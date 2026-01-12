@@ -16,6 +16,7 @@ package otlp
 
 import (
 	"context"
+	"crypto/subtle"
 	"crypto/tls"
 	"errors"
 	"fmt"
@@ -28,6 +29,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
 	pb "github.com/redpanda-data/common-go/redpanda-otel-exporter/proto"
@@ -40,6 +42,7 @@ import (
 const (
 	giFieldAddress        = "address"
 	giFieldTLS            = "tls"
+	giFieldAuthToken      = "auth_token"
 	giFieldMaxRecvMsgSize = "max_recv_msg_size"
 	giFieldRateLimit      = "rate_limit"
 
@@ -50,6 +53,7 @@ const (
 type grpcInputConfig struct {
 	Address        string
 	TLS            tlsConfig
+	AuthToken      string
 	MaxRecvMsgSize int
 	RateLimit      string
 	ListenerConfig netutil.ListenerConfig
@@ -82,6 +86,30 @@ Each OTLP export request is unbatched into individual messages:
 Messages are encoded in Redpanda OTEL v1 protobuf format with metadata:
 - `+"`signal_type`"+`: "trace", "log", or "metric"
 
+## Authentication
+
+When `+"`auth_token`"+` is configured, clients must include the token in the gRPC metadata:
+
+**Go Client Example:**
+`+"```go"+`
+import (
+    "go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+)
+
+exporter, err := otlptracegrpc.New(ctx,
+    otlptracegrpc.WithEndpoint("localhost:4317"),
+    otlptracegrpc.WithInsecure(), // or WithTLSCredentials() for TLS
+    otlptracegrpc.WithHeaders(map[string]string{
+        "authorization": "Bearer your-token-here",
+    }),
+)
+`+"```"+`
+
+**Environment Variable:**
+`+"```bash"+`
+export OTEL_EXPORTER_OTLP_HEADERS="authorization=Bearer your-token-here"
+`+"```"+`
+
 ## Rate Limiting
 
 An optional rate limit resource can be specified to throttle incoming requests. When the rate limit is breached, requests will receive a ResourceExhausted gRPC status code.
@@ -93,6 +121,11 @@ An optional rate limit resource can be specified to throttle incoming requests. 
 			service.NewObjectField(giFieldTLS,
 				tlsFields()...,
 			).Description("TLS configuration for gRPC.").
+				Advanced(),
+			service.NewStringField(giFieldAuthToken).
+				Description("Optional bearer token for authentication. When set, requests must include 'authorization: Bearer <token>' metadata.").
+				Default("").
+				Secret().
 				Advanced(),
 			service.NewIntField(giFieldMaxRecvMsgSize).
 				Description("Maximum size of gRPC messages to receive in bytes.").
@@ -137,6 +170,11 @@ func GRPCInputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (s
 		if conf.TLS, err = parseTLSConfig(pConf.Namespace(giFieldTLS)); err != nil {
 			return nil, err
 		}
+	}
+
+	// Parse auth token
+	if conf.AuthToken, err = pConf.FieldString(giFieldAuthToken); err != nil {
+		return nil, err
 	}
 
 	// Parse netutil listener config
@@ -238,6 +276,32 @@ func (gi *grpcOTLPInput) Close(ctx context.Context) error {
 	return nil
 }
 
+// validateAuth checks the authorization header in the gRPC metadata
+func (gi *grpcOTLPInput) validateAuth(ctx context.Context) error {
+	if gi.conf.AuthToken == "" {
+		return nil // No auth configured
+	}
+
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return status.Error(codes.Unauthenticated, "missing metadata")
+	}
+
+	authHeaders := md.Get("authorization")
+	if len(authHeaders) == 0 {
+		return status.Error(codes.Unauthenticated, "missing authorization header")
+	}
+
+	authHeader := authHeaders[0]
+	expectedAuth := "Bearer " + gi.conf.AuthToken
+
+	if subtle.ConstantTimeCompare([]byte(authHeader), []byte(expectedAuth)) != 1 {
+		return status.Error(codes.Unauthenticated, "invalid authorization token")
+	}
+
+	return nil
+}
+
 // traceServiceServer implements the gRPC trace service.
 type traceServiceServer struct {
 	ptraceotlp.UnimplementedGRPCServer
@@ -252,6 +316,11 @@ func newTraceServiceServer(gi *grpcOTLPInput) *traceServiceServer {
 
 // Export implements the gRPC Export method for traces
 func (s *traceServiceServer) Export(ctx context.Context, req ptraceotlp.ExportRequest) (ptraceotlp.ExportResponse, error) {
+	if err := s.validateAuth(ctx); err != nil {
+		s.log.Warnf("Authentication failed: %s", err)
+		return ptraceotlp.NewExportResponse(), err
+	}
+
 	s.maybeWaitForAccess(ctx)
 
 	if req.Traces().SpanCount() == 0 {
@@ -311,6 +380,10 @@ func newLogsServiceServer(gi *grpcOTLPInput) *logsServiceServer {
 }
 
 func (s *logsServiceServer) Export(ctx context.Context, req plogotlp.ExportRequest) (plogotlp.ExportResponse, error) {
+	if err := s.validateAuth(ctx); err != nil {
+		return plogotlp.NewExportResponse(), err
+	}
+
 	s.maybeWaitForAccess(ctx)
 
 	logs := req.Logs()
@@ -373,6 +446,10 @@ func newMetricsServiceServer(gi *grpcOTLPInput) *metricsServiceServer {
 
 // Export implements the gRPC Export method for metrics
 func (s *metricsServiceServer) Export(ctx context.Context, req pmetricotlp.ExportRequest) (pmetricotlp.ExportResponse, error) {
+	if err := s.validateAuth(ctx); err != nil {
+		return pmetricotlp.NewExportResponse(), err
+	}
+
 	s.maybeWaitForAccess(ctx)
 
 	metrics := req.Metrics()

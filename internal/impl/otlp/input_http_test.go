@@ -91,6 +91,89 @@ func createTestLoggerProviderHTTP(ctx context.Context, endpoint string) (*sdklog
 	return lp, nil
 }
 
+func TestHTTPInputAuth(t *testing.T) {
+	const testToken = "test-secret-token-12345"
+
+	port, err := integration.GetFreePort()
+	require.NoError(t, err)
+	address := "127.0.0.1:" + strconv.Itoa(port)
+
+	pConf, err := otlp.HTTPInputSpec().ParseYAML(fmt.Sprintf(`
+address: "%s"
+auth_token: "%s"
+`, address, testToken), nil)
+	require.NoError(t, err)
+
+	input, err := otlp.HTTPInputFromParsed(pConf, service.MockResources())
+	require.NoError(t, err)
+
+	require.NoError(t, input.Connect(t.Context()))
+	t.Cleanup(func() {
+		if err := input.Close(context.Background()); err != nil {
+			t.Logf("failed to close input: %v", err)
+		}
+	})
+
+	baseURL := "http://" + address
+
+	t.Run("missing_auth_header", func(t *testing.T) {
+		httpReq, err := http.NewRequestWithContext(t.Context(), "POST", baseURL+"/v1/traces", bytes.NewReader([]byte("{}")))
+		require.NoError(t, err)
+		httpReq.Header.Set("Content-Type", "application/json")
+		// No Authorization header
+
+		client := &http.Client{Timeout: httpOpTimeout}
+		resp, err := client.Do(httpReq)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+	})
+
+	t.Run("invalid_auth_token", func(t *testing.T) {
+		httpReq, err := http.NewRequestWithContext(t.Context(), "POST", baseURL+"/v1/traces", bytes.NewReader([]byte("{}")))
+		require.NoError(t, err)
+		httpReq.Header.Set("Content-Type", "application/json")
+		httpReq.Header.Set("Authorization", "Bearer wrong-token")
+
+		client := &http.Client{Timeout: httpOpTimeout}
+		resp, err := client.Do(httpReq)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+	})
+
+	t.Run("malformed_auth_header", func(t *testing.T) {
+		httpReq, err := http.NewRequestWithContext(t.Context(), "POST", baseURL+"/v1/traces", bytes.NewReader([]byte("{}")))
+		require.NoError(t, err)
+		httpReq.Header.Set("Content-Type", "application/json")
+		httpReq.Header.Set("Authorization", testToken) // Missing "Bearer " prefix
+
+		client := &http.Client{Timeout: httpOpTimeout}
+		resp, err := client.Do(httpReq)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+	})
+
+	t.Run("valid_auth_token", func(t *testing.T) {
+		httpReq, err := http.NewRequestWithContext(t.Context(), "POST", baseURL+"/v1/traces", bytes.NewReader([]byte("{}")))
+		require.NoError(t, err)
+		httpReq.Header.Set("Content-Type", "application/json")
+		httpReq.Header.Set("Authorization", "Bearer "+testToken)
+
+		client := &http.Client{Timeout: httpOpTimeout}
+		resp, err := client.Do(httpReq)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		// Should not be unauthorized (might be 400 for empty body, but not 401)
+		assert.NotEqual(t, http.StatusUnauthorized, resp.StatusCode)
+	})
+}
+
 func TestHTTPInputEdgeCases(t *testing.T) {
 	port, err := integration.GetFreePort()
 	require.NoError(t, err)

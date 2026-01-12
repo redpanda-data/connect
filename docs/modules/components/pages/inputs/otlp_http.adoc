@@ -58,6 +58,7 @@ input:
       enabled: false
       cert_file: ""
       key_file: ""
+    auth_token: ""
     read_timeout: 10s
     write_timeout: 10s
     max_body_size: 4194304
@@ -95,6 +96,38 @@ Each OTLP export request is unbatched into individual messages:
 
 Messages are encoded in Redpanda OTEL v1 protobuf format with metadata:
 - `signalType`: "trace", "log", or "metric"
+
+## Authentication
+
+When `auth_token` is configured, clients must include the token in the HTTP Authorization header:
+
+**Go Client Example:**
+```go
+import (
+    "go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
+)
+
+exporter, err := otlptracehttp.New(ctx,
+    otlptracehttp.WithEndpoint("localhost:4318"),
+    otlptracehttp.WithInsecure(), // or WithTLSClientConfig() for TLS
+    otlptracehttp.WithHeaders(map[string]string{
+        "Authorization": "Bearer your-token-here",
+    }),
+)
+```
+
+**cURL Example:**
+```bash
+curl -X POST http://localhost:4318/v1/traces \
+  -H "Content-Type: application/x-protobuf" \
+  -H "Authorization: Bearer your-token-here" \
+  --data-binary @traces.pb
+```
+
+**Environment Variable:**
+```bash
+export OTEL_EXPORTER_OTLP_HEADERS="Authorization=Bearer your-token-here"
+```
 
 ## Rate Limiting
 
@@ -141,6 +174,20 @@ Path to the TLS certificate file.
 === `tls.key_file`
 
 Path to the TLS key file.
+
+
+*Type*: `string`
+
+*Default*: `""`
+
+=== `auth_token`
+
+Optional bearer token for authentication. When set, requests must include 'Authorization: Bearer <token>' header.
+[CAUTION]
+====
+This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
+====
+
 
 
 *Type*: `string`

@@ -43,11 +43,14 @@ import (
 )
 
 // createTestTracerProvider creates an OpenTelemetry TracerProvider configured to export to the given endpoint.
-func createTestTracerProvider(ctx context.Context, endpoint string) (*sdktrace.TracerProvider, error) {
-	exporter, err := otlptracegrpc.New(ctx,
+func createTestTracerProvider(ctx context.Context, endpoint string, opts ...otlptracegrpc.Option) (*sdktrace.TracerProvider, error) {
+	defaultOpts := []otlptracegrpc.Option{
 		otlptracegrpc.WithEndpoint(endpoint),
 		otlptracegrpc.WithInsecure(),
-	)
+	}
+	defaultOpts = append(defaultOpts, opts...)
+
+	exporter, err := otlptracegrpc.New(ctx, defaultOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -88,6 +91,130 @@ func createTestLoggerProvider(ctx context.Context, endpoint string) (*sdklog.Log
 		sdklog.WithProcessor(sdklog.NewBatchProcessor(exporter)),
 	)
 	return lp, nil
+}
+
+func TestGRPCInputAuth(t *testing.T) {
+	const testToken = "test-secret-token-grpc-67890"
+	port, err := integration.GetFreePort()
+	require.NoError(t, err)
+	address := "127.0.0.1:" + strconv.Itoa(port)
+
+	pConf, err := otlp.GRPCInputSpec().ParseYAML(fmt.Sprintf(`
+address: "%s"
+auth_token: "%s"
+`, address, testToken), nil)
+	require.NoError(t, err)
+
+	input, err := otlp.GRPCInputFromParsed(pConf, service.MockResources())
+	require.NoError(t, err)
+
+	require.NoError(t, input.Connect(t.Context()))
+	t.Cleanup(func() {
+		if err := input.Close(context.Background()); err != nil {
+			t.Logf("failed to close input: %v", err)
+		}
+	})
+
+	// Give the server a moment to start
+	time.Sleep(100 * time.Millisecond)
+
+	t.Run("missing_auth_metadata", func(t *testing.T) {
+		// Create exporter without auth headers
+		tp, err := createTestTracerProvider(t.Context(), address)
+		require.NoError(t, err)
+		defer tp.Shutdown(t.Context()) //nolint:errcheck
+
+		tracer := tp.Tracer("test-service")
+		_, span := tracer.Start(t.Context(), "test-span")
+		span.End()
+
+		// Try to flush - should fail with unauthenticated error
+		err = tp.ForceFlush(t.Context())
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "Unauthenticated")
+	})
+
+	t.Run("invalid_auth_token", func(t *testing.T) {
+		// Create exporter with wrong token
+		tp, err := createTestTracerProvider(t.Context(), address,
+			otlptracegrpc.WithHeaders(map[string]string{
+				"authorization": "Bearer wrong-token",
+			}),
+		)
+		require.NoError(t, err)
+		defer tp.Shutdown(t.Context()) //nolint:errcheck
+
+		tracer := tp.Tracer("test-service")
+		_, span := tracer.Start(t.Context(), "test-span")
+		span.End()
+
+		// Try to flush - should fail with unauthenticated error
+		err = tp.ForceFlush(t.Context())
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "Unauthenticated")
+	})
+
+	t.Run("malformed_auth_metadata", func(t *testing.T) {
+		// Create exporter with malformed auth (missing "Bearer " prefix)
+		tp, err := createTestTracerProvider(t.Context(), address,
+			otlptracegrpc.WithHeaders(map[string]string{
+				"authorization": testToken,
+			}),
+		)
+		require.NoError(t, err)
+		defer tp.Shutdown(t.Context()) //nolint:errcheck
+
+		tracer := tp.Tracer("test-service")
+		_, span := tracer.Start(t.Context(), "test-span")
+		span.End()
+
+		// Try to flush - should fail with unauthenticated error
+		err = tp.ForceFlush(t.Context())
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "Unauthenticated")
+	})
+
+	t.Run("valid_auth_token", func(t *testing.T) {
+		// Create exporter with correct auth token
+		tp, err := createTestTracerProvider(t.Context(), address,
+			otlptracegrpc.WithHeaders(map[string]string{
+				"authorization": "Bearer " + testToken,
+			}),
+		)
+		require.NoError(t, err)
+		defer tp.Shutdown(t.Context()) //nolint:errcheck
+
+		received := make(chan service.MessageBatch, 1)
+		readErr := make(chan error, 1)
+		go func() {
+			batch, aFn, err := input.ReadBatch(t.Context())
+			aFn(t.Context(), nil) //nolint:errcheck
+
+			if err != nil {
+				readErr <- err
+			} else {
+				received <- batch
+			}
+		}()
+
+		tracer := tp.Tracer("test-service")
+		_, span := tracer.Start(t.Context(), "test-span")
+		span.End()
+
+		// Try to flush - should succeed
+		err = tp.ForceFlush(t.Context())
+		require.NoError(t, err)
+
+		// Verify message was received
+		select {
+		case batch := <-received:
+			require.NotEmpty(t, batch)
+		case err := <-readErr:
+			t.Fatalf("Error reading batch: %v", err)
+		case <-time.After(grpcOpTimeout):
+			t.Fatal("Timeout waiting for message")
+		}
+	})
 }
 
 func TestGRPCInputTraces(t *testing.T) {
