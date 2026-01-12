@@ -2018,6 +2018,8 @@ github.com/redpanda-data/benthos/v4 v4.63.0 h1:bi3uraD9OQhYXueRhOXpLlOf+kaJ3renP
 github.com/redpanda-data/benthos/v4 v4.63.0/go.mod h1:2WkPYoItaJ5cfsh3Rir9kncliCZRwY1Ooh0tXBPx1Iw=
 github.com/redpanda-data/common-go/authz v0.2.0 h1:KYBu/+eIdFlaR8qJXn5I52AJ9Zo4KzyV+R/ia92swko=
 github.com/redpanda-data/common-go/authz v0.2.0/go.mod h1:x1C0YQ5NhCg2uj09Oz0bwMwDTkazK8lwxfZshE5Lf3s=
+github.com/redpanda-data/common-go/license v0.0.0-20260109170727-1dd9f5d22ee1 h1:Qr6sK5Qmznbwtk4AKgd6086RM+uA/Z4lO/r2aCDxx+c=
+github.com/redpanda-data/common-go/license v0.0.0-20260109170727-1dd9f5d22ee1/go.mod h1:F1fp8xVNS2UwWFosOjJ9+5jaEZnXSjB9AdHk2R9XlpI=
 github.com/redpanda-data/common-go/redpanda-otel-exporter v0.3.0 h1:Y7pkNAmA/pRnlOulJ1iU+Ux6U3Iey+OSqSCELnSsrLk=
 github.com/redpanda-data/common-go/redpanda-otel-exporter v0.3.0/go.mod h1:uNozjiJjQ7ddqxJNM0Q99yzzxkQcs0Xh0810qi8UImw=
 github.com/redpanda-data/common-go/secrets v0.1.4 h1:CGp3KolGnjcJvIafTwf7Hlj5ztLOJCjgkegRu7IAkSw=
