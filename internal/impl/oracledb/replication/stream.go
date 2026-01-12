@@ -407,7 +407,12 @@ func (t *UserDefinedTable) FullName() string {
 // VerifyUserDefinedTables verifies underlying user defined tables based on supplied
 // include and exclude filters, validating change tracking is enabled.
 func VerifyUserDefinedTables(ctx context.Context, db *sql.DB, tableFilter *confx.RegexpFilter, log *service.Logger) ([]UserDefinedTable, error) {
-	rows, err := db.QueryContext(ctx, "SELECT USER AS SchemaName, TABLE_NAME AS TableName FROM USER_TABLES ORDER BY TABLE_NAME")
+	sql := `
+	SELECT OWNER AS SchemeName, TABLE_NAME AS TableName
+	FROM DBA_TABLES
+	WHERE OWNER NOT IN ('SYS', 'SYSTEM', 'OUTLN', 'DBSNMP', 'APPQOSSYS', 'DBSFWUSER', 'GGSYS', 'ANONYMOUS', 'CTXSYS', 'DVSYS', 'DVF', 'GSMADMIN_INTERNAL', 'LBACSYS', 'MDSYS', 'OJVMSYS', 'OLAPSYS', 'ORDDATA', 'ORDSYS', 'WMSYS', 'XDB')
+	ORDER BY OWNER, TABLE_NAME`
+	rows, err := db.QueryContext(ctx, sql)
 	if err != nil {
 		return nil, fmt.Errorf("fetching user defined tables from user_tables for verification: %w", err)
 	}
