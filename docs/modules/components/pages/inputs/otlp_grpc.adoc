@@ -58,6 +58,7 @@ input:
       enabled: false
       cert_file: ""
       key_file: ""
+    auth_token: ""
     max_recv_msg_size: 4194304
     rate_limit: ""
     tcp:
@@ -86,6 +87,30 @@ Each OTLP export request is unbatched into individual messages:
 
 Messages are encoded in Redpanda OTEL v1 protobuf format with metadata:
 - `signal_type`: "trace", "log", or "metric"
+
+## Authentication
+
+When `auth_token` is configured, clients must include the token in the gRPC metadata:
+
+**Go Client Example:**
+```go
+import (
+    "go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+)
+
+exporter, err := otlptracegrpc.New(ctx,
+    otlptracegrpc.WithEndpoint("localhost:4317"),
+    otlptracegrpc.WithInsecure(), // or WithTLSCredentials() for TLS
+    otlptracegrpc.WithHeaders(map[string]string{
+        "authorization": "Bearer your-token-here",
+    }),
+)
+```
+
+**Environment Variable:**
+```bash
+export OTEL_EXPORTER_OTLP_HEADERS="authorization=Bearer your-token-here"
+```
 
 ## Rate Limiting
 
@@ -132,6 +157,20 @@ Path to the TLS certificate file.
 === `tls.key_file`
 
 Path to the TLS key file.
+
+
+*Type*: `string`
+
+*Default*: `""`
+
+=== `auth_token`
+
+Optional bearer token for authentication. When set, requests must include 'authorization: Bearer <token>' metadata.
+[CAUTION]
+====
+This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
+====
+
 
 
 *Type*: `string`

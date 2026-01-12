@@ -16,6 +16,7 @@ package otlp
 
 import (
 	"context"
+	"crypto/subtle"
 	"crypto/tls"
 	"encoding/json"
 	"errors"
@@ -40,6 +41,7 @@ import (
 const (
 	hiFieldAddress      = "address"
 	hiFieldTLS          = "tls"
+	hiFieldAuthToken    = "auth_token"
 	hiFieldReadTimeout  = "read_timeout"
 	hiFieldWriteTimeout = "write_timeout"
 	hiFieldMaxBodySize  = "max_body_size"
@@ -54,6 +56,7 @@ const (
 type httpInputConfig struct {
 	Address        string
 	TLS            tlsConfig
+	AuthToken      string
 	ReadTimeout    time.Duration
 	WriteTimeout   time.Duration
 	MaxBodySize    int
@@ -95,6 +98,38 @@ Each OTLP export request is unbatched into individual messages:
 Messages are encoded in Redpanda OTEL v1 protobuf format with metadata:
 - `+"`signalType`"+`: "trace", "log", or "metric"
 
+## Authentication
+
+When `+"`auth_token`"+` is configured, clients must include the token in the HTTP Authorization header:
+
+**Go Client Example:**
+`+"```go"+`
+import (
+    "go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
+)
+
+exporter, err := otlptracehttp.New(ctx,
+    otlptracehttp.WithEndpoint("localhost:4318"),
+    otlptracehttp.WithInsecure(), // or WithTLSClientConfig() for TLS
+    otlptracehttp.WithHeaders(map[string]string{
+        "Authorization": "Bearer your-token-here",
+    }),
+)
+`+"```"+`
+
+**cURL Example:**
+`+"```bash"+`
+curl -X POST http://localhost:4318/v1/traces \
+  -H "Content-Type: application/x-protobuf" \
+  -H "Authorization: Bearer your-token-here" \
+  --data-binary @traces.pb
+`+"```"+`
+
+**Environment Variable:**
+`+"```bash"+`
+export OTEL_EXPORTER_OTLP_HEADERS="Authorization=Bearer your-token-here"
+`+"```"+`
+
 ## Rate Limiting
 
 An optional rate limit resource can be specified to throttle incoming requests. When the rate limit is breached, requests will receive a 429 (Too Many Requests) response.
@@ -106,6 +141,11 @@ An optional rate limit resource can be specified to throttle incoming requests. 
 			service.NewObjectField(hiFieldTLS,
 				tlsFields()...,
 			).Description("TLS configuration for HTTP.").
+				Advanced(),
+			service.NewStringField(hiFieldAuthToken).
+				Description("Optional bearer token for authentication. When set, requests must include 'Authorization: Bearer <token>' header.").
+				Default("").
+				Secret().
 				Advanced(),
 			service.NewDurationField(hiFieldReadTimeout).
 				Description("Maximum duration for reading the entire request.").
@@ -166,6 +206,11 @@ func HTTPInputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (s
 		if conf.TLS, err = parseTLSConfig(pConf.Namespace(hiFieldTLS)); err != nil {
 			return nil, err
 		}
+	}
+
+	// Parse auth token
+	if conf.AuthToken, err = pConf.FieldString(hiFieldAuthToken); err != nil {
+		return nil, err
 	}
 
 	// Parse netutil listener config
@@ -282,6 +327,17 @@ func (hi *httpOTLPInput) handler() http.Handler {
 		if hi.shutSig.IsSoftStopSignalled() {
 			http.Error(w, "Server closing", http.StatusServiceUnavailable)
 			return
+		}
+
+		// Validate authentication if configured
+		if hi.conf.AuthToken != "" {
+			authHeader := r.Header.Get("Authorization")
+			expectedAuth := "Bearer " + hi.conf.AuthToken
+			if subtle.ConstantTimeCompare([]byte(authHeader), []byte(expectedAuth)) != 1 {
+				hi.log.Warnf("Unauthorized request from %s", r.RemoteAddr)
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				return
+			}
 		}
 
 		// Validate URL and method
