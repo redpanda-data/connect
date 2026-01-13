@@ -27,8 +27,6 @@ import (
 	"path"
 	"strconv"
 	"testing"
-
-	btls "github.com/redpanda-data/benthos/v4/internal/tls"
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/data/azcosmos"
@@ -317,7 +315,7 @@ func TestIntegrationCosmosDB(t *testing.T) {
 		require.NoError(t, err)
 
 		customTransport := http.DefaultTransport.(*http.Transport).Clone()
-		customTransport.TLSClientConfig = securetls.WithInsecureSkipVerify(securetls.SecurityLevelLax)
+		customTransport.TLSClientConfig = securetls.WithInsecureSkipVerify(securetls.SecurityLevelNormal)
 
 		p := httputil.NewSingleHostReverseProxy(url)
 		p.Transport = customTransport

@@ -230,7 +230,7 @@ client_id: rpcn
 
 	if connDetails.TLSEnabled = tlsEnabled; connDetails.TLSEnabled {
 		// Use strict security level for Redpanda-to-Redpanda communication
-		connDetails.TLSConf = securetls.NewSecureConfig(securetls.SecurityLevelStrict)
+		connDetails.TLSConf = securetls.NewConfig(securetls.SecurityLevelStrict)
 
 		if rootCasFile != "" {
 			var caCert []byte
