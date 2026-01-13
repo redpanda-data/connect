@@ -36,14 +36,14 @@ func TestIntegration_OracleDBCDC_ConcurrentSnapshot(t *testing.T) {
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t, "latest")
 	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.foo", "CREATE TABLE testdb.foo (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
 	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.foo2", "CREATE TABLE testdb.foo2 (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
-	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.bar", "CREATE TABLE testdb.bar (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
+	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb2.bar", "CREATE TABLE testdb2.bar (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
 
 	// Insert 3000 rows across tables for initial snapshot streaming
 	want := 3000
 	for range 1000 {
 		db.MustExec("INSERT INTO testdb.foo (id) VALUES (DEFAULT)")
 		db.MustExec("INSERT INTO testdb.foo2 (id) VALUES (DEFAULT)")
-		db.MustExec("INSERT INTO testdb.bar (id) VALUES (DEFAULT)")
+		db.MustExec("INSERT INTO testdb2.bar (id) VALUES (DEFAULT)")
 	}
 
 	// wait for changes to propagate to redo logs
@@ -63,7 +63,7 @@ oracledb_cdc:
   stream_snapshot: true
   snapshot_max_batch_size: 10
   max_parallel_snapshot_tables: 3
-  include: ["TESTDB.FOO", "TESTDB.FOO2", "TESTDB.BAR"]
+  include: ["TESTDB.FOO", "TESTDB.FOO2", "TESTDB2.BAR"]
   exclude: ["TESTDB.DOESNOTEXIST"]`
 
 		streamBuilder := service.NewStreamBuilder()
