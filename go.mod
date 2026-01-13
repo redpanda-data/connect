@@ -142,6 +142,7 @@ require (
 	github.com/redis/go-redis/v9 v9.14.0
 	github.com/redpanda-data/benthos/v4 v4.63.0
 	github.com/redpanda-data/common-go/authz v0.2.0
+	github.com/redpanda-data/common-go/license v0.0.0-20260109170727-1dd9f5d22ee1
 	github.com/redpanda-data/common-go/redpanda-otel-exporter v0.3.0
 	github.com/redpanda-data/common-go/secrets v0.1.4
 	github.com/redpanda-data/connect/public/bundle/free/v4 v4.66.1

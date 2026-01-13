@@ -9,40 +9,30 @@
 package license
 
 import (
-	"bytes"
 	"context"
-	"crypto"
-	"crypto/rsa"
-	"crypto/sha256"
-	"crypto/x509"
 	_ "embed"
-	"encoding/base64"
-	"encoding/hex"
-	"encoding/json"
-	"encoding/pem"
-	"errors"
 	"fmt"
 	"os"
 	"sync/atomic"
 	"time"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/common-go/license"
 )
-
-//go:embed public_key.pem
-var licensePublicKeyPem []byte
 
 const defaultLicenseFilepath = "/etc/redpanda/redpanda.license"
 
-var openSourceLicense = RedpandaLicense{
-	Type:   -1,
-	Expiry: time.Now().Add(time.Hour * 24 * 365 * 10).Unix(),
+var openSourceLicense license.RedpandaLicense = &license.V1RedpandaLicense{
+	Version:  1,
+	Type:     license.LicenseTypeOpenSource,
+	Expiry:   time.Now().Add(time.Hour * 24 * 365 * 10).Unix(),
+	Products: []license.Product{license.ProductConnect},
 }
 
 // Service is the license service.
 type Service struct {
 	logger        *service.Logger
-	loadedLicense *atomic.Pointer[RedpandaLicense]
+	loadedLicense *atomic.Pointer[license.RedpandaLicense]
 	conf          Config
 
 	expiryMetric *service.MetricGauge
@@ -51,19 +41,9 @@ type Service struct {
 
 // Config is a struct used to provide configuration to a license service.
 type Config struct {
-	License         string
-	LicenseFilepath string
-
-	// Just for testing
-	customPublicKeyPem           []byte
+	License                      string
+	LicenseFilepath              string
 	customDefaultLicenseFilepath string
-}
-
-func (c Config) publicKeyPem() []byte {
-	if len(c.customPublicKeyPem) > 0 {
-		return c.customPublicKeyPem
-	}
-	return licensePublicKeyPem
 }
 
 func (c Config) defaultLicenseFilepath() string {
@@ -78,16 +58,17 @@ func (c Config) defaultLicenseFilepath() string {
 func RegisterService(res *service.Resources, conf Config) {
 	s := &Service{
 		logger:        res.Logger(),
-		loadedLicense: &atomic.Pointer[RedpandaLicense]{},
+		loadedLicense: &atomic.Pointer[license.RedpandaLicense]{},
 		conf:          conf,
 	}
 
 	license, err := s.readAndValidateLicense()
 	if err != nil {
 		res.Logger().With("error", err).Error("Failed to read Redpanda License")
+		license = openSourceLicense
 	}
 
-	s.setLicense(res, &license)
+	s.setLicense(res, license)
 	setSharedService(res, s)
 }
 
@@ -96,13 +77,15 @@ func RegisterService(res *service.Resources, conf Config) {
 func InjectTestService(res *service.Resources) {
 	s := &Service{
 		logger:        res.Logger(),
-		loadedLicense: &atomic.Pointer[RedpandaLicense]{},
+		loadedLicense: &atomic.Pointer[license.RedpandaLicense]{},
 	}
-	s.setLicense(res, &RedpandaLicense{
+
+	s.setLicense(res, &license.V1RedpandaLicense{
 		Version:      1,
 		Organization: "test",
-		Type:         1,
+		Type:         license.LicenseTypeEnterprise,
 		Expiry:       time.Now().Add(time.Hour).Unix(),
+		Products:     []license.Product{license.ProductConnect},
 	})
 	setSharedService(res, s)
 }
@@ -113,33 +96,44 @@ func InjectTestService(res *service.Resources) {
 func InjectCustomLicenseBytes(res *service.Resources, conf Config, licenseBytes []byte) error {
 	s := &Service{
 		logger:        res.Logger(),
-		loadedLicense: &atomic.Pointer[RedpandaLicense]{},
+		loadedLicense: &atomic.Pointer[license.RedpandaLicense]{},
 		conf:          conf,
 	}
 
-	license, err := s.validateLicense(licenseBytes)
+	l, err := license.ParseLicense(licenseBytes)
 	if err != nil {
 		return fmt.Errorf("failed to validate license: %w", err)
 	}
 
-	if err := license.CheckExpiry(); err != nil {
-		return err
+	expiryTime := l.Expires()
+	if time.Now().After(expiryTime) {
+		return fmt.Errorf("license expired on %s", expiryTime.Format(time.RFC3339))
+	}
+
+	var orgStr, licenseTypeStr string
+	switch t := l.(type) {
+	case *license.V0RedpandaLicense:
+		orgStr = t.Organization
+		licenseTypeStr = t.Type.String()
+	case *license.V1RedpandaLicense:
+		orgStr = t.Organization
+		licenseTypeStr = string(t.Type)
 	}
 
 	s.logger.With(
-		"license_org", license.Organization,
-		"license_type", typeDisplayName(license.Type),
-		"expires_at", time.Unix(license.Expiry, 0).Format(time.RFC3339),
+		"license_org", orgStr,
+		"license_type", licenseTypeStr,
+		"expires_at", expiryTime.Format(time.RFC3339),
 	).Info("Successfully loaded Redpanda license")
 
-	s.setLicense(res, &license)
+	s.setLicense(res, l)
 	setSharedService(res, s)
 
 	return nil
 }
 
-func (s *Service) setLicense(res *service.Resources, l *RedpandaLicense) {
-	s.loadedLicense.Store(l)
+func (s *Service) setLicense(res *service.Resources, l license.RedpandaLicense) {
+	s.loadedLicense.Store(&l)
 
 	if s.cancel != nil {
 		s.cancel()
@@ -153,14 +147,14 @@ func (s *Service) setLicense(res *service.Resources, l *RedpandaLicense) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	s.cancel = cancel
-	go s.updateExpiryMetricLoop(ctx, *l)
+	go s.updateExpiryMetricLoop(ctx, l)
 }
 
 // updateExpiryMetricLoop updates the license expiry metric every hour. The
 // metric value is the delta in seconds between now and the expiry time.
-func (s *Service) updateExpiryMetricLoop(ctx context.Context, license RedpandaLicense) {
+func (s *Service) updateExpiryMetricLoop(ctx context.Context, l license.RedpandaLicense) {
 	updateMetric := func() {
-		expiryTime := time.Unix(license.Expiry, 0)
+		expiryTime := l.Expires()
 		deltaSeconds := time.Until(expiryTime).Seconds()
 		s.expiryMetric.Set(int64(deltaSeconds))
 	}
@@ -178,30 +172,41 @@ func (s *Service) updateExpiryMetricLoop(ctx context.Context, license RedpandaLi
 	}
 }
 
-func (s *Service) readAndValidateLicense() (RedpandaLicense, error) {
+func (s *Service) readAndValidateLicense() (license.RedpandaLicense, error) {
 	licenseBytes, err := s.readLicense()
 	if err != nil {
-		return openSourceLicense, err
+		return nil, err
 	}
 
-	license := openSourceLicense
+	l := openSourceLicense
 	if len(licenseBytes) > 0 {
-		if license, err = s.validateLicense(licenseBytes); err != nil {
-			return openSourceLicense, fmt.Errorf("failed to validate license: %w", err)
+		if l, err = license.ParseLicense(licenseBytes); err != nil {
+			return nil, fmt.Errorf("failed to validate license: %w", err)
 		}
 	}
 
-	if err := license.CheckExpiry(); err != nil {
-		return openSourceLicense, err
+	expiryTime := l.Expires()
+	if time.Now().After(expiryTime) {
+		return nil, fmt.Errorf("license expired on %s", expiryTime.Format(time.RFC3339))
+	}
+
+	var orgStr, licenseTypeStr string
+	switch t := l.(type) {
+	case *license.V0RedpandaLicense:
+		orgStr = t.Organization
+		licenseTypeStr = t.Type.String()
+	case *license.V1RedpandaLicense:
+		orgStr = t.Organization
+		licenseTypeStr = string(t.Type)
 	}
 
 	s.logger.With(
-		"license_org", license.Organization,
-		"license_type", typeDisplayName(license.Type),
-		"expires_at", time.Unix(license.Expiry, 0).Format(time.RFC3339),
+		"license_org", orgStr,
+		"license_type", licenseTypeStr,
+		"expires_at", expiryTime.Format(time.RFC3339),
 	).Info("Successfully loaded Redpanda license")
 
-	return license, nil
+	return l, nil
 }
 
 func (s *Service) readLicense() (licenseFileContents []byte, err error) {
@@ -234,59 +239,4 @@ func (s *Service) readLicense() (licenseFileContents []byte, err error) {
 
 	s.logger.Debug("Loaded Redpanda Enterprise license from default file path")
 	return
-}
-
-func (s *Service) validateLicense(license []byte) (RedpandaLicense, error) {
-	publicKeyBytes := s.conf.publicKeyPem()
-
-	// 1. Try to parse embedded public key
-	block, _ := pem.Decode(publicKeyBytes)
-	publicKey, err := x509.ParsePKIXPublicKey(block.Bytes)
-	if err != nil {
-		return openSourceLicense, fmt.Errorf("failed to parse public key: %w", err)
-	}
-	publicKeyRSA, ok := publicKey.(*rsa.PublicKey)
-	if !ok {
-		return openSourceLicense, errors.New("failed to parse public key, expected dateFormat is not RSA")
-	}
-
-	// Trim Whitespace and Linebreaks for input license
-	license = bytes.TrimSpace(license)
-
-	// 2. Split license contents by delimiter
-	splitParts := bytes.Split(license, []byte("."))
-	if len(splitParts) != 2 {
-		return openSourceLicense, errors.New("failed to split license contents by delimiter")
-	}
-
-	licenseDataEncoded := splitParts[0]
-	signatureEncoded := splitParts[1]
-
-	licenseData, err := base64.StdEncoding.DecodeString(string(licenseDataEncoded))
-	if err != nil {
-		return openSourceLicense, fmt.Errorf("failed to decode license data: %w", err)
-	}
-
-	signature, err := base64.StdEncoding.DecodeString(string(signatureEncoded))
-	if err != nil {
-		return openSourceLicense, fmt.Errorf("failed to decode license signature: %w", err)
-	}
-	hash := sha256.Sum256(licenseDataEncoded)
-
-	// 3. Verify license contents with static public key
-	if err := rsa.VerifyPKCS1v15(publicKeyRSA, crypto.SHA256, hash[:], signature); err != nil {
-		return openSourceLicense, fmt.Errorf("failed to verify license signature: %w", err)
-	}
-
-	// 4. If license contents seem to be legit, we will continue unpacking the license
-	var rpLicense RedpandaLicense
-	if err := json.Unmarshal(licenseData, &rpLicense); err != nil {
-		return openSourceLicense, fmt.Errorf("failed to unmarshal license data: %w", err)
-	}
-
-	// 5. In addition to the contents we also save the checksum.
-	hash = sha256.Sum256(license)
-	rpLicense.Checksum = hex.EncodeToString(hash[:])
-
-	return rpLicense, nil
 }
