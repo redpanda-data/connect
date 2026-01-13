@@ -125,9 +125,9 @@ By default Redpanda Connect will use a shared credentials file when connecting t
 				Optional(),
 			service.NewOutputMaxInFlightField().
 				Description("The maximum number of parallel message batches to have in flight at any given time."),
-			service.NewMetadataExcludeFilterField(snsoFieldMetadata).
+			service.NewMetadataExcludeFilterField(sqsoFieldMetadata).
 				Description("Specify criteria for which metadata values are sent as headers."),
-			service.NewBatchPolicyField(koFieldBatching),
+			service.NewBatchPolicyField(sqsoFieldBatching),
 			service.NewIntField(sqsoFieldMaxRecordsCount).
 				Description("Customize the maximum number of records delivered in a single SQS request. This value must be greater than 0 but no greater than 10.").
 				Default(10).
