@@ -20,19 +20,20 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
-const kafkaHeaders = "kafka_headers"
+// kafkaHeaders is the metadata key under which the full list of Kafka headers
+// is stored.
+const kafkaHeaders = "__rpcn_kafka_headers"
 
 // AddHeaders stores Kafka record headers in message metadata. Each header value
 // is stored under its key. Empty values are stored as nil, single-byte values
-// as rune and multibyte values as string. The ordered list of keys is stored
-// under "kafka_headers" for reconstruction.
+// as rune and multibyte values as string. The full original list of headers
+// is stored under the special key "__rpcn_kafka_headers".
 func AddHeaders(msg *service.Message, headers []kgo.RecordHeader) {
 	if len(headers) == 0 {
 		return
 	}
 
-	keys := make([]string, len(headers))
-	for i, h := range headers {
+	for _, h := range headers {
 		if h.Value == nil {
 			msg.MetaSetMut(h.Key, nil)
 		} else if n := len(h.Value); n == 0 {
@@ -42,57 +43,22 @@ func AddHeaders(msg *service.Message, headers []kgo.RecordHeader) {
 		} else {
 			msg.MetaSetMut(h.Key, string(h.Value))
 		}
-		keys[i] = h.Key
 	}
-	msg.MetaSetMut(kafkaHeaders, keys)
+	msg.MetaSetMut(kafkaHeaders, headers)
 }
 
 // ExtractHeaders reconstructs Kafka record headers from message metadata.
 // Returns nil if no headers are present. This is the inverse of [AddHeaders].
 func ExtractHeaders(msg *service.Message) []kgo.RecordHeader {
-	keys := extractKeys(msg)
-	if len(keys) == 0 {
+	m, ok := msg.MetaGetMut(kafkaHeaders)
+	if !ok {
 		return nil
 	}
-
-	headers := make([]kgo.RecordHeader, 0, len(keys))
-	for _, k := range extractKeys(msg) {
-		v, ok := msg.MetaGetMut(k)
-		if !ok {
-			continue
-		}
-		var vb []byte
-		switch val := v.(type) {
-		case nil:
-			vb = nil
-		case []byte:
-			vb = val
-		case rune:
-			vb = []byte{byte(val)}
-		case string:
-			vb = []byte(val)
-		default:
-			continue
-		}
-		headers = append(headers, kgo.RecordHeader{
-			Key:   k,
-			Value: vb,
-		})
+	headers, ok := m.([]kgo.RecordHeader)
+	if !ok {
+		return nil
 	}
-
 	return headers
-}
-
-func extractKeys(msg *service.Message) []string {
-	headers, ok := msg.MetaGetMut(kafkaHeaders)
-	if !ok {
-		return nil
-	}
-	keys, ok := headers.([]string)
-	if !ok {
-		return nil
-	}
-	return keys
 }
 
 // GetHeaderValue retrieves the last header value matching the given key.
