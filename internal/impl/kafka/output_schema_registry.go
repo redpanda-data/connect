@@ -145,7 +145,7 @@ func outputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (o *s
 	}
 
 	var srURLStr string
-	if srURLStr, err = pConf.FieldString(sriFieldURL); err != nil {
+	if srURLStr, err = pConf.FieldString(sroFieldURL); err != nil {
 		return
 	}
 	var srURL *url.URL
