@@ -1,0 +1,50 @@
+name: Update Bundles
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  update-bundles:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+    - name: Check Out Repo
+      uses: actions/checkout@v5
+      with:
+        fetch-depth: 0
+
+    - name: Install Go
+      uses: actions/setup-go@v6
+      with:
+        go-version: 1.25.5
+
+    - name: Extract version from tag
+      id: version
+      run: echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+    - name: Update bundles
+      run: |
+        chmod +x ./resources/scripts/update_bundles.sh
+        ./resources/scripts/update_bundles.sh
+
+    - name: Create Pull Request
+      uses: peter-evans/create-pull-request@v7
+      with:
+        commit-message: "chore: update bundle dependencies for ${{ steps.version.outputs.version }}"
+        title: "chore: update bundle dependencies for ${{ steps.version.outputs.version }}"
+        body: |
+          Automated bundle dependency update for release ${{ steps.version.outputs.version }}.
+
+          This PR updates all bundle dependencies in `public/bundle/` to the latest versions.
+
+          Once merged, bundle tags will be automatically created by the tag-bundles workflow.
+        branch: update-bundles-${{ steps.version.outputs.version }}
+        delete-branch: true
+        labels: |
+          dependencies
+          automated
