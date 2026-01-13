@@ -226,7 +226,22 @@ func SetupTestWithOracleDBVersion(t *testing.T, version string) (string, *TestDB
 	END;`
 
 	_, err = db.ExecContext(t.Context(), sql)
-	assert.NoError(t, err)
+	assert.NoError(t, err, "Creating 'testdb' schema for testing across multiple schemas")
+
+	sql = `
+	DECLARE
+		user_exists NUMBER;
+	BEGIN
+		SELECT COUNT(*) INTO user_exists FROM dba_users WHERE username = 'TESTDB2';
+		IF user_exists = 0 THEN
+			EXECUTE IMMEDIATE 'CREATE USER testdb2 IDENTIFIED BY testdb2123';
+			EXECUTE IMMEDIATE 'GRANT CONNECT, RESOURCE, DBA TO testdb2';
+			EXECUTE IMMEDIATE 'GRANT UNLIMITED TABLESPACE TO testdb2';
+		END IF;
+	END;`
+
+	_, err = db.ExecContext(t.Context(), sql)
+	assert.NoError(t, err, "Creating 'testdb2' schema for testing across multiple schemas")
 
 	t.Cleanup(func() {
 		assert.NoError(t, db.Close())
