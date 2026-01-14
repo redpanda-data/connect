@@ -131,6 +131,22 @@ type redisStreamsReader struct {
 	closeOnce  sync.Once
 }
 
+// ConnectionTest attempts to test the connection configuration of this input
+// without actually consuming data. The connection, if successful, is then
+// closed.
+func (r *redisStreamsReader) ConnectionTest(ctx context.Context) service.ConnectionTestResults {
+	client, err := r.clientCtor()
+	if err != nil {
+		return service.ConnectionTestFailed(err).AsList()
+	}
+	defer client.Close()
+
+	if _, err = client.Ping(ctx).Result(); err != nil {
+		return service.ConnectionTestFailed(err).AsList()
+	}
+	return service.ConnectionTestSucceeded().AsList()
+}
+
 func newRedisStreamsReader(conf *service.ParsedConfig, mgr *service.Resources) (r *redisStreamsReader, err error) {
 	connBoff := backoff.NewExponentialBackOff()
 	connBoff.InitialInterval = time.Millisecond * 100

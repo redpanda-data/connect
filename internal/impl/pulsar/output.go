@@ -17,7 +17,6 @@ package pulsar
 import (
 	"context"
 	"sync"
-	"time"
 
 	"github.com/apache/pulsar-client-go/pulsar"
 
@@ -131,18 +130,7 @@ func (p *pulsarWriter) Connect(context.Context) error {
 		err      error
 	)
 
-	opts := pulsar.ClientOptions{
-		Logger:                createDefaultLogger(p.log),
-		ConnectionTimeout:     time.Second * 3,
-		URL:                   p.url,
-		TLSTrustCertsFilePath: p.rootCasFile,
-	}
-
-	if p.authConf.OAuth2.Enabled {
-		opts.Authentication = pulsar.NewAuthenticationOAuth2(p.authConf.OAuth2.ToMap())
-	} else if p.authConf.Token.Enabled {
-		opts.Authentication = pulsar.NewAuthenticationToken(p.authConf.Token.Token)
-	}
+	opts := newClientOptions(p.authConf, p.url, p.rootCasFile, p.log)
 
 	if client, err = pulsar.NewClient(opts); err != nil {
 		return err
@@ -220,6 +208,28 @@ func (p *pulsarWriter) Write(ctx context.Context, msg *service.Message) error {
 
 	_, err = r.Send(ctx, m)
 	return err
+}
+
+// ConnectionTest attempts to test the connection configuration of this output
+// without actually sending data. The connection, if successful, is then
+// closed.
+func (p *pulsarWriter) ConnectionTest(_ context.Context) service.ConnectionTestResults {
+	opts := newClientOptions(p.authConf, p.url, p.rootCasFile, p.log)
+
+	client, err := pulsar.NewClient(opts)
+	if err != nil {
+		return service.ConnectionTestFailed(err).AsList()
+	}
+	defer client.Close()
+
+	// Test connection by querying topic partitions for a lightweight check
+	// This validates the client can communicate with the broker
+	_, err = client.TopicPartitions(p.topic)
+	if err != nil {
+		return service.ConnectionTestFailed(err).AsList()
+	}
+
+	return service.ConnectionTestSucceeded().AsList()
 }
 
 func (p *pulsarWriter) Close(context.Context) error {

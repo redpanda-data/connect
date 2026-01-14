@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 )
 
@@ -174,4 +175,115 @@ func TestIntegrationAMQP09WithoutQueueDeclareAutoDelete(t *testing.T) {
 
 func TestIntegrationAMQP09WithQueueDeclareAutoDelete(t *testing.T) {
 	doSetupAndAssertions(true, t)
+}
+
+func TestAMQP09ConnectionTestIntegration(t *testing.T) {
+	integration.CheckSkip(t)
+	t.Parallel()
+
+	pool, err := dockertest.NewPool("")
+	require.NoError(t, err)
+
+	pool.MaxWait = time.Minute
+	resource, err := pool.Run("rabbitmq", "latest", nil)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		assert.NoError(t, pool.Purge(resource))
+	})
+
+	_ = resource.Expire(900)
+	require.NoError(t, pool.Retry(func() error {
+		inConf, err := amqp.Dial(fmt.Sprintf("amqp://guest:guest@localhost:%v/", resource.GetPort("5672/tcp")))
+		if err != nil {
+			return err
+		}
+		inConf.Close()
+		return nil
+	}))
+
+	port := resource.GetPort("5672/tcp")
+
+	t.Run("input_valid", func(t *testing.T) {
+		resBuilder := service.NewResourceBuilder()
+
+		require.NoError(t, resBuilder.AddInputYAML(fmt.Sprintf(`
+label: test_input
+amqp_0_9:
+  urls: [ amqp://guest:guest@localhost:%v/ ]
+  queue: test-queue
+  queue_declare:
+    enabled: true
+`, port)))
+
+		resources, _, err := resBuilder.BuildSuspended()
+		require.NoError(t, err)
+
+		require.NoError(t, resources.AccessInput(t.Context(), "test_input", func(i *service.ResourceInput) {
+			connResults := i.ConnectionTest(t.Context())
+			require.Len(t, connResults, 1)
+			require.NoError(t, connResults[0].Err)
+		}))
+	})
+
+	t.Run("input_invalid", func(t *testing.T) {
+		resBuilder := service.NewResourceBuilder()
+
+		require.NoError(t, resBuilder.AddInputYAML(`
+label: test_input
+amqp_0_9:
+  urls: [ amqp://guest:guest@localhost:11111/ ]
+  queue: test-queue
+`))
+
+		resources, _, err := resBuilder.BuildSuspended()
+		require.NoError(t, err)
+
+		require.NoError(t, resources.AccessInput(t.Context(), "test_input", func(i *service.ResourceInput) {
+			connResults := i.ConnectionTest(t.Context())
+			require.Len(t, connResults, 1)
+			require.Error(t, connResults[0].Err)
+		}))
+	})
+
+	t.Run("output_valid", func(t *testing.T) {
+		resBuilder := service.NewResourceBuilder()
+
+		require.NoError(t, resBuilder.AddOutputYAML(fmt.Sprintf(`
+label: test_output
+amqp_0_9:
+  urls: [ amqp://guest:guest@localhost:%v/ ]
+  exchange: test-exchange
+  key: test-key
+`, port)))
+
+		resources, _, err := resBuilder.BuildSuspended()
+		require.NoError(t, err)
+
+		require.NoError(t, resources.AccessOutput(t.Context(), "test_output", func(o *service.ResourceOutput) {
+			connResults := o.ConnectionTest(t.Context())
+			require.Len(t, connResults, 1)
+			require.NoError(t, connResults[0].Err)
+		}))
+	})
+
+	t.Run("output_invalid", func(t *testing.T) {
+		resBuilder := service.NewResourceBuilder()
+
+		require.NoError(t, resBuilder.AddOutputYAML(`
+label: test_output
+amqp_0_9:
+  urls: [ amqp://guest:guest@localhost:11111/ ]
+  exchange: test-exchange
+  key: test-key
+`))
+
+		resources, _, err := resBuilder.BuildSuspended()
+		require.NoError(t, err)
+
+		require.NoError(t, resources.AccessOutput(t.Context(), "test_output", func(o *service.ResourceOutput) {
+			connResults := o.ConnectionTest(t.Context())
+			require.Len(t, connResults, 1)
+			require.Error(t, connResults[0].Err)
+		}))
+	})
 }

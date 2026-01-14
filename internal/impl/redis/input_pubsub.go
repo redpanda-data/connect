@@ -93,6 +93,17 @@ func newRedisPubSubReader(conf *service.ParsedConfig, mgr *service.Resources) (*
 	return r, nil
 }
 
+// ConnectionTest attempts to test the connection configuration of this input
+// without actually consuming data. The connection, if successful, is then
+// closed.
+func (r *redisPubSubReader) ConnectionTest(ctx context.Context) service.ConnectionTestResults {
+	_, err := r.client.Ping(ctx).Result()
+	if err != nil {
+		return service.ConnectionTestFailed(err).AsList()
+	}
+	return service.ConnectionTestSucceeded().AsList()
+}
+
 func (r *redisPubSubReader) Connect(ctx context.Context) error {
 	r.cMut.Lock()
 	defer r.cMut.Unlock()

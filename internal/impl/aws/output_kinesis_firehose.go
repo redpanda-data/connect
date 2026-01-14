@@ -149,6 +149,20 @@ func (a *kinesisFirehoseWriter) toRecords(batch service.MessageBatch) ([]types.R
 
 //------------------------------------------------------------------------------
 
+// ConnectionTest attempts to test the connection configuration of this output
+// without actually sending data. The connection, if successful, is then
+// closed.
+func (a *kinesisFirehoseWriter) ConnectionTest(ctx context.Context) service.ConnectionTestResults {
+	client := firehose.NewFromConfig(a.conf.aconf)
+	_, err := client.DescribeDeliveryStream(ctx, &firehose.DescribeDeliveryStreamInput{
+		DeliveryStreamName: aws.String(a.conf.Stream),
+	})
+	if err != nil {
+		return service.ConnectionTestFailed(fmt.Errorf("failed to describe delivery stream %s: %w", a.conf.Stream, err)).AsList()
+	}
+	return service.ConnectionTestSucceeded().AsList()
+}
+
 // Connect creates a new Kinesis Firehose client and ensures that the target
 // Kinesis Firehose delivery stream.
 func (a *kinesisFirehoseWriter) Connect(ctx context.Context) error {

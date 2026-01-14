@@ -157,6 +157,37 @@ func newNSQReaderFromParsed(conf *service.ParsedConfig, mgr *service.Resources) 
 	return
 }
 
+// ConnectionTest attempts to test the connection configuration of this input
+// without actually consuming data. The connection, if successful, is then
+// closed.
+func (n *nsqReader) ConnectionTest(_ context.Context) service.ConnectionTestResults {
+	cfg := nsq.NewConfig()
+	cfg.UserAgent = n.userAgent
+	cfg.MaxInFlight = n.maxInFlight
+	cfg.MaxAttempts = n.maxAttempts
+	if n.tlsConf != nil {
+		cfg.TlsV1 = true
+		cfg.TlsConfig = n.tlsConf
+	}
+
+	consumer, err := nsq.NewConsumer(n.topic, n.channel, cfg)
+	if err != nil {
+		return service.ConnectionTestFailed(err).AsList()
+	}
+	defer consumer.Stop()
+
+	consumer.SetLogger(llog.New(io.Discard, "", llog.Flags()), nsq.LogLevelError)
+
+	if err = consumer.ConnectToNSQDs(n.addresses); err != nil {
+		return service.ConnectionTestFailed(err).AsList()
+	}
+	if err = consumer.ConnectToNSQLookupds(n.lookupAddresses); err != nil {
+		return service.ConnectionTestFailed(err).AsList()
+	}
+
+	return service.ConnectionTestSucceeded().AsList()
+}
+
 func (n *nsqReader) HandleMessage(message *nsq.Message) error {
 	message.DisableAutoResponse()
 	select {

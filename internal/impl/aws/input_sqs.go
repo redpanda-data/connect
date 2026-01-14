@@ -157,6 +157,7 @@ func init() {
 //------------------------------------------------------------------------------
 
 type sqsAPI interface {
+	GetQueueAttributes(context.Context, *sqs.GetQueueAttributesInput, ...func(*sqs.Options)) (*sqs.GetQueueAttributesOutput, error)
 	ReceiveMessage(context.Context, *sqs.ReceiveMessageInput, ...func(*sqs.Options)) (*sqs.ReceiveMessageOutput, error)
 	DeleteMessageBatch(context.Context, *sqs.DeleteMessageBatchInput, ...func(*sqs.Options)) (*sqs.DeleteMessageBatchOutput, error)
 	ChangeMessageVisibilityBatch(context.Context, *sqs.ChangeMessageVisibilityBatchInput, ...func(*sqs.Options)) (*sqs.ChangeMessageVisibilityBatchOutput, error)
@@ -187,6 +188,21 @@ func newAWSSQSReader(conf sqsiConfig, aconf aws.Config, log *service.Logger) (*a
 		nackMessagesChan: make(chan *sqsMessageHandle),
 		closeSignal:      shutdown.NewSignaller(),
 	}, nil
+}
+
+// ConnectionTest attempts to test the connection configuration of this input
+// without actually consuming data. The connection, if successful, is then
+// closed.
+func (a *awsSQSReader) ConnectionTest(ctx context.Context) service.ConnectionTestResults {
+	client := sqs.NewFromConfig(a.aconf)
+	_, err := client.GetQueueAttributes(ctx, &sqs.GetQueueAttributesInput{
+		QueueUrl:       aws.String(a.conf.URL),
+		AttributeNames: []types.QueueAttributeName{types.QueueAttributeNameQueueArn},
+	})
+	if err != nil {
+		return service.ConnectionTestFailed(fmt.Errorf("failed to get queue attributes: %w", err)).AsList()
+	}
+	return service.ConnectionTestSucceeded().AsList()
 }
 
 // Connect attempts to establish a connection to the target SQS

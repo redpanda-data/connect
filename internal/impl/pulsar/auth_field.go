@@ -16,6 +16,9 @@ package pulsar
 
 import (
 	"errors"
+	"time"
+
+	"github.com/apache/pulsar-client-go/pulsar"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
@@ -154,4 +157,24 @@ func (c *tokenConfig) Validate() error {
 		return errors.New("token is empty")
 	}
 	return nil
+}
+
+// newClientOptions creates a pulsar.ClientOptions with the given configuration.
+// This helper is used by both input and output components to avoid duplicating
+// the client options setup logic.
+func newClientOptions(authConf authConfig, url, rootCasFile string, log *service.Logger) pulsar.ClientOptions {
+	opts := pulsar.ClientOptions{
+		Logger:                createDefaultLogger(log),
+		ConnectionTimeout:     time.Second * 3,
+		URL:                   url,
+		TLSTrustCertsFilePath: rootCasFile,
+	}
+
+	if authConf.OAuth2.Enabled {
+		opts.Authentication = pulsar.NewAuthenticationOAuth2(authConf.OAuth2.ToMap())
+	} else if authConf.Token.Enabled {
+		opts.Authentication = pulsar.NewAuthenticationToken(authConf.Token.Token)
+	}
+
+	return opts
 }

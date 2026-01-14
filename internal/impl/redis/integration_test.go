@@ -27,6 +27,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
+	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 )
 
@@ -395,5 +396,222 @@ input:
 			integration.StreamTestOptSleepAfterOutput(100*time.Millisecond),
 			integration.StreamTestOptPort(resource.GetPort("6379/tcp")),
 		)
+	})
+}
+
+func TestRedisConnectionTestIntegration(t *testing.T) {
+	integration.CheckSkip(t)
+	t.Parallel()
+
+	pool, err := dockertest.NewPool("")
+	require.NoError(t, err)
+
+	pool.MaxWait = time.Second * 30
+	resource, err := pool.Run("redis", "latest", nil)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		assert.NoError(t, pool.Purge(resource))
+	})
+
+	urlStr := fmt.Sprintf("tcp://localhost:%v", resource.GetPort("6379/tcp"))
+	uri, err := url.Parse(urlStr)
+	require.NoError(t, err)
+
+	client := redis.NewClient(&redis.Options{
+		Addr:    uri.Host,
+		Network: uri.Scheme,
+	})
+
+	_ = resource.Expire(900)
+	require.NoError(t, pool.Retry(func() error {
+		return client.Ping(t.Context()).Err()
+	}))
+
+	port := resource.GetPort("6379/tcp")
+
+	t.Run("streams_input_valid", func(t *testing.T) {
+		resBuilder := service.NewResourceBuilder()
+
+		require.NoError(t, resBuilder.AddInputYAML(fmt.Sprintf(`
+label: test_input
+redis_streams:
+  url: tcp://localhost:%v
+  streams: [ test-stream ]
+  body_key: body
+  consumer_group: test-group
+  client_id: test-client
+`, port)))
+
+		resources, _, err := resBuilder.BuildSuspended()
+		require.NoError(t, err)
+
+		require.NoError(t, resources.AccessInput(t.Context(), "test_input", func(i *service.ResourceInput) {
+			connResults := i.ConnectionTest(t.Context())
+			require.Len(t, connResults, 1)
+			require.NoError(t, connResults[0].Err)
+		}))
+	})
+
+	t.Run("streams_output_valid", func(t *testing.T) {
+		resBuilder := service.NewResourceBuilder()
+
+		require.NoError(t, resBuilder.AddOutputYAML(fmt.Sprintf(`
+label: test_output
+redis_streams:
+  url: tcp://localhost:%v
+  stream: test-stream
+  body_key: body
+`, port)))
+
+		resources, _, err := resBuilder.BuildSuspended()
+		require.NoError(t, err)
+
+		require.NoError(t, resources.AccessOutput(t.Context(), "test_output", func(o *service.ResourceOutput) {
+			connResults := o.ConnectionTest(t.Context())
+			require.Len(t, connResults, 1)
+			require.NoError(t, connResults[0].Err)
+		}))
+	})
+
+	t.Run("list_input_valid", func(t *testing.T) {
+		resBuilder := service.NewResourceBuilder()
+
+		require.NoError(t, resBuilder.AddInputYAML(fmt.Sprintf(`
+label: test_input
+redis_list:
+  url: tcp://localhost:%v
+  key: test-list
+`, port)))
+
+		resources, _, err := resBuilder.BuildSuspended()
+		require.NoError(t, err)
+
+		require.NoError(t, resources.AccessInput(t.Context(), "test_input", func(i *service.ResourceInput) {
+			connResults := i.ConnectionTest(t.Context())
+			require.Len(t, connResults, 1)
+			require.NoError(t, connResults[0].Err)
+		}))
+	})
+
+	t.Run("list_output_valid", func(t *testing.T) {
+		resBuilder := service.NewResourceBuilder()
+
+		require.NoError(t, resBuilder.AddOutputYAML(fmt.Sprintf(`
+label: test_output
+redis_list:
+  url: tcp://localhost:%v
+  key: test-list
+`, port)))
+
+		resources, _, err := resBuilder.BuildSuspended()
+		require.NoError(t, err)
+
+		require.NoError(t, resources.AccessOutput(t.Context(), "test_output", func(o *service.ResourceOutput) {
+			connResults := o.ConnectionTest(t.Context())
+			require.Len(t, connResults, 1)
+			require.NoError(t, connResults[0].Err)
+		}))
+	})
+
+	t.Run("pubsub_input_valid", func(t *testing.T) {
+		resBuilder := service.NewResourceBuilder()
+
+		require.NoError(t, resBuilder.AddInputYAML(fmt.Sprintf(`
+label: test_input
+redis_pubsub:
+  url: tcp://localhost:%v
+  channels: [ test-channel ]
+`, port)))
+
+		resources, _, err := resBuilder.BuildSuspended()
+		require.NoError(t, err)
+
+		require.NoError(t, resources.AccessInput(t.Context(), "test_input", func(i *service.ResourceInput) {
+			connResults := i.ConnectionTest(t.Context())
+			require.Len(t, connResults, 1)
+			require.NoError(t, connResults[0].Err)
+		}))
+	})
+
+	t.Run("pubsub_output_valid", func(t *testing.T) {
+		resBuilder := service.NewResourceBuilder()
+
+		require.NoError(t, resBuilder.AddOutputYAML(fmt.Sprintf(`
+label: test_output
+redis_pubsub:
+  url: tcp://localhost:%v
+  channel: test-channel
+`, port)))
+
+		resources, _, err := resBuilder.BuildSuspended()
+		require.NoError(t, err)
+
+		require.NoError(t, resources.AccessOutput(t.Context(), "test_output", func(o *service.ResourceOutput) {
+			connResults := o.ConnectionTest(t.Context())
+			require.Len(t, connResults, 1)
+			require.NoError(t, connResults[0].Err)
+		}))
+	})
+
+	t.Run("hash_output_valid", func(t *testing.T) {
+		resBuilder := service.NewResourceBuilder()
+
+		require.NoError(t, resBuilder.AddOutputYAML(fmt.Sprintf(`
+label: test_output
+redis_hash:
+  url: tcp://localhost:%v
+  key: test-key
+  fields:
+    foo: bar
+`, port)))
+
+		resources, _, err := resBuilder.BuildSuspended()
+		require.NoError(t, err)
+
+		require.NoError(t, resources.AccessOutput(t.Context(), "test_output", func(o *service.ResourceOutput) {
+			connResults := o.ConnectionTest(t.Context())
+			require.Len(t, connResults, 1)
+			require.NoError(t, connResults[0].Err)
+		}))
+	})
+
+	t.Run("scan_input_valid", func(t *testing.T) {
+		resBuilder := service.NewResourceBuilder()
+
+		require.NoError(t, resBuilder.AddInputYAML(fmt.Sprintf(`
+label: test_input
+redis_scan:
+  url: tcp://localhost:%v
+  match: "*"
+`, port)))
+
+		resources, _, err := resBuilder.BuildSuspended()
+		require.NoError(t, err)
+
+		require.NoError(t, resources.AccessInput(t.Context(), "test_input", func(i *service.ResourceInput) {
+			connResults := i.ConnectionTest(t.Context())
+			require.Len(t, connResults, 1)
+			require.NoError(t, connResults[0].Err)
+		}))
+	})
+
+	t.Run("invalid_connection", func(t *testing.T) {
+		resBuilder := service.NewResourceBuilder()
+
+		require.NoError(t, resBuilder.AddInputYAML(`
+label: test_input
+redis_list:
+  url: tcp://localhost:11111
+  key: test-list
+`))
+
+		resources, _, err := resBuilder.BuildSuspended()
+		require.NoError(t, err)
+
+		require.NoError(t, resources.AccessInput(t.Context(), "test_input", func(i *service.ResourceInput) {
+			connResults := i.ConnectionTest(t.Context())
+			require.Len(t, connResults, 1)
+			require.Error(t, connResults[0].Err)
+		}))
 	})
 }

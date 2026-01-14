@@ -122,6 +122,25 @@ func newMQTTWriterFromParsed(conf *service.ParsedConfig, mgr *service.Resources)
 	return m, nil
 }
 
+// ConnectionTest attempts to test the connection configuration of this output
+// without actually sending data. The connection, if successful, is then
+// closed.
+func (m *mqttWriter) ConnectionTest(_ context.Context) service.ConnectionTestResults {
+	conf := m.clientBuilder.apply(mqtt.NewClientOptions()).
+		SetWriteTimeout(m.writeTimeout)
+
+	tmpClient := mqtt.NewClient(conf)
+
+	tok := tmpClient.Connect()
+	tok.Wait()
+	if err := tok.Error(); err != nil {
+		return service.ConnectionTestFailed(err).AsList()
+	}
+
+	tmpClient.Disconnect(250)
+	return service.ConnectionTestSucceeded().AsList()
+}
+
 func (m *mqttWriter) Connect(context.Context) error {
 	m.connMut.Lock()
 	defer m.connMut.Unlock()
