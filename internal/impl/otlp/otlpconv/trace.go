@@ -230,6 +230,11 @@ func spanKindFromRedpanda(src pb.Span_SpanKind) ptrace.SpanKind {
 
 // spanStatusToRedpanda converts pdata Status to Redpanda protobuf Status.
 func spanStatusToRedpanda(src ptrace.Status) *pb.Status {
+	// Return nil for unset status to maintain idempotency with spanStatusFromRedpanda
+	if src.Code() == ptrace.StatusCodeUnset && src.Message() == "" {
+		return nil
+	}
+
 	pbStatus := &pb.Status{
 		Message: src.Message(),
 	}

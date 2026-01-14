@@ -178,7 +178,12 @@ func TestSpanStatusConversion(t *testing.T) {
 
 			// Convert to Redpanda
 			redpanda := spanStatusToRedpanda(original)
-			assert.Equal(t, tt.message, redpanda.Message)
+			if tt.message == "" {
+				assert.Nil(t, redpanda)
+			} else {
+				require.NotNil(t, redpanda)
+				assert.Equal(t, tt.message, redpanda.Message)
+			}
 
 			// Convert back
 			reconstructed := ptrace.NewStatus()
