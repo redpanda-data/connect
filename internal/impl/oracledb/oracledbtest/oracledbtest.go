@@ -98,6 +98,11 @@ func (db *TestDB) CreateTableWithSupplementalLoggingIfNotExists(ctx context.Cont
 	schema := strings.ToUpper(table[0])
 	tableName := strings.ToUpper(table[1])
 
+	// Enable creation of local users in CDB root (required to avoid ORA-65096)
+	if _, err := db.Exec("ALTER SESSION SET \"_ORACLE_SCRIPT\"=TRUE"); err != nil {
+		return err
+	}
+
 	q := `
 	DECLARE
 		user_exists NUMBER;
@@ -203,7 +208,7 @@ func SetupTestWithOracleDBVersion(t *testing.T, version string) (string, *TestDB
 		assert.NoError(t, err)
 
 		// Now connect to the PDB (XEPDB1) for application use
-		pdbConnectionString = fmt.Sprintf("oracle://system:YourPassword123@localhost:%s/XEPDB1", port)
+		pdbConnectionString = fmt.Sprintf("oracle://system:YourPassword123@localhost:%s/XE", port)
 		db, err = sql.Open("oracle", pdbConnectionString)
 		if err != nil {
 			return err
@@ -220,6 +225,10 @@ func SetupTestWithOracleDBVersion(t *testing.T, version string) (string, *TestDB
 		return nil
 	})
 	require.NoError(t, err)
+
+	// Enable creation of local users in CDB root (required to avoid ORA-65096)
+	_, err = db.ExecContext(t.Context(), "ALTER SESSION SET \"_ORACLE_SCRIPT\"=TRUE")
+	require.NoError(t, err, "Failed to enable _ORACLE_SCRIPT session parameter")
 
 	sql := `
 	DECLARE

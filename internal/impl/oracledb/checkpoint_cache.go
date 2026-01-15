@@ -20,6 +20,7 @@ import (
 	"github.com/Jeffail/shutdown"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/connect/v4/internal/impl/oracledb/replication"
 )
 
 const (
@@ -134,7 +135,13 @@ func (c *checkpointCache) Get(ctx context.Context, _ string) ([]byte, error) {
 		}
 		return nil, fmt.Errorf("querying checkpoint cache: %w", err)
 	}
-	return val, nil
+
+	// Validate the SCN bytes before returning
+	scn, err := replication.SCNFromBytes(val)
+	if err != nil {
+		return nil, fmt.Errorf("parsing cached SCN bytes: %w", err)
+	}
+	return scn.Bytes(), nil
 }
 
 // Set a cache item, specifying an optional TTL. It is okay for caches to
@@ -143,6 +150,7 @@ func (c *checkpointCache) Set(ctx context.Context, _ string, value []byte, _ *ti
 	if c.cacheSetStmt == nil {
 		return errors.New("prepared statement for cache set not initialised")
 	}
+	// go-ora driver handles []byte parameters as RAW type
 	if _, err := c.cacheSetStmt.ExecContext(ctx, defaultCacheKey, value); err != nil {
 		return fmt.Errorf("writing to checkpoint cache: %w", err)
 	}
@@ -174,10 +182,11 @@ func createCacheTable(ctx context.Context, db *sql.DB, tbl cacheTable) (bool, er
 
 	// Create table if it doesn't exist
 	// cache_key length is based on default (fixed) cache key
+	// cache_val stores binary data as RAW (8 bytes for SCN uint64)
 	createQuery := fmt.Sprintf(`
 		CREATE TABLE %s (
 			cache_key VARCHAR2(10) NOT NULL PRIMARY KEY,
-			cache_val VARCHAR2(100)
+			cache_val RAW(8)
 		)`, tbl.String())
 
 	if _, err := db.ExecContext(ctx, createQuery); err != nil {
@@ -208,10 +217,11 @@ func createUpsertStoredProc(ctx context.Context, db *sql.DB, cacheTable cacheTab
 	}
 
 	// Create the upsert procedure
+	// Note: go-ora driver handles []byte parameters as RAW type
 	createQuery := fmt.Sprintf(`
 		CREATE PROCEDURE %s (
 			p_key IN VARCHAR2,
-			p_value IN VARCHAR2
+			p_value IN RAW
 		)
 		AS
 			v_count NUMBER;
