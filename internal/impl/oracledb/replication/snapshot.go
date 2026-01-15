@@ -17,14 +17,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/redpanda-data/benthos/v4/public/service"
 	"golang.org/x/sync/errgroup"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 // Snapshot is responsible for creating snapshots of existing tables based on the Tables configuration value.
 type Snapshot struct {
 	db                      *sql.DB
-	tables                  []UserDefinedTable
+	tables                  []UserTable
 	publisher               ChangePublisher
 	log                     *service.Logger
 	snapshotStatusMetric    *service.MetricGauge
@@ -34,9 +35,9 @@ type Snapshot struct {
 // NewSnapshot creates a new instance of Snapshot capable of snapshotting provided tables.
 // It does this by creating a transaction with snapshot level isolation before paging
 // through rows, sending them to be batched.
-func NewSnapshot(
+func NewSnapshot(ctx context.Context,
 	connectionString string,
-	tables []UserDefinedTable,
+	tables []UserTable,
 	publisher ChangePublisher,
 	logger *service.Logger,
 	metrics *service.Metrics,
@@ -45,6 +46,12 @@ func NewSnapshot(
 	if err != nil {
 		return nil, fmt.Errorf("connecting to oracle database for snapshotting: %w", err)
 	}
+
+	// apply nls session for consistent logminer datetime output.
+	if err := ApplyNLSSettings(ctx, db); err != nil {
+		return nil, fmt.Errorf("configuring nls for snapshot session: %w", err)
+	}
+
 	s := &Snapshot{
 		db:                      db,
 		tables:                  tables,
@@ -60,22 +67,22 @@ func NewSnapshot(
 // Returns the current SCN for the snapshot.
 func (s *Snapshot) Prepare(ctx context.Context) (SCN, error) {
 	if len(s.tables) == 0 {
-		return nil, errors.New("no tables provided")
+		return InvalidSCN, errors.New("no tables provided")
 	}
 
 	var currentSCN SCN
 	if err := s.db.QueryRowContext(ctx, "SELECT CURRENT_SCN FROM V$DATABASE").Scan(&currentSCN); err != nil {
-		return nil, fmt.Errorf("getting current SCN for snapshot: %w", err)
+		return InvalidSCN, fmt.Errorf("getting current SCN for snapshot: %w", err)
 	}
 
-	// s.log.Infof("Starting snapshot at SCN: %s", currentSCN)
+	s.log.Infof("Captured SCN before snapshot at SCN: %s", currentSCN)
 	return currentSCN, nil
 }
 
 // Read launches N number of go routines (based on maxWorkers) and starts the process of
 // iterating through each table, reading rows based on maxBatchSize, sending the row as a
 // replication.MessageEvent to the configured publisher.
-func (s *Snapshot) Read(ctx context.Context, maxWorkers int, maxBatchSize int) error {
+func (s *Snapshot) Read(ctx context.Context, maxWorkers, maxBatchSize int) error {
 	s.log.Infof("Starting snapshot of %d table(s) using %d configured readers", len(s.tables), maxWorkers)
 
 	for _, table := range s.tables {
@@ -97,7 +104,7 @@ func (s *Snapshot) Read(ctx context.Context, maxWorkers int, maxBatchSize int) e
 }
 
 // snapshotTable is responsible for managing the entire process of replicating data from the table specified.
-func (s *Snapshot) snapshotTable(ctx context.Context, table UserDefinedTable, maxBatchSize int) func() error {
+func (s *Snapshot) snapshotTable(ctx context.Context, table UserTable, maxBatchSize int) func() error {
 	return func() error {
 		var (
 			err       error
@@ -151,20 +158,19 @@ func (s *Snapshot) snapshotTable(ctx context.Context, table UserDefinedTable, ma
 				batchRows, err = querySnapshotTable(ctx, tx, table, tablePks, lastSeenPksValues, maxBatchSize)
 			}
 			if err != nil {
-				return fmt.Errorf("failed to execute snapshot table query: %s", err)
+				return fmt.Errorf("failed to execute snapshot table query: %w", err)
 			}
+			defer batchRows.Close()
 
 			var types []*sql.ColumnType
-			types, err = batchRows.ColumnTypes()
-			if err != nil {
+			if types, err = batchRows.ColumnTypes(); err != nil {
 				return fmt.Errorf("failed to fetch column types: %w", err)
 			}
 
 			values, mappers := prepSnapshotScannerAndMappers(types)
 
 			var columns []string
-			columns, err = batchRows.Columns()
-			if err != nil {
+			if columns, err = batchRows.Columns(); err != nil {
 				return fmt.Errorf("failed to fetch columns: %w", err)
 			}
 
@@ -177,11 +183,13 @@ func (s *Snapshot) snapshotTable(ctx context.Context, table UserDefinedTable, ma
 					return err
 				}
 
+				var (
+					v   any
+					err error
+				)
 				row := map[string]any{}
-				var v any
 				for idx, value := range values {
-					v, err = mappers[idx](value)
-					if err != nil {
+					if v, err = mappers[idx](value); err != nil {
 						return err
 					}
 					row[columns[idx]] = v
@@ -195,9 +203,9 @@ func (s *Snapshot) snapshotTable(ctx context.Context, table UserDefinedTable, ma
 					Schema:    table.Schema,
 					Data:      row,
 					Operation: MessageOperationRead.String(),
-					SCN:       nil,
+					SCN:       0,
 				}
-				if err = s.publisher.Publish(ctx, m); err != nil {
+				if err = s.publisher.Publish(ctx, &m); err != nil {
 					return fmt.Errorf("handling snapshot table row: %w", err)
 				}
 			}
@@ -221,7 +229,7 @@ func (s *Snapshot) snapshotTable(ctx context.Context, table UserDefinedTable, ma
 	}
 }
 
-func getTablePrimaryKeys(ctx context.Context, tx *sql.Tx, table UserDefinedTable) ([]string, error) {
+func getTablePrimaryKeys(ctx context.Context, tx *sql.Tx, table UserTable) ([]string, error) {
 	// Oracle data dictionary query for primary key columns
 	// Note: Oracle stores identifiers in uppercase by default unless created with quotes
 	pkSQL := `
@@ -262,7 +270,7 @@ func getTablePrimaryKeys(ctx context.Context, tx *sql.Tx, table UserDefinedTable
 func querySnapshotTable(
 	ctx context.Context,
 	tx *sql.Tx,
-	table UserDefinedTable,
+	table UserTable,
 	pk []string,
 	lastSeenPkVal map[string]any,
 	limit int,
@@ -411,4 +419,27 @@ func snapshotValueMapper[T any](v any) (any, error) {
 		return nil, nil
 	}
 	return s.V, nil
+}
+
+// ApplyNLSSettings sets NLS session parameters for consistent LogMiner output formatting.
+// This ensures that LogMiner's SQL_REDO statements use 4-digit years (YYYY) instead of
+// 2-digit years (RR), which prevents date corruption for years beyond 1999.
+// This matches Debezium's approach for Oracle CDC.
+func ApplyNLSSettings(ctx context.Context, db *sql.DB) error {
+	if _, err := db.ExecContext(ctx, "ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD HH24:MI:SS'"); err != nil {
+		return fmt.Errorf("setting NLS_DATE_FORMAT: %w", err)
+	}
+	if _, err := db.ExecContext(ctx, "ALTER SESSION SET NLS_TIMESTAMP_FORMAT = 'YYYY-MM-DD HH24:MI:SS.FF9'"); err != nil {
+		return fmt.Errorf("setting NLS_TIMESTAMP_FORMAT: %w", err)
+	}
+	if _, err := db.ExecContext(ctx, "ALTER SESSION SET NLS_TIMESTAMP_TZ_FORMAT = 'YYYY-MM-DD HH24:MI:SS.FF9 TZH:TZM'"); err != nil {
+		return fmt.Errorf("setting NLS_TIMESTAMP_TZ_FORMAT: %w", err)
+	}
+	if _, err := db.ExecContext(ctx, "ALTER SESSION SET NLS_NUMERIC_CHARACTERS = '.,'"); err != nil {
+		return fmt.Errorf("setting NLS_NUMERIC_CHARACTERS: %w", err)
+	}
+	if _, err := db.ExecContext(ctx, "ALTER SESSION SET TIME_ZONE = '00:00'"); err != nil {
+		return fmt.Errorf("setting session timezone: %w", err)
+	}
+	return nil
 }
