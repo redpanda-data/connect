@@ -9,51 +9,15 @@
 package replication
 
 import (
-	"bytes"
-	"container/heap"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/confx"
 )
-
-type heapItem struct{ iter *changeTableRowIter }
-
-// rowIteratorMinHeap is used for sorting iterators by LSN to ensure they're in order across tables.
-type rowIteratorMinHeap []*heapItem
-
-func (h rowIteratorMinHeap) Len() int { return len(h) }
-
-func (h rowIteratorMinHeap) Less(i, j int) bool {
-	// Compare LSNs as byte slices. CDC LSNs are fixed-length varbinary(10) so lexicographic == numeric order.
-	// We also need to order by command_id, see below for more details:
-	// https://learn.microsoft.com/en-us/sql/relational-databases/system-tables/cdc-capture-instance-ct-transact-sql?view=sql-server-ver17
-	// First compare LSNs
-	if cmp := bytes.Compare(h[i].iter.current.startSCN, h[j].iter.current.startSCN); cmp != 0 {
-		return cmp < 0
-	}
-	// If LSN equal, compare command_id
-	if h[i].iter.current.commandID != h[j].iter.current.commandID {
-		return h[i].iter.current.commandID < h[j].iter.current.commandID
-	}
-	// If command_id equal, compare operation
-	return h[i].iter.current.operation < h[j].iter.current.operation
-}
-
-func (h rowIteratorMinHeap) Swap(i, j int) { h[i], h[j] = h[j], h[i] }
-func (h *rowIteratorMinHeap) Push(x any)   { *h = append(*h, x.(*heapItem)) }
-func (h *rowIteratorMinHeap) Pop() any {
-	old := *h
-	n := len(old)
-	item := old[n-1]
-	*h = old[:n-1]
-	return item
-}
 
 // change represents a logical change row from the change table.
 type change struct {
@@ -264,126 +228,6 @@ func mapScannedValue(val any, colType *sql.ColumnType) any {
 // ChangePublisher is responsible for handling and processing of a replication.MessageEvent.
 type ChangePublisher interface {
 	Publish(ctx context.Context, msg MessageEvent) error
-}
-
-// ChangeTableStream tracks and streams all change events from the configured change
-// tables tracked in tables.
-type ChangeTableStream struct {
-	tables          []UserDefinedTable
-	backoffInterval time.Duration
-	publisher       ChangePublisher
-	log             *service.Logger
-}
-
-// NewChangeTableStream creates a new instance of NewChangeTableStream, responsible
-// for paging through change events based on the tables param.
-func NewChangeTableStream(tables []UserDefinedTable, publisher ChangePublisher, backoffInterval time.Duration, logger *service.Logger) *ChangeTableStream {
-	s := &ChangeTableStream{
-		tables:          tables,
-		publisher:       publisher,
-		backoffInterval: backoffInterval,
-		log:             logger,
-	}
-	return s
-}
-
-// ReadChangeTables streams the change events from the configured SQL Server change tables.
-func (r *ChangeTableStream) ReadChangeTables(ctx context.Context, db *sql.DB, startPos SCN) error {
-	r.log.Infof("Starting streaming %d change table(s)", len(r.tables))
-	var (
-		startLSN SCN // load last checkpoint; nil means start from beginning in tables
-		endLSN   SCN // often set to fn_cdc_get_max_lsn(); nil means no upper bound
-		lastLSN  SCN
-	)
-
-	if len(startPos) != 0 {
-		startLSN = startPos
-		lastLSN = startPos
-		r.log.Infof("Resuming from recorded LSN position '%s'", startPos)
-	}
-
-	for {
-		// We have the "from" position, now fetch the "to" upper bound
-		if err := db.QueryRowContext(ctx, "SELECT sys.fn_cdc_get_max_lsn()").Scan(&endLSN); err != nil {
-			return err
-		}
-
-		// Create an iterator per table, table LSNs can be ordred but we need to create a global
-		// ordering by merging them (which we do using a using a (min) heap).
-		h := &rowIteratorMinHeap{}
-		heap.Init(h)
-
-		iters := make([]*changeTableRowIter, 0, len(r.tables))
-		for _, changeTable := range r.tables {
-			if len(startLSN) == 0 {
-				// if no previous LSN is set, start from beginning dictated by tracking table
-				startLSN = changeTable.startSCN
-			}
-
-			it, err := newChangeTableRowIter(ctx, db, changeTable, startLSN, endLSN, r.log)
-			if err != nil {
-				if errors.Is(err, sql.ErrNoRows) {
-					// No data means we can skip adding row iterator to the heap below
-					r.log.Debugf("Exhausted all changes for change table '%s'", changeTable.ToChangeTable())
-					continue
-				}
-				return fmt.Errorf("initialising iterator for change table '%s': %w", changeTable.ToChangeTable(), err)
-			}
-
-			if it != nil && it.current != nil {
-				iters = append(iters, it)
-				heap.Push(h, &heapItem{iter: it})
-			} else if it != nil {
-				it.Close()
-			}
-		}
-
-		for h.Len() > 0 {
-			// Pop the smallest LSN change
-			item := heap.Pop(h).(*heapItem)
-			cur := item.iter.current
-
-			msg := MessageEvent{
-				Table:     item.iter.table.Name,
-				Schema:    item.iter.table.Schema,
-				Data:      cur.columns,
-				SCN:       cur.startSCN,
-				Operation: cur.operation.String(),
-			}
-
-			if err := r.publisher.Publish(ctx, msg); err != nil {
-				// Clean up before returning error
-				for _, it := range iters {
-					_ = it.Close()
-				}
-				return err
-			} else {
-				// next page
-				lastLSN = cur.startSCN
-			}
-
-			// Advance the iterator and push back on heap to be sorted
-			if err := item.iter.next(); err != nil {
-				if errors.Is(err, sql.ErrNoRows) {
-					r.log.Debugf("Reached end of rows for change table '%s'", item.iter.table.ToChangeTable())
-				}
-				// exhausted all rows
-				item.iter.Close()
-			} else {
-				// put back advanced on the heap to sort it again
-				heap.Push(h, item)
-			}
-		}
-
-		if len(lastLSN) != 0 {
-			if !bytes.Equal(startLSN, lastLSN) {
-				startLSN = lastLSN
-			} else {
-				r.log.Debug("No more changes across all change tables, backing off...")
-				time.Sleep(r.backoffInterval)
-			}
-		}
-	}
 }
 
 // UserDefinedTable represents a found user's SQL Server table (called a user-defined table) in SQL.
