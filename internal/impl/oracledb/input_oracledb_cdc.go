@@ -296,9 +296,12 @@ func (i *oracleDBCDCInput) Connect(ctx context.Context) error {
 	}
 
 	// setup snapshotting and streaming
+	type streamProcessor interface {
+		ReadChanges(ctx context.Context, db *sql.DB, startPos replication.SCN) error
+	}
 	var (
 		snapshotter *replication.Snapshot
-		streaming   *replication.ChangeTableStream
+		streaming   streamProcessor
 	)
 	// no cached SCN means we're not recovering from a restart
 	if i.cfg.streamSnapshot && len(cachedSCN) == 0 {
@@ -309,7 +312,7 @@ func (i *oracleDBCDCInput) Connect(ctx context.Context) error {
 		i.log.Infof("Snapshotting disabled, skipping...")
 	}
 
-	streaming = replication.NewChangeTableStream(userTables, i.publisher, i.cfg.streamBackoffInterval, i.log)
+	streaming = replication.NewLogMiner(userTables, i.publisher, i.cfg.streamBackoffInterval, i.log)
 
 	// Reset our stop signal
 	i.stopSig = shutdown.NewSignaller()
@@ -348,8 +351,7 @@ func (i *oracleDBCDCInput) Connect(ctx context.Context) error {
 		// streaming
 		wg, _ := errgroup.WithContext(softCtx)
 		wg.Go(func() error {
-			return nil
-			if err := streaming.ReadChangeTables(ctx, i.db, maxSCN); err != nil {
+			if err := streaming.ReadChanges(ctx, i.db, maxSCN); err != nil {
 				return fmt.Errorf("streaming from change tables: %w", err)
 			}
 			return nil
