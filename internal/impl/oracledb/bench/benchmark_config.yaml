@@ -4,14 +4,14 @@ http:
 input:
   oracledb_cdc:
     connection_string: oracle://testdb:testdb123@localhost:1521/XEPDB1
-    stream_snapshot: true
+    stream_snapshot: false
     snapshot_max_batch_size: 500
     include:
       - TESTDB.USERS
       # - testdb.products
       # - testdb.cart
     batching:
-      count: 1
+      count: 50
 
 
 output:
@@ -19,8 +19,8 @@ output:
     - benchmark:
         interval: 1s
         count_bytes: true
-  drop: {}
-  # stdout: {}
+  # drop: {}
+  stdout: {}
 
 logger:
   level: DEBUG
