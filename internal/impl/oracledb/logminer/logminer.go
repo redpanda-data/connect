@@ -128,8 +128,13 @@ func (lm *LogMiner) miningCycle(_ context.Context) error { // 1. Collect log fil
 		return fmt.Errorf("failed to remove old log files: %w", err)
 	}
 
-	for _, logFile := range logFiles {
-		if err := lm.sessionMgr.AddLogFile(logFile.FileName); err != nil {
+	// for _, logFile := range logFiles {
+	// 	if err := lm.sessionMgr.AddLogFile(logFile.FileName); err != nil {
+	// 		return fmt.Errorf("failed to add log file %s: %w", logFile.FileName, err)
+	// 	}
+	// }
+	for i, logFile := range logFiles {
+		if err := lm.sessionMgr.AddLogFile(logFile.FileName, i == 0); err != nil {
 			return fmt.Errorf("failed to add log file %s: %w", logFile.FileName, err)
 		}
 	}
@@ -257,8 +262,8 @@ func (lm *LogMiner) queryLogMinerContents(startSCN, endSCN uint64) ([]*LogMinerE
 // LogFile represents a redo or archive log file
 type LogFile struct {
 	FileName  string
-	FirstSCN  int64
-	NextSCN   int64
+	FirstSCN  uint64
+	NextSCN   uint64
 	Sequence  int64
 	Type      string // "ONLINE" or "ARCHIVED"
 	IsCurrent bool
