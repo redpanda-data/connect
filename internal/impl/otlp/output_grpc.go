@@ -28,7 +28,6 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/encoding/gzip"
-	"google.golang.org/grpc/metadata"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/utils/netutil"
@@ -38,7 +37,6 @@ import (
 
 const (
 	goFieldEndpoint    = "endpoint"
-	goFieldAuthToken   = "auth_token"
 	goFieldTimeout     = "timeout"
 	goFieldCompression = "compression"
 	goFieldTLS         = "tls"
@@ -50,7 +48,6 @@ const (
 type grpcOutputConfig struct {
 	Endpoint     string
 	TLS          tlsClientConfig
-	AuthToken    string
 	Timeout      time.Duration
 	Compression  string
 	DialerConfig netutil.DialerConfig
@@ -79,11 +76,6 @@ The entire batch is converted to a single OTLP export request and sent via gRPC.
 		Fields(
 			service.NewStringField(goFieldEndpoint).
 				Description("The gRPC endpoint of the remote OTLP collector."),
-			service.NewStringField(goFieldAuthToken).
-				Description("Optional bearer token for authentication. When set, the token is sent in the 'authorization: Bearer <token>' metadata.").
-				Default("").
-				Secret().
-				Advanced(),
 			service.NewDurationField(goFieldTimeout).
 				Description("Timeout for gRPC requests.").
 				Default("30s").
@@ -124,9 +116,6 @@ func GRPCOutputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (
 
 	// Parse gRPC-specific config
 	if conf.Endpoint, err = pConf.FieldString(goFieldEndpoint); err != nil {
-		return nil, err
-	}
-	if conf.AuthToken, err = pConf.FieldString(goFieldAuthToken); err != nil {
 		return nil, err
 	}
 	if conf.Timeout, err = pConf.FieldDuration(goFieldTimeout); err != nil {
@@ -242,12 +231,6 @@ func (o *grpcOTLPOutput) WriteBatch(ctx context.Context, batch service.MessageBa
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, o.conf.Timeout)
 		defer cancel()
-	}
-
-	// Add auth token if configured
-	if o.conf.AuthToken != "" {
-		ctx = metadata.AppendToOutgoingContext(ctx,
-			"authorization", "Bearer "+o.conf.AuthToken)
 	}
 
 	// Detect signal type from first message

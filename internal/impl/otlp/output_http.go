@@ -40,7 +40,6 @@ import (
 const (
 	hoFieldEndpoint        = "endpoint"
 	hoFieldContentType     = "content_type"
-	hoFieldAuthToken       = "auth_token"
 	hoFieldTimeout         = "timeout"
 	hoFieldProxyURL        = "proxy_url"
 	hoFieldFollowRedirects = "follow_redirects"
@@ -58,6 +57,7 @@ type httpOutputConfig struct {
 	ProxyURL        string
 	FollowRedirects bool
 	DisableHTTP2    bool
+	AuthSigner      func(*http.Request) error
 	TLS             tlsClientConfig
 	DialerConfig    netutil.DialerConfig
 }
@@ -96,7 +96,10 @@ Supports two content types:
 
 ## Authentication
 
-When `+"`auth_token`"+` is configured, the token is sent in the Authorization header as a bearer token.
+Supports multiple authentication methods:
+- Basic authentication
+- OAuth v1
+- JWT
 `).
 		Fields(
 			service.NewStringField(hoFieldEndpoint).
@@ -104,11 +107,6 @@ When `+"`auth_token`"+` is configured, the token is sent in the Authorization he
 			service.NewStringEnumField(hoFieldContentType, "protobuf", "json").
 				Description("Content type for HTTP requests. Options: 'protobuf' or 'json'.").
 				Default(defaultContentType).
-				Advanced(),
-			service.NewStringField(hoFieldAuthToken).
-				Description("Optional bearer token for authentication. When set, the token is sent in the 'Authorization: Bearer <token>' header.").
-				Default("").
-				Secret().
 				Advanced(),
 			service.NewDurationField(hoFieldTimeout).
 				Description("Timeout for HTTP requests.").
@@ -134,6 +132,7 @@ When `+"`auth_token`"+` is configured, the token is sent in the Authorization he
 				Optional(),
 			netutil.DialerConfigSpec(),
 		).
+		Fields(service.NewHTTPRequestAuthSignerFields()...).
 		Fields(service.NewOutputMaxInFlightField())
 }
 
@@ -166,9 +165,6 @@ func HTTPOutputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (
 	if conf.ContentType, err = pConf.FieldString(hoFieldContentType); err != nil {
 		return nil, err
 	}
-	if conf.AuthToken, err = pConf.FieldString(hoFieldAuthToken); err != nil {
-		return nil, err
-	}
 	if conf.Timeout, err = pConf.FieldDuration(hoFieldTimeout); err != nil {
 		return nil, err
 	}
@@ -180,6 +176,15 @@ func HTTPOutputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (
 	}
 	if conf.DisableHTTP2, err = pConf.FieldBool(hoFieldDisableHTTP2); err != nil {
 		return nil, err
+	}
+
+	// Parse auth configuration
+	authSigner, err := pConf.HTTPRequestAuthSignerFromParsed()
+	if err != nil {
+		return nil, fmt.Errorf("parse auth config: %w", err)
+	}
+	conf.AuthSigner = func(req *http.Request) error {
+		return authSigner(nil, req)
 	}
 
 	// Parse TLS config
@@ -381,8 +386,11 @@ func (o *httpOTLPOutput) sendHTTPRequest(
 	}
 	req.Header.Set("Content-Type", o.contentType)
 
-	if o.conf.AuthToken != "" {
-		req.Header.Set("Authorization", "Bearer "+o.conf.AuthToken)
+	// Apply authentication
+	if o.conf.AuthSigner != nil {
+		if err := o.conf.AuthSigner(req); err != nil {
+			return fmt.Errorf("sign HTTP request: %w", err)
+		}
 	}
 
 	resp, err := o.client.Do(req)
