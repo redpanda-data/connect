@@ -9,53 +9,56 @@
 package replication
 
 import (
-	"encoding/hex"
+	"encoding/binary"
 	"fmt"
+	"strconv"
+	"time"
 )
 
-// SCN represents an Oracle System Change Number
-type SCN []byte
+// SCN represents an Oracle System Change Number (SCN).
+type SCN uint64
 
-// Scan implements the Scanner interface.
-func (scn *SCN) Scan(src any) error {
-	if src == nil { // db returned nil, CDC record may not exist yet
-		*scn = nil
-		return nil
-	}
+// InvalidSCN represents an SCN value that's unset or invalid.
+const InvalidSCN SCN = 0
 
-	switch v := src.(type) {
-	case []byte:
-		if len(v) == 0 {
-			*scn = nil
-		} else {
-			// copy to avoid driver buffer reuse
-			*scn = append((*scn)[:0], v...)
-		}
-		return nil
-	case string:
-		// Oracle might return SCN as string
-		if v == "" {
-			*scn = nil
-		} else {
-			*scn = []byte(v)
-		}
-		return nil
-	case int64:
-		// Oracle might return SCN as number
-		*scn = []byte(fmt.Sprintf("%d", v))
-		return nil
-	default:
-		*scn = nil
-		return fmt.Errorf("cannot scan %T to SCN", src)
-	}
+// String formats the SCN to a string for logging.
+func (scn SCN) String() string {
+	return strconv.FormatUint(uint64(scn), 10)
 }
 
-// String formats the SCN to the hexadecimal equivalent.
-func (scn SCN) String() string {
-	if len(scn) == 0 {
-		return ""
+// Bytes converts a uint64 value SCN into a byte slice.
+func (scn SCN) Bytes() []byte {
+	b := make([]byte, 8)
+	binary.LittleEndian.PutUint64(b, uint64(scn))
+	return b
+}
+
+// IsValid verifies that the SCN is considered a valid SCN.
+func (scn SCN) IsValid() bool {
+	return scn > 0
+}
+
+// ParseSCN parses a string into an SCN value.
+func ParseSCN(s string) (SCN, error) {
+	if s == "" {
+		return InvalidSCN, nil
 	}
-	return "0x" + hex.EncodeToString(scn)
+	val, err := strconv.ParseUint(s, 10, 64)
+	if err != nil {
+		return InvalidSCN, fmt.Errorf("failed to parse SCN from string %q: %w", s, err)
+	}
+	return SCN(val), nil
+}
+
+// SCNFromBytes converts a byte slice to an SCN value
+func SCNFromBytes(b []byte) (SCN, error) {
+	if len(b) == 0 {
+		return InvalidSCN, nil
+	}
+	if len(b) != 8 {
+		return InvalidSCN, fmt.Errorf("expected 8 bytes for SCN, got %d", len(b))
+	}
+	return SCN(binary.LittleEndian.Uint64(b)), nil
 }
 
 // OpType is the type of operation from the database.
@@ -94,9 +97,10 @@ func (op OpType) String() string {
 
 // MessageEvent represents a single change from Table's change table in the database.
 type MessageEvent struct {
-	SCN       SCN    `json:"start_scn"`
-	Operation string `json:"operation"`
-	Schema    string `json:"schema"`
-	Table     string `json:"table"`
-	Data      any    `json:"data"`
+	SCN       SCN       `json:"start_scn"`
+	Operation string    `json:"operation"`
+	Schema    string    `json:"schema"`
+	Table     string    `json:"table"`
+	Data      any       `json:"data"`
+	Timestamp time.Time `json:"timestamp"`
 }
