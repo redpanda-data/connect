@@ -30,6 +30,16 @@ jobs:
     - name: Install Task
       uses: ./.github/actions/setup-task
 
+    - name: Free disk space
+      run: |
+        sudo rm -rf /usr/share/dotnet
+        sudo rm -rf /usr/local/lib/android
+        sudo rm -rf /opt/ghc
+        sudo rm -rf /usr/local/.ghcup
+        sudo rm -rf /usr/share/swift
+        sudo rm -rf /usr/local/share/powershell
+        sudo docker image prune --all --force
+
     - name: Deps
       run: task deps && git diff-index --quiet HEAD || { >&2 echo "Stale go.{mod,sum} detected. This can be fixed with 'task deps'."; exit 1; }
 
