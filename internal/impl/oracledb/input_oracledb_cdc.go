@@ -22,6 +22,7 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/confx"
+	"github.com/redpanda-data/connect/v4/internal/impl/oracledb/logminer"
 	"github.com/redpanda-data/connect/v4/internal/impl/oracledb/replication"
 	"github.com/redpanda-data/connect/v4/internal/license"
 )
@@ -31,7 +32,7 @@ const (
 	fieldStreamSnapshot            = "stream_snapshot"
 	fieldMaxParallelSnapshotTables = "max_parallel_snapshot_tables"
 	fieldSnapshotMaxBatchSize      = "snapshot_max_batch_size"
-	fieldStreamBackoffInterval     = "stream_backoff_interval"
+	fieldLogMiner                  = "logminer"
 	fieldTablesExclude             = "exclude"
 	fieldTablesInclude             = "include"
 	fieldCheckpointLimit           = "checkpoint_limit"
@@ -51,7 +52,7 @@ var oracleDBStreamConfigSpec = service.NewConfigSpec().
 	Beta().
 	Categories("Services").
 	Version("0.0.1").
-	Summary("Enables Change Data Capture by consuming from Oracle's change tables.").
+	Summary("Enables Change Data Capture by consuming from OracleDB.").
 	Description(`Streams changes from an Oracle database for Change Data Capture (CDC).
 Additionally, if ` + "`" + fieldStreamSnapshot + "`" + ` is set to true, then the existing data in the database is also streamed too.
 
@@ -83,6 +84,18 @@ When using the default Oracle based cache, the Connect user requires permission 
 		Description("The maximum number of rows to be streamed in a single batch when taking a snapshot.").
 		Default(1000),
 	).
+	Field(service.NewObjectField(fieldLogMiner,
+		service.NewIntField(logminer.FieldMaxBatchSize).
+			Description("The maximum number of records to be queried when parsing log lines via LogMiner. Smaller batches mean more frequent queries with higher overhead but lower latency, larger batches mean fewer queries with better throughput but require more memory.").
+			Default(logminer.DefaultMaxBatchSize),
+		service.NewDurationField(logminer.FieldBackoffInterval).
+			Description("The interval between attempts to check for new changes once all data is processed. For low traffic tables increasing this value can reduce network traffic to the server.").
+			Default(logminer.DefaultBackoffInterval.String()).
+			Example("5s").Example("1m"),
+		service.NewStringField(logminer.FieldMiningStrategy).
+			Description("Controls how LogMiner retrieves data dictionary information. `online_catalog` (default) uses the current data dictionary for best performance but cannot capture DDL changes. `online_catalog` currently only supported.").
+			Default(logminer.DefaultMiningStrategy),
+	).Description("LogMiner configuration settings.").Optional()).
 	Field(service.NewStringListField(fieldTablesInclude).
 		Description("Regular expressions for tables to include.").
 		Example("SCHEMA.PRODUCTS"),
@@ -93,11 +106,11 @@ When using the default Oracle based cache, the Connect user requires permission 
 		Optional(),
 	).
 	Field(service.NewStringField(fieldCheckpointCache).
-		Description("A https://www.docs.redpanda.com/redpanda-connect/components/caches/about[cache resource^] to use for storing the current System Change Number (SCN) that has been successfully delivered, this allows Redpanda Connect to continue from that System Change Number (SCN) upon restart, rather than consume the entire state of the change table. If not set the default Oracle based cache will be used, see `" + fieldCheckpointCacheTableName + "` for more information.").
+		Description("A https://www.docs.redpanda.com/redpanda-connect/components/caches/about[cache resource^] to use for storing the current System Change Number (SCN) that has been successfully delivered, this allows Redpanda Connect to continue from that System Change Number (SCN) upon restart, rather than consume the entire state of OracleDB's redo logs. If not set the default Oracle based cache will be used, see `" + fieldCheckpointCacheTableName + "` for more information.").
 		Optional(),
 	).
 	Field(service.NewStringField(fieldCheckpointCacheTableName).
-		Description("The identifier for the checkpoint cache table name. If no `" + fieldCheckpointCache + "` field is specified, this input will automatically create a table and stored procedure under the `rpcn` schema to act as a checkpoint cache. This table stores the latest processed System Change Number (SCN) that has been successfully delivered, allowing Redpanda Connect to resume from that point upon restart rather than reconsume the entire change table.").
+		Description("The identifier for the checkpoint cache table name. If no `" + fieldCheckpointCache + "` field is specified, this input will automatically create a table and stored procedure under the `rpcn` schema to act as a checkpoint cache. This table stores the latest processed System Change Number (SCN) that has been successfully delivered, allowing Redpanda Connect to resume from that point upon restart rather than reconsume the entire redo log.").
 		Default(defaultCheckpointCache).
 		Example("RPCN.CHECKPOINT_CACHE").
 		Optional(),
@@ -111,11 +124,6 @@ When using the default Oracle based cache, the Connect user requires permission 
 		Description("The maximum number of messages that can be processed at a given time. Increasing this limit enables parallel processing and batching at the output level. Any given System Change Number (SCN) will not be acknowledged unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.").
 		Default(1024),
 	).
-	Field(service.NewDurationField(fieldStreamBackoffInterval).
-		Description("The interval between attempts to check for new changes once all data is processed. For low traffic tables increasing this value can reduce network traffic to the server.").
-		Default("5s").
-		Example("5s").Example("1m"),
-	).
 	Field(service.NewAutoRetryNacksToggleField()).
 	Field(service.NewBatchPolicyField(fieldBatching))
 
@@ -125,20 +133,20 @@ type asyncMessage struct {
 }
 
 type config struct {
-	connectionString      string
-	streamSnapshot        bool
-	streamBackoffInterval time.Duration
-	snapshotMaxBatchSize  int
-	snapshotMaxWorkers    int
-	tablesFilter          *confx.RegexpFilter
-	scnCache              string
-	scnCacheKey           string
-	cpCacheTableName      string
+	connectionString     string
+	streamSnapshot       bool
+	snapshotMaxBatchSize int
+	snapshotMaxWorkers   int
+	tablesFilter         *confx.RegexpFilter
+	scnCache             string
+	scnCacheKey          string
+	cpCacheTableName     string
 }
 
 type oracleDBCDCInput struct {
-	cfg *config
-	db  *sql.DB
+	cfg   *config
+	lmCfg *logminer.Config
+	db    *sql.DB
 
 	res       *service.Resources
 	publisher *batchPublisher
@@ -154,7 +162,6 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 		connectionString             string
 		streamSnapshot               bool
 		snapshotMaxWorkers           int
-		streamBackoffInterval        time.Duration
 		snapshotMaxBatchSize         int
 		scnCache, scnCacheKey        string
 		tableIncludes, tableExcludes []*regexp.Regexp
@@ -162,6 +169,7 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 		cp                           *checkpoint.Capped[replication.SCN]
 		cpCache                      service.Cache
 		cpCacheTableName             string
+		lmCfg                        *logminer.Config
 	)
 
 	if err := license.CheckRunningEnterprise(resources); err != nil {
@@ -179,8 +187,21 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 	if snapshotMaxBatchSize, err = conf.FieldInt(fieldSnapshotMaxBatchSize); err != nil {
 		return nil, err
 	}
-	if streamBackoffInterval, err = conf.FieldDuration(fieldStreamBackoffInterval); err != nil {
-		return nil, err
+	// logminer
+	if conf.Contains(fieldLogMiner) {
+		lmConf := conf.Namespace(fieldLogMiner)
+		lmCfg = logminer.NewDefaultConfig()
+		if lmCfg.MaxBatchSize, err = lmConf.FieldInt(logminer.FieldMaxBatchSize); err != nil {
+			return nil, err
+		}
+		if lmCfg.MiningBackoffInterval, err = lmConf.FieldDuration(logminer.FieldBackoffInterval); err != nil {
+			return nil, err
+		}
+		if strategy, err := lmConf.FieldString(logminer.FieldMiningStrategy); err != nil {
+			return nil, err
+		} else {
+			lmCfg.MiningStrategy = logminer.MiningStrategy(strategy)
+		}
 	}
 	// tables
 	if includes, err := conf.FieldStringList(fieldTablesInclude); err != nil {
@@ -232,19 +253,19 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 
 	i := oracleDBCDCInput{
 		cfg: &config{
-			connectionString:      connectionString,
-			streamSnapshot:        streamSnapshot,
-			streamBackoffInterval: streamBackoffInterval,
-			snapshotMaxWorkers:    snapshotMaxWorkers,
-			snapshotMaxBatchSize:  snapshotMaxBatchSize,
-			scnCache:              scnCache,
-			scnCacheKey:           scnCacheKey,
-			cpCacheTableName:      cpCacheTableName,
+			connectionString:     connectionString,
+			streamSnapshot:       streamSnapshot,
+			snapshotMaxWorkers:   snapshotMaxWorkers,
+			snapshotMaxBatchSize: snapshotMaxBatchSize,
+			scnCache:             scnCache,
+			scnCacheKey:          scnCacheKey,
+			cpCacheTableName:     cpCacheTableName,
 			tablesFilter: &confx.RegexpFilter{
 				Include: tableIncludes,
 				Exclude: tableExcludes,
 			},
 		},
+		lmCfg:     lmCfg,
 		res:       resources,
 		log:       logger,
 		metrics:   resources.Metrics(),
@@ -255,6 +276,14 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 
 	i.publisher.cacheSCN = func(ctx context.Context, scn replication.SCN) error {
 		return i.cacheSCN(ctx, scn)
+	}
+
+	// no cache specified so use default, internal oracle based cache
+	if i.cfg.scnCache == "" {
+		// setup internal cache
+		if i.cpCache, err = newCheckpointCache(context.Background(), i.cfg.connectionString, i.cfg.cpCacheTableName, i.log); err != nil {
+			return nil, fmt.Errorf("initialising oracle based checkpoint cache: %w", err)
+		}
 	}
 
 	// Has stopped is how we notify that we're not connected. This will get reset at connection time.
@@ -271,45 +300,58 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 func (i *oracleDBCDCInput) Connect(ctx context.Context) error {
 	var (
 		err        error
-		userTables []replication.UserDefinedTable
+		userTables []replication.UserTable
 		cachedSCN  replication.SCN
 	)
 	if i.db, err = sql.Open("oracle", i.cfg.connectionString); err != nil {
-		return fmt.Errorf("failed to connect to oracle database: %s", err)
+		return fmt.Errorf("failed to connect to oracle database: %w", err)
 	}
 
-	// no cache specified so use default, custom sql cache
-	if i.cfg.scnCache == "" {
-		// setup internal cache
-		cache, err := newCheckpointCache(ctx, i.cfg.connectionString, i.cfg.cpCacheTableName, i.log)
-		if err != nil {
-			return fmt.Errorf("initialising oracle based checkpoint cache: %s", err)
-		}
-		i.cpCache = cache
-	}
-
-	if userTables, err = replication.VerifyUserDefinedTables(ctx, i.db, i.cfg.tablesFilter, i.log); err != nil {
+	if userTables, err = replication.VerifyUserTables(ctx, i.db, i.cfg.tablesFilter, i.log); err != nil {
 		return fmt.Errorf("verifying user defined tables: %w", err)
 	}
 	if cachedSCN, err = i.getCachedSCN(ctx); err != nil {
-		return fmt.Errorf("unable to get cached SCN: %s", err)
+		if errors.Is(err, service.ErrKeyNotFound) {
+			i.log.Infof("No SCN found in checkpoint cache")
+			cachedSCN = replication.InvalidSCN
+		} else {
+			return fmt.Errorf("unable to get cached SCN: %w", err)
+		}
+	} else {
+		switch {
+		case cachedSCN != replication.InvalidSCN:
+			i.log.Infof("Resuming from cached SCN value: %d", cachedSCN)
+		default:
+			// TODO: Consider what states could exist, should we error here and fail fast?
+			i.log.Info("Unable to restore SCN from cache, reverting to oldest found in database")
+		}
 	}
 
 	// setup snapshotting and streaming
+	// logminer processor
+	type streamProcessor interface {
+		FindStartPos(ctx context.Context) (replication.SCN, error)
+		ReadChanges(ctx context.Context, startPos replication.SCN) error
+	}
 	var (
 		snapshotter *replication.Snapshot
-		streaming   *replication.ChangeTableStream
+		streaming   streamProcessor
 	)
+
 	// no cached SCN means we're not recovering from a restart
-	if i.cfg.streamSnapshot && len(cachedSCN) == 0 {
-		if snapshotter, err = replication.NewSnapshot(i.cfg.connectionString, userTables, i.publisher, i.log, i.metrics); err != nil {
+	if i.cfg.streamSnapshot && cachedSCN == replication.InvalidSCN {
+		if snapshotter, err = replication.NewSnapshot(ctx, i.cfg.connectionString, userTables, i.publisher, i.log, i.metrics); err != nil {
 			return fmt.Errorf("creating database snapshotter: %w", err)
 		}
 	} else {
 		i.log.Infof("Snapshotting disabled, skipping...")
 	}
 
-	streaming = replication.NewChangeTableStream(userTables, i.publisher, i.cfg.streamBackoffInterval, i.log)
+	if i.lmCfg != nil {
+		streaming = logminer.NewMiner(i.db, userTables, i.publisher, i.lmCfg, i.metrics, i.log)
+	} else {
+		return errors.New("logminer configuration required for streaming")
+	}
 
 	// Reset our stop signal
 	i.stopSig = shutdown.NewSignaller()
@@ -327,30 +369,39 @@ func (i *oracleDBCDCInput) Connect(ctx context.Context) error {
 				if i.stopSig.IsHardStopSignalled() {
 					i.log.Errorf("Shutting down snapshotting process: %s", err)
 				} else {
-					//TODO: This should probably be an ErrorF if err is an error?
 					i.log.Infof("Gracefully shutting down snapshotting process: %s", err)
 				}
 				i.stopSig.TriggerHasStopped()
 				return
 			}
+
 			if err = i.cacheSCN(softCtx, maxSCN); err != nil {
-				if i.stopSig.IsHardStopSignalled() {
-					i.log.Errorf("Shutting down snapshotting process: %s", err)
-				} else {
-					i.log.Infof("Gracefully shutting down snapshotting process: %s", err)
-				}
+				i.log.Errorf("Failed to capture SCN after snapshot completion. Snapshot will re-run on restart (may cause duplicate data): %s", err)
 				i.stopSig.TriggerHasStopped()
 				return
 			}
-			i.log.Debugf("Cached SCN following snapshot: '%s'", maxSCN)
+
+			i.log.Infof("Successfully captured SCN following snapshot: %d", maxSCN)
+		}
+
+		// If no SCN is available (no snapshot and no cached position), so get the start position from the DB
+		if maxSCN == replication.InvalidSCN {
+			if maxSCN, err = streaming.FindStartPos(softCtx); err != nil {
+				i.log.Errorf("Failed to get start SCN from database: %s", err)
+				i.stopSig.TriggerHasStopped()
+				return
+			}
+			i.log.Infof("No cached SCN found, fetched starting position from database: %d", maxSCN)
+			if err = i.cacheSCN(softCtx, maxSCN); err != nil {
+				i.log.Warnf("Failed to cache initial SCN (non-critical): %s", err)
+			}
 		}
 
 		// streaming
 		wg, _ := errgroup.WithContext(softCtx)
 		wg.Go(func() error {
-			return nil
-			if err := streaming.ReadChangeTables(ctx, i.db, maxSCN); err != nil {
-				return fmt.Errorf("streaming from change tables: %w", err)
+			if err := streaming.ReadChanges(softCtx, maxSCN); err != nil {
+				return fmt.Errorf("streaming from logminer: %w", err)
 			}
 			return nil
 		})
@@ -371,38 +422,46 @@ func (i *oracleDBCDCInput) getCachedSCN(ctx context.Context) (replication.SCN, e
 		cErr     error
 	)
 
+	// Use internal Oracle-based cache if set (when no external cache configured),
+	// otherwise use external cache resource
 	if i.cpCache != nil {
-		// use default custom oracle based cache
 		cacheVal, cErr = i.cpCache.Get(ctx, i.cfg.scnCacheKey)
 	} else {
 		if err := i.res.AccessCache(ctx, i.cfg.scnCache, func(c service.Cache) {
 			cacheVal, cErr = c.Get(ctx, i.cfg.scnCacheKey)
 		}); err != nil {
-			return nil, fmt.Errorf("unable to access cache for reading: %w", err)
+			return replication.InvalidSCN, fmt.Errorf("unable to access cache for reading: %w", err)
 		}
 	}
 
 	if errors.Is(cErr, service.ErrKeyNotFound) {
-		return nil, nil
+		return replication.InvalidSCN, service.ErrKeyNotFound
 	} else if cErr != nil {
-		return nil, fmt.Errorf("unable read checkpoint from cache: %w", cErr)
+		return replication.InvalidSCN, fmt.Errorf("unable read checkpoint from cache: %w", cErr)
 	} else if len(cacheVal) == 0 {
-		return nil, nil
+		return replication.InvalidSCN, errors.New("empty SCN cache value")
 	}
-	return replication.SCN(cacheVal), nil
+
+	scn, err := replication.SCNFromBytes(cacheVal)
+	if err != nil {
+		return replication.InvalidSCN, fmt.Errorf("unable to parse SCN from cache: %w", err)
+	}
+	return scn, nil
 }
 
 func (i *oracleDBCDCInput) cacheSCN(ctx context.Context, scn replication.SCN) error {
-	if len(scn) == 0 {
+	if scn == replication.InvalidSCN {
 		return errors.New("SCN for caching is empty")
 	}
 
+	// Use internal Oracle-based cache if set (when no external cache configured),
+	// otherwise use external cache resource
 	var cErr error
 	if i.cpCache != nil {
-		cErr = i.cpCache.Set(ctx, i.cfg.scnCacheKey, scn, nil)
+		cErr = i.cpCache.Set(ctx, i.cfg.scnCacheKey, scn.Bytes(), nil)
 	} else {
 		if err := i.res.AccessCache(ctx, i.cfg.scnCache, func(c service.Cache) {
-			cErr = c.Set(ctx, i.cfg.scnCacheKey, scn, nil)
+			cErr = c.Set(ctx, i.cfg.scnCacheKey, scn.Bytes(), nil)
 		}); err != nil {
 			return fmt.Errorf("unable to access cache for writing: %w", err)
 		}
@@ -432,14 +491,14 @@ func (i *oracleDBCDCInput) processSnapshot(ctx context.Context, snapshot *replic
 	)
 	if scn, err = snapshot.Prepare(ctx); err != nil {
 		_ = snapshot.Close()
-		return nil, fmt.Errorf("preparing snapshot: %w", err)
+		return replication.InvalidSCN, fmt.Errorf("preparing snapshot: %w", err)
 	}
 	if err = snapshot.Read(ctx, i.cfg.snapshotMaxWorkers, i.cfg.snapshotMaxBatchSize); err != nil {
 		_ = snapshot.Close()
-		return nil, fmt.Errorf("reading snapshot: %w", err)
+		return replication.InvalidSCN, fmt.Errorf("reading snapshot: %w", err)
 	}
 	if err = snapshot.Close(); err != nil {
-		return nil, fmt.Errorf("closing snapshot connections: %w", err)
+		return replication.InvalidSCN, fmt.Errorf("closing snapshot connections: %w", err)
 	}
 	i.log.Infof("Completed running snapshot process")
 
@@ -464,11 +523,22 @@ func (i *oracleDBCDCInput) Close(ctx context.Context) error {
 		i.log.Error("failed to shutdown 'oracledb_cdc' component within the timeout")
 	case <-i.stopSig.HasStoppedChan():
 	}
+
+	// Close both resources and combine errors to avoid resource leaks
+	var closeErr error
 	if i.cpCache != nil {
-		return i.cpCache.Close(ctx)
+		if err := i.cpCache.Close(ctx); err != nil {
+			closeErr = fmt.Errorf("closing checkpoint cache: %w", err)
+		}
 	}
 	if i.db != nil {
-		return i.db.Close()
+		if err := i.db.Close(); err != nil {
+			if closeErr != nil {
+				closeErr = fmt.Errorf("%w; closing database: %w", closeErr, err)
+			} else {
+				closeErr = fmt.Errorf("closing database: %w", err)
+			}
+		}
 	}
-	return nil
+	return closeErr
 }
