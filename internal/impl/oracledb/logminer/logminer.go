@@ -63,7 +63,17 @@ type LogMiner struct {
 
 // NewMiner creates a new instance of NewMiner, responsible
 // for paging through change events based on the tables param.
-func NewMiner(db *sql.DB, tables []replication.UserDefinedTable, publisher replication.ChangePublisher, backoffInterval time.Duration, logger *service.Logger) *LogMiner {
+func NewMiner(_ *sql.DB, tables []replication.UserDefinedTable, publisher replication.ChangePublisher, backoffInterval time.Duration, logger *service.Logger) *LogMiner {
+	var (
+		db  *sql.DB
+		err error
+	)
+
+	//TODO: Support switching between connections from snapshot to this.
+	if db, err = sql.Open("oracle", "oracle://system:YourPassword123@localhost:1521/XE"); err != nil {
+		panic(fmt.Sprintf("Failed to connect: %s", err))
+	}
+
 	s := &LogMiner{
 		tables:          tables,
 		publisher:       publisher,
@@ -210,7 +220,7 @@ func (lm *LogMiner) queryLogMinerContents(startSCN, endSCN uint64) ([]*LogMinerE
 			TIMESTAMP,
 			XID,
 			XIDUSN,
-			XIDSLOT,
+			XIDSLT,
 			XIDSQN,
 			RS_ID,
 			SSN
@@ -231,7 +241,7 @@ func (lm *LogMiner) queryLogMinerContents(startSCN, endSCN uint64) ([]*LogMinerE
 	var events []*LogMinerEvent
 	for rows.Next() {
 		event := &LogMinerEvent{}
-		var xidUsn, xidSlot, xidSqn int64
+		var xidUsn, xidSlt, xidSqn int64
 		var rsId, ssn sql.NullString
 
 		err := rows.Scan(
@@ -243,7 +253,7 @@ func (lm *LogMiner) queryLogMinerContents(startSCN, endSCN uint64) ([]*LogMinerE
 			&event.Timestamp,
 			&event.TransactionID,
 			&xidUsn,
-			&xidSlot,
+			&xidSlt,
 			&xidSqn,
 			&rsId,
 			&ssn,
