@@ -17,6 +17,7 @@ package otlp
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net"
 	"time"
@@ -27,12 +28,14 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/credentials/oauth"
 	"google.golang.org/grpc/encoding/gzip"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/utils/netutil"
 	"github.com/redpanda-data/common-go/redpanda-otel-exporter/proto"
 	"github.com/redpanda-data/connect/v4/internal/impl/otlp/otlpconv"
+	"github.com/redpanda-data/connect/v4/internal/oauth2"
 )
 
 const (
@@ -48,6 +51,7 @@ const (
 type grpcOutputConfig struct {
 	Endpoint     string
 	TLS          tlsClientConfig
+	OAuth2       oauth2.Config
 	Timeout      time.Duration
 	Compression  string
 	DialerConfig netutil.DialerConfig
@@ -72,6 +76,14 @@ Expects messages in Redpanda OTEL v1 protobuf format with metadata:
 
 Each batch must contain messages of the same signal type.
 The entire batch is converted to a single OTLP export request and sent via gRPC.
+
+## Authentication
+
+Supports multiple authentication methods:
+- Bearer token authentication (via auth_token field)
+- OAuth v2 (via oauth2 configuration block)
+
+Note: OAuth2 requires TLS to be enabled.
 `).
 		Fields(
 			service.NewStringField(goFieldEndpoint).
@@ -91,6 +103,7 @@ The entire batch is converted to a single OTLP export request and sent via gRPC.
 				Optional(),
 			netutil.DialerConfigSpec(),
 		).
+		Fields(oauth2.FieldSpec()).
 		Fields(service.NewOutputMaxInFlightField())
 }
 
@@ -132,6 +145,16 @@ func GRPCOutputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (
 		}
 	}
 
+	// Parse OAuth2 config
+	if pConf.Contains("oauth2") {
+		if conf.OAuth2, err = oauth2.ParseConfig(pConf.Namespace("oauth2")); err != nil {
+			return nil, fmt.Errorf("parse oauth2 config: %w", err)
+		}
+		if conf.OAuth2.Enabled && !conf.TLS.Enabled {
+			return nil, errors.New("oauth2 requires TLS to be enabled")
+		}
+	}
+
 	// Parse netutil dialer config
 	if pConf.Contains("tcp") {
 		if conf.DialerConfig, err = netutil.DialerConfigFromParsed(pConf.Namespace("tcp")); err != nil {
@@ -167,7 +190,7 @@ func init() {
 //------------------------------------------------------------------------------
 
 // Connect establishes the gRPC connection and initializes clients.
-func (o *grpcOTLPOutput) Connect(ctx context.Context) error {
+func (o *grpcOTLPOutput) Connect(_ context.Context) error {
 	if o.conn != nil {
 		return nil
 	}
@@ -207,6 +230,13 @@ func (o *grpcOTLPOutput) Connect(ctx context.Context) error {
 	// Configure compression
 	if o.conf.Compression == "gzip" {
 		opts = append(opts, grpc.WithDefaultCallOptions(grpc.UseCompressor(gzip.Name)))
+	}
+
+	// Configure OAuth2 if enabled
+	if o.conf.OAuth2.Enabled {
+		ctx, _ := o.shutSig.SoftStopCtx(context.Background())
+		opts = append(opts, grpc.WithPerRPCCredentials(
+			oauth.TokenSource{TokenSource: o.conf.OAuth2.TokenSource(ctx)}))
 	}
 
 	// Establish connection
@@ -311,6 +341,9 @@ func (o *grpcOTLPOutput) sendMetrics(ctx context.Context, batch service.MessageB
 
 // Close closes the gRPC connection.
 func (o *grpcOTLPOutput) Close(_ context.Context) error {
+	o.shutSig.TriggerSoftStop()
+	defer o.shutSig.TriggerHasStopped()
+
 	if o.conn == nil {
 		return nil
 	}
