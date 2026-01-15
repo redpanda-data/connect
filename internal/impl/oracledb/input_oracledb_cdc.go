@@ -22,6 +22,7 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/confx"
+	"github.com/redpanda-data/connect/v4/internal/impl/oracledb/logminer"
 	"github.com/redpanda-data/connect/v4/internal/impl/oracledb/replication"
 	"github.com/redpanda-data/connect/v4/internal/license"
 )
@@ -312,7 +313,7 @@ func (i *oracleDBCDCInput) Connect(ctx context.Context) error {
 		i.log.Infof("Snapshotting disabled, skipping...")
 	}
 
-	streaming = replication.NewLogMiner(userTables, i.publisher, i.cfg.streamBackoffInterval, i.log)
+	streaming = logminer.NewMiner(i.db, userTables, i.publisher, i.cfg.streamBackoffInterval, i.log)
 
 	// Reset our stop signal
 	i.stopSig = shutdown.NewSignaller()
