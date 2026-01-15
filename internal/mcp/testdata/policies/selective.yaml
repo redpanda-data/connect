@@ -1,9 +1,9 @@
 roles:
   - id: mcp.user
     permissions:
-      - dataplane_mcp_server_ping
-      - dataplane_mcp_server_tools_list
-      - dataplane_mcp_server_tools_call
+      - dataplane_mcpserver_ping
+      - dataplane_mcpserver_tools_list
+      - dataplane_mcpserver_tools_call
 
 bindings:
   - role: mcp.user

@@ -29,16 +29,16 @@ import (
 )
 
 const (
-	permissionInitialize             authz.PermissionName = "dataplane_mcp_server_initialize"
-	permissionPing                   authz.PermissionName = "dataplane_mcp_server_ping"
-	permissionResourcesList          authz.PermissionName = "dataplane_mcp_server_resources_list"
-	permissionResourcesTemplatesList authz.PermissionName = "dataplane_mcp_server_resources_templates_list"
-	permissionResourcesRead          authz.PermissionName = "dataplane_mcp_server_resources_read"
-	permissionPromptsList            authz.PermissionName = "dataplane_mcp_server_prompts_list"
-	permissionPromptsGet             authz.PermissionName = "dataplane_mcp_server_prompts_get"
-	permissionToolsList              authz.PermissionName = "dataplane_mcp_server_tools_list"
-	permissionToolsCall              authz.PermissionName = "dataplane_mcp_server_tools_call"
-	permissionLoggingSetLevel        authz.PermissionName = "dataplane_mcp_server_logging_set_level"
+	permissionInitialize             authz.PermissionName = "dataplane_mcpserver_initialize"
+	permissionPing                   authz.PermissionName = "dataplane_mcpserver_ping"
+	permissionResourcesList          authz.PermissionName = "dataplane_mcpserver_resources_list"
+	permissionResourcesTemplatesList authz.PermissionName = "dataplane_mcpserver_resources_templates_list"
+	permissionResourcesRead          authz.PermissionName = "dataplane_mcpserver_resources_read"
+	permissionPromptsList            authz.PermissionName = "dataplane_mcpserver_prompts_list"
+	permissionPromptsGet             authz.PermissionName = "dataplane_mcpserver_prompts_get"
+	permissionToolsList              authz.PermissionName = "dataplane_mcpserver_tools_list"
+	permissionToolsCall              authz.PermissionName = "dataplane_mcpserver_tools_call"
+	permissionLoggingSetLevel        authz.PermissionName = "dataplane_mcpserver_logging_set_level"
 )
 
 var allPermissions = []authz.PermissionName{

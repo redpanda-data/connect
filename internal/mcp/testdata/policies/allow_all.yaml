@@ -1,16 +1,16 @@
 roles:
   - id: mcp.admin
     permissions:
-      - dataplane_mcp_server_initialize
-      - dataplane_mcp_server_ping
-      - dataplane_mcp_server_resources_list
-      - dataplane_mcp_server_resources_templates_list
-      - dataplane_mcp_server_resources_read
-      - dataplane_mcp_server_prompts_list
-      - dataplane_mcp_server_prompts_get
-      - dataplane_mcp_server_tools_list
-      - dataplane_mcp_server_tools_call
-      - dataplane_mcp_server_logging_set_level
+      - dataplane_mcpserver_initialize
+      - dataplane_mcpserver_ping
+      - dataplane_mcpserver_resources_list
+      - dataplane_mcpserver_resources_templates_list
+      - dataplane_mcpserver_resources_read
+      - dataplane_mcpserver_prompts_list
+      - dataplane_mcpserver_prompts_get
+      - dataplane_mcpserver_tools_list
+      - dataplane_mcpserver_tools_call
+      - dataplane_mcpserver_logging_set_level
 
 bindings:
   - role: mcp.admin
