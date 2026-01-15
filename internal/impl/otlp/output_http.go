@@ -19,6 +19,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -35,6 +36,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/utils/netutil"
 	"github.com/redpanda-data/common-go/redpanda-otel-exporter/proto"
 	"github.com/redpanda-data/connect/v4/internal/impl/otlp/otlpconv"
+	"github.com/redpanda-data/connect/v4/internal/oauth2"
 )
 
 const (
@@ -58,6 +60,7 @@ type httpOutputConfig struct {
 	FollowRedirects bool
 	DisableHTTP2    bool
 	AuthSigner      func(*http.Request) error
+	OAuth2          oauth2.Config
 	TLS             tlsClientConfig
 	DialerConfig    netutil.DialerConfig
 }
@@ -99,6 +102,7 @@ Supports two content types:
 Supports multiple authentication methods:
 - Basic authentication
 - OAuth v1
+- OAuth v2
 - JWT
 `).
 		Fields(
@@ -133,6 +137,7 @@ Supports multiple authentication methods:
 			netutil.DialerConfigSpec(),
 		).
 		Fields(service.NewHTTPRequestAuthSignerFields()...).
+		Fields(oauth2.FieldSpec()).
 		Fields(service.NewOutputMaxInFlightField())
 }
 
@@ -185,6 +190,16 @@ func HTTPOutputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (
 	}
 	conf.AuthSigner = func(req *http.Request) error {
 		return authSigner(nil, req)
+	}
+
+	// Parse OAuth2 config
+	if pConf.Contains("oauth2") {
+		if conf.OAuth2, err = oauth2.ParseConfig(pConf.Namespace("oauth2")); err != nil {
+			return nil, fmt.Errorf("parse oauth2 config: %w", err)
+		}
+		if conf.OAuth2.Enabled && !conf.TLS.Enabled {
+			return nil, errors.New("oauth2 requires TLS to be enabled")
+		}
 	}
 
 	// Parse TLS config
@@ -259,7 +274,7 @@ func init() {
 //------------------------------------------------------------------------------
 
 // Connect initializes the HTTP client.
-func (o *httpOTLPOutput) Connect(ctx context.Context) error {
+func (o *httpOTLPOutput) Connect(_ context.Context) error {
 	if o.client != nil {
 		return nil
 	}
@@ -270,6 +285,7 @@ func (o *httpOTLPOutput) Connect(ctx context.Context) error {
 		return fmt.Errorf("configure custom dialer: %w", err)
 	}
 
+	// Configure HTTP transport
 	tr := &http.Transport{
 		ForceAttemptHTTP2: !o.conf.DisableHTTP2,
 		DialContext:       nd.DialContext,
@@ -298,10 +314,23 @@ func (o *httpOTLPOutput) Connect(ctx context.Context) error {
 		}
 		tr.Proxy = http.ProxyURL(proxyURL)
 	}
-	o.client = &http.Client{
+
+	// Create HTTP client, OAuth2 wraps the transport but returns a new client
+	client := &http.Client{
 		Transport: tr,
 		Timeout:   o.conf.Timeout,
 	}
+	if o.conf.OAuth2.Enabled {
+		ctx, _ := o.shutSig.SoftStopCtx(context.Background())
+		var err error
+		if o.client, err = o.conf.OAuth2.HTTPClient(ctx, client); err != nil {
+			return fmt.Errorf("configure oauth2: %w", err)
+		}
+	} else {
+		o.client = client
+	}
+
+	// Configure HTTP client
 	if !o.conf.FollowRedirects {
 		o.client.CheckRedirect = func(_ *http.Request, _ []*http.Request) error {
 			return http.ErrUseLastResponse
@@ -466,6 +495,9 @@ func (o *httpOTLPOutput) handleResponse(signalType SignalType, resp *http.Respon
 
 // Close closes the HTTP client (no-op for HTTP transport).
 func (o *httpOTLPOutput) Close(_ context.Context) error {
+	o.shutSig.TriggerSoftStop()
+	defer o.shutSig.TriggerHasStopped()
+
 	if o.client != nil {
 		o.client.CloseIdleConnections()
 	}
