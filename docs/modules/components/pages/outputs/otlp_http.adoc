@@ -55,6 +55,7 @@ output:
   otlp_http:
     endpoint: "" # No default (required)
     content_type: protobuf
+    headers: {}
     timeout: 30s
     proxy_url: ""
     follow_redirects: false
@@ -156,6 +157,24 @@ Options:
 `protobuf`
 , `json`
 .
+
+=== `headers`
+
+A map of headers to add to the request.
+This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
+
+
+*Type*: `object`
+
+*Default*: `{}`
+
+```yml
+# Examples
+
+headers:
+  X-Custom-Header: value
+  traceparent: ${! tracing_span().traceparent }
+```
 
 === `timeout`
 

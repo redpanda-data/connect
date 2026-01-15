@@ -54,6 +54,7 @@ output:
   label: ""
   otlp_grpc:
     endpoint: "" # No default (required)
+    headers: {}
     timeout: 30s
     compression: gzip
     tls:
@@ -111,6 +112,24 @@ The gRPC endpoint of the remote OTLP collector.
 
 *Type*: `string`
 
+
+=== `headers`
+
+A map of headers to add to the gRPC request metadata.
+This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
+
+
+*Type*: `object`
+
+*Default*: `{}`
+
+```yml
+# Examples
+
+headers:
+  X-Custom-Header: value
+  traceparent: ${! tracing_span().traceparent }
+```
 
 === `timeout`
 

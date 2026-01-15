@@ -30,6 +30,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/credentials/oauth"
 	"google.golang.org/grpc/encoding/gzip"
+	"google.golang.org/grpc/metadata"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/utils/netutil"
@@ -40,6 +41,7 @@ import (
 
 const (
 	goFieldEndpoint    = "endpoint"
+	goFieldHeaders     = "headers"
 	goFieldTimeout     = "timeout"
 	goFieldCompression = "compression"
 	goFieldTLS         = "tls"
@@ -50,6 +52,7 @@ const (
 
 type grpcOutputConfig struct {
 	Endpoint     string
+	Headers      map[string]*service.InterpolatedString
 	TLS          tlsClientConfig
 	OAuth2       oauth2.Config
 	Timeout      time.Duration
@@ -88,6 +91,14 @@ Note: OAuth2 requires TLS to be enabled.
 		Fields(
 			service.NewStringField(goFieldEndpoint).
 				Description("The gRPC endpoint of the remote OTLP collector."),
+			service.NewInterpolatedStringMapField(goFieldHeaders).
+				Description("A map of headers to add to the gRPC request metadata.").
+				Example(map[string]any{
+					"X-Custom-Header": "value",
+					"traceparent":     `${! tracing_span().traceparent }`,
+				}).
+				Default(map[string]any{}).
+				Advanced(),
 			service.NewDurationField(goFieldTimeout).
 				Description("Timeout for gRPC requests.").
 				Default("30s").
@@ -129,6 +140,9 @@ func GRPCOutputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (
 
 	// Parse gRPC-specific config
 	if conf.Endpoint, err = pConf.FieldString(goFieldEndpoint); err != nil {
+		return nil, err
+	}
+	if conf.Headers, err = pConf.FieldInterpolatedStringMap(goFieldHeaders); err != nil {
 		return nil, err
 	}
 	if conf.Timeout, err = pConf.FieldDuration(goFieldTimeout); err != nil {
@@ -282,13 +296,34 @@ func (o *grpcOTLPOutput) WriteBatch(ctx context.Context, batch service.MessageBa
 	}
 }
 
+func (o *grpcOTLPOutput) headersFrom(ctx context.Context, batch service.MessageBatch) (context.Context, error) {
+	if len(o.conf.Headers) == 0 {
+		return ctx, nil
+	}
+
+	md := metadata.New(nil)
+	for k, v := range o.conf.Headers {
+		hv, err := batch.TryInterpolatedString(0, v)
+		if err != nil {
+			return nil, fmt.Errorf("header '%s' interpolation error: %w", k, err)
+		}
+		md.Append(k, hv)
+	}
+	return metadata.NewOutgoingContext(ctx, md), nil
+}
+
 func (o *grpcOTLPOutput) sendTraces(ctx context.Context, batch service.MessageBatch) error {
 	spans, err := unmarshalBatch[proto.Span](batch, "span")
 	if err != nil {
 		return fmt.Errorf("unmarshal spans: %w", err)
 	}
-	req := otlpconv.TracesFromRedpanda(spans)
 
+	ctx, err = o.headersFrom(ctx, batch)
+	if err != nil {
+		return fmt.Errorf("headers: %w", err)
+	}
+
+	req := otlpconv.TracesFromRedpanda(spans)
 	resp, err := o.traceClient.Export(ctx, req)
 	if err != nil {
 		return fmt.Errorf("export traces: %w", err)
@@ -306,8 +341,13 @@ func (o *grpcOTLPOutput) sendLogs(ctx context.Context, batch service.MessageBatc
 	if err != nil {
 		return fmt.Errorf("unmarshal logs: %w", err)
 	}
-	req := otlpconv.LogsFromRedpanda(logs)
 
+	ctx, err = o.headersFrom(ctx, batch)
+	if err != nil {
+		return fmt.Errorf("headers: %w", err)
+	}
+
+	req := otlpconv.LogsFromRedpanda(logs)
 	resp, err := o.logClient.Export(ctx, req)
 	if err != nil {
 		return fmt.Errorf("export logs: %w", err)
@@ -325,8 +365,13 @@ func (o *grpcOTLPOutput) sendMetrics(ctx context.Context, batch service.MessageB
 	if err != nil {
 		return fmt.Errorf("unmarshal metrics: %w", err)
 	}
-	req := otlpconv.MetricsFromRedpanda(metrics)
 
+	ctx, err = o.headersFrom(ctx, batch)
+	if err != nil {
+		return fmt.Errorf("headers: %w", err)
+	}
+
+	req := otlpconv.MetricsFromRedpanda(metrics)
 	resp, err := o.metricClient.Export(ctx, req)
 	if err != nil {
 		return fmt.Errorf("export metrics: %w", err)
