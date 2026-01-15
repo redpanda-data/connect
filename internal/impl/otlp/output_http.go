@@ -42,6 +42,7 @@ import (
 const (
 	hoFieldEndpoint        = "endpoint"
 	hoFieldContentType     = "content_type"
+	hoFieldHeaders         = "headers"
 	hoFieldTimeout         = "timeout"
 	hoFieldProxyURL        = "proxy_url"
 	hoFieldFollowRedirects = "follow_redirects"
@@ -54,6 +55,7 @@ const (
 type httpOutputConfig struct {
 	Endpoint        string
 	ContentType     string
+	Headers         map[string]*service.InterpolatedString
 	AuthToken       string
 	Timeout         time.Duration
 	ProxyURL        string
@@ -112,6 +114,14 @@ Supports multiple authentication methods:
 				Description("Content type for HTTP requests. Options: 'protobuf' or 'json'.").
 				Default(defaultContentType).
 				Advanced(),
+			service.NewInterpolatedStringMapField(hoFieldHeaders).
+				Description("A map of headers to add to the request.").
+				Example(map[string]any{
+					"X-Custom-Header": "value",
+					"traceparent":     `${! tracing_span().traceparent }`,
+				}).
+				Default(map[string]any{}).
+				Advanced(),
 			service.NewDurationField(hoFieldTimeout).
 				Description("Timeout for HTTP requests.").
 				Default("30s").
@@ -168,6 +178,9 @@ func HTTPOutputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (
 	conf.Endpoint = strings.TrimSuffix(conf.Endpoint, "/")
 
 	if conf.ContentType, err = pConf.FieldString(hoFieldContentType); err != nil {
+		return nil, err
+	}
+	if conf.Headers, err = pConf.FieldInterpolatedStringMap(hoFieldHeaders); err != nil {
 		return nil, err
 	}
 	if conf.Timeout, err = pConf.FieldDuration(hoFieldTimeout); err != nil {
@@ -368,8 +381,12 @@ func (o *httpOTLPOutput) sendTraces(ctx context.Context, batch service.MessageBa
 		return fmt.Errorf("unmarshal spans: %w", err)
 	}
 
+	headers, err := o.headersFrom(batch)
+	if err != nil {
+		return fmt.Errorf("headers: %w", err)
+	}
 	body := marshalContentType(otlpconv.TracesFromRedpanda(spans), o.contentType)
-	return o.sendHTTPRequest(ctx, SignalTypeTrace, body)
+	return o.sendHTTPRequest(ctx, SignalTypeTrace, headers, body)
 }
 
 func (o *httpOTLPOutput) sendLogs(ctx context.Context, batch service.MessageBatch) error {
@@ -378,8 +395,12 @@ func (o *httpOTLPOutput) sendLogs(ctx context.Context, batch service.MessageBatc
 		return fmt.Errorf("unmarshal logs: %w", err)
 	}
 
+	headers, err := o.headersFrom(batch)
+	if err != nil {
+		return fmt.Errorf("headers: %w", err)
+	}
 	body := marshalContentType(otlpconv.LogsFromRedpanda(logs), o.contentType)
-	return o.sendHTTPRequest(ctx, SignalTypeLog, body)
+	return o.sendHTTPRequest(ctx, SignalTypeLog, headers, body)
 }
 
 func (o *httpOTLPOutput) sendMetrics(ctx context.Context, batch service.MessageBatch) error {
@@ -388,13 +409,34 @@ func (o *httpOTLPOutput) sendMetrics(ctx context.Context, batch service.MessageB
 		return fmt.Errorf("unmarshal metrics: %w", err)
 	}
 
+	headers, err := o.headersFrom(batch)
+	if err != nil {
+		return fmt.Errorf("headers: %w", err)
+	}
 	body := marshalContentType(otlpconv.MetricsFromRedpanda(metrics), o.contentType)
-	return o.sendHTTPRequest(ctx, SignalTypeMetric, body)
+	return o.sendHTTPRequest(ctx, SignalTypeMetric, headers, body)
+}
+
+func (o *httpOTLPOutput) headersFrom(batch service.MessageBatch) (http.Header, error) {
+	if len(o.conf.Headers) == 0 {
+		return nil, nil
+	}
+
+	m := make(http.Header)
+	for k, v := range o.conf.Headers {
+		hv, err := batch.TryInterpolatedString(0, v)
+		if err != nil {
+			return nil, fmt.Errorf("header '%s' interpolation error: %w", k, err)
+		}
+		m.Set(k, hv)
+	}
+	return m, nil
 }
 
 func (o *httpOTLPOutput) sendHTTPRequest(
 	ctx context.Context,
 	signalType SignalType,
+	headers http.Header,
 	body []byte,
 ) error {
 	var url string
@@ -412,6 +454,11 @@ func (o *httpOTLPOutput) sendHTTPRequest(
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("create HTTP request: %w", err)
+	}
+	for k, vv := range headers {
+		for _, v := range vv {
+			req.Header.Add(k, v)
+		}
 	}
 	req.Header.Set("Content-Type", o.contentType)
 
