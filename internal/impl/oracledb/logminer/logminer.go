@@ -159,7 +159,8 @@ func (lm *LogMiner) emitChangeEvent(ctx context.Context, event *ChangeEvent) {
 		Table:     event.Table,
 		Data:      event.After,
 	}
-	lm.log.Infof("EMIT: %s on %s.%s at SCN %d", event.Operation, event.Schema, event.Table, event.SCN)
+	// lm.log.Infof("EMIT: %s on %s.%s at SCN %d", event.Operation, event.Schema, event.Table, event.SCN)
+	// lm.log.Infof(event.After)
 	lm.publisher.Publish(ctx, msg)
 }
 
