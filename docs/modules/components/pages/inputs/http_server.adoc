@@ -77,6 +77,9 @@ input:
       metadata_headers:
         include_prefixes: []
         include_patterns: []
+    tcp:
+      reuse_addr: false
+      reuse_port: false
 ```
 
 --
@@ -422,5 +425,31 @@ include_patterns:
 include_patterns:
   - _timestamp_unix$
 ```
+
+=== `tcp`
+
+TCP listener configuration for the HTTP server. Only valid with a custom `address`.
+
+
+*Type*: `object`
+
+
+=== `tcp.reuse_addr`
+
+Enable SO_REUSEADDR, allowing binding to ports in TIME_WAIT state. Useful for graceful restarts and config reloads where the server needs to rebind to the same port immediately after shutdown.
+
+
+*Type*: `bool`
+
+*Default*: `false`
+
+=== `tcp.reuse_port`
+
+Enable SO_REUSEPORT, allowing multiple sockets to bind to the same port for load balancing across multiple processes/threads.
+
+
+*Type*: `bool`
+
+*Default*: `false`
 
 
