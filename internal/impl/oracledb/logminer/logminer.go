@@ -87,19 +87,38 @@ func NewMiner(_ *sql.DB, tables []replication.UserDefinedTable, publisher replic
 	return s
 }
 
+// getCurrentSCN gets the current SCN from the database
+func (lm *LogMiner) getCurrentSCN() (uint64, error) {
+	var scn uint64
+	err := lm.db.QueryRow("SELECT CURRENT_SCN FROM V$DATABASE").Scan(&scn)
+	if err != nil {
+		return 0, fmt.Errorf("failed to query current SCN: %w", err)
+	}
+	return scn, nil
+}
+
 // ReadChanges streams the change events from the configured SQL Server change tables.
 func (lm *LogMiner) ReadChanges(ctx context.Context, db *sql.DB, startPos replication.SCN) error {
 	lm.log.Infof("Starting streaming %d change table(s)", len(lm.tables))
-	var (
-	// startLSN replication.SCN // load last checkpoint; nil means start from beginning in tables
-	// endLSN   replication.SCN // often set to fn_cdc_get_max_lsn(); nil means no upper bound
-	// lastLSN  replication.SCN
-	)
+	lm.BatchSize = 100
+	lm.currentSCN = 1
 
+	// Determine starting SCN
 	if len(startPos) != 0 {
-		// startLSN = startPos
-		// lastLSN = startPos
-		lm.log.Infof("Resuming from recorded LSN position '%s'", startPos)
+		// Resume from checkpoint
+		lm.log.Infof("Resuming from recorded SCN position '%s'", startPos)
+		// Parse startPos to uint64
+		// For now, assuming startPos is empty and we get current SCN
+	}
+
+	// Get current SCN from database if not resuming
+	if lm.currentSCN == 0 {
+		var err error
+		lm.currentSCN, err = lm.getCurrentSCN()
+		if err != nil {
+			return fmt.Errorf("failed to get current SCN: %w", err)
+		}
+		lm.log.Infof("Starting from current SCN: %d", lm.currentSCN)
 	}
 
 	for {
@@ -117,13 +136,19 @@ func (lm *LogMiner) ReadChanges(ctx context.Context, db *sql.DB, startPos replic
 }
 
 // emitChangeEvent sends a change event to the output (Kafka, etc.)
-func (c *LogMiner) emitChangeEvent(event *ChangeEvent) {
-	// In real implementation, this would send to Kafka
-	log.Printf("EMIT: %s on %s.%s at SCN %d",
-		event.Operation, event.Schema, event.Table, event.SCN)
+func (lm *LogMiner) emitChangeEvent(ctx context.Context, event *ChangeEvent) {
+	msg := replication.MessageEvent{
+		// SCN:       event.SCN,
+		Operation: event.Operation,
+		Schema:    event.Schema,
+		Table:     event.Table,
+		Data:      event.After,
+	}
+	lm.log.Infof("EMIT: %s on %s.%s at SCN %d", event.Operation, event.Schema, event.Table, event.SCN)
+	lm.publisher.Publish(ctx, msg)
 }
 
-func (lm *LogMiner) miningCycle(_ context.Context) error { // 1. Collect log files that contain changes from current SCN
+func (lm *LogMiner) miningCycle(ctx context.Context) error { // 1. Collect log files that contain changes from current SCN
 	logFiles, err := lm.logCollector.GetLogs(lm.currentSCN)
 	if err != nil {
 		return fmt.Errorf("failed to collect logs: %w", err)
@@ -138,11 +163,6 @@ func (lm *LogMiner) miningCycle(_ context.Context) error { // 1. Collect log fil
 		return fmt.Errorf("failed to remove old log files: %w", err)
 	}
 
-	// for _, logFile := range logFiles {
-	// 	if err := lm.sessionMgr.AddLogFile(logFile.FileName); err != nil {
-	// 		return fmt.Errorf("failed to add log file %s: %w", logFile.FileName, err)
-	// 	}
-	// }
 	for i, logFile := range logFiles {
 		if err := lm.sessionMgr.AddLogFile(logFile.FileName, i == 0); err != nil {
 			return fmt.Errorf("failed to add log file %s: %w", logFile.FileName, err)
@@ -163,7 +183,7 @@ func (lm *LogMiner) miningCycle(_ context.Context) error { // 1. Collect log fil
 
 	// 6. Process events and buffer transactions
 	for _, event := range events {
-		if err := lm.processEvent(event); err != nil {
+		if err := lm.processEvent(ctx, event); err != nil {
 			return fmt.Errorf("failed to process event: %w", err)
 		}
 	}
@@ -174,7 +194,7 @@ func (lm *LogMiner) miningCycle(_ context.Context) error { // 1. Collect log fil
 	return nil
 }
 
-func (lm *LogMiner) processEvent(event *LogMinerEvent) error {
+func (lm *LogMiner) processEvent(ctx context.Context, event *LogMinerEvent) error {
 	switch event.Operation {
 	case OpStart:
 		// Transaction started
@@ -194,7 +214,8 @@ func (lm *LogMiner) processEvent(event *LogMinerEvent) error {
 		if txn != nil {
 			for _, dmlEvent := range txn.Events {
 				changeEvent := lm.eventProc.ConvertToChangeEvent(dmlEvent, event.SCN)
-				lm.emitChangeEvent(changeEvent)
+				// TODO: Refactor to use replication.ChangeEvent
+				lm.emitChangeEvent(ctx, changeEvent)
 			}
 			lm.txnCache.CommitTransaction(event.TransactionID)
 			log.Printf("Committed transaction %s with %d events at SCN %d",
