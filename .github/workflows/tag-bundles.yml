@@ -24,7 +24,7 @@ jobs:
     - name: Install Go
       uses: actions/setup-go@v6
       with:
-        go-version: 1.25.5
+        go-version-file: 'go.mod'
 
     - name: Configure Git
       run: |
