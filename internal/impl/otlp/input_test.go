@@ -44,6 +44,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 	pb "github.com/redpanda-data/common-go/redpanda-otel-exporter/proto"
 	"github.com/redpanda-data/connect/v4/internal/impl/otlp"
+	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
 const opTimeout = 5 * time.Second
@@ -873,7 +874,9 @@ func startInput(
 	pConf, err := inputSpec.ParseYAML(yamlConfig, nil)
 	require.NoError(t, err)
 
-	input, err := inputCtor(pConf, service.MockResources())
+	res := service.MockResources()
+	license.InjectTestService(res)
+	input, err := inputCtor(pConf, res)
 	require.NoError(t, err)
 
 	require.NoError(t, input.Connect(t.Context()))

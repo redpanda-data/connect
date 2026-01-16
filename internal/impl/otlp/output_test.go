@@ -29,6 +29,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 	pb "github.com/redpanda-data/common-go/redpanda-otel-exporter/proto"
 	"github.com/redpanda-data/connect/v4/internal/impl/otlp"
+	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
 // createTestSpan news a test span in Redpanda protobuf format.
@@ -385,7 +386,9 @@ address: "%s"
 `, endpoint), nil)
 	require.NoError(t, err)
 
-	input, err := inputCtor(inputConf, service.MockResources())
+	inputRes := service.MockResources()
+	license.InjectTestService(inputRes)
+	input, err := inputCtor(inputConf, inputRes)
 	require.NoError(t, err)
 
 	require.NoError(t, input.Connect(t.Context()))
@@ -413,7 +416,9 @@ endpoint: "%s"
 	outputConf, err := outputSpec.ParseYAML(outputYAML, nil)
 	require.NoError(t, err)
 
-	output, err := outputCtor(outputConf, service.MockResources())
+	outputRes := service.MockResources()
+	license.InjectTestService(outputRes)
+	output, err := outputCtor(outputConf, outputRes)
 	require.NoError(t, err)
 
 	require.NoError(t, output.Connect(t.Context()))
