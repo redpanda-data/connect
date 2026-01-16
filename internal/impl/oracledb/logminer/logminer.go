@@ -92,7 +92,7 @@ func (lm *LogMiner) getCurrentSCN() (uint64, error) {
 	var scn uint64
 	err := lm.db.QueryRow("SELECT CURRENT_SCN FROM V$DATABASE").Scan(&scn)
 	if err != nil {
-		return 0, fmt.Errorf("failed to query current SCN: %w", err)
+		return 0, fmt.Errorf("fetching current SCN: %w", err)
 	}
 	return scn, nil
 }
@@ -118,6 +118,7 @@ func (lm *LogMiner) ReadChanges(ctx context.Context, db *sql.DB, startPos replic
 
 	var err error
 	if lm.currentSCN, err = lm.getOldestAvailableSCN(); err != nil {
+		return fmt.Errorf("fetching oldest SCN: %w", err)
 	}
 
 	// Determine starting SCN
@@ -127,12 +128,11 @@ func (lm *LogMiner) ReadChanges(ctx context.Context, db *sql.DB, startPos replic
 		// Parse startPos to uint64
 		// TODO: Parse startPos string to uint64
 	} else {
-		// Get current SCN from database
-		var err error
-		lm.currentSCN, err = lm.getCurrentSCN()
-		if err != nil {
-			return fmt.Errorf("failed to get current SCN: %w", err)
+		var scn uint64
+		if err := lm.db.QueryRow("SELECT CURRENT_SCN FROM V$DATABASE").Scan(&scn); err != nil {
+			return fmt.Errorf("fetching current SCN: %w", err)
 		}
+
 		lm.log.Infof("Starting from current SCN: %d", lm.currentSCN)
 	}
 
@@ -142,9 +142,9 @@ func (lm *LogMiner) ReadChanges(ctx context.Context, db *sql.DB, startPos replic
 			return ctx.Err()
 		default:
 			if err := lm.miningCycle(ctx); err != nil {
-				log.Printf("Mining cycle error: %v", err)
-				return err
+				return fmt.Errorf("mining logs: %w", err)
 			}
+
 			time.Sleep(lm.backoffInterval)
 		}
 	}
@@ -159,7 +159,8 @@ func (lm *LogMiner) emitChangeEvent(ctx context.Context, event *ChangeEvent) {
 		Table:     event.Table,
 		Data:      event.After,
 	}
-	lm.log.Infof("EMIT: %s on %s.%s at SCN %d", event.Operation, event.Schema, event.Table, event.SCN)
+	// lm.log.Infof("EMIT: %s on %s.%s at SCN %d", event.Operation, event.Schema, event.Table, event.SCN)
+	// lm.log.Infof(event.After)
 	lm.publisher.Publish(ctx, msg)
 }
 
@@ -180,20 +181,20 @@ func (lm *LogMiner) miningCycle(ctx context.Context) error { // 1. Collect log f
 
 	for i, logFile := range logFiles {
 		if err := lm.sessionMgr.AddLogFile(logFile.FileName, i == 0); err != nil {
-			return fmt.Errorf("failed to add log file %s: %w", logFile.FileName, err)
+			return fmt.Errorf("loading log filename '%s' into logminer: %w", logFile.FileName, err)
 		}
 	}
 
 	// 4. Start LogMiner session with ONLINE_CATALOG strategy
 	if err := lm.sessionMgr.StartSession(lm.currentSCN, endSCN, false); err != nil {
-		return fmt.Errorf("failed to start LogMiner session: %w", err)
+		return fmt.Errorf("failed to start logminer session: %w", err)
 	}
 	defer lm.sessionMgr.EndSession()
 
 	// 5. Query and process events from V$LOGMNR_CONTENTS
 	events, err := lm.queryLogMinerContents(lm.currentSCN, endSCN)
 	if err != nil {
-		return fmt.Errorf("failed to query LogMiner contents: %w", err)
+		return fmt.Errorf("failed to query logminer contents: %w", err)
 	}
 
 	// 6. Process events and buffer transactions
@@ -217,16 +218,14 @@ func (lm *LogMiner) processEvent(ctx context.Context, event *LogMinerEvent) erro
 
 	case OpInsert, OpUpdate, OpDelete:
 		// Buffer DML event in transaction
-		dmlEvent, err := lm.eventProc.ParseDML(event)
-		if err != nil {
+		if dmlEvent, err := lm.eventProc.ParseDML(event); err != nil {
 			return fmt.Errorf("failed to parse DML: %w", err)
+		} else {
+			lm.txnCache.AddEvent(event.TransactionID, dmlEvent)
 		}
-		lm.txnCache.AddEvent(event.TransactionID, dmlEvent)
-
 	case OpCommit:
 		// Emit all buffered events for this transaction
-		txn := lm.txnCache.GetTransaction(event.TransactionID)
-		if txn != nil {
+		if txn := lm.txnCache.GetTransaction(event.TransactionID); txn != nil {
 			for _, dmlEvent := range txn.Events {
 				changeEvent := lm.eventProc.ConvertToChangeEvent(dmlEvent, event.SCN)
 				// TODO: Refactor to use replication.ChangeEvent
