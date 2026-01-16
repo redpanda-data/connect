@@ -6,6 +6,6 @@
 # community, etc) and upgrades all dependencies (go get -u).
 
 for dir in $(ls ./public/bundle); do
-    ( cd "./public/bundle/$dir" && go get -u . && go mod tidy )
+    ( cd "./public/bundle/$dir" && go get github.com/redpanda-data/connect/v4@latest && go mod tidy )
 done
 
