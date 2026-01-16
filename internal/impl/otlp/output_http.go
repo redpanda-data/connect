@@ -1,16 +1,10 @@
 // Copyright 2026 Redpanda Data, Inc.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// Licensed as a Redpanda Enterprise file under the Redpanda Community
+// License (the "License"); you may not use this file except in compliance with
+// the License. You may obtain a copy of the License at
 //
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
 package otlp
 
@@ -36,6 +30,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/utils/netutil"
 	"github.com/redpanda-data/common-go/redpanda-otel-exporter/proto"
 	"github.com/redpanda-data/connect/v4/internal/impl/otlp/otlpconv"
+	"github.com/redpanda-data/connect/v4/internal/license"
 	"github.com/redpanda-data/connect/v4/internal/oauth2"
 )
 
@@ -166,6 +161,10 @@ type httpOTLPOutput struct {
 
 // HTTPOutputFromParsed creates an OTLP HTTP output from a parsed config.
 func HTTPOutputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (service.BatchOutput, error) {
+	if err := license.CheckRunningEnterprise(mgr); err != nil {
+		return nil, err
+	}
+
 	var (
 		conf httpOutputConfig
 		err  error
