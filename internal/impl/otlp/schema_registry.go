@@ -15,6 +15,8 @@ import (
 	"github.com/twmb/franz-go/pkg/sr"
 )
 
+const schemaRegistryField = "schema_registry"
+
 func registerSchemas(ctx context.Context, client *sr.Client) (map[SignalType]int, error) {
 	commonRef, err := registerCommonProto(ctx, client)
 	if err != nil {
