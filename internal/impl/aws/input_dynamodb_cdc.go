@@ -172,10 +172,6 @@ func newDynamoDBCDCInputFromConfig(conf *service.ParsedConfig, mgr *service.Reso
 }
 
 func (d *dynamoDBCDCInput) Connect(ctx context.Context) error {
-	if d.dynamoClient != nil {
-		return nil
-	}
-
 	d.dynamoClient = dynamodb.NewFromConfig(d.awsConf)
 	d.streamsClient = dynamodbstreams.NewFromConfig(d.awsConf)
 

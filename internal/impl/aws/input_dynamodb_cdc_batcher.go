@@ -106,7 +106,6 @@ func (b *dynamoDBCDCRecordBatcher) AckMessages(ctx context.Context, checkpointer
 		// pendingCount tracks how many messages have been acked since last checkpoint
 		if b.pendingCount[shardID] >= checkpointer.checkpointLimit {
 			if err := checkpointer.Set(ctx, shardID, seq); err != nil {
-				b.log.Warnf("Failed to checkpoint shard %s: %w", shardID, err)
 				return err
 			}
 
