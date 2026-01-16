@@ -139,9 +139,9 @@ output:
   processors:
     - mapping: |
         meta id = this.id
-        # If the product with the ID exists, its price will be updated to 100.
+        # If the product with the ID exists, its price will be updated to 50.
         # If the product does not exist, a new document with ID 1 and a price
-        # of 50 will be inserted.
+        # of 100 will be inserted.
         root.doc.product_price = 50
         root.upsert.product_price = 100
   elasticsearch_v9:
