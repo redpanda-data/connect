@@ -1,0 +1,52 @@
+name: Tag Bundles
+
+on:
+  pull_request:
+    types:
+      - closed
+    branches:
+      - main
+
+jobs:
+  tag-bundles:
+    # Only run if the PR was merged and the branch name matches our bundle update pattern
+    if: github.event.pull_request.merged == true && startsWith(github.event.pull_request.head.ref, 'update-bundles-')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+    - name: Check Out Repo
+      uses: actions/checkout@v5
+      with:
+        fetch-depth: 0
+
+    - name: Install Go
+      uses: actions/setup-go@v6
+      with:
+        go-version: 1.25.5
+
+    - name: Configure Git
+      run: |
+        git config --global user.name "github-actions[bot]"
+        git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+    - name: Create bundle tags
+      run: |
+        chmod +x ./resources/scripts/tag_bundles.sh
+        ./resources/scripts/tag_bundles.sh
+
+    - name: Push tags
+      run: |
+        git push origin --tags
+
+    - name: List created tags
+      run: |
+        echo "Created the following bundle tags:"
+        for dir in $(ls ./public/bundle); do
+          bundle_path="public/bundle/$dir"
+          modline=$( cd $bundle_path && cat go.mod | grep "redpanda-data/connect/v" )
+          modline_split=( $modline )
+          version=${modline_split[2]}
+          echo "  - $bundle_path/$version"
+        done
