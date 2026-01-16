@@ -3,6 +3,20 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.78.0 - 2026-01-16
+
+### Added
+
+- add more ConnectionTest implementations (@Jeffail)
+- otel: add input and output components for OpenTelemetry OTEL protocol (@mmatczuk)
+- license: add support for Redpanda v1 licenses (@Jeffail)
+- aws: add `nack_visibility_timeout` field to `sqs` input (@squiidz)
+
+### Fixed
+
+- mcp: fix parsing of tool names for metrics (@alenkacz)
+- mcp: update permission names (@rockwotj)
+
 ## 4.77.0 - 2026-01-06
 
 ### Fixed
