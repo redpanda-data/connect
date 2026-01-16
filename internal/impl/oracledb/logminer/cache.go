@@ -55,8 +55,8 @@ type DMLEvent struct {
 	Operation Operation
 	Schema    string
 	Table     string
-	OldValues map[string]interface{}
-	NewValues map[string]interface{}
+	OldValues map[string]any
+	NewValues map[string]any
 	SQLRedo   string
 	Timestamp time.Time
 }
