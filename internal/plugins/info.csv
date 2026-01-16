@@ -13,6 +13,7 @@ aws_bedrock_embeddings    ,processor ,aws_bedrock_embeddings    ,4.37.0  ,certif
 aws_cloudwatch            ,metric    ,aws_cloudwatch            ,3.36.0  ,community  ,n          ,n     ,n
 aws_dynamodb              ,cache     ,AWS DynamoDB              ,3.36.0  ,community  ,n          ,y     ,y
 aws_dynamodb              ,output    ,AWS DynamoDB              ,3.36.0  ,community  ,n          ,y     ,y
+aws_dynamodb_cdc          ,input     ,aws_dynamodb_cdc          ,0.0.0   ,enterprise ,n          ,y     ,n
 aws_dynamodb_partiql      ,processor ,aws_dynamodb_partiql      ,3.48.0  ,certified  ,n          ,y     ,y
 aws_kinesis               ,input     ,AWS Kinesis               ,3.36.0  ,certified  ,n          ,y     ,y
 aws_kinesis               ,output    ,AWS Kinesis               ,3.36.0  ,certified  ,n          ,y     ,y
