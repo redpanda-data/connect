@@ -75,13 +75,13 @@ func NewMiner(_ *sql.DB, tables []replication.UserDefinedTable, publisher replic
 	}
 
 	s := &LogMiner{
+		db:              db,
 		tables:          tables,
 		publisher:       publisher,
 		backoffInterval: backoffInterval,
 		logCollector:    NewLogFileCollector(db),
 		sessionMgr:      NewSessionManager(db),
-		db:              db,
-		SleepDuration:   5 * time.Second,
+		txnCache:        NewTransactionCache(),
 		log:             logger,
 	}
 	return s
@@ -97,22 +97,37 @@ func (lm *LogMiner) getCurrentSCN() (uint64, error) {
 	return scn, nil
 }
 
+func (lm *LogMiner) getOldestAvailableSCN() (uint64, error) {
+	var scn uint64
+	err := lm.db.QueryRow(`                                                                        
+          SELECT MIN(FIRST_CHANGE#)                                                                  
+          FROM (                                                                                     
+              SELECT FIRST_CHANGE# FROM V$LOG                                                        
+              UNION                                                                                  
+              SELECT FIRST_CHANGE# FROM V$ARCHIVED_LOG                                               
+              WHERE NAME IS NOT NULL AND STATUS = 'A'                                                
+          )                                                                                          
+      `).Scan(&scn)
+	return scn, err
+}
+
 // ReadChanges streams the change events from the configured SQL Server change tables.
 func (lm *LogMiner) ReadChanges(ctx context.Context, db *sql.DB, startPos replication.SCN) error {
 	lm.log.Infof("Starting streaming %d change table(s)", len(lm.tables))
 	lm.BatchSize = 100
-	lm.currentSCN = 1
+
+	var err error
+	if lm.currentSCN, err = lm.getOldestAvailableSCN(); err != nil {
+	}
 
 	// Determine starting SCN
 	if len(startPos) != 0 {
 		// Resume from checkpoint
 		lm.log.Infof("Resuming from recorded SCN position '%s'", startPos)
 		// Parse startPos to uint64
-		// For now, assuming startPos is empty and we get current SCN
-	}
-
-	// Get current SCN from database if not resuming
-	if lm.currentSCN == 0 {
+		// TODO: Parse startPos string to uint64
+	} else {
+		// Get current SCN from database
 		var err error
 		lm.currentSCN, err = lm.getCurrentSCN()
 		if err != nil {
@@ -130,7 +145,7 @@ func (lm *LogMiner) ReadChanges(ctx context.Context, db *sql.DB, startPos replic
 				log.Printf("Mining cycle error: %v", err)
 				return err
 			}
-			time.Sleep(lm.SleepDuration)
+			time.Sleep(lm.backoffInterval)
 		}
 	}
 }
