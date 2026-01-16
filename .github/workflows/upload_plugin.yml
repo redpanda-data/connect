@@ -45,7 +45,7 @@ jobs:
 
       - uses: actions/setup-go@v6
         with:
-          go-version: stable
+          go-version-file: 'go.mod'
 
       - name: Install Microsoft Go
         run: |

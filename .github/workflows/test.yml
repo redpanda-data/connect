@@ -20,7 +20,7 @@ jobs:
     - name: Install Go
       uses: actions/setup-go@v6
       with:
-        go-version: stable
+        go-version-file: 'go.mod'
 
     - name: Install dependencies for x_benthos_extra
       run: |
@@ -62,7 +62,7 @@ jobs:
     - name: Install Go
       uses: actions/setup-go@v6
       with:
-        go-version: stable
+        go-version-file: 'go.mod'
 
     - name: Set version env variables
       run: |

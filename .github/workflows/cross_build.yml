@@ -10,7 +10,6 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        go-version: [stable]
         os: [ubuntu-latest-32, macos-latest]
     runs-on: ${{ matrix.os }}
     permissions:
@@ -27,7 +26,7 @@ jobs:
     - name: Install Go
       uses: actions/setup-go@v6
       with:
-        go-version: ${{ matrix.go-version }}
+        go-version-file: 'go.mod'
 
     - name: GoReleaser
       uses: goreleaser/goreleaser-action@v6
