@@ -31,6 +31,7 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/gateway"
 	"github.com/redpanda-data/connect/v4/internal/impl/otlp/otlpconv"
 	"github.com/redpanda-data/connect/v4/internal/license"
+	"github.com/redpanda-data/connect/v4/internal/schemaregistry"
 )
 
 const (
@@ -158,6 +159,10 @@ An optional rate limit resource can be specified to throttle incoming requests. 
 				Description("An optional rate limit resource to throttle requests.").
 				Default(""),
 			netutil.ListenerConfigSpec(),
+			service.NewObjectField(schemaRegistryField, schemaregistry.ConfigFields()...).
+				Description("Optional Schema Registry configuration for adding Scheme Registry wire format headers to messages.").
+				Optional().
+				Advanced(),
 		)
 }
 
@@ -223,8 +228,12 @@ func HTTPInputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (s
 		return nil, err
 	}
 
+	base, err := newOTLPInputFromParsed(pConf, mgr, conf.RateLimit)
+	if err != nil {
+		return nil, err
+	}
 	return &httpOTLPInput{
-		otlpInput: newOTLPInput(mgr, conf.RateLimit),
+		otlpInput: base,
 		conf:      conf,
 		rpJWT:     rpJWT,
 		cors:      gateway.NewCORSConfigFromEnv(),
@@ -288,6 +297,11 @@ func (hi *httpOTLPInput) Connect(ctx context.Context) error {
 			hi.log.Errorf("HTTP server error: %v", serr)
 		}
 	}()
+
+	// Initialize Schema Registry
+	if err := hi.initSchemaRegistry(ctx); err != nil {
+		return fmt.Errorf("schema registry initialization: %w", err)
+	}
 
 	return nil
 }
@@ -428,7 +442,7 @@ func (hi *httpOTLPInput) handler() http.Handler {
 
 			batch = make(service.MessageBatch, 0, otlpconv.SpansCount(req))
 			otlpconv.TracesToRedpandaFunc(req, func(span *pb.Span) bool {
-				msg, err := newMessageWithSignalType(span, SignalTypeTrace)
+				msg, err := hi.newMessageWithSignalType(span, SignalTypeTrace)
 				if err != nil {
 					marshalErr = err
 					return false
@@ -454,7 +468,7 @@ func (hi *httpOTLPInput) handler() http.Handler {
 
 			batch = make(service.MessageBatch, 0, otlpconv.LogsCount(req))
 			otlpconv.LogsToRedpandaFunc(req, func(logRecord *pb.LogRecord) bool {
-				msg, err := newMessageWithSignalType(logRecord, SignalTypeLog)
+				msg, err := hi.newMessageWithSignalType(logRecord, SignalTypeLog)
 				if err != nil {
 					marshalErr = err
 					return false
@@ -480,7 +494,7 @@ func (hi *httpOTLPInput) handler() http.Handler {
 
 			batch = make(service.MessageBatch, 0, otlpconv.MetricsCount(req))
 			otlpconv.MetricsToRedpandaFunc(req, func(metric *pb.Metric) bool {
-				msg, err := newMessageWithSignalType(metric, SignalTypeMetric)
+				msg, err := hi.newMessageWithSignalType(metric, SignalTypeMetric)
 				if err != nil {
 					marshalErr = err
 					return false

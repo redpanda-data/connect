@@ -27,6 +27,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	pb "github.com/redpanda-data/common-go/redpanda-otel-exporter/proto"
+	"github.com/redpanda-data/connect/v4/internal/schemaregistry"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/utils/netutil"
@@ -130,6 +131,10 @@ An optional rate limit resource can be specified to throttle incoming requests. 
 				Description("An optional rate limit resource to throttle requests.").
 				Default(""),
 			netutil.ListenerConfigSpec(),
+			service.NewObjectField(schemaRegistryField, schemaregistry.ConfigFields()...).
+				Description("Optional Schema Registry configuration for adding Scheme Registry wire format headers to messages.").
+				Optional().
+				Advanced(),
 		)
 }
 
@@ -181,8 +186,12 @@ func GRPCInputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (s
 		return nil, fmt.Errorf("parse tcp config: %w", err)
 	}
 
+	base, err := newOTLPInputFromParsed(pConf, mgr, conf.RateLimit)
+	if err != nil {
+		return nil, err
+	}
 	return &grpcOTLPInput{
-		otlpInput: newOTLPInput(mgr, conf.RateLimit),
+		otlpInput: base,
 		conf:      conf,
 		done:      make(chan struct{}),
 	}, nil
@@ -240,6 +249,11 @@ func (gi *grpcOTLPInput) Connect(ctx context.Context) error {
 		}
 		close(gi.done)
 	}()
+
+	// Initialize Schema Registry
+	if err := gi.initSchemaRegistry(ctx); err != nil {
+		return fmt.Errorf("schema registry initialization: %w", err)
+	}
 
 	return nil
 }
@@ -329,7 +343,7 @@ func (s *traceServiceServer) Export(ctx context.Context, req ptraceotlp.ExportRe
 	batch := make(service.MessageBatch, 0, otlpconv.SpansCount(req))
 	var marshalErr error
 	otlpconv.TracesToRedpandaFunc(req, func(span *pb.Span) bool {
-		msg, err := newMessageWithSignalType(span, SignalTypeTrace)
+		msg, err := s.newMessageWithSignalType(span, SignalTypeTrace)
 		if err != nil {
 			marshalErr = err
 			return false
@@ -393,7 +407,7 @@ func (s *logsServiceServer) Export(ctx context.Context, req plogotlp.ExportReque
 	batch := make(service.MessageBatch, 0, otlpconv.LogsCount(req))
 	var marshalErr error
 	otlpconv.LogsToRedpandaFunc(req, func(logRecord *pb.LogRecord) bool {
-		msg, err := newMessageWithSignalType(logRecord, SignalTypeLog)
+		msg, err := s.newMessageWithSignalType(logRecord, SignalTypeLog)
 		if err != nil {
 			marshalErr = err
 			return false
@@ -459,7 +473,7 @@ func (s *metricsServiceServer) Export(ctx context.Context, req pmetricotlp.Expor
 	batch := make(service.MessageBatch, 0, otlpconv.MetricsCount(req))
 	var marshalErr error
 	otlpconv.MetricsToRedpandaFunc(req, func(metric *pb.Metric) bool {
-		msg, err := newMessageWithSignalType(metric, SignalTypeMetric)
+		msg, err := s.newMessageWithSignalType(metric, SignalTypeMetric)
 		if err != nil {
 			marshalErr = err
 			return false

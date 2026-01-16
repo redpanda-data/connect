@@ -16,11 +16,16 @@ package otlp
 
 import (
 	"context"
+	"encoding/binary"
+	"slices"
 	"time"
 
 	"github.com/Jeffail/shutdown"
+	"github.com/twmb/franz-go/pkg/sr"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/connect/v4/internal/schemaregistry"
 )
 
 type asyncMessage struct {
@@ -34,16 +39,26 @@ type otlpInput struct {
 	rateLimit string
 	resCh     chan asyncMessage
 	shutSig   *shutdown.Signaller
+
+	srClient  *sr.Client
+	schemaIDs map[SignalType]int
 }
 
-func newOTLPInput(mgr *service.Resources, rateLimit string) otlpInput {
+func newOTLPInputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources, rateLimit string) (otlpInput, error) {
+	client, err := schemaregistry.ClientFromParsedOptional(pConf, schemaRegistryField, mgr)
+	if err != nil {
+		return otlpInput{}, err
+	}
+
 	return otlpInput{
 		log:       mgr.Logger(),
 		mgr:       mgr,
 		rateLimit: rateLimit,
 		resCh:     make(chan asyncMessage),
 		shutSig:   shutdown.NewSignaller(),
-	}
+
+		srClient: client,
+	}, nil
 }
 
 // maybeWaitForAccess blocks until the rate limiter grants access or the
@@ -124,4 +139,51 @@ func (o *otlpInput) ReadBatch(ctx context.Context) (service.MessageBatch, servic
 	case am := <-o.resCh:
 		return am.msg, am.ackFn, nil
 	}
+}
+
+// initSchemaRegistry initializes Schema Registry by registering all three
+// signal type schemas and caching their IDs. Called once during Connect().
+func (o *otlpInput) initSchemaRegistry(ctx context.Context) error {
+	if o.srClient == nil {
+		return nil // SR not configured, skip
+	}
+
+	schemaIDs, err := registerSchemas(ctx, o.srClient)
+	if err != nil {
+		return err
+	}
+	o.schemaIDs = schemaIDs
+
+	// Log registered schemas
+	for signalType, schemaID := range schemaIDs {
+		o.log.Infof("Using Schema Registry schema ID %d for signal type %s", schemaID, signalType.String())
+	}
+
+	return nil
+}
+
+// newMessageWithSignalType creates a new message from a protobuf object with
+// the specified signal type metadata and optional Schema Registry header.
+func (o *otlpInput) newMessageWithSignalType(msg proto.Message, s SignalType) (*service.Message, error) {
+	msgBytes, err := proto.Marshal(msg)
+	if err != nil {
+		return nil, err
+	}
+
+	// Add Schema Registry header if configured
+	if schemaID, ok := o.schemaIDs[s]; ok {
+		msgBytes = insertSchemaRegistryHeader(schemaID, msgBytes)
+	}
+
+	svcMsg := service.NewMessage(msgBytes)
+	svcMsg.MetaSet(MetadataKeySignalType, s.String())
+	return svcMsg, nil
+}
+
+func insertSchemaRegistryHeader(schemaID int, payload []byte) []byte {
+	result := slices.Grow(payload, 5)[:len(payload)+5]
+	copy(result[5:], payload)
+	result[0] = 0x00 // Confluent magic byte
+	binary.BigEndian.PutUint32(result[1:5], uint32(schemaID))
+	return result
 }
