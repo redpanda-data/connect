@@ -16,6 +16,7 @@ All notable changes to this project will be documented in this file.
 
 - mcp: fix parsing of tool names for metrics (@alenkacz)
 - mcp: update permission names (@rockwotj)
+- (Benthos) http_server: Use `SO_REUSEADDR` to avoid being blocked by `TIME_WAIT` upon connector restart. (@vuldin)
 
 ## 4.77.0 - 2026-01-06
 
