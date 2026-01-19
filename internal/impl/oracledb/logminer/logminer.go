@@ -92,7 +92,7 @@ func (lm *LogMiner) getCurrentSCN() (uint64, error) {
 	var scn uint64
 	err := lm.db.QueryRow("SELECT CURRENT_SCN FROM V$DATABASE").Scan(&scn)
 	if err != nil {
-		return 0, fmt.Errorf("failed to query current SCN: %w", err)
+		return 0, fmt.Errorf("fetching current SCN: %w", err)
 	}
 	return scn, nil
 }
@@ -118,6 +118,7 @@ func (lm *LogMiner) ReadChanges(ctx context.Context, db *sql.DB, startPos replic
 
 	var err error
 	if lm.currentSCN, err = lm.getOldestAvailableSCN(); err != nil {
+		return fmt.Errorf("fetching oldest SCN: %w", err)
 	}
 
 	// Determine starting SCN
@@ -127,12 +128,11 @@ func (lm *LogMiner) ReadChanges(ctx context.Context, db *sql.DB, startPos replic
 		// Parse startPos to uint64
 		// TODO: Parse startPos string to uint64
 	} else {
-		// Get current SCN from database
-		var err error
-		lm.currentSCN, err = lm.getCurrentSCN()
-		if err != nil {
-			return fmt.Errorf("failed to get current SCN: %w", err)
+		var scn uint64
+		if err := lm.db.QueryRow("SELECT CURRENT_SCN FROM V$DATABASE").Scan(&scn); err != nil {
+			return fmt.Errorf("fetching current SCN: %w", err)
 		}
+
 		lm.log.Infof("Starting from current SCN: %d", lm.currentSCN)
 	}
 
@@ -142,9 +142,9 @@ func (lm *LogMiner) ReadChanges(ctx context.Context, db *sql.DB, startPos replic
 			return ctx.Err()
 		default:
 			if err := lm.miningCycle(ctx); err != nil {
-				log.Printf("Mining cycle error: %v", err)
-				return err
+				return fmt.Errorf("mining logs: %w", err)
 			}
+
 			time.Sleep(lm.backoffInterval)
 		}
 	}
