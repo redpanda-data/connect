@@ -15,9 +15,8 @@ func NewSessionManager(db *sql.DB) *SessionManager {
 	return &SessionManager{db: db}
 }
 
-// AddLogFile registers a log file with LogMiner
-//
-//	func (sm *SessionManager) AddLogFile(fileName string) error {
+// AutoRegisterLogFile registers a log file with LogMiner
+//	func (sm *SessionManager) AutoRegisterLogFile(fileName string) error {
 //		sql := fmt.Sprintf("BEGIN sys.dbms_logmnr.add_logfile(LOGFILENAME => '%s', OPTIONS => DBMS_LOGMNR.ADDFILE); END;", fileName)
 //		_, err := sm.db.Exec(sql)
 //		if err != nil {
@@ -28,21 +27,16 @@ func NewSessionManager(db *sql.DB) *SessionManager {
 //	}
 
 func (sm *SessionManager) AddLogFile(fileName string, isFirst bool) error {
-	var option string
+	var opt string
 	if isFirst {
-		option = "DBMS_LOGMNR.NEW" // Clears previous files and adds this one
+		opt = "DBMS_LOGMNR.NEW" // Clears previous files and adds this one
 	} else {
-		option = "DBMS_LOGMNR.ADDFILE" // Adds to existing list
+		opt = "DBMS_LOGMNR.ADDFILE" // Adds to existing list
 	}
 
-	query := fmt.Sprintf("BEGIN DBMS_LOGMNR.ADD_LOGFILE(LOGFILENAME => :1, OPTIONS => %s); END;", option)
-	_, err := sm.db.Exec(query, fileName)
+	q := fmt.Sprintf("BEGIN DBMS_LOGMNR.ADD_LOGFILE(LOGFILENAME => :1, OPTIONS => %s); END;", opt)
+	_, err := sm.db.Exec(q, fileName)
 	return err
-}
-
-func (sm *SessionManager) RemoveAllLogFiles() error {
-	// No explicit removal needed - use NEW option on first AddLogFile instead
-	return nil
 }
 
 // StartSession starts a LogMiner session with ONLINE_CATALOG strategy
@@ -70,12 +64,10 @@ func (sm *SessionManager) StartSession(startSCN, endSCN uint64, committedDataOnl
 		startSCN, endSCN, optionsStr,
 	)
 
-	_, err := sm.db.Exec(sql)
-	if err != nil {
+	if _, err := sm.db.Exec(sql); err != nil {
 		return fmt.Errorf("failed to start LogMiner session: %w", err)
 	}
 
-	log.Printf("Started LogMiner session: SCN %d to %d", startSCN, endSCN)
 	return nil
 }
 

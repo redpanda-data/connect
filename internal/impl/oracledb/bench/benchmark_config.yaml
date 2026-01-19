@@ -6,6 +6,7 @@ input:
     connection_string: oracle://testdb:testdb123@localhost:1521/XEPDB1
     stream_snapshot: false
     snapshot_max_batch_size: 500
+    stream_backoff_interval: 5s
     include:
       - TESTDB.USERS
       # - testdb.products
@@ -15,12 +16,12 @@ input:
 
 
 output:
-  processors:
-    - benchmark:
-        interval: 1s
-        count_bytes: true
-  # drop: {}
+#   processors:
+#     - benchmark:
+#         interval: 1s
+#         count_bytes: true
   stdout: {}
+  # drop: {}
 
 logger:
   level: DEBUG
