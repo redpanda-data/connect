@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/connect/v4/internal/impl/oracledb/logminer/dmlparser"
 	"github.com/redpanda-data/connect/v4/internal/impl/oracledb/replication"
 )
 
@@ -57,6 +58,7 @@ type LogMiner struct {
 	eventProc       *EventProcessor
 	db              *sql.DB
 	SleepDuration   time.Duration
+	DMLParser       *dmlparser.LogMinerDMLParser
 
 	txnCache TransactionCache
 }
@@ -82,25 +84,12 @@ func NewMiner(_ *sql.DB, tables []replication.UserDefinedTable, publisher replic
 		logCollector:    NewLogFileCollector(db),
 		sessionMgr:      NewSessionManager(db),
 		txnCache:        NewInMemoryCache(),
+		DMLParser:       dmlparser.New(true),
 		BatchSize:       maxBatchSize,
 		log:             logger,
 	}
 	return s
 }
-
-// func (lm *LogMiner) getOldestAvailableSCN() (uint64, error) {
-// 	var scn uint64
-// 	err := lm.db.QueryRow(`
-//           SELECT MIN(FIRST_CHANGE#)
-//           FROM (
-//               SELECT FIRST_CHANGE# FROM V$LOG
-//               UNION
-//               SELECT FIRST_CHANGE# FROM V$ARCHIVED_LOG
-//               WHERE NAME IS NOT NULL AND STATUS = 'A'
-//           )
-//       `).Scan(&scn)
-// 	return scn, err
-// }
 
 // ReadChanges streams the change events from the configured SQL Server change tables.
 func (lm *LogMiner) ReadChanges(ctx context.Context, db *sql.DB, startPos replication.SCN) error {
