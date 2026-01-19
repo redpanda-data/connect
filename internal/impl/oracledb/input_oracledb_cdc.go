@@ -32,6 +32,7 @@ const (
 	fieldStreamSnapshot            = "stream_snapshot"
 	fieldMaxParallelSnapshotTables = "max_parallel_snapshot_tables"
 	fieldSnapshotMaxBatchSize      = "snapshot_max_batch_size"
+	fieldLogMinerMaxBatchSize      = "logminer_max_batch_size"
 	fieldStreamBackoffInterval     = "stream_backoff_interval"
 	fieldTablesExclude             = "exclude"
 	fieldTablesInclude             = "include"
@@ -84,6 +85,10 @@ When using the default Oracle based cache, the Connect user requires permission 
 		Description("The maximum number of rows to be streamed in a single batch when taking a snapshot.").
 		Default(1000),
 	).
+	Field(service.NewIntField(fieldLogMinerMaxBatchSize).
+		Description("The maximum number of records to be queried when parsing log lines via LogMiner. Smaller batches mean more frequent queries with higher overhead but lower latency, larger batches mean fewer queries with better throughput but require more memory.").
+		Default(500),
+	).
 	Field(service.NewStringListField(fieldTablesInclude).
 		Description("Regular expressions for tables to include.").
 		Example("SCHEMA.PRODUCTS"),
@@ -131,6 +136,7 @@ type config struct {
 	streamBackoffInterval time.Duration
 	snapshotMaxBatchSize  int
 	snapshotMaxWorkers    int
+	logMinerMaxBatchSize  int
 	tablesFilter          *confx.RegexpFilter
 	scnCache              string
 	scnCacheKey           string
@@ -157,6 +163,7 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 		snapshotMaxWorkers           int
 		streamBackoffInterval        time.Duration
 		snapshotMaxBatchSize         int
+		logMinerMaxBatchSize         int
 		scnCache, scnCacheKey        string
 		tableIncludes, tableExcludes []*regexp.Regexp
 		batcher                      *service.Batcher
@@ -178,6 +185,9 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 		return nil, err
 	}
 	if snapshotMaxBatchSize, err = conf.FieldInt(fieldSnapshotMaxBatchSize); err != nil {
+		return nil, err
+	}
+	if logMinerMaxBatchSize, err = conf.FieldInt(fieldLogMinerMaxBatchSize); err != nil {
 		return nil, err
 	}
 	if streamBackoffInterval, err = conf.FieldDuration(fieldStreamBackoffInterval); err != nil {
@@ -238,6 +248,7 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 			streamBackoffInterval: streamBackoffInterval,
 			snapshotMaxWorkers:    snapshotMaxWorkers,
 			snapshotMaxBatchSize:  snapshotMaxBatchSize,
+			logMinerMaxBatchSize:  logMinerMaxBatchSize,
 			scnCache:              scnCache,
 			scnCacheKey:           scnCacheKey,
 			cpCacheTableName:      cpCacheTableName,
@@ -313,7 +324,7 @@ func (i *oracleDBCDCInput) Connect(ctx context.Context) error {
 		i.log.Infof("Snapshotting disabled, skipping...")
 	}
 
-	streaming = logminer.NewMiner(i.db, userTables, i.publisher, i.cfg.streamBackoffInterval, i.log)
+	streaming = logminer.NewMiner(i.db, userTables, i.publisher, i.cfg.streamBackoffInterval, i.cfg.logMinerMaxBatchSize, i.log)
 
 	// Reset our stop signal
 	i.stopSig = shutdown.NewSignaller()

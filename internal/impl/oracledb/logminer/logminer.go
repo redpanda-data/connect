@@ -12,7 +12,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -24,8 +23,9 @@ type ChangeEvent struct {
 	Schema    string
 	Table     string
 	Operation string // "CREATE", "UPDATE", "DELETE"
-	Before    map[string]any
-	After     map[string]any
+	// Before    map[string]any
+	// After     map[string]any
+	Data      string
 	SCN       int64
 	Timestamp time.Time
 	TxnID     string
@@ -52,18 +52,18 @@ type LogMiner struct {
 	log             *service.Logger
 	logCollector    *LogFileCollector
 	currentSCN      uint64
-	BatchSize       uint8
+	BatchSize       int
 	sessionMgr      *SessionManager
 	eventProc       *EventProcessor
 	db              *sql.DB
 	SleepDuration   time.Duration
 
-	txnCache *TransactionCache
+	txnCache TransactionCache
 }
 
 // NewMiner creates a new instance of NewMiner, responsible
 // for paging through change events based on the tables param.
-func NewMiner(_ *sql.DB, tables []replication.UserDefinedTable, publisher replication.ChangePublisher, backoffInterval time.Duration, logger *service.Logger) *LogMiner {
+func NewMiner(_ *sql.DB, tables []replication.UserDefinedTable, publisher replication.ChangePublisher, backoffInterval time.Duration, maxBatchSize int, logger *service.Logger) *LogMiner {
 	var (
 		db  *sql.DB
 		err error
@@ -81,45 +81,30 @@ func NewMiner(_ *sql.DB, tables []replication.UserDefinedTable, publisher replic
 		backoffInterval: backoffInterval,
 		logCollector:    NewLogFileCollector(db),
 		sessionMgr:      NewSessionManager(db),
-		txnCache:        NewTransactionCache(),
+		txnCache:        NewInMemoryCache(),
+		BatchSize:       maxBatchSize,
 		log:             logger,
 	}
 	return s
 }
 
-// getCurrentSCN gets the current SCN from the database
-func (lm *LogMiner) getCurrentSCN() (uint64, error) {
-	var scn uint64
-	err := lm.db.QueryRow("SELECT CURRENT_SCN FROM V$DATABASE").Scan(&scn)
-	if err != nil {
-		return 0, fmt.Errorf("fetching current SCN: %w", err)
-	}
-	return scn, nil
-}
-
-func (lm *LogMiner) getOldestAvailableSCN() (uint64, error) {
-	var scn uint64
-	err := lm.db.QueryRow(`                                                                        
-          SELECT MIN(FIRST_CHANGE#)                                                                  
-          FROM (                                                                                     
-              SELECT FIRST_CHANGE# FROM V$LOG                                                        
-              UNION                                                                                  
-              SELECT FIRST_CHANGE# FROM V$ARCHIVED_LOG                                               
-              WHERE NAME IS NOT NULL AND STATUS = 'A'                                                
-          )                                                                                          
-      `).Scan(&scn)
-	return scn, err
-}
+// func (lm *LogMiner) getOldestAvailableSCN() (uint64, error) {
+// 	var scn uint64
+// 	err := lm.db.QueryRow(`
+//           SELECT MIN(FIRST_CHANGE#)
+//           FROM (
+//               SELECT FIRST_CHANGE# FROM V$LOG
+//               UNION
+//               SELECT FIRST_CHANGE# FROM V$ARCHIVED_LOG
+//               WHERE NAME IS NOT NULL AND STATUS = 'A'
+//           )
+//       `).Scan(&scn)
+// 	return scn, err
+// }
 
 // ReadChanges streams the change events from the configured SQL Server change tables.
 func (lm *LogMiner) ReadChanges(ctx context.Context, db *sql.DB, startPos replication.SCN) error {
 	lm.log.Infof("Starting streaming %d change table(s)", len(lm.tables))
-	lm.BatchSize = 100
-
-	var err error
-	if lm.currentSCN, err = lm.getOldestAvailableSCN(); err != nil {
-		return fmt.Errorf("fetching oldest SCN: %w", err)
-	}
 
 	// Determine starting SCN
 	if len(startPos) != 0 {
@@ -128,11 +113,12 @@ func (lm *LogMiner) ReadChanges(ctx context.Context, db *sql.DB, startPos replic
 		// Parse startPos to uint64
 		// TODO: Parse startPos string to uint64
 	} else {
+		// get current SCN from DB
 		var scn uint64
 		if err := lm.db.QueryRow("SELECT CURRENT_SCN FROM V$DATABASE").Scan(&scn); err != nil {
 			return fmt.Errorf("fetching current SCN: %w", err)
 		}
-
+		lm.currentSCN = scn
 		lm.log.Infof("Starting from current SCN: %d", lm.currentSCN)
 	}
 
@@ -145,6 +131,7 @@ func (lm *LogMiner) ReadChanges(ctx context.Context, db *sql.DB, startPos replic
 				return fmt.Errorf("mining logs: %w", err)
 			}
 
+			lm.log.Infof("------------------------------------")
 			time.Sleep(lm.backoffInterval)
 		}
 	}
@@ -157,44 +144,63 @@ func (lm *LogMiner) emitChangeEvent(ctx context.Context, event *ChangeEvent) {
 		Operation: event.Operation,
 		Schema:    event.Schema,
 		Table:     event.Table,
-		Data:      event.After,
+		Data:      event.Data,
 	}
 	// lm.log.Infof("EMIT: %s on %s.%s at SCN %d", event.Operation, event.Schema, event.Table, event.SCN)
 	// lm.log.Infof(event.After)
 	lm.publisher.Publish(ctx, msg)
 }
 
-func (lm *LogMiner) miningCycle(ctx context.Context) error { // 1. Collect log files that contain changes from current SCN
+func (lm *LogMiner) miningCycle(ctx context.Context) error {
+	// 1. Get the database's current SCN to know our target
+	var dbCurrentSCN uint64
+	if err := lm.db.QueryRow("SELECT CURRENT_SCN FROM V$DATABASE").Scan(&dbCurrentSCN); err != nil {
+		return fmt.Errorf("fetching current SCN: %w", err)
+	}
+
+	// If we've caught up, nothing to do
+	if lm.currentSCN >= dbCurrentSCN {
+		lm.log.Debugf("Caught up to current SCN %d, no new changes to process", dbCurrentSCN)
+		return nil
+	}
+
+	// 2. Calculate SCN range - process up to current SCN or a reasonable chunk
+	endSCN := dbCurrentSCN
+	// Limit the range to avoid huge queries when there's a large gap
+	maxRange := uint64(lm.BatchSize)
+	if endSCN-lm.currentSCN > maxRange {
+		endSCN = lm.currentSCN + maxRange
+	}
+
+	// 3. Collect log files that contain changes from current SCN
 	logFiles, err := lm.logCollector.GetLogs(lm.currentSCN)
 	if err != nil {
-		return fmt.Errorf("failed to collect logs: %w", err)
+		return fmt.Errorf("collecting redo logs for logminer: %w", err)
 	}
-	log.Printf("Collected %d log files for mining", len(logFiles))
+	lm.log.Debugf("Collected %d redo log file(s) for LogMiner", len(logFiles))
 
-	// 2. Calculate SCN range for this batch
-	endSCN := lm.currentSCN + uint64(lm.BatchSize)
-
-	// 3. Register log files with LogMiner
-	if err := lm.sessionMgr.RemoveAllLogFiles(); err != nil {
-		return fmt.Errorf("failed to remove old log files: %w", err)
-	}
-
+	// 4. Load redo logs into LogMiner
 	for i, logFile := range logFiles {
-		if err := lm.sessionMgr.AddLogFile(logFile.FileName, i == 0); err != nil {
+		// if first log file, ensure we clear existing logs
+		isFirstFile := i == 0
+		if err := lm.sessionMgr.AddLogFile(logFile.FileName, isFirstFile); err != nil {
 			return fmt.Errorf("loading log filename '%s' into logminer: %w", logFile.FileName, err)
 		}
+
+		lm.log.Debugf("Loaded redo log file %s into LogMiner", logFile.FileName)
 	}
 
 	// 4. Start LogMiner session with ONLINE_CATALOG strategy
 	if err := lm.sessionMgr.StartSession(lm.currentSCN, endSCN, false); err != nil {
-		return fmt.Errorf("failed to start logminer session: %w", err)
+		return fmt.Errorf("starting logminer session: %w", err)
 	}
 	defer lm.sessionMgr.EndSession()
+	lm.log.Infof("Started LogMiner session: SCN %d to %d", lm.currentSCN, endSCN)
 
 	// 5. Query and process events from V$LOGMNR_CONTENTS
 	events, err := lm.queryLogMinerContents(lm.currentSCN, endSCN)
 	if err != nil {
-		return fmt.Errorf("failed to query logminer contents: %w", err)
+		return fmt.Errorf("querying logminer contents: %w", err)
 	}
 
 	// 6. Process events and buffer transactions
@@ -204,12 +210,14 @@ func (lm *LogMiner) miningCycle(ctx context.Context) error { // 1. Collect log f
 		}
 	}
 
-	log.Printf("Processed %d events in SCN range %d-%d", len(events), lm.currentSCN, endSCN)
+	lm.log.Infof("Processed %d events in SCN range %d-%d", len(events), lm.currentSCN, endSCN)
 	lm.currentSCN = endSCN
 
 	return nil
 }
 
+// processEvent buffers emitted events until a commit or rollback event is processed at which
+// point the buffer can be flushed to the Connect pipeline or dropped.
 func (lm *LogMiner) processEvent(ctx context.Context, event *LogMinerEvent) error {
 	switch event.Operation {
 	case OpStart:
@@ -232,8 +240,7 @@ func (lm *LogMiner) processEvent(ctx context.Context, event *LogMinerEvent) erro
 				lm.emitChangeEvent(ctx, changeEvent)
 			}
 			lm.txnCache.CommitTransaction(event.TransactionID)
-			log.Printf("Committed transaction %s with %d events at SCN %d",
-				event.TransactionID, len(txn.Events), event.SCN)
+			lm.log.Infof("Committed transaction %s with %d events at SCN %d", event.TransactionID, len(txn.Events), event.SCN)
 		}
 
 	case OpRollback:
@@ -277,6 +284,7 @@ func (lm *LogMiner) queryLogMinerContents(startSCN, endSCN uint64) ([]*LogMinerE
 	for rows.Next() {
 		event := &LogMinerEvent{}
 		var xidUsn, xidSlt, xidSqn int64
+		var xid string
 		var rsId, ssn sql.NullString
 
 		err := rows.Scan(
@@ -286,7 +294,7 @@ func (lm *LogMiner) queryLogMinerContents(startSCN, endSCN uint64) ([]*LogMinerE
 			&event.TableName,
 			&event.SchemaName,
 			&event.Timestamp,
-			&event.TransactionID,
+			&xid,
 			&xidUsn,
 			&xidSlt,
 			&xidSqn,
@@ -297,6 +305,8 @@ func (lm *LogMiner) queryLogMinerContents(startSCN, endSCN uint64) ([]*LogMinerE
 			return nil, err
 		}
 
+		// Construct transaction ID from components (XID as RAW doesn't format well)
+		event.TransactionID = fmt.Sprintf("%d.%d.%d", xidUsn, xidSlt, xidSqn)
 		event.Operation = operationFromCode(event.OperationCode)
 		events = append(events, event)
 	}
