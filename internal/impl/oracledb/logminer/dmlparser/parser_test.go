@@ -410,8 +410,7 @@ func BenchmarkParseInsert(b *testing.B) {
 	sql := `insert into "MYAPP"."CUSTOMERS"("ID","NAME","EMAIL","PHONE","ADDRESS") values ('1','John Doe','john@example.com','555-1234','123 Main St');`
 	columns := []string{"ID", "NAME", "EMAIL", "PHONE", "ADDRESS"}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = parser.Parse(sql, columns)
 	}
 }
@@ -421,8 +420,7 @@ func BenchmarkParseUpdate(b *testing.B) {
 	sql := `update "MYAPP"."CUSTOMERS" set "NAME" = 'Jane Doe', "EMAIL" = 'jane@example.com' where "ID" = '1' and "NAME" = 'John Doe';`
 	columns := []string{"ID", "NAME", "EMAIL"}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = parser.Parse(sql, columns)
 	}
 }
@@ -432,8 +430,7 @@ func BenchmarkParseDelete(b *testing.B) {
 	sql := `delete from "MYAPP"."CUSTOMERS" where "ID" = '1' and "NAME" = 'John Doe' and "EMAIL" = 'john@example.com';`
 	columns := []string{"ID", "NAME", "EMAIL"}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = parser.Parse(sql, columns)
 	}
 }
