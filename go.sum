@@ -2022,8 +2022,9 @@ github.com/redpanda-data/common-go/authz v0.2.0 h1:KYBu/+eIdFlaR8qJXn5I52AJ9Zo4K
 github.com/redpanda-data/common-go/authz v0.2.0/go.mod h1:x1C0YQ5NhCg2uj09Oz0bwMwDTkazK8lwxfZshE5Lf3s=
 github.com/redpanda-data/common-go/license v0.0.0-20260109170727-1dd9f5d22ee1 h1:Qr6sK5Qmznbwtk4AKgd6086RM+uA/Z4lO/r2aCDxx+c=
 github.com/redpanda-data/common-go/license v0.0.0-20260109170727-1dd9f5d22ee1/go.mod h1:F1fp8xVNS2UwWFosOjJ9+5jaEZnXSjB9AdHk2R9XlpI=
-github.com/redpanda-data/common-go/redpanda-otel-exporter v0.3.0 h1:Y7pkNAmA/pRnlOulJ1iU+Ux6U3Iey+OSqSCELnSsrLk=
-github.com/redpanda-data/common-go/redpanda-otel-exporter v0.3.0/go.mod h1:uNozjiJjQ7ddqxJNM0Q99yzzxkQcs0Xh0810qi8UImw=
+github.com/redpanda-data/common-go/redpanda-otel-exporter v0.3.1-0.20260120073450-935d3dd3d6c1 h1:jQLTLBWJqOyMAZi9YFx8nsgZ7fOq+DYZsSF7zM+hb7o=
+github.com/redpanda-data/common-go/redpanda-otel-exporter v0.3.1-0.20260120073450-935d3dd3d6c1/go.mod h1:kzFoUX1Abv6ccz8wuTUUpmBlGwQcwNjSxYCuDLA4IyQ=
+github.com/redpanda-data/common-go/redpanda-otel-exporter v0.4.0/go.mod h1:kzFoUX1Abv6ccz8wuTUUpmBlGwQcwNjSxYCuDLA4IyQ=
 github.com/redpanda-data/common-go/secrets v0.1.4 h1:CGp3KolGnjcJvIafTwf7Hlj5ztLOJCjgkegRu7IAkSw=
 github.com/redpanda-data/common-go/secrets v0.1.4/go.mod h1:WjUU/5saSXwItZx6veFOGbQZUgPQz4MQ65z22y0Ky84=
 github.com/redpanda-data/connect/public/bundle/free/v4 v4.66.1 h1:WOjbJMWPn++lNBm1bFl733z9LXtujmQh0tDJg2S3M6I=
