@@ -28,8 +28,8 @@ func (ep *EventProcessor) ParseDML(event *LogMinerEvent) (*DMLEvent, error) {
 	}
 
 	// Store SQL_REDO - will need to parse this to extract column values
-	if strings.TrimSpace(event.SQLRedo) != "" {
-		dml.SQLRedo = event.SQLRedo
+	if strings.TrimSpace(event.SQLRedo.String) != "" {
+		dml.SQLRedo = event.SQLRedo.String
 	}
 	dml.Data = event.Data
 
@@ -43,7 +43,7 @@ func (ep *EventProcessor) ConvertToChangeEvent(dml *DMLEvent, scn int64) *Change
 		Table:     dml.Table,
 		SCN:       scn,
 		Timestamp: dml.Timestamp,
-		Data:      dml.SQLRedo,
+		Data:      dml.Data,
 	}
 
 	switch dml.Operation {
