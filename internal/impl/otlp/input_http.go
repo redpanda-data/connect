@@ -34,14 +34,12 @@ import (
 )
 
 const (
-	hiFieldEncoding     = "encoding"
 	hiFieldAddress      = "address"
 	hiFieldTLS          = "tls"
 	hiFieldAuthToken    = "auth_token"
 	hiFieldReadTimeout  = "read_timeout"
 	hiFieldWriteTimeout = "write_timeout"
 	hiFieldMaxBodySize  = "max_body_size"
-	hiFieldRateLimit    = "rate_limit"
 
 	defaultHTTPAddress      = "0.0.0.0:4318"
 	defaultHTTPReadTimeout  = 10 * time.Second
@@ -50,14 +48,12 @@ const (
 )
 
 type httpInputConfig struct {
-	Encoding       Encoding
 	Address        string
 	TLS            tlsServerConfig
 	AuthToken      string
 	ReadTimeout    time.Duration
 	WriteTimeout   time.Duration
 	MaxBodySize    int
-	RateLimit      string
 	ListenerConfig netutil.ListenerConfig
 }
 
@@ -96,8 +92,8 @@ Each OTLP export request is unbatched into individual messages:
 Messages are encoded in Redpanda OTEL v1 format (protobuf or JSON, configurable via `+"`encoding`"+` field).
 
 Each message includes the following metadata:
-- `+"`signalType`"+`: The signal type - "trace", "log", or "metric"
-- `+"`encoding`"+` : The message encoding - "json" or "protobuf"
+- `+"`otel_signal_type`"+`: The signal type - "trace", "log", or "metric"
+- `+"`otel_encoding`"+` : The message encoding - "json" or "protobuf"
 
 ## Authentication
 
@@ -136,7 +132,7 @@ export OTEL_EXPORTER_OTLP_HEADERS="Authorization=Bearer your-token-here"
 An optional rate limit resource can be specified to throttle incoming requests. When the rate limit is breached, requests will receive a 429 (Too Many Requests) response.
 `).
 		Fields(
-			service.NewStringEnumField(hiFieldEncoding, "protobuf", "json").
+			service.NewStringEnumField(fieldEncoding, "protobuf", "json").
 				Description("Encoding format for messages in the batch. Options: 'protobuf' or 'json'.").
 				Default(string(EncodingJSON)),
 			service.NewStringField(hiFieldAddress).
@@ -163,10 +159,14 @@ An optional rate limit resource can be specified to throttle incoming requests. 
 				Description("Maximum size of HTTP request body in bytes.").
 				Default(defaultHTTPMaxBodySize).
 				Advanced(),
-			service.NewStringField(hiFieldRateLimit).
+			service.NewStringField(fieldRateLimit).
 				Description("An optional rate limit resource to throttle requests.").
 				Default(""),
 			netutil.ListenerConfigSpec(),
+			service.NewObjectField(schemaRegistryField, schemaRegistryConfigFields()...).
+				Description("Optional Schema Registry configuration for adding Schema Registry wire format headers to messages.").
+				Optional().
+				Advanced(),
 		)
 }
 
@@ -192,13 +192,6 @@ func HTTPInputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (s
 		err  error
 	)
 
-	// Parse encoding
-	var encodingStr string
-	if encodingStr, err = pConf.FieldString(hiFieldEncoding); err != nil {
-		return nil, err
-	}
-	conf.Encoding = Encoding(encodingStr)
-
 	// Parse HTTP-specific config
 	if conf.Address, err = pConf.FieldString(hiFieldAddress); err != nil {
 		return nil, err
@@ -210,9 +203,6 @@ func HTTPInputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (s
 		return nil, err
 	}
 	if conf.MaxBodySize, err = pConf.FieldInt(hiFieldMaxBodySize); err != nil {
-		return nil, err
-	}
-	if conf.RateLimit, err = pConf.FieldString(hiFieldRateLimit); err != nil {
 		return nil, err
 	}
 
@@ -239,8 +229,12 @@ func HTTPInputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (s
 		return nil, err
 	}
 
+	otlpIn, err := newOTLPInputFromParsed(pConf, mgr)
+	if err != nil {
+		return nil, err
+	}
 	return &httpOTLPInput{
-		otlpInput: newOTLPInput(mgr, conf.Encoding, conf.RateLimit),
+		otlpInput: otlpIn,
 		conf:      conf,
 		rpJWT:     rpJWT,
 		cors:      gateway.NewCORSConfigFromEnv(),
@@ -259,6 +253,11 @@ func init() {
 func (hi *httpOTLPInput) Connect(ctx context.Context) error {
 	if hi.server != nil {
 		return nil
+	}
+
+	// Initialize Schema Registry
+	if err := hi.maybeInitSchemaRegistry(ctx); err != nil {
+		return fmt.Errorf("initialize schema registry: %w", err)
 	}
 
 	h := hi.handler()
@@ -285,7 +284,7 @@ func (hi *httpOTLPInput) Connect(ctx context.Context) error {
 	// Create listener
 	var lc net.ListenConfig
 	if err := netutil.DecorateListenerConfig(&lc, hi.conf.ListenerConfig); err != nil {
-		return fmt.Errorf("failed to configure listener: %w", err)
+		return fmt.Errorf("configure listener: %w", err)
 	}
 	ln, err := lc.Listen(ctx, "tcp", hi.conf.Address)
 	if err != nil {
@@ -444,7 +443,7 @@ func (hi *httpOTLPInput) handler() http.Handler {
 
 			batch = make(service.MessageBatch, 0, otlpconv.SpansCount(req))
 			otlpconv.TracesToRedpandaFunc(req, func(span *pb.Span) bool {
-				msg, err := hi.otlpInput.newMessageWithSignalType(span, SignalTypeTrace)
+				msg, err := hi.newMessageWithSignalType(span, SignalTypeTrace)
 				if err != nil {
 					marshalErr = err
 					return false
@@ -470,7 +469,7 @@ func (hi *httpOTLPInput) handler() http.Handler {
 
 			batch = make(service.MessageBatch, 0, otlpconv.LogsCount(req))
 			otlpconv.LogsToRedpandaFunc(req, func(logRecord *pb.LogRecord) bool {
-				msg, err := hi.otlpInput.newMessageWithSignalType(logRecord, SignalTypeLog)
+				msg, err := hi.newMessageWithSignalType(logRecord, SignalTypeLog)
 				if err != nil {
 					marshalErr = err
 					return false
@@ -496,7 +495,7 @@ func (hi *httpOTLPInput) handler() http.Handler {
 
 			batch = make(service.MessageBatch, 0, otlpconv.MetricsCount(req))
 			otlpconv.MetricsToRedpandaFunc(req, func(metric *pb.Metric) bool {
-				msg, err := hi.otlpInput.newMessageWithSignalType(metric, SignalTypeMetric)
+				msg, err := hi.newMessageWithSignalType(metric, SignalTypeMetric)
 				if err != nil {
 					marshalErr = err
 					return false
