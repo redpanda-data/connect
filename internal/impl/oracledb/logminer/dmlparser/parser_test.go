@@ -11,7 +11,6 @@ func TestParseInsert(t *testing.T) {
 	tests := []struct {
 		name       string
 		sql        string
-		columns    []string
 		wantSchema string
 		wantTable  string
 		wantValues map[string]any
@@ -20,7 +19,6 @@ func TestParseInsert(t *testing.T) {
 		{
 			name:       "simple insert",
 			sql:        `insert into "MYAPP"."CUSTOMERS"("ID","NAME","EMAIL") values ('1','John Doe','john@example.com');`,
-			columns:    []string{"ID", "NAME", "EMAIL"},
 			wantSchema: "MYAPP",
 			wantTable:  "CUSTOMERS",
 			wantValues: map[string]any{
@@ -32,7 +30,6 @@ func TestParseInsert(t *testing.T) {
 		{
 			name:       "insert with NULL",
 			sql:        `insert into "MYAPP"."CUSTOMERS"("ID","NAME","EMAIL") values ('1','John Doe',NULL);`,
-			columns:    []string{"ID", "NAME", "EMAIL"},
 			wantSchema: "MYAPP",
 			wantTable:  "CUSTOMERS",
 			wantValues: map[string]any{
@@ -44,7 +41,6 @@ func TestParseInsert(t *testing.T) {
 		{
 			name:       "insert with function call",
 			sql:        `insert into "MYAPP"."ORDERS"("ID","ORDER_DATE","AMOUNT") values ('100',TO_DATE('2020-01-15','YYYY-MM-DD'),'500.00');`,
-			columns:    []string{"ID", "ORDER_DATE", "AMOUNT"},
 			wantSchema: "MYAPP",
 			wantTable:  "ORDERS",
 			wantValues: map[string]any{
@@ -56,7 +52,6 @@ func TestParseInsert(t *testing.T) {
 		{
 			name:       "insert with escaped quotes",
 			sql:        `insert into "MYAPP"."MESSAGES"("ID","TEXT") values ('1','It''s a beautiful day');`,
-			columns:    []string{"ID", "TEXT"},
 			wantSchema: "MYAPP",
 			wantTable:  "MESSAGES",
 			wantValues: map[string]any{
@@ -67,7 +62,6 @@ func TestParseInsert(t *testing.T) {
 		{
 			name:       "insert with timestamp",
 			sql:        `insert into "MYAPP"."EVENTS"("ID","EVENT_TIME") values ('1',TO_TIMESTAMP('2020-02-01 10:30:00','YYYY-MM-DD HH24:MI:SS'));`,
-			columns:    []string{"ID", "EVENT_TIME"},
 			wantSchema: "MYAPP",
 			wantTable:  "EVENTS",
 			wantValues: map[string]any{
@@ -78,7 +72,6 @@ func TestParseInsert(t *testing.T) {
 		{
 			name:       "insert with empty string",
 			sql:        `insert into "MYAPP"."CUSTOMERS"("ID","NAME","NOTES") values ('1','John','');`,
-			columns:    []string{"ID", "NAME", "NOTES"},
 			wantSchema: "MYAPP",
 			wantTable:  "CUSTOMERS",
 			wantValues: map[string]any{
@@ -91,7 +84,7 @@ func TestParseInsert(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := parser.Parse(tt.sql, tt.columns)
+			result, err := parser.Parse(tt.sql)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Parse() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -119,7 +112,6 @@ func TestParseUpdate(t *testing.T) {
 	tests := []struct {
 		name          string
 		sql           string
-		columns       []string
 		wantSchema    string
 		wantTable     string
 		wantNewValues map[string]any
@@ -129,7 +121,6 @@ func TestParseUpdate(t *testing.T) {
 		{
 			name:       "simple update",
 			sql:        `update "MYAPP"."CUSTOMERS" set "NAME" = 'Jane Doe', "EMAIL" = 'jane@example.com' where "ID" = '1' and "NAME" = 'John Doe';`,
-			columns:    []string{"ID", "NAME", "EMAIL"},
 			wantSchema: "MYAPP",
 			wantTable:  "CUSTOMERS",
 			wantNewValues: map[string]any{
@@ -144,7 +135,6 @@ func TestParseUpdate(t *testing.T) {
 		{
 			name:       "update with NULL",
 			sql:        `update "MYAPP"."CUSTOMERS" set "EMAIL" = NULL where "ID" = '1';`,
-			columns:    []string{"ID", "EMAIL"},
 			wantSchema: "MYAPP",
 			wantTable:  "CUSTOMERS",
 			wantNewValues: map[string]any{
@@ -157,7 +147,6 @@ func TestParseUpdate(t *testing.T) {
 		{
 			name:       "update with timestamp function",
 			sql:        `update "MYAPP"."EVENTS" set "EVENT_TIME" = TO_TIMESTAMP('2020-02-02 00:00:00','YYYY-MM-DD HH24:MI:SS') where "ID" = '1' and "EVENT_TIME" = TO_TIMESTAMP('2020-02-01 00:00:00','YYYY-MM-DD HH24:MI:SS');`,
-			columns:    []string{"ID", "EVENT_TIME"},
 			wantSchema: "MYAPP",
 			wantTable:  "EVENTS",
 			wantNewValues: map[string]any{
@@ -171,7 +160,6 @@ func TestParseUpdate(t *testing.T) {
 		{
 			name:       "update with escaped quotes",
 			sql:        `update "MYAPP"."MESSAGES" set "TEXT" = 'He said ''Hello''' where "ID" = '1';`,
-			columns:    []string{"ID", "TEXT"},
 			wantSchema: "MYAPP",
 			wantTable:  "MESSAGES",
 			wantNewValues: map[string]any{
@@ -184,7 +172,6 @@ func TestParseUpdate(t *testing.T) {
 		{
 			name:       "update multiple columns",
 			sql:        `update "MYAPP"."PRODUCTS" set "PRICE" = '99.99', "STOCK" = '50', "UPDATED_AT" = TO_DATE('2020-03-15','YYYY-MM-DD') where "ID" = '200';`,
-			columns:    []string{"ID", "PRICE", "STOCK", "UPDATED_AT"},
 			wantSchema: "MYAPP",
 			wantTable:  "PRODUCTS",
 			wantNewValues: map[string]any{
@@ -200,7 +187,7 @@ func TestParseUpdate(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := parser.Parse(tt.sql, tt.columns)
+			result, err := parser.Parse(tt.sql)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Parse() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -231,7 +218,6 @@ func TestParseDelete(t *testing.T) {
 	tests := []struct {
 		name          string
 		sql           string
-		columns       []string
 		wantSchema    string
 		wantTable     string
 		wantOldValues map[string]any
@@ -240,7 +226,6 @@ func TestParseDelete(t *testing.T) {
 		{
 			name:       "simple delete",
 			sql:        `delete from "MYAPP"."CUSTOMERS" where "ID" = '1' and "NAME" = 'John Doe';`,
-			columns:    []string{"ID", "NAME"},
 			wantSchema: "MYAPP",
 			wantTable:  "CUSTOMERS",
 			wantOldValues: map[string]any{
@@ -251,7 +236,6 @@ func TestParseDelete(t *testing.T) {
 		{
 			name:       "delete with NULL",
 			sql:        `delete from "MYAPP"."CUSTOMERS" where "ID" = '1' and "EMAIL" IS NULL;`,
-			columns:    []string{"ID", "EMAIL"},
 			wantSchema: "MYAPP",
 			wantTable:  "CUSTOMERS",
 			wantOldValues: map[string]any{
@@ -262,7 +246,6 @@ func TestParseDelete(t *testing.T) {
 		{
 			name:       "delete with function",
 			sql:        `delete from "MYAPP"."ORDERS" where "ID" = '100' and "ORDER_DATE" = TO_DATE('2020-01-15','YYYY-MM-DD');`,
-			columns:    []string{"ID", "ORDER_DATE"},
 			wantSchema: "MYAPP",
 			wantTable:  "ORDERS",
 			wantOldValues: map[string]any{
@@ -273,7 +256,6 @@ func TestParseDelete(t *testing.T) {
 		{
 			name:       "delete with escaped quotes",
 			sql:        `delete from "MYAPP"."MESSAGES" where "ID" = '1' and "TEXT" = 'It''s working';`,
-			columns:    []string{"ID", "TEXT"},
 			wantSchema: "MYAPP",
 			wantTable:  "MESSAGES",
 			wantOldValues: map[string]any{
@@ -284,7 +266,6 @@ func TestParseDelete(t *testing.T) {
 		{
 			name:       "delete with multiple conditions",
 			sql:        `delete from "MYAPP"."PRODUCTS" where "ID" = '200' and "PRICE" = '99.99' and "STOCK" = '0';`,
-			columns:    []string{"ID", "PRICE", "STOCK"},
 			wantSchema: "MYAPP",
 			wantTable:  "PRODUCTS",
 			wantOldValues: map[string]any{
@@ -297,7 +278,7 @@ func TestParseDelete(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := parser.Parse(tt.sql, tt.columns)
+			result, err := parser.Parse(tt.sql)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Parse() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -325,32 +306,28 @@ func TestParseComplexCases(t *testing.T) {
 	tests := []struct {
 		name    string
 		sql     string
-		columns []string
 		wantErr bool
 	}{
 		{
 			name:    "insert with nested parentheses in function",
 			sql:     `insert into "MYAPP"."TEST"("ID","DATA") values ('1',TO_CHAR(SYSDATE,'YYYY-MM-DD'));`,
-			columns: []string{"ID", "DATA"},
 			wantErr: false,
 		},
 		{
 			name:    "update with complex function",
 			sql:     `update "MYAPP"."TEST" set "DATA" = SUBSTR('Hello World',1,5) where "ID" = '1';`,
-			columns: []string{"ID", "DATA"},
 			wantErr: false,
 		},
 		{
 			name:    "delete with number value",
 			sql:     `delete from "MYAPP"."TEST" where "ID" = '1' and "AMOUNT" = '100.50';`,
-			columns: []string{"ID", "AMOUNT"},
 			wantErr: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := parser.Parse(tt.sql, tt.columns)
+			result, err := parser.Parse(tt.sql)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Parse() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -371,32 +348,28 @@ func TestParseErrors(t *testing.T) {
 	tests := []struct {
 		name    string
 		sql     string
-		columns []string
 		wantErr bool
 	}{
 		{
 			name:    "empty SQL",
 			sql:     "",
-			columns: []string{},
 			wantErr: true,
 		},
 		{
 			name:    "invalid operation",
 			sql:     "select * from table;",
-			columns: []string{},
 			wantErr: true,
 		},
 		{
 			name:    "malformed insert",
 			sql:     "insert into",
-			columns: []string{},
 			wantErr: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := parser.Parse(tt.sql, tt.columns)
+			_, err := parser.Parse(tt.sql)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Parse() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -408,29 +381,26 @@ func TestParseErrors(t *testing.T) {
 func BenchmarkParseInsert(b *testing.B) {
 	parser := New(false)
 	sql := `insert into "MYAPP"."CUSTOMERS"("ID","NAME","EMAIL","PHONE","ADDRESS") values ('1','John Doe','john@example.com','555-1234','123 Main St');`
-	columns := []string{"ID", "NAME", "EMAIL", "PHONE", "ADDRESS"}
 
 	for b.Loop() {
-		_, _ = parser.Parse(sql, columns)
+		_, _ = parser.Parse(sql)
 	}
 }
 
 func BenchmarkParseUpdate(b *testing.B) {
 	parser := New(false)
 	sql := `update "MYAPP"."CUSTOMERS" set "NAME" = 'Jane Doe', "EMAIL" = 'jane@example.com' where "ID" = '1' and "NAME" = 'John Doe';`
-	columns := []string{"ID", "NAME", "EMAIL"}
 
 	for b.Loop() {
-		_, _ = parser.Parse(sql, columns)
+		_, _ = parser.Parse(sql)
 	}
 }
 
 func BenchmarkParseDelete(b *testing.B) {
 	parser := New(false)
 	sql := `delete from "MYAPP"."CUSTOMERS" where "ID" = '1' and "NAME" = 'John Doe' and "EMAIL" = 'john@example.com';`
-	columns := []string{"ID", "NAME", "EMAIL"}
 
 	for b.Loop() {
-		_, _ = parser.Parse(sql, columns)
+		_, _ = parser.Parse(sql)
 	}
 }

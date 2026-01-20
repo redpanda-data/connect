@@ -38,7 +38,7 @@ type ParseResult struct {
 }
 
 // Parse parses a SQL_REDO statement
-func (p *LogMinerDMLParser) Parse(sql string, columnNames []string) (*ParseResult, error) {
+func (p *LogMinerDMLParser) Parse(sql string) (*ParseResult, error) {
 	if len(sql) == 0 {
 		return nil, fmt.Errorf("empty SQL statement")
 	}
@@ -46,18 +46,18 @@ func (p *LogMinerDMLParser) Parse(sql string, columnNames []string) (*ParseResul
 	// Determine operation type by first character
 	switch sql[0] {
 	case 'i':
-		return p.parseInsert(sql, columnNames)
+		return p.parseInsert(sql)
 	case 'u':
-		return p.parseUpdate(sql, columnNames)
+		return p.parseUpdate(sql)
 	case 'd':
-		return p.parseDelete(sql, columnNames)
+		return p.parseDelete(sql)
 	default:
 		return nil, fmt.Errorf("unknown SQL operation: %s", sql)
 	}
 }
 
 // parseInsert parses: insert into "schema"."table"("C1","C2") values ('v1','v2');
-func (p *LogMinerDMLParser) parseInsert(sql string, allColumns []string) (*ParseResult, error) {
+func (p *LogMinerDMLParser) parseInsert(sql string) (*ParseResult, error) {
 	const insertInto = "insert into "
 	if !strings.HasPrefix(sql, insertInto) {
 		return nil, fmt.Errorf("invalid INSERT statement")
@@ -95,7 +95,7 @@ func (p *LogMinerDMLParser) parseInsert(sql string, allColumns []string) (*Parse
 }
 
 // parseUpdate parses: update "schema"."table" set "C1" = 'v1', "C2" = 'v2' where "C1" = 'old1' and "C2" = 'old2';
-func (p *LogMinerDMLParser) parseUpdate(sql string, allColumns []string) (*ParseResult, error) {
+func (p *LogMinerDMLParser) parseUpdate(sql string) (*ParseResult, error) {
 	const update = "update "
 	if !strings.HasPrefix(sql, update) {
 		return nil, fmt.Errorf("invalid UPDATE statement")
@@ -133,7 +133,7 @@ func (p *LogMinerDMLParser) parseUpdate(sql string, allColumns []string) (*Parse
 }
 
 // parseDelete parses: delete from "schema"."table" where "C1" = 'v1' and "C2" = 'v2';
-func (p *LogMinerDMLParser) parseDelete(sql string, allColumns []string) (*ParseResult, error) {
+func (p *LogMinerDMLParser) parseDelete(sql string) (*ParseResult, error) {
 	const deleteFrom = "delete from "
 	if !strings.HasPrefix(sql, deleteFrom) {
 		return nil, fmt.Errorf("invalid DELETE statement")

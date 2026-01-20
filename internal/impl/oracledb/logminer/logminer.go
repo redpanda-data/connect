@@ -36,6 +36,7 @@ type ChangeEvent struct {
 type LogMinerEvent struct {
 	SCN           int64
 	SQLRedo       string
+	Data          map[string]any
 	Operation     Operation
 	OperationCode int
 	TableName     sql.NullString
@@ -58,7 +59,7 @@ type LogMiner struct {
 	eventProc       *EventProcessor
 	db              *sql.DB
 	SleepDuration   time.Duration
-	DMLParser       *dmlparser.LogMinerDMLParser
+	dmlParser       *dmlparser.LogMinerDMLParser
 
 	txnCache TransactionCache
 }
@@ -84,7 +85,7 @@ func NewMiner(_ *sql.DB, tables []replication.UserDefinedTable, publisher replic
 		logCollector:    NewLogFileCollector(db),
 		sessionMgr:      NewSessionManager(db),
 		txnCache:        NewInMemoryCache(),
-		DMLParser:       dmlparser.New(true),
+		dmlParser:       dmlparser.New(true),
 		BatchSize:       maxBatchSize,
 		log:             logger,
 	}
@@ -135,8 +136,6 @@ func (lm *LogMiner) emitChangeEvent(ctx context.Context, event *ChangeEvent) {
 		Table:     event.Table,
 		Data:      event.Data,
 	}
-	// lm.log.Infof("EMIT: %s on %s.%s at SCN %d", event.Operation, event.Schema, event.Table, event.SCN)
-	// lm.log.Infof(event.After)
 	lm.publisher.Publish(ctx, msg)
 }
 
@@ -297,6 +296,11 @@ func (lm *LogMiner) queryLogMinerContents(startSCN, endSCN uint64) ([]*LogMinerE
 		// Construct transaction ID from components (XID as RAW doesn't format well)
 		event.TransactionID = fmt.Sprintf("%d.%d.%d", xidUsn, xidSlt, xidSqn)
 		event.Operation = operationFromCode(event.OperationCode)
+		if data, err := lm.dmlParser.Parse(event.SQLRedo); err != nil {
+			return nil, err
+		} else {
+			event.Data = data.NewValues
+		}
 		events = append(events, event)
 	}
 
