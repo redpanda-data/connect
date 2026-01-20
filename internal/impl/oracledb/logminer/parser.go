@@ -12,6 +12,7 @@ func NewEventProcessor() *EventProcessor {
 }
 
 // ParseDML parses a LogMiner event into a DML event
+// TODO: Can we do without this and instead do it as part of translating to replication.MessageEvent?
 func (ep *EventProcessor) ParseDML(event *LogMinerEvent) (*DMLEvent, error) {
 	dml := &DMLEvent{
 		Operation: event.Operation,
@@ -30,6 +31,7 @@ func (ep *EventProcessor) ParseDML(event *LogMinerEvent) (*DMLEvent, error) {
 	if strings.TrimSpace(event.SQLRedo) != "" {
 		dml.SQLRedo = event.SQLRedo
 	}
+	dml.Data = event.Data
 
 	return dml, nil
 }
