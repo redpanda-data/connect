@@ -27,7 +27,7 @@ type ChangeEvent struct {
 	Operation string // "CREATE", "UPDATE", "DELETE"
 	// Before    map[string]any
 	// After     map[string]any
-	Data      string
+	Data      map[string]any
 	SCN       int64
 	Timestamp time.Time
 	TxnID     string
@@ -36,7 +36,8 @@ type ChangeEvent struct {
 // LogMinerEvent represents a row from V$LOGMNR_CONTENTS
 type LogMinerEvent struct {
 	SCN           int64
-	SQLRedo       string
+	SQLRedo       sql.NullString
+	SQLUndo       sql.NullString
 	Data          map[string]any
 	Operation     Operation
 	OperationCode int
@@ -76,8 +77,8 @@ func NewMiner(db *sql.DB, userTables []replication.UserDefinedTable, publisher r
 	var tableFilter strings.Builder
 	if len(userTables) > 0 {
 		tableFilter.WriteString(" AND (")
-		tableFilter.WriteString("OPERATION_CODE IN (6, 7, 36)")  // Allow all transaction control events
-		tableFilter.WriteString(" OR (OPERATION_CODE IN (1, 2, 3) AND (")  // Filter DML by table
+		tableFilter.WriteString("OPERATION_CODE IN (6, 7, 36)")           // Allow all transaction control events
+		tableFilter.WriteString(" OR (OPERATION_CODE IN (1, 2, 3) AND (") // Filter DML by table
 		for i, t := range userTables {
 			if i > 0 {
 				tableFilter.WriteString(" OR ")
@@ -90,6 +91,7 @@ func NewMiner(db *sql.DB, userTables []replication.UserDefinedTable, publisher r
 		SELECT
 			SCN,
 			SQL_REDO,
+			SQL_UNDO,
 			OPERATION_CODE,
 			TABLE_NAME,
 			SEG_OWNER,
@@ -123,7 +125,7 @@ func NewMiner(db *sql.DB, userTables []replication.UserDefinedTable, publisher r
 
 // ReadChanges streams the change events from the configured SQL Server change tables.
 func (lm *LogMiner) ReadChanges(ctx context.Context, db *sql.DB, startPos replication.SCN) error {
-	lm.log.Infof("Starting streaming %d change table(s)", len(lm.tables))
+	lm.log.Infof("Starting streaming of %d change table(s)", len(lm.tables))
 
 	// Determine starting SCN
 	if len(startPos) != 0 {
@@ -150,7 +152,6 @@ func (lm *LogMiner) ReadChanges(ctx context.Context, db *sql.DB, startPos replic
 				return fmt.Errorf("mining logs: %w", err)
 			}
 
-			lm.log.Infof("------------------------------------")
 			time.Sleep(lm.backoffInterval)
 		}
 	}
@@ -177,7 +178,7 @@ func (lm *LogMiner) miningCycle(ctx context.Context) error {
 
 	// If we've caught up, nothing to do
 	if lm.currentSCN >= dbCurrentSCN {
-		lm.log.Debugf("Caught up to current SCN %d, no new changes to process", dbCurrentSCN)
+		lm.log.Infof("Caught up to current SCN %d, no new changes to process", dbCurrentSCN)
 		return nil
 	}
 
@@ -212,7 +213,7 @@ func (lm *LogMiner) miningCycle(ctx context.Context) error {
 		return fmt.Errorf("starting logminer session: %w", err)
 	}
 	defer lm.sessionMgr.EndSession()
-	lm.log.Infof("Started LogMiner session: SCN %d to %d", lm.currentSCN, endSCN)
+	lm.log.Debugf("Started LogMiner session: SCN %d to %d", lm.currentSCN, endSCN)
 
 	// 5. Query and process events from V$LOGMNR_CONTENTS
 	events, err := lm.queryLogMinerContents(lm.currentSCN, endSCN)
@@ -227,7 +228,7 @@ func (lm *LogMiner) miningCycle(ctx context.Context) error {
 		}
 	}
 
-	lm.log.Infof("Processed %d events in SCN range %d-%d", len(events), lm.currentSCN, endSCN)
+	lm.log.Debugf("Found and processed %d events in SCN range %d - %d", len(events), lm.currentSCN, endSCN)
 	lm.currentSCN = endSCN
 
 	return nil
@@ -242,12 +243,22 @@ func (lm *LogMiner) processEvent(ctx context.Context, event *LogMinerEvent) erro
 		lm.txnCache.StartTransaction(event.TransactionID, event.SCN)
 
 	case OpInsert, OpUpdate, OpDelete:
-		// Buffer DML events in transaction
-		if dmlEvent, err := lm.eventProc.ParseDML(event); err != nil {
-			return fmt.Errorf("failed to parse DML event: %w", err)
-		} else {
-			lm.txnCache.AddEvent(event.TransactionID, dmlEvent)
+		// parse sql insert/update/delete statements into key/value object
+		if event.SQLRedo.Valid {
+			data, err := lm.dmlParser.Parse(event.SQLRedo.String)
+			if err != nil {
+				return fmt.Errorf("parsing sql query into object: %w", err)
+			}
+			event.Data = data.NewValues
 		}
+
+		dmlEvent, err := lm.eventProc.ParseDML(event)
+		if err != nil {
+			return fmt.Errorf("failed to parse DML event: %w", err)
+		}
+
+		// Buffer DML events in transaction
+		lm.txnCache.AddEvent(event.TransactionID, dmlEvent)
 	case OpCommit:
 		// Flush all buffered events for this transaction
 		if txn := lm.txnCache.GetTransaction(event.TransactionID); txn != nil {
@@ -257,11 +268,12 @@ func (lm *LogMiner) processEvent(ctx context.Context, event *LogMinerEvent) erro
 				lm.emitChangeEvent(ctx, changeEvent)
 			}
 			lm.txnCache.CommitTransaction(event.TransactionID)
-			lm.log.Infof("Committed transaction %s with %d events at SCN %d", event.TransactionID, len(txn.Events), event.SCN)
+			lm.log.Debugf("Committed transaction %s with %d events at SCN %d", event.TransactionID, len(txn.Events), event.SCN)
 		}
 
 	case OpRollback:
 		// Discard all buffered events for this transaction
+		lm.log.Debugf("Discarding transaction due to rollback")
 		lm.txnCache.RollbackTransaction(event.TransactionID)
 	}
 
@@ -286,6 +298,7 @@ func (lm *LogMiner) queryLogMinerContents(startSCN, endSCN uint64) ([]*LogMinerE
 		err := rows.Scan(
 			&event.SCN,
 			&event.SQLRedo,
+			&event.SQLUndo,
 			&event.OperationCode,
 			&event.TableName,
 			&event.SchemaName,
@@ -304,11 +317,6 @@ func (lm *LogMiner) queryLogMinerContents(startSCN, endSCN uint64) ([]*LogMinerE
 		// Construct transaction ID from components (XID as RAW doesn't format well)
 		event.TransactionID = fmt.Sprintf("%d.%d.%d", xidUsn, xidSlt, xidSqn)
 		event.Operation = operationFromCode(event.OperationCode)
-		if data, err := lm.dmlParser.Parse(event.SQLRedo); err != nil {
-			return nil, err
-		} else {
-			event.Data = data.NewValues
-		}
 		events = append(events, event)
 	}
 
