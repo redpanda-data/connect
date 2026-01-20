@@ -288,11 +288,16 @@ func TestGRPCOutput(t *testing.T) {
 	require.NoError(t, err)
 	endpoint := "127.0.0.1:" + strconv.Itoa(port)
 
+	encodings := []otlp.Encoding{otlp.EncodingProtobuf, otlp.EncodingJSON}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			testOutput(t, endpoint, "", tt.signalType, tt.newProto, tt.validateFn,
-				otlp.GRPCInputSpec(), otlp.GRPCInputFromParsed,
-				otlp.GRPCOutputSpec(), otlp.GRPCOutputFromParsed)
+			for _, enc := range encodings {
+				t.Run(enc.String(), func(t *testing.T) {
+					testOutput(t, endpoint, "", enc, tt.signalType, tt.newProto, tt.validateFn,
+						otlp.GRPCInputSpec(), otlp.GRPCInputFromParsed,
+						otlp.GRPCOutputSpec(), otlp.GRPCOutputFromParsed)
+				})
+			}
 		})
 	}
 }
@@ -345,13 +350,18 @@ func TestHTTPOutput(t *testing.T) {
 	endpoint := "127.0.0.1:" + strconv.Itoa(port)
 
 	contentTypes := []string{"protobuf", "json"}
+	encodings := []otlp.Encoding{otlp.EncodingProtobuf, otlp.EncodingJSON}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			for _, contentType := range contentTypes {
 				t.Run(contentType, func(t *testing.T) {
-					testOutput(t, endpoint, contentType, tt.signalType, tt.newProto, tt.validateFn,
-						otlp.HTTPInputSpec(), otlp.HTTPInputFromParsed,
-						otlp.HTTPOutputSpec(), otlp.HTTPOutputFromParsed)
+					for _, enc := range encodings {
+						t.Run(enc.String(), func(t *testing.T) {
+							testOutput(t, endpoint, contentType, enc, tt.signalType, tt.newProto, tt.validateFn,
+								otlp.HTTPInputSpec(), otlp.HTTPInputFromParsed,
+								otlp.HTTPOutputSpec(), otlp.HTTPOutputFromParsed)
+						})
+					}
 				})
 			}
 		})
@@ -363,6 +373,7 @@ func testOutput(
 	t *testing.T,
 	endpoint string,
 	contentType string,
+	enc otlp.Encoding,
 	signalType otlp.SignalType,
 	newProto func() proto.Message,
 	validateFn func(msgBytes []byte),
@@ -380,6 +391,7 @@ func testOutput(
 	// Start input server
 	inputConf, err := inputSpec.ParseYAML(fmt.Sprintf(`
 address: "%s"
+encoding: protobuf
 `, endpoint), nil)
 	require.NoError(t, err)
 
@@ -441,7 +453,7 @@ endpoint: "%s"
 
 	// Send message
 	protoMsg := newProto()
-	msg, err := otlp.NewMessageWithSignalType(protoMsg, signalType)
+	msg, err := otlp.NewMessageWithSignalType(protoMsg, signalType, enc)
 	require.NoError(t, err)
 	batch := service.MessageBatch{msg}
 	require.NoError(t, output.WriteBatch(t.Context(), batch))

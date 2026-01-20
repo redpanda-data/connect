@@ -11,10 +11,10 @@
 
 package otlp
 
-import (
-	"google.golang.org/protobuf/proto"
-
-	"github.com/redpanda-data/benthos/v4/public/service"
+// MetadataKeySignalType is the metadata key used to store the signal type.
+const (
+	MetadataKeySignalType = "signal_type"
+	MetadataKeyEncoding   = "encoding"
 )
 
 // SignalType represents the type of OpenTelemetry signal (trace, log, or metric).
@@ -29,23 +29,22 @@ const (
 	SignalTypeMetric SignalType = "metric"
 )
 
-// MetadataKeySignalType is the metadata key used to store the signal type.
-const MetadataKeySignalType = "signalType"
-
 // String returns the string representation of the SignalType.
 func (s SignalType) String() string {
 	return string(s)
 }
 
-// newMessageWithSignalType creates a new message from a protobuf object with
-// the specified signal type metadata.
-func newMessageWithSignalType(msg proto.Message, s SignalType) (*service.Message, error) {
-	msgBytes, err := proto.Marshal(msg)
-	if err != nil {
-		return nil, err
-	}
+// Encoding represents the message encoding format.
+type Encoding string
 
-	svcMsg := service.NewMessage(msgBytes)
-	svcMsg.MetaSet(MetadataKeySignalType, s.String())
-	return svcMsg, nil
+const (
+	// EncodingProtobuf represents protobuf binary encoding
+	EncodingProtobuf Encoding = "protobuf"
+	// EncodingJSON represents JSON encoding
+	EncodingJSON Encoding = "json"
+)
+
+// String returns the string representation of the Encoding.
+func (e Encoding) String() string {
+	return string(e)
 }

@@ -39,6 +39,7 @@ Common::
 input:
   label: ""
   otlp_http:
+    encoding: json
     address: 0.0.0.0:4318
     rate_limit: ""
 ```
@@ -53,6 +54,7 @@ Advanced::
 input:
   label: ""
   otlp_http:
+    encoding: json
     address: 0.0.0.0:4318
     tls:
       enabled: false
@@ -73,7 +75,8 @@ input:
 
 Exposes an OpenTelemetry Collector HTTP receiver that accepts traces, logs, and metrics via HTTP.
 
-Telemetry data is received in OTLP format (both protobuf and JSON) at standard OTLP endpoints and converted to individual Redpanda OTEL v1 protobuf messages. Each signal (span, log record, or metric) becomes a separate message with embedded Resource and Scope metadata, optimized for Kafka partitioning.
+Telemetry data is received in OTLP format (protobuf or JSON) and converted to individual Redpanda OTEL v1 messages.
+Each signal (span, log record, or metric) becomes a separate message with embedded Resource and Scope metadata.
 
 ## Endpoints
 
@@ -94,8 +97,11 @@ Each OTLP export request is unbatched into individual messages:
 - **Logs**: One message per log record
 - **Metrics**: One message per metric
 
-Messages are encoded in Redpanda OTEL v1 protobuf format with metadata:
-- `signalType`: "trace", "log", or "metric"
+Messages are encoded in Redpanda OTEL v1 format (protobuf or JSON, configurable via `encoding` field).
+
+Each message includes the following metadata:
+- `signalType`: The signal type - "trace", "log", or "metric"
+- `encoding` : The message encoding - "json" or "protobuf"
 
 ## Authentication
 
@@ -135,6 +141,20 @@ An optional rate limit resource can be specified to throttle incoming requests. 
 
 
 == Fields
+
+=== `encoding`
+
+Encoding format for messages in the batch. Options: 'protobuf' or 'json'.
+
+
+*Type*: `string`
+
+*Default*: `"json"`
+
+Options:
+`protobuf`
+, `json`
+.
 
 === `address`
 

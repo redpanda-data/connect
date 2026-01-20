@@ -35,6 +35,7 @@ import (
 )
 
 const (
+	giFieldEncoding       = "encoding"
 	giFieldAddress        = "address"
 	giFieldTLS            = "tls"
 	giFieldAuthToken      = "auth_token"
@@ -46,6 +47,7 @@ const (
 )
 
 type grpcInputConfig struct {
+	Encoding       Encoding
 	Address        string
 	TLS            tlsServerConfig
 	AuthToken      string
@@ -64,8 +66,8 @@ func GRPCInputSpec() *service.ConfigSpec {
 		Description(`
 Exposes an OpenTelemetry Collector gRPC receiver that accepts traces, logs, and metrics via gRPC.
 
-Telemetry data is received in OTLP protobuf format and converted to individual Redpanda OTEL v1 protobuf messages.
-Each signal (span, log record, or metric) becomes a separate message with embedded Resource and Scope metadata, optimized for Kafka partitioning.
+Telemetry data is received in OTLP protobuf format and converted to individual Redpanda OTEL v1 messages.
+Each signal (span, log record, or metric) becomes a separate message with embedded Resource and Scope metadata.
 
 ## Protocols
 
@@ -78,8 +80,11 @@ Each OTLP export request is unbatched into individual messages:
 - **Logs**: One message per log record
 - **Metrics**: One message per metric
 
-Messages are encoded in Redpanda OTEL v1 protobuf format with metadata:
-- `+"`signal_type`"+`: "trace", "log", or "metric"
+Messages are encoded in Redpanda OTEL v1 format (protobuf or JSON, configurable via `+"`encoding`"+` field).
+
+Each message includes the following metadata:
+- `+"`signalType`"+`: The signal type - "trace", "log", or "metric"
+- `+"`encoding`"+` : The message encoding - "json" or "protobuf"
 
 ## Authentication
 
@@ -110,6 +115,9 @@ export OTEL_EXPORTER_OTLP_HEADERS="authorization=Bearer your-token-here"
 An optional rate limit resource can be specified to throttle incoming requests. When the rate limit is breached, requests will receive a ResourceExhausted gRPC status code.
 `).
 		Fields(
+			service.NewStringEnumField(giFieldEncoding, "protobuf", "json").
+				Description("Encoding format for messages in the batch. Options: 'protobuf' or 'json'.").
+				Default(string(EncodingJSON)),
 			service.NewStringField(giFieldAddress).
 				Description("The address to listen on for gRPC connections.").
 				Default(defaultGRPCAddress),
@@ -153,6 +161,13 @@ func GRPCInputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (s
 		err  error
 	)
 
+	// Parse encoding
+	var encodingStr string
+	if encodingStr, err = pConf.FieldString(giFieldEncoding); err != nil {
+		return nil, err
+	}
+	conf.Encoding = Encoding(encodingStr)
+
 	// Parse gRPC-specific config
 	if conf.Address, err = pConf.FieldString(giFieldAddress); err != nil {
 		return nil, err
@@ -182,7 +197,7 @@ func GRPCInputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (s
 	}
 
 	return &grpcOTLPInput{
-		otlpInput: newOTLPInput(mgr, conf.RateLimit),
+		otlpInput: newOTLPInput(mgr, conf.Encoding, conf.RateLimit),
 		conf:      conf,
 		done:      make(chan struct{}),
 	}, nil
@@ -329,7 +344,7 @@ func (s *traceServiceServer) Export(ctx context.Context, req ptraceotlp.ExportRe
 	batch := make(service.MessageBatch, 0, otlpconv.SpansCount(req))
 	var marshalErr error
 	otlpconv.TracesToRedpandaFunc(req, func(span *pb.Span) bool {
-		msg, err := newMessageWithSignalType(span, SignalTypeTrace)
+		msg, err := s.newMessageWithSignalType(span, SignalTypeTrace)
 		if err != nil {
 			marshalErr = err
 			return false
@@ -393,7 +408,7 @@ func (s *logsServiceServer) Export(ctx context.Context, req plogotlp.ExportReque
 	batch := make(service.MessageBatch, 0, otlpconv.LogsCount(req))
 	var marshalErr error
 	otlpconv.LogsToRedpandaFunc(req, func(logRecord *pb.LogRecord) bool {
-		msg, err := newMessageWithSignalType(logRecord, SignalTypeLog)
+		msg, err := s.newMessageWithSignalType(logRecord, SignalTypeLog)
 		if err != nil {
 			marshalErr = err
 			return false
@@ -459,7 +474,7 @@ func (s *metricsServiceServer) Export(ctx context.Context, req pmetricotlp.Expor
 	batch := make(service.MessageBatch, 0, otlpconv.MetricsCount(req))
 	var marshalErr error
 	otlpconv.MetricsToRedpandaFunc(req, func(metric *pb.Metric) bool {
-		msg, err := newMessageWithSignalType(metric, SignalTypeMetric)
+		msg, err := s.newMessageWithSignalType(metric, SignalTypeMetric)
 		if err != nil {
 			marshalErr = err
 			return false
