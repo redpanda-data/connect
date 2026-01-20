@@ -66,15 +66,7 @@ type LogMiner struct {
 
 // NewMiner creates a new instance of NewMiner, responsible
 // for paging through change events based on the tables param.
-func NewMiner(_ *sql.DB, tables []replication.UserDefinedTable, publisher replication.ChangePublisher, backoffInterval time.Duration, maxBatchSize int, logger *service.Logger) *LogMiner {
-	var (
-		db  *sql.DB
-		err error
-	)
-
-	//TODO: Support switching between connections from snapshot to this.
-	if db, err = sql.Open("oracle", "oracle://system:YourPassword123@localhost:1521/XE"); err != nil {
-		panic(fmt.Sprintf("Failed to connect: %s", err))
+func NewMiner(db *sql.DB, userTables []replication.UserDefinedTable, publisher replication.ChangePublisher, backoffInterval time.Duration, maxBatchSize int, logger *service.Logger) *LogMiner {
 	}
 
 	s := &LogMiner{
