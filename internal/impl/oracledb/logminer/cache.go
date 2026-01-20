@@ -70,6 +70,7 @@ type DMLEvent struct {
 	Schema    string
 	Table     string
 	SQLRedo   string
+	Data      map[string]any
 	Timestamp time.Time
 }
 
