@@ -21,7 +21,6 @@ type LogMinerDMLParser struct {
 	useRelaxedQuotes bool
 }
 
-// New creates a new parser
 func New(useRelaxedQuotes bool) *LogMinerDMLParser {
 	return &LogMinerDMLParser{
 		useRelaxedQuotes: useRelaxedQuotes,
