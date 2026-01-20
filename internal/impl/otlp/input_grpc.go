@@ -35,24 +35,20 @@ import (
 )
 
 const (
-	giFieldEncoding       = "encoding"
 	giFieldAddress        = "address"
 	giFieldTLS            = "tls"
 	giFieldAuthToken      = "auth_token"
 	giFieldMaxRecvMsgSize = "max_recv_msg_size"
-	giFieldRateLimit      = "rate_limit"
 
 	defaultGRPCAddress    = "0.0.0.0:4317"
 	defaultMaxRecvMsgSize = 4 * 1024 * 1024 // 4MB
 )
 
 type grpcInputConfig struct {
-	Encoding       Encoding
 	Address        string
 	TLS            tlsServerConfig
 	AuthToken      string
 	MaxRecvMsgSize int
-	RateLimit      string
 	ListenerConfig netutil.ListenerConfig
 }
 
@@ -83,8 +79,8 @@ Each OTLP export request is unbatched into individual messages:
 Messages are encoded in Redpanda OTEL v1 format (protobuf or JSON, configurable via `+"`encoding`"+` field).
 
 Each message includes the following metadata:
-- `+"`signalType`"+`: The signal type - "trace", "log", or "metric"
-- `+"`encoding`"+` : The message encoding - "json" or "protobuf"
+- `+"`otel_signal_type`"+`: The signal type - "trace", "log", or "metric"
+- `+"`otel_encoding`"+` : The message encoding - "json" or "protobuf"
 
 ## Authentication
 
@@ -115,7 +111,7 @@ export OTEL_EXPORTER_OTLP_HEADERS="authorization=Bearer your-token-here"
 An optional rate limit resource can be specified to throttle incoming requests. When the rate limit is breached, requests will receive a ResourceExhausted gRPC status code.
 `).
 		Fields(
-			service.NewStringEnumField(giFieldEncoding, "protobuf", "json").
+			service.NewStringEnumField(fieldEncoding, "protobuf", "json").
 				Description("Encoding format for messages in the batch. Options: 'protobuf' or 'json'.").
 				Default(string(EncodingJSON)),
 			service.NewStringField(giFieldAddress).
@@ -134,10 +130,14 @@ An optional rate limit resource can be specified to throttle incoming requests. 
 				Description("Maximum size of gRPC messages to receive in bytes.").
 				Default(defaultMaxRecvMsgSize).
 				Advanced(),
-			service.NewStringField(giFieldRateLimit).
+			service.NewStringField(fieldRateLimit).
 				Description("An optional rate limit resource to throttle requests.").
 				Default(""),
 			netutil.ListenerConfigSpec(),
+			service.NewObjectField(schemaRegistryField, schemaRegistryConfigFields()...).
+				Description("Optional Schema Registry configuration for adding Schema Registry wire format headers to messages.").
+				Optional().
+				Advanced(),
 		)
 }
 
@@ -161,21 +161,11 @@ func GRPCInputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (s
 		err  error
 	)
 
-	// Parse encoding
-	var encodingStr string
-	if encodingStr, err = pConf.FieldString(giFieldEncoding); err != nil {
-		return nil, err
-	}
-	conf.Encoding = Encoding(encodingStr)
-
 	// Parse gRPC-specific config
 	if conf.Address, err = pConf.FieldString(giFieldAddress); err != nil {
 		return nil, err
 	}
 	if conf.MaxRecvMsgSize, err = pConf.FieldInt(giFieldMaxRecvMsgSize); err != nil {
-		return nil, err
-	}
-	if conf.RateLimit, err = pConf.FieldString(giFieldRateLimit); err != nil {
 		return nil, err
 	}
 
@@ -196,8 +186,12 @@ func GRPCInputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (s
 		return nil, fmt.Errorf("parse tcp config: %w", err)
 	}
 
+	otlpIn, err := newOTLPInputFromParsed(pConf, mgr)
+	if err != nil {
+		return nil, err
+	}
 	return &grpcOTLPInput{
-		otlpInput: newOTLPInput(mgr, conf.Encoding, conf.RateLimit),
+		otlpInput: otlpIn,
 		conf:      conf,
 		done:      make(chan struct{}),
 	}, nil
@@ -215,6 +209,11 @@ func init() {
 func (gi *grpcOTLPInput) Connect(ctx context.Context) error {
 	if gi.server != nil {
 		return nil
+	}
+
+	// Initialize Schema Registry
+	if err := gi.maybeInitSchemaRegistry(ctx); err != nil {
+		return fmt.Errorf("initialize schema registry: %w", err)
 	}
 
 	opts := []grpc.ServerOption{
@@ -241,7 +240,7 @@ func (gi *grpcOTLPInput) Connect(ctx context.Context) error {
 	// Create listener
 	var lc net.ListenConfig
 	if err := netutil.DecorateListenerConfig(&lc, gi.conf.ListenerConfig); err != nil {
-		return fmt.Errorf("failed to configure listener: %w", err)
+		return fmt.Errorf("configure listener: %w", err)
 	}
 	ln, err := lc.Listen(ctx, "tcp", gi.conf.Address)
 	if err != nil {

@@ -322,7 +322,7 @@ func (o *httpOTLPOutput) Connect(_ context.Context) error {
 	if o.conf.ProxyURL != "" {
 		proxyURL, err := url.Parse(o.conf.ProxyURL)
 		if err != nil {
-			return fmt.Errorf("failed to parse proxy_url string: %w", err)
+			return fmt.Errorf("parse proxy_url string: %w", err)
 		}
 		tr.Proxy = http.ProxyURL(proxyURL)
 	}

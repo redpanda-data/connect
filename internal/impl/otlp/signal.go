@@ -13,8 +13,8 @@ package otlp
 
 // MetadataKeySignalType is the metadata key used to store the signal type.
 const (
-	MetadataKeySignalType = "signal_type"
-	MetadataKeyEncoding   = "encoding"
+	MetadataKeySignalType = "otel_signal_type"
+	MetadataKeyEncoding   = "otel_encoding"
 )
 
 // SignalType represents the type of OpenTelemetry signal (trace, log, or metric).
