@@ -12,6 +12,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -61,27 +62,63 @@ type LogMiner struct {
 	SleepDuration   time.Duration
 	dmlParser       *dmlparser.LogMinerDMLParser
 
-	txnCache TransactionCache
+	// Pre-built query string for LogMiner contents
+	logMinerQuery string
+	txnCache      TransactionCache
 }
 
 // NewMiner creates a new instance of NewMiner, responsible
 // for paging through change events based on the tables param.
 func NewMiner(db *sql.DB, userTables []replication.UserDefinedTable, publisher replication.ChangePublisher, backoffInterval time.Duration, maxBatchSize int, logger *service.Logger) *LogMiner {
+	// Build table filter condition once
+	// Only filter DML operations (1=INSERT, 2=DELETE, 3=UPDATE) by table
+	// Transaction control operations (6=START, 7=COMMIT, 36=ROLLBACK) don't have table info
+	var tableFilter strings.Builder
+	if len(userTables) > 0 {
+		tableFilter.WriteString(" AND (")
+		tableFilter.WriteString("OPERATION_CODE IN (6, 7, 36)")  // Allow all transaction control events
+		tableFilter.WriteString(" OR (OPERATION_CODE IN (1, 2, 3) AND (")  // Filter DML by table
+		for i, t := range userTables {
+			if i > 0 {
+				tableFilter.WriteString(" OR ")
+			}
+			tableFilter.WriteString(fmt.Sprintf("(SEG_OWNER = '%s' AND TABLE_NAME = '%s')", t.Schema, t.Name))
+		}
+		tableFilter.WriteString(")))")
 	}
+	logMinerQuery := fmt.Sprintf(`
+		SELECT
+			SCN,
+			SQL_REDO,
+			OPERATION_CODE,
+			TABLE_NAME,
+			SEG_OWNER,
+			TIMESTAMP,
+			XID,
+			XIDUSN,
+			XIDSLT,
+			XIDSQN,
+			RS_ID,
+			SSN
+		FROM V$LOGMNR_CONTENTS
+		WHERE SCN >= :1 AND SCN < :2%s
+		ORDER BY SCN, SSN
+	`, tableFilter.String())
 
-	s := &LogMiner{
+	lm := &LogMiner{
+		log:             logger,
 		db:              db,
-		tables:          tables,
+		tables:          userTables,
 		publisher:       publisher,
 		backoffInterval: backoffInterval,
+		BatchSize:       maxBatchSize,
 		logCollector:    NewLogFileCollector(db),
 		sessionMgr:      NewSessionManager(db),
 		txnCache:        NewInMemoryCache(),
 		dmlParser:       dmlparser.New(true),
-		BatchSize:       maxBatchSize,
-		log:             logger,
+		logMinerQuery:   logMinerQuery,
 	}
-	return s
+	return lm
 }
 
 // ReadChanges streams the change events from the configured SQL Server change tables.
@@ -205,14 +242,14 @@ func (lm *LogMiner) processEvent(ctx context.Context, event *LogMinerEvent) erro
 		lm.txnCache.StartTransaction(event.TransactionID, event.SCN)
 
 	case OpInsert, OpUpdate, OpDelete:
-		// Buffer DML event in transaction
+		// Buffer DML events in transaction
 		if dmlEvent, err := lm.eventProc.ParseDML(event); err != nil {
-			return fmt.Errorf("failed to parse DML: %w", err)
+			return fmt.Errorf("failed to parse DML event: %w", err)
 		} else {
 			lm.txnCache.AddEvent(event.TransactionID, dmlEvent)
 		}
 	case OpCommit:
-		// Emit all buffered events for this transaction
+		// Flush all buffered events for this transaction
 		if txn := lm.txnCache.GetTransaction(event.TransactionID); txn != nil {
 			for _, dmlEvent := range txn.Events {
 				changeEvent := lm.eventProc.ConvertToChangeEvent(dmlEvent, event.SCN)
@@ -232,31 +269,10 @@ func (lm *LogMiner) processEvent(ctx context.Context, event *LogMinerEvent) erro
 }
 
 func (lm *LogMiner) queryLogMinerContents(startSCN, endSCN uint64) ([]*LogMinerEvent, error) {
-	query := `
-		SELECT
-			SCN,
-			SQL_REDO,
-			OPERATION_CODE,
-			TABLE_NAME,
-			SEG_OWNER,
-			TIMESTAMP,
-			XID,
-			XIDUSN,
-			XIDSLT,
-			XIDSQN,
-			RS_ID,
-			SSN
-		FROM V$LOGMNR_CONTENTS
-		WHERE SCN >= :1 AND SCN < :2
-		AND (
-			OPERATION_CODE IN (1, 2, 3, 6, 7, 36)  -- INSERT, DELETE, UPDATE, START, COMMIT, ROLLBACK
-		)
-		ORDER BY SCN, SSN
-	`
-
-	rows, err := lm.db.Query(query, startSCN, endSCN)
+	// Use the pre-built query from initialization
+	rows, err := lm.db.Query(lm.logMinerQuery, startSCN, endSCN)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("querying logminer: %w", err)
 	}
 	defer rows.Close()
 
