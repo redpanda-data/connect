@@ -156,6 +156,7 @@ require (
 	github.com/stretchr/testify v1.11.1
 	github.com/testcontainers/testcontainers-go/modules/ollama v0.39.0
 	github.com/testcontainers/testcontainers-go/modules/qdrant v0.39.0
+	github.com/testcontainers/testcontainers-go/modules/redpanda v0.40.0
 	github.com/tetratelabs/wazero v1.9.0
 	github.com/tigerbeetle/tigerbeetle-go v0.16.61
 	github.com/timeplus-io/proton-go-driver/v2 v2.1.2
@@ -494,7 +495,7 @@ require (
 	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
-	github.com/testcontainers/testcontainers-go v0.40.0 // indirect
+	github.com/testcontainers/testcontainers-go v0.40.0
 	github.com/testcontainers/testcontainers-go/modules/mongodb v0.39.0
 	github.com/tilinna/z85 v1.0.0 // indirect
 	github.com/tklauser/go-sysconf v0.3.15 // indirect
