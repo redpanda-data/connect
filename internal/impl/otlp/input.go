@@ -287,7 +287,11 @@ func (o *otlpInput) newMessageWithSignalType(msg proto.Message, s SignalType) (*
 	case EncodingProtobuf:
 		msgBytes, err = proto.Marshal(msg)
 	case EncodingJSON:
-		msgBytes, err = protojson.Marshal(msg)
+		marshaler := protojson.MarshalOptions{
+			UseProtoNames:  true, // Align with our snake case preferences
+			UseEnumNumbers: true, // Closer to the official OTEL JSON format
+		}
+		msgBytes, err = marshaler.Marshal(msg)
 	default:
 		return nil, fmt.Errorf("unsupported encoding: %s", o.encoding)
 	}
