@@ -66,6 +66,9 @@ type LogMiner struct {
 	// Pre-built query string for LogMiner contents
 	logMinerQuery string
 	txnCache      TransactionCache
+
+	// Track currently loaded log files to avoid reloading
+	loadedLogFiles map[string]bool
 }
 
 // NewMiner creates a new instance of NewMiner, responsible
@@ -119,6 +122,7 @@ func NewMiner(db *sql.DB, userTables []replication.UserDefinedTable, publisher r
 		txnCache:        NewInMemoryCache(),
 		dmlParser:       dmlparser.New(true),
 		logMinerQuery:   logMinerQuery,
+		loadedLogFiles:  make(map[string]bool),
 	}
 	return lm
 }
@@ -197,15 +201,22 @@ func (lm *LogMiner) miningCycle(ctx context.Context) error {
 	}
 	lm.log.Debugf("Collected %d redo log file(s) for LogMiner", len(logFiles))
 
-	// 4. Load redo logs into LogMiner
-	for i, logFile := range logFiles {
-		// if first log file, ensure we clear existing logs
-		isFirstFile := i == 0
-		if err := lm.sessionMgr.AddLogFile(logFile.FileName, isFirstFile); err != nil {
-			return fmt.Errorf("loading log filename '%s' into logminer: %w", logFile.FileName, err)
+	// 4. Load only NEW redo logs into LogMiner (skip already loaded files)
+	newFilesLoaded := 0
+	for _, logFile := range logFiles {
+		if !lm.loadedLogFiles[logFile.FileName] {
+			// This is a new file, add it
+			if err := lm.sessionMgr.AddLogFile(logFile.FileName, false); err != nil {
+				return fmt.Errorf("loading log filename '%s' into logminer: %w", logFile.FileName, err)
+			}
+			lm.loadedLogFiles[logFile.FileName] = true
+			newFilesLoaded++
+			lm.log.Infof("Loaded new redo log file %s into LogMiner", logFile.FileName)
 		}
+	}
 
-		lm.log.Debugf("Loaded redo log file %s into LogMiner", logFile.FileName)
+	if newFilesLoaded > 0 {
+		lm.log.Debugf("Loaded %d new log files (skipped %d already loaded)", newFilesLoaded, len(logFiles)-newFilesLoaded)
 	}
 
 	// 4. Start LogMiner session with ONLINE_CATALOG strategy
