@@ -26,7 +26,7 @@ const kafkaHeaders = "__rpcn_kafka_headers"
 
 // AddHeaders stores Kafka record headers in message metadata. Each header value
 // is stored under its key. Empty values are stored as nil, other values
-// as string. The full original list of headers is stored under the 
+// as string. The full original list of headers is stored under the
 // special key "__rpcn_kafka_headers".
 func AddHeaders(msg *service.Message, headers []kgo.RecordHeader) {
 	if len(headers) == 0 {
