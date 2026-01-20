@@ -11,4 +11,15 @@
 
 package otlp
 
-var NewMessageWithSignalType = newMessageWithSignalType
+import (
+	"google.golang.org/protobuf/proto"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
+)
+
+// NewMessageWithSignalType is a test helper that creates a message with the given encoding.
+func NewMessageWithSignalType(msg proto.Message, s SignalType, enc Encoding) (*service.Message, error) {
+	// Create a temporary otlpInput with the specified encoding
+	input := otlpInput{encoding: enc}
+	return input.newMessageWithSignalType(msg, s)
+}

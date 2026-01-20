@@ -146,7 +146,8 @@ func TestGRPCInputAuth(t *testing.T) {
 	address := "127.0.0.1:" + strconv.Itoa(port)
 
 	yamlConfig := fmt.Sprintf(`address: "%s"
-auth_token: "%s"`, address, testToken)
+auth_token: "%s"
+encoding: protobuf`, address, testToken)
 	input := startInput(t, otlp.GRPCInputSpec(), otlp.GRPCInputFromParsed, yamlConfig)
 	time.Sleep(100 * time.Millisecond)
 
@@ -257,7 +258,8 @@ func TestHTTPInputAuth(t *testing.T) {
 	address := "127.0.0.1:" + strconv.Itoa(port)
 
 	yamlConfig := fmt.Sprintf(`address: "%s"
-auth_token: "%s"`, address, testToken)
+auth_token: "%s"
+encoding: protobuf`, address, testToken)
 	startInput(t, otlp.HTTPInputSpec(), otlp.HTTPInputFromParsed, yamlConfig)
 
 	baseURL := "http://" + address
@@ -325,7 +327,8 @@ func TestHTTPInputEdgeCases(t *testing.T) {
 	require.NoError(t, err)
 	address := "127.0.0.1:" + strconv.Itoa(port)
 
-	yamlConfig := fmt.Sprintf(`address: "%s"`, address)
+	yamlConfig := fmt.Sprintf(`address: "%s"
+encoding: protobuf`, address)
 	startInput(t, otlp.HTTPInputSpec(), otlp.HTTPInputFromParsed, yamlConfig)
 
 	baseURL := "http://" + address
@@ -809,7 +812,8 @@ func testInput(
 ) {
 	t.Helper()
 
-	yamlConfig := fmt.Sprintf(`address: "%s"`, address)
+	yamlConfig := fmt.Sprintf(`address: "%s"
+encoding: protobuf`, address)
 	input := startInput(t, inputSpec, inputCtor, yamlConfig)
 
 	received := make(chan service.MessageBatch, 1)

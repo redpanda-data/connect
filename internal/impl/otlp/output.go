@@ -16,6 +16,7 @@ import (
 	"fmt"
 
 	"github.com/Jeffail/shutdown"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -53,6 +54,9 @@ func detectSignalType(batch service.MessageBatch) (SignalType, error) {
 // unmarshalBatch converts a batch of messages into a slice of protobuf messages.
 // T must be a protobuf message type (pb.Span, pb.LogRecord, or pb.Metric).
 // P must be a pointer to T that implements proto.Message.
+//
+// Automatically detects encoding by trying JSON first, then falling back to
+// protobuf.
 func unmarshalBatch[T any, P interface {
 	*T
 	proto.Message
@@ -66,8 +70,12 @@ func unmarshalBatch[T any, P interface {
 		}
 
 		ptr := P(&results[i])
-		if err := proto.Unmarshal(msgBytes, ptr); err != nil {
-			return nil, fmt.Errorf("message %d: failed to unmarshal %s: %w", i, typeName, err)
+		jsonErr := protojson.Unmarshal(msgBytes, ptr)
+		if jsonErr == nil {
+			continue
+		}
+		if pbErr := proto.Unmarshal(msgBytes, ptr); pbErr != nil {
+			return nil, fmt.Errorf("message %d: failed to unmarshal %s: %w", i, typeName, errors.Join(jsonErr, pbErr))
 		}
 	}
 
