@@ -12,7 +12,7 @@
 package otlp_test
 
 import (
-	pb "github.com/redpanda-data/common-go/redpanda-otel-exporter/proto"
+	pb "buf.build/gen/go/redpandadata/otel/protocolbuffers/go/redpanda/otel/v1"
 )
 
 func attrMap(attrs []*pb.KeyValue) map[string]*pb.AnyValue {

@@ -37,9 +37,10 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/protobuf/proto"
 
+	pb "buf.build/gen/go/redpandadata/otel/protocolbuffers/go/redpanda/otel/v1"
+
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
-	pb "github.com/redpanda-data/common-go/redpanda-otel-exporter/proto"
 	"github.com/redpanda-data/connect/v4/internal/impl/otlp"
 	"github.com/redpanda-data/connect/v4/internal/license"
 )

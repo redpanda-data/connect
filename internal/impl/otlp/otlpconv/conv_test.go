@@ -18,7 +18,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 
-	pb "github.com/redpanda-data/common-go/redpanda-otel-exporter/proto"
+	pb "buf.build/gen/go/redpandadata/otel/protocolbuffers/go/redpanda/otel/v1"
 )
 
 func TestAnyValueRoundtrip(t *testing.T) {

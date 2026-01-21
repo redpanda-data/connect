@@ -6,6 +6,8 @@ buf.build/gen/go/bufbuild/reflect/connectrpc/go v1.19.1-20240117202343-bf8f65e88
 buf.build/gen/go/bufbuild/reflect/connectrpc/go v1.19.1-20240117202343-bf8f65e8876c.2/go.mod h1:ZGK0ces5GRXffhjOIcqSMOVV3Y3rgIwnvMJfZ/JltTg=
 buf.build/gen/go/bufbuild/reflect/protocolbuffers/go v1.36.10-20240117202343-bf8f65e8876c.1 h1:Z6b/hsRyrX22pN5cI7n6mDwhj38smtNfV21fhj+4gPk=
 buf.build/gen/go/bufbuild/reflect/protocolbuffers/go v1.36.10-20240117202343-bf8f65e8876c.1/go.mod h1:dDSnTB/bSMAA9z59+0E2JWab9LyGnb+spW8nrVeEAqA=
+buf.build/gen/go/redpandadata/otel/protocolbuffers/go v1.36.11-20251216164002-58c749b888d8.1 h1:4jqc94IBC9Ea9GaMbmgfhczXZzCkA4ZWfon3/uI3KV0=
+buf.build/gen/go/redpandadata/otel/protocolbuffers/go v1.36.11-20251216164002-58c749b888d8.1/go.mod h1:akvBCH3f6fL10sDu4NppgjHrQITLe1m5YWLt/yiLEKI=
 buf.build/go/hyperpb v0.1.3 h1:wiw2F7POvAe2VA2kkB0TAsFwj91lXbFrKM41D3ZgU1w=
 buf.build/go/hyperpb v0.1.3/go.mod h1:IHXAM5qnS0/Fsnd7/HGDghFNvUET646WoHmq1FDZXIE=
 buf.build/go/protovalidate v0.14.0 h1:kr/rC/no+DtRyYX+8KXLDxNnI1rINz0imk5K44ZpZ3A=
@@ -2024,8 +2026,7 @@ github.com/redpanda-data/common-go/authz v0.2.0 h1:KYBu/+eIdFlaR8qJXn5I52AJ9Zo4K
 github.com/redpanda-data/common-go/authz v0.2.0/go.mod h1:x1C0YQ5NhCg2uj09Oz0bwMwDTkazK8lwxfZshE5Lf3s=
 github.com/redpanda-data/common-go/license v0.0.0-20260109170727-1dd9f5d22ee1 h1:Qr6sK5Qmznbwtk4AKgd6086RM+uA/Z4lO/r2aCDxx+c=
 github.com/redpanda-data/common-go/license v0.0.0-20260109170727-1dd9f5d22ee1/go.mod h1:F1fp8xVNS2UwWFosOjJ9+5jaEZnXSjB9AdHk2R9XlpI=
-github.com/redpanda-data/common-go/redpanda-otel-exporter v0.3.1-0.20260120073450-935d3dd3d6c1 h1:jQLTLBWJqOyMAZi9YFx8nsgZ7fOq+DYZsSF7zM+hb7o=
-github.com/redpanda-data/common-go/redpanda-otel-exporter v0.3.1-0.20260120073450-935d3dd3d6c1/go.mod h1:kzFoUX1Abv6ccz8wuTUUpmBlGwQcwNjSxYCuDLA4IyQ=
+github.com/redpanda-data/common-go/redpanda-otel-exporter v0.4.0 h1:lyLHsAMI4Ns8CqNDi2zuaslSNO5BHoMt+hvyoOKieII=
 github.com/redpanda-data/common-go/redpanda-otel-exporter v0.4.0/go.mod h1:kzFoUX1Abv6ccz8wuTUUpmBlGwQcwNjSxYCuDLA4IyQ=
 github.com/redpanda-data/common-go/secrets v0.1.4 h1:CGp3KolGnjcJvIafTwf7Hlj5ztLOJCjgkegRu7IAkSw=
 github.com/redpanda-data/common-go/secrets v0.1.4/go.mod h1:WjUU/5saSXwItZx6veFOGbQZUgPQz4MQ65z22y0Ky84=
