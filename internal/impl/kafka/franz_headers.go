@@ -25,9 +25,9 @@ import (
 const kafkaHeaders = "__rpcn_kafka_headers"
 
 // AddHeaders stores Kafka record headers in message metadata. Each header value
-// is stored under its key. Empty values are stored as nil, single-byte values
-// as rune and multibyte values as string. The full original list of headers
-// is stored under the special key "__rpcn_kafka_headers".
+// is stored under its key. Empty values are stored as nil, other values
+// as string. The full original list of headers is stored under the
+// special key "__rpcn_kafka_headers".
 func AddHeaders(msg *service.Message, headers []kgo.RecordHeader) {
 	if len(headers) == 0 {
 		return
@@ -38,8 +38,6 @@ func AddHeaders(msg *service.Message, headers []kgo.RecordHeader) {
 			msg.MetaSetMut(h.Key, nil)
 		} else if n := len(h.Value); n == 0 {
 			msg.MetaSetMut(h.Key, "")
-		} else if n == 1 {
-			msg.MetaSetMut(h.Key, rune(h.Value[0]))
 		} else {
 			msg.MetaSetMut(h.Key, string(h.Value))
 		}
