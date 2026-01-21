@@ -35,8 +35,8 @@ func (c *change) reset() {
 		for k := range c.columns {
 			delete(c.columns, k)
 		}
-		c.startSCN = nil
-		c.endSCN = nil
+		c.startSCN = InvalidSCN
+		c.endSCN = InvalidSCN
 		c.updateMask = nil
 		c.seqVal = nil
 		c.operation = 0

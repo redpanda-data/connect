@@ -137,8 +137,8 @@ func (b *batchPublisher) Publish(ctx context.Context, m replication.MessageEvent
 	msg.MetaSet("schema", m.Schema)
 	msg.MetaSet("table", m.Table)
 	msg.MetaSet("operation", m.Operation)
-	if len(m.SCN) != 0 {
-		msg.MetaSet("scn", string(m.SCN))
+	if m.SCN.IsValid() {
+		msg.MetaSet("scn", m.SCN.String())
 	}
 
 	var flushedBatch []*service.Message
@@ -167,10 +167,14 @@ func (b *batchPublisher) publishBatch(ctx context.Context, batch service.Message
 	}
 
 	lastMsg := batch[len(batch)-1]
-	var checkpointSCN []byte
+	var checkpointSCN replication.SCN
 	// snapshot records don't have a scn as we don't track those
 	if scn, ok := lastMsg.MetaGet("scn"); ok {
-		checkpointSCN = replication.SCN(scn)
+		var parseErr error
+		checkpointSCN, parseErr = replication.ParseSCN(scn)
+		if parseErr != nil {
+			return fmt.Errorf("failed to parse checkpoint SCN: %w", parseErr)
+		}
 	}
 
 	resolveFn, err := b.checkpoint.Track(ctx, checkpointSCN, int64(len(batch)))
@@ -181,7 +185,7 @@ func (b *batchPublisher) publishBatch(ctx context.Context, batch service.Message
 		msg: batch,
 		ackFn: func(ctx context.Context, _ error) error {
 			scn := resolveFn()
-			if scn != nil && len(*scn) != 0 {
+			if scn != nil && scn.IsValid() {
 				return b.cacheSCN(ctx, *scn)
 			}
 			return nil

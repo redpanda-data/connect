@@ -60,12 +60,12 @@ func NewSnapshot(
 // Returns the current SCN for the snapshot.
 func (s *Snapshot) Prepare(ctx context.Context) (SCN, error) {
 	if len(s.tables) == 0 {
-		return nil, errors.New("no tables provided")
+		return InvalidSCN, errors.New("no tables provided")
 	}
 
 	var currentSCN SCN
 	if err := s.db.QueryRowContext(ctx, "SELECT CURRENT_SCN FROM V$DATABASE").Scan(&currentSCN); err != nil {
-		return nil, fmt.Errorf("getting current SCN for snapshot: %w", err)
+		return InvalidSCN, fmt.Errorf("getting current SCN for snapshot: %w", err)
 	}
 
 	// s.log.Infof("Starting snapshot at SCN: %s", currentSCN)
@@ -195,7 +195,7 @@ func (s *Snapshot) snapshotTable(ctx context.Context, table UserDefinedTable, ma
 					Schema:    table.Schema,
 					Data:      row,
 					Operation: MessageOperationRead.String(),
-					SCN:       nil,
+					SCN:       0,
 				}
 				if err = s.publisher.Publish(ctx, m); err != nil {
 					return fmt.Errorf("handling snapshot table row: %w", err)
