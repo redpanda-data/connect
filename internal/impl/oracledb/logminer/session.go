@@ -3,10 +3,10 @@ package logminer
 import (
 	"database/sql"
 	"fmt"
-	"log"
 )
 
-// SessionManager manages LogMiner sessions
+// SessionManager manages LogMiner sessions, such as loading
+// logs into LogMiner then starting/ending mining sessions.
 type SessionManager struct {
 	db *sql.DB
 }
@@ -51,31 +51,25 @@ func (sm *SessionManager) StartSession(startSCN, endSCN uint64, committedDataOnl
 		options = append(options, "DBMS_LOGMNR.COMMITTED_DATA_ONLY")
 	}
 
-	optionsStr := ""
-	for i, opt := range options {
+	var optionsStr string
+	for i, o := range options {
 		if i > 0 {
 			optionsStr += " + "
 		}
-		optionsStr += opt
+		optionsStr += o
 	}
 
-	sql := fmt.Sprintf(
-		"BEGIN sys.dbms_logmnr.start_logmnr(startScn => %d, endScn => %d, options => %s); END;",
-		startSCN, endSCN, optionsStr,
-	)
-
-	if _, err := sm.db.Exec(sql); err != nil {
-		return fmt.Errorf("failed to start LogMiner session: %w", err)
+	q := fmt.Sprintf("BEGIN sys.dbms_logmnr.start_logmnr(startScn => %d, endScn => %d, options => %s); END;", startSCN, endSCN, optionsStr)
+	if _, err := sm.db.Exec(q); err != nil {
+		return fmt.Errorf("starting LogMiner session: %w", err)
 	}
-
 	return nil
 }
 
 // EndSession ends the current LogMiner session
 func (sm *SessionManager) EndSession() error {
-	_, err := sm.db.Exec("BEGIN SYS.DBMS_LOGMNR.END_LOGMNR(); END;")
-	if err != nil {
-		log.Printf("Warning: failed to end LogMiner session: %v", err)
+	if _, err := sm.db.Exec("BEGIN SYS.DBMS_LOGMNR.END_LOGMNR(); END;"); err != nil {
+		return fmt.Errorf("ending logminer session: %w", err)
 	}
-	return err
+	return nil
 }
