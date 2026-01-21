@@ -129,11 +129,10 @@ func (lm *LogMiner) ReadChanges(ctx context.Context, db *sql.DB, startPos replic
 	lm.log.Infof("Starting streaming of %d change table(s)", len(lm.tables))
 
 	// Determine starting SCN
-	if len(startPos) != 0 {
+	if startPos.IsValid() {
 		// Resume from checkpoint
 		lm.log.Infof("Resuming from recorded SCN position '%s'", startPos)
-		// Parse startPos to uint64
-		// TODO: Parse startPos string to uint64
+		lm.currentSCN = uint64(startPos)
 	} else {
 		// get current SCN from DB
 		var scn uint64

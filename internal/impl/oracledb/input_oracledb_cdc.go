@@ -316,7 +316,7 @@ func (i *oracleDBCDCInput) Connect(ctx context.Context) error {
 		streaming   streamProcessor
 	)
 	// no cached SCN means we're not recovering from a restart
-	if i.cfg.streamSnapshot && len(cachedSCN) == 0 {
+	if i.cfg.streamSnapshot && cachedSCN == 0 {
 		if snapshotter, err = replication.NewSnapshot(i.cfg.connectionString, userTables, i.publisher, i.log, i.metrics); err != nil {
 			return fmt.Errorf("creating database snapshotter: %w", err)
 		}
@@ -400,31 +400,35 @@ func (i *oracleDBCDCInput) getCachedSCN(ctx context.Context) (replication.SCN, e
 		if err := i.res.AccessCache(ctx, i.cfg.scnCache, func(c service.Cache) {
 			cacheVal, cErr = c.Get(ctx, i.cfg.scnCacheKey)
 		}); err != nil {
-			return nil, fmt.Errorf("unable to access cache for reading: %w", err)
+			return replication.InvalidSCN, fmt.Errorf("unable to access cache for reading: %w", err)
 		}
 	}
 
 	if errors.Is(cErr, service.ErrKeyNotFound) {
-		return nil, nil
+		return replication.InvalidSCN, nil
 	} else if cErr != nil {
-		return nil, fmt.Errorf("unable read checkpoint from cache: %w", cErr)
+		return replication.InvalidSCN, fmt.Errorf("unable read checkpoint from cache: %w", cErr)
 	} else if len(cacheVal) == 0 {
-		return nil, nil
+		return replication.InvalidSCN, nil
 	}
-	return replication.SCN(cacheVal), nil
+	scn, err := replication.SCNFromBytes(cacheVal)
+	if err != nil {
+		return replication.InvalidSCN, fmt.Errorf("unable to parse SCN from cache: %w", err)
+	}
+	return scn, nil
 }
 
 func (i *oracleDBCDCInput) cacheSCN(ctx context.Context, scn replication.SCN) error {
-	if len(scn) == 0 {
+	if scn == replication.InvalidSCN {
 		return errors.New("SCN for caching is empty")
 	}
 
 	var cErr error
 	if i.cpCache != nil {
-		cErr = i.cpCache.Set(ctx, i.cfg.scnCacheKey, scn, nil)
+		cErr = i.cpCache.Set(ctx, i.cfg.scnCacheKey, scn.Bytes(), nil)
 	} else {
 		if err := i.res.AccessCache(ctx, i.cfg.scnCache, func(c service.Cache) {
-			cErr = c.Set(ctx, i.cfg.scnCacheKey, scn, nil)
+			cErr = c.Set(ctx, i.cfg.scnCacheKey, scn.Bytes(), nil)
 		}); err != nil {
 			return fmt.Errorf("unable to access cache for writing: %w", err)
 		}
@@ -454,14 +458,14 @@ func (i *oracleDBCDCInput) processSnapshot(ctx context.Context, snapshot *replic
 	)
 	if scn, err = snapshot.Prepare(ctx); err != nil {
 		_ = snapshot.Close()
-		return nil, fmt.Errorf("preparing snapshot: %w", err)
+		return replication.InvalidSCN, fmt.Errorf("preparing snapshot: %w", err)
 	}
 	if err = snapshot.Read(ctx, i.cfg.snapshotMaxWorkers, i.cfg.snapshotMaxBatchSize); err != nil {
 		_ = snapshot.Close()
-		return nil, fmt.Errorf("reading snapshot: %w", err)
+		return replication.InvalidSCN, fmt.Errorf("reading snapshot: %w", err)
 	}
 	if err = snapshot.Close(); err != nil {
-		return nil, fmt.Errorf("closing snapshot connections: %w", err)
+		return replication.InvalidSCN, fmt.Errorf("closing snapshot connections: %w", err)
 	}
 	i.log.Infof("Completed running snapshot process")
 
