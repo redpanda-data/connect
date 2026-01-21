@@ -116,6 +116,7 @@ func NewMiner(db *sql.DB, userTables []replication.UserDefinedTable, publisher r
 		BatchSize:       maxBatchSize,
 		logCollector:    NewLogFileCollector(db),
 		sessionMgr:      NewSessionManager(db),
+		eventProc:       NewEventProcessor(),
 		txnCache:        NewInMemoryCache(),
 		dmlParser:       dmlparser.New(true),
 		logMinerQuery:   logMinerQuery,
