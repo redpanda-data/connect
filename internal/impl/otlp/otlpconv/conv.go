@@ -21,7 +21,7 @@ import (
 
 	"go.opentelemetry.io/collector/pdata/pcommon"
 
-	pb "github.com/redpanda-data/common-go/redpanda-otel-exporter/proto"
+	pb "buf.build/gen/go/redpandadata/otel/protocolbuffers/go/redpanda/otel/v1"
 )
 
 // int64ToUint64 safely converts an int64 timestamp to uint64.

@@ -19,6 +19,7 @@ ignore (
 require (
 	buf.build/gen/go/bufbuild/reflect/connectrpc/go v1.19.1-20240117202343-bf8f65e8876c.2
 	buf.build/gen/go/bufbuild/reflect/protocolbuffers/go v1.36.10-20240117202343-bf8f65e8876c.1
+	buf.build/gen/go/redpandadata/otel/protocolbuffers/go v1.36.11-20251216164002-58c749b888d8.1
 	buf.build/go/hyperpb v0.1.3
 	cloud.google.com/go/aiplatform v1.104.0
 	cloud.google.com/go/bigquery v1.71.0

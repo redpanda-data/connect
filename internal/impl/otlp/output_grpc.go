@@ -26,9 +26,10 @@ import (
 	"google.golang.org/grpc/encoding/gzip"
 	"google.golang.org/grpc/metadata"
 
+	pb "buf.build/gen/go/redpandadata/otel/protocolbuffers/go/redpanda/otel/v1"
+
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/utils/netutil"
-	"github.com/redpanda-data/common-go/redpanda-otel-exporter/proto"
 	"github.com/redpanda-data/connect/v4/internal/impl/otlp/otlpconv"
 	"github.com/redpanda-data/connect/v4/internal/license"
 	"github.com/redpanda-data/connect/v4/internal/oauth2"
@@ -312,7 +313,7 @@ func (o *grpcOTLPOutput) headersFrom(ctx context.Context, batch service.MessageB
 }
 
 func (o *grpcOTLPOutput) sendTraces(ctx context.Context, batch service.MessageBatch) error {
-	spans, err := unmarshalBatch[proto.Span](batch, "span")
+	spans, err := unmarshalBatch[pb.Span](batch, "span")
 	if err != nil {
 		return fmt.Errorf("unmarshal spans: %w", err)
 	}
@@ -336,7 +337,7 @@ func (o *grpcOTLPOutput) sendTraces(ctx context.Context, batch service.MessageBa
 }
 
 func (o *grpcOTLPOutput) sendLogs(ctx context.Context, batch service.MessageBatch) error {
-	logs, err := unmarshalBatch[proto.LogRecord](batch, "log record")
+	logs, err := unmarshalBatch[pb.LogRecord](batch, "log record")
 	if err != nil {
 		return fmt.Errorf("unmarshal logs: %w", err)
 	}
@@ -360,7 +361,7 @@ func (o *grpcOTLPOutput) sendLogs(ctx context.Context, batch service.MessageBatc
 }
 
 func (o *grpcOTLPOutput) sendMetrics(ctx context.Context, batch service.MessageBatch) error {
-	metrics, err := unmarshalBatch[proto.Metric](batch, "metric")
+	metrics, err := unmarshalBatch[pb.Metric](batch, "metric")
 	if err != nil {
 		return fmt.Errorf("unmarshal metrics: %w", err)
 	}
