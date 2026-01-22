@@ -17,14 +17,11 @@ package mcp
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log/slog"
-	"sync/atomic"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/redpanda-data/common-go/authz"
-	"github.com/redpanda-data/common-go/authz/loader"
 	"github.com/redpanda-data/connect/v4/internal/gateway"
 )
 
@@ -67,46 +64,29 @@ var methodToPerm = map[string]authz.PermissionName{
 	"logging/setLevel":         permissionLoggingSetLevel,
 }
 
-// NewAuthorizer returns an MCP server authorizer which dynamically loads (and watches) the configuration file
-// for policy enforcement.
+// NewAuthorizer returns an MCP server authorizer which dynamically loads
+// (and watches) the configuration file for policy enforcement.
 func NewAuthorizer(name authz.ResourceName, file string, logger *slog.Logger) (*Authorizer, error) {
-	a := &Authorizer{}
-	policy, unwatch, err := loader.WatchPolicyFile(file, func(policy authz.Policy, err error) {
-		if err != nil {
-			logger.Warn("error watching authorization policy file", "err", err)
-			return
-		}
-		rp, err := authz.NewResourcePolicy(policy, name, allPermissions)
-		if err != nil {
-			logger.Warn("error loading authorization policy file", "err", err)
-			return
-		}
-		logger.Info("reloaded updated policy file", "file", file)
-		a.value.Store(rp)
-	})
-	if err != nil {
-		return nil, fmt.Errorf("unable to load authorization policy: %w", err)
+	notifyError := func(err error) {
+		logger.Warn("authorization policy error", "err", err)
 	}
-	a.unwatch = unwatch
-	rp, err := authz.NewResourcePolicy(policy, name, allPermissions)
+	policy, err := gateway.NewFileWatchingAuthzResourcePolicy(name, file, allPermissions, notifyError)
 	if err != nil {
-		return nil, fmt.Errorf("unable to compile authorization policy: %w", err)
+		return nil, err
 	}
-	a.value.Store(rp)
-	return a, nil
+	return &Authorizer{policy: policy}, nil
 }
 
 // Authorizer provides middleware for enforcing authorization policies on MCP method calls.
 type Authorizer struct {
-	unwatch loader.PolicyUnwatch
-	value   atomic.Pointer[authz.ResourcePolicy]
+	policy *gateway.FileWatchingAuthzResourcePolicy
 }
 
 // Middleware returns an MCP method handler that enforces authorization checks before invoking the next handler.
 func (a *Authorizer) Middleware(next mcp.MethodHandler) mcp.MethodHandler {
 	return func(ctx context.Context, method string, req mcp.Request) (result mcp.Result, err error) {
 		principal, ok := gateway.ValidatedPrincipalIDFromContext(ctx)
-		enforcer := a.value.Load().Authorizer(methodToPerm[method])
+		enforcer := a.policy.Authorizer(methodToPerm[method])
 		if !ok || !enforcer.Check(principal) {
 			return nil, errors.New("permission denied")
 		}
@@ -114,6 +94,7 @@ func (a *Authorizer) Middleware(next mcp.MethodHandler) mcp.MethodHandler {
 	}
 }
 
-func (a *Authorizer) Close(_ context.Context) error {
-	return a.unwatch()
+// Close closes the resource policy and stops watching the policy file.
+func (a *Authorizer) Close() error {
+	return a.policy.Close()
 }
