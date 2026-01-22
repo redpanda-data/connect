@@ -154,7 +154,7 @@ func setupMCPServer(t *testing.T, issuerURL, orgID, policyFile string) *mcpServe
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
-		if err := auth.Close(context.Background()); err != nil {
+		if err := auth.Close(); err != nil {
 			t.Log(err)
 		}
 	})
