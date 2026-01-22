@@ -228,7 +228,7 @@ func (lm *LogMiner) miningCycle(ctx context.Context) error {
 		}
 	}
 
-	lm.log.Debugf("Found and processed %d events in SCN range %d - %d", len(events), lm.currentSCN, endSCN)
+	// lm.log.Debugf("Found and processed %d events in SCN range %d - %d", len(events), lm.currentSCN, endSCN)
 	lm.currentSCN = endSCN
 
 	return nil
@@ -237,9 +237,11 @@ func (lm *LogMiner) miningCycle(ctx context.Context) error {
 // processEvent buffers emitted events until a commit or rollback event is processed at which
 // point the buffer can be flushed to the Connect pipeline or dropped.
 func (lm *LogMiner) processEvent(ctx context.Context, event *LogMinerEvent) error {
+	txnLog := lm.log.With("transaction_id", event.TransactionID)
 	switch event.Operation {
 	case OpStart:
 		// Transaction started
+		// txnLog.Debugf("Transaction begin")
 		lm.txnCache.StartTransaction(event.TransactionID, event.SCN)
 
 	case OpInsert, OpUpdate, OpDelete:
@@ -268,12 +270,14 @@ func (lm *LogMiner) processEvent(ctx context.Context, event *LogMinerEvent) erro
 				lm.emitChangeEvent(ctx, changeEvent)
 			}
 			lm.txnCache.CommitTransaction(event.TransactionID)
-			lm.log.Debugf("Committed transaction %s with %d events at SCN %d", event.TransactionID, len(txn.Events), event.SCN)
+			if len(txn.Events) > 0 {
+				txnLog.Debugf("Fluhed %d committed events", len(txn.Events))
+			}
 		}
 
 	case OpRollback:
 		// Discard all buffered events for this transaction
-		lm.log.Debugf("Discarding transaction due to rollback")
+		txnLog.Debugf("Discarding transaction due to rollback")
 		lm.txnCache.RollbackTransaction(event.TransactionID)
 	}
 
