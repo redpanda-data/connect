@@ -10,6 +10,7 @@ package gateway
 
 import (
 	"fmt"
+	"net/http"
 	"sync/atomic"
 
 	"github.com/redpanda-data/common-go/authz"
@@ -79,4 +80,23 @@ func (r *FileWatchingAuthzResourcePolicy) Authorizer(perm authz.PermissionName) 
 // [NewFileWatchingAuthzResourcePolicy].
 func (r *FileWatchingAuthzResourcePolicy) SubResourceAuthorizer(t authz.ResourceType, id authz.ResourceID, perm authz.PermissionName) authz.Authorizer {
 	return r.value.Load().SubResourceAuthorizer(t, id, perm)
+}
+
+// AuthzMiddleware returns an HTTP middleware handler that enforces
+// authorization checks for the given permission before invoking the next
+// handler. If the principal is missing or unauthorized, it responds with
+// 403 Forbidden.
+func AuthzMiddleware(
+	policy *FileWatchingAuthzResourcePolicy,
+	perm authz.PermissionName,
+	next http.Handler,
+) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		principal, ok := ValidatedPrincipalIDFromContext(req.Context())
+		if !ok || !policy.Authorizer(perm).Check(principal) {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		next.ServeHTTP(w, req)
+	})
 }
