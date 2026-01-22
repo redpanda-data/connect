@@ -13,9 +13,35 @@ import (
 	"net/http"
 	"sync/atomic"
 
+	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/common-go/authz"
 	"github.com/redpanda-data/common-go/authz/loader"
 )
+
+// AuthzConfig holds the configuration for authorization policy.
+type AuthzConfig struct {
+	ResourceName authz.ResourceName
+	PolicyFile   string
+}
+
+type authzConfigKeyType int
+
+var authzConfigKey authzConfigKeyType
+
+// SetManagerAuthzConfig stores the authorization configuration in the resource
+// manager.
+func SetManagerAuthzConfig(mgr *service.Resources, conf AuthzConfig) {
+	mgr.SetGeneric(authzConfigKey, conf)
+}
+
+// ManagerAuthzConfig retrieves the authorization configuration from the
+// resource manager.
+func ManagerAuthzConfig(mgr *service.Resources) (AuthzConfig, bool) {
+	if c, ok := mgr.GetGeneric(authzConfigKey); ok {
+		return c.(AuthzConfig), true
+	}
+	return AuthzConfig{}, false
+}
 
 // FileWatchingAuthzResourcePolicy wraps an authorization policy that
 // automatically reloads when the underlying policy file changes.
