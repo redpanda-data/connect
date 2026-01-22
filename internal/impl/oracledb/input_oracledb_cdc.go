@@ -290,7 +290,7 @@ func (i *oracleDBCDCInput) Connect(ctx context.Context) error {
 		return fmt.Errorf("failed to connect to oracle database: %s", err)
 	}
 
-	// no cache specified so use default, custom sql cache
+	// no cache specified so use default, internal oracle based cache
 	if i.cfg.scnCache == "" {
 		// setup internal cache
 		cache, err := newCheckpointCache(ctx, i.cfg.connectionString, i.cfg.cpCacheTableName, i.log)
