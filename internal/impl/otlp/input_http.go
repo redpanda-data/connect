@@ -29,6 +29,7 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/utils/netutil"
+	"github.com/redpanda-data/common-go/authz"
 	"github.com/redpanda-data/connect/v4/internal/gateway"
 	"github.com/redpanda-data/connect/v4/internal/impl/otlp/otlpconv"
 	"github.com/redpanda-data/connect/v4/internal/license"
@@ -46,6 +47,8 @@ const (
 	defaultHTTPReadTimeout  = 10 * time.Second
 	defaultHTTPWriteTimeout = 10 * time.Second
 	defaultHTTPMaxBodySize  = 4 * 1024 * 1024 // 4MB
+
+	otlpHTTPPermission authz.PermissionName = "dataplane_pipeline_otlp_http_invoke"
 )
 
 type httpInputConfig struct {
@@ -176,10 +179,11 @@ An optional rate limit resource can be specified to throttle incoming requests. 
 // httpOTLPInput is the HTTP-specific OTLP input
 type httpOTLPInput struct {
 	otlpInput
-	conf   httpInputConfig
-	rpJWT  *gateway.RPJWTMiddleware
-	cors   gateway.CORSConfig
-	server *http.Server
+	conf        httpInputConfig
+	authzPolicy *gateway.FileWatchingAuthzResourcePolicy
+	rpJWT       *gateway.RPJWTMiddleware
+	cors        gateway.CORSConfig
+	server      *http.Server
 }
 
 // HTTPInputFromParsed creates an OTLP HTTP input from a parsed config.
@@ -224,6 +228,22 @@ func HTTPInputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (s
 		return nil, fmt.Errorf("parse tcp config: %w", err)
 	}
 
+	// Initialize authorization policy if configured
+	var authzPolicy *gateway.FileWatchingAuthzResourcePolicy
+	if authzConf, ok := gateway.ManagerAuthzConfig(mgr); ok {
+		authzPolicy, err = gateway.NewFileWatchingAuthzResourcePolicy(
+			authzConf.ResourceName,
+			authzConf.PolicyFile,
+			[]authz.PermissionName{otlpHTTPPermission},
+			func(err error) {
+				mgr.Logger().With("error", err).Error("Authorization policy error")
+			},
+		)
+		if err != nil {
+			return nil, fmt.Errorf("initialize authorization policy: %w", err)
+		}
+	}
+
 	// Initialize HTTP-specific middleware
 	rpJWT, err := gateway.NewRPJWTMiddleware(mgr)
 	if err != nil {
@@ -234,11 +254,13 @@ func HTTPInputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (s
 	if err != nil {
 		return nil, err
 	}
+
 	return &httpOTLPInput{
-		otlpInput: otlpIn,
-		conf:      conf,
-		rpJWT:     rpJWT,
-		cors:      gateway.NewCORSConfigFromEnv(),
+		otlpInput:   otlpIn,
+		conf:        conf,
+		authzPolicy: authzPolicy,
+		rpJWT:       rpJWT,
+		cors:        gateway.NewCORSConfigFromEnv(),
 	}, nil
 }
 
@@ -262,7 +284,11 @@ func (hi *httpOTLPInput) Connect(ctx context.Context) error {
 	}
 
 	h := hi.handler()
-	h = hi.cors.WrapHandler(hi.rpJWT.Wrap(h))
+	if hi.authzPolicy != nil {
+		h = gateway.AuthzMiddleware(hi.authzPolicy, otlpHTTPPermission, h)
+	}
+	h = hi.rpJWT.Wrap(h)
+	h = hi.cors.WrapHandler(h)
 	hi.server = &http.Server{
 		Addr:         hi.conf.Address,
 		Handler:      h,
@@ -314,7 +340,7 @@ func (hi *httpOTLPInput) Close(ctx context.Context) error {
 	defer hi.shutSig.TriggerHasStopped()
 
 	if hi.server == nil {
-		return nil
+		return hi.authzPolicy.Close()
 	}
 
 	// Shutdown HTTP server gracefully
@@ -329,7 +355,7 @@ func (hi *httpOTLPInput) Close(ctx context.Context) error {
 		}
 	}
 
-	return nil
+	return hi.authzPolicy.Close()
 }
 
 const (
