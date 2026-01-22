@@ -32,6 +32,7 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/utils/netutil"
+	"github.com/redpanda-data/common-go/authz"
 	"github.com/redpanda-data/connect/v4/internal/gateway"
 )
 
@@ -43,6 +44,9 @@ const (
 	hsiFieldResponseHeaders         = "headers"
 	hsiFieldResponseExtractMetadata = "metadata_headers"
 )
+
+// Gateway HTTP authorization permission
+const gatewayPermission authz.PermissionName = "dataplane_pipeline_gateway_invoke"
 
 type hsiConfig struct {
 	Path      string
@@ -183,6 +187,7 @@ type Input struct {
 	server *http.Server
 
 	rpJWTValidator *gateway.RPJWTMiddleware
+	authzPolicy    *gateway.FileWatchingAuthzResourcePolicy
 
 	batches chan batchAndAck
 
@@ -210,6 +215,19 @@ func InputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (*Inpu
 	if h.rpJWTValidator, err = gateway.NewRPJWTMiddleware(mgr); err != nil {
 		return nil, err
 	}
+	if authzConf, ok := gateway.ManagerAuthzConfig(mgr); ok {
+		h.authzPolicy, err = gateway.NewFileWatchingAuthzResourcePolicy(
+			authzConf.ResourceName,
+			authzConf.PolicyFile,
+			[]authz.PermissionName{gatewayPermission},
+			func(err error) {
+				mgr.Logger().With("error", err).Error("Authorization policy error")
+			},
+		)
+		if err != nil {
+			return nil, fmt.Errorf("initialize authorization policy: %w", err)
+		}
+	}
 
 	if h.conf.RateLimit != "" {
 		if !h.mgr.HasRateLimit(h.conf.RateLimit) {
@@ -229,6 +247,9 @@ func InputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (*Inpu
 func (ri *Input) createHandler() (h http.Handler) {
 	h = http.HandlerFunc(ri.deliverHandler)
 	h = gzipHandler(h)
+	if ri.authzPolicy != nil {
+		h = gateway.AuthzMiddleware(ri.authzPolicy, gatewayPermission, h)
+	}
 	h = ri.rpJWTValidator.Wrap(h)
 	h = ri.conf.CORS.WrapHandler(h)
 	return
@@ -549,10 +570,7 @@ func (ri *Input) Close(ctx context.Context) error {
 	ri.shutSig.TriggerSoftStop()
 	defer ri.shutSig.TriggerHardStop()
 
-	if ri.server == nil {
-		return nil
-	}
-	return ri.server.Shutdown(ctx)
+	return errors.Join(ri.server.Shutdown(ctx), ri.authzPolicy.Close())
 }
 
 //------------------------------------------------------------------------------
