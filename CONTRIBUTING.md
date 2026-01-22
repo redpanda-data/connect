@@ -28,7 +28,7 @@ To certify a connector, it must meet the following requirements:
 - **1.3.2** Tests should cover end-to-end functionality and prove that the connector works across supported configurations.  
 - **1.3.3** Integration tests verify core workflows and are runnable in CI.
 - **1.3.4** Benchmarks have been run at various throughput levels so that we can determine CPU and memory trendlines based on usage.
-- **1.3.5** If a corresponding Kafka Connect connector exists, benchmarks have been run against it so we can it compare against our throughput and ensure Redpanda Connect's is comparable or better.
+- **1.3.5** If a corresponding Kafka Connect connector exists, benchmarks have been run against it so we can compare it against our throughput and ensure Redpanda Connect's is comparable or better.
 
 ---
 
