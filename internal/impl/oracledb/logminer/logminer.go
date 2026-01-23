@@ -56,7 +56,6 @@ type LogMiner struct {
 	log           *service.Logger
 	logCollector  *LogFileCollector
 	currentSCN    uint64
-	BatchSize     int
 	sessionMgr    *SessionManager
 	eventProc     *EventProcessor
 	db            *sql.DB
@@ -184,7 +183,7 @@ func (lm *LogMiner) miningCycle(ctx context.Context) error {
 	// 2. Calculate SCN range - process up to current SCN or a reasonable chunk
 	endSCN := dbCurrentSCN
 	// Limit the range to avoid huge queries when there's a large gap
-	maxRange := uint64(lm.BatchSize)
+	maxRange := uint64(lm.cfg.MaxBatchSize)
 	if endSCN-lm.currentSCN > maxRange {
 		endSCN = lm.currentSCN + maxRange
 	}
@@ -351,7 +350,7 @@ func (lfc *LogFileCollector) GetLogs(offsetSCN uint64) ([]*LogFile, error) {
 	query := `
 		SELECT FILE_NAME, FIRST_CHANGE, NEXT_CHANGE, SEQ, TYPE, THREAD
 		FROM (
-			-- Current online redo logs
+			-- Online redo logs that contain or come after our position
 			SELECT
 				MIN(F.MEMBER) AS FILE_NAME,
 				L.FIRST_CHANGE# FIRST_CHANGE,
@@ -360,7 +359,7 @@ func (lfc *LogFileCollector) GetLogs(offsetSCN uint64) ([]*LogFile, error) {
 				'ONLINE' AS TYPE,
 				L.THREAD# AS THREAD
 			FROM V$LOGFILE F, V$LOG L
-			WHERE L.STATUS = 'CURRENT'
+			WHERE (L.STATUS = 'CURRENT' OR L.NEXT_CHANGE# > :1)
 			AND F.GROUP# = L.GROUP#
 			GROUP BY L.FIRST_CHANGE#, L.NEXT_CHANGE#, L.SEQUENCE#, L.THREAD#
 

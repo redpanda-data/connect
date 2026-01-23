@@ -335,16 +335,8 @@ func (i *oracleDBCDCInput) Connect(ctx context.Context) error {
 		i.log.Infof("Snapshotting disabled, skipping...")
 	}
 
-	//TODO: This is temporary - support i.db switching between connections for snapshot to logminer.
-	var (
-		db *sql.DB
-	)
-	if db, err = sql.Open("oracle", "oracle://system:YourPassword123@localhost:1521/XE"); err != nil {
-		return fmt.Errorf("failed to connect to LogMiner: %w", err)
-	}
-
 	if i.lmCfg != nil {
-		streaming = logminer.NewMiner(db, userTables, i.publisher, i.lmCfg, i.log)
+		streaming = logminer.NewMiner(i.db, userTables, i.publisher, i.lmCfg, i.log)
 	}
 
 	// Reset our stop signal

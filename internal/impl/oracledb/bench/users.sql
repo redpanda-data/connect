@@ -1,5 +1,5 @@
 -- Oracle Database Benchmark - Users Data
--- Connection: oracle://system:oracle@localhost:1521/XEPDB1
+-- Connection: oracle://system:oracle@localhost:1521/XE
 -- Prerequisites: Run create.sql first
 
 -- Enable output for debugging
