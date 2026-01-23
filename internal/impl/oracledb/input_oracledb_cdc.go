@@ -32,8 +32,7 @@ const (
 	fieldStreamSnapshot            = "stream_snapshot"
 	fieldMaxParallelSnapshotTables = "max_parallel_snapshot_tables"
 	fieldSnapshotMaxBatchSize      = "snapshot_max_batch_size"
-	fieldLogMinerMaxBatchSize      = "logminer_max_batch_size"
-	fieldStreamBackoffInterval     = "stream_backoff_interval"
+	fieldLogMiner                  = "logminer"
 	fieldTablesExclude             = "exclude"
 	fieldTablesInclude             = "include"
 	fieldCheckpointLimit           = "checkpoint_limit"
@@ -85,10 +84,18 @@ When using the default Oracle based cache, the Connect user requires permission 
 		Description("The maximum number of rows to be streamed in a single batch when taking a snapshot.").
 		Default(1000),
 	).
-	Field(service.NewIntField(fieldLogMinerMaxBatchSize).
-		Description("The maximum number of records to be queried when parsing log lines via LogMiner. Smaller batches mean more frequent queries with higher overhead but lower latency, larger batches mean fewer queries with better throughput but require more memory.").
-		Default(500),
-	).
+	Field(service.NewObjectField(fieldLogMiner,
+		service.NewIntField(logminer.FieldMaxBatchSize).
+			Description("The maximum number of records to be queried when parsing log lines via LogMiner. Smaller batches mean more frequent queries with higher overhead but lower latency, larger batches mean fewer queries with better throughput but require more memory.").
+			Default(logminer.DefaultMaxBatchSize),
+		service.NewDurationField(logminer.FieldBackoffInterval).
+			Description("The interval between attempts to check for new changes once all data is processed. For low traffic tables increasing this value can reduce network traffic to the server.").
+			Default(logminer.DefaultBackoffInterval).
+			Example("5s").Example("1m"),
+		service.NewStringField(logminer.FieldMiningStrategy).
+			Description("Controls how LogMiner retrieves data dictionary information. `online_catalog` (default) uses the current data dictionary for best performance but cannot capture DDL changes. `online_catalog` currently only supported.").
+			Default(logminer.DefaultMiningStrategy),
+	).Description("LogMiner configuration settings.").Optional()).
 	Field(service.NewStringListField(fieldTablesInclude).
 		Description("Regular expressions for tables to include.").
 		Example("SCHEMA.PRODUCTS"),
@@ -117,11 +124,6 @@ When using the default Oracle based cache, the Connect user requires permission 
 		Description("The maximum number of messages that can be processed at a given time. Increasing this limit enables parallel processing and batching at the output level. Any given System Change Number (SCN) will not be acknowledged unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.").
 		Default(1024),
 	).
-	Field(service.NewDurationField(fieldStreamBackoffInterval).
-		Description("The interval between attempts to check for new changes once all data is processed. For low traffic tables increasing this value can reduce network traffic to the server.").
-		Default("5s").
-		Example("5s").Example("1m"),
-	).
 	Field(service.NewAutoRetryNacksToggleField()).
 	Field(service.NewBatchPolicyField(fieldBatching))
 
@@ -131,21 +133,20 @@ type asyncMessage struct {
 }
 
 type config struct {
-	connectionString      string
-	streamSnapshot        bool
-	streamBackoffInterval time.Duration
-	snapshotMaxBatchSize  int
-	snapshotMaxWorkers    int
-	logMinerMaxBatchSize  int
-	tablesFilter          *confx.RegexpFilter
-	scnCache              string
-	scnCacheKey           string
-	cpCacheTableName      string
+	connectionString     string
+	streamSnapshot       bool
+	snapshotMaxBatchSize int
+	snapshotMaxWorkers   int
+	tablesFilter         *confx.RegexpFilter
+	scnCache             string
+	scnCacheKey          string
+	cpCacheTableName     string
 }
 
 type oracleDBCDCInput struct {
-	cfg *config
-	db  *sql.DB
+	cfg   *config
+	lmCfg *logminer.Config
+	db    *sql.DB
 
 	res       *service.Resources
 	publisher *batchPublisher
@@ -161,15 +162,14 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 		connectionString             string
 		streamSnapshot               bool
 		snapshotMaxWorkers           int
-		streamBackoffInterval        time.Duration
 		snapshotMaxBatchSize         int
-		logMinerMaxBatchSize         int
 		scnCache, scnCacheKey        string
 		tableIncludes, tableExcludes []*regexp.Regexp
 		batcher                      *service.Batcher
 		cp                           *checkpoint.Capped[replication.SCN]
 		cpCache                      service.Cache
 		cpCacheTableName             string
+		lmCfg                        *logminer.Config
 	)
 
 	if err := license.CheckRunningEnterprise(resources); err != nil {
@@ -187,11 +187,21 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 	if snapshotMaxBatchSize, err = conf.FieldInt(fieldSnapshotMaxBatchSize); err != nil {
 		return nil, err
 	}
-	if logMinerMaxBatchSize, err = conf.FieldInt(fieldLogMinerMaxBatchSize); err != nil {
-		return nil, err
-	}
-	if streamBackoffInterval, err = conf.FieldDuration(fieldStreamBackoffInterval); err != nil {
-		return nil, err
+	// logminer
+	if conf.Contains(fieldLogMiner) {
+		lmConf := conf.Namespace(fieldLogMiner)
+		lmCfg = logminer.NewDefaultConfig()
+		if lmCfg.MaxBatchSize, err = lmConf.FieldInt(logminer.FieldMaxBatchSize); err != nil {
+			return nil, err
+		}
+		if lmCfg.MiningBackoffInterval, err = lmConf.FieldDuration(logminer.FieldBackoffInterval); err != nil {
+			return nil, err
+		}
+		if strategy, err := lmConf.FieldString(logminer.FieldMiningStrategy); err != nil {
+			return nil, err
+		} else {
+			lmCfg.MiningStrategy = logminer.MiningStrategy(strategy)
+		}
 	}
 	// tables
 	if includes, err := conf.FieldStringList(fieldTablesInclude); err != nil {
@@ -243,20 +253,19 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 
 	i := oracleDBCDCInput{
 		cfg: &config{
-			connectionString:      connectionString,
-			streamSnapshot:        streamSnapshot,
-			streamBackoffInterval: streamBackoffInterval,
-			snapshotMaxWorkers:    snapshotMaxWorkers,
-			snapshotMaxBatchSize:  snapshotMaxBatchSize,
-			logMinerMaxBatchSize:  logMinerMaxBatchSize,
-			scnCache:              scnCache,
-			scnCacheKey:           scnCacheKey,
-			cpCacheTableName:      cpCacheTableName,
+			connectionString:     connectionString,
+			streamSnapshot:       streamSnapshot,
+			snapshotMaxWorkers:   snapshotMaxWorkers,
+			snapshotMaxBatchSize: snapshotMaxBatchSize,
+			scnCache:             scnCache,
+			scnCacheKey:          scnCacheKey,
+			cpCacheTableName:     cpCacheTableName,
 			tablesFilter: &confx.RegexpFilter{
 				Include: tableIncludes,
 				Exclude: tableExcludes,
 			},
 		},
+		lmCfg:     lmCfg,
 		res:       resources,
 		log:       logger,
 		metrics:   resources.Metrics(),
@@ -308,6 +317,7 @@ func (i *oracleDBCDCInput) Connect(ctx context.Context) error {
 	}
 
 	// setup snapshotting and streaming
+	// logminer processor
 	type streamProcessor interface {
 		ReadChanges(ctx context.Context, db *sql.DB, startPos replication.SCN) error
 	}
@@ -315,6 +325,7 @@ func (i *oracleDBCDCInput) Connect(ctx context.Context) error {
 		snapshotter *replication.Snapshot
 		streaming   streamProcessor
 	)
+
 	// no cached SCN means we're not recovering from a restart
 	if i.cfg.streamSnapshot && cachedSCN == 0 {
 		if snapshotter, err = replication.NewSnapshot(i.cfg.connectionString, userTables, i.publisher, i.log, i.metrics); err != nil {
@@ -332,7 +343,9 @@ func (i *oracleDBCDCInput) Connect(ctx context.Context) error {
 		return fmt.Errorf("failed to connect to LogMiner: %w", err)
 	}
 
-	streaming = logminer.NewMiner(db, userTables, i.publisher, i.cfg.streamBackoffInterval, i.cfg.logMinerMaxBatchSize, i.log)
+	if i.lmCfg != nil {
+		streaming = logminer.NewMiner(db, userTables, i.publisher, i.lmCfg, i.log)
+	}
 
 	// Reset our stop signal
 	i.stopSig = shutdown.NewSignaller()
@@ -371,6 +384,7 @@ func (i *oracleDBCDCInput) Connect(ctx context.Context) error {
 		// streaming
 		wg, _ := errgroup.WithContext(softCtx)
 		wg.Go(func() error {
+
 			if err := streaming.ReadChanges(ctx, i.db, maxSCN); err != nil {
 				return fmt.Errorf("streaming from change tables: %w", err)
 			}

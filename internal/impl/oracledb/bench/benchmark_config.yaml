@@ -6,8 +6,9 @@ input:
     connection_string: oracle://testdb:testdb123@localhost:1521/XEPDB1
     stream_snapshot: false
     snapshot_max_batch_size: 500
-    logminer_max_batch_size: 500
-    stream_backoff_interval: 5s
+    logminer:
+      max_batch_size: 1000
+      backoff_interval: 1s
     include:
       - TESTDB.USERS
       # - testdb.products
@@ -28,7 +29,7 @@ output:
     codec: lines
 
 logger:
-  level: DEBUG
+  level: INFO
 
 metrics:
   prometheus:
