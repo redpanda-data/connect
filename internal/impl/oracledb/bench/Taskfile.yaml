@@ -16,7 +16,7 @@ tasks:
     cmd: docker logs -f oracledb
 
   sqlcl:
-    cmd: sqlcl system/YourPassword123@localhost:1521/XEPDB1 {{.EXTRA_ARGS}}
+    cmd: sqlcl system/YourPassword123@localhost:1521/XE {{.EXTRA_ARGS}}
 
   sqlcl:create:
     cmd: task sqlcl EXTRA_ARGS="@create.sql"
@@ -31,4 +31,4 @@ tasks:
     cmd: task sqlcl EXTRA_ARGS="@cart.sql"
 
   sqlcl:drop-cache:
-    cmd: echo "DROP TABLE RPCN.CDC_CHECKPOINT_CACHE;" | sqlcl system/YourPassword123@localhost:1521/XEPDB1
+    cmd: echo "DROP TABLE RPCN.CDC_CHECKPOINT_CACHE;" | sqlcl system/YourPassword123@localhost:1521/XE

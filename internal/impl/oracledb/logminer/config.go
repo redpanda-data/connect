@@ -2,32 +2,42 @@ package logminer
 
 import "time"
 
-// Connect config primatives
+// Field constants for configuration
 const (
-	FieldMaxBatchSize    = "max_batch_size"
-	FieldBackoffInterval = "backoff_interval"
-	FieldMiningStrategy  = "mining_strategy"
-
-	DefaultMaxBatchSize    = 500
-	DefaultBackoffInterval = 5 * time.Second
-	DefaultMiningStrategy  = "online_catalog"
-
-	// log mining strategies
-	OnlineCatalogStrategy MiningStrategy = DefaultMiningStrategy
+	FieldMaxBatchSize     = "max_batch_size"
+	FieldBackoffInterval  = "backoff_interval"
+	FieldMiningStrategy   = "strategy"
 )
 
-type MiningStrategy string
+// Default values
+const (
+	DefaultMaxBatchSize     = 500
+	DefaultBackoffInterval  = 5 * time.Second
+	DefaultMiningStrategy   = "online_catalog"
+)
 
+// Config holds configuration for LogMiner
 type Config struct {
 	MaxBatchSize          int
 	MiningBackoffInterval time.Duration
 	MiningStrategy        MiningStrategy
 }
 
+// MiningStrategy defines how LogMiner accesses dictionary information
+type MiningStrategy string
+
+const (
+	// OnlineCatalogStrategy uses the online catalog for dictionary lookups (default, recommended)
+	OnlineCatalogStrategy MiningStrategy = "online_catalog"
+	// RedoLogsStrategy extracts dictionary from redo logs
+	RedoLogsStrategy MiningStrategy = "redo_logs"
+)
+
+// NewDefaultConfig returns a Config with default values
 func NewDefaultConfig() *Config {
 	return &Config{
 		MaxBatchSize:          DefaultMaxBatchSize,
 		MiningBackoffInterval: DefaultBackoffInterval,
-		MiningStrategy:        OnlineCatalogStrategy,
+		MiningStrategy:        MiningStrategy(DefaultMiningStrategy),
 	}
 }

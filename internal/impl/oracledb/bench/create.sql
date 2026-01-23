@@ -1,6 +1,10 @@
 -- Oracle Database Benchmark Setup Script
 -- This script creates the user/schema, enables supplemental logging, and creates tables
--- Connection: oracle://system:oracle@localhost:1521/XEPDB1
+-- Connection: oracle://system:oracle@localhost:1521/XE
+
+-- Enable creation of local users in CDB root (not recommended for production)
+ALTER SESSION SET "_ORACLE_SCRIPT"=TRUE;
+/
 
 -- ============================================================================
 -- STAGE 1: Create User/Schema
