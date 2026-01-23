@@ -8,11 +8,28 @@ import (
 // SessionManager manages LogMiner sessions, such as loading
 // logs into LogMiner then starting/ending mining sessions.
 type SessionManager struct {
-	db *sql.DB
+	db   *sql.DB
+	cfg  *Config
+	opts []string
 }
 
-func NewSessionManager(db *sql.DB) *SessionManager {
-	return &SessionManager{db: db}
+func NewSessionManager(db *sql.DB, cfg *Config) *SessionManager {
+	options := []string{
+		"DBMS_LOGMNR.NO_ROWID_IN_STMT", // Exclude ROWIDs from SQL
+	}
+
+	switch cfg.MiningStrategy {
+	case OnlineCatalogStrategy:
+		options = append(options, "DBMS_LOGMNR.DICT_FROM_ONLINE_CATALOG")
+	default:
+		options = append(options, "DBMS_LOGMNR.DICT_FROM_ONLINE_CATALOG")
+	}
+
+	return &SessionManager{
+		db:   db,
+		cfg:  cfg,
+		opts: options,
+	}
 }
 
 // AutoRegisterLogFile registers a log file with LogMiner
@@ -41,18 +58,16 @@ func (sm *SessionManager) AddLogFile(fileName string, isFirst bool) error {
 
 // StartSession starts a LogMiner session with ONLINE_CATALOG strategy
 func (sm *SessionManager) StartSession(startSCN, endSCN uint64, committedDataOnly bool) error {
-	// Build options for ONLINE_CATALOG mode
-	options := []string{
-		"DBMS_LOGMNR.DICT_FROM_ONLINE_CATALOG", // Use current data dictionary
-		"DBMS_LOGMNR.NO_ROWID_IN_STMT",         // Exclude ROWIDs from SQL
-	}
+	// TODO: Ugh, optimise this
+	opts := make([]string, len(sm.opts))
+	opts = append(opts, sm.opts...)
 
 	if committedDataOnly {
-		options = append(options, "DBMS_LOGMNR.COMMITTED_DATA_ONLY")
+		opts = append(opts, []string{"DBMS_LOGMNR.COMMITTED_DATA_ONLY"}...)
 	}
 
 	var optionsStr string
-	for i, o := range options {
+	for i, o := range opts {
 		if i > 0 {
 			optionsStr += " + "
 		}

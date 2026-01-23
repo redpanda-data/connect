@@ -50,18 +50,18 @@ type LogMinerEvent struct {
 // LogMiner tracks and streams all change events from the configured change
 // tables tracked in tables.
 type LogMiner struct {
-	tables          []replication.UserDefinedTable
-	backoffInterval time.Duration
-	publisher       replication.ChangePublisher
-	log             *service.Logger
-	logCollector    *LogFileCollector
-	currentSCN      uint64
-	BatchSize       int
-	sessionMgr      *SessionManager
-	eventProc       *EventProcessor
-	db              *sql.DB
-	SleepDuration   time.Duration
-	dmlParser       *dmlparser.LogMinerDMLParser
+	cfg           *Config
+	tables        []replication.UserDefinedTable
+	publisher     replication.ChangePublisher
+	log           *service.Logger
+	logCollector  *LogFileCollector
+	currentSCN    uint64
+	BatchSize     int
+	sessionMgr    *SessionManager
+	eventProc     *EventProcessor
+	db            *sql.DB
+	SleepDuration time.Duration
+	dmlParser     *dmlparser.LogMinerDMLParser
 
 	// Pre-built query string for LogMiner contents
 	logMinerQuery string
@@ -70,7 +70,7 @@ type LogMiner struct {
 
 // NewMiner creates a new instance of NewMiner, responsible
 // for paging through change events based on the tables param.
-func NewMiner(db *sql.DB, userTables []replication.UserDefinedTable, publisher replication.ChangePublisher, backoffInterval time.Duration, maxBatchSize int, logger *service.Logger) *LogMiner {
+func NewMiner(db *sql.DB, userTables []replication.UserDefinedTable, publisher replication.ChangePublisher, cfg *Config, logger *service.Logger) *LogMiner {
 	// Build table filter condition once
 	// Only filter DML operations (1=INSERT, 2=DELETE, 3=UPDATE) by table
 	// Transaction control operations (6=START, 7=COMMIT, 36=ROLLBACK) don't have table info
@@ -108,18 +108,17 @@ func NewMiner(db *sql.DB, userTables []replication.UserDefinedTable, publisher r
 	`, tableFilter.String())
 
 	lm := &LogMiner{
-		log:             logger,
-		db:              db,
-		tables:          userTables,
-		publisher:       publisher,
-		backoffInterval: backoffInterval,
-		BatchSize:       maxBatchSize,
-		logCollector:    NewLogFileCollector(db),
-		sessionMgr:      NewSessionManager(db),
-		eventProc:       NewEventProcessor(),
-		txnCache:        NewInMemoryCache(),
-		dmlParser:       dmlparser.New(true),
-		logMinerQuery:   logMinerQuery,
+		cfg:           cfg,
+		log:           logger,
+		db:            db,
+		tables:        userTables,
+		publisher:     publisher,
+		logCollector:  NewLogFileCollector(db),
+		sessionMgr:    NewSessionManager(db, cfg),
+		eventProc:     NewEventProcessor(),
+		txnCache:      NewInMemoryCache(),
+		dmlParser:     dmlparser.New(true),
+		logMinerQuery: logMinerQuery,
 	}
 	return lm
 }
@@ -140,7 +139,7 @@ func (lm *LogMiner) ReadChanges(ctx context.Context, db *sql.DB, startPos replic
 			return fmt.Errorf("fetching current SCN: %w", err)
 		}
 		lm.currentSCN = scn
-		lm.log.Infof("Starting from current SCN: %d", lm.currentSCN)
+		lm.log.Infof("Starting from current SCN sourced from database: %d", lm.currentSCN)
 	}
 
 	for {
@@ -152,7 +151,7 @@ func (lm *LogMiner) ReadChanges(ctx context.Context, db *sql.DB, startPos replic
 				return fmt.Errorf("mining logs: %w", err)
 			}
 
-			time.Sleep(lm.backoffInterval)
+			time.Sleep(lm.cfg.MiningBackoffInterval)
 		}
 	}
 }
