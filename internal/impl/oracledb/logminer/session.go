@@ -59,7 +59,7 @@ func (sm *SessionManager) StartSession(startSCN, endSCN uint64, committedDataOnl
 		optionsStr += o
 	}
 
-	q := fmt.Sprintf("BEGIN sys.dbms_logmnr.start_logmnr(startScn => %d, endScn => %d, options => %s); END;", startSCN, endSCN, optionsStr)
+	q := fmt.Sprintf("BEGIN SYS.DBMS_LOGMNR.START_LOGMNR(STARTSCN => %d, ENDSCN => %d, OPTIONS => %s); END;", startSCN, endSCN, optionsStr)
 	if _, err := sm.db.Exec(q); err != nil {
 		return fmt.Errorf("starting LogMiner session: %w", err)
 	}
