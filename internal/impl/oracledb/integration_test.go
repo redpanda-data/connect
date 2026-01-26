@@ -126,8 +126,9 @@ func TestIntegration_OracleDBCDC_Streaming(t *testing.T) {
 oracledb_cdc:
   connection_string: %s
   stream_snapshot: false
-  stream_backoff_interval: 5s
-  logminer_max_batch_size: 1000
+  logminer:
+    max_batch_size: 1000
+    backoff_interval: 1s
   include: ["TESTDB.FOO", "TESTDB.FOO2", "TESTDB2.BAR"]
   exclude: ["TESTDB.DOESNOTEXIST"]
   batching:
