@@ -132,7 +132,7 @@ oracledb_cdc:
   include: ["TESTDB.FOO", "TESTDB.FOO2", "TESTDB2.BAR"]
   exclude: ["TESTDB.DOESNOTEXIST"]
   batching:
-    count: 50`
+    count: 100`
 
 		streamBuilder := service.NewStreamBuilder()
 		require.NoError(t, streamBuilder.AddInputYAML(fmt.Sprintf(cfg, connStr)))
