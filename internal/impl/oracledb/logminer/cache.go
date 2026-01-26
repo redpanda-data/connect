@@ -24,6 +24,7 @@ type Transaction struct {
 
 type InMemoryCache struct {
 	transactions map[string]*Transaction
+	mu           sync.Mutex
 }
 
 func NewInMemoryCache() *InMemoryCache {
@@ -33,6 +34,8 @@ func NewInMemoryCache() *InMemoryCache {
 }
 
 func (tc *InMemoryCache) StartTransaction(txnID string, scn int64) {
+	tc.mu.Lock()
+	defer tc.mu.Unlock()
 	tc.transactions[txnID] = &Transaction{
 		ID:     txnID,
 		SCN:    scn,
@@ -41,6 +44,8 @@ func (tc *InMemoryCache) StartTransaction(txnID string, scn int64) {
 }
 
 func (tc *InMemoryCache) AddEvent(txnID string, event *DMLEvent) {
+	tc.mu.Lock()
+	defer tc.mu.Unlock()
 	if txn, exists := tc.transactions[txnID]; exists {
 		txn.Events = append(txn.Events, event)
 	} else {
@@ -53,14 +58,20 @@ func (tc *InMemoryCache) AddEvent(txnID string, event *DMLEvent) {
 }
 
 func (tc *InMemoryCache) GetTransaction(txnID string) *Transaction {
+	tc.mu.Lock()
+	defer tc.mu.Unlock()
 	return tc.transactions[txnID]
 }
 
 func (tc *InMemoryCache) CommitTransaction(txnID string) {
+	tc.mu.Lock()
+	defer tc.mu.Unlock()
 	delete(tc.transactions, txnID)
 }
 
 func (tc *InMemoryCache) RollbackTransaction(txnID string) {
+	tc.mu.Lock()
+	defer tc.mu.Unlock()
 	delete(tc.transactions, txnID)
 }
 
