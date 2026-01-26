@@ -313,7 +313,19 @@ func (i *oracleDBCDCInput) Connect(ctx context.Context) error {
 		return fmt.Errorf("verifying user defined tables: %w", err)
 	}
 	if cachedSCN, err = i.getCachedSCN(ctx); err != nil {
-		return fmt.Errorf("unable to get cached SCN: %s", err)
+		if errors.Is(err, service.ErrKeyNotFound) {
+			i.log.Infof("SCN not found in cache, resuming from earlier database SCN")
+		} else {
+			return fmt.Errorf("unable to get cached SCN: %s", err)
+		}
+	} else {
+		switch {
+		case cachedSCN != replication.InvalidSCN:
+			i.log.Infof("Resuming from cached SCN value: %d", cachedSCN)
+		default:
+			//TODO: Consider what states could exist, should we error here and fail fast?
+			i.log.Info("Unable to restore SCN from cache, reverting to oldest found in database")
+		}
 	}
 
 	// setup snapshotting and streaming
@@ -411,12 +423,13 @@ func (i *oracleDBCDCInput) getCachedSCN(ctx context.Context) (replication.SCN, e
 	}
 
 	if errors.Is(cErr, service.ErrKeyNotFound) {
-		return replication.InvalidSCN, nil
+		return replication.InvalidSCN, service.ErrKeyNotFound
 	} else if cErr != nil {
 		return replication.InvalidSCN, fmt.Errorf("unable read checkpoint from cache: %w", cErr)
 	} else if len(cacheVal) == 0 {
-		return replication.InvalidSCN, nil
+		return replication.InvalidSCN, fmt.Errorf("empty SCN cache value")
 	}
+
 	scn, err := replication.SCNFromBytes(cacheVal)
 	if err != nil {
 		return replication.InvalidSCN, fmt.Errorf("unable to parse SCN from cache: %w", err)

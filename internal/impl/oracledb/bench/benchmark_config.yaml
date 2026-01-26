@@ -15,6 +15,7 @@ input:
       # - testdb.cart
     batching:
       count: 5
+      period: 100ms
 
 
 output:
