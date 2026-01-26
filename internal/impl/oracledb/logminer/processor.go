@@ -2,6 +2,8 @@ package logminer
 
 import (
 	"strings"
+
+	"github.com/redpanda-data/connect/v4/internal/impl/oracledb/replication"
 )
 
 // EventProcessor handles event parsing and conversion
@@ -41,7 +43,7 @@ func (ep *EventProcessor) ConvertToChangeEvent(dml *DMLEvent, scn int64) *Change
 	ce := &ChangeEvent{
 		Schema:    dml.Schema,
 		Table:     dml.Table,
-		SCN:       scn,
+		SCN:       replication.SCN(scn),
 		Timestamp: dml.Timestamp,
 		Data:      dml.Data,
 	}

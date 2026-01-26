@@ -28,7 +28,7 @@ type ChangeEvent struct {
 	// Before    map[string]any
 	// After     map[string]any
 	Data      map[string]any
-	SCN       int64
+	SCN       replication.SCN
 	Timestamp time.Time
 	TxnID     string
 }
@@ -158,7 +158,7 @@ func (lm *LogMiner) ReadChanges(ctx context.Context, db *sql.DB, startPos replic
 // emitChangeEvent sends a change event to the output (Kafka, etc.)
 func (lm *LogMiner) emitChangeEvent(ctx context.Context, event *ChangeEvent) {
 	msg := replication.MessageEvent{
-		// SCN:       event.SCN,
+		SCN:       event.SCN,
 		Operation: event.Operation,
 		Schema:    event.Schema,
 		Table:     event.Table,

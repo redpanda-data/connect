@@ -20,6 +20,7 @@ import (
 	"github.com/Jeffail/shutdown"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/connect/v4/internal/impl/oracledb/replication"
 )
 
 const (
@@ -134,7 +135,13 @@ func (c *checkpointCache) Get(ctx context.Context, _ string) ([]byte, error) {
 		}
 		return nil, fmt.Errorf("querying checkpoint cache: %w", err)
 	}
-	return val, nil
+
+	// Validate the SCN bytes before returning
+	scn, err := replication.SCNFromBytes(val)
+	if err != nil {
+		return nil, fmt.Errorf("parsing cached SCN bytes: %w", err)
+	}
+	return scn.Bytes(), nil
 }
 
 // Set a cache item, specifying an optional TTL. It is okay for caches to
@@ -143,7 +150,9 @@ func (c *checkpointCache) Set(ctx context.Context, _ string, value []byte, _ *ti
 	if c.cacheSetStmt == nil {
 		return errors.New("prepared statement for cache set not initialised")
 	}
-	if _, err := c.cacheSetStmt.ExecContext(ctx, defaultCacheKey, value); err != nil {
+	// Convert bytes to hex string since go-ora driver and our stored procedure expect VARCHAR2 + HEXTORAW
+	hexValue := fmt.Sprintf("%X", value)
+	if _, err := c.cacheSetStmt.ExecContext(ctx, defaultCacheKey, hexValue); err != nil {
 		return fmt.Errorf("writing to checkpoint cache: %w", err)
 	}
 	return nil
@@ -177,7 +186,7 @@ func createCacheTable(ctx context.Context, db *sql.DB, tbl cacheTable) (bool, er
 	createQuery := fmt.Sprintf(`
 		CREATE TABLE %s (
 			cache_key VARCHAR2(10) NOT NULL PRIMARY KEY,
-			cache_val VARCHAR2(100)
+			cache_val RAW(100)
 		)`, tbl.String())
 
 	if _, err := db.ExecContext(ctx, createQuery); err != nil {
@@ -208,6 +217,7 @@ func createUpsertStoredProc(ctx context.Context, db *sql.DB, cacheTable cacheTab
 	}
 
 	// Create the upsert procedure
+	// Note: go-ora driver converts []byte parameters to hex strings, so we use HEXTORAW to convert back
 	createQuery := fmt.Sprintf(`
 		CREATE PROCEDURE %s (
 			p_key IN VARCHAR2,
@@ -219,9 +229,9 @@ func createUpsertStoredProc(ctx context.Context, db *sql.DB, cacheTable cacheTab
 			SELECT COUNT(*) INTO v_count FROM %s WHERE cache_key = p_key;
 
 			IF v_count > 0 THEN
-				UPDATE %s SET cache_val = p_value WHERE cache_key = p_key;
+				UPDATE %s SET cache_val = HEXTORAW(p_value) WHERE cache_key = p_key;
 			ELSE
-				INSERT INTO %s (cache_key, cache_val) VALUES (p_key, p_value);
+				INSERT INTO %s (cache_key, cache_val) VALUES (p_key, HEXTORAW(p_value));
 			END IF;
 
 			COMMIT;
