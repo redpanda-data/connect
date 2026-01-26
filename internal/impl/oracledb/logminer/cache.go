@@ -1,6 +1,11 @@
 package logminer
 
-import "time"
+import (
+	"sync"
+	"time"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
+)
 
 // TransactionCache is responsible for buffering transactions until a commit event is received,
 // at which point we know it's safe to flush transactions to the Connect pipeline.
@@ -11,6 +16,7 @@ type TransactionCache interface {
 	GetTransaction(txnID string) *Transaction
 	CommitTransaction(txnID string)
 	RollbackTransaction(txnID string)
+	Count()
 }
 
 type TransactionID string
@@ -25,11 +31,13 @@ type Transaction struct {
 type InMemoryCache struct {
 	transactions map[string]*Transaction
 	mu           sync.Mutex
+	log          *service.Logger
 }
 
-func NewInMemoryCache() *InMemoryCache {
+func NewInMemoryCache(logger *service.Logger) *InMemoryCache {
 	return &InMemoryCache{
 		transactions: make(map[string]*Transaction),
+		log:          logger,
 	}
 }
 
@@ -73,6 +81,15 @@ func (tc *InMemoryCache) RollbackTransaction(txnID string) {
 	tc.mu.Lock()
 	defer tc.mu.Unlock()
 	delete(tc.transactions, txnID)
+}
+
+func (tc *InMemoryCache) Count() {
+	tc.mu.Lock()
+	defer tc.mu.Unlock()
+
+	for k, v := range tc.transactions {
+		tc.log.Debugf("Cache: TransID %s: %d records", k, len(v.Events))
+	}
 }
 
 // DMLEvent represents a parsed DML operation
