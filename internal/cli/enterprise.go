@@ -127,7 +127,7 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 				// Logging disabled
 			default:
 				logsLevel = levelPtr(slog.LevelInfo)
-				fbLogger.Errorf("Log level '%s' not recognized, using to default level %s", logsLevelStr, logsLevel)
+				fbLogger.Errorf("Log level '%s' not recognized, using the default level %s", logsLevelStr, logsLevel)
 			}
 
 			rpMgr.SetTopicLoggerLevel(logsLevel)
