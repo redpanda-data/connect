@@ -252,18 +252,18 @@ func (lm *LogMiner) processEvent(ctx context.Context, event *LogMinerEvent) erro
 	case OpCommit:
 		// Flush all buffered events for this transaction
 		if txn := lm.txnCache.GetTransaction(event.TransactionID); txn != nil {
+			txnLog.Debugf("Transaction commit (%d events)", len(txn.Events))
 			for _, ev := range txn.Events {
 				msg := lm.eventProc.toEventMessage(ev, event.SCN)
 				lm.publisher.Publish(ctx, msg)
 			}
 
 			lm.txnCache.CommitTransaction(event.TransactionID)
-			txnLog.Debugf("Transaction commit (%d events)", len(txn.Events))
 		}
 
 	case OpRollback:
 		// Discard all buffered events for this transaction
-		txnLog.Debugf("Discarding transaction due to rollback")
+		txnLog.Debugf("Transaction rollback")
 		lm.txnCache.RollbackTransaction(event.TransactionID)
 	}
 
