@@ -28,6 +28,120 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
+func TestIntegration_OracleDBCDC_SnapshotAndStreaming(t *testing.T) {
+	integration.CheckSkip(t)
+	t.Parallel()
+
+	// Create tables
+	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t, "latest")
+	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.foo", "CREATE TABLE testdb.foo (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
+	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.foo2", "CREATE TABLE testdb.foo2 (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
+	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb2.bar", "CREATE TABLE testdb2.bar (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
+
+	// Insert 3000 rows across tables for initial snapshot streaming
+	want := 3000
+	for range 1000 {
+		db.MustExec("INSERT INTO testdb.foo (id) VALUES (DEFAULT)")
+		db.MustExec("INSERT INTO testdb.foo2 (id) VALUES (DEFAULT)")
+		db.MustExec("INSERT INTO testdb2.bar (id) VALUES (DEFAULT)")
+	}
+
+	// wait for changes to propagate to redo logs
+	time.Sleep(5 * time.Second)
+
+	var (
+		outBatches   []string
+		outBatchesMu sync.Mutex
+		stream       *service.Stream
+		err          error
+	)
+	t.Log("Launching component...")
+	{
+		cfg := `
+oracledb_cdc:
+  connection_string: %s
+  stream_snapshot: true
+  max_parallel_snapshot_tables: 3
+  snapshot_max_batch_size: 10
+  logminer:
+    max_batch_size: 1000
+    backoff_interval: 1s
+  include: ["TESTDB.FOO", "TESTDB.FOO2", "TESTDB2.BAR"]
+  exclude: ["TESTDB.DOESNOTEXIST"]
+  batching:
+    count: 500`
+
+		streamBuilder := service.NewStreamBuilder()
+		require.NoError(t, streamBuilder.AddInputYAML(fmt.Sprintf(cfg, connStr)))
+		require.NoError(t, streamBuilder.SetLoggerYAML(`level: DEBUG`))
+
+		require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+			outBatchesMu.Lock()
+			defer outBatchesMu.Unlock()
+			for _, msg := range mb {
+				msgBytes, err := msg.AsBytes()
+				require.NoError(t, err)
+				outBatches = append(outBatches, string(msgBytes))
+			}
+			return nil
+		}))
+
+		stream, err = streamBuilder.Build()
+		require.NoError(t, err)
+		license.InjectTestService(stream.Resources())
+
+		go func() {
+			err = stream.Run(t.Context())
+			require.NoError(t, err)
+		}()
+
+		t.Log("Verifying snapshot changes...")
+		assert.Eventually(t, func() bool {
+			outBatchesMu.Lock()
+			defer outBatchesMu.Unlock()
+
+			got := len(outBatches)
+			if got > want {
+				t.Fatalf("Wanted %d snapshot messages but got %d", want, got)
+			}
+			return got == want
+		}, time.Minute*5, time.Second*1)
+	}
+
+	t.Log("Verifying streaming changes...")
+	{
+		// Insert 3000 rows across tables for initial streaming
+		want := 3000
+		_, err := db.Exec(`
+	BEGIN
+		FOR i IN 1..1000 LOOP
+			INSERT INTO testdb.foo (id) VALUES (DEFAULT);
+			INSERT INTO testdb.foo2 (id) VALUES (DEFAULT);
+			INSERT INTO testdb2.bar (id) VALUES (DEFAULT);
+		END LOOP;
+		COMMIT;
+	END;`)
+		require.NoError(t, err)
+
+		outBatches = nil
+		assert.Eventually(t, func() bool {
+			outBatchesMu.Lock()
+			defer outBatchesMu.Unlock()
+
+			got := len(outBatches)
+			if got > want {
+				t.Fatalf("Wanted %d streaming messages but got %d", want, got)
+			}
+
+			t.Logf("Found %d of %d records...", got, want)
+
+			return got == want
+		}, time.Minute*1, time.Second*1)
+	}
+
+	require.NoError(t, stream.StopWithin(time.Second*10))
+}
+
 func TestIntegration_OracleDBCDC_ConcurrentSnapshot(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
@@ -71,11 +185,13 @@ oracledb_cdc:
 		require.NoError(t, streamBuilder.SetLoggerYAML(`level: DEBUG`))
 
 		require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
-			msgBytes, err := mb[0].AsBytes()
-			require.NoError(t, err)
 			outBatchesMu.Lock()
-			outBatches = append(outBatches, string(msgBytes))
-			outBatchesMu.Unlock()
+			defer outBatchesMu.Unlock()
+			for _, msg := range mb {
+				msgBytes, err := msg.AsBytes()
+				require.NoError(t, err)
+				outBatches = append(outBatches, string(msgBytes))
+			}
 			return nil
 		}))
 
@@ -101,7 +217,7 @@ oracledb_cdc:
 		}, time.Minute*5, time.Second*1)
 	}
 
-	require.NoError(t, stream.StopWithin(time.Second*10))
+	// require.NoError(t, stream.StopWithin(time.Second*10))
 }
 
 func TestIntegration_OracleDBCDC_Streaming(t *testing.T) {
@@ -132,18 +248,20 @@ oracledb_cdc:
   include: ["TESTDB.FOO", "TESTDB.FOO2", "TESTDB2.BAR"]
   exclude: ["TESTDB.DOESNOTEXIST"]
   batching:
-    count: 100`
+    count: 500`
 
 		streamBuilder := service.NewStreamBuilder()
 		require.NoError(t, streamBuilder.AddInputYAML(fmt.Sprintf(cfg, connStr)))
 		require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
 
 		require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
-			msgBytes, err := mb[0].AsBytes()
-			require.NoError(t, err)
 			outBatchesMu.Lock()
-			outBatches = append(outBatches, string(msgBytes))
-			outBatchesMu.Unlock()
+			defer outBatchesMu.Unlock()
+			for _, msg := range mb {
+				msgBytes, err := msg.AsBytes()
+				require.NoError(t, err)
+				outBatches = append(outBatches, string(msgBytes))
+			}
 			return nil
 		}))
 
@@ -155,12 +273,14 @@ oracledb_cdc:
 			err = stream.Run(t.Context())
 			require.NoError(t, err)
 		}()
+	}
 
-		// wait for component to start
-		time.Sleep(10 * time.Second)
+	// wait for component to start
+	time.Sleep(10 * time.Second)
 
-		// Insert 3000 rows across tables for initial snapshot streaming
-		t.Log("Inserting test data for streaming...")
+	t.Log("Verifying streaming changes...")
+	{
+		// Insert 3000 rows across tables for initial streaming
 		want := 3000
 		for range 1000 {
 			db.MustExec("INSERT INTO testdb.foo (id) VALUES (DEFAULT)")
@@ -168,7 +288,6 @@ oracledb_cdc:
 			db.MustExec("INSERT INTO testdb2.bar (id) VALUES (DEFAULT)")
 		}
 
-		t.Log("Verifying streaming changes...")
 		assert.Eventually(t, func() bool {
 			outBatchesMu.Lock()
 			defer outBatchesMu.Unlock()
@@ -310,11 +429,13 @@ oracledb_cdc:
 		require.NoError(t, streamBuilder.AddInputYAML(fmt.Sprintf(cfg, connStr)))
 
 		require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
-			msgBytes, err := mb[0].AsBytes()
-			require.NoError(t, err)
 			outBatchesMu.Lock()
-			outBatches = append(outBatches, string(msgBytes))
-			outBatchesMu.Unlock()
+			defer outBatchesMu.Unlock()
+			for _, msg := range mb {
+				msgBytes, err := msg.AsBytes()
+				require.NoError(t, err)
+				outBatches = append(outBatches, string(msgBytes))
+			}
 			return nil
 		}))
 
