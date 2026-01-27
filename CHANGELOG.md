@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.79.0 - TBD
+
+### Fixed
+
+- Setting the logging level to `TRACE`, `ALL`, `OFF` and `NONE` no longer emits an error. (@mihaitodor)
+
 ## 4.78.0 - 2026-01-16
 
 ### Added
