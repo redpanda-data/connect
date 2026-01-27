@@ -197,7 +197,7 @@ func (s *Snapshot) snapshotTable(ctx context.Context, table UserDefinedTable, ma
 					Operation: MessageOperationRead.String(),
 					SCN:       0,
 				}
-				if err = s.publisher.Publish(ctx, m); err != nil {
+				if err = s.publisher.Publish(ctx, &m); err != nil {
 					return fmt.Errorf("handling snapshot table row: %w", err)
 				}
 			}

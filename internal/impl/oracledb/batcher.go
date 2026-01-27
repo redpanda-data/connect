@@ -127,7 +127,7 @@ func (p *batchPublisher) loop() {
 
 // Publish turns the provided message into a service.Message before batching and
 // flushing them based on batch size or time elapsed.
-func (b *batchPublisher) Publish(ctx context.Context, m replication.MessageEvent) error {
+func (b *batchPublisher) Publish(ctx context.Context, m *replication.MessageEvent) error {
 	data, err := json.Marshal(m.Data)
 	if err != nil {
 		return fmt.Errorf("failure to marshal message: %w", err)
