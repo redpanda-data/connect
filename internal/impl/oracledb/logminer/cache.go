@@ -68,7 +68,22 @@ func (tc *InMemoryCache) AddEvent(txnID string, event *DMLEvent) {
 func (tc *InMemoryCache) GetTransaction(txnID string) *Transaction {
 	tc.mu.Lock()
 	defer tc.mu.Unlock()
-	return tc.transactions[txnID]
+
+	txn := tc.transactions[txnID]
+	if txn == nil {
+		return nil
+	}
+
+	// Return deep copy to prevent race conditions when the caller
+	// iterates over Events while AddEvent might be appending to the slice
+	eventsCopy := make([]*DMLEvent, len(txn.Events))
+	copy(eventsCopy, txn.Events)
+
+	return &Transaction{
+		ID:     txn.ID,
+		SCN:    txn.SCN,
+		Events: eventsCopy,
+	}
 }
 
 func (tc *InMemoryCache) CommitTransaction(txnID string) {
