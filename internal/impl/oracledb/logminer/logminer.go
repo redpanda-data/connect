@@ -254,7 +254,9 @@ func (lm *LogMiner) processEvent(ctx context.Context, event *LMEvent) error {
 			txnLog.Debugf("Transaction commit (%d events)", len(txn.Events))
 			for _, ev := range txn.Events {
 				msg := lm.eventProc.toEventMessage(ev, event.SCN)
-				lm.publisher.Publish(ctx, msg)
+				if err := lm.publisher.Publish(ctx, msg); err != nil {
+					return fmt.Errorf("publishing event with SCN '%d`: %w", event.SCN, err)
+				}
 			}
 
 			lm.txnCache.CommitTransaction(event.TransactionID)
