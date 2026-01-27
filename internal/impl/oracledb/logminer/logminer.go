@@ -22,13 +22,11 @@ import (
 
 // ChangeEvent represents the final change event emitted to Kafka
 type ChangeEvent struct {
+	SCN       replication.SCN
+	Operation string // "CREATE", "UPDATE", "DELETE"
 	Schema    string
 	Table     string
-	Operation string // "CREATE", "UPDATE", "DELETE"
-	// Before    map[string]any
-	// After     map[string]any
 	Data      map[string]any
-	SCN       replication.SCN
 	Timestamp time.Time
 	TxnID     string
 }
@@ -158,18 +156,6 @@ func (lm *LogMiner) ReadChanges(ctx context.Context, db *sql.DB, startPos replic
 	}
 }
 
-// emitChangeEvent sends a change event to the output (Kafka, etc.)
-func (lm *LogMiner) emitChangeEvent(ctx context.Context, event *ChangeEvent) {
-	msg := replication.MessageEvent{
-		SCN:       event.SCN,
-		Operation: event.Operation,
-		Schema:    event.Schema,
-		Table:     event.Table,
-		Data:      event.Data,
-	}
-	lm.publisher.Publish(ctx, msg)
-}
-
 func (lm *LogMiner) miningCycle(ctx context.Context) error {
 	// 1. Get the database's current SCN to know our target
 	var dbCurrentSCN uint64
@@ -242,11 +228,11 @@ func (lm *LogMiner) processEvent(ctx context.Context, event *LogMinerEvent) erro
 	switch event.Operation {
 	case OpStart:
 		// Transaction started
-		// txnLog.Debugf("Transaction begin")
+		txnLog.Debugf("Transaction begin")
 		lm.txnCache.StartTransaction(event.TransactionID, event.SCN)
 
 	case OpInsert, OpUpdate, OpDelete:
-		// parse sql insert/update/delete statements into key/value object
+		// parse sql insert/update/delete sql statements into key/value object
 		if event.SQLRedo.Valid {
 			data, err := lm.dmlParser.Parse(event.SQLRedo.String)
 			if err != nil {
@@ -255,25 +241,24 @@ func (lm *LogMiner) processEvent(ctx context.Context, event *LogMinerEvent) erro
 			event.Data = data.NewValues
 		}
 
+		// Parse and buffer DML events in transaction until we see a commit for the same transaction
 		dmlEvent, err := lm.eventProc.ParseDML(event)
 		if err != nil {
 			return fmt.Errorf("failed to parse DML event: %w", err)
 		}
 
-		// Buffer DML events in transaction
+		txnLog.Debugf("Transaction update")
 		lm.txnCache.AddEvent(event.TransactionID, dmlEvent)
 	case OpCommit:
 		// Flush all buffered events for this transaction
 		if txn := lm.txnCache.GetTransaction(event.TransactionID); txn != nil {
-			for _, dmlEvent := range txn.Events {
-				changeEvent := lm.eventProc.ConvertToChangeEvent(dmlEvent, event.SCN)
-				// TODO: Refactor to use replication.ChangeEvent
-				lm.emitChangeEvent(ctx, changeEvent)
+			for _, ev := range txn.Events {
+				msg := lm.eventProc.toEventMessage(ev, event.SCN)
+				lm.publisher.Publish(ctx, msg)
 			}
+
 			lm.txnCache.CommitTransaction(event.TransactionID)
-			if len(txn.Events) > 0 {
-				txnLog.Debugf("Fluhed %d committed events", len(txn.Events))
-			}
+			txnLog.Debugf("Transaction commit (%d events)", len(txn.Events))
 		}
 
 	case OpRollback:

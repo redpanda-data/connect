@@ -12,6 +12,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"strconv"
+	"time"
 )
 
 // SCN represents an Oracle System Change Number
@@ -94,9 +95,10 @@ func (op OpType) String() string {
 
 // MessageEvent represents a single change from Table's change table in the database.
 type MessageEvent struct {
-	SCN       SCN    `json:"start_scn"`
-	Operation string `json:"operation"`
-	Schema    string `json:"schema"`
-	Table     string `json:"table"`
-	Data      any    `json:"data"`
+	SCN       SCN       `json:"start_scn"`
+	Operation string    `json:"operation"`
+	Schema    string    `json:"schema"`
+	Table     string    `json:"table"`
+	Data      any       `json:"data"`
+	Timestamp time.Time `json:"timestamp"`
 }

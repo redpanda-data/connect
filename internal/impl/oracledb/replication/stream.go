@@ -64,7 +64,7 @@ func mapScannedValue(val any, colType *sql.ColumnType) any {
 
 // ChangePublisher is responsible for handling and processing of a replication.MessageEvent.
 type ChangePublisher interface {
-	Publish(ctx context.Context, msg MessageEvent) error
+	Publish(ctx context.Context, msg *MessageEvent) error
 }
 
 // UserDefinedTable represents a found user's SQL Server table (called a user-defined table) in SQL.

@@ -59,3 +59,24 @@ func (ep *EventProcessor) ConvertToChangeEvent(dml *DMLEvent, scn int64) *Change
 
 	return ce
 }
+
+func (ep *EventProcessor) toEventMessage(dml *DMLEvent, scn int64) *replication.MessageEvent {
+	m := &replication.MessageEvent{
+		SCN:       replication.SCN(scn),
+		Schema:    dml.Schema,
+		Table:     dml.Table,
+		Data:      dml.Data,
+		Timestamp: dml.Timestamp,
+	}
+
+	switch dml.Operation {
+	case OpInsert:
+		m.Operation = "CREATE"
+	case OpUpdate:
+		m.Operation = "UPDATE"
+	case OpDelete:
+		m.Operation = "DELETE"
+	}
+
+	return m
+}
