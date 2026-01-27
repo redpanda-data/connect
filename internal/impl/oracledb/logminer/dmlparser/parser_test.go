@@ -1,3 +1,9 @@
+/*
+ * Copyright Debezium Authors.
+ *
+ * Licensed under the Apache Software License version 2.0, available at http://www.apache.org/licenses/LICENSE-2.0
+ */
+
 package dmlparser
 
 import (
@@ -327,7 +333,7 @@ func TestParseUpdate(t *testing.T) {
 			wantSchema: "MYAPP",
 			wantTable:  "DOCUMENTS",
 			wantNewValues: map[string]any{
-				"JSON_COL":        `{"key": "value"}`,
+				"JSON_COL":       `{"key": "value"}`,
 				"VARCHARMAX_COL": "Max varchar text",
 			},
 			wantOldValues: map[string]any{
