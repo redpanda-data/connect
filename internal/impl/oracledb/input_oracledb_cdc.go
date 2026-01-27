@@ -292,7 +292,7 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 func (i *oracleDBCDCInput) Connect(ctx context.Context) error {
 	var (
 		err        error
-		userTables []replication.UserDefinedTable
+		userTables []replication.UserTable
 		cachedSCN  replication.SCN
 	)
 	if i.db, err = sql.Open("oracle", i.cfg.connectionString); err != nil {
@@ -309,7 +309,7 @@ func (i *oracleDBCDCInput) Connect(ctx context.Context) error {
 		i.cpCache = cache
 	}
 
-	if userTables, err = replication.VerifyUserDefinedTables(ctx, i.db, i.cfg.tablesFilter, i.log); err != nil {
+	if userTables, err = replication.VerifyUserTables(ctx, i.db, i.cfg.tablesFilter, i.log); err != nil {
 		return fmt.Errorf("verifying user defined tables: %w", err)
 	}
 	if cachedSCN, err = i.getCachedSCN(ctx); err != nil {
@@ -426,7 +426,7 @@ func (i *oracleDBCDCInput) getCachedSCN(ctx context.Context) (replication.SCN, e
 	} else if cErr != nil {
 		return replication.InvalidSCN, fmt.Errorf("unable read checkpoint from cache: %w", cErr)
 	} else if len(cacheVal) == 0 {
-		return replication.InvalidSCN, errors.New("empty SCN cache value")
+		return replication.InvalidSCN, fmt.Errorf("empty SCN cache value")
 	}
 
 	scn, err := replication.SCNFromBytes(cacheVal)

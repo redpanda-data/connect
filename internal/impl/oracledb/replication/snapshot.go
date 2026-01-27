@@ -24,7 +24,7 @@ import (
 // Snapshot is responsible for creating snapshots of existing tables based on the Tables configuration value.
 type Snapshot struct {
 	db                      *sql.DB
-	tables                  []UserDefinedTable
+	tables                  []UserTable
 	publisher               ChangePublisher
 	log                     *service.Logger
 	snapshotStatusMetric    *service.MetricGauge
@@ -36,7 +36,7 @@ type Snapshot struct {
 // through rows, sending them to be batched.
 func NewSnapshot(
 	connectionString string,
-	tables []UserDefinedTable,
+	tables []UserTable,
 	publisher ChangePublisher,
 	logger *service.Logger,
 	metrics *service.Metrics,
@@ -97,7 +97,7 @@ func (s *Snapshot) Read(ctx context.Context, maxWorkers int, maxBatchSize int) e
 }
 
 // snapshotTable is responsible for managing the entire process of replicating data from the table specified.
-func (s *Snapshot) snapshotTable(ctx context.Context, table UserDefinedTable, maxBatchSize int) func() error {
+func (s *Snapshot) snapshotTable(ctx context.Context, table UserTable, maxBatchSize int) func() error {
 	return func() error {
 		var (
 			err       error
@@ -221,7 +221,7 @@ func (s *Snapshot) snapshotTable(ctx context.Context, table UserDefinedTable, ma
 	}
 }
 
-func getTablePrimaryKeys(ctx context.Context, tx *sql.Tx, table UserDefinedTable) ([]string, error) {
+func getTablePrimaryKeys(ctx context.Context, tx *sql.Tx, table UserTable) ([]string, error) {
 	// Oracle data dictionary query for primary key columns
 	// Note: Oracle stores identifiers in uppercase by default unless created with quotes
 	pkSQL := `
@@ -262,7 +262,7 @@ func getTablePrimaryKeys(ctx context.Context, tx *sql.Tx, table UserDefinedTable
 func querySnapshotTable(
 	ctx context.Context,
 	tx *sql.Tx,
-	table UserDefinedTable,
+	table UserTable,
 	pk []string,
 	lastSeenPkVal map[string]any,
 	limit int,

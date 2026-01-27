@@ -23,27 +23,20 @@ type ChangePublisher interface {
 	Publish(ctx context.Context, msg *MessageEvent) error
 }
 
-// UserDefinedTable represents a found user's SQL Server table (called a user-defined table) in SQL.
-type UserDefinedTable struct {
-	Schema        string
-	Name          string
-	LogGroupTypes map[string]string
-	startSCN      SCN
+// UserTable represents a found user's OracleDB table (called a user-table).
+type UserTable struct {
+	Schema string
+	Name   string
 }
 
-// ToChangeTable returns a string in the SQL Server change table format of cdc.<schema>_<tablename>_CT.
-func (t *UserDefinedTable) ToChangeTable() string {
-	return t.FullName()
-}
-
-// FullName returns a string of the table name including the schema (ie dbo.<tablename>).
-func (t *UserDefinedTable) FullName() string {
+// FullName returns a string of the table name including the schema (ie <schemaname>.<tablename>).
+func (t *UserTable) FullName() string {
 	return fmt.Sprintf("%s.%s", t.Schema, t.Name)
 }
 
-// VerifyUserDefinedTables verifies underlying user defined tables based on supplied
+// VerifyUserTables verifies underlying user tables based on supplied
 // include and exclude filters, validating change tracking is enabled.
-func VerifyUserDefinedTables(ctx context.Context, db *sql.DB, tableFilter *confx.RegexpFilter, log *service.Logger) ([]UserDefinedTable, error) {
+func VerifyUserTables(ctx context.Context, db *sql.DB, tableFilter *confx.RegexpFilter, log *service.Logger) ([]UserTable, error) {
 	sql := `
 	SELECT OWNER AS SchemeName, TABLE_NAME AS TableName
 	FROM DBA_TABLES
@@ -51,25 +44,25 @@ func VerifyUserDefinedTables(ctx context.Context, db *sql.DB, tableFilter *confx
 	ORDER BY OWNER, TABLE_NAME`
 	rows, err := db.QueryContext(ctx, sql)
 	if err != nil {
-		return nil, fmt.Errorf("fetching user defined tables from user_tables for verification: %w", err)
+		return nil, fmt.Errorf("fetching user tables from dba_tables for verification: %w", err)
 	}
 
-	var userTables []UserDefinedTable
+	var userTables []UserTable
 	for rows.Next() {
-		var ut UserDefinedTable
+		var ut UserTable
 		if err := rows.Scan(&ut.Schema, &ut.Name); err != nil {
-			return nil, fmt.Errorf("scanning user_tables row for user defined tables: %w", err)
+			return nil, fmt.Errorf("scanning dba_tables row for user tables: %w", err)
 		}
 		if tableFilter.Matches(fmt.Sprintf("%s.%s", ut.Schema, ut.Name)) {
 			userTables = append(userTables, ut)
 		}
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterating through user_tables for user defined tables: %w", err)
+		return nil, fmt.Errorf("iterating through dba_tables for user tables: %w", err)
 	}
 
 	if len(userTables) == 0 {
-		return nil, errors.New("no user defined tables found for given include and exclude filters")
+		return nil, errors.New("no user tables found for given include and exclude filters")
 	}
 
 	// perform a simple check that the tables are tracked, we could verify what columns are tracked but a simple check feels sufficient.
@@ -85,7 +78,7 @@ func VerifyUserDefinedTables(ctx context.Context, db *sql.DB, tableFilter *confx
 	}
 
 	for _, t := range userTables {
-		log.Infof("Found table '%s'", t.FullName())
+		log.Infof("Found user table '%s'", t.FullName())
 	}
 
 	return userTables, nil
