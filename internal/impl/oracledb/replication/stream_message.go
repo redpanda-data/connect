@@ -15,9 +15,10 @@ import (
 	"time"
 )
 
-// SCN represents an Oracle System Change Number
+// SCN represents an Oracle System Change Number (SCN).
 type SCN uint64
 
+// InvalidSCN represents an SCN value that's unset or invalid.
 const InvalidSCN SCN = 0
 
 // String formats the SCN to a string for logging.
@@ -25,6 +26,7 @@ func (scn SCN) String() string {
 	return strconv.FormatUint(uint64(scn), 10)
 }
 
+// Bytes converts a uint64 value SCN into a byte slice.
 func (scn SCN) Bytes() []byte {
 	b := make([]byte, 8)
 	binary.LittleEndian.PutUint64(b, uint64(scn))
@@ -36,7 +38,7 @@ func (scn SCN) IsValid() bool {
 	return scn > 0
 }
 
-// ParseSCN parses a string into an SCN value
+// ParseSCN parses a string into an SCN value.
 func ParseSCN(s string) (SCN, error) {
 	if s == "" {
 		return InvalidSCN, nil

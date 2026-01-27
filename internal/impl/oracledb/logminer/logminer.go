@@ -198,7 +198,11 @@ func (lm *LogMiner) miningCycle(ctx context.Context) error {
 	if err := lm.sessionMgr.StartSession(lm.currentSCN, endSCN, false); err != nil {
 		return fmt.Errorf("starting logminer session: %w", err)
 	}
-	defer lm.sessionMgr.EndSession()
+	defer func() {
+		if err := lm.sessionMgr.EndSession(); err != nil {
+			lm.log.Errorf("Failed to end LogMiner session: %v", err)
+		}
+	}()
 	lm.log.Debugf("Started LogMiner session: SCN %d to %d", lm.currentSCN, endSCN)
 
 	// 5. Query and process events from V$LOGMNR_CONTENTS
@@ -330,6 +334,8 @@ type LogFileCollector struct {
 	db *sql.DB
 }
 
+// NewLogFileCollector creates a new *LogFileCollector which is responsible for
+// discovering the relevant log files to mine.
 func NewLogFileCollector(db *sql.DB) *LogFileCollector {
 	return &LogFileCollector{db: db}
 }

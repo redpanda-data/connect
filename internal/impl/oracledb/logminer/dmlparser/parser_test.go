@@ -4,15 +4,17 @@
  * Licensed under the Apache Software License version 2.0, available at http://www.apache.org/licenses/LICENSE-2.0
  */
 
-package dmlparser
+package dmlparser_test
 
 import (
 	"reflect"
 	"testing"
+
+	"github.com/redpanda-data/connect/v4/internal/impl/oracledb/logminer/dmlparser"
 )
 
 func TestParseInsert(t *testing.T) {
-	parser := New(false)
+	parser := dmlparser.New(false)
 
 	tests := []struct {
 		name       string
@@ -238,7 +240,7 @@ func TestParseInsert(t *testing.T) {
 }
 
 func TestParseUpdate(t *testing.T) {
-	parser := New(false)
+	parser := dmlparser.New(false)
 
 	tests := []struct {
 		name          string
@@ -418,7 +420,7 @@ func TestParseUpdate(t *testing.T) {
 }
 
 func TestParseDelete(t *testing.T) {
-	parser := New(false)
+	parser := dmlparser.New(false)
 
 	tests := []struct {
 		name          string
@@ -556,7 +558,7 @@ func TestParseDelete(t *testing.T) {
 }
 
 func TestParseComplexCases(t *testing.T) {
-	parser := New(false)
+	parser := dmlparser.New(false)
 
 	tests := []struct {
 		name    string
@@ -633,7 +635,7 @@ func TestParseComplexCases(t *testing.T) {
 }
 
 func TestParseSchemalessTableNames(t *testing.T) {
-	parser := New(false)
+	parser := dmlparser.New(false)
 
 	tests := []struct {
 		name       string
@@ -687,7 +689,7 @@ func TestParseSchemalessTableNames(t *testing.T) {
 }
 
 func TestParseErrors(t *testing.T) {
-	parser := New(false)
+	parser := dmlparser.New(false)
 
 	tests := []struct {
 		name    string
@@ -743,27 +745,24 @@ func TestParseErrors(t *testing.T) {
 
 // Benchmark tests
 func BenchmarkParseInsert(b *testing.B) {
-	parser := New(false)
+	parser := dmlparser.New(false)
 	sql := `insert into "MYAPP"."CUSTOMERS"("ID","NAME","EMAIL","PHONE","ADDRESS") values ('1','John Doe','john@example.com','555-1234','123 Main St');`
-
 	for b.Loop() {
 		_, _ = parser.Parse(sql)
 	}
 }
 
 func BenchmarkParseUpdate(b *testing.B) {
-	parser := New(false)
+	parser := dmlparser.New(false)
 	sql := `update "MYAPP"."CUSTOMERS" set "NAME" = 'Jane Doe', "EMAIL" = 'jane@example.com' where "ID" = '1' and "NAME" = 'John Doe';`
-
 	for b.Loop() {
 		_, _ = parser.Parse(sql)
 	}
 }
 
 func BenchmarkParseDelete(b *testing.B) {
-	parser := New(false)
+	parser := dmlparser.New(false)
 	sql := `delete from "MYAPP"."CUSTOMERS" where "ID" = '1' and "NAME" = 'John Doe' and "EMAIL" = 'john@example.com';`
-
 	for b.Loop() {
 		_, _ = parser.Parse(sql)
 	}

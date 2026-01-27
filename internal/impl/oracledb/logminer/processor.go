@@ -17,6 +17,8 @@ import (
 // EventProcessor handles event parsing and conversion
 type EventProcessor struct{}
 
+// NewEventProcessor creates an instance of an *EventProcessor which is responsible
+// for handling parsing and processing of LogMiner events.
 func NewEventProcessor() *EventProcessor {
 	return &EventProcessor{}
 }
