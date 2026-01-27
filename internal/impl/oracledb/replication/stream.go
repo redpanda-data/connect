@@ -11,56 +11,12 @@ package replication
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/confx"
 )
-
-// change represents a logical change row from the change table.
-type change struct {
-	startSCN   SCN // varbinary(10)
-	endSCN     SCN // varbinary(10)
-	operation  OpType
-	updateMask []byte
-	seqVal     []byte
-	commandID  int
-	columns    map[string]any
-}
-
-func (c *change) reset() {
-	if c != nil {
-		for k := range c.columns {
-			delete(c.columns, k)
-		}
-		c.startSCN = InvalidSCN
-		c.endSCN = InvalidSCN
-		c.updateMask = nil
-		c.seqVal = nil
-		c.operation = 0
-		c.commandID = 0
-	}
-}
-
-// mapScannedValue takes an already-scanned value and column type, and converts it
-// to the appropriate Go type for JSON marshaling.
-func mapScannedValue(val any, colType *sql.ColumnType) any {
-	if val == nil {
-		return nil
-	}
-
-	switch colType.DatabaseTypeName() {
-	// Decimals come as []byte from the driver, convert to json.Number to preserve precision
-	case "DECIMAL", "NUMERIC":
-		if b, ok := val.([]byte); ok {
-			return json.Number(string(b))
-		}
-	}
-
-	return val
-}
 
 // ChangePublisher is responsible for handling and processing of a replication.MessageEvent.
 type ChangePublisher interface {

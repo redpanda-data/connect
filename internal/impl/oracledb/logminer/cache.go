@@ -1,7 +1,6 @@
 package logminer
 
 import (
-	"sync"
 	"time"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -30,7 +29,6 @@ type Transaction struct {
 
 type InMemoryCache struct {
 	transactions map[string]*Transaction
-	mu           sync.Mutex
 	log          *service.Logger
 }
 
@@ -42,8 +40,6 @@ func NewInMemoryCache(logger *service.Logger) *InMemoryCache {
 }
 
 func (tc *InMemoryCache) StartTransaction(txnID string, scn int64) {
-	tc.mu.Lock()
-	defer tc.mu.Unlock()
 	tc.transactions[txnID] = &Transaction{
 		ID:     txnID,
 		SCN:    scn,
@@ -52,8 +48,6 @@ func (tc *InMemoryCache) StartTransaction(txnID string, scn int64) {
 }
 
 func (tc *InMemoryCache) AddEvent(txnID string, event *DMLEvent) {
-	tc.mu.Lock()
-	defer tc.mu.Unlock()
 	if txn, exists := tc.transactions[txnID]; exists {
 		txn.Events = append(txn.Events, event)
 	} else {
@@ -66,42 +60,18 @@ func (tc *InMemoryCache) AddEvent(txnID string, event *DMLEvent) {
 }
 
 func (tc *InMemoryCache) GetTransaction(txnID string) *Transaction {
-	tc.mu.Lock()
-	defer tc.mu.Unlock()
-
-	txn := tc.transactions[txnID]
-	if txn == nil {
-		return nil
-	}
-
-	// Return deep copy to prevent race conditions when the caller
-	// iterates over Events while AddEvent might be appending to the slice
-	eventsCopy := make([]*DMLEvent, len(txn.Events))
-	copy(eventsCopy, txn.Events)
-
-	return &Transaction{
-		ID:     txn.ID,
-		SCN:    txn.SCN,
-		Events: eventsCopy,
-	}
+	return tc.transactions[txnID]
 }
 
 func (tc *InMemoryCache) CommitTransaction(txnID string) {
-	tc.mu.Lock()
-	defer tc.mu.Unlock()
 	delete(tc.transactions, txnID)
 }
 
 func (tc *InMemoryCache) RollbackTransaction(txnID string) {
-	tc.mu.Lock()
-	defer tc.mu.Unlock()
 	delete(tc.transactions, txnID)
 }
 
 func (tc *InMemoryCache) Count() {
-	tc.mu.Lock()
-	defer tc.mu.Unlock()
-
 	for k, v := range tc.transactions {
 		tc.log.Debugf("Cache: TransID %s: %d records", k, len(v.Events))
 	}
