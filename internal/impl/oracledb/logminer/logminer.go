@@ -124,22 +124,25 @@ func NewMiner(db *sql.DB, userTables []replication.UserDefinedTable, publisher r
 
 // ReadChanges streams the change events from the configured SQL Server change tables.
 func (lm *LogMiner) ReadChanges(ctx context.Context, db *sql.DB, startPos replication.SCN) error {
-	lm.log.Infof("Starting streaming of %d change table(s)", len(lm.tables))
 
 	// Determine starting SCN
+	var scnSource string
 	if startPos.IsValid() {
-		// Resume from checkpoint
-		lm.log.Infof("Resuming from recorded SCN position '%s'", startPos)
+		// Resume from checkpoint/snapshot position
 		lm.currentSCN = uint64(startPos)
+		scnSource = "checkpoint"
 	} else {
 		// get current SCN from DB
 		var scn uint64
 		if err := lm.db.QueryRow("SELECT CURRENT_SCN FROM V$DATABASE").Scan(&scn); err != nil {
-			return fmt.Errorf("fetching current SCN: %w", err)
+			return fmt.Errorf("fetching current SCN from database: %w", err)
 		}
 		lm.currentSCN = scn
-		lm.log.Infof("Starting from current SCN sourced from database: %d", lm.currentSCN)
+		scnSource = "database"
+		// lm.log.Infof("Starting from current SCN sourced from database: %d", lm.currentSCN)
 	}
+
+	lm.log.Infof("Starting streaming of %d change table(s) from SCN (sourced from %s): %d", len(lm.tables), scnSource, lm.currentSCN)
 
 	for {
 		select {

@@ -68,7 +68,7 @@ func (s *Snapshot) Prepare(ctx context.Context) (SCN, error) {
 		return InvalidSCN, fmt.Errorf("getting current SCN for snapshot: %w", err)
 	}
 
-	// s.log.Infof("Starting snapshot at SCN: %s", currentSCN)
+	s.log.Infof("Captured SCN before snapshot at SCN: %s", currentSCN)
 	return currentSCN, nil
 }
 
