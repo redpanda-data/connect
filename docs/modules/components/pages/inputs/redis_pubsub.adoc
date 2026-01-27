@@ -79,6 +79,15 @@ In order to subscribe to channels using the `PSUBSCRIBE` command set the field `
 
 Use `\` to escape special characters if you want to match them verbatim.
 
+== Metadata
+
+This input adds the following metadata fields to each message:
+
+- redis_pubsub_channel
+- redis_pubsub_patern
+
+You can access these metadata fields using xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].
+
 == Fields
 
 === `url`

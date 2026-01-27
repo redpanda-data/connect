@@ -45,8 +45,8 @@ Use `+"`\\`"+` to escape special characters if you want to match them verbatim.
 
 This input adds the following metadata fields to each message:
 
-- redis_psub_channel
-- redis_psub_patern
+- redis_pubsub_channel
+- redis_pubsub_patern
 
 You can access these metadata fields using xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].`).
 		Categories("Services").
@@ -151,8 +151,8 @@ func (r *redisPubSubReader) Read(ctx context.Context) (*service.Message, service
 			return nil, nil, service.ErrEndOfInput
 		}
 		message := service.NewMessage([]byte(rMsg.Payload))
-		message.MetaSetMut(rMsg.Channel, "redis_psub_channel")
-		message.MetaSetMut(rMsg.Pattern, "redis_psub_patern")
+		message.MetaSetMut("redis_pubsub_channel", rMsg.Channel)
+		message.MetaSetMut("redis_pubsub_pattern", rMsg.Pattern)
 		return message, func(context.Context, error) error {
 			return nil
 		}, nil
