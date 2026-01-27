@@ -17,8 +17,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/redpanda-data/benthos/v4/public/service"
 	"golang.org/x/sync/errgroup"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 // Snapshot is responsible for creating snapshots of existing tables based on the Tables configuration value.
@@ -75,7 +76,7 @@ func (s *Snapshot) Prepare(ctx context.Context) (SCN, error) {
 // Read launches N number of go routines (based on maxWorkers) and starts the process of
 // iterating through each table, reading rows based on maxBatchSize, sending the row as a
 // replication.MessageEvent to the configured publisher.
-func (s *Snapshot) Read(ctx context.Context, maxWorkers int, maxBatchSize int) error {
+func (s *Snapshot) Read(ctx context.Context, maxWorkers, maxBatchSize int) error {
 	s.log.Infof("Starting snapshot of %d table(s) using %d configured readers", len(s.tables), maxWorkers)
 
 	for _, table := range s.tables {

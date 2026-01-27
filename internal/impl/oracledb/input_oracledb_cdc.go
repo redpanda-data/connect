@@ -52,7 +52,7 @@ var oracleDBStreamConfigSpec = service.NewConfigSpec().
 	Beta().
 	Categories("Services").
 	Version("0.0.1").
-	Summary("Enables Change Data Capture by consuming from Oracle's change tables.").
+	Summary("Enables Change Data Capture by consuming from OracleDB.").
 	Description(`Streams changes from an Oracle database for Change Data Capture (CDC).
 Additionally, if ` + "`" + fieldStreamSnapshot + "`" + ` is set to true, then the existing data in the database is also streamed too.
 
@@ -106,11 +106,11 @@ When using the default Oracle based cache, the Connect user requires permission 
 		Optional(),
 	).
 	Field(service.NewStringField(fieldCheckpointCache).
-		Description("A https://www.docs.redpanda.com/redpanda-connect/components/caches/about[cache resource^] to use for storing the current System Change Number (SCN) that has been successfully delivered, this allows Redpanda Connect to continue from that System Change Number (SCN) upon restart, rather than consume the entire state of the change table. If not set the default Oracle based cache will be used, see `" + fieldCheckpointCacheTableName + "` for more information.").
+		Description("A https://www.docs.redpanda.com/redpanda-connect/components/caches/about[cache resource^] to use for storing the current System Change Number (SCN) that has been successfully delivered, this allows Redpanda Connect to continue from that System Change Number (SCN) upon restart, rather than consume the entire state of OracleDB's redo logs. If not set the default Oracle based cache will be used, see `" + fieldCheckpointCacheTableName + "` for more information.").
 		Optional(),
 	).
 	Field(service.NewStringField(fieldCheckpointCacheTableName).
-		Description("The identifier for the checkpoint cache table name. If no `" + fieldCheckpointCache + "` field is specified, this input will automatically create a table and stored procedure under the `rpcn` schema to act as a checkpoint cache. This table stores the latest processed System Change Number (SCN) that has been successfully delivered, allowing Redpanda Connect to resume from that point upon restart rather than reconsume the entire change table.").
+		Description("The identifier for the checkpoint cache table name. If no `" + fieldCheckpointCache + "` field is specified, this input will automatically create a table and stored procedure under the `rpcn` schema to act as a checkpoint cache. This table stores the latest processed System Change Number (SCN) that has been successfully delivered, allowing Redpanda Connect to resume from that point upon restart rather than reconsume the entire redo log.").
 		Default(defaultCheckpointCache).
 		Example("RPCN.CHECKPOINT_CACHE").
 		Optional(),
@@ -323,7 +323,7 @@ func (i *oracleDBCDCInput) Connect(ctx context.Context) error {
 		case cachedSCN != replication.InvalidSCN:
 			i.log.Infof("Resuming from cached SCN value: %d", cachedSCN)
 		default:
-			//TODO: Consider what states could exist, should we error here and fail fast?
+			// TODO: Consider what states could exist, should we error here and fail fast?
 			i.log.Info("Unable to restore SCN from cache, reverting to oldest found in database")
 		}
 	}
@@ -331,7 +331,7 @@ func (i *oracleDBCDCInput) Connect(ctx context.Context) error {
 	// setup snapshotting and streaming
 	// logminer processor
 	type streamProcessor interface {
-		ReadChanges(ctx context.Context, db *sql.DB, startPos replication.SCN) error
+		ReadChanges(ctx context.Context, startPos replication.SCN) error
 	}
 	var (
 		snapshotter *replication.Snapshot
@@ -367,7 +367,7 @@ func (i *oracleDBCDCInput) Connect(ctx context.Context) error {
 				if i.stopSig.IsHardStopSignalled() {
 					i.log.Errorf("Shutting down snapshotting process: %s", err)
 				} else {
-					//TODO: This should probably be an ErrorF if err is an error?
+					// TODO: This should probably be an ErrorF if err is an error?
 					i.log.Infof("Gracefully shutting down snapshotting process: %s", err)
 				}
 				i.stopSig.TriggerHasStopped()
@@ -388,8 +388,8 @@ func (i *oracleDBCDCInput) Connect(ctx context.Context) error {
 		// streaming
 		wg, _ := errgroup.WithContext(softCtx)
 		wg.Go(func() error {
-			if err := streaming.ReadChanges(ctx, i.db, maxSCN); err != nil {
-				return fmt.Errorf("streaming from change tables: %w", err)
+			if err := streaming.ReadChanges(ctx, maxSCN); err != nil {
+				return fmt.Errorf("streaming from logminer: %w", err)
 			}
 			return nil
 		})
@@ -426,7 +426,7 @@ func (i *oracleDBCDCInput) getCachedSCN(ctx context.Context) (replication.SCN, e
 	} else if cErr != nil {
 		return replication.InvalidSCN, fmt.Errorf("unable read checkpoint from cache: %w", cErr)
 	} else if len(cacheVal) == 0 {
-		return replication.InvalidSCN, fmt.Errorf("empty SCN cache value")
+		return replication.InvalidSCN, errors.New("empty SCN cache value")
 	}
 
 	scn, err := replication.SCNFromBytes(cacheVal)
