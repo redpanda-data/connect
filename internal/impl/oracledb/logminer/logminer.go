@@ -31,8 +31,8 @@ type ChangeEvent struct {
 	TxnID     string
 }
 
-// LogMinerEvent represents a row from V$LOGMNR_CONTENTS
-type LogMinerEvent struct {
+// LMEvent represents a row from V$LOGMNR_CONTENTS
+type LMEvent struct {
 	SCN           int64
 	SQLRedo       sql.NullString
 	SQLUndo       sql.NullString
@@ -121,8 +121,7 @@ func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replicat
 }
 
 // ReadChanges streams the change events from the configured SQL Server change tables.
-func (lm *LogMiner) ReadChanges(ctx context.Context, db *sql.DB, startPos replication.SCN) error {
-
+func (lm *LogMiner) ReadChanges(ctx context.Context, startPos replication.SCN) error {
 	// Determine starting SCN
 	var scnSource string
 	if startPos.IsValid() {
@@ -223,7 +222,7 @@ func (lm *LogMiner) miningCycle(ctx context.Context) error {
 
 // processEvent buffers emitted events until a commit or rollback event is processed at which
 // point the buffer can be flushed to the Connect pipeline or dropped.
-func (lm *LogMiner) processEvent(ctx context.Context, event *LogMinerEvent) error {
+func (lm *LogMiner) processEvent(ctx context.Context, event *LMEvent) error {
 	txnLog := lm.log.With("transaction_id", event.TransactionID)
 	switch event.Operation {
 	case OpStart:
@@ -270,7 +269,7 @@ func (lm *LogMiner) processEvent(ctx context.Context, event *LogMinerEvent) erro
 	return nil
 }
 
-func (lm *LogMiner) queryLogMinerContents(startSCN, endSCN uint64) ([]*LogMinerEvent, error) {
+func (lm *LogMiner) queryLogMinerContents(startSCN, endSCN uint64) ([]*LMEvent, error) {
 	// Use the pre-built query from initialization
 	rows, err := lm.db.Query(lm.logMinerQuery, startSCN, endSCN)
 	if err != nil {
@@ -278,9 +277,9 @@ func (lm *LogMiner) queryLogMinerContents(startSCN, endSCN uint64) ([]*LogMinerE
 	}
 	defer rows.Close()
 
-	var events []*LogMinerEvent
+	var events []*LMEvent
 	for rows.Next() {
-		event := &LogMinerEvent{}
+		event := &LMEvent{}
 		var xidUsn, xidSlt, xidSqn int64
 		var xid string
 		var rsId, ssn sql.NullString

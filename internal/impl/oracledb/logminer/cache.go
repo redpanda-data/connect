@@ -18,6 +18,7 @@ type TransactionCache interface {
 	Count()
 }
 
+// TransactionID uniquely identifies an Oracle database transaction.
 type TransactionID string
 
 // Transaction buffers events until commit
@@ -27,11 +28,16 @@ type Transaction struct {
 	Events []*DMLEvent
 }
 
+// InMemoryCache is an in-memory implementation of TransactionCache that stores
+// transactions in a map. This cache is used to buffer DML events until a transaction
+// commits or rolls back. All operations are sequential and not protected by locks.
 type InMemoryCache struct {
 	transactions map[string]*Transaction
 	log          *service.Logger
 }
 
+// NewInMemoryCache creates a new in-memory transaction cache with the specified logger.
+// The cache buffers transactions until they commit or rollback.
 func NewInMemoryCache(logger *service.Logger) *InMemoryCache {
 	return &InMemoryCache{
 		transactions: make(map[string]*Transaction),
@@ -39,6 +45,7 @@ func NewInMemoryCache(logger *service.Logger) *InMemoryCache {
 	}
 }
 
+// StartTransaction initializes a new transaction in the cache with the given transaction ID and SCN.
 func (tc *InMemoryCache) StartTransaction(txnID string, scn int64) {
 	tc.transactions[txnID] = &Transaction{
 		ID:     txnID,
@@ -47,6 +54,8 @@ func (tc *InMemoryCache) StartTransaction(txnID string, scn int64) {
 	}
 }
 
+// AddEvent adds a DML event to the specified transaction's buffer.
+// If the transaction doesn't exist, it creates a new transaction with the event.
 func (tc *InMemoryCache) AddEvent(txnID string, event *DMLEvent) {
 	if txn, exists := tc.transactions[txnID]; exists {
 		txn.Events = append(txn.Events, event)
@@ -59,18 +68,23 @@ func (tc *InMemoryCache) AddEvent(txnID string, event *DMLEvent) {
 	}
 }
 
+// GetTransaction retrieves the transaction with the given ID from the cache.
+// Returns nil if the transaction doesn't exist.
 func (tc *InMemoryCache) GetTransaction(txnID string) *Transaction {
 	return tc.transactions[txnID]
 }
 
+// CommitTransaction removes the committed transaction from the cache.
 func (tc *InMemoryCache) CommitTransaction(txnID string) {
 	delete(tc.transactions, txnID)
 }
 
+// RollbackTransaction removes the rolled back transaction from the cache, discarding all buffered events.
 func (tc *InMemoryCache) RollbackTransaction(txnID string) {
 	delete(tc.transactions, txnID)
 }
 
+// Count logs debug information about all transactions currently in the cache.
 func (tc *InMemoryCache) Count() {
 	for k, v := range tc.transactions {
 		tc.log.Debugf("Cache: TransID %s: %d records", k, len(v.Events))
@@ -91,12 +105,19 @@ type DMLEvent struct {
 type Operation int
 
 const (
+	// OpUnknown represents an unknown or unsupported operation
 	OpUnknown Operation = iota
+	// OpInsert represents an INSERT operation
 	OpInsert
+	// OpDelete represents a DELETE operation
 	OpDelete
+	// OpUpdate represents an UPDATE operation
 	OpUpdate
+	// OpStart represents a transaction START operation
 	OpStart
+	// OpCommit represents a transaction COMMIT operation
 	OpCommit
+	// OpRollback represents a transaction ROLLBACK operation
 	OpRollback
 )
 

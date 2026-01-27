@@ -528,5 +528,5 @@ oracledb_cdc:
 	}
 
 	require.NoError(t, stream.StopWithin(time.Second*10))
-	//TODO: Verify json is correct similar to TestIntegration_MicrosoftSQLServerCDC_SnapshotAndStreaming_AllTypes
+	// TODO: Verify json is correct similar to TestIntegration_MicrosoftSQLServerCDC_SnapshotAndStreaming_AllTypes
 }

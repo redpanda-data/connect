@@ -4,16 +4,16 @@ import "time"
 
 // Field constants for configuration
 const (
-	FieldMaxBatchSize     = "max_batch_size"
-	FieldBackoffInterval  = "backoff_interval"
-	FieldMiningStrategy   = "strategy"
+	FieldMaxBatchSize    = "max_batch_size"
+	FieldBackoffInterval = "backoff_interval"
+	FieldMiningStrategy  = "strategy"
 )
 
 // Default values
 const (
-	DefaultMaxBatchSize     = 500
-	DefaultBackoffInterval  = 5 * time.Second
-	DefaultMiningStrategy   = "online_catalog"
+	DefaultMaxBatchSize    = 500
+	DefaultBackoffInterval = 5 * time.Second
+	DefaultMiningStrategy  = "online_catalog"
 )
 
 // Config holds configuration for LogMiner

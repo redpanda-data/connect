@@ -164,7 +164,7 @@ func (p *LogMinerDMLParser) parseDelete(sql string) (*ParseResult, error) {
 }
 
 // parseTableName parses "schema"."table" or just "table"
-func (p *LogMinerDMLParser) parseTableName(sql string, index int) (schema, table string, nextIndex int, err error) {
+func (*LogMinerDMLParser) parseTableName(sql string, index int) (schema, table string, nextIndex int, err error) {
 	// Look for first quoted identifier
 	inQuote := false
 	parts := []string{}
@@ -204,7 +204,7 @@ func (p *LogMinerDMLParser) parseTableName(sql string, index int) (schema, table
 }
 
 // parseColumnList parses ("C1","C2","C3")
-func (p *LogMinerDMLParser) parseColumnList(sql string, index int) ([]string, int, error) {
+func (*LogMinerDMLParser) parseColumnList(sql string, index int) ([]string, int, error) {
 	// Find opening parenthesis
 	for index < len(sql) && sql[index] != '(' {
 		index++
@@ -241,7 +241,7 @@ func (p *LogMinerDMLParser) parseColumnList(sql string, index int) ([]string, in
 }
 
 // parseValuesClause parses values ('v1','v2',NULL,TO_DATE('2020-01-01','YYYY-MM-DD'))
-func (p *LogMinerDMLParser) parseValuesClause(sql string, index int, columnNames []string) (map[string]any, error) {
+func (*LogMinerDMLParser) parseValuesClause(sql string, index int, columnNames []string) (map[string]any, error) {
 	// Find "values"
 	valuesIdx := strings.Index(sql[index:], " values ")
 	if valuesIdx == -1 {
@@ -280,14 +280,12 @@ func (p *LogMinerDMLParser) parseValuesClause(sql string, index int, columnNames
 					collectedValue.WriteByte('\'')
 					i++
 					continue
-				} else {
-					// End of quoted value
-					inSingleQuote = false
-					continue
 				}
-			} else {
-				collectedValue.WriteByte(c)
+				// End of quoted value
+				inSingleQuote = false
+				continue
 			}
+			collectedValue.WriteByte(c)
 			continue
 		}
 
@@ -349,7 +347,7 @@ func (p *LogMinerDMLParser) parseValuesClause(sql string, index int, columnNames
 }
 
 // parseSetClause parses set "C1" = 'v1', "C2" = 'v2', "C3" = NULL
-func (p *LogMinerDMLParser) parseSetClause(sql string, index int) (map[string]any, int, error) {
+func (*LogMinerDMLParser) parseSetClause(sql string, index int) (map[string]any, int, error) {
 	// Find " set "
 	setIdx := strings.Index(sql[index:], " set ")
 	if setIdx == -1 {
@@ -386,13 +384,11 @@ func (p *LogMinerDMLParser) parseSetClause(sql string, index int) (map[string]an
 					collectedValue.WriteByte('\'')
 					i++
 					continue
-				} else {
-					inSingleQuote = false
-					continue
 				}
-			} else {
-				collectedValue.WriteByte(c)
+				inSingleQuote = false
+				continue
 			}
+			collectedValue.WriteByte(c)
 			continue
 		}
 
@@ -474,7 +470,7 @@ func (p *LogMinerDMLParser) parseSetClause(sql string, index int) (map[string]an
 }
 
 // parseWhereClause parses where "C1" = 'v1' and "C2" = 'v2' and "C3" IS NULL
-func (p *LogMinerDMLParser) parseWhereClause(sql string, index int) (map[string]any, error) {
+func (*LogMinerDMLParser) parseWhereClause(sql string, index int) (map[string]any, error) {
 	// Find " where "
 	whereIdx := strings.Index(sql[index:], " where ")
 	if whereIdx == -1 {
@@ -507,13 +503,11 @@ func (p *LogMinerDMLParser) parseWhereClause(sql string, index int) (map[string]
 					collectedValue.WriteByte('\'')
 					i++
 					continue
-				} else {
-					inSingleQuote = false
-					continue
 				}
-			} else {
-				collectedValue.WriteByte(c)
+				inSingleQuote = false
+				continue
 			}
+			collectedValue.WriteByte(c)
 			continue
 		}
 
