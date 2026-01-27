@@ -23,7 +23,7 @@
 component_type_dropdown::[]
 
 
-Enables Change Data Capture by consuming from Oracle's change tables.
+Enables Change Data Capture by consuming from OracleDB.
 
 Introduced in version 0.0.1.
 
@@ -235,7 +235,7 @@ exclude: SCHEMA.PRIVATETABLE
 
 === `checkpoint_cache`
 
-A https://www.docs.redpanda.com/redpanda-connect/components/caches/about[cache resource^] to use for storing the current System Change Number (SCN) that has been successfully delivered, this allows Redpanda Connect to continue from that System Change Number (SCN) upon restart, rather than consume the entire state of the change table. If not set the default Oracle based cache will be used, see `checkpoint_cache_table_name` for more information.
+A https://www.docs.redpanda.com/redpanda-connect/components/caches/about[cache resource^] to use for storing the current System Change Number (SCN) that has been successfully delivered, this allows Redpanda Connect to continue from that System Change Number (SCN) upon restart, rather than consume the entire state of OracleDB's redo logs. If not set the default Oracle based cache will be used, see `checkpoint_cache_table_name` for more information.
 
 
 *Type*: `string`
@@ -243,7 +243,7 @@ A https://www.docs.redpanda.com/redpanda-connect/components/caches/about[cache r
 
 === `checkpoint_cache_table_name`
 
-The identifier for the checkpoint cache table name. If no `checkpoint_cache` field is specified, this input will automatically create a table and stored procedure under the `rpcn` schema to act as a checkpoint cache. This table stores the latest processed System Change Number (SCN) that has been successfully delivered, allowing Redpanda Connect to resume from that point upon restart rather than reconsume the entire change table.
+The identifier for the checkpoint cache table name. If no `checkpoint_cache` field is specified, this input will automatically create a table and stored procedure under the `rpcn` schema to act as a checkpoint cache. This table stores the latest processed System Change Number (SCN) that has been successfully delivered, allowing Redpanda Connect to resume from that point upon restart rather than reconsume the entire redo log.
 
 
 *Type*: `string`
