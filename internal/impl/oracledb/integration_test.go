@@ -174,6 +174,9 @@ oracledb_cdc:
   stream_snapshot: true
   snapshot_max_batch_size: 10
   max_parallel_snapshot_tables: 3
+  logminer:
+    max_batch_size: 1000
+    backoff_interval: 1s
   include: ["TESTDB.FOO", "TESTDB.FOO2", "TESTDB2.BAR"]
   exclude: ["TESTDB.DOESNOTEXIST"]`
 
@@ -214,7 +217,7 @@ oracledb_cdc:
 		}, time.Minute*5, time.Second*1)
 	}
 
-	// require.NoError(t, stream.StopWithin(time.Second*10))
+	require.NoError(t, stream.StopWithin(time.Second*10))
 }
 
 func TestIntegration_OracleDBCDC_Streaming(t *testing.T) {
