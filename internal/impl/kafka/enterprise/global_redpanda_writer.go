@@ -141,7 +141,7 @@ func (l *GlobalRedpandaManager) InitWithCustomDetails(pipelineID, logsTopic, sta
 	}
 
 	l.oCustom = tmpO
-	l.topicLogger.InitWithOutput(pipelineID, logsTopic, defaultLevel, l.oCustom)
+	l.topicLogger.InitWithOutput(pipelineID, logsTopic, &defaultLevel, l.oCustom)
 	l.statusEmitter.InitWithOutput(pipelineID, statusTopic, l.fallbackLogger, l.oCustom)
 
 	return nil
@@ -173,16 +173,21 @@ func (l *GlobalRedpandaManager) InitFromParsedConfig(pConf *service.ParsedConfig
 		return err
 	}
 
-	var logsLevel slog.Level
+	levelPtr := func(level slog.Level) *slog.Level {
+		return &level
+	}
+	var logsLevel *slog.Level
 	switch strings.ToLower(logsLevelStr) {
-	case "debug":
-		logsLevel = slog.LevelDebug
+	case "debug", "trace", "all":
+		logsLevel = levelPtr(slog.LevelDebug)
 	case "info":
-		logsLevel = slog.LevelInfo
+		logsLevel = levelPtr(slog.LevelInfo)
 	case "warn":
-		logsLevel = slog.LevelWarn
-	case "error":
-		logsLevel = slog.LevelError
+		logsLevel = levelPtr(slog.LevelWarn)
+	case "error", "fatal":
+		logsLevel = levelPtr(slog.LevelError)
+	case "off", "none":
+		// Logging disabled
 	default:
 		return fmt.Errorf("log level not recognized: %v", logsLevelStr)
 	}

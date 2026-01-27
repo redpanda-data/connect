@@ -110,21 +110,27 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 				fbLogger.Errorf("Failed reading log level from config: %v", err)
 			}
 
-			var logsLevel slog.Level
+			levelPtr := func(level slog.Level) *slog.Level {
+				return &level
+			}
+			var logsLevel *slog.Level
 			switch strings.ToLower(logsLevelStr) {
-			case "debug":
-				logsLevel = slog.LevelDebug
+			case "debug", "trace", "all":
+				logsLevel = levelPtr(slog.LevelDebug)
 			case "info":
-				logsLevel = slog.LevelInfo
+				logsLevel = levelPtr(slog.LevelInfo)
 			case "warn":
-				logsLevel = slog.LevelWarn
-			case "error":
-				logsLevel = slog.LevelError
+				logsLevel = levelPtr(slog.LevelWarn)
+			case "error", "fatal":
+				logsLevel = levelPtr(slog.LevelError)
+			case "off", "none":
+				// Logging disabled
 			default:
-				fbLogger.Errorf("Log level '%s' not recognized, using to default level %s", logsLevelStr, logsLevel)
+				logsLevel = levelPtr(slog.LevelInfo)
+				fbLogger.Errorf("Log level '%s' not recognized, using the default level %s", logsLevelStr, logsLevel)
 			}
 
-			rpMgr.SetTopicLoggerLevel(&logsLevel)
+			rpMgr.SetTopicLoggerLevel(logsLevel)
 
 			// Chroot if needed
 			if chrootPath != "" {

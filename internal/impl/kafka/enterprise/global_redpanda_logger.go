@@ -40,10 +40,10 @@ func newTopicLogger(id string) *topicLogger {
 	return t
 }
 
-func (l *topicLogger) InitWithOutput(pipelineID, topic string, logsLevel slog.Level, o *service.OwnedOutput) {
+func (l *topicLogger) InitWithOutput(pipelineID, topic string, logsLevel *slog.Level, o *service.OwnedOutput) {
 	l.pipelineID.Store(&pipelineID)
 	l.topic.Store(&topic)
-	l.level.Store(&logsLevel)
+	l.level.Store(logsLevel)
 	l.o.Store(o)
 }
 
@@ -51,7 +51,7 @@ func (l *topicLogger) InitWithOutput(pipelineID, topic string, logsLevel slog.Le
 func (l *topicLogger) Enabled(_ context.Context, atLevel slog.Level) bool {
 	lvl := l.level.Load()
 	if lvl == nil {
-		return true
+		return false
 	}
 	return atLevel >= *lvl
 }
