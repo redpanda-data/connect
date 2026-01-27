@@ -15,7 +15,7 @@ func NewEventProcessor() *EventProcessor {
 
 // ParseDML parses a LogMiner event into a DML event
 // TODO: Can we do without this and instead do it as part of translating to replication.MessageEvent?
-func (ep *EventProcessor) ParseDML(event *LogMinerEvent) (*DMLEvent, error) {
+func (EventProcessor) ParseDML(event *LogMinerEvent) (*DMLEvent, error) {
 	dml := &DMLEvent{
 		Operation: event.Operation,
 		// SQLRedo:   event.RedoValue.String,
@@ -39,7 +39,7 @@ func (ep *EventProcessor) ParseDML(event *LogMinerEvent) (*DMLEvent, error) {
 }
 
 // ConvertToChangeEvent converts a DML event to a change event
-func (ep *EventProcessor) ConvertToChangeEvent(dml *DMLEvent, scn int64) *ChangeEvent {
+func (EventProcessor) ConvertToChangeEvent(dml *DMLEvent, scn int64) *ChangeEvent {
 	ce := &ChangeEvent{
 		Schema:    dml.Schema,
 		Table:     dml.Table,
@@ -60,7 +60,7 @@ func (ep *EventProcessor) ConvertToChangeEvent(dml *DMLEvent, scn int64) *Change
 	return ce
 }
 
-func (ep *EventProcessor) toEventMessage(dml *DMLEvent, scn int64) *replication.MessageEvent {
+func (EventProcessor) toEventMessage(dml *DMLEvent, scn int64) *replication.MessageEvent {
 	m := &replication.MessageEvent{
 		SCN:       replication.SCN(scn),
 		Schema:    dml.Schema,

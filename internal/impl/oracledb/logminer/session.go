@@ -13,6 +13,8 @@ type SessionManager struct {
 	opts []string
 }
 
+// NewSessionManager creates a new SessionManager with the specified database connection and configuration.
+// It initializes LogMiner options based on the mining strategy (e.g., DICT_FROM_ONLINE_CATALOG).
 func NewSessionManager(db *sql.DB, cfg *Config) *SessionManager {
 	options := []string{
 		"DBMS_LOGMNR.NO_ROWID_IN_STMT", // Exclude ROWIDs from SQL
@@ -32,18 +34,10 @@ func NewSessionManager(db *sql.DB, cfg *Config) *SessionManager {
 	}
 }
 
-// AutoRegisterLogFile registers a log file with LogMiner
-//	func (sm *SessionManager) AutoRegisterLogFile(fileName string) error {
-//		sql := fmt.Sprintf("BEGIN sys.dbms_logmnr.add_logfile(LOGFILENAME => '%s', OPTIONS => DBMS_LOGMNR.ADDFILE); END;", fileName)
-//		_, err := sm.db.Exec(sql)
-//		if err != nil {
-//			return fmt.Errorf("failed to add log file: %w", err)
-//		}
-//		log.Printf("Added log file: %s", fileName)
-//		return nil
-//	}
-
-func (sm *SessionManager) AddLogFile(fileName string, isFirst bool) error {
+// AddLogFile adds a redo log file to the LogMiner session for mining.
+// If isFirst is true, it clears any previously added files before adding this one.
+// Otherwise, it adds the file to the existing list of files to be mined.
+func (sm *SessionManager) AddLogFile(filename string, isFirst bool) error {
 	var opt string
 	if isFirst {
 		opt = "DBMS_LOGMNR.NEW" // Clears previous files and adds this one
@@ -52,8 +46,11 @@ func (sm *SessionManager) AddLogFile(fileName string, isFirst bool) error {
 	}
 
 	q := fmt.Sprintf("BEGIN DBMS_LOGMNR.ADD_LOGFILE(LOGFILENAME => :1, OPTIONS => %s); END;", opt)
-	_, err := sm.db.Exec(q, fileName)
-	return err
+	if _, err := sm.db.Exec(q, filename); err != nil {
+		return fmt.Errorf("adding logminer log file '%s' with option '%s': %w", filename, opt, err)
+	}
+
+	return nil
 }
 
 // StartSession starts a LogMiner session with ONLINE_CATALOG strategy
@@ -76,8 +73,9 @@ func (sm *SessionManager) StartSession(startSCN, endSCN uint64, committedDataOnl
 
 	q := fmt.Sprintf("BEGIN SYS.DBMS_LOGMNR.START_LOGMNR(STARTSCN => %d, ENDSCN => %d, OPTIONS => %s); END;", startSCN, endSCN, optionsStr)
 	if _, err := sm.db.Exec(q); err != nil {
-		return fmt.Errorf("starting LogMiner session: %w", err)
+		return fmt.Errorf("starting logminer session: %w", err)
 	}
+
 	return nil
 }
 
@@ -86,5 +84,6 @@ func (sm *SessionManager) EndSession() error {
 	if _, err := sm.db.Exec("BEGIN SYS.DBMS_LOGMNR.END_LOGMNR(); END;"); err != nil {
 		return fmt.Errorf("ending logminer session: %w", err)
 	}
+
 	return nil
 }
