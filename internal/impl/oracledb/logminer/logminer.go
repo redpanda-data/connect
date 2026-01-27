@@ -49,7 +49,7 @@ type LogMinerEvent struct {
 // tables tracked in tables.
 type LogMiner struct {
 	cfg           *Config
-	tables        []replication.UserDefinedTable
+	tables        []replication.UserTable
 	publisher     replication.ChangePublisher
 	log           *service.Logger
 	logCollector  *LogFileCollector
@@ -67,7 +67,7 @@ type LogMiner struct {
 
 // NewMiner creates a new instance of NewMiner, responsible
 // for paging through change events based on the tables param.
-func NewMiner(db *sql.DB, userTables []replication.UserDefinedTable, publisher replication.ChangePublisher, cfg *Config, logger *service.Logger) *LogMiner {
+func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replication.ChangePublisher, cfg *Config, logger *service.Logger) *LogMiner {
 	// Build table filter condition once
 	// Only filter DML operations (1=INSERT, 2=DELETE, 3=UPDATE) by table
 	// Transaction control operations (6=START, 7=COMMIT, 36=ROLLBACK) don't have table info
