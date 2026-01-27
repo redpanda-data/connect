@@ -46,9 +46,6 @@ func TestIntegration_OracleDBCDC_SnapshotAndStreaming(t *testing.T) {
 		db.MustExec("INSERT INTO testdb2.bar (id) VALUES (DEFAULT)")
 	}
 
-	// wait for changes to propagate to redo logs
-	time.Sleep(5 * time.Second)
-
 	var (
 		outBatches   []string
 		outBatchesMu sync.Mutex
@@ -73,7 +70,7 @@ oracledb_cdc:
 
 		streamBuilder := service.NewStreamBuilder()
 		require.NoError(t, streamBuilder.AddInputYAML(fmt.Sprintf(cfg, connStr)))
-		require.NoError(t, streamBuilder.SetLoggerYAML(`level: DEBUG`))
+		require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
 
 		require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
 			outBatchesMu.Lock()

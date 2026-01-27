@@ -314,7 +314,7 @@ func (i *oracleDBCDCInput) Connect(ctx context.Context) error {
 	}
 	if cachedSCN, err = i.getCachedSCN(ctx); err != nil {
 		if errors.Is(err, service.ErrKeyNotFound) {
-			i.log.Infof("SCN not found in cache, resuming from earlier database SCN")
+			i.log.Infof("No SCN not found in checkpoint cache")
 		} else {
 			return fmt.Errorf("unable to get cached SCN: %s", err)
 		}
@@ -388,7 +388,6 @@ func (i *oracleDBCDCInput) Connect(ctx context.Context) error {
 		// streaming
 		wg, _ := errgroup.WithContext(softCtx)
 		wg.Go(func() error {
-
 			if err := streaming.ReadChanges(ctx, i.db, maxSCN); err != nil {
 				return fmt.Errorf("streaming from change tables: %w", err)
 			}
