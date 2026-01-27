@@ -22,6 +22,9 @@ type LogMinerDMLParser struct {
 	useRelaxedQuotes bool
 }
 
+// New creates a new LogMinerDMLParser instance with the specified quote handling behavior.
+// If useRelaxedQuotes is true, the parser will accept both quoted and unquoted identifiers.
+// If false, it strictly requires quoted identifiers as produced by Oracle LogMiner.
 func New(useRelaxedQuotes bool) *LogMinerDMLParser {
 	return &LogMinerDMLParser{
 		useRelaxedQuotes: useRelaxedQuotes,
