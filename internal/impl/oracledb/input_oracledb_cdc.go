@@ -426,7 +426,7 @@ func (i *oracleDBCDCInput) getCachedSCN(ctx context.Context) (replication.SCN, e
 	} else if cErr != nil {
 		return replication.InvalidSCN, fmt.Errorf("unable read checkpoint from cache: %w", cErr)
 	} else if len(cacheVal) == 0 {
-		return replication.InvalidSCN, fmt.Errorf("empty SCN cache value")
+		return replication.InvalidSCN, errors.New("empty SCN cache value")
 	}
 
 	scn, err := replication.SCNFromBytes(cacheVal)

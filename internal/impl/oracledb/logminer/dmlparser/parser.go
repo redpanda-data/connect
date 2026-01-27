@@ -7,6 +7,7 @@
 package dmlparser
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 )
@@ -40,7 +41,7 @@ type ParseResult struct {
 // Parse parses a SQL_REDO statement
 func (p *LogMinerDMLParser) Parse(sql string) (*ParseResult, error) {
 	if len(sql) == 0 {
-		return nil, fmt.Errorf("empty SQL statement")
+		return nil, errors.New("empty SQL statement")
 	}
 
 	// Determine operation type by first character
@@ -60,7 +61,7 @@ func (p *LogMinerDMLParser) Parse(sql string) (*ParseResult, error) {
 func (p *LogMinerDMLParser) parseInsert(sql string) (*ParseResult, error) {
 	const insertInto = "insert into "
 	if !strings.HasPrefix(sql, insertInto) {
-		return nil, fmt.Errorf("invalid INSERT statement")
+		return nil, errors.New("invalid INSERT statement")
 	}
 
 	index := len(insertInto)
@@ -98,7 +99,7 @@ func (p *LogMinerDMLParser) parseInsert(sql string) (*ParseResult, error) {
 func (p *LogMinerDMLParser) parseUpdate(sql string) (*ParseResult, error) {
 	const update = "update "
 	if !strings.HasPrefix(sql, update) {
-		return nil, fmt.Errorf("invalid UPDATE statement")
+		return nil, errors.New("invalid UPDATE statement")
 	}
 
 	index := len(update)
@@ -136,7 +137,7 @@ func (p *LogMinerDMLParser) parseUpdate(sql string) (*ParseResult, error) {
 func (p *LogMinerDMLParser) parseDelete(sql string) (*ParseResult, error) {
 	const deleteFrom = "delete from "
 	if !strings.HasPrefix(sql, deleteFrom) {
-		return nil, fmt.Errorf("invalid DELETE statement")
+		return nil, errors.New("invalid DELETE statement")
 	}
 
 	index := len(deleteFrom)
@@ -190,7 +191,7 @@ func (p *LogMinerDMLParser) parseTableName(sql string, index int) (schema, table
 	}
 
 	if len(parts) == 0 {
-		return "", "", index, fmt.Errorf("failed to parse table name")
+		return "", "", index, errors.New("failed to parse table name")
 	}
 
 	if len(parts) == 1 {
@@ -209,7 +210,7 @@ func (p *LogMinerDMLParser) parseColumnList(sql string, index int) ([]string, in
 		index++
 	}
 	if index >= len(sql) {
-		return nil, index, fmt.Errorf("column list not found")
+		return nil, index, errors.New("column list not found")
 	}
 	index++ // skip '('
 
@@ -236,7 +237,7 @@ func (p *LogMinerDMLParser) parseColumnList(sql string, index int) ([]string, in
 		}
 	}
 
-	return nil, index, fmt.Errorf("unterminated column list")
+	return nil, index, errors.New("unterminated column list")
 }
 
 // parseValuesClause parses values ('v1','v2',NULL,TO_DATE('2020-01-01','YYYY-MM-DD'))
@@ -244,7 +245,7 @@ func (p *LogMinerDMLParser) parseValuesClause(sql string, index int, columnNames
 	// Find "values"
 	valuesIdx := strings.Index(sql[index:], " values ")
 	if valuesIdx == -1 {
-		return nil, fmt.Errorf("values clause not found")
+		return nil, errors.New("values clause not found")
 	}
 	index += valuesIdx + len(" values ")
 
@@ -253,7 +254,7 @@ func (p *LogMinerDMLParser) parseValuesClause(sql string, index int, columnNames
 		index++
 	}
 	if index >= len(sql) {
-		return nil, fmt.Errorf("values list not found")
+		return nil, errors.New("values list not found")
 	}
 	index++ // skip '('
 
@@ -352,7 +353,7 @@ func (p *LogMinerDMLParser) parseSetClause(sql string, index int) (map[string]an
 	// Find " set "
 	setIdx := strings.Index(sql[index:], " set ")
 	if setIdx == -1 {
-		return nil, index, fmt.Errorf("SET clause not found")
+		return nil, index, errors.New("SET clause not found")
 	}
 	index += setIdx + len(" set ")
 
