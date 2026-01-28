@@ -150,9 +150,8 @@ func (c *checkpointCache) Set(ctx context.Context, _ string, value []byte, _ *ti
 	if c.cacheSetStmt == nil {
 		return errors.New("prepared statement for cache set not initialised")
 	}
-	// Convert bytes to hex string since go-ora driver and our stored procedure expect VARCHAR2 + HEXTORAW
-	hexValue := fmt.Sprintf("%X", value)
-	if _, err := c.cacheSetStmt.ExecContext(ctx, defaultCacheKey, hexValue); err != nil {
+	// go-ora driver handles []byte parameters as RAW type
+	if _, err := c.cacheSetStmt.ExecContext(ctx, defaultCacheKey, value); err != nil {
 		return fmt.Errorf("writing to checkpoint cache: %w", err)
 	}
 	return nil
@@ -183,10 +182,11 @@ func createCacheTable(ctx context.Context, db *sql.DB, tbl cacheTable) (bool, er
 
 	// Create table if it doesn't exist
 	// cache_key length is based on default (fixed) cache key
+	// cache_val stores binary data as RAW (8 bytes for SCN uint64)
 	createQuery := fmt.Sprintf(`
 		CREATE TABLE %s (
 			cache_key VARCHAR2(10) NOT NULL PRIMARY KEY,
-			cache_val RAW(100)
+			cache_val RAW(8)
 		)`, tbl.String())
 
 	if _, err := db.ExecContext(ctx, createQuery); err != nil {
@@ -217,11 +217,11 @@ func createUpsertStoredProc(ctx context.Context, db *sql.DB, cacheTable cacheTab
 	}
 
 	// Create the upsert procedure
-	// Note: go-ora driver converts []byte parameters to hex strings, so we use HEXTORAW to convert back
+	// Note: go-ora driver handles []byte parameters as RAW type
 	createQuery := fmt.Sprintf(`
 		CREATE PROCEDURE %s (
 			p_key IN VARCHAR2,
-			p_value IN VARCHAR2
+			p_value IN RAW
 		)
 		AS
 			v_count NUMBER;
@@ -229,9 +229,9 @@ func createUpsertStoredProc(ctx context.Context, db *sql.DB, cacheTable cacheTab
 			SELECT COUNT(*) INTO v_count FROM %s WHERE cache_key = p_key;
 
 			IF v_count > 0 THEN
-				UPDATE %s SET cache_val = HEXTORAW(p_value) WHERE cache_key = p_key;
+				UPDATE %s SET cache_val = p_value WHERE cache_key = p_key;
 			ELSE
-				INSERT INTO %s (cache_key, cache_val) VALUES (p_key, HEXTORAW(p_value));
+				INSERT INTO %s (cache_key, cache_val) VALUES (p_key, p_value);
 			END IF;
 
 			COMMIT;
