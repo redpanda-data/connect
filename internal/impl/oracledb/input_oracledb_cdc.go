@@ -90,7 +90,7 @@ When using the default Oracle based cache, the Connect user requires permission 
 			Default(logminer.DefaultMaxBatchSize),
 		service.NewDurationField(logminer.FieldBackoffInterval).
 			Description("The interval between attempts to check for new changes once all data is processed. For low traffic tables increasing this value can reduce network traffic to the server.").
-			Default(logminer.DefaultBackoffInterval).
+			Default(logminer.DefaultBackoffInterval.String()).
 			Example("5s").Example("1m"),
 		service.NewStringField(logminer.FieldMiningStrategy).
 			Description("Controls how LogMiner retrieves data dictionary information. `online_catalog` (default) uses the current data dictionary for best performance but cannot capture DDL changes. `online_catalog` currently only supported.").

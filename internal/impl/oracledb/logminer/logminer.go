@@ -139,7 +139,7 @@ func (lm *LogMiner) ReadChanges(ctx context.Context, startPos replication.SCN) e
 		// lm.log.Infof("Starting from current SCN sourced from database: %d", lm.currentSCN)
 	}
 
-	lm.log.Infof("Starting streaming of %d change table(s) from SCN (sourced from %s): %d", len(lm.tables), scnSource, lm.currentSCN)
+	lm.log.Infof("Starting streaming change events for %d table(s) beginning from SCN (sourced from %s): %d", len(lm.tables), scnSource, lm.currentSCN)
 
 	for {
 		select {
