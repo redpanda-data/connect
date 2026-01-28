@@ -48,17 +48,18 @@ type LMEvent struct {
 // LogMiner tracks and streams all change events from the configured change
 // tables tracked in tables.
 type LogMiner struct {
-	cfg           *Config
-	tables        []replication.UserTable
-	publisher     replication.ChangePublisher
-	log           *service.Logger
-	logCollector  *LogFileCollector
-	currentSCN    uint64
-	sessionMgr    *SessionManager
-	eventProc     *EventProcessor
-	db            *sql.DB
-	SleepDuration time.Duration
-	dmlParser     *dmlparser.LogMinerDMLParser
+	cfg            *Config
+	tables         []replication.UserTable
+	publisher      replication.ChangePublisher
+	log            *service.Logger
+	logCollector   *LogFileCollector
+	currentSCN     uint64
+	sessionMgr     *SessionManager
+	eventProc      *EventProcessor
+	db             *sql.DB
+	SleepDuration  time.Duration
+	dmlParser      *dmlparser.LogMinerDMLParser
+	valueConverter *dmlparser.OracleValueConverter
 
 	// Pre-built query string for LogMiner contents
 	logMinerQuery string
@@ -105,17 +106,18 @@ func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replicat
 	`, tableFilter.String())
 
 	lm := &LogMiner{
-		cfg:           cfg,
-		log:           logger,
-		db:            db,
-		tables:        userTables,
-		publisher:     publisher,
-		logCollector:  NewLogFileCollector(db),
-		sessionMgr:    NewSessionManager(db, cfg),
-		eventProc:     NewEventProcessor(),
-		txnCache:      NewInMemoryCache(logger),
-		dmlParser:     dmlparser.New(true),
-		logMinerQuery: logMinerQuery,
+		cfg:            cfg,
+		log:            logger,
+		db:             db,
+		tables:         userTables,
+		publisher:      publisher,
+		logCollector:   NewLogFileCollector(db),
+		sessionMgr:     NewSessionManager(db, cfg),
+		eventProc:      NewEventProcessor(),
+		txnCache:       NewInMemoryCache(logger),
+		valueConverter: dmlparser.NewOracleValueConverter(nil),
+		dmlParser:      dmlparser.New(true),
+		logMinerQuery:  logMinerQuery,
 	}
 	return lm
 }
@@ -248,6 +250,11 @@ func (lm *LogMiner) processEvent(ctx context.Context, event *LMEvent) error {
 		dmlEvent, err := lm.eventProc.ParseDML(event)
 		if err != nil {
 			return fmt.Errorf("failed to parse DML event: %w", err)
+		}
+
+		// covert sql types to their equivalent values
+		for k, v := range dmlEvent.Data {
+			dmlEvent.Data[k] = lm.valueConverter.ConvertValue(v, k)
 		}
 
 		// txnLog.Debugf("Transaction update")

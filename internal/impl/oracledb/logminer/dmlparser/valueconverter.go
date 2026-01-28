@@ -1,13 +1,13 @@
-/*
- * Copyright Debezium Authors.
- *
- * Licensed under the Apache Software License version 2.0, available at http://www.apache.org/licenses/LICENSE-2.0
- */
+//
+// Copyright Debezium Authors.
+//
+// Licensed under the Apache Software License version 2.0, available at http://www.apache.org/licenses/LICENSE-2.0
+//
 
 package dmlparser
 
 import (
-	"fmt"
+	"encoding/hex"
 	"regexp"
 	"strconv"
 	"strings"
@@ -52,7 +52,7 @@ var (
 
 // ConvertValue converts an Oracle value (potentially a function call) to its proper Go type
 // columnType should be the Oracle column type (e.g., "DATE", "TIMESTAMP", "VARCHAR2", etc.)
-func (c *OracleValueConverter) ConvertValue(value interface{}, columnType string) interface{} {
+func (c *OracleValueConverter) ConvertValue(value any, columnType string) any {
 	// If not a string, return as-is
 	str, ok := value.(string)
 	if !ok {
@@ -91,7 +91,7 @@ func (c *OracleValueConverter) ConvertValue(value interface{}, columnType string
 }
 
 // convertDateValue converts TO_DATE function calls to time.Time
-func (c *OracleValueConverter) convertDateValue(value string) interface{} {
+func (c *OracleValueConverter) convertDateValue(value string) any {
 	matches := toDatePattern.FindStringSubmatch(value)
 	if matches == nil {
 		return nil
@@ -124,7 +124,7 @@ func (c *OracleValueConverter) convertDateValue(value string) interface{} {
 }
 
 // convertTimestampValue converts TO_TIMESTAMP function calls to time.Time
-func (c *OracleValueConverter) convertTimestampValue(value string) interface{} {
+func (c *OracleValueConverter) convertTimestampValue(value string) any {
 	matches := toTimestampPattern.FindStringSubmatch(value)
 	if matches == nil {
 		return nil
@@ -152,7 +152,7 @@ func (c *OracleValueConverter) convertTimestampValue(value string) interface{} {
 }
 
 // convertTimestampWithZone converts TO_TIMESTAMP_TZ function calls
-func (c *OracleValueConverter) convertTimestampWithZone(value string) interface{} {
+func (*OracleValueConverter) convertTimestampWithZone(value string) any {
 	matches := toTimestampTzPattern.FindStringSubmatch(value)
 	if matches == nil {
 		return nil
@@ -180,7 +180,7 @@ func (c *OracleValueConverter) convertTimestampWithZone(value string) interface{
 }
 
 // convertRawValue converts HEXTORAW function calls to byte slices
-func (c *OracleValueConverter) convertRawValue(value string) interface{} {
+func (*OracleValueConverter) convertRawValue(value string) any {
 	matches := hexToRawPattern.FindStringSubmatch(value)
 	if matches == nil {
 		return value
@@ -201,7 +201,7 @@ func (c *OracleValueConverter) convertRawValue(value string) interface{} {
 }
 
 // convertLobValue handles EMPTY_CLOB() and EMPTY_BLOB()
-func (c *OracleValueConverter) convertLobValue(value string) interface{} {
+func (*OracleValueConverter) convertLobValue(value string) any {
 	if emptyLobPattern.MatchString(value) {
 		// Return empty byte slice for empty LOBs
 		return []byte{}
@@ -210,7 +210,7 @@ func (c *OracleValueConverter) convertLobValue(value string) interface{} {
 }
 
 // convertNumericValue attempts to parse numeric values
-func (c *OracleValueConverter) convertNumericValue(value string) interface{} {
+func (*OracleValueConverter) convertNumericValue(value string) any {
 	// Try integer first
 	if i, err := strconv.ParseInt(value, 10, 64); err == nil {
 		return i
@@ -226,7 +226,7 @@ func (c *OracleValueConverter) convertNumericValue(value string) interface{} {
 
 // oracleFormatToGo converts Oracle date/timestamp format to Go format
 // Oracle formats: https://docs.oracle.com/en/database/oracle/oracle-database/19/sqlrf/Format-Models.html
-func (c *OracleValueConverter) oracleFormatToGo(oracleFormat string) string {
+func (*OracleValueConverter) oracleFormatToGo(oracleFormat string) string {
 	// Mapping of Oracle format elements to Go format
 	replacements := map[string]string{
 		"YYYY": "2006",
@@ -256,30 +256,30 @@ func (c *OracleValueConverter) oracleFormatToGo(oracleFormat string) string {
 
 // ConvertValueToKafkaFormat converts a value to the format expected by Kafka Connect
 // This mimics Debezium's behavior for different temporal precision modes
-type TemporalPrecisionMode string
+type temporalPrecisionMode string
 
 const (
-	TemporalPrecisionAdaptive           TemporalPrecisionMode = "adaptive"
-	TemporalPrecisionAdaptiveTimeMicros TemporalPrecisionMode = "adaptive_time_microseconds"
-	TemporalPrecisionConnect            TemporalPrecisionMode = "connect"
+	temporalPrecisionAdaptive           temporalPrecisionMode = "adaptive"
+	temporalPrecisionAdaptiveTimeMicros temporalPrecisionMode = "adaptive_time_microseconds"
+	temporalPrecisionConnect            temporalPrecisionMode = "connect"
 )
 
 // ToKafkaValue converts a Go value to Kafka Connect format
 // For timestamps, this converts to epoch milliseconds/microseconds/nanoseconds
-func (c *OracleValueConverter) ToKafkaValue(value interface{}, columnType string, precisionMode TemporalPrecisionMode) interface{} {
+func (*OracleValueConverter) ToKafkaValue(value any, _ string, precisionMode temporalPrecisionMode) any {
 	switch v := value.(type) {
 	case time.Time:
 		switch precisionMode {
-		case TemporalPrecisionAdaptiveTimeMicros:
+		case temporalPrecisionAdaptiveTimeMicros:
 			return v.UnixMicro() // Microseconds since epoch
-		case TemporalPrecisionConnect:
+		case temporalPrecisionConnect:
 			return v.UnixMilli() // Milliseconds since epoch
 		default:
 			return v.UnixNano() // Nanoseconds since epoch
 		}
 	case []byte:
 		// Return as base64 or hex string for JSON serialization
-		return fmt.Sprintf("%x", v)
+		return hex.EncodeToString(v)
 	default:
 		return value
 	}
