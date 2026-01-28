@@ -153,7 +153,7 @@ func (r *RPJWTMiddleware) Wrap(next http.Handler) http.Handler {
 			return
 		}
 
-		principal := authz.PrincipalID(customClaims.AccountInfo.Email)
+		principal := authz.PrincipalID("User:" + customClaims.AccountInfo.Email)
 		next.ServeHTTP(w, req.WithContext(ContextWithValidatedPrincipalID(req.Context(), principal)))
 	})
 }
