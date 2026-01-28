@@ -46,7 +46,7 @@ Use `+"`\\`"+` to escape special characters if you want to match them verbatim.
 This input adds the following metadata fields to each message:
 
 - redis_pubsub_channel
-- redis_pubsub_patern
+- redis_pubsub_pattern
 
 You can access these metadata fields using xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].`).
 		Categories("Services").
