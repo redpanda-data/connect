@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## 4.79.0 - TBD
 
+### Added
+
+- redis_pubsub: `redis_pubsub_channel` and `redis_pubsub_pattern` metadata fields added to input component. (@g-hurst)
+
 ### Fixed
 
 - Setting the logging level to `TRACE`, `ALL`, `OFF` and `NONE` no longer emits an error. (@mihaitodor)
