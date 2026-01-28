@@ -231,7 +231,7 @@ func (lm *LogMiner) processEvent(ctx context.Context, event *LMEvent) error {
 	switch event.Operation {
 	case OpStart:
 		// Transaction started
-		txnLog.Debugf("Transaction begin")
+		// txnLog.Debugf("Transaction begin")
 		lm.txnCache.StartTransaction(event.TransactionID, event.SCN)
 
 	case OpInsert, OpUpdate, OpDelete:
@@ -250,12 +250,12 @@ func (lm *LogMiner) processEvent(ctx context.Context, event *LMEvent) error {
 			return fmt.Errorf("failed to parse DML event: %w", err)
 		}
 
-		txnLog.Debugf("Transaction update")
+		// txnLog.Debugf("Transaction update")
 		lm.txnCache.AddEvent(event.TransactionID, dmlEvent)
 	case OpCommit:
 		// Flush all buffered events for this transaction
 		if txn := lm.txnCache.GetTransaction(event.TransactionID); txn != nil {
-			txnLog.Debugf("Transaction commit (%d events)", len(txn.Events))
+			// txnLog.Debugf("Transaction commit (%d events)", len(txn.Events))
 			for _, ev := range txn.Events {
 				msg := lm.eventProc.toEventMessage(ev, event.SCN)
 				if err := lm.publisher.Publish(ctx, msg); err != nil {
