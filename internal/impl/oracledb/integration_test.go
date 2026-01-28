@@ -220,6 +220,127 @@ oracledb_cdc:
 	require.NoError(t, stream.StopWithin(time.Second*10))
 }
 
+func TestIntegration_OracleDBCDC_ResumesFromCheckpoint(t *testing.T) {
+	integration.CheckSkip(t)
+	t.Parallel()
+
+	// Create table
+	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t, "latest")
+	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.foo", "CREATE TABLE testdb.foo (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
+
+	var (
+		outBatches   []string
+		outBatchesMu sync.Mutex
+	)
+
+	cfg := `
+oracledb_cdc:
+  connection_string: %s
+  stream_snapshot: false
+  logminer:
+    max_batch_size: 1000
+    backoff_interval: 1s
+  include: ["TESTDB.FOO"]
+  batching:
+    count: 500`
+
+	t.Log("Launching component to stream initial data...")
+	{
+		streamBuilder := service.NewStreamBuilder()
+		require.NoError(t, streamBuilder.AddInputYAML(fmt.Sprintf(cfg, connStr)))
+		require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
+
+		require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+			outBatchesMu.Lock()
+			defer outBatchesMu.Unlock()
+			for _, msg := range mb {
+				msgBytes, err := msg.AsBytes()
+				require.NoError(t, err)
+				outBatches = append(outBatches, string(msgBytes))
+			}
+			return nil
+		}))
+
+		stream, err := streamBuilder.Build()
+		require.NoError(t, err)
+		license.InjectTestService(stream.Resources())
+
+		go func() {
+			err = stream.Run(t.Context())
+			require.NoError(t, err)
+		}()
+
+		// Wait for component to start
+		time.Sleep(5 * time.Second)
+
+		_, err = db.Exec(`
+		BEGIN
+			FOR i IN 1..1000 LOOP
+				INSERT INTO testdb.foo (id) VALUES (DEFAULT);
+			END LOOP;
+			COMMIT;
+		END;`)
+		require.NoError(t, err)
+
+		assert.Eventually(t, func() bool {
+			outBatchesMu.Lock()
+			defer outBatchesMu.Unlock()
+			got := len(outBatches)
+			t.Logf("Found %d of 1000 records...", got)
+			return got == 1000
+		}, time.Minute*2, time.Millisecond*500)
+		require.NoError(t, stream.StopWithin(time.Second*10))
+	}
+
+	t.Log("Relaunching component to resume from checkpoint...")
+	{
+		// Insert more data before restarting
+		_, err := db.Exec(`
+		BEGIN
+			FOR i IN 1..1000 LOOP
+				INSERT INTO testdb.foo (id) VALUES (DEFAULT);
+			END LOOP;
+			COMMIT;
+		END;`)
+		require.NoError(t, err)
+
+		// Create new stream builder for second phase
+		streamBuilder2 := service.NewStreamBuilder()
+		require.NoError(t, streamBuilder2.AddInputYAML(fmt.Sprintf(cfg, connStr)))
+		require.NoError(t, streamBuilder2.SetLoggerYAML(`level: INFO`))
+
+		require.NoError(t, streamBuilder2.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+			outBatchesMu.Lock()
+			defer outBatchesMu.Unlock()
+			for _, msg := range mb {
+				msgBytes, err := msg.AsBytes()
+				require.NoError(t, err)
+				outBatches = append(outBatches, string(msgBytes))
+			}
+			return nil
+		}))
+
+		streamResume, err := streamBuilder2.Build()
+		require.NoError(t, err)
+		license.InjectTestService(streamResume.Resources())
+
+		go func() {
+			err = streamResume.Run(t.Context())
+			require.NoError(t, err)
+		}()
+
+		assert.Eventually(t, func() bool {
+			outBatchesMu.Lock()
+			defer outBatchesMu.Unlock()
+			got := len(outBatches)
+			t.Logf("Found %d of 2000 records...", got)
+			return got == 2000
+		}, time.Minute*2, time.Millisecond*500)
+
+		require.NoError(t, streamResume.StopWithin(time.Second*10))
+	}
+}
+
 func TestIntegration_OracleDBCDC_Streaming(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
