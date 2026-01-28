@@ -142,6 +142,16 @@ func (c *SnowflakeServiceClient) registerBlobs(ctx context.Context, metadata []b
 	return resp.Blobs, nil
 }
 
+// MessageFormat specifies the incoming message format the to the snowflake connector
+type MessageFormat int
+
+const (
+	// MessageFormatObject means the incoming data is a bloblang object
+	MessageFormatObject MessageFormat = iota
+	// MessageFormatArray means the incoming data is a bloblang array
+	MessageFormatArray
+)
+
 // BuildOptions is the options for building a parquet file
 type BuildOptions struct {
 	// The maximum parallelism
@@ -166,6 +176,8 @@ type ChannelOptions struct {
 	BuildOptions BuildOptions
 	// How to handle schema differences
 	SchemaMode SchemaMode
+	// MesssageFormat what format do we expect incoming data to be?
+	MessageFormat MessageFormat
 }
 
 type encryptionInfo struct {
@@ -335,11 +347,19 @@ func (c *SnowflakeIngestionChannel) constructBdecPart(batch service.MessageBatch
 	for chunk := range slices.Chunk(batch, maxChunkSize) {
 		j := len(rowGroups)
 		rowGroups = append(rowGroups, rowGroup{})
-		work = append(work, func() error {
-			rows, stats, err := constructRowGroup(chunk, c.schema, c.transformers, c.SchemaMode)
-			rowGroups[j] = rowGroup{rows, stats}
-			return err
-		})
+		if c.MessageFormat == MessageFormatArray {
+			work = append(work, func() error {
+				rows, stats, err := constructRowGroupFromArray(chunk, c.schema, c.transformers, c.SchemaMode)
+				rowGroups[j] = rowGroup{rows, stats}
+				return err
+			})
+		} else {
+			work = append(work, func() error {
+				rows, stats, err := constructRowGroupFromObject(chunk, c.schema, c.transformers, c.SchemaMode)
+				rowGroups[j] = rowGroup{rows, stats}
+				return err
+			})
+		}
 	}
 	var wg errgroup.Group
 	wg.SetLimit(c.BuildOptions.Parallelism)

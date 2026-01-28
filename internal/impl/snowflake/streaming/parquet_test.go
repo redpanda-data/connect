@@ -58,7 +58,7 @@ func TestWriteParquet(t *testing.T) {
 		},
 	}
 	schema := parquet.NewSchema("bdec", inputDataSchema)
-	rows, stats, err := constructRowGroup(
+	rows, stats, err := constructRowGroupFromObject(
 		batch,
 		schema,
 		transformers,
