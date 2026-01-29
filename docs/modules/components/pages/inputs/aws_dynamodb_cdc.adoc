@@ -25,7 +25,7 @@ component_type_dropdown::[]
 
 Reads change data capture (CDC) events from DynamoDB Streams
 
-Introduced in version 1.0.0.
+Introduced in version 4.79.0.
 
 
 [tabs]

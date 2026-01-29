@@ -41,7 +41,7 @@ const (
 func dynamoDBCDCInputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Beta().
-		Version("1.0.0").
+		Version("4.79.0").
 		Categories("Services", "AWS").
 		Summary("Reads change data capture (CDC) events from DynamoDB Streams").
 		Description(`
