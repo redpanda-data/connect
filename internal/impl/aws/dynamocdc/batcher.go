@@ -27,11 +27,11 @@ type RecordBatcher struct {
 	maxTrackedMessages int
 	log                *service.Logger
 
-	mu             sync.Mutex
-	messageTracker map[*service.Message]*messageCheckpoint
+	mu sync.Mutex
 
-	// Checkpoint state per shard
-	pendingCount    map[string]int    // Count of acked but not-yet-checkpointed messages
+	// Tracking state
+	messageTracker  map[*service.Message]*messageCheckpoint
+	pendingCount    map[string]int    // Count of acked but not-yet-checkpointed messages per shard
 	lastCheckpoints map[string]string // Most recent sequence number per shard
 }
 
@@ -50,12 +50,12 @@ func NewRecordBatcher(maxTrackedShards, checkpointLimit int, log *service.Logger
 	}
 
 	return &RecordBatcher{
-		messageTracker:     make(map[*service.Message]*messageCheckpoint),
-		log:                log,
-		pendingCount:       make(map[string]int),
-		lastCheckpoints:    make(map[string]string),
 		maxTrackedShards:   maxTrackedShards,
 		maxTrackedMessages: maxTrackedMessages,
+		log:                log,
+		messageTracker:     make(map[*service.Message]*messageCheckpoint),
+		pendingCount:       make(map[string]int),
+		lastCheckpoints:    make(map[string]string),
 	}
 }
 
