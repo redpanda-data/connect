@@ -24,6 +24,9 @@ import (
 	"github.com/a2aproject/a2a-go/a2aclient"
 )
 
+// ErrNotImplemented indicates a method is not implemented by this transport.
+var ErrNotImplemented = errors.New("not implemented")
+
 // httpTransport implements a2aclient.Transport using HTTP/JSON-RPC 2.0.
 type httpTransport struct {
 	baseURL    string
@@ -411,32 +414,32 @@ func (*httpTransport) parseEventByType(data []byte, eventType string) (a2a.Event
 
 // CancelTask implements the tasks/cancel method.
 func (*httpTransport) CancelTask(_ context.Context, _ *a2a.TaskIDParams) (*a2a.Task, error) {
-	return nil, a2aclient.ErrNotImplemented
+	return nil, ErrNotImplemented
 }
 
 // GetTaskPushConfig implements the tasks/pushNotificationConfig/get method.
 func (*httpTransport) GetTaskPushConfig(_ context.Context, _ *a2a.GetTaskPushConfigParams) (*a2a.TaskPushConfig, error) {
-	return nil, a2aclient.ErrNotImplemented
+	return nil, ErrNotImplemented
 }
 
 // ListTaskPushConfig implements the tasks/pushNotificationConfig/list method.
 func (*httpTransport) ListTaskPushConfig(_ context.Context, _ *a2a.ListTaskPushConfigParams) ([]*a2a.TaskPushConfig, error) {
-	return nil, a2aclient.ErrNotImplemented
+	return nil, ErrNotImplemented
 }
 
 // SetTaskPushConfig implements the tasks/pushNotificationConfig/set method.
 func (*httpTransport) SetTaskPushConfig(_ context.Context, _ *a2a.TaskPushConfig) (*a2a.TaskPushConfig, error) {
-	return nil, a2aclient.ErrNotImplemented
+	return nil, ErrNotImplemented
 }
 
 // DeleteTaskPushConfig implements the tasks/pushNotificationConfig/delete method.
 func (*httpTransport) DeleteTaskPushConfig(_ context.Context, _ *a2a.DeleteTaskPushConfigParams) error {
-	return a2aclient.ErrNotImplemented
+	return ErrNotImplemented
 }
 
 // GetAgentCard retrieves the agent card from /.well-known/agent.json.
 func (*httpTransport) GetAgentCard(_ context.Context) (*a2a.AgentCard, error) {
-	return nil, a2aclient.ErrNotImplemented
+	return nil, ErrNotImplemented
 }
 
 // Destroy cleans up resources.
