@@ -333,69 +333,80 @@ type InsertStats struct {
 type bdecPart struct {
 	unencryptedLen  int
 	parquetFile     []byte
-	parquetMetadata format.FileMetaData
+	parquetMetadata *format.FileMetaData
 	stats           []*statsBuffer
 	convertTime     time.Duration
 	serializeTime   time.Duration
 }
 
 func (c *SnowflakeIngestionChannel) constructBdecPart(batch service.MessageBatch, metadata map[string]string) (bdecPart, error) {
-	type rowGroup struct {
-		rows  []parquet.Row
+	// concurrentRowGroup holds a row group writer and its stats after conversion
+	type concurrentRowGroup struct {
+		rg    *parquet.ConcurrentRowGroupWriter
 		stats []*statsBuffer
 	}
-	rowGroups := []rowGroup{}
+
 	maxChunkSize := c.BuildOptions.ChunkSize
 	convertStart := time.Now()
-	work := []func() error{}
+
+	// Create writer and prepare for new file
+	w := newParquetWriter(c.connectVersion, c.schema)
+	w.Reset(metadata)
+
+	// Create all row groups up front so we can process them in parallel
+	rowGroups := make([]concurrentRowGroup, 0)
+	chunks := make([]service.MessageBatch, 0)
 	for chunk := range slices.Chunk(batch, maxChunkSize) {
-		j := len(rowGroups)
-		rowGroups = append(rowGroups, rowGroup{})
-		if c.MessageFormat == MessageFormatArray {
-			work = append(work, func() error {
-				rows, stats, err := constructRowGroupFromArray(chunk, c.schema, c.transformers, c.SchemaMode)
-				rowGroups[j] = rowGroup{rows, stats}
-				return err
-			})
-		} else {
-			work = append(work, func() error {
-				rows, stats, err := constructRowGroupFromObject(chunk, c.schema, c.transformers, c.SchemaMode)
-				rowGroups[j] = rowGroup{rows, stats}
-				return err
-			})
-		}
+		rg := w.BeginRowGroup()
+		rowGroups = append(rowGroups, concurrentRowGroup{rg: rg})
+		chunks = append(chunks, chunk)
 	}
+
+	// Convert, write, and flush row groups in parallel
 	var wg errgroup.Group
 	wg.SetLimit(c.BuildOptions.Parallelism)
-	for _, w := range work {
-		wg.Go(w)
+	for j, chunk := range chunks {
+		wg.Go(func() error {
+			var stats []*statsBuffer
+			var err error
+			if c.MessageFormat == MessageFormatArray {
+				stats, err = writeRowGroupFromArray(chunk, c.schema, c.transformers, c.SchemaMode, rowGroups[j].rg)
+			} else {
+				stats, err = writeRowGroupFromObject(chunk, c.schema, c.transformers, c.SchemaMode, rowGroups[j].rg)
+			}
+			rowGroups[j].stats = stats
+			return err
+		})
 	}
 	if err := wg.Wait(); err != nil {
 		return bdecPart{}, err
 	}
 	convertDone := time.Now()
-	allRows := make([]parquet.Row, 0, len(batch))
+
+	// Commit row groups serially (required for correct ordering)
+	for _, rg := range rowGroups {
+		if _, err := rg.rg.Commit(); err != nil {
+			return bdecPart{}, fmt.Errorf("failed to commit row group: %w", err)
+		}
+	}
+
+	// Finalize the file
+	buf, fileMetadata, err := w.Close()
+	if err != nil {
+		return bdecPart{}, err
+	}
+
+	// Merge stats from all row groups
 	combinedStats := make([]*statsBuffer, len(c.schema.Fields()))
 	for i := range combinedStats {
 		combinedStats[i] = &statsBuffer{}
 	}
 	for _, rg := range rowGroups {
-		allRows = append(allRows, rg.rows...)
 		for i, s := range combinedStats {
 			combinedStats[i] = mergeStats(s, rg.stats[i])
 		}
 	}
-	// TODO(perf): It would be really nice to be able to compress in parallel,
-	// that actually ends up taking quite of bit of CPU.
-	w := newParquetWriter(c.connectVersion, c.schema)
-	buf, err := w.WriteFile(allRows, metadata)
-	if err != nil {
-		return bdecPart{}, err
-	}
-	fileMetadata, err := readParquetMetadata(buf)
-	if err != nil {
-		return bdecPart{}, fmt.Errorf("unable to parse parquet metadata: %w", err)
-	}
+
 	done := time.Now()
 	return bdecPart{
 		unencryptedLen:  len(buf),
@@ -404,7 +415,7 @@ func (c *SnowflakeIngestionChannel) constructBdecPart(batch service.MessageBatch
 		stats:           combinedStats,
 		convertTime:     convertDone.Sub(convertStart),
 		serializeTime:   done.Sub(convertDone),
-	}, err
+	}, nil
 }
 
 // OffsetTokenRange is the range of offsets for the data being written.

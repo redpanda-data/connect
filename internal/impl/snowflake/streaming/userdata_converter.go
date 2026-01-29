@@ -28,7 +28,8 @@ import (
 
 type typedBufferFactory func() typedBuffer
 
-// typedBuffer is the buffer that holds columnar data before we write to the parquet file
+// typedBuffer writes columnar data directly to a parquet ColumnWriter.
+// Each Write method writes a single value to the column.
 type typedBuffer interface {
 	WriteNull()
 	WriteInt128(int128.Num)
@@ -36,19 +37,17 @@ type typedBuffer interface {
 	WriteFloat64(float64)
 	WriteBytes([]byte) // should never be nil
 
-	// Prepare for writing values to the following matrix.
-	// Must be called before writing
-	// The matrix size must be pre-allocated to be the size of
-	// the data that will be written - this buffer will not modify
-	// the size of the data.
-	Prepare(matrix []parquet.Value, columnIndex, rowWidth int)
+	// Reset prepares the buffer for writing to a new column writer.
+	// columnIndex is the column index for setting value levels.
+	Reset(columnWriter *parquet.ColumnWriter, columnIndex int)
 }
 
 type typedBufferImpl struct {
-	matrix      []parquet.Value
-	columnIndex int
-	rowWidth    int
-	currentRow  int
+	columnWriter *parquet.ColumnWriter
+	columnIndex  int
+
+	// Scratch buffer reused for single-value writes to avoid allocations
+	valueBuffer [1]parquet.Value
 
 	// For int128 we don't make a bunch of small allocs,
 	// but append to this existing buffer a bunch, this
@@ -59,8 +58,9 @@ type typedBufferImpl struct {
 }
 
 func (b *typedBufferImpl) WriteValue(v parquet.Value) {
-	b.matrix[(b.currentRow*b.rowWidth)+b.columnIndex] = v
-	b.currentRow++
+	b.valueBuffer[0] = v
+	// WriteRowValues handles internal buffering, so calling it per-value is fine
+	_, _ = b.columnWriter.WriteRowValues(b.valueBuffer[:])
 }
 
 func (b *typedBufferImpl) WriteNull() {
@@ -84,11 +84,9 @@ func (b *typedBufferImpl) WriteBytes(v []byte) {
 	b.WriteValue(parquet.ByteArrayValue(v).Level(0, 1, b.columnIndex))
 }
 
-func (b *typedBufferImpl) Prepare(matrix []parquet.Value, columnIndex, rowWidth int) {
-	b.currentRow = 0
-	b.matrix = matrix
+func (b *typedBufferImpl) Reset(columnWriter *parquet.ColumnWriter, columnIndex int) {
+	b.columnWriter = columnWriter
 	b.columnIndex = columnIndex
-	b.rowWidth = rowWidth
 	if b.scratch != nil {
 		b.scratch = b.scratch[:0]
 	}

@@ -12,13 +12,11 @@ package streaming
 
 import (
 	"bytes"
-	"encoding/binary"
 	"errors"
 	"fmt"
 
 	"github.com/parquet-go/parquet-go"
 	"github.com/parquet-go/parquet-go/format"
-	"github.com/segmentio/encoding/thrift"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
@@ -66,41 +64,40 @@ func objectMessageToRow(msg *service.Message, out []any, nameToPosition map[stri
 	return nil
 }
 
-func constructRowGroupFromObject(
+// writeRowGroupFromObject writes a batch of object messages directly to a concurrent row group's column writers,
+// then flushes (compresses) the row group. Values are written directly to the column writers as they are converted.
+func writeRowGroupFromObject(
 	batch service.MessageBatch,
 	schema *parquet.Schema,
 	transformers []*dataTransformer,
 	mode SchemaMode,
-) ([]parquet.Row, []*statsBuffer, error) {
-	// We write all of our data in a columnar fashion, but need to pivot that data so that we can feed it into
-	// out parquet library (which sadly will redo the pivot - maybe we need a lower level abstraction...).
-	// So create a massive matrix that we will write stuff in columnar form, but then we don't need to move any
-	// data to create rows of the data via an in-place transpose operation.
-	//
-	// TODO: Consider caching/pooling this matrix as I expect many are similarily sized.
+	rg *parquet.ConcurrentRowGroupWriter,
+) ([]*statsBuffer, error) {
 	rowWidth := len(schema.Fields())
-	matrix := make([]parquet.Value, len(batch)*rowWidth)
 	nameToPosition := make(map[string]int, rowWidth)
 	stats := make([]*statsBuffer, rowWidth)
 	buffers := make([]typedBuffer, rowWidth)
+	columnWriters := rg.ColumnWriters()
+
 	for idx, t := range transformers {
 		leaf, ok := schema.Lookup(t.name)
 		if !ok {
-			return nil, nil, fmt.Errorf("invariant failed: unable to find column %q", t.name)
+			return nil, fmt.Errorf("invariant failed: unable to find column %q", t.name)
 		}
 		buffers[idx] = t.bufferFactory()
-		buffers[idx].Prepare(matrix, leaf.ColumnIndex, rowWidth)
+		buffers[idx].Reset(columnWriters[leaf.ColumnIndex], leaf.ColumnIndex)
 		stats[idx] = &statsBuffer{}
 		nameToPosition[t.name] = idx
 	}
-	// First we need to shred our record into columns, snowflake's data model
-	// is thankfully a flat list of columns, so no dremel style record shredding
-	// is needed
+
+	// Shred records into columns - snowflake's data model is a flat list of columns,
+	// so no dremel style record shredding is needed. Values are written directly
+	// to column writers as they are converted.
 	row := make([]any, rowWidth)
 	for _, msg := range batch {
 		err := objectMessageToRow(msg, row, nameToPosition, mode)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 		for i, v := range row {
 			t := transformers[i]
@@ -109,24 +106,21 @@ func constructRowGroupFromObject(
 			err = t.converter.ValidateAndConvert(s, v, b)
 			if err != nil {
 				if errors.Is(err, errNullValue) {
-					return nil, nil, &NonNullColumnError{msg, t.column.Name}
+					return nil, &NonNullColumnError{msg, t.column.Name}
 				}
-				// There is not special typed error for a validation error, there really isn't
-				// anything we can do about it.
-				return nil, nil, fmt.Errorf("invalid data for column %s: %w", t.name, err)
+				return nil, fmt.Errorf("invalid data for column %s: %w", t.name, err)
 			}
 			// reset the column as nil for the next row
 			row[i] = nil
 		}
 	}
-	// Now all our values have been written to each buffer - here is where we do our matrix
-	// transpose mentioned above
-	rows := make([]parquet.Row, len(batch))
-	for i := range rows {
-		rowStart := i * rowWidth
-		rows[i] = matrix[rowStart : rowStart+rowWidth]
+
+	// Flush compresses the row group data
+	if err := rg.Flush(); err != nil {
+		return nil, fmt.Errorf("failed to flush row group: %w", err)
 	}
-	return rows, stats, nil
+
+	return stats, nil
 }
 
 // arrayMessageToRow converts a message into columnar form using the provided name to index mapping.
@@ -161,31 +155,35 @@ func arrayMessageToRow(msg *service.Message, out []any, mode SchemaMode) error {
 	return nil
 }
 
-func constructRowGroupFromArray(
+// writeRowGroupFromArray writes a batch of array messages directly to a concurrent row group's column writers,
+// then flushes (compresses) the row group. Values are written directly to the column writers as they are converted.
+func writeRowGroupFromArray(
 	batch service.MessageBatch,
 	schema *parquet.Schema,
 	transformers []*dataTransformer,
 	mode SchemaMode,
-) ([]parquet.Row, []*statsBuffer, error) {
-	// TODO: Switch to using concurrent row groups to write this stuff
+	rg *parquet.ConcurrentRowGroupWriter,
+) ([]*statsBuffer, error) {
 	rowWidth := len(schema.Fields())
-	matrix := make([]parquet.Value, len(batch)*rowWidth)
 	stats := make([]*statsBuffer, rowWidth)
 	buffers := make([]typedBuffer, rowWidth)
+	columnWriters := rg.ColumnWriters()
+
 	for idx, t := range transformers {
 		leaf, ok := schema.Lookup(t.name)
 		if !ok {
-			return nil, nil, fmt.Errorf("invariant failed: unable to find column %q", t.name)
+			return nil, fmt.Errorf("invariant failed: unable to find column %q", t.name)
 		}
 		buffers[idx] = t.bufferFactory()
-		buffers[idx].Prepare(matrix, leaf.ColumnIndex, rowWidth)
+		buffers[idx].Reset(columnWriters[leaf.ColumnIndex], leaf.ColumnIndex)
 		stats[idx] = &statsBuffer{}
 	}
+
 	row := make([]any, rowWidth)
 	for _, msg := range batch {
 		err := arrayMessageToRow(msg, row, mode)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 		for i, v := range row {
 			t := transformers[i]
@@ -194,29 +192,27 @@ func constructRowGroupFromArray(
 			err = t.converter.ValidateAndConvert(s, v, b)
 			if err != nil {
 				if errors.Is(err, errNullValue) {
-					return nil, nil, &NonNullColumnError{msg, t.column.Name}
+					return nil, &NonNullColumnError{msg, t.column.Name}
 				}
-				// There is not special typed error for a validation error, there really isn't
-				// anything we can do about it.
-				return nil, nil, fmt.Errorf("invalid data for column %s: %w", t.name, err)
+				return nil, fmt.Errorf("invalid data for column %s: %w", t.name, err)
 			}
 			// reset the column as nil for the next row
 			row[i] = nil
 		}
 	}
-	// Now all our values have been written to each buffer - here is where we do our matrix
-	// transpose mentioned above
-	rows := make([]parquet.Row, len(batch))
-	for i := range rows {
-		rowStart := i * rowWidth
-		rows[i] = matrix[rowStart : rowStart+rowWidth]
+
+	// Flush compresses the row group data
+	if err := rg.Flush(); err != nil {
+		return nil, fmt.Errorf("failed to flush row group: %w", err)
 	}
-	return rows, stats, nil
+
+	return stats, nil
 }
 
 type parquetWriter struct {
-	b *bytes.Buffer
-	w *parquet.GenericWriter[any]
+	b      *bytes.Buffer
+	w      *parquet.GenericWriter[any]
+	schema *parquet.Schema
 }
 
 func newParquetWriter(rpcnVersion string, schema *parquet.Schema) *parquetWriter {
@@ -230,53 +226,32 @@ func newParquetWriter(rpcnVersion string, schema *parquet.Schema) *parquetWriter
 		parquet.Compression(&parquet.Zstd),
 		parquet.WriteBufferSize(0),
 	)
-	return &parquetWriter{b, w}
+	return &parquetWriter{b, w, schema}
 }
 
-// WriteFile writes a new parquet file using the rows and metadata.
-//
-// NOTE: metadata is sticky - if you want the next file to remove metadata you need to set the value to the empty string
-// to actually remove it. In the usage of this method in this package, the metadata keys are all always the same.
-func (w *parquetWriter) WriteFile(rows []parquet.Row, metadata map[string]string) (out []byte, err error) {
+// BeginRowGroup creates a new concurrent row group for parallel construction.
+func (w *parquetWriter) BeginRowGroup() *parquet.ConcurrentRowGroupWriter {
+	return w.w.BeginRowGroup()
+}
+
+// Reset prepares the writer for a new file with the given metadata.
+func (w *parquetWriter) Reset(metadata map[string]string) {
 	for k, v := range metadata {
 		w.w.SetKeyValueMetadata(k, v)
 	}
 	w.b.Reset()
 	w.w.Reset(w.b)
-	defer func() {
-		if r := recover(); r != nil {
-			err = fmt.Errorf("encoding panic: %v", r)
-		}
-	}()
-	_, err = w.w.WriteRows(rows)
-	if err != nil {
-		return
-	}
-	err = w.w.Close()
-	out = w.b.Bytes()
-	return
 }
 
-func readParquetMetadata(parquetFile []byte) (metadata format.FileMetaData, err error) {
-	if len(parquetFile) < 8 {
-		return format.FileMetaData{}, fmt.Errorf("too small of parquet file: %d", len(parquetFile))
+// Close finalizes the parquet file and returns the bytes.
+func (w *parquetWriter) Close() ([]byte, *format.FileMetaData, error) {
+	if err := w.w.Close(); err != nil {
+		return nil, nil, err
 	}
-	trailingBytes := parquetFile[len(parquetFile)-8:]
-	if string(trailingBytes[4:]) != "PAR1" {
-		return metadata, fmt.Errorf("missing magic bytes, got: %q", trailingBytes[4:])
-	}
-	footerSize := int(binary.LittleEndian.Uint32(trailingBytes))
-	if len(parquetFile) < footerSize+8 {
-		return metadata, fmt.Errorf("too small of parquet file: %d, footer size: %d", len(parquetFile), footerSize)
-	}
-	footerBytes := parquetFile[len(parquetFile)-(footerSize+8) : len(parquetFile)-8]
-	if err := thrift.Unmarshal(new(thrift.CompactProtocol), footerBytes, &metadata); err != nil {
-		return metadata, fmt.Errorf("unable to extract parquet metadata: %w", err)
-	}
-	return
+	return w.b.Bytes(), w.w.File().Metadata(), nil
 }
 
-func totalUncompressedSize(metadata format.FileMetaData) int32 {
+func totalUncompressedSize(metadata *format.FileMetaData) int32 {
 	var size int64
 	for _, rowGroup := range metadata.RowGroups {
 		size += rowGroup.TotalByteSize

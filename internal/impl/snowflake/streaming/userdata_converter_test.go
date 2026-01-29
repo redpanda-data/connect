@@ -497,10 +497,9 @@ func (b *testTypedBuffer) WriteBytes(v []byte) {
 	b.output = v
 }
 
-func (b *testTypedBuffer) Prepare([]parquet.Value, int, int) {
+func (b *testTypedBuffer) Reset(*parquet.ColumnWriter, int) {
 	b.output = nil
 }
-func (*testTypedBuffer) Reset() {}
 
 func runTestcase(t *testing.T, dc dataConverter, tc validateTestCase) {
 	t.Helper()
