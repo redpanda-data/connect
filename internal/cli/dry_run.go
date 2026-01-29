@@ -10,9 +10,12 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
+	"strings"
 
 	"github.com/rs/xid"
 	"github.com/urfave/cli/v2"
@@ -60,7 +63,7 @@ Exits with a status code 1 if any connection errors are detected in a directory:
 			r := dryRunner{
 				schema:        schema,
 				licenseConfig: defaultLicenseConfig(),
-				logger: slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+				logger: slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{
 					Level: slog.LevelError,
 				})),
 				runLogger: &dryRunResultLogger{
@@ -112,7 +115,9 @@ type dryRunResultLogger struct {
 func (d *dryRunResultLogger) Add(fileName string, results service.ConnectionTestResults) {
 	var errored bool
 	for _, res := range results {
-		errored = errored || res.Err != nil
+		if res.Err != nil && !errors.Is(res.Err, service.ErrConnectionTestNotSupported) {
+			errored = true
+		}
 	}
 
 	if d.verbose {
@@ -132,13 +137,27 @@ func (d *dryRunResultLogger) Add(fileName string, results service.ConnectionTest
 func (d *dryRunResultLogger) Report() (hasRunErrors bool) {
 	for _, rr := range d.results {
 		for _, res := range rr.results {
-			hasRunErrors = hasRunErrors || res.Err != nil
+			if res.Err != nil && !errors.Is(res.Err, service.ErrConnectionTestNotSupported) {
+				hasRunErrors = true
+			}
 			if res.Err != nil {
-				resText := fmt.Sprintf("[%v] %v\n", res.Label, res.Err)
-				if rr.fileName != "" {
-					resText = fmt.Sprintf("%v: [%v] %v\n", rr.fileName, res.Label, res.Err)
+				label := res.Label
+				if label == "" {
+					label = "." + strings.Join(res.Path, ".")
 				}
-				fmt.Fprint(os.Stderr, red(resText))
+
+				resText := fmt.Sprintf("[%v] %v\n", label, res.Err)
+				if rr.fileName != "" {
+					resText = fmt.Sprintf("%v: [%v] %v\n", rr.fileName, label, res.Err)
+				}
+
+				if errors.Is(res.Err, service.ErrConnectionTestNotSupported) {
+					if d.verbose {
+						fmt.Fprint(os.Stderr, yellow(resText))
+					}
+				} else {
+					fmt.Fprint(os.Stderr, red(resText))
+				}
 			}
 		}
 	}
@@ -161,6 +180,7 @@ func (d *dryRunner) dryRunFile(c *cli.Context, filePath string) error {
 
 	strmBuilder := d.schema.Environment().NewStreamBuilder()
 	strmBuilder.DisableLinting()
+	strmBuilder.SetLogger(d.logger)
 	if err := strmBuilder.SetYAML(string(fileContents)); err != nil {
 		return err
 	}
@@ -194,9 +214,12 @@ func (d *dryRunner) dryRunFile(c *cli.Context, filePath string) error {
 		return err
 	}
 
-	connTestResults, err := strm.ConnectionTest(c.Context)
-	if err != nil {
+	connTestResults := rpMgr.ConnectionTest(c.Context)
+
+	if tmpTestResults, err := strm.ConnectionTest(c.Context); err != nil {
 		return err
+	} else {
+		connTestResults = append(connTestResults, tmpTestResults...)
 	}
 
 	d.runLogger.Add(filePath, connTestResults)

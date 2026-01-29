@@ -132,8 +132,13 @@ func (l *GlobalRedpandaManager) InitWithCustomDetails(pipelineID, logsTopic, sta
 	}
 
 	// TODO: Enterprise check here?
+	resBuilder := service.NewResourceBuilder()
+	resBuilder.SetBenthosLogger(l.fallbackLogger)
+	res, _, err := resBuilder.Build()
+	if err != nil {
+		return err
+	}
 
-	res := service.MockResources(service.MockResourcesOptUseLogger(l.fallbackLogger))
 	tmpO, err := wrapWriter(res, w)
 	if err != nil {
 		l.fallbackLogger.With("error", err.Error()).Warn("failed to initialise topic logs connection")
@@ -197,7 +202,15 @@ func (l *GlobalRedpandaManager) InitFromParsedConfig(pConf *service.ParsedConfig
 		}
 	}
 
-	res := service.MockResources(service.MockResourcesOptUseLogger(l.fallbackLogger))
+	resBuilder := service.NewResourceBuilder()
+	resBuilder.SetBenthosLogger(l.fallbackLogger)
+
+	res, _, err := resBuilder.Build()
+	if err != nil {
+		return err
+	}
+	res = res.IntoPath("redpanda")
+
 	tmpO, err := wrapWriter(res, w)
 	if err != nil {
 		l.fallbackLogger.With("error", err.Error()).Warn("failed to initialise topic logs connection")
@@ -241,6 +254,14 @@ func wrapWriter(res *service.Resources, w service.BatchOutput) (*service.OwnedOu
 	}
 
 	return tmpO, nil
+}
+
+// ConnectionTest attempts to test the global connectivity to Redpanda.
+func (l *GlobalRedpandaManager) ConnectionTest(ctx context.Context) service.ConnectionTestResults {
+	if l.o == nil && l.oCustom == nil {
+		return service.ConnectionTestNotSupported().AsList()
+	}
+	return l.o.ConnectionTest(ctx)
 }
 
 // Close the underlying connections of this manager.
@@ -329,6 +350,20 @@ func newTopicLoggerWriterFromConfig(conf *service.ParsedConfig, log *service.Log
 }
 
 //------------------------------------------------------------------------------
+
+func (f *franzTopicLoggerWriter) ConnectionTest(ctx context.Context) service.ConnectionTestResults {
+	cl, err := kafka.NewFranzClient(ctx, f.clientOpts...)
+	if err != nil {
+		return service.ConnectionTestFailed(err).AsList()
+	}
+	defer cl.Close()
+
+	if err := cl.Ping(ctx); err != nil {
+		return service.ConnectionTestFailed(err).AsList()
+	}
+
+	return service.ConnectionTestSucceeded().AsList()
+}
 
 func (f *franzTopicLoggerWriter) Connect(ctx context.Context) error {
 	if f.client != nil {
