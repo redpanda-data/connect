@@ -75,9 +75,9 @@ func ReplaceConfig(s string) string {
 }
 
 func SetupConfig() {
-	config.account = EnvOrDefault("SNOWFLAKE_ACCOUNT", "WQKFXQQ-WI77362")
-	config.user = EnvOrDefault("SNOWFLAKE_USER", "ROCKWOODREDPANDA")
-	config.db = EnvOrDefault("SNOWFLAKE_DB", "BABY_DATABASE")
+	config.account = EnvOrDefault("SNOWFLAKE_ACCOUNT", "wqkfxqq-redpanda_aws")
+	config.user = EnvOrDefault("SNOWFLAKE_USER", "TYLERROCKWOOD")
+	config.db = EnvOrDefault("SNOWFLAKE_DB", "TYLER_DB")
 	config.role = EnvOrDefault("SNOWFLAKE_ROLE", "ACCOUNTADMIN")
 	config.schema = EnvOrDefault("SNOWFLAKE_SCHEMA", "PUBLIC")
 	config.privateKeyFile = EnvOrDefault("SNOWFLAKE_PRIVATE_KEY", "./streaming/resources/rsa_key.p8")
@@ -95,7 +95,7 @@ func SetupConfig() {
 	)
 }
 
-func Batch(rows []map[string]any) service.MessageBatch {
+func ObjectBatch(rows []map[string]any) service.MessageBatch {
 	var batch service.MessageBatch
 	for _, row := range rows {
 		msg := service.NewMessage(nil)
@@ -105,7 +105,17 @@ func Batch(rows []map[string]any) service.MessageBatch {
 	return batch
 }
 
-func SetupSnowflakeStream(t *testing.T, outputConfiguration string) (func([]map[string]any) error, *service.Stream) {
+func ArrayBatch(rows [][]any) service.MessageBatch {
+	var batch service.MessageBatch
+	for _, row := range rows {
+		msg := service.NewMessage(nil)
+		msg.SetStructuredMut(row)
+		batch = append(batch, msg)
+	}
+	return batch
+}
+
+func SetupSnowflakeStream(t *testing.T, outputConfiguration string) (func(any) error, *service.Stream) {
 	SetupConfig()
 	t.Helper()
 	streamBuilder := service.NewStreamBuilder()
@@ -117,24 +127,29 @@ func SetupSnowflakeStream(t *testing.T, outputConfiguration string) (func([]map[
 	require.NoError(t, err)
 	license.InjectTestService(stream.Resources())
 	t.Cleanup(func() {
-		err := stream.Stop(t.Context())
+		err := stream.Stop(context.Background())
 		require.NoError(t, err)
 	})
-	return func(b []map[string]any) error {
-		return produce(t.Context(), Batch(b))
+	return func(v any) error {
+		switch b := v.(type) {
+		case []map[string]any:
+			return produce(t.Context(), ObjectBatch(b))
+		case [][]any:
+			return produce(t.Context(), ArrayBatch(b))
+		default:
+			return fmt.Errorf("unexpected batch type: %T", v)
+		}
 	}, stream
 }
 
 func RunStreamInBackground(t *testing.T, stream *service.Stream) {
 	ctx, cancel := context.WithCancel(t.Context())
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
+	wg.Go(func() {
 		if err := stream.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
 			t.Error("failed to run stream: ", err)
 		}
-		wg.Done()
-	}()
+	})
 	t.Cleanup(func() {
 		cancel()
 		wg.Wait()
@@ -214,6 +229,57 @@ snowflake_streaming:
 		{"zoom", "4"},
 		{"thud", "5"},
 		{"zing", "6"},
+	}, rows)
+}
+
+func TestIntegrationArrayMessageFormat(t *testing.T) {
+	integration.CheckSkip(t)
+	produce, stream := SetupSnowflakeStream(t, `
+label: snowpipe_streaming
+snowflake_streaming:
+  account: "$ACCOUNT"
+  user: "$USER"
+  role: $ROLE
+  database: "$DB"
+  schema: $SCHEMA
+  private_key_file: "$PRIVATE_KEY_FILE"
+  table: integration_test_array_inputs
+  init_statement: |
+    DROP TABLE IF EXISTS integration_test_array_inputs;
+    CREATE TABLE integration_test_array_inputs(foo TEXT, token INTEGER, ts TIMESTAMP_NTZ);
+  max_in_flight: 1
+  message_format: array
+  timestamp_format: "2006-01-02 15:04:05Z"
+  schema_evolution:
+    enabled: true
+`)
+	RunStreamInBackground(t, stream)
+	require.NoError(t, produce([][]any{
+		{"bar", 1, "2026-01-02 15:04:59Z"},
+		{"baz", 2, "2026-02-20 23:00:59Z"},
+		{"qux", 3, "2026-03-20 00:54:33Z"},
+		{"zoom", 4, "2026-04-18 12:33:00Z"},
+	}))
+	require.NoError(t, produce([][]any{
+		{"bar", 5, "2026-01-02 15:04:05Z"},
+		{"baz", 6}, // will be filled in as `NULL`
+		{"qux", 7, "2026-01-02 15:04:05Z"},
+		{"zoom", 8, nil},
+	}))
+	rows := RunSQLQuery(
+		t,
+		stream,
+		`SELECT foo, token, ts FROM integration_test_array_inputs ORDER BY token`,
+	)
+	require.Equal(t, [][]string{
+		{"bar", "1", "2026-01-02 15:04:59.000"},
+		{"baz", "2", "2026-02-20 23:00:59.000"},
+		{"qux", "3", "2026-03-20 00:54:33.000"},
+		{"zoom", "4", "2026-04-18 12:33:00.000"},
+		{"bar", "5", "2026-01-02 15:04:05.000"},
+		{"baz", "6", ""},
+		{"qux", "7", "2026-01-02 15:04:05.000"},
+		{"zoom", "8", ""},
 	}, rows)
 }
 

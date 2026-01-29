@@ -35,10 +35,10 @@ const (
 	SchemaModeStrictWithNulls
 )
 
-// messageToRow converts a message into columnar form using the provided name to index mapping.
+// objectMessageToRow converts a message into columnar form using the provided name to index mapping.
 // We have to materialize the column into a row so that we can know if a column is null - the
 // msg can be sparse, but the row must not be sparse.
-func messageToRow(msg *service.Message, out []any, nameToPosition map[string]int, mode SchemaMode) error {
+func objectMessageToRow(msg *service.Message, out []any, nameToPosition map[string]int, mode SchemaMode) error {
 	v, err := msg.AsStructured()
 	if err != nil {
 		return fmt.Errorf("error extracting object from message: %w", err)
@@ -66,7 +66,7 @@ func messageToRow(msg *service.Message, out []any, nameToPosition map[string]int
 	return nil
 }
 
-func constructRowGroup(
+func constructRowGroupFromObject(
 	batch service.MessageBatch,
 	schema *parquet.Schema,
 	transformers []*dataTransformer,
@@ -98,7 +98,92 @@ func constructRowGroup(
 	// is needed
 	row := make([]any, rowWidth)
 	for _, msg := range batch {
-		err := messageToRow(msg, row, nameToPosition, mode)
+		err := objectMessageToRow(msg, row, nameToPosition, mode)
+		if err != nil {
+			return nil, nil, err
+		}
+		for i, v := range row {
+			t := transformers[i]
+			s := stats[i]
+			b := buffers[i]
+			err = t.converter.ValidateAndConvert(s, v, b)
+			if err != nil {
+				if errors.Is(err, errNullValue) {
+					return nil, nil, &NonNullColumnError{msg, t.column.Name}
+				}
+				// There is not special typed error for a validation error, there really isn't
+				// anything we can do about it.
+				return nil, nil, fmt.Errorf("invalid data for column %s: %w", t.name, err)
+			}
+			// reset the column as nil for the next row
+			row[i] = nil
+		}
+	}
+	// Now all our values have been written to each buffer - here is where we do our matrix
+	// transpose mentioned above
+	rows := make([]parquet.Row, len(batch))
+	for i := range rows {
+		rowStart := i * rowWidth
+		rows[i] = matrix[rowStart : rowStart+rowWidth]
+	}
+	return rows, stats, nil
+}
+
+// arrayMessageToRow converts a message into columnar form using the provided name to index mapping.
+// We have to materialize the column into a row so that we can know if a column is null - the
+// msg can be sparse, but the row must not be sparse.
+func arrayMessageToRow(msg *service.Message, out []any, mode SchemaMode) error {
+	v, err := msg.AsStructured()
+	if err != nil {
+		return fmt.Errorf("error extracting object from message: %w", err)
+	}
+	row, ok := v.([]any)
+	if !ok {
+		return fmt.Errorf("expected array, got: %T", v)
+	}
+	copy(out, row)
+	if len(row) > len(out) && mode != SchemaModeIgnoreExtra {
+		// We have extra columns here folks
+		var missingColumns []*MissingColumnError
+		for i, v := range row[len(out):] {
+			if mode == SchemaModeStrict && v != nil {
+				k := fmt.Sprintf("COLUMN_%d", len(out)+i)
+				missingColumns = append(missingColumns, NewMissingColumnError(msg, k, v))
+			} else if mode == SchemaModeStrictWithNulls {
+				k := fmt.Sprintf("COLUMN_%d", len(out)+i)
+				missingColumns = append(missingColumns, NewMissingColumnError(msg, k, v))
+			}
+		}
+		if len(missingColumns) > 0 {
+			return &BatchSchemaMismatchError[*MissingColumnError]{missingColumns}
+		}
+	}
+	return nil
+}
+
+func constructRowGroupFromArray(
+	batch service.MessageBatch,
+	schema *parquet.Schema,
+	transformers []*dataTransformer,
+	mode SchemaMode,
+) ([]parquet.Row, []*statsBuffer, error) {
+	// TODO: Switch to using concurrent row groups to write this stuff
+	rowWidth := len(schema.Fields())
+	matrix := make([]parquet.Value, len(batch)*rowWidth)
+	stats := make([]*statsBuffer, rowWidth)
+	buffers := make([]typedBuffer, rowWidth)
+	for idx, t := range transformers {
+		leaf, ok := schema.Lookup(t.name)
+		if !ok {
+			return nil, nil, fmt.Errorf("invariant failed: unable to find column %q", t.name)
+		}
+		buffers[idx] = t.bufferFactory()
+		buffers[idx].Prepare(matrix, leaf.ColumnIndex, rowWidth)
+		stats[idx] = &statsBuffer{}
+	}
+	row := make([]any, rowWidth)
+	for _, msg := range batch {
+		err := arrayMessageToRow(msg, row, mode)
 		if err != nil {
 			return nil, nil, err
 		}

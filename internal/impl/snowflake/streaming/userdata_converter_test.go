@@ -349,12 +349,13 @@ func TestTimestampNTZConverter(t *testing.T) {
 			loc, err := time.LoadLocation("America/New_York")
 			require.NoError(t, err)
 			c := &timestampConverter{
-				nullable:  true,
-				scale:     tc.scale,
-				precision: tc.precision,
-				includeTZ: false,
-				trimTZ:    true,
-				defaultTZ: loc,
+				nullable:   true,
+				scale:      tc.scale,
+				precision:  tc.precision,
+				includeTZ:  false,
+				trimTZ:     true,
+				defaultTZ:  loc,
+				timeFormat: time.RFC3339Nano,
 			}
 			runTestcase(t, c, tc)
 		})
@@ -376,12 +377,13 @@ func TestTimestampTZConverter(t *testing.T) {
 			loc, err := time.LoadLocation("America/New_York")
 			require.NoError(t, err)
 			c := &timestampConverter{
-				nullable:  true,
-				scale:     tc.scale,
-				precision: tc.precision,
-				includeTZ: true,
-				trimTZ:    false,
-				defaultTZ: loc,
+				nullable:   true,
+				scale:      tc.scale,
+				precision:  tc.precision,
+				includeTZ:  true,
+				trimTZ:     false,
+				defaultTZ:  loc,
+				timeFormat: time.RFC3339Nano,
 			}
 			runTestcase(t, c, tc)
 		})
@@ -415,12 +417,13 @@ func TestTimestampLTZConverter(t *testing.T) {
 			loc, err := time.LoadLocation("America/New_York")
 			require.NoError(t, err)
 			c := &timestampConverter{
-				nullable:  true,
-				scale:     tc.scale,
-				precision: tc.precision,
-				includeTZ: false,
-				trimTZ:    false,
-				defaultTZ: loc,
+				nullable:   true,
+				scale:      tc.scale,
+				precision:  tc.precision,
+				includeTZ:  false,
+				trimTZ:     false,
+				defaultTZ:  loc,
+				timeFormat: time.RFC3339Nano,
 			}
 			runTestcase(t, c, tc)
 		})

@@ -65,9 +65,9 @@ func setup(t *testing.T) (*streaming.SnowflakeRestClient, *streaming.SnowflakeSe
 	parseResult, err := x509.ParsePKCS8PrivateKey(block.Bytes)
 	require.NoError(t, err)
 	clientOptions := streaming.ClientOptions{
-		Account:        envOr("SNOWFLAKE_ACCOUNT", "WQKFXQQ-WI77362"),
-		URL:            fmt.Sprintf("https://%s.snowflakecomputing.com", envOr("SNOWFLAKE_ACCOUNT", "WQKFXQQ-WI77362")),
-		User:           envOr("SNOWFLAKE_USER", "ROCKWOODREDPANDA"),
+		Account:        envOr("SNOWFLAKE_ACCOUNT", "wqkfxqq-redpanda_aws"),
+		URL:            fmt.Sprintf("https://%s.snowflakecomputing.com", envOr("SNOWFLAKE_ACCOUNT", "wqkfxqq-redpanda_aws")),
+		User:           envOr("SNOWFLAKE_USER", "TYLERTYLER_DB"),
 		Role:           "ACCOUNTADMIN",
 		PrivateKey:     parseResult.(*rsa.PrivateKey),
 		ConnectVersion: "",
@@ -93,7 +93,7 @@ func TestAllSnowflakeDatatypes(t *testing.T) {
 	restClient, streamClient := setup(t)
 	channelOpts := streaming.ChannelOptions{
 		Name:         t.Name(),
-		DatabaseName: envOr("SNOWFLAKE_DB", "BABY_DATABASE"),
+		DatabaseName: envOr("SNOWFLAKE_DB", "TYLER_DB"),
 		SchemaName:   "PUBLIC",
 		TableName:    "TEST_TABLE_KITCHEN_SINK",
 		BuildOptions: streaming.BuildOptions{Parallelism: 1, ChunkSize: 50_000},
@@ -278,7 +278,7 @@ func TestIntegerCompat(t *testing.T) {
 	restClient, streamClient := setup(t)
 	channelOpts := streaming.ChannelOptions{
 		Name:         t.Name(),
-		DatabaseName: envOr("SNOWFLAKE_DB", "BABY_DATABASE"),
+		DatabaseName: envOr("SNOWFLAKE_DB", "TYLER_DB"),
 		SchemaName:   "PUBLIC",
 		TableName:    "TEST_INT_TABLE",
 		BuildOptions: streaming.BuildOptions{Parallelism: 1, ChunkSize: 50_000},
@@ -353,7 +353,7 @@ func TestTimestampCompat(t *testing.T) {
 	restClient, streamClient := setup(t)
 	channelOpts := streaming.ChannelOptions{
 		Name:         t.Name(),
-		DatabaseName: envOr("SNOWFLAKE_DB", "BABY_DATABASE"),
+		DatabaseName: envOr("SNOWFLAKE_DB", "TYLER_DB"),
 		SchemaName:   "PUBLIC",
 		TableName:    "TEST_TIMESTAMP_TABLE",
 		BuildOptions: streaming.BuildOptions{Parallelism: 1, ChunkSize: 50_000},
@@ -502,7 +502,7 @@ func TestChannelReopenFails(t *testing.T) {
 	restClient, streamClient := setup(t)
 	channelOpts := streaming.ChannelOptions{
 		Name:         t.Name(),
-		DatabaseName: envOr("SNOWFLAKE_DB", "BABY_DATABASE"),
+		DatabaseName: envOr("SNOWFLAKE_DB", "TYLER_DB"),
 		SchemaName:   "PUBLIC",
 		TableName:    "TEST_CHANNEL_TABLE",
 		BuildOptions: streaming.BuildOptions{Parallelism: 1, ChunkSize: 50_000},
@@ -567,7 +567,7 @@ func TestChannelOffsetToken(t *testing.T) {
 	restClient, streamClient := setup(t)
 	channelOpts := streaming.ChannelOptions{
 		Name:         t.Name(),
-		DatabaseName: envOr("SNOWFLAKE_DB", "BABY_DATABASE"),
+		DatabaseName: envOr("SNOWFLAKE_DB", "TYLER_DB"),
 		SchemaName:   "PUBLIC",
 		TableName:    "TEST_OFFSET_TOKEN_TABLE",
 		BuildOptions: streaming.BuildOptions{Parallelism: 1, ChunkSize: 50_000},
