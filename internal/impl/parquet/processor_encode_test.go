@@ -44,10 +44,10 @@ schema:
 
 	tctx := t.Context()
 	_, err = encodeProc.ProcessBatch(tctx, service.MessageBatch{
-		service.NewMessage([]byte(`{"id":12,"name":"foo"}`)),
+		service.NewMessage([]byte(`{"id":"bar","name":"foo"}`)),
 	})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "cannot create parquet value of type FLOAT from go value of type int64")
+	assert.Contains(t, err.Error(), "encoding panic")
 }
 
 func TestParquetEncodeDecodeRoundTrip(t *testing.T) {

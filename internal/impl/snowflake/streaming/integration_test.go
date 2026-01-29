@@ -67,7 +67,7 @@ func setup(t *testing.T) (*streaming.SnowflakeRestClient, *streaming.SnowflakeSe
 	clientOptions := streaming.ClientOptions{
 		Account:        envOr("SNOWFLAKE_ACCOUNT", "wqkfxqq-redpanda_aws"),
 		URL:            fmt.Sprintf("https://%s.snowflakecomputing.com", envOr("SNOWFLAKE_ACCOUNT", "wqkfxqq-redpanda_aws")),
-		User:           envOr("SNOWFLAKE_USER", "TYLERTYLER_DB"),
+		User:           envOr("SNOWFLAKE_USER", "TYLERROCKWOOD"),
 		Role:           "ACCOUNTADMIN",
 		PrivateKey:     parseResult.(*rsa.PrivateKey),
 		ConnectVersion: "",
