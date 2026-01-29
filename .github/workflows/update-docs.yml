@@ -1,9 +1,8 @@
 name: Update Docs
 
 on:
-  push:
-    tags:
-      - 'v*'
+  release:
+    types: [published]
 
 permissions:
   id-token: write
@@ -13,6 +12,8 @@ jobs:
   update-blobl-playground-modules:
     name: Update Bloblang playground modules
     runs-on: ubuntu-latest
+    # Skip prereleases and drafts
+    if: ${{ !github.event.release.prerelease && !github.event.release.draft }}
     steps:
       - uses: aws-actions/configure-aws-credentials@v5
         with:
@@ -32,6 +33,8 @@ jobs:
   update-rpcn-connector-docs:
     name: Generate RPCN connector docs
     runs-on: ubuntu-latest
+    # Skip prereleases and drafts
+    if: ${{ !github.event.release.prerelease && !github.event.release.draft }}
     steps:
       - uses: aws-actions/configure-aws-credentials@v5
         with:
