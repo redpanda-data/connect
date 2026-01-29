@@ -346,6 +346,7 @@ type timestampConverter struct {
 	includeTZ        bool
 	trimTZ           bool
 	defaultTZ        *time.Location
+	timeFormat       string
 }
 
 func (c timestampConverter) ValidateAndConvert(stats *statsBuffer, val any, buf typedBuffer) error {
@@ -372,8 +373,7 @@ func (c timestampConverter) ValidateAndConvert(stats *statsBuffer, val any, buf 
 		}
 	}
 	if s != "" {
-		location := c.defaultTZ
-		t, err = time.ParseInLocation(time.RFC3339Nano, s, location)
+		t, err = time.ParseInLocation(c.timeFormat, s, c.defaultTZ)
 		if err != nil {
 			return &InvalidTimestampFormatError{"timestamp", s}
 		}

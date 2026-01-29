@@ -56,6 +56,7 @@ const (
 	ssoFieldSchemaEvolutionProcessors           = "processors"
 	ssoFieldCommitTimeout                       = "commit_timeout"
 	ssoFieldMessageFormat                       = "message_format"
+	ssoFieldTimestampFormat                     = "timestamp_format"
 
 	defaultSchemaEvolutionNewColumnMapping = `root = match this.value.type() {
   this == "string" => "STRING"
@@ -196,6 +197,10 @@ For more information about offset tokens, see https://docs.snowflake.com/en/user
 				Default("object").
 				Advanced().
 				Example("array"),
+			service.NewStringField(ssoFieldTimestampFormat).
+				Description("The format to parse string values for TIMESTAMP, TIMESTAMP_LTZ and TIMESTAMP_NTZ columns. Should be a layout for https://pkg.go.dev/time#Parse[^time.Parse] in Golang.").
+				Default(time.RFC3339Nano).
+				Advanced(),
 		).
 		LintRule(`root = match {
   this.exists("private_key") && this.exists("private_key_file") => [ "both `+"`private_key`"+` and `+"`private_key_file`"+` can't be set simultaneously" ],
@@ -540,6 +545,11 @@ func newSnowflakeStreamer(
 		return nil, fmt.Errorf("unknown `%s`: %q", ssoFieldMessageFormat, messageFormatStr)
 	}
 
+	timestampFormat, err := conf.FieldString(ssoFieldTimestampFormat)
+	if err != nil {
+		return nil, err
+	}
+
 	// Normalize role, db and schema as they are case-sensitive in the API calls.
 	// Maybe we should use the golang SQL driver for SQL statements so we don't have
 	// to handle this, instead of the REST API directly.
@@ -616,19 +626,20 @@ func newSnowflakeStreamer(
 		var impl service.BatchOutput
 		if channelName != nil {
 			indexed := &snowpipeIndexedOutput{
-				channelName:   channelName,
-				client:        client,
-				db:            db,
-				schema:        schema,
-				table:         table,
-				role:          role,
-				logger:        mgr.Logger(),
-				metrics:       newSnowpipeMetrics(mgr.Metrics()),
-				buildOpts:     buildOpts,
-				offsetToken:   offsetToken,
-				schemaMode:    schemaEvolutionMode,
-				commitTimeout: commitTimeout,
-				messageFormat: msgFmt,
+				channelName:     channelName,
+				client:          client,
+				db:              db,
+				schema:          schema,
+				table:           table,
+				role:            role,
+				logger:          mgr.Logger(),
+				metrics:         newSnowpipeMetrics(mgr.Metrics()),
+				buildOpts:       buildOpts,
+				offsetToken:     offsetToken,
+				schemaMode:      schemaEvolutionMode,
+				commitTimeout:   commitTimeout,
+				messageFormat:   msgFmt,
+				timestampFormat: timestampFormat,
 			}
 			indexed.channelPool = pool.NewIndexed(func(ctx context.Context, name string) (*streaming.SnowflakeIngestionChannel, error) {
 				hash := sha256.Sum256([]byte(name))
@@ -644,19 +655,20 @@ func newSnowflakeStreamer(
 				channelPrefix = fmt.Sprintf("Redpanda_Connect_%s.%s.%s", db, schema, table)
 			}
 			pooled := &snowpipePooledOutput{
-				channelPrefix: channelPrefix,
-				client:        client,
-				db:            db,
-				schema:        schema,
-				table:         table,
-				role:          role,
-				logger:        mgr.Logger(),
-				metrics:       newSnowpipeMetrics(mgr.Metrics()),
-				buildOpts:     buildOpts,
-				offsetToken:   offsetToken,
-				schemaMode:    schemaEvolutionMode,
-				commitTimeout: commitTimeout,
-				messageFormat: msgFmt,
+				channelPrefix:   channelPrefix,
+				client:          client,
+				db:              db,
+				schema:          schema,
+				table:           table,
+				role:            role,
+				logger:          mgr.Logger(),
+				metrics:         newSnowpipeMetrics(mgr.Metrics()),
+				buildOpts:       buildOpts,
+				offsetToken:     offsetToken,
+				schemaMode:      schemaEvolutionMode,
+				commitTimeout:   commitTimeout,
+				messageFormat:   msgFmt,
+				timestampFormat: timestampFormat,
 			}
 			pooled.channelPool = pool.NewCapped(maxInFlight, func(ctx context.Context, id int) (*streaming.SnowflakeIngestionChannel, error) {
 				name := fmt.Sprintf("%s_%d", pooled.channelPrefix, id)
@@ -916,19 +928,21 @@ type snowpipePooledOutput struct {
 	logger                                 *service.Logger
 	schemaMode                             streaming.SchemaMode
 	messageFormat                          streaming.MessageFormat
+	timestampFormat                        string
 }
 
 func (o *snowpipePooledOutput) openChannel(ctx context.Context, name string, id int16) (*streaming.SnowflakeIngestionChannel, error) {
 	o.logger.Debugf("opening snowflake streaming channel for table `%s.%s.%s`: %s", o.db, o.schema, o.table, name)
 	return o.client.OpenChannel(ctx, streaming.ChannelOptions{
-		ID:            id,
-		Name:          name,
-		DatabaseName:  o.db,
-		SchemaName:    o.schema,
-		TableName:     o.table,
-		BuildOptions:  o.buildOpts,
-		SchemaMode:    o.schemaMode,
-		MessageFormat: o.messageFormat,
+		ID:              id,
+		Name:            name,
+		DatabaseName:    o.db,
+		SchemaName:      o.schema,
+		TableName:       o.table,
+		BuildOptions:    o.buildOpts,
+		SchemaMode:      o.schemaMode,
+		MessageFormat:   o.messageFormat,
+		TimestampFormat: o.timestampFormat,
 	})
 }
 
@@ -1017,19 +1031,21 @@ type snowpipeIndexedOutput struct {
 	logger                   *service.Logger
 	schemaMode               streaming.SchemaMode
 	messageFormat            streaming.MessageFormat
+	timestampFormat          string
 }
 
 func (o *snowpipeIndexedOutput) openChannel(ctx context.Context, name string, id int16) (*streaming.SnowflakeIngestionChannel, error) {
 	o.logger.Debugf("opening snowflake streaming channel for table `%s.%s.%s`: %s", o.db, o.schema, o.table, name)
 	return o.client.OpenChannel(ctx, streaming.ChannelOptions{
-		ID:            id,
-		Name:          name,
-		DatabaseName:  o.db,
-		SchemaName:    o.schema,
-		TableName:     o.table,
-		BuildOptions:  o.buildOpts,
-		SchemaMode:    o.schemaMode,
-		MessageFormat: o.messageFormat,
+		ID:              id,
+		Name:            name,
+		DatabaseName:    o.db,
+		SchemaName:      o.schema,
+		TableName:       o.table,
+		BuildOptions:    o.buildOpts,
+		SchemaMode:      o.schemaMode,
+		MessageFormat:   o.messageFormat,
+		TimestampFormat: o.timestampFormat,
 	})
 }
 

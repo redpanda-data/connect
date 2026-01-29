@@ -178,6 +178,8 @@ type ChannelOptions struct {
 	SchemaMode SchemaMode
 	// MesssageFormat what format do we expect incoming data to be?
 	MessageFormat MessageFormat
+	// TimestampFormat is the format of timestamps parsed by the connector
+	TimestampFormat string
 }
 
 type encryptionInfo struct {
@@ -208,7 +210,9 @@ func (c *SnowflakeServiceClient) OpenChannel(ctx context.Context, opts ChannelOp
 	if resp.StatusCode != responseSuccess {
 		return nil, fmt.Errorf("unable to open channel %s - status: %d, message: %s", opts.Name, resp.StatusCode, resp.Message)
 	}
-	schema, transformers, typeMetadata, err := constructParquetSchema(resp.TableColumns)
+	schema, transformers, typeMetadata, err := constructParquetSchema(resp.TableColumns, dataConverterOptions{
+		TimestampFormat: opts.TimestampFormat,
+	})
 	if err != nil {
 		return nil, err
 	}

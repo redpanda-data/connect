@@ -246,43 +246,40 @@ snowflake_streaming:
   table: integration_test_array_inputs
   init_statement: |
     DROP TABLE IF EXISTS integration_test_array_inputs;
-    CREATE TABLE integration_test_array_inputs(foo TEXT, token INTEGER);
+    CREATE TABLE integration_test_array_inputs(foo TEXT, token INTEGER, ts TIMESTAMP_NTZ);
   max_in_flight: 1
   message_format: array
+  timestamp_format: "2006-01-02 15:04:05Z"
   schema_evolution:
     enabled: true
 `)
 	RunStreamInBackground(t, stream)
 	require.NoError(t, produce([][]any{
-		{"bar", 1},
-		{"baz", 2},
-		{"qux", 3},
-		{"zoom", 4},
+		{"bar", 1, "2026-01-02 15:04:59Z"},
+		{"baz", 2, "2026-02-20 23:00:59Z"},
+		{"qux", 3, "2026-03-20 00:54:33Z"},
+		{"zoom", 4, "2026-04-18 12:33:00Z"},
 	}))
 	require.NoError(t, produce([][]any{
-		{"qux", 3},
-		{"zoom", 4},
-		{"thud", 5},
-		{"zing", 6},
-	}))
-	require.NoError(t, produce([][]any{
-		{"bar", 1},
-		{"baz", 2},
-		{"qux", 3},
-		{"zoom", 4},
+		{"bar", 5, "2026-01-02 15:04:05Z"},
+		{"baz", 6}, // will be filled in as `NULL`
+		{"qux", 7, "2026-01-02 15:04:05Z"},
+		{"zoom", 8, nil},
 	}))
 	rows := RunSQLQuery(
 		t,
 		stream,
-		`SELECT foo, token FROM integration_test_exactly_once ORDER BY token`,
+		`SELECT foo, token, ts FROM integration_test_array_inputs ORDER BY token`,
 	)
 	require.Equal(t, [][]string{
-		{"bar", "1"},
-		{"baz", "2"},
-		{"qux", "3"},
-		{"zoom", "4"},
-		{"thud", "5"},
-		{"zing", "6"},
+		{"bar", "1", "2026-01-02 15:04:59.000"},
+		{"baz", "2", "2026-02-20 23:00:59.000"},
+		{"qux", "3", "2026-03-20 00:54:33.000"},
+		{"zoom", "4", "2026-04-18 12:33:00.000"},
+		{"bar", "5", "2026-01-02 15:04:05.000"},
+		{"baz", "6", ""},
+		{"qux", "7", "2026-01-02 15:04:05.000"},
+		{"zoom", "8", ""},
 	}, rows)
 }
 
