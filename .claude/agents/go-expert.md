@@ -196,6 +196,42 @@ var i = 42
 var coords = Point{X: 0, Y: 0}
 ```
 
+**Use var groups for multiple related declarations**:
+```go
+// Good - grouped zero-value declarations (very common pattern)
+var (
+    name    string
+    email   string
+    address string
+)
+
+// Good - grouped package-level initialized vars (errors, constants)
+var (
+    ErrNotFound = errors.New("not found")
+    ErrInvalid  = errors.New("invalid")
+    maxRetries  = 3
+)
+
+// Good - grouped function-level zero values
+func process() {
+    var (
+        count  int
+        result string
+        err    error
+    )
+    // ...
+}
+
+// Bad - separate var declarations for multiple related vars
+var name string
+var email string
+var address string
+
+// Bad - separate package-level initializations
+var ErrNotFound = errors.New("not found")
+var ErrInvalid = errors.New("invalid")
+```
+
 **Shadowing vs Stomping** - Use `=` to reassign in new scope:
 ```go
 // Bad - shadowing bug
