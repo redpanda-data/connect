@@ -234,6 +234,7 @@ func (p *processor) Process(ctx context.Context, msg *service.Message) (service.
 		if k != "" {
 			vectorName = &k
 		}
+		//nolint:staticcheck
 		if v.GetVectorsCount() > 0 {
 			var vecs [][]float32
 			for chunk := range slices.Chunk(v.Data, int(v.GetVectorsCount())) {
