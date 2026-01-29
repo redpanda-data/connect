@@ -20,10 +20,8 @@ import (
 // dynamoDBCDCRecordBatcher tracks messages and their checkpoints for DynamoDB CDC.
 //
 // This batcher implements a batched checkpointing strategy to optimize performance by
-// checkpointing only after a configurable threshold of messages have been acknowledged
+// checkpointing only after a configurable threshold of messages has been acknowledged
 // per shard, rather than after every message.
-//
-// Message tracking
 type dynamoDBCDCRecordBatcher struct {
 	mu             sync.Mutex
 	messageTracker map[*service.Message]*messageCheckpoint

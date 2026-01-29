@@ -20,7 +20,9 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
-// dynamoDBCDCCheckpointer manages checkpoints for DynamoDB CDC shards.
+// dynamoDBCDCCheckpointer manages checkpoints for DynamoDB CDC shards in a DynamoDB table.
+// It stores the last processed sequence number for each shard, enabling resumption from
+// the last checkpoint after restarts.
 type dynamoDBCDCCheckpointer struct {
 	tableName       string
 	streamArn       string

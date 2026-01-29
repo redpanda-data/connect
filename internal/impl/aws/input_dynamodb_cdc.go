@@ -43,19 +43,34 @@ func dynamoDBCDCInputConfig() *service.ConfigSpec {
 		Beta().
 		Version("4.79.0").
 		Categories("Services", "AWS").
-		Summary("Reads change data capture (CDC) events from DynamoDB Streams").
+		Summary("Reads change data capture (CDC) events from DynamoDB Streams.").
 		Description(`
 Consumes records from DynamoDB Streams with automatic checkpointing and shard management.
 
 DynamoDB Streams capture item-level changes in DynamoDB tables. This input supports:
+
 - Automatic shard discovery and management
-- Checkpoint-based resumption after crashes
-- Multiple shard processing
+- Checkpoint-based resumption after restarts
+- Concurrent processing of multiple shards
 
-For better performance and longer retention, consider using Kinesis Data Streams for DynamoDB
-with the `+"`aws_kinesis`"+` input instead.
+### Prerequisites
 
-== Metadata
+The source DynamoDB table must have streams enabled. You can enable streams with one of these view types:
+
+- `+"`KEYS_ONLY`"+` - Only the key attributes of the modified item
+- `+"`NEW_IMAGE`"+` - The entire item as it appears after the modification
+- `+"`OLD_IMAGE`"+` - The entire item as it appeared before the modification
+- `+"`NEW_AND_OLD_IMAGES`"+` - Both the new and old item images
+
+### Checkpointing
+
+Checkpoints are stored in a separate DynamoDB table (configured via `+"`checkpoint_table`"+`). This table is created automatically if it does not exist. On restart, the input resumes from the last checkpointed position for each shard.
+
+### Alternative
+
+For better performance and longer retention (up to 1 year vs 24 hours), consider using Kinesis Data Streams for DynamoDB with the `+"`aws_kinesis`"+` input instead.
+
+### Metadata
 
 This input adds the following metadata fields to each message:
 
@@ -64,12 +79,12 @@ This input adds the following metadata fields to each message:
 - `+"`dynamodb_event_name`"+` - The type of change: INSERT, MODIFY, or REMOVE
 - `+"`dynamodb_table`"+` - The name of the DynamoDB table
 
-== Metrics
+### Metrics
 
-This input exposes the following metrics:
+This input emits the following metrics:
 
 - `+"`dynamodb_cdc_shards_tracked`"+` - Total number of shards being tracked (gauge)
-- `+"`dynamodb_cdc_shards_active`"+` - Number of active shards currently being read from (gauge)
+- `+"`dynamodb_cdc_shards_active`"+` - Number of shards currently being read from (gauge)
 `).
 		Fields(
 			service.NewStringField("table").
@@ -79,7 +94,7 @@ This input exposes the following metrics:
 				Description("DynamoDB table name for storing checkpoints. Will be created if it doesn't exist.").
 				Default("redpanda_dynamodb_checkpoints"),
 			service.NewIntField("batch_size").
-				Description("Maximum number of records to read in a single batch.").
+				Description("Maximum number of records to read per shard in a single request. Valid range: 1-1000.").
 				Default(defaultDynamoDBBatchSize).
 				Advanced(),
 			service.NewDurationField("poll_interval").
@@ -90,7 +105,7 @@ This input exposes the following metrics:
 				Description("Where to start reading when no checkpoint exists. `trim_horizon` starts from the oldest available record, `latest` starts from new records.").
 				Default("trim_horizon"),
 			service.NewIntField("checkpoint_limit").
-				Description("Maximum number of messages to process before updating checkpoint.").
+				Description("Maximum number of unacknowledged messages before forcing a checkpoint update. Lower values provide better recovery guarantees but increase write overhead.").
 				Default(1000).
 				Advanced(),
 			service.NewIntField("max_tracked_shards").
@@ -98,7 +113,28 @@ This input exposes the following metrics:
 				Default(10000).
 				Advanced(),
 		).
-		Fields(config.SessionFields()...)
+		Fields(config.SessionFields()...).
+		Example(
+			"Consume CDC events",
+			"Read change events from a DynamoDB table with streams enabled.",
+			`
+input:
+  aws_dynamodb_cdc:
+    table: my-table
+    region: us-east-1
+`,
+		).
+		Example(
+			"Start from latest",
+			"Only process new changes, ignoring existing stream data.",
+			`
+input:
+  aws_dynamodb_cdc:
+    table: orders
+    start_from: latest
+    region: us-west-2
+`,
+		)
 }
 
 func init() {
