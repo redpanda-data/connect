@@ -259,6 +259,34 @@ type Request struct {}
 func Encode(w io.Writer, req *Request) {}
 ```
 
+**Wrap doc comments at 80 characters**:
+```go
+// Good - wrapped at 80 chars
+// ProcessBatch processes a batch of items concurrently using the provided
+// worker pool. It returns the number of successfully processed items and any
+// error encountered during processing.
+func ProcessBatch(items []Item, pool *WorkerPool) (int, error) {}
+
+// Bad - long single line
+// ProcessBatch processes a batch of items concurrently using the provided worker pool and returns the number of successfully processed items and any error encountered during processing.
+func ProcessBatch(items []Item, pool *WorkerPool) (int, error) {}
+```
+
+**Use [] notation to reference other types and functions**:
+```go
+// Good - using [] for cross-references
+// NewClient creates a new [Client] with the given configuration.
+// Use [Client.Connect] to establish a connection before calling other methods.
+// See [Config] for available options.
+func NewClient(cfg Config) *Client {}
+
+// Bad - no cross-references
+// NewClient creates a new Client with the given configuration.
+// Use Client.Connect to establish a connection before calling other methods.
+// See Config for available options.
+func NewClient(cfg Config) *Client {}
+```
+
 ## Misc Patterns
 
 **Empty slices** - Prefer `var t []string` over `t := []string{}`:
