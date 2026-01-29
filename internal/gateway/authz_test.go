@@ -24,11 +24,11 @@ import (
 )
 
 const (
-	authzTestResourceName authz.ResourceName   = "organization/test-org/resourcegroup/default/dataplane/test-service"
+	authzTestResourceName authz.ResourceName   = "organizations/test-org/resourcegroups/default/dataplanes/test-service"
 	authzTestPermRead     authz.PermissionName = "test_service_read"
 	authzTestPermWrite    authz.PermissionName = "test_service_write"
-	authzTestPrincipal    authz.PrincipalID    = "test@example.com"
-	authzOtherPrincipal   authz.PrincipalID    = "other@example.com"
+	authzTestPrincipal    authz.PrincipalID    = "User:test@example.com"
+	authzOtherPrincipal   authz.PrincipalID    = "User:other@example.com"
 )
 
 // testHandler is a simple HTTP handler that writes "OK" on success
