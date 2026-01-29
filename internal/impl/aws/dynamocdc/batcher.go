@@ -6,7 +6,7 @@
 //
 // https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
-package aws
+package dynamocdc
 
 import (
 	"context"
@@ -17,24 +17,22 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
-// dynamoDBCDCRecordBatcher tracks messages and their checkpoints for DynamoDB CDC.
+// RecordBatcher tracks messages and their checkpoints for DynamoDB CDC.
 //
-// This batcher implements a batched checkpointing strategy to optimize performance by
-// checkpointing only after a configurable threshold of messages has been acknowledged
-// per shard, rather than after every message.
-type dynamoDBCDCRecordBatcher struct {
+// This batcher implements a batched checkpointing strategy to optimize performance
+// by checkpointing only after a configurable threshold of messages has been
+// acknowledged per shard, rather than after every message.
+type RecordBatcher struct {
+	maxTrackedShards   int
+	maxTrackedMessages int
+	log                *service.Logger
+
 	mu             sync.Mutex
 	messageTracker map[*service.Message]*messageCheckpoint
 
 	// Checkpoint state per shard
 	pendingCount    map[string]int    // Count of acked but not-yet-checkpointed messages
 	lastCheckpoints map[string]string // Most recent sequence number per shard
-
-	// Configuration
-	maxTrackedShards   int // Memory safety limit for number of unique shards
-	maxTrackedMessages int // Memory safety limit for in-flight messages
-
-	log *service.Logger
 }
 
 type messageCheckpoint struct {
@@ -42,16 +40,16 @@ type messageCheckpoint struct {
 	sequenceNumber string
 }
 
-// newDynamoDBCDCRecordBatcher creates a new record batcher for DynamoDB CDC.
-func newDynamoDBCDCRecordBatcher(maxTrackedShards, checkpointLimit int, log *service.Logger) *dynamoDBCDCRecordBatcher {
-	// Set max tracked messages to 10x the checkpoint limit to allow for some buffering
-	// This prevents unbounded growth while allowing parallel processing
+// NewRecordBatcher creates a new [RecordBatcher] for DynamoDB CDC.
+func NewRecordBatcher(maxTrackedShards, checkpointLimit int, log *service.Logger) *RecordBatcher {
+	// Set max tracked messages to 10x the checkpoint limit to allow for some buffering.
+	// This prevents unbounded growth while allowing parallel processing.
 	maxTrackedMessages := checkpointLimit * 10
 	if maxTrackedMessages < 1000 {
 		maxTrackedMessages = 1000 // Minimum reasonable size
 	}
 
-	return &dynamoDBCDCRecordBatcher{
+	return &RecordBatcher{
 		messageTracker:     make(map[*service.Message]*messageCheckpoint),
 		log:                log,
 		pendingCount:       make(map[string]int),
@@ -63,7 +61,7 @@ func newDynamoDBCDCRecordBatcher(maxTrackedShards, checkpointLimit int, log *ser
 
 // AddMessages tracks a batch of messages with their shard and sequence information.
 // Each message should have its sequence number in metadata under "dynamodb_sequence_number".
-func (b *dynamoDBCDCRecordBatcher) AddMessages(batch service.MessageBatch, shardID string) service.MessageBatch {
+func (b *RecordBatcher) AddMessages(batch service.MessageBatch, shardID string) service.MessageBatch {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -87,7 +85,7 @@ func (b *dynamoDBCDCRecordBatcher) AddMessages(batch service.MessageBatch, shard
 }
 
 // RemoveMessages removes messages from tracking (used when messages are nacked).
-func (b *dynamoDBCDCRecordBatcher) RemoveMessages(batch service.MessageBatch) {
+func (b *RecordBatcher) RemoveMessages(batch service.MessageBatch) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -96,19 +94,17 @@ func (b *dynamoDBCDCRecordBatcher) RemoveMessages(batch service.MessageBatch) {
 	}
 }
 
-// checkpointerInterface defines the interface for checkpointing operations.
-type checkpointerInterface interface {
+type checkpointer interface {
 	Set(ctx context.Context, shardID, sequenceNumber string) error
 	GetCheckpointLimit() int
 }
 
-// GetCheckpointLimit returns the checkpoint limit for the checkpointer.
-func (c *dynamoDBCDCCheckpointer) GetCheckpointLimit() int {
-	return c.checkpointLimit
-}
-
 // AckMessages marks messages as acknowledged and checkpoints if threshold is reached.
-func (b *dynamoDBCDCRecordBatcher) AckMessages(ctx context.Context, checkpointer checkpointerInterface, batch service.MessageBatch) error {
+func (b *RecordBatcher) AckMessages(
+	ctx context.Context,
+	cp checkpointer,
+	batch service.MessageBatch,
+) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -141,8 +137,8 @@ func (b *dynamoDBCDCRecordBatcher) AckMessages(ctx context.Context, checkpointer
 		b.pendingCount[shardID] += shardMessageCounts[shardID]
 
 		// Check if we should checkpoint
-		if b.pendingCount[shardID] >= checkpointer.GetCheckpointLimit() {
-			if err := checkpointer.Set(ctx, shardID, seq); err != nil {
+		if b.pendingCount[shardID] >= cp.GetCheckpointLimit() {
+			if err := cp.Set(ctx, shardID, seq); err != nil {
 				return err
 			}
 
@@ -155,8 +151,9 @@ func (b *dynamoDBCDCRecordBatcher) AckMessages(ctx context.Context, checkpointer
 	return nil
 }
 
-// GetPendingCheckpoints returns a copy of all pending checkpoints that haven't been persisted yet.
-func (b *dynamoDBCDCRecordBatcher) GetPendingCheckpoints() map[string]string {
+// GetPendingCheckpoints returns a copy of all pending checkpoints that haven't
+// been persisted yet.
+func (b *RecordBatcher) GetPendingCheckpoints() map[string]string {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -165,11 +162,65 @@ func (b *dynamoDBCDCRecordBatcher) GetPendingCheckpoints() map[string]string {
 	return checkpoints
 }
 
-// ShouldThrottle returns true if the message tracker is near capacity and backpressure should be applied.
-func (b *dynamoDBCDCRecordBatcher) ShouldThrottle() bool {
+// ShouldThrottle returns true if the message tracker is near capacity and
+// backpressure should be applied.
+func (b *RecordBatcher) ShouldThrottle() bool {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
 	// Throttle at 90% capacity to leave some headroom
 	return len(b.messageTracker) >= (b.maxTrackedMessages * 9 / 10)
+}
+
+// PendingCount returns the pending count for a shard. Exported for testing.
+func (b *RecordBatcher) PendingCount(shardID string) int {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.pendingCount[shardID]
+}
+
+// TrackedMessageCount returns the number of tracked messages. Exported for testing.
+func (b *RecordBatcher) TrackedMessageCount() int {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return len(b.messageTracker)
+}
+
+// LastCheckpoint returns the last checkpoint for a shard. Exported for testing.
+func (b *RecordBatcher) LastCheckpoint(shardID string) string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.lastCheckpoints[shardID]
+}
+
+// SetLastCheckpoint sets the last checkpoint for a shard. Exported for testing.
+func (b *RecordBatcher) SetLastCheckpoint(shardID, seq string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.lastCheckpoints[shardID] = seq
+}
+
+// SetPendingCount sets the pending count for a shard. Exported for testing.
+func (b *RecordBatcher) SetPendingCount(shardID string, count int) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.pendingCount[shardID] = count
+}
+
+// GetMessageCheckpoint returns the checkpoint info for a message. Exported for testing.
+func (b *RecordBatcher) GetMessageCheckpoint(msg *service.Message) (shardID, sequenceNumber string, exists bool) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	cp, ok := b.messageTracker[msg]
+	if !ok {
+		return "", "", false
+	}
+	return cp.shardID, cp.sequenceNumber, true
+}
+
+// LastCheckpointsCount returns the number of shards with checkpoints. Exported for testing.
+func (b *RecordBatcher) LastCheckpointsCount() int {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return len(b.lastCheckpoints)
 }

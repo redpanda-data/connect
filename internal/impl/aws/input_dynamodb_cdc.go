@@ -26,12 +26,14 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/impl/aws/config"
+	"github.com/redpanda-data/connect/v4/internal/impl/aws/dynamocdc"
 )
 
 const (
-	defaultDynamoDBBatchSize    = 1000 // AWS max limit
-	defaultDynamoDBPollInterval = "1s"
-	defaultShutdownTimeout      = 10 * time.Second
+	defaultDynamoDBBatchSize       = 1000 // AWS max limit
+	defaultDynamoDBPollInterval    = "1s"
+	defaultDynamoDBThrottleBackoff = "100ms"
+	defaultShutdownTimeout         = 10 * time.Second
 
 	// Metrics
 	metricShardsTracked = "dynamodb_cdc_shards_tracked"
@@ -112,6 +114,10 @@ This input emits the following metrics:
 				Description("Maximum number of shards to track simultaneously. Prevents memory issues with extremely large tables.").
 				Default(10000).
 				Advanced(),
+			service.NewDurationField("throttle_backoff").
+				Description("Time to wait when applying backpressure due to too many in-flight messages.").
+				Default(defaultDynamoDBThrottleBackoff).
+				Advanced(),
 		).
 		Fields(config.SessionFields()...).
 		Example(
@@ -156,36 +162,32 @@ type dynamoDBCDCConfig struct {
 	startFrom        string
 	checkpointLimit  int
 	maxTrackedShards int
+	throttleBackoff  time.Duration
 }
 
 type dynamoDBCDCInput struct {
-	conf dynamoDBCDCConfig
-
+	conf          dynamoDBCDCConfig
 	awsConf       aws.Config
 	dynamoClient  *dynamodb.Client
 	streamsClient *dynamodbstreams.Client
 	streamArn     *string
+	log           *service.Logger
+	metrics       dynamoDBCDCMetrics
 
-	checkpointer  *dynamoDBCDCCheckpointer
-	recordBatcher *dynamoDBCDCRecordBatcher
+	mu            sync.RWMutex
+	msgChan       chan asyncMessage
+	shutSig       *shutdown.Signaller
+	checkpointer  *dynamocdc.Checkpointer
+	recordBatcher *dynamocdc.RecordBatcher
+	shardReaders  map[string]*dynamoDBShardReader
 
-	// Channel-based batch delivery
-	msgChan chan asyncMessage
-	shutSig *shutdown.Signaller
-
-	// Shard management
-	shardReaders map[string]*dynamoDBShardReader
-	mu           sync.RWMutex // Changed to RWMutex for better performance
-
-	// Pending acknowledgments tracking
 	pendingAcks sync.WaitGroup
 	closed      atomic.Bool
+}
 
-	log *service.Logger
-
-	// Metrics
-	shardsTrackedMetric *service.MetricGauge
-	shardsActiveMetric  *service.MetricGauge
+type dynamoDBCDCMetrics struct {
+	shardsTracked *service.MetricGauge
+	shardsActive  *service.MetricGauge
 }
 
 type dynamoDBShardReader struct {
@@ -216,6 +218,9 @@ func dynamoCDCInputConfigFromParsed(pConf *service.ParsedConfig) (conf dynamoDBC
 	if conf.maxTrackedShards, err = pConf.FieldInt("max_tracked_shards"); err != nil {
 		return
 	}
+	if conf.throttleBackoff, err = pConf.FieldDuration("throttle_backoff"); err != nil {
+		return
+	}
 	return
 }
 
@@ -231,12 +236,15 @@ func newDynamoDBCDCInputFromConfig(pConf *service.ParsedConfig, mgr *service.Res
 	}
 
 	return &dynamoDBCDCInput{
-		conf:                conf,
-		awsConf:             awsConf,
-		shardReaders:        make(map[string]*dynamoDBShardReader),
-		log:                 mgr.Logger(),
-		shardsTrackedMetric: mgr.Metrics().NewGauge(metricShardsTracked),
-		shardsActiveMetric:  mgr.Metrics().NewGauge(metricShardsActive),
+		conf:         conf,
+		awsConf:      awsConf,
+		shardReaders: make(map[string]*dynamoDBShardReader),
+		shutSig:      shutdown.NewSignaller(),
+		log:          mgr.Logger(),
+		metrics: dynamoDBCDCMetrics{
+			shardsTracked: mgr.Metrics().NewGauge(metricShardsTracked),
+			shardsActive:  mgr.Metrics().NewGauge(metricShardsActive),
+		},
 	}, nil
 }
 
@@ -262,17 +270,16 @@ func (d *dynamoDBCDCInput) Connect(ctx context.Context) error {
 	}
 
 	// Initialize checkpointer
-	d.checkpointer, err = newDynamoDBCDCCheckpointer(ctx, d.dynamoClient, d.conf.checkpointTable, *d.streamArn, d.conf.checkpointLimit, d.log)
+	d.checkpointer, err = dynamocdc.NewCheckpointer(ctx, d.dynamoClient, d.conf.checkpointTable, *d.streamArn, d.conf.checkpointLimit, d.log)
 	if err != nil {
 		return fmt.Errorf("failed to create checkpointer: %w", err)
 	}
 
 	// Initialize record batcher
-	d.recordBatcher = newDynamoDBCDCRecordBatcher(d.conf.maxTrackedShards, d.conf.checkpointLimit, d.log)
+	d.recordBatcher = dynamocdc.NewRecordBatcher(d.conf.maxTrackedShards, d.conf.checkpointLimit, d.log)
 
-	// Initialize channel and shutdown signaller
+	// Initialize message channel
 	d.msgChan = make(chan asyncMessage)
-	d.shutSig = shutdown.NewSignaller()
 
 	d.log.Infof("Connected to DynamoDB stream: %s", *d.streamArn)
 
@@ -291,7 +298,11 @@ func (d *dynamoDBCDCInput) Connect(ctx context.Context) error {
 	}
 
 	// Start background goroutine to coordinate shard readers
-	go d.runShardCoordinator()
+	coordinatorCtx, coordinatorCancel := d.shutSig.SoftStopCtx(context.Background())
+	go func() {
+		defer coordinatorCancel()
+		d.startShardCoordinator(coordinatorCtx)
+	}()
 
 	return nil
 }
@@ -381,21 +392,18 @@ func (d *dynamoDBCDCInput) refreshShards(ctx context.Context) error {
 		d.mu.Unlock()
 
 		d.log.Infof("Tracking %d shards", totalShards)
-		d.shardsTrackedMetric.Set(int64(totalShards))
+		d.metrics.shardsTracked.Set(int64(totalShards))
 	}
 
 	return nil
 }
 
-// runShardCoordinator spawns goroutines for each shard and manages shard refresh
-func (d *dynamoDBCDCInput) runShardCoordinator() {
+// startShardCoordinator spawns goroutines for each shard and manages shard refresh.
+func (d *dynamoDBCDCInput) startShardCoordinator(ctx context.Context) {
 	defer func() {
 		close(d.msgChan)
 		d.shutSig.TriggerHasStopped()
 	}()
-
-	ctx, cancel := d.shutSig.SoftStopCtx(context.Background())
-	defer cancel()
 
 	// Track running shard readers
 	activeShards := make(map[string]context.CancelFunc)
@@ -421,7 +429,7 @@ func (d *dynamoDBCDCInput) runShardCoordinator() {
 			if _, exists := activeShards[shardID]; !exists && !reader.exhausted {
 				shardCtx, shardCancel := context.WithCancel(ctx)
 				activeShards[shardID] = shardCancel
-				go d.runShardReader(shardCtx, shardID)
+				go d.startShardReader(shardCtx, shardID)
 			}
 		}
 
@@ -435,7 +443,7 @@ func (d *dynamoDBCDCInput) runShardCoordinator() {
 				activeCount++
 			}
 		}
-		d.shardsActiveMetric.Set(int64(activeCount))
+		d.metrics.shardsActive.Set(int64(activeCount))
 
 		select {
 		case <-ctx.Done():
@@ -452,8 +460,8 @@ func (d *dynamoDBCDCInput) runShardCoordinator() {
 	}
 }
 
-// runShardReader continuously reads from a single shard and sends batches to the channel
-func (d *dynamoDBCDCInput) runShardReader(ctx context.Context, shardID string) {
+// startShardReader continuously reads from a single shard and sends batches to the channel
+func (d *dynamoDBCDCInput) startShardReader(ctx context.Context, shardID string) {
 	d.log.Debugf("Starting reader for shard %s", shardID)
 	defer d.log.Debugf("Stopped reader for shard %s", shardID)
 
@@ -479,16 +487,24 @@ func (d *dynamoDBCDCInput) runShardReader(ctx context.Context, shardID string) {
 			}
 
 			// Apply backpressure if too many messages are in flight
-			if d.recordBatcher != nil && d.recordBatcher.ShouldThrottle() {
+			for d.recordBatcher != nil && d.recordBatcher.ShouldThrottle() {
 				d.log.Debugf("Throttling shard %s due to too many in-flight messages", shardID)
-				time.Sleep(100 * time.Millisecond)
-				continue
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(d.conf.throttleBackoff):
+				}
 			}
 
 			// Get current reader state
 			d.mu.RLock()
 			reader, exists := d.shardReaders[shardID]
-			if !exists || reader.exhausted || reader.iterator == nil {
+			if !exists {
+				d.mu.RUnlock()
+				d.log.Errorf("BUG: shard reader for %s not found in map", shardID)
+				return
+			}
+			if reader.exhausted || reader.iterator == nil {
 				d.mu.RUnlock()
 				return
 			}
@@ -676,21 +692,17 @@ func (d *dynamoDBCDCInput) Close(ctx context.Context) error {
 	d.mu.RUnlock()
 
 	// Trigger graceful shutdown
-	if shutSig != nil {
-		d.log.Debug("Initiating graceful shutdown")
-		shutSig.TriggerSoftStop()
+	d.log.Debug("Initiating graceful shutdown")
+	shutSig.TriggerSoftStop()
 
-		// Wait for background goroutines to stop
-		select {
-		case <-shutSig.HasStoppedChan():
-			d.log.Debug("Background goroutines stopped")
-		case <-time.After(defaultShutdownTimeout):
-			d.log.Warn("Timeout waiting for background goroutines to stop")
-			// Trigger hard stop if graceful shutdown times out
-			shutSig.TriggerHardStop()
-		}
-	} else {
-		d.log.Debug("Skipping shutdown signal - component not fully initialized")
+	// Wait for background goroutines to stop
+	select {
+	case <-shutSig.HasStoppedChan():
+		d.log.Debug("Background goroutines stopped")
+	case <-time.After(defaultShutdownTimeout):
+		d.log.Warn("Timeout waiting for background goroutines to stop")
+		// Trigger hard stop if graceful shutdown times out
+		shutSig.TriggerHardStop()
 	}
 
 	// Wait for pending acknowledgments with timeout

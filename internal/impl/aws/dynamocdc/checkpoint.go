@@ -6,7 +6,7 @@
 //
 // https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
-package aws
+package dynamocdc
 
 import (
 	"context"
@@ -20,10 +20,10 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
-// dynamoDBCDCCheckpointer manages checkpoints for DynamoDB CDC shards in a DynamoDB table.
-// It stores the last processed sequence number for each shard, enabling resumption from
-// the last checkpoint after restarts.
-type dynamoDBCDCCheckpointer struct {
+// Checkpointer manages checkpoints for DynamoDB CDC shards in a DynamoDB table.
+// It stores the last processed sequence number for each shard, enabling resumption
+// from the last checkpoint after restarts.
+type Checkpointer struct {
 	tableName       string
 	streamArn       string
 	checkpointLimit int
@@ -31,16 +31,16 @@ type dynamoDBCDCCheckpointer struct {
 	log             *service.Logger
 }
 
-// newDynamoDBCDCCheckpointer creates a new checkpointer for DynamoDB CDC.
-func newDynamoDBCDCCheckpointer(
+// NewCheckpointer creates a new [Checkpointer] for DynamoDB CDC.
+func NewCheckpointer(
 	ctx context.Context,
 	svc *dynamodb.Client,
 	tableName,
 	streamArn string,
 	checkpointLimit int,
 	log *service.Logger,
-) (*dynamoDBCDCCheckpointer, error) {
-	c := &dynamoDBCDCCheckpointer{
+) (*Checkpointer, error) {
+	c := &Checkpointer{
 		tableName:       tableName,
 		streamArn:       streamArn,
 		checkpointLimit: checkpointLimit,
@@ -55,7 +55,7 @@ func newDynamoDBCDCCheckpointer(
 	return c, nil
 }
 
-func (c *dynamoDBCDCCheckpointer) ensureTableExists(ctx context.Context) error {
+func (c *Checkpointer) ensureTableExists(ctx context.Context) error {
 	_, err := c.svc.DescribeTable(ctx, &dynamodb.DescribeTableInput{
 		TableName: aws.String(c.tableName),
 	})
@@ -88,7 +88,7 @@ func (c *dynamoDBCDCCheckpointer) ensureTableExists(ctx context.Context) error {
 }
 
 // Get retrieves the checkpoint for a shard.
-func (c *dynamoDBCDCCheckpointer) Get(ctx context.Context, shardID string) (string, error) {
+func (c *Checkpointer) Get(ctx context.Context, shardID string) (string, error) {
 	result, err := c.svc.GetItem(ctx, &dynamodb.GetItemInput{
 		TableName: aws.String(c.tableName),
 		Key: map[string]types.AttributeValue{
@@ -117,7 +117,7 @@ func (c *dynamoDBCDCCheckpointer) Get(ctx context.Context, shardID string) (stri
 }
 
 // Set stores a checkpoint for a shard.
-func (c *dynamoDBCDCCheckpointer) Set(ctx context.Context, shardID, sequenceNumber string) error {
+func (c *Checkpointer) Set(ctx context.Context, shardID, sequenceNumber string) error {
 	_, err := c.svc.PutItem(ctx, &dynamodb.PutItemInput{
 		TableName: aws.String(c.tableName),
 		Item: map[string]types.AttributeValue{
@@ -133,9 +133,13 @@ func (c *dynamoDBCDCCheckpointer) Set(ctx context.Context, shardID, sequenceNumb
 	return nil
 }
 
+// GetCheckpointLimit returns the checkpoint limit for the checkpointer.
+func (c *Checkpointer) GetCheckpointLimit() int {
+	return c.checkpointLimit
+}
+
 // FlushCheckpoints writes all pending checkpoints to DynamoDB.
-func (c *dynamoDBCDCCheckpointer) FlushCheckpoints(ctx context.Context, checkpoints map[string]string) error {
-	// Flush all pending checkpoints
+func (c *Checkpointer) FlushCheckpoints(ctx context.Context, checkpoints map[string]string) error {
 	for shardID, seq := range checkpoints {
 		if seq == "" {
 			continue
