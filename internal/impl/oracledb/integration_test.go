@@ -649,5 +649,64 @@ oracledb_cdc:
 	}
 
 	require.NoError(t, stream.StopWithin(time.Second*10))
-	// TODO: Verify json is correct similar to TestIntegration_MicrosoftSQLServerCDC_SnapshotAndStreaming_AllTypes
+
+	// assert min
+	require.JSONEq(t, `{
+		"bigint_col": -9223372036854775808,
+		"binary_col": "AAAAAAAAAAAAAAAAAAAAAA==",
+		"bit_col": "false",
+		"char_col": "AAAAAAAAAA",
+		"date_col": "0001-01-01T00:00:00Z",
+		"datetime2_col": "0001-01-01T00:00:00Z",
+		"datetime_col": "1753-01-01T00:00:00Z",
+		"datetimeoffset_col": "0001-01-01T00:00:00-14:00",
+		"decimal_col": -9999999999999999999999999999.9999999999,
+		"float_col": -1.79e+308,
+		"int_col": -2147483648,
+		"json_col": "{}",
+		"nchar_col": "АААААААААА",
+		"numeric_col": -999999999999999.99999,
+		"nvarchar_col": "",
+		"nvarcharmax_col": "",
+		"real_col": "-3.3999999521443642e+38",
+		"smalldatetime_col": "1900-01-01T00:00:00Z",
+		"smallint_col": -32768,
+		"time_col": "0001-01-01T00:00:00Z",
+		"tinyint_col": 0,
+		"varbinary_col": "AA==",
+		"varbinarymax_col": "AA==",
+		"varchar_col": "",
+		"varcharmax_col": "",
+		"xml_col": "\u003croot/\u003e"
+		}`, outBatches[0], "Failed to assert min result")
+
+	// assert max
+	require.JSONEq(t, `{
+		"bigint_col": 9223372036854775807,
+		"binary_col": "AAAAAAAAAAAAAAAAAAAAAA==",
+		"bit_col": true,
+		"char_col": "ZZZZZZZZZZ",
+		"date_col": "9999-12-31T00:00:00Z",
+		"datetime2_col": "9999-12-31T23:59:59.9999999Z",
+		"datetime_col": "9999-12-31T23:59:59.997Z",
+		"datetimeoffset_col": "9999-12-31T23:59:59.9999999+14:00",
+		"decimal_col": 9999999999999999999999999999.9999999999,
+		"float_col": 1.79e+308,
+		"int_col": 2147483647,
+		"json_col": "{\"max\": true}",
+		"nchar_col": "ZZZZZZZZZZ",
+		"numeric_col": 999999999999999.99999,
+		"nvarchar_col": "Max nvarchar value",
+		"nvarcharmax_col": "Max nvarchar(max)",
+		"real_col": 3.3999999521443642e+38,
+		"smalldatetime_col": "2079-06-06T23:59:00Z",
+		"smallint_col": 32767,
+		"time_col": "0001-01-01T23:59:59.9999999Z",
+		"tinyint_col": 255,
+		"varbinary_col": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+		"varbinarymax_col": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+		"varchar_col": "Max varchar value",
+		"varcharmax_col": "Max varchar(max)",
+		"xml_col": "\u003croot\u003emax\u003c/root\u003e"
+		}`, outBatches[1], "Failed to assert max result")
 }
