@@ -4,5 +4,5 @@ roles:
 
 bindings:
   - role: test.readonly
-    principal: test@example.com
-    scope: organization/test-org/resourcegroup/default/dataplane/test-service
+    principal: User:test@example.com
+    scope: organizations/test-org/resourcegroups/default/dataplanes/test-service
