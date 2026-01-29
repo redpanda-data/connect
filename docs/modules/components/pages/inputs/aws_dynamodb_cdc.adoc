@@ -61,6 +61,7 @@ input:
     start_from: trim_horizon
     checkpoint_limit: 1000
     max_tracked_shards: 10000
+    throttle_backoff: 100ms
     region: "" # No default (optional)
     endpoint: "" # No default (optional)
     tcp:
@@ -228,6 +229,15 @@ Maximum number of shards to track simultaneously. Prevents memory issues with ex
 *Type*: `int`
 
 *Default*: `10000`
+
+=== `throttle_backoff`
+
+Time to wait when applying backpressure due to too many in-flight messages.
+
+
+*Type*: `string`
+
+*Default*: `"100ms"`
 
 === `region`
 
