@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - redis_pubsub: `redis_pubsub_channel` and `redis_pubsub_pattern` metadata fields added to input component. (@g-hurst)
+- snowflake_streaming: new `message_format` and `timestamp_format` advanced properties introduced. (@rockwotj)
 
 ### Fixed
 
