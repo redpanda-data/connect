@@ -16,37 +16,37 @@ jobs:
       contents: write
 
     steps:
-    - name: Check Out Repo
-      uses: actions/checkout@v5
-      with:
-        fetch-depth: 0
+      - name: Check Out Repo
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
-    - name: Install Go
-      uses: actions/setup-go@v6
-      with:
-        go-version-file: 'go.mod'
+      - name: Install Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: 'go.mod'
 
-    - name: Configure Git
-      run: |
-        git config --global user.name "github-actions[bot]"
-        git config --global user.email "github-actions[bot]@users.noreply.github.com"
+      - name: Configure Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-    - name: Create bundle tags
-      run: |
-        chmod +x ./resources/scripts/tag_bundles.sh
-        ./resources/scripts/tag_bundles.sh
+      - name: Create bundle tags
+        run: |
+          chmod +x ./resources/scripts/tag_bundles.sh
+          ./resources/scripts/tag_bundles.sh
 
-    - name: Push tags
-      run: |
-        git push origin --tags
+      - name: Push tags
+        run: |
+          git push origin --tags
 
-    - name: List created tags
-      run: |
-        echo "Created the following bundle tags:"
-        for dir in $(ls ./public/bundle); do
-          bundle_path="public/bundle/$dir"
-          modline=$( cd $bundle_path && cat go.mod | grep "redpanda-data/connect/v" )
-          modline_split=( $modline )
-          version=${modline_split[2]}
-          echo "  - $bundle_path/$version"
-        done
+      - name: List created tags
+        run: |
+          echo "Created the following bundle tags:"
+          for dir in $(ls ./public/bundle); do
+            bundle_path="public/bundle/$dir"
+            modline=$( cd $bundle_path && cat go.mod | grep "redpanda-data/connect/v" )
+            modline_split=( $modline )
+            version=${modline_split[2]}
+            echo "  - $bundle_path/$version"
+          done

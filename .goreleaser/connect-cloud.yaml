@@ -7,8 +7,8 @@ builds:
   - id: connect-cloud
     main: cmd/redpanda-connect-cloud/main.go
     binary: redpanda-connect
-    goos: [ linux, darwin ]
-    goarch: [ amd64, arm64 ]
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
     env:
       - CGO_ENABLED=0
     tags:
@@ -21,7 +21,7 @@ builds:
 
 archives:
   - id: connect-cloud
-    ids: [ connect-cloud ]
+    ids: [connect-cloud]
     formats: tar.gz
     name_template: 'redpanda-connect-cloud_{{ .Version }}_{{ .Os }}_{{ .Arch }}{{ with .Arm }}v{{ . }}{{ end }}{{ with .Mips }}_{{ . }}{{ end }}{{ if not (eq .Amd64 "v1") }}{{ .Amd64 }}{{ end }}'
     files:
@@ -59,4 +59,3 @@ release:
 
 checksum:
   split: true
-

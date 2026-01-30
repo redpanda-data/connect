@@ -18,17 +18,17 @@ jobs:
       CGO_ENABLED: 0
     steps:
 
-    - name: Checkout code
-      uses: actions/checkout@v5
-      with:
-        fetch-depth: 0
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
-    - name: Install Go
-      uses: actions/setup-go@v6
-      with:
-        go-version-file: 'go.mod'
+      - name: Install Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: 'go.mod'
 
-    - name: GoReleaser
-      uses: goreleaser/goreleaser-action@v6
-      with:
-        args: release --snapshot --timeout 120m --config ./.goreleaser/connect.yaml
+      - name: GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          args: release --snapshot --timeout 120m --config ./.goreleaser/connect.yaml
