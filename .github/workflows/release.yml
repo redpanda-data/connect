@@ -100,8 +100,14 @@ jobs:
           username: ${{ env.DOCKERHUB_USER }}
           password: ${{ env.DOCKERHUB_TOKEN }}
 
-      - name: Install Buildx
+      - name: Setup Buildx
         uses: docker/setup-buildx-action@v3
+
+      - name: Setup Task
+        uses: ./.github/actions/setup-task
+
+      - name: Initialize Docker buildx with docker-container driver
+        run: task docker:init
 
       - name: Write telemetry private key
         env:

@@ -1,6 +1,17 @@
 version: '3'
 
 tasks:
+  init:
+    desc: Initialize Docker buildx with docker-container driver
+    cmds:
+      - |
+        if docker buildx inspect container >/dev/null 2>&1; then
+          docker buildx use container
+        else
+          docker buildx create --use --name container --driver docker-container --driver-opt network=host --bootstrap
+        fi
+    silent: true
+
   redpanda-connect:
     desc: Build main Docker image using goreleaser for local development
     aliases:
