@@ -11,6 +11,7 @@ jobs:
   integration-test:
     if: ${{ github.event_name != 'pull_request' || startsWith(github.event.pull_request.title, 'build(deps)') }}
     runs-on: ubuntu-latest-32
+    environment: Integration-Tests
     env:
       CGO_ENABLED: 0
     strategy:
