@@ -222,6 +222,7 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 		}),
 
 		// Custom subcommands
+		service.CLIOptAddCommand(dryRunCli(schema)),
 		service.CLIOptAddCommand(agentCli(rpMgr)),
 		service.CLIOptAddCommand(mcpServerCli(rpMgr)),
 		service.CLIOptAddCommand(pluginInit()),

@@ -3,12 +3,13 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## 4.79.0 - TBD
+## 4.79.0 - 2026-01-30
 
 ### Added
 
 - redis_pubsub: `redis_pubsub_channel` and `redis_pubsub_pattern` metadata fields added to input component. (@g-hurst)
 - snowflake_streaming: new `message_format` and `timestamp_format` advanced properties introduced. (@rockwotj)
+- New `dry-run` subcommand for testing the connections of provided configs. (@Jeffail)
 
 ### Fixed
 
