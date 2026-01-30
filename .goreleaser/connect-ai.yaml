@@ -3,6 +3,10 @@ project_name: redpanda-connect
 dist: target/dist
 version: 2
 
+before:
+  hooks:
+    - docker pull ollama/ollama:latest
+
 builds:
   - id: connect-ai
     main: cmd/redpanda-connect-ai/main.go
