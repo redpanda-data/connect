@@ -3,7 +3,7 @@ http:
   enabled: true
 
 input:
-  redpanda_common:
+  redpanda:
     consumer_group: cg_d
     topics: [ testing_a ]
     auto_replay_nacks: false
@@ -16,7 +16,7 @@ pipeline:
 
 output:
   fallback:
-    - redpanda_common:
+    - redpanda:
         topic: testing_b
     - stdout: {}
       processors:
