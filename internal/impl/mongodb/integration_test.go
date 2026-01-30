@@ -29,6 +29,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
+	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 )
@@ -218,6 +219,7 @@ mongodb:
   collection: test-collection
   username: mongoadmin
   password: secret
+  query: "root = {}"
 `, port)))
 
 		resources, _, err := resBuilder.BuildSuspended()
@@ -241,6 +243,7 @@ mongodb:
   collection: test-collection
   username: mongoadmin
   password: secret
+  query: "root = {}"
 `))
 
 		resources, _, err := resBuilder.BuildSuspended()

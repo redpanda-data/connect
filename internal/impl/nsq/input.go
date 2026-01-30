@@ -177,6 +177,7 @@ func (n *nsqReader) ConnectionTest(_ context.Context) service.ConnectionTestResu
 	defer consumer.Stop()
 
 	consumer.SetLogger(llog.New(io.Discard, "", llog.Flags()), nsq.LogLevelError)
+	consumer.AddHandler(n)
 
 	if err = consumer.ConnectToNSQDs(n.addresses); err != nil {
 		return service.ConnectionTestFailed(err).AsList()

@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 )
@@ -79,7 +80,12 @@ func TestNSQConnectionTestIntegration(t *testing.T) {
 	require.NoError(t, err)
 
 	pool.MaxWait = time.Second * 30
-	resource, err := pool.Run("nsqio/nsq", "latest", []string{"/nsqd"})
+	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
+		Repository:   "nsqio/nsq",
+		Tag:          "latest",
+		Cmd:          []string{"/nsqd"},
+		ExposedPorts: []string{"4150/tcp", "4151/tcp"},
+	})
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		assert.NoError(t, pool.Purge(resource))
