@@ -81,9 +81,9 @@ func TestNSQConnectionTestIntegration(t *testing.T) {
 
 	pool.MaxWait = time.Second * 30
 	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
-		Repository: "nsqio/nsq",
-		Tag:        "latest",
-		Cmd:        []string{"/nsqd"},
+		Repository:   "nsqio/nsq",
+		Tag:          "latest",
+		Cmd:          []string{"/nsqd"},
 		ExposedPorts: []string{"4150/tcp", "4151/tcp"},
 	})
 	require.NoError(t, err)
