@@ -11,8 +11,8 @@ builds:
   - id: connect-ai
     main: cmd/redpanda-connect-ai/main.go
     binary: redpanda-connect
-    goos: [ linux ]
-    goarch: [ amd64, arm64 ]
+    goos: [linux]
+    goarch: [amd64, arm64]
     env:
       - CGO_ENABLED=0
     tags:
@@ -45,4 +45,3 @@ dockers_v2:
 
 release:
   disable: true
-

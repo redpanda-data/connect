@@ -32,7 +32,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        binary-name: [ 'connect', 'connect-fips' ]
+        binary-name: ['connect', 'connect-fips']
 
     steps:
       - name: Configure AWS credentials
