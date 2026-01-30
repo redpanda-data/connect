@@ -133,7 +133,9 @@ func (l *GlobalRedpandaManager) InitWithCustomDetails(pipelineID, logsTopic, sta
 
 	// TODO: Enterprise check here?
 	resBuilder := service.NewResourceBuilder()
-	resBuilder.SetBenthosLogger(l.fallbackLogger)
+	if l.fallbackLogger != nil {
+		resBuilder.SetBenthosLogger(l.fallbackLogger)
+	}
 	res, _, err := resBuilder.Build()
 	if err != nil {
 		return err
@@ -209,7 +211,9 @@ func (l *GlobalRedpandaManager) InitFromParsedConfig(pConf *service.ParsedConfig
 	}
 
 	resBuilder := service.NewResourceBuilder()
-	resBuilder.SetBenthosLogger(l.fallbackLogger)
+	if l.fallbackLogger != nil {
+		resBuilder.SetBenthosLogger(l.fallbackLogger)
+	}
 	res, _, err := resBuilder.Build()
 	if err != nil {
 		return err
