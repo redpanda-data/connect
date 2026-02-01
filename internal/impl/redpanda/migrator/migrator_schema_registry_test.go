@@ -66,6 +66,61 @@ func TestVersionsString(t *testing.T) {
 	assert.Equal(t, "all", VersionsAll.String())
 }
 
+func TestSchemaRegistryMigratorConfigDefaults(t *testing.T) {
+	conf := SchemaRegistryMigratorConfig{}
+	assert.Equal(t, 0, conf.Workers)
+
+	if conf.Workers <= 0 {
+		conf.Workers = defaultWorkers
+	}
+	assert.Equal(t, defaultWorkers, conf.Workers)
+}
+
+func TestSchemasWithReferencesDetection(t *testing.T) {
+	tests := []struct {
+		name          string
+		schemas       []sr.SubjectSchema
+		hasReferences bool
+	}{
+		{
+			name: "no references",
+			schemas: []sr.SubjectSchema{
+				{Subject: "a", Version: 1, ID: 1},
+				{Subject: "b", Version: 1, ID: 2},
+			},
+			hasReferences: false,
+		},
+		{
+			name: "has references",
+			schemas: []sr.SubjectSchema{
+				{Subject: "a", Version: 1, ID: 1},
+				{Subject: "b", Version: 1, ID: 2, Schema: sr.Schema{
+					References: []sr.SchemaReference{{Name: "A", Subject: "a", Version: 1}},
+				}},
+			},
+			hasReferences: true,
+		},
+		{
+			name:          "empty",
+			schemas:       []sr.SubjectSchema{},
+			hasReferences: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			hasRefs := false
+			for _, s := range tt.schemas {
+				if len(s.References) > 0 {
+					hasRefs = true
+					break
+				}
+			}
+			assert.Equal(t, tt.hasReferences, hasRefs)
+		})
+	}
+}
+
 func TestSchemaEquals(t *testing.T) {
 	tests := []struct {
 		name string

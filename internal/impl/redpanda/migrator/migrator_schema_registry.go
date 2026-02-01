@@ -81,6 +81,12 @@ const (
 	srFieldTranslateIDs   = "translate_ids"
 	srFieldNormalize      = "normalize"
 	srFieldStrict         = "strict"
+	srFieldWorkers        = "workers"
+	srFieldBatchSize      = "batch_size"
+
+	defaultWorkers      = 10
+	defaultBatchSize    = 100
+	progressLogInterval = 1000
 )
 
 func schemaRegistryField(extraFields ...*service.ConfigField) *service.ConfigField {
@@ -152,6 +158,12 @@ func schemaRegistryMigratorFields() []*service.ConfigField {
 				"Note: messages with 0-byte prefixes (e.g., protobuf) cannot be distinguished from schema registry headers and may fail when strict is enabled.").
 			Default(false).
 			LintRule(`root = if this && !this.schema_registry.translate_ids { "strict is only relevant when translate_ids is true" }`),
+		service.NewIntField(srFieldWorkers).
+			Description("Number of parallel workers for schema sync operations. Higher values improve throughput for large schema counts.").
+			Default(defaultWorkers),
+		service.NewIntField(srFieldBatchSize).
+			Description("Number of subjects to fetch and sync per batch. Schemas are streamed in batches rather than fetched all at once, reducing memory usage and providing real-time progress for large migrations.").
+			Default(defaultBatchSize),
 	}
 }
 
@@ -238,6 +250,10 @@ type SchemaRegistryMigratorConfig struct {
 	// Serverless narrows the set of schema configuration keys to those
 	// supported by serverless clusters.
 	Serverless bool
+	// Workers is the number of parallel workers for schema sync operations.
+	Workers int
+	// BatchSize is the number of subjects to fetch and sync per batch.
+	BatchSize int
 }
 
 // initFromParsed initializes the schema registry migrator with configuration from parsed config.
@@ -313,6 +329,18 @@ func (m *SchemaRegistryMigratorConfig) initFromParsed(pConf *service.ParsedConfi
 	if m.Strict, err = pConf.FieldBool(srObjectField, srFieldStrict); err != nil {
 		return fmt.Errorf("parse strict setting: %w", err)
 	}
+	if m.Workers, err = pConf.FieldInt(srObjectField, srFieldWorkers); err != nil {
+		return fmt.Errorf("parse workers setting: %w", err)
+	}
+	if m.Workers <= 0 {
+		m.Workers = defaultWorkers
+	}
+	if m.BatchSize, err = pConf.FieldInt(srObjectField, srFieldBatchSize); err != nil {
+		return fmt.Errorf("parse batch_size setting: %w", err)
+	}
+	if m.BatchSize <= 0 {
+		m.BatchSize = defaultBatchSize
+	}
 
 	// Use serverless from migrator config
 	m.Serverless, err = pConf.FieldBool(rmoFieldServerless)
@@ -374,27 +402,69 @@ func (m *schemaRegistryMigrator) listSubjectSchemas(ctx context.Context, client 
 		ctx = sr.WithParams(ctx, sr.ShowDeleted)
 	}
 
-	// List and filter subjects
+	res, err := m.listSubjectSchemasBulk(ctx, client)
+	if err != nil {
+		m.log.Debugf("Schema migration: AllSchemas not available (%v), falling back to per-subject fetch", err)
+		res, err = m.listSubjectSchemasIterative(ctx, client)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	sort.Slice(res, func(i, j int) bool {
+		return res[i].ID < res[j].ID
+	})
+
+	return res, nil
+}
+
+func (m *schemaRegistryMigrator) listSubjectSchemasBulk(ctx context.Context, client *sr.Client) ([]sr.SubjectSchema, error) {
+	if m.conf.Versions == VersionsLatest {
+		ctx = sr.WithParams(ctx, sr.LatestOnly)
+	}
+
+	m.log.Info("Schema migration: fetching all schemas from source registry")
+	all, err := client.AllSchemas(ctx)
+	if err != nil {
+		return nil, err
+	}
+	m.log.Infof("Schema migration: fetched %d schemas from source registry", len(all))
+
+	var res []sr.SubjectSchema
+	for _, s := range all {
+		if m.conf.Matches(s.Subject) {
+			res = append(res, s)
+		}
+	}
+	m.log.Infof("Schema migration: %d schemas after filtering", len(res))
+
+	return res, nil
+}
+
+func (m *schemaRegistryMigrator) listSubjectSchemasIterative(ctx context.Context, client *sr.Client) ([]sr.SubjectSchema, error) {
 	subs, err := client.Subjects(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("list subjects: %w", err)
 	}
 	subs = m.conf.Filtered(subs)
+	m.log.Infof("Schema migration: found %d subjects after filtering", len(subs))
 
-	// Get subject schemas
 	var res []sr.SubjectSchema
 	switch m.conf.Versions {
 	case VersionsLatest:
 		const latestVersion = -1
-		for _, s := range subs {
+		for i, s := range subs {
 			schema, err := client.SchemaByVersion(ctx, s, latestVersion)
 			if err != nil {
 				return nil, fmt.Errorf("get latest schema for subject %q: %w", s, err)
 			}
 			res = append(res, schema)
+			if (i+1)%progressLogInterval == 0 {
+				m.log.Infof("Schema migration: fetched %d/%d subjects", i+1, len(subs))
+			}
 		}
 	case VersionsAll:
-		for _, s := range subs {
+		for i, s := range subs {
 			vers, err := client.SubjectVersions(ctx, s)
 			if err != nil {
 				return nil, fmt.Errorf("get versions for subject %q: %w", s, err)
@@ -406,15 +476,14 @@ func (m *schemaRegistryMigrator) listSubjectSchemas(ctx context.Context, client 
 				}
 				res = append(res, schema)
 			}
+			if (i+1)%progressLogInterval == 0 {
+				m.log.Infof("Schema migration: fetched %d/%d subjects", i+1, len(subs))
+			}
 		}
 	default:
 		return nil, fmt.Errorf("unsupported versions mode: %q", m.conf.Versions)
 	}
-
-	// Sort by schema ID ascending
-	sort.Slice(res, func(i, j int) bool {
-		return res[i].ID < res[j].ID
-	})
+	m.log.Infof("Schema migration: fetched %d schemas total", len(res))
 
 	return res, nil
 }
@@ -450,9 +519,9 @@ func (m *schemaRegistryMigrator) SyncLoop(ctx context.Context) {
 }
 
 // Sync syncs the source schema registry with the destination schema registry.
-// It lists all subject schemas in the source schema registry, filters them by
-// the migrator configuration, and then syncs each subject schema and its
-// compatibility mode.
+// It uses a streaming approach - fetching and syncing schemas in batches rather
+// than loading all schemas into memory at once. This provides real-time progress
+// and reduces memory usage for large migrations.
 //
 // For serverless schema registries, it automatically handles IMPORT mode by
 // temporarily switching subject to IMPORT mode and restoring the original mode
@@ -469,46 +538,301 @@ func (m *schemaRegistryMigrator) Sync(ctx context.Context) error {
 		return err
 	}
 
-	all, err := m.listSubjectSchemas(ctx, m.src)
+	subjects, err := m.listSubjects(ctx)
 	if err != nil {
-		return fmt.Errorf("list subject schemas: %w", err)
-	}
-	m.log.Debugf("Schema migration: found %d subject schemas", len(all))
-	for _, s := range all {
-		m.log.Debugf("Schema migration: found subject=%s version=%d id=%d", s.Subject, s.Version, s.ID)
+		return fmt.Errorf("list subjects: %w", err)
 	}
 
-	for _, s := range all {
-		srcInfo := schemaInfoFromSubjectSchema(s)
+	if len(subjects) == 0 {
+		m.log.Info("Schema migration: no subjects to sync")
+		return nil
+	}
 
-		if _, ok := m.knownSubjects[srcInfo]; ok {
-			m.log.Debugf("Schema migration: schema already synced, skipping: subject=%s version=%d id=%d",
-				s.Subject, s.Version, s.ID)
+	// Sample first batch to detect references - if found, sort all subjects by ID
+	hasReferences := false
+	sampleSize := min(m.conf.BatchSize, len(subjects))
+	sampleSchemas, err := m.fetchSchemasForSubjects(ctx, subjects[:sampleSize])
+	if err != nil {
+		return fmt.Errorf("fetch sample schemas: %w", err)
+	}
+	for _, s := range sampleSchemas {
+		if len(s.References) > 0 {
+			hasReferences = true
+			break
+		}
+	}
+
+	if hasReferences {
+		m.log.Info("Schema migration: references detected, sorting subjects by schema ID for ordering")
+		subjects, _, err = m.listSubjectsSortedByMinID(ctx)
+		if err != nil {
+			return fmt.Errorf("sort subjects by ID: %w", err)
+		}
+	}
+
+	m.log.Infof("Schema migration: streaming %d subjects in batches of %d (workers=%d, has_references=%v)",
+		len(subjects), m.conf.BatchSize, m.conf.Workers, hasReferences)
+
+	var totalSynced, totalSkipped int
+	for batchStart := 0; batchStart < len(subjects); batchStart += m.conf.BatchSize {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
+		batchEnd := min(batchStart+m.conf.BatchSize, len(subjects))
+		batchSubjects := subjects[batchStart:batchEnd]
+
+		schemas, err := m.fetchSchemasForSubjects(ctx, batchSubjects)
+		if err != nil {
+			return fmt.Errorf("fetch schemas for batch: %w", err)
+		}
+
+		var toSync []sr.SubjectSchema
+		m.mu.RLock()
+		for _, s := range schemas {
+			srcInfo := schemaInfoFromSubjectSchema(s)
+			if _, ok := m.knownSubjects[srcInfo]; !ok {
+				toSync = append(toSync, s)
+			} else {
+				totalSkipped++
+			}
+		}
+		m.mu.RUnlock()
+
+		if len(toSync) == 0 {
 			continue
+		}
+
+		synced, err := m.syncBatch(ctx, toSync, hasReferences)
+		if err != nil {
+			return err
+		}
+		totalSynced += synced
+
+		m.log.Infof("Schema migration: progress %d/%d subjects, %d schemas synced, %d skipped (already exists)",
+			batchEnd, len(subjects), totalSynced, totalSkipped)
+	}
+
+	m.log.Infof("Schema migration: completed - %d schemas synced, %d skipped", totalSynced, totalSkipped)
+	return nil
+}
+
+func (m *schemaRegistryMigrator) listSubjects(ctx context.Context) ([]string, error) {
+	if m.conf.IncludeDeleted {
+		ctx = sr.WithParams(ctx, sr.ShowDeleted)
+	}
+
+	subs, err := m.src.Subjects(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return m.conf.Filtered(subs), nil
+}
+
+type subjectMinID struct {
+	subject string
+	minID   int
+}
+
+func (m *schemaRegistryMigrator) listSubjectsSortedByMinID(ctx context.Context) ([]string, bool, error) {
+	if m.conf.IncludeDeleted {
+		ctx = sr.WithParams(ctx, sr.ShowDeleted)
+	}
+
+	subs, err := m.src.Subjects(ctx)
+	if err != nil {
+		return nil, false, err
+	}
+	subs = m.conf.Filtered(subs)
+
+	if len(subs) == 0 {
+		return nil, false, nil
+	}
+
+	m.log.Infof("Schema migration: fetching schema IDs for %d subjects to determine ordering", len(subs))
+
+	var items []subjectMinID
+	var hasReferences bool
+	for i, s := range subs {
+		schema, err := m.src.SchemaByVersion(ctx, s, -1) // latest version
+		if err != nil {
+			return nil, false, fmt.Errorf("get schema for subject %q: %w", s, err)
+		}
+		items = append(items, subjectMinID{subject: s, minID: schema.ID})
+		if len(schema.References) > 0 {
+			hasReferences = true
+		}
+		if (i+1)%progressLogInterval == 0 {
+			m.log.Infof("Schema migration: fetched IDs for %d/%d subjects", i+1, len(subs))
+		}
+	}
+
+	sort.Slice(items, func(i, j int) bool {
+		return items[i].minID < items[j].minID
+	})
+
+	sorted := make([]string, len(items))
+	for i, item := range items {
+		sorted[i] = item.subject
+	}
+
+	return sorted, hasReferences, nil
+}
+
+func (m *schemaRegistryMigrator) fetchSchemasForSubjects(ctx context.Context, subjects []string) ([]sr.SubjectSchema, error) {
+	if m.conf.IncludeDeleted {
+		ctx = sr.WithParams(ctx, sr.ShowDeleted)
+	}
+
+	var res []sr.SubjectSchema
+	switch m.conf.Versions {
+	case VersionsLatest:
+		const latestVersion = -1
+		for _, s := range subjects {
+			schema, err := m.src.SchemaByVersion(ctx, s, latestVersion)
+			if err != nil {
+				return nil, fmt.Errorf("get latest schema for subject %q: %w", s, err)
+			}
+			res = append(res, schema)
+		}
+	case VersionsAll:
+		for _, s := range subjects {
+			vers, err := m.src.SubjectVersions(ctx, s)
+			if err != nil {
+				return nil, fmt.Errorf("get versions for subject %q: %w", s, err)
+			}
+			for _, v := range vers {
+				schema, err := m.src.SchemaByVersion(ctx, s, v)
+				if err != nil {
+					return nil, fmt.Errorf("get schema for subject %q version %d: %w", s, v, err)
+				}
+				res = append(res, schema)
+			}
+		}
+	default:
+		return nil, fmt.Errorf("unsupported versions mode: %q", m.conf.Versions)
+	}
+
+	sort.Slice(res, func(i, j int) bool {
+		return res[i].ID < res[j].ID
+	})
+
+	return res, nil
+}
+
+func (m *schemaRegistryMigrator) syncBatch(ctx context.Context, toSync []sr.SubjectSchema, forceSequential bool) (int, error) {
+	if forceSequential || len(toSync) <= m.conf.Workers {
+		return m.syncBatchSequential(ctx, toSync)
+	}
+
+	return m.syncBatchParallel(ctx, toSync)
+}
+
+func (m *schemaRegistryMigrator) syncBatchSequential(ctx context.Context, toSync []sr.SubjectSchema) (int, error) {
+	var synced int
+	for _, s := range toSync {
+		select {
+		case <-ctx.Done():
+			return synced, ctx.Err()
+		default:
 		}
 
 		info, err := m.syncSubjectSchema(ctx, s)
 		if err != nil {
-			return fmt.Errorf("sync subject schema %s version %d: %w", s.Subject, s.Version, err)
-		}
-		if existing, ok := m.knownSchemas[s.ID]; ok {
-			if existing.ID != info.ID {
-				return fmt.Errorf("schema ID mapping conflict: source ID %d maps to both destination IDs %d and %d",
-					s.ID, existing.ID, info.ID)
-			}
-		}
-
-		if err := m.syncSubjectCompatibility(ctx, s.Subject); err != nil {
-			return fmt.Errorf("sync subject compatibility %s: %w", s.Subject, err)
+			return synced, fmt.Errorf("sync subject schema %s version %d: %w", s.Subject, s.Version, err)
 		}
 
 		m.mu.Lock()
+		if existing, ok := m.knownSchemas[s.ID]; ok {
+			if existing.ID != info.ID {
+				m.mu.Unlock()
+				return synced, fmt.Errorf("schema ID mapping conflict: source ID %d maps to both destination IDs %d and %d",
+					s.ID, existing.ID, info.ID)
+			}
+		}
+		srcInfo := schemaInfoFromSubjectSchema(s)
 		m.knownSubjects[srcInfo] = struct{}{}
 		m.knownSchemas[s.ID] = info
 		m.mu.Unlock()
+
+		if err := m.syncSubjectCompatibility(ctx, s.Subject); err != nil {
+			return synced, fmt.Errorf("sync subject compatibility %s: %w", s.Subject, err)
+		}
+
+		synced++
 	}
 
-	return nil
+	return synced, nil
+}
+
+func (m *schemaRegistryMigrator) syncBatchParallel(ctx context.Context, toSync []sr.SubjectSchema) (int, error) {
+	type syncResult struct {
+		src  sr.SubjectSchema
+		info schemaInfo
+		err  error
+	}
+
+	work := make(chan sr.SubjectSchema, len(toSync))
+	results := make(chan syncResult, len(toSync))
+
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	var wg sync.WaitGroup
+	for i := 0; i < m.conf.Workers; i++ {
+		wg.Go(func() {
+			for s := range work {
+				select {
+				case <-ctx.Done():
+					return
+				default:
+				}
+				info, err := m.syncSubjectSchema(ctx, s)
+				if err == nil {
+					err = m.syncSubjectCompatibility(ctx, s.Subject)
+				}
+				results <- syncResult{src: s, info: info, err: err}
+			}
+		})
+	}
+
+	for _, s := range toSync {
+		work <- s
+	}
+	close(work)
+
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+
+	var synced int
+	for res := range results {
+		if res.err != nil {
+			cancel()
+			return synced, fmt.Errorf("sync subject schema %s version %d: %w", res.src.Subject, res.src.Version, res.err)
+		}
+
+		m.mu.Lock()
+		if existing, ok := m.knownSchemas[res.src.ID]; ok {
+			if existing.ID != res.info.ID {
+				m.mu.Unlock()
+				cancel()
+				return synced, fmt.Errorf("schema ID mapping conflict: source ID %d maps to both destination IDs %d and %d",
+					res.src.ID, existing.ID, res.info.ID)
+			}
+		}
+		srcInfo := schemaInfoFromSubjectSchema(res.src)
+		m.knownSubjects[srcInfo] = struct{}{}
+		m.knownSchemas[res.src.ID] = res.info
+		m.mu.Unlock()
+		synced++
+	}
+
+	return synced, nil
 }
 
 func (m *schemaRegistryMigrator) enabled() bool {
