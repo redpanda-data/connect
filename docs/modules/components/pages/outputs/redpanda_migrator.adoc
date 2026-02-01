@@ -53,6 +53,8 @@ output:
       translate_ids: false
       normalize: false
       strict: false
+      workers: 10
+      batch_size: 100
     consumer_groups:
       enabled: true
       interval: 1m
@@ -139,6 +141,8 @@ output:
       translate_ids: false
       normalize: false
       strict: false
+      workers: 10
+      batch_size: 100
     consumer_groups:
       enabled: true
       interval: 1m
@@ -1424,6 +1428,24 @@ Error on unknown schema IDs. Only relevant when translate_ids is true. When fals
 *Type*: `bool`
 
 *Default*: `false`
+
+=== `schema_registry.workers`
+
+Number of parallel workers for schema sync operations. Higher values improve throughput for large schema counts.
+
+
+*Type*: `int`
+
+*Default*: `10`
+
+=== `schema_registry.batch_size`
+
+Number of subjects to fetch and sync per batch. Schemas are streamed in batches rather than fetched all at once, reducing memory usage and providing real-time progress for large migrations.
+
+
+*Type*: `int`
+
+*Default*: `100`
 
 === `consumer_groups`
 
