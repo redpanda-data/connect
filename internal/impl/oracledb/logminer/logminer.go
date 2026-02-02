@@ -11,6 +11,7 @@ package logminer
 import (
 	"context"
 	"database/sql"
+	"encoding/hex"
 	"fmt"
 	"strings"
 	"time"
@@ -33,9 +34,8 @@ type ChangeEvent struct {
 
 // LMEvent represents a row from V$LOGMNR_CONTENTS
 type LMEvent struct {
-	SCN     int64
-	SQLRedo sql.NullString
-	// SQLUndo       sql.NullString
+	SCN           int64
+	SQLRedo       sql.NullString
 	Data          map[string]any
 	Operation     Operation
 	OperationCode int
@@ -99,12 +99,12 @@ func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replicat
 			TABLE_NAME,
 			SEG_OWNER,
 			TIMESTAMP,
-			-- XID,             -- Not used, we construct TransactionID from components instead
-			XIDUSN,
-			XIDSLT,
-			XIDSQN
-			-- RS_ID,           -- Not used
-			-- SSN              -- Not used (only needed for ORDER BY)
+			XID                  -- Oracle's native transaction identifier (RAW)
+			-- XIDUSN,           -- Not used, XID contains this
+			-- XIDSLT,           -- Not used, XID contains this
+			-- XIDSQN            -- Not used, XID contains this
+			-- RS_ID,            -- Not used
+			-- SSN               -- Not used (only needed for ORDER BY)
 		FROM V$LOGMNR_CONTENTS
 		WHERE SCN >= :1 AND SCN < :2%s
 		ORDER BY SCN, SSN
@@ -165,7 +165,7 @@ func (lm *LogMiner) ReadChanges(ctx context.Context, startPos replication.SCN) e
 	}()
 
 	// set initial log sequences
-	if _, err := lm.checkLogSwitchOccurred(); err != nil {
+	if _, err := lm.hasLogSwitchOccurred(); err != nil {
 		return fmt.Errorf("initializing redo log sequence tracking: %w", err)
 	}
 
@@ -184,28 +184,27 @@ func (lm *LogMiner) ReadChanges(ctx context.Context, startPos replication.SCN) e
 }
 
 func (lm *LogMiner) miningCycle(ctx context.Context) error {
-	// 1. Get the database's current SCN to know our target
+	// Get database's current SCN to know our target
 	var dbCurrentSCN uint64
 	if err := lm.db.QueryRow("SELECT CURRENT_SCN FROM V$DATABASE").Scan(&dbCurrentSCN); err != nil {
 		return fmt.Errorf("fetching current SCN: %w", err)
 	}
 
-	// If we've caught up, nothing to do
 	if lm.currentSCN >= dbCurrentSCN {
 		lm.log.Debugf("Caught up to current SCN %d, no new changes to process", dbCurrentSCN)
 		return nil
 	}
 
-	// 2. Calculate SCN range - process up to current SCN or a reasonable chunk
+	// Calculate SCN range - process up to current SCN or a reasonable chunk,
+	// limiting the range to avoid huge queries when there's a large gap
 	endSCN := dbCurrentSCN
-	// Limit the range to avoid huge queries when there's a large gap
 	maxRange := uint64(lm.cfg.MaxBatchSize)
 	if endSCN-lm.currentSCN > maxRange {
 		endSCN = lm.currentSCN + maxRange
 	}
 
-	// 3. Check if we need to restart the session due to log switch
-	logSwitched, err := lm.checkLogSwitchOccurred()
+	// Check if we need to restart the session due to log switch
+	logSwitched, err := lm.hasLogSwitchOccurred()
 	if err != nil {
 		return fmt.Errorf("checking for log switch: %w", err)
 	}
@@ -213,18 +212,18 @@ func (lm *LogMiner) miningCycle(ctx context.Context) error {
 	if logSwitched || !lm.sessionActive {
 		lm.log.Infof("Restarting LogMiner session (log_switch=%t, session_active=%t)", logSwitched, lm.sessionActive)
 		if err := lm.prepareLogsAndStartSession(lm.currentSCN); err != nil {
-			return fmt.Errorf("preparing logs and starting session: %w", err)
+			return fmt.Errorf("preparing logs and starting session at position %d: %w", lm.currentSCN, err)
 		}
 	}
 
-	// 4. Query and process events from V$LOGMNR_CONTENTS
+	// Query and process events from V$LOGMNR_CONTENTS
 	// The session is already active, just query it
 	events, err := lm.queryLogMinerContents(lm.currentSCN, endSCN)
 	if err != nil {
-		return fmt.Errorf("querying logminer contents: %w", err)
+		return fmt.Errorf("querying logminer contents between %d and %d: %w", lm.currentSCN, endSCN, err)
 	}
 
-	// 5. Process events and buffer transactions
+	// Process events and buffer transactions
 	for _, event := range events {
 		if err := lm.processEvent(ctx, event); err != nil {
 			return fmt.Errorf("failed to process event: %w", err)
@@ -301,12 +300,11 @@ func (lm *LogMiner) queryLogMinerContents(startSCN, endSCN uint64) ([]*LMEvent, 
 	}
 	defer rows.Close()
 
+	// TODO: Can we grow this memory buffer and keep reusing it?
 	var events []*LMEvent
 	for rows.Next() {
 		event := &LMEvent{}
-		var xidUsn, xidSlt, xidSqn int64
-		// var xid string            // Not used, we construct TransactionID from components
-		// var rsId, ssn sql.NullString  // Not used
+		var xid []byte // Oracle RAW type comes as []byte in Go
 
 		err := rows.Scan(
 			&event.SCN,
@@ -316,19 +314,15 @@ func (lm *LogMiner) queryLogMinerContents(startSCN, endSCN uint64) ([]*LMEvent, 
 			&event.TableName,
 			&event.SchemaName,
 			&event.Timestamp,
-			// &xid,                  // Not used
-			&xidUsn,
-			&xidSlt,
-			&xidSqn,
-			// &rsId,                 // Not used
-			// &ssn,                  // Not used
+			&xid,
 		)
 		if err != nil {
 			return nil, err
 		}
 
-		// Construct transaction ID from components (XID as RAW doesn't format well)
-		event.TransactionID = fmt.Sprintf("%d.%d.%d", xidUsn, xidSlt, xidSqn)
+		// Convert XID to hex string (matches Debezium's approach)
+		// XID is Oracle's native transaction identifier (RAW(8) = 8 bytes)
+		event.TransactionID = hex.EncodeToString(xid)
 		event.Operation = operationFromCode(event.OperationCode)
 		events = append(events, event)
 	}
@@ -420,10 +414,11 @@ func (lfc *LogFileCollector) GetLogs(offsetSCN uint64) ([]*LogFile, error) {
 	return logFiles, rows.Err()
 }
 
-// checkLogSwitchOccurred detects if a redo log switch has occurred by comparing
+// hasLogSwitchOccurred detects if a redo log switch has occurred by comparing
 // current redo log sequences with the previously tracked sequences.
 // This is used to determine when the LogMiner session needs to be restarted to pick up new redo log files.
-func (lm *LogMiner) checkLogSwitchOccurred() (bool, error) {
+// A log switch occurs when a reodo log has reached a given size and been replaced with a new log, or a given time has exceeded.
+func (lm *LogMiner) hasLogSwitchOccurred() (bool, error) {
 	var (
 		rows             *sql.Rows
 		err              error
@@ -455,11 +450,13 @@ func (lm *LogMiner) checkLogSwitchOccurred() (bool, error) {
 
 	// Compare with previous sequences
 	switch {
+	// fast path, sizes are different
 	case len(currentSequences) != len(lm.currentRedoLogSequences):
 		lm.log.Debugf("Redo log switch detected: sequence count changed from %d to %d", len(lm.currentRedoLogSequences), len(currentSequences))
 		lm.currentRedoLogSequences = currentSequences
 		return true, nil
 	default:
+		// slow path, compare contents of array
 		for i := range currentSequences {
 			if currentSequences[i] != lm.currentRedoLogSequences[i] {
 				lm.log.Debugf("Redo log switch detected: sequence changed from %v to %v", lm.currentRedoLogSequences, currentSequences)
