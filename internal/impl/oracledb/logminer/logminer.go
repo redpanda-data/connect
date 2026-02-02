@@ -106,24 +106,31 @@ func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replicat
 	`, tableFilter.String())
 
 	lm := &LogMiner{
-		cfg:            cfg,
-		log:            logger,
-		db:             db,
-		tables:         userTables,
-		publisher:      publisher,
+		cfg:           cfg,
+		log:           logger,
+		db:            db,
+		tables:        userTables,
+		publisher:     publisher,
+		logMinerQuery: logMinerQuery,
+
 		logCollector:   NewLogFileCollector(db),
 		sessionMgr:     NewSessionManager(db, cfg),
 		eventProc:      NewEventProcessor(),
 		txnCache:       NewInMemoryCache(logger),
-		valueConverter: dmlparser.NewOracleValueConverter(nil),
+		valueConverter: dmlparser.NewOracleValueConverter(time.UTC),
 		dmlParser:      dmlparser.New(true),
-		logMinerQuery:  logMinerQuery,
 	}
 	return lm
 }
 
 // ReadChanges streams the change events from the configured SQL Server change tables.
 func (lm *LogMiner) ReadChanges(ctx context.Context, startPos replication.SCN) error {
+	// apply nls session for consistent logminer datetime output. (sql.DB is a connection pool,
+	// so we need to ensure NLS settings are applied to the connection used by LogMiner).
+	if err := replication.ApplyNLSSettings(ctx, lm.db); err != nil {
+		return fmt.Errorf("applying NLS settings for LogMiner: %w", err)
+	}
+
 	// Determine starting SCN
 	var scnSource string
 	if startPos.IsValid() {

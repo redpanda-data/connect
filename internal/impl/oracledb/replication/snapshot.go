@@ -35,7 +35,7 @@ type Snapshot struct {
 // NewSnapshot creates a new instance of Snapshot capable of snapshotting provided tables.
 // It does this by creating a transaction with snapshot level isolation before paging
 // through rows, sending them to be batched.
-func NewSnapshot(
+func NewSnapshot(ctx context.Context,
 	connectionString string,
 	tables []UserTable,
 	publisher ChangePublisher,
@@ -46,6 +46,12 @@ func NewSnapshot(
 	if err != nil {
 		return nil, fmt.Errorf("connecting to oracle database for snapshotting: %w", err)
 	}
+
+	// apply nls session for consistent logminer datetime output.
+	if err := ApplyNLSSettings(ctx, db); err != nil {
+		return nil, fmt.Errorf("configuring nls for snapshot session: %w", err)
+	}
+
 	s := &Snapshot{
 		db:                      db,
 		tables:                  tables,
@@ -412,4 +418,27 @@ func snapshotValueMapper[T any](v any) (any, error) {
 		return nil, nil
 	}
 	return s.V, nil
+}
+
+// ApplyNLSSettings sets NLS session parameters for consistent LogMiner output formatting.
+// This ensures that LogMiner's SQL_REDO statements use 4-digit years (YYYY) instead of
+// 2-digit years (RR), which prevents date corruption for years beyond 1999.
+// This matches Debezium's approach for Oracle CDC.
+func ApplyNLSSettings(ctx context.Context, db *sql.DB) error {
+	if _, err := db.ExecContext(ctx, "ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD HH24:MI:SS'"); err != nil {
+		return fmt.Errorf("setting NLS_DATE_FORMAT: %w", err)
+	}
+	if _, err := db.ExecContext(ctx, "ALTER SESSION SET NLS_TIMESTAMP_FORMAT = 'YYYY-MM-DD HH24:MI:SS.FF9'"); err != nil {
+		return fmt.Errorf("setting NLS_TIMESTAMP_FORMAT: %w", err)
+	}
+	if _, err := db.ExecContext(ctx, "ALTER SESSION SET NLS_TIMESTAMP_TZ_FORMAT = 'YYYY-MM-DD HH24:MI:SS.FF9 TZH:TZM'"); err != nil {
+		return fmt.Errorf("setting NLS_TIMESTAMP_TZ_FORMAT: %w", err)
+	}
+	if _, err := db.ExecContext(ctx, "ALTER SESSION SET NLS_NUMERIC_CHARACTERS = '.,'"); err != nil {
+		return fmt.Errorf("setting NLS_NUMERIC_CHARACTERS: %w", err)
+	}
+	if _, err := db.ExecContext(ctx, "ALTER SESSION SET TIME_ZONE = '00:00'"); err != nil {
+		return fmt.Errorf("setting session timezone: %w", err)
+	}
+	return nil
 }
