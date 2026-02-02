@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"iter"
+	"math/rand/v2"
 	"net/http"
 	"regexp"
 	"slices"
@@ -31,6 +32,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/confx"
@@ -73,16 +75,17 @@ const (
 	srFieldTLS     = "tls"
 
 	// Schema registry migrator fields
-	srFieldEnabled        = "enabled"
-	srFieldInterval       = "interval"
-	srFieldInclude        = "include"
-	srFieldExclude        = "exclude"
-	srFieldSubject        = "subject"
-	srFieldVersions       = "versions"
-	srFieldIncludeDeleted = "include_deleted"
-	srFieldTranslateIDs   = "translate_ids"
-	srFieldNormalize      = "normalize"
-	srFieldStrict         = "strict"
+	srFieldEnabled                = "enabled"
+	srFieldInterval               = "interval"
+	srFieldInclude                = "include"
+	srFieldExclude                = "exclude"
+	srFieldSubject                = "subject"
+	srFieldVersions               = "versions"
+	srFieldIncludeDeleted         = "include_deleted"
+	srFieldTranslateIDs           = "translate_ids"
+	srFieldNormalize              = "normalize"
+	srFieldMaxParallelHTTPRequest = "max_parallel_http_requests"
+	srFieldStrict                 = "strict"
 )
 
 func schemaRegistryField(extraFields ...*service.ConfigField) *service.ConfigField {
@@ -154,6 +157,9 @@ func schemaRegistryMigratorFields() []*service.ConfigField {
 				"Note: messages with 0-byte prefixes (e.g., protobuf) cannot be distinguished from schema registry headers and may fail when strict is enabled.").
 			Default(false).
 			LintRule(`root = if this && !this.schema_registry.translate_ids { "strict is only relevant when translate_ids is true" }`),
+		service.NewIntField(srFieldMaxParallelHTTPRequest).
+			Description("Maximum number of parallel HTTP requests to the schema registry. Controls concurrency when syncing multiple schemas.").
+			Default(10),
 	}
 }
 
@@ -237,6 +243,9 @@ type SchemaRegistryMigratorConfig struct {
 	// Strict controls if DestinationSchemaID should error if the
 	// source schema ID is unknown.
 	Strict bool
+	// MaxParallelHTTPRequests controls the maximum number of concurrent HTTP requests
+	// to the schema registry.
+	MaxParallelHTTPRequests int
 	// Serverless narrows the set of schema configuration keys to those
 	// supported by serverless clusters.
 	Serverless bool
@@ -311,6 +320,9 @@ func (m *SchemaRegistryMigratorConfig) initFromParsed(pConf *service.ParsedConfi
 	}
 	if m.Normalize, err = pConf.FieldBool(srObjectField, srFieldNormalize); err != nil {
 		return fmt.Errorf("parse normalize setting: %w", err)
+	}
+	if m.MaxParallelHTTPRequests, err = pConf.FieldInt(srObjectField, srFieldMaxParallelHTTPRequest); err != nil {
+		return fmt.Errorf("parse max_parallel_http_requests setting: %w", err)
 	}
 	if m.Strict, err = pConf.FieldBool(srObjectField, srFieldStrict); err != nil {
 		return fmt.Errorf("parse strict setting: %w", err)
@@ -415,6 +427,9 @@ func (m *schemaRegistryMigrator) listSubjectSchemas(
 			return
 		}
 		subs = m.conf.Filtered(subs)
+		rand.Shuffle(len(subs), func(i, j int) {
+			subs[i], subs[j] = subs[j], subs[i]
+		})
 
 		// Get and yield subject schemas
 		switch versions {
@@ -605,38 +620,69 @@ func (m *schemaRegistryMigrator) Sync(ctx context.Context) error {
 			Version: version,
 		}]
 		m.mu.RUnlock()
+		return ok
+	}
+	loggingFilter := func(subject string, version int) bool {
+		ok := filter(subject, version)
 		if ok {
 			m.log.Debugf("Schema migration: schema already synced, skipping: subject=%s version=%d", subject, version)
 		}
-
 		return ok
 	}
 
-	for s, err := range m.listSubjectSchemas(ctx, m.src, m.conf.Versions, filter) {
-		if err != nil {
-			return fmt.Errorf("list subject schemas: %w", err)
-		}
-		m.log.Debugf("Schema migration: found subject=%s version=%d id=%d", s.Subject, s.Version, s.ID)
+	workCh := make(chan sr.SubjectSchema, m.conf.MaxParallelHTTPRequests)
+	g, ctx := errgroup.WithContext(ctx)
 
-		info, err := m.syncSubjectSchema(ctx, s)
-		if err != nil {
-			return fmt.Errorf("sync subject schema %s version %d: %w", s.Subject, s.Version, err)
+	// Producer: send root subjects to channel
+	g.Go(func() error {
+		defer close(workCh)
+		for ss, err := range m.listSubjectSchemas(ctx, m.src, VersionsLatest, loggingFilter) { // Always use latest for DFS roots
+			if err != nil {
+				return fmt.Errorf("list subject schemas: %w", err)
+			}
+			select {
+			case workCh <- ss:
+			case <-ctx.Done():
+				return ctx.Err()
+			}
 		}
-		if err := m.checkSchemaIDConflict(s.ID, info); err != nil {
-			return err
-		}
+		return nil
+	})
 
-		if err := m.syncSubjectCompatibility(ctx, s.Subject); err != nil {
-			return fmt.Errorf("sync subject compatibility %s: %w", s.Subject, err)
-		}
+	// Workers: process subjects with DFS traversal
+	for range m.conf.MaxParallelHTTPRequests {
+		g.Go(func() error {
+			for ss := range workCh {
+				err := m.dfsSubjectSchemasFunc(ctx, m.src, ss, filter, func(s sr.SubjectSchema) error {
+					m.log.Debugf("Schema migration: syncing subject=%s version=%d id=%d", s.Subject, s.Version, s.ID)
 
-		m.mu.Lock()
-		m.knownSubjects[schemaSubjectVersionFromSubjectSchema(s)] = struct{}{}
-		m.knownSchemas[s.ID] = info
-		m.mu.Unlock()
+					info, err := m.syncSubjectSchema(ctx, s)
+					if err != nil {
+						return fmt.Errorf("sync subject schema %s version %d: %w", s.Subject, s.Version, err)
+					}
+					if err := m.checkSchemaIDConflict(s.ID, info); err != nil {
+						return err
+					}
+					if err := m.syncSubjectCompatibility(ctx, s.Subject); err != nil {
+						return fmt.Errorf("sync subject compatibility %s: %w", s.Subject, err)
+					}
+
+					m.mu.Lock()
+					m.knownSubjects[schemaSubjectVersionFromSubjectSchema(s)] = struct{}{}
+					m.knownSchemas[s.ID] = info
+					m.mu.Unlock()
+
+					return nil
+				})
+				if err != nil {
+					return err
+				}
+			}
+			return nil
+		})
 	}
 
-	return nil
+	return g.Wait()
 }
 
 func (m *schemaRegistryMigrator) checkSchemaIDConflict(srcID int, dstInfo schemaInfo) error {

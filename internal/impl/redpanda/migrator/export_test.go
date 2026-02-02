@@ -71,6 +71,7 @@ func NewSchemaRegistryMigratorForTesting(t *testing.T, conf SchemaRegistryMigrat
 	t.Cleanup(func() {
 		t.Log(buf.String())
 	})
+	conf.MaxParallelHTTPRequests = 2
 	return &schemaRegistryMigrator{
 		conf:   conf,
 		src:    src,
