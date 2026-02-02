@@ -21,11 +21,7 @@ type OracleValueConverter struct {
 }
 
 // NewOracleValueConverter creates a new converter with the specified timezone
-// If timezone is nil, UTC is used
 func NewOracleValueConverter(timezone *time.Location) *OracleValueConverter {
-	if timezone == nil {
-		timezone = time.UTC
-	}
 	return &OracleValueConverter{
 		timezone: timezone,
 	}
@@ -227,28 +223,37 @@ func (*OracleValueConverter) convertNumericValue(value string) any {
 // oracleFormatToGo converts Oracle date/timestamp format to Go format
 // Oracle formats: https://docs.oracle.com/en/database/oracle/oracle-database/19/sqlrf/Format-Models.html
 func (*OracleValueConverter) oracleFormatToGo(oracleFormat string) string {
-	// Mapping of Oracle format elements to Go format
-	replacements := map[string]string{
-		"YYYY": "2006",
-		"YY":   "06",
-		"MM":   "01",
-		"MON":  "Jan",
-		"DD":   "02",
-		"HH24": "15",
-		"HH":   "03",
-		"MI":   "04",
-		"SS":   "05",
-		"FF9":  ".999999999",
-		"FF6":  ".999999",
-		"FF3":  ".999",
-		"FF":   ".999999", // Default to microseconds
-		"AM":   "PM",
-		"PM":   "PM",
+	// CRITICAL: Must replace in order from longest to shortest pattern to avoid substring conflicts!
+	// For example, "YYYY" must be replaced before "YY", otherwise "YY" will match inside "YYYY"
+	// and corrupt it to "Y06Y". This caused dates like 9999 to be parsed as 1999.
+	replacements := []struct {
+		oracle string
+		golang string
+	}{
+		// Fractional seconds - longest first
+		{"FF9", ".999999999"},
+		{"FF6", ".999999"},
+		{"FF3", ".999"},
+		{"FF", ".999999"}, // Default to microseconds
+		// Years - longest first
+		{"YYYY", "2006"},
+		{"YY", "06"},
+		// Hours - longest first
+		{"HH24", "15"},
+		{"HH", "03"},
+		// Other elements
+		{"MON", "Jan"},
+		{"MM", "01"},
+		{"DD", "02"},
+		{"MI", "04"},
+		{"SS", "05"},
+		{"AM", "PM"},
+		{"PM", "PM"},
 	}
 
 	result := oracleFormat
-	for oracle, golang := range replacements {
-		result = strings.ReplaceAll(result, oracle, golang)
+	for _, r := range replacements {
+		result = strings.ReplaceAll(result, r.oracle, r.golang)
 	}
 
 	return result

@@ -339,8 +339,8 @@ func (i *oracleDBCDCInput) Connect(ctx context.Context) error {
 	)
 
 	// no cached SCN means we're not recovering from a restart
-	if i.cfg.streamSnapshot && cachedSCN == 0 {
-		if snapshotter, err = replication.NewSnapshot(i.cfg.connectionString, userTables, i.publisher, i.log, i.metrics); err != nil {
+	if i.cfg.streamSnapshot && cachedSCN == replication.InvalidSCN {
+		if snapshotter, err = replication.NewSnapshot(ctx, i.cfg.connectionString, userTables, i.publisher, i.log, i.metrics); err != nil {
 			return fmt.Errorf("creating database snapshotter: %w", err)
 		}
 	} else {
