@@ -85,6 +85,16 @@ func NewSchemaRegistryMigratorForTesting(t *testing.T, conf SchemaRegistryMigrat
 	}
 }
 
+func (m *schemaRegistryMigrator) DfsSubjectSchemasFunc(
+	ctx context.Context,
+	client *sr.Client,
+	root sr.SubjectSchema,
+	filter func(subject string, version int) bool,
+	cb func(sr.SubjectSchema) error,
+) error {
+	return m.dfsSubjectSchemasFunc(ctx, client, root, filter, cb)
+}
+
 func NewGroupsMigratorForTesting(
 	t *testing.T,
 	conf GroupsMigratorConfig,

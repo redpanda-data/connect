@@ -22,6 +22,7 @@ import (
 	"iter"
 	"net/http"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -456,6 +457,95 @@ func (m *schemaRegistryMigrator) listSubjectSchemas(
 			yield(sr.SubjectSchema{}, fmt.Errorf("unsupported versions mode: %q", versions))
 		}
 	}
+}
+
+func (m *schemaRegistryMigrator) dfsSubjectSchemasFunc(
+	ctx context.Context,
+	client *sr.Client,
+	root sr.SubjectSchema,
+	filter func(subject string, version int) bool,
+	cb func(sr.SubjectSchema) error,
+) error {
+	if m.conf.IncludeDeleted {
+		ctx = sr.WithParams(ctx, sr.ShowDeleted)
+	}
+
+	type stackItem struct {
+		sr.SubjectSchema
+		fetched  bool // true when schema has been fetched from client
+		expanded bool // true when we've pushed dependencies and ready to process
+	}
+
+	var (
+		stack   = []stackItem{{SubjectSchema: root, fetched: true}}
+		visited = map[schemaSubjectVersion]struct{}{
+			schemaSubjectVersionFromSubjectSchema(root): {},
+		}
+	)
+
+	enqueue := func(subject string, version int) {
+		key := schemaSubjectVersion{Subject: subject, Version: version}
+		if _, ok := visited[key]; ok {
+			return
+		}
+		visited[key] = struct{}{}
+
+		if filter != nil && filter(subject, version) {
+			return
+		}
+
+		stack = append(stack, stackItem{
+			SubjectSchema: sr.SubjectSchema{
+				Subject: subject,
+				Version: version,
+			},
+		})
+	}
+
+	for len(stack) > 0 {
+		// Peek at top of stack and try to expand
+		item := &stack[len(stack)-1]
+
+		if !item.fetched {
+			ss, err := client.SchemaByVersion(ctx, item.Subject, item.Version)
+			if err != nil {
+				return fmt.Errorf("fetch schema %s version %d: %w", item.Subject, item.Version, err)
+			}
+			item.SubjectSchema, item.fetched = ss, true
+		}
+		if !item.expanded {
+			// Add previous versions if VersionsAll is enabled
+			if m.conf.Versions == VersionsAll && item.Version > 1 {
+				vers, err := client.SubjectVersions(ctx, item.Subject)
+				if err != nil {
+					return fmt.Errorf("get versions for subject %q: %w", item.Subject, err)
+				}
+				// Sort in descending order
+				slices.SortFunc(vers, func(a, b int) int {
+					return b - a
+				})
+				for _, v := range vers {
+					enqueue(item.Subject, v)
+				}
+			}
+			// Add references
+			for _, ref := range item.References {
+				enqueue(ref.Subject, ref.Version)
+			}
+
+			// Mark as expanded and continue
+			item.expanded = true
+			continue
+		}
+
+		// Pop from stack and process
+		stack = stack[:len(stack)-1]
+		if err := cb(item.SubjectSchema); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // SyncLoop runs the schema registry sync in a loop at the configured interval

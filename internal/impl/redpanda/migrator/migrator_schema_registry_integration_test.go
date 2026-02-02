@@ -16,6 +16,7 @@ package migrator_test
 
 import (
 	"context"
+	"fmt"
 	"regexp"
 	"testing"
 	"time"
@@ -701,4 +702,158 @@ func TestIntegrationSchemaRegistryMigratorServerlessImportMode(t *testing.T) {
 	mode := dst.Mode(ctx)
 	require.NoError(t, mode[0].Err)
 	assert.Equal(t, "READWRITE", mode[0].Mode.String())
+}
+
+func TestIntegrationSchemaRegistryMigratorDFS(t *testing.T) {
+	integration.CheckSkip(t)
+
+	src, _ := startSchemaRegistrySourceAndDestination(t)
+	ctx := t.Context()
+
+	t.Log("Setup: Create complex schema dependency graph with multiple versions")
+
+	// Level 0: Base schemas with multiple versions
+	base1v1 := `{"type":"record","name":"Base1","fields":[{"name":"id","type":"int"}]}`
+	base1v2 := `{"type":"record","name":"Base1","fields":[{"name":"id","type":"int"},{"name":"name","type":"string","default":""}]}`
+
+	b1v1, err := src.CreateSchema(ctx, "base1", sr.Schema{Schema: base1v1, Type: sr.TypeAvro})
+	require.NoError(t, err)
+	b1v2, err := src.CreateSchema(ctx, "base1", sr.Schema{Schema: base1v2, Type: sr.TypeAvro})
+	require.NoError(t, err)
+
+	base2 := `{"type":"record","name":"Base2","fields":[{"name":"value","type":"string"}]}`
+	b2v1, err := src.CreateSchema(ctx, "base2", sr.Schema{Schema: base2, Type: sr.TypeAvro})
+	require.NoError(t, err)
+
+	// Level 1: Mid schema references base1 v2 and base2
+	mid1 := `{"type":"record","name":"Mid1","fields":[{"name":"b1","type":"Base1"},{"name":"b2","type":"Base2"}]}`
+	m1v1, err := src.CreateSchema(ctx, "mid1", sr.Schema{
+		Schema: mid1,
+		Type:   sr.TypeAvro,
+		References: []sr.SchemaReference{
+			{Name: "Base1", Subject: "base1", Version: b1v2.Version},
+			{Name: "Base2", Subject: "base2", Version: b2v1.Version},
+		},
+	})
+	require.NoError(t, err)
+
+	// Level 2: Top schema references mid1 and base1 v1
+	top := `{"type":"record","name":"Top","fields":[{"name":"mid","type":"Mid1"},{"name":"oldBase","type":"Base1"}]}`
+	topv1, err := src.CreateSchema(ctx, "top", sr.Schema{
+		Schema: top,
+		Type:   sr.TypeAvro,
+		References: []sr.SchemaReference{
+			{Name: "Mid1", Subject: "mid1", Version: m1v1.Version},
+			{Name: "Base1", Subject: "base1", Version: b1v1.Version},
+		},
+	})
+	require.NoError(t, err)
+
+	t.Run("simple leaf traversal", func(t *testing.T) {
+		t.Log("When: DFS starts from leaf schema (base2)")
+		conf := migrator.SchemaRegistryMigratorConfig{
+			Enabled:  true,
+			Versions: migrator.VersionsLatest,
+		}
+		m := migrator.NewSchemaRegistryMigratorForTesting(t, conf, src, nil)
+
+		var traversed []string
+		err = m.DfsSubjectSchemasFunc(ctx, src, b2v1, nil, func(schema sr.SubjectSchema) error {
+			traversed = append(traversed, fmt.Sprintf("%s-v%d", schema.Subject, schema.Version))
+			return nil
+		})
+		require.NoError(t, err)
+
+		t.Log("Then: only single schema is traversed")
+		assert.Equal(t, []string{"base2-v1"}, traversed)
+	})
+
+	t.Run("complex tree with VersionsAll", func(t *testing.T) {
+		t.Log("When: DFS with VersionsAll starts from top")
+		conf := migrator.SchemaRegistryMigratorConfig{
+			Enabled:  true,
+			Versions: migrator.VersionsAll,
+		}
+		m := migrator.NewSchemaRegistryMigratorForTesting(t, conf, src, nil)
+
+		var traversed []string
+		err = m.DfsSubjectSchemasFunc(ctx, src, topv1, nil, func(schema sr.SubjectSchema) error {
+			traversed = append(traversed, fmt.Sprintf("%s-v%d", schema.Subject, schema.Version))
+			return nil
+		})
+		require.NoError(t, err)
+
+		t.Log("Then: all schemas traversed with no duplicates")
+		schemaCount := make(map[string]int)
+		for _, s := range traversed {
+			schemaCount[s]++
+		}
+		for schema, count := range schemaCount {
+			assert.Equal(t, 1, count, "Schema %s visited exactly once", schema)
+		}
+
+		t.Log("And: all expected schemas present")
+		expectedSchemas := map[string]bool{
+			"top-v1": true, "mid1-v1": true,
+			"base1-v1": true, "base1-v2": true, "base2-v1": true,
+		}
+		for _, s := range traversed {
+			assert.True(t, expectedSchemas[s], "Unexpected schema: %s", s)
+		}
+		assert.Len(t, expectedSchemas, len(traversed))
+
+		t.Log("And: dependencies processed before dependents")
+		indices := make(map[string]int)
+		for i, s := range traversed {
+			indices[s] = i
+		}
+		assert.Less(t, indices["base1-v2"], indices["mid1-v1"])
+		assert.Less(t, indices["base2-v1"], indices["mid1-v1"])
+		assert.Less(t, indices["mid1-v1"], indices["top-v1"])
+		assert.Less(t, indices["base1-v1"], indices["top-v1"])
+	})
+
+	t.Run("with filter", func(t *testing.T) {
+		t.Log("When: DFS with filter excluding base2")
+		conf := migrator.SchemaRegistryMigratorConfig{
+			Enabled:  true,
+			Versions: migrator.VersionsLatest,
+		}
+		m := migrator.NewSchemaRegistryMigratorForTesting(t, conf, src, nil)
+
+		filter := func(subject string, _ int) bool {
+			return subject == "base2"
+		}
+
+		var traversed []string
+		err = m.DfsSubjectSchemasFunc(ctx, src, m1v1, filter, func(schema sr.SubjectSchema) error {
+			traversed = append(traversed, fmt.Sprintf("%s-v%d", schema.Subject, schema.Version))
+			return nil
+		})
+		require.NoError(t, err)
+
+		t.Log("Then: base2 not in results")
+		for _, s := range traversed {
+			assert.NotContains(t, s, "base2")
+		}
+		assert.Contains(t, traversed, "mid1-v1")
+		assert.Contains(t, traversed, "base1-v2")
+	})
+
+	t.Run("callback error", func(t *testing.T) {
+		t.Log("When: callback returns error")
+		conf := migrator.SchemaRegistryMigratorConfig{
+			Enabled:  true,
+			Versions: migrator.VersionsLatest,
+		}
+		m := migrator.NewSchemaRegistryMigratorForTesting(t, conf, src, nil)
+
+		expectedErr := fmt.Errorf("test error")
+		err = m.DfsSubjectSchemasFunc(ctx, src, b2v1, nil, func(_ sr.SubjectSchema) error {
+			return expectedErr
+		})
+
+		t.Log("Then: error propagated")
+		assert.ErrorIs(t, err, expectedErr)
+	})
 }
