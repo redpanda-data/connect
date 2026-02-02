@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"iter"
 	"net/http"
 	"regexp"
 	"sort"
@@ -366,57 +367,74 @@ func (m *schemaRegistryMigrator) ListSubjectSchemas(ctx context.Context) ([]sr.S
 	if m.src == nil {
 		return nil, errors.New("source schema registry client not configured")
 	}
-	return m.listSubjectSchemas(ctx, m.src)
-}
 
-func (m *schemaRegistryMigrator) listSubjectSchemas(ctx context.Context, client *sr.Client) ([]sr.SubjectSchema, error) {
-	if m.conf.IncludeDeleted {
-		ctx = sr.WithParams(ctx, sr.ShowDeleted)
-	}
-
-	// List and filter subjects
-	subs, err := client.Subjects(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("list subjects: %w", err)
-	}
-	subs = m.conf.Filtered(subs)
-
-	// Get subject schemas
-	var res []sr.SubjectSchema
-	switch m.conf.Versions {
-	case VersionsLatest:
-		const latestVersion = -1
-		for _, s := range subs {
-			schema, err := client.SchemaByVersion(ctx, s, latestVersion)
-			if err != nil {
-				return nil, fmt.Errorf("get latest schema for subject %q: %w", s, err)
-			}
-			res = append(res, schema)
+	var schemas []sr.SubjectSchema
+	for s, err := range m.listSubjectSchemas(ctx, m.src) {
+		if err != nil {
+			return nil, err
 		}
-	case VersionsAll:
-		for _, s := range subs {
-			vers, err := client.SubjectVersions(ctx, s)
-			if err != nil {
-				return nil, fmt.Errorf("get versions for subject %q: %w", s, err)
-			}
-			for _, v := range vers {
-				schema, err := client.SchemaByVersion(ctx, s, v)
-				if err != nil {
-					return nil, fmt.Errorf("get schema for subject %q version %d: %w", s, v, err)
-				}
-				res = append(res, schema)
-			}
-		}
-	default:
-		return nil, fmt.Errorf("unsupported versions mode: %q", m.conf.Versions)
+		schemas = append(schemas, s)
 	}
 
 	// Sort by schema ID ascending
-	sort.Slice(res, func(i, j int) bool {
-		return res[i].ID < res[j].ID
+	sort.Slice(schemas, func(i, j int) bool {
+		return schemas[i].ID < schemas[j].ID
 	})
 
-	return res, nil
+	return schemas, nil
+}
+
+func (m *schemaRegistryMigrator) listSubjectSchemas(ctx context.Context, client *sr.Client) iter.Seq2[sr.SubjectSchema, error] {
+	return func(yield func(sr.SubjectSchema, error) bool) {
+		if m.conf.IncludeDeleted {
+			ctx = sr.WithParams(ctx, sr.ShowDeleted)
+		}
+
+		// List and filter subjects
+		subs, err := client.Subjects(ctx)
+		if err != nil {
+			yield(sr.SubjectSchema{}, fmt.Errorf("list subjects: %w", err))
+			return
+		}
+		subs = m.conf.Filtered(subs)
+
+		// Get and yield subject schemas
+		switch m.conf.Versions {
+		case VersionsLatest:
+			const latestVersion = -1
+			for _, s := range subs {
+				schema, err := client.SchemaByVersion(ctx, s, latestVersion)
+				if err != nil {
+					err = fmt.Errorf("get latest schema for subject %q: %w", s, err)
+				}
+				if !yield(schema, err) {
+					return
+				}
+			}
+		case VersionsAll:
+			for _, s := range subs {
+				vers, err := client.SubjectVersions(ctx, s)
+				if err != nil {
+					if !yield(sr.SubjectSchema{}, fmt.Errorf("get versions for subject %q: %w", s, err)) {
+						return
+					}
+				}
+				sort.Ints(vers)
+
+				for _, v := range vers {
+					schema, err := client.SchemaByVersion(ctx, s, v)
+					if err != nil {
+						err = fmt.Errorf("get schema for subject %q version %d: %w", s, v, err)
+					}
+					if !yield(schema, err) {
+						return
+					}
+				}
+			}
+		default:
+			yield(sr.SubjectSchema{}, fmt.Errorf("unsupported versions mode: %q", m.conf.Versions))
+		}
+	}
 }
 
 // SyncLoop runs the schema registry sync in a loop at the configured interval
@@ -469,16 +487,12 @@ func (m *schemaRegistryMigrator) Sync(ctx context.Context) error {
 		return err
 	}
 
-	all, err := m.listSubjectSchemas(ctx, m.src)
-	if err != nil {
-		return fmt.Errorf("list subject schemas: %w", err)
-	}
-	m.log.Debugf("Schema migration: found %d subject schemas", len(all))
-	for _, s := range all {
+	for s, err := range m.listSubjectSchemas(ctx, m.src) {
+		if err != nil {
+			return fmt.Errorf("list subject schemas: %w", err)
+		}
 		m.log.Debugf("Schema migration: found subject=%s version=%d id=%d", s.Subject, s.Version, s.ID)
-	}
 
-	for _, s := range all {
 		srcInfo := schemaInfoFromSubjectSchema(s)
 
 		if _, ok := m.knownSubjects[srcInfo]; ok {
