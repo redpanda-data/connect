@@ -33,9 +33,9 @@ type ChangeEvent struct {
 
 // LMEvent represents a row from V$LOGMNR_CONTENTS
 type LMEvent struct {
-	SCN           int64
-	SQLRedo       sql.NullString
-	SQLUndo       sql.NullString
+	SCN     int64
+	SQLRedo sql.NullString
+	// SQLUndo       sql.NullString
 	Data          map[string]any
 	Operation     Operation
 	OperationCode int
@@ -89,17 +89,17 @@ func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replicat
 		SELECT
 			SCN,
 			SQL_REDO,
-			SQL_UNDO,
+			-- SQL_UNDO,        -- Not used, only SQL_REDO is parsed
 			OPERATION_CODE,
 			TABLE_NAME,
 			SEG_OWNER,
 			TIMESTAMP,
-			XID,
+			-- XID,             -- Not used, we construct TransactionID from components instead
 			XIDUSN,
 			XIDSLT,
-			XIDSQN,
-			RS_ID,
-			SSN
+			XIDSQN
+			-- RS_ID,           -- Not used
+			-- SSN              -- Not used (only needed for ORDER BY)
 		FROM V$LOGMNR_CONTENTS
 		WHERE SCN >= :1 AND SCN < :2%s
 		ORDER BY SCN, SSN
@@ -301,23 +301,23 @@ func (lm *LogMiner) queryLogMinerContents(startSCN, endSCN uint64) ([]*LMEvent, 
 	for rows.Next() {
 		event := &LMEvent{}
 		var xidUsn, xidSlt, xidSqn int64
-		var xid string
-		var rsId, ssn sql.NullString
+		// var xid string            // Not used, we construct TransactionID from components
+		// var rsId, ssn sql.NullString  // Not used
 
 		err := rows.Scan(
 			&event.SCN,
 			&event.SQLRedo,
-			&event.SQLUndo,
+			// &event.SQLUndo,        // Not used, only SQL_REDO is parsed
 			&event.OperationCode,
 			&event.TableName,
 			&event.SchemaName,
 			&event.Timestamp,
-			&xid,
+			// &xid,                  // Not used
 			&xidUsn,
 			&xidSlt,
 			&xidSqn,
-			&rsId,
-			&ssn,
+			// &rsId,                 // Not used
+			// &ssn,                  // Not used
 		)
 		if err != nil {
 			return nil, err
