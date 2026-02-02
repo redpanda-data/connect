@@ -20,12 +20,9 @@ package salesforce
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/url"
-	"strings"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/salesforce/salesforcehttp"
 
@@ -114,7 +111,6 @@ pipeline:
 }
 
 func newSalesforceProcessor(conf *service.ParsedConfig, mgr *service.Resources) (*salesforceProcessor, error) {
-
 	orgURL, err := conf.FieldString("org_url")
 	if err != nil {
 		return nil, err
@@ -179,25 +175,6 @@ func (s *salesforceProcessor) Process(ctx context.Context, msg *service.Message)
 	batch = append(batch, m)
 
 	return batch, nil
-}
-
-func extractFieldNames(describeJSON []byte) ([]string, error) {
-	var dr DescribeResult
-	if err := json.Unmarshal(describeJSON, &dr); err != nil {
-		return nil, err
-	}
-
-	fields := make([]string, 0, len(dr.Fields))
-	for _, f := range dr.Fields {
-		fields = append(fields, f.Name)
-	}
-
-	return fields, nil
-}
-
-func buildSOQL(objectName string, fields []string) string {
-	fieldList := strings.Join(fields, ",+")
-	return fmt.Sprintf("SELECT+%s+FROM+%s", fieldList, objectName)
 }
 
 func (*salesforceProcessor) Close(context.Context) error { return nil }
