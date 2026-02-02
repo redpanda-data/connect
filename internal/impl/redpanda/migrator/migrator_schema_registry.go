@@ -381,7 +381,7 @@ func (m *schemaRegistryMigrator) ListSubjectSchemas(ctx context.Context) ([]sr.S
 	}
 
 	var schemas []sr.SubjectSchema
-	for s, err := range m.listSubjectSchemas(ctx, m.src, nil) {
+	for s, err := range m.listSubjectSchemas(ctx, m.src, m.conf.Versions, nil) {
 		if err != nil {
 			return nil, err
 		}
@@ -399,6 +399,7 @@ func (m *schemaRegistryMigrator) ListSubjectSchemas(ctx context.Context) ([]sr.S
 func (m *schemaRegistryMigrator) listSubjectSchemas(
 	ctx context.Context,
 	client *sr.Client,
+	versions Versions,
 	filter func(subject string, version int) bool,
 ) iter.Seq2[sr.SubjectSchema, error] {
 	return func(yield func(sr.SubjectSchema, error) bool) {
@@ -415,7 +416,7 @@ func (m *schemaRegistryMigrator) listSubjectSchemas(
 		subs = m.conf.Filtered(subs)
 
 		// Get and yield subject schemas
-		switch m.conf.Versions {
+		switch versions {
 		case VersionsLatest:
 			const latestVersion = -1
 			for _, s := range subs {
@@ -452,7 +453,7 @@ func (m *schemaRegistryMigrator) listSubjectSchemas(
 				}
 			}
 		default:
-			yield(sr.SubjectSchema{}, fmt.Errorf("unsupported versions mode: %q", m.conf.Versions))
+			yield(sr.SubjectSchema{}, fmt.Errorf("unsupported versions mode: %q", versions))
 		}
 	}
 }
@@ -521,7 +522,7 @@ func (m *schemaRegistryMigrator) Sync(ctx context.Context) error {
 		return ok
 	}
 
-	for s, err := range m.listSubjectSchemas(ctx, m.src, filter) {
+	for s, err := range m.listSubjectSchemas(ctx, m.src, m.conf.Versions, filter) {
 		if err != nil {
 			return fmt.Errorf("list subject schemas: %w", err)
 		}
