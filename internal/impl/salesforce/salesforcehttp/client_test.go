@@ -72,7 +72,7 @@ func TestCallSalesforceApi_RefreshOn401_RealClient(t *testing.T) {
 		case "/services/oauth2/token":
 			tokenIssued = true
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`{"access_token":"new-token"}`))
+			_, _ = w.Write([]byte(`{"access_token":"new-token"}`))
 			return
 
 		// Data endpoint
@@ -87,7 +87,7 @@ func TestCallSalesforceApi_RefreshOn401_RealClient(t *testing.T) {
 
 			// Second call → success
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`{"ok":true}`))
+			_, _ = w.Write([]byte(`{"ok":true}`))
 			return
 
 		default:
