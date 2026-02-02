@@ -432,7 +432,7 @@ func NewMigrator(mgr *service.Resources) *Migrator {
 		sr: schemaRegistryMigrator{
 			metrics:       newSchemaRegistryMetrics(mgr.Metrics()),
 			log:           log,
-			knownSubjects: make(map[schemaInfo]struct{}),
+			knownSubjects: make(map[schemaSubjectVersion]struct{}),
 			knownSchemas:  make(map[int]schemaInfo),
 		},
 		groups: groupsMigrator{

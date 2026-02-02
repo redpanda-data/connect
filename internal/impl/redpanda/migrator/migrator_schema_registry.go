@@ -324,6 +324,18 @@ func (m *SchemaRegistryMigratorConfig) initFromParsed(pConf *service.ParsedConfi
 	return nil
 }
 
+type schemaSubjectVersion struct {
+	Subject string
+	Version int
+}
+
+func schemaSubjectVersionFromSubjectSchema(ss sr.SubjectSchema) schemaSubjectVersion {
+	return schemaSubjectVersion{
+		Subject: ss.Subject,
+		Version: ss.Version,
+	}
+}
+
 type schemaInfo struct {
 	Subject string
 	Version int
@@ -357,8 +369,8 @@ type schemaRegistryMigrator struct {
 	log     *service.Logger
 
 	mu            sync.RWMutex
-	knownSubjects map[schemaInfo]struct{} // source schema info set
-	knownSchemas  map[int]schemaInfo      // source schema ID -> destination schema info
+	knownSubjects map[schemaSubjectVersion]struct{} // source schema subject and version marked as known
+	knownSchemas  map[int]schemaInfo                // source schema ID -> destination schema info
 }
 
 // ListSubjectSchemas returns a list of all source subject schemas Filtered by
@@ -369,7 +381,7 @@ func (m *schemaRegistryMigrator) ListSubjectSchemas(ctx context.Context) ([]sr.S
 	}
 
 	var schemas []sr.SubjectSchema
-	for s, err := range m.listSubjectSchemas(ctx, m.src) {
+	for s, err := range m.listSubjectSchemas(ctx, m.src, nil) {
 		if err != nil {
 			return nil, err
 		}
@@ -384,7 +396,11 @@ func (m *schemaRegistryMigrator) ListSubjectSchemas(ctx context.Context) ([]sr.S
 	return schemas, nil
 }
 
-func (m *schemaRegistryMigrator) listSubjectSchemas(ctx context.Context, client *sr.Client) iter.Seq2[sr.SubjectSchema, error] {
+func (m *schemaRegistryMigrator) listSubjectSchemas(
+	ctx context.Context,
+	client *sr.Client,
+	filter func(subject string, version int) bool,
+) iter.Seq2[sr.SubjectSchema, error] {
 	return func(yield func(sr.SubjectSchema, error) bool) {
 		if m.conf.IncludeDeleted {
 			ctx = sr.WithParams(ctx, sr.ShowDeleted)
@@ -422,6 +438,10 @@ func (m *schemaRegistryMigrator) listSubjectSchemas(ctx context.Context, client 
 				sort.Ints(vers)
 
 				for _, v := range vers {
+					if filter != nil && filter(s, v) {
+						continue
+					}
+
 					schema, err := client.SchemaByVersion(ctx, s, v)
 					if err != nil {
 						err = fmt.Errorf("get schema for subject %q version %d: %w", s, v, err)
@@ -487,19 +507,25 @@ func (m *schemaRegistryMigrator) Sync(ctx context.Context) error {
 		return err
 	}
 
-	for s, err := range m.listSubjectSchemas(ctx, m.src) {
+	filter := func(subject string, version int) bool {
+		m.mu.RLock()
+		_, ok := m.knownSubjects[schemaSubjectVersion{
+			Subject: subject,
+			Version: version,
+		}]
+		m.mu.RUnlock()
+		if ok {
+			m.log.Debugf("Schema migration: schema already synced, skipping: subject=%s version=%d", subject, version)
+		}
+
+		return ok
+	}
+
+	for s, err := range m.listSubjectSchemas(ctx, m.src, filter) {
 		if err != nil {
 			return fmt.Errorf("list subject schemas: %w", err)
 		}
 		m.log.Debugf("Schema migration: found subject=%s version=%d id=%d", s.Subject, s.Version, s.ID)
-
-		srcInfo := schemaInfoFromSubjectSchema(s)
-
-		if _, ok := m.knownSubjects[srcInfo]; ok {
-			m.log.Debugf("Schema migration: schema already synced, skipping: subject=%s version=%d id=%d",
-				s.Subject, s.Version, s.ID)
-			continue
-		}
 
 		info, err := m.syncSubjectSchema(ctx, s)
 		if err != nil {
@@ -517,7 +543,7 @@ func (m *schemaRegistryMigrator) Sync(ctx context.Context) error {
 		}
 
 		m.mu.Lock()
-		m.knownSubjects[srcInfo] = struct{}{}
+		m.knownSubjects[schemaSubjectVersionFromSubjectSchema(s)] = struct{}{}
 		m.knownSchemas[s.ID] = info
 		m.mu.Unlock()
 	}
