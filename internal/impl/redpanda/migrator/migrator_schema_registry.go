@@ -531,11 +531,8 @@ func (m *schemaRegistryMigrator) Sync(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("sync subject schema %s version %d: %w", s.Subject, s.Version, err)
 		}
-		if existing, ok := m.knownSchemas[s.ID]; ok {
-			if existing.ID != info.ID {
-				return fmt.Errorf("schema ID mapping conflict: source ID %d maps to both destination IDs %d and %d",
-					s.ID, existing.ID, info.ID)
-			}
+		if err := m.checkSchemaIDConflict(s.ID, info); err != nil {
+			return err
 		}
 
 		if err := m.syncSubjectCompatibility(ctx, s.Subject); err != nil {
@@ -546,6 +543,19 @@ func (m *schemaRegistryMigrator) Sync(ctx context.Context) error {
 		m.knownSubjects[schemaSubjectVersionFromSubjectSchema(s)] = struct{}{}
 		m.knownSchemas[s.ID] = info
 		m.mu.Unlock()
+	}
+
+	return nil
+}
+
+func (m *schemaRegistryMigrator) checkSchemaIDConflict(srcID int, dstInfo schemaInfo) error {
+	m.mu.RLock()
+	cur, ok := m.knownSchemas[srcID]
+	m.mu.RUnlock()
+
+	if ok && cur.ID != dstInfo.ID {
+		return fmt.Errorf("schema ID mapping conflict: source ID %d maps to both destination IDs %d and %d",
+			srcID, cur.ID, dstInfo.ID)
 	}
 
 	return nil
