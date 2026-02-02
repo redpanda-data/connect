@@ -64,6 +64,11 @@ type LogMiner struct {
 	// Pre-built query string for LogMiner contents
 	logMinerQuery string
 	txnCache      TransactionCache
+
+	// Session state tracking (for keeping session alive between iterations)
+	sessionActive           bool
+	currentLogFiles         []*LogFile
+	currentRedoLogSequences []int64
 }
 
 // NewMiner creates a new instance of NewMiner, responsible
@@ -150,6 +155,20 @@ func (lm *LogMiner) ReadChanges(ctx context.Context, startPos replication.SCN) e
 
 	lm.log.Infof("Starting streaming change events for %d table(s) beginning from SCN (sourced from %s): %d", len(lm.tables), scnSource, lm.currentSCN)
 
+	defer func() {
+		if lm.sessionActive {
+			if err := lm.sessionMgr.EndSession(); err != nil {
+				lm.log.Errorf("ending LogMiner session on exit: %v", err)
+			}
+			lm.sessionActive = false
+		}
+	}()
+
+	// set initial log sequences
+	if _, err := lm.checkLogSwitchOccurred(); err != nil {
+		return fmt.Errorf("initializing redo log sequence tracking: %w", err)
+	}
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -173,7 +192,7 @@ func (lm *LogMiner) miningCycle(ctx context.Context) error {
 
 	// If we've caught up, nothing to do
 	if lm.currentSCN >= dbCurrentSCN {
-		lm.log.Infof("Caught up to current SCN %d, no new changes to process", dbCurrentSCN)
+		lm.log.Debugf("Caught up to current SCN %d, no new changes to process", dbCurrentSCN)
 		return nil
 	}
 
@@ -185,49 +204,34 @@ func (lm *LogMiner) miningCycle(ctx context.Context) error {
 		endSCN = lm.currentSCN + maxRange
 	}
 
-	// 3. Collect log files that contain changes from current SCN
-	logFiles, err := lm.logCollector.GetLogs(lm.currentSCN)
+	// 3. Check if we need to restart the session due to log switch
+	logSwitched, err := lm.checkLogSwitchOccurred()
 	if err != nil {
-		return fmt.Errorf("collecting redo logs for logminer: %w", err)
+		return fmt.Errorf("checking for log switch: %w", err)
 	}
-	lm.log.Debugf("Collected %d redo log file(s) for LogMiner", len(logFiles))
 
-	// 4. Load redo logs into LogMiner
-	for i, logFile := range logFiles {
-		// if first log file, ensure we clear existing logs
-		isFirstFile := i == 0
-		if err := lm.sessionMgr.AddLogFile(logFile.FileName, isFirstFile); err != nil {
-			return fmt.Errorf("loading log filename '%s' into logminer: %w", logFile.FileName, err)
+	if logSwitched || !lm.sessionActive {
+		lm.log.Infof("Restarting LogMiner session (log_switch=%t, session_active=%t)", logSwitched, lm.sessionActive)
+		if err := lm.prepareLogsAndStartSession(lm.currentSCN); err != nil {
+			return fmt.Errorf("preparing logs and starting session: %w", err)
 		}
-
-		lm.log.Debugf("Loaded redo log file %s into LogMiner", logFile.FileName)
 	}
 
-	// 4. Start LogMiner session with ONLINE_CATALOG strategy
-	if err := lm.sessionMgr.StartSession(lm.currentSCN, endSCN, false); err != nil {
-		return fmt.Errorf("starting logminer session: %w", err)
-	}
-	defer func() {
-		if err := lm.sessionMgr.EndSession(); err != nil {
-			lm.log.Errorf("Failed to end LogMiner session: %v", err)
-		}
-	}()
-	lm.log.Debugf("Started LogMiner session: SCN %d to %d", lm.currentSCN, endSCN)
-
-	// 5. Query and process events from V$LOGMNR_CONTENTS
+	// 4. Query and process events from V$LOGMNR_CONTENTS
+	// The session is already active, just query it
 	events, err := lm.queryLogMinerContents(lm.currentSCN, endSCN)
 	if err != nil {
 		return fmt.Errorf("querying logminer contents: %w", err)
 	}
 
-	// 6. Process events and buffer transactions
+	// 5. Process events and buffer transactions
 	for _, event := range events {
 		if err := lm.processEvent(ctx, event); err != nil {
 			return fmt.Errorf("failed to process event: %w", err)
 		}
 	}
 
-	// lm.log.Debugf("Found and processed %d events in SCN range %d - %d", len(events), lm.currentSCN, endSCN)
+	lm.log.Debugf("Processed %d events in SCN range %d - %d", len(events), lm.currentSCN, endSCN)
 	lm.currentSCN = endSCN
 
 	return nil
@@ -236,11 +240,11 @@ func (lm *LogMiner) miningCycle(ctx context.Context) error {
 // processEvent buffers emitted events until a commit or rollback event is processed at which
 // point the buffer can be flushed to the Connect pipeline or dropped.
 func (lm *LogMiner) processEvent(ctx context.Context, event *LMEvent) error {
-	txnLog := lm.log.With("transaction_id", event.TransactionID)
+	// txnLog := lm.log.With("transaction_id", event.TransactionID)
 	switch event.Operation {
 	case OpStart:
-		// Transaction started
 		// txnLog.Debugf("Transaction begin")
+		// Transaction started
 		lm.txnCache.StartTransaction(event.TransactionID, event.SCN)
 
 	case OpInsert, OpUpdate, OpDelete:
@@ -282,7 +286,7 @@ func (lm *LogMiner) processEvent(ctx context.Context, event *LMEvent) error {
 
 	case OpRollback:
 		// Discard all buffered events for this transaction
-		txnLog.Debugf("Transaction rollback")
+		// txnLog.Debugf("Transaction rollback")
 		lm.txnCache.RollbackTransaction(event.TransactionID)
 	}
 
@@ -414,4 +418,97 @@ func (lfc *LogFileCollector) GetLogs(offsetSCN uint64) ([]*LogFile, error) {
 	}
 
 	return logFiles, rows.Err()
+}
+
+// checkLogSwitchOccurred detects if a redo log switch has occurred by comparing
+// current redo log sequences with the previously tracked sequences.
+// This is used to determine when the LogMiner session needs to be restarted to pick up new redo log files.
+func (lm *LogMiner) checkLogSwitchOccurred() (bool, error) {
+	var (
+		rows             *sql.Rows
+		err              error
+		currentSequences []int64
+	)
+
+	// Query current redo log sequences to compare with existing sequences
+	if rows, err = lm.db.Query(`SELECT SEQUENCE# FROM V$LOG WHERE STATUS = 'CURRENT' ORDER BY SEQUENCE#`); err != nil {
+		return false, fmt.Errorf("querying current redo log sequences: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var seq int64
+		if err := rows.Scan(&seq); err != nil {
+			return false, err
+		}
+		currentSequences = append(currentSequences, seq)
+	}
+	if err := rows.Err(); err != nil {
+		return false, err
+	}
+
+	// If we haven't tracked sequences yet, store them and return false
+	if lm.currentRedoLogSequences == nil {
+		lm.currentRedoLogSequences = currentSequences
+		return false, nil
+	}
+
+	// Compare with previous sequences
+	switch {
+	case len(currentSequences) != len(lm.currentRedoLogSequences):
+		lm.log.Debugf("Redo log switch detected: sequence count changed from %d to %d", len(lm.currentRedoLogSequences), len(currentSequences))
+		lm.currentRedoLogSequences = currentSequences
+		return true, nil
+	default:
+		for i := range currentSequences {
+			if currentSequences[i] != lm.currentRedoLogSequences[i] {
+				lm.log.Debugf("Redo log switch detected: sequence changed from %v to %v", lm.currentRedoLogSequences, currentSequences)
+				lm.currentRedoLogSequences = currentSequences
+				return true, nil
+			}
+		}
+	}
+
+	return false, nil
+}
+
+// prepareLogsAndStartSession collects redo/archive logs for the given SCN,
+// loads them into LogMiner, and starts a new mining session.
+// This should be called initially and whenever a log switch is detected.
+// The session is started without an endSCN boundary, allowing continuous mining.
+func (lm *LogMiner) prepareLogsAndStartSession(startSCN uint64) error {
+	// End existing session if active
+	if lm.sessionActive {
+		if err := lm.sessionMgr.EndSession(); err != nil {
+			lm.log.Errorf("Failed to end existing LogMiner session: %v", err)
+		}
+		lm.sessionActive = false
+	}
+
+	// Collect log files that contain changes from current SCN
+	logFiles, err := lm.logCollector.GetLogs(startSCN)
+	if err != nil {
+		return fmt.Errorf("collecting redo logs for logminer: %w", err)
+	}
+	lm.log.Debugf("Collected %d redo log file(s) for LogMiner", len(logFiles))
+	lm.currentLogFiles = logFiles
+
+	// Load redo logs into LogMiner
+	for i, logFile := range logFiles {
+		// if first log file, ensure we clear existing logs
+		isFirstFile := i == 0
+		if err := lm.sessionMgr.AddLogFile(logFile.FileName, isFirstFile); err != nil {
+			return fmt.Errorf("loading log filename '%s' into logminer: %w", logFile.FileName, err)
+		}
+		lm.log.Debugf("Loaded redo log file %s into LogMiner", logFile.FileName)
+	}
+
+	// Start LogMiner session with no end boundary (endSCN=0) for continuous mining
+	if err := lm.sessionMgr.StartSession(startSCN, 0, false); err != nil {
+		return fmt.Errorf("starting logminer session: %w", err)
+	}
+	lm.sessionActive = true
+	lm.log.Infof("Started persistent LogMiner session from SCN %d (no end boundary)", startSCN)
+
+	return nil
 }
