@@ -160,7 +160,8 @@ func schemaRegistryMigratorFields() []*service.ConfigField {
 			LintRule(`root = if this && !this.schema_registry.translate_ids { "strict is only relevant when translate_ids is true" }`),
 		service.NewIntField(srFieldMaxParallelHTTPRequest).
 			Description("Maximum number of parallel HTTP requests to the schema registry. Controls concurrency when syncing multiple schemas.").
-			Default(10),
+			Default(10).
+			LintRule(`root = if this < 1 { "max_parallel_http_requests must be at least 1" }`),
 	}
 }
 
@@ -612,6 +613,10 @@ func (m *schemaRegistryMigrator) Sync(ctx context.Context) error {
 
 	if err := m.validateSchemaRegistries(ctx); err != nil {
 		return err
+	}
+
+	if m.conf.MaxParallelHTTPRequests < 1 {
+		return errors.New("max_parallel_http_requests must be at least 1")
 	}
 
 	filter := func(subject string, version int) bool {
