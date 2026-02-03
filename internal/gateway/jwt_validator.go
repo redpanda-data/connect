@@ -33,18 +33,14 @@ const (
 	rpEnvJWTOrgID    = "REDPANDA_CLOUD_GATEWAY_JWT_ORGANIZATION_ID"
 )
 
-// RPJWTMiddleware implements a custom JWT validation for the RP platform that
-// ensures a given request matches a specified organisation and audience.
-type RPJWTMiddleware struct {
-	logger       *service.Logger
-	jwtValidator *validator.Validator
-	orgID        string
-
-	validationCache *cache.Cache[string, *validator.ValidatedClaims]
+// jwtValidator contains the JWT validation logic and is technology-agnostic.
+type jwtValidator struct {
+	orgID     string
+	validator *validator.Validator
+	cache     *cache.Cache[string, *validator.ValidatedClaims]
 }
 
-// NewRPJWTMiddleware creates a new RP JWT middleware.
-func NewRPJWTMiddleware(mgr *service.Resources) (*RPJWTMiddleware, error) {
+func newJWTValidator(mgr *service.Resources) (*jwtValidator, error) {
 	issuerURLStr := os.Getenv(rpEnvJWTIssuer)
 	if issuerURLStr == "" {
 		return nil, nil
@@ -69,10 +65,8 @@ func NewRPJWTMiddleware(mgr *service.Resources) (*RPJWTMiddleware, error) {
 		return nil, fmt.Errorf("failed to parse gateway JWT issuer URL: %w", err)
 	}
 
-	provider := jwks.NewCachingProvider(issuerURL, time.Minute)
-
-	jwtValidator, err := validator.New(
-		provider.KeyFunc,
+	v, err := validator.New(
+		jwks.NewCachingProvider(issuerURL, time.Minute).KeyFunc,
 		validator.RS256,
 		issuerURL.String(),
 		[]string{audience},
@@ -87,13 +81,50 @@ func NewRPJWTMiddleware(mgr *service.Resources) (*RPJWTMiddleware, error) {
 		return nil, errors.New("failed to set up the jwt validator")
 	}
 
-	return &RPJWTMiddleware{
-		logger:       mgr.Logger(),
-		jwtValidator: jwtValidator,
-		orgID:        orgID,
-
-		validationCache: cache.New[string, *validator.ValidatedClaims](cache.MaxAge(10*time.Second), cache.MaxErrorAge(time.Second)),
+	return &jwtValidator{
+		orgID:     orgID,
+		validator: v,
+		cache:     cache.New[string, *validator.ValidatedClaims](cache.MaxAge(10*time.Second), cache.MaxErrorAge(time.Second)),
 	}, nil
+}
+
+func (r *jwtValidator) validateToken(ctx context.Context, tokenString string) (*validator.ValidatedClaims, error) {
+	c, err, _ := r.cache.Get(tokenString, func() (*validator.ValidatedClaims, error) {
+		token, err := r.validator.ValidateToken(ctx, tokenString)
+		if err != nil {
+			return nil, err
+		}
+
+		c, ok := (token).(*validator.ValidatedClaims)
+		if !ok {
+			return nil, errors.New("invalid claims type")
+		}
+		return c, nil
+	})
+
+	return c, err
+}
+
+// validateAndGetPrincipal validates token and extracts principal.
+func (r *jwtValidator) validateAndGetPrincipal(ctx context.Context, token string) (authz.PrincipalID, error) {
+	c, err := r.validateToken(ctx, token)
+	if err != nil {
+		return "", err
+	}
+	cc, ok := c.CustomClaims.(*rpCustomClaims)
+	if !ok {
+		return "", errors.New("authentication claims were not found")
+	}
+
+	if cc.OrgID != r.orgID {
+		return "", errors.New("organisation mismatch")
+	}
+
+	if cc.AccountInfo.Email == "" {
+		return "", errors.New("missing email claim")
+	}
+
+	return authz.PrincipalID("User:" + cc.AccountInfo.Email), nil
 }
 
 type rpCustomClaims struct {
@@ -113,6 +144,28 @@ func (r *rpCustomClaims) Validate(_ context.Context) error {
 	return nil
 }
 
+// RPJWTMiddleware implements a custom JWT validation for the Redpanda platform
+// that ensures a given request matches a specified organization and audience.
+type RPJWTMiddleware struct {
+	jwt    *jwtValidator
+	logger *service.Logger
+}
+
+// NewRPJWTMiddleware creates a new RP JWT middleware.
+func NewRPJWTMiddleware(mgr *service.Resources) (*RPJWTMiddleware, error) {
+	jwt, err := newJWTValidator(mgr)
+	if err != nil {
+		return nil, err
+	}
+	if jwt == nil {
+		return nil, nil
+	}
+	return &RPJWTMiddleware{
+		jwt:    jwt,
+		logger: mgr.Logger(),
+	}, nil
+}
+
 // Wrap a handler with JWT validation. Any request that fails validation will
 // be rejected and next will not be called.
 func (r *RPJWTMiddleware) Wrap(next http.Handler) http.Handler {
@@ -127,33 +180,13 @@ func (r *RPJWTMiddleware) Wrap(next http.Handler) http.Handler {
 			return
 		}
 
-		var claims *validator.ValidatedClaims
-		if claims, err = r.validateToken(req.Context(), authToken); err != nil {
-			r.logger.With("error", err).Error("Authentication token was not valid")
-			http.Error(w, "authentication token was invalid", http.StatusBadRequest)
+		principal, err := r.jwt.validateAndGetPrincipal(req.Context(), authToken)
+		if err != nil {
+			r.logger.With("error", err).Error("Authentication failed")
+			http.Error(w, "authentication failed", http.StatusUnauthorized)
 			return
 		}
 
-		customClaims, ok := claims.CustomClaims.(*rpCustomClaims)
-		if !ok {
-			r.logger.Error("Failed to extract custom claims")
-			http.Error(w, "authentication claims were not found", http.StatusBadRequest)
-			return
-		}
-
-		if customClaims.OrgID != r.orgID {
-			r.logger.With("org_id", customClaims.OrgID).Error("Organisation ID mismatch")
-			http.Error(w, "organisation mismatch", http.StatusUnauthorized)
-			return
-		}
-
-		if customClaims.AccountInfo.Email == "" {
-			r.logger.Error("Missing email claim")
-			http.Error(w, "missing email claim", http.StatusUnauthorized)
-			return
-		}
-
-		principal := authz.PrincipalID("User:" + customClaims.AccountInfo.Email)
 		next.ServeHTTP(w, req.WithContext(ContextWithValidatedPrincipalID(req.Context(), principal)))
 	})
 }
@@ -170,24 +203,6 @@ func extractAuthenticationToken(r *http.Request) (string, error) {
 	}
 
 	return authHeaderParts[1], nil
-}
-
-func (r *RPJWTMiddleware) validateToken(ctx context.Context, tokenString string) (*validator.ValidatedClaims, error) {
-	parsedToken, err, _ := r.validationCache.Get(tokenString, func() (*validator.ValidatedClaims, error) {
-		parsedToken, err := r.jwtValidator.ValidateToken(ctx, tokenString)
-		if err != nil {
-			return nil, err
-		}
-
-		validatedClaims, ok := (parsedToken).(*validator.ValidatedClaims)
-		if !ok {
-			return nil, errors.New("invalid claims type")
-		}
-
-		return validatedClaims, nil
-	})
-
-	return parsedToken, err
 }
 
 type validatedPrincipalIDContextKeyType string
