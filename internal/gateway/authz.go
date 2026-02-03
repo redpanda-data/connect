@@ -9,9 +9,14 @@
 package gateway
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"sync/atomic"
+
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/common-go/authz"
@@ -125,4 +130,36 @@ func AuthzMiddleware(
 		}
 		next.ServeHTTP(w, req)
 	})
+}
+
+// GRPCUnaryAuthzInterceptor returns a gRPC unary interceptor that enforces
+// authorization checks for the given permission before invoking the handler.
+// If the principal is missing or unauthorized, it returns PermissionDenied.
+func GRPCUnaryAuthzInterceptor(
+	policy *FileWatchingAuthzResourcePolicy,
+	perm authz.PermissionName,
+) grpc.UnaryServerInterceptor {
+	return func(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+		principal, ok := ValidatedPrincipalIDFromContext(ctx)
+		if !ok || !policy.Authorizer(perm).Check(principal) {
+			return nil, status.Error(codes.PermissionDenied, "permission denied")
+		}
+		return handler(ctx, req)
+	}
+}
+
+// GRPCStreamAuthzInterceptor returns a gRPC stream interceptor that enforces
+// authorization checks for the given permission before invoking the handler.
+// If the principal is missing or unauthorized, it returns PermissionDenied.
+func GRPCStreamAuthzInterceptor(
+	policy *FileWatchingAuthzResourcePolicy,
+	perm authz.PermissionName,
+) grpc.StreamServerInterceptor {
+	return func(srv any, ss grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+		principal, ok := ValidatedPrincipalIDFromContext(ss.Context())
+		if !ok || !policy.Authorizer(perm).Check(principal) {
+			return status.Error(codes.PermissionDenied, "permission denied")
+		}
+		return handler(srv, ss)
+	}
 }
