@@ -1,67 +1,100 @@
-/*
- * Copyright 2026 Redpanda Data, Inc.
- *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
- * License (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- *
- * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
- */
+// Copyright 2025 Redpanda Data, Inc.
+//
+// Licensed as a Redpanda Enterprise file under the Redpanda Community
+// License (the "License"); you may not use this file except in compliance with
+// the License. You may obtain a copy of the License at
+//
+// https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
+
 package iceberg
 
 import (
 	"context"
+	"fmt"
 
+	"github.com/apache/iceberg-go/table"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/asyncroutine"
-	"github.com/redpanda-data/connect/v4/internal/impl/iceberg/icebergx"
 )
 
-// committer is the final stage of the pipeline, which does the actual communication
-// with the catalog to register a new snapshot with the given data files.
-type committer struct {
-	client *catalogClient // unowned
-
-	batcher *asyncroutine.Batcher[commitRequest, commitResponse]
+// dataFile represents a written parquet file ready for commit.
+type dataFile struct {
+	path     string // full path (e.g., s3://bucket/ns/table/data/xxx.parquet)
+	rowCount int64
+	fileSize int64
 }
 
-type (
-	dataFile struct {
-		remotePath      string
-		rowCount        int
-		sizeBytes       []byte
-		tableSchemaID   int
-		partitionSpecID int
-		partitionKey    icebergx.PartitionKey
-	}
-	commitRequest  struct{}
-	commitResponse struct{}
-)
+// committer batches data file commits for a single table.
+// Commits are serialized - only one commit at a time per committer.
+type committer struct {
+	table   *table.Table
+	batcher *asyncroutine.Batcher[dataFile, struct{}]
+	logger  *service.Logger
+}
 
-// newCommitter returns a new committer object
-//
-// NOTE: it is the callers responsibility to close the passed in client
-func newCommitter(client *catalogClient) (*committer, error) {
+// newCommitter creates a new committer for a specific table.
+func newCommitter(tbl *table.Table, logger *service.Logger) (*committer, error) {
 	c := &committer{
-		client: client,
+		table:  tbl,
+		logger: logger,
 	}
-	if batcher, err := asyncroutine.NewBatcher(100, c.doCommit); err != nil {
-		return nil, err
-	} else {
-		c.batcher = batcher
+
+	batcher, err := asyncroutine.NewBatcher(100, c.doCommit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create batcher: %w", err)
 	}
+	c.batcher = batcher
+
 	return c, nil
 }
 
-// Commit to the catalog the given data files
-func (c *committer) Commit(ctx context.Context, req commitRequest) (commitResponse, error) {
-	return c.batcher.Submit(ctx, req)
+// Commit submits a data file for commit and waits for the result.
+func (c *committer) Commit(ctx context.Context, file dataFile) error {
+	_, err := c.batcher.Submit(ctx, file)
+	return err
 }
 
-func (c *committer) doCommit(ctx context.Context, reqs []commitRequest) ([]commitResponse, error) {
-	panic(nil)
+// doCommit processes a batch of data files for this table.
+func (c *committer) doCommit(ctx context.Context, files []dataFile) ([]struct{}, error) {
+	if len(files) == 0 {
+		return nil, nil
+	}
+
+	// Refresh the table to get latest metadata
+	if err := c.table.Refresh(ctx); err != nil {
+		return nil, fmt.Errorf("failed to refresh table: %w", err)
+	}
+
+	// Collect file paths and stats
+	paths := make([]string, len(files))
+	var totalRows int64
+	for i, f := range files {
+		paths[i] = f.path
+		totalRows += f.rowCount
+	}
+
+	// Create transaction and add files
+	txn := c.table.NewTransaction()
+	if err := txn.AddFiles(ctx, paths, nil, true); err != nil {
+		return nil, fmt.Errorf("failed to add files: %w", err)
+	}
+
+	// Commit the transaction
+	if _, err := txn.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	c.logger.Debugf("Committed %d files (%d rows)", len(paths), totalRows)
+
+	// All succeeded - return empty responses
+	responses := make([]struct{}, len(files))
+	return responses, nil
 }
 
-// Close the committer and any pending commit requests
+// Close shuts down the committer and waits for pending commits.
 func (c *committer) Close() {
-	c.batcher.Close()
+	if c.batcher != nil {
+		c.batcher.Close()
+	}
 }

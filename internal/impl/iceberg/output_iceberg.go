@@ -11,10 +11,13 @@ package iceberg
 import (
 	"context"
 	"fmt"
+	"net/url"
+
+	"github.com/apache/iceberg-go"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
-	"github.com/redpanda-data/connect/v4/internal/impl/iceberg/storage"
+	"github.com/redpanda-data/connect/v4/internal/impl/iceberg/catalogx"
 	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
@@ -58,78 +61,41 @@ func init() {
 
 // icebergOutput implements service.BatchOutput for Iceberg tables.
 type icebergOutput struct {
-	writer *icebergWriter
+	router *router
 	logger *service.Logger
 }
 
 // newIcebergOutputFromConfig creates a new Iceberg output from parsed configuration.
 func newIcebergOutputFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (*icebergOutput, error) {
 	// Parse catalog configuration
-	catalogConf, err := parseCatalogConfig(conf)
+	catalogCfg, err := parseCatalogConfig(conf)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse catalog config: %w", err)
 	}
 
 	// Parse table identification
-	namespace, err := conf.FieldString(ioFieldNamespace)
+	namespaceStr, err := conf.FieldInterpolatedString(ioFieldNamespace)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse namespace: %w", err)
 	}
 
-	tableNameStr, err := conf.FieldInterpolatedString(ioFieldTable)
+	tableStr, err := conf.FieldInterpolatedString(ioFieldTable)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse table name: %w", err)
 	}
 
-	// Parse storage configuration
-	stor, err := parseStorageConfig(conf)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse storage config: %w", err)
-	}
-
-	// Parse schema evolution settings
-	ignoreNulls := true
-	if conf.Contains(ioFieldSchemaEvolution) {
-		if conf.Contains(ioFieldSchemaEvolution, ioFieldSchemaEvolutionIgnoreNulls) {
-			ignoreNulls, err = conf.FieldBool(ioFieldSchemaEvolution, ioFieldSchemaEvolutionIgnoreNulls)
-			if err != nil {
-				return nil, fmt.Errorf("failed to parse ignore_nulls: %w", err)
-			}
-		}
-	}
-
-	// Parse commit timeout
-	commitTimeout, err := conf.FieldDuration(ioFieldCommitTimeout)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse commit_timeout: %w", err)
-	}
-
-	// Create catalog client
-	catalog, err := newCatalogClient(catalogConf, []string{namespace})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create catalog client: %w", err)
-	}
-
-	// Create writer
-	writer := newIcebergWriter(
-		catalog,
-		stor,
-		namespace,
-		tableNameStr,
-		ignoreNulls,
-		commitTimeout,
-		mgr.Logger(),
-	)
+	// Create router
+	rtr := NewRouter(catalogCfg, namespaceStr, tableStr, mgr.Logger())
 
 	return &icebergOutput{
-		writer: writer,
+		router: rtr,
 		logger: mgr.Logger(),
 	}, nil
 }
 
 // parseCatalogConfig parses the catalog configuration.
-func parseCatalogConfig(conf *service.ParsedConfig) (catalogConfig, error) {
-	cfg := catalogConfig{
+func parseCatalogConfig(conf *service.ParsedConfig) (catalogx.Config, error) {
+	cfg := catalogx.Config{
 		AuthType: "none", // Default to no auth
 	}
 
@@ -138,6 +104,20 @@ func parseCatalogConfig(conf *service.ParsedConfig) (catalogConfig, error) {
 	cfg.URL, err = conf.FieldString(ioFieldCatalog, ioFieldCatalogURL)
 	if err != nil {
 		return cfg, fmt.Errorf("catalog.url is required: %w", err)
+	}
+
+	// Parse warehouse (optional)
+	if conf.Contains(ioFieldCatalog, ioFieldCatalogWarehouse) {
+		cfg.Warehouse, err = conf.FieldString(ioFieldCatalog, ioFieldCatalogWarehouse)
+		if err != nil {
+			return cfg, err
+		}
+	}
+
+	// Parse S3 storage configuration for AdditionalProps
+	cfg.AdditionalProps, err = parseS3Props(conf)
+	if err != nil {
+		return cfg, err
 	}
 
 	// Parse authentication (if present)
@@ -156,7 +136,13 @@ func parseCatalogConfig(conf *service.ParsedConfig) (catalogConfig, error) {
 		if err != nil {
 			return cfg, err
 		}
-		cfg.OAuth2ServerURI, _ = conf.FieldString(ioFieldCatalog, ioFieldCatalogAuth, ioFieldCatalogAuthOAuth2, ioFieldOAuth2ServerURI)
+		serverURI, _ := conf.FieldString(ioFieldCatalog, ioFieldCatalogAuth, ioFieldCatalogAuthOAuth2, ioFieldOAuth2ServerURI)
+		if serverURI != "" {
+			cfg.OAuth2ServerURI, err = url.Parse(serverURI)
+			if err != nil {
+				return cfg, fmt.Errorf("failed to parse oauth2 server URI: %w", err)
+			}
+		}
 		return cfg, nil
 	}
 
@@ -185,67 +171,72 @@ func parseCatalogConfig(conf *service.ParsedConfig) (catalogConfig, error) {
 	return cfg, nil
 }
 
-// parseStorageConfig parses the storage configuration and creates a storage backend.
-func parseStorageConfig(conf *service.ParsedConfig) (storage.Storage, error) {
+// parseS3Props extracts S3 storage properties from config and returns them as iceberg.Properties.
+func parseS3Props(conf *service.ParsedConfig) (iceberg.Properties, error) {
+	props := make(iceberg.Properties)
+
+	// Check if storage config exists
+	if !conf.Contains(ioFieldStorage) {
+		return props, nil
+	}
+
 	storageType, err := conf.FieldString(ioFieldStorage, ioFieldStorageType)
-	if err != nil {
-		return nil, fmt.Errorf("storage.type is required: %w", err)
+	if err != nil || storageType != "s3" {
+		return props, nil // Only S3 supported for now
 	}
 
-	switch storageType {
-	case "s3":
-		return parseS3Storage(conf)
-	case "gcs":
-		return nil, fmt.Errorf("GCS storage not yet implemented (coming in Phase 3)")
-	case "azure":
-		return nil, fmt.Errorf("Azure storage not yet implemented (coming in Phase 3)")
-	default:
-		return nil, fmt.Errorf("unsupported storage type: %s", storageType)
-	}
-}
-
-// parseS3Storage creates an S3 storage backend from configuration.
-func parseS3Storage(conf *service.ParsedConfig) (storage.Storage, error) {
-	bucket, err := conf.FieldString(ioFieldStorage, ioFieldStorageBucket)
-	if err != nil {
-		return nil, err
-	}
-
-	region, err := conf.FieldString(ioFieldStorage, ioFieldStorageRegion)
-	if err != nil {
-		return nil, err
-	}
-
-	endpoint := ""
-	if conf.Contains(ioFieldStorage, ioFieldStorageEndpoint) {
-		endpoint, err = conf.FieldString(ioFieldStorage, ioFieldStorageEndpoint)
+	// Get region
+	if conf.Contains(ioFieldStorage, ioFieldStorageRegion) {
+		region, err := conf.FieldString(ioFieldStorage, ioFieldStorageRegion)
 		if err != nil {
 			return nil, err
 		}
+		props["s3.region"] = region
 	}
 
-	return storage.NewS3Storage(conf, bucket, region, endpoint)
+	// Get endpoint
+	if conf.Contains(ioFieldStorage, ioFieldStorageEndpoint) {
+		endpoint, err := conf.FieldString(ioFieldStorage, ioFieldStorageEndpoint)
+		if err != nil {
+			return nil, err
+		}
+		props["s3.endpoint"] = endpoint
+		// For custom endpoints (like MinIO), enable path-style access
+		props["s3.path-style-access"] = "true"
+	}
+
+	// Get credentials - check for static credentials first
+	if conf.Contains(ioFieldStorage, "credentials", "id") {
+		accessKeyID, err := conf.FieldString(ioFieldStorage, "credentials", "id")
+		if err != nil {
+			return nil, err
+		}
+		props["s3.access-key-id"] = accessKeyID
+	}
+	if conf.Contains(ioFieldStorage, "credentials", "secret") {
+		secretAccessKey, err := conf.FieldString(ioFieldStorage, "credentials", "secret")
+		if err != nil {
+			return nil, err
+		}
+		props["s3.secret-access-key"] = secretAccessKey
+	}
+
+	return props, nil
 }
 
 // Connect establishes connections to the catalog and storage.
-func (o *icebergOutput) Connect(ctx context.Context) error {
-	// Connect to storage
-	if s3, ok := o.writer.storage.(*storage.S3Storage); ok {
-		if err := s3.Connect(ctx); err != nil {
-			return fmt.Errorf("failed to connect to S3: %w", err)
-		}
-	}
-
-	o.logger.Info("Connected to Iceberg catalog and storage")
+func (o *icebergOutput) Connect(_ context.Context) error {
+	o.logger.Info("Iceberg output ready")
 	return nil
 }
 
 // WriteBatch writes a batch of messages to the Iceberg table.
 func (o *icebergOutput) WriteBatch(ctx context.Context, batch service.MessageBatch) error {
-	return o.writer.WriteBatch(ctx, batch)
+	return o.router.Route(ctx, batch)
 }
 
 // Close closes the output and releases resources.
-func (o *icebergOutput) Close(ctx context.Context) error {
-	return o.writer.Close(ctx)
+func (o *icebergOutput) Close(_ context.Context) error {
+	o.router.Close()
+	return nil
 }
