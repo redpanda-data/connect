@@ -186,7 +186,7 @@ The interval between attempts to check for new changes once all data is processe
 
 *Type*: `string`
 
-*Default*: `5000000000`
+*Default*: `"5s"`
 
 ```yml
 # Examples
