@@ -186,10 +186,10 @@ openai_speech             ,processor ,openai_speech             ,4.32.0  ,certif
 openai_transcription      ,processor ,openai_transcription      ,4.32.0  ,certified  ,n          ,y     ,y
 openai_translation        ,processor ,openai_translation        ,4.32.0  ,certified  ,n          ,y     ,y
 opensearch                ,output    ,OpenSearch                ,0.0.0   ,certified  ,n          ,y     ,y
-otlp_grpc                 ,input     ,otlp_grpc                 ,4.78.0  ,certified  ,n          ,y     ,y
-otlp_grpc                 ,output    ,otlp_grpc                 ,4.78.0  ,certified  ,n          ,y     ,y
-otlp_http                 ,input     ,otlp_http                 ,4.78.0  ,certified  ,n          ,y     ,y
-otlp_http                 ,output    ,otlp_http                 ,4.78.0  ,certified  ,n          ,y     ,y
+otlp_grpc                 ,input     ,otlp_grpc                 ,4.78.0  ,enterprise ,n          ,y     ,y
+otlp_grpc                 ,output    ,otlp_grpc                 ,4.78.0  ,enterprise ,n          ,y     ,y
+otlp_http                 ,input     ,otlp_http                 ,4.78.0  ,enterprise ,n          ,y     ,y
+otlp_http                 ,output    ,otlp_http                 ,4.78.0  ,enterprise ,n          ,y     ,y
 parallel                  ,processor ,parallel                  ,0.0.0   ,certified  ,n          ,y     ,y
 parquet                   ,input     ,parquet                   ,4.8.0   ,certified  ,n          ,n     ,n
 parquet                   ,processor ,parquet                   ,3.62.0  ,community  ,y          ,n     ,n
