@@ -33,8 +33,8 @@ type committer struct {
 	logger  *service.Logger
 }
 
-// newCommitter creates a new committer for a specific table.
-func newCommitter(tbl *table.Table, logger *service.Logger) (*committer, error) {
+// NewCommitter creates a new committer for a specific table.
+func NewCommitter(tbl *table.Table, logger *service.Logger) (*committer, error) {
 	c := &committer{
 		table:  tbl,
 		logger: logger,

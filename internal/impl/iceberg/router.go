@@ -57,13 +57,15 @@ func (r *router) Route(ctx context.Context, batch service.MessageBatch) error {
 	// Group messages by table key
 	groups := make(map[tableKey]service.MessageBatch)
 
-	for _, msg := range batch {
-		ns, err := r.namespaceStr.TryString(msg)
+	nsExec := batch.InterpolationExecutor(r.namespaceStr)
+	tableExec := batch.InterpolationExecutor(r.tableStr)
+	for i, msg := range batch {
+		ns, err := nsExec.TryString(i)
 		if err != nil {
 			return fmt.Errorf("failed to interpolate namespace: %w", err)
 		}
 
-		tbl, err := r.tableStr.TryString(msg)
+		tbl, err := tableExec.TryString(i)
 		if err != nil {
 			return fmt.Errorf("failed to interpolate table: %w", err)
 		}
@@ -115,19 +117,29 @@ func (r *router) getOrCreateWriter(ctx context.Context, key tableKey) (*writer, 
 		return nil, fmt.Errorf("failed to create catalog client: %w", err)
 	}
 
-	// Load the table
-	tbl, err := client.LoadTable(ctx, key.table)
+	// Load the table twice - writer and committer need separate references
+	// since the table object is mutable and they operate in different goroutines
+	writerTbl, err := client.LoadTable(ctx, key.table)
 	if err != nil {
 		_ = client.Close()
-		return nil, fmt.Errorf("failed to load table: %w", err)
+		return nil, fmt.Errorf("failed to load table for writer: %w", err)
 	}
 
-	// Create writer for this table
-	w, err = NewWriter(tbl, r.logger)
+	committerTbl, err := client.LoadTable(ctx, key.table)
 	if err != nil {
 		_ = client.Close()
-		return nil, fmt.Errorf("failed to create writer: %w", err)
+		return nil, fmt.Errorf("failed to load table for committer: %w", err)
 	}
+
+	// Create committer with its own table reference
+	comm, err := NewCommitter(committerTbl, r.logger)
+	if err != nil {
+		_ = client.Close()
+		return nil, fmt.Errorf("failed to create committer: %w", err)
+	}
+
+	// Create writer with its own table reference and the committer
+	w = NewWriter(writerTbl, comm, r.logger)
 
 	r.writers[key] = w
 	r.logger.Debugf("Created writer for table %s.%s", key.namespace, key.table)

@@ -48,6 +48,14 @@ func TestConnectorIntegration(t *testing.T) {
 	t.Run("RouterMultipleTables", func(t *testing.T) {
 		testRouterMultipleTablesIntegration(t, ctx, infra, namespace)
 	})
+
+	t.Run("ListValues", func(t *testing.T) {
+		testListValuesIntegration(t, ctx, infra, namespace)
+	})
+
+	t.Run("NestedStruct", func(t *testing.T) {
+		testNestedStructIntegration(t, ctx, infra, namespace)
+	})
 }
 
 // testWriterIntegration tests the writer component directly.
@@ -81,14 +89,23 @@ func testWriterIntegration(t *testing.T, ctx context.Context, infra *testInfrast
 	defer func() { _ = client.Close() }()
 
 	// Create the table
-	tbl, err := client.CreateTable(ctx, tableName, schema)
+	_, err = client.CreateTable(ctx, tableName, schema)
 	require.NoError(t, err)
 	t.Logf("Created table: %s.%s", namespace, tableName)
 
-	// Create a writer
-	logger := service.MockResources().Logger()
-	writer, err := iberg.NewWriter(tbl, logger)
+	// Load the table twice - writer and committer need separate references
+	writerTbl, err := client.LoadTable(ctx, tableName)
 	require.NoError(t, err)
+
+	committerTbl, err := client.LoadTable(ctx, tableName)
+	require.NoError(t, err)
+
+	// Create committer and writer with separate table references
+	logger := service.MockResources().Logger()
+	comm, err := iberg.NewCommitter(committerTbl, logger)
+	require.NoError(t, err)
+
+	writer := iberg.NewWriter(writerTbl, comm, logger)
 	defer writer.Close()
 
 	// Create test messages
@@ -253,6 +270,214 @@ func testRouterMultipleTablesIntegration(t *testing.T, ctx context.Context, infr
 	assert.Equal(t, 2, viewCount, "expected 2 rows in events_views")
 
 	t.Logf("Router multiple tables test passed: %d clicks, %d views", clickCount, viewCount)
+}
+
+// testListValuesIntegration tests writing records with list fields.
+func testListValuesIntegration(t *testing.T, ctx context.Context, infra *testInfrastructure, namespace string) {
+	t.Helper()
+
+	tableName := "list_test"
+	schema := iceberg.NewSchemaWithIdentifiers(
+		1, nil,
+		iceberg.NestedField{ID: 1, Name: "id", Type: iceberg.PrimitiveTypes.Int64, Required: true},
+		iceberg.NestedField{
+			ID:   2,
+			Name: "tags",
+			Type: &iceberg.ListType{
+				ElementID:       3,
+				Element:         iceberg.PrimitiveTypes.String,
+				ElementRequired: false,
+			},
+			Required: false,
+		},
+		iceberg.NestedField{
+			ID:   4,
+			Name: "scores",
+			Type: &iceberg.ListType{
+				ElementID:       5,
+				Element:         iceberg.PrimitiveTypes.Int64,
+				ElementRequired: false,
+			},
+			Required: false,
+		},
+	)
+
+	catalogCfg := catalogx.Config{
+		URL:      infra.RestURL,
+		AuthType: "none",
+		AdditionalProps: iceberg.Properties{
+			"s3.access-key-id":     "admin",
+			"s3.secret-access-key": "password",
+			"s3.endpoint":          infra.MinioEndpoint,
+			"s3.path-style-access": "true",
+			"s3.region":            "us-east-1",
+		},
+	}
+
+	client, err := catalogx.NewCatalogClient(catalogCfg, []string{namespace})
+	require.NoError(t, err)
+	defer func() { _ = client.Close() }()
+
+	_, err = client.CreateTable(ctx, tableName, schema)
+	require.NoError(t, err)
+	t.Logf("Created table: %s.%s", namespace, tableName)
+
+	writerTbl, err := client.LoadTable(ctx, tableName)
+	require.NoError(t, err)
+
+	committerTbl, err := client.LoadTable(ctx, tableName)
+	require.NoError(t, err)
+
+	logger := service.MockResources().Logger()
+	comm, err := iberg.NewCommitter(committerTbl, logger)
+	require.NoError(t, err)
+
+	writer := iberg.NewWriter(writerTbl, comm, logger)
+	defer writer.Close()
+
+	// Create test messages with list values
+	batch := createTestBatch(t, []map[string]any{
+		{"id": int64(1), "tags": []any{"red", "blue", "green"}, "scores": []any{int64(100), int64(200)}},
+		{"id": int64(2), "tags": []any{"yellow"}, "scores": []any{int64(50), int64(75), int64(100)}},
+		{"id": int64(3), "tags": []any{}, "scores": nil}, // empty list and null list
+	})
+
+	err = writer.Write(ctx, batch)
+	require.NoError(t, err)
+
+	time.Sleep(500 * time.Millisecond)
+
+	count, err := infra.CountIcebergRows(ctx, "rest", namespace, tableName)
+	require.NoError(t, err)
+	assert.Equal(t, 3, count, "expected 3 rows")
+
+	t.Logf("List values test passed: wrote %d rows with list fields to %s.%s", count, namespace, tableName)
+}
+
+// testNestedStructIntegration tests writing records with nested struct fields.
+func testNestedStructIntegration(t *testing.T, ctx context.Context, infra *testInfrastructure, namespace string) {
+	t.Helper()
+
+	tableName := "nested_test"
+	schema := iceberg.NewSchemaWithIdentifiers(
+		1, nil,
+		iceberg.NestedField{ID: 1, Name: "id", Type: iceberg.PrimitiveTypes.Int64, Required: true},
+		iceberg.NestedField{
+			ID:   2,
+			Name: "user",
+			Type: &iceberg.StructType{
+				FieldList: []iceberg.NestedField{
+					{ID: 3, Name: "name", Type: iceberg.PrimitiveTypes.String, Required: true},
+					{ID: 4, Name: "email", Type: iceberg.PrimitiveTypes.String, Required: false},
+					{ID: 5, Name: "age", Type: iceberg.PrimitiveTypes.Int32, Required: false},
+				},
+			},
+			Required: false,
+		},
+		iceberg.NestedField{
+			ID:   6,
+			Name: "address",
+			Type: &iceberg.StructType{
+				FieldList: []iceberg.NestedField{
+					{ID: 7, Name: "street", Type: iceberg.PrimitiveTypes.String, Required: false},
+					{ID: 8, Name: "city", Type: iceberg.PrimitiveTypes.String, Required: false},
+					{ID: 9, Name: "location", Type: &iceberg.StructType{
+						FieldList: []iceberg.NestedField{
+							{ID: 10, Name: "lat", Type: iceberg.PrimitiveTypes.Float64, Required: false},
+							{ID: 11, Name: "lng", Type: iceberg.PrimitiveTypes.Float64, Required: false},
+						},
+					}, Required: false},
+				},
+			},
+			Required: false,
+		},
+	)
+
+	catalogCfg := catalogx.Config{
+		URL:      infra.RestURL,
+		AuthType: "none",
+		AdditionalProps: iceberg.Properties{
+			"s3.access-key-id":     "admin",
+			"s3.secret-access-key": "password",
+			"s3.endpoint":          infra.MinioEndpoint,
+			"s3.path-style-access": "true",
+			"s3.region":            "us-east-1",
+		},
+	}
+
+	client, err := catalogx.NewCatalogClient(catalogCfg, []string{namespace})
+	require.NoError(t, err)
+	defer func() { _ = client.Close() }()
+
+	_, err = client.CreateTable(ctx, tableName, schema)
+	require.NoError(t, err)
+	t.Logf("Created table: %s.%s", namespace, tableName)
+
+	writerTbl, err := client.LoadTable(ctx, tableName)
+	require.NoError(t, err)
+
+	committerTbl, err := client.LoadTable(ctx, tableName)
+	require.NoError(t, err)
+
+	logger := service.MockResources().Logger()
+	comm, err := iberg.NewCommitter(committerTbl, logger)
+	require.NoError(t, err)
+
+	writer := iberg.NewWriter(writerTbl, comm, logger)
+	defer writer.Close()
+
+	// Create test messages with nested struct values
+	batch := createTestBatch(t, []map[string]any{
+		{
+			"id": int64(1),
+			"user": map[string]any{
+				"name":  "Alice",
+				"email": "alice@example.com",
+				"age":   int32(30),
+			},
+			"address": map[string]any{
+				"street": "123 Main St",
+				"city":   "Seattle",
+				"location": map[string]any{
+					"lat": 47.6062,
+					"lng": -122.3321,
+				},
+			},
+		},
+		{
+			"id": int64(2),
+			"user": map[string]any{
+				"name":  "Bob",
+				"email": nil, // null optional field
+				"age":   int32(25),
+			},
+			"address": nil, // null nested struct
+		},
+		{
+			"id": int64(3),
+			"user": map[string]any{
+				"name":  "Charlie",
+				"email": "charlie@example.com",
+				"age":   nil,
+			},
+			"address": map[string]any{
+				"street": "456 Oak Ave",
+				"city":   "Portland",
+				"location": nil, // null deeply nested struct
+			},
+		},
+	})
+
+	err = writer.Write(ctx, batch)
+	require.NoError(t, err)
+
+	time.Sleep(500 * time.Millisecond)
+
+	count, err := infra.CountIcebergRows(ctx, "rest", namespace, tableName)
+	require.NoError(t, err)
+	assert.Equal(t, 3, count, "expected 3 rows")
+
+	t.Logf("Nested struct test passed: wrote %d rows with nested structs to %s.%s", count, namespace, tableName)
 }
 
 // createTestBatch creates a message batch from test data.
