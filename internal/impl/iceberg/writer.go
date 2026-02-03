@@ -120,7 +120,6 @@ func (w *writer) messagesToParquet(batch service.MessageBatch) ([]byte, int, err
 	// Create sink that writes directly to column writers
 	sink := newParquetSink(fieldToCol, colWriters)
 
-	// Shred each record
 	rowCount := 0
 	for _, msg := range batch {
 		structured, err := msg.AsStructured()
@@ -133,21 +132,15 @@ func (w *writer) messagesToParquet(batch service.MessageBatch) ([]byte, int, err
 			return nil, 0, fmt.Errorf("message is not an object, got %T", structured)
 		}
 
-		// Start new row (flushes previous row to column writers)
-		if err := sink.startRow(); err != nil {
-			return nil, 0, fmt.Errorf("failed to start row: %w", err)
-		}
-
 		if err := rs.Shred(row, sink); err != nil {
 			return nil, 0, fmt.Errorf("failed to shred record: %w", err)
 		}
 
-		rowCount++
-	}
+		if err := sink.flush(); err != nil {
+			return nil, 0, fmt.Errorf("failed to flush row: %w", err)
+		}
 
-	// Flush the last row
-	if err := sink.flush(); err != nil {
-		return nil, 0, fmt.Errorf("failed to flush final row: %w", err)
+		rowCount++
 	}
 
 	if err := pw.Close(); err != nil {
@@ -175,14 +168,6 @@ func newParquetSink(fieldToCol map[int]int, colWriters []*parquet.ColumnWriter) 
 		colWriters: colWriters,
 		currentRow: make([][]parquet.Value, len(colWriters)),
 	}
-}
-
-// startRow flushes the previous row to column writers and resets for a new row.
-func (s *parquetSink) startRow() error {
-	if err := s.flush(); err != nil {
-		return err
-	}
-	return nil
 }
 
 // flush writes the current row to column writers.
@@ -234,6 +219,9 @@ func buildParquetSchema(schema *iceberg.Schema) (*parquet.Schema, map[int]int, e
 	}
 	pqSchema := parquet.NewSchema("root", group)
 
+	// Walk the iceberg schema and build up a mapping of field ID -> column index
+	// NOTE: we can simplify this when iceberg go supports field IDs in parquet files
+	// as we can just loop over the parquet leaves easily and build our map that way
 	fieldToCol := make(map[int]int)
 	st := schema.AsStruct()
 	for leaf := range schemaLeaves(&st, -1, nil) {
@@ -253,6 +241,7 @@ type schemaLeaf struct {
 	Path    []string
 }
 
+// schemaLeaves walks an iceberg struct yielding each leaf in the parquet schema
 func schemaLeaves(root iceberg.Type, fieldID int, path []string) iter.Seq[schemaLeaf] {
 	walkStruct := func(st *iceberg.StructType, yield func(schemaLeaf) bool) bool {
 		for _, field := range st.Fields() {
