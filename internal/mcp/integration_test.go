@@ -39,6 +39,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 	"github.com/redpanda-data/common-go/authz"
 
+	"github.com/redpanda-data/connect/v4/internal/gateway/gatewaytest"
 	"github.com/redpanda-data/connect/v4/internal/license"
 	mcpinternal "github.com/redpanda-data/connect/v4/internal/mcp"
 )
@@ -75,60 +76,6 @@ func (h *mcpServerHandle) URL() string {
 func (h *mcpServerHandle) Close() error {
 	h.cancel()
 	return h.listener.Close()
-}
-
-// redpandaUser implements mockoidc.User with Redpanda custom claims
-type redpandaUser struct {
-	subject string
-	email   string
-	orgID   string
-}
-
-func (u *redpandaUser) ID() string {
-	return u.subject
-}
-
-func (u *redpandaUser) Userinfo(_ []string) ([]byte, error) {
-	info := map[string]any{
-		"sub":   u.subject,
-		"email": u.email,
-	}
-	return json.Marshal(info)
-}
-
-func (u *redpandaUser) Claims(_ []string, claims *mockoidc.IDTokenClaims) (jwt.Claims, error) {
-	claims.Subject = u.subject
-
-	// Add custom Redpanda claims
-	customClaims := map[string]any{
-		"iss": claims.Issuer,
-		"sub": u.subject,
-		"aud": claims.Audience,
-		"exp": claims.ExpiresAt.Unix(),
-		"iat": claims.IssuedAt.Unix(),
-		"https://cloud.redpanda.com/organization_id": u.orgID,
-		"account_info": map[string]any{
-			"email": u.email,
-		},
-	}
-
-	return jwt.MapClaims(customClaims), nil
-}
-
-// setupMockOIDC creates a mockoidc server with Redpanda custom claims support
-func setupMockOIDC(t *testing.T) (*mockoidc.MockOIDC, string) {
-	t.Helper()
-
-	m, err := mockoidc.Run()
-	require.NoError(t, err)
-
-	t.Cleanup(func() {
-		if err := m.Shutdown(); err != nil {
-			t.Log(err)
-		}
-	})
-
-	return m, m.Issuer()
 }
 
 // setupMCPServer starts an MCP server with JWT authentication and authorization policy
@@ -202,35 +149,6 @@ func setupMCPServer(t *testing.T, issuerURL, orgID, policyFile string) *mcpServe
 	return handle
 }
 
-// getAccessToken performs OAuth flow with mockoidc to get a valid access token
-func getAccessToken(t *testing.T, m *mockoidc.MockOIDC, user mockoidc.User) string {
-	t.Helper()
-
-	// Queue the user for authentication
-	m.QueueUser(user)
-
-	// Create base ID token claims
-	baseClaims := &mockoidc.IDTokenClaims{
-		RegisteredClaims: &jwt.RegisteredClaims{
-			Issuer:    m.Issuer(),
-			Subject:   user.ID(),
-			Audience:  jwt.ClaimStrings{"test-audience"},
-			IssuedAt:  jwt.NewNumericDate(m.Now()),
-			ExpiresAt: jwt.NewNumericDate(m.Now().Add(time.Hour)),
-		},
-	}
-
-	// Get user claims with custom Redpanda claims
-	claims, err := user.Claims([]string{"openid", "email"}, baseClaims)
-	require.NoError(t, err)
-
-	// Sign the JWT
-	token, err := m.Keypair.SignJWT(claims)
-	require.NoError(t, err)
-
-	return token
-}
-
 // createMCPClient creates an MCP client connected via SSE transport
 func createMCPClient(t *testing.T, serverURL, token string) (*mcp.ClientSession, func()) {
 	t.Helper()
@@ -293,20 +211,20 @@ func TestIntegrationMCPServerJWTAuth_Valid(t *testing.T) {
 	const testEmail = "test@example.com"
 
 	t.Log("Given: mockoidc provider with Redpanda custom claims")
-	mockOIDC, issuerURL := setupMockOIDC(t)
+	mockOIDC, issuerURL := gatewaytest.SetupMockOIDC(t)
 	t.Logf("OIDC Issuer: %s", issuerURL)
 
 	t.Log("And: MCP server with JWT authentication enabled")
 	server := setupMCPServer(t, issuerURL, testOrgID, "testdata/policies/allow_all.yaml")
 
 	t.Log("And: User with valid token")
-	user := &redpandaUser{
-		subject: "test-user-123",
-		email:   testEmail,
-		orgID:   testOrgID,
+	user := &gatewaytest.RedpandaUser{
+		Subject: "test-user-123",
+		Email:   testEmail,
+		OrgID:   testOrgID,
 	}
 
-	token := getAccessToken(t, mockOIDC, user)
+	token := gatewaytest.AccessToken(t, mockOIDC, user)
 	require.NotEmpty(t, token)
 
 	t.Log("When: MCP client connects with valid JWT token")
@@ -337,10 +255,10 @@ func TestIntegrationMCPServerJWTAuth_Invalid(t *testing.T) {
 		{
 			name: "expired_token",
 			setupFn: func(t *testing.T, m *mockoidc.MockOIDC) string {
-				user := &redpandaUser{
-					subject: "test-user",
-					email:   "test@example.com",
-					orgID:   testOrgID,
+				user := &gatewaytest.RedpandaUser{
+					Subject: "test-user",
+					Email:   "test@example.com",
+					OrgID:   testOrgID,
 				}
 
 				// Create token that's already expired
@@ -367,24 +285,24 @@ func TestIntegrationMCPServerJWTAuth_Invalid(t *testing.T) {
 		{
 			name: "wrong_org_id",
 			setupFn: func(t *testing.T, m *mockoidc.MockOIDC) string {
-				user := &redpandaUser{
-					subject: "test-user",
-					email:   "test@example.com",
-					orgID:   "wrong-org-456",
+				user := &gatewaytest.RedpandaUser{
+					Subject: "test-user",
+					Email:   "test@example.com",
+					OrgID:   "wrong-org-456",
 				}
-				return getAccessToken(t, m, user)
+				return gatewaytest.AccessToken(t, m, user)
 			},
 			wantCode: http.StatusUnauthorized,
 		},
 		{
 			name: "missing_email",
 			setupFn: func(t *testing.T, m *mockoidc.MockOIDC) string {
-				user := &redpandaUser{
-					subject: "test-user",
-					email:   "", // empty email
-					orgID:   testOrgID,
+				user := &gatewaytest.RedpandaUser{
+					Subject: "test-user",
+					Email:   "", // empty email
+					OrgID:   testOrgID,
 				}
-				return getAccessToken(t, m, user)
+				return gatewaytest.AccessToken(t, m, user)
 			},
 			wantCode: http.StatusBadRequest,
 		},
@@ -400,7 +318,7 @@ func TestIntegrationMCPServerJWTAuth_Invalid(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Log("Given: mockoidc provider")
-			mockOIDC, issuerURL := setupMockOIDC(t)
+			mockOIDC, issuerURL := gatewaytest.SetupMockOIDC(t)
 
 			t.Log("And: MCP server with JWT authentication")
 			server := setupMCPServer(t, issuerURL, testOrgID, "testdata/policies/allow_all.yaml")
@@ -444,18 +362,18 @@ func TestIntegrationMCPServerAuthz_AllowAll(t *testing.T) {
 	const testEmail = "test@example.com"
 
 	t.Log("Given: mockoidc provider")
-	mockOIDC, issuerURL := setupMockOIDC(t)
+	mockOIDC, issuerURL := gatewaytest.SetupMockOIDC(t)
 
 	t.Log("And: Policy file granting all permissions")
 	server := setupMCPServer(t, issuerURL, testOrgID, "testdata/policies/allow_all.yaml")
 
 	t.Log("And: User with valid token")
-	user := &redpandaUser{
-		subject: "test-user",
-		email:   testEmail,
-		orgID:   testOrgID,
+	user := &gatewaytest.RedpandaUser{
+		Subject: "test-user",
+		Email:   testEmail,
+		OrgID:   testOrgID,
 	}
-	token := getAccessToken(t, mockOIDC, user)
+	token := gatewaytest.AccessToken(t, mockOIDC, user)
 
 	t.Log("When: MCP client connects with valid credentials and all permissions")
 	session, cleanup := createMCPClient(t, server.URL(), token)
@@ -478,18 +396,18 @@ func TestIntegrationMCPServerAuthz_DenyAll(t *testing.T) {
 	const testEmail = "test@example.com"
 
 	t.Log("Given: mockoidc provider")
-	mockOIDC, issuerURL := setupMockOIDC(t)
+	mockOIDC, issuerURL := gatewaytest.SetupMockOIDC(t)
 
 	t.Log("And: Policy file denying all permissions")
 	server := setupMCPServer(t, issuerURL, testOrgID, "testdata/policies/deny_all.yaml")
 
 	t.Log("And: User with valid token but no permissions")
-	user := &redpandaUser{
-		subject: "test-user",
-		email:   testEmail,
-		orgID:   testOrgID,
+	user := &gatewaytest.RedpandaUser{
+		Subject: "test-user",
+		Email:   testEmail,
+		OrgID:   testOrgID,
 	}
-	token := getAccessToken(t, mockOIDC, user)
+	token := gatewaytest.AccessToken(t, mockOIDC, user)
 
 	t.Log("When: MCP client attempts to connect with no permissions")
 	client := mcp.NewClient(&mcp.Implementation{
@@ -522,7 +440,7 @@ func TestIntegrationMCPServerAuthz_PolicyReload(t *testing.T) {
 	const testEmail = "test@example.com"
 
 	t.Log("Given: mockoidc provider")
-	mockOIDC, issuerURL := setupMockOIDC(t)
+	mockOIDC, issuerURL := gatewaytest.SetupMockOIDC(t)
 
 	t.Log("And: Temporary policy file with allow_all")
 	tmpDir := t.TempDir()
@@ -537,12 +455,12 @@ func TestIntegrationMCPServerAuthz_PolicyReload(t *testing.T) {
 	server := setupMCPServer(t, issuerURL, testOrgID, tmpPolicyFile)
 
 	t.Log("And: User with valid token")
-	user := &redpandaUser{
-		subject: "test-user",
-		email:   testEmail,
-		orgID:   testOrgID,
+	user := &gatewaytest.RedpandaUser{
+		Subject: "test-user",
+		Email:   testEmail,
+		OrgID:   testOrgID,
 	}
-	token := getAccessToken(t, mockOIDC, user)
+	token := gatewaytest.AccessToken(t, mockOIDC, user)
 
 	t.Log("When: MCP client connects with allow_all policy")
 	session, cleanup := createMCPClient(t, server.URL(), token)
@@ -575,18 +493,18 @@ func TestIntegrationMCPServerTracing(t *testing.T) {
 	const testEmail = "test@example.com"
 
 	t.Log("Given: mockoidc provider with Redpanda custom claims")
-	mockOIDC, issuerURL := setupMockOIDC(t)
+	mockOIDC, issuerURL := gatewaytest.SetupMockOIDC(t)
 
 	t.Log("And: MCP server with tracing enabled")
 	server := setupMCPServer(t, issuerURL, testOrgID, "testdata/policies/allow_all.yaml")
 
 	t.Log("And: User with valid token")
-	user := &redpandaUser{
-		subject: "test-user-123",
-		email:   testEmail,
-		orgID:   testOrgID,
+	user := &gatewaytest.RedpandaUser{
+		Subject: "test-user-123",
+		Email:   testEmail,
+		OrgID:   testOrgID,
 	}
-	token := getAccessToken(t, mockOIDC, user)
+	token := gatewaytest.AccessToken(t, mockOIDC, user)
 
 	t.Log("When: MCP client connects with valid JWT token")
 	session, cleanup := createMCPClient(t, server.URL(), token)
