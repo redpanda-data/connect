@@ -25,7 +25,7 @@ import (
 	"github.com/go-mysql-org/go-mysql/canal"
 	gomysql "github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/replication"
-	"github.com/go-mysql-org/go-mysql/schema"
+	gomysqlschema "github.com/go-mysql-org/go-mysql/schema"
 	"github.com/go-sql-driver/mysql"
 	"golang.org/x/sync/errgroup"
 
@@ -75,9 +75,10 @@ var mysqlStreamConfigSpec = service.NewConfigSpec().
 
 This input adds the following metadata fields to each message:
 
-- operation
-- table
-- binlog_position
+- operation: The type of operation (insert, update, delete, or read for snapshot messages)
+- table: The name of the table
+- binlog_position: The binlog position (for CDC messages only, not set for snapshot messages)
+- schema: The table schema in benthos common schema format, compatible with processors like parquet_encode
 `).
 	Fields(
 		service.NewStringAnnotatedEnumField(fieldMySQLFlavor, map[string]string{
@@ -198,6 +199,10 @@ type mysqlStreamInput struct {
 	// IAM authentication fields
 	iamAuthEnabled      bool
 	iamAuthTokenBuilder TokenBuilder
+
+	// Table schemas - stored as serialized format (map[string]any) for metadata
+	tableSchemas map[string]any
+	schemaMutex  sync.RWMutex
 }
 
 func newMySQLStreamInput(conf *service.ParsedConfig, res *service.Resources) (s service.BatchInput, err error) {
@@ -210,6 +215,7 @@ func newMySQLStreamInput(conf *service.ParsedConfig, res *service.Resources) (s 
 		rawMessageEvents: make(chan MessageEvent),
 		msgChan:          make(chan asyncMessage),
 		res:              res,
+		tableSchemas:     make(map[string]any),
 	}
 
 	var batching service.BatchPolicy
@@ -646,6 +652,11 @@ func (i *mysqlStreamInput) readMessages(ctx context.Context) error {
 				mb.MetaSet("binlog_position", binlogPositionToString(*me.Position))
 			}
 
+			// Add table schema if available
+			if tableSchema := i.getOrExtractTableSchemaByName(me.Table); tableSchema != nil {
+				mb.MetaSetMut("schema", tableSchema)
+			}
+
 			if i.batchPolicy.Add(mb) {
 				nextTimedBatchChan = nil
 				flushedBatch, err := i.batchPolicy.Flush(ctx)
@@ -799,6 +810,11 @@ func (i *mysqlStreamInput) OnRotate(_ *replication.EventHeader, re *replication.
 }
 
 func (i *mysqlStreamInput) OnRow(e *canal.RowsEvent) error {
+	// Extract and cache the table schema if we haven't seen this table yet
+	if _, err := i.getTableSchema(e.Table); err != nil {
+		return fmt.Errorf("failed to extract schema for table %s: %w", e.Table.Name, err)
+	}
+
 	switch e.Action {
 	case canal.InsertAction:
 		return i.onMessage(e, 0, 1)
@@ -833,18 +849,18 @@ func (i *mysqlStreamInput) onMessage(e *canal.RowsEvent, initValue, incrementVal
 	return nil
 }
 
-func mapMessageColumn(v any, col schema.TableColumn) (any, error) {
+func mapMessageColumn(v any, col gomysqlschema.TableColumn) (any, error) {
 	if v == nil {
 		return v, nil
 	}
 	switch col.Type {
-	case schema.TYPE_DECIMAL:
+	case gomysqlschema.TYPE_DECIMAL:
 		s, ok := v.(string)
 		if !ok {
 			return nil, fmt.Errorf("expected string value for decimal column got: %T", v)
 		}
 		return json.Number(s), nil
-	case schema.TYPE_SET:
+	case gomysqlschema.TYPE_SET:
 		bitset, ok := v.(int64)
 		if !ok {
 			return nil, fmt.Errorf("expected int value for set column got: %T", v)
@@ -856,13 +872,13 @@ func mapMessageColumn(v any, col schema.TableColumn) (any, error) {
 			}
 		}
 		return out, nil
-	case schema.TYPE_DATE:
+	case gomysqlschema.TYPE_DATE:
 		date, ok := v.(string)
 		if !ok {
 			return nil, fmt.Errorf("expected string value for date column got: %T", v)
 		}
 		return time.Parse("2006-01-02", date)
-	case schema.TYPE_ENUM:
+	case gomysqlschema.TYPE_ENUM:
 		ordinal, ok := v.(int64)
 		if !ok {
 			return nil, fmt.Errorf("expected int value for enum column got: %T", v)
@@ -871,7 +887,7 @@ func mapMessageColumn(v any, col schema.TableColumn) (any, error) {
 			return nil, fmt.Errorf("enum ordinal out of range: %d when there are %d variants", ordinal, len(col.EnumValues))
 		}
 		return col.EnumValues[ordinal-1], nil
-	case schema.TYPE_JSON:
+	case gomysqlschema.TYPE_JSON:
 		s, ok := v.(string)
 		if !ok {
 			return nil, fmt.Errorf("expected string value for json column got: %T", v)
@@ -881,7 +897,7 @@ func mapMessageColumn(v any, col schema.TableColumn) (any, error) {
 			return nil, err
 		}
 		return decoded, nil
-	case schema.TYPE_STRING:
+	case gomysqlschema.TYPE_STRING:
 		// Blob types should come through as binary, but are marked type 5,
 		// instead skip them here and have those fallthrough to the binary case.
 		if !strings.Contains(col.RawType, "blob") {
@@ -895,7 +911,7 @@ func mapMessageColumn(v any, col schema.TableColumn) (any, error) {
 			return string(s), nil
 		}
 		fallthrough
-	case schema.TYPE_BINARY:
+	case gomysqlschema.TYPE_BINARY:
 		if s, ok := v.([]byte); ok {
 			return s, nil
 		}
@@ -910,3 +926,42 @@ func mapMessageColumn(v any, col schema.TableColumn) (any, error) {
 }
 
 // --- MySQL Canal handler methods end ----
+
+// ---- Schema extraction methods ----
+
+// getTableSchema retrieves the cached schema for a table, or extracts it if not yet cached.
+func (i *mysqlStreamInput) getTableSchema(table *gomysqlschema.Table) (any, error) {
+	i.schemaMutex.RLock()
+	if cached, exists := i.tableSchemas[table.Name]; exists {
+		i.schemaMutex.RUnlock()
+		return cached, nil
+	}
+	i.schemaMutex.RUnlock()
+
+	// Extract schema from MySQL table
+	commonSchema, err := mysqlTableToCommonSchema(table)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert table schema for %s: %w", table.Name, err)
+	}
+
+	// Serialize to generic format for metadata
+	serialized := commonSchema.ToAny()
+
+	// Cache it
+	i.schemaMutex.Lock()
+	i.tableSchemas[table.Name] = serialized
+	i.schemaMutex.Unlock()
+
+	return serialized, nil
+}
+
+// getOrExtractTableSchemaByName attempts to retrieve a cached schema by table name.
+// For snapshot messages, we may not have the canal Table object, so we return nil
+// and let the schema be extracted later when we see CDC events for this table.
+func (i *mysqlStreamInput) getOrExtractTableSchemaByName(tableName string) any {
+	i.schemaMutex.RLock()
+	defer i.schemaMutex.RUnlock()
+	return i.tableSchemas[tableName]
+}
+
+// ---- Schema extraction methods end ----
