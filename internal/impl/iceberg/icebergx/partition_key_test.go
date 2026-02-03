@@ -181,22 +181,21 @@ func TestTimeTransforms(t *testing.T) {
 		iceberg.PartitionField{SourceID: 9, FieldID: 1003, Name: "hour_transform", Transform: iceberg.HourTransform{}},
 	)
 
-	// Values are pre-transformed:
-	// Year transform: years since 1970 -> 2025 - 1970 = 55
-	// Month transform: months since 1970-01 -> (2025-1970)*12 + 5 = 665 (2025-06)
-	// Day transform: days since epoch for 2025-02-24 -> 20143
-	// Hour transform: hours since epoch for 2025-02-24 11:00 -> 483443
+	// Raw timestamp value: 2025-02-24 11:30:00 UTC in microseconds since epoch
+	// All transforms will be applied to this same timestamp
+	ts := int64(1740397800000000) // 2025-02-24 11:30:00 UTC
+
 	values := []parquet.Value{
-		parquet.Int32Value(55),     // year: 2025 - 1970 = 55
-		parquet.Int32Value(665),    // month: (2025-1970)*12 + 5 = 665
-		parquet.Int32Value(20143),  // day: days since epoch for 2025-02-24
-		parquet.Int32Value(483443), // hour: hours since epoch for 2025-02-24 11:xx
+		parquet.Int64Value(ts), // -> year 2025
+		parquet.Int64Value(ts), // -> month 2025-02
+		parquet.Int64Value(ts), // -> day 2025-02-24
+		parquet.Int64Value(ts), // -> hour 2025-02-24-11
 	}
 
 	result := partitionKeyToPath(t, spec, schema, values)
 
 	expected := "year_transform=2025/" +
-		"month_transform=2025-06/" +
+		"month_transform=2025-02/" +
 		"day_transform=2025-02-24/" +
 		"hour_transform=2025-02-24-11"
 
@@ -212,9 +211,9 @@ func TestVoidTransform(t *testing.T) {
 		iceberg.PartitionField{SourceID: 2, FieldID: 1000, Name: "void_transform", Transform: iceberg.VoidTransform{}},
 	)
 
-	// Void transform should return "null" regardless of input
+	// Void transform should return "null" regardless of input value
 	values := []parquet.Value{
-		parquet.NullValue(),
+		parquet.Int32Value(42), // any value - void transform ignores it
 	}
 
 	result := partitionKeyToPath(t, spec, schema, values)
@@ -231,14 +230,19 @@ func TestBucketTransform(t *testing.T) {
 		iceberg.PartitionField{SourceID: 2, FieldID: 1000, Name: "bucket_transform", Transform: iceberg.BucketTransform{NumBuckets: 16}},
 	)
 
-	// Bucket transform result is an int32 bucket number
+	// Raw int value - bucket transform will compute bucket number
 	values := []parquet.Value{
-		parquet.Int32Value(32),
+		parquet.Int32Value(100), // bucket(100, 16) will compute a bucket 0-15
 	}
 
-	result := partitionKeyToPath(t, spec, schema, values)
+	key, err := NewPartitionKey(spec, schema, values)
+	require.NoError(t, err)
 
-	assert.Equal(t, "bucket_transform=32", result)
+	// Verify bucket result is in valid range [0, 16)
+	require.True(t, key[0].Valid)
+	bucketVal := key[0].Val.Any().(int32)
+	assert.GreaterOrEqual(t, bucketVal, int32(0))
+	assert.Less(t, bucketVal, int32(16))
 }
 
 // TestElementSizeLimiting tests that individual partition values are truncated to 64 bytes.
@@ -361,10 +365,10 @@ func TestTruncateTransform(t *testing.T) {
 		iceberg.PartitionField{SourceID: 11, FieldID: 1001, Name: "truncate_string", Transform: iceberg.TruncateTransform{Width: 5}},
 	)
 
-	// Values are pre-transformed
+	// Raw values - truncate transform will be applied
 	values := []parquet.Value{
-		parquet.Int32Value(120),                 // 128 truncated to width 10 = 120
-		parquet.ByteArrayValue([]byte("Hello")), // "Hello World" truncated to 5 chars
+		parquet.Int32Value(128),                       // truncate(128, 10) = 120
+		parquet.ByteArrayValue([]byte("Hello World")), // truncate("Hello World", 5) = "Hello"
 	}
 
 	result := partitionKeyToPath(t, spec, schema, values)
@@ -435,4 +439,394 @@ func TestPartitionKeyWithNulls(t *testing.T) {
 	result, err := PartitionKeyToPath(spec, key)
 	require.NoError(t, err)
 	assert.Equal(t, "int_partition=null", result)
+}
+
+// ============================================================================
+// ParsePartitionSpec tests - matching Redpanda broker's partition_spec_parser_test.cc
+// ============================================================================
+
+// TestParsePartitionSpecEmpty tests parsing empty partition specs.
+// Corresponds to empty spec tests in partition_spec_parser_test.cc.
+func TestParsePartitionSpecEmpty(t *testing.T) {
+	schema := makeTestSchema()
+
+	testCases := []string{
+		"",
+		"()",
+		"( )",
+		"   (  )  ",
+		"\t\r\n",
+	}
+
+	for _, input := range testCases {
+		t.Run(fmt.Sprintf("input=%q", input), func(t *testing.T) {
+			spec, err := ParsePartitionSpec(input, schema)
+			require.NoError(t, err, "input: %q", input)
+			assert.Equal(t, 0, spec.NumFields(), "expected empty spec for input: %q", input)
+		})
+	}
+}
+
+// TestParsePartitionSpecIdentity tests parsing identity transforms.
+// Corresponds to single field identity tests in partition_spec_parser_test.cc.
+func TestParsePartitionSpecIdentity(t *testing.T) {
+	schema := makeTestSchema()
+
+	testCases := []struct {
+		input      string
+		expectName string
+	}{
+		{"(test_int)", "test_int"},
+		{"test_int", "test_int"},
+		{"  test_int  ", "test_int"},
+		{"(  test_int  )", "test_int"},
+		{"`test_int`", "test_int"},
+		{"identity(test_int)", "test_int"}, // explicit identity transform
+	}
+
+	for _, tc := range testCases {
+		t.Run(fmt.Sprintf("input=%q", tc.input), func(t *testing.T) {
+			spec, err := ParsePartitionSpec(tc.input, schema)
+			require.NoError(t, err, "input: %q", tc.input)
+			require.Equal(t, 1, spec.NumFields())
+
+			field := spec.Field(0)
+			assert.Equal(t, tc.expectName, field.Name)
+			assert.IsType(t, iceberg.IdentityTransform{}, field.Transform)
+		})
+	}
+}
+
+// TestParsePartitionSpecMultipleFields tests parsing multiple fields.
+func TestParsePartitionSpecMultipleFields(t *testing.T) {
+	schema := makeTestSchema()
+
+	spec, err := ParsePartitionSpec("(test_int, test_string)", schema)
+	require.NoError(t, err)
+	require.Equal(t, 2, spec.NumFields())
+
+	assert.Equal(t, "test_int", spec.Field(0).Name)
+	assert.Equal(t, 2, spec.Field(0).SourceID) // test_int has ID 2
+	assert.IsType(t, iceberg.IdentityTransform{}, spec.Field(0).Transform)
+
+	assert.Equal(t, "test_string", spec.Field(1).Name)
+	assert.Equal(t, 11, spec.Field(1).SourceID) // test_string has ID 11
+	assert.IsType(t, iceberg.IdentityTransform{}, spec.Field(1).Transform)
+}
+
+// TestParsePartitionSpecTimeTransforms tests parsing time-based transforms.
+// Corresponds to time transform tests in partition_spec_parser_test.cc.
+func TestParsePartitionSpecTimeTransforms(t *testing.T) {
+	schema := makeTestSchema()
+
+	testCases := []struct {
+		input         string
+		expectName    string
+		transformType iceberg.Transform
+	}{
+		{"year(test_timestamp)", "test_timestamp", iceberg.YearTransform{}},
+		{"YEAR(test_timestamp)", "test_timestamp", iceberg.YearTransform{}},
+		{"month(test_timestamp)", "test_timestamp", iceberg.MonthTransform{}},
+		{"day(test_timestamp)", "test_timestamp", iceberg.DayTransform{}},
+		{"hour(test_timestamp)", "test_timestamp", iceberg.HourTransform{}},
+		{"void(test_int)", "test_int", iceberg.VoidTransform{}},
+		{"year(test_timestamp) as ts_year", "ts_year", iceberg.YearTransform{}},
+	}
+
+	for _, tc := range testCases {
+		t.Run(fmt.Sprintf("input=%q", tc.input), func(t *testing.T) {
+			spec, err := ParsePartitionSpec(tc.input, schema)
+			require.NoError(t, err)
+			require.Equal(t, 1, spec.NumFields())
+
+			field := spec.Field(0)
+			assert.Equal(t, tc.expectName, field.Name)
+			assert.Equal(t, tc.transformType, field.Transform)
+		})
+	}
+}
+
+// TestParsePartitionSpecBucketTransform tests parsing bucket transforms.
+// Corresponds to bucket transform tests in partition_spec_parser_test.cc.
+func TestParsePartitionSpecBucketTransform(t *testing.T) {
+	schema := makeTestSchema()
+
+	testCases := []struct {
+		input      string
+		numBuckets int
+	}{
+		{"bucket(16, test_int)", 16},
+		{"bucket(0, test_int)", 0},
+		{"bucket(1000000, test_int)", 1000000},
+		{"BUCKET(32, test_string)", 32},
+	}
+
+	for _, tc := range testCases {
+		t.Run(fmt.Sprintf("input=%q", tc.input), func(t *testing.T) {
+			spec, err := ParsePartitionSpec(tc.input, schema)
+			require.NoError(t, err)
+			require.Equal(t, 1, spec.NumFields())
+
+			field := spec.Field(0)
+			bucket, ok := field.Transform.(iceberg.BucketTransform)
+			require.True(t, ok, "expected BucketTransform")
+			assert.Equal(t, tc.numBuckets, bucket.NumBuckets)
+		})
+	}
+}
+
+// TestParsePartitionSpecTruncateTransform tests parsing truncate transforms.
+// Corresponds to truncate transform tests in partition_spec_parser_test.cc.
+func TestParsePartitionSpecTruncateTransform(t *testing.T) {
+	schema := makeTestSchema()
+
+	testCases := []struct {
+		input      string
+		width      int
+		expectName string
+	}{
+		{"truncate(10, test_int)", 10, "test_int"},
+		{"truncate(9000, test_string)", 9000, "test_string"},
+		{"TRUNCATE(5, test_int)", 5, "test_int"},
+		{"truncate(10, test_int) as int_trunc", 10, "int_trunc"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(fmt.Sprintf("input=%q", tc.input), func(t *testing.T) {
+			spec, err := ParsePartitionSpec(tc.input, schema)
+			require.NoError(t, err)
+			require.Equal(t, 1, spec.NumFields())
+
+			field := spec.Field(0)
+			assert.Equal(t, tc.expectName, field.Name)
+			trunc, ok := field.Transform.(iceberg.TruncateTransform)
+			require.True(t, ok, "expected TruncateTransform")
+			assert.Equal(t, tc.width, trunc.Width)
+		})
+	}
+}
+
+// TestParsePartitionSpecWithAlias tests parsing partition specs with aliases.
+// Corresponds to alias tests in partition_spec_parser_test.cc.
+func TestParsePartitionSpecWithAlias(t *testing.T) {
+	schema := makeTestSchema()
+
+	testCases := []struct {
+		input      string
+		expectName string
+	}{
+		{"test_int as my_int", "my_int"},
+		{"hour(test_timestamp) as ts_hour", "ts_hour"},
+		{"bucket(16, test_int) AS bucketed_int", "bucketed_int"},
+		{"(test_int as foo, test_string as bar)", "foo"}, // first field
+	}
+
+	for _, tc := range testCases {
+		t.Run(fmt.Sprintf("input=%q", tc.input), func(t *testing.T) {
+			spec, err := ParsePartitionSpec(tc.input, schema)
+			require.NoError(t, err)
+			require.GreaterOrEqual(t, spec.NumFields(), 1)
+
+			field := spec.Field(0)
+			assert.Equal(t, tc.expectName, field.Name)
+		})
+	}
+}
+
+// TestParsePartitionSpecQuotedIdentifiers tests parsing quoted identifiers with special chars.
+// Corresponds to quoted identifier tests in partition_spec_parser_test.cc.
+func TestParsePartitionSpecQuotedIdentifiers(t *testing.T) {
+	// Create schema with special field names
+	schema := iceberg.NewSchema(0,
+		iceberg.NestedField{ID: 1, Name: "normal", Type: iceberg.PrimitiveTypes.Int32, Required: true},
+		iceberg.NestedField{ID: 2, Name: "has space", Type: iceberg.PrimitiveTypes.Int32, Required: true},
+		iceberg.NestedField{ID: 3, Name: "has`backtick", Type: iceberg.PrimitiveTypes.Int32, Required: true},
+		iceberg.NestedField{ID: 4, Name: "special@chars!", Type: iceberg.PrimitiveTypes.Int32, Required: true},
+	)
+
+	testCases := []struct {
+		input      string
+		expectName string
+		sourceID   int
+	}{
+		{"`has space`", "has space", 2},
+		{"`has``backtick`", "has`backtick", 3}, // doubled backtick = escaped backtick
+		{"`special@chars!`", "special@chars!", 4},
+	}
+
+	for _, tc := range testCases {
+		t.Run(fmt.Sprintf("input=%q", tc.input), func(t *testing.T) {
+			spec, err := ParsePartitionSpec(tc.input, schema)
+			require.NoError(t, err)
+			require.Equal(t, 1, spec.NumFields())
+
+			field := spec.Field(0)
+			assert.Equal(t, tc.expectName, field.Name)
+			assert.Equal(t, tc.sourceID, field.SourceID)
+		})
+	}
+}
+
+// TestParsePartitionSpecNestedFields tests parsing nested field references.
+func TestParsePartitionSpecNestedFields(t *testing.T) {
+	// Create schema with nested struct
+	schema := iceberg.NewSchema(0,
+		iceberg.NestedField{
+			ID:       1,
+			Name:     "outer",
+			Required: true,
+			Type: &iceberg.StructType{
+				FieldList: []iceberg.NestedField{
+					{ID: 2, Name: "inner", Type: iceberg.PrimitiveTypes.Int32, Required: true},
+					{
+						ID:       3,
+						Name:     "nested",
+						Required: true,
+						Type: &iceberg.StructType{
+							FieldList: []iceberg.NestedField{
+								{ID: 4, Name: "deep", Type: iceberg.PrimitiveTypes.String, Required: true},
+							},
+						},
+					},
+				},
+			},
+		},
+	)
+
+	testCases := []struct {
+		input      string
+		expectName string
+		sourceID   int
+	}{
+		{"outer.inner", "outer_inner", 2},
+		{"outer.nested.deep", "outer_nested_deep", 4},
+		{"hour(outer.nested.deep) as deep_hour", "deep_hour", 4},
+	}
+
+	for _, tc := range testCases {
+		t.Run(fmt.Sprintf("input=%q", tc.input), func(t *testing.T) {
+			spec, err := ParsePartitionSpec(tc.input, schema)
+			require.NoError(t, err)
+			require.Equal(t, 1, spec.NumFields())
+
+			field := spec.Field(0)
+			assert.Equal(t, tc.expectName, field.Name)
+			assert.Equal(t, tc.sourceID, field.SourceID)
+		})
+	}
+}
+
+// TestParsePartitionSpecComplexSpec tests parsing complex partition specs.
+func TestParsePartitionSpecComplexSpec(t *testing.T) {
+	schema := makeTestSchema()
+
+	input := "(hour(test_timestamp) as ts_hour, bucket(16, test_int) as int_bucket, test_string)"
+	spec, err := ParsePartitionSpec(input, schema)
+	require.NoError(t, err)
+	require.Equal(t, 3, spec.NumFields())
+
+	// First field: hour transform with alias
+	f0 := spec.Field(0)
+	assert.Equal(t, "ts_hour", f0.Name)
+	assert.Equal(t, 9, f0.SourceID) // test_timestamp
+	assert.IsType(t, iceberg.HourTransform{}, f0.Transform)
+
+	// Second field: bucket transform with alias
+	f1 := spec.Field(1)
+	assert.Equal(t, "int_bucket", f1.Name)
+	assert.Equal(t, 2, f1.SourceID) // test_int
+	bucket, ok := f1.Transform.(iceberg.BucketTransform)
+	require.True(t, ok)
+	assert.Equal(t, 16, bucket.NumBuckets)
+
+	// Third field: identity transform
+	f2 := spec.Field(2)
+	assert.Equal(t, "test_string", f2.Name)
+	assert.Equal(t, 11, f2.SourceID) // test_string
+	assert.IsType(t, iceberg.IdentityTransform{}, f2.Transform)
+}
+
+// TestParsePartitionSpecErrors tests parsing errors.
+// Corresponds to failure tests in partition_spec_parser_test.cc.
+func TestParsePartitionSpecErrors(t *testing.T) {
+	schema := makeTestSchema()
+
+	testCases := []struct {
+		input       string
+		errContains string
+	}{
+		{"(,test_int)", "expected identifier"},
+		{"((test_int))", "expected identifier"},
+		{"test_int)", "unexpected characters"},
+		{"(test_int", "expected ')'"},
+		{"unknown_field", "field not found"},
+		{"bucket(test_int)", "expected number"},   // missing bucket count
+		{"bucket(16)", "expected ','"},            // missing column after number
+		{"truncate(test_int)", "expected number"}, // missing width
+		{"unknown_transform(test_int)", "unknown transform"},
+		{"`unclosed", "unterminated quoted"},
+		{"test_int.nonexistent", "non-struct"}, // can't navigate into primitive
+	}
+
+	for _, tc := range testCases {
+		t.Run(fmt.Sprintf("input=%q", tc.input), func(t *testing.T) {
+			_, err := ParsePartitionSpec(tc.input, schema)
+			require.Error(t, err)
+			assert.Contains(t, strings.ToLower(err.Error()), strings.ToLower(tc.errContains),
+				"error should contain %q, got: %v", tc.errContains, err)
+		})
+	}
+}
+
+// TestParsePartitionSpecCaseInsensitiveTransforms tests that transform names are case-insensitive.
+func TestParsePartitionSpecCaseInsensitiveTransforms(t *testing.T) {
+	schema := makeTestSchema()
+
+	testCases := []struct {
+		input         string
+		transformType iceberg.Transform
+	}{
+		{"HOUR(test_timestamp)", iceberg.HourTransform{}},
+		{"Hour(test_timestamp)", iceberg.HourTransform{}},
+		{"hoUr(test_timestamp)", iceberg.HourTransform{}},
+		{"BUCKET(16, test_int)", iceberg.BucketTransform{NumBuckets: 16}},
+		{"Truncate(10, test_int)", iceberg.TruncateTransform{Width: 10}},
+		{"IDENTITY(test_int)", iceberg.IdentityTransform{}},
+		{"VOID(test_int)", iceberg.VoidTransform{}},
+		{"YEAR(test_timestamp)", iceberg.YearTransform{}},
+		{"MONTH(test_timestamp)", iceberg.MonthTransform{}},
+		{"DAY(test_timestamp)", iceberg.DayTransform{}},
+	}
+
+	for _, tc := range testCases {
+		t.Run(fmt.Sprintf("input=%q", tc.input), func(t *testing.T) {
+			spec, err := ParsePartitionSpec(tc.input, schema)
+			require.NoError(t, err)
+			require.Equal(t, 1, spec.NumFields())
+			assert.Equal(t, tc.transformType, spec.Field(0).Transform)
+		})
+	}
+}
+
+// TestParsePartitionSpecWhitespaceHandling tests various whitespace scenarios.
+func TestParsePartitionSpecWhitespaceHandling(t *testing.T) {
+	schema := makeTestSchema()
+
+	testCases := []string{
+		"  test_int  ",
+		"\ttest_int\t",
+		"\ntest_int\n",
+		"  (  test_int  )  ",
+		"bucket(  16  ,  test_int  )",
+		"hour(  test_timestamp  )  as  ts_hour",
+		"  test_int  ,  test_string  ",
+	}
+
+	for _, input := range testCases {
+		t.Run(fmt.Sprintf("input=%q", input), func(t *testing.T) {
+			spec, err := ParsePartitionSpec(input, schema)
+			require.NoError(t, err)
+			require.GreaterOrEqual(t, spec.NumFields(), 1)
+		})
+	}
 }

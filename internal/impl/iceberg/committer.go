@@ -61,11 +61,6 @@ func (c *committer) doCommit(ctx context.Context, files []dataFile) ([]struct{},
 		return nil, nil
 	}
 
-	// Refresh the table to get latest metadata
-	if err := c.table.Refresh(ctx); err != nil {
-		return nil, fmt.Errorf("failed to refresh table: %w", err)
-	}
-
 	// Collect file paths and stats
 	paths := make([]string, len(files))
 	var totalRows int64

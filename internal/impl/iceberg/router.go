@@ -54,6 +54,20 @@ func NewRouter(
 
 // Route routes a batch of messages to the appropriate writers.
 func (r *router) Route(ctx context.Context, batch service.MessageBatch) error {
+	// fast path if static namespace + table is used.
+	if ns, ok := r.namespaceStr.Static(); ok {
+		if tbl, ok := r.tableStr.Static(); ok {
+			w, err := r.getOrCreateWriter(ctx, tableKey{namespace: ns, table: tbl})
+			if err != nil {
+				return fmt.Errorf("failed to get writer for %s.%s: %w", ns, tbl, err)
+			}
+			if err := w.Write(ctx, batch); err != nil {
+				return fmt.Errorf("failed to write to %s.%s: %w", ns, tbl, err)
+			}
+			return nil
+		}
+	}
+
 	// Group messages by table key
 	groups := make(map[tableKey]service.MessageBatch)
 

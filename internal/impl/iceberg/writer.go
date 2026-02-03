@@ -58,7 +58,7 @@ func (w *writer) Write(ctx context.Context, batch service.MessageBatch) error {
 	}
 
 	// Generate unique file name
-	fileName := fmt.Sprintf("%s-%d.parquet", uuid.New().String(), time.Now().UnixNano())
+	fileName := fmt.Sprintf("%s.parquet", uuid.New().String())
 
 	// Get location provider for the table
 	locProvider, err := w.table.LocationProvider()
@@ -189,8 +189,7 @@ func (s *parquetSink) flush() error {
 func (s *parquetSink) EmitValue(sv shredder.ShreddedValue) error {
 	colIdx, ok := s.fieldToCol[sv.FieldID]
 	if !ok {
-		// Unknown field ID - skip (shouldn't happen with correct schema)
-		return nil
+		return fmt.Errorf("unknown field ID: %d", sv.FieldID)
 	}
 
 	// Append the value with rep/def levels set

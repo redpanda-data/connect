@@ -32,23 +32,16 @@ const (
 	ioFieldTable     = "table"
 
 	// Storage fields
-	ioFieldStorage            = "storage"
-	ioFieldStorageType        = "type"
-	ioFieldStorageBucket      = "bucket"
-	ioFieldStorageRegion      = "region"
-	ioFieldStorageEndpoint    = "endpoint"
-	ioFieldStorageCredentials = "credentials"
-
-	// Partition spec fields
-	ioFieldPartitionSpec      = "partition_spec"
-	ioFieldPartitionField     = "field"
-	ioFieldPartitionTransform = "transform"
-	ioFieldPartitionArgs      = "args"
+	ioFieldStorage         = "storage"
+	ioFieldStorageType     = "type"
+	ioFieldStorageBucket   = "bucket"
+	ioFieldStorageRegion   = "region"
+	ioFieldStorageEndpoint = "endpoint"
 
 	// Schema evolution fields
-	ioFieldSchemaEvolution            = "schema_evolution"
-	ioFieldSchemaEvolutionEnabled     = "enabled"
-	ioFieldSchemaEvolutionIgnoreNulls = "ignore_nulls"
+	ioFieldSchemaEvolution              = "schema_evolution"
+	ioFieldSchemaEvolutionEnabled       = "enabled"
+	ioFieldSchemaEvolutionPartitionSpec = "partition_spec"
 
 	// Performance fields
 	ioFieldBatching      = "batching"
@@ -157,40 +150,21 @@ map[string]any:struct
 				}, config.SessionFields()...)...,
 			).Description("Storage backend configuration for data files."),
 
-			// Partition specification
-			service.NewObjectListField(ioFieldPartitionSpec,
-				service.NewStringField(ioFieldPartitionField).
-					Description("The field name to partition by."),
-				service.NewStringField(ioFieldPartitionTransform).
-					Description("The partition transform to apply: identity, year, month, day, hour, bucket, truncate.").
-					Default("identity"),
-				service.NewIntListField(ioFieldPartitionArgs).
-					Description("Arguments for bucket and truncate transforms.").
-					Optional().
-					Example([]any{100}).
-					Advanced(),
-			).Description("Partition specification for the table. Each entry defines a partition field and its transform.").
-				Optional().
-				Example([]any{
-					map[string]any{
-						"field":     "event_time",
-						"transform": "day",
-					},
-					map[string]any{
-						"field":     "event_type",
-						"transform": "identity",
-					},
-				}).
-				Advanced(),
-
 			// Schema evolution
 			service.NewObjectField(ioFieldSchemaEvolution,
 				service.NewBoolField(ioFieldSchemaEvolutionEnabled).
 					Description("Enable automatic schema evolution. When enabled, new columns will be automatically added to the table.").
 					Default(false),
-				service.NewBoolField(ioFieldSchemaEvolutionIgnoreNulls).
-					Description("Skip adding columns that only contain null values. Recommended to avoid creating unnecessary columns.").
-					Default(true),
+				service.NewInterpolatedStringField(ioFieldSchemaEvolutionPartitionSpec).
+					Description("A bloblang expression to evalutate when a new table is created to determine the table's partition spec. The result of the mapping should be an iceberg partition spec in the same string format as the https://docs.redpanda.com/current/manage/iceberg/about-iceberg-topics/#use-custom-partitioning[^Redpanda Streaming Topic Property]").
+					Example(`(col1)`).
+					Example(`(nested.col)`).
+					Example(`(year(my_ts_col))`).
+					Example(`(year(my_ts_col), col2)`).
+					Example(`(hour(my_ts_col), truncate(42, col2))`).
+					Example(`(day(my_ts_col), bucket(4, nested.col))`).
+					Example("(day(my_ts_col), void(`non.nested column.with.dots`), identity(nested.column))").
+					Default("()"),
 			).Description("Schema evolution configuration.").
 				Optional().
 				Advanced(),

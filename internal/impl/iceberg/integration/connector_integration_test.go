@@ -461,8 +461,8 @@ func testNestedStructIntegration(t *testing.T, ctx context.Context, infra *testI
 				"age":   nil,
 			},
 			"address": map[string]any{
-				"street": "456 Oak Ave",
-				"city":   "Portland",
+				"street":   "456 Oak Ave",
+				"city":     "Portland",
 				"location": nil, // null deeply nested struct
 			},
 		},
