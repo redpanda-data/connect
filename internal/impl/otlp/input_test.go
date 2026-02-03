@@ -18,8 +18,12 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/common-go/authz"
+	"github.com/redpanda-data/connect/v4/internal/gateway"
 	"github.com/redpanda-data/connect/v4/internal/impl/otlp"
 	"github.com/redpanda-data/connect/v4/internal/license"
 )
@@ -107,12 +111,12 @@ func startInput(
 
 	res := service.MockResources()
 	license.InjectTestService(res)
-	input, err := inputCtor(pConf, res)
-	require.NoError(t, err)
-
 	for _, opt := range opts {
 		opt(res)
 	}
+
+	input, err := inputCtor(pConf, res)
+	require.NoError(t, err)
 
 	require.NoError(t, input.Connect(t.Context()))
 	t.Cleanup(func() {
@@ -122,4 +126,46 @@ func startInput(
 	})
 
 	return input
+}
+
+const (
+	authzAudience = "test-audience"
+	authzOrgID    = "test-org"
+	authzEmail    = "test@example.com"
+
+	authzHTTPResourceName authz.ResourceName = "organizations/test-org/resourcegroups/default/dataplane/otlp-http"
+	authzGRPCResourceName authz.ResourceName = "organizations/test-org/resourcegroups/default/dataplane/otlp-grpc"
+)
+
+func setupAuthz(resourceName authz.ResourceName, policyFile string) func(res *service.Resources) {
+	return func(res *service.Resources) {
+		gateway.SetManagerAuthzConfig(res, gateway.AuthzConfig{
+			ResourceName: resourceName,
+			PolicyFile:   policyFile,
+		})
+	}
+}
+
+func newHTTPTestTracerProviderWithHeaders(
+	ctx context.Context,
+	endpoint string,
+	headers map[string]string,
+) (*sdktrace.TracerProvider, error) {
+	opts := []otlptracehttp.Option{
+		otlptracehttp.WithEndpoint(endpoint),
+		otlptracehttp.WithInsecure(),
+	}
+	if len(headers) > 0 {
+		opts = append(opts, otlptracehttp.WithHeaders(headers))
+	}
+
+	exporter, err := otlptracehttp.New(ctx, opts...)
+	if err != nil {
+		return nil, err
+	}
+
+	tp := sdktrace.NewTracerProvider(
+		sdktrace.WithBatcher(exporter),
+	)
+	return tp, nil
 }

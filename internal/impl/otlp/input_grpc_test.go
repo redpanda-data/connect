@@ -36,6 +36,7 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
+	"github.com/redpanda-data/connect/v4/internal/gateway/gatewaytest"
 	"github.com/redpanda-data/connect/v4/internal/impl/otlp"
 )
 
@@ -418,4 +419,189 @@ func TestGRPCInput(t *testing.T) {
 				otlp.GRPCInputSpec(), otlp.GRPCInputFromParsed)
 		})
 	}
+}
+
+func TestIntegrationGRPCInputAuthz(t *testing.T) {
+	integration.CheckSkip(t)
+
+	t.Log("Given: mockoidc provider")
+	mockOIDC, issuerURL := gatewaytest.SetupMockOIDC(t)
+
+	t.Log("And: JWT environment variables configured")
+	t.Setenv("REDPANDA_CLOUD_GATEWAY_JWT_ISSUER_URL", issuerURL)
+	t.Setenv("REDPANDA_CLOUD_GATEWAY_JWT_AUDIENCE", authzAudience)
+	t.Setenv("REDPANDA_CLOUD_GATEWAY_JWT_ORGANIZATION_ID", authzOrgID)
+
+	t.Log("And: OTLP gRPC input with allow_all policy")
+	port, err := integration.GetFreePort()
+	require.NoError(t, err)
+	address := "127.0.0.1:" + strconv.Itoa(port)
+
+	yamlConfig := fmt.Sprintf(`address: "%s"
+encoding: protobuf`, address)
+	input := startInput(t, otlp.GRPCInputSpec(), otlp.GRPCInputFromParsed, yamlConfig,
+		setupAuthz(authzGRPCResourceName, "testdata/policies/allow_all_grpc.yaml"))
+	time.Sleep(100 * time.Millisecond)
+
+	t.Log("And: User with valid token and permissions")
+	user := &gatewaytest.RedpandaUser{
+		Subject: "test-user",
+		Email:   authzEmail,
+		OrgID:   authzOrgID,
+	}
+	token := gatewaytest.AccessToken(t, mockOIDC, user)
+
+	t.Log("When: OTLP gRPC client sends traces with valid JWT")
+	received := make(chan service.MessageBatch, 1)
+	readErr := make(chan error, 1)
+	go func() {
+		batch, aFn, err := input.ReadBatch(t.Context())
+		aFn(t.Context(), nil) //nolint:errcheck
+		if err != nil {
+			readErr <- err
+		} else {
+			received <- batch
+		}
+	}()
+
+	tp, err := newGRPCTestTracerProvider(t.Context(), address,
+		otlptracegrpc.WithHeaders(map[string]string{
+			"authorization": "Bearer " + token,
+		}),
+	)
+	require.NoError(t, err)
+	defer tp.Shutdown(t.Context()) //nolint:errcheck
+
+	tracer := tp.Tracer("authz-test-service")
+	_, span := tracer.Start(t.Context(), "authz-test-span")
+	span.SetAttributes(attribute.String("test.key", "test-value"))
+	span.End()
+
+	err = tp.ForceFlush(t.Context())
+	require.NoError(t, err)
+
+	t.Log("Then: Message is received successfully")
+	select {
+	case batch := <-received:
+		require.NotEmpty(t, batch)
+		t.Logf("Received batch with %d messages", len(batch))
+	case err := <-readErr:
+		t.Fatalf("Error reading batch: %v", err)
+	case <-time.After(opTimeout):
+		t.Fatal("Timeout waiting for message")
+	}
+}
+
+func TestGRPCInputAuthzUnauthenticated(t *testing.T) {
+	integration.CheckSkip(t)
+
+	t.Log("Given: mockoidc provider")
+	_, issuerURL := gatewaytest.SetupMockOIDC(t)
+
+	t.Log("And: JWT environment variables configured")
+	t.Setenv("REDPANDA_CLOUD_GATEWAY_JWT_ISSUER_URL", issuerURL)
+	t.Setenv("REDPANDA_CLOUD_GATEWAY_JWT_AUDIENCE", authzAudience)
+	t.Setenv("REDPANDA_CLOUD_GATEWAY_JWT_ORGANIZATION_ID", authzOrgID)
+
+	t.Log("And: OTLP gRPC input with allow_all policy")
+	port, err := integration.GetFreePort()
+	require.NoError(t, err)
+	address := "127.0.0.1:" + strconv.Itoa(port)
+
+	yamlConfig := fmt.Sprintf(`address: "%s"
+encoding: protobuf`, address)
+	startInput(t, otlp.GRPCInputSpec(), otlp.GRPCInputFromParsed, yamlConfig,
+		setupAuthz(authzGRPCResourceName, "testdata/policies/allow_all_grpc.yaml"))
+	time.Sleep(100 * time.Millisecond)
+
+	tests := []struct {
+		name    string
+		headers map[string]string
+	}{
+		{
+			name:    "missing_token",
+			headers: map[string]string{},
+		},
+		{
+			name: "invalid_token",
+			headers: map[string]string{
+				"authorization": "Bearer invalid-token",
+			},
+		},
+		{
+			name: "malformed_auth_header",
+			headers: map[string]string{
+				"authorization": "invalid-format",
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			tp, err := newGRPCTestTracerProvider(t.Context(), address,
+				otlptracegrpc.WithHeaders(tc.headers),
+			)
+			require.NoError(t, err)
+			defer tp.Shutdown(t.Context()) //nolint:errcheck
+
+			tracer := tp.Tracer("unauthenticated-service")
+			_, span := tracer.Start(t.Context(), "unauthenticated-span")
+			span.End()
+
+			err = tp.ForceFlush(t.Context())
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "Unauthenticated")
+		})
+	}
+}
+
+func TestIntegrationGRPCInputAuthz_WrongOrg(t *testing.T) {
+	integration.CheckSkip(t)
+
+	const wrongOrgID = "wrong-org"
+
+	t.Log("Given: mockoidc provider")
+	mockOIDC, issuerURL := gatewaytest.SetupMockOIDC(t)
+
+	t.Log("And: JWT environment variables configured")
+	t.Setenv("REDPANDA_CLOUD_GATEWAY_JWT_ISSUER_URL", issuerURL)
+	t.Setenv("REDPANDA_CLOUD_GATEWAY_JWT_AUDIENCE", authzAudience)
+	t.Setenv("REDPANDA_CLOUD_GATEWAY_JWT_ORGANIZATION_ID", authzOrgID)
+
+	t.Log("And: OTLP gRPC input with allow_all policy")
+	port, err := integration.GetFreePort()
+	require.NoError(t, err)
+	address := "127.0.0.1:" + strconv.Itoa(port)
+
+	yamlConfig := fmt.Sprintf(`address: "%s"
+encoding: protobuf`, address)
+	startInput(t, otlp.GRPCInputSpec(), otlp.GRPCInputFromParsed, yamlConfig,
+		setupAuthz(authzGRPCResourceName, "testdata/policies/allow_all_grpc.yaml"))
+	time.Sleep(100 * time.Millisecond)
+
+	t.Log("And: User with token from wrong organization")
+	user := &gatewaytest.RedpandaUser{
+		Subject: "test-user",
+		Email:   authzEmail,
+		OrgID:   wrongOrgID,
+	}
+	token := gatewaytest.AccessToken(t, mockOIDC, user)
+
+	t.Log("When: OTLP gRPC client sends traces with wrong org JWT")
+	tp, err := newGRPCTestTracerProvider(t.Context(), address,
+		otlptracegrpc.WithHeaders(map[string]string{
+			"authorization": "Bearer " + token,
+		}),
+	)
+	require.NoError(t, err)
+	defer tp.Shutdown(t.Context()) //nolint:errcheck
+
+	tracer := tp.Tracer("wrong-org-service")
+	_, span := tracer.Start(t.Context(), "wrong-org-span")
+	span.End()
+
+	t.Log("Then: Request is rejected with authentication error")
+	err = tp.ForceFlush(t.Context())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "Unauthenticated")
 }

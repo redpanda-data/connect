@@ -18,6 +18,7 @@ import (
 	"net/http"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -35,7 +36,9 @@ import (
 
 	pb "buf.build/gen/go/redpandadata/otel/protocolbuffers/go/redpanda/otel/v1"
 
+	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
+	"github.com/redpanda-data/connect/v4/internal/gateway/gatewaytest"
 	"github.com/redpanda-data/connect/v4/internal/impl/otlp"
 )
 
@@ -405,6 +408,135 @@ func TestHTTPInput(t *testing.T) {
 			t.Helper()
 			testInput(t, address, tc.signalType, tc.exportFn, tc.validateFn,
 				otlp.HTTPInputSpec(), otlp.HTTPInputFromParsed)
+		})
+	}
+}
+
+func TestIntegrationHTTPInputAuthz(t *testing.T) {
+	integration.CheckSkip(t)
+
+	t.Log("Given: mockoidc provider")
+	mockOIDC, issuerURL := gatewaytest.SetupMockOIDC(t)
+
+	t.Log("And: JWT environment variables configured")
+	t.Setenv("REDPANDA_CLOUD_GATEWAY_JWT_ISSUER_URL", issuerURL)
+	t.Setenv("REDPANDA_CLOUD_GATEWAY_JWT_AUDIENCE", authzAudience)
+	t.Setenv("REDPANDA_CLOUD_GATEWAY_JWT_ORGANIZATION_ID", authzOrgID)
+
+	t.Log("And: OTLP HTTP input with allow_all policy")
+	port, err := integration.GetFreePort()
+	require.NoError(t, err)
+	address := "127.0.0.1:" + strconv.Itoa(port)
+
+	yamlConfig := fmt.Sprintf(`address: "%s"
+encoding: protobuf`, address)
+	input := startInput(t, otlp.HTTPInputSpec(), otlp.HTTPInputFromParsed, yamlConfig,
+		setupAuthz(authzHTTPResourceName, "testdata/policies/allow_all_http.yaml"))
+	time.Sleep(100 * time.Millisecond)
+
+	t.Log("And: User with valid token and permissions")
+	user := &gatewaytest.RedpandaUser{
+		Subject: "test-user",
+		Email:   authzEmail,
+		OrgID:   authzOrgID,
+	}
+	token := gatewaytest.AccessToken(t, mockOIDC, user)
+
+	t.Log("When: OTLP HTTP client sends traces with valid JWT")
+	received := make(chan service.MessageBatch, 1)
+	readErr := make(chan error, 1)
+	go func() {
+		batch, aFn, err := input.ReadBatch(t.Context())
+		aFn(t.Context(), nil) //nolint:errcheck
+		if err != nil {
+			readErr <- err
+		} else {
+			received <- batch
+		}
+	}()
+
+	tp, err := newHTTPTestTracerProviderWithHeaders(t.Context(), address, map[string]string{
+		"Authorization": "Bearer " + token,
+	})
+	require.NoError(t, err)
+	defer tp.Shutdown(t.Context()) //nolint:errcheck
+
+	tracer := tp.Tracer("authz-test-service")
+	_, span := tracer.Start(t.Context(), "authz-test-span")
+	span.SetAttributes(attribute.String("test.key", "test-value"))
+	span.End()
+
+	err = tp.ForceFlush(t.Context())
+	require.NoError(t, err)
+
+	t.Log("Then: Message is received successfully")
+	select {
+	case batch := <-received:
+		require.NotEmpty(t, batch)
+		t.Logf("Received batch with %d messages", len(batch))
+	case err := <-readErr:
+		t.Fatalf("Error reading batch: %v", err)
+	case <-time.After(opTimeout):
+		t.Fatal("Timeout waiting for message")
+	}
+}
+
+func TestHTTPInputAuthzUnauthenticated(t *testing.T) {
+	integration.CheckSkip(t)
+
+	t.Log("Given: mockoidc provider")
+	_, issuerURL := gatewaytest.SetupMockOIDC(t)
+
+	t.Log("And: JWT environment variables configured")
+	t.Setenv("REDPANDA_CLOUD_GATEWAY_JWT_ISSUER_URL", issuerURL)
+	t.Setenv("REDPANDA_CLOUD_GATEWAY_JWT_AUDIENCE", authzAudience)
+	t.Setenv("REDPANDA_CLOUD_GATEWAY_JWT_ORGANIZATION_ID", authzOrgID)
+
+	t.Log("And: OTLP HTTP input with allow_all policy")
+	port, err := integration.GetFreePort()
+	require.NoError(t, err)
+	address := "127.0.0.1:" + strconv.Itoa(port)
+
+	yamlConfig := fmt.Sprintf(`address: "%s"
+encoding: protobuf`, address)
+	startInput(t, otlp.HTTPInputSpec(), otlp.HTTPInputFromParsed, yamlConfig,
+		setupAuthz(authzHTTPResourceName, "testdata/policies/allow_all_http.yaml"))
+	time.Sleep(100 * time.Millisecond)
+
+	tests := []struct {
+		name    string
+		headers map[string]string
+	}{
+		{
+			name:    "missing_token",
+			headers: map[string]string{},
+		},
+		{
+			name: "invalid_token",
+			headers: map[string]string{
+				"Authorization": "Bearer invalid-token",
+			},
+		},
+		{
+			name: "malformed_auth_header",
+			headers: map[string]string{
+				"Authorization": "invalid-format",
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			tp, err := newHTTPTestTracerProviderWithHeaders(t.Context(), address, tc.headers)
+			require.NoError(t, err)
+			defer tp.Shutdown(t.Context()) //nolint:errcheck
+
+			tracer := tp.Tracer("unauthenticated-service")
+			_, span := tracer.Start(t.Context(), "unauthenticated-span")
+			span.End()
+
+			err = tp.ForceFlush(t.Context())
+			require.Error(t, err)
 		})
 	}
 }
