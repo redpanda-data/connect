@@ -21,6 +21,10 @@ import (
 	"github.com/auth0/go-jwt-middleware/v2/jwks"
 	"github.com/auth0/go-jwt-middleware/v2/validator"
 	"github.com/twmb/go-cache/cache"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/common-go/authz"
@@ -203,6 +207,108 @@ func extractAuthenticationToken(r *http.Request) (string, error) {
 	}
 
 	return authHeaderParts[1], nil
+}
+
+// RPGRPCJWTInterceptor validates JWT tokens from gRPC metadata.
+type RPGRPCJWTInterceptor struct {
+	jwt    *jwtValidator
+	logger *service.Logger
+}
+
+// NewRPGRPCJWTInterceptor creates a gRPC JWT interceptor.
+// Returns nil if JWT env vars are not configured.
+func NewRPGRPCJWTInterceptor(mgr *service.Resources) (*RPGRPCJWTInterceptor, error) {
+	jwt, err := newJWTValidator(mgr)
+	if err != nil {
+		return nil, err
+	}
+	if jwt == nil {
+		return nil, nil
+	}
+	return &RPGRPCJWTInterceptor{
+		jwt:    jwt,
+		logger: mgr.Logger(),
+	}, nil
+}
+
+// UnaryInterceptor returns a gRPC unary interceptor for JWT validation.
+func (r *RPGRPCJWTInterceptor) UnaryInterceptor() grpc.UnaryServerInterceptor {
+	return func(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+		if r == nil {
+			return handler(ctx, req)
+		}
+		ctx, err := r.validateContext(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return handler(ctx, req)
+	}
+}
+
+// StreamInterceptor returns a gRPC stream interceptor for JWT validation.
+func (r *RPGRPCJWTInterceptor) StreamInterceptor() grpc.StreamServerInterceptor {
+	return func(srv any, ss grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+		if r == nil {
+			return handler(srv, ss)
+		}
+		ctx, err := r.validateContext(ss.Context())
+		if err != nil {
+			return err
+		}
+		return handler(srv, &wrappedServerStream{ServerStream: ss, ctx: ctx})
+	}
+}
+
+// validateContext extracts JWT from metadata, validates, and returns context
+// with principal.
+func (r *RPGRPCJWTInterceptor) validateContext(ctx context.Context) (context.Context, error) {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return nil, status.Error(codes.Unauthenticated, "missing metadata")
+	}
+
+	authHeaders := md.Get("authorization")
+	if len(authHeaders) == 0 {
+		r.logger.Error("Authentication token not found")
+		return nil, status.Error(codes.Unauthenticated, "authentication token not found")
+	}
+
+	token, err := extractBearerToken(authHeaders[0])
+	if err != nil {
+		return nil, status.Error(codes.Unauthenticated, err.Error())
+	}
+
+	principal, err := r.jwt.validateAndGetPrincipal(ctx, token)
+	if err != nil {
+		r.logger.With("error", err).Error("Authentication failed")
+		return nil, status.Error(codes.Unauthenticated, "authentication failed")
+	}
+
+	return ContextWithValidatedPrincipalID(ctx, principal), nil
+}
+
+// extractBearerToken extracts the token from a Bearer authorization header value.
+func extractBearerToken(authHeader string) (string, error) {
+	if authHeader == "" {
+		return "", errors.New("empty authorization header")
+	}
+
+	parts := strings.Fields(authHeader)
+	if len(parts) != 2 || !strings.EqualFold(parts[0], "bearer") {
+		return "", errors.New("authorization header format must be Bearer {token}")
+	}
+
+	return parts[1], nil
+}
+
+// wrappedServerStream wraps grpc.ServerStream to inject modified context.
+type wrappedServerStream struct {
+	grpc.ServerStream
+	ctx context.Context
+}
+
+func (w *wrappedServerStream) Context() context.Context {
+	return w.ctx
 }
 
 type validatedPrincipalIDContextKeyType string
