@@ -28,6 +28,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
@@ -650,6 +651,7 @@ func (m *schemaRegistryMigrator) Sync(ctx context.Context) error {
 	})
 
 	// Workers: process subjects with DFS traversal
+	var total atomic.Int64
 	for range m.conf.MaxParallelHTTPRequests {
 		g.Go(func() error {
 			for ss := range workCh {
@@ -671,6 +673,10 @@ func (m *schemaRegistryMigrator) Sync(ctx context.Context) error {
 					m.knownSubjects[schemaSubjectVersionFromSubjectSchema(s)] = struct{}{}
 					m.knownSchemas[s.ID] = info
 					m.mu.Unlock()
+
+					if n := total.Add(1); n%100 == 0 {
+						m.log.Infof("Schema migration: synced %d schemas", n)
+					}
 
 					return nil
 				})
