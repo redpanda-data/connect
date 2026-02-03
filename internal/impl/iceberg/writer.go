@@ -12,11 +12,8 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"iter"
-	"strings"
-	"time"
+	"slices"
 
-	"github.com/apache/iceberg-go"
 	icebergio "github.com/apache/iceberg-go/io"
 	"github.com/apache/iceberg-go/table"
 	"github.com/google/uuid"
@@ -51,23 +48,17 @@ func (w *writer) Write(ctx context.Context, batch service.MessageBatch) error {
 		return nil
 	}
 
-	// Convert messages to parquet
-	parquetData, rowCount, err := w.messagesToParquet(batch)
+	// Convert messages to parquet (grouped by partition)
+	parquetFiles, err := w.messagesToParquet(batch)
 	if err != nil {
 		return fmt.Errorf("failed to convert messages to parquet: %w", err)
 	}
-
-	// Generate unique file name
-	fileName := fmt.Sprintf("%s.parquet", uuid.New().String())
 
 	// Get location provider for the table
 	locProvider, err := w.table.LocationProvider()
 	if err != nil {
 		return fmt.Errorf("failed to get location provider: %w", err)
 	}
-
-	// Generate data file path
-	filePath := locProvider.NewDataLocation(fileName)
 
 	// Write file using table's IO
 	tableIO, err := w.table.FS(ctx)
@@ -79,75 +70,183 @@ func (w *writer) Write(ctx context.Context, batch service.MessageBatch) error {
 		return fmt.Errorf("table IO does not support writing (got %T)", tableIO)
 	}
 
-	if err := writeIO.WriteFile(filePath, parquetData); err != nil {
-		return fmt.Errorf("failed to write parquet file: %w", err)
+	// Write each partition file and submit to committer
+	var files []dataFile
+	for _, pf := range parquetFiles {
+		// Generate unique file name
+		fileName := uuid.New().String() + ".parquet"
+
+		// Generate data file path (partition path is empty for unpartitioned tables)
+		var filePath string
+		if pf.path == "" {
+			filePath = locProvider.NewDataLocation(fileName)
+		} else {
+			filePath = locProvider.NewDataLocation(pf.path + "/" + fileName)
+		}
+
+		if err := writeIO.WriteFile(filePath, pf.result.data); err != nil {
+			return fmt.Errorf("failed to write parquet file %q: %w", filePath, err)
+		}
+
+		w.logger.Debugf("Wrote parquet file: %s (%d bytes, %d rows)", filePath, len(pf.result.data), pf.result.rowCount)
+
+		files = append(files, dataFile{
+			path:     filePath,
+			rowCount: int64(pf.result.rowCount),
+			fileSize: int64(len(pf.result.data)),
+		})
 	}
 
-	w.logger.Debugf("Wrote parquet file: %s (%d bytes, %d rows)", filePath, len(parquetData), rowCount)
-
-	// Submit to committer
-	file := dataFile{
-		path:     filePath,
-		rowCount: int64(rowCount),
-		fileSize: int64(len(parquetData)),
-	}
-
-	if err := w.committer.Commit(ctx, file); err != nil {
-		return fmt.Errorf("failed to commit: %w", err)
+	// Submit all files to committer
+	for _, file := range files {
+		if err := w.committer.Commit(ctx, file); err != nil {
+			return fmt.Errorf("failed to commit: %w", err)
+		}
 	}
 
 	return nil
 }
 
+// parquetResult holds the output of parquet conversion for a partition.
+type parquetResult struct {
+	data     []byte
+	rowCount int
+}
+
+// partitionFile pairs a partition path with its parquet data.
+type partitionFile struct {
+	path   string // partition path (may be truncated), empty for unpartitioned
+	result parquetResult
+}
+
 // messagesToParquet converts messages to parquet format using the shredder.
-func (w *writer) messagesToParquet(batch service.MessageBatch) ([]byte, int, error) {
+// Returns a slice of partition files. For unpartitioned tables, returns a single
+// file with an empty path.
+func (w *writer) messagesToParquet(batch service.MessageBatch) ([]partitionFile, error) {
 	schema := w.table.Schema()
+	spec := w.table.Spec()
 
 	// Build parquet schema and field ID to column index mapping
-	pqSchema, fieldToCol, err := buildParquetSchema(schema)
+	pqSchema, fieldToCol, err := icebergx.BuildParquetSchema(schema)
 	if err != nil {
-		return nil, 0, fmt.Errorf("failed to build parquet schema: %w", err)
+		return nil, fmt.Errorf("failed to build parquet schema: %w", err)
 	}
 
-	// Create parquet writer and get column writers
-	buf := bytes.NewBuffer(nil)
-	pw := parquet.NewWriter(buf, pqSchema)
-	colWriters := pw.ColumnWriters()
+	// Build sourceID -> partition index map
+	partitionSourceIDs := make(map[int]int)
+	for i := 0; i < spec.NumFields(); i++ {
+		field := spec.Field(i)
+		partitionSourceIDs[field.SourceID] = i
+	}
+	numPartitionFields := spec.NumFields()
 
 	// Create shredder for the schema
 	rs := shredder.NewRecordShredder(schema)
 
-	// Create sink that writes directly to column writers
-	sink := newParquetSink(fieldToCol, colWriters)
+	// For unpartitioned tables, use a single writer
+	if spec.IsUnpartitioned() {
+		sink := newParquetSink(pqSchema, fieldToCol)
 
-	rowCount := 0
+		for _, msg := range batch {
+			structured, err := msg.AsStructured()
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse message as structured: %w", err)
+			}
+
+			row, ok := structured.(map[string]any)
+			if !ok {
+				return nil, fmt.Errorf("message is not an object, got %T", structured)
+			}
+
+			if err := rs.Shred(row, sink); err != nil {
+				return nil, fmt.Errorf("failed to shred record: %w", err)
+			}
+
+			if err := sink.flush(); err != nil {
+				return nil, fmt.Errorf("failed to flush row: %w", err)
+			}
+		}
+
+		result, err := sink.Close()
+		if err != nil {
+			return nil, fmt.Errorf("failed to close parquet writer: %w", err)
+		}
+
+		return []partitionFile{{path: "", result: result}}, nil
+	}
+
+	// For partitioned tables, route rows to different writers
+	// Use sorted slice with binary search (keyed by full partition key, not truncated path)
+	type partitionEntry struct {
+		key  icebergx.PartitionKey
+		sink *parquetSink
+	}
+	var partitions []*partitionEntry
+
+	// Create a buffering sink to capture values and partition key
+	bufferSink := newBufferingSink(partitionSourceIDs, numPartitionFields)
+
 	for _, msg := range batch {
 		structured, err := msg.AsStructured()
 		if err != nil {
-			return nil, 0, fmt.Errorf("failed to parse message as structured: %w", err)
+			return nil, fmt.Errorf("failed to parse message as structured: %w", err)
 		}
 
 		row, ok := structured.(map[string]any)
 		if !ok {
-			return nil, 0, fmt.Errorf("message is not an object, got %T", structured)
+			return nil, fmt.Errorf("message is not an object, got %T", structured)
 		}
 
-		if err := rs.Shred(row, sink); err != nil {
-			return nil, 0, fmt.Errorf("failed to shred record: %w", err)
+		// Shred to buffer (captures values and partition key in one pass)
+		bufferSink.reset()
+		if err := rs.Shred(row, bufferSink); err != nil {
+			return nil, fmt.Errorf("failed to shred record: %w", err)
 		}
 
-		if err := sink.flush(); err != nil {
-			return nil, 0, fmt.Errorf("failed to flush row: %w", err)
+		// Compute partition key
+		partitionKey, err := icebergx.NewPartitionKey(spec, schema, bufferSink.partitionValues)
+		if err != nil {
+			return nil, fmt.Errorf("failed to compute partition key: %w", err)
 		}
 
-		rowCount++
+		// Binary search for existing partition entry
+		idx, found := slices.BinarySearchFunc(partitions, partitionKey, func(e *partitionEntry, k icebergx.PartitionKey) int {
+			return e.key.Compare(k)
+		})
+
+		var entry *partitionEntry
+		if found {
+			entry = partitions[idx]
+		} else {
+			entry = &partitionEntry{
+				key:  partitionKey,
+				sink: newParquetSink(pqSchema, fieldToCol),
+			}
+			// Insert at sorted position
+			partitions = slices.Insert(partitions, idx, entry)
+		}
+
+		// Write buffered values to the correct partition
+		if err := bufferSink.writeTo(entry.sink); err != nil {
+			return nil, fmt.Errorf("failed to write row to partition: %w", err)
+		}
 	}
 
-	if err := pw.Close(); err != nil {
-		return nil, 0, fmt.Errorf("failed to close parquet writer: %w", err)
+	// Close all partition sinks and collect results (compute paths now)
+	results := make([]partitionFile, 0, len(partitions))
+	for _, entry := range partitions {
+		result, err := entry.sink.Close()
+		if err != nil {
+			return nil, fmt.Errorf("failed to close parquet writer: %w", err)
+		}
+		path, err := icebergx.PartitionKeyToPath(spec, entry.key)
+		if err != nil {
+			return nil, fmt.Errorf("failed to compute partition path: %w", err)
+		}
+		results = append(results, partitionFile{path: path, result: result})
 	}
 
-	return buf.Bytes(), rowCount, nil
+	return results, nil
 }
 
 // Close closes the writer and its committer.
@@ -155,46 +254,50 @@ func (w *writer) Close() {
 	w.committer.Close()
 }
 
+// parquetColumn holds state for writing to a single parquet column.
+type parquetColumn struct {
+	writer *parquet.ColumnWriter
+	colIdx int             // column index for parquet.Value.Level()
+	values []parquet.Value // accumulated values for current row
+}
+
 // parquetSink implements shredder.ShredderSink and writes values directly to column writers.
 type parquetSink struct {
-	fieldToCol map[int]int             // field ID -> column index
-	colWriters []*parquet.ColumnWriter // column writers to write to
-	currentRow [][]parquet.Value       // current row being built (multiple values per column for lists)
+	buffer   *bytes.Buffer
+	writer   *parquet.GenericWriter[any]
+	columns  map[int]*parquetColumn // field ID -> column state
+	rowCount int
 }
 
-func newParquetSink(fieldToCol map[int]int, colWriters []*parquet.ColumnWriter) *parquetSink {
+func newParquetSink(pqSchema *parquet.Schema, fieldToCol map[int]int) *parquetSink {
+	buf := bytes.NewBuffer(nil)
+	pw := parquet.NewGenericWriter[any](buf, pqSchema)
+	colWriters := pw.ColumnWriters()
+
+	columns := make(map[int]*parquetColumn, len(fieldToCol))
+	for fieldID, colIdx := range fieldToCol {
+		columns[fieldID] = &parquetColumn{
+			writer: colWriters[colIdx],
+			colIdx: colIdx,
+			values: make([]parquet.Value, 0, 8),
+		}
+	}
 	return &parquetSink{
-		fieldToCol: fieldToCol,
-		colWriters: colWriters,
-		currentRow: make([][]parquet.Value, len(colWriters)),
+		buffer:  buf,
+		writer:  pw,
+		columns: columns,
 	}
-}
-
-// flush writes the current row to column writers.
-func (s *parquetSink) flush() error {
-	// Write each column's values to its column writer
-	for i, vals := range s.currentRow {
-		if len(vals) == 0 {
-			continue
-		}
-		if _, err := s.colWriters[i].WriteRowValues(vals); err != nil {
-			return fmt.Errorf("failed to write to column %d: %w", i, err)
-		}
-		// Reset slice but keep capacity
-		s.currentRow[i] = vals[:0]
-	}
-	return nil
 }
 
 func (s *parquetSink) EmitValue(sv shredder.ShreddedValue) error {
-	colIdx, ok := s.fieldToCol[sv.FieldID]
+	col, ok := s.columns[sv.FieldID]
 	if !ok {
 		return fmt.Errorf("unknown field ID: %d", sv.FieldID)
 	}
 
 	// Append the value with rep/def levels set
-	val := sv.Value.Level(sv.RepLevel, sv.DefLevel, colIdx)
-	s.currentRow[colIdx] = append(s.currentRow[colIdx], val)
+	val := sv.Value.Level(sv.RepLevel, sv.DefLevel, col.colIdx)
+	col.values = append(col.values, val)
 
 	return nil
 }
@@ -204,165 +307,75 @@ func (s *parquetSink) OnNewField(_ icebergx.Path, _ string, _ any) {
 	// TODO: Could be used for schema evolution
 }
 
-// buildParquetSchema builds a parquet schema from an iceberg schema and returns
-// a mapping from field ID to column index.
-func buildParquetSchema(schema *iceberg.Schema) (*parquet.Schema, map[int]int, error) {
-	group := make(parquet.Group)
-
-	for _, field := range schema.Fields() {
-		node, err := icebergFieldToParquet(field)
-		if err != nil {
-			return nil, nil, fmt.Errorf("field %s: %w", field.Name, err)
+// flush writes the current row to column writers and increments the row count.
+func (s *parquetSink) flush() error {
+	for _, col := range s.columns {
+		if _, err := col.writer.WriteRowValues(col.values); err != nil {
+			return fmt.Errorf("failed to write to column %d: %w", col.colIdx, err)
 		}
-		group[field.Name] = node
+		// Reset slice but keep capacity
+		col.values = col.values[:0]
 	}
-	pqSchema := parquet.NewSchema("root", group)
-
-	// Walk the iceberg schema and build up a mapping of field ID -> column index
-	// NOTE: we can simplify this when iceberg go supports field IDs in parquet files
-	// as we can just loop over the parquet leaves easily and build our map that way
-	fieldToCol := make(map[int]int)
-	st := schema.AsStruct()
-	for leaf := range schemaLeaves(&st, -1, nil) {
-		col, ok := pqSchema.Lookup(leaf.Path...)
-		if !ok {
-			return nil, nil, fmt.Errorf("invalid schema mapping for %s", strings.Join(leaf.Path, "."))
-		}
-		fieldToCol[leaf.FieldID] = col.ColumnIndex
-	}
-
-	return pqSchema, fieldToCol, nil
+	s.rowCount++
+	return nil
 }
 
-type schemaLeaf struct {
-	FieldID int
-	Type    iceberg.Type
-	Path    []string
+// Close closes the parquet writer and returns the result.
+func (s *parquetSink) Close() (parquetResult, error) {
+	if err := s.writer.Close(); err != nil {
+		return parquetResult{}, err
+	}
+	return parquetResult{
+		data:     s.buffer.Bytes(),
+		rowCount: s.rowCount,
+	}, nil
 }
 
-// schemaLeaves walks an iceberg struct yielding each leaf in the parquet schema
-func schemaLeaves(root iceberg.Type, fieldID int, path []string) iter.Seq[schemaLeaf] {
-	walkStruct := func(st *iceberg.StructType, yield func(schemaLeaf) bool) bool {
-		for _, field := range st.Fields() {
-			for leaf := range schemaLeaves(field.Type, field.ID, append(path, field.Name)) {
-				if !yield(leaf) {
-					return false
-				}
-			}
-		}
-		return true
-	}
-	walkList := func(lt *iceberg.ListType, yield func(schemaLeaf) bool) bool {
-		for leaf := range schemaLeaves(lt.Element, lt.ElementID, append(path, "list", "element")) {
-			if !yield(leaf) {
-				return false
-			}
-		}
-		return true
-	}
-	walkMap := func(mt *iceberg.MapType, yield func(schemaLeaf) bool) bool {
-		for leaf := range schemaLeaves(mt.KeyType, mt.KeyID, append(path, "key_value", "key")) {
-			if !yield(leaf) {
-				return false
-			}
-		}
-		for leaf := range schemaLeaves(mt.ValueType, mt.ValueID, append(path, "key_value", "value")) {
-			if !yield(leaf) {
-				return false
-			}
-		}
-		return true
-	}
-	return func(yield func(schemaLeaf) bool) {
-		switch t := root.(type) {
-		case *iceberg.StructType:
-			walkStruct(t, yield)
-		case *iceberg.ListType:
-			walkList(t, yield)
-		case *iceberg.MapType:
-			walkMap(t, yield)
-		default:
-			yield(schemaLeaf{
-				FieldID: fieldID,
-				Type:    t,
-				Path:    path,
-			})
-		}
+// bufferingSink captures shredded values and partition keys for later replay.
+// This allows shredding once and then routing to the correct partition writer.
+type bufferingSink struct {
+	values             []shredder.ShreddedValue // buffered values in emission order
+	partitionSourceIDs map[int]int              // sourceFieldID -> partition field index
+	partitionValues    []parquet.Value          // captured partition values
+}
+
+func newBufferingSink(partitionSourceIDs map[int]int, numPartitionFields int) *bufferingSink {
+	return &bufferingSink{
+		values:             make([]shredder.ShreddedValue, 0, 64),
+		partitionSourceIDs: partitionSourceIDs,
+		partitionValues:    make([]parquet.Value, numPartitionFields),
 	}
 }
 
-// icebergFieldToParquet converts an iceberg field to a parquet node.
-func icebergFieldToParquet(field iceberg.NestedField) (parquet.Node, error) {
-	node, err := icebergTypeToParquet(field.Type)
-	if err != nil {
-		return nil, err
+func (s *bufferingSink) reset() {
+	s.values = s.values[:0]
+	for i := range s.partitionValues {
+		s.partitionValues[i] = parquet.Value{}
 	}
-
-	// Add optional wrapper if not required
-	if !field.Required {
-		node = parquet.Optional(node)
-	}
-
-	// Note: We don't add field IDs because iceberg-go's AddFiles method doesn't support them.
-	// The AddFiles method resolves field IDs by matching column names to the schema.
-
-	return node, nil
 }
 
-// icebergTypeToParquet converts an iceberg type to a parquet node.
-func icebergTypeToParquet(t iceberg.Type) (parquet.Node, error) {
-	switch t := t.(type) {
-	case iceberg.BooleanType:
-		return parquet.Leaf(parquet.BooleanType), nil
-	case iceberg.Int32Type:
-		return parquet.Int(32), nil
-	case iceberg.Int64Type:
-		return parquet.Int(64), nil
-	case iceberg.Float32Type:
-		return parquet.Leaf(parquet.FloatType), nil
-	case iceberg.Float64Type:
-		return parquet.Leaf(parquet.DoubleType), nil
-	case iceberg.StringType:
-		return parquet.String(), nil
-	case iceberg.BinaryType:
-		return parquet.Leaf(parquet.ByteArrayType), nil
-	case iceberg.DateType:
-		return parquet.Date(), nil
-	case iceberg.TimeType:
-		return parquet.Time(parquet.Microsecond), nil
-	case iceberg.TimestampType:
-		return parquet.Timestamp(parquet.Microsecond), nil
-	case iceberg.TimestampTzType:
-		return parquet.Timestamp(parquet.Microsecond), nil
-	case iceberg.UUIDType:
-		return parquet.UUID(), nil
-	case *iceberg.StructType:
-		group := make(parquet.Group)
-		for _, f := range t.Fields() {
-			node, err := icebergFieldToParquet(f)
-			if err != nil {
-				return nil, err
-			}
-			group[f.Name] = node
-		}
-		return group, nil
-	case *iceberg.ListType:
-		elem, err := icebergTypeToParquet(t.Element)
-		if err != nil {
-			return nil, err
-		}
-		return parquet.List(elem), nil
-	case *iceberg.MapType:
-		key, err := icebergTypeToParquet(t.KeyType)
-		if err != nil {
-			return nil, err
-		}
-		val, err := icebergTypeToParquet(t.ValueType)
-		if err != nil {
-			return nil, err
-		}
-		return parquet.Map(key, val), nil
-	default:
-		return nil, fmt.Errorf("unsupported iceberg type: %T", t)
+func (s *bufferingSink) EmitValue(sv shredder.ShreddedValue) error {
+	// Buffer the value
+	s.values = append(s.values, sv)
+
+	// Capture partition values (only top-level fields, rep level 0)
+	if idx, ok := s.partitionSourceIDs[sv.FieldID]; ok && sv.RepLevel == 0 {
+		s.partitionValues[idx] = sv.Value
 	}
+
+	return nil
+}
+
+func (s *bufferingSink) OnNewField(_ icebergx.Path, _ string, _ any) {
+	// Ignore unknown fields
+}
+
+// writeTo replays buffered values to the target sink and flushes.
+func (s *bufferingSink) writeTo(target *parquetSink) error {
+	for _, sv := range s.values {
+		if err := target.EmitValue(sv); err != nil {
+			return err
+		}
+	}
+	return target.flush()
 }

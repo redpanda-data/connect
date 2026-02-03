@@ -1,12 +1,14 @@
-// Copyright 2025 Redpanda Data, Inc.
-//
-// Licensed as a Redpanda Enterprise file under the Redpanda Community
-// License (the "License"); you may not use this file except in compliance with
-// the License. You may obtain a copy of the License at
-//
-// https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
+/*
+ * Copyright 2025 Redpanda Data, Inc.
+ *
+ * Licensed as a Redpanda Enterprise file under the Redpanda Community
+ * License (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
+ */
 
-package iceberg
+package icebergx
 
 import (
 	"testing"
@@ -23,7 +25,7 @@ func TestBuildParquetSchema_SimpleFlat(t *testing.T) {
 		iceberg.NestedField{ID: 2, Name: "name", Type: iceberg.PrimitiveTypes.String, Required: false},
 	)
 
-	pqSchema, fieldToCol, err := buildParquetSchema(schema)
+	pqSchema, fieldToCol, err := BuildParquetSchema(schema)
 	require.NoError(t, err)
 	require.NotNil(t, pqSchema)
 
@@ -60,7 +62,7 @@ func TestBuildParquetSchema_NestedStruct(t *testing.T) {
 		},
 	)
 
-	pqSchema, fieldToCol, err := buildParquetSchema(schema)
+	pqSchema, fieldToCol, err := BuildParquetSchema(schema)
 	require.NoError(t, err)
 	require.NotNil(t, pqSchema)
 
@@ -99,7 +101,7 @@ func TestBuildParquetSchema_List(t *testing.T) {
 		},
 	)
 
-	pqSchema, fieldToCol, err := buildParquetSchema(schema)
+	pqSchema, fieldToCol, err := BuildParquetSchema(schema)
 	require.NoError(t, err)
 	require.NotNil(t, pqSchema)
 
@@ -135,7 +137,7 @@ func TestBuildParquetSchema_Map(t *testing.T) {
 		},
 	)
 
-	pqSchema, fieldToCol, err := buildParquetSchema(schema)
+	pqSchema, fieldToCol, err := BuildParquetSchema(schema)
 	require.NoError(t, err)
 	require.NotNil(t, pqSchema)
 
@@ -179,7 +181,7 @@ func TestBuildParquetSchema_ListOfStructs(t *testing.T) {
 		},
 	)
 
-	pqSchema, fieldToCol, err := buildParquetSchema(schema)
+	pqSchema, fieldToCol, err := BuildParquetSchema(schema)
 	require.NoError(t, err)
 	require.NotNil(t, pqSchema)
 
@@ -228,7 +230,7 @@ func TestBuildParquetSchema_DeeplyNested(t *testing.T) {
 		},
 	)
 
-	pqSchema, fieldToCol, err := buildParquetSchema(schema)
+	pqSchema, fieldToCol, err := BuildParquetSchema(schema)
 	require.NoError(t, err)
 	require.NotNil(t, pqSchema)
 
@@ -280,7 +282,7 @@ func TestBuildParquetSchema_NestedListsInStruct(t *testing.T) {
 		},
 	)
 
-	pqSchema, fieldToCol, err := buildParquetSchema(schema)
+	pqSchema, fieldToCol, err := BuildParquetSchema(schema)
 	require.NoError(t, err)
 	require.NotNil(t, pqSchema)
 
@@ -337,7 +339,7 @@ func TestBuildParquetSchema_ComplexMixed(t *testing.T) {
 		},
 	)
 
-	pqSchema, fieldToCol, err := buildParquetSchema(schema)
+	pqSchema, fieldToCol, err := BuildParquetSchema(schema)
 	require.NoError(t, err)
 	require.NotNil(t, pqSchema)
 
@@ -384,7 +386,7 @@ func TestBuildParquetSchema_AllPrimitiveTypes(t *testing.T) {
 		iceberg.NestedField{ID: 12, Name: "uuid_col", Type: iceberg.PrimitiveTypes.UUID, Required: false},
 	)
 
-	pqSchema, fieldToCol, err := buildParquetSchema(schema)
+	pqSchema, fieldToCol, err := BuildParquetSchema(schema)
 	require.NoError(t, err)
 	require.NotNil(t, pqSchema)
 
