@@ -9,9 +9,8 @@
 package logminer
 
 import (
-	"time"
-
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/connect/v4/internal/impl/oracledb/logminer/dmlparser"
 )
 
 // TransactionCache is responsible for buffering transactions until a commit event is received,
@@ -19,7 +18,7 @@ import (
 // If a rollback events is received the cache will be be cleared instead of flushed.
 type TransactionCache interface {
 	StartTransaction(txnID string, scn int64)
-	AddEvent(txnID string, event *DMLEvent)
+	AddEvent(txnID string, event *dmlparser.DMLEvent)
 	GetTransaction(txnID string) *Transaction
 	CommitTransaction(txnID string)
 	RollbackTransaction(txnID string)
@@ -33,7 +32,7 @@ type TransactionID string
 type Transaction struct {
 	ID     string
 	SCN    int64
-	Events []*DMLEvent
+	Events []*dmlparser.DMLEvent
 }
 
 // InMemoryCache is an in-memory implementation of TransactionCache that stores
@@ -58,20 +57,20 @@ func (tc *InMemoryCache) StartTransaction(txnID string, scn int64) {
 	tc.transactions[txnID] = &Transaction{
 		ID:     txnID,
 		SCN:    scn,
-		Events: []*DMLEvent{},
+		Events: []*dmlparser.DMLEvent{},
 	}
 }
 
 // AddEvent adds a DML event to the specified transaction's buffer.
 // If the transaction doesn't exist, it creates a new transaction with the event.
-func (tc *InMemoryCache) AddEvent(txnID string, event *DMLEvent) {
+func (tc *InMemoryCache) AddEvent(txnID string, event *dmlparser.DMLEvent) {
 	if txn, exists := tc.transactions[txnID]; exists {
 		txn.Events = append(txn.Events, event)
 	} else {
 		// Transaction not started yet, create it
 		tc.transactions[txnID] = &Transaction{
 			ID:     txnID,
-			Events: []*DMLEvent{event},
+			Events: []*dmlparser.DMLEvent{event},
 		}
 	}
 }
@@ -96,54 +95,5 @@ func (tc *InMemoryCache) RollbackTransaction(txnID string) {
 func (tc *InMemoryCache) Count() {
 	for k, v := range tc.transactions {
 		tc.log.Debugf("Cache: TransID %s: %d records", k, len(v.Events))
-	}
-}
-
-// DMLEvent represents a parsed DML operation
-type DMLEvent struct {
-	Operation Operation
-	Schema    string
-	Table     string
-	SQLRedo   string
-	Data      map[string]any
-	Timestamp time.Time
-}
-
-// Operation represents a LogMiner operation type
-type Operation int
-
-const (
-	// OpUnknown represents an unknown or unsupported operation
-	OpUnknown Operation = iota
-	// OpInsert represents an INSERT operation
-	OpInsert
-	// OpDelete represents a DELETE operation
-	OpDelete
-	// OpUpdate represents an UPDATE operation
-	OpUpdate
-	// OpStart represents a transaction START operation
-	OpStart
-	// OpCommit represents a transaction COMMIT operation
-	OpCommit
-	// OpRollback represents a transaction ROLLBACK operation
-	OpRollback
-)
-
-func operationFromCode(code int) Operation {
-	switch code {
-	case 1:
-		return OpInsert
-	case 2:
-		return OpDelete
-	case 3:
-		return OpUpdate
-	case 6:
-		return OpStart
-	case 7:
-		return OpCommit
-	case 36:
-		return OpRollback
-	default:
-		return OpUnknown
 	}
 }
