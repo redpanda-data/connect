@@ -151,6 +151,14 @@ func InitEnterpriseCLI(
 			}
 
 			// Store authorization configuration if present
+			if dist == DistCloud || dist == DistCloudAI {
+				if authzResourceName == "" {
+					return fmt.Errorf("authorization resource name is required for cloud distributions")
+				}
+				if authzPolicyFile == "" {
+					return fmt.Errorf("authorization policy file is required for cloud distributions")
+				}
+			}
 			if authzResourceName != "" && authzPolicyFile != "" {
 				gateway.SetManagerAuthzConfig(pConf.Resources(), gateway.AuthzConfig{
 					ResourceName: authz.ResourceName(authzResourceName),
