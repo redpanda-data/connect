@@ -329,12 +329,7 @@ func newProtobufToJSONOperator(
 	if err != nil {
 		return nil, fmt.Errorf("unable to find protobuf type %q: %w", msg, err)
 	}
-	decoder := common.NewHyperPbDecoder(
-		msgType.Descriptor(),
-		common.ProfilingOptions{
-			Rate:              0.01,
-			RecompileInterval: 100_000,
-		})
+	decoder := common.NewDynamicPbDecoder(msgType.Descriptor())
 	opts.Resolver = types
 	return func(part *service.Message) error {
 		partBytes, err := part.AsBytes()
@@ -403,12 +398,7 @@ func newProtobufToJSONBSROperator(
 	if err != nil {
 		return nil, fmt.Errorf("unable to find message '%v' definition: %w", msg, err)
 	}
-	decoder := common.NewHyperPbDecoder(
-		d.Descriptor(),
-		common.ProfilingOptions{
-			Rate:              0.01,
-			RecompileInterval: 100_000,
-		})
+	decoder := common.NewDynamicPbDecoder(d.Descriptor())
 	opts.Resolver = multiModuleWatcher
 	return func(part *service.Message) error {
 		partBytes, err := part.AsBytes()

@@ -20,11 +20,8 @@ import (
 )
 
 // NewDynamicPbDecoder returns a new ProtobufDecoder based on standard proto reflection
-// in the offical protobuf library.
-func NewDynamicPbDecoder(
-	md protoreflect.MessageDescriptor,
-	_ ProfilingOptions,
-) ProtobufDecoder {
+// in the official protobuf library.
+func NewDynamicPbDecoder(md protoreflect.MessageDescriptor) ProtobufDecoder {
 	return &dynamicPbParser{dynamicpb.NewMessageType(md)}
 }
 
