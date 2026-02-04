@@ -314,7 +314,8 @@ func (i *oracleDBCDCInput) Connect(ctx context.Context) error {
 	}
 	if cachedSCN, err = i.getCachedSCN(ctx); err != nil {
 		if errors.Is(err, service.ErrKeyNotFound) {
-			i.log.Infof("No SCN not found in checkpoint cache")
+			i.log.Infof("No SCN found in checkpoint cache")
+			cachedSCN = replication.InvalidSCN
 		} else {
 			return fmt.Errorf("unable to get cached SCN: %s", err)
 		}
@@ -349,6 +350,8 @@ func (i *oracleDBCDCInput) Connect(ctx context.Context) error {
 
 	if i.lmCfg != nil {
 		streaming = logminer.NewMiner(i.db, userTables, i.publisher, i.lmCfg, i.log)
+	} else {
+		return fmt.Errorf("logminer configuration is required for streaming")
 	}
 
 	// Reset our stop signal
@@ -367,28 +370,39 @@ func (i *oracleDBCDCInput) Connect(ctx context.Context) error {
 				if i.stopSig.IsHardStopSignalled() {
 					i.log.Errorf("Shutting down snapshotting process: %s", err)
 				} else {
-					// TODO: This should probably be an ErrorF if err is an error?
 					i.log.Infof("Gracefully shutting down snapshotting process: %s", err)
 				}
 				i.stopSig.TriggerHasStopped()
 				return
 			}
+
 			if err = i.cacheSCN(softCtx, maxSCN); err != nil {
-				if i.stopSig.IsHardStopSignalled() {
-					i.log.Errorf("Shutting down snapshotting process: %s", err)
-				} else {
-					i.log.Infof("Gracefully shutting down snapshotting process: %s", err)
-				}
+				i.log.Errorf("Failed to capture SCN after snapshot completion. Snapshot will re-run on restart (may cause duplicate data): %s", err)
 				i.stopSig.TriggerHasStopped()
 				return
 			}
-			i.log.Debugf("Cached SCN following snapshot: '%s'", maxSCN)
+
+			i.log.Infof("Successfully captured SCN following snapshot: %d", maxSCN)
+		}
+
+		// If no SCN is available (no snapshot and no cached position), get current SCN from database
+		// to avoid starting from SCN 0 which could replay entire database history
+		if maxSCN == replication.InvalidSCN {
+			if err := i.db.QueryRowContext(softCtx, "SELECT CURRENT_SCN FROM V$DATABASE").Scan(&maxSCN); err != nil {
+				i.log.Errorf("Failed to get current SCN from database: %s", err)
+				i.stopSig.TriggerHasStopped()
+				return
+			}
+			i.log.Infof("No cached SCN found, starting from current database SCN: %d", maxSCN)
+			if err = i.cacheSCN(softCtx, maxSCN); err != nil {
+				i.log.Warnf("Failed to cache initial SCN (non-critical): %s", err)
+			}
 		}
 
 		// streaming
 		wg, _ := errgroup.WithContext(softCtx)
 		wg.Go(func() error {
-			if err := streaming.ReadChanges(ctx, maxSCN); err != nil {
+			if err := streaming.ReadChanges(softCtx, maxSCN); err != nil {
 				return fmt.Errorf("streaming from logminer: %w", err)
 			}
 			return nil
@@ -410,8 +424,9 @@ func (i *oracleDBCDCInput) getCachedSCN(ctx context.Context) (replication.SCN, e
 		cErr     error
 	)
 
+	// Use internal Oracle-based cache if set (when no external cache configured),
+	// otherwise use external cache resource
 	if i.cpCache != nil {
-		// use default custom oracle based cache
 		cacheVal, cErr = i.cpCache.Get(ctx, i.cfg.scnCacheKey)
 	} else {
 		if err := i.res.AccessCache(ctx, i.cfg.scnCache, func(c service.Cache) {
@@ -441,6 +456,8 @@ func (i *oracleDBCDCInput) cacheSCN(ctx context.Context, scn replication.SCN) er
 		return errors.New("SCN for caching is empty")
 	}
 
+	// Use internal Oracle-based cache if set (when no external cache configured),
+	// otherwise use external cache resource
 	var cErr error
 	if i.cpCache != nil {
 		cErr = i.cpCache.Set(ctx, i.cfg.scnCacheKey, scn.Bytes(), nil)
@@ -508,11 +525,22 @@ func (i *oracleDBCDCInput) Close(ctx context.Context) error {
 		i.log.Error("failed to shutdown 'oracledb_cdc' component within the timeout")
 	case <-i.stopSig.HasStoppedChan():
 	}
+
+	// Close both resources and combine errors to avoid resource leaks
+	var closeErr error
 	if i.cpCache != nil {
-		return i.cpCache.Close(ctx)
+		if err := i.cpCache.Close(ctx); err != nil {
+			closeErr = fmt.Errorf("closing checkpoint cache: %w", err)
+		}
 	}
 	if i.db != nil {
-		return i.db.Close()
+		if err := i.db.Close(); err != nil {
+			if closeErr != nil {
+				closeErr = fmt.Errorf("%w; closing database: %w", closeErr, err)
+			} else {
+				closeErr = fmt.Errorf("closing database: %w", err)
+			}
+		}
 	}
-	return nil
+	return closeErr
 }
