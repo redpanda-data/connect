@@ -85,8 +85,14 @@ func newIcebergOutputFromConfig(conf *service.ParsedConfig, mgr *service.Resourc
 		return nil, fmt.Errorf("failed to parse table name: %w", err)
 	}
 
+	// Parse schema evolution config
+	schemaEvoCfg, err := parseSchemaEvolutionConfig(conf)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse schema evolution config: %w", err)
+	}
+
 	// Create router
-	rtr := NewRouter(catalogCfg, namespaceStr, tableStr, mgr.Logger())
+	rtr := NewRouter(catalogCfg, namespaceStr, tableStr, schemaEvoCfg, mgr.Logger())
 
 	return &icebergOutput{
 		router: rtr,
@@ -394,6 +400,33 @@ func parseAzureProps(conf *service.ParsedConfig) (iceberg.Properties, error) {
 	}
 
 	return props, nil
+}
+
+// parseSchemaEvolutionConfig parses the schema evolution configuration.
+func parseSchemaEvolutionConfig(conf *service.ParsedConfig) (SchemaEvolutionConfig, error) {
+	cfg := SchemaEvolutionConfig{}
+
+	// Check if schema evolution config exists
+	if !conf.Contains(ioFieldSchemaEvolution) {
+		return cfg, nil
+	}
+
+	// Parse enabled flag
+	var err error
+	cfg.Enabled, err = conf.FieldBool(ioFieldSchemaEvolution, ioFieldSchemaEvolutionEnabled)
+	if err != nil {
+		return cfg, err
+	}
+
+	// Parse partition spec if present
+	if conf.Contains(ioFieldSchemaEvolution, ioFieldSchemaEvolutionPartitionSpec) {
+		cfg.PartitionSpec, err = conf.FieldInterpolatedString(ioFieldSchemaEvolution, ioFieldSchemaEvolutionPartitionSpec)
+		if err != nil {
+			return cfg, err
+		}
+	}
+
+	return cfg, nil
 }
 
 // Connect establishes connections to the catalog and storage.

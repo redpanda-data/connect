@@ -205,6 +205,11 @@ func (w *writer) messagesToParquet(batch service.MessageBatch) ([]partitionFile,
 			}
 		}
 
+		// Check for schema evolution before closing
+		if newFields := sink.newFieldErrors(); len(newFields) > 0 {
+			return nil, NewBatchSchemaEvolutionError(newFields)
+		}
+
 		result, err := sink.Close()
 		if err != nil {
 			return nil, fmt.Errorf("failed to close parquet writer: %w", err)
@@ -269,6 +274,11 @@ func (w *writer) messagesToParquet(batch service.MessageBatch) ([]partitionFile,
 		}
 	}
 
+	// Check for schema evolution before closing partition sinks
+	if newFields := bufferSink.newFieldErrors(); len(newFields) > 0 {
+		return nil, NewBatchSchemaEvolutionError(newFields)
+	}
+
 	// Close all partition sinks and collect results (compute paths now)
 	results := make([]partitionFile, 0, len(partitions))
 	for _, entry := range partitions {
@@ -300,6 +310,9 @@ type parquetSink struct {
 	writer   *parquet.GenericWriter[any]
 	columns  map[int]*parquetColumn // field ID -> column state
 	rowCount int
+
+	// newFields collects unknown fields discovered during shredding for schema evolution.
+	newFields []*NewFieldError
 }
 
 func newParquetSink(pqSchema *parquet.Schema, fieldToCol map[int]int) *parquetSink {
@@ -316,9 +329,10 @@ func newParquetSink(pqSchema *parquet.Schema, fieldToCol map[int]int) *parquetSi
 		}
 	}
 	return &parquetSink{
-		buffer:  buf,
-		writer:  pw,
-		columns: columns,
+		buffer:    buf,
+		writer:    pw,
+		columns:   columns,
+		newFields: nil, // allocated lazily
 	}
 }
 
@@ -335,9 +349,14 @@ func (s *parquetSink) EmitValue(sv shredder.ShreddedValue) error {
 	return nil
 }
 
-func (s *parquetSink) OnNewField(_ icebergx.Path, _ string, _ any) {
-	// For now, ignore unknown fields
-	// TODO: Could be used for schema evolution
+func (s *parquetSink) OnNewField(parentPath icebergx.Path, name string, value any) {
+	// Collect unknown fields for schema evolution
+	s.newFields = append(s.newFields, NewNewFieldError(parentPath, name, value))
+}
+
+// newFieldErrors returns the collected new field errors.
+func (s *parquetSink) newFieldErrors() []*NewFieldError {
+	return s.newFields
 }
 
 // flush writes the current row to column writers and increments the row count.
@@ -369,6 +388,9 @@ type bufferingSink struct {
 	values             []shredder.ShreddedValue // buffered values in emission order
 	partitionSourceIDs map[int]int              // sourceFieldID -> partition field index
 	partitionValues    []parquet.Value          // captured partition values
+
+	// newFields collects unknown fields discovered during shredding for schema evolution.
+	newFields []*NewFieldError
 }
 
 func newBufferingSink(partitionSourceIDs map[int]int, numPartitionFields int) *bufferingSink {
@@ -376,6 +398,7 @@ func newBufferingSink(partitionSourceIDs map[int]int, numPartitionFields int) *b
 		values:             make([]shredder.ShreddedValue, 0, 64),
 		partitionSourceIDs: partitionSourceIDs,
 		partitionValues:    make([]parquet.Value, numPartitionFields),
+		newFields:          nil, // allocated lazily
 	}
 }
 
@@ -384,6 +407,7 @@ func (s *bufferingSink) reset() {
 	for i := range s.partitionValues {
 		s.partitionValues[i] = parquet.Value{}
 	}
+	// Don't reset newFields - we want to accumulate across all messages in the batch
 }
 
 func (s *bufferingSink) EmitValue(sv shredder.ShreddedValue) error {
@@ -398,8 +422,14 @@ func (s *bufferingSink) EmitValue(sv shredder.ShreddedValue) error {
 	return nil
 }
 
-func (s *bufferingSink) OnNewField(_ icebergx.Path, _ string, _ any) {
-	// TODO: implement
+func (s *bufferingSink) OnNewField(parentPath icebergx.Path, name string, value any) {
+	// Collect unknown fields for schema evolution
+	s.newFields = append(s.newFields, NewNewFieldError(parentPath, name, value))
+}
+
+// newFieldErrors returns the collected new field errors.
+func (s *bufferingSink) newFieldErrors() []*NewFieldError {
+	return s.newFields
 }
 
 // writeTo replays buffered values to the target sink and flushes.

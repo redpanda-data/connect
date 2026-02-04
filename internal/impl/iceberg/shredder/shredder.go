@@ -9,6 +9,7 @@
 package shredder
 
 import (
+	"encoding/json"
 	"fmt"
 	"slices"
 
@@ -370,6 +371,12 @@ func convertLeafValue(value any, typ iceberg.Type) (parquet.Value, error) {
 			return parquet.Int32Value(int32(v)), nil
 		case float64:
 			return parquet.Int32Value(int32(v)), nil
+		case json.Number:
+			i, err := v.Int64()
+			if err != nil {
+				return parquet.NullValue(), fmt.Errorf("cannot convert json.Number to int32: %w", err)
+			}
+			return parquet.Int32Value(int32(i)), nil
 		default:
 			return parquet.NullValue(), fmt.Errorf("cannot convert %T to int32", value)
 		}
@@ -384,6 +391,12 @@ func convertLeafValue(value any, typ iceberg.Type) (parquet.Value, error) {
 			return parquet.Int64Value(v), nil
 		case float64:
 			return parquet.Int64Value(int64(v)), nil
+		case json.Number:
+			i, err := v.Int64()
+			if err != nil {
+				return parquet.NullValue(), fmt.Errorf("cannot convert json.Number to int64: %w", err)
+			}
+			return parquet.Int64Value(i), nil
 		default:
 			return parquet.NullValue(), fmt.Errorf("cannot convert %T to int64", value)
 		}
@@ -396,6 +409,12 @@ func convertLeafValue(value any, typ iceberg.Type) (parquet.Value, error) {
 			return parquet.FloatValue(float32(v)), nil
 		case int:
 			return parquet.FloatValue(float32(v)), nil
+		case json.Number:
+			f, err := v.Float64()
+			if err != nil {
+				return parquet.NullValue(), fmt.Errorf("cannot convert json.Number to float32: %w", err)
+			}
+			return parquet.FloatValue(float32(f)), nil
 		default:
 			return parquet.NullValue(), fmt.Errorf("cannot convert %T to float32", value)
 		}
@@ -408,6 +427,12 @@ func convertLeafValue(value any, typ iceberg.Type) (parquet.Value, error) {
 			return parquet.DoubleValue(v), nil
 		case int:
 			return parquet.DoubleValue(float64(v)), nil
+		case json.Number:
+			f, err := v.Float64()
+			if err != nil {
+				return parquet.NullValue(), fmt.Errorf("cannot convert json.Number to float64: %w", err)
+			}
+			return parquet.DoubleValue(f), nil
 		default:
 			return parquet.NullValue(), fmt.Errorf("cannot convert %T to float64", value)
 		}

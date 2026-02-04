@@ -428,6 +428,27 @@ func (infra *testInfrastructure) IcebergTableExists(ctx context.Context, catalog
 	return err == nil
 }
 
+// ColumnInfo represents a column's schema information from DuckDB DESCRIBE.
+type ColumnInfo struct {
+	ColumnName string `json:"column_name"`
+	ColumnType string `json:"column_type"`
+	Null       string `json:"null"`
+}
+
+// DescribeIcebergTable returns the schema of an Iceberg table using DuckDB's DESCRIBE.
+func (infra *testInfrastructure) DescribeIcebergTable(ctx context.Context, catalog, namespace, table string) ([]ColumnInfo, error) {
+	sql := infra.duckDBSetupSQL(catalog) + fmt.Sprintf(`
+		DESCRIBE iceberg_cat."%s"."%s";
+	`, namespace, table)
+
+	output, err := infra.ExecSQL(ctx, sql)
+	if err != nil {
+		return nil, err
+	}
+
+	return parseJSONArray[ColumnInfo](output)
+}
+
 // ListIcebergTables lists tables in a namespace using the Polaris catalog via DuckDB.
 func (infra *testInfrastructure) ListIcebergTables(ctx context.Context, catalog, namespace string) ([]string, error) {
 	// Run everything in one batch since secrets are session-scoped

@@ -11,9 +11,11 @@ package iceberg
 import (
 	"bytes"
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/apache/iceberg-go"
+	"github.com/apache/iceberg-go/catalog"
 	"github.com/apache/iceberg-go/io"
 	"github.com/apache/iceberg-go/table"
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -241,6 +243,135 @@ func TestCatalogxIntegration(t *testing.T) {
 
 		err = client.Close()
 		require.NoError(t, err)
+	})
+
+	t.Run("ErrorPropagation", func(t *testing.T) {
+		t.Run("ErrNoSuchTable", func(t *testing.T) {
+			// Test that catalog.ErrNoSuchTable is properly propagated through catalogx wrapper
+			client, err := catalogx.NewCatalogClient(catalogx.Config{
+				URL:      infra.RestURL,
+				AuthType: "none",
+			}, []string{namespaceName})
+			require.NoError(t, err)
+			defer client.Close()
+
+			// Try to load a non-existent table
+			_, err = client.LoadTable(ctx, "nonexistent_table_xyz")
+			require.Error(t, err)
+
+			// Verify the error chain preserves catalog.ErrNoSuchTable
+			assert.True(t, errors.Is(err, catalog.ErrNoSuchTable),
+				"expected error to wrap catalog.ErrNoSuchTable, got: %v", err)
+		})
+
+		t.Run("ErrNoSuchNamespace", func(t *testing.T) {
+			// Test that catalog.ErrNoSuchNamespace is properly propagated through catalogx wrapper
+			// Use a namespace that doesn't exist
+			client, err := catalogx.NewCatalogClient(catalogx.Config{
+				URL:      infra.RestURL,
+				AuthType: "none",
+			}, []string{"nonexistent_namespace_xyz"})
+			require.NoError(t, err)
+			defer client.Close()
+
+			// Try to create a table in a non-existent namespace
+			schema := iceberg.NewSchema(
+				0,
+				iceberg.NestedField{ID: 1, Name: "id", Type: iceberg.Int32Type{}, Required: true},
+			)
+			_, err = client.CreateTable(ctx, "test_table", schema)
+			require.Error(t, err)
+
+			// Verify the error chain preserves catalog.ErrNoSuchNamespace
+			assert.True(t, errors.Is(err, catalog.ErrNoSuchNamespace),
+				"expected error to wrap catalog.ErrNoSuchNamespace, got: %v", err)
+		})
+	})
+
+	t.Run("NamespaceOperations", func(t *testing.T) {
+		t.Run("CheckNamespaceExists", func(t *testing.T) {
+			// Test existing namespace
+			client, err := catalogx.NewCatalogClient(catalogx.Config{
+				URL:      infra.RestURL,
+				AuthType: "none",
+			}, []string{namespaceName})
+			require.NoError(t, err)
+			defer client.Close()
+
+			exists, err := client.CheckNamespaceExists(ctx)
+			require.NoError(t, err)
+			assert.True(t, exists, "namespace should exist")
+
+			// Test non-existing namespace
+			clientNonExistent, err := catalogx.NewCatalogClient(catalogx.Config{
+				URL:      infra.RestURL,
+				AuthType: "none",
+			}, []string{"nonexistent_namespace_check"})
+			require.NoError(t, err)
+			defer clientNonExistent.Close()
+
+			exists, err = clientNonExistent.CheckNamespaceExists(ctx)
+			require.NoError(t, err)
+			assert.False(t, exists, "namespace should not exist")
+		})
+
+		t.Run("CreateNamespace", func(t *testing.T) {
+			newNamespace := "test_create_namespace"
+
+			// Create client for new namespace
+			client, err := catalogx.NewCatalogClient(catalogx.Config{
+				URL:      infra.RestURL,
+				AuthType: "none",
+			}, []string{newNamespace})
+			require.NoError(t, err)
+			defer client.Close()
+
+			// Namespace should not exist initially
+			exists, err := client.CheckNamespaceExists(ctx)
+			require.NoError(t, err)
+			assert.False(t, exists)
+
+			// Create the namespace
+			err = client.CreateNamespace(ctx, nil)
+			require.NoError(t, err)
+
+			// Namespace should now exist
+			exists, err = client.CheckNamespaceExists(ctx)
+			require.NoError(t, err)
+			assert.True(t, exists)
+
+			// Creating again should be idempotent (no error)
+			err = client.CreateNamespace(ctx, nil)
+			require.NoError(t, err)
+		})
+
+		t.Run("CheckTableExists", func(t *testing.T) {
+			client, err := catalogx.NewCatalogClient(catalogx.Config{
+				URL:      infra.RestURL,
+				AuthType: "none",
+			}, []string{namespaceName})
+			require.NoError(t, err)
+			defer client.Close()
+
+			// First, create a table
+			tableName := "test_check_exists"
+			schema := iceberg.NewSchema(
+				0,
+				iceberg.NestedField{ID: 1, Name: "id", Type: iceberg.Int32Type{}, Required: true},
+			)
+			_, err = client.CreateTable(ctx, tableName, schema)
+			require.NoError(t, err)
+
+			// Table should exist
+			exists, err := client.CheckTableExists(ctx, tableName)
+			require.NoError(t, err)
+			assert.True(t, exists, "table should exist")
+
+			// Non-existent table should return false
+			exists, err = client.CheckTableExists(ctx, "nonexistent_table_check")
+			require.NoError(t, err)
+			assert.False(t, exists, "table should not exist")
+		})
 	})
 }
 

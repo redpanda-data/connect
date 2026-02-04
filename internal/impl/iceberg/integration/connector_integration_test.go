@@ -175,9 +175,10 @@ func testRouterIntegration(t *testing.T, ctx context.Context, infra *testInfrast
 	tableStr, err := service.NewInterpolatedString(tableName)
 	require.NoError(t, err)
 
-	// Create router
+	// Create router with schema evolution disabled (we pre-created the table)
 	logger := service.MockResources().Logger()
-	router := iberg.NewRouter(catalogCfg, namespaceStr, tableStr, logger)
+	schemaEvoCfg := iberg.SchemaEvolutionConfig{Enabled: false}
+	router := iberg.NewRouter(catalogCfg, namespaceStr, tableStr, schemaEvoCfg, logger)
 	defer router.Close()
 
 	// Create test messages
@@ -244,9 +245,10 @@ func testRouterMultipleTablesIntegration(t *testing.T, ctx context.Context, infr
 	tableStr, err := service.NewInterpolatedString(`events_${!meta("event_type")}`)
 	require.NoError(t, err)
 
-	// Create router
+	// Create router with schema evolution disabled (we pre-created the tables)
 	logger := service.MockResources().Logger()
-	router := iberg.NewRouter(catalogCfg, namespaceStr, tableStr, logger)
+	schemaEvoCfg := iberg.SchemaEvolutionConfig{Enabled: false}
+	router := iberg.NewRouter(catalogCfg, namespaceStr, tableStr, schemaEvoCfg, logger)
 	defer router.Close()
 
 	// Create test messages with metadata indicating which table they should go to

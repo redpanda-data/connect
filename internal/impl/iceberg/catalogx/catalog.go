@@ -11,6 +11,7 @@ package catalogx
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net/url"
 	"strings"
@@ -194,6 +195,44 @@ func (c *Client) AppendDataFiles(ctx context.Context, tbl *table.Table, dataFile
 		return nil, err
 	}
 	return txn.Commit(ctx)
+}
+
+// CheckTableExists checks if the table exists in the catalog.
+func (c *Client) CheckTableExists(ctx context.Context, tableName string) (bool, error) {
+	identifier := toTableIdentifier(c.namespace, tableName)
+	exists, err := c.catalog.CheckTableExists(ctx, identifier)
+	if err != nil {
+		return false, fmt.Errorf("failed to check table existence %s: %w", strings.Join(identifier, "."), err)
+	}
+	return exists, nil
+}
+
+// CreateNamespace creates the configured namespace with the given properties.
+// Returns nil if the namespace already exists (idempotent).
+func (c *Client) CreateNamespace(ctx context.Context, props iceberg.Properties) error {
+	err := c.catalog.CreateNamespace(ctx, c.namespace, props)
+	if err != nil {
+		// Check if namespace already exists - treat as success
+		if isNamespaceAlreadyExists(err) {
+			return nil
+		}
+		return fmt.Errorf("failed to create namespace %s: %w", strings.Join(c.namespace, "."), err)
+	}
+	return nil
+}
+
+// CheckNamespaceExists checks if the configured namespace exists.
+func (c *Client) CheckNamespaceExists(ctx context.Context) (bool, error) {
+	exists, err := c.catalog.CheckNamespaceExists(ctx, c.namespace)
+	if err != nil {
+		return false, fmt.Errorf("failed to check namespace existence %s: %w", strings.Join(c.namespace, "."), err)
+	}
+	return exists, nil
+}
+
+// isNamespaceAlreadyExists checks if the error indicates the namespace already exists.
+func isNamespaceAlreadyExists(err error) bool {
+	return errors.Is(err, catalog.ErrNamespaceAlreadyExists)
 }
 
 // Close closes the catalog connection.
