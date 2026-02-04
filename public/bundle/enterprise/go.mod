@@ -2,7 +2,7 @@ module github.com/redpanda-data/connect/public/bundle/enterprise/v4
 
 go 1.25.6
 
-require github.com/redpanda-data/connect/v4 v4.79.0
+require github.com/redpanda-data/connect/v4 v4.80.0
 
 require (
 	buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.10-20250912141014-52f32327d4b0.1 // indirect
@@ -192,7 +192,6 @@ require (
 	github.com/tetratelabs/wazero v1.9.0 // indirect
 	github.com/theparanoids/crypki v1.20.9 // indirect
 	github.com/tigerbeetle/tigerbeetle-go v0.16.61 // indirect
-	github.com/timandy/routine v1.1.5 // indirect
 	github.com/timeplus-io/proton-go-driver/v2 v2.1.2 // indirect
 	github.com/tmc/langchaingo v0.1.13 // indirect
 	github.com/trinodb/trino-go-client v0.330.0 // indirect
