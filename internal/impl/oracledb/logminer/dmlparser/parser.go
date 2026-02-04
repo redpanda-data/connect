@@ -7,10 +7,74 @@
 package dmlparser
 
 import (
+	"database/sql"
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 )
+
+// DMLEvent represents a parsed DML operation
+type DMLEvent struct {
+	Operation Operation
+	Schema    string
+	Table     string
+	SQLRedo   string
+	Data      map[string]any
+	Timestamp time.Time
+}
+
+// Operation represents a LogMiner operation type
+type Operation int
+
+const (
+	// OpUnknown represents an unknown or unsupported operation
+	OpUnknown Operation = iota
+	// OpInsert represents an INSERT operation
+	OpInsert
+	// OpDelete represents a DELETE operation
+	OpDelete
+	// OpUpdate represents an UPDATE operation
+	OpUpdate
+	// OpStart represents a transaction START operation
+	OpStart
+	// OpCommit represents a transaction COMMIT operation
+	OpCommit
+	// OpRollback represents a transaction ROLLBACK operation
+	OpRollback
+)
+
+func OperationFromCode(code int) Operation {
+	switch code {
+	case 1:
+		return OpInsert
+	case 2:
+		return OpDelete
+	case 3:
+		return OpUpdate
+	case 6:
+		return OpStart
+	case 7:
+		return OpCommit
+	case 36:
+		return OpRollback
+	default:
+		return OpUnknown
+	}
+}
+
+// LMEvent represents a row from V$LOGMNR_CONTENTS
+type LMEvent struct {
+	SCN           int64
+	SQLRedo       sql.NullString
+	Data          map[string]any
+	Operation     Operation
+	OperationCode int
+	TableName     sql.NullString
+	SchemaName    sql.NullString
+	Timestamp     time.Time
+	TransactionID string
+}
 
 // LogMinerDMLParser parses SQL_REDO statements from Oracle LogMiner
 // It handles the specific format that LogMiner produces:
@@ -20,6 +84,7 @@ import (
 //	DELETE: delete from "schema"."table" where "C1" = 'v1' and "C2" = 'v2';
 type LogMinerDMLParser struct {
 	useRelaxedQuotes bool
+	valueConverter   *OracleValueConverter
 }
 
 // New creates a new LogMinerDMLParser instance with the specified quote handling behavior.
@@ -28,6 +93,7 @@ type LogMinerDMLParser struct {
 func New(useRelaxedQuotes bool) *LogMinerDMLParser {
 	return &LogMinerDMLParser{
 		useRelaxedQuotes: useRelaxedQuotes,
+		valueConverter:   NewOracleValueConverter(time.UTC),
 	}
 }
 
@@ -39,6 +105,84 @@ type ParseResult struct {
 	NewValues  map[string]any // After-state values (INSERT, UPDATE)
 	OldValues  map[string]any // Before-state values (UPDATE, DELETE)
 	ColumnList []string       // Column names in order
+}
+
+func (p *LogMinerDMLParser) RawEventToDMLEvent(rawEvent *LMEvent) (*DMLEvent, error) {
+	if len(rawEvent.SQLRedo.String) == 0 {
+		return nil, errors.New("empty SQL statement")
+	}
+	sql := rawEvent.SQLRedo.String
+
+	// Determine operation type by first character
+	var (
+		result *ParseResult
+		err    error
+	)
+	switch sql[0] {
+	case 'i':
+		if result, err = p.parseInsert(sql); err != nil {
+			return nil, fmt.Errorf("parsing insert statement: %w", err)
+		}
+	case 'u':
+		if result, err = p.parseUpdate(sql); err != nil {
+			return nil, fmt.Errorf("parsing update statement: %w", err)
+		}
+	case 'd':
+		if result, err = p.parseDelete(sql); err != nil {
+			return nil, fmt.Errorf("parsing delete statement: %w", err)
+		}
+	default:
+		return nil, fmt.Errorf("unknown sql operation: %s", sql)
+	}
+
+	// convert to DML Event
+	event := &DMLEvent{
+		Operation: rawEvent.Operation,
+		Timestamp: rawEvent.Timestamp,
+		Data:      result.NewValues,
+	}
+
+	if rawEvent.SchemaName.Valid {
+		event.Schema = rawEvent.SchemaName.String
+	}
+	if rawEvent.TableName.Valid {
+		event.Table = rawEvent.TableName.String
+	}
+
+	// Store SQL_REDO - will need to parse this to extract column values
+	if strings.TrimSpace(rawEvent.SQLRedo.String) != "" {
+		event.SQLRedo = rawEvent.SQLRedo.String
+	}
+
+	// covert sql types to their equivalent values
+	for k, v := range rawEvent.Data {
+		rawEvent.Data[k] = p.valueConverter.ConvertValue(v, k)
+	}
+
+	return event, nil
+}
+
+func (p *LogMinerDMLParser) ParseDML(event *LMEvent) (*DMLEvent, error) {
+	dml := &DMLEvent{
+		Operation: event.Operation,
+		// SQLRedo:   event.RedoValue.String,
+		Timestamp: event.Timestamp,
+	}
+
+	if event.SchemaName.Valid {
+		dml.Schema = event.SchemaName.String
+	}
+	if event.TableName.Valid {
+		dml.Table = event.TableName.String
+	}
+
+	// Store SQL_REDO - will need to parse this to extract column values
+	if strings.TrimSpace(event.SQLRedo.String) != "" {
+		dml.SQLRedo = event.SQLRedo.String
+	}
+	dml.Data = event.Data
+
+	return dml, nil
 }
 
 // Parse parses a SQL_REDO statement

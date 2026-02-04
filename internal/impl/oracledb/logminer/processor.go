@@ -11,6 +11,7 @@ package logminer
 import (
 	"strings"
 
+	. "github.com/redpanda-data/connect/v4/internal/impl/oracledb/logminer/dmlparser"
 	"github.com/redpanda-data/connect/v4/internal/impl/oracledb/replication"
 )
 
