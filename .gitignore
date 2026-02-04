@@ -11,3 +11,4 @@ release_notes.md
 .vscode
 .op
 __pycache__
+*.test
