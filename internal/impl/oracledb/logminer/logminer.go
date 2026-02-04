@@ -18,7 +18,6 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/impl/oracledb/logminer/dmlparser"
-	. "github.com/redpanda-data/connect/v4/internal/impl/oracledb/logminer/dmlparser"
 	"github.com/redpanda-data/connect/v4/internal/impl/oracledb/replication"
 )
 
@@ -109,7 +108,7 @@ func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replicat
 		sessionMgr:   NewSessionManager(db, cfg),
 		eventProc:    NewEventProcessor(),
 		txnCache:     NewInMemoryCache(logger),
-		dmlParser:    dmlparser.New(true),
+		dmlParser:    dmlparser.New(),
 	}
 	return lm
 }
@@ -230,7 +229,7 @@ func (lm *LogMiner) processEvent(ctx context.Context, rawEvent *dmlparser.LMEven
 		// Transaction started
 		lm.txnCache.StartTransaction(rawEvent.TransactionID, rawEvent.SCN)
 
-	case dmlparser.OpInsert, OpUpdate, OpDelete:
+	case dmlparser.OpInsert, dmlparser.OpUpdate, dmlparser.OpDelete:
 		// SQL_REDO should always be present for DML operations. If not, it's likely a temporary
 		// table (Oracle doesn't generate redo for these) or an unsupported operation.
 		if !rawEvent.SQLRedo.Valid || rawEvent.SQLRedo.String == "" {
@@ -240,13 +239,14 @@ func (lm *LogMiner) processEvent(ctx context.Context, rawEvent *dmlparser.LMEven
 		}
 
 		// Parse sql insert/update/delete sql statements into key/value object
+		//TODO: Should we do this, or some of it only after commit is received? Measure performance impact.
 		event, err := lm.dmlParser.RawEventToDMLEvent(rawEvent)
 		if err != nil {
 			return fmt.Errorf("parsing sql query into object: %w", err)
 		}
 
 		lm.txnCache.AddEvent(rawEvent.TransactionID, event)
-	case OpCommit:
+	case dmlparser.OpCommit:
 		// Flush all buffered events for this transaction
 		if txn := lm.txnCache.GetTransaction(rawEvent.TransactionID); txn != nil {
 			for _, ev := range txn.Events {
@@ -259,7 +259,7 @@ func (lm *LogMiner) processEvent(ctx context.Context, rawEvent *dmlparser.LMEven
 			lm.txnCache.CommitTransaction(rawEvent.TransactionID)
 		}
 
-	case OpRollback:
+	case dmlparser.OpRollback:
 		// Discard all buffered events for this transaction
 		lm.txnCache.RollbackTransaction(rawEvent.TransactionID)
 	}
