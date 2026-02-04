@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/apache/iceberg-go"
+	"github.com/apache/iceberg-go/io"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -80,11 +81,11 @@ func testWriterIntegration(t *testing.T, ctx context.Context, infra *testInfrast
 		URL:      infra.RestURL,
 		AuthType: "none",
 		AdditionalProps: iceberg.Properties{
-			"s3.access-key-id":     "admin",
-			"s3.secret-access-key": "password",
-			"s3.endpoint":          infra.MinioEndpoint,
-			"s3.path-style-access": "true",
-			"s3.region":            "us-east-1",
+			io.S3AccessKeyID:            "admin",
+			io.S3SecretAccessKey:        "password",
+			io.S3EndpointURL:            infra.MinioEndpoint,
+			io.S3ForceVirtualAddressing: "false", // Use path-style for MinIO
+			io.S3Region:                 "us-east-1",
 		},
 	}
 
@@ -151,11 +152,11 @@ func testRouterIntegration(t *testing.T, ctx context.Context, infra *testInfrast
 		URL:      infra.RestURL,
 		AuthType: "none",
 		AdditionalProps: iceberg.Properties{
-			"s3.access-key-id":     "admin",
-			"s3.secret-access-key": "password",
-			"s3.endpoint":          infra.MinioEndpoint,
-			"s3.path-style-access": "true",
-			"s3.region":            "us-east-1",
+			io.S3AccessKeyID:            "admin",
+			io.S3SecretAccessKey:        "password",
+			io.S3EndpointURL:            infra.MinioEndpoint,
+			io.S3ForceVirtualAddressing: "false", // Use path-style for MinIO
+			io.S3Region:                 "us-east-1",
 		},
 	}
 
@@ -216,11 +217,11 @@ func testRouterMultipleTablesIntegration(t *testing.T, ctx context.Context, infr
 		URL:      infra.RestURL,
 		AuthType: "none",
 		AdditionalProps: iceberg.Properties{
-			"s3.access-key-id":     "admin",
-			"s3.secret-access-key": "password",
-			"s3.endpoint":          infra.MinioEndpoint,
-			"s3.path-style-access": "true",
-			"s3.region":            "us-east-1",
+			io.S3AccessKeyID:            "admin",
+			io.S3SecretAccessKey:        "password",
+			io.S3EndpointURL:            infra.MinioEndpoint,
+			io.S3ForceVirtualAddressing: "false", // Use path-style for MinIO
+			io.S3Region:                 "us-east-1",
 		},
 	}
 
@@ -310,11 +311,11 @@ func testListValuesIntegration(t *testing.T, ctx context.Context, infra *testInf
 		URL:      infra.RestURL,
 		AuthType: "none",
 		AdditionalProps: iceberg.Properties{
-			"s3.access-key-id":     "admin",
-			"s3.secret-access-key": "password",
-			"s3.endpoint":          infra.MinioEndpoint,
-			"s3.path-style-access": "true",
-			"s3.region":            "us-east-1",
+			io.S3AccessKeyID:            "admin",
+			io.S3SecretAccessKey:        "password",
+			io.S3EndpointURL:            infra.MinioEndpoint,
+			io.S3ForceVirtualAddressing: "false", // Use path-style for MinIO
+			io.S3Region:                 "us-east-1",
 		},
 	}
 
@@ -401,11 +402,11 @@ func testNestedStructIntegration(t *testing.T, ctx context.Context, infra *testI
 		URL:      infra.RestURL,
 		AuthType: "none",
 		AdditionalProps: iceberg.Properties{
-			"s3.access-key-id":     "admin",
-			"s3.secret-access-key": "password",
-			"s3.endpoint":          infra.MinioEndpoint,
-			"s3.path-style-access": "true",
-			"s3.region":            "us-east-1",
+			io.S3AccessKeyID:            "admin",
+			io.S3SecretAccessKey:        "password",
+			io.S3EndpointURL:            infra.MinioEndpoint,
+			io.S3ForceVirtualAddressing: "false", // Use path-style for MinIO
+			io.S3Region:                 "us-east-1",
 		},
 	}
 
@@ -530,11 +531,11 @@ func testPartitionedTableIntegration(t *testing.T, ctx context.Context, infra *t
 		URL:      infra.RestURL,
 		AuthType: "none",
 		AdditionalProps: iceberg.Properties{
-			"s3.access-key-id":     "admin",
-			"s3.secret-access-key": "password",
-			"s3.endpoint":          infra.MinioEndpoint,
-			"s3.path-style-access": "true",
-			"s3.region":            "us-east-1",
+			io.S3AccessKeyID:            "admin",
+			io.S3SecretAccessKey:        "password",
+			io.S3EndpointURL:            infra.MinioEndpoint,
+			io.S3ForceVirtualAddressing: "false", // Use path-style for MinIO
+			io.S3Region:                 "us-east-1",
 		},
 	}
 

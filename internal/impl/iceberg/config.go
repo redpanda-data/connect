@@ -26,17 +26,43 @@ const (
 	ioFieldOAuth2ServerURI    = "server_uri"
 	ioFieldOAuth2ClientID     = "client_id"
 	ioFieldOAuth2ClientSecret = "client_secret"
+	ioFieldOAuth2Scope        = "scope"
+	ioFieldSigV4Region        = "region"
+	ioFieldSigV4Service       = "service"
+	ioFieldCatalogHeaders     = "headers"
+	ioFieldCatalogTLSSkipVer  = "tls_skip_verify"
 
 	// Table fields
 	ioFieldNamespace = "namespace"
 	ioFieldTable     = "table"
 
-	// Storage fields
-	ioFieldStorage         = "storage"
-	ioFieldStorageType     = "type"
-	ioFieldStorageBucket   = "bucket"
-	ioFieldStorageRegion   = "region"
-	ioFieldStorageEndpoint = "endpoint"
+	// Storage fields - common
+	ioFieldStorage = "storage"
+
+	// S3 storage fields
+	ioFieldStorageS3            = "s3"
+	ioFieldS3Bucket             = "bucket"
+	ioFieldS3Region             = "region"
+	ioFieldS3Endpoint           = "endpoint"
+	ioFieldS3ForcePathStyleURLs = "force_path_style_urls"
+
+	// GCS storage fields
+	ioFieldStorageGCS  = "gcs"
+	ioFieldGCSBucket   = "bucket"
+	ioFieldGCSEndpoint = "endpoint"
+	ioFieldGCSCredType = "credentials_type"
+	ioFieldGCSKeyPath  = "credentials_file"
+	ioFieldGCSJSONKey  = "credentials_json"
+
+	// Azure storage fields
+	ioFieldStorageAzure          = "azure"
+	ioFieldAzureStorageAccount   = "storage_account"
+	ioFieldAzureContainer        = "container"
+	ioFieldAzureEndpoint         = "endpoint"
+	ioFieldAzureSASToken         = "sas_token"
+	ioFieldAzureConnectionString = "connection_string"
+	ioFieldAzureSharedKeyName    = "shared_key_account_name"
+	ioFieldAzureSharedKeyKey     = "shared_key_account_key"
 
 	// Schema evolution fields
 	ioFieldSchemaEvolution              = "schema_evolution"
@@ -44,9 +70,8 @@ const (
 	ioFieldSchemaEvolutionPartitionSpec = "partition_spec"
 
 	// Performance fields
-	ioFieldBatching      = "batching"
-	ioFieldMaxInFlight   = "max_in_flight"
-	ioFieldCommitTimeout = "commit_timeout"
+	ioFieldBatching    = "batching"
+	ioFieldMaxInFlight = "max_in_flight"
 )
 
 // icebergOutputConfig returns the configuration spec for the Iceberg output.
@@ -65,7 +90,7 @@ Write streaming data to Apache Iceberg tables using the REST catalog API. This o
 * Schema evolution (automatic column addition)
 * Transaction retry logic for concurrent writes
 
-This output is designed to work with REST catalog implementations like Apache Polaris, AWS Glue Data Catalog, and Snowflake.
+This output is designed to work with REST catalog implementations like Apache Polaris, AWS Glue Data Catalog, and the Databricks Unity Catalog.
 
 [%header,format=dsv]
 |===
@@ -103,18 +128,36 @@ map[string]any:struct
 						service.NewStringField(ioFieldOAuth2ClientSecret).
 							Description("OAuth2 client secret.").
 							Secret(),
+						service.NewStringField(ioFieldOAuth2Scope).
+							Description("OAuth2 scope to request.").
+							Optional(),
 					).Description("OAuth2 authentication configuration.").
 						Optional(),
 					service.NewStringField(ioFieldCatalogAuthBearer).
 						Description("Static bearer token for authentication. For testing only, not recommended for production.").
 						Optional().
 						Secret(),
-					service.NewBoolField(ioFieldCatalogAuthSigV4).
-						Description("Use AWS SigV4 authentication (for AWS Glue Data Catalog). Uses the same credentials as the storage configuration.").
-						Optional().
-						Default(false),
+					service.NewObjectField(ioFieldCatalogAuthSigV4,
+						service.NewStringField(ioFieldSigV4Region).
+							Description("AWS region for SigV4 signing. If not specified, uses the region from AWS credentials.").
+							Optional().
+							Example("us-east-1"),
+						service.NewStringField(ioFieldSigV4Service).
+							Description("AWS service name for SigV4 signing.").
+							Default("execute-api"),
+					).Description("AWS SigV4 authentication (for AWS Glue Data Catalog or API Gateway). Uses the same credentials as the storage configuration.").
+						Optional(),
 				).Description("Authentication configuration for the REST catalog. Only one authentication method can be active at a time.").
 					Optional(),
+				service.NewStringMapField(ioFieldCatalogHeaders).
+					Description("Custom HTTP headers to include in all requests to the catalog.").
+					Example(map[string]string{"X-Api-Key": "your-api-key"}).
+					Optional().
+					Advanced(),
+				service.NewBoolField(ioFieldCatalogTLSSkipVer).
+					Description("Skip TLS certificate verification. Not recommended for production.").
+					Default(false).
+					Advanced(),
 			).Description("REST catalog configuration."),
 
 			// Table identification
@@ -128,27 +171,83 @@ map[string]any:struct
 				Example("user_events").
 				Example(`events_${!meta("topic")}`),
 
-			// Storage configuration
+			// Storage configuration - one of s3, gcs, or azure must be specified
 			service.NewObjectField(ioFieldStorage,
-				append([]*service.ConfigField{
-					service.NewStringField(ioFieldStorageType).
-						Description("Storage backend type.").
-						Example("s3").
-						Example("gcs").
-						Example("azure"),
-					service.NewStringField(ioFieldStorageBucket).
-						Description("The storage bucket name (S3/GCS) or storage account name (Azure).").
+				// S3 storage configuration
+				service.NewObjectField(ioFieldStorageS3,
+					append([]*service.ConfigField{
+						service.NewStringField(ioFieldS3Bucket).
+							Description("The S3 bucket name.").
+							Example("my-iceberg-data"),
+						service.NewStringField(ioFieldS3Region).
+							Description("The AWS region.").
+							Optional().
+							Example("us-west-2"),
+						service.NewStringField(ioFieldS3Endpoint).
+							Description("Custom endpoint for S3-compatible storage (e.g., MinIO).").
+							Optional().
+							Example("http://localhost:9000"),
+						service.NewBoolField(ioFieldS3ForcePathStyleURLs).
+							Description("Forces the client API to use path style URLs, which is often required when connecting to custom endpoints.").
+							Default(false).
+							Advanced(),
+					}, config.SessionFields()...)...,
+				).Description("S3 storage configuration.").
+					Optional(),
+
+				// GCS storage configuration
+				service.NewObjectField(ioFieldStorageGCS,
+					service.NewStringField(ioFieldGCSBucket).
+						Description("The GCS bucket name.").
 						Example("my-iceberg-data"),
-					service.NewStringField(ioFieldStorageRegion).
-						Description("The AWS region (for S3).").
+					service.NewStringField(ioFieldGCSEndpoint).
+						Description("Custom endpoint for GCS-compatible storage.").
 						Optional().
-						Example("us-west-2"),
-					service.NewStringField(ioFieldStorageEndpoint).
-						Description("Custom endpoint for S3-compatible storage (e.g., MinIO).").
+						Advanced(),
+					service.NewStringField(ioFieldGCSCredType).
+						Description("The type of credentials to use. Valid values: `service_account`, `authorized_user`, `impersonated_service_account`, `external_account`.").
 						Optional().
-						Example("http://localhost:9000"),
-				}, config.SessionFields()...)...,
-			).Description("Storage backend configuration for data files."),
+						Example("service_account"),
+					service.NewStringField(ioFieldGCSKeyPath).
+						Description("Path to a GCP credentials JSON file.").
+						Optional(),
+					service.NewStringField(ioFieldGCSJSONKey).
+						Description("GCP credentials JSON content. Use this or `credentials_file`, not both.").
+						Optional().
+						Secret(),
+				).Description("Google Cloud Storage configuration.").
+					Optional(),
+
+				// Azure storage configuration
+				service.NewObjectField(ioFieldStorageAzure,
+					service.NewStringField(ioFieldAzureStorageAccount).
+						Description("The Azure storage account name.").
+						Example("mystorageaccount"),
+					service.NewStringField(ioFieldAzureContainer).
+						Description("The Azure blob container name.").
+						Example("iceberg-data"),
+					service.NewStringField(ioFieldAzureEndpoint).
+						Description("Custom endpoint for Azure-compatible storage.").
+						Optional().
+						Advanced(),
+					service.NewStringField(ioFieldAzureSASToken).
+						Description("SAS token for authentication. Prefix with the container name followed by a dot if container-specific.").
+						Optional().
+						Secret(),
+					service.NewStringField(ioFieldAzureConnectionString).
+						Description("Azure storage connection string. Use this or other auth methods, not both.").
+						Optional().
+						Secret(),
+					service.NewStringField(ioFieldAzureSharedKeyName).
+						Description("Azure shared key account name for authentication.").
+						Optional(),
+					service.NewStringField(ioFieldAzureSharedKeyKey).
+						Description("Azure shared key account key for authentication.").
+						Optional().
+						Secret(),
+				).Description("Azure Blob Storage (ADLS Gen2) configuration.").
+					Optional(),
+			).Description("Storage backend configuration for data files. Exactly one of `s3`, `gcs`, or `azure` must be specified."),
 
 			// Schema evolution
 			service.NewObjectField(ioFieldSchemaEvolution,
@@ -172,11 +271,5 @@ map[string]any:struct
 			// Batching
 			service.NewBatchPolicyField(ioFieldBatching),
 			service.NewOutputMaxInFlightField().Default(4),
-
-			// Performance tuning
-			service.NewDurationField(ioFieldCommitTimeout).
-				Description("Maximum time to wait for catalog transaction commit.").
-				Default("30s").
-				Advanced(),
 		)
 }

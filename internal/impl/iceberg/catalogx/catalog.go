@@ -10,6 +10,7 @@ package catalogx
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"net/url"
 	"strings"
@@ -26,25 +27,37 @@ type Client struct {
 	namespace []string
 }
 
-// catalogConfig holds the catalog configuration.
+// Config holds the catalog configuration.
 type Config struct {
 	URL             string
 	Warehouse       string
 	Prefix          string
 	AdditionalProps iceberg.Properties
 
+	// Authentication
 	AuthType string // "none", "oauth2", "bearer", "sigv4"
+
 	// OAuth2 fields
 	OAuth2ServerURI    *url.URL
 	OAuth2ClientID     string
 	OAuth2ClientSecret string
 	OAuth2Scope        string
+
 	// Bearer token
 	BearerToken string
-	// AWS SigV4 uses credentials from storage config
+
+	// AWS SigV4 fields
+	SigV4Region  string // AWS region for SigV4 signing (e.g., "us-east-1")
+	SigV4Service string // AWS service name for SigV4 signing (default: "execute-api")
+
+	// Custom HTTP headers
+	Headers map[string]string
+
+	// TLS configuration
+	TLSSkipVerify bool
 }
 
-// newCatalogClient creates a new REST catalog client.
+// NewCatalogClient creates a new REST catalog client.
 func NewCatalogClient(cfg Config, namespace []string) (*Client, error) {
 	// Build options for REST catalog
 	var opts []rest.Option
@@ -63,7 +76,12 @@ func NewCatalogClient(cfg Config, namespace []string) (*Client, error) {
 	case "bearer":
 		opts = append(opts, rest.WithOAuthToken(cfg.BearerToken))
 	case "sigv4":
-		opts = append(opts, rest.WithSigV4())
+		// Use region/service-specific SigV4 if provided, otherwise use default
+		if cfg.SigV4Region != "" || cfg.SigV4Service != "" {
+			opts = append(opts, rest.WithSigV4RegionSvc(cfg.SigV4Region, cfg.SigV4Service))
+		} else {
+			opts = append(opts, rest.WithSigV4())
+		}
 	case "none":
 		// No authentication
 	default:
@@ -78,6 +96,18 @@ func NewCatalogClient(cfg Config, namespace []string) (*Client, error) {
 	}
 	if cfg.AdditionalProps != nil {
 		opts = append(opts, rest.WithAdditionalProps(cfg.AdditionalProps))
+	}
+
+	// Configure custom headers
+	if len(cfg.Headers) > 0 {
+		opts = append(opts, rest.WithHeaders(cfg.Headers))
+	}
+
+	// Configure TLS
+	if cfg.TLSSkipVerify {
+		opts = append(opts, rest.WithTLSConfig(&tls.Config{
+			InsecureSkipVerify: true, //nolint:gosec // User explicitly requested to skip TLS verification
+		}))
 	}
 
 	// Create REST catalog
@@ -127,23 +157,34 @@ func (c *Client) CreateTableWithSpec(ctx context.Context, tableName string, sche
 	return tbl, nil
 }
 
-// AddColumns adds new columns to an existing table.
-// This is used for schema evolution.
-func (c *Client) UpdateSchema(ctx context.Context, tbl *table.Table, newSchema *iceberg.Schema) error {
-	current := tbl.Schema()
-	_, _, err := c.catalog.CommitTable(
-		ctx,
-		tbl.Identifier(),
-		table.Requirements{
-			table.AssertCurrentSchemaID(current.ID),
-		},
-		table.Updates{
-			table.NewAddSchemaUpdate(newSchema),
-			// NOTE: the -1 means we should set the schema to be the one we're adding here
-			table.NewSetCurrentSchemaUpdate(-1),
-		},
+// UpdateSchema applies schema changes to the table using a transaction.
+// The callback function receives an UpdateSchema instance that can be used to add, delete,
+// rename, or update columns. The transaction is automatically committed after the callback.
+//
+// Example usage:
+//
+//	err := client.UpdateSchema(ctx, tbl, func(us *table.UpdateSchema) {
+//	    us.AddColumn([]string{"email"}, iceberg.StringType{}, "Email address", false, nil)
+//	    us.AddColumn([]string{"age"}, iceberg.Int32Type{}, "", false, nil)
+//	})
+func (c *Client) UpdateSchema(ctx context.Context, tbl *table.Table, fn func(*table.UpdateSchema), opts ...table.UpdateSchemaOption) (*table.Table, error) {
+	txn := tbl.NewTransaction()
+	updateSchema := txn.UpdateSchema(
+		true,  // caseSensitive
+		false, // allowIncompatibleChanges
+		opts...,
 	)
-	return err
+
+	// Let the caller configure the schema changes
+	fn(updateSchema)
+
+	// Commit the schema update to the transaction
+	if err := updateSchema.Commit(); err != nil {
+		return nil, fmt.Errorf("failed to apply schema update: %w", err)
+	}
+
+	// Commit the transaction to persist changes
+	return txn.Commit(ctx)
 }
 
 // AppendDataFiles commits a batch of data files to the table.

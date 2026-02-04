@@ -14,6 +14,8 @@ import (
 	"testing"
 
 	"github.com/apache/iceberg-go"
+	"github.com/apache/iceberg-go/io"
+	"github.com/apache/iceberg-go/table"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
@@ -155,15 +157,10 @@ func TestCatalogxIntegration(t *testing.T) {
 		tbl, err := client.CreateTable(ctx, tableName, initialSchema)
 		require.NoError(t, err)
 
-		// Update schema with additional column
-		// Note: Schema evolution in Iceberg requires keeping existing fields
-		newSchema := iceberg.NewSchema(
-			1, // Increment schema ID for evolution
-			iceberg.NestedField{ID: 1, Name: "col1", Type: iceberg.Int32Type{}, Required: true},
-			iceberg.NestedField{ID: 2, Name: "col2", Type: iceberg.StringType{}, Required: false},
-		)
-
-		err = client.UpdateSchema(ctx, tbl, newSchema)
+		// Update schema by adding a new column using the callback API
+		_, err = client.UpdateSchema(ctx, tbl, func(us *table.UpdateSchema) {
+			us.AddColumn([]string{"col2"}, iceberg.StringType{}, "", false, nil)
+		})
 		require.NoError(t, err)
 
 		// Load table and verify schema has 2 fields
@@ -186,11 +183,11 @@ func TestCatalogxIntegration(t *testing.T) {
 		// Configure S3 properties for MinIO access
 		// The iceberg-go library needs these to read Parquet file stats
 		s3Props := iceberg.Properties{
-			"s3.access-key-id":     "admin",
-			"s3.secret-access-key": "password",
-			"s3.endpoint":          infra.MinioEndpoint,
-			"s3.path-style-access": "true",
-			"s3.region":            "us-east-1",
+			io.S3AccessKeyID:            "admin",
+			io.S3SecretAccessKey:        "password",
+			io.S3EndpointURL:            infra.MinioEndpoint,
+			io.S3ForceVirtualAddressing: "false", // Use path-style for MinIO
+			io.S3Region:                 "us-east-1",
 		}
 
 		client, err := catalogx.NewCatalogClient(catalogx.Config{

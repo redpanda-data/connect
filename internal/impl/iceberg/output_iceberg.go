@@ -14,6 +14,7 @@ import (
 	"net/url"
 
 	"github.com/apache/iceberg-go"
+	"github.com/apache/iceberg-go/io"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
@@ -114,10 +115,26 @@ func parseCatalogConfig(conf *service.ParsedConfig) (catalogx.Config, error) {
 		}
 	}
 
-	// Parse S3 storage configuration for AdditionalProps
-	cfg.AdditionalProps, err = parseS3Props(conf)
+	// Parse storage configuration for AdditionalProps
+	cfg.AdditionalProps, err = parseStorageProps(conf)
 	if err != nil {
 		return cfg, err
+	}
+
+	// Parse custom headers (optional)
+	if conf.Contains(ioFieldCatalog, ioFieldCatalogHeaders) {
+		cfg.Headers, err = conf.FieldStringMap(ioFieldCatalog, ioFieldCatalogHeaders)
+		if err != nil {
+			return cfg, err
+		}
+	}
+
+	// Parse TLS skip verify (optional)
+	if conf.Contains(ioFieldCatalog, ioFieldCatalogTLSSkipVer) {
+		cfg.TLSSkipVerify, err = conf.FieldBool(ioFieldCatalog, ioFieldCatalogTLSSkipVer)
+		if err != nil {
+			return cfg, err
+		}
 	}
 
 	// Parse authentication (if present)
@@ -143,6 +160,10 @@ func parseCatalogConfig(conf *service.ParsedConfig) (catalogx.Config, error) {
 				return cfg, fmt.Errorf("failed to parse oauth2 server URI: %w", err)
 			}
 		}
+		// Parse OAuth2 scope (optional)
+		if conf.Contains(ioFieldCatalog, ioFieldCatalogAuth, ioFieldCatalogAuthOAuth2, ioFieldOAuth2Scope) {
+			cfg.OAuth2Scope, _ = conf.FieldString(ioFieldCatalog, ioFieldCatalogAuth, ioFieldCatalogAuthOAuth2, ioFieldOAuth2Scope)
+		}
 		return cfg, nil
 	}
 
@@ -158,21 +179,21 @@ func parseCatalogConfig(conf *service.ParsedConfig) (catalogx.Config, error) {
 
 	// Check for AWS SigV4
 	if conf.Contains(ioFieldCatalog, ioFieldCatalogAuth, ioFieldCatalogAuthSigV4) {
-		useSigV4, err := conf.FieldBool(ioFieldCatalog, ioFieldCatalogAuth, ioFieldCatalogAuthSigV4)
-		if err != nil {
-			return cfg, err
+		cfg.AuthType = "sigv4"
+		// Parse optional region
+		if conf.Contains(ioFieldCatalog, ioFieldCatalogAuth, ioFieldCatalogAuthSigV4, ioFieldSigV4Region) {
+			cfg.SigV4Region, _ = conf.FieldString(ioFieldCatalog, ioFieldCatalogAuth, ioFieldCatalogAuthSigV4, ioFieldSigV4Region)
 		}
-		if useSigV4 {
-			cfg.AuthType = "sigv4"
-		}
+		// Parse service (has default)
+		cfg.SigV4Service, _ = conf.FieldString(ioFieldCatalog, ioFieldCatalogAuth, ioFieldCatalogAuthSigV4, ioFieldSigV4Service)
 		return cfg, nil
 	}
 
 	return cfg, nil
 }
 
-// parseS3Props extracts S3 storage properties from config and returns them as iceberg.Properties.
-func parseS3Props(conf *service.ParsedConfig) (iceberg.Properties, error) {
+// parseStorageProps extracts storage properties from config and returns them as iceberg.Properties.
+func parseStorageProps(conf *service.ParsedConfig) (iceberg.Properties, error) {
 	props := make(iceberg.Properties)
 
 	// Check if storage config exists
@@ -180,45 +201,196 @@ func parseS3Props(conf *service.ParsedConfig) (iceberg.Properties, error) {
 		return props, nil
 	}
 
-	storageType, err := conf.FieldString(ioFieldStorage, ioFieldStorageType)
-	if err != nil || storageType != "s3" {
-		return props, nil // Only S3 supported for now
+	// Check for S3 configuration
+	if conf.Contains(ioFieldStorage, ioFieldStorageS3) {
+		return parseS3Props(conf)
 	}
 
+	// Check for GCS configuration
+	if conf.Contains(ioFieldStorage, ioFieldStorageGCS) {
+		return parseGCSProps(conf)
+	}
+
+	// Check for Azure configuration
+	if conf.Contains(ioFieldStorage, ioFieldStorageAzure) {
+		return parseAzureProps(conf)
+	}
+
+	return props, nil
+}
+
+// parseS3Props extracts S3 storage properties from the nested s3 config.
+func parseS3Props(conf *service.ParsedConfig) (iceberg.Properties, error) {
+	props := make(iceberg.Properties)
+
 	// Get region
-	if conf.Contains(ioFieldStorage, ioFieldStorageRegion) {
-		region, err := conf.FieldString(ioFieldStorage, ioFieldStorageRegion)
+	if conf.Contains(ioFieldStorage, ioFieldStorageS3, ioFieldS3Region) {
+		region, err := conf.FieldString(ioFieldStorage, ioFieldStorageS3, ioFieldS3Region)
 		if err != nil {
 			return nil, err
 		}
-		props["s3.region"] = region
+		props[io.S3Region] = region
 	}
 
 	// Get endpoint
-	if conf.Contains(ioFieldStorage, ioFieldStorageEndpoint) {
-		endpoint, err := conf.FieldString(ioFieldStorage, ioFieldStorageEndpoint)
+	if conf.Contains(ioFieldStorage, ioFieldStorageS3, ioFieldS3Endpoint) {
+		endpoint, err := conf.FieldString(ioFieldStorage, ioFieldStorageS3, ioFieldS3Endpoint)
 		if err != nil {
 			return nil, err
 		}
-		props["s3.endpoint"] = endpoint
-		// For custom endpoints (like MinIO), enable path-style access
-		props["s3.path-style-access"] = "true"
+		props[io.S3EndpointURL] = endpoint
+	}
+
+	// Get force_path_style_urls - explicit setting like the standard S3 connector.
+	// iceberg-go uses S3ForceVirtualAddressing which is the inverse:
+	// - force_path_style_urls=true  → S3ForceVirtualAddressing="false" (path-style)
+	// - force_path_style_urls=false → S3ForceVirtualAddressing="true"  (virtual-hosted, AWS default)
+	forcePathStyle, err := conf.FieldBool(ioFieldStorage, ioFieldStorageS3, ioFieldS3ForcePathStyleURLs)
+	if err != nil {
+		return nil, err
+	}
+	if forcePathStyle {
+		props[io.S3ForceVirtualAddressing] = "false"
+	} else {
+		props[io.S3ForceVirtualAddressing] = "true"
 	}
 
 	// Get credentials - check for static credentials first
-	if conf.Contains(ioFieldStorage, "credentials", "id") {
-		accessKeyID, err := conf.FieldString(ioFieldStorage, "credentials", "id")
+	// The credentials field comes from config.SessionFields() which uses "credentials.id" and "credentials.secret"
+	if conf.Contains(ioFieldStorage, ioFieldStorageS3, "credentials", "id") {
+		accessKeyID, err := conf.FieldString(ioFieldStorage, ioFieldStorageS3, "credentials", "id")
 		if err != nil {
 			return nil, err
 		}
-		props["s3.access-key-id"] = accessKeyID
+		props[io.S3AccessKeyID] = accessKeyID
 	}
-	if conf.Contains(ioFieldStorage, "credentials", "secret") {
-		secretAccessKey, err := conf.FieldString(ioFieldStorage, "credentials", "secret")
+	if conf.Contains(ioFieldStorage, ioFieldStorageS3, "credentials", "secret") {
+		secretAccessKey, err := conf.FieldString(ioFieldStorage, ioFieldStorageS3, "credentials", "secret")
 		if err != nil {
 			return nil, err
 		}
-		props["s3.secret-access-key"] = secretAccessKey
+		props[io.S3SecretAccessKey] = secretAccessKey
+	}
+
+	return props, nil
+}
+
+// parseGCSProps extracts GCS storage properties from the nested gcs config.
+func parseGCSProps(conf *service.ParsedConfig) (iceberg.Properties, error) {
+	props := make(iceberg.Properties)
+
+	// Get endpoint
+	if conf.Contains(ioFieldStorage, ioFieldStorageGCS, ioFieldGCSEndpoint) {
+		endpoint, err := conf.FieldString(ioFieldStorage, ioFieldStorageGCS, ioFieldGCSEndpoint)
+		if err != nil {
+			return nil, err
+		}
+		props[io.GCSEndpoint] = endpoint
+	}
+
+	// Get credentials type
+	if conf.Contains(ioFieldStorage, ioFieldStorageGCS, ioFieldGCSCredType) {
+		credType, err := conf.FieldString(ioFieldStorage, ioFieldStorageGCS, ioFieldGCSCredType)
+		if err != nil {
+			return nil, err
+		}
+		props[io.GCSCredType] = credType
+	}
+
+	// Get credentials file path
+	if conf.Contains(ioFieldStorage, ioFieldStorageGCS, ioFieldGCSKeyPath) {
+		keyPath, err := conf.FieldString(ioFieldStorage, ioFieldStorageGCS, ioFieldGCSKeyPath)
+		if err != nil {
+			return nil, err
+		}
+		props[io.GCSKeyPath] = keyPath
+	}
+
+	// Get credentials JSON
+	if conf.Contains(ioFieldStorage, ioFieldStorageGCS, ioFieldGCSJSONKey) {
+		jsonKey, err := conf.FieldString(ioFieldStorage, ioFieldStorageGCS, ioFieldGCSJSONKey)
+		if err != nil {
+			return nil, err
+		}
+		props[io.GCSJSONKey] = jsonKey
+	}
+
+	return props, nil
+}
+
+// parseAzureProps extracts Azure storage properties from the nested azure config.
+func parseAzureProps(conf *service.ParsedConfig) (iceberg.Properties, error) {
+	props := make(iceberg.Properties)
+
+	// Get storage account name for SAS token prefix
+	storageAccount := ""
+	if conf.Contains(ioFieldStorage, ioFieldStorageAzure, ioFieldAzureStorageAccount) {
+		var err error
+		storageAccount, err = conf.FieldString(ioFieldStorage, ioFieldStorageAzure, ioFieldAzureStorageAccount)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Get container name for SAS token prefix
+	container := ""
+	if conf.Contains(ioFieldStorage, ioFieldStorageAzure, ioFieldAzureContainer) {
+		var err error
+		container, err = conf.FieldString(ioFieldStorage, ioFieldStorageAzure, ioFieldAzureContainer)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Get endpoint
+	if conf.Contains(ioFieldStorage, ioFieldStorageAzure, ioFieldAzureEndpoint) {
+		endpoint, err := conf.FieldString(ioFieldStorage, ioFieldStorageAzure, ioFieldAzureEndpoint)
+		if err != nil {
+			return nil, err
+		}
+		props[io.AdlsEndpoint] = endpoint
+	}
+
+	// Get SAS token - uses container-specific prefix
+	if conf.Contains(ioFieldStorage, ioFieldStorageAzure, ioFieldAzureSASToken) {
+		sasToken, err := conf.FieldString(ioFieldStorage, ioFieldStorageAzure, ioFieldAzureSASToken)
+		if err != nil {
+			return nil, err
+		}
+		// SAS tokens are prefixed with "adls.sas-token.<container>." for container-specific tokens
+		if container != "" {
+			props[io.AdlsSasTokenPrefix+container] = sasToken
+		} else if storageAccount != "" {
+			props[io.AdlsSasTokenPrefix+storageAccount] = sasToken
+		}
+	}
+
+	// Get connection string
+	if conf.Contains(ioFieldStorage, ioFieldStorageAzure, ioFieldAzureConnectionString) {
+		connStr, err := conf.FieldString(ioFieldStorage, ioFieldStorageAzure, ioFieldAzureConnectionString)
+		if err != nil {
+			return nil, err
+		}
+		// Connection strings are prefixed with "adls.connection-string.<account>."
+		if storageAccount != "" {
+			props[io.AdlsConnectionStringPrefix+storageAccount] = connStr
+		}
+	}
+
+	// Get shared key credentials
+	if conf.Contains(ioFieldStorage, ioFieldStorageAzure, ioFieldAzureSharedKeyName) {
+		name, err := conf.FieldString(ioFieldStorage, ioFieldStorageAzure, ioFieldAzureSharedKeyName)
+		if err != nil {
+			return nil, err
+		}
+		props[io.AdlsSharedKeyAccountName] = name
+	}
+	if conf.Contains(ioFieldStorage, ioFieldStorageAzure, ioFieldAzureSharedKeyKey) {
+		key, err := conf.FieldString(ioFieldStorage, ioFieldStorageAzure, ioFieldAzureSharedKeyKey)
+		if err != nil {
+			return nil, err
+		}
+		props[io.AdlsSharedKeyAccountKey] = key
 	}
 
 	return props, nil
