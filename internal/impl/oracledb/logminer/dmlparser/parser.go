@@ -83,17 +83,15 @@ type LMEvent struct {
 //	UPDATE: update "schema"."table" set "C1" = 'v1', "C2" = 'v2' where "C1" = 'old1' and "C2" = 'old2';
 //	DELETE: delete from "schema"."table" where "C1" = 'v1' and "C2" = 'v2';
 type LogMinerDMLParser struct {
-	useRelaxedQuotes bool
-	valueConverter   *OracleValueConverter
+	valueConverter *OracleValueConverter
 }
 
 // New creates a new LogMinerDMLParser instance with the specified quote handling behavior.
 // If useRelaxedQuotes is true, the parser will accept both quoted and unquoted identifiers.
 // If false, it strictly requires quoted identifiers as produced by Oracle LogMiner.
-func New(useRelaxedQuotes bool) *LogMinerDMLParser {
+func New() *LogMinerDMLParser {
 	return &LogMinerDMLParser{
-		useRelaxedQuotes: useRelaxedQuotes,
-		valueConverter:   NewOracleValueConverter(time.UTC),
+		valueConverter: NewOracleValueConverter(time.UTC),
 	}
 }
 
@@ -111,35 +109,11 @@ func (p *LogMinerDMLParser) RawEventToDMLEvent(rawEvent *LMEvent) (*DMLEvent, er
 	if len(rawEvent.SQLRedo.String) == 0 {
 		return nil, errors.New("empty SQL statement")
 	}
-	sql := rawEvent.SQLRedo.String
-
-	// Determine operation type by first character
-	var (
-		result *ParseResult
-		err    error
-	)
-	switch sql[0] {
-	case 'i':
-		if result, err = p.parseInsert(sql); err != nil {
-			return nil, fmt.Errorf("parsing insert statement: %w", err)
-		}
-	case 'u':
-		if result, err = p.parseUpdate(sql); err != nil {
-			return nil, fmt.Errorf("parsing update statement: %w", err)
-		}
-	case 'd':
-		if result, err = p.parseDelete(sql); err != nil {
-			return nil, fmt.Errorf("parsing delete statement: %w", err)
-		}
-	default:
-		return nil, fmt.Errorf("unknown sql operation: %s", sql)
-	}
 
 	// convert to DML Event
 	event := &DMLEvent{
 		Operation: rawEvent.Operation,
 		Timestamp: rawEvent.Timestamp,
-		Data:      result.NewValues,
 	}
 
 	if rawEvent.SchemaName.Valid {
@@ -154,58 +128,52 @@ func (p *LogMinerDMLParser) RawEventToDMLEvent(rawEvent *LMEvent) (*DMLEvent, er
 		event.SQLRedo = rawEvent.SQLRedo.String
 	}
 
-	// covert sql types to their equivalent values
-	for k, v := range rawEvent.Data {
-		rawEvent.Data[k] = p.valueConverter.ConvertValue(v, k)
+	result, err := ParseSQLCommand(rawEvent.SQLRedo.String)
+	if err != nil {
+		return nil, fmt.Errorf("parsing sql from redo log: %w", err)
+	}
+
+	// Convert Oracle SQL types (TO_DATE, TO_TIMESTAMP, etc.) to their Go equivalents
+	event.Data = make(map[string]any, len(result.NewValues))
+	for k, v := range result.NewValues {
+		event.Data[k] = p.valueConverter.ConvertValue(v, k)
 	}
 
 	return event, nil
 }
 
-func (p *LogMinerDMLParser) ParseDML(event *LMEvent) (*DMLEvent, error) {
-	dml := &DMLEvent{
-		Operation: event.Operation,
-		// SQLRedo:   event.RedoValue.String,
-		Timestamp: event.Timestamp,
-	}
-
-	if event.SchemaName.Valid {
-		dml.Schema = event.SchemaName.String
-	}
-	if event.TableName.Valid {
-		dml.Table = event.TableName.String
-	}
-
-	// Store SQL_REDO - will need to parse this to extract column values
-	if strings.TrimSpace(event.SQLRedo.String) != "" {
-		dml.SQLRedo = event.SQLRedo.String
-	}
-	dml.Data = event.Data
-
-	return dml, nil
-}
-
-// Parse parses a SQL_REDO statement
-func (p *LogMinerDMLParser) Parse(sql string) (*ParseResult, error) {
+// ParseSQLCommand parses a SQL_REDO statement
+func ParseSQLCommand(sql string) (*ParseResult, error) {
 	if len(sql) == 0 {
 		return nil, errors.New("empty SQL statement")
 	}
 
-	// Determine operation type by first character
+	var (
+		result *ParseResult
+		err    error
+	)
 	switch sql[0] {
-	case 'i':
-		return p.parseInsert(sql)
-	case 'u':
-		return p.parseUpdate(sql)
-	case 'd':
-		return p.parseDelete(sql)
+	case 'i', 'I':
+		if result, err = parseInsert(sql); err != nil {
+			return nil, fmt.Errorf("parsing insert statement: %w", err)
+		}
+	case 'u', 'U':
+		if result, err = parseUpdate(sql); err != nil {
+			return nil, fmt.Errorf("parsing update statement: %w", err)
+		}
+	case 'd', 'D':
+		if result, err = parseDelete(sql); err != nil {
+			return nil, fmt.Errorf("parsing delete statement: %w", err)
+		}
 	default:
-		return nil, fmt.Errorf("unknown SQL operation: %s", sql)
+		return nil, fmt.Errorf("unknown sql operation: %s", sql)
 	}
+
+	return result, err
 }
 
 // parseInsert parses: insert into "schema"."table"("C1","C2") values ('v1','v2');
-func (p *LogMinerDMLParser) parseInsert(sql string) (*ParseResult, error) {
+func parseInsert(sql string) (*ParseResult, error) {
 	const insertInto = "insert into "
 	if !strings.HasPrefix(sql, insertInto) {
 		return nil, errors.New("invalid INSERT statement")
@@ -214,21 +182,21 @@ func (p *LogMinerDMLParser) parseInsert(sql string) (*ParseResult, error) {
 	index := len(insertInto)
 
 	// Parse schema.table
-	schema, table, nextIdx, err := p.parseTableName(sql, index)
+	schema, table, nextIdx, err := parseTableName(sql, index)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse table name: %w", err)
 	}
 	index = nextIdx
 
 	// Parse column list: ("C1","C2")
-	columnList, nextIdx, err := p.parseColumnList(sql, index)
+	columnList, nextIdx, err := parseColumnList(sql, index)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse column list: %w", err)
 	}
 	index = nextIdx
 
 	// Parse values clause: values ('v1','v2')
-	values, err := p.parseValuesClause(sql, index, columnList)
+	values, err := parseValuesClause(sql, index, columnList)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse values clause: %w", err)
 	}
@@ -243,7 +211,7 @@ func (p *LogMinerDMLParser) parseInsert(sql string) (*ParseResult, error) {
 }
 
 // parseUpdate parses: update "schema"."table" set "C1" = 'v1', "C2" = 'v2' where "C1" = 'old1' and "C2" = 'old2';
-func (p *LogMinerDMLParser) parseUpdate(sql string) (*ParseResult, error) {
+func parseUpdate(sql string) (*ParseResult, error) {
 	const update = "update "
 	if !strings.HasPrefix(sql, update) {
 		return nil, errors.New("invalid UPDATE statement")
@@ -252,21 +220,21 @@ func (p *LogMinerDMLParser) parseUpdate(sql string) (*ParseResult, error) {
 	index := len(update)
 
 	// Parse schema.table
-	schema, table, nextIdx, err := p.parseTableName(sql, index)
+	schema, table, nextIdx, err := parseTableName(sql, index)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse table name: %w", err)
 	}
 	index = nextIdx
 
 	// Parse SET clause
-	newValues, nextIdx, err := p.parseSetClause(sql, index)
+	newValues, nextIdx, err := parseSetClause(sql, index)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse SET clause: %w", err)
 	}
 	index = nextIdx
 
 	// Parse WHERE clause
-	oldValues, err := p.parseWhereClause(sql, index)
+	oldValues, err := parseWhereClause(sql, index)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse WHERE clause: %w", err)
 	}
@@ -281,7 +249,7 @@ func (p *LogMinerDMLParser) parseUpdate(sql string) (*ParseResult, error) {
 }
 
 // parseDelete parses: delete from "schema"."table" where "C1" = 'v1' and "C2" = 'v2';
-func (p *LogMinerDMLParser) parseDelete(sql string) (*ParseResult, error) {
+func parseDelete(sql string) (*ParseResult, error) {
 	const deleteFrom = "delete from "
 	if !strings.HasPrefix(sql, deleteFrom) {
 		return nil, errors.New("invalid DELETE statement")
@@ -290,14 +258,14 @@ func (p *LogMinerDMLParser) parseDelete(sql string) (*ParseResult, error) {
 	index := len(deleteFrom)
 
 	// Parse schema.table
-	schema, table, nextIdx, err := p.parseTableName(sql, index)
+	schema, table, nextIdx, err := parseTableName(sql, index)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse table name: %w", err)
 	}
 	index = nextIdx
 
 	// Parse WHERE clause
-	oldValues, err := p.parseWhereClause(sql, index)
+	oldValues, err := parseWhereClause(sql, index)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse WHERE clause: %w", err)
 	}
@@ -311,7 +279,7 @@ func (p *LogMinerDMLParser) parseDelete(sql string) (*ParseResult, error) {
 }
 
 // parseTableName parses "schema"."table" or just "table"
-func (*LogMinerDMLParser) parseTableName(sql string, index int) (schema, table string, nextIndex int, err error) {
+func parseTableName(sql string, index int) (schema, table string, nextIndex int, err error) {
 	// Look for first quoted identifier
 	inQuote := false
 	parts := []string{}
@@ -351,7 +319,7 @@ func (*LogMinerDMLParser) parseTableName(sql string, index int) (schema, table s
 }
 
 // parseColumnList parses ("C1","C2","C3")
-func (*LogMinerDMLParser) parseColumnList(sql string, index int) ([]string, int, error) {
+func parseColumnList(sql string, index int) ([]string, int, error) {
 	// Find opening parenthesis
 	for index < len(sql) && sql[index] != '(' {
 		index++
@@ -388,7 +356,7 @@ func (*LogMinerDMLParser) parseColumnList(sql string, index int) ([]string, int,
 }
 
 // parseValuesClause parses values ('v1','v2',NULL,TO_DATE('2020-01-01','YYYY-MM-DD'))
-func (*LogMinerDMLParser) parseValuesClause(sql string, index int, columnNames []string) (map[string]any, error) {
+func parseValuesClause(sql string, index int, columnNames []string) (map[string]any, error) {
 	// Find "values"
 	valuesIdx := strings.Index(sql[index:], " values ")
 	if valuesIdx == -1 {
@@ -494,7 +462,7 @@ func (*LogMinerDMLParser) parseValuesClause(sql string, index int, columnNames [
 }
 
 // parseSetClause parses set "C1" = 'v1', "C2" = 'v2', "C3" = NULL
-func (*LogMinerDMLParser) parseSetClause(sql string, index int) (map[string]any, int, error) {
+func parseSetClause(sql string, index int) (map[string]any, int, error) {
 	// Find " set "
 	setIdx := strings.Index(sql[index:], " set ")
 	if setIdx == -1 {
@@ -617,7 +585,7 @@ func (*LogMinerDMLParser) parseSetClause(sql string, index int) (map[string]any,
 }
 
 // parseWhereClause parses where "C1" = 'v1' and "C2" = 'v2' and "C3" IS NULL
-func (*LogMinerDMLParser) parseWhereClause(sql string, index int) (map[string]any, error) {
+func parseWhereClause(sql string, index int) (map[string]any, error) {
 	// Find " where "
 	whereIdx := strings.Index(sql[index:], " where ")
 	if whereIdx == -1 {
