@@ -45,7 +45,7 @@ type LogMiner struct {
 	eventProc     *EventProcessor
 	db            *sql.DB
 	SleepDuration time.Duration
-	dmlParser     *sqlredo.LogMinerDMLParser
+	dmlParser     *sqlredo.Parser
 
 	// Pre-built query string for LogMiner contents
 	logMinerQuery string
@@ -108,7 +108,7 @@ func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replicat
 		sessionMgr:   NewSessionManager(db, cfg),
 		eventProc:    NewEventProcessor(),
 		txnCache:     NewInMemoryCache(logger),
-		dmlParser:    sqlredo.NewDMLParser(),
+		dmlParser:    sqlredo.NewParser(),
 	}
 	return lm
 }
@@ -223,45 +223,45 @@ func (lm *LogMiner) miningCycle(ctx context.Context) error {
 
 // processRedoEvent buffers emitted events until a commit or rollback event is processed at which
 // point the buffer can be flushed to the Connect pipeline or dropped.
-func (lm *LogMiner) processRedoEvent(ctx context.Context, rawEvent *sqlredo.RedoEvent) error {
-	switch rawEvent.Operation {
+func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.RedoEvent) error {
+	switch redoEvent.Operation {
 	case sqlredo.OpStart:
 		// Transaction started
-		lm.txnCache.StartTransaction(rawEvent.TransactionID, rawEvent.SCN)
+		lm.txnCache.StartTransaction(redoEvent.TransactionID, redoEvent.SCN)
 
 	case sqlredo.OpInsert, sqlredo.OpUpdate, sqlredo.OpDelete:
 		// SQL_REDO should always be present for DML operations. If not, it's likely a temporary
 		// table (Oracle doesn't generate redo for these) or an unsupported operation.
-		if !rawEvent.SQLRedo.Valid || rawEvent.SQLRedo.String == "" {
+		if !redoEvent.SQLRedo.Valid || redoEvent.SQLRedo.String == "" {
 			lm.log.Warnf("Skipping DML event with no SQL_REDO (operation=%s, table=%s.%s, scn=%d, txn=%s) - likely temporary table or unsupported operation",
-				rawEvent.Operation, rawEvent.SchemaName.String, rawEvent.TableName.String, rawEvent.SCN, rawEvent.TransactionID)
+				redoEvent.Operation, redoEvent.SchemaName.String, redoEvent.TableName.String, redoEvent.SCN, redoEvent.TransactionID)
 			return nil
 		}
 
 		// Parse sql insert/update/delete sql statements into key/value object
 		// TODO: Should we do this, or some of it only after commit is received? Measure performance impact.
-		event, err := lm.dmlParser.RedoEventToDMLEvent(rawEvent)
+		event, err := lm.dmlParser.RedoEventToDMLEvent(redoEvent)
 		if err != nil {
-			return fmt.Errorf("parsing sql query into object: %w", err)
+			return fmt.Errorf("parsing sql redo event into dml event: %w", err)
 		}
 
-		lm.txnCache.AddEvent(rawEvent.TransactionID, event)
+		lm.txnCache.AddEvent(redoEvent.TransactionID, event)
 	case sqlredo.OpCommit:
 		// Flush all buffered events for this transaction
-		if txn := lm.txnCache.GetTransaction(rawEvent.TransactionID); txn != nil {
+		if txn := lm.txnCache.GetTransaction(redoEvent.TransactionID); txn != nil {
 			for _, ev := range txn.Events {
-				msg := lm.eventProc.toEventMessage(ev, rawEvent.SCN)
+				msg := lm.eventProc.toEventMessage(ev, redoEvent.SCN)
 				if err := lm.publisher.Publish(ctx, msg); err != nil {
-					return fmt.Errorf("publishing event with SCN '%d`: %w", rawEvent.SCN, err)
+					return fmt.Errorf("publishing event with SCN '%d`: %w", redoEvent.SCN, err)
 				}
 			}
 
-			lm.txnCache.CommitTransaction(rawEvent.TransactionID)
+			lm.txnCache.CommitTransaction(redoEvent.TransactionID)
 		}
 
 	case sqlredo.OpRollback:
 		// Discard all buffered events for this transaction
-		lm.txnCache.RollbackTransaction(rawEvent.TransactionID)
+		lm.txnCache.RollbackTransaction(redoEvent.TransactionID)
 	}
 
 	return nil
@@ -285,7 +285,7 @@ func (lm *LogMiner) queryLogMinerContents(startSCN, endSCN uint64) ([]*sqlredo.R
 			&event.SCN,
 			&event.SQLRedo,
 			// &event.SQLUndo,        // Not used, only SQL_REDO is parsed
-			&event.Operation,
+			&event.OperationCode,
 			&event.TableName,
 			&event.SchemaName,
 			&event.Timestamp,
