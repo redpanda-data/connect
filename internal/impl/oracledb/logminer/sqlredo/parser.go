@@ -4,77 +4,14 @@
 // Licensed under the Apache Software License version 2.0, available at http://www.apache.org/licenses/LICENSE-2.0
 //
 
-package dmlparser
+package sqlredo
 
 import (
-	"database/sql"
 	"errors"
 	"fmt"
 	"strings"
 	"time"
 )
-
-// DMLEvent represents a parsed DML operation
-type DMLEvent struct {
-	Operation Operation
-	Schema    string
-	Table     string
-	SQLRedo   string
-	Data      map[string]any
-	Timestamp time.Time
-}
-
-// Operation represents a LogMiner operation type
-type Operation int
-
-const (
-	// OpUnknown represents an unknown or unsupported operation
-	OpUnknown Operation = iota
-	// OpInsert represents an INSERT operation
-	OpInsert
-	// OpDelete represents a DELETE operation
-	OpDelete
-	// OpUpdate represents an UPDATE operation
-	OpUpdate
-	// OpStart represents a transaction START operation
-	OpStart
-	// OpCommit represents a transaction COMMIT operation
-	OpCommit
-	// OpRollback represents a transaction ROLLBACK operation
-	OpRollback
-)
-
-func OperationFromCode(code int) Operation {
-	switch code {
-	case 1:
-		return OpInsert
-	case 2:
-		return OpDelete
-	case 3:
-		return OpUpdate
-	case 6:
-		return OpStart
-	case 7:
-		return OpCommit
-	case 36:
-		return OpRollback
-	default:
-		return OpUnknown
-	}
-}
-
-// LMEvent represents a row from V$LOGMNR_CONTENTS
-type LMEvent struct {
-	SCN           int64
-	SQLRedo       sql.NullString
-	Data          map[string]any
-	Operation     Operation
-	OperationCode int
-	TableName     sql.NullString
-	SchemaName    sql.NullString
-	Timestamp     time.Time
-	TransactionID string
-}
 
 // LogMinerDMLParser parses SQL_REDO statements from Oracle LogMiner
 // It handles the specific format that LogMiner produces:
@@ -86,13 +23,57 @@ type LogMinerDMLParser struct {
 	valueConverter *OracleValueConverter
 }
 
-// New creates a new LogMinerDMLParser instance with the specified quote handling behavior.
-// If useRelaxedQuotes is true, the parser will accept both quoted and unquoted identifiers.
-// If false, it strictly requires quoted identifiers as produced by Oracle LogMiner.
-func New() *LogMinerDMLParser {
+// NewDMLParser creates a new LogMinerDMLParser instance for parsing SQL_REDO statements.
+// The parser handles Oracle LogMiner's specific SQL format and automatically converts
+// Oracle SQL functions (TO_DATE, TO_TIMESTAMP, HEXTORAW, etc.) to their Go equivalents.
+// All timestamp conversions use UTC timezone.
+func NewDMLParser() *LogMinerDMLParser {
 	return &LogMinerDMLParser{
 		valueConverter: NewOracleValueConverter(time.UTC),
 	}
+}
+
+// RedoEventToDMLEvent converts a RedoEvent (from V$LOGMNR_CONTENTS) into a DMLEvent
+// by parsing the SQL_REDO statement and extracting column values. The function:
+//   - Parses INSERT, UPDATE, and DELETE statements from the SQL_REDO field
+//   - Extracts schema, table, and column data from the parsed SQL
+//   - Converts Oracle SQL functions (TO_DATE, TO_TIMESTAMP, HEXTORAW, etc.) to Go types
+//   - Returns an error if the SQL_REDO field is empty or the statement cannot be parsed
+func (p *LogMinerDMLParser) RedoEventToDMLEvent(redoEvent *RedoEvent) (*DMLEvent, error) {
+	if len(redoEvent.SQLRedo.String) == 0 {
+		return nil, errors.New("empty SQL statement")
+	}
+
+	event := &DMLEvent{
+		Operation: redoEvent.Operation,
+		Timestamp: redoEvent.Timestamp,
+	}
+
+	if redoEvent.SchemaName.Valid {
+		event.Schema = redoEvent.SchemaName.String
+	}
+	if redoEvent.TableName.Valid {
+		event.Table = redoEvent.TableName.String
+	}
+
+	// Store SQL_REDO - will need to parse this to extract column values
+	if strings.TrimSpace(redoEvent.SQLRedo.String) != "" {
+		event.SQLRedo = redoEvent.SQLRedo.String
+	}
+
+	// parse insert, update and delete commands into key/value fields
+	result, err := ParseSQLCommand(redoEvent.SQLRedo.String)
+	if err != nil {
+		return nil, fmt.Errorf("parsing sql from redo log: %w", err)
+	}
+
+	event.Data = make(map[string]any, len(result.NewValues))
+	for k, v := range result.NewValues {
+		// Convert Oracle SQL types (TO_DATE, TO_TIMESTAMP, etc.) to their Go equivalents
+		event.Data[k] = p.valueConverter.ConvertValue(v, k)
+	}
+
+	return event, nil
 }
 
 // ParseResult represents the parsed DML statement
@@ -103,43 +84,6 @@ type ParseResult struct {
 	NewValues  map[string]any // After-state values (INSERT, UPDATE)
 	OldValues  map[string]any // Before-state values (UPDATE, DELETE)
 	ColumnList []string       // Column names in order
-}
-
-func (p *LogMinerDMLParser) RawEventToDMLEvent(rawEvent *LMEvent) (*DMLEvent, error) {
-	if len(rawEvent.SQLRedo.String) == 0 {
-		return nil, errors.New("empty SQL statement")
-	}
-
-	// convert to DML Event
-	event := &DMLEvent{
-		Operation: rawEvent.Operation,
-		Timestamp: rawEvent.Timestamp,
-	}
-
-	if rawEvent.SchemaName.Valid {
-		event.Schema = rawEvent.SchemaName.String
-	}
-	if rawEvent.TableName.Valid {
-		event.Table = rawEvent.TableName.String
-	}
-
-	// Store SQL_REDO - will need to parse this to extract column values
-	if strings.TrimSpace(rawEvent.SQLRedo.String) != "" {
-		event.SQLRedo = rawEvent.SQLRedo.String
-	}
-
-	result, err := ParseSQLCommand(rawEvent.SQLRedo.String)
-	if err != nil {
-		return nil, fmt.Errorf("parsing sql from redo log: %w", err)
-	}
-
-	// Convert Oracle SQL types (TO_DATE, TO_TIMESTAMP, etc.) to their Go equivalents
-	event.Data = make(map[string]any, len(result.NewValues))
-	for k, v := range result.NewValues {
-		event.Data[k] = p.valueConverter.ConvertValue(v, k)
-	}
-
-	return event, nil
 }
 
 // ParseSQLCommand parses a SQL_REDO statement

@@ -11,7 +11,7 @@ package logminer
 import (
 	"strings"
 
-	. "github.com/redpanda-data/connect/v4/internal/impl/oracledb/logminer/dmlparser"
+	"github.com/redpanda-data/connect/v4/internal/impl/oracledb/logminer/sqlredo"
 	"github.com/redpanda-data/connect/v4/internal/impl/oracledb/replication"
 )
 
@@ -26,8 +26,8 @@ func NewEventProcessor() *EventProcessor {
 
 // ParseDML parses a LogMiner event into a DML event
 // TODO: Can we do without this and instead do it as part of translating to replication.MessageEvent?
-func (EventProcessor) ParseDML(event *LMEvent) (*DMLEvent, error) {
-	dml := &DMLEvent{
+func (EventProcessor) ParseDML(event *sqlredo.RedoEvent) (*sqlredo.DMLEvent, error) {
+	dml := &sqlredo.DMLEvent{
 		Operation: event.Operation,
 		// SQLRedo:   event.RedoValue.String,
 		Timestamp: event.Timestamp,
@@ -50,7 +50,7 @@ func (EventProcessor) ParseDML(event *LMEvent) (*DMLEvent, error) {
 }
 
 // toEventMessage converts a DML event to a replication.toEventMessage ready for pushing to Benthos.
-func (EventProcessor) toEventMessage(dml *DMLEvent, scn int64) *replication.MessageEvent {
+func (EventProcessor) toEventMessage(dml *sqlredo.DMLEvent, scn int64) *replication.MessageEvent {
 	m := &replication.MessageEvent{
 		SCN:       replication.SCN(scn),
 		Schema:    dml.Schema,
@@ -60,11 +60,11 @@ func (EventProcessor) toEventMessage(dml *DMLEvent, scn int64) *replication.Mess
 	}
 
 	switch dml.Operation {
-	case OpInsert:
+	case sqlredo.OpInsert:
 		m.Operation = "CREATE"
-	case OpUpdate:
+	case sqlredo.OpUpdate:
 		m.Operation = "UPDATE"
-	case OpDelete:
+	case sqlredo.OpDelete:
 		m.Operation = "DELETE"
 	}
 

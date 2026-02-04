@@ -10,7 +10,7 @@ package logminer
 
 import (
 	"github.com/redpanda-data/benthos/v4/public/service"
-	"github.com/redpanda-data/connect/v4/internal/impl/oracledb/logminer/dmlparser"
+	"github.com/redpanda-data/connect/v4/internal/impl/oracledb/logminer/sqlredo"
 )
 
 // TransactionCache is responsible for buffering transactions until a commit event is received,
@@ -18,7 +18,7 @@ import (
 // If a rollback events is received the cache will be be cleared instead of flushed.
 type TransactionCache interface {
 	StartTransaction(txnID string, scn int64)
-	AddEvent(txnID string, event *dmlparser.DMLEvent)
+	AddEvent(txnID string, event *sqlredo.DMLEvent)
 	GetTransaction(txnID string) *Transaction
 	CommitTransaction(txnID string)
 	RollbackTransaction(txnID string)
@@ -32,7 +32,7 @@ type TransactionID string
 type Transaction struct {
 	ID     string
 	SCN    int64
-	Events []*dmlparser.DMLEvent
+	Events []*sqlredo.DMLEvent
 }
 
 // InMemoryCache is an in-memory implementation of TransactionCache that stores
@@ -57,20 +57,20 @@ func (tc *InMemoryCache) StartTransaction(txnID string, scn int64) {
 	tc.transactions[txnID] = &Transaction{
 		ID:     txnID,
 		SCN:    scn,
-		Events: []*dmlparser.DMLEvent{},
+		Events: []*sqlredo.DMLEvent{},
 	}
 }
 
 // AddEvent adds a DML event to the specified transaction's buffer.
 // If the transaction doesn't exist, it creates a new transaction with the event.
-func (tc *InMemoryCache) AddEvent(txnID string, event *dmlparser.DMLEvent) {
+func (tc *InMemoryCache) AddEvent(txnID string, event *sqlredo.DMLEvent) {
 	if txn, exists := tc.transactions[txnID]; exists {
 		txn.Events = append(txn.Events, event)
 	} else {
 		// Transaction not started yet, create it
 		tc.transactions[txnID] = &Transaction{
 			ID:     txnID,
-			Events: []*dmlparser.DMLEvent{event},
+			Events: []*sqlredo.DMLEvent{event},
 		}
 	}
 }
