@@ -58,8 +58,10 @@ func (c *committer) doCommit(ctx context.Context, files [][]iceberg.DataFile) ([
 		return nil, fmt.Errorf("failed to add files: %w", err)
 	}
 	// Commit the transaction
-	if _, err := txn.Commit(ctx); err != nil {
+	if tbl, err := txn.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("failed to commit transaction: %w", err)
+	} else {
+		c.table = tbl
 	}
 	c.logger.Debugf("Committed %d files", len(allFiles))
 	// All succeeded - return empty responses

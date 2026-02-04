@@ -188,11 +188,18 @@ func parseCatalogConfig(conf *service.ParsedConfig) (catalogx.Config, error) {
 		cfg.AuthType = "sigv4"
 		// Parse optional region
 		if conf.Contains(ioFieldCatalog, ioFieldCatalogAuth, ioFieldCatalogAuthSigV4, ioFieldSigV4Region) {
-			cfg.SigV4Region, _ = conf.FieldString(ioFieldCatalog, ioFieldCatalogAuth, ioFieldCatalogAuthSigV4, ioFieldSigV4Region)
+			cfg.SigV4Region, err = conf.FieldString(ioFieldCatalog, ioFieldCatalogAuth, ioFieldCatalogAuthSigV4, ioFieldSigV4Region)
+			if err != nil {
+				return cfg, err
+			}
 		}
-		// Parse service (has default)
-		cfg.SigV4Service, _ = conf.FieldString(ioFieldCatalog, ioFieldCatalogAuth, ioFieldCatalogAuthSigV4, ioFieldSigV4Service)
-		return cfg, nil
+		// Parse service
+		if conf.Contains(ioFieldCatalog, ioFieldCatalogAuth, ioFieldCatalogAuthSigV4, ioFieldSigV4Service) {
+			cfg.SigV4Service, err = conf.FieldString(ioFieldCatalog, ioFieldCatalogAuth, ioFieldCatalogAuthSigV4, ioFieldSigV4Service)
+			if err != nil {
+				return cfg, err
+			}
+		}
 	}
 
 	return cfg, nil

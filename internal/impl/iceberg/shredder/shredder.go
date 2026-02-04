@@ -9,7 +9,6 @@
 package shredder
 
 import (
-	"encoding/json"
 	"fmt"
 	"slices"
 
@@ -17,6 +16,7 @@ import (
 	"github.com/gofrs/uuid/v5"
 	"github.com/parquet-go/parquet-go"
 
+	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/connect/v4/internal/impl/iceberg/icebergx"
 )
 
@@ -362,100 +362,28 @@ func convertLeafValue(value any, typ iceberg.Type) (parquet.Value, error) {
 		}
 
 	case iceberg.Int32Type:
-		switch v := value.(type) {
-		case int:
-			return parquet.Int32Value(int32(v)), nil
-		case int32:
-			return parquet.Int32Value(v), nil
-		case int64:
-			return parquet.Int32Value(int32(v)), nil
-		case float64:
-			return parquet.Int32Value(int32(v)), nil
-		case json.Number:
-			i, err := v.Int64()
-			if err != nil {
-				return parquet.NullValue(), fmt.Errorf("cannot convert json.Number to int32: %w", err)
-			}
-			return parquet.Int32Value(int32(i)), nil
-		default:
-			return parquet.NullValue(), fmt.Errorf("cannot convert %T to int32", value)
-		}
+		i, err := bloblang.ValueAsInt64(value)
+		return parquet.Int32Value(int32(i)), err
 
 	case iceberg.Int64Type:
-		switch v := value.(type) {
-		case int:
-			return parquet.Int64Value(int64(v)), nil
-		case int32:
-			return parquet.Int64Value(int64(v)), nil
-		case int64:
-			return parquet.Int64Value(v), nil
-		case float64:
-			return parquet.Int64Value(int64(v)), nil
-		case json.Number:
-			i, err := v.Int64()
-			if err != nil {
-				return parquet.NullValue(), fmt.Errorf("cannot convert json.Number to int64: %w", err)
-			}
-			return parquet.Int64Value(i), nil
-		default:
-			return parquet.NullValue(), fmt.Errorf("cannot convert %T to int64", value)
-		}
+		i, err := bloblang.ValueAsInt64(value)
+		return parquet.Int64Value(i), err
 
 	case iceberg.Float32Type:
-		switch v := value.(type) {
-		case float32:
-			return parquet.FloatValue(v), nil
-		case float64:
-			return parquet.FloatValue(float32(v)), nil
-		case int:
-			return parquet.FloatValue(float32(v)), nil
-		case json.Number:
-			f, err := v.Float64()
-			if err != nil {
-				return parquet.NullValue(), fmt.Errorf("cannot convert json.Number to float32: %w", err)
-			}
-			return parquet.FloatValue(float32(f)), nil
-		default:
-			return parquet.NullValue(), fmt.Errorf("cannot convert %T to float32", value)
-		}
+		i, err := bloblang.ValueAsFloat32(value)
+		return parquet.FloatValue(i), err
 
 	case iceberg.Float64Type:
-		switch v := value.(type) {
-		case float32:
-			return parquet.DoubleValue(float64(v)), nil
-		case float64:
-			return parquet.DoubleValue(v), nil
-		case int:
-			return parquet.DoubleValue(float64(v)), nil
-		case json.Number:
-			f, err := v.Float64()
-			if err != nil {
-				return parquet.NullValue(), fmt.Errorf("cannot convert json.Number to float64: %w", err)
-			}
-			return parquet.DoubleValue(f), nil
-		default:
-			return parquet.NullValue(), fmt.Errorf("cannot convert %T to float64", value)
-		}
+		i, err := bloblang.ValueAsFloat64(value)
+		return parquet.DoubleValue(i), err
 
 	case iceberg.StringType:
-		switch v := value.(type) {
-		case string:
-			return parquet.ByteArrayValue([]byte(v)), nil
-		case []byte:
-			return parquet.ByteArrayValue(v), nil
-		default:
-			return parquet.ByteArrayValue([]byte(fmt.Sprint(value))), nil
-		}
+		v, err := bloblang.ValueAsBytes(value)
+		return parquet.ByteArrayValue(v), err
 
 	case iceberg.BinaryType:
-		switch v := value.(type) {
-		case []byte:
-			return parquet.ByteArrayValue(v), nil
-		case string:
-			return parquet.ByteArrayValue([]byte(v)), nil
-		default:
-			return parquet.NullValue(), fmt.Errorf("cannot convert %T to binary", value)
-		}
+		v, err := bloblang.ValueAsBytes(value)
+		return parquet.ByteArrayValue(v), err
 
 	case iceberg.DateType:
 		// Date is days since epoch as int32.
@@ -486,17 +414,8 @@ func convertLeafValue(value any, typ iceberg.Type) (parquet.Value, error) {
 
 	case iceberg.TimestampType, iceberg.TimestampTzType:
 		// Timestamp is microseconds since epoch as int64.
-		// TODO: Handle time.Time conversion.
-		switch v := value.(type) {
-		case int64:
-			return parquet.Int64Value(v), nil
-		case int:
-			return parquet.Int64Value(int64(v)), nil
-		case float64:
-			return parquet.Int64Value(int64(v)), nil
-		default:
-			return parquet.NullValue(), fmt.Errorf("cannot convert %T to timestamp", value)
-		}
+		v, err := bloblang.ValueAsTimestamp(value)
+		return parquet.Int64Value(v.UnixMicro()), err
 
 	case iceberg.UUIDType:
 		switch v := value.(type) {
@@ -527,6 +446,7 @@ func convertLeafValue(value any, typ iceberg.Type) (parquet.Value, error) {
 		}
 
 	case iceberg.FixedType:
+		// TODO: Validate length
 		switch v := value.(type) {
 		case []byte:
 			return parquet.FixedLenByteArrayValue(v), nil

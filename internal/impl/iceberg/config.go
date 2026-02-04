@@ -117,6 +117,7 @@ map[string]any:struct
 					Example("https://polaris.example.com/api/catalog"),
 				service.NewStringField(ioFieldCatalogWarehouse).
 					Description("The REST catalog warehouse.").
+					Optional().
 					Example("redpanda-catalog"),
 				service.NewObjectField(ioFieldCatalogAuth,
 					service.NewObjectField(ioFieldCatalogAuthOAuth2,
@@ -144,7 +145,8 @@ map[string]any:struct
 							Example("us-east-1"),
 						service.NewStringField(ioFieldSigV4Service).
 							Description("AWS service name for SigV4 signing.").
-							Default("execute-api"),
+							Advanced().
+							Optional(),
 					).Description("AWS SigV4 authentication (for AWS Glue Data Catalog or API Gateway). Uses the same credentials as the storage configuration.").
 						Optional(),
 				).Description("Authentication configuration for the REST catalog. Only one authentication method can be active at a time.").
