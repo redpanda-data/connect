@@ -35,7 +35,13 @@ const connectorListPath = "/etc/redpanda/connector_list.yaml"
 // all of the enterprise functionality of Redpanda Connect. This has been
 // abstracted into a separate package so that multiple distributions (classic
 // versus cloud) can reference the same code.
-func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.ConfigSchema, opts ...service.CLIOptFunc) {
+func InitEnterpriseCLI(
+	binaryName, version,
+	dateBuilt string,
+	schema *service.ConfigSchema,
+	dist Distribution,
+	opts ...service.CLIOptFunc,
+) {
 	instanceID := xid.New().String()
 
 	rpMgr := enterprise.NewGlobalRedpandaManager(instanceID)
