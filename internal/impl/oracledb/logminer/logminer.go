@@ -62,18 +62,18 @@ func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replicat
 	// Build table filter condition once
 	// Only filter DML operations (1=INSERT, 2=DELETE, 3=UPDATE) by table
 	// Transaction control operations (6=START, 7=COMMIT, 36=ROLLBACK) don't have table info
-	var tableFilter strings.Builder
+	var buf strings.Builder
 	if len(userTables) > 0 {
-		tableFilter.WriteString(" AND (")
-		tableFilter.WriteString("OPERATION_CODE IN (6, 7, 36)")           // Allow all transaction control events
-		tableFilter.WriteString(" OR (OPERATION_CODE IN (1, 2, 3) AND (") // Filter DML by table
+		buf.WriteString(" AND (")
+		buf.WriteString("OPERATION_CODE IN (6, 7, 36)")           // Allow all transaction control events
+		buf.WriteString(" OR (OPERATION_CODE IN (1, 2, 3) AND (") // Filter DML by table
 		for i, t := range userTables {
 			if i > 0 {
-				tableFilter.WriteString(" OR ")
+				buf.WriteString(" OR ")
 			}
-			tableFilter.WriteString(fmt.Sprintf("(SEG_OWNER = '%s' AND TABLE_NAME = '%s')", t.Schema, t.Name))
+			buf.WriteString(fmt.Sprintf("(SEG_OWNER = '%s' AND TABLE_NAME = '%s')", t.Schema, t.Name))
 		}
-		tableFilter.WriteString(")))")
+		buf.WriteString(")))")
 	}
 	logMinerQuery := fmt.Sprintf(`
 		SELECT
@@ -85,15 +85,10 @@ func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replicat
 			SEG_OWNER,
 			TIMESTAMP,
 			XID                  -- Oracle's native transaction identifier (RAW)
-			-- XIDUSN,           -- Not used, XID contains this
-			-- XIDSLT,           -- Not used, XID contains this
-			-- XIDSQN            -- Not used, XID contains this
-			-- RS_ID,            -- Not used
-			-- SSN               -- Not used (only needed for ORDER BY)
 		FROM V$LOGMNR_CONTENTS
 		WHERE SCN >= :1 AND SCN < :2%s
 		ORDER BY SCN, SSN
-	`, tableFilter.String())
+	`, buf.String())
 
 	lm := &LogMiner{
 		cfg:       cfg,
