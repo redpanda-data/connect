@@ -42,7 +42,6 @@ type LogMiner struct {
 	logCollector  *LogFileCollector
 	currentSCN    uint64
 	sessionMgr    *SessionManager
-	eventProc     *EventProcessor
 	db            *sql.DB
 	SleepDuration time.Duration
 	dmlParser     *sqlredo.Parser
@@ -57,7 +56,7 @@ type LogMiner struct {
 	currentRedoLogSequences []int64
 }
 
-// NewMiner creates a new instance of NewMiner, responsible
+// NewMiner creates a new instance of LogMiner responsible
 // for paging through change events based on the tables param.
 func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replication.ChangePublisher, cfg *Config, logger *service.Logger) *LogMiner {
 	// Build table filter condition once
@@ -97,18 +96,18 @@ func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replicat
 	`, tableFilter.String())
 
 	lm := &LogMiner{
-		cfg:           cfg,
-		log:           logger,
-		db:            db,
-		tables:        userTables,
-		publisher:     publisher,
-		logMinerQuery: logMinerQuery,
+		cfg:       cfg,
+		log:       logger,
+		db:        db,
+		tables:    userTables,
+		publisher: publisher,
 
-		logCollector: NewLogFileCollector(db),
-		sessionMgr:   NewSessionManager(db, cfg),
-		eventProc:    NewEventProcessor(),
-		txnCache:     NewInMemoryCache(logger),
-		dmlParser:    sqlredo.NewParser(),
+		// logminer specific
+		logMinerQuery: logMinerQuery,
+		logCollector:  NewLogFileCollector(db),
+		sessionMgr:    NewSessionManager(db, cfg),
+		txnCache:      NewInMemoryCache(logger),
+		dmlParser:     sqlredo.NewParser(),
 	}
 	return lm
 }
@@ -135,7 +134,6 @@ func (lm *LogMiner) ReadChanges(ctx context.Context, startPos replication.SCN) e
 		}
 		lm.currentSCN = scn
 		scnSource = "database"
-		// lm.log.Infof("Starting from current SCN sourced from database: %d", lm.currentSCN)
 	}
 
 	lm.log.Infof("Starting streaming change events for %d table(s) beginning from SCN (sourced from %s): %d", len(lm.tables), scnSource, lm.currentSCN)
@@ -246,11 +244,12 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 		}
 
 		lm.txnCache.AddEvent(redoEvent.TransactionID, event)
+
 	case sqlredo.OpCommit:
 		// Flush all buffered events for this transaction
 		if txn := lm.txnCache.GetTransaction(redoEvent.TransactionID); txn != nil {
-			for _, ev := range txn.Events {
-				msg := lm.eventProc.toEventMessage(ev, redoEvent.SCN)
+			for _, dmlEvent := range txn.Events {
+				msg := toEventMessage(dmlEvent, redoEvent.SCN)
 				if err := lm.publisher.Publish(ctx, msg); err != nil {
 					return fmt.Errorf("publishing event with SCN '%d`: %w", redoEvent.SCN, err)
 				}
@@ -482,4 +481,25 @@ func (lm *LogMiner) prepareLogsAndStartSession(startSCN uint64) error {
 	lm.log.Infof("Started persistent LogMiner session from SCN %d (no end boundary)", startSCN)
 
 	return nil
+}
+
+func toEventMessage(dml *sqlredo.DMLEvent, scn int64) *replication.MessageEvent {
+	m := &replication.MessageEvent{
+		SCN:       replication.SCN(scn),
+		Schema:    dml.Schema,
+		Table:     dml.Table,
+		Data:      dml.Data,
+		Timestamp: dml.Timestamp,
+	}
+
+	switch dml.Operation {
+	case sqlredo.OpInsert:
+		m.Operation = "CREATE"
+	case sqlredo.OpUpdate:
+		m.Operation = "UPDATE"
+	case sqlredo.OpDelete:
+		m.Operation = "DELETE"
+	}
+
+	return m
 }

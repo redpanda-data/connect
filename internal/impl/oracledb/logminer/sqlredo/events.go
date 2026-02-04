@@ -25,6 +25,7 @@ const (
 	OpRollback
 )
 
+// OperationFromCode converts an operation code integer into an Operation type
 func OperationFromCode(code int) Operation {
 	switch code {
 	case 1:
@@ -44,7 +45,7 @@ func OperationFromCode(code int) Operation {
 	}
 }
 
-// DMLEvent represents a parsed DML operation
+// DMLEvent represents a parsed DML (Data Manipulation Language) operation
 type DMLEvent struct {
 	Operation Operation
 	Schema    string
