@@ -4,13 +4,13 @@
 // Licensed under the Apache Software License version 2.0, available at http://www.apache.org/licenses/LICENSE-2.0
 //
 
-package dmlparser_test
+package sqlredo_test
 
 import (
 	"reflect"
 	"testing"
 
-	"github.com/redpanda-data/connect/v4/internal/impl/oracledb/logminer/dmlparser"
+	"github.com/redpanda-data/connect/v4/internal/impl/oracledb/logminer/sqlredo"
 )
 
 func TestParseInsert(t *testing.T) {
@@ -215,7 +215,7 @@ func TestParseInsert(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := dmlparser.ParseSQLCommand(tt.sql)
+			result, err := sqlredo.ParseSQLCommand(tt.sql)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Parse() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -390,7 +390,7 @@ func TestParseUpdate(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := dmlparser.ParseSQLCommand(tt.sql)
+			result, err := sqlredo.ParseSQLCommand(tt.sql)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Parse() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -529,7 +529,7 @@ func TestParseDelete(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := dmlparser.ParseSQLCommand(tt.sql)
+			result, err := sqlredo.ParseSQLCommand(tt.sql)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Parse() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -611,7 +611,7 @@ func TestParseComplexCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := dmlparser.ParseSQLCommand(tt.sql)
+			result, err := sqlredo.ParseSQLCommand(tt.sql)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Parse() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -659,7 +659,7 @@ func TestParseSchemalessTableNames(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := dmlparser.ParseSQLCommand(tt.sql)
+			result, err := sqlredo.ParseSQLCommand(tt.sql)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Parse() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -723,7 +723,7 @@ func TestParseErrors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := dmlparser.ParseSQLCommand(tt.sql)
+			_, err := sqlredo.ParseSQLCommand(tt.sql)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Parse() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -735,20 +735,20 @@ func TestParseErrors(t *testing.T) {
 func BenchmarkParseInsert(b *testing.B) {
 	sql := `insert into "MYAPP"."CUSTOMERS"("ID","NAME","EMAIL","PHONE","ADDRESS") values ('1','John Doe','john@example.com','555-1234','123 Main St');`
 	for b.Loop() {
-		_, _ = dmlparser.ParseSQLCommand(sql)
+		_, _ = sqlredo.ParseSQLCommand(sql)
 	}
 }
 
 func BenchmarkParseUpdate(b *testing.B) {
 	sql := `update "MYAPP"."CUSTOMERS" set "NAME" = 'Jane Doe', "EMAIL" = 'jane@example.com' where "ID" = '1' and "NAME" = 'John Doe';`
 	for b.Loop() {
-		_, _ = dmlparser.ParseSQLCommand(sql)
+		_, _ = sqlredo.ParseSQLCommand(sql)
 	}
 }
 
 func BenchmarkParseDelete(b *testing.B) {
 	sql := `delete from "MYAPP"."CUSTOMERS" where "ID" = '1' and "NAME" = 'John Doe' and "EMAIL" = 'john@example.com';`
 	for b.Loop() {
-		_, _ = dmlparser.ParseSQLCommand(sql)
+		_, _ = sqlredo.ParseSQLCommand(sql)
 	}
 }

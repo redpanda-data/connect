@@ -17,7 +17,7 @@ import (
 	"time"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
-	"github.com/redpanda-data/connect/v4/internal/impl/oracledb/logminer/dmlparser"
+	"github.com/redpanda-data/connect/v4/internal/impl/oracledb/logminer/sqlredo"
 	"github.com/redpanda-data/connect/v4/internal/impl/oracledb/replication"
 )
 
@@ -45,7 +45,7 @@ type LogMiner struct {
 	eventProc     *EventProcessor
 	db            *sql.DB
 	SleepDuration time.Duration
-	dmlParser     *dmlparser.LogMinerDMLParser
+	dmlParser     *sqlredo.LogMinerDMLParser
 
 	// Pre-built query string for LogMiner contents
 	logMinerQuery string
@@ -108,7 +108,7 @@ func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replicat
 		sessionMgr:   NewSessionManager(db, cfg),
 		eventProc:    NewEventProcessor(),
 		txnCache:     NewInMemoryCache(logger),
-		dmlParser:    dmlparser.New(),
+		dmlParser:    sqlredo.NewDMLParser(),
 	}
 	return lm
 }
@@ -201,35 +201,35 @@ func (lm *LogMiner) miningCycle(ctx context.Context) error {
 		}
 	}
 
-	// Query and process events from V$LOGMNR_CONTENTS
+	// Query and process redoEvents from V$LOGMNR_CONTENTS
 	// The session is already active, just query it
-	events, err := lm.queryLogMinerContents(lm.currentSCN, endSCN)
+	redoEvents, err := lm.queryLogMinerContents(lm.currentSCN, endSCN)
 	if err != nil {
 		return fmt.Errorf("querying logminer contents between %d and %d: %w", lm.currentSCN, endSCN, err)
 	}
 
 	// Process events and buffer transactions
-	for _, event := range events {
-		if err := lm.processEvent(ctx, event); err != nil {
+	for _, redoEvent := range redoEvents {
+		if err := lm.processRedoEvent(ctx, redoEvent); err != nil {
 			return fmt.Errorf("failed to process event: %w", err)
 		}
 	}
 
-	lm.log.Debugf("Processed %d events in SCN range %d - %d", len(events), lm.currentSCN, endSCN)
+	lm.log.Debugf("Processed %d events in SCN range %d - %d", len(redoEvents), lm.currentSCN, endSCN)
 	lm.currentSCN = endSCN
 
 	return nil
 }
 
-// processEvent buffers emitted events until a commit or rollback event is processed at which
+// processRedoEvent buffers emitted events until a commit or rollback event is processed at which
 // point the buffer can be flushed to the Connect pipeline or dropped.
-func (lm *LogMiner) processEvent(ctx context.Context, rawEvent *dmlparser.LMEvent) error {
+func (lm *LogMiner) processRedoEvent(ctx context.Context, rawEvent *sqlredo.RedoEvent) error {
 	switch rawEvent.Operation {
-	case dmlparser.OpStart:
+	case sqlredo.OpStart:
 		// Transaction started
 		lm.txnCache.StartTransaction(rawEvent.TransactionID, rawEvent.SCN)
 
-	case dmlparser.OpInsert, dmlparser.OpUpdate, dmlparser.OpDelete:
+	case sqlredo.OpInsert, sqlredo.OpUpdate, sqlredo.OpDelete:
 		// SQL_REDO should always be present for DML operations. If not, it's likely a temporary
 		// table (Oracle doesn't generate redo for these) or an unsupported operation.
 		if !rawEvent.SQLRedo.Valid || rawEvent.SQLRedo.String == "" {
@@ -239,14 +239,14 @@ func (lm *LogMiner) processEvent(ctx context.Context, rawEvent *dmlparser.LMEven
 		}
 
 		// Parse sql insert/update/delete sql statements into key/value object
-		//TODO: Should we do this, or some of it only after commit is received? Measure performance impact.
-		event, err := lm.dmlParser.RawEventToDMLEvent(rawEvent)
+		// TODO: Should we do this, or some of it only after commit is received? Measure performance impact.
+		event, err := lm.dmlParser.RedoEventToDMLEvent(rawEvent)
 		if err != nil {
 			return fmt.Errorf("parsing sql query into object: %w", err)
 		}
 
 		lm.txnCache.AddEvent(rawEvent.TransactionID, event)
-	case dmlparser.OpCommit:
+	case sqlredo.OpCommit:
 		// Flush all buffered events for this transaction
 		if txn := lm.txnCache.GetTransaction(rawEvent.TransactionID); txn != nil {
 			for _, ev := range txn.Events {
@@ -259,7 +259,7 @@ func (lm *LogMiner) processEvent(ctx context.Context, rawEvent *dmlparser.LMEven
 			lm.txnCache.CommitTransaction(rawEvent.TransactionID)
 		}
 
-	case dmlparser.OpRollback:
+	case sqlredo.OpRollback:
 		// Discard all buffered events for this transaction
 		lm.txnCache.RollbackTransaction(rawEvent.TransactionID)
 	}
@@ -267,7 +267,7 @@ func (lm *LogMiner) processEvent(ctx context.Context, rawEvent *dmlparser.LMEven
 	return nil
 }
 
-func (lm *LogMiner) queryLogMinerContents(startSCN, endSCN uint64) ([]*dmlparser.LMEvent, error) {
+func (lm *LogMiner) queryLogMinerContents(startSCN, endSCN uint64) ([]*sqlredo.RedoEvent, error) {
 	// Use the pre-built query from initialization
 	rows, err := lm.db.Query(lm.logMinerQuery, startSCN, endSCN)
 	if err != nil {
@@ -276,16 +276,16 @@ func (lm *LogMiner) queryLogMinerContents(startSCN, endSCN uint64) ([]*dmlparser
 	defer rows.Close()
 
 	// TODO: Can we grow this memory buffer and keep reusing it?
-	var events []*dmlparser.LMEvent
+	var events []*sqlredo.RedoEvent
 	for rows.Next() {
-		event := &dmlparser.LMEvent{}
+		event := &sqlredo.RedoEvent{}
 		var xid []byte // Oracle RAW type comes as []byte in Go
 
 		err := rows.Scan(
 			&event.SCN,
 			&event.SQLRedo,
 			// &event.SQLUndo,        // Not used, only SQL_REDO is parsed
-			&event.OperationCode,
+			&event.Operation,
 			&event.TableName,
 			&event.SchemaName,
 			&event.Timestamp,
@@ -298,7 +298,7 @@ func (lm *LogMiner) queryLogMinerContents(startSCN, endSCN uint64) ([]*dmlparser
 		// Convert XID to hex string (matches Debezium's approach)
 		// XID is Oracle's native transaction identifier (RAW(8) = 8 bytes)
 		event.TransactionID = hex.EncodeToString(xid)
-		event.Operation = dmlparser.OperationFromCode(event.OperationCode)
+		event.Operation = sqlredo.OperationFromCode(event.OperationCode)
 		events = append(events, event)
 	}
 
