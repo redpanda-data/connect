@@ -13,22 +13,22 @@ import (
 	"time"
 )
 
-// LogMinerDMLParser parses SQL_REDO statements from Oracle LogMiner
+// Parser parses SQL_REDO statements from Oracle LogMiner
 // It handles the specific format that LogMiner produces:
 //
 //	INSERT: insert into "schema"."table"("C1","C2") values ('v1','v2');
 //	UPDATE: update "schema"."table" set "C1" = 'v1', "C2" = 'v2' where "C1" = 'old1' and "C2" = 'old2';
 //	DELETE: delete from "schema"."table" where "C1" = 'v1' and "C2" = 'v2';
-type LogMinerDMLParser struct {
+type Parser struct {
 	valueConverter *OracleValueConverter
 }
 
-// NewDMLParser creates a new LogMinerDMLParser instance for parsing SQL_REDO statements.
+// NewParser creates a new Parser instance for parsing SQL_REDO statements.
 // The parser handles Oracle LogMiner's specific SQL format and automatically converts
 // Oracle SQL functions (TO_DATE, TO_TIMESTAMP, HEXTORAW, etc.) to their Go equivalents.
 // All timestamp conversions use UTC timezone.
-func NewDMLParser() *LogMinerDMLParser {
-	return &LogMinerDMLParser{
+func NewParser() *Parser {
+	return &Parser{
 		valueConverter: NewOracleValueConverter(time.UTC),
 	}
 }
@@ -39,7 +39,7 @@ func NewDMLParser() *LogMinerDMLParser {
 //   - Extracts schema, table, and column data from the parsed SQL
 //   - Converts Oracle SQL functions (TO_DATE, TO_TIMESTAMP, HEXTORAW, etc.) to Go types
 //   - Returns an error if the SQL_REDO field is empty or the statement cannot be parsed
-func (p *LogMinerDMLParser) RedoEventToDMLEvent(redoEvent *RedoEvent) (*DMLEvent, error) {
+func (p *Parser) RedoEventToDMLEvent(redoEvent *RedoEvent) (*DMLEvent, error) {
 	if len(redoEvent.SQLRedo.String) == 0 {
 		return nil, errors.New("empty SQL statement")
 	}

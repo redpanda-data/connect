@@ -22,7 +22,6 @@ type TransactionCache interface {
 	GetTransaction(txnID string) *Transaction
 	CommitTransaction(txnID string)
 	RollbackTransaction(txnID string)
-	Count()
 }
 
 // TransactionID uniquely identifies an Oracle database transaction.
@@ -89,11 +88,4 @@ func (tc *InMemoryCache) CommitTransaction(txnID string) {
 // RollbackTransaction removes the rolled back transaction from the cache, discarding all buffered events.
 func (tc *InMemoryCache) RollbackTransaction(txnID string) {
 	delete(tc.transactions, txnID)
-}
-
-// Count logs debug information about all transactions currently in the cache.
-func (tc *InMemoryCache) Count() {
-	for k, v := range tc.transactions {
-		tc.log.Debugf("Cache: TransID %s: %d records", k, len(v.Events))
-	}
 }
