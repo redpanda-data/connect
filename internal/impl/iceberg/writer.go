@@ -12,6 +12,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"path"
 	"slices"
 
 	icebergio "github.com/apache/iceberg-go/io"
@@ -73,15 +74,13 @@ func (w *writer) Write(ctx context.Context, batch service.MessageBatch) error {
 	// Write each partition file and submit to committer
 	var files []dataFile
 	for _, pf := range parquetFiles {
-		// Generate unique file name
 		fileName := uuid.New().String() + ".parquet"
-
 		// Generate data file path (partition path is empty for unpartitioned tables)
 		var filePath string
 		if pf.path == "" {
 			filePath = locProvider.NewDataLocation(fileName)
 		} else {
-			filePath = locProvider.NewDataLocation(pf.path + "/" + fileName)
+			filePath = locProvider.NewDataLocation(path.Join(pf.path, fileName))
 		}
 
 		if err := writeIO.WriteFile(filePath, pf.result.data); err != nil {
@@ -209,7 +208,6 @@ func (w *writer) messagesToParquet(batch service.MessageBatch) ([]partitionFile,
 			return nil, fmt.Errorf("failed to compute partition key: %w", err)
 		}
 
-		// Binary search for existing partition entry
 		idx, found := slices.BinarySearchFunc(partitions, partitionKey, func(e *partitionEntry, k icebergx.PartitionKey) int {
 			return e.key.Compare(k)
 		})
@@ -313,7 +311,6 @@ func (s *parquetSink) flush() error {
 		if _, err := col.writer.WriteRowValues(col.values); err != nil {
 			return fmt.Errorf("failed to write to column %d: %w", col.colIdx, err)
 		}
-		// Reset slice but keep capacity
 		col.values = col.values[:0]
 	}
 	s.rowCount++
@@ -367,7 +364,7 @@ func (s *bufferingSink) EmitValue(sv shredder.ShreddedValue) error {
 }
 
 func (s *bufferingSink) OnNewField(_ icebergx.Path, _ string, _ any) {
-	// Ignore unknown fields
+	// TODO: implement
 }
 
 // writeTo replays buffered values to the target sink and flushes.

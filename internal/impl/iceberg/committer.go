@@ -11,25 +11,20 @@ package iceberg
 import (
 	"context"
 	"fmt"
+	"slices"
 
+	"github.com/apache/iceberg-go"
 	"github.com/apache/iceberg-go/table"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/asyncroutine"
 )
 
-// dataFile represents a written parquet file ready for commit.
-type dataFile struct {
-	path     string // full path (e.g., s3://bucket/ns/table/data/xxx.parquet)
-	rowCount int64
-	fileSize int64
-}
-
 // committer batches data file commits for a single table.
 // Commits are serialized - only one commit at a time per committer.
 type committer struct {
 	table   *table.Table
-	batcher *asyncroutine.Batcher[dataFile, struct{}]
+	batcher *asyncroutine.Batcher[[]iceberg.DataFile, struct{}]
 	logger  *service.Logger
 }
 
@@ -50,38 +45,23 @@ func NewCommitter(tbl *table.Table, logger *service.Logger) (*committer, error) 
 }
 
 // Commit submits a data file for commit and waits for the result.
-func (c *committer) Commit(ctx context.Context, file dataFile) error {
-	_, err := c.batcher.Submit(ctx, file)
+func (c *committer) Commit(ctx context.Context, files []iceberg.DataFile) error {
+	_, err := c.batcher.Submit(ctx, files)
 	return err
 }
 
 // doCommit processes a batch of data files for this table.
-func (c *committer) doCommit(ctx context.Context, files []dataFile) ([]struct{}, error) {
-	if len(files) == 0 {
-		return nil, nil
-	}
-
-	// Collect file paths and stats
-	paths := make([]string, len(files))
-	var totalRows int64
-	for i, f := range files {
-		paths[i] = f.path
-		totalRows += f.rowCount
-	}
-
-	// Create transaction and add files
+func (c *committer) doCommit(ctx context.Context, files [][]iceberg.DataFile) ([]struct{}, error) {
+	allFiles := slices.Concat(files...)
 	txn := c.table.NewTransaction()
-	if err := txn.AddFiles(ctx, paths, nil, true); err != nil {
+	if err := txn.AddDataFiles(ctx, allFiles, nil); err != nil {
 		return nil, fmt.Errorf("failed to add files: %w", err)
 	}
-
 	// Commit the transaction
 	if _, err := txn.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("failed to commit transaction: %w", err)
 	}
-
-	c.logger.Debugf("Committed %d files (%d rows)", len(paths), totalRows)
-
+	c.logger.Debugf("Committed %d files", len(allFiles))
 	// All succeeded - return empty responses
 	responses := make([]struct{}, len(files))
 	return responses, nil
@@ -89,7 +69,5 @@ func (c *committer) doCommit(ctx context.Context, files []dataFile) ([]struct{},
 
 // Close shuts down the committer and waits for pending commits.
 func (c *committer) Close() {
-	if c.batcher != nil {
-		c.batcher.Close()
-	}
+	c.batcher.Close()
 }
