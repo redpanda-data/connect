@@ -353,6 +353,34 @@ func (infra *testInfrastructure) QueryIcebergTable(ctx context.Context, catalog,
 	return parseJSONArray[map[string]any](output)
 }
 
+// IcebergMetadata returns metadata for an Iceberg table using DuckDB's iceberg_metadata function.
+func (infra *testInfrastructure) IcebergMetadata(ctx context.Context, catalog, namespace, table string) ([]map[string]any, error) {
+	sql := infra.duckDBSetupSQL(catalog) + fmt.Sprintf(`
+		SELECT * FROM iceberg_metadata('iceberg_cat."%s"."%s"');
+	`, namespace, table)
+
+	output, err := infra.ExecSQL(ctx, sql)
+	if err != nil {
+		return nil, err
+	}
+
+	return parseJSONArray[map[string]any](output)
+}
+
+// IcebergSnapshots returns snapshots for an Iceberg table using DuckDB's iceberg_snapshots function.
+func (infra *testInfrastructure) IcebergSnapshots(ctx context.Context, catalog, namespace, table string) ([]map[string]any, error) {
+	sql := infra.duckDBSetupSQL(catalog) + fmt.Sprintf(`
+		SELECT * FROM iceberg_snapshots('iceberg_cat."%s"."%s"');
+	`, namespace, table)
+
+	output, err := infra.ExecSQL(ctx, sql)
+	if err != nil {
+		return nil, err
+	}
+
+	return parseJSONArray[map[string]any](output)
+}
+
 // CountIcebergRows counts rows in an Iceberg table via the Polaris catalog.
 func (infra *testInfrastructure) CountIcebergRows(ctx context.Context, catalog, namespace, table string) (int, error) {
 	sql := infra.duckDBSetupSQL(catalog) + fmt.Sprintf(`

@@ -15,10 +15,12 @@ import (
 	"path"
 	"slices"
 
+	"github.com/apache/iceberg-go"
 	icebergio "github.com/apache/iceberg-go/io"
 	"github.com/apache/iceberg-go/table"
 	"github.com/google/uuid"
 	"github.com/parquet-go/parquet-go"
+	"github.com/parquet-go/parquet-go/format"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/impl/iceberg/icebergx"
@@ -71,36 +73,73 @@ func (w *writer) Write(ctx context.Context, batch service.MessageBatch) error {
 		return fmt.Errorf("table IO does not support writing (got %T)", tableIO)
 	}
 
+	// Build field ID mappings for stats extraction and partition data
+	_, fieldToCol, err := icebergx.BuildParquetSchema(w.table.Schema())
+	if err != nil {
+		return fmt.Errorf("failed to build parquet schema: %w", err)
+	}
+	colToFieldID := icebergx.ReverseFieldIDMap(fieldToCol)
+	fieldIDToLogicalType, fieldIDToFixedSize := icebergx.PartitionFieldMaps(w.table.Spec(), w.table.Schema())
+
 	// Write each partition file and submit to committer
-	var files []dataFile
+	var files []iceberg.DataFile
 	for _, pf := range parquetFiles {
 		fileName := uuid.New().String() + ".parquet"
 		// Generate data file path (partition path is empty for unpartitioned tables)
 		var filePath string
-		if pf.path == "" {
+		if len(pf.partitionKey) == 0 {
 			filePath = locProvider.NewDataLocation(fileName)
 		} else {
-			filePath = locProvider.NewDataLocation(path.Join(pf.path, fileName))
+			partitionPath, err := icebergx.PartitionKeyToPath(w.table.Spec(), pf.partitionKey)
+			if err != nil {
+				return fmt.Errorf("unable to compute partition key path: %w", err)
+			}
+			filePath = locProvider.NewDataLocation(path.Join(partitionPath, fileName))
 		}
 
 		if err := writeIO.WriteFile(filePath, pf.result.data); err != nil {
 			return fmt.Errorf("failed to write parquet file %q: %w", filePath, err)
 		}
 
-		w.logger.Debugf("Wrote parquet file: %s (%d bytes, %d rows)", filePath, len(pf.result.data), pf.result.rowCount)
+		w.logger.Debugf("Wrote parquet file: %s (%d bytes, %d rows)", filePath, len(pf.result.data), pf.result.footer.NumRows)
 
-		files = append(files, dataFile{
-			path:     filePath,
-			rowCount: int64(pf.result.rowCount),
-			fileSize: int64(len(pf.result.data)),
-		})
+		// Extract partition data from key
+		fieldIDToPartitionData := icebergx.PartitionDataFromKey(w.table.Spec(), pf.partitionKey)
+
+		builder, err := iceberg.NewDataFileBuilder(
+			w.table.Spec(),
+			iceberg.EntryContentData,
+			filePath,
+			iceberg.ParquetFile,
+			fieldIDToPartitionData,
+			fieldIDToLogicalType,
+			fieldIDToFixedSize,
+			pf.result.footer.NumRows,
+			int64(len(pf.result.data)),
+		)
+		if err != nil {
+			return fmt.Errorf("unable to create data file buider: %w", err)
+		}
+
+		// Extract parquet statistics
+		stats, err := icebergx.ExtractParquetStats(pf.result.footer, w.table.Schema(), colToFieldID)
+		if err != nil {
+			return fmt.Errorf("failed to extract parquet stats: %w", err)
+		}
+		builder = builder.
+			ColumnSizes(stats.ColumnSizes).
+			ValueCounts(stats.ValueCounts).
+			NullValueCounts(stats.NullValueCounts).
+			LowerBoundValues(stats.LowerBounds).
+			UpperBoundValues(stats.UpperBounds).
+			SplitOffsets(stats.SplitOffsets)
+
+		files = append(files, builder.Build())
 	}
 
 	// Submit all files to committer
-	for _, file := range files {
-		if err := w.committer.Commit(ctx, file); err != nil {
-			return fmt.Errorf("failed to commit: %w", err)
-		}
+	if err := w.committer.Commit(ctx, files); err != nil {
+		return fmt.Errorf("failed to commit: %w", err)
 	}
 
 	return nil
@@ -108,14 +147,14 @@ func (w *writer) Write(ctx context.Context, batch service.MessageBatch) error {
 
 // parquetResult holds the output of parquet conversion for a partition.
 type parquetResult struct {
-	data     []byte
-	rowCount int
+	data   []byte
+	footer *format.FileMetaData
 }
 
 // partitionFile pairs a partition path with its parquet data.
 type partitionFile struct {
-	path   string // partition path (may be truncated), empty for unpartitioned
-	result parquetResult
+	partitionKey icebergx.PartitionKey
+	result       parquetResult
 }
 
 // messagesToParquet converts messages to parquet format using the shredder.
@@ -171,7 +210,7 @@ func (w *writer) messagesToParquet(batch service.MessageBatch) ([]partitionFile,
 			return nil, fmt.Errorf("failed to close parquet writer: %w", err)
 		}
 
-		return []partitionFile{{path: "", result: result}}, nil
+		return []partitionFile{{partitionKey: nil, result: result}}, nil
 	}
 
 	// For partitioned tables, route rows to different writers
@@ -237,11 +276,7 @@ func (w *writer) messagesToParquet(batch service.MessageBatch) ([]partitionFile,
 		if err != nil {
 			return nil, fmt.Errorf("failed to close parquet writer: %w", err)
 		}
-		path, err := icebergx.PartitionKeyToPath(spec, entry.key)
-		if err != nil {
-			return nil, fmt.Errorf("failed to compute partition path: %w", err)
-		}
-		results = append(results, partitionFile{path: path, result: result})
+		results = append(results, partitionFile{partitionKey: entry.key, result: result})
 	}
 
 	return results, nil
@@ -323,8 +358,8 @@ func (s *parquetSink) Close() (parquetResult, error) {
 		return parquetResult{}, err
 	}
 	return parquetResult{
-		data:     s.buffer.Bytes(),
-		rowCount: s.rowCount,
+		data:   s.buffer.Bytes(),
+		footer: s.writer.File().Metadata(),
 	}, nil
 }
 

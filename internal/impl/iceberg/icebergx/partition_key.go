@@ -55,67 +55,6 @@ func (pk PartitionKey) Compare(other PartitionKey) int {
 	return 0
 }
 
-// compareOptionalLiteral compares two optional literals.
-// Null values sort before non-null values.
-func compareOptionalLiteral(a, b iceberg.Optional[iceberg.Literal]) int {
-	if !a.Valid && !b.Valid {
-		return 0
-	}
-	if !a.Valid {
-		return -1 // null < non-null
-	}
-	if !b.Valid {
-		return 1 // non-null > null
-	}
-	return compareLiteral(a.Val, b.Val)
-}
-
-// compareLiteral compares two iceberg literals.
-func compareLiteral(a, b iceberg.Literal) int {
-	// Compare by underlying value
-	switch av := a.(type) {
-	case iceberg.BoolLiteral:
-		bv := b.(iceberg.BoolLiteral)
-		return av.Comparator()(av.Value(), bv.Value())
-	case iceberg.Int32Literal:
-		bv := b.(iceberg.Int32Literal)
-		return av.Comparator()(av.Value(), bv.Value())
-	case iceberg.Int64Literal:
-		bv := b.(iceberg.Int64Literal)
-		return av.Comparator()(av.Value(), bv.Value())
-	case iceberg.Float32Literal:
-		bv := b.(iceberg.Float32Literal)
-		return av.Comparator()(av.Value(), bv.Value())
-	case iceberg.Float64Literal:
-		bv := b.(iceberg.Float64Literal)
-		return av.Comparator()(av.Value(), bv.Value())
-	case iceberg.DateLiteral:
-		bv := b.(iceberg.DateLiteral)
-		return av.Comparator()(av.Value(), bv.Value())
-	case iceberg.TimeLiteral:
-		bv := b.(iceberg.TimeLiteral)
-		return av.Comparator()(av.Value(), bv.Value())
-	case iceberg.TimestampLiteral:
-		bv := b.(iceberg.TimestampLiteral)
-		return av.Comparator()(av.Value(), bv.Value())
-	case iceberg.StringLiteral:
-		bv := b.(iceberg.StringLiteral)
-		return av.Comparator()(av.Value(), bv.Value())
-	case iceberg.UUIDLiteral:
-		bv := b.(iceberg.UUIDLiteral)
-		return av.Comparator()(av.Value(), bv.Value())
-	case iceberg.BinaryLiteral:
-		bv := b.(iceberg.BinaryLiteral)
-		return av.Comparator()(av.Value(), bv.Value())
-	case iceberg.FixedLiteral:
-		bv := b.(iceberg.FixedLiteral)
-		return av.Comparator()(av.Value(), bv.Value())
-	default:
-		// Fall back to string comparison for unknown types
-		return strings.Compare(fmt.Sprintf("%v", a), fmt.Sprintf("%v", b))
-	}
-}
-
 // NewPartitionKey creates a PartitionKey from parquet values based on the partition spec and schema.
 // The parquet values should be raw (untransformed) values matching the source field types.
 // Transforms are applied automatically.

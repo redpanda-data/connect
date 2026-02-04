@@ -34,8 +34,6 @@ func BuildParquetSchema(schema *iceberg.Schema) (_ *parquet.Schema, fieldIDToCol
 	pqSchema := parquet.NewSchema("root", group)
 
 	// Walk the iceberg schema and build up a mapping of field ID -> column index
-	// NOTE: we can simplify this when iceberg go supports field IDs in parquet files
-	// as we can just loop over the parquet leaves easily and build our map that way
 	fieldToCol := make(map[int]int)
 	st := schema.AsStruct()
 	for leaf := range schemaLeaves(&st, -1, nil) {
@@ -118,8 +116,7 @@ func icebergFieldToParquet(field iceberg.NestedField) (parquet.Node, error) {
 		node = parquet.Optional(node)
 	}
 
-	// Note: We don't add field IDs because iceberg-go's AddFiles method doesn't support them.
-	// The AddFiles method resolves field IDs by matching column names to the schema.
+	node = parquet.FieldID(node, field.ID)
 
 	return node, nil
 }
@@ -152,7 +149,7 @@ func icebergTypeToParquet(t iceberg.Type) (parquet.Node, error) {
 	case iceberg.UUIDType:
 		return parquet.UUID(), nil
 	case *iceberg.StructType:
-		group := make(parquet.Group)
+		group := make(parquet.Group, len(t.Fields()))
 		for _, f := range t.Fields() {
 			node, err := icebergFieldToParquet(f)
 			if err != nil {
@@ -166,15 +163,24 @@ func icebergTypeToParquet(t iceberg.Type) (parquet.Node, error) {
 		if err != nil {
 			return nil, err
 		}
+		if !t.ElementRequired {
+			elem = parquet.Optional(elem)
+		}
+		elem = parquet.FieldID(elem, t.ElementID)
 		return parquet.List(elem), nil
 	case *iceberg.MapType:
 		key, err := icebergTypeToParquet(t.KeyType)
 		if err != nil {
 			return nil, err
 		}
+		key = parquet.FieldID(key, t.KeyID)
 		val, err := icebergTypeToParquet(t.ValueType)
 		if err != nil {
 			return nil, err
+		}
+		val = parquet.FieldID(val, t.KeyID)
+		if !t.ValueRequired {
+			val = parquet.Optional(val)
 		}
 		return parquet.Map(key, val), nil
 	default:

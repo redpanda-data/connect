@@ -110,9 +110,17 @@ func (c *Client) LoadTable(ctx context.Context, tableName string) (*table.Table,
 
 // CreateTable creates a new table with the given schema.
 func (c *Client) CreateTable(ctx context.Context, tableName string, schema *iceberg.Schema) (*table.Table, error) {
+	return c.CreateTableWithSpec(ctx, tableName, schema, nil)
+}
+
+// CreateTableWithSpec creates a new table with the given schema and partition spec.
+func (c *Client) CreateTableWithSpec(ctx context.Context, tableName string, schema *iceberg.Schema, spec *iceberg.PartitionSpec) (*table.Table, error) {
 	identifier := toTableIdentifier(c.namespace, tableName)
-	// Create table with basic properties
-	tbl, err := c.catalog.CreateTable(ctx, identifier, schema)
+	var opts []catalog.CreateTableOpt
+	if spec != nil {
+		opts = append(opts, catalog.WithPartitionSpec(spec))
+	}
+	tbl, err := c.catalog.CreateTable(ctx, identifier, schema, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create table %s: %w", strings.Join(identifier, "."), err)
 	}
