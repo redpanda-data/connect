@@ -3,6 +3,20 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.80.0 - 2026-02-04
+
+### Added
+
+- otlp_grpc: add authorization support with JWT validation. (@mmatczuk)
+- redpanda/migrator: add `max_parallel_http_requests` field for concurrent schema migration. (@mmatczuk)
+- redpanda/migrator: implement DFS traversal for schema dependencies. (@mmatczuk)
+- redpanda/migrator: stream schemas instead of loading all into memory. (@mmatczuk)
+- redpanda/migrator: add progress logs to schema migration worker. (@mmatczuk)
+
+### Fixed
+
+- protobuf: remove hyperpb to fix memory leak. (@rockwotj)
+
 ## 4.79.0 - 2026-01-30
 
 ### Added
@@ -246,7 +260,7 @@ All notable changes to this project will be documented in this file.
 - (Benthos) New Bloblang method `infer_schema`. (@Jeffail)
 - Custom s3 endpoints support in `snowflake_streaming` output. (@josephwoodward)
 - Experimental field `timely_nacks_maximum_wait` added to all kafka protocol inputs. (@Jeffail)
-- Added `subject_compatibility_level` to the `schema_registry` output. (@mmatczuk) 
+- Added `subject_compatibility_level` to the `schema_registry` output. (@mmatczuk)
 
 ### Fixed
 
