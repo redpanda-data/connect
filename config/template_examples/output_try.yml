@@ -1,0 +1,27 @@
+name: try
+type: output
+status: experimental
+summary: Behaves exactly like `broker` output with the pattern `fan_out_sequential`
+
+fields:
+  - name: outputs
+    type: unknown
+    kind: list
+    description: |-
+      List of child outputs
+
+  - name: processors
+    type: unknown
+    kind: list
+    default: []
+    description: |-
+      List of processors to run before output
+
+mapping: |-
+  #!blobl
+  root.broker = {
+    "pattern": "fan_out_sequential",
+    "outputs": this.outputs,
+
+  }
+  root.processors = this.processors
