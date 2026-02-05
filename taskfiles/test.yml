@@ -7,15 +7,21 @@ tasks:
       - ut
     vars:
       TIMEOUT: '{{if .CI}}5m{{else}}1m{{end}}'
+    preconditions:
+      - sh: command -v {{.TOOLS_BIN_DIR}}/gotestfmt
+        msg: "gotestfmt is not installed. Run 'task tools:install-gotestfmt' first."
     cmds:
-      - go test {{.GO_FLAGS}} -timeout {{.TIMEOUT}} -shuffle=on {{if .CI}}{{else}}-v{{end}} ./...
+      - go test {{.GO_FLAGS}} -json -timeout {{.TIMEOUT}} -shuffle=on {{if .CI}}{{else}}-v{{end}} ./... 2>&1 | tee /tmp/gotest.log | {{.TOOLS_BIN_DIR}}/gotestfmt
 
   unit-race:
     desc: Run unit tests with race detection
     aliases:
       - ut-race
+    preconditions:
+      - sh: command -v {{.TOOLS_BIN_DIR}}/gotestfmt
+        msg: "gotestfmt is not installed. Run 'task tools:install-gotestfmt' first."
     cmds:
-      - go test {{.GO_FLAGS}} -timeout 3m -shuffle=on -race {{if .CI}}{{else}}-v{{end}} ./...
+      - go test {{.GO_FLAGS}} -json -timeout 3m -shuffle=on -race {{if .CI}}{{else}}-v{{end}} ./... 2>&1 | tee /tmp/gotest.log | {{.TOOLS_BIN_DIR}}/gotestfmt
 
   integration-package:
     desc: Run integration tests for package PKG
@@ -26,8 +32,11 @@ tasks:
         - PKG
     vars:
       TIMEOUT: '{{if .CI}}15m{{else}}5m{{end}}'
+    preconditions:
+      - sh: command -v {{.TOOLS_BIN_DIR}}/gotestfmt
+        msg: "gotestfmt is not installed. Run 'task tools:install-gotestfmt' first."
     cmds:
-      - go test {{.GO_FLAGS}} -run "^Test.*Integration" -timeout {{.TIMEOUT}} {{if .CI}}{{else}}-v{{end}} {{.PKG}}
+      - go test {{.GO_FLAGS}} -json -run "^Test.*Integration" -timeout {{.TIMEOUT}} {{if .CI}}{{else}}-v{{end}} {{.PKG}} 2>&1 | tee /tmp/gotest.log | {{.TOOLS_BIN_DIR}}/gotestfmt
 
   template:
     desc: Run template tests
@@ -38,6 +47,9 @@ tasks:
     vars:
       TEMPLATE_FILES:
         sh: find internal/impl -type f -name "*tmpl.yaml" | tr '\n' ' '
+    preconditions:
+      - sh: command -v {{.TOOLS_BIN_DIR}}/gotestfmt
+        msg: "gotestfmt is not installed. Run 'task tools:install-gotestfmt' first."
     cmds:
       - '{{.TARGET_DIR}}/redpanda-connect template lint {{.TEMPLATE_FILES}}'
       - '{{.TARGET_DIR}}/redpanda-connect test ./config/test/...'
