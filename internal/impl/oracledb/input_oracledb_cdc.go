@@ -332,6 +332,7 @@ func (i *oracleDBCDCInput) Connect(ctx context.Context) error {
 	// setup snapshotting and streaming
 	// logminer processor
 	type streamProcessor interface {
+		FindStartPos(ctx context.Context) (replication.SCN, error)
 		ReadChanges(ctx context.Context, startPos replication.SCN) error
 	}
 	var (
@@ -349,7 +350,7 @@ func (i *oracleDBCDCInput) Connect(ctx context.Context) error {
 	}
 
 	if i.lmCfg != nil {
-		streaming = logminer.NewMiner(i.db, userTables, i.publisher, i.lmCfg, i.log)
+		streaming = logminer.NewMiner(i.db, userTables, i.publisher, i.lmCfg, i.metrics, i.log)
 	} else {
 		return fmt.Errorf("logminer configuration is required for streaming")
 	}
@@ -385,15 +386,14 @@ func (i *oracleDBCDCInput) Connect(ctx context.Context) error {
 			i.log.Infof("Successfully captured SCN following snapshot: %d", maxSCN)
 		}
 
-		// If no SCN is available (no snapshot and no cached position), get current SCN from database
-		// to avoid starting from SCN 0 which could replay entire database history
+		// If no SCN is available (no snapshot and no cached position), so get the start position from the DB
 		if maxSCN == replication.InvalidSCN {
-			if err := i.db.QueryRowContext(softCtx, "SELECT CURRENT_SCN FROM V$DATABASE").Scan(&maxSCN); err != nil {
-				i.log.Errorf("Failed to get current SCN from database: %s", err)
+			if maxSCN, err = streaming.FindStartPos(softCtx); err != nil {
+				i.log.Errorf("Failed to get start SCN from database: %s", err)
 				i.stopSig.TriggerHasStopped()
 				return
 			}
-			i.log.Infof("No cached SCN found, starting from current database SCN: %d", maxSCN)
+			i.log.Infof("No cached SCN found, fetched starting position from database: %d", maxSCN)
 			if err = i.cacheSCN(softCtx, maxSCN); err != nil {
 				i.log.Warnf("Failed to cache initial SCN (non-critical): %s", err)
 			}

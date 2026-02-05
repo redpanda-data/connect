@@ -58,7 +58,7 @@ type LogMiner struct {
 
 // NewMiner creates a new instance of LogMiner responsible
 // for paging through change events based on the tables param.
-func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replication.ChangePublisher, cfg *Config, logger *service.Logger) *LogMiner {
+func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replication.ChangePublisher, cfg *Config, metrics *service.Metrics, logger *service.Logger) *LogMiner {
 	// Build table filter condition once
 	// Only filter DML operations (1=INSERT, 2=DELETE, 3=UPDATE) by table
 	// Transaction control operations (6=START, 7=COMMIT, 36=ROLLBACK) don't have table info
@@ -101,7 +101,7 @@ func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replicat
 		logMinerQuery: logMinerQuery,
 		logCollector:  NewLogFileCollector(db),
 		sessionMgr:    NewSessionManager(db, cfg),
-		txnCache:      NewInMemoryCache(logger),
+		txnCache:      NewInMemoryCache(metrics, logger),
 		dmlParser:     sqlredo.NewParser(),
 	}
 	return lm
@@ -115,20 +115,20 @@ func (lm *LogMiner) ReadChanges(ctx context.Context, startPos replication.SCN) e
 		return fmt.Errorf("applying NLS settings for LogMiner: %w", err)
 	}
 
-	// Determine starting SCN
-	var scnSource string
-	if startPos.IsValid() {
-		// Resume from checkpoint/snapshot position
-		lm.currentSCN = uint64(startPos)
-		scnSource = "checkpoint"
-	} else {
-		// get current SCN from DB
-		var scn uint64
-		if err := lm.db.QueryRow("SELECT CURRENT_SCN FROM V$DATABASE").Scan(&scn); err != nil {
-			return fmt.Errorf("fetching current SCN from database: %w", err)
-		}
-		lm.currentSCN = scn
-		scnSource = "database"
+	//TODO: include starting scn source
+	scnSource := "unknown"
+
+	if lm.currentSCN < uint64(startPos) {
+		return fmt.Errorf("starting SCN %d (from %s) is no longer available in redo/archive logs. "+
+			"Oldest available SCN is %d. This means Oracle has purged the archived logs needed to resume CDC from your checkpoint.\n\n"+
+			"To resolve:\n"+
+			"1. If stream_snapshot is enabled, re-run the connector to take a new snapshot\n"+
+			"2. If stream_snapshot is disabled, you have two options:\n"+
+			"   a) Enable stream_snapshot to take a full snapshot from current state (recommended)\n"+
+			"   b) Delete the checkpoint and restart from current database SCN (DATA LOSS: events between %d and current SCN will be missed)\n"+
+			"3. Increase Oracle's log retention to prevent this:\n"+
+			"   ALTER SYSTEM SET LOG_ARCHIVE_RETENTION_HOURS = 24;",
+			lm.currentSCN, scnSource, startPos, lm.currentSCN)
 	}
 
 	lm.log.Infof("Starting streaming change events for %d table(s) beginning from SCN (sourced from %s): %d", len(lm.tables), scnSource, lm.currentSCN)
@@ -152,25 +152,55 @@ func (lm *LogMiner) ReadChanges(ctx context.Context, startPos replication.SCN) e
 		case <-ctx.Done():
 			return ctx.Err()
 		default:
-			if err := lm.miningCycle(ctx); err != nil {
+			caughtUp, err := lm.miningCycle(ctx)
+			if err != nil {
 				return fmt.Errorf("mining logs: %w", err)
 			}
-
-			time.Sleep(lm.cfg.MiningBackoffInterval)
+			if caughtUp {
+				// back off if we've caught up
+				time.Sleep(lm.cfg.MiningBackoffInterval)
+			}
 		}
 	}
 }
 
-func (lm *LogMiner) miningCycle(ctx context.Context) error {
+// FindStartPos finds the earliest possible SCN that exists within a log that's still available.
+func (lm *LogMiner) FindStartPos(ctx context.Context) (replication.SCN, error) {
+	query := `
+		SELECT MIN(FIRST_CHANGE#) AS FIRST_SCN
+		FROM (
+			SELECT FIRST_CHANGE# FROM V$LOG
+			UNION
+			SELECT FIRST_CHANGE# FROM V$ARCHIVED_LOG
+			WHERE NAME IS NOT NULL
+			AND ARCHIVED = 'YES'
+			AND STATUS = 'A'
+			AND DEST_ID IN (
+				SELECT DEST_ID
+				FROM V$ARCHIVE_DEST_STATUS
+				WHERE STATUS='VALID' AND TYPE='LOCAL' AND ROWNUM=1
+			)
+		)
+	`
+
+	var firstSCN uint64
+	if err := lm.db.QueryRow(query).Scan(&firstSCN); err != nil {
+		return 0, fmt.Errorf("querying oldest available SCN in logs: %w", err)
+	}
+
+	return replication.SCN(firstSCN), nil
+}
+
+func (lm *LogMiner) miningCycle(ctx context.Context) (caughtUp bool, err error) {
 	// Get database's current SCN to know our target
 	var dbCurrentSCN uint64
 	if err := lm.db.QueryRow("SELECT CURRENT_SCN FROM V$DATABASE").Scan(&dbCurrentSCN); err != nil {
-		return fmt.Errorf("fetching current SCN: %w", err)
+		return false, fmt.Errorf("fetching current SCN: %w", err)
 	}
 
 	if lm.currentSCN > dbCurrentSCN {
 		lm.log.Debugf("Caught up to current SCN %d, no new changes to process", dbCurrentSCN)
-		return nil
+		return true, nil
 	}
 
 	// Calculate SCN range - process up to current SCN or a reasonable chunk,
@@ -184,13 +214,31 @@ func (lm *LogMiner) miningCycle(ctx context.Context) error {
 	// Check if we need to restart the session due to log switch
 	logSwitched, err := lm.checkLogSwitchOccurred()
 	if err != nil {
-		return fmt.Errorf("checking for log switch: %w", err)
+		return false, fmt.Errorf("checking for log switch: %w", err)
 	}
 
 	if logSwitched || !lm.sessionActive {
 		lm.log.Infof("Restarting LogMiner session (log_switch=%t, session_active=%t)", logSwitched, lm.sessionActive)
 		if err := lm.prepareLogsAndStartSession(lm.currentSCN); err != nil {
-			return fmt.Errorf("preparing logs and starting session at position %d: %w", lm.currentSCN, err)
+			// Check for ORA-01291: missing log file error and provide helpful message
+			if strings.Contains(err.Error(), "ORA-01291") {
+				return false, fmt.Errorf("preparing logs and starting session at position %d: %w\n\n"+
+					"This error indicates archived redo logs have been purged before LogMiner could process them.\n"+
+					"This typically happens when processing takes longer than Oracle's log retention period.\n\n"+
+					"To fix this issue:\n"+
+					"1. Increase Oracle's archived log retention:\n"+
+					"   ALTER SYSTEM SET LOG_ARCHIVE_RETENTION_HOURS = 24;\n"+
+					"   or use RMAN: CONFIGURE RETENTION POLICY TO RECOVERY WINDOW OF 7 DAYS;\n\n"+
+					"2. Improve processing performance:\n"+
+					"   - Increase logminer.max_batch_size (current: %d)\n"+
+					"   - Decrease logminer.backoff_interval (current: %v)\n"+
+					"   - Increase input batching.count for better throughput\n"+
+					"   - Use faster output (e.g., drop: {} for benchmarking)\n\n"+
+					"3. Restart the connector from the current database SCN to skip missing logs:\n"+
+					"   Note: This will result in data loss for events in the purged logs.",
+					lm.currentSCN, err, lm.cfg.MaxBatchSize, lm.cfg.MiningBackoffInterval)
+			}
+			return false, fmt.Errorf("preparing logs and starting session at position %d: %w", lm.currentSCN, err)
 		}
 	}
 
@@ -198,20 +246,20 @@ func (lm *LogMiner) miningCycle(ctx context.Context) error {
 	// The session is already active, just query it
 	redoEvents, err := lm.queryLogMinerContents(lm.currentSCN, endSCN)
 	if err != nil {
-		return fmt.Errorf("querying logminer contents between %d and %d: %w", lm.currentSCN, endSCN, err)
+		return false, fmt.Errorf("querying logminer contents between %d and %d: %w", lm.currentSCN, endSCN, err)
 	}
 
 	// Process events and buffer transactions
 	for _, redoEvent := range redoEvents {
 		if err := lm.processRedoEvent(ctx, redoEvent); err != nil {
-			return fmt.Errorf("failed to process event: %w", err)
+			return false, fmt.Errorf("failed to process event: %w", err)
 		}
 	}
 
 	lm.log.Debugf("Processed %d events in SCN range %d - %d", len(redoEvents), lm.currentSCN, endSCN)
 	lm.currentSCN = endSCN + 1
 
-	return nil
+	return false, nil
 }
 
 // processRedoEvent buffers emitted events until a commit or rollback event is processed at which
@@ -238,7 +286,7 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 			return fmt.Errorf("parsing sql redo event into dml event: %w", err)
 		}
 
-		lm.txnCache.AddEvent(redoEvent.TransactionID, event)
+		lm.txnCache.AddEvent(redoEvent.TransactionID, redoEvent.SCN, event)
 
 	case sqlredo.OpCommit:
 		// Flush all buffered events for this transaction
@@ -273,7 +321,7 @@ func (lm *LogMiner) queryLogMinerContents(startSCN, endSCN uint64) ([]*sqlredo.R
 	var events []*sqlredo.RedoEvent
 	for rows.Next() {
 		event := &sqlredo.RedoEvent{}
-		var xid []byte // Oracle RAW type comes as []byte in Go
+		var xid []byte              // Oracle RAW type comes as []byte in Go
 		var commitSCN sql.NullInt64 // COMMIT_SCN can be NULL for uncommitted transactions
 
 		err := rows.Scan(
@@ -480,7 +528,7 @@ func (lm *LogMiner) prepareLogsAndStartSession(startSCN uint64) error {
 	return nil
 }
 
-func toEventMessage(dml *sqlredo.DMLEvent, scn int64) *replication.MessageEvent {
+func toEventMessage(dml *sqlredo.DMLEvent, scn uint64) *replication.MessageEvent {
 	m := &replication.MessageEvent{
 		SCN:       replication.SCN(scn),
 		Schema:    dml.Schema,
