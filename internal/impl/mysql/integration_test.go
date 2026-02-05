@@ -749,3 +749,380 @@ file:
 	require.Equal(t, expected, ids)
 	batchMu.Unlock()
 }
+
+func TestIntegrationMySQLCDCSchemaMetadata(t *testing.T) {
+	dsn, db := setupTestWithMySQLVersion(t, "8.0")
+
+	// Create a table with various data types to test schema metadata
+	db.Exec(`
+		CREATE TABLE IF NOT EXISTS test_schema (
+			id INT PRIMARY KEY,
+			name VARCHAR(255),
+			created_at TIMESTAMP,
+			score FLOAT,
+			data JSON,
+			tags SET('tag1', 'tag2', 'tag3')
+		)
+	`)
+
+	// Insert snapshot rows
+	db.Exec("INSERT INTO test_schema VALUES (1, 'snapshot1', '2024-01-01 12:00:00', 95.5, '{\"key\":\"value1\"}', 'tag1')")
+	db.Exec("INSERT INTO test_schema VALUES (2, 'snapshot2', '2024-01-02 12:00:00', 87.3, '{\"key\":\"value2\"}', 'tag1,tag2')")
+
+	template := fmt.Sprintf(`
+mysql_cdc:
+  dsn: %s
+  stream_snapshot: true
+  snapshot_max_batch_size: 100
+  checkpoint_cache: schemacache
+  tables:
+    - test_schema
+`, dsn)
+
+	cacheConf := fmt.Sprintf(`
+label: schemacache
+file:
+  directory: %s`, t.TempDir())
+
+	streamOutBuilder := service.NewStreamBuilder()
+	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: DEBUG`))
+	require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
+	require.NoError(t, streamOutBuilder.AddInputYAML(template))
+
+	type messageMetadata struct {
+		operation      string
+		table          string
+		binlogPosition string
+		hasSchema      bool
+		schema         map[string]any
+		data           map[string]any
+	}
+
+	var messages []messageMetadata
+	var msgMut sync.Mutex
+
+	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+		for _, msg := range mb {
+			msgMut.Lock()
+
+			operation, _ := msg.MetaGet("operation")
+			table, _ := msg.MetaGet("table")
+			binlogPosition, _ := msg.MetaGet("binlog_position")
+
+			// Try to get schema metadata - mutable metadata is stored separately
+			var schema map[string]any
+			hasSchema := false
+			err := msg.MetaWalkMut(func(key string, value any) error {
+				if key == "schema" {
+					hasSchema = true
+					if schemaMap, ok := value.(map[string]any); ok {
+						schema = schemaMap
+					}
+				}
+				return nil
+			})
+			require.NoError(t, err)
+
+			data, err := msg.AsStructured()
+			require.NoError(t, err)
+
+			messages = append(messages, messageMetadata{
+				operation:      operation,
+				table:          table,
+				binlogPosition: binlogPosition,
+				hasSchema:      hasSchema,
+				schema:         schema,
+				data:           data.(map[string]any),
+			})
+
+			msgMut.Unlock()
+		}
+		return nil
+	}))
+
+	streamOut, err := streamOutBuilder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(streamOut.Resources())
+
+	go func() {
+		err = streamOut.Run(t.Context())
+		require.NoError(t, err)
+	}()
+
+	// Wait for stream to start and read snapshot
+	time.Sleep(time.Second * 3)
+
+	// Insert CDC rows
+	db.Exec("INSERT INTO test_schema VALUES (3, 'cdc1', '2024-01-03 12:00:00', 92.1, '{\"key\":\"value3\"}', 'tag2')")
+	db.Exec("INSERT INTO test_schema VALUES (4, 'cdc2', '2024-01-04 12:00:00', 88.7, '{\"key\":\"value4\"}', 'tag2,tag3')")
+
+	// Wait for CDC events
+	assert.Eventually(t, func() bool {
+		msgMut.Lock()
+		defer msgMut.Unlock()
+		return len(messages) == 4
+	}, time.Minute, time.Millisecond*100)
+
+	require.NoError(t, streamOut.StopWithin(time.Second*10))
+
+	// Verify messages
+	msgMut.Lock()
+	defer msgMut.Unlock()
+
+	require.Len(t, messages, 4, "should have 4 messages total (2 snapshot + 2 CDC)")
+
+	// Check snapshot messages (first 2)
+	for i := range 2 {
+		msg := messages[i]
+		assert.Equal(t, "read", msg.operation, "snapshot message should have operation=read")
+		assert.Equal(t, "test_schema", msg.table, "message should have correct table name")
+		assert.Empty(t, msg.binlogPosition, "snapshot message should not have binlog_position")
+
+		// Note: Snapshot messages may not have schema initially because schema is extracted
+		// from Canal table objects which are only available during CDC events
+		if msg.hasSchema {
+			t.Logf("Snapshot message %d has schema (this is good!)", i)
+			validateSchemaStructure(t, msg.schema)
+		} else {
+			t.Logf("Snapshot message %d does not have schema (expected limitation)", i)
+		}
+	}
+
+	// Check CDC messages (last 2)
+	for i := range 2 {
+		msg := messages[i+2]
+		assert.Equal(t, "insert", msg.operation, "CDC message should have operation=insert")
+		assert.Equal(t, "test_schema", msg.table, "message should have correct table name")
+		assert.NotEmpty(t, msg.binlogPosition, "CDC message should have binlog_position")
+
+		// CDC messages MUST have schema metadata
+		require.True(t, msg.hasSchema, "CDC message must have schema metadata")
+		require.NotNil(t, msg.schema, "CDC message schema must not be nil")
+
+		// Validate schema structure
+		validateSchemaStructure(t, msg.schema)
+
+		// Verify specific field schemas
+		children, ok := msg.schema["children"].([]any)
+		require.True(t, ok, "schema should have children array")
+		require.NotEmpty(t, children, "schema children should not be empty")
+
+		// Build a map of field names to field schemas for easier validation
+		fieldSchemas := make(map[string]map[string]any)
+		for _, child := range children {
+			childMap := child.(map[string]any)
+			fieldName := childMap["name"].(string)
+			fieldSchemas[fieldName] = childMap
+		}
+
+		// Verify expected fields exist in schema
+		expectedFields := []string{"id", "name", "created_at", "score", "data", "tags"}
+		for _, fieldName := range expectedFields {
+			_, exists := fieldSchemas[fieldName]
+			assert.True(t, exists, "schema should contain field %s", fieldName)
+		}
+
+		// Verify field types (uppercase)
+		assert.Equal(t, "INT64", fieldSchemas["id"]["type"], "id should be INT64")
+		assert.Equal(t, "STRING", fieldSchemas["name"]["type"], "name should be STRING")
+		assert.Equal(t, "TIMESTAMP", fieldSchemas["created_at"]["type"], "created_at should be TIMESTAMP")
+		assert.Equal(t, "FLOAT64", fieldSchemas["score"]["type"], "score should be FLOAT64")
+		assert.Equal(t, "STRING", fieldSchemas["data"]["type"], "json field should be STRING in schema")
+		assert.Equal(t, "ARRAY", fieldSchemas["tags"]["type"], "set field should be ARRAY")
+
+		// Verify array element type for tags
+		tagsChildren, ok := fieldSchemas["tags"]["children"].([]any)
+		require.True(t, ok, "tags field should have children")
+		require.Len(t, tagsChildren, 1, "tags array should have one element type")
+		elementType := tagsChildren[0].(map[string]any)
+		assert.Equal(t, "STRING", elementType["type"], "tags array elements should be STRINGs")
+	}
+}
+
+// validateSchemaStructure validates the basic structure of schema metadata
+func validateSchemaStructure(t *testing.T, schema map[string]any) {
+	t.Helper()
+
+	// Verify schema has required fields
+	require.Contains(t, schema, "name", "schema should have 'name' field")
+	require.Contains(t, schema, "type", "schema should have 'type' field")
+	require.Contains(t, schema, "children", "schema should have 'children' field")
+
+	// Verify root schema is of type OBJECT (uppercase)
+	assert.Equal(t, "OBJECT", schema["type"], "root schema should be of type 'OBJECT'")
+
+	// Verify table name matches
+	assert.Equal(t, "test_schema", schema["name"], "schema name should match table name")
+
+	// Verify children is an array
+	children, ok := schema["children"].([]any)
+	require.True(t, ok, "children should be an array")
+	require.NotEmpty(t, children, "children should not be empty")
+
+	// Verify each child has required fields
+	for _, child := range children {
+		childMap, ok := child.(map[string]any)
+		require.True(t, ok, "each child should be a map")
+		require.Contains(t, childMap, "name", "child should have 'name' field")
+		require.Contains(t, childMap, "type", "child should have 'type' field")
+		require.Contains(t, childMap, "optional", "child should have 'optional' field")
+	}
+}
+
+func TestIntegrationMySQLCDCSchemaInvalidationOnDDL(t *testing.T) {
+	dsn, db := setupTestWithMySQLVersion(t, "8.0")
+
+	// Create a table with initial columns
+	db.Exec(`
+		CREATE TABLE IF NOT EXISTS ddl_test (
+			id INT PRIMARY KEY,
+			name VARCHAR(100)
+		)
+	`)
+
+	// Insert initial row before starting CDC
+	db.Exec("INSERT INTO ddl_test VALUES (1, 'initial')")
+
+	template := fmt.Sprintf(`
+mysql_cdc:
+  dsn: %s
+  stream_snapshot: false
+  checkpoint_cache: ddlcache
+  tables:
+    - ddl_test
+`, dsn)
+
+	cacheConf := fmt.Sprintf(`
+label: ddlcache
+file:
+  directory: %s`, t.TempDir())
+
+	streamOutBuilder := service.NewStreamBuilder()
+	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: DEBUG`))
+	require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
+	require.NoError(t, streamOutBuilder.AddInputYAML(template))
+
+	type messageWithSchema struct {
+		operation string
+		data      map[string]any
+		schema    map[string]any
+	}
+
+	var messages []messageWithSchema
+	var msgMut sync.Mutex
+
+	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+		for _, msg := range mb {
+			msgMut.Lock()
+
+			operation, _ := msg.MetaGet("operation")
+			data, err := msg.AsStructured()
+			require.NoError(t, err)
+
+			// Extract schema metadata
+			var schema map[string]any
+			err = msg.MetaWalkMut(func(key string, value any) error {
+				if key == "schema" {
+					if schemaMap, ok := value.(map[string]any); ok {
+						schema = schemaMap
+					}
+				}
+				return nil
+			})
+			require.NoError(t, err)
+
+			messages = append(messages, messageWithSchema{
+				operation: operation,
+				data:      data.(map[string]any),
+				schema:    schema,
+			})
+
+			msgMut.Unlock()
+		}
+		return nil
+	}))
+
+	streamOut, err := streamOutBuilder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(streamOut.Resources())
+
+	go func() {
+		err = streamOut.Run(t.Context())
+		require.NoError(t, err)
+	}()
+
+	// Wait for stream to start
+	time.Sleep(time.Second * 2)
+
+	// Insert a row - this should capture the initial schema
+	db.Exec("INSERT INTO ddl_test VALUES (2, 'before_ddl')")
+
+	// Wait for the message
+	assert.Eventually(t, func() bool {
+		msgMut.Lock()
+		defer msgMut.Unlock()
+		return len(messages) >= 1
+	}, time.Second*10, time.Millisecond*100)
+
+	msgMut.Lock()
+	require.Len(t, messages, 1, "should have received first insert")
+	firstMsg := messages[0]
+	msgMut.Unlock()
+
+	// Verify first message has schema with 2 fields (id, name)
+	require.NotNil(t, firstMsg.schema, "first message should have schema")
+	firstChildren, ok := firstMsg.schema["children"].([]any)
+	require.True(t, ok, "schema should have children")
+	require.Len(t, firstChildren, 2, "initial schema should have 2 fields")
+
+	// Extract field names from first schema
+	firstFieldNames := make([]string, 0, len(firstChildren))
+	for _, child := range firstChildren {
+		childMap := child.(map[string]any)
+		firstFieldNames = append(firstFieldNames, childMap["name"].(string))
+	}
+	assert.ElementsMatch(t, []string{"id", "name"}, firstFieldNames, "initial schema should have id and name")
+
+	// Now perform a DDL change - add a new column
+	t.Log("Executing DDL: ALTER TABLE ADD COLUMN")
+	db.Exec("ALTER TABLE ddl_test ADD COLUMN email VARCHAR(255)")
+
+	// Give the DDL event time to be processed
+	time.Sleep(time.Second * 2)
+
+	// Insert another row with the new column
+	db.Exec("INSERT INTO ddl_test (id, name, email) VALUES (3, 'after_ddl', 'test@example.com')")
+
+	// Wait for the second message
+	assert.Eventually(t, func() bool {
+		msgMut.Lock()
+		defer msgMut.Unlock()
+		return len(messages) >= 2
+	}, time.Second*10, time.Millisecond*100)
+
+	msgMut.Lock()
+	require.Len(t, messages, 2, "should have received second insert")
+	secondMsg := messages[1]
+	msgMut.Unlock()
+
+	// Verify second message has updated schema with 3 fields (id, name, email)
+	require.NotNil(t, secondMsg.schema, "second message should have schema")
+	secondChildren, ok := secondMsg.schema["children"].([]any)
+	require.True(t, ok, "schema should have children")
+	require.Len(t, secondChildren, 3, "updated schema should have 3 fields after DDL")
+
+	// Extract field names from second schema
+	secondFieldNames := make([]string, 0, len(secondChildren))
+	for _, child := range secondChildren {
+		childMap := child.(map[string]any)
+		secondFieldNames = append(secondFieldNames, childMap["name"].(string))
+	}
+	assert.ElementsMatch(t, []string{"id", "name", "email"}, secondFieldNames,
+		"updated schema should include the new email column")
+
+	// Verify the data includes the email field
+	require.Contains(t, secondMsg.data, "email", "second message data should contain email field")
+	assert.Equal(t, "test@example.com", secondMsg.data["email"], "email value should match")
+
+	require.NoError(t, streamOut.StopWithin(time.Second*10))
+}

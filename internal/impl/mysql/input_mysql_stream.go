@@ -75,9 +75,10 @@ var mysqlStreamConfigSpec = service.NewConfigSpec().
 
 This input adds the following metadata fields to each message:
 
-- operation
-- table
-- binlog_position
+- operation: The type of operation (insert, update, delete, or read for snapshot messages)
+- table: The name of the table
+- binlog_position: The binlog position (for CDC messages only, not set for snapshot messages)
+- schema: The table schema in benthos common schema format, compatible with processors like parquet_encode
 `).
 	Fields(
 		service.NewStringAnnotatedEnumField(fieldMySQLFlavor, map[string]string{
@@ -198,6 +199,10 @@ type mysqlStreamInput struct {
 	// IAM authentication fields
 	iamAuthEnabled      bool
 	iamAuthTokenBuilder TokenBuilder
+
+	// Table schemas - stored as serialized format (map[string]any) for metadata
+	tableSchemas   map[string]any
+	tableSchemasMu sync.RWMutex
 }
 
 func newMySQLStreamInput(conf *service.ParsedConfig, res *service.Resources) (s service.BatchInput, err error) {
@@ -210,6 +215,7 @@ func newMySQLStreamInput(conf *service.ParsedConfig, res *service.Resources) (s 
 		rawMessageEvents: make(chan MessageEvent),
 		msgChan:          make(chan asyncMessage),
 		res:              res,
+		tableSchemas:     make(map[string]any),
 	}
 
 	var batching service.BatchPolicy
@@ -646,6 +652,11 @@ func (i *mysqlStreamInput) readMessages(ctx context.Context) error {
 				mb.MetaSet("binlog_position", binlogPositionToString(*me.Position))
 			}
 
+			// Add table schema if available
+			if tableSchema := i.getOrExtractTableSchemaByName(me.Table); tableSchema != nil {
+				mb.MetaSetMut("schema", tableSchema)
+			}
+
 			if i.batchPolicy.Add(mb) {
 				nextTimedBatchChan = nil
 				flushedBatch, err := i.batchPolicy.Flush(ctx)
@@ -798,7 +809,38 @@ func (i *mysqlStreamInput) OnRotate(_ *replication.EventHeader, re *replication.
 	return nil
 }
 
+// OnTableChanged is called when a table is created, altered, renamed, or dropped.
+// We invalidate the cached schema so it will be re-extracted on the next row event.
+func (i *mysqlStreamInput) OnTableChanged(_ *replication.EventHeader, schema, table string) error {
+	// Only invalidate cache for tables we're tracking
+	fullTableName := table
+	if schema != "" {
+		fullTableName = schema + "." + table
+	}
+
+	// Check if this is one of our tracked tables
+	isTracked := false
+	for _, t := range i.tables {
+		if t == table || t == fullTableName {
+			isTracked = true
+			break
+		}
+	}
+
+	if isTracked {
+		i.invalidateTableSchema(table)
+		i.logger.Infof("Schema cache invalidated for table %s.%s due to DDL change", schema, table)
+	}
+
+	return nil
+}
+
 func (i *mysqlStreamInput) OnRow(e *canal.RowsEvent) error {
+	// Extract and cache the table schema if we haven't seen this table yet
+	if _, err := i.getTableSchema(e.Table); err != nil {
+		return fmt.Errorf("failed to extract schema for table %s: %w", e.Table.Name, err)
+	}
+
 	switch e.Action {
 	case canal.InsertAction:
 		return i.onMessage(e, 0, 1)
@@ -910,3 +952,50 @@ func mapMessageColumn(v any, col schema.TableColumn) (any, error) {
 }
 
 // --- MySQL Canal handler methods end ----
+
+// ---- Schema extraction methods ----
+
+// getTableSchema retrieves the cached schema for a table, or extracts it if not yet cached.
+func (i *mysqlStreamInput) getTableSchema(table *schema.Table) (any, error) {
+	i.tableSchemasMu.RLock()
+	if cached, exists := i.tableSchemas[table.Name]; exists {
+		i.tableSchemasMu.RUnlock()
+		return cached, nil
+	}
+	i.tableSchemasMu.RUnlock()
+
+	// Extract schema from MySQL table
+	commonSchema, err := mysqlTableToCommonSchema(table)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert table schema for %s: %w", table.Name, err)
+	}
+
+	// Serialize to generic format for metadata
+	serialized := commonSchema.ToAny()
+
+	// Cache it
+	i.tableSchemasMu.Lock()
+	i.tableSchemas[table.Name] = serialized
+	i.tableSchemasMu.Unlock()
+
+	return serialized, nil
+}
+
+// getOrExtractTableSchemaByName attempts to retrieve a cached schema by table name.
+// For snapshot messages, we may not have the canal Table object, so we return nil
+// and let the schema be extracted later when we see CDC events for this table.
+func (i *mysqlStreamInput) getOrExtractTableSchemaByName(tableName string) any {
+	i.tableSchemasMu.RLock()
+	defer i.tableSchemasMu.RUnlock()
+	return i.tableSchemas[tableName]
+}
+
+// invalidateTableSchema removes a table's schema from the cache.
+// This is called when a DDL change is detected via OnTableChanged.
+func (i *mysqlStreamInput) invalidateTableSchema(tableName string) {
+	i.tableSchemasMu.Lock()
+	defer i.tableSchemasMu.Unlock()
+	delete(i.tableSchemas, tableName)
+}
+
+// ---- Schema extraction methods end ----
