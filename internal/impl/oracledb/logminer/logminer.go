@@ -84,10 +84,10 @@ func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replicat
 			TABLE_NAME,
 			SEG_OWNER,
 			TIMESTAMP,
-			XID                  -- Oracle's native transaction identifier (RAW)
+			XID,                 -- Oracle's native transaction identifier (RAW)
+			COMMIT_SCN          -- SCN when transaction commits (vs SCN when DML executes)
 		FROM V$LOGMNR_CONTENTS
-		WHERE SCN >= :1 AND SCN < :2%s
-		ORDER BY SCN, SSN
+		WHERE (COMMIT_SCN >= :1 AND COMMIT_SCN <= :2) OR (COMMIT_SCN IS NULL)%s
 	`, buf.String())
 
 	lm := &LogMiner{
@@ -168,7 +168,7 @@ func (lm *LogMiner) miningCycle(ctx context.Context) error {
 		return fmt.Errorf("fetching current SCN: %w", err)
 	}
 
-	if lm.currentSCN >= dbCurrentSCN {
+	if lm.currentSCN > dbCurrentSCN {
 		lm.log.Debugf("Caught up to current SCN %d, no new changes to process", dbCurrentSCN)
 		return nil
 	}
@@ -209,7 +209,7 @@ func (lm *LogMiner) miningCycle(ctx context.Context) error {
 	}
 
 	lm.log.Debugf("Processed %d events in SCN range %d - %d", len(redoEvents), lm.currentSCN, endSCN)
-	lm.currentSCN = endSCN
+	lm.currentSCN = endSCN + 1
 
 	return nil
 }
@@ -274,6 +274,7 @@ func (lm *LogMiner) queryLogMinerContents(startSCN, endSCN uint64) ([]*sqlredo.R
 	for rows.Next() {
 		event := &sqlredo.RedoEvent{}
 		var xid []byte // Oracle RAW type comes as []byte in Go
+		var commitSCN sql.NullInt64 // COMMIT_SCN can be NULL for uncommitted transactions
 
 		err := rows.Scan(
 			&event.SCN,
@@ -284,6 +285,7 @@ func (lm *LogMiner) queryLogMinerContents(startSCN, endSCN uint64) ([]*sqlredo.R
 			&event.SchemaName,
 			&event.Timestamp,
 			&xid,
+			&commitSCN,
 		)
 		if err != nil {
 			return nil, err
@@ -335,7 +337,7 @@ func (lfc *LogFileCollector) GetLogs(offsetSCN uint64) ([]*LogFile, error) {
 				'ONLINE' AS TYPE,
 				L.THREAD# AS THREAD
 			FROM V$LOGFILE F, V$LOG L
-			WHERE (L.STATUS = 'CURRENT' OR L.NEXT_CHANGE# > :1)
+			WHERE (L.STATUS = 'CURRENT' OR L.NEXT_CHANGE# >= :1)
 			AND F.GROUP# = L.GROUP#
 			GROUP BY L.FIRST_CHANGE#, L.NEXT_CHANGE#, L.SEQUENCE#, L.THREAD#
 
@@ -353,7 +355,7 @@ func (lfc *LogFileCollector) GetLogs(offsetSCN uint64) ([]*LogFile, error) {
 			WHERE A.NAME IS NOT NULL
 			AND A.ARCHIVED = 'YES'
 			AND A.STATUS = 'A'
-			AND A.NEXT_CHANGE# > :1
+			AND A.NEXT_CHANGE# >= :1
 			AND A.DEST_ID IN (
 				SELECT DEST_ID
 				FROM V$ARCHIVE_DEST_STATUS
