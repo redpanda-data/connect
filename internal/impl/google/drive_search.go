@@ -25,11 +25,11 @@ import (
 )
 
 const (
-	driveSearchFieldQuery          = "query"
-	driveSearchFieldProjection     = "projection"
-	driveSearchFieldLabels         = "include_label_ids"
-	driveSearchFieldMaxResults     = "max_results"
-	driveSearchSupportSharedDrives = "shared_drives"
+	driveSearchFieldQuery               = "query"
+	driveSearchFieldProjection          = "projection"
+	driveSearchFieldLabels              = "include_label_ids"
+	driveSearchFieldMaxResults          = "max_results"
+	driveSearchFieldSupportSharedDrives = "shared_drives"
 )
 
 func init() {
@@ -63,7 +63,7 @@ Search results are emitted as message batch, where each message is a https://dev
 			service.NewIntField(driveSearchFieldMaxResults).
 				Description("The maximum number of results to return.").
 				Default(64),
-			service.NewBoolField(driveSearchSupportSharedDrives).
+			service.NewBoolField(driveSearchFieldSupportSharedDrives).
 				Description("Whether or not to include shared drives in the result.").
 				Default(false),
 		).
@@ -122,7 +122,7 @@ func newGoogleDriveSearchProcessor(conf *service.ParsedConfig, mgr *service.Reso
 		return nil, err
 	}
 
-	sharedDrives, err := conf.FieldBool(driveSearchSupportSharedDrives)
+	sharedDrives, err := conf.FieldBool(driveSearchFieldSupportSharedDrives)
 	if err != nil {
 		return nil, err
 	}

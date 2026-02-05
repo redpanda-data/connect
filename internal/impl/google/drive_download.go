@@ -24,10 +24,10 @@ import (
 )
 
 const (
-	driveDownloadFieldFileID          = "file_id"
-	driveDownloadFieldMimeType        = "mime_type"
-	driveDownloadFieldExportMimeTypes = "export_mime_types"
-	driveDownloadSupportSharedDrives  = "shared_drives"
+	driveDownloadFieldFileID              = "file_id"
+	driveDownloadFieldMimeType            = "mime_type"
+	driveDownloadFieldExportMimeTypes     = "export_mime_types"
+	driveDownloadFieldSupportSharedDrives = "shared_drives"
 )
 
 func init() {
@@ -74,7 +74,7 @@ Can download a file from Google Drive based on a file ID.
 					"application/vnd.google-apps.drawing":      "image/svg+xml",
 				}).
 				Advanced(),
-			service.NewBoolField(driveDownloadSupportSharedDrives).
+			service.NewBoolField(driveDownloadFieldSupportSharedDrives).
 				Description("Whether or not to include shared drives.").
 				Default(false),
 		).
@@ -119,7 +119,7 @@ func newGoogleDriveDownloadProcessor(conf *service.ParsedConfig, mgr *service.Re
 		return nil, err
 	}
 
-	sharedDrives, err := conf.FieldBool(driveDownloadSupportSharedDrives)
+	sharedDrives, err := conf.FieldBool(driveDownloadFieldSupportSharedDrives)
 	if err != nil {
 		return nil, err
 	}
@@ -147,10 +147,6 @@ func newGoogleDriveDownloadProcessor(conf *service.ParsedConfig, mgr *service.Re
 }
 
 func (g *googleDriveDownloadProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
-	client, err := g.getDriveService(ctx)
-	if err != nil {
-		return nil, err
-	}
 	id, err := g.fileID.TryString(msg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to interpolate file_id: %v", err)
@@ -162,9 +158,9 @@ func (g *googleDriveDownloadProcessor) Process(ctx context.Context, msg *service
 	exportMimeType, ok := g.exportMimeTypes[mimeType]
 	var b []byte
 	if ok {
-		b, err = exportFile(ctx, client, id, exportMimeType)
+		b, err = g.exportFile(ctx, id, exportMimeType)
 	} else {
-		b, err = downloadFile(ctx, client, id, g.sharedDrives)
+		b, err = g.downloadFile(ctx, id)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to download file %v: %v", id, err)
@@ -174,8 +170,12 @@ func (g *googleDriveDownloadProcessor) Process(ctx context.Context, msg *service
 	return service.MessageBatch{msg}, nil
 }
 
-func downloadFile(ctx context.Context, srv *drive.Service, fileID string, sharedDrives bool) ([]byte, error) {
-	resp, err := srv.Files.Get(fileID).SupportsAllDrives(sharedDrives).Context(ctx).Download()
+func (g *googleDriveDownloadProcessor) downloadFile(ctx context.Context, fileID string) ([]byte, error) {
+	client, err := g.getDriveService(ctx)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := client.Files.Get(fileID).SupportsAllDrives(g.sharedDrives).Context(ctx).Download()
 	if err != nil {
 		return nil, fmt.Errorf("unable to download file: %v", err)
 	}
@@ -183,8 +183,12 @@ func downloadFile(ctx context.Context, srv *drive.Service, fileID string, shared
 	return io.ReadAll(resp.Body)
 }
 
-func exportFile(ctx context.Context, srv *drive.Service, fileID, mimeType string) ([]byte, error) {
-	resp, err := srv.Files.Export(fileID, mimeType).Context(ctx).Download()
+func (g *googleDriveDownloadProcessor) exportFile(ctx context.Context, fileID, mimeType string) ([]byte, error) {
+	client, err := g.getDriveService(ctx)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := client.Files.Export(fileID, mimeType).Context(ctx).Download()
 	if err != nil {
 		return nil, fmt.Errorf("unable to download file: %v", err)
 	}
