@@ -279,3 +279,92 @@ func TestMysqlTableToCommonSchemaNilTable(t *testing.T) {
 	assert.Nil(t, result)
 	assert.Contains(t, err.Error(), "table is nil")
 }
+
+func TestInvalidateTableSchema(t *testing.T) {
+	input := &mysqlStreamInput{
+		tableSchemas: make(map[string]any),
+	}
+
+	// Add some schemas to the cache
+	input.tableSchemas["users"] = map[string]any{"name": "users", "type": "object"}
+	input.tableSchemas["products"] = map[string]any{"name": "products", "type": "object"}
+
+	// Verify schemas are cached
+	require.NotNil(t, input.getOrExtractTableSchemaByName("users"))
+	require.NotNil(t, input.getOrExtractTableSchemaByName("products"))
+
+	// Invalidate one table
+	input.invalidateTableSchema("users")
+
+	// Verify only the specified table was invalidated
+	assert.Nil(t, input.getOrExtractTableSchemaByName("users"))
+	assert.NotNil(t, input.getOrExtractTableSchemaByName("products"))
+}
+
+func TestOnTableChanged(t *testing.T) {
+	tests := []struct {
+		name             string
+		trackedTables    []string
+		schemaName       string
+		tableName        string
+		shouldInvalidate bool
+	}{
+		{
+			name:             "invalidates tracked table",
+			trackedTables:    []string{"users", "products"},
+			schemaName:       "testdb",
+			tableName:        "users",
+			shouldInvalidate: true,
+		},
+		{
+			name:             "does not invalidate untracked table",
+			trackedTables:    []string{"users", "products"},
+			schemaName:       "testdb",
+			tableName:        "orders",
+			shouldInvalidate: false,
+		},
+		{
+			name:             "invalidates table with schema prefix",
+			trackedTables:    []string{"testdb.users"},
+			schemaName:       "testdb",
+			tableName:        "users",
+			shouldInvalidate: true,
+		},
+		{
+			name:             "invalidates table without schema prefix in tracked list",
+			trackedTables:    []string{"users"},
+			schemaName:       "testdb",
+			tableName:        "users",
+			shouldInvalidate: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// service.Logger is safe to be nil for testing components
+			input := &mysqlStreamInput{
+				tables:       tt.trackedTables,
+				tableSchemas: make(map[string]any),
+				logger:       nil,
+			}
+
+			// Add schema to cache
+			input.tableSchemas[tt.tableName] = map[string]any{"name": tt.tableName, "type": "object"}
+
+			// Verify schema is cached
+			require.NotNil(t, input.getOrExtractTableSchemaByName(tt.tableName))
+
+			// Call OnTableChanged
+			err := input.OnTableChanged(nil, tt.schemaName, tt.tableName)
+			require.NoError(t, err)
+
+			// Check if schema was invalidated
+			schema := input.getOrExtractTableSchemaByName(tt.tableName)
+			if tt.shouldInvalidate {
+				assert.Nil(t, schema, "schema should be invalidated for tracked table")
+			} else {
+				assert.NotNil(t, schema, "schema should not be invalidated for untracked table")
+			}
+		})
+	}
+}

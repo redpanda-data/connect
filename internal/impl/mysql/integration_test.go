@@ -968,3 +968,161 @@ func validateSchemaStructure(t *testing.T, schema map[string]any) {
 		require.Contains(t, childMap, "optional", "child should have 'optional' field")
 	}
 }
+
+func TestIntegrationMySQLCDCSchemaInvalidationOnDDL(t *testing.T) {
+	dsn, db := setupTestWithMySQLVersion(t, "8.0")
+
+	// Create a table with initial columns
+	db.Exec(`
+		CREATE TABLE IF NOT EXISTS ddl_test (
+			id INT PRIMARY KEY,
+			name VARCHAR(100)
+		)
+	`)
+
+	// Insert initial row before starting CDC
+	db.Exec("INSERT INTO ddl_test VALUES (1, 'initial')")
+
+	template := fmt.Sprintf(`
+mysql_cdc:
+  dsn: %s
+  stream_snapshot: false
+  checkpoint_cache: ddlcache
+  tables:
+    - ddl_test
+`, dsn)
+
+	cacheConf := fmt.Sprintf(`
+label: ddlcache
+file:
+  directory: %s`, t.TempDir())
+
+	streamOutBuilder := service.NewStreamBuilder()
+	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: DEBUG`))
+	require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
+	require.NoError(t, streamOutBuilder.AddInputYAML(template))
+
+	type messageWithSchema struct {
+		operation string
+		data      map[string]any
+		schema    map[string]any
+	}
+
+	var messages []messageWithSchema
+	var msgMut sync.Mutex
+
+	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+		for _, msg := range mb {
+			msgMut.Lock()
+
+			operation, _ := msg.MetaGet("operation")
+			data, err := msg.AsStructured()
+			require.NoError(t, err)
+
+			// Extract schema metadata
+			var schema map[string]any
+			err = msg.MetaWalkMut(func(key string, value any) error {
+				if key == "schema" {
+					if schemaMap, ok := value.(map[string]any); ok {
+						schema = schemaMap
+					}
+				}
+				return nil
+			})
+			require.NoError(t, err)
+
+			messages = append(messages, messageWithSchema{
+				operation: operation,
+				data:      data.(map[string]any),
+				schema:    schema,
+			})
+
+			msgMut.Unlock()
+		}
+		return nil
+	}))
+
+	streamOut, err := streamOutBuilder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(streamOut.Resources())
+
+	go func() {
+		err = streamOut.Run(t.Context())
+		require.NoError(t, err)
+	}()
+
+	// Wait for stream to start
+	time.Sleep(time.Second * 2)
+
+	// Insert a row - this should capture the initial schema
+	db.Exec("INSERT INTO ddl_test VALUES (2, 'before_ddl')")
+
+	// Wait for the message
+	assert.Eventually(t, func() bool {
+		msgMut.Lock()
+		defer msgMut.Unlock()
+		return len(messages) >= 1
+	}, time.Second*10, time.Millisecond*100)
+
+	msgMut.Lock()
+	require.Len(t, messages, 1, "should have received first insert")
+	firstMsg := messages[0]
+	msgMut.Unlock()
+
+	// Verify first message has schema with 2 fields (id, name)
+	require.NotNil(t, firstMsg.schema, "first message should have schema")
+	firstChildren, ok := firstMsg.schema["children"].([]any)
+	require.True(t, ok, "schema should have children")
+	require.Len(t, firstChildren, 2, "initial schema should have 2 fields")
+
+	// Extract field names from first schema
+	firstFieldNames := make([]string, 0, len(firstChildren))
+	for _, child := range firstChildren {
+		childMap := child.(map[string]any)
+		firstFieldNames = append(firstFieldNames, childMap["name"].(string))
+	}
+	assert.ElementsMatch(t, []string{"id", "name"}, firstFieldNames, "initial schema should have id and name")
+
+	// Now perform a DDL change - add a new column
+	t.Log("Executing DDL: ALTER TABLE ADD COLUMN")
+	db.Exec("ALTER TABLE ddl_test ADD COLUMN email VARCHAR(255)")
+
+	// Give the DDL event time to be processed
+	time.Sleep(time.Second * 2)
+
+	// Insert another row with the new column
+	db.Exec("INSERT INTO ddl_test (id, name, email) VALUES (3, 'after_ddl', 'test@example.com')")
+
+	// Wait for the second message
+	assert.Eventually(t, func() bool {
+		msgMut.Lock()
+		defer msgMut.Unlock()
+		return len(messages) >= 2
+	}, time.Second*10, time.Millisecond*100)
+
+	msgMut.Lock()
+	require.Len(t, messages, 2, "should have received second insert")
+	secondMsg := messages[1]
+	msgMut.Unlock()
+
+	// Verify second message has updated schema with 3 fields (id, name, email)
+	require.NotNil(t, secondMsg.schema, "second message should have schema")
+	secondChildren, ok := secondMsg.schema["children"].([]any)
+	require.True(t, ok, "schema should have children")
+	require.Len(t, secondChildren, 3, "updated schema should have 3 fields after DDL")
+
+	// Extract field names from second schema
+	secondFieldNames := make([]string, 0, len(secondChildren))
+	for _, child := range secondChildren {
+		childMap := child.(map[string]any)
+		secondFieldNames = append(secondFieldNames, childMap["name"].(string))
+	}
+	assert.ElementsMatch(t, []string{"id", "name", "email"}, secondFieldNames,
+		"updated schema should include the new email column")
+
+	// Verify the data includes the email field
+	require.Contains(t, secondMsg.data, "email", "second message data should contain email field")
+	assert.Equal(t, "test@example.com", secondMsg.data["email"], "email value should match")
+
+	require.NoError(t, streamOut.StopWithin(time.Second*10))
+}
