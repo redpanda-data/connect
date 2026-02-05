@@ -57,7 +57,7 @@ type DMLEvent struct {
 
 // RedoEvent represents a redo log row from V$LOGMNR_CONTENTS
 type RedoEvent struct {
-	SCN     int64
+	SCN     uint64
 	SQLRedo sql.NullString
 	Data    map[string]any
 	// TODO: Do we need both Operation and OperationCode?
