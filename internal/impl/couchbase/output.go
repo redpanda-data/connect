@@ -41,8 +41,11 @@ func outputConfig() *service.ConfigSpec {
 			string(client.OperationRemove):  "delete a document.",
 			string(client.OperationReplace): "replace the contents of a document.",
 			string(client.OperationUpsert):  "creates a new document if it does not exist, if it does exist then it updates it.",
+			// counters ops
+			string(client.OperationIncrement): "increment a counter by the value in content.",
+			string(client.OperationDecrement): "decrement a counter by the value in content.",
 		}).Description("Couchbase operation to perform.").Default(string(client.OperationUpsert))).
-		LintRule(`root = if ((this.operation == "insert" || this.operation == "replace" || this.operation == "upsert") && !this.exists("content")) { [ "content must be set for insert, replace and upsert operations." ] }`).
+		LintRule(`root = if ((this.operation == "insert" || this.operation == "replace" || this.operation == "upsert" || this.operation == "increment" || this.operation == "decrement") && !this.exists("content")) { [ "content must be set for insert, replace, upsert, increment and decrement operations." ] }`).
 		Field(service.NewOutputMaxInFlightField()).
 		Field(service.NewBatchPolicyField("batching"))
 }
@@ -71,7 +74,7 @@ type Output struct {
 	id      *service.InterpolatedString
 	content *bloblang.Executor
 	ttl     *time.Duration
-	op      func(key string, data []byte, ttl *time.Duration) gocb.BulkOp
+	op      func(key string, data []byte, ttl *time.Duration) (gocb.BulkOp, error)
 }
 
 // NewOutput returns a new couchbase output based on the provided config
@@ -172,7 +175,10 @@ func (o *Output) WriteBatch(_ context.Context, batch service.MessageBatch) error
 			}
 		}
 
-		ops[index] = o.op(k, content, o.ttl)
+		ops[index], err = o.op(k, content, o.ttl)
+		if err != nil {
+			return err
+		}
 	}
 
 	return o.client.collection.Do(ops, &gocb.BulkOpOptions{})
