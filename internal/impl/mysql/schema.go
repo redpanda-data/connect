@@ -9,16 +9,18 @@
 package mysql
 
 import (
+	"errors"
 	"fmt"
 
 	gomysqlschema "github.com/go-mysql-org/go-mysql/schema"
+
 	"github.com/redpanda-data/benthos/v4/public/schema"
 )
 
 // mysqlTableToCommonSchema converts a MySQL table schema to benthos common schema format.
 func mysqlTableToCommonSchema(table *gomysqlschema.Table) (*schema.Common, error) {
 	if table == nil {
-		return nil, fmt.Errorf("table is nil")
+		return nil, errors.New("table is nil")
 	}
 
 	children := make([]schema.Common, 0, len(table.Columns))

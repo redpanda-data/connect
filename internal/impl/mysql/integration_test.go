@@ -863,7 +863,7 @@ file:
 		return len(messages) == 4
 	}, time.Minute, time.Millisecond*100)
 
-	require.NoError(t, streamOut.StopWithin(time.Second * 10))
+	require.NoError(t, streamOut.StopWithin(time.Second*10))
 
 	// Verify messages
 	msgMut.Lock()

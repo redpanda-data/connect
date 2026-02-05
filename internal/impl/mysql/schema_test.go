@@ -12,19 +12,20 @@ import (
 	"testing"
 
 	gomysqlschema "github.com/go-mysql-org/go-mysql/schema"
-	"github.com/redpanda-data/benthos/v4/public/schema"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/redpanda-data/benthos/v4/public/schema"
 )
 
 func TestMysqlColumnToCommon(t *testing.T) {
 	tests := []struct {
-		name           string
-		col            gomysqlschema.TableColumn
-		expectedType   schema.CommonType
-		expectedName   string
-		hasChildren    bool
-		expectedError  bool
+		name          string
+		col           gomysqlschema.TableColumn
+		expectedType  schema.CommonType
+		expectedName  string
+		hasChildren   bool
+		expectedError bool
 	}{
 		{
 			name: "integer column",
@@ -263,7 +264,7 @@ func TestMysqlTableToCommonSchemaRoundtrip(t *testing.T) {
 	// Verify the parsed schema matches the original
 	assert.Equal(t, commonSchema.Name, parsed.Name)
 	assert.Equal(t, commonSchema.Type, parsed.Type)
-	assert.Equal(t, len(commonSchema.Children), len(parsed.Children))
+	assert.Len(t, commonSchema.Children, len(parsed.Children))
 
 	for i, child := range commonSchema.Children {
 		assert.Equal(t, child.Name, parsed.Children[i].Name)
