@@ -156,11 +156,16 @@ func (g *googleDriveSearchProcessor) Process(ctx context.Context, msg *service.M
 		Context(ctx).
 		Q(q).
 		PageSize(min(int64(g.maxResults), 100)).
-		SupportsAllDrives(g.sharedDrives).
-		IncludeItemsFromAllDrives(g.sharedDrives).
 		Fields("nextPageToken", googleapi.Field("files("+strings.Join(g.fields, ",")+")"))
 	if l != "" {
 		call = call.IncludeLabels(l)
+	}
+	if g.sharedDrives {
+		// all of those flags are needed to look into shared drives
+		call.
+			SupportsAllDrives(g.sharedDrives).         // Flag 1: Tells API you know about Shared Drives
+			IncludeItemsFromAllDrives(g.sharedDrives). // Flag 2: Tells API to actually look in them
+			Corpora("allDrives")                       // Flag 3: Look everywhere the SA has access
 	}
 	var files []*drive.File
 	err = call.Pages(ctx, func(page *drive.FileList) error {
