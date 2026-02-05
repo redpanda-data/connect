@@ -6,9 +6,10 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/sns"
-	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 type mockSNSClient struct {
@@ -16,7 +17,7 @@ type mockSNSClient struct {
 	publishErr error
 }
 
-func (m *mockSNSClient) Publish(ctx context.Context, input *sns.PublishInput, _ ...func(*sns.Options)) (*sns.PublishOutput, error) {
+func (m *mockSNSClient) Publish(_ context.Context, input *sns.PublishInput, _ ...func(*sns.Options)) (*sns.PublishOutput, error) {
 	m.lastInput = input
 	return &sns.PublishOutput{}, m.publishErr
 }
