@@ -39,6 +39,7 @@ google_drive_search:
     - labelInfo
   include_label_ids: ""
   max_results: 64
+  shared_drives: false
 ```
 
 This processor searches for files in Google Drive using the provided query.
@@ -140,5 +141,14 @@ The maximum number of results to return.
 *Type*: `int`
 
 *Default*: `64`
+
+=== `shared_drives`
+
+Whether or not to include shared drives in the result.
+
+
+*Type*: `bool`
+
+*Default*: `false`
 
 
