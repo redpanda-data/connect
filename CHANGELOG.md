@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.80.1 - 2026-02-05
+
+### Changed
+
+- chroot: existing directories are now allowed. (@birdayz)
+
 ## 4.80.0 - 2026-02-04
 
 ### Added
