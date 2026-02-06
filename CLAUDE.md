@@ -2,10 +2,16 @@
 
 AI agent guidance for working with Redpanda Connect codebase.
 
-> **Note**: This file contains general repository guidance. For detailed context:
-> - **Go patterns & testing**: See `internal/CLAUDE.md`
-> - **YAML & Bloblang**: See `config/CLAUDE.md`
-> - **Agent standards & gotchas**: See `AGENTS.md`
+---
+
+## Agent Routing
+
+| Task | Agent/File |
+|---|---|
+| Writing or modifying Go code | `godev` agent |
+| Writing or modifying tests | `tester` agent |
+| Writing YAML configs or Bloblang | `config/CLAUDE.md` |
+| Code review | `/review` command |
 
 ---
 
@@ -73,92 +79,70 @@ go run ./cmd/redpanda-connect --config ./config.yaml
 rpk connect run ./config.yaml
 ```
 
+### Other Commands
+```bash
+task deps                         # Tidy Go modules
+task bundles                      # Update bundle imports
+task bump-benthos                 # Update benthos dependency
+```
+
 ---
 
 ## Architecture
 
 ### Multi-Distribution System
 
-Four binary distributions exist with different component sets.
+Four binary distributions with different component sets:
 
-**`redpanda-connect`** - Full-featured, self-hosted.
-All components (community + enterprise).
-
-**`redpanda-connect-cloud`** - Serverless/cloud environments.
-Cloud-safe subset (pure processors only, no filesystem access).
-
-**`redpanda-connect-community`** - Open-source deployments.
-FOSS/Apache 2.0 components only.
-
-**`redpanda-connect-ai`** - AI-specific workflows.
-Cloud components + AI integrations (OpenAI, Claude, etc.).
+| Distribution | Purpose | Components |
+|---|---|---|
+| `redpanda-connect` | Full-featured, self-hosted | All (community + enterprise) |
+| `redpanda-connect-cloud` | Serverless/cloud | Cloud-safe subset, no filesystem |
+| `redpanda-connect-community` | Open-source | Apache 2.0 only |
+| `redpanda-connect-ai` | AI workflows | Cloud + AI integrations |
 
 Component availability controlled by:
 - `public/bundle/enterprise/` and `public/bundle/free/` - Distribution-specific package imports
 - `public/schema/` - Schema generation and filtering per distribution
-- `internal/plugins/info.csv` - Component metadata defining which components are available in which distributions (columns: `cloud`, `cloud_with_gpu` indicate cloud-safe components)
+- `internal/plugins/info.csv` - Component metadata (columns: `cloud`, `cloud_with_gpu`)
 
 ### Directory Structure
 
-`internal/impl/{category}/` - Component implementations (76+ categories: kafka, redis, aws, azure, postgres, etc.).
-Each category contains inputs, outputs, processors, caches for that system.
-Components register themselves via `init()` functions calling `service.MustRegister*`.
+`internal/impl/{category}/` - Component implementations. Each category contains inputs, outputs, processors, caches for that system.
 
-`public/components/{category}/` - Public API wrappers.
-Thin import wrappers: `import _ "github.com/redpanda-data/connect/v4/internal/impl/redis"`.
-Allows selective compilation per distribution.
+`public/components/{category}/` - Public API wrappers. Thin `import _` wrappers for selective compilation.
 
-`internal/cli/` - Enterprise CLI functionality (license management, MCP server, agent mode, global manager).
+`internal/cli/` - Enterprise CLI (license management, MCP server, agent mode).
 
-`internal/license/` - RCL (Redpanda Community License) validation and enforcement.
+`internal/license/` - RCL validation and enforcement.
 
-`internal/rpcplugin/` - RPC plugin system for extensibility (Python/Go templates).
+`internal/rpcplugin/` - RPC plugin system (Python/Go templates).
 
 `public/schema/` - Distribution-specific schema generation.
-`Standard()` for full schema with all components.
-`Cloud()` for filtered schema with pure processors only.
 
 `cmd/` - Binary entry points for each distribution.
 
-### Component Registration
-
-Components use registration-at-init via benthos's public service API.
-Call `service.MustRegister*` in `init()` function.
-Import with `import _` to trigger registration.
-
-No explicit registry file exists.
-Components discovered via Go's `import _` side effects.
-Different binaries include different subsets by importing different packages.
-
 ### Benthos Integration
 
-Benthos is the foundational framework.
-
 Redpanda Connect imports benthos's public service API: `github.com/redpanda-data/benthos/v4/public/service`.
-Uses benthos's built-in component interfaces (Input, Output, Processor, Cache, Buffer, etc.).
-Inherits benthos's configuration DSL, validation, and runtime.
-Extends with enterprise-only components.
+Inherits benthos's component interfaces, configuration DSL, validation, and runtime.
 
-Update benthos dependency: `task bump-benthos`
-
-### Other Commands
-
-```bash
-task deps                         # Tidy Go modules
-task bundles                      # Update bundle imports
-```
+Component registration, config specs, license headers, and certification standards are covered in the `godev` agent.
 
 ---
 
-## Additional Context Files
+## Key Non-Obvious Patterns
 
-This file provides general repository guidance. For detailed context on specific topics:
+1. **Distribution gating is compile-time:** Different binaries import different `public/components/` packages. Schema filters at runtime based on `internal/plugins/info.csv`.
 
-- **Specialized Agents**: See `.claude/agents/` for domain-specific expertise
-  - `go-expert.md` - Go code patterns, idioms, and best practices
-  - `unit-test-writer.md` - Table-driven tests, testify patterns
-  - `integration-test-writer.md` - Docker-based tests with testcontainers-go
-  - `component-architect.md` - Component registration and multi-distribution system
-  - `code-reviewer.md` - Comprehensive code review orchestration
-- **YAML & Bloblang**: See `config/CLAUDE.md` for configuration patterns and Bloblang transformation language
-- **Agent standards & gotchas**: See `AGENTS.md` for certification requirements and common pitfalls
+2. **Template tests validate YAML configs:** `task test:template` runs actual binaries against config files in `config/test/` and `internal/impl/*/tmpl.yaml`.
+
+3. **Cloud distribution is restrictive:** Only pure processors (no side effects) and pure Bloblang functions. Check `schema.Cloud()` for filtering logic.
+
+---
+
+## Common Gotchas
+
+- **External dependencies:** Components requiring C libraries (like ZMQ) are excluded by default. Use `TAGS=x_benthos_extra task build:all`.
+- **Template tests are slow:** They build and run actual binaries. Run only changed tests during development.
+- **License headers matter:** CI fails if headers don't match the component's distribution classification. See `godev` agent for header formats.
