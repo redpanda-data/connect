@@ -108,7 +108,7 @@ func TestCallSalesforceApi_RefreshOn401_RealClient(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	body, err := client.callSalesforceApi(context.Background(), mustParseURL(ts.URL+"/services/data/v65.0"))
+	body, err := client.callSalesforceAPI(context.Background(), mustParseURL(ts.URL+"/services/data/v65.0"))
 	require.NoError(t, err)
 
 	assert.Equal(t, `{"ok":true}`, string(body))

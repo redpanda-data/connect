@@ -39,7 +39,7 @@ const salesforceAPIBasePath = "/services"
 // This is the general function that calls Salesforce API on a specific URL using the URL object.
 // It applies standard header parameters to all calls, Authorization, User-Agent and Accept.
 // It uses the helper functions to check against possible response codes and handling the retry-after mechanism
-func (s *Client) callSalesforceApi(ctx context.Context, u *url.URL) ([]byte, error) {
+func (s *Client) callSalesforceAPI(ctx context.Context, u *url.URL) ([]byte, error) {
 	s.log.Debugf("API call: %s", u.String())
 
 	if s.bearerToken == "" {
@@ -137,7 +137,7 @@ func (s *Client) GetAvailableResources(ctx context.Context) ([]byte, error) {
 		return nil, fmt.Errorf("invalid URL: %v", err)
 	}
 
-	body, err := s.callSalesforceApi(ctx, apiUrl)
+	body, err := s.callSalesforceAPI(ctx, apiUrl)
 	if err != nil {
 		return nil, err
 	}
@@ -152,7 +152,7 @@ func (s *Client) GetAllSObjectResources(ctx context.Context) ([]byte, error) {
 		return nil, fmt.Errorf("invalid URL: %v", err)
 	}
 
-	body, err := s.callSalesforceApi(ctx, apiUrl)
+	body, err := s.callSalesforceAPI(ctx, apiUrl)
 	if err != nil {
 		return nil, err
 	}
@@ -167,7 +167,7 @@ func (s *Client) GetSObjectResource(ctx context.Context, sObj string) ([]byte, e
 		return nil, fmt.Errorf("invalid URL: %v", err)
 	}
 
-	body, err := s.callSalesforceApi(ctx, apiUrl)
+	body, err := s.callSalesforceAPI(ctx, apiUrl)
 	if err != nil {
 		return nil, err
 	}
@@ -182,7 +182,7 @@ func (s *Client) GetSObjectData(ctx context.Context, query string) ([]byte, erro
 		return nil, fmt.Errorf("invalid URL: %v", err)
 	}
 
-	body, err := s.callSalesforceApi(ctx, apiUrl)
+	body, err := s.callSalesforceAPI(ctx, apiUrl)
 	if err != nil {
 		return nil, err
 	}
