@@ -43,7 +43,7 @@ var (
 func main() {
 	schema := schema.CloudAI(Version, DateBuilt)
 	if len(os.Args) > 1 && os.Args[1] != "run" {
-		cli.InitEnterpriseCLI(BinaryName, Version, DateBuilt, schema)
+		cli.InitEnterpriseCLI(BinaryName, Version, DateBuilt, schema, cli.DistCloudAI)
 		return
 	}
 
@@ -54,7 +54,7 @@ func main() {
 	go func() {
 		errC <- status.Run(context.Background())
 	}()
-	cli.InitEnterpriseCLI(BinaryName, Version, DateBuilt, schema)
+	cli.InitEnterpriseCLI(BinaryName, Version, DateBuilt, schema, cli.DistCloudAI)
 	select {
 	case <-sigC:
 		// External termination should not cause the pipeline to be killed

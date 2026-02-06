@@ -35,7 +35,13 @@ const connectorListPath = "/etc/redpanda/connector_list.yaml"
 // all of the enterprise functionality of Redpanda Connect. This has been
 // abstracted into a separate package so that multiple distributions (classic
 // versus cloud) can reference the same code.
-func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.ConfigSchema, opts ...service.CLIOptFunc) {
+func InitEnterpriseCLI(
+	binaryName, version,
+	dateBuilt string,
+	schema *service.ConfigSchema,
+	dist Distribution,
+	opts ...service.CLIOptFunc,
+) {
 	instanceID := xid.New().String()
 
 	rpMgr := enterprise.NewGlobalRedpandaManager(instanceID)
@@ -145,6 +151,14 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 			}
 
 			// Store authorization configuration if present
+			if dist == DistCloud || dist == DistCloudAI {
+				if authzResourceName == "" {
+					return fmt.Errorf("authorization resource name is required for cloud distributions")
+				}
+				if authzPolicyFile == "" {
+					return fmt.Errorf("authorization policy file is required for cloud distributions")
+				}
+			}
 			if authzResourceName != "" && authzPolicyFile != "" {
 				gateway.SetManagerAuthzConfig(pConf.Resources(), gateway.AuthzConfig{
 					ResourceName: authz.ResourceName(authzResourceName),

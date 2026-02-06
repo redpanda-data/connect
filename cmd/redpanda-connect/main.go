@@ -31,5 +31,5 @@ var (
 )
 
 func main() {
-	cli.InitEnterpriseCLI(BinaryName, Version, DateBuilt, schema.Standard(Version, DateBuilt))
+	cli.InitEnterpriseCLI(BinaryName, Version, DateBuilt, schema.Standard(Version, DateBuilt), cli.DistStandard)
 }
