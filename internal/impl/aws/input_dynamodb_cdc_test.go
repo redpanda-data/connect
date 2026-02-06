@@ -9,6 +9,7 @@
 package aws
 
 import (
+	"context"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -185,4 +186,92 @@ func TestExhaustedShardHandling(t *testing.T) {
 	input.mu.RUnlock()
 
 	assert.Equal(t, 1, activeCount, "Only one shard should be active")
+}
+
+// Test cleanupExhaustedShards removes exhausted shards correctly
+func TestCleanupExhaustedShards(t *testing.T) {
+	logger := service.MockResources().Logger()
+
+	t.Run("removes only exhausted shards", func(t *testing.T) {
+		input := &dynamoDBCDCInput{
+			shardReaders: map[string]*dynamoDBShardReader{
+				"shard-001": {shardID: "shard-001", exhausted: true},
+				"shard-002": {shardID: "shard-002", exhausted: false},
+				"shard-003": {shardID: "shard-003", exhausted: true},
+				"shard-004": {shardID: "shard-004", exhausted: false},
+			},
+			log: logger,
+			metrics: dynamoDBCDCMetrics{
+				shardsTracked: service.MockResources().Metrics().NewGauge("test_shards"),
+			},
+		}
+
+		activeShards := map[string]context.CancelFunc{
+			"shard-001": func() {},
+			"shard-003": func() {},
+		}
+
+		input.cleanupExhaustedShards(activeShards)
+
+		// Should only have non-exhausted shards left
+		assert.Len(t, input.shardReaders, 2)
+		assert.Contains(t, input.shardReaders, "shard-002")
+		assert.Contains(t, input.shardReaders, "shard-004")
+		assert.NotContains(t, input.shardReaders, "shard-001")
+		assert.NotContains(t, input.shardReaders, "shard-003")
+
+		// Active shards should have been removed
+		assert.Empty(t, activeShards)
+	})
+
+	t.Run("handles empty shard map", func(t *testing.T) {
+		input := &dynamoDBCDCInput{
+			shardReaders: map[string]*dynamoDBShardReader{},
+			log:          logger,
+			metrics: dynamoDBCDCMetrics{
+				shardsTracked: service.MockResources().Metrics().NewGauge("test_shards"),
+			},
+		}
+
+		activeShards := map[string]context.CancelFunc{}
+		input.cleanupExhaustedShards(activeShards)
+
+		assert.Empty(t, input.shardReaders)
+	})
+
+	t.Run("handles all exhausted shards", func(t *testing.T) {
+		input := &dynamoDBCDCInput{
+			shardReaders: map[string]*dynamoDBShardReader{
+				"shard-001": {shardID: "shard-001", exhausted: true},
+				"shard-002": {shardID: "shard-002", exhausted: true},
+			},
+			log: logger,
+			metrics: dynamoDBCDCMetrics{
+				shardsTracked: service.MockResources().Metrics().NewGauge("test_shards"),
+			},
+		}
+
+		activeShards := map[string]context.CancelFunc{}
+		input.cleanupExhaustedShards(activeShards)
+
+		assert.Empty(t, input.shardReaders)
+	})
+
+	t.Run("handles no exhausted shards", func(t *testing.T) {
+		input := &dynamoDBCDCInput{
+			shardReaders: map[string]*dynamoDBShardReader{
+				"shard-001": {shardID: "shard-001", exhausted: false},
+				"shard-002": {shardID: "shard-002", exhausted: false},
+			},
+			log: logger,
+			metrics: dynamoDBCDCMetrics{
+				shardsTracked: service.MockResources().Metrics().NewGauge("test_shards"),
+			},
+		}
+
+		activeShards := map[string]context.CancelFunc{}
+		input.cleanupExhaustedShards(activeShards)
+
+		assert.Len(t, input.shardReaders, 2)
+	})
 }

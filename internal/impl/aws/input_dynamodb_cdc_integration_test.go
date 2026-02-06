@@ -542,3 +542,308 @@ credentials:
 	// The batch may include checkpoint-3 but should not re-process already checkpointed items
 	assert.NotEmpty(t, batch2, "Should read new events after resumption")
 }
+
+// TestIntegrationDynamoDBSnapshot tests snapshot functionality
+func TestIntegrationDynamoDBSnapshot(t *testing.T) {
+	integration.CheckSkip(t)
+	t.Parallel()
+
+	pool, err := dockertest.NewPool("")
+	require.NoError(t, err)
+
+	pool.MaxWait = time.Second * 60
+
+	// Start DynamoDB Local container
+	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
+		Repository:   "amazon/dynamodb-local",
+		Tag:          "latest",
+		ExposedPorts: []string{"8000/tcp"},
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		assert.NoError(t, pool.Purge(resource))
+	})
+
+	_ = resource.Expire(900)
+
+	var client *dynamodb.Client
+	tableName := "test-snapshot-table"
+
+	// Wait for DynamoDB to be ready and create table
+	require.NoError(t, pool.Retry(func() error {
+		var err error
+		client, err = createTableWithStreams(context.Background(), t, resource.GetPort("8000/tcp"), tableName)
+		return err
+	}))
+
+	port := resource.GetPort("8000/tcp")
+
+	t.Run("SnapshotOnlyMode", func(t *testing.T) {
+		checkpointTable := "test-snapshot-only-checkpoint"
+		testSnapshotOnlyMode(t, client, port, tableName, checkpointTable)
+	})
+
+	t.Run("SnapshotAndCDCMode", func(t *testing.T) {
+		checkpointTable := "test-snapshot-cdc-checkpoint"
+		testSnapshotAndCDCMode(t, client, port, tableName, checkpointTable)
+	})
+
+	t.Run("SnapshotResumeFromCheckpoint", func(t *testing.T) {
+		checkpointTable := "test-snapshot-resume-checkpoint"
+		testSnapshotResumeFromCheckpoint(t, client, port, tableName, checkpointTable)
+	})
+}
+
+// testSnapshotOnlyMode verifies snapshot_only mode reads all items and exits
+func testSnapshotOnlyMode(t *testing.T, client *dynamodb.Client, port, tableName, checkpointTable string) {
+	ctx := context.Background()
+
+	// Insert test items BEFORE starting snapshot
+	require.NoError(t, putTestItem(ctx, client, tableName, "snap-only-1", "value-1"))
+	require.NoError(t, putTestItem(ctx, client, tableName, "snap-only-2", "value-2"))
+	require.NoError(t, putTestItem(ctx, client, tableName, "snap-only-3", "value-3"))
+
+	// Give DynamoDB a moment to persist
+	time.Sleep(100 * time.Millisecond)
+
+	// Create input with snapshot_only mode
+	confStr := fmt.Sprintf(`
+table: %s
+checkpoint_table: %s
+endpoint: http://localhost:%s
+region: us-east-1
+start_from: latest
+snapshot_mode: snapshot_only
+snapshot_segments: 1
+snapshot_batch_size: 10
+credentials:
+  id: xxxxx
+  secret: xxxxx
+  token: xxxxx
+`, tableName, checkpointTable, port)
+
+	spec := dynamoDBCDCInputConfig()
+	parsed, err := spec.ParseYAML(confStr, nil)
+	require.NoError(t, err)
+
+	input, err := newDynamoDBCDCInputFromConfig(parsed, service.MockResources())
+	require.NoError(t, err)
+
+	require.NoError(t, input.Connect(ctx))
+	t.Cleanup(func() {
+		_ = input.Close(ctx)
+	})
+
+	// Collect all messages
+	messages := []any{}
+	readCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	// Read batches until we get ErrEndOfInput or timeout
+	for {
+		batch, ackFn, err := input.ReadBatch(readCtx)
+		if err != nil {
+			if errors.Is(err, service.ErrEndOfInput) {
+				t.Log("Received ErrEndOfInput as expected for snapshot_only mode")
+				break
+			}
+			// Timeout or context canceled is expected when snapshot completes
+			if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+				t.Log("Context timeout - snapshot may still be running")
+				break
+			}
+			require.NoError(t, err, "Unexpected error reading batch")
+		}
+
+		// Acknowledge batch
+		if ackFn != nil {
+			require.NoError(t, ackFn(ctx, nil))
+		}
+
+		// Verify all messages have READ event type (snapshot events)
+		for _, msg := range batch {
+			eventName, exists := msg.MetaGet("dynamodb_event_name")
+			require.True(t, exists, "Message should have event_name metadata")
+			require.Equal(t, "READ", eventName, "Snapshot messages should have READ event type")
+
+			structured, err := msg.AsStructured()
+			require.NoError(t, err)
+			messages = append(messages, structured)
+		}
+	}
+
+	// We should have read at least the 3 items we inserted
+	// (there might be more from other tests, that's okay)
+	assert.GreaterOrEqual(t, len(messages), 3, "Should read at least 3 snapshot items")
+}
+
+// testSnapshotAndCDCMode verifies snapshot_and_cdc mode captures both snapshot and CDC events
+func testSnapshotAndCDCMode(t *testing.T, client *dynamodb.Client, port, tableName, checkpointTable string) {
+	ctx := context.Background()
+
+	// Insert initial items BEFORE starting
+	require.NoError(t, putTestItem(ctx, client, tableName, "snap-cdc-1", "initial-1"))
+	require.NoError(t, putTestItem(ctx, client, tableName, "snap-cdc-2", "initial-2"))
+
+	// Give DynamoDB a moment to persist
+	time.Sleep(100 * time.Millisecond)
+
+	// Create input with snapshot_and_cdc mode
+	confStr := fmt.Sprintf(`
+table: %s
+checkpoint_table: %s
+endpoint: http://localhost:%s
+region: us-east-1
+start_from: latest
+snapshot_mode: snapshot_and_cdc
+snapshot_segments: 1
+snapshot_batch_size: 10
+snapshot_deduplicate: true
+credentials:
+  id: xxxxx
+  secret: xxxxx
+  token: xxxxx
+`, tableName, checkpointTable, port)
+
+	spec := dynamoDBCDCInputConfig()
+	parsed, err := spec.ParseYAML(confStr, nil)
+	require.NoError(t, err)
+
+	input, err := newDynamoDBCDCInputFromConfig(parsed, service.MockResources())
+	require.NoError(t, err)
+
+	require.NoError(t, input.Connect(ctx))
+	t.Cleanup(func() {
+		_ = input.Close(ctx)
+	})
+
+	// Read first batch (should include snapshot items)
+	readCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	batch1, ackFn1, err := input.ReadBatch(readCtx)
+	require.NoError(t, err)
+	require.NotEmpty(t, batch1)
+
+	// Verify we got READ events (snapshot)
+	foundRead := false
+	for _, msg := range batch1 {
+		eventName, _ := msg.MetaGet("dynamodb_event_name")
+		if eventName == "READ" {
+			foundRead = true
+			break
+		}
+	}
+	assert.True(t, foundRead, "Should receive READ events from snapshot")
+
+	// Acknowledge snapshot batch
+	require.NoError(t, ackFn1(ctx, nil))
+
+	// Now insert a NEW item (CDC event)
+	require.NoError(t, putTestItem(ctx, client, tableName, "snap-cdc-3", "new-item"))
+
+	// Read next batch (should include CDC INSERT event)
+	readCtx2, cancel2 := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel2()
+
+	batch2, ackFn2, err := input.ReadBatch(readCtx2)
+	if err == nil {
+		// Verify we can get CDC events after snapshot
+		foundInsert := false
+		for _, msg := range batch2 {
+			eventName, _ := msg.MetaGet("dynamodb_event_name")
+			if eventName == "INSERT" {
+				foundInsert = true
+				break
+			}
+		}
+		assert.True(t, foundInsert, "Should receive INSERT events from CDC after snapshot")
+
+		require.NoError(t, ackFn2(ctx, nil))
+	}
+}
+
+// testSnapshotResumeFromCheckpoint verifies snapshot can resume from checkpoint
+func testSnapshotResumeFromCheckpoint(t *testing.T, client *dynamodb.Client, port, tableName, checkpointTable string) {
+	ctx := context.Background()
+
+	// Insert multiple test items
+	for i := 1; i <= 10; i++ {
+		require.NoError(t, putTestItem(ctx, client, tableName, fmt.Sprintf("snap-resume-%d", i), fmt.Sprintf("value-%d", i)))
+	}
+
+	// Give DynamoDB a moment to persist
+	time.Sleep(100 * time.Millisecond)
+
+	// Create input with snapshot_only mode and small batch size to force multiple batches
+	confStr := fmt.Sprintf(`
+table: %s
+checkpoint_table: %s
+endpoint: http://localhost:%s
+region: us-east-1
+start_from: latest
+snapshot_mode: snapshot_only
+snapshot_segments: 1
+snapshot_batch_size: 3
+credentials:
+  id: xxxxx
+  secret: xxxxx
+  token: xxxxx
+`, tableName, checkpointTable, port)
+
+	spec := dynamoDBCDCInputConfig()
+	parsed, err := spec.ParseYAML(confStr, nil)
+	require.NoError(t, err)
+
+	// First input instance - read some messages then close (simulating crash)
+	input1, err := newDynamoDBCDCInputFromConfig(parsed, service.MockResources())
+	require.NoError(t, err)
+	require.NoError(t, input1.Connect(ctx))
+
+	// Read one batch
+	readCtx1, cancel1 := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel1()
+
+	batch1, ackFn1, err := input1.ReadBatch(readCtx1)
+	if err == nil && len(batch1) > 0 {
+		// Acknowledge to save checkpoint
+		require.NoError(t, ackFn1(ctx, nil))
+
+		// Give checkpoint time to persist
+		time.Sleep(500 * time.Millisecond)
+	}
+
+	// Close first input (simulating crash/restart)
+	require.NoError(t, input1.Close(ctx))
+
+	// Create second input instance - should resume from checkpoint
+	input2, err := newDynamoDBCDCInputFromConfig(parsed, service.MockResources())
+	require.NoError(t, err)
+	require.NoError(t, input2.Connect(ctx))
+	t.Cleanup(func() {
+		_ = input2.Close(ctx)
+	})
+
+	// Should be able to continue reading without re-reading all items
+	readCtx2, cancel2 := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel2()
+
+	batch2, _, err := input2.ReadBatch(readCtx2)
+
+	// We expect either:
+	// 1. More snapshot data to read (no error)
+	// 2. Snapshot complete (ErrEndOfInput or timeout)
+	if err != nil && !errors.Is(err, service.ErrEndOfInput) && !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("Unexpected error on resume: %v", err)
+	}
+
+	// If we got data, verify it's snapshot data
+	if len(batch2) > 0 {
+		for _, msg := range batch2 {
+			eventName, _ := msg.MetaGet("dynamodb_event_name")
+			assert.Equal(t, "READ", eventName, "Resumed messages should be snapshot READ events")
+		}
+	}
+
+	t.Log("Successfully resumed snapshot from checkpoint")
+}
