@@ -415,9 +415,12 @@ func parseSetClause(sql string, index int) (map[string]any, int, error) {
 	}
 	index += setIdx + len(" set ")
 
-	values := make(map[string]any)
+	// Pre-allocate with reasonable capacity - UPDATE statements typically modify 1-8 columns
+	// This reduces map rehashing for common cases
+	values := make(map[string]any, 8)
 	var currentColumn string
 	var collectedValue strings.Builder
+	collectedValue.Grow(64) // Pre-allocate for typical value sizes
 	inSingleQuote := false
 	inDoubleQuote := false
 	isQuotedValue := false
@@ -535,13 +538,16 @@ func parseWhereClause(sql string, index int) (map[string]any, error) {
 	whereIdx := strings.Index(sql[index:], " where ")
 	if whereIdx == -1 {
 		// No WHERE clause (DBZ-3235 - LogMiner can generate SQL without WHERE)
-		return make(map[string]any), nil
+		return make(map[string]any, 0), nil
 	}
 	index += whereIdx + len(" where ")
 
-	values := make(map[string]any)
+	// Pre-allocate with reasonable capacity - WHERE clauses typically have 1-4 conditions (primary keys)
+	// This reduces map rehashing for common cases
+	values := make(map[string]any, 4)
 	var currentColumn string
 	var collectedValue strings.Builder
+	collectedValue.Grow(64) // Pre-allocate for typical value sizes
 	inSingleQuote := false
 	inDoubleQuote := false
 	isQuotedValue := false
