@@ -1,6 +1,6 @@
 module github.com/redpanda-data/connect/v4
 
-go 1.25.6
+go 1.25.7
 
 replace github.com/99designs/keyring => github.com/Jeffail/keyring v1.2.3
 
