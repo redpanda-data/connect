@@ -296,7 +296,7 @@ func (i *oracleDBCDCInput) Connect(ctx context.Context) error {
 		cachedSCN  replication.SCN
 	)
 	if i.db, err = sql.Open("oracle", i.cfg.connectionString); err != nil {
-		return fmt.Errorf("failed to connect to oracle database: %s", err)
+		return fmt.Errorf("failed to connect to oracle database: %w", err)
 	}
 
 	// no cache specified so use default, internal oracle based cache
@@ -304,7 +304,7 @@ func (i *oracleDBCDCInput) Connect(ctx context.Context) error {
 		// setup internal cache
 		cache, err := newCheckpointCache(ctx, i.cfg.connectionString, i.cfg.cpCacheTableName, i.log)
 		if err != nil {
-			return fmt.Errorf("initialising oracle based checkpoint cache: %s", err)
+			return fmt.Errorf("initialising oracle based checkpoint cache: %w", err)
 		}
 		i.cpCache = cache
 	}
@@ -317,7 +317,7 @@ func (i *oracleDBCDCInput) Connect(ctx context.Context) error {
 			i.log.Infof("No SCN found in checkpoint cache")
 			cachedSCN = replication.InvalidSCN
 		} else {
-			return fmt.Errorf("unable to get cached SCN: %s", err)
+			return fmt.Errorf("unable to get cached SCN: %w", err)
 		}
 	} else {
 		switch {
