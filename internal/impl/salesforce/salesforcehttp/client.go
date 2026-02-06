@@ -202,7 +202,7 @@ type Client struct {
 	log          *service.Logger
 }
 
-// NewClient is the constructor ofr a Client object
+// NewClient is the constructor for a Client object
 func NewClient(log *service.Logger, orgUrl, clientId, clientSecret, apiVersion string, maxRetries int, metrics *service.Metrics, httpClient *http.Client) (*Client, error) {
 	return &Client{
 		log:          log,
