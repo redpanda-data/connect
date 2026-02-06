@@ -10,8 +10,37 @@ AI agent guidance for working with Redpanda Connect codebase.
 |---|---|
 | Writing or modifying Go code | `godev` agent |
 | Writing or modifying tests | `tester` agent |
-| Writing YAML configs or Bloblang | `config/CLAUDE.md` |
 | Code review | `/review` command |
+
+## Plugin: Redpanda Connect
+
+YAML configuration, Bloblang authoring, and component discovery are provided by the `redpanda-connect` plugin from `.claude-plugin`.
+
+### Prerequisites
+
+```bash
+brew install redpanda-data/tap/redpanda python3 jq
+rpk connect install
+```
+
+### Installation
+
+```bash
+/plugin marketplace add /path/to/connect   # local dev
+/plugin install redpanda-connect
+```
+
+Restart Claude Code after installation.
+
+### Commands
+
+| Command | Purpose |
+|---|---|
+| `/rpcn:search <query>` | Natural language component discovery |
+| `/rpcn:blobl <description> [sample=<json>]` | Bloblang transformation authoring |
+| `/rpcn:pipeline <description> [file=<path>]` | Pipeline creation and repair |
+
+The plugin also auto-triggers on mentions of Redpanda Connect, streaming pipelines, or Bloblang.
 
 ---
 
