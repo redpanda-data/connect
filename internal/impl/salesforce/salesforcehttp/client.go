@@ -27,6 +27,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/salesforce/salesforcehttp/http_metrics"
 
@@ -101,17 +102,18 @@ func (s *Client) updateAndSetBearerToken(ctx context.Context) error {
 		return fmt.Errorf("invalid URL: %v", err)
 	}
 
-	query := apiUrl.Query()
-	query.Set("grant_type", "client_credentials")
-	query.Set("client_id", s.clientId)
-	query.Set("client_secret", s.clientSecret)
-	apiUrl.RawQuery = query.Encode()
+	// Build form-encoded body
+	form := url.Values{}
+	form.Set("grant_type", "client_credentials")
+	form.Set("client_id", s.clientID)
+	form.Set("client_secret", s.clientSecret)
 
-	req, err := http.NewRequestWithContext(ctx, "POST", apiUrl.String(), nil)
+	req, err := http.NewRequestWithContext(ctx, "POST", apiUrl.String(), strings.NewReader(form.Encode()))
+
 	if err != nil {
 		return fmt.Errorf("failed to create request: %v", err)
 	}
-
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", "Redpanda-Connect")
 
@@ -193,7 +195,7 @@ func (s *Client) GetSObjectData(ctx context.Context, query string) ([]byte, erro
 // Client is the implementation of Salesforce API queries. It holds the client state and orchestrates calls into the salesforcehttp package.
 type Client struct {
 	orgURL       string
-	clientId     string
+	clientID     string
 	clientSecret string
 	apiVersion   string
 	bearerToken  string
@@ -207,7 +209,7 @@ func NewClient(log *service.Logger, orgUrl, clientId, clientSecret, apiVersion s
 	return &Client{
 		log:          log,
 		orgURL:       orgUrl,
-		clientId:     clientId,
+		clientID:     clientId,
 		clientSecret: clientSecret,
 		apiVersion:   apiVersion,
 		retryOpts: RetryOptions{
