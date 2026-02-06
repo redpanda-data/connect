@@ -61,6 +61,17 @@ type QueryResult struct {
 	Done      bool `json:"done"`
 }
 
+func init() {
+	if err := service.RegisterProcessor(
+		"salesforce", newSalesforceProcessorConfigSpec(),
+		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
+			return newSalesforceProcessor(conf, mgr)
+		},
+	); err != nil {
+		panic(err)
+	}
+}
+
 // newSalesforceProcessorConfigSpec creates a new Configuration specification for the Salesforce processor
 func newSalesforceProcessorConfigSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
@@ -178,14 +189,3 @@ func (s *salesforceProcessor) Process(ctx context.Context, msg *service.Message)
 }
 
 func (*salesforceProcessor) Close(context.Context) error { return nil }
-
-func init() {
-	if err := service.RegisterProcessor(
-		"salesforce", newSalesforceProcessorConfigSpec(),
-		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
-			return newSalesforceProcessor(conf, mgr)
-		},
-	); err != nil {
-		panic(err)
-	}
-}
