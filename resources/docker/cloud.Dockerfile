@@ -27,6 +27,12 @@ COPY --from=build /etc/passwd /etc/passwd
 COPY --from=build /tmp/redpanda-connect /redpanda-connect
 COPY config/docker.yaml /connect.yaml
 
+# Pre-create the chroot directory so that volume mounts placed inside it
+# (e.g. ConfigMaps at /tmp/chroot/...) don't cause kubelet to create it
+# as root-owned, which would prevent the connect user from populating the
+# rest of the chroot structure at runtime.
+RUN mkdir -p /tmp/chroot && chown 10001:10001 /tmp/chroot
+
 USER connect
 
 EXPOSE 4195
