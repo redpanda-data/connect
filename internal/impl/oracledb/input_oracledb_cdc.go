@@ -352,7 +352,7 @@ func (i *oracleDBCDCInput) Connect(ctx context.Context) error {
 	if i.lmCfg != nil {
 		streaming = logminer.NewMiner(i.db, userTables, i.publisher, i.lmCfg, i.metrics, i.log)
 	} else {
-		return fmt.Errorf("logminer configuration is required for streaming")
+		return errors.New("logminer configuration required for streaming")
 	}
 
 	// Reset our stop signal

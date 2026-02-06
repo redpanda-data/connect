@@ -117,23 +117,7 @@ func (lm *LogMiner) ReadChanges(ctx context.Context, startPos replication.SCN) e
 
 	lm.currentSCN = uint64(startPos)
 
-	//TODO: include starting scn source
-	scnSource := "unknown"
-
-	// if lm.currentSCN < uint64(startPos) {
-	// 	return fmt.Errorf("starting SCN %d (from %s) is no longer available in redo/archive logs. "+
-	// 		"Oldest available SCN is %d. This means Oracle has purged the archived logs needed to resume CDC from your checkpoint.\n\n"+
-	// 		"To resolve:\n"+
-	// 		"1. If stream_snapshot is enabled, re-run the connector to take a new snapshot\n"+
-	// 		"2. If stream_snapshot is disabled, you have two options:\n"+
-	// 		"   a) Enable stream_snapshot to take a full snapshot from current state (recommended)\n"+
-	// 		"   b) Delete the checkpoint and restart from current database SCN (DATA LOSS: events between %d and current SCN will be missed)\n"+
-	// 		"3. Increase Oracle's log retention to prevent this:\n"+
-	// 		"   ALTER SYSTEM SET LOG_ARCHIVE_RETENTION_HOURS = 24;",
-	// 		lm.currentSCN, scnSource, startPos, lm.currentSCN)
-	// }
-
-	lm.log.Infof("Starting streaming change events for %d table(s) beginning from SCN (sourced from %s): %d", len(lm.tables), scnSource, lm.currentSCN)
+	lm.log.Infof("Starting streaming change events for %d table(s) beginning from SCN: %d", len(lm.tables), lm.currentSCN)
 
 	defer func() {
 		if lm.sessionActive {
@@ -186,7 +170,7 @@ func (lm *LogMiner) FindStartPos(ctx context.Context) (replication.SCN, error) {
 	`
 
 	var firstSCN uint64
-	if err := lm.db.QueryRow(query).Scan(&firstSCN); err != nil {
+	if err := lm.db.QueryRowContext(ctx, query).Scan(&firstSCN); err != nil {
 		return 0, fmt.Errorf("querying oldest available SCN in logs: %w", err)
 	}
 
@@ -194,7 +178,6 @@ func (lm *LogMiner) FindStartPos(ctx context.Context) (replication.SCN, error) {
 }
 
 func (lm *LogMiner) miningCycle(ctx context.Context) (caughtUp bool, err error) {
-
 	// Get database's current SCN to know our target
 	var dbCurrentSCN uint64
 	if err := lm.db.QueryRow("SELECT CURRENT_SCN FROM V$DATABASE").Scan(&dbCurrentSCN); err != nil {
@@ -225,6 +208,7 @@ func (lm *LogMiner) miningCycle(ctx context.Context) (caughtUp bool, err error) 
 		if err := lm.prepareLogsAndStartSession(lm.currentSCN); err != nil {
 			// Check for ORA-01291: missing log file error and provide helpful message
 			if strings.Contains(err.Error(), "ORA-01291") {
+				//nolint:staticcheck
 				return false, fmt.Errorf("preparing logs and starting session at position %d: %w\n\n"+
 					"This error indicates archived redo logs have been purged before LogMiner could process them.\n"+
 					"This typically happens when processing takes longer than Oracle's log retention period.\n\n"+
