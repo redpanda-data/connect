@@ -115,21 +115,23 @@ func (lm *LogMiner) ReadChanges(ctx context.Context, startPos replication.SCN) e
 		return fmt.Errorf("applying NLS settings for LogMiner: %w", err)
 	}
 
+	lm.currentSCN = uint64(startPos)
+
 	//TODO: include starting scn source
 	scnSource := "unknown"
 
-	if lm.currentSCN < uint64(startPos) {
-		return fmt.Errorf("starting SCN %d (from %s) is no longer available in redo/archive logs. "+
-			"Oldest available SCN is %d. This means Oracle has purged the archived logs needed to resume CDC from your checkpoint.\n\n"+
-			"To resolve:\n"+
-			"1. If stream_snapshot is enabled, re-run the connector to take a new snapshot\n"+
-			"2. If stream_snapshot is disabled, you have two options:\n"+
-			"   a) Enable stream_snapshot to take a full snapshot from current state (recommended)\n"+
-			"   b) Delete the checkpoint and restart from current database SCN (DATA LOSS: events between %d and current SCN will be missed)\n"+
-			"3. Increase Oracle's log retention to prevent this:\n"+
-			"   ALTER SYSTEM SET LOG_ARCHIVE_RETENTION_HOURS = 24;",
-			lm.currentSCN, scnSource, startPos, lm.currentSCN)
-	}
+	// if lm.currentSCN < uint64(startPos) {
+	// 	return fmt.Errorf("starting SCN %d (from %s) is no longer available in redo/archive logs. "+
+	// 		"Oldest available SCN is %d. This means Oracle has purged the archived logs needed to resume CDC from your checkpoint.\n\n"+
+	// 		"To resolve:\n"+
+	// 		"1. If stream_snapshot is enabled, re-run the connector to take a new snapshot\n"+
+	// 		"2. If stream_snapshot is disabled, you have two options:\n"+
+	// 		"   a) Enable stream_snapshot to take a full snapshot from current state (recommended)\n"+
+	// 		"   b) Delete the checkpoint and restart from current database SCN (DATA LOSS: events between %d and current SCN will be missed)\n"+
+	// 		"3. Increase Oracle's log retention to prevent this:\n"+
+	// 		"   ALTER SYSTEM SET LOG_ARCHIVE_RETENTION_HOURS = 24;",
+	// 		lm.currentSCN, scnSource, startPos, lm.currentSCN)
+	// }
 
 	lm.log.Infof("Starting streaming change events for %d table(s) beginning from SCN (sourced from %s): %d", len(lm.tables), scnSource, lm.currentSCN)
 
