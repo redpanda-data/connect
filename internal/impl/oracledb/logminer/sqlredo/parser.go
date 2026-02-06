@@ -317,12 +317,13 @@ func parseValuesClause(sql string, index int, columnNames []string) (map[string]
 	}
 	index++ // skip '('
 
-	values := make(map[string]any)
+	values := make(map[string]any, len(columnNames))
 	valueIdx := 0
 	inSingleQuote := false
 	nested := 0
 	valueStart := index
 	var collectedValue strings.Builder
+	collectedValue.Grow(64) // average string values are < 64 bytes
 	isQuotedValue := false
 
 	for i := index; i < len(sql); i++ {
