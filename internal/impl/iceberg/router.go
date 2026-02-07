@@ -49,8 +49,8 @@ type tableEntry struct {
 	writer *writer
 }
 
-// router routes message batches to per-table writers.
-type router struct {
+// Router routes message batches to per-table writers.
+type Router struct {
 	catalogCfg   catalogx.Config
 	namespaceStr *service.InterpolatedString
 	tableStr     *service.InterpolatedString
@@ -68,8 +68,8 @@ func NewRouter(
 	tableStr *service.InterpolatedString,
 	schemaEvoCfg SchemaEvolutionConfig,
 	logger *service.Logger,
-) *router {
-	return &router{
+) *Router {
+	return &Router{
 		catalogCfg:   catalogCfg,
 		namespaceStr: namespaceStr,
 		tableStr:     tableStr,
@@ -79,7 +79,7 @@ func NewRouter(
 }
 
 // getOrCreateEntry returns the entry for a table, creating one if needed.
-func (r *router) getOrCreateEntry(key tableKey) *tableEntry {
+func (r *Router) getOrCreateEntry(key tableKey) *tableEntry {
 	if v, ok := r.entries.Load(key); ok {
 		return v.(*tableEntry)
 	}
@@ -89,7 +89,7 @@ func (r *router) getOrCreateEntry(key tableKey) *tableEntry {
 }
 
 // Route routes a batch of messages to the appropriate writers.
-func (r *router) Route(ctx context.Context, batch service.MessageBatch) error {
+func (r *Router) Route(ctx context.Context, batch service.MessageBatch) error {
 	// fast path if static namespace + table is used.
 	if ns, ok := r.namespaceStr.Static(); ok {
 		if tbl, ok := r.tableStr.Static(); ok {
@@ -129,7 +129,7 @@ func (r *router) Route(ctx context.Context, batch service.MessageBatch) error {
 }
 
 // writeWithRetry writes a batch to a table with retry loop for schema evolution.
-func (r *router) writeWithRetry(ctx context.Context, key tableKey, batch service.MessageBatch) error {
+func (r *Router) writeWithRetry(ctx context.Context, key tableKey, batch service.MessageBatch) error {
 	entry := r.getOrCreateEntry(key)
 
 	for range maxSchemaEvolutionRetries {
@@ -183,7 +183,7 @@ func (r *router) writeWithRetry(ctx context.Context, key tableKey, batch service
 }
 
 // doWrite performs a single write attempt, creating the writer if needed.
-func (r *router) doWrite(ctx context.Context, key tableKey, entry *tableEntry, batch service.MessageBatch) error {
+func (r *Router) doWrite(ctx context.Context, key tableKey, entry *tableEntry, batch service.MessageBatch) error {
 	for {
 		// Fast path: writer exists, use RLock for concurrent writes
 		entry.mu.RLock()
@@ -214,7 +214,7 @@ func (r *router) doWrite(ctx context.Context, key tableKey, entry *tableEntry, b
 }
 
 // createNamespace creates the namespace for a table.
-func (r *router) createNamespace(ctx context.Context, key tableKey, entry *tableEntry) error {
+func (r *Router) createNamespace(ctx context.Context, key tableKey, entry *tableEntry) error {
 	entry.mu.Lock()
 	defer entry.mu.Unlock()
 
@@ -245,7 +245,7 @@ func (r *router) createNamespace(ctx context.Context, key tableKey, entry *table
 }
 
 // createTable creates a new table with schema inferred from the first message.
-func (r *router) createTable(ctx context.Context, key tableKey, batch service.MessageBatch, entry *tableEntry) error {
+func (r *Router) createTable(ctx context.Context, key tableKey, batch service.MessageBatch, entry *tableEntry) error {
 	entry.mu.Lock()
 	defer entry.mu.Unlock()
 
@@ -325,7 +325,7 @@ func (r *router) createTable(ctx context.Context, key tableKey, batch service.Me
 }
 
 // evolveSchema adds new columns to the table.
-func (r *router) evolveSchema(ctx context.Context, key tableKey, schemaErr *BatchSchemaEvolutionError, entry *tableEntry) error {
+func (r *Router) evolveSchema(ctx context.Context, key tableKey, schemaErr *BatchSchemaEvolutionError, entry *tableEntry) error {
 	entry.mu.Lock()
 	defer entry.mu.Unlock()
 
@@ -381,7 +381,7 @@ func (r *router) evolveSchema(ctx context.Context, key tableKey, schemaErr *Batc
 
 // closeWriter closes and nils the writer in an entry.
 // Caller must hold entry.mu.Lock().
-func (r *router) closeWriter(entry *tableEntry) {
+func (r *Router) closeWriter(entry *tableEntry) {
 	if entry.writer != nil {
 		entry.writer.Close()
 		entry.writer = nil
@@ -390,7 +390,7 @@ func (r *router) closeWriter(entry *tableEntry) {
 
 // createWriter creates a new writer for a table.
 // Caller must ensure this is only called when entry.writer is nil.
-func (r *router) createWriter(ctx context.Context, key tableKey) (*writer, error) {
+func (r *Router) createWriter(ctx context.Context, key tableKey) (*writer, error) {
 	// Parse namespace into parts
 	nsParts := strings.Split(key.namespace, ".")
 
@@ -430,7 +430,7 @@ func (r *router) createWriter(ctx context.Context, key tableKey) (*writer, error
 }
 
 // Close closes all cached writers.
-func (r *router) Close() {
+func (r *Router) Close() {
 	r.entries.Range(func(k, v any) bool {
 		key := k.(tableKey)
 		entry := v.(*tableEntry)

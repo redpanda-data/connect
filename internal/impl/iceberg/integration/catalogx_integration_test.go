@@ -12,11 +12,11 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/apache/iceberg-go"
 	"github.com/apache/iceberg-go/catalog"
-	"github.com/apache/iceberg-go/io"
 	"github.com/apache/iceberg-go/table"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -35,17 +35,8 @@ func TestCatalogxIntegration(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
+	infra := setupTestInfra(t, ctx)
 
-	// Start test infrastructure (MinIO + Iceberg REST catalog + DuckDB)
-	infra := startTestInfrastructure(t, ctx)
-	t.Cleanup(func() {
-		require.NoError(t, infra.Terminate(context.Background()))
-	})
-
-	// Create warehouse bucket in MinIO (must match CATALOG_WAREHOUSE in iceberg-rest-fixture)
-	infra.CreateBucket(t, "warehouse")
-
-	// Create namespace via REST API
 	namespaceName := "catalogx_test"
 	infra.CreateNamespace(t, namespaceName)
 
@@ -89,7 +80,6 @@ func TestCatalogxIntegration(t *testing.T) {
 		require.NoError(t, err)
 		defer client.Close()
 
-		// Create table with simple schema
 		tableName := "test_create_table"
 		schema := iceberg.NewSchema(
 			0,
@@ -102,9 +92,16 @@ func TestCatalogxIntegration(t *testing.T) {
 		require.NotNil(t, tbl)
 
 		// Verify table exists via DuckDB
-		tables, err := infra.ListIcebergTables(ctx, "demo", namespaceName)
-		require.NoError(t, err)
-		assert.Contains(t, tables, tableName)
+		type tableNameResult struct {
+			TableName string `json:"table_name"`
+		}
+		tables := querySQL[tableNameResult](t, ctx, infra,
+			fmt.Sprintf(`SELECT table_name FROM information_schema.tables WHERE table_schema = '%s' AND table_catalog = 'iceberg_cat';`, namespaceName))
+		var names []string
+		for _, row := range tables {
+			names = append(names, row.TableName)
+		}
+		assert.Contains(t, names, tableName)
 	})
 
 	t.Run("LoadTable", func(t *testing.T) {
@@ -115,7 +112,6 @@ func TestCatalogxIntegration(t *testing.T) {
 		require.NoError(t, err)
 		defer client.Close()
 
-		// Create a table first
 		tableName := "test_load_table"
 		schema := iceberg.NewSchema(
 			0,
@@ -125,17 +121,14 @@ func TestCatalogxIntegration(t *testing.T) {
 		_, err = client.CreateTable(ctx, tableName, schema)
 		require.NoError(t, err)
 
-		// Load the table
 		tbl, err := client.LoadTable(ctx, tableName)
 		require.NoError(t, err)
 		require.NotNil(t, tbl)
 
-		// Verify schema matches
 		loadedSchema := tbl.Schema()
 		assert.Len(t, loadedSchema.Fields(), 1)
 		assert.Equal(t, "col1", loadedSchema.Fields()[0].Name)
 
-		// Test loading non-existent table returns error
 		_, err = client.LoadTable(ctx, "non_existent_table")
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to load table")
@@ -149,7 +142,6 @@ func TestCatalogxIntegration(t *testing.T) {
 		require.NoError(t, err)
 		defer client.Close()
 
-		// Create table with single column
 		tableName := "test_update_schema"
 		initialSchema := iceberg.NewSchema(
 			0,
@@ -159,20 +151,17 @@ func TestCatalogxIntegration(t *testing.T) {
 		tbl, err := client.CreateTable(ctx, tableName, initialSchema)
 		require.NoError(t, err)
 
-		// Update schema by adding a new column using the callback API
 		_, err = client.UpdateSchema(ctx, tbl, func(us *table.UpdateSchema) {
 			us.AddColumn([]string{"col2"}, iceberg.StringType{}, "", false, nil)
 		})
 		require.NoError(t, err)
 
-		// Load table and verify schema has 2 fields
 		tbl, err = client.LoadTable(ctx, tableName)
 		require.NoError(t, err)
 
 		updatedSchema := tbl.Schema()
 		assert.Len(t, updatedSchema.Fields(), 2)
 
-		// Verify field names
 		fieldNames := make([]string, len(updatedSchema.Fields()))
 		for i, f := range updatedSchema.Fields() {
 			fieldNames[i] = f.Name
@@ -182,25 +171,10 @@ func TestCatalogxIntegration(t *testing.T) {
 	})
 
 	t.Run("AppendDataFiles", func(t *testing.T) {
-		// Configure S3 properties for MinIO access
-		// The iceberg-go library needs these to read Parquet file stats
-		s3Props := iceberg.Properties{
-			io.S3AccessKeyID:            "admin",
-			io.S3SecretAccessKey:        "password",
-			io.S3EndpointURL:            infra.MinioEndpoint,
-			io.S3ForceVirtualAddressing: "false", // Use path-style for MinIO
-			io.S3Region:                 "us-east-1",
-		}
-
-		client, err := catalogx.NewCatalogClient(catalogx.Config{
-			URL:             infra.RestURL,
-			AuthType:        "none",
-			AdditionalProps: s3Props,
-		}, []string{namespaceName})
+		client, err := catalogx.NewCatalogClient(infra.CatalogConfig(), []string{namespaceName})
 		require.NoError(t, err)
 		defer client.Close()
 
-		// Create table with schema matching test data
 		tableName := "test_append_data"
 		schema := iceberg.NewSchema(
 			0,
@@ -211,27 +185,19 @@ func TestCatalogxIntegration(t *testing.T) {
 		tbl, err := client.CreateTable(ctx, tableName, schema)
 		require.NoError(t, err)
 
-		// Create test Parquet data
 		parquetData := createTestParquet(t, []testRow{
 			{ID: 1, Value: "one"},
 			{ID: 2, Value: "two"},
 			{ID: 3, Value: "three"},
 		})
 
-		// Upload Parquet file to MinIO
 		fileKey := namespaceName + "/" + tableName + "/data/test-data.parquet"
 		s3URI := uploadToMinIO(t, infra.MinioEndpoint, "warehouse", fileKey, parquetData)
-		t.Logf("Uploaded Parquet file: %s", s3URI)
 
-		// Append data files to table
 		updatedTbl, err := client.AppendDataFiles(ctx, tbl, []string{s3URI})
 		require.NoError(t, err)
 		require.NotNil(t, updatedTbl)
-
-		// Verify table was updated by checking snapshots
-		// AppendDataFiles creates a new snapshot with the data files
-		require.NotNil(t, updatedTbl.CurrentSnapshot(), "Table should have a snapshot after appending data files")
-		t.Logf("Successfully appended data files, snapshot: %d", updatedTbl.CurrentSnapshot().SnapshotID)
+		require.NotNil(t, updatedTbl.CurrentSnapshot())
 	})
 
 	t.Run("Close", func(t *testing.T) {
@@ -240,14 +206,11 @@ func TestCatalogxIntegration(t *testing.T) {
 			AuthType: "none",
 		}, []string{namespaceName})
 		require.NoError(t, err)
-
-		err = client.Close()
-		require.NoError(t, err)
+		require.NoError(t, client.Close())
 	})
 
 	t.Run("ErrorPropagation", func(t *testing.T) {
 		t.Run("ErrNoSuchTable", func(t *testing.T) {
-			// Test that catalog.ErrNoSuchTable is properly propagated through catalogx wrapper
 			client, err := catalogx.NewCatalogClient(catalogx.Config{
 				URL:      infra.RestURL,
 				AuthType: "none",
@@ -255,18 +218,13 @@ func TestCatalogxIntegration(t *testing.T) {
 			require.NoError(t, err)
 			defer client.Close()
 
-			// Try to load a non-existent table
 			_, err = client.LoadTable(ctx, "nonexistent_table_xyz")
 			require.Error(t, err)
-
-			// Verify the error chain preserves catalog.ErrNoSuchTable
 			assert.True(t, errors.Is(err, catalog.ErrNoSuchTable),
 				"expected error to wrap catalog.ErrNoSuchTable, got: %v", err)
 		})
 
 		t.Run("ErrNoSuchNamespace", func(t *testing.T) {
-			// Test that catalog.ErrNoSuchNamespace is properly propagated through catalogx wrapper
-			// Use a namespace that doesn't exist
 			client, err := catalogx.NewCatalogClient(catalogx.Config{
 				URL:      infra.RestURL,
 				AuthType: "none",
@@ -274,15 +232,12 @@ func TestCatalogxIntegration(t *testing.T) {
 			require.NoError(t, err)
 			defer client.Close()
 
-			// Try to create a table in a non-existent namespace
 			schema := iceberg.NewSchema(
 				0,
 				iceberg.NestedField{ID: 1, Name: "id", Type: iceberg.Int32Type{}, Required: true},
 			)
 			_, err = client.CreateTable(ctx, "test_table", schema)
 			require.Error(t, err)
-
-			// Verify the error chain preserves catalog.ErrNoSuchNamespace
 			assert.True(t, errors.Is(err, catalog.ErrNoSuchNamespace),
 				"expected error to wrap catalog.ErrNoSuchNamespace, got: %v", err)
 		})
@@ -290,7 +245,6 @@ func TestCatalogxIntegration(t *testing.T) {
 
 	t.Run("NamespaceOperations", func(t *testing.T) {
 		t.Run("CheckNamespaceExists", func(t *testing.T) {
-			// Test existing namespace
 			client, err := catalogx.NewCatalogClient(catalogx.Config{
 				URL:      infra.RestURL,
 				AuthType: "none",
@@ -300,9 +254,8 @@ func TestCatalogxIntegration(t *testing.T) {
 
 			exists, err := client.CheckNamespaceExists(ctx)
 			require.NoError(t, err)
-			assert.True(t, exists, "namespace should exist")
+			assert.True(t, exists)
 
-			// Test non-existing namespace
 			clientNonExistent, err := catalogx.NewCatalogClient(catalogx.Config{
 				URL:      infra.RestURL,
 				AuthType: "none",
@@ -312,13 +265,12 @@ func TestCatalogxIntegration(t *testing.T) {
 
 			exists, err = clientNonExistent.CheckNamespaceExists(ctx)
 			require.NoError(t, err)
-			assert.False(t, exists, "namespace should not exist")
+			assert.False(t, exists)
 		})
 
 		t.Run("CreateNamespace", func(t *testing.T) {
 			newNamespace := "test_create_namespace"
 
-			// Create client for new namespace
 			client, err := catalogx.NewCatalogClient(catalogx.Config{
 				URL:      infra.RestURL,
 				AuthType: "none",
@@ -326,21 +278,18 @@ func TestCatalogxIntegration(t *testing.T) {
 			require.NoError(t, err)
 			defer client.Close()
 
-			// Namespace should not exist initially
 			exists, err := client.CheckNamespaceExists(ctx)
 			require.NoError(t, err)
 			assert.False(t, exists)
 
-			// Create the namespace
 			err = client.CreateNamespace(ctx, nil)
 			require.NoError(t, err)
 
-			// Namespace should now exist
 			exists, err = client.CheckNamespaceExists(ctx)
 			require.NoError(t, err)
 			assert.True(t, exists)
 
-			// Creating again should be idempotent (no error)
+			// Idempotent
 			err = client.CreateNamespace(ctx, nil)
 			require.NoError(t, err)
 		})
@@ -353,7 +302,6 @@ func TestCatalogxIntegration(t *testing.T) {
 			require.NoError(t, err)
 			defer client.Close()
 
-			// First, create a table
 			tableName := "test_check_exists"
 			schema := iceberg.NewSchema(
 				0,
@@ -362,15 +310,13 @@ func TestCatalogxIntegration(t *testing.T) {
 			_, err = client.CreateTable(ctx, tableName, schema)
 			require.NoError(t, err)
 
-			// Table should exist
 			exists, err := client.CheckTableExists(ctx, tableName)
 			require.NoError(t, err)
-			assert.True(t, exists, "table should exist")
+			assert.True(t, exists)
 
-			// Non-existent table should return false
 			exists, err = client.CheckTableExists(ctx, "nonexistent_table_check")
 			require.NoError(t, err)
-			assert.False(t, exists, "table should not exist")
+			assert.False(t, exists)
 		})
 	})
 }
@@ -402,7 +348,6 @@ func uploadToMinIO(t *testing.T, endpoint, bucket, key string, data []byte) stri
 	t.Helper()
 
 	ctx := context.Background()
-
 	cfg, err := config.LoadDefaultConfig(ctx,
 		config.WithRegion("us-east-1"),
 		config.WithCredentialsProvider(

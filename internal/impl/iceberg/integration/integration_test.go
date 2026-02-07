@@ -10,6 +10,7 @@ package iceberg
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/apache/iceberg-go"
@@ -17,7 +18,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
-	"github.com/redpanda-data/connect/v4/internal/impl/iceberg/catalogx"
 )
 
 func TestIntegrationIcebergRESTWithMinIO(t *testing.T) {
@@ -25,53 +25,34 @@ func TestIntegrationIcebergRESTWithMinIO(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
+	infra := setupTestInfra(t, ctx)
 
-	// Start test infrastructure (MinIO + Iceberg REST catalog)
-	infra := startTestInfrastructure(t, ctx)
-	t.Cleanup(func() {
-		require.NoError(t, infra.Terminate(context.Background()))
-	})
-
-	// Create warehouse bucket in MinIO (must match CATALOG_WAREHOUSE in iceberg-rest-fixture)
-	infra.CreateBucket(t, "warehouse")
-
-	// Create namespace via REST API
 	namespaceName := "test_ns"
 	infra.CreateNamespace(t, namespaceName)
 
-	// Test DuckDB connection to the Iceberg REST catalog
-	t.Log("Testing DuckDB connection to Iceberg REST catalog...")
+	// Verify empty namespace via DuckDB
+	type tableNameResult struct {
+		TableName string `json:"table_name"`
+	}
+	tables := querySQL[tableNameResult](t, ctx, infra,
+		fmt.Sprintf(`SELECT table_name FROM information_schema.tables WHERE table_schema = '%s' AND table_catalog = 'iceberg_cat';`, namespaceName))
+	assert.Empty(t, tables)
 
-	tables, err := infra.ListIcebergTables(ctx, "demo", namespaceName)
-	require.NoError(t, err, "DuckDB should be able to list tables")
-	t.Logf("DuckDB listed tables in %s: %v", namespaceName, tables)
-
-	// Namespace is empty, so we expect no tables
-	assert.Empty(t, tables, "Namespace should have no tables initially")
-
-	// Create a catalog client using our catalogx package
-	// Note: No S3 properties needed - the REST catalog handles file I/O server-side
-	c, err := catalogx.NewCatalogClient(catalogx.Config{
-		URL:      infra.RestURL,
-		AuthType: "none",
-	}, []string{namespaceName})
-	require.NoError(t, err, "create catalog client")
-
-	// Create a table
-	tbl, err := c.CreateTable(
+	// Create table via catalogx
+	c := infra.NewCatalogClient(t, namespaceName)
+	_, err := c.CreateTable(
 		t.Context(),
 		"foo",
 		iceberg.NewSchema(-1, iceberg.NestedField{Type: iceberg.Int32Type{}, Name: "col"}),
 	)
-	require.NoError(t, err, "create table")
-	t.Logf("Created table: %s", tbl.Identifier())
+	require.NoError(t, err)
 
-	// Verify table is visible via DuckDB
-	tables, err = infra.ListIcebergTables(ctx, "demo", namespaceName)
-	require.NoError(t, err, "DuckDB should be able to list tables")
-	t.Logf("DuckDB listed tables after create: %v", tables)
-
-	assert.Contains(t, tables, "foo", "Table 'foo' should be in the list")
-
-	t.Log("Iceberg REST catalog integration with MinIO verified successfully")
+	// Verify table visible via DuckDB
+	tables = querySQL[tableNameResult](t, ctx, infra,
+		fmt.Sprintf(`SELECT table_name FROM information_schema.tables WHERE table_schema = '%s' AND table_catalog = 'iceberg_cat';`, namespaceName))
+	var names []string
+	for _, row := range tables {
+		names = append(names, row.TableName)
+	}
+	assert.Contains(t, names, "foo")
 }

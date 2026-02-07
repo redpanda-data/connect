@@ -62,7 +62,7 @@ func init() {
 
 // icebergOutput implements service.BatchOutput for Iceberg tables.
 type icebergOutput struct {
-	router *router
+	router *Router
 	logger *service.Logger
 }
 
