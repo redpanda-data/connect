@@ -73,6 +73,8 @@ func (w *writer) Write(ctx context.Context, batch service.MessageBatch) error {
 		return fmt.Errorf("table IO does not support writing (got %T)", tableIO)
 	}
 
+	schemaID := w.table.Schema().ID
+
 	// Build field ID mappings for stats extraction and partition data
 	_, fieldToCol, err := icebergx.BuildParquetSchema(w.table.Schema())
 	if err != nil {
@@ -138,7 +140,7 @@ func (w *writer) Write(ctx context.Context, batch service.MessageBatch) error {
 	}
 
 	// Submit all files to committer
-	if err := w.committer.Commit(ctx, files); err != nil {
+	if err := w.committer.Commit(ctx, CommitInput{Files: files, SchemaID: schemaID}); err != nil {
 		return fmt.Errorf("failed to commit: %w", err)
 	}
 

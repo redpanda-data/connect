@@ -138,6 +138,17 @@ func (r *Router) writeWithRetry(ctx context.Context, key tableKey, batch service
 			return nil
 		}
 
+		// Stale schema: the writer was using an outdated schema.
+		// Recreate the writer to pick up the current schema and retry.
+		var staleErr *StaleSchemaError
+		if errors.As(err, &staleErr) {
+			entry.mu.Lock()
+			r.closeWriter(entry)
+			entry.mu.Unlock()
+			r.logger.Debugf("Stale schema for %s.%s: %v, recreating writer", key.namespace, key.table, err)
+			continue
+		}
+
 		// Check if schema evolution is disabled - fail immediately
 		if !r.schemaEvoCfg.Enabled {
 			return fmt.Errorf("failed to write to %s.%s: %w", key.namespace, key.table, err)

@@ -11,7 +11,6 @@ package iceberg
 import (
 	"context"
 	"fmt"
-	"slices"
 
 	"github.com/apache/iceberg-go"
 	"github.com/apache/iceberg-go/table"
@@ -20,11 +19,29 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/asyncroutine"
 )
 
+// CommitInput holds data files and the schema ID they were written with.
+type CommitInput struct {
+	Files    []iceberg.DataFile
+	SchemaID int
+}
+
+// StaleSchemaError is returned when data was written with a schema
+// that no longer matches the table's current schema.
+type StaleSchemaError struct {
+	WriterSchemaID  int
+	CurrentSchemaID int
+}
+
+func (e *StaleSchemaError) Error() string {
+	return fmt.Sprintf("stale schema: data written with schema %d but table is at schema %d",
+		e.WriterSchemaID, e.CurrentSchemaID)
+}
+
 // committer batches data file commits for a single table.
 // Commits are serialized - only one commit at a time per committer.
 type committer struct {
 	table   *table.Table
-	batcher *asyncroutine.Batcher[[]iceberg.DataFile, struct{}]
+	batcher *asyncroutine.Batcher[CommitInput, struct{}]
 	logger  *service.Logger
 }
 
@@ -44,15 +61,30 @@ func NewCommitter(tbl *table.Table, logger *service.Logger) (*committer, error) 
 	return c, nil
 }
 
-// Commit submits a data file for commit and waits for the result.
-func (c *committer) Commit(ctx context.Context, files []iceberg.DataFile) error {
-	_, err := c.batcher.Submit(ctx, files)
+// Commit submits data files for commit and waits for the result.
+func (c *committer) Commit(ctx context.Context, input CommitInput) error {
+	_, err := c.batcher.Submit(ctx, input)
 	return err
 }
 
-// doCommit processes a batch of data files for this table.
-func (c *committer) doCommit(ctx context.Context, files [][]iceberg.DataFile) ([]struct{}, error) {
-	allFiles := slices.Concat(files...)
+// doCommit processes a batch of commit inputs for this table.
+func (c *committer) doCommit(ctx context.Context, inputs []CommitInput) ([]struct{}, error) {
+	// Validate schema IDs match the current table schema.
+	currentSchemaID := c.currentSchemaID()
+	for _, input := range inputs {
+		if input.SchemaID != currentSchemaID {
+			return nil, &StaleSchemaError{
+				WriterSchemaID:  input.SchemaID,
+				CurrentSchemaID: currentSchemaID,
+			}
+		}
+	}
+
+	var allFiles []iceberg.DataFile
+	for _, input := range inputs {
+		allFiles = append(allFiles, input.Files...)
+	}
+
 	txn := c.table.NewTransaction()
 	if err := txn.AddDataFiles(ctx, allFiles, nil); err != nil {
 		return nil, fmt.Errorf("failed to add files: %w", err)
@@ -65,8 +97,13 @@ func (c *committer) doCommit(ctx context.Context, files [][]iceberg.DataFile) ([
 	}
 	c.logger.Debugf("Committed %d files", len(allFiles))
 	// All succeeded - return empty responses
-	responses := make([]struct{}, len(files))
+	responses := make([]struct{}, len(inputs))
 	return responses, nil
+}
+
+// currentSchemaID returns the table's current schema ID.
+func (c *committer) currentSchemaID() int {
+	return c.table.Schema().ID
 }
 
 // Close shuts down the committer and waits for pending commits.
