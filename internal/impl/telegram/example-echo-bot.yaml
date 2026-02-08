@@ -1,0 +1,27 @@
+# Example Telegram Echo Bot Configuration
+#
+# Prerequisites:
+# 1. Create a bot via @BotFather on Telegram
+# 2. Set TELEGRAM_BOT_TOKEN environment variable
+# 3. Send a message to your bot to start the conversation
+#
+# Run with:
+# export TELEGRAM_BOT_TOKEN="your-bot-token-here"
+# redpanda-connect run example-echo-bot.yaml
+
+input:
+  telegram:
+    bot_token: "${TELEGRAM_BOT_TOKEN}"
+    polling_timeout: 30s
+
+pipeline:
+  processors:
+    - log:
+        level: INFO
+        message: "Received: ${!json(\"message.text\")} from chat ${!json(\"message.chat.id\")}"
+
+output:
+  telegram:
+    bot_token: "${TELEGRAM_BOT_TOKEN}"
+    chat_id: ${! json("message.chat.id") }
+    text: "Echo: ${! json("message.text") }"

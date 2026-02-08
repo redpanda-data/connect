@@ -96,6 +96,7 @@ require (
 	github.com/go-mysql-org/go-mysql v1.13.0
 	github.com/go-resty/resty/v2 v2.16.5
 	github.com/go-sql-driver/mysql v1.9.3
+	github.com/go-telegram/bot v1.18.0
 	github.com/go-viper/mapstructure/v2 v2.4.0
 	github.com/gocql/gocql v1.7.0
 	github.com/gofrs/uuid/v5 v5.4.0

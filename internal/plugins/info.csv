@@ -300,6 +300,8 @@ sync_response             ,output    ,sync_response             ,0.0.0   ,certif
 sync_response             ,processor ,sync_response             ,0.0.0   ,certified  ,n          ,y     ,y
 system_window             ,buffer    ,system_window             ,3.53.0  ,certified  ,n          ,y     ,y
 tar                       ,scanner   ,tar                       ,0.0.0   ,certified  ,n          ,y     ,y
+telegram                  ,input     ,Telegram                  ,4.80.0  ,certified  ,n          ,y     ,y
+telegram                  ,output    ,Telegram                  ,4.80.0  ,certified  ,n          ,y     ,y
 text_chunker              ,processor ,text_chunker              ,4.51.0  ,certified  ,n          ,y     ,y
 tigerbeetle_cdc           ,input     ,tigerbeetle_cdc           ,4.65.0  ,certified  ,n          ,n     ,n
 timeplus                  ,input     ,timeplus                  ,4.39.0  ,community  ,n          ,y     ,y
