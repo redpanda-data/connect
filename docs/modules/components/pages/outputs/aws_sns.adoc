@@ -42,6 +42,7 @@ output:
     topic_arn: "" # No default (required)
     message_group_id: "" # No default (optional)
     message_deduplication_id: "" # No default (optional)
+    subject: "" # No default (optional)
     max_in_flight: 64
     metadata:
       exclude_prefixes: []
@@ -60,6 +61,7 @@ output:
     topic_arn: "" # No default (required)
     message_group_id: "" # No default (optional)
     message_deduplication_id: "" # No default (optional)
+    subject: "" # No default (optional)
     max_in_flight: 64
     metadata:
       exclude_prefixes: []
@@ -124,6 +126,15 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 *Type*: `string`
 
 Requires version 3.60.0 or newer
+
+=== `subject`
+
+An optional subject to set for messages.
+This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
+
+
+*Type*: `string`
+
 
 === `max_in_flight`
 
