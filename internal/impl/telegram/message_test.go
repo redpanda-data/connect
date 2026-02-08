@@ -27,11 +27,11 @@ import (
 
 func TestParseUpdate(t *testing.T) {
 	tests := []struct {
-		name           string
-		update         *models.Update
-		wantErr        bool
-		checkContent   func(t *testing.T, content []byte)
-		checkMetadata  func(t *testing.T, msg *service.Message)
+		name          string
+		update        *models.Update
+		wantErr       bool
+		checkContent  func(t *testing.T, content []byte)
+		checkMetadata func(t *testing.T, msg *service.Message)
 	}{
 		{
 			name:    "nil update",

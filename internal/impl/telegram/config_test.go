@@ -15,6 +15,7 @@
 package telegram
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -24,57 +25,58 @@ import (
 
 func TestValidateBotToken(t *testing.T) {
 	tests := []struct {
-		name    string
-		token   string
-		wantErr bool
+		name        string
+		token       string
+		errContains string
 	}{
 		{
-			name:    "valid token",
-			token:   "123456789:ABCdefGHIjklMNOpqrsTUVwxyz",
-			wantErr: false,
+			name:        "valid token",
+			token:       "123456789:ABCdefGHIjklMNOpqrsTUVwxyz",
+			errContains: "",
 		},
 		{
-			name:    "valid token with underscores",
-			token:   "987654321:ABC_def_GHI_jkl",
-			wantErr: false,
+			name:        "valid token with underscores",
+			token:       "987654321:ABC_def_GHI_jkl",
+			errContains: "",
 		},
 		{
-			name:    "valid token with hyphens",
-			token:   "111222333:ABC-def-GHI-jkl",
-			wantErr: false,
+			name:        "valid token with hyphens",
+			token:       "111222333:ABC-def-GHI-jkl",
+			errContains: "",
 		},
 		{
-			name:    "empty token",
-			token:   "",
-			wantErr: true,
+			name:        "empty token",
+			token:       "",
+			errContains: "bot_token is required",
 		},
 		{
-			name:    "missing colon",
-			token:   "123456789ABCdefGHIjklMNOpqrsTUVwxyz",
-			wantErr: true,
+			name:        "missing colon",
+			token:       "123456789ABCdefGHIjklMNOpqrsTUVwxyz",
+			errContains: "invalid bot token format",
 		},
 		{
-			name:    "missing bot id",
-			token:   ":ABCdefGHIjklMNOpqrsTUVwxyz",
-			wantErr: true,
+			name:        "missing bot id",
+			token:       ":ABCdefGHIjklMNOpqrsTUVwxyz",
+			errContains: "invalid bot token format",
 		},
 		{
-			name:    "missing hash",
-			token:   "123456789:",
-			wantErr: true,
+			name:        "missing hash",
+			token:       "123456789:",
+			errContains: "invalid bot token format",
 		},
 		{
-			name:    "invalid characters",
-			token:   "123456789:ABC def GHI",
-			wantErr: true,
+			name:        "invalid characters",
+			token:       "123456789:ABC def GHI",
+			errContains: "invalid bot token format",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := validateBotToken(tt.token)
-			if tt.wantErr {
-				assert.Error(t, err)
+			if tt.errContains != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errContains)
 			} else {
 				assert.NoError(t, err)
 			}
@@ -84,47 +86,48 @@ func TestValidateBotToken(t *testing.T) {
 
 func TestValidateParseMode(t *testing.T) {
 	tests := []struct {
-		name    string
-		mode    string
-		wantErr bool
+		name        string
+		mode        string
+		errContains string
 	}{
 		{
-			name:    "empty (no parse mode)",
-			mode:    "",
-			wantErr: false,
+			name:        "empty (no parse mode)",
+			mode:        "",
+			errContains: "",
 		},
 		{
-			name:    "Markdown",
-			mode:    "Markdown",
-			wantErr: false,
+			name:        "Markdown",
+			mode:        "Markdown",
+			errContains: "",
 		},
 		{
-			name:    "MarkdownV2",
-			mode:    "MarkdownV2",
-			wantErr: false,
+			name:        "MarkdownV2",
+			mode:        "MarkdownV2",
+			errContains: "",
 		},
 		{
-			name:    "HTML",
-			mode:    "HTML",
-			wantErr: false,
+			name:        "HTML",
+			mode:        "HTML",
+			errContains: "",
 		},
 		{
-			name:    "invalid mode",
-			mode:    "XML",
-			wantErr: true,
+			name:        "invalid mode",
+			mode:        "XML",
+			errContains: "invalid parse_mode",
 		},
 		{
-			name:    "lowercase markdown",
-			mode:    "markdown",
-			wantErr: true,
+			name:        "lowercase markdown",
+			mode:        "markdown",
+			errContains: "invalid parse_mode",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := validateParseMode(tt.mode)
-			if tt.wantErr {
-				assert.Error(t, err)
+			if tt.errContains != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errContains)
 			} else {
 				assert.NoError(t, err)
 			}
@@ -134,10 +137,10 @@ func TestValidateParseMode(t *testing.T) {
 
 func TestExtractChatID(t *testing.T) {
 	tests := []struct {
-		name       string
-		setupMsg   func() *service.Message
-		wantChatID int64
-		wantErr    bool
+		name        string
+		setupMsg    func() *service.Message
+		wantChatID  int64
+		errContains string
 	}{
 		{
 			name: "from metadata",
@@ -146,8 +149,8 @@ func TestExtractChatID(t *testing.T) {
 				msg.MetaSet("chat_id", "123456789")
 				return msg
 			},
-			wantChatID: 123456789,
-			wantErr:    false,
+			wantChatID:  123456789,
+			errContains: "",
 		},
 		{
 			name: "from message.chat.id structure",
@@ -163,8 +166,8 @@ func TestExtractChatID(t *testing.T) {
 				msg.SetStructured(data)
 				return msg
 			},
-			wantChatID: 987654321,
-			wantErr:    false,
+			wantChatID:  987654321,
+			errContains: "",
 		},
 		{
 			name: "from direct chat_id field",
@@ -176,8 +179,8 @@ func TestExtractChatID(t *testing.T) {
 				msg.SetStructured(data)
 				return msg
 			},
-			wantChatID: 555666777,
-			wantErr:    false,
+			wantChatID:  555666777,
+			errContains: "",
 		},
 		{
 			name: "missing chat_id",
@@ -189,7 +192,7 @@ func TestExtractChatID(t *testing.T) {
 				msg.SetStructured(data)
 				return msg
 			},
-			wantErr: true,
+			errContains: "chat_id not found",
 		},
 	}
 
@@ -197,8 +200,9 @@ func TestExtractChatID(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			msg := tt.setupMsg()
 			chatID, err := extractChatID(msg)
-			if tt.wantErr {
-				assert.Error(t, err)
+			if tt.errContains != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errContains)
 			} else {
 				require.NoError(t, err)
 				assert.Equal(t, tt.wantChatID, chatID)

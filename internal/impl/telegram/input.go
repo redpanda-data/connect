@@ -26,6 +26,12 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/impl/pure/shutdown"
 )
 
+const (
+	tiFieldBotToken       = "bot_token"
+	tiFieldPollingTimeout = "polling_timeout"
+	tiFieldAllowedUpdates = "allowed_updates"
+)
+
 func inputConfigSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
@@ -53,15 +59,15 @@ Create a bot:
 - Per-chat: 1 message/second
 `).
 		Fields(
-			service.NewStringField("bot_token").
+			service.NewStringField(tiFieldBotToken).
 				Description("The bot token obtained from @BotFather.").
 				Secret().
 				Example("123456789:ABCdefGHIjklMNOpqrsTUVwxyz"),
-			service.NewDurationField("polling_timeout").
+			service.NewDurationField(tiFieldPollingTimeout).
 				Description("The timeout for long polling requests.").
 				Default("30s").
 				Advanced(),
-			service.NewStringListField("allowed_updates").
+			service.NewStringListField(tiFieldAllowedUpdates).
 				Description("List of update types to receive. Leave empty to receive all types.").
 				Example([]string{"message", "edited_message", "channel_post"}).
 				Optional().
@@ -93,7 +99,7 @@ type telegramInput struct {
 }
 
 func newTelegramInput(conf *service.ParsedConfig, mgr *service.Resources) (*telegramInput, error) {
-	botToken, err := conf.FieldString("bot_token")
+	botToken, err := conf.FieldString(tiFieldBotToken)
 	if err != nil {
 		return nil, err
 	}
@@ -102,14 +108,14 @@ func newTelegramInput(conf *service.ParsedConfig, mgr *service.Resources) (*tele
 		return nil, err
 	}
 
-	pollingTimeout, err := conf.FieldDuration("polling_timeout")
+	pollingTimeout, err := conf.FieldDuration(tiFieldPollingTimeout)
 	if err != nil {
 		return nil, err
 	}
 
 	var allowedUpdates []string
-	if conf.Contains("allowed_updates") {
-		allowedUpdates, err = conf.FieldStringList("allowed_updates")
+	if conf.Contains(tiFieldAllowedUpdates) {
+		allowedUpdates, err = conf.FieldStringList(tiFieldAllowedUpdates)
 		if err != nil {
 			return nil, err
 		}

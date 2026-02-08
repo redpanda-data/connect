@@ -26,6 +26,14 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
+const (
+	toFieldBotToken            = "bot_token"
+	toFieldChatID              = "chat_id"
+	toFieldText                = "text"
+	toFieldParseMode           = "parse_mode"
+	toFieldDisableNotification = "disable_notification"
+)
+
 func outputConfigSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
@@ -61,27 +69,27 @@ To send messages, you need the chat ID:
 - 429 errors indicate rate limit exceeded
 `).
 		Fields(
-			service.NewStringField("bot_token").
+			service.NewStringField(toFieldBotToken).
 				Description("The bot token obtained from @BotFather.").
 				Secret().
 				Example("123456789:ABCdefGHIjklMNOpqrsTUVwxyz"),
-			service.NewInterpolatedStringField("chat_id").
+			service.NewInterpolatedStringField(toFieldChatID).
 				Description("The chat ID to send the message to. Supports interpolation.").
 				Example("${!json(\"chat_id\")}").
 				Example("${!json(\"message.chat.id\")}").
 				Example("123456789"),
-			service.NewInterpolatedStringField("text").
+			service.NewInterpolatedStringField(toFieldText).
 				Description("The message text to send. Supports interpolation.").
 				Example("${!content()}").
 				Example("Alert: ${!json(\"alert_message\")}"),
-			service.NewStringField("parse_mode").
+			service.NewStringField(toFieldParseMode).
 				Description("The parse mode for the message text.").
 				Optional().
 				Example("Markdown").
 				Example("MarkdownV2").
 				Example("HTML").
 				Advanced(),
-			service.NewBoolField("disable_notification").
+			service.NewBoolField(toFieldDisableNotification).
 				Description("Send the message silently (users will receive a notification with no sound).").
 				Default(false).
 				Advanced(),
@@ -99,10 +107,10 @@ func init() {
 }
 
 type telegramOutput struct {
-	botToken           string
-	chatID             *service.InterpolatedString
-	text               *service.InterpolatedString
-	parseMode          string
+	botToken            string
+	chatID              *service.InterpolatedString
+	text                *service.InterpolatedString
+	parseMode           string
 	disableNotification bool
 
 	log *service.Logger
@@ -110,7 +118,7 @@ type telegramOutput struct {
 }
 
 func newTelegramOutput(conf *service.ParsedConfig, mgr *service.Resources) (*telegramOutput, error) {
-	botToken, err := conf.FieldString("bot_token")
+	botToken, err := conf.FieldString(toFieldBotToken)
 	if err != nil {
 		return nil, err
 	}
@@ -119,19 +127,19 @@ func newTelegramOutput(conf *service.ParsedConfig, mgr *service.Resources) (*tel
 		return nil, err
 	}
 
-	chatID, err := conf.FieldInterpolatedString("chat_id")
+	chatID, err := conf.FieldInterpolatedString(toFieldChatID)
 	if err != nil {
 		return nil, err
 	}
 
-	text, err := conf.FieldInterpolatedString("text")
+	text, err := conf.FieldInterpolatedString(toFieldText)
 	if err != nil {
 		return nil, err
 	}
 
 	var parseMode string
-	if conf.Contains("parse_mode") {
-		parseMode, err = conf.FieldString("parse_mode")
+	if conf.Contains(toFieldParseMode) {
+		parseMode, err = conf.FieldString(toFieldParseMode)
 		if err != nil {
 			return nil, err
 		}
@@ -140,7 +148,7 @@ func newTelegramOutput(conf *service.ParsedConfig, mgr *service.Resources) (*tel
 		}
 	}
 
-	disableNotification, err := conf.FieldBool("disable_notification")
+	disableNotification, err := conf.FieldBool(toFieldDisableNotification)
 	if err != nil {
 		return nil, err
 	}
