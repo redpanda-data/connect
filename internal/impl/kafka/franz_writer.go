@@ -542,7 +542,7 @@ func (w *batchWriter) writeBatch(details *FranzSharedClientInfo) error {
 		}
 
 		wg.Add(1)
-		details.Client.Produce(w.ctx, r, func(r *kgo.Record, err error) {
+		details.Client.Produce(w.ctx, r, func(_ *kgo.Record, err error) {
 			errs = append(errs, err)
 			wg.Done()
 		})
