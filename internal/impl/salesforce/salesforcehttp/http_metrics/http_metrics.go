@@ -16,6 +16,7 @@ package http_metrics
 
 import (
 	"net/http"
+	"strconv"
 	"sync/atomic"
 	"time"
 
@@ -29,13 +30,12 @@ type Transport struct {
 	ns      string
 
 	inflight    *service.MetricGauge
-	inflightVal int64 // track ourselves; gauge uses Set()
-	total       *service.MetricCounter
-	errors      *service.MetricCounter
-	status2xx   *service.MetricCounter
-	status4xx   *service.MetricCounter
-	status5xx   *service.MetricCounter
-	duration    *service.MetricTimer
+	inflightVal int64
+
+	total    *service.MetricCounter
+	errors   *service.MetricCounter
+	status   *service.MetricCounter
+	duration *service.MetricTimer
 }
 
 // NewTransport creates new Transport with metrics instrumentation. It takes a metrics
@@ -45,17 +45,16 @@ func NewTransport(m *service.Metrics, namespace string, base http.RoundTripper) 
 	if base == nil {
 		base = http.DefaultTransport
 	}
+
 	return &Transport{
-		base:      base,
-		metrics:   m,
-		ns:        namespace,
-		inflight:  m.NewGauge(namespace + "_in_flight"),
-		total:     m.NewCounter(namespace + "_requests_total"),
-		errors:    m.NewCounter(namespace + "_requests_errors"),
-		status2xx: m.NewCounter(namespace + "_responses_2xx"),
-		status4xx: m.NewCounter(namespace + "_responses_4xx"),
-		status5xx: m.NewCounter(namespace + "_responses_5xx"),
-		duration:  m.NewTimer(namespace + "_request_duration"),
+		base:     base,
+		metrics:  m,
+		ns:       namespace,
+		inflight: m.NewGauge(namespace + "_in_flight"),
+		total:    m.NewCounter(namespace + "_requests_total"),
+		errors:   m.NewCounter(namespace + "_requests_errors"),
+		status:   m.NewCounter(namespace+"_responses", "status_code"),
+		duration: m.NewTimer(namespace + "_request_duration"),
 	}
 }
 
@@ -84,14 +83,8 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 		return nil, err
 	}
 
-	switch code := resp.StatusCode; {
-	case code >= 200 && code < 300:
-		t.status2xx.Incr(1)
-	case code >= 400 && code < 500:
-		t.status4xx.Incr(1)
-	case code >= 500:
-		t.status5xx.Incr(1)
-	}
+	codeStr := strconv.Itoa(resp.StatusCode)
+	t.status.Incr(1, codeStr)
 
 	return resp, nil
 }
