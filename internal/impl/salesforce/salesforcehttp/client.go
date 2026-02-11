@@ -76,7 +76,7 @@ func (s *Client) callSalesforceAPI(ctx context.Context, u *url.URL) ([]byte, err
 	retryBody, retryErr := s.doSalesforceRequest(ctx, u)
 
 	if retryErr != nil {
-		return nil, fmt.Errorf("request failed: %v", retryErr)
+		return nil, fmt.Errorf("request failed: %w", retryErr)
 	}
 
 	return retryBody, nil
@@ -85,7 +85,7 @@ func (s *Client) callSalesforceAPI(ctx context.Context, u *url.URL) ([]byte, err
 func (s *Client) doSalesforceRequest(ctx context.Context, u *url.URL) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", u.String(), nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %v", err)
+		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
 	req.Header.Set("Accept", "application/json")
@@ -99,7 +99,7 @@ func (s *Client) doSalesforceRequest(ctx context.Context, u *url.URL) ([]byte, e
 func (s *Client) updateAndSetBearerToken(ctx context.Context) error {
 	apiUrl, err := url.Parse(s.orgURL + salesforceAPIBasePath + "/oauth2/token")
 	if err != nil {
-		return fmt.Errorf("invalid URL: %v", err)
+		return fmt.Errorf("invalid URL: %w", err)
 	}
 
 	// Build form-encoded body
@@ -111,7 +111,7 @@ func (s *Client) updateAndSetBearerToken(ctx context.Context) error {
 	req, err := http.NewRequestWithContext(ctx, "POST", apiUrl.String(), strings.NewReader(form.Encode()))
 
 	if err != nil {
-		return fmt.Errorf("failed to create request: %v", err)
+		return fmt.Errorf("failed to create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Accept", "application/json")
@@ -119,7 +119,7 @@ func (s *Client) updateAndSetBearerToken(ctx context.Context) error {
 
 	body, err := DoRequestWithRetries(ctx, s.httpClient, req, s.retryOpts)
 	if err != nil {
-		return fmt.Errorf("request failed: %v", err)
+		return fmt.Errorf("request failed: %w", err)
 	}
 
 	var result SalesforceAuthResponse
@@ -136,7 +136,7 @@ func (s *Client) updateAndSetBearerToken(ctx context.Context) error {
 func (s *Client) GetAvailableResources(ctx context.Context) ([]byte, error) {
 	apiUrl, err := url.Parse(s.orgURL + salesforceAPIBasePath + "/data/" + s.apiVersion)
 	if err != nil {
-		return nil, fmt.Errorf("invalid URL: %v", err)
+		return nil, fmt.Errorf("invalid URL: %w", err)
 	}
 
 	body, err := s.callSalesforceAPI(ctx, apiUrl)
@@ -151,7 +151,7 @@ func (s *Client) GetAvailableResources(ctx context.Context) ([]byte, error) {
 func (s *Client) GetAllSObjectResources(ctx context.Context) ([]byte, error) {
 	apiUrl, err := url.Parse(s.orgURL + salesforceAPIBasePath + "/data/" + s.apiVersion + "/sobjects")
 	if err != nil {
-		return nil, fmt.Errorf("invalid URL: %v", err)
+		return nil, fmt.Errorf("invalid URL: %w", err)
 	}
 
 	body, err := s.callSalesforceAPI(ctx, apiUrl)
@@ -166,7 +166,7 @@ func (s *Client) GetAllSObjectResources(ctx context.Context) ([]byte, error) {
 func (s *Client) GetSObjectResource(ctx context.Context, sObj string) ([]byte, error) {
 	apiUrl, err := url.Parse(s.orgURL + salesforceAPIBasePath + "/data/" + s.apiVersion + "/sobjects/" + sObj + "/describe")
 	if err != nil {
-		return nil, fmt.Errorf("invalid URL: %v", err)
+		return nil, fmt.Errorf("invalid URL: %w", err)
 	}
 
 	body, err := s.callSalesforceAPI(ctx, apiUrl)
@@ -181,7 +181,7 @@ func (s *Client) GetSObjectResource(ctx context.Context, sObj string) ([]byte, e
 func (s *Client) GetSObjectData(ctx context.Context, query string) ([]byte, error) {
 	apiUrl, err := url.Parse(s.orgURL + salesforceAPIBasePath + "/data/" + s.apiVersion + "/query?q=" + query)
 	if err != nil {
-		return nil, fmt.Errorf("invalid URL: %v", err)
+		return nil, fmt.Errorf("invalid URL: %w", err)
 	}
 
 	body, err := s.callSalesforceAPI(ctx, apiUrl)
