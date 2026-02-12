@@ -39,7 +39,7 @@ Common::
 input:
   label: ""
   aws_dynamodb_cdc:
-    table: "" # No default (required)
+    tables: []
     checkpoint_table: redpanda_dynamodb_checkpoints
     start_from: trim_horizon
     snapshot_mode: none
@@ -55,7 +55,11 @@ Advanced::
 input:
   label: ""
   aws_dynamodb_cdc:
-    table: "" # No default (required)
+    tables: []
+    table_discovery_mode: single
+    table_tag_key: ""
+    table_tag_value: ""
+    table_discovery_interval: 5m
     checkpoint_table: redpanda_dynamodb_checkpoints
     batch_size: 1000
     poll_interval: 1s
@@ -99,10 +103,21 @@ DynamoDB Streams capture item-level changes in DynamoDB tables. This input suppo
 - Checkpoint-based resumption after restarts
 - Concurrent processing of multiple shards
 - Optional initial snapshot of existing table data
+- Multi-table streaming with auto-discovery by tags or explicit table lists
+
+### Table Discovery Modes
+
+This input supports three table discovery modes:
+
+- `single` (default) - Stream from a single table specified by the `table` field
+- `tag` - Auto-discover and stream from multiple tables based on DynamoDB table tags. Use `table_tag_key` and optionally `table_tag_value` to filter tables
+- `includelist` - Stream from an explicit list of tables specified in the `tables` field
+
+When using `tag` or `includelist` mode, the connector will stream from all matching tables simultaneously. Each table maintains its own checkpoint state. Use `table_discovery_interval` to periodically rescan for new tables (useful for dynamically tagged tables).
 
 ### Prerequisites
 
-The source DynamoDB table must have streams enabled. You can enable streams with one of these view types:
+The source DynamoDB table(s) must have streams enabled. You can enable streams with one of these view types:
 
 - `KEYS_ONLY` - Only the key attributes of the modified item
 - `NEW_IMAGE` - The entire item as it appears after the modification
@@ -162,7 +177,7 @@ Read change events from a DynamoDB table with streams enabled.
 ```yaml
 input:
   aws_dynamodb_cdc:
-    table: my-table
+    tables: [my-table]
     region: us-east-1
 ```
 
@@ -176,7 +191,7 @@ Only process new changes, ignoring existing stream data.
 ```yaml
 input:
   aws_dynamodb_cdc:
-    table: orders
+    tables: [orders]
     start_from: latest
     region: us-west-2
 ```
@@ -191,10 +206,45 @@ Scan all existing records, then stream ongoing changes.
 ```yaml
 input:
   aws_dynamodb_cdc:
-    table: products
+    tables: [products]
     snapshot_mode: snapshot_and_cdc
     snapshot_segments: 5
     region: us-east-1
+```
+
+--
+Auto-discover tables by tag::
++
+--
+
+Automatically discover and stream from all tables with a specific tag.
+
+```yaml
+input:
+  aws_dynamodb_cdc:
+    table_discovery_mode: tag
+    table_tag_key: "stream-enabled"
+    table_tag_value: "true"
+    table_discovery_interval: 5m
+    region: us-east-1
+```
+
+--
+Stream from multiple specific tables::
++
+--
+
+Stream from an explicit list of tables simultaneously.
+
+```yaml
+input:
+  aws_dynamodb_cdc:
+    table_discovery_mode: includelist
+    tables:
+      - orders
+      - customers
+      - products
+    region: us-west-2
 ```
 
 --
@@ -202,13 +252,56 @@ input:
 
 == Fields
 
-=== `table`
+=== `tables`
 
-The name of the DynamoDB table to read streams from.
+List of table names to stream from. For single table mode, provide one table. For multi-table mode, provide multiple tables.
+
+
+*Type*: `array`
+
+*Default*: `[]`
+
+=== `table_discovery_mode`
+
+Table discovery mode. `single`: stream from tables specified in `tables` list. `tag`: auto-discover tables by tags (ignores `tables` field). `includelist`: stream from tables in `tables` list (alias for `single`, kept for compatibility).
 
 
 *Type*: `string`
 
+*Default*: `"single"`
+
+Options:
+`single`
+, `tag`
+, `includelist`
+.
+
+=== `table_tag_key`
+
+Tag key to filter tables by when `table_discovery_mode` is `tag`. Only tables with this tag will be discovered.
+
+
+*Type*: `string`
+
+*Default*: `""`
+
+=== `table_tag_value`
+
+Optional tag value to match when `table_discovery_mode` is `tag`. If empty, any table with the tag key will match.
+
+
+*Type*: `string`
+
+*Default*: `""`
+
+=== `table_discovery_interval`
+
+Interval for rescanning and discovering new tables when using `tag` or `includelist` mode. Set to 0 to disable periodic rescanning.
+
+
+*Type*: `string`
+
+*Default*: `"5m"`
 
 === `checkpoint_table`
 
