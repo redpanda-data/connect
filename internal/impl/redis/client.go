@@ -50,6 +50,10 @@ Some cloud hosted instances of Redis (such as Azure Cache) might need some hand 
 			Default("").
 			Example("mymaster").
 			Advanced(),
+		service.NewStringField("client_name").
+			Description("Name of the client connection to redis.").
+			Default("redpanda-connect").
+			Advanced(),
 		tlsField,
 	}
 }
