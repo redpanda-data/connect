@@ -26,7 +26,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"syscall"
 )
 
 // Run `ockam ...` commands
@@ -60,7 +59,7 @@ func runCommand(capture bool, arg ...string) (string, string, error) {
 		cmd.Stderr = devNull
 	}
 
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	setSysProcAttr(cmd)
 
 	err = cmd.Run()
 	stdout := stdoutBuf.String()

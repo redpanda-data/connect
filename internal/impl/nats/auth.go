@@ -60,6 +60,10 @@ generated with the https://docs.nats.io/nats-tools/nsc[nsc tool^].
 Alternatively, the ` + "`user_jwt`" + ` field can contain a plain text JWT and the ` + "`user_nkey_seed`" + `can contain
 the plain text NKey Seed.
 
+Alternatively, the ` + "`token`" + ` field can contain a plain text random string.
+
+Alternatively, the ` + "`user`" + ` and ` + "`password`" + ` fields can contain plain text user and password.
+
 https://docs.nats.io/using-nats/developer/connecting/creds[More details^].`
 }
 
@@ -83,6 +87,18 @@ func authFieldSpec() *service.ConfigField {
 			Description("An optional plain text user JWT (given along with the corresponding user NKey Seed).").
 			Secret().
 			Optional(),
+		service.NewStringField("user").
+			Description("An optional plain text user name (given along with the corresponding user password).").
+			Secret().
+			Optional(),
+		service.NewStringField("password").
+			Description("An optional plain text password (given along with the corresponding user name).").
+			Secret().
+			Optional(),
+		service.NewStringField("token").
+			Description("An optional plain text token.").
+			Secret().
+			Optional(),
 		service.NewStringField("user_nkey_seed").
 			Description("An optional plain text user NKey Seed (given along with the corresponding user JWT).").
 			Secret().
@@ -97,6 +113,9 @@ type authConfig struct {
 	UserCredentialsFile string
 	UserJWT             string
 	UserNkeySeed        string
+	Token               string
+	User                string
+	Password            string
 }
 
 //------------------------------------------------------------------------------
@@ -137,6 +156,15 @@ func authConfToOptions(auth authConfig, fs *service.FS) []nats.Option {
 		))
 	}
 
+	if auth.Token != "" {
+		opts = append(opts, nats.Token(
+			auth.Token,
+		))
+	}
+
+	if auth.User != "" && auth.Password != "" {
+		opts = append(opts, nats.UserInfo(auth.User, auth.Password))
+	}
 	return opts
 }
 
@@ -170,6 +198,28 @@ func AuthFromParsedConfig(p *service.ParsedConfig) (c authConfig, err error) {
 			return
 		}
 		if c.UserNkeySeed, err = p.FieldString("user_nkey_seed"); err != nil {
+			return
+		}
+	}
+	if p.Contains("token") {
+		if c.Token, err = p.FieldString("token"); err != nil {
+			return
+		}
+	}
+
+	if p.Contains("user") || p.Contains("password") {
+		if !p.Contains("user") {
+			err = errors.New("missing auth.user config field")
+			return
+		}
+		if !p.Contains("password") {
+			err = errors.New("missing auth.password config field")
+			return
+		}
+		if c.User, err = p.FieldString("user"); err != nil {
+			return
+		}
+		if c.Password, err = p.FieldString("password"); err != nil {
 			return
 		}
 	}
