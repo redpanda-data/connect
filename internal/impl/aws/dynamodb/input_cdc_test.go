@@ -10,6 +10,7 @@ package dynamodb
 
 import (
 	"context"
+	"slices"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -255,4 +256,208 @@ func TestCleanupExhaustedShards(t *testing.T) {
 
 		assert.Len(t, input.shardReaders, 2)
 	})
+}
+
+func TestParseTableTagFilter(t *testing.T) {
+	tests := []struct {
+		name        string
+		input       string
+		expected    map[string][]string
+		expectError bool
+	}{
+		{
+			name:  "single key single value",
+			input: "env:prod",
+			expected: map[string][]string{
+				"env": {"prod"},
+			},
+		},
+		{
+			name:  "single key multiple values",
+			input: "env:prod,staging,dev",
+			expected: map[string][]string{
+				"env": {"prod", "staging", "dev"},
+			},
+		},
+		{
+			name:  "multiple keys multiple values",
+			input: "env:prod,staging;team:data,analytics",
+			expected: map[string][]string{
+				"env":  {"prod", "staging"},
+				"team": {"data", "analytics"},
+			},
+		},
+		{
+			name:  "whitespace tolerance",
+			input: " env : prod , staging ; team : data , analytics ",
+			expected: map[string][]string{
+				"env":  {"prod", "staging"},
+				"team": {"data", "analytics"},
+			},
+		},
+		{
+			name:        "empty string",
+			input:       "",
+			expected:    nil,
+			expectError: false,
+		},
+		{
+			name:        "missing colon",
+			input:       "env-prod",
+			expectError: true,
+		},
+		{
+			name:        "empty key",
+			input:       ":prod",
+			expectError: true,
+		},
+		{
+			name:        "empty value list",
+			input:       "env:",
+			expectError: true,
+		},
+		{
+			name:        "duplicate keys",
+			input:       "env:prod;env:staging",
+			expectError: true,
+		},
+		{
+			name:        "empty values after trim",
+			input:       "env: , , ",
+			expectError: true,
+		},
+		{
+			name:  "complex real-world example",
+			input: "environment:production,staging;region:us-east-1,us-west-2;team:data",
+			expected: map[string][]string{
+				"environment": {"production", "staging"},
+				"region":      {"us-east-1", "us-west-2"},
+				"team":        {"data"},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := parseTableTagFilter(tt.input)
+
+			if tt.expectError {
+				assert.Error(t, err)
+				return
+			}
+
+			assert.NoError(t, err)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestTableTagMatching(t *testing.T) {
+	tests := []struct {
+		name        string
+		filter      map[string][]string
+		tableTags   []struct{ key, value string }
+		shouldMatch bool
+	}{
+		{
+			name: "single key matches",
+			filter: map[string][]string{
+				"env": {"prod"},
+			},
+			tableTags: []struct{ key, value string }{
+				{"env", "prod"},
+			},
+			shouldMatch: true,
+		},
+		{
+			name: "single key OR match",
+			filter: map[string][]string{
+				"env": {"prod", "staging"},
+			},
+			tableTags: []struct{ key, value string }{
+				{"env", "staging"},
+			},
+			shouldMatch: true,
+		},
+		{
+			name: "multiple keys AND match",
+			filter: map[string][]string{
+				"env":  {"prod"},
+				"team": {"data"},
+			},
+			tableTags: []struct{ key, value string }{
+				{"env", "prod"},
+				{"team", "data"},
+			},
+			shouldMatch: true,
+		},
+		{
+			name: "multiple keys partial match fails",
+			filter: map[string][]string{
+				"env":  {"prod"},
+				"team": {"data"},
+			},
+			tableTags: []struct{ key, value string }{
+				{"env", "prod"},
+				// missing "team" tag
+			},
+			shouldMatch: false,
+		},
+		{
+			name: "value mismatch",
+			filter: map[string][]string{
+				"env": {"prod"},
+			},
+			tableTags: []struct{ key, value string }{
+				{"env", "dev"},
+			},
+			shouldMatch: false,
+		},
+		{
+			name: "extra table tags OK",
+			filter: map[string][]string{
+				"env": {"prod"},
+			},
+			tableTags: []struct{ key, value string }{
+				{"env", "prod"},
+				{"owner", "team-a"}, // extra tag, should still match
+			},
+			shouldMatch: true,
+		},
+		{
+			name: "complex AND/OR logic",
+			filter: map[string][]string{
+				"env":  {"prod", "staging"},
+				"team": {"data", "analytics"},
+			},
+			tableTags: []struct{ key, value string }{
+				{"env", "staging"},
+				{"team", "analytics"},
+				{"region", "us-east-1"}, // extra tag
+			},
+			shouldMatch: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Simulate matching logic from discoverTablesByTag
+			matchedTags := make(map[string]bool)
+
+			for _, tag := range tt.tableTags {
+				acceptedValues, exists := tt.filter[tag.key]
+				if !exists {
+					continue
+				}
+
+				if slices.Contains(acceptedValues, tag.value) {
+					matchedTags[tag.key] = true
+				}
+			}
+
+			matches := len(matchedTags) == len(tt.filter)
+			assert.Equal(t, tt.shouldMatch, matches,
+				"Filter: %v, Tags: %v, Matched: %v", tt.filter, tt.tableTags, matchedTags)
+		})
+	}
 }
