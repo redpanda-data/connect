@@ -22,7 +22,6 @@ import (
 	"slices"
 	"strconv"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/dustin/go-humanize"
@@ -499,9 +498,6 @@ type batchWriter struct {
 	*FranzWriter
 	ctx   context.Context
 	batch service.MessageBatch
-
-	wg  sync.WaitGroup
-	err atomic.Value
 }
 
 func (w *FranzWriter) newBatchWriter(ctx context.Context, batch service.MessageBatch) *batchWriter {
@@ -524,6 +520,8 @@ func (w *batchWriter) writeBatch(details *FranzSharedClientInfo) error {
 	if len(records) != len(w.batch) {
 		return fmt.Errorf("record count mismatch: got %d records for %d messages", len(records), len(w.batch))
 	}
+	var errs []error
+	var wg sync.WaitGroup
 	for i := range records {
 		r := &records[i]
 
@@ -538,37 +536,19 @@ func (w *batchWriter) writeBatch(details *FranzSharedClientInfo) error {
 		}
 		if w.DecorateRecord != nil {
 			if err := w.DecorateRecord(r); err != nil {
-				return fmt.Errorf("decorate record: %w", err)
+				errs = append(errs, fmt.Errorf("decorate record: %w", err))
+				continue
 			}
 		}
 
-		w.wg.Add(1)
-		details.Client.Produce(w.ctx, r, w.onRecordProduced)
+		wg.Add(1)
+		details.Client.Produce(w.ctx, r, func(_ *kgo.Record, err error) {
+			errs = append(errs, err)
+			wg.Done()
+		})
 	}
-	return w.wait()
-}
-
-func (w *batchWriter) onRecordProduced(r *kgo.Record, err error) {
-	// Note: the order of these operations is important, first set the error if
-	// there is one, then signal completion.
-	if err != nil {
-		w.err.CompareAndSwap(nil, err)
-	}
-	w.wg.Done()
-
-	if r.Context != nil {
-		dispatch.TriggerSignal(r.Context)
-	}
-}
-
-func (w *batchWriter) wait() error {
-	w.wg.Wait()
-
-	if err := w.err.Load(); err != nil {
-		return err.(error)
-	}
-
-	return nil
+	wg.Wait()
+	return errors.Join(slices.Compact(errs)...)
 }
 
 // Close calls into the provided yield client func.
