@@ -1742,7 +1742,7 @@ func (d *dynamoDBCDCInput) startBackgroundWorker(name string, fn func(context.Co
 // startTableCoordinator launches a table stream coordinator goroutine.
 func (d *dynamoDBCDCInput) startTableCoordinator(tableName string, ts *tableStream) {
 	d.startBackgroundWorker(
-		fmt.Sprintf("coordinator for table %s", tableName),
+		"coordinator for table "+tableName,
 		func(ctx context.Context) {
 			d.startTableStreamCoordinator(ctx, tableName, ts)
 		},
@@ -2251,7 +2251,7 @@ func (d *dynamoDBCDCInput) Close(ctx context.Context) error {
 	d.mu.RUnlock()
 
 	for tableName, ts := range tableStreamsCopy {
-		d.flushCheckpoint(ctx, ts.checkpointer, ts.recordBatcher, fmt.Sprintf("table %s", tableName))
+		d.flushCheckpoint(ctx, ts.checkpointer, ts.recordBatcher, "table "+tableName)
 	}
 
 	// Clear references to help GC
