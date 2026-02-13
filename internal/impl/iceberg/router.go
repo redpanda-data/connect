@@ -38,6 +38,10 @@ type SchemaEvolutionConfig struct {
 	// PartitionSpec is an interpolated string that produces a partition spec expression
 	// when evaluated against the first message (e.g., "(year(ts), bucket(16, id))").
 	PartitionSpec *service.InterpolatedString
+	// TableLocation is a prefix used to derive table locations when the catalog
+	// does not automatically assign them (e.g., AWS Glue). When set, new table
+	// locations are derived as {prefix}{namespace}/{table}.
+	TableLocation string
 }
 
 const maxSchemaEvolutionRetries = 10
@@ -329,8 +333,18 @@ func (r *Router) createTable(ctx context.Context, key tableKey, batch service.Me
 		}
 	}
 
+	// Build create table options
+	var createOpts []catalog.CreateTableOpt
+	if partitionSpec != nil {
+		createOpts = append(createOpts, catalog.WithPartitionSpec(partitionSpec))
+	}
+	if r.schemaEvoCfg.TableLocation != "" {
+		location := r.schemaEvoCfg.TableLocation + strings.Join(nsParts, "/") + "/" + key.table
+		createOpts = append(createOpts, catalog.WithLocation(location))
+	}
+
 	// Create the table
-	_, err = client.CreateTableWithSpec(ctx, key.table, schema, partitionSpec)
+	_, err = client.CreateTable(ctx, key.table, schema, createOpts...)
 	if err != nil {
 		// Check if table was created by another process
 		if errors.Is(err, catalog.ErrTableAlreadyExists) {
@@ -369,6 +383,7 @@ func (r *Router) evolveSchema(ctx context.Context, key tableKey, schemaErr *Batc
 	groups := schemaErr.GroupByParentPath()
 
 	// Update schema with new columns
+	added := 0
 	_, err = client.UpdateSchema(ctx, tbl, func(us *table.UpdateSchema) {
 		for _, fields := range groups {
 			for _, field := range fields {
@@ -388,6 +403,7 @@ func (r *Router) evolveSchema(ctx context.Context, key tableKey, schemaErr *Batc
 
 				// Add column (all new columns are optional)
 				us.AddColumn(colPath, fieldType, "", false, nil)
+				added++
 			}
 		}
 	})
@@ -395,7 +411,7 @@ func (r *Router) evolveSchema(ctx context.Context, key tableKey, schemaErr *Batc
 		return fmt.Errorf("updating schema: %w", err)
 	}
 
-	r.logger.Infof("Evolved schema for %s.%s: added %d columns", key.namespace, key.table, len(schemaErr.Errors))
+	r.logger.Infof("Evolved schema for %s.%s: added %d columns", key.namespace, key.table, added)
 
 	// Invalidate cached writer so it gets recreated with the new schema
 	r.closeWriter(entry)

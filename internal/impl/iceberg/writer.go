@@ -314,7 +314,8 @@ type parquetSink struct {
 	rowCount int
 
 	// newFields collects unknown fields discovered during shredding for schema evolution.
-	newFields []*NewFieldError
+	newFields  []*NewFieldError
+	seenFields map[string]struct{} // dedup by full path
 }
 
 func newParquetSink(pqSchema *parquet.Schema, fieldToCol map[int]int) *parquetSink {
@@ -352,8 +353,16 @@ func (s *parquetSink) EmitValue(sv shredder.ShreddedValue) error {
 }
 
 func (s *parquetSink) OnNewField(parentPath icebergx.Path, name string, value any) {
-	// Collect unknown fields for schema evolution
-	s.newFields = append(s.newFields, NewNewFieldError(parentPath, name, value))
+	fe := NewNewFieldError(parentPath, name, value)
+	key := fe.FullPath().String()
+	if _, ok := s.seenFields[key]; ok {
+		return
+	}
+	if s.seenFields == nil {
+		s.seenFields = make(map[string]struct{})
+	}
+	s.seenFields[key] = struct{}{}
+	s.newFields = append(s.newFields, fe)
 }
 
 // newFieldErrors returns the collected new field errors.
@@ -392,7 +401,8 @@ type bufferingSink struct {
 	partitionValues    []parquet.Value          // captured partition values
 
 	// newFields collects unknown fields discovered during shredding for schema evolution.
-	newFields []*NewFieldError
+	newFields  []*NewFieldError
+	seenFields map[string]struct{} // dedup by full path
 }
 
 func newBufferingSink(partitionSourceIDs map[int]int, numPartitionFields int) *bufferingSink {
@@ -425,8 +435,16 @@ func (s *bufferingSink) EmitValue(sv shredder.ShreddedValue) error {
 }
 
 func (s *bufferingSink) OnNewField(parentPath icebergx.Path, name string, value any) {
-	// Collect unknown fields for schema evolution
-	s.newFields = append(s.newFields, NewNewFieldError(parentPath, name, value))
+	fe := NewNewFieldError(parentPath, name, value)
+	key := fe.FullPath().String()
+	if _, ok := s.seenFields[key]; ok {
+		return
+	}
+	if s.seenFields == nil {
+		s.seenFields = make(map[string]struct{})
+	}
+	s.seenFields[key] = struct{}{}
+	s.newFields = append(s.newFields, fe)
 }
 
 // newFieldErrors returns the collected new field errors.
