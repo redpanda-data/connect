@@ -25,6 +25,7 @@ import (
 	_ "github.com/redpanda-data/connect/v4/public/components/aws"
 	_ "github.com/redpanda-data/connect/v4/public/components/azure"
 	_ "github.com/redpanda-data/connect/v4/public/components/beanstalkd"
+	_ "github.com/redpanda-data/connect/v4/public/components/bluesky"
 	_ "github.com/redpanda-data/connect/v4/public/components/cassandra"
 	_ "github.com/redpanda-data/connect/v4/public/components/changelog"
 	_ "github.com/redpanda-data/connect/v4/public/components/cockroachdb"
