@@ -50,6 +50,10 @@ Some cloud hosted instances of Redis (such as Azure Cache) might need some hand 
 			Default("").
 			Example("mymaster").
 			Advanced(),
+		service.NewStringField("client_name").
+			Description("Name of the client connection to redis.").
+			Default("redpanda-connect").
+			Advanced(),
 		tlsField,
 	}
 }
@@ -66,6 +70,11 @@ func getClient(parsedConf *service.ParsedConfig) (redis.UniversalClient, error) 
 	}
 
 	master, err := parsedConf.FieldString("master")
+	if err != nil {
+		return nil, err
+	}
+
+	clientName, err := parsedConf.FieldString("client_name")
 	if err != nil {
 		return nil, err
 	}
@@ -108,11 +117,12 @@ func getClient(parsedConf *service.ParsedConfig) (redis.UniversalClient, error) 
 
 	var client redis.UniversalClient
 	opts := &redis.UniversalOptions{
-		Addrs:     addrs,
-		DB:        redisDB,
-		Username:  user,
-		Password:  pass,
-		TLSConfig: tlsConf,
+		Addrs:     	addrs,
+		DB:        	redisDB,
+		Username:  	user,
+		Password:  	pass,
+		ClientName: clientName,
+		TLSConfig:  tlsConf,
 	}
 
 	switch kind {

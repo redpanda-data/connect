@@ -3,6 +3,10 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.81.0 - TBD
+
+- redis: add `redis` client name configuration option. (@nhaberla)
+
 ## 4.80.1 - 2026-02-05
 
 ### Changed
