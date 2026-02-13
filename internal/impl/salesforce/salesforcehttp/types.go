@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// types.go defines core data structures, response models, and enums for the Jira processor.
+// types.go defines core data structures, response models, and enums for the Salesforce processor.
 // It includes input query types, API response DTOs, output message formats, and resource type constants.
 
 package salesforcehttp

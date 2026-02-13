@@ -131,7 +131,7 @@ func newSalesforceProcessor(conf *service.ParsedConfig, mgr *service.Resources) 
 		return nil, errors.New("org_url is not a valid URL")
 	}
 
-	clientId, err := conf.FieldString("client_id")
+	clientID, err := conf.FieldString("client_id")
 	if err != nil {
 		return nil, err
 	}
@@ -155,10 +155,13 @@ func newSalesforceProcessor(conf *service.ParsedConfig, mgr *service.Resources) 
 	if err != nil {
 		return nil, err
 	}
+	if maxRetries < 0 {
+		return nil, errors.New("max_retries must not be negative")
+	}
 
 	httpClient := &http.Client{Timeout: timeout}
 
-	salesforceHttp, err := salesforcehttp.NewClient(mgr.Logger(), orgURL, clientId, clientSecret, apiVersion, maxRetries, mgr.Metrics(), httpClient)
+	salesforceHttp, err := salesforcehttp.NewClient(orgURL, clientID, clientSecret, apiVersion, maxRetries, httpClient, mgr.Logger(), mgr.Metrics())
 	if err != nil {
 		return nil, err
 	}
@@ -169,13 +172,8 @@ func newSalesforceProcessor(conf *service.ParsedConfig, mgr *service.Resources) 
 	}, nil
 }
 
-func (s *salesforceProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
+func (s *salesforceProcessor) Process(ctx context.Context, _ *service.Message) (service.MessageBatch, error) {
 	var batch service.MessageBatch
-	inputMsg, err := msg.AsBytes()
-	if err != nil {
-		return nil, err
-	}
-	s.log.Debugf("Fetching from Salesforce.. Input: %s", string(inputMsg))
 
 	res, err := s.client.GetAvailableResources(ctx)
 	if err != nil {
