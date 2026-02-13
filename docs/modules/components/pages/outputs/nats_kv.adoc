@@ -73,6 +73,9 @@ output:
       nkey: '!!!SECRET_SCRUBBED!!!' # No default (optional)
       user_credentials_file: ./user.creds # No default (optional)
       user_jwt: "" # No default (optional)
+      user: "" # No default (optional)
+      password: "" # No default (optional)
+      token: "" # No default (optional)
       user_nkey_seed: "" # No default (optional)
 ```
 
@@ -120,6 +123,10 @@ generated with the https://docs.nats.io/nats-tools/nsc[nsc tool^].
 
 Alternatively, the `user_jwt` field can contain a plain text JWT and the `user_nkey_seed`can contain
 the plain text NKey Seed.
+
+Alternatively, the `token` field can contain a plain text random string.
+
+Alternatively, the `user` and `password` fields can contain plain text user and password.
 
 https://docs.nats.io/using-nats/developer/connecting/creds[More details^].
 
@@ -421,6 +428,45 @@ user_credentials_file: ./user.creds
 === `auth.user_jwt`
 
 An optional plain text user JWT (given along with the corresponding user NKey Seed).
+[CAUTION]
+====
+This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
+====
+
+
+
+*Type*: `string`
+
+
+=== `auth.user`
+
+An optional plain text user name (given along with the corresponding user password).
+[CAUTION]
+====
+This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
+====
+
+
+
+*Type*: `string`
+
+
+=== `auth.password`
+
+An optional plain text password (given along with the corresponding user name).
+[CAUTION]
+====
+This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
+====
+
+
+
+*Type*: `string`
+
+
+=== `auth.token`
+
+An optional plain text token.
 [CAUTION]
 ====
 This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].

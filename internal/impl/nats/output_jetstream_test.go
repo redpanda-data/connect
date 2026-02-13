@@ -39,6 +39,9 @@ auth:
   nkey_file: test auth n key file
   user_credentials_file: test auth user creds file
   user_jwt: test auth inline user JWT
+  token: test auth inline user token
+  user: test auth inline user name
+  password: test auth inline user password
   user_nkey_seed: test auth inline user NKey Seed
 `
 
@@ -69,7 +72,39 @@ auth:
 		assert.Equal(t, "test auth n key file", e.connDetails.authConf.NKeyFile)
 		assert.Equal(t, "test auth user creds file", e.connDetails.authConf.UserCredentialsFile)
 		assert.Equal(t, "test auth inline user JWT", e.connDetails.authConf.UserJWT)
+		assert.Equal(t, "test auth inline user token", e.connDetails.authConf.Token)
+		assert.Equal(t, "test auth inline user name", e.connDetails.authConf.User)
+		assert.Equal(t, "test auth inline user password", e.connDetails.authConf.Password)
 		assert.Equal(t, "test auth inline user NKey Seed", e.connDetails.authConf.UserNkeySeed)
+	})
+
+	t.Run("Missing password", func(t *testing.T) {
+		inputConfig := `
+urls: [ url1, url2 ]
+subject: testsubject
+auth:
+  user: test auth inline user name
+`
+
+		conf, err := spec.ParseYAML(inputConfig, env)
+		require.NoError(t, err)
+
+		_, err = newJetStreamReaderFromConfig(conf, service.MockResources())
+		require.Error(t, err)
+	})
+	t.Run("Missing user", func(t *testing.T) {
+		inputConfig := `
+urls: [ url1, url2 ]
+subject: testsubject
+auth:
+  password: test auth inline user password
+`
+
+		conf, err := spec.ParseYAML(inputConfig, env)
+		require.NoError(t, err)
+
+		_, err = newJetStreamReaderFromConfig(conf, service.MockResources())
+		require.Error(t, err)
 	})
 
 	t.Run("Missing user_nkey_seed", func(t *testing.T) {
@@ -101,4 +136,5 @@ auth:
 		_, err = newJetStreamReaderFromConfig(conf, service.MockResources())
 		require.Error(t, err)
 	})
+
 }

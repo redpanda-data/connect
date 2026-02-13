@@ -115,8 +115,8 @@ require (
 	github.com/microsoft/go-mssqldb v1.9.3
 	github.com/microsoft/gocosmos v1.1.1
 	github.com/modelcontextprotocol/go-sdk v1.1.0
-	github.com/nats-io/nats.go v1.46.1
-	github.com/nats-io/nkeys v0.4.11
+	github.com/nats-io/nats.go v1.48.0
+	github.com/nats-io/nkeys v0.4.12
 	github.com/nats-io/stan.go v0.10.4
 	github.com/neo4j/neo4j-go-driver/v5 v5.28.4
 	github.com/nsf/jsondiff v0.0.0-20230430225905-43f6cf3098c1
@@ -465,7 +465,7 @@ require (
 	github.com/moby/term v0.5.2 // indirect
 	github.com/morikuni/aec v1.0.0 // indirect
 	github.com/mtibben/percent v0.2.1 // indirect
-	github.com/nats-io/nats-server/v2 v2.9.23 // indirect
+	github.com/nats-io/nats-server/v2 v2.12.4 // indirect
 	github.com/nats-io/nats-streaming-server v0.24.6 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/ncruces/go-strftime v0.1.9 // indirect
@@ -522,7 +522,7 @@ require (
 	golang.org/x/oauth2 v0.34.0
 	golang.org/x/sys v0.40.0
 	golang.org/x/term v0.39.0 // indirect
-	golang.org/x/time v0.13.0 // indirect
+	golang.org/x/time v0.14.0 // indirect
 	golang.org/x/tools v0.40.0 // indirect
 	golang.org/x/xerrors v0.0.0-20240903120638-7835f813f4da // indirect
 	google.golang.org/genai v1.30.0
