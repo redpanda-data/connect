@@ -38,18 +38,15 @@ func TestUpdateAndSetBearerToken_RealClient(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	// log := service.NewLogger("test")
-
 	client, err := NewClient(
-		nil,
 		ts.URL,
 		"id",
 		"secret",
 		"v65.0",
 		1,
-		// service.NewMetrics(),
-		nil,
 		ts.Client(),
+		nil,
+		nil,
 	)
 	require.NoError(t, err)
 
@@ -97,14 +94,14 @@ func TestCallSalesforceApi_RefreshOn401_RealClient(t *testing.T) {
 	defer ts.Close()
 
 	client, err := NewClient(
-		nil,
 		ts.URL,
 		"id",
 		"secret",
 		"v65.0",
 		1,
-		nil,
 		ts.Client(),
+		nil,
+		nil,
 	)
 	require.NoError(t, err)
 

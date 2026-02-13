@@ -16,7 +16,7 @@
 // with Salesforce-specific authentication and rate-limiting handling.
 // It wraps HTTP responses to detect common error cases such as
 // 401/403 Unauthorized, 429 Too Many Requests, and Salesforce’s
-// X-Seraph-LoginReason header, which may indicate an authentication
+// auth-related header, which may indicate an authentication
 // problem even on a 200 OK response.
 //
 // Overview
@@ -24,7 +24,7 @@
 //  authentication and rate-limiting signals.
 //  - Central entry point: CheckSalesforceAuth(resp) which examines an http.Response and
 //  returns a *SalesforceError for common Salesforce conditions:
-//  - 401 Unauthorized: Likely invalid credentials (email/API token).
+//  - 401 Unauthorized: Likely invalid or expired access token.
 //  - 403 Forbidden: Authenticated but insufficient permissions.
 //  - 429 Too Many Requests: Salesforce is throttling; check Retry-After header.
 //  - On success (no issues detected), CheckSalesforceAuth returns nil.
@@ -40,10 +40,10 @@
 //  1. Basic request and auth check
 //
 //    ctx := context.Background()
-//    req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "https:your-domain.atlassian.net/rest/api/3/myself", nil)
-//    req.SetBasicAuth("<salesforce-email>", "<salesforce-api-token>")
+//    req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "https://your-domain.salesforce.com/services/data/v65.0/sobjects", nil)
+//    req.Header.Set("Authorization", "Bearer <access-token>")
 //    req.Header.Set("Accept", "application/json")
-//    req.Header.Set("User-Agent", "YourApp/1.0")
+//    req.Header.Set("User-Agent", "Redpanda-Connect")
 //
 //    resp, err := http.DefaultClient.Do(req)
 //    if err != nil {
@@ -52,13 +52,12 @@
 //    }
 //    defer resp.Body.Close()
 //
-//     if jerr := salesforce_helper.CheckSalesforceAuth(resp); jerr != nil {
-//     // This includes 401, 403, 429, and 200 + X-Seraph-LoginReason problems.
+//     if serr := salesforce_helper.CheckSalesforceAuth(resp); serr != nil {
+//     // This includes 401, 403, 429, and 200 + header-signaled problems.
 //     // You can inspect the error for details.
-//     if je, ok := jerr.(*salesforce_helper.SalesforceError); ok {
-//     log.Printf("salesforce error: status=%d reason=%s", je.StatusCode, je.Reason)
-//     log.Printf("headers: %v", je.Headers)
-//     //Optionally log or parse a truncated version of je.Body.
+//     if se, ok := serr.(*salesforce_helper.SalesforceError); ok {
+//     log.Printf("salesforce error: status=%d reason=%s", se.StatusCode, se.Reason)
+//     log.Printf("headers: %v", se.Headers)
 //     }
 //     return
 //     }
@@ -100,7 +99,7 @@
 //     case http.StatusTooManyRequests:
 //     // back off and retry later
 //     default:
-//     // 200 with X-Seraph-LoginReason or other 4xx/5xx
+//     // 200 with auth-related or other 4xx/5xx
 //     }
 //     }
 //     return
@@ -186,7 +185,7 @@ func (e *HTTPError) Error() string {
 }
 
 // AuthHeaderPolicy allows callers to declare a header that signals an auth problem
-// even on 200 OK responses (e.g., "X-Seraph-LoginReason").
+// even on 200 OK responses (e.g., "auth-related").
 type AuthHeaderPolicy struct {
 	HeaderName string                // case-insensitive
 	IsProblem  func(val string) bool // return true if the header value indicates auth failure

@@ -95,7 +95,7 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 // metrics such as in-flight requests, response status codes, errors, and request duration.
 func NewInstrumentedClient(m *service.Metrics, namespace string, client *http.Client) *http.Client {
 	if client == nil {
-		client = &http.Client{}
+		client = http.DefaultClient
 	}
 	clone := *client
 	clone.Transport = NewTransport(m, namespace, client.Transport)
