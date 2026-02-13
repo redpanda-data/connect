@@ -10,6 +10,9 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestConvertDateValue(t *testing.T) {
@@ -47,20 +50,13 @@ func TestConvertDateValue(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result := converter.convertDateValue(tt.input)
 			if tt.wantNil {
-				if result != nil {
-					t.Errorf("expected nil, got %v", result)
-				}
+				assert.Nil(t, result)
 				return
 			}
 
 			gotTime, ok := result.(time.Time)
-			if !ok {
-				t.Fatalf("expected time.Time, got %T", result)
-			}
-
-			if !gotTime.Equal(tt.wantTime) {
-				t.Errorf("got %v, want %v", gotTime, tt.wantTime)
-			}
+			require.True(t, ok, "expected time.Time, got %T", result)
+			assert.True(t, gotTime.Equal(tt.wantTime), "got %v, want %v", gotTime, tt.wantTime)
 		})
 	}
 }
@@ -115,20 +111,13 @@ func TestConvertTimestampValue(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result := converter.convertTimestampValue(tt.input)
 			if tt.wantNil {
-				if result != nil {
-					t.Errorf("expected nil, got %v", result)
-				}
+				assert.Nil(t, result)
 				return
 			}
 
 			gotTime, ok := result.(time.Time)
-			if !ok {
-				t.Fatalf("expected time.Time, got %T", result)
-			}
-
-			if !gotTime.Equal(tt.wantTime) {
-				t.Errorf("got %v, want %v", gotTime, tt.wantTime)
-			}
+			require.True(t, ok, "expected time.Time, got %T", result)
+			assert.True(t, gotTime.Equal(tt.wantTime), "got %v, want %v", gotTime, tt.wantTime)
 		})
 	}
 }
@@ -168,20 +157,13 @@ func TestConvertTimestampWithZone(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result := converter.convertTimestampWithZone(tt.input)
 			if tt.wantNil {
-				if result != nil {
-					t.Errorf("expected nil, got %v", result)
-				}
+				assert.Nil(t, result)
 				return
 			}
 
 			gotTime, ok := result.(time.Time)
-			if !ok {
-				t.Fatalf("expected time.Time, got %T", result)
-			}
-
-			if !gotTime.Equal(tt.wantTime) {
-				t.Errorf("got %v, want %v", gotTime, tt.wantTime)
-			}
+			require.True(t, ok, "expected time.Time, got %T", result)
+			assert.True(t, gotTime.Equal(tt.wantTime), "got %v, want %v", gotTime, tt.wantTime)
 		})
 	}
 }
@@ -218,20 +200,12 @@ func TestConvertRawValue(t *testing.T) {
 
 			if tt.wantBytes != nil {
 				gotBytes, ok := result.([]byte)
-				if !ok {
-					t.Fatalf("expected []byte, got %T", result)
-				}
-				if !reflect.DeepEqual(gotBytes, tt.wantBytes) {
-					t.Errorf("got %v, want %v", gotBytes, tt.wantBytes)
-				}
+				require.True(t, ok, "expected []byte, got %T", result)
+				assert.Equal(t, tt.wantBytes, gotBytes)
 			} else {
 				gotStr, ok := result.(string)
-				if !ok {
-					t.Fatalf("expected string, got %T", result)
-				}
-				if gotStr != tt.wantStr {
-					t.Errorf("got %v, want %v", gotStr, tt.wantStr)
-				}
+				require.True(t, ok, "expected string, got %T", result)
+				assert.Equal(t, tt.wantStr, gotStr)
 			}
 		})
 	}
@@ -269,20 +243,12 @@ func TestConvertLobValue(t *testing.T) {
 
 			if tt.wantEmpty {
 				bytes, ok := result.([]byte)
-				if !ok {
-					t.Fatalf("expected []byte, got %T", result)
-				}
-				if len(bytes) != 0 {
-					t.Errorf("expected empty bytes, got %v", bytes)
-				}
+				require.True(t, ok, "expected []byte, got %T", result)
+				assert.Empty(t, bytes)
 			} else if tt.wantString {
 				str, ok := result.(string)
-				if !ok {
-					t.Fatalf("expected string, got %T", result)
-				}
-				if str != tt.input {
-					t.Errorf("got %v, want %v", str, tt.input)
-				}
+				require.True(t, ok, "expected string, got %T", result)
+				assert.Equal(t, tt.input, str)
 			}
 		})
 	}
@@ -354,21 +320,15 @@ func TestConvertValue(t *testing.T) {
 			result := converter.ConvertValue(tt.input, tt.columnType)
 
 			resultType := reflect.TypeOf(result).String()
-			if resultType != tt.wantType {
-				t.Errorf("got type %v, want %v", resultType, tt.wantType)
-			}
+			assert.Equal(t, tt.wantType, resultType)
 
 			// For time.Time, use Equal method
 			if wantTime, ok := tt.wantValue.(time.Time); ok {
 				gotTime, ok := result.(time.Time)
-				if !ok {
-					t.Fatalf("expected time.Time, got %T", result)
-				}
-				if !gotTime.Equal(wantTime) {
-					t.Errorf("got %v, want %v", gotTime, wantTime)
-				}
-			} else if !reflect.DeepEqual(result, tt.wantValue) {
-				t.Errorf("got %v, want %v", result, tt.wantValue)
+				require.True(t, ok, "expected time.Time, got %T", result)
+				assert.True(t, gotTime.Equal(wantTime), "got %v, want %v", gotTime, wantTime)
+			} else {
+				assert.Equal(t, tt.wantValue, result)
 			}
 		})
 	}
@@ -425,10 +385,7 @@ func TestToKafkaValue(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := converter.ToKafkaValue(tt.input, tt.columnType, tt.precisionMode)
-
-			if !reflect.DeepEqual(result, tt.wantValue) {
-				t.Errorf("got %v (type %T), want %v (type %T)", result, result, tt.wantValue, tt.wantValue)
-			}
+			assert.Equal(t, tt.wantValue, result)
 		})
 	}
 }
@@ -484,9 +441,7 @@ func TestIsOracleFunctionCall(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := IsOracleFunctionCall(tt.input)
-			if got != tt.want {
-				t.Errorf("got %v, want %v", got, tt.want)
-			}
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
