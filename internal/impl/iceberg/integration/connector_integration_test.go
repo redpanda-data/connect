@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/apache/iceberg-go"
+	"github.com/apache/iceberg-go/catalog"
 	"github.com/stretchr/testify/require"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -171,7 +172,7 @@ func TestConnectorIntegration(t *testing.T) {
 			iceberg.PartitionField{SourceID: 2, FieldID: 1000, Name: "category", Transform: iceberg.IdentityTransform{}},
 			iceberg.PartitionField{SourceID: 4, FieldID: 1001, Name: "ts_day", Transform: iceberg.DayTransform{}},
 		)
-		_, err := client.CreateTableWithSpec(ctx, "partitioned_test", schema, &partitionSpec)
+		_, err := client.CreateTable(ctx, "partitioned_test", schema, catalog.WithPartitionSpec(&partitionSpec))
 		require.NoError(t, err)
 
 		router := infra.NewRouter(t, namespace, "partitioned_test")

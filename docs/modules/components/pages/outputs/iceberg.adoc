@@ -143,6 +143,7 @@ output:
     schema_evolution:
       enabled: false
       partition_spec: ()
+      table_location: s3://my-iceberg-bucket/ # No default (optional)
     commit:
       manifest_merge_enabled: true
       max_snapshot_age: 24h
@@ -168,6 +169,16 @@ Write streaming data to Apache Iceberg tables using the REST catalog API. This o
 * Transaction retry logic for concurrent writes
 
 This output is designed to work with REST catalog implementations like Apache Polaris, AWS Glue Data Catalog, and the Databricks Unity Catalog.
+
+=== AWS Glue Data Catalog
+
+To use with AWS Glue Data Catalog:
+
+* Set `catalog.url` to `https://glue.<region>.amazonaws.com/iceberg` (the REST client appends the API version automatically).
+* Set `catalog.warehouse` to your AWS account ID (the Glue catalog identifier).
+* Set `schema_evolution.table_location` to an S3 prefix (e.g., `s3://my-bucket/`) since Glue does not automatically assign table locations.
+* Configure `catalog.auth.aws_sigv4` with the appropriate region and set `service` to `glue`.
+* Configure `storage.aws_s3` with the same bucket and region.
 
 [%header,format=dsv]
 |===
@@ -216,6 +227,8 @@ The REST catalog endpoint URL.
 url: http://localhost:8181/api/catalog
 
 url: https://polaris.example.com/api/catalog
+
+url: https://glue.us-east-1.amazonaws.com/iceberg
 ```
 
 === `catalog.warehouse`
@@ -792,6 +805,20 @@ partition_spec: (hour(my_ts_col), truncate(42, col2))
 partition_spec: (day(my_ts_col), bucket(4, nested.col))
 
 partition_spec: (day(my_ts_col), void(`non.nested column.with.dots`), identity(nested.column))
+```
+
+=== `schema_evolution.table_location`
+
+A prefix used as the location for new tables when the catalog does not automatically assign one. For example, AWS Glue requires explicit table locations. When set, table locations are derived as `{prefix}{namespace}/{table}`.
+
+
+*Type*: `string`
+
+
+```yml
+# Examples
+
+table_location: s3://my-iceberg-bucket/
 ```
 
 === `commit`

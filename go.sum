@@ -959,6 +959,8 @@ github.com/aws/aws-sdk-go-v2/internal/ini v1.8.4/go.mod h1:ZWy7j6v1vWGmPReu0iSGv
 github.com/aws/aws-sdk-go-v2/internal/v4a v1.2.3/go.mod h1:5yzAuE9i2RkVAttBl8yxZgQr5OCq4D5yDnG7j9x2L0U=
 github.com/aws/aws-sdk-go-v2/internal/v4a v1.4.17 h1:JqcdRG//czea7Ppjb+g/n4o8i/R50aTBHkA7vu0lK+k=
 github.com/aws/aws-sdk-go-v2/internal/v4a v1.4.17/go.mod h1:CO+WeGmIdj/MlPel2KwID9Gt7CNq4M65HUfBW97liM0=
+github.com/aws/aws-sdk-go-v2/service/athena v1.57.0 h1:zWpbEE0+lqHikRPOWOsboqEw/j3lyOPIO0CsZKIy9og=
+github.com/aws/aws-sdk-go-v2/service/athena v1.57.0/go.mod h1:4Hg2qtNOcRb/+xXK5wR+RbhIUV2/kKVLwtQg+Zih+X4=
 github.com/aws/aws-sdk-go-v2/service/bedrockruntime v1.41.0 h1:xdYdX+JpIFByMG8JQe9iWM9CqepyjhenukxTVQnuCbM=
 github.com/aws/aws-sdk-go-v2/service/bedrockruntime v1.41.0/go.mod h1:c1Ik+59wgLIJFhsSY8cAnw6QooiogpTZKP0rtkVcpCQ=
 github.com/aws/aws-sdk-go-v2/service/cloudwatch v1.51.1 h1:GqVafesryYki8Lw/yRzLcoSeaT06qSAIbLoZLqeY0ks=
@@ -969,8 +971,8 @@ github.com/aws/aws-sdk-go-v2/service/dynamodbstreams v1.31.0 h1:cRXQpYLaXCMHtOZ3
 github.com/aws/aws-sdk-go-v2/service/dynamodbstreams v1.31.0/go.mod h1:lWutbbPuMCVYZAJOC75eWPUzyE71nTC9hTSIAmiJhrg=
 github.com/aws/aws-sdk-go-v2/service/firehose v1.41.6 h1:BaLiLj0REx6fAxK6KYTeHXv9njpyqnLqrARYC8QhkLQ=
 github.com/aws/aws-sdk-go-v2/service/firehose v1.41.6/go.mod h1:kKWlKjg9gI2uOLNQG1GnTBaYfBVQKJC0z99GIPQLFXw=
-github.com/aws/aws-sdk-go-v2/service/glue v1.136.1 h1:yezTrSee8k1HbxiSe1sBZAGP5K3MWTVhRuIhz9ZNncM=
-github.com/aws/aws-sdk-go-v2/service/glue v1.136.1/go.mod h1:B6g7dsUUg4QUcH6zou32L1LDXjgtk/YjVFcu09jXv10=
+github.com/aws/aws-sdk-go-v2/service/glue v1.137.0 h1:gPQ3FlHOFQELCiNSc76CS9B1G7wBT73PktKG64Q3tRc=
+github.com/aws/aws-sdk-go-v2/service/glue v1.137.0/go.mod h1:B6g7dsUUg4QUcH6zou32L1LDXjgtk/YjVFcu09jXv10=
 github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.9.1/go.mod h1:GeUru+8VzrTXV/83XyMJ80KpH8xO89VPoUileyNQ+tc=
 github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.10.1/go.mod h1:l9ymW25HOqymeU2m1gbUQ3rUIsTwKs8gYHXkqDQUhiI=
 github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.4 h1:0ryTNEdJbzUCEWkVXEXoqlXV72J5keC1GvILMOuD00E=

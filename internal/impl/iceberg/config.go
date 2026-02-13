@@ -67,6 +67,7 @@ const (
 	ioFieldSchemaEvolution              = "schema_evolution"
 	ioFieldSchemaEvolutionEnabled       = "enabled"
 	ioFieldSchemaEvolutionPartitionSpec = "partition_spec"
+	ioFieldSchemaEvolutionTableLoc      = "table_location"
 
 	// Commit fields
 	ioFieldCommit               = "commit"
@@ -97,6 +98,16 @@ Write streaming data to Apache Iceberg tables using the REST catalog API. This o
 
 This output is designed to work with REST catalog implementations like Apache Polaris, AWS Glue Data Catalog, and the Databricks Unity Catalog.
 
+=== AWS Glue Data Catalog
+
+To use with AWS Glue Data Catalog:
+
+* Set `+"`catalog.url`"+` to `+"`https://glue.<region>.amazonaws.com/iceberg`"+` (the REST client appends the API version automatically).
+* Set `+"`catalog.warehouse`"+` to your AWS account ID (the Glue catalog identifier).
+* Set `+"`schema_evolution.table_location`"+` to an S3 prefix (e.g., `+"`s3://my-bucket/`"+`) since Glue does not automatically assign table locations.
+* Configure `+"`catalog.auth.aws_sigv4`"+` with the appropriate region and set `+"`service`"+` to `+"`glue`"+`.
+* Configure `+"`storage.aws_s3`"+` with the same bucket and region.
+
 [%header,format=dsv]
 |===
 Go type:Iceberg type
@@ -119,7 +130,8 @@ map[string]any:struct
 				service.NewStringField(ioFieldCatalogURL).
 					Description("The REST catalog endpoint URL.").
 					Example("http://localhost:8181/api/catalog").
-					Example("https://polaris.example.com/api/catalog"),
+					Example("https://polaris.example.com/api/catalog").
+					Example("https://glue.us-east-1.amazonaws.com/iceberg"),
 				service.NewStringField(ioFieldCatalogWarehouse).
 					Description("The REST catalog warehouse.").
 					Optional().
@@ -268,6 +280,10 @@ map[string]any:struct
 					Example(`(day(my_ts_col), bucket(4, nested.col))`).
 					Example("(day(my_ts_col), void(`non.nested column.with.dots`), identity(nested.column))").
 					Default("()"),
+				service.NewStringField(ioFieldSchemaEvolutionTableLoc).
+					Description("A prefix used as the location for new tables when the catalog does not automatically assign one. For example, AWS Glue requires explicit table locations. When set, table locations are derived as `{prefix}{namespace}/{table}`.").
+					Example("s3://my-iceberg-bucket/").
+					Optional(),
 			).Description("Schema evolution configuration.").
 				Optional().
 				Advanced(),
