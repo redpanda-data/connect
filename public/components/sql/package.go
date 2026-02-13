@@ -27,6 +27,7 @@ import (
 	_ "github.com/databricks/databricks-sql-go"
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/googleapis/go-sql-spanner"
+	_ "github.com/jackc/pgx/v5/stdlib"
 	_ "github.com/lib/pq"
 	_ "github.com/microsoft/go-mssqldb"
 	_ "github.com/microsoft/gocosmos"
