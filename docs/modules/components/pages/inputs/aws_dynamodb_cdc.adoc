@@ -39,9 +39,10 @@ Common::
 input:
   label: ""
   aws_dynamodb_cdc:
-    table: "" # No default (required)
+    tables: []
     checkpoint_table: redpanda_dynamodb_checkpoints
     start_from: trim_horizon
+    snapshot_mode: none
 ```
 
 --
@@ -54,7 +55,11 @@ Advanced::
 input:
   label: ""
   aws_dynamodb_cdc:
-    table: "" # No default (required)
+    tables: []
+    table_discovery_mode: single
+    table_tag_key: ""
+    table_tag_value: ""
+    table_discovery_interval: 5m
     checkpoint_table: redpanda_dynamodb_checkpoints
     batch_size: 1000
     poll_interval: 1s
@@ -62,6 +67,12 @@ input:
     checkpoint_limit: 1000
     max_tracked_shards: 10000
     throttle_backoff: 100ms
+    snapshot_mode: none
+    snapshot_segments: 1
+    snapshot_batch_size: 100
+    snapshot_throttle: 100ms
+    snapshot_deduplicate: true
+    snapshot_buffer_size: 100000
     region: "" # No default (optional)
     endpoint: "" # No default (optional)
     tcp:
@@ -91,19 +102,43 @@ DynamoDB Streams capture item-level changes in DynamoDB tables. This input suppo
 - Automatic shard discovery and management
 - Checkpoint-based resumption after restarts
 - Concurrent processing of multiple shards
+- Optional initial snapshot of existing table data
+- Multi-table streaming with auto-discovery by tags or explicit table lists
+
+### Table Discovery Modes
+
+This input supports three table discovery modes:
+
+- `single` (default) - Stream from a single table specified by the `table` field
+- `tag` - Auto-discover and stream from multiple tables based on DynamoDB table tags. Use `table_tag_key` and optionally `table_tag_value` to filter tables
+- `includelist` - Stream from an explicit list of tables specified in the `tables` field
+
+When using `tag` or `includelist` mode, the connector will stream from all matching tables simultaneously. Each table maintains its own checkpoint state. Use `table_discovery_interval` to periodically rescan for new tables (useful for dynamically tagged tables).
 
 ### Prerequisites
 
-The source DynamoDB table must have streams enabled. You can enable streams with one of these view types:
+The source DynamoDB table(s) must have streams enabled. You can enable streams with one of these view types:
 
 - `KEYS_ONLY` - Only the key attributes of the modified item
 - `NEW_IMAGE` - The entire item as it appears after the modification
 - `OLD_IMAGE` - The entire item as it appeared before the modification
 - `NEW_AND_OLD_IMAGES` - Both the new and old item images
 
+### Snapshots
+
+When `snapshot_mode` is set to `snapshot_only` or `snapshot_and_cdc`, the input will first scan the entire table before (or instead of) streaming changes. This is useful for:
+
+- Building a replica or cache with all existing data
+- Syncing historical data to a data warehouse
+- Populating a search index with existing records
+
+WARNING: Snapshots use the DynamoDB Scan API which consumes read capacity units (RCUs). For large tables, this can be expensive and take considerable time. Use `snapshot_segments` and `snapshot_throttle` to control RCU consumption.
+
+NOTE: Snapshots use eventually consistent reads and do not provide point-in-time consistency. Records modified during the snapshot may appear in both the snapshot and CDC stream (with different values). Use `snapshot_deduplicate` to minimize duplicates.
+
 ### Checkpointing
 
-Checkpoints are stored in a separate DynamoDB table (configured via `checkpoint_table`). This table is created automatically if it does not exist. On restart, the input resumes from the last checkpointed position for each shard.
+Checkpoints are stored in a separate DynamoDB table (configured via `checkpoint_table`). This table is created automatically if it does not exist. On restart, the input resumes from the last checkpointed position for each shard. Snapshot progress is also checkpointed, allowing resumption mid-snapshot after failures.
 
 ### Alternative
 
@@ -113,9 +148,9 @@ For better performance and longer retention (up to 1 year vs 24 hours), consider
 
 This input adds the following metadata fields to each message:
 
-- `dynamodb_shard_id` - The shard ID from which the record was read
-- `dynamodb_sequence_number` - The sequence number of the record in the stream
-- `dynamodb_event_name` - The type of change: INSERT, MODIFY, or REMOVE
+- `dynamodb_shard_id` - The shard ID from which the record was read (empty for snapshot records)
+- `dynamodb_sequence_number` - The sequence number of the record in the stream (empty for snapshot records)
+- `dynamodb_event_name` - The type of change: INSERT, MODIFY, REMOVE, or READ (for snapshot records)
 - `dynamodb_table` - The name of the DynamoDB table
 
 ### Metrics
@@ -124,6 +159,9 @@ This input emits the following metrics:
 
 - `dynamodb_cdc_shards_tracked` - Total number of shards being tracked (gauge)
 - `dynamodb_cdc_shards_active` - Number of shards currently being read from (gauge)
+- `dynamodb_cdc_snapshot_state` - Snapshot state: 0=not_started, 1=in_progress, 2=complete (gauge)
+- `dynamodb_cdc_snapshot_records_read` - Total records read during snapshot (counter)
+- `dynamodb_cdc_snapshot_segments_active` - Number of active snapshot scan segments (gauge)
 
 
 == Examples
@@ -139,7 +177,7 @@ Read change events from a DynamoDB table with streams enabled.
 ```yaml
 input:
   aws_dynamodb_cdc:
-    table: my-table
+    tables: [my-table]
     region: us-east-1
 ```
 
@@ -153,8 +191,59 @@ Only process new changes, ignoring existing stream data.
 ```yaml
 input:
   aws_dynamodb_cdc:
-    table: orders
+    tables: [orders]
     start_from: latest
+    region: us-west-2
+```
+
+--
+Snapshot and CDC::
++
+--
+
+Scan all existing records, then stream ongoing changes.
+
+```yaml
+input:
+  aws_dynamodb_cdc:
+    tables: [products]
+    snapshot_mode: snapshot_and_cdc
+    snapshot_segments: 5
+    region: us-east-1
+```
+
+--
+Auto-discover tables by tag::
++
+--
+
+Automatically discover and stream from all tables with a specific tag.
+
+```yaml
+input:
+  aws_dynamodb_cdc:
+    table_discovery_mode: tag
+    table_tag_key: "stream-enabled"
+    table_tag_value: "true"
+    table_discovery_interval: 5m
+    region: us-east-1
+```
+
+--
+Stream from multiple specific tables::
++
+--
+
+Stream from an explicit list of tables simultaneously.
+
+```yaml
+input:
+  aws_dynamodb_cdc:
+    table_discovery_mode: includelist
+    tables:
+      - orders
+      - customers
+      - products
     region: us-west-2
 ```
 
@@ -163,13 +252,56 @@ input:
 
 == Fields
 
-=== `table`
+=== `tables`
 
-The name of the DynamoDB table to read streams from.
+List of table names to stream from. For single table mode, provide one table. For multi-table mode, provide multiple tables.
+
+
+*Type*: `array`
+
+*Default*: `[]`
+
+=== `table_discovery_mode`
+
+Table discovery mode. `single`: stream from tables specified in `tables` list. `tag`: auto-discover tables by tags (ignores `tables` field). `includelist`: stream from tables in `tables` list (alias for `single`, kept for compatibility).
 
 
 *Type*: `string`
 
+*Default*: `"single"`
+
+Options:
+`single`
+, `tag`
+, `includelist`
+.
+
+=== `table_tag_key`
+
+Tag key to filter tables by when `table_discovery_mode` is `tag`. Only tables with this tag will be discovered.
+
+
+*Type*: `string`
+
+*Default*: `""`
+
+=== `table_tag_value`
+
+Optional tag value to match when `table_discovery_mode` is `tag`. If empty, any table with the tag key will match.
+
+
+*Type*: `string`
+
+*Default*: `""`
+
+=== `table_discovery_interval`
+
+Interval for rescanning and discovering new tables when using `tag` or `includelist` mode. Set to 0 to disable periodic rescanning.
+
+
+*Type*: `string`
+
+*Default*: `"5m"`
 
 === `checkpoint_table`
 
@@ -238,6 +370,66 @@ Time to wait when applying backpressure due to too many in-flight messages.
 *Type*: `string`
 
 *Default*: `"100ms"`
+
+=== `snapshot_mode`
+
+Snapshot behavior. `none`: CDC only (default). `snapshot_only`: one-time table scan, no streaming. `snapshot_and_cdc`: scan entire table then stream changes.
+
+
+*Type*: `string`
+
+*Default*: `"none"`
+
+Options:
+`none`
+, `snapshot_only`
+, `snapshot_and_cdc`
+.
+
+=== `snapshot_segments`
+
+Number of parallel scan segments (1-10). Higher parallelism scans faster but consumes more RCUs. Start with 1 for safety.
+
+
+*Type*: `int`
+
+*Default*: `1`
+
+=== `snapshot_batch_size`
+
+Records per scan request during snapshot. Maximum 1000. Lower values provide better backpressure control but require more API calls.
+
+
+*Type*: `int`
+
+*Default*: `100`
+
+=== `snapshot_throttle`
+
+Minimum time between scan requests per segment. Use this to limit RCU consumption during snapshot.
+
+
+*Type*: `string`
+
+*Default*: `"100ms"`
+
+=== `snapshot_deduplicate`
+
+Deduplicate records that appear in both snapshot and CDC stream. Requires buffering CDC events during snapshot. If buffer is exceeded, deduplication is disabled to prevent data loss.
+
+
+*Type*: `bool`
+
+*Default*: `true`
+
+=== `snapshot_buffer_size`
+
+Maximum CDC events to buffer for deduplication (approximately 100 bytes per entry). If exceeded, deduplication is disabled and duplicates may be emitted.
+
+
+*Type*: `int`
+
+*Default*: `100000`
 
 === `region`
 
