@@ -313,7 +313,6 @@ func (lm *LogMiner) queryLogMinerContents(startSCN, endSCN uint64) ([]*sqlredo.R
 		err := rows.Scan(
 			&event.SCN,
 			&event.SQLRedo,
-			// &event.SQLUndo,        // Not used, only SQL_REDO is parsed
 			&event.OperationCode,
 			&event.TableName,
 			&event.SchemaName,
@@ -478,6 +477,7 @@ func (lm *LogMiner) checkLogSwitchOccurred() (bool, error) {
 // This should be called initially and whenever a log switch is detected.
 // The session is started without an endSCN boundary, allowing continuous mining.
 func (lm *LogMiner) prepareLogsAndStartSession(startSCN uint64) error {
+	// TODO: Isn't continious mining deprecated in LogMiner?
 	// End existing session if active
 	if lm.sessionActive {
 		if err := lm.sessionMgr.EndSession(); err != nil {
