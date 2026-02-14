@@ -313,7 +313,7 @@ func (lm *LogMiner) queryLogMinerContents(startSCN, endSCN uint64) ([]*sqlredo.R
 		err := rows.Scan(
 			&event.SCN,
 			&event.SQLRedo,
-			&event.OperationCode,
+			&event.Operation,
 			&event.TableName,
 			&event.SchemaName,
 			&event.Timestamp,
@@ -327,7 +327,6 @@ func (lm *LogMiner) queryLogMinerContents(startSCN, endSCN uint64) ([]*sqlredo.R
 		// Convert XID to hex string (matches Debezium's approach)
 		// XID is Oracle's native transaction identifier (RAW(8) = 8 bytes)
 		event.TransactionID = hex.EncodeToString(xid)
-		event.Operation = sqlredo.OperationFromCode(event.OperationCode)
 		events = append(events, event)
 	}
 

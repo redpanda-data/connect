@@ -10,11 +10,13 @@ package sqlredo
 
 import (
 	"database/sql"
+	"fmt"
+	"strconv"
 	"time"
 )
 
 // Operation represents a LogMiner operation type
-type Operation int
+type Operation int64
 
 const (
 	// OpUnknown represents an unknown or unsupported operation
@@ -33,8 +35,8 @@ const (
 	OpRollback
 )
 
-// OperationFromCode converts an operation code integer into an Operation type
-func OperationFromCode(code int) Operation {
+// operationFromCode converts an operation code integer into an Operation type
+func operationFromCode(code int) Operation {
 	switch code {
 	case 1:
 		return OpInsert
@@ -53,6 +55,27 @@ func OperationFromCode(code int) Operation {
 	}
 }
 
+// Scan implements the DB Scanner interface.
+func (op *Operation) Scan(src any) error {
+	if src == nil { // db returned nil, CDC record may not exist yet
+		op = nil
+		return nil
+	}
+	switch v := src.(type) {
+	case int:
+		*op = operationFromCode(v)
+	case string:
+		if val, err := strconv.ParseInt(v, 10, 64); err != nil {
+			return fmt.Errorf("parsing operation code: %w", err)
+		} else {
+			*op = operationFromCode(int(val))
+		}
+	default:
+		return fmt.Errorf("cannot scan %T to operation code", src)
+	}
+	return nil
+}
+
 // DMLEvent represents a parsed DML (Data Manipulation Language) operation
 type DMLEvent struct {
 	Operation Operation
@@ -65,12 +88,10 @@ type DMLEvent struct {
 
 // RedoEvent represents a redo log row from V$LOGMNR_CONTENTS
 type RedoEvent struct {
-	SCN     uint64
-	SQLRedo sql.NullString
-	Data    map[string]any
-	// TODO: Do we need both Operation and OperationCode?
+	SCN           uint64
+	SQLRedo       sql.NullString
+	Data          map[string]any
 	Operation     Operation
-	OperationCode int
 	TableName     sql.NullString
 	SchemaName    sql.NullString
 	Timestamp     time.Time
