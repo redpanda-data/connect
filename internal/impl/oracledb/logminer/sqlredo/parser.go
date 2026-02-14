@@ -11,6 +11,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/blastrain/vitess-sqlparser/sqlparser"
 )
 
 // Parser parses SQL_REDO statements from Oracle LogMiner
@@ -84,6 +86,65 @@ type ParseResult struct {
 	NewValues  map[string]any // After-state values (INSERT, UPDATE)
 	OldValues  map[string]any // Before-state values (UPDATE, DELETE)
 	ColumnList []string       // Column names in order
+}
+
+func ParseSQLCommand2(sql string) (sqlparser.Statement, error) {
+	// Normalize Oracle SQL to MySQL syntax
+	normalized := normalizeOracleToMySQL(sql)
+
+	stmt, err := sqlparser.Parse(normalized)
+	if err != nil {
+		return nil, fmt.Errorf("parsing sql: %w", err)
+	}
+
+	return stmt, nil
+}
+
+// normalizeOracleToMySQL converts Oracle SQL syntax to MySQL syntax
+// Main transformations:
+// - Replace double quotes (") around identifiers with backticks (`) or remove them
+// - Keep single quotes (') as-is for string literals
+func normalizeOracleToMySQL(sql string) string {
+	var result strings.Builder
+	result.Grow(len(sql))
+
+	inSingleQuote := false
+	inDoubleQuote := false
+
+	for i := 0; i < len(sql); i++ {
+		ch := sql[i]
+
+		switch ch {
+		case '\'':
+			// Single quote - toggle string literal state
+			// Handle escaped quotes: ''
+			if i+1 < len(sql) && sql[i+1] == '\'' && inSingleQuote {
+				// Escaped single quote inside string literal
+				result.WriteByte(ch)
+				result.WriteByte(sql[i+1])
+				i++ // Skip next quote
+			} else {
+				inSingleQuote = !inSingleQuote
+				result.WriteByte(ch)
+			}
+
+		case '"':
+			if inSingleQuote {
+				// Double quote inside string literal - keep as-is
+				result.WriteByte(ch)
+			} else {
+				// Double quote for identifier - remove it (or could replace with backtick)
+				// For simple identifiers, MySQL doesn't require quotes
+				inDoubleQuote = !inDoubleQuote
+				// Skip the double quote (don't write it)
+			}
+
+		default:
+			result.WriteByte(ch)
+		}
+	}
+
+	return result.String()
 }
 
 // ParseSQLCommand parses a SQL_REDO statement

@@ -68,6 +68,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sts v1.38.6
 	github.com/beanstalkd/go-beanstalk v0.2.0
 	github.com/benhoyt/goawk v1.29.1
+	github.com/blastrain/vitess-sqlparser v0.0.0-20201030050434-a139afbb1aba
 	github.com/bmatcuk/doublestar/v4 v4.9.1
 	github.com/bradfitz/gomemcache v0.0.0-20250403215159-8d39553ac7cf
 	github.com/bufbuild/prototransform v0.4.0
@@ -245,6 +246,7 @@ require (
 	github.com/jbenet/go-context v0.0.0-20150711004518-d14ea06fba99 // indirect
 	github.com/jcmturner/goidentity/v6 v6.0.1 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
+	github.com/juju/errors v0.0.0-20170703010042-c7d06af17c68 // indirect
 	github.com/jzelinskie/stringz v0.0.3 // indirect
 	github.com/kevinburke/ssh_config v1.4.0 // indirect
 	github.com/klauspost/asmfmt v1.3.2 // indirect

@@ -13,6 +13,58 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/impl/oracledb/logminer/sqlredo"
 )
 
+func TestParseTest(t *testing.T) {
+	tests := []struct {
+		name    string
+		sql     string
+		wantErr bool
+	}{
+		{
+			name:    "Oracle syntax with double-quoted identifiers",
+			sql:     `insert into "MYAPP"."CUSTOMERS" ("ID","NAME","EMAIL") values ('1','John Doe','john@example.com')`,
+			wantErr: false,
+		},
+		{
+			name:    "Oracle update with double quotes",
+			sql:     `update "MYAPP"."CUSTOMERS" set "NAME" = 'Jane Doe', "EMAIL" = 'jane@example.com' where "ID" = '1' and "NAME" = 'John Doe'`,
+			wantErr: false,
+		},
+		{
+			name:    "Oracle delete with double quotes",
+			sql:     `delete from "MYAPP"."CUSTOMERS" where "ID" = '1' and "NAME" = 'John Doe'`,
+			wantErr: false,
+		},
+		{
+			name:    "String with escaped single quotes",
+			sql:     `insert into "MYAPP"."MESSAGES" ("ID","TEXT") values ('1','It''s a test')`,
+			wantErr: false,
+		},
+		{
+			name:    "String with double quotes inside",
+			sql:     `insert into "MYAPP"."MESSAGES" ("ID","TEXT") values ('1','He said "Hello"')`,
+			wantErr: false,
+		},
+		{
+			name:    "Complex with Oracle functions",
+			sql:     `insert into "MYAPP"."ORDERS" ("ID","ORDER_DATE") values ('100',TO_DATE('2020-01-15','YYYY-MM-DD'))`,
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stmt, err := sqlredo.ParseSQLCommand2(tt.sql)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ParseSQLCommand2() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if err == nil && stmt == nil {
+				t.Error("Expected non-nil statement")
+			}
+		})
+	}
+}
+
 func TestParseInsert(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -734,21 +786,21 @@ func TestParseErrors(t *testing.T) {
 // Benchmark tests
 func BenchmarkParseInsert(b *testing.B) {
 	sql := `insert into "MYAPP"."CUSTOMERS"("ID","NAME","EMAIL","PHONE","ADDRESS") values ('1','John Doe','john@example.com','555-1234','123 Main St');`
-	for b.Loop() {
+	for i := 0; i < b.N; i++ {
 		_, _ = sqlredo.ParseSQLCommand(sql)
 	}
 }
 
 func BenchmarkParseUpdate(b *testing.B) {
 	sql := `update "MYAPP"."CUSTOMERS" set "NAME" = 'Jane Doe', "EMAIL" = 'jane@example.com' where "ID" = '1' and "NAME" = 'John Doe';`
-	for b.Loop() {
+	for i := 0; i < b.N; i++ {
 		_, _ = sqlredo.ParseSQLCommand(sql)
 	}
 }
 
 func BenchmarkParseDelete(b *testing.B) {
 	sql := `delete from "MYAPP"."CUSTOMERS" where "ID" = '1' and "NAME" = 'John Doe' and "EMAIL" = 'john@example.com';`
-	for b.Loop() {
+	for i := 0; i < b.N; i++ {
 		_, _ = sqlredo.ParseSQLCommand(sql)
 	}
 }
