@@ -49,13 +49,11 @@ var (
 // ConvertValue converts an Oracle value (potentially a function call) to its proper Go type
 // columnType should be the Oracle column type (e.g., "DATE", "TIMESTAMP", "VARCHAR2", etc.)
 func (c *OracleValueConverter) ConvertValue(value any, columnType string) any {
-	// If not a string, return as-is
 	str, ok := value.(string)
 	if !ok {
 		return value
 	}
 
-	// Try type-specific conversions based on column type
 	switch strings.ToUpper(columnType) {
 	case "DATE":
 		return c.convertDateValue(str)
@@ -71,7 +69,6 @@ func (c *OracleValueConverter) ConvertValue(value any, columnType string) any {
 		return c.convertNumericValue(str)
 	}
 
-	// Default: try to detect function calls even without column type
 	if result := c.convertDateValue(str); result != nil {
 		return result
 	}
@@ -82,7 +79,6 @@ func (c *OracleValueConverter) ConvertValue(value any, columnType string) any {
 		return result
 	}
 
-	// Return as-is if no conversion applies
 	return value
 }
 
