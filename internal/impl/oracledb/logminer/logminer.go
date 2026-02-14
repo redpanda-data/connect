@@ -266,7 +266,6 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 		}
 
 		// Parse sql insert/update/delete sql statements into key/value object
-		// TODO: Should we do this, or some of it only after commit is received? Measure performance impact.
 		event, err := lm.dmlParser.RedoEventToDMLEvent(redoEvent)
 		if err != nil {
 			return fmt.Errorf("parsing sql redo event into dml event: %w", err)
@@ -303,7 +302,6 @@ func (lm *LogMiner) queryLogMinerContents(startSCN, endSCN uint64) ([]*sqlredo.R
 	}
 	defer rows.Close()
 
-	// TODO: Can we grow this memory buffer and keep reusing it?
 	var events []*sqlredo.RedoEvent
 	for rows.Next() {
 		event := &sqlredo.RedoEvent{}
