@@ -63,29 +63,25 @@ func (p *Parser) RedoEventToDMLEvent(redoEvent *RedoEvent) (*DMLEvent, error) {
 		event.SQLRedo = redoEvent.SQLRedo.String
 	}
 
-	// parse insert, update and delete commands into key/value fields
-	result, err := ParseSQLCommand(redoEvent.SQLRedo.String)
+	// Parse SQL to AST
+	stmt, err := ParseSQLCommand2(redoEvent.SQLRedo.String)
 	if err != nil {
 		return nil, fmt.Errorf("parsing sql from redo log: %w", err)
 	}
 
-	event.Data = make(map[string]any, len(result.NewValues))
-	for k, v := range result.NewValues {
+	// Extract values from AST
+	newValues, _, err := ExtractValuesFromAST(stmt)
+	if err != nil {
+		return nil, fmt.Errorf("extracting values from AST: %w", err)
+	}
+
+	event.Data = make(map[string]any, len(newValues))
+	for k, v := range newValues {
 		// Convert Oracle SQL types (TO_DATE, TO_TIMESTAMP, etc.) to their Go equivalents
 		event.Data[k] = p.valueConverter.ConvertValue(v, k)
 	}
 
 	return event, nil
-}
-
-// ParseResult represents the parsed DML statement
-type ParseResult struct {
-	Operation  string         // INSERT, UPDATE, DELETE
-	Schema     string         // Schema name
-	Table      string         // Table name
-	NewValues  map[string]any // After-state values (INSERT, UPDATE)
-	OldValues  map[string]any // Before-state values (UPDATE, DELETE)
-	ColumnList []string       // Column names in order
 }
 
 func ParseSQLCommand2(sql string) (sqlparser.Statement, error) {
@@ -98,6 +94,146 @@ func ParseSQLCommand2(sql string) (sqlparser.Statement, error) {
 	}
 
 	return stmt, nil
+}
+
+// ExtractValuesFromAST extracts column->value mappings from a parsed statement.
+// Returns newValues (for INSERT/UPDATE) and oldValues (for UPDATE/DELETE WHERE clauses).
+func ExtractValuesFromAST(stmt sqlparser.Statement) (newValues, oldValues map[string]any, err error) {
+	switch s := stmt.(type) {
+	case *sqlparser.Insert:
+		newValues = extractInsertValues(s)
+	case *sqlparser.Update:
+		newValues = extractUpdateSetValues(s)
+		oldValues = extractWhereValues(s.Where)
+	case *sqlparser.Delete:
+		oldValues = extractWhereValues(s.Where)
+	default:
+		return nil, nil, fmt.Errorf("unsupported statement type: %T", stmt)
+	}
+	return newValues, oldValues, nil
+}
+
+// extractInsertValues extracts column-value pairs from an INSERT statement
+func extractInsertValues(stmt *sqlparser.Insert) map[string]any {
+	result := make(map[string]any)
+
+	// Get column names
+	columns := make([]string, len(stmt.Columns))
+	for i, col := range stmt.Columns {
+		columns[i] = sqlparser.String(col)
+	}
+
+	// Get values from the first row (LogMiner always has single row inserts)
+	if values, ok := stmt.Rows.(sqlparser.Values); ok && len(values) > 0 {
+		row := values[0]
+		for i, val := range row {
+			if i < len(columns) {
+				// Convert the value expression to a string representation
+				valStr := sqlparser.String(val)
+				// Strip quotes from string literals, keep functions/NULL as-is
+				parsedVal := stripQuotesFromValue(valStr)
+				if parsedVal != nil {
+					result[columns[i]] = parsedVal
+				}
+			}
+		}
+	}
+
+	return result
+}
+
+// extractUpdateSetValues extracts column-value pairs from UPDATE SET clause
+func extractUpdateSetValues(stmt *sqlparser.Update) map[string]any {
+	result := make(map[string]any)
+
+	for _, expr := range stmt.Exprs {
+		colName := sqlparser.String(expr.Name)
+		valStr := sqlparser.String(expr.Expr)
+		// Strip quotes from string literals, keep functions/NULL as-is
+		parsedVal := stripQuotesFromValue(valStr)
+		if parsedVal != nil {
+			result[colName] = parsedVal
+		}
+	}
+
+	return result
+}
+
+// extractWhereValues extracts column-value pairs from WHERE clause
+// Handles simple equality conditions like: WHERE col1 = 'val1' AND col2 = 'val2'
+func extractWhereValues(where *sqlparser.Where) map[string]any {
+	if where == nil {
+		return make(map[string]any)
+	}
+
+	result := make(map[string]any)
+	extractWhereConditions(where.Expr, result)
+	return result
+}
+
+// extractWhereConditions recursively extracts conditions from WHERE expression
+func extractWhereConditions(expr sqlparser.Expr, result map[string]any) {
+	switch e := expr.(type) {
+	case *sqlparser.AndExpr:
+		// Handle AND: recursively process left and right
+		extractWhereConditions(e.Left, result)
+		extractWhereConditions(e.Right, result)
+
+	case *sqlparser.OrExpr:
+		// Handle OR: recursively process left and right
+		extractWhereConditions(e.Left, result)
+		extractWhereConditions(e.Right, result)
+
+	case *sqlparser.ComparisonExpr:
+		// Handle comparison: col = 'value'
+		if e.Operator == "=" {
+			if colName, ok := e.Left.(*sqlparser.ColName); ok {
+				colStr := sqlparser.String(colName)
+				valStr := sqlparser.String(e.Right)
+				// Strip quotes from string literals, keep functions/NULL as-is
+				parsedVal := stripQuotesFromValue(valStr)
+				if parsedVal != nil {
+					result[colStr] = parsedVal
+				}
+			}
+		}
+
+	case *sqlparser.IsExpr:
+		// Handle IS NULL / IS NOT NULL
+		if _, ok := e.Expr.(*sqlparser.ColName); ok {
+			// IS NULL - don't add to result (old parser behavior)
+			if e.Operator == "is null" {
+				// Skip - NULL values are not included in the map
+			}
+		}
+	}
+}
+
+// stripQuotesFromValue removes quotes from string literals and handles escaped quotes.
+// Returns nil for NULL values (to exclude them from the map, matching old parser behavior).
+// Keeps function calls and other non-string values as-is.
+func stripQuotesFromValue(valStr string) any {
+	valStr = strings.TrimSpace(valStr)
+
+	// Handle NULL - return nil to exclude from map
+	if valStr == "NULL" || valStr == "Unsupported Type" {
+		return nil
+	}
+
+	// If it's a quoted string literal, strip quotes and handle escapes
+	if len(valStr) >= 2 && valStr[0] == '\'' && valStr[len(valStr)-1] == '\'' {
+		// Strip outer quotes
+		unquoted := valStr[1 : len(valStr)-1]
+		// Handle escaped single quotes: \' -> ' and '' -> '
+		unquoted = strings.ReplaceAll(unquoted, "\\'", "'")
+		unquoted = strings.ReplaceAll(unquoted, "''", "'")
+		// Handle escaped double quotes: \" -> "
+		unquoted = strings.ReplaceAll(unquoted, "\\\"", "\"")
+		return unquoted
+	}
+
+	// Not a quoted string - return as-is (function calls, etc.)
+	return valStr
 }
 
 // normalizeOracleToMySQL converts Oracle SQL syntax to MySQL syntax
@@ -147,587 +283,3 @@ func normalizeOracleToMySQL(sql string) string {
 	return result.String()
 }
 
-// ParseSQLCommand parses a SQL_REDO statement
-func ParseSQLCommand(sql string) (*ParseResult, error) {
-	if len(sql) == 0 {
-		return nil, errors.New("empty SQL statement")
-	}
-
-	var (
-		result *ParseResult
-		err    error
-	)
-	switch sql[0] {
-	case 'i', 'I':
-		if result, err = parseInsert(sql); err != nil {
-			return nil, fmt.Errorf("parsing insert statement: %w", err)
-		}
-	case 'u', 'U':
-		if result, err = parseUpdate(sql); err != nil {
-			return nil, fmt.Errorf("parsing update statement: %w", err)
-		}
-	case 'd', 'D':
-		if result, err = parseDelete(sql); err != nil {
-			return nil, fmt.Errorf("parsing delete statement: %w", err)
-		}
-	default:
-		return nil, fmt.Errorf("unknown sql operation: %s", sql)
-	}
-
-	return result, err
-}
-
-// parseInsert parses: insert into "schema"."table"("C1","C2") values ('v1','v2');
-func parseInsert(sql string) (*ParseResult, error) {
-	const insertInto = "insert into "
-	if !strings.HasPrefix(sql, insertInto) {
-		return nil, errors.New("invalid INSERT statement")
-	}
-
-	index := len(insertInto)
-
-	// Parse schema.table
-	schema, table, nextIdx, err := parseTableName(sql, index)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse table name: %w", err)
-	}
-	index = nextIdx
-
-	// Parse column list: ("C1","C2")
-	columnList, nextIdx, err := parseColumnList(sql, index)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse column list: %w", err)
-	}
-	index = nextIdx
-
-	// Parse values clause: values ('v1','v2')
-	values, err := parseValuesClause(sql, index, columnList)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse values clause: %w", err)
-	}
-
-	return &ParseResult{
-		Operation:  "INSERT",
-		Schema:     schema,
-		Table:      table,
-		ColumnList: columnList,
-		NewValues:  values,
-	}, nil
-}
-
-// parseUpdate parses: update "schema"."table" set "C1" = 'v1', "C2" = 'v2' where "C1" = 'old1' and "C2" = 'old2';
-func parseUpdate(sql string) (*ParseResult, error) {
-	const update = "update "
-	if !strings.HasPrefix(sql, update) {
-		return nil, errors.New("invalid UPDATE statement")
-	}
-
-	index := len(update)
-
-	// Parse schema.table
-	schema, table, nextIdx, err := parseTableName(sql, index)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse table name: %w", err)
-	}
-	index = nextIdx
-
-	// Parse SET clause
-	newValues, nextIdx, err := parseSetClause(sql, index)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse SET clause: %w", err)
-	}
-	index = nextIdx
-
-	// Parse WHERE clause
-	oldValues, err := parseWhereClause(sql, index)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse WHERE clause: %w", err)
-	}
-
-	return &ParseResult{
-		Operation: "UPDATE",
-		Schema:    schema,
-		Table:     table,
-		NewValues: newValues,
-		OldValues: oldValues,
-	}, nil
-}
-
-// parseDelete parses: delete from "schema"."table" where "C1" = 'v1' and "C2" = 'v2';
-func parseDelete(sql string) (*ParseResult, error) {
-	const deleteFrom = "delete from "
-	if !strings.HasPrefix(sql, deleteFrom) {
-		return nil, errors.New("invalid DELETE statement")
-	}
-
-	index := len(deleteFrom)
-
-	// Parse schema.table
-	schema, table, nextIdx, err := parseTableName(sql, index)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse table name: %w", err)
-	}
-	index = nextIdx
-
-	// Parse WHERE clause
-	oldValues, err := parseWhereClause(sql, index)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse WHERE clause: %w", err)
-	}
-
-	return &ParseResult{
-		Operation: "DELETE",
-		Schema:    schema,
-		Table:     table,
-		OldValues: oldValues,
-	}, nil
-}
-
-// parseTableName parses "schema"."table" or just "table"
-func parseTableName(sql string, index int) (schema, table string, nextIndex int, err error) {
-	// Look for first quoted identifier
-	inQuote := false
-	parts := []string{}
-	partStart := 0
-
-	for i := index; i < len(sql); i++ {
-		c := sql[i]
-
-		if c == '"' {
-			if inQuote {
-				// End of quoted identifier
-				parts = append(parts, sql[partStart+1:i])
-				inQuote = false
-			} else {
-				// Start of quoted identifier
-				partStart = i
-				inQuote = true
-			}
-		} else if !inQuote && (c == ' ' || c == '(') {
-			// End of table name
-			nextIndex = i
-			break
-		}
-	}
-
-	if len(parts) == 0 {
-		return "", "", index, errors.New("failed to parse table name")
-	}
-
-	if len(parts) == 1 {
-		// Just table name
-		return "", parts[0], nextIndex, nil
-	}
-
-	// Schema.table
-	return parts[0], parts[1], nextIndex, nil
-}
-
-// parseColumnList parses ("C1","C2","C3")
-func parseColumnList(sql string, index int) ([]string, int, error) {
-	// Find opening parenthesis
-	for index < len(sql) && sql[index] != '(' {
-		index++
-	}
-	if index >= len(sql) {
-		return nil, index, errors.New("column list not found")
-	}
-	index++ // skip '('
-
-	columns := []string{}
-	inQuote := false
-	colStart := 0
-
-	for i := index; i < len(sql); i++ {
-		c := sql[i]
-
-		if c == '"' {
-			if inQuote {
-				// End of column name
-				columns = append(columns, sql[colStart+1:i])
-				inQuote = false
-			} else {
-				// Start of column name
-				colStart = i
-				inQuote = true
-			}
-		} else if c == ')' && !inQuote {
-			// End of column list
-			return columns, i + 1, nil
-		}
-	}
-
-	return nil, index, errors.New("unterminated column list")
-}
-
-// parseValuesClause parses values ('v1','v2',NULL,TO_DATE('2020-01-01','YYYY-MM-DD'))
-func parseValuesClause(sql string, index int, columnNames []string) (map[string]any, error) {
-	// Find "values"
-	valuesIdx := strings.Index(sql[index:], " values ")
-	if valuesIdx == -1 {
-		return nil, errors.New("values clause not found")
-	}
-	index += valuesIdx + len(" values ")
-
-	// Find opening parenthesis
-	for index < len(sql) && sql[index] != '(' {
-		index++
-	}
-	if index >= len(sql) {
-		return nil, errors.New("values list not found")
-	}
-	index++ // skip '('
-
-	values := make(map[string]any, len(columnNames))
-	valueIdx := 0
-	inSingleQuote := false
-	nested := 0
-	valueStart := index
-	var collectedValue strings.Builder
-	collectedValue.Grow(64) // average string values are < 64 bytes
-	isQuotedValue := false
-
-	for i := index; i < len(sql); i++ {
-		c := sql[i]
-		lookAhead := byte(0)
-		if i+1 < len(sql) {
-			lookAhead = sql[i+1]
-		}
-
-		if inSingleQuote {
-			if c == '\'' {
-				if lookAhead == '\'' {
-					// Escaped single quote - add one quote to result
-					collectedValue.WriteByte('\'')
-					i++
-					continue
-				}
-				// End of quoted value
-				inSingleQuote = false
-				continue
-			}
-			collectedValue.WriteByte(c)
-			continue
-		}
-
-		// Not in single quote
-		if c == '\'' && nested == 0 {
-			// Start of a quoted string value
-			inSingleQuote = true
-			isQuotedValue = true
-			collectedValue.Reset()
-		} else if c == '(' {
-			// Start of function call or nested expression
-			nested++
-		} else if c == ')' {
-			if nested > 0 {
-				// End of nested function/expression
-				nested--
-			} else {
-				// End of values list - handle last value
-				if isQuotedValue {
-					// Was quoted - use collected value (even if empty string)
-					if valueIdx < len(columnNames) {
-						values[columnNames[valueIdx]] = collectedValue.String()
-					}
-				} else {
-					// Was unquoted (NULL, function call, etc.)
-					val := strings.TrimSpace(sql[valueStart:i])
-					if val != "NULL" && val != "Unsupported Type" && val != "" {
-						if valueIdx < len(columnNames) {
-							values[columnNames[valueIdx]] = val
-						}
-					}
-				}
-				return values, nil
-			}
-		} else if c == ',' && nested == 0 {
-			// End of current value
-			if isQuotedValue {
-				// Was a quoted value - use collected value
-				if valueIdx < len(columnNames) {
-					values[columnNames[valueIdx]] = collectedValue.String()
-				}
-				collectedValue.Reset()
-			} else {
-				// Was an unquoted value (NULL, function call, etc.)
-				val := strings.TrimSpace(sql[valueStart:i])
-				if val != "NULL" && val != "Unsupported Type" && val != "" {
-					if valueIdx < len(columnNames) {
-						values[columnNames[valueIdx]] = val
-					}
-				}
-			}
-			valueIdx++
-			valueStart = i + 1
-			isQuotedValue = false
-		}
-	}
-
-	return values, nil
-}
-
-// parseSetClause parses set "C1" = 'v1', "C2" = 'v2', "C3" = NULL
-func parseSetClause(sql string, index int) (map[string]any, int, error) {
-	// Find " set "
-	setIdx := strings.Index(sql[index:], " set ")
-	if setIdx == -1 {
-		return nil, index, errors.New("SET clause not found")
-	}
-	index += setIdx + len(" set ")
-
-	// Pre-allocate with reasonable capacity - UPDATE statements typically modify 1-8 columns
-	// This reduces map rehashing for common cases
-	values := make(map[string]any, 8)
-	var currentColumn string
-	var collectedValue strings.Builder
-	collectedValue.Grow(64) // Pre-allocate for typical value sizes
-	inSingleQuote := false
-	inDoubleQuote := false
-	isQuotedValue := false
-	nested := 0
-	valueStart := 0
-	state := "column" // "column", "equals", "value", "comma"
-
-	for i := index; i < len(sql); i++ {
-		c := sql[i]
-		lookAhead := byte(0)
-		if i+1 < len(sql) {
-			lookAhead = sql[i+1]
-		}
-
-		// Check for WHERE clause (return index of space before "where")
-		if c == 'w' && i > 0 && sql[i-1] == ' ' && strings.HasPrefix(sql[i:], "where ") {
-			return values, i - 1, nil
-		}
-
-		// Handle single-quoted values
-		if inSingleQuote {
-			if c == '\'' {
-				if lookAhead == '\'' {
-					collectedValue.WriteByte('\'')
-					i++
-					continue
-				}
-				inSingleQuote = false
-				continue
-			}
-			collectedValue.WriteByte(c)
-			continue
-		}
-
-		// Handle double-quoted column names
-		if inDoubleQuote {
-			if c == '"' {
-				currentColumn = sql[valueStart+1 : i]
-				inDoubleQuote = false
-				state = "equals"
-			}
-			continue
-		}
-
-		// State machine
-		switch state {
-		case "column":
-			if c == '"' {
-				inDoubleQuote = true
-				valueStart = i
-			} else if c == ',' || c == ' ' {
-				// Skip whitespace and commas between assignments
-				continue
-			}
-
-		case "equals":
-			if c == '=' {
-				state = "value"
-				// Skip spaces after =
-				for i+1 < len(sql) && sql[i+1] == ' ' {
-					i++
-				}
-				valueStart = i + 1
-				isQuotedValue = false
-				collectedValue.Reset()
-			}
-
-		case "value":
-			if c == '\'' && nested == 0 {
-				inSingleQuote = true
-				isQuotedValue = true
-			} else if c == '(' {
-				nested++
-			} else if c == ')' && nested > 0 {
-				nested--
-			} else if (c == ',' || c == ' ') && nested == 0 {
-				// End of value - store it
-				if isQuotedValue {
-					values[currentColumn] = collectedValue.String()
-					state = "column"
-				} else {
-					val := strings.TrimSpace(sql[valueStart:i])
-					if val == "NULL" {
-						values[currentColumn] = nil
-						state = "column"
-					} else if val != "Unsupported Type" && val != "" {
-						values[currentColumn] = val
-						state = "column"
-					}
-				}
-			}
-		}
-	}
-
-	// Handle last value if we're at end
-	if state == "value" {
-		if isQuotedValue {
-			values[currentColumn] = collectedValue.String()
-		} else {
-			val := strings.TrimSpace(sql[valueStart:])
-			if val == "NULL" {
-				values[currentColumn] = nil
-			} else if val != "Unsupported Type" && val != "" && !strings.HasSuffix(val, ";") {
-				values[currentColumn] = strings.TrimRight(val, ";")
-			}
-		}
-	}
-
-	return values, len(sql), nil
-}
-
-// parseWhereClause parses where "C1" = 'v1' and "C2" = 'v2' and "C3" IS NULL
-func parseWhereClause(sql string, index int) (map[string]any, error) {
-	// Find " where "
-	whereIdx := strings.Index(sql[index:], " where ")
-	if whereIdx == -1 {
-		// No WHERE clause (DBZ-3235 - LogMiner can generate SQL without WHERE)
-		return make(map[string]any, 0), nil
-	}
-	index += whereIdx + len(" where ")
-
-	// Pre-allocate with reasonable capacity - WHERE clauses typically have 1-4 conditions (primary keys)
-	// This reduces map rehashing for common cases
-	values := make(map[string]any, 4)
-	var currentColumn string
-	var collectedValue strings.Builder
-	collectedValue.Grow(64) // Pre-allocate for typical value sizes
-	inSingleQuote := false
-	inDoubleQuote := false
-	isQuotedValue := false
-	nested := 0
-	valueStart := 0
-	state := "column" // "column", "equals", "value", "and"
-
-	for i := index; i < len(sql); i++ {
-		c := sql[i]
-		lookAhead := byte(0)
-		if i+1 < len(sql) {
-			lookAhead = sql[i+1]
-		}
-
-		// Handle single-quoted values
-		if inSingleQuote {
-			if c == '\'' {
-				if lookAhead == '\'' {
-					collectedValue.WriteByte('\'')
-					i++
-					continue
-				}
-				inSingleQuote = false
-				continue
-			}
-			collectedValue.WriteByte(c)
-			continue
-		}
-
-		// Handle double-quoted column names
-		if inDoubleQuote {
-			if c == '"' {
-				currentColumn = sql[valueStart+1 : i]
-				inDoubleQuote = false
-				state = "equals"
-			}
-			continue
-		}
-
-		// State machine
-		switch state {
-		case "column":
-			if c == '"' {
-				inDoubleQuote = true
-				valueStart = i
-			} else if c == ' ' {
-				// Skip whitespace
-				continue
-			}
-
-		case "equals":
-			if c == '=' {
-				state = "value"
-				// Skip spaces after =
-				for i+1 < len(sql) && sql[i+1] == ' ' {
-					i++
-				}
-				valueStart = i + 1
-				isQuotedValue = false
-				collectedValue.Reset()
-			} else if c == 'I' && strings.HasPrefix(sql[i:], "IS NULL") {
-				values[currentColumn] = nil
-				i += len("IS NULL") - 1
-				state = "and"
-			}
-
-		case "value":
-			if c == '\'' && nested == 0 {
-				inSingleQuote = true
-				isQuotedValue = true
-			} else if c == '(' {
-				nested++
-			} else if c == ')' && nested > 0 {
-				nested--
-			} else if (c == ' ' || c == ';') && nested == 0 {
-				// End of value
-				if isQuotedValue {
-					values[currentColumn] = collectedValue.String()
-				} else {
-					val := strings.TrimSpace(sql[valueStart:i])
-					if val == "NULL" {
-						values[currentColumn] = nil
-					} else if val != "Unsupported Type" && val != "" {
-						values[currentColumn] = val
-					}
-				}
-				state = "and"
-			}
-
-		case "and":
-			if c == ';' {
-				return values, nil
-			} else if c == ' ' {
-				// Skip whitespace
-				continue
-			} else if strings.HasPrefix(sql[i:], "and ") {
-				i += 3 // skip "and "
-				state = "column"
-			} else if strings.HasPrefix(sql[i:], "or ") {
-				i += 2 // skip "or "
-				state = "column"
-			}
-		}
-	}
-
-	// Handle last value if we're at end
-	if state == "value" {
-		if isQuotedValue {
-			values[currentColumn] = collectedValue.String()
-		} else {
-			val := strings.TrimSpace(sql[valueStart:])
-			val = strings.TrimRight(val, ";")
-			if val == "NULL" {
-				values[currentColumn] = nil
-			} else if val != "Unsupported Type" && val != "" {
-				values[currentColumn] = val
-			}
-		}
-	}
-
-	return values, nil
-}
