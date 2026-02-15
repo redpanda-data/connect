@@ -1,0 +1,13 @@
+version: '3'
+
+tasks:
+  create:
+    desc: Initialize and apply Terraform configuration
+    cmds:
+      - terraform init
+      - terraform apply -auto-approve
+
+  destroy:
+    desc: Destroy Terraform infrastructure
+    cmds:
+      - terraform destroy -auto-approve

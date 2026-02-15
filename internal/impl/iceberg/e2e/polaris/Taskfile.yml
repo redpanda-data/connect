@@ -1,0 +1,38 @@
+version: '3'
+
+vars:
+  GIT_ROOT:
+    sh: git rev-parse --show-toplevel
+  STORAGE_ACCOUNT:
+    sh: cd terraform && terraform output -raw storage_account_name 2>/dev/null || echo ""
+  ACCESS_KEY:
+    sh: cd terraform && terraform output -raw storage_access_key 2>/dev/null || echo ""
+  CONTAINER:
+    sh: cd terraform && terraform output -raw container_name 2>/dev/null || echo ""
+  TENANT_ID:
+    sh: cd terraform && terraform output -raw tenant_id 2>/dev/null || echo ""
+  SP_CLIENT_ID:
+    sh: cd terraform && terraform output -raw sp_client_id 2>/dev/null || echo ""
+  SP_CLIENT_SECRET:
+    sh: cd terraform && terraform output -raw sp_client_secret 2>/dev/null || echo ""
+
+includes:
+  terraform:
+    taskfile: ./terraform/terraform.yml
+    dir: terraform
+
+tasks:
+  test:
+    desc: Run Polaris + Azure ADLS e2e tests
+    dir: '{{.GIT_ROOT}}'
+    cmds:
+      - >-
+        go test -v -timeout 5m
+        -run TestPolarisE2E
+        ./internal/impl/iceberg/e2e/polaris/...
+        -polaris.storage-account={{.STORAGE_ACCOUNT}}
+        -polaris.access-key={{.ACCESS_KEY}}
+        -polaris.container={{.CONTAINER}}
+        -polaris.tenant-id={{.TENANT_ID}}
+        -polaris.sp-client-id={{.SP_CLIENT_ID}}
+        -polaris.sp-client-secret={{.SP_CLIENT_SECRET}}

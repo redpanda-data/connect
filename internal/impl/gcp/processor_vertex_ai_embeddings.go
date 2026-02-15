@@ -112,7 +112,7 @@ func newVertexAIEmbeddingsProcessor(conf *service.ParsedConfig, _ *service.Resou
 		if err != nil {
 			return
 		}
-		opts = append(opts, option.WithCredentialsJSON([]byte(jsonObject)))
+		opts = append(opts, option.WithCredentialsJSON([]byte(jsonObject))) //nolint:staticcheck // TODO: migrate off deprecated API
 	}
 	proc.client, err = aiplatform.NewPredictionClient(ctx, opts...)
 	if err != nil {

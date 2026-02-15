@@ -30,6 +30,7 @@ import (
 	_ "github.com/redpanda-data/connect/v4/public/components/gcp/enterprise"
 	_ "github.com/redpanda-data/connect/v4/public/components/git"
 	_ "github.com/redpanda-data/connect/v4/public/components/google"
+	_ "github.com/redpanda-data/connect/v4/public/components/iceberg"
 	_ "github.com/redpanda-data/connect/v4/public/components/io"
 	_ "github.com/redpanda-data/connect/v4/public/components/jira"
 	_ "github.com/redpanda-data/connect/v4/public/components/kafka"
