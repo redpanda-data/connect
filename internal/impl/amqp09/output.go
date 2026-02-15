@@ -251,8 +251,11 @@ func amqp09WriterFromParsed(conf *service.ParsedConfig, mgr *service.Resources) 
 			if err != nil {
 				return nil, err
 			}
-			for key, value := range args {
-				a.exchangeDeclareArgs[key] = value
+			if len(args) > 0 {
+				a.exchangeDeclareArgs = make(amqp.Table)
+				for key, value := range args {
+					a.exchangeDeclareArgs[key] = value
+				}
 			}
 		}
 	}
