@@ -98,6 +98,14 @@ Write streaming data to Apache Iceberg tables using the REST catalog API. This o
 
 This output is designed to work with REST catalog implementations like Apache Polaris, AWS Glue Data Catalog, and the Databricks Unity Catalog.
 
+=== Apache Polaris
+
+To use with https://polaris.apache.org[Apache Polaris^]:
+
+* Set `+"`catalog.url`"+` to the Polaris REST endpoint (e.g., `+"`http://localhost:8181/api/catalog`"+`).
+* Set `+"`catalog.warehouse`"+` to the catalog name configured in Polaris.
+* Configure `+"`catalog.auth.oauth2`"+` with client credentials granted access to the catalog.
+
 === AWS Glue Data Catalog
 
 To use with AWS Glue Data Catalog:
@@ -107,6 +115,14 @@ To use with AWS Glue Data Catalog:
 * Set `+"`schema_evolution.table_location`"+` to an S3 prefix (e.g., `+"`s3://my-bucket/`"+`) since Glue does not automatically assign table locations.
 * Configure `+"`catalog.auth.aws_sigv4`"+` with the appropriate region and set `+"`service`"+` to `+"`glue`"+`.
 * Configure `+"`storage.aws_s3`"+` with the same bucket and region.
+
+=== Azure Blob Storage (ADLS Gen2)
+
+To use with Azure Data Lake Storage Gen2:
+
+* Configure `+"`storage.azure_blob_storage`"+` with your storage account name and container.
+* Authenticate using one of: `+"`storage_access_key`"+` (shared key), `+"`storage_sas_token`"+`, or `+"`storage_connection_string`"+`.
+* The storage account must have hierarchical namespace (HNS) enabled for ADLS Gen2 compatibility.
 
 [%header,format=dsv]
 |===

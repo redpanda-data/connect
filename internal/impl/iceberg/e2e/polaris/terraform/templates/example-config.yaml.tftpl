@@ -1,0 +1,31 @@
+input:
+  generate:
+    count: 100
+    interval: 100ms
+    mapping: |
+      root.id = counter()
+      root.name = ["alice", "bob", "charlie"].index(counter() % 3)
+      root.event_type = ["click", "view", "purchase"].index(counter() % 3)
+      root.value = (counter() * 10) + random_int(max: 100)
+      root.ts = now()
+
+output:
+  iceberg:
+    catalog:
+      url: http://localhost:8181/api/catalog
+      prefix: polaris
+      auth:
+        oauth2:
+          client_id: root
+          client_secret: secret
+          scope: PRINCIPAL_ROLE:ALL
+      additional_properties:
+        adls.auth.shared-key.account.name: ${storage_account_name}
+        adls.auth.shared-key.account.key: ${storage_access_key}
+    namespace: e2e
+    table: events
+    schema_evolution:
+      enabled: true
+    batching:
+      count: 50
+      period: 5s
