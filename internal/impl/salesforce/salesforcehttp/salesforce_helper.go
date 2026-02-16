@@ -214,15 +214,18 @@ func backoffWithJitter(base, maxDuration time.Duration, attempt int) time.Durati
 	return d + jitter
 }
 
-// DoRequestWithRetries executes req, handling:
+// DoRequestWithRetries executes a request built by newReq on each attempt, handling:
 // - Auth errors on 401/403
 // - Header-signaled auth problems on 200 (via AuthHeaderPolicy)
 // - 429 with Retry-After or exponential backoff and jitter (up to MaxRetries)
 // Other 4xx/5xx are returned as HTTPError without a retry.
+//
+// newReq is called for every attempt so that the request body is fresh
+// (POST bodies are consumed by the first Do and cannot be reused).
 func DoRequestWithRetries(
 	ctx context.Context,
 	client *http.Client,
-	req *http.Request,
+	newReq func() (*http.Request, error),
 	opts RetryOptions,
 ) ([]byte, error) {
 	if client == nil {
@@ -231,6 +234,10 @@ func DoRequestWithRetries(
 	attempt := 0
 
 	for {
+		req, err := newReq()
+		if err != nil {
+			return nil, fmt.Errorf("failed to build request: %w", err)
+		}
 		resp, err := client.Do(req.WithContext(ctx))
 		if err != nil {
 			return nil, err
@@ -322,10 +329,9 @@ func DoRequestWithRetries(
 			}
 		}
 
-		defer resp.Body.Close()
-
-		// Read the response body for context
+		// Read the response body and close immediately (not defer — we're in a loop)
 		bodyBytes, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
 		return bodyBytes, nil
 	}
 }

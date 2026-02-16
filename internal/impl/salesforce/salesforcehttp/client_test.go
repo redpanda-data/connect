@@ -52,7 +52,7 @@ func TestUpdateAndSetBearerToken_RealClient(t *testing.T) {
 
 	err = client.updateAndSetBearerToken(context.Background())
 	require.NoError(t, err)
-	assert.Equal(t, "abc123", client.bearerToken)
+	assert.Equal(t, "abc123", client.getBearerToken())
 }
 
 func TestCallSalesforceApi_RefreshOn401_RealClient(t *testing.T) {
