@@ -28,9 +28,9 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"sync"
+	"sync/atomic"
 
-	"github.com/redpanda-data/connect/v4/internal/impl/salesforce/salesforcehttp/http_metrics"
+	"github.com/redpanda-data/connect/v4/internal/impl/salesforce/salesforcehttp/metrics"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
@@ -44,11 +44,7 @@ const salesforceAPIBasePath = "/services"
 func (s *Client) callSalesforceAPI(ctx context.Context, u *url.URL) ([]byte, error) {
 	s.log.Debugf("API call: %s", u.String())
 
-	s.tokenMu.Lock()
-	needsToken := s.bearerToken == ""
-	s.tokenMu.Unlock()
-
-	if needsToken {
+	if s.getBearerToken() == "" {
 		if err := s.updateAndSetBearerToken(ctx); err != nil {
 			return nil, err
 		}
@@ -86,20 +82,18 @@ func (s *Client) callSalesforceAPI(ctx context.Context, u *url.URL) ([]byte, err
 }
 
 func (s *Client) doSalesforceRequest(ctx context.Context, u *url.URL) ([]byte, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", u.String(), nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+	newReq := func() (*http.Request, error) {
+		req, err := http.NewRequestWithContext(ctx, "GET", u.String(), nil)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Accept", "application/json")
+		req.Header.Set("User-Agent", "Redpanda-Connect")
+		req.Header.Set("Authorization", "Bearer "+s.getBearerToken())
+		return req, nil
 	}
 
-	s.tokenMu.Lock()
-	token := s.bearerToken
-	s.tokenMu.Unlock()
-
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "Redpanda-Connect")
-	req.Header.Set("Authorization", "Bearer "+token)
-
-	return DoRequestWithRetries(ctx, s.httpClient, req, s.retryOpts)
+	return DoRequestWithRetries(ctx, s.httpClient, newReq, s.retryOpts)
 }
 
 // Function to get the Bearer token from Salesforce Oauth2.0 endpoint using client credentials grant type along with client id and client secret
@@ -115,15 +109,19 @@ func (s *Client) updateAndSetBearerToken(ctx context.Context) error {
 	form.Set("client_id", s.clientID)
 	form.Set("client_secret", s.clientSecret)
 
-	req, err := http.NewRequestWithContext(ctx, "POST", apiUrl.String(), strings.NewReader(form.Encode()))
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
+	encodedForm := form.Encode()
+	newReq := func() (*http.Request, error) {
+		req, err := http.NewRequestWithContext(ctx, "POST", apiUrl.String(), strings.NewReader(encodedForm))
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("Accept", "application/json")
+		req.Header.Set("User-Agent", "Redpanda-Connect")
+		return req, nil
 	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "Redpanda-Connect")
 
-	body, err := DoRequestWithRetries(ctx, s.httpClient, req, s.retryOpts)
+	body, err := DoRequestWithRetries(ctx, s.httpClient, newReq, s.retryOpts)
 	if err != nil {
 		return fmt.Errorf("request failed: %w", err)
 	}
@@ -132,9 +130,7 @@ func (s *Client) updateAndSetBearerToken(ctx context.Context) error {
 	if err := json.Unmarshal(body, &result); err != nil {
 		return fmt.Errorf("cannot map response to custom field struct: %w", err)
 	}
-	s.tokenMu.Lock()
-	s.bearerToken = result.AccessToken
-	s.tokenMu.Unlock()
+	s.bearerToken.Store(result.AccessToken)
 
 	return nil
 }
@@ -209,15 +205,19 @@ type Client struct {
 	clientID     string
 	clientSecret string
 	apiVersion   string
-	bearerToken  string
-	tokenMu      sync.Mutex
+	bearerToken atomic.Value
 	httpClient   *http.Client
 	retryOpts    RetryOptions
 	log          *service.Logger
 }
 
+func (s *Client) getBearerToken() string {
+	v, _ := s.bearerToken.Load().(string)
+	return v
+}
+
 // NewClient is the constructor for a Client object
-func NewClient(orgURL, clientID, clientSecret, apiVersion string, maxRetries int, httpClient *http.Client, log *service.Logger, metrics *service.Metrics) (*Client, error) {
+func NewClient(orgURL, clientID, clientSecret, apiVersion string, maxRetries int, httpClient *http.Client, log *service.Logger, m *service.Metrics) (*Client, error) {
 	return &Client{
 		log:          log,
 		orgURL:       orgURL,
@@ -227,9 +227,8 @@ func NewClient(orgURL, clientID, clientSecret, apiVersion string, maxRetries int
 		retryOpts: RetryOptions{
 			MaxRetries: maxRetries,
 		},
-		httpClient: http_metrics.NewInstrumentedClient(
-			metrics, "salesforce_http",
+		httpClient: metrics.NewInstrumentedClient(
+			m, "salesforce_http",
 			httpClient),
-		bearerToken: "",
 	}, nil
 }
