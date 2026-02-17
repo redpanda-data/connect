@@ -205,7 +205,7 @@ type Client struct {
 	clientID     string
 	clientSecret string
 	apiVersion   string
-	bearerToken atomic.Value
+	bearerToken  atomic.Value
 	httpClient   *http.Client
 	retryOpts    RetryOptions
 	log          *service.Logger
