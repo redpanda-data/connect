@@ -83,7 +83,6 @@ func applyLicenseFlag(c *cli.Context, conf *license.Config) {
 var chrootFlag = &cli.StringFlag{
 	Name: "chroot",
 	Usage: "Chroot into the provided directory after parsing configuration. " +
-		"The directory must not exist and will be created. " +
 		"Common /etc/ files are copied to the chroot directory, and the directory is made read-only. " +
 		"This flag is only supported on Linux.",
 }

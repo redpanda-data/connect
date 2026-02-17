@@ -25,10 +25,11 @@ import (
 )
 
 const (
-	driveSearchFieldQuery      = "query"
-	driveSearchFieldProjection = "projection"
-	driveSearchFieldLabels     = "include_label_ids"
-	driveSearchFieldMaxResults = "max_results"
+	driveSearchFieldQuery               = "query"
+	driveSearchFieldProjection          = "projection"
+	driveSearchFieldLabels              = "include_label_ids"
+	driveSearchFieldMaxResults          = "max_results"
+	driveSearchFieldSupportSharedDrives = "shared_drives"
 )
 
 func init() {
@@ -62,6 +63,9 @@ Search results are emitted as message batch, where each message is a https://dev
 			service.NewIntField(driveSearchFieldMaxResults).
 				Description("The maximum number of results to return.").
 				Default(64),
+			service.NewBoolField(driveSearchFieldSupportSharedDrives).
+				Description("Whether or not to include shared drives in the result.").
+				Default(false),
 		).
 		Example("Search & download files from Google Drive", "This examples downloads all the files from Google Drive that are returned in the query", `
 input:
@@ -83,10 +87,11 @@ output:
 
 type googleDriveSearchProcessor struct {
 	*baseProcessor[drive.Service]
-	query      *service.InterpolatedString
-	labels     *service.InterpolatedString
-	fields     []string
-	maxResults int
+	query        *service.InterpolatedString
+	labels       *service.InterpolatedString
+	fields       []string
+	maxResults   int
+	sharedDrives bool
 }
 
 // newGoogleDriveSearchProcessor creates a new instance of googleDriveSearchProcessor.
@@ -117,12 +122,18 @@ func newGoogleDriveSearchProcessor(conf *service.ParsedConfig, mgr *service.Reso
 		return nil, err
 	}
 
+	sharedDrives, err := conf.FieldBool(driveSearchFieldSupportSharedDrives)
+	if err != nil {
+		return nil, err
+	}
+
 	return &googleDriveSearchProcessor{
 		baseProcessor: base,
 		query:         query,
 		labels:        labels,
 		fields:        fields,
 		maxResults:    maxResults,
+		sharedDrives:  sharedDrives,
 	}, nil
 }
 
@@ -148,6 +159,13 @@ func (g *googleDriveSearchProcessor) Process(ctx context.Context, msg *service.M
 		Fields("nextPageToken", googleapi.Field("files("+strings.Join(g.fields, ",")+")"))
 	if l != "" {
 		call = call.IncludeLabels(l)
+	}
+	if g.sharedDrives {
+		// all of those flags are needed to look into shared drives
+		call.
+			SupportsAllDrives(g.sharedDrives).         // Flag 1: Tells API you know about Shared Drives
+			IncludeItemsFromAllDrives(g.sharedDrives). // Flag 2: Tells API to actually look in them
+			Corpora("allDrives")                       // Flag 3: Look everywhere the SA has access
 	}
 	var files []*drive.File
 	err = call.Pages(ctx, func(page *drive.FileList) error {

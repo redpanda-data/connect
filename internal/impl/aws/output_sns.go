@@ -38,12 +38,14 @@ const (
 	snsoFieldMessageDedupeID = "message_deduplication_id"
 	snsoFieldMetadata        = "metadata"
 	snsoFieldTimeout         = "timeout"
+	snsoFieldSubject         = "subject"
 )
 
 type snsoConfig struct {
 	TopicArn               *service.InterpolatedString
 	MessageGroupID         *service.InterpolatedString
 	MessageDeduplicationID *service.InterpolatedString
+	Subject                *service.InterpolatedString
 	Timeout                time.Duration
 	Metadata               *service.MetadataExcludeFilter
 
@@ -63,6 +65,11 @@ func snsoConfigFromParsed(pConf *service.ParsedConfig) (conf snsoConfig, err err
 	}
 	if pConf.Contains(snsoFieldMessageDedupeID) {
 		if conf.MessageDeduplicationID, err = pConf.FieldInterpolatedString(snsoFieldMessageDedupeID); err != nil {
+			return
+		}
+	}
+	if pConf.Contains(snsoFieldSubject) {
+		if conf.Subject, err = pConf.FieldInterpolatedString(snsoFieldSubject); err != nil {
 			return
 		}
 	}
@@ -99,6 +106,9 @@ By default Redpanda Connect will use a shared credentials file when connecting t
 				Description("An optional deduplication ID to set for messages.").
 				Version("3.60.0").
 				Optional(),
+			service.NewInterpolatedStringField(snsoFieldSubject).
+				Description("An optional subject to set for messages.").
+				Optional(),
 			service.NewOutputMaxInFlightField(),
 			service.NewMetadataExcludeFilterField(snsoFieldMetadata).
 				Description("Specify criteria for which metadata values are sent as headers.").
@@ -126,16 +136,23 @@ func init() {
 		})
 }
 
+type snsClientIface interface {
+	Publish(ctx context.Context, input *sns.PublishInput, opts ...func(*sns.Options)) (*sns.PublishOutput, error)
+}
+
 type snsWriter struct {
 	conf snsoConfig
-	sns  *sns.Client
+	sns  snsClientIface
 	log  *service.Logger
 }
 
-func newSNSWriter(conf snsoConfig, mgr *service.Resources) (*snsWriter, error) {
+func newSNSWriter(conf snsoConfig, mgr *service.Resources, customClient ...snsClientIface) (*snsWriter, error) {
 	s := &snsWriter{
 		conf: conf,
 		log:  mgr.Logger(),
+	}
+	if len(customClient) > 0 {
+		s.sns = customClient[0]
 	}
 	return s, nil
 }
@@ -269,6 +286,15 @@ func (a *snsWriter) Write(wctx context.Context, msg *service.Message) error {
 		MessageAttributes:      attrs.attrMap,
 		MessageGroupId:         attrs.groupID,
 		MessageDeduplicationId: attrs.dedupeID,
+	}
+	if a.conf.Subject != nil {
+		subjectStr, err := a.conf.Subject.TryString(msg)
+		if err != nil {
+			return err
+		}
+		if subjectStr != "" {
+			message.Subject = aws.String(subjectStr)
+		}
 	}
 	_, err = a.sns.Publish(ctx, message)
 	return err
