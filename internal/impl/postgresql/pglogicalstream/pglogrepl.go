@@ -296,13 +296,15 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 
 	tablesClause := "FOR ALL TABLES"
 	if len(tables) > 0 {
-		tablesClause = "FOR TABLE "
+		var sb strings.Builder
+		sb.WriteString("FOR TABLE ")
 		for i, table := range tables {
 			if i > 0 {
-				tablesClause += ", "
+				sb.WriteString(", ")
 			}
-			tablesClause += table.String()
+			sb.WriteString(table.String())
 		}
+		tablesClause = sb.String()
 	}
 
 	if len(rows) == 0 || len(rows[0].Rows) == 0 {
