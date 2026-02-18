@@ -525,6 +525,7 @@ Splits a string into an array of substrings using a delimiter. Use for parsing C
 ==== Parameters
 
 *`delimiter`* &lt;string&gt; The delimiter to split with.  
+*`empty_as_null`* &lt;bool, default `false`&gt; To treat empty substrings as null values  
 
 ==== Examples
 
@@ -534,6 +535,13 @@ root.new_value = this.value.split(",")
 
 # In:  {"value":"foo,bar,baz"}
 # Out: {"new_value":["foo","bar","baz"]}
+```
+
+```coffeescript
+root.new_value = this.value.split(",", true)
+
+# In:  {"value":"foo,,qux"}
+# Out: {"new_value":["foo",null,"qux"]}
 ```
 
 ```coffeescript
