@@ -24,6 +24,7 @@
       "Bash(echo:*)",
       "Bash(jq:*)",
       "Bash(yq:*)",
+      "Bash(gh:*)",
       "Bash(git:*)",
       "Bash(docker:*)",
       "WebFetch(domain:github.com)",
