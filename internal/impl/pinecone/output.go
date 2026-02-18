@@ -188,7 +188,7 @@ func (w *outputWriter) Connect(context.Context) error {
 	w.logger.Tracef("Connecting to %s", w.host)
 	c, err := w.client.Index(w.host)
 	if err != nil {
-		w.logger.Tracef("error connecting to %s: %w", w.host, err)
+		w.logger.Tracef("error connecting to %s: %v", w.host, err)
 		return err
 	}
 	w.logger.Tracef("Connected to %s", w.host)

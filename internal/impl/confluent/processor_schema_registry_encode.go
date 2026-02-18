@@ -319,7 +319,7 @@ func (s *schemaRegistryEncoder) getLatestEncoder(subject string) (schemaEncoder,
 		return nil, 0, err
 	}
 
-	s.logger.Tracef("Loaded new codec for subject %v: %s", subject, resPayload.Schema)
+	s.logger.Tracef("Loaded new codec for subject %v: %v", subject, resPayload.Schema)
 
 	var encoder schemaEncoder
 	switch resPayload.Type {

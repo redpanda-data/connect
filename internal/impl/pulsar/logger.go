@@ -64,19 +64,19 @@ func (l defaultLogger) Error(args ...any) {
 }
 
 func (l defaultLogger) Debugf(format string, args ...any) {
-	l.backend.Debugf(format, args)
+	l.backend.Debugf(format, args...)
 }
 
 func (l defaultLogger) Infof(format string, args ...any) {
-	l.backend.Infof(format, args)
+	l.backend.Infof(format, args...)
 }
 
 func (l defaultLogger) Warnf(format string, args ...any) {
-	l.backend.Warnf(format, args)
+	l.backend.Warnf(format, args...)
 }
 
 func (l defaultLogger) Errorf(format string, args ...any) {
-	l.backend.Errorf(format, args)
+	l.backend.Errorf(format, args...)
 }
 
 // NoopLogger returns a logger that does nothing.

@@ -79,7 +79,7 @@ partMsgLoop:
 			nextTimedBatchChan = nil
 			flushedBatch, err := batchPolicy.Flush(ctx)
 			if err != nil {
-				k.mgr.Logger().Debugf("Timed flush batch error: %w", err)
+				k.mgr.Logger().Debugf("Timed flush batch error: %v", err)
 				break partMsgLoop
 			}
 			if !flushBatch(ctx, k.msgChan, flushedBatch, latestOffset+1) {
@@ -98,7 +98,7 @@ partMsgLoop:
 				nextTimedBatchChan = nil
 				flushedBatch, err := batchPolicy.Flush(ctx)
 				if err != nil {
-					k.mgr.Logger().Debugf("Flush batch error: %w", err)
+					k.mgr.Logger().Debugf("Flush batch error: %v", err)
 					break partMsgLoop
 				}
 				if !flushBatch(ctx, k.msgChan, flushedBatch, latestOffset+1) {

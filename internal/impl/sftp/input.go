@@ -407,7 +407,7 @@ func (s *sftpReader) initScanner(ctx context.Context) (codec.DeprecatedFallbackS
 				err = nil
 			}
 			if ackErr := s.pathProvider.Ack(ctx, path, err); ackErr != nil {
-				s.log.With("error", ackErr).Warnf("Failed to acknowledge path: %w", path)
+				s.log.With("error", ackErr).Warnf("Failed to acknowledge path: %s", path)
 			}
 
 			s.sftpClientPool.Release(client)

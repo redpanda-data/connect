@@ -108,7 +108,7 @@ func (s *Snapshot) snapshotTable(ctx context.Context, table UserDefinedTable, ma
 		if err != nil {
 			return err
 		}
-		l.Tracef("Primary keys for table '%s': %v", table, tablePks)
+		l.Tracef("Primary keys for table '%v': %v", table, tablePks)
 		lastSeenPksValues := map[string]any{}
 		for _, pk := range tablePks {
 			lastSeenPksValues[pk] = nil

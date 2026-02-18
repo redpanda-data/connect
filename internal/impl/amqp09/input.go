@@ -428,13 +428,13 @@ func (a *amqp09Reader) disconnect() error {
 
 	if a.amqpChan != nil {
 		if err := a.amqpChan.Cancel(a.consumerTag, true); err != nil {
-			a.log.Errorf("Failed to cancel consumer: %w", err)
+			a.log.Errorf("Failed to cancel consumer: %v", err)
 		}
 		a.amqpChan = nil
 	}
 	if a.conn != nil {
 		if err := a.conn.Close(); err != nil {
-			a.log.Errorf("Failed to close connection cleanly: %w", err)
+			a.log.Errorf("Failed to close connection cleanly: %v", err)
 		}
 		a.conn = nil
 	}
