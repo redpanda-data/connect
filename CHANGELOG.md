@@ -3,11 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## 4.81.0 - TBD
+## 4.81.0 - 2026-02-18
 
 ### Added
 
 - The `mysql_cdc` input now adds schema metadata to consumed messages, this can be used for automatic schema conversion in processors such as `schema_registry_encode`. (@Jeffail)
+- (Benthos) Bloblang method `split` now supports converting empty substrings to `null` directly. (@rockwotj)
 
 ## 4.80.1 - 2026-02-05
 
