@@ -1,6 +1,6 @@
 ---
 name: rpcn:review
-description: Code review a pull request for Redpanda Connect, checking Go patterns, tests, and component architecture
+description: Code review a pull request for Redpanda Connect, checking Go patterns, tests, component architecture, and commit policy
 arguments:
   - name: pr
     description: "Pull request number or URL to review. Defaults to current branch PR."
@@ -20,7 +20,7 @@ This review orchestrates specialized agents for domain-specific analysis. Do not
    - **Agent A**: Collect paths to relevant CLAUDE.md files (root `CLAUDE.md`, `config/CLAUDE.md`, and any in directories touched by the PR)
    - **Agent B**: Summarize the PR (files modified, change categories: component implementation, tests, configuration, CLI, etc.)
 
-3. **Review** - Run 3 Sonnet agents in parallel. Each receives the PR diff, change summary, and relevant CLAUDE.md content. Each returns a list of issues with a reason and confidence score 0-100:
+3. **Review** - Run 3 Sonnet agents and 1 Haiku agent in parallel. Each receives the PR diff, change summary, and relevant CLAUDE.md content. Each returns a list of issues with a reason and confidence score 0-100:
    - 0: False positive or pre-existing issue
    - 25: Possibly real, possibly false positive. Stylistic issues not in CLAUDE.md/agent files.
    - 50: Real but nitpick or rare. Not important relative to the rest of the PR.
@@ -32,6 +32,13 @@ This review orchestrates specialized agents for domain-specific analysis. Do not
    **Agent 2 - Tests** (`tester`): Unit: table-driven tests with errContains, assert vs require, config parsing with MockResources, enterprise InjectTestService, processor/input/output/bloblang lifecycle tests, config linting, NewStreamBuilder pipelines, HTTP mock servers. Integration: integration.CheckSkip(t), Given-When-Then with t.Log(), testcontainers-go (module helpers preferred, GenericContainer fallback), NewStreamBuilder with AddBatchConsumerFunc, side-effect imports, async stream.Run with context.Canceled handling, assert.Eventually polling (no require inside), parallel subtest safety, cleanup with context.Background(). Flag changed code lacking tests and new components without integration tests.
 
    **Agent 3 - Bugs and Security**: Logic errors, nil dereferences, race conditions, resource leaks, SQL/command injection, XSS, hardcoded secrets. Focus on real bugs, not nitpicks.
+
+   **Agent 4 - Commit Policy** (Haiku): Uses `git log` and `git show --stat` on the PR commits. Checks:
+   - **Granularity**: Each commit is one small, self-contained, logical change. Flag commits mixing unrelated work.
+   - **Message format** (preferred, not enforced): `system: message` or `system(subsystem): message` (e.g., `otlp: add authz support`, `gateway(authz): add http middleware`) or uppercase plain message for global changes (e.g., `Bump to Go 1.26`).
+   - **Message quality** (enforced): Flag messages that are vague ("fix stuff", "updates", "WIP"), misleading (title doesn't match the actual changes), or incomprehensible.
+   - **Fixup/squash**: Flag unsquashed `fixup!`/`squash!` commits.
+   - Ignore PR number suffixes `(#1234)`.
 
 4. **Filter** - Drop issues scoring below 75. If none remain, skip commenting.
 
@@ -71,7 +78,7 @@ If no issues found:
 ```
 ### Code review
 
-No issues found. Checked for bugs, Go patterns and component architecture (godev), test quality (tester), and CLAUDE.md compliance.
+No issues found. Checked for bugs, Go patterns and component architecture (godev), test quality (tester), commit policy, and CLAUDE.md compliance.
 
 Generated with Claude Code
 ```
