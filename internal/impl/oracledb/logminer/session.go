@@ -63,7 +63,7 @@ func (sm *SessionManager) AddLogFile(filename string, isFirst bool) error {
 
 // StartSession starts a LogMiner session with ONLINE_CATALOG strategy
 func (sm *SessionManager) StartSession(startSCN, endSCN uint64, committedDataOnly bool) error {
-	opts := make([]string, len(sm.opts))
+	opts := make([]string, 0, len(sm.opts))
 	opts = append(opts, sm.opts...)
 
 	if committedDataOnly {

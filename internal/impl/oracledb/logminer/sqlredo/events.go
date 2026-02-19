@@ -10,6 +10,7 @@ package sqlredo
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"strconv"
 	"time"
@@ -57,10 +58,10 @@ func operationFromCode(code int) Operation {
 
 // Scan implements the DB Scanner interface.
 func (op *Operation) Scan(src any) error {
-	if src == nil { // db returned nil, CDC record may not exist yet
-		op = nil
-		return nil
+	if src == nil {
+		return errors.New("no operation found when parsing operation code")
 	}
+
 	switch v := src.(type) {
 	case int:
 		*op = operationFromCode(v)
