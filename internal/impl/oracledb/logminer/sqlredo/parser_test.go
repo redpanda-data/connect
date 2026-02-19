@@ -78,7 +78,7 @@ func TestParseTest(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			stmt, err := sqlredo.ParseSQLCommand2(tt.sql)
+			stmt, err := sqlredo.ParseSQLCommand(tt.sql)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ParseSQLCommand2() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -101,4 +101,3 @@ func TestParseTest(t *testing.T) {
 		})
 	}
 }
-

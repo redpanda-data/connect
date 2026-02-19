@@ -64,7 +64,7 @@ func (p *Parser) RedoEventToDMLEvent(redoEvent *RedoEvent) (*DMLEvent, error) {
 	}
 
 	// Parse SQL to AST
-	stmt, err := ParseSQLCommand2(redoEvent.SQLRedo.String)
+	stmt, err := ParseSQLCommand(redoEvent.SQLRedo.String)
 	if err != nil {
 		return nil, fmt.Errorf("parsing sql from redo log: %w", err)
 	}
@@ -84,7 +84,8 @@ func (p *Parser) RedoEventToDMLEvent(redoEvent *RedoEvent) (*DMLEvent, error) {
 	return event, nil
 }
 
-func ParseSQLCommand2(sql string) (sqlparser.Statement, error) {
+// ParseSQLCommand parses the sql string and returns an AST for extracting key/values.
+func ParseSQLCommand(sql string) (sqlparser.Statement, error) {
 	// Normalize Oracle SQL to MySQL syntax
 	normalized := normalizeOracleToMySQL(sql)
 
@@ -199,13 +200,7 @@ func extractWhereConditions(expr sqlparser.Expr, result map[string]any) {
 		}
 
 	case *sqlparser.IsExpr:
-		// Handle IS NULL / IS NOT NULL
-		if _, ok := e.Expr.(*sqlparser.ColName); ok {
-			// IS NULL - don't add to result (old parser behavior)
-			if e.Operator == "is null" {
-				// Skip - NULL values are not included in the map
-			}
-		}
+		// IS NULL / IS NOT NULL - NULL values are not included in the map
 	}
 }
 
@@ -282,4 +277,3 @@ func normalizeOracleToMySQL(sql string) string {
 
 	return result.String()
 }
-

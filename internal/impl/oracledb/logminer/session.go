@@ -11,6 +11,7 @@ package logminer
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 )
 
 // SessionManager manages LogMiner sessions, such as loading
@@ -70,13 +71,7 @@ func (sm *SessionManager) StartSession(startSCN, endSCN uint64, committedDataOnl
 		opts = append(opts, []string{"DBMS_LOGMNR.COMMITTED_DATA_ONLY"}...)
 	}
 
-	var optionsStr string
-	for i, o := range opts {
-		if i > 0 {
-			optionsStr += " + "
-		}
-		optionsStr += o
-	}
+	optionsStr := strings.Join(opts, " + ")
 
 	q := fmt.Sprintf("BEGIN SYS.DBMS_LOGMNR.START_LOGMNR(STARTSCN => %d, ENDSCN => %d, OPTIONS => %s); END;", startSCN, endSCN, optionsStr)
 	if _, err := sm.db.Exec(q); err != nil {

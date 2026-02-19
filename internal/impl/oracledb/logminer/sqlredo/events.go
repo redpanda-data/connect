@@ -36,23 +36,23 @@ const (
 	OpRollback
 )
 
-// operationFromCode converts an operation code integer into an Operation type
-func operationFromCode(code int) Operation {
-	switch code {
-	case 1:
-		return OpInsert
-	case 2:
-		return OpDelete
-	case 3:
-		return OpUpdate
-	case 6:
-		return OpStart
-	case 7:
-		return OpCommit
-	case 36:
-		return OpRollback
+// String converts the operation type to a string equivalent.
+func (op Operation) String() string {
+	switch op {
+	case OpInsert:
+		return "insert"
+	case OpDelete:
+		return "delete"
+	case OpUpdate:
+		return "update"
+	case OpStart:
+		return "start"
+	case OpCommit:
+		return "commit"
+	case OpRollback:
+		return "rollback"
 	default:
-		return OpUnknown
+		return fmt.Sprintf("unknown operation (%d)", int64(op))
 	}
 }
 
@@ -75,6 +75,26 @@ func (op *Operation) Scan(src any) error {
 		return fmt.Errorf("cannot scan %T to operation code", src)
 	}
 	return nil
+}
+
+// operationFromCode converts an operation code integer into an Operation type
+func operationFromCode(code int) Operation {
+	switch code {
+	case 1:
+		return OpInsert
+	case 2:
+		return OpDelete
+	case 3:
+		return OpUpdate
+	case 6:
+		return OpStart
+	case 7:
+		return OpCommit
+	case 36:
+		return OpRollback
+	default:
+		return OpUnknown
+	}
 }
 
 // DMLEvent represents a parsed DML (Data Manipulation Language) operation
