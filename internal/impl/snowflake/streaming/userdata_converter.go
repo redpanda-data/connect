@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 	"unicode/utf8"
 	"unsafe"
@@ -200,6 +201,8 @@ func (c numberConverter) ValidateAndConvert(stats *statsBuffer, val any, buf typ
 		v, err = int128.FromFloat64(t, c.precision, c.scale)
 	case string:
 		v, err = int128.FromString(t, c.precision, c.scale)
+	case []byte:
+		v, err = int128.FromString(unsafe.String(unsafe.SliceData(t), len(t)), c.precision, c.scale)
 	case json.Number:
 		v, err = int128.FromString(t.String(), c.precision, c.scale)
 	default:
@@ -233,7 +236,43 @@ func (c doubleConverter) ValidateAndConvert(stats *statsBuffer, val any, buf typ
 		buf.WriteNull()
 		return nil
 	}
-	v, err := bloblang.ValueAsFloat64(val)
+	var v float64
+	var err error
+	switch t := val.(type) {
+	case int:
+		v = float64(t)
+	case int8:
+		v = float64(t)
+	case int16:
+		v = float64(t)
+	case int32:
+		v = float64(t)
+	case int64:
+		v = float64(t)
+	case uint:
+		v = float64(t)
+	case uint8:
+		v = float64(t)
+	case uint16:
+		v = float64(t)
+	case uint32:
+		v = float64(t)
+	case uint64:
+		v = float64(t)
+	case float32:
+		v = float64(t)
+	case float64:
+		v = t
+	case string:
+		v, err = strconv.ParseFloat(t, 64)
+	case []byte:
+		v, err = strconv.ParseFloat(unsafe.String(unsafe.SliceData(t), len(t)), 64)
+	case json.Number:
+		v, err = t.Float64()
+	default:
+		// fallback to the good error message that bloblang provides
+		v, err = bloblang.ValueAsFloat64(val)
+	}
 	if err != nil {
 		return err
 	}
