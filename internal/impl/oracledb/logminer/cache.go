@@ -56,7 +56,12 @@ func NewInMemoryCache(metrics *service.Metrics, logger *service.Logger) *InMemor
 }
 
 // StartTransaction initializes a new transaction in the cache with the given transaction ID and SCN.
+// If the transaction already exists in the cache it is left untouched so that previously
+// accumulated events are not lost when LogMiner re-emits the START record across polling cycles.
 func (tc *InMemoryCache) StartTransaction(txnID string, scn uint64) {
+	if _, exists := tc.transactions[txnID]; exists {
+		return
+	}
 	tc.transactions[txnID] = &Transaction{
 		ID:     txnID,
 		SCN:    scn,
@@ -70,12 +75,18 @@ func (tc *InMemoryCache) StartTransaction(txnID string, scn uint64) {
 func (tc *InMemoryCache) AddEvent(txnID string, scn uint64, event *sqlredo.DMLEvent) {
 	if txn, exists := tc.transactions[txnID]; exists {
 		txn.Events = append(txn.Events, event)
+		tc.log.Infof("appending event (len=%d) to transaction %s", len(txn.Events), txnID)
 		tc.eventsMetric.Incr(1)
 	} else {
 		// Transaction not started yet, create it. This is an edgecase that _shouldn't_ happen.
-		tc.log.Warnf("Transaction %s not found for event", txnID)
-		tc.StartTransaction(txnID, scn)
-		txn.Events = append(txn.Events, event)
+		tc.log.Warnf("Transaction %s not found for event, creating...", txnID)
+		t := &Transaction{
+			ID:     txnID,
+			SCN:    scn,
+			Events: []*sqlredo.DMLEvent{event},
+		}
+		tc.transactions[txnID] = t
+		tc.transactionsMetric.Incr(1)
 		tc.eventsMetric.Incr(1)
 	}
 }
