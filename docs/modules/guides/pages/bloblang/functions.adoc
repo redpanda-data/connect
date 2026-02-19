@@ -30,6 +30,24 @@ root.values_two = range(0, this.max, 2)
 
 == General
 
+=== `buffer_acquire`
+
+Acquires a byte buffer from a named pool. Buffers are reused across invocations to reduce allocations. If no buffer is available in the pool, a new one of the specified size is created. For a given pool, the size must never change.
+
+==== Parameters
+
+- *`pool`* &lt;string&gt; The name of the buffer pool to acquire from.  
+- *`size`* &lt;integer&gt; The size of the buffer to allocate if none are available in the pool.  
+
+=== `buffer_release`
+
+Returns a byte buffer to a named pool for reuse. The buffer should have been previously acquired with buffer_acquire from the same pool. Returns null.
+
+==== Parameters
+
+- *`pool`* &lt;string&gt; The name of the buffer pool to return the buffer to.  
+- *`buffer`* &lt;unknown&gt; The byte buffer to return to the pool.  
+
 === `bytes`
 
 Creates a zero-initialized byte array of specified length. Use this to allocate fixed-size byte buffers for binary data manipulation or to generate padding.

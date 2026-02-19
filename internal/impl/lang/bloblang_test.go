@@ -135,3 +135,74 @@ func TestUnicodeSegmentation_Sentence(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []any{"This is sentence 1.0. ", "This is 2.0!"}, res)
 }
+
+func TestBufferAcquire(t *testing.T) {
+	exe, err := bloblang.Parse(`root = buffer_acquire("test_acquire", 128)`)
+	require.NoError(t, err)
+
+	res, err := exe.Query(nil)
+	require.NoError(t, err)
+
+	buf, ok := res.([]byte)
+	require.True(t, ok, "expected []byte, got %T", res)
+	assert.Len(t, buf, 128)
+}
+
+func TestBufferAcquireAndRelease(t *testing.T) {
+	exe, err := bloblang.Parse(`
+let buf = buffer_acquire("test_ar", 64)
+root = buffer_release("test_ar", $buf)
+`)
+	require.NoError(t, err)
+
+	res, err := exe.Query(nil)
+	require.NoError(t, err)
+	assert.Nil(t, res)
+}
+
+func TestBufferReleaseUnknownPool(t *testing.T) {
+	exe, err := bloblang.Parse(`root = buffer_release("nonexistent", "hello".bytes())`)
+	require.NoError(t, err)
+
+	_, err = exe.Query(nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not found")
+}
+
+func TestBufferReleaseWrongType(t *testing.T) {
+	exe, err := bloblang.Parse(`root = buffer_release("whatever", this)`)
+	require.NoError(t, err)
+
+	_, err = exe.Query("not bytes")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "expected bytes")
+}
+
+func TestBufferPoolReuse(t *testing.T) {
+	poolName := "test_reuse"
+
+	// Acquire a buffer.
+	exe1, err := bloblang.Parse(`root = buffer_acquire("` + poolName + `", 256)`)
+	require.NoError(t, err)
+
+	res1, err := exe1.Query(nil)
+	require.NoError(t, err)
+	buf1, ok := res1.([]byte)
+	require.True(t, ok)
+	assert.Len(t, buf1, 256)
+
+	// Release it back.
+	exe2, err := bloblang.Parse(`root = buffer_release("` + poolName + `", this)`)
+	require.NoError(t, err)
+
+	res2, err := exe2.Query(buf1)
+	require.NoError(t, err)
+	assert.Nil(t, res2)
+
+	// Acquire again — pool should still work.
+	res3, err := exe1.Query(nil)
+	require.NoError(t, err)
+	buf3, ok := res3.([]byte)
+	require.True(t, ok)
+	assert.Same(t, &buf3[0], &buf1[0])
+}
