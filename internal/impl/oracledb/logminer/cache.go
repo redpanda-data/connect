@@ -75,7 +75,6 @@ func (tc *InMemoryCache) StartTransaction(txnID string, scn uint64) {
 func (tc *InMemoryCache) AddEvent(txnID string, scn uint64, event *sqlredo.DMLEvent) {
 	if txn, exists := tc.transactions[txnID]; exists {
 		txn.Events = append(txn.Events, event)
-		tc.log.Infof("appending event (len=%d) to transaction %s", len(txn.Events), txnID)
 		tc.eventsMetric.Incr(1)
 	} else {
 		// Transaction not started yet, create it. This is an edgecase that _shouldn't_ happen.

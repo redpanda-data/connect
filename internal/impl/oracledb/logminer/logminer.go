@@ -51,9 +51,8 @@ type LogMiner struct {
 	txnCache      TransactionCache
 
 	// Session state tracking (for keeping session alive between iterations)
-	sessionActive           bool
-	currentLogFiles         []*LogFile
-	currentRedoLogSequences []int64
+	sessionActive   bool
+	currentLogFiles []*LogFile
 }
 
 // NewMiner creates a new instance of LogMiner responsible
@@ -87,7 +86,7 @@ func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replicat
 			XID,                 -- Oracle's native transaction identifier (RAW)
 			COMMIT_SCN          -- SCN when transaction commits (vs SCN when DML executes)
 		FROM V$LOGMNR_CONTENTS
-		WHERE (COMMIT_SCN > :1 AND COMMIT_SCN <= :2) OR (COMMIT_SCN IS NULL)%s
+		WHERE SCN > :1 AND SCN <= :2%s
 	`, buf.String())
 
 	lm := &LogMiner{
@@ -127,11 +126,6 @@ func (lm *LogMiner) ReadChanges(ctx context.Context, startPos replication.SCN) e
 			lm.sessionActive = false
 		}
 	}()
-
-	// set initial log sequences
-	if _, err := lm.checkLogSwitchOccurred(); err != nil {
-		return fmt.Errorf("initializing redo log sequence tracking: %w", err)
-	}
 
 	for {
 		select {
@@ -197,36 +191,31 @@ func (lm *LogMiner) miningCycle(ctx context.Context) (caughtUp bool, err error) 
 		endSCN = lm.currentSCN + maxRange
 	}
 
-	// Check if we need to restart the session due to log switch
-	logSwitched, err := lm.checkLogSwitchOccurred()
-	if err != nil {
-		return false, fmt.Errorf("checking for log switch: %w", err)
-	}
-
-	if logSwitched || !lm.sessionActive {
-		lm.log.Debugf("Restarting LogMiner session (log_switch=%t, session_active=%t)", logSwitched, lm.sessionActive)
-		if err := lm.prepareLogsAndStartSession(lm.currentSCN); err != nil {
-			// Check for ORA-01291: missing log file error and provide helpful message
-			if strings.Contains(err.Error(), "ORA-01291") {
-				//nolint:staticcheck
-				return false, fmt.Errorf("preparing logs and starting session at position %d: %w\n\n"+
-					"This error indicates archived redo logs have been purged before LogMiner could process them.\n"+
-					"This typically happens when processing takes longer than Oracle's log retention period.\n\n"+
-					"To fix this issue:\n"+
-					"1. Increase Oracle's archived log retention:\n"+
-					"   ALTER SYSTEM SET LOG_ARCHIVE_RETENTION_HOURS = 24;\n"+
-					"   or use RMAN: CONFIGURE RETENTION POLICY TO RECOVERY WINDOW OF 7 DAYS;\n\n"+
-					"2. Improve processing performance:\n"+
-					"   - Increase logminer.max_batch_size (current: %d)\n"+
-					"   - Decrease logminer.backoff_interval (current: %v)\n"+
-					"   - Increase input batching.count for better throughput\n"+
-					"   - Use faster output (e.g., drop: {} for benchmarking)\n\n"+
-					"3. Restart the connector from the current database SCN to skip missing logs:\n"+
-					"   Note: This will result in data loss for events in the purged logs.",
-					lm.currentSCN, err, lm.cfg.MaxBatchSize, lm.cfg.MiningBackoffInterval)
-			}
-			return false, fmt.Errorf("preparing logs and starting session at position %d: %w", lm.currentSCN, err)
+	// Restart the session on every cycle with explicit SCN bounds. Oracle's START_LOGMNR
+	// with ENDSCN=0 freezes the session's view at session start time, making events written
+	// after session start invisible. Per-window restart with explicit endSCN ensures all
+	// events in [currentSCN, endSCN] are visible.
+	if err := lm.prepareLogsAndStartSession(lm.currentSCN, endSCN); err != nil {
+		// Check for ORA-01291: missing log file error and provide helpful message
+		if strings.Contains(err.Error(), "ORA-01291") {
+			//nolint:staticcheck
+			return false, fmt.Errorf("preparing logs and starting session at position %d: %w\n\n"+
+				"This error indicates archived redo logs have been purged before LogMiner could process them.\n"+
+				"This typically happens when processing takes longer than Oracle's log retention period.\n\n"+
+				"To fix this issue:\n"+
+				"1. Increase Oracle's archived log retention:\n"+
+				"   ALTER SYSTEM SET LOG_ARCHIVE_RETENTION_HOURS = 24;\n"+
+				"   or use RMAN: CONFIGURE RETENTION POLICY TO RECOVERY WINDOW OF 7 DAYS;\n\n"+
+				"2. Improve processing performance:\n"+
+				"   - Increase logminer.max_batch_size (current: %d)\n"+
+				"   - Decrease logminer.backoff_interval (current: %v)\n"+
+				"   - Increase input batching.count for better throughput\n"+
+				"   - Use faster output (e.g., drop: {} for benchmarking)\n\n"+
+				"3. Restart the connector from the current database SCN to skip missing logs:\n"+
+				"   Note: This will result in data loss for events in the purged logs.",
+				lm.currentSCN, err, lm.cfg.MaxBatchSize, lm.cfg.MiningBackoffInterval)
 		}
+		return false, fmt.Errorf("preparing logs and starting session at position %d: %w", lm.currentSCN, err)
 	}
 
 	// Query and process redoEvents from V$LOGMNR_CONTENTS
@@ -414,67 +403,13 @@ func (lfc *LogFileCollector) GetLogs(offsetSCN uint64) ([]*LogFile, error) {
 	return logFiles, rows.Err()
 }
 
-// checkLogSwitchOccurred detects if a redo log switch has occurred by comparing
-// current redo log sequences with the previously tracked sequences.
-// This is used to determine when the LogMiner session needs to be restarted to pick up new redo log files.
-// A log switch occurs when a reodo log has reached a given size and been replaced with a new log, or a given time has exceeded.
-func (lm *LogMiner) checkLogSwitchOccurred() (bool, error) {
-	var (
-		rows             *sql.Rows
-		err              error
-		currentSequences []int64
-	)
-
-	// Query current redo log sequences to compare with existing sequences
-	if rows, err = lm.db.Query(`SELECT SEQUENCE# FROM V$LOG WHERE STATUS = 'CURRENT' ORDER BY SEQUENCE#`); err != nil {
-		return false, fmt.Errorf("querying current redo log sequences: %w", err)
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var seq int64
-		if err := rows.Scan(&seq); err != nil {
-			return false, err
-		}
-		currentSequences = append(currentSequences, seq)
-	}
-	if err := rows.Err(); err != nil {
-		return false, err
-	}
-
-	// If we haven't tracked sequences yet, store them and return false
-	if lm.currentRedoLogSequences == nil {
-		lm.currentRedoLogSequences = currentSequences
-		return false, nil
-	}
-
-	// Compare with previous sequences
-	switch {
-	// fast path, sizes are different
-	case len(currentSequences) != len(lm.currentRedoLogSequences):
-		lm.log.Debugf("Redo log switch detected: sequence count changed from %d to %d", len(lm.currentRedoLogSequences), len(currentSequences))
-		lm.currentRedoLogSequences = currentSequences
-		return true, nil
-	default:
-		// slow path, compare contents of array
-		for i := range currentSequences {
-			if currentSequences[i] != lm.currentRedoLogSequences[i] {
-				lm.log.Debugf("Redo log switch detected: sequence changed from %v to %v", lm.currentRedoLogSequences, currentSequences)
-				lm.currentRedoLogSequences = currentSequences
-				return true, nil
-			}
-		}
-	}
-
-	return false, nil
-}
-
-// prepareLogsAndStartSession collects redo/archive logs for the given SCN,
+// prepareLogsAndStartSession collects redo/archive logs for the given SCN range,
 // loads them into LogMiner, and starts a new mining session.
-// This should be called initially and whenever a log switch is detected.
-// The session is started without an endSCN boundary, allowing continuous mining.
-func (lm *LogMiner) prepareLogsAndStartSession(startSCN uint64) error {
-	// TODO: Isn't continious mining deprecated in LogMiner?
+// It is called on every mining cycle with explicit bounds. Passing ENDSCN=0 to
+// START_LOGMNR would freeze the session's view at session-start time, making events
+// written after that point invisible. An explicit endSCN ensures all events in
+// [startSCN, endSCN] are accessible.
+func (lm *LogMiner) prepareLogsAndStartSession(startSCN, endSCN uint64) error {
 	// End existing session if active
 	if lm.sessionActive {
 		if err := lm.sessionMgr.EndSession(); err != nil {
@@ -501,12 +436,11 @@ func (lm *LogMiner) prepareLogsAndStartSession(startSCN uint64) error {
 		lm.log.Debugf("Loaded redo log file %s into LogMiner", file.FileName)
 	}
 
-	// Start LogMiner session with no end boundary (endSCN=0) for continuous mining
-	if err := lm.sessionMgr.StartSession(startSCN, 0, false); err != nil {
+	if err := lm.sessionMgr.StartSession(startSCN, endSCN, false); err != nil {
 		return fmt.Errorf("starting logminer session: %w", err)
 	}
 	lm.sessionActive = true
-	lm.log.Debugf("Started LogMiner session from SCN %d (no end boundary)", startSCN)
+	lm.log.Debugf("Started LogMiner session from SCN %d to SCN %d", startSCN, endSCN)
 
 	return nil
 }
