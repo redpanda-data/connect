@@ -18,7 +18,9 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"math"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -126,6 +128,18 @@ type SQLiteBuffer struct {
 }
 
 func newSQLiteBuffer(path string, preProcs, postProcs []*service.OwnedProcessor) (*SQLiteBuffer, error) {
+	// Pre-flight check: the SQLite driver returns a misleading "out of memory"
+	// error when sqlite3_open() fails (e.g. due to permission denied), because
+	// it calls sqlite3_errmsg() on a NULL handle. Opening the file via the OS
+	// first surfaces the real error.
+	if path != ":memory:" {
+		f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o600)
+		if err != nil {
+			return nil, fmt.Errorf("failed to open sqlite database: %w", err)
+		}
+		_ = f.Close()
+	}
+
 	db, err := sql.Open("sqlite", path)
 	if err != nil {
 		return nil, err
