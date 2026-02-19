@@ -31,11 +31,19 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: Load review prompt
+        id: prompt
+        run: |
+          # Strip YAML front matter and substitute the PR number
+          PROMPT=$(sed '1,/^---$/d; 1,/^---$/d' .claude/commands/review.md)
+          PROMPT="${PROMPT//\{\{pr\}\}/${{ github.event.pull_request.number }}}"
+          echo "content<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$PROMPT" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
       - name: Run Claude Code Review
         id: claude-review
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          prompt: "/rpcn:review ${{ github.event.pull_request.number }}"
-          # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
-          # or https://code.claude.com/docs/en/cli-reference for available options
+          prompt: ${{ steps.prompt.outputs.content }}
