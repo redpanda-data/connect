@@ -75,6 +75,8 @@ func (tc *InMemoryCache) AddEvent(txnID string, scn uint64, event *sqlredo.DMLEv
 		// Transaction not started yet, create it. This is an edgecase that _shouldn't_ happen.
 		tc.log.Warnf("Transaction %s not found for event", txnID)
 		tc.StartTransaction(txnID, scn)
+		txn.Events = append(txn.Events, event)
+		tc.eventsMetric.Incr(1)
 	}
 }
 
