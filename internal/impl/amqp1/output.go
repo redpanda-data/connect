@@ -100,10 +100,12 @@ This output benefits from sending multiple messages in flight in parallel for im
 				Optional().
 				Advanced().
 				Example("amqp://localhost:5672/").
-			Example(`${! meta("target_address") }`),
+				Example(`${! meta("target_address") }`),
 		).LintRule(`
 root = if this.url.or("") == "" && this.urls.or([]).length() == 0 {
   "field 'urls' must be set"
+} else if this.target_address.or("") == "" && !this.exists("message_properties_to") {
+  "when 'target_address' is empty, 'message_properties_to' must be set to specify per-message destinations"
 }
 `)
 }
@@ -327,7 +329,7 @@ func (a *amqp1Writer) Write(ctx context.Context, msg *service.Message) error {
 	if a.msgTo != nil {
 		msgToStr, err := a.msgTo.TryString(msg)
 		if err != nil {
-			return fmt.Errorf("message_properties_to interpolation: %w", err)
+			return fmt.Errorf("interpolating message_properties_to: %w", err)
 		}
 		if msgToStr != "" {
 			m.Properties = &amqp.MessageProperties{To: &msgToStr}
