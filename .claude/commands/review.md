@@ -18,7 +18,7 @@ This review orchestrates specialized agents for domain-specific analysis. Do not
    - **Agent A**: Collect paths to relevant CLAUDE.md files (root `CLAUDE.md`, `config/CLAUDE.md`, and any in directories touched by the PR)
    - **Agent B**: Summarize the PR (files modified, change categories: component implementation, tests, configuration, CLI, etc.)
 
-2. **Review** - Run 3 Sonnet agents and 1 Haiku agent in parallel. Each receives the PR diff, change summary, and relevant CLAUDE.md content. Each returns a list of issues with a reason, confidence score 0-100, and (for scores 50-74) a brief explanation of why the reviewer is uncertain:
+2. **Review** - Run 3 Opus agents and 1 Haiku agent in parallel. Each receives the PR diff, change summary, and relevant CLAUDE.md content. Each returns a list of issues with a reason, confidence score 0-100, and (for scores 50-74) a brief explanation of why the reviewer is uncertain:
    - 0: False positive or pre-existing issue
    - 25: Possibly real, possibly false positive. Stylistic issues not in CLAUDE.md/agent files.
    - 50: Real but uncertain — reviewer lacks context to confirm severity or correctness. Include uncertainty reason (e.g., "unfamiliar domain pattern", "can't determine intent without runtime context", "possible edge case but depends on caller behavior").

@@ -52,7 +52,8 @@ jobs:
           show_full_output: false
           use_commit_signing: true
           claude_args: >
-            --max-turns 3
+            --model opus
+            --max-turns 10
             --disallowedTools "WebFetch,WebSearch"
             --allowedTools "
               Bash(gh pr view *),
