@@ -462,13 +462,6 @@ path: "%v"
 	require.NoError(t, block.Close(ctx))
 }
 
-func mustParseConf(t testing.TB, conf string) *service.ParsedConfig {
-	t.Helper()
-	parsed, err := sql.SQLiteBufferConfig().ParseYAML(conf, nil)
-	require.NoError(t, err)
-	return parsed
-}
-
 func TestBufferSQLitePermissionDenied(t *testing.T) {
 	if os.Getuid() == 0 {
 		t.Skip("skipping permission test: running as root")
@@ -482,8 +475,12 @@ func TestBufferSQLitePermissionDenied(t *testing.T) {
 		_ = os.Chmod(restrictedDir, 0o755) // restore so TempDir cleanup can delete it
 	})
 
-	_, err := sql.NewSQLiteBufferFromConfig(
-		mustParseConf(t, fmt.Sprintf(`path: %q`, filepath.Join(restrictedDir, "test.db"))),
+	dbPath := filepath.Join(restrictedDir, "test.db")
+	conf, err := sql.SQLiteBufferConfig().ParseYAML(fmt.Sprintf(`path: %q`, dbPath), nil)
+	require.NoError(t, err)
+
+	_, err = sql.NewSQLiteBufferFromConfig(
+		conf,
 		service.MockResources(),
 	)
 	require.Error(t, err)
