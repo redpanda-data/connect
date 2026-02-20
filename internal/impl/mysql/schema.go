@@ -91,10 +91,11 @@ func mysqlColumnToCommon(col gomysqlschema.TableColumn) (schema.Common, error) {
 			},
 		}
 	case gomysqlschema.TYPE_JSON:
-		// JSON columns can contain any type, but we'll represent as string
-		// since the actual JSON is decoded into structured data
-		// A more sophisticated approach would be to infer schema from actual data
-		commonType = schema.String
+		// JSON columns contain arbitrary structured data with no static schema.
+		// schema.Any signals to downstream consumers (e.g. parquet_encode) that
+		// the field type is unknown; they must handle Any explicitly or return an
+		// actionable error prompting the user to add a type-conversion step.
+		commonType = schema.Any
 	case gomysqlschema.TYPE_POINT:
 		// Geometric types - treating as binary for now
 		commonType = schema.ByteArray

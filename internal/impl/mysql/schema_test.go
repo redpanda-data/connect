@@ -146,7 +146,7 @@ func TestMysqlColumnToCommon(t *testing.T) {
 				Type:    gomysqlschema.TYPE_JSON,
 				RawType: "json",
 			},
-			expectedType: schema.String,
+			expectedType: schema.Any,
 			expectedName: "metadata",
 			hasChildren:  false,
 		},
