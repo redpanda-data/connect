@@ -111,7 +111,7 @@ func ecsAvroTypeToCommon(t string) schema.CommonType {
 	case "array":
 		return schema.Array
 	}
-	return schema.CommonType(-1)
+	return schema.Any
 }
 
 func ecsAvroHydrateRawUnion(cfg ecsAvroConfig, c *schema.Common, types []any) error {
