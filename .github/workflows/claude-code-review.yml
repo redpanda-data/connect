@@ -13,29 +13,6 @@ jobs:
       id-token: write
 
     steps:
-      - name: Checkout base branch for prompt
-        uses: actions/checkout@v4
-        with:
-          ref: main
-          fetch-depth: 1
-          persist-credentials: false
-          sparse-checkout: .claude/commands/review.md
-          path: base-branch
-
-      - name: Load review prompt from base branch
-        id: prompt
-        run: |
-          if [ ! -f base-branch/.claude/commands/review.md ]; then
-            echo "Error: review.md not found in base branch" >&2
-            exit 1
-          fi
-          # Strip YAML front matter and substitute the PR number
-          PROMPT=$(sed '1,/^---$/d; 1,/^---$/d' base-branch/.claude/commands/review.md)
-          PROMPT="${PROMPT//\{\{pr\}\}/${{ github.event.pull_request.number }}}"
-          echo "content<<EOF" >> "$GITHUB_OUTPUT"
-          echo "$PROMPT" >> "$GITHUB_OUTPUT"
-          echo "EOF" >> "$GITHUB_OUTPUT"
-
       - name: Checkout PR code
         uses: actions/checkout@v4
         with:
@@ -62,4 +39,7 @@ jobs:
               Bash(git log *),
               Bash(git show *),
               Bash(git diff *)"
-          prompt: ${{ steps.prompt.outputs.content }}
+          prompt: >
+            Read the file .claude/commands/review.md (skip the YAML front matter
+            between the --- delimiters). Follow those instructions to review pull
+            request ${{ github.event.pull_request.number }}.
