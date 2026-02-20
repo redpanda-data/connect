@@ -256,6 +256,11 @@ func (a *amqp1Writer) Connect(ctx context.Context) (err error) {
 	}
 
 	// Create a sender
+	// When targetAddr is empty (""), this creates an anonymous terminus pattern
+	// where the destination is specified per-message via message.Properties.To.
+	// Note: go-amqp v1.5.0 creates an omitted target address rather than an
+	// explicit null target as specified in AMQP 1.0 spec section 2.6.12.
+	// Most mainstream brokers (ActiveMQ, Azure Service Bus) accept both forms.
 	if sender, err = session.NewSender(ctx, a.targetAddr, a.senderOpts); err != nil {
 		_ = session.Close(ctx)
 		_ = client.Close()
