@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 
 - Add configuration option to set client name for `redis` connections.
 - (Benthos) The `command` processor now emits the `exit_code` metadata field. (@mihaitodor)
+- The `postgres_cdc` input now adds schema metadata to consumed messages, this can be used for automatic schema conversion in processors such as `schema_registry_encode`. (@Jeffail)
 
 ### Changed
 
