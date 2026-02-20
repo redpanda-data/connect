@@ -9,12 +9,10 @@
 package sqlredo
 
 import (
-	"reflect"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestConvertDateValue(t *testing.T) {
@@ -55,10 +53,7 @@ func TestConvertDateValue(t *testing.T) {
 				assert.Nil(t, result)
 				return
 			}
-
-			gotTime, ok := result.(time.Time)
-			require.True(t, ok, "expected time.Time, got %T", result)
-			assert.True(t, gotTime.Equal(tt.wantTime), "got %v, want %v", gotTime, tt.wantTime)
+			assert.Equal(t, tt.wantTime, result)
 		})
 	}
 }
@@ -116,10 +111,7 @@ func TestConvertTimestampValue(t *testing.T) {
 				assert.Nil(t, result)
 				return
 			}
-
-			gotTime, ok := result.(time.Time)
-			require.True(t, ok, "expected time.Time, got %T", result)
-			assert.True(t, gotTime.Equal(tt.wantTime), "got %v, want %v", gotTime, tt.wantTime)
+			assert.Equal(t, tt.wantTime, result)
 		})
 	}
 }
@@ -162,9 +154,11 @@ func TestConvertTimestampWithZone(t *testing.T) {
 				assert.Nil(t, result)
 				return
 			}
-
+			// convertTimestampWithZone preserves the parsed timezone rather than
+			// normalising to UTC, so compare the instant with time.Equal rather
+			// than the full time.Time value (which includes the location).
 			gotTime, ok := result.(time.Time)
-			require.True(t, ok, "expected time.Time, got %T", result)
+			assert.True(t, ok, "expected time.Time, got %T", result)
 			assert.True(t, gotTime.Equal(tt.wantTime), "got %v, want %v", gotTime, tt.wantTime)
 		})
 	}
@@ -199,15 +193,10 @@ func TestConvertRawValue(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := converter.convertRawValue(tt.input)
-
 			if tt.wantBytes != nil {
-				gotBytes, ok := result.([]byte)
-				require.True(t, ok, "expected []byte, got %T", result)
-				assert.Equal(t, tt.wantBytes, gotBytes)
+				assert.Equal(t, tt.wantBytes, result)
 			} else {
-				gotStr, ok := result.(string)
-				require.True(t, ok, "expected string, got %T", result)
-				assert.Equal(t, tt.wantStr, gotStr)
+				assert.Equal(t, tt.wantStr, result)
 			}
 		})
 	}
@@ -217,10 +206,10 @@ func TestConvertLobValue(t *testing.T) {
 	converter := NewOracleValueConverter(time.UTC)
 
 	tests := []struct {
-		name       string
-		input      string
-		wantEmpty  bool
-		wantString bool
+		name      string
+		input     string
+		wantEmpty bool
+		wantStr   string
 	}{
 		{
 			name:      "EMPTY_CLOB()",
@@ -233,24 +222,20 @@ func TestConvertLobValue(t *testing.T) {
 			wantEmpty: true,
 		},
 		{
-			name:       "regular string",
-			input:      "some text",
-			wantString: true,
+			name:    "regular string",
+			input:   "some text",
+			wantStr: "some text",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := converter.convertLobValue(tt.input)
-
 			if tt.wantEmpty {
-				bytes, ok := result.([]byte)
-				require.True(t, ok, "expected []byte, got %T", result)
-				assert.Empty(t, bytes)
-			} else if tt.wantString {
-				str, ok := result.(string)
-				require.True(t, ok, "expected string, got %T", result)
-				assert.Equal(t, tt.input, str)
+				assert.IsType(t, []byte{}, result)
+				assert.Empty(t, result)
+			} else {
+				assert.Equal(t, tt.wantStr, result)
 			}
 		})
 	}
@@ -263,56 +248,48 @@ func TestConvertValue(t *testing.T) {
 		name       string
 		input      any
 		columnType string
-		wantType   string
 		wantValue  any
 	}{
 		{
 			name:       "DATE column with TO_DATE",
 			input:      "TO_DATE('2020-01-15','YYYY-MM-DD')",
 			columnType: "DATE",
-			wantType:   "time.Time",
 			wantValue:  time.Date(2020, 1, 15, 0, 0, 0, 0, time.UTC),
 		},
 		{
 			name:       "TIMESTAMP column with TO_TIMESTAMP",
 			input:      "TO_TIMESTAMP('2020-01-15 10:30:00','YYYY-MM-DD HH24:MI:SS')",
 			columnType: "TIMESTAMP",
-			wantType:   "time.Time",
 			wantValue:  time.Date(2020, 1, 15, 10, 30, 0, 0, time.UTC),
 		},
 		{
 			name:       "VARCHAR2 with regular string",
 			input:      "Hello World",
 			columnType: "VARCHAR2",
-			wantType:   "string",
 			wantValue:  "Hello World",
 		},
 		{
 			name:       "NUMBER with integer",
 			input:      "123",
 			columnType: "NUMBER",
-			wantType:   "int64",
 			wantValue:  int64(123),
 		},
 		{
 			name:       "NUMBER with float",
 			input:      "123.456",
 			columnType: "NUMBER",
-			wantType:   "float64",
 			wantValue:  123.456,
 		},
 		{
 			name:       "RAW with HEXTORAW",
 			input:      "HEXTORAW('48656C6C6F')",
 			columnType: "RAW",
-			wantType:   "[]uint8",
 			wantValue:  []byte("Hello"),
 		},
 		{
 			name:       "non-string value passes through",
 			input:      123,
 			columnType: "NUMBER",
-			wantType:   "int",
 			wantValue:  123,
 		},
 	}
@@ -320,130 +297,8 @@ func TestConvertValue(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := converter.ConvertValue(tt.input, tt.columnType)
-
-			resultType := reflect.TypeOf(result).String()
-			assert.Equal(t, tt.wantType, resultType)
-
-			// For time.Time, use Equal method
-			if wantTime, ok := tt.wantValue.(time.Time); ok {
-				gotTime, ok := result.(time.Time)
-				require.True(t, ok, "expected time.Time, got %T", result)
-				assert.True(t, gotTime.Equal(wantTime), "got %v, want %v", gotTime, wantTime)
-			} else {
-				assert.Equal(t, tt.wantValue, result)
-			}
-		})
-	}
-}
-
-func TestToKafkaValue(t *testing.T) {
-	converter := NewOracleValueConverter(time.UTC)
-	timestamp := time.Date(2020, 1, 15, 10, 30, 0, 123456789, time.UTC)
-
-	tests := []struct {
-		name          string
-		input         any
-		columnType    string
-		precisionMode temporalPrecisionMode
-		wantValue     any
-	}{
-		{
-			name:          "timestamp to milliseconds",
-			input:         timestamp,
-			columnType:    "TIMESTAMP",
-			precisionMode: temporalPrecisionConnect,
-			wantValue:     int64(1579084200123),
-		},
-		{
-			name:          "timestamp to microseconds",
-			input:         timestamp,
-			columnType:    "TIMESTAMP",
-			precisionMode: temporalPrecisionAdaptiveTimeMicros,
-			wantValue:     int64(1579084200123456),
-		},
-		{
-			name:          "timestamp to nanoseconds",
-			input:         timestamp,
-			columnType:    "TIMESTAMP",
-			precisionMode: temporalPrecisionAdaptive,
-			wantValue:     int64(1579084200123456789),
-		},
-		{
-			name:          "byte array to hex string",
-			input:         []byte{0x48, 0x65, 0x6C, 0x6C, 0x6F},
-			columnType:    "RAW",
-			precisionMode: temporalPrecisionConnect,
-			wantValue:     "48656c6c6f",
-		},
-		{
-			name:          "string passes through",
-			input:         "Hello World",
-			columnType:    "VARCHAR2",
-			precisionMode: temporalPrecisionConnect,
-			wantValue:     "Hello World",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := converter.ToKafkaValue(tt.input, tt.columnType, tt.precisionMode)
+			assert.IsType(t, tt.wantValue, result)
 			assert.Equal(t, tt.wantValue, result)
-		})
-	}
-}
-
-func TestIsOracleFunctionCall(t *testing.T) {
-	tests := []struct {
-		name  string
-		input string
-		want  bool
-	}{
-		{
-			name:  "TO_DATE",
-			input: "TO_DATE('2020-01-15','YYYY-MM-DD')",
-			want:  true,
-		},
-		{
-			name:  "TO_TIMESTAMP",
-			input: "TO_TIMESTAMP('2020-01-15 10:30:00')",
-			want:  true,
-		},
-		{
-			name:  "TO_TIMESTAMP_TZ",
-			input: "TO_TIMESTAMP_TZ('2020-01-15 10:30:00 +00:00')",
-			want:  true,
-		},
-		{
-			name:  "HEXTORAW",
-			input: "HEXTORAW('48656C6C6F')",
-			want:  true,
-		},
-		{
-			name:  "EMPTY_CLOB",
-			input: "EMPTY_CLOB()",
-			want:  true,
-		},
-		{
-			name:  "EMPTY_BLOB",
-			input: "EMPTY_BLOB()",
-			want:  true,
-		},
-		{
-			name:  "regular string",
-			input: "Hello World",
-			want:  false,
-		},
-		{
-			name:  "date-like string",
-			input: "2020-01-15",
-			want:  false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := IsOracleFunctionCall(tt.input)
-			assert.Equal(t, tt.want, got)
 		})
 	}
 }

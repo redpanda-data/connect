@@ -9,8 +9,10 @@
 package sqlredo_test
 
 import (
-	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/oracledb/logminer/sqlredo"
 )
@@ -76,30 +78,34 @@ func TestParseTest(t *testing.T) {
 				"ORDER_DATE": "TO_DATE('2020-01-15', 'YYYY-MM-DD')",
 			},
 		},
+		{
+			// Regression: a single quote inside a double-quoted Oracle identifier (e.g.
+			// "O'Brien") must not toggle inSingleQuote. Without the fix the parser treats
+			// all characters after the quote as inside a string literal, corrupting the
+			// column names and values that follow.
+			name: "INSERT with single quote inside double-quoted table name",
+			sql:  `insert into "MYAPP"."O'Brien" ("ID","NAME") values ('1','Alice')`,
+			wantNewValues: map[string]any{
+				"ID":   "1",
+				"NAME": "Alice",
+			},
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			stmt, err := sqlredo.ParseSQLCommand(tt.sql)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("ParseSQLCommand2() error = %v, wantErr %v", err, tt.wantErr)
+			if tt.wantErr {
+				require.Error(t, err)
 				return
 			}
-			if err != nil {
-				return
-			}
+			require.NoError(t, err)
 
 			newValues, oldValues, err := sqlredo.ExtractValuesFromAST(stmt)
-			if err != nil {
-				t.Fatalf("ExtractValuesFromAST() error = %v", err)
-			}
+			require.NoError(t, err)
 
-			if !reflect.DeepEqual(newValues, tt.wantNewValues) {
-				t.Errorf("newValues = %v, want %v", newValues, tt.wantNewValues)
-			}
-			if !reflect.DeepEqual(oldValues, tt.wantOldValues) {
-				t.Errorf("oldValues = %v, want %v", oldValues, tt.wantOldValues)
-			}
+			assert.Equal(t, tt.wantNewValues, newValues)
+			assert.Equal(t, tt.wantOldValues, oldValues)
 		})
 	}
 }

@@ -28,18 +28,18 @@ import (
 )
 
 const (
-	fieldConnectionString          = "connection_string"
-	fieldStreamSnapshot            = "stream_snapshot"
-	fieldMaxParallelSnapshotTables = "max_parallel_snapshot_tables"
-	fieldSnapshotMaxBatchSize      = "snapshot_max_batch_size"
-	fieldLogMiner                  = "logminer"
-	fieldTablesExclude             = "exclude"
-	fieldTablesInclude             = "include"
-	fieldCheckpointLimit           = "checkpoint_limit"
-	fieldCheckpointCache           = "checkpoint_cache"
-	fieldCheckpointCacheKey        = "checkpoint_cache_key"
-	fieldCheckpointCacheTableName  = "checkpoint_cache_table_name"
-	fieldBatching                  = "batching"
+	ociFieldConnectionString          = "connection_string"
+	ociFieldStreamSnapshot            = "stream_snapshot"
+	ociFieldMaxParallelSnapshotTables = "max_parallel_snapshot_tables"
+	ociFieldSnapshotMaxBatchSize      = "snapshot_max_batch_size"
+	ociFieldLogMiner                  = "logminer"
+	ociFieldTablesExclude             = "exclude"
+	ociFieldTablesInclude             = "include"
+	ociFieldCheckpointLimit           = "checkpoint_limit"
+	ociFieldCheckpointCache           = "checkpoint_cache"
+	ociFieldCheckpointCacheKey        = "checkpoint_cache_key"
+	ociFieldCheckpointCacheTableName  = "checkpoint_cache_table_name"
+	ociFieldBatching                  = "batching"
 
 	shutdownTimeout = 5 * time.Second
 )
@@ -54,7 +54,7 @@ var oracleDBStreamConfigSpec = service.NewConfigSpec().
 	Version("0.0.1").
 	Summary("Enables Change Data Capture by consuming from OracleDB.").
 	Description(`Streams changes from an Oracle database for Change Data Capture (CDC).
-Additionally, if ` + "`" + fieldStreamSnapshot + "`" + ` is set to true, then the existing data in the database is also streamed too.
+Additionally, if ` + "`" + ociFieldStreamSnapshot + "`" + ` is set to true, then the existing data in the database is also streamed too.
 
 == Metadata
 
@@ -66,25 +66,25 @@ This input adds the following metadata fields to each message:
 
 == Permissions
 
-When using the default Oracle based cache, the Connect user requires permission to create tables and stored procedures, and the ` + "rpcn" + `  schema must already exist. Refer to ` + "`" + fieldCheckpointCacheTableName + "`" + ` for more information.
+When using the default Oracle based cache, the Connect user requires permission to create tables and stored procedures, and the ` + "rpcn" + `  schema must already exist. Refer to ` + "`" + ociFieldCheckpointCacheTableName + "`" + ` for more information.
 		`).
-	Field(service.NewStringField(fieldConnectionString).
+	Field(service.NewStringField(ociFieldConnectionString).
 		Description("The connection string of the Oracle database to connect to.").
 		Example("oracle://username:password@host:port/service_name"),
 	).
-	Field(service.NewBoolField(fieldStreamSnapshot).
+	Field(service.NewBoolField(ociFieldStreamSnapshot).
 		Description("If set to true, the connector will query all the existing data as a part of snapshot process. Otherwise, it will start from the current System Change Number position.").
 		Example(true).
 		Default(false),
 	).
-	Field(service.NewIntField(fieldMaxParallelSnapshotTables).
+	Field(service.NewIntField(ociFieldMaxParallelSnapshotTables).
 		Description("Specifies a number of tables that will be processed in parallel during the snapshot processing stage.").
 		Default(1)).
-	Field(service.NewIntField(fieldSnapshotMaxBatchSize).
+	Field(service.NewIntField(ociFieldSnapshotMaxBatchSize).
 		Description("The maximum number of rows to be streamed in a single batch when taking a snapshot.").
 		Default(1000),
 	).
-	Field(service.NewObjectField(fieldLogMiner,
+	Field(service.NewObjectField(ociFieldLogMiner,
 		service.NewIntField(logminer.FieldMaxBatchSize).
 			Description("The maximum number of records to be queried when parsing log lines via LogMiner. Smaller batches mean more frequent queries with higher overhead but lower latency, larger batches mean fewer queries with better throughput but require more memory.").
 			Default(logminer.DefaultMaxBatchSize),
@@ -96,36 +96,36 @@ When using the default Oracle based cache, the Connect user requires permission 
 			Description("Controls how LogMiner retrieves data dictionary information. `online_catalog` (default) uses the current data dictionary for best performance but cannot capture DDL changes. `online_catalog` currently only supported.").
 			Default(logminer.DefaultMiningStrategy),
 	).Description("LogMiner configuration settings.").Optional()).
-	Field(service.NewStringListField(fieldTablesInclude).
+	Field(service.NewStringListField(ociFieldTablesInclude).
 		Description("Regular expressions for tables to include.").
 		Example("SCHEMA.PRODUCTS"),
 	).
-	Field(service.NewStringListField(fieldTablesExclude).
+	Field(service.NewStringListField(ociFieldTablesExclude).
 		Description("Regular expressions for tables to exclude.").
 		Example("SCHEMA.PRIVATETABLE").
 		Optional(),
 	).
-	Field(service.NewStringField(fieldCheckpointCache).
-		Description("A https://www.docs.redpanda.com/redpanda-connect/components/caches/about[cache resource^] to use for storing the current System Change Number (SCN) that has been successfully delivered, this allows Redpanda Connect to continue from that System Change Number (SCN) upon restart, rather than consume the entire state of OracleDB's redo logs. If not set the default Oracle based cache will be used, see `" + fieldCheckpointCacheTableName + "` for more information.").
+	Field(service.NewStringField(ociFieldCheckpointCache).
+		Description("A https://www.docs.redpanda.com/redpanda-connect/components/caches/about[cache resource^] to use for storing the current System Change Number (SCN) that has been successfully delivered, this allows Redpanda Connect to continue from that System Change Number (SCN) upon restart, rather than consume the entire state of OracleDB's redo logs. If not set the default Oracle based cache will be used, see `" + ociFieldCheckpointCacheTableName + "` for more information.").
 		Optional(),
 	).
-	Field(service.NewStringField(fieldCheckpointCacheTableName).
-		Description("The identifier for the checkpoint cache table name. If no `" + fieldCheckpointCache + "` field is specified, this input will automatically create a table and stored procedure under the `rpcn` schema to act as a checkpoint cache. This table stores the latest processed System Change Number (SCN) that has been successfully delivered, allowing Redpanda Connect to resume from that point upon restart rather than reconsume the entire redo log.").
+	Field(service.NewStringField(ociFieldCheckpointCacheTableName).
+		Description("The identifier for the checkpoint cache table name. If no `" + ociFieldCheckpointCache + "` field is specified, this input will automatically create a table and stored procedure under the `rpcn` schema to act as a checkpoint cache. This table stores the latest processed System Change Number (SCN) that has been successfully delivered, allowing Redpanda Connect to resume from that point upon restart rather than reconsume the entire redo log.").
 		Default(defaultCheckpointCache).
 		Example("RPCN.CHECKPOINT_CACHE").
 		Optional(),
 	).
-	Field(service.NewStringField(fieldCheckpointCacheKey).
-		Description("The key to use to store the snapshot position in `" + fieldCheckpointCache + "`. An alternative key can be provided if multiple CDC inputs share the same cache.").
+	Field(service.NewStringField(ociFieldCheckpointCacheKey).
+		Description("The key to use to store the snapshot position in `" + ociFieldCheckpointCache + "`. An alternative key can be provided if multiple CDC inputs share the same cache.").
 		Default("oracledb_cdc").
 		Optional(),
 	).
-	Field(service.NewIntField(fieldCheckpointLimit).
+	Field(service.NewIntField(ociFieldCheckpointLimit).
 		Description("The maximum number of messages that can be processed at a given time. Increasing this limit enables parallel processing and batching at the output level. Any given System Change Number (SCN) will not be acknowledged unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.").
 		Default(1024),
 	).
 	Field(service.NewAutoRetryNacksToggleField()).
-	Field(service.NewBatchPolicyField(fieldBatching))
+	Field(service.NewBatchPolicyField(ociFieldBatching))
 
 type asyncMessage struct {
 	msg   service.MessageBatch
@@ -159,10 +159,11 @@ type oracleDBCDCInput struct {
 
 func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resources) (s service.BatchInput, err error) {
 	var (
-		connectionString             string
-		streamSnapshot               bool
-		snapshotMaxWorkers           int
-		snapshotMaxBatchSize         int
+		connectionString     string
+		streamSnapshot       bool
+		snapshotMaxWorkers   int
+		snapshotMaxBatchSize int
+
 		scnCache, scnCacheKey        string
 		tableIncludes, tableExcludes []*regexp.Regexp
 		batcher                      *service.Batcher
@@ -175,21 +176,22 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 	if err := license.CheckRunningEnterprise(resources); err != nil {
 		return nil, err
 	}
-	if connectionString, err = conf.FieldString(fieldConnectionString); err != nil {
+	if connectionString, err = conf.FieldString(ociFieldConnectionString); err != nil {
 		return nil, err
 	}
-	if streamSnapshot, err = conf.FieldBool(fieldStreamSnapshot); err != nil {
+	if streamSnapshot, err = conf.FieldBool(ociFieldStreamSnapshot); err != nil {
 		return nil, err
 	}
-	if snapshotMaxWorkers, err = conf.FieldInt(fieldMaxParallelSnapshotTables); err != nil {
+	if snapshotMaxWorkers, err = conf.FieldInt(ociFieldMaxParallelSnapshotTables); err != nil {
 		return nil, err
 	}
-	if snapshotMaxBatchSize, err = conf.FieldInt(fieldSnapshotMaxBatchSize); err != nil {
+	if snapshotMaxBatchSize, err = conf.FieldInt(ociFieldSnapshotMaxBatchSize); err != nil {
 		return nil, err
 	}
+
 	// logminer
-	if conf.Contains(fieldLogMiner) {
-		lmConf := conf.Namespace(fieldLogMiner)
+	if conf.Contains(ociFieldLogMiner) {
+		lmConf := conf.Namespace(ociFieldLogMiner)
 		lmCfg = logminer.NewDefaultConfig()
 		if lmCfg.MaxBatchSize, err = lmConf.FieldInt(logminer.FieldMaxBatchSize); err != nil {
 			return nil, err
@@ -203,44 +205,46 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 			lmCfg.MiningStrategy = logminer.MiningStrategy(strategy)
 		}
 	}
+
 	// tables
-	if includes, err := conf.FieldStringList(fieldTablesInclude); err != nil {
+	if includes, err := conf.FieldStringList(ociFieldTablesInclude); err != nil {
 		return nil, err
 	} else if tableIncludes, err = confx.ParseRegexpPatterns(includes); err != nil {
 		return nil, err
 	}
-	if excludes, err := conf.FieldStringList(fieldTablesExclude); err != nil {
+	if excludes, err := conf.FieldStringList(ociFieldTablesExclude); err != nil {
 		return nil, err
 	} else if tableExcludes, err = confx.ParseRegexpPatterns(excludes); err != nil {
 		return nil, err
 	}
+
 	// cache
 	// if no cache component is specified then we fallback to default sql based version
-	if conf.Contains(fieldCheckpointCache) {
-		if scnCache, err = conf.FieldString(fieldCheckpointCache); err != nil {
+	if conf.Contains(ociFieldCheckpointCache) {
+		if scnCache, err = conf.FieldString(ociFieldCheckpointCache); err != nil {
 			return nil, err
 		}
 		if conf.Resources().HasCache(scnCache) {
-			if scnCacheKey, err = conf.FieldString(fieldCheckpointCacheKey); err != nil {
+			if scnCacheKey, err = conf.FieldString(ociFieldCheckpointCacheKey); err != nil {
 				return nil, err
 			}
 		}
 	}
 
-	if cpCacheTableName, err = conf.FieldString(fieldCheckpointCacheTableName); err != nil {
+	if cpCacheTableName, err = conf.FieldString(ociFieldCheckpointCacheTableName); err != nil {
 		return nil, err
 	}
 
 	// checkpointing
 	var checkpointLimit int
-	if checkpointLimit, err = conf.FieldInt(fieldCheckpointLimit); err != nil {
+	if checkpointLimit, err = conf.FieldInt(ociFieldCheckpointLimit); err != nil {
 		return nil, err
 	}
 	cp = checkpoint.NewCapped[replication.SCN](int64(checkpointLimit))
 
 	// batching
 	var policy service.BatchPolicy
-	if policy, err = conf.FieldBatchPolicy(fieldBatching); err != nil {
+	if policy, err = conf.FieldBatchPolicy(ociFieldBatching); err != nil {
 		return nil, err
 	} else if policy.IsNoop() {
 		policy.Count = 1
@@ -274,16 +278,14 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 		cpCache:   cpCache,
 	}
 
+	defer func() {
+		if err != nil {
+			i.publisher.Close()
+		}
+	}()
+
 	i.publisher.cacheSCN = func(ctx context.Context, scn replication.SCN) error {
 		return i.cacheSCN(ctx, scn)
-	}
-
-	// no cache specified so use default, internal oracle based cache
-	if i.cfg.scnCache == "" {
-		// setup internal cache
-		if i.cpCache, err = newCheckpointCache(context.Background(), i.cfg.connectionString, i.cfg.cpCacheTableName, i.log); err != nil {
-			return nil, fmt.Errorf("initialising oracle based checkpoint cache: %w", err)
-		}
 	}
 
 	// Has stopped is how we notify that we're not connected. This will get reset at connection time.
@@ -297,33 +299,46 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 	return conf.WrapBatchInputExtractTracingSpanMapping("oracledb_cdc", batchInput)
 }
 
-func (i *oracleDBCDCInput) Connect(ctx context.Context) error {
+func (i *oracleDBCDCInput) Connect(ctx context.Context) (err error) {
 	var (
-		err        error
 		userTables []replication.UserTable
 		cachedSCN  replication.SCN
 	)
 	if i.db, err = sql.Open("oracle", i.cfg.connectionString); err != nil {
-		return fmt.Errorf("failed to connect to oracle database: %w", err)
+		return fmt.Errorf("connecting to oracle database: %w", err)
+	}
+	defer func() {
+		if err != nil {
+			_ = i.db.Close()
+		}
+	}()
+
+	// no cache specified so use default, internal oracle based cache
+	if i.cfg.scnCache == "" {
+		// setup internal cache
+		if i.cpCache, err = newCheckpointCache(ctx, i.cfg.connectionString, i.cfg.cpCacheTableName, i.log); err != nil {
+			return fmt.Errorf("initialising oracle based checkpoint cache: %w", err)
+		}
 	}
 
 	if userTables, err = replication.VerifyUserTables(ctx, i.db, i.cfg.tablesFilter, i.log); err != nil {
 		return fmt.Errorf("verifying user defined tables: %w", err)
 	}
+
 	if cachedSCN, err = i.getCachedSCN(ctx); err != nil {
 		if errors.Is(err, service.ErrKeyNotFound) {
 			i.log.Infof("No SCN found in checkpoint cache")
 			cachedSCN = replication.InvalidSCN
 		} else {
-			return fmt.Errorf("unable to get cached SCN: %w", err)
+			return fmt.Errorf("getting cached SCN: %w", err)
 		}
 	} else {
 		switch {
 		case cachedSCN != replication.InvalidSCN:
 			i.log.Infof("Resuming from cached SCN value: %d", cachedSCN)
 		default:
-			// TODO: Consider what states could exist, should we error here and fail fast?
-			i.log.Info("Unable to restore SCN from cache, reverting to oldest found in database")
+			// this is an edgecase, but re-snapshotting is the best solution here if/should this state be possible.
+			return errors.New("unable to restore SCN from cache, consider clearing checkpoint cache and running snapshot to avoid missing data")
 		}
 	}
 
@@ -343,6 +358,11 @@ func (i *oracleDBCDCInput) Connect(ctx context.Context) error {
 		if snapshotter, err = replication.NewSnapshot(ctx, i.cfg.connectionString, userTables, i.publisher, i.log, i.metrics); err != nil {
 			return fmt.Errorf("creating database snapshotter: %w", err)
 		}
+		defer func() {
+			if err != nil {
+				_ = snapshotter.Close()
+			}
+		}()
 	} else {
 		i.log.Infof("Snapshotting disabled, skipping...")
 	}
@@ -365,6 +385,7 @@ func (i *oracleDBCDCInput) Connect(ctx context.Context) error {
 
 		// snapshot if no SCN exists then store checkpoint once complete
 		if snapshotter != nil {
+			defer snapshotter.Close()
 			if maxSCN, err = i.processSnapshot(softCtx, snapshotter); err != nil {
 				if i.stopSig.IsHardStopSignalled() {
 					i.log.Errorf("Shutting down snapshotting process: %s", err)
@@ -430,21 +451,21 @@ func (i *oracleDBCDCInput) getCachedSCN(ctx context.Context) (replication.SCN, e
 		if err := i.res.AccessCache(ctx, i.cfg.scnCache, func(c service.Cache) {
 			cacheVal, cErr = c.Get(ctx, i.cfg.scnCacheKey)
 		}); err != nil {
-			return replication.InvalidSCN, fmt.Errorf("unable to access cache for reading: %w", err)
+			return replication.InvalidSCN, fmt.Errorf("accessing cache for reading: %w", err)
 		}
 	}
 
 	if errors.Is(cErr, service.ErrKeyNotFound) {
 		return replication.InvalidSCN, service.ErrKeyNotFound
 	} else if cErr != nil {
-		return replication.InvalidSCN, fmt.Errorf("unable read checkpoint from cache: %w", cErr)
+		return replication.InvalidSCN, fmt.Errorf("reading checkpoint from cache: %w", cErr)
 	} else if len(cacheVal) == 0 {
 		return replication.InvalidSCN, errors.New("empty SCN cache value")
 	}
 
 	scn, err := replication.SCNFromBytes(cacheVal)
 	if err != nil {
-		return replication.InvalidSCN, fmt.Errorf("unable to parse SCN from cache: %w", err)
+		return replication.InvalidSCN, fmt.Errorf("parsing SCN from cache: %w", err)
 	}
 	return scn, nil
 }
@@ -463,12 +484,12 @@ func (i *oracleDBCDCInput) cacheSCN(ctx context.Context, scn replication.SCN) er
 		if err := i.res.AccessCache(ctx, i.cfg.scnCache, func(c service.Cache) {
 			cErr = c.Set(ctx, i.cfg.scnCacheKey, scn.Bytes(), nil)
 		}); err != nil {
-			return fmt.Errorf("unable to access cache for writing: %w", err)
+			return fmt.Errorf("accessing cache for writing: %w", err)
 		}
 	}
 
 	if cErr != nil {
-		return fmt.Errorf("unable persist checkpoint to cache: %w", cErr)
+		return fmt.Errorf("persisting checkpoint to cache: %w", cErr)
 	}
 	return nil
 }
@@ -522,6 +543,10 @@ func (i *oracleDBCDCInput) Close(ctx context.Context) error {
 	case <-time.After(shutdownTimeout):
 		i.log.Error("failed to shutdown 'oracledb_cdc' component within the timeout")
 	case <-i.stopSig.HasStoppedChan():
+	}
+
+	if i.publisher != nil {
+		i.publisher.Close()
 	}
 
 	// Close both resources and combine errors to avoid resource leaks

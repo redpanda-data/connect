@@ -9,7 +9,6 @@
 package sqlredo
 
 import (
-	"encoding/hex"
 	"regexp"
 	"strconv"
 	"strings"
@@ -205,12 +204,10 @@ func (*OracleValueConverter) convertLobValue(value string) any {
 
 // convertNumericValue attempts to parse numeric values
 func (*OracleValueConverter) convertNumericValue(value string) any {
-	// Try integer first
 	if i, err := strconv.ParseInt(value, 10, 64); err == nil {
 		return i
 	}
 
-	// Try float
 	if f, err := strconv.ParseFloat(value, 64); err == nil {
 		return f
 	}
@@ -255,55 +252,4 @@ func (*OracleValueConverter) oracleFormatToGo(oracleFormat string) string {
 	}
 
 	return result
-}
-
-// ConvertValueToKafkaFormat converts a value to the format expected by Kafka Connect
-// This mimics Debezium's behavior for different temporal precision modes
-type temporalPrecisionMode string
-
-const (
-	temporalPrecisionAdaptive           temporalPrecisionMode = "adaptive"
-	temporalPrecisionAdaptiveTimeMicros temporalPrecisionMode = "adaptive_time_microseconds"
-	temporalPrecisionConnect            temporalPrecisionMode = "connect"
-)
-
-// ToKafkaValue converts a Go value to Kafka Connect format
-// For timestamps, this converts to epoch milliseconds/microseconds/nanoseconds
-func (*OracleValueConverter) ToKafkaValue(value any, _ string, precisionMode temporalPrecisionMode) any {
-	switch v := value.(type) {
-	case time.Time:
-		switch precisionMode {
-		case temporalPrecisionAdaptiveTimeMicros:
-			return v.UnixMicro() // Microseconds since epoch
-		case temporalPrecisionConnect:
-			return v.UnixMilli() // Milliseconds since epoch
-		default:
-			return v.UnixNano() // Nanoseconds since epoch
-		}
-	case []byte:
-		// Return as base64 or hex string for JSON serialization
-		return hex.EncodeToString(v)
-	default:
-		return value
-	}
-}
-
-// IsOracleFunctionCall checks if a string value is an Oracle function call
-func IsOracleFunctionCall(value string) bool {
-	if toTimestampPattern.MatchString(value) {
-		return true
-	}
-	if toDatePattern.MatchString(value) {
-		return true
-	}
-	if toTimestampTzPattern.MatchString(value) {
-		return true
-	}
-	if hexToRawPattern.MatchString(value) {
-		return true
-	}
-	if emptyLobPattern.MatchString(value) {
-		return true
-	}
-	return false
 }
