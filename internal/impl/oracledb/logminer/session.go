@@ -9,6 +9,7 @@
 package logminer
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"strings"
@@ -46,7 +47,7 @@ func NewSessionManager(db *sql.DB, cfg *Config) *SessionManager {
 // AddLogFile adds a redo log file to the LogMiner session for mining.
 // If isFirst is true, it clears any previously added files before adding this one.
 // Otherwise, it adds the file to the existing list of files to be mined.
-func (sm *SessionManager) AddLogFile(filename string, isFirst bool) error {
+func (sm *SessionManager) AddLogFile(ctx context.Context, filename string, isFirst bool) error {
 	var opt string
 	if isFirst {
 		opt = "DBMS_LOGMNR.NEW" // Clears previous files and adds this one
@@ -55,7 +56,7 @@ func (sm *SessionManager) AddLogFile(filename string, isFirst bool) error {
 	}
 
 	q := fmt.Sprintf("BEGIN DBMS_LOGMNR.ADD_LOGFILE(LOGFILENAME => :1, OPTIONS => %s); END;", opt)
-	if _, err := sm.db.Exec(q, filename); err != nil {
+	if _, err := sm.db.ExecContext(ctx, q, filename); err != nil {
 		return fmt.Errorf("adding logminer log file '%s' with option '%s': %w", filename, opt, err)
 	}
 
@@ -63,7 +64,7 @@ func (sm *SessionManager) AddLogFile(filename string, isFirst bool) error {
 }
 
 // StartSession starts a LogMiner session with ONLINE_CATALOG strategy
-func (sm *SessionManager) StartSession(startSCN, endSCN uint64, committedDataOnly bool) error {
+func (sm *SessionManager) StartSession(ctx context.Context, startSCN, endSCN uint64, committedDataOnly bool) error {
 	opts := make([]string, 0, len(sm.opts))
 	opts = append(opts, sm.opts...)
 
@@ -74,7 +75,7 @@ func (sm *SessionManager) StartSession(startSCN, endSCN uint64, committedDataOnl
 	optionsStr := strings.Join(opts, " + ")
 
 	q := fmt.Sprintf("BEGIN SYS.DBMS_LOGMNR.START_LOGMNR(STARTSCN => %d, ENDSCN => %d, OPTIONS => %s); END;", startSCN, endSCN, optionsStr)
-	if _, err := sm.db.Exec(q); err != nil {
+	if _, err := sm.db.ExecContext(ctx, q); err != nil {
 		return fmt.Errorf("starting logminer session: %w", err)
 	}
 
@@ -82,8 +83,8 @@ func (sm *SessionManager) StartSession(startSCN, endSCN uint64, committedDataOnl
 }
 
 // EndSession ends the current LogMiner session
-func (sm *SessionManager) EndSession() error {
-	if _, err := sm.db.Exec("BEGIN SYS.DBMS_LOGMNR.END_LOGMNR(); END;"); err != nil {
+func (sm *SessionManager) EndSession(ctx context.Context) error {
+	if _, err := sm.db.ExecContext(ctx, "BEGIN SYS.DBMS_LOGMNR.END_LOGMNR(); END;"); err != nil {
 		return fmt.Errorf("ending logminer session: %w", err)
 	}
 

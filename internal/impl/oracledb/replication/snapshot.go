@@ -47,8 +47,8 @@ func NewSnapshot(ctx context.Context,
 		return nil, fmt.Errorf("connecting to oracle database for snapshotting: %w", err)
 	}
 
-	// apply nls session for consistent logminer datetime output.
 	if err := ApplyNLSSettings(ctx, db); err != nil {
+		db.Close()
 		return nil, fmt.Errorf("configuring nls for snapshot session: %w", err)
 	}
 
@@ -117,7 +117,7 @@ func (s *Snapshot) snapshotTable(ctx context.Context, table UserTable, maxBatchS
 		// BeginTx opens/reuses a dedicated connection for the given table-based transaction
 		// Oracle drivers don't support TxOptions, so we use default and set properties explicitly
 		if tx, err = s.db.BeginTx(ctx, nil); err != nil {
-			return fmt.Errorf("starting snapshot transaction: %w", err)
+			return fmt.Errorf("snapshot transaction: %w", err)
 		}
 
 		// Set transaction to read-only mode
@@ -158,20 +158,20 @@ func (s *Snapshot) snapshotTable(ctx context.Context, table UserTable, maxBatchS
 				batchRows, err = querySnapshotTable(ctx, tx, table, tablePks, lastSeenPksValues, maxBatchSize)
 			}
 			if err != nil {
-				return fmt.Errorf("failed to execute snapshot table query: %w", err)
+				return fmt.Errorf("execute snapshot table query: %w", err)
 			}
-			defer batchRows.Close()
-
 			var types []*sql.ColumnType
 			if types, err = batchRows.ColumnTypes(); err != nil {
-				return fmt.Errorf("failed to fetch column types: %w", err)
+				batchRows.Close()
+				return fmt.Errorf("fetch column types: %w", err)
 			}
 
 			values, mappers := prepSnapshotScannerAndMappers(types)
 
 			var columns []string
 			if columns, err = batchRows.Columns(); err != nil {
-				return fmt.Errorf("failed to fetch columns: %w", err)
+				batchRows.Close()
+				return fmt.Errorf("fetch columns: %w", err)
 			}
 
 			var batchRowsCount int
@@ -180,6 +180,7 @@ func (s *Snapshot) snapshotTable(ctx context.Context, table UserTable, maxBatchS
 				batchRowsCount++
 
 				if err := batchRows.Scan(values...); err != nil {
+					batchRows.Close()
 					return err
 				}
 
@@ -190,6 +191,7 @@ func (s *Snapshot) snapshotTable(ctx context.Context, table UserTable, maxBatchS
 				row := map[string]any{}
 				for idx, value := range values {
 					if v, err = mappers[idx](value); err != nil {
+						batchRows.Close()
 						return err
 					}
 					row[columns[idx]] = v
@@ -206,10 +208,12 @@ func (s *Snapshot) snapshotTable(ctx context.Context, table UserTable, maxBatchS
 					SCN:       0,
 				}
 				if err = s.publisher.Publish(ctx, &m); err != nil {
+					batchRows.Close()
 					return fmt.Errorf("handling snapshot table row: %w", err)
 				}
 			}
 
+			batchRows.Close()
 			if err = batchRows.Err(); err != nil {
 				return fmt.Errorf("iterating snapshot table row: %w", err)
 			}
@@ -245,7 +249,7 @@ func getTablePrimaryKeys(ctx context.Context, tx *sql.Tx, table UserTable) ([]st
 
 	rows, err := tx.QueryContext(ctx, pkSQL, table.Name, table.Schema)
 	if err != nil {
-		return nil, fmt.Errorf("get primary key: %v", err)
+		return nil, fmt.Errorf("get primary key: %w", err)
 	}
 	defer rows.Close()
 
@@ -260,10 +264,10 @@ func getTablePrimaryKeys(ctx context.Context, tx *sql.Tx, table UserTable) ([]st
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("discovering primary keys for table '%s': %w", table.FullName(), err)
 	}
-
 	if len(pks) == 0 {
 		return nil, fmt.Errorf("unable to find primary key for table '%s' - does the table exist and does it have a primary key set?", table.FullName())
 	}
+
 	return pks, nil
 }
 
@@ -277,7 +281,7 @@ func querySnapshotTable(
 ) (*sql.Rows, error) {
 	// Oracle uses FETCH FIRST instead of TOP, and it comes at the end
 	snapshotQueryParts := []string{
-		fmt.Sprintf("SELECT * FROM %s.%s", table.Schema, table.Name),
+		fmt.Sprintf(`SELECT * FROM "%s"."%s"`, table.Schema, table.Name),
 	}
 
 	if lastSeenPkVal == nil {
@@ -303,12 +307,12 @@ func querySnapshotTable(
 		// Add equality conditions for all previous columns
 		for j := range i {
 			paramIdx++
-			condParts = append(condParts, fmt.Sprintf("%s = :%d", pk[j], paramIdx))
+			condParts = append(condParts, fmt.Sprintf(`"%s" = :%d`, pk[j], paramIdx))
 			lastSeenPkVals = append(lastSeenPkVals, lastSeenPkVal[pk[j]])
 		}
 		// Add greater-than condition for current column
 		paramIdx++
-		condParts = append(condParts, fmt.Sprintf("%s > :%d", pk[i], paramIdx))
+		condParts = append(condParts, fmt.Sprintf(`"%s" > :%d`, pk[i], paramIdx))
 		lastSeenPkVals = append(lastSeenPkVals, lastSeenPkVal[pk[i]])
 
 		conditions = append(conditions, "("+strings.Join(condParts, " AND ")+")")
@@ -402,11 +406,11 @@ func prepSnapshotScannerAndMappers(cols []*sql.ColumnType) (values []any, mapper
 }
 
 func buildOrderByClause(pk []string) string {
-	if len(pk) == 1 {
-		return "ORDER BY " + pk[0]
+	quoted := make([]string, len(pk))
+	for i, col := range pk {
+		quoted[i] = `"` + col + `"`
 	}
-
-	return "ORDER BY " + strings.Join(pk, ", ")
+	return "ORDER BY " + strings.Join(quoted, ", ")
 }
 
 func snapshotValueMapper[T any](v any) (any, error) {
@@ -419,27 +423,4 @@ func snapshotValueMapper[T any](v any) (any, error) {
 		return nil, nil
 	}
 	return s.V, nil
-}
-
-// ApplyNLSSettings sets NLS session parameters for consistent LogMiner output formatting.
-// This ensures that LogMiner's SQL_REDO statements use 4-digit years (YYYY) instead of
-// 2-digit years (RR), which prevents date corruption for years beyond 1999.
-// This matches Debezium's approach for Oracle CDC.
-func ApplyNLSSettings(ctx context.Context, db *sql.DB) error {
-	if _, err := db.ExecContext(ctx, "ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD HH24:MI:SS'"); err != nil {
-		return fmt.Errorf("setting NLS_DATE_FORMAT: %w", err)
-	}
-	if _, err := db.ExecContext(ctx, "ALTER SESSION SET NLS_TIMESTAMP_FORMAT = 'YYYY-MM-DD HH24:MI:SS.FF9'"); err != nil {
-		return fmt.Errorf("setting NLS_TIMESTAMP_FORMAT: %w", err)
-	}
-	if _, err := db.ExecContext(ctx, "ALTER SESSION SET NLS_TIMESTAMP_TZ_FORMAT = 'YYYY-MM-DD HH24:MI:SS.FF9 TZH:TZM'"); err != nil {
-		return fmt.Errorf("setting NLS_TIMESTAMP_TZ_FORMAT: %w", err)
-	}
-	if _, err := db.ExecContext(ctx, "ALTER SESSION SET NLS_NUMERIC_CHARACTERS = '.,'"); err != nil {
-		return fmt.Errorf("setting NLS_NUMERIC_CHARACTERS: %w", err)
-	}
-	if _, err := db.ExecContext(ctx, "ALTER SESSION SET TIME_ZONE = '00:00'"); err != nil {
-		return fmt.Errorf("setting session timezone: %w", err)
-	}
-	return nil
 }

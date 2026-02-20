@@ -21,6 +21,7 @@ import (
 // ChangePublisher is responsible for handling and processing of a replication.MessageEvent.
 type ChangePublisher interface {
 	Publish(ctx context.Context, msg *MessageEvent) error
+	Close()
 }
 
 // UserTable represents a found user's OracleDB table (called a user-table).
@@ -46,6 +47,7 @@ func VerifyUserTables(ctx context.Context, db *sql.DB, tableFilter *confx.Regexp
 	if err != nil {
 		return nil, fmt.Errorf("fetching user tables from dba_tables for verification: %w", err)
 	}
+	defer rows.Close()
 
 	var userTables []UserTable
 	for rows.Next() {
@@ -68,7 +70,7 @@ func VerifyUserTables(ctx context.Context, db *sql.DB, tableFilter *confx.Regexp
 	// perform a simple check that the tables are tracked, we could verify what columns are tracked but a simple check feels sufficient.
 	for i, tbl := range userTables {
 		var logGroupsCnt int
-		if err = db.QueryRow(`SELECT COUNT(*) FROM ALL_LOG_GROUPS WHERE OWNER = :1 AND TABLE_NAME = :2`, tbl.Schema, tbl.Name).Scan(&logGroupsCnt); err != nil {
+		if err = db.QueryRowContext(ctx, `SELECT COUNT(*) FROM ALL_LOG_GROUPS WHERE OWNER = :1 AND TABLE_NAME = :2`, tbl.Schema, tbl.Name).Scan(&logGroupsCnt); err != nil {
 			return nil, fmt.Errorf("querying log groups for table '%s': %w", tbl.FullName(), err)
 		}
 		if logGroupsCnt == 0 {
@@ -82,4 +84,25 @@ func VerifyUserTables(ctx context.Context, db *sql.DB, tableFilter *confx.Regexp
 	}
 
 	return userTables, nil
+}
+
+// ApplyNLSSettings ensures consistent datetime formatting for connection session.
+// This is important for reading redo_logs and ensures consistency with snapshotting.
+func ApplyNLSSettings(ctx context.Context, db *sql.DB) error {
+	if _, err := db.ExecContext(ctx, "ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD HH24:MI:SS'"); err != nil {
+		return fmt.Errorf("setting NLS_DATE_FORMAT: %w", err)
+	}
+	if _, err := db.ExecContext(ctx, "ALTER SESSION SET NLS_TIMESTAMP_FORMAT = 'YYYY-MM-DD HH24:MI:SS.FF9'"); err != nil {
+		return fmt.Errorf("setting NLS_TIMESTAMP_FORMAT: %w", err)
+	}
+	if _, err := db.ExecContext(ctx, "ALTER SESSION SET NLS_TIMESTAMP_TZ_FORMAT = 'YYYY-MM-DD HH24:MI:SS.FF9 TZH:TZM'"); err != nil {
+		return fmt.Errorf("setting NLS_TIMESTAMP_TZ_FORMAT: %w", err)
+	}
+	if _, err := db.ExecContext(ctx, "ALTER SESSION SET NLS_NUMERIC_CHARACTERS = '.,'"); err != nil {
+		return fmt.Errorf("setting NLS_NUMERIC_CHARACTERS: %w", err)
+	}
+	if _, err := db.ExecContext(ctx, "ALTER SESSION SET TIME_ZONE = '00:00'"); err != nil {
+		return fmt.Errorf("setting session timezone: %w", err)
+	}
+	return nil
 }

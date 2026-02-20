@@ -55,8 +55,7 @@ type LogMiner struct {
 	currentLogFiles []*LogFile
 }
 
-// NewMiner creates a new instance of LogMiner responsible
-// for paging through change events based on the tables param.
+// NewMiner creates a new instance of LogMiner responsible for paging through change events based on the tables param.
 func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replication.ChangePublisher, cfg *Config, metrics *service.Metrics, logger *service.Logger) *LogMiner {
 	// Build table filter condition once
 	// Only filter DML operations (1=INSERT, 2=DELETE, 3=UPDATE) by table
@@ -70,7 +69,7 @@ func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replicat
 			if i > 0 {
 				buf.WriteString(" OR ")
 			}
-			buf.WriteString(fmt.Sprintf("(SEG_OWNER = '%s' AND TABLE_NAME = '%s')", t.Schema, t.Name))
+			fmt.Fprintf(&buf, "(SEG_OWNER = '%s' AND TABLE_NAME = '%s')", t.Schema, t.Name)
 		}
 		buf.WriteString(")))")
 	}
@@ -120,7 +119,7 @@ func (lm *LogMiner) ReadChanges(ctx context.Context, startPos replication.SCN) e
 
 	defer func() {
 		if lm.sessionActive {
-			if err := lm.sessionMgr.EndSession(); err != nil {
+			if err := lm.sessionMgr.EndSession(ctx); err != nil {
 				lm.log.Errorf("ending LogMiner session on exit: %v", err)
 			}
 			lm.sessionActive = false
@@ -132,12 +131,10 @@ func (lm *LogMiner) ReadChanges(ctx context.Context, startPos replication.SCN) e
 		case <-ctx.Done():
 			return ctx.Err()
 		default:
-			caughtUp, err := lm.miningCycle(ctx)
-			if err != nil {
+			if caughtUp, err := lm.miningCycle(ctx); err != nil {
 				return fmt.Errorf("mining logs: %w", err)
-			}
-			if caughtUp {
-				// back off if we've caught up
+			} else if caughtUp {
+				lm.log.Infof("Caught up with redo logs, backing off")
 				time.Sleep(lm.cfg.MiningBackoffInterval)
 			}
 		}
@@ -174,28 +171,21 @@ func (lm *LogMiner) FindStartPos(ctx context.Context) (replication.SCN, error) {
 func (lm *LogMiner) miningCycle(ctx context.Context) (caughtUp bool, err error) {
 	// Get database's current SCN to know our target
 	var dbCurrentSCN uint64
-	if err := lm.db.QueryRow("SELECT CURRENT_SCN FROM V$DATABASE").Scan(&dbCurrentSCN); err != nil {
+	if err := lm.db.QueryRowContext(ctx, "SELECT CURRENT_SCN FROM V$DATABASE").Scan(&dbCurrentSCN); err != nil {
 		return false, fmt.Errorf("fetching current SCN: %w", err)
 	}
 
 	if lm.currentSCN >= dbCurrentSCN {
-		lm.log.Debugf("Caught up to current SCN %d, no new changes to process", dbCurrentSCN)
 		return true, nil
 	}
 
-	// Calculate SCN range - process up to current SCN or a reasonable chunk,
-	// limiting the range to avoid huge queries when there's a large gap
 	endSCN := dbCurrentSCN
-	maxRange := uint64(lm.cfg.MaxBatchSize)
-	if endSCN-lm.currentSCN > maxRange {
-		endSCN = lm.currentSCN + maxRange
-	}
 
 	// Restart the session on every cycle with explicit SCN bounds. Oracle's START_LOGMNR
 	// with ENDSCN=0 freezes the session's view at session start time, making events written
 	// after session start invisible. Per-window restart with explicit endSCN ensures all
 	// events in [currentSCN, endSCN] are visible.
-	if err := lm.prepareLogsAndStartSession(lm.currentSCN, endSCN); err != nil {
+	if err := lm.prepareLogsAndStartSession(ctx, lm.currentSCN, endSCN); err != nil {
 		// Check for ORA-01291: missing log file error and provide helpful message
 		if strings.Contains(err.Error(), "ORA-01291") {
 			//nolint:staticcheck
@@ -220,7 +210,7 @@ func (lm *LogMiner) miningCycle(ctx context.Context) (caughtUp bool, err error) 
 
 	// Query and process redoEvents from V$LOGMNR_CONTENTS
 	// The session is already active, just query it
-	redoEvents, err := lm.queryLogMinerContents(lm.currentSCN, endSCN)
+	redoEvents, err := lm.queryLogMinerContents(ctx, lm.currentSCN, endSCN)
 	if err != nil {
 		return false, fmt.Errorf("querying logminer contents between %d and %d: %w", lm.currentSCN, endSCN, err)
 	}
@@ -228,13 +218,13 @@ func (lm *LogMiner) miningCycle(ctx context.Context) (caughtUp bool, err error) 
 	// Process events and buffer transactions
 	for _, redoEvent := range redoEvents {
 		if err := lm.processRedoEvent(ctx, redoEvent); err != nil {
-			return false, fmt.Errorf("failed to process event: %w", err)
+			return false, fmt.Errorf("process redo event: %w", err)
 		}
 	}
 
 	lm.currentSCN = endSCN
 
-	return false, nil
+	return endSCN >= dbCurrentSCN, nil
 }
 
 // processRedoEvent buffers emitted events until a commit or rollback event is processed at which
@@ -266,7 +256,7 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 		// Flush all buffered events for this transaction
 		if txn := lm.txnCache.GetTransaction(redoEvent.TransactionID); txn != nil {
 			for _, dmlEvent := range txn.Events {
-				msg := toEventMessage(dmlEvent, redoEvent.SCN)
+				msg := toMessageEvent(dmlEvent, redoEvent.SCN)
 				if err := lm.publisher.Publish(ctx, msg); err != nil {
 					return fmt.Errorf("publishing event with SCN '%d`: %w", redoEvent.SCN, err)
 				}
@@ -283,9 +273,9 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 	return nil
 }
 
-func (lm *LogMiner) queryLogMinerContents(startSCN, endSCN uint64) ([]*sqlredo.RedoEvent, error) {
+func (lm *LogMiner) queryLogMinerContents(ctx context.Context, startSCN, endSCN uint64) ([]*sqlredo.RedoEvent, error) {
 	// Use the pre-built query from initialization
-	rows, err := lm.db.Query(lm.logMinerQuery, startSCN, endSCN)
+	rows, err := lm.db.QueryContext(ctx, lm.logMinerQuery, startSCN, endSCN)
 	if err != nil {
 		return nil, fmt.Errorf("querying logminer: %w", err)
 	}
@@ -343,10 +333,11 @@ func NewLogFileCollector(db *sql.DB) *LogFileCollector {
 }
 
 // GetLogs collects all log files containing changes from the given SCN
-func (lfc *LogFileCollector) GetLogs(offsetSCN uint64) ([]*LogFile, error) {
+func (lfc *LogFileCollector) GetLogs(ctx context.Context, offsetSCN uint64) ([]*LogFile, error) {
 	query := `
 		SELECT FILE_NAME, FIRST_CHANGE, NEXT_CHANGE, SEQ, TYPE, THREAD
 		FROM (
+
 			-- Online redo logs that contain or come after our position
 			SELECT
 				MIN(F.MEMBER) AS FILE_NAME,
@@ -384,23 +375,55 @@ func (lfc *LogFileCollector) GetLogs(offsetSCN uint64) ([]*LogFile, error) {
 		ORDER BY SEQ
 	`
 
-	rows, err := lfc.db.Query(query, offsetSCN)
+	rows, err := lfc.db.QueryContext(ctx, query, offsetSCN)
 	if err != nil {
 		return nil, fmt.Errorf("querying all logs containing changes from SCN %d: %w", offsetSCN, err)
 	}
 	defer rows.Close()
 
-	var logFiles []*LogFile
+	var archived, online []*LogFile
 	for rows.Next() {
 		lf := &LogFile{}
 		if err := rows.Scan(&lf.FileName, &lf.FirstSCN, &lf.NextSCN, &lf.Sequence, &lf.Type, &lf.Thread); err != nil {
 			return nil, fmt.Errorf("scanning logs row: %w", err)
 		}
 		lf.IsCurrent = lf.Type == "ONLINE"
-		logFiles = append(logFiles, lf)
+		if lf.IsCurrent {
+			online = append(online, lf)
+		} else {
+			archived = append(archived, lf)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return deduplicateLogs(archived, online), nil
+}
+
+// deduplicateLogs merges archive and online log lists, preferring the archive
+// copy when the same (thread, sequence) exists in both (archived logs guarantee
+// completeness where as online logs are still being written to). This prevents
+// ORA-01289 when V$ARCHIVED_LOG contains multiple registrations of the same
+// physical file, or when a sequence appears in both V$LOG and V$ARCHIVED_LOG.
+func deduplicateLogs(archived, online []*LogFile) []*LogFile {
+	type logKey struct {
+		thread   int
+		sequence int64
 	}
 
-	return logFiles, rows.Err()
+	archivedKeys := make(map[logKey]struct{}, len(archived))
+	for _, f := range archived {
+		archivedKeys[logKey{f.Thread, f.Sequence}] = struct{}{}
+	}
+
+	out := make([]*LogFile, 0, len(archived)+len(online))
+	out = append(out, archived...)
+	for _, f := range online {
+		if _, covered := archivedKeys[logKey{f.Thread, f.Sequence}]; !covered {
+			out = append(out, f)
+		}
+	}
+	return out
 }
 
 // prepareLogsAndStartSession collects redo/archive logs for the given SCN range,
@@ -409,17 +432,17 @@ func (lfc *LogFileCollector) GetLogs(offsetSCN uint64) ([]*LogFile, error) {
 // START_LOGMNR would freeze the session's view at session-start time, making events
 // written after that point invisible. An explicit endSCN ensures all events in
 // [startSCN, endSCN] are accessible.
-func (lm *LogMiner) prepareLogsAndStartSession(startSCN, endSCN uint64) error {
+func (lm *LogMiner) prepareLogsAndStartSession(ctx context.Context, startSCN, endSCN uint64) error {
 	// End existing session if active
 	if lm.sessionActive {
-		if err := lm.sessionMgr.EndSession(); err != nil {
+		if err := lm.sessionMgr.EndSession(ctx); err != nil {
 			lm.log.Errorf("Failed to end existing LogMiner session: %v", err)
 		}
 		lm.sessionActive = false
 	}
 
 	// Collect log files that contain changes from current SCN
-	logFiles, err := lm.logCollector.GetLogs(startSCN)
+	logFiles, err := lm.logCollector.GetLogs(ctx, startSCN)
 	if err != nil {
 		return fmt.Errorf("collecting redo logs for logminer: %w", err)
 	}
@@ -430,13 +453,13 @@ func (lm *LogMiner) prepareLogsAndStartSession(startSCN, endSCN uint64) error {
 	for i, file := range logFiles {
 		// if first log file, ensure we clear existing logs
 		isFirstFile := i == 0
-		if err := lm.sessionMgr.AddLogFile(file.FileName, isFirstFile); err != nil {
+		if err := lm.sessionMgr.AddLogFile(ctx, file.FileName, isFirstFile); err != nil {
 			return fmt.Errorf("loading log filename '%s' into logminer: %w", file.FileName, err)
 		}
 		lm.log.Debugf("Loaded redo log file %s into LogMiner", file.FileName)
 	}
 
-	if err := lm.sessionMgr.StartSession(startSCN, endSCN, false); err != nil {
+	if err := lm.sessionMgr.StartSession(ctx, startSCN, endSCN, false); err != nil {
 		return fmt.Errorf("starting logminer session: %w", err)
 	}
 	lm.sessionActive = true
@@ -445,7 +468,7 @@ func (lm *LogMiner) prepareLogsAndStartSession(startSCN, endSCN uint64) error {
 	return nil
 }
 
-func toEventMessage(dml *sqlredo.DMLEvent, scn uint64) *replication.MessageEvent {
+func toMessageEvent(dml *sqlredo.DMLEvent, scn uint64) *replication.MessageEvent {
 	m := &replication.MessageEvent{
 		SCN:       replication.SCN(scn),
 		Schema:    dml.Schema,
@@ -456,11 +479,11 @@ func toEventMessage(dml *sqlredo.DMLEvent, scn uint64) *replication.MessageEvent
 
 	switch dml.Operation {
 	case sqlredo.OpInsert:
-		m.Operation = "CREATE"
+		m.Operation = replication.MessageOperationInsert.String()
 	case sqlredo.OpUpdate:
-		m.Operation = "UPDATE"
+		m.Operation = replication.MessageOperationUpdate.String()
 	case sqlredo.OpDelete:
-		m.Operation = "DELETE"
+		m.Operation = replication.MessageOperationDelete.String()
 	}
 
 	return m

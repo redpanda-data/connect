@@ -37,8 +37,6 @@ type MiningStrategy string
 const (
 	// OnlineCatalogStrategy uses the online catalog for dictionary lookups (default, recommended)
 	OnlineCatalogStrategy MiningStrategy = "online_catalog"
-	// RedoLogsStrategy extracts dictionary from redo logs
-	RedoLogsStrategy MiningStrategy = "redo_logs"
 )
 
 // NewDefaultConfig returns a Config with default values
