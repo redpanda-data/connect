@@ -38,11 +38,6 @@ func NewParser() *Parser {
 }
 
 // RedoEventToDMLEvent converts a RedoEvent (from V$LOGMNR_CONTENTS) into a DMLEvent
-// by parsing the SQL_REDO statement and extracting column values. The function:
-//   - Parses INSERT, UPDATE, and DELETE statements from the SQL_REDO field
-//   - Extracts schema, table, and column data from the parsed SQL
-//   - Converts Oracle SQL functions (TO_DATE, TO_TIMESTAMP, HEXTORAW, etc.) to Go types
-//   - Returns an error if the SQL_REDO field is empty or the statement cannot be parsed
 func (p *Parser) RedoEventToDMLEvent(redoEvent *RedoEvent) (*DMLEvent, error) {
 	if len(redoEvent.SQLRedo.String) == 0 {
 		return nil, errors.New("empty SQL statement")
@@ -251,7 +246,10 @@ func normalizeOracleToMySQL(sql string) string {
 		case '\'':
 			// Single quote - toggle string literal state
 			// Handle escaped quotes: ''
-			if i+1 < len(sql) && sql[i+1] == '\'' && inSingleQuote {
+			if inDoubleQuote {
+				// Single quote inside a double-quoted identifier - keep as-is
+				result.WriteByte(ch)
+			} else if i+1 < len(sql) && sql[i+1] == '\'' && inSingleQuote {
 				// Escaped single quote inside string literal
 				result.WriteByte(ch)
 				result.WriteByte(sql[i+1])
@@ -266,10 +264,9 @@ func normalizeOracleToMySQL(sql string) string {
 				// Double quote inside string literal - keep as-is
 				result.WriteByte(ch)
 			} else {
-				// Double quote for identifier - remove it (or could replace with backtick)
-				// For simple identifiers, MySQL doesn't require quotes
+				// Double quote for identifier - convert to MySQL backtick
 				inDoubleQuote = !inDoubleQuote
-				// Skip the double quote (don't write it)
+				result.WriteByte('`')
 			}
 
 		default:
