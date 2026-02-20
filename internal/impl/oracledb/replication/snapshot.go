@@ -184,16 +184,18 @@ func (s *Snapshot) snapshotTable(ctx context.Context, table UserTable, maxBatchS
 					return err
 				}
 
+				var (
+					v   any
+					err error
+				)
 				row := map[string]any{}
-				var v any
 				for idx, value := range values {
-					v, err = mappers[idx](value)
-					if err != nil {
+					if v, err = mappers[idx](value); err != nil {
 						return err
 					}
 					row[columns[idx]] = v
 					if _, ok := lastSeenPksValues[columns[idx]]; ok {
-						lastSeenPksValues[columns[idx]] = value
+						lastSeenPksValues[columns[idx]] = v
 					}
 				}
 
