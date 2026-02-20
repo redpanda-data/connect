@@ -278,6 +278,14 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 		return i.cacheSCN(ctx, scn)
 	}
 
+	// no cache specified so use default, internal oracle based cache
+	if i.cfg.scnCache == "" {
+		// setup internal cache
+		if i.cpCache, err = newCheckpointCache(context.Background(), i.cfg.connectionString, i.cfg.cpCacheTableName, i.log); err != nil {
+			return nil, fmt.Errorf("initialising oracle based checkpoint cache: %w", err)
+		}
+	}
+
 	// Has stopped is how we notify that we're not connected. This will get reset at connection time.
 	i.stopSig.TriggerHasStopped()
 
@@ -297,16 +305,6 @@ func (i *oracleDBCDCInput) Connect(ctx context.Context) error {
 	)
 	if i.db, err = sql.Open("oracle", i.cfg.connectionString); err != nil {
 		return fmt.Errorf("failed to connect to oracle database: %w", err)
-	}
-
-	// no cache specified so use default, internal oracle based cache
-	if i.cfg.scnCache == "" {
-		// setup internal cache
-		cache, err := newCheckpointCache(ctx, i.cfg.connectionString, i.cfg.cpCacheTableName, i.log)
-		if err != nil {
-			return fmt.Errorf("initialising oracle based checkpoint cache: %w", err)
-		}
-		i.cpCache = cache
 	}
 
 	if userTables, err = replication.VerifyUserTables(ctx, i.db, i.cfg.tablesFilter, i.log); err != nil {
