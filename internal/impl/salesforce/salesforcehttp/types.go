@@ -31,3 +31,29 @@ type SalesforceAuthResponse struct {
 	IssuedAt       string `json:"issued_at"`
 	ApiInstanceUrl string `json:"api_instance_url"`
 }
+
+// SObjectList is the response from all the available sObjects
+type SObjectList struct {
+	Encoding     string    `json:"encoding"`
+	MaxBatchSize int       `json:"maxBatchSize"`
+	Sobjects     []SObject `json:"sobjects"`
+}
+
+// SObject is the minimal representation of an sObject
+type SObject struct {
+	Name string `json:"name"`
+}
+
+// DescribeResult sObject result
+type DescribeResult struct {
+	Fields []struct {
+		Name string `json:"name"`
+	} `json:"fields"`
+}
+
+// QueryResult of the salesforce search query
+type QueryResult struct {
+	TotalSize      int    `json:"totalSize"`
+	Done           bool   `json:"done"`
+	NextRecordsUrl string `json:"nextRecordsUrl,omitempty"`
+}

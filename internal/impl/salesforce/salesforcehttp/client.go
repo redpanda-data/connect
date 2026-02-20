@@ -22,11 +22,13 @@
 package salesforcehttp
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync/atomic"
 
@@ -131,6 +133,15 @@ func (s *Client) updateAndSetBearerToken(ctx context.Context) error {
 		return fmt.Errorf("cannot map response to custom field struct: %w", err)
 	}
 	s.bearerToken.Store(result.AccessToken)
+	s.instanceURL = result.InstanceUrl
+
+	// Extract org ID from the identity URL: https://login.salesforce.com/id/{orgId}/{userId}
+	if result.Id != "" {
+		parts := strings.Split(strings.TrimRight(result.Id, "/"), "/")
+		if len(parts) >= 2 {
+			s.tenantID = parts[len(parts)-2]
+		}
+	}
 
 	return nil
 }
@@ -199,6 +210,19 @@ func (s *Client) GetSObjectData(ctx context.Context, query string) ([]byte, erro
 	return body, nil
 }
 
+// SObjectInfo holds basic info about an SObject
+type SObjectInfo struct {
+	Name   string
+	Fields []string // Cached field names
+}
+
+// Cursor represents the current position in the batch processing
+type Cursor struct {
+	SObjectIndex int    `json:"sobject_index"`
+	SObjectName  string `json:"sobject_name"`
+	NextURL      string `json:"next_url"` // For pagination within an SObject
+}
+
 // Client is the implementation of Salesforce API queries. It holds the client state and orchestrates calls into the salesforcehttp package.
 type Client struct {
 	orgURL       string
@@ -206,9 +230,14 @@ type Client struct {
 	clientSecret string
 	apiVersion   string
 	bearerToken  atomic.Value
+	instanceURL  string
+	tenantID     string
 	httpClient   *http.Client
 	retryOpts    RetryOptions
 	log          *service.Logger
+
+	// Cache the SObject list to avoid refetching
+	sobjectList []SObjectInfo
 }
 
 func (s *Client) getBearerToken() string {
@@ -231,4 +260,308 @@ func NewClient(orgURL, clientID, clientSecret, apiVersion string, maxRetries int
 			m, "salesforce_http",
 			httpClient),
 	}, nil
+}
+
+// BearerToken returns the current OAuth bearer token.
+func (s *Client) BearerToken() string { return s.getBearerToken() }
+
+// InstanceURL returns the Salesforce instance URL obtained during authentication.
+func (s *Client) InstanceURL() string { return s.instanceURL }
+
+// TenantID returns the Salesforce org/tenant ID extracted from the identity URL.
+func (s *Client) TenantID() string { return s.tenantID }
+
+// RefreshToken forces a token refresh and returns an error if it fails.
+func (s *Client) RefreshToken(ctx context.Context) error {
+	return s.updateAndSetBearerToken(ctx)
+}
+
+// GraphQL sends a GraphQL query to Salesforce and returns the raw response body.
+func (s *Client) GraphQL(ctx context.Context, query string) ([]byte, error) {
+	apiUrl, err := url.Parse(s.orgURL + salesforceAPIBasePath + "/data/" + s.apiVersion + "/graphql")
+	if err != nil {
+		return nil, fmt.Errorf("invalid GraphQL URL: %w", err)
+	}
+
+	payload := map[string]string{
+		"query": query,
+	}
+
+	bodyBytes, err := json.Marshal(payload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal GraphQL payload: %w", err)
+	}
+
+	return s.callSalesforceAPIWithBody(ctx, apiUrl, bodyBytes)
+}
+
+// RestQueryAll is deprecated - use GetNextBatch instead.
+// Kept for backward compatibility.
+func (s *Client) RestQueryAll(ctx context.Context) (service.MessageBatch, error) {
+	var batch service.MessageBatch
+
+	raw, err := s.GetAllSObjectResources(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var list SObjectList
+	if err := json.Unmarshal(raw, &list); err != nil {
+		return nil, err
+	}
+
+	skipList := map[string]bool{
+		"AIUpdateRecordEvent": true,
+	}
+
+	for _, sobj := range list.Sobjects {
+		if skipList[sobj.Name] {
+			continue
+		}
+
+		describeJSON, err := s.GetSObjectResource(ctx, sobj.Name)
+		if err != nil {
+			return nil, err
+		}
+
+		fields, err := extractFieldNames(describeJSON)
+		if err != nil {
+			return nil, err
+		}
+
+		soql := buildSOQL(sobj.Name, fields)
+		queryResults, err := s.GetSObjectData(ctx, soql)
+		if err != nil {
+			return nil, err
+		}
+
+		var qr QueryResult
+		if err := json.Unmarshal(queryResults, &qr); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal query result: %w", err)
+		}
+
+		msg := service.NewMessage(queryResults)
+		msg.MetaSet("sobject", sobj.Name)
+		msg.MetaSet("total_size", strconv.Itoa(qr.TotalSize))
+
+		batch = append(batch, msg)
+	}
+
+	return batch, nil
+}
+
+// RestQueryFiltered fetches data using the provided SOQL query via the REST API.
+func (s *Client) RestQueryFiltered(ctx context.Context, soql string) (service.MessageBatch, error) {
+	raw, err := s.GetSObjectData(ctx, soql)
+	if err != nil {
+		return nil, err
+	}
+
+	msg := service.NewMessage(raw)
+	msg.MetaSet("soql", soql)
+
+	return service.MessageBatch{msg}, nil
+}
+
+// GraphQLQueryFiltered fetches data using the provided GraphQL query.
+func (s *Client) GraphQLQueryFiltered(ctx context.Context, query string) (service.MessageBatch, error) {
+	raw, err := s.GraphQL(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+
+	msg := service.NewMessage(raw)
+	msg.MetaSet("query", query)
+
+	return service.MessageBatch{msg}, nil
+}
+
+// GetNextBatch returns the next batch of records based on the cursor.
+// This is the key method for cursor-based batching support.
+func (s *Client) GetNextBatch(ctx context.Context, cursor Cursor) (service.MessageBatch, Cursor, bool, error) {
+	// Step 1: Ensure we have the SObject list loaded
+	if len(s.sobjectList) == 0 {
+		if err := s.loadSObjectList(ctx); err != nil {
+			return nil, cursor, false, err
+		}
+	}
+
+	// Step 2: Check if we've exhausted all SObjects
+	if cursor.SObjectIndex >= len(s.sobjectList) {
+		return nil, cursor, true, nil // done = true
+	}
+
+	currentSObject := s.sobjectList[cursor.SObjectIndex]
+
+	var queryResults []byte
+	var err error
+
+	// Step 3: Handle pagination within the current SObject
+	if cursor.NextURL != "" {
+		// Continue fetching from pagination URL
+		queryResults, err = s.fetchNextRecordsPage(ctx, cursor.NextURL)
+		if err != nil {
+			return nil, cursor, false, err
+		}
+	} else {
+		// First query for this SObject
+		queryResults, err = s.queryFirstPage(ctx, currentSObject)
+		if err != nil {
+			return nil, cursor, false, err
+		}
+	}
+
+	// Step 4: Parse the result to check for nextRecordsUrl
+	var qr QueryResult
+	if err := json.Unmarshal(queryResults, &qr); err != nil {
+		return nil, cursor, false, fmt.Errorf("failed to unmarshal query result: %w", err)
+	}
+
+	// Step 5: Update cursor
+	nextCursor := cursor
+	nextCursor.SObjectName = currentSObject.Name
+
+	if qr.NextRecordsUrl != "" {
+		// More pages exist for this SObject
+		nextCursor.NextURL = qr.NextRecordsUrl
+	} else {
+		// Move to next SObject
+		nextCursor.SObjectIndex++
+		nextCursor.NextURL = ""
+	}
+
+	// Step 6: Create message batch
+	msg := service.NewMessage(queryResults)
+	msg.MetaSet("sobject", currentSObject.Name)
+	msg.MetaSet("total_size", strconv.Itoa(qr.TotalSize))
+	msg.MetaSet("done", strconv.FormatBool(qr.Done))
+
+	return service.MessageBatch{msg}, nextCursor, false, nil
+}
+
+// callSalesforceAPIWithBody sends an authenticated POST request with a JSON body.
+func (s *Client) callSalesforceAPIWithBody(ctx context.Context, u *url.URL, body []byte) ([]byte, error) {
+	s.log.Debugf("API POST call: %s", u.String())
+
+	if s.getBearerToken() == "" {
+		if err := s.updateAndSetBearerToken(ctx); err != nil {
+			return nil, err
+		}
+	}
+
+	resp, err := s.doSalesforcePostRequest(ctx, u, body)
+	if err == nil {
+		return resp, nil
+	}
+
+	httpErr, ok := err.(*HTTPError)
+	if !ok {
+		return nil, err
+	}
+
+	if httpErr.StatusCode != http.StatusUnauthorized {
+		return nil, err
+	}
+
+	s.log.Warn("Salesforce token expired, refreshing token...")
+	if err := s.updateAndSetBearerToken(ctx); err != nil {
+		return nil, fmt.Errorf("failed to refresh token: %w", err)
+	}
+
+	retryResp, retryErr := s.doSalesforcePostRequest(ctx, u, body)
+	if retryErr != nil {
+		return nil, fmt.Errorf("request failed: %w", retryErr)
+	}
+
+	return retryResp, nil
+}
+
+func (s *Client) doSalesforcePostRequest(ctx context.Context, u *url.URL, body []byte) ([]byte, error) {
+	newReq := func() (*http.Request, error) {
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, u.String(), bytes.NewReader(body))
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Accept", "application/json")
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("User-Agent", "Redpanda-Connect")
+		req.Header.Set("Authorization", "Bearer "+s.getBearerToken())
+		return req, nil
+	}
+
+	return DoRequestWithRetries(ctx, s.httpClient, newReq, s.retryOpts)
+}
+
+func (s *Client) loadSObjectList(ctx context.Context) error {
+	raw, err := s.GetAllSObjectResources(ctx)
+	if err != nil {
+		return err
+	}
+
+	var list SObjectList
+	if err := json.Unmarshal(raw, &list); err != nil {
+		return err
+	}
+
+	skipList := map[string]bool{
+		"AIUpdateRecordEvent": true,
+	}
+
+	s.sobjectList = make([]SObjectInfo, 0)
+	for _, sobj := range list.Sobjects {
+		if skipList[sobj.Name] {
+			continue
+		}
+
+		describeJSON, err := s.GetSObjectResource(ctx, sobj.Name)
+		if err != nil {
+			return err
+		}
+
+		fields, err := extractFieldNames(describeJSON)
+		if err != nil {
+			return err
+		}
+
+		s.sobjectList = append(s.sobjectList, SObjectInfo{
+			Name:   sobj.Name,
+			Fields: fields,
+		})
+	}
+
+	s.log.Infof("Loaded %d SObjects for batching", len(s.sobjectList))
+	return nil
+}
+
+func (s *Client) queryFirstPage(ctx context.Context, sobj SObjectInfo) ([]byte, error) {
+	soql := buildSOQL(sobj.Name, sobj.Fields)
+	return s.GetSObjectData(ctx, soql)
+}
+
+func (s *Client) fetchNextRecordsPage(ctx context.Context, nextURL string) ([]byte, error) {
+	apiUrl, err := url.Parse(s.orgURL + nextURL)
+	if err != nil {
+		return nil, fmt.Errorf("invalid next records URL: %w", err)
+	}
+
+	return s.callSalesforceAPI(ctx, apiUrl)
+}
+
+func extractFieldNames(describeJSON []byte) ([]string, error) {
+	var dr DescribeResult
+	if err := json.Unmarshal(describeJSON, &dr); err != nil {
+		return nil, err
+	}
+
+	fields := make([]string, 0, len(dr.Fields))
+	for _, f := range dr.Fields {
+		fields = append(fields, f.Name)
+	}
+
+	return fields, nil
+}
+
+func buildSOQL(objectName string, fields []string) string {
+	fieldList := strings.Join(fields, ",+")
+	return fmt.Sprintf("SELECT+%s+FROM+%s", fieldList, objectName)
 }
