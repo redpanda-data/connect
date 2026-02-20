@@ -33,7 +33,10 @@ This review orchestrates specialized agents for domain-specific analysis. Do not
 
    **Agent 4 - Commit Policy** (Haiku): Uses `git log` and `git show --stat` on the PR commits. Checks:
    - **Granularity**: Each commit is one small, self-contained, logical change. Flag commits mixing unrelated work.
-   - **Message format** (preferred, not enforced): `system: message` or `system(subsystem): message` (e.g., `otlp: add authz support`, `gateway(authz): add http middleware`) or uppercase plain message for global changes (e.g., `Bump to Go 1.26`).
+   - **Message format** (enforced): Must match one of these patterns:
+     - `system: message` (e.g., `otlp: add authz support`, `kafka: fix consumer group rebalance`)
+     - `system(subsystem): message` (e.g., `gateway(authz): add http middleware`, `cli(mcp): handle shutdown`)
+     - Uppercase plain message for repo-wide/global changes (e.g., `Bump to Go 1.26`, `Update CI workflows`)
    - **Message quality** (enforced): Flag messages that are vague ("fix stuff", "updates", "WIP"), misleading (title doesn't match the actual changes), or incomprehensible.
    - **Fixup/squash**: Flag unsquashed `fixup!`/`squash!` commits.
    - Ignore PR number suffixes `(#1234)`.
