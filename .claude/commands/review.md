@@ -5,7 +5,7 @@ arguments:
   - name: pr
     description: "Pull request number or URL to review. Defaults to current branch PR."
     required: false
-allowed-tools: Bash(gh issue view:*), Bash(gh search:*), Bash(gh issue list:*), Bash(gh pr comment:*), Bash(gh pr diff:*), Bash(gh pr view:*), Bash(gh pr list:*), Bash(git log:*), Bash(git blame:*), Bash(git diff:*), Bash(git show:*)
+allowed-tools: Bash(gh pr view:*), Bash(gh pr diff:*), Bash(gh pr comment:*), Bash(git log:*), Bash(git show:*), Bash(git diff:*)
 ---
 
 Code review pull request {{pr}} for Redpanda Connect. If no PR was specified, resolve the current branch's PR with `gh pr view --json number -q .number`.

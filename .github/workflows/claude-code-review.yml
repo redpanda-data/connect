@@ -3,47 +3,62 @@ name: Claude Code Review
 on:
   pull_request:
     types: [opened, synchronize, ready_for_review, reopened]
-    # Optional: Only run on specific file changes
-    # paths:
-    #   - "src/**/*.ts"
-    #   - "src/**/*.tsx"
-    #   - "src/**/*.js"
-    #   - "src/**/*.jsx"
 
 jobs:
   claude-review:
-    # Optional: Filter by PR author
-    # if: |
-    #   github.event.pull_request.user.login == 'external-contributor' ||
-    #   github.event.pull_request.user.login == 'new-developer' ||
-    #   github.event.pull_request.author_association == 'FIRST_TIME_CONTRIBUTOR'
-
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: read
-      issues: read
+      pull-requests: write
       id-token: write
 
     steps:
-      - name: Checkout repository
+      - name: Checkout base branch for prompt
         uses: actions/checkout@v4
         with:
+          ref: main
           fetch-depth: 1
+          persist-credentials: false
+          sparse-checkout: .claude/commands/review.md
+          path: base-branch
 
-      - name: Load review prompt
+      - name: Load review prompt from base branch
         id: prompt
         run: |
+          if [ ! -f base-branch/.claude/commands/review.md ]; then
+            echo "Error: review.md not found in base branch" >&2
+            exit 1
+          fi
           # Strip YAML front matter and substitute the PR number
-          PROMPT=$(sed '1,/^---$/d; 1,/^---$/d' .claude/commands/review.md)
+          PROMPT=$(sed '1,/^---$/d; 1,/^---$/d' base-branch/.claude/commands/review.md)
           PROMPT="${PROMPT//\{\{pr\}\}/${{ github.event.pull_request.number }}}"
           echo "content<<EOF" >> "$GITHUB_OUTPUT"
           echo "$PROMPT" >> "$GITHUB_OUTPUT"
           echo "EOF" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout PR code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 50
+          persist-credentials: false
 
       - name: Run Claude Code Review
         id: claude-review
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          allowed_bots: ""
+          allowed_non_write_users: ""
+          show_full_output: false
+          use_commit_signing: true
+          claude_args: >
+            --max-turns 3
+            --disallowedTools "WebFetch,WebSearch"
+            --allowedTools "
+              Bash(gh pr view *),
+              Bash(gh pr diff *),
+              Bash(gh pr comment *),
+              Bash(git log *),
+              Bash(git show *),
+              Bash(git diff *)"
           prompt: ${{ steps.prompt.outputs.content }}

@@ -1,22 +1,25 @@
 name: Claude Code Security Review
 
-permissions:
-  pull-requests: write
-  contents: read
-
 on:
   pull_request:
 
 jobs:
   security:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 2
+          persist-credentials: false
 
-      - uses: anthropics/claude-code-security-review@main
+      - name: Run Claude Code Security Review
+        uses: anthropics/claude-code-security-review@main
         with:
           comment-pr: true
           claude-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
