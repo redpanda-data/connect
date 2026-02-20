@@ -453,6 +453,14 @@ func (i *mysqlStreamInput) startMySQLSync(ctx context.Context, pos *position, sn
 func (i *mysqlStreamInput) readSnapshot(ctx context.Context, snapshot *Snapshot) error {
 	// TODO(cdc): Process tables in parallel
 	for _, table := range i.tables {
+		// Pre-populate schema cache so snapshot messages carry schema metadata.
+		if tbl, err := i.canal.GetTable(i.mysqlConfig.DBName, table); err == nil {
+			if _, err := i.getTableSchema(tbl); err != nil {
+				i.logger.Warnf("Failed to pre-populate schema for table %s during snapshot: %v", table, err)
+			}
+		} else {
+			i.logger.Warnf("Failed to fetch schema for table %s during snapshot: %v", table, err)
+		}
 		tablePks, err := snapshot.getTablePrimaryKeys(ctx, table)
 		if err != nil {
 			return err

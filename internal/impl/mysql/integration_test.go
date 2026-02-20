@@ -878,14 +878,29 @@ file:
 		assert.Equal(t, "test_schema", msg.table, "message should have correct table name")
 		assert.Empty(t, msg.binlogPosition, "snapshot message should not have binlog_position")
 
-		// Note: Snapshot messages may not have schema initially because schema is extracted
-		// from Canal table objects which are only available during CDC events
-		if msg.hasSchema {
-			t.Logf("Snapshot message %d has schema (this is good!)", i)
-			validateSchemaStructure(t, msg.schema)
-		} else {
-			t.Logf("Snapshot message %d does not have schema (expected limitation)", i)
+		// Snapshot messages MUST have schema metadata
+		require.True(t, msg.hasSchema, "snapshot message must have schema metadata")
+		require.NotNil(t, msg.schema, "snapshot message schema must not be nil")
+		validateSchemaStructure(t, msg.schema)
+
+		// Verify specific field schemas match CDC schema
+		children, ok := msg.schema["children"].([]any)
+		require.True(t, ok, "schema should have children array")
+		fieldSchemas := make(map[string]map[string]any)
+		for _, child := range children {
+			childMap := child.(map[string]any)
+			fieldSchemas[childMap["name"].(string)] = childMap
 		}
+		for _, fieldName := range []string{"id", "name", "created_at", "score", "data", "tags"} {
+			_, exists := fieldSchemas[fieldName]
+			assert.True(t, exists, "snapshot schema should contain field %s", fieldName)
+		}
+		assert.Equal(t, "INT64", fieldSchemas["id"]["type"])
+		assert.Equal(t, "STRING", fieldSchemas["name"]["type"])
+		assert.Equal(t, "TIMESTAMP", fieldSchemas["created_at"]["type"])
+		assert.Equal(t, "FLOAT64", fieldSchemas["score"]["type"])
+		assert.Equal(t, "STRING", fieldSchemas["data"]["type"])
+		assert.Equal(t, "ARRAY", fieldSchemas["tags"]["type"])
 	}
 
 	// Check CDC messages (last 2)
