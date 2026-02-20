@@ -158,20 +158,19 @@ func (s *Snapshot) snapshotTable(ctx context.Context, table UserTable, maxBatchS
 				batchRows, err = querySnapshotTable(ctx, tx, table, tablePks, lastSeenPksValues, maxBatchSize)
 			}
 			if err != nil {
-				return fmt.Errorf("failed to execute snapshot table query: %s", err)
+				return fmt.Errorf("failed to execute snapshot table query: %w", err)
 			}
+			defer batchRows.Close()
 
 			var types []*sql.ColumnType
-			types, err = batchRows.ColumnTypes()
-			if err != nil {
+			if types, err = batchRows.ColumnTypes(); err != nil {
 				return fmt.Errorf("failed to fetch column types: %w", err)
 			}
 
 			values, mappers := prepSnapshotScannerAndMappers(types)
 
 			var columns []string
-			columns, err = batchRows.Columns()
-			if err != nil {
+			if columns, err = batchRows.Columns(); err != nil {
 				return fmt.Errorf("failed to fetch columns: %w", err)
 			}
 
@@ -195,7 +194,7 @@ func (s *Snapshot) snapshotTable(ctx context.Context, table UserTable, maxBatchS
 					}
 					row[columns[idx]] = v
 					if _, ok := lastSeenPksValues[columns[idx]]; ok {
-						lastSeenPksValues[columns[idx]] = v
+						lastSeenPksValues[columns[idx]] = value
 					}
 				}
 
