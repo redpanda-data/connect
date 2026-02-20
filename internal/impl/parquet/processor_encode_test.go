@@ -620,6 +620,35 @@ func TestParquetEncodeDynamicSchemaProcessor(t *testing.T) {
 	assert.JSONEq(t, string(expectedBytes), string(actualBytes))
 }
 
+func TestParquetEncodeDynamicSchemaAnyFieldError(t *testing.T) {
+	commonSchema := &schema.Common{
+		Type: schema.Object,
+		Children: []schema.Common{
+			{
+				Name: "id",
+				Type: schema.Int64,
+			},
+			{
+				Name: "payload",
+				Type: schema.Any,
+			},
+		},
+	}
+
+	inBatch := service.MessageBatch{
+		service.NewMessage([]byte(`{"id":1,"payload":{"key":"value"}}`)),
+	}
+	inBatch[0].MetaSetMut("schema", commonSchema.ToAny())
+
+	proc, err := newParquetEncodeProcessor(nil, nil, "schema", &parquet.Uncompressed)
+	require.NoError(t, err)
+
+	_, err = proc.ProcessBatch(t.Context(), inBatch)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "payload")
+	assert.Contains(t, err.Error(), "ANY")
+}
+
 func TestParquetEncodeProcessorConfigLinting(t *testing.T) {
 	configTests := []struct {
 		name        string
