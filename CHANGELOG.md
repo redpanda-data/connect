@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.82.0 - TBD
+
+### Fixed
+
+- `test` command: Templates registered via the `-t` flag are now correctly available during test execution. (@Phantal)
+
 ## 4.81.0 - 2026-02-18
 
 ### Added
