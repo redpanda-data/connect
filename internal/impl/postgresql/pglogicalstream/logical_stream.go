@@ -377,6 +377,10 @@ func (s *Stream) commitAckedLSN(ctx context.Context, lsn LSN) error {
 func (s *Stream) streamMessages(currentLSN LSN) error {
 	relations := map[uint32]*RelationMessage{}
 	typeMap := pgtype.NewMap()
+	// schemaCache maps relation ID to its serialized schema. It is keyed by relation ID
+	// and invalidated whenever a RelationMessage for that ID is received (which PostgreSQL
+	// sends before any DML when the table definition changes).
+	schemaCache := map[uint32]any{}
 	// If we don't stream commit messages we could not ack them, which means postgres will replay the whole transaction
 	// so if we're at the end of a stream and we get an ack for the last message in a txn, we need to ack the txn not the
 	// last message.
@@ -458,7 +462,7 @@ func (s *Stream) streamMessages(currentLSN LSN) error {
 				return fmt.Errorf("parsing XLogData: %w", err)
 			}
 			msgLSN := xld.WALStart + LSN(len(xld.WALData))
-			result, err := s.processChange(ctx, msgLSN, xld, relations, typeMap)
+			result, err := s.processChange(ctx, msgLSN, xld, relations, typeMap, schemaCache)
 			if err != nil {
 				return fmt.Errorf("decoding postgres changes failed: %w", err)
 			}
@@ -489,11 +493,19 @@ const (
 )
 
 // Handle handles the pgoutput output
-func (s *Stream) processChange(ctx context.Context, msgLSN LSN, xld XLogData, relations map[uint32]*RelationMessage, typeMap *pgtype.Map) (processChangeResult, error) {
+func (s *Stream) processChange(ctx context.Context, msgLSN LSN, xld XLogData, relations map[uint32]*RelationMessage, typeMap *pgtype.Map, schemaCache map[uint32]any) (processChangeResult, error) {
 	logicalMsg, err := Parse(xld.WALData)
 	if err != nil {
 		return changeResultNoMessage, err
 	}
+
+	// Invalidate the schema cache when a RelationMessage arrives — PostgreSQL sends one
+	// before the first DML after any DDL change, so clearing here ensures the next DML
+	// picks up the updated column definitions.
+	if rel, ok := logicalMsg.(*RelationMessage); ok {
+		delete(schemaCache, rel.RelationID)
+	}
+
 	// parse changes inside the transaction
 	message, err := toStreamMessage(logicalMsg, relations, typeMap, s.unchangedToastValue)
 	if err != nil {
@@ -514,6 +526,28 @@ func (s *Stream) processChange(ctx context.Context, msgLSN LSN, xld XLogData, re
 			return changeResultSuppressedCommitMessage, nil
 		case BeginOpType:
 			return changeResultNoMessage, nil
+		}
+	}
+
+	// Attach the column schema for DML messages, building it once per relation and
+	// caching by relation ID. The cache entry is cleared above when a RelationMessage
+	// arrives, ensuring DDL changes are reflected on the next DML event.
+	var relID uint32
+	switch msg := logicalMsg.(type) {
+	case *InsertMessage:
+		relID = msg.RelationID
+	case *UpdateMessage:
+		relID = msg.RelationID
+	case *DeleteMessage:
+		relID = msg.RelationID
+	}
+	if relID != 0 {
+		if cached, ok := schemaCache[relID]; ok {
+			message.ColumnSchema = cached
+		} else if rel, ok := relations[relID]; ok {
+			schema := relationMessageToSchema(rel, typeMap)
+			schemaCache[relID] = schema
+			message.ColumnSchema = schema
 		}
 	}
 
@@ -665,6 +699,9 @@ func (s *Stream) scanTableRange(ctx context.Context, snapshotter *snapshotter, t
 			pkPosition[i] = slices.Index(primaryKeyIndex, normalized)
 		}
 
+		// Build the table schema once per batch for snapshot messages.
+		tableSchema := columnTypesToSchema(unquotedTable, columnNames, columnTypes)
+
 		rowsCount := 0
 		batch := make([]StreamMessage, 0, s.snapshotBatchSize)
 		rowsStart := time.Now()
@@ -688,11 +725,12 @@ func (s *Stream) scanTableRange(ctx context.Context, snapshotter *snapshotter, t
 				}
 			}
 			batch = append(batch, StreamMessage{
-				LSN:       nil,
-				Operation: ReadOpType,
-				Table:     unquotedTable,
-				Schema:    unquotedSchema,
-				Data:      data,
+				LSN:          nil,
+				Operation:    ReadOpType,
+				Table:        unquotedTable,
+				Schema:       unquotedSchema,
+				Data:         data,
+				ColumnSchema: tableSchema,
 			})
 		}
 		s.monitor.UpdateSnapshotProgressForTable(table, rowsCount)
