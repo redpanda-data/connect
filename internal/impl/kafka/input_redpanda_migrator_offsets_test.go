@@ -41,7 +41,7 @@ func createUpdateConsumerGroup(t *testing.T, client *kadm.Client, group string, 
 }
 
 func populateKafkaBroker(t *testing.T, client *kgo.Client, topic, metadata, group string) {
-	for i := 0; i < 6; i++ {
+	for i := range 6 {
 		ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 		rec := kgo.Record{
 			Topic:     topic,

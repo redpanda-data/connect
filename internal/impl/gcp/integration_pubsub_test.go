@@ -199,10 +199,7 @@ input:
 				require.NoError(t, err)
 
 				wg := sync.WaitGroup{}
-				wg.Add(1)
-				go func() {
-					defer wg.Done()
-
+				wg.Go(func() {
 					ctx, done := context.WithTimeout(t.Context(), 1*time.Second)
 					defer done()
 
@@ -219,7 +216,7 @@ input:
 					}
 
 					assert.NoError(t, stream.StopWithin(1*time.Second))
-				}()
+				})
 
 				require.NoError(t, stream.Run(t.Context()))
 

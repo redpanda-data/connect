@@ -44,10 +44,9 @@ type messageCheckpoint struct {
 func NewRecordBatcher(maxTrackedShards, checkpointLimit int, log *service.Logger) *RecordBatcher {
 	// Set max tracked messages to 10x the checkpoint limit to allow for some buffering.
 	// This prevents unbounded growth while allowing parallel processing.
-	maxTrackedMessages := checkpointLimit * 10
-	if maxTrackedMessages < 1000 {
-		maxTrackedMessages = 1000 // Minimum reasonable size
-	}
+	maxTrackedMessages := max(checkpointLimit*10,
+		// Minimum reasonable size
+		1000)
 
 	return &RecordBatcher{
 		maxTrackedShards:   maxTrackedShards,

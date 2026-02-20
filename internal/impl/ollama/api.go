@@ -62,7 +62,7 @@ type ToolCall struct {
 }
 
 // ToolCallArguments represents the arguments of a tool call
-type ToolCallArguments map[string]interface{}
+type ToolCallArguments map[string]any
 
 func (t ToolCallArguments) String() string {
 	b, _ := json.Marshal(t)

@@ -46,8 +46,8 @@ func extractExpandableFields(fields []string) []string {
 	var result []string
 	for _, f := range fields {
 		topLevel := f
-		if idx := strings.Index(f, "."); idx != -1 {
-			topLevel = f[:idx]
+		if before, _, ok := strings.Cut(f, "."); ok {
+			topLevel = before
 		}
 		if _, ok := expandableFieldsSet[topLevel]; ok {
 			result = append(result, f)
@@ -132,9 +132,9 @@ func (j *Client) PrepareJiraQuery(ctx context.Context, q *JsonInputQuery) (Resou
 			// so we send the status in the query param and filter for status.name in the response manually
 			// also make sure to not include custom fields by their real name and use their custom_field_xxxxx name
 
-			if dot := strings.Index(f, "."); dot != -1 {
-				if _, exists := customFields[f[:dot]]; !exists {
-					processed = append(processed, f[:dot])
+			if before, _, ok := strings.Cut(f, "."); ok {
+				if _, exists := customFields[before]; !exists {
+					processed = append(processed, before)
 				}
 			} else {
 				if _, exists := customFields[f]; !exists {

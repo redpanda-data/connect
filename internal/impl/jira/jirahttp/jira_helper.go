@@ -220,10 +220,7 @@ func backoffWithJitter(base, maxDuration time.Duration, attempt int) time.Durati
 	if maxDuration <= 0 {
 		maxDuration = 30 * time.Second
 	}
-	d := base << attempt
-	if d > maxDuration {
-		d = maxDuration
-	}
+	d := min(base<<attempt, maxDuration)
 	jitter := time.Duration(rand.Int63n(int64(d))) - d/2
 	return d + jitter
 }

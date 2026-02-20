@@ -33,12 +33,12 @@ func TestBuildS3Endpoint(t *testing.T) {
 			{
 				name: "supports custom endpoint",
 				info: fileLocationInfo{UseS3RegionalURL: false, Region: "us-east-1", EndPoint: "localhost:8080"},
-				want: strPtr("https://localhost:8080"),
+				want: new("https://localhost:8080"),
 			},
 			{
 				name: "supports custom endpoint - prioritised over regional flag",
 				info: fileLocationInfo{UseS3RegionalURL: true, Region: "us-east-1", EndPoint: "localhost:8080"},
-				want: strPtr("https://localhost:8080"),
+				want: new("https://localhost:8080"),
 			},
 		}
 
@@ -55,12 +55,12 @@ func TestBuildS3Endpoint(t *testing.T) {
 			{
 				name: "returns regional endpoint",
 				info: fileLocationInfo{UseS3RegionalURL: true, Region: "us-east-1"},
-				want: strPtr("https://s3.us-east-1.amazonaws.com"),
+				want: new("https://s3.us-east-1.amazonaws.com"),
 			},
 			{
 				name: "supports cn prefix",
 				info: fileLocationInfo{UseS3RegionalURL: true, Region: "cn-north-1"},
-				want: strPtr("https://s3.cn-north-1.amazonaws.com.cn"),
+				want: new("https://s3.cn-north-1.amazonaws.com.cn"),
 			},
 			{
 				name: "empty region returns nil",
@@ -78,6 +78,7 @@ func TestBuildS3Endpoint(t *testing.T) {
 	})
 }
 
+//go:fix inline
 func strPtr(v string) *string {
-	return &v
+	return new(v)
 }

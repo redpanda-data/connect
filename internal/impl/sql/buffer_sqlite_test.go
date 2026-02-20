@@ -293,10 +293,8 @@ path: "%v"
 	n := 100
 
 	wg := sync.WaitGroup{}
-	wg.Add(1)
 
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		for i := range n {
 			m, ackFunc, err := block.ReadBatch(ctx)
 			require.NoError(t, err)
@@ -304,7 +302,7 @@ path: "%v"
 			msgEqualStr(t, fmt.Sprintf("test%v", i), m[0])
 			require.NoError(t, ackFunc(ctx, nil))
 		}
-	}()
+	})
 
 	go func() {
 		for i := range n {
@@ -386,12 +384,10 @@ path: "%v"
 	}
 
 	wg := sync.WaitGroup{}
-	wg.Add(1)
 
-	go func() {
+	wg.Go(func() {
 		block.EndOfInput()
-		wg.Done()
-	}()
+	})
 
 	<-time.After(time.Millisecond * 100)
 	for range 10 {

@@ -272,7 +272,7 @@ func newVertexAIProcessor(conf *service.ParsedConfig, _ *service.Resources) (p s
 		if err != nil {
 			return
 		}
-		proc.temp = genai.Ptr(float32(temp))
+		proc.temp = new(float32(temp))
 	}
 	if conf.Contains(vaicpFieldTopP) {
 		var topP float64
@@ -280,7 +280,7 @@ func newVertexAIProcessor(conf *service.ParsedConfig, _ *service.Resources) (p s
 		if err != nil {
 			return
 		}
-		proc.topP = genai.Ptr(float32(topP))
+		proc.topP = new(float32(topP))
 	}
 	if conf.Contains(vaicpFieldTopK) {
 		var topK float64
@@ -288,7 +288,7 @@ func newVertexAIProcessor(conf *service.ParsedConfig, _ *service.Resources) (p s
 		if err != nil {
 			return
 		}
-		proc.topK = genai.Ptr(float32(topK))
+		proc.topK = new(float32(topK))
 	}
 	if conf.Contains(vaicpFieldMaxTokens) {
 		var maxTokens int
@@ -310,7 +310,7 @@ func newVertexAIProcessor(conf *service.ParsedConfig, _ *service.Resources) (p s
 		if err != nil {
 			return
 		}
-		proc.presencePenalty = genai.Ptr(float32(pp))
+		proc.presencePenalty = new(float32(pp))
 	}
 	if conf.Contains(vaicpFieldFrequencyPenalty) {
 		var fp float64
@@ -318,7 +318,7 @@ func newVertexAIProcessor(conf *service.ParsedConfig, _ *service.Resources) (p s
 		if err != nil {
 			return
 		}
-		proc.frequencyPenalty = genai.Ptr(float32(fp))
+		proc.frequencyPenalty = new(float32(fp))
 	}
 	var format string
 	format, err = conf.FieldString(vaicpFieldResponseFormat)

@@ -322,7 +322,6 @@ func TestSchemaRegistryDecodeAvro(t *testing.T) {
 	require.NoError(t, err)
 
 	for _, test := range tests {
-		test := test
 		fn := func(t *testing.T, useHamba bool) {
 			decoder := goAvroDecoder
 			if useHamba {
@@ -535,7 +534,6 @@ func TestSchemaRegistryDecodeAvroRawJson(t *testing.T) {
 	require.NoError(t, err)
 
 	for _, test := range tests {
-		test := test
 		fn := func(t *testing.T, useHamba bool) {
 			decoder := goAvroDecoder
 			if useHamba {
@@ -653,7 +651,6 @@ func TestSchemaRegistryDecodeProtobuf(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			outMsgs, err := decoder.Process(t.Context(), service.NewMessage([]byte(test.input)))
 			if test.errContains != "" {
@@ -717,7 +714,6 @@ func TestSchemaRegistryDecodeWithDefaultSchemaID(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			cfg := decodingConfig{}
 			cfg.avro.rawUnions = false
@@ -799,7 +795,6 @@ func TestSchemaRegistryDecodeJson(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			outMsgs, err := decoder.Process(t.Context(), service.NewMessage([]byte(test.input)))
 			if test.errContains != "" {

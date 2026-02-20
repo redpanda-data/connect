@@ -49,7 +49,6 @@ func TestKafkaBadParams(t *testing.T) {
 	}
 
 	for _, test := range testCases {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			pConf, err := iskConfigSpec().ParseYAML(fmt.Sprintf(`
 addresses: [ example.com:1234 ]

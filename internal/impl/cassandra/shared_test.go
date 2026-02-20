@@ -15,7 +15,7 @@ func TestNewHostSelectionPolicy(t *testing.T) {
 		name               string
 		localDC            string
 		localRack          string
-		expectedPolicyType interface{}
+		expectedPolicyType any
 		expectedError      bool
 	}{
 		{

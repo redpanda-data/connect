@@ -281,7 +281,7 @@ func TestIntegrationMigratorMultiPartitionSchemaAwareWithConsumerGroups(t *testi
 		// Produce directly in 1000-record batches using ProduceSync to speed up test
 		const batchSize = 1000
 		records := make([]*kgo.Record, 0, batchSize)
-		for i := 0; i < numMessages; i++ {
+		for i := range numMessages {
 			r := &kgo.Record{
 				Topic:     migratorTestTopic,
 				Key:       []byte(strconv.Itoa(i)),
@@ -922,12 +922,12 @@ func TestIntegrationMigratorTwoWayWithProvenanceHeaders(t *testing.T) {
 
 	t.Log("And: 10 messages are produced to src")
 	for i := range numMessages {
-		src.Produce(migratorTestTopic, []byte(fmt.Sprintf("src-%d", i)))
+		src.Produce(migratorTestTopic, fmt.Appendf(nil, "src-%d", i))
 	}
 
 	t.Log("And: 10 messages are produced to dst")
 	for i := range numMessages {
-		dst.Produce(migratorTestTopic, []byte(fmt.Sprintf("dst-%d", i)))
+		dst.Produce(migratorTestTopic, fmt.Appendf(nil, "dst-%d", i))
 	}
 
 	t.Log("Then: Both clusters have 20 messages")
@@ -1024,11 +1024,11 @@ func TestIntegrationMigratorJiraCON229(t *testing.T) {
 
 		for _, topic := range []string{topicA, topicB, topicC, topicD} {
 			records := make([]*kgo.Record, 0, numMessages)
-			for i := 0; i < numMessages; i++ {
+			for i := range numMessages {
 				r := &kgo.Record{
 					Topic:     topic,
-					Key:       []byte(fmt.Sprintf("%s-key-%d", topic, i)),
-					Value:     []byte(fmt.Sprintf(`{"id":%d,"data":"msg-%d"}`, i, i)),
+					Key:       fmt.Appendf(nil, "%s-key-%d", topic, i),
+					Value:     fmt.Appendf(nil, `{"id":%d,"data":"msg-%d"}`, i, i),
 					Partition: int32(i % numPartitions),
 					Timestamp: time.Unix(100, 0).Add(time.Duration(i) * 100 * time.Millisecond),
 				}
@@ -1150,7 +1150,7 @@ logger:
 
 		totalMessages := numMessages * 4
 		t.Logf("Then: Waiting for %d messages to be migrated", totalMessages)
-		for i := 0; i < totalMessages; i++ {
+		for i := range totalMessages {
 			select {
 			case <-msgChan:
 				if (i+1)%100 == 0 {

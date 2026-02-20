@@ -46,7 +46,6 @@ func TestPathConversion(t *testing.T) {
 		},
 	}
 	for i, test := range tests {
-		test := test
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
 			act := sliceToDotPath(test.path)
 			assert.Equal(t, test.expected, act)

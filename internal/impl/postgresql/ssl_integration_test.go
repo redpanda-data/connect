@@ -260,7 +260,7 @@ postgres_cdc:
 
 func indent(s string, spaces int) string {
 	var builder strings.Builder
-	for _, line := range strings.Split(s, "\n") {
+	for line := range strings.SplitSeq(s, "\n") {
 		if strings.TrimSpace(line) == "" {
 			continue
 		}

@@ -28,7 +28,6 @@ func TestValidColumnTypeRegex(t *testing.T) {
 		"  varchar ( 0 )  ",
 	}
 	for _, m := range matches {
-		m := m
 		t.Run(m, func(t *testing.T) {
 			require.Regexp(t, validColumnTypeRegex, m)
 		})
@@ -44,7 +43,6 @@ func TestValidColumnTypeRegex(t *testing.T) {
 		"VARCHAR(2) GARBAGE",
 	}
 	for _, m := range nonMatches {
-		m := m
 		t.Run(m, func(t *testing.T) {
 			require.NotRegexp(t, validColumnTypeRegex, m)
 		})

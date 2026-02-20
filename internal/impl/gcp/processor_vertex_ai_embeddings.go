@@ -24,7 +24,6 @@ import (
 
 	aiplatform "cloud.google.com/go/aiplatform/apiv1"
 	"cloud.google.com/go/aiplatform/apiv1/aiplatformpb"
-	"cloud.google.com/go/vertexai/genai"
 
 	"google.golang.org/protobuf/types/known/structpb"
 
@@ -147,7 +146,7 @@ func newVertexAIEmbeddingsProcessor(conf *service.ParsedConfig, _ *service.Resou
 		if err != nil {
 			return
 		}
-		proc.dims = genai.Ptr(float64(dims))
+		proc.dims = new(float64(dims))
 	}
 	p = proc
 	return

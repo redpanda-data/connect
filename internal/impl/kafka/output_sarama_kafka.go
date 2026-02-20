@@ -737,7 +737,7 @@ func (mur *murmur2) Sum32() uint32 {
 	h := int32(seed ^ uint32(length))
 	length4 := length / 4
 
-	for i := int32(0); i < length4; i++ {
+	for i := range length4 {
 		i4 := i * 4
 		k := int32(mur.data[i4+0]&0xff) +
 			(int32(mur.data[i4+1]&0xff) << 8) +

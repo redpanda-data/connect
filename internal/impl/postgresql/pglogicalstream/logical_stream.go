@@ -540,7 +540,6 @@ func (s *Stream) processSnapshot(ctx context.Context, snapshotter *snapshotter) 
 	snapshotTasks := []func(context.Context) error{}
 
 	for _, table := range s.tables {
-		table := table
 		s.logger.Infof("Planning snapshot scan for table: %v", table)
 		planStartTime := time.Now()
 		primaryKeyColumns, err := s.getPrimaryKeyColumn(ctx, table)
@@ -610,7 +609,6 @@ func (s *Stream) processSnapshot(ctx context.Context, snapshotter *snapshotter) 
 	wg, ctx := errgroup.WithContext(ctx)
 	wg.SetLimit(s.maxSnapshotWorkers)
 	for _, task := range snapshotTasks {
-		task := task
 		wg.Go(func() error { return task(ctx) })
 	}
 	if err := wg.Wait(); err != nil {

@@ -210,7 +210,6 @@ func testParquetEncodeDecodeRoundTrip(t *testing.T, encodeProc *parquetEncodePro
 }`,
 		},
 	} {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			inBatch := service.MessageBatch{
 				service.NewMessage([]byte(test.input)),
@@ -329,7 +328,6 @@ func TestParquetEncodeProcessor(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			expectedDataBytes, err := json.Marshal(test.input)
 			require.NoError(t, err)

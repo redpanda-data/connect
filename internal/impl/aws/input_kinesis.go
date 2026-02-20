@@ -875,7 +875,6 @@ func (k *kinesisReader) runExplicitShards() {
 func (k *kinesisReader) waitUntilStreamsExists(ctx context.Context) error {
 	results := make(chan error, len(k.streams))
 	for _, s := range k.streams {
-		s := s
 		go func(info *streamInfo) {
 			waiter := kinesis.NewStreamExistsWaiter(k.svc)
 			input := &kinesis.DescribeStreamInput{}

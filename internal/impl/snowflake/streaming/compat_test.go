@@ -232,7 +232,6 @@ func TestSnowflakeTimestamp(t *testing.T) {
 		},
 	}
 	for _, c := range cases {
-		c := c
 		t.Run("", func(t *testing.T) {
 			layout := "2006-01-02 15:04:05.000"
 			if c.keepTZ {

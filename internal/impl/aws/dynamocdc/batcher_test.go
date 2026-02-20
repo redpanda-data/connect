@@ -381,7 +381,7 @@ func TestBatcherShouldThrottle(t *testing.T) {
 	assert.False(t, batcher.ShouldThrottle(), "Should not throttle when empty")
 
 	// Add messages up to 80% capacity (should not throttle)
-	for i := 0; i < 800; i++ {
+	for i := range 800 {
 		batch := createTestMessages(1, "shard-001", i)
 		batcher.AddMessages(batch, "shard-001")
 	}

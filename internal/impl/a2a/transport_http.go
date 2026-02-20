@@ -290,10 +290,10 @@ func (t *httpTransport) parseSSEStream(ctx context.Context, body io.Reader, yiel
 
 		line := scanner.Text()
 
-		if strings.HasPrefix(line, "event:") {
-			eventType = strings.TrimSpace(strings.TrimPrefix(line, "event:"))
-		} else if strings.HasPrefix(line, "data:") {
-			data := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+		if after, ok := strings.CutPrefix(line, "event:"); ok {
+			eventType = strings.TrimSpace(after)
+		} else if after, ok := strings.CutPrefix(line, "data:"); ok {
+			data := strings.TrimSpace(after)
 			if eventData.Len() > 0 {
 				eventData.WriteString("\n")
 			}

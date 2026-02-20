@@ -614,6 +614,7 @@ func (*MockSnowflakeServer) handleRunSQL(w http.ResponseWriter, r *http.Request)
 	})
 }
 
+//go:fix inline
 func ptr[T any](v T) *T {
-	return &v
+	return new(v)
 }

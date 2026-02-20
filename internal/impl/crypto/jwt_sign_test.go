@@ -97,7 +97,6 @@ JWHmBFldXcJkvNe6PH+6YL1R5jJO3TnNFFa4P6nltg==
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.method, func(t *testing.T) {
 			mapping := fmt.Sprintf("root = this.%s(%q)", tc.method, tc.secret)
 

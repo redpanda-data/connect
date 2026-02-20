@@ -130,7 +130,6 @@ input:
 	}
 
 	for _, tc := range testcases {
-		tc := tc
 		t.Run(tc.label, func(t *testing.T) {
 			suite := integration.StreamTests(
 				integration.StreamTestOpenClose(),

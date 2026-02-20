@@ -4,7 +4,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/aws/smithy-go/ptr"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/twmb/franz-go/pkg/kadm"
@@ -23,7 +22,7 @@ func TestIntegrationTopicMigratorSyncConfig(t *testing.T) {
 	t.Log("And: topic with configs is created in source cluster")
 	const topic = "topic-with-configs"
 	configs := map[string]*string{
-		"retention.ms": ptr.String("1500"),
+		"retention.ms": new("1500"),
 	}
 	src.CreateTopicWithConfigs(topic, configs)
 
@@ -34,7 +33,7 @@ func TestIntegrationTopicMigratorSyncConfig(t *testing.T) {
 	}))
 
 	t.Log("Then: Topic is created in destination cluster with configs")
-	assert.Equal(t, ptr.String("1500"), dst.TopicConfig(topic, "retention.ms"))
+	assert.Equal(t, new("1500"), dst.TopicConfig(topic, "retention.ms"))
 }
 
 func TestIntegrationTopicMigratorSyncACLs(t *testing.T) {

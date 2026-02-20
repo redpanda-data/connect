@@ -740,7 +740,6 @@ func TestIntegrationTOASTValues(t *testing.T) {
 	integration.CheckSkip(t)
 
 	for _, replicaIdentity := range []string{"FULL", "DEFAULT", "ALT_UNCHANGED_TOAST"} {
-		replicaIdentity := replicaIdentity
 		t.Run(replicaIdentity, func(t *testing.T) {
 			t.Parallel()
 			pool, err := dockertest.NewPool("")

@@ -340,7 +340,7 @@ func makeChatProcessor(conf *service.ParsedConfig, mgr *service.Resources) (serv
 			params[paramName] = param
 		}
 		tool := cohere.ToolV2{
-			Type: cohere.String("function"),
+			Type: new("function"),
 			Function: &cohere.ToolV2Function{
 				Name:        name,
 				Description: &desc,
@@ -496,7 +496,7 @@ func (p *chatProcessor) Process(ctx context.Context, msg *service.Message) (serv
 			}
 			// Fix a bug in cohere API when the function arguments are null, it expects a valid JSON object in the response.
 			if tool.Function.Arguments == nil || *tool.Function.Arguments == "null" {
-				tool.Function.Arguments = cohere.String(`{}`)
+				tool.Function.Arguments = new(`{}`)
 			}
 		}
 		body.Messages = append(body.Messages, &cohere.ChatMessageV2{

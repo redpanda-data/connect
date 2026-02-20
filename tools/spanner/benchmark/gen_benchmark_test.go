@@ -47,7 +47,7 @@ func (h BenchmarkTableHelper) CreateTableAndStream() {
 
 func (h BenchmarkTableHelper) InsertRowsInTransaction(n int) time.Time {
 	muts := make([]*spanner.Mutation, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		muts[i] = h.insertMut()
 	}
 
@@ -127,10 +127,8 @@ func TestBenchmarkInsert10MRows(t *testing.T) {
 		wg        sync.WaitGroup
 		startTime = time.Now()
 	)
-	for i := 0; i < numWorkers; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range numWorkers {
+		wg.Go(func() {
 
 			for {
 				if cur := atomic.LoadInt64(&rowsInserted); cur >= targetRows {
@@ -145,7 +143,7 @@ func TestBenchmarkInsert10MRows(t *testing.T) {
 					t.Logf("Progress: %d/%d rows (%.2f rows/sec)", cnt, targetRows, rowsPerSec)
 				}
 			}
-		}()
+		})
 	}
 
 	wg.Wait()

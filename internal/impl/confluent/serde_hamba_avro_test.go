@@ -130,7 +130,6 @@ func TestHambaAvroReferences(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			subj, err := service.NewInterpolatedString(test.subject)
 			require.NoError(t, err)
@@ -318,7 +317,6 @@ func TestHambaDecodeAvroUnions(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			cfg := decodingConfig{}
 			cfg.avro.useHamba = true
@@ -500,7 +498,6 @@ func TestHambaDecodeKafkaConnectTypes(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			encoder, err := newSchemaRegistryEncoder(urlStr, noopReqSign, nil, subject, true, schemaStaleAfter, time.Minute, service.MockResources())
 			require.NoError(t, err)

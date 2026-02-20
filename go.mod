@@ -25,7 +25,6 @@ require (
 	cloud.google.com/go/pubsub v1.50.1
 	cloud.google.com/go/spanner v1.86.0
 	cloud.google.com/go/storage v1.57.0
-	cloud.google.com/go/vertexai v0.15.0
 	connectrpc.com/connect v1.19.1
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.19.1
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.13.0

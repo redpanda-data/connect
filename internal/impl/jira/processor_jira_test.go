@@ -119,7 +119,6 @@ max_retries: 5
 	}
 
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			conf, err := newJiraProcessorConfigSpec().ParseYAML(tc.configYAML, nil)
 			resources := conf.Resources()

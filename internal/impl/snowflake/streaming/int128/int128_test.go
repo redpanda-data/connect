@@ -121,7 +121,7 @@ func TestMul(t *testing.T) {
 }
 
 func TestShl(t *testing.T) {
-	for i := uint(0); i < 64; i++ {
+	for i := range uint(64) {
 		require.Equal(t, Num{lo: 1 << i}, Shl(FromInt64(1), i))
 		require.Equal(t, Num{hi: 1 << i}, Shl(FromInt64(1), i+64))
 		require.Equal(t, Num{hi: ^0, lo: uint64(int64(-1) << i)}, Shl(FromInt64(-1), i))
@@ -132,7 +132,7 @@ func TestShl(t *testing.T) {
 }
 
 func TestUshr(t *testing.T) {
-	for i := uint(0); i < 64; i++ {
+	for i := range uint(64) {
 		require.Equal(t, Num{hi: int64(uint64(1<<63) >> i)}, uShr(MinInt128, i), i)
 		require.Equal(t, Num{lo: (1 << 63) >> i}, uShr(MinInt128, i+64), i)
 	}
@@ -259,7 +259,6 @@ func TestDiv(t *testing.T) {
 		},
 	}
 	for _, c := range cases {
-		c := c
 		t.Run("", func(t *testing.T) {
 			require.Equal(
 				t,
@@ -385,7 +384,6 @@ func TestByteWidth(t *testing.T) {
 		{math.MinInt64 + 1, 8},
 	}
 	for _, tc := range tests {
-		tc := tc
 		t.Run(fmt.Sprintf("byteWidth(%d)", tc[0]), func(t *testing.T) {
 			require.Equal(t, int(tc[1]), ByteWidth(FromInt64(tc[0])))
 		})
@@ -412,7 +410,6 @@ func TestIncreaseScaleBy(t *testing.T) {
 		{MinInt128, 0, true},
 	}
 	for _, tc := range tests {
-		tc := tc
 		t.Run("", func(t *testing.T) {
 			v, err := Rescale(tc.n, 38, tc.scale)
 			if tc.overflow {

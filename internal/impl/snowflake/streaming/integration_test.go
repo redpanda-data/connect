@@ -30,8 +30,9 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/impl/snowflake/streaming"
 )
 
+//go:fix inline
 func ptr[T any](v T) *T {
-	return &v
+	return new(v)
 }
 
 func msg(s string) *service.Message {

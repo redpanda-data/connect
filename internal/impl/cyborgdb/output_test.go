@@ -19,6 +19,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
+	"maps"
 	"testing"
 
 	"github.com/cyborginc/cyborgdb-go"
@@ -128,24 +129,22 @@ func generateTestKey() string {
 	return base64.StdEncoding.EncodeToString(key)
 }
 
-func createTestMessage(id string, vector []float32, metadata map[string]interface{}) *service.Message {
+func createTestMessage(id string, vector []float32, metadata map[string]any) *service.Message {
 	msg := service.NewMessage(nil)
 
 	// Convert vector to interface slice
-	vecInterface := make([]interface{}, len(vector))
+	vecInterface := make([]any, len(vector))
 	for i, v := range vector {
 		vecInterface[i] = v
 	}
 
-	structured := map[string]interface{}{
+	structured := map[string]any{
 		"id":     id,
 		"vector": vecInterface,
 	}
 
 	// Add metadata fields to structured data for mapping
-	for k, v := range metadata {
-		structured[k] = v
-	}
+	maps.Copy(structured, metadata)
 
 	msg.SetStructuredMut(structured)
 
@@ -254,11 +253,11 @@ func TestOutputWriter_UpsertBatch(t *testing.T) {
 
 	// Create test batch
 	batch := service.MessageBatch{
-		createTestMessage("vec1", []float32{0.1, 0.2, 0.3}, map[string]interface{}{
+		createTestMessage("vec1", []float32{0.1, 0.2, 0.3}, map[string]any{
 			"category": "test",
 			"score":    0.95,
 		}),
-		createTestMessage("vec2", []float32{0.4, 0.5, 0.6}, map[string]interface{}{
+		createTestMessage("vec2", []float32{0.4, 0.5, 0.6}, map[string]any{
 			"category": "example",
 			"score":    0.87,
 		}),
@@ -362,9 +361,9 @@ func TestOutputWriter_VectorTypeConversion(t *testing.T) {
 
 	// Test different numeric types
 	msg := service.NewMessage(nil)
-	msg.SetStructuredMut(map[string]interface{}{
+	msg.SetStructuredMut(map[string]any{
 		"id": "test-vec",
-		"vector": []interface{}{
+		"vector": []any{
 			float64(0.1),
 			float32(0.2),
 			int(3),
@@ -408,9 +407,9 @@ func TestOutputWriter_InvalidVectorType(t *testing.T) {
 
 	// Test with invalid vector element type
 	msg := service.NewMessage(nil)
-	msg.SetStructuredMut(map[string]interface{}{
+	msg.SetStructuredMut(map[string]any{
 		"id": "test-vec",
-		"vector": []interface{}{
+		"vector": []any{
 			0.1,
 			"invalid", // Invalid type
 			0.3,

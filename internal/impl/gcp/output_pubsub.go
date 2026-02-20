@@ -264,7 +264,6 @@ func (out *pubsubOutput) WriteBatch(ctx context.Context, batch service.MessageBa
 	}
 
 	for i, msg := range batch {
-		i := i
 		res, err := out.writeMessage(ctx, topics, msg)
 		if err != nil {
 			batchErrFailed(i, err)

@@ -51,14 +51,11 @@ func TestBackoffWithJitter_BoundsAndCap(t *testing.T) {
 	base := 10 * time.Millisecond
 	duration := 50 * time.Millisecond
 
-	for attempt := 0; attempt < 6; attempt++ {
+	for attempt := range 6 {
 		d := backoffWithJitter(base, duration, attempt)
 
 		// expected, before jitter and cap
-		expected := base << attempt
-		if expected > duration {
-			expected = duration
-		}
+		expected := min(base<<attempt, duration)
 
 		// jitter result must be within [expected/2, 3*expected/2)
 		minJ := expected / 2
@@ -74,7 +71,6 @@ func TestDoRequestWithRetries_AuthErrors401And403(t *testing.T) {
 	t.Parallel()
 
 	for _, code := range []int{http.StatusUnauthorized, http.StatusForbidden} {
-		code := code
 		t.Run(http.StatusText(code), func(t *testing.T) {
 			t.Parallel()
 

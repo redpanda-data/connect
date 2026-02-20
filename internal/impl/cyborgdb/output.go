@@ -19,6 +19,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 
@@ -271,13 +272,7 @@ func (w *outputWriter) Connect(ctx context.Context) error {
 		return fmt.Errorf("failed to list indexes: %w", err)
 	}
 
-	indexExists := false
-	for _, name := range indexes {
-		if name == w.indexName {
-			indexExists = true
-			break
-		}
-	}
+	indexExists := slices.Contains(indexes, w.indexName)
 
 	var index *cyborgdb.EncryptedIndex
 
@@ -350,7 +345,7 @@ func (w *outputWriter) upsertBatch(ctx context.Context, batch service.MessageBat
 			return fmt.Errorf("failed to interpolate id: %w", err)
 		}
 
-		var vecResult interface{}
+		var vecResult any
 
 		if vectorExec != nil {
 			// Execute vector mapping using batch executor
@@ -374,7 +369,7 @@ func (w *outputWriter) upsertBatch(ctx context.Context, batch service.MessageBat
 			}
 
 			// If it's a map, try to extract the "vector" field
-			if structMap, ok := structured.(map[string]interface{}); ok {
+			if structMap, ok := structured.(map[string]any); ok {
 				if vec, exists := structMap["vector"]; exists {
 					vecResult = vec
 				} else {
@@ -396,7 +391,7 @@ func (w *outputWriter) upsertBatch(ctx context.Context, batch service.MessageBat
 			for i, val := range v {
 				vector[i] = float32(val)
 			}
-		case []interface{}:
+		case []any:
 			vector = make([]float32, len(v))
 			for i, elem := range v {
 				f32, err := bloblang.ValueAsFloat32(elem)
@@ -430,7 +425,7 @@ func (w *outputWriter) upsertBatch(ctx context.Context, batch service.MessageBat
 					return fmt.Errorf("metadata mapping extraction failed: %w", err)
 				}
 
-				if metaMap, ok := metaResult.(map[string]interface{}); ok {
+				if metaMap, ok := metaResult.(map[string]any); ok {
 					item.Metadata = metaMap
 				}
 			}
@@ -439,7 +434,7 @@ func (w *outputWriter) upsertBatch(ctx context.Context, batch service.MessageBat
 			msg := batch[i]
 			structured, err := msg.AsStructured()
 			if err == nil {
-				if structMap, ok := structured.(map[string]interface{}); ok {
+				if structMap, ok := structured.(map[string]any); ok {
 					// Count metadata fields first to avoid allocation if none
 					metaCount := 0
 					for k := range structMap {
@@ -449,7 +444,7 @@ func (w *outputWriter) upsertBatch(ctx context.Context, batch service.MessageBat
 					}
 
 					if metaCount > 0 {
-						metadata := make(map[string]interface{}, metaCount)
+						metadata := make(map[string]any, metaCount)
 						for k, v := range structMap {
 							if k != "id" && k != "vector" {
 								metadata[k] = v

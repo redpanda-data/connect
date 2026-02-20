@@ -170,7 +170,6 @@ func TestSchemaRegistryEncodeAvro(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			outBatches, err := encoder.ProcessBatch(
 				t.Context(),
@@ -252,7 +251,6 @@ func TestSchemaRegistryEncodeAvroRawJSON(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			outBatches, err := encoder.ProcessBatch(
 				t.Context(),
@@ -329,7 +327,6 @@ func TestSchemaRegistryEncodeAvroLogicalTypes(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			outBatches, err := encoder.ProcessBatch(
 				t.Context(),
@@ -406,7 +403,6 @@ func TestSchemaRegistryEncodeAvroRawJSONLogicalTypes(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			outBatches, err := encoder.ProcessBatch(
 				t.Context(),
@@ -639,7 +635,6 @@ func TestSchemaRegistryEncodeJSON(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			outBatches, err := encoder.ProcessBatch(
 				t.Context(),
@@ -711,9 +706,7 @@ func TestSchemaRegistryEncodeJSONConstantRefreshes(t *testing.T) {
 
 	var wg sync.WaitGroup
 	for range 10 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			for time.Since(tStarted) <= (time.Second * 300) {
 
 				outBatches, err := encoder.ProcessBatch(
@@ -732,7 +725,7 @@ func TestSchemaRegistryEncodeJSONConstantRefreshes(t *testing.T) {
 				require.True(t, strings.HasPrefix(string(b), outputPrefix), string(b))
 				require.True(t, strings.HasSuffix(string(b), outputSuffix), string(b))
 			}
-		}()
+		})
 	}
 
 	wg.Wait()

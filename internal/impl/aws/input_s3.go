@@ -549,7 +549,6 @@ func (s *sqsTargetReader) readSQSEvents(ctx context.Context) ([]*s3ObjectTarget,
 	var pendingObjects []*s3ObjectTarget
 
 	for _, sqsMsg := range output.Messages {
-		sqsMsg := sqsMsg
 
 		var notificationAt time.Time
 		if rcvd, ok := sqsMsg.Attributes["SentTimestamp"]; ok {
