@@ -18,10 +18,10 @@ import (
 
 	_ "github.com/sijms/go-ora/v2"
 
-	"github.com/ory/dockertest/v3"
-	"github.com/ory/dockertest/v3/docker"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/wait"
 )
 
 // TestDB wraps sql.DB with testing utilities for Oracle database integration tests.
@@ -150,84 +150,47 @@ func (db *TestDB) CreateTableWithSupplementalLoggingIfNotExists(ctx context.Cont
 // enables supplemental logging for CDC, and returns the connection string and TestDB wrapper.
 // The container is automatically cleaned up when the test completes.
 func SetupTestWithOracleDBVersion(t *testing.T, version string) (string, *TestDB) {
-	pool, err := dockertest.NewPool("")
-	require.NoError(t, err)
+	ctx := t.Context()
 
-	pool.MaxWait = time.Minute * 3 // Oracle takes longer to start
-	// Oracle XE specific environment variables
-	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
-		Repository: "container-registry.oracle.com/database/express",
-		Tag:        version,
-		Env: []string{
-			"ORACLE_PWD=YourPassword123",
+	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
+		ContainerRequest: testcontainers.ContainerRequest{
+			Image:        "container-registry.oracle.com/database/express:" + version,
+			ExposedPorts: []string{"1521/tcp"},
+			Env: map[string]string{
+				"ORACLE_PWD": "YourPassword123",
+			},
+			WaitingFor: wait.ForLog("DATABASE IS READY TO USE!").WithStartupTimeout(3 * time.Minute),
 		},
-		Cmd:          []string{},
-		ExposedPorts: []string{"1521/tcp"},
-	}, func(config *docker.HostConfig) {
-		// set AutoRemove to true so that stopped container goes away by itself
-		config.AutoRemove = true
-		config.RestartPolicy = docker.RestartPolicy{
-			Name: "no",
-		}
+		Started: true,
 	})
 	require.NoError(t, err)
 	t.Cleanup(func() {
-		assert.NoError(t, pool.Purge(resource))
+		assert.NoError(t, container.Terminate(context.Background()))
 	})
 
-	port := resource.GetPort("1521/tcp")
-
-	var (
-		db                  *sql.DB
-		pdbConnectionString string
-	)
-
-	err = pool.Retry(func() error {
-		var err error
-
-		connStr := fmt.Sprintf("oracle://system:YourPassword123@localhost:%s/XE", port)
-		dbConn, err := sql.Open("oracle", connStr)
-		if err != nil {
-			return err
-		}
-		defer dbConn.Close()
-
-		dbConn.SetMaxOpenConns(10)
-		dbConn.SetMaxIdleConns(5)
-		dbConn.SetConnMaxLifetime(time.Minute * 5)
-
-		if err = dbConn.Ping(); err != nil {
-			return err
-		}
-
-		_, err = dbConn.Exec("ALTER DATABASE ADD SUPPLEMENTAL LOG DATA")
-		assert.NoError(t, err)
-
-		// Enable minimal supplemental logging for primary keys at CDB level
-		_, err = dbConn.Exec("ALTER DATABASE ADD SUPPLEMENTAL LOG DATA (PRIMARY KEY) COLUMNS")
-		assert.NoError(t, err)
-
-		// Now connect to the PDB (XEPDB1) for application use
-		pdbConnectionString = fmt.Sprintf("oracle://system:YourPassword123@localhost:%s/XE", port)
-		db, err = sql.Open("oracle", pdbConnectionString)
-		if err != nil {
-			return err
-		}
-
-		db.SetMaxOpenConns(10)
-		db.SetMaxIdleConns(5)
-		db.SetConnMaxLifetime(time.Minute * 5)
-
-		if err = db.Ping(); err != nil {
-			return err
-		}
-
-		return nil
-	})
+	port, err := container.MappedPort(ctx, "1521/tcp")
+	require.NoError(t, err)
+	host, err := container.Host(ctx)
 	require.NoError(t, err)
 
+	pdbConnectionString := fmt.Sprintf("oracle://system:YourPassword123@%s:%s/XE", host, port.Port())
+
+	db, err := sql.Open("oracle", pdbConnectionString)
+	require.NoError(t, err)
+	db.SetMaxOpenConns(10)
+	db.SetMaxIdleConns(5)
+	db.SetConnMaxLifetime(time.Minute * 5)
+	require.NoError(t, db.PingContext(ctx))
+
+	_, err = db.ExecContext(ctx, "ALTER DATABASE ADD SUPPLEMENTAL LOG DATA")
+	assert.NoError(t, err)
+
+	// Enable minimal supplemental logging for primary keys at CDB level
+	_, err = db.ExecContext(ctx, "ALTER DATABASE ADD SUPPLEMENTAL LOG DATA (PRIMARY KEY) COLUMNS")
+	assert.NoError(t, err)
+
 	// Enable creation of local users in CDB root (required to avoid ORA-65096)
-	_, err = db.ExecContext(t.Context(), "ALTER SESSION SET \"_ORACLE_SCRIPT\"=TRUE")
+	_, err = db.ExecContext(ctx, "ALTER SESSION SET \"_ORACLE_SCRIPT\"=TRUE")
 	require.NoError(t, err, "Failed to enable _ORACLE_SCRIPT session parameter")
 
 	sql := `

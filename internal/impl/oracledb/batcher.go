@@ -30,9 +30,10 @@ type batchPublisher struct {
 
 	checkpoint *checkpoint.Capped[replication.SCN]
 	msgChan    chan asyncMessage
-	log        *service.Logger
 	cacheSCN   func(ctx context.Context, scn replication.SCN) error
-	shutSig    *shutdown.Signaller
+
+	log     *service.Logger
+	shutSig *shutdown.Signaller
 }
 
 // newBatchPublisher creates an instance of batchPublisher.
@@ -40,8 +41,8 @@ func newBatchPublisher(batcher *service.Batcher, checkpoint *checkpoint.Capped[r
 	b := &batchPublisher{
 		batcher:    batcher,
 		checkpoint: checkpoint,
-		log:        logger,
 		msgChan:    make(chan asyncMessage),
+		log:        logger,
 		shutSig:    shutdown.NewSignaller(),
 	}
 	go b.loop()
@@ -130,7 +131,7 @@ func (p *batchPublisher) loop() {
 func (b *batchPublisher) Publish(ctx context.Context, m *replication.MessageEvent) error {
 	data, err := json.Marshal(m.Data)
 	if err != nil {
-		return fmt.Errorf("failure to marshal message: %w", err)
+		return fmt.Errorf("marshalling message: %w", err)
 	}
 
 	msg := service.NewMessage(data)
@@ -173,13 +174,13 @@ func (b *batchPublisher) publishBatch(ctx context.Context, batch service.Message
 		var parseErr error
 		checkpointSCN, parseErr = replication.ParseSCN(scn)
 		if parseErr != nil {
-			return fmt.Errorf("failed to parse checkpoint SCN: %w", parseErr)
+			return fmt.Errorf("parsing checkpoint SCN: %w", parseErr)
 		}
 	}
 
 	resolveFn, err := b.checkpoint.Track(ctx, checkpointSCN, int64(len(batch)))
 	if err != nil {
-		return fmt.Errorf("failed to track SCN checkpoint for batch: %w", err)
+		return fmt.Errorf("tracking SCN checkpoint for batch: %w", err)
 	}
 	msg := asyncMessage{
 		msg: batch,
@@ -201,4 +202,10 @@ func (b *batchPublisher) publishBatch(ctx context.Context, batch service.Message
 
 func (b *batchPublisher) msgs() <-chan asyncMessage {
 	return b.msgChan
+}
+
+// Close signals the publisher's loop goroutine to stop and waits for it to exit.
+func (b *batchPublisher) Close() {
+	b.shutSig.TriggerSoftStop()
+	<-b.shutSig.HasStoppedChan()
 }

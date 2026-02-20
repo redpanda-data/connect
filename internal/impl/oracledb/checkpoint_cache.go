@@ -197,27 +197,21 @@ func createCacheTable(ctx context.Context, db *sql.DB, tbl cacheTable) (bool, er
 }
 
 func createUpsertStoredProc(ctx context.Context, db *sql.DB, cacheTable cacheTable) error {
-	storedProcFullName := fmt.Sprintf("%s.%s", cacheTable.schema, defaultStoredProcName)
-	tableName := cacheTable.String()
-
-	// Drop procedure if it exists (Oracle doesn't have CREATE OR REPLACE for procedures in all versions)
-	dropQuery := fmt.Sprintf(`
-		BEGIN
-			EXECUTE IMMEDIATE 'DROP PROCEDURE %s';
-		EXCEPTION
-			WHEN OTHERS THEN
-				IF SQLCODE != -4043 THEN
-					RAISE;
-				END IF;
-		END;`, storedProcFullName)
-
-	if _, err := db.ExecContext(ctx, dropQuery); err != nil {
-		// Ignore error if procedure doesn't exist
-		return fmt.Errorf("dropping existing procedure: %w", err)
+	// Check if stored proc already exists
+	var count int
+	q := `SELECT COUNT(*) FROM ALL_PROCEDURES WHERE OWNER = :1 AND OBJECT_NAME = :2 AND OBJECT_TYPE = 'PROCEDURE'`
+	if err := db.QueryRowContext(ctx, q, strings.ToUpper(cacheTable.schema), strings.ToUpper(defaultStoredProcName)).Scan(&count); err != nil {
+		return fmt.Errorf("checking if stored procedure exists: %w", err)
+	}
+	if count > 0 {
+		return nil
 	}
 
 	// Create the upsert procedure
 	// Note: go-ora driver handles []byte parameters as RAW type
+	storedProcFullName := fmt.Sprintf("%s.%s", cacheTable.schema, defaultStoredProcName)
+	tableName := cacheTable.String()
+
 	createQuery := fmt.Sprintf(`
 		CREATE PROCEDURE %s (
 			p_key IN VARCHAR2,
@@ -246,12 +240,12 @@ func createUpsertStoredProc(ctx context.Context, db *sql.DB, cacheTable cacheTab
 
 // Add is unused
 func (*checkpointCache) Add(_ context.Context, _ string, _ []byte, _ *time.Duration) error {
-	panic("not implemented")
+	return errors.New("function Add not supported for checkpoint cache")
 }
 
 // Delete is unused
 func (*checkpointCache) Delete(_ context.Context, _ string) error {
-	panic("not implemented")
+	return errors.New("function Delete not supported for checkpoint cache")
 }
 
 var (

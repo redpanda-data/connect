@@ -10,6 +10,7 @@ package oracledb_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"testing"
@@ -77,7 +78,7 @@ oracledb_cdc:
 			defer outBatchesMu.Unlock()
 			for _, msg := range mb {
 				msgBytes, err := msg.AsBytes()
-				require.NoError(t, err)
+				assert.NoError(t, err)
 				outBatches = append(outBatches, string(msgBytes))
 			}
 			return nil
@@ -88,21 +89,20 @@ oracledb_cdc:
 		license.InjectTestService(stream.Resources())
 
 		go func() {
-			err = stream.Run(t.Context())
-			require.NoError(t, err)
+			if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+				t.Error(err)
+			}
 		}()
 
 		t.Log("Verifying snapshot changes...")
+		var got int
 		assert.Eventually(t, func() bool {
 			outBatchesMu.Lock()
 			defer outBatchesMu.Unlock()
-
-			got := len(outBatches)
-			if got > want {
-				t.Fatalf("Wanted %d snapshot messages but got %d", want, got)
-			}
-			return got == want
+			got = len(outBatches)
+			return got >= want
 		}, time.Minute*5, time.Second*1)
+		assert.Truef(t, (got == want), "Wanted %d snapshot messages but got %d", want, got)
 	}
 
 	t.Log("Verifying streaming changes...")
@@ -120,20 +120,18 @@ oracledb_cdc:
 	END;`)
 		require.NoError(t, err)
 
+		outBatchesMu.Lock()
 		outBatches = nil
+		outBatchesMu.Unlock()
+
+		var got int
 		assert.Eventually(t, func() bool {
 			outBatchesMu.Lock()
 			defer outBatchesMu.Unlock()
-
-			got := len(outBatches)
-			if got > want {
-				t.Fatalf("Wanted %d streaming messages but got %d", want, got)
-			}
-
-			t.Logf("Found %d of %d records...", got, want)
-
-			return got == want
-		}, time.Minute*1, time.Second*1)
+			got = len(outBatches)
+			return got >= want
+		}, time.Minute*5, time.Second*1)
+		assert.Truef(t, (got == want), "Wanted %d streaming messages but got %d", want, got)
 	}
 
 	require.NoError(t, stream.StopWithin(time.Second*10))
@@ -189,7 +187,7 @@ oracledb_cdc:
 			defer outBatchesMu.Unlock()
 			for _, msg := range mb {
 				msgBytes, err := msg.AsBytes()
-				require.NoError(t, err)
+				assert.NoError(t, err)
 				outBatches = append(outBatches, string(msgBytes))
 			}
 			return nil
@@ -200,21 +198,20 @@ oracledb_cdc:
 		license.InjectTestService(stream.Resources())
 
 		go func() {
-			err = stream.Run(t.Context())
-			require.NoError(t, err)
+			if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+				t.Error(err)
+			}
 		}()
 
 		t.Log("Verifying snapshot changes...")
+		var got int
 		assert.Eventually(t, func() bool {
 			outBatchesMu.Lock()
 			defer outBatchesMu.Unlock()
-
-			got := len(outBatches)
-			if got > want {
-				t.Fatalf("Wanted %d snapshot messages but got %d", want, got)
-			}
-			return got == want
+			got = len(outBatches)
+			return got >= want
 		}, time.Minute*5, time.Second*1)
+		assert.Truef(t, (got == want), "Wanted %d snapshot messages but got %d", want, got)
 	}
 
 	require.NoError(t, stream.StopWithin(time.Second*10))
@@ -255,7 +252,7 @@ oracledb_cdc:
 			defer outBatchesMu.Unlock()
 			for _, msg := range mb {
 				msgBytes, err := msg.AsBytes()
-				require.NoError(t, err)
+				assert.NoError(t, err)
 				outBatches = append(outBatches, string(msgBytes))
 			}
 			return nil
@@ -266,8 +263,9 @@ oracledb_cdc:
 		license.InjectTestService(stream.Resources())
 
 		go func() {
-			err = stream.Run(t.Context())
-			require.NoError(t, err)
+			if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+				t.Error(err)
+			}
 		}()
 
 		// Wait for component to start
@@ -285,8 +283,10 @@ oracledb_cdc:
 		assert.Eventually(t, func() bool {
 			outBatchesMu.Lock()
 			defer outBatchesMu.Unlock()
+
 			got := len(outBatches)
 			t.Logf("Found %d of 1000 records...", got)
+
 			return got == 1000
 		}, time.Minute*2, time.Millisecond*500)
 		require.NoError(t, stream.StopWithin(time.Second*10))
@@ -314,7 +314,7 @@ oracledb_cdc:
 			defer outBatchesMu.Unlock()
 			for _, msg := range mb {
 				msgBytes, err := msg.AsBytes()
-				require.NoError(t, err)
+				assert.NoError(t, err)
 				outBatches = append(outBatches, string(msgBytes))
 			}
 			return nil
@@ -325,15 +325,18 @@ oracledb_cdc:
 		license.InjectTestService(streamResume.Resources())
 
 		go func() {
-			err = streamResume.Run(t.Context())
-			require.NoError(t, err)
+			if err := streamResume.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+				t.Error(err)
+			}
 		}()
 
 		assert.Eventually(t, func() bool {
 			outBatchesMu.Lock()
 			defer outBatchesMu.Unlock()
+
 			got := len(outBatches)
 			t.Logf("Found %d of 2000 records...", got)
+
 			return got == 2000
 		}, time.Minute*2, time.Millisecond*500)
 
@@ -347,19 +350,17 @@ func TestIntegration_OracleDBCDC_Streaming(t *testing.T) {
 
 	// Create tables
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t, "latest")
-	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.foo", "CREATE TABLE testdb.foo (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
-	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.foo2", "CREATE TABLE testdb.foo2 (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
-	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb2.bar", "CREATE TABLE testdb2.bar (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
+	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.foo", "CREATE TABLE testdb.foo (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, val NUMBER)"))
+	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.foo2", "CREATE TABLE testdb.foo2 (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, val NUMBER)"))
+	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb2.bar", "CREATE TABLE testdb2.bar (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, val NUMBER)"))
 
 	var (
-		outBatches   []string
-		outBatchesMu sync.Mutex
-		stream       *service.Stream
-		err          error
+		err     error
+		stream  *service.Stream
+		msgChan = make(chan *service.Message, 1)
 	)
-	t.Log("Launching component...")
-	{
-		cfg := `
+
+	cfg := `
 oracledb_cdc:
   connection_string: %s
   stream_snapshot: false
@@ -371,17 +372,15 @@ oracledb_cdc:
   batching:
     count: 500`
 
+	t.Log("Launching component...")
+	{
 		streamBuilder := service.NewStreamBuilder()
 		require.NoError(t, streamBuilder.AddInputYAML(fmt.Sprintf(cfg, connStr)))
 		require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
 
 		require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
-			outBatchesMu.Lock()
-			defer outBatchesMu.Unlock()
 			for _, msg := range mb {
-				msgBytes, err := msg.AsBytes()
-				require.NoError(t, err)
-				outBatches = append(outBatches, string(msgBytes))
+				msgChan <- msg
 			}
 			return nil
 		}))
@@ -391,44 +390,94 @@ oracledb_cdc:
 		license.InjectTestService(stream.Resources())
 
 		go func() {
-			err = stream.Run(t.Context())
-			require.NoError(t, err)
+			if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+				t.Error(err)
+			}
+		}()
+		go func() {
+			<-t.Context().Done()
+			close(msgChan)
 		}()
 	}
 
 	// wait for component to start
 	time.Sleep(10 * time.Second)
 
-	t.Log("Verifying streaming changes...")
-	{
-		// Insert 3000 rows across tables for initial streaming
-		want := 3000
-		for range 1000 {
-			db.MustExec("INSERT INTO testdb.foo (id) VALUES (DEFAULT)")
-			db.MustExec("INSERT INTO testdb.foo2 (id) VALUES (DEFAULT)")
-			db.MustExec("INSERT INTO testdb2.bar (id) VALUES (DEFAULT)")
+	// collectMessages reads messages from channel ready for assertion
+	collectMessages := func(t *testing.T, want int) []*service.Message {
+		t.Helper()
+		msgs := make([]*service.Message, 0, want)
+		for msg := range msgChan {
+			msgs = append(msgs, msg)
+			t.Logf("Found %d of %d records...", len(msgs), want)
+			if len(msgs) == want {
+				break
+			}
+			require.LessOrEqualf(t, len(msgs), want, "received too many messages")
+		}
+		require.Lenf(t, msgs, want, "channel closed before receiving %d messages, got %d", want, len(msgs))
+		return msgs
+	}
+
+	// mustAssertMetadata ensures correct metadata exists in messages
+	mustAssertMetadata := func(t *testing.T, operation string, msgs []*service.Message) {
+		t.Helper()
+		results := make(map[string][]*service.Message)
+		for i, msg := range msgs {
+			schema, ok := msg.MetaGet("schema")
+			require.Truef(t, ok, "message %d missing 'schema' metadata", i)
+
+			table, ok := msg.MetaGet("table")
+			require.Truef(t, ok, "message %d missing 'table' metadata", i)
+
+			key := fmt.Sprintf("%s.%s", schema, table)
+			results[key] = append(results[key], msg)
+
+			op, ok := msg.MetaGet("operation")
+			require.Truef(t, ok, "message %d missing 'operation' metadata", i)
+			assert.Equalf(t, operation, op, "message %d: expected operation '%s', got %q", i, operation, op)
 		}
 
-		assert.Eventually(t, func() bool {
-			outBatchesMu.Lock()
-			defer outBatchesMu.Unlock()
-
-			got := len(outBatches)
-			if got > want {
-				t.Fatalf("Wanted %d streaming messages but got %d", want, got)
-			}
-
-			t.Logf("Found %d of %d records...", got, want)
-
-			return got == want
-		}, time.Minute*1, time.Second*1)
+		for _, expectedKey := range []string{"TESTDB.FOO", "TESTDB.FOO2", "TESTDB2.BAR"} {
+			assert.Containsf(t, results, expectedKey, "no messages received for table %q", expectedKey)
+		}
 	}
+
+	// insert initial test data
+	want := 3000
+	for range 1000 {
+		db.MustExec("INSERT INTO testdb.foo (val) VALUES (1)")
+		db.MustExec("INSERT INTO testdb.foo2 (val) VALUES (1)")
+		db.MustExec("INSERT INTO testdb2.bar (val) VALUES (1)")
+	}
+
+	t.Run("Streaming insert changes...", func(t *testing.T) {
+		msgs := collectMessages(t, want)
+		mustAssertMetadata(t, "insert", msgs)
+	})
+
+	t.Run("Streaming update changes...", func(t *testing.T) {
+		db.MustExec("UPDATE testdb.foo SET val = 2")
+		db.MustExec("UPDATE testdb.foo2 SET val = 2")
+		db.MustExec("UPDATE testdb2.bar SET val = 2")
+
+		msgs := collectMessages(t, want)
+		mustAssertMetadata(t, "update", msgs)
+	})
+
+	t.Run("Streaming delete changes...", func(t *testing.T) {
+		db.MustExec("DELETE FROM testdb.foo")
+		db.MustExec("DELETE FROM testdb.foo2")
+		db.MustExec("DELETE FROM testdb2.bar")
+
+		msgs := collectMessages(t, want)
+		mustAssertMetadata(t, "delete", msgs)
+	})
 
 	require.NoError(t, stream.StopWithin(time.Second*10))
 }
 
 func TestIntegration_OracleDBCDC_SnapshotAndStreaming_AllTypes(t *testing.T) {
-	// t.Skip()
 	integration.CheckSkip(t)
 	t.Parallel()
 
@@ -560,7 +609,7 @@ oracledb_cdc:
 			defer outBatchesMu.Unlock()
 			for _, msg := range mb {
 				msgBytes, err := msg.AsBytes()
-				require.NoError(t, err)
+				assert.NoError(t, err)
 				outBatches = append(outBatches, string(msgBytes))
 			}
 			return nil
@@ -571,8 +620,9 @@ oracledb_cdc:
 		license.InjectTestService(stream.Resources())
 
 		go func() {
-			err = stream.Run(t.Context())
-			require.NoError(t, err)
+			if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+				t.Error(err)
+			}
 		}()
 
 		// Wait for snapshot to complete (should have 1 batch with min values)
@@ -580,8 +630,10 @@ oracledb_cdc:
 		assert.Eventually(t, func() bool {
 			outBatchesMu.Lock()
 			defer outBatchesMu.Unlock()
+
 			got := len(outBatches)
 			t.Logf("Snapshot progress: %d/1 records", got)
+
 			return got == 1
 		}, time.Second*30, time.Millisecond*500)
 
@@ -629,8 +681,10 @@ oracledb_cdc:
 		assert.Eventually(t, func() bool {
 			outBatchesMu.Lock()
 			defer outBatchesMu.Unlock()
+
 			got := len(outBatches)
 			t.Logf("Total records received: %d (expecting at least %d)", got, minWant)
+
 			return got >= minWant
 		}, time.Second*30, time.Millisecond*500)
 

@@ -45,7 +45,7 @@ func ParseSCN(s string) (SCN, error) {
 	}
 	val, err := strconv.ParseUint(s, 10, 64)
 	if err != nil {
-		return InvalidSCN, fmt.Errorf("failed to parse SCN from string %q: %w", s, err)
+		return InvalidSCN, fmt.Errorf("parse SCN from string %q: %w", s, err)
 	}
 	return SCN(val), nil
 }
@@ -71,10 +71,12 @@ const (
 	MessageOperationDelete OpType = 1
 	// MessageOperationInsert represents an insert operation from Oracle's CDC table
 	MessageOperationInsert OpType = 2
+	// MessageOperationUpdate represents an update operation from Oracle's CDC table
+	MessageOperationUpdate OpType = 3
 	// MessageOperationUpdateBefore represents an update (before) operation from Oracle's CDC table
-	MessageOperationUpdateBefore OpType = 3
+	MessageOperationUpdateBefore OpType = 4
 	// MessageOperationUpdateAfter represents an update (after) operation from Oracle's CDC table
-	MessageOperationUpdateAfter OpType = 4
+	MessageOperationUpdateAfter OpType = 5
 )
 
 // String converts the operation type to a string equivalent.
@@ -86,6 +88,8 @@ func (op OpType) String() string {
 		return "delete"
 	case MessageOperationInsert:
 		return "insert"
+	case MessageOperationUpdate:
+		return "update"
 	case MessageOperationUpdateBefore:
 		return "update_before"
 	case MessageOperationUpdateAfter:
