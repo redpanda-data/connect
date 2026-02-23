@@ -477,7 +477,7 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 					batchMsg.MetaSet("lsn", *msg.LSN)
 				}
 				if msg.ColumnSchema != nil {
-					batchMsg.MetaSetMut("schema", msg.ColumnSchema)
+					batchMsg.MetaSetImmut("schema", service.ImmutableAny{V: msg.ColumnSchema})
 				}
 				if batcher.Add(batchMsg) {
 					flush = true

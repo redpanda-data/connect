@@ -662,7 +662,7 @@ func (i *mysqlStreamInput) readMessages(ctx context.Context) error {
 
 			// Add table schema if available
 			if tableSchema := i.getOrExtractTableSchemaByName(me.Table); tableSchema != nil {
-				mb.MetaSetMut("schema", tableSchema)
+				mb.MetaSetImmut("schema", service.ImmutableAny{V: tableSchema})
 			}
 
 			if i.batchPolicy.Add(mb) {
