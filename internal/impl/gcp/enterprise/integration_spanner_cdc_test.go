@@ -450,7 +450,7 @@ func TestIntegrationRealSpannerCDCInputMessagesOrderedByTimestampAndTransactionI
 
 	var sb strings.Builder
 	for i, batch := range batches {
-		sb.WriteString(fmt.Sprintf("Batch %d:\n", i))
+		fmt.Fprintf(&sb, "Batch %d:\n", i)
 		for _, m := range batch {
 			fmt.Fprintf(&sb, "  %s: %s\n", m.ModType, m.Mod.Keys.Value)
 		}

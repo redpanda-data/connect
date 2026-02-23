@@ -77,8 +77,3 @@ func TestBuildS3Endpoint(t *testing.T) {
 		}
 	})
 }
-
-//go:fix inline
-func strPtr(v string) *string {
-	return new(v)
-}

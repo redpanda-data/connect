@@ -33,24 +33,21 @@ func (cr *ChangeRecord) String() string {
 	)
 	b.WriteString("ChangeRecord{")
 	if len(cr.DataChangeRecords) > 0 {
-		b.WriteString("DataChangeRecords: ")
-		b.WriteString(fmt.Sprintf("%+v", cr.DataChangeRecords))
+		fmt.Fprintf(&b, "DataChangeRecords: %+v", cr.DataChangeRecords)
 		c = true
 	}
 	if len(cr.HeartbeatRecords) > 0 {
 		if c {
 			b.WriteString(", ")
 		}
-		b.WriteString("HeartbeatRecords: ")
-		b.WriteString(fmt.Sprintf("%+v", cr.HeartbeatRecords))
+		fmt.Fprintf(&b, "HeartbeatRecords: %+v", cr.HeartbeatRecords)
 		c = true
 	}
 	if len(cr.ChildPartitionsRecords) > 0 {
 		if c {
 			b.WriteString(", ")
 		}
-		b.WriteString("ChildPartitionsRecords: ")
-		b.WriteString(fmt.Sprintf("%+v", cr.ChildPartitionsRecords))
+		fmt.Fprintf(&b, "ChildPartitionsRecords: %+v", cr.ChildPartitionsRecords)
 	}
 	b.WriteString("}")
 	return b.String()

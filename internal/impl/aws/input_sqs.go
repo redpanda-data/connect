@@ -602,7 +602,7 @@ func (err *batchUpdateVisibilityError) Error() string {
 		if i > 0 {
 			msg.WriteByte(',')
 		}
-		msg.WriteString(fmt.Sprintf("%q", *fail.Id))
+		fmt.Fprintf(&msg, "%q", *fail.Id)
 	}
 	msg.WriteByte(']')
 	return msg.String()
