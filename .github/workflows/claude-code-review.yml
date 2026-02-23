@@ -31,7 +31,7 @@ jobs:
           use_commit_signing: true
           claude_args: >
             --model opus
-            --max-turns 10
+            --max-turns 50
             --disallowedTools "WebFetch,WebSearch"
           prompt: |
             Before running the review, load agent definitions into context since named agents may not be available in CI:
