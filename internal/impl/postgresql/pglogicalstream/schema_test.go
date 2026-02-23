@@ -177,7 +177,7 @@ func TestRelationMessageToSchemaTimetz(t *testing.T) {
 		Namespace:    "public",
 		RelationName: "appointments",
 		Columns: []*RelationMessageColumn{
-			{Name: "id", DataType: 23},                    // int4
+			{Name: "id", DataType: 23},                      // int4
 			{Name: "appt_time", DataType: pgtype.TimetzOID}, // timetz — OID 1266, not in pgtype default map
 		},
 	}

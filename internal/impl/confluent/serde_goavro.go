@@ -164,7 +164,7 @@ func (s *schemaRegistryDecoder) getGoAvroDecoder(ctx context.Context, aschema fr
 		m.SetBytes(jb)
 
 		if commonSchema != nil {
-			m.MetaSetMut(s.cfg.avro.storeSchemaMeta, commonSchema)
+			m.MetaSetImmut(s.cfg.avro.storeSchemaMeta, service.ImmutableAny{V: commonSchema})
 		}
 		return nil
 	}
