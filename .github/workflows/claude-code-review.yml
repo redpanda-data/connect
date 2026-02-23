@@ -32,4 +32,9 @@ jobs:
             --model opus
             --max-turns 10
             --disallowedTools "WebFetch,WebSearch"
-          prompt: "/review ${{ github.event.pull_request.number }}"
+          prompt: |
+            Before running the review, load agent definitions into context since named agents may not be available in CI:
+            - Read `.claude/agents/godev.md` and use its content as context when launching the godev review agent.
+            - Read `.claude/agents/tester.md` and use its content as context when launching the tester review agent.
+
+            Then run: /review ${{ github.event.pull_request.number }}

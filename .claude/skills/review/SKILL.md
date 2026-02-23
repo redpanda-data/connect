@@ -12,24 +12,26 @@ This review orchestrates specialized agents for domain-specific analysis. Do not
 
 ## Workflow
 
-1. **Gather context** - Run 2 Haiku agents in parallel:
-   - **Agent A**: Collect paths to relevant CLAUDE.md files (root `CLAUDE.md`, `config/CLAUDE.md`, and any in directories touched by the PR)
-   - **Agent B**: Summarize the PR (files modified, change categories: component implementation, tests, configuration, CLI, etc.)
+1. **Gather context** - Collect the information needed for review. Prefer running these in parallel when possible:
+   - Collect paths to relevant CLAUDE.md files (root `CLAUDE.md`, `config/CLAUDE.md`, and any in directories touched by the PR)
+   - Summarize the PR (files modified, change categories: component implementation, tests, configuration, CLI, etc.)
 
-2. **Review** - Run 3 Opus agents and 1 Haiku agent in parallel. Each receives the PR diff, change summary, and relevant CLAUDE.md content. Each returns a list of issues with a reason, confidence score 0-100, and (for scores 50-74) a brief explanation of why the reviewer is uncertain:
+2. **Review** - Launch review agents. Each receives the PR diff, change summary, and relevant CLAUDE.md content. Each returns a list of issues with a reason, confidence score 0-100, and (for scores 50-74) a brief explanation of why the reviewer is uncertain. Prefer running independent agents in parallel when possible.
+
+   Confidence scale:
    - 0: False positive or pre-existing issue
    - 25: Possibly real, possibly false positive. Stylistic issues not in CLAUDE.md/skill files.
    - 50: Real but uncertain — reviewer lacks context to confirm severity or correctness. Include uncertainty reason (e.g., "unfamiliar domain pattern", "can't determine intent without runtime context", "possible edge case but depends on caller behavior").
    - 75: Verified, will be hit in practice. Directly impacts functionality or mentioned in CLAUDE.md/skill files.
    - 100: Confirmed, will happen frequently. Evidence directly confirms this.
 
-   **Agent 1 - Go Patterns & Architecture** (`godev` agent): Component registration (single vs batch MustRegister*), ConfigSpec construction, field name constants, ParsedConfig extraction, Resources pattern, import organization, license headers, formatting/linting, error handling (wrapping with gerund form, %w), context propagation (no context.Background() in methods, no storing ctx on structs), concurrency patterns (mutex, goroutine lifecycle), shutdown/cleanup (idempotent Close, sync.Once), public wrappers, bundle registration, info.csv metadata, distribution classification.
+   **Go Patterns & Architecture** (`godev` agent): Component registration (single vs batch MustRegister*), ConfigSpec construction, field name constants, ParsedConfig extraction, Resources pattern, import organization, license headers, formatting/linting, error handling (wrapping with gerund form, %w), context propagation (no context.Background() in methods, no storing ctx on structs), concurrency patterns (mutex, goroutine lifecycle), shutdown/cleanup (idempotent Close, sync.Once), public wrappers, bundle registration, info.csv metadata, distribution classification.
 
-   **Agent 2 - Tests** (`tester` agent): Unit: table-driven tests with errContains, assert vs require, config parsing with MockResources, enterprise InjectTestService, processor/input/output/bloblang lifecycle tests, config linting, NewStreamBuilder pipelines, HTTP mock servers. Integration: integration.CheckSkip(t), Given-When-Then with t.Log(), testcontainers-go (module helpers preferred, GenericContainer fallback), NewStreamBuilder with AddBatchConsumerFunc, side-effect imports, async stream.Run with context.Canceled handling, assert.Eventually polling (no require inside), parallel subtest safety, cleanup with context.Background(). Flag changed code lacking tests and new components without integration tests.
+   **Tests** (`tester` agent): Unit: table-driven tests with errContains, assert vs require, config parsing with MockResources, enterprise InjectTestService, processor/input/output/bloblang lifecycle tests, config linting, NewStreamBuilder pipelines, HTTP mock servers. Integration: integration.CheckSkip(t), Given-When-Then with t.Log(), testcontainers-go (module helpers preferred, GenericContainer fallback), NewStreamBuilder with AddBatchConsumerFunc, side-effect imports, async stream.Run with context.Canceled handling, assert.Eventually polling (no require inside), parallel subtest safety, cleanup with context.Background(). Flag changed code lacking tests and new components without integration tests.
 
-   **Agent 3 - Bugs and Security**: Logic errors, nil dereferences, race conditions, resource leaks, SQL/command injection, XSS, hardcoded secrets. Focus on real bugs, not nitpicks.
+   **Bugs and Security** (general-purpose agent): Logic errors, nil dereferences, race conditions, resource leaks, SQL/command injection, XSS, hardcoded secrets. Focus on real bugs, not nitpicks.
 
-   **Agent 4 - Commit Policy** (Haiku): Uses `git log` and `git show --stat` on the PR commits. Checks:
+   **Commit Policy** (general-purpose agent): Uses `git log` and `git show --stat` on the PR commits. Checks:
    - **Granularity**: Each commit is one small, self-contained, logical change. Flag commits mixing unrelated work.
    - **Message format** (enforced): Must match one of these patterns:
      - `system: message` (e.g., `otlp: add authz support`, `kafka: fix consumer group rebalance`)
@@ -41,7 +43,7 @@ This review orchestrates specialized agents for domain-specific analysis. Do not
 
 3. **Filter** - Drop issues scoring below 50. Separate remaining items into two buckets:
    - **Issues** (score >= 75): Confirmed problems to flag.
-   - **Attention areas** (score 50-74): Areas where the reviewer is uncertain and a human should look. Each must include the uncertainty reason from step 3.
+   - **Attention areas** (score 50-74): Areas where the reviewer is uncertain and a human should look. Each must include the uncertainty reason from step 2.
 
    If both buckets are empty, skip commenting.
 
