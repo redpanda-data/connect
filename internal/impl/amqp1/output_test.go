@@ -65,7 +65,7 @@ message_properties_to: "queue:/my-destination"`
 		require.NoError(t, err)
 		w, wErr := amqp1WriterFromParsed(conf, service.MockResources())
 		require.NoError(t, wErr)
-		require.Equal(t, "", w.targetAddr)
+		require.Empty(t, w.targetAddr)
 		require.NotNil(t, w.msgTo)
 		msgToStr, isStatic := w.msgTo.Static()
 		require.True(t, isStatic)
@@ -81,7 +81,7 @@ message_properties_to: '${! meta("target_queue") }'`
 		require.NoError(t, err)
 		w, wErr := amqp1WriterFromParsed(conf, service.MockResources())
 		require.NoError(t, wErr)
-		require.Equal(t, "", w.targetAddr)
+		require.Empty(t, w.targetAddr)
 		require.NotNil(t, w.msgTo)
 		_, isStatic := w.msgTo.Static()
 		require.False(t, isStatic, "message_properties_to should be dynamic/interpolated")
@@ -94,7 +94,7 @@ message_properties_to: '${! meta("target_queue") }'`
 		require.NoError(t, err)
 		w, wErr := amqp1WriterFromParsed(conf, service.MockResources())
 		require.NoError(t, wErr)
-		require.Equal(t, "", w.targetAddr)
+		require.Empty(t, w.targetAddr)
 		require.Nil(t, w.msgTo)
 		// This config is valid - it will use Anonymous Terminus with no message_properties_to
 		// The To property would need to be set programmatically or the sender will fail
