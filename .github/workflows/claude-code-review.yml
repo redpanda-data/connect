@@ -32,14 +32,4 @@ jobs:
             --model opus
             --max-turns 10
             --disallowedTools "WebFetch,WebSearch"
-            --allowedTools "
-              Bash(gh pr view *),
-              Bash(gh pr diff *),
-              Bash(gh pr comment *),
-              Bash(git log *),
-              Bash(git show *),
-              Bash(git diff *)"
-          prompt: >
-            Read the file .claude/commands/review.md (skip the YAML front matter
-            between the --- delimiters). Follow those instructions to review pull
-            request ${{ github.event.pull_request.number }}.
+          prompt: "/review ${{ github.event.pull_request.number }}"

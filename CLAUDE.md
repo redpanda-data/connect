@@ -4,13 +4,13 @@ AI agent guidance for working with Redpanda Connect codebase.
 
 ---
 
-## Agent Routing
+## Skills and Agents
 
-| Task | Agent/File |
+| Task | Skill / Agent |
 |---|---|
 | Writing or modifying Go code | `godev` agent |
 | Writing or modifying tests | `tester` agent |
-| Code review | `/review` command |
+| Code review | `/review` skill |
 
 ## Plugin: Redpanda Connect
 
@@ -156,7 +156,7 @@ Component availability controlled by:
 Redpanda Connect imports benthos's public service API: `github.com/redpanda-data/benthos/v4/public/service`.
 Inherits benthos's component interfaces, configuration DSL, validation, and runtime.
 
-Component registration, config specs, license headers, and certification standards are covered in the `godev` agent.
+Component registration, config specs, license headers, and certification standards are covered in the `godev` skill/agent.
 
 ---
 
@@ -174,4 +174,4 @@ Component registration, config specs, license headers, and certification standar
 
 - **External dependencies:** Components requiring C libraries (like ZMQ) are excluded by default. Use `TAGS=x_benthos_extra task build:all`.
 - **Template tests are slow:** They build and run actual binaries. Run only changed tests during development.
-- **License headers matter:** CI fails if headers don't match the component's distribution classification. See `godev` agent for header formats.
+- **License headers matter:** CI fails if headers don't match the component's distribution classification. See `godev` skill/agent for header formats.

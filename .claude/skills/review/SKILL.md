@@ -1,14 +1,12 @@
 ---
-name: rpcn:review
+name: review
 description: Code review a pull request for Redpanda Connect, checking Go patterns, tests, component architecture, and commit policy
-arguments:
-  - name: pr
-    description: "Pull request number or URL to review. Defaults to current branch PR."
-    required: false
-allowed-tools: Bash(gh pr view:*), Bash(gh pr diff:*), Bash(gh pr comment:*), Bash(git log:*), Bash(git show:*), Bash(git diff:*)
+argument-hint: "[pr-number]"
+disable-model-invocation: true
+allowed-tools: Bash(gh pr view *), Bash(gh pr diff *), Bash(gh pr comment *), Bash(git log *), Bash(git show *), Bash(git diff *), Read, Glob, Grep, Task
 ---
 
-Code review pull request {{pr}} for Redpanda Connect. If no PR was specified, resolve the current branch's PR with `gh pr view --json number -q .number`.
+Code review pull request $ARGUMENTS for Redpanda Connect. If no PR was specified, resolve the current branch's PR with `gh pr view --json number -q .number`.
 
 This review orchestrates specialized agents for domain-specific analysis. Do not duplicate the expertise of these agents -- delegate to them and synthesize their findings.
 
@@ -20,14 +18,14 @@ This review orchestrates specialized agents for domain-specific analysis. Do not
 
 2. **Review** - Run 3 Opus agents and 1 Haiku agent in parallel. Each receives the PR diff, change summary, and relevant CLAUDE.md content. Each returns a list of issues with a reason, confidence score 0-100, and (for scores 50-74) a brief explanation of why the reviewer is uncertain:
    - 0: False positive or pre-existing issue
-   - 25: Possibly real, possibly false positive. Stylistic issues not in CLAUDE.md/agent files.
+   - 25: Possibly real, possibly false positive. Stylistic issues not in CLAUDE.md/skill files.
    - 50: Real but uncertain — reviewer lacks context to confirm severity or correctness. Include uncertainty reason (e.g., "unfamiliar domain pattern", "can't determine intent without runtime context", "possible edge case but depends on caller behavior").
-   - 75: Verified, will be hit in practice. Directly impacts functionality or mentioned in CLAUDE.md/agent files.
+   - 75: Verified, will be hit in practice. Directly impacts functionality or mentioned in CLAUDE.md/skill files.
    - 100: Confirmed, will happen frequently. Evidence directly confirms this.
 
-   **Agent 1 - Go Patterns & Architecture** (`godev`, defined in `.claude/agents/godev.md`): Component registration (single vs batch MustRegister*), ConfigSpec construction, field name constants, ParsedConfig extraction, Resources pattern, import organization, license headers, formatting/linting, error handling (wrapping with gerund form, %w), context propagation (no context.Background() in methods, no storing ctx on structs), concurrency patterns (mutex, goroutine lifecycle), shutdown/cleanup (idempotent Close, sync.Once), public wrappers, bundle registration, info.csv metadata, distribution classification.
+   **Agent 1 - Go Patterns & Architecture** (`godev` agent): Component registration (single vs batch MustRegister*), ConfigSpec construction, field name constants, ParsedConfig extraction, Resources pattern, import organization, license headers, formatting/linting, error handling (wrapping with gerund form, %w), context propagation (no context.Background() in methods, no storing ctx on structs), concurrency patterns (mutex, goroutine lifecycle), shutdown/cleanup (idempotent Close, sync.Once), public wrappers, bundle registration, info.csv metadata, distribution classification.
 
-   **Agent 2 - Tests** (`tester`, defined in `.claude/agents/tester.md`): Unit: table-driven tests with errContains, assert vs require, config parsing with MockResources, enterprise InjectTestService, processor/input/output/bloblang lifecycle tests, config linting, NewStreamBuilder pipelines, HTTP mock servers. Integration: integration.CheckSkip(t), Given-When-Then with t.Log(), testcontainers-go (module helpers preferred, GenericContainer fallback), NewStreamBuilder with AddBatchConsumerFunc, side-effect imports, async stream.Run with context.Canceled handling, assert.Eventually polling (no require inside), parallel subtest safety, cleanup with context.Background(). Flag changed code lacking tests and new components without integration tests.
+   **Agent 2 - Tests** (`tester` agent): Unit: table-driven tests with errContains, assert vs require, config parsing with MockResources, enterprise InjectTestService, processor/input/output/bloblang lifecycle tests, config linting, NewStreamBuilder pipelines, HTTP mock servers. Integration: integration.CheckSkip(t), Given-When-Then with t.Log(), testcontainers-go (module helpers preferred, GenericContainer fallback), NewStreamBuilder with AddBatchConsumerFunc, side-effect imports, async stream.Run with context.Canceled handling, assert.Eventually polling (no require inside), parallel subtest safety, cleanup with context.Background(). Flag changed code lacking tests and new components without integration tests.
 
    **Agent 3 - Bugs and Security**: Logic errors, nil dereferences, race conditions, resource leaks, SQL/command injection, XSS, hardcoded secrets. Focus on real bugs, not nitpicks.
 
@@ -55,7 +53,7 @@ This review orchestrates specialized agents for domain-specific analysis. Do not
 - Code that looks wrong but is intentional
 - Pedantic nitpicks a senior engineer wouldn't flag
 - Issues that linters, typecheckers, or compilers catch (imports, types, formatting)
-- General quality issues unless explicitly required in CLAUDE.md or agent files
+- General quality issues unless explicitly required in CLAUDE.md or skill files
 - Issues called out in CLAUDE.md but silenced in code via lint ignore comments
 - Functionality changes that are clearly intentional
 - Real issues on lines the user did not modify
@@ -118,4 +116,4 @@ https://github.com/redpanda-data/connect/blob/[full-sha]/path/file.ext#L[start]-
 - Do not build, lint, or run tests. Those run separately in CI.
 - Use `gh` for all GitHub interactions, not web fetch.
 - Create a todo list first to track progress.
-- Cite and link every issue (if referring to a CLAUDE.md or agent file, link it).
+- Cite and link every issue (if referring to a CLAUDE.md or skill file, link it).

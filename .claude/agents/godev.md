@@ -389,7 +389,7 @@ name,type,commercial_name,version,support,deprecated,cloud,cloud_with_gpu
 - **Unit tests**: `internal/impl/foo/input_test.go`
 - **Integration tests**: `internal/impl/foo/input_integration_test.go`
   - Use `testcontainers-go` for containerized dependencies
-  - Follow patterns from `.claude/agents/tester.md`
+  - Follow patterns from the `tester` agent
 
 ### 8. Verify
 
