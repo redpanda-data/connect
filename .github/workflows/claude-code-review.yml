@@ -33,9 +33,39 @@ jobs:
             --model opus
             --max-turns 50
             --disallowedTools "WebFetch,WebSearch"
+            --allowedTools "
+              Bash(gh pr view *),
+              Bash(gh pr diff *),
+              Bash(gh pr comment *),
+              Bash(git log *),
+              Bash(git show *),
+              Bash(git diff *)"
           prompt: |
             Before running the review, load agent definitions into context since named agents may not be available in CI:
             - Read `.claude/agents/godev.md` and use its content as context when launching the godev review agent.
             - Read `.claude/agents/tester.md` and use its content as context when launching the tester review agent.
 
-            Then run: /review ${{ github.event.pull_request.number }}
+            When reviewing the PR, focus on these key areas:
+            - **Go Patterns & Architecture** (`godev` agent): Component registration (single vs batch MustRegister*), ConfigSpec construction, field name constants, ParsedConfig extraction, Resources pattern, import organization, license headers, formatting/linting, error handling (wrapping with gerund form, %w), context propagation (no context.Background() in methods, no storing ctx on structs), concurrency patterns (mutex, goroutine lifecycle), shutdown/cleanup (idempotent Close, sync.Once), public wrappers, bundle registration, info.csv metadata, distribution classification.
+            - **Tests** (`tester` agent): Unit: table-driven tests with errContains, assert vs require, config parsing with MockResources, enterprise InjectTestService, processor/input/output/bloblang lifecycle tests, config linting, NewStreamBuilder pipelines, HTTP mock servers. Integration: integration.CheckSkip(t), Given-When-Then with t.Log(), testcontainers-go (module helpers preferred, GenericContainer fallback), NewStreamBuilder with AddBatchConsumerFunc, side-effect imports, async stream.Run with context.Canceled handling, assert.Eventually polling (no require inside), parallel subtest safety, cleanup with context.Background(). Flag changed code lacking tests and new components without integration tests.
+            - **Bugs and Security**: Logic errors, nil dereferences, race conditions, resource leaks, SQL/command injection, XSS, hardcoded secrets. Focus on real bugs, not nitpicks.
+            - **Commit Policy**: Uses `git log` and `git show --stat` on the PR commits. Checks:
+              - **Granularity**: Each commit is one small, self-contained, logical change. Flag commits mixing unrelated work.
+              - **Message format** (enforced): Must match one of these patterns:
+                - `system: message` (e.g., `otlp: add authz support`, `kafka: fix consumer group rebalance`)
+                - `system(subsystem): message` (e.g., `gateway(authz): add http middleware`, `cli(mcp): handle shutdown`)
+                - Uppercase plain message for repo-wide/global changes (e.g., `Bump to Go 1.26`, `Update CI workflows`)
+              - **Message quality** (enforced): Flag messages that are vague ("fix stuff", "updates", "WIP"), misleading (title doesn't match the actual changes), or incomprehensible.
+              - **Fixup/squash**: Flag unsquashed `fixup!`/`squash!` commits.
+              - Ignore PR number suffixes `(#1234)`.
+
+            After running the review, links must follow this exact format for GitHub Markdown rendering:
+            ```
+            https://github.com/redpanda-data/connect/blob/[full-sha]/path/file.ext#L[start]-L[end]
+            ```
+            - Full git SHA required (not abbreviated)
+            - `#L` notation after filename
+            - Line range format: `L[start]-L[end]`
+            - Include at least 1 line of context before and after
+
+            Run: /review ${{ github.event.pull_request.number }}
