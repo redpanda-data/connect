@@ -13,10 +13,10 @@ jobs:
       id-token: write
 
     steps:
-      - name: Checkout PR code
-        uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v6
         with:
-          fetch-depth: 25
+          fetch-depth: ${{ github.event.pull_request.commits }}
           persist-credentials: false
 
       - name: Run Claude Code Review
@@ -38,6 +38,25 @@ jobs:
             **Assumptions:**
             - All tools are functional and will work without error. Do not test tools or make exploratory calls. Make sure this is clear to every subagent that is launched.
             - Only call a tool if it is required to complete the task. Every tool call should have a clear purpose.
+
+            **STEP 1: Commit Policy Validation**
+
+            Fetch commit data using: `gh pr view $PR --json commits`
+
+            For each commit, validate against commit policy:
+            - **Granularity**: Each commit is one small, self-contained, logical change. Flag commits mixing unrelated work.
+            - **Message format** (enforced): Must match one of these patterns:
+              - `system: message` — lowercase system name matching a known area (e.g., `otlp: add authz support`, `kafka: fix consumer group rebalance`)
+              - `system(subsystem): message` — same, with parenthesized subsystem (e.g., `gateway(authz): add http middleware`, `cli(mcp): handle shutdown`)
+              - Sentence-case plain message for repo-wide changes not scoped to one system (e.g., `Bump to Go 1.26`, `Update CI workflows`). First word capitalized, rest lowercase unless proper noun.
+              - `Revert "..."` and merge commits are exempt.
+              In all cases, `message` starts lowercase and uses imperative mood (e.g., "add", "fix", not "added", "fixes").
+            - **Message quality** (enforced): Flag messages that are vague ("fix stuff", "updates", "WIP"), misleading (title doesn't match the actual changes), or incomprehensible.
+            - **Fixup/squash**: Flag unsquashed `fixup!`/`squash!` commits.
+
+            Post commit policy violations as a SINGLE summary comment (not inline comments) listing all violations found. If no commit policy violations are found, do NOT post a commit policy comment.
+
+            **STEP 2: Code Review**
 
             **CRITICAL: We only want HIGH SIGNAL issues.** Flag issues where:
             - Clear, unambiguous CLAUDE.md violations where you can quote the exact rule being broken
