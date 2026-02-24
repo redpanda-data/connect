@@ -48,8 +48,31 @@ func jwtSigner(secretDecoder secretDecoderFunc, method jwt.SigningMethod) blobla
 			return nil, fmt.Errorf("failed to decode signing_secret: %w", err)
 		}
 
+		h, err := args.Get("headers")
+		if err != nil {
+			return nil, err
+		}
+		var customHeaders map[string]any
+		if h != nil {
+			switch htype := h.(type) {
+			case map[string]any:
+				customHeaders = make(map[string]any, len(htype))
+				for key, value := range htype {
+					if key == "alg" || key == "typ" || key == "jku" || key == "jwk" || key == "x5u" || key == "x5c" || key == "x5t" || key == "x5t#S256" || key == "crit" {
+						continue
+					}
+					customHeaders[key] = value
+				}
+			default:
+				return nil, fmt.Errorf("headers parameter must be an object (map), got %T", h)
+			}
+		}
+
 		return bloblang.ObjectMethod(func(obj map[string]any) (any, error) {
 			token := jwt.NewWithClaims(method, jwt.MapClaims(obj))
+			for key, value := range customHeaders {
+				token.Header[key] = value
+			}
 			signed, err := token.SignedString(s)
 			if err != nil {
 				return "", fmt.Errorf("failed to sign token: %w", err)
@@ -74,6 +97,7 @@ func registerSignJwtMethod(m signJwtMethodSpec) error {
 		Category("JSON Web Tokens").
 		Description(fmt.Sprintf("Hash and sign an object representing JSON Web Token (JWT) claims using %s.", m.method.Alg())).
 		Param(bloblang.NewStringParam("signing_secret").Description("The secret to use for signing the token.")).
+		Param(bloblang.NewAnyParam("headers").Optional().Description("Optional object of JWT header fields to include in the token. Keys \"alg\" and \"typ\" will be ignored if provided.")).
 		Version(m.version)
 
 	if m.sampleSignature != "" {
@@ -86,6 +110,15 @@ func registerSignJwtMethod(m signJwtMethodSpec) error {
 			},
 		)
 	}
+
+	spec.ExampleNotTested(
+		"",
+		fmt.Sprintf(`root.signed = this.claims.%s(signing_secret: """%s""", headers: {"kid": "my-key", "x": "y"})`, m.name, m.dummySecret),
+		[2]string{
+			`{"claims":{"sub":"user123"}}`,
+			`{"signed":"<signed JWT token>"}`,
+		},
+	)
 
 	return bloblang.RegisterMethodV2(m.name, spec, jwtSigner(m.secretDecoder, m.method))
 }
