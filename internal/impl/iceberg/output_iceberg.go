@@ -16,6 +16,7 @@ import (
 
 	"github.com/apache/iceberg-go"
 	"github.com/apache/iceberg-go/io"
+	_ "github.com/apache/iceberg-go/io/gocloud"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 

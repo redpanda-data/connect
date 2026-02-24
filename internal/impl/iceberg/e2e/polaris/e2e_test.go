@@ -170,8 +170,8 @@ func buildCatalogConfig(polarisURL, catalogName string) catalogx.Config {
 		OAuth2ClientSecret: "secret",
 		OAuth2Scope:        "PRINCIPAL_ROLE:ALL",
 		AdditionalProps: iceberg.Properties{
-			iceio.AdlsSharedKeyAccountName: *storageAccount,
-			iceio.AdlsSharedKeyAccountKey:  *accessKey,
+			iceio.ADLSSharedKeyAccountName: *storageAccount,
+			iceio.ADLSSharedKeyAccountKey:  *accessKey,
 		},
 	}
 }
