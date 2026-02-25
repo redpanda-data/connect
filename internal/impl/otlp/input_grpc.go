@@ -321,6 +321,10 @@ func (gi *grpcOTLPInput) Close(ctx context.Context) error {
 	gi.shutSig.TriggerSoftStop()
 	defer gi.shutSig.TriggerHasStopped()
 
+	if gi.srCancel != nil {
+		gi.srCancel()
+	}
+
 	if gi.server == nil {
 		return gi.authzPolicy.Close()
 	}
