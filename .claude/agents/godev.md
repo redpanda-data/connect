@@ -189,7 +189,7 @@ Every Go file requires a license header. CI enforces this.
 // License (the "License"); you may not use this file except in compliance with
 // the License. You may obtain a copy of the License at
 //
-// https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
+// https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 ```
 
 Use the current year. Match the license of neighboring files in the same package.
