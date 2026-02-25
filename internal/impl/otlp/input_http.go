@@ -337,6 +337,10 @@ func (hi *httpOTLPInput) Close(ctx context.Context) error {
 	hi.shutSig.TriggerSoftStop()
 	defer hi.shutSig.TriggerHasStopped()
 
+	if hi.srCancel != nil {
+		hi.srCancel()
+	}
+
 	if hi.server == nil {
 		return hi.authzPolicy.Close()
 	}

@@ -49,6 +49,7 @@ type otlpInput struct {
 
 	// Schema Registry fields
 	srClient      *sr.Client
+	srCancel      context.CancelFunc
 	schemaID      map[SignalType]int
 	subject       map[SignalType]string
 	commonSubject string
@@ -76,7 +77,7 @@ func newOTLPInputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources)
 	}
 
 	// Create Schema Registry client if configured
-	if o.srClient, err = schemaregistry.ClientFromParsedOptional(pConf, schemaRegistryField, mgr); err != nil {
+	if o.srClient, o.srCancel, err = schemaregistry.ClientFromParsedOptional(pConf, schemaRegistryField, mgr); err != nil {
 		return otlpInput{}, fmt.Errorf("create schema registry client: %w", err)
 	}
 
