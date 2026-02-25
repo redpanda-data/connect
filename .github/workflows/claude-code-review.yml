@@ -48,6 +48,7 @@ jobs:
             - **Message format** (enforced): Must match one of these patterns:
               - `system: message` — lowercase system name matching a known area (e.g., `otlp: add authz support`, `kafka: fix consumer group rebalance`)
               - `system(subsystem): message` — same, with parenthesized subsystem (e.g., `gateway(authz): add http middleware`, `cli(mcp): handle shutdown`)
+              - `chore: message` — low-importance cleanup, maintenance, or housekeeping changes (e.g., `chore: update gitignore`)
               - Sentence-case plain message for repo-wide changes not scoped to one system (e.g., `Bump to Go 1.26`, `Update CI workflows`). First word capitalized, rest lowercase unless proper noun.
               - `Revert "..."` and merge commits are exempt.
               In all cases, `message` starts lowercase and uses imperative mood (e.g., "add", "fix", not "added", "fixes").
