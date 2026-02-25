@@ -4175,7 +4175,7 @@ Introduced in version v4.20.0.
 ==== Parameters
 
 *`signing_secret`* &lt;string&gt; The secret to use for signing the token.  
-*`headers`* &lt;(optional) unknown&gt; Optional object of JWT header fields to include in the token. Keys "alg" and "typ" will be ignored if provided.  
+*`headers`* &lt;(optional) unknown&gt; Optional object of JWT header fields to include in the token. Keys "alg", "typ", "jku", "jwk", "x5u", "x5c", "x5t","x5t#S256" and "crit" will be ignored if provided.  
 
 ==== Examples
 
@@ -4208,7 +4208,7 @@ Introduced in version v4.20.0.
 ==== Parameters
 
 *`signing_secret`* &lt;string&gt; The secret to use for signing the token.  
-*`headers`* &lt;(optional) unknown&gt; Optional object of JWT header fields to include in the token. Keys "alg" and "typ" will be ignored if provided.  
+*`headers`* &lt;(optional) unknown&gt; Optional object of JWT header fields to include in the token. Keys "alg", "typ", "jku", "jwk", "x5u", "x5c", "x5t","x5t#S256" and "crit" will be ignored if provided.  
 
 ==== Examples
 
@@ -4241,7 +4241,7 @@ Introduced in version v4.20.0.
 ==== Parameters
 
 *`signing_secret`* &lt;string&gt; The secret to use for signing the token.  
-*`headers`* &lt;(optional) unknown&gt; Optional object of JWT header fields to include in the token. Keys "alg" and "typ" will be ignored if provided.  
+*`headers`* &lt;(optional) unknown&gt; Optional object of JWT header fields to include in the token. Keys "alg", "typ", "jku", "jwk", "x5u", "x5c", "x5t","x5t#S256" and "crit" will be ignored if provided.  
 
 ==== Examples
 
@@ -4274,7 +4274,7 @@ Introduced in version v4.12.0.
 ==== Parameters
 
 *`signing_secret`* &lt;string&gt; The secret to use for signing the token.  
-*`headers`* &lt;(optional) unknown&gt; Optional object of JWT header fields to include in the token. Keys "alg" and "typ" will be ignored if provided.  
+*`headers`* &lt;(optional) unknown&gt; Optional object of JWT header fields to include in the token. Keys "alg", "typ", "jku", "jwk", "x5u", "x5c", "x5t","x5t#S256" and "crit" will be ignored if provided.  
 
 ==== Examples
 
@@ -4303,7 +4303,7 @@ Introduced in version v4.12.0.
 ==== Parameters
 
 *`signing_secret`* &lt;string&gt; The secret to use for signing the token.  
-*`headers`* &lt;(optional) unknown&gt; Optional object of JWT header fields to include in the token. Keys "alg" and "typ" will be ignored if provided.  
+*`headers`* &lt;(optional) unknown&gt; Optional object of JWT header fields to include in the token. Keys "alg", "typ", "jku", "jwk", "x5u", "x5c", "x5t","x5t#S256" and "crit" will be ignored if provided.  
 
 ==== Examples
 
@@ -4332,7 +4332,7 @@ Introduced in version v4.12.0.
 ==== Parameters
 
 *`signing_secret`* &lt;string&gt; The secret to use for signing the token.  
-*`headers`* &lt;(optional) unknown&gt; Optional object of JWT header fields to include in the token. Keys "alg" and "typ" will be ignored if provided.  
+*`headers`* &lt;(optional) unknown&gt; Optional object of JWT header fields to include in the token. Keys "alg", "typ", "jku", "jwk", "x5u", "x5c", "x5t","x5t#S256" and "crit" will be ignored if provided.  
 
 ==== Examples
 
@@ -4361,7 +4361,7 @@ Introduced in version v4.18.0.
 ==== Parameters
 
 *`signing_secret`* &lt;string&gt; The secret to use for signing the token.  
-*`headers`* &lt;(optional) unknown&gt; Optional object of JWT header fields to include in the token. Keys "alg" and "typ" will be ignored if provided.  
+*`headers`* &lt;(optional) unknown&gt; Optional object of JWT header fields to include in the token. Keys "alg", "typ", "jku", "jwk", "x5u", "x5c", "x5t","x5t#S256" and "crit" will be ignored if provided.  
 
 ==== Examples
 
@@ -4394,7 +4394,7 @@ Introduced in version v4.18.0.
 ==== Parameters
 
 *`signing_secret`* &lt;string&gt; The secret to use for signing the token.  
-*`headers`* &lt;(optional) unknown&gt; Optional object of JWT header fields to include in the token. Keys "alg" and "typ" will be ignored if provided.  
+*`headers`* &lt;(optional) unknown&gt; Optional object of JWT header fields to include in the token. Keys "alg", "typ", "jku", "jwk", "x5u", "x5c", "x5t","x5t#S256" and "crit" will be ignored if provided.  
 
 ==== Examples
 
@@ -4427,7 +4427,7 @@ Introduced in version v4.18.0.
 ==== Parameters
 
 *`signing_secret`* &lt;string&gt; The secret to use for signing the token.  
-*`headers`* &lt;(optional) unknown&gt; Optional object of JWT header fields to include in the token. Keys "alg" and "typ" will be ignored if provided.  
+*`headers`* &lt;(optional) unknown&gt; Optional object of JWT header fields to include in the token. Keys "alg", "typ", "jku", "jwk", "x5u", "x5c", "x5t","x5t#S256" and "crit" will be ignored if provided.  
 
 ==== Examples
 

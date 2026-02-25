@@ -199,6 +199,8 @@ JWHmBFldXcJkvNe6PH+6YL1R5jJO3TnNFFa4P6nltg==
 	}{
 		{name: "sign_hs256_invalid_headers", method: "sign_jwt_hs256", secret: dummySecretHMAC, headerArg: "\"not-an-object\"", errContains: "headers parameter must be an object"},
 		{name: "sign_rs256_headers_ignored", method: "sign_jwt_rs256", secret: dummySecretRSA, alg: jwt.SigningMethodRS256, headerArg: "{\"alg\": \"none\", \"typ\": \"bar\"}"},
+		{name: "sign_rs256_good_and_ignored_headers", method: "sign_jwt_rs256", secret: dummySecretRSA, alg: jwt.SigningMethodRS256, headerArg: "{\"kid\": \"1234\", \"typ\": \"bar\", \"jku\": \"https://www.redpanda.com/keys.json\"}"},
+		{name: "sign_rs256_good_and_all_ignored_headers", method: "sign_jwt_rs256", secret: dummySecretRSA, alg: jwt.SigningMethodRS256, headerArg: "{\"kid\": \"1234\", \"alg\": \"none\", \"typ\": \"bar\", \"jku\": \"https://www.redpanda.com/keys.json\", \"jwk\": {\"kty\": \"RSA\"}, \"x5u\": \"https://www.redpanda.com/cert.pem\", \"x5c\": [\"MIICVjCC...base64cert...\"], \"x5t\": \"thumbprint_sha1\", \"x5t#S256\": \"thumbprint_sha256\", \"crit\": [\"badsig\"]}"},
 		{name: "sign_hs256_good_headers", method: "sign_jwt_hs256", secret: dummySecretHMAC, alg: jwt.SigningMethodHS256, headerArg: "{\"kid\": \"1234\", \"foo\": \"bar\"}"},
 		{name: "sign_hs384_good_headers", method: "sign_jwt_hs384", secret: dummySecretHMAC, alg: jwt.SigningMethodHS384, headerArg: "{\"kid\": \"1234\", \"foo\": \"bar\"}"},
 		{name: "sign_hs512_good_headers", method: "sign_jwt_hs512", secret: dummySecretHMAC, alg: jwt.SigningMethodHS512, headerArg: "{\"kid\": \"1234\", \"foo\": \"bar\"}"},
@@ -260,6 +262,30 @@ JWHmBFldXcJkvNe6PH+6YL1R5jJO3TnNFFa4P6nltg==
 			}
 			if strings.Contains(tc.headerArg, "alg") {
 				assert.NotEqual(t, "none", tok.Header["alg"])
+			}
+			if strings.Contains(tc.headerArg, "typ") {
+				assert.NotEqual(t, "bar", tok.Header["typ"])
+			}
+			if strings.Contains(tc.headerArg, "jku") {
+				assert.NotContains(t, tok.Header, "jku")
+			}
+			if strings.Contains(tc.headerArg, "jwk") {
+				assert.NotContains(t, tok.Header, "jwk")
+			}
+			if strings.Contains(tc.headerArg, "x5u") {
+				assert.NotContains(t, tok.Header, "x5u")
+			}
+			if strings.Contains(tc.headerArg, "x5c") {
+				assert.NotContains(t, tok.Header, "x5c")
+			}
+			if strings.Contains(tc.headerArg, "x5t") {
+				assert.NotContains(t, tok.Header, "x5t")
+			}
+			if strings.Contains(tc.headerArg, "x5t#S256") {
+				assert.NotContains(t, tok.Header, "x5t#S256")
+			}
+			if strings.Contains(tc.headerArg, "crit") {
+				assert.NotContains(t, tok.Header, "crit")
 			}
 
 			require.Equal(t, tc.alg.Alg(), tok.Method.Alg())
