@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## 4.82.0 - TBD
 
+### Added
+
+- Add configuration option to set client name for `redis` connections.
+
 ### Changed
 
 - `tigerbeetle_cdc` input: adds the `timeout_seconds` configuration and triggers
