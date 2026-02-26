@@ -86,7 +86,7 @@ func ClientFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (*sr.
 	var oa2Conf oauth2.Config
 	if pConf.Contains("oauth2") {
 		if oa2Conf, err = oauth2.ParseConfig(pConf.Namespace("oauth2")); err != nil {
-			return nil, nil, fmt.Errorf("failed to parse oauth2: %w", err)
+			return nil, nil, fmt.Errorf("parsing oauth2: %w", err)
 		}
 	}
 
@@ -104,7 +104,7 @@ func ClientFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (*sr.
 		c, err := oa2Conf.HTTPClient(ctx, httpClient)
 		if err != nil {
 			cancel()
-			return nil, nil, fmt.Errorf("failed to create oauth2 http client: %w", err)
+			return nil, nil, fmt.Errorf("creating oauth2 http client: %w", err)
 		}
 		httpClient = c
 	} else if reqSigner == nil {
