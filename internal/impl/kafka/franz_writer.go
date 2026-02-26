@@ -35,19 +35,19 @@ import (
 
 const (
 	// Producer fields
-	kfwFieldPartitioner            = "partitioner"
-	kfwFieldIdempotentWrite        = "idempotent_write"
-	kfwFieldAcks                   = "acks"
-	kfwFieldCompression            = "compression"
-	kfwFieldAllowAutoTopicCreation = "allow_auto_topic_creation"
-	kfwFieldTimeout                     = "timeout"
-	kfwFieldMaxMessageBytes             = "max_message_bytes"
-	kfwFieldBrokerWriteMaxBytes         = "broker_write_max_bytes"
-	kfwFieldMaxBufferedRecords          = "max_buffered_records"
-	kfwFieldMaxBufferedBytes            = "max_buffered_bytes"
-	kfwFieldMaxInFlightRequestsPerBrkr  = "max_in_flight_requests"
-	kfwFieldRecordRetries               = "record_retries"
-	kfwFieldRecordDeliveryTimeout       = "record_delivery_timeout"
+	kfwFieldPartitioner                = "partitioner"
+	kfwFieldIdempotentWrite            = "idempotent_write"
+	kfwFieldAcks                       = "acks"
+	kfwFieldCompression                = "compression"
+	kfwFieldAllowAutoTopicCreation     = "allow_auto_topic_creation"
+	kfwFieldTimeout                    = "timeout"
+	kfwFieldMaxMessageBytes            = "max_message_bytes"
+	kfwFieldBrokerWriteMaxBytes        = "broker_write_max_bytes"
+	kfwFieldMaxBufferedRecords         = "max_buffered_records"
+	kfwFieldMaxBufferedBytes           = "max_buffered_bytes"
+	kfwFieldMaxInFlightRequestsPerBrkr = "max_in_flight_requests"
+	kfwFieldRecordRetries              = "record_retries"
+	kfwFieldRecordDeliveryTimeout      = "record_delivery_timeout"
 )
 
 // FranzProducerLimitsFields returns a slice of fields specifically for
@@ -126,25 +126,25 @@ func FranzProducerFields() []*service.ConfigField {
 			}).
 				Description("Override the default murmur2 hashing partitioner.").
 				Advanced().Optional(),
-		service.NewBoolField(kfwFieldIdempotentWrite).
-			Description("Enable the idempotent write producer option. " +
-				"When enabled, the producer initializes a producer ID and uses it to guarantee exactly-once semantics per partition (no duplicates on retries). " +
-				"This requires the `IDEMPOTENT_WRITE` permission on the `CLUSTER` resource. " +
-				"If your cluster does not grant this permission or uses ACLs restrictively, disable this option. " +
-				"Note: Idempotent writes are strictly a win for data integrity but may be unavailable in restricted environments " +
-				"(e.g., some managed Kafka services, Redpanda with strict ACLs). " +
-				"Disabling this option is safe and only affects retry behavior—duplicates may occur on producer retries, but the pipeline will continue to function normally.").
-			Default(true).
-			Advanced(),
-		service.NewStringAnnotatedEnumField(kfwFieldAcks, map[string]string{
-			"all":    "Wait for all in-sync replicas to acknowledge (acks=-1). Required when idempotent_write is enabled.",
-			"none":   "Do not wait for any acknowledgement (acks=0). Highest throughput but messages may be lost.",
-			"leader": "Wait for the leader broker to acknowledge (acks=1). Messages are lost if the leader fails before replication.",
-		}).
-			Description("The number of acknowledgements the leader broker must receive from ISR brokers before responding to the produce request. " +
-				"When `idempotent_write` is enabled this must be set to `all`.").
-			Default("all").
-			Advanced(),
+			service.NewBoolField(kfwFieldIdempotentWrite).
+				Description("Enable the idempotent write producer option. " +
+					"When enabled, the producer initializes a producer ID and uses it to guarantee exactly-once semantics per partition (no duplicates on retries). " +
+					"This requires the `IDEMPOTENT_WRITE` permission on the `CLUSTER` resource. " +
+					"If your cluster does not grant this permission or uses ACLs restrictively, disable this option. " +
+					"Note: Idempotent writes are strictly a win for data integrity but may be unavailable in restricted environments " +
+					"(e.g., some managed Kafka services, Redpanda with strict ACLs). " +
+					"Disabling this option is safe and only affects retry behavior—duplicates may occur on producer retries, but the pipeline will continue to function normally.").
+				Default(true).
+				Advanced(),
+			service.NewStringAnnotatedEnumField(kfwFieldAcks, map[string]string{
+				"all":    "Wait for all in-sync replicas to acknowledge (acks=-1). Required when idempotent_write is enabled.",
+				"none":   "Do not wait for any acknowledgement (acks=0). Highest throughput but messages may be lost.",
+				"leader": "Wait for the leader broker to acknowledge (acks=1). Messages are lost if the leader fails before replication.",
+			}).
+				Description("The number of acknowledgements the leader broker must receive from ISR brokers before responding to the produce request. " +
+					"When `idempotent_write` is enabled this must be set to `all`.").
+				Default("all").
+				Advanced(),
 			service.NewStringEnumField(kfwFieldCompression, "lz4", "snappy", "gzip", "none", "zstd").
 				Description("Optionally set an explicit compression type. The default preference is to use snappy when the broker supports it, and fall back to none if not.").
 				Optional().
