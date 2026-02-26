@@ -318,8 +318,7 @@ func (i *oracleDBCDCInput) Connect(ctx context.Context) (err error) {
 	}()
 
 	// no cache specified so use default, internal oracle based cache
-	if i.cfg.scnCache == "" {
-		// setup internal cache
+	if i.cfg.scnCache == "" && i.cpCache == nil {
 		if i.cpCache, err = newCheckpointCache(ctx, i.cfg.connectionString, i.cfg.cpCacheTableName, i.log); err != nil {
 			return fmt.Errorf("initialising oracle based checkpoint cache: %w", err)
 		}
