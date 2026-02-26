@@ -175,7 +175,7 @@ func NewJaeger(config jaegerConfig) (trace.TracerProvider, error) {
 	if i := config.FlushInterval; i != "" {
 		flushInterval, err := time.ParseDuration(i)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse flush interval '%s': %v", i, err)
+			return nil, fmt.Errorf("parsing flush interval '%s': %v", i, err)
 		}
 		batchOpts = append(batchOpts, tracesdk.WithBatchTimeout(flushInterval))
 	}

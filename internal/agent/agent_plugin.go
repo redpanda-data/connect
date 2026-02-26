@@ -33,7 +33,7 @@ type rpcClient struct {
 func (m *rpcClient) InvokeAgent(ctx context.Context, inputMsg *service.Message) (*service.Message, error) {
 	pb, err := runtimepb.MessageToProto(inputMsg)
 	if err != nil {
-		return nil, fmt.Errorf("failed to convert message for agent: %w", err)
+		return nil, fmt.Errorf("converting message for agent: %w", err)
 	}
 	span := trace.SpanFromContext(inputMsg.Context())
 	var traceContext *agentruntimepb.TraceContext
@@ -51,11 +51,11 @@ func (m *rpcClient) InvokeAgent(ctx context.Context, inputMsg *service.Message) 
 	})
 	if err != nil {
 		// TODO: Support typed errors handled in the core engine
-		return nil, fmt.Errorf("failed to invoke agent: %w", err)
+		return nil, fmt.Errorf("invoking agent: %w", err)
 	}
 	outputMsg, err := runtimepb.ProtoToMessage(resp.GetMessage())
 	if err != nil {
-		return nil, fmt.Errorf("failed to convert message from agent: %w", err)
+		return nil, fmt.Errorf("converting message from agent: %w", err)
 	}
 	// Copy the context too
 	outputMsg = outputMsg.WithContext(inputMsg.Context())

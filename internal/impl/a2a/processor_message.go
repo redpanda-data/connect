@@ -125,19 +125,19 @@ func makeProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.
 	// Get authenticated HTTP client and token source from global service account config
 	httpClient, err := serviceaccount.GetHTTPClient()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get service account HTTP client: %w", err)
+		return nil, fmt.Errorf("getting service account HTTP client: %w", err)
 	}
 
 	tokenSource, err := serviceaccount.GetTokenSource()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get service account token source: %w", err)
+		return nil, fmt.Errorf("getting service account token source: %w", err)
 	}
 
 	// Fetch agent card to discover the actual agent endpoint URL
 	// Note: We use OAuth2 auth to fetch the card, but ignore card's security schemes
 	token, err := tokenSource.Token()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get OAuth2 token for agent card fetch: %w", err)
+		return nil, fmt.Errorf("getting OAuth2 token for agent card fetch: %w", err)
 	}
 
 	// Parse the agent card URL to separate base URL and path
@@ -148,7 +148,7 @@ func makeProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.
 		agentcard.WithPath(cardPath),
 		agentcard.WithRequestHeader("Authorization", "Bearer "+token.AccessToken))
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch agent card from %s: %w", agentCardURL, err)
+		return nil, fmt.Errorf("fetching agent card from %s: %w", agentCardURL, err)
 	}
 
 	mgr.Logger().Debugf("Fetched agent card: %s (version: %s, protocol: %s)", card.Name, card.Version, card.ProtocolVersion)
@@ -184,7 +184,7 @@ func makeProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.
 		},
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to create A2A client: %w", err)
+		return nil, fmt.Errorf("creating A2A client: %w", err)
 	}
 
 	return &messageProcessor{
@@ -205,12 +205,12 @@ func (p *messageProcessor) Process(ctx context.Context, msg *service.Message) (s
 		var err error
 		promptText, err = p.prompt.TryString(msg)
 		if err != nil {
-			return nil, fmt.Errorf("failed to evaluate prompt: %w", err)
+			return nil, fmt.Errorf("evaluating prompt: %w", err)
 		}
 	} else {
 		payloadBytes, err := msg.AsBytes()
 		if err != nil {
-			return nil, fmt.Errorf("failed to get message payload: %w", err)
+			return nil, fmt.Errorf("getting message payload: %w", err)
 		}
 		promptText = string(payloadBytes)
 	}
@@ -227,7 +227,7 @@ func (p *messageProcessor) Process(ctx context.Context, msg *service.Message) (s
 	})
 	if err != nil {
 		p.logger.Errorf("Failed to send A2A message: %v", err)
-		return nil, fmt.Errorf("failed to send A2A message: %w", err)
+		return nil, fmt.Errorf("sending A2A message: %w", err)
 	}
 
 	// Handle result
@@ -385,7 +385,7 @@ func (p *messageProcessor) pollTaskUntilComplete(ctx context.Context, taskID a2a
 			})
 			if err != nil {
 				p.logger.Errorf("Failed to get task status on poll %d: %v", pollCount, err)
-				return nil, fmt.Errorf("failed to get task status: %w", err)
+				return nil, fmt.Errorf("getting task status: %w", err)
 			}
 
 			p.logger.Debugf("Task %s poll %d: state=%s", taskID, pollCount, task.Status.State)

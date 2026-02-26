@@ -53,7 +53,7 @@ func init() {
 			}
 			eval, err := jsonPathLanguage.NewEvaluable(expressionStr)
 			if err != nil {
-				return nil, fmt.Errorf("failed to evaluate json path expression: %w", err)
+				return nil, fmt.Errorf("evaluating json path expression: %w", err)
 			}
 			return func(v any) (any, error) {
 				return eval(context.Background(), v)

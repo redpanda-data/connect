@@ -44,7 +44,7 @@ func TestSchemaRegistryDecoderConfigParse(t *testing.T) {
 			config: `
 url: huh#%#@$u*not////::example.com
 `,
-			errContains: `failed to parse url`,
+			errContains: `parsing url`,
 		},
 		{
 			name: "url with base path",

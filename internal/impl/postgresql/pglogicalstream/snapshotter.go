@@ -217,7 +217,7 @@ _rpcn__sampled_keys AS MATERIALIZED (
 
 	query, err = sanitize.SQLQuery(query, table.String())
 	if err != nil {
-		return nil, fmt.Errorf("failed to sanitize query: %w", err)
+		return nil, fmt.Errorf("sanitizing query: %w", err)
 	}
 	rows, err := s.tx.QueryContext(ctx, query)
 	if err != nil {
@@ -226,7 +226,7 @@ _rpcn__sampled_keys AS MATERIALIZED (
 
 	columnTypes, err := rows.ColumnTypes()
 	if err != nil {
-		return nil, fmt.Errorf("failed to compute column types for key sampling: %w", err)
+		return nil, fmt.Errorf("computing column types for key sampling: %w", err)
 	}
 	scanArgs, valueGetters := prepareScannersAndGetters(columnTypes)
 	for rows.Next() {

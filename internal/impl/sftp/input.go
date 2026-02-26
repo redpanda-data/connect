@@ -192,7 +192,7 @@ func newSFTPReaderFromParsed(conf *service.ParsedConfig, mgr *service.Resources)
 
 		client, err := sftp.NewClient(s.sshClient)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create SFTP client: %w", err)
+			return nil, fmt.Errorf("creating SFTP client: %w", err)
 		}
 
 		return client, nil
@@ -216,7 +216,7 @@ func (s *sftpReader) Connect(ctx context.Context) error {
 	var err error
 	s.sshClient, err = ssh.Dial("tcp", s.address, s.sshConfig)
 	if err != nil {
-		return fmt.Errorf("failed to connect to SFTP server: %w", err)
+		return fmt.Errorf("connecting to SFTP server: %w", err)
 	}
 
 	if s.watcherEnabled && s.pathProvider == nil {
@@ -298,7 +298,7 @@ func (s *sftpReader) Close(ctx context.Context) error {
 	s.sftpClientPool.Reset()
 
 	if err := s.sshClient.Close(); err != nil {
-		return fmt.Errorf("failed to close SSH client: %s", err)
+		return fmt.Errorf("closing SSH client: %s", err)
 	}
 
 	s.sshClient = nil
@@ -394,7 +394,7 @@ func (s *sftpReader) initScanner(ctx context.Context) (codec.DeprecatedFallbackS
 
 		client, err := s.sftpClientPool.Acquire(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("failed to acquire SFTP client: %w", err)
+			return nil, fmt.Errorf("acquiring SFTP client: %w", err)
 		}
 
 		handleErr := func(err error) {
@@ -415,13 +415,13 @@ func (s *sftpReader) initScanner(ctx context.Context) (codec.DeprecatedFallbackS
 
 		file, err = client.Open(path)
 		if err != nil {
-			handleErr(fmt.Errorf("failed to open file: %w", err))
+			handleErr(fmt.Errorf("opening file: %w", err))
 			continue
 		}
 
 		stat, err := file.Stat()
 		if err != nil {
-			handleErr(fmt.Errorf("failed to stat file: %w", err))
+			handleErr(fmt.Errorf("statting file: %w", err))
 			continue
 		}
 
@@ -439,7 +439,7 @@ func (s *sftpReader) initScanner(ctx context.Context) (codec.DeprecatedFallbackS
 			if err = f.Close(); err != nil {
 				s.log.Errorf("Failed to close file %q: %s", path, err)
 			}
-			return nil, fmt.Errorf("failed to create scanner: %w", err)
+			return nil, fmt.Errorf("creating scanner: %w", err)
 		}
 
 		s.stateLock.Lock()
@@ -469,7 +469,7 @@ func (s *sftpReader) newCodecAckFn(client *sftp.Client, path string) service.Ack
 			}
 
 			if err := client.Remove(path); err != nil {
-				return fmt.Errorf("failed to remove file %q: %w", path, err)
+				return fmt.Errorf("removing file %q: %w", path, err)
 			}
 		}
 

@@ -123,13 +123,13 @@ func (s *Snapshot) snapshotTable(ctx context.Context, table UserDefinedTable, ma
 				batchRows, err = querySnapshotTable(ctx, tx, table, tablePks, lastSeenPksValues, maxBatchSize)
 			}
 			if err != nil {
-				return fmt.Errorf("failed to execute snapshot table query: %s", err)
+				return fmt.Errorf("executing snapshot table query: %s", err)
 			}
 
 			var types []*sql.ColumnType
 			types, err = batchRows.ColumnTypes()
 			if err != nil {
-				return fmt.Errorf("failed to fetch column types: %w", err)
+				return fmt.Errorf("fetching column types: %w", err)
 			}
 
 			values, mappers := prepSnapshotScannerAndMappers(types)
@@ -137,7 +137,7 @@ func (s *Snapshot) snapshotTable(ctx context.Context, table UserDefinedTable, ma
 			var columns []string
 			columns, err = batchRows.Columns()
 			if err != nil {
-				return fmt.Errorf("failed to fetch columns: %w", err)
+				return fmt.Errorf("fetching columns: %w", err)
 			}
 
 			var batchRowsCount int

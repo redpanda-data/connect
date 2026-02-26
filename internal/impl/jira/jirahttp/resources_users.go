@@ -137,7 +137,7 @@ func (j *Client) SearchUsersResource(
 
 		bytes, err := json.Marshal(response)
 		if err != nil {
-			return nil, fmt.Errorf("failed to marshal user: %w", err)
+			return nil, fmt.Errorf("marshalling user: %w", err)
 		}
 
 		message := service.NewMessage(bytes)

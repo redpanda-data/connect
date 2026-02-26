@@ -39,7 +39,7 @@ func createTopic(ctx context.Context, logger *service.Logger, inputClient, outpu
 	outputAdminClient := kadm.NewClient(outputClient)
 
 	if topics, err := outputAdminClient.ListTopics(ctx, cfg.srcTopic); err != nil {
-		return fmt.Errorf("failed to fetch topic %q from output broker: %s", cfg.srcTopic, err)
+		return fmt.Errorf("fetching topic %q from output broker: %s", cfg.srcTopic, err)
 	} else {
 		if topics.Has(cfg.srcTopic) {
 			return kerr.TopicAlreadyExists
@@ -49,7 +49,7 @@ func createTopic(ctx context.Context, logger *service.Logger, inputClient, outpu
 	inputAdminClient := kadm.NewClient(inputClient)
 	var inputTopic kadm.TopicDetail
 	if topics, err := inputAdminClient.ListTopics(ctx, cfg.srcTopic); err != nil {
-		return fmt.Errorf("failed to fetch topic %q from source broker: %s", cfg.srcTopic, err)
+		return fmt.Errorf("fetching topic %q from source broker: %s", cfg.srcTopic, err)
 	} else {
 		inputTopic = topics[cfg.srcTopic]
 	}
@@ -70,12 +70,12 @@ func createTopic(ctx context.Context, logger *service.Logger, inputClient, outpu
 
 	topicConfigs, err := inputAdminClient.DescribeTopicConfigs(ctx, cfg.srcTopic)
 	if err != nil {
-		return fmt.Errorf("failed to fetch configs for topic %q from source broker: %s", cfg.srcTopic, err)
+		return fmt.Errorf("fetching configs for topic %q from source broker: %s", cfg.srcTopic, err)
 	}
 
 	rc, err := topicConfigs.On(cfg.srcTopic, nil)
 	if err != nil {
-		return fmt.Errorf("failed to fetch configs for topic %q from source broker: %s", cfg.srcTopic, err)
+		return fmt.Errorf("fetching configs for topic %q from source broker: %s", cfg.srcTopic, err)
 	}
 
 	// Source: https://docs.redpanda.com/current/reference/properties/topic-properties/
@@ -119,7 +119,7 @@ func createTopic(ctx context.Context, logger *service.Logger, inputClient, outpu
 		}
 
 		if !errors.Is(err, kerr.TopicAlreadyExists) {
-			return fmt.Errorf("failed to create topic %q: %s", cfg.destTopic, err)
+			return fmt.Errorf("creating topic %q: %s", cfg.destTopic, err)
 		} else {
 			return err
 		}
@@ -140,7 +140,7 @@ func createACLs(ctx context.Context, srcTopic, destTopic string, inputClient, ou
 	var inputACLResults kadm.DescribeACLsResults
 	var err error
 	if inputACLResults, err = inputAdminClient.DescribeACLs(ctx, builder); err != nil {
-		return fmt.Errorf("failed to fetch ACLs for topic %q: %s", srcTopic, err)
+		return fmt.Errorf("fetching ACLs for topic %q: %s", srcTopic, err)
 	}
 
 	if len(inputACLResults) > 1 {
@@ -169,7 +169,7 @@ func createACLs(ctx context.Context, srcTopic, destTopic string, inputClient, ou
 
 		// Attempting to overwrite existing ACLs is idempotent and doesn't seem to raise an error.
 		if _, err := outputAdminClient.CreateACLs(ctx, builder); err != nil {
-			return fmt.Errorf("failed to create ACLs for topic %q: %s", destTopic, err)
+			return fmt.Errorf("creating ACLs for topic %q: %s", destTopic, err)
 		}
 	}
 

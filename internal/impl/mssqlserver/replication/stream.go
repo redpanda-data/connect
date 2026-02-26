@@ -190,7 +190,7 @@ func (ct *changeTableRowIter) mapValsToChange(vals []any, dst *change) error {
 			if b, ok := v.([]byte); ok {
 				dst.startLSN = b
 			} else {
-				return errors.New("failed to map 'start_lsn' column from change table")
+				return errors.New("mapping 'start_lsn' column from change table")
 			}
 		case "__$end_lsn":
 			// "In SQL Server 2012 (11.x), this column is always NULL."
@@ -206,7 +206,7 @@ func (ct *changeTableRowIter) mapValsToChange(vals []any, dst *change) error {
 			if b, ok := v.([]byte); ok {
 				dst.updateMask = b
 			} else {
-				return errors.New("failed to map 'update_mask' column from change table")
+				return errors.New("mapping 'update_mask' column from change table")
 			}
 		case "__$operation":
 			switch x := v.(type) {
@@ -215,7 +215,7 @@ func (ct *changeTableRowIter) mapValsToChange(vals []any, dst *change) error {
 			case int32:
 				dst.operation = OpType(x)
 			default:
-				return errors.New("failed to map 'operation' column from change table")
+				return errors.New("mapping 'operation' column from change table")
 			}
 		case "__$command_id":
 			switch x := v.(type) {
@@ -224,13 +224,13 @@ func (ct *changeTableRowIter) mapValsToChange(vals []any, dst *change) error {
 			case int32:
 				dst.commandID = int(x)
 			default:
-				return errors.New("failed to map 'command_id' column from change table")
+				return errors.New("mapping 'command_id' column from change table")
 			}
 		case "__$seqval":
 			if b, ok := v.([]byte); ok {
 				dst.seqVal = b
 			} else {
-				return errors.New("failed to map 'seqval' column from change table")
+				return errors.New("mapping 'seqval' column from change table")
 			}
 		default:
 			if ct.colTypes[i] != nil {

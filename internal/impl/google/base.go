@@ -102,7 +102,7 @@ func (g *baseProcessor[Service]) getDriveService(ctx context.Context) (*Service,
 	}
 	service, err = g.ctor(ctx, options...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create Drive service: %v", err)
+		return nil, fmt.Errorf("creating Drive service: %v", err)
 	}
 	g.service = service
 	return g.service, nil
@@ -116,7 +116,7 @@ func googleClientOptions(ctx context.Context, credentialsJSON string) (options [
 	if credentialsJSON == "" {
 		creds, err := google.FindDefaultCredentials(ctx, drive.DriveReadonlyScope)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create default google client: %v", err)
+			return nil, fmt.Errorf("creating default google client: %v", err)
 		}
 		options = append(options, option.WithTokenSource(creds.TokenSource))
 		if len(creds.JSON) > 0 {
@@ -131,7 +131,7 @@ func googleClientOptions(ctx context.Context, credentialsJSON string) (options [
 	} else {
 		jwtConfig, err := google.JWTConfigFromJSON([]byte(credentialsJSON), drive.DriveReadonlyScope)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse credentials: %v", err)
+			return nil, fmt.Errorf("parsing credentials: %v", err)
 		}
 		client := jwtConfig.Client(ctx)
 		options = append(options, option.WithHTTPClient(client))

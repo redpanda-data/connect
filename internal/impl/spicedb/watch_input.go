@@ -144,7 +144,7 @@ func (wi *watchInput) Connect(ctx context.Context) error {
 	// 2. initialize spicedb connection
 	client, err := wi.clientConfig.loadSpiceDBClient()
 	if err != nil {
-		return fmt.Errorf("failed to initialize SpiceDB client: %v", err)
+		return fmt.Errorf("initializing SpiceDB client: %v", err)
 	}
 
 	// 3. get the last processed Zed token
@@ -164,7 +164,7 @@ func (wi *watchInput) Connect(ctx context.Context) error {
 		err = cacheErr
 	}
 	if err != nil {
-		return fmt.Errorf("failed to obtain latest processed zed token: %v", err)
+		return fmt.Errorf("obtaining latest processed zed token: %v", err)
 	}
 	if lastZedToken != "" {
 		startCursor = &v1.ZedToken{

@@ -462,7 +462,7 @@ func newSnowflakeWriterFromConfig(conf *service.ParsedConfig, mgr *service.Resou
 	var err error
 
 	if s.account, err = conf.FieldString("account"); err != nil {
-		return nil, fmt.Errorf("failed to parse account: %s", err)
+		return nil, fmt.Errorf("parsing account: %s", err)
 	}
 
 	s.accountIdentifier = s.account
@@ -470,7 +470,7 @@ func newSnowflakeWriterFromConfig(conf *service.ParsedConfig, mgr *service.Resou
 	if conf.Contains("region") {
 		var region string
 		if region, err = conf.FieldString("region"); err != nil {
-			return nil, fmt.Errorf("failed to parse region: %s", err)
+			return nil, fmt.Errorf("parsing region: %s", err)
 		}
 		s.accountIdentifier += "." + region
 	}
@@ -478,64 +478,64 @@ func newSnowflakeWriterFromConfig(conf *service.ParsedConfig, mgr *service.Resou
 	if conf.Contains("cloud") {
 		var cloud string
 		if cloud, err = conf.FieldString("cloud"); err != nil {
-			return nil, fmt.Errorf("failed to parse cloud: %s", err)
+			return nil, fmt.Errorf("parsing cloud: %s", err)
 		}
 		s.accountIdentifier += "." + cloud
 	}
 
 	if s.user, err = conf.FieldString("user"); err != nil {
-		return nil, fmt.Errorf("failed to parse user: %s", err)
+		return nil, fmt.Errorf("parsing user: %s", err)
 	}
 
 	var password string
 	if conf.Contains("password") {
 		if password, err = conf.FieldString("password"); err != nil {
-			return nil, fmt.Errorf("failed to parse password: %s", err)
+			return nil, fmt.Errorf("parsing password: %s", err)
 		}
 	}
 
 	var role string
 	if role, err = conf.FieldString("role"); err != nil {
-		return nil, fmt.Errorf("failed to parse role: %s", err)
+		return nil, fmt.Errorf("parsing role: %s", err)
 	}
 
 	if s.database, err = conf.FieldString("database"); err != nil {
-		return nil, fmt.Errorf("failed to parse database: %s", err)
+		return nil, fmt.Errorf("parsing database: %s", err)
 	}
 
 	var warehouse string
 	if warehouse, err = conf.FieldString("warehouse"); err != nil {
-		return nil, fmt.Errorf("failed to parse warehouse: %s", err)
+		return nil, fmt.Errorf("parsing warehouse: %s", err)
 	}
 
 	if s.schema, err = conf.FieldString("schema"); err != nil {
-		return nil, fmt.Errorf("failed to parse schema: %s", err)
+		return nil, fmt.Errorf("parsing schema: %s", err)
 	}
 
 	if s.stage, err = conf.FieldInterpolatedString("stage"); err != nil {
-		return nil, fmt.Errorf("failed to parse stage: %s", err)
+		return nil, fmt.Errorf("parsing stage: %s", err)
 	}
 
 	if s.path, err = conf.FieldInterpolatedString("path"); err != nil {
-		return nil, fmt.Errorf("failed to parse path: %s", err)
+		return nil, fmt.Errorf("parsing path: %s", err)
 	}
 
 	if s.fileName, err = conf.FieldInterpolatedString("file_name"); err != nil {
-		return nil, fmt.Errorf("failed to parse file_name: %s", err)
+		return nil, fmt.Errorf("parsing file_name: %s", err)
 	}
 
 	if s.fileExtension, err = conf.FieldInterpolatedString("file_extension"); err != nil {
-		return nil, fmt.Errorf("failed to parse file_extension: %s", err)
+		return nil, fmt.Errorf("parsing file_extension: %s", err)
 	}
 
 	var uploadParallelThreads int
 	if uploadParallelThreads, err = conf.FieldInt("upload_parallel_threads"); err != nil {
-		return nil, fmt.Errorf("failed to parse stage: %s", err)
+		return nil, fmt.Errorf("parsing stage: %s", err)
 	}
 
 	compressionStr, err := conf.FieldString("compression")
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse compression: %s", err)
+		return nil, fmt.Errorf("parsing compression: %s", err)
 	}
 
 	compression := CompressionType(compressionStr)
@@ -574,12 +574,12 @@ func newSnowflakeWriterFromConfig(conf *service.ParsedConfig, mgr *service.Resou
 	s.putQueryFormat = fmt.Sprintf("PUT file://%%s %%s AUTO_COMPRESS = %s SOURCE_COMPRESSION = %s PARALLEL=%d", autoCompress, sourceCompression, uploadParallelThreads)
 
 	if s.requestID, err = conf.FieldInterpolatedString("request_id"); err != nil {
-		return nil, fmt.Errorf("failed to parse request_id: %s", err)
+		return nil, fmt.Errorf("parsing request_id: %s", err)
 	}
 
 	if conf.Contains("snowpipe") {
 		if s.snowpipe, err = conf.FieldInterpolatedString("snowpipe"); err != nil {
-			return nil, fmt.Errorf("failed to parse snowpipe: %s", err)
+			return nil, fmt.Errorf("parsing snowpipe: %s", err)
 		}
 	}
 
@@ -588,33 +588,33 @@ func newSnowflakeWriterFromConfig(conf *service.ParsedConfig, mgr *service.Resou
 		var privateKeyPass string
 		if conf.Contains("private_key_pass") {
 			if privateKeyPass, err = conf.FieldString("private_key_pass"); err != nil {
-				return nil, fmt.Errorf("failed to parse private_key_pass: %s", err)
+				return nil, fmt.Errorf("parsing private_key_pass: %s", err)
 			}
 		}
 
 		var privateKey string
 		if conf.Contains("private_key") {
 			if privateKey, err = conf.FieldString("private_key"); err != nil {
-				return nil, fmt.Errorf("failed to parse private_key: %s", err)
+				return nil, fmt.Errorf("parsing private_key: %s", err)
 			}
 		}
 		if privateKey != "" {
 			if s.privateKey, err = getPrivateKey([]byte(privateKey), privateKeyPass); err != nil {
-				return nil, fmt.Errorf("failed to read private key: %s", err)
+				return nil, fmt.Errorf("reading private key: %s", err)
 			}
 		} else {
 			var privateKeyFile string
 			if privateKeyFile, err = conf.FieldString("private_key_file"); err != nil {
-				return nil, fmt.Errorf("failed to parse private_key_file: %s", err)
+				return nil, fmt.Errorf("parsing private_key_file: %s", err)
 			}
 
 			if s.privateKey, err = getPrivateKeyFromFile(mgr.FS(), privateKeyFile, privateKeyPass); err != nil {
-				return nil, fmt.Errorf("failed to read private key: %s", err)
+				return nil, fmt.Errorf("reading private key: %s", err)
 			}
 		}
 
 		if s.publicKeyFingerprint, err = calculatePublicKeyFingerprint(s.privateKey); err != nil {
-			return nil, fmt.Errorf("failed to calculate public key fingerprint: %s", err)
+			return nil, fmt.Errorf("calculating public key fingerprint: %s", err)
 		}
 	} else {
 		authenticator = gosnowflake.AuthTypeSnowflake
@@ -622,7 +622,7 @@ func newSnowflakeWriterFromConfig(conf *service.ParsedConfig, mgr *service.Resou
 
 	var params map[string]*string
 	if clientSessionKeepAlive, err := conf.FieldBool("client_session_keep_alive"); err != nil {
-		return nil, fmt.Errorf("failed to parse client_session_keep_alive: %s", err)
+		return nil, fmt.Errorf("parsing client_session_keep_alive: %s", err)
 	} else if clientSessionKeepAlive {
 		params = make(map[string]*string)
 		value := "true"
@@ -644,7 +644,7 @@ func newSnowflakeWriterFromConfig(conf *service.ParsedConfig, mgr *service.Resou
 		PrivateKey:    s.privateKey,
 		Params:        params,
 	}); err != nil {
-		return nil, fmt.Errorf("failed to construct DSN: %s", err)
+		return nil, fmt.Errorf("constructing DSN: %s", err)
 	}
 
 	return &s, nil
@@ -656,7 +656,7 @@ func (s *snowflakeWriter) Connect(context.Context) error {
 	var err error
 	s.db, err = sql.Open("snowflake", s.dsn)
 	if err != nil {
-		return fmt.Errorf("failed to connect to snowflake: %s", err)
+		return fmt.Errorf("connecting to snowflake: %s", err)
 	}
 
 	return nil
@@ -692,7 +692,7 @@ func (s *snowflakeWriter) getSnowpipeInsertURL(snowpipe, requestID string) strin
 func (s *snowflakeWriter) callSnowpipe(ctx context.Context, snowpipe, requestID, filePath string) error {
 	jwtToken, err := s.createJWT()
 	if err != nil {
-		return fmt.Errorf("failed to create Snowpipe JWT token: %s", err)
+		return fmt.Errorf("creating Snowpipe JWT token: %s", err)
 	}
 
 	type File struct {
@@ -710,19 +710,19 @@ func (s *snowflakeWriter) callSnowpipe(ctx context.Context, snowpipe, requestID,
 
 	buf := bytes.Buffer{}
 	if err := json.NewEncoder(&buf).Encode(reqPayload); err != nil {
-		return fmt.Errorf("failed to marshal request body JSON: %s", err)
+		return fmt.Errorf("marshalling request body JSON: %s", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.getSnowpipeInsertURL(snowpipe, requestID), &buf)
 	if err != nil {
-		return fmt.Errorf("failed to create Snowpipe HTTP request: %s", err)
+		return fmt.Errorf("creating Snowpipe HTTP request: %s", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+jwtToken)
 
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to execute Snowpipe HTTP request: %s", err)
+		return fmt.Errorf("executing Snowpipe HTTP request: %s", err)
 	}
 	defer resp.Body.Close()
 
@@ -734,7 +734,7 @@ func (s *snowflakeWriter) callSnowpipe(ctx context.Context, snowpipe, requestID,
 		ResponseCode string
 	}
 	if err = json.NewDecoder(resp.Body).Decode(&respPayload); err != nil {
-		return fmt.Errorf("failed to decode Snowpipe HTTP response: %s", err)
+		return fmt.Errorf("decoding Snowpipe HTTP response: %s", err)
 	}
 	if respPayload.ResponseCode != "SUCCESS" {
 		return fmt.Errorf("received unexpected Snowpipe response code: %s", respPayload.ResponseCode)
@@ -769,38 +769,38 @@ func (s *snowflakeWriter) WriteBatch(ctx context.Context, batch service.MessageB
 		)
 
 		if f.stage, err = s.stage.TryString(msg); err != nil {
-			return fmt.Errorf("failed to get stage: %s", err)
+			return fmt.Errorf("getting stage: %s", err)
 		} else if f.stage == "" {
 			return fmt.Errorf("stage cannot be empty: %s", err)
 		}
 
 		if f.stagePath, err = s.path.TryString(msg); err != nil {
-			return fmt.Errorf("failed to get stage path: %s", err)
+			return fmt.Errorf("getting stage path: %s", err)
 		}
 
 		if f.requestID, err = s.requestID.TryString(msg); err != nil {
-			return fmt.Errorf("failed to get request ID: %s", err)
+			return fmt.Errorf("getting request ID: %s", err)
 		}
 
 		if f.fileName, err = s.fileName.TryString(msg); err != nil {
-			return fmt.Errorf("failed to get file: %s", err)
+			return fmt.Errorf("getting file: %s", err)
 		}
 
 		if f.fileExtension, err = s.fileExtension.TryString(msg); err != nil {
-			return fmt.Errorf("failed to get file extension: %s", err)
+			return fmt.Errorf("getting file extension: %s", err)
 		} else if f.fileExtension == "" {
 			f.fileExtension = s.defaultStageFileExtension
 		}
 
 		if s.snowpipe != nil {
 			if f.snowpipe, err = s.snowpipe.TryString(msg); err != nil {
-				return fmt.Errorf("failed to get snowpipe: %s", err)
+				return fmt.Errorf("getting snowpipe: %s", err)
 			}
 		}
 
 		msgBytes, err := msg.AsBytes()
 		if err != nil {
-			return fmt.Errorf("failed to get message bytes: %s", err)
+			return fmt.Errorf("getting message bytes: %s", err)
 		}
 
 		files[f] = append(files[f], msgBytes...)
@@ -812,7 +812,7 @@ func (s *snowflakeWriter) WriteBatch(ctx context.Context, batch service.MessageB
 		if requestID == "" {
 			uuid, err := s.uuidGenerator.NewV4()
 			if err != nil {
-				return fmt.Errorf("failed to generate requestID: %s", err)
+				return fmt.Errorf("generating requestID: %s", err)
 			}
 
 			requestID = uuid.String()
@@ -829,14 +829,14 @@ func (s *snowflakeWriter) WriteBatch(ctx context.Context, batch service.MessageB
 			gosnowflake.WithFileTransferOptions(ctx, &gosnowflake.SnowflakeFileTransferOptions{RaisePutGetError: true}),
 			bytes.NewReader(fBytes)), fmt.Sprintf(s.putQueryFormat, filePath, path.Join(f.stage, f.stagePath)))
 		if err != nil {
-			return fmt.Errorf("failed to run query: %s", err)
+			return fmt.Errorf("running query: %s", err)
 		}
 
 		if f.snowpipe != "" {
 			s.logger.Debugf("Calling Snowpipe with requestId=%s", requestID)
 
 			if err := s.callSnowpipe(ctx, f.snowpipe, requestID, filePath); err != nil {
-				return fmt.Errorf("failed to call Snowpipe: %s", err)
+				return fmt.Errorf("calling Snowpipe: %s", err)
 			}
 		}
 	}

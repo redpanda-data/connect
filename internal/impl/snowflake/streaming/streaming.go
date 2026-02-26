@@ -269,7 +269,7 @@ func (c *SnowflakeServiceClient) ChannelStatus(ctx context.Context, opts Channel
 		return "", fmt.Errorf("unable to status channel %s - status: %d, message: %s", opts.Name, resp.StatusCode, resp.Message)
 	}
 	if len(resp.Channels) != 1 {
-		return "", fmt.Errorf("failed to fetch channel %s, got %d channels in response", opts.Name, len(resp.Channels))
+		return "", fmt.Errorf("fetching channel %s, got %d channels in response", opts.Name, len(resp.Channels))
 	}
 	channel := resp.Channels[0]
 	if channel.StatusCode != responseSuccess {
@@ -384,7 +384,7 @@ func (c *SnowflakeIngestionChannel) constructBdecPart(batch service.MessageBatch
 	// Commit row groups serially (required for correct ordering)
 	for _, rg := range rowGroups {
 		if _, err := rg.rg.Commit(); err != nil {
-			return bdecPart{}, fmt.Errorf("failed to commit row group: %w", err)
+			return bdecPart{}, fmt.Errorf("committing row group: %w", err)
 		}
 	}
 
@@ -469,7 +469,7 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch servic
 	for i := range 3 {
 		ur := c.uploaderManager.GetUploader()
 		if ur.err != nil {
-			return insertStats, fmt.Errorf("failed to acquire stage uploader (last fetch time=%v): %w", ur.timestamp, ur.err)
+			return insertStats, fmt.Errorf("acquiring stage uploader (last fetch time=%v): %w", ur.timestamp, ur.err)
 		}
 		err = ur.uploader.upload(ctx, blobPath, part.parquetFile, fullMD5Hash[:], map[string]string{
 			"ingestclientname": partnerID + "_" + c.Name,

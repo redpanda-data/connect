@@ -123,7 +123,7 @@ func (in *input) Connect(ctx context.Context) error {
 	tmpDir, err := os.MkdirTemp("", "git-input-*")
 	if err != nil {
 		in.shutSig.TriggerHasStopped()
-		return fmt.Errorf("failed to create temp directory: %w", err)
+		return fmt.Errorf("creating temp directory: %w", err)
 	}
 	in.tempDir = tmpDir
 
@@ -133,7 +133,7 @@ func (in *input) Connect(ctx context.Context) error {
 		if err := in.mgr.AccessCache(ctx, in.cfg.checkpointCache, func(cache service.Cache) {
 			lastCommitBytes, cacheErr := cache.Get(ctx, in.cfg.checkpointKey)
 			if cacheErr != nil && !errors.Is(cacheErr, service.ErrKeyNotFound) {
-				err = fmt.Errorf("failed to get last commit from cache: %w", cacheErr)
+				err = fmt.Errorf("getting last commit from cache: %w", cacheErr)
 				return
 			}
 			cachedCommitHash = plumbing.NewHash(string(lastCommitBytes))
@@ -154,7 +154,7 @@ func (in *input) Connect(ctx context.Context) error {
 	if err := in.cloneRepo(ctx); err != nil {
 		_ = os.RemoveAll(tmpDir)
 		in.shutSig.TriggerHasStopped()
-		return fmt.Errorf("failed to clone repo: %w", err)
+		return fmt.Errorf("cloning repo: %w", err)
 	}
 
 	// Start polling for changes, cleanup when we're done
@@ -196,7 +196,7 @@ func (in *input) Read(ctx context.Context) (*service.Message, service.AckFunc, e
 				msg := service.NewMessage(nil)
 				relPath, err := filepath.Rel(in.tempDir, event.path)
 				if err != nil {
-					return nil, nil, fmt.Errorf("failed to get relative path for %s: %w", event.path, err)
+					return nil, nil, fmt.Errorf("getting relative path for %s: %w", event.path, err)
 				}
 				msg.MetaSet("git_file_path", relPath)
 				msg.MetaSet("git_commit", in.getLastCommit().String())
@@ -334,7 +334,7 @@ func (in *input) pollChanges(ctx context.Context, cachedCommit plumbing.Hash) {
 			return
 		case <-ticker.C:
 			if err := in.fetchAndProcessNewCommits(ctx); err != nil {
-				err = fmt.Errorf("failed to check for updates: %v", err)
+				err = fmt.Errorf("checking for updates: %v", err)
 				select {
 				case in.errorChan <- err:
 				case <-ctx.Done():
@@ -355,7 +355,7 @@ func (in *input) fetchAndProcessNewCommits(ctx context.Context) error {
 	// Fetch and pull changes
 	wt, err := in.repository.Worktree()
 	if err != nil {
-		return fmt.Errorf("failed to get worktree: %w", err)
+		return fmt.Errorf("getting worktree: %w", err)
 	}
 
 	auth, err := in.setupAuth()
@@ -373,7 +373,7 @@ func (in *input) fetchAndProcessNewCommits(ctx context.Context) error {
 	// Get the new HEAD reference
 	ref, err := in.repository.Head()
 	if err != nil {
-		return fmt.Errorf("failed to get HEAD reference: %w", err)
+		return fmt.Errorf("getting HEAD reference: %w", err)
 	}
 
 	newCommit := ref.Hash()
@@ -385,7 +385,7 @@ func (in *input) fetchAndProcessNewCommits(ctx context.Context) error {
 	// If the commit hash has changed, process the changes
 	wg, err := in.processChangedFiles(ctx, oldCommit, newCommit)
 	if err != nil {
-		return fmt.Errorf("failed to process changed files: %w", err)
+		return fmt.Errorf("processing changed files: %w", err)
 	}
 
 	done := make(chan any)
@@ -442,18 +442,18 @@ func (in *input) processChangedFiles(ctx context.Context, oldCommit, newCommit p
 	// Get the old and new commit objects
 	oldCommitObj, err := in.repository.CommitObject(oldCommit)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get old commit object: %w", err)
+		return nil, fmt.Errorf("getting old commit object: %w", err)
 	}
 
 	newCommitObj, err := in.repository.CommitObject(newCommit)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get new commit object: %w", err)
+		return nil, fmt.Errorf("getting new commit object: %w", err)
 	}
 
 	// Compare the two commits
 	diff, err := oldCommitObj.Patch(newCommitObj)
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate diff: %w", err)
+		return nil, fmt.Errorf("generating diff: %w", err)
 	}
 
 	wg := &sync.WaitGroup{}
@@ -600,13 +600,13 @@ func (in *input) detectMimeType(filePath string) (string, bool) {
 func (in *input) createMessage(filePath string) (*service.Message, error) {
 	relPath, err := filepath.Rel(in.tempDir, filePath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get relative path for %s: %w", filePath, err)
+		return nil, fmt.Errorf("getting relative path for %s: %w", filePath, err)
 	}
 
 	// Get file info
 	info, err := os.Lstat(filePath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get file info for %s: %w", relPath, err)
+		return nil, fmt.Errorf("getting file info for %s: %w", relPath, err)
 	}
 
 	if info.Mode()&os.ModeSymlink != 0 {
@@ -629,7 +629,7 @@ func (in *input) createMessage(filePath string) (*service.Message, error) {
 	// Read file content
 	content, err := os.ReadFile(filePath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read file %s: %w", relPath, err)
+		return nil, fmt.Errorf("reading file %s: %w", relPath, err)
 	}
 
 	msg := service.NewMessage(content)
@@ -676,13 +676,13 @@ func (in *input) setupAuth() (transport.AuthMethod, error) {
 		if in.cfg.auth.sshKey.privateKey != "" {
 			publicKeys, err = ssh.NewPublicKeys("git", []byte(in.cfg.auth.sshKey.privateKey), in.cfg.auth.sshKey.passphrase)
 			if err != nil {
-				return nil, fmt.Errorf("failed to create SSH public keys from content: %w", err)
+				return nil, fmt.Errorf("creating SSH public keys from content: %w", err)
 			}
 		} else if in.cfg.auth.sshKey.privateKeyPath != "" {
 			// Use private key file if provided
 			publicKeys, err = ssh.NewPublicKeysFromFile("git", in.cfg.auth.sshKey.privateKeyPath, in.cfg.auth.sshKey.passphrase)
 			if err != nil {
-				return nil, fmt.Errorf("failed to create SSH public keys from file: %w", err)
+				return nil, fmt.Errorf("creating SSH public keys from file: %w", err)
 			}
 		} else {
 			return nil, errors.New("SSH key authentication requires either private_key or private_key_path")

@@ -52,22 +52,22 @@ func ConfigFields() []*service.ConfigField {
 func ClientFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (*sr.Client, error) {
 	srURL, err := pConf.FieldURL(fieldURL)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse url: %w", err)
+		return nil, fmt.Errorf("parsing url: %w", err)
 	}
 
 	timeout, err := pConf.FieldDuration(fieldTimeout)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse timeout: %w", err)
+		return nil, fmt.Errorf("parsing timeout: %w", err)
 	}
 
 	reqSigner, err := pConf.HTTPRequestAuthSignerFromParsed()
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse auth: %w", err)
+		return nil, fmt.Errorf("parsing auth: %w", err)
 	}
 
 	tlsConf, tlsEnabled, err := pConf.FieldTLSToggled(fieldTLS)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse tls: %w", err)
+		return nil, fmt.Errorf("parsing tls: %w", err)
 	}
 	if !tlsEnabled {
 		tlsConf = nil
@@ -88,7 +88,7 @@ func ClientFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (*sr.
 
 	client, err := sr.NewClient(opts...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create Schema Registry client: %w", err)
+		return nil, fmt.Errorf("creating Schema Registry client: %w", err)
 	}
 
 	return client, nil

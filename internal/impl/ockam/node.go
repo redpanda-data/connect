@@ -53,7 +53,7 @@ func newNode(identityName, address, ticket, relay string) (*node, error) {
 
 	j, err := json.Marshal(configuration)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal node config to json string: %v", err)
+		return nil, fmt.Errorf("marshalling node config to json string: %v", err)
 	}
 
 	node := &node{name: name, address: address, identity: identity, identifier: identifier, config: string(j)}
@@ -219,7 +219,7 @@ func findOrCreateIdentityByName(identityName string) (string, string, error) {
 		}
 	}
 
-	return "", "", errors.New("failed to create identity")
+	return "", "", errors.New("creating identity")
 }
 
 func getIdentity(identityName string) (string, string, error) {

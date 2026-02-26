@@ -65,7 +65,7 @@ func (j *Client) SearchIssuesResource(
 		}
 		b, err := json.Marshal(resp)
 		if err != nil {
-			return nil, fmt.Errorf("failed to marshal issue: %w", err)
+			return nil, fmt.Errorf("marshalling issue: %w", err)
 		}
 		m := service.NewMessage(b)
 		m.MetaSet("jira_issue_key", resp.Key)
@@ -181,7 +181,7 @@ func (j *Client) SearchIssueTransitionsResource(ctx context.Context, q *JsonInpu
 		}
 		bytes, err := json.Marshal(resp)
 		if err != nil {
-			return nil, fmt.Errorf("failed to marshal issue transition: %w", err)
+			return nil, fmt.Errorf("marshalling issue transition: %w", err)
 		}
 
 		message := service.NewMessage(bytes)

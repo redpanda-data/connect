@@ -55,7 +55,7 @@ allow: [ c ]
 		{
 			name:                "not valid yaml",
 			input:               `&&!^@&@%$^@#$`,
-			expectedErrContains: `failed to parse connector list file`,
+			expectedErrContains: `parsing connector list file`,
 		},
 		{
 			name: "no items listed",

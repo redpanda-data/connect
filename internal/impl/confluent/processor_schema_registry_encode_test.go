@@ -48,7 +48,7 @@ func TestSchemaRegistryEncoderConfigParse(t *testing.T) {
 url: huh#%#@$u*not////::example.com
 subject: foo
 `,
-			errContains: `failed to parse url`,
+			errContains: `parsing url`,
 		},
 		{
 			name: "bad subject",

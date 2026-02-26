@@ -193,7 +193,7 @@ func (a *sqsWriter) ConnectionTest(ctx context.Context) service.ConnectionTestRe
 		AttributeNames: []types.QueueAttributeName{types.QueueAttributeNameQueueArn},
 	})
 	if err != nil {
-		return service.ConnectionTestFailed(fmt.Errorf("failed to get queue attributes: %w", err)).AsList()
+		return service.ConnectionTestFailed(fmt.Errorf("getting queue attributes: %w", err)).AsList()
 	}
 	return service.ConnectionTestSucceeded().AsList()
 }
@@ -397,7 +397,7 @@ func (a *sqsWriter) writeChunk(
 					MessageDeduplicationId: aMap.dedupeID,
 				})
 			}
-			err = fmt.Errorf("failed to send %v messages", len(unproc))
+			err = fmt.Errorf("sending %v messages", len(unproc))
 		} else {
 			input.Entries = nil
 		}

@@ -174,7 +174,7 @@ func (a *snsWriter) ConnectionTest(ctx context.Context) service.ConnectionTestRe
 		TopicArn: aws.String(topicArn),
 	})
 	if err != nil {
-		return service.ConnectionTestFailed(fmt.Errorf("failed to get topic attributes: %w", err)).AsList()
+		return service.ConnectionTestFailed(fmt.Errorf("getting topic attributes: %w", err)).AsList()
 	}
 	return service.ConnectionTestSucceeded().AsList()
 }

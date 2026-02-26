@@ -210,7 +210,7 @@ func newJetStreamReaderFromConfig(conf *service.ParsedConfig, mgr *service.Resou
 	if ackWaitStr != "" {
 		j.ackWait, err = time.ParseDuration(ackWaitStr)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse ack wait duration: %v", err)
+			return nil, fmt.Errorf("parsing ack wait duration: %v", err)
 		}
 	}
 

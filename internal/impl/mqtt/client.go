@@ -128,7 +128,7 @@ func clientOptsFromParsed(conf *service.ParsedConfig) (opts clientOptsBuilder, e
 		case "nanoid":
 			var nid string
 			if nid, err = gonanoid.New(); err != nil {
-				err = fmt.Errorf("failed to generate nanoid: %w", err)
+				err = fmt.Errorf("generating nanoid: %w", err)
 				return
 			}
 			opts.clientID += nid

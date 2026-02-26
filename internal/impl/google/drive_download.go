@@ -147,11 +147,11 @@ func newGoogleDriveDownloadProcessor(conf *service.ParsedConfig, mgr *service.Re
 func (g *googleDriveDownloadProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
 	id, err := g.fileID.TryString(msg)
 	if err != nil {
-		return nil, fmt.Errorf("failed to interpolate file_id: %v", err)
+		return nil, fmt.Errorf("interpolating file_id: %v", err)
 	}
 	mimeType, err := g.mimeType.TryString(msg)
 	if err != nil {
-		return nil, fmt.Errorf("failed to interpolate mime_type: %v", err)
+		return nil, fmt.Errorf("interpolating mime_type: %v", err)
 	}
 	exportMimeType, ok := g.exportMimeTypes[mimeType]
 	var b []byte
@@ -161,7 +161,7 @@ func (g *googleDriveDownloadProcessor) Process(ctx context.Context, msg *service
 		b, err = g.downloadFile(ctx, id)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("failed to download file %v: %v", id, err)
+		return nil, fmt.Errorf("downloading file %v: %v", id, err)
 	}
 	msg = msg.Copy()
 	msg.SetBytes(b)

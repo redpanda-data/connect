@@ -57,7 +57,7 @@ func init() {
 			return bloblang.BytesMethod(func(xmlBytes []byte) (any, error) {
 				xmlObj, err := ToMap(xmlBytes, cast)
 				if err != nil {
-					return nil, fmt.Errorf("failed to parse value as XML: %w", err)
+					return nil, fmt.Errorf("parsing value as XML: %w", err)
 				}
 				return xmlObj, nil
 			}), nil

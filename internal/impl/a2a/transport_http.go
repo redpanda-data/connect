@@ -80,13 +80,13 @@ func (t *httpTransport) doRequest(ctx context.Context, method string, params any
 
 	reqBody, err := json.Marshal(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal JSON-RPC request: %w", err)
+		return nil, fmt.Errorf("marshalling JSON-RPC request: %w", err)
 	}
 
 	// Create HTTP request
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", t.baseURL, bytes.NewReader(reqBody))
 	if err != nil {
-		return nil, fmt.Errorf("failed to create HTTP request: %w", err)
+		return nil, fmt.Errorf("creating HTTP request: %w", err)
 	}
 
 	httpReq.Header.Set("Content-Type", "application/json")
@@ -116,7 +116,7 @@ func (t *httpTransport) doRequest(ctx context.Context, method string, params any
 	// Parse JSON-RPC response
 	var jsonResp jsonRPCResponse
 	if err := json.NewDecoder(resp.Body).Decode(&jsonResp); err != nil {
-		return nil, fmt.Errorf("failed to decode JSON-RPC response: %w", err)
+		return nil, fmt.Errorf("decoding JSON-RPC response: %w", err)
 	}
 
 	if jsonResp.Error != nil {
@@ -141,7 +141,7 @@ func (t *httpTransport) SendMessage(ctx context.Context, params *a2a.MessageSend
 
 	var message a2a.Message
 	if err := json.Unmarshal(resp.Result, &message); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal result as Task or Message: %w", err)
+		return nil, fmt.Errorf("unmarshalling result as Task or Message: %w", err)
 	}
 
 	return &message, nil
@@ -156,7 +156,7 @@ func (t *httpTransport) GetTask(ctx context.Context, query *a2a.TaskQueryParams)
 
 	var task a2a.Task
 	if err := json.Unmarshal(resp.Result, &task); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal task: %w", err)
+		return nil, fmt.Errorf("unmarshalling task: %w", err)
 	}
 
 	return &task, nil
@@ -174,13 +174,13 @@ func (t *httpTransport) SendStreamingMessage(ctx context.Context, params *a2a.Me
 
 		reqBody, err := json.Marshal(req)
 		if err != nil {
-			yield(nil, fmt.Errorf("failed to marshal request: %w", err))
+			yield(nil, fmt.Errorf("marshalling request: %w", err))
 			return
 		}
 
 		httpReq, err := http.NewRequestWithContext(ctx, "POST", t.baseURL, bytes.NewReader(reqBody))
 		if err != nil {
-			yield(nil, fmt.Errorf("failed to create HTTP request: %w", err))
+			yield(nil, fmt.Errorf("creating HTTP request: %w", err))
 			return
 		}
 
@@ -230,13 +230,13 @@ func (t *httpTransport) ResubscribeToTask(ctx context.Context, id *a2a.TaskIDPar
 
 		reqBody, err := json.Marshal(req)
 		if err != nil {
-			yield(nil, fmt.Errorf("failed to marshal request: %w", err))
+			yield(nil, fmt.Errorf("marshalling request: %w", err))
 			return
 		}
 
 		httpReq, err := http.NewRequestWithContext(ctx, "POST", t.baseURL, bytes.NewReader(reqBody))
 		if err != nil {
-			yield(nil, fmt.Errorf("failed to create HTTP request: %w", err))
+			yield(nil, fmt.Errorf("creating HTTP request: %w", err))
 			return
 		}
 
@@ -304,7 +304,7 @@ func (t *httpTransport) parseSSEStream(ctx context.Context, body io.Reader, yiel
 
 			event, err := t.parseEventByType([]byte(data), eventType)
 			if err != nil {
-				yield(nil, fmt.Errorf("failed to parse SSE event (type=%s): %w", eventType, err))
+				yield(nil, fmt.Errorf("parsing SSE event (type=%s): %w", eventType, err))
 				return
 			}
 
@@ -337,14 +337,14 @@ func (*httpTransport) parseEventByType(data []byte, eventType string) (a2a.Event
 	case "task_status_update":
 		var evt a2a.TaskStatusUpdateEvent
 		if err := json.Unmarshal(data, &evt); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal TaskStatusUpdateEvent: %w", err)
+			return nil, fmt.Errorf("unmarshalling TaskStatusUpdateEvent: %w", err)
 		}
 		return &evt, nil
 
 	case "task_artifact_update":
 		var evt a2a.TaskArtifactUpdateEvent
 		if err := json.Unmarshal(data, &evt); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal TaskArtifactUpdateEvent: %w", err)
+			return nil, fmt.Errorf("unmarshalling TaskArtifactUpdateEvent: %w", err)
 		}
 		return &evt, nil
 
@@ -359,19 +359,19 @@ func (*httpTransport) parseEventByType(data []byte, eventType string) (a2a.Event
 			return &msg, nil
 		}
 
-		return nil, errors.New("failed to parse event as Task or Message")
+		return nil, errors.New("parsing event as Task or Message")
 
 	case "message":
 		var msg a2a.Message
 		if err := json.Unmarshal(data, &msg); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal Message: %w", err)
+			return nil, fmt.Errorf("unmarshalling Message: %w", err)
 		}
 		return &msg, nil
 
 	default:
 		var raw map[string]any
 		if err := json.Unmarshal(data, &raw); err != nil {
-			return nil, fmt.Errorf("failed to parse event JSON: %w", err)
+			return nil, fmt.Errorf("parsing event JSON: %w", err)
 		}
 
 		if _, hasArtifact := raw["artifact"]; hasArtifact {

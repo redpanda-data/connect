@@ -59,7 +59,7 @@ func InitGlobal(ctx context.Context, tokenURL, clientID, clientSecret, audience 
 
 	// Test token acquisition to fail fast if auth is misconfigured
 	if _, err := tokenSource.Token(); err != nil {
-		return fmt.Errorf("failed to acquire OAuth2 token: %w", err)
+		return fmt.Errorf("acquiring OAuth2 token: %w", err)
 	}
 
 	globalConfigMu.Lock()

@@ -118,19 +118,19 @@ func (c *avroScanner) NextBatch(context.Context) (service.MessageBatch, error) {
 	if !c.ocf.Scan() {
 		err := c.ocf.Err()
 		if err != nil {
-			return nil, fmt.Errorf("failed to scan OCF file: %s", err)
+			return nil, fmt.Errorf("scanning OCF file: %s", err)
 		}
 		return nil, io.EOF
 	}
 
 	datum, err := c.ocf.Read()
 	if err != nil {
-		return nil, fmt.Errorf("failed to read OCF datum: %s", err)
+		return nil, fmt.Errorf("reading OCF datum: %s", err)
 	}
 
 	jb, err := c.avroCodec.TextualFromNative(nil, datum)
 	if err != nil {
-		return nil, fmt.Errorf("failed to decode OCF datum to JSON: %s", err)
+		return nil, fmt.Errorf("decoding OCF datum to JSON: %s", err)
 	}
 	msg := service.NewMessage(jb)
 	msg.MetaSetMut("avro_schema", c.avroCodec.CanonicalSchema())

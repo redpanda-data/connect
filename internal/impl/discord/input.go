@@ -138,7 +138,7 @@ func (r *reader) Connect(ctx context.Context) error {
 		err = cacheErr
 	}
 	if err != nil {
-		return fmt.Errorf("failed to obtain latest seen message ID: %v", err)
+		return fmt.Errorf("obtaining latest seen message ID: %v", err)
 	}
 
 	sess, doneWithSessFn, err := getGlobalSession(r.botToken, r.mgr.EngineVersion())

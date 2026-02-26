@@ -68,13 +68,13 @@ func RunAgent(
 ) error {
 	redpandaAgentsContents, err := os.ReadFile(filepath.Join(repositoryDir, "redpanda_agents.yaml"))
 	if err != nil {
-		return fmt.Errorf("failed to read redpanda_agents.yaml (are you in the right directory?): %w", err)
+		return fmt.Errorf("reading redpanda_agents.yaml (are you in the right directory?): %w", err)
 	}
 	var config agentsConfig
 	config.HTTP.enabled = true
 	config.HTTP.address = "0.0.0.0:4195"
 	if err := yaml.Unmarshal(redpandaAgentsContents, &config); err != nil {
-		return fmt.Errorf("failed to unmarshal redpanda_agents.yaml: %w", err)
+		return fmt.Errorf("unmarshalling redpanda_agents.yaml: %w", err)
 	}
 	env := service.NewEnvironment()
 	err = env.RegisterProcessor(
@@ -153,7 +153,7 @@ func RunAgent(
 			if !config.node.IsZero() {
 				str, _ := yaml.Marshal(config.node)
 				if err := config.builder(string(str)); err != nil {
-					return nil, fmt.Errorf("failed to add agent %s: %w", config.name, err)
+					return nil, fmt.Errorf("adding agent %s: %w", config.name, err)
 				}
 			}
 		}
@@ -168,11 +168,11 @@ redpanda_agent_runtime:
   cwd: "$CWD"
       `))
 		if err != nil {
-			return nil, fmt.Errorf("failed to add agent processor: %w", err)
+			return nil, fmt.Errorf("adding agent processor: %w", err)
 		}
 		stream, err := b.Build()
 		if err != nil {
-			return nil, fmt.Errorf("failed to add build agent stream: %w", err)
+			return nil, fmt.Errorf("adding build agent stream: %w", err)
 		}
 		return stream, nil
 	}

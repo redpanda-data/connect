@@ -94,7 +94,7 @@ func NewSubscriber(
 	dialect, err := detectDialect(ctx, client)
 	if err != nil {
 		client.Close()
-		return nil, fmt.Errorf("failed to detect dialect: %w", err)
+		return nil, fmt.Errorf("detecting dialect: %w", err)
 	}
 
 	var tableNames metadata.TableNames

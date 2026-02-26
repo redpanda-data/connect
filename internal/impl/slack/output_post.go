@@ -137,12 +137,12 @@ func (o *postOutput) Connect(ctx context.Context) error {
 func (o *postOutput) Write(ctx context.Context, msg *service.Message) error {
 	channelID, err := o.channelID.TryString(msg)
 	if err != nil {
-		return fmt.Errorf("failed to interpolate channel ID: %w", err)
+		return fmt.Errorf("interpolating channel ID: %w", err)
 	}
 	options := []slack.MsgOption{}
 	ts, err := o.threadTS.TryString(msg)
 	if err != nil {
-		return fmt.Errorf("failed to interpolate thread ID: %w", err)
+		return fmt.Errorf("interpolating thread ID: %w", err)
 	}
 	if ts != "" {
 		options = append(options, slack.MsgOptionTS(ts))
@@ -150,21 +150,21 @@ func (o *postOutput) Write(ctx context.Context, msg *service.Message) error {
 	if o.blocks != nil {
 		q, err := msg.BloblangQuery(o.blocks)
 		if err != nil {
-			return fmt.Errorf("failed to process blocks: %w", err)
+			return fmt.Errorf("processing blocks: %w", err)
 		}
 		b, err := q.AsBytes()
 		if err != nil {
-			return fmt.Errorf("failed to serialize blocks as JSON: %w", err)
+			return fmt.Errorf("serializing blocks as JSON: %w", err)
 		}
 		var blocks slack.Blocks
 		if err = json.Unmarshal(b, &blocks); err != nil {
-			return fmt.Errorf("failed to unmarshal blocks: %w", err)
+			return fmt.Errorf("unmarshalling blocks: %w", err)
 		}
 		options = append(options, slack.MsgOptionBlocks(blocks.BlockSet...))
 	} else {
 		text, err := o.text.TryString(msg)
 		if err != nil {
-			return fmt.Errorf("failed to interpolate text: %w", err)
+			return fmt.Errorf("interpolating text: %w", err)
 		}
 		options = append(options, slack.MsgOptionText(text, false))
 	}

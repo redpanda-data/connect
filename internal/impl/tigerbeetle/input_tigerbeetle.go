@@ -580,7 +580,7 @@ func (input *tigerbeetleInput) checkRateLimit(ctx context.Context) error {
 			}
 		}
 		if attempt == max_tries {
-			return fmt.Errorf("failed to access the rate limit after %d attempts", max_tries)
+			return fmt.Errorf("accessing the rate limit after %d attempts", max_tries)
 		}
 	}
 	return nil

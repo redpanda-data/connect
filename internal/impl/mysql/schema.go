@@ -27,7 +27,7 @@ func mysqlTableToCommonSchema(table *gomysqlschema.Table) (*schema.Common, error
 	for _, col := range table.Columns {
 		commonCol, err := mysqlColumnToCommon(col)
 		if err != nil {
-			return nil, fmt.Errorf("failed to convert column %s: %w", col.Name, err)
+			return nil, fmt.Errorf("converting column %s: %w", col.Name, err)
 		}
 		children = append(children, commonCol)
 	}

@@ -66,7 +66,7 @@ func newJWTValidator(mgr *service.Resources) (*jwtValidator, error) {
 
 	issuerURL, err := url.Parse(issuerURLStr)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse gateway JWT issuer URL: %w", err)
+		return nil, fmt.Errorf("parsing gateway JWT issuer URL: %w", err)
 	}
 
 	v, err := validator.New(
@@ -82,7 +82,7 @@ func newJWTValidator(mgr *service.Resources) (*jwtValidator, error) {
 		),
 	)
 	if err != nil {
-		return nil, errors.New("failed to set up the jwt validator")
+		return nil, errors.New("setting up the jwt validator")
 	}
 
 	return &jwtValidator{

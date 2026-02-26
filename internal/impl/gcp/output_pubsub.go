@@ -242,7 +242,7 @@ func (out *pubsubOutput) Connect(_ context.Context) error {
 	client, err := pubsub.NewClient(clientCtx, out.project, out.clientOpts...)
 	if err != nil {
 		clientCancel()
-		return fmt.Errorf("failed to create pubsub client: %w", err)
+		return fmt.Errorf("creating pubsub client: %w", err)
 	}
 
 	out.client = &airGappedPubsubClient{client}
@@ -281,7 +281,7 @@ func (out *pubsubOutput) WriteBatch(ctx context.Context, batch service.MessageBa
 
 	getResults, err := p.Wait()
 	if err != nil {
-		return fmt.Errorf("failed to get publish results: %w", err)
+		return fmt.Errorf("getting publish results: %w", err)
 	}
 
 	for _, res := range getResults {
@@ -318,7 +318,7 @@ func (out *pubsubOutput) Close(_ context.Context) error {
 func (out *pubsubOutput) writeMessage(ctx context.Context, cachedTopics map[string]pubsubTopic, msg *service.Message) (publishResult, error) {
 	topicName, err := out.topicQ.TryString(msg)
 	if err != nil {
-		return nil, fmt.Errorf("failed to resolve topic name: %w", err)
+		return nil, fmt.Errorf("resolving topic name: %w", err)
 	}
 
 	topic, found := cachedTopics[topicName]
@@ -326,7 +326,7 @@ func (out *pubsubOutput) writeMessage(ctx context.Context, cachedTopics map[stri
 	if !found {
 		t, err := out.getTopic(ctx, topicName)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get topic: %s: %w", topicName, err)
+			return nil, fmt.Errorf("getting topic: %s: %w", topicName, err)
 		}
 
 		cachedTopics[topicName] = t
@@ -348,19 +348,19 @@ func (out *pubsubOutput) writeMessage(ctx context.Context, cachedTopics map[stri
 		attr[key] = value
 		return nil
 	}); err != nil {
-		return nil, fmt.Errorf("failed to build message attributes: %w", err)
+		return nil, fmt.Errorf("building message attributes: %w", err)
 	}
 
 	var orderingKey string
 	if out.orderingKeyQ != nil {
 		if orderingKey, err = out.orderingKeyQ.TryString(msg); err != nil {
-			return nil, fmt.Errorf("failed to build ordering key: %w", err)
+			return nil, fmt.Errorf("building ordering key: %w", err)
 		}
 	}
 
 	data, err := msg.AsBytes()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get bytes from message: %w", err)
+		return nil, fmt.Errorf("getting bytes from message: %w", err)
 	}
 
 	return topic.Publish(ctx, &pubsub.Message{
@@ -383,7 +383,7 @@ func (out *pubsubOutput) getTopic(ctx context.Context, name string) (pubsubTopic
 	if out.validateTopic {
 		exists, err := t.Exists(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("failed to validate topic '%v': %v", name, err)
+			return nil, fmt.Errorf("validating topic '%v': %v", name, err)
 		}
 		if !exists {
 			return nil, fmt.Errorf("topic '%v' does not exist", name)

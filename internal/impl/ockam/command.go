@@ -33,7 +33,7 @@ import (
 func runCommand(capture bool, arg ...string) (string, string, error) {
 	bin, err := findCommandBinary()
 	if err != nil {
-		return "", "", fmt.Errorf("failed to find Ockam Command binary: %v", err)
+		return "", "", fmt.Errorf("finding Ockam Command binary: %v", err)
 	}
 
 	cmd := exec.Command(bin, arg...)
@@ -52,7 +52,7 @@ func runCommand(capture bool, arg ...string) (string, string, error) {
 	} else {
 		devNull, err := os.Open(os.DevNull)
 		if err != nil {
-			return "", "", fmt.Errorf("failed to open %s: %v", os.DevNull, err)
+			return "", "", fmt.Errorf("opening %s: %v", os.DevNull, err)
 		}
 		defer devNull.Close()
 
@@ -84,7 +84,7 @@ func setupCommand() (string, error) {
 
 	err = installCommand()
 	if err != nil {
-		return "", fmt.Errorf("failed to install Ockam Command: %v", err)
+		return "", fmt.Errorf("installing Ockam Command: %v", err)
 	}
 
 	return findCommandBinary()
@@ -133,7 +133,7 @@ func findCommandBinary() (string, error) {
 		return path, nil
 	}
 
-	return "", errors.New("failed to find Ockam Command binary")
+	return "", errors.New("finding Ockam Command binary")
 }
 
 // Installs Ockam Command.
@@ -163,7 +163,7 @@ func downloadAndInstall() error {
 
 	resp, err := http.Get(url)
 	if err != nil {
-		return fmt.Errorf("failed to download the binary %s: %v", url, err)
+		return fmt.Errorf("downloading the binary %s: %v", url, err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
@@ -173,24 +173,24 @@ func downloadAndInstall() error {
 	binaryDirPath := filepath.Join(ockamHome(), "/bin")
 	err = os.MkdirAll(binaryDirPath, os.ModePerm)
 	if err != nil {
-		return fmt.Errorf("failed to create directories in this path %s: %v", binaryDirPath, err)
+		return fmt.Errorf("creating directories in this path %s: %v", binaryDirPath, err)
 	}
 
 	binary := filepath.Join(binaryDirPath, "/ockam")
 	out, err := os.Create(binary)
 	if err != nil {
-		return fmt.Errorf("failed to create file %s: %v", binary, err)
+		return fmt.Errorf("creating file %s: %v", binary, err)
 	}
 	defer out.Close()
 
 	_, err = io.Copy(out, resp.Body)
 	if err != nil {
-		return fmt.Errorf("failed to copy downloaded contents to file %s: %v", binary, err)
+		return fmt.Errorf("copying downloaded contents to file %s: %v", binary, err)
 	}
 
 	err = os.Chmod(binary, 0o700)
 	if err != nil {
-		return fmt.Errorf("failed to change permissions of the file %s: %v", binary, err)
+		return fmt.Errorf("changing permissions of the file %s: %v", binary, err)
 	}
 	return nil
 }
@@ -218,7 +218,7 @@ func downloadAndInstallWithInstallScript() error {
 	// Download the install script.
 	resp, err := http.Get("https://install.command.ockam.io")
 	if err != nil {
-		return fmt.Errorf("failed to download the install script: %v", err)
+		return fmt.Errorf("downloading the install script: %v", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
@@ -228,16 +228,16 @@ func downloadAndInstallWithInstallScript() error {
 	// Save the install script to a temporary file.
 	tmpFile, err := os.CreateTemp("", "install-ockam-*.sh")
 	if err != nil {
-		return fmt.Errorf("failed to create temporary file for the install script: %v", err)
+		return fmt.Errorf("creating temporary file for the install script: %v", err)
 	}
 	defer os.Remove(tmpFile.Name())
 	_, err = io.Copy(tmpFile, resp.Body)
 	if err != nil {
-		return fmt.Errorf("failed to copy install script to a temporary file: %v", err)
+		return fmt.Errorf("copying install script to a temporary file: %v", err)
 	}
 	err = os.Chmod(tmpFile.Name(), 0o700)
 	if err != nil {
-		return fmt.Errorf("failed to change permissions on the install script to 0700: %v", err)
+		return fmt.Errorf("changing permissions on the install script to 0700: %v", err)
 	}
 
 	// Prepare the install script invocation command
@@ -253,7 +253,7 @@ func downloadAndInstallWithInstallScript() error {
 	cmd.Stderr = os.Stderr
 	err = cmd.Run()
 	if err != nil {
-		return fmt.Errorf("failed to execute the install script: %v", err)
+		return fmt.Errorf("executing the install script: %v", err)
 	}
 
 	return nil
@@ -271,7 +271,7 @@ func shell() (string, error) {
 			return s, nil
 		}
 	}
-	return "", errors.New("failed to find bash or sh in path")
+	return "", errors.New("finding bash or sh in path")
 }
 
 // Returns the path to the environment file that is used to add Ockam Command to $PATH, in a shell.
@@ -284,7 +284,7 @@ func envFile() (string, error) {
 	// Check if the env file can be opened for reading
 	file, err := os.Open(envFile)
 	if err != nil {
-		return "", fmt.Errorf("failed to open env file %s: %v", envFile, err)
+		return "", fmt.Errorf("opening env file %s: %v", envFile, err)
 	}
 	defer file.Close()
 

@@ -45,7 +45,7 @@ func (j *Client) callJiraApi(ctx context.Context, u *url.URL) ([]byte, error) {
 
 	req, err := http.NewRequestWithContext(ctx, "GET", u.String(), nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %v", err)
+		return nil, fmt.Errorf("creating request: %v", err)
 	}
 	req.SetBasicAuth(j.username, j.apiToken)
 	req.Header.Set("Accept", "application/json")

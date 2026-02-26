@@ -549,7 +549,7 @@ func (k *kafkaWriter) WriteBatch(ctx context.Context, msg service.MessageBatch) 
 		}
 		if k.customTopicCreation {
 			if err := k.createTopic(topic); err != nil {
-				return fmt.Errorf("failed to create topic '%v': %w", topic, err)
+				return fmt.Errorf("creating topic '%v': %w", topic, err)
 			}
 		}
 
@@ -577,12 +577,12 @@ func (k *kafkaWriter) WriteBatch(ctx context.Context, msg service.MessageBatch) 
 				return fmt.Errorf("partition interpolation error: %w", err)
 			}
 			if partitionString == "" {
-				return errors.New("partition expression failed to produce a value")
+				return errors.New("partition expression producing a value")
 			}
 
 			partitionInt, err := strconv.Atoi(partitionString)
 			if err != nil {
-				return fmt.Errorf("failed to parse valid integer from partition expression: %w", err)
+				return fmt.Errorf("parsing valid integer from partition expression: %w", err)
 			}
 			if partitionInt < 0 {
 				return fmt.Errorf("invalid partition parsed from expression, must be >= 0, got %v", partitionInt)
@@ -596,7 +596,7 @@ func (k *kafkaWriter) WriteBatch(ctx context.Context, msg service.MessageBatch) 
 				return fmt.Errorf("timestamp interpolation error: %w", err)
 			} else {
 				if ts, err := strconv.ParseInt(tsStr, 10, 64); err != nil {
-					return fmt.Errorf("failed to parse timestamp: %w", err)
+					return fmt.Errorf("parsing timestamp: %w", err)
 				} else {
 					if k.isTimestampMs {
 						nextMsg.Timestamp = time.UnixMilli(ts)

@@ -120,11 +120,11 @@ func convertToMultiVector(input []any) (*qdrant.Vector, error) {
 	for i, vec := range input {
 		vecTyped, ok := vec.([]any)
 		if !ok {
-			return nil, fmt.Errorf("failed to convert vector at index %d to []any", i)
+			return nil, fmt.Errorf("converting vector at index %d to []any", i)
 		}
 		floats, err := convertToFloat32Slice(vecTyped)
 		if err != nil {
-			return nil, fmt.Errorf("failed to convert vector at index %d: %w", i, err)
+			return nil, fmt.Errorf("converting vector at index %d: %w", i, err)
 		}
 		inputTyped[i] = floats
 	}
@@ -143,14 +143,14 @@ func handleSparseVector(input map[string]any) (*qdrant.Vector, error) {
 	if idx, ok := input["indices"].([]any); ok {
 		indices, err = convertToUint32Slice(idx)
 		if err != nil {
-			return nil, fmt.Errorf("failed to convert indices: %w", err)
+			return nil, fmt.Errorf("converting indices: %w", err)
 		}
 	}
 
 	if vals, ok := input["values"].([]any); ok {
 		data, err = convertToFloat32Slice(vals)
 		if err != nil {
-			return nil, fmt.Errorf("failed to convert values: %w", err)
+			return nil, fmt.Errorf("converting values: %w", err)
 		}
 	}
 
@@ -163,7 +163,7 @@ func convertToFloat32Slice(input []any) ([]float32, error) {
 	for i, v := range input {
 		val, err := bloblang.ValueAsFloat32(v)
 		if err != nil {
-			return nil, fmt.Errorf("failed to convert value to float32 at index %d: %w", i, err)
+			return nil, fmt.Errorf("converting value to float32 at index %d: %w", i, err)
 		}
 		values[i] = val
 	}
@@ -176,7 +176,7 @@ func convertToUint32Slice(input []any) ([]uint32, error) {
 	for i, v := range input {
 		val, err := bloblang.ValueAsInt64(v)
 		if err != nil {
-			return nil, fmt.Errorf("failed to convert value to int64 at index %d: %w", i, err)
+			return nil, fmt.Errorf("converting value to int64 at index %d: %w", i, err)
 		}
 		values[i] = uint32(val)
 	}

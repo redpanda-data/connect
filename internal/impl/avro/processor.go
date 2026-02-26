@@ -75,7 +75,7 @@ func newAvroToJSONOperator(encoding string, codec *goavro.Codec) (avroOperator, 
 			}
 			jObj, _, err := codec.NativeFromTextual(pBytes)
 			if err != nil {
-				return fmt.Errorf("failed to convert Avro document to JSON: %v", err)
+				return fmt.Errorf("converting Avro document to JSON: %v", err)
 			}
 			part.SetStructuredMut(jObj)
 			return nil
@@ -88,7 +88,7 @@ func newAvroToJSONOperator(encoding string, codec *goavro.Codec) (avroOperator, 
 			}
 			jObj, _, err := codec.NativeFromBinary(pBytes)
 			if err != nil {
-				return fmt.Errorf("failed to convert Avro document to JSON: %v", err)
+				return fmt.Errorf("converting Avro document to JSON: %v", err)
 			}
 			part.SetStructuredMut(jObj)
 			return nil
@@ -101,7 +101,7 @@ func newAvroToJSONOperator(encoding string, codec *goavro.Codec) (avroOperator, 
 			}
 			jObj, _, err := codec.NativeFromSingle(pBytes)
 			if err != nil {
-				return fmt.Errorf("failed to convert Avro document to JSON: %v", err)
+				return fmt.Errorf("converting Avro document to JSON: %v", err)
 			}
 			part.SetStructuredMut(jObj)
 			return nil
@@ -116,11 +116,11 @@ func newAvroFromJSONOperator(encoding string, codec *goavro.Codec) (avroOperator
 		return func(part *service.Message) error {
 			jObj, err := part.AsStructured()
 			if err != nil {
-				return fmt.Errorf("failed to parse message as JSON: %v", err)
+				return fmt.Errorf("parsing message as JSON: %v", err)
 			}
 			var textual []byte
 			if textual, err = codec.TextualFromNative(nil, jObj); err != nil {
-				return fmt.Errorf("failed to convert JSON to Avro schema: %v", err)
+				return fmt.Errorf("converting JSON to Avro schema: %v", err)
 			}
 			part.SetBytes(textual)
 			return nil
@@ -129,11 +129,11 @@ func newAvroFromJSONOperator(encoding string, codec *goavro.Codec) (avroOperator
 		return func(part *service.Message) error {
 			jObj, err := part.AsStructured()
 			if err != nil {
-				return fmt.Errorf("failed to parse message as JSON: %v", err)
+				return fmt.Errorf("parsing message as JSON: %v", err)
 			}
 			var binary []byte
 			if binary, err = codec.BinaryFromNative(nil, jObj); err != nil {
-				return fmt.Errorf("failed to convert JSON to Avro schema: %v", err)
+				return fmt.Errorf("converting JSON to Avro schema: %v", err)
 			}
 			part.SetBytes(binary)
 			return nil
@@ -142,11 +142,11 @@ func newAvroFromJSONOperator(encoding string, codec *goavro.Codec) (avroOperator
 		return func(part *service.Message) error {
 			jObj, err := part.AsStructured()
 			if err != nil {
-				return fmt.Errorf("failed to parse message as JSON: %v", err)
+				return fmt.Errorf("parsing message as JSON: %v", err)
 			}
 			var single []byte
 			if single, err = codec.SingleFromNative(nil, jObj); err != nil {
-				return fmt.Errorf("failed to convert JSON to Avro schema: %v", err)
+				return fmt.Errorf("converting JSON to Avro schema: %v", err)
 			}
 			part.SetBytes(single)
 			return nil
@@ -220,7 +220,7 @@ func newAvroFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (serv
 			return nil, errors.New("invalid schema_path provided, must start with file:// or http://")
 		}
 		if schema, err = loadSchema(schemaPath); err != nil {
-			return nil, fmt.Errorf("failed to load Avro schema definition: %v", err)
+			return nil, fmt.Errorf("loading Avro schema definition: %v", err)
 		}
 	}
 	if schema == "" {
@@ -229,7 +229,7 @@ func newAvroFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (serv
 
 	codec, err := goavro.NewCodec(schema)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse schema: %v", err)
+		return nil, fmt.Errorf("parsing schema: %v", err)
 	}
 
 	if a.operator, err = strToAvroOperator(operator, encoding, codec); err != nil {

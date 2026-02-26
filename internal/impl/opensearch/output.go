@@ -278,7 +278,7 @@ func (e *Output) WriteBatch(ctx context.Context, msg service.MessageBatch) error
 		rawBytes, ierr := msg[i].AsBytes()
 		if ierr != nil {
 			e.log.Errorf("Failed to obtain message raw data: %v\n", ierr)
-			return fmt.Errorf("failed to obtain message raw data: %w", ierr)
+			return fmt.Errorf("obtaining message raw data: %w", ierr)
 		}
 
 		pbi := &pendingBulkIndex{Payload: rawBytes}

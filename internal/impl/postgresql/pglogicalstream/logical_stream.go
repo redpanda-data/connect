@@ -232,7 +232,7 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 			CreateReplicationSlotOptions{Temporary: true, SnapshotAction: "EXPORT_SNAPSHOT"},
 		)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create temporary replication slot for snapshot: %w", err)
+			return nil, fmt.Errorf("creating temporary replication slot for snapshot: %w", err)
 		}
 
 		snapshotter, err = newSnapshotter(config, config.DBRawDSN, config.Logger, snapshotName, config.MaxSnapshotWorkers)
@@ -248,7 +248,7 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		var startLSN LSN
 		if snapshotter != nil {
 			if err = stream.processSnapshot(ctx, snapshotter); err != nil {
-				stream.errors <- fmt.Errorf("failed to process snapshot: %w", err)
+				stream.errors <- fmt.Errorf("processing snapshot: %w", err)
 				return
 			}
 			for _, table := range tables {
@@ -277,7 +277,7 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 				)
 			}
 			if err != nil {
-				stream.errors <- fmt.Errorf("failed to create streaming replication slot: %w", err)
+				stream.errors <- fmt.Errorf("creating streaming replication slot: %w", err)
 				return
 			}
 		} else {
@@ -292,7 +292,7 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 				},
 			)
 			if err != nil {
-				stream.errors <- fmt.Errorf("failed to create replication slot: %w", err)
+				stream.errors <- fmt.Errorf("creating replication slot: %w", err)
 				return
 			}
 		}
@@ -300,7 +300,7 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		stream.ackedLSN = startLSN
 		stream.ackedLSNMu.Unlock()
 		if err := stream.startLr(ctx, startLSN); err != nil {
-			stream.errors <- fmt.Errorf("failed to start logical replication: %w", err)
+			stream.errors <- fmt.Errorf("starting logical replication: %w", err)
 			return
 		}
 		if err := stream.streamMessages(startLSN); err != nil {
@@ -369,7 +369,7 @@ func (s *Stream) commitAckedLSN(ctx context.Context, lsn LSN) error {
 		},
 	)
 	if err != nil {
-		return fmt.Errorf("failed to send standby status message at LSN %s: %w", lsn, err)
+		return fmt.Errorf("sending standby status message at LSN %s: %w", lsn, err)
 	}
 	return nil
 }
@@ -423,7 +423,7 @@ func (s *Stream) streamMessages(currentLSN LSN) error {
 			if hitStandbyTimeout || pgconn.Timeout(err) {
 				continue
 			}
-			return fmt.Errorf("failed to receive messages from Postgres: %w", err)
+			return fmt.Errorf("receiving messages from Postgres: %w", err)
 		}
 
 		if errMsg, ok := rawMsg.(*pgproto3.ErrorResponse); ok {
@@ -444,7 +444,7 @@ func (s *Stream) streamMessages(currentLSN LSN) error {
 		case PrimaryKeepaliveMessageByteID:
 			pkm, err := ParsePrimaryKeepaliveMessage(msg.Data[1:])
 			if err != nil {
-				return fmt.Errorf("failed to parse PrimaryKeepaliveMessage: %w", err)
+				return fmt.Errorf("parsing PrimaryKeepaliveMessage: %w", err)
 			}
 			if pkm.ReplyRequested {
 				nextStandbyMessageDeadline = time.Time{}
@@ -455,7 +455,7 @@ func (s *Stream) streamMessages(currentLSN LSN) error {
 		case XLogDataByteID:
 			xld, err := ParseXLogData(msg.Data[1:])
 			if err != nil {
-				return fmt.Errorf("failed to parse XLogData: %w", err)
+				return fmt.Errorf("parsing XLogData: %w", err)
 			}
 			msgLSN := xld.WALStart + LSN(len(xld.WALData))
 			result, err := s.processChange(ctx, msgLSN, xld, relations, typeMap)
@@ -544,15 +544,15 @@ func (s *Stream) processSnapshot(ctx context.Context, snapshotter *snapshotter) 
 		planStartTime := time.Now()
 		primaryKeyColumns, err := s.getPrimaryKeyColumn(ctx, table)
 		if err != nil {
-			return fmt.Errorf("failed to get primary key column for table %v: %w", table, err)
+			return fmt.Errorf("getting primary key column for table %v: %w", table, err)
 		}
 		if len(primaryKeyColumns) == 0 {
-			return fmt.Errorf("failed to get primary key for table %s", table)
+			return fmt.Errorf("getting primary key for table %s", table)
 		}
 
 		txn, err := snapshotter.AcquireReaderTxn(ctx)
 		if err != nil {
-			return fmt.Errorf("failed to create snapshot transaction for snapshot read: %w", err)
+			return fmt.Errorf("creating snapshot transaction for snapshot read: %w", err)
 		}
 
 		const overSampleFactor = 32
@@ -562,7 +562,7 @@ func (s *Stream) processSnapshot(ctx context.Context, snapshotter *snapshotter) 
 		snapshotter.ReleaseReaderTxn(txn)
 
 		if err != nil {
-			return fmt.Errorf("failed to create sample keyspace: %w", err)
+			return fmt.Errorf("creating sample keyspace: %w", err)
 		}
 
 		var prev primaryKey
@@ -638,7 +638,7 @@ func (s *Stream) scanTableRange(ctx context.Context, snapshotter *snapshotter, t
 		queryStart := time.Now()
 		snapshotRows, err := txn.querySnapshotData(ctx, table, minExclusive, maxInclusive, primaryKeyIndex, s.snapshotBatchSize)
 		if err != nil {
-			return fmt.Errorf("failed to query snapshot data for table %v: %w", table, err)
+			return fmt.Errorf("querying snapshot data for table %v: %w", table, err)
 		}
 
 		if minExclusive == nil {
@@ -646,18 +646,18 @@ func (s *Stream) scanTableRange(ctx context.Context, snapshotter *snapshotter, t
 		}
 
 		if snapshotRows.Err() != nil {
-			return fmt.Errorf("failed to get snapshot data for table %v: %w", table, snapshotRows.Err())
+			return fmt.Errorf("getting snapshot data for table %v: %w", table, snapshotRows.Err())
 		}
 
 		columnTypes, err := snapshotRows.ColumnTypes()
 		if err != nil {
-			return fmt.Errorf("failed to get column types for table %v: %w", table, err)
+			return fmt.Errorf("getting column types for table %v: %w", table, err)
 		}
 		scanArgs, valueGetters := prepareScannersAndGetters(columnTypes)
 
 		columnNames, err := snapshotRows.Columns()
 		if err != nil {
-			return fmt.Errorf("failed to get column names for table %v: %w", table, err)
+			return fmt.Errorf("getting column names for table %v: %w", table, err)
 		}
 		pkPosition := make([]int, len(columnNames))
 		for i, col := range columnNames {
@@ -672,7 +672,7 @@ func (s *Stream) scanTableRange(ctx context.Context, snapshotter *snapshotter, t
 			rowsCount += 1
 
 			if err := snapshotRows.Scan(scanArgs...); err != nil {
-				return fmt.Errorf("failed to scan row for table %v: %v", table, err.Error())
+				return fmt.Errorf("scanning row for table %v: %v", table, err.Error())
 			}
 
 			data := make(map[string]any, len(valueGetters))
@@ -697,7 +697,7 @@ func (s *Stream) scanTableRange(ctx context.Context, snapshotter *snapshotter, t
 		}
 		s.monitor.UpdateSnapshotProgressForTable(table, rowsCount)
 		if snapshotRows.Err() != nil {
-			return fmt.Errorf("failed to close snapshot data iterator for table %v: %w", table, snapshotRows.Err())
+			return fmt.Errorf("closing snapshot data iterator for table %v: %w", table, snapshotRows.Err())
 		}
 		sendStartTime := time.Now()
 		select {
@@ -738,13 +738,13 @@ func (s *Stream) getPrimaryKeyColumn(ctx context.Context, table TableFQN) ([]str
         ORDER BY array_position(i.indkey, a.attnum);
     `, table.String())
 	if err != nil {
-		return nil, fmt.Errorf("failed to sanitize query: %w", err)
+		return nil, fmt.Errorf("sanitizing query: %w", err)
 	}
 
 	reader := s.pgConn.Exec(ctx, q)
 	data, err := reader.ReadAll()
 	if err != nil {
-		return nil, fmt.Errorf("failed to read query results: %w", err)
+		return nil, fmt.Errorf("reading query results: %w", err)
 	}
 
 	if len(data) == 0 || len(data[0].Rows) == 0 {

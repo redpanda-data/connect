@@ -80,7 +80,7 @@ func (c *Checkpointer) ensureTableExists(ctx context.Context) error {
 	}
 
 	if _, err = c.svc.CreateTable(ctx, input); err != nil {
-		return fmt.Errorf("failed to create checkpoint table: %w", err)
+		return fmt.Errorf("creating checkpoint table: %w", err)
 	}
 
 	c.log.Infof("Created checkpoint table: %s", c.tableName)
@@ -101,7 +101,7 @@ func (c *Checkpointer) Get(ctx context.Context, shardID string) (string, error) 
 		if errors.As(err, &aerr) {
 			return "", nil
 		}
-		return "", fmt.Errorf("failed to get checkpoint for table=%s stream=%s shard=%s: %w",
+		return "", fmt.Errorf("getting checkpoint for table=%s stream=%s shard=%s: %w",
 			c.tableName, c.streamArn, shardID, err)
 	}
 
@@ -127,7 +127,7 @@ func (c *Checkpointer) Set(ctx context.Context, shardID, sequenceNumber string) 
 		},
 	})
 	if err != nil {
-		return fmt.Errorf("failed to set checkpoint for table=%s stream=%s shard=%s seq=%s: %w",
+		return fmt.Errorf("setting checkpoint for table=%s stream=%s shard=%s seq=%s: %w",
 			c.tableName, c.streamArn, shardID, sequenceNumber, err)
 	}
 	return nil

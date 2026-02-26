@@ -301,7 +301,7 @@ func parseCloudAuthFlags(ctx context.Context, c *cli.Context, secretLookupFn sec
 	// Initialize global service account config if credentials are provided
 	if tokenURL != "" && clientID != "" && clientSecret != "" {
 		if err := serviceaccount.InitGlobal(ctx, tokenURL, clientID, clientSecret, audience); err != nil {
-			return "", "", fmt.Errorf("failed to initialize service account authentication: %w", err)
+			return "", "", fmt.Errorf("initializing service account authentication: %w", err)
 		}
 	}
 

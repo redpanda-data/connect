@@ -371,12 +371,12 @@ func newProtobufFromJSONOperator(f fs.FS, msg string, importPaths []string, opts
 
 		opts.Resolver = types
 		if err := opts.Unmarshal(msgBytes, dynMsg); err != nil {
-			return fmt.Errorf("failed to unmarshal JSON message '%v': %w", msg, err)
+			return fmt.Errorf("unmarshalling JSON message '%v': %w", msg, err)
 		}
 
 		data, err := proto.Marshal(dynMsg)
 		if err != nil {
-			return fmt.Errorf("failed to marshal protobuf message '%v': %v", msg, err)
+			return fmt.Errorf("marshalling protobuf message '%v': %v", msg, err)
 		}
 
 		part.SetBytes(data)
@@ -429,11 +429,11 @@ func newProtobufFromJSONBSROperator(multiModuleWatcher *multiModuleWatcher, msg 
 		}
 		dynMsg := dynamicpb.NewMessage(d.Descriptor())
 		if err := opts.Unmarshal(msgBytes, dynMsg); err != nil {
-			return fmt.Errorf("failed to unmarshal JSON message '%v': %w", msg, err)
+			return fmt.Errorf("unmarshalling JSON message '%v': %w", msg, err)
 		}
 		data, err := proto.Marshal(dynMsg)
 		if err != nil {
-			return fmt.Errorf("failed to marshal protobuf message '%v': %v", msg, err)
+			return fmt.Errorf("marshalling protobuf message '%v': %v", msg, err)
 		}
 
 		part.SetBytes(data)
@@ -525,7 +525,7 @@ func newProtobuf(conf *service.ParsedConfig, mgr *service.Resources) (*protobufP
 	// if BSR config is present, use BSR to discover proto definitions
 	if len(bsrModules) > 0 {
 		if p.multiModuleWatcher, err = newMultiModuleWatcher(bsrModules); err != nil {
-			return nil, fmt.Errorf("failed to create multiModuleWatcher: %w", err)
+			return nil, fmt.Errorf("creating multiModuleWatcher: %w", err)
 		}
 		if p.operator, err = strToProtobufBSROperator(p.multiModuleWatcher, operatorStr, message, opts); err != nil {
 			return nil, err

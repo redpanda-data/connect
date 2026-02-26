@@ -79,7 +79,7 @@ func cloudTraceFromParsed(conf *service.ParsedConfig) (trace.TracerProvider, err
 
 	exp, err := gcptrace.New(gcptrace.WithProjectID(projID))
 	if err != nil {
-		return nil, fmt.Errorf("failed to create cloud trace exporter: %w", err)
+		return nil, fmt.Errorf("creating cloud trace exporter: %w", err)
 	}
 
 	tags, err := conf.FieldStringMap(ctFieldTags)
@@ -96,7 +96,7 @@ func cloudTraceFromParsed(conf *service.ParsedConfig) (trace.TracerProvider, err
 	if i, _ := conf.FieldString(ctFieldFlushInterval); i != "" {
 		flushInterval, err := time.ParseDuration(i)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse flush interval '%s': %v", i, err)
+			return nil, fmt.Errorf("parsing flush interval '%s': %v", i, err)
 		}
 		batchOpts = append(batchOpts, tracesdk.WithBatchTimeout(flushInterval))
 	}

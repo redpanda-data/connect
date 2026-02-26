@@ -150,7 +150,7 @@ func outputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (o *s
 	}
 	var srURL *url.URL
 	if srURL, err = url.Parse(srURLStr); err != nil {
-		return nil, fmt.Errorf("failed to parse URL: %s", err)
+		return nil, fmt.Errorf("parsing URL: %s", err)
 	}
 
 	if o.subject, err = pConf.FieldInterpolatedString(sroFieldSubject); err != nil {
@@ -206,7 +206,7 @@ func outputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (o *s
 		tlsConf = nil
 	}
 	if o.client, err = sr.NewClient(srURL.String(), reqSigner, tlsConf, mgr); err != nil {
-		return nil, fmt.Errorf("failed to create Schema Registry client: %s", err)
+		return nil, fmt.Errorf("creating Schema Registry client: %s", err)
 	}
 
 	if label := mgr.Label(); label != "" {
@@ -227,7 +227,7 @@ func (o *schemaRegistryOutput) Connect(ctx context.Context) error {
 
 	mode, err := o.client.GetMode(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to fetch mode: %s", err)
+		return fmt.Errorf("fetching mode: %s", err)
 	}
 
 	if mode != "READWRITE" && mode != "IMPORT" {
@@ -265,16 +265,16 @@ func (o *schemaRegistryOutput) Write(ctx context.Context, m *service.Message) er
 		return err
 	}
 	if err := o.maybeUpdateCompatibilityLevel(ctx, subject, compatLevel); err != nil {
-		return fmt.Errorf("failed to update compatibility level: %s", err)
+		return fmt.Errorf("updating compatibility level: %s", err)
 	}
 
 	var payload []byte
 	if payload, err = m.AsBytes(); err != nil {
-		return fmt.Errorf("failed to extract message bytes: %s", err)
+		return fmt.Errorf("extracting message bytes: %s", err)
 	}
 	var ss franz_sr.SubjectSchema
 	if err := json.Unmarshal(payload, &ss); err != nil {
-		return fmt.Errorf("failed to unmarshal schema details: %s", err)
+		return fmt.Errorf("unmarshalling schema details: %s", err)
 	}
 	ss.Subject = subject // subject from the metadata
 
@@ -310,7 +310,7 @@ func (o *schemaRegistryOutput) compatibilityLevelFromMessage(subject string, m *
 	}
 
 	if err := compatLevel.UnmarshalText(b); err != nil {
-		return compatLevel, fmt.Errorf("failed to unmarshal compatibility level: %s", err)
+		return compatLevel, fmt.Errorf("unmarshalling compatibility level: %s", err)
 	}
 	o.log.Debugf("Got compatibility level: %s", string(b))
 
@@ -331,12 +331,12 @@ func (o *schemaRegistryOutput) Close(_ context.Context) error {
 func (o *schemaRegistryOutput) GetDestinationSchemaID(ctx context.Context, id int) (int, error) {
 	schema, err := o.inputClient.GetSchemaByID(ctx, id, false)
 	if err != nil {
-		return -1, fmt.Errorf("failed to get schema for ID %d: %s", id, err)
+		return -1, fmt.Errorf("getting schema for ID %d: %s", id, err)
 	}
 
 	schemaSubjects, err := o.inputClient.GetSubjectsBySchemaID(ctx, id, false)
 	if err != nil {
-		return -1, fmt.Errorf("failed to get subjects for schema ID %d: %s", id, err)
+		return -1, fmt.Errorf("getting subjects for schema ID %d: %s", id, err)
 	}
 
 	if len(schemaSubjects) == 0 {
@@ -357,7 +357,7 @@ func (o *schemaRegistryOutput) GetDestinationSchemaID(ctx context.Context, id in
 
 		latestVersion, err := o.inputClient.GetLatestSchemaVersionForSchemaIDAndSubject(ctx, id, subject)
 		if err != nil {
-			return -1, fmt.Errorf("failed to get schema for ID %d and subject %q: %s", id, subject, err)
+			return -1, fmt.Errorf("getting schema for ID %d and subject %q: %s", id, subject, err)
 		}
 
 		destinationID, err = o.getOrCreateSchemaID(
@@ -370,7 +370,7 @@ func (o *schemaRegistryOutput) GetDestinationSchemaID(ctx context.Context, id in
 			},
 		)
 		if err != nil {
-			return -1, fmt.Errorf("failed to get destination schema ID for source schema ID %d, subject %q and version %d: %s", id, subject, latestVersion, err)
+			return -1, fmt.Errorf("getting destination schema ID for source schema ID %d, subject %q and version %d: %s", id, subject, latestVersion, err)
 		}
 	}
 
@@ -399,7 +399,7 @@ func (o *schemaRegistryOutput) getOrCreateSchemaID(ctx context.Context, ss franz
 
 	if o.backfillDependencies {
 		if err := o.createSchemaDeps(ctx, ss, true); err != nil {
-			return 0, fmt.Errorf("failed to backfill dependencies for schema with subject %q and version %d: %s", ss.Subject, ss.Version, err)
+			return 0, fmt.Errorf("backfilling dependencies for schema with subject %q and version %d: %s", ss.Subject, ss.Version, err)
 		}
 	}
 
@@ -421,11 +421,11 @@ func (o *schemaRegistryOutput) createSchemaDeps(ctx context.Context, ss franz_sr
 	for _, ref := range ss.References {
 		schema, err := o.inputClient.GetSchemaBySubjectAndVersion(ctx, ref.Subject, &ref.Version, false)
 		if err != nil {
-			return fmt.Errorf("failed to get schema for subject %q with version %d: %s", ref.Subject, ref.Version, err)
+			return fmt.Errorf("getting schema for subject %q with version %d: %s", ref.Subject, ref.Version, err)
 		}
 
 		if err := o.createSchemaDeps(ctx, schema, true); err != nil {
-			return fmt.Errorf("failed to create schema dependencies: %s", err)
+			return fmt.Errorf("creating schema dependencies: %s", err)
 		}
 	}
 
@@ -433,24 +433,24 @@ func (o *schemaRegistryOutput) createSchemaDeps(ctx context.Context, ss franz_sr
 	if ss.Version > 1 && backfillPrevVersions {
 		versions, err := o.inputClient.GetVersionsForSubject(ctx, ss.Subject, false)
 		if err != nil {
-			return fmt.Errorf("failed to get schema versions for subject %q: %s", ss.Subject, err)
+			return fmt.Errorf("getting schema versions for subject %q: %s", ss.Subject, err)
 		}
 
 		slices.Sort(versions)
 		for _, version := range versions {
 			schema, err := o.inputClient.GetSchemaBySubjectAndVersion(ctx, ss.Subject, &version, false)
 			if err != nil {
-				return fmt.Errorf("failed to get schema for subject %q with version %d: %s", ss.Subject, version, err)
+				return fmt.Errorf("getting schema for subject %q with version %d: %s", ss.Subject, version, err)
 			}
 
 			if err := o.createSchemaDeps(ctx, schema, false); err != nil {
-				return fmt.Errorf("failed to create schema dependencies: %s", err)
+				return fmt.Errorf("creating schema dependencies: %s", err)
 			}
 		}
 	}
 
 	if _, err := o.createSchema(ctx, key, ss); err != nil {
-		return fmt.Errorf("failed to create schema: %s", err)
+		return fmt.Errorf("creating schema: %s", err)
 	}
 
 	return nil
@@ -501,7 +501,7 @@ func (o *schemaRegistryOutput) createSchema(ctx context.Context, key schemaLinea
 				// due to normalization differences.
 				destinationID, err = o.client.CreateSchema(ctx, ss.Subject, existingSchema, o.normalize)
 				if err != nil {
-					return -1, fmt.Errorf("failed to associate schema ID %d with subject %q: %s", ss.ID, ss.Subject, err)
+					return -1, fmt.Errorf("associating schema ID %d with subject %q: %s", ss.ID, ss.Subject, err)
 				}
 			} else {
 				// Fail if we get any other errors.

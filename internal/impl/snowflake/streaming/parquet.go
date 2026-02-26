@@ -115,7 +115,7 @@ func writeRowGroupFromObject(
 
 	// Flush compresses the row group data
 	if err := rg.Flush(); err != nil {
-		return nil, fmt.Errorf("failed to flush row group: %w", err)
+		return nil, fmt.Errorf("flushing row group: %w", err)
 	}
 
 	return stats, nil
@@ -201,7 +201,7 @@ func writeRowGroupFromArray(
 
 	// Flush compresses the row group data
 	if err := rg.Flush(); err != nil {
-		return nil, fmt.Errorf("failed to flush row group: %w", err)
+		return nil, fmt.Errorf("flushing row group: %w", err)
 	}
 
 	return stats, nil

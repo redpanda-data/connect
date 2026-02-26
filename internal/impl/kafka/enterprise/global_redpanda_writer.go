@@ -389,7 +389,7 @@ func (f *franzTopicLoggerWriter) Connect(ctx context.Context) error {
 			Client:      cl,
 			ConnDetails: f.connDetails,
 		}, f.mgr); err != nil {
-			return fmt.Errorf("failed to store global redpanda client: %w", err)
+			return fmt.Errorf("storing global redpanda client: %w", err)
 		}
 	}
 

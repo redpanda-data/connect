@@ -144,11 +144,11 @@ func (g *googleDriveSearchProcessor) Process(ctx context.Context, msg *service.M
 	}
 	q, err := g.query.TryString(msg)
 	if err != nil {
-		return nil, fmt.Errorf("failed to interpolate %s: %v", driveSearchFieldQuery, err)
+		return nil, fmt.Errorf("interpolating %s: %v", driveSearchFieldQuery, err)
 	}
 	l, err := g.labels.TryString(msg)
 	if err != nil {
-		return nil, fmt.Errorf("failed to interpolate %s: %v", driveSearchFieldLabels, err)
+		return nil, fmt.Errorf("interpolating %s: %v", driveSearchFieldLabels, err)
 	}
 	call := client.Files.List().
 		Context(ctx).
@@ -177,13 +177,13 @@ func (g *googleDriveSearchProcessor) Process(ctx context.Context, msg *service.M
 		err = nil
 	}
 	if err != nil {
-		return nil, fmt.Errorf("failed to query files in google drive: %v", err)
+		return nil, fmt.Errorf("querying files in google drive: %v", err)
 	}
 	batch := service.MessageBatch{}
 	for _, file := range files {
 		b, err := file.MarshalJSON()
 		if err != nil {
-			return nil, fmt.Errorf("failed to marshal file to JSON: %v", err)
+			return nil, fmt.Errorf("marshalling file to JSON: %v", err)
 		}
 		cpy := msg.Copy()
 		cpy.SetBytes(b)

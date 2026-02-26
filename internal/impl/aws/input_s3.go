@@ -337,7 +337,7 @@ func newStaticTargetReader(
 	}
 	output, err := s3Client.ListObjectsV2(ctx, listInput)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list objects: %v", err)
+		return nil, fmt.Errorf("listing objects: %v", err)
 	}
 	staticKeys := staticTargetReader{
 		s3:   s3Client,
@@ -367,7 +367,7 @@ func (s *staticTargetReader) Pop(ctx context.Context) (*s3ObjectTarget, error) {
 		}
 		output, err := s.s3.ListObjectsV2(ctx, listInput)
 		if err != nil {
-			return nil, fmt.Errorf("failed to list objects: %v", err)
+			return nil, fmt.Errorf("listing objects: %v", err)
 		}
 		for _, obj := range output.Contents {
 			ackFn := deleteS3ObjectAckFn(s.s3, s.conf.Bucket, *obj.Key, s.conf.DeleteObjects, nil)
@@ -468,14 +468,14 @@ func digStrsFromSlices(slice []any) []string {
 func (s *sqsTargetReader) parseObjectPaths(sqsMsg *string) ([]s3ObjectTarget, error) {
 	gObj, err := gabs.ParseJSON([]byte(*sqsMsg))
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse SQS message: %v", err)
+		return nil, fmt.Errorf("parsing SQS message: %v", err)
 	}
 
 	if s.conf.SQS.EnvelopePath != "" {
 		d := gObj.Path(s.conf.SQS.EnvelopePath).Data()
 		if str, ok := d.(string); ok {
 			if gObj, err = gabs.ParseJSON([]byte(str)); err != nil {
-				return nil, fmt.Errorf("failed to parse enveloped message: %v", err)
+				return nil, fmt.Errorf("parsing enveloped message: %v", err)
 			}
 		} else {
 			return nil, fmt.Errorf("expected string at envelope path, found %T", d)
@@ -503,7 +503,7 @@ func (s *sqsTargetReader) parseObjectPaths(sqsMsg *string) ([]s3ObjectTarget, er
 	objects := make([]s3ObjectTarget, 0, len(keys))
 	for i, key := range keys {
 		if key, err = url.QueryUnescape(key); err != nil {
-			return nil, fmt.Errorf("failed to parse key from SQS message: %v", err)
+			return nil, fmt.Errorf("parsing key from SQS message: %v", err)
 		}
 		bucket := s.conf.Bucket
 		if len(buckets) > i {
@@ -701,7 +701,7 @@ func newAmazonS3Reader(conf s3iConfig, awsConf aws.Config, nm *service.Resources
 	if conf.SQS.DelayPeriod != "" {
 		var err error
 		if s.gracePeriod, err = time.ParseDuration(conf.SQS.DelayPeriod); err != nil {
-			return nil, fmt.Errorf("failed to parse grace period: %w", err)
+			return nil, fmt.Errorf("parsing grace period: %w", err)
 		}
 	}
 	return s, nil
@@ -731,7 +731,7 @@ func (a *awsS3Reader) ConnectionTest(ctx context.Context) service.ConnectionTest
 			Bucket: aws.String(a.conf.Bucket),
 		})
 		if err != nil {
-			return service.ConnectionTestFailed(fmt.Errorf("failed to access bucket %s: %w", a.conf.Bucket, err)).AsList()
+			return service.ConnectionTestFailed(fmt.Errorf("accessing bucket %s: %w", a.conf.Bucket, err)).AsList()
 		}
 	}
 
@@ -748,7 +748,7 @@ func (a *awsS3Reader) ConnectionTest(ctx context.Context) service.ConnectionTest
 			AttributeNames: []sqstypes.QueueAttributeName{sqstypes.QueueAttributeNameQueueArn},
 		})
 		if err != nil {
-			return service.ConnectionTestFailed(fmt.Errorf("failed to access SQS queue: %w", err)).AsList()
+			return service.ConnectionTestFailed(fmt.Errorf("accessing SQS queue: %w", err)).AsList()
 		}
 	}
 

@@ -117,7 +117,7 @@ func FranzProducerLimitsOptsFromConfig(conf *service.ParsedConfig) ([]kgo.Opt, e
 	}
 	maxMessageBytes, err := humanize.ParseBytes(maxMessageBytesStr)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse max_message_bytes: %w", err)
+		return nil, fmt.Errorf("parsing max_message_bytes: %w", err)
 	}
 	if maxMessageBytes > uint64(math.MaxInt32) {
 		return nil, fmt.Errorf("invalid max_message_bytes, must not exceed %v", math.MaxInt32)
@@ -130,7 +130,7 @@ func FranzProducerLimitsOptsFromConfig(conf *service.ParsedConfig) ([]kgo.Opt, e
 	}
 	brokerWriteMaxBytes, err := humanize.ParseBytes(brokerWriteMaxBytesStr)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse broker_write_max_bytes: %w", err)
+		return nil, fmt.Errorf("parsing broker_write_max_bytes: %w", err)
 	}
 	if brokerWriteMaxBytes > 1<<30 {
 		return nil, fmt.Errorf("invalid broker_write_max_bytes, must not exceed %v", 1<<30)
@@ -515,7 +515,7 @@ func (w *batchWriter) writeBatch(details *FranzSharedClientInfo) error {
 	}
 	records, err := conv(w.batch)
 	if err != nil {
-		return fmt.Errorf("failed to create records: %w", err)
+		return fmt.Errorf("creating records: %w", err)
 	}
 	if len(records) != len(w.batch) {
 		return fmt.Errorf("record count mismatch: got %d records for %d messages", len(records), len(w.batch))

@@ -355,16 +355,16 @@ func newKinesisReaderFromConfig(conf kiConfig, batcher service.BatchPolicy, sess
 	}
 
 	if k.commitPeriod, err = time.ParseDuration(k.conf.CommitPeriod); err != nil {
-		return nil, fmt.Errorf("failed to parse commit period string: %v", err)
+		return nil, fmt.Errorf("parsing commit period string: %v", err)
 	}
 	if k.stealGracePeriod, err = time.ParseDuration(k.conf.StealGracePeriod); err != nil {
-		return nil, fmt.Errorf("failed to parse steal grace period string: %v", err)
+		return nil, fmt.Errorf("parsing steal grace period string: %v", err)
 	}
 	if k.leasePeriod, err = time.ParseDuration(k.conf.LeasePeriod); err != nil {
-		return nil, fmt.Errorf("failed to parse lease period string: %v", err)
+		return nil, fmt.Errorf("parsing lease period string: %v", err)
 	}
 	if k.rebalancePeriod, err = time.ParseDuration(k.conf.RebalancePeriod); err != nil {
-		return nil, fmt.Errorf("failed to parse rebalance period string: %v", err)
+		return nil, fmt.Errorf("parsing rebalance period string: %v", err)
 	}
 
 	// Initialize metrics
@@ -425,7 +425,7 @@ func (k *kinesisReader) getIter(info streamInfo, shardID, sequence string) (stri
 		}
 	}
 	if iter == "" {
-		return "", errors.New("failed to obtain shard iterator")
+		return "", errors.New("obtaining shard iterator")
 	}
 	return iter, nil
 }
@@ -918,7 +918,7 @@ func (k *kinesisReader) ConnectionTest(ctx context.Context) service.ConnectionTe
 		StreamName: aws.String(streamInfo.id),
 	})
 	if err != nil {
-		return service.ConnectionTestFailed(fmt.Errorf("failed to describe stream %s: %w", streamInfo.id, err)).AsList()
+		return service.ConnectionTestFailed(fmt.Errorf("describing stream %s: %w", streamInfo.id, err)).AsList()
 	}
 
 	return service.ConnectionTestSucceeded().AsList()

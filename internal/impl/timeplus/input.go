@@ -141,10 +141,10 @@ func (p *timeplusInput) Connect(context.Context) error {
 	// itself."
 	if err := p.reader.Run(p.sql); err != nil {
 		if errors.Is(err, syscall.ECONNREFUSED) || errors.Is(err, os.ErrDeadlineExceeded) {
-			return errors.New("failed to connect to driver")
+			return errors.New("connecting to driver")
 		}
 
-		return fmt.Errorf("failed to run query: %w", err)
+		return fmt.Errorf("running query: %w", err)
 	}
 
 	logger.Info("timeplusd connected, query is running")

@@ -83,10 +83,10 @@ func newAgentProcessor(conf *service.ParsedConfig, res *service.Resources) (serv
 		}()),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create plugin process: %w", err)
+		return nil, fmt.Errorf("creating plugin process: %w", err)
 	}
 	if err := proc.Start(); err != nil {
-		return nil, fmt.Errorf("failed to start plugin process: %w", err)
+		return nil, fmt.Errorf("starting plugin process: %w", err)
 	}
 	select {
 	case line := <-protocol:
@@ -106,7 +106,7 @@ func newAgentProcessor(conf *service.ParsedConfig, res *service.Resources) (serv
 		if err != nil {
 			res.Logger().Debugf("failed to create connection: %v", err)
 			_ = proc.Close(context.Background())
-			return nil, fmt.Errorf("failed to connect to plugin process: %w", err)
+			return nil, fmt.Errorf("connecting to plugin process: %w", err)
 		}
 		res.Logger().Debugf("started agent listening on %s", addr)
 		client := &rpcClient{
@@ -121,9 +121,9 @@ func newAgentProcessor(conf *service.ParsedConfig, res *service.Resources) (serv
 		res.Logger().Debugf("failed to start agent after 10 seconds")
 		_ = proc.Close(context.Background())
 		if !proc.IsRunning() {
-			return nil, errors.New("failed to start plugin process, process exited, make sure you're calling `redpanda.runtime.serve`")
+			return nil, errors.New("starting plugin process, process exited, make sure you're calling `redpanda.runtime.serve`")
 		}
-		return nil, errors.New("failed to start plugin process, timeout waiting for protocol line")
+		return nil, errors.New("starting plugin process, timeout waiting for protocol line")
 	}
 }
 

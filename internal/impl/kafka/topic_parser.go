@@ -34,18 +34,18 @@ func parsePartitions(expr string) ([]int32, error) {
 	if len(rangeExpr) == 1 {
 		partition, err := strconv.ParseInt(expr, 10, 32)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse partition number: %w", err)
+			return nil, fmt.Errorf("parsing partition number: %w", err)
 		}
 		return []int32{int32(partition)}, nil
 	}
 
 	start, err := strconv.ParseInt(rangeExpr[0], 10, 32)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse start of range: %w", err)
+		return nil, fmt.Errorf("parsing start of range: %w", err)
 	}
 	end, err := strconv.ParseInt(rangeExpr[1], 10, 32)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse end of range: %w", err)
+		return nil, fmt.Errorf("parsing end of range: %w", err)
 	}
 
 	var parts []int32

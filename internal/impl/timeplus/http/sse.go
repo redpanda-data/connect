@@ -85,7 +85,7 @@ func (c *sseClient) Run(sql string) error {
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		resp.Body.Close()
-		return fmt.Errorf("failed to run query, got status code %d", resp.StatusCode)
+		return fmt.Errorf("running query, got status code %d", resp.StatusCode)
 	}
 
 	c.reader = newEventStreamReader(resp.Body, 1024*1024)

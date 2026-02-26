@@ -274,12 +274,12 @@ func (ri *Input) Connect(_ context.Context) error {
 
 	var lc net.ListenConfig
 	if err := netutil.DecorateListenerConfig(&lc, ri.lc); err != nil {
-		return fmt.Errorf("failed to configure listener: %w", err)
+		return fmt.Errorf("configuring listener: %w", err)
 	}
 
 	l, err := lc.Listen(context.Background(), "tcp", ri.conf.Address)
 	if err != nil {
-		return fmt.Errorf("failed to bind to address %s: %w", ri.conf.Address, err)
+		return fmt.Errorf("binding to address %s: %w", ri.conf.Address, err)
 	}
 	ri.server = &http.Server{Addr: ri.conf.Address, Handler: ri.mux}
 
@@ -313,7 +313,7 @@ func extractBatchFromRequest(r *http.Request) (service.MessageBatch, error) {
 
 	mediaType, params, err := mime.ParseMediaType(contentType)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse media type: %w", err)
+		return nil, fmt.Errorf("parsing media type: %w", err)
 	}
 
 	if strings.HasPrefix(mediaType, "multipart/") {
@@ -324,18 +324,18 @@ func extractBatchFromRequest(r *http.Request) (service.MessageBatch, error) {
 				if errors.Is(err, io.EOF) {
 					break
 				}
-				return nil, fmt.Errorf("failed to obtain next multipart message part: %w", err)
+				return nil, fmt.Errorf("obtaining next multipart message part: %w", err)
 			}
 			var msgBytes []byte
 			if msgBytes, err = io.ReadAll(p); err != nil {
-				return nil, fmt.Errorf("failed to read multipart message part: %w", err)
+				return nil, fmt.Errorf("reading multipart message part: %w", err)
 			}
 			batch = append(batch, service.NewMessage(msgBytes))
 		}
 	} else {
 		var msgBytes []byte
 		if msgBytes, err = io.ReadAll(r.Body); err != nil {
-			return nil, fmt.Errorf("failed to read body: %w", err)
+			return nil, fmt.Errorf("reading body: %w", err)
 		}
 		batch = append(batch, service.NewMessage(msgBytes))
 	}

@@ -209,7 +209,7 @@ func TestPubSubOutput_MissingTopic(t *testing.T) {
 
 	err = out.WriteBatch(ctx, batch)
 	require.ErrorAsf(t, err, &bErr, "expected a batch error but got: %T: %v", bErr, bErr)
-	require.ErrorContains(t, bErr, "failed to validate topic 'test_bar': simulated error")
+	require.ErrorContains(t, bErr, "validating topic 'test_bar': simulated error")
 	bErr.WalkMessagesIndexedBy(index, func(_ int, _ *service.Message, err error) bool {
 		if err != nil {
 			errs = append(errs, err)
@@ -217,7 +217,7 @@ func TestPubSubOutput_MissingTopic(t *testing.T) {
 		return true
 	})
 	require.Len(t, errs, 1, "expected one error in batch error")
-	require.ErrorContains(t, errs[0], "failed to validate topic 'test_bar': simulated error")
+	require.ErrorContains(t, errs[0], "validating topic 'test_bar': simulated error")
 }
 
 func TestPubSubOutput_PublishErrors(t *testing.T) {

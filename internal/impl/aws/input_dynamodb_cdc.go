@@ -261,7 +261,7 @@ func (d *dynamoDBCDCInput) Connect(ctx context.Context) error {
 		if errors.As(err, &aerr) {
 			return fmt.Errorf("table %s does not exist", d.conf.table)
 		}
-		return fmt.Errorf("failed to describe table %s: %w", d.conf.table, err)
+		return fmt.Errorf("describing table %s: %w", d.conf.table, err)
 	}
 
 	d.streamArn = descTable.Table.LatestStreamArn
@@ -272,7 +272,7 @@ func (d *dynamoDBCDCInput) Connect(ctx context.Context) error {
 	// Initialize checkpointer
 	d.checkpointer, err = dynamocdc.NewCheckpointer(ctx, d.dynamoClient, d.conf.checkpointTable, *d.streamArn, d.conf.checkpointLimit, d.log)
 	if err != nil {
-		return fmt.Errorf("failed to create checkpointer: %w", err)
+		return fmt.Errorf("creating checkpointer: %w", err)
 	}
 
 	// Initialize record batcher
@@ -285,7 +285,7 @@ func (d *dynamoDBCDCInput) Connect(ctx context.Context) error {
 
 	// Initialize shards
 	if err := d.refreshShards(ctx); err != nil {
-		return fmt.Errorf("failed to initialize shards: %w", err)
+		return fmt.Errorf("initializing shards: %w", err)
 	}
 
 	// Verify at least one shard reader started successfully
@@ -294,7 +294,7 @@ func (d *dynamoDBCDCInput) Connect(ctx context.Context) error {
 	d.mu.Unlock()
 
 	if activeCount == 0 {
-		return errors.New("no active shard readers available - stream may have no shards or all failed to initialize")
+		return errors.New("no active shard readers available - stream may have no shards or all initializing")
 	}
 
 	// Start background goroutine to coordinate shard readers
@@ -366,7 +366,7 @@ func (d *dynamoDBCDCInput) refreshShards(ctx context.Context) error {
 			SequenceNumber:    sequenceNumber,
 		})
 		if err != nil {
-			return fmt.Errorf("failed to get iterator for shard %s: %w", shardID, err)
+			return fmt.Errorf("getting iterator for shard %s: %w", shardID, err)
 		}
 
 		newShards = append(newShards, shardToAdd{

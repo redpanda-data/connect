@@ -36,7 +36,7 @@ func getPrivateKeyFromFile(f fs.FS, path, passphrase string) (*rsa.PrivateKey, e
 	privateKeyBytes, err := service.ReadFile(f, path)
 	defer wipeSlice(privateKeyBytes)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read private key %s: %s", path, err)
+		return nil, fmt.Errorf("reading private key %s: %s", path, err)
 	}
 	if len(privateKeyBytes) == 0 {
 		return nil, errors.New("private key is empty")
@@ -73,7 +73,7 @@ func getPrivateKey(privateKeyBytes []byte, passphrase string) (*rsa.PrivateKey, 
 		// pbeWithMD5AndDES-CBC http://oid-info.com/get/1.2.840.113549.1.5.3 is not supported.
 		privateKey, err := pkcs8.ParsePKCS8PrivateKeyRSA(privateKeyBlock.Bytes, []byte(passphrase))
 		if err != nil {
-			return nil, fmt.Errorf("failed to decrypt encrypted private key (only ciphers aes-128-cbc, aes-128-gcm, aes-192-cbc, aes-192-gcm, aes-256-cbc, aes-256-gcm, and des-ede3-cbc are supported): %s", err)
+			return nil, fmt.Errorf("decrypting encrypted private key (only ciphers aes-128-cbc, aes-128-gcm, aes-192-cbc, aes-192-gcm, aes-256-cbc, aes-256-gcm, and des-ede3-cbc are supported): %s", err)
 		}
 
 		return privateKey, nil
@@ -98,7 +98,7 @@ func calculatePublicKeyFingerprint(privateKey *rsa.PrivateKey) (string, error) {
 	pubKey := privateKey.Public()
 	pubDER, err := x509.MarshalPKIXPublicKey(pubKey)
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal public key: %s", err)
+		return "", fmt.Errorf("marshalling public key: %s", err)
 	}
 
 	hash := sha256.Sum256(pubDER)

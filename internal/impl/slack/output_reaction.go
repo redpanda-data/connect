@@ -113,15 +113,15 @@ func (o *reactionOutput) Connect(ctx context.Context) error {
 func (o *reactionOutput) Write(ctx context.Context, msg *service.Message) error {
 	channelID, err := o.channelID.TryString(msg)
 	if err != nil {
-		return fmt.Errorf("failed to interpolate channel ID: %w", err)
+		return fmt.Errorf("interpolating channel ID: %w", err)
 	}
 	timestamp, err := o.timestamp.TryString(msg)
 	if err != nil {
-		return fmt.Errorf("failed to interpolate timestamp: %w", err)
+		return fmt.Errorf("interpolating timestamp: %w", err)
 	}
 	emoji, err := o.emoji.TryString(msg)
 	if err != nil {
-		return fmt.Errorf("failed to interpolate emoji: %w", err)
+		return fmt.Errorf("interpolating emoji: %w", err)
 	}
 
 	item := slack.ItemRef{Channel: channelID, Timestamp: timestamp}

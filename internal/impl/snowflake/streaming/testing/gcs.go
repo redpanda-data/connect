@@ -50,19 +50,19 @@ func StartFakeGCS(ctx context.Context) (*FakeGCSContainer, error) {
 		Started:          true,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to start fake-gcs-server container: %w", err)
+		return nil, fmt.Errorf("starting fake-gcs-server container: %w", err)
 	}
 
 	host, err := container.Host(ctx)
 	if err != nil {
 		_ = container.Terminate(ctx)
-		return nil, fmt.Errorf("failed to get container host: %w", err)
+		return nil, fmt.Errorf("getting container host: %w", err)
 	}
 
 	mappedPort, err := container.MappedPort(ctx, "4443")
 	if err != nil {
 		_ = container.Terminate(ctx)
-		return nil, fmt.Errorf("failed to get mapped port: %w", err)
+		return nil, fmt.Errorf("getting mapped port: %w", err)
 	}
 
 	endpoint := fmt.Sprintf("http://%s:%s", host, mappedPort.Port())
@@ -80,7 +80,7 @@ func StartFakeGCS(ctx context.Context) (*FakeGCSContainer, error) {
 	// Create the bucket
 	if err := gc.createBucket(ctx); err != nil {
 		_ = container.Terminate(ctx)
-		return nil, fmt.Errorf("failed to create bucket: %w", err)
+		return nil, fmt.Errorf("creating bucket: %w", err)
 	}
 
 	return gc, nil

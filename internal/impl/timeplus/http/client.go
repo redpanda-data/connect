@@ -101,10 +101,10 @@ func (c *Client) Write(ctx context.Context, cols []string, rows [][]any) error {
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		errorBody, err := io.ReadAll(resp.Body)
 		if err != nil {
-			return fmt.Errorf("failed to ingest, got status code %d", resp.StatusCode)
+			return fmt.Errorf("ingesting, got status code %d", resp.StatusCode)
 		}
 
-		return fmt.Errorf("failed to ingest, got status code %d, error %s", resp.StatusCode, errorBody)
+		return fmt.Errorf("ingesting, got status code %d, error %s", resp.StatusCode, errorBody)
 	}
 
 	return nil

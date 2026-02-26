@@ -195,13 +195,13 @@ var _ service.Processor = (*processor)(nil)
 func (p *processor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
 	collection, err := p.collectionName.TryString(msg)
 	if err != nil {
-		return nil, fmt.Errorf("failed to interpolate `%s`: %w", qpFieldCollectionName, err)
+		return nil, fmt.Errorf("interpolating `%s`: %w", qpFieldCollectionName, err)
 	}
 	var filter qdrant.Filter
 	if p.filter != nil {
 		rawFilter, err := msg.BloblangQuery(p.filter)
 		if err != nil {
-			return nil, fmt.Errorf("failed to execute `%s`: %w", qpFieldFilter, err)
+			return nil, fmt.Errorf("executing `%s`: %w", qpFieldFilter, err)
 		}
 		b, err := rawFilter.AsBytes()
 		if err != nil {
@@ -215,7 +215,7 @@ func (p *processor) Process(ctx context.Context, msg *service.Message) (service.
 	}
 	rawVec, err := msg.BloblangQuery(p.vectorMapping)
 	if err != nil {
-		return nil, fmt.Errorf("failed to execute `%s`: %w", qpFieldVectorMapping, err)
+		return nil, fmt.Errorf("executing `%s`: %w", qpFieldVectorMapping, err)
 	}
 	maybeVec, err := rawVec.AsStructured()
 	if err != nil {
@@ -256,7 +256,7 @@ func (p *processor) Process(ctx context.Context, msg *service.Message) (service.
 		p.limit,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query qdrant: %w", err)
+		return nil, fmt.Errorf("querying qdrant: %w", err)
 	}
 	points := []json.RawMessage{}
 	for _, result := range results {

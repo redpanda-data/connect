@@ -142,14 +142,14 @@ func (i *input) Connect(ctx context.Context) error {
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, i.url, strings.NewReader(payload.Encode()))
 	if err != nil {
-		return fmt.Errorf("failed to construct HTTP request: %s", err)
+		return fmt.Errorf("constructing HTTP request: %s", err)
 	}
 	req.SetBasicAuth(i.user, i.password)
 	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 
 	resp, err := i.client.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to execute HTTP request: %s", err)
+		return fmt.Errorf("executing HTTP request: %s", err)
 	}
 
 	if resp.StatusCode != http.StatusOK {
@@ -157,7 +157,7 @@ func (i *input) Connect(ctx context.Context) error {
 		defer resp.Body.Close()
 
 		if respData, err := httputil.DumpResponse(resp, true); err != nil {
-			return fmt.Errorf("failed to read response: %s", err)
+			return fmt.Errorf("reading response: %s", err)
 		} else {
 			i.log.Debugf("Failed to fetch data to Splunk with status %d: %s", resp.StatusCode, string(respData))
 		}
@@ -203,7 +203,7 @@ func (i *input) Read(context.Context) (*service.Message, service.AckFunc, error)
 			i.reader = nil
 			return nil, nil, service.ErrEndOfInput
 		}
-		return nil, nil, fmt.Errorf("failed to read data: %s", err)
+		return nil, nil, fmt.Errorf("reading data: %s", err)
 	}
 
 	return service.NewMessage(line), func(context.Context, error) error {

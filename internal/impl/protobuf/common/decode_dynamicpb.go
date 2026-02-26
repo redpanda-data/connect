@@ -35,7 +35,7 @@ var _ ProtobufDecoder = (*dynamicPbParser)(nil)
 func (p *dynamicPbParser) WithDecoded(buf []byte, cb func(msg proto.Message) error) error {
 	dynMsg := p.msgType.New().Interface()
 	if err := proto.Unmarshal(buf, dynMsg); err != nil {
-		return fmt.Errorf("failed to unmarshal protobuf message: '%v': %w", p.msgType.Descriptor().FullName(), err)
+		return fmt.Errorf("unmarshalling protobuf message: '%v': %w", p.msgType.Descriptor().FullName(), err)
 	}
 	return cb(dynMsg)
 }

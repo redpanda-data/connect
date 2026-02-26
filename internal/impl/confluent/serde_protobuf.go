@@ -58,7 +58,7 @@ func (s *schemaRegistryDecoder) getProtobufDecoder(
 
 	files, types, err := common.RegistriesFromMap(regMap)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse proto schema: %v", err)
+		return nil, fmt.Errorf("parsing proto schema: %v", err)
 	}
 
 	targetFile, err := files.FindFileByPath(".")
@@ -138,7 +138,7 @@ func (s *schemaRegistryEncoder) getProtobufEncoder(ctx context.Context, schema s
 
 	files, types, err := common.RegistriesFromMap(regMap)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse proto schema: %v", err)
+		return nil, fmt.Errorf("parsing proto schema: %v", err)
 	}
 
 	targetFile, err := files.FindFileByPath(".")
@@ -160,7 +160,7 @@ func (s *schemaRegistryEncoder) getProtobufEncoder(ctx context.Context, schema s
 
 		data, err := proto.Marshal(dynMsg)
 		if err != nil {
-			return fmt.Errorf("failed to marshal protobuf message: %w", err)
+			return fmt.Errorf("marshalling protobuf message: %w", err)
 		}
 
 		m.SetBytes(append(indexBytes, data...)) // TODO: Only allocate once by passing id through

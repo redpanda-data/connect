@@ -462,14 +462,14 @@ func (w writeMapsExec) extractFromMessage(operation Operation, i int) (
 
 	if filterValWanted && w.filterMap != nil {
 		if filterJSON, err = extJSONFromMap(i, w.filterMap); err != nil {
-			err = fmt.Errorf("failed to execute filter_map: %v", err)
+			err = fmt.Errorf("executing filter_map: %v", err)
 			return
 		}
 	}
 
 	if documentValWanted && w.documentMap != nil {
 		if docJSON, err = extJSONFromMap(i, w.documentMap); err != nil {
-			err = fmt.Errorf("failed to execute document_map: %v", err)
+			err = fmt.Errorf("executing document_map: %v", err)
 			return
 		}
 	}

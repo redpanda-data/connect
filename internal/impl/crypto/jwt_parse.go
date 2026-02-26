@@ -65,7 +65,7 @@ func jwtParser(secretDecoder secretDecoderFunc, method jwt.SigningMethod) blobla
 				return signingSecret, nil
 			})
 			if err != nil {
-				return nil, fmt.Errorf("failed to parse JWT string: %w", err)
+				return nil, fmt.Errorf("parsing JWT string: %w", err)
 			}
 
 			return map[string]any(claims), nil

@@ -98,11 +98,11 @@ func ParseLSN(s string) (LSN, error) {
 	var nparsed int
 	nparsed, err := fmt.Sscanf(s, "%X/%X", &upperHalf, &lowerHalf)
 	if err != nil {
-		return 0, fmt.Errorf("failed to parse LSN: %w", err)
+		return 0, fmt.Errorf("parsing LSN: %w", err)
 	}
 
 	if nparsed != 2 {
-		return 0, fmt.Errorf("failed to parsed LSN: %s", s)
+		return 0, fmt.Errorf("parsing LSN: %s", s)
 	}
 
 	return LSN((upperHalf << 32) + lowerHalf), nil
@@ -146,13 +146,13 @@ func ParseIdentifySystem(mrr *pgconn.MultiResultReader) (IdentifySystemResult, e
 	isr.SystemID = string(row[0])
 	timeline, err := strconv.ParseInt(string(row[1]), 10, 32)
 	if err != nil {
-		return isr, fmt.Errorf("failed to parse timeline: %w", err)
+		return isr, fmt.Errorf("parsing timeline: %w", err)
 	}
 	isr.Timeline = int32(timeline)
 
 	isr.XLogPos, err = ParseLSN(string(row[2]))
 	if err != nil {
-		return isr, fmt.Errorf("failed to parse xlogpos as LSN: %w", err)
+		return isr, fmt.Errorf("parsing xlogpos as LSN: %w", err)
 	}
 
 	isr.DBName = string(row[3])
@@ -284,14 +284,14 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 			WHERE pubname = $1;
 		`, publicationName)
 	if err != nil {
-		return fmt.Errorf("failed to sanitize publication query: %w", err)
+		return fmt.Errorf("sanitizing publication query: %w", err)
 	}
 
 	result := conn.Exec(ctx, pubQuery)
 
 	rows, err := result.ReadAll()
 	if err != nil {
-		return fmt.Errorf("failed to check publication existence: %w", err)
+		return fmt.Errorf("checking publication existence: %w", err)
 	}
 
 	tablesClause := "FOR ALL TABLES"
@@ -311,12 +311,12 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 		// tablesClause is sanitized, so we can safely interpolate it into the query
 		sq, err := sanitize.SQLQuery(fmt.Sprintf("CREATE PUBLICATION %s %s;", publicationName, tablesClause))
 		if err != nil {
-			return fmt.Errorf("failed to sanitize publication creation query: %w", err)
+			return fmt.Errorf("sanitizing publication creation query: %w", err)
 		}
 		// Publication doesn't exist, create new one
 		result = conn.Exec(ctx, sq)
 		if _, err := result.ReadAll(); err != nil {
-			return fmt.Errorf("failed to create publication: %w", err)
+			return fmt.Errorf("creating publication: %w", err)
 		}
 
 		return nil
@@ -326,7 +326,7 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 	// get a list of tables in the publication
 	pubTables, forAllTables, err := GetPublicationTables(ctx, conn, publicationName)
 	if err != nil {
-		return fmt.Errorf("failed to get publication tables: %w", err)
+		return fmt.Errorf("getting publication tables: %w", err)
 	}
 
 	// list of tables to publish is empty and publication is for all tables
@@ -353,11 +353,11 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 	for _, dropTable := range tablesToRemoveFromPublication {
 		sq, err := sanitize.SQLQuery(fmt.Sprintf(`ALTER PUBLICATION %s DROP TABLE %s;`, publicationName, dropTable.String()))
 		if err != nil {
-			return fmt.Errorf("failed to sanitize drop table query: %w", err)
+			return fmt.Errorf("sanitizing drop table query: %w", err)
 		}
 		result = conn.Exec(ctx, sq)
 		if _, err := result.ReadAll(); err != nil {
-			return fmt.Errorf("failed to remove table from publication: %w", err)
+			return fmt.Errorf("removing table from publication: %w", err)
 		}
 	}
 
@@ -365,11 +365,11 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 	for _, addTable := range tablesToAddToPublication {
 		sq, err := sanitize.SQLQuery(fmt.Sprintf("ALTER PUBLICATION %s ADD TABLE %s;", publicationName, addTable.String()))
 		if err != nil {
-			return fmt.Errorf("failed to sanitize add table query: %w", err)
+			return fmt.Errorf("sanitizing add table query: %w", err)
 		}
 		result = conn.Exec(ctx, sq)
 		if _, err := result.ReadAll(); err != nil {
-			return fmt.Errorf("failed to add table to publication: %w", err)
+			return fmt.Errorf("adding table to publication: %w", err)
 		}
 	}
 
@@ -388,7 +388,7 @@ func GetPublicationTables(ctx context.Context, conn *pgconn.PgConn, publicationN
 		ORDER BY schema_name, table_name;
 	`, publicationName)
 	if err != nil {
-		return nil, false, fmt.Errorf("failed to get publication tables: %w", err)
+		return nil, false, fmt.Errorf("getting publication tables: %w", err)
 	}
 
 	// Get specific tables in the publication
@@ -396,7 +396,7 @@ func GetPublicationTables(ctx context.Context, conn *pgconn.PgConn, publicationN
 
 	rows, err := result.ReadAll()
 	if err != nil {
-		return nil, false, fmt.Errorf("failed to get publication tables: %w", err)
+		return nil, false, fmt.Errorf("getting publication tables: %w", err)
 	}
 
 	if len(rows) == 0 || len(rows[0].Rows) == 0 {
@@ -433,13 +433,13 @@ func StartReplication(ctx context.Context, conn *pgconn.PgConn, slotName string,
 	conn.Frontend().SendQuery(&pgproto3.Query{String: sql})
 	err := conn.Frontend().Flush()
 	if err != nil {
-		return fmt.Errorf("failed to send START_REPLICATION: %w", err)
+		return fmt.Errorf("sending START_REPLICATION: %w", err)
 	}
 
 	for {
 		msg, err := conn.ReceiveMessage(ctx)
 		if err != nil {
-			return fmt.Errorf("failed to receive message: %w", err)
+			return fmt.Errorf("receiving message: %w", err)
 		}
 
 		switch msg := msg.(type) {

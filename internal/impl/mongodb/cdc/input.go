@@ -639,7 +639,7 @@ func (m *mongoCDC) readSnapshotRange(
 		},
 	}, options.Find().SetBatchSize(int32(m.readBatchSize)))
 	if err != nil {
-		return fmt.Errorf("failed to read snapshot: %w", err)
+		return fmt.Errorf("reading snapshot: %w", err)
 	}
 	cursor.SetBatchSize(int32(m.readBatchSize))
 	defer cursor.Close(ctx)
@@ -675,7 +675,7 @@ func (m *mongoCDC) readSnapshotRange(
 		}
 	}
 	if err := cursor.Err(); err != nil {
-		return fmt.Errorf("failed to read snapshot: %w", err)
+		return fmt.Errorf("reading snapshot: %w", err)
 	}
 	return nil
 }

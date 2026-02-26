@@ -956,7 +956,7 @@ func (m *schemaRegistryMigrator) ensureSubjectImportMode(ctx context.Context, su
 			m.log.Warnf("Schema migration: destination schema registry does not support IMPORT mode for subject=%s, proceeding without mode change", subject)
 			return noop, nil
 		}
-		return noop, fmt.Errorf("failed to set IMPORT mode: %w", err)
+		return noop, fmt.Errorf("setting IMPORT mode: %w", err)
 	}
 
 	return func() {

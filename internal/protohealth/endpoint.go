@@ -54,7 +54,7 @@ func (e *Endpoint) Run(ctx context.Context) error {
 	e.running.Store(true)
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", e.port))
 	if err != nil {
-		return fmt.Errorf("failed to listen: %w", err)
+		return fmt.Errorf("listening: %w", err)
 	}
 	errC := make(chan error, 1)
 	go func() {

@@ -136,7 +136,7 @@ func newCosmosDBProcessorFromParsed(conf *service.ParsedConfig, logger *service.
 func (c *cosmosDBProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
 	resp, err := cosmosdb.ExecMessageBatch(ctx, batch, c.containerClient, c.CRUDConfig, c.enableContentResponseOnWrite)
 	if err != nil {
-		return nil, fmt.Errorf("failed to execute transactional batch: %s", err)
+		return nil, fmt.Errorf("executing transactional batch: %s", err)
 	}
 
 	c.logger.Debugf("Transactional batch executed successfully. ActivityID %s consumed %f RU", resp.ActivityID, resp.RequestCharge)

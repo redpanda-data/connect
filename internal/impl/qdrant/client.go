@@ -36,7 +36,7 @@ type qdrantClient struct {
 func newQdrantClient(host, apiKey string, useTLS bool, config *tls.Config, logger *service.Logger) (*qdrantClient, error) {
 	hostName, portInt, err := parseHostAndPort(host)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse host and port: %w", err)
+		return nil, fmt.Errorf("parsing host and port: %w", err)
 	}
 
 	client, err := qdrant.NewClient(&qdrant.Config{
@@ -47,7 +47,7 @@ func newQdrantClient(host, apiKey string, useTLS bool, config *tls.Config, logge
 		TLSConfig: config,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to create Qdrant client: %w", err)
+		return nil, fmt.Errorf("creating Qdrant client: %w", err)
 	}
 
 	return &qdrantClient{
@@ -64,7 +64,7 @@ func parseHostAndPort(host string) (string, int, error) {
 
 	portInt, err := strconv.Atoi(splits[1])
 	if err != nil {
-		return "", 0, fmt.Errorf("failed to parse port: %w", err)
+		return "", 0, fmt.Errorf("parsing port: %w", err)
 	}
 
 	return splits[0], portInt, nil
@@ -111,7 +111,7 @@ func (c *qdrantClient) Connect(ctx context.Context) error {
 	c.logger.Debug("Checking connection to Qdrant")
 	_, err := c.client.HealthCheck(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to connect to Qdrant: %w", err)
+		return fmt.Errorf("connecting to Qdrant: %w", err)
 	}
 
 	return nil

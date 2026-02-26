@@ -175,7 +175,7 @@ func (b *batchPublisher) publishBatch(ctx context.Context, batch service.Message
 
 	resolveFn, err := b.checkpoint.Track(ctx, checkpointLSN, int64(len(batch)))
 	if err != nil {
-		return fmt.Errorf("failed to track LSN checkpoint for batch: %w", err)
+		return fmt.Errorf("tracking LSN checkpoint for batch: %w", err)
 	}
 	msg := asyncMessage{
 		msg: batch,

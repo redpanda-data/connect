@@ -466,7 +466,7 @@ string_columns:
 		service.NewMessage([]byte(`{"id":"baz","content":"baz stuff"}`)),
 	}
 
-	require.Equal(t, errors.New("failed to set 1 items"), db.WriteBatch(t.Context(), msg))
+	require.Equal(t, errors.New("setting 1 items"), db.WriteBatch(t.Context(), msg))
 
 	expected := [][]types.WriteRequest{
 		{

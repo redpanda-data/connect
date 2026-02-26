@@ -77,7 +77,7 @@ func decodeArgon2Hash(hashedSecret string) (*argon2Value, error) {
 
 	_, err := fmt.Sscanf(parts[2], "v=%s", &value.version)
 	if err != nil {
-		return nil, multierr.Combine(fmt.Errorf("%w: failed to parse version", errInvalidArgon2Hash), err)
+		return nil, multierr.Combine(fmt.Errorf("%w: parsing version", errInvalidArgon2Hash), err)
 	}
 
 	// Parse the hashing parameters segment while disallowing extra trailing
@@ -87,7 +87,7 @@ func decodeArgon2Hash(hashedSecret string) (*argon2Value, error) {
 	var rest string
 	_, err = fmt.Sscanf(parts[3]+sep, "m=%d,t=%d,p=%d%1s", &value.memory, &value.iterations, &value.parallelism, &rest)
 	if err != nil {
-		return nil, multierr.Combine(fmt.Errorf("%w: failed to parse parameters", errInvalidArgon2Hash), err)
+		return nil, multierr.Combine(fmt.Errorf("%w: parsing parameters", errInvalidArgon2Hash), err)
 	}
 	if rest != sep {
 		return nil, fmt.Errorf("%w: excess characters in parameters segment", errInvalidArgon2Hash)
@@ -95,14 +95,14 @@ func decodeArgon2Hash(hashedSecret string) (*argon2Value, error) {
 
 	salt, err := base64.RawStdEncoding.DecodeString(parts[4])
 	if err != nil {
-		return nil, multierr.Combine(fmt.Errorf("%w: failed to parse base64 salt", errInvalidArgon2Hash), err)
+		return nil, multierr.Combine(fmt.Errorf("%w: parsing base64 salt", errInvalidArgon2Hash), err)
 	}
 
 	value.salt = salt
 
 	key, err := base64.RawStdEncoding.DecodeString(parts[5])
 	if err != nil {
-		return nil, multierr.Combine(fmt.Errorf("%w: failed to parse base64 key", errInvalidArgon2Hash), err)
+		return nil, multierr.Combine(fmt.Errorf("%w: parsing base64 key", errInvalidArgon2Hash), err)
 	}
 
 	value.key = key

@@ -164,7 +164,7 @@ type vertexAIEmbeddingsProcessor struct {
 func (p *vertexAIEmbeddingsProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
 	text, err := p.computeText(msg)
 	if err != nil {
-		return nil, fmt.Errorf("failed to compute prompt: %w", err)
+		return nil, fmt.Errorf("computing prompt: %w", err)
 	}
 	input := structpb.NewStructValue(&structpb.Struct{
 		Fields: map[string]*structpb.Value{

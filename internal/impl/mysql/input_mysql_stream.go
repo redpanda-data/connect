@@ -251,7 +251,7 @@ func newMySQLStreamInput(conf *service.ParsedConfig, res *service.Resources) (s 
 
 		tlsConfigKey := "custom-tls"
 		if err := mysql.RegisterTLSConfig(tlsConfigKey, i.customTLSConfig); err != nil {
-			return nil, fmt.Errorf("failed to register TLS config: %w", err)
+			return nil, fmt.Errorf("registering TLS config: %w", err)
 		}
 		i.mysqlConfig.TLSConfig = tlsConfigKey
 	}
@@ -385,7 +385,7 @@ func (i *mysqlStreamInput) Connect(ctx context.Context) error {
 	if i.streamSnapshot && pos == nil {
 		db, err := sql.Open("mysql", i.mysqlConfig.FormatDSN())
 		if err != nil {
-			return fmt.Errorf("failed to connect to MySQL server: %s", err)
+			return fmt.Errorf("connecting to MySQL server: %s", err)
 		}
 		snapshot = NewSnapshot(i.logger, db)
 	}
@@ -445,7 +445,7 @@ func (i *mysqlStreamInput) startMySQLSync(ctx context.Context, pos *position, sn
 	i.currentBinlogName = pos.Name
 	i.canal.SetEventHandler(i)
 	if err := i.canal.RunFrom(*pos); err != nil {
-		return fmt.Errorf("failed to start streaming: %w", err)
+		return fmt.Errorf("starting streaming: %w", err)
 	}
 	return nil
 }
@@ -472,19 +472,19 @@ func (i *mysqlStreamInput) readSnapshot(ctx context.Context, snapshot *Snapshot)
 				batchRows, err = snapshot.querySnapshotTable(ctx, table, tablePks, &lastSeenPksValues, i.fieldSnapshotMaxBatchSize)
 			}
 			if err != nil {
-				return fmt.Errorf("failed to execute snapshot table query: %s", err)
+				return fmt.Errorf("executing snapshot table query: %s", err)
 			}
 
 			types, err := batchRows.ColumnTypes()
 			if err != nil {
-				return fmt.Errorf("failed to fetch column types: %s", err)
+				return fmt.Errorf("fetching column types: %s", err)
 			}
 
 			values, mappers := prepSnapshotScannerAndMappers(types)
 
 			columns, err := batchRows.Columns()
 			if err != nil {
-				return fmt.Errorf("failed to fetch columns: %s", err)
+				return fmt.Errorf("fetching columns: %s", err)
 			}
 
 			var batchRowsCount int
@@ -521,7 +521,7 @@ func (i *mysqlStreamInput) readSnapshot(ctx context.Context, snapshot *Snapshot)
 			}
 
 			if err := batchRows.Err(); err != nil {
-				return fmt.Errorf("failed to iterate snapshot table: %s", err)
+				return fmt.Errorf("iterating snapshot table: %s", err)
 			}
 
 			if batchRowsCount < i.fieldSnapshotMaxBatchSize {
@@ -637,12 +637,12 @@ func (i *mysqlStreamInput) readMessages(ctx context.Context) error {
 			}
 
 			if err := i.flushBatch(ctx, i.cp, flushedBatch); err != nil {
-				return fmt.Errorf("failed to flush periodic batch: %w", err)
+				return fmt.Errorf("flushing periodic batch: %w", err)
 			}
 		case me := <-i.rawMessageEvents:
 			row, err := json.Marshal(me.Row)
 			if err != nil {
-				return fmt.Errorf("failed to serialize row: %w", err)
+				return fmt.Errorf("serializing row: %w", err)
 			}
 
 			mb := service.NewMessage(row)
@@ -664,7 +664,7 @@ func (i *mysqlStreamInput) readMessages(ctx context.Context) error {
 					return fmt.Errorf("flush batch error: %w", err)
 				}
 				if err := i.flushBatch(ctx, i.cp, flushedBatch); err != nil {
-					return fmt.Errorf("failed to flush batch: %w", err)
+					return fmt.Errorf("flushing batch: %w", err)
 				}
 			} else {
 				d, ok := i.batchPolicy.UntilNext()
@@ -698,7 +698,7 @@ func (i *mysqlStreamInput) flushBatch(
 
 	resolveFn, err := checkpointer.Track(ctx, binLogPos, int64(len(batch)))
 	if err != nil {
-		return fmt.Errorf("failed to track checkpoint for batch: %w", err)
+		return fmt.Errorf("tracking checkpoint for batch: %w", err)
 	}
 	msg := asyncMessage{
 		msg: batch,
@@ -838,7 +838,7 @@ func (i *mysqlStreamInput) OnTableChanged(_ *replication.EventHeader, schema, ta
 func (i *mysqlStreamInput) OnRow(e *canal.RowsEvent) error {
 	// Extract and cache the table schema if we haven't seen this table yet
 	if _, err := i.getTableSchema(e.Table); err != nil {
-		return fmt.Errorf("failed to extract schema for table %s: %w", e.Table.Name, err)
+		return fmt.Errorf("extracting schema for table %s: %w", e.Table.Name, err)
 	}
 
 	switch e.Action {
@@ -967,7 +967,7 @@ func (i *mysqlStreamInput) getTableSchema(table *schema.Table) (any, error) {
 	// Extract schema from MySQL table
 	commonSchema, err := mysqlTableToCommonSchema(table)
 	if err != nil {
-		return nil, fmt.Errorf("failed to convert table schema for %s: %w", table.Name, err)
+		return nil, fmt.Errorf("converting table schema for %s: %w", table.Name, err)
 	}
 
 	// Serialize to generic format for metadata

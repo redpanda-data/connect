@@ -142,7 +142,7 @@ func newTextChunker(conf *service.ParsedConfig, _ *service.Resources) (service.P
 		}
 		tokenizer, err = tiktoken.GetEncoding(encoding)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get tokenizer for encoding '%v': %w", encoding, err)
+			return nil, fmt.Errorf("getting tokenizer for encoding '%v': %w", encoding, err)
 		}
 		opts = append(opts, textsplitter.WithEncodingName(encoding))
 	}

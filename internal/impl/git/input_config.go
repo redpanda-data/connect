@@ -200,14 +200,14 @@ func parseBasicAuth(conf *service.ParsedConfig) (basicAuthConfig, error) {
 	if conf.Contains("auth", "basic", "username") {
 		auth.username, err = conf.FieldString("auth", "basic", "username")
 		if err != nil {
-			return auth, fmt.Errorf("failed to parse basic auth username: %w", err)
+			return auth, fmt.Errorf("parsing basic auth username: %w", err)
 		}
 	}
 
 	if conf.Contains("auth", "basic", "password") {
 		auth.password, err = conf.FieldString("auth", "basic", "password")
 		if err != nil {
-			return auth, fmt.Errorf("failed to parse basic auth password: %w", err)
+			return auth, fmt.Errorf("parsing basic auth password: %w", err)
 		}
 	}
 
@@ -226,21 +226,21 @@ func parseSSHKeyAuth(conf *service.ParsedConfig) (sshKeyAuthConfig, error) {
 	if conf.Contains("auth", "ssh_key", "private_key_path") {
 		auth.privateKeyPath, err = conf.FieldString("auth", "ssh_key", "private_key_path")
 		if err != nil {
-			return auth, fmt.Errorf("failed to parse SSH private key path: %w", err)
+			return auth, fmt.Errorf("parsing SSH private key path: %w", err)
 		}
 	}
 
 	if conf.Contains("auth", "ssh_key", "private_key") {
 		auth.privateKey, err = conf.FieldString("auth", "ssh_key", "private_key")
 		if err != nil {
-			return auth, fmt.Errorf("failed to parse SSH private key: %w", err)
+			return auth, fmt.Errorf("parsing SSH private key: %w", err)
 		}
 	}
 
 	if conf.Contains("auth", "ssh_key", "passphrase") {
 		auth.passphrase, err = conf.FieldString("auth", "ssh_key", "passphrase")
 		if err != nil {
-			return auth, fmt.Errorf("failed to parse SSH key passphrase: %w", err)
+			return auth, fmt.Errorf("parsing SSH key passphrase: %w", err)
 		}
 	}
 
@@ -259,7 +259,7 @@ func parseTokenAuth(conf *service.ParsedConfig) (tokenAuthConfig, error) {
 	if conf.Contains("auth", "token", "value") {
 		auth.value, err = conf.FieldString("auth", "token", "value")
 		if err != nil {
-			return auth, fmt.Errorf("failed to parse token value: %w", err)
+			return auth, fmt.Errorf("parsing token value: %w", err)
 		}
 	}
 

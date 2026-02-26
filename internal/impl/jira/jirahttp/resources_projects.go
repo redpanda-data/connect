@@ -73,7 +73,7 @@ func (j *Client) SearchProjectsResource(
 		}
 		projectBytes, err := json.Marshal(projectResponse)
 		if err != nil {
-			return nil, fmt.Errorf("failed to marshal project: %w", err)
+			return nil, fmt.Errorf("marshalling project: %w", err)
 		}
 		newMsg := service.NewMessage(projectBytes)
 		newMsg.MetaSet("jira_project_key", projectResponse.Key)
@@ -242,7 +242,7 @@ func (j *Client) SearchProjectCategoriesResource(ctx context.Context, q *JsonInp
 		}
 		bytes, err := json.Marshal(resp)
 		if err != nil {
-			return nil, fmt.Errorf("failed to marshal project category: %w", err)
+			return nil, fmt.Errorf("marshalling project category: %w", err)
 		}
 		message := service.NewMessage(bytes)
 		message.MetaSet("jira_project_category_id", resp.ID)
@@ -300,7 +300,7 @@ func (j *Client) SearchProjectVersionsResource(
 		}
 		bytes, err := json.Marshal(resp)
 		if err != nil {
-			return nil, fmt.Errorf("failed to marshal project version: %w", err)
+			return nil, fmt.Errorf("marshalling project version: %w", err)
 		}
 		message := service.NewMessage(bytes)
 		message.MetaSet("jira_project_version_id", resp.ID)

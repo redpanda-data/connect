@@ -257,7 +257,7 @@ func ContainerClientFromParsed(conf *service.ParsedConfig) (*azcosmos.ContainerC
 
 		keyCredential, err = azcosmos.NewKeyCredential(accountKey)
 		if err != nil {
-			return nil, fmt.Errorf("failed to deserialise %s: %s", fieldAccountKey, err)
+			return nil, fmt.Errorf("deserialising %s: %s", fieldAccountKey, err)
 		}
 	}
 
@@ -287,7 +287,7 @@ func ContainerClientFromParsed(conf *service.ParsedConfig) (*azcosmos.ContainerC
 		return nil, fmt.Errorf("either %s or %s must be set", fieldEndpoint, fieldConnectionString)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("failed to create client: %s", err)
+		return nil, fmt.Errorf("creating client: %s", err)
 	}
 
 	database, err := conf.FieldString(fieldDatabase)
@@ -302,7 +302,7 @@ func ContainerClientFromParsed(conf *service.ParsedConfig) (*azcosmos.ContainerC
 
 	containerClient, err := client.NewContainer(database, container)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create container client: %s", err)
+		return nil, fmt.Errorf("creating container client: %s", err)
 	}
 
 	return containerClient, nil

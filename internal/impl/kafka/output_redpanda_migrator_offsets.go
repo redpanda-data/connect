@@ -220,41 +220,41 @@ func (w *redpandaMigratorOffsetsWriter) Write(ctx context.Context, msg *service.
 	var topic string
 	var err error
 	if topic, err = w.offsetTopic.TryString(msg); err != nil {
-		return fmt.Errorf("failed to extract offset topic: %s", err)
+		return fmt.Errorf("extracting offset topic: %s", err)
 	}
 
 	topic = w.offsetTopicPrefix + topic
 
 	var group string
 	if group, err = w.offsetGroup.TryString(msg); err != nil {
-		return fmt.Errorf("failed to extract offset group: %s", err)
+		return fmt.Errorf("extracting offset group: %s", err)
 	}
 
 	var partition int32
 	if p, err := w.offsetPartition.TryString(msg); err != nil {
-		return fmt.Errorf("failed to extract offset partition: %s", err)
+		return fmt.Errorf("extracting offset partition: %s", err)
 	} else {
 		i, err := strconv.Atoi(p)
 		if err != nil {
-			return fmt.Errorf("failed to parse offset partition: %s", err)
+			return fmt.Errorf("parsing offset partition: %s", err)
 		}
 		partition = int32(i)
 	}
 
 	var offsetCommitTimestamp int64
 	if t, err := w.offsetCommitTimestamp.TryString(msg); err != nil {
-		return fmt.Errorf("failed to extract offset commit timestamp: %s", err)
+		return fmt.Errorf("extracting offset commit timestamp: %s", err)
 	} else {
 		offsetCommitTimestamp, err = strconv.ParseInt(t, 10, 64)
 		if err != nil {
-			return fmt.Errorf("failed to parse offset partition: %s", err)
+			return fmt.Errorf("parsing offset partition: %s", err)
 		}
 	}
 
 	var offsetMetadata string
 	if w.offsetMetadata != nil {
 		if offsetMetadata, err = w.offsetMetadata.TryString(msg); err != nil {
-			return fmt.Errorf("failed to extract offset metadata: %w", err)
+			return fmt.Errorf("extracting offset metadata: %w", err)
 		}
 	}
 
@@ -262,11 +262,11 @@ func (w *redpandaMigratorOffsetsWriter) Write(ctx context.Context, msg *service.
 	if w.isHighWatermark != nil {
 		data, err := w.isHighWatermark.TryString(msg)
 		if err != nil {
-			return fmt.Errorf("failed to extract is_end_offset: %w", err)
+			return fmt.Errorf("extracting is_end_offset: %w", err)
 		}
 		isHighWatermark, err = strconv.ParseBool(data)
 		if err != nil {
-			return fmt.Errorf("failed to parse is_end_offset: %w", err)
+			return fmt.Errorf("parsing is_end_offset: %w", err)
 		}
 	}
 
@@ -275,11 +275,11 @@ func (w *redpandaMigratorOffsetsWriter) Write(ctx context.Context, msg *service.
 		// timestamps of all the records in the topic. It also sets the timestamp of the returned offset to -1 in this case.
 		listedOffsets, err := w.client.ListOffsetsAfterMilli(ctx, offsetCommitTimestamp, topic)
 		if err != nil {
-			return fmt.Errorf("failed to list offsets for topic %q and timestamp %d: %s", topic, offsetCommitTimestamp, err)
+			return fmt.Errorf("listing offsets for topic %q and timestamp %d: %s", topic, offsetCommitTimestamp, err)
 		}
 
 		if err := listedOffsets.Error(); err != nil {
-			return fmt.Errorf("failed to read offsets for topic %q and timestamp %d: %s", topic, offsetCommitTimestamp, err)
+			return fmt.Errorf("reading offsets for topic %q and timestamp %d: %s", topic, offsetCommitTimestamp, err)
 		}
 
 		destOffset, ok := listedOffsets.Lookup(topic, partition)
@@ -305,12 +305,12 @@ func (w *redpandaMigratorOffsetsWriter) Write(ctx context.Context, msg *service.
 		if isHighWatermark && destOffset.Timestamp != -1 {
 			offsets, err := w.client.ListEndOffsets(ctx, topic)
 			if err != nil {
-				return fmt.Errorf("failed to list the high watermark for topic %q and partition %d (timestamp %d): %s", topic, partition, offsetCommitTimestamp, err)
+				return fmt.Errorf("listing the high watermark for topic %q and partition %d (timestamp %d): %s", topic, partition, offsetCommitTimestamp, err)
 			}
 
 			highWatermark, ok := offsets.Lookup(topic, partition)
 			if !ok {
-				return fmt.Errorf("failed to read the high watermark for topic %q and partition %d (timestamp %d): %s", topic, partition, offsetCommitTimestamp, err)
+				return fmt.Errorf("reading the high watermark for topic %q and partition %d (timestamp %d): %s", topic, partition, offsetCommitTimestamp, err)
 			}
 			if highWatermark.Offset == destOffset.Offset+1 {
 				destOffset.Offset = highWatermark.Offset
@@ -322,7 +322,7 @@ func (w *redpandaMigratorOffsetsWriter) Write(ctx context.Context, msg *service.
 		// offset is equal to the one we're trying to write.
 		currentGroupOffsets, err := w.client.FetchOffsets(ctx, group)
 		if err != nil {
-			return fmt.Errorf("failed to fetch the destination consumer group %q offsets: %s", group, err)
+			return fmt.Errorf("fetching the destination consumer group %q offsets: %s", group, err)
 		}
 
 		if err := currentGroupOffsets.Error(); err != nil {
@@ -348,7 +348,7 @@ func (w *redpandaMigratorOffsetsWriter) Write(ctx context.Context, msg *service.
 
 		offsetResponses, err := w.client.CommitOffsets(ctx, group, offsets)
 		if err != nil {
-			return fmt.Errorf("failed to commit consumer offsets for topic %q and partition %d (timestamp %d): %s", topic, partition, offsetCommitTimestamp, err)
+			return fmt.Errorf("committing consumer offsets for topic %q and partition %d (timestamp %d): %s", topic, partition, offsetCommitTimestamp, err)
 		}
 
 		if err := offsetResponses.Error(); err != nil {
@@ -371,7 +371,7 @@ func (w *redpandaMigratorOffsetsWriter) Write(ctx context.Context, msg *service.
 
 		wait := backOff.NextBackOff()
 		if wait == backoff.Stop {
-			return fmt.Errorf("failed to update consumer offsets for topic %q and partition %d (timestamp %d): %s", topic, partition, offsetCommitTimestamp, err)
+			return fmt.Errorf("updating consumer offsets for topic %q and partition %d (timestamp %d): %s", topic, partition, offsetCommitTimestamp, err)
 		}
 
 		time.Sleep(wait)

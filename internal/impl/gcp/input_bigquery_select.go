@@ -168,7 +168,7 @@ type bigQuerySelectInput struct {
 func newBigQuerySelectInput(inConf *service.ParsedConfig, logger *service.Logger) (*bigQuerySelectInput, error) {
 	conf, err := bigQuerySelectInputConfigFromParsed(inConf)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse config: %w", err)
+		return nil, fmt.Errorf("parsing config: %w", err)
 	}
 
 	return &bigQuerySelectInput{
@@ -191,7 +191,7 @@ func (inp *bigQuerySelectInput) Connect(context.Context) error {
 
 		client, err := bigquery.NewClient(jobctx, inp.config.project, opt...)
 		if err != nil {
-			return fmt.Errorf("failed to create bigquery client: %w", err)
+			return fmt.Errorf("creating bigquery client: %w", err)
 		}
 		inp.client = wrapBQClient(client, inp.logger)
 	}
@@ -244,7 +244,7 @@ func (inp *bigQuerySelectInput) Read(context.Context) (*service.Message, service
 
 	bs, err := json.Marshal(row)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to marshal row to json: %w", err)
+		return nil, nil, fmt.Errorf("marshalling row to json: %w", err)
 	}
 
 	msg := service.NewMessage(bs)

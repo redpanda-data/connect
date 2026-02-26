@@ -42,7 +42,7 @@ func ExecMessageBatch(ctx context.Context, batch service.MessageBatch, client *a
 
 	pkQueryResult, err := batch.BloblangExecutor(config.PartitionKeys).QueryValue(0)
 	if err != nil {
-		return azcosmos.TransactionalBatchResponse{}, fmt.Errorf("failed to evaluate partition key values: %s", err)
+		return azcosmos.TransactionalBatchResponse{}, fmt.Errorf("evaluating partition key values: %s", err)
 	}
 
 	// TODO: Enable support for hierarchical / empty Partition Keys this when the following issues are addressed:
@@ -67,14 +67,14 @@ func ExecMessageBatch(ctx context.Context, batch service.MessageBatch, client *a
 		if config.Operation == OperationCreate && config.AutoID {
 			structuredMsg, err := msg.AsStructured()
 			if err != nil {
-				return azcosmos.TransactionalBatchResponse{}, fmt.Errorf("failed to get message bytes: %s", err)
+				return azcosmos.TransactionalBatchResponse{}, fmt.Errorf("getting message bytes: %s", err)
 			}
 
 			if obj, ok := structuredMsg.(map[string]any); ok {
 				if _, ok := obj["id"]; !ok {
 					u4, err := uuid.NewV4()
 					if err != nil {
-						return azcosmos.TransactionalBatchResponse{}, fmt.Errorf("failed to generate uuid: %s", err)
+						return azcosmos.TransactionalBatchResponse{}, fmt.Errorf("generating uuid: %s", err)
 					}
 					obj["id"] = u4.String()
 				}
@@ -83,12 +83,12 @@ func ExecMessageBatch(ctx context.Context, batch service.MessageBatch, client *a
 			}
 
 			if b, err = json.Marshal(structuredMsg); err != nil {
-				return azcosmos.TransactionalBatchResponse{}, fmt.Errorf("failed to marshal message to json: %s", err)
+				return azcosmos.TransactionalBatchResponse{}, fmt.Errorf("marshalling message to json: %s", err)
 			}
 		} else {
 			b, err = msg.AsBytes()
 			if err != nil {
-				return azcosmos.TransactionalBatchResponse{}, fmt.Errorf("failed to get message bytes: %s", err)
+				return azcosmos.TransactionalBatchResponse{}, fmt.Errorf("getting message bytes: %s", err)
 			}
 		}
 
@@ -113,7 +113,7 @@ func ExecMessageBatch(ctx context.Context, batch service.MessageBatch, client *a
 			if config.PatchCondition != nil {
 				condition, err := config.PatchCondition.TryString(msg)
 				if err != nil {
-					return azcosmos.TransactionalBatchResponse{}, fmt.Errorf("failed to get patch condition: %s", err)
+					return azcosmos.TransactionalBatchResponse{}, fmt.Errorf("getting patch condition: %s", err)
 				}
 				if condition != "" {
 					patch.SetCondition(condition)
@@ -123,13 +123,13 @@ func ExecMessageBatch(ctx context.Context, batch service.MessageBatch, client *a
 			for _, po := range config.PatchOperations {
 				path, err := po.Path.TryString(msg)
 				if err != nil {
-					return azcosmos.TransactionalBatchResponse{}, fmt.Errorf("failed to get patch path: %s", err)
+					return azcosmos.TransactionalBatchResponse{}, fmt.Errorf("getting patch path: %s", err)
 				}
 
 				var value any
 				if po.Value != nil {
 					if value, err = batch.BloblangExecutor(po.Value).QueryValue(idx); err != nil {
-						return azcosmos.TransactionalBatchResponse{}, fmt.Errorf("failed to evaluate patch value: %s", err)
+						return azcosmos.TransactionalBatchResponse{}, fmt.Errorf("evaluating patch value: %s", err)
 					}
 				}
 

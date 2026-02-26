@@ -64,14 +64,14 @@ func CreateTemplate(tfs fs.ReadFileFS, outputDir string, options ...Options) err
 	}
 	err := unpackFS(tfs, outputDir, &o)
 	if err != nil {
-		return fmt.Errorf("failed to generate template: %w", err)
+		return fmt.Errorf("generating template: %w", err)
 	}
 	return nil
 }
 
 func unpackFS(tfs fs.ReadFileFS, destPath string, options *opts) error {
 	if err := os.MkdirAll(destPath, os.ModePerm); err != nil {
-		return fmt.Errorf("failed to create destination directory %s: %w", destPath, err)
+		return fmt.Errorf("creating destination directory %s: %w", destPath, err)
 	}
 	oldnew := []string{}
 	for k, v := range options.variables {
@@ -80,11 +80,11 @@ func unpackFS(tfs fs.ReadFileFS, destPath string, options *opts) error {
 	replacer := strings.NewReplacer(oldnew...)
 	return fs.WalkDir(tfs, options.root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
-			return fmt.Errorf("failed to walk directory %s: %w", path, err)
+			return fmt.Errorf("walking directory %s: %w", path, err)
 		}
 		relPath, err := filepath.Rel(options.root, path)
 		if err != nil {
-			return fmt.Errorf("failed to get relative path for %s: %w", path, err)
+			return fmt.Errorf("getting relative path for %s: %w", path, err)
 		}
 		dir, name := filepath.Split(relPath)
 		if newName, ok := options.renames[name]; ok {
@@ -93,24 +93,24 @@ func unpackFS(tfs fs.ReadFileFS, destPath string, options *opts) error {
 		outputPath := filepath.Join(destPath, dir, name)
 		if d.IsDir() {
 			if err := os.MkdirAll(outputPath, os.ModePerm); err != nil {
-				return fmt.Errorf("failed to create directory %s: %w", outputPath, err)
+				return fmt.Errorf("creating directory %s: %w", outputPath, err)
 			}
 			return nil
 		}
 		data, err := tfs.ReadFile(path)
 		if err != nil {
-			return fmt.Errorf("failed to read file %s: %w", path, err)
+			return fmt.Errorf("reading file %s: %w", path, err)
 		}
 		f, err := os.OpenFile(outputPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
 		if err != nil {
-			return fmt.Errorf("failed to open file %s for writing: %w", outputPath, err)
+			return fmt.Errorf("opening file %s for writing: %w", outputPath, err)
 		}
 		_, err = replacer.WriteString(f, string(data))
 		if cerr := f.Close(); cerr != nil && err == nil {
 			err = cerr
 		}
 		if err != nil {
-			return fmt.Errorf("failed to write file %s: %w", outputPath, err)
+			return fmt.Errorf("writing file %s: %w", outputPath, err)
 		}
 		return nil
 	})

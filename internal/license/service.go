@@ -102,7 +102,7 @@ func InjectCustomLicenseBytes(res *service.Resources, conf Config, licenseBytes 
 
 	l, err := license.ParseLicense(licenseBytes)
 	if err != nil {
-		return fmt.Errorf("failed to validate license: %w", err)
+		return fmt.Errorf("validating license: %w", err)
 	}
 
 	expiryTime := l.Expires()
@@ -181,7 +181,7 @@ func (s *Service) readAndValidateLicense() (license.RedpandaLicense, error) {
 	l := openSourceLicense
 	if len(licenseBytes) > 0 {
 		if l, err = license.ParseLicense(licenseBytes); err != nil {
-			return nil, fmt.Errorf("failed to validate license: %w", err)
+			return nil, fmt.Errorf("validating license: %w", err)
 		}
 	}
 
@@ -224,7 +224,7 @@ func (s *Service) readLicense() (licenseFileContents []byte, err error) {
 
 		licenseFileContents, err = os.ReadFile(s.conf.LicenseFilepath)
 		if err != nil {
-			return nil, fmt.Errorf("failed to read license file: %w", err)
+			return nil, fmt.Errorf("reading license file: %w", err)
 		}
 		return
 	}
@@ -232,7 +232,7 @@ func (s *Service) readLicense() (licenseFileContents []byte, err error) {
 	// Followed by the default file path.
 	if licenseFileContents, err = os.ReadFile(s.conf.defaultLicenseFilepath()); err != nil {
 		if !os.IsNotExist(err) {
-			return nil, fmt.Errorf("failed to read default path license file: %w", err)
+			return nil, fmt.Errorf("reading default path license file: %w", err)
 		}
 		return nil, nil
 	}

@@ -63,7 +63,7 @@ func resolveGoAvroReferences(ctx context.Context, client *sr.Client, mapping *bl
 	}
 	schemaDry := []string{}
 	if err := json.Unmarshal([]byte(root), &schemaDry); err != nil {
-		return "", fmt.Errorf("failed to parse root schema as enum: %w", err)
+		return "", fmt.Errorf("parsing root schema as enum: %w", err)
 	}
 
 	schemaHydrated := make([]json.RawMessage, len(schemaDry))
@@ -77,7 +77,7 @@ func resolveGoAvroReferences(ctx context.Context, client *sr.Client, mapping *bl
 
 	schemaHydratedBytes, err := json.Marshal(schemaHydrated)
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal hydrated schema: %w", err)
+		return "", fmt.Errorf("marshalling hydrated schema: %w", err)
 	}
 
 	return string(schemaHydratedBytes), nil

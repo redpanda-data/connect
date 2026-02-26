@@ -141,7 +141,7 @@ func newSchemaRegistryEncoderFromConfig(conf *service.ParsedConfig, mgr *service
 	}
 	refreshPeriod, err := time.ParseDuration(refreshPeriodStr)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse refresh period: %v", err)
+		return nil, fmt.Errorf("parsing refresh period: %v", err)
 	}
 	refreshTicker := max(refreshPeriod/10, time.Second)
 	authSigner, err := conf.HTTPRequestAuthSignerFromParsed()

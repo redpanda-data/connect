@@ -330,10 +330,10 @@ func (o *redpandaMigratorOutput) resolveTopic(topic string) (string, error) {
 	msg.MetaSetMut("kafka_topic", topic)
 	destTopic, err := o.destTopicResolver.TryString(msg)
 	if err != nil {
-		return "", fmt.Errorf("failed to parse destination topic: %s", err)
+		return "", fmt.Errorf("parsing destination topic: %s", err)
 	}
 	if destTopic == "" {
-		return "", errors.New("failed to parse destination topic: empty string")
+		return "", errors.New("parsing destination topic: empty string")
 	}
 	destTopic = o.topicPrefix + destTopic
 

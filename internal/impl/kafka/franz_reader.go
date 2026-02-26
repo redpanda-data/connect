@@ -33,7 +33,7 @@ func bytesFromStrField(name string, pConf *service.ParsedConfig) (uint64, error)
 
 	fieldAsBytes, err := humanize.ParseBytes(fieldAsStr)
 	if err != nil {
-		return 0, fmt.Errorf("failed to parse %v bytes: %w", name, err)
+		return 0, fmt.Errorf("parsing %v bytes: %w", name, err)
 	}
 	return fieldAsBytes, nil
 }

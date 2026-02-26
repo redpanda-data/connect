@@ -359,7 +359,7 @@ func (r *dataTransformEngine) newTransformMessage(message *service.Message) (tms
 			return
 		}
 		if tmsg.timestamp, err = strconv.ParseInt(tsStr, 10, 64); err != nil {
-			err = fmt.Errorf("failed to parse timestamp: %w", err)
+			err = fmt.Errorf("parsing timestamp: %w", err)
 			return
 		}
 	} else {

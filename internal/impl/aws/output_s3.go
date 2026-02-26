@@ -374,7 +374,7 @@ func (a *amazonS3Writer) ConnectionTest(ctx context.Context) service.ConnectionT
 		Bucket: aws.String(a.conf.Bucket),
 	})
 	if err != nil {
-		return service.ConnectionTestFailed(fmt.Errorf("failed to access bucket %s: %w", a.conf.Bucket, err)).AsList()
+		return service.ConnectionTestFailed(fmt.Errorf("accessing bucket %s: %w", a.conf.Bucket, err)).AsList()
 	}
 	return service.ConnectionTestSucceeded().AsList()
 }

@@ -161,7 +161,7 @@ type bigQuerySelectProcessor struct {
 func newBigQuerySelectProcessor(inConf *service.ParsedConfig, options *bigQueryProcessorOptions) (*bigQuerySelectProcessor, error) {
 	conf, err := bigQuerySelectProcessorConfigFromParsed(inConf)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse config: %w", err)
+		return nil, fmt.Errorf("parsing config: %w", err)
 	}
 
 	closeCtx, closeF := context.WithCancel(context.Background())
@@ -175,7 +175,7 @@ func newBigQuerySelectProcessor(inConf *service.ParsedConfig, options *bigQueryP
 	wrapped, err := bigquery.NewClient(closeCtx, conf.project, options.clientOptions...)
 	if err != nil {
 		closeF()
-		return nil, fmt.Errorf("failed to create bigquery client: %w", err)
+		return nil, fmt.Errorf("creating bigquery client: %w", err)
 	}
 
 	client := wrapBQClient(wrapped, options.logger)
@@ -204,7 +204,7 @@ func (proc *bigQuerySelectProcessor) ProcessBatch(ctx context.Context, batch ser
 		if argsExec != nil {
 			resMsg, err := argsExec.Query(i)
 			if err != nil {
-				msg.SetError(fmt.Errorf("failed to resolve args mapping: %w", err))
+				msg.SetError(fmt.Errorf("resolving args mapping: %w", err))
 				continue
 			}
 
@@ -233,13 +233,13 @@ func (proc *bigQuerySelectProcessor) ProcessBatch(ctx context.Context, batch ser
 
 		rows, err := consumeIterator(iter)
 		if err != nil {
-			msg.SetError(fmt.Errorf("failed to read all rows: %w", err))
+			msg.SetError(fmt.Errorf("reading all rows: %w", err))
 			continue
 		}
 
 		bs, err := json.Marshal(rows)
 		if err != nil {
-			msg.SetError(fmt.Errorf("failed to marshal rows to json: %w", err))
+			msg.SetError(fmt.Errorf("marshalling rows to json: %w", err))
 			continue
 		}
 

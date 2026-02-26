@@ -154,7 +154,7 @@ func fromParsed(conf *service.ParsedConfig, logger *service.Logger) (i *influxDB
 		metrics.RegisterRuntimeMemStats(i.runtimeRegistry)
 		interval, err := time.ParseDuration(runTime)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse interval: %s", err)
+			return nil, fmt.Errorf("parsing interval: %s", err)
 		}
 		go metrics.CaptureRuntimeMemStats(i.runtimeRegistry, interval)
 	}
@@ -163,7 +163,7 @@ func fromParsed(conf *service.ParsedConfig, logger *service.Logger) (i *influxDB
 		metrics.RegisterDebugGCStats(i.runtimeRegistry)
 		interval, err := time.ParseDuration(debugGC)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse interval: %s", err)
+			return nil, fmt.Errorf("parsing interval: %s", err)
 		}
 		go metrics.CaptureDebugGCStats(i.runtimeRegistry, interval)
 	}

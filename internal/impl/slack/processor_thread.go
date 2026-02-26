@@ -71,11 +71,11 @@ var _ service.Processor = (*threadProcessor)(nil)
 func (t *threadProcessor) Process(ctx context.Context, m *service.Message) (service.MessageBatch, error) {
 	channelID, err := t.channelID.TryString(m)
 	if err != nil {
-		return nil, fmt.Errorf("failed to interpolate channel ID: %w", err)
+		return nil, fmt.Errorf("interpolating channel ID: %w", err)
 	}
 	threadTS, err := t.threadTS.TryString(m)
 	if err != nil {
-		return nil, fmt.Errorf("failed to interpolate thread timestamp: %w", err)
+		return nil, fmt.Errorf("interpolating thread timestamp: %w", err)
 	}
 	cursor := ""
 	var thread []slack.Message
@@ -91,14 +91,14 @@ func (t *threadProcessor) Process(ctx context.Context, m *service.Message) (serv
 			},
 		)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get conversation replies: %w", err)
+			return nil, fmt.Errorf("getting conversation replies: %w", err)
 		}
 		thread = append(thread, msgs...)
 	}
 	msg := m.Copy()
 	b, err := json.Marshal(thread)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal thread: %w", err)
+		return nil, fmt.Errorf("marshalling thread: %w", err)
 	}
 	msg.SetBytes(b)
 	return service.MessageBatch{msg}, nil

@@ -226,7 +226,7 @@ func newVertexAIProcessor(conf *service.ParsedConfig, _ *service.Resources) (p s
 			UseSelfSignedJWT: true,
 		})
 		if err != nil {
-			return nil, fmt.Errorf("failed to load json credentials: %w", err)
+			return nil, fmt.Errorf("loading json credentials: %w", err)
 		}
 	}
 	proc.client, err = genai.NewClient(ctx, &genai.ClientConfig{
@@ -488,11 +488,11 @@ func (p *vertexAIChatProcessor) Process(ctx context.Context, msg *service.Messag
 	}
 	chat, err := p.client.Chats.Create(ctx, p.model, cfg, history)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create chat: %w", err)
+		return nil, fmt.Errorf("creating chat: %w", err)
 	}
 	prompt, err := p.computePrompt(msg)
 	if err != nil {
-		return nil, fmt.Errorf("failed to compute prompt: %w", err)
+		return nil, fmt.Errorf("computing prompt: %w", err)
 	}
 	reqParts := []genai.Part{{Text: prompt}}
 	if p.attachment != nil {
@@ -513,7 +513,7 @@ func (p *vertexAIChatProcessor) Process(ctx context.Context, msg *service.Messag
 	for range p.maxToolCalls {
 		resp, err := chat.SendMessage(ctx, reqParts...)
 		if err != nil {
-			return nil, fmt.Errorf("failed to generate response: %w", err)
+			return nil, fmt.Errorf("generating response: %w", err)
 		}
 		if len(resp.Candidates) != 1 {
 			if resp.PromptFeedback != nil && resp.PromptFeedback.BlockReasonMessage != "" {

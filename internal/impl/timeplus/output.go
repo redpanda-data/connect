@@ -113,7 +113,7 @@ func (t *timeplus) WriteBatch(ctx context.Context, b service.MessageBatch) error
 
 		msgStructure, err := msg.AsStructured()
 		if err != nil {
-			return fmt.Errorf("failed to get structured message %w, skipping this message", err)
+			return fmt.Errorf("getting structured message %w, skipping this message", err)
 		}
 
 		msgJSON, OK := msgStructure.(map[string]any)

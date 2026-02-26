@@ -66,7 +66,7 @@ func unmarshalBatch[T any, P interface {
 	for i, msg := range batch {
 		msgBytes, err := msg.AsBytes()
 		if err != nil {
-			return nil, fmt.Errorf("message %d: failed to get bytes: %w", i, err)
+			return nil, fmt.Errorf("message %d: getting bytes: %w", i, err)
 		}
 
 		ptr := P(&results[i])
@@ -75,7 +75,7 @@ func unmarshalBatch[T any, P interface {
 			continue
 		}
 		if pbErr := proto.Unmarshal(msgBytes, ptr); pbErr != nil {
-			return nil, fmt.Errorf("message %d: failed to unmarshal %s: %w", i, typeName, errors.Join(jsonErr, pbErr))
+			return nil, fmt.Errorf("message %d: unmarshalling %s: %w", i, typeName, errors.Join(jsonErr, pbErr))
 		}
 	}
 

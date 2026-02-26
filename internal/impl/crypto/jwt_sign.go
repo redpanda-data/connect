@@ -45,7 +45,7 @@ func jwtSigner(secretDecoder secretDecoderFunc, method jwt.SigningMethod) blobla
 		}
 		s, err := secretDecoder(signingSecret)
 		if err != nil {
-			return nil, fmt.Errorf("failed to decode signing_secret: %w", err)
+			return nil, fmt.Errorf("decoding signing_secret: %w", err)
 		}
 
 		h, err := args.Get("headers")
@@ -75,7 +75,7 @@ func jwtSigner(secretDecoder secretDecoderFunc, method jwt.SigningMethod) blobla
 			}
 			signed, err := token.SignedString(s)
 			if err != nil {
-				return "", fmt.Errorf("failed to sign token: %w", err)
+				return "", fmt.Errorf("signing token: %w", err)
 			}
 
 			return signed, nil

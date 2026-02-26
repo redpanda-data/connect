@@ -31,12 +31,12 @@ func ApplyConnectorsList(path string, s *service.ConfigSchema) (bool, error) {
 		if os.IsNotExist(err) {
 			return false, nil
 		}
-		return false, fmt.Errorf("failed to read connector list file: %w", err)
+		return false, fmt.Errorf("reading connector list file: %w", err)
 	}
 
 	var cList connectorsList
 	if err := yaml.Unmarshal(cListBytes, &cList); err != nil {
-		return false, fmt.Errorf("failed to parse connector list file: %w", err)
+		return false, fmt.Errorf("parsing connector list file: %w", err)
 	}
 
 	if len(cList.Allow) > 0 && len(cList.Deny) > 0 {

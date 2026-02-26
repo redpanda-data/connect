@@ -325,7 +325,7 @@ func (s *sqlRawOutput) WriteBatch(ctx context.Context, batch service.MessageBatc
 				_, err = tx.ExecContext(ctx, queryStr, args...)
 			}
 			if err != nil {
-				return fmt.Errorf("failed to run query: %w", err)
+				return fmt.Errorf("running query: %w", err)
 			}
 		}
 		return nil

@@ -158,7 +158,7 @@ func (a *kinesisFirehoseWriter) ConnectionTest(ctx context.Context) service.Conn
 		DeliveryStreamName: aws.String(a.conf.Stream),
 	})
 	if err != nil {
-		return service.ConnectionTestFailed(fmt.Errorf("failed to describe delivery stream %s: %w", a.conf.Stream, err)).AsList()
+		return service.ConnectionTestFailed(fmt.Errorf("describing delivery stream %s: %w", a.conf.Stream, err)).AsList()
 	}
 	return service.ConnectionTestSucceeded().AsList()
 }
@@ -242,7 +242,7 @@ func (a *kinesisFirehoseWriter) WriteBatch(ctx context.Context, batch service.Me
 		if l > 0 {
 			a.log.Warnf("scheduling retry of throttled records (%d)\n", l)
 			if wait == backoff.Stop {
-				return fmt.Errorf("%v records failed to be delivered within backoff policy", l)
+				return fmt.Errorf("delivering %v records within backoff policy", l)
 			}
 			time.Sleep(wait)
 		}

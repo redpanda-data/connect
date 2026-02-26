@@ -31,7 +31,7 @@ func resolveJSONSchema(ctx context.Context, client *sr.Client, schema franz_sr.S
 
 	if len(schema.References) == 0 {
 		if err := sl.AddSchemas(); err != nil {
-			return nil, fmt.Errorf("failed to parse root schema: %w", err)
+			return nil, fmt.Errorf("parsing root schema: %w", err)
 		}
 
 		return sl.Compile(gojsonschema.NewStringLoader(schema.Schema))
