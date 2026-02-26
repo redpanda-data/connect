@@ -20,6 +20,7 @@ import (
 	"net/http"
 	"net/url"
 	"slices"
+	"time"
 
 	"go.opentelemetry.io/otel/attribute"
 	semconv "go.opentelemetry.io/otel/semconv/v1.9.0"
@@ -33,8 +34,8 @@ import (
 	exporter "github.com/redpanda-data/common-go/redpanda-otel-exporter"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
-	srinternal "github.com/redpanda-data/connect/v4/internal/impl/confluent/sr"
 	"github.com/redpanda-data/connect/v4/internal/impl/kafka"
+	"github.com/redpanda-data/connect/v4/internal/oauth2"
 	"github.com/redpanda-data/connect/v4/internal/tracing"
 )
 
@@ -60,7 +61,7 @@ func tracerSpec() *service.ConfigSpec {
 					[]*service.ConfigField{
 						service.NewURLField("url").Description("The base URL of the schema registry service.").Optional(),
 						service.NewTLSField("tls"),
-						srinternal.OAuth2FieldSpec(),
+						oauth2.FieldSpec(),
 					},
 					service.NewHTTPRequestAuthSignerFields(),
 				)...,
@@ -189,12 +190,23 @@ func tracerConfigFromParsed(conf *service.ParsedConfig, logger *service.Logger) 
 		if err != nil {
 			return nil, err
 		}
-		opts, cancel, err := srinternal.OAuth2ClientOptFromConfig(conf.Namespace("schema_registry"))
-		if err != nil {
-			return nil, err
+		srConf := conf.Namespace("schema_registry")
+		if srConf.Contains("oauth2") {
+			oauthConf, err := oauth2.ParseConfig(srConf.Namespace("oauth2"))
+			if err != nil {
+				return nil, err
+			}
+			if oauthConf.Enabled {
+				var ctx context.Context
+				ctx, t.srCancel = context.WithCancel(context.Background())
+				cl, err := oauthConf.HTTPClient(ctx, &http.Client{Timeout: 5 * time.Second})
+				if err != nil {
+					t.srCancel()
+					return nil, err
+				}
+				t.srOpts = append(t.srOpts, sr.HTTPClient(cl))
+			}
 		}
-		t.srCancel = cancel
-		t.srOpts = append(t.srOpts, opts...)
 		if authSigner != nil {
 			t.srOpts = append(t.srOpts, sr.PreReq(func(req *http.Request) error {
 				return authSigner(conf.Resources().FS(), req)
@@ -248,7 +260,9 @@ func (w *wrappedExporter) ExportSpans(ctx context.Context, spans []tracesdk.Read
 
 // Shutdown implements trace.SpanExporter.
 func (w *wrappedExporter) Shutdown(ctx context.Context) error {
-	w.cancel()
+	if w.cancel != nil {
+		w.cancel()
+	}
 	return w.exporter.Shutdown(ctx)
 }
 
