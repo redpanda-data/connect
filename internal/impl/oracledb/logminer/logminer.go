@@ -135,8 +135,8 @@ func (lm *LogMiner) ReadChanges(ctx context.Context, startPos replication.SCN) e
 				return fmt.Errorf("mining logs: %w", err)
 			} else if caughtUp {
 				lm.log.Infof("Caught up with redo logs, backing off")
-				time.Sleep(lm.cfg.MiningBackoffInterval)
 			}
+			time.Sleep(lm.cfg.MiningBackoffInterval)
 		}
 	}
 }
@@ -180,6 +180,9 @@ func (lm *LogMiner) miningCycle(ctx context.Context) (caughtUp bool, err error) 
 	}
 
 	endSCN := dbCurrentSCN
+	if maxRange := uint64(lm.cfg.SCNWindowSize); lm.currentSCN+maxRange < dbCurrentSCN {
+		endSCN = lm.currentSCN + maxRange
+	}
 
 	// Restart the session on every cycle with explicit SCN bounds. Oracle's START_LOGMNR
 	// with ENDSCN=0 freezes the session's view at session start time, making events written
@@ -193,17 +196,16 @@ func (lm *LogMiner) miningCycle(ctx context.Context) (caughtUp bool, err error) 
 				"This error indicates archived redo logs have been purged before LogMiner could process them.\n"+
 				"This typically happens when processing takes longer than Oracle's log retention period.\n\n"+
 				"To fix this issue:\n"+
-				"1. Increase Oracle's archived log retention:\n"+
-				"   ALTER SYSTEM SET LOG_ARCHIVE_RETENTION_HOURS = 24;\n"+
-				"   or use RMAN: CONFIGURE RETENTION POLICY TO RECOVERY WINDOW OF 7 DAYS;\n\n"+
+				"1. Increase Oracle's archived log retention using RMAN:\n"+
+				"   CONFIGURE RETENTION POLICY TO RECOVERY WINDOW OF 7 DAYS;\n\n"+
 				"2. Improve processing performance:\n"+
-				"   - Increase logminer.max_batch_size (current: %d)\n"+
+				"   - Reduce logminer.scn_window_size (current: %d SCN units) to process smaller windows per cycle\n"+
 				"   - Decrease logminer.backoff_interval (current: %v)\n"+
 				"   - Increase input batching.count for better throughput\n"+
 				"   - Use faster output (e.g., drop: {} for benchmarking)\n\n"+
 				"3. Restart the connector from the current database SCN to skip missing logs:\n"+
 				"   Note: This will result in data loss for events in the purged logs.",
-				lm.currentSCN, err, lm.cfg.MaxBatchSize, lm.cfg.MiningBackoffInterval)
+				lm.currentSCN, err, lm.cfg.SCNWindowSize, lm.cfg.MiningBackoffInterval)
 		}
 		return false, fmt.Errorf("preparing logs and starting session at position %d: %w", lm.currentSCN, err)
 	}

@@ -96,7 +96,7 @@ func (c *OracleValueConverter) convertDateValue(value string) any {
 	// Convert Oracle format to Go format
 	goFormat := c.oracleFormatToGo(formatStr)
 	if goFormat == "" {
-		// Try common formats
+		// first try common date formats
 		for _, format := range []string{
 			"2006-01-02",
 			"2006-01-02 15:04:05",
