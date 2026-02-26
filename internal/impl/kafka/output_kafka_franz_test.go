@@ -67,6 +67,72 @@ kafka_franz:
 `,
 			errContains: "a partition cannot be specified unless the partitioner is set to manual",
 		},
+		{
+			name: "idempotent write with acks all",
+			conf: `
+kafka_franz:
+  seed_brokers: [ foo:1234 ]
+  topic: foo
+  idempotent_write: true
+  acks: all
+`,
+		},
+		{
+			name: "idempotent write with acks leader",
+			conf: `
+kafka_franz:
+  seed_brokers: [ foo:1234 ]
+  topic: foo
+  idempotent_write: true
+  acks: leader
+`,
+			errContains: "idempotent_write requires acks to be set to all",
+		},
+		{
+			name: "idempotent write with acks none",
+			conf: `
+kafka_franz:
+  seed_brokers: [ foo:1234 ]
+  topic: foo
+  idempotent_write: true
+  acks: none
+`,
+			errContains: "idempotent_write requires acks to be set to all",
+		},
+		{
+			name: "non-idempotent with acks leader",
+			conf: `
+kafka_franz:
+  seed_brokers: [ foo:1234 ]
+  topic: foo
+  idempotent_write: false
+  acks: leader
+`,
+		},
+		{
+			name: "non-idempotent with acks none",
+			conf: `
+kafka_franz:
+  seed_brokers: [ foo:1234 ]
+  topic: foo
+  idempotent_write: false
+  acks: none
+`,
+		},
+		{
+			name: "custom producer limits",
+			conf: `
+kafka_franz:
+  seed_brokers: [ foo:1234 ]
+  topic: foo
+  idempotent_write: false
+  max_buffered_records: 50000
+  max_buffered_bytes: "128MB"
+  max_in_flight_requests: 5
+  record_retries: 10
+  record_delivery_timeout: "30s"
+`,
+		},
 	}
 
 	for _, test := range testCases {
