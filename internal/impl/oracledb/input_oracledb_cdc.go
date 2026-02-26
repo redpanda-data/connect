@@ -304,6 +304,10 @@ func (i *oracleDBCDCInput) Connect(ctx context.Context) (err error) {
 		userTables []replication.UserTable
 		cachedSCN  replication.SCN
 	)
+	if i.db != nil {
+		_ = i.db.Close()
+		i.db = nil
+	}
 	if i.db, err = sql.Open("oracle", i.cfg.connectionString); err != nil {
 		return fmt.Errorf("connecting to oracle database: %w", err)
 	}
