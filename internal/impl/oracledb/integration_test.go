@@ -62,7 +62,7 @@ oracledb_cdc:
   max_parallel_snapshot_tables: 3
   snapshot_max_batch_size: 10
   logminer:
-    max_batch_size: 1000
+    scn_window_size: 20000
     backoff_interval: 1s
   include: ["TESTDB.FOO", "TESTDB.FOO2", "TESTDB2.BAR"]
   exclude: ["TESTDB.DOESNOTEXIST"]
@@ -173,7 +173,7 @@ oracledb_cdc:
   snapshot_max_batch_size: 10
   max_parallel_snapshot_tables: 3
   logminer:
-    max_batch_size: 1000
+    scn_window_size: 20000
     backoff_interval: 1s
   include: ["TESTDB.FOO", "TESTDB.FOO2", "TESTDB2.BAR"]
   exclude: ["TESTDB.DOESNOTEXIST"]`
@@ -235,7 +235,7 @@ oracledb_cdc:
   connection_string: %s
   stream_snapshot: false
   logminer:
-    max_batch_size: 1000
+    scn_window_size: 20000
     backoff_interval: 1s
   include: ["TESTDB.FOO"]
   batching:
@@ -365,7 +365,7 @@ oracledb_cdc:
   connection_string: %s
   stream_snapshot: false
   logminer:
-    max_batch_size: 1000
+    scn_window_size: 20000
     backoff_interval: 1s
   include: ["TESTDB.FOO", "TESTDB.FOO2", "TESTDB2.BAR"]
   exclude: ["TESTDB.DOESNOTEXIST"]
@@ -409,7 +409,6 @@ oracledb_cdc:
 		msgs := make([]*service.Message, 0, want)
 		for msg := range msgChan {
 			msgs = append(msgs, msg)
-			t.Logf("Found %d of %d records...", len(msgs), want)
 			if len(msgs) == want {
 				break
 			}
@@ -596,7 +595,7 @@ oracledb_cdc:
   stream_snapshot: true
   snapshot_max_batch_size: 100
   logminer:
-    max_batch_size: 1000
+    scn_window_size: 20000
     backoff_interval: 1s
   include: ["TESTDB.ALL_DATA_TYPES"]`
 

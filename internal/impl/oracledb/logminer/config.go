@@ -12,21 +12,21 @@ import "time"
 
 // Field constants for configuration
 const (
-	FieldMaxBatchSize    = "max_batch_size"
+	FieldSCNWindowSize   = "scn_window_size"
 	FieldBackoffInterval = "backoff_interval"
 	FieldMiningStrategy  = "strategy"
 )
 
 // Default values
 const (
-	DefaultMaxBatchSize    = 500
+	DefaultSCNWindowSize   = 20000
 	DefaultBackoffInterval = 5 * time.Second
 	DefaultMiningStrategy  = "online_catalog"
 )
 
 // Config holds configuration for LogMiner
 type Config struct {
-	MaxBatchSize          int
+	SCNWindowSize         int
 	MiningBackoffInterval time.Duration
 	MiningStrategy        MiningStrategy
 }
@@ -42,7 +42,7 @@ const (
 // NewDefaultConfig returns a Config with default values
 func NewDefaultConfig() *Config {
 	return &Config{
-		MaxBatchSize:          DefaultMaxBatchSize,
+		SCNWindowSize:         DefaultSCNWindowSize,
 		MiningBackoffInterval: DefaultBackoffInterval,
 		MiningStrategy:        MiningStrategy(DefaultMiningStrategy),
 	}

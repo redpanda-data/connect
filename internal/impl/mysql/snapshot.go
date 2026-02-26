@@ -155,7 +155,7 @@ ORDER BY ORDINAL_POSITION
 	// Get primary key columns for the table
 	rows, err := s.tx.QueryContext(ctx, fmt.Sprintf(pkSql, table))
 	if err != nil {
-		return nil, fmt.Errorf("get primary key: %w", err)
+		return nil, fmt.Errorf("get primary key: %v", err)
 	}
 
 	defer rows.Close()
