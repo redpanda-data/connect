@@ -28,6 +28,7 @@ import (
 	_ "github.com/redpanda-data/connect/v4/public/components/mysql"
 	_ "github.com/redpanda-data/connect/v4/public/components/oracledb"
 	_ "github.com/redpanda-data/connect/v4/public/components/postgresql"
+	_ "github.com/redpanda-data/connect/v4/public/components/salesforce"
 	_ "github.com/redpanda-data/connect/v4/public/components/slack"
 	_ "github.com/redpanda-data/connect/v4/public/components/snowflake"
 	_ "github.com/redpanda-data/connect/v4/public/components/splunk"

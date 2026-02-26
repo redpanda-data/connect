@@ -17,6 +17,8 @@
 
 package salesforcehttp
 
+import "encoding/json"
+
 /*** Input / DTOs ***/
 
 // SalesforceAuthResponse represents the response from the salesforce auth API
@@ -41,7 +43,8 @@ type SObjectList struct {
 
 // SObject is the minimal representation of an sObject
 type SObject struct {
-	Name string `json:"name"`
+	Name      string `json:"name"`
+	Queryable bool   `json:"queryable"`
 }
 
 // DescribeResult sObject result
@@ -53,7 +56,8 @@ type DescribeResult struct {
 
 // QueryResult of the salesforce search query
 type QueryResult struct {
-	TotalSize      int    `json:"totalSize"`
-	Done           bool   `json:"done"`
-	NextRecordsUrl string `json:"nextRecordsUrl,omitempty"`
+	TotalSize      int               `json:"totalSize"`
+	Done           bool              `json:"done"`
+	NextRecordsUrl string            `json:"nextRecordsUrl,omitempty"`
+	Records        []json.RawMessage `json:"records"`
 }

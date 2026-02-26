@@ -31,6 +31,7 @@ import (
 	"strconv"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/salesforce/salesforcehttp/metrics"
 
@@ -351,16 +352,27 @@ func (s *Client) RestQueryAll(ctx context.Context) (service.MessageBatch, error)
 }
 
 // RestQueryFiltered fetches data using the provided SOQL query via the REST API.
+// Returns one message per record in the result set.
 func (s *Client) RestQueryFiltered(ctx context.Context, soql string) (service.MessageBatch, error) {
 	raw, err := s.GetSObjectData(ctx, soql)
 	if err != nil {
 		return nil, err
 	}
 
-	msg := service.NewMessage(raw)
-	msg.MetaSet("soql", soql)
+	var qr QueryResult
+	if err := json.Unmarshal(raw, &qr); err != nil {
+		return nil, fmt.Errorf("failed to parse query result: %w", err)
+	}
 
-	return service.MessageBatch{msg}, nil
+	var batch service.MessageBatch
+	for _, record := range qr.Records {
+		msg := service.NewMessage(record)
+		msg.MetaSet("soql", soql)
+		msg.MetaSet("total_size", strconv.Itoa(qr.TotalSize))
+		batch = append(batch, msg)
+	}
+
+	return batch, nil
 }
 
 // GraphQLQueryFiltered fetches data using the provided GraphQL query.
@@ -430,13 +442,16 @@ func (s *Client) GetNextBatch(ctx context.Context, cursor Cursor) (service.Messa
 		nextCursor.NextURL = ""
 	}
 
-	// Step 6: Create message batch
-	msg := service.NewMessage(queryResults)
-	msg.MetaSet("sobject", currentSObject.Name)
-	msg.MetaSet("total_size", strconv.Itoa(qr.TotalSize))
-	msg.MetaSet("done", strconv.FormatBool(qr.Done))
+	// Step 6: Create message batch — one message per record
+	var batch service.MessageBatch
+	for _, record := range qr.Records {
+		msg := service.NewMessage(record)
+		msg.MetaSet("sobject", currentSObject.Name)
+		msg.MetaSet("total_size", strconv.Itoa(qr.TotalSize))
+		batch = append(batch, msg)
+	}
 
-	return service.MessageBatch{msg}, nextCursor, false, nil
+	return batch, nextCursor, false, nil
 }
 
 // callSalesforceAPIWithBody sends an authenticated POST request with a JSON body.
@@ -509,18 +524,22 @@ func (s *Client) loadSObjectList(ctx context.Context) error {
 
 	s.sobjectList = make([]SObjectInfo, 0)
 	for _, sobj := range list.Sobjects {
-		if skipList[sobj.Name] {
+		if skipList[sobj.Name] || !sobj.Queryable {
 			continue
 		}
 
-		describeJSON, err := s.GetSObjectResource(ctx, sobj.Name)
+		describeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		describeJSON, err := s.GetSObjectResource(describeCtx, sobj.Name)
+		cancel()
 		if err != nil {
-			return err
+			s.log.Warnf("Skipping SObject %s: failed to describe: %v", sobj.Name, err)
+			continue
 		}
 
 		fields, err := extractFieldNames(describeJSON)
 		if err != nil {
-			return err
+			s.log.Warnf("Skipping SObject %s: failed to extract fields: %v", sobj.Name, err)
+			continue
 		}
 
 		s.sobjectList = append(s.sobjectList, SObjectInfo{
@@ -529,7 +548,7 @@ func (s *Client) loadSObjectList(ctx context.Context) error {
 		})
 	}
 
-	s.log.Infof("Loaded %d SObjects for batching", len(s.sobjectList))
+	s.log.Infof("Loaded %d queryable SObjects for batching", len(s.sobjectList))
 	return nil
 }
 
@@ -562,6 +581,6 @@ func extractFieldNames(describeJSON []byte) ([]string, error) {
 }
 
 func buildSOQL(objectName string, fields []string) string {
-	fieldList := strings.Join(fields, ",+")
-	return fmt.Sprintf("SELECT+%s+FROM+%s", fieldList, objectName)
+	fieldList := strings.Join(fields, ", ")
+	return fmt.Sprintf("SELECT %s FROM %s", fieldList, objectName)
 }

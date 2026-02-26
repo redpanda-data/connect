@@ -146,6 +146,7 @@ func (s *salesforceProcessor) dispatchWithCheckpoint(ctx context.Context) (servi
 		}
 
 		// CDC not enabled: reset for next full scan
+		s.log.Info("All Salesforce records processed, waiting for next poll interval")
 		state.SnapshotComplete = false
 		if err := s.saveState(ctx, state); err != nil {
 			s.log.Errorf("failed to reset checkpoint after completion: %v", err)
