@@ -85,9 +85,9 @@ When using the default Oracle based cache, the Connect user requires permission 
 		Default(1000),
 	).
 	Field(service.NewObjectField(ociFieldLogMiner,
-		service.NewIntField(logminer.FieldMaxBatchSize).
-			Description("The maximum number of records to be queried when parsing log lines via LogMiner. Smaller batches mean more frequent queries with higher overhead but lower latency, larger batches mean fewer queries with better throughput but require more memory.").
-			Default(logminer.DefaultMaxBatchSize),
+		service.NewIntField(logminer.FieldSCNWindowSize).
+			Description("The SCN range to mine per cycle. Each cycle reads changes between the current SCN and current SCN + scn_window_size. Smaller values mean more frequent queries with lower memory usage but higher overhead; larger values reduce query frequency and improve throughput at the cost of higher memory usage per cycle.").
+			Default(logminer.DefaultSCNWindowSize),
 		service.NewDurationField(logminer.FieldBackoffInterval).
 			Description("The interval between attempts to check for new changes once all data is processed. For low traffic tables increasing this value can reduce network traffic to the server.").
 			Default(logminer.DefaultBackoffInterval.String()).
@@ -193,8 +193,11 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 	if conf.Contains(ociFieldLogMiner) {
 		lmConf := conf.Namespace(ociFieldLogMiner)
 		lmCfg = logminer.NewDefaultConfig()
-		if lmCfg.MaxBatchSize, err = lmConf.FieldInt(logminer.FieldMaxBatchSize); err != nil {
+		if lmCfg.SCNWindowSize, err = lmConf.FieldInt(logminer.FieldSCNWindowSize); err != nil {
 			return nil, err
+		}
+		if lmCfg.SCNWindowSize <= 0 {
+			return nil, fmt.Errorf("logminer.%s must be greater than 0, got %d", logminer.FieldSCNWindowSize, lmCfg.SCNWindowSize)
 		}
 		if lmCfg.MiningBackoffInterval, err = lmConf.FieldDuration(logminer.FieldBackoffInterval); err != nil {
 			return nil, err

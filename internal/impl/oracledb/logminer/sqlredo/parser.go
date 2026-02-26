@@ -88,7 +88,7 @@ func ParseSQLCommand(sql string) (sqlparser.Statement, error) {
 
 	stmt, err := sqlparser.Parse(normalized)
 	if err != nil {
-		return nil, fmt.Errorf("parsing sql: %w", err)
+		return nil, fmt.Errorf("parsing sql command from logminer: %w", err)
 	}
 
 	return stmt, nil
@@ -129,8 +129,7 @@ func extractInsertValues(stmt *sqlparser.Insert) map[string]any {
 				// Convert the value expression to a string representation
 				valStr := sqlparser.String(val)
 				// Strip quotes from string literals, keep functions/NULL as-is
-				parsedVal := stripQuotesFromValue(valStr)
-				if parsedVal != nil {
+				if parsedVal := stripQuotesFromValue(valStr); parsedVal != nil {
 					result[columns[i]] = parsedVal
 				}
 			}
@@ -148,8 +147,7 @@ func extractUpdateSetValues(stmt *sqlparser.Update) map[string]any {
 		colName := sqlparser.String(expr.Name)
 		valStr := sqlparser.String(expr.Expr)
 		// Strip quotes from string literals, keep functions/NULL as-is
-		parsedVal := stripQuotesFromValue(valStr)
-		if parsedVal != nil {
+		if parsedVal := stripQuotesFromValue(valStr); parsedVal != nil {
 			result[colName] = parsedVal
 		}
 	}
