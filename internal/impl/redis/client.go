@@ -75,7 +75,7 @@ func getClient(parsedConf *service.ParsedConfig) (redis.UniversalClient, error) 
 		return nil, err
 	}
 
-	client_name, err := parsedConf.FieldString("client_name")
+	clientName, err := parsedConf.FieldString("client_name")
 	if err != nil {
 		return nil, err
 	}
@@ -119,7 +119,7 @@ func getClient(parsedConf *service.ParsedConfig) (redis.UniversalClient, error) 
 	var client redis.UniversalClient
 	opts := &redis.UniversalOptions{
 		Addrs:      addrs,
-		ClientName: client_name,
+		ClientName: clientName,
 		DB:         redisDB,
 		Username:   user,
 		Password:   pass,
