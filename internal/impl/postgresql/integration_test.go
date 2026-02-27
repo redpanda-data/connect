@@ -12,6 +12,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -1288,7 +1289,14 @@ postgres_cdc:
 	require.NoError(t, err)
 	license.InjectTestService(streamOut.Resources())
 
-	go func() { _ = streamOut.Run(context.Background()) }()
+	go func() {
+		if err := streamOut.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+			t.Error(err)
+		}
+	}()
+	t.Cleanup(func() {
+		require.NoError(t, streamOut.StopWithin(10*time.Second))
+	})
 
 	// --- Phase 1: snapshot + CDC schema check ---
 
@@ -1430,6 +1438,4 @@ postgres_cdc:
 		byName[child["name"].(string)] = child["type"].(string)
 	}
 	assert.Equal(t, "STRING", byName["extra"], "new 'extra' column should have type STRING")
-
-	require.NoError(t, streamOut.StopWithin(10*time.Second))
 }
