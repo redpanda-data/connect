@@ -32,7 +32,6 @@ const (
 	ociFieldStreamSnapshot            = "stream_snapshot"
 	ociFieldMaxParallelSnapshotTables = "max_parallel_snapshot_tables"
 	ociFieldSnapshotMaxBatchSize      = "snapshot_max_batch_size"
-	ociFieldLogMiner                  = "logminer"
 	ociFieldTablesExclude             = "exclude"
 	ociFieldTablesInclude             = "include"
 	ociFieldCheckpointLimit           = "checkpoint_limit"
@@ -84,18 +83,7 @@ When using the default Oracle based cache, the Connect user requires permission 
 		Description("The maximum number of rows to be streamed in a single batch when taking a snapshot.").
 		Default(1000),
 	).
-	Field(service.NewObjectField(ociFieldLogMiner,
-		service.NewIntField(logminer.FieldSCNWindowSize).
-			Description("The SCN range to mine per cycle. Each cycle reads changes between the current SCN and current SCN + scn_window_size. Smaller values mean more frequent queries with lower memory usage but higher overhead; larger values reduce query frequency and improve throughput at the cost of higher memory usage per cycle.").
-			Default(logminer.DefaultSCNWindowSize),
-		service.NewDurationField(logminer.FieldBackoffInterval).
-			Description("The interval between attempts to check for new changes once all data is processed. For low traffic tables increasing this value can reduce network traffic to the server.").
-			Default(logminer.DefaultBackoffInterval.String()).
-			Example("5s").Example("1m"),
-		service.NewStringField(logminer.FieldMiningStrategy).
-			Description("Controls how LogMiner retrieves data dictionary information. `online_catalog` (default) uses the current data dictionary for best performance but cannot capture DDL changes. `online_catalog` currently only supported.").
-			Default(logminer.DefaultMiningStrategy),
-	).Description("LogMiner configuration settings.").Optional()).
+	Field(logminer.NewConfigFields()).
 	Field(service.NewStringListField(ociFieldTablesInclude).
 		Description("Regular expressions for tables to include.").
 		Example("SCHEMA.PRODUCTS"),
@@ -190,8 +178,8 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 	}
 
 	// logminer
-	if conf.Contains(ociFieldLogMiner) {
-		lmConf := conf.Namespace(ociFieldLogMiner)
+	if conf.Contains(logminer.OciFieldLogMiner) {
+		lmConf := conf.Namespace(logminer.OciFieldLogMiner)
 		lmCfg = logminer.NewDefaultConfig()
 		if lmCfg.SCNWindowSize, err = lmConf.FieldInt(logminer.FieldSCNWindowSize); err != nil {
 			return nil, err
