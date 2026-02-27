@@ -140,26 +140,6 @@ Some components pass `mgr.Logger()` directly instead of the full resources objec
 func newPulsarWriter(conf *service.ParsedConfig, log *service.Logger) (*pulsarWriter, error) {
 ```
 
-## Import Organization
-
-Three groups separated by blank lines: stdlib, third-party, `github.com/redpanda-data/`:
-```go
-import (
-	"context"
-	"fmt"
-	"sync"
-
-	"github.com/redis/go-redis/v9"
-
-	"github.com/redpanda-data/benthos/v4/public/service"
-
-	"github.com/redpanda-data/connect/v4/internal/impl/aws/config"
-	"github.com/redpanda-data/connect/v4/internal/license"
-)
-```
-
-Note: `benthos` and `connect` imports are both in the third group (both under `github.com/redpanda-data/`), but separated by a blank line when both are present.
-
 ## License Headers
 
 Every Go file requires a license header. CI enforces this.
@@ -193,18 +173,6 @@ Every Go file requires a license header. CI enforces this.
 ```
 
 Use the current year. Match the license of neighboring files in the same package.
-
-## Formatting and Linting
-
-Formatter is `gofumpt` (not `gofmt`). Run `task fmt` to format.
-
-Linter is `golangci-lint`. Run `task lint` to check. Key enabled linters:
-- **perfsprint**: Use `fmt.Sprintf` alternatives where possible
-- **testifylint**: Correct testify assertion usage (nil-compare, compares, error-is-as, bool-compare, empty, len, expected-actual, error-nil)
-- **usetesting**: Proper `testing.T` usage patterns
-- **revive**: General Go style
-- **bodyclose**: HTTP response bodies must be closed
-- **rowserrcheck**: `sql.Rows.Err` must be checked
 
 ## Error Handling
 
@@ -248,8 +216,6 @@ for {
 	}
 }
 ```
-
-Never store a context on a struct. Pass it through method parameters.
 
 ## Concurrency Patterns
 
