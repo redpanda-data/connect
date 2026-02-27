@@ -245,58 +245,55 @@ func TestConvertValue(t *testing.T) {
 	converter := NewOracleValueConverter(time.UTC)
 
 	tests := []struct {
-		name       string
-		input      any
-		columnType string
-		wantValue  any
+		name      string
+		input     any
+		wantValue any
 	}{
 		{
-			name:       "DATE column with TO_DATE",
-			input:      "TO_DATE('2020-01-15','YYYY-MM-DD')",
-			columnType: "DATE",
-			wantValue:  time.Date(2020, 1, 15, 0, 0, 0, 0, time.UTC),
+			name:      "TO_DATE function call",
+			input:     "TO_DATE('2020-01-15','YYYY-MM-DD')",
+			wantValue: time.Date(2020, 1, 15, 0, 0, 0, 0, time.UTC),
 		},
 		{
-			name:       "TIMESTAMP column with TO_TIMESTAMP",
-			input:      "TO_TIMESTAMP('2020-01-15 10:30:00','YYYY-MM-DD HH24:MI:SS')",
-			columnType: "TIMESTAMP",
-			wantValue:  time.Date(2020, 1, 15, 10, 30, 0, 0, time.UTC),
+			name:      "TO_TIMESTAMP function call",
+			input:     "TO_TIMESTAMP('2020-01-15 10:30:00','YYYY-MM-DD HH24:MI:SS')",
+			wantValue: time.Date(2020, 1, 15, 10, 30, 0, 0, time.UTC),
 		},
 		{
-			name:       "VARCHAR2 with regular string",
-			input:      "Hello World",
-			columnType: "VARCHAR2",
-			wantValue:  "Hello World",
+			name:      "HEXTORAW function call",
+			input:     "HEXTORAW('48656C6C6F')",
+			wantValue: []byte("Hello"),
 		},
 		{
-			name:       "NUMBER with integer",
-			input:      "123",
-			columnType: "NUMBER",
-			wantValue:  int64(123),
+			name:      "EMPTY_CLOB function call",
+			input:     "EMPTY_CLOB()",
+			wantValue: []byte{},
 		},
 		{
-			name:       "NUMBER with float",
-			input:      "123.456",
-			columnType: "NUMBER",
-			wantValue:  123.456,
+			name:      "EMPTY_BLOB function call",
+			input:     "EMPTY_BLOB()",
+			wantValue: []byte{},
 		},
 		{
-			name:       "RAW with HEXTORAW",
-			input:      "HEXTORAW('48656C6C6F')",
-			columnType: "RAW",
-			wantValue:  []byte("Hello"),
+			name:      "plain string passes through",
+			input:     "Hello World",
+			wantValue: "Hello World",
 		},
 		{
-			name:       "non-string value passes through",
-			input:      123,
-			columnType: "NUMBER",
-			wantValue:  123,
+			name:      "numeric string passes through without type metadata",
+			input:     "123",
+			wantValue: "123",
+		},
+		{
+			name:      "non-string value passes through",
+			input:     123,
+			wantValue: 123,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := converter.ConvertValue(tt.input, tt.columnType)
+			result := converter.ConvertValue(tt.input)
 			assert.IsType(t, tt.wantValue, result)
 			assert.Equal(t, tt.wantValue, result)
 		})
@@ -309,7 +306,7 @@ func BenchmarkConvertTimestamp(b *testing.B) {
 	input := "TO_TIMESTAMP('2020-01-15 10:30:00.123456','YYYY-MM-DD HH24:MI:SS.FF6')"
 
 	for b.Loop() {
-		converter.ConvertValue(input, "TIMESTAMP")
+		converter.ConvertValue(input)
 	}
 }
 
@@ -318,7 +315,7 @@ func BenchmarkConvertDate(b *testing.B) {
 	input := "TO_DATE('2020-01-15','YYYY-MM-DD')"
 
 	for b.Loop() {
-		converter.ConvertValue(input, "DATE")
+		converter.ConvertValue(input)
 	}
 }
 
@@ -327,6 +324,6 @@ func BenchmarkConvertRaw(b *testing.B) {
 	input := "HEXTORAW('48656C6C6F576F726C64')"
 
 	for b.Loop() {
-		converter.ConvertValue(input, "RAW")
+		converter.ConvertValue(input)
 	}
 }
