@@ -281,9 +281,7 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 		}
 	}()
 
-	i.publisher.cacheSCN = func(ctx context.Context, scn replication.SCN) error {
-		return i.cacheSCN(ctx, scn)
-	}
+	i.publisher.cacheSCN = i.cacheSCN
 
 	// Has stopped is how we notify that we're not connected. This will get reset at connection time.
 	i.stopSig.TriggerHasStopped()
