@@ -27,7 +27,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
-// SearchIssuesResource performs a search for the issues resource
+// SearchIssuesResource performs a search for the issues resource.
 func (j *Client) SearchIssuesResource(
 	ctx context.Context,
 	inputQuery *JsonInputQuery,
@@ -78,7 +78,7 @@ func (j *Client) SearchIssuesResource(
 
 // searchAllIssues function to get all Issues from Jira API and placing them into an array of issues.
 // If the nextPageToken is present in the response, then it will fetch the next page until isLast is true.
-// Returns the array of []issue
+// Returns the array of []issue.
 func (j *Client) searchAllIssues(ctx context.Context, queryParams map[string]string) ([]Issue, error) {
 	var all []Issue
 	next := ""
@@ -97,7 +97,7 @@ func (j *Client) searchAllIssues(ctx context.Context, queryParams map[string]str
 }
 
 // searchIssuesPage function to get a single page of issues using nextPageToken strategy
-// The MaxResults can be overridden by the processor parameters (up to 5000 - default 50)
+// The MaxResults can be overridden by the processor parameters (up to 5000 - default 50).
 func (j *Client) searchIssuesPage(ctx context.Context, qp map[string]string, nextPageToken string) (*SearchJQLResponse, error) {
 	apiUrl, err := url.Parse(j.baseURL + jiraAPIBasePath + "/search/jql")
 	if err != nil {
@@ -135,7 +135,7 @@ func (j *Client) searchIssuesPage(ctx context.Context, qp map[string]string, nex
 // - params: map[string]string → query parameters for the Jira API request
 // Returns:
 // - service.MessageBatch → batch of messages containing transformed transitions
-// - error → error if the API call, response parsing, or field processing fails
+// - error → error if the API call, response parsing, or field processing fails.
 func (j *Client) SearchIssueTransitionsResource(ctx context.Context, q *JsonInputQuery, custom, params map[string]string) (service.MessageBatch, error) {
 	var batch service.MessageBatch
 

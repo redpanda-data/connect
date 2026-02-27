@@ -66,7 +66,7 @@ type SnowflakeServiceClient struct {
 	flusher *asyncroutine.Batcher[blobMetadata, blobRegisterStatus]
 }
 
-// NewSnowflakeServiceClient creates a new API client for the Snowpipe Streaming API
+// NewSnowflakeServiceClient creates a new API client for the Snowpipe Streaming API.
 func NewSnowflakeServiceClient(ctx context.Context, opts ClientOptions) (*SnowflakeServiceClient, error) {
 	client, err := NewRestClient(RestOptions{
 		Account:    opts.Account,
@@ -249,7 +249,7 @@ func (c *SnowflakeServiceClient) OpenChannel(ctx context.Context, opts ChannelOp
 // processing.
 type OffsetToken string
 
-// ChannelStatus returns the offset token for a channel or an error
+// ChannelStatus returns the offset token for a channel or an error.
 func (c *SnowflakeServiceClient) ChannelStatus(ctx context.Context, opts ChannelOptions) (OffsetToken, error) {
 	resp, err := c.client.channelStatus(ctx, batchChannelStatusRequest{
 		Role: c.options.Role,
@@ -278,7 +278,7 @@ func (c *SnowflakeServiceClient) ChannelStatus(ctx context.Context, opts Channel
 	return OffsetToken(channel.PersistedOffsetToken), nil
 }
 
-// DropChannel drops it like it's hot 🔥
+// DropChannel drops it like it's hot 🔥.
 func (c *SnowflakeServiceClient) DropChannel(ctx context.Context, opts ChannelOptions) error {
 	resp, err := c.client.dropChannel(ctx, dropChannelRequest{
 		RequestID: c.nextRequestID(),
@@ -436,7 +436,7 @@ func (r *OffsetTokenRange) end() *OffsetToken {
 }
 
 // InsertRows creates a parquet file using the schema from the data,
-// then writes that file into the Snowflake table
+// then writes that file into the Snowflake table.
 func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch service.MessageBatch, offsets *OffsetTokenRange) (InsertStats, error) {
 	insertStats := InsertStats{}
 	if len(batch) == 0 {
@@ -593,12 +593,12 @@ type IngestionFailedError struct {
 	ActualClientSequencer               int64
 }
 
-// LostOwnership returns true when another channel was opened and this one is invalidated now
+// LostOwnership returns true when another channel was opened and this one is invalidated now.
 func (e *IngestionFailedError) LostOwnership() bool {
 	return e.ExpectedClientSequencer != e.ActualClientSequencer || e.StatusCode == responseErrInvalidClientSequencer
 }
 
-// CanRetry returns true when it's expected a retry can fix the issue
+// CanRetry returns true when it's expected a retry can fix the issue.
 func (e *IngestionFailedError) CanRetry() bool {
 	switch e.StatusCode {
 	case responseErrRetryRequest,

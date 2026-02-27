@@ -29,7 +29,7 @@ var customSpanIDKey = customSpanIDKeyType{}
 
 // WithCustomSpanID sets a custom span ID in the context.
 //
-// This should be used with trace.TraceProvider.Start to customize the ID of a span
+// This should be used with trace.TraceProvider.Start to customize the ID of a span.
 func WithCustomSpanID(ctx context.Context, id trace.SpanID) context.Context {
 	return context.WithValue(ctx, customSpanIDKey, id)
 }

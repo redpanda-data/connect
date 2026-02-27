@@ -27,7 +27,7 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/impl/kafka"
 )
 
-// this function is, almost, an exact copy of the init() function in ../kafka/output_kafka_franz.go
+// this function is, almost, an exact copy of the init() function in ../kafka/output_kafka_franz.go.
 func init() {
 	service.MustRegisterBatchOutput("ockam_kafka", ockamKafkaOutputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (

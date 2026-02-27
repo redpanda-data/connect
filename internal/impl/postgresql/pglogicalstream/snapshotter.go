@@ -42,7 +42,7 @@ type snapshotter struct {
 	txnPool pool.Capped[*sql.Tx]
 }
 
-// newSnapshotter creates a new Snapshotter instance
+// newSnapshotter creates a new Snapshotter instance.
 func newSnapshotter(
 	config *Config,
 	_ string,

@@ -348,7 +348,7 @@ func (gi *grpcOTLPInput) Close(ctx context.Context) error {
 	return gi.authzPolicy.Close()
 }
 
-// validateAuth checks the authorization header in the gRPC metadata
+// validateAuth checks the authorization header in the gRPC metadata.
 func (gi *grpcOTLPInput) validateAuth(ctx context.Context) error {
 	if gi.conf.AuthToken == "" {
 		return nil // No auth configured
@@ -386,7 +386,7 @@ func newTraceServiceServer(gi *grpcOTLPInput) *traceServiceServer {
 	}
 }
 
-// Export implements the gRPC Export method for traces
+// Export implements the gRPC Export method for traces.
 func (s *traceServiceServer) Export(ctx context.Context, req ptraceotlp.ExportRequest) (ptraceotlp.ExportResponse, error) {
 	if err := s.validateAuth(ctx); err != nil {
 		s.log.Warnf("Authentication failed: %s", err)
@@ -516,7 +516,7 @@ func newMetricsServiceServer(gi *grpcOTLPInput) *metricsServiceServer {
 	}
 }
 
-// Export implements the gRPC Export method for metrics
+// Export implements the gRPC Export method for metrics.
 func (s *metricsServiceServer) Export(ctx context.Context, req pmetricotlp.ExportRequest) (pmetricotlp.ExportResponse, error) {
 	if err := s.validateAuth(ctx); err != nil {
 		return pmetricotlp.NewExportResponse(), err

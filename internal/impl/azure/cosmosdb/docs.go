@@ -181,7 +181,7 @@ root."-" = if this.operation == "Patch" && this.patch_operations.any(o -> o.oper
 
 //------------------------------------------------------------------------------
 
-// ContainerClientConfigFields returns the container client config fields
+// ContainerClientConfigFields returns the container client config fields.
 func ContainerClientConfigFields() []*service.ConfigField {
 	return []*service.ConfigField{
 		service.NewStringField(fieldEndpoint).Description("CosmosDB endpoint.").Optional().Example("https://localhost:8081"),
@@ -192,7 +192,7 @@ func ContainerClientConfigFields() []*service.ConfigField {
 	}
 }
 
-// PartitionKeysField returns the partition keys field definition
+// PartitionKeysField returns the partition keys field definition.
 func PartitionKeysField(isInputField bool) *service.ConfigField {
 	// TODO: Add examples for hierarchical / empty Partition Keys this when the following issues are addressed:
 	// - https://github.com/Azure/azure-sdk-for-go/issues/18578
@@ -206,7 +206,7 @@ func PartitionKeysField(isInputField bool) *service.ConfigField {
 	return field.Example(`root = now().ts_format("2006-01-02")`)
 }
 
-// CRUDFields returns the CRUD field definitions
+// CRUDFields returns the CRUD field definitions.
 func CRUDFields(hasReadOperation bool) []*service.ConfigField {
 	operations := map[string]string{
 		string(OperationCreate):  "Create operation.",

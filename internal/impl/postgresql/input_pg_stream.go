@@ -358,7 +358,7 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 	return conf.WrapBatchInputExtractTracingSpanMapping("postgres_cdc", r)
 }
 
-// validateSimpleString ensures we aren't vuln to SQL injection
+// validateSimpleString ensures we aren't vuln to SQL injection.
 func validateSimpleString(s string) error {
 	for _, b := range []byte(s) {
 		isDigit := b >= '0' && b <= '9'

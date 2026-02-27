@@ -63,7 +63,7 @@ func (j *Client) callJiraApi(ctx context.Context, u *url.URL) ([]byte, error) {
 // Then iterate over the map and the fields from a Fields input message to check if any of the fields are custom
 //
 // Note that this supports custom fields that are nested, like if "Sprint.name" is present into the Fields input message -> this will be translated to "custom_field_10022.name"
-// Returns only the custom fields present in the Fields input message as a map[fieldName]=customFieldName
+// Returns only the custom fields present in the Fields input message as a map[fieldName]=customFieldName.
 func (j *Client) GetAllCustomFields(ctx context.Context, fieldsToSearch []string) (map[string]string, error) {
 	j.log.Debug("Fetching custom fields from API")
 
@@ -100,7 +100,7 @@ func (j *Client) GetAllCustomFields(ctx context.Context, fieldsToSearch []string
 	return customFieldsInQuery, nil
 }
 
-// Function to get a single page of custom fields using startAt strategy as the maximum number of custom fields to be retrieved is capped at 50
+// Function to get a single page of custom fields using startAt strategy as the maximum number of custom fields to be retrieved is capped at 50.
 func (j *Client) getCustomFieldsPage(ctx context.Context, startAt int) (*CustomFieldSearchResponse, error) {
 	apiUrl, err := url.Parse(j.baseURL + jiraAPIBasePath + "/field/search")
 	if err != nil {
@@ -133,7 +133,7 @@ type Client struct {
 	log        *service.Logger
 }
 
-// NewClient is the constructor ofr a Client object
+// NewClient is the constructor ofr a Client object.
 func NewClient(log *service.Logger, baseUrl, username, apiToken string, maxResults, maxRetries int, metrics *service.Metrics, httpClient *http.Client, headerPolicy *AuthHeaderPolicy) (*Client, error) {
 	return &Client{
 		log:        log,

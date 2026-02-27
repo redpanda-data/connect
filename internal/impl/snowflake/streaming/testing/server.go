@@ -57,12 +57,12 @@ func NewMockSnowflakeServer(fakeGCS *FakeGCSContainer) *MockSnowflakeServer {
 	return mock
 }
 
-// Close closes the mock server
+// Close closes the mock server.
 func (m *MockSnowflakeServer) Close() {
 	m.Server.Close()
 }
 
-// URL returns the server URL
+// URL returns the server URL.
 func (m *MockSnowflakeServer) URL() string {
 	return m.Server.URL
 }

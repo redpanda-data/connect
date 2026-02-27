@@ -50,7 +50,7 @@ type ServerState struct {
 	registeredBlobs []string
 }
 
-// NewServerState creates a new server state
+// NewServerState creates a new server state.
 func NewServerState() *ServerState {
 	return &ServerState{
 		channels:        make(map[string]*ChannelState),
@@ -60,7 +60,7 @@ func NewServerState() *ServerState {
 	}
 }
 
-// SetGCSConfig sets the GCS configuration
+// SetGCSConfig sets the GCS configuration.
 func (s *ServerState) SetGCSConfig(bucket, pathPrefix string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -68,21 +68,21 @@ func (s *ServerState) SetGCSConfig(bucket, pathPrefix string) {
 	s.gcsPathPrefix = pathPrefix
 }
 
-// GetGCSConfig returns the GCS configuration
+// GetGCSConfig returns the GCS configuration.
 func (s *ServerState) GetGCSConfig() (bucket, pathPrefix string) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.gcsBucket, s.gcsPathPrefix
 }
 
-// GetClientPrefix returns the client prefix
+// GetClientPrefix returns the client prefix.
 func (s *ServerState) GetClientPrefix() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.clientPrefix
 }
 
-// GetDeploymentID returns the deployment ID
+// GetDeploymentID returns the deployment ID.
 func (s *ServerState) GetDeploymentID() int64 {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -93,7 +93,7 @@ func channelKey(database, schema, table, channel string) string {
 	return database + "." + schema + "." + table + "." + channel
 }
 
-// GetChannel returns the channel state
+// GetChannel returns the channel state.
 func (s *ServerState) GetChannel(database, schema, table, channel string) (*ChannelState, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -102,7 +102,7 @@ func (s *ServerState) GetChannel(database, schema, table, channel string) (*Chan
 	return ch, ok
 }
 
-// OpenChannel opens a channel and returns the initial state
+// OpenChannel opens a channel and returns the initial state.
 func (s *ServerState) OpenChannel(database, schema, table, channel string) *ChannelState {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -136,7 +136,7 @@ func (s *ServerState) OpenChannel(database, schema, table, channel string) *Chan
 	return ch
 }
 
-// DropChannel drops a channel
+// DropChannel drops a channel.
 func (s *ServerState) DropChannel(database, schema, table, channel string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -148,7 +148,7 @@ func (s *ServerState) DropChannel(database, schema, table, channel string) bool 
 	return false
 }
 
-// UpdateChannelOffset updates the persisted offset token for a channel
+// UpdateChannelOffset updates the persisted offset token for a channel.
 func (s *ServerState) UpdateChannelOffset(database, schema, table, channel, offsetToken string, clientSequencer, rowSequencer int64) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -160,14 +160,14 @@ func (s *ServerState) UpdateChannelOffset(database, schema, table, channel, offs
 	}
 }
 
-// RegisterBlob records a blob registration
+// RegisterBlob records a blob registration.
 func (s *ServerState) RegisterBlob(path string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.registeredBlobs = append(s.registeredBlobs, path)
 }
 
-// GetRegisteredBlobs returns all registered blobs
+// GetRegisteredBlobs returns all registered blobs.
 func (s *ServerState) GetRegisteredBlobs() []string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

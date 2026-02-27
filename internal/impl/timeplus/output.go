@@ -98,12 +98,12 @@ type timeplus struct {
 	client Writer
 }
 
-// Close implements service.Output
+// Close implements service.Output.
 func (*timeplus) Close(context.Context) error {
 	return nil
 }
 
-// Connect implements service.Output
+// Connect implements service.Output.
 func (t *timeplus) Connect(context.Context) error {
 	if t.client == nil {
 		return errors.New("client not initialized")

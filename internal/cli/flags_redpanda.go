@@ -289,7 +289,7 @@ func resolveSecret(ctx context.Context, value string, lookupFn secrets.LookupFn)
 
 // parseCloudAuthFlags parses the OAuth2/cloud authentication CLI flags,
 // resolves any secret references, and initializes the global service account configuration.
-// returns the authz policy file (if specified)
+// returns the authz policy file (if specified).
 func parseCloudAuthFlags(ctx context.Context, c *cli.Context, secretLookupFn secrets.LookupFn) (authzResourceName, authzPolicyFile string, err error) {
 	tokenURL := resolveSecret(ctx, c.String(rfCloudTokenURL), secretLookupFn)
 	clientID := resolveSecret(ctx, c.String(rfCloudClientID), secretLookupFn)

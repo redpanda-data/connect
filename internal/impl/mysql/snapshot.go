@@ -30,7 +30,7 @@ type Snapshot struct {
 	logger *service.Logger
 }
 
-// NewSnapshot creates new snapshot instance
+// NewSnapshot creates new snapshot instance.
 func NewSnapshot(logger *service.Logger, db *sql.DB) *Snapshot {
 	return &Snapshot{
 		db:     db,

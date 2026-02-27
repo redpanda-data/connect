@@ -57,7 +57,7 @@ type Stream struct {
 	unchangedToastValue     any
 }
 
-// NewPgStream creates a new instance of the Stream struct
+// NewPgStream creates a new instance of the Stream struct.
 func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 	if config.ReplicationSlotName == "" {
 		return nil, errors.New("missing replication slot name")
@@ -492,7 +492,7 @@ const (
 	changeResultEmittedMessage          processChangeResult = 2
 )
 
-// Handle handles the pgoutput output
+// Handle handles the pgoutput output.
 func (s *Stream) processChange(ctx context.Context, msgLSN LSN, xld XLogData, relations map[uint32]*RelationMessage, typeMap *pgtype.Map, schemaCache map[uint32]any) (processChangeResult, error) {
 	logicalMsg, err := Parse(xld.WALData)
 	if err != nil {
@@ -754,12 +754,12 @@ func (s *Stream) scanTableRange(ctx context.Context, snapshotter *snapshotter, t
 	return nil
 }
 
-// Messages is a channel that can be used to consume messages from the plugin. It will contain LSN nil for snapshot messages
+// Messages is a channel that can be used to consume messages from the plugin. It will contain LSN nil for snapshot messages.
 func (s *Stream) Messages() chan []StreamMessage {
 	return s.messages
 }
 
-// Errors is a channel that can be used to see if and error has occured internally and the stream should be restarted
+// Errors is a channel that can be used to see if and error has occured internally and the stream should be restarted.
 func (s *Stream) Errors() chan error {
 	return s.errors
 }
@@ -799,7 +799,7 @@ func (s *Stream) getPrimaryKeyColumn(ctx context.Context, table TableFQN) ([]str
 	return pkColumns, nil
 }
 
-// Stop closes the stream (hopefully gracefully)
+// Stop closes the stream (hopefully gracefully).
 func (s *Stream) Stop(ctx context.Context) error {
 	s.shutSig.TriggerSoftStop()
 	var wg errgroup.Group

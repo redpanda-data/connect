@@ -275,7 +275,7 @@ func DropReplicationSlot(ctx context.Context, conn *pgconn.PgConn, slotName stri
 	return err
 }
 
-// CreatePublication creates a new PostgreSQL publication with the given name for a list of tables and drop if exists flag
+// CreatePublication creates a new PostgreSQL publication with the given name for a list of tables and drop if exists flag.
 func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName string, tables []TableFQN) error {
 	// Check if publication exists
 	pubQuery, err := sanitize.SQLQuery(`
@@ -377,7 +377,7 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 }
 
 // GetPublicationTables returns a list of tables currently in the publication
-// Arguments, in order: list of the tables, exist for all tables, errror
+// Arguments, in order: list of the tables, exist for all tables, errror.
 func GetPublicationTables(ctx context.Context, conn *pgconn.PgConn, publicationName string) ([]TableFQN, bool, error) {
 	query, err := sanitize.SQLQuery(`
 		SELECT DISTINCT

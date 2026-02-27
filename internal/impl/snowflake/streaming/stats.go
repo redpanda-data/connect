@@ -146,7 +146,7 @@ func asJSONNumber(f float64) json.RawMessage {
 	return json.RawMessage(b)
 }
 
-// with similar semantics to Java's Double.compare
+// with similar semantics to Java's Double.compare.
 func compareDouble(a, b float64) int {
 	if a < b {
 		return -1

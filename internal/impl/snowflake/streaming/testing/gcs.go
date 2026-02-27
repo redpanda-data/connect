@@ -33,7 +33,7 @@ type FakeGCSContainer struct {
 	pathPrefix string
 }
 
-// StartFakeGCS starts a fake-gcs-server container for testing
+// StartFakeGCS starts a fake-gcs-server container for testing.
 func StartFakeGCS(ctx context.Context) (*FakeGCSContainer, error) {
 	req := testcontainers.ContainerRequest{
 		Image:        "fsouza/fake-gcs-server:latest",
@@ -86,7 +86,7 @@ func StartFakeGCS(ctx context.Context) (*FakeGCSContainer, error) {
 	return gc, nil
 }
 
-// createBucket creates the default bucket in fake-gcs-server
+// createBucket creates the default bucket in fake-gcs-server.
 func (gc *FakeGCSContainer) createBucket(ctx context.Context) error {
 	client, err := gcs.NewClient(ctx, option.WithoutAuthentication())
 	if err != nil {
@@ -98,7 +98,7 @@ func (gc *FakeGCSContainer) createBucket(ctx context.Context) error {
 	return bucket.Create(ctx, "test-project", nil)
 }
 
-// Terminate stops and removes the fake-gcs-server container
+// Terminate stops and removes the fake-gcs-server container.
 func (gc *FakeGCSContainer) Terminate(ctx context.Context) error {
 	os.Unsetenv("STORAGE_EMULATOR_HOST")
 	if gc.container != nil {
@@ -107,22 +107,22 @@ func (gc *FakeGCSContainer) Terminate(ctx context.Context) error {
 	return nil
 }
 
-// Endpoint returns the GCS endpoint
+// Endpoint returns the GCS endpoint.
 func (gc *FakeGCSContainer) Endpoint() string {
 	return gc.endpoint
 }
 
-// Bucket returns the bucket name
+// Bucket returns the bucket name.
 func (gc *FakeGCSContainer) Bucket() string {
 	return gc.bucket
 }
 
-// PathPrefix returns the path prefix
+// PathPrefix returns the path prefix.
 func (gc *FakeGCSContainer) PathPrefix() string {
 	return gc.pathPrefix
 }
 
-// GCSClient returns a configured GCS client for the fake-gcs-server instance
+// GCSClient returns a configured GCS client for the fake-gcs-server instance.
 func (*FakeGCSContainer) GCSClient(ctx context.Context) (*gcs.Client, error) {
 	return gcs.NewClient(ctx, option.WithoutAuthentication())
 }

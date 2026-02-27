@@ -26,7 +26,7 @@ type ecsAvroConfig struct {
 	rawUnion bool // Whether unions are going to be serialized as raw JSON
 }
 
-// Extract common schema from avro bytes
+// Extract common schema from avro bytes.
 func ecsAvroFromBytes(cfg ecsAvroConfig, specBytes []byte) (any, error) {
 	var as any
 	if err := json.Unmarshal(specBytes, &as); err != nil {
