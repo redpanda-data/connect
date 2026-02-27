@@ -77,29 +77,28 @@ func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replicat
 		SELECT
 			SCN,
 			SQL_REDO,
-			-- SQL_UNDO,        -- Not used, only SQL_REDO is parsed
 			OPERATION_CODE,
 			TABLE_NAME,
 			SEG_OWNER,
 			TIMESTAMP,
-			XID,                 -- Oracle's native transaction identifier (RAW)
-			COMMIT_SCN          -- SCN when transaction commits (vs SCN when DML executes)
+			XID,
+			COMMIT_SCN
 		FROM V$LOGMNR_CONTENTS
 		WHERE SCN > :1 AND SCN <= :2%s
 	`, buf.String())
 
 	lm := &LogMiner{
 		cfg:       cfg,
-		log:       logger,
 		db:        db,
 		tables:    userTables,
 		publisher: publisher,
+		log:       logger,
 
 		// logminer specific
 		logMinerQuery: logMinerQuery,
 		logCollector:  NewLogFileCollector(db),
 		sessionMgr:    NewSessionManager(db, cfg),
-		txnCache:      NewInMemoryCache(metrics, logger),
+		txnCache:      NewInMemoryCache(cfg.MaxTransactionEvents, metrics, logger),
 		dmlParser:     sqlredo.NewParser(),
 	}
 	return lm
@@ -114,7 +113,6 @@ func (lm *LogMiner) ReadChanges(ctx context.Context, startPos replication.SCN) e
 	}
 
 	lm.currentSCN = uint64(startPos)
-
 	lm.log.Infof("Starting streaming change events for %d table(s) beginning from SCN: %d", len(lm.tables), lm.currentSCN)
 
 	defer func() {
@@ -286,8 +284,10 @@ func (lm *LogMiner) queryLogMinerContents(ctx context.Context, startSCN, endSCN 
 	var events []*sqlredo.RedoEvent
 	for rows.Next() {
 		event := &sqlredo.RedoEvent{}
-		var xid []byte              // Oracle RAW type comes as []byte in Go
-		var commitSCN sql.NullInt64 // COMMIT_SCN can be NULL for uncommitted transactions
+		var (
+			xid       []byte        // Oracle RAW type comes as []byte in Go
+			commitSCN sql.NullInt64 // COMMIT_SCN can be NULL for uncommitted transactions
+		)
 
 		err := rows.Scan(
 			&event.SCN,
