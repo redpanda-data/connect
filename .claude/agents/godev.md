@@ -220,7 +220,7 @@ func (o *myOutput) WriteBatch(ctx context.Context, batch service.MessageBatch) e
 
 Use `%w` for wrapping (allows `errors.Is`/`errors.As` upstream). Use `%v` only when you intentionally want to break the error chain.
 
-Prefix with the action in gerund form ("sending", "parsing", "connecting"), not "failed to" or "error".
+Prefix with the action in gerund form ("sending", "parsing", "connecting").
 
 ## Context Propagation
 
@@ -441,15 +441,6 @@ data, err := client.Fetch(context.Background())
 
 // Right
 data, err := client.Fetch(ctx)
-```
-
-**Don't wrap errors with "failed to". Do use gerund form:**
-```go
-// Wrong
-return fmt.Errorf("failed to connect to database: %w", err)
-
-// Right
-return fmt.Errorf("connecting to database: %w", err)
 ```
 
 **Don't put field names as string literals. Do use constants:**

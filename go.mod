@@ -138,6 +138,7 @@ require (
 	github.com/prometheus/common v0.67.1
 	github.com/pusher/pusher-http-go v4.0.1+incompatible
 	github.com/qdrant/go-client v1.15.2
+	github.com/quasilyte/go-ruleguard/dsl v0.3.23
 	github.com/questdb/go-questdb-client/v4 v4.0.0
 	github.com/r3labs/diff/v3 v3.0.2
 	github.com/rabbitmq/amqp091-go v1.10.0

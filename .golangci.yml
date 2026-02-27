@@ -12,8 +12,7 @@ linters:
     - unused
     # Extra linters:
     - wastedassign
-    # gocritic is very slow (golangci-lint v1.52.0)
-    # - gocritic
+    - gocritic # only ruleguard enabled (full gocritic is slow)
     - revive
     - unconvert
     - durationcheck
@@ -36,18 +35,13 @@ linters:
         - (*github.com/redpanda-data/benthos/v4/internal/batch.Error).Failed
         - (*github.com/redpanda-data/benthos/v4/public/service.BatchError).Failed
     gocritic:
-      disabled-checks:
-        - hugeParam # Micro-optimisations
-        - rangeValCopy # Micro-optimisations
-        - ifElseChain # Mostly false positives
-        - ptrToRefParam # False positives?
-        - importShadow # Probably not worth the hassle...
-      enabled-tags:
-        - diagnostic
-        - experimental
-        - opinionated
-        - performance
-        - style
+      disable-all: true
+      enabled-checks:
+        - ruleguard
+      settings:
+        ruleguard:
+          failOn: dsl
+          rules: .golangci/rules.go
     govet:
       disable:
         - fieldalignment
