@@ -18,14 +18,16 @@ import (
 const (
 	OciFieldLogMiner = "logminer"
 
-	FieldSCNWindowSize   = "scn_window_size"
-	FieldBackoffInterval = "backoff_interval"
-	FieldMiningStrategy  = "strategy"
+	OciFieldSCNWindowSize        = "scn_window_size"
+	OciFieldBackoffInterval      = "backoff_interval"
+	OciFieldMiningStrategy       = "strategy"
+	OciFieldMaxTransactionEvents = "max_transaction_events"
 
 	// Default values
-	defaultSCNWindowSize   = 20000
-	defaultBackoffInterval = 5 * time.Second
-	defaultMiningStrategy  = "online_catalog"
+	defaultSCNWindowSize        = 20000
+	defaultBackoffInterval      = 5 * time.Second
+	defaultMiningStrategy       = "online_catalog"
+	defaultMaxTransactionEvents = 0
 )
 
 // Config holds configuration for LogMiner
@@ -33,21 +35,25 @@ type Config struct {
 	SCNWindowSize         int
 	MiningBackoffInterval time.Duration
 	MiningStrategy        MiningStrategy
+	MaxTransactionEvents  int
 }
 
 // NewConfigFields provides the configurations specific to Logminer.
 func NewConfigFields() *service.ConfigField {
 	return service.NewObjectField(OciFieldLogMiner,
-		service.NewIntField(FieldSCNWindowSize).
+		service.NewIntField(OciFieldSCNWindowSize).
 			Description("The SCN range to mine per cycle. Each cycle reads changes between the current SCN and current SCN + scn_window_size. Smaller values mean more frequent queries with lower memory usage but higher overhead; larger values reduce query frequency and improve throughput at the cost of higher memory usage per cycle.").
 			Default(defaultSCNWindowSize),
-		service.NewDurationField(FieldBackoffInterval).
+		service.NewDurationField(OciFieldBackoffInterval).
 			Description("The interval between attempts to check for new changes once all data is processed. For low traffic tables increasing this value can reduce network traffic to the server.").
 			Default(defaultBackoffInterval.String()).
 			Example("5s").Example("1m"),
-		service.NewStringField(FieldMiningStrategy).
+		service.NewStringField(OciFieldMiningStrategy).
 			Description("Controls how LogMiner retrieves data dictionary information. `online_catalog` (default) uses the current data dictionary for best performance but cannot capture DDL changes. `online_catalog` currently only supported.").
 			Default(defaultMiningStrategy),
+		service.NewIntField(OciFieldMaxTransactionEvents).
+			Description("The maximum number of events that can be buffered for a single transaction. If a transaction exceeds this limit it is discarded and its events will not be emitted. Set to 0 to disable the limit.").
+			Default(defaultMaxTransactionEvents),
 	).Description("LogMiner configuration settings.").Optional()
 }
 
@@ -65,5 +71,6 @@ func NewDefaultConfig() *Config {
 		SCNWindowSize:         defaultSCNWindowSize,
 		MiningBackoffInterval: defaultBackoffInterval,
 		MiningStrategy:        MiningStrategy(defaultMiningStrategy),
+		MaxTransactionEvents:  defaultMaxTransactionEvents,
 	}
 }

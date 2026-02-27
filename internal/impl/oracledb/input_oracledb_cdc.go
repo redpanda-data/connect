@@ -60,7 +60,7 @@ Additionally, if ` + "`" + ociFieldStreamSnapshot + "`" + ` is set to true, then
 This input adds the following metadata fields to each message:
 - schema (Schema of the table that the message originated from)
 - table (Name of the table that the message originated from)
-- operation (Type of operation that generated the message: "read", "delete", "insert", or "update_before" and "update_after". "read" is from messages that are read in the initial snapshot phase.)
+- operation (Type of operation that generated the message: "read", "delete", "insert", or "update". "read" is from messages that are read in the initial snapshot phase.)
 - scn (the System Change Number in Oracle)
 
 == Permissions
@@ -181,19 +181,25 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 	if conf.Contains(logminer.OciFieldLogMiner) {
 		lmConf := conf.Namespace(logminer.OciFieldLogMiner)
 		lmCfg = logminer.NewDefaultConfig()
-		if lmCfg.SCNWindowSize, err = lmConf.FieldInt(logminer.FieldSCNWindowSize); err != nil {
+		if lmCfg.SCNWindowSize, err = lmConf.FieldInt(logminer.OciFieldSCNWindowSize); err != nil {
 			return nil, err
 		}
 		if lmCfg.SCNWindowSize <= 0 {
-			return nil, fmt.Errorf("logminer.%s must be greater than 0, got %d", logminer.FieldSCNWindowSize, lmCfg.SCNWindowSize)
+			return nil, fmt.Errorf("logminer.%s must be greater than 0, got %d", logminer.OciFieldSCNWindowSize, lmCfg.SCNWindowSize)
 		}
-		if lmCfg.MiningBackoffInterval, err = lmConf.FieldDuration(logminer.FieldBackoffInterval); err != nil {
+		if lmCfg.MiningBackoffInterval, err = lmConf.FieldDuration(logminer.OciFieldBackoffInterval); err != nil {
 			return nil, err
 		}
-		if strategy, err := lmConf.FieldString(logminer.FieldMiningStrategy); err != nil {
+		if strategy, err := lmConf.FieldString(logminer.OciFieldMiningStrategy); err != nil {
 			return nil, err
 		} else {
 			lmCfg.MiningStrategy = logminer.MiningStrategy(strategy)
+		}
+		if lmCfg.MaxTransactionEvents, err = lmConf.FieldInt(logminer.OciFieldMaxTransactionEvents); err != nil {
+			return nil, err
+		}
+		if lmCfg.MaxTransactionEvents < 0 {
+			return nil, fmt.Errorf("logminer.%s must be greater than or equal to 0, got %d", logminer.OciFieldMaxTransactionEvents, lmCfg.MaxTransactionEvents)
 		}
 	}
 
