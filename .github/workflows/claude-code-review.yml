@@ -42,7 +42,7 @@ jobs:
           allowed_bots: ""
           allowed_non_write_users: ""
           track_progress: true
-          show_full_output: false
+          show_full_output: true
           claude_args: >
             --model opus
             --max-turns 30
