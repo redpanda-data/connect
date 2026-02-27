@@ -194,19 +194,6 @@ func (*OracleValueConverter) convertLobValue(value string) any {
 	return value
 }
 
-// convertNumericValue attempts to parse numeric values
-func (*OracleValueConverter) convertNumericValue(value string) any {
-	if i, err := strconv.ParseInt(value, 10, 64); err == nil {
-		return i
-	}
-
-	if f, err := strconv.ParseFloat(value, 64); err == nil {
-		return f
-	}
-
-	return value
-}
-
 // oracleFormatToGo converts Oracle date/timestamp format to Go format
 // Oracle formats: https://docs.oracle.com/en/database/oracle/oracle-database/19/sqlrf/Format-Models.html
 func (*OracleValueConverter) oracleFormatToGo(oracleFormat string) string {
