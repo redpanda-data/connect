@@ -57,6 +57,7 @@ linters:
         # - name: defer
         # - name: early-return
         - name: exported
+        - name: get-return
         - name: superfluous-else
         - name: time-equal
         - name: unnecessary-stmt
@@ -85,6 +86,7 @@ linters:
     rules:
       - linters:
           - bodyclose
+          - godot
           - perfsprint
         path: _test.go
       - linters:

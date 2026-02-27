@@ -67,7 +67,7 @@ jobs:
             Fetch commit data using: `gh pr view --json commit`
 
             For each commit, validate against commit policy:
-            - **Granularity**: Each commit is one small, self-contained, logical change. Flag commits mixing unrelated work.
+            - **Granularity**: Each commit is one small, self-contained, logical change. Flag commits mixing unrelated work. In multi-commit PRs, documentation changes must be in a separate commit from code changes.
             - **Message format** (enforced): Must match one of these patterns:
               - `system: message` — lowercase system name matching a known area (e.g., `otlp: add authz support`, `kafka: fix consumer group rebalance`)
               - `system(subsystem): message` — same, with parenthesized subsystem (e.g., `gateway(authz): add http middleware`, `cli(mcp): handle shutdown`)
