@@ -176,7 +176,7 @@ func newTextChunker(conf *service.ParsedConfig, _ *service.Resources) (service.P
 			return len(tokenizer.Encode(s, allowedSpecial, disallowedSpecial))
 		}))
 	case "graphemes":
-		opts = append(opts, textsplitter.WithLenFunc(func(s string) int { return uniseg.GraphemeClusterCount(s) }))
+		opts = append(opts, textsplitter.WithLenFunc(uniseg.GraphemeClusterCount))
 	default:
 		return nil, fmt.Errorf("unknown %s: %v", tcpFieldWithLenFunc, lenFuncStr)
 	}

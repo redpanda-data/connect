@@ -32,7 +32,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
-// DEPRECATED: Use the franz_reader_toggled variant instead.
+// Deprecated: Use the franz_reader_toggled variant instead.
 const (
 	kruFieldConsumerGroup         = "consumer_group"
 	kruFieldCheckpointLimit       = "checkpoint_limit"
@@ -43,7 +43,8 @@ const (
 )
 
 // FranzReaderUnorderedConfigFields is deprecated.
-// DEPRECATED: Use the franz_reader_toggled variant instead.
+//
+// Deprecated: Use the franz_reader_toggled variant instead.
 func FranzReaderUnorderedConfigFields() []*service.ConfigField {
 	return []*service.ConfigField{
 		service.NewStringField(kruFieldConsumerGroup).
@@ -109,7 +110,8 @@ func (f *FranzReaderUnordered) storeBatchChan(c chan batchWithAckFn) {
 }
 
 // NewFranzReaderUnorderedFromConfig is deprecated.
-// DEPRECATED: Use the toggled variant in future.
+//
+// Deprecated: Use the toggled variant in future.
 func NewFranzReaderUnorderedFromConfig(conf *service.ParsedConfig, res *service.Resources, opts ...kgo.Opt) (*FranzReaderUnordered, error) {
 	f := FranzReaderUnordered{
 		res:     res,

@@ -53,7 +53,7 @@ func ockamKafkaInputConfig() *service.ConfigSpec {
 				service.NewTLSToggledField("tls"),
 			},
 			kafka.FranzConsumerFields(),
-			kafka.FranzReaderUnorderedConfigFields(),
+			kafka.FranzReaderUnorderedConfigFields(), //nolint:staticcheck // intentional use of deprecated API
 		)...).LintRule(kafka.FranzConsumerFieldLintRules)).
 		Field(service.NewBoolField("disable_content_encryption").Default(false)).
 		Field(service.NewStringField("enrollment_ticket").Optional()).
@@ -194,7 +194,7 @@ func newOckamKafkaInput(conf *service.ParsedConfig, mgr *service.Resources) (*oc
 		kgo.SeedBrokers(kafkaInletAddress),
 	)
 
-	kafkaReader, err := kafka.NewFranzReaderUnorderedFromConfig(conf.Namespace("kafka"), mgr, clientOpts...)
+	kafkaReader, err := kafka.NewFranzReaderUnorderedFromConfig(conf.Namespace("kafka"), mgr, clientOpts...) //nolint:staticcheck // intentional use of deprecated API
 	if err != nil {
 		return nil, err
 	}

@@ -60,7 +60,7 @@ func deriveKey(encryptionKey, diversifier string) ([]byte, error) {
 	hash := sha256.New()
 	hash.Write(decodedKey)
 	hash.Write([]byte(diversifier))
-	return hash.Sum(nil)[:], nil
+	return hash.Sum(nil), nil
 }
 
 // See Encyptor.encrypt in the Java SDK

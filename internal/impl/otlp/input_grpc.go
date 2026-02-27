@@ -228,9 +228,7 @@ func GRPCInputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (s
 }
 
 func init() {
-	service.MustRegisterBatchInput("otlp_grpc", GRPCInputSpec(), func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
-		return GRPCInputFromParsed(conf, mgr)
-	})
+	service.MustRegisterBatchInput("otlp_grpc", GRPCInputSpec(), GRPCInputFromParsed)
 }
 
 //------------------------------------------------------------------------------

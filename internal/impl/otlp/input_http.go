@@ -265,9 +265,7 @@ func HTTPInputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (s
 }
 
 func init() {
-	service.MustRegisterBatchInput("otlp_http", HTTPInputSpec(), func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
-		return HTTPInputFromParsed(conf, mgr)
-	})
+	service.MustRegisterBatchInput("otlp_http", HTTPInputSpec(), HTTPInputFromParsed)
 }
 
 //------------------------------------------------------------------------------

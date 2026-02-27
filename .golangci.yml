@@ -38,6 +38,8 @@ linters:
       disable-all: true
       enabled-checks:
         - ruleguard
+        - unlambda
+        - deprecatedComment
       settings:
         ruleguard:
           failOn: dsl

@@ -253,9 +253,7 @@ func newMSSQLServerCDCInput(conf *service.ParsedConfig, resources *service.Resou
 		cpCache:   cpCache,
 	}
 
-	i.publisher.cacheLSN = func(ctx context.Context, lsn replication.LSN) error {
-		return i.cacheLSN(ctx, lsn)
-	}
+	i.publisher.cacheLSN = i.cacheLSN
 
 	// Has stopped is how we notify that we're not connected. This will get reset at connection time.
 	i.stopSig.TriggerHasStopped()

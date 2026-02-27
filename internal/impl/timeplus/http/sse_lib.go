@@ -145,7 +145,7 @@ func processEvent(msg []byte) (event *sseEvent, err error) {
 			e.ID = slices.Clone(trimHeader(len(headerID), line))
 		case bytes.HasPrefix(line, headerData):
 			// The spec allows for multiple data fields per event, concatenated them with "\n".
-			e.Data = append(e.Data[:], append(trimHeader(len(headerData), line), byte('\n'))...)
+			e.Data = append(e.Data, append(trimHeader(len(headerData), line), byte('\n'))...)
 		// The spec says that a line that simply contains the string "data" should be treated as a data field with an empty body.
 		case bytes.Equal(line, bytes.TrimSuffix(headerData, []byte(":"))):
 			e.Data = append(e.Data, byte('\n'))

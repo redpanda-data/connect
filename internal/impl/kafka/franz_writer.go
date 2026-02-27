@@ -317,7 +317,7 @@ type FranzWriter struct {
 	// DecorateRecord is executed for each record before it is written to the
 	// broker.
 	//
-	// DEPRECATED: Use [MessageBatchToFranzRecords] instead.
+	// Deprecated: Use [MessageBatchToFranzRecords] instead.
 	DecorateRecord func(r *kgo.Record) error
 }
 
