@@ -38,20 +38,25 @@ type Transaction struct {
 // transactions in a map. This cache is used to buffer DML events until a transaction
 // commits or rolls back. All operations are sequential and not protected by locks.
 type InMemoryCache struct {
-	transactions       map[string]*Transaction
-	log                *service.Logger
-	transactionsMetric *service.MetricGauge
-	eventsMetric       *service.MetricGauge
+	transactions         map[string]*Transaction
+	discardedTxns        map[string]struct{}
+	maxTransactionEvents int
+	transactionsMetric   *service.MetricGauge
+	eventsMetric         *service.MetricGauge
+	log                  *service.Logger
 }
 
 // NewInMemoryCache creates a new in-memory transaction cache with the specified logger.
-// The cache buffers transactions until they commit or rollback.
-func NewInMemoryCache(metrics *service.Metrics, logger *service.Logger) *InMemoryCache {
+// The cache buffers transactions until they commit or rollback. maxTransactionEvents
+// sets the maximum number of events per transaction before it is discarded; 0 disables the limit.
+func NewInMemoryCache(maxTransactionEvents int, metrics *service.Metrics, logger *service.Logger) *InMemoryCache {
 	return &InMemoryCache{
-		transactions:       make(map[string]*Transaction),
-		transactionsMetric: metrics.NewGauge("oracledb_cdc_active_transactions"),
-		eventsMetric:       metrics.NewGauge("oracledb_cdc_inflight_events"),
-		log:                logger,
+		transactions:         make(map[string]*Transaction),
+		discardedTxns:        make(map[string]struct{}),
+		maxTransactionEvents: maxTransactionEvents,
+		transactionsMetric:   metrics.NewGauge("oracledb_cdc_transactions_active"),
+		eventsMetric:         metrics.NewGauge("oracledb_cdc_transactions_events_inflight"),
+		log:                  logger,
 	}
 }
 
@@ -59,6 +64,9 @@ func NewInMemoryCache(metrics *service.Metrics, logger *service.Logger) *InMemor
 // If the transaction already exists in the cache it is left untouched so that previously
 // accumulated events are not lost when LogMiner re-emits the START record across polling cycles.
 func (tc *InMemoryCache) StartTransaction(txnID string, scn uint64) {
+	if _, discarded := tc.discardedTxns[txnID]; discarded {
+		return
+	}
 	if _, exists := tc.transactions[txnID]; exists {
 		return
 	}
@@ -72,10 +80,22 @@ func (tc *InMemoryCache) StartTransaction(txnID string, scn uint64) {
 
 // AddEvent adds a DML event to the specified transaction's buffer.
 // If the transaction doesn't exist, it creates a new transaction with the event.
+// If maxTransactionEvents is set and the buffer exceeds it, the transaction is discarded.
 func (tc *InMemoryCache) AddEvent(txnID string, scn uint64, event *sqlredo.DMLEvent) {
+	if _, discarded := tc.discardedTxns[txnID]; discarded {
+		return
+	}
 	if txn, exists := tc.transactions[txnID]; exists {
 		txn.Events = append(txn.Events, event)
 		tc.eventsMetric.Incr(1)
+
+		if tc.maxTransactionEvents > 0 && len(txn.Events) > tc.maxTransactionEvents {
+			tc.log.Warnf("Transaction %s exceeded max event buffer of %d events, discarding", txnID, tc.maxTransactionEvents)
+			tc.eventsMetric.Decr(int64(len(txn.Events)))
+			delete(tc.transactions, txnID)
+			tc.transactionsMetric.Decr(1)
+			tc.discardedTxns[txnID] = struct{}{}
+		}
 	} else {
 		// Transaction not started yet, create it. This is an edgecase that _shouldn't_ happen.
 		tc.log.Warnf("Transaction %s not found for event, creating...", txnID)
@@ -98,6 +118,7 @@ func (tc *InMemoryCache) GetTransaction(txnID string) *Transaction {
 
 // CommitTransaction removes the committed transaction from the cache.
 func (tc *InMemoryCache) CommitTransaction(txnID string) {
+	delete(tc.discardedTxns, txnID)
 	tx, ok := tc.transactions[txnID]
 	if !ok {
 		return
@@ -110,6 +131,7 @@ func (tc *InMemoryCache) CommitTransaction(txnID string) {
 
 // RollbackTransaction removes the rolled back transaction from the cache, discarding all buffered events.
 func (tc *InMemoryCache) RollbackTransaction(txnID string) {
+	delete(tc.discardedTxns, txnID)
 	tx, ok := tc.transactions[txnID]
 	if !ok {
 		return

@@ -47,6 +47,7 @@ input:
       scn_window_size: 20000
       backoff_interval: 5s
       strategy: online_catalog
+      max_transaction_events: 0
     include: [] # No default (required)
     exclude: [] # No default (optional)
     checkpoint_cache: "" # No default (optional)
@@ -79,6 +80,7 @@ input:
       scn_window_size: 20000
       backoff_interval: 5s
       strategy: online_catalog
+      max_transaction_events: 0
     include: [] # No default (required)
     exclude: [] # No default (optional)
     checkpoint_cache: "" # No default (optional)
@@ -105,7 +107,7 @@ Additionally, if `stream_snapshot` is set to true, then the existing data in the
 This input adds the following metadata fields to each message:
 - schema (Schema of the table that the message originated from)
 - table (Name of the table that the message originated from)
-- operation (Type of operation that generated the message: "read", "delete", "insert", or "update_before" and "update_after". "read" is from messages that are read in the initial snapshot phase.)
+- operation (Type of operation that generated the message: "read", "delete", "insert", or "update". "read" is from messages that are read in the initial snapshot phase.)
 - scn (the System Change Number in Oracle)
 
 == Permissions
@@ -204,6 +206,15 @@ Controls how LogMiner retrieves data dictionary information. `online_catalog` (d
 *Type*: `string`
 
 *Default*: `"online_catalog"`
+
+=== `logminer.max_transaction_events`
+
+The maximum number of events that can be buffered for a single transaction. If a transaction exceeds this limit it is discarded and its events will not be emitted. Set to 0 to disable the limit.
+
+
+*Type*: `int`
+
+*Default*: `0`
 
 === `include`
 
