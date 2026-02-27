@@ -304,7 +304,7 @@ func extractBearerToken(authHeader string) (string, error) {
 // wrappedServerStream wraps grpc.ServerStream to inject modified context.
 type wrappedServerStream struct {
 	grpc.ServerStream
-	ctx context.Context
+	ctx context.Context //nolint:containedctx // standard grpc.ServerStream context injection pattern
 }
 
 func (w *wrappedServerStream) Context() context.Context {

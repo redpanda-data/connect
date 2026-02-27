@@ -21,7 +21,7 @@ type driver struct {
 	rows        *sql.Rows
 	columnTypes []*sql.ColumnType
 
-	ctx    context.Context
+	ctx    context.Context //nolint:containedctx // lifecycle context for query driver
 	cancel context.CancelFunc
 }
 

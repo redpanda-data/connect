@@ -35,7 +35,7 @@ func testStreamHandler(_ any, _ grpc.ServerStream) error {
 // mockServerStream implements grpc.ServerStream for testing
 type mockServerStream struct {
 	grpc.ServerStream
-	ctx context.Context
+	ctx context.Context //nolint:containedctx // standard grpc.ServerStream mock pattern
 }
 
 func (m *mockServerStream) Context() context.Context {

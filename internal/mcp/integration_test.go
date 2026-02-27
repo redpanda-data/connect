@@ -65,7 +65,7 @@ func init() {
 type mcpServerHandle struct {
 	server   *mcpinternal.Server
 	listener net.Listener
-	ctx      context.Context
+	ctx      context.Context //nolint:containedctx // test server lifecycle context
 	cancel   context.CancelFunc
 }
 

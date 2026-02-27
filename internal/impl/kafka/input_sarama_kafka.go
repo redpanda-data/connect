@@ -214,7 +214,7 @@ type kafkaReader struct {
 	// Connection resources
 	cMut            sync.Mutex
 	consumerCloseFn context.CancelFunc
-	consumerDoneCtx context.Context
+	consumerDoneCtx context.Context //nolint:containedctx // signals consumer group completion
 	msgChan         chan asyncMessage
 	session         offsetMarker
 

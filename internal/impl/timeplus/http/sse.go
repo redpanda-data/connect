@@ -24,7 +24,7 @@ type sseClient struct {
 	client   *http.Client
 	logger   *service.Logger
 
-	ctx    context.Context
+	ctx    context.Context //nolint:containedctx // lifecycle context for SSE connection
 	cancel context.CancelFunc
 }
 

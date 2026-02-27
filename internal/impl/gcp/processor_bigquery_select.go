@@ -154,7 +154,7 @@ type bigQuerySelectProcessor struct {
 	logger   *service.Logger
 	config   *bigQuerySelectProcessorConfig
 	client   bqClient
-	closeCtx context.Context
+	closeCtx context.Context //nolint:containedctx // lifecycle context for BigQuery client
 	closeF   context.CancelFunc
 }
 

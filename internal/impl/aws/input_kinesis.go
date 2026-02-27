@@ -227,7 +227,7 @@ type kinesisReader struct {
 	cMut    sync.Mutex
 	msgChan chan asyncMessage
 
-	ctx  context.Context
+	ctx  context.Context //nolint:containedctx // lifecycle context for consumer goroutines
 	done func()
 
 	closeOnce  sync.Once

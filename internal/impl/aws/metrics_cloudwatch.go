@@ -294,7 +294,7 @@ type cwMetrics struct {
 	datumses  map[string]*cloudWatchDatum
 	datumLock *sync.Mutex
 
-	ctx    context.Context
+	ctx    context.Context //nolint:containedctx // lifecycle context for background flush loop
 	cancel func()
 
 	config cwmConfig

@@ -133,7 +133,7 @@ type influxDBMetrics struct {
 	pingInterval time.Duration
 	timeout      time.Duration
 
-	ctx    context.Context
+	ctx    context.Context //nolint:containedctx // lifecycle context for background flush loop
 	cancel func()
 
 	registry        metrics.Registry

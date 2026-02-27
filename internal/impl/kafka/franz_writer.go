@@ -496,7 +496,7 @@ func (w *FranzWriter) WriteBatch(ctx context.Context, b service.MessageBatch) er
 // batchWriter handles concurrent writes of a message batch to Kafka.
 type batchWriter struct {
 	*FranzWriter
-	ctx   context.Context
+	ctx   context.Context //nolint:containedctx // method-scoped context captured for batch callback
 	batch service.MessageBatch
 }
 

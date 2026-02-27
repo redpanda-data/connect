@@ -29,6 +29,7 @@ linters:
     - rowserrcheck
     - bodyclose
     - nolintlint
+    - containedctx
   settings:
     errcheck:
       exclude-functions:
