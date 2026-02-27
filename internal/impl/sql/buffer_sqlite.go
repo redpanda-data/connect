@@ -135,7 +135,7 @@ func newSQLiteBuffer(path string, preProcs, postProcs []*service.OwnedProcessor)
 	if path != ":memory:" {
 		f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o600)
 		if err != nil {
-			return nil, fmt.Errorf("failed to open sqlite database: %w", err)
+			return nil, fmt.Errorf("opening sqlite database: %w", err)
 		}
 		_ = f.Close()
 	}
