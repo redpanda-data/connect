@@ -51,13 +51,6 @@ tasks:
     cmds:
       - "{{.TOOLS_BIN_DIR}}/golangci-lint run --fix cmd/... internal/... public/..."
 
-  vuln:
-    desc: Run vulnerability scanner
-    deps:
-      - tools:install-govulncheck
-    cmds:
-      - '{{.TOOLS_BIN_DIR}}/govulncheck ./...'
-
   test:
     desc: Run unit, template and ffi tests
     deps:
