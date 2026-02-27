@@ -47,37 +47,29 @@ var (
 	emptyLobPattern = regexp.MustCompile(`(?i)EMPTY_(CLOB|BLOB)\(\)`)
 )
 
-// ConvertValue converts an Oracle value (potentially a function call) to its proper Go type
-// columnType should be the Oracle column type (e.g., "DATE", "TIMESTAMP", "VARCHAR2", etc.)
-func (c *OracleValueConverter) ConvertValue(value any, columnType string) any {
+// ConvertValue converts an Oracle value (potentially a function call) to its proper Go type.
+// Type detection is based solely on value string patterns (e.g. TO_DATE, HEXTORAW) since
+// column type metadata is not available at parse time.
+func (c *OracleValueConverter) ConvertValue(value any) any {
 	str, ok := value.(string)
 	if !ok {
 		return value
 	}
 
-	switch strings.ToUpper(columnType) {
-	case "DATE":
-		return c.convertDateValue(str)
-	case "TIMESTAMP", "TIMESTAMP(0)", "TIMESTAMP(3)", "TIMESTAMP(6)", "TIMESTAMP(9)":
-		return c.convertTimestampValue(str)
-	case "TIMESTAMP WITH TIME ZONE", "TIMESTAMP WITH LOCAL TIME ZONE":
-		return c.convertTimestampWithZone(str)
-	case "RAW", "LONG RAW":
-		return c.convertRawValue(str)
-	case "CLOB", "BLOB", "NCLOB":
-		return c.convertLobValue(str)
-	case "NUMBER", "FLOAT", "BINARY_FLOAT", "BINARY_DOUBLE":
-		return c.convertNumericValue(str)
-	}
-
 	if result := c.convertDateValue(str); result != nil {
+		return result
+	}
+	if result := c.convertTimestampWithZone(str); result != nil {
 		return result
 	}
 	if result := c.convertTimestampValue(str); result != nil {
 		return result
 	}
-	if result := c.convertTimestampWithZone(str); result != nil {
-		return result
+	if hexToRawPattern.MatchString(str) {
+		return c.convertRawValue(str)
+	}
+	if emptyLobPattern.MatchString(str) {
+		return c.convertLobValue(str)
 	}
 
 	return value

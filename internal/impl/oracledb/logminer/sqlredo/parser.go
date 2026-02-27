@@ -75,7 +75,7 @@ func (p *Parser) RedoEventToDMLEvent(redoEvent *RedoEvent) (*DMLEvent, error) {
 	event.Data = make(map[string]any, len(newValues))
 	for k, v := range newValues {
 		// Convert Oracle SQL types (TO_DATE, TO_TIMESTAMP, etc.) to their Go equivalents
-		event.Data[k] = p.valueConverter.ConvertValue(v, k)
+		event.Data[k] = p.valueConverter.ConvertValue(v)
 	}
 
 	return event, nil
