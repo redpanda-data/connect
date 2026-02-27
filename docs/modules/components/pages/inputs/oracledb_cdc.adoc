@@ -44,7 +44,7 @@ input:
     max_parallel_snapshot_tables: 1
     snapshot_max_batch_size: 1000
     logminer:
-      max_batch_size: 500
+      scn_window_size: 20000
       backoff_interval: 5s
       strategy: online_catalog
     include: [] # No default (required)
@@ -76,7 +76,7 @@ input:
     max_parallel_snapshot_tables: 1
     snapshot_max_batch_size: 1000
     logminer:
-      max_batch_size: 500
+      scn_window_size: 20000
       backoff_interval: 5s
       strategy: online_catalog
     include: [] # No default (required)
@@ -170,14 +170,14 @@ LogMiner configuration settings.
 *Type*: `object`
 
 
-=== `logminer.max_batch_size`
+=== `logminer.scn_window_size`
 
-The maximum number of records to be queried when parsing log lines via LogMiner. Smaller batches mean more frequent queries with higher overhead but lower latency, larger batches mean fewer queries with better throughput but require more memory.
+The SCN range to mine per cycle. Each cycle reads changes between the current SCN and current SCN + scn_window_size. Smaller values mean more frequent queries with lower memory usage but higher overhead; larger values reduce query frequency and improve throughput at the cost of higher memory usage per cycle.
 
 
 *Type*: `int`
 
-*Default*: `500`
+*Default*: `20000`
 
 === `logminer.backoff_interval`
 
