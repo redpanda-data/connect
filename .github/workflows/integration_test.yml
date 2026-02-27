@@ -5,11 +5,19 @@ on:
     # Run every day at 1AM UTC
     - cron: '0 1 * * *'
   pull_request:
+  issue_comment:
+    types: [created]
   workflow_dispatch:
+    inputs:
+      package:
+        description: 'Package to test (e.g. ./internal/impl/aws). Leave empty to run all.'
+        required: false
+        default: ''
+        type: string
 
 jobs:
   integration-test:
-    if: ${{ github.event_name != 'pull_request' || startsWith(github.event.pull_request.title, 'build(deps)') }}
+    if: ${{ github.event_name != 'issue_comment' && github.event.inputs.package == '' && (github.event_name != 'pull_request' || startsWith(github.event.pull_request.title, 'build(deps)')) }}
     runs-on: ubuntu-latest-32
     env:
       CGO_ENABLED: 0
@@ -78,4 +86,59 @@ jobs:
 
       - name: Run Integration Tests for ${{ matrix.package }}
         run: task test:integration-package PKG=${{ matrix.package }}
+        timeout-minutes: 30
+
+  integration-test-package:
+    if: >-
+      (github.event_name == 'issue_comment' && github.event.issue.pull_request && startsWith(github.event.comment.body, '/test ')) ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.package != '')
+    runs-on: ubuntu-latest-32
+    env:
+      CGO_ENABLED: 0
+    steps:
+      - name: Check commenter permissions
+        if: ${{ github.event_name == 'issue_comment' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PERMISSION=$(gh api "repos/${{ github.repository }}/collaborators/${{ github.event.comment.user.login }}/permission" --jq '.permission')
+          if [[ "${PERMISSION}" != "admin" && "${PERMISSION}" != "write" ]]; then
+            echo "::error::User ${{ github.event.comment.user.login }} does not have write access"
+            exit 1
+          fi
+
+      - name: Parse package from comment
+        if: ${{ github.event_name == 'issue_comment' }}
+        id: parse
+        env:
+          COMMENT_BODY: ${{ github.event.comment.body }}
+        run: |
+          PACKAGE=$(echo "${COMMENT_BODY}" | sed 's|^/test ||')
+          echo "package=${PACKAGE}" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout PR branch
+        if: ${{ github.event_name == 'issue_comment' }}
+        uses: actions/checkout@v5
+        with:
+          ref: refs/pull/${{ github.event.issue.number }}/merge
+
+      - name: Checkout code
+        if: ${{ github.event_name != 'issue_comment' }}
+        uses: actions/checkout@v5
+
+      - name: Install Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: 'go.mod'
+
+      - name: Install Task
+        uses: ./.github/actions/setup-task
+
+      - name: Pull Latest Redpanda Image
+        run: task docker:pull-redpanda
+
+      - name: Run Integration Tests
+        env:
+          PACKAGE: ${{ steps.parse.outputs.package || github.event.inputs.package }}
+        run: task test:integration-package PKG="${PACKAGE}"
         timeout-minutes: 30
