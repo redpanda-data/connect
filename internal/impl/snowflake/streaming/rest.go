@@ -408,14 +408,14 @@ func (c *SnowflakeRestClient) configureClient(ctx context.Context, req clientCon
 	return
 }
 
-// channelStatus returns the status of a given channel
+// channelStatus returns the status of a given channel.
 func (c *SnowflakeRestClient) channelStatus(ctx context.Context, req batchChannelStatusRequest) (resp batchChannelStatusResponse, err error) {
 	requestID := uuid.NewString()
 	err = c.doPost(ctx, fmt.Sprintf("%s/v1/streaming/channels/status?requestId=%s", c.url, requestID), req, &resp)
 	return
 }
 
-// openChannel opens a channel for writing
+// openChannel opens a channel for writing.
 func (c *SnowflakeRestClient) openChannel(ctx context.Context, req openChannelRequest) (resp openChannelResponse, err error) {
 	requestID := uuid.NewString()
 	err = c.doPost(ctx, fmt.Sprintf("%s/v1/streaming/channels/open?requestId=%s", c.url, requestID), req, &resp)

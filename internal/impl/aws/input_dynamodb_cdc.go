@@ -460,7 +460,7 @@ func (d *dynamoDBCDCInput) startShardCoordinator(ctx context.Context) {
 	}
 }
 
-// startShardReader continuously reads from a single shard and sends batches to the channel
+// startShardReader continuously reads from a single shard and sends batches to the channel.
 func (d *dynamoDBCDCInput) startShardReader(ctx context.Context, shardID string) {
 	d.log.Debugf("Starting reader for shard %s", shardID)
 	defer d.log.Debugf("Stopped reader for shard %s", shardID)
@@ -603,7 +603,7 @@ func (d *dynamoDBCDCInput) startShardReader(ctx context.Context, shardID string)
 	}
 }
 
-// convertRecordsToBatch converts DynamoDB Stream records to Benthos messages
+// convertRecordsToBatch converts DynamoDB Stream records to Benthos messages.
 func (d *dynamoDBCDCInput) convertRecordsToBatch(records []types.Record, shardID string) service.MessageBatch {
 	batch := make(service.MessageBatch, 0, len(records))
 
@@ -748,7 +748,7 @@ func (d *dynamoDBCDCInput) Close(ctx context.Context) error {
 	return nil
 }
 
-// Helper to convert DynamoDB attribute values to Go types
+// Helper to convert DynamoDB attribute values to Go types.
 func convertAttributeMap(attrs map[string]types.AttributeValue) map[string]any {
 	result := make(map[string]any)
 	for k, v := range attrs {

@@ -49,7 +49,7 @@ func newBatchPublisher(batcher *service.Batcher, checkpoint *checkpoint.Capped[r
 }
 
 // loop creates a long-running process that periodically flushes batches by configured interval.
-// lifted from internal/impl/kafka/franz_reader_ordered.go
+// lifted from internal/impl/kafka/franz_reader_ordered.go.
 func (p *batchPublisher) loop() {
 	defer func() {
 		if p.batcher != nil {

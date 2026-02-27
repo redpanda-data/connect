@@ -27,7 +27,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
-// searchResource performs a search for a specific resource
+// searchResource performs a search for a specific resource.
 func (j *jiraProcessor) searchResource(
 	ctx context.Context,
 	resource jirahttp.ResourceType,

@@ -22,7 +22,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 )
 
-// newVectors converts the input into the appropriate *pb.Vectors format
+// newVectors converts the input into the appropriate *pb.Vectors format.
 func newVectors(input any) (map[string]*qdrant.Vector, error) {
 	namedVectors := make(map[string]*qdrant.Vector)
 
@@ -82,7 +82,7 @@ func newVectors(input any) (map[string]*qdrant.Vector, error) {
 	return namedVectors, nil
 }
 
-// Handle dense and multi-vectors
+// Handle dense and multi-vectors.
 func handleDenseOrMultiVector(input []any) (*qdrant.Vector, error) {
 	var vector *qdrant.Vector
 	var err error
@@ -104,7 +104,7 @@ func handleDenseOrMultiVector(input []any) (*qdrant.Vector, error) {
 	return vector, nil
 }
 
-// Convert a []any containing a dense vector to a *pb.Vector
+// Convert a []any containing a dense vector to a *pb.Vector.
 func convertToDenseVector(input []any) (*qdrant.Vector, error) {
 	data, err := convertToFloat32Slice(input)
 	if err != nil {
@@ -113,7 +113,7 @@ func convertToDenseVector(input []any) (*qdrant.Vector, error) {
 	return qdrant.NewVectorDense(data), nil
 }
 
-// Convert a [][]any containing a multi-vector to a *pb.Vector
+// Convert a [][]any containing a multi-vector to a *pb.Vector.
 func convertToMultiVector(input []any) (*qdrant.Vector, error) {
 	// Convert the []any to [][]float32
 	inputTyped := make([][]float32, len(input))
@@ -132,7 +132,7 @@ func convertToMultiVector(input []any) (*qdrant.Vector, error) {
 	return qdrant.NewVectorMulti(inputTyped), nil
 }
 
-// Convert a map[string]any containing a sparse vector to a *pb.Vector
+// Convert a map[string]any containing a sparse vector to a *pb.Vector.
 func handleSparseVector(input map[string]any) (*qdrant.Vector, error) {
 	var (
 		indices []uint32
@@ -157,7 +157,7 @@ func handleSparseVector(input map[string]any) (*qdrant.Vector, error) {
 	return qdrant.NewVectorSparse(indices, data), nil
 }
 
-// Convert a []any slice to a []float32 slice
+// Convert a []any slice to a []float32 slice.
 func convertToFloat32Slice(input []any) ([]float32, error) {
 	values := make([]float32, len(input))
 	for i, v := range input {
@@ -170,7 +170,7 @@ func convertToFloat32Slice(input []any) ([]float32, error) {
 	return values, nil
 }
 
-// Convert a []any slice to a []uint32 slice
+// Convert a []any slice to a []uint32 slice.
 func convertToUint32Slice(input []any) ([]uint32, error) {
 	values := make([]uint32, len(input))
 	for i, v := range input {

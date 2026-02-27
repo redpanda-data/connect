@@ -53,7 +53,7 @@ type tpIngest struct {
 	Data    [][]any  `json:"data" binding:"required"`
 }
 
-// NewClient creates a new Timeplus Enterprise HTTP client
+// NewClient creates a new Timeplus Enterprise HTTP client.
 func NewClient(logger *service.Logger, target string, baseURL *url.URL, workspace, stream, apikey, username, password string) *Client {
 	ingestURL, _ := url.Parse(baseURL.String())
 

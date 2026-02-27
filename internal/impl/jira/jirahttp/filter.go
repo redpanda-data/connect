@@ -160,7 +160,7 @@ func (j *Client) filter(data any, selectors selectorTree, custom map[string]stri
 // Parameters:
 // - m: map[string]string → input map to reverse
 // Returns:
-// - map[string]string → new map with values as keys and keys as values
+// - map[string]string → new map with values as keys and keys as values.
 func reverseCustomFields(m map[string]string) map[string]string {
 	r := make(map[string]string, len(m))
 	for k, v := range m {
@@ -174,7 +174,7 @@ func reverseCustomFields(m map[string]string) map[string]string {
 // - q: *JsonInputQuery → query object containing the list of fields
 // - custom: map[string]string → mapping of display names to custom field keys
 // Returns:
-// - none (modifies q.Fields in place)
+// - none (modifies q.Fields in place).
 func normalizeInputFields(q *JsonInputQuery, custom map[string]string) {
 	for i, v := range q.Fields {
 		if dot := strings.Index(v, "."); dot != -1 {

@@ -76,7 +76,7 @@ func (n *node) delete() error {
 	return err
 }
 
-// TODO: improve this function's interface
+// TODO: improve this function's interface.
 func (n *node) createKafkaInlet(name, from, to string, avoidPublishing bool, routeToConsumer, allowOutlet, allowProducer, allowConsumer string, disableContentEncryption bool, encryptedFields []string) error {
 	args := []string{"kafka-inlet", "create", "--addr", name, "--at", n.name, "--from", from, "--to", to}
 	if routeToConsumer != "" {

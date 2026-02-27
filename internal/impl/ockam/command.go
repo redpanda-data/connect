@@ -29,7 +29,7 @@ import (
 	"syscall"
 )
 
-// Run `ockam ...` commands
+// Run `ockam ...` commands.
 func runCommand(capture bool, arg ...string) (string, string, error) {
 	bin, err := findCommandBinary()
 	if err != nil {

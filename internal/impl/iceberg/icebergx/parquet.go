@@ -53,7 +53,7 @@ type schemaLeaf struct {
 	Path    []string
 }
 
-// schemaLeaves walks an iceberg struct yielding each leaf in the parquet schema
+// schemaLeaves walks an iceberg struct yielding each leaf in the parquet schema.
 func schemaLeaves(root iceberg.Type, fieldID int, path []string) iter.Seq[schemaLeaf] {
 	walkStruct := func(st *iceberg.StructType, yield func(schemaLeaf) bool) bool {
 		for _, field := range st.Fields() {

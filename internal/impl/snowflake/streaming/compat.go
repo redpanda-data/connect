@@ -63,7 +63,7 @@ func deriveKey(encryptionKey, diversifier string) ([]byte, error) {
 	return hash.Sum(nil), nil
 }
 
-// See Encyptor.encrypt in the Java SDK
+// See Encyptor.encrypt in the Java SDK.
 func encrypt(buf []byte, encryptionKey, diversifier string, iv int64) ([]byte, error) {
 	// Derive the key from the diversifier and the original encryptionKey from server
 	key, err := deriveKey(encryptionKey, diversifier)

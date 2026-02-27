@@ -119,7 +119,7 @@ func newCheckpointCache(
 	return c, nil
 }
 
-// Get a cache item, we only do this at start up, key can be ignored as we only ever store one entry
+// Get a cache item, we only do this at start up, key can be ignored as we only ever store one entry.
 func (c *checkpointCache) Get(ctx context.Context, _ string) ([]byte, error) {
 	if c.db == nil {
 		return nil, fmt.Errorf("checkpoint cache not initialised for get operation: %w", service.ErrNotConnected)
@@ -137,7 +137,7 @@ func (c *checkpointCache) Get(ctx context.Context, _ string) ([]byte, error) {
 }
 
 // Set a cache item, specifying an optional TTL. It is okay for caches to
-// ignore the ttl parameter if it isn't possible to implement. Key can be ignored as we only ever store one entry
+// ignore the ttl parameter if it isn't possible to implement. Key can be ignored as we only ever store one entry.
 func (c *checkpointCache) Set(ctx context.Context, _ string, value []byte, _ *time.Duration) error {
 	if c.cacheSetStmt == nil {
 		return errors.New("prepared statement for cache set not initialised")
@@ -148,7 +148,7 @@ func (c *checkpointCache) Set(ctx context.Context, _ string, value []byte, _ *ti
 	return nil
 }
 
-// Close closes the cache and any underlying connections
+// Close closes the cache and any underlying connections.
 func (c *checkpointCache) Close(ctx context.Context) error {
 	c.shutSig.TriggerHardStop()
 	select {
@@ -201,12 +201,12 @@ func createUpsertStoredProc(ctx context.Context, db *sql.DB, cacheTable cacheTab
 	return nil
 }
 
-// Add is unused
+// Add is unused.
 func (*checkpointCache) Add(_ context.Context, _ string, _ []byte, _ *time.Duration) error {
 	panic("not implemented")
 }
 
-// Delete is unused
+// Delete is unused.
 func (*checkpointCache) Delete(_ context.Context, _ string) error {
 	panic("not implemented")
 }

@@ -42,7 +42,7 @@ func (so *SharedLibrary) Close() error {
 	return purego.Dlclose(so.handle)
 }
 
-// registerFunc registers the given function at the address
+// registerFunc registers the given function at the address.
 func registerFunc(fnPtr any, addr uintptr) {
 	purego.RegisterFunc(fnPtr, addr)
 }

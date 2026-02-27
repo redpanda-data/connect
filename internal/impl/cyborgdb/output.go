@@ -237,7 +237,7 @@ func newOutputWriter(conf *service.ParsedConfig, mgr *service.Resources) (*outpu
 	return &w, nil
 }
 
-// decodeBase64Key decodes and validates a base64-encoded key string
+// decodeBase64Key decodes and validates a base64-encoded key string.
 func decodeBase64Key(keyStr string) ([]byte, error) {
 	keyStr = strings.TrimSpace(keyStr)
 	if keyStr == "" {

@@ -55,7 +55,7 @@ func Setup(t *testing.T) *TestEnvironment {
 	return env
 }
 
-// GenerateTestPrivateKey generates a test RSA private key
+// GenerateTestPrivateKey generates a test RSA private key.
 func GenerateTestPrivateKey(t *testing.T) *rsa.PrivateKey {
 	t.Helper()
 	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
@@ -63,7 +63,7 @@ func GenerateTestPrivateKey(t *testing.T) *rsa.PrivateKey {
 	return privateKey
 }
 
-// GetLogger returns a test logger
+// GetLogger returns a test logger.
 func GetLogger(t *testing.T) *service.Logger {
 	t.Helper()
 	logger := service.MockResources().Logger()

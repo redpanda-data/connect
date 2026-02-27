@@ -87,7 +87,7 @@ func fromPositiveFloat64(v float64, prec, scale int32) (Num, error) {
 //
 //	FromFloat32(v, 20, 4)
 //
-// because float64(v) == 1844674629206016 rather than 1844674600000000
+// because float64(v) == 1844674629206016 rather than 1844674600000000.
 func fromPositiveFloat32(v float32, prec, scale int32) (Num, error) {
 	val, err := scalePositiveFloat64(float64(v), prec, scale)
 	if err != nil {
@@ -140,7 +140,7 @@ func FromString(v string, prec, scale int32) (n Num, err error) {
 
 var errFallbackNeeded = errors.New("fallback to slowpath needed")
 
-// A parsing fast path
+// A parsing fast path.
 func fromStringFast(s string, prec, scale int32) (n Num, err error) {
 	sLen := int32(len(s))
 	// Even though there could be decimal points or negative/positive signs

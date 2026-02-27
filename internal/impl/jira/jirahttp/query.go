@@ -41,7 +41,7 @@ var expandableFieldsSet = map[string]struct{}{
 }
 
 // extractExpandableFields is a method to extract special fields directly from the Fields []string input message
-// This is designed so that the input message won't need the "expand" property, which will make everything more readable
+// This is designed so that the input message won't need the "expand" property, which will make everything more readable.
 func extractExpandableFields(fields []string) []string {
 	var result []string
 	for _, f := range fields {
@@ -57,7 +57,7 @@ func extractExpandableFields(fields []string) []string {
 }
 
 // ExtractQueryFromMessage method receives the input message from the jiraProcessor
-// and parses it into a jsonInputQuery object
+// and parses it into a jsonInputQuery object.
 func (j *Client) ExtractQueryFromMessage(msg *service.Message) (*JsonInputQuery, error) {
 	var queryData *JsonInputQuery
 	msgBytes, err := msg.AsBytes()
@@ -81,7 +81,7 @@ func (j *Client) ExtractQueryFromMessage(msg *service.Message) (*JsonInputQuery,
 // Instead of 'fields: ["summary","custom_field_10100"]' to have 'fields: ["summary", "Story Points"]'
 // This will check the fields against custom fields retrieved by the Custom Field Jira API
 //
-// This method also returns all the query params used for the issue Search API
+// This method also returns all the query params used for the issue Search API.
 func (j *Client) PrepareJiraQuery(ctx context.Context, q *JsonInputQuery) (ResourceType, map[string]string, map[string]string, error) {
 	params := make(map[string]string)
 	resource := ResourceIssue

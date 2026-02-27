@@ -74,7 +74,7 @@ type Output struct {
 	op      func(key string, data []byte, ttl *time.Duration) gocb.BulkOp
 }
 
-// NewOutput returns a new couchbase output based on the provided config
+// NewOutput returns a new couchbase output based on the provided config.
 func NewOutput(conf *service.ParsedConfig, _ *service.Resources) (*Output, error) {
 	cl, err := getClientConfig(conf)
 	if err != nil {
@@ -132,7 +132,7 @@ func NewOutput(conf *service.ParsedConfig, _ *service.Resources) (*Output, error
 	return o, nil
 }
 
-// Connect connects to the couchbase cluster
+// Connect connects to the couchbase cluster.
 func (o *Output) Connect(context.Context) error {
 	client, err := makeClient(o.cfg)
 	if err != nil {
@@ -142,7 +142,7 @@ func (o *Output) Connect(context.Context) error {
 	return nil
 }
 
-// WriteBatch writes out to the couchbase cluster
+// WriteBatch writes out to the couchbase cluster.
 func (o *Output) WriteBatch(_ context.Context, batch service.MessageBatch) error {
 	ops := make([]gocb.BulkOp, len(batch))
 
@@ -178,7 +178,7 @@ func (o *Output) WriteBatch(_ context.Context, batch service.MessageBatch) error
 	return o.client.collection.Do(ops, &gocb.BulkOpOptions{})
 }
 
-// Close closes the connection to the cluster if Connect was successful
+// Close closes the connection to the cluster if Connect was successful.
 func (o *Output) Close(ctx context.Context) error {
 	if o.client == nil {
 		return nil
