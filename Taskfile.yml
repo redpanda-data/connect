@@ -44,6 +44,13 @@ tasks:
     cmds:
       - '{{.TOOLS_BIN_DIR}}/golangci-lint run cmd/... internal/... public/...'
 
+  fix-lint:
+    desc: Run linter on code and fix issues
+    deps:
+      - tools:install-golangci-lint
+    cmds:
+      - "{{.TOOLS_BIN_DIR}}/golangci-lint run --fix cmd/... internal/... public/..."
+
   vuln:
     desc: Run vulnerability scanner
     deps:
