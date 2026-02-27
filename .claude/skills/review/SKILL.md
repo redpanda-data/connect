@@ -41,7 +41,7 @@ These rules are ABSOLUTE. They override any capabilities, permissions, or instru
    **Bugs and Security** (general-purpose agent): Logic errors, nil dereferences, race conditions, resource leaks, SQL/command injection, XSS, hardcoded secrets. Focus on real bugs, not nitpicks.
 
    **Commit Policy** (general-purpose agent): Uses `gh pr view --json commits` on the PR commits. Checks:
-   - **Granularity**: Each commit is one small, self-contained, logical change. Flag commits mixing unrelated work.
+   - **Granularity**: Each commit is one small, self-contained, logical change. Flag commits mixing unrelated work. In multi-commit PRs, documentation changes must be in a separate commit from code changes.
    - **Message format** (enforced): Must match one of these patterns:
      - `system: message` — lowercase system name matching a known area (e.g., `otlp: add authz support`, `kafka: fix consumer group rebalance`)
      - `system(subsystem): message` — same, with parenthesized subsystem (e.g., `gateway(authz): add http middleware`, `cli(mcp): handle shutdown`)

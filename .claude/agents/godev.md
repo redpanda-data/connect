@@ -398,6 +398,121 @@ Anti-patterns to avoid:
 - Excessive resource usage (unnecessary goroutines, memory/CPU overhead)
 - Hard-to-diagnose error handling
 
+# Code Style Rules
+
+## Naming
+
+Use `req` for requests and `res` for responses.
+
+Use `exists` (not `ok`) as the second variable in map comma-ok idioms when checking key existence:
+```go
+if _, exists := shard.sequences[key]; exists {
+```
+
+## Constructors
+
+Use `new(X)` instead of `&X{}` for zero-value struct pointers:
+```go
+// Right
+state := new(SegmentState)
+
+// Wrong
+state := &SegmentState{}
+```
+
+## Variable Declarations
+
+Group related `var` declarations in a block. Do not use separate `var` lines:
+```go
+// Right
+var (
+	retries  int
+	backoff  time.Duration
+	deadline time.Time
+)
+
+// Wrong
+var retries int
+var backoff time.Duration
+var deadline time.Time
+```
+
+## Guard Clauses
+
+Handle special cases and zero-value checks early with a return. Do not nest the main logic inside a conditional:
+```go
+// Right
+func process(items []Item) error {
+	if len(items) == 0 {
+		return nil
+	}
+	// main logic here
+}
+
+// Wrong
+func process(items []Item) error {
+	if len(items) > 0 {
+		// main logic here
+	}
+	return nil
+}
+```
+
+## Magic Numbers
+
+Name all numeric constants. Every literal number in logic must have a clear meaning through a named constant or variable:
+```go
+// Right
+const maxRetries = 3
+if attempts > maxRetries {
+
+// Wrong
+if attempts > 3 {
+```
+
+## Mutex Encapsulation
+
+Never access a struct's mutex from outside the struct. Mutex operations must only happen inside the struct's own methods:
+```go
+// Right: mutex locked inside a method
+func (s *Store) Add(key string, val int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.data[key] = val
+}
+
+// Wrong: caller locks the mutex
+s.mu.Lock()
+s.data[key] = val
+s.mu.Unlock()
+```
+
+## Configurable Time Parameters
+
+Every time-related value (timeouts, backoffs, intervals, retry delays) must be exposed as a YAML-configurable field. Do not hardcode durations.
+
+## Batch Input Batching Options
+
+When registering a batch input with `MustRegisterBatchInput`, expose `batching` config options unless batching is inherent to the data source itself.
+
+## Documentation
+
+Godoc must wrap at 80 characters per line. Every exported function comment must be a full sentence ending with a period.
+
+Document structs and functions that contain non-obvious logic. Focus on WHY the logic exists, not WHAT it does. Trivial descriptions add noise. For unexported functions, prefer no documentation at all over a trivial one-liner that restates the function name. If the name is self-explanatory, skip the comment entirely.
+
+## Logging Over Comments
+
+Prefer meaningful debug log lines over comments. If something is worth annotating, it's usually worth logging at debug level so it's observable at runtime. Prefer meaningful debug log lines over comments. If something is worth annotating, it's usually worth logging at debug level so it's observable at runtime.
+
+```go
+// Prefer this
+s.log.Debugf("Reconnecting after %d failed attempts, backoff: %s", attempts, backoff)
+
+// Over this
+// reconnect after failures
+```
+
 # Common Mistakes
 
 **Don't use `context.Background()` in component methods. Do pass the method's ctx:**
