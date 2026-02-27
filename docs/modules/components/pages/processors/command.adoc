@@ -37,6 +37,18 @@ command:
 
 The specified command is executed for each message processed, with the raw bytes of the message being fed into the stdin of the command process, and the resulting message having its contents replaced with the stdout of it.
 
+== Metadata
+
+This input adds the following metadata fields to each message:
+
+```text
+- command_stderr - Contains the stderr output of a successful command, if any.
+- exit_code - The exit code returned by the command.
+```
+
+You can access these metadata fields using
+xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].
+
 == Performance
 
 Since this processor executes a new process for each message performance will likely be an issue for high throughput streams. If this is the case then consider using the xref:components:processors/subprocess.adoc[`subprocess` processor] instead as it keeps the underlying process alive long term and uses codecs to insert and extract inputs and outputs to it via stdin/stdout.
@@ -44,8 +56,6 @@ Since this processor executes a new process for each message performance will li
 == Error handling
 
 If a non-zero error code is returned by the command then an error containing the entirety of stderr (or a generic message if nothing is written) is set on the message. These failed messages will continue through the pipeline unchanged, but can be dropped or placed in a dead letter queue according to your config, you can read about xref:configuration:error_handling.adoc[these patterns].
-
-If the command is successful but stderr is written to then a metadata field `command_stderr` is populated with its contents.
 
 
 == Fields

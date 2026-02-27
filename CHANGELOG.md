@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - Add configuration option to set client name for `redis` connections.
+- (Benthos) The `command` processor now emits the `exit_code` metadata field. (@mihaitodor)
 
 ### Changed
 
@@ -18,6 +19,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - `test` command: Templates registered via the `-t` flag are now correctly available during test execution. (@Phantal)
+- (Benthos) Fixed a regression where input and output resources imported but unused were being initialized. (@Jeffail)
 
 ## 4.81.0 - 2026-02-18
 
