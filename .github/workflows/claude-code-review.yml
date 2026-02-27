@@ -45,7 +45,7 @@ jobs:
           show_full_output: false
           claude_args: >
             --model opus
-            --max-turns 15
+            --max-turns 30
             --disallowedTools "WebFetch,WebSearch"
             --allowedTools "mcp__github_inline_comment__create_inline_comment,mcp__github_comment__update_claude_comment,Bash(gh pr view:*),Bash(gh pr diff:*),Read,Glob,Grep"
           prompt: |
