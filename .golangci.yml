@@ -11,25 +11,24 @@ linters:
     - staticcheck
     - unused
     # Extra linters:
-    - wastedassign
-    - gocritic # only ruleguard enabled (full gocritic is slow)
-    - revive
-    - unconvert
-    - durationcheck
     # - depguard
-    # - bodyclose
     # - gosec
     # - misspell
     # - prealloc
-    - perfsprint
-    - testifylint
-    - usetesting
-    - predeclared
-    - mirror
-    - rowserrcheck
     - bodyclose
-    - nolintlint
     - containedctx
+    - durationcheck
+    - gocritic # only ruleguard enabled (full gocritic is slow)
+    - mirror
+    - nolintlint
+    - perfsprint
+    - predeclared
+    - revive
+    - rowserrcheck
+    - testifylint
+    - unconvert
+    - usetesting
+    - wastedassign
   settings:
     errcheck:
       exclude-functions:
