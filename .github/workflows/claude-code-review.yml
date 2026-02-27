@@ -61,6 +61,14 @@ jobs:
             **Assumptions:**
             - All tools are functional and will work without error. Do not test tools or make exploratory calls. Make sure this is clear to every subagent that is launched.
             - Only call a tool if it is required to complete the task. Every tool call should have a clear purpose.
+            
+            **INIT: Setup**
+            - Create a todo list before starting.
+            - Use gh CLI to fetch PR data (e.g., `gh pr view`, `gh pr diff`). Do not use web fetch.
+            - Use `gh pr diff <number>` as the primary review input. Do NOT read full source files unless the diff context is insufficient to evaluate an issue (e.g., you need surrounding code, imports, or pattern context across the file).
+            - Use `gh pr view <number> --json files` to list changed files if needed.
+            - Do NOT use `git diff origin/main` — the checkout is shallow and `origin/main` is unavailable.
+            - Read `.claude/agents/godev.md` and `.claude/agents/tester.md` exactly once at the start for reference. Do not re-read them.
 
             **STEP 1: Commit Policy Validation**
 
@@ -111,18 +119,15 @@ jobs:
             - General code quality concerns (e.g., lack of test coverage, general security issues) unless explicitly required in CLAUDE.md
             - Issues mentioned in CLAUDE.md but explicitly silenced in the code (e.g., via a lint ignore comment)
 
-            Notes:
-            - Use gh CLI to fetch PR data (e.g., `gh pr view`, `gh pr diff`). Do not use web fetch.
+            **STEP 3: Post Summary Comment**
+
             - Use `mcp__github_comment__update_claude_comment` for summary comments. Use `mcp__github_inline_comment__create_inline_comment` for inline comments.
-            - Create a todo list before starting.
             - You must cite and link each issue in inline comments (e.g., if referring to a CLAUDE.md, include a link to it).
             - Links must follow this exact format for GitHub Markdown rendering: `https://github.com/redpanda-data/connect/blob/[full-sha]/path/file.ext#L[start]-L[end]`
               - Full git SHA required (not abbreviated, not a command like `$(git rev-parse HEAD)`)
               - `#L` notation after filename
               - Line range format: `L[start]-L[end]`
               - Include at least 1 line of context before and after
-
-            **STEP 3: Post Summary Comment**
 
             After completing STEP 1 and STEP 2, post a SINGLE summary comment using `mcp__github_comment__update_claude_comment` with exactly this format:
 

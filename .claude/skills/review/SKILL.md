@@ -3,7 +3,7 @@ name: review
 description: Code review a pull request for Redpanda Connect, checking Go patterns, tests, component architecture, and commit policy
 argument-hint: "[pr-number]"
 disable-model-invocation: true
-allowed-tools: mcp__github__pull_request_review_write, mcp__github__add_comment_to_pending_review, mcp__github__add_issue_comment, Bash(gh pr view *), Bash(gh pr diff *), Bash(git log *), Bash(git show *), Bash(git diff *), Read, Glob, Grep, Task,
+allowed-tools: mcp__github__pull_request_review_write, mcp__github__add_comment_to_pending_review, mcp__github__add_issue_comment, Bash(gh pr view *), Bash(gh pr diff *), Bash(git log *), Bash(git show *), Read, Glob, Grep, Task,
 ---
 
 Code review pull request $ARGUMENTS for Redpanda Connect. If no PR was specified, resolve the current branch's PR with `gh pr view --json number -q .number`.
