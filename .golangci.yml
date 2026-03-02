@@ -5,6 +5,7 @@ run:
 linters:
   default: none
   enable:
+    - modernize
     - errcheck
     - govet
     - ineffassign
