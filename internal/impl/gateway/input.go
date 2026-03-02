@@ -580,11 +580,28 @@ type gzipResponseWriter struct {
 	http.ResponseWriter
 }
 
+// WriteHeader deletes any Content-Length before freezing headers. The
+// Content-Length was set for the uncompressed payload and is wrong after gzip.
+// Removing it lets Go's HTTP server use Transfer-Encoding: chunked instead.
+//
+// All current callers (deliverHandler) call WriteHeader explicitly before
+// Write, so this is the primary deletion site. Write also deletes it
+// defensively for any future caller that skips an explicit WriteHeader.
+func (w gzipResponseWriter) WriteHeader(code int) {
+	w.Header().Del("Content-Length")
+	w.ResponseWriter.WriteHeader(code)
+}
+
 func (w gzipResponseWriter) Write(b []byte) (int, error) {
 	if w.Header().Get("Content-Type") == "" {
 		// If no content type, apply sniffing algorithm to un-gzipped body.
 		w.Header().Set("Content-Type", http.DetectContentType(b))
 	}
+	// Defensive: if Write is called without an explicit WriteHeader, Go's
+	// implicit WriteHeader(200) fires on the underlying ResponseWriter
+	// directly, bypassing our override. Delete Content-Length here too so
+	// it is gone before the implicit header flush.
+	w.Header().Del("Content-Length")
 	return w.Writer.Write(b)
 }
 
