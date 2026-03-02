@@ -78,8 +78,8 @@ redpanda:
 
 A cache that stores data in a Kafka topic.
 
-This cache is useful for data that is written frequently and queried infreqently.
-Reads of the cache require reading the entire topic partition, so if there is a need for frequent reads, it's recommended to put an in memory caching layer infront of this cache.
+This cache is useful for data that is written frequently and queried infrequently.
+Reads of the cache require reading the entire topic partition, so if there is a need for frequent reads, it's recommended to put an in memory caching layer in front of this cache.
 
 Topics that are used as caches should be compacted so that reads are less expensive when they rescan the topic, as only the latest value is needed.
 

@@ -101,7 +101,7 @@ which is generally the case unless you're building an input for a queuing system
 
 InputConstructor: TypeAlias = Callable[[Value], tuple[Input, AutoRetryNacks]]
 """
-An input constructor recieves the configuration specified in the configuration,
+An input constructor receives the configuration specified in the configuration,
 file, then returns the input and a boolean indicating whether the input should automatically
 nack'd messages or not.
 """
@@ -196,7 +196,7 @@ class Processor(Protocol):
 
 ProcessorConstructor: TypeAlias = Callable[[Value], Processor]
 """
-A processor constructor recieves the configuration specified in the configuration,
+A processor constructor receives the configuration specified in the configuration,
 then returns a properly configured processor component.
 """
 
@@ -356,7 +356,7 @@ def batch_output(
 
 class OutputFunc(Protocol):
     """
-    An output function that recieves the configuration and a stream of messages that can be sent.
+    An output function that receives the configuration and a stream of messages that can be sent.
     """
 
     async def __call__(self, config: Value, messages: AsyncIterator[Message]) -> None: ...

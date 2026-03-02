@@ -283,7 +283,7 @@ The maximum number of tokens to allow in the generated response.
 
 === `temperature`
 
-The likelihood of the model selecting higher-probability options while generating a response. A lower value makes the model omre likely to choose higher-probability options, while a higher value makes the model more likely to choose lower-probability options.
+The likelihood of the model selecting higher-probability options while generating a response. A lower value makes the model more likely to choose higher-probability options, while a higher value makes the model more likely to choose lower-probability options.
 
 
 *Type*: `float`

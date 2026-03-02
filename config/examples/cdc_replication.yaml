@@ -10,7 +10,7 @@ input:
     # this might be massive, but might be required for foreign key constraints
     batching:
       check: '@operation == "commit"'
-      # This window should be large enough that you recieve transactions in it, otherwise
+      # This window should be large enough that you receive transactions in it, otherwise
       # you could see partial transactions downstream.
       period: 10s
       processors:

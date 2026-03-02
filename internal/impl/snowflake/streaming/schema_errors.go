@@ -71,7 +71,7 @@ func (e *NonNullColumnError) Message() *service.Message {
 
 // Error implements the error interface.
 func (e *NonNullColumnError) Error() string {
-	return fmt.Sprintf("column %q has a NOT NULL constraint and recieved a nil value", e.columnName)
+	return fmt.Sprintf("column %q has a NOT NULL constraint and received a nil value", e.columnName)
 }
 
 var (
