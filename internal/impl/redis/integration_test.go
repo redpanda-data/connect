@@ -118,6 +118,78 @@ input:
 		})
 	})
 
+	// Custom Entry ID
+	t.Run("streams_custom_id", func(t *testing.T) {
+		t.Parallel()
+		port := resource.GetPort("6379/tcp")
+
+		t.Run("single_message", func(t *testing.T) {
+			t.Parallel()
+
+			stream := "test-custom-id-single"
+			conf, err := redisStreamsOutputConfig().ParseYAML(fmt.Sprintf(`
+url: tcp://localhost:%v
+stream: %v
+body_key: body
+id: "${! @custom_id }"
+`, port, stream), nil)
+			require.NoError(t, err)
+
+			writer, err := newRedisStreamsWriter(conf, service.MockResources())
+			require.NoError(t, err)
+
+			require.NoError(t, writer.Connect(t.Context()))
+			t.Cleanup(func() { writer.Close(context.Background()) })
+
+			for i, id := range []string{"1-0", "2-0", "3-0"} {
+				msg := service.NewMessage(fmt.Appendf(nil, "message-%d", i))
+				msg.MetaSetMut("custom_id", id)
+				require.NoError(t, writer.WriteBatch(t.Context(), service.MessageBatch{msg}))
+			}
+
+			msgs, err := client.XRange(t.Context(), stream, "-", "+").Result()
+			require.NoError(t, err)
+			require.Len(t, msgs, 3)
+			assert.Equal(t, "1-0", msgs[0].ID)
+			assert.Equal(t, "2-0", msgs[1].ID)
+			assert.Equal(t, "3-0", msgs[2].ID)
+		})
+
+		t.Run("batch", func(t *testing.T) {
+			t.Parallel()
+
+			stream := "test-custom-id-batch"
+			conf, err := redisStreamsOutputConfig().ParseYAML(fmt.Sprintf(`
+url: tcp://localhost:%v
+stream: %v
+body_key: body
+id: "${! @custom_id }"
+`, port, stream), nil)
+			require.NoError(t, err)
+
+			writer, err := newRedisStreamsWriter(conf, service.MockResources())
+			require.NoError(t, err)
+
+			require.NoError(t, writer.Connect(t.Context()))
+			t.Cleanup(func() { writer.Close(context.Background()) })
+
+			var batch service.MessageBatch
+			for i, id := range []string{"10-0", "20-0", "30-0"} {
+				msg := service.NewMessage(fmt.Appendf(nil, "message-%d", i))
+				msg.MetaSetMut("custom_id", id)
+				batch = append(batch, msg)
+			}
+			require.NoError(t, writer.WriteBatch(t.Context(), batch))
+
+			msgs, err := client.XRange(t.Context(), stream, "-", "+").Result()
+			require.NoError(t, err)
+			require.Len(t, msgs, 3)
+			assert.Equal(t, "10-0", msgs[0].ID)
+			assert.Equal(t, "20-0", msgs[1].ID)
+			assert.Equal(t, "30-0", msgs[2].ID)
+		})
+	})
+
 	t.Run("pubsub", func(t *testing.T) {
 		t.Parallel()
 		template := `
