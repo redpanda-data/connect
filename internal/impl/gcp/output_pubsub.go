@@ -20,7 +20,7 @@ import (
 	"sync"
 	"unicode/utf8"
 
-	"cloud.google.com/go/pubsub" //nolint:staticcheck
+	"cloud.google.com/go/pubsub"
 	"github.com/sourcegraph/conc/pool"
 	"google.golang.org/api/option"
 

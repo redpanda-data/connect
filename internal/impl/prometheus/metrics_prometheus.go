@@ -370,7 +370,6 @@ func (p *metrics) HandlerFunc() http.HandlerFunc {
 }
 
 func (p *metrics) NewCounterCtor(path string, labelNames ...string) service.MetricsExporterCounterCtor {
-	//nolint:staticcheck
 	if !model.IsValidMetricName(model.LabelValue(path)) {
 		p.log.Errorf("Ignoring metric '%v' due to invalid name", path)
 		return func(...string) service.MetricsExporterCounter {
@@ -409,7 +408,6 @@ func (p *metrics) NewCounterCtor(path string, labelNames ...string) service.Metr
 }
 
 func (p *metrics) NewTimerCtor(path string, labelNames ...string) service.MetricsExporterTimerCtor {
-	//nolint:staticcheck
 	if !model.IsValidMetricName(model.LabelValue(path)) {
 		p.log.Errorf("Ignoring metric '%v' due to invalid name", path)
 		return func(...string) service.MetricsExporterTimer {
@@ -485,7 +483,6 @@ func (p *metrics) getTimerHistVec(path string, labelNames ...string) service.Met
 }
 
 func (p *metrics) NewGaugeCtor(path string, labelNames ...string) service.MetricsExporterGaugeCtor {
-	//nolint:staticcheck
 	if !model.IsValidMetricName(model.LabelValue(path)) {
 		p.log.Errorf("Ignoring metric '%v' due to invalid name", path)
 		return func(...string) service.MetricsExporterGauge {

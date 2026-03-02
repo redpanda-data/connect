@@ -26,9 +26,8 @@ import (
 	"google.golang.org/protobuf/types/descriptorpb"
 	"google.golang.org/protobuf/types/dynamicpb"
 
-	//nolint:staticcheck // Ignore SA1019 "github.com/jhump/protoreflect/desc" is deprecated warning
 	"github.com/jhump/protoreflect/desc"
-	//nolint:staticcheck // Ignore SA1019 "github.com/jhump/protoreflect/desc/protoparse" is deprecated warning
+
 	"github.com/jhump/protoreflect/desc/protoparse"
 )
 
