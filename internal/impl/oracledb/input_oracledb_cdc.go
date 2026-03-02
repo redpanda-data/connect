@@ -48,7 +48,6 @@ func init() {
 }
 
 var oracleDBStreamConfigSpec = service.NewConfigSpec().
-	Beta().
 	Categories("Services").
 	Version("0.0.1").
 	Summary("Enables Change Data Capture by consuming from OracleDB.").
@@ -58,10 +57,11 @@ Additionally, if ` + "`" + ociFieldStreamSnapshot + "`" + ` is set to true, then
 == Metadata
 
 This input adds the following metadata fields to each message:
-- schema (Schema of the table that the message originated from)
-- table (Name of the table that the message originated from)
-- operation (Type of operation that generated the message: "read", "delete", "insert", or "update". "read" is from messages that are read in the initial snapshot phase.)
-- scn (the System Change Number in Oracle)
+
+- schema: Schema of the table that the message originated from
+- table: Name of the table that the message originated from
+- operation: Type of operation that generated the message: "read", "delete", "insert", or "update". "read" is from messages that are read in the initial snapshot phase.
+- scn: the System Change Number in Oracle
 
 == Permissions
 
