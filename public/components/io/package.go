@@ -25,4 +25,7 @@ package io
 import (
 	// Import only io packages.
 	_ "github.com/redpanda-data/benthos/v4/public/components/io"
+
+	// Override benthos file output with path validation (issue #1005).
+	_ "github.com/redpanda-data/connect/v4/internal/impl/io"
 )
