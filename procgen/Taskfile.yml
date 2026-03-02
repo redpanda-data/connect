@@ -1,0 +1,12 @@
+version: "3"
+
+tasks:
+  openapi:
+    desc: Convert Postman collection to OpenAPI spec
+    cmds:
+      - bunx p2o "postman_collection.json" -f openapi.yaml
+    sources:
+      - postman_collection.json
+    generates:
+      - openapi.yaml
+    silent: true

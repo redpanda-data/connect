@@ -32,16 +32,8 @@
             "url": {
               "raw": "https://api.notion.com/v1/users/:id",
               "protocol": "https",
-              "host": [
-                "api",
-                "notion",
-                "com"
-              ],
-              "path": [
-                "v1",
-                "users",
-                ":id"
-              ],
+              "host": ["api", "notion", "com"],
+              "path": ["v1", "users", ":id"],
               "variable": [
                 {
                   "key": "id",
@@ -70,16 +62,8 @@
                 "url": {
                   "raw": "https://api.notion.com/v1/users/:id",
                   "protocol": "https",
-                  "host": [
-                    "api",
-                    "notion",
-                    "com"
-                  ],
-                  "path": [
-                    "v1",
-                    "users",
-                    ":id"
-                  ],
+                  "host": ["api", "notion", "com"],
+                  "path": ["v1", "users", ":id"],
                   "variable": [
                     {
                       "key": "id",
@@ -208,15 +192,8 @@
             "url": {
               "raw": "https://api.notion.com/v1/users",
               "protocol": "https",
-              "host": [
-                "api",
-                "notion",
-                "com"
-              ],
-              "path": [
-                "v1",
-                "users"
-              ]
+              "host": ["api", "notion", "com"],
+              "path": ["v1", "users"]
             },
             "description": "Returns a paginated list of user objects for a workspace"
           },
@@ -235,15 +212,8 @@
                 "url": {
                   "raw": "https://api.notion.com/v1/users",
                   "protocol": "https",
-                  "host": [
-                    "api",
-                    "notion",
-                    "com"
-                  ],
-                  "path": [
-                    "v1",
-                    "users"
-                  ]
+                  "host": ["api", "notion", "com"],
+                  "path": ["v1", "users"]
                 }
               },
               "status": "OK",
@@ -366,16 +336,8 @@
             "url": {
               "raw": "https://api.notion.com/v1/users/me",
               "protocol": "https",
-              "host": [
-                "api",
-                "notion",
-                "com"
-              ],
-              "path": [
-                "v1",
-                "users",
-                "me"
-              ]
+              "host": ["api", "notion", "com"],
+              "path": ["v1", "users", "me"]
             }
           },
           "response": [
@@ -393,16 +355,8 @@
                 "url": {
                   "raw": "https://api.notion.com/v1/users/me",
                   "protocol": "https",
-                  "host": [
-                    "api",
-                    "notion",
-                    "com"
-                  ],
-                  "path": [
-                    "v1",
-                    "users",
-                    "me"
-                  ]
+                  "host": ["api", "notion", "com"],
+                  "path": ["v1", "users", "me"]
                 }
               },
               "status": "OK",
@@ -531,16 +485,8 @@
             "url": {
               "raw": "https://api.notion.com/v1/databases/:id",
               "protocol": "https",
-              "host": [
-                "api",
-                "notion",
-                "com"
-              ],
-              "path": [
-                "v1",
-                "databases",
-                ":id"
-              ],
+              "host": ["api", "notion", "com"],
+              "path": ["v1", "databases", ":id"],
               "variable": [
                 {
                   "key": "id",
@@ -565,16 +511,8 @@
                 "url": {
                   "raw": "https://api.notion.com/v1/databases/:id",
                   "protocol": "https",
-                  "host": [
-                    "api",
-                    "notion",
-                    "com"
-                  ],
-                  "path": [
-                    "v1",
-                    "databases",
-                    ":id"
-                  ],
+                  "host": ["api", "notion", "com"],
+                  "path": ["v1", "databases", ":id"],
                   "variable": [
                     {
                       "key": "id",
@@ -697,16 +635,8 @@
                 "url": {
                   "raw": "https://api.notion.com/v1/databases/:id",
                   "protocol": "https",
-                  "host": [
-                    "api",
-                    "notion",
-                    "com"
-                  ],
-                  "path": [
-                    "v1",
-                    "databases",
-                    ":id"
-                  ],
+                  "host": ["api", "notion", "com"],
+                  "path": ["v1", "databases", ":id"],
                   "variable": [
                     {
                       "key": "id",
@@ -844,17 +774,8 @@
             "url": {
               "raw": "https://api.notion.com/v1/databases/:id/query",
               "protocol": "https",
-              "host": [
-                "api",
-                "notion",
-                "com"
-              ],
-              "path": [
-                "v1",
-                "databases",
-                ":id",
-                "query"
-              ],
+              "host": ["api", "notion", "com"],
+              "path": ["v1", "databases", ":id", "query"],
               "variable": [
                 {
                   "key": "id",
@@ -891,17 +812,8 @@
                 "url": {
                   "raw": "https://api.notion.com/v1/databases/:id/query",
                   "protocol": "https",
-                  "host": [
-                    "api",
-                    "notion",
-                    "com"
-                  ],
-                  "path": [
-                    "v1",
-                    "databases",
-                    ":id",
-                    "query"
-                  ],
+                  "host": ["api", "notion", "com"],
+                  "path": ["v1", "databases", ":id", "query"],
                   "variable": [
                     {
                       "key": "id",
@@ -1041,17 +953,8 @@
                 "url": {
                   "raw": "https://api.notion.com/v1/databases/:id/query",
                   "protocol": "https",
-                  "host": [
-                    "api",
-                    "notion",
-                    "com"
-                  ],
-                  "path": [
-                    "v1",
-                    "databases",
-                    ":id",
-                    "query"
-                  ],
+                  "host": ["api", "notion", "com"],
+                  "path": ["v1", "databases", ":id", "query"],
                   "variable": [
                     {
                       "key": "id",
@@ -1191,17 +1094,8 @@
                 "url": {
                   "raw": "https://api.notion.com/v1/databases/:id/query",
                   "protocol": "https",
-                  "host": [
-                    "api",
-                    "notion",
-                    "com"
-                  ],
-                  "path": [
-                    "v1",
-                    "databases",
-                    ":id",
-                    "query"
-                  ],
+                  "host": ["api", "notion", "com"],
+                  "path": ["v1", "databases", ":id", "query"],
                   "variable": [
                     {
                       "key": "id",
@@ -1343,17 +1237,8 @@
             "url": {
               "raw": "https://api.notion.com/v1/databases/:id/query",
               "protocol": "https",
-              "host": [
-                "api",
-                "notion",
-                "com"
-              ],
-              "path": [
-                "v1",
-                "databases",
-                ":id",
-                "query"
-              ],
+              "host": ["api", "notion", "com"],
+              "path": ["v1", "databases", ":id", "query"],
               "variable": [
                 {
                   "key": "id",
@@ -1390,17 +1275,8 @@
                 "url": {
                   "raw": "https://api.notion.com/v1/databases/:id/query",
                   "protocol": "https",
-                  "host": [
-                    "api",
-                    "notion",
-                    "com"
-                  ],
-                  "path": [
-                    "v1",
-                    "databases",
-                    ":id",
-                    "query"
-                  ],
+                  "host": ["api", "notion", "com"],
+                  "path": ["v1", "databases", ":id", "query"],
                   "variable": [
                     {
                       "key": "id",
@@ -1540,17 +1416,8 @@
                 "url": {
                   "raw": "https://api.notion.com/v1/databases/:id/query",
                   "protocol": "https",
-                  "host": [
-                    "api",
-                    "notion",
-                    "com"
-                  ],
-                  "path": [
-                    "v1",
-                    "databases",
-                    ":id",
-                    "query"
-                  ],
+                  "host": ["api", "notion", "com"],
+                  "path": ["v1", "databases", ":id", "query"],
                   "variable": [
                     {
                       "key": "id",
@@ -1690,17 +1557,8 @@
                 "url": {
                   "raw": "https://api.notion.com/v1/databases/:id/query",
                   "protocol": "https",
-                  "host": [
-                    "api",
-                    "notion",
-                    "com"
-                  ],
-                  "path": [
-                    "v1",
-                    "databases",
-                    ":id",
-                    "query"
-                  ],
+                  "host": ["api", "notion", "com"],
+                  "path": ["v1", "databases", ":id", "query"],
                   "variable": [
                     {
                       "key": "id",
@@ -1842,17 +1700,8 @@
             "url": {
               "raw": "https://api.notion.com/v1/databases/:id/query",
               "protocol": "https",
-              "host": [
-                "api",
-                "notion",
-                "com"
-              ],
-              "path": [
-                "v1",
-                "databases",
-                ":id",
-                "query"
-              ],
+              "host": ["api", "notion", "com"],
+              "path": ["v1", "databases", ":id", "query"],
               "variable": [
                 {
                   "key": "id",
@@ -1889,17 +1738,8 @@
                 "url": {
                   "raw": "https://api.notion.com/v1/databases/:id/query",
                   "protocol": "https",
-                  "host": [
-                    "api",
-                    "notion",
-                    "com"
-                  ],
-                  "path": [
-                    "v1",
-                    "databases",
-                    ":id",
-                    "query"
-                  ],
+                  "host": ["api", "notion", "com"],
+                  "path": ["v1", "databases", ":id", "query"],
                   "variable": [
                     {
                       "key": "id",
@@ -2039,17 +1879,8 @@
                 "url": {
                   "raw": "https://api.notion.com/v1/databases/:id/query",
                   "protocol": "https",
-                  "host": [
-                    "api",
-                    "notion",
-                    "com"
-                  ],
-                  "path": [
-                    "v1",
-                    "databases",
-                    ":id",
-                    "query"
-                  ],
+                  "host": ["api", "notion", "com"],
+                  "path": ["v1", "databases", ":id", "query"],
                   "variable": [
                     {
                       "key": "id",
@@ -2189,17 +2020,8 @@
                 "url": {
                   "raw": "https://api.notion.com/v1/databases/:id/query",
                   "protocol": "https",
-                  "host": [
-                    "api",
-                    "notion",
-                    "com"
-                  ],
-                  "path": [
-                    "v1",
-                    "databases",
-                    ":id",
-                    "query"
-                  ],
+                  "host": ["api", "notion", "com"],
+                  "path": ["v1", "databases", ":id", "query"],
                   "variable": [
                     {
                       "key": "id",
@@ -2335,16 +2157,8 @@
             "url": {
               "raw": "https://api.notion.com/v1/databases/",
               "protocol": "https",
-              "host": [
-                "api",
-                "notion",
-                "com"
-              ],
-              "path": [
-                "v1",
-                "databases",
-                ""
-              ]
+              "host": ["api", "notion", "com"],
+              "path": ["v1", "databases", ""]
             }
           },
           "response": [
@@ -2369,16 +2183,8 @@
                 "url": {
                   "raw": "https://api.notion.com/v1/databases/",
                   "protocol": "https",
-                  "host": [
-                    "api",
-                    "notion",
-                    "com"
-                  ],
-                  "path": [
-                    "v1",
-                    "databases",
-                    ""
-                  ]
+                  "host": ["api", "notion", "com"],
+                  "path": ["v1", "databases", ""]
                 }
               },
               "status": "OK",
@@ -2510,16 +2316,8 @@
             "url": {
               "raw": "https://api.notion.com/v1/databases/:id",
               "protocol": "https",
-              "host": [
-                "api",
-                "notion",
-                "com"
-              ],
-              "path": [
-                "v1",
-                "databases",
-                ":id"
-              ],
+              "host": ["api", "notion", "com"],
+              "path": ["v1", "databases", ":id"],
               "variable": [
                 {
                   "key": "id",
@@ -2552,16 +2350,8 @@
                 "url": {
                   "raw": "https://api.notion.com/v1/databases/:id",
                   "protocol": "https",
-                  "host": [
-                    "api",
-                    "notion",
-                    "com"
-                  ],
-                  "path": [
-                    "v1",
-                    "databases",
-                    ":id"
-                  ],
+                  "host": ["api", "notion", "com"],
+                  "path": ["v1", "databases", ":id"],
                   "variable": [
                     {
                       "key": "id",
@@ -2697,16 +2487,8 @@
                 "url": {
                   "raw": "https://api.notion.com/v1/databases/:id",
                   "protocol": "https",
-                  "host": [
-                    "api",
-                    "notion",
-                    "com"
-                  ],
-                  "path": [
-                    "v1",
-                    "databases",
-                    ":id"
-                  ],
+                  "host": ["api", "notion", "com"],
+                  "path": ["v1", "databases", ":id"],
                   "variable": [
                     {
                       "key": "id",
@@ -2844,16 +2626,8 @@
             "url": {
               "raw": "https://api.notion.com/v1/databases/:id",
               "protocol": "https",
-              "host": [
-                "api",
-                "notion",
-                "com"
-              ],
-              "path": [
-                "v1",
-                "databases",
-                ":id"
-              ],
+              "host": ["api", "notion", "com"],
+              "path": ["v1", "databases", ":id"],
               "variable": [
                 {
                   "key": "id",
@@ -2886,16 +2660,8 @@
                 "url": {
                   "raw": "https://api.notion.com/v1/databases/:id",
                   "protocol": "https",
-                  "host": [
-                    "api",
-                    "notion",
-                    "com"
-                  ],
-                  "path": [
-                    "v1",
-                    "databases",
-                    ":id"
-                  ],
+                  "host": ["api", "notion", "com"],
+                  "path": ["v1", "databases", ":id"],
                   "variable": [
                     {
                       "key": "id",
@@ -3031,16 +2797,8 @@
                 "url": {
                   "raw": "https://api.notion.com/v1/databases/:id",
                   "protocol": "https",
-                  "host": [
-                    "api",
-                    "notion",
-                    "com"
-                  ],
-                  "path": [
-                    "v1",
-                    "databases",
-                    ":id"
-                  ],
+                  "host": ["api", "notion", "com"],
+                  "path": ["v1", "databases", ":id"],
                   "variable": [
                     {
                       "key": "id",
@@ -3187,16 +2945,8 @@
             "url": {
               "raw": "https://api.notion.com/v1/pages/",
               "protocol": "https",
-              "host": [
-                "api",
-                "notion",
-                "com"
-              ],
-              "path": [
-                "v1",
-                "pages",
-                ""
-              ]
+              "host": ["api", "notion", "com"],
+              "path": ["v1", "pages", ""]
             }
           },
           "response": [
@@ -3227,16 +2977,8 @@
                 "url": {
                   "raw": "https://api.notion.com/v1/pages/",
                   "protocol": "https",
-                  "host": [
-                    "api",
-                    "notion",
-                    "com"
-                  ],
-                  "path": [
-                    "v1",
-                    "pages",
-                    ""
-                  ]
+                  "host": ["api", "notion", "com"],
+                  "path": ["v1", "pages", ""]
                 }
               },
               "status": "OK",
@@ -3366,16 +3108,8 @@
                 "url": {
                   "raw": "https://api.notion.com/v1/pages/",
                   "protocol": "https",
-                  "host": [
-                    "api",
-                    "notion",
-                    "com"
-                  ],
-                  "path": [
-                    "v1",
-                    "pages",
-                    ""
-                  ]
+                  "host": ["api", "notion", "com"],
+                  "path": ["v1", "pages", ""]
                 }
               },
               "status": "OK",
@@ -3507,16 +3241,8 @@
             "url": {
               "raw": "https://api.notion.com/v1/pages/",
               "protocol": "https",
-              "host": [
-                "api",
-                "notion",
-                "com"
-              ],
-              "path": [
-                "v1",
-                "pages",
-                ""
-              ]
+              "host": ["api", "notion", "com"],
+              "path": ["v1", "pages", ""]
             }
           },
           "response": [
@@ -3547,16 +3273,8 @@
                 "url": {
                   "raw": "https://api.notion.com/v1/pages/",
                   "protocol": "https",
-                  "host": [
-                    "api",
-                    "notion",
-                    "com"
-                  ],
-                  "path": [
-                    "v1",
-                    "pages",
-                    ""
-                  ]
+                  "host": ["api", "notion", "com"],
+                  "path": ["v1", "pages", ""]
                 }
               },
               "status": "OK",
@@ -3686,16 +3404,8 @@
                 "url": {
                   "raw": "https://api.notion.com/v1/pages/",
                   "protocol": "https",
-                  "host": [
-                    "api",
-                    "notion",
-                    "com"
-                  ],
-                  "path": [
-                    "v1",
-                    "pages",
-                    ""
-                  ]
+                  "host": ["api", "notion", "com"],
+                  "path": ["v1", "pages", ""]
                 }
               },
               "status": "OK",
@@ -3820,16 +3530,8 @@
             "url": {
               "raw": "https://api.notion.com/v1/pages/:id",
               "protocol": "https",
-              "host": [
-                "api",
-                "notion",
-                "com"
-              ],
-              "path": [
-                "v1",
-                "pages",
-                ":id"
-              ],
+              "host": ["api", "notion", "com"],
+              "path": ["v1", "pages", ":id"],
               "variable": [
                 {
                   "key": "id",
@@ -3860,16 +3562,8 @@
                 "url": {
                   "raw": "https://api.notion.com/v1/pages/:id",
                   "protocol": "https",
-                  "host": [
-                    "api",
-                    "notion",
-                    "com"
-                  ],
-                  "path": [
-                    "v1",
-                    "pages",
-                    ":id"
-                  ],
+                  "host": ["api", "notion", "com"],
+                  "path": ["v1", "pages", ":id"],
                   "variable": [
                     {
                       "key": "id",
@@ -3998,16 +3692,8 @@
                 "url": {
                   "raw": "https://api.notion.com/v1/pages/:id",
                   "protocol": "https",
-                  "host": [
-                    "api",
-                    "notion",
-                    "com"
-                  ],
-                  "path": [
-                    "v1",
-                    "pages",
-                    ":id"
-                  ],
+                  "host": ["api", "notion", "com"],
+                  "path": ["v1", "pages", ":id"],
                   "variable": [
                     {
                       "key": "id",
@@ -4140,16 +3826,8 @@
             "url": {
               "raw": "https://api.notion.com/v1/pages/:id",
               "protocol": "https",
-              "host": [
-                "api",
-                "notion",
-                "com"
-              ],
-              "path": [
-                "v1",
-                "pages",
-                ":id"
-              ],
+              "host": ["api", "notion", "com"],
+              "path": ["v1", "pages", ":id"],
               "variable": [
                 {
                   "key": "id",
@@ -4189,16 +3867,8 @@
                 "url": {
                   "raw": "https://api.notion.com/v1/pages/:id",
                   "protocol": "https",
-                  "host": [
-                    "api",
-                    "notion",
-                    "com"
-                  ],
-                  "path": [
-                    "v1",
-                    "pages",
-                    ":id"
-                  ],
+                  "host": ["api", "notion", "com"],
+                  "path": ["v1", "pages", ":id"],
                   "variable": [
                     {
                       "key": "id",
@@ -4332,16 +4002,8 @@
             "url": {
               "raw": "https://api.notion.com/v1/pages/:id",
               "protocol": "https",
-              "host": [
-                "api",
-                "notion",
-                "com"
-              ],
-              "path": [
-                "v1",
-                "pages",
-                ":id"
-              ],
+              "host": ["api", "notion", "com"],
+              "path": ["v1", "pages", ":id"],
               "variable": [
                 {
                   "key": "id",
@@ -4365,16 +4027,8 @@
                 "url": {
                   "raw": "https://api.notion.com/v1/blocks/:id",
                   "protocol": "https",
-                  "host": [
-                    "api",
-                    "notion",
-                    "com"
-                  ],
-                  "path": [
-                    "v1",
-                    "blocks",
-                    ":id"
-                  ],
+                  "host": ["api", "notion", "com"],
+                  "path": ["v1", "blocks", ":id"],
                   "variable": [
                     {
                       "key": "id",
@@ -4503,18 +4157,8 @@
             "url": {
               "raw": "https://api.notion.com/v1/pages/:page_id/properties/:property_id",
               "protocol": "https",
-              "host": [
-                "api",
-                "notion",
-                "com"
-              ],
-              "path": [
-                "v1",
-                "pages",
-                ":page_id",
-                "properties",
-                ":property_id"
-              ],
+              "host": ["api", "notion", "com"],
+              "path": ["v1", "pages", ":page_id", "properties", ":property_id"],
               "variable": [
                 {
                   "key": "page_id",
@@ -4536,11 +4180,7 @@
                 "url": {
                   "raw": "https://api.notion.com/v1/pages/672b014a26264ada9211fb3613d07ae2/properties/)Y7%22",
                   "protocol": "https",
-                  "host": [
-                    "api",
-                    "notion",
-                    "com"
-                  ],
+                  "host": ["api", "notion", "com"],
                   "path": [
                     "v1",
                     "pages",
@@ -4672,17 +4312,8 @@
             "url": {
               "raw": "https://api.notion.com/v1/blocks/:id/children?page_size=100",
               "protocol": "https",
-              "host": [
-                "api",
-                "notion",
-                "com"
-              ],
-              "path": [
-                "v1",
-                "blocks",
-                ":id",
-                "children"
-              ],
+              "host": ["api", "notion", "com"],
+              "path": ["v1", "blocks", ":id", "children"],
               "query": [
                 {
                   "key": "page_size",
@@ -4712,17 +4343,8 @@
                 "url": {
                   "raw": "https://api.notion.com/v1/blocks/:id/children?page_size=100",
                   "protocol": "https",
-                  "host": [
-                    "api",
-                    "notion",
-                    "com"
-                  ],
-                  "path": [
-                    "v1",
-                    "blocks",
-                    ":id",
-                    "children"
-                  ],
+                  "host": ["api", "notion", "com"],
+                  "path": ["v1", "blocks", ":id", "children"],
                   "query": [
                     {
                       "key": "page_size",
@@ -4866,17 +4488,8 @@
             "url": {
               "raw": "https://api.notion.com/v1/blocks/:id/children",
               "protocol": "https",
-              "host": [
-                "api",
-                "notion",
-                "com"
-              ],
-              "path": [
-                "v1",
-                "blocks",
-                ":id",
-                "children"
-              ],
+              "host": ["api", "notion", "com"],
+              "path": ["v1", "blocks", ":id", "children"],
               "variable": [
                 {
                   "key": "id",
@@ -4919,17 +4532,8 @@
                 "url": {
                   "raw": "https://api.notion.com/v1/blocks/:id/children",
                   "protocol": "https",
-                  "host": [
-                    "api",
-                    "notion",
-                    "com"
-                  ],
-                  "path": [
-                    "v1",
-                    "blocks",
-                    ":id",
-                    "children"
-                  ],
+                  "host": ["api", "notion", "com"],
+                  "path": ["v1", "blocks", ":id", "children"],
                   "variable": [
                     {
                       "key": "id",
@@ -5063,16 +4667,8 @@
             "url": {
               "raw": "https://api.notion.com/v1/blocks/:id",
               "protocol": "https",
-              "host": [
-                "api",
-                "notion",
-                "com"
-              ],
-              "path": [
-                "v1",
-                "blocks",
-                ":id"
-              ],
+              "host": ["api", "notion", "com"],
+              "path": ["v1", "blocks", ":id"],
               "variable": [
                 {
                   "key": "id",
@@ -5106,16 +4702,8 @@
                 "url": {
                   "raw": "https://api.notion.com/v1/blocks/:id",
                   "protocol": "https",
-                  "host": [
-                    "api",
-                    "notion",
-                    "com"
-                  ],
-                  "path": [
-                    "v1",
-                    "blocks",
-                    ":id"
-                  ],
+                  "host": ["api", "notion", "com"],
+                  "path": ["v1", "blocks", ":id"],
                   "variable": [
                     {
                       "key": "id",
@@ -5236,16 +4824,8 @@
             "url": {
               "raw": "https://api.notion.com/v1/blocks/:id",
               "protocol": "https",
-              "host": [
-                "api",
-                "notion",
-                "com"
-              ],
-              "path": [
-                "v1",
-                "blocks",
-                ":id"
-              ],
+              "host": ["api", "notion", "com"],
+              "path": ["v1", "blocks", ":id"],
               "variable": [
                 {
                   "key": "id",
@@ -5269,16 +4849,8 @@
                 "url": {
                   "raw": "https://api.notion.com/v1/blocks/:id",
                   "protocol": "https",
-                  "host": [
-                    "api",
-                    "notion",
-                    "com"
-                  ],
-                  "path": [
-                    "v1",
-                    "blocks",
-                    ":id"
-                  ],
+                  "host": ["api", "notion", "com"],
+                  "path": ["v1", "blocks", ":id"],
                   "variable": [
                     {
                       "key": "id",
@@ -5399,16 +4971,8 @@
             "url": {
               "raw": "https://api.notion.com/v1/blocks/:id",
               "protocol": "https",
-              "host": [
-                "api",
-                "notion",
-                "com"
-              ],
-              "path": [
-                "v1",
-                "blocks",
-                ":id"
-              ],
+              "host": ["api", "notion", "com"],
+              "path": ["v1", "blocks", ":id"],
               "variable": [
                 {
                   "key": "id",
@@ -5432,16 +4996,8 @@
                 "url": {
                   "raw": "https://api.notion.com/v1/blocks/:id",
                   "protocol": "https",
-                  "host": [
-                    "api",
-                    "notion",
-                    "com"
-                  ],
-                  "path": [
-                    "v1",
-                    "blocks",
-                    ":id"
-                  ],
+                  "host": ["api", "notion", "com"],
+                  "path": ["v1", "blocks", ":id"],
                   "variable": [
                     {
                       "key": "id",
@@ -5588,15 +5144,8 @@
             "url": {
               "raw": "https://api.notion.com/v1/search",
               "protocol": "https",
-              "host": [
-                "api",
-                "notion",
-                "com"
-              ],
-              "path": [
-                "v1",
-                "search"
-              ]
+              "host": ["api", "notion", "com"],
+              "path": ["v1", "search"]
             }
           },
           "response": [
@@ -5622,15 +5171,8 @@
                 "url": {
                   "raw": "https://api.notion.com/v1/search",
                   "protocol": "https",
-                  "host": [
-                    "api",
-                    "notion",
-                    "com"
-                  ],
-                  "path": [
-                    "v1",
-                    "search"
-                  ]
+                  "host": ["api", "notion", "com"],
+                  "path": ["v1", "search"]
                 }
               },
               "status": "OK",
@@ -5759,15 +5301,8 @@
                 "url": {
                   "raw": "https://api.notion.com/v1/search",
                   "protocol": "https",
-                  "host": [
-                    "api",
-                    "notion",
-                    "com"
-                  ],
-                  "path": [
-                    "v1",
-                    "search"
-                  ]
+                  "host": ["api", "notion", "com"],
+                  "path": ["v1", "search"]
                 }
               },
               "status": "OK",
@@ -5903,15 +5438,8 @@
             "url": {
               "raw": "https://api.notion.com/v1/comments?block_id={{BLOCK_ID}}&page_size=100",
               "protocol": "https",
-              "host": [
-                "api",
-                "notion",
-                "com"
-              ],
-              "path": [
-                "v1",
-                "comments"
-              ],
+              "host": ["api", "notion", "com"],
+              "path": ["v1", "comments"],
               "query": [
                 {
                   "key": "block_id",
@@ -5945,15 +5473,8 @@
                 "url": {
                   "raw": "https://api.notion.com/v1/comments?block_id={{BLOCK_ID}}",
                   "protocol": "https",
-                  "host": [
-                    "api",
-                    "notion",
-                    "com"
-                  ],
-                  "path": [
-                    "v1",
-                    "comments"
-                  ],
+                  "host": ["api", "notion", "com"],
+                  "path": ["v1", "comments"],
                   "query": [
                     {
                       "key": "block_id",
@@ -6059,15 +5580,8 @@
             "url": {
               "raw": "https://api.notion.com/v1/comments",
               "protocol": "https",
-              "host": [
-                "api",
-                "notion",
-                "com"
-              ],
-              "path": [
-                "v1",
-                "comments"
-              ]
+              "host": ["api", "notion", "com"],
+              "path": ["v1", "comments"]
             }
           },
           "response": [
@@ -6094,15 +5608,8 @@
                 "url": {
                   "raw": "https://api.notion.com/v1/comments",
                   "protocol": "https",
-                  "host": [
-                    "api",
-                    "notion",
-                    "com"
-                  ],
-                  "path": [
-                    "v1",
-                    "comments"
-                  ]
+                  "host": ["api", "notion", "com"],
+                  "path": ["v1", "comments"]
                 }
               },
               "status": "OK",
@@ -6202,15 +5709,8 @@
             "url": {
               "raw": "https://api.notion.com/v1/comments",
               "protocol": "https",
-              "host": [
-                "api",
-                "notion",
-                "com"
-              ],
-              "path": [
-                "v1",
-                "comments"
-              ]
+              "host": ["api", "notion", "com"],
+              "path": ["v1", "comments"]
             }
           },
           "response": [
@@ -6237,15 +5737,8 @@
                 "url": {
                   "raw": "https://api.notion.com/v1/comments",
                   "protocol": "https",
-                  "host": [
-                    "api",
-                    "notion",
-                    "com"
-                  ],
-                  "path": [
-                    "v1",
-                    "comments"
-                  ]
+                  "host": ["api", "notion", "com"],
+                  "path": ["v1", "comments"]
                 }
               },
               "status": "OK",
@@ -6342,9 +5835,7 @@
       "script": {
         "type": "text/javascript",
         "requests": {},
-        "exec": [
-          ""
-        ]
+        "exec": [""]
       }
     },
     {
@@ -6352,9 +5843,7 @@
       "script": {
         "type": "text/javascript",
         "requests": {},
-        "exec": [
-          ""
-        ]
+        "exec": [""]
       }
     }
   ],
