@@ -78,7 +78,7 @@ func spannerCDCInputConfigFromParsed(pConf *service.ParsedConfig) (conf spannerC
 			return conf, fmt.Errorf("decode base64 credentials: %w", err)
 		}
 		conf.SpannerClientOptions = append(conf.SpannerClientOptions,
-			option.WithCredentialsJSON(credBytes)) //nolint:staticcheck // TODO: migrate off deprecated API
+			option.WithCredentialsJSON(credBytes))
 	}
 
 	if conf.ProjectID, err = pConf.FieldString(siFieldProjectID); err != nil {

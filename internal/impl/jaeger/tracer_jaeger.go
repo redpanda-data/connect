@@ -28,7 +28,6 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.7.0"
 	"go.opentelemetry.io/otel/trace"
 
-	//nolint:staticcheck
 	"go.opentelemetry.io/otel/exporters/jaeger"
 
 	"github.com/redpanda-data/benthos/v4/public/service"

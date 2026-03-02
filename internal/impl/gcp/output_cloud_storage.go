@@ -247,7 +247,7 @@ func (g *gcpCloudStorageOutput) Connect(context.Context) error {
 
 func getClientOptionWithCredential(credentialsJSON string, opt []option.ClientOption) ([]option.ClientOption, error) {
 	if len(credentialsJSON) > 0 {
-		opt = append(opt, option.WithCredentialsJSON([]byte(credentialsJSON))) //nolint:staticcheck // TODO: migrate off deprecated API
+		opt = append(opt, option.WithCredentialsJSON([]byte(credentialsJSON)))
 	}
 	return opt, nil
 }

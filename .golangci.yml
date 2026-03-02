@@ -103,6 +103,26 @@ linters:
           - errcheck
         text: "Error return value of.*Write.*is not checked"
         path: internal/impl/otlp/otlpconv/conv.go
+      - linters:
+          - staticcheck
+        text: "SA1019.*cloud.google.com/go/pubsub"
+        path: internal/impl/gcp
+      - linters:
+          - staticcheck
+        text: "SA1019.*go.opentelemetry.io/otel/exporters/jaeger"
+        path: internal/impl/jaeger
+      - linters:
+          - staticcheck
+        text: "SA1019.*option.WithCredentialsJSON"
+        path: internal/impl/gcp
+      - linters:
+          - staticcheck
+        text: "SA1019.*model.IsValidMetricName"
+        path: internal/impl/prometheus
+      - linters:
+          - staticcheck
+        text: "SA1019.*github.com/jhump/protoreflect"
+        path: internal/impl/protobuf
     paths:
       - third_party$
       - builtin$
