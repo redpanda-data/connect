@@ -120,19 +120,20 @@ type asyncMessage struct {
 	ackFn service.AckFunc
 }
 
-type config struct {
-	connectionString     string
-	streamSnapshot       bool
-	snapshotMaxBatchSize int
-	snapshotMaxWorkers   int
-	tablesFilter         *confx.RegexpFilter
-	scnCache             string
-	scnCacheKey          string
-	cpCacheTableName     string
+// Config is the configuration for a Oracle connector.
+type Config struct {
+	ConnectionString     string
+	StreamSnapshot       bool
+	SnapshotMaxBatchSize int
+	SnapshotMaxWorkers   int
+	TablesFilter         *confx.RegexpFilter
+	SCNCache             string
+	SCNCacheKey          string
+	CpCacheTableName     string
 }
 
 type oracleDBCDCInput struct {
-	cfg   config
+	cfg   Config
 	lmCfg *logminer.Config
 	db    *sql.DB
 
@@ -230,15 +231,15 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 	logger := resources.Logger()
 
 	o := oracleDBCDCInput{
-		cfg: config{
-			connectionString:     connectionString,
-			streamSnapshot:       streamSnapshot,
-			snapshotMaxWorkers:   snapshotMaxWorkers,
-			snapshotMaxBatchSize: snapshotMaxBatchSize,
-			scnCache:             scnCache,
-			scnCacheKey:          scnCacheKey,
-			cpCacheTableName:     cpCacheTableName,
-			tablesFilter: &confx.RegexpFilter{
+		cfg: Config{
+			ConnectionString:     connectionString,
+			StreamSnapshot:       streamSnapshot,
+			SnapshotMaxWorkers:   snapshotMaxWorkers,
+			SnapshotMaxBatchSize: snapshotMaxBatchSize,
+			SCNCache:             scnCache,
+			SCNCacheKey:          scnCacheKey,
+			CpCacheTableName:     cpCacheTableName,
+			TablesFilter: &confx.RegexpFilter{
 				Include: tableIncludes,
 				Exclude: tableExcludes,
 			},
@@ -280,7 +281,7 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (err error) {
 		_ = o.db.Close()
 		o.db = nil
 	}
-	if o.db, err = sql.Open("oracle", o.cfg.connectionString); err != nil {
+	if o.db, err = sql.Open("oracle", o.cfg.ConnectionString); err != nil {
 		return fmt.Errorf("connecting to oracle database: %w", err)
 	}
 	defer func() {
@@ -290,13 +291,13 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (err error) {
 	}()
 
 	// no cache specified so use default, internal oracle based cache
-	if o.cfg.scnCache == "" && o.cpCache == nil {
-		if o.cpCache, err = newCheckpointCache(ctx, o.cfg.connectionString, o.cfg.cpCacheTableName, o.log); err != nil {
+	if o.cfg.SCNCache == "" && o.cpCache == nil {
+		if o.cpCache, err = newCheckpointCache(ctx, o.cfg.ConnectionString, o.cfg.CpCacheTableName, o.log); err != nil {
 			return fmt.Errorf("initialising oracle based checkpoint cache: %w", err)
 		}
 	}
 
-	if userTables, err = replication.VerifyUserTables(ctx, o.db, o.cfg.tablesFilter, o.log); err != nil {
+	if userTables, err = replication.VerifyUserTables(ctx, o.db, o.cfg.TablesFilter, o.log); err != nil {
 		return fmt.Errorf("verifying user defined tables: %w", err)
 	}
 
@@ -329,8 +330,8 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (err error) {
 	)
 
 	// no cached SCN means we're not recovering from a restart
-	if o.cfg.streamSnapshot && cachedSCN == replication.InvalidSCN {
-		if snapshotter, err = replication.NewSnapshot(ctx, o.cfg.connectionString, userTables, o.publisher, o.log, o.metrics); err != nil {
+	if o.cfg.StreamSnapshot && cachedSCN == replication.InvalidSCN {
+		if snapshotter, err = replication.NewSnapshot(ctx, o.cfg.ConnectionString, userTables, o.publisher, o.log, o.metrics); err != nil {
 			return fmt.Errorf("creating database snapshotter: %w", err)
 		}
 		defer func() {
@@ -421,10 +422,10 @@ func (o *oracleDBCDCInput) getCachedSCN(ctx context.Context) (replication.SCN, e
 	// Use internal Oracle-based cache if set (when no external cache configured),
 	// otherwise use external cache resource
 	if o.cpCache != nil {
-		cacheVal, cErr = o.cpCache.Get(ctx, o.cfg.scnCacheKey)
+		cacheVal, cErr = o.cpCache.Get(ctx, o.cfg.SCNCacheKey)
 	} else {
-		if err := o.res.AccessCache(ctx, o.cfg.scnCache, func(c service.Cache) {
-			cacheVal, cErr = c.Get(ctx, o.cfg.scnCacheKey)
+		if err := o.res.AccessCache(ctx, o.cfg.SCNCache, func(c service.Cache) {
+			cacheVal, cErr = c.Get(ctx, o.cfg.SCNCacheKey)
 		}); err != nil {
 			return replication.InvalidSCN, fmt.Errorf("accessing cache for reading: %w", err)
 		}
@@ -454,10 +455,10 @@ func (o *oracleDBCDCInput) cacheSCN(ctx context.Context, scn replication.SCN) er
 	// otherwise use external cache resource
 	var cErr error
 	if o.cpCache != nil {
-		cErr = o.cpCache.Set(ctx, o.cfg.scnCacheKey, scn.Bytes(), nil)
+		cErr = o.cpCache.Set(ctx, o.cfg.SCNCacheKey, scn.Bytes(), nil)
 	} else {
-		if err := o.res.AccessCache(ctx, o.cfg.scnCache, func(c service.Cache) {
-			cErr = c.Set(ctx, o.cfg.scnCacheKey, scn.Bytes(), nil)
+		if err := o.res.AccessCache(ctx, o.cfg.SCNCache, func(c service.Cache) {
+			cErr = c.Set(ctx, o.cfg.SCNCacheKey, scn.Bytes(), nil)
 		}); err != nil {
 			return fmt.Errorf("accessing cache for writing: %w", err)
 		}
@@ -489,7 +490,7 @@ func (o *oracleDBCDCInput) processSnapshot(ctx context.Context, snapshot *replic
 		_ = snapshot.Close()
 		return replication.InvalidSCN, fmt.Errorf("preparing snapshot: %w", err)
 	}
-	if err = snapshot.Read(ctx, o.cfg.snapshotMaxWorkers, o.cfg.snapshotMaxBatchSize); err != nil {
+	if err = snapshot.Read(ctx, o.cfg.SnapshotMaxWorkers, o.cfg.SnapshotMaxBatchSize); err != nil {
 		_ = snapshot.Close()
 		return replication.InvalidSCN, fmt.Errorf("reading snapshot: %w", err)
 	}
