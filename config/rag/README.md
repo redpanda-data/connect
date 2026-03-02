@@ -5,20 +5,20 @@ This folder hosts a series of RAG pipelines using Redpanda + Redpanda Connect.
 We have a series of ingestion pipelines in the `ingestion` directory, these all write
 data we want to ingest into our vector database in topics with the pattern: `rp.ai.rag.*`
 
-Next, there is a matrix of different indexing piplines that use the following sets of options:
+Next, there is a matrix of different indexing pipelines that use the following sets of options:
 
 Vector Database: `{postgres, elasticsearch, qdrant}`
 
 Embeddings Model: `{openai, cohere}`
 
-These are implemented as resources in the `indexing/resources` directory, then each instance of a pipline
+These are implemented as resources in the `indexing/resources` directory, then each instance of a pipeline
 is created in the `indexing` pipeline.
 
-Lastly, there is a set of retrivial pipelines that mirror each one of our indexing pipelines. These pipelines
-are exposed over HTTP and they can be used to retrive documents/chunks from. These pipelines all live in the
-`retrivial` directory.
+Lastly, there is a set of retrieval pipelines that mirror each one of our indexing pipelines. These pipelines
+are exposed over HTTP and they can be used to retrieve documents/chunks from. These pipelines all live in the
+`retrieval` directory.
 
-Lastly, there is an evalutation framework setup by running a final pipeline after indexing is complete, that exists
+Lastly, there is an evaluation framework setup by running a final pipeline after indexing is complete, that exists
 in the `evaluation` directory, which also has some golden files/snapshots of various versions of the pipelines we can
 use to rank/compare the quality of different indexing options.
 
@@ -42,10 +42,10 @@ Ingest and index all the documents for our knowledge graph
 rpk connect streams -t 'templates/*.yaml' -e env indexing/* ingestion/*
 ```
 
-Once everything has been ingested, then indexed, we can stop the pipeline and startup the retrival pipelines
+Once everything has been ingested, then indexed, we can stop the pipeline and startup the retrieval pipelines
 
 ```
-rpk connect streams -t 'templates/*.yaml' -e env retrivial/*
+rpk connect streams -t 'templates/*.yaml' -e env retrieval/*
 ```
 
 Now concurrently run the eval pipeline to run the evaluations:

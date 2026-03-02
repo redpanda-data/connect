@@ -222,7 +222,7 @@ func newUploaderManager(client *SnowflakeRestClient, role string) *uploaderManag
 	m := &uploaderManager{state: nil, client: client, role: role}
 	// According to the Java SDK tokens are refreshed every hour on GCP
 	// and 2 hours on AWS. It seems in practice some customers only have
-	// tokens that live for 30 minutes, so we need to support ealier
+	// tokens that live for 30 minutes, so we need to support earlier
 	// refreshes (those are opt in however).
 	const refreshTime = time.Hour - time.Minute*5
 	m.periodic = *asyncroutine.NewPeriodicWithContext(refreshTime, m.RefreshUploader)

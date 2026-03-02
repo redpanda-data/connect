@@ -160,7 +160,7 @@ The project ID of the dataset to insert data to. If not set, it will be inferred
 
 === `job_project`
 
-The project ID in which jobs will be exectuted. If not set, project will be used.
+The project ID in which jobs will be executed. If not set, project will be used.
 
 
 *Type*: `string`
@@ -288,7 +288,7 @@ This field contains sensitive information that usually shouldn't be added to a c
 
 === `csv`
 
-Specify how CSV data should be interpretted.
+Specify how CSV data should be interpreted.
 
 
 *Type*: `object`

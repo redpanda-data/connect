@@ -311,7 +311,7 @@ func (t *sqsInFlightTracker) AddNew(ctx context.Context, messages ...sqsMessage)
 		if m.handle == nil {
 			continue
 		}
-		// If this is a duplicate (a re-recieve of an inflight message due to timeout)
+		// If this is a duplicate (a re-receive of an inflight message due to timeout)
 		// we can just update the existing handle.
 		if e, ok := t.handles[m.handle.id]; ok {
 			e.Value = m.handle

@@ -509,7 +509,7 @@ snowflake_streaming:
 }
 
 func TestIntegrationManualSchemaEvolution(t *testing.T) {
-	// This is sort of a stress test for race conditions when the schema changes seperately
+	// This is sort of a stress test for race conditions when the schema changes separately
 	integration.CheckSkip(t)
 	produce, stream := SetupSnowflakeStream(t, `
 label: snowpipe_streaming
