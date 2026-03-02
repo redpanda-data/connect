@@ -132,7 +132,7 @@ type config struct {
 }
 
 type oracleDBCDCInput struct {
-	cfg   *config
+	cfg   config
 	lmCfg *logminer.Config
 	db    *sql.DB
 
@@ -253,7 +253,7 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 	logger := resources.Logger()
 
 	i := oracleDBCDCInput{
-		cfg: &config{
+		cfg: config{
 			connectionString:     connectionString,
 			streamSnapshot:       streamSnapshot,
 			snapshotMaxWorkers:   snapshotMaxWorkers,
