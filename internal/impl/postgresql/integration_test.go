@@ -1366,7 +1366,7 @@ postgres_cdc:
 		assert.Equal(t, "STRING", byName["col_varchar"], "VARCHAR column")
 		assert.Equal(t, "STRING", byName["col_char"], "CHAR column")
 		assert.Equal(t, "BYTE_ARRAY", byName["col_bytea"], "BYTEA column")
-		assert.Equal(t, "STRING", byName["col_date"], "DATE column")
+		assert.Equal(t, "TIMESTAMP", byName["col_date"], "DATE column")
 		assert.Equal(t, "STRING", byName["col_time"], "TIME column")
 		assert.Equal(t, "STRING", byName["col_timetz"], "TIMETZ column")
 		assert.Equal(t, "TIMESTAMP", byName["col_timestamp"], "TIMESTAMP column")
