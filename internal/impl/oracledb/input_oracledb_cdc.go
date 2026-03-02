@@ -176,31 +176,8 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 	if snapshotMaxBatchSize, err = conf.FieldInt(ociFieldSnapshotMaxBatchSize); err != nil {
 		return nil, err
 	}
-
-	// logminer
-	if conf.Contains(logminer.OciFieldLogMiner) {
-		lmConf := conf.Namespace(logminer.OciFieldLogMiner)
-		lmCfg = logminer.NewDefaultConfig()
-		if lmCfg.SCNWindowSize, err = lmConf.FieldInt(logminer.OciFieldSCNWindowSize); err != nil {
-			return nil, err
-		}
-		if lmCfg.SCNWindowSize <= 0 {
-			return nil, fmt.Errorf("logminer.%s must be greater than 0, got %d", logminer.OciFieldSCNWindowSize, lmCfg.SCNWindowSize)
-		}
-		if lmCfg.MiningBackoffInterval, err = lmConf.FieldDuration(logminer.OciFieldBackoffInterval); err != nil {
-			return nil, err
-		}
-		if strategy, err := lmConf.FieldString(logminer.OciFieldMiningStrategy); err != nil {
-			return nil, err
-		} else {
-			lmCfg.MiningStrategy = logminer.MiningStrategy(strategy)
-		}
-		if lmCfg.MaxTransactionEvents, err = lmConf.FieldInt(logminer.OciFieldMaxTransactionEvents); err != nil {
-			return nil, err
-		}
-		if lmCfg.MaxTransactionEvents < 0 {
-			return nil, fmt.Errorf("logminer.%s must be greater than or equal to 0, got %d", logminer.OciFieldMaxTransactionEvents, lmCfg.MaxTransactionEvents)
-		}
+	if lmCfg, err = parseLogMinerConfig(conf); err != nil {
+		return nil, err
 	}
 
 	// tables
@@ -564,4 +541,37 @@ func (o *oracleDBCDCInput) Close(ctx context.Context) error {
 		}
 	}
 	return closeErr
+}
+
+func parseLogMinerConfig(conf *service.ParsedConfig) (*logminer.Config, error) {
+	var (
+		err error
+		cfg *logminer.Config
+	)
+	if conf.Contains(logminer.OciFieldLogMiner) {
+		lmConf := conf.Namespace(logminer.OciFieldLogMiner)
+		cfg = logminer.NewDefaultConfig()
+		if cfg.SCNWindowSize, err = lmConf.FieldInt(logminer.OciFieldSCNWindowSize); err != nil {
+			return nil, err
+		}
+		if cfg.SCNWindowSize <= 0 {
+			return nil, fmt.Errorf("logminer.%s must be greater than 0, got %d", logminer.OciFieldSCNWindowSize, cfg.SCNWindowSize)
+		}
+		if cfg.MiningBackoffInterval, err = lmConf.FieldDuration(logminer.OciFieldBackoffInterval); err != nil {
+			return nil, err
+		}
+		if strategy, err := lmConf.FieldString(logminer.OciFieldMiningStrategy); err != nil {
+			return nil, err
+		} else {
+			cfg.MiningStrategy = logminer.MiningStrategy(strategy)
+		}
+		if cfg.MaxTransactionEvents, err = lmConf.FieldInt(logminer.OciFieldMaxTransactionEvents); err != nil {
+			return nil, err
+		}
+		if cfg.MaxTransactionEvents < 0 {
+			return nil, fmt.Errorf("logminer.%s must be greater than or equal to 0, got %d", logminer.OciFieldMaxTransactionEvents, cfg.MaxTransactionEvents)
+		}
+	}
+
+	return cfg, nil
 }
