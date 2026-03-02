@@ -16,6 +16,7 @@ package crypto
 
 import (
 	"fmt"
+	"maps"
 	"strings"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -70,9 +71,7 @@ func jwtSigner(secretDecoder secretDecoderFunc, method jwt.SigningMethod) blobla
 
 		return bloblang.ObjectMethod(func(obj map[string]any) (any, error) {
 			token := jwt.NewWithClaims(method, jwt.MapClaims(obj))
-			for key, value := range customHeaders {
-				token.Header[key] = value
-			}
+			maps.Copy(token.Header, customHeaders)
 			signed, err := token.SignedString(s)
 			if err != nil {
 				return "", fmt.Errorf("signing token: %w", err)

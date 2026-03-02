@@ -258,7 +258,7 @@ func (p *dataTransformEnginePool) newModule() (engine *dataTransformEngine, err 
 		WithArgs("transform").
 		WithName("transform").
 		WithEnv("REDPANDA_INPUT_TOPIC", "benthos")
-	for i := 0; i < 8; i += 1 {
+	for i := range 8 {
 		cfg = cfg.WithEnv(fmt.Sprintf("REDPANDA_OUTPUT_TOPIC_%d", i), fmt.Sprintf("output_%d", i))
 	}
 	if engine.mod, err = r.InstantiateModule(ctx, p.wasmBinary, cfg); err != nil {

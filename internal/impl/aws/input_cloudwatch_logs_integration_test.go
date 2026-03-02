@@ -77,7 +77,7 @@ func createLogGroupWithEvents(ctx context.Context, t testing.TB, cwlPort, logGro
 	if numEvents > 0 {
 		events := make([]types.InputLogEvent, numEvents)
 		baseTime := time.Now().Add(-1 * time.Hour).UnixMilli()
-		for i := 0; i < numEvents; i++ {
+		for i := range numEvents {
 			events[i] = types.InputLogEvent{
 				Message:   aws.String(fmt.Sprintf("test message %d", i)),
 				Timestamp: aws.Int64(baseTime + int64(i*1000)),
