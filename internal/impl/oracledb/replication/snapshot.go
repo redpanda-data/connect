@@ -22,7 +22,8 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
-// Snapshot is responsible for creating snapshots of existing tables based on the Tables configuration value.
+// Snapshot is responsible for creating snapshots of existing tables based on the Tables
+// configuration value.
 type Snapshot struct {
 	db                      *sql.DB
 	tables                  []UserTable
@@ -70,8 +71,11 @@ func (s *Snapshot) Prepare(ctx context.Context) (SCN, error) {
 		return InvalidSCN, errors.New("no tables provided")
 	}
 
-	var currentSCN SCN
-	if err := s.db.QueryRowContext(ctx, "SELECT CURRENT_SCN FROM V$DATABASE").Scan(&currentSCN); err != nil {
+	var (
+		currentSCN SCN
+	)
+	sql := `SELECT CURRENT_SCN FROM V$DATABASE`
+	if err := s.db.QueryRowContext(ctx, sql).Scan(&currentSCN); err != nil {
 		return InvalidSCN, fmt.Errorf("getting current SCN for snapshot: %w", err)
 	}
 
@@ -79,7 +83,7 @@ func (s *Snapshot) Prepare(ctx context.Context) (SCN, error) {
 	return currentSCN, nil
 }
 
-// Read launches N number of go routines (based on maxWorkers) and starts the process of
+// Read launches N go routines (based on maxWorkers) and starts the process of
 // iterating through each table, reading rows based on maxBatchSize, sending the row as a
 // replication.MessageEvent to the configured publisher.
 func (s *Snapshot) Read(ctx context.Context, maxWorkers, maxBatchSize int) error {
@@ -103,7 +107,8 @@ func (s *Snapshot) Read(ctx context.Context, maxWorkers, maxBatchSize int) error
 	return nil
 }
 
-// snapshotTable is responsible for managing the entire process of replicating data from the table specified.
+// snapshotTable is responsible for managing the entire process of replicating
+// data from the table specified.
 func (s *Snapshot) snapshotTable(ctx context.Context, table UserTable, maxBatchSize int) func() error {
 	return func() error {
 		var (
@@ -143,7 +148,7 @@ func (s *Snapshot) snapshotTable(ctx context.Context, table UserTable, maxBatchS
 		if err != nil {
 			return err
 		}
-		l.Tracef("Primary keys for table '%s': %v", table, tablePks)
+		l.Debugf("Primary keys for table '%s': %v", table, tablePks)
 		lastSeenPksValues := map[string]any{}
 		for _, pk := range tablePks {
 			lastSeenPksValues[pk] = nil
@@ -223,8 +228,8 @@ func (s *Snapshot) snapshotTable(ctx context.Context, table UserTable, maxBatchS
 			}
 		}
 
-		if err := tx.Commit(); err != nil {
-			l.Errorf("Failed to commit snapshot transaction: %v", err)
+		if err := tx.Rollback(); err != nil {
+			l.Errorf("Failed rollback snapshot transaction: %v", err)
 		}
 		s.snapshotStatusMetric.Set(1, tableName)
 		l.Infof("Table snapshot completed, %d rows processed", numRowsProcessed)
@@ -265,7 +270,7 @@ func getTablePrimaryKeys(ctx context.Context, tx *sql.Tx, table UserTable) ([]st
 		return nil, fmt.Errorf("discovering primary keys for table '%s': %w", table.FullName(), err)
 	}
 	if len(pks) == 0 {
-		return nil, fmt.Errorf("unable to find primary key for table '%s' - does the table exist and does it have a primary key set?", table.FullName())
+		return nil, fmt.Errorf("can't find a primary key for table '%s', does it exist and have one set?", table.FullName())
 	}
 
 	return pks, nil
