@@ -252,7 +252,7 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 
 	logger := resources.Logger()
 
-	i := oracleDBCDCInput{
+	o := oracleDBCDCInput{
 		cfg: config{
 			connectionString:     connectionString,
 			streamSnapshot:       streamSnapshot,
@@ -277,16 +277,16 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 
 	defer func() {
 		if err != nil {
-			i.publisher.Close()
+			o.publisher.Close()
 		}
 	}()
 
-	i.publisher.cacheSCN = i.cacheSCN
+	o.publisher.cacheSCN = o.cacheSCN
 
 	// Has stopped is how we notify that we're not connected. This will get reset at connection time.
-	i.stopSig.TriggerHasStopped()
+	o.stopSig.TriggerHasStopped()
 
-	batchInput, err := service.AutoRetryNacksBatchedToggled(conf, &i)
+	batchInput, err := service.AutoRetryNacksBatchedToggled(conf, &o)
 	if err != nil {
 		return nil, err
 	}
@@ -294,38 +294,38 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 	return conf.WrapBatchInputExtractTracingSpanMapping("oracledb_cdc", batchInput)
 }
 
-func (i *oracleDBCDCInput) Connect(ctx context.Context) (err error) {
+func (o *oracleDBCDCInput) Connect(ctx context.Context) (err error) {
 	var (
 		userTables []replication.UserTable
 		cachedSCN  replication.SCN
 	)
-	if i.db != nil {
-		_ = i.db.Close()
-		i.db = nil
+	if o.db != nil {
+		_ = o.db.Close()
+		o.db = nil
 	}
-	if i.db, err = sql.Open("oracle", i.cfg.connectionString); err != nil {
+	if o.db, err = sql.Open("oracle", o.cfg.connectionString); err != nil {
 		return fmt.Errorf("connecting to oracle database: %w", err)
 	}
 	defer func() {
 		if err != nil {
-			_ = i.db.Close()
+			_ = o.db.Close()
 		}
 	}()
 
 	// no cache specified so use default, internal oracle based cache
-	if i.cfg.scnCache == "" && i.cpCache == nil {
-		if i.cpCache, err = newCheckpointCache(ctx, i.cfg.connectionString, i.cfg.cpCacheTableName, i.log); err != nil {
+	if o.cfg.scnCache == "" && o.cpCache == nil {
+		if o.cpCache, err = newCheckpointCache(ctx, o.cfg.connectionString, o.cfg.cpCacheTableName, o.log); err != nil {
 			return fmt.Errorf("initialising oracle based checkpoint cache: %w", err)
 		}
 	}
 
-	if userTables, err = replication.VerifyUserTables(ctx, i.db, i.cfg.tablesFilter, i.log); err != nil {
+	if userTables, err = replication.VerifyUserTables(ctx, o.db, o.cfg.tablesFilter, o.log); err != nil {
 		return fmt.Errorf("verifying user defined tables: %w", err)
 	}
 
-	if cachedSCN, err = i.getCachedSCN(ctx); err != nil {
+	if cachedSCN, err = o.getCachedSCN(ctx); err != nil {
 		if errors.Is(err, service.ErrKeyNotFound) {
-			i.log.Infof("No SCN found in checkpoint cache")
+			o.log.Infof("No SCN found in checkpoint cache")
 			cachedSCN = replication.InvalidSCN
 		} else {
 			return fmt.Errorf("getting cached SCN: %w", err)
@@ -333,7 +333,7 @@ func (i *oracleDBCDCInput) Connect(ctx context.Context) (err error) {
 	} else {
 		switch {
 		case cachedSCN != replication.InvalidSCN:
-			i.log.Infof("Resuming from cached SCN value: %d", cachedSCN)
+			o.log.Infof("Resuming from cached SCN value: %d", cachedSCN)
 		default:
 			// this is an edgecase, but re-snapshotting is the best solution here if/should this state be possible.
 			return errors.New("unable to restore SCN from cache, consider clearing checkpoint cache and running snapshot to avoid missing data")
@@ -352,8 +352,8 @@ func (i *oracleDBCDCInput) Connect(ctx context.Context) (err error) {
 	)
 
 	// no cached SCN means we're not recovering from a restart
-	if i.cfg.streamSnapshot && cachedSCN == replication.InvalidSCN {
-		if snapshotter, err = replication.NewSnapshot(ctx, i.cfg.connectionString, userTables, i.publisher, i.log, i.metrics); err != nil {
+	if o.cfg.streamSnapshot && cachedSCN == replication.InvalidSCN {
+		if snapshotter, err = replication.NewSnapshot(ctx, o.cfg.connectionString, userTables, o.publisher, o.log, o.metrics); err != nil {
 			return fmt.Errorf("creating database snapshotter: %w", err)
 		}
 		defer func() {
@@ -362,57 +362,57 @@ func (i *oracleDBCDCInput) Connect(ctx context.Context) (err error) {
 			}
 		}()
 	} else {
-		i.log.Infof("Snapshotting disabled, skipping...")
+		o.log.Infof("Snapshotting disabled, skipping...")
 	}
 
-	if i.lmCfg != nil {
-		streaming = logminer.NewMiner(i.db, userTables, i.publisher, i.lmCfg, i.metrics, i.log)
+	if o.lmCfg != nil {
+		streaming = logminer.NewMiner(o.db, userTables, o.publisher, o.lmCfg, o.metrics, o.log)
 	} else {
 		return errors.New("logminer configuration required for streaming")
 	}
 
 	// Reset our stop signal
-	i.stopSig = shutdown.NewSignaller()
+	o.stopSig = shutdown.NewSignaller()
 
 	go func() {
 		var (
 			err    error
 			maxSCN = cachedSCN
 		)
-		softCtx, _ := i.stopSig.SoftStopCtx(context.Background())
+		softCtx, _ := o.stopSig.SoftStopCtx(context.Background())
 
 		// snapshot if no SCN exists then store checkpoint once complete
 		if snapshotter != nil {
 			defer snapshotter.Close()
-			if maxSCN, err = i.processSnapshot(softCtx, snapshotter); err != nil {
-				if i.stopSig.IsHardStopSignalled() {
-					i.log.Errorf("Shutting down snapshotting process: %s", err)
+			if maxSCN, err = o.processSnapshot(softCtx, snapshotter); err != nil {
+				if o.stopSig.IsHardStopSignalled() {
+					o.log.Errorf("Shutting down snapshotting process: %s", err)
 				} else {
-					i.log.Infof("Gracefully shutting down snapshotting process: %s", err)
+					o.log.Infof("Gracefully shutting down snapshotting process: %s", err)
 				}
-				i.stopSig.TriggerHasStopped()
+				o.stopSig.TriggerHasStopped()
 				return
 			}
 
-			if err = i.cacheSCN(softCtx, maxSCN); err != nil {
-				i.log.Errorf("Failed to capture SCN after snapshot completion. Snapshot will re-run on restart (may cause duplicate data): %s", err)
-				i.stopSig.TriggerHasStopped()
+			if err = o.cacheSCN(softCtx, maxSCN); err != nil {
+				o.log.Errorf("Failed to capture SCN after snapshot completion. Snapshot will re-run on restart (may cause duplicate data): %s", err)
+				o.stopSig.TriggerHasStopped()
 				return
 			}
 
-			i.log.Infof("Successfully captured SCN following snapshot: %d", maxSCN)
+			o.log.Infof("Successfully captured SCN following snapshot: %d", maxSCN)
 		}
 
 		// If no SCN is available (no snapshot and no cached position), so get the start position from the DB
 		if maxSCN == replication.InvalidSCN {
 			if maxSCN, err = streaming.FindStartPos(softCtx); err != nil {
-				i.log.Errorf("Failed to get start SCN from database: %s", err)
-				i.stopSig.TriggerHasStopped()
+				o.log.Errorf("Failed to get start SCN from database: %s", err)
+				o.stopSig.TriggerHasStopped()
 				return
 			}
-			i.log.Infof("No cached SCN found, fetched starting position from database: %d", maxSCN)
-			if err = i.cacheSCN(softCtx, maxSCN); err != nil {
-				i.log.Warnf("Failed to cache initial SCN (non-critical): %s", err)
+			o.log.Infof("No cached SCN found, fetched starting position from database: %d", maxSCN)
+			if err = o.cacheSCN(softCtx, maxSCN); err != nil {
+				o.log.Warnf("Failed to cache initial SCN (non-critical): %s", err)
 			}
 		}
 
@@ -425,17 +425,17 @@ func (i *oracleDBCDCInput) Connect(ctx context.Context) (err error) {
 			return nil
 		})
 		if err := wg.Wait(); err != nil && !errors.Is(err, context.Canceled) {
-			i.log.Errorf("Error during Oracle CDC Component: %s", err)
+			o.log.Errorf("Error during Oracle CDC Component: %s", err)
 		} else {
-			i.log.Info("Successfully shutdown Oracle CDC Component")
+			o.log.Info("Successfully shutdown Oracle CDC Component")
 		}
-		i.stopSig.TriggerHasStopped()
+		o.stopSig.TriggerHasStopped()
 	}()
 
 	return nil
 }
 
-func (i *oracleDBCDCInput) getCachedSCN(ctx context.Context) (replication.SCN, error) {
+func (o *oracleDBCDCInput) getCachedSCN(ctx context.Context) (replication.SCN, error) {
 	var (
 		cacheVal []byte
 		cErr     error
@@ -443,11 +443,11 @@ func (i *oracleDBCDCInput) getCachedSCN(ctx context.Context) (replication.SCN, e
 
 	// Use internal Oracle-based cache if set (when no external cache configured),
 	// otherwise use external cache resource
-	if i.cpCache != nil {
-		cacheVal, cErr = i.cpCache.Get(ctx, i.cfg.scnCacheKey)
+	if o.cpCache != nil {
+		cacheVal, cErr = o.cpCache.Get(ctx, o.cfg.scnCacheKey)
 	} else {
-		if err := i.res.AccessCache(ctx, i.cfg.scnCache, func(c service.Cache) {
-			cacheVal, cErr = c.Get(ctx, i.cfg.scnCacheKey)
+		if err := o.res.AccessCache(ctx, o.cfg.scnCache, func(c service.Cache) {
+			cacheVal, cErr = c.Get(ctx, o.cfg.scnCacheKey)
 		}); err != nil {
 			return replication.InvalidSCN, fmt.Errorf("accessing cache for reading: %w", err)
 		}
@@ -468,7 +468,7 @@ func (i *oracleDBCDCInput) getCachedSCN(ctx context.Context) (replication.SCN, e
 	return scn, nil
 }
 
-func (i *oracleDBCDCInput) cacheSCN(ctx context.Context, scn replication.SCN) error {
+func (o *oracleDBCDCInput) cacheSCN(ctx context.Context, scn replication.SCN) error {
 	if scn == replication.InvalidSCN {
 		return errors.New("SCN for caching is empty")
 	}
@@ -476,11 +476,11 @@ func (i *oracleDBCDCInput) cacheSCN(ctx context.Context, scn replication.SCN) er
 	// Use internal Oracle-based cache if set (when no external cache configured),
 	// otherwise use external cache resource
 	var cErr error
-	if i.cpCache != nil {
-		cErr = i.cpCache.Set(ctx, i.cfg.scnCacheKey, scn.Bytes(), nil)
+	if o.cpCache != nil {
+		cErr = o.cpCache.Set(ctx, o.cfg.scnCacheKey, scn.Bytes(), nil)
 	} else {
-		if err := i.res.AccessCache(ctx, i.cfg.scnCache, func(c service.Cache) {
-			cErr = c.Set(ctx, i.cfg.scnCacheKey, scn.Bytes(), nil)
+		if err := o.res.AccessCache(ctx, o.cfg.scnCache, func(c service.Cache) {
+			cErr = c.Set(ctx, o.cfg.scnCacheKey, scn.Bytes(), nil)
 		}); err != nil {
 			return fmt.Errorf("accessing cache for writing: %w", err)
 		}
@@ -492,18 +492,18 @@ func (i *oracleDBCDCInput) cacheSCN(ctx context.Context, scn replication.SCN) er
 	return nil
 }
 
-func (i *oracleDBCDCInput) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
+func (o *oracleDBCDCInput) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
 	select {
-	case m := <-i.publisher.msgs():
+	case m := <-o.publisher.msgs():
 		return m.msg, m.ackFn, nil
-	case <-i.stopSig.HasStoppedChan():
+	case <-o.stopSig.HasStoppedChan():
 		return nil, nil, service.ErrNotConnected
 	case <-ctx.Done():
 		return nil, nil, ctx.Err()
 	}
 }
 
-func (i *oracleDBCDCInput) processSnapshot(ctx context.Context, snapshot *replication.Snapshot) (replication.SCN, error) {
+func (o *oracleDBCDCInput) processSnapshot(ctx context.Context, snapshot *replication.Snapshot) (replication.SCN, error) {
 	var (
 		scn replication.SCN
 		err error
@@ -512,50 +512,50 @@ func (i *oracleDBCDCInput) processSnapshot(ctx context.Context, snapshot *replic
 		_ = snapshot.Close()
 		return replication.InvalidSCN, fmt.Errorf("preparing snapshot: %w", err)
 	}
-	if err = snapshot.Read(ctx, i.cfg.snapshotMaxWorkers, i.cfg.snapshotMaxBatchSize); err != nil {
+	if err = snapshot.Read(ctx, o.cfg.snapshotMaxWorkers, o.cfg.snapshotMaxBatchSize); err != nil {
 		_ = snapshot.Close()
 		return replication.InvalidSCN, fmt.Errorf("reading snapshot: %w", err)
 	}
 	if err = snapshot.Close(); err != nil {
 		return replication.InvalidSCN, fmt.Errorf("closing snapshot connections: %w", err)
 	}
-	i.log.Infof("Completed running snapshot process")
+	o.log.Infof("Completed running snapshot process")
 
 	return scn, nil
 }
 
-func (i *oracleDBCDCInput) Close(ctx context.Context) error {
-	if i.stopSig == nil {
+func (o *oracleDBCDCInput) Close(ctx context.Context) error {
+	if o.stopSig == nil {
 		return nil // Never connected
 	}
-	i.stopSig.TriggerSoftStop()
+	o.stopSig.TriggerSoftStop()
 	select {
 	case <-ctx.Done():
 	case <-time.After(shutdownTimeout):
-	case <-i.stopSig.HasStoppedChan():
+	case <-o.stopSig.HasStoppedChan():
 	}
 
-	i.stopSig.TriggerHardStop()
+	o.stopSig.TriggerHardStop()
 	select {
 	case <-ctx.Done():
 	case <-time.After(shutdownTimeout):
-		i.log.Error("failed to shutdown 'oracledb_cdc' component within the timeout")
-	case <-i.stopSig.HasStoppedChan():
+		o.log.Error("failed to shutdown 'oracledb_cdc' component within the timeout")
+	case <-o.stopSig.HasStoppedChan():
 	}
 
-	if i.publisher != nil {
-		i.publisher.Close()
+	if o.publisher != nil {
+		o.publisher.Close()
 	}
 
 	// Close both resources and combine errors to avoid resource leaks
 	var closeErr error
-	if i.cpCache != nil {
-		if err := i.cpCache.Close(ctx); err != nil {
+	if o.cpCache != nil {
+		if err := o.cpCache.Close(ctx); err != nil {
 			closeErr = fmt.Errorf("closing checkpoint cache: %w", err)
 		}
 	}
-	if i.db != nil {
-		if err := i.db.Close(); err != nil {
+	if o.db != nil {
+		if err := o.db.Close(); err != nil {
 			if closeErr != nil {
 				closeErr = fmt.Errorf("%w; closing database: %w", closeErr, err)
 			} else {
