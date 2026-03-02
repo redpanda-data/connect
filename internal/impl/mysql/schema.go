@@ -11,6 +11,7 @@ package mysql
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	gomysqlschema "github.com/go-mysql-org/go-mysql/schema"
 
@@ -49,15 +50,21 @@ func mysqlColumnToCommon(col gomysqlschema.TableColumn) (schema.Common, error) {
 
 	switch col.Type {
 	case gomysqlschema.TYPE_NUMBER:
-		// TYPE_NUMBER includes tinyint, smallint, int, bigint, year
-		// Map to INT64 for safety (can hold all integer types)
-		// Could be more specific based on col.RawType if needed
-		commonType = schema.Int64
+		rawLower := strings.ToLower(col.RawType)
+		if strings.HasPrefix(rawLower, "bigint") ||
+			(strings.HasPrefix(rawLower, "int") && col.IsUnsigned) {
+			commonType = schema.Int64
+		} else {
+			commonType = schema.Int32
+		}
 	case gomysqlschema.TYPE_MEDIUM_INT:
 		commonType = schema.Int32
 	case gomysqlschema.TYPE_FLOAT:
-		// Covers float and double
-		commonType = schema.Float64
+		if strings.HasPrefix(strings.ToLower(col.RawType), "double") {
+			commonType = schema.Float64
+		} else {
+			commonType = schema.Float32
+		}
 	case gomysqlschema.TYPE_DECIMAL:
 		// Decimals are represented as strings in the message data
 		commonType = schema.String
@@ -66,9 +73,7 @@ func mysqlColumnToCommon(col gomysqlschema.TableColumn) (schema.Common, error) {
 	case gomysqlschema.TYPE_DATETIME, gomysqlschema.TYPE_TIMESTAMP:
 		commonType = schema.Timestamp
 	case gomysqlschema.TYPE_DATE:
-		// Dates could be represented as timestamps or strings
-		// Using string for compatibility
-		commonType = schema.String
+		commonType = schema.Timestamp
 	case gomysqlschema.TYPE_TIME:
 		// Time is typically represented as string
 		commonType = schema.String

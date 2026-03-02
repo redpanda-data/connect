@@ -15,6 +15,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"regexp"
 	"strings"
 	"sync"
@@ -584,7 +585,20 @@ func prepSnapshotScannerAndMappers(cols []*sql.ColumnType) (values []any, mapper
 				}
 				return s.Time, nil
 			}
-		case "TINYINT", "SMALLINT", "MEDIUMINT", "INT", "BIGINT", "YEAR":
+		case "TINYINT", "SMALLINT", "MEDIUMINT", "INT", "YEAR",
+			"UNSIGNED TINYINT", "UNSIGNED SMALLINT", "UNSIGNED MEDIUMINT":
+			val = new(sql.NullInt32)
+			mapper = func(v any) (any, error) {
+				s, ok := v.(*sql.NullInt32)
+				if !ok {
+					return nil, fmt.Errorf("expected %T got %T", int32(0), v)
+				}
+				if !s.Valid {
+					return nil, nil
+				}
+				return s.Int32, nil
+			}
+		case "BIGINT", "UNSIGNED INT", "UNSIGNED BIGINT":
 			val = new(sql.NullInt64)
 			mapper = func(v any) (any, error) {
 				s, ok := v.(*sql.NullInt64)
@@ -594,14 +608,17 @@ func prepSnapshotScannerAndMappers(cols []*sql.ColumnType) (values []any, mapper
 				if !s.Valid {
 					return nil, nil
 				}
-				return int(s.Int64), nil
+				return s.Int64, nil
 			}
 		case "DECIMAL", "NUMERIC":
 			val = new(sql.NullString)
 			mapper = stringMapping(func(s string) (any, error) {
-				return json.Number(s), nil
+				return s, nil
 			})
-		case "FLOAT", "DOUBLE":
+		case "FLOAT":
+			val = new(sql.Null[float32])
+			mapper = snapshotValueMapper[float32]
+		case "DOUBLE":
 			val = new(sql.Null[float64])
 			mapper = snapshotValueMapper[float64]
 		case "SET":
@@ -621,6 +638,34 @@ func prepSnapshotScannerAndMappers(cols []*sql.ColumnType) (values []any, mapper
 				err = json.Unmarshal([]byte(s), &v)
 				return
 			})
+		case "BIT":
+			val = new(sql.Null[[]byte])
+			mapper = func(v any) (any, error) {
+				s, ok := v.(*sql.Null[[]byte])
+				if !ok {
+					return nil, fmt.Errorf("expected %T got %T", &sql.Null[[]byte]{}, v)
+				}
+				if !s.Valid {
+					return nil, nil
+				}
+				var n int64
+				for _, b := range s.V {
+					n = (n << 8) | int64(b)
+				}
+				return n, nil
+			}
+		case "DATE":
+			val = new(sql.NullTime)
+			mapper = func(v any) (any, error) {
+				s, ok := v.(*sql.NullTime)
+				if !ok {
+					return nil, fmt.Errorf("expected %T got %T", &sql.NullTime{}, v)
+				}
+				if !s.Valid {
+					return nil, nil
+				}
+				return s.Time, nil
+			}
 		default:
 			val = new(sql.Null[string])
 			mapper = snapshotValueMapper[string]
@@ -648,12 +693,8 @@ func (i *mysqlStreamInput) readMessages(ctx context.Context) error {
 				return fmt.Errorf("flushing periodic batch: %w", err)
 			}
 		case me := <-i.rawMessageEvents:
-			row, err := json.Marshal(me.Row)
-			if err != nil {
-				return fmt.Errorf("serializing row: %w", err)
-			}
-
-			mb := service.NewMessage(row)
+			mb := service.NewMessage(nil)
+			mb.SetStructuredMut(me.Row)
 			mb.MetaSet("operation", string(me.Operation))
 			mb.MetaSet("table", me.Table)
 			if me.Position != nil {
@@ -888,12 +929,47 @@ func mapMessageColumn(v any, col schema.TableColumn) (any, error) {
 		return v, nil
 	}
 	switch col.Type {
+	case schema.TYPE_NUMBER:
+		switch n := v.(type) {
+		case int8:
+			return int32(n), nil
+		case int16:
+			return int32(n), nil
+		case int32:
+			return n, nil
+		case int64:
+			return n, nil
+		case uint8:
+			return int32(n), nil
+		case uint16:
+			return int32(n), nil
+		case uint32:
+			return int64(n), nil
+		case uint64:
+			if n > math.MaxInt64 {
+				return n, nil
+			}
+			return int64(n), nil
+		default:
+			return nil, fmt.Errorf("expected integer value for number column got: %T", v)
+		}
+	case schema.TYPE_MEDIUM_INT:
+		switch n := v.(type) {
+		case int32:
+			return n, nil
+		case uint32:
+			return int32(n), nil
+		default:
+			return nil, fmt.Errorf("expected int32 or uint32 value for mediumint column got: %T", v)
+		}
+	case schema.TYPE_FLOAT:
+		return v, nil
 	case schema.TYPE_DECIMAL:
 		s, ok := v.(string)
 		if !ok {
 			return nil, fmt.Errorf("expected string value for decimal column got: %T", v)
 		}
-		return json.Number(s), nil
+		return s, nil
 	case schema.TYPE_SET:
 		bitset, ok := v.(int64)
 		if !ok {
@@ -907,11 +983,19 @@ func mapMessageColumn(v any, col schema.TableColumn) (any, error) {
 		}
 		return out, nil
 	case schema.TYPE_DATE:
-		date, ok := v.(string)
-		if !ok {
-			return nil, fmt.Errorf("expected string value for date column got: %T", v)
+		switch d := v.(type) {
+		case string:
+			return time.Parse("2006-01-02", d)
+		case time.Time:
+			return d, nil
+		default:
+			return nil, fmt.Errorf("expected string or time.Time for date column got: %T", v)
 		}
-		return time.Parse("2006-01-02", date)
+	case schema.TYPE_DATETIME, schema.TYPE_TIMESTAMP:
+		if _, ok := v.(string); ok {
+			return nil, nil
+		}
+		return v, nil
 	case schema.TYPE_ENUM:
 		ordinal, ok := v.(int64)
 		if !ok {
