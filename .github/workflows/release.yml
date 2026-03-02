@@ -119,7 +119,7 @@ jobs:
 
       - name: GoReleaser Release
         if: ${{ github.event_name == 'push' }}
-        uses: goreleaser/goreleaser-action@v6
+        uses: goreleaser/goreleaser-action@v7
         with:
           args: release --release-notes=./release_notes.md --timeout 120m --config ./.goreleaser/${{ matrix.variant }}.yaml
         env:
@@ -133,7 +133,7 @@ jobs:
 
       - name: GoReleaser Edge
         if: ${{ github.event_name == 'schedule' }}
-        uses: goreleaser/goreleaser-action@v6
+        uses: goreleaser/goreleaser-action@v7
         with:
           args: release --timeout 120m --snapshot --skip archive,nfpm --config ./.goreleaser/${{ matrix.variant }}.yaml
         env:
@@ -150,7 +150,7 @@ jobs:
 
       - name: GoReleaser Test
         if: ${{ github.event_name == 'workflow_dispatch' }}
-        uses: goreleaser/goreleaser-action@v6
+        uses: goreleaser/goreleaser-action@v7
         with:
           args: release --timeout 120m --snapshot --skip publish --config ./.goreleaser/${{ matrix.variant }}.yaml
 
