@@ -16,6 +16,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -92,6 +93,11 @@ type changeTableRowIter struct {
 	log      *service.Logger
 
 	vals []any
+
+	// userColNames and userColTypes are the user-defined columns only,
+	// excluding MSSQL system columns (those with __$ prefix).
+	userColNames []string
+	userColTypes []*sql.ColumnType
 }
 
 // newChangeTableRowIter returns an custom row iterator for the given changeTable.
@@ -125,6 +131,17 @@ func newChangeTableRowIter(
 		return nil, err
 	}
 
+	// Compute user-defined column lists by filtering out MSSQL system columns
+	// (those with the __$ prefix, e.g. __$start_lsn, __$operation, etc.).
+	userColNames := make([]string, 0, len(cols))
+	userColTypes := make([]*sql.ColumnType, 0, len(cols))
+	for i, c := range cols {
+		if !strings.HasPrefix(c, "__$") {
+			userColNames = append(userColNames, c)
+			userColTypes = append(userColTypes, colTypes[i])
+		}
+	}
+
 	// pre-allocate slice of pointers for sql.Scan operations
 	vals := make([]any, len(cols))
 	for i := range vals {
@@ -133,12 +150,14 @@ func newChangeTableRowIter(
 	}
 
 	iter := &changeTableRowIter{
-		table:    changeTable,
-		rows:     rows,
-		cols:     cols,
-		colTypes: colTypes,
-		vals:     vals,
-		log:      logger,
+		table:        changeTable,
+		rows:         rows,
+		cols:         cols,
+		colTypes:     colTypes,
+		vals:         vals,
+		log:          logger,
+		userColNames: userColNames,
+		userColTypes: userColTypes,
 	}
 	// Prime the iterator by loading the first row
 	if err := iter.next(); err != nil {
@@ -344,11 +363,13 @@ func (r *ChangeTableStream) ReadChangeTables(ctx context.Context, db *sql.DB, st
 			cur := item.iter.current
 
 			msg := MessageEvent{
-				Table:     item.iter.table.Name,
-				Schema:    item.iter.table.Schema,
-				Data:      cur.columns,
-				LSN:       cur.startLSN,
-				Operation: cur.operation.String(),
+				Table:       item.iter.table.Name,
+				Schema:      item.iter.table.Schema,
+				Data:        cur.columns,
+				LSN:         cur.startLSN,
+				Operation:   cur.operation.String(),
+				ColumnNames: item.iter.userColNames,
+				ColumnTypes: item.iter.userColTypes,
 			}
 
 			if err := r.publisher.Publish(ctx, msg); err != nil {

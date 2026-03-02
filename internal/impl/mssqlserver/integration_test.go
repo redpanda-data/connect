@@ -709,6 +709,129 @@ microsoft_sql_server_cdc:
 	}
 }
 
+func TestIntegration_MicrosoftSQLServerCDC_SchemaMetadata(t *testing.T) {
+	integration.CheckSkip(t)
+	t.Parallel()
+
+	connStr, db := mssqlservertest.SetupTestWithMicrosoftSQLServerVersion(t, "2022-latest")
+	require.NoError(t, db.CreateTableWithCDCEnabledIfNotExists(t.Context(), "dbo.schema_meta_test", `
+		CREATE TABLE dbo.schema_meta_test (
+			id      INT          PRIMARY KEY,
+			label   NVARCHAR(50) NOT NULL,
+			active  BIT          NOT NULL,
+			score   FLOAT        NOT NULL,
+			created DATETIME2    NOT NULL
+		);`))
+
+	// Disable CDC so the first row becomes a snapshot row, then re-enable CDC.
+	db.MustDisableCDC(t.Context(), "dbo.schema_meta_test")
+	db.MustExecContext(t.Context(), `INSERT INTO dbo.schema_meta_test VALUES (1, N'snapshot', 1, 3.14, SYSDATETIME())`)
+	db.MustEnableCDC(t.Context(), "dbo.schema_meta_test")
+
+	type msgMeta struct {
+		schema any
+		op     string
+	}
+	var received []msgMeta
+	var receivedMu sync.Mutex
+
+	cfg := fmt.Sprintf(`
+microsoft_sql_server_cdc:
+  connection_string: %s
+  stream_snapshot: true
+  include: ["schema_meta_test"]`, connStr)
+
+	streamBuilder := service.NewStreamBuilder()
+	require.NoError(t, streamBuilder.AddInputYAML(cfg))
+	require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+		for _, msg := range mb {
+			s, _ := msg.MetaGetMut("common_schema")
+			op, _ := msg.MetaGet("operation")
+			receivedMu.Lock()
+			received = append(received, msgMeta{schema: s, op: op})
+			receivedMu.Unlock()
+		}
+		return nil
+	}))
+
+	stream, err := streamBuilder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(stream.Resources())
+
+	go func() {
+		require.NoError(t, stream.Run(t.Context()))
+	}()
+
+	// Wait for the snapshot row to arrive.
+	assert.Eventually(t, func() bool {
+		receivedMu.Lock()
+		defer receivedMu.Unlock()
+		for _, m := range received {
+			if m.op == "read" {
+				return true
+			}
+		}
+		return false
+	}, time.Second*30, time.Millisecond*100)
+
+	// Insert a CDC row and wait for it to arrive.
+	db.MustExecContext(t.Context(), `INSERT INTO dbo.schema_meta_test VALUES (2, N'cdc', 0, 2.71, SYSDATETIME())`)
+	assert.Eventually(t, func() bool {
+		receivedMu.Lock()
+		defer receivedMu.Unlock()
+		for _, m := range received {
+			if m.op == "insert" {
+				return true
+			}
+		}
+		return false
+	}, time.Second*30, time.Millisecond*100)
+
+	require.NoError(t, stream.StopWithin(time.Second*10))
+
+	receivedMu.Lock()
+	defer receivedMu.Unlock()
+
+	require.Len(t, received, 2, "expected 1 snapshot message and 1 CDC message")
+
+	// Expected column name → benthos common type string for dbo.schema_meta_test.
+	expectedCols := map[string]string{
+		"id":      "INT64",
+		"label":   "STRING",
+		"active":  "BOOLEAN",
+		"score":   "FLOAT64",
+		"created": "TIMESTAMP",
+	}
+
+	for i, m := range received {
+		require.NotNilf(t, m.schema, "message %d (op=%q) is missing schema metadata", i, m.op)
+
+		schemaMap, ok := m.schema.(map[string]any)
+		require.Truef(t, ok, "message %d schema is not map[string]any, got %T", i, m.schema)
+
+		assert.Equalf(t, "OBJECT", schemaMap["type"], "message %d schema type", i)
+		assert.Equalf(t, "schema_meta_test", schemaMap["name"], "message %d schema name", i)
+
+		children, ok := schemaMap["children"].([]any)
+		require.Truef(t, ok, "message %d schema children is not []any", i)
+		assert.Lenf(t, children, len(expectedCols), "message %d schema children count", i)
+
+		for _, child := range children {
+			childMap, ok := child.(map[string]any)
+			require.Truef(t, ok, "message %d child schema is not map[string]any", i)
+
+			name, _ := childMap["name"].(string)
+			typ, _ := childMap["type"].(string)
+			optional, _ := childMap["optional"].(bool)
+
+			expectedType, exists := expectedCols[name]
+			assert.Truef(t, exists, "message %d: unexpected column %q in schema", i, name)
+			assert.Equalf(t, expectedType, typ, "message %d column %q type mismatch", i, name)
+			assert.Truef(t, optional, "message %d column %q should be optional", i, name)
+		}
+	}
+}
+
 // Test_ManualTesting_AddTestDataWithUniqueLSN adds data to an existing table and ensures each change has its own LSN
 func Test_ManualTesting_AddTestDataWithUniqueLSN(t *testing.T) {
 	t.Skip("This test requires a remote database to run. Aimed to seed initial data in a remote test databases")

@@ -163,11 +163,13 @@ func (s *Snapshot) snapshotTable(ctx context.Context, table UserDefinedTable, ma
 				}
 
 				m := MessageEvent{
-					Table:     table.Name,
-					Schema:    table.Schema,
-					Data:      row,
-					Operation: MessageOperationRead.String(),
-					LSN:       nil,
+					Table:       table.Name,
+					Schema:      table.Schema,
+					Data:        row,
+					Operation:   MessageOperationRead.String(),
+					LSN:         nil,
+					ColumnNames: columns,
+					ColumnTypes: types,
 				}
 				if err = s.publisher.Publish(ctx, m); err != nil {
 					return fmt.Errorf("handling snapshot table row: %w", err)

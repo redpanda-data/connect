@@ -10,6 +10,7 @@ package mssqlserver
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"sync"
@@ -28,6 +29,14 @@ type batchPublisher struct {
 	batcher   *service.Batcher
 	batcherMu sync.Mutex
 
+	// tableSchemas caches the computed common schema for each table. No
+	// invalidation is needed because MSSQL CDC capture instances are immutable:
+	// an ALTER TABLE requires creating a new capture instance, which the input
+	// won't discover until it restarts (at which point a fresh batchPublisher
+	// with an empty cache is created).
+	tableSchemas   map[string]any
+	tableSchemasMu sync.RWMutex
+
 	checkpoint *checkpoint.Capped[replication.LSN]
 	msgChan    chan asyncMessage
 	log        *service.Logger
@@ -38,11 +47,12 @@ type batchPublisher struct {
 // newBatchPublisher creates an instance of batchPublisher.
 func newBatchPublisher(batcher *service.Batcher, checkpoint *checkpoint.Capped[replication.LSN], logger *service.Logger) *batchPublisher {
 	b := &batchPublisher{
-		batcher:    batcher,
-		checkpoint: checkpoint,
-		log:        logger,
-		msgChan:    make(chan asyncMessage),
-		shutSig:    shutdown.NewSignaller(),
+		batcher:      batcher,
+		checkpoint:   checkpoint,
+		log:          logger,
+		msgChan:      make(chan asyncMessage),
+		shutSig:      shutdown.NewSignaller(),
+		tableSchemas: make(map[string]any),
 	}
 	go b.loop()
 	return b
@@ -125,6 +135,28 @@ func (p *batchPublisher) loop() {
 	}
 }
 
+// getOrComputeTableSchema returns the cached schema for tableName. If not yet
+// cached and colTypes is non-empty, it computes and caches the schema from the
+// provided column metadata.
+func (b *batchPublisher) getOrComputeTableSchema(tableName string, colNames []string, colTypes []*sql.ColumnType) any {
+	b.tableSchemasMu.RLock()
+	if s, ok := b.tableSchemas[tableName]; ok {
+		b.tableSchemasMu.RUnlock()
+		return s
+	}
+	b.tableSchemasMu.RUnlock()
+
+	if len(colTypes) == 0 {
+		return nil
+	}
+
+	s := columnTypesToSchema(tableName, colNames, colTypes)
+	b.tableSchemasMu.Lock()
+	b.tableSchemas[tableName] = s
+	b.tableSchemasMu.Unlock()
+	return s
+}
+
 // Publish turns the provided message into a service.Message before batching and
 // flushing them based on batch size or time elapsed.
 func (b *batchPublisher) Publish(ctx context.Context, m replication.MessageEvent) error {
@@ -139,6 +171,9 @@ func (b *batchPublisher) Publish(ctx context.Context, m replication.MessageEvent
 	msg.MetaSet("operation", m.Operation)
 	if len(m.LSN) != 0 {
 		msg.MetaSet("lsn", string(m.LSN))
+	}
+	if s := b.getOrComputeTableSchema(m.Table, m.ColumnNames, m.ColumnTypes); s != nil {
+		msg.MetaSetImmut("common_schema", service.ImmutableAny{V: s})
 	}
 
 	var flushedBatch []*service.Message

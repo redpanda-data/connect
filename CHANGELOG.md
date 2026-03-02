@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - (Benthos) The `command` processor now emits the `exit_code` metadata field. (@mihaitodor)
 - The `postgres_cdc` input now adds schema metadata to consumed messages, this can be used for automatic schema conversion in processors such as `schema_registry_encode`. (@Jeffail)
 - New `iceberg` output, allows writing Iceberg data to REST catalogs in s3, gcs and adls. (@rockwotj)
+- The `microsoft_sql_server_cdc` input now adds schema metadata to consumed messages, this can be used for automatic schema conversion in processors such as `schema_registry_encode`. (@Jeffail)
 
 ### Changed
 
