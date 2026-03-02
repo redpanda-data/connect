@@ -9,7 +9,9 @@
 package mysql
 
 import (
+	"math"
 	"testing"
+	"time"
 
 	gomysqlschema "github.com/go-mysql-org/go-mysql/schema"
 	"github.com/stretchr/testify/assert"
@@ -17,6 +19,138 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/schema"
 )
+
+func TestMapMessageColumn(t *testing.T) {
+	tests := []struct {
+		name     string
+		value    any
+		col      gomysqlschema.TableColumn
+		expected any
+	}{
+		{
+			name:     "int8 to int32",
+			value:    int8(42),
+			col:      gomysqlschema.TableColumn{Type: gomysqlschema.TYPE_NUMBER},
+			expected: int32(42),
+		},
+		{
+			name:     "int16 to int32",
+			value:    int16(1000),
+			col:      gomysqlschema.TableColumn{Type: gomysqlschema.TYPE_NUMBER},
+			expected: int32(1000),
+		},
+		{
+			name:     "int32 passthrough",
+			value:    int32(100000),
+			col:      gomysqlschema.TableColumn{Type: gomysqlschema.TYPE_NUMBER},
+			expected: int32(100000),
+		},
+		{
+			name:     "int64 passthrough",
+			value:    int64(9223372036854775807),
+			col:      gomysqlschema.TableColumn{Type: gomysqlschema.TYPE_NUMBER},
+			expected: int64(9223372036854775807),
+		},
+		{
+			name:     "uint8 to int32",
+			value:    uint8(255),
+			col:      gomysqlschema.TableColumn{Type: gomysqlschema.TYPE_NUMBER},
+			expected: int32(255),
+		},
+		{
+			name:     "uint16 to int32",
+			value:    uint16(65535),
+			col:      gomysqlschema.TableColumn{Type: gomysqlschema.TYPE_NUMBER},
+			expected: int32(65535),
+		},
+		{
+			name:     "uint32 to int64",
+			value:    uint32(4294967295),
+			col:      gomysqlschema.TableColumn{Type: gomysqlschema.TYPE_NUMBER},
+			expected: int64(4294967295),
+		},
+		{
+			name:     "uint64 small to int64",
+			value:    uint64(1000),
+			col:      gomysqlschema.TableColumn{Type: gomysqlschema.TYPE_NUMBER},
+			expected: int64(1000),
+		},
+		{
+			name:     "uint64 large stays uint64",
+			value:    uint64(math.MaxInt64 + 1),
+			col:      gomysqlschema.TableColumn{Type: gomysqlschema.TYPE_NUMBER},
+			expected: uint64(math.MaxInt64 + 1),
+		},
+		{
+			name:     "mediumint int32 passthrough",
+			value:    int32(8388607),
+			col:      gomysqlschema.TableColumn{Type: gomysqlschema.TYPE_MEDIUM_INT},
+			expected: int32(8388607),
+		},
+		{
+			name:     "mediumint uint32 to int32",
+			value:    uint32(16777215),
+			col:      gomysqlschema.TableColumn{Type: gomysqlschema.TYPE_MEDIUM_INT},
+			expected: int32(16777215),
+		},
+		{
+			name:     "float32 passthrough",
+			value:    float32(3.14),
+			col:      gomysqlschema.TableColumn{Type: gomysqlschema.TYPE_FLOAT},
+			expected: float32(3.14),
+		},
+		{
+			name:     "float64 passthrough",
+			value:    float64(2.718281828),
+			col:      gomysqlschema.TableColumn{Type: gomysqlschema.TYPE_FLOAT},
+			expected: float64(2.718281828),
+		},
+		{
+			name:     "decimal string passthrough",
+			value:    "999999999999999999999999999999999999.99",
+			col:      gomysqlschema.TableColumn{Type: gomysqlschema.TYPE_DECIMAL},
+			expected: "999999999999999999999999999999999999.99",
+		},
+		{
+			name:     "date string to time.Time",
+			value:    "2024-12-10",
+			col:      gomysqlschema.TableColumn{Type: gomysqlschema.TYPE_DATE},
+			expected: time.Date(2024, 12, 10, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			name:     "date time.Time passthrough",
+			value:    time.Date(2024, 12, 10, 0, 0, 0, 0, time.UTC),
+			col:      gomysqlschema.TableColumn{Type: gomysqlschema.TYPE_DATE},
+			expected: time.Date(2024, 12, 10, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			name:     "zero datetime string to nil",
+			value:    "0000-00-00 00:00:00",
+			col:      gomysqlschema.TableColumn{Type: gomysqlschema.TYPE_DATETIME},
+			expected: nil,
+		},
+		{
+			name:     "time.Time passthrough for datetime",
+			value:    time.Date(2024, 12, 10, 15, 30, 45, 0, time.UTC),
+			col:      gomysqlschema.TableColumn{Type: gomysqlschema.TYPE_DATETIME},
+			expected: time.Date(2024, 12, 10, 15, 30, 45, 0, time.UTC),
+		},
+		{
+			name:     "nil passthrough",
+			value:    nil,
+			col:      gomysqlschema.TableColumn{Type: gomysqlschema.TYPE_NUMBER},
+			expected: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := mapMessageColumn(tt.value, tt.col)
+			require.NoError(t, err)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
 
 func TestMysqlColumnToCommon(t *testing.T) {
 	tests := []struct {
@@ -28,7 +162,29 @@ func TestMysqlColumnToCommon(t *testing.T) {
 		expectedError bool
 	}{
 		{
-			name: "integer column",
+			name: "tinyint column",
+			col: gomysqlschema.TableColumn{
+				Name:    "age",
+				Type:    gomysqlschema.TYPE_NUMBER,
+				RawType: "tinyint",
+			},
+			expectedType: schema.Int32,
+			expectedName: "age",
+			hasChildren:  false,
+		},
+		{
+			name: "int column",
+			col: gomysqlschema.TableColumn{
+				Name:    "count",
+				Type:    gomysqlschema.TYPE_NUMBER,
+				RawType: "int",
+			},
+			expectedType: schema.Int32,
+			expectedName: "count",
+			hasChildren:  false,
+		},
+		{
+			name: "bigint column",
 			col: gomysqlschema.TableColumn{
 				Name:    "id",
 				Type:    gomysqlschema.TYPE_NUMBER,
@@ -39,18 +195,41 @@ func TestMysqlColumnToCommon(t *testing.T) {
 			hasChildren:  false,
 		},
 		{
+			name: "unsigned int column",
+			col: gomysqlschema.TableColumn{
+				Name:       "ref",
+				Type:       gomysqlschema.TYPE_NUMBER,
+				RawType:    "int unsigned",
+				IsUnsigned: true,
+			},
+			expectedType: schema.Int64,
+			expectedName: "ref",
+			hasChildren:  false,
+		},
+		{
 			name: "medium int column",
 			col: gomysqlschema.TableColumn{
-				Name:    "count",
+				Name:    "mid",
 				Type:    gomysqlschema.TYPE_MEDIUM_INT,
 				RawType: "mediumint",
 			},
 			expectedType: schema.Int32,
-			expectedName: "count",
+			expectedName: "mid",
 			hasChildren:  false,
 		},
 		{
 			name: "float column",
+			col: gomysqlschema.TableColumn{
+				Name:    "ratio",
+				Type:    gomysqlschema.TYPE_FLOAT,
+				RawType: "float",
+			},
+			expectedType: schema.Float32,
+			expectedName: "ratio",
+			hasChildren:  false,
+		},
+		{
+			name: "double column",
 			col: gomysqlschema.TableColumn{
 				Name:    "price",
 				Type:    gomysqlschema.TYPE_FLOAT,
@@ -80,6 +259,17 @@ func TestMysqlColumnToCommon(t *testing.T) {
 			},
 			expectedType: schema.String,
 			expectedName: "name",
+			hasChildren:  false,
+		},
+		{
+			name: "date column",
+			col: gomysqlschema.TableColumn{
+				Name:    "birth_date",
+				Type:    gomysqlschema.TYPE_DATE,
+				RawType: "date",
+			},
+			expectedType: schema.Timestamp,
+			expectedName: "birth_date",
 			hasChildren:  false,
 		},
 		{

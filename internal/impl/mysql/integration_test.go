@@ -600,8 +600,8 @@ memory: {}
   "mediumint_col": 8388607,
   "int_col": 2147483647,
   "bigint_col": 9223372036854775807,
-  "decimal_col": 999999999999999999999999999999999999.99,
-  "numeric_col": 98765.43,
+  "decimal_col": "999999999999999999999999999999999999.99",
+  "numeric_col": "98765.43",
   "float_col": 3.14,
   "double_col": 2.718281828,
   "date_col": "2024-12-10T00:00:00Z",
@@ -631,8 +631,8 @@ memory: {}
   "mediumint_col": -8388608,
   "int_col": -2147483648,
   "bigint_col": -9223372036854775808,
-  "decimal_col": 888888888888888888888888888888888888.88,
-  "numeric_col": 87654.21,
+  "decimal_col": "888888888888888888888888888888888888.88",
+  "numeric_col": "87654.21",
   "float_col": 1.618,
   "double_col": 3.141592653,
   "date_col": "2023-01-01T00:00:00Z",
@@ -895,11 +895,11 @@ file:
 			_, exists := fieldSchemas[fieldName]
 			assert.True(t, exists, "snapshot schema should contain field %s", fieldName)
 		}
-		assert.Equal(t, "INT64", fieldSchemas["id"]["type"])
+		assert.Equal(t, "INT32", fieldSchemas["id"]["type"])
 		assert.Equal(t, "STRING", fieldSchemas["name"]["type"])
 		assert.Equal(t, "TIMESTAMP", fieldSchemas["created_at"]["type"])
-		assert.Equal(t, "FLOAT64", fieldSchemas["score"]["type"])
-		assert.Equal(t, "STRING", fieldSchemas["data"]["type"])
+		assert.Equal(t, "FLOAT32", fieldSchemas["score"]["type"])
+		assert.Equal(t, "ANY", fieldSchemas["data"]["type"])
 		assert.Equal(t, "ARRAY", fieldSchemas["tags"]["type"])
 	}
 
@@ -938,11 +938,11 @@ file:
 		}
 
 		// Verify field types (uppercase)
-		assert.Equal(t, "INT64", fieldSchemas["id"]["type"], "id should be INT64")
+		assert.Equal(t, "INT32", fieldSchemas["id"]["type"], "id should be INT32")
 		assert.Equal(t, "STRING", fieldSchemas["name"]["type"], "name should be STRING")
 		assert.Equal(t, "TIMESTAMP", fieldSchemas["created_at"]["type"], "created_at should be TIMESTAMP")
-		assert.Equal(t, "FLOAT64", fieldSchemas["score"]["type"], "score should be FLOAT64")
-		assert.Equal(t, "STRING", fieldSchemas["data"]["type"], "json field should be STRING in schema")
+		assert.Equal(t, "FLOAT32", fieldSchemas["score"]["type"], "score should be FLOAT32")
+		assert.Equal(t, "ANY", fieldSchemas["data"]["type"], "json field should be ANY in schema")
 		assert.Equal(t, "ARRAY", fieldSchemas["tags"]["type"], "set field should be ARRAY")
 
 		// Verify array element type for tags
