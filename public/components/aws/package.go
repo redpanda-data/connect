@@ -16,7 +16,14 @@ package aws
 
 import (
 	// Bring in the internal plugin definitions.
-	_ "github.com/redpanda-data/connect/v4/internal/impl/aws"
+	_ "github.com/redpanda-data/connect/v4/internal/impl/aws/awslambda"
+	_ "github.com/redpanda-data/connect/v4/internal/impl/aws/bedrock"
+	_ "github.com/redpanda-data/connect/v4/internal/impl/aws/cloudwatch"
+	_ "github.com/redpanda-data/connect/v4/internal/impl/aws/dynamodb"
+	_ "github.com/redpanda-data/connect/v4/internal/impl/aws/kinesis"
+	_ "github.com/redpanda-data/connect/v4/internal/impl/aws/s3"
+	_ "github.com/redpanda-data/connect/v4/internal/impl/aws/sns"
+	_ "github.com/redpanda-data/connect/v4/internal/impl/aws/sqs"
 	_ "github.com/redpanda-data/connect/v4/internal/impl/kafka/aws"
 	_ "github.com/redpanda-data/connect/v4/internal/impl/mysql/aws"
 	_ "github.com/redpanda-data/connect/v4/internal/impl/opensearch/aws"

@@ -30,7 +30,8 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/utils/netutil"
 )
 
-func int32Field(conf *service.ParsedConfig, path ...string) (int32, error) {
+// Int32Field extracts an integer field from config and converts it to int32.
+func Int32Field(conf *service.ParsedConfig, path ...string) (int32, error) {
 	i, err := conf.FieldInt(path...)
 	if err != nil {
 		return 0, err
@@ -38,7 +39,8 @@ func int32Field(conf *service.ParsedConfig, path ...string) (int32, error) {
 	return int32(i), nil
 }
 
-func int64Field(conf *service.ParsedConfig, path ...string) (int64, error) {
+// Int64Field extracts an integer field from config and converts it to int64.
+func Int64Field(conf *service.ParsedConfig, path ...string) (int64, error) {
 	i, err := conf.FieldInt(path...)
 	if err != nil {
 		return 0, err
