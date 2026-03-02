@@ -10,3 +10,14 @@ tasks:
     generates:
       - openapi.yaml
     silent: true
+
+  api:
+    desc: Generate Go client from OpenAPI spec
+    deps: [openapi]
+    cmds:
+      - go run github.com/ogen-go/ogen/cmd/ogen --config ogen.yaml --target api --clean openapi.yaml
+    sources:
+      - openapi.yaml
+      - ogen.yaml
+    generates:
+      - api/**/*.go

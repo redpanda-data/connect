@@ -125,6 +125,7 @@ require (
 	github.com/nsf/jsondiff v0.0.0-20230430225905-43f6cf3098c1
 	github.com/nsqio/go-nsq v1.1.0
 	github.com/oauth2-proxy/mockoidc v0.0.0-20240214162133-caebfff84d25
+	github.com/ogen-go/ogen v1.20.1
 	github.com/oklog/ulid/v2 v2.1.1
 	github.com/opensearch-project/opensearch-go/v3 v3.1.0
 	github.com/ory/dockertest/v3 v3.12.0
@@ -248,6 +249,9 @@ require (
 	github.com/envoyproxy/go-control-plane/envoy v1.36.0 // indirect
 	github.com/envoyproxy/protoc-gen-validate v1.3.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.0 // indirect
+	github.com/ghodss/yaml v1.0.0 // indirect
+	github.com/go-faster/jx v1.2.0 // indirect
+	github.com/go-faster/yaml v0.4.6 // indirect
 	github.com/go-git/gcfg v1.5.1-0.20230307220236-3a3c6141e376 // indirect
 	github.com/go-git/go-billy/v5 v5.6.2 // indirect
 	github.com/go-jose/go-jose/v3 v3.0.4 // indirect
@@ -328,6 +332,7 @@ require (
 	golang.org/x/telemetry v0.0.0-20260209163413-e7419c687ee4 // indirect
 	gopkg.in/go-jose/go-jose.v2 v2.6.3 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
+	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gotest.tools/gotestsum v1.8.2 // indirect
 	k8s.io/apimachinery v0.34.1 // indirect
 	k8s.io/client-go v0.34.1 // indirect
@@ -547,7 +552,7 @@ require (
 	go.opentelemetry.io/otel/metric v1.40.0
 	go.opentelemetry.io/proto/otlp v1.9.0 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
-	go.uber.org/zap v1.27.0 // indirect
+	go.uber.org/zap v1.27.1 // indirect
 	golang.org/x/mod v0.33.0 // indirect
 	golang.org/x/oauth2 v0.35.0
 	golang.org/x/sys v0.41.0

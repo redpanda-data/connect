@@ -1,0 +1,19 @@
+parser:
+  # Enables type inference for schemas. Schema parser will try to detect schema type by its properties. Default is false.
+  infer_types: true
+  # Enables remote references resolving. See https://github.com/ogen-go/ogen/issues/385. Default is false.
+  allow_remote: true
+  # Allowed authentication schemes. See https://swagger.io/specification/#security-scheme-object. Default is full list.
+  authentication_schemes:
+    - "basic"
+    - "bearer"
+    - "oauth"
+
+generator:
+  features:
+    enable:
+      - "paths/client"
+      # - "client/security/reentrant"
+      - "client/request/validation"
+      - "ogen/otel"
+    disable_all: true
