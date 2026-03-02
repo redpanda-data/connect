@@ -71,9 +71,7 @@ func (s *Snapshot) Prepare(ctx context.Context) (SCN, error) {
 		return InvalidSCN, errors.New("no tables provided")
 	}
 
-	var (
-		currentSCN SCN
-	)
+	var currentSCN SCN
 	sql := `SELECT CURRENT_SCN FROM V$DATABASE`
 	if err := s.db.QueryRowContext(ctx, sql).Scan(&currentSCN); err != nil {
 		return InvalidSCN, fmt.Errorf("getting current SCN for snapshot: %w", err)
