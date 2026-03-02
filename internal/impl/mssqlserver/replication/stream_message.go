@@ -9,6 +9,7 @@
 package replication
 
 import (
+	"database/sql"
 	"encoding/hex"
 	"fmt"
 )
@@ -87,4 +88,10 @@ type MessageEvent struct {
 	Schema    string `json:"schema"`
 	Table     string `json:"table"`
 	Data      any    `json:"data"`
+
+	// ColumnNames and ColumnTypes carry user-defined column metadata (excluding
+	// MSSQL system columns with __$ prefix). They are used to build schema
+	// metadata on the outgoing message and are not serialised to JSON.
+	ColumnNames []string          `json:"-"`
+	ColumnTypes []*sql.ColumnType `json:"-"`
 }
