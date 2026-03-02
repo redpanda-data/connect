@@ -42,6 +42,7 @@ tasks:
     deps:
       - tools:install-golangci-lint
     cmds:
+      - echo "Running task lint. Consider using command 'fix-lint' to apply fixes."
       - '{{.TOOLS_BIN_DIR}}/golangci-lint run cmd/... internal/... public/...'
 
   fix-lint:
