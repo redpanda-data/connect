@@ -67,7 +67,7 @@ jobs:
           echo "$CONNECT_TELEMETRY_PRIV_KEY" > ./internal/telemetry/key.pem
 
       - name: Build binaries
-        uses: goreleaser/goreleaser-action@v6
+        uses: goreleaser/goreleaser-action@v7
         with:
           args: build --config ./.goreleaser/${{ matrix.binary-name }}.yaml  ${{ env.DRY_RUN != 'false' && '--snapshot' || '' }}
 
