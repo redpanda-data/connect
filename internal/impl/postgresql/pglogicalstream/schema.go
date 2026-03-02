@@ -10,6 +10,7 @@ package pglogicalstream
 
 import (
 	"database/sql"
+	"strconv"
 	"strings"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -40,7 +41,7 @@ func pgTypeNameToCommonType(typeName string) bschema.CommonType {
 	case "bytea":
 		return bschema.ByteArray
 	case "date":
-		return bschema.String
+		return bschema.Timestamp
 	case "time", "timetz", "time without time zone", "time with time zone":
 		return bschema.String
 	case "timestamp", "timestamptz", "timestamp without time zone", "timestamp with time zone":
@@ -86,6 +87,19 @@ func relationMessageToSchema(rel *RelationMessage, typeMap *pgtype.Map) any {
 	return c.ToAny()
 }
 
+// resolveTypeName resolves a database type name that may be a numeric OID string
+// (as returned by pgx/v5 stdlib for unregistered types like timetz) into a
+// canonical uppercase type name. Known OIDs are resolved via pgOIDToTypeName;
+// all other names are returned as-is.
+func resolveTypeName(name string) string {
+	if oid, err := strconv.ParseUint(name, 10, 32); err == nil {
+		if resolved, ok := pgOIDToTypeName[uint32(oid)]; ok {
+			return strings.ToUpper(resolved)
+		}
+	}
+	return name
+}
+
 // columnTypesToSchema converts sql.ColumnType slice (from a snapshot query) to a
 // serialized schema.Common suitable for use as message metadata.
 func columnTypesToSchema(tableName string, columnNames []string, columnTypes []*sql.ColumnType) any {
@@ -93,7 +107,7 @@ func columnTypesToSchema(tableName string, columnNames []string, columnTypes []*
 	for i, ct := range columnTypes {
 		children[i] = bschema.Common{
 			Name:     columnNames[i],
-			Type:     pgTypeNameToCommonType(ct.DatabaseTypeName()),
+			Type:     pgTypeNameToCommonType(resolveTypeName(ct.DatabaseTypeName())),
 			Optional: true,
 		}
 	}

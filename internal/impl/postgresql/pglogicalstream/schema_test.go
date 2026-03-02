@@ -41,7 +41,7 @@ func TestPgTypeNameToCommonType(t *testing.T) {
 		{typeName: "character varying", expected: bschema.String},
 		{typeName: "bpchar", expected: bschema.String},
 		{typeName: "bytea", expected: bschema.ByteArray},
-		{typeName: "date", expected: bschema.String},
+		{typeName: "date", expected: bschema.Timestamp},
 		{typeName: "time", expected: bschema.String},
 		{typeName: "timetz", expected: bschema.String},
 		{typeName: "timestamp", expected: bschema.Timestamp},
@@ -247,4 +247,29 @@ func TestRelationMessageToSchemaEmptyTable(t *testing.T) {
 	assert.Equal(t, "empty_table", parsed.Name)
 	assert.Equal(t, bschema.Object, parsed.Type)
 	assert.Empty(t, parsed.Children)
+}
+
+func TestResolveTypeName(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		// Normal pgx type names pass through unchanged.
+		{input: "INT4", expected: "INT4"},
+		{input: "TEXT", expected: "TEXT"},
+		{input: "BOOL", expected: "BOOL"},
+		// Numeric OID for timetz (1266) resolves to uppercase name.
+		{input: "1266", expected: "TIMETZ"},
+		// Unknown numeric OID passes through as-is.
+		{input: "99999", expected: "99999"},
+		// Non-numeric strings pass through.
+		{input: "VARCHAR", expected: "VARCHAR"},
+		{input: "", expected: ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			assert.Equal(t, tt.expected, resolveTypeName(tt.input))
+		})
+	}
 }

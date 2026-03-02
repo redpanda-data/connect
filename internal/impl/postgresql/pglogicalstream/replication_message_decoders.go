@@ -11,6 +11,7 @@ package pglogicalstream
 import (
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	pgtypes "github.com/jackc/pgtype"
@@ -179,26 +180,52 @@ func decodeTextColumnData(mi *pgtype.Map, data []byte, dataType uint32) (any, er
 			return val, err
 		}
 
-		if dt.Name == "uuid" {
+		switch dt.Name {
+		case "uuid":
 			typesValueForUUID, ok := val.([16]uint8)
 			if !ok {
 				return nil, errors.New("unable to convert uuid to string. type casting failed")
 			}
-
 			return uuid.UUID(typesValueForUUID).String(), nil
-		}
-
-		if dt.Name == "tsrange" {
+		case "tsrange":
 			newArray := pgtypes.Tsrange{}
 			if err := newArray.Scan(data); err != nil {
 				return nil, err
 			}
-
 			vv, _ := newArray.Value()
 			return vv, err
+		case "int2":
+			// pgx decodes int2 as int16; promote to int32 to match schema (Int32).
+			if v, ok := val.(int16); ok {
+				return int32(v), nil
+			}
+			return val, nil
+		case "numeric":
+			// Return the raw PostgreSQL text representation as a string,
+			// avoiding the pgtype.Numeric struct that doesn't match schema.
+			return string(data), nil
+		case "date":
+			// ±infinity dates cannot be represented as time.Time; return nil.
+			if ts, ok := val.(time.Time); ok {
+				return ts, nil
+			}
+			return nil, nil
+		case "time":
+			// Return the raw PostgreSQL text representation as a string,
+			// avoiding pgtype.Time struct.
+			// Note: timetz (OID 1266) is not in pgx's default type map, so it
+			// never reaches this switch — it is handled by the string(data)
+			// fallback after the TypeForOID check.
+			return string(data), nil
+		case "timestamp", "timestamptz":
+			// ±infinity timestamps cannot be represented as time.Time; return nil.
+			if ts, ok := val.(time.Time); ok {
+				return ts, nil
+			}
+			return nil, nil
+		default:
+			return val, err
 		}
-
-		return val, err
 	}
 	return string(data), nil
 }
