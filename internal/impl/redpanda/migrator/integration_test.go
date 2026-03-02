@@ -25,6 +25,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -1301,12 +1302,7 @@ logger:
 	t.Logf("And: Empty topic %s exists on destination with 0 messages", topicEmpty)
 	assert.Eventually(t, func() bool {
 		topics := dst.ListTopics()
-		for _, topic := range topics {
-			if topic == topicEmpty {
-				return true
-			}
-		}
-		return false
+		return slices.Contains(topics, topicEmpty)
 	}, redpandaTestWaitTimeout, 500*time.Millisecond)
 
 	eo, err := dst.Admin.ListEndOffsets(t.Context(), topicEmpty)
