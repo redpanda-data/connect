@@ -193,7 +193,7 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 	}
 
 	// cache
-	// if no cache component is specified then we fallback to default sql based version
+	// if no cache component is specified then we fall back to default SQL based version
 	if conf.Contains(ociFieldCheckpointCache) {
 		if scnCache, err = conf.FieldString(ociFieldCheckpointCache); err != nil {
 			return nil, err
