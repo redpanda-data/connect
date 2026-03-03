@@ -8,7 +8,7 @@
 
 //go:build tools
 
-package tools
+package procgen
 
 import (
 	_ "github.com/ogen-go/ogen"

@@ -1,0 +1,36 @@
+version: "3"
+
+vars:
+  NOTION_SDK_REPO: https://raw.githubusercontent.com/makenotion/notion-sdk-js/main
+
+tasks:
+  download:
+    desc: Download api-endpoints.ts from the Notion JS SDK
+    cmds:
+      - curl -sSfL {{.NOTION_SDK_REPO}}/src/api-endpoints.ts -o schema/api-endpoints.ts
+    generates:
+      - schema/api-endpoints.ts
+
+  openapi:
+    desc: Convert Postman collection to OpenAPI spec and enrich with TS SDK types
+    cmds:
+      - bunx p2o "postman_collection.json" -f openapi.yaml
+      - bun run schema/ts-to-openapi.ts
+    sources:
+      - postman_collection.json
+      - schema/api-endpoints.ts
+      - schema/ts-to-openapi.ts
+    generates:
+      - openapi.yaml
+    silent: true
+
+  notionapi:
+    desc: Generate Go client from OpenAPI spec
+    deps: [openapi]
+    cmds:
+      - go run github.com/ogen-go/ogen/cmd/ogen --config ../ogen.yaml --package notionapi --target notionapi --clean openapi.yaml
+    sources:
+      - openapi.yaml
+      - ../ogen.yaml
+    generates:
+      - notionapi/**/*.go

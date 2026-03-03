@@ -1,14 +1,29 @@
-# Postman Collection to Redpanda Connect Processor
+# procgen
 
-## Prerequisites
+Code generation for third-party HTTP API clients used by Redpanda Connect processors.
 
-- Install [bun](https://bun.sh)
-- Run `bun install postman-to-openapi`
+## Structure
 
-## Extracting Postman Collection to OpenAPI
+Each subdirectory targets a specific API:
 
-- Go to https://www.postman.com and Search product Workspace ex. "Notion"
-- Open the Workspace and click on the "Variables" tab
-- Click on "Fork Collection" and save it to your workspace
-- Click on "..." > "More" > "Export" > "Export as JSON" and save it to `postman_collection.json`
-- Run `bunx p2o "./Notion API.postman_collection.json" -f notion_openapi.yml`
+| Directory | API | Output |
+|---|---|---|
+| `notion/` | [Notion API](https://developers.notion.com) | `notion/notionapi/` |
+
+## Shared tooling
+
+- `ogen.yaml` - Shared [ogen](https://github.com/ogen-go/ogen) configuration for OpenAPI code generation
+- `tools.go` - Go tool dependencies (build-tagged `tools`)
+
+Each subdirectory has its own `Taskfile.yml` and `README.md` with API-specific setup.
+
+## Adding a new API
+
+1. Create a new directory: `procgen/<api>/`
+1. Go to https://www.postman.com and search for the product workspace (e.g. "Notion")
+1. Fork the collection to your workspace
+1. Export as JSON ("..." > "More" > "Export" > "Export as JSON")
+1. Save as `<api>/postman_collection.json`
+1. Add a `Taskfile.yml` with tasks for schema download, OpenAPI generation, and Go client generation
+1. Reference `../ogen.yaml` for shared ogen config (or add API-specific overrides)
+1. Add a `README.md` documenting the pipeline
