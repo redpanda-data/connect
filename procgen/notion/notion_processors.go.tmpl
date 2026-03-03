@@ -20,25 +20,25 @@ type securitySource struct {
 	token string
 }
 
-func (s *securitySource) {{ .Security.Method }}(_ context.Context, _ v1.OperationName) (v1.{{ .Security.Type }}, error) {
-	return v1.{{ .Security.Type }}{ {{- .Security.Field }}: s.token}, nil
+func (s *securitySource) BearerAuth(_ context.Context, _ v1.OperationName) (v1.BearerAuth, error) {
+	return v1.BearerAuth{Token: s.token}, nil
 }
 
 const (
-	fieldAPIKey        = "api_key"
-	fieldNotionVersion = "notion_version"
-	fieldServerURL     = "server_url"
+	npFieldAPIKey        = "api_key"
+	npFieldNotionVersion = "notion_version"
+	npFieldServerURL     = "server_url"
 )
 
 func sharedConfigFields() []*service.ConfigField {
 	return []*service.ConfigField{
-		service.NewStringField(fieldAPIKey).
+		service.NewStringField(npFieldAPIKey).
 			Secret().
 			Description("The {{ .Service | title }} API integration token."),
-		service.NewStringField(fieldNotionVersion).
+		service.NewStringField(npFieldNotionVersion).
 			Default("2022-06-28").
 			Description("The Notion API version."),
-		service.NewStringField(fieldServerURL).
+		service.NewStringField(npFieldServerURL).
 			Default({{ .DefaultServerURL | printf "%q" }}).
 			Advanced().
 			Description("The {{ .Service | title }} API server URL."),
@@ -51,16 +51,16 @@ type baseProcessor struct {
 	log           *service.Logger
 }
 
-func newBaseProcessor(conf *service.ParsedConfig, log *service.Logger) (baseProcessor, error) {
-	apiKey, err := conf.FieldString(fieldAPIKey)
+func baseProcessorFromParsed(conf *service.ParsedConfig, log *service.Logger) (baseProcessor, error) {
+	apiKey, err := conf.FieldString(npFieldAPIKey)
 	if err != nil {
 		return baseProcessor{}, err
 	}
-	notionVersion, err := conf.FieldString(fieldNotionVersion)
+	notionVersion, err := conf.FieldString(npFieldNotionVersion)
 	if err != nil {
 		return baseProcessor{}, err
 	}
-	serverURL, err := conf.FieldString(fieldServerURL)
+	serverURL, err := conf.FieldString(npFieldServerURL)
 	if err != nil {
 		return baseProcessor{}, err
 	}
@@ -83,8 +83,7 @@ func (p *baseProcessor) Close(context.Context) error { return nil }
 // On HTTP errors, returns the message with error set so it flows downstream.
 // On other errors, returns a processing failure.
 func handleAPIError(msg *service.Message, err error) (service.MessageBatch, error) {
-	var unexpectedStatus *validate.UnexpectedStatusCodeError
-	if errors.As(err, &unexpectedStatus) {
+	if unexpectedStatus, ok := errors.Into[*validate.UnexpectedStatusCodeError](err); ok {
 		out := msg.Copy()
 		out.MetaSetMut("http_status_code", unexpectedStatus.StatusCode)
 		out.SetError(fmt.Errorf("{{ .Service | title }} API error (status %d): %w", unexpectedStatus.StatusCode, err))
@@ -107,7 +106,7 @@ func marshalResponse(msg *service.Message, resp any) (service.MessageBatch, erro
 // Ensure unused imports are kept.
 var (
 	_ = strconv.Atoi
-	_ = errors.As
+	_ = errors.Into[error]
 	_ = validate.ErrNilPointer
 )
 
@@ -156,7 +155,7 @@ type {{ .Name | lowerFirst }}Processor struct {
 }
 
 func new{{ .Name }}Processor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
-	base, err := newBaseProcessor(conf, mgr.Logger())
+	base, err := baseProcessorFromParsed(conf, mgr.Logger())
 	if err != nil {
 		return nil, err
 	}

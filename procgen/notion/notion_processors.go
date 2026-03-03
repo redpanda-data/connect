@@ -25,23 +25,23 @@ func (s *securitySource) BearerAuth(_ context.Context, _ v1.OperationName) (v1.B
 }
 
 const (
-	fieldAPIKey        = "api_key"
-	fieldNotionVersion = "notion_version"
-	fieldServerURL     = "server_url"
+	npFieldAPIKey        = "api_key"
+	npFieldNotionVersion = "notion_version"
+	npFieldServerURL     = "server_url"
 )
 
 func sharedConfigFields() []*service.ConfigField {
 	return []*service.ConfigField{
-		service.NewStringField(fieldAPIKey).
+		service.NewStringField(npFieldAPIKey).
 			Secret().
-			Description("The Notion API integration token."),
-		service.NewStringField(fieldNotionVersion).
+			Description("The NOTION API integration token."),
+		service.NewStringField(npFieldNotionVersion).
 			Default("2022-06-28").
 			Description("The Notion API version."),
-		service.NewStringField(fieldServerURL).
+		service.NewStringField(npFieldServerURL).
 			Default("https://api.notion.com").
 			Advanced().
-			Description("The Notion API server URL."),
+			Description("The NOTION API server URL."),
 	}
 }
 
@@ -51,23 +51,23 @@ type baseProcessor struct {
 	log           *service.Logger
 }
 
-func newBaseProcessor(conf *service.ParsedConfig, log *service.Logger) (baseProcessor, error) {
-	apiKey, err := conf.FieldString(fieldAPIKey)
+func baseProcessorFromParsed(conf *service.ParsedConfig, log *service.Logger) (baseProcessor, error) {
+	apiKey, err := conf.FieldString(npFieldAPIKey)
 	if err != nil {
 		return baseProcessor{}, err
 	}
-	notionVersion, err := conf.FieldString(fieldNotionVersion)
+	notionVersion, err := conf.FieldString(npFieldNotionVersion)
 	if err != nil {
 		return baseProcessor{}, err
 	}
-	serverURL, err := conf.FieldString(fieldServerURL)
+	serverURL, err := conf.FieldString(npFieldServerURL)
 	if err != nil {
 		return baseProcessor{}, err
 	}
 
 	client, err := v1.NewClient(serverURL, &securitySource{token: apiKey})
 	if err != nil {
-		return baseProcessor{}, fmt.Errorf("creating Notion client: %w", err)
+		return baseProcessor{}, fmt.Errorf("creating NOTION client: %w", err)
 	}
 
 	return baseProcessor{
@@ -83,14 +83,13 @@ func (p *baseProcessor) Close(context.Context) error { return nil }
 // On HTTP errors, returns the message with error set so it flows downstream.
 // On other errors, returns a processing failure.
 func handleAPIError(msg *service.Message, err error) (service.MessageBatch, error) {
-	var unexpectedStatus *validate.UnexpectedStatusCodeError
-	if errors.As(err, &unexpectedStatus) {
+	if unexpectedStatus, ok := errors.Into[*validate.UnexpectedStatusCodeError](err); ok {
 		out := msg.Copy()
 		out.MetaSetMut("http_status_code", unexpectedStatus.StatusCode)
-		out.SetError(fmt.Errorf("Notion API error (status %d): %w", unexpectedStatus.StatusCode, err))
+		out.SetError(fmt.Errorf("NOTION API error (status %d): %w", unexpectedStatus.StatusCode, err))
 		return service.MessageBatch{out}, nil
 	}
-	return nil, fmt.Errorf("Notion API request failed: %w", err)
+	return nil, fmt.Errorf("NOTION API request failed: %w", err)
 }
 
 // marshalResponse serializes the typed response to JSON on a copy of the message.
@@ -107,7 +106,7 @@ func marshalResponse(msg *service.Message, resp any) (service.MessageBatch, erro
 // Ensure unused imports are kept.
 var (
 	_ = strconv.Atoi
-	_ = errors.As
+	_ = errors.Into[error]
 	_ = validate.ErrNilPointer
 )
 
@@ -123,7 +122,7 @@ func init() {
 
 func blocksIDChildrenGetConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Categories("Services", "Notion").
+		Categories("Services", "NOTION").
 		Summary("Retrieve block children").
 		Description("get /v1/blocks/{id}/children").
 		Fields(sharedConfigFields()...).Fields(
@@ -142,7 +141,7 @@ type blocksIDChildrenGetProcessor struct {
 }
 
 func newBlocksIDChildrenGetProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
-	base, err := newBaseProcessor(conf, mgr.Logger())
+	base, err := baseProcessorFromParsed(conf, mgr.Logger())
 	if err != nil {
 		return nil, err
 	}
@@ -201,7 +200,7 @@ func init() {
 
 func blocksIDChildrenPatchConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Categories("Services", "Notion").
+		Categories("Services", "NOTION").
 		Summary("Append block children").
 		Description("patch /v1/blocks/{id}/children").
 		Fields(sharedConfigFields()...).Fields(
@@ -216,7 +215,7 @@ type blocksIDChildrenPatchProcessor struct {
 }
 
 func newBlocksIDChildrenPatchProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
-	base, err := newBaseProcessor(conf, mgr.Logger())
+	base, err := baseProcessorFromParsed(conf, mgr.Logger())
 	if err != nil {
 		return nil, err
 	}
@@ -272,7 +271,7 @@ func init() {
 
 func blocksIDDeleteConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Categories("Services", "Notion").
+		Categories("Services", "NOTION").
 		Summary("Delete a block").
 		Description("delete /v1/blocks/{id}").
 		Fields(sharedConfigFields()...).Fields(
@@ -287,7 +286,7 @@ type blocksIDDeleteProcessor struct {
 }
 
 func newBlocksIDDeleteProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
-	base, err := newBaseProcessor(conf, mgr.Logger())
+	base, err := baseProcessorFromParsed(conf, mgr.Logger())
 	if err != nil {
 		return nil, err
 	}
@@ -330,7 +329,7 @@ func init() {
 
 func blocksIDGetConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Categories("Services", "Notion").
+		Categories("Services", "NOTION").
 		Summary("Retrieve a block").
 		Description("get /v1/blocks/{id}").
 		Fields(sharedConfigFields()...).Fields(
@@ -345,7 +344,7 @@ type blocksIDGetProcessor struct {
 }
 
 func newBlocksIDGetProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
-	base, err := newBaseProcessor(conf, mgr.Logger())
+	base, err := baseProcessorFromParsed(conf, mgr.Logger())
 	if err != nil {
 		return nil, err
 	}
@@ -388,7 +387,7 @@ func init() {
 
 func blocksIDPatchConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Categories("Services", "Notion").
+		Categories("Services", "NOTION").
 		Summary("Update a block").
 		Description("patch /v1/blocks/{id}").
 		Fields(sharedConfigFields()...).Fields(
@@ -403,7 +402,7 @@ type blocksIDPatchProcessor struct {
 }
 
 func newBlocksIDPatchProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
-	base, err := newBaseProcessor(conf, mgr.Logger())
+	base, err := baseProcessorFromParsed(conf, mgr.Logger())
 	if err != nil {
 		return nil, err
 	}
@@ -459,7 +458,7 @@ func init() {
 
 func commentsGetConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Categories("Services", "Notion").
+		Categories("Services", "NOTION").
 		Summary("Retrieve comments").
 		Description("get /v1/comments").
 		Fields(sharedConfigFields()...).Fields(
@@ -479,7 +478,7 @@ type commentsGetProcessor struct {
 }
 
 func newCommentsGetProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
-	base, err := newBaseProcessor(conf, mgr.Logger())
+	base, err := baseProcessorFromParsed(conf, mgr.Logger())
 	if err != nil {
 		return nil, err
 	}
@@ -540,7 +539,7 @@ func init() {
 
 func commentsPostConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Categories("Services", "Notion").
+		Categories("Services", "NOTION").
 		Summary("Add comment to discussion").
 		Description("post /v1/comments").
 		Fields(sharedConfigFields()...).Fields()
@@ -551,7 +550,7 @@ type commentsPostProcessor struct {
 }
 
 func newCommentsPostProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
-	base, err := newBaseProcessor(conf, mgr.Logger())
+	base, err := baseProcessorFromParsed(conf, mgr.Logger())
 	if err != nil {
 		return nil, err
 	}
@@ -597,7 +596,7 @@ func init() {
 
 func databasesIDGetConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Categories("Services", "Notion").
+		Categories("Services", "NOTION").
 		Summary("Retrieve a database").
 		Description("get /v1/databases/{id}").
 		Fields(sharedConfigFields()...).Fields(
@@ -612,7 +611,7 @@ type databasesIDGetProcessor struct {
 }
 
 func newDatabasesIDGetProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
-	base, err := newBaseProcessor(conf, mgr.Logger())
+	base, err := baseProcessorFromParsed(conf, mgr.Logger())
 	if err != nil {
 		return nil, err
 	}
@@ -655,7 +654,7 @@ func init() {
 
 func databasesIDPatchConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Categories("Services", "Notion").
+		Categories("Services", "NOTION").
 		Summary("Update database properties").
 		Description("patch /v1/databases/{id}").
 		Fields(sharedConfigFields()...).Fields(
@@ -670,7 +669,7 @@ type databasesIDPatchProcessor struct {
 }
 
 func newDatabasesIDPatchProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
-	base, err := newBaseProcessor(conf, mgr.Logger())
+	base, err := baseProcessorFromParsed(conf, mgr.Logger())
 	if err != nil {
 		return nil, err
 	}
@@ -726,7 +725,7 @@ func init() {
 
 func databasesIDQueryPostConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Categories("Services", "Notion").
+		Categories("Services", "NOTION").
 		Summary("Filter a database").
 		Description("post /v1/databases/{id}/query").
 		Fields(sharedConfigFields()...).Fields(
@@ -741,7 +740,7 @@ type databasesIDQueryPostProcessor struct {
 }
 
 func newDatabasesIDQueryPostProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
-	base, err := newBaseProcessor(conf, mgr.Logger())
+	base, err := baseProcessorFromParsed(conf, mgr.Logger())
 	if err != nil {
 		return nil, err
 	}
@@ -797,7 +796,7 @@ func init() {
 
 func databasesPostConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Categories("Services", "Notion").
+		Categories("Services", "NOTION").
 		Summary("Create a database").
 		Description("post /v1/databases/").
 		Fields(sharedConfigFields()...).Fields()
@@ -808,7 +807,7 @@ type databasesPostProcessor struct {
 }
 
 func newDatabasesPostProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
-	base, err := newBaseProcessor(conf, mgr.Logger())
+	base, err := baseProcessorFromParsed(conf, mgr.Logger())
 	if err != nil {
 		return nil, err
 	}
@@ -854,7 +853,7 @@ func init() {
 
 func pagesIDGetConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Categories("Services", "Notion").
+		Categories("Services", "NOTION").
 		Summary("Retrieve a page").
 		Description("get /v1/pages/{id}").
 		Fields(sharedConfigFields()...).Fields(
@@ -869,7 +868,7 @@ type pagesIDGetProcessor struct {
 }
 
 func newPagesIDGetProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
-	base, err := newBaseProcessor(conf, mgr.Logger())
+	base, err := baseProcessorFromParsed(conf, mgr.Logger())
 	if err != nil {
 		return nil, err
 	}
@@ -912,7 +911,7 @@ func init() {
 
 func pagesIDPatchConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Categories("Services", "Notion").
+		Categories("Services", "NOTION").
 		Summary("Archive a page").
 		Description("patch /v1/pages/{id}").
 		Fields(sharedConfigFields()...).Fields(
@@ -927,7 +926,7 @@ type pagesIDPatchProcessor struct {
 }
 
 func newPagesIDPatchProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
-	base, err := newBaseProcessor(conf, mgr.Logger())
+	base, err := baseProcessorFromParsed(conf, mgr.Logger())
 	if err != nil {
 		return nil, err
 	}
@@ -983,7 +982,7 @@ func init() {
 
 func pagesPageIDPropertiesPropertyIDGetConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Categories("Services", "Notion").
+		Categories("Services", "NOTION").
 		Summary("Retrieve a page property item").
 		Description("get /v1/pages/{page_id}/properties/{property_id}").
 		Fields(sharedConfigFields()...).Fields(
@@ -1001,7 +1000,7 @@ type pagesPageIDPropertiesPropertyIDGetProcessor struct {
 }
 
 func newPagesPageIDPropertiesPropertyIDGetProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
-	base, err := newBaseProcessor(conf, mgr.Logger())
+	base, err := baseProcessorFromParsed(conf, mgr.Logger())
 	if err != nil {
 		return nil, err
 	}
@@ -1054,7 +1053,7 @@ func init() {
 
 func pagesPostConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Categories("Services", "Notion").
+		Categories("Services", "NOTION").
 		Summary("Create a page with content").
 		Description("post /v1/pages/").
 		Fields(sharedConfigFields()...).Fields()
@@ -1065,7 +1064,7 @@ type pagesPostProcessor struct {
 }
 
 func newPagesPostProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
-	base, err := newBaseProcessor(conf, mgr.Logger())
+	base, err := baseProcessorFromParsed(conf, mgr.Logger())
 	if err != nil {
 		return nil, err
 	}
@@ -1111,7 +1110,7 @@ func init() {
 
 func searchPostConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Categories("Services", "Notion").
+		Categories("Services", "NOTION").
 		Summary("Search").
 		Description("post /v1/search").
 		Fields(sharedConfigFields()...).Fields()
@@ -1122,7 +1121,7 @@ type searchPostProcessor struct {
 }
 
 func newSearchPostProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
-	base, err := newBaseProcessor(conf, mgr.Logger())
+	base, err := baseProcessorFromParsed(conf, mgr.Logger())
 	if err != nil {
 		return nil, err
 	}
@@ -1168,7 +1167,7 @@ func init() {
 
 func usersGetConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Categories("Services", "Notion").
+		Categories("Services", "NOTION").
 		Summary("List all users").
 		Description("get /v1/users").
 		Fields(sharedConfigFields()...).Fields()
@@ -1179,7 +1178,7 @@ type usersGetProcessor struct {
 }
 
 func newUsersGetProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
-	base, err := newBaseProcessor(conf, mgr.Logger())
+	base, err := baseProcessorFromParsed(conf, mgr.Logger())
 	if err != nil {
 		return nil, err
 	}
@@ -1212,7 +1211,7 @@ func init() {
 
 func usersIDGetConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Categories("Services", "Notion").
+		Categories("Services", "NOTION").
 		Summary("Retrieve a user").
 		Description("get /v1/users/{id}").
 		Fields(sharedConfigFields()...).Fields(
@@ -1227,7 +1226,7 @@ type usersIDGetProcessor struct {
 }
 
 func newUsersIDGetProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
-	base, err := newBaseProcessor(conf, mgr.Logger())
+	base, err := baseProcessorFromParsed(conf, mgr.Logger())
 	if err != nil {
 		return nil, err
 	}
@@ -1270,7 +1269,7 @@ func init() {
 
 func usersMeGetConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Categories("Services", "Notion").
+		Categories("Services", "NOTION").
 		Summary("Retrieve your token’s bot user").
 		Description("get /v1/users/me").
 		Fields(sharedConfigFields()...).Fields()
@@ -1281,7 +1280,7 @@ type usersMeGetProcessor struct {
 }
 
 func newUsersMeGetProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
-	base, err := newBaseProcessor(conf, mgr.Logger())
+	base, err := baseProcessorFromParsed(conf, mgr.Logger())
 	if err != nil {
 		return nil, err
 	}
