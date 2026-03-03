@@ -688,11 +688,11 @@ func (c *SnowflakeIngestionChannel) WaitUntilCommitted(ctx context.Context, time
 		}
 		return nil
 	}, backoff.WithContext(
-		// 1, 10, 100, 1000, 1000, ...
+		// 32, 64, 128, 256, 512, 512, ...
 		backoff.NewExponentialBackOff(
-			backoff.WithInitialInterval(time.Millisecond),
-			backoff.WithMultiplier(10),
-			backoff.WithMaxInterval(time.Second),
+			backoff.WithInitialInterval(32*time.Millisecond),
+			backoff.WithMultiplier(2),
+			backoff.WithMaxInterval(512*time.Millisecond),
 			backoff.WithMaxElapsedTime(timeout),
 		),
 		ctx,
