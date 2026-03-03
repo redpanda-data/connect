@@ -55,6 +55,11 @@ const (
 	ssoFieldSchemaEvolutionNewColumnTypeMapping = "new_column_type_mapping"
 	ssoFieldSchemaEvolutionProcessors           = "processors"
 	ssoFieldCommitTimeout                       = "commit_timeout"
+	ssoFieldCommitBackoff                       = "commit_backoff"
+	ssoFieldCommitBackoffInitInterval           = "initial_interval"
+	ssoFieldCommitBackoffMaxInterval            = "max_interval"
+	ssoFieldCommitBackoffMaxElapsedTime         = "max_elapsed_time"
+	ssoFieldCommitBackoffMultiplier             = "multiplier"
 	ssoFieldMessageFormat                       = "message_format"
 	ssoFieldTimestampFormat                     = "timestamp_format"
 
@@ -184,11 +189,26 @@ For more information about offset tokens, see https://docs.snowflake.com/en/user
 				Advanced().
 				Examples(`offset-${!"%016X".format(@kafka_offset)}`, `postgres-${!@lsn}`),
 			service.NewDurationField(ssoFieldCommitTimeout).
-				Description(`The max duration to wait until the data has been asynchronously committed to Snowflake.`).
-				Default("60s").
+				Description(`Deprecated: use `+"`commit_backoff.max_elapsed_time`"+` instead.`).
+				Default("").
 				Advanced().
-				Example("10s").
-				Example("10m"),
+				Deprecated(),
+			service.NewObjectField(ssoFieldCommitBackoff,
+				service.NewDurationField(ssoFieldCommitBackoffInitInterval).
+					Description("The initial period to wait between status polls.").
+					Default("32ms"),
+				service.NewDurationField(ssoFieldCommitBackoffMaxInterval).
+					Description("The maximum period to wait between status polls.").
+					Default("512ms"),
+				service.NewDurationField(ssoFieldCommitBackoffMaxElapsedTime).
+					Description("The maximum total time to wait for data to be committed. If zero then no limit is used.").
+					Default("60s"),
+				service.NewFloatField(ssoFieldCommitBackoffMultiplier).
+					Description("The factor by which the poll interval grows on each attempt.").
+					Default(2.0),
+			).
+				Description("Control how frequently Snowflake is polled to check if data has been committed.").
+				Advanced(),
 			service.NewStringAnnotatedEnumField(ssoFieldMessageFormat, map[string]string{
 				"object": "Messages are an object in JSON or bloblang where the key of the object is the column name in snowflake and the value is the value for the column",
 				"array":  "Messages are an array of values where the position in the array matches up the with ordinal of the column in snowflake",
@@ -526,9 +546,34 @@ func newSnowflakeStreamer(
 		return nil, err
 	}
 
-	commitTimeout, err := conf.FieldDuration(ssoFieldCommitTimeout)
+	commitBackoffConf := conf.Namespace(ssoFieldCommitBackoff)
+	commitBackoffInitInterval, err := commitBackoffConf.FieldDuration(ssoFieldCommitBackoffInitInterval)
 	if err != nil {
 		return nil, err
+	}
+	commitBackoffMaxInterval, err := commitBackoffConf.FieldDuration(ssoFieldCommitBackoffMaxInterval)
+	if err != nil {
+		return nil, err
+	}
+	commitBackoffMaxElapsedTime, err := commitBackoffConf.FieldDuration(ssoFieldCommitBackoffMaxElapsedTime)
+	if err != nil {
+		return nil, err
+	}
+	commitBackoffMultiplier, err := commitBackoffConf.FieldFloat(ssoFieldCommitBackoffMultiplier)
+	if err != nil {
+		return nil, err
+	}
+	// commit_timeout is deprecated. If explicitly set, it overrides commit_backoff.max_elapsed_time.
+	if legacyStr, _ := conf.FieldString(ssoFieldCommitTimeout); legacyStr != "" {
+		if commitBackoffMaxElapsedTime, err = conf.FieldDuration(ssoFieldCommitTimeout); err != nil {
+			return nil, err
+		}
+	}
+	commitBackoff := streaming.CommitBackoffOptions{
+		InitialInterval: commitBackoffInitInterval,
+		MaxInterval:     commitBackoffMaxInterval,
+		MaxElapsedTime:  commitBackoffMaxElapsedTime,
+		Multiplier:      commitBackoffMultiplier,
 	}
 
 	messageFormatStr, err := conf.FieldString(ssoFieldMessageFormat)
@@ -637,7 +682,7 @@ func newSnowflakeStreamer(
 				buildOpts:       buildOpts,
 				offsetToken:     offsetToken,
 				schemaMode:      schemaEvolutionMode,
-				commitTimeout:   commitTimeout,
+				commitBackoff:   commitBackoff,
 				messageFormat:   msgFmt,
 				timestampFormat: timestampFormat,
 			}
@@ -666,7 +711,7 @@ func newSnowflakeStreamer(
 				buildOpts:       buildOpts,
 				offsetToken:     offsetToken,
 				schemaMode:      schemaEvolutionMode,
-				commitTimeout:   commitTimeout,
+				commitBackoff:   commitBackoff,
 				messageFormat:   msgFmt,
 				timestampFormat: timestampFormat,
 			}
@@ -921,7 +966,7 @@ type snowpipePooledOutput struct {
 	channelPool   pool.Capped[*streaming.SnowflakeIngestionChannel]
 	metrics       *snowpipeMetrics
 	buildOpts     streaming.BuildOptions
-	commitTimeout time.Duration
+	commitBackoff streaming.CommitBackoffOptions
 
 	channelPrefix, db, schema, table, role string
 	offsetToken                            *service.InterpolatedString
@@ -995,7 +1040,7 @@ func (o *snowpipePooledOutput) WriteBatch(ctx context.Context, batch service.Mes
 	}
 	o.logger.Debugf("done inserting %d rows using channel %s, stats: %+v", len(batch), channel.Name, stats)
 	commitStart := time.Now()
-	polls, err := channel.WaitUntilCommitted(ctx, o.commitTimeout)
+	polls, err := channel.WaitUntilCommitted(ctx, o.commitBackoff)
 	if err != nil {
 		reopened, reopenErr := o.openChannel(ctx, channel.Name, channel.ID)
 		if reopenErr == nil {
@@ -1024,7 +1069,7 @@ type snowpipeIndexedOutput struct {
 	channelPool   pool.Indexed[*streaming.SnowflakeIngestionChannel]
 	metrics       *snowpipeMetrics
 	buildOpts     streaming.BuildOptions
-	commitTimeout time.Duration
+	commitBackoff streaming.CommitBackoffOptions
 
 	db, schema, table, role  string
 	offsetToken, channelName *service.InterpolatedString
@@ -1102,7 +1147,7 @@ func (o *snowpipeIndexedOutput) WriteBatch(ctx context.Context, batch service.Me
 	}
 	o.logger.Debugf("done inserting %d rows using channel %s, stats: %+v", len(batch), channel.Name, stats)
 	commitStart := time.Now()
-	polls, err := channel.WaitUntilCommitted(ctx, o.commitTimeout)
+	polls, err := channel.WaitUntilCommitted(ctx, o.commitBackoff)
 	if err != nil {
 		reopened, reopenErr := o.openChannel(ctx, channel.Name, channel.ID)
 		if reopenErr == nil {
