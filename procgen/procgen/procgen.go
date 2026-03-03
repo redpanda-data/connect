@@ -121,17 +121,16 @@ func Run(args []string) error {
 	cfgPath := set.Arg(0)
 	specPath := set.Arg(1)
 
-	prefix := *service // already lowercase, e.g. "notion"
 	pkgDir := *pkg
 	if pkgDir == "" {
-		pkgDir = filepath.Join("impl", prefix)
+		pkgDir = filepath.Join("impl", *service)
 	}
 	apiDir := *apiPackage
 	if apiDir == "" {
 		apiDir = filepath.Join(pkgDir, "api", "v1")
 	}
 	apiPkgName := filepath.Base(apiDir)
-	outputFilename := prefix + "_processors.go"
+	outputFilename := *service + "_processors.go"
 
 	// Determine processor package name.
 	procPkgName, err := resolvePackageName(pkgDir)
@@ -224,10 +223,10 @@ func Run(args []string) error {
 	td := TemplateData{
 		Package:          procPkgName,
 		APIPackage:       apiImportPath,
-		Service:          prefix,
+		Service:          *service,
 		DefaultServerURL: defaultURL,
 		SharedHeaders:    sharedHeaders,
-		Operations:       buildOps(operations, prefix, sharedHeaderNames),
+		Operations:       buildOps(operations, *service, sharedHeaderNames),
 	}
 
 	if err := generateProcessorFile(td, string(tmplData), pkgDir, outputFilename); err != nil {

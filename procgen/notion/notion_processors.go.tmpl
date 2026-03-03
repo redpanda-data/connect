@@ -6,10 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strconv"
 
-	"github.com/go-faster/errors"
-	"github.com/ogen-go/ogen/validate"
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	v1 "{{ .APIPackage }}"
@@ -103,13 +100,6 @@ func marshalResponse(msg *service.Message, resp any) (service.MessageBatch, erro
 	return service.MessageBatch{out}, nil
 }
 
-// Ensure unused imports are kept.
-var (
-	_ = strconv.Atoi
-	_ = errors.Into[error]
-	_ = validate.ErrNilPointer
-)
-
 {{ range .Operations }}
 // {{ .Name }} processor — {{ .HTTPMethod }} {{ .Path }}
 
@@ -125,7 +115,9 @@ func {{ .Name | lowerFirst }}Config() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Services", {{ $.Service | title | printf "%q" }}).
 		Summary({{ .Summary | printf "%q" }}).
-		Description({{ printf "%s %s" .HTTPMethod .Path | printf "%q" }}).
+		{{- if .Description }}
+		Description({{ .Description | printf "%q" }}).
+		{{- end }}
 		Fields(sharedConfigFields()...).Fields(
 		{{- range .PathParams }}
 		service.NewInterpolatedStringField("{{ .FieldName }}").

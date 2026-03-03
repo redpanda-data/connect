@@ -34,14 +34,14 @@ func sharedConfigFields() []*service.ConfigField {
 	return []*service.ConfigField{
 		service.NewStringField(npFieldAPIKey).
 			Secret().
-			Description("The NOTION API integration token."),
+			Description("The Notion API integration token."),
 		service.NewStringField(npFieldNotionVersion).
 			Default("2022-06-28").
 			Description("The Notion API version."),
 		service.NewStringField(npFieldServerURL).
 			Default("https://api.notion.com").
 			Advanced().
-			Description("The NOTION API server URL."),
+			Description("The Notion API server URL."),
 	}
 }
 
@@ -67,7 +67,7 @@ func baseProcessorFromParsed(conf *service.ParsedConfig, log *service.Logger) (b
 
 	client, err := v1.NewClient(serverURL, &securitySource{token: apiKey})
 	if err != nil {
-		return baseProcessor{}, fmt.Errorf("creating NOTION client: %w", err)
+		return baseProcessor{}, fmt.Errorf("creating Notion client: %w", err)
 	}
 
 	return baseProcessor{
@@ -86,10 +86,10 @@ func handleAPIError(msg *service.Message, err error) (service.MessageBatch, erro
 	if unexpectedStatus, ok := errors.Into[*validate.UnexpectedStatusCodeError](err); ok {
 		out := msg.Copy()
 		out.MetaSetMut("http_status_code", unexpectedStatus.StatusCode)
-		out.SetError(fmt.Errorf("NOTION API error (status %d): %w", unexpectedStatus.StatusCode, err))
+		out.SetError(fmt.Errorf("Notion API error (status %d): %w", unexpectedStatus.StatusCode, err))
 		return service.MessageBatch{out}, nil
 	}
-	return nil, fmt.Errorf("NOTION API request failed: %w", err)
+	return nil, fmt.Errorf("Notion API request failed: %w", err)
 }
 
 // marshalResponse serializes the typed response to JSON on a copy of the message.
@@ -103,13 +103,6 @@ func marshalResponse(msg *service.Message, resp any) (service.MessageBatch, erro
 	return service.MessageBatch{out}, nil
 }
 
-// Ensure unused imports are kept.
-var (
-	_ = strconv.Atoi
-	_ = errors.Into[error]
-	_ = validate.ErrNilPointer
-)
-
 // BlocksIDChildrenGet processor — get /v1/blocks/{id}/children
 
 func init() {
@@ -122,9 +115,8 @@ func init() {
 
 func blocksIDChildrenGetConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Categories("Services", "NOTION").
+		Categories("Services", "Notion").
 		Summary("Retrieve block children").
-		Description("get /v1/blocks/{id}/children").
 		Fields(sharedConfigFields()...).Fields(
 		service.NewInterpolatedStringField("id").
 			Description(""),
@@ -200,9 +192,8 @@ func init() {
 
 func blocksIDChildrenPatchConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Categories("Services", "NOTION").
+		Categories("Services", "Notion").
 		Summary("Append block children").
-		Description("patch /v1/blocks/{id}/children").
 		Fields(sharedConfigFields()...).Fields(
 		service.NewInterpolatedStringField("id").
 			Description(""),
@@ -271,9 +262,8 @@ func init() {
 
 func blocksIDDeleteConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Categories("Services", "NOTION").
+		Categories("Services", "Notion").
 		Summary("Delete a block").
-		Description("delete /v1/blocks/{id}").
 		Fields(sharedConfigFields()...).Fields(
 		service.NewInterpolatedStringField("id").
 			Description(""),
@@ -329,9 +319,8 @@ func init() {
 
 func blocksIDGetConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Categories("Services", "NOTION").
+		Categories("Services", "Notion").
 		Summary("Retrieve a block").
-		Description("get /v1/blocks/{id}").
 		Fields(sharedConfigFields()...).Fields(
 		service.NewInterpolatedStringField("id").
 			Description(""),
@@ -387,9 +376,9 @@ func init() {
 
 func blocksIDPatchConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Categories("Services", "NOTION").
+		Categories("Services", "Notion").
 		Summary("Update a block").
-		Description("patch /v1/blocks/{id}").
+		Description("This endpoint allows you to update block content. [See Full Documentation](https://developers.notion.com/reference/update-a-block)").
 		Fields(sharedConfigFields()...).Fields(
 		service.NewInterpolatedStringField("id").
 			Description(""),
@@ -458,9 +447,9 @@ func init() {
 
 func commentsGetConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Categories("Services", "NOTION").
+		Categories("Services", "Notion").
 		Summary("Retrieve comments").
-		Description("get /v1/comments").
+		Description("Retrieve a user object using the ID specified in the request path.").
 		Fields(sharedConfigFields()...).Fields(
 		service.NewInterpolatedStringField("block_id").
 			Description("").
@@ -539,9 +528,8 @@ func init() {
 
 func commentsPostConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Categories("Services", "NOTION").
+		Categories("Services", "Notion").
 		Summary("Add comment to discussion").
-		Description("post /v1/comments").
 		Fields(sharedConfigFields()...).Fields()
 }
 
@@ -596,9 +584,9 @@ func init() {
 
 func databasesIDGetConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Categories("Services", "NOTION").
+		Categories("Services", "Notion").
 		Summary("Retrieve a database").
-		Description("get /v1/databases/{id}").
+		Description("Retrieves a database object using the ID specified in the request path. ").
 		Fields(sharedConfigFields()...).Fields(
 		service.NewInterpolatedStringField("id").
 			Description(""),
@@ -654,9 +642,8 @@ func init() {
 
 func databasesIDPatchConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Categories("Services", "NOTION").
+		Categories("Services", "Notion").
 		Summary("Update database properties").
-		Description("patch /v1/databases/{id}").
 		Fields(sharedConfigFields()...).Fields(
 		service.NewInterpolatedStringField("id").
 			Description(""),
@@ -725,9 +712,8 @@ func init() {
 
 func databasesIDQueryPostConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Categories("Services", "NOTION").
+		Categories("Services", "Notion").
 		Summary("Filter a database").
-		Description("post /v1/databases/{id}/query").
 		Fields(sharedConfigFields()...).Fields(
 		service.NewInterpolatedStringField("id").
 			Description(""),
@@ -796,9 +782,8 @@ func init() {
 
 func databasesPostConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Categories("Services", "NOTION").
+		Categories("Services", "Notion").
 		Summary("Create a database").
-		Description("post /v1/databases/").
 		Fields(sharedConfigFields()...).Fields()
 }
 
@@ -853,9 +838,9 @@ func init() {
 
 func pagesIDGetConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Categories("Services", "NOTION").
+		Categories("Services", "Notion").
 		Summary("Retrieve a page").
-		Description("get /v1/pages/{id}").
+		Description("Retrieves a Page object using the ID in the request path. This endpoint exposes page properties, not page content. ").
 		Fields(sharedConfigFields()...).Fields(
 		service.NewInterpolatedStringField("id").
 			Description(""),
@@ -911,9 +896,8 @@ func init() {
 
 func pagesIDPatchConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Categories("Services", "NOTION").
+		Categories("Services", "Notion").
 		Summary("Archive a page").
-		Description("patch /v1/pages/{id}").
 		Fields(sharedConfigFields()...).Fields(
 		service.NewInterpolatedStringField("id").
 			Description(""),
@@ -982,9 +966,8 @@ func init() {
 
 func pagesPageIDPropertiesPropertyIDGetConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Categories("Services", "NOTION").
+		Categories("Services", "Notion").
 		Summary("Retrieve a page property item").
-		Description("get /v1/pages/{page_id}/properties/{property_id}").
 		Fields(sharedConfigFields()...).Fields(
 		service.NewInterpolatedStringField("page_id").
 			Description(""),
@@ -1053,9 +1036,8 @@ func init() {
 
 func pagesPostConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Categories("Services", "NOTION").
+		Categories("Services", "Notion").
 		Summary("Create a page with content").
-		Description("post /v1/pages/").
 		Fields(sharedConfigFields()...).Fields()
 }
 
@@ -1110,9 +1092,8 @@ func init() {
 
 func searchPostConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Categories("Services", "NOTION").
+		Categories("Services", "Notion").
 		Summary("Search").
-		Description("post /v1/search").
 		Fields(sharedConfigFields()...).Fields()
 }
 
@@ -1167,9 +1148,9 @@ func init() {
 
 func usersGetConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Categories("Services", "NOTION").
+		Categories("Services", "Notion").
 		Summary("List all users").
-		Description("get /v1/users").
+		Description("Returns a paginated list of user objects for a workspace").
 		Fields(sharedConfigFields()...).Fields()
 }
 
@@ -1211,9 +1192,9 @@ func init() {
 
 func usersIDGetConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Categories("Services", "NOTION").
+		Categories("Services", "Notion").
 		Summary("Retrieve a user").
-		Description("get /v1/users/{id}").
+		Description("Retrieve a user object using the ID specified in the request path.").
 		Fields(sharedConfigFields()...).Fields(
 		service.NewInterpolatedStringField("id").
 			Description(""),
@@ -1269,9 +1250,8 @@ func init() {
 
 func usersMeGetConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Categories("Services", "NOTION").
+		Categories("Services", "Notion").
 		Summary("Retrieve your token’s bot user").
-		Description("get /v1/users/me").
 		Fields(sharedConfigFields()...).Fields()
 }
 
