@@ -24,13 +24,13 @@ tasks:
       - openapi.yaml
     silent: true
 
-  api:
-    desc: Generate Go client from OpenAPI spec
+  procgen:
+    desc: Generate Go client and processors from OpenAPI spec
     deps: [openapi]
     cmds:
-      - go run github.com/ogen-go/ogen/cmd/ogen --config ../ogen.yaml --package v1 --target api/v1 --clean openapi.yaml
-    sources:
-      - openapi.yaml
-      - ../ogen.yaml
-    generates:
-      - api/v1/**/*.go
+      - >-
+        go run ../procgen/cmd/procgen
+        --service notion
+        --template notion_processors.go.tmpl
+        --package .
+        ../ogen.yaml openapi.yaml
