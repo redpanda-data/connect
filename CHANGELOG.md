@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- `snowflake_streaming` output: the commit polling backoff is now configurable via the `commit_backoff` object. The `commit_timeout` field is deprecated in favour of `commit_backoff.max_elapsed_time`.
 - `tigerbeetle_cdc` input: adds the `timeout_seconds` configuration and triggers
    [monitoring](https://docs.redpanda.com/redpanda-connect/guides/monitoring/) in case
    of lost connectivity with the TigerBeetle cluster. (@batiati)
