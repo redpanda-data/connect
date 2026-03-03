@@ -131,7 +131,7 @@ func (s *sftpWriter) Connect(context.Context) error {
 	var err error
 	s.sshClient, err = ssh.Dial("tcp", s.address, s.sshConfig)
 	if err != nil {
-		return fmt.Errorf("failed to connect to SFTP server: %s", err)
+		return fmt.Errorf("connecting to SFTP server: %s", err)
 	}
 
 	return nil
@@ -205,16 +205,16 @@ func (s *sftpWriter) Write(_ context.Context, msg *service.Message) (wErr error)
 
 	s.sftpClient, err = sftp.NewClient(s.sshClient)
 	if err != nil {
-		return fmt.Errorf("failed to create SFTP client: %w", err)
+		return fmt.Errorf("creating SFTP client: %w", err)
 	}
 
 	if err := s.sftpClient.MkdirAll(filepath.Dir(path)); err != nil {
-		return fmt.Errorf("failed to create remote directory: %w", err)
+		return fmt.Errorf("creating remote directory: %w", err)
 	}
 
 	handle, err := s.sftpClient.OpenFile(path, flag)
 	if err != nil {
-		return fmt.Errorf("failed to open remote file: %w", err)
+		return fmt.Errorf("opening remote file: %w", err)
 	}
 	s.handle = handle
 	s.handlePath = path
@@ -224,11 +224,11 @@ func (s *sftpWriter) Write(_ context.Context, msg *service.Message) (wErr error)
 		// Details here: https://github.com/pkg/sftp/issues/295
 		fi, err := s.sftpClient.Lstat(path)
 		if err != nil {
-			return fmt.Errorf("failed to stat remote file: %w", err)
+			return fmt.Errorf("statting remote file: %w", err)
 		}
 		_, err = handle.Seek(fi.Size(), 0)
 		if err != nil {
-			return fmt.Errorf("failed to seek remote file: %w", err)
+			return fmt.Errorf("seeking remote file: %w", err)
 		}
 	}
 
@@ -239,7 +239,7 @@ func (s *sftpWriter) Write(_ context.Context, msg *service.Message) (wErr error)
 		if err := s.sftpClient.Close(); err != nil {
 			s.log.With("error", err).Error("Failed to close SFTP client")
 		}
-		return fmt.Errorf("failed to write message to SFTP server: %w", err)
+		return fmt.Errorf("writing message to SFTP server: %w", err)
 	}
 
 	return nil
@@ -267,7 +267,7 @@ func (s *sftpWriter) Close(context.Context) error {
 	}
 
 	if err := s.sshClient.Close(); err != nil {
-		return fmt.Errorf("failed to close SSH client: %w", err)
+		return fmt.Errorf("closing SSH client: %w", err)
 	}
 	s.sshClient = nil
 

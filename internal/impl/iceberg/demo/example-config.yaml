@@ -1,0 +1,56 @@
+# Example Redpanda Connect config for local Iceberg testing
+#
+# Prerequisites:
+#   docker compose -f internal/impl/iceberg/integration/docker-compose.yaml up -d
+#
+# Run with:
+#   go run ./cmd/redpanda-connect run ./internal/impl/iceberg/integration/example-config.yaml
+#
+# Query tables with local DuckDB (install from https://duckdb.org/docs/installation):
+#   duckdb -c "
+#     INSTALL iceberg; LOAD iceberg;
+#     SET s3_region='us-east-1';
+#     SET s3_access_key_id='admin';
+#     SET s3_secret_access_key='password';
+#     SET s3_endpoint='127.0.0.1:9000';
+#     SET s3_url_style='path';
+#     SET s3_use_ssl=false;
+#     ATTACH 'rest' AS cat (TYPE iceberg, ENDPOINT 'http://127.0.0.1:8181', AUTHORIZATION_TYPE 'none');
+#     DESCRIBE cat.test_ns.events;
+#     SELECT * FROM cat.test_ns.events;
+#   "
+#
+# MinIO Console (view buckets/files):
+#   http://localhost:9001 (login: admin/password)
+
+input:
+  generate:
+    count: 100
+
+    interval: 1s
+    mapping: |
+      root.id = counter()
+      root.name = ["alice", "bob", "charlie", "diana", "eve"].index(counter() % 5)
+      root.event_type = ["click", "view", "purchase"].index(counter() % 3)
+      root.value = (counter() * 10) + random_int(max: 100)
+      root.ts = now()
+      root.meta.ts = now()
+      root.meta.other = ["foo", "bar"].index(counter() % 2)
+
+output:
+  iceberg:
+    catalog:
+      url: http://localhost:8181
+    namespace: test_ns
+    table: "events-${!this.meta.other}"
+    storage:
+      aws_s3:
+        bucket: warehouse
+        region: us-east-1
+        endpoint: http://localhost:9000
+        force_path_style_urls: true
+        credentials:
+          id: admin
+          secret: password
+    schema_evolution:
+      enabled: true

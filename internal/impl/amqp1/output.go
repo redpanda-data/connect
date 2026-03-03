@@ -64,10 +64,12 @@ This output benefits from sending multiple messages in flight in parallel for im
 				Optional().
 				Version("4.23.0"),
 			service.NewStringField(targetAddrField).
-				Description("The target address to write to.").
+				Description("The target address to write to. When left empty, the output uses the Anonymous Terminus pattern where the destination is specified per-message using `message_properties_to`.").
+				Default("").
 				Example("/foo").
 				Example("queue:/bar").
-				Example("topic:/baz"),
+				Example("topic:/baz").
+				Example(""),
 			service.NewOutputMaxInFlightField(),
 			service.NewTLSToggledField(tlsField),
 			service.NewBloblangField(appPropsMapField).
@@ -93,14 +95,17 @@ This output benefits from sending multiple messages in flight in parallel for im
 				Example([]string{"queue"}).
 				Example([]string{"topic"}).
 				Example([]string{"queue", "topic"}),
-			service.NewStringField(messagePropsTo).
-				Description("The field specifies the node that is the intended destination of the message, which may differ from the node currently receiving the transfer.").
+			service.NewInterpolatedStringField(messagePropsTo).
+				Description("The field specifies the node that is the intended destination of the message, which may differ from the node currently receiving the transfer. This field supports Bloblang interpolation.").
 				Optional().
 				Advanced().
-				Example("amqp://localhost:5672/"),
+				Example("amqp://localhost:5672/").
+				Example(`${! meta("target_address") }`),
 		).LintRule(`
 root = if this.url.or("") == "" && this.urls.or([]).length() == 0 {
   "field 'urls' must be set"
+} else if this.target_address.or("") == "" && !this.exists("message_properties_to") {
+  "when 'target_address' is empty, 'message_properties_to' must be set to specify per-message destinations"
 }
 `)
 }
@@ -135,7 +140,7 @@ type amqp1Writer struct {
 	contentType              amqpContentType
 	senderOpts               *amqp.SenderOptions
 	persistent               bool
-	msgTo                    string
+	msgTo                    *service.InterpolatedString
 
 	log      *service.Logger
 	connLock sync.RWMutex
@@ -217,7 +222,7 @@ func amqp1WriterFromParsed(conf *service.ParsedConfig, mgr *service.Resources) (
 	}
 
 	if conf.Contains(messagePropsTo) {
-		if a.msgTo, err = conf.FieldString(messagePropsTo); err != nil {
+		if a.msgTo, err = conf.FieldInterpolatedString(messagePropsTo); err != nil {
 			return nil, err
 		}
 	}
@@ -251,6 +256,11 @@ func (a *amqp1Writer) Connect(ctx context.Context) (err error) {
 	}
 
 	// Create a sender
+	// When targetAddr is empty (""), this creates an anonymous terminus pattern
+	// where the destination is specified per-message via message.Properties.To.
+	// Note: go-amqp v1.5.0 creates an omitted target address rather than an
+	// explicit null target as specified in AMQP 1.0 spec section 2.6.12.
+	// Most mainstream brokers (ActiveMQ, Azure Service Bus) accept both forms.
 	if sender, err = session.NewSender(ctx, a.targetAddr, a.senderOpts); err != nil {
 		_ = session.Close(ctx)
 		_ = client.Close()
@@ -321,8 +331,14 @@ func (a *amqp1Writer) Write(ctx context.Context, msg *service.Message) error {
 		m.Header = &amqp.MessageHeader{Durable: true}
 	}
 
-	if a.msgTo != "" {
-		m.Properties = &amqp.MessageProperties{To: &a.msgTo}
+	if a.msgTo != nil {
+		msgToStr, err := a.msgTo.TryString(msg)
+		if err != nil {
+			return fmt.Errorf("interpolating message_properties_to: %w", err)
+		}
+		if msgToStr != "" {
+			m.Properties = &amqp.MessageProperties{To: &msgToStr}
+		}
 	}
 
 	if a.applicationPropertiesMap != nil {

@@ -25,6 +25,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -281,7 +282,7 @@ func TestIntegrationMigratorMultiPartitionSchemaAwareWithConsumerGroups(t *testi
 		// Produce directly in 1000-record batches using ProduceSync to speed up test
 		const batchSize = 1000
 		records := make([]*kgo.Record, 0, batchSize)
-		for i := 0; i < numMessages; i++ {
+		for i := range numMessages {
 			r := &kgo.Record{
 				Topic:     migratorTestTopic,
 				Key:       []byte(strconv.Itoa(i)),
@@ -922,12 +923,12 @@ func TestIntegrationMigratorTwoWayWithProvenanceHeaders(t *testing.T) {
 
 	t.Log("And: 10 messages are produced to src")
 	for i := range numMessages {
-		src.Produce(migratorTestTopic, []byte(fmt.Sprintf("src-%d", i)))
+		src.Produce(migratorTestTopic, fmt.Appendf(nil, "src-%d", i))
 	}
 
 	t.Log("And: 10 messages are produced to dst")
 	for i := range numMessages {
-		dst.Produce(migratorTestTopic, []byte(fmt.Sprintf("dst-%d", i)))
+		dst.Produce(migratorTestTopic, fmt.Appendf(nil, "dst-%d", i))
 	}
 
 	t.Log("Then: Both clusters have 20 messages")
@@ -1024,11 +1025,11 @@ func TestIntegrationMigratorJiraCON229(t *testing.T) {
 
 		for _, topic := range []string{topicA, topicB, topicC, topicD} {
 			records := make([]*kgo.Record, 0, numMessages)
-			for i := 0; i < numMessages; i++ {
+			for i := range numMessages {
 				r := &kgo.Record{
 					Topic:     topic,
-					Key:       []byte(fmt.Sprintf("%s-key-%d", topic, i)),
-					Value:     []byte(fmt.Sprintf(`{"id":%d,"data":"msg-%d"}`, i, i)),
+					Key:       fmt.Appendf(nil, "%s-key-%d", topic, i),
+					Value:     fmt.Appendf(nil, `{"id":%d,"data":"msg-%d"}`, i, i),
 					Partition: int32(i % numPartitions),
 					Timestamp: time.Unix(100, 0).Add(time.Duration(i) * 100 * time.Millisecond),
 				}
@@ -1150,7 +1151,7 @@ logger:
 
 		totalMessages := numMessages * 4
 		t.Logf("Then: Waiting for %d messages to be migrated", totalMessages)
-		for i := 0; i < totalMessages; i++ {
+		for i := range totalMessages {
 			select {
 			case <-msgChan:
 				if (i+1)%100 == 0 {
@@ -1195,4 +1196,120 @@ logger:
 			return total == int64(numMessages)
 		}, redpandaTestWaitTimeout, 500*time.Millisecond, "Topic %s should have %d messages", dstTopic, numMessages)
 	}
+}
+
+func TestIntegrationMigratorEmptyTopicReplication(t *testing.T) {
+	integration.CheckSkip(t)
+
+	const (
+		numMessages    = 100
+		topicPopulated = "topic_populated"
+		topicEmpty     = "topic_empty"
+	)
+
+	t.Log("Given: Redpanda clusters without schema registry")
+	src, dst := startRedpandaSourceAndDestination(t)
+	src.SchemaRegistryURL = ""
+	dst.SchemaRegistryURL = ""
+
+	t.Log("And: Two topics on source, one with data and one empty")
+	src.CreateTopic(topicPopulated)
+	src.CreateTopic(topicEmpty)
+
+	t.Log("When: Messages are written only to the populated topic")
+	for i := range numMessages {
+		src.Produce(topicPopulated, []byte(strconv.Itoa(i)))
+	}
+	t.Logf("Successfully wrote %d messages to topic %s", numMessages, topicPopulated)
+
+	t.Log("And: Migrator is started for both topics")
+	const yamlTmpl = `
+input:
+  redpanda_migrator:
+    seed_brokers:
+      - {{.Src.BrokerAddr}}
+    topics:
+      - {{.TopicPopulated}}
+      - {{.TopicEmpty}}
+    consumer_group: redpanda_migrator_cg
+output:
+  redpanda_migrator:
+    seed_brokers: [ {{.Dst.BrokerAddr}} ]
+logger:
+  level: DEBUG
+`
+	tmpl, err := template.New("migrator").Parse(yamlTmpl)
+	require.NoError(t, err)
+
+	data := struct {
+		Src            EmbeddedRedpandaCluster
+		Dst            EmbeddedRedpandaCluster
+		TopicPopulated string
+		TopicEmpty     string
+	}{
+		Src:            src,
+		Dst:            dst,
+		TopicPopulated: topicPopulated,
+		TopicEmpty:     topicEmpty,
+	}
+	var yamlBuf bytes.Buffer
+	require.NoError(t, tmpl.Execute(&yamlBuf, data))
+
+	sb := service.NewStreamBuilder()
+	require.NoError(t, sb.SetYAML(yamlBuf.String()))
+
+	msgChan := make(chan *service.Message, numMessages)
+	require.NoError(t, sb.AddConsumerFunc(func(_ context.Context, m *service.Message) error {
+		msgChan <- m
+		return nil
+	}))
+
+	stream, err := sb.Build()
+	require.NoError(t, err)
+
+	go func() {
+		if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+			t.Error(err)
+		}
+	}()
+	t.Cleanup(func() {
+		require.NoError(t, stream.StopWithin(stopStreamTimeout))
+	})
+
+	t.Logf("Then: All %d messages from %s are migrated", numMessages, topicPopulated)
+	for i := range numMessages {
+		select {
+		case <-msgChan:
+		case <-time.After(redpandaTestWaitTimeout):
+			t.Fatalf("Timed out waiting for message %d of %d", i+1, numMessages)
+		}
+	}
+
+	t.Logf("And: Populated topic %s exists on destination with %d messages", topicPopulated, numMessages)
+	assert.Eventually(t, func() bool {
+		eo, err := dst.Admin.ListEndOffsets(t.Context(), topicPopulated)
+		if err != nil {
+			t.Logf("list end offsets error for %s: %v", topicPopulated, err)
+			return false
+		}
+		var total int64
+		eo.Each(func(lo kadm.ListedOffset) {
+			total += lo.Offset
+		})
+		return total == int64(numMessages)
+	}, redpandaTestWaitTimeout, 500*time.Millisecond)
+
+	t.Logf("And: Empty topic %s exists on destination with 0 messages", topicEmpty)
+	assert.Eventually(t, func() bool {
+		topics := dst.ListTopics()
+		return slices.Contains(topics, topicEmpty)
+	}, redpandaTestWaitTimeout, 500*time.Millisecond)
+
+	eo, err := dst.Admin.ListEndOffsets(t.Context(), topicEmpty)
+	require.NoError(t, err)
+	var emptyTotal int64
+	eo.Each(func(lo kadm.ListedOffset) {
+		emptyTotal += lo.Offset
+	})
+	assert.Equal(t, int64(0), emptyTotal, "Empty topic should have 0 messages on destination")
 }

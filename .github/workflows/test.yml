@@ -14,40 +14,40 @@ jobs:
       CGO_ENABLED: 0
     steps:
 
-    - name: Checkout code
-      uses: actions/checkout@v5
+      - name: Checkout code
+        uses: actions/checkout@v5
 
-    - name: Install Go
-      uses: actions/setup-go@v6
-      with:
-        go-version-file: 'go.mod'
+      - name: Install Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: 'go.mod'
 
-    - name: Install dependencies for x_benthos_extra
-      run: |
-        sudo apt update -y
-        sudo apt install -y --no-install-recommends libzmq3-dev
+      - name: Install dependencies for x_benthos_extra
+        run: |
+          sudo apt update -y
+          sudo apt install -y --no-install-recommends libzmq3-dev
 
-    - name: Install Task
-      uses: ./.github/actions/setup-task
+      - name: Install Task
+        uses: ./.github/actions/setup-task
 
-    - name: Free disk space
-      run: |
-        sudo rm -rf /usr/share/dotnet
-        sudo rm -rf /usr/local/lib/android
-        sudo rm -rf /opt/ghc
-        sudo rm -rf /usr/local/.ghcup
-        sudo rm -rf /usr/share/swift
-        sudo rm -rf /usr/local/share/powershell
-        sudo docker image prune --all --force
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/.ghcup
+          sudo rm -rf /usr/share/swift
+          sudo rm -rf /usr/local/share/powershell
+          sudo docker image prune --all --force
 
-    - name: Deps
-      run: task deps && git diff-index --quiet HEAD || { >&2 echo "Stale go.{mod,sum} detected. This can be fixed with 'task deps'."; exit 1; }
+      - name: Deps
+        run: task deps && git diff-index --quiet HEAD || { >&2 echo "Stale go.{mod,sum} detected. This can be fixed with 'task deps'."; exit 1; }
 
-    - name: Docs
-      run: CGO_ENABLED=1 TAGS=x_benthos_extra task docs && test -z "$(git ls-files --others --modified --exclude-standard)" || { >&2 echo "Stale docs detected. This can be fixed with 'task docs'."; exit 1; }
+      - name: Docs
+        run: CGO_ENABLED=1 TAGS=x_benthos_extra task docs && test -z "$(git ls-files --others --modified --exclude-standard)" || { >&2 echo "Stale docs detected. This can be fixed with 'task docs'."; exit 1; }
 
-    - name: Test
-      run: task test
+      - name: Test
+        run: task test
 
   golangci-lint:
     if: ${{ github.repository == 'redpanda-data/connect' || github.event_name != 'schedule' }}
@@ -56,55 +56,55 @@ jobs:
       CGO_ENABLED: 0
     steps:
 
-    - name: Checkout code
-      uses: actions/checkout@v5
+      - name: Checkout code
+        uses: actions/checkout@v5
 
-    - name: Install Go
-      uses: actions/setup-go@v6
-      with:
-        go-version-file: 'go.mod'
+      - name: Install Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: 'go.mod'
 
-    - name: Set version env variables
-      run: |
-        cat .versions >> $GITHUB_ENV
+      - name: Set version env variables
+        run: |
+          cat .versions >> $GITHUB_ENV
 
-    - name: Lint
-      uses: golangci/golangci-lint-action@v9
-      with:
-        version: "v${{env.GOLANGCI_LINT_VERSION}}"
-        args: "--timeout=30m cmd/... internal/... public/..."
-        skip-cache: true
-        skip-save-cache: true
+      - name: Lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: "v${{env.GOLANGCI_LINT_VERSION}}"
+          args: "--timeout=30m cmd/... internal/... public/..."
+          skip-cache: true
+          skip-save-cache: true
 
   test-push-to-cloudsmith:
     if: ${{ github.repository == 'redpanda-data/connect' || github.event_name != 'schedule' }}
     runs-on: ubuntu-latest
     steps:
 
-    - name: Checkout code
-      uses: actions/checkout@v5
+      - name: Checkout code
+        uses: actions/checkout@v5
 
-    - name: Mock cloudsmith cli
-      run: |
-        echo '#!/bin/bash' >cloudsmith
-        echo "echo \$@" >>cloudsmith
-        chmod +x cloudsmith
-        mv cloudsmith /usr/local/bin/
+      - name: Mock cloudsmith cli
+        run: |
+          echo '#!/bin/bash' >cloudsmith
+          echo "echo \$@" >>cloudsmith
+          chmod +x cloudsmith
+          mv cloudsmith /usr/local/bin/
 
-    - name: Test GA
-      env:
-        CLOUDSMITH_API_KEY: thisisatest
-      run: |
-        test $(./resources/scripts/push_pkg_to_cloudsmith.sh artifact.deb 0.0.0 \
-          | grep "push deb redpanda/redpanda/" | wc -l) -eq 1
-        test $(./resources/scripts/push_pkg_to_cloudsmith.sh artifact.deb v0.0.0 \
-          | grep "push deb redpanda/redpanda/" | wc -l) -eq 1
+      - name: Test GA
+        env:
+          CLOUDSMITH_API_KEY: thisisatest
+        run: |
+          test $(./resources/scripts/push_pkg_to_cloudsmith.sh artifact.deb 0.0.0 \
+            | grep "push deb redpanda/redpanda/" | wc -l) -eq 1
+          test $(./resources/scripts/push_pkg_to_cloudsmith.sh artifact.deb v0.0.0 \
+            | grep "push deb redpanda/redpanda/" | wc -l) -eq 1
 
-    - name: Test RC
-      env:
-        CLOUDSMITH_API_KEY: thisisatest
-      run: |
-        test $(./resources/scripts/push_pkg_to_cloudsmith.sh artifact.deb 0.0.0-rc1 \
-          | grep "push deb redpanda/redpanda-unstable/" | wc -l) -eq 1
-        test $(./resources/scripts/push_pkg_to_cloudsmith.sh artifact.deb v0.0.0-rc1 \
-          | grep "push deb redpanda/redpanda-unstable/" | wc -l) -eq 1
+      - name: Test RC
+        env:
+          CLOUDSMITH_API_KEY: thisisatest
+        run: |
+          test $(./resources/scripts/push_pkg_to_cloudsmith.sh artifact.deb 0.0.0-rc1 \
+            | grep "push deb redpanda/redpanda-unstable/" | wc -l) -eq 1
+          test $(./resources/scripts/push_pkg_to_cloudsmith.sh artifact.deb v0.0.0-rc1 \
+            | grep "push deb redpanda/redpanda-unstable/" | wc -l) -eq 1

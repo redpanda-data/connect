@@ -65,7 +65,7 @@ func (j *Client) SearchRolesResource(
 
 		bytes, err := json.Marshal(resp)
 		if err != nil {
-			return nil, fmt.Errorf("failed to marshal role: %w", err)
+			return nil, fmt.Errorf("marshalling role: %w", err)
 		}
 
 		message := service.NewMessage(bytes)

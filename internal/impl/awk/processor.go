@@ -410,7 +410,7 @@ func newAWKProcFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (s
 		Funcs: awkFunctionsMap,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to compile AWK program: %v", err)
+		return nil, fmt.Errorf("compiling AWK program: %v", err)
 	}
 	switch codec {
 	case "none":
@@ -476,7 +476,7 @@ func getTime(dateStr, format string) (time.Time, error) {
 			}
 		}
 		if err != nil {
-			return time.Time{}, fmt.Errorf("failed to detect datetime format of: %v", dateStr)
+			return time.Time{}, fmt.Errorf("detecting datetime format of: %v", dateStr)
 		}
 		return parsed, nil
 	}
@@ -649,7 +649,7 @@ func (a *awkProc) Process(_ context.Context, msg *service.Message) (service.Mess
 	customFuncs["json_get"] = func(path string) (string, error) {
 		jsonPart, err := msg.AsStructured()
 		if err != nil {
-			return "", fmt.Errorf("failed to parse message into json: %v", err)
+			return "", fmt.Errorf("parsing message into json: %v", err)
 		}
 		gPart := gabs.Wrap(jsonPart)
 		gTarget := gPart.Path(path)
@@ -670,7 +670,7 @@ func (a *awkProc) Process(_ context.Context, msg *service.Message) (service.Mess
 			}
 		}
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse message into json: %v", err)
+			return nil, fmt.Errorf("parsing message into json: %v", err)
 		}
 		gPart := gabs.Wrap(jsonPart)
 		return gPart, nil

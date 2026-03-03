@@ -42,14 +42,15 @@ tasks:
     deps:
       - tools:install-golangci-lint
     cmds:
+      - echo "Running task lint. Consider using command 'fix-lint' to apply fixes."
       - '{{.TOOLS_BIN_DIR}}/golangci-lint run cmd/... internal/... public/...'
 
-  vuln:
-    desc: Run vulnerability scanner
+  fix-lint:
+    desc: Run linter on code and fix issues
     deps:
-      - tools:install-govulncheck
+      - tools:install-golangci-lint
     cmds:
-      - '{{.TOOLS_BIN_DIR}}/govulncheck ./...'
+      - "{{.TOOLS_BIN_DIR}}/golangci-lint run --fix cmd/... internal/... public/..."
 
   test:
     desc: Run unit, template and ffi tests

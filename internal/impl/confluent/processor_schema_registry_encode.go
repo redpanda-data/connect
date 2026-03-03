@@ -141,7 +141,7 @@ func newSchemaRegistryEncoderFromConfig(conf *service.ParsedConfig, mgr *service
 	}
 	refreshPeriod, err := time.ParseDuration(refreshPeriodStr)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse refresh period: %v", err)
+		return nil, fmt.Errorf("parsing refresh period: %v", err)
 	}
 	refreshTicker := max(refreshPeriod/10, time.Second)
 	authSigner, err := conf.HTTPRequestAuthSignerFromParsed()
@@ -319,7 +319,7 @@ func (s *schemaRegistryEncoder) getLatestEncoder(subject string) (schemaEncoder,
 		return nil, 0, err
 	}
 
-	s.logger.Tracef("Loaded new codec for subject %v: %s", subject, resPayload.Schema)
+	s.logger.Tracef("Loaded new codec for subject %v: %v", subject, resPayload.Schema)
 
 	var encoder schemaEncoder
 	switch resPayload.Type {

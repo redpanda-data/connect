@@ -80,7 +80,7 @@ func (k *kafkaReader) ConsumeClaim(sess sarama.ConsumerGroupSession, claim saram
 			nextTimedBatchChan = nil
 			flushedBatch, err := batchPolicy.Flush(sess.Context())
 			if err != nil {
-				k.mgr.Logger().Debugf("Timed flush batch error: %w", err)
+				k.mgr.Logger().Debugf("Timed flush batch error: %v", err)
 				return nil
 			}
 			if !flushBatch(sess.Context(), k.msgChan, flushedBatch, latestOffset+1) {
@@ -98,7 +98,7 @@ func (k *kafkaReader) ConsumeClaim(sess sarama.ConsumerGroupSession, claim saram
 				nextTimedBatchChan = nil
 				flushedBatch, err := batchPolicy.Flush(sess.Context())
 				if err != nil {
-					k.mgr.Logger().Debugf("Flush batch error: %w", err)
+					k.mgr.Logger().Debugf("Flush batch error: %v", err)
 					return nil
 				}
 				if !flushBatch(sess.Context(), k.msgChan, flushedBatch, latestOffset+1) {

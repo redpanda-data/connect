@@ -278,7 +278,7 @@ func (e *Output) WriteBatch(ctx context.Context, msg service.MessageBatch) error
 		rawBytes, ierr := msg[i].AsBytes()
 		if ierr != nil {
 			e.log.Errorf("Failed to obtain message raw data: %v\n", ierr)
-			return fmt.Errorf("failed to obtain message raw data: %w", ierr)
+			return fmt.Errorf("obtaining message raw data: %w", ierr)
 		}
 
 		pbi := &pendingBulkIndex{Payload: rawBytes}
@@ -347,10 +347,10 @@ func (e *Output) WriteBatch(ctx context.Context, msg service.MessageBatch) error
 	dur := time.Since(start)
 
 	e.log.Debugf(
-		"Successfully dispatched [%d] documents in %s (%f docs/sec)",
+		"Successfully dispatched [%d] documents in %s (%.2f docs/sec)",
 		biStats.NumFlushed,
 		dur.Truncate(time.Millisecond),
-		int64(1000.0/float64(dur/time.Millisecond)*float64(biStats.NumFlushed)),
+		1000.0/float64(dur/time.Millisecond)*float64(biStats.NumFlushed),
 	)
 	return nil
 }

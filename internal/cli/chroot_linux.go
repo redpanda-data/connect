@@ -11,6 +11,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -45,10 +46,9 @@ func chroot(path string, passthroughFiles []string) error {
 }
 
 func setupChrootDir(chrootDir string, passthroughFiles []string) error {
-	// Make sure chroot directory does not exist
-	if _, err := os.Stat(chrootDir); err == nil {
-		return fmt.Errorf("chroot directory %s must not exist", chrootDir)
-	} else if !os.IsNotExist(err) {
+	// Allow the chroot directory to pre-exist (e.g. created by volume
+	// mounts). Only fail on unexpected stat errors.
+	if _, err := os.Stat(chrootDir); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("check directory: %w", err)
 	}
 
@@ -234,6 +234,13 @@ func makeReadOnly(root string) error {
 		if err != nil {
 			return err
 		}
-		return os.Chmod(filePath, info.Mode() & ^os.FileMode(0o222))
+		if err := os.Chmod(filePath, info.Mode() & ^os.FileMode(0o222)); err != nil {
+			// Ignore read-only filesystem errors from volume mounts.
+			if errors.Is(err, syscall.EROFS) {
+				return nil
+			}
+			return err
+		}
+		return nil
 	})
 }

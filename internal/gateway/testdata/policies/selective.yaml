@@ -1,0 +1,9 @@
+roles:
+  - id: test.reader
+    permissions:
+      - test_service_read
+
+bindings:
+  - role: test.reader
+    principal: User:test@example.com
+    scope: organizations/test-org/resourcegroups/default/dataplanes/test-service

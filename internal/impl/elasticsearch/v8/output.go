@@ -315,13 +315,13 @@ type esOutput struct {
 func (e *esOutput) ConnectionTest(ctx context.Context) service.ConnectionTestResults {
 	client, err := elasticsearch.NewTypedClient(e.conf.clientOpts)
 	if err != nil {
-		return service.ConnectionTestFailed(fmt.Errorf("failed to create client: %w", err)).AsList()
+		return service.ConnectionTestFailed(fmt.Errorf("creating client: %w", err)).AsList()
 	}
 
 	// Test connection by pinging the cluster
 	_, err = client.Info().Do(ctx)
 	if err != nil {
-		return service.ConnectionTestFailed(fmt.Errorf("failed to connect to cluster: %w", err)).AsList()
+		return service.ConnectionTestFailed(fmt.Errorf("connecting to cluster: %w", err)).AsList()
 	}
 
 	return service.ConnectionTestSucceeded().AsList()

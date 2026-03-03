@@ -115,7 +115,7 @@ func ProcessorMain[T any](ctor ProcessorConstructor[T]) {
 	})
 }
 
-// GenericProcessorMain is the same as ProcessorMain except that it does not give a strongly typed configuration object
+// GenericProcessorMain is the same as ProcessorMain except that it does not give a strongly typed configuration object.
 func GenericProcessorMain(ctor ProcessorConstructor[any]) {
 	runMain(func(s *grpc.Server) {
 		runtimepb.RegisterBatchProcessorServiceServer(s, &processor{ctor: ctor})
@@ -201,7 +201,7 @@ func OutputMain[T any](ctor OutputConstructor[T]) {
 	})
 }
 
-// GenericOutputMain is the same as OutputMain except that it does not give a strongly typed configuration object
+// GenericOutputMain is the same as OutputMain except that it does not give a strongly typed configuration object.
 func GenericOutputMain(ctor OutputConstructor[any]) {
 	runMain(func(s *grpc.Server) {
 		runtimepb.RegisterBatchOutputServiceServer(s, &output{ctor: ctor})
@@ -297,7 +297,7 @@ func InputMain[T any](ctor InputConstructor[T]) {
 	})
 }
 
-// GenericInputMain is the same as InputMain except that it does not give a strongly typed configuration object
+// GenericInputMain is the same as InputMain except that it does not give a strongly typed configuration object.
 func GenericInputMain(ctor InputConstructor[any]) {
 	runMain(func(s *grpc.Server) {
 		runtimepb.RegisterBatchInputServiceServer(s, &input{ctor: ctor})

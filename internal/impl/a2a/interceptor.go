@@ -26,7 +26,7 @@ type oauth2BearerInterceptor struct {
 func (i *oauth2BearerInterceptor) Before(ctx context.Context, req *a2aclient.Request) (context.Context, error) {
 	token, err := i.tokenSource.Token()
 	if err != nil {
-		return ctx, fmt.Errorf("failed to get OAuth2 token: %w", err)
+		return ctx, fmt.Errorf("getting OAuth2 token: %w", err)
 	}
 
 	if req.Meta == nil {

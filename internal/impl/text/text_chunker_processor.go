@@ -142,7 +142,7 @@ func newTextChunker(conf *service.ParsedConfig, _ *service.Resources) (service.P
 		}
 		tokenizer, err = tiktoken.GetEncoding(encoding)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get tokenizer for encoding '%v': %w", encoding, err)
+			return nil, fmt.Errorf("getting tokenizer for encoding '%v': %w", encoding, err)
 		}
 		opts = append(opts, textsplitter.WithEncodingName(encoding))
 	}
@@ -176,7 +176,7 @@ func newTextChunker(conf *service.ParsedConfig, _ *service.Resources) (service.P
 			return len(tokenizer.Encode(s, allowedSpecial, disallowedSpecial))
 		}))
 	case "graphemes":
-		opts = append(opts, textsplitter.WithLenFunc(func(s string) int { return uniseg.GraphemeClusterCount(s) }))
+		opts = append(opts, textsplitter.WithLenFunc(uniseg.GraphemeClusterCount))
 	default:
 		return nil, fmt.Errorf("unknown %s: %v", tcpFieldWithLenFunc, lenFuncStr)
 	}

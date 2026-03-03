@@ -673,7 +673,7 @@ logger:
 	require.NoError(t, stream.Run(ctx))
 
 	// Verify all schemas migrated correctly
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		subject := fmt.Sprintf("%s-%d", baseSubject, i)
 
 		resp, err := http.DefaultClient.Get(fmt.Sprintf("%s/subjects/%s/versions/1", dst.SchemaRegistryURL, subject))

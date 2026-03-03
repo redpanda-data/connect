@@ -10,7 +10,6 @@ package cli
 
 import (
 	"context"
-	"crypto/tls"
 	"crypto/x509"
 	"fmt"
 	"log/slog"
@@ -22,6 +21,7 @@ import (
 	"github.com/urfave/cli/v2"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service/securetls"
 	"github.com/redpanda-data/connect/v4/internal/impl/kafka"
 	"github.com/redpanda-data/connect/v4/internal/license"
 	"github.com/redpanda-data/connect/v4/internal/secrets"
@@ -83,7 +83,6 @@ func applyLicenseFlag(c *cli.Context, conf *license.Config) {
 var chrootFlag = &cli.StringFlag{
 	Name: "chroot",
 	Usage: "Chroot into the provided directory after parsing configuration. " +
-		"The directory must not exist and will be created. " +
 		"Common /etc/ files are copied to the chroot directory, and the directory is made read-only. " +
 		"This flag is only supported on Linux.",
 }
@@ -229,9 +228,8 @@ client_id: rpcn
 	connDetails.SeedBrokers = brokers
 
 	if connDetails.TLSEnabled = tlsEnabled; connDetails.TLSEnabled {
-		connDetails.TLSConf = &tls.Config{
-			MinVersion: tls.VersionTLS12,
-		}
+		// Use strict security level for Redpanda-to-Redpanda communication
+		connDetails.TLSConf = securetls.NewConfig(securetls.SecurityLevelStrict)
 
 		if rootCasFile != "" {
 			var caCert []byte
@@ -291,7 +289,7 @@ func resolveSecret(ctx context.Context, value string, lookupFn secrets.LookupFn)
 
 // parseCloudAuthFlags parses the OAuth2/cloud authentication CLI flags,
 // resolves any secret references, and initializes the global service account configuration.
-// returns the authz policy file (if specified)
+// returns the authz policy file (if specified).
 func parseCloudAuthFlags(ctx context.Context, c *cli.Context, secretLookupFn secrets.LookupFn) (authzResourceName, authzPolicyFile string, err error) {
 	tokenURL := resolveSecret(ctx, c.String(rfCloudTokenURL), secretLookupFn)
 	clientID := resolveSecret(ctx, c.String(rfCloudClientID), secretLookupFn)
@@ -303,7 +301,7 @@ func parseCloudAuthFlags(ctx context.Context, c *cli.Context, secretLookupFn sec
 	// Initialize global service account config if credentials are provided
 	if tokenURL != "" && clientID != "" && clientSecret != "" {
 		if err := serviceaccount.InitGlobal(ctx, tokenURL, clientID, clientSecret, audience); err != nil {
-			return "", "", fmt.Errorf("failed to initialize service account authentication: %w", err)
+			return "", "", fmt.Errorf("initializing service account authentication: %w", err)
 		}
 	}
 

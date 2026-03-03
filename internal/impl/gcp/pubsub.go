@@ -17,7 +17,7 @@ package gcp
 import (
 	"context"
 
-	"cloud.google.com/go/pubsub" //nolint:staticcheck
+	"cloud.google.com/go/pubsub"
 )
 
 var _ pubsubClient = (*airGappedPubsubClient)(nil)

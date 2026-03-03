@@ -298,7 +298,7 @@ func (d *dynamodbCache) SetMulti(ctx context.Context, items ...service.CacheItem
 		if err == nil {
 			if unproc := batchResult.UnprocessedItems[d.table]; len(unproc) > 0 {
 				writeReqs = unproc
-				err = fmt.Errorf("failed to set %v items", len(unproc))
+				err = fmt.Errorf("setting %v items", len(unproc))
 			} else {
 				writeReqs = nil
 			}

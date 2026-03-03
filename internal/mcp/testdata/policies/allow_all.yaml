@@ -14,5 +14,5 @@ roles:
 
 bindings:
   - role: mcp.admin
-    principal: test@example.com
+    principal: User:test@example.com
     scope: organization/test-org/resourcegroup/default/dataplane/mcp-server

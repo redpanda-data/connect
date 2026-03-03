@@ -107,7 +107,7 @@ func newCosmosDBReaderFromParsed(conf *service.ParsedConfig, _ *service.Resource
 
 	pkQueryResult, err := partitionKeysMapping.Query(nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to evaluate partition keys values: %s", err)
+		return nil, fmt.Errorf("evaluating partition keys values: %s", err)
 	}
 
 	// TODO: Enable support for hierarchical / empty Partition Keys this when the following issues are addressed:
@@ -172,7 +172,7 @@ func (c *cosmosDBReader) ReadBatch(ctx context.Context) (service.MessageBatch, s
 
 	queryResponse, err := c.pager.NextPage(ctx)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get next page of query response: %s", err)
+		return nil, nil, fmt.Errorf("getting next page of query response: %s", err)
 	}
 
 	resBatch := make(service.MessageBatch, 0, len(queryResponse.Items))

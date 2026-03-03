@@ -71,6 +71,7 @@ func NewSchemaRegistryMigratorForTesting(t *testing.T, conf SchemaRegistryMigrat
 	t.Cleanup(func() {
 		t.Log(buf.String())
 	})
+	conf.MaxParallelHTTPRequests = 2
 	return &schemaRegistryMigrator{
 		conf:   conf,
 		src:    src,
@@ -80,9 +81,19 @@ func NewSchemaRegistryMigratorForTesting(t *testing.T, conf SchemaRegistryMigrat
 		log: service.NewLoggerFromSlog(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{
 			Level: slog.LevelDebug,
 		}))),
-		knownSubjects: make(map[schemaInfo]struct{}),
+		knownSubjects: make(map[schemaSubjectVersion]struct{}),
 		knownSchemas:  make(map[int]schemaInfo),
 	}
+}
+
+func (m *schemaRegistryMigrator) DfsSubjectSchemasFunc(
+	ctx context.Context,
+	client *sr.Client,
+	root sr.SubjectSchema,
+	filter func(subject string, version int) bool,
+	cb func(sr.SubjectSchema) error,
+) error {
+	return m.dfsSubjectSchemasFunc(ctx, client, root, filter, cb)
 }
 
 func NewGroupsMigratorForTesting(

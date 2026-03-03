@@ -16,7 +16,6 @@ package azure
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -41,6 +40,7 @@ import (
 	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
+	"github.com/redpanda-data/benthos/v4/public/service/securetls"
 )
 
 func TestIntegrationAzure(t *testing.T) {
@@ -315,7 +315,7 @@ func TestIntegrationCosmosDB(t *testing.T) {
 		require.NoError(t, err)
 
 		customTransport := http.DefaultTransport.(*http.Transport).Clone()
-		customTransport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+		customTransport.TLSClientConfig = securetls.WithInsecureSkipVerify(securetls.SecurityLevelNormal)
 
 		p := httputil.NewSingleHostReverseProxy(url)
 		p.Transport = customTransport
@@ -344,14 +344,14 @@ func TestIntegrationCosmosDB(t *testing.T) {
 		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusOK {
-			return fmt.Errorf("failed to get emulator.pem, got status: %d", resp.StatusCode)
+			return fmt.Errorf("getting emulator.pem, got status: %d", resp.StatusCode)
 		}
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
 			return err
 		}
 		if len(body) == 0 {
-			return errors.New("failed to get emulator.pem")
+			return errors.New("getting emulator.pem")
 		}
 
 		return nil

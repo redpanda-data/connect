@@ -77,6 +77,10 @@ func TestIntegrationAWS(t *testing.T) {
 
 	servicePort := getLocalStack(t)
 
+	t.Run("cloudwatch_logs", func(t *testing.T) {
+		cloudWatchLogsIntegrationSuite(t, servicePort)
+	})
+
 	t.Run("kinesis", func(t *testing.T) {
 		kinesisIntegrationSuite(t, servicePort)
 	})

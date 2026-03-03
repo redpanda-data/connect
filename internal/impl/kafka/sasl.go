@@ -375,7 +375,7 @@ func (c *cacheAccessTokenProvider) Token() (*sarama.AccessToken, error) {
 	if err := c.mgr.AccessCache(context.Background(), c.cacheName, func(cache service.Cache) {
 		tok, terr = cache.Get(context.Background(), c.key)
 	}); err != nil {
-		return nil, fmt.Errorf("failed to obtain cache resource '%v': %v", c.cacheName, err)
+		return nil, fmt.Errorf("obtaining cache resource '%v': %v", c.cacheName, err)
 	}
 	if terr != nil {
 		return nil, terr

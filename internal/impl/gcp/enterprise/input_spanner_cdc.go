@@ -62,7 +62,7 @@ func parseRFC3339Nano(pConf *service.ParsedConfig, key string) (time.Time, error
 
 	t, err := time.Parse(time.RFC3339Nano, s)
 	if err != nil {
-		return time.Time{}, fmt.Errorf("failed to parse %v as RFC3339Nano: %w", key, err)
+		return time.Time{}, fmt.Errorf("parsing %v as RFC3339Nano: %w", key, err)
 	}
 	return t, nil
 }

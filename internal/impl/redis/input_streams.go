@@ -303,7 +303,7 @@ func (r *redisStreamsReader) Connect(ctx context.Context) error {
 			err = client.XGroupCreate(ctx, s, r.consumerGroup, offset).Err()
 		}
 		if err != nil && err.Error() != "BUSYGROUP Consumer Group name already exists" {
-			return fmt.Errorf("failed to create group %v for stream %v: %v", r.consumerGroup, s, err)
+			return fmt.Errorf("creating group %v for stream %v: %v", r.consumerGroup, s, err)
 		}
 	}
 	r.client = client

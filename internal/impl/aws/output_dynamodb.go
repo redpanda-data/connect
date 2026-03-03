@@ -219,7 +219,7 @@ func newDynamoDBWriter(conf ddboConfig, mgr *service.Resources) (*dynamoDBWriter
 	if conf.TTL != "" {
 		ttl, err := time.ParseDuration(conf.TTL)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse TTL: %v", err)
+			return nil, fmt.Errorf("parsing TTL: %v", err)
 		}
 		db.ttl = ttl
 	}
@@ -240,7 +240,7 @@ func (d *dynamoDBWriter) ConnectionTest(ctx context.Context) service.ConnectionT
 		TableName: d.table,
 	})
 	if err != nil {
-		return service.ConnectionTestFailed(fmt.Errorf("failed to describe table %s: %w", *d.table, err)).AsList()
+		return service.ConnectionTestFailed(fmt.Errorf("describing table %s: %w", *d.table, err)).AsList()
 	}
 	return service.ConnectionTestSucceeded().AsList()
 }
@@ -449,7 +449,7 @@ unprocessedLoop:
 		}); err != nil {
 			d.log.Errorf("Write multi error: %v\n", err)
 		} else if unproc = batchResult.UnprocessedItems[*d.table]; len(unproc) > 0 {
-			err = fmt.Errorf("failed to set %v items", len(unproc))
+			err = fmt.Errorf("setting %v items", len(unproc))
 		} else {
 			unproc = nil
 		}

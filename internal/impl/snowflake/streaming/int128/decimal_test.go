@@ -339,7 +339,6 @@ func TestFromStringFast(t *testing.T) {
 	}
 
 	for _, str := range tests {
-		str := str
 		digitCount, leadingDigits := computeDecimalParameters(str)
 		t.Run(str, func(t *testing.T) {
 			cases := 0
@@ -429,7 +428,6 @@ func BenchmarkParsing(b *testing.B) {
 		"1234567890.1234567890",
 	}
 	for _, test := range tests {
-		test := test
 		digitCount, leadingDigits := computeDecimalParameters(test)
 		scale := digitCount - leadingDigits
 		b.Run("fast_"+test, func(b *testing.B) {

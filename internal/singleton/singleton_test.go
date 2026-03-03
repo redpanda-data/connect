@@ -80,9 +80,7 @@ func TestMultipleGoroutines(t *testing.T) {
 	require.False(t, open.Load())
 	var wg sync.WaitGroup
 	for range 3 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			f1, ticket1, err := s.Acquire(t.Context())
 			require.NoError(t, err)
 			require.True(t, open.Load())
@@ -97,7 +95,7 @@ func TestMultipleGoroutines(t *testing.T) {
 			require.NoError(t, s.Close(t.Context(), ticket2))
 			// Nothing to assert, could race with other goroutines
 			require.NoError(t, s.Close(t.Context(), ticket2))
-		}()
+		})
 	}
 	wg.Wait()
 	require.False(t, open.Load())

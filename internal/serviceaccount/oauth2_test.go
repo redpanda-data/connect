@@ -107,5 +107,5 @@ func TestInitGlobalWithInvalidTokenURL(t *testing.T) {
 
 	err := InitGlobal(ctx, "http://invalid-host-that-does-not-exist.local/token", "client", "secret", "")
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to acquire OAuth2 token")
+	assert.Contains(t, err.Error(), "acquiring OAuth2 token")
 }

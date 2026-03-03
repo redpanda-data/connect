@@ -19,16 +19,21 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"iter"
+	"math/rand/v2"
 	"net/http"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/confx"
@@ -71,16 +76,17 @@ const (
 	srFieldTLS     = "tls"
 
 	// Schema registry migrator fields
-	srFieldEnabled        = "enabled"
-	srFieldInterval       = "interval"
-	srFieldInclude        = "include"
-	srFieldExclude        = "exclude"
-	srFieldSubject        = "subject"
-	srFieldVersions       = "versions"
-	srFieldIncludeDeleted = "include_deleted"
-	srFieldTranslateIDs   = "translate_ids"
-	srFieldNormalize      = "normalize"
-	srFieldStrict         = "strict"
+	srFieldEnabled                = "enabled"
+	srFieldInterval               = "interval"
+	srFieldInclude                = "include"
+	srFieldExclude                = "exclude"
+	srFieldSubject                = "subject"
+	srFieldVersions               = "versions"
+	srFieldIncludeDeleted         = "include_deleted"
+	srFieldTranslateIDs           = "translate_ids"
+	srFieldNormalize              = "normalize"
+	srFieldMaxParallelHTTPRequest = "max_parallel_http_requests"
+	srFieldStrict                 = "strict"
 )
 
 func schemaRegistryField(extraFields ...*service.ConfigField) *service.ConfigField {
@@ -152,6 +158,10 @@ func schemaRegistryMigratorFields() []*service.ConfigField {
 				"Note: messages with 0-byte prefixes (e.g., protobuf) cannot be distinguished from schema registry headers and may fail when strict is enabled.").
 			Default(false).
 			LintRule(`root = if this && !this.schema_registry.translate_ids { "strict is only relevant when translate_ids is true" }`),
+		service.NewIntField(srFieldMaxParallelHTTPRequest).
+			Description("Maximum number of parallel HTTP requests to the schema registry. Controls concurrency when syncing multiple schemas.").
+			Default(10).
+			LintRule(`root = if this < 1 { "max_parallel_http_requests must be at least 1" }`),
 	}
 }
 
@@ -235,6 +245,9 @@ type SchemaRegistryMigratorConfig struct {
 	// Strict controls if DestinationSchemaID should error if the
 	// source schema ID is unknown.
 	Strict bool
+	// MaxParallelHTTPRequests controls the maximum number of concurrent HTTP requests
+	// to the schema registry.
+	MaxParallelHTTPRequests int
 	// Serverless narrows the set of schema configuration keys to those
 	// supported by serverless clusters.
 	Serverless bool
@@ -310,6 +323,9 @@ func (m *SchemaRegistryMigratorConfig) initFromParsed(pConf *service.ParsedConfi
 	if m.Normalize, err = pConf.FieldBool(srObjectField, srFieldNormalize); err != nil {
 		return fmt.Errorf("parse normalize setting: %w", err)
 	}
+	if m.MaxParallelHTTPRequests, err = pConf.FieldInt(srObjectField, srFieldMaxParallelHTTPRequest); err != nil {
+		return fmt.Errorf("parse max_parallel_http_requests setting: %w", err)
+	}
 	if m.Strict, err = pConf.FieldBool(srObjectField, srFieldStrict); err != nil {
 		return fmt.Errorf("parse strict setting: %w", err)
 	}
@@ -321,6 +337,18 @@ func (m *SchemaRegistryMigratorConfig) initFromParsed(pConf *service.ParsedConfi
 	}
 
 	return nil
+}
+
+type schemaSubjectVersion struct {
+	Subject string
+	Version int
+}
+
+func schemaSubjectVersionFromSubjectSchema(ss sr.SubjectSchema) schemaSubjectVersion {
+	return schemaSubjectVersion{
+		Subject: ss.Subject,
+		Version: ss.Version,
+	}
 }
 
 type schemaInfo struct {
@@ -356,8 +384,8 @@ type schemaRegistryMigrator struct {
 	log     *service.Logger
 
 	mu            sync.RWMutex
-	knownSubjects map[schemaInfo]struct{} // source schema info set
-	knownSchemas  map[int]schemaInfo      // source schema ID -> destination schema info
+	knownSubjects map[schemaSubjectVersion]struct{} // source schema subject and version marked as known
+	knownSchemas  map[int]schemaInfo                // source schema ID -> destination schema info
 }
 
 // ListSubjectSchemas returns a list of all source subject schemas Filtered by
@@ -366,57 +394,175 @@ func (m *schemaRegistryMigrator) ListSubjectSchemas(ctx context.Context) ([]sr.S
 	if m.src == nil {
 		return nil, errors.New("source schema registry client not configured")
 	}
-	return m.listSubjectSchemas(ctx, m.src)
+
+	var schemas []sr.SubjectSchema
+	for s, err := range m.listSubjectSchemas(ctx, m.src, m.conf.Versions, nil) {
+		if err != nil {
+			return nil, err
+		}
+		schemas = append(schemas, s)
+	}
+
+	// Sort by schema ID ascending
+	sort.Slice(schemas, func(i, j int) bool {
+		return schemas[i].ID < schemas[j].ID
+	})
+
+	return schemas, nil
 }
 
-func (m *schemaRegistryMigrator) listSubjectSchemas(ctx context.Context, client *sr.Client) ([]sr.SubjectSchema, error) {
+func (m *schemaRegistryMigrator) listSubjectSchemas(
+	ctx context.Context,
+	client *sr.Client,
+	versions Versions,
+	filter func(subject string, version int) bool,
+) iter.Seq2[sr.SubjectSchema, error] {
+	return func(yield func(sr.SubjectSchema, error) bool) {
+		if m.conf.IncludeDeleted {
+			ctx = sr.WithParams(ctx, sr.ShowDeleted)
+		}
+
+		// List and filter subjects
+		subs, err := client.Subjects(ctx)
+		if err != nil {
+			yield(sr.SubjectSchema{}, fmt.Errorf("list subjects: %w", err))
+			return
+		}
+		subs = m.conf.Filtered(subs)
+		rand.Shuffle(len(subs), func(i, j int) {
+			subs[i], subs[j] = subs[j], subs[i]
+		})
+
+		// Get and yield subject schemas
+		switch versions {
+		case VersionsLatest:
+			const latestVersion = -1
+			for _, s := range subs {
+				schema, err := client.SchemaByVersion(ctx, s, latestVersion)
+				if err != nil {
+					err = fmt.Errorf("get latest schema for subject %q: %w", s, err)
+				}
+				if !yield(schema, err) {
+					return
+				}
+			}
+		case VersionsAll:
+			for _, s := range subs {
+				vers, err := client.SubjectVersions(ctx, s)
+				if err != nil {
+					if !yield(sr.SubjectSchema{}, fmt.Errorf("get versions for subject %q: %w", s, err)) {
+						return
+					}
+				}
+				sort.Ints(vers)
+
+				for _, v := range vers {
+					if filter != nil && filter(s, v) {
+						continue
+					}
+
+					schema, err := client.SchemaByVersion(ctx, s, v)
+					if err != nil {
+						err = fmt.Errorf("get schema for subject %q version %d: %w", s, v, err)
+					}
+					if !yield(schema, err) {
+						return
+					}
+				}
+			}
+		default:
+			yield(sr.SubjectSchema{}, fmt.Errorf("unsupported versions mode: %q", versions))
+		}
+	}
+}
+
+func (m *schemaRegistryMigrator) dfsSubjectSchemasFunc(
+	ctx context.Context,
+	client *sr.Client,
+	root sr.SubjectSchema,
+	filter func(subject string, version int) bool,
+	cb func(sr.SubjectSchema) error,
+) error {
 	if m.conf.IncludeDeleted {
 		ctx = sr.WithParams(ctx, sr.ShowDeleted)
 	}
 
-	// List and filter subjects
-	subs, err := client.Subjects(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("list subjects: %w", err)
+	type stackItem struct {
+		sr.SubjectSchema
+		fetched  bool // true when schema has been fetched from client
+		expanded bool // true when we've pushed dependencies and ready to process
 	}
-	subs = m.conf.Filtered(subs)
 
-	// Get subject schemas
-	var res []sr.SubjectSchema
-	switch m.conf.Versions {
-	case VersionsLatest:
-		const latestVersion = -1
-		for _, s := range subs {
-			schema, err := client.SchemaByVersion(ctx, s, latestVersion)
-			if err != nil {
-				return nil, fmt.Errorf("get latest schema for subject %q: %w", s, err)
-			}
-			res = append(res, schema)
+	var (
+		stack   = []stackItem{{SubjectSchema: root, fetched: true}}
+		visited = map[schemaSubjectVersion]struct{}{
+			schemaSubjectVersionFromSubjectSchema(root): {},
 		}
-	case VersionsAll:
-		for _, s := range subs {
-			vers, err := client.SubjectVersions(ctx, s)
+	)
+
+	enqueue := func(subject string, version int) {
+		key := schemaSubjectVersion{Subject: subject, Version: version}
+		if _, ok := visited[key]; ok {
+			return
+		}
+		visited[key] = struct{}{}
+
+		if filter != nil && filter(subject, version) {
+			return
+		}
+
+		stack = append(stack, stackItem{
+			SubjectSchema: sr.SubjectSchema{
+				Subject: subject,
+				Version: version,
+			},
+		})
+	}
+
+	for len(stack) > 0 {
+		// Peek at top of stack and try to expand
+		item := &stack[len(stack)-1]
+
+		if !item.fetched {
+			ss, err := client.SchemaByVersion(ctx, item.Subject, item.Version)
 			if err != nil {
-				return nil, fmt.Errorf("get versions for subject %q: %w", s, err)
+				return fmt.Errorf("fetch schema %s version %d: %w", item.Subject, item.Version, err)
 			}
-			for _, v := range vers {
-				schema, err := client.SchemaByVersion(ctx, s, v)
+			item.SubjectSchema, item.fetched = ss, true
+		}
+		if !item.expanded {
+			// Add previous versions if VersionsAll is enabled
+			if m.conf.Versions == VersionsAll && item.Version > 1 {
+				vers, err := client.SubjectVersions(ctx, item.Subject)
 				if err != nil {
-					return nil, fmt.Errorf("get schema for subject %q version %d: %w", s, v, err)
+					return fmt.Errorf("get versions for subject %q: %w", item.Subject, err)
 				}
-				res = append(res, schema)
+				// Sort in descending order
+				slices.SortFunc(vers, func(a, b int) int {
+					return b - a
+				})
+				for _, v := range vers {
+					enqueue(item.Subject, v)
+				}
 			}
+			// Add references
+			for _, ref := range item.References {
+				enqueue(ref.Subject, ref.Version)
+			}
+
+			// Mark as expanded and continue
+			item.expanded = true
+			continue
 		}
-	default:
-		return nil, fmt.Errorf("unsupported versions mode: %q", m.conf.Versions)
+
+		// Pop from stack and process
+		stack = stack[:len(stack)-1]
+		if err := cb(item.SubjectSchema); err != nil {
+			return err
+		}
 	}
 
-	// Sort by schema ID ascending
-	sort.Slice(res, func(i, j int) bool {
-		return res[i].ID < res[j].ID
-	})
-
-	return res, nil
+	return nil
 }
 
 // SyncLoop runs the schema registry sync in a loop at the configured interval
@@ -469,43 +615,95 @@ func (m *schemaRegistryMigrator) Sync(ctx context.Context) error {
 		return err
 	}
 
-	all, err := m.listSubjectSchemas(ctx, m.src)
-	if err != nil {
-		return fmt.Errorf("list subject schemas: %w", err)
-	}
-	m.log.Debugf("Schema migration: found %d subject schemas", len(all))
-	for _, s := range all {
-		m.log.Debugf("Schema migration: found subject=%s version=%d id=%d", s.Subject, s.Version, s.ID)
+	if m.conf.MaxParallelHTTPRequests < 1 {
+		return errors.New("max_parallel_http_requests must be at least 1")
 	}
 
-	for _, s := range all {
-		srcInfo := schemaInfoFromSubjectSchema(s)
-
-		if _, ok := m.knownSubjects[srcInfo]; ok {
-			m.log.Debugf("Schema migration: schema already synced, skipping: subject=%s version=%d id=%d",
-				s.Subject, s.Version, s.ID)
-			continue
+	filter := func(subject string, version int) bool {
+		m.mu.RLock()
+		_, ok := m.knownSubjects[schemaSubjectVersion{
+			Subject: subject,
+			Version: version,
+		}]
+		m.mu.RUnlock()
+		return ok
+	}
+	loggingFilter := func(subject string, version int) bool {
+		ok := filter(subject, version)
+		if ok {
+			m.log.Debugf("Schema migration: schema already synced, skipping: subject=%s version=%d", subject, version)
 		}
+		return ok
+	}
 
-		info, err := m.syncSubjectSchema(ctx, s)
-		if err != nil {
-			return fmt.Errorf("sync subject schema %s version %d: %w", s.Subject, s.Version, err)
-		}
-		if existing, ok := m.knownSchemas[s.ID]; ok {
-			if existing.ID != info.ID {
-				return fmt.Errorf("schema ID mapping conflict: source ID %d maps to both destination IDs %d and %d",
-					s.ID, existing.ID, info.ID)
+	workCh := make(chan sr.SubjectSchema, m.conf.MaxParallelHTTPRequests)
+	g, ctx := errgroup.WithContext(ctx)
+
+	// Producer: send root subjects to channel
+	g.Go(func() error {
+		defer close(workCh)
+		for ss, err := range m.listSubjectSchemas(ctx, m.src, VersionsLatest, loggingFilter) { // Always use latest for DFS roots
+			if err != nil {
+				return fmt.Errorf("list subject schemas: %w", err)
+			}
+			select {
+			case workCh <- ss:
+			case <-ctx.Done():
+				return ctx.Err()
 			}
 		}
+		return nil
+	})
 
-		if err := m.syncSubjectCompatibility(ctx, s.Subject); err != nil {
-			return fmt.Errorf("sync subject compatibility %s: %w", s.Subject, err)
-		}
+	// Workers: process subjects with DFS traversal
+	var total atomic.Int64
+	for range m.conf.MaxParallelHTTPRequests {
+		g.Go(func() error {
+			for ss := range workCh {
+				err := m.dfsSubjectSchemasFunc(ctx, m.src, ss, filter, func(s sr.SubjectSchema) error {
+					m.log.Debugf("Schema migration: syncing subject=%s version=%d id=%d", s.Subject, s.Version, s.ID)
 
-		m.mu.Lock()
-		m.knownSubjects[srcInfo] = struct{}{}
-		m.knownSchemas[s.ID] = info
-		m.mu.Unlock()
+					info, err := m.syncSubjectSchema(ctx, s)
+					if err != nil {
+						return fmt.Errorf("sync subject schema %s version %d: %w", s.Subject, s.Version, err)
+					}
+					if err := m.checkSchemaIDConflict(s.ID, info); err != nil {
+						return err
+					}
+					if err := m.syncSubjectCompatibility(ctx, s.Subject); err != nil {
+						return fmt.Errorf("sync subject compatibility %s: %w", s.Subject, err)
+					}
+
+					m.mu.Lock()
+					m.knownSubjects[schemaSubjectVersionFromSubjectSchema(s)] = struct{}{}
+					m.knownSchemas[s.ID] = info
+					m.mu.Unlock()
+
+					if n := total.Add(1); n%100 == 0 {
+						m.log.Infof("Schema migration: synced %d schemas", n)
+					}
+
+					return nil
+				})
+				if err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+	}
+
+	return g.Wait()
+}
+
+func (m *schemaRegistryMigrator) checkSchemaIDConflict(srcID int, dstInfo schemaInfo) error {
+	m.mu.RLock()
+	cur, ok := m.knownSchemas[srcID]
+	m.mu.RUnlock()
+
+	if ok && cur.ID != dstInfo.ID {
+		return fmt.Errorf("schema ID mapping conflict: source ID %d maps to both destination IDs %d and %d",
+			srcID, cur.ID, dstInfo.ID)
 	}
 
 	return nil
@@ -758,7 +956,7 @@ func (m *schemaRegistryMigrator) ensureSubjectImportMode(ctx context.Context, su
 			m.log.Warnf("Schema migration: destination schema registry does not support IMPORT mode for subject=%s, proceeding without mode change", subject)
 			return noop, nil
 		}
-		return noop, fmt.Errorf("failed to set IMPORT mode: %w", err)
+		return noop, fmt.Errorf("setting IMPORT mode: %w", err)
 	}
 
 	return func() {

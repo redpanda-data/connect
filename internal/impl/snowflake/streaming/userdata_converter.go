@@ -1,12 +1,10 @@
-/*
- * Copyright 2024 Redpanda Data, Inc.
- *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
- * License (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- *
- * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
- */
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed as a Redpanda Enterprise file under the Redpanda Community
+// License (the "License"); you may not use this file except in compliance with
+// the License. You may obtain a copy of the License at
+//
+// https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
 package streaming
 
@@ -14,6 +12,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 	"unicode/utf8"
 	"unsafe"
@@ -28,7 +27,8 @@ import (
 
 type typedBufferFactory func() typedBuffer
 
-// typedBuffer is the buffer that holds columnar data before we write to the parquet file
+// typedBuffer writes columnar data directly to a parquet ColumnWriter.
+// Each Write method writes a single value to the column.
 type typedBuffer interface {
 	WriteNull()
 	WriteInt128(int128.Num)
@@ -36,19 +36,17 @@ type typedBuffer interface {
 	WriteFloat64(float64)
 	WriteBytes([]byte) // should never be nil
 
-	// Prepare for writing values to the following matrix.
-	// Must be called before writing
-	// The matrix size must be pre-allocated to be the size of
-	// the data that will be written - this buffer will not modify
-	// the size of the data.
-	Prepare(matrix []parquet.Value, columnIndex, rowWidth int)
+	// Reset prepares the buffer for writing to a new column writer.
+	// columnIndex is the column index for setting value levels.
+	Reset(columnWriter *parquet.ColumnWriter, columnIndex int)
 }
 
 type typedBufferImpl struct {
-	matrix      []parquet.Value
-	columnIndex int
-	rowWidth    int
-	currentRow  int
+	columnWriter *parquet.ColumnWriter
+	columnIndex  int
+
+	// Scratch buffer reused for single-value writes to avoid allocations
+	valueBuffer [1]parquet.Value
 
 	// For int128 we don't make a bunch of small allocs,
 	// but append to this existing buffer a bunch, this
@@ -59,8 +57,9 @@ type typedBufferImpl struct {
 }
 
 func (b *typedBufferImpl) WriteValue(v parquet.Value) {
-	b.matrix[(b.currentRow*b.rowWidth)+b.columnIndex] = v
-	b.currentRow++
+	b.valueBuffer[0] = v
+	// WriteRowValues handles internal buffering, so calling it per-value is fine
+	_, _ = b.columnWriter.WriteRowValues(b.valueBuffer[:])
 }
 
 func (b *typedBufferImpl) WriteNull() {
@@ -84,11 +83,9 @@ func (b *typedBufferImpl) WriteBytes(v []byte) {
 	b.WriteValue(parquet.ByteArrayValue(v).Level(0, 1, b.columnIndex))
 }
 
-func (b *typedBufferImpl) Prepare(matrix []parquet.Value, columnIndex, rowWidth int) {
-	b.currentRow = 0
-	b.matrix = matrix
+func (b *typedBufferImpl) Reset(columnWriter *parquet.ColumnWriter, columnIndex int) {
+	b.columnWriter = columnWriter
 	b.columnIndex = columnIndex
-	b.rowWidth = rowWidth
 	if b.scratch != nil {
 		b.scratch = b.scratch[:0]
 	}
@@ -202,6 +199,8 @@ func (c numberConverter) ValidateAndConvert(stats *statsBuffer, val any, buf typ
 		v, err = int128.FromFloat64(t, c.precision, c.scale)
 	case string:
 		v, err = int128.FromString(t, c.precision, c.scale)
+	case []byte:
+		v, err = int128.FromString(unsafe.String(unsafe.SliceData(t), len(t)), c.precision, c.scale)
 	case json.Number:
 		v, err = int128.FromString(t.String(), c.precision, c.scale)
 	default:
@@ -235,7 +234,43 @@ func (c doubleConverter) ValidateAndConvert(stats *statsBuffer, val any, buf typ
 		buf.WriteNull()
 		return nil
 	}
-	v, err := bloblang.ValueAsFloat64(val)
+	var v float64
+	var err error
+	switch t := val.(type) {
+	case int:
+		v = float64(t)
+	case int8:
+		v = float64(t)
+	case int16:
+		v = float64(t)
+	case int32:
+		v = float64(t)
+	case int64:
+		v = float64(t)
+	case uint:
+		v = float64(t)
+	case uint8:
+		v = float64(t)
+	case uint16:
+		v = float64(t)
+	case uint32:
+		v = float64(t)
+	case uint64:
+		v = float64(t)
+	case float32:
+		v = float64(t)
+	case float64:
+		v = t
+	case string:
+		v, err = strconv.ParseFloat(t, 64)
+	case []byte:
+		v, err = strconv.ParseFloat(unsafe.String(unsafe.SliceData(t), len(t)), 64)
+	case json.Number:
+		v, err = t.Float64()
+	default:
+		// fallback to the good error message that bloblang provides
+		v, err = bloblang.ValueAsFloat64(val)
+	}
 	if err != nil {
 		return err
 	}
@@ -346,6 +381,7 @@ type timestampConverter struct {
 	includeTZ        bool
 	trimTZ           bool
 	defaultTZ        *time.Location
+	timeFormat       string
 }
 
 func (c timestampConverter) ValidateAndConvert(stats *statsBuffer, val any, buf typedBuffer) error {
@@ -372,8 +408,7 @@ func (c timestampConverter) ValidateAndConvert(stats *statsBuffer, val any, buf 
 		}
 	}
 	if s != "" {
-		location := c.defaultTZ
-		t, err = time.ParseInLocation(time.RFC3339Nano, s, location)
+		t, err = time.ParseInLocation(c.timeFormat, s, c.defaultTZ)
 		if err != nil {
 			return &InvalidTimestampFormatError{"timestamp", s}
 		}

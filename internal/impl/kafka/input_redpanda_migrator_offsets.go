@@ -145,7 +145,7 @@ func init() {
 				for _, topic := range i.topics {
 					tp, err := regexp.Compile(topic)
 					if err != nil {
-						return nil, fmt.Errorf("failed to compile topic regex %q: %s", topic, err)
+						return nil, fmt.Errorf("compiling topic regex %q: %s", topic, err)
 					}
 					i.topicPatterns = append(i.topicPatterns, tp)
 				}
@@ -204,7 +204,7 @@ func (rmoi *redpandaMigratorOffsetsInput) getTimestampsForCommittedOffsets(ctx c
 
 	highWatermarks, err := rmoi.admClient.ListEndOffsets(ctx, topics...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read high watermarks: %s", err)
+		return nil, fmt.Errorf("reading high watermarks: %s", err)
 	}
 
 	// Clone the tsRequests map so we can remove entries from it as we make progress.
@@ -302,7 +302,7 @@ func (rmoi *redpandaMigratorOffsetsInput) getTimestampsForCommittedOffsets(ctx c
 		// been found.
 		fetches := rmoi.client.PollFetches(pollFetchesCtx)
 		if fetches.IsClientClosed() {
-			return nil, errors.New("failed to read topic records: client closed")
+			return nil, errors.New("reading topic records: client closed")
 		}
 
 		if err := fetches.Err(); err != nil {
@@ -311,7 +311,7 @@ func (rmoi *redpandaMigratorOffsetsInput) getTimestampsForCommittedOffsets(ctx c
 				rmoi.client.ResumeFetchPartitions(pausedPartitions)
 				break
 			}
-			return nil, fmt.Errorf("failed to read topic records: %s", err)
+			return nil, fmt.Errorf("reading topic records: %s", err)
 		}
 
 		pendingTsRequestsLock.Lock()
@@ -374,7 +374,7 @@ func (rmoi *redpandaMigratorOffsetsInput) Connect(ctx context.Context) error {
 	var err error
 	rmoi.client, err = NewFranzClient(ctx, rmoi.clientOpts...)
 	if err != nil {
-		return fmt.Errorf("failed to connect: %s", err)
+		return fmt.Errorf("connecting: %s", err)
 	}
 
 	// The default kadm client timeout is 15s. Do we need to make this configurable?

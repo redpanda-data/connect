@@ -181,7 +181,7 @@ root."-" = if this.operation == "Patch" && this.patch_operations.any(o -> o.oper
 
 //------------------------------------------------------------------------------
 
-// ContainerClientConfigFields returns the container client config fields
+// ContainerClientConfigFields returns the container client config fields.
 func ContainerClientConfigFields() []*service.ConfigField {
 	return []*service.ConfigField{
 		service.NewStringField(fieldEndpoint).Description("CosmosDB endpoint.").Optional().Example("https://localhost:8081"),
@@ -192,7 +192,7 @@ func ContainerClientConfigFields() []*service.ConfigField {
 	}
 }
 
-// PartitionKeysField returns the partition keys field definition
+// PartitionKeysField returns the partition keys field definition.
 func PartitionKeysField(isInputField bool) *service.ConfigField {
 	// TODO: Add examples for hierarchical / empty Partition Keys this when the following issues are addressed:
 	// - https://github.com/Azure/azure-sdk-for-go/issues/18578
@@ -206,7 +206,7 @@ func PartitionKeysField(isInputField bool) *service.ConfigField {
 	return field.Example(`root = now().ts_format("2006-01-02")`)
 }
 
-// CRUDFields returns the CRUD field definitions
+// CRUDFields returns the CRUD field definitions.
 func CRUDFields(hasReadOperation bool) []*service.ConfigField {
 	operations := map[string]string{
 		string(OperationCreate):  "Create operation.",
@@ -257,7 +257,7 @@ func ContainerClientFromParsed(conf *service.ParsedConfig) (*azcosmos.ContainerC
 
 		keyCredential, err = azcosmos.NewKeyCredential(accountKey)
 		if err != nil {
-			return nil, fmt.Errorf("failed to deserialise %s: %s", fieldAccountKey, err)
+			return nil, fmt.Errorf("deserialising %s: %s", fieldAccountKey, err)
 		}
 	}
 
@@ -287,7 +287,7 @@ func ContainerClientFromParsed(conf *service.ParsedConfig) (*azcosmos.ContainerC
 		return nil, fmt.Errorf("either %s or %s must be set", fieldEndpoint, fieldConnectionString)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("failed to create client: %s", err)
+		return nil, fmt.Errorf("creating client: %s", err)
 	}
 
 	database, err := conf.FieldString(fieldDatabase)
@@ -302,7 +302,7 @@ func ContainerClientFromParsed(conf *service.ParsedConfig) (*azcosmos.ContainerC
 
 	containerClient, err := client.NewContainer(database, container)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create container client: %s", err)
+		return nil, fmt.Errorf("creating container client: %s", err)
 	}
 
 	return containerClient, nil

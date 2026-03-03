@@ -22,7 +22,6 @@ import (
 	"slices"
 	"strconv"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/dustin/go-humanize"
@@ -118,7 +117,7 @@ func FranzProducerLimitsOptsFromConfig(conf *service.ParsedConfig) ([]kgo.Opt, e
 	}
 	maxMessageBytes, err := humanize.ParseBytes(maxMessageBytesStr)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse max_message_bytes: %w", err)
+		return nil, fmt.Errorf("parsing max_message_bytes: %w", err)
 	}
 	if maxMessageBytes > uint64(math.MaxInt32) {
 		return nil, fmt.Errorf("invalid max_message_bytes, must not exceed %v", math.MaxInt32)
@@ -131,7 +130,7 @@ func FranzProducerLimitsOptsFromConfig(conf *service.ParsedConfig) ([]kgo.Opt, e
 	}
 	brokerWriteMaxBytes, err := humanize.ParseBytes(brokerWriteMaxBytesStr)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse broker_write_max_bytes: %w", err)
+		return nil, fmt.Errorf("parsing broker_write_max_bytes: %w", err)
 	}
 	if brokerWriteMaxBytes > 1<<30 {
 		return nil, fmt.Errorf("invalid broker_write_max_bytes, must not exceed %v", 1<<30)
@@ -318,7 +317,7 @@ type FranzWriter struct {
 	// DecorateRecord is executed for each record before it is written to the
 	// broker.
 	//
-	// DEPRECATED: Use [MessageBatchToFranzRecords] instead.
+	// Deprecated: Use [MessageBatchToFranzRecords] instead.
 	DecorateRecord func(r *kgo.Record) error
 }
 
@@ -497,11 +496,8 @@ func (w *FranzWriter) WriteBatch(ctx context.Context, b service.MessageBatch) er
 // batchWriter handles concurrent writes of a message batch to Kafka.
 type batchWriter struct {
 	*FranzWriter
-	ctx   context.Context
+	ctx   context.Context //nolint:containedctx // method-scoped context captured for batch callback
 	batch service.MessageBatch
-
-	wg  sync.WaitGroup
-	err atomic.Value
 }
 
 func (w *FranzWriter) newBatchWriter(ctx context.Context, batch service.MessageBatch) *batchWriter {
@@ -519,11 +515,13 @@ func (w *batchWriter) writeBatch(details *FranzSharedClientInfo) error {
 	}
 	records, err := conv(w.batch)
 	if err != nil {
-		return fmt.Errorf("failed to create records: %w", err)
+		return fmt.Errorf("creating records: %w", err)
 	}
 	if len(records) != len(w.batch) {
 		return fmt.Errorf("record count mismatch: got %d records for %d messages", len(records), len(w.batch))
 	}
+	var errs []error
+	var wg sync.WaitGroup
 	for i := range records {
 		r := &records[i]
 
@@ -538,37 +536,19 @@ func (w *batchWriter) writeBatch(details *FranzSharedClientInfo) error {
 		}
 		if w.DecorateRecord != nil {
 			if err := w.DecorateRecord(r); err != nil {
-				return fmt.Errorf("decorate record: %w", err)
+				errs = append(errs, fmt.Errorf("decorate record: %w", err))
+				continue
 			}
 		}
 
-		w.wg.Add(1)
-		details.Client.Produce(w.ctx, r, w.onRecordProduced)
+		wg.Add(1)
+		details.Client.Produce(w.ctx, r, func(_ *kgo.Record, err error) {
+			errs = append(errs, err)
+			wg.Done()
+		})
 	}
-	return w.wait()
-}
-
-func (w *batchWriter) onRecordProduced(r *kgo.Record, err error) {
-	// Note: the order of these operations is important, first set the error if
-	// there is one, then signal completion.
-	if err != nil {
-		w.err.CompareAndSwap(nil, err)
-	}
-	w.wg.Done()
-
-	if r.Context != nil {
-		dispatch.TriggerSignal(r.Context)
-	}
-}
-
-func (w *batchWriter) wait() error {
-	w.wg.Wait()
-
-	if err := w.err.Load(); err != nil {
-		return err.(error)
-	}
-
-	return nil
+	wg.Wait()
+	return errors.Join(slices.Compact(errs)...)
 }
 
 // Close calls into the provided yield client func.

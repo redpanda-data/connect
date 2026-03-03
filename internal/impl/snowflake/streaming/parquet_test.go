@@ -1,12 +1,10 @@
-/*
- * Copyright 2024 Redpanda Data, Inc.
- *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
- * License (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- *
- * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
- */
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed as a Redpanda Enterprise file under the Redpanda Community
+// License (the "License"); you may not use this file except in compliance with
+// the License. You may obtain a copy of the License at
+//
+// https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
 package streaming
 
@@ -58,18 +56,31 @@ func TestWriteParquet(t *testing.T) {
 		},
 	}
 	schema := parquet.NewSchema("bdec", inputDataSchema)
-	rows, stats, err := constructRowGroup(
-		batch,
-		schema,
-		transformers,
-		SchemaModeIgnoreExtra,
-	)
-	require.NoError(t, err)
 	w := newParquetWriter("latest", schema)
+
 	// Ensure that a parquet writer correctly resets it's state
 	for range 4 {
-		b, err := w.WriteFile(rows, nil)
+		w.Reset(nil)
+
+		// Create a concurrent row group, write to it, and flush (all in one call)
+		rg := w.BeginRowGroup()
+		stats, err := writeRowGroupFromObject(
+			batch,
+			schema,
+			transformers,
+			SchemaModeIgnoreExtra,
+			rg,
+		)
 		require.NoError(t, err)
+
+		// Commit the row group
+		_, err = rg.Commit()
+		require.NoError(t, err)
+
+		// Close the writer and get the bytes
+		b, _, err := w.Close()
+		require.NoError(t, err)
+
 		actual, err := readGeneric(
 			bytes.NewReader(b),
 			int64(len(b)),

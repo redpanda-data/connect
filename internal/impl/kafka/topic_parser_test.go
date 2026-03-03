@@ -105,7 +105,6 @@ func TestKafkaTopicParsing(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			ts, tps, err := ParseTopics(test.input, test.defaultOffset, test.allowOffsets)
 			if test.expectedErr == "" {

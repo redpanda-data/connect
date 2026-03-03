@@ -1,0 +1,8 @@
+roles:
+  - id: test.readonly
+    permissions: []
+
+bindings:
+  - role: test.readonly
+    principal: User:test@example.com
+    scope: organizations/test-org/resourcegroups/default/dataplanes/test-service

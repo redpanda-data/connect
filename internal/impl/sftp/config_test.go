@@ -59,7 +59,7 @@ credentials:
   host_public_key: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDknETovnNcLdtMzYk3qj9qGmRh0NkS6i4uGc3jtBdmK
   host_public_key_file: /path/to/public/key
 `,
-			errContains: `failed to get host public key: both "host_public_key" and "host_public_key_file" cannot be set simultaneously`,
+			errContains: `getting host public key: both "host_public_key" and "host_public_key_file" cannot be set simultaneously`,
 		},
 		{
 			name: "conflicting private key fields",
@@ -72,7 +72,7 @@ credentials:
   private_key: supersecretkey
   private_key_file: /path/to/private/key
 `,
-			errContains: `failed to get private key: both "private_key" and "private_key_file" cannot be set simultaneously`,
+			errContains: `getting private key: both "private_key" and "private_key_file" cannot be set simultaneously`,
 		},
 	}
 

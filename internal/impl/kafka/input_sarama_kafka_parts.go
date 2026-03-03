@@ -79,7 +79,7 @@ partMsgLoop:
 			nextTimedBatchChan = nil
 			flushedBatch, err := batchPolicy.Flush(ctx)
 			if err != nil {
-				k.mgr.Logger().Debugf("Timed flush batch error: %w", err)
+				k.mgr.Logger().Debugf("Timed flush batch error: %v", err)
 				break partMsgLoop
 			}
 			if !flushBatch(ctx, k.msgChan, flushedBatch, latestOffset+1) {
@@ -98,7 +98,7 @@ partMsgLoop:
 				nextTimedBatchChan = nil
 				flushedBatch, err := batchPolicy.Flush(ctx)
 				if err != nil {
-					k.mgr.Logger().Debugf("Flush batch error: %w", err)
+					k.mgr.Logger().Debugf("Flush batch error: %v", err)
 					break partMsgLoop
 				}
 				if !flushBatch(ctx, k.msgChan, flushedBatch, latestOffset+1) {
@@ -193,7 +193,7 @@ func (k *kafkaReader) connectExplicitTopics(ctx context.Context, config *sarama.
 			if errors.Is(err, io.EOF) {
 				offsetRes = &sarama.OffsetFetchResponse{}
 			} else {
-				return fmt.Errorf("failed to acquire offsets from broker: %v", err)
+				return fmt.Errorf("acquiring offsets from broker: %v", err)
 			}
 		}
 	} else {
@@ -250,7 +250,7 @@ func (k *kafkaReader) connectExplicitTopics(ctx context.Context, config *sarama.
 				}
 				if partConsumer, err = consumer.ConsumePartition(topic, partition, offset); err != nil {
 					doneFn()
-					return fmt.Errorf("failed to consume topic %v partition %v: %v", topic, partition, err)
+					return fmt.Errorf("consuming topic %v partition %v: %v", topic, partition, err)
 				}
 			}
 

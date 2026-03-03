@@ -201,7 +201,7 @@ func (a *kinesisWriter) ConnectionTest(ctx context.Context) service.ConnectionTe
 
 	_, err := k.DescribeStream(ctx, in)
 	if err != nil {
-		return service.ConnectionTestFailed(fmt.Errorf("failed to describe stream %s: %w", a.conf.Stream, err)).AsList()
+		return service.ConnectionTestFailed(fmt.Errorf("describing stream %s: %w", a.conf.Stream, err)).AsList()
 	}
 
 	return service.ConnectionTestSucceeded().AsList()
@@ -297,7 +297,7 @@ func (a *kinesisWriter) WriteBatch(ctx context.Context, batch service.MessageBat
 		if l > 0 {
 			a.log.Warnf("scheduling retry of throttled records (%d)\n", l)
 			if wait == backoff.Stop {
-				return fmt.Errorf("%v records failed to be delivered within backoff policy", l)
+				return fmt.Errorf("delivering %v records within backoff policy", l)
 			}
 			time.Sleep(wait)
 		}

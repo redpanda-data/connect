@@ -285,7 +285,7 @@ func TestIntegrationStore(t *testing.T) {
 				ok, err := tc.s.MaybeUpdateWatermark(t.Context(), "created1", want)
 				require.NoError(t, err)
 				require.True(t, ok)
-				for i := 0; i < 10; i++ {
+				for range 10 {
 					ok, err := tc.s.MaybeUpdateWatermark(t.Context(), "created1", want)
 					require.NoError(t, err)
 					require.False(t, ok)

@@ -43,7 +43,7 @@ type Monitor struct {
 	loop     *asyncroutine.Periodic
 }
 
-// NewMonitor creates a new Monitor instance
+// NewMonitor creates a new Monitor instance.
 func NewMonitor(
 	ctx context.Context,
 	config *Config,
@@ -79,7 +79,7 @@ func NewMonitor(
 	return m, nil
 }
 
-// UpdateSnapshotProgressForTable updates the snapshot ingestion progress for a given table
+// UpdateSnapshotProgressForTable updates the snapshot ingestion progress for a given table.
 func (m *Monitor) UpdateSnapshotProgressForTable(table TableFQN, read int) {
 	m.snapshotProgress[table].Add(int64(read))
 }
@@ -89,7 +89,7 @@ func (m *Monitor) MarkSnapshotComplete(table TableFQN) {
 	m.snapshotProgress[table].Store(int64(m.tableStat[table]))
 }
 
-// we need to read the tables stat to calculate the snapshot ingestion progress
+// we need to read the tables stat to calculate the snapshot ingestion progress.
 func (m *Monitor) readTablesStat(ctx context.Context, tables []TableFQN) error {
 	for _, table := range tables {
 		var count float64
@@ -135,7 +135,7 @@ func (m *Monitor) readReplicationLag(ctx context.Context) {
 	m.replicationLagInBytes.Store(lagbytes)
 }
 
-// Report returns a snapshot of the monitor's state
+// Report returns a snapshot of the monitor's state.
 func (m *Monitor) Report() *Report {
 	// report the snapshot ingestion progress
 	// report the replication lag
@@ -153,7 +153,7 @@ func (m *Monitor) Report() *Report {
 	}
 }
 
-// Stop stops the monitor
+// Stop stops the monitor.
 func (m *Monitor) Stop() error {
 	m.loop.Stop()
 	return m.dbConn.Close()

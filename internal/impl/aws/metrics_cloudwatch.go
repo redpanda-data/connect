@@ -166,43 +166,11 @@ func trimValuesMap(m map[int64]int64) {
 }
 
 func (c *cloudWatchStat) appendValue(v int64) {
-	c.root.datumLock.Lock()
-	existing := c.root.datumses[c.id]
-	if existing == nil {
-		existing = &cloudWatchDatum{
-			MetricName: c.name,
-			Unit:       c.unit,
-			Dimensions: c.dimensions,
-			Timestamp:  time.Now(),
-			Values:     map[int64]int64{v: 1},
-		}
-		c.root.datumses[c.id] = existing
-	} else {
-		tally := existing.Values[v]
-		existing.Values[v] = tally + 1
-		if len(existing.Values) > maxCloudWatchValues*5 {
-			trimValuesMap(existing.Values)
-		}
-	}
-	c.root.datumLock.Unlock()
+	c.root.appendDatum(c.id, c.name, c.unit, c.dimensions, v)
 }
 
 func (c *cloudWatchStat) addValue(v int64) {
-	c.root.datumLock.Lock()
-	existing := c.root.datumses[c.id]
-	if existing == nil {
-		existing = &cloudWatchDatum{
-			MetricName: c.name,
-			Unit:       c.unit,
-			Dimensions: c.dimensions,
-			Timestamp:  time.Now(),
-			Value:      v,
-		}
-		c.root.datumses[c.id] = existing
-	} else {
-		existing.Value += v
-	}
-	c.root.datumLock.Unlock()
+	c.root.addDatum(c.id, c.name, c.unit, c.dimensions, v)
 }
 
 // Incr increments a metric by an int64 amount.
@@ -294,7 +262,7 @@ type cwMetrics struct {
 	datumses  map[string]*cloudWatchDatum
 	datumLock *sync.Mutex
 
-	ctx    context.Context
+	ctx    context.Context //nolint:containedctx // lifecycle context for background flush loop
 	cancel func()
 
 	config cwmConfig
@@ -453,6 +421,46 @@ func valuesMapToSlices(m map[int64]int64) (values, counts []float64) {
 		counts = nil
 	}
 	return
+}
+
+func (c *cwMetrics) appendDatum(id, name string, unit types.StandardUnit, dimensions []types.Dimension, v int64) {
+	c.datumLock.Lock()
+	existing := c.datumses[id]
+	if existing == nil {
+		existing = &cloudWatchDatum{
+			MetricName: name,
+			Unit:       unit,
+			Dimensions: dimensions,
+			Timestamp:  time.Now(),
+			Values:     map[int64]int64{v: 1},
+		}
+		c.datumses[id] = existing
+	} else {
+		tally := existing.Values[v]
+		existing.Values[v] = tally + 1
+		if len(existing.Values) > maxCloudWatchValues*5 {
+			trimValuesMap(existing.Values)
+		}
+	}
+	c.datumLock.Unlock()
+}
+
+func (c *cwMetrics) addDatum(id, name string, unit types.StandardUnit, dimensions []types.Dimension, v int64) {
+	c.datumLock.Lock()
+	existing := c.datumses[id]
+	if existing == nil {
+		existing = &cloudWatchDatum{
+			MetricName: name,
+			Unit:       unit,
+			Dimensions: dimensions,
+			Timestamp:  time.Now(),
+			Value:      v,
+		}
+		c.datumses[id] = existing
+	} else {
+		existing.Value += v
+	}
+	c.datumLock.Unlock()
 }
 
 func (c *cwMetrics) flush() error {

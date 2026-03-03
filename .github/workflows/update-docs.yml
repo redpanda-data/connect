@@ -1,9 +1,8 @@
 name: Update Docs
 
 on:
-  push:
-    tags:
-      - 'v*'
+  release:
+    types: [released]
 
 permissions:
   id-token: write
@@ -14,7 +13,7 @@ jobs:
     name: Update Bloblang playground modules
     runs-on: ubuntu-latest
     steps:
-      - uses: aws-actions/configure-aws-credentials@v5
+      - uses: aws-actions/configure-aws-credentials@v6
         with:
           aws-region: ${{ vars.RP_AWS_CRED_REGION }}
           role-to-assume: arn:aws:iam::${{ secrets.RP_AWS_CRED_ACCOUNT_ID }}:role/${{ vars.RP_AWS_CRED_BASE_ROLE_NAME }}${{ github.event.repository.name }}
@@ -33,7 +32,7 @@ jobs:
     name: Generate RPCN connector docs
     runs-on: ubuntu-latest
     steps:
-      - uses: aws-actions/configure-aws-credentials@v5
+      - uses: aws-actions/configure-aws-credentials@v6
         with:
           aws-region: ${{ vars.RP_AWS_CRED_REGION }}
           role-to-assume: arn:aws:iam::${{ secrets.RP_AWS_CRED_ACCOUNT_ID }}:role/${{ vars.RP_AWS_CRED_BASE_ROLE_NAME }}${{ github.event.repository.name }}
@@ -47,3 +46,22 @@ jobs:
           token: ${{ env.ACTIONS_BOT_TOKEN }}
           repository: redpanda-data/rp-connect-docs
           event-type: generate-rpcn-docs
+
+  test-cookbook-examples:
+    name: Test cookbook examples
+    runs-on: ubuntu-latest
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          aws-region: ${{ vars.RP_AWS_CRED_REGION }}
+          role-to-assume: arn:aws:iam::${{ secrets.RP_AWS_CRED_ACCOUNT_ID }}:role/${{ vars.RP_AWS_CRED_BASE_ROLE_NAME }}${{ github.event.repository.name }}
+      - uses: aws-actions/aws-secretsmanager-get-secrets@v2
+        with:
+          secret-ids: |
+            ,sdlc/prod/github/actions_bot_token
+          parse-json-secrets: true
+      - uses: peter-evans/repository-dispatch@v4
+        with:
+          token: ${{ env.ACTIONS_BOT_TOKEN }}
+          repository: redpanda-data/rp-connect-docs
+          event-type: test-cookbook-examples

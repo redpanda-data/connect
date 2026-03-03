@@ -19,6 +19,7 @@ package jirahttp
 
 import (
 	"fmt"
+	"maps"
 )
 
 // transformIssue takes a JiraIssue and returns a JiraIssueResponse with the changelog moved into the fields.
@@ -33,9 +34,7 @@ func transformIssue(orig Issue) IssueResponse {
 		fields = map[string]any{}
 	case map[string]any:
 		fields = make(map[string]any, len(origFields))
-		for k, v := range origFields {
-			fields[k] = v
-		}
+		maps.Copy(fields, origFields)
 	default:
 		fmt.Printf("Warning: issue.Fields type %T not map/nil (id=%s)\n", orig.Fields, orig.ID)
 		fields = map[string]any{}
@@ -57,9 +56,7 @@ func transformIssueTransition(orig any) issueTransitionResponse {
 		fields = map[string]any{}
 	case map[string]any:
 		fields = make(map[string]any, len(origFields))
-		for k, v := range origFields {
-			fields[k] = v
-		}
+		maps.Copy(fields, origFields)
 	default:
 		fmt.Printf("Warning: issueTransition type %T not map/nil\n", orig)
 		fields = map[string]any{}
@@ -83,9 +80,7 @@ func transformProject(orig any) ProjectResponse {
 	fields := map[string]any{}
 
 	if m, ok := orig.(map[string]any); ok && m != nil {
-		for k, v := range m {
-			fields[k] = v
-		}
+		maps.Copy(fields, m)
 	} else if orig != nil {
 		fmt.Printf("Warning: project not map[string]any (type=%T)\n", orig)
 	}
@@ -116,9 +111,7 @@ func transformUser(orig any) userResponse {
 		fields = map[string]any{}
 	case map[string]any:
 		fields = make(map[string]any, len(msg))
-		for k, v := range msg {
-			fields[k] = v
-		}
+		maps.Copy(fields, msg)
 	default:
 		fmt.Printf("Warning: user type %T not map/nil\n", orig)
 		fields = map[string]any{}
@@ -142,9 +135,7 @@ func transformProjectType(orig any) projectTypeResponse {
 	fields := map[string]any{}
 
 	if message, ok := orig.(map[string]any); ok && message != nil {
-		for key, value := range message {
-			fields[key] = value
-		}
+		maps.Copy(fields, message)
 	} else if orig != nil {
 		fmt.Printf("Warning: projectType not map[string]any (type=%T)\n", orig)
 	}
@@ -172,9 +163,7 @@ func transformProjectCategory(orig any) projectCategoryResponse {
 	fields := map[string]any{}
 
 	if msg, ok := orig.(map[string]any); ok && msg != nil {
-		for key, value := range msg {
-			fields[key] = value
-		}
+		maps.Copy(fields, msg)
 	} else if orig != nil {
 		fmt.Printf("Warning: projectCategory not map[string]any (type=%T)\n", orig)
 	}
@@ -200,9 +189,7 @@ func transformRole(orig any) roleResponse {
 		fields = map[string]any{}
 	case map[string]any:
 		fields = make(map[string]any, len(msg))
-		for key, value := range msg {
-			fields[key] = value
-		}
+		maps.Copy(fields, msg)
 	default:
 		fmt.Printf("Warning: role type %T not map/nil\n", orig)
 		fields = map[string]any{}
@@ -230,9 +217,7 @@ func transformProjectVersion(orig any) projectVersionResponse {
 		fields = map[string]any{}
 	case map[string]any:
 		fields = make(map[string]any, len(msg))
-		for key, value := range msg {
-			fields[key] = value
-		}
+		maps.Copy(fields, msg)
 	default:
 		fmt.Printf("Warning: project version type %T not map/nil\n", orig)
 		fields = map[string]any{}

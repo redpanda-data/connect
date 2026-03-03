@@ -79,9 +79,10 @@ Additionally, if ` + "`" + fieldStreamSnapshot + "`" + ` is set to true, then th
 == Metadata
 
 This input adds the following metadata fields to each message:
-- table (Name of the table that the message originated from)
-- operation (Type of operation that generated the message: "read", "insert", "update", or "delete". "read" is from messages that are read in the initial snapshot phase. This will also be "begin" and "commit" if ` + "`" + fieldIncludeTxnMarkers + "`" + ` is enabled)
-- lsn (the log sequence number in postgres)
+- table: Name of the table that the message originated from
+- operation: Type of operation that generated the message: "read", "insert", "update", or "delete". "read" is from messages that are read in the initial snapshot phase. This will also be "begin" and "commit" if ` + "`" + fieldIncludeTxnMarkers + "`" + ` is enabled
+- lsn: the log sequence number in postgres
+- schema: The table schema in benthos common schema format, compatible with processors like parquet_encode
 		`).
 		Field(service.NewStringField(fieldDSN).
 			Description("The Data Source Name for the PostgreSQL database in the form of `postgres://[user[:password]@][netloc][:port][/dbname][?param1=value1&...]`. Please note that Postgres enforces SSL by default, you can override this with the parameter `sslmode=disable` if required.").
@@ -357,7 +358,7 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 	return conf.WrapBatchInputExtractTracingSpanMapping("postgres_cdc", r)
 }
 
-// validateSimpleString ensures we aren't vuln to SQL injection
+// validateSimpleString ensures we aren't vuln to SQL injection.
 func validateSimpleString(s string) error {
 	for _, b := range []byte(s) {
 		isDigit := b >= '0' && b <= '9'
@@ -474,6 +475,9 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 				batchMsg.MetaSet("operation", string(msg.Operation))
 				if msg.LSN != nil {
 					batchMsg.MetaSet("lsn", *msg.LSN)
+				}
+				if msg.ColumnSchema != nil {
+					batchMsg.MetaSetImmut("schema", service.ImmutableAny{V: msg.ColumnSchema})
 				}
 				if batcher.Add(batchMsg) {
 					flush = true

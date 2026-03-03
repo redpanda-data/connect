@@ -181,7 +181,7 @@ func (a *azureTableStorage) ReadBatch(ctx context.Context) (batch service.Messag
 	return nil, nil, service.ErrEndOfInput
 }
 
-// Close is called when the pipeline ends
+// Close is called when the pipeline ends.
 func (*azureTableStorage) Close(context.Context) (err error) {
 	return
 }

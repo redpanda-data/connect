@@ -42,7 +42,7 @@ var _ = registerModuleRunnerFunction("v0_msg_set_bytes", func(r *moduleRunner) a
 
 		bytes, err := r.readBytesOutbound(ctx, contentPtr, contentSize)
 		if err != nil {
-			r.funcErr(fmt.Errorf("failed to read out-bound memory: %w", err))
+			r.funcErr(fmt.Errorf("reading out-bound memory: %w", err))
 			return
 		}
 		r.targetMessage.SetBytes(bytes)
@@ -58,13 +58,13 @@ var _ = registerModuleRunnerFunction("v0_msg_as_bytes", func(r *moduleRunner) an
 
 		msgBytes, err := r.targetMessage.AsBytes()
 		if err != nil {
-			r.funcErr(fmt.Errorf("failed to get message as bytes: %v", err))
+			r.funcErr(fmt.Errorf("getting message as bytes: %v", err))
 			return
 		}
 
 		contentPtr, err := r.allocateBytesInbound(ctx, msgBytes)
 		if err != nil {
-			r.funcErr(fmt.Errorf("failed to allocate in-bound memory: %v", err))
+			r.funcErr(fmt.Errorf("allocating in-bound memory: %v", err))
 			return
 		}
 		return ptrLen(contentPtr, uint64(len(msgBytes)))
@@ -80,13 +80,13 @@ var _ = registerModuleRunnerFunction("v0_msg_set_meta", func(r *moduleRunner) an
 
 		keyBytes, err := r.readBytesOutbound(ctx, keyPtr, keySize)
 		if err != nil {
-			r.funcErr(fmt.Errorf("failed to read out-bound meta key memory: %w", err))
+			r.funcErr(fmt.Errorf("reading out-bound meta key memory: %w", err))
 			return
 		}
 
 		contentBytes, err := r.readBytesOutbound(ctx, contentPtr, contentSize)
 		if err != nil {
-			r.funcErr(fmt.Errorf("failed to read out-bound meta value memory: %w", err))
+			r.funcErr(fmt.Errorf("reading out-bound meta value memory: %w", err))
 			return
 		}
 
@@ -103,7 +103,7 @@ var _ = registerModuleRunnerFunction("v0_msg_get_meta", func(r *moduleRunner) an
 
 		keyBytes, err := r.readBytesOutbound(ctx, keyPtr, keySize)
 		if err != nil {
-			r.funcErr(fmt.Errorf("failed to read out-bound meta key memory: %w", err))
+			r.funcErr(fmt.Errorf("reading out-bound meta key memory: %w", err))
 			return
 		}
 
@@ -115,7 +115,7 @@ var _ = registerModuleRunnerFunction("v0_msg_get_meta", func(r *moduleRunner) an
 		metaValueBytes := []byte(metaValue)
 		contentPtr, err := r.allocateBytesInbound(ctx, metaValueBytes)
 		if err != nil {
-			r.funcErr(fmt.Errorf("failed to allocate in-bound memory: %v", err))
+			r.funcErr(fmt.Errorf("allocating in-bound memory: %v", err))
 			return
 		}
 		return ptrLen(contentPtr, uint64(len(metaValueBytes)))

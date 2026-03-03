@@ -206,7 +206,7 @@ func (o *output) WriteBatch(ctx context.Context, b service.MessageBatch) (err er
 		if err != nil {
 			rawData, err := msg.AsBytes()
 			if err != nil {
-				return fmt.Errorf("failed to get message bytes: %s", err)
+				return fmt.Errorf("getting message bytes: %s", err)
 			}
 			data = map[string]any{"event": string(rawData)}
 		}
@@ -234,32 +234,32 @@ func (o *output) WriteBatch(ctx context.Context, b service.MessageBatch) (err er
 
 		err = encoder.Encode(dataObj)
 		if err != nil {
-			return fmt.Errorf("failed to marshal message to json: %s", err)
+			return fmt.Errorf("marshalling message to json: %s", err)
 		}
 	}
 
 	if o.useGzipCompression {
 		if err := gzipFlusher(); err != nil {
-			return fmt.Errorf("failed to compress messages: %s", err)
+			return fmt.Errorf("compressing messages: %s", err)
 		}
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, o.url, &payload)
 	if err != nil {
-		return fmt.Errorf("failed to construct HTTP request: %s", err)
+		return fmt.Errorf("constructing HTTP request: %s", err)
 	}
 	req.Header = header
 	req.ContentLength = int64(payload.Len())
 
 	resp, err := o.client.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to execute http request: %s", err)
+		return fmt.Errorf("executing http request: %s", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		if respData, err := httputil.DumpResponse(resp, true); err != nil {
-			return fmt.Errorf("failed to read response: %s", err)
+			return fmt.Errorf("reading response: %s", err)
 		} else {
 			o.log.Debugf("Failed to push data to Splunk with status %d: %s", resp.StatusCode, string(respData))
 		}

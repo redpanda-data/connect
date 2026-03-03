@@ -1,12 +1,10 @@
-/*
- * Copyright 2024 Redpanda Data, Inc.
- *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
- * License (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- *
- * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
- */
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed as a Redpanda Enterprise file under the Redpanda Community
+// License (the "License"); you may not use this file except in compliance with
+// the License. You may obtain a copy of the License at
+//
+// https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
 // package int128 contains an implmentation of int128 that is more
 // efficent (no allocations) compared to math/big.Int
@@ -99,7 +97,7 @@ func New(hi int64, lo uint64) Num {
 	}
 }
 
-// FromInt64 casts an signed int64 to uint128
+// FromInt64 casts an signed int64 to uint128.
 func FromInt64(v int64) Num {
 	hi := int64(0)
 	// sign extend
@@ -112,7 +110,7 @@ func FromInt64(v int64) Num {
 	}
 }
 
-// FromUint64 casts an unsigned int64 to uint128
+// FromUint64 casts an unsigned int64 to uint128.
 func FromUint64(v uint64) Num {
 	return Num{
 		hi: 0,
@@ -120,21 +118,21 @@ func FromUint64(v uint64) Num {
 	}
 }
 
-// Add computes a + b
+// Add computes a + b.
 func Add(a, b Num) Num {
 	lo, carry := bits.Add64(a.lo, b.lo, 0)
 	hi, _ := bits.Add64(uint64(a.hi), uint64(b.hi), carry)
 	return Num{int64(hi), lo}
 }
 
-// Sub computes a - b
+// Sub computes a - b.
 func Sub(a, b Num) Num {
 	lo, carry := bits.Sub64(a.lo, b.lo, 0)
 	hi, _ := bits.Sub64(uint64(a.hi), uint64(b.hi), carry)
 	return Num{int64(hi), lo}
 }
 
-// Mul computes a * b
+// Mul computes a * b.
 func Mul(a, b Num) Num {
 	hi, lo := bits.Mul64(a.lo, b.lo)
 	hi += (uint64(a.hi) * b.lo) + (a.lo * uint64(b.hi))
@@ -148,7 +146,7 @@ func fls128(n Num) int {
 	return 63 - bits.LeadingZeros64(n.lo)
 }
 
-// Neg computes -v
+// Neg computes -v.
 func Neg(n Num) Num {
 	n.lo = ^n.lo + 1
 	n.hi = ^n.hi
@@ -158,7 +156,7 @@ func Neg(n Num) Num {
 	return n
 }
 
-// Abs computes v < 0 ? -v : v
+// Abs computes v < 0 ? -v : v.
 func (i Num) Abs() Num {
 	if i.IsNegative() {
 		return Neg(i)
@@ -166,12 +164,12 @@ func (i Num) Abs() Num {
 	return i
 }
 
-// IsNegative returns true if `i` is negative
+// IsNegative returns true if `i` is negative.
 func (i Num) IsNegative() bool {
 	return i.hi < 0
 }
 
-// Shl returns a << i
+// Shl returns a << i.
 func Shl(v Num, amt uint) Num {
 	n := amt - 64
 	m := 64 - amt
@@ -181,7 +179,7 @@ func Shl(v Num, amt uint) Num {
 	}
 }
 
-// Or returns a | i
+// Or returns a | i.
 func Or(a, b Num) Num {
 	return Num{
 		hi: a.hi | b.hi,
@@ -189,7 +187,7 @@ func Or(a, b Num) Num {
 	}
 }
 
-// Less returns a < b
+// Less returns a < b.
 func Less(a, b Num) bool {
 	if a.hi == b.hi {
 		return a.lo < b.lo
@@ -198,7 +196,7 @@ func Less(a, b Num) bool {
 	}
 }
 
-// Greater returns a > b
+// Greater returns a > b.
 func Greater(a, b Num) bool {
 	if a.hi == b.hi {
 		return a.lo > b.lo
@@ -207,7 +205,7 @@ func Greater(a, b Num) bool {
 	}
 }
 
-// FromBigEndian converts bi endian bytes to Int128
+// FromBigEndian converts bi endian bytes to Int128.
 func FromBigEndian(b []byte) Num {
 	hi := int64(binary.BigEndian.Uint64(b[0:8]))
 	lo := binary.BigEndian.Uint64(b[8:16])
@@ -217,7 +215,7 @@ func FromBigEndian(b []byte) Num {
 	}
 }
 
-// ToBigEndian converts an Int128 into big endian bytes
+// ToBigEndian converts an Int128 into big endian bytes.
 func (i Num) ToBigEndian() []byte {
 	b := make([]byte, 16)
 	binary.BigEndian.PutUint64(b[0:8], uint64(i.hi))
@@ -225,7 +223,7 @@ func (i Num) ToBigEndian() []byte {
 	return b
 }
 
-// AppendBigEndian converts an Int128 into big endian bytes
+// AppendBigEndian converts an Int128 into big endian bytes.
 func (i Num) AppendBigEndian(b []byte) []byte {
 	b = binary.BigEndian.AppendUint64(b, uint64(i.hi))
 	return binary.BigEndian.AppendUint64(b, i.lo)
@@ -251,7 +249,7 @@ func (i Num) ToInt8() int8 {
 	return int8(i.lo)
 }
 
-// Min computes min(a, b)
+// Min computes min(a, b).
 func Min(a, b Num) Num {
 	if Less(a, b) {
 		return a
@@ -260,7 +258,7 @@ func Min(a, b Num) Num {
 	}
 }
 
-// Max computes min(a, b)
+// Max computes min(a, b).
 func Max(a, b Num) Num {
 	if Greater(a, b) {
 		return a
@@ -283,7 +281,7 @@ func MustParse(str string) Num {
 
 // Parse converted a base 10 formatted string into an Int128
 //
-// Not fast, but simple
+// Not fast, but simple.
 func Parse(str string) (n Num, ok bool) {
 	var bi *big.Int
 	bi, ok = big.NewInt(0).SetString(str, 10)
@@ -344,7 +342,7 @@ func bigInt(bi *big.Int) (n Num, ok bool) {
 	return
 }
 
-// ByteWidth returns the maximum number of bytes needed to store v
+// ByteWidth returns the maximum number of bytes needed to store v.
 func ByteWidth(v Num) int {
 	if v.IsNegative() {
 		switch {

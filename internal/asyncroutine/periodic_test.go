@@ -56,7 +56,7 @@ func TestWorksWithContext(t *testing.T) {
 		active.Store(false)
 	})
 	p.Start()
-	require.Eventually(t, func() bool { return active.Load() }, time.Second, 5*time.Millisecond)
+	require.Eventually(t, active.Load, time.Second, 5*time.Millisecond)
 	p.Stop()
 	require.False(t, active.Load())
 }

@@ -127,7 +127,7 @@ func newSchemaWatcher(ctx context.Context, bsrURL, bsrAPIKey, module, version st
 	}
 	watcher, err := prototransform.NewSchemaWatcher(ctx, cfg)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create schema watcher: %w", err)
+		return nil, fmt.Errorf("creating schema watcher: %w", err)
 	}
 
 	ctxWithTimeout, cancel := context.WithTimeout(ctx, watcherTimeout)

@@ -65,7 +65,7 @@ func setFunction(vr *vmRunner, name string, function jsFunction) error {
 	}
 	if targetObj == nil {
 		if err := vr.vm.GlobalObject().Set(fnCtxName, map[string]any{}); err != nil {
-			return fmt.Errorf("failed to set global benthos object: %w", err)
+			return fmt.Errorf("setting global benthos object: %w", err)
 		}
 		targetObj = vr.vm.GlobalObject().Get(fnCtxName).ToObject(vr.vm)
 	}
@@ -78,7 +78,7 @@ func setFunction(vr *vmRunner, name string, function jsFunction) error {
 		}
 		return rt.ToValue(result)
 	}); err != nil {
-		return fmt.Errorf("failed to set global function %v: %w", name, err)
+		return fmt.Errorf("setting global function %v: %w", name, err)
 	}
 	return nil
 }

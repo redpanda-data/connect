@@ -146,7 +146,7 @@ func newParquetProcessorFromConfig(conf *service.ParsedConfig, mgr *service.Reso
 		if schemaFile != "" {
 			rawSchemaBytes, err := service.ReadFile(mgr.FS(), schemaFile)
 			if err != nil {
-				return nil, fmt.Errorf("failed to read schema file: %w", err)
+				return nil, fmt.Errorf("reading schema file: %w", err)
 			}
 			rawSchema = string(rawSchemaBytes)
 		}
@@ -199,7 +199,7 @@ func (s *parquetProcessor) processBatchReader(_ context.Context, batch service.M
 	for i, m := range batch {
 		mBytes, err := m.AsBytes()
 		if err != nil {
-			return nil, fmt.Errorf("failed to read message contents: %w", err)
+			return nil, fmt.Errorf("reading message contents: %w", err)
 		}
 
 		buf := buffer.NewBufferFileFromBytes(mBytes)
@@ -210,14 +210,14 @@ func (s *parquetProcessor) processBatchReader(_ context.Context, batch service.M
 		}
 		pr, err := reader.NewParquetReader(buf, schema, 1)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create parquet reader: %w", err)
+			return nil, fmt.Errorf("creating parquet reader: %w", err)
 		}
 
 		var outBatch service.MessageBatch
 		for j := range int(pr.GetNumRows()) {
 			res, err := pr.ReadByNumber(j)
 			if err != nil {
-				return nil, fmt.Errorf("failed to read parquet row: %w", err)
+				return nil, fmt.Errorf("reading parquet row: %w", err)
 			}
 			for _, v := range res {
 				outMsg := m.Copy()
@@ -242,22 +242,22 @@ func (s *parquetProcessor) processBatchWriter(_ context.Context, batch service.M
 
 	pw, err := writer.NewJSONWriter(*s.schema, buf, 1)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create parquet writer: %w", err)
+		return nil, fmt.Errorf("creating parquet writer: %w", err)
 	}
 	pw.CompressionType = s.cCodec
 
 	for _, m := range batch {
 		b, err := m.AsBytes()
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse message as structured: %w", err)
+			return nil, fmt.Errorf("parsing message as structured: %w", err)
 		}
 		if err = pw.Write(b); err != nil {
-			return nil, fmt.Errorf("failed to write document to parquet file: %w", err)
+			return nil, fmt.Errorf("writing document to parquet file: %w", err)
 		}
 	}
 
 	if err := pw.WriteStop(); err != nil {
-		return nil, fmt.Errorf("failed to close parquet writer: %w", err)
+		return nil, fmt.Errorf("closing parquet writer: %w", err)
 	}
 
 	outMsg := batch[0]

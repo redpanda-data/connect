@@ -310,15 +310,13 @@ var testBatchProcessorParallel = testProcessors("parallel", func(t *testing.T, i
 }`, index, index)))
 		}
 
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			<-startChan
 			for _, msg := range insertBatch {
 				_, err := insertProc.ProcessBatch(t.Context(), service.MessageBatch{msg})
 				require.NoError(t, err)
 			}
-		}()
+		})
 	}
 
 	close(startChan)
@@ -334,9 +332,7 @@ var testBatchProcessorParallel = testProcessors("parallel", func(t *testing.T, i
 			queryBatch = append(queryBatch, service.NewMessage(fmt.Appendf(nil, `{"id":"doc-%d"}`, index)))
 		}
 
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			<-startChan
 			for _, msg := range queryBatch {
 				resBatches, err := selectProc.ProcessBatch(t.Context(), service.MessageBatch{msg})
@@ -345,7 +341,7 @@ var testBatchProcessorParallel = testProcessors("parallel", func(t *testing.T, i
 				require.Len(t, resBatches[0], 1)
 				require.NoError(t, resBatches[0][0].GetError())
 			}
-		}()
+		})
 	}
 
 	close(startChan)

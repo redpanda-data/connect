@@ -197,7 +197,7 @@ type amqp09BindingDeclare struct {
 
 //------------------------------------------------------------------------------
 
-var errAMQP09Connect = errors.New("failed to connect to server")
+var errAMQP09Connect = errors.New("connecting to server")
 
 type amqp09Reader struct {
 	conn         *amqp.Connection
@@ -276,7 +276,7 @@ func amqp09ReaderFromParsed(conf *service.ParsedConfig, mgr *service.Resources) 
 		for _, p := range nackPatternStrs {
 			r, err := regexp.Compile(p)
 			if err != nil {
-				return nil, fmt.Errorf("failed to compile nack reject pattern: %w", err)
+				return nil, fmt.Errorf("compiling nack reject pattern: %w", err)
 			}
 			a.nackRejectPattens = append(a.nackRejectPattens, r)
 		}
@@ -428,13 +428,13 @@ func (a *amqp09Reader) disconnect() error {
 
 	if a.amqpChan != nil {
 		if err := a.amqpChan.Cancel(a.consumerTag, true); err != nil {
-			a.log.Errorf("Failed to cancel consumer: %w", err)
+			a.log.Errorf("Failed to cancel consumer: %v", err)
 		}
 		a.amqpChan = nil
 	}
 	if a.conn != nil {
 		if err := a.conn.Close(); err != nil {
-			a.log.Errorf("Failed to close connection cleanly: %w", err)
+			a.log.Errorf("Failed to close connection cleanly: %v", err)
 		}
 		a.conn = nil
 	}

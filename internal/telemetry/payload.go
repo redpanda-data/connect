@@ -78,7 +78,7 @@ func extractPayload(identifier string, logger *service.Logger, schema *service.C
 
 	rootValue, err := conf.FieldAny()
 	if err != nil {
-		return nil, fmt.Errorf("failed to obtain root of config: %w", err)
+		return nil, fmt.Errorf("obtaining root of config: %w", err)
 	}
 
 	if err := schema.NewStreamConfigWalker().WalkComponentsAny(rootValue, func(w *service.WalkedComponent) error {

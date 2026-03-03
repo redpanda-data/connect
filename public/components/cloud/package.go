@@ -4,7 +4,7 @@
 // License (the "License"); you may not use this file except in compliance with
 // the License. You may obtain a copy of the License at
 //
-// https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
+// https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
 // Package cloud imports all enterprise and FOSS component implementations that
 // ship with Redpanda Connect in the cloud.
@@ -30,6 +30,7 @@ import (
 	_ "github.com/redpanda-data/connect/v4/public/components/gcp/enterprise"
 	_ "github.com/redpanda-data/connect/v4/public/components/git"
 	_ "github.com/redpanda-data/connect/v4/public/components/google"
+	_ "github.com/redpanda-data/connect/v4/public/components/iceberg"
 	_ "github.com/redpanda-data/connect/v4/public/components/io"
 	_ "github.com/redpanda-data/connect/v4/public/components/jira"
 	_ "github.com/redpanda-data/connect/v4/public/components/kafka"

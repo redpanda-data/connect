@@ -33,23 +33,23 @@ func openPgConnectionFromConfig(cfg *Config) (*sql.DB, error) {
 func getPostgresVersion(cfg *Config) (int, error) {
 	conn, err := openPgConnectionFromConfig(cfg)
 	if err != nil {
-		return 0, fmt.Errorf("failed to connect to the database: %w", err)
+		return 0, fmt.Errorf("connecting to the database: %w", err)
 	}
 	defer conn.Close()
 
 	var versionString string
 	if err = conn.QueryRow("SHOW server_version").Scan(&versionString); err != nil {
-		return 0, fmt.Errorf("failed to execute query: %w", err)
+		return 0, fmt.Errorf("executing query: %w", err)
 	}
 
 	match := re.FindStringSubmatch(versionString)
 	if len(match) < 2 {
-		return 0, fmt.Errorf("failed to parse version string: %s", versionString)
+		return 0, fmt.Errorf("parsing version string: %s", versionString)
 	}
 
 	majorVersion, err := strconv.Atoi(match[1])
 	if err != nil {
-		return 0, fmt.Errorf("failed to convert version to integer: %w", err)
+		return 0, fmt.Errorf("converting version to integer: %w", err)
 	}
 
 	return majorVersion, nil

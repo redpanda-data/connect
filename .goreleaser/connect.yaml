@@ -7,8 +7,8 @@ builds:
   - id: connect
     main: cmd/redpanda-connect/main.go
     binary: redpanda-connect
-    goos: [ windows, darwin, linux ]
-    goarch: [ amd64, arm64 ]
+    goos: [windows, darwin, linux]
+    goarch: [amd64, arm64]
     # goarm: [ 6, 7 ]
     hooks:
       post:
@@ -35,7 +35,7 @@ builds:
 
 archives:
   - id: connect
-    ids: [ connect ]
+    ids: [connect]
     formats: tar.gz
     files:
       - README.md
@@ -102,4 +102,3 @@ release:
 
 checksum:
   split: true
-

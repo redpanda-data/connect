@@ -83,7 +83,7 @@ pipeline:
 			if allowDynQuery {
 				mgr.Logger().Warn("using unsafe_dynamic_query leaves you vulnerable to SQL injection attacks")
 				if dynQuery, err = service.NewInterpolatedString(query); err != nil {
-					return nil, fmt.Errorf("failed to parse query: %v", err)
+					return nil, fmt.Errorf("parsing query: %v", err)
 				}
 			}
 			return newDynamoDBPartiQL(mgr.Logger(), client, query, dynQuery, args), nil
@@ -148,7 +148,7 @@ func (d *dynamoDBPartiQL) ProcessBatch(ctx context.Context, batch service.Messag
 		for i, a := range argsSlice {
 			tmp, err := objFormToAttributeValue(a)
 			if err != nil {
-				return nil, fmt.Errorf("arg mapping index %d failed to map to an attribute value: %v", i, err)
+				return nil, fmt.Errorf("arg mapping index %d mapping to an attribute value: %v", i, err)
 			}
 			req.Parameters = append(req.Parameters, tmp)
 		}
@@ -166,7 +166,7 @@ func (d *dynamoDBPartiQL) ProcessBatch(ctx context.Context, batch service.Messag
 	for i, res := range batchResult.Responses {
 		if res.Error != nil {
 			code := fmt.Sprintf(" (%v)", res.Error.Code)
-			batch[i].SetError(fmt.Errorf("failed to process statement%v: %v", code, *res.Error.Message))
+			batch[i].SetError(fmt.Errorf("processing statement%v: %v", code, *res.Error.Message))
 			continue
 		}
 		if res.Item != nil {

@@ -259,7 +259,7 @@ func TestCloudWatchMoreThan150Values(t *testing.T) {
 	}
 
 	gge := cw.NewGaugeCtor("foo")()
-	for i := int64(0); i < 300; i++ {
+	for i := range int64(300) {
 		v := i
 		if i >= 150 {
 			gge.Set(i)
@@ -289,7 +289,7 @@ func TestCloudWatchMoreThan150RandomReduce(t *testing.T) {
 	cw.ctx, cw.cancel = context.WithCancel(t.Context())
 
 	gge := cw.NewGaugeCtor("foo")()
-	for i := int64(0); i < 300; i++ {
+	for i := range int64(300) {
 		gge.Set(i)
 	}
 
@@ -309,7 +309,7 @@ func TestCloudWatchMoreThan150LiveReduce(t *testing.T) {
 	cw.ctx, cw.cancel = context.WithCancel(t.Context())
 
 	gge := cw.NewGaugeCtor("foo")()
-	for i := int64(0); i < 5000; i++ {
+	for i := range int64(5000) {
 		gge.Set(i)
 	}
 

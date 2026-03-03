@@ -200,7 +200,7 @@ func (a *awsSQSReader) ConnectionTest(ctx context.Context) service.ConnectionTes
 		AttributeNames: []types.QueueAttributeName{types.QueueAttributeNameQueueArn},
 	})
 	if err != nil {
-		return service.ConnectionTestFailed(fmt.Errorf("failed to get queue attributes: %w", err)).AsList()
+		return service.ConnectionTestFailed(fmt.Errorf("getting queue attributes: %w", err)).AsList()
 	}
 	return service.ConnectionTestSucceeded().AsList()
 }
@@ -602,7 +602,7 @@ func (err *batchUpdateVisibilityError) Error() string {
 		if i > 0 {
 			msg.WriteByte(',')
 		}
-		msg.WriteString(fmt.Sprintf("%q", *fail.Id))
+		fmt.Fprintf(&msg, "%q", *fail.Id)
 	}
 	msg.WriteByte(']')
 	return msg.String()

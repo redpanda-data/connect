@@ -33,12 +33,12 @@ func bytesFromStrField(name string, pConf *service.ParsedConfig) (uint64, error)
 
 	fieldAsBytes, err := humanize.ParseBytes(fieldAsStr)
 	if err != nil {
-		return 0, fmt.Errorf("failed to parse %v bytes: %w", name, err)
+		return 0, fmt.Errorf("parsing %v bytes: %w", name, err)
 	}
 	return fieldAsBytes, nil
 }
 
-// BytesFromStrFieldAsInt32 attempts to parse string field containing a human-readable byte size
+// BytesFromStrFieldAsInt32 attempts to parse string field containing a human-readable byte size.
 func BytesFromStrFieldAsInt32(name string, pConf *service.ParsedConfig) (int32, error) {
 	ui64, err := bytesFromStrField(name, pConf)
 	if err != nil {

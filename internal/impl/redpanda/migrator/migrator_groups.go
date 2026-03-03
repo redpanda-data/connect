@@ -494,9 +494,7 @@ func (m *groupsMigrator) Sync(ctx context.Context, getTopics func() []TopicMappi
 			continue
 		}
 
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			t0 := time.Now()
 			if err := translateOffsetFn(i, o); err != nil {
 				m.log.Errorf("Consumer group migration: group '%s' topic '%s' partition %d failed to translate offset %d to destination cluster: %v - skipping",
@@ -506,7 +504,7 @@ func (m *groupsMigrator) Sync(ctx context.Context, getTopics func() []TopicMappi
 				m.metrics.ObserveOffsetTranslationLatency(g.Group, time.Since(t0))
 				m.metrics.IncOffsetsTranslated(g.Group)
 			}
-		}()
+		})
 	}
 	wg.Wait()
 

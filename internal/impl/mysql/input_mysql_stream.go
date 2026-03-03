@@ -15,6 +15,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"regexp"
 	"strings"
 	"sync"
@@ -75,9 +76,10 @@ var mysqlStreamConfigSpec = service.NewConfigSpec().
 
 This input adds the following metadata fields to each message:
 
-- operation
-- table
-- binlog_position
+- operation: The type of operation (insert, update, delete, or read for snapshot messages)
+- table: The name of the table
+- binlog_position: The binlog position (for CDC messages only, not set for snapshot messages)
+- schema: The table schema in benthos common schema format, compatible with processors like parquet_encode
 `).
 	Fields(
 		service.NewStringAnnotatedEnumField(fieldMySQLFlavor, map[string]string{
@@ -198,6 +200,10 @@ type mysqlStreamInput struct {
 	// IAM authentication fields
 	iamAuthEnabled      bool
 	iamAuthTokenBuilder TokenBuilder
+
+	// Table schemas - stored as serialized format (map[string]any) for metadata
+	tableSchemas   map[string]any
+	tableSchemasMu sync.RWMutex
 }
 
 func newMySQLStreamInput(conf *service.ParsedConfig, res *service.Resources) (s service.BatchInput, err error) {
@@ -210,6 +216,7 @@ func newMySQLStreamInput(conf *service.ParsedConfig, res *service.Resources) (s 
 		rawMessageEvents: make(chan MessageEvent),
 		msgChan:          make(chan asyncMessage),
 		res:              res,
+		tableSchemas:     make(map[string]any),
 	}
 
 	var batching service.BatchPolicy
@@ -245,7 +252,7 @@ func newMySQLStreamInput(conf *service.ParsedConfig, res *service.Resources) (s 
 
 		tlsConfigKey := "custom-tls"
 		if err := mysql.RegisterTLSConfig(tlsConfigKey, i.customTLSConfig); err != nil {
-			return nil, fmt.Errorf("failed to register TLS config: %w", err)
+			return nil, fmt.Errorf("registering TLS config: %w", err)
 		}
 		i.mysqlConfig.TLSConfig = tlsConfigKey
 	}
@@ -379,7 +386,7 @@ func (i *mysqlStreamInput) Connect(ctx context.Context) error {
 	if i.streamSnapshot && pos == nil {
 		db, err := sql.Open("mysql", i.mysqlConfig.FormatDSN())
 		if err != nil {
-			return fmt.Errorf("failed to connect to MySQL server: %s", err)
+			return fmt.Errorf("connecting to MySQL server: %s", err)
 		}
 		snapshot = NewSnapshot(i.logger, db)
 	}
@@ -439,7 +446,7 @@ func (i *mysqlStreamInput) startMySQLSync(ctx context.Context, pos *position, sn
 	i.currentBinlogName = pos.Name
 	i.canal.SetEventHandler(i)
 	if err := i.canal.RunFrom(*pos); err != nil {
-		return fmt.Errorf("failed to start streaming: %w", err)
+		return fmt.Errorf("starting streaming: %w", err)
 	}
 	return nil
 }
@@ -447,6 +454,14 @@ func (i *mysqlStreamInput) startMySQLSync(ctx context.Context, pos *position, sn
 func (i *mysqlStreamInput) readSnapshot(ctx context.Context, snapshot *Snapshot) error {
 	// TODO(cdc): Process tables in parallel
 	for _, table := range i.tables {
+		// Pre-populate schema cache so snapshot messages carry schema metadata.
+		if tbl, err := i.canal.GetTable(i.mysqlConfig.DBName, table); err == nil {
+			if _, err := i.getTableSchema(tbl); err != nil {
+				i.logger.Warnf("Failed to pre-populate schema for table %s during snapshot: %v", table, err)
+			}
+		} else {
+			i.logger.Warnf("Failed to fetch schema for table %s during snapshot: %v", table, err)
+		}
 		tablePks, err := snapshot.getTablePrimaryKeys(ctx, table)
 		if err != nil {
 			return err
@@ -466,19 +481,19 @@ func (i *mysqlStreamInput) readSnapshot(ctx context.Context, snapshot *Snapshot)
 				batchRows, err = snapshot.querySnapshotTable(ctx, table, tablePks, &lastSeenPksValues, i.fieldSnapshotMaxBatchSize)
 			}
 			if err != nil {
-				return fmt.Errorf("failed to execute snapshot table query: %s", err)
+				return fmt.Errorf("executing snapshot table query: %s", err)
 			}
 
 			types, err := batchRows.ColumnTypes()
 			if err != nil {
-				return fmt.Errorf("failed to fetch column types: %s", err)
+				return fmt.Errorf("fetching column types: %s", err)
 			}
 
 			values, mappers := prepSnapshotScannerAndMappers(types)
 
 			columns, err := batchRows.Columns()
 			if err != nil {
-				return fmt.Errorf("failed to fetch columns: %s", err)
+				return fmt.Errorf("fetching columns: %s", err)
 			}
 
 			var batchRowsCount int
@@ -515,7 +530,7 @@ func (i *mysqlStreamInput) readSnapshot(ctx context.Context, snapshot *Snapshot)
 			}
 
 			if err := batchRows.Err(); err != nil {
-				return fmt.Errorf("failed to iterate snapshot table: %s", err)
+				return fmt.Errorf("iterating snapshot table: %s", err)
 			}
 
 			if batchRowsCount < i.fieldSnapshotMaxBatchSize {
@@ -570,7 +585,20 @@ func prepSnapshotScannerAndMappers(cols []*sql.ColumnType) (values []any, mapper
 				}
 				return s.Time, nil
 			}
-		case "TINYINT", "SMALLINT", "MEDIUMINT", "INT", "BIGINT", "YEAR":
+		case "TINYINT", "SMALLINT", "MEDIUMINT", "INT", "YEAR",
+			"UNSIGNED TINYINT", "UNSIGNED SMALLINT", "UNSIGNED MEDIUMINT":
+			val = new(sql.NullInt32)
+			mapper = func(v any) (any, error) {
+				s, ok := v.(*sql.NullInt32)
+				if !ok {
+					return nil, fmt.Errorf("expected %T got %T", int32(0), v)
+				}
+				if !s.Valid {
+					return nil, nil
+				}
+				return s.Int32, nil
+			}
+		case "BIGINT", "UNSIGNED INT", "UNSIGNED BIGINT":
 			val = new(sql.NullInt64)
 			mapper = func(v any) (any, error) {
 				s, ok := v.(*sql.NullInt64)
@@ -580,14 +608,17 @@ func prepSnapshotScannerAndMappers(cols []*sql.ColumnType) (values []any, mapper
 				if !s.Valid {
 					return nil, nil
 				}
-				return int(s.Int64), nil
+				return s.Int64, nil
 			}
 		case "DECIMAL", "NUMERIC":
 			val = new(sql.NullString)
 			mapper = stringMapping(func(s string) (any, error) {
-				return json.Number(s), nil
+				return s, nil
 			})
-		case "FLOAT", "DOUBLE":
+		case "FLOAT":
+			val = new(sql.Null[float32])
+			mapper = snapshotValueMapper[float32]
+		case "DOUBLE":
 			val = new(sql.Null[float64])
 			mapper = snapshotValueMapper[float64]
 		case "SET":
@@ -607,6 +638,34 @@ func prepSnapshotScannerAndMappers(cols []*sql.ColumnType) (values []any, mapper
 				err = json.Unmarshal([]byte(s), &v)
 				return
 			})
+		case "BIT":
+			val = new(sql.Null[[]byte])
+			mapper = func(v any) (any, error) {
+				s, ok := v.(*sql.Null[[]byte])
+				if !ok {
+					return nil, fmt.Errorf("expected %T got %T", &sql.Null[[]byte]{}, v)
+				}
+				if !s.Valid {
+					return nil, nil
+				}
+				var n int64
+				for _, b := range s.V {
+					n = (n << 8) | int64(b)
+				}
+				return n, nil
+			}
+		case "DATE":
+			val = new(sql.NullTime)
+			mapper = func(v any) (any, error) {
+				s, ok := v.(*sql.NullTime)
+				if !ok {
+					return nil, fmt.Errorf("expected %T got %T", &sql.NullTime{}, v)
+				}
+				if !s.Valid {
+					return nil, nil
+				}
+				return s.Time, nil
+			}
 		default:
 			val = new(sql.Null[string])
 			mapper = snapshotValueMapper[string]
@@ -631,19 +690,20 @@ func (i *mysqlStreamInput) readMessages(ctx context.Context) error {
 			}
 
 			if err := i.flushBatch(ctx, i.cp, flushedBatch); err != nil {
-				return fmt.Errorf("failed to flush periodic batch: %w", err)
+				return fmt.Errorf("flushing periodic batch: %w", err)
 			}
 		case me := <-i.rawMessageEvents:
-			row, err := json.Marshal(me.Row)
-			if err != nil {
-				return fmt.Errorf("failed to serialize row: %w", err)
-			}
-
-			mb := service.NewMessage(row)
+			mb := service.NewMessage(nil)
+			mb.SetStructuredMut(me.Row)
 			mb.MetaSet("operation", string(me.Operation))
 			mb.MetaSet("table", me.Table)
 			if me.Position != nil {
 				mb.MetaSet("binlog_position", binlogPositionToString(*me.Position))
+			}
+
+			// Add table schema if available
+			if tableSchema := i.getOrExtractTableSchemaByName(me.Table); tableSchema != nil {
+				mb.MetaSetImmut("schema", service.ImmutableAny{V: tableSchema})
 			}
 
 			if i.batchPolicy.Add(mb) {
@@ -653,7 +713,7 @@ func (i *mysqlStreamInput) readMessages(ctx context.Context) error {
 					return fmt.Errorf("flush batch error: %w", err)
 				}
 				if err := i.flushBatch(ctx, i.cp, flushedBatch); err != nil {
-					return fmt.Errorf("failed to flush batch: %w", err)
+					return fmt.Errorf("flushing batch: %w", err)
 				}
 			} else {
 				d, ok := i.batchPolicy.UntilNext()
@@ -687,7 +747,7 @@ func (i *mysqlStreamInput) flushBatch(
 
 	resolveFn, err := checkpointer.Track(ctx, binLogPos, int64(len(batch)))
 	if err != nil {
-		return fmt.Errorf("failed to track checkpoint for batch: %w", err)
+		return fmt.Errorf("tracking checkpoint for batch: %w", err)
 	}
 	msg := asyncMessage{
 		msg: batch,
@@ -798,7 +858,38 @@ func (i *mysqlStreamInput) OnRotate(_ *replication.EventHeader, re *replication.
 	return nil
 }
 
+// OnTableChanged is called when a table is created, altered, renamed, or dropped.
+// We invalidate the cached schema so it will be re-extracted on the next row event.
+func (i *mysqlStreamInput) OnTableChanged(_ *replication.EventHeader, schema, table string) error {
+	// Only invalidate cache for tables we're tracking
+	fullTableName := table
+	if schema != "" {
+		fullTableName = schema + "." + table
+	}
+
+	// Check if this is one of our tracked tables
+	isTracked := false
+	for _, t := range i.tables {
+		if t == table || t == fullTableName {
+			isTracked = true
+			break
+		}
+	}
+
+	if isTracked {
+		i.invalidateTableSchema(table)
+		i.logger.Infof("Schema cache invalidated for table %s.%s due to DDL change", schema, table)
+	}
+
+	return nil
+}
+
 func (i *mysqlStreamInput) OnRow(e *canal.RowsEvent) error {
+	// Extract and cache the table schema if we haven't seen this table yet
+	if _, err := i.getTableSchema(e.Table); err != nil {
+		return fmt.Errorf("extracting schema for table %s: %w", e.Table.Name, err)
+	}
+
 	switch e.Action {
 	case canal.InsertAction:
 		return i.onMessage(e, 0, 1)
@@ -838,12 +929,47 @@ func mapMessageColumn(v any, col schema.TableColumn) (any, error) {
 		return v, nil
 	}
 	switch col.Type {
+	case schema.TYPE_NUMBER:
+		switch n := v.(type) {
+		case int8:
+			return int32(n), nil
+		case int16:
+			return int32(n), nil
+		case int32:
+			return n, nil
+		case int64:
+			return n, nil
+		case uint8:
+			return int32(n), nil
+		case uint16:
+			return int32(n), nil
+		case uint32:
+			return int64(n), nil
+		case uint64:
+			if n > math.MaxInt64 {
+				return n, nil
+			}
+			return int64(n), nil
+		default:
+			return nil, fmt.Errorf("expected integer value for number column got: %T", v)
+		}
+	case schema.TYPE_MEDIUM_INT:
+		switch n := v.(type) {
+		case int32:
+			return n, nil
+		case uint32:
+			return int32(n), nil
+		default:
+			return nil, fmt.Errorf("expected int32 or uint32 value for mediumint column got: %T", v)
+		}
+	case schema.TYPE_FLOAT:
+		return v, nil
 	case schema.TYPE_DECIMAL:
 		s, ok := v.(string)
 		if !ok {
 			return nil, fmt.Errorf("expected string value for decimal column got: %T", v)
 		}
-		return json.Number(s), nil
+		return s, nil
 	case schema.TYPE_SET:
 		bitset, ok := v.(int64)
 		if !ok {
@@ -857,11 +983,19 @@ func mapMessageColumn(v any, col schema.TableColumn) (any, error) {
 		}
 		return out, nil
 	case schema.TYPE_DATE:
-		date, ok := v.(string)
-		if !ok {
-			return nil, fmt.Errorf("expected string value for date column got: %T", v)
+		switch d := v.(type) {
+		case string:
+			return time.Parse("2006-01-02", d)
+		case time.Time:
+			return d, nil
+		default:
+			return nil, fmt.Errorf("expected string or time.Time for date column got: %T", v)
 		}
-		return time.Parse("2006-01-02", date)
+	case schema.TYPE_DATETIME, schema.TYPE_TIMESTAMP:
+		if _, ok := v.(string); ok {
+			return nil, nil
+		}
+		return v, nil
 	case schema.TYPE_ENUM:
 		ordinal, ok := v.(int64)
 		if !ok {
@@ -910,3 +1044,50 @@ func mapMessageColumn(v any, col schema.TableColumn) (any, error) {
 }
 
 // --- MySQL Canal handler methods end ----
+
+// ---- Schema extraction methods ----
+
+// getTableSchema retrieves the cached schema for a table, or extracts it if not yet cached.
+func (i *mysqlStreamInput) getTableSchema(table *schema.Table) (any, error) {
+	i.tableSchemasMu.RLock()
+	if cached, exists := i.tableSchemas[table.Name]; exists {
+		i.tableSchemasMu.RUnlock()
+		return cached, nil
+	}
+	i.tableSchemasMu.RUnlock()
+
+	// Extract schema from MySQL table
+	commonSchema, err := mysqlTableToCommonSchema(table)
+	if err != nil {
+		return nil, fmt.Errorf("converting table schema for %s: %w", table.Name, err)
+	}
+
+	// Serialize to generic format for metadata
+	serialized := commonSchema.ToAny()
+
+	// Cache it
+	i.tableSchemasMu.Lock()
+	i.tableSchemas[table.Name] = serialized
+	i.tableSchemasMu.Unlock()
+
+	return serialized, nil
+}
+
+// getOrExtractTableSchemaByName attempts to retrieve a cached schema by table name.
+// For snapshot messages, we may not have the canal Table object, so we return nil
+// and let the schema be extracted later when we see CDC events for this table.
+func (i *mysqlStreamInput) getOrExtractTableSchemaByName(tableName string) any {
+	i.tableSchemasMu.RLock()
+	defer i.tableSchemasMu.RUnlock()
+	return i.tableSchemas[tableName]
+}
+
+// invalidateTableSchema removes a table's schema from the cache.
+// This is called when a DDL change is detected via OnTableChanged.
+func (i *mysqlStreamInput) invalidateTableSchema(tableName string) {
+	i.tableSchemasMu.Lock()
+	defer i.tableSchemasMu.Unlock()
+	delete(i.tableSchemas, tableName)
+}
+
+// ---- Schema extraction methods end ----

@@ -199,7 +199,7 @@ func newGCPCloudStorageTargetReader(
 		if errors.Is(err, iterator.Done) {
 			break
 		} else if err != nil {
-			return nil, fmt.Errorf("failed to list objects: %v", err)
+			return nil, fmt.Errorf("listing objects: %v", err)
 		}
 
 		ackFn := deleteGCPCloudStorageObjectAckFn(bucket, obj.Name, conf.DeleteObjects, nil)
@@ -222,7 +222,7 @@ func (r *gcpCloudStorageTargetReader) Pop(context.Context) (*gcpCloudStorageObje
 			if errors.Is(err, iterator.Done) {
 				break
 			} else if err != nil {
-				return nil, fmt.Errorf("failed to list objects: %v", err)
+				return nil, fmt.Errorf("listing objects: %v", err)
 			}
 
 			ackFn := deleteGCPCloudStorageObjectAckFn(r.bucket, obj.Name, r.conf.DeleteObjects, nil)

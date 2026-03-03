@@ -37,7 +37,7 @@ import (
 // - params: map[string]string → query parameters for the Jira API request
 // Returns:
 // - service.MessageBatch → batch of messages containing transformed projects
-// - error → error if the API call, response parsing, or field processing fails
+// - error → error if the API call, response parsing, or field processing fails.
 func (j *Client) SearchProjectsResource(
 	ctx context.Context,
 	inputQuery *JsonInputQuery,
@@ -73,7 +73,7 @@ func (j *Client) SearchProjectsResource(
 		}
 		projectBytes, err := json.Marshal(projectResponse)
 		if err != nil {
-			return nil, fmt.Errorf("failed to marshal project: %w", err)
+			return nil, fmt.Errorf("marshalling project: %w", err)
 		}
 		newMsg := service.NewMessage(projectBytes)
 		newMsg.MetaSet("jira_project_key", projectResponse.Key)
@@ -89,7 +89,7 @@ func (j *Client) SearchProjectsResource(
 // - queryParams: map[string]string → query parameters for the Jira API request
 // Returns:
 // - []any → list of all retrieved projects
-// - error → error if a paginated request or response parsing fails
+// - error → error if a paginated request or response parsing fails.
 func (j *Client) searchAllProjects(ctx context.Context, queryParams map[string]string) ([]any, error) {
 	var all []any
 	startAt := 0
@@ -120,7 +120,7 @@ func (j *Client) searchAllProjects(ctx context.Context, queryParams map[string]s
 }
 
 // Function to get a single page of issues using startAt offset strategy
-// The MaxResults can be overridden by the processor parameters (up to 5000 - default 50)
+// The MaxResults can be overridden by the processor parameters (up to 5000 - default 50).
 func (j *Client) searchProjectsPage(ctx context.Context, qp map[string]string, startAt int) (*ProjectSearchResponse, error) {
 	urlString, err := url.Parse(j.baseURL + jiraAPIBasePath + "/project/search")
 	if err != nil {
@@ -156,7 +156,7 @@ func (j *Client) searchProjectsPage(ctx context.Context, qp map[string]string, s
 // - custom: map[string]string → mapping of display names to custom field keys
 // Returns:
 // - service.MessageBatch → batch of messages containing transformed project types
-// - error → error if the API call, response parsing, or field processing fails
+// - error → error if the API call, response parsing, or field processing fails.
 func (j *Client) SearchProjectTypesResource(ctx context.Context, q *JsonInputQuery, custom map[string]string) (service.MessageBatch, error) {
 	var batch service.MessageBatch
 
@@ -206,7 +206,7 @@ func (j *Client) SearchProjectTypesResource(ctx context.Context, q *JsonInputQue
 // - custom: map[string]string → mapping of display names to custom field keys
 // Returns:
 // - service.MessageBatch → batch of messages containing transformed project categories
-// - error → error if the API call, response parsing, or field processing fails
+// - error → error if the API call, response parsing, or field processing fails.
 func (j *Client) SearchProjectCategoriesResource(ctx context.Context, q *JsonInputQuery, custom map[string]string) (service.MessageBatch, error) {
 	var batch service.MessageBatch
 
@@ -242,7 +242,7 @@ func (j *Client) SearchProjectCategoriesResource(ctx context.Context, q *JsonInp
 		}
 		bytes, err := json.Marshal(resp)
 		if err != nil {
-			return nil, fmt.Errorf("failed to marshal project category: %w", err)
+			return nil, fmt.Errorf("marshalling project category: %w", err)
 		}
 		message := service.NewMessage(bytes)
 		message.MetaSet("jira_project_category_id", resp.ID)
@@ -259,7 +259,7 @@ func (j *Client) SearchProjectCategoriesResource(ctx context.Context, q *JsonInp
 // - customFields: map[string]string → mapping of display names to custom field keys
 // Returns:
 // - service.MessageBatch → batch of messages containing transformed project versions
-// - error → error if the API call, response parsing, or field processing fails
+// - error → error if the API call, response parsing, or field processing fails.
 func (j *Client) SearchProjectVersionsResource(
 	ctx context.Context,
 	inputQuery *JsonInputQuery,
@@ -300,7 +300,7 @@ func (j *Client) SearchProjectVersionsResource(
 		}
 		bytes, err := json.Marshal(resp)
 		if err != nil {
-			return nil, fmt.Errorf("failed to marshal project version: %w", err)
+			return nil, fmt.Errorf("marshalling project version: %w", err)
 		}
 		message := service.NewMessage(bytes)
 		message.MetaSet("jira_project_version_id", resp.ID)

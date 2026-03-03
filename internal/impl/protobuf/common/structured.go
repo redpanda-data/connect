@@ -37,7 +37,7 @@ type ToMessageFn = func(protoreflect.Message, protojson.MarshalOptions, *service
 // - google.protobuf.Timestamp and bytes types are preserved instead of converting into string
 // - NaN, Infinity and -Infinity are preserved as float instead of string
 // - 64 bit integers (signed and unsigned) are preserved as raw numbers instead of strings
-// - unknown enum values are emitted as default string values instead of numbers
+// - unknown enum values are emitted as default string values instead of numbers.
 func ToMessageFast(pbMsg protoreflect.Message, opts protojson.MarshalOptions, sMsg *service.Message) error {
 	m := &marshaller{opts}
 	v, err := m.messageToStructured(pbMsg)

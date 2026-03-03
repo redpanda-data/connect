@@ -3,6 +3,65 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.82.0 - TBD
+
+### Added
+
+- Add configuration option to set client name for `redis` connections.
+- (Benthos) The `command` processor now emits the `exit_code` metadata field. (@mihaitodor)
+- The `postgres_cdc` input now adds schema metadata to consumed messages, this can be used for automatic schema conversion in processors such as `schema_registry_encode`. (@Jeffail)
+
+### Changed
+
+- `tigerbeetle_cdc` input: adds the `timeout_seconds` configuration and triggers
+   [monitoring](https://docs.redpanda.com/redpanda-connect/guides/monitoring/) in case
+   of lost connectivity with the TigerBeetle cluster. (@batiati)
+
+### Fixed
+
+- `test` command: Templates registered via the `-t` flag are now correctly available during test execution. (@Phantal)
+- (Benthos) Fixed a regression where input and output resources imported but unused were being initialized. (@Jeffail)
+
+## 4.81.0 - 2026-02-18
+
+### Added
+
+- The `mysql_cdc` input now adds schema metadata to consumed messages, this can be used for automatic schema conversion in processors such as `schema_registry_encode`. (@Jeffail)
+- (Benthos) Bloblang method `split` now supports converting empty substrings to `null` directly. (@rockwotj)
+- Go API: New `DiscoverAndRegisterPlugins` mechanism added to the `public/plugins/go/rpcnloader` package. (@prakhargarg105)
+
+## 4.80.1 - 2026-02-05
+
+### Changed
+
+- chroot: existing directories are now allowed. (@birdayz)
+
+## 4.80.0 - 2026-02-04
+
+### Added
+
+- otlp_grpc: add authorization support with JWT validation. (@mmatczuk)
+- redpanda/migrator: add `max_parallel_http_requests` field for concurrent schema migration. (@mmatczuk)
+- redpanda/migrator: implement DFS traversal for schema dependencies. (@mmatczuk)
+- redpanda/migrator: stream schemas instead of loading all into memory. (@mmatczuk)
+- redpanda/migrator: add progress logs to schema migration worker. (@mmatczuk)
+
+### Fixed
+
+- protobuf: remove hyperpb to fix memory leak. (@rockwotj)
+
+## 4.79.0 - 2026-01-30
+
+### Added
+
+- redis_pubsub: `redis_pubsub_channel` and `redis_pubsub_pattern` metadata fields added to input component. (@g-hurst)
+- snowflake_streaming: new `message_format` and `timestamp_format` advanced properties introduced. (@rockwotj)
+- New `dry-run` subcommand for testing the connections of provided configs. (@Jeffail)
+
+### Fixed
+
+- Setting the logging level to `TRACE`, `ALL`, `OFF` and `NONE` no longer emits an error. (@mihaitodor)
+
 ## 4.78.0 - 2026-01-16
 
 ### Added
@@ -234,7 +293,7 @@ All notable changes to this project will be documented in this file.
 - (Benthos) New Bloblang method `infer_schema`. (@Jeffail)
 - Custom s3 endpoints support in `snowflake_streaming` output. (@josephwoodward)
 - Experimental field `timely_nacks_maximum_wait` added to all kafka protocol inputs. (@Jeffail)
-- Added `subject_compatibility_level` to the `schema_registry` output. (@mmatczuk) 
+- Added `subject_compatibility_level` to the `schema_registry` output. (@mmatczuk)
 
 ### Fixed
 

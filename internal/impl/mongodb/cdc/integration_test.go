@@ -51,22 +51,18 @@ func (s *streamHelper) Run(t *testing.T) {
 func (s *streamHelper) RunAsync(t *testing.T) func() {
 	stream := s.makeStream(t)
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		require.NoError(t, stream.Run(t.Context()))
-	}()
+	})
 	return wg.Wait
 }
 
 func (s *streamHelper) RunAsyncWithErrors(t *testing.T) func() {
 	stream := s.makeStream(t)
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		require.Error(t, stream.Run(t.Context()))
-	}()
+	})
 	return wg.Wait
 }
 

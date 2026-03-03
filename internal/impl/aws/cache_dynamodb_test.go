@@ -84,7 +84,6 @@ ttl_key: buz
 	}
 
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			conf, err := dynCacheConfig().ParseYAML(test.conf, nil)
 			if test.errContains != "" {

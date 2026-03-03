@@ -154,7 +154,7 @@ const (
 	ResourceProjectVersion  ResourceType = "project_version"
 )
 
-// parseResource safely converts a string into ResourceType or returns an error
+// parseResource safely converts a string into ResourceType or returns an error.
 func parseResource(s string) (ResourceType, error) {
 	switch ResourceType(s) {
 	case ResourceIssue, ResourceIssueTransition, ResourceRole,

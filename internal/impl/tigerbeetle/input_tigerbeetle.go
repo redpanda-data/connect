@@ -43,10 +43,12 @@ const (
 	fieldEventCountMax    = "event_count_max"
 	fieldIdleInterval     = "idle_interval_ms"
 	fieldTimestampInitial = "timestamp_initial"
+	fieldTimeoutSeconds   = "timeout_seconds"
 
-	idleIntervalDefault = 1000
-	eventCountDefault   = 2730
-	shutdownTimeout     = 5 * time.Second
+	idleIntervalDefault   = 1000
+	eventCountDefault     = 2730
+	timeoutSecondsDefault = 15
+	shutdownTimeout       = 5 * time.Second
 )
 
 func configSpec() *service.ConfigSpec {
@@ -181,6 +183,12 @@ Requires TigerBeetle cluster version 0.16.57 or greater.`).
 				LintRule(`root = if this.length() > 0 && !this.re_match("^[0-9]+$") {
 						[ "field '`+fieldTimestampInitial+`' must be a valid integer" ]
 					}`),
+			service.NewIntField(fieldTimeoutSeconds).
+				Description("The timeout in seconds, for querying the TigerBeetle cluster.").
+				Default(timeoutSecondsDefault).
+				LintRule(`root = if this <= 0 {
+						[ "field '`+fieldTimeoutSeconds+`' must be greater than 0" ]
+					}`),
 			service.NewAutoRetryNacksToggleField(),
 		)
 }
@@ -194,13 +202,15 @@ type tigerbeetleConfig struct {
 	progressCache    string
 	rateLimit        string
 	timestampLastKey string
+	timeout          time.Duration
 }
 
 type tigerbeetleInput struct {
 	config tigerbeetleConfig
 
-	producerChan chan []tb_types.ChangeEvent
-	consumerChan chan batchedMesssage
+	producerChan    chan []tb_types.ChangeEvent
+	consumerChan    chan batchedMesssage
+	connectionState chan error
 
 	stopSignaller *shutdown.Signaller
 	logger        *service.Logger
@@ -245,7 +255,15 @@ func (input *tigerbeetleInput) Connect(ctx context.Context) error {
 		}
 		input.stopSignaller.TriggerHasStopped()
 	}()
-	return nil
+
+	select {
+	case err := <-input.connectionState:
+		// The first request succeeded or timed out.
+		return err
+	case <-ctx.Done():
+		// Aborted during `Connect()`.
+		return ctx.Err()
+	}
 }
 
 func (input *tigerbeetleInput) Close(ctx context.Context) error {
@@ -289,6 +307,7 @@ func newTigerbeetleInput(config *service.ParsedConfig, resources *service.Resour
 		rateLimit           string
 		eventCountMax       int
 		idleInterval        int
+		timeoutSeconds      int
 		timestampInitialStr string
 		timestampInitial    uint64 = 0
 	)
@@ -344,6 +363,12 @@ func newTigerbeetleInput(config *service.ParsedConfig, resources *service.Resour
 		}
 	}
 
+	if timeoutSeconds, err = config.FieldInt(fieldTimeoutSeconds); err != nil {
+		return nil, err
+	} else if timeoutSeconds <= 0 {
+		return nil, fmt.Errorf("property '%s' must be greater than zero", fieldTimeoutSeconds)
+	}
+
 	input := &tigerbeetleInput{
 		config: tigerbeetleConfig{
 			clusterID:        clusterID128,
@@ -352,13 +377,15 @@ func newTigerbeetleInput(config *service.ParsedConfig, resources *service.Resour
 			rateLimit:        rateLimit,
 			timestampLastKey: "timestamp_last_" + clusterID,
 			eventCountMax:    uint32(eventCountMax),
+			timeout:          time.Duration(timeoutSeconds) * time.Second,
 			idleInterval:     time.Duration(idleInterval) * time.Millisecond,
 			timestampInitial: timestampInitial,
 		},
-		producerChan: make(chan []tb_types.ChangeEvent, 1),
-		consumerChan: make(chan batchedMesssage, 1),
-		logger:       resources.Logger(),
-		resources:    resources,
+		producerChan:    make(chan []tb_types.ChangeEvent, 1),
+		consumerChan:    make(chan batchedMesssage, 1),
+		connectionState: make(chan error, 1),
+		logger:          resources.Logger(),
+		resources:       resources,
 	}
 
 	return service.AutoRetryNacksBatchedToggled(config, input)
@@ -366,12 +393,16 @@ func newTigerbeetleInput(config *service.ParsedConfig, resources *service.Resour
 
 // Extracts events from TigerBeetle.
 func (input *tigerbeetleInput) produce(ctx context.Context, client tb.Client, timestampLast uint64) error {
+	timeoutTimer := time.NewTimer(0)
+	_ = timeoutTimer.Stop()
+
 	// Asynchronously closes the client,
-	// forcing any inflight request to finish in case of hard stop.
+	// forcing any in-flight request to finish in case of a timeout or hard stop.
 	go func() {
 		select {
-		case <-input.stopSignaller.HasStoppedChan(): // Graceful shutdown.
+		case <-input.stopSignaller.SoftStopChan(): // Graceful shutdown.
 		case <-input.stopSignaller.HardStopChan(): // Hard stop.
+		case <-timeoutTimer.C: // Timed out.
 		}
 		client.Close()
 	}()
@@ -389,11 +420,29 @@ func (input *tigerbeetleInput) produce(ctx context.Context, client tb.Client, ti
 			input.config.eventCountMax,
 		)
 
+		_ = timeoutTimer.Reset(input.config.timeout)
 		results, err := client.GetChangeEvents(tb_types.ChangeEventsFilter{
 			TimestampMin: timestampLast + 1,
 			TimestampMax: 0,
 			Limit:        input.config.eventCountMax,
 		})
+
+		// Stops the timeout timer.
+		// If the timeout has fired, we have received a
+		// `Client closed` error, so we must override the error.
+		completed := timeoutTimer.Stop()
+		if !completed && err != nil {
+			err = fmt.Errorf("timed out after %s", input.config.timeout)
+		}
+
+		// For the first attempt, signals the `Connect()`
+		// goroutine that we have established the connection.
+		// If it has already been signaled, nothing to do.
+		select {
+		case input.connectionState <- err:
+		default:
+		}
+
 		if err != nil {
 			return err
 		}
@@ -531,7 +580,7 @@ func (input *tigerbeetleInput) checkRateLimit(ctx context.Context) error {
 			}
 		}
 		if attempt == max_tries {
-			return fmt.Errorf("failed to access the rate limit after %d attempts", max_tries)
+			return fmt.Errorf("accessing the rate limit after %d attempts", max_tries)
 		}
 	}
 	return nil

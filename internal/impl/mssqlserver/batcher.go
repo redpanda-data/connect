@@ -49,7 +49,7 @@ func newBatchPublisher(batcher *service.Batcher, checkpoint *checkpoint.Capped[r
 }
 
 // loop creates a long-running process that periodically flushes batches by configured interval.
-// lifted from internal/impl/kafka/franz_reader_ordered.go
+// lifted from internal/impl/kafka/franz_reader_ordered.go.
 func (p *batchPublisher) loop() {
 	defer func() {
 		if p.batcher != nil {
@@ -175,7 +175,7 @@ func (b *batchPublisher) publishBatch(ctx context.Context, batch service.Message
 
 	resolveFn, err := b.checkpoint.Track(ctx, checkpointLSN, int64(len(batch)))
 	if err != nil {
-		return fmt.Errorf("failed to track LSN checkpoint for batch: %w", err)
+		return fmt.Errorf("tracking LSN checkpoint for batch: %w", err)
 	}
 	msg := asyncMessage{
 		msg: batch,

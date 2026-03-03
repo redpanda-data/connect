@@ -19,6 +19,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 
@@ -159,7 +160,7 @@ func newOutputWriter(conf *service.ParsedConfig, mgr *service.Resources) (*outpu
 
 	cyborgClient, err := cyborgdb.NewClient(baseURL, apiKey)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create CyborgDB client: %w", err)
+		return nil, fmt.Errorf("creating CyborgDB client: %w", err)
 	}
 
 	indexName, err := conf.FieldString(poFieldIndexName)
@@ -236,7 +237,7 @@ func newOutputWriter(conf *service.ParsedConfig, mgr *service.Resources) (*outpu
 	return &w, nil
 }
 
-// decodeBase64Key decodes and validates a base64-encoded key string
+// decodeBase64Key decodes and validates a base64-encoded key string.
 func decodeBase64Key(keyStr string) ([]byte, error) {
 	keyStr = strings.TrimSpace(keyStr)
 	if keyStr == "" {
@@ -268,16 +269,10 @@ func (w *outputWriter) Connect(ctx context.Context) error {
 	// Check if index exists first
 	indexes, err := w.client.ListIndexes(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to list indexes: %w", err)
+		return fmt.Errorf("listing indexes: %w", err)
 	}
 
-	indexExists := false
-	for _, name := range indexes {
-		if name == w.indexName {
-			indexExists = true
-			break
-		}
-	}
+	indexExists := slices.Contains(indexes, w.indexName)
 
 	var index *cyborgdb.EncryptedIndex
 
@@ -286,7 +281,7 @@ func (w *outputWriter) Connect(ctx context.Context) error {
 		w.logger.Tracef("Getting existing index %s", w.indexName)
 		index, err = w.client.GetIndex(ctx, w.indexName, w.indexKey)
 		if err != nil {
-			return fmt.Errorf("failed to get index %s: %w", w.indexName, err)
+			return fmt.Errorf("getting index %s: %w", w.indexName, err)
 		}
 		w.logger.Tracef("Successfully got index %s", w.indexName)
 	} else {
@@ -300,7 +295,7 @@ func (w *outputWriter) Connect(ctx context.Context) error {
 
 		index, err = w.client.CreateIndex(ctx, w.indexName, w.indexKey)
 		if err != nil {
-			return fmt.Errorf("failed to create index %s: %w", w.indexName, err)
+			return fmt.Errorf("creating index %s: %w", w.indexName, err)
 		}
 
 		w.logger.Infof("Successfully created CyborgDB index %s", w.indexName)
@@ -347,16 +342,16 @@ func (w *outputWriter) upsertBatch(ctx context.Context, batch service.MessageBat
 	for i := range batch {
 		id, err := idExec.TryString(i)
 		if err != nil {
-			return fmt.Errorf("failed to interpolate id: %w", err)
+			return fmt.Errorf("interpolating id: %w", err)
 		}
 
-		var vecResult interface{}
+		var vecResult any
 
 		if vectorExec != nil {
 			// Execute vector mapping using batch executor
 			rawVec, err := vectorExec.Query(i)
 			if err != nil {
-				return fmt.Errorf("failed to execute vector mapping: %w", err)
+				return fmt.Errorf("executing vector mapping: %w", err)
 			}
 			if rawVec == nil {
 				continue // Skip if no vector returned
@@ -370,11 +365,11 @@ func (w *outputWriter) upsertBatch(ctx context.Context, batch service.MessageBat
 			msg := batch[i]
 			structured, err := msg.AsStructured()
 			if err != nil {
-				return fmt.Errorf("failed to parse message: %w", err)
+				return fmt.Errorf("parsing message: %w", err)
 			}
 
 			// If it's a map, try to extract the "vector" field
-			if structMap, ok := structured.(map[string]interface{}); ok {
+			if structMap, ok := structured.(map[string]any); ok {
 				if vec, exists := structMap["vector"]; exists {
 					vecResult = vec
 				} else {
@@ -396,7 +391,7 @@ func (w *outputWriter) upsertBatch(ctx context.Context, batch service.MessageBat
 			for i, val := range v {
 				vector[i] = float32(val)
 			}
-		case []interface{}:
+		case []any:
 			vector = make([]float32, len(v))
 			for i, elem := range v {
 				f32, err := bloblang.ValueAsFloat32(elem)
@@ -421,7 +416,7 @@ func (w *outputWriter) upsertBatch(ctx context.Context, batch service.MessageBat
 			// Use metadata mapping with batch executor
 			rawMeta, err := metadataExec.Query(i)
 			if err != nil {
-				return fmt.Errorf("failed to execute metadata mapping: %w", err)
+				return fmt.Errorf("executing metadata mapping: %w", err)
 			}
 
 			if rawMeta != nil {
@@ -430,7 +425,7 @@ func (w *outputWriter) upsertBatch(ctx context.Context, batch service.MessageBat
 					return fmt.Errorf("metadata mapping extraction failed: %w", err)
 				}
 
-				if metaMap, ok := metaResult.(map[string]interface{}); ok {
+				if metaMap, ok := metaResult.(map[string]any); ok {
 					item.Metadata = metaMap
 				}
 			}
@@ -439,7 +434,7 @@ func (w *outputWriter) upsertBatch(ctx context.Context, batch service.MessageBat
 			msg := batch[i]
 			structured, err := msg.AsStructured()
 			if err == nil {
-				if structMap, ok := structured.(map[string]interface{}); ok {
+				if structMap, ok := structured.(map[string]any); ok {
 					// Count metadata fields first to avoid allocation if none
 					metaCount := 0
 					for k := range structMap {
@@ -449,7 +444,7 @@ func (w *outputWriter) upsertBatch(ctx context.Context, batch service.MessageBat
 					}
 
 					if metaCount > 0 {
-						metadata := make(map[string]interface{}, metaCount)
+						metadata := make(map[string]any, metaCount)
 						for k, v := range structMap {
 							if k != "id" && k != "vector" {
 								metadata[k] = v
@@ -465,7 +460,7 @@ func (w *outputWriter) upsertBatch(ctx context.Context, batch service.MessageBat
 	}
 
 	if err := w.index.Upsert(ctx, items); err != nil {
-		return fmt.Errorf("failed to upsert vectors: %w", err)
+		return fmt.Errorf("upserting vectors: %w", err)
 	}
 
 	return nil
@@ -484,13 +479,13 @@ func (w *outputWriter) deleteBatch(ctx context.Context, batch service.MessageBat
 	for i := range batch {
 		id, err := idExec.TryString(i)
 		if err != nil {
-			return fmt.Errorf("failed to interpolate id: %w", err)
+			return fmt.Errorf("interpolating id: %w", err)
 		}
 		ids = append(ids, id)
 	}
 
 	if err := w.index.Delete(ctx, ids); err != nil {
-		return fmt.Errorf("failed to delete vectors: %w", err)
+		return fmt.Errorf("deleting vectors: %w", err)
 	}
 
 	return nil

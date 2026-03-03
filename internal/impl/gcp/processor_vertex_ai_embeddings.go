@@ -24,7 +24,6 @@ import (
 
 	aiplatform "cloud.google.com/go/aiplatform/apiv1"
 	"cloud.google.com/go/aiplatform/apiv1/aiplatformpb"
-	"cloud.google.com/go/vertexai/genai"
 
 	"google.golang.org/protobuf/types/known/structpb"
 
@@ -147,7 +146,7 @@ func newVertexAIEmbeddingsProcessor(conf *service.ParsedConfig, _ *service.Resou
 		if err != nil {
 			return
 		}
-		proc.dims = genai.Ptr(float64(dims))
+		proc.dims = new(float64(dims))
 	}
 	p = proc
 	return
@@ -165,7 +164,7 @@ type vertexAIEmbeddingsProcessor struct {
 func (p *vertexAIEmbeddingsProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
 	text, err := p.computeText(msg)
 	if err != nil {
-		return nil, fmt.Errorf("failed to compute prompt: %w", err)
+		return nil, fmt.Errorf("computing prompt: %w", err)
 	}
 	input := structpb.NewStructValue(&structpb.Struct{
 		Fields: map[string]*structpb.Value{

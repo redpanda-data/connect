@@ -111,7 +111,7 @@ func (h *Handler) Handle(ctx context.Context, v any) (any, error) {
 		for j, p := range batch {
 			var merr error
 			if batchResults[j], merr = p.AsStructured(); merr != nil {
-				return nil, fmt.Errorf("failed to process result batch '%v': failed to marshal json response: %v", i, merr)
+				return nil, fmt.Errorf("processing result batch '%v': marshalling json response: %v", i, merr)
 			}
 		}
 		anyResults[i] = batchResults

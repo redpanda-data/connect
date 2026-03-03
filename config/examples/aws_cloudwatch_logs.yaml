@@ -1,0 +1,90 @@
+# AWS CloudWatch Logs Source Connector (Confluent-compatible)
+# Ingests log events from AWS CloudWatch Logs with structured output
+
+input:
+  aws_cloudwatch_logs:
+    # Required: Log group name to consume from
+    log_group_name: /aws/lambda/my-function
+
+    # Optional: Consume from specific streams
+    # log_stream_names:
+    #   - "2024/01/01/[$LATEST]abc123"
+    #   - "2024/01/01/[$LATEST]def456"
+
+    # Optional: Filter streams by prefix (cannot use with log_stream_names)
+    # log_stream_prefix: "2024/01/"
+
+    # Optional: Apply CloudWatch Logs filter pattern
+    # filter_pattern: "[ERROR]"
+
+    # Optional: Start time (RFC3339 format or "now" for live tailing)
+    # start_time: "2024-01-01T00:00:00Z"
+    start_time: now
+
+    # Polling interval (default: 5s)
+    poll_interval: 5s
+
+    # Maximum events per API call (1-10000, default: 1000)
+    # Higher values = better throughput, lower values = lower latency
+    limit: 1000
+
+    # Confluent-style structured output (default: true)
+    # When true: outputs JSON with all fields (message, log_group, log_stream, timestamp, etc.)
+    # When false: outputs raw log message with metadata in message headers
+    structured_log: true
+
+    # AWS credentials and region
+    region: us-east-1
+    # credentials:
+    #   id: "{AWS_ACCESS_KEY_ID}"
+    #   secret: "{AWS_SECRET_ACCESS_KEY}"
+
+pipeline:
+  processors:
+    # Example 1: When using structured_log=true, process structured JSON
+    - mapping: |
+        # The message is already structured JSON
+        root = this
+
+        # Extract fields
+        root.application = this.log_stream.split("/").index(0)
+        root.severity = if this.message.contains("ERROR") { "ERROR" } else { "INFO" }
+
+        # Keep original fields
+        root.original_message = this.message
+        root.source = {
+          "log_group": this.log_group,
+          "log_stream": this.log_stream,
+          "timestamp": this.timestamp
+        }
+
+    # Example 2: Filter by log content
+    - mapping: |
+        root = if this.message.contains("ERROR") || this.message.contains("WARN") {
+          this
+        } else {
+          deleted()
+        }
+
+output:
+  # Example: Output to Kafka (similar to Confluent connector)
+  kafka:
+    addresses:
+      - localhost:9092
+    topic: cloudwatch-logs
+    max_in_flight: 10
+    compression: snappy
+
+    # Use log_stream as the message key for ordering
+    key: ${! this.log_stream }
+
+  # Alternative: Output to stdout for testing
+  # stdout:
+  #   codec: lines
+
+  # Alternative: Output to Redpanda Connect HTTP
+  # http_client:
+  #   url: http://localhost:8080/logs
+  #   verb: POST
+  #   headers:
+  #     Content-Type: application/json

@@ -390,6 +390,8 @@ func parquetNodeFromCommonField(field schema.Common) (parquet.Node, error) {
 			return nil, err
 		}
 
+	case schema.Any:
+		return nil, fmt.Errorf("source schema contains field '%v' with type ANY, which has no Parquet equivalent; add a processor to convert this field to a concrete type before parquet_encode", field.Name)
 	default:
 		return nil, fmt.Errorf("source schema contains field '%v' of type '%v' that is not supported by this processor", field.Name, field.Type)
 	}

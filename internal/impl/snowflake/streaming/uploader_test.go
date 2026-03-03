@@ -1,12 +1,10 @@
-/*
- * Copyright 2024 Redpanda Data, Inc.
- *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
- * License (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- *
- * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
- */
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed as a Redpanda Enterprise file under the Redpanda Community
+// License (the "License"); you may not use this file except in compliance with
+// the License. You may obtain a copy of the License at
+//
+// https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
 package streaming
 
@@ -33,12 +31,12 @@ func TestBuildS3Endpoint(t *testing.T) {
 			{
 				name: "supports custom endpoint",
 				info: fileLocationInfo{UseS3RegionalURL: false, Region: "us-east-1", EndPoint: "localhost:8080"},
-				want: strPtr("https://localhost:8080"),
+				want: new("https://localhost:8080"),
 			},
 			{
 				name: "supports custom endpoint - prioritised over regional flag",
 				info: fileLocationInfo{UseS3RegionalURL: true, Region: "us-east-1", EndPoint: "localhost:8080"},
-				want: strPtr("https://localhost:8080"),
+				want: new("https://localhost:8080"),
 			},
 		}
 
@@ -55,12 +53,12 @@ func TestBuildS3Endpoint(t *testing.T) {
 			{
 				name: "returns regional endpoint",
 				info: fileLocationInfo{UseS3RegionalURL: true, Region: "us-east-1"},
-				want: strPtr("https://s3.us-east-1.amazonaws.com"),
+				want: new("https://s3.us-east-1.amazonaws.com"),
 			},
 			{
 				name: "supports cn prefix",
 				info: fileLocationInfo{UseS3RegionalURL: true, Region: "cn-north-1"},
-				want: strPtr("https://s3.cn-north-1.amazonaws.com.cn"),
+				want: new("https://s3.cn-north-1.amazonaws.com.cn"),
 			},
 			{
 				name: "empty region returns nil",
@@ -76,8 +74,4 @@ func TestBuildS3Endpoint(t *testing.T) {
 			})
 		}
 	})
-}
-
-func strPtr(v string) *string {
-	return &v
 }

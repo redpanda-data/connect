@@ -3,7 +3,7 @@ http:
   enabled: true
 
 input:
-  redpanda_common:
+  redpanda:
     consumer_group: cg_b
     topics: [ '.*' ]
     regexp_topics: true

@@ -30,6 +30,8 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/utils/netutil"
+	"github.com/redpanda-data/common-go/authz"
+	"github.com/redpanda-data/connect/v4/internal/gateway"
 	"github.com/redpanda-data/connect/v4/internal/impl/otlp/otlpconv"
 	"github.com/redpanda-data/connect/v4/internal/license"
 )
@@ -42,6 +44,8 @@ const (
 
 	defaultGRPCAddress    = "0.0.0.0:4317"
 	defaultMaxRecvMsgSize = 4 * 1024 * 1024 // 4MB
+
+	otlpGRPCPermission authz.PermissionName = "dataplane_pipeline_otlp_grpc_invoke"
 )
 
 type grpcInputConfig struct {
@@ -145,9 +149,11 @@ An optional rate limit resource can be specified to throttle incoming requests. 
 
 type grpcOTLPInput struct {
 	otlpInput
-	conf   grpcInputConfig
-	server *grpc.Server
-	done   chan struct{}
+	conf        grpcInputConfig
+	authzPolicy *gateway.FileWatchingAuthzResourcePolicy
+	rpJWT       *gateway.RPGRPCJWTInterceptor
+	server      *grpc.Server
+	done        chan struct{}
 }
 
 // GRPCInputFromParsed creates an OTLP gRPC input from a parsed config.
@@ -186,21 +192,43 @@ func GRPCInputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (s
 		return nil, fmt.Errorf("parse tcp config: %w", err)
 	}
 
+	// Initialize authorization policy if configured
+	var authzPolicy *gateway.FileWatchingAuthzResourcePolicy
+	if authzConf, ok := gateway.ManagerAuthzConfig(mgr); ok {
+		authzPolicy, err = gateway.NewFileWatchingAuthzResourcePolicy(
+			authzConf.ResourceName,
+			authzConf.PolicyFile,
+			[]authz.PermissionName{otlpGRPCPermission},
+			func(err error) {
+				mgr.Logger().With("error", err).Error("Authorization policy error")
+			},
+		)
+		if err != nil {
+			return nil, fmt.Errorf("initialize authorization policy: %w", err)
+		}
+	}
+
+	// Initialize JWT interceptor
+	rpJWT, err := gateway.NewRPGRPCJWTInterceptor(mgr)
+	if err != nil {
+		return nil, err
+	}
+
 	otlpIn, err := newOTLPInputFromParsed(pConf, mgr)
 	if err != nil {
 		return nil, err
 	}
 	return &grpcOTLPInput{
-		otlpInput: otlpIn,
-		conf:      conf,
-		done:      make(chan struct{}),
+		otlpInput:   otlpIn,
+		conf:        conf,
+		authzPolicy: authzPolicy,
+		rpJWT:       rpJWT,
+		done:        make(chan struct{}),
 	}, nil
 }
 
 func init() {
-	service.MustRegisterBatchInput("otlp_grpc", GRPCInputSpec(), func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
-		return GRPCInputFromParsed(conf, mgr)
-	})
+	service.MustRegisterBatchInput("otlp_grpc", GRPCInputSpec(), GRPCInputFromParsed)
 }
 
 //------------------------------------------------------------------------------
@@ -230,6 +258,34 @@ func (gi *grpcOTLPInput) Connect(ctx context.Context) error {
 		})
 		opts = append(opts, grpc.Creds(creds))
 	}
+
+	// Build interceptor chain: JWT -> Authz
+	var (
+		unaryInterceptors  []grpc.UnaryServerInterceptor
+		streamInterceptors []grpc.StreamServerInterceptor
+	)
+
+	if gi.rpJWT != nil {
+		unaryInterceptors = append(unaryInterceptors, gi.rpJWT.UnaryInterceptor())
+		streamInterceptors = append(streamInterceptors, gi.rpJWT.StreamInterceptor())
+	}
+
+	if gi.authzPolicy != nil {
+		if gi.rpJWT == nil {
+			return errors.New("authorization policy requires JWT authentication to be enabled")
+		}
+
+		unaryInterceptors = append(unaryInterceptors, gateway.GRPCUnaryAuthzInterceptor(gi.authzPolicy, otlpGRPCPermission))
+		streamInterceptors = append(streamInterceptors, gateway.GRPCStreamAuthzInterceptor(gi.authzPolicy, otlpGRPCPermission))
+	}
+
+	if len(unaryInterceptors) > 0 {
+		opts = append(opts, grpc.ChainUnaryInterceptor(unaryInterceptors...))
+	}
+	if len(streamInterceptors) > 0 {
+		opts = append(opts, grpc.ChainStreamInterceptor(streamInterceptors...))
+	}
+
 	gi.server = grpc.NewServer(opts...)
 
 	// Register services
@@ -265,8 +321,12 @@ func (gi *grpcOTLPInput) Close(ctx context.Context) error {
 	gi.shutSig.TriggerSoftStop()
 	defer gi.shutSig.TriggerHasStopped()
 
+	if gi.srCancel != nil {
+		gi.srCancel()
+	}
+
 	if gi.server == nil {
-		return nil
+		return gi.authzPolicy.Close()
 	}
 
 	// Shutdown gRPC server gracefully
@@ -277,19 +337,18 @@ func (gi *grpcOTLPInput) Close(ctx context.Context) error {
 	select {
 	case <-gi.done:
 		gi.log.Info("OTLP gRPC input shut down successfully")
-		return nil
-
 	case <-time.After(gracefulShutdownTimeout):
 		gi.log.Debug("OTLP gRPC input graceful shutdown timed out, forcing shutdown")
+		gi.server.Stop()
 	case <-ctx.Done():
 		gi.log.Warn("OTLP gRPC input shutdown timed out")
+		gi.server.Stop()
 	}
-	gi.server.Stop()
 
-	return nil
+	return gi.authzPolicy.Close()
 }
 
-// validateAuth checks the authorization header in the gRPC metadata
+// validateAuth checks the authorization header in the gRPC metadata.
 func (gi *grpcOTLPInput) validateAuth(ctx context.Context) error {
 	if gi.conf.AuthToken == "" {
 		return nil // No auth configured
@@ -327,7 +386,7 @@ func newTraceServiceServer(gi *grpcOTLPInput) *traceServiceServer {
 	}
 }
 
-// Export implements the gRPC Export method for traces
+// Export implements the gRPC Export method for traces.
 func (s *traceServiceServer) Export(ctx context.Context, req ptraceotlp.ExportRequest) (ptraceotlp.ExportResponse, error) {
 	if err := s.validateAuth(ctx); err != nil {
 		s.log.Warnf("Authentication failed: %s", err)
@@ -457,7 +516,7 @@ func newMetricsServiceServer(gi *grpcOTLPInput) *metricsServiceServer {
 	}
 }
 
-// Export implements the gRPC Export method for metrics
+// Export implements the gRPC Export method for metrics.
 func (s *metricsServiceServer) Export(ctx context.Context, req pmetricotlp.ExportRequest) (pmetricotlp.ExportResponse, error) {
 	if err := s.validateAuth(ctx); err != nil {
 		return pmetricotlp.NewExportResponse(), err

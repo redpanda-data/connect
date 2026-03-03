@@ -55,7 +55,7 @@ type Query struct {
 // https://github.com/jackc/pgx/issues/1380
 const replacementcharacterwidth = 3
 
-// Sanitize sanitizes a SQL query
+// Sanitize sanitizes a SQL query.
 func (q *Query) Sanitize(args ...any) (string, error) {
 	argUse := make([]bool, len(args))
 	buf := &bytes.Buffer{}
@@ -406,7 +406,7 @@ func UnquotePostgresIdentifier(quoted string) (string, error) {
 }
 
 // NormalizePostgresIdentifier checks if a string is a valid PostgreSQL identifier
-// This follows PostgreSQL's standard naming rules
+// This follows PostgreSQL's standard naming rules.
 func NormalizePostgresIdentifier(name string) (string, error) {
 	if len(name) == 0 {
 		return "", errors.New("empty identifier is not allowed")

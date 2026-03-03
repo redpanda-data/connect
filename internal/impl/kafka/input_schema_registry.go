@@ -128,7 +128,7 @@ func inputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (i *sc
 	}
 	var srURL *url.URL
 	if srURL, err = url.Parse(srURLStr); err != nil {
-		return nil, fmt.Errorf("failed to parse URL: %s", err)
+		return nil, fmt.Errorf("parsing URL: %s", err)
 	}
 
 	if i.includeDeleted, err = pConf.FieldBool(sriFieldIncludeDeleted); err != nil {
@@ -144,7 +144,7 @@ func inputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (i *sc
 		return
 	}
 	if i.subjectFilter, err = regexp.Compile(filter); err != nil {
-		return nil, fmt.Errorf("failed to compile subject filter %q: %s", filter, err)
+		return nil, fmt.Errorf("compiling subject filter %q: %s", filter, err)
 	}
 
 	var reqSigner func(f fs.FS, req *http.Request) error
@@ -162,7 +162,7 @@ func inputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (i *sc
 		tlsConf = nil
 	}
 	if i.client, err = sr.NewClient(srURL.String(), reqSigner, tlsConf, mgr); err != nil {
-		return nil, fmt.Errorf("failed to create Schema Registry client: %s", err)
+		return nil, fmt.Errorf("creating Schema Registry client: %s", err)
 	}
 
 	if label := mgr.Label(); label != "" {
@@ -182,7 +182,7 @@ func (i *schemaRegistryInput) Connect(ctx context.Context) error {
 
 	subjects, err := i.client.GetSubjects(ctx, i.includeDeleted)
 	if err != nil {
-		return fmt.Errorf("failed to fetch subjects: %s", err)
+		return fmt.Errorf("fetching subjects: %s", err)
 	}
 
 	i.subjects = make([]string, 0, len(subjects))
@@ -203,7 +203,7 @@ func (i *schemaRegistryInput) Connect(ctx context.Context) error {
 		for _, subject := range i.subjects {
 			var versions []int
 			if versions, err = i.client.GetVersionsForSubject(ctx, subject, i.includeDeleted); err != nil {
-				return fmt.Errorf("failed to fetch versions for subject %q: %s", subject, err)
+				return fmt.Errorf("fetching versions for subject %q: %s", subject, err)
 			}
 			if len(versions) == 0 {
 				i.mgr.Logger().Infof("Subject %q does not contain any versions", subject)
@@ -213,7 +213,7 @@ func (i *schemaRegistryInput) Connect(ctx context.Context) error {
 			for _, version := range versions {
 				var schema franz_sr.SubjectSchema
 				if schema, err = i.client.GetSchemaBySubjectAndVersion(ctx, subject, &version, i.includeDeleted); err != nil {
-					return fmt.Errorf("failed to fetch schema version %d for subject %q: %s", version, subject, err)
+					return fmt.Errorf("fetching schema version %d for subject %q: %s", version, subject, err)
 				}
 
 				schemas[schema.ID] = append(schemas[schema.ID], schema)
@@ -260,7 +260,7 @@ func (i *schemaRegistryInput) Read(ctx context.Context) (*service.Message, servi
 
 			var err error
 			if i.versions, err = i.client.GetVersionsForSubject(ctx, i.subject, i.includeDeleted); err != nil {
-				return nil, nil, fmt.Errorf("failed to fetch versions for subject %q: %s", i.subject, err)
+				return nil, nil, fmt.Errorf("fetching versions for subject %q: %s", i.subject, err)
 			}
 
 			i.subjects = i.subjects[1:]
@@ -280,7 +280,7 @@ func (i *schemaRegistryInput) Read(ctx context.Context) (*service.Message, servi
 
 		var err error
 		if si, err = i.client.GetSchemaBySubjectAndVersion(ctx, i.subject, &version, i.includeDeleted); err != nil {
-			return nil, nil, fmt.Errorf("failed to fetch schema version %d for subject %q: %s", version, i.subject, err)
+			return nil, nil, fmt.Errorf("fetching schema version %d for subject %q: %s", version, i.subject, err)
 		}
 	} else {
 		if len(i.schemas) == 0 {
@@ -295,7 +295,7 @@ func (i *schemaRegistryInput) Read(ctx context.Context) (*service.Message, servi
 
 	schema, err := json.Marshal(si)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to marshal schema to json for subject %q version %d: %s", i.subject, si.Version, err)
+		return nil, nil, fmt.Errorf("marshalling schema to json for subject %q version %d: %s", i.subject, si.Version, err)
 	}
 
 	msg := service.NewMessage(schema)

@@ -69,7 +69,7 @@ type wrappedDatadogLogger struct {
 }
 
 func (s wrappedDatadogLogger) Printf(msg string, args ...any) {
-	s.log.Warnf(fmt.Sprintf(msg, args...))
+	s.log.Warnf("%s", fmt.Sprintf(msg, args...))
 }
 
 //------------------------------------------------------------------------------

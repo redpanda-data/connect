@@ -206,7 +206,7 @@ func (r *redisHashWriter) Write(ctx context.Context, msg *service.Message) error
 	}
 	if r.walkJSON {
 		if err := walkForHashFields(msg, fields); err != nil {
-			err = fmt.Errorf("failed to walk JSON object: %v", err)
+			err = fmt.Errorf("walking JSON object: %v", err)
 			r.log.Errorf("HSET error: %v\n", err)
 			return err
 		}

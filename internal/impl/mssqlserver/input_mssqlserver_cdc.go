@@ -253,9 +253,7 @@ func newMSSQLServerCDCInput(conf *service.ParsedConfig, resources *service.Resou
 		cpCache:   cpCache,
 	}
 
-	i.publisher.cacheLSN = func(ctx context.Context, lsn replication.LSN) error {
-		return i.cacheLSN(ctx, lsn)
-	}
+	i.publisher.cacheLSN = i.cacheLSN
 
 	// Has stopped is how we notify that we're not connected. This will get reset at connection time.
 	i.stopSig.TriggerHasStopped()
@@ -275,7 +273,7 @@ func (i *sqlServerCDCInput) Connect(ctx context.Context) error {
 		cachedLSN  replication.LSN
 	)
 	if i.db, err = sql.Open("mssql", i.cfg.connectionString); err != nil {
-		return fmt.Errorf("failed to connect to microsoft sql server: %s", err)
+		return fmt.Errorf("connecting to microsoft sql server: %s", err)
 	}
 
 	// no cache specified so use default, custom sql cache

@@ -123,19 +123,19 @@ type rerankProcessor struct {
 func (p *rerankProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
 	q, err := p.query.TryString(msg)
 	if err != nil {
-		return nil, fmt.Errorf("failed to interpolate query: %w", err)
+		return nil, fmt.Errorf("interpolating query: %w", err)
 	}
 	docsMsg, err := msg.BloblangQuery(p.documents)
 	if err != nil {
-		return nil, fmt.Errorf("failed to execute documents: %w", err)
+		return nil, fmt.Errorf("executing documents: %w", err)
 	}
 	v, err := docsMsg.AsStructured()
 	if err != nil {
-		return nil, fmt.Errorf("failed to extract documents response: %w", err)
+		return nil, fmt.Errorf("extracting documents response: %w", err)
 	}
 	docs, ok := v.([]any)
 	if !ok {
-		return nil, fmt.Errorf("failed to extract documents response as array: %T", v)
+		return nil, fmt.Errorf("extracting documents response as array: %T", v)
 	}
 	if len(docs) == 0 {
 		return nil, errors.New("no documents to rerank")
@@ -147,7 +147,7 @@ func (p *rerankProcessor) Process(ctx context.Context, msg *service.Message) (se
 	}
 	topNStr, err := p.topN.TryString(msg)
 	if err != nil {
-		return nil, fmt.Errorf("failed to interpolate top_n: %w", err)
+		return nil, fmt.Errorf("interpolating top_n: %w", err)
 	}
 	topNVal, err := strconv.Atoi(topNStr)
 	if err != nil {
@@ -161,7 +161,7 @@ func (p *rerankProcessor) Process(ctx context.Context, msg *service.Message) (se
 	}
 	resp, err := p.client.Rerank(ctx, &req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to rerank documents: %w", err)
+		return nil, fmt.Errorf("reranking documents: %w", err)
 	}
 	rerankedResults := []any{}
 	for _, result := range resp.Results {

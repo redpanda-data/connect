@@ -1,12 +1,10 @@
-/*
- * Copyright 2025 Redpanda Data, Inc.
- *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
- * License (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- *
- * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
- */
+// Copyright 2025 Redpanda Data, Inc.
+//
+// Licensed as a Redpanda Enterprise file under the Redpanda Community
+// License (the "License"); you may not use this file except in compliance with
+// the License. You may obtain a copy of the License at
+//
+// https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
 //go:generate protoc -I=../../proto --go-grpc_opt=module=github.com/redpanda-data/connect/v4 --go_opt=module=github.com/redpanda-data/connect/v4 --go_out=../.. --go-grpc_out=../.. redpanda/runtime/v1alpha1/agent.proto
 
@@ -35,7 +33,7 @@ type rpcClient struct {
 func (m *rpcClient) InvokeAgent(ctx context.Context, inputMsg *service.Message) (*service.Message, error) {
 	pb, err := runtimepb.MessageToProto(inputMsg)
 	if err != nil {
-		return nil, fmt.Errorf("failed to convert message for agent: %w", err)
+		return nil, fmt.Errorf("converting message for agent: %w", err)
 	}
 	span := trace.SpanFromContext(inputMsg.Context())
 	var traceContext *agentruntimepb.TraceContext
@@ -53,11 +51,11 @@ func (m *rpcClient) InvokeAgent(ctx context.Context, inputMsg *service.Message) 
 	})
 	if err != nil {
 		// TODO: Support typed errors handled in the core engine
-		return nil, fmt.Errorf("failed to invoke agent: %w", err)
+		return nil, fmt.Errorf("invoking agent: %w", err)
 	}
 	outputMsg, err := runtimepb.ProtoToMessage(resp.GetMessage())
 	if err != nil {
-		return nil, fmt.Errorf("failed to convert message from agent: %w", err)
+		return nil, fmt.Errorf("converting message from agent: %w", err)
 	}
 	// Copy the context too
 	outputMsg = outputMsg.WithContext(inputMsg.Context())

@@ -56,7 +56,7 @@ func strToMsgPackOperator(opStr string) (msgPackOperator, error) {
 
 			var jObj any
 			if err := msgpack.Unmarshal(mBytes, &jObj); err != nil {
-				return nil, fmt.Errorf("failed to convert MsgPack document to JSON: %v", err)
+				return nil, fmt.Errorf("converting MsgPack document to JSON: %v", err)
 			}
 
 			m.SetStructuredMut(jObj)
@@ -66,12 +66,12 @@ func strToMsgPackOperator(opStr string) (msgPackOperator, error) {
 		return func(m *service.Message) (*service.Message, error) {
 			jObj, err := m.AsStructured()
 			if err != nil {
-				return nil, fmt.Errorf("failed to parse message as JSON: %v", err)
+				return nil, fmt.Errorf("parsing message as JSON: %v", err)
 			}
 
 			b, err := msgpack.Marshal(jObj)
 			if err != nil {
-				return nil, fmt.Errorf("failed to convert JSON to MsgPack: %v", err)
+				return nil, fmt.Errorf("converting JSON to MsgPack: %v", err)
 			}
 
 			m.SetBytes(b)

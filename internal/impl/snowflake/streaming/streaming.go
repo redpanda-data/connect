@@ -1,12 +1,10 @@
-/*
- * Copyright 2024 Redpanda Data, Inc.
- *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
- * License (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- *
- * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
- */
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed as a Redpanda Enterprise file under the Redpanda Community
+// License (the "License"); you may not use this file except in compliance with
+// the License. You may obtain a copy of the License at
+//
+// https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
 package streaming
 
@@ -68,7 +66,7 @@ type SnowflakeServiceClient struct {
 	flusher *asyncroutine.Batcher[blobMetadata, blobRegisterStatus]
 }
 
-// NewSnowflakeServiceClient creates a new API client for the Snowpipe Streaming API
+// NewSnowflakeServiceClient creates a new API client for the Snowpipe Streaming API.
 func NewSnowflakeServiceClient(ctx context.Context, opts ClientOptions) (*SnowflakeServiceClient, error) {
 	client, err := NewRestClient(RestOptions{
 		Account:    opts.Account,
@@ -142,6 +140,16 @@ func (c *SnowflakeServiceClient) registerBlobs(ctx context.Context, metadata []b
 	return resp.Blobs, nil
 }
 
+// MessageFormat specifies the incoming message format the to the snowflake connector
+type MessageFormat int
+
+const (
+	// MessageFormatObject means the incoming data is a bloblang object
+	MessageFormatObject MessageFormat = iota
+	// MessageFormatArray means the incoming data is a bloblang array
+	MessageFormatArray
+)
+
 // BuildOptions is the options for building a parquet file
 type BuildOptions struct {
 	// The maximum parallelism
@@ -166,6 +174,10 @@ type ChannelOptions struct {
 	BuildOptions BuildOptions
 	// How to handle schema differences
 	SchemaMode SchemaMode
+	// MesssageFormat what format do we expect incoming data to be?
+	MessageFormat MessageFormat
+	// TimestampFormat is the format of timestamps parsed by the connector
+	TimestampFormat string
 }
 
 type encryptionInfo struct {
@@ -196,7 +208,9 @@ func (c *SnowflakeServiceClient) OpenChannel(ctx context.Context, opts ChannelOp
 	if resp.StatusCode != responseSuccess {
 		return nil, fmt.Errorf("unable to open channel %s - status: %d, message: %s", opts.Name, resp.StatusCode, resp.Message)
 	}
-	schema, transformers, typeMetadata, err := constructParquetSchema(resp.TableColumns)
+	schema, transformers, typeMetadata, err := constructParquetSchema(resp.TableColumns, dataConverterOptions{
+		TimestampFormat: opts.TimestampFormat,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -235,7 +249,7 @@ func (c *SnowflakeServiceClient) OpenChannel(ctx context.Context, opts ChannelOp
 // processing.
 type OffsetToken string
 
-// ChannelStatus returns the offset token for a channel or an error
+// ChannelStatus returns the offset token for a channel or an error.
 func (c *SnowflakeServiceClient) ChannelStatus(ctx context.Context, opts ChannelOptions) (OffsetToken, error) {
 	resp, err := c.client.channelStatus(ctx, batchChannelStatusRequest{
 		Role: c.options.Role,
@@ -255,7 +269,7 @@ func (c *SnowflakeServiceClient) ChannelStatus(ctx context.Context, opts Channel
 		return "", fmt.Errorf("unable to status channel %s - status: %d, message: %s", opts.Name, resp.StatusCode, resp.Message)
 	}
 	if len(resp.Channels) != 1 {
-		return "", fmt.Errorf("failed to fetch channel %s, got %d channels in response", opts.Name, len(resp.Channels))
+		return "", fmt.Errorf("fetching channel %s, got %d channels in response", opts.Name, len(resp.Channels))
 	}
 	channel := resp.Channels[0]
 	if channel.StatusCode != responseSuccess {
@@ -264,7 +278,7 @@ func (c *SnowflakeServiceClient) ChannelStatus(ctx context.Context, opts Channel
 	return OffsetToken(channel.PersistedOffsetToken), nil
 }
 
-// DropChannel drops it like it's hot 🔥
+// DropChannel drops it like it's hot 🔥.
 func (c *SnowflakeServiceClient) DropChannel(ctx context.Context, opts ChannelOptions) error {
 	resp, err := c.client.dropChannel(ctx, dropChannelRequest{
 		RequestID: c.nextRequestID(),
@@ -317,61 +331,80 @@ type InsertStats struct {
 type bdecPart struct {
 	unencryptedLen  int
 	parquetFile     []byte
-	parquetMetadata format.FileMetaData
+	parquetMetadata *format.FileMetaData
 	stats           []*statsBuffer
 	convertTime     time.Duration
 	serializeTime   time.Duration
 }
 
 func (c *SnowflakeIngestionChannel) constructBdecPart(batch service.MessageBatch, metadata map[string]string) (bdecPart, error) {
-	type rowGroup struct {
-		rows  []parquet.Row
+	// concurrentRowGroup holds a row group writer and its stats after conversion
+	type concurrentRowGroup struct {
+		rg    *parquet.ConcurrentRowGroupWriter
 		stats []*statsBuffer
 	}
-	rowGroups := []rowGroup{}
+
 	maxChunkSize := c.BuildOptions.ChunkSize
 	convertStart := time.Now()
-	work := []func() error{}
+
+	// Create writer and prepare for new file
+	w := newParquetWriter(c.connectVersion, c.schema)
+	w.Reset(metadata)
+
+	// Create all row groups up front so we can process them in parallel
+	rowGroups := make([]concurrentRowGroup, 0)
+	chunks := make([]service.MessageBatch, 0)
 	for chunk := range slices.Chunk(batch, maxChunkSize) {
-		j := len(rowGroups)
-		rowGroups = append(rowGroups, rowGroup{})
-		work = append(work, func() error {
-			rows, stats, err := constructRowGroup(chunk, c.schema, c.transformers, c.SchemaMode)
-			rowGroups[j] = rowGroup{rows, stats}
-			return err
-		})
+		rg := w.BeginRowGroup()
+		rowGroups = append(rowGroups, concurrentRowGroup{rg: rg})
+		chunks = append(chunks, chunk)
 	}
+
+	// Convert, write, and flush row groups in parallel
 	var wg errgroup.Group
 	wg.SetLimit(c.BuildOptions.Parallelism)
-	for _, w := range work {
-		wg.Go(w)
+	for j, chunk := range chunks {
+		wg.Go(func() error {
+			var stats []*statsBuffer
+			var err error
+			if c.MessageFormat == MessageFormatArray {
+				stats, err = writeRowGroupFromArray(chunk, c.schema, c.transformers, c.SchemaMode, rowGroups[j].rg)
+			} else {
+				stats, err = writeRowGroupFromObject(chunk, c.schema, c.transformers, c.SchemaMode, rowGroups[j].rg)
+			}
+			rowGroups[j].stats = stats
+			return err
+		})
 	}
 	if err := wg.Wait(); err != nil {
 		return bdecPart{}, err
 	}
 	convertDone := time.Now()
-	allRows := make([]parquet.Row, 0, len(batch))
+
+	// Commit row groups serially (required for correct ordering)
+	for _, rg := range rowGroups {
+		if _, err := rg.rg.Commit(); err != nil {
+			return bdecPart{}, fmt.Errorf("committing row group: %w", err)
+		}
+	}
+
+	// Finalize the file
+	buf, fileMetadata, err := w.Close()
+	if err != nil {
+		return bdecPart{}, err
+	}
+
+	// Merge stats from all row groups
 	combinedStats := make([]*statsBuffer, len(c.schema.Fields()))
 	for i := range combinedStats {
 		combinedStats[i] = &statsBuffer{}
 	}
 	for _, rg := range rowGroups {
-		allRows = append(allRows, rg.rows...)
 		for i, s := range combinedStats {
 			combinedStats[i] = mergeStats(s, rg.stats[i])
 		}
 	}
-	// TODO(perf): It would be really nice to be able to compress in parallel,
-	// that actually ends up taking quite of bit of CPU.
-	w := newParquetWriter(c.connectVersion, c.schema)
-	buf, err := w.WriteFile(allRows, metadata)
-	if err != nil {
-		return bdecPart{}, err
-	}
-	fileMetadata, err := readParquetMetadata(buf)
-	if err != nil {
-		return bdecPart{}, fmt.Errorf("unable to parse parquet metadata: %w", err)
-	}
+
 	done := time.Now()
 	return bdecPart{
 		unencryptedLen:  len(buf),
@@ -380,7 +413,7 @@ func (c *SnowflakeIngestionChannel) constructBdecPart(batch service.MessageBatch
 		stats:           combinedStats,
 		convertTime:     convertDone.Sub(convertStart),
 		serializeTime:   done.Sub(convertDone),
-	}, err
+	}, nil
 }
 
 // OffsetTokenRange is the range of offsets for the data being written.
@@ -403,7 +436,7 @@ func (r *OffsetTokenRange) end() *OffsetToken {
 }
 
 // InsertRows creates a parquet file using the schema from the data,
-// then writes that file into the Snowflake table
+// then writes that file into the Snowflake table.
 func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch service.MessageBatch, offsets *OffsetTokenRange) (InsertStats, error) {
 	insertStats := InsertStats{}
 	if len(batch) == 0 {
@@ -436,7 +469,7 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch servic
 	for i := range 3 {
 		ur := c.uploaderManager.GetUploader()
 		if ur.err != nil {
-			return insertStats, fmt.Errorf("failed to acquire stage uploader (last fetch time=%v): %w", ur.timestamp, ur.err)
+			return insertStats, fmt.Errorf("acquiring stage uploader (last fetch time=%v): %w", ur.timestamp, ur.err)
 		}
 		err = ur.uploader.upload(ctx, blobPath, part.parquetFile, fullMD5Hash[:], map[string]string{
 			"ingestclientname": partnerID + "_" + c.Name,
@@ -560,12 +593,12 @@ type IngestionFailedError struct {
 	ActualClientSequencer               int64
 }
 
-// LostOwnership returns true when another channel was opened and this one is invalidated now
+// LostOwnership returns true when another channel was opened and this one is invalidated now.
 func (e *IngestionFailedError) LostOwnership() bool {
 	return e.ExpectedClientSequencer != e.ActualClientSequencer || e.StatusCode == responseErrInvalidClientSequencer
 }
 
-// CanRetry returns true when it's expected a retry can fix the issue
+// CanRetry returns true when it's expected a retry can fix the issue.
 func (e *IngestionFailedError) CanRetry() bool {
 	switch e.StatusCode {
 	case responseErrRetryRequest,
@@ -655,11 +688,11 @@ func (c *SnowflakeIngestionChannel) WaitUntilCommitted(ctx context.Context, time
 		}
 		return nil
 	}, backoff.WithContext(
-		// 1, 10, 100, 1000, 1000, ...
+		// 32, 64, 128, 256, 512, 512, ...
 		backoff.NewExponentialBackOff(
-			backoff.WithInitialInterval(time.Millisecond),
-			backoff.WithMultiplier(10),
-			backoff.WithMaxInterval(time.Second),
+			backoff.WithInitialInterval(32*time.Millisecond),
+			backoff.WithMultiplier(2),
+			backoff.WithMaxInterval(512*time.Millisecond),
 			backoff.WithMaxElapsedTime(timeout),
 		),
 		ctx,

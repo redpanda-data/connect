@@ -45,7 +45,7 @@ type jiraProcessor struct {
 	client *jirahttp.Client
 }
 
-// newJiraProcessorConfigSpec creates a new Configuration specification for the Jira processor
+// newJiraProcessorConfigSpec creates a new Configuration specification for the Jira processor.
 func newJiraProcessorConfigSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Services").

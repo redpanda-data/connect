@@ -6,8 +6,10 @@ site
 .DS_Store
 TODO.md
 release_notes.md
+.codemogger
 .idea
 .task
 .vscode
 .op
 __pycache__
+*.test

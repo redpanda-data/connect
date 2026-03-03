@@ -133,7 +133,7 @@ func (k *awsKinesisCheckpointer) ensureTableExists(ctx context.Context) error {
 		}
 	}
 	if _, err = k.svc.CreateTable(ctx, input); err != nil {
-		return fmt.Errorf("failed to create table: %w", err)
+		return fmt.Errorf("creating table: %w", err)
 	}
 	return nil
 }
@@ -229,16 +229,16 @@ func (k *awsKinesisCheckpointer) AllClaims(ctx context.Context, streamID string)
 			claim.ShardID = s.Value
 		}
 		if claim.ShardID == "" {
-			return nil, errors.New("failed to extract shard id from claim")
+			return nil, errors.New("extracting shard id from claim")
 		}
 
 		if s, ok := i["LeaseTimeout"].(*types.AttributeValueMemberS); ok {
 			if claim.LeaseTimeout, scanErr = time.Parse(time.RFC3339Nano, s.Value); scanErr != nil {
-				return nil, fmt.Errorf("failed to parse claim lease: %w", scanErr)
+				return nil, fmt.Errorf("parsing claim lease: %w", scanErr)
 			}
 		}
 		if claim.LeaseTimeout.IsZero() {
-			return nil, errors.New("failed to extract lease timeout from claim")
+			return nil, errors.New("extracting lease timeout from claim")
 		}
 
 		clientClaims[clientID] = append(clientClaims[clientID], claim)

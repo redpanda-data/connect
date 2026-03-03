@@ -46,19 +46,19 @@ type wrappedBQClient struct {
 func (client *wrappedBQClient) RunQuery(ctx context.Context, options *bqQueryBuilderOptions) (bigqueryIterator, error) {
 	query, err := buildBQQuery(client.wrapped, options)
 	if err != nil {
-		return nil, fmt.Errorf("failed to build query: %w", err)
+		return nil, fmt.Errorf("building query: %w", err)
 	}
 
 	job, err := query.Run(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to run query: %w", err)
+		return nil, fmt.Errorf("running query: %w", err)
 	}
 
 	client.logger.With("job_id", job.ID()).Debug("running bigquery job")
 
 	status, err := job.Wait(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to wait on job: %w", err)
+		return nil, fmt.Errorf("waiting on job: %w", err)
 	}
 
 	if err := errorFromStatus(status); err != nil {
@@ -67,7 +67,7 @@ func (client *wrappedBQClient) RunQuery(ctx context.Context, options *bqQueryBui
 
 	it, err := job.Read(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read rows: %w", err)
+		return nil, fmt.Errorf("reading rows: %w", err)
 	}
 
 	return it, nil
@@ -109,7 +109,7 @@ func buildBQQuery(client *bigquery.Client, options *bqQueryBuilderOptions) (*big
 
 	qs, args, err := builder.PlaceholderFormat(squirrel.Question).ToSql()
 	if err != nil {
-		return nil, fmt.Errorf("failed to build query string: %w", err)
+		return nil, fmt.Errorf("building query string: %w", err)
 	}
 
 	query := client.Query(qs)
@@ -144,7 +144,7 @@ func errorFromStatus(status *bigquery.JobStatus) error {
 		bqErr = statusErr
 	}
 
-	return fmt.Errorf("failed to complete bigquery job successfully: %w", bqErr)
+	return fmt.Errorf("completing bigquery job successfully: %w", bqErr)
 }
 
 func parseQueryPriority(config *service.ParsedConfig, fieldName string) (bigquery.QueryPriority, error) {

@@ -176,15 +176,15 @@ func (f *ffiProcessor) ProcessBatch(_ context.Context, batch service.MessageBatc
 	for i, msg := range batch {
 		queried, err := executor.Query(i)
 		if err != nil {
-			return nil, fmt.Errorf("failed to execute `args_mapping` bloblang: %w", err)
+			return nil, fmt.Errorf("executing `args_mapping` bloblang: %w", err)
 		}
 		structured, err := queried.AsStructuredMut()
 		if err != nil {
-			return nil, fmt.Errorf("failed to extract structured result from `args_mapping` bloblang: %w", err)
+			return nil, fmt.Errorf("extracting structured result from `args_mapping` bloblang: %w", err)
 		}
 		args, ok := structured.([]any)
 		if !ok {
-			return nil, fmt.Errorf("failed to extract structured result from `args_mapping` bloblang: expected type []any, got %T", structured)
+			return nil, fmt.Errorf("extracting structured result from `args_mapping` bloblang: expected type []any, got %T", structured)
 		}
 		outs, err := f.function(args)
 		if err != nil {

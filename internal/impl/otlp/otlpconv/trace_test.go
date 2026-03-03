@@ -132,7 +132,7 @@ func TestSpanKindConversion(t *testing.T) {
 	tests := []struct {
 		name         string
 		pdataKind    ptrace.SpanKind
-		redpandaKind interface{}
+		redpandaKind any
 	}{
 		{"unspecified", ptrace.SpanKindUnspecified, 0},
 		{"internal", ptrace.SpanKindInternal, 1},
@@ -241,7 +241,7 @@ func TestSpanWithAllFields(t *testing.T) {
 	span.SetDroppedAttributesCount(2)
 
 	// Add multiple events
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		event := span.Events().AppendEmpty()
 		event.SetName("event")
 		event.SetTimestamp(pcommon.Timestamp(1500000000 + int64(i)*1000))
@@ -251,7 +251,7 @@ func TestSpanWithAllFields(t *testing.T) {
 	span.SetDroppedEventsCount(7)
 
 	// Add multiple links
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		link := span.Links().AppendEmpty()
 		link.SetTraceID([16]byte{byte(i), 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10})
 		link.SetSpanID([8]byte{byte(i), 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18})

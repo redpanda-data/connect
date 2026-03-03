@@ -105,7 +105,7 @@ func (s *schemaRegistryDecoder) getHambaAvroDecoder(ctx context.Context, schema 
 		m.SetStructuredMut(native)
 
 		if commonSchema != nil {
-			m.MetaSetMut(s.cfg.avro.storeSchemaMeta, commonSchema)
+			m.MetaSetImmut(s.cfg.avro.storeSchemaMeta, service.ImmutableAny{V: commonSchema})
 		}
 		return nil
 	}

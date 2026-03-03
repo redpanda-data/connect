@@ -43,7 +43,7 @@ func NewClient(
 ) (*Client, error) {
 	_, err := url.Parse(urlStr)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse url: %w", err)
+		return nil, fmt.Errorf("parsing url: %w", err)
 	}
 
 	opts := []sr.ClientOpt{sr.URLs(urlStr)}
@@ -56,7 +56,7 @@ func NewClient(
 
 	clientSR, err := sr.NewClient(opts...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to init client: %w", err)
+		return nil, fmt.Errorf("initializing client: %w", err)
 	}
 
 	return &Client{
@@ -90,7 +90,7 @@ func (c *Client) GetSubjectsBySchemaID(ctx context.Context, id int, includeDelet
 func (c *Client) GetLatestSchemaVersionForSchemaIDAndSubject(ctx context.Context, id int, subject string) (versionID int, err error) {
 	svs, err := c.Client.SchemaVersionsByID(ctx, id)
 	if err != nil {
-		return -1, fmt.Errorf("failed to fetch schema versions for ID %d and subject %q", id, subject)
+		return -1, fmt.Errorf("fetching schema versions for ID %d and subject %q", id, subject)
 	}
 
 	versions := []int{}
@@ -166,7 +166,7 @@ func (c *Client) CreateSchema(ctx context.Context, subject string, schema sr.Sch
 
 	ss, err := c.Client.CreateSchema(ctx, subject, schema)
 	if err != nil {
-		return -1, fmt.Errorf("failed to create schema for subject %q: %s", subject, err)
+		return -1, fmt.Errorf("creating schema for subject %q: %s", subject, err)
 	}
 
 	return ss.ID, nil
@@ -180,7 +180,7 @@ func (c *Client) CreateSchemaWithIDAndVersion(ctx context.Context, subject strin
 
 	ss, err := c.Client.CreateSchemaWithIDAndVersion(ctx, subject, schema, id, version)
 	if err != nil {
-		return -1, fmt.Errorf("failed to create schema for subject %q with id %d and version %d: %s", subject, id, version, err)
+		return -1, fmt.Errorf("creating schema for subject %q with id %d and version %d: %s", subject, id, version, err)
 	}
 
 	return ss.ID, nil

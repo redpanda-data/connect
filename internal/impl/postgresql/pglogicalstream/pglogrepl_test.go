@@ -19,6 +19,8 @@ import (
 	"testing"
 	"time"
 
+	_ "github.com/lib/pq" // registers "postgres" driver for sql.Open in tests
+
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgproto3"
 	"github.com/jackc/pgx/v5/pgtype"

@@ -377,20 +377,20 @@ root.data = this`,
 
 			id, err := ulid.New(ms, rdr)
 			if err != nil {
-				return nil, fmt.Errorf("failed to generate ulid: %s", err)
+				return nil, fmt.Errorf("generating ulid: %s", err)
 			}
 
 			switch encoding {
 			case "crockford":
 				bs, err := id.MarshalText()
 				if err != nil {
-					return nil, fmt.Errorf("failed to marshal text: %s", err)
+					return nil, fmt.Errorf("marshalling text: %s", err)
 				}
 				return string(bs), nil
 			case "hex":
 				bs, err := id.MarshalBinary()
 				if err != nil {
-					return nil, fmt.Errorf("failed to marshal binary: %s", err)
+					return nil, fmt.Errorf("marshalling binary: %s", err)
 				}
 				return hex.EncodeToString(bs), nil
 			default:

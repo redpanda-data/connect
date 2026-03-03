@@ -155,7 +155,7 @@ func (a *azureBlobStorageWriter) uploadBlob(ctx context.Context, containerName, 
 			if isErrorCode(err, bloberror.BlobNotFound) {
 				_, err := appendBlobClient.Create(ctx, nil)
 				if err != nil && !isErrorCode(err, bloberror.BlobAlreadyExists) {
-					return fmt.Errorf("failed to create append blob: %w", err)
+					return fmt.Errorf("creating append blob: %w", err)
 				}
 
 				// Try to upload the message again now that we created the blob
@@ -164,13 +164,13 @@ func (a *azureBlobStorageWriter) uploadBlob(ctx context.Context, containerName, 
 					return fmt.Errorf("failed retrying to append block to blob: %w", err)
 				}
 			} else {
-				return fmt.Errorf("failed to append block to blob: %w", err)
+				return fmt.Errorf("appending block to blob: %w", err)
 			}
 		}
 	} else {
 		_, err = containerClient.NewBlockBlobClient(blobName).UploadStream(ctx, bytes.NewReader(message), nil)
 		if err != nil {
-			return fmt.Errorf("failed to push block to blob: %w", err)
+			return fmt.Errorf("pushing block to blob: %w", err)
 		}
 	}
 	return nil
@@ -220,7 +220,7 @@ func (a *azureBlobStorageWriter) Write(ctx context.Context, msg *service.Message
 
 			if err := a.createContainer(ctx, containerName, accessLevel); err != nil {
 				if !isErrorCode(err, bloberror.ContainerAlreadyExists) {
-					return fmt.Errorf("failed to create container: %s", err)
+					return fmt.Errorf("creating container: %s", err)
 				}
 			}
 
@@ -228,7 +228,7 @@ func (a *azureBlobStorageWriter) Write(ctx context.Context, msg *service.Message
 				return fmt.Errorf("error retrying to upload blob: %s", err)
 			}
 		} else {
-			return fmt.Errorf("failed to upload blob: %s", err)
+			return fmt.Errorf("uploading blob: %s", err)
 		}
 	}
 	return nil

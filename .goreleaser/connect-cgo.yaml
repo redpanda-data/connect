@@ -7,8 +7,8 @@ builds:
   - id: connect-cgo
     main: cmd/redpanda-connect/main.go
     binary: redpanda-connect
-    goos: [ linux ]
-    goarch: [ amd64 ]
+    goos: [linux]
+    goarch: [amd64]
     tags:
       - x_benthos_extra
     env:
@@ -23,7 +23,7 @@ builds:
 
 archives:
   - id: connect-cgo
-    ids: [ connect-cgo ]
+    ids: [connect-cgo]
     formats: tar.gz
     files:
       - README.md
@@ -41,4 +41,3 @@ release:
 
 checksum:
   split: true
-

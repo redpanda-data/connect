@@ -26,9 +26,8 @@ import (
 	"google.golang.org/protobuf/types/descriptorpb"
 	"google.golang.org/protobuf/types/dynamicpb"
 
-	//nolint:staticcheck // Ignore SA1019 "github.com/jhump/protoreflect/desc" is deprecated warning
 	"github.com/jhump/protoreflect/desc"
-	//nolint:staticcheck // Ignore SA1019 "github.com/jhump/protoreflect/desc/protoparse" is deprecated warning
+
 	"github.com/jhump/protoreflect/desc/protoparse"
 )
 
@@ -55,11 +54,11 @@ func ParseFromFS(fsys fs.FS, importPaths []string) (*descriptorpb.FileDescriptor
 			if filepath.Ext(info.Name()) == ".proto" && !strings.HasPrefix(info.Name(), ".") {
 				rPath, ferr := filepath.Rel(importPath, path)
 				if ferr != nil {
-					return fmt.Errorf("failed to get relative path: %v", ferr)
+					return fmt.Errorf("getting relative path: %v", ferr)
 				}
 				content, ferr := fs.ReadFile(fsys, path)
 				if ferr != nil {
-					return fmt.Errorf("failed to read import %v: %v", path, ferr)
+					return fmt.Errorf("reading import %v: %v", path, ferr)
 				}
 				files[rPath] = string(content)
 			}
@@ -108,7 +107,7 @@ func ParseProtos(filesMap map[string]string) (*descriptorpb.FileDescriptorSet, e
 func BuildRegistries(descriptors *descriptorpb.FileDescriptorSet) (*protoregistry.Files, *protoregistry.Types, error) {
 	files, err := protodesc.NewFiles(descriptors)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to register proto files: %w", err)
+		return nil, nil, fmt.Errorf("registering proto files: %w", err)
 	}
 	types := &protoregistry.Types{}
 	var register func(mds protoreflect.MessageDescriptors) error
@@ -116,7 +115,7 @@ func BuildRegistries(descriptors *descriptorpb.FileDescriptorSet) (*protoregistr
 		for i := range mds.Len() {
 			msg := mds.Get(i)
 			if err := types.RegisterMessage(dynamicpb.NewMessageType(msg)); err != nil {
-				return fmt.Errorf("failed to register type %q: %w", msg.FullName(), err)
+				return fmt.Errorf("registering type %q: %w", msg.FullName(), err)
 			}
 			if err := register(msg.Messages()); err != nil {
 				return err

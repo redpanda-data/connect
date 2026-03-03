@@ -38,7 +38,7 @@ output:
   label: ""
   amqp_1:
     urls: [] # No default (optional)
-    target_address: /foo # No default (required)
+    target_address: ""
     max_in_flight: 64
     metadata:
       exclude_prefixes: []
@@ -55,7 +55,7 @@ output:
   label: ""
   amqp_1:
     urls: [] # No default (optional)
-    target_address: /foo # No default (required)
+    target_address: ""
     max_in_flight: 64
     tls:
       enabled: false
@@ -115,11 +115,12 @@ urls:
 
 === `target_address`
 
-The target address to write to.
+The target address to write to. When left empty, the output uses the Anonymous Terminus pattern where the destination is specified per-message using `message_properties_to`.
 
 
 *Type*: `string`
 
+*Default*: `""`
 
 ```yml
 # Examples
@@ -129,6 +130,8 @@ target_address: /foo
 target_address: queue:/bar
 
 target_address: topic:/baz
+
+target_address: ""
 ```
 
 === `max_in_flight`
@@ -436,7 +439,8 @@ target_capabilities:
 
 === `message_properties_to`
 
-The field specifies the node that is the intended destination of the message, which may differ from the node currently receiving the transfer.
+The field specifies the node that is the intended destination of the message, which may differ from the node currently receiving the transfer. This field supports Bloblang interpolation.
+This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
 
 *Type*: `string`
@@ -446,6 +450,8 @@ The field specifies the node that is the intended destination of the message, wh
 # Examples
 
 message_properties_to: amqp://localhost:5672/
+
+message_properties_to: ${! meta("target_address") }
 ```
 
 

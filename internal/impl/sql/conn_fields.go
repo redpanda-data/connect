@@ -252,7 +252,7 @@ func connSettingsFromParsed(
 			return
 		}
 		if tmpFiles, err = service.Globs(mgr.FS(), tmpFiles...); err != nil {
-			err = fmt.Errorf("failed to expand init_files glob patterns: %w", err)
+			err = fmt.Errorf("expanding init_files glob patterns: %w", err)
 			return
 		}
 		for _, p := range tmpFiles {

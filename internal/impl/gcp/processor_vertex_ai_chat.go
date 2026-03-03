@@ -226,7 +226,7 @@ func newVertexAIProcessor(conf *service.ParsedConfig, _ *service.Resources) (p s
 			UseSelfSignedJWT: true,
 		})
 		if err != nil {
-			return nil, fmt.Errorf("failed to load json credentials: %w", err)
+			return nil, fmt.Errorf("loading json credentials: %w", err)
 		}
 	}
 	proc.client, err = genai.NewClient(ctx, &genai.ClientConfig{
@@ -272,7 +272,7 @@ func newVertexAIProcessor(conf *service.ParsedConfig, _ *service.Resources) (p s
 		if err != nil {
 			return
 		}
-		proc.temp = genai.Ptr(float32(temp))
+		proc.temp = new(float32(temp))
 	}
 	if conf.Contains(vaicpFieldTopP) {
 		var topP float64
@@ -280,7 +280,7 @@ func newVertexAIProcessor(conf *service.ParsedConfig, _ *service.Resources) (p s
 		if err != nil {
 			return
 		}
-		proc.topP = genai.Ptr(float32(topP))
+		proc.topP = new(float32(topP))
 	}
 	if conf.Contains(vaicpFieldTopK) {
 		var topK float64
@@ -288,7 +288,7 @@ func newVertexAIProcessor(conf *service.ParsedConfig, _ *service.Resources) (p s
 		if err != nil {
 			return
 		}
-		proc.topK = genai.Ptr(float32(topK))
+		proc.topK = new(float32(topK))
 	}
 	if conf.Contains(vaicpFieldMaxTokens) {
 		var maxTokens int
@@ -310,7 +310,7 @@ func newVertexAIProcessor(conf *service.ParsedConfig, _ *service.Resources) (p s
 		if err != nil {
 			return
 		}
-		proc.presencePenalty = genai.Ptr(float32(pp))
+		proc.presencePenalty = new(float32(pp))
 	}
 	if conf.Contains(vaicpFieldFrequencyPenalty) {
 		var fp float64
@@ -318,7 +318,7 @@ func newVertexAIProcessor(conf *service.ParsedConfig, _ *service.Resources) (p s
 		if err != nil {
 			return
 		}
-		proc.frequencyPenalty = genai.Ptr(float32(fp))
+		proc.frequencyPenalty = new(float32(fp))
 	}
 	var format string
 	format, err = conf.FieldString(vaicpFieldResponseFormat)
@@ -488,11 +488,11 @@ func (p *vertexAIChatProcessor) Process(ctx context.Context, msg *service.Messag
 	}
 	chat, err := p.client.Chats.Create(ctx, p.model, cfg, history)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create chat: %w", err)
+		return nil, fmt.Errorf("creating chat: %w", err)
 	}
 	prompt, err := p.computePrompt(msg)
 	if err != nil {
-		return nil, fmt.Errorf("failed to compute prompt: %w", err)
+		return nil, fmt.Errorf("computing prompt: %w", err)
 	}
 	reqParts := []genai.Part{{Text: prompt}}
 	if p.attachment != nil {
@@ -513,7 +513,7 @@ func (p *vertexAIChatProcessor) Process(ctx context.Context, msg *service.Messag
 	for range p.maxToolCalls {
 		resp, err := chat.SendMessage(ctx, reqParts...)
 		if err != nil {
-			return nil, fmt.Errorf("failed to generate response: %w", err)
+			return nil, fmt.Errorf("generating response: %w", err)
 		}
 		if len(resp.Candidates) != 1 {
 			if resp.PromptFeedback != nil && resp.PromptFeedback.BlockReasonMessage != "" {

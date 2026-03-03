@@ -7,8 +7,8 @@ builds:
   - id: connect-fips
     main: cmd/redpanda-connect/main.go
     binary: redpanda-connect-fips
-    goos: [ linux ]
-    goarch: [ amd64 ]
+    goos: [linux]
+    goarch: [amd64]
     hooks:
       post:
         - cmd: ./resources/scripts/fips_patchelf.sh "{{ .Path }}"
@@ -17,8 +17,7 @@ builds:
       - PATH={{ .Env.RUNNER_TEMP }}/microsoft/go/bin:{{ .Env.PATH }}
     tags:
       - timetzdata
-    ldflags:
-      -s -w
+    ldflags: -s -w
       -X main.Version={{.Version}}
       -X main.DateBuilt={{.Date}}
       -X main.BinaryName=redpanda-connect-fips
@@ -28,7 +27,7 @@ builds:
 
 archives:
   - id: connect-fips
-    ids: [ connect-fips ]
+    ids: [connect-fips]
     formats: tar.gz
     name_template: 'redpanda-connect-fips_{{ .Version }}_{{ .Os }}_{{ .Arch }}{{ with .Arm }}v{{ . }}{{ end }}{{ with .Mips }}_{{ . }}{{ end }}{{ if not (eq .Amd64 "v1") }}{{ .Amd64 }}{{ end }}'
     files:
@@ -84,4 +83,3 @@ release:
 
 checksum:
   split: true
-

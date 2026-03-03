@@ -262,23 +262,23 @@ func (c *Config) toSpec() (*service.ConfigSpec, error) {
 func DiscoverAndRegisterPlugins(fs fs.FS, env *service.Environment, paths []string) error {
 	paths, err := service.Globs(fs, paths...)
 	if err != nil {
-		return fmt.Errorf("failed to resolve template glob pattern: %w", err)
+		return fmt.Errorf("resolving template glob pattern: %w", err)
 	}
 	for _, path := range paths {
 		b, err := service.ReadFile(fs, path)
 		if err != nil {
-			return fmt.Errorf("failed to read plugin config file %s: %w", path, err)
+			return fmt.Errorf("reading plugin config file %s: %w", path, err)
 		}
 		var cfg Config
 		if err := yaml.Unmarshal(b, &cfg); err != nil {
-			return fmt.Errorf("failed to unmarshal plugin config file %s: %w", path, err)
+			return fmt.Errorf("unmarshalling plugin config file %s: %w", path, err)
 		}
 		if err := cfg.Validate(); err != nil {
-			return fmt.Errorf("failed to validate plugin config file %s: %w", path, err)
+			return fmt.Errorf("validating plugin config file %s: %w", path, err)
 		}
 		cfg.setDefaultCWD(path)
 		if err := registerPlugin(env, &cfg); err != nil {
-			return fmt.Errorf("failed to register plugin %s: %w", cfg.Name, err)
+			return fmt.Errorf("registering plugin %s: %w", cfg.Name, err)
 		}
 	}
 	return nil

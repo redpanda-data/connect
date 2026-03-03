@@ -1001,7 +1001,6 @@ A list of optional requested permissions.
 *Type*: `array`
 
 *Default*: `[]`
-Requires version 3.45.0 or newer
 
 === `schema_registry.oauth2.endpoint_params`
 
@@ -1011,17 +1010,15 @@ A list of optional endpoint parameters, values should be arrays of strings.
 *Type*: `object`
 
 *Default*: `{}`
-Requires version 4.21.0 or newer
 
 ```yml
 # Examples
 
 endpoint_params:
-  bar:
-    - woof
-  foo:
-    - meow
-    - quack
+  audience:
+    - https://example.com
+  resource:
+    - https://api.example.com
 ```
 
 === `schema_registry.oauth`

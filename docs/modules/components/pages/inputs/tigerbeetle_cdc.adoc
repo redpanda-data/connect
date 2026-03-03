@@ -39,6 +39,7 @@ input:
     event_count_max: 2730
     idle_interval_ms: 1000
     timestamp_initial: ""
+    timeout_seconds: 15
     auto_replay_nacks: true
 ```
 
@@ -187,6 +188,15 @@ This is a TigerBeetle timestamp with nanosecond precision.
 *Type*: `string`
 
 *Default*: `""`
+
+=== `timeout_seconds`
+
+The timeout in seconds, for querying the TigerBeetle cluster.
+
+
+*Type*: `int`
+
+*Default*: `15`
 
 === `auto_replay_nacks`
 

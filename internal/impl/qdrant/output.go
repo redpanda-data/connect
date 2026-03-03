@@ -184,17 +184,17 @@ func (w *outputWriter) batchPointsByCollection(batch service.MessageBatch) (map[
 		}
 		rawID, err := idExec.QueryValue(i)
 		if err != nil {
-			return nil, fmt.Errorf("failed to execute %s: %w", qoFieldID, err)
+			return nil, fmt.Errorf("executing %s: %w", qoFieldID, err)
 		}
 
 		id, err := newPointID(rawID)
 		if err != nil {
-			return nil, fmt.Errorf("failed to coerce point ID type: %w", err)
+			return nil, fmt.Errorf("coercing point ID type: %w", err)
 		}
 
 		rawVec, err := vectorExec.Query(i)
 		if err != nil {
-			return nil, fmt.Errorf("failed to execute %s: %w", qoFieldVectorMapping, err)
+			return nil, fmt.Errorf("executing %s: %w", qoFieldVectorMapping, err)
 		}
 		if rawVec == nil {
 			continue
@@ -210,7 +210,7 @@ func (w *outputWriter) batchPointsByCollection(batch service.MessageBatch) (map[
 
 		rawMeta, err := payloadExec.Query(i)
 		if err != nil {
-			return nil, fmt.Errorf("failed to execute %s: %w", qoFieldPayloadMapping, err)
+			return nil, fmt.Errorf("executing %s: %w", qoFieldPayloadMapping, err)
 		}
 
 		maybePayload, err := rawMeta.AsStructured()

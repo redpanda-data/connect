@@ -102,6 +102,8 @@ output:
     channel_name: partition-${!@kafka_partition} # No default (optional)
     offset_token: offset-${!"%016X".format(@kafka_offset)} # No default (optional)
     commit_timeout: 60s
+    message_format: object
+    timestamp_format: 2006-01-02T15:04:05.999999999Z07:00
 ```
 
 --
@@ -718,5 +720,39 @@ commit_timeout: 10s
 
 commit_timeout: 10m
 ```
+
+=== `message_format`
+
+The format at which to expect incoming messages from the rest of the pipeline in.
+
+
+*Type*: `string`
+
+*Default*: `"object"`
+
+|===
+| Option | Summary
+
+| `array`
+| Messages are an array of values where the position in the array matches up the with ordinal of the column in snowflake
+| `object`
+| Messages are an object in JSON or bloblang where the key of the object is the column name in snowflake and the value is the value for the column
+
+|===
+
+```yml
+# Examples
+
+message_format: array
+```
+
+=== `timestamp_format`
+
+The format to parse string values for TIMESTAMP, TIMESTAMP_LTZ and TIMESTAMP_NTZ columns. Should be a layout for https://pkg.go.dev/time#Parse[^time.Parse] in Golang.
+
+
+*Type*: `string`
+
+*Default*: `"2006-01-02T15:04:05.999999999Z07:00"`
 
 

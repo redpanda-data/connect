@@ -53,6 +53,7 @@ output:
       translate_ids: false
       normalize: false
       strict: false
+      max_parallel_http_requests: 10
     consumer_groups:
       enabled: true
       interval: 1m
@@ -139,6 +140,7 @@ output:
       translate_ids: false
       normalize: false
       strict: false
+      max_parallel_http_requests: 10
     consumer_groups:
       enabled: true
       interval: 1m
@@ -1424,6 +1426,15 @@ Error on unknown schema IDs. Only relevant when translate_ids is true. When fals
 *Type*: `bool`
 
 *Default*: `false`
+
+=== `schema_registry.max_parallel_http_requests`
+
+Maximum number of parallel HTTP requests to the schema registry. Controls concurrency when syncing multiple schemas.
+
+
+*Type*: `int`
+
+*Default*: `10`
 
 === `consumer_groups`
 

@@ -62,7 +62,7 @@ type ToolCall struct {
 }
 
 // ToolCallArguments represents the arguments of a tool call
-type ToolCallArguments map[string]interface{}
+type ToolCallArguments map[string]any
 
 func (t ToolCallArguments) String() string {
 	b, _ := json.Marshal(t)
@@ -161,7 +161,7 @@ func NewClient(baseURL *url.URL, httpClient *http.Client) *Client {
 	}
 }
 
-// ClientFromEnvironment creates a client from environment variables
+// ClientFromEnvironment creates a client from environment variables.
 func ClientFromEnvironment() (*Client, error) {
 	host := os.Getenv("OLLAMA_HOST")
 	if host == "" {
@@ -174,7 +174,7 @@ func ClientFromEnvironment() (*Client, error) {
 	return NewClient(u, http.DefaultClient), nil
 }
 
-// Heartbeat checks if the Ollama server is reachable
+// Heartbeat checks if the Ollama server is reachable.
 func (c *Client) Heartbeat(ctx context.Context) error {
 	req, err := http.NewRequestWithContext(ctx, "GET", c.baseURL.String(), nil)
 	if err != nil {
@@ -191,7 +191,7 @@ func (c *Client) Heartbeat(ctx context.Context) error {
 	return nil
 }
 
-// Pull pulls a model from the Ollama registry
+// Pull pulls a model from the Ollama registry.
 func (c *Client) Pull(ctx context.Context, req *PullRequest, fn func(ProgressResponse) error) error {
 	reqURL := c.baseURL.JoinPath("/api/pull")
 	body, err := json.Marshal(req)
@@ -230,7 +230,7 @@ func (c *Client) Pull(ctx context.Context, req *PullRequest, fn func(ProgressRes
 	return scanner.Err()
 }
 
-// Chat sends a chat request to Ollama
+// Chat sends a chat request to Ollama.
 func (c *Client) Chat(ctx context.Context, req *ChatRequest, fn func(ChatResponse) error) error {
 	reqURL := c.baseURL.JoinPath("/api/chat")
 	body, err := json.Marshal(req)
@@ -269,7 +269,7 @@ func (c *Client) Chat(ctx context.Context, req *ChatRequest, fn func(ChatRespons
 	return scanner.Err()
 }
 
-// Embeddings generates embeddings for the given text
+// Embeddings generates embeddings for the given text.
 func (c *Client) Embeddings(ctx context.Context, req *EmbeddingRequest) (*EmbeddingResponse, error) {
 	reqURL := c.baseURL.JoinPath("/api/embeddings")
 	body, err := json.Marshal(req)

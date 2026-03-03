@@ -20,7 +20,9 @@ import (
 	"github.com/urfave/cli/v2"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/common-go/authz"
 
+	"github.com/redpanda-data/connect/v4/internal/gateway"
 	"github.com/redpanda-data/connect/v4/internal/impl/kafka/enterprise"
 	"github.com/redpanda-data/connect/v4/internal/license"
 	"github.com/redpanda-data/connect/v4/internal/rpcplugin"
@@ -56,6 +58,8 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 		chrootPath        string
 		chrootPassthrough []string
 		disableTelemetry  bool
+		authzResourceName string
+		authzPolicyFile   string
 	)
 
 	flags := []cli.Flag{
@@ -110,21 +114,27 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 				fbLogger.Errorf("Failed reading log level from config: %v", err)
 			}
 
-			var logsLevel slog.Level
+			levelPtr := func(level slog.Level) *slog.Level {
+				return &level
+			}
+			var logsLevel *slog.Level
 			switch strings.ToLower(logsLevelStr) {
-			case "debug":
-				logsLevel = slog.LevelDebug
+			case "debug", "trace", "all":
+				logsLevel = levelPtr(slog.LevelDebug)
 			case "info":
-				logsLevel = slog.LevelInfo
+				logsLevel = levelPtr(slog.LevelInfo)
 			case "warn":
-				logsLevel = slog.LevelWarn
-			case "error":
-				logsLevel = slog.LevelError
+				logsLevel = levelPtr(slog.LevelWarn)
+			case "error", "fatal":
+				logsLevel = levelPtr(slog.LevelError)
+			case "off", "none":
+				// Logging disabled
 			default:
-				fbLogger.Errorf("Log level '%s' not recognized, using to default level %s", logsLevelStr, logsLevel)
+				logsLevel = levelPtr(slog.LevelInfo)
+				fbLogger.Errorf("Log level '%s' not recognized, using the default level %s", logsLevelStr, logsLevel)
 			}
 
-			rpMgr.SetTopicLoggerLevel(&logsLevel)
+			rpMgr.SetTopicLoggerLevel(logsLevel)
 
 			// Chroot if needed
 			if chrootPath != "" {
@@ -134,7 +144,15 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 				}
 			}
 
-			// Kick off telemetry exporter.
+			// Store authorization configuration if present
+			if authzResourceName != "" && authzPolicyFile != "" {
+				gateway.SetManagerAuthzConfig(pConf.Resources(), gateway.AuthzConfig{
+					ResourceName: authz.ResourceName(authzResourceName),
+					PolicyFile:   authzPolicyFile,
+				})
+			}
+
+			// Kick off telemetry exporter
 			if !disableTelemetry {
 				telemetry.ActivateExporter(instanceID, version, fbLogger, schema, pConf)
 			}
@@ -185,7 +203,7 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 				}
 
 				// Parse and resolve cloud auth flags
-				if _, _, err := parseCloudAuthFlags(c.Context, c, secretLookupFn); err != nil {
+				if authzResourceName, authzPolicyFile, err = parseCloudAuthFlags(c.Context, c, secretLookupFn); err != nil {
 					return err
 				}
 
@@ -204,6 +222,7 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 		}),
 
 		// Custom subcommands
+		service.CLIOptAddCommand(dryRunCli(schema)),
 		service.CLIOptAddCommand(agentCli(rpMgr)),
 		service.CLIOptAddCommand(mcpServerCli(rpMgr)),
 		service.CLIOptAddCommand(pluginInit()),
