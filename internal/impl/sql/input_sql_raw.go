@@ -42,7 +42,7 @@ func sqlRawInputConfig() *service.ConfigSpec {
 		Version("4.10.0").
 		Example("Consumes an SQL table using a query as an input.",
 			`
-Here we preform an aggregate over a list of names in a table that are less than 3600 seconds old.`,
+Here we perform an aggregate over a list of names in a table that are less than 3600 seconds old.`,
 			`
 input:
   sql_raw:

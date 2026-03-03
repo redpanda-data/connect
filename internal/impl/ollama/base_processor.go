@@ -84,7 +84,7 @@ func commonFields() []*service.ConfigField {
 			Advanced().
 			Optional(),
 		service.NewStringField(bopFieldDownloadURL).
-			Description("If `" + bopFieldServerAddress + "` is not set - the URL to download the ollama binary from. Defaults to the offical Ollama GitHub release for this platform.").
+			Description("If `" + bopFieldServerAddress + "` is not set - the URL to download the ollama binary from. Defaults to the official Ollama GitHub release for this platform.").
 			Advanced().
 			Optional(),
 	}

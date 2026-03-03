@@ -75,7 +75,7 @@ output:
   timeplus:
     workspace: my_workspace_id
     stream: mystream
-    apikey: <Api key genereated on web console>
+    apikey: <Api key generated on web console>
 
   processors:
     - mapping: |

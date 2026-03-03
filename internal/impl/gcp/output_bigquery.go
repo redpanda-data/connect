@@ -193,7 +193,7 @@ For parquet, the data can be encoded using the ` + "`parquet_encode`" + ` proces
 
 ` + service.OutputPerformanceDocs(true, true)).
 		Field(service.NewStringField("project").Description("The project ID of the dataset to insert data to. If not set, it will be inferred from the credentials or read from the GOOGLE_CLOUD_PROJECT environment variable.").Default("")).
-		Field(service.NewStringField("job_project").Description("The project ID in which jobs will be exectuted. If not set, project will be used.").Default("")).
+		Field(service.NewStringField("job_project").Description("The project ID in which jobs will be executed. If not set, project will be used.").Default("")).
 		Field(service.NewStringField("dataset").Description("The BigQuery Dataset ID.")).
 		Field(service.NewStringField("table").Description("The table to insert messages to.")).
 		Field(service.NewStringEnumField("format", string(bigquery.JSON), string(bigquery.CSV), string(bigquery.Parquet)).
@@ -248,7 +248,7 @@ For parquet, the data can be encoded using the ` + "`parquet_encode`" + ` proces
 				Description("The number of rows at the top of a CSV file that BigQuery will skip when reading data. The default value is 1 since Redpanda Connect will add the specified header in the first line of each batch sent to BigQuery.").
 				Advanced().
 				Default(1),
-		).Description("Specify how CSV data should be interpretted.")).
+		).Description("Specify how CSV data should be interpreted.")).
 		Field(service.NewBatchPolicyField("batching"))
 }
 
