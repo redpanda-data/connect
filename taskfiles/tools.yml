@@ -2,7 +2,7 @@ version: '3'
 
 vars:
   GOBIN:
-    sh: realpath {{.TOOLS_BIN_DIR}}
+    sh: mkdir -p {{.TOOLS_BIN_DIR}} && realpath {{.TOOLS_BIN_DIR}}
 
 tasks:
   install-all:
