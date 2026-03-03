@@ -12,6 +12,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
@@ -60,8 +61,7 @@ func (c *Checkpointer) ensureTableExists(ctx context.Context) error {
 		TableName: aws.String(c.tableName),
 	})
 
-	var aerr *types.ResourceNotFoundException
-	if err == nil || !errors.As(err, &aerr) {
+	if _, ok := errors.AsType[*types.ResourceNotFoundException](err); err == nil || !ok {
 		return err
 	}
 
@@ -97,8 +97,7 @@ func (c *Checkpointer) Get(ctx context.Context, shardID string) (string, error) 
 		},
 	})
 	if err != nil {
-		var aerr *types.ResourceNotFoundException
-		if errors.As(err, &aerr) {
+		if _, ok := errors.AsType[*types.ResourceNotFoundException](err); ok {
 			return "", nil
 		}
 		return "", fmt.Errorf("getting checkpoint for table=%s stream=%s shard=%s: %w",
@@ -133,8 +132,8 @@ func (c *Checkpointer) Set(ctx context.Context, shardID, sequenceNumber string) 
 	return nil
 }
 
-// GetCheckpointLimit returns the checkpoint limit for the checkpointer.
-func (c *Checkpointer) GetCheckpointLimit() int {
+// CheckpointLimit returns the checkpoint limit for the checkpointer.
+func (c *Checkpointer) CheckpointLimit() int {
 	return c.checkpointLimit
 }
 
@@ -150,5 +149,127 @@ func (c *Checkpointer) FlushCheckpoints(ctx context.Context, checkpoints map[str
 		}
 		c.log.Infof("Flushed checkpoint for shard %s at sequence %s", shardID, seq)
 	}
+	return nil
+}
+
+// SnapshotProgress retrieves the snapshot checkpoint.
+func (c *Checkpointer) SnapshotProgress(ctx context.Context) (*SnapshotCheckpoint, error) {
+	checkpoint := NewSnapshotCheckpoint()
+
+	res, err := c.svc.GetItem(ctx, &dynamodb.GetItemInput{
+		TableName: aws.String(c.tableName),
+		Key: map[string]types.AttributeValue{
+			"StreamArn": &types.AttributeValueMemberS{Value: c.streamArn},
+			"ShardID":   &types.AttributeValueMemberS{Value: "snapshot#complete"},
+		},
+	})
+	if err != nil {
+		if _, ok := errors.AsType[*types.ResourceNotFoundException](err); !ok {
+			return nil, fmt.Errorf("getting snapshot completion status: %w", err)
+		}
+	}
+
+	if res != nil && res.Item != nil {
+		if complete, ok := res.Item["Complete"].(*types.AttributeValueMemberBOOL); ok && complete.Value {
+			checkpoint.MarkComplete()
+			return checkpoint, nil
+		}
+	}
+
+	queryRes, err := c.svc.Query(ctx, &dynamodb.QueryInput{
+		TableName:              aws.String(c.tableName),
+		KeyConditionExpression: aws.String("StreamArn = :stream_arn AND begins_with(ShardID, :snapshot_prefix)"),
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":stream_arn":      &types.AttributeValueMemberS{Value: c.streamArn},
+			":snapshot_prefix": &types.AttributeValueMemberS{Value: "snapshot#segment#"},
+		},
+	})
+	if err != nil {
+		if _, ok := errors.AsType[*types.ResourceNotFoundException](err); !ok {
+			return nil, fmt.Errorf("querying snapshot progress: %w", err)
+		}
+		return checkpoint, nil
+	}
+
+	for _, item := range queryRes.Items {
+		shardID, ok := item["ShardID"].(*types.AttributeValueMemberS)
+		if !ok {
+			c.log.Warn("Unexpected ShardID type in snapshot checkpoint item, skipping.")
+			continue
+		}
+
+		var segmentID int
+		if _, err := fmt.Sscanf(shardID.Value, "snapshot#segment#%d", &segmentID); err != nil {
+			c.log.Warnf("Failed to parse segment ID from %s: %v", shardID.Value, err)
+			continue
+		}
+
+		state := &SegmentState{}
+
+		if lastKey, ok := item["LastKey"].(*types.AttributeValueMemberM); ok {
+			state.LastKey = lastKey.Value
+		}
+
+		if recordsRead, ok := item["RecordsRead"].(*types.AttributeValueMemberN); ok {
+			if _, err := fmt.Sscanf(recordsRead.Value, "%d", &state.RecordsRead); err != nil {
+				c.log.Warnf("Failed to parse RecordsRead from checkpoint: %v", err)
+			}
+		}
+
+		if complete, ok := item["Complete"].(*types.AttributeValueMemberBOOL); ok {
+			state.Complete = complete.Value
+		}
+
+		checkpoint.SegmentProgress[segmentID] = state
+	}
+
+	return checkpoint, nil
+}
+
+// UpdateSnapshotProgress updates the checkpoint for a snapshot segment.
+func (c *Checkpointer) UpdateSnapshotProgress(ctx context.Context, segment int, lastKey map[string]types.AttributeValue, recordsRead int64) error {
+	shardID := fmt.Sprintf("snapshot#segment#%d", segment)
+
+	item := map[string]types.AttributeValue{
+		"StreamArn":   &types.AttributeValueMemberS{Value: c.streamArn},
+		"ShardID":     &types.AttributeValueMemberS{Value: shardID},
+		"RecordsRead": &types.AttributeValueMemberN{Value: strconv.FormatInt(recordsRead, 10)},
+	}
+
+	if lastKey == nil {
+		// Segment complete
+		item["Complete"] = &types.AttributeValueMemberBOOL{Value: true}
+	} else {
+		// Store last key for resume
+		item["LastKey"] = &types.AttributeValueMemberM{Value: lastKey}
+		item["Complete"] = &types.AttributeValueMemberBOOL{Value: false}
+	}
+
+	_, err := c.svc.PutItem(ctx, &dynamodb.PutItemInput{
+		TableName: aws.String(c.tableName),
+		Item:      item,
+	})
+	if err != nil {
+		return fmt.Errorf("updating snapshot progress for segment %d: %w", segment, err)
+	}
+
+	return nil
+}
+
+// MarkSnapshotComplete marks the entire snapshot as complete.
+func (c *Checkpointer) MarkSnapshotComplete(ctx context.Context) error {
+	_, err := c.svc.PutItem(ctx, &dynamodb.PutItemInput{
+		TableName: aws.String(c.tableName),
+		Item: map[string]types.AttributeValue{
+			"StreamArn": &types.AttributeValueMemberS{Value: c.streamArn},
+			"ShardID":   &types.AttributeValueMemberS{Value: "snapshot#complete"},
+			"Complete":  &types.AttributeValueMemberBOOL{Value: true},
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("marking snapshot complete: %w", err)
+	}
+
+	c.log.Info("Marked snapshot as complete in checkpoint table")
 	return nil
 }
