@@ -15,7 +15,7 @@ import (
 	"github.com/ogen-go/ogen/validate"
 )
 
-func decodeV1BlocksIDChildrenGetResponse(resp *http.Response) (res *V1BlocksIDChildrenGetOKHeaders, _ error) {
+func decodeV1BlocksIDChildrenGetResponse(resp *http.Response) (res *ListBlockChildrenResponseHeaders, _ error) {
 	switch resp.StatusCode {
 	case 200:
 		// Code 200.
@@ -31,7 +31,7 @@ func decodeV1BlocksIDChildrenGetResponse(resp *http.Response) (res *V1BlocksIDCh
 			}
 			d := jx.DecodeBytes(buf)
 
-			var response V1BlocksIDChildrenGetOK
+			var response ListBlockChildrenResponse
 			if err := func() error {
 				if err := response.Decode(d); err != nil {
 					return err
@@ -48,7 +48,16 @@ func decodeV1BlocksIDChildrenGetResponse(resp *http.Response) (res *V1BlocksIDCh
 				}
 				return res, err
 			}
-			var wrapper V1BlocksIDChildrenGetOKHeaders
+			// Validate response.
+			if err := func() error {
+				if err := response.Validate(); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return res, errors.Wrap(err, "validate")
+			}
+			var wrapper ListBlockChildrenResponseHeaders
 			wrapper.Response = response
 			h := uri.NewHeaderDecoder(resp.Header)
 			// Parse "CF-Cache-Status" header.
@@ -873,7 +882,7 @@ func decodeV1BlocksIDChildrenGetResponse(resp *http.Response) (res *V1BlocksIDCh
 	return res, validate.UnexpectedStatusCodeWithResponse(resp)
 }
 
-func decodeV1BlocksIDChildrenPatchResponse(resp *http.Response) (res *V1BlocksIDChildrenPatchOKHeaders, _ error) {
+func decodeV1BlocksIDChildrenPatchResponse(resp *http.Response) (res *AppendBlockChildrenResponseHeaders, _ error) {
 	switch resp.StatusCode {
 	case 200:
 		// Code 200.
@@ -889,7 +898,7 @@ func decodeV1BlocksIDChildrenPatchResponse(resp *http.Response) (res *V1BlocksID
 			}
 			d := jx.DecodeBytes(buf)
 
-			var response V1BlocksIDChildrenPatchOK
+			var response AppendBlockChildrenResponse
 			if err := func() error {
 				if err := response.Decode(d); err != nil {
 					return err
@@ -906,7 +915,16 @@ func decodeV1BlocksIDChildrenPatchResponse(resp *http.Response) (res *V1BlocksID
 				}
 				return res, err
 			}
-			var wrapper V1BlocksIDChildrenPatchOKHeaders
+			// Validate response.
+			if err := func() error {
+				if err := response.Validate(); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return res, errors.Wrap(err, "validate")
+			}
+			var wrapper AppendBlockChildrenResponseHeaders
 			wrapper.Response = response
 			h := uri.NewHeaderDecoder(resp.Header)
 			// Parse "CF-Cache-Status" header.
@@ -1731,7 +1749,7 @@ func decodeV1BlocksIDChildrenPatchResponse(resp *http.Response) (res *V1BlocksID
 	return res, validate.UnexpectedStatusCodeWithResponse(resp)
 }
 
-func decodeV1BlocksIDDeleteResponse(resp *http.Response) (res *V1BlocksIDDeleteOKHeaders, _ error) {
+func decodeV1BlocksIDDeleteResponse(resp *http.Response) (res *DeleteBlockResponseHeaders, _ error) {
 	switch resp.StatusCode {
 	case 200:
 		// Code 200.
@@ -1747,7 +1765,7 @@ func decodeV1BlocksIDDeleteResponse(resp *http.Response) (res *V1BlocksIDDeleteO
 			}
 			d := jx.DecodeBytes(buf)
 
-			var response V1BlocksIDDeleteOK
+			var response DeleteBlockResponse
 			if err := func() error {
 				if err := response.Decode(d); err != nil {
 					return err
@@ -1764,7 +1782,16 @@ func decodeV1BlocksIDDeleteResponse(resp *http.Response) (res *V1BlocksIDDeleteO
 				}
 				return res, err
 			}
-			var wrapper V1BlocksIDDeleteOKHeaders
+			// Validate response.
+			if err := func() error {
+				if err := response.Validate(); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return res, errors.Wrap(err, "validate")
+			}
+			var wrapper DeleteBlockResponseHeaders
 			wrapper.Response = response
 			h := uri.NewHeaderDecoder(resp.Header)
 			// Parse "CF-Cache-Status" header.
@@ -2552,7 +2579,7 @@ func decodeV1BlocksIDDeleteResponse(resp *http.Response) (res *V1BlocksIDDeleteO
 	return res, validate.UnexpectedStatusCodeWithResponse(resp)
 }
 
-func decodeV1BlocksIDGetResponse(resp *http.Response) (res *V1BlocksIDGetOKHeaders, _ error) {
+func decodeV1BlocksIDGetResponse(resp *http.Response) (res *GetBlockResponseHeaders, _ error) {
 	switch resp.StatusCode {
 	case 200:
 		// Code 200.
@@ -2568,7 +2595,7 @@ func decodeV1BlocksIDGetResponse(resp *http.Response) (res *V1BlocksIDGetOKHeade
 			}
 			d := jx.DecodeBytes(buf)
 
-			var response V1BlocksIDGetOK
+			var response GetBlockResponse
 			if err := func() error {
 				if err := response.Decode(d); err != nil {
 					return err
@@ -2585,7 +2612,16 @@ func decodeV1BlocksIDGetResponse(resp *http.Response) (res *V1BlocksIDGetOKHeade
 				}
 				return res, err
 			}
-			var wrapper V1BlocksIDGetOKHeaders
+			// Validate response.
+			if err := func() error {
+				if err := response.Validate(); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return res, errors.Wrap(err, "validate")
+			}
+			var wrapper GetBlockResponseHeaders
 			wrapper.Response = response
 			h := uri.NewHeaderDecoder(resp.Header)
 			// Parse "CF-Cache-Status" header.
@@ -3373,7 +3409,7 @@ func decodeV1BlocksIDGetResponse(resp *http.Response) (res *V1BlocksIDGetOKHeade
 	return res, validate.UnexpectedStatusCodeWithResponse(resp)
 }
 
-func decodeV1BlocksIDPatchResponse(resp *http.Response) (res *V1BlocksIDPatchOKHeaders, _ error) {
+func decodeV1BlocksIDPatchResponse(resp *http.Response) (res *UpdateBlockResponseHeaders, _ error) {
 	switch resp.StatusCode {
 	case 200:
 		// Code 200.
@@ -3389,7 +3425,7 @@ func decodeV1BlocksIDPatchResponse(resp *http.Response) (res *V1BlocksIDPatchOKH
 			}
 			d := jx.DecodeBytes(buf)
 
-			var response V1BlocksIDPatchOK
+			var response UpdateBlockResponse
 			if err := func() error {
 				if err := response.Decode(d); err != nil {
 					return err
@@ -3406,7 +3442,16 @@ func decodeV1BlocksIDPatchResponse(resp *http.Response) (res *V1BlocksIDPatchOKH
 				}
 				return res, err
 			}
-			var wrapper V1BlocksIDPatchOKHeaders
+			// Validate response.
+			if err := func() error {
+				if err := response.Validate(); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return res, errors.Wrap(err, "validate")
+			}
+			var wrapper UpdateBlockResponseHeaders
 			wrapper.Response = response
 			h := uri.NewHeaderDecoder(resp.Header)
 			// Parse "CF-Cache-Status" header.
@@ -4194,7 +4239,7 @@ func decodeV1BlocksIDPatchResponse(resp *http.Response) (res *V1BlocksIDPatchOKH
 	return res, validate.UnexpectedStatusCodeWithResponse(resp)
 }
 
-func decodeV1CommentsGetResponse(resp *http.Response) (res *V1CommentsGetOKHeaders, _ error) {
+func decodeV1CommentsGetResponse(resp *http.Response) (res *ListCommentsResponseHeaders, _ error) {
 	switch resp.StatusCode {
 	case 200:
 		// Code 200.
@@ -4210,7 +4255,7 @@ func decodeV1CommentsGetResponse(resp *http.Response) (res *V1CommentsGetOKHeade
 			}
 			d := jx.DecodeBytes(buf)
 
-			var response V1CommentsGetOK
+			var response ListCommentsResponse
 			if err := func() error {
 				if err := response.Decode(d); err != nil {
 					return err
@@ -4227,7 +4272,16 @@ func decodeV1CommentsGetResponse(resp *http.Response) (res *V1CommentsGetOKHeade
 				}
 				return res, err
 			}
-			var wrapper V1CommentsGetOKHeaders
+			// Validate response.
+			if err := func() error {
+				if err := response.Validate(); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return res, errors.Wrap(err, "validate")
+			}
+			var wrapper ListCommentsResponseHeaders
 			wrapper.Response = response
 			h := uri.NewHeaderDecoder(resp.Header)
 			// Parse "Connection" header.
@@ -4793,7 +4847,7 @@ func decodeV1CommentsGetResponse(resp *http.Response) (res *V1CommentsGetOKHeade
 	return res, validate.UnexpectedStatusCodeWithResponse(resp)
 }
 
-func decodeV1CommentsPostResponse(resp *http.Response) (res *V1CommentsPostOKHeaders, _ error) {
+func decodeV1CommentsPostResponse(resp *http.Response) (res *CreateCommentResponseHeaders, _ error) {
 	switch resp.StatusCode {
 	case 200:
 		// Code 200.
@@ -4809,7 +4863,7 @@ func decodeV1CommentsPostResponse(resp *http.Response) (res *V1CommentsPostOKHea
 			}
 			d := jx.DecodeBytes(buf)
 
-			var response V1CommentsPostOK
+			var response CreateCommentResponse
 			if err := func() error {
 				if err := response.Decode(d); err != nil {
 					return err
@@ -4826,7 +4880,16 @@ func decodeV1CommentsPostResponse(resp *http.Response) (res *V1CommentsPostOKHea
 				}
 				return res, err
 			}
-			var wrapper V1CommentsPostOKHeaders
+			// Validate response.
+			if err := func() error {
+				if err := response.Validate(); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return res, errors.Wrap(err, "validate")
+			}
+			var wrapper CreateCommentResponseHeaders
 			wrapper.Response = response
 			h := uri.NewHeaderDecoder(resp.Header)
 			// Parse "Connection" header.
@@ -5392,7 +5455,7 @@ func decodeV1CommentsPostResponse(resp *http.Response) (res *V1CommentsPostOKHea
 	return res, validate.UnexpectedStatusCodeWithResponse(resp)
 }
 
-func decodeV1DatabasesIDGetResponse(resp *http.Response) (res *V1DatabasesIDGetOKHeaders, _ error) {
+func decodeV1DatabasesIDGetResponse(resp *http.Response) (res *GetDatabaseResponseHeaders, _ error) {
 	switch resp.StatusCode {
 	case 200:
 		// Code 200.
@@ -5408,7 +5471,7 @@ func decodeV1DatabasesIDGetResponse(resp *http.Response) (res *V1DatabasesIDGetO
 			}
 			d := jx.DecodeBytes(buf)
 
-			var response V1DatabasesIDGetOK
+			var response GetDatabaseResponse
 			if err := func() error {
 				if err := response.Decode(d); err != nil {
 					return err
@@ -5425,7 +5488,16 @@ func decodeV1DatabasesIDGetResponse(resp *http.Response) (res *V1DatabasesIDGetO
 				}
 				return res, err
 			}
-			var wrapper V1DatabasesIDGetOKHeaders
+			// Validate response.
+			if err := func() error {
+				if err := response.Validate(); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return res, errors.Wrap(err, "validate")
+			}
+			var wrapper GetDatabaseResponseHeaders
 			wrapper.Response = response
 			h := uri.NewHeaderDecoder(resp.Header)
 			// Parse "CF-Cache-Status" header.
@@ -6213,7 +6285,7 @@ func decodeV1DatabasesIDGetResponse(resp *http.Response) (res *V1DatabasesIDGetO
 	return res, validate.UnexpectedStatusCodeWithResponse(resp)
 }
 
-func decodeV1DatabasesIDPatchResponse(resp *http.Response) (res *V1DatabasesIDPatchOKHeaders, _ error) {
+func decodeV1DatabasesIDPatchResponse(resp *http.Response) (res *UpdateDatabaseResponseHeaders, _ error) {
 	switch resp.StatusCode {
 	case 200:
 		// Code 200.
@@ -6229,7 +6301,7 @@ func decodeV1DatabasesIDPatchResponse(resp *http.Response) (res *V1DatabasesIDPa
 			}
 			d := jx.DecodeBytes(buf)
 
-			var response V1DatabasesIDPatchOK
+			var response UpdateDatabaseResponse
 			if err := func() error {
 				if err := response.Decode(d); err != nil {
 					return err
@@ -6246,7 +6318,16 @@ func decodeV1DatabasesIDPatchResponse(resp *http.Response) (res *V1DatabasesIDPa
 				}
 				return res, err
 			}
-			var wrapper V1DatabasesIDPatchOKHeaders
+			// Validate response.
+			if err := func() error {
+				if err := response.Validate(); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return res, errors.Wrap(err, "validate")
+			}
+			var wrapper UpdateDatabaseResponseHeaders
 			wrapper.Response = response
 			h := uri.NewHeaderDecoder(resp.Header)
 			// Parse "CF-Cache-Status" header.
@@ -7034,7 +7115,7 @@ func decodeV1DatabasesIDPatchResponse(resp *http.Response) (res *V1DatabasesIDPa
 	return res, validate.UnexpectedStatusCodeWithResponse(resp)
 }
 
-func decodeV1DatabasesIDQueryPostResponse(resp *http.Response) (res *V1DatabasesIDQueryPostOKHeaders, _ error) {
+func decodeV1DatabasesIDQueryPostResponse(resp *http.Response) (res *QueryDataSourceResponseHeaders, _ error) {
 	switch resp.StatusCode {
 	case 200:
 		// Code 200.
@@ -7050,7 +7131,7 @@ func decodeV1DatabasesIDQueryPostResponse(resp *http.Response) (res *V1Databases
 			}
 			d := jx.DecodeBytes(buf)
 
-			var response V1DatabasesIDQueryPostOK
+			var response QueryDataSourceResponse
 			if err := func() error {
 				if err := response.Decode(d); err != nil {
 					return err
@@ -7067,7 +7148,16 @@ func decodeV1DatabasesIDQueryPostResponse(resp *http.Response) (res *V1Databases
 				}
 				return res, err
 			}
-			var wrapper V1DatabasesIDQueryPostOKHeaders
+			// Validate response.
+			if err := func() error {
+				if err := response.Validate(); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return res, errors.Wrap(err, "validate")
+			}
+			var wrapper QueryDataSourceResponseHeaders
 			wrapper.Response = response
 			h := uri.NewHeaderDecoder(resp.Header)
 			// Parse "CF-Cache-Status" header.
@@ -7855,7 +7945,7 @@ func decodeV1DatabasesIDQueryPostResponse(resp *http.Response) (res *V1Databases
 	return res, validate.UnexpectedStatusCodeWithResponse(resp)
 }
 
-func decodeV1DatabasesPostResponse(resp *http.Response) (res *V1DatabasesPostOKHeaders, _ error) {
+func decodeV1DatabasesPostResponse(resp *http.Response) (res *CreateDatabaseResponseHeaders, _ error) {
 	switch resp.StatusCode {
 	case 200:
 		// Code 200.
@@ -7871,7 +7961,7 @@ func decodeV1DatabasesPostResponse(resp *http.Response) (res *V1DatabasesPostOKH
 			}
 			d := jx.DecodeBytes(buf)
 
-			var response V1DatabasesPostOK
+			var response CreateDatabaseResponse
 			if err := func() error {
 				if err := response.Decode(d); err != nil {
 					return err
@@ -7888,7 +7978,16 @@ func decodeV1DatabasesPostResponse(resp *http.Response) (res *V1DatabasesPostOKH
 				}
 				return res, err
 			}
-			var wrapper V1DatabasesPostOKHeaders
+			// Validate response.
+			if err := func() error {
+				if err := response.Validate(); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return res, errors.Wrap(err, "validate")
+			}
+			var wrapper CreateDatabaseResponseHeaders
 			wrapper.Response = response
 			h := uri.NewHeaderDecoder(resp.Header)
 			// Parse "CF-Cache-Status" header.
@@ -8676,7 +8775,7 @@ func decodeV1DatabasesPostResponse(resp *http.Response) (res *V1DatabasesPostOKH
 	return res, validate.UnexpectedStatusCodeWithResponse(resp)
 }
 
-func decodeV1PagesIDGetResponse(resp *http.Response) (res *V1PagesIDGetOKHeaders, _ error) {
+func decodeV1PagesIDGetResponse(resp *http.Response) (res *GetPageResponseHeaders, _ error) {
 	switch resp.StatusCode {
 	case 200:
 		// Code 200.
@@ -8692,7 +8791,7 @@ func decodeV1PagesIDGetResponse(resp *http.Response) (res *V1PagesIDGetOKHeaders
 			}
 			d := jx.DecodeBytes(buf)
 
-			var response V1PagesIDGetOK
+			var response GetPageResponse
 			if err := func() error {
 				if err := response.Decode(d); err != nil {
 					return err
@@ -8709,7 +8808,16 @@ func decodeV1PagesIDGetResponse(resp *http.Response) (res *V1PagesIDGetOKHeaders
 				}
 				return res, err
 			}
-			var wrapper V1PagesIDGetOKHeaders
+			// Validate response.
+			if err := func() error {
+				if err := response.Validate(); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return res, errors.Wrap(err, "validate")
+			}
+			var wrapper GetPageResponseHeaders
 			wrapper.Response = response
 			h := uri.NewHeaderDecoder(resp.Header)
 			// Parse "CF-Cache-Status" header.
@@ -9497,7 +9605,7 @@ func decodeV1PagesIDGetResponse(resp *http.Response) (res *V1PagesIDGetOKHeaders
 	return res, validate.UnexpectedStatusCodeWithResponse(resp)
 }
 
-func decodeV1PagesIDPatchResponse(resp *http.Response) (res *V1PagesIDPatchOKHeaders, _ error) {
+func decodeV1PagesIDPatchResponse(resp *http.Response) (res *UpdatePageResponseHeaders, _ error) {
 	switch resp.StatusCode {
 	case 200:
 		// Code 200.
@@ -9513,7 +9621,7 @@ func decodeV1PagesIDPatchResponse(resp *http.Response) (res *V1PagesIDPatchOKHea
 			}
 			d := jx.DecodeBytes(buf)
 
-			var response V1PagesIDPatchOK
+			var response UpdatePageResponse
 			if err := func() error {
 				if err := response.Decode(d); err != nil {
 					return err
@@ -9530,7 +9638,16 @@ func decodeV1PagesIDPatchResponse(resp *http.Response) (res *V1PagesIDPatchOKHea
 				}
 				return res, err
 			}
-			var wrapper V1PagesIDPatchOKHeaders
+			// Validate response.
+			if err := func() error {
+				if err := response.Validate(); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return res, errors.Wrap(err, "validate")
+			}
+			var wrapper UpdatePageResponseHeaders
 			wrapper.Response = response
 			h := uri.NewHeaderDecoder(resp.Header)
 			// Parse "CF-Cache-Status" header.
@@ -10318,7 +10435,7 @@ func decodeV1PagesIDPatchResponse(resp *http.Response) (res *V1PagesIDPatchOKHea
 	return res, validate.UnexpectedStatusCodeWithResponse(resp)
 }
 
-func decodeV1PagesPageIDPropertiesPropertyIDGetResponse(resp *http.Response) (res *V1PagesPageIDPropertiesPropertyIDGetOKHeaders, _ error) {
+func decodeV1PagesPageIDPropertiesPropertyIDGetResponse(resp *http.Response) (res *GetPagePropertyResponseHeaders, _ error) {
 	switch resp.StatusCode {
 	case 200:
 		// Code 200.
@@ -10334,7 +10451,7 @@ func decodeV1PagesPageIDPropertiesPropertyIDGetResponse(resp *http.Response) (re
 			}
 			d := jx.DecodeBytes(buf)
 
-			var response V1PagesPageIDPropertiesPropertyIDGetOK
+			var response GetPagePropertyResponse
 			if err := func() error {
 				if err := response.Decode(d); err != nil {
 					return err
@@ -10351,7 +10468,16 @@ func decodeV1PagesPageIDPropertiesPropertyIDGetResponse(resp *http.Response) (re
 				}
 				return res, err
 			}
-			var wrapper V1PagesPageIDPropertiesPropertyIDGetOKHeaders
+			// Validate response.
+			if err := func() error {
+				if err := response.Validate(); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return res, errors.Wrap(err, "validate")
+			}
+			var wrapper GetPagePropertyResponseHeaders
 			wrapper.Response = response
 			h := uri.NewHeaderDecoder(resp.Header)
 			// Parse "CF-Cache-Status" header.
@@ -11139,7 +11265,7 @@ func decodeV1PagesPageIDPropertiesPropertyIDGetResponse(resp *http.Response) (re
 	return res, validate.UnexpectedStatusCodeWithResponse(resp)
 }
 
-func decodeV1PagesPostResponse(resp *http.Response) (res *V1PagesPostOKHeaders, _ error) {
+func decodeV1PagesPostResponse(resp *http.Response) (res *CreatePageResponseHeaders, _ error) {
 	switch resp.StatusCode {
 	case 200:
 		// Code 200.
@@ -11155,7 +11281,7 @@ func decodeV1PagesPostResponse(resp *http.Response) (res *V1PagesPostOKHeaders, 
 			}
 			d := jx.DecodeBytes(buf)
 
-			var response V1PagesPostOK
+			var response CreatePageResponse
 			if err := func() error {
 				if err := response.Decode(d); err != nil {
 					return err
@@ -11172,7 +11298,16 @@ func decodeV1PagesPostResponse(resp *http.Response) (res *V1PagesPostOKHeaders, 
 				}
 				return res, err
 			}
-			var wrapper V1PagesPostOKHeaders
+			// Validate response.
+			if err := func() error {
+				if err := response.Validate(); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return res, errors.Wrap(err, "validate")
+			}
+			var wrapper CreatePageResponseHeaders
 			wrapper.Response = response
 			h := uri.NewHeaderDecoder(resp.Header)
 			// Parse "CF-Cache-Status" header.
@@ -11960,7 +12095,7 @@ func decodeV1PagesPostResponse(resp *http.Response) (res *V1PagesPostOKHeaders, 
 	return res, validate.UnexpectedStatusCodeWithResponse(resp)
 }
 
-func decodeV1SearchPostResponse(resp *http.Response) (res *V1SearchPostOKHeaders, _ error) {
+func decodeV1SearchPostResponse(resp *http.Response) (res *SearchResponseHeaders, _ error) {
 	switch resp.StatusCode {
 	case 200:
 		// Code 200.
@@ -11976,7 +12111,7 @@ func decodeV1SearchPostResponse(resp *http.Response) (res *V1SearchPostOKHeaders
 			}
 			d := jx.DecodeBytes(buf)
 
-			var response V1SearchPostOK
+			var response SearchResponse
 			if err := func() error {
 				if err := response.Decode(d); err != nil {
 					return err
@@ -11993,7 +12128,16 @@ func decodeV1SearchPostResponse(resp *http.Response) (res *V1SearchPostOKHeaders
 				}
 				return res, err
 			}
-			var wrapper V1SearchPostOKHeaders
+			// Validate response.
+			if err := func() error {
+				if err := response.Validate(); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return res, errors.Wrap(err, "validate")
+			}
+			var wrapper SearchResponseHeaders
 			wrapper.Response = response
 			h := uri.NewHeaderDecoder(resp.Header)
 			// Parse "CF-Cache-Status" header.
@@ -12781,7 +12925,7 @@ func decodeV1SearchPostResponse(resp *http.Response) (res *V1SearchPostOKHeaders
 	return res, validate.UnexpectedStatusCodeWithResponse(resp)
 }
 
-func decodeV1UsersGetResponse(resp *http.Response) (res *V1UsersGetOKHeaders, _ error) {
+func decodeV1UsersGetResponse(resp *http.Response) (res *ListUsersResponseHeaders, _ error) {
 	switch resp.StatusCode {
 	case 200:
 		// Code 200.
@@ -12797,7 +12941,7 @@ func decodeV1UsersGetResponse(resp *http.Response) (res *V1UsersGetOKHeaders, _ 
 			}
 			d := jx.DecodeBytes(buf)
 
-			var response V1UsersGetOK
+			var response ListUsersResponse
 			if err := func() error {
 				if err := response.Decode(d); err != nil {
 					return err
@@ -12814,7 +12958,16 @@ func decodeV1UsersGetResponse(resp *http.Response) (res *V1UsersGetOKHeaders, _ 
 				}
 				return res, err
 			}
-			var wrapper V1UsersGetOKHeaders
+			// Validate response.
+			if err := func() error {
+				if err := response.Validate(); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return res, errors.Wrap(err, "validate")
+			}
+			var wrapper ListUsersResponseHeaders
 			wrapper.Response = response
 			h := uri.NewHeaderDecoder(resp.Header)
 			// Parse "CF-Cache-Status" header.
@@ -13602,7 +13755,7 @@ func decodeV1UsersGetResponse(resp *http.Response) (res *V1UsersGetOKHeaders, _ 
 	return res, validate.UnexpectedStatusCodeWithResponse(resp)
 }
 
-func decodeV1UsersIDGetResponse(resp *http.Response) (res *V1UsersIDGetOKHeaders, _ error) {
+func decodeV1UsersIDGetResponse(resp *http.Response) (res *UserObjectResponseHeaders, _ error) {
 	switch resp.StatusCode {
 	case 200:
 		// Code 200.
@@ -13618,7 +13771,7 @@ func decodeV1UsersIDGetResponse(resp *http.Response) (res *V1UsersIDGetOKHeaders
 			}
 			d := jx.DecodeBytes(buf)
 
-			var response V1UsersIDGetOK
+			var response UserObjectResponse
 			if err := func() error {
 				if err := response.Decode(d); err != nil {
 					return err
@@ -13635,7 +13788,16 @@ func decodeV1UsersIDGetResponse(resp *http.Response) (res *V1UsersIDGetOKHeaders
 				}
 				return res, err
 			}
-			var wrapper V1UsersIDGetOKHeaders
+			// Validate response.
+			if err := func() error {
+				if err := response.Validate(); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return res, errors.Wrap(err, "validate")
+			}
+			var wrapper UserObjectResponseHeaders
 			wrapper.Response = response
 			h := uri.NewHeaderDecoder(resp.Header)
 			// Parse "CF-Cache-Status" header.
@@ -14423,7 +14585,7 @@ func decodeV1UsersIDGetResponse(resp *http.Response) (res *V1UsersIDGetOKHeaders
 	return res, validate.UnexpectedStatusCodeWithResponse(resp)
 }
 
-func decodeV1UsersMeGetResponse(resp *http.Response) (res *V1UsersMeGetOKHeaders, _ error) {
+func decodeV1UsersMeGetResponse(resp *http.Response) (res *UserObjectResponseHeaders, _ error) {
 	switch resp.StatusCode {
 	case 200:
 		// Code 200.
@@ -14439,7 +14601,7 @@ func decodeV1UsersMeGetResponse(resp *http.Response) (res *V1UsersMeGetOKHeaders
 			}
 			d := jx.DecodeBytes(buf)
 
-			var response V1UsersMeGetOK
+			var response UserObjectResponse
 			if err := func() error {
 				if err := response.Decode(d); err != nil {
 					return err
@@ -14456,7 +14618,16 @@ func decodeV1UsersMeGetResponse(resp *http.Response) (res *V1UsersMeGetOKHeaders
 				}
 				return res, err
 			}
-			var wrapper V1UsersMeGetOKHeaders
+			// Validate response.
+			if err := func() error {
+				if err := response.Validate(); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return res, errors.Wrap(err, "validate")
+			}
+			var wrapper UserObjectResponseHeaders
 			wrapper.Response = response
 			h := uri.NewHeaderDecoder(resp.Header)
 			// Parse "CF-Cache-Status" header.

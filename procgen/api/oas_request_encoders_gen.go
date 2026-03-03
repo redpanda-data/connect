@@ -6,37 +6,32 @@ import (
 	"bytes"
 	"net/http"
 
-	"github.com/go-faster/errors"
 	"github.com/go-faster/jx"
 	ht "github.com/ogen-go/ogen/http"
 )
 
 func encodeV1BlocksIDChildrenPatchRequest(
-	req *V1BlocksIDChildrenPatchReqWithContentType,
-	r *http.Request,
-) error {
-	contentType := req.ContentType
-	if contentType != "" && !ht.MatchContentType("*/*", contentType) {
-		return errors.Errorf("%q does not match mask %q", contentType, "*/*")
-	}
-	{
-		req := req.Content
-		body := req
-		ht.SetBody(r, body, contentType)
-		return nil
-	}
-}
-
-func encodeV1BlocksIDPatchRequest(
-	req *V1BlocksIDPatchReq,
+	req *AppendBlockChildrenBodyParameters,
 	r *http.Request,
 ) error {
 	const contentType = "application/json"
 	e := new(jx.Encoder)
 	{
-		if req != nil {
-			req.Encode(e)
-		}
+		req.Encode(e)
+	}
+	encoded := e.Bytes()
+	ht.SetBody(r, bytes.NewReader(encoded), contentType)
+	return nil
+}
+
+func encodeV1BlocksIDPatchRequest(
+	req *UpdateBlockBodyParameters,
+	r *http.Request,
+) error {
+	const contentType = "application/json"
+	e := new(jx.Encoder)
+	{
+		req.Encode(e)
 	}
 	encoded := e.Bytes()
 	ht.SetBody(r, bytes.NewReader(encoded), contentType)
@@ -44,31 +39,27 @@ func encodeV1BlocksIDPatchRequest(
 }
 
 func encodeV1CommentsPostRequest(
-	req *V1CommentsPostReqWithContentType,
-	r *http.Request,
-) error {
-	contentType := req.ContentType
-	if contentType != "" && !ht.MatchContentType("*/*", contentType) {
-		return errors.Errorf("%q does not match mask %q", contentType, "*/*")
-	}
-	{
-		req := req.Content
-		body := req
-		ht.SetBody(r, body, contentType)
-		return nil
-	}
-}
-
-func encodeV1DatabasesIDPatchRequest(
-	req *V1DatabasesIDPatchReq,
+	req *CreateCommentBodyParameters,
 	r *http.Request,
 ) error {
 	const contentType = "application/json"
 	e := new(jx.Encoder)
 	{
-		if req != nil {
-			req.Encode(e)
-		}
+		req.Encode(e)
+	}
+	encoded := e.Bytes()
+	ht.SetBody(r, bytes.NewReader(encoded), contentType)
+	return nil
+}
+
+func encodeV1DatabasesIDPatchRequest(
+	req *UpdateDatabaseBodyParameters,
+	r *http.Request,
+) error {
+	const contentType = "application/json"
+	e := new(jx.Encoder)
+	{
+		req.Encode(e)
 	}
 	encoded := e.Bytes()
 	ht.SetBody(r, bytes.NewReader(encoded), contentType)
@@ -76,47 +67,41 @@ func encodeV1DatabasesIDPatchRequest(
 }
 
 func encodeV1DatabasesIDQueryPostRequest(
-	req *V1DatabasesIDQueryPostReqWithContentType,
-	r *http.Request,
-) error {
-	contentType := req.ContentType
-	if contentType != "" && !ht.MatchContentType("*/*", contentType) {
-		return errors.Errorf("%q does not match mask %q", contentType, "*/*")
-	}
-	{
-		req := req.Content
-		body := req
-		ht.SetBody(r, body, contentType)
-		return nil
-	}
-}
-
-func encodeV1DatabasesPostRequest(
-	req *V1DatabasesPostReqWithContentType,
-	r *http.Request,
-) error {
-	contentType := req.ContentType
-	if contentType != "" && !ht.MatchContentType("*/*", contentType) {
-		return errors.Errorf("%q does not match mask %q", contentType, "*/*")
-	}
-	{
-		req := req.Content
-		body := req
-		ht.SetBody(r, body, contentType)
-		return nil
-	}
-}
-
-func encodeV1PagesIDPatchRequest(
-	req *V1PagesIDPatchReq,
+	req *QueryDataSourceBodyParameters,
 	r *http.Request,
 ) error {
 	const contentType = "application/json"
 	e := new(jx.Encoder)
 	{
-		if req != nil {
-			req.Encode(e)
-		}
+		req.Encode(e)
+	}
+	encoded := e.Bytes()
+	ht.SetBody(r, bytes.NewReader(encoded), contentType)
+	return nil
+}
+
+func encodeV1DatabasesPostRequest(
+	req *CreateDatabaseBodyParameters,
+	r *http.Request,
+) error {
+	const contentType = "application/json"
+	e := new(jx.Encoder)
+	{
+		req.Encode(e)
+	}
+	encoded := e.Bytes()
+	ht.SetBody(r, bytes.NewReader(encoded), contentType)
+	return nil
+}
+
+func encodeV1PagesIDPatchRequest(
+	req *UpdatePageBodyParameters,
+	r *http.Request,
+) error {
+	const contentType = "application/json"
+	e := new(jx.Encoder)
+	{
+		req.Encode(e)
 	}
 	encoded := e.Bytes()
 	ht.SetBody(r, bytes.NewReader(encoded), contentType)
@@ -124,33 +109,29 @@ func encodeV1PagesIDPatchRequest(
 }
 
 func encodeV1PagesPostRequest(
-	req *V1PagesPostReqWithContentType,
+	req *CreatePageBodyParameters,
 	r *http.Request,
 ) error {
-	contentType := req.ContentType
-	if contentType != "" && !ht.MatchContentType("*/*", contentType) {
-		return errors.Errorf("%q does not match mask %q", contentType, "*/*")
-	}
+	const contentType = "application/json"
+	e := new(jx.Encoder)
 	{
-		req := req.Content
-		body := req
-		ht.SetBody(r, body, contentType)
-		return nil
+		req.Encode(e)
 	}
+	encoded := e.Bytes()
+	ht.SetBody(r, bytes.NewReader(encoded), contentType)
+	return nil
 }
 
 func encodeV1SearchPostRequest(
-	req *V1SearchPostReqWithContentType,
+	req *SearchBodyParameters,
 	r *http.Request,
 ) error {
-	contentType := req.ContentType
-	if contentType != "" && !ht.MatchContentType("*/*", contentType) {
-		return errors.Errorf("%q does not match mask %q", contentType, "*/*")
-	}
+	const contentType = "application/json"
+	e := new(jx.Encoder)
 	{
-		req := req.Content
-		body := req
-		ht.SetBody(r, body, contentType)
-		return nil
+		req.Encode(e)
 	}
+	encoded := e.Bytes()
+	ht.SetBody(r, bytes.NewReader(encoded), contentType)
+	return nil
 }

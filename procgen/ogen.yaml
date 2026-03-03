@@ -8,6 +8,9 @@ parser:
     - "bearer"
 
 generator:
+  ignore_not_implemented:
+    - "type-based discrimination with same jxType"
+    - "complicated reference"
   features:
     enable:
       - "paths/client"

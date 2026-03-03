@@ -32,117 +32,117 @@ type Invoker interface {
 	// Retrieve block children.
 	//
 	// GET /v1/blocks/{id}/children
-	V1BlocksIDChildrenGet(ctx context.Context, params V1BlocksIDChildrenGetParams) (*V1BlocksIDChildrenGetOKHeaders, error)
+	V1BlocksIDChildrenGet(ctx context.Context, params V1BlocksIDChildrenGetParams) (*ListBlockChildrenResponseHeaders, error)
 	// V1BlocksIDChildrenPatch invokes PATCH /v1/blocks/{id}/children operation.
 	//
 	// Append block children.
 	//
 	// PATCH /v1/blocks/{id}/children
-	V1BlocksIDChildrenPatch(ctx context.Context, request *V1BlocksIDChildrenPatchReqWithContentType, params V1BlocksIDChildrenPatchParams) (*V1BlocksIDChildrenPatchOKHeaders, error)
+	V1BlocksIDChildrenPatch(ctx context.Context, request *AppendBlockChildrenBodyParameters, params V1BlocksIDChildrenPatchParams) (*AppendBlockChildrenResponseHeaders, error)
 	// V1BlocksIDDelete invokes DELETE /v1/blocks/{id} operation.
 	//
 	// Delete a block.
 	//
 	// DELETE /v1/blocks/{id}
-	V1BlocksIDDelete(ctx context.Context, params V1BlocksIDDeleteParams) (*V1BlocksIDDeleteOKHeaders, error)
+	V1BlocksIDDelete(ctx context.Context, params V1BlocksIDDeleteParams) (*DeleteBlockResponseHeaders, error)
 	// V1BlocksIDGet invokes GET /v1/blocks/{id} operation.
 	//
 	// Retrieve a block.
 	//
 	// GET /v1/blocks/{id}
-	V1BlocksIDGet(ctx context.Context, params V1BlocksIDGetParams) (*V1BlocksIDGetOKHeaders, error)
+	V1BlocksIDGet(ctx context.Context, params V1BlocksIDGetParams) (*GetBlockResponseHeaders, error)
 	// V1BlocksIDPatch invokes PATCH /v1/blocks/{id} operation.
 	//
 	// This endpoint allows you to update block content. [See Full Documentation](https://developers.
 	// notion.com/reference/update-a-block).
 	//
 	// PATCH /v1/blocks/{id}
-	V1BlocksIDPatch(ctx context.Context, request *V1BlocksIDPatchReq, params V1BlocksIDPatchParams) (*V1BlocksIDPatchOKHeaders, error)
+	V1BlocksIDPatch(ctx context.Context, request *UpdateBlockBodyParameters, params V1BlocksIDPatchParams) (*UpdateBlockResponseHeaders, error)
 	// V1CommentsGet invokes GET /v1/comments operation.
 	//
 	// Retrieve a user object using the ID specified in the request path.
 	//
 	// GET /v1/comments
-	V1CommentsGet(ctx context.Context, params V1CommentsGetParams) (*V1CommentsGetOKHeaders, error)
+	V1CommentsGet(ctx context.Context, params V1CommentsGetParams) (*ListCommentsResponseHeaders, error)
 	// V1CommentsPost invokes POST /v1/comments operation.
 	//
 	// Add comment to discussion.
 	//
 	// POST /v1/comments
-	V1CommentsPost(ctx context.Context, request *V1CommentsPostReqWithContentType, params V1CommentsPostParams) (*V1CommentsPostOKHeaders, error)
+	V1CommentsPost(ctx context.Context, request *CreateCommentBodyParameters, params V1CommentsPostParams) (*CreateCommentResponseHeaders, error)
 	// V1DatabasesIDGet invokes GET /v1/databases/{id} operation.
 	//
 	// Retrieves a database object using the ID specified in the request path.
 	//
 	// GET /v1/databases/{id}
-	V1DatabasesIDGet(ctx context.Context, params V1DatabasesIDGetParams) (*V1DatabasesIDGetOKHeaders, error)
+	V1DatabasesIDGet(ctx context.Context, params V1DatabasesIDGetParams) (*GetDatabaseResponseHeaders, error)
 	// V1DatabasesIDPatch invokes PATCH /v1/databases/{id} operation.
 	//
 	// Update database properties.
 	//
 	// PATCH /v1/databases/{id}
-	V1DatabasesIDPatch(ctx context.Context, request *V1DatabasesIDPatchReq, params V1DatabasesIDPatchParams) (*V1DatabasesIDPatchOKHeaders, error)
+	V1DatabasesIDPatch(ctx context.Context, request *UpdateDatabaseBodyParameters, params V1DatabasesIDPatchParams) (*UpdateDatabaseResponseHeaders, error)
 	// V1DatabasesIDQueryPost invokes POST /v1/databases/{id}/query operation.
 	//
 	// Filter a database.
 	//
 	// POST /v1/databases/{id}/query
-	V1DatabasesIDQueryPost(ctx context.Context, request *V1DatabasesIDQueryPostReqWithContentType, params V1DatabasesIDQueryPostParams) (*V1DatabasesIDQueryPostOKHeaders, error)
+	V1DatabasesIDQueryPost(ctx context.Context, request *QueryDataSourceBodyParameters, params V1DatabasesIDQueryPostParams) (*QueryDataSourceResponseHeaders, error)
 	// V1DatabasesPost invokes POST /v1/databases/ operation.
 	//
 	// Create a database.
 	//
 	// POST /v1/databases/
-	V1DatabasesPost(ctx context.Context, request *V1DatabasesPostReqWithContentType, params V1DatabasesPostParams) (*V1DatabasesPostOKHeaders, error)
+	V1DatabasesPost(ctx context.Context, request *CreateDatabaseBodyParameters, params V1DatabasesPostParams) (*CreateDatabaseResponseHeaders, error)
 	// V1PagesIDGet invokes GET /v1/pages/{id} operation.
 	//
 	// Retrieves a Page object using the ID in the request path. This endpoint exposes page properties,
 	// not page content.
 	//
 	// GET /v1/pages/{id}
-	V1PagesIDGet(ctx context.Context, params V1PagesIDGetParams) (*V1PagesIDGetOKHeaders, error)
+	V1PagesIDGet(ctx context.Context, params V1PagesIDGetParams) (*GetPageResponseHeaders, error)
 	// V1PagesIDPatch invokes PATCH /v1/pages/{id} operation.
 	//
 	// Archive a page.
 	//
 	// PATCH /v1/pages/{id}
-	V1PagesIDPatch(ctx context.Context, request *V1PagesIDPatchReq, params V1PagesIDPatchParams) (*V1PagesIDPatchOKHeaders, error)
+	V1PagesIDPatch(ctx context.Context, request *UpdatePageBodyParameters, params V1PagesIDPatchParams) (*UpdatePageResponseHeaders, error)
 	// V1PagesPageIDPropertiesPropertyIDGet invokes GET /v1/pages/{page_id}/properties/{property_id} operation.
 	//
 	// Retrieve a page property item.
 	//
 	// GET /v1/pages/{page_id}/properties/{property_id}
-	V1PagesPageIDPropertiesPropertyIDGet(ctx context.Context, params V1PagesPageIDPropertiesPropertyIDGetParams) (*V1PagesPageIDPropertiesPropertyIDGetOKHeaders, error)
+	V1PagesPageIDPropertiesPropertyIDGet(ctx context.Context, params V1PagesPageIDPropertiesPropertyIDGetParams) (*GetPagePropertyResponseHeaders, error)
 	// V1PagesPost invokes POST /v1/pages/ operation.
 	//
 	// Create a page with content.
 	//
 	// POST /v1/pages/
-	V1PagesPost(ctx context.Context, request *V1PagesPostReqWithContentType, params V1PagesPostParams) (*V1PagesPostOKHeaders, error)
+	V1PagesPost(ctx context.Context, request *CreatePageBodyParameters, params V1PagesPostParams) (*CreatePageResponseHeaders, error)
 	// V1SearchPost invokes POST /v1/search operation.
 	//
 	// Search.
 	//
 	// POST /v1/search
-	V1SearchPost(ctx context.Context, request *V1SearchPostReqWithContentType, params V1SearchPostParams) (*V1SearchPostOKHeaders, error)
+	V1SearchPost(ctx context.Context, request *SearchBodyParameters, params V1SearchPostParams) (*SearchResponseHeaders, error)
 	// V1UsersGet invokes GET /v1/users operation.
 	//
 	// Returns a paginated list of user objects for a workspace.
 	//
 	// GET /v1/users
-	V1UsersGet(ctx context.Context, params V1UsersGetParams) (*V1UsersGetOKHeaders, error)
+	V1UsersGet(ctx context.Context, params V1UsersGetParams) (*ListUsersResponseHeaders, error)
 	// V1UsersIDGet invokes GET /v1/users/{id} operation.
 	//
 	// Retrieve a user object using the ID specified in the request path.
 	//
 	// GET /v1/users/{id}
-	V1UsersIDGet(ctx context.Context, params V1UsersIDGetParams) (*V1UsersIDGetOKHeaders, error)
+	V1UsersIDGet(ctx context.Context, params V1UsersIDGetParams) (*UserObjectResponseHeaders, error)
 	// V1UsersMeGet invokes GET /v1/users/me operation.
 	//
 	// Retrieve your token’s bot user.
 	//
 	// GET /v1/users/me
-	V1UsersMeGet(ctx context.Context, params V1UsersMeGetParams) (*V1UsersMeGetOKHeaders, error)
+	V1UsersMeGet(ctx context.Context, params V1UsersMeGetParams) (*UserObjectResponseHeaders, error)
 }
 
 // Client implements OAS client.
@@ -191,12 +191,12 @@ func (c *Client) requestURL(ctx context.Context) *url.URL {
 // Retrieve block children.
 //
 // GET /v1/blocks/{id}/children
-func (c *Client) V1BlocksIDChildrenGet(ctx context.Context, params V1BlocksIDChildrenGetParams) (*V1BlocksIDChildrenGetOKHeaders, error) {
+func (c *Client) V1BlocksIDChildrenGet(ctx context.Context, params V1BlocksIDChildrenGetParams) (*ListBlockChildrenResponseHeaders, error) {
 	res, err := c.sendV1BlocksIDChildrenGet(ctx, params)
 	return res, err
 }
 
-func (c *Client) sendV1BlocksIDChildrenGet(ctx context.Context, params V1BlocksIDChildrenGetParams) (res *V1BlocksIDChildrenGetOKHeaders, err error) {
+func (c *Client) sendV1BlocksIDChildrenGet(ctx context.Context, params V1BlocksIDChildrenGetParams) (res *ListBlockChildrenResponseHeaders, err error) {
 	otelAttrs := []attribute.KeyValue{
 		semconv.HTTPRequestMethodKey.String("GET"),
 		semconv.URLTemplateKey.String("/v1/blocks/{id}/children"),
@@ -354,12 +354,21 @@ func (c *Client) sendV1BlocksIDChildrenGet(ctx context.Context, params V1BlocksI
 // Append block children.
 //
 // PATCH /v1/blocks/{id}/children
-func (c *Client) V1BlocksIDChildrenPatch(ctx context.Context, request *V1BlocksIDChildrenPatchReqWithContentType, params V1BlocksIDChildrenPatchParams) (*V1BlocksIDChildrenPatchOKHeaders, error) {
+func (c *Client) V1BlocksIDChildrenPatch(ctx context.Context, request *AppendBlockChildrenBodyParameters, params V1BlocksIDChildrenPatchParams) (*AppendBlockChildrenResponseHeaders, error) {
 	res, err := c.sendV1BlocksIDChildrenPatch(ctx, request, params)
 	return res, err
 }
 
-func (c *Client) sendV1BlocksIDChildrenPatch(ctx context.Context, request *V1BlocksIDChildrenPatchReqWithContentType, params V1BlocksIDChildrenPatchParams) (res *V1BlocksIDChildrenPatchOKHeaders, err error) {
+func (c *Client) sendV1BlocksIDChildrenPatch(ctx context.Context, request *AppendBlockChildrenBodyParameters, params V1BlocksIDChildrenPatchParams) (res *AppendBlockChildrenResponseHeaders, err error) {
+	// Validate request before sending.
+	if err := func() error {
+		if err := request.Validate(); err != nil {
+			return err
+		}
+		return nil
+	}(); err != nil {
+		return res, errors.Wrap(err, "validate")
+	}
 	otelAttrs := []attribute.KeyValue{
 		semconv.HTTPRequestMethodKey.String("PATCH"),
 		semconv.URLTemplateKey.String("/v1/blocks/{id}/children"),
@@ -499,12 +508,12 @@ func (c *Client) sendV1BlocksIDChildrenPatch(ctx context.Context, request *V1Blo
 // Delete a block.
 //
 // DELETE /v1/blocks/{id}
-func (c *Client) V1BlocksIDDelete(ctx context.Context, params V1BlocksIDDeleteParams) (*V1BlocksIDDeleteOKHeaders, error) {
+func (c *Client) V1BlocksIDDelete(ctx context.Context, params V1BlocksIDDeleteParams) (*DeleteBlockResponseHeaders, error) {
 	res, err := c.sendV1BlocksIDDelete(ctx, params)
 	return res, err
 }
 
-func (c *Client) sendV1BlocksIDDelete(ctx context.Context, params V1BlocksIDDeleteParams) (res *V1BlocksIDDeleteOKHeaders, err error) {
+func (c *Client) sendV1BlocksIDDelete(ctx context.Context, params V1BlocksIDDeleteParams) (res *DeleteBlockResponseHeaders, err error) {
 	otelAttrs := []attribute.KeyValue{
 		semconv.HTTPRequestMethodKey.String("DELETE"),
 		semconv.URLTemplateKey.String("/v1/blocks/{id}"),
@@ -640,12 +649,12 @@ func (c *Client) sendV1BlocksIDDelete(ctx context.Context, params V1BlocksIDDele
 // Retrieve a block.
 //
 // GET /v1/blocks/{id}
-func (c *Client) V1BlocksIDGet(ctx context.Context, params V1BlocksIDGetParams) (*V1BlocksIDGetOKHeaders, error) {
+func (c *Client) V1BlocksIDGet(ctx context.Context, params V1BlocksIDGetParams) (*GetBlockResponseHeaders, error) {
 	res, err := c.sendV1BlocksIDGet(ctx, params)
 	return res, err
 }
 
-func (c *Client) sendV1BlocksIDGet(ctx context.Context, params V1BlocksIDGetParams) (res *V1BlocksIDGetOKHeaders, err error) {
+func (c *Client) sendV1BlocksIDGet(ctx context.Context, params V1BlocksIDGetParams) (res *GetBlockResponseHeaders, err error) {
 	otelAttrs := []attribute.KeyValue{
 		semconv.HTTPRequestMethodKey.String("GET"),
 		semconv.URLTemplateKey.String("/v1/blocks/{id}"),
@@ -782,12 +791,21 @@ func (c *Client) sendV1BlocksIDGet(ctx context.Context, params V1BlocksIDGetPara
 // notion.com/reference/update-a-block).
 //
 // PATCH /v1/blocks/{id}
-func (c *Client) V1BlocksIDPatch(ctx context.Context, request *V1BlocksIDPatchReq, params V1BlocksIDPatchParams) (*V1BlocksIDPatchOKHeaders, error) {
+func (c *Client) V1BlocksIDPatch(ctx context.Context, request *UpdateBlockBodyParameters, params V1BlocksIDPatchParams) (*UpdateBlockResponseHeaders, error) {
 	res, err := c.sendV1BlocksIDPatch(ctx, request, params)
 	return res, err
 }
 
-func (c *Client) sendV1BlocksIDPatch(ctx context.Context, request *V1BlocksIDPatchReq, params V1BlocksIDPatchParams) (res *V1BlocksIDPatchOKHeaders, err error) {
+func (c *Client) sendV1BlocksIDPatch(ctx context.Context, request *UpdateBlockBodyParameters, params V1BlocksIDPatchParams) (res *UpdateBlockResponseHeaders, err error) {
+	// Validate request before sending.
+	if err := func() error {
+		if err := request.Validate(); err != nil {
+			return err
+		}
+		return nil
+	}(); err != nil {
+		return res, errors.Wrap(err, "validate")
+	}
 	otelAttrs := []attribute.KeyValue{
 		semconv.HTTPRequestMethodKey.String("PATCH"),
 		semconv.URLTemplateKey.String("/v1/blocks/{id}"),
@@ -926,12 +944,12 @@ func (c *Client) sendV1BlocksIDPatch(ctx context.Context, request *V1BlocksIDPat
 // Retrieve a user object using the ID specified in the request path.
 //
 // GET /v1/comments
-func (c *Client) V1CommentsGet(ctx context.Context, params V1CommentsGetParams) (*V1CommentsGetOKHeaders, error) {
+func (c *Client) V1CommentsGet(ctx context.Context, params V1CommentsGetParams) (*ListCommentsResponseHeaders, error) {
 	res, err := c.sendV1CommentsGet(ctx, params)
 	return res, err
 }
 
-func (c *Client) sendV1CommentsGet(ctx context.Context, params V1CommentsGetParams) (res *V1CommentsGetOKHeaders, err error) {
+func (c *Client) sendV1CommentsGet(ctx context.Context, params V1CommentsGetParams) (res *ListCommentsResponseHeaders, err error) {
 	otelAttrs := []attribute.KeyValue{
 		semconv.HTTPRequestMethodKey.String("GET"),
 		semconv.URLTemplateKey.String("/v1/comments"),
@@ -1087,12 +1105,21 @@ func (c *Client) sendV1CommentsGet(ctx context.Context, params V1CommentsGetPara
 // Add comment to discussion.
 //
 // POST /v1/comments
-func (c *Client) V1CommentsPost(ctx context.Context, request *V1CommentsPostReqWithContentType, params V1CommentsPostParams) (*V1CommentsPostOKHeaders, error) {
+func (c *Client) V1CommentsPost(ctx context.Context, request *CreateCommentBodyParameters, params V1CommentsPostParams) (*CreateCommentResponseHeaders, error) {
 	res, err := c.sendV1CommentsPost(ctx, request, params)
 	return res, err
 }
 
-func (c *Client) sendV1CommentsPost(ctx context.Context, request *V1CommentsPostReqWithContentType, params V1CommentsPostParams) (res *V1CommentsPostOKHeaders, err error) {
+func (c *Client) sendV1CommentsPost(ctx context.Context, request *CreateCommentBodyParameters, params V1CommentsPostParams) (res *CreateCommentResponseHeaders, err error) {
+	// Validate request before sending.
+	if err := func() error {
+		if err := request.Validate(); err != nil {
+			return err
+		}
+		return nil
+	}(); err != nil {
+		return res, errors.Wrap(err, "validate")
+	}
 	otelAttrs := []attribute.KeyValue{
 		semconv.HTTPRequestMethodKey.String("POST"),
 		semconv.URLTemplateKey.String("/v1/comments"),
@@ -1213,12 +1240,12 @@ func (c *Client) sendV1CommentsPost(ctx context.Context, request *V1CommentsPost
 // Retrieves a database object using the ID specified in the request path.
 //
 // GET /v1/databases/{id}
-func (c *Client) V1DatabasesIDGet(ctx context.Context, params V1DatabasesIDGetParams) (*V1DatabasesIDGetOKHeaders, error) {
+func (c *Client) V1DatabasesIDGet(ctx context.Context, params V1DatabasesIDGetParams) (*GetDatabaseResponseHeaders, error) {
 	res, err := c.sendV1DatabasesIDGet(ctx, params)
 	return res, err
 }
 
-func (c *Client) sendV1DatabasesIDGet(ctx context.Context, params V1DatabasesIDGetParams) (res *V1DatabasesIDGetOKHeaders, err error) {
+func (c *Client) sendV1DatabasesIDGet(ctx context.Context, params V1DatabasesIDGetParams) (res *GetDatabaseResponseHeaders, err error) {
 	otelAttrs := []attribute.KeyValue{
 		semconv.HTTPRequestMethodKey.String("GET"),
 		semconv.URLTemplateKey.String("/v1/databases/{id}"),
@@ -1354,12 +1381,21 @@ func (c *Client) sendV1DatabasesIDGet(ctx context.Context, params V1DatabasesIDG
 // Update database properties.
 //
 // PATCH /v1/databases/{id}
-func (c *Client) V1DatabasesIDPatch(ctx context.Context, request *V1DatabasesIDPatchReq, params V1DatabasesIDPatchParams) (*V1DatabasesIDPatchOKHeaders, error) {
+func (c *Client) V1DatabasesIDPatch(ctx context.Context, request *UpdateDatabaseBodyParameters, params V1DatabasesIDPatchParams) (*UpdateDatabaseResponseHeaders, error) {
 	res, err := c.sendV1DatabasesIDPatch(ctx, request, params)
 	return res, err
 }
 
-func (c *Client) sendV1DatabasesIDPatch(ctx context.Context, request *V1DatabasesIDPatchReq, params V1DatabasesIDPatchParams) (res *V1DatabasesIDPatchOKHeaders, err error) {
+func (c *Client) sendV1DatabasesIDPatch(ctx context.Context, request *UpdateDatabaseBodyParameters, params V1DatabasesIDPatchParams) (res *UpdateDatabaseResponseHeaders, err error) {
+	// Validate request before sending.
+	if err := func() error {
+		if err := request.Validate(); err != nil {
+			return err
+		}
+		return nil
+	}(); err != nil {
+		return res, errors.Wrap(err, "validate")
+	}
 	otelAttrs := []attribute.KeyValue{
 		semconv.HTTPRequestMethodKey.String("PATCH"),
 		semconv.URLTemplateKey.String("/v1/databases/{id}"),
@@ -1498,12 +1534,21 @@ func (c *Client) sendV1DatabasesIDPatch(ctx context.Context, request *V1Database
 // Filter a database.
 //
 // POST /v1/databases/{id}/query
-func (c *Client) V1DatabasesIDQueryPost(ctx context.Context, request *V1DatabasesIDQueryPostReqWithContentType, params V1DatabasesIDQueryPostParams) (*V1DatabasesIDQueryPostOKHeaders, error) {
+func (c *Client) V1DatabasesIDQueryPost(ctx context.Context, request *QueryDataSourceBodyParameters, params V1DatabasesIDQueryPostParams) (*QueryDataSourceResponseHeaders, error) {
 	res, err := c.sendV1DatabasesIDQueryPost(ctx, request, params)
 	return res, err
 }
 
-func (c *Client) sendV1DatabasesIDQueryPost(ctx context.Context, request *V1DatabasesIDQueryPostReqWithContentType, params V1DatabasesIDQueryPostParams) (res *V1DatabasesIDQueryPostOKHeaders, err error) {
+func (c *Client) sendV1DatabasesIDQueryPost(ctx context.Context, request *QueryDataSourceBodyParameters, params V1DatabasesIDQueryPostParams) (res *QueryDataSourceResponseHeaders, err error) {
+	// Validate request before sending.
+	if err := func() error {
+		if err := request.Validate(); err != nil {
+			return err
+		}
+		return nil
+	}(); err != nil {
+		return res, errors.Wrap(err, "validate")
+	}
 	otelAttrs := []attribute.KeyValue{
 		semconv.HTTPRequestMethodKey.String("POST"),
 		semconv.URLTemplateKey.String("/v1/databases/{id}/query"),
@@ -1643,12 +1688,21 @@ func (c *Client) sendV1DatabasesIDQueryPost(ctx context.Context, request *V1Data
 // Create a database.
 //
 // POST /v1/databases/
-func (c *Client) V1DatabasesPost(ctx context.Context, request *V1DatabasesPostReqWithContentType, params V1DatabasesPostParams) (*V1DatabasesPostOKHeaders, error) {
+func (c *Client) V1DatabasesPost(ctx context.Context, request *CreateDatabaseBodyParameters, params V1DatabasesPostParams) (*CreateDatabaseResponseHeaders, error) {
 	res, err := c.sendV1DatabasesPost(ctx, request, params)
 	return res, err
 }
 
-func (c *Client) sendV1DatabasesPost(ctx context.Context, request *V1DatabasesPostReqWithContentType, params V1DatabasesPostParams) (res *V1DatabasesPostOKHeaders, err error) {
+func (c *Client) sendV1DatabasesPost(ctx context.Context, request *CreateDatabaseBodyParameters, params V1DatabasesPostParams) (res *CreateDatabaseResponseHeaders, err error) {
+	// Validate request before sending.
+	if err := func() error {
+		if err := request.Validate(); err != nil {
+			return err
+		}
+		return nil
+	}(); err != nil {
+		return res, errors.Wrap(err, "validate")
+	}
 	otelAttrs := []attribute.KeyValue{
 		semconv.HTTPRequestMethodKey.String("POST"),
 		semconv.URLTemplateKey.String("/v1/databases/"),
@@ -1770,12 +1824,12 @@ func (c *Client) sendV1DatabasesPost(ctx context.Context, request *V1DatabasesPo
 // not page content.
 //
 // GET /v1/pages/{id}
-func (c *Client) V1PagesIDGet(ctx context.Context, params V1PagesIDGetParams) (*V1PagesIDGetOKHeaders, error) {
+func (c *Client) V1PagesIDGet(ctx context.Context, params V1PagesIDGetParams) (*GetPageResponseHeaders, error) {
 	res, err := c.sendV1PagesIDGet(ctx, params)
 	return res, err
 }
 
-func (c *Client) sendV1PagesIDGet(ctx context.Context, params V1PagesIDGetParams) (res *V1PagesIDGetOKHeaders, err error) {
+func (c *Client) sendV1PagesIDGet(ctx context.Context, params V1PagesIDGetParams) (res *GetPageResponseHeaders, err error) {
 	otelAttrs := []attribute.KeyValue{
 		semconv.HTTPRequestMethodKey.String("GET"),
 		semconv.URLTemplateKey.String("/v1/pages/{id}"),
@@ -1911,12 +1965,21 @@ func (c *Client) sendV1PagesIDGet(ctx context.Context, params V1PagesIDGetParams
 // Archive a page.
 //
 // PATCH /v1/pages/{id}
-func (c *Client) V1PagesIDPatch(ctx context.Context, request *V1PagesIDPatchReq, params V1PagesIDPatchParams) (*V1PagesIDPatchOKHeaders, error) {
+func (c *Client) V1PagesIDPatch(ctx context.Context, request *UpdatePageBodyParameters, params V1PagesIDPatchParams) (*UpdatePageResponseHeaders, error) {
 	res, err := c.sendV1PagesIDPatch(ctx, request, params)
 	return res, err
 }
 
-func (c *Client) sendV1PagesIDPatch(ctx context.Context, request *V1PagesIDPatchReq, params V1PagesIDPatchParams) (res *V1PagesIDPatchOKHeaders, err error) {
+func (c *Client) sendV1PagesIDPatch(ctx context.Context, request *UpdatePageBodyParameters, params V1PagesIDPatchParams) (res *UpdatePageResponseHeaders, err error) {
+	// Validate request before sending.
+	if err := func() error {
+		if err := request.Validate(); err != nil {
+			return err
+		}
+		return nil
+	}(); err != nil {
+		return res, errors.Wrap(err, "validate")
+	}
 	otelAttrs := []attribute.KeyValue{
 		semconv.HTTPRequestMethodKey.String("PATCH"),
 		semconv.URLTemplateKey.String("/v1/pages/{id}"),
@@ -2055,12 +2118,12 @@ func (c *Client) sendV1PagesIDPatch(ctx context.Context, request *V1PagesIDPatch
 // Retrieve a page property item.
 //
 // GET /v1/pages/{page_id}/properties/{property_id}
-func (c *Client) V1PagesPageIDPropertiesPropertyIDGet(ctx context.Context, params V1PagesPageIDPropertiesPropertyIDGetParams) (*V1PagesPageIDPropertiesPropertyIDGetOKHeaders, error) {
+func (c *Client) V1PagesPageIDPropertiesPropertyIDGet(ctx context.Context, params V1PagesPageIDPropertiesPropertyIDGetParams) (*GetPagePropertyResponseHeaders, error) {
 	res, err := c.sendV1PagesPageIDPropertiesPropertyIDGet(ctx, params)
 	return res, err
 }
 
-func (c *Client) sendV1PagesPageIDPropertiesPropertyIDGet(ctx context.Context, params V1PagesPageIDPropertiesPropertyIDGetParams) (res *V1PagesPageIDPropertiesPropertyIDGetOKHeaders, err error) {
+func (c *Client) sendV1PagesPageIDPropertiesPropertyIDGet(ctx context.Context, params V1PagesPageIDPropertiesPropertyIDGetParams) (res *GetPagePropertyResponseHeaders, err error) {
 	otelAttrs := []attribute.KeyValue{
 		semconv.HTTPRequestMethodKey.String("GET"),
 		semconv.URLTemplateKey.String("/v1/pages/{page_id}/properties/{property_id}"),
@@ -2215,12 +2278,21 @@ func (c *Client) sendV1PagesPageIDPropertiesPropertyIDGet(ctx context.Context, p
 // Create a page with content.
 //
 // POST /v1/pages/
-func (c *Client) V1PagesPost(ctx context.Context, request *V1PagesPostReqWithContentType, params V1PagesPostParams) (*V1PagesPostOKHeaders, error) {
+func (c *Client) V1PagesPost(ctx context.Context, request *CreatePageBodyParameters, params V1PagesPostParams) (*CreatePageResponseHeaders, error) {
 	res, err := c.sendV1PagesPost(ctx, request, params)
 	return res, err
 }
 
-func (c *Client) sendV1PagesPost(ctx context.Context, request *V1PagesPostReqWithContentType, params V1PagesPostParams) (res *V1PagesPostOKHeaders, err error) {
+func (c *Client) sendV1PagesPost(ctx context.Context, request *CreatePageBodyParameters, params V1PagesPostParams) (res *CreatePageResponseHeaders, err error) {
+	// Validate request before sending.
+	if err := func() error {
+		if err := request.Validate(); err != nil {
+			return err
+		}
+		return nil
+	}(); err != nil {
+		return res, errors.Wrap(err, "validate")
+	}
 	otelAttrs := []attribute.KeyValue{
 		semconv.HTTPRequestMethodKey.String("POST"),
 		semconv.URLTemplateKey.String("/v1/pages/"),
@@ -2341,12 +2413,21 @@ func (c *Client) sendV1PagesPost(ctx context.Context, request *V1PagesPostReqWit
 // Search.
 //
 // POST /v1/search
-func (c *Client) V1SearchPost(ctx context.Context, request *V1SearchPostReqWithContentType, params V1SearchPostParams) (*V1SearchPostOKHeaders, error) {
+func (c *Client) V1SearchPost(ctx context.Context, request *SearchBodyParameters, params V1SearchPostParams) (*SearchResponseHeaders, error) {
 	res, err := c.sendV1SearchPost(ctx, request, params)
 	return res, err
 }
 
-func (c *Client) sendV1SearchPost(ctx context.Context, request *V1SearchPostReqWithContentType, params V1SearchPostParams) (res *V1SearchPostOKHeaders, err error) {
+func (c *Client) sendV1SearchPost(ctx context.Context, request *SearchBodyParameters, params V1SearchPostParams) (res *SearchResponseHeaders, err error) {
+	// Validate request before sending.
+	if err := func() error {
+		if err := request.Validate(); err != nil {
+			return err
+		}
+		return nil
+	}(); err != nil {
+		return res, errors.Wrap(err, "validate")
+	}
 	otelAttrs := []attribute.KeyValue{
 		semconv.HTTPRequestMethodKey.String("POST"),
 		semconv.URLTemplateKey.String("/v1/search"),
@@ -2467,12 +2548,12 @@ func (c *Client) sendV1SearchPost(ctx context.Context, request *V1SearchPostReqW
 // Returns a paginated list of user objects for a workspace.
 //
 // GET /v1/users
-func (c *Client) V1UsersGet(ctx context.Context, params V1UsersGetParams) (*V1UsersGetOKHeaders, error) {
+func (c *Client) V1UsersGet(ctx context.Context, params V1UsersGetParams) (*ListUsersResponseHeaders, error) {
 	res, err := c.sendV1UsersGet(ctx, params)
 	return res, err
 }
 
-func (c *Client) sendV1UsersGet(ctx context.Context, params V1UsersGetParams) (res *V1UsersGetOKHeaders, err error) {
+func (c *Client) sendV1UsersGet(ctx context.Context, params V1UsersGetParams) (res *ListUsersResponseHeaders, err error) {
 	otelAttrs := []attribute.KeyValue{
 		semconv.HTTPRequestMethodKey.String("GET"),
 		semconv.URLTemplateKey.String("/v1/users"),
@@ -2590,12 +2671,12 @@ func (c *Client) sendV1UsersGet(ctx context.Context, params V1UsersGetParams) (r
 // Retrieve a user object using the ID specified in the request path.
 //
 // GET /v1/users/{id}
-func (c *Client) V1UsersIDGet(ctx context.Context, params V1UsersIDGetParams) (*V1UsersIDGetOKHeaders, error) {
+func (c *Client) V1UsersIDGet(ctx context.Context, params V1UsersIDGetParams) (*UserObjectResponseHeaders, error) {
 	res, err := c.sendV1UsersIDGet(ctx, params)
 	return res, err
 }
 
-func (c *Client) sendV1UsersIDGet(ctx context.Context, params V1UsersIDGetParams) (res *V1UsersIDGetOKHeaders, err error) {
+func (c *Client) sendV1UsersIDGet(ctx context.Context, params V1UsersIDGetParams) (res *UserObjectResponseHeaders, err error) {
 	otelAttrs := []attribute.KeyValue{
 		semconv.HTTPRequestMethodKey.String("GET"),
 		semconv.URLTemplateKey.String("/v1/users/{id}"),
@@ -2731,12 +2812,12 @@ func (c *Client) sendV1UsersIDGet(ctx context.Context, params V1UsersIDGetParams
 // Retrieve your token’s bot user.
 //
 // GET /v1/users/me
-func (c *Client) V1UsersMeGet(ctx context.Context, params V1UsersMeGetParams) (*V1UsersMeGetOKHeaders, error) {
+func (c *Client) V1UsersMeGet(ctx context.Context, params V1UsersMeGetParams) (*UserObjectResponseHeaders, error) {
 	res, err := c.sendV1UsersMeGet(ctx, params)
 	return res, err
 }
 
-func (c *Client) sendV1UsersMeGet(ctx context.Context, params V1UsersMeGetParams) (res *V1UsersMeGetOKHeaders, err error) {
+func (c *Client) sendV1UsersMeGet(ctx context.Context, params V1UsersMeGetParams) (res *UserObjectResponseHeaders, err error) {
 	otelAttrs := []attribute.KeyValue{
 		semconv.HTTPRequestMethodKey.String("GET"),
 		semconv.URLTemplateKey.String("/v1/users/me"),
