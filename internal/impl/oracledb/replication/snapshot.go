@@ -142,11 +142,11 @@ func (s *Snapshot) snapshotTable(ctx context.Context, table UserTable, maxBatchS
 		}()
 
 		var tablePks []string
-		tablePks, err = getTablePrimaryKeys(ctx, tx, table)
-		if err != nil {
+		if tablePks, err = getTablePrimaryKeys(ctx, tx, table); err != nil {
 			return err
 		}
-		l.Debugf("Primary keys for table '%s': %v", table, tablePks)
+
+		l.Debugf("Found primary keys for table '%s': %v", table, tablePks)
 		lastSeenPksValues := map[string]any{}
 		for _, pk := range tablePks {
 			lastSeenPksValues[pk] = nil
@@ -154,74 +154,17 @@ func (s *Snapshot) snapshotTable(ctx context.Context, table UserTable, maxBatchS
 
 		var numRowsProcessed int
 		for {
-			var batchRows *sql.Rows
-			if numRowsProcessed == 0 {
-				batchRows, err = querySnapshotTable(ctx, tx, table, tablePks, nil, maxBatchSize)
-			} else {
-				batchRows, err = querySnapshotTable(ctx, tx, table, tablePks, lastSeenPksValues, maxBatchSize)
+			var pksForQuery map[string]any
+			if numRowsProcessed > 0 {
+				pksForQuery = lastSeenPksValues
 			}
+			batchCount, err := s.processBatch(ctx, tx, table, tablePks, pksForQuery, lastSeenPksValues, maxBatchSize, tableName)
 			if err != nil {
-				return fmt.Errorf("execute snapshot table query: %w", err)
-			}
-			var types []*sql.ColumnType
-			if types, err = batchRows.ColumnTypes(); err != nil {
-				batchRows.Close()
-				return fmt.Errorf("fetch column types: %w", err)
+				return fmt.Errorf("prcessing snapshot batch: %w", err)
 			}
 
-			values, mappers := prepSnapshotScannerAndMappers(types)
-
-			var columns []string
-			if columns, err = batchRows.Columns(); err != nil {
-				batchRows.Close()
-				return fmt.Errorf("fetch columns: %w", err)
-			}
-
-			var batchRowsCount int
-			for batchRows.Next() {
-				numRowsProcessed++
-				batchRowsCount++
-
-				if err := batchRows.Scan(values...); err != nil {
-					batchRows.Close()
-					return err
-				}
-
-				var (
-					v   any
-					err error
-				)
-				row := map[string]any{}
-				for idx, value := range values {
-					if v, err = mappers[idx](value); err != nil {
-						batchRows.Close()
-						return err
-					}
-					row[columns[idx]] = v
-					if _, ok := lastSeenPksValues[columns[idx]]; ok {
-						lastSeenPksValues[columns[idx]] = value
-					}
-				}
-
-				m := MessageEvent{
-					Table:     table.Name,
-					Schema:    table.Schema,
-					Data:      row,
-					Operation: MessageOperationRead.String(),
-					SCN:       0,
-				}
-				if err = s.publisher.Publish(ctx, &m); err != nil {
-					batchRows.Close()
-					return fmt.Errorf("handling snapshot table row: %w", err)
-				}
-			}
-
-			batchRows.Close()
-			if err = batchRows.Err(); err != nil {
-				return fmt.Errorf("iterating snapshot table row: %w", err)
-			}
-			s.snapshotRowsTotalMetric.Incr(int64(batchRowsCount), tableName)
-			if batchRowsCount < maxBatchSize {
+			numRowsProcessed += batchCount
+			if batchCount < maxBatchSize {
 				break
 			}
 		}
@@ -234,6 +177,74 @@ func (s *Snapshot) snapshotTable(ctx context.Context, table UserTable, maxBatchS
 
 		return nil
 	}
+}
+
+// processBatch queries and processes a single page of rows from a snapshot table.
+// pksForQuery is passed to querySnapshotTable for cursor-based pagination (nil on first batch).
+// lastSeenPksValues is mutated in place with the PK values from the last row of the batch,
+// so the caller can pass it as pksForQuery on the next iteration.
+func (s *Snapshot) processBatch(ctx context.Context, tx *sql.Tx, table UserTable, tablePks []string, pksForQuery map[string]any, lastSeenPksValues map[string]any, maxBatchSize int, tableName string) (batchCount int, err error) {
+	batchRows, err := querySnapshotTable(ctx, tx, table, tablePks, pksForQuery, maxBatchSize)
+	if err != nil {
+		return 0, fmt.Errorf("execute snapshot table query: %w", err)
+	}
+	defer func() {
+		if closeErr := batchRows.Close(); closeErr != nil && err == nil {
+			err = fmt.Errorf("closing snapshot rows: %w", closeErr)
+		}
+	}()
+
+	types, err := batchRows.ColumnTypes()
+	if err != nil {
+		return 0, fmt.Errorf("fetch column types: %w", err)
+	}
+
+	values, mappers := prepSnapshotScannerAndMappers(types)
+
+	columns, err := batchRows.Columns()
+	if err != nil {
+		return 0, fmt.Errorf("fetch columns: %w", err)
+	}
+
+	for batchRows.Next() {
+		batchCount++
+
+		if err := batchRows.Scan(values...); err != nil {
+			return 0, err
+		}
+
+		var (
+			v      any
+			mapErr error
+		)
+		row := map[string]any{}
+		for idx, value := range values {
+			if v, mapErr = mappers[idx](value); mapErr != nil {
+				return 0, mapErr
+			}
+			row[columns[idx]] = v
+			if _, ok := lastSeenPksValues[columns[idx]]; ok {
+				lastSeenPksValues[columns[idx]] = value
+			}
+		}
+
+		m := MessageEvent{
+			Table:     table.Name,
+			Schema:    table.Schema,
+			Data:      row,
+			Operation: MessageOperationRead.String(),
+			SCN:       0,
+		}
+		if err = s.publisher.Publish(ctx, &m); err != nil {
+			return 0, fmt.Errorf("handling snapshot table row: %w", err)
+		}
+	}
+
+	if err = batchRows.Err(); err != nil {
+		return 0, fmt.Errorf("iterating snapshot table row: %w", err)
+	}
+	s.snapshotRowsTotalMetric.Incr(int64(batchCount), tableName)
+	return batchCount, nil
 }
 
 func getTablePrimaryKeys(ctx context.Context, tx *sql.Tx, table UserTable) ([]string, error) {
@@ -274,14 +285,7 @@ func getTablePrimaryKeys(ctx context.Context, tx *sql.Tx, table UserTable) ([]st
 	return pks, nil
 }
 
-func querySnapshotTable(
-	ctx context.Context,
-	tx *sql.Tx,
-	table UserTable,
-	pk []string,
-	lastSeenPkVal map[string]any,
-	limit int,
-) (*sql.Rows, error) {
+func querySnapshotTable(ctx context.Context, tx *sql.Tx, table UserTable, pk []string, lastSeenPkVal map[string]any, limit int) (*sql.Rows, error) {
 	// Oracle uses FETCH FIRST instead of TOP, and it comes at the end
 	snapshotQueryParts := []string{
 		fmt.Sprintf(`SELECT * FROM "%s"."%s"`, table.Schema, table.Name),
