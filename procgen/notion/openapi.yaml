@@ -13359,6 +13359,899 @@ components:
       required:
         - type
         - string
+    UpdateDatabaseRequest:
+      type: object
+      properties:
+        parent:
+          description: The parent page or workspace to move the database to. If not provided, the database // will not be moved.
+          type: object
+          properties:
+            type:
+              type: string
+              enum:
+                - page_id
+                - workspace
+              description: Always `page_id`
+            page_id:
+              type: string
+            workspace:
+              type: boolean
+              enum:
+                - true
+              description: Always `true`
+          required:
+            - type
+        title:
+          type: array
+          items:
+            $ref: "#/components/schemas/RichTextItemRequest"
+          description: The updated title of the database, if any. If not provided, the title will not be // updated.
+        description:
+          type: array
+          items:
+            $ref: "#/components/schemas/RichTextItemRequest"
+          description: The updated description of the database, if any. If not provided, the description will // not be updated.
+        is_inline:
+          type: boolean
+          description: Whether the database should be displayed inline in the parent page. If not provided, // the inline status
+            will not be updated.
+        icon:
+          $ref: "#/components/schemas/PageIconRequest"
+          description: The updated icon for the database, if any. If not provided, the icon will not be // updated.
+        cover:
+          $ref: "#/components/schemas/PageCoverRequest"
+          description: The updated cover image for the database, if any. If not provided, the cover will not // be updated.
+        in_trash:
+          type: boolean
+          description: Whether the database should be moved to or from the trash. If not provided, the trash // status will not be
+            updated.
+        is_locked:
+          type: boolean
+          description: Whether the database should be locked from editing in the Notion app UI. If not // provided, the locked
+            state will not be updated.
+    QueryDataSourceRequest:
+      type: object
+      properties:
+        sorts:
+          type: array
+          items:
+            type: object
+            properties:
+              property:
+                type: string
+              direction:
+                type: string
+                enum:
+                  - ascending
+                  - descending
+              timestamp:
+                type: string
+                enum:
+                  - created_time
+                  - last_edited_time
+            required:
+              - direction
+        filter:
+          type: object
+          properties:
+            or:
+              $ref: "#/components/schemas/GroupFilterOperatorArray"
+            and:
+              $ref: "#/components/schemas/GroupFilterOperatorArray"
+            title:
+              $ref: "#/components/schemas/TextPropertyFilter"
+            property:
+              type: string
+            type:
+              type: string
+              enum:
+                - title
+                - rich_text
+                - number
+                - checkbox
+                - select
+                - multi_select
+                - status
+                - date
+                - people
+                - files
+                - url
+                - email
+                - phone_number
+                - relation
+                - created_by
+                - created_time
+                - last_edited_by
+                - last_edited_time
+                - formula
+                - unique_id
+                - rollup
+                - verification
+            rich_text:
+              $ref: "#/components/schemas/TextPropertyFilter"
+            number:
+              $ref: "#/components/schemas/NumberPropertyFilter"
+            checkbox:
+              $ref: "#/components/schemas/CheckboxPropertyFilter"
+            select:
+              $ref: "#/components/schemas/SelectPropertyFilter"
+            multi_select:
+              $ref: "#/components/schemas/MultiSelectPropertyFilter"
+            status:
+              $ref: "#/components/schemas/StatusPropertyFilter"
+            date:
+              $ref: "#/components/schemas/DatePropertyFilter"
+            people:
+              $ref: "#/components/schemas/PeoplePropertyFilter"
+            files:
+              $ref: "#/components/schemas/ExistencePropertyFilter"
+            url:
+              $ref: "#/components/schemas/TextPropertyFilter"
+            email:
+              $ref: "#/components/schemas/TextPropertyFilter"
+            phone_number:
+              $ref: "#/components/schemas/TextPropertyFilter"
+            relation:
+              $ref: "#/components/schemas/RelationPropertyFilter"
+            created_by:
+              $ref: "#/components/schemas/PeoplePropertyFilter"
+            created_time:
+              $ref: "#/components/schemas/DatePropertyFilter"
+            last_edited_by:
+              $ref: "#/components/schemas/PeoplePropertyFilter"
+            last_edited_time:
+              $ref: "#/components/schemas/DatePropertyFilter"
+            formula:
+              $ref: "#/components/schemas/FormulaPropertyFilter"
+            unique_id:
+              $ref: "#/components/schemas/NumberPropertyFilter"
+            rollup:
+              $ref: "#/components/schemas/RollupPropertyFilter"
+            verification:
+              $ref: "#/components/schemas/VerificationPropertyStatusFilter"
+            timestamp:
+              type: string
+              enum:
+                - created_time
+                - last_edited_time
+        start_cursor:
+          type: string
+        page_size:
+          type: number
+        archived:
+          type: boolean
+        in_trash:
+          type: boolean
+        result_type:
+          type: string
+          enum:
+            - page
+            - data_source
+          description: Optionally filter the results to only include pages or data sources. Regular, non-wiki // databases only
+            support page children. The default behavior is no result type // filtering, in other words, returning both
+            pages and data sources for wikis.
+    CreateDatabaseRequest:
+      type: object
+      properties:
+        parent:
+          description: The parent page or workspace where the database will be created.
+          type: object
+          properties:
+            type:
+              type: string
+              enum:
+                - page_id
+                - workspace
+              description: Always `page_id`
+            page_id:
+              type: string
+            workspace:
+              type: boolean
+              enum:
+                - true
+              description: Always `true`
+          required:
+            - type
+        title:
+          type: array
+          items:
+            $ref: "#/components/schemas/RichTextItemRequest"
+          description: The title of the database.
+        description:
+          type: array
+          items:
+            $ref: "#/components/schemas/RichTextItemRequest"
+          description: The description of the database.
+        is_inline:
+          type: boolean
+          description: Whether the database should be displayed inline in the parent page. Defaults to false.
+        initial_data_source:
+          $ref: "#/components/schemas/InitialDataSourceRequest"
+          description: Initial data source configuration for the database.
+        icon:
+          $ref: "#/components/schemas/PageIconRequest"
+          description: The icon for the database.
+        cover:
+          $ref: "#/components/schemas/PageCoverRequest"
+          description: The cover image for the database.
+      required:
+        - parent
+    CreatePageRequest:
+      type: object
+      properties:
+        parent:
+          type: object
+          properties:
+            page_id:
+              type: string
+            type:
+              type: string
+              enum:
+                - page_id
+                - database_id
+                - data_source_id
+                - workspace
+            database_id:
+              type: string
+            data_source_id:
+              type: string
+            workspace:
+              type: boolean
+              enum:
+                - true
+        properties:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              title:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RichTextItemRequest"
+              type:
+                type: string
+                enum:
+                  - title
+                  - rich_text
+                  - number
+                  - url
+                  - select
+                  - multi_select
+                  - people
+                  - email
+                  - phone_number
+                  - date
+                  - checkbox
+                  - relation
+                  - files
+                  - status
+                  - place
+              rich_text:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RichTextItemRequest"
+              number:
+                type: number
+                nullable: true
+              url:
+                type: string
+                nullable: true
+              select:
+                nullable: true
+                type: object
+                properties:
+                  id:
+                    type: string
+                  name:
+                    type: string
+                  color:
+                    $ref: "#/components/schemas/SelectColor"
+                  description:
+                    type: string
+                    nullable: true
+              multi_select:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                    name:
+                      type: string
+                    color:
+                      $ref: "#/components/schemas/SelectColor"
+                    description:
+                      type: string
+                      nullable: true
+              people:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      description: The ID of the user.
+                    object:
+                      type: string
+                      enum:
+                        - user
+                        - group
+                      description: The user object type name.
+                    name:
+                      type: string
+                      nullable: true
+                  required:
+                    - id
+              email:
+                type: string
+                nullable: true
+              phone_number:
+                type: string
+                nullable: true
+              date:
+                $ref: "#/components/schemas/DateRequest"
+                nullable: true
+              checkbox:
+                type: boolean
+              relation:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RelationItemPropertyValueResponse"
+              files:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    file:
+                      $ref: "#/components/schemas/InternalFileRequest"
+                    name:
+                      type: string
+                    type:
+                      type: string
+                      enum:
+                        - file
+                        - external
+                        - file_upload
+                    external:
+                      $ref: "#/components/schemas/ExternalFileRequest"
+                    file_upload:
+                      $ref: "#/components/schemas/FileUploadIdRequest"
+              status:
+                nullable: true
+                type: object
+                properties:
+                  id:
+                    type: string
+                  name:
+                    type: string
+                  color:
+                    $ref: "#/components/schemas/SelectColor"
+                  description:
+                    type: string
+                    nullable: true
+              place:
+                type: object
+                properties:
+                  lat:
+                    type: number
+                  lon:
+                    type: number
+                  name:
+                    type: string
+                    nullable: true
+                  address:
+                    type: string
+                    nullable: true
+                  aws_place_id:
+                    type: string
+                    nullable: true
+                  google_place_id:
+                    type: string
+                    nullable: true
+                required:
+                  - lat
+                  - lon
+                nullable: true
+        icon:
+          $ref: "#/components/schemas/PageIconRequest"
+          nullable: true
+        cover:
+          $ref: "#/components/schemas/PageCoverRequest"
+          nullable: true
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/BlockObjectRequest"
+        children:
+          type: array
+          items:
+            $ref: "#/components/schemas/BlockObjectRequest"
+        markdown:
+          type: string
+          description: Page content as Notion-flavored Markdown. Mutually exclusive with content/children.
+        template:
+          type: object
+          properties:
+            type:
+              type: string
+              enum:
+                - none
+                - default
+                - template_id
+            template_id:
+              type: string
+          required:
+            - type
+        position:
+          $ref: "#/components/schemas/PagePositionSchema"
+    UpdatePageRequest:
+      type: object
+      properties:
+        properties:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              title:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RichTextItemRequest"
+              type:
+                type: string
+                enum:
+                  - title
+                  - rich_text
+                  - number
+                  - url
+                  - select
+                  - multi_select
+                  - people
+                  - email
+                  - phone_number
+                  - date
+                  - checkbox
+                  - relation
+                  - files
+                  - status
+                  - place
+              rich_text:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RichTextItemRequest"
+              number:
+                type: number
+                nullable: true
+              url:
+                type: string
+                nullable: true
+              select:
+                nullable: true
+                type: object
+                properties:
+                  id:
+                    type: string
+                  name:
+                    type: string
+                  color:
+                    $ref: "#/components/schemas/SelectColor"
+                  description:
+                    type: string
+                    nullable: true
+              multi_select:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                    name:
+                      type: string
+                    color:
+                      $ref: "#/components/schemas/SelectColor"
+                    description:
+                      type: string
+                      nullable: true
+              people:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      description: The ID of the user.
+                    object:
+                      type: string
+                      enum:
+                        - user
+                        - group
+                      description: The user object type name.
+                    name:
+                      type: string
+                      nullable: true
+                  required:
+                    - id
+              email:
+                type: string
+                nullable: true
+              phone_number:
+                type: string
+                nullable: true
+              date:
+                $ref: "#/components/schemas/DateRequest"
+                nullable: true
+              checkbox:
+                type: boolean
+              relation:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RelationItemPropertyValueResponse"
+              files:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    file:
+                      $ref: "#/components/schemas/InternalFileRequest"
+                    name:
+                      type: string
+                    type:
+                      type: string
+                      enum:
+                        - file
+                        - external
+                        - file_upload
+                    external:
+                      $ref: "#/components/schemas/ExternalFileRequest"
+                    file_upload:
+                      $ref: "#/components/schemas/FileUploadIdRequest"
+              status:
+                nullable: true
+                type: object
+                properties:
+                  id:
+                    type: string
+                  name:
+                    type: string
+                  color:
+                    $ref: "#/components/schemas/SelectColor"
+                  description:
+                    type: string
+                    nullable: true
+              place:
+                type: object
+                properties:
+                  lat:
+                    type: number
+                  lon:
+                    type: number
+                  name:
+                    type: string
+                    nullable: true
+                  address:
+                    type: string
+                    nullable: true
+                  aws_place_id:
+                    type: string
+                    nullable: true
+                  google_place_id:
+                    type: string
+                    nullable: true
+                required:
+                  - lat
+                  - lon
+                nullable: true
+        icon:
+          $ref: "#/components/schemas/PageIconRequest"
+          nullable: true
+        cover:
+          $ref: "#/components/schemas/PageCoverRequest"
+          nullable: true
+        is_locked:
+          type: boolean
+          description: Whether the page should be locked from editing in the Notion app UI. If not provided, // the locked state
+            will not be updated.
+        template:
+          type: object
+          properties:
+            type:
+              type: string
+              enum:
+                - default
+                - template_id
+            template_id:
+              type: string
+          required:
+            - type
+        erase_content:
+          type: boolean
+          description: Whether to erase all existing content from the page. When used with a template, the // template content
+            replaces the existing content. When used without a template, simply // clears the page content.
+        archived:
+          type: boolean
+        in_trash:
+          type: boolean
+    AppendBlockChildrenRequest:
+      type: object
+      properties:
+        children:
+          type: array
+          items:
+            $ref: "#/components/schemas/BlockObjectRequest"
+        after:
+          type: string
+        position:
+          $ref: "#/components/schemas/ContentPositionSchema"
+      required:
+        - children
+    UpdateBlockRequest:
+      type: object
+      properties:
+        embed:
+          $ref: "#/components/schemas/UpdateMediaContentWithUrlAndCaptionRequest"
+        type:
+          type: string
+          enum:
+            - embed
+            - bookmark
+            - image
+            - video
+            - pdf
+            - file
+            - audio
+            - code
+            - equation
+            - divider
+            - breadcrumb
+            - table_of_contents
+            - link_to_page
+            - table_row
+            - heading_1
+            - heading_2
+            - heading_3
+            - paragraph
+            - bulleted_list_item
+            - numbered_list_item
+            - quote
+            - to_do
+            - toggle
+            - template
+            - callout
+            - synced_block
+            - table
+            - column
+        archived:
+          type: boolean
+        in_trash:
+          type: boolean
+        bookmark:
+          $ref: "#/components/schemas/UpdateMediaContentWithUrlAndCaptionRequest"
+        image:
+          $ref: "#/components/schemas/UpdateMediaContentWithFileAndCaptionRequest"
+        video:
+          $ref: "#/components/schemas/UpdateMediaContentWithFileAndCaptionRequest"
+        pdf:
+          $ref: "#/components/schemas/UpdateMediaContentWithFileAndCaptionRequest"
+        file:
+          $ref: "#/components/schemas/UpdateMediaContentWithFileNameAndCaptionRequest"
+        audio:
+          $ref: "#/components/schemas/UpdateMediaContentWithFileAndCaptionRequest"
+        code:
+          type: object
+          properties:
+            rich_text:
+              type: array
+              items:
+                $ref: "#/components/schemas/RichTextItemRequest"
+            language:
+              $ref: "#/components/schemas/LanguageRequest"
+            caption:
+              type: array
+              items:
+                $ref: "#/components/schemas/RichTextItemRequest"
+        equation:
+          $ref: "#/components/schemas/ContentWithExpressionRequest"
+        divider:
+          type: object
+        breadcrumb:
+          type: object
+        table_of_contents:
+          type: object
+          properties:
+            color:
+              $ref: "#/components/schemas/ApiColor"
+        link_to_page:
+          type: object
+          properties:
+            page_id:
+              type: string
+            type:
+              type: string
+              enum:
+                - page_id
+                - database_id
+                - comment_id
+            database_id:
+              type: string
+            comment_id:
+              type: string
+        table_row:
+          $ref: "#/components/schemas/ContentWithTableRowRequest"
+        heading_1:
+          $ref: "#/components/schemas/HeaderContentWithRichTextAndColorRequest"
+        heading_2:
+          $ref: "#/components/schemas/HeaderContentWithRichTextAndColorRequest"
+        heading_3:
+          $ref: "#/components/schemas/HeaderContentWithRichTextAndColorRequest"
+        paragraph:
+          $ref: "#/components/schemas/ContentWithRichTextAndColorRequest"
+        bulleted_list_item:
+          $ref: "#/components/schemas/ContentWithRichTextAndColorRequest"
+        numbered_list_item:
+          $ref: "#/components/schemas/ContentWithRichTextAndColorRequest"
+        quote:
+          $ref: "#/components/schemas/ContentWithRichTextAndColorRequest"
+        to_do:
+          type: object
+          properties:
+            rich_text:
+              type: array
+              items:
+                $ref: "#/components/schemas/RichTextItemRequest"
+            checked:
+              type: boolean
+            color:
+              $ref: "#/components/schemas/ApiColor"
+        toggle:
+          $ref: "#/components/schemas/ContentWithRichTextAndColorRequest"
+        template:
+          $ref: "#/components/schemas/ContentWithRichTextRequest"
+        callout:
+          type: object
+          properties:
+            rich_text:
+              type: array
+              items:
+                $ref: "#/components/schemas/RichTextItemRequest"
+            icon:
+              $ref: "#/components/schemas/PageIconRequest"
+            color:
+              $ref: "#/components/schemas/ApiColor"
+        synced_block:
+          type: object
+          properties:
+            synced_from:
+              type: object
+              properties:
+                block_id:
+                  type: string
+                type:
+                  type: string
+                  enum:
+                    - block_id
+              required:
+                - block_id
+              nullable: true
+          required:
+            - synced_from
+        table:
+          type: object
+          properties:
+            has_column_header:
+              type: boolean
+            has_row_header:
+              type: boolean
+        column:
+          type: object
+          properties:
+            width_ratio:
+              type: number
+              description: Ratio between 0 and 1 of the width of this column relative to all columns in the list. // If not provided,
+                uses an equal width.
+    SearchRequest:
+      type: object
+      properties:
+        sort:
+          type: object
+          properties:
+            timestamp:
+              type: string
+              enum:
+                - last_edited_time
+            direction:
+              type: string
+              enum:
+                - ascending
+                - descending
+          required:
+            - timestamp
+            - direction
+        query:
+          type: string
+        start_cursor:
+          type: string
+        page_size:
+          type: number
+        filter:
+          type: object
+          properties:
+            property:
+              type: string
+              enum:
+                - object
+            value:
+              type: string
+              enum:
+                - page
+                - data_source
+          required:
+            - property
+            - value
+    CreateCommentRequest:
+      type: object
+      properties:
+        rich_text:
+          type: array
+          items:
+            $ref: "#/components/schemas/RichTextItemRequest"
+          description: An array of rich text objects that represent the content of the comment.
+        attachments:
+          type: array
+          items:
+            type: object
+            properties:
+              file_upload_id:
+                type: string
+                description: ID of a FileUpload object that has the status `uploaded`.
+              type:
+                type: string
+                enum:
+                  - file_upload
+                description: Always `file_upload`
+            required:
+              - file_upload_id
+          description: An array of files to attach to the comment. Maximum of 3 allowed.
+        display_name:
+          description: Display name for the comment.
+          type: object
+          properties:
+            type:
+              type: string
+              enum:
+                - integration
+                - user
+                - custom
+              description: Always `integration`
+            custom:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: The custom display name to use
+              required:
+                - name
+          required:
+            - type
+        parent:
+          description: The parent of the comment. This can be a page or a block.
+          type: object
+          properties:
+            page_id:
+              type: string
+              description: The ID of the parent page (with or without dashes), for example, // 195de9221179449fab8075a27c979105
+            type:
+              type: string
+              enum:
+                - page_id
+                - block_id
+              description: Always `page_id`
+            block_id:
+              type: string
+              description: The ID of the parent block (with or without dashes), for example, // 195de9221179449fab8075a27c979105
+        discussion_id:
+          type: string
+          description: The ID of the discussion to comment on.
+      required:
+        - rich_text
 security:
   - bearerAuth: []
 tags:
@@ -14166,7 +15059,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/UpdateDatabaseBodyParameters"
+              $ref: "#/components/schemas/UpdateDatabaseRequest"
       parameters:
         - name: Notion-Version
           in: header
@@ -14352,7 +15245,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/QueryDataSourceBodyParameters"
+              $ref: "#/components/schemas/QueryDataSourceRequest"
       parameters:
         - name: Authorization
           in: header
@@ -14548,7 +15441,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreateDatabaseBodyParameters"
+              $ref: "#/components/schemas/CreateDatabaseRequest"
       parameters:
         - name: Content-Type
           in: header
@@ -14733,7 +15626,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreatePageBodyParameters"
+              $ref: "#/components/schemas/CreatePageRequest"
       parameters:
         - name: Authorization
           in: header
@@ -15104,7 +15997,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/UpdatePageBodyParameters"
+              $ref: "#/components/schemas/UpdatePageRequest"
       parameters:
         - name: Notion-Version
           in: header
@@ -15652,7 +16545,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/AppendBlockChildrenBodyParameters"
+              $ref: "#/components/schemas/AppendBlockChildrenRequest"
       parameters:
         - name: Authorization
           in: header
@@ -15846,7 +16739,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/UpdateBlockBodyParameters"
+              $ref: "#/components/schemas/UpdateBlockRequest"
       parameters:
         - name: Notion-Version
           in: header
@@ -16392,7 +17285,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/SearchBodyParameters"
+              $ref: "#/components/schemas/SearchRequest"
       parameters:
         - name: Content-Type
           in: header
@@ -16711,7 +17604,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreateCommentBodyParameters"
+              $ref: "#/components/schemas/CreateCommentRequest"
       parameters:
         - name: Content-Type
           in: header

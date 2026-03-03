@@ -384,40 +384,40 @@ func (s *ApiTranscriptionStatus) UnmarshalText(data []byte) error {
 	}
 }
 
-// Ref: #/components/schemas/AppendBlockChildrenBodyParameters
-type AppendBlockChildrenBodyParameters struct {
+// Ref: #/components/schemas/AppendBlockChildrenRequest
+type AppendBlockChildrenRequest struct {
 	Children []BlockObjectRequest     `json:"children"`
 	After    OptString                `json:"after"`
 	Position OptContentPositionSchema `json:"position"`
 }
 
 // GetChildren returns the value of Children.
-func (s *AppendBlockChildrenBodyParameters) GetChildren() []BlockObjectRequest {
+func (s *AppendBlockChildrenRequest) GetChildren() []BlockObjectRequest {
 	return s.Children
 }
 
 // GetAfter returns the value of After.
-func (s *AppendBlockChildrenBodyParameters) GetAfter() OptString {
+func (s *AppendBlockChildrenRequest) GetAfter() OptString {
 	return s.After
 }
 
 // GetPosition returns the value of Position.
-func (s *AppendBlockChildrenBodyParameters) GetPosition() OptContentPositionSchema {
+func (s *AppendBlockChildrenRequest) GetPosition() OptContentPositionSchema {
 	return s.Position
 }
 
 // SetChildren sets the value of Children.
-func (s *AppendBlockChildrenBodyParameters) SetChildren(val []BlockObjectRequest) {
+func (s *AppendBlockChildrenRequest) SetChildren(val []BlockObjectRequest) {
 	s.Children = val
 }
 
 // SetAfter sets the value of After.
-func (s *AppendBlockChildrenBodyParameters) SetAfter(val OptString) {
+func (s *AppendBlockChildrenRequest) SetAfter(val OptString) {
 	s.After = val
 }
 
 // SetPosition sets the value of Position.
-func (s *AppendBlockChildrenBodyParameters) SetPosition(val OptContentPositionSchema) {
+func (s *AppendBlockChildrenRequest) SetPosition(val OptContentPositionSchema) {
 	s.Position = val
 }
 
@@ -5923,115 +5923,115 @@ func (s *ContentWithTableRowResponse) SetCells(val [][]RichTextItemResponse) {
 	s.Cells = val
 }
 
-// Ref: #/components/schemas/CreateCommentBodyParameters
-type CreateCommentBodyParameters struct {
+// Ref: #/components/schemas/CreateCommentRequest
+type CreateCommentRequest struct {
 	// An array of rich text objects that represent the content of the comment.
 	RichText []RichTextItemRequest `json:"rich_text"`
 	// An array of files to attach to the comment. Maximum of 3 allowed.
-	Attachments []CreateCommentBodyParametersAttachmentsItem `json:"attachments"`
+	Attachments []CreateCommentRequestAttachmentsItem `json:"attachments"`
 	// Display name for the comment.
-	DisplayName OptCreateCommentBodyParametersDisplayName `json:"display_name"`
+	DisplayName OptCreateCommentRequestDisplayName `json:"display_name"`
 	// The parent of the comment. This can be a page or a block.
-	Parent OptCreateCommentBodyParametersParent `json:"parent"`
+	Parent OptCreateCommentRequestParent `json:"parent"`
 	// The ID of the discussion to comment on.
 	DiscussionID OptString `json:"discussion_id"`
 }
 
 // GetRichText returns the value of RichText.
-func (s *CreateCommentBodyParameters) GetRichText() []RichTextItemRequest {
+func (s *CreateCommentRequest) GetRichText() []RichTextItemRequest {
 	return s.RichText
 }
 
 // GetAttachments returns the value of Attachments.
-func (s *CreateCommentBodyParameters) GetAttachments() []CreateCommentBodyParametersAttachmentsItem {
+func (s *CreateCommentRequest) GetAttachments() []CreateCommentRequestAttachmentsItem {
 	return s.Attachments
 }
 
 // GetDisplayName returns the value of DisplayName.
-func (s *CreateCommentBodyParameters) GetDisplayName() OptCreateCommentBodyParametersDisplayName {
+func (s *CreateCommentRequest) GetDisplayName() OptCreateCommentRequestDisplayName {
 	return s.DisplayName
 }
 
 // GetParent returns the value of Parent.
-func (s *CreateCommentBodyParameters) GetParent() OptCreateCommentBodyParametersParent {
+func (s *CreateCommentRequest) GetParent() OptCreateCommentRequestParent {
 	return s.Parent
 }
 
 // GetDiscussionID returns the value of DiscussionID.
-func (s *CreateCommentBodyParameters) GetDiscussionID() OptString {
+func (s *CreateCommentRequest) GetDiscussionID() OptString {
 	return s.DiscussionID
 }
 
 // SetRichText sets the value of RichText.
-func (s *CreateCommentBodyParameters) SetRichText(val []RichTextItemRequest) {
+func (s *CreateCommentRequest) SetRichText(val []RichTextItemRequest) {
 	s.RichText = val
 }
 
 // SetAttachments sets the value of Attachments.
-func (s *CreateCommentBodyParameters) SetAttachments(val []CreateCommentBodyParametersAttachmentsItem) {
+func (s *CreateCommentRequest) SetAttachments(val []CreateCommentRequestAttachmentsItem) {
 	s.Attachments = val
 }
 
 // SetDisplayName sets the value of DisplayName.
-func (s *CreateCommentBodyParameters) SetDisplayName(val OptCreateCommentBodyParametersDisplayName) {
+func (s *CreateCommentRequest) SetDisplayName(val OptCreateCommentRequestDisplayName) {
 	s.DisplayName = val
 }
 
 // SetParent sets the value of Parent.
-func (s *CreateCommentBodyParameters) SetParent(val OptCreateCommentBodyParametersParent) {
+func (s *CreateCommentRequest) SetParent(val OptCreateCommentRequestParent) {
 	s.Parent = val
 }
 
 // SetDiscussionID sets the value of DiscussionID.
-func (s *CreateCommentBodyParameters) SetDiscussionID(val OptString) {
+func (s *CreateCommentRequest) SetDiscussionID(val OptString) {
 	s.DiscussionID = val
 }
 
-type CreateCommentBodyParametersAttachmentsItem struct {
+type CreateCommentRequestAttachmentsItem struct {
 	// ID of a FileUpload object that has the status `uploaded`.
 	FileUploadID string `json:"file_upload_id"`
 	// Always `file_upload`.
-	Type OptCreateCommentBodyParametersAttachmentsItemType `json:"type"`
+	Type OptCreateCommentRequestAttachmentsItemType `json:"type"`
 }
 
 // GetFileUploadID returns the value of FileUploadID.
-func (s *CreateCommentBodyParametersAttachmentsItem) GetFileUploadID() string {
+func (s *CreateCommentRequestAttachmentsItem) GetFileUploadID() string {
 	return s.FileUploadID
 }
 
 // GetType returns the value of Type.
-func (s *CreateCommentBodyParametersAttachmentsItem) GetType() OptCreateCommentBodyParametersAttachmentsItemType {
+func (s *CreateCommentRequestAttachmentsItem) GetType() OptCreateCommentRequestAttachmentsItemType {
 	return s.Type
 }
 
 // SetFileUploadID sets the value of FileUploadID.
-func (s *CreateCommentBodyParametersAttachmentsItem) SetFileUploadID(val string) {
+func (s *CreateCommentRequestAttachmentsItem) SetFileUploadID(val string) {
 	s.FileUploadID = val
 }
 
 // SetType sets the value of Type.
-func (s *CreateCommentBodyParametersAttachmentsItem) SetType(val OptCreateCommentBodyParametersAttachmentsItemType) {
+func (s *CreateCommentRequestAttachmentsItem) SetType(val OptCreateCommentRequestAttachmentsItemType) {
 	s.Type = val
 }
 
 // Always `file_upload`.
-type CreateCommentBodyParametersAttachmentsItemType string
+type CreateCommentRequestAttachmentsItemType string
 
 const (
-	CreateCommentBodyParametersAttachmentsItemTypeFileUpload CreateCommentBodyParametersAttachmentsItemType = "file_upload"
+	CreateCommentRequestAttachmentsItemTypeFileUpload CreateCommentRequestAttachmentsItemType = "file_upload"
 )
 
-// AllValues returns all CreateCommentBodyParametersAttachmentsItemType values.
-func (CreateCommentBodyParametersAttachmentsItemType) AllValues() []CreateCommentBodyParametersAttachmentsItemType {
-	return []CreateCommentBodyParametersAttachmentsItemType{
-		CreateCommentBodyParametersAttachmentsItemTypeFileUpload,
+// AllValues returns all CreateCommentRequestAttachmentsItemType values.
+func (CreateCommentRequestAttachmentsItemType) AllValues() []CreateCommentRequestAttachmentsItemType {
+	return []CreateCommentRequestAttachmentsItemType{
+		CreateCommentRequestAttachmentsItemTypeFileUpload,
 	}
 }
 
 // MarshalText implements encoding.TextMarshaler.
-func (s CreateCommentBodyParametersAttachmentsItemType) MarshalText() ([]byte, error) {
+func (s CreateCommentRequestAttachmentsItemType) MarshalText() ([]byte, error) {
 	switch s {
-	case CreateCommentBodyParametersAttachmentsItemTypeFileUpload:
+	case CreateCommentRequestAttachmentsItemTypeFileUpload:
 		return []byte(s), nil
 	default:
 		return nil, errors.Errorf("invalid value: %q", s)
@@ -6039,10 +6039,10 @@ func (s CreateCommentBodyParametersAttachmentsItemType) MarshalText() ([]byte, e
 }
 
 // UnmarshalText implements encoding.TextUnmarshaler.
-func (s *CreateCommentBodyParametersAttachmentsItemType) UnmarshalText(data []byte) error {
-	switch CreateCommentBodyParametersAttachmentsItemType(data) {
-	case CreateCommentBodyParametersAttachmentsItemTypeFileUpload:
-		*s = CreateCommentBodyParametersAttachmentsItemTypeFileUpload
+func (s *CreateCommentRequestAttachmentsItemType) UnmarshalText(data []byte) error {
+	switch CreateCommentRequestAttachmentsItemType(data) {
+	case CreateCommentRequestAttachmentsItemTypeFileUpload:
+		*s = CreateCommentRequestAttachmentsItemTypeFileUpload
 		return nil
 	default:
 		return errors.Errorf("invalid value: %q", data)
@@ -6050,73 +6050,73 @@ func (s *CreateCommentBodyParametersAttachmentsItemType) UnmarshalText(data []by
 }
 
 // Display name for the comment.
-type CreateCommentBodyParametersDisplayName struct {
+type CreateCommentRequestDisplayName struct {
 	// Always `integration`.
-	Type   CreateCommentBodyParametersDisplayNameType      `json:"type"`
-	Custom OptCreateCommentBodyParametersDisplayNameCustom `json:"custom"`
+	Type   CreateCommentRequestDisplayNameType      `json:"type"`
+	Custom OptCreateCommentRequestDisplayNameCustom `json:"custom"`
 }
 
 // GetType returns the value of Type.
-func (s *CreateCommentBodyParametersDisplayName) GetType() CreateCommentBodyParametersDisplayNameType {
+func (s *CreateCommentRequestDisplayName) GetType() CreateCommentRequestDisplayNameType {
 	return s.Type
 }
 
 // GetCustom returns the value of Custom.
-func (s *CreateCommentBodyParametersDisplayName) GetCustom() OptCreateCommentBodyParametersDisplayNameCustom {
+func (s *CreateCommentRequestDisplayName) GetCustom() OptCreateCommentRequestDisplayNameCustom {
 	return s.Custom
 }
 
 // SetType sets the value of Type.
-func (s *CreateCommentBodyParametersDisplayName) SetType(val CreateCommentBodyParametersDisplayNameType) {
+func (s *CreateCommentRequestDisplayName) SetType(val CreateCommentRequestDisplayNameType) {
 	s.Type = val
 }
 
 // SetCustom sets the value of Custom.
-func (s *CreateCommentBodyParametersDisplayName) SetCustom(val OptCreateCommentBodyParametersDisplayNameCustom) {
+func (s *CreateCommentRequestDisplayName) SetCustom(val OptCreateCommentRequestDisplayNameCustom) {
 	s.Custom = val
 }
 
-type CreateCommentBodyParametersDisplayNameCustom struct {
+type CreateCommentRequestDisplayNameCustom struct {
 	// The custom display name to use.
 	Name string `json:"name"`
 }
 
 // GetName returns the value of Name.
-func (s *CreateCommentBodyParametersDisplayNameCustom) GetName() string {
+func (s *CreateCommentRequestDisplayNameCustom) GetName() string {
 	return s.Name
 }
 
 // SetName sets the value of Name.
-func (s *CreateCommentBodyParametersDisplayNameCustom) SetName(val string) {
+func (s *CreateCommentRequestDisplayNameCustom) SetName(val string) {
 	s.Name = val
 }
 
 // Always `integration`.
-type CreateCommentBodyParametersDisplayNameType string
+type CreateCommentRequestDisplayNameType string
 
 const (
-	CreateCommentBodyParametersDisplayNameTypeIntegration CreateCommentBodyParametersDisplayNameType = "integration"
-	CreateCommentBodyParametersDisplayNameTypeUser        CreateCommentBodyParametersDisplayNameType = "user"
-	CreateCommentBodyParametersDisplayNameTypeCustom      CreateCommentBodyParametersDisplayNameType = "custom"
+	CreateCommentRequestDisplayNameTypeIntegration CreateCommentRequestDisplayNameType = "integration"
+	CreateCommentRequestDisplayNameTypeUser        CreateCommentRequestDisplayNameType = "user"
+	CreateCommentRequestDisplayNameTypeCustom      CreateCommentRequestDisplayNameType = "custom"
 )
 
-// AllValues returns all CreateCommentBodyParametersDisplayNameType values.
-func (CreateCommentBodyParametersDisplayNameType) AllValues() []CreateCommentBodyParametersDisplayNameType {
-	return []CreateCommentBodyParametersDisplayNameType{
-		CreateCommentBodyParametersDisplayNameTypeIntegration,
-		CreateCommentBodyParametersDisplayNameTypeUser,
-		CreateCommentBodyParametersDisplayNameTypeCustom,
+// AllValues returns all CreateCommentRequestDisplayNameType values.
+func (CreateCommentRequestDisplayNameType) AllValues() []CreateCommentRequestDisplayNameType {
+	return []CreateCommentRequestDisplayNameType{
+		CreateCommentRequestDisplayNameTypeIntegration,
+		CreateCommentRequestDisplayNameTypeUser,
+		CreateCommentRequestDisplayNameTypeCustom,
 	}
 }
 
 // MarshalText implements encoding.TextMarshaler.
-func (s CreateCommentBodyParametersDisplayNameType) MarshalText() ([]byte, error) {
+func (s CreateCommentRequestDisplayNameType) MarshalText() ([]byte, error) {
 	switch s {
-	case CreateCommentBodyParametersDisplayNameTypeIntegration:
+	case CreateCommentRequestDisplayNameTypeIntegration:
 		return []byte(s), nil
-	case CreateCommentBodyParametersDisplayNameTypeUser:
+	case CreateCommentRequestDisplayNameTypeUser:
 		return []byte(s), nil
-	case CreateCommentBodyParametersDisplayNameTypeCustom:
+	case CreateCommentRequestDisplayNameTypeCustom:
 		return []byte(s), nil
 	default:
 		return nil, errors.Errorf("invalid value: %q", s)
@@ -6124,16 +6124,16 @@ func (s CreateCommentBodyParametersDisplayNameType) MarshalText() ([]byte, error
 }
 
 // UnmarshalText implements encoding.TextUnmarshaler.
-func (s *CreateCommentBodyParametersDisplayNameType) UnmarshalText(data []byte) error {
-	switch CreateCommentBodyParametersDisplayNameType(data) {
-	case CreateCommentBodyParametersDisplayNameTypeIntegration:
-		*s = CreateCommentBodyParametersDisplayNameTypeIntegration
+func (s *CreateCommentRequestDisplayNameType) UnmarshalText(data []byte) error {
+	switch CreateCommentRequestDisplayNameType(data) {
+	case CreateCommentRequestDisplayNameTypeIntegration:
+		*s = CreateCommentRequestDisplayNameTypeIntegration
 		return nil
-	case CreateCommentBodyParametersDisplayNameTypeUser:
-		*s = CreateCommentBodyParametersDisplayNameTypeUser
+	case CreateCommentRequestDisplayNameTypeUser:
+		*s = CreateCommentRequestDisplayNameTypeUser
 		return nil
-	case CreateCommentBodyParametersDisplayNameTypeCustom:
-		*s = CreateCommentBodyParametersDisplayNameTypeCustom
+	case CreateCommentRequestDisplayNameTypeCustom:
+		*s = CreateCommentRequestDisplayNameTypeCustom
 		return nil
 	default:
 		return errors.Errorf("invalid value: %q", data)
@@ -6141,69 +6141,69 @@ func (s *CreateCommentBodyParametersDisplayNameType) UnmarshalText(data []byte) 
 }
 
 // The parent of the comment. This can be a page or a block.
-type CreateCommentBodyParametersParent struct {
+type CreateCommentRequestParent struct {
 	// The ID of the parent page (with or without dashes), for example, //
 	// 195de9221179449fab8075a27c979105.
 	PageID OptString `json:"page_id"`
 	// Always `page_id`.
-	Type OptCreateCommentBodyParametersParentType `json:"type"`
+	Type OptCreateCommentRequestParentType `json:"type"`
 	// The ID of the parent block (with or without dashes), for example, //
 	// 195de9221179449fab8075a27c979105.
 	BlockID OptString `json:"block_id"`
 }
 
 // GetPageID returns the value of PageID.
-func (s *CreateCommentBodyParametersParent) GetPageID() OptString {
+func (s *CreateCommentRequestParent) GetPageID() OptString {
 	return s.PageID
 }
 
 // GetType returns the value of Type.
-func (s *CreateCommentBodyParametersParent) GetType() OptCreateCommentBodyParametersParentType {
+func (s *CreateCommentRequestParent) GetType() OptCreateCommentRequestParentType {
 	return s.Type
 }
 
 // GetBlockID returns the value of BlockID.
-func (s *CreateCommentBodyParametersParent) GetBlockID() OptString {
+func (s *CreateCommentRequestParent) GetBlockID() OptString {
 	return s.BlockID
 }
 
 // SetPageID sets the value of PageID.
-func (s *CreateCommentBodyParametersParent) SetPageID(val OptString) {
+func (s *CreateCommentRequestParent) SetPageID(val OptString) {
 	s.PageID = val
 }
 
 // SetType sets the value of Type.
-func (s *CreateCommentBodyParametersParent) SetType(val OptCreateCommentBodyParametersParentType) {
+func (s *CreateCommentRequestParent) SetType(val OptCreateCommentRequestParentType) {
 	s.Type = val
 }
 
 // SetBlockID sets the value of BlockID.
-func (s *CreateCommentBodyParametersParent) SetBlockID(val OptString) {
+func (s *CreateCommentRequestParent) SetBlockID(val OptString) {
 	s.BlockID = val
 }
 
 // Always `page_id`.
-type CreateCommentBodyParametersParentType string
+type CreateCommentRequestParentType string
 
 const (
-	CreateCommentBodyParametersParentTypePageID  CreateCommentBodyParametersParentType = "page_id"
-	CreateCommentBodyParametersParentTypeBlockID CreateCommentBodyParametersParentType = "block_id"
+	CreateCommentRequestParentTypePageID  CreateCommentRequestParentType = "page_id"
+	CreateCommentRequestParentTypeBlockID CreateCommentRequestParentType = "block_id"
 )
 
-// AllValues returns all CreateCommentBodyParametersParentType values.
-func (CreateCommentBodyParametersParentType) AllValues() []CreateCommentBodyParametersParentType {
-	return []CreateCommentBodyParametersParentType{
-		CreateCommentBodyParametersParentTypePageID,
-		CreateCommentBodyParametersParentTypeBlockID,
+// AllValues returns all CreateCommentRequestParentType values.
+func (CreateCommentRequestParentType) AllValues() []CreateCommentRequestParentType {
+	return []CreateCommentRequestParentType{
+		CreateCommentRequestParentTypePageID,
+		CreateCommentRequestParentTypeBlockID,
 	}
 }
 
 // MarshalText implements encoding.TextMarshaler.
-func (s CreateCommentBodyParametersParentType) MarshalText() ([]byte, error) {
+func (s CreateCommentRequestParentType) MarshalText() ([]byte, error) {
 	switch s {
-	case CreateCommentBodyParametersParentTypePageID:
+	case CreateCommentRequestParentTypePageID:
 		return []byte(s), nil
-	case CreateCommentBodyParametersParentTypeBlockID:
+	case CreateCommentRequestParentTypeBlockID:
 		return []byte(s), nil
 	default:
 		return nil, errors.Errorf("invalid value: %q", s)
@@ -6211,13 +6211,13 @@ func (s CreateCommentBodyParametersParentType) MarshalText() ([]byte, error) {
 }
 
 // UnmarshalText implements encoding.TextUnmarshaler.
-func (s *CreateCommentBodyParametersParentType) UnmarshalText(data []byte) error {
-	switch CreateCommentBodyParametersParentType(data) {
-	case CreateCommentBodyParametersParentTypePageID:
-		*s = CreateCommentBodyParametersParentTypePageID
+func (s *CreateCommentRequestParentType) UnmarshalText(data []byte) error {
+	switch CreateCommentRequestParentType(data) {
+	case CreateCommentRequestParentTypePageID:
+		*s = CreateCommentRequestParentTypePageID
 		return nil
-	case CreateCommentBodyParametersParentTypeBlockID:
-		*s = CreateCommentBodyParametersParentTypeBlockID
+	case CreateCommentRequestParentTypeBlockID:
+		*s = CreateCommentRequestParentTypeBlockID
 		return nil
 	default:
 		return errors.Errorf("invalid value: %q", data)
@@ -6728,10 +6728,10 @@ func (s *CreateCommentResponseObject) UnmarshalText(data []byte) error {
 	}
 }
 
-// Ref: #/components/schemas/CreateDatabaseBodyParameters
-type CreateDatabaseBodyParameters struct {
+// Ref: #/components/schemas/CreateDatabaseRequest
+type CreateDatabaseRequest struct {
 	// The parent page or workspace where the database will be created.
-	Parent CreateDatabaseBodyParametersParent `json:"parent"`
+	Parent CreateDatabaseRequestParent `json:"parent"`
 	// The title of the database.
 	Title []RichTextItemRequest `json:"title"`
 	// The description of the database.
@@ -6747,136 +6747,136 @@ type CreateDatabaseBodyParameters struct {
 }
 
 // GetParent returns the value of Parent.
-func (s *CreateDatabaseBodyParameters) GetParent() CreateDatabaseBodyParametersParent {
+func (s *CreateDatabaseRequest) GetParent() CreateDatabaseRequestParent {
 	return s.Parent
 }
 
 // GetTitle returns the value of Title.
-func (s *CreateDatabaseBodyParameters) GetTitle() []RichTextItemRequest {
+func (s *CreateDatabaseRequest) GetTitle() []RichTextItemRequest {
 	return s.Title
 }
 
 // GetDescription returns the value of Description.
-func (s *CreateDatabaseBodyParameters) GetDescription() []RichTextItemRequest {
+func (s *CreateDatabaseRequest) GetDescription() []RichTextItemRequest {
 	return s.Description
 }
 
 // GetIsInline returns the value of IsInline.
-func (s *CreateDatabaseBodyParameters) GetIsInline() OptBool {
+func (s *CreateDatabaseRequest) GetIsInline() OptBool {
 	return s.IsInline
 }
 
 // GetInitialDataSource returns the value of InitialDataSource.
-func (s *CreateDatabaseBodyParameters) GetInitialDataSource() OptInitialDataSourceRequest {
+func (s *CreateDatabaseRequest) GetInitialDataSource() OptInitialDataSourceRequest {
 	return s.InitialDataSource
 }
 
 // GetIcon returns the value of Icon.
-func (s *CreateDatabaseBodyParameters) GetIcon() OptPageIconRequest {
+func (s *CreateDatabaseRequest) GetIcon() OptPageIconRequest {
 	return s.Icon
 }
 
 // GetCover returns the value of Cover.
-func (s *CreateDatabaseBodyParameters) GetCover() OptPageCoverRequest {
+func (s *CreateDatabaseRequest) GetCover() OptPageCoverRequest {
 	return s.Cover
 }
 
 // SetParent sets the value of Parent.
-func (s *CreateDatabaseBodyParameters) SetParent(val CreateDatabaseBodyParametersParent) {
+func (s *CreateDatabaseRequest) SetParent(val CreateDatabaseRequestParent) {
 	s.Parent = val
 }
 
 // SetTitle sets the value of Title.
-func (s *CreateDatabaseBodyParameters) SetTitle(val []RichTextItemRequest) {
+func (s *CreateDatabaseRequest) SetTitle(val []RichTextItemRequest) {
 	s.Title = val
 }
 
 // SetDescription sets the value of Description.
-func (s *CreateDatabaseBodyParameters) SetDescription(val []RichTextItemRequest) {
+func (s *CreateDatabaseRequest) SetDescription(val []RichTextItemRequest) {
 	s.Description = val
 }
 
 // SetIsInline sets the value of IsInline.
-func (s *CreateDatabaseBodyParameters) SetIsInline(val OptBool) {
+func (s *CreateDatabaseRequest) SetIsInline(val OptBool) {
 	s.IsInline = val
 }
 
 // SetInitialDataSource sets the value of InitialDataSource.
-func (s *CreateDatabaseBodyParameters) SetInitialDataSource(val OptInitialDataSourceRequest) {
+func (s *CreateDatabaseRequest) SetInitialDataSource(val OptInitialDataSourceRequest) {
 	s.InitialDataSource = val
 }
 
 // SetIcon sets the value of Icon.
-func (s *CreateDatabaseBodyParameters) SetIcon(val OptPageIconRequest) {
+func (s *CreateDatabaseRequest) SetIcon(val OptPageIconRequest) {
 	s.Icon = val
 }
 
 // SetCover sets the value of Cover.
-func (s *CreateDatabaseBodyParameters) SetCover(val OptPageCoverRequest) {
+func (s *CreateDatabaseRequest) SetCover(val OptPageCoverRequest) {
 	s.Cover = val
 }
 
 // The parent page or workspace where the database will be created.
-type CreateDatabaseBodyParametersParent struct {
+type CreateDatabaseRequestParent struct {
 	// Always `page_id`.
-	Type   CreateDatabaseBodyParametersParentType `json:"type"`
-	PageID OptString                              `json:"page_id"`
+	Type   CreateDatabaseRequestParentType `json:"type"`
+	PageID OptString                       `json:"page_id"`
 	// Always `true`.
-	Workspace OptCreateDatabaseBodyParametersParentWorkspace `json:"workspace"`
+	Workspace OptCreateDatabaseRequestParentWorkspace `json:"workspace"`
 }
 
 // GetType returns the value of Type.
-func (s *CreateDatabaseBodyParametersParent) GetType() CreateDatabaseBodyParametersParentType {
+func (s *CreateDatabaseRequestParent) GetType() CreateDatabaseRequestParentType {
 	return s.Type
 }
 
 // GetPageID returns the value of PageID.
-func (s *CreateDatabaseBodyParametersParent) GetPageID() OptString {
+func (s *CreateDatabaseRequestParent) GetPageID() OptString {
 	return s.PageID
 }
 
 // GetWorkspace returns the value of Workspace.
-func (s *CreateDatabaseBodyParametersParent) GetWorkspace() OptCreateDatabaseBodyParametersParentWorkspace {
+func (s *CreateDatabaseRequestParent) GetWorkspace() OptCreateDatabaseRequestParentWorkspace {
 	return s.Workspace
 }
 
 // SetType sets the value of Type.
-func (s *CreateDatabaseBodyParametersParent) SetType(val CreateDatabaseBodyParametersParentType) {
+func (s *CreateDatabaseRequestParent) SetType(val CreateDatabaseRequestParentType) {
 	s.Type = val
 }
 
 // SetPageID sets the value of PageID.
-func (s *CreateDatabaseBodyParametersParent) SetPageID(val OptString) {
+func (s *CreateDatabaseRequestParent) SetPageID(val OptString) {
 	s.PageID = val
 }
 
 // SetWorkspace sets the value of Workspace.
-func (s *CreateDatabaseBodyParametersParent) SetWorkspace(val OptCreateDatabaseBodyParametersParentWorkspace) {
+func (s *CreateDatabaseRequestParent) SetWorkspace(val OptCreateDatabaseRequestParentWorkspace) {
 	s.Workspace = val
 }
 
 // Always `page_id`.
-type CreateDatabaseBodyParametersParentType string
+type CreateDatabaseRequestParentType string
 
 const (
-	CreateDatabaseBodyParametersParentTypePageID    CreateDatabaseBodyParametersParentType = "page_id"
-	CreateDatabaseBodyParametersParentTypeWorkspace CreateDatabaseBodyParametersParentType = "workspace"
+	CreateDatabaseRequestParentTypePageID    CreateDatabaseRequestParentType = "page_id"
+	CreateDatabaseRequestParentTypeWorkspace CreateDatabaseRequestParentType = "workspace"
 )
 
-// AllValues returns all CreateDatabaseBodyParametersParentType values.
-func (CreateDatabaseBodyParametersParentType) AllValues() []CreateDatabaseBodyParametersParentType {
-	return []CreateDatabaseBodyParametersParentType{
-		CreateDatabaseBodyParametersParentTypePageID,
-		CreateDatabaseBodyParametersParentTypeWorkspace,
+// AllValues returns all CreateDatabaseRequestParentType values.
+func (CreateDatabaseRequestParentType) AllValues() []CreateDatabaseRequestParentType {
+	return []CreateDatabaseRequestParentType{
+		CreateDatabaseRequestParentTypePageID,
+		CreateDatabaseRequestParentTypeWorkspace,
 	}
 }
 
 // MarshalText implements encoding.TextMarshaler.
-func (s CreateDatabaseBodyParametersParentType) MarshalText() ([]byte, error) {
+func (s CreateDatabaseRequestParentType) MarshalText() ([]byte, error) {
 	switch s {
-	case CreateDatabaseBodyParametersParentTypePageID:
+	case CreateDatabaseRequestParentTypePageID:
 		return []byte(s), nil
-	case CreateDatabaseBodyParametersParentTypeWorkspace:
+	case CreateDatabaseRequestParentTypeWorkspace:
 		return []byte(s), nil
 	default:
 		return nil, errors.Errorf("invalid value: %q", s)
@@ -6884,13 +6884,13 @@ func (s CreateDatabaseBodyParametersParentType) MarshalText() ([]byte, error) {
 }
 
 // UnmarshalText implements encoding.TextUnmarshaler.
-func (s *CreateDatabaseBodyParametersParentType) UnmarshalText(data []byte) error {
-	switch CreateDatabaseBodyParametersParentType(data) {
-	case CreateDatabaseBodyParametersParentTypePageID:
-		*s = CreateDatabaseBodyParametersParentTypePageID
+func (s *CreateDatabaseRequestParentType) UnmarshalText(data []byte) error {
+	switch CreateDatabaseRequestParentType(data) {
+	case CreateDatabaseRequestParentTypePageID:
+		*s = CreateDatabaseRequestParentTypePageID
 		return nil
-	case CreateDatabaseBodyParametersParentTypeWorkspace:
-		*s = CreateDatabaseBodyParametersParentTypeWorkspace
+	case CreateDatabaseRequestParentTypeWorkspace:
+		*s = CreateDatabaseRequestParentTypeWorkspace
 		return nil
 	default:
 		return errors.Errorf("invalid value: %q", data)
@@ -6898,16 +6898,16 @@ func (s *CreateDatabaseBodyParametersParentType) UnmarshalText(data []byte) erro
 }
 
 // Always `true`.
-type CreateDatabaseBodyParametersParentWorkspace bool
+type CreateDatabaseRequestParentWorkspace bool
 
 const (
-	CreateDatabaseBodyParametersParentWorkspaceTrue CreateDatabaseBodyParametersParentWorkspace = true
+	CreateDatabaseRequestParentWorkspaceTrue CreateDatabaseRequestParentWorkspace = true
 )
 
-// AllValues returns all CreateDatabaseBodyParametersParentWorkspace values.
-func (CreateDatabaseBodyParametersParentWorkspace) AllValues() []CreateDatabaseBodyParametersParentWorkspace {
-	return []CreateDatabaseBodyParametersParentWorkspace{
-		CreateDatabaseBodyParametersParentWorkspaceTrue,
+// AllValues returns all CreateDatabaseRequestParentWorkspace values.
+func (CreateDatabaseRequestParentWorkspace) AllValues() []CreateDatabaseRequestParentWorkspace {
+	return []CreateDatabaseRequestParentWorkspace{
+		CreateDatabaseRequestParentWorkspaceTrue,
 	}
 }
 
@@ -7377,197 +7377,197 @@ func (s *CreateDatabaseResponseObject) UnmarshalText(data []byte) error {
 	}
 }
 
-// Ref: #/components/schemas/CreatePageBodyParameters
-type CreatePageBodyParameters struct {
-	Parent     OptCreatePageBodyParametersParent     `json:"parent"`
-	Properties OptCreatePageBodyParametersProperties `json:"properties"`
-	Icon       OptPageIconRequest                    `json:"icon"`
-	Cover      OptPageCoverRequest                   `json:"cover"`
-	Content    []BlockObjectRequest                  `json:"content"`
-	Children   []BlockObjectRequest                  `json:"children"`
+// Ref: #/components/schemas/CreatePageRequest
+type CreatePageRequest struct {
+	Parent     OptCreatePageRequestParent     `json:"parent"`
+	Properties OptCreatePageRequestProperties `json:"properties"`
+	Icon       OptPageIconRequest             `json:"icon"`
+	Cover      OptPageCoverRequest            `json:"cover"`
+	Content    []BlockObjectRequest           `json:"content"`
+	Children   []BlockObjectRequest           `json:"children"`
 	// Page content as Notion-flavored Markdown. Mutually exclusive with content/children.
-	Markdown OptString                           `json:"markdown"`
-	Template OptCreatePageBodyParametersTemplate `json:"template"`
-	Position OptPagePositionSchema               `json:"position"`
+	Markdown OptString                    `json:"markdown"`
+	Template OptCreatePageRequestTemplate `json:"template"`
+	Position OptPagePositionSchema        `json:"position"`
 }
 
 // GetParent returns the value of Parent.
-func (s *CreatePageBodyParameters) GetParent() OptCreatePageBodyParametersParent {
+func (s *CreatePageRequest) GetParent() OptCreatePageRequestParent {
 	return s.Parent
 }
 
 // GetProperties returns the value of Properties.
-func (s *CreatePageBodyParameters) GetProperties() OptCreatePageBodyParametersProperties {
+func (s *CreatePageRequest) GetProperties() OptCreatePageRequestProperties {
 	return s.Properties
 }
 
 // GetIcon returns the value of Icon.
-func (s *CreatePageBodyParameters) GetIcon() OptPageIconRequest {
+func (s *CreatePageRequest) GetIcon() OptPageIconRequest {
 	return s.Icon
 }
 
 // GetCover returns the value of Cover.
-func (s *CreatePageBodyParameters) GetCover() OptPageCoverRequest {
+func (s *CreatePageRequest) GetCover() OptPageCoverRequest {
 	return s.Cover
 }
 
 // GetContent returns the value of Content.
-func (s *CreatePageBodyParameters) GetContent() []BlockObjectRequest {
+func (s *CreatePageRequest) GetContent() []BlockObjectRequest {
 	return s.Content
 }
 
 // GetChildren returns the value of Children.
-func (s *CreatePageBodyParameters) GetChildren() []BlockObjectRequest {
+func (s *CreatePageRequest) GetChildren() []BlockObjectRequest {
 	return s.Children
 }
 
 // GetMarkdown returns the value of Markdown.
-func (s *CreatePageBodyParameters) GetMarkdown() OptString {
+func (s *CreatePageRequest) GetMarkdown() OptString {
 	return s.Markdown
 }
 
 // GetTemplate returns the value of Template.
-func (s *CreatePageBodyParameters) GetTemplate() OptCreatePageBodyParametersTemplate {
+func (s *CreatePageRequest) GetTemplate() OptCreatePageRequestTemplate {
 	return s.Template
 }
 
 // GetPosition returns the value of Position.
-func (s *CreatePageBodyParameters) GetPosition() OptPagePositionSchema {
+func (s *CreatePageRequest) GetPosition() OptPagePositionSchema {
 	return s.Position
 }
 
 // SetParent sets the value of Parent.
-func (s *CreatePageBodyParameters) SetParent(val OptCreatePageBodyParametersParent) {
+func (s *CreatePageRequest) SetParent(val OptCreatePageRequestParent) {
 	s.Parent = val
 }
 
 // SetProperties sets the value of Properties.
-func (s *CreatePageBodyParameters) SetProperties(val OptCreatePageBodyParametersProperties) {
+func (s *CreatePageRequest) SetProperties(val OptCreatePageRequestProperties) {
 	s.Properties = val
 }
 
 // SetIcon sets the value of Icon.
-func (s *CreatePageBodyParameters) SetIcon(val OptPageIconRequest) {
+func (s *CreatePageRequest) SetIcon(val OptPageIconRequest) {
 	s.Icon = val
 }
 
 // SetCover sets the value of Cover.
-func (s *CreatePageBodyParameters) SetCover(val OptPageCoverRequest) {
+func (s *CreatePageRequest) SetCover(val OptPageCoverRequest) {
 	s.Cover = val
 }
 
 // SetContent sets the value of Content.
-func (s *CreatePageBodyParameters) SetContent(val []BlockObjectRequest) {
+func (s *CreatePageRequest) SetContent(val []BlockObjectRequest) {
 	s.Content = val
 }
 
 // SetChildren sets the value of Children.
-func (s *CreatePageBodyParameters) SetChildren(val []BlockObjectRequest) {
+func (s *CreatePageRequest) SetChildren(val []BlockObjectRequest) {
 	s.Children = val
 }
 
 // SetMarkdown sets the value of Markdown.
-func (s *CreatePageBodyParameters) SetMarkdown(val OptString) {
+func (s *CreatePageRequest) SetMarkdown(val OptString) {
 	s.Markdown = val
 }
 
 // SetTemplate sets the value of Template.
-func (s *CreatePageBodyParameters) SetTemplate(val OptCreatePageBodyParametersTemplate) {
+func (s *CreatePageRequest) SetTemplate(val OptCreatePageRequestTemplate) {
 	s.Template = val
 }
 
 // SetPosition sets the value of Position.
-func (s *CreatePageBodyParameters) SetPosition(val OptPagePositionSchema) {
+func (s *CreatePageRequest) SetPosition(val OptPagePositionSchema) {
 	s.Position = val
 }
 
-type CreatePageBodyParametersParent struct {
-	PageID       OptString                                  `json:"page_id"`
-	Type         OptCreatePageBodyParametersParentType      `json:"type"`
-	DatabaseID   OptString                                  `json:"database_id"`
-	DataSourceID OptString                                  `json:"data_source_id"`
-	Workspace    OptCreatePageBodyParametersParentWorkspace `json:"workspace"`
+type CreatePageRequestParent struct {
+	PageID       OptString                           `json:"page_id"`
+	Type         OptCreatePageRequestParentType      `json:"type"`
+	DatabaseID   OptString                           `json:"database_id"`
+	DataSourceID OptString                           `json:"data_source_id"`
+	Workspace    OptCreatePageRequestParentWorkspace `json:"workspace"`
 }
 
 // GetPageID returns the value of PageID.
-func (s *CreatePageBodyParametersParent) GetPageID() OptString {
+func (s *CreatePageRequestParent) GetPageID() OptString {
 	return s.PageID
 }
 
 // GetType returns the value of Type.
-func (s *CreatePageBodyParametersParent) GetType() OptCreatePageBodyParametersParentType {
+func (s *CreatePageRequestParent) GetType() OptCreatePageRequestParentType {
 	return s.Type
 }
 
 // GetDatabaseID returns the value of DatabaseID.
-func (s *CreatePageBodyParametersParent) GetDatabaseID() OptString {
+func (s *CreatePageRequestParent) GetDatabaseID() OptString {
 	return s.DatabaseID
 }
 
 // GetDataSourceID returns the value of DataSourceID.
-func (s *CreatePageBodyParametersParent) GetDataSourceID() OptString {
+func (s *CreatePageRequestParent) GetDataSourceID() OptString {
 	return s.DataSourceID
 }
 
 // GetWorkspace returns the value of Workspace.
-func (s *CreatePageBodyParametersParent) GetWorkspace() OptCreatePageBodyParametersParentWorkspace {
+func (s *CreatePageRequestParent) GetWorkspace() OptCreatePageRequestParentWorkspace {
 	return s.Workspace
 }
 
 // SetPageID sets the value of PageID.
-func (s *CreatePageBodyParametersParent) SetPageID(val OptString) {
+func (s *CreatePageRequestParent) SetPageID(val OptString) {
 	s.PageID = val
 }
 
 // SetType sets the value of Type.
-func (s *CreatePageBodyParametersParent) SetType(val OptCreatePageBodyParametersParentType) {
+func (s *CreatePageRequestParent) SetType(val OptCreatePageRequestParentType) {
 	s.Type = val
 }
 
 // SetDatabaseID sets the value of DatabaseID.
-func (s *CreatePageBodyParametersParent) SetDatabaseID(val OptString) {
+func (s *CreatePageRequestParent) SetDatabaseID(val OptString) {
 	s.DatabaseID = val
 }
 
 // SetDataSourceID sets the value of DataSourceID.
-func (s *CreatePageBodyParametersParent) SetDataSourceID(val OptString) {
+func (s *CreatePageRequestParent) SetDataSourceID(val OptString) {
 	s.DataSourceID = val
 }
 
 // SetWorkspace sets the value of Workspace.
-func (s *CreatePageBodyParametersParent) SetWorkspace(val OptCreatePageBodyParametersParentWorkspace) {
+func (s *CreatePageRequestParent) SetWorkspace(val OptCreatePageRequestParentWorkspace) {
 	s.Workspace = val
 }
 
-type CreatePageBodyParametersParentType string
+type CreatePageRequestParentType string
 
 const (
-	CreatePageBodyParametersParentTypePageID       CreatePageBodyParametersParentType = "page_id"
-	CreatePageBodyParametersParentTypeDatabaseID   CreatePageBodyParametersParentType = "database_id"
-	CreatePageBodyParametersParentTypeDataSourceID CreatePageBodyParametersParentType = "data_source_id"
-	CreatePageBodyParametersParentTypeWorkspace    CreatePageBodyParametersParentType = "workspace"
+	CreatePageRequestParentTypePageID       CreatePageRequestParentType = "page_id"
+	CreatePageRequestParentTypeDatabaseID   CreatePageRequestParentType = "database_id"
+	CreatePageRequestParentTypeDataSourceID CreatePageRequestParentType = "data_source_id"
+	CreatePageRequestParentTypeWorkspace    CreatePageRequestParentType = "workspace"
 )
 
-// AllValues returns all CreatePageBodyParametersParentType values.
-func (CreatePageBodyParametersParentType) AllValues() []CreatePageBodyParametersParentType {
-	return []CreatePageBodyParametersParentType{
-		CreatePageBodyParametersParentTypePageID,
-		CreatePageBodyParametersParentTypeDatabaseID,
-		CreatePageBodyParametersParentTypeDataSourceID,
-		CreatePageBodyParametersParentTypeWorkspace,
+// AllValues returns all CreatePageRequestParentType values.
+func (CreatePageRequestParentType) AllValues() []CreatePageRequestParentType {
+	return []CreatePageRequestParentType{
+		CreatePageRequestParentTypePageID,
+		CreatePageRequestParentTypeDatabaseID,
+		CreatePageRequestParentTypeDataSourceID,
+		CreatePageRequestParentTypeWorkspace,
 	}
 }
 
 // MarshalText implements encoding.TextMarshaler.
-func (s CreatePageBodyParametersParentType) MarshalText() ([]byte, error) {
+func (s CreatePageRequestParentType) MarshalText() ([]byte, error) {
 	switch s {
-	case CreatePageBodyParametersParentTypePageID:
+	case CreatePageRequestParentTypePageID:
 		return []byte(s), nil
-	case CreatePageBodyParametersParentTypeDatabaseID:
+	case CreatePageRequestParentTypeDatabaseID:
 		return []byte(s), nil
-	case CreatePageBodyParametersParentTypeDataSourceID:
+	case CreatePageRequestParentTypeDataSourceID:
 		return []byte(s), nil
-	case CreatePageBodyParametersParentTypeWorkspace:
+	case CreatePageRequestParentTypeWorkspace:
 		return []byte(s), nil
 	default:
 		return nil, errors.Errorf("invalid value: %q", s)
@@ -7575,311 +7575,311 @@ func (s CreatePageBodyParametersParentType) MarshalText() ([]byte, error) {
 }
 
 // UnmarshalText implements encoding.TextUnmarshaler.
-func (s *CreatePageBodyParametersParentType) UnmarshalText(data []byte) error {
-	switch CreatePageBodyParametersParentType(data) {
-	case CreatePageBodyParametersParentTypePageID:
-		*s = CreatePageBodyParametersParentTypePageID
+func (s *CreatePageRequestParentType) UnmarshalText(data []byte) error {
+	switch CreatePageRequestParentType(data) {
+	case CreatePageRequestParentTypePageID:
+		*s = CreatePageRequestParentTypePageID
 		return nil
-	case CreatePageBodyParametersParentTypeDatabaseID:
-		*s = CreatePageBodyParametersParentTypeDatabaseID
+	case CreatePageRequestParentTypeDatabaseID:
+		*s = CreatePageRequestParentTypeDatabaseID
 		return nil
-	case CreatePageBodyParametersParentTypeDataSourceID:
-		*s = CreatePageBodyParametersParentTypeDataSourceID
+	case CreatePageRequestParentTypeDataSourceID:
+		*s = CreatePageRequestParentTypeDataSourceID
 		return nil
-	case CreatePageBodyParametersParentTypeWorkspace:
-		*s = CreatePageBodyParametersParentTypeWorkspace
+	case CreatePageRequestParentTypeWorkspace:
+		*s = CreatePageRequestParentTypeWorkspace
 		return nil
 	default:
 		return errors.Errorf("invalid value: %q", data)
 	}
 }
 
-type CreatePageBodyParametersParentWorkspace bool
+type CreatePageRequestParentWorkspace bool
 
 const (
-	CreatePageBodyParametersParentWorkspaceTrue CreatePageBodyParametersParentWorkspace = true
+	CreatePageRequestParentWorkspaceTrue CreatePageRequestParentWorkspace = true
 )
 
-// AllValues returns all CreatePageBodyParametersParentWorkspace values.
-func (CreatePageBodyParametersParentWorkspace) AllValues() []CreatePageBodyParametersParentWorkspace {
-	return []CreatePageBodyParametersParentWorkspace{
-		CreatePageBodyParametersParentWorkspaceTrue,
+// AllValues returns all CreatePageRequestParentWorkspace values.
+func (CreatePageRequestParentWorkspace) AllValues() []CreatePageRequestParentWorkspace {
+	return []CreatePageRequestParentWorkspace{
+		CreatePageRequestParentWorkspaceTrue,
 	}
 }
 
-type CreatePageBodyParametersProperties map[string]CreatePageBodyParametersPropertiesItem
+type CreatePageRequestProperties map[string]CreatePageRequestPropertiesItem
 
-func (s *CreatePageBodyParametersProperties) init() CreatePageBodyParametersProperties {
+func (s *CreatePageRequestProperties) init() CreatePageRequestProperties {
 	m := *s
 	if m == nil {
-		m = map[string]CreatePageBodyParametersPropertiesItem{}
+		m = map[string]CreatePageRequestPropertiesItem{}
 		*s = m
 	}
 	return m
 }
 
-type CreatePageBodyParametersPropertiesItem struct {
-	Title       []RichTextItemRequest                                   `json:"title"`
-	Type        OptCreatePageBodyParametersPropertiesItemType           `json:"type"`
-	RichText    []RichTextItemRequest                                   `json:"rich_text"`
-	Number      OptNilFloat64                                           `json:"number"`
-	URL         OptNilString                                            `json:"url"`
-	Select      OptNilCreatePageBodyParametersPropertiesItemSelect      `json:"select"`
-	MultiSelect []CreatePageBodyParametersPropertiesItemMultiSelectItem `json:"multi_select"`
-	People      []CreatePageBodyParametersPropertiesItemPeopleItem      `json:"people"`
-	Email       OptNilString                                            `json:"email"`
-	PhoneNumber OptNilString                                            `json:"phone_number"`
-	Date        OptDateRequest                                          `json:"date"`
-	Checkbox    OptBool                                                 `json:"checkbox"`
-	Relation    []RelationItemPropertyValueResponse                     `json:"relation"`
-	Files       []CreatePageBodyParametersPropertiesItemFilesItem       `json:"files"`
-	Status      OptNilCreatePageBodyParametersPropertiesItemStatus      `json:"status"`
-	Place       OptNilCreatePageBodyParametersPropertiesItemPlace       `json:"place"`
+type CreatePageRequestPropertiesItem struct {
+	Title       []RichTextItemRequest                            `json:"title"`
+	Type        OptCreatePageRequestPropertiesItemType           `json:"type"`
+	RichText    []RichTextItemRequest                            `json:"rich_text"`
+	Number      OptNilFloat64                                    `json:"number"`
+	URL         OptNilString                                     `json:"url"`
+	Select      OptNilCreatePageRequestPropertiesItemSelect      `json:"select"`
+	MultiSelect []CreatePageRequestPropertiesItemMultiSelectItem `json:"multi_select"`
+	People      []CreatePageRequestPropertiesItemPeopleItem      `json:"people"`
+	Email       OptNilString                                     `json:"email"`
+	PhoneNumber OptNilString                                     `json:"phone_number"`
+	Date        OptDateRequest                                   `json:"date"`
+	Checkbox    OptBool                                          `json:"checkbox"`
+	Relation    []RelationItemPropertyValueResponse              `json:"relation"`
+	Files       []CreatePageRequestPropertiesItemFilesItem       `json:"files"`
+	Status      OptNilCreatePageRequestPropertiesItemStatus      `json:"status"`
+	Place       OptNilCreatePageRequestPropertiesItemPlace       `json:"place"`
 }
 
 // GetTitle returns the value of Title.
-func (s *CreatePageBodyParametersPropertiesItem) GetTitle() []RichTextItemRequest {
+func (s *CreatePageRequestPropertiesItem) GetTitle() []RichTextItemRequest {
 	return s.Title
 }
 
 // GetType returns the value of Type.
-func (s *CreatePageBodyParametersPropertiesItem) GetType() OptCreatePageBodyParametersPropertiesItemType {
+func (s *CreatePageRequestPropertiesItem) GetType() OptCreatePageRequestPropertiesItemType {
 	return s.Type
 }
 
 // GetRichText returns the value of RichText.
-func (s *CreatePageBodyParametersPropertiesItem) GetRichText() []RichTextItemRequest {
+func (s *CreatePageRequestPropertiesItem) GetRichText() []RichTextItemRequest {
 	return s.RichText
 }
 
 // GetNumber returns the value of Number.
-func (s *CreatePageBodyParametersPropertiesItem) GetNumber() OptNilFloat64 {
+func (s *CreatePageRequestPropertiesItem) GetNumber() OptNilFloat64 {
 	return s.Number
 }
 
 // GetURL returns the value of URL.
-func (s *CreatePageBodyParametersPropertiesItem) GetURL() OptNilString {
+func (s *CreatePageRequestPropertiesItem) GetURL() OptNilString {
 	return s.URL
 }
 
 // GetSelect returns the value of Select.
-func (s *CreatePageBodyParametersPropertiesItem) GetSelect() OptNilCreatePageBodyParametersPropertiesItemSelect {
+func (s *CreatePageRequestPropertiesItem) GetSelect() OptNilCreatePageRequestPropertiesItemSelect {
 	return s.Select
 }
 
 // GetMultiSelect returns the value of MultiSelect.
-func (s *CreatePageBodyParametersPropertiesItem) GetMultiSelect() []CreatePageBodyParametersPropertiesItemMultiSelectItem {
+func (s *CreatePageRequestPropertiesItem) GetMultiSelect() []CreatePageRequestPropertiesItemMultiSelectItem {
 	return s.MultiSelect
 }
 
 // GetPeople returns the value of People.
-func (s *CreatePageBodyParametersPropertiesItem) GetPeople() []CreatePageBodyParametersPropertiesItemPeopleItem {
+func (s *CreatePageRequestPropertiesItem) GetPeople() []CreatePageRequestPropertiesItemPeopleItem {
 	return s.People
 }
 
 // GetEmail returns the value of Email.
-func (s *CreatePageBodyParametersPropertiesItem) GetEmail() OptNilString {
+func (s *CreatePageRequestPropertiesItem) GetEmail() OptNilString {
 	return s.Email
 }
 
 // GetPhoneNumber returns the value of PhoneNumber.
-func (s *CreatePageBodyParametersPropertiesItem) GetPhoneNumber() OptNilString {
+func (s *CreatePageRequestPropertiesItem) GetPhoneNumber() OptNilString {
 	return s.PhoneNumber
 }
 
 // GetDate returns the value of Date.
-func (s *CreatePageBodyParametersPropertiesItem) GetDate() OptDateRequest {
+func (s *CreatePageRequestPropertiesItem) GetDate() OptDateRequest {
 	return s.Date
 }
 
 // GetCheckbox returns the value of Checkbox.
-func (s *CreatePageBodyParametersPropertiesItem) GetCheckbox() OptBool {
+func (s *CreatePageRequestPropertiesItem) GetCheckbox() OptBool {
 	return s.Checkbox
 }
 
 // GetRelation returns the value of Relation.
-func (s *CreatePageBodyParametersPropertiesItem) GetRelation() []RelationItemPropertyValueResponse {
+func (s *CreatePageRequestPropertiesItem) GetRelation() []RelationItemPropertyValueResponse {
 	return s.Relation
 }
 
 // GetFiles returns the value of Files.
-func (s *CreatePageBodyParametersPropertiesItem) GetFiles() []CreatePageBodyParametersPropertiesItemFilesItem {
+func (s *CreatePageRequestPropertiesItem) GetFiles() []CreatePageRequestPropertiesItemFilesItem {
 	return s.Files
 }
 
 // GetStatus returns the value of Status.
-func (s *CreatePageBodyParametersPropertiesItem) GetStatus() OptNilCreatePageBodyParametersPropertiesItemStatus {
+func (s *CreatePageRequestPropertiesItem) GetStatus() OptNilCreatePageRequestPropertiesItemStatus {
 	return s.Status
 }
 
 // GetPlace returns the value of Place.
-func (s *CreatePageBodyParametersPropertiesItem) GetPlace() OptNilCreatePageBodyParametersPropertiesItemPlace {
+func (s *CreatePageRequestPropertiesItem) GetPlace() OptNilCreatePageRequestPropertiesItemPlace {
 	return s.Place
 }
 
 // SetTitle sets the value of Title.
-func (s *CreatePageBodyParametersPropertiesItem) SetTitle(val []RichTextItemRequest) {
+func (s *CreatePageRequestPropertiesItem) SetTitle(val []RichTextItemRequest) {
 	s.Title = val
 }
 
 // SetType sets the value of Type.
-func (s *CreatePageBodyParametersPropertiesItem) SetType(val OptCreatePageBodyParametersPropertiesItemType) {
+func (s *CreatePageRequestPropertiesItem) SetType(val OptCreatePageRequestPropertiesItemType) {
 	s.Type = val
 }
 
 // SetRichText sets the value of RichText.
-func (s *CreatePageBodyParametersPropertiesItem) SetRichText(val []RichTextItemRequest) {
+func (s *CreatePageRequestPropertiesItem) SetRichText(val []RichTextItemRequest) {
 	s.RichText = val
 }
 
 // SetNumber sets the value of Number.
-func (s *CreatePageBodyParametersPropertiesItem) SetNumber(val OptNilFloat64) {
+func (s *CreatePageRequestPropertiesItem) SetNumber(val OptNilFloat64) {
 	s.Number = val
 }
 
 // SetURL sets the value of URL.
-func (s *CreatePageBodyParametersPropertiesItem) SetURL(val OptNilString) {
+func (s *CreatePageRequestPropertiesItem) SetURL(val OptNilString) {
 	s.URL = val
 }
 
 // SetSelect sets the value of Select.
-func (s *CreatePageBodyParametersPropertiesItem) SetSelect(val OptNilCreatePageBodyParametersPropertiesItemSelect) {
+func (s *CreatePageRequestPropertiesItem) SetSelect(val OptNilCreatePageRequestPropertiesItemSelect) {
 	s.Select = val
 }
 
 // SetMultiSelect sets the value of MultiSelect.
-func (s *CreatePageBodyParametersPropertiesItem) SetMultiSelect(val []CreatePageBodyParametersPropertiesItemMultiSelectItem) {
+func (s *CreatePageRequestPropertiesItem) SetMultiSelect(val []CreatePageRequestPropertiesItemMultiSelectItem) {
 	s.MultiSelect = val
 }
 
 // SetPeople sets the value of People.
-func (s *CreatePageBodyParametersPropertiesItem) SetPeople(val []CreatePageBodyParametersPropertiesItemPeopleItem) {
+func (s *CreatePageRequestPropertiesItem) SetPeople(val []CreatePageRequestPropertiesItemPeopleItem) {
 	s.People = val
 }
 
 // SetEmail sets the value of Email.
-func (s *CreatePageBodyParametersPropertiesItem) SetEmail(val OptNilString) {
+func (s *CreatePageRequestPropertiesItem) SetEmail(val OptNilString) {
 	s.Email = val
 }
 
 // SetPhoneNumber sets the value of PhoneNumber.
-func (s *CreatePageBodyParametersPropertiesItem) SetPhoneNumber(val OptNilString) {
+func (s *CreatePageRequestPropertiesItem) SetPhoneNumber(val OptNilString) {
 	s.PhoneNumber = val
 }
 
 // SetDate sets the value of Date.
-func (s *CreatePageBodyParametersPropertiesItem) SetDate(val OptDateRequest) {
+func (s *CreatePageRequestPropertiesItem) SetDate(val OptDateRequest) {
 	s.Date = val
 }
 
 // SetCheckbox sets the value of Checkbox.
-func (s *CreatePageBodyParametersPropertiesItem) SetCheckbox(val OptBool) {
+func (s *CreatePageRequestPropertiesItem) SetCheckbox(val OptBool) {
 	s.Checkbox = val
 }
 
 // SetRelation sets the value of Relation.
-func (s *CreatePageBodyParametersPropertiesItem) SetRelation(val []RelationItemPropertyValueResponse) {
+func (s *CreatePageRequestPropertiesItem) SetRelation(val []RelationItemPropertyValueResponse) {
 	s.Relation = val
 }
 
 // SetFiles sets the value of Files.
-func (s *CreatePageBodyParametersPropertiesItem) SetFiles(val []CreatePageBodyParametersPropertiesItemFilesItem) {
+func (s *CreatePageRequestPropertiesItem) SetFiles(val []CreatePageRequestPropertiesItemFilesItem) {
 	s.Files = val
 }
 
 // SetStatus sets the value of Status.
-func (s *CreatePageBodyParametersPropertiesItem) SetStatus(val OptNilCreatePageBodyParametersPropertiesItemStatus) {
+func (s *CreatePageRequestPropertiesItem) SetStatus(val OptNilCreatePageRequestPropertiesItemStatus) {
 	s.Status = val
 }
 
 // SetPlace sets the value of Place.
-func (s *CreatePageBodyParametersPropertiesItem) SetPlace(val OptNilCreatePageBodyParametersPropertiesItemPlace) {
+func (s *CreatePageRequestPropertiesItem) SetPlace(val OptNilCreatePageRequestPropertiesItemPlace) {
 	s.Place = val
 }
 
-type CreatePageBodyParametersPropertiesItemFilesItem struct {
-	File       OptInternalFileRequest                                 `json:"file"`
-	Name       OptString                                              `json:"name"`
-	Type       OptCreatePageBodyParametersPropertiesItemFilesItemType `json:"type"`
-	External   OptExternalFileRequest                                 `json:"external"`
-	FileUpload OptFileUploadIdRequest                                 `json:"file_upload"`
+type CreatePageRequestPropertiesItemFilesItem struct {
+	File       OptInternalFileRequest                          `json:"file"`
+	Name       OptString                                       `json:"name"`
+	Type       OptCreatePageRequestPropertiesItemFilesItemType `json:"type"`
+	External   OptExternalFileRequest                          `json:"external"`
+	FileUpload OptFileUploadIdRequest                          `json:"file_upload"`
 }
 
 // GetFile returns the value of File.
-func (s *CreatePageBodyParametersPropertiesItemFilesItem) GetFile() OptInternalFileRequest {
+func (s *CreatePageRequestPropertiesItemFilesItem) GetFile() OptInternalFileRequest {
 	return s.File
 }
 
 // GetName returns the value of Name.
-func (s *CreatePageBodyParametersPropertiesItemFilesItem) GetName() OptString {
+func (s *CreatePageRequestPropertiesItemFilesItem) GetName() OptString {
 	return s.Name
 }
 
 // GetType returns the value of Type.
-func (s *CreatePageBodyParametersPropertiesItemFilesItem) GetType() OptCreatePageBodyParametersPropertiesItemFilesItemType {
+func (s *CreatePageRequestPropertiesItemFilesItem) GetType() OptCreatePageRequestPropertiesItemFilesItemType {
 	return s.Type
 }
 
 // GetExternal returns the value of External.
-func (s *CreatePageBodyParametersPropertiesItemFilesItem) GetExternal() OptExternalFileRequest {
+func (s *CreatePageRequestPropertiesItemFilesItem) GetExternal() OptExternalFileRequest {
 	return s.External
 }
 
 // GetFileUpload returns the value of FileUpload.
-func (s *CreatePageBodyParametersPropertiesItemFilesItem) GetFileUpload() OptFileUploadIdRequest {
+func (s *CreatePageRequestPropertiesItemFilesItem) GetFileUpload() OptFileUploadIdRequest {
 	return s.FileUpload
 }
 
 // SetFile sets the value of File.
-func (s *CreatePageBodyParametersPropertiesItemFilesItem) SetFile(val OptInternalFileRequest) {
+func (s *CreatePageRequestPropertiesItemFilesItem) SetFile(val OptInternalFileRequest) {
 	s.File = val
 }
 
 // SetName sets the value of Name.
-func (s *CreatePageBodyParametersPropertiesItemFilesItem) SetName(val OptString) {
+func (s *CreatePageRequestPropertiesItemFilesItem) SetName(val OptString) {
 	s.Name = val
 }
 
 // SetType sets the value of Type.
-func (s *CreatePageBodyParametersPropertiesItemFilesItem) SetType(val OptCreatePageBodyParametersPropertiesItemFilesItemType) {
+func (s *CreatePageRequestPropertiesItemFilesItem) SetType(val OptCreatePageRequestPropertiesItemFilesItemType) {
 	s.Type = val
 }
 
 // SetExternal sets the value of External.
-func (s *CreatePageBodyParametersPropertiesItemFilesItem) SetExternal(val OptExternalFileRequest) {
+func (s *CreatePageRequestPropertiesItemFilesItem) SetExternal(val OptExternalFileRequest) {
 	s.External = val
 }
 
 // SetFileUpload sets the value of FileUpload.
-func (s *CreatePageBodyParametersPropertiesItemFilesItem) SetFileUpload(val OptFileUploadIdRequest) {
+func (s *CreatePageRequestPropertiesItemFilesItem) SetFileUpload(val OptFileUploadIdRequest) {
 	s.FileUpload = val
 }
 
-type CreatePageBodyParametersPropertiesItemFilesItemType string
+type CreatePageRequestPropertiesItemFilesItemType string
 
 const (
-	CreatePageBodyParametersPropertiesItemFilesItemTypeFile       CreatePageBodyParametersPropertiesItemFilesItemType = "file"
-	CreatePageBodyParametersPropertiesItemFilesItemTypeExternal   CreatePageBodyParametersPropertiesItemFilesItemType = "external"
-	CreatePageBodyParametersPropertiesItemFilesItemTypeFileUpload CreatePageBodyParametersPropertiesItemFilesItemType = "file_upload"
+	CreatePageRequestPropertiesItemFilesItemTypeFile       CreatePageRequestPropertiesItemFilesItemType = "file"
+	CreatePageRequestPropertiesItemFilesItemTypeExternal   CreatePageRequestPropertiesItemFilesItemType = "external"
+	CreatePageRequestPropertiesItemFilesItemTypeFileUpload CreatePageRequestPropertiesItemFilesItemType = "file_upload"
 )
 
-// AllValues returns all CreatePageBodyParametersPropertiesItemFilesItemType values.
-func (CreatePageBodyParametersPropertiesItemFilesItemType) AllValues() []CreatePageBodyParametersPropertiesItemFilesItemType {
-	return []CreatePageBodyParametersPropertiesItemFilesItemType{
-		CreatePageBodyParametersPropertiesItemFilesItemTypeFile,
-		CreatePageBodyParametersPropertiesItemFilesItemTypeExternal,
-		CreatePageBodyParametersPropertiesItemFilesItemTypeFileUpload,
+// AllValues returns all CreatePageRequestPropertiesItemFilesItemType values.
+func (CreatePageRequestPropertiesItemFilesItemType) AllValues() []CreatePageRequestPropertiesItemFilesItemType {
+	return []CreatePageRequestPropertiesItemFilesItemType{
+		CreatePageRequestPropertiesItemFilesItemTypeFile,
+		CreatePageRequestPropertiesItemFilesItemTypeExternal,
+		CreatePageRequestPropertiesItemFilesItemTypeFileUpload,
 	}
 }
 
 // MarshalText implements encoding.TextMarshaler.
-func (s CreatePageBodyParametersPropertiesItemFilesItemType) MarshalText() ([]byte, error) {
+func (s CreatePageRequestPropertiesItemFilesItemType) MarshalText() ([]byte, error) {
 	switch s {
-	case CreatePageBodyParametersPropertiesItemFilesItemTypeFile:
+	case CreatePageRequestPropertiesItemFilesItemTypeFile:
 		return []byte(s), nil
-	case CreatePageBodyParametersPropertiesItemFilesItemTypeExternal:
+	case CreatePageRequestPropertiesItemFilesItemTypeExternal:
 		return []byte(s), nil
-	case CreatePageBodyParametersPropertiesItemFilesItemTypeFileUpload:
+	case CreatePageRequestPropertiesItemFilesItemTypeFileUpload:
 		return []byte(s), nil
 	default:
 		return nil, errors.Errorf("invalid value: %q", s)
@@ -7887,23 +7887,23 @@ func (s CreatePageBodyParametersPropertiesItemFilesItemType) MarshalText() ([]by
 }
 
 // UnmarshalText implements encoding.TextUnmarshaler.
-func (s *CreatePageBodyParametersPropertiesItemFilesItemType) UnmarshalText(data []byte) error {
-	switch CreatePageBodyParametersPropertiesItemFilesItemType(data) {
-	case CreatePageBodyParametersPropertiesItemFilesItemTypeFile:
-		*s = CreatePageBodyParametersPropertiesItemFilesItemTypeFile
+func (s *CreatePageRequestPropertiesItemFilesItemType) UnmarshalText(data []byte) error {
+	switch CreatePageRequestPropertiesItemFilesItemType(data) {
+	case CreatePageRequestPropertiesItemFilesItemTypeFile:
+		*s = CreatePageRequestPropertiesItemFilesItemTypeFile
 		return nil
-	case CreatePageBodyParametersPropertiesItemFilesItemTypeExternal:
-		*s = CreatePageBodyParametersPropertiesItemFilesItemTypeExternal
+	case CreatePageRequestPropertiesItemFilesItemTypeExternal:
+		*s = CreatePageRequestPropertiesItemFilesItemTypeExternal
 		return nil
-	case CreatePageBodyParametersPropertiesItemFilesItemTypeFileUpload:
-		*s = CreatePageBodyParametersPropertiesItemFilesItemTypeFileUpload
+	case CreatePageRequestPropertiesItemFilesItemTypeFileUpload:
+		*s = CreatePageRequestPropertiesItemFilesItemTypeFileUpload
 		return nil
 	default:
 		return errors.Errorf("invalid value: %q", data)
 	}
 }
 
-type CreatePageBodyParametersPropertiesItemMultiSelectItem struct {
+type CreatePageRequestPropertiesItemMultiSelectItem struct {
 	ID          OptString      `json:"id"`
 	Name        OptString      `json:"name"`
 	Color       OptSelectColor `json:"color"`
@@ -7911,105 +7911,105 @@ type CreatePageBodyParametersPropertiesItemMultiSelectItem struct {
 }
 
 // GetID returns the value of ID.
-func (s *CreatePageBodyParametersPropertiesItemMultiSelectItem) GetID() OptString {
+func (s *CreatePageRequestPropertiesItemMultiSelectItem) GetID() OptString {
 	return s.ID
 }
 
 // GetName returns the value of Name.
-func (s *CreatePageBodyParametersPropertiesItemMultiSelectItem) GetName() OptString {
+func (s *CreatePageRequestPropertiesItemMultiSelectItem) GetName() OptString {
 	return s.Name
 }
 
 // GetColor returns the value of Color.
-func (s *CreatePageBodyParametersPropertiesItemMultiSelectItem) GetColor() OptSelectColor {
+func (s *CreatePageRequestPropertiesItemMultiSelectItem) GetColor() OptSelectColor {
 	return s.Color
 }
 
 // GetDescription returns the value of Description.
-func (s *CreatePageBodyParametersPropertiesItemMultiSelectItem) GetDescription() OptNilString {
+func (s *CreatePageRequestPropertiesItemMultiSelectItem) GetDescription() OptNilString {
 	return s.Description
 }
 
 // SetID sets the value of ID.
-func (s *CreatePageBodyParametersPropertiesItemMultiSelectItem) SetID(val OptString) {
+func (s *CreatePageRequestPropertiesItemMultiSelectItem) SetID(val OptString) {
 	s.ID = val
 }
 
 // SetName sets the value of Name.
-func (s *CreatePageBodyParametersPropertiesItemMultiSelectItem) SetName(val OptString) {
+func (s *CreatePageRequestPropertiesItemMultiSelectItem) SetName(val OptString) {
 	s.Name = val
 }
 
 // SetColor sets the value of Color.
-func (s *CreatePageBodyParametersPropertiesItemMultiSelectItem) SetColor(val OptSelectColor) {
+func (s *CreatePageRequestPropertiesItemMultiSelectItem) SetColor(val OptSelectColor) {
 	s.Color = val
 }
 
 // SetDescription sets the value of Description.
-func (s *CreatePageBodyParametersPropertiesItemMultiSelectItem) SetDescription(val OptNilString) {
+func (s *CreatePageRequestPropertiesItemMultiSelectItem) SetDescription(val OptNilString) {
 	s.Description = val
 }
 
-type CreatePageBodyParametersPropertiesItemPeopleItem struct {
+type CreatePageRequestPropertiesItemPeopleItem struct {
 	// The ID of the user.
 	ID string `json:"id"`
 	// The user object type name.
-	Object OptCreatePageBodyParametersPropertiesItemPeopleItemObject `json:"object"`
-	Name   OptNilString                                              `json:"name"`
+	Object OptCreatePageRequestPropertiesItemPeopleItemObject `json:"object"`
+	Name   OptNilString                                       `json:"name"`
 }
 
 // GetID returns the value of ID.
-func (s *CreatePageBodyParametersPropertiesItemPeopleItem) GetID() string {
+func (s *CreatePageRequestPropertiesItemPeopleItem) GetID() string {
 	return s.ID
 }
 
 // GetObject returns the value of Object.
-func (s *CreatePageBodyParametersPropertiesItemPeopleItem) GetObject() OptCreatePageBodyParametersPropertiesItemPeopleItemObject {
+func (s *CreatePageRequestPropertiesItemPeopleItem) GetObject() OptCreatePageRequestPropertiesItemPeopleItemObject {
 	return s.Object
 }
 
 // GetName returns the value of Name.
-func (s *CreatePageBodyParametersPropertiesItemPeopleItem) GetName() OptNilString {
+func (s *CreatePageRequestPropertiesItemPeopleItem) GetName() OptNilString {
 	return s.Name
 }
 
 // SetID sets the value of ID.
-func (s *CreatePageBodyParametersPropertiesItemPeopleItem) SetID(val string) {
+func (s *CreatePageRequestPropertiesItemPeopleItem) SetID(val string) {
 	s.ID = val
 }
 
 // SetObject sets the value of Object.
-func (s *CreatePageBodyParametersPropertiesItemPeopleItem) SetObject(val OptCreatePageBodyParametersPropertiesItemPeopleItemObject) {
+func (s *CreatePageRequestPropertiesItemPeopleItem) SetObject(val OptCreatePageRequestPropertiesItemPeopleItemObject) {
 	s.Object = val
 }
 
 // SetName sets the value of Name.
-func (s *CreatePageBodyParametersPropertiesItemPeopleItem) SetName(val OptNilString) {
+func (s *CreatePageRequestPropertiesItemPeopleItem) SetName(val OptNilString) {
 	s.Name = val
 }
 
 // The user object type name.
-type CreatePageBodyParametersPropertiesItemPeopleItemObject string
+type CreatePageRequestPropertiesItemPeopleItemObject string
 
 const (
-	CreatePageBodyParametersPropertiesItemPeopleItemObjectUser  CreatePageBodyParametersPropertiesItemPeopleItemObject = "user"
-	CreatePageBodyParametersPropertiesItemPeopleItemObjectGroup CreatePageBodyParametersPropertiesItemPeopleItemObject = "group"
+	CreatePageRequestPropertiesItemPeopleItemObjectUser  CreatePageRequestPropertiesItemPeopleItemObject = "user"
+	CreatePageRequestPropertiesItemPeopleItemObjectGroup CreatePageRequestPropertiesItemPeopleItemObject = "group"
 )
 
-// AllValues returns all CreatePageBodyParametersPropertiesItemPeopleItemObject values.
-func (CreatePageBodyParametersPropertiesItemPeopleItemObject) AllValues() []CreatePageBodyParametersPropertiesItemPeopleItemObject {
-	return []CreatePageBodyParametersPropertiesItemPeopleItemObject{
-		CreatePageBodyParametersPropertiesItemPeopleItemObjectUser,
-		CreatePageBodyParametersPropertiesItemPeopleItemObjectGroup,
+// AllValues returns all CreatePageRequestPropertiesItemPeopleItemObject values.
+func (CreatePageRequestPropertiesItemPeopleItemObject) AllValues() []CreatePageRequestPropertiesItemPeopleItemObject {
+	return []CreatePageRequestPropertiesItemPeopleItemObject{
+		CreatePageRequestPropertiesItemPeopleItemObjectUser,
+		CreatePageRequestPropertiesItemPeopleItemObjectGroup,
 	}
 }
 
 // MarshalText implements encoding.TextMarshaler.
-func (s CreatePageBodyParametersPropertiesItemPeopleItemObject) MarshalText() ([]byte, error) {
+func (s CreatePageRequestPropertiesItemPeopleItemObject) MarshalText() ([]byte, error) {
 	switch s {
-	case CreatePageBodyParametersPropertiesItemPeopleItemObjectUser:
+	case CreatePageRequestPropertiesItemPeopleItemObjectUser:
 		return []byte(s), nil
-	case CreatePageBodyParametersPropertiesItemPeopleItemObjectGroup:
+	case CreatePageRequestPropertiesItemPeopleItemObjectGroup:
 		return []byte(s), nil
 	default:
 		return nil, errors.Errorf("invalid value: %q", s)
@@ -8017,20 +8017,20 @@ func (s CreatePageBodyParametersPropertiesItemPeopleItemObject) MarshalText() ([
 }
 
 // UnmarshalText implements encoding.TextUnmarshaler.
-func (s *CreatePageBodyParametersPropertiesItemPeopleItemObject) UnmarshalText(data []byte) error {
-	switch CreatePageBodyParametersPropertiesItemPeopleItemObject(data) {
-	case CreatePageBodyParametersPropertiesItemPeopleItemObjectUser:
-		*s = CreatePageBodyParametersPropertiesItemPeopleItemObjectUser
+func (s *CreatePageRequestPropertiesItemPeopleItemObject) UnmarshalText(data []byte) error {
+	switch CreatePageRequestPropertiesItemPeopleItemObject(data) {
+	case CreatePageRequestPropertiesItemPeopleItemObjectUser:
+		*s = CreatePageRequestPropertiesItemPeopleItemObjectUser
 		return nil
-	case CreatePageBodyParametersPropertiesItemPeopleItemObjectGroup:
-		*s = CreatePageBodyParametersPropertiesItemPeopleItemObjectGroup
+	case CreatePageRequestPropertiesItemPeopleItemObjectGroup:
+		*s = CreatePageRequestPropertiesItemPeopleItemObjectGroup
 		return nil
 	default:
 		return errors.Errorf("invalid value: %q", data)
 	}
 }
 
-type CreatePageBodyParametersPropertiesItemPlace struct {
+type CreatePageRequestPropertiesItemPlace struct {
 	Lat           float64      `json:"lat"`
 	Lon           float64      `json:"lon"`
 	Name          OptNilString `json:"name"`
@@ -8040,66 +8040,66 @@ type CreatePageBodyParametersPropertiesItemPlace struct {
 }
 
 // GetLat returns the value of Lat.
-func (s *CreatePageBodyParametersPropertiesItemPlace) GetLat() float64 {
+func (s *CreatePageRequestPropertiesItemPlace) GetLat() float64 {
 	return s.Lat
 }
 
 // GetLon returns the value of Lon.
-func (s *CreatePageBodyParametersPropertiesItemPlace) GetLon() float64 {
+func (s *CreatePageRequestPropertiesItemPlace) GetLon() float64 {
 	return s.Lon
 }
 
 // GetName returns the value of Name.
-func (s *CreatePageBodyParametersPropertiesItemPlace) GetName() OptNilString {
+func (s *CreatePageRequestPropertiesItemPlace) GetName() OptNilString {
 	return s.Name
 }
 
 // GetAddress returns the value of Address.
-func (s *CreatePageBodyParametersPropertiesItemPlace) GetAddress() OptNilString {
+func (s *CreatePageRequestPropertiesItemPlace) GetAddress() OptNilString {
 	return s.Address
 }
 
 // GetAWSPlaceID returns the value of AWSPlaceID.
-func (s *CreatePageBodyParametersPropertiesItemPlace) GetAWSPlaceID() OptNilString {
+func (s *CreatePageRequestPropertiesItemPlace) GetAWSPlaceID() OptNilString {
 	return s.AWSPlaceID
 }
 
 // GetGooglePlaceID returns the value of GooglePlaceID.
-func (s *CreatePageBodyParametersPropertiesItemPlace) GetGooglePlaceID() OptNilString {
+func (s *CreatePageRequestPropertiesItemPlace) GetGooglePlaceID() OptNilString {
 	return s.GooglePlaceID
 }
 
 // SetLat sets the value of Lat.
-func (s *CreatePageBodyParametersPropertiesItemPlace) SetLat(val float64) {
+func (s *CreatePageRequestPropertiesItemPlace) SetLat(val float64) {
 	s.Lat = val
 }
 
 // SetLon sets the value of Lon.
-func (s *CreatePageBodyParametersPropertiesItemPlace) SetLon(val float64) {
+func (s *CreatePageRequestPropertiesItemPlace) SetLon(val float64) {
 	s.Lon = val
 }
 
 // SetName sets the value of Name.
-func (s *CreatePageBodyParametersPropertiesItemPlace) SetName(val OptNilString) {
+func (s *CreatePageRequestPropertiesItemPlace) SetName(val OptNilString) {
 	s.Name = val
 }
 
 // SetAddress sets the value of Address.
-func (s *CreatePageBodyParametersPropertiesItemPlace) SetAddress(val OptNilString) {
+func (s *CreatePageRequestPropertiesItemPlace) SetAddress(val OptNilString) {
 	s.Address = val
 }
 
 // SetAWSPlaceID sets the value of AWSPlaceID.
-func (s *CreatePageBodyParametersPropertiesItemPlace) SetAWSPlaceID(val OptNilString) {
+func (s *CreatePageRequestPropertiesItemPlace) SetAWSPlaceID(val OptNilString) {
 	s.AWSPlaceID = val
 }
 
 // SetGooglePlaceID sets the value of GooglePlaceID.
-func (s *CreatePageBodyParametersPropertiesItemPlace) SetGooglePlaceID(val OptNilString) {
+func (s *CreatePageRequestPropertiesItemPlace) SetGooglePlaceID(val OptNilString) {
 	s.GooglePlaceID = val
 }
 
-type CreatePageBodyParametersPropertiesItemSelect struct {
+type CreatePageRequestPropertiesItemSelect struct {
 	ID          OptString      `json:"id"`
 	Name        OptString      `json:"name"`
 	Color       OptSelectColor `json:"color"`
@@ -8107,46 +8107,46 @@ type CreatePageBodyParametersPropertiesItemSelect struct {
 }
 
 // GetID returns the value of ID.
-func (s *CreatePageBodyParametersPropertiesItemSelect) GetID() OptString {
+func (s *CreatePageRequestPropertiesItemSelect) GetID() OptString {
 	return s.ID
 }
 
 // GetName returns the value of Name.
-func (s *CreatePageBodyParametersPropertiesItemSelect) GetName() OptString {
+func (s *CreatePageRequestPropertiesItemSelect) GetName() OptString {
 	return s.Name
 }
 
 // GetColor returns the value of Color.
-func (s *CreatePageBodyParametersPropertiesItemSelect) GetColor() OptSelectColor {
+func (s *CreatePageRequestPropertiesItemSelect) GetColor() OptSelectColor {
 	return s.Color
 }
 
 // GetDescription returns the value of Description.
-func (s *CreatePageBodyParametersPropertiesItemSelect) GetDescription() OptNilString {
+func (s *CreatePageRequestPropertiesItemSelect) GetDescription() OptNilString {
 	return s.Description
 }
 
 // SetID sets the value of ID.
-func (s *CreatePageBodyParametersPropertiesItemSelect) SetID(val OptString) {
+func (s *CreatePageRequestPropertiesItemSelect) SetID(val OptString) {
 	s.ID = val
 }
 
 // SetName sets the value of Name.
-func (s *CreatePageBodyParametersPropertiesItemSelect) SetName(val OptString) {
+func (s *CreatePageRequestPropertiesItemSelect) SetName(val OptString) {
 	s.Name = val
 }
 
 // SetColor sets the value of Color.
-func (s *CreatePageBodyParametersPropertiesItemSelect) SetColor(val OptSelectColor) {
+func (s *CreatePageRequestPropertiesItemSelect) SetColor(val OptSelectColor) {
 	s.Color = val
 }
 
 // SetDescription sets the value of Description.
-func (s *CreatePageBodyParametersPropertiesItemSelect) SetDescription(val OptNilString) {
+func (s *CreatePageRequestPropertiesItemSelect) SetDescription(val OptNilString) {
 	s.Description = val
 }
 
-type CreatePageBodyParametersPropertiesItemStatus struct {
+type CreatePageRequestPropertiesItemStatus struct {
 	ID          OptString      `json:"id"`
 	Name        OptString      `json:"name"`
 	Color       OptSelectColor `json:"color"`
@@ -8154,118 +8154,118 @@ type CreatePageBodyParametersPropertiesItemStatus struct {
 }
 
 // GetID returns the value of ID.
-func (s *CreatePageBodyParametersPropertiesItemStatus) GetID() OptString {
+func (s *CreatePageRequestPropertiesItemStatus) GetID() OptString {
 	return s.ID
 }
 
 // GetName returns the value of Name.
-func (s *CreatePageBodyParametersPropertiesItemStatus) GetName() OptString {
+func (s *CreatePageRequestPropertiesItemStatus) GetName() OptString {
 	return s.Name
 }
 
 // GetColor returns the value of Color.
-func (s *CreatePageBodyParametersPropertiesItemStatus) GetColor() OptSelectColor {
+func (s *CreatePageRequestPropertiesItemStatus) GetColor() OptSelectColor {
 	return s.Color
 }
 
 // GetDescription returns the value of Description.
-func (s *CreatePageBodyParametersPropertiesItemStatus) GetDescription() OptNilString {
+func (s *CreatePageRequestPropertiesItemStatus) GetDescription() OptNilString {
 	return s.Description
 }
 
 // SetID sets the value of ID.
-func (s *CreatePageBodyParametersPropertiesItemStatus) SetID(val OptString) {
+func (s *CreatePageRequestPropertiesItemStatus) SetID(val OptString) {
 	s.ID = val
 }
 
 // SetName sets the value of Name.
-func (s *CreatePageBodyParametersPropertiesItemStatus) SetName(val OptString) {
+func (s *CreatePageRequestPropertiesItemStatus) SetName(val OptString) {
 	s.Name = val
 }
 
 // SetColor sets the value of Color.
-func (s *CreatePageBodyParametersPropertiesItemStatus) SetColor(val OptSelectColor) {
+func (s *CreatePageRequestPropertiesItemStatus) SetColor(val OptSelectColor) {
 	s.Color = val
 }
 
 // SetDescription sets the value of Description.
-func (s *CreatePageBodyParametersPropertiesItemStatus) SetDescription(val OptNilString) {
+func (s *CreatePageRequestPropertiesItemStatus) SetDescription(val OptNilString) {
 	s.Description = val
 }
 
-type CreatePageBodyParametersPropertiesItemType string
+type CreatePageRequestPropertiesItemType string
 
 const (
-	CreatePageBodyParametersPropertiesItemTypeTitle       CreatePageBodyParametersPropertiesItemType = "title"
-	CreatePageBodyParametersPropertiesItemTypeRichText    CreatePageBodyParametersPropertiesItemType = "rich_text"
-	CreatePageBodyParametersPropertiesItemTypeNumber      CreatePageBodyParametersPropertiesItemType = "number"
-	CreatePageBodyParametersPropertiesItemTypeURL         CreatePageBodyParametersPropertiesItemType = "url"
-	CreatePageBodyParametersPropertiesItemTypeSelect      CreatePageBodyParametersPropertiesItemType = "select"
-	CreatePageBodyParametersPropertiesItemTypeMultiSelect CreatePageBodyParametersPropertiesItemType = "multi_select"
-	CreatePageBodyParametersPropertiesItemTypePeople      CreatePageBodyParametersPropertiesItemType = "people"
-	CreatePageBodyParametersPropertiesItemTypeEmail       CreatePageBodyParametersPropertiesItemType = "email"
-	CreatePageBodyParametersPropertiesItemTypePhoneNumber CreatePageBodyParametersPropertiesItemType = "phone_number"
-	CreatePageBodyParametersPropertiesItemTypeDate        CreatePageBodyParametersPropertiesItemType = "date"
-	CreatePageBodyParametersPropertiesItemTypeCheckbox    CreatePageBodyParametersPropertiesItemType = "checkbox"
-	CreatePageBodyParametersPropertiesItemTypeRelation    CreatePageBodyParametersPropertiesItemType = "relation"
-	CreatePageBodyParametersPropertiesItemTypeFiles       CreatePageBodyParametersPropertiesItemType = "files"
-	CreatePageBodyParametersPropertiesItemTypeStatus      CreatePageBodyParametersPropertiesItemType = "status"
-	CreatePageBodyParametersPropertiesItemTypePlace       CreatePageBodyParametersPropertiesItemType = "place"
+	CreatePageRequestPropertiesItemTypeTitle       CreatePageRequestPropertiesItemType = "title"
+	CreatePageRequestPropertiesItemTypeRichText    CreatePageRequestPropertiesItemType = "rich_text"
+	CreatePageRequestPropertiesItemTypeNumber      CreatePageRequestPropertiesItemType = "number"
+	CreatePageRequestPropertiesItemTypeURL         CreatePageRequestPropertiesItemType = "url"
+	CreatePageRequestPropertiesItemTypeSelect      CreatePageRequestPropertiesItemType = "select"
+	CreatePageRequestPropertiesItemTypeMultiSelect CreatePageRequestPropertiesItemType = "multi_select"
+	CreatePageRequestPropertiesItemTypePeople      CreatePageRequestPropertiesItemType = "people"
+	CreatePageRequestPropertiesItemTypeEmail       CreatePageRequestPropertiesItemType = "email"
+	CreatePageRequestPropertiesItemTypePhoneNumber CreatePageRequestPropertiesItemType = "phone_number"
+	CreatePageRequestPropertiesItemTypeDate        CreatePageRequestPropertiesItemType = "date"
+	CreatePageRequestPropertiesItemTypeCheckbox    CreatePageRequestPropertiesItemType = "checkbox"
+	CreatePageRequestPropertiesItemTypeRelation    CreatePageRequestPropertiesItemType = "relation"
+	CreatePageRequestPropertiesItemTypeFiles       CreatePageRequestPropertiesItemType = "files"
+	CreatePageRequestPropertiesItemTypeStatus      CreatePageRequestPropertiesItemType = "status"
+	CreatePageRequestPropertiesItemTypePlace       CreatePageRequestPropertiesItemType = "place"
 )
 
-// AllValues returns all CreatePageBodyParametersPropertiesItemType values.
-func (CreatePageBodyParametersPropertiesItemType) AllValues() []CreatePageBodyParametersPropertiesItemType {
-	return []CreatePageBodyParametersPropertiesItemType{
-		CreatePageBodyParametersPropertiesItemTypeTitle,
-		CreatePageBodyParametersPropertiesItemTypeRichText,
-		CreatePageBodyParametersPropertiesItemTypeNumber,
-		CreatePageBodyParametersPropertiesItemTypeURL,
-		CreatePageBodyParametersPropertiesItemTypeSelect,
-		CreatePageBodyParametersPropertiesItemTypeMultiSelect,
-		CreatePageBodyParametersPropertiesItemTypePeople,
-		CreatePageBodyParametersPropertiesItemTypeEmail,
-		CreatePageBodyParametersPropertiesItemTypePhoneNumber,
-		CreatePageBodyParametersPropertiesItemTypeDate,
-		CreatePageBodyParametersPropertiesItemTypeCheckbox,
-		CreatePageBodyParametersPropertiesItemTypeRelation,
-		CreatePageBodyParametersPropertiesItemTypeFiles,
-		CreatePageBodyParametersPropertiesItemTypeStatus,
-		CreatePageBodyParametersPropertiesItemTypePlace,
+// AllValues returns all CreatePageRequestPropertiesItemType values.
+func (CreatePageRequestPropertiesItemType) AllValues() []CreatePageRequestPropertiesItemType {
+	return []CreatePageRequestPropertiesItemType{
+		CreatePageRequestPropertiesItemTypeTitle,
+		CreatePageRequestPropertiesItemTypeRichText,
+		CreatePageRequestPropertiesItemTypeNumber,
+		CreatePageRequestPropertiesItemTypeURL,
+		CreatePageRequestPropertiesItemTypeSelect,
+		CreatePageRequestPropertiesItemTypeMultiSelect,
+		CreatePageRequestPropertiesItemTypePeople,
+		CreatePageRequestPropertiesItemTypeEmail,
+		CreatePageRequestPropertiesItemTypePhoneNumber,
+		CreatePageRequestPropertiesItemTypeDate,
+		CreatePageRequestPropertiesItemTypeCheckbox,
+		CreatePageRequestPropertiesItemTypeRelation,
+		CreatePageRequestPropertiesItemTypeFiles,
+		CreatePageRequestPropertiesItemTypeStatus,
+		CreatePageRequestPropertiesItemTypePlace,
 	}
 }
 
 // MarshalText implements encoding.TextMarshaler.
-func (s CreatePageBodyParametersPropertiesItemType) MarshalText() ([]byte, error) {
+func (s CreatePageRequestPropertiesItemType) MarshalText() ([]byte, error) {
 	switch s {
-	case CreatePageBodyParametersPropertiesItemTypeTitle:
+	case CreatePageRequestPropertiesItemTypeTitle:
 		return []byte(s), nil
-	case CreatePageBodyParametersPropertiesItemTypeRichText:
+	case CreatePageRequestPropertiesItemTypeRichText:
 		return []byte(s), nil
-	case CreatePageBodyParametersPropertiesItemTypeNumber:
+	case CreatePageRequestPropertiesItemTypeNumber:
 		return []byte(s), nil
-	case CreatePageBodyParametersPropertiesItemTypeURL:
+	case CreatePageRequestPropertiesItemTypeURL:
 		return []byte(s), nil
-	case CreatePageBodyParametersPropertiesItemTypeSelect:
+	case CreatePageRequestPropertiesItemTypeSelect:
 		return []byte(s), nil
-	case CreatePageBodyParametersPropertiesItemTypeMultiSelect:
+	case CreatePageRequestPropertiesItemTypeMultiSelect:
 		return []byte(s), nil
-	case CreatePageBodyParametersPropertiesItemTypePeople:
+	case CreatePageRequestPropertiesItemTypePeople:
 		return []byte(s), nil
-	case CreatePageBodyParametersPropertiesItemTypeEmail:
+	case CreatePageRequestPropertiesItemTypeEmail:
 		return []byte(s), nil
-	case CreatePageBodyParametersPropertiesItemTypePhoneNumber:
+	case CreatePageRequestPropertiesItemTypePhoneNumber:
 		return []byte(s), nil
-	case CreatePageBodyParametersPropertiesItemTypeDate:
+	case CreatePageRequestPropertiesItemTypeDate:
 		return []byte(s), nil
-	case CreatePageBodyParametersPropertiesItemTypeCheckbox:
+	case CreatePageRequestPropertiesItemTypeCheckbox:
 		return []byte(s), nil
-	case CreatePageBodyParametersPropertiesItemTypeRelation:
+	case CreatePageRequestPropertiesItemTypeRelation:
 		return []byte(s), nil
-	case CreatePageBodyParametersPropertiesItemTypeFiles:
+	case CreatePageRequestPropertiesItemTypeFiles:
 		return []byte(s), nil
-	case CreatePageBodyParametersPropertiesItemTypeStatus:
+	case CreatePageRequestPropertiesItemTypeStatus:
 		return []byte(s), nil
-	case CreatePageBodyParametersPropertiesItemTypePlace:
+	case CreatePageRequestPropertiesItemTypePlace:
 		return []byte(s), nil
 	default:
 		return nil, errors.Errorf("invalid value: %q", s)
@@ -8273,108 +8273,108 @@ func (s CreatePageBodyParametersPropertiesItemType) MarshalText() ([]byte, error
 }
 
 // UnmarshalText implements encoding.TextUnmarshaler.
-func (s *CreatePageBodyParametersPropertiesItemType) UnmarshalText(data []byte) error {
-	switch CreatePageBodyParametersPropertiesItemType(data) {
-	case CreatePageBodyParametersPropertiesItemTypeTitle:
-		*s = CreatePageBodyParametersPropertiesItemTypeTitle
+func (s *CreatePageRequestPropertiesItemType) UnmarshalText(data []byte) error {
+	switch CreatePageRequestPropertiesItemType(data) {
+	case CreatePageRequestPropertiesItemTypeTitle:
+		*s = CreatePageRequestPropertiesItemTypeTitle
 		return nil
-	case CreatePageBodyParametersPropertiesItemTypeRichText:
-		*s = CreatePageBodyParametersPropertiesItemTypeRichText
+	case CreatePageRequestPropertiesItemTypeRichText:
+		*s = CreatePageRequestPropertiesItemTypeRichText
 		return nil
-	case CreatePageBodyParametersPropertiesItemTypeNumber:
-		*s = CreatePageBodyParametersPropertiesItemTypeNumber
+	case CreatePageRequestPropertiesItemTypeNumber:
+		*s = CreatePageRequestPropertiesItemTypeNumber
 		return nil
-	case CreatePageBodyParametersPropertiesItemTypeURL:
-		*s = CreatePageBodyParametersPropertiesItemTypeURL
+	case CreatePageRequestPropertiesItemTypeURL:
+		*s = CreatePageRequestPropertiesItemTypeURL
 		return nil
-	case CreatePageBodyParametersPropertiesItemTypeSelect:
-		*s = CreatePageBodyParametersPropertiesItemTypeSelect
+	case CreatePageRequestPropertiesItemTypeSelect:
+		*s = CreatePageRequestPropertiesItemTypeSelect
 		return nil
-	case CreatePageBodyParametersPropertiesItemTypeMultiSelect:
-		*s = CreatePageBodyParametersPropertiesItemTypeMultiSelect
+	case CreatePageRequestPropertiesItemTypeMultiSelect:
+		*s = CreatePageRequestPropertiesItemTypeMultiSelect
 		return nil
-	case CreatePageBodyParametersPropertiesItemTypePeople:
-		*s = CreatePageBodyParametersPropertiesItemTypePeople
+	case CreatePageRequestPropertiesItemTypePeople:
+		*s = CreatePageRequestPropertiesItemTypePeople
 		return nil
-	case CreatePageBodyParametersPropertiesItemTypeEmail:
-		*s = CreatePageBodyParametersPropertiesItemTypeEmail
+	case CreatePageRequestPropertiesItemTypeEmail:
+		*s = CreatePageRequestPropertiesItemTypeEmail
 		return nil
-	case CreatePageBodyParametersPropertiesItemTypePhoneNumber:
-		*s = CreatePageBodyParametersPropertiesItemTypePhoneNumber
+	case CreatePageRequestPropertiesItemTypePhoneNumber:
+		*s = CreatePageRequestPropertiesItemTypePhoneNumber
 		return nil
-	case CreatePageBodyParametersPropertiesItemTypeDate:
-		*s = CreatePageBodyParametersPropertiesItemTypeDate
+	case CreatePageRequestPropertiesItemTypeDate:
+		*s = CreatePageRequestPropertiesItemTypeDate
 		return nil
-	case CreatePageBodyParametersPropertiesItemTypeCheckbox:
-		*s = CreatePageBodyParametersPropertiesItemTypeCheckbox
+	case CreatePageRequestPropertiesItemTypeCheckbox:
+		*s = CreatePageRequestPropertiesItemTypeCheckbox
 		return nil
-	case CreatePageBodyParametersPropertiesItemTypeRelation:
-		*s = CreatePageBodyParametersPropertiesItemTypeRelation
+	case CreatePageRequestPropertiesItemTypeRelation:
+		*s = CreatePageRequestPropertiesItemTypeRelation
 		return nil
-	case CreatePageBodyParametersPropertiesItemTypeFiles:
-		*s = CreatePageBodyParametersPropertiesItemTypeFiles
+	case CreatePageRequestPropertiesItemTypeFiles:
+		*s = CreatePageRequestPropertiesItemTypeFiles
 		return nil
-	case CreatePageBodyParametersPropertiesItemTypeStatus:
-		*s = CreatePageBodyParametersPropertiesItemTypeStatus
+	case CreatePageRequestPropertiesItemTypeStatus:
+		*s = CreatePageRequestPropertiesItemTypeStatus
 		return nil
-	case CreatePageBodyParametersPropertiesItemTypePlace:
-		*s = CreatePageBodyParametersPropertiesItemTypePlace
+	case CreatePageRequestPropertiesItemTypePlace:
+		*s = CreatePageRequestPropertiesItemTypePlace
 		return nil
 	default:
 		return errors.Errorf("invalid value: %q", data)
 	}
 }
 
-type CreatePageBodyParametersTemplate struct {
-	Type       CreatePageBodyParametersTemplateType `json:"type"`
-	TemplateID OptString                            `json:"template_id"`
+type CreatePageRequestTemplate struct {
+	Type       CreatePageRequestTemplateType `json:"type"`
+	TemplateID OptString                     `json:"template_id"`
 }
 
 // GetType returns the value of Type.
-func (s *CreatePageBodyParametersTemplate) GetType() CreatePageBodyParametersTemplateType {
+func (s *CreatePageRequestTemplate) GetType() CreatePageRequestTemplateType {
 	return s.Type
 }
 
 // GetTemplateID returns the value of TemplateID.
-func (s *CreatePageBodyParametersTemplate) GetTemplateID() OptString {
+func (s *CreatePageRequestTemplate) GetTemplateID() OptString {
 	return s.TemplateID
 }
 
 // SetType sets the value of Type.
-func (s *CreatePageBodyParametersTemplate) SetType(val CreatePageBodyParametersTemplateType) {
+func (s *CreatePageRequestTemplate) SetType(val CreatePageRequestTemplateType) {
 	s.Type = val
 }
 
 // SetTemplateID sets the value of TemplateID.
-func (s *CreatePageBodyParametersTemplate) SetTemplateID(val OptString) {
+func (s *CreatePageRequestTemplate) SetTemplateID(val OptString) {
 	s.TemplateID = val
 }
 
-type CreatePageBodyParametersTemplateType string
+type CreatePageRequestTemplateType string
 
 const (
-	CreatePageBodyParametersTemplateTypeNone       CreatePageBodyParametersTemplateType = "none"
-	CreatePageBodyParametersTemplateTypeDefault    CreatePageBodyParametersTemplateType = "default"
-	CreatePageBodyParametersTemplateTypeTemplateID CreatePageBodyParametersTemplateType = "template_id"
+	CreatePageRequestTemplateTypeNone       CreatePageRequestTemplateType = "none"
+	CreatePageRequestTemplateTypeDefault    CreatePageRequestTemplateType = "default"
+	CreatePageRequestTemplateTypeTemplateID CreatePageRequestTemplateType = "template_id"
 )
 
-// AllValues returns all CreatePageBodyParametersTemplateType values.
-func (CreatePageBodyParametersTemplateType) AllValues() []CreatePageBodyParametersTemplateType {
-	return []CreatePageBodyParametersTemplateType{
-		CreatePageBodyParametersTemplateTypeNone,
-		CreatePageBodyParametersTemplateTypeDefault,
-		CreatePageBodyParametersTemplateTypeTemplateID,
+// AllValues returns all CreatePageRequestTemplateType values.
+func (CreatePageRequestTemplateType) AllValues() []CreatePageRequestTemplateType {
+	return []CreatePageRequestTemplateType{
+		CreatePageRequestTemplateTypeNone,
+		CreatePageRequestTemplateTypeDefault,
+		CreatePageRequestTemplateTypeTemplateID,
 	}
 }
 
 // MarshalText implements encoding.TextMarshaler.
-func (s CreatePageBodyParametersTemplateType) MarshalText() ([]byte, error) {
+func (s CreatePageRequestTemplateType) MarshalText() ([]byte, error) {
 	switch s {
-	case CreatePageBodyParametersTemplateTypeNone:
+	case CreatePageRequestTemplateTypeNone:
 		return []byte(s), nil
-	case CreatePageBodyParametersTemplateTypeDefault:
+	case CreatePageRequestTemplateTypeDefault:
 		return []byte(s), nil
-	case CreatePageBodyParametersTemplateTypeTemplateID:
+	case CreatePageRequestTemplateTypeTemplateID:
 		return []byte(s), nil
 	default:
 		return nil, errors.Errorf("invalid value: %q", s)
@@ -8382,16 +8382,16 @@ func (s CreatePageBodyParametersTemplateType) MarshalText() ([]byte, error) {
 }
 
 // UnmarshalText implements encoding.TextUnmarshaler.
-func (s *CreatePageBodyParametersTemplateType) UnmarshalText(data []byte) error {
-	switch CreatePageBodyParametersTemplateType(data) {
-	case CreatePageBodyParametersTemplateTypeNone:
-		*s = CreatePageBodyParametersTemplateTypeNone
+func (s *CreatePageRequestTemplateType) UnmarshalText(data []byte) error {
+	switch CreatePageRequestTemplateType(data) {
+	case CreatePageRequestTemplateTypeNone:
+		*s = CreatePageRequestTemplateTypeNone
 		return nil
-	case CreatePageBodyParametersTemplateTypeDefault:
-		*s = CreatePageBodyParametersTemplateTypeDefault
+	case CreatePageRequestTemplateTypeDefault:
+		*s = CreatePageRequestTemplateTypeDefault
 		return nil
-	case CreatePageBodyParametersTemplateTypeTemplateID:
-		*s = CreatePageBodyParametersTemplateTypeTemplateID
+	case CreatePageRequestTemplateTypeTemplateID:
+		*s = CreatePageRequestTemplateTypeTemplateID
 		return nil
 	default:
 		return errors.Errorf("invalid value: %q", data)
@@ -21040,37 +21040,37 @@ func (o NilString) Or(d string) string {
 	return d
 }
 
-// NewNilUpdateBlockBodyParametersSyncedBlockSyncedFrom returns new NilUpdateBlockBodyParametersSyncedBlockSyncedFrom with value set to v.
-func NewNilUpdateBlockBodyParametersSyncedBlockSyncedFrom(v UpdateBlockBodyParametersSyncedBlockSyncedFrom) NilUpdateBlockBodyParametersSyncedBlockSyncedFrom {
-	return NilUpdateBlockBodyParametersSyncedBlockSyncedFrom{
+// NewNilUpdateBlockRequestSyncedBlockSyncedFrom returns new NilUpdateBlockRequestSyncedBlockSyncedFrom with value set to v.
+func NewNilUpdateBlockRequestSyncedBlockSyncedFrom(v UpdateBlockRequestSyncedBlockSyncedFrom) NilUpdateBlockRequestSyncedBlockSyncedFrom {
+	return NilUpdateBlockRequestSyncedBlockSyncedFrom{
 		Value: v,
 	}
 }
 
-// NilUpdateBlockBodyParametersSyncedBlockSyncedFrom is nullable UpdateBlockBodyParametersSyncedBlockSyncedFrom.
-type NilUpdateBlockBodyParametersSyncedBlockSyncedFrom struct {
-	Value UpdateBlockBodyParametersSyncedBlockSyncedFrom
+// NilUpdateBlockRequestSyncedBlockSyncedFrom is nullable UpdateBlockRequestSyncedBlockSyncedFrom.
+type NilUpdateBlockRequestSyncedBlockSyncedFrom struct {
+	Value UpdateBlockRequestSyncedBlockSyncedFrom
 	Null  bool
 }
 
 // SetTo sets value to v.
-func (o *NilUpdateBlockBodyParametersSyncedBlockSyncedFrom) SetTo(v UpdateBlockBodyParametersSyncedBlockSyncedFrom) {
+func (o *NilUpdateBlockRequestSyncedBlockSyncedFrom) SetTo(v UpdateBlockRequestSyncedBlockSyncedFrom) {
 	o.Null = false
 	o.Value = v
 }
 
 // IsNull returns true if value is Null.
-func (o NilUpdateBlockBodyParametersSyncedBlockSyncedFrom) IsNull() bool { return o.Null }
+func (o NilUpdateBlockRequestSyncedBlockSyncedFrom) IsNull() bool { return o.Null }
 
 // SetToNull sets value to null.
-func (o *NilUpdateBlockBodyParametersSyncedBlockSyncedFrom) SetToNull() {
+func (o *NilUpdateBlockRequestSyncedBlockSyncedFrom) SetToNull() {
 	o.Null = true
-	var v UpdateBlockBodyParametersSyncedBlockSyncedFrom
+	var v UpdateBlockRequestSyncedBlockSyncedFrom
 	o.Value = v
 }
 
 // Get returns value and boolean that denotes whether value was set.
-func (o NilUpdateBlockBodyParametersSyncedBlockSyncedFrom) Get() (v UpdateBlockBodyParametersSyncedBlockSyncedFrom, ok bool) {
+func (o NilUpdateBlockRequestSyncedBlockSyncedFrom) Get() (v UpdateBlockRequestSyncedBlockSyncedFrom, ok bool) {
 	if o.Null {
 		return v, false
 	}
@@ -21078,7 +21078,7 @@ func (o NilUpdateBlockBodyParametersSyncedBlockSyncedFrom) Get() (v UpdateBlockB
 }
 
 // Or returns value if set, or given parameter if does not.
-func (o NilUpdateBlockBodyParametersSyncedBlockSyncedFrom) Or(d UpdateBlockBodyParametersSyncedBlockSyncedFrom) UpdateBlockBodyParametersSyncedBlockSyncedFrom {
+func (o NilUpdateBlockRequestSyncedBlockSyncedFrom) Or(d UpdateBlockRequestSyncedBlockSyncedFrom) UpdateBlockRequestSyncedBlockSyncedFrom {
 	if v, ok := o.Get(); ok {
 		return v
 	}
@@ -24521,38 +24521,38 @@ func (o OptContentWithTableRowResponse) Or(d ContentWithTableRowResponse) Conten
 	return d
 }
 
-// NewOptCreateCommentBodyParametersAttachmentsItemType returns new OptCreateCommentBodyParametersAttachmentsItemType with value set to v.
-func NewOptCreateCommentBodyParametersAttachmentsItemType(v CreateCommentBodyParametersAttachmentsItemType) OptCreateCommentBodyParametersAttachmentsItemType {
-	return OptCreateCommentBodyParametersAttachmentsItemType{
+// NewOptCreateCommentRequestAttachmentsItemType returns new OptCreateCommentRequestAttachmentsItemType with value set to v.
+func NewOptCreateCommentRequestAttachmentsItemType(v CreateCommentRequestAttachmentsItemType) OptCreateCommentRequestAttachmentsItemType {
+	return OptCreateCommentRequestAttachmentsItemType{
 		Value: v,
 		Set:   true,
 	}
 }
 
-// OptCreateCommentBodyParametersAttachmentsItemType is optional CreateCommentBodyParametersAttachmentsItemType.
-type OptCreateCommentBodyParametersAttachmentsItemType struct {
-	Value CreateCommentBodyParametersAttachmentsItemType
+// OptCreateCommentRequestAttachmentsItemType is optional CreateCommentRequestAttachmentsItemType.
+type OptCreateCommentRequestAttachmentsItemType struct {
+	Value CreateCommentRequestAttachmentsItemType
 	Set   bool
 }
 
-// IsSet returns true if OptCreateCommentBodyParametersAttachmentsItemType was set.
-func (o OptCreateCommentBodyParametersAttachmentsItemType) IsSet() bool { return o.Set }
+// IsSet returns true if OptCreateCommentRequestAttachmentsItemType was set.
+func (o OptCreateCommentRequestAttachmentsItemType) IsSet() bool { return o.Set }
 
 // Reset unsets value.
-func (o *OptCreateCommentBodyParametersAttachmentsItemType) Reset() {
-	var v CreateCommentBodyParametersAttachmentsItemType
+func (o *OptCreateCommentRequestAttachmentsItemType) Reset() {
+	var v CreateCommentRequestAttachmentsItemType
 	o.Value = v
 	o.Set = false
 }
 
 // SetTo sets value to v.
-func (o *OptCreateCommentBodyParametersAttachmentsItemType) SetTo(v CreateCommentBodyParametersAttachmentsItemType) {
+func (o *OptCreateCommentRequestAttachmentsItemType) SetTo(v CreateCommentRequestAttachmentsItemType) {
 	o.Set = true
 	o.Value = v
 }
 
 // Get returns value and boolean that denotes whether value was set.
-func (o OptCreateCommentBodyParametersAttachmentsItemType) Get() (v CreateCommentBodyParametersAttachmentsItemType, ok bool) {
+func (o OptCreateCommentRequestAttachmentsItemType) Get() (v CreateCommentRequestAttachmentsItemType, ok bool) {
 	if !o.Set {
 		return v, false
 	}
@@ -24560,45 +24560,45 @@ func (o OptCreateCommentBodyParametersAttachmentsItemType) Get() (v CreateCommen
 }
 
 // Or returns value if set, or given parameter if does not.
-func (o OptCreateCommentBodyParametersAttachmentsItemType) Or(d CreateCommentBodyParametersAttachmentsItemType) CreateCommentBodyParametersAttachmentsItemType {
+func (o OptCreateCommentRequestAttachmentsItemType) Or(d CreateCommentRequestAttachmentsItemType) CreateCommentRequestAttachmentsItemType {
 	if v, ok := o.Get(); ok {
 		return v
 	}
 	return d
 }
 
-// NewOptCreateCommentBodyParametersDisplayName returns new OptCreateCommentBodyParametersDisplayName with value set to v.
-func NewOptCreateCommentBodyParametersDisplayName(v CreateCommentBodyParametersDisplayName) OptCreateCommentBodyParametersDisplayName {
-	return OptCreateCommentBodyParametersDisplayName{
+// NewOptCreateCommentRequestDisplayName returns new OptCreateCommentRequestDisplayName with value set to v.
+func NewOptCreateCommentRequestDisplayName(v CreateCommentRequestDisplayName) OptCreateCommentRequestDisplayName {
+	return OptCreateCommentRequestDisplayName{
 		Value: v,
 		Set:   true,
 	}
 }
 
-// OptCreateCommentBodyParametersDisplayName is optional CreateCommentBodyParametersDisplayName.
-type OptCreateCommentBodyParametersDisplayName struct {
-	Value CreateCommentBodyParametersDisplayName
+// OptCreateCommentRequestDisplayName is optional CreateCommentRequestDisplayName.
+type OptCreateCommentRequestDisplayName struct {
+	Value CreateCommentRequestDisplayName
 	Set   bool
 }
 
-// IsSet returns true if OptCreateCommentBodyParametersDisplayName was set.
-func (o OptCreateCommentBodyParametersDisplayName) IsSet() bool { return o.Set }
+// IsSet returns true if OptCreateCommentRequestDisplayName was set.
+func (o OptCreateCommentRequestDisplayName) IsSet() bool { return o.Set }
 
 // Reset unsets value.
-func (o *OptCreateCommentBodyParametersDisplayName) Reset() {
-	var v CreateCommentBodyParametersDisplayName
+func (o *OptCreateCommentRequestDisplayName) Reset() {
+	var v CreateCommentRequestDisplayName
 	o.Value = v
 	o.Set = false
 }
 
 // SetTo sets value to v.
-func (o *OptCreateCommentBodyParametersDisplayName) SetTo(v CreateCommentBodyParametersDisplayName) {
+func (o *OptCreateCommentRequestDisplayName) SetTo(v CreateCommentRequestDisplayName) {
 	o.Set = true
 	o.Value = v
 }
 
 // Get returns value and boolean that denotes whether value was set.
-func (o OptCreateCommentBodyParametersDisplayName) Get() (v CreateCommentBodyParametersDisplayName, ok bool) {
+func (o OptCreateCommentRequestDisplayName) Get() (v CreateCommentRequestDisplayName, ok bool) {
 	if !o.Set {
 		return v, false
 	}
@@ -24606,45 +24606,45 @@ func (o OptCreateCommentBodyParametersDisplayName) Get() (v CreateCommentBodyPar
 }
 
 // Or returns value if set, or given parameter if does not.
-func (o OptCreateCommentBodyParametersDisplayName) Or(d CreateCommentBodyParametersDisplayName) CreateCommentBodyParametersDisplayName {
+func (o OptCreateCommentRequestDisplayName) Or(d CreateCommentRequestDisplayName) CreateCommentRequestDisplayName {
 	if v, ok := o.Get(); ok {
 		return v
 	}
 	return d
 }
 
-// NewOptCreateCommentBodyParametersDisplayNameCustom returns new OptCreateCommentBodyParametersDisplayNameCustom with value set to v.
-func NewOptCreateCommentBodyParametersDisplayNameCustom(v CreateCommentBodyParametersDisplayNameCustom) OptCreateCommentBodyParametersDisplayNameCustom {
-	return OptCreateCommentBodyParametersDisplayNameCustom{
+// NewOptCreateCommentRequestDisplayNameCustom returns new OptCreateCommentRequestDisplayNameCustom with value set to v.
+func NewOptCreateCommentRequestDisplayNameCustom(v CreateCommentRequestDisplayNameCustom) OptCreateCommentRequestDisplayNameCustom {
+	return OptCreateCommentRequestDisplayNameCustom{
 		Value: v,
 		Set:   true,
 	}
 }
 
-// OptCreateCommentBodyParametersDisplayNameCustom is optional CreateCommentBodyParametersDisplayNameCustom.
-type OptCreateCommentBodyParametersDisplayNameCustom struct {
-	Value CreateCommentBodyParametersDisplayNameCustom
+// OptCreateCommentRequestDisplayNameCustom is optional CreateCommentRequestDisplayNameCustom.
+type OptCreateCommentRequestDisplayNameCustom struct {
+	Value CreateCommentRequestDisplayNameCustom
 	Set   bool
 }
 
-// IsSet returns true if OptCreateCommentBodyParametersDisplayNameCustom was set.
-func (o OptCreateCommentBodyParametersDisplayNameCustom) IsSet() bool { return o.Set }
+// IsSet returns true if OptCreateCommentRequestDisplayNameCustom was set.
+func (o OptCreateCommentRequestDisplayNameCustom) IsSet() bool { return o.Set }
 
 // Reset unsets value.
-func (o *OptCreateCommentBodyParametersDisplayNameCustom) Reset() {
-	var v CreateCommentBodyParametersDisplayNameCustom
+func (o *OptCreateCommentRequestDisplayNameCustom) Reset() {
+	var v CreateCommentRequestDisplayNameCustom
 	o.Value = v
 	o.Set = false
 }
 
 // SetTo sets value to v.
-func (o *OptCreateCommentBodyParametersDisplayNameCustom) SetTo(v CreateCommentBodyParametersDisplayNameCustom) {
+func (o *OptCreateCommentRequestDisplayNameCustom) SetTo(v CreateCommentRequestDisplayNameCustom) {
 	o.Set = true
 	o.Value = v
 }
 
 // Get returns value and boolean that denotes whether value was set.
-func (o OptCreateCommentBodyParametersDisplayNameCustom) Get() (v CreateCommentBodyParametersDisplayNameCustom, ok bool) {
+func (o OptCreateCommentRequestDisplayNameCustom) Get() (v CreateCommentRequestDisplayNameCustom, ok bool) {
 	if !o.Set {
 		return v, false
 	}
@@ -24652,45 +24652,45 @@ func (o OptCreateCommentBodyParametersDisplayNameCustom) Get() (v CreateCommentB
 }
 
 // Or returns value if set, or given parameter if does not.
-func (o OptCreateCommentBodyParametersDisplayNameCustom) Or(d CreateCommentBodyParametersDisplayNameCustom) CreateCommentBodyParametersDisplayNameCustom {
+func (o OptCreateCommentRequestDisplayNameCustom) Or(d CreateCommentRequestDisplayNameCustom) CreateCommentRequestDisplayNameCustom {
 	if v, ok := o.Get(); ok {
 		return v
 	}
 	return d
 }
 
-// NewOptCreateCommentBodyParametersParent returns new OptCreateCommentBodyParametersParent with value set to v.
-func NewOptCreateCommentBodyParametersParent(v CreateCommentBodyParametersParent) OptCreateCommentBodyParametersParent {
-	return OptCreateCommentBodyParametersParent{
+// NewOptCreateCommentRequestParent returns new OptCreateCommentRequestParent with value set to v.
+func NewOptCreateCommentRequestParent(v CreateCommentRequestParent) OptCreateCommentRequestParent {
+	return OptCreateCommentRequestParent{
 		Value: v,
 		Set:   true,
 	}
 }
 
-// OptCreateCommentBodyParametersParent is optional CreateCommentBodyParametersParent.
-type OptCreateCommentBodyParametersParent struct {
-	Value CreateCommentBodyParametersParent
+// OptCreateCommentRequestParent is optional CreateCommentRequestParent.
+type OptCreateCommentRequestParent struct {
+	Value CreateCommentRequestParent
 	Set   bool
 }
 
-// IsSet returns true if OptCreateCommentBodyParametersParent was set.
-func (o OptCreateCommentBodyParametersParent) IsSet() bool { return o.Set }
+// IsSet returns true if OptCreateCommentRequestParent was set.
+func (o OptCreateCommentRequestParent) IsSet() bool { return o.Set }
 
 // Reset unsets value.
-func (o *OptCreateCommentBodyParametersParent) Reset() {
-	var v CreateCommentBodyParametersParent
+func (o *OptCreateCommentRequestParent) Reset() {
+	var v CreateCommentRequestParent
 	o.Value = v
 	o.Set = false
 }
 
 // SetTo sets value to v.
-func (o *OptCreateCommentBodyParametersParent) SetTo(v CreateCommentBodyParametersParent) {
+func (o *OptCreateCommentRequestParent) SetTo(v CreateCommentRequestParent) {
 	o.Set = true
 	o.Value = v
 }
 
 // Get returns value and boolean that denotes whether value was set.
-func (o OptCreateCommentBodyParametersParent) Get() (v CreateCommentBodyParametersParent, ok bool) {
+func (o OptCreateCommentRequestParent) Get() (v CreateCommentRequestParent, ok bool) {
 	if !o.Set {
 		return v, false
 	}
@@ -24698,45 +24698,45 @@ func (o OptCreateCommentBodyParametersParent) Get() (v CreateCommentBodyParamete
 }
 
 // Or returns value if set, or given parameter if does not.
-func (o OptCreateCommentBodyParametersParent) Or(d CreateCommentBodyParametersParent) CreateCommentBodyParametersParent {
+func (o OptCreateCommentRequestParent) Or(d CreateCommentRequestParent) CreateCommentRequestParent {
 	if v, ok := o.Get(); ok {
 		return v
 	}
 	return d
 }
 
-// NewOptCreateCommentBodyParametersParentType returns new OptCreateCommentBodyParametersParentType with value set to v.
-func NewOptCreateCommentBodyParametersParentType(v CreateCommentBodyParametersParentType) OptCreateCommentBodyParametersParentType {
-	return OptCreateCommentBodyParametersParentType{
+// NewOptCreateCommentRequestParentType returns new OptCreateCommentRequestParentType with value set to v.
+func NewOptCreateCommentRequestParentType(v CreateCommentRequestParentType) OptCreateCommentRequestParentType {
+	return OptCreateCommentRequestParentType{
 		Value: v,
 		Set:   true,
 	}
 }
 
-// OptCreateCommentBodyParametersParentType is optional CreateCommentBodyParametersParentType.
-type OptCreateCommentBodyParametersParentType struct {
-	Value CreateCommentBodyParametersParentType
+// OptCreateCommentRequestParentType is optional CreateCommentRequestParentType.
+type OptCreateCommentRequestParentType struct {
+	Value CreateCommentRequestParentType
 	Set   bool
 }
 
-// IsSet returns true if OptCreateCommentBodyParametersParentType was set.
-func (o OptCreateCommentBodyParametersParentType) IsSet() bool { return o.Set }
+// IsSet returns true if OptCreateCommentRequestParentType was set.
+func (o OptCreateCommentRequestParentType) IsSet() bool { return o.Set }
 
 // Reset unsets value.
-func (o *OptCreateCommentBodyParametersParentType) Reset() {
-	var v CreateCommentBodyParametersParentType
+func (o *OptCreateCommentRequestParentType) Reset() {
+	var v CreateCommentRequestParentType
 	o.Value = v
 	o.Set = false
 }
 
 // SetTo sets value to v.
-func (o *OptCreateCommentBodyParametersParentType) SetTo(v CreateCommentBodyParametersParentType) {
+func (o *OptCreateCommentRequestParentType) SetTo(v CreateCommentRequestParentType) {
 	o.Set = true
 	o.Value = v
 }
 
 // Get returns value and boolean that denotes whether value was set.
-func (o OptCreateCommentBodyParametersParentType) Get() (v CreateCommentBodyParametersParentType, ok bool) {
+func (o OptCreateCommentRequestParentType) Get() (v CreateCommentRequestParentType, ok bool) {
 	if !o.Set {
 		return v, false
 	}
@@ -24744,7 +24744,7 @@ func (o OptCreateCommentBodyParametersParentType) Get() (v CreateCommentBodyPara
 }
 
 // Or returns value if set, or given parameter if does not.
-func (o OptCreateCommentBodyParametersParentType) Or(d CreateCommentBodyParametersParentType) CreateCommentBodyParametersParentType {
+func (o OptCreateCommentRequestParentType) Or(d CreateCommentRequestParentType) CreateCommentRequestParentType {
 	if v, ok := o.Get(); ok {
 		return v
 	}
@@ -24797,38 +24797,38 @@ func (o OptCreateCommentResponseDisplayName) Or(d CreateCommentResponseDisplayNa
 	return d
 }
 
-// NewOptCreateDatabaseBodyParametersParentWorkspace returns new OptCreateDatabaseBodyParametersParentWorkspace with value set to v.
-func NewOptCreateDatabaseBodyParametersParentWorkspace(v CreateDatabaseBodyParametersParentWorkspace) OptCreateDatabaseBodyParametersParentWorkspace {
-	return OptCreateDatabaseBodyParametersParentWorkspace{
+// NewOptCreateDatabaseRequestParentWorkspace returns new OptCreateDatabaseRequestParentWorkspace with value set to v.
+func NewOptCreateDatabaseRequestParentWorkspace(v CreateDatabaseRequestParentWorkspace) OptCreateDatabaseRequestParentWorkspace {
+	return OptCreateDatabaseRequestParentWorkspace{
 		Value: v,
 		Set:   true,
 	}
 }
 
-// OptCreateDatabaseBodyParametersParentWorkspace is optional CreateDatabaseBodyParametersParentWorkspace.
-type OptCreateDatabaseBodyParametersParentWorkspace struct {
-	Value CreateDatabaseBodyParametersParentWorkspace
+// OptCreateDatabaseRequestParentWorkspace is optional CreateDatabaseRequestParentWorkspace.
+type OptCreateDatabaseRequestParentWorkspace struct {
+	Value CreateDatabaseRequestParentWorkspace
 	Set   bool
 }
 
-// IsSet returns true if OptCreateDatabaseBodyParametersParentWorkspace was set.
-func (o OptCreateDatabaseBodyParametersParentWorkspace) IsSet() bool { return o.Set }
+// IsSet returns true if OptCreateDatabaseRequestParentWorkspace was set.
+func (o OptCreateDatabaseRequestParentWorkspace) IsSet() bool { return o.Set }
 
 // Reset unsets value.
-func (o *OptCreateDatabaseBodyParametersParentWorkspace) Reset() {
-	var v CreateDatabaseBodyParametersParentWorkspace
+func (o *OptCreateDatabaseRequestParentWorkspace) Reset() {
+	var v CreateDatabaseRequestParentWorkspace
 	o.Value = v
 	o.Set = false
 }
 
 // SetTo sets value to v.
-func (o *OptCreateDatabaseBodyParametersParentWorkspace) SetTo(v CreateDatabaseBodyParametersParentWorkspace) {
+func (o *OptCreateDatabaseRequestParentWorkspace) SetTo(v CreateDatabaseRequestParentWorkspace) {
 	o.Set = true
 	o.Value = v
 }
 
 // Get returns value and boolean that denotes whether value was set.
-func (o OptCreateDatabaseBodyParametersParentWorkspace) Get() (v CreateDatabaseBodyParametersParentWorkspace, ok bool) {
+func (o OptCreateDatabaseRequestParentWorkspace) Get() (v CreateDatabaseRequestParentWorkspace, ok bool) {
 	if !o.Set {
 		return v, false
 	}
@@ -24836,45 +24836,45 @@ func (o OptCreateDatabaseBodyParametersParentWorkspace) Get() (v CreateDatabaseB
 }
 
 // Or returns value if set, or given parameter if does not.
-func (o OptCreateDatabaseBodyParametersParentWorkspace) Or(d CreateDatabaseBodyParametersParentWorkspace) CreateDatabaseBodyParametersParentWorkspace {
+func (o OptCreateDatabaseRequestParentWorkspace) Or(d CreateDatabaseRequestParentWorkspace) CreateDatabaseRequestParentWorkspace {
 	if v, ok := o.Get(); ok {
 		return v
 	}
 	return d
 }
 
-// NewOptCreatePageBodyParametersParent returns new OptCreatePageBodyParametersParent with value set to v.
-func NewOptCreatePageBodyParametersParent(v CreatePageBodyParametersParent) OptCreatePageBodyParametersParent {
-	return OptCreatePageBodyParametersParent{
+// NewOptCreatePageRequestParent returns new OptCreatePageRequestParent with value set to v.
+func NewOptCreatePageRequestParent(v CreatePageRequestParent) OptCreatePageRequestParent {
+	return OptCreatePageRequestParent{
 		Value: v,
 		Set:   true,
 	}
 }
 
-// OptCreatePageBodyParametersParent is optional CreatePageBodyParametersParent.
-type OptCreatePageBodyParametersParent struct {
-	Value CreatePageBodyParametersParent
+// OptCreatePageRequestParent is optional CreatePageRequestParent.
+type OptCreatePageRequestParent struct {
+	Value CreatePageRequestParent
 	Set   bool
 }
 
-// IsSet returns true if OptCreatePageBodyParametersParent was set.
-func (o OptCreatePageBodyParametersParent) IsSet() bool { return o.Set }
+// IsSet returns true if OptCreatePageRequestParent was set.
+func (o OptCreatePageRequestParent) IsSet() bool { return o.Set }
 
 // Reset unsets value.
-func (o *OptCreatePageBodyParametersParent) Reset() {
-	var v CreatePageBodyParametersParent
+func (o *OptCreatePageRequestParent) Reset() {
+	var v CreatePageRequestParent
 	o.Value = v
 	o.Set = false
 }
 
 // SetTo sets value to v.
-func (o *OptCreatePageBodyParametersParent) SetTo(v CreatePageBodyParametersParent) {
+func (o *OptCreatePageRequestParent) SetTo(v CreatePageRequestParent) {
 	o.Set = true
 	o.Value = v
 }
 
 // Get returns value and boolean that denotes whether value was set.
-func (o OptCreatePageBodyParametersParent) Get() (v CreatePageBodyParametersParent, ok bool) {
+func (o OptCreatePageRequestParent) Get() (v CreatePageRequestParent, ok bool) {
 	if !o.Set {
 		return v, false
 	}
@@ -24882,45 +24882,45 @@ func (o OptCreatePageBodyParametersParent) Get() (v CreatePageBodyParametersPare
 }
 
 // Or returns value if set, or given parameter if does not.
-func (o OptCreatePageBodyParametersParent) Or(d CreatePageBodyParametersParent) CreatePageBodyParametersParent {
+func (o OptCreatePageRequestParent) Or(d CreatePageRequestParent) CreatePageRequestParent {
 	if v, ok := o.Get(); ok {
 		return v
 	}
 	return d
 }
 
-// NewOptCreatePageBodyParametersParentType returns new OptCreatePageBodyParametersParentType with value set to v.
-func NewOptCreatePageBodyParametersParentType(v CreatePageBodyParametersParentType) OptCreatePageBodyParametersParentType {
-	return OptCreatePageBodyParametersParentType{
+// NewOptCreatePageRequestParentType returns new OptCreatePageRequestParentType with value set to v.
+func NewOptCreatePageRequestParentType(v CreatePageRequestParentType) OptCreatePageRequestParentType {
+	return OptCreatePageRequestParentType{
 		Value: v,
 		Set:   true,
 	}
 }
 
-// OptCreatePageBodyParametersParentType is optional CreatePageBodyParametersParentType.
-type OptCreatePageBodyParametersParentType struct {
-	Value CreatePageBodyParametersParentType
+// OptCreatePageRequestParentType is optional CreatePageRequestParentType.
+type OptCreatePageRequestParentType struct {
+	Value CreatePageRequestParentType
 	Set   bool
 }
 
-// IsSet returns true if OptCreatePageBodyParametersParentType was set.
-func (o OptCreatePageBodyParametersParentType) IsSet() bool { return o.Set }
+// IsSet returns true if OptCreatePageRequestParentType was set.
+func (o OptCreatePageRequestParentType) IsSet() bool { return o.Set }
 
 // Reset unsets value.
-func (o *OptCreatePageBodyParametersParentType) Reset() {
-	var v CreatePageBodyParametersParentType
+func (o *OptCreatePageRequestParentType) Reset() {
+	var v CreatePageRequestParentType
 	o.Value = v
 	o.Set = false
 }
 
 // SetTo sets value to v.
-func (o *OptCreatePageBodyParametersParentType) SetTo(v CreatePageBodyParametersParentType) {
+func (o *OptCreatePageRequestParentType) SetTo(v CreatePageRequestParentType) {
 	o.Set = true
 	o.Value = v
 }
 
 // Get returns value and boolean that denotes whether value was set.
-func (o OptCreatePageBodyParametersParentType) Get() (v CreatePageBodyParametersParentType, ok bool) {
+func (o OptCreatePageRequestParentType) Get() (v CreatePageRequestParentType, ok bool) {
 	if !o.Set {
 		return v, false
 	}
@@ -24928,45 +24928,45 @@ func (o OptCreatePageBodyParametersParentType) Get() (v CreatePageBodyParameters
 }
 
 // Or returns value if set, or given parameter if does not.
-func (o OptCreatePageBodyParametersParentType) Or(d CreatePageBodyParametersParentType) CreatePageBodyParametersParentType {
+func (o OptCreatePageRequestParentType) Or(d CreatePageRequestParentType) CreatePageRequestParentType {
 	if v, ok := o.Get(); ok {
 		return v
 	}
 	return d
 }
 
-// NewOptCreatePageBodyParametersParentWorkspace returns new OptCreatePageBodyParametersParentWorkspace with value set to v.
-func NewOptCreatePageBodyParametersParentWorkspace(v CreatePageBodyParametersParentWorkspace) OptCreatePageBodyParametersParentWorkspace {
-	return OptCreatePageBodyParametersParentWorkspace{
+// NewOptCreatePageRequestParentWorkspace returns new OptCreatePageRequestParentWorkspace with value set to v.
+func NewOptCreatePageRequestParentWorkspace(v CreatePageRequestParentWorkspace) OptCreatePageRequestParentWorkspace {
+	return OptCreatePageRequestParentWorkspace{
 		Value: v,
 		Set:   true,
 	}
 }
 
-// OptCreatePageBodyParametersParentWorkspace is optional CreatePageBodyParametersParentWorkspace.
-type OptCreatePageBodyParametersParentWorkspace struct {
-	Value CreatePageBodyParametersParentWorkspace
+// OptCreatePageRequestParentWorkspace is optional CreatePageRequestParentWorkspace.
+type OptCreatePageRequestParentWorkspace struct {
+	Value CreatePageRequestParentWorkspace
 	Set   bool
 }
 
-// IsSet returns true if OptCreatePageBodyParametersParentWorkspace was set.
-func (o OptCreatePageBodyParametersParentWorkspace) IsSet() bool { return o.Set }
+// IsSet returns true if OptCreatePageRequestParentWorkspace was set.
+func (o OptCreatePageRequestParentWorkspace) IsSet() bool { return o.Set }
 
 // Reset unsets value.
-func (o *OptCreatePageBodyParametersParentWorkspace) Reset() {
-	var v CreatePageBodyParametersParentWorkspace
+func (o *OptCreatePageRequestParentWorkspace) Reset() {
+	var v CreatePageRequestParentWorkspace
 	o.Value = v
 	o.Set = false
 }
 
 // SetTo sets value to v.
-func (o *OptCreatePageBodyParametersParentWorkspace) SetTo(v CreatePageBodyParametersParentWorkspace) {
+func (o *OptCreatePageRequestParentWorkspace) SetTo(v CreatePageRequestParentWorkspace) {
 	o.Set = true
 	o.Value = v
 }
 
 // Get returns value and boolean that denotes whether value was set.
-func (o OptCreatePageBodyParametersParentWorkspace) Get() (v CreatePageBodyParametersParentWorkspace, ok bool) {
+func (o OptCreatePageRequestParentWorkspace) Get() (v CreatePageRequestParentWorkspace, ok bool) {
 	if !o.Set {
 		return v, false
 	}
@@ -24974,45 +24974,45 @@ func (o OptCreatePageBodyParametersParentWorkspace) Get() (v CreatePageBodyParam
 }
 
 // Or returns value if set, or given parameter if does not.
-func (o OptCreatePageBodyParametersParentWorkspace) Or(d CreatePageBodyParametersParentWorkspace) CreatePageBodyParametersParentWorkspace {
+func (o OptCreatePageRequestParentWorkspace) Or(d CreatePageRequestParentWorkspace) CreatePageRequestParentWorkspace {
 	if v, ok := o.Get(); ok {
 		return v
 	}
 	return d
 }
 
-// NewOptCreatePageBodyParametersProperties returns new OptCreatePageBodyParametersProperties with value set to v.
-func NewOptCreatePageBodyParametersProperties(v CreatePageBodyParametersProperties) OptCreatePageBodyParametersProperties {
-	return OptCreatePageBodyParametersProperties{
+// NewOptCreatePageRequestProperties returns new OptCreatePageRequestProperties with value set to v.
+func NewOptCreatePageRequestProperties(v CreatePageRequestProperties) OptCreatePageRequestProperties {
+	return OptCreatePageRequestProperties{
 		Value: v,
 		Set:   true,
 	}
 }
 
-// OptCreatePageBodyParametersProperties is optional CreatePageBodyParametersProperties.
-type OptCreatePageBodyParametersProperties struct {
-	Value CreatePageBodyParametersProperties
+// OptCreatePageRequestProperties is optional CreatePageRequestProperties.
+type OptCreatePageRequestProperties struct {
+	Value CreatePageRequestProperties
 	Set   bool
 }
 
-// IsSet returns true if OptCreatePageBodyParametersProperties was set.
-func (o OptCreatePageBodyParametersProperties) IsSet() bool { return o.Set }
+// IsSet returns true if OptCreatePageRequestProperties was set.
+func (o OptCreatePageRequestProperties) IsSet() bool { return o.Set }
 
 // Reset unsets value.
-func (o *OptCreatePageBodyParametersProperties) Reset() {
-	var v CreatePageBodyParametersProperties
+func (o *OptCreatePageRequestProperties) Reset() {
+	var v CreatePageRequestProperties
 	o.Value = v
 	o.Set = false
 }
 
 // SetTo sets value to v.
-func (o *OptCreatePageBodyParametersProperties) SetTo(v CreatePageBodyParametersProperties) {
+func (o *OptCreatePageRequestProperties) SetTo(v CreatePageRequestProperties) {
 	o.Set = true
 	o.Value = v
 }
 
 // Get returns value and boolean that denotes whether value was set.
-func (o OptCreatePageBodyParametersProperties) Get() (v CreatePageBodyParametersProperties, ok bool) {
+func (o OptCreatePageRequestProperties) Get() (v CreatePageRequestProperties, ok bool) {
 	if !o.Set {
 		return v, false
 	}
@@ -25020,45 +25020,45 @@ func (o OptCreatePageBodyParametersProperties) Get() (v CreatePageBodyParameters
 }
 
 // Or returns value if set, or given parameter if does not.
-func (o OptCreatePageBodyParametersProperties) Or(d CreatePageBodyParametersProperties) CreatePageBodyParametersProperties {
+func (o OptCreatePageRequestProperties) Or(d CreatePageRequestProperties) CreatePageRequestProperties {
 	if v, ok := o.Get(); ok {
 		return v
 	}
 	return d
 }
 
-// NewOptCreatePageBodyParametersPropertiesItemFilesItemType returns new OptCreatePageBodyParametersPropertiesItemFilesItemType with value set to v.
-func NewOptCreatePageBodyParametersPropertiesItemFilesItemType(v CreatePageBodyParametersPropertiesItemFilesItemType) OptCreatePageBodyParametersPropertiesItemFilesItemType {
-	return OptCreatePageBodyParametersPropertiesItemFilesItemType{
+// NewOptCreatePageRequestPropertiesItemFilesItemType returns new OptCreatePageRequestPropertiesItemFilesItemType with value set to v.
+func NewOptCreatePageRequestPropertiesItemFilesItemType(v CreatePageRequestPropertiesItemFilesItemType) OptCreatePageRequestPropertiesItemFilesItemType {
+	return OptCreatePageRequestPropertiesItemFilesItemType{
 		Value: v,
 		Set:   true,
 	}
 }
 
-// OptCreatePageBodyParametersPropertiesItemFilesItemType is optional CreatePageBodyParametersPropertiesItemFilesItemType.
-type OptCreatePageBodyParametersPropertiesItemFilesItemType struct {
-	Value CreatePageBodyParametersPropertiesItemFilesItemType
+// OptCreatePageRequestPropertiesItemFilesItemType is optional CreatePageRequestPropertiesItemFilesItemType.
+type OptCreatePageRequestPropertiesItemFilesItemType struct {
+	Value CreatePageRequestPropertiesItemFilesItemType
 	Set   bool
 }
 
-// IsSet returns true if OptCreatePageBodyParametersPropertiesItemFilesItemType was set.
-func (o OptCreatePageBodyParametersPropertiesItemFilesItemType) IsSet() bool { return o.Set }
+// IsSet returns true if OptCreatePageRequestPropertiesItemFilesItemType was set.
+func (o OptCreatePageRequestPropertiesItemFilesItemType) IsSet() bool { return o.Set }
 
 // Reset unsets value.
-func (o *OptCreatePageBodyParametersPropertiesItemFilesItemType) Reset() {
-	var v CreatePageBodyParametersPropertiesItemFilesItemType
+func (o *OptCreatePageRequestPropertiesItemFilesItemType) Reset() {
+	var v CreatePageRequestPropertiesItemFilesItemType
 	o.Value = v
 	o.Set = false
 }
 
 // SetTo sets value to v.
-func (o *OptCreatePageBodyParametersPropertiesItemFilesItemType) SetTo(v CreatePageBodyParametersPropertiesItemFilesItemType) {
+func (o *OptCreatePageRequestPropertiesItemFilesItemType) SetTo(v CreatePageRequestPropertiesItemFilesItemType) {
 	o.Set = true
 	o.Value = v
 }
 
 // Get returns value and boolean that denotes whether value was set.
-func (o OptCreatePageBodyParametersPropertiesItemFilesItemType) Get() (v CreatePageBodyParametersPropertiesItemFilesItemType, ok bool) {
+func (o OptCreatePageRequestPropertiesItemFilesItemType) Get() (v CreatePageRequestPropertiesItemFilesItemType, ok bool) {
 	if !o.Set {
 		return v, false
 	}
@@ -25066,45 +25066,45 @@ func (o OptCreatePageBodyParametersPropertiesItemFilesItemType) Get() (v CreateP
 }
 
 // Or returns value if set, or given parameter if does not.
-func (o OptCreatePageBodyParametersPropertiesItemFilesItemType) Or(d CreatePageBodyParametersPropertiesItemFilesItemType) CreatePageBodyParametersPropertiesItemFilesItemType {
+func (o OptCreatePageRequestPropertiesItemFilesItemType) Or(d CreatePageRequestPropertiesItemFilesItemType) CreatePageRequestPropertiesItemFilesItemType {
 	if v, ok := o.Get(); ok {
 		return v
 	}
 	return d
 }
 
-// NewOptCreatePageBodyParametersPropertiesItemPeopleItemObject returns new OptCreatePageBodyParametersPropertiesItemPeopleItemObject with value set to v.
-func NewOptCreatePageBodyParametersPropertiesItemPeopleItemObject(v CreatePageBodyParametersPropertiesItemPeopleItemObject) OptCreatePageBodyParametersPropertiesItemPeopleItemObject {
-	return OptCreatePageBodyParametersPropertiesItemPeopleItemObject{
+// NewOptCreatePageRequestPropertiesItemPeopleItemObject returns new OptCreatePageRequestPropertiesItemPeopleItemObject with value set to v.
+func NewOptCreatePageRequestPropertiesItemPeopleItemObject(v CreatePageRequestPropertiesItemPeopleItemObject) OptCreatePageRequestPropertiesItemPeopleItemObject {
+	return OptCreatePageRequestPropertiesItemPeopleItemObject{
 		Value: v,
 		Set:   true,
 	}
 }
 
-// OptCreatePageBodyParametersPropertiesItemPeopleItemObject is optional CreatePageBodyParametersPropertiesItemPeopleItemObject.
-type OptCreatePageBodyParametersPropertiesItemPeopleItemObject struct {
-	Value CreatePageBodyParametersPropertiesItemPeopleItemObject
+// OptCreatePageRequestPropertiesItemPeopleItemObject is optional CreatePageRequestPropertiesItemPeopleItemObject.
+type OptCreatePageRequestPropertiesItemPeopleItemObject struct {
+	Value CreatePageRequestPropertiesItemPeopleItemObject
 	Set   bool
 }
 
-// IsSet returns true if OptCreatePageBodyParametersPropertiesItemPeopleItemObject was set.
-func (o OptCreatePageBodyParametersPropertiesItemPeopleItemObject) IsSet() bool { return o.Set }
+// IsSet returns true if OptCreatePageRequestPropertiesItemPeopleItemObject was set.
+func (o OptCreatePageRequestPropertiesItemPeopleItemObject) IsSet() bool { return o.Set }
 
 // Reset unsets value.
-func (o *OptCreatePageBodyParametersPropertiesItemPeopleItemObject) Reset() {
-	var v CreatePageBodyParametersPropertiesItemPeopleItemObject
+func (o *OptCreatePageRequestPropertiesItemPeopleItemObject) Reset() {
+	var v CreatePageRequestPropertiesItemPeopleItemObject
 	o.Value = v
 	o.Set = false
 }
 
 // SetTo sets value to v.
-func (o *OptCreatePageBodyParametersPropertiesItemPeopleItemObject) SetTo(v CreatePageBodyParametersPropertiesItemPeopleItemObject) {
+func (o *OptCreatePageRequestPropertiesItemPeopleItemObject) SetTo(v CreatePageRequestPropertiesItemPeopleItemObject) {
 	o.Set = true
 	o.Value = v
 }
 
 // Get returns value and boolean that denotes whether value was set.
-func (o OptCreatePageBodyParametersPropertiesItemPeopleItemObject) Get() (v CreatePageBodyParametersPropertiesItemPeopleItemObject, ok bool) {
+func (o OptCreatePageRequestPropertiesItemPeopleItemObject) Get() (v CreatePageRequestPropertiesItemPeopleItemObject, ok bool) {
 	if !o.Set {
 		return v, false
 	}
@@ -25112,45 +25112,45 @@ func (o OptCreatePageBodyParametersPropertiesItemPeopleItemObject) Get() (v Crea
 }
 
 // Or returns value if set, or given parameter if does not.
-func (o OptCreatePageBodyParametersPropertiesItemPeopleItemObject) Or(d CreatePageBodyParametersPropertiesItemPeopleItemObject) CreatePageBodyParametersPropertiesItemPeopleItemObject {
+func (o OptCreatePageRequestPropertiesItemPeopleItemObject) Or(d CreatePageRequestPropertiesItemPeopleItemObject) CreatePageRequestPropertiesItemPeopleItemObject {
 	if v, ok := o.Get(); ok {
 		return v
 	}
 	return d
 }
 
-// NewOptCreatePageBodyParametersPropertiesItemType returns new OptCreatePageBodyParametersPropertiesItemType with value set to v.
-func NewOptCreatePageBodyParametersPropertiesItemType(v CreatePageBodyParametersPropertiesItemType) OptCreatePageBodyParametersPropertiesItemType {
-	return OptCreatePageBodyParametersPropertiesItemType{
+// NewOptCreatePageRequestPropertiesItemType returns new OptCreatePageRequestPropertiesItemType with value set to v.
+func NewOptCreatePageRequestPropertiesItemType(v CreatePageRequestPropertiesItemType) OptCreatePageRequestPropertiesItemType {
+	return OptCreatePageRequestPropertiesItemType{
 		Value: v,
 		Set:   true,
 	}
 }
 
-// OptCreatePageBodyParametersPropertiesItemType is optional CreatePageBodyParametersPropertiesItemType.
-type OptCreatePageBodyParametersPropertiesItemType struct {
-	Value CreatePageBodyParametersPropertiesItemType
+// OptCreatePageRequestPropertiesItemType is optional CreatePageRequestPropertiesItemType.
+type OptCreatePageRequestPropertiesItemType struct {
+	Value CreatePageRequestPropertiesItemType
 	Set   bool
 }
 
-// IsSet returns true if OptCreatePageBodyParametersPropertiesItemType was set.
-func (o OptCreatePageBodyParametersPropertiesItemType) IsSet() bool { return o.Set }
+// IsSet returns true if OptCreatePageRequestPropertiesItemType was set.
+func (o OptCreatePageRequestPropertiesItemType) IsSet() bool { return o.Set }
 
 // Reset unsets value.
-func (o *OptCreatePageBodyParametersPropertiesItemType) Reset() {
-	var v CreatePageBodyParametersPropertiesItemType
+func (o *OptCreatePageRequestPropertiesItemType) Reset() {
+	var v CreatePageRequestPropertiesItemType
 	o.Value = v
 	o.Set = false
 }
 
 // SetTo sets value to v.
-func (o *OptCreatePageBodyParametersPropertiesItemType) SetTo(v CreatePageBodyParametersPropertiesItemType) {
+func (o *OptCreatePageRequestPropertiesItemType) SetTo(v CreatePageRequestPropertiesItemType) {
 	o.Set = true
 	o.Value = v
 }
 
 // Get returns value and boolean that denotes whether value was set.
-func (o OptCreatePageBodyParametersPropertiesItemType) Get() (v CreatePageBodyParametersPropertiesItemType, ok bool) {
+func (o OptCreatePageRequestPropertiesItemType) Get() (v CreatePageRequestPropertiesItemType, ok bool) {
 	if !o.Set {
 		return v, false
 	}
@@ -25158,45 +25158,45 @@ func (o OptCreatePageBodyParametersPropertiesItemType) Get() (v CreatePageBodyPa
 }
 
 // Or returns value if set, or given parameter if does not.
-func (o OptCreatePageBodyParametersPropertiesItemType) Or(d CreatePageBodyParametersPropertiesItemType) CreatePageBodyParametersPropertiesItemType {
+func (o OptCreatePageRequestPropertiesItemType) Or(d CreatePageRequestPropertiesItemType) CreatePageRequestPropertiesItemType {
 	if v, ok := o.Get(); ok {
 		return v
 	}
 	return d
 }
 
-// NewOptCreatePageBodyParametersTemplate returns new OptCreatePageBodyParametersTemplate with value set to v.
-func NewOptCreatePageBodyParametersTemplate(v CreatePageBodyParametersTemplate) OptCreatePageBodyParametersTemplate {
-	return OptCreatePageBodyParametersTemplate{
+// NewOptCreatePageRequestTemplate returns new OptCreatePageRequestTemplate with value set to v.
+func NewOptCreatePageRequestTemplate(v CreatePageRequestTemplate) OptCreatePageRequestTemplate {
+	return OptCreatePageRequestTemplate{
 		Value: v,
 		Set:   true,
 	}
 }
 
-// OptCreatePageBodyParametersTemplate is optional CreatePageBodyParametersTemplate.
-type OptCreatePageBodyParametersTemplate struct {
-	Value CreatePageBodyParametersTemplate
+// OptCreatePageRequestTemplate is optional CreatePageRequestTemplate.
+type OptCreatePageRequestTemplate struct {
+	Value CreatePageRequestTemplate
 	Set   bool
 }
 
-// IsSet returns true if OptCreatePageBodyParametersTemplate was set.
-func (o OptCreatePageBodyParametersTemplate) IsSet() bool { return o.Set }
+// IsSet returns true if OptCreatePageRequestTemplate was set.
+func (o OptCreatePageRequestTemplate) IsSet() bool { return o.Set }
 
 // Reset unsets value.
-func (o *OptCreatePageBodyParametersTemplate) Reset() {
-	var v CreatePageBodyParametersTemplate
+func (o *OptCreatePageRequestTemplate) Reset() {
+	var v CreatePageRequestTemplate
 	o.Value = v
 	o.Set = false
 }
 
 // SetTo sets value to v.
-func (o *OptCreatePageBodyParametersTemplate) SetTo(v CreatePageBodyParametersTemplate) {
+func (o *OptCreatePageRequestTemplate) SetTo(v CreatePageRequestTemplate) {
 	o.Set = true
 	o.Value = v
 }
 
 // Get returns value and boolean that denotes whether value was set.
-func (o OptCreatePageBodyParametersTemplate) Get() (v CreatePageBodyParametersTemplate, ok bool) {
+func (o OptCreatePageRequestTemplate) Get() (v CreatePageRequestTemplate, ok bool) {
 	if !o.Set {
 		return v, false
 	}
@@ -25204,7 +25204,7 @@ func (o OptCreatePageBodyParametersTemplate) Get() (v CreatePageBodyParametersTe
 }
 
 // Or returns value if set, or given parameter if does not.
-func (o OptCreatePageBodyParametersTemplate) Or(d CreatePageBodyParametersTemplate) CreatePageBodyParametersTemplate {
+func (o OptCreatePageRequestTemplate) Or(d CreatePageRequestTemplate) CreatePageRequestTemplate {
 	if v, ok := o.Get(); ok {
 		return v
 	}
@@ -30104,52 +30104,52 @@ func (o OptNilBool) Or(d bool) bool {
 	return d
 }
 
-// NewOptNilCreatePageBodyParametersPropertiesItemPlace returns new OptNilCreatePageBodyParametersPropertiesItemPlace with value set to v.
-func NewOptNilCreatePageBodyParametersPropertiesItemPlace(v CreatePageBodyParametersPropertiesItemPlace) OptNilCreatePageBodyParametersPropertiesItemPlace {
-	return OptNilCreatePageBodyParametersPropertiesItemPlace{
+// NewOptNilCreatePageRequestPropertiesItemPlace returns new OptNilCreatePageRequestPropertiesItemPlace with value set to v.
+func NewOptNilCreatePageRequestPropertiesItemPlace(v CreatePageRequestPropertiesItemPlace) OptNilCreatePageRequestPropertiesItemPlace {
+	return OptNilCreatePageRequestPropertiesItemPlace{
 		Value: v,
 		Set:   true,
 	}
 }
 
-// OptNilCreatePageBodyParametersPropertiesItemPlace is optional nullable CreatePageBodyParametersPropertiesItemPlace.
-type OptNilCreatePageBodyParametersPropertiesItemPlace struct {
-	Value CreatePageBodyParametersPropertiesItemPlace
+// OptNilCreatePageRequestPropertiesItemPlace is optional nullable CreatePageRequestPropertiesItemPlace.
+type OptNilCreatePageRequestPropertiesItemPlace struct {
+	Value CreatePageRequestPropertiesItemPlace
 	Set   bool
 	Null  bool
 }
 
-// IsSet returns true if OptNilCreatePageBodyParametersPropertiesItemPlace was set.
-func (o OptNilCreatePageBodyParametersPropertiesItemPlace) IsSet() bool { return o.Set }
+// IsSet returns true if OptNilCreatePageRequestPropertiesItemPlace was set.
+func (o OptNilCreatePageRequestPropertiesItemPlace) IsSet() bool { return o.Set }
 
 // Reset unsets value.
-func (o *OptNilCreatePageBodyParametersPropertiesItemPlace) Reset() {
-	var v CreatePageBodyParametersPropertiesItemPlace
+func (o *OptNilCreatePageRequestPropertiesItemPlace) Reset() {
+	var v CreatePageRequestPropertiesItemPlace
 	o.Value = v
 	o.Set = false
 	o.Null = false
 }
 
 // SetTo sets value to v.
-func (o *OptNilCreatePageBodyParametersPropertiesItemPlace) SetTo(v CreatePageBodyParametersPropertiesItemPlace) {
+func (o *OptNilCreatePageRequestPropertiesItemPlace) SetTo(v CreatePageRequestPropertiesItemPlace) {
 	o.Set = true
 	o.Null = false
 	o.Value = v
 }
 
 // IsNull returns true if value is Null.
-func (o OptNilCreatePageBodyParametersPropertiesItemPlace) IsNull() bool { return o.Null }
+func (o OptNilCreatePageRequestPropertiesItemPlace) IsNull() bool { return o.Null }
 
 // SetToNull sets value to null.
-func (o *OptNilCreatePageBodyParametersPropertiesItemPlace) SetToNull() {
+func (o *OptNilCreatePageRequestPropertiesItemPlace) SetToNull() {
 	o.Set = true
 	o.Null = true
-	var v CreatePageBodyParametersPropertiesItemPlace
+	var v CreatePageRequestPropertiesItemPlace
 	o.Value = v
 }
 
 // Get returns value and boolean that denotes whether value was set.
-func (o OptNilCreatePageBodyParametersPropertiesItemPlace) Get() (v CreatePageBodyParametersPropertiesItemPlace, ok bool) {
+func (o OptNilCreatePageRequestPropertiesItemPlace) Get() (v CreatePageRequestPropertiesItemPlace, ok bool) {
 	if o.Null {
 		return v, false
 	}
@@ -30160,59 +30160,59 @@ func (o OptNilCreatePageBodyParametersPropertiesItemPlace) Get() (v CreatePageBo
 }
 
 // Or returns value if set, or given parameter if does not.
-func (o OptNilCreatePageBodyParametersPropertiesItemPlace) Or(d CreatePageBodyParametersPropertiesItemPlace) CreatePageBodyParametersPropertiesItemPlace {
+func (o OptNilCreatePageRequestPropertiesItemPlace) Or(d CreatePageRequestPropertiesItemPlace) CreatePageRequestPropertiesItemPlace {
 	if v, ok := o.Get(); ok {
 		return v
 	}
 	return d
 }
 
-// NewOptNilCreatePageBodyParametersPropertiesItemSelect returns new OptNilCreatePageBodyParametersPropertiesItemSelect with value set to v.
-func NewOptNilCreatePageBodyParametersPropertiesItemSelect(v CreatePageBodyParametersPropertiesItemSelect) OptNilCreatePageBodyParametersPropertiesItemSelect {
-	return OptNilCreatePageBodyParametersPropertiesItemSelect{
+// NewOptNilCreatePageRequestPropertiesItemSelect returns new OptNilCreatePageRequestPropertiesItemSelect with value set to v.
+func NewOptNilCreatePageRequestPropertiesItemSelect(v CreatePageRequestPropertiesItemSelect) OptNilCreatePageRequestPropertiesItemSelect {
+	return OptNilCreatePageRequestPropertiesItemSelect{
 		Value: v,
 		Set:   true,
 	}
 }
 
-// OptNilCreatePageBodyParametersPropertiesItemSelect is optional nullable CreatePageBodyParametersPropertiesItemSelect.
-type OptNilCreatePageBodyParametersPropertiesItemSelect struct {
-	Value CreatePageBodyParametersPropertiesItemSelect
+// OptNilCreatePageRequestPropertiesItemSelect is optional nullable CreatePageRequestPropertiesItemSelect.
+type OptNilCreatePageRequestPropertiesItemSelect struct {
+	Value CreatePageRequestPropertiesItemSelect
 	Set   bool
 	Null  bool
 }
 
-// IsSet returns true if OptNilCreatePageBodyParametersPropertiesItemSelect was set.
-func (o OptNilCreatePageBodyParametersPropertiesItemSelect) IsSet() bool { return o.Set }
+// IsSet returns true if OptNilCreatePageRequestPropertiesItemSelect was set.
+func (o OptNilCreatePageRequestPropertiesItemSelect) IsSet() bool { return o.Set }
 
 // Reset unsets value.
-func (o *OptNilCreatePageBodyParametersPropertiesItemSelect) Reset() {
-	var v CreatePageBodyParametersPropertiesItemSelect
+func (o *OptNilCreatePageRequestPropertiesItemSelect) Reset() {
+	var v CreatePageRequestPropertiesItemSelect
 	o.Value = v
 	o.Set = false
 	o.Null = false
 }
 
 // SetTo sets value to v.
-func (o *OptNilCreatePageBodyParametersPropertiesItemSelect) SetTo(v CreatePageBodyParametersPropertiesItemSelect) {
+func (o *OptNilCreatePageRequestPropertiesItemSelect) SetTo(v CreatePageRequestPropertiesItemSelect) {
 	o.Set = true
 	o.Null = false
 	o.Value = v
 }
 
 // IsNull returns true if value is Null.
-func (o OptNilCreatePageBodyParametersPropertiesItemSelect) IsNull() bool { return o.Null }
+func (o OptNilCreatePageRequestPropertiesItemSelect) IsNull() bool { return o.Null }
 
 // SetToNull sets value to null.
-func (o *OptNilCreatePageBodyParametersPropertiesItemSelect) SetToNull() {
+func (o *OptNilCreatePageRequestPropertiesItemSelect) SetToNull() {
 	o.Set = true
 	o.Null = true
-	var v CreatePageBodyParametersPropertiesItemSelect
+	var v CreatePageRequestPropertiesItemSelect
 	o.Value = v
 }
 
 // Get returns value and boolean that denotes whether value was set.
-func (o OptNilCreatePageBodyParametersPropertiesItemSelect) Get() (v CreatePageBodyParametersPropertiesItemSelect, ok bool) {
+func (o OptNilCreatePageRequestPropertiesItemSelect) Get() (v CreatePageRequestPropertiesItemSelect, ok bool) {
 	if o.Null {
 		return v, false
 	}
@@ -30223,59 +30223,59 @@ func (o OptNilCreatePageBodyParametersPropertiesItemSelect) Get() (v CreatePageB
 }
 
 // Or returns value if set, or given parameter if does not.
-func (o OptNilCreatePageBodyParametersPropertiesItemSelect) Or(d CreatePageBodyParametersPropertiesItemSelect) CreatePageBodyParametersPropertiesItemSelect {
+func (o OptNilCreatePageRequestPropertiesItemSelect) Or(d CreatePageRequestPropertiesItemSelect) CreatePageRequestPropertiesItemSelect {
 	if v, ok := o.Get(); ok {
 		return v
 	}
 	return d
 }
 
-// NewOptNilCreatePageBodyParametersPropertiesItemStatus returns new OptNilCreatePageBodyParametersPropertiesItemStatus with value set to v.
-func NewOptNilCreatePageBodyParametersPropertiesItemStatus(v CreatePageBodyParametersPropertiesItemStatus) OptNilCreatePageBodyParametersPropertiesItemStatus {
-	return OptNilCreatePageBodyParametersPropertiesItemStatus{
+// NewOptNilCreatePageRequestPropertiesItemStatus returns new OptNilCreatePageRequestPropertiesItemStatus with value set to v.
+func NewOptNilCreatePageRequestPropertiesItemStatus(v CreatePageRequestPropertiesItemStatus) OptNilCreatePageRequestPropertiesItemStatus {
+	return OptNilCreatePageRequestPropertiesItemStatus{
 		Value: v,
 		Set:   true,
 	}
 }
 
-// OptNilCreatePageBodyParametersPropertiesItemStatus is optional nullable CreatePageBodyParametersPropertiesItemStatus.
-type OptNilCreatePageBodyParametersPropertiesItemStatus struct {
-	Value CreatePageBodyParametersPropertiesItemStatus
+// OptNilCreatePageRequestPropertiesItemStatus is optional nullable CreatePageRequestPropertiesItemStatus.
+type OptNilCreatePageRequestPropertiesItemStatus struct {
+	Value CreatePageRequestPropertiesItemStatus
 	Set   bool
 	Null  bool
 }
 
-// IsSet returns true if OptNilCreatePageBodyParametersPropertiesItemStatus was set.
-func (o OptNilCreatePageBodyParametersPropertiesItemStatus) IsSet() bool { return o.Set }
+// IsSet returns true if OptNilCreatePageRequestPropertiesItemStatus was set.
+func (o OptNilCreatePageRequestPropertiesItemStatus) IsSet() bool { return o.Set }
 
 // Reset unsets value.
-func (o *OptNilCreatePageBodyParametersPropertiesItemStatus) Reset() {
-	var v CreatePageBodyParametersPropertiesItemStatus
+func (o *OptNilCreatePageRequestPropertiesItemStatus) Reset() {
+	var v CreatePageRequestPropertiesItemStatus
 	o.Value = v
 	o.Set = false
 	o.Null = false
 }
 
 // SetTo sets value to v.
-func (o *OptNilCreatePageBodyParametersPropertiesItemStatus) SetTo(v CreatePageBodyParametersPropertiesItemStatus) {
+func (o *OptNilCreatePageRequestPropertiesItemStatus) SetTo(v CreatePageRequestPropertiesItemStatus) {
 	o.Set = true
 	o.Null = false
 	o.Value = v
 }
 
 // IsNull returns true if value is Null.
-func (o OptNilCreatePageBodyParametersPropertiesItemStatus) IsNull() bool { return o.Null }
+func (o OptNilCreatePageRequestPropertiesItemStatus) IsNull() bool { return o.Null }
 
 // SetToNull sets value to null.
-func (o *OptNilCreatePageBodyParametersPropertiesItemStatus) SetToNull() {
+func (o *OptNilCreatePageRequestPropertiesItemStatus) SetToNull() {
 	o.Set = true
 	o.Null = true
-	var v CreatePageBodyParametersPropertiesItemStatus
+	var v CreatePageRequestPropertiesItemStatus
 	o.Value = v
 }
 
 // Get returns value and boolean that denotes whether value was set.
-func (o OptNilCreatePageBodyParametersPropertiesItemStatus) Get() (v CreatePageBodyParametersPropertiesItemStatus, ok bool) {
+func (o OptNilCreatePageRequestPropertiesItemStatus) Get() (v CreatePageRequestPropertiesItemStatus, ok bool) {
 	if o.Null {
 		return v, false
 	}
@@ -30286,7 +30286,7 @@ func (o OptNilCreatePageBodyParametersPropertiesItemStatus) Get() (v CreatePageB
 }
 
 // Or returns value if set, or given parameter if does not.
-func (o OptNilCreatePageBodyParametersPropertiesItemStatus) Or(d CreatePageBodyParametersPropertiesItemStatus) CreatePageBodyParametersPropertiesItemStatus {
+func (o OptNilCreatePageRequestPropertiesItemStatus) Or(d CreatePageRequestPropertiesItemStatus) CreatePageRequestPropertiesItemStatus {
 	if v, ok := o.Get(); ok {
 		return v
 	}
@@ -30608,52 +30608,52 @@ func (o OptNilString) Or(d string) string {
 	return d
 }
 
-// NewOptNilUpdatePageBodyParametersPropertiesItemPlace returns new OptNilUpdatePageBodyParametersPropertiesItemPlace with value set to v.
-func NewOptNilUpdatePageBodyParametersPropertiesItemPlace(v UpdatePageBodyParametersPropertiesItemPlace) OptNilUpdatePageBodyParametersPropertiesItemPlace {
-	return OptNilUpdatePageBodyParametersPropertiesItemPlace{
+// NewOptNilUpdatePageRequestPropertiesItemPlace returns new OptNilUpdatePageRequestPropertiesItemPlace with value set to v.
+func NewOptNilUpdatePageRequestPropertiesItemPlace(v UpdatePageRequestPropertiesItemPlace) OptNilUpdatePageRequestPropertiesItemPlace {
+	return OptNilUpdatePageRequestPropertiesItemPlace{
 		Value: v,
 		Set:   true,
 	}
 }
 
-// OptNilUpdatePageBodyParametersPropertiesItemPlace is optional nullable UpdatePageBodyParametersPropertiesItemPlace.
-type OptNilUpdatePageBodyParametersPropertiesItemPlace struct {
-	Value UpdatePageBodyParametersPropertiesItemPlace
+// OptNilUpdatePageRequestPropertiesItemPlace is optional nullable UpdatePageRequestPropertiesItemPlace.
+type OptNilUpdatePageRequestPropertiesItemPlace struct {
+	Value UpdatePageRequestPropertiesItemPlace
 	Set   bool
 	Null  bool
 }
 
-// IsSet returns true if OptNilUpdatePageBodyParametersPropertiesItemPlace was set.
-func (o OptNilUpdatePageBodyParametersPropertiesItemPlace) IsSet() bool { return o.Set }
+// IsSet returns true if OptNilUpdatePageRequestPropertiesItemPlace was set.
+func (o OptNilUpdatePageRequestPropertiesItemPlace) IsSet() bool { return o.Set }
 
 // Reset unsets value.
-func (o *OptNilUpdatePageBodyParametersPropertiesItemPlace) Reset() {
-	var v UpdatePageBodyParametersPropertiesItemPlace
+func (o *OptNilUpdatePageRequestPropertiesItemPlace) Reset() {
+	var v UpdatePageRequestPropertiesItemPlace
 	o.Value = v
 	o.Set = false
 	o.Null = false
 }
 
 // SetTo sets value to v.
-func (o *OptNilUpdatePageBodyParametersPropertiesItemPlace) SetTo(v UpdatePageBodyParametersPropertiesItemPlace) {
+func (o *OptNilUpdatePageRequestPropertiesItemPlace) SetTo(v UpdatePageRequestPropertiesItemPlace) {
 	o.Set = true
 	o.Null = false
 	o.Value = v
 }
 
 // IsNull returns true if value is Null.
-func (o OptNilUpdatePageBodyParametersPropertiesItemPlace) IsNull() bool { return o.Null }
+func (o OptNilUpdatePageRequestPropertiesItemPlace) IsNull() bool { return o.Null }
 
 // SetToNull sets value to null.
-func (o *OptNilUpdatePageBodyParametersPropertiesItemPlace) SetToNull() {
+func (o *OptNilUpdatePageRequestPropertiesItemPlace) SetToNull() {
 	o.Set = true
 	o.Null = true
-	var v UpdatePageBodyParametersPropertiesItemPlace
+	var v UpdatePageRequestPropertiesItemPlace
 	o.Value = v
 }
 
 // Get returns value and boolean that denotes whether value was set.
-func (o OptNilUpdatePageBodyParametersPropertiesItemPlace) Get() (v UpdatePageBodyParametersPropertiesItemPlace, ok bool) {
+func (o OptNilUpdatePageRequestPropertiesItemPlace) Get() (v UpdatePageRequestPropertiesItemPlace, ok bool) {
 	if o.Null {
 		return v, false
 	}
@@ -30664,59 +30664,59 @@ func (o OptNilUpdatePageBodyParametersPropertiesItemPlace) Get() (v UpdatePageBo
 }
 
 // Or returns value if set, or given parameter if does not.
-func (o OptNilUpdatePageBodyParametersPropertiesItemPlace) Or(d UpdatePageBodyParametersPropertiesItemPlace) UpdatePageBodyParametersPropertiesItemPlace {
+func (o OptNilUpdatePageRequestPropertiesItemPlace) Or(d UpdatePageRequestPropertiesItemPlace) UpdatePageRequestPropertiesItemPlace {
 	if v, ok := o.Get(); ok {
 		return v
 	}
 	return d
 }
 
-// NewOptNilUpdatePageBodyParametersPropertiesItemSelect returns new OptNilUpdatePageBodyParametersPropertiesItemSelect with value set to v.
-func NewOptNilUpdatePageBodyParametersPropertiesItemSelect(v UpdatePageBodyParametersPropertiesItemSelect) OptNilUpdatePageBodyParametersPropertiesItemSelect {
-	return OptNilUpdatePageBodyParametersPropertiesItemSelect{
+// NewOptNilUpdatePageRequestPropertiesItemSelect returns new OptNilUpdatePageRequestPropertiesItemSelect with value set to v.
+func NewOptNilUpdatePageRequestPropertiesItemSelect(v UpdatePageRequestPropertiesItemSelect) OptNilUpdatePageRequestPropertiesItemSelect {
+	return OptNilUpdatePageRequestPropertiesItemSelect{
 		Value: v,
 		Set:   true,
 	}
 }
 
-// OptNilUpdatePageBodyParametersPropertiesItemSelect is optional nullable UpdatePageBodyParametersPropertiesItemSelect.
-type OptNilUpdatePageBodyParametersPropertiesItemSelect struct {
-	Value UpdatePageBodyParametersPropertiesItemSelect
+// OptNilUpdatePageRequestPropertiesItemSelect is optional nullable UpdatePageRequestPropertiesItemSelect.
+type OptNilUpdatePageRequestPropertiesItemSelect struct {
+	Value UpdatePageRequestPropertiesItemSelect
 	Set   bool
 	Null  bool
 }
 
-// IsSet returns true if OptNilUpdatePageBodyParametersPropertiesItemSelect was set.
-func (o OptNilUpdatePageBodyParametersPropertiesItemSelect) IsSet() bool { return o.Set }
+// IsSet returns true if OptNilUpdatePageRequestPropertiesItemSelect was set.
+func (o OptNilUpdatePageRequestPropertiesItemSelect) IsSet() bool { return o.Set }
 
 // Reset unsets value.
-func (o *OptNilUpdatePageBodyParametersPropertiesItemSelect) Reset() {
-	var v UpdatePageBodyParametersPropertiesItemSelect
+func (o *OptNilUpdatePageRequestPropertiesItemSelect) Reset() {
+	var v UpdatePageRequestPropertiesItemSelect
 	o.Value = v
 	o.Set = false
 	o.Null = false
 }
 
 // SetTo sets value to v.
-func (o *OptNilUpdatePageBodyParametersPropertiesItemSelect) SetTo(v UpdatePageBodyParametersPropertiesItemSelect) {
+func (o *OptNilUpdatePageRequestPropertiesItemSelect) SetTo(v UpdatePageRequestPropertiesItemSelect) {
 	o.Set = true
 	o.Null = false
 	o.Value = v
 }
 
 // IsNull returns true if value is Null.
-func (o OptNilUpdatePageBodyParametersPropertiesItemSelect) IsNull() bool { return o.Null }
+func (o OptNilUpdatePageRequestPropertiesItemSelect) IsNull() bool { return o.Null }
 
 // SetToNull sets value to null.
-func (o *OptNilUpdatePageBodyParametersPropertiesItemSelect) SetToNull() {
+func (o *OptNilUpdatePageRequestPropertiesItemSelect) SetToNull() {
 	o.Set = true
 	o.Null = true
-	var v UpdatePageBodyParametersPropertiesItemSelect
+	var v UpdatePageRequestPropertiesItemSelect
 	o.Value = v
 }
 
 // Get returns value and boolean that denotes whether value was set.
-func (o OptNilUpdatePageBodyParametersPropertiesItemSelect) Get() (v UpdatePageBodyParametersPropertiesItemSelect, ok bool) {
+func (o OptNilUpdatePageRequestPropertiesItemSelect) Get() (v UpdatePageRequestPropertiesItemSelect, ok bool) {
 	if o.Null {
 		return v, false
 	}
@@ -30727,59 +30727,59 @@ func (o OptNilUpdatePageBodyParametersPropertiesItemSelect) Get() (v UpdatePageB
 }
 
 // Or returns value if set, or given parameter if does not.
-func (o OptNilUpdatePageBodyParametersPropertiesItemSelect) Or(d UpdatePageBodyParametersPropertiesItemSelect) UpdatePageBodyParametersPropertiesItemSelect {
+func (o OptNilUpdatePageRequestPropertiesItemSelect) Or(d UpdatePageRequestPropertiesItemSelect) UpdatePageRequestPropertiesItemSelect {
 	if v, ok := o.Get(); ok {
 		return v
 	}
 	return d
 }
 
-// NewOptNilUpdatePageBodyParametersPropertiesItemStatus returns new OptNilUpdatePageBodyParametersPropertiesItemStatus with value set to v.
-func NewOptNilUpdatePageBodyParametersPropertiesItemStatus(v UpdatePageBodyParametersPropertiesItemStatus) OptNilUpdatePageBodyParametersPropertiesItemStatus {
-	return OptNilUpdatePageBodyParametersPropertiesItemStatus{
+// NewOptNilUpdatePageRequestPropertiesItemStatus returns new OptNilUpdatePageRequestPropertiesItemStatus with value set to v.
+func NewOptNilUpdatePageRequestPropertiesItemStatus(v UpdatePageRequestPropertiesItemStatus) OptNilUpdatePageRequestPropertiesItemStatus {
+	return OptNilUpdatePageRequestPropertiesItemStatus{
 		Value: v,
 		Set:   true,
 	}
 }
 
-// OptNilUpdatePageBodyParametersPropertiesItemStatus is optional nullable UpdatePageBodyParametersPropertiesItemStatus.
-type OptNilUpdatePageBodyParametersPropertiesItemStatus struct {
-	Value UpdatePageBodyParametersPropertiesItemStatus
+// OptNilUpdatePageRequestPropertiesItemStatus is optional nullable UpdatePageRequestPropertiesItemStatus.
+type OptNilUpdatePageRequestPropertiesItemStatus struct {
+	Value UpdatePageRequestPropertiesItemStatus
 	Set   bool
 	Null  bool
 }
 
-// IsSet returns true if OptNilUpdatePageBodyParametersPropertiesItemStatus was set.
-func (o OptNilUpdatePageBodyParametersPropertiesItemStatus) IsSet() bool { return o.Set }
+// IsSet returns true if OptNilUpdatePageRequestPropertiesItemStatus was set.
+func (o OptNilUpdatePageRequestPropertiesItemStatus) IsSet() bool { return o.Set }
 
 // Reset unsets value.
-func (o *OptNilUpdatePageBodyParametersPropertiesItemStatus) Reset() {
-	var v UpdatePageBodyParametersPropertiesItemStatus
+func (o *OptNilUpdatePageRequestPropertiesItemStatus) Reset() {
+	var v UpdatePageRequestPropertiesItemStatus
 	o.Value = v
 	o.Set = false
 	o.Null = false
 }
 
 // SetTo sets value to v.
-func (o *OptNilUpdatePageBodyParametersPropertiesItemStatus) SetTo(v UpdatePageBodyParametersPropertiesItemStatus) {
+func (o *OptNilUpdatePageRequestPropertiesItemStatus) SetTo(v UpdatePageRequestPropertiesItemStatus) {
 	o.Set = true
 	o.Null = false
 	o.Value = v
 }
 
 // IsNull returns true if value is Null.
-func (o OptNilUpdatePageBodyParametersPropertiesItemStatus) IsNull() bool { return o.Null }
+func (o OptNilUpdatePageRequestPropertiesItemStatus) IsNull() bool { return o.Null }
 
 // SetToNull sets value to null.
-func (o *OptNilUpdatePageBodyParametersPropertiesItemStatus) SetToNull() {
+func (o *OptNilUpdatePageRequestPropertiesItemStatus) SetToNull() {
 	o.Set = true
 	o.Null = true
-	var v UpdatePageBodyParametersPropertiesItemStatus
+	var v UpdatePageRequestPropertiesItemStatus
 	o.Value = v
 }
 
 // Get returns value and boolean that denotes whether value was set.
-func (o OptNilUpdatePageBodyParametersPropertiesItemStatus) Get() (v UpdatePageBodyParametersPropertiesItemStatus, ok bool) {
+func (o OptNilUpdatePageRequestPropertiesItemStatus) Get() (v UpdatePageRequestPropertiesItemStatus, ok bool) {
 	if o.Null {
 		return v, false
 	}
@@ -30790,7 +30790,7 @@ func (o OptNilUpdatePageBodyParametersPropertiesItemStatus) Get() (v UpdatePageB
 }
 
 // Or returns value if set, or given parameter if does not.
-func (o OptNilUpdatePageBodyParametersPropertiesItemStatus) Or(d UpdatePageBodyParametersPropertiesItemStatus) UpdatePageBodyParametersPropertiesItemStatus {
+func (o OptNilUpdatePageRequestPropertiesItemStatus) Or(d UpdatePageRequestPropertiesItemStatus) UpdatePageRequestPropertiesItemStatus {
 	if v, ok := o.Get(); ok {
 		return v
 	}
@@ -34891,38 +34891,38 @@ func (o OptPropertyOrTimestampFilterType) Or(d PropertyOrTimestampFilterType) Pr
 	return d
 }
 
-// NewOptQueryDataSourceBodyParametersFilter returns new OptQueryDataSourceBodyParametersFilter with value set to v.
-func NewOptQueryDataSourceBodyParametersFilter(v QueryDataSourceBodyParametersFilter) OptQueryDataSourceBodyParametersFilter {
-	return OptQueryDataSourceBodyParametersFilter{
+// NewOptQueryDataSourceRequestFilter returns new OptQueryDataSourceRequestFilter with value set to v.
+func NewOptQueryDataSourceRequestFilter(v QueryDataSourceRequestFilter) OptQueryDataSourceRequestFilter {
+	return OptQueryDataSourceRequestFilter{
 		Value: v,
 		Set:   true,
 	}
 }
 
-// OptQueryDataSourceBodyParametersFilter is optional QueryDataSourceBodyParametersFilter.
-type OptQueryDataSourceBodyParametersFilter struct {
-	Value QueryDataSourceBodyParametersFilter
+// OptQueryDataSourceRequestFilter is optional QueryDataSourceRequestFilter.
+type OptQueryDataSourceRequestFilter struct {
+	Value QueryDataSourceRequestFilter
 	Set   bool
 }
 
-// IsSet returns true if OptQueryDataSourceBodyParametersFilter was set.
-func (o OptQueryDataSourceBodyParametersFilter) IsSet() bool { return o.Set }
+// IsSet returns true if OptQueryDataSourceRequestFilter was set.
+func (o OptQueryDataSourceRequestFilter) IsSet() bool { return o.Set }
 
 // Reset unsets value.
-func (o *OptQueryDataSourceBodyParametersFilter) Reset() {
-	var v QueryDataSourceBodyParametersFilter
+func (o *OptQueryDataSourceRequestFilter) Reset() {
+	var v QueryDataSourceRequestFilter
 	o.Value = v
 	o.Set = false
 }
 
 // SetTo sets value to v.
-func (o *OptQueryDataSourceBodyParametersFilter) SetTo(v QueryDataSourceBodyParametersFilter) {
+func (o *OptQueryDataSourceRequestFilter) SetTo(v QueryDataSourceRequestFilter) {
 	o.Set = true
 	o.Value = v
 }
 
 // Get returns value and boolean that denotes whether value was set.
-func (o OptQueryDataSourceBodyParametersFilter) Get() (v QueryDataSourceBodyParametersFilter, ok bool) {
+func (o OptQueryDataSourceRequestFilter) Get() (v QueryDataSourceRequestFilter, ok bool) {
 	if !o.Set {
 		return v, false
 	}
@@ -34930,45 +34930,45 @@ func (o OptQueryDataSourceBodyParametersFilter) Get() (v QueryDataSourceBodyPara
 }
 
 // Or returns value if set, or given parameter if does not.
-func (o OptQueryDataSourceBodyParametersFilter) Or(d QueryDataSourceBodyParametersFilter) QueryDataSourceBodyParametersFilter {
+func (o OptQueryDataSourceRequestFilter) Or(d QueryDataSourceRequestFilter) QueryDataSourceRequestFilter {
 	if v, ok := o.Get(); ok {
 		return v
 	}
 	return d
 }
 
-// NewOptQueryDataSourceBodyParametersFilterTimestamp returns new OptQueryDataSourceBodyParametersFilterTimestamp with value set to v.
-func NewOptQueryDataSourceBodyParametersFilterTimestamp(v QueryDataSourceBodyParametersFilterTimestamp) OptQueryDataSourceBodyParametersFilterTimestamp {
-	return OptQueryDataSourceBodyParametersFilterTimestamp{
+// NewOptQueryDataSourceRequestFilterTimestamp returns new OptQueryDataSourceRequestFilterTimestamp with value set to v.
+func NewOptQueryDataSourceRequestFilterTimestamp(v QueryDataSourceRequestFilterTimestamp) OptQueryDataSourceRequestFilterTimestamp {
+	return OptQueryDataSourceRequestFilterTimestamp{
 		Value: v,
 		Set:   true,
 	}
 }
 
-// OptQueryDataSourceBodyParametersFilterTimestamp is optional QueryDataSourceBodyParametersFilterTimestamp.
-type OptQueryDataSourceBodyParametersFilterTimestamp struct {
-	Value QueryDataSourceBodyParametersFilterTimestamp
+// OptQueryDataSourceRequestFilterTimestamp is optional QueryDataSourceRequestFilterTimestamp.
+type OptQueryDataSourceRequestFilterTimestamp struct {
+	Value QueryDataSourceRequestFilterTimestamp
 	Set   bool
 }
 
-// IsSet returns true if OptQueryDataSourceBodyParametersFilterTimestamp was set.
-func (o OptQueryDataSourceBodyParametersFilterTimestamp) IsSet() bool { return o.Set }
+// IsSet returns true if OptQueryDataSourceRequestFilterTimestamp was set.
+func (o OptQueryDataSourceRequestFilterTimestamp) IsSet() bool { return o.Set }
 
 // Reset unsets value.
-func (o *OptQueryDataSourceBodyParametersFilterTimestamp) Reset() {
-	var v QueryDataSourceBodyParametersFilterTimestamp
+func (o *OptQueryDataSourceRequestFilterTimestamp) Reset() {
+	var v QueryDataSourceRequestFilterTimestamp
 	o.Value = v
 	o.Set = false
 }
 
 // SetTo sets value to v.
-func (o *OptQueryDataSourceBodyParametersFilterTimestamp) SetTo(v QueryDataSourceBodyParametersFilterTimestamp) {
+func (o *OptQueryDataSourceRequestFilterTimestamp) SetTo(v QueryDataSourceRequestFilterTimestamp) {
 	o.Set = true
 	o.Value = v
 }
 
 // Get returns value and boolean that denotes whether value was set.
-func (o OptQueryDataSourceBodyParametersFilterTimestamp) Get() (v QueryDataSourceBodyParametersFilterTimestamp, ok bool) {
+func (o OptQueryDataSourceRequestFilterTimestamp) Get() (v QueryDataSourceRequestFilterTimestamp, ok bool) {
 	if !o.Set {
 		return v, false
 	}
@@ -34976,45 +34976,45 @@ func (o OptQueryDataSourceBodyParametersFilterTimestamp) Get() (v QueryDataSourc
 }
 
 // Or returns value if set, or given parameter if does not.
-func (o OptQueryDataSourceBodyParametersFilterTimestamp) Or(d QueryDataSourceBodyParametersFilterTimestamp) QueryDataSourceBodyParametersFilterTimestamp {
+func (o OptQueryDataSourceRequestFilterTimestamp) Or(d QueryDataSourceRequestFilterTimestamp) QueryDataSourceRequestFilterTimestamp {
 	if v, ok := o.Get(); ok {
 		return v
 	}
 	return d
 }
 
-// NewOptQueryDataSourceBodyParametersFilterType returns new OptQueryDataSourceBodyParametersFilterType with value set to v.
-func NewOptQueryDataSourceBodyParametersFilterType(v QueryDataSourceBodyParametersFilterType) OptQueryDataSourceBodyParametersFilterType {
-	return OptQueryDataSourceBodyParametersFilterType{
+// NewOptQueryDataSourceRequestFilterType returns new OptQueryDataSourceRequestFilterType with value set to v.
+func NewOptQueryDataSourceRequestFilterType(v QueryDataSourceRequestFilterType) OptQueryDataSourceRequestFilterType {
+	return OptQueryDataSourceRequestFilterType{
 		Value: v,
 		Set:   true,
 	}
 }
 
-// OptQueryDataSourceBodyParametersFilterType is optional QueryDataSourceBodyParametersFilterType.
-type OptQueryDataSourceBodyParametersFilterType struct {
-	Value QueryDataSourceBodyParametersFilterType
+// OptQueryDataSourceRequestFilterType is optional QueryDataSourceRequestFilterType.
+type OptQueryDataSourceRequestFilterType struct {
+	Value QueryDataSourceRequestFilterType
 	Set   bool
 }
 
-// IsSet returns true if OptQueryDataSourceBodyParametersFilterType was set.
-func (o OptQueryDataSourceBodyParametersFilterType) IsSet() bool { return o.Set }
+// IsSet returns true if OptQueryDataSourceRequestFilterType was set.
+func (o OptQueryDataSourceRequestFilterType) IsSet() bool { return o.Set }
 
 // Reset unsets value.
-func (o *OptQueryDataSourceBodyParametersFilterType) Reset() {
-	var v QueryDataSourceBodyParametersFilterType
+func (o *OptQueryDataSourceRequestFilterType) Reset() {
+	var v QueryDataSourceRequestFilterType
 	o.Value = v
 	o.Set = false
 }
 
 // SetTo sets value to v.
-func (o *OptQueryDataSourceBodyParametersFilterType) SetTo(v QueryDataSourceBodyParametersFilterType) {
+func (o *OptQueryDataSourceRequestFilterType) SetTo(v QueryDataSourceRequestFilterType) {
 	o.Set = true
 	o.Value = v
 }
 
 // Get returns value and boolean that denotes whether value was set.
-func (o OptQueryDataSourceBodyParametersFilterType) Get() (v QueryDataSourceBodyParametersFilterType, ok bool) {
+func (o OptQueryDataSourceRequestFilterType) Get() (v QueryDataSourceRequestFilterType, ok bool) {
 	if !o.Set {
 		return v, false
 	}
@@ -35022,45 +35022,45 @@ func (o OptQueryDataSourceBodyParametersFilterType) Get() (v QueryDataSourceBody
 }
 
 // Or returns value if set, or given parameter if does not.
-func (o OptQueryDataSourceBodyParametersFilterType) Or(d QueryDataSourceBodyParametersFilterType) QueryDataSourceBodyParametersFilterType {
+func (o OptQueryDataSourceRequestFilterType) Or(d QueryDataSourceRequestFilterType) QueryDataSourceRequestFilterType {
 	if v, ok := o.Get(); ok {
 		return v
 	}
 	return d
 }
 
-// NewOptQueryDataSourceBodyParametersResultType returns new OptQueryDataSourceBodyParametersResultType with value set to v.
-func NewOptQueryDataSourceBodyParametersResultType(v QueryDataSourceBodyParametersResultType) OptQueryDataSourceBodyParametersResultType {
-	return OptQueryDataSourceBodyParametersResultType{
+// NewOptQueryDataSourceRequestResultType returns new OptQueryDataSourceRequestResultType with value set to v.
+func NewOptQueryDataSourceRequestResultType(v QueryDataSourceRequestResultType) OptQueryDataSourceRequestResultType {
+	return OptQueryDataSourceRequestResultType{
 		Value: v,
 		Set:   true,
 	}
 }
 
-// OptQueryDataSourceBodyParametersResultType is optional QueryDataSourceBodyParametersResultType.
-type OptQueryDataSourceBodyParametersResultType struct {
-	Value QueryDataSourceBodyParametersResultType
+// OptQueryDataSourceRequestResultType is optional QueryDataSourceRequestResultType.
+type OptQueryDataSourceRequestResultType struct {
+	Value QueryDataSourceRequestResultType
 	Set   bool
 }
 
-// IsSet returns true if OptQueryDataSourceBodyParametersResultType was set.
-func (o OptQueryDataSourceBodyParametersResultType) IsSet() bool { return o.Set }
+// IsSet returns true if OptQueryDataSourceRequestResultType was set.
+func (o OptQueryDataSourceRequestResultType) IsSet() bool { return o.Set }
 
 // Reset unsets value.
-func (o *OptQueryDataSourceBodyParametersResultType) Reset() {
-	var v QueryDataSourceBodyParametersResultType
+func (o *OptQueryDataSourceRequestResultType) Reset() {
+	var v QueryDataSourceRequestResultType
 	o.Value = v
 	o.Set = false
 }
 
 // SetTo sets value to v.
-func (o *OptQueryDataSourceBodyParametersResultType) SetTo(v QueryDataSourceBodyParametersResultType) {
+func (o *OptQueryDataSourceRequestResultType) SetTo(v QueryDataSourceRequestResultType) {
 	o.Set = true
 	o.Value = v
 }
 
 // Get returns value and boolean that denotes whether value was set.
-func (o OptQueryDataSourceBodyParametersResultType) Get() (v QueryDataSourceBodyParametersResultType, ok bool) {
+func (o OptQueryDataSourceRequestResultType) Get() (v QueryDataSourceRequestResultType, ok bool) {
 	if !o.Set {
 		return v, false
 	}
@@ -35068,45 +35068,45 @@ func (o OptQueryDataSourceBodyParametersResultType) Get() (v QueryDataSourceBody
 }
 
 // Or returns value if set, or given parameter if does not.
-func (o OptQueryDataSourceBodyParametersResultType) Or(d QueryDataSourceBodyParametersResultType) QueryDataSourceBodyParametersResultType {
+func (o OptQueryDataSourceRequestResultType) Or(d QueryDataSourceRequestResultType) QueryDataSourceRequestResultType {
 	if v, ok := o.Get(); ok {
 		return v
 	}
 	return d
 }
 
-// NewOptQueryDataSourceBodyParametersSortsItemTimestamp returns new OptQueryDataSourceBodyParametersSortsItemTimestamp with value set to v.
-func NewOptQueryDataSourceBodyParametersSortsItemTimestamp(v QueryDataSourceBodyParametersSortsItemTimestamp) OptQueryDataSourceBodyParametersSortsItemTimestamp {
-	return OptQueryDataSourceBodyParametersSortsItemTimestamp{
+// NewOptQueryDataSourceRequestSortsItemTimestamp returns new OptQueryDataSourceRequestSortsItemTimestamp with value set to v.
+func NewOptQueryDataSourceRequestSortsItemTimestamp(v QueryDataSourceRequestSortsItemTimestamp) OptQueryDataSourceRequestSortsItemTimestamp {
+	return OptQueryDataSourceRequestSortsItemTimestamp{
 		Value: v,
 		Set:   true,
 	}
 }
 
-// OptQueryDataSourceBodyParametersSortsItemTimestamp is optional QueryDataSourceBodyParametersSortsItemTimestamp.
-type OptQueryDataSourceBodyParametersSortsItemTimestamp struct {
-	Value QueryDataSourceBodyParametersSortsItemTimestamp
+// OptQueryDataSourceRequestSortsItemTimestamp is optional QueryDataSourceRequestSortsItemTimestamp.
+type OptQueryDataSourceRequestSortsItemTimestamp struct {
+	Value QueryDataSourceRequestSortsItemTimestamp
 	Set   bool
 }
 
-// IsSet returns true if OptQueryDataSourceBodyParametersSortsItemTimestamp was set.
-func (o OptQueryDataSourceBodyParametersSortsItemTimestamp) IsSet() bool { return o.Set }
+// IsSet returns true if OptQueryDataSourceRequestSortsItemTimestamp was set.
+func (o OptQueryDataSourceRequestSortsItemTimestamp) IsSet() bool { return o.Set }
 
 // Reset unsets value.
-func (o *OptQueryDataSourceBodyParametersSortsItemTimestamp) Reset() {
-	var v QueryDataSourceBodyParametersSortsItemTimestamp
+func (o *OptQueryDataSourceRequestSortsItemTimestamp) Reset() {
+	var v QueryDataSourceRequestSortsItemTimestamp
 	o.Value = v
 	o.Set = false
 }
 
 // SetTo sets value to v.
-func (o *OptQueryDataSourceBodyParametersSortsItemTimestamp) SetTo(v QueryDataSourceBodyParametersSortsItemTimestamp) {
+func (o *OptQueryDataSourceRequestSortsItemTimestamp) SetTo(v QueryDataSourceRequestSortsItemTimestamp) {
 	o.Set = true
 	o.Value = v
 }
 
 // Get returns value and boolean that denotes whether value was set.
-func (o OptQueryDataSourceBodyParametersSortsItemTimestamp) Get() (v QueryDataSourceBodyParametersSortsItemTimestamp, ok bool) {
+func (o OptQueryDataSourceRequestSortsItemTimestamp) Get() (v QueryDataSourceRequestSortsItemTimestamp, ok bool) {
 	if !o.Set {
 		return v, false
 	}
@@ -35114,7 +35114,7 @@ func (o OptQueryDataSourceBodyParametersSortsItemTimestamp) Get() (v QueryDataSo
 }
 
 // Or returns value if set, or given parameter if does not.
-func (o OptQueryDataSourceBodyParametersSortsItemTimestamp) Or(d QueryDataSourceBodyParametersSortsItemTimestamp) QueryDataSourceBodyParametersSortsItemTimestamp {
+func (o OptQueryDataSourceRequestSortsItemTimestamp) Or(d QueryDataSourceRequestSortsItemTimestamp) QueryDataSourceRequestSortsItemTimestamp {
 	if v, ok := o.Get(); ok {
 		return v
 	}
@@ -36041,38 +36041,38 @@ func (o OptRollupSubfilterPropertyFilter) Or(d RollupSubfilterPropertyFilter) Ro
 	return d
 }
 
-// NewOptSearchBodyParametersFilter returns new OptSearchBodyParametersFilter with value set to v.
-func NewOptSearchBodyParametersFilter(v SearchBodyParametersFilter) OptSearchBodyParametersFilter {
-	return OptSearchBodyParametersFilter{
+// NewOptSearchRequestFilter returns new OptSearchRequestFilter with value set to v.
+func NewOptSearchRequestFilter(v SearchRequestFilter) OptSearchRequestFilter {
+	return OptSearchRequestFilter{
 		Value: v,
 		Set:   true,
 	}
 }
 
-// OptSearchBodyParametersFilter is optional SearchBodyParametersFilter.
-type OptSearchBodyParametersFilter struct {
-	Value SearchBodyParametersFilter
+// OptSearchRequestFilter is optional SearchRequestFilter.
+type OptSearchRequestFilter struct {
+	Value SearchRequestFilter
 	Set   bool
 }
 
-// IsSet returns true if OptSearchBodyParametersFilter was set.
-func (o OptSearchBodyParametersFilter) IsSet() bool { return o.Set }
+// IsSet returns true if OptSearchRequestFilter was set.
+func (o OptSearchRequestFilter) IsSet() bool { return o.Set }
 
 // Reset unsets value.
-func (o *OptSearchBodyParametersFilter) Reset() {
-	var v SearchBodyParametersFilter
+func (o *OptSearchRequestFilter) Reset() {
+	var v SearchRequestFilter
 	o.Value = v
 	o.Set = false
 }
 
 // SetTo sets value to v.
-func (o *OptSearchBodyParametersFilter) SetTo(v SearchBodyParametersFilter) {
+func (o *OptSearchRequestFilter) SetTo(v SearchRequestFilter) {
 	o.Set = true
 	o.Value = v
 }
 
 // Get returns value and boolean that denotes whether value was set.
-func (o OptSearchBodyParametersFilter) Get() (v SearchBodyParametersFilter, ok bool) {
+func (o OptSearchRequestFilter) Get() (v SearchRequestFilter, ok bool) {
 	if !o.Set {
 		return v, false
 	}
@@ -36080,45 +36080,45 @@ func (o OptSearchBodyParametersFilter) Get() (v SearchBodyParametersFilter, ok b
 }
 
 // Or returns value if set, or given parameter if does not.
-func (o OptSearchBodyParametersFilter) Or(d SearchBodyParametersFilter) SearchBodyParametersFilter {
+func (o OptSearchRequestFilter) Or(d SearchRequestFilter) SearchRequestFilter {
 	if v, ok := o.Get(); ok {
 		return v
 	}
 	return d
 }
 
-// NewOptSearchBodyParametersSort returns new OptSearchBodyParametersSort with value set to v.
-func NewOptSearchBodyParametersSort(v SearchBodyParametersSort) OptSearchBodyParametersSort {
-	return OptSearchBodyParametersSort{
+// NewOptSearchRequestSort returns new OptSearchRequestSort with value set to v.
+func NewOptSearchRequestSort(v SearchRequestSort) OptSearchRequestSort {
+	return OptSearchRequestSort{
 		Value: v,
 		Set:   true,
 	}
 }
 
-// OptSearchBodyParametersSort is optional SearchBodyParametersSort.
-type OptSearchBodyParametersSort struct {
-	Value SearchBodyParametersSort
+// OptSearchRequestSort is optional SearchRequestSort.
+type OptSearchRequestSort struct {
+	Value SearchRequestSort
 	Set   bool
 }
 
-// IsSet returns true if OptSearchBodyParametersSort was set.
-func (o OptSearchBodyParametersSort) IsSet() bool { return o.Set }
+// IsSet returns true if OptSearchRequestSort was set.
+func (o OptSearchRequestSort) IsSet() bool { return o.Set }
 
 // Reset unsets value.
-func (o *OptSearchBodyParametersSort) Reset() {
-	var v SearchBodyParametersSort
+func (o *OptSearchRequestSort) Reset() {
+	var v SearchRequestSort
 	o.Value = v
 	o.Set = false
 }
 
 // SetTo sets value to v.
-func (o *OptSearchBodyParametersSort) SetTo(v SearchBodyParametersSort) {
+func (o *OptSearchRequestSort) SetTo(v SearchRequestSort) {
 	o.Set = true
 	o.Value = v
 }
 
 // Get returns value and boolean that denotes whether value was set.
-func (o OptSearchBodyParametersSort) Get() (v SearchBodyParametersSort, ok bool) {
+func (o OptSearchRequestSort) Get() (v SearchRequestSort, ok bool) {
 	if !o.Set {
 		return v, false
 	}
@@ -36126,7 +36126,7 @@ func (o OptSearchBodyParametersSort) Get() (v SearchBodyParametersSort, ok bool)
 }
 
 // Or returns value if set, or given parameter if does not.
-func (o OptSearchBodyParametersSort) Or(d SearchBodyParametersSort) SearchBodyParametersSort {
+func (o OptSearchRequestSort) Or(d SearchRequestSort) SearchRequestSort {
 	if v, ok := o.Get(); ok {
 		return v
 	}
@@ -37881,38 +37881,38 @@ func (o OptUniqueIdPropertyValueResponse) Or(d UniqueIdPropertyValueResponse) Un
 	return d
 }
 
-// NewOptUpdateBlockBodyParametersCallout returns new OptUpdateBlockBodyParametersCallout with value set to v.
-func NewOptUpdateBlockBodyParametersCallout(v UpdateBlockBodyParametersCallout) OptUpdateBlockBodyParametersCallout {
-	return OptUpdateBlockBodyParametersCallout{
+// NewOptUpdateBlockRequestCallout returns new OptUpdateBlockRequestCallout with value set to v.
+func NewOptUpdateBlockRequestCallout(v UpdateBlockRequestCallout) OptUpdateBlockRequestCallout {
+	return OptUpdateBlockRequestCallout{
 		Value: v,
 		Set:   true,
 	}
 }
 
-// OptUpdateBlockBodyParametersCallout is optional UpdateBlockBodyParametersCallout.
-type OptUpdateBlockBodyParametersCallout struct {
-	Value UpdateBlockBodyParametersCallout
+// OptUpdateBlockRequestCallout is optional UpdateBlockRequestCallout.
+type OptUpdateBlockRequestCallout struct {
+	Value UpdateBlockRequestCallout
 	Set   bool
 }
 
-// IsSet returns true if OptUpdateBlockBodyParametersCallout was set.
-func (o OptUpdateBlockBodyParametersCallout) IsSet() bool { return o.Set }
+// IsSet returns true if OptUpdateBlockRequestCallout was set.
+func (o OptUpdateBlockRequestCallout) IsSet() bool { return o.Set }
 
 // Reset unsets value.
-func (o *OptUpdateBlockBodyParametersCallout) Reset() {
-	var v UpdateBlockBodyParametersCallout
+func (o *OptUpdateBlockRequestCallout) Reset() {
+	var v UpdateBlockRequestCallout
 	o.Value = v
 	o.Set = false
 }
 
 // SetTo sets value to v.
-func (o *OptUpdateBlockBodyParametersCallout) SetTo(v UpdateBlockBodyParametersCallout) {
+func (o *OptUpdateBlockRequestCallout) SetTo(v UpdateBlockRequestCallout) {
 	o.Set = true
 	o.Value = v
 }
 
 // Get returns value and boolean that denotes whether value was set.
-func (o OptUpdateBlockBodyParametersCallout) Get() (v UpdateBlockBodyParametersCallout, ok bool) {
+func (o OptUpdateBlockRequestCallout) Get() (v UpdateBlockRequestCallout, ok bool) {
 	if !o.Set {
 		return v, false
 	}
@@ -37920,45 +37920,45 @@ func (o OptUpdateBlockBodyParametersCallout) Get() (v UpdateBlockBodyParametersC
 }
 
 // Or returns value if set, or given parameter if does not.
-func (o OptUpdateBlockBodyParametersCallout) Or(d UpdateBlockBodyParametersCallout) UpdateBlockBodyParametersCallout {
+func (o OptUpdateBlockRequestCallout) Or(d UpdateBlockRequestCallout) UpdateBlockRequestCallout {
 	if v, ok := o.Get(); ok {
 		return v
 	}
 	return d
 }
 
-// NewOptUpdateBlockBodyParametersCode returns new OptUpdateBlockBodyParametersCode with value set to v.
-func NewOptUpdateBlockBodyParametersCode(v UpdateBlockBodyParametersCode) OptUpdateBlockBodyParametersCode {
-	return OptUpdateBlockBodyParametersCode{
+// NewOptUpdateBlockRequestCode returns new OptUpdateBlockRequestCode with value set to v.
+func NewOptUpdateBlockRequestCode(v UpdateBlockRequestCode) OptUpdateBlockRequestCode {
+	return OptUpdateBlockRequestCode{
 		Value: v,
 		Set:   true,
 	}
 }
 
-// OptUpdateBlockBodyParametersCode is optional UpdateBlockBodyParametersCode.
-type OptUpdateBlockBodyParametersCode struct {
-	Value UpdateBlockBodyParametersCode
+// OptUpdateBlockRequestCode is optional UpdateBlockRequestCode.
+type OptUpdateBlockRequestCode struct {
+	Value UpdateBlockRequestCode
 	Set   bool
 }
 
-// IsSet returns true if OptUpdateBlockBodyParametersCode was set.
-func (o OptUpdateBlockBodyParametersCode) IsSet() bool { return o.Set }
+// IsSet returns true if OptUpdateBlockRequestCode was set.
+func (o OptUpdateBlockRequestCode) IsSet() bool { return o.Set }
 
 // Reset unsets value.
-func (o *OptUpdateBlockBodyParametersCode) Reset() {
-	var v UpdateBlockBodyParametersCode
+func (o *OptUpdateBlockRequestCode) Reset() {
+	var v UpdateBlockRequestCode
 	o.Value = v
 	o.Set = false
 }
 
 // SetTo sets value to v.
-func (o *OptUpdateBlockBodyParametersCode) SetTo(v UpdateBlockBodyParametersCode) {
+func (o *OptUpdateBlockRequestCode) SetTo(v UpdateBlockRequestCode) {
 	o.Set = true
 	o.Value = v
 }
 
 // Get returns value and boolean that denotes whether value was set.
-func (o OptUpdateBlockBodyParametersCode) Get() (v UpdateBlockBodyParametersCode, ok bool) {
+func (o OptUpdateBlockRequestCode) Get() (v UpdateBlockRequestCode, ok bool) {
 	if !o.Set {
 		return v, false
 	}
@@ -37966,45 +37966,45 @@ func (o OptUpdateBlockBodyParametersCode) Get() (v UpdateBlockBodyParametersCode
 }
 
 // Or returns value if set, or given parameter if does not.
-func (o OptUpdateBlockBodyParametersCode) Or(d UpdateBlockBodyParametersCode) UpdateBlockBodyParametersCode {
+func (o OptUpdateBlockRequestCode) Or(d UpdateBlockRequestCode) UpdateBlockRequestCode {
 	if v, ok := o.Get(); ok {
 		return v
 	}
 	return d
 }
 
-// NewOptUpdateBlockBodyParametersColumn returns new OptUpdateBlockBodyParametersColumn with value set to v.
-func NewOptUpdateBlockBodyParametersColumn(v UpdateBlockBodyParametersColumn) OptUpdateBlockBodyParametersColumn {
-	return OptUpdateBlockBodyParametersColumn{
+// NewOptUpdateBlockRequestColumn returns new OptUpdateBlockRequestColumn with value set to v.
+func NewOptUpdateBlockRequestColumn(v UpdateBlockRequestColumn) OptUpdateBlockRequestColumn {
+	return OptUpdateBlockRequestColumn{
 		Value: v,
 		Set:   true,
 	}
 }
 
-// OptUpdateBlockBodyParametersColumn is optional UpdateBlockBodyParametersColumn.
-type OptUpdateBlockBodyParametersColumn struct {
-	Value UpdateBlockBodyParametersColumn
+// OptUpdateBlockRequestColumn is optional UpdateBlockRequestColumn.
+type OptUpdateBlockRequestColumn struct {
+	Value UpdateBlockRequestColumn
 	Set   bool
 }
 
-// IsSet returns true if OptUpdateBlockBodyParametersColumn was set.
-func (o OptUpdateBlockBodyParametersColumn) IsSet() bool { return o.Set }
+// IsSet returns true if OptUpdateBlockRequestColumn was set.
+func (o OptUpdateBlockRequestColumn) IsSet() bool { return o.Set }
 
 // Reset unsets value.
-func (o *OptUpdateBlockBodyParametersColumn) Reset() {
-	var v UpdateBlockBodyParametersColumn
+func (o *OptUpdateBlockRequestColumn) Reset() {
+	var v UpdateBlockRequestColumn
 	o.Value = v
 	o.Set = false
 }
 
 // SetTo sets value to v.
-func (o *OptUpdateBlockBodyParametersColumn) SetTo(v UpdateBlockBodyParametersColumn) {
+func (o *OptUpdateBlockRequestColumn) SetTo(v UpdateBlockRequestColumn) {
 	o.Set = true
 	o.Value = v
 }
 
 // Get returns value and boolean that denotes whether value was set.
-func (o OptUpdateBlockBodyParametersColumn) Get() (v UpdateBlockBodyParametersColumn, ok bool) {
+func (o OptUpdateBlockRequestColumn) Get() (v UpdateBlockRequestColumn, ok bool) {
 	if !o.Set {
 		return v, false
 	}
@@ -38012,45 +38012,45 @@ func (o OptUpdateBlockBodyParametersColumn) Get() (v UpdateBlockBodyParametersCo
 }
 
 // Or returns value if set, or given parameter if does not.
-func (o OptUpdateBlockBodyParametersColumn) Or(d UpdateBlockBodyParametersColumn) UpdateBlockBodyParametersColumn {
+func (o OptUpdateBlockRequestColumn) Or(d UpdateBlockRequestColumn) UpdateBlockRequestColumn {
 	if v, ok := o.Get(); ok {
 		return v
 	}
 	return d
 }
 
-// NewOptUpdateBlockBodyParametersLinkToPage returns new OptUpdateBlockBodyParametersLinkToPage with value set to v.
-func NewOptUpdateBlockBodyParametersLinkToPage(v UpdateBlockBodyParametersLinkToPage) OptUpdateBlockBodyParametersLinkToPage {
-	return OptUpdateBlockBodyParametersLinkToPage{
+// NewOptUpdateBlockRequestLinkToPage returns new OptUpdateBlockRequestLinkToPage with value set to v.
+func NewOptUpdateBlockRequestLinkToPage(v UpdateBlockRequestLinkToPage) OptUpdateBlockRequestLinkToPage {
+	return OptUpdateBlockRequestLinkToPage{
 		Value: v,
 		Set:   true,
 	}
 }
 
-// OptUpdateBlockBodyParametersLinkToPage is optional UpdateBlockBodyParametersLinkToPage.
-type OptUpdateBlockBodyParametersLinkToPage struct {
-	Value UpdateBlockBodyParametersLinkToPage
+// OptUpdateBlockRequestLinkToPage is optional UpdateBlockRequestLinkToPage.
+type OptUpdateBlockRequestLinkToPage struct {
+	Value UpdateBlockRequestLinkToPage
 	Set   bool
 }
 
-// IsSet returns true if OptUpdateBlockBodyParametersLinkToPage was set.
-func (o OptUpdateBlockBodyParametersLinkToPage) IsSet() bool { return o.Set }
+// IsSet returns true if OptUpdateBlockRequestLinkToPage was set.
+func (o OptUpdateBlockRequestLinkToPage) IsSet() bool { return o.Set }
 
 // Reset unsets value.
-func (o *OptUpdateBlockBodyParametersLinkToPage) Reset() {
-	var v UpdateBlockBodyParametersLinkToPage
+func (o *OptUpdateBlockRequestLinkToPage) Reset() {
+	var v UpdateBlockRequestLinkToPage
 	o.Value = v
 	o.Set = false
 }
 
 // SetTo sets value to v.
-func (o *OptUpdateBlockBodyParametersLinkToPage) SetTo(v UpdateBlockBodyParametersLinkToPage) {
+func (o *OptUpdateBlockRequestLinkToPage) SetTo(v UpdateBlockRequestLinkToPage) {
 	o.Set = true
 	o.Value = v
 }
 
 // Get returns value and boolean that denotes whether value was set.
-func (o OptUpdateBlockBodyParametersLinkToPage) Get() (v UpdateBlockBodyParametersLinkToPage, ok bool) {
+func (o OptUpdateBlockRequestLinkToPage) Get() (v UpdateBlockRequestLinkToPage, ok bool) {
 	if !o.Set {
 		return v, false
 	}
@@ -38058,45 +38058,45 @@ func (o OptUpdateBlockBodyParametersLinkToPage) Get() (v UpdateBlockBodyParamete
 }
 
 // Or returns value if set, or given parameter if does not.
-func (o OptUpdateBlockBodyParametersLinkToPage) Or(d UpdateBlockBodyParametersLinkToPage) UpdateBlockBodyParametersLinkToPage {
+func (o OptUpdateBlockRequestLinkToPage) Or(d UpdateBlockRequestLinkToPage) UpdateBlockRequestLinkToPage {
 	if v, ok := o.Get(); ok {
 		return v
 	}
 	return d
 }
 
-// NewOptUpdateBlockBodyParametersLinkToPageType returns new OptUpdateBlockBodyParametersLinkToPageType with value set to v.
-func NewOptUpdateBlockBodyParametersLinkToPageType(v UpdateBlockBodyParametersLinkToPageType) OptUpdateBlockBodyParametersLinkToPageType {
-	return OptUpdateBlockBodyParametersLinkToPageType{
+// NewOptUpdateBlockRequestLinkToPageType returns new OptUpdateBlockRequestLinkToPageType with value set to v.
+func NewOptUpdateBlockRequestLinkToPageType(v UpdateBlockRequestLinkToPageType) OptUpdateBlockRequestLinkToPageType {
+	return OptUpdateBlockRequestLinkToPageType{
 		Value: v,
 		Set:   true,
 	}
 }
 
-// OptUpdateBlockBodyParametersLinkToPageType is optional UpdateBlockBodyParametersLinkToPageType.
-type OptUpdateBlockBodyParametersLinkToPageType struct {
-	Value UpdateBlockBodyParametersLinkToPageType
+// OptUpdateBlockRequestLinkToPageType is optional UpdateBlockRequestLinkToPageType.
+type OptUpdateBlockRequestLinkToPageType struct {
+	Value UpdateBlockRequestLinkToPageType
 	Set   bool
 }
 
-// IsSet returns true if OptUpdateBlockBodyParametersLinkToPageType was set.
-func (o OptUpdateBlockBodyParametersLinkToPageType) IsSet() bool { return o.Set }
+// IsSet returns true if OptUpdateBlockRequestLinkToPageType was set.
+func (o OptUpdateBlockRequestLinkToPageType) IsSet() bool { return o.Set }
 
 // Reset unsets value.
-func (o *OptUpdateBlockBodyParametersLinkToPageType) Reset() {
-	var v UpdateBlockBodyParametersLinkToPageType
+func (o *OptUpdateBlockRequestLinkToPageType) Reset() {
+	var v UpdateBlockRequestLinkToPageType
 	o.Value = v
 	o.Set = false
 }
 
 // SetTo sets value to v.
-func (o *OptUpdateBlockBodyParametersLinkToPageType) SetTo(v UpdateBlockBodyParametersLinkToPageType) {
+func (o *OptUpdateBlockRequestLinkToPageType) SetTo(v UpdateBlockRequestLinkToPageType) {
 	o.Set = true
 	o.Value = v
 }
 
 // Get returns value and boolean that denotes whether value was set.
-func (o OptUpdateBlockBodyParametersLinkToPageType) Get() (v UpdateBlockBodyParametersLinkToPageType, ok bool) {
+func (o OptUpdateBlockRequestLinkToPageType) Get() (v UpdateBlockRequestLinkToPageType, ok bool) {
 	if !o.Set {
 		return v, false
 	}
@@ -38104,45 +38104,45 @@ func (o OptUpdateBlockBodyParametersLinkToPageType) Get() (v UpdateBlockBodyPara
 }
 
 // Or returns value if set, or given parameter if does not.
-func (o OptUpdateBlockBodyParametersLinkToPageType) Or(d UpdateBlockBodyParametersLinkToPageType) UpdateBlockBodyParametersLinkToPageType {
+func (o OptUpdateBlockRequestLinkToPageType) Or(d UpdateBlockRequestLinkToPageType) UpdateBlockRequestLinkToPageType {
 	if v, ok := o.Get(); ok {
 		return v
 	}
 	return d
 }
 
-// NewOptUpdateBlockBodyParametersSyncedBlock returns new OptUpdateBlockBodyParametersSyncedBlock with value set to v.
-func NewOptUpdateBlockBodyParametersSyncedBlock(v UpdateBlockBodyParametersSyncedBlock) OptUpdateBlockBodyParametersSyncedBlock {
-	return OptUpdateBlockBodyParametersSyncedBlock{
+// NewOptUpdateBlockRequestSyncedBlock returns new OptUpdateBlockRequestSyncedBlock with value set to v.
+func NewOptUpdateBlockRequestSyncedBlock(v UpdateBlockRequestSyncedBlock) OptUpdateBlockRequestSyncedBlock {
+	return OptUpdateBlockRequestSyncedBlock{
 		Value: v,
 		Set:   true,
 	}
 }
 
-// OptUpdateBlockBodyParametersSyncedBlock is optional UpdateBlockBodyParametersSyncedBlock.
-type OptUpdateBlockBodyParametersSyncedBlock struct {
-	Value UpdateBlockBodyParametersSyncedBlock
+// OptUpdateBlockRequestSyncedBlock is optional UpdateBlockRequestSyncedBlock.
+type OptUpdateBlockRequestSyncedBlock struct {
+	Value UpdateBlockRequestSyncedBlock
 	Set   bool
 }
 
-// IsSet returns true if OptUpdateBlockBodyParametersSyncedBlock was set.
-func (o OptUpdateBlockBodyParametersSyncedBlock) IsSet() bool { return o.Set }
+// IsSet returns true if OptUpdateBlockRequestSyncedBlock was set.
+func (o OptUpdateBlockRequestSyncedBlock) IsSet() bool { return o.Set }
 
 // Reset unsets value.
-func (o *OptUpdateBlockBodyParametersSyncedBlock) Reset() {
-	var v UpdateBlockBodyParametersSyncedBlock
+func (o *OptUpdateBlockRequestSyncedBlock) Reset() {
+	var v UpdateBlockRequestSyncedBlock
 	o.Value = v
 	o.Set = false
 }
 
 // SetTo sets value to v.
-func (o *OptUpdateBlockBodyParametersSyncedBlock) SetTo(v UpdateBlockBodyParametersSyncedBlock) {
+func (o *OptUpdateBlockRequestSyncedBlock) SetTo(v UpdateBlockRequestSyncedBlock) {
 	o.Set = true
 	o.Value = v
 }
 
 // Get returns value and boolean that denotes whether value was set.
-func (o OptUpdateBlockBodyParametersSyncedBlock) Get() (v UpdateBlockBodyParametersSyncedBlock, ok bool) {
+func (o OptUpdateBlockRequestSyncedBlock) Get() (v UpdateBlockRequestSyncedBlock, ok bool) {
 	if !o.Set {
 		return v, false
 	}
@@ -38150,45 +38150,45 @@ func (o OptUpdateBlockBodyParametersSyncedBlock) Get() (v UpdateBlockBodyParamet
 }
 
 // Or returns value if set, or given parameter if does not.
-func (o OptUpdateBlockBodyParametersSyncedBlock) Or(d UpdateBlockBodyParametersSyncedBlock) UpdateBlockBodyParametersSyncedBlock {
+func (o OptUpdateBlockRequestSyncedBlock) Or(d UpdateBlockRequestSyncedBlock) UpdateBlockRequestSyncedBlock {
 	if v, ok := o.Get(); ok {
 		return v
 	}
 	return d
 }
 
-// NewOptUpdateBlockBodyParametersSyncedBlockSyncedFromType returns new OptUpdateBlockBodyParametersSyncedBlockSyncedFromType with value set to v.
-func NewOptUpdateBlockBodyParametersSyncedBlockSyncedFromType(v UpdateBlockBodyParametersSyncedBlockSyncedFromType) OptUpdateBlockBodyParametersSyncedBlockSyncedFromType {
-	return OptUpdateBlockBodyParametersSyncedBlockSyncedFromType{
+// NewOptUpdateBlockRequestSyncedBlockSyncedFromType returns new OptUpdateBlockRequestSyncedBlockSyncedFromType with value set to v.
+func NewOptUpdateBlockRequestSyncedBlockSyncedFromType(v UpdateBlockRequestSyncedBlockSyncedFromType) OptUpdateBlockRequestSyncedBlockSyncedFromType {
+	return OptUpdateBlockRequestSyncedBlockSyncedFromType{
 		Value: v,
 		Set:   true,
 	}
 }
 
-// OptUpdateBlockBodyParametersSyncedBlockSyncedFromType is optional UpdateBlockBodyParametersSyncedBlockSyncedFromType.
-type OptUpdateBlockBodyParametersSyncedBlockSyncedFromType struct {
-	Value UpdateBlockBodyParametersSyncedBlockSyncedFromType
+// OptUpdateBlockRequestSyncedBlockSyncedFromType is optional UpdateBlockRequestSyncedBlockSyncedFromType.
+type OptUpdateBlockRequestSyncedBlockSyncedFromType struct {
+	Value UpdateBlockRequestSyncedBlockSyncedFromType
 	Set   bool
 }
 
-// IsSet returns true if OptUpdateBlockBodyParametersSyncedBlockSyncedFromType was set.
-func (o OptUpdateBlockBodyParametersSyncedBlockSyncedFromType) IsSet() bool { return o.Set }
+// IsSet returns true if OptUpdateBlockRequestSyncedBlockSyncedFromType was set.
+func (o OptUpdateBlockRequestSyncedBlockSyncedFromType) IsSet() bool { return o.Set }
 
 // Reset unsets value.
-func (o *OptUpdateBlockBodyParametersSyncedBlockSyncedFromType) Reset() {
-	var v UpdateBlockBodyParametersSyncedBlockSyncedFromType
+func (o *OptUpdateBlockRequestSyncedBlockSyncedFromType) Reset() {
+	var v UpdateBlockRequestSyncedBlockSyncedFromType
 	o.Value = v
 	o.Set = false
 }
 
 // SetTo sets value to v.
-func (o *OptUpdateBlockBodyParametersSyncedBlockSyncedFromType) SetTo(v UpdateBlockBodyParametersSyncedBlockSyncedFromType) {
+func (o *OptUpdateBlockRequestSyncedBlockSyncedFromType) SetTo(v UpdateBlockRequestSyncedBlockSyncedFromType) {
 	o.Set = true
 	o.Value = v
 }
 
 // Get returns value and boolean that denotes whether value was set.
-func (o OptUpdateBlockBodyParametersSyncedBlockSyncedFromType) Get() (v UpdateBlockBodyParametersSyncedBlockSyncedFromType, ok bool) {
+func (o OptUpdateBlockRequestSyncedBlockSyncedFromType) Get() (v UpdateBlockRequestSyncedBlockSyncedFromType, ok bool) {
 	if !o.Set {
 		return v, false
 	}
@@ -38196,45 +38196,45 @@ func (o OptUpdateBlockBodyParametersSyncedBlockSyncedFromType) Get() (v UpdateBl
 }
 
 // Or returns value if set, or given parameter if does not.
-func (o OptUpdateBlockBodyParametersSyncedBlockSyncedFromType) Or(d UpdateBlockBodyParametersSyncedBlockSyncedFromType) UpdateBlockBodyParametersSyncedBlockSyncedFromType {
+func (o OptUpdateBlockRequestSyncedBlockSyncedFromType) Or(d UpdateBlockRequestSyncedBlockSyncedFromType) UpdateBlockRequestSyncedBlockSyncedFromType {
 	if v, ok := o.Get(); ok {
 		return v
 	}
 	return d
 }
 
-// NewOptUpdateBlockBodyParametersTable returns new OptUpdateBlockBodyParametersTable with value set to v.
-func NewOptUpdateBlockBodyParametersTable(v UpdateBlockBodyParametersTable) OptUpdateBlockBodyParametersTable {
-	return OptUpdateBlockBodyParametersTable{
+// NewOptUpdateBlockRequestTable returns new OptUpdateBlockRequestTable with value set to v.
+func NewOptUpdateBlockRequestTable(v UpdateBlockRequestTable) OptUpdateBlockRequestTable {
+	return OptUpdateBlockRequestTable{
 		Value: v,
 		Set:   true,
 	}
 }
 
-// OptUpdateBlockBodyParametersTable is optional UpdateBlockBodyParametersTable.
-type OptUpdateBlockBodyParametersTable struct {
-	Value UpdateBlockBodyParametersTable
+// OptUpdateBlockRequestTable is optional UpdateBlockRequestTable.
+type OptUpdateBlockRequestTable struct {
+	Value UpdateBlockRequestTable
 	Set   bool
 }
 
-// IsSet returns true if OptUpdateBlockBodyParametersTable was set.
-func (o OptUpdateBlockBodyParametersTable) IsSet() bool { return o.Set }
+// IsSet returns true if OptUpdateBlockRequestTable was set.
+func (o OptUpdateBlockRequestTable) IsSet() bool { return o.Set }
 
 // Reset unsets value.
-func (o *OptUpdateBlockBodyParametersTable) Reset() {
-	var v UpdateBlockBodyParametersTable
+func (o *OptUpdateBlockRequestTable) Reset() {
+	var v UpdateBlockRequestTable
 	o.Value = v
 	o.Set = false
 }
 
 // SetTo sets value to v.
-func (o *OptUpdateBlockBodyParametersTable) SetTo(v UpdateBlockBodyParametersTable) {
+func (o *OptUpdateBlockRequestTable) SetTo(v UpdateBlockRequestTable) {
 	o.Set = true
 	o.Value = v
 }
 
 // Get returns value and boolean that denotes whether value was set.
-func (o OptUpdateBlockBodyParametersTable) Get() (v UpdateBlockBodyParametersTable, ok bool) {
+func (o OptUpdateBlockRequestTable) Get() (v UpdateBlockRequestTable, ok bool) {
 	if !o.Set {
 		return v, false
 	}
@@ -38242,45 +38242,45 @@ func (o OptUpdateBlockBodyParametersTable) Get() (v UpdateBlockBodyParametersTab
 }
 
 // Or returns value if set, or given parameter if does not.
-func (o OptUpdateBlockBodyParametersTable) Or(d UpdateBlockBodyParametersTable) UpdateBlockBodyParametersTable {
+func (o OptUpdateBlockRequestTable) Or(d UpdateBlockRequestTable) UpdateBlockRequestTable {
 	if v, ok := o.Get(); ok {
 		return v
 	}
 	return d
 }
 
-// NewOptUpdateBlockBodyParametersTableOfContents returns new OptUpdateBlockBodyParametersTableOfContents with value set to v.
-func NewOptUpdateBlockBodyParametersTableOfContents(v UpdateBlockBodyParametersTableOfContents) OptUpdateBlockBodyParametersTableOfContents {
-	return OptUpdateBlockBodyParametersTableOfContents{
+// NewOptUpdateBlockRequestTableOfContents returns new OptUpdateBlockRequestTableOfContents with value set to v.
+func NewOptUpdateBlockRequestTableOfContents(v UpdateBlockRequestTableOfContents) OptUpdateBlockRequestTableOfContents {
+	return OptUpdateBlockRequestTableOfContents{
 		Value: v,
 		Set:   true,
 	}
 }
 
-// OptUpdateBlockBodyParametersTableOfContents is optional UpdateBlockBodyParametersTableOfContents.
-type OptUpdateBlockBodyParametersTableOfContents struct {
-	Value UpdateBlockBodyParametersTableOfContents
+// OptUpdateBlockRequestTableOfContents is optional UpdateBlockRequestTableOfContents.
+type OptUpdateBlockRequestTableOfContents struct {
+	Value UpdateBlockRequestTableOfContents
 	Set   bool
 }
 
-// IsSet returns true if OptUpdateBlockBodyParametersTableOfContents was set.
-func (o OptUpdateBlockBodyParametersTableOfContents) IsSet() bool { return o.Set }
+// IsSet returns true if OptUpdateBlockRequestTableOfContents was set.
+func (o OptUpdateBlockRequestTableOfContents) IsSet() bool { return o.Set }
 
 // Reset unsets value.
-func (o *OptUpdateBlockBodyParametersTableOfContents) Reset() {
-	var v UpdateBlockBodyParametersTableOfContents
+func (o *OptUpdateBlockRequestTableOfContents) Reset() {
+	var v UpdateBlockRequestTableOfContents
 	o.Value = v
 	o.Set = false
 }
 
 // SetTo sets value to v.
-func (o *OptUpdateBlockBodyParametersTableOfContents) SetTo(v UpdateBlockBodyParametersTableOfContents) {
+func (o *OptUpdateBlockRequestTableOfContents) SetTo(v UpdateBlockRequestTableOfContents) {
 	o.Set = true
 	o.Value = v
 }
 
 // Get returns value and boolean that denotes whether value was set.
-func (o OptUpdateBlockBodyParametersTableOfContents) Get() (v UpdateBlockBodyParametersTableOfContents, ok bool) {
+func (o OptUpdateBlockRequestTableOfContents) Get() (v UpdateBlockRequestTableOfContents, ok bool) {
 	if !o.Set {
 		return v, false
 	}
@@ -38288,45 +38288,45 @@ func (o OptUpdateBlockBodyParametersTableOfContents) Get() (v UpdateBlockBodyPar
 }
 
 // Or returns value if set, or given parameter if does not.
-func (o OptUpdateBlockBodyParametersTableOfContents) Or(d UpdateBlockBodyParametersTableOfContents) UpdateBlockBodyParametersTableOfContents {
+func (o OptUpdateBlockRequestTableOfContents) Or(d UpdateBlockRequestTableOfContents) UpdateBlockRequestTableOfContents {
 	if v, ok := o.Get(); ok {
 		return v
 	}
 	return d
 }
 
-// NewOptUpdateBlockBodyParametersToDo returns new OptUpdateBlockBodyParametersToDo with value set to v.
-func NewOptUpdateBlockBodyParametersToDo(v UpdateBlockBodyParametersToDo) OptUpdateBlockBodyParametersToDo {
-	return OptUpdateBlockBodyParametersToDo{
+// NewOptUpdateBlockRequestToDo returns new OptUpdateBlockRequestToDo with value set to v.
+func NewOptUpdateBlockRequestToDo(v UpdateBlockRequestToDo) OptUpdateBlockRequestToDo {
+	return OptUpdateBlockRequestToDo{
 		Value: v,
 		Set:   true,
 	}
 }
 
-// OptUpdateBlockBodyParametersToDo is optional UpdateBlockBodyParametersToDo.
-type OptUpdateBlockBodyParametersToDo struct {
-	Value UpdateBlockBodyParametersToDo
+// OptUpdateBlockRequestToDo is optional UpdateBlockRequestToDo.
+type OptUpdateBlockRequestToDo struct {
+	Value UpdateBlockRequestToDo
 	Set   bool
 }
 
-// IsSet returns true if OptUpdateBlockBodyParametersToDo was set.
-func (o OptUpdateBlockBodyParametersToDo) IsSet() bool { return o.Set }
+// IsSet returns true if OptUpdateBlockRequestToDo was set.
+func (o OptUpdateBlockRequestToDo) IsSet() bool { return o.Set }
 
 // Reset unsets value.
-func (o *OptUpdateBlockBodyParametersToDo) Reset() {
-	var v UpdateBlockBodyParametersToDo
+func (o *OptUpdateBlockRequestToDo) Reset() {
+	var v UpdateBlockRequestToDo
 	o.Value = v
 	o.Set = false
 }
 
 // SetTo sets value to v.
-func (o *OptUpdateBlockBodyParametersToDo) SetTo(v UpdateBlockBodyParametersToDo) {
+func (o *OptUpdateBlockRequestToDo) SetTo(v UpdateBlockRequestToDo) {
 	o.Set = true
 	o.Value = v
 }
 
 // Get returns value and boolean that denotes whether value was set.
-func (o OptUpdateBlockBodyParametersToDo) Get() (v UpdateBlockBodyParametersToDo, ok bool) {
+func (o OptUpdateBlockRequestToDo) Get() (v UpdateBlockRequestToDo, ok bool) {
 	if !o.Set {
 		return v, false
 	}
@@ -38334,45 +38334,45 @@ func (o OptUpdateBlockBodyParametersToDo) Get() (v UpdateBlockBodyParametersToDo
 }
 
 // Or returns value if set, or given parameter if does not.
-func (o OptUpdateBlockBodyParametersToDo) Or(d UpdateBlockBodyParametersToDo) UpdateBlockBodyParametersToDo {
+func (o OptUpdateBlockRequestToDo) Or(d UpdateBlockRequestToDo) UpdateBlockRequestToDo {
 	if v, ok := o.Get(); ok {
 		return v
 	}
 	return d
 }
 
-// NewOptUpdateBlockBodyParametersType returns new OptUpdateBlockBodyParametersType with value set to v.
-func NewOptUpdateBlockBodyParametersType(v UpdateBlockBodyParametersType) OptUpdateBlockBodyParametersType {
-	return OptUpdateBlockBodyParametersType{
+// NewOptUpdateBlockRequestType returns new OptUpdateBlockRequestType with value set to v.
+func NewOptUpdateBlockRequestType(v UpdateBlockRequestType) OptUpdateBlockRequestType {
+	return OptUpdateBlockRequestType{
 		Value: v,
 		Set:   true,
 	}
 }
 
-// OptUpdateBlockBodyParametersType is optional UpdateBlockBodyParametersType.
-type OptUpdateBlockBodyParametersType struct {
-	Value UpdateBlockBodyParametersType
+// OptUpdateBlockRequestType is optional UpdateBlockRequestType.
+type OptUpdateBlockRequestType struct {
+	Value UpdateBlockRequestType
 	Set   bool
 }
 
-// IsSet returns true if OptUpdateBlockBodyParametersType was set.
-func (o OptUpdateBlockBodyParametersType) IsSet() bool { return o.Set }
+// IsSet returns true if OptUpdateBlockRequestType was set.
+func (o OptUpdateBlockRequestType) IsSet() bool { return o.Set }
 
 // Reset unsets value.
-func (o *OptUpdateBlockBodyParametersType) Reset() {
-	var v UpdateBlockBodyParametersType
+func (o *OptUpdateBlockRequestType) Reset() {
+	var v UpdateBlockRequestType
 	o.Value = v
 	o.Set = false
 }
 
 // SetTo sets value to v.
-func (o *OptUpdateBlockBodyParametersType) SetTo(v UpdateBlockBodyParametersType) {
+func (o *OptUpdateBlockRequestType) SetTo(v UpdateBlockRequestType) {
 	o.Set = true
 	o.Value = v
 }
 
 // Get returns value and boolean that denotes whether value was set.
-func (o OptUpdateBlockBodyParametersType) Get() (v UpdateBlockBodyParametersType, ok bool) {
+func (o OptUpdateBlockRequestType) Get() (v UpdateBlockRequestType, ok bool) {
 	if !o.Set {
 		return v, false
 	}
@@ -38380,7 +38380,7 @@ func (o OptUpdateBlockBodyParametersType) Get() (v UpdateBlockBodyParametersType
 }
 
 // Or returns value if set, or given parameter if does not.
-func (o OptUpdateBlockBodyParametersType) Or(d UpdateBlockBodyParametersType) UpdateBlockBodyParametersType {
+func (o OptUpdateBlockRequestType) Or(d UpdateBlockRequestType) UpdateBlockRequestType {
 	if v, ok := o.Get(); ok {
 		return v
 	}
@@ -38755,38 +38755,38 @@ func (o OptUpdateBlockResponseType) Or(d UpdateBlockResponseType) UpdateBlockRes
 	return d
 }
 
-// NewOptUpdateDatabaseBodyParametersParent returns new OptUpdateDatabaseBodyParametersParent with value set to v.
-func NewOptUpdateDatabaseBodyParametersParent(v UpdateDatabaseBodyParametersParent) OptUpdateDatabaseBodyParametersParent {
-	return OptUpdateDatabaseBodyParametersParent{
+// NewOptUpdateDatabaseRequestParent returns new OptUpdateDatabaseRequestParent with value set to v.
+func NewOptUpdateDatabaseRequestParent(v UpdateDatabaseRequestParent) OptUpdateDatabaseRequestParent {
+	return OptUpdateDatabaseRequestParent{
 		Value: v,
 		Set:   true,
 	}
 }
 
-// OptUpdateDatabaseBodyParametersParent is optional UpdateDatabaseBodyParametersParent.
-type OptUpdateDatabaseBodyParametersParent struct {
-	Value UpdateDatabaseBodyParametersParent
+// OptUpdateDatabaseRequestParent is optional UpdateDatabaseRequestParent.
+type OptUpdateDatabaseRequestParent struct {
+	Value UpdateDatabaseRequestParent
 	Set   bool
 }
 
-// IsSet returns true if OptUpdateDatabaseBodyParametersParent was set.
-func (o OptUpdateDatabaseBodyParametersParent) IsSet() bool { return o.Set }
+// IsSet returns true if OptUpdateDatabaseRequestParent was set.
+func (o OptUpdateDatabaseRequestParent) IsSet() bool { return o.Set }
 
 // Reset unsets value.
-func (o *OptUpdateDatabaseBodyParametersParent) Reset() {
-	var v UpdateDatabaseBodyParametersParent
+func (o *OptUpdateDatabaseRequestParent) Reset() {
+	var v UpdateDatabaseRequestParent
 	o.Value = v
 	o.Set = false
 }
 
 // SetTo sets value to v.
-func (o *OptUpdateDatabaseBodyParametersParent) SetTo(v UpdateDatabaseBodyParametersParent) {
+func (o *OptUpdateDatabaseRequestParent) SetTo(v UpdateDatabaseRequestParent) {
 	o.Set = true
 	o.Value = v
 }
 
 // Get returns value and boolean that denotes whether value was set.
-func (o OptUpdateDatabaseBodyParametersParent) Get() (v UpdateDatabaseBodyParametersParent, ok bool) {
+func (o OptUpdateDatabaseRequestParent) Get() (v UpdateDatabaseRequestParent, ok bool) {
 	if !o.Set {
 		return v, false
 	}
@@ -38794,45 +38794,45 @@ func (o OptUpdateDatabaseBodyParametersParent) Get() (v UpdateDatabaseBodyParame
 }
 
 // Or returns value if set, or given parameter if does not.
-func (o OptUpdateDatabaseBodyParametersParent) Or(d UpdateDatabaseBodyParametersParent) UpdateDatabaseBodyParametersParent {
+func (o OptUpdateDatabaseRequestParent) Or(d UpdateDatabaseRequestParent) UpdateDatabaseRequestParent {
 	if v, ok := o.Get(); ok {
 		return v
 	}
 	return d
 }
 
-// NewOptUpdateDatabaseBodyParametersParentWorkspace returns new OptUpdateDatabaseBodyParametersParentWorkspace with value set to v.
-func NewOptUpdateDatabaseBodyParametersParentWorkspace(v UpdateDatabaseBodyParametersParentWorkspace) OptUpdateDatabaseBodyParametersParentWorkspace {
-	return OptUpdateDatabaseBodyParametersParentWorkspace{
+// NewOptUpdateDatabaseRequestParentWorkspace returns new OptUpdateDatabaseRequestParentWorkspace with value set to v.
+func NewOptUpdateDatabaseRequestParentWorkspace(v UpdateDatabaseRequestParentWorkspace) OptUpdateDatabaseRequestParentWorkspace {
+	return OptUpdateDatabaseRequestParentWorkspace{
 		Value: v,
 		Set:   true,
 	}
 }
 
-// OptUpdateDatabaseBodyParametersParentWorkspace is optional UpdateDatabaseBodyParametersParentWorkspace.
-type OptUpdateDatabaseBodyParametersParentWorkspace struct {
-	Value UpdateDatabaseBodyParametersParentWorkspace
+// OptUpdateDatabaseRequestParentWorkspace is optional UpdateDatabaseRequestParentWorkspace.
+type OptUpdateDatabaseRequestParentWorkspace struct {
+	Value UpdateDatabaseRequestParentWorkspace
 	Set   bool
 }
 
-// IsSet returns true if OptUpdateDatabaseBodyParametersParentWorkspace was set.
-func (o OptUpdateDatabaseBodyParametersParentWorkspace) IsSet() bool { return o.Set }
+// IsSet returns true if OptUpdateDatabaseRequestParentWorkspace was set.
+func (o OptUpdateDatabaseRequestParentWorkspace) IsSet() bool { return o.Set }
 
 // Reset unsets value.
-func (o *OptUpdateDatabaseBodyParametersParentWorkspace) Reset() {
-	var v UpdateDatabaseBodyParametersParentWorkspace
+func (o *OptUpdateDatabaseRequestParentWorkspace) Reset() {
+	var v UpdateDatabaseRequestParentWorkspace
 	o.Value = v
 	o.Set = false
 }
 
 // SetTo sets value to v.
-func (o *OptUpdateDatabaseBodyParametersParentWorkspace) SetTo(v UpdateDatabaseBodyParametersParentWorkspace) {
+func (o *OptUpdateDatabaseRequestParentWorkspace) SetTo(v UpdateDatabaseRequestParentWorkspace) {
 	o.Set = true
 	o.Value = v
 }
 
 // Get returns value and boolean that denotes whether value was set.
-func (o OptUpdateDatabaseBodyParametersParentWorkspace) Get() (v UpdateDatabaseBodyParametersParentWorkspace, ok bool) {
+func (o OptUpdateDatabaseRequestParentWorkspace) Get() (v UpdateDatabaseRequestParentWorkspace, ok bool) {
 	if !o.Set {
 		return v, false
 	}
@@ -38840,7 +38840,7 @@ func (o OptUpdateDatabaseBodyParametersParentWorkspace) Get() (v UpdateDatabaseB
 }
 
 // Or returns value if set, or given parameter if does not.
-func (o OptUpdateDatabaseBodyParametersParentWorkspace) Or(d UpdateDatabaseBodyParametersParentWorkspace) UpdateDatabaseBodyParametersParentWorkspace {
+func (o OptUpdateDatabaseRequestParentWorkspace) Or(d UpdateDatabaseRequestParentWorkspace) UpdateDatabaseRequestParentWorkspace {
 	if v, ok := o.Get(); ok {
 		return v
 	}
@@ -38985,38 +38985,38 @@ func (o OptUpdateMediaContentWithUrlAndCaptionRequest) Or(d UpdateMediaContentWi
 	return d
 }
 
-// NewOptUpdatePageBodyParametersProperties returns new OptUpdatePageBodyParametersProperties with value set to v.
-func NewOptUpdatePageBodyParametersProperties(v UpdatePageBodyParametersProperties) OptUpdatePageBodyParametersProperties {
-	return OptUpdatePageBodyParametersProperties{
+// NewOptUpdatePageRequestProperties returns new OptUpdatePageRequestProperties with value set to v.
+func NewOptUpdatePageRequestProperties(v UpdatePageRequestProperties) OptUpdatePageRequestProperties {
+	return OptUpdatePageRequestProperties{
 		Value: v,
 		Set:   true,
 	}
 }
 
-// OptUpdatePageBodyParametersProperties is optional UpdatePageBodyParametersProperties.
-type OptUpdatePageBodyParametersProperties struct {
-	Value UpdatePageBodyParametersProperties
+// OptUpdatePageRequestProperties is optional UpdatePageRequestProperties.
+type OptUpdatePageRequestProperties struct {
+	Value UpdatePageRequestProperties
 	Set   bool
 }
 
-// IsSet returns true if OptUpdatePageBodyParametersProperties was set.
-func (o OptUpdatePageBodyParametersProperties) IsSet() bool { return o.Set }
+// IsSet returns true if OptUpdatePageRequestProperties was set.
+func (o OptUpdatePageRequestProperties) IsSet() bool { return o.Set }
 
 // Reset unsets value.
-func (o *OptUpdatePageBodyParametersProperties) Reset() {
-	var v UpdatePageBodyParametersProperties
+func (o *OptUpdatePageRequestProperties) Reset() {
+	var v UpdatePageRequestProperties
 	o.Value = v
 	o.Set = false
 }
 
 // SetTo sets value to v.
-func (o *OptUpdatePageBodyParametersProperties) SetTo(v UpdatePageBodyParametersProperties) {
+func (o *OptUpdatePageRequestProperties) SetTo(v UpdatePageRequestProperties) {
 	o.Set = true
 	o.Value = v
 }
 
 // Get returns value and boolean that denotes whether value was set.
-func (o OptUpdatePageBodyParametersProperties) Get() (v UpdatePageBodyParametersProperties, ok bool) {
+func (o OptUpdatePageRequestProperties) Get() (v UpdatePageRequestProperties, ok bool) {
 	if !o.Set {
 		return v, false
 	}
@@ -39024,45 +39024,45 @@ func (o OptUpdatePageBodyParametersProperties) Get() (v UpdatePageBodyParameters
 }
 
 // Or returns value if set, or given parameter if does not.
-func (o OptUpdatePageBodyParametersProperties) Or(d UpdatePageBodyParametersProperties) UpdatePageBodyParametersProperties {
+func (o OptUpdatePageRequestProperties) Or(d UpdatePageRequestProperties) UpdatePageRequestProperties {
 	if v, ok := o.Get(); ok {
 		return v
 	}
 	return d
 }
 
-// NewOptUpdatePageBodyParametersPropertiesItemFilesItemType returns new OptUpdatePageBodyParametersPropertiesItemFilesItemType with value set to v.
-func NewOptUpdatePageBodyParametersPropertiesItemFilesItemType(v UpdatePageBodyParametersPropertiesItemFilesItemType) OptUpdatePageBodyParametersPropertiesItemFilesItemType {
-	return OptUpdatePageBodyParametersPropertiesItemFilesItemType{
+// NewOptUpdatePageRequestPropertiesItemFilesItemType returns new OptUpdatePageRequestPropertiesItemFilesItemType with value set to v.
+func NewOptUpdatePageRequestPropertiesItemFilesItemType(v UpdatePageRequestPropertiesItemFilesItemType) OptUpdatePageRequestPropertiesItemFilesItemType {
+	return OptUpdatePageRequestPropertiesItemFilesItemType{
 		Value: v,
 		Set:   true,
 	}
 }
 
-// OptUpdatePageBodyParametersPropertiesItemFilesItemType is optional UpdatePageBodyParametersPropertiesItemFilesItemType.
-type OptUpdatePageBodyParametersPropertiesItemFilesItemType struct {
-	Value UpdatePageBodyParametersPropertiesItemFilesItemType
+// OptUpdatePageRequestPropertiesItemFilesItemType is optional UpdatePageRequestPropertiesItemFilesItemType.
+type OptUpdatePageRequestPropertiesItemFilesItemType struct {
+	Value UpdatePageRequestPropertiesItemFilesItemType
 	Set   bool
 }
 
-// IsSet returns true if OptUpdatePageBodyParametersPropertiesItemFilesItemType was set.
-func (o OptUpdatePageBodyParametersPropertiesItemFilesItemType) IsSet() bool { return o.Set }
+// IsSet returns true if OptUpdatePageRequestPropertiesItemFilesItemType was set.
+func (o OptUpdatePageRequestPropertiesItemFilesItemType) IsSet() bool { return o.Set }
 
 // Reset unsets value.
-func (o *OptUpdatePageBodyParametersPropertiesItemFilesItemType) Reset() {
-	var v UpdatePageBodyParametersPropertiesItemFilesItemType
+func (o *OptUpdatePageRequestPropertiesItemFilesItemType) Reset() {
+	var v UpdatePageRequestPropertiesItemFilesItemType
 	o.Value = v
 	o.Set = false
 }
 
 // SetTo sets value to v.
-func (o *OptUpdatePageBodyParametersPropertiesItemFilesItemType) SetTo(v UpdatePageBodyParametersPropertiesItemFilesItemType) {
+func (o *OptUpdatePageRequestPropertiesItemFilesItemType) SetTo(v UpdatePageRequestPropertiesItemFilesItemType) {
 	o.Set = true
 	o.Value = v
 }
 
 // Get returns value and boolean that denotes whether value was set.
-func (o OptUpdatePageBodyParametersPropertiesItemFilesItemType) Get() (v UpdatePageBodyParametersPropertiesItemFilesItemType, ok bool) {
+func (o OptUpdatePageRequestPropertiesItemFilesItemType) Get() (v UpdatePageRequestPropertiesItemFilesItemType, ok bool) {
 	if !o.Set {
 		return v, false
 	}
@@ -39070,45 +39070,45 @@ func (o OptUpdatePageBodyParametersPropertiesItemFilesItemType) Get() (v UpdateP
 }
 
 // Or returns value if set, or given parameter if does not.
-func (o OptUpdatePageBodyParametersPropertiesItemFilesItemType) Or(d UpdatePageBodyParametersPropertiesItemFilesItemType) UpdatePageBodyParametersPropertiesItemFilesItemType {
+func (o OptUpdatePageRequestPropertiesItemFilesItemType) Or(d UpdatePageRequestPropertiesItemFilesItemType) UpdatePageRequestPropertiesItemFilesItemType {
 	if v, ok := o.Get(); ok {
 		return v
 	}
 	return d
 }
 
-// NewOptUpdatePageBodyParametersPropertiesItemPeopleItemObject returns new OptUpdatePageBodyParametersPropertiesItemPeopleItemObject with value set to v.
-func NewOptUpdatePageBodyParametersPropertiesItemPeopleItemObject(v UpdatePageBodyParametersPropertiesItemPeopleItemObject) OptUpdatePageBodyParametersPropertiesItemPeopleItemObject {
-	return OptUpdatePageBodyParametersPropertiesItemPeopleItemObject{
+// NewOptUpdatePageRequestPropertiesItemPeopleItemObject returns new OptUpdatePageRequestPropertiesItemPeopleItemObject with value set to v.
+func NewOptUpdatePageRequestPropertiesItemPeopleItemObject(v UpdatePageRequestPropertiesItemPeopleItemObject) OptUpdatePageRequestPropertiesItemPeopleItemObject {
+	return OptUpdatePageRequestPropertiesItemPeopleItemObject{
 		Value: v,
 		Set:   true,
 	}
 }
 
-// OptUpdatePageBodyParametersPropertiesItemPeopleItemObject is optional UpdatePageBodyParametersPropertiesItemPeopleItemObject.
-type OptUpdatePageBodyParametersPropertiesItemPeopleItemObject struct {
-	Value UpdatePageBodyParametersPropertiesItemPeopleItemObject
+// OptUpdatePageRequestPropertiesItemPeopleItemObject is optional UpdatePageRequestPropertiesItemPeopleItemObject.
+type OptUpdatePageRequestPropertiesItemPeopleItemObject struct {
+	Value UpdatePageRequestPropertiesItemPeopleItemObject
 	Set   bool
 }
 
-// IsSet returns true if OptUpdatePageBodyParametersPropertiesItemPeopleItemObject was set.
-func (o OptUpdatePageBodyParametersPropertiesItemPeopleItemObject) IsSet() bool { return o.Set }
+// IsSet returns true if OptUpdatePageRequestPropertiesItemPeopleItemObject was set.
+func (o OptUpdatePageRequestPropertiesItemPeopleItemObject) IsSet() bool { return o.Set }
 
 // Reset unsets value.
-func (o *OptUpdatePageBodyParametersPropertiesItemPeopleItemObject) Reset() {
-	var v UpdatePageBodyParametersPropertiesItemPeopleItemObject
+func (o *OptUpdatePageRequestPropertiesItemPeopleItemObject) Reset() {
+	var v UpdatePageRequestPropertiesItemPeopleItemObject
 	o.Value = v
 	o.Set = false
 }
 
 // SetTo sets value to v.
-func (o *OptUpdatePageBodyParametersPropertiesItemPeopleItemObject) SetTo(v UpdatePageBodyParametersPropertiesItemPeopleItemObject) {
+func (o *OptUpdatePageRequestPropertiesItemPeopleItemObject) SetTo(v UpdatePageRequestPropertiesItemPeopleItemObject) {
 	o.Set = true
 	o.Value = v
 }
 
 // Get returns value and boolean that denotes whether value was set.
-func (o OptUpdatePageBodyParametersPropertiesItemPeopleItemObject) Get() (v UpdatePageBodyParametersPropertiesItemPeopleItemObject, ok bool) {
+func (o OptUpdatePageRequestPropertiesItemPeopleItemObject) Get() (v UpdatePageRequestPropertiesItemPeopleItemObject, ok bool) {
 	if !o.Set {
 		return v, false
 	}
@@ -39116,45 +39116,45 @@ func (o OptUpdatePageBodyParametersPropertiesItemPeopleItemObject) Get() (v Upda
 }
 
 // Or returns value if set, or given parameter if does not.
-func (o OptUpdatePageBodyParametersPropertiesItemPeopleItemObject) Or(d UpdatePageBodyParametersPropertiesItemPeopleItemObject) UpdatePageBodyParametersPropertiesItemPeopleItemObject {
+func (o OptUpdatePageRequestPropertiesItemPeopleItemObject) Or(d UpdatePageRequestPropertiesItemPeopleItemObject) UpdatePageRequestPropertiesItemPeopleItemObject {
 	if v, ok := o.Get(); ok {
 		return v
 	}
 	return d
 }
 
-// NewOptUpdatePageBodyParametersPropertiesItemType returns new OptUpdatePageBodyParametersPropertiesItemType with value set to v.
-func NewOptUpdatePageBodyParametersPropertiesItemType(v UpdatePageBodyParametersPropertiesItemType) OptUpdatePageBodyParametersPropertiesItemType {
-	return OptUpdatePageBodyParametersPropertiesItemType{
+// NewOptUpdatePageRequestPropertiesItemType returns new OptUpdatePageRequestPropertiesItemType with value set to v.
+func NewOptUpdatePageRequestPropertiesItemType(v UpdatePageRequestPropertiesItemType) OptUpdatePageRequestPropertiesItemType {
+	return OptUpdatePageRequestPropertiesItemType{
 		Value: v,
 		Set:   true,
 	}
 }
 
-// OptUpdatePageBodyParametersPropertiesItemType is optional UpdatePageBodyParametersPropertiesItemType.
-type OptUpdatePageBodyParametersPropertiesItemType struct {
-	Value UpdatePageBodyParametersPropertiesItemType
+// OptUpdatePageRequestPropertiesItemType is optional UpdatePageRequestPropertiesItemType.
+type OptUpdatePageRequestPropertiesItemType struct {
+	Value UpdatePageRequestPropertiesItemType
 	Set   bool
 }
 
-// IsSet returns true if OptUpdatePageBodyParametersPropertiesItemType was set.
-func (o OptUpdatePageBodyParametersPropertiesItemType) IsSet() bool { return o.Set }
+// IsSet returns true if OptUpdatePageRequestPropertiesItemType was set.
+func (o OptUpdatePageRequestPropertiesItemType) IsSet() bool { return o.Set }
 
 // Reset unsets value.
-func (o *OptUpdatePageBodyParametersPropertiesItemType) Reset() {
-	var v UpdatePageBodyParametersPropertiesItemType
+func (o *OptUpdatePageRequestPropertiesItemType) Reset() {
+	var v UpdatePageRequestPropertiesItemType
 	o.Value = v
 	o.Set = false
 }
 
 // SetTo sets value to v.
-func (o *OptUpdatePageBodyParametersPropertiesItemType) SetTo(v UpdatePageBodyParametersPropertiesItemType) {
+func (o *OptUpdatePageRequestPropertiesItemType) SetTo(v UpdatePageRequestPropertiesItemType) {
 	o.Set = true
 	o.Value = v
 }
 
 // Get returns value and boolean that denotes whether value was set.
-func (o OptUpdatePageBodyParametersPropertiesItemType) Get() (v UpdatePageBodyParametersPropertiesItemType, ok bool) {
+func (o OptUpdatePageRequestPropertiesItemType) Get() (v UpdatePageRequestPropertiesItemType, ok bool) {
 	if !o.Set {
 		return v, false
 	}
@@ -39162,45 +39162,45 @@ func (o OptUpdatePageBodyParametersPropertiesItemType) Get() (v UpdatePageBodyPa
 }
 
 // Or returns value if set, or given parameter if does not.
-func (o OptUpdatePageBodyParametersPropertiesItemType) Or(d UpdatePageBodyParametersPropertiesItemType) UpdatePageBodyParametersPropertiesItemType {
+func (o OptUpdatePageRequestPropertiesItemType) Or(d UpdatePageRequestPropertiesItemType) UpdatePageRequestPropertiesItemType {
 	if v, ok := o.Get(); ok {
 		return v
 	}
 	return d
 }
 
-// NewOptUpdatePageBodyParametersTemplate returns new OptUpdatePageBodyParametersTemplate with value set to v.
-func NewOptUpdatePageBodyParametersTemplate(v UpdatePageBodyParametersTemplate) OptUpdatePageBodyParametersTemplate {
-	return OptUpdatePageBodyParametersTemplate{
+// NewOptUpdatePageRequestTemplate returns new OptUpdatePageRequestTemplate with value set to v.
+func NewOptUpdatePageRequestTemplate(v UpdatePageRequestTemplate) OptUpdatePageRequestTemplate {
+	return OptUpdatePageRequestTemplate{
 		Value: v,
 		Set:   true,
 	}
 }
 
-// OptUpdatePageBodyParametersTemplate is optional UpdatePageBodyParametersTemplate.
-type OptUpdatePageBodyParametersTemplate struct {
-	Value UpdatePageBodyParametersTemplate
+// OptUpdatePageRequestTemplate is optional UpdatePageRequestTemplate.
+type OptUpdatePageRequestTemplate struct {
+	Value UpdatePageRequestTemplate
 	Set   bool
 }
 
-// IsSet returns true if OptUpdatePageBodyParametersTemplate was set.
-func (o OptUpdatePageBodyParametersTemplate) IsSet() bool { return o.Set }
+// IsSet returns true if OptUpdatePageRequestTemplate was set.
+func (o OptUpdatePageRequestTemplate) IsSet() bool { return o.Set }
 
 // Reset unsets value.
-func (o *OptUpdatePageBodyParametersTemplate) Reset() {
-	var v UpdatePageBodyParametersTemplate
+func (o *OptUpdatePageRequestTemplate) Reset() {
+	var v UpdatePageRequestTemplate
 	o.Value = v
 	o.Set = false
 }
 
 // SetTo sets value to v.
-func (o *OptUpdatePageBodyParametersTemplate) SetTo(v UpdatePageBodyParametersTemplate) {
+func (o *OptUpdatePageRequestTemplate) SetTo(v UpdatePageRequestTemplate) {
 	o.Set = true
 	o.Value = v
 }
 
 // Get returns value and boolean that denotes whether value was set.
-func (o OptUpdatePageBodyParametersTemplate) Get() (v UpdatePageBodyParametersTemplate, ok bool) {
+func (o OptUpdatePageRequestTemplate) Get() (v UpdatePageRequestTemplate, ok bool) {
 	if !o.Set {
 		return v, false
 	}
@@ -39208,7 +39208,7 @@ func (o OptUpdatePageBodyParametersTemplate) Get() (v UpdatePageBodyParametersTe
 }
 
 // Or returns value if set, or given parameter if does not.
-func (o OptUpdatePageBodyParametersTemplate) Or(d UpdatePageBodyParametersTemplate) UpdatePageBodyParametersTemplate {
+func (o OptUpdatePageRequestTemplate) Or(d UpdatePageRequestTemplate) UpdatePageRequestTemplate {
 	if v, ok := o.Get(); ok {
 		return v
 	}
@@ -46335,411 +46335,411 @@ func (s *PropertyOrTimestampFilterType) UnmarshalText(data []byte) error {
 	}
 }
 
-// Ref: #/components/schemas/QueryDataSourceBodyParameters
-type QueryDataSourceBodyParameters struct {
-	Sorts       []QueryDataSourceBodyParametersSortsItem `json:"sorts"`
-	Filter      OptQueryDataSourceBodyParametersFilter   `json:"filter"`
-	StartCursor OptString                                `json:"start_cursor"`
-	PageSize    OptFloat64                               `json:"page_size"`
-	Archived    OptBool                                  `json:"archived"`
-	InTrash     OptBool                                  `json:"in_trash"`
+// Ref: #/components/schemas/QueryDataSourceRequest
+type QueryDataSourceRequest struct {
+	Sorts       []QueryDataSourceRequestSortsItem `json:"sorts"`
+	Filter      OptQueryDataSourceRequestFilter   `json:"filter"`
+	StartCursor OptString                         `json:"start_cursor"`
+	PageSize    OptFloat64                        `json:"page_size"`
+	Archived    OptBool                           `json:"archived"`
+	InTrash     OptBool                           `json:"in_trash"`
 	// Optionally filter the results to only include pages or data sources. Regular, non-wiki //
 	// databases only support page children. The default behavior is no result type // filtering, in
 	// other words, returning both pages and data sources for wikis.
-	ResultType OptQueryDataSourceBodyParametersResultType `json:"result_type"`
+	ResultType OptQueryDataSourceRequestResultType `json:"result_type"`
 }
 
 // GetSorts returns the value of Sorts.
-func (s *QueryDataSourceBodyParameters) GetSorts() []QueryDataSourceBodyParametersSortsItem {
+func (s *QueryDataSourceRequest) GetSorts() []QueryDataSourceRequestSortsItem {
 	return s.Sorts
 }
 
 // GetFilter returns the value of Filter.
-func (s *QueryDataSourceBodyParameters) GetFilter() OptQueryDataSourceBodyParametersFilter {
+func (s *QueryDataSourceRequest) GetFilter() OptQueryDataSourceRequestFilter {
 	return s.Filter
 }
 
 // GetStartCursor returns the value of StartCursor.
-func (s *QueryDataSourceBodyParameters) GetStartCursor() OptString {
+func (s *QueryDataSourceRequest) GetStartCursor() OptString {
 	return s.StartCursor
 }
 
 // GetPageSize returns the value of PageSize.
-func (s *QueryDataSourceBodyParameters) GetPageSize() OptFloat64 {
+func (s *QueryDataSourceRequest) GetPageSize() OptFloat64 {
 	return s.PageSize
 }
 
 // GetArchived returns the value of Archived.
-func (s *QueryDataSourceBodyParameters) GetArchived() OptBool {
+func (s *QueryDataSourceRequest) GetArchived() OptBool {
 	return s.Archived
 }
 
 // GetInTrash returns the value of InTrash.
-func (s *QueryDataSourceBodyParameters) GetInTrash() OptBool {
+func (s *QueryDataSourceRequest) GetInTrash() OptBool {
 	return s.InTrash
 }
 
 // GetResultType returns the value of ResultType.
-func (s *QueryDataSourceBodyParameters) GetResultType() OptQueryDataSourceBodyParametersResultType {
+func (s *QueryDataSourceRequest) GetResultType() OptQueryDataSourceRequestResultType {
 	return s.ResultType
 }
 
 // SetSorts sets the value of Sorts.
-func (s *QueryDataSourceBodyParameters) SetSorts(val []QueryDataSourceBodyParametersSortsItem) {
+func (s *QueryDataSourceRequest) SetSorts(val []QueryDataSourceRequestSortsItem) {
 	s.Sorts = val
 }
 
 // SetFilter sets the value of Filter.
-func (s *QueryDataSourceBodyParameters) SetFilter(val OptQueryDataSourceBodyParametersFilter) {
+func (s *QueryDataSourceRequest) SetFilter(val OptQueryDataSourceRequestFilter) {
 	s.Filter = val
 }
 
 // SetStartCursor sets the value of StartCursor.
-func (s *QueryDataSourceBodyParameters) SetStartCursor(val OptString) {
+func (s *QueryDataSourceRequest) SetStartCursor(val OptString) {
 	s.StartCursor = val
 }
 
 // SetPageSize sets the value of PageSize.
-func (s *QueryDataSourceBodyParameters) SetPageSize(val OptFloat64) {
+func (s *QueryDataSourceRequest) SetPageSize(val OptFloat64) {
 	s.PageSize = val
 }
 
 // SetArchived sets the value of Archived.
-func (s *QueryDataSourceBodyParameters) SetArchived(val OptBool) {
+func (s *QueryDataSourceRequest) SetArchived(val OptBool) {
 	s.Archived = val
 }
 
 // SetInTrash sets the value of InTrash.
-func (s *QueryDataSourceBodyParameters) SetInTrash(val OptBool) {
+func (s *QueryDataSourceRequest) SetInTrash(val OptBool) {
 	s.InTrash = val
 }
 
 // SetResultType sets the value of ResultType.
-func (s *QueryDataSourceBodyParameters) SetResultType(val OptQueryDataSourceBodyParametersResultType) {
+func (s *QueryDataSourceRequest) SetResultType(val OptQueryDataSourceRequestResultType) {
 	s.ResultType = val
 }
 
-type QueryDataSourceBodyParametersFilter struct {
-	Or             GroupFilterOperatorArray                        `json:"or"`
-	And            GroupFilterOperatorArray                        `json:"and"`
-	Title          OptTextPropertyFilter                           `json:"title"`
-	Property       OptString                                       `json:"property"`
-	Type           OptQueryDataSourceBodyParametersFilterType      `json:"type"`
-	RichText       OptTextPropertyFilter                           `json:"rich_text"`
-	Number         OptNumberPropertyFilter                         `json:"number"`
-	Checkbox       OptCheckboxPropertyFilter                       `json:"checkbox"`
-	Select         OptSelectPropertyFilter                         `json:"select"`
-	MultiSelect    OptMultiSelectPropertyFilter                    `json:"multi_select"`
-	Status         OptStatusPropertyFilter                         `json:"status"`
-	Date           OptDatePropertyFilter                           `json:"date"`
-	People         OptPeoplePropertyFilter                         `json:"people"`
-	Files          OptExistencePropertyFilter                      `json:"files"`
-	URL            OptTextPropertyFilter                           `json:"url"`
-	Email          OptTextPropertyFilter                           `json:"email"`
-	PhoneNumber    OptTextPropertyFilter                           `json:"phone_number"`
-	Relation       OptRelationPropertyFilter                       `json:"relation"`
-	CreatedBy      OptPeoplePropertyFilter                         `json:"created_by"`
-	CreatedTime    OptDatePropertyFilter                           `json:"created_time"`
-	LastEditedBy   OptPeoplePropertyFilter                         `json:"last_edited_by"`
-	LastEditedTime OptDatePropertyFilter                           `json:"last_edited_time"`
-	Formula        OptFormulaPropertyFilter                        `json:"formula"`
-	UniqueID       OptNumberPropertyFilter                         `json:"unique_id"`
-	Rollup         OptRollupPropertyFilter                         `json:"rollup"`
-	Verification   OptVerificationPropertyStatusFilter             `json:"verification"`
-	Timestamp      OptQueryDataSourceBodyParametersFilterTimestamp `json:"timestamp"`
+type QueryDataSourceRequestFilter struct {
+	Or             GroupFilterOperatorArray                 `json:"or"`
+	And            GroupFilterOperatorArray                 `json:"and"`
+	Title          OptTextPropertyFilter                    `json:"title"`
+	Property       OptString                                `json:"property"`
+	Type           OptQueryDataSourceRequestFilterType      `json:"type"`
+	RichText       OptTextPropertyFilter                    `json:"rich_text"`
+	Number         OptNumberPropertyFilter                  `json:"number"`
+	Checkbox       OptCheckboxPropertyFilter                `json:"checkbox"`
+	Select         OptSelectPropertyFilter                  `json:"select"`
+	MultiSelect    OptMultiSelectPropertyFilter             `json:"multi_select"`
+	Status         OptStatusPropertyFilter                  `json:"status"`
+	Date           OptDatePropertyFilter                    `json:"date"`
+	People         OptPeoplePropertyFilter                  `json:"people"`
+	Files          OptExistencePropertyFilter               `json:"files"`
+	URL            OptTextPropertyFilter                    `json:"url"`
+	Email          OptTextPropertyFilter                    `json:"email"`
+	PhoneNumber    OptTextPropertyFilter                    `json:"phone_number"`
+	Relation       OptRelationPropertyFilter                `json:"relation"`
+	CreatedBy      OptPeoplePropertyFilter                  `json:"created_by"`
+	CreatedTime    OptDatePropertyFilter                    `json:"created_time"`
+	LastEditedBy   OptPeoplePropertyFilter                  `json:"last_edited_by"`
+	LastEditedTime OptDatePropertyFilter                    `json:"last_edited_time"`
+	Formula        OptFormulaPropertyFilter                 `json:"formula"`
+	UniqueID       OptNumberPropertyFilter                  `json:"unique_id"`
+	Rollup         OptRollupPropertyFilter                  `json:"rollup"`
+	Verification   OptVerificationPropertyStatusFilter      `json:"verification"`
+	Timestamp      OptQueryDataSourceRequestFilterTimestamp `json:"timestamp"`
 }
 
 // GetOr returns the value of Or.
-func (s *QueryDataSourceBodyParametersFilter) GetOr() GroupFilterOperatorArray {
+func (s *QueryDataSourceRequestFilter) GetOr() GroupFilterOperatorArray {
 	return s.Or
 }
 
 // GetAnd returns the value of And.
-func (s *QueryDataSourceBodyParametersFilter) GetAnd() GroupFilterOperatorArray {
+func (s *QueryDataSourceRequestFilter) GetAnd() GroupFilterOperatorArray {
 	return s.And
 }
 
 // GetTitle returns the value of Title.
-func (s *QueryDataSourceBodyParametersFilter) GetTitle() OptTextPropertyFilter {
+func (s *QueryDataSourceRequestFilter) GetTitle() OptTextPropertyFilter {
 	return s.Title
 }
 
 // GetProperty returns the value of Property.
-func (s *QueryDataSourceBodyParametersFilter) GetProperty() OptString {
+func (s *QueryDataSourceRequestFilter) GetProperty() OptString {
 	return s.Property
 }
 
 // GetType returns the value of Type.
-func (s *QueryDataSourceBodyParametersFilter) GetType() OptQueryDataSourceBodyParametersFilterType {
+func (s *QueryDataSourceRequestFilter) GetType() OptQueryDataSourceRequestFilterType {
 	return s.Type
 }
 
 // GetRichText returns the value of RichText.
-func (s *QueryDataSourceBodyParametersFilter) GetRichText() OptTextPropertyFilter {
+func (s *QueryDataSourceRequestFilter) GetRichText() OptTextPropertyFilter {
 	return s.RichText
 }
 
 // GetNumber returns the value of Number.
-func (s *QueryDataSourceBodyParametersFilter) GetNumber() OptNumberPropertyFilter {
+func (s *QueryDataSourceRequestFilter) GetNumber() OptNumberPropertyFilter {
 	return s.Number
 }
 
 // GetCheckbox returns the value of Checkbox.
-func (s *QueryDataSourceBodyParametersFilter) GetCheckbox() OptCheckboxPropertyFilter {
+func (s *QueryDataSourceRequestFilter) GetCheckbox() OptCheckboxPropertyFilter {
 	return s.Checkbox
 }
 
 // GetSelect returns the value of Select.
-func (s *QueryDataSourceBodyParametersFilter) GetSelect() OptSelectPropertyFilter {
+func (s *QueryDataSourceRequestFilter) GetSelect() OptSelectPropertyFilter {
 	return s.Select
 }
 
 // GetMultiSelect returns the value of MultiSelect.
-func (s *QueryDataSourceBodyParametersFilter) GetMultiSelect() OptMultiSelectPropertyFilter {
+func (s *QueryDataSourceRequestFilter) GetMultiSelect() OptMultiSelectPropertyFilter {
 	return s.MultiSelect
 }
 
 // GetStatus returns the value of Status.
-func (s *QueryDataSourceBodyParametersFilter) GetStatus() OptStatusPropertyFilter {
+func (s *QueryDataSourceRequestFilter) GetStatus() OptStatusPropertyFilter {
 	return s.Status
 }
 
 // GetDate returns the value of Date.
-func (s *QueryDataSourceBodyParametersFilter) GetDate() OptDatePropertyFilter {
+func (s *QueryDataSourceRequestFilter) GetDate() OptDatePropertyFilter {
 	return s.Date
 }
 
 // GetPeople returns the value of People.
-func (s *QueryDataSourceBodyParametersFilter) GetPeople() OptPeoplePropertyFilter {
+func (s *QueryDataSourceRequestFilter) GetPeople() OptPeoplePropertyFilter {
 	return s.People
 }
 
 // GetFiles returns the value of Files.
-func (s *QueryDataSourceBodyParametersFilter) GetFiles() OptExistencePropertyFilter {
+func (s *QueryDataSourceRequestFilter) GetFiles() OptExistencePropertyFilter {
 	return s.Files
 }
 
 // GetURL returns the value of URL.
-func (s *QueryDataSourceBodyParametersFilter) GetURL() OptTextPropertyFilter {
+func (s *QueryDataSourceRequestFilter) GetURL() OptTextPropertyFilter {
 	return s.URL
 }
 
 // GetEmail returns the value of Email.
-func (s *QueryDataSourceBodyParametersFilter) GetEmail() OptTextPropertyFilter {
+func (s *QueryDataSourceRequestFilter) GetEmail() OptTextPropertyFilter {
 	return s.Email
 }
 
 // GetPhoneNumber returns the value of PhoneNumber.
-func (s *QueryDataSourceBodyParametersFilter) GetPhoneNumber() OptTextPropertyFilter {
+func (s *QueryDataSourceRequestFilter) GetPhoneNumber() OptTextPropertyFilter {
 	return s.PhoneNumber
 }
 
 // GetRelation returns the value of Relation.
-func (s *QueryDataSourceBodyParametersFilter) GetRelation() OptRelationPropertyFilter {
+func (s *QueryDataSourceRequestFilter) GetRelation() OptRelationPropertyFilter {
 	return s.Relation
 }
 
 // GetCreatedBy returns the value of CreatedBy.
-func (s *QueryDataSourceBodyParametersFilter) GetCreatedBy() OptPeoplePropertyFilter {
+func (s *QueryDataSourceRequestFilter) GetCreatedBy() OptPeoplePropertyFilter {
 	return s.CreatedBy
 }
 
 // GetCreatedTime returns the value of CreatedTime.
-func (s *QueryDataSourceBodyParametersFilter) GetCreatedTime() OptDatePropertyFilter {
+func (s *QueryDataSourceRequestFilter) GetCreatedTime() OptDatePropertyFilter {
 	return s.CreatedTime
 }
 
 // GetLastEditedBy returns the value of LastEditedBy.
-func (s *QueryDataSourceBodyParametersFilter) GetLastEditedBy() OptPeoplePropertyFilter {
+func (s *QueryDataSourceRequestFilter) GetLastEditedBy() OptPeoplePropertyFilter {
 	return s.LastEditedBy
 }
 
 // GetLastEditedTime returns the value of LastEditedTime.
-func (s *QueryDataSourceBodyParametersFilter) GetLastEditedTime() OptDatePropertyFilter {
+func (s *QueryDataSourceRequestFilter) GetLastEditedTime() OptDatePropertyFilter {
 	return s.LastEditedTime
 }
 
 // GetFormula returns the value of Formula.
-func (s *QueryDataSourceBodyParametersFilter) GetFormula() OptFormulaPropertyFilter {
+func (s *QueryDataSourceRequestFilter) GetFormula() OptFormulaPropertyFilter {
 	return s.Formula
 }
 
 // GetUniqueID returns the value of UniqueID.
-func (s *QueryDataSourceBodyParametersFilter) GetUniqueID() OptNumberPropertyFilter {
+func (s *QueryDataSourceRequestFilter) GetUniqueID() OptNumberPropertyFilter {
 	return s.UniqueID
 }
 
 // GetRollup returns the value of Rollup.
-func (s *QueryDataSourceBodyParametersFilter) GetRollup() OptRollupPropertyFilter {
+func (s *QueryDataSourceRequestFilter) GetRollup() OptRollupPropertyFilter {
 	return s.Rollup
 }
 
 // GetVerification returns the value of Verification.
-func (s *QueryDataSourceBodyParametersFilter) GetVerification() OptVerificationPropertyStatusFilter {
+func (s *QueryDataSourceRequestFilter) GetVerification() OptVerificationPropertyStatusFilter {
 	return s.Verification
 }
 
 // GetTimestamp returns the value of Timestamp.
-func (s *QueryDataSourceBodyParametersFilter) GetTimestamp() OptQueryDataSourceBodyParametersFilterTimestamp {
+func (s *QueryDataSourceRequestFilter) GetTimestamp() OptQueryDataSourceRequestFilterTimestamp {
 	return s.Timestamp
 }
 
 // SetOr sets the value of Or.
-func (s *QueryDataSourceBodyParametersFilter) SetOr(val GroupFilterOperatorArray) {
+func (s *QueryDataSourceRequestFilter) SetOr(val GroupFilterOperatorArray) {
 	s.Or = val
 }
 
 // SetAnd sets the value of And.
-func (s *QueryDataSourceBodyParametersFilter) SetAnd(val GroupFilterOperatorArray) {
+func (s *QueryDataSourceRequestFilter) SetAnd(val GroupFilterOperatorArray) {
 	s.And = val
 }
 
 // SetTitle sets the value of Title.
-func (s *QueryDataSourceBodyParametersFilter) SetTitle(val OptTextPropertyFilter) {
+func (s *QueryDataSourceRequestFilter) SetTitle(val OptTextPropertyFilter) {
 	s.Title = val
 }
 
 // SetProperty sets the value of Property.
-func (s *QueryDataSourceBodyParametersFilter) SetProperty(val OptString) {
+func (s *QueryDataSourceRequestFilter) SetProperty(val OptString) {
 	s.Property = val
 }
 
 // SetType sets the value of Type.
-func (s *QueryDataSourceBodyParametersFilter) SetType(val OptQueryDataSourceBodyParametersFilterType) {
+func (s *QueryDataSourceRequestFilter) SetType(val OptQueryDataSourceRequestFilterType) {
 	s.Type = val
 }
 
 // SetRichText sets the value of RichText.
-func (s *QueryDataSourceBodyParametersFilter) SetRichText(val OptTextPropertyFilter) {
+func (s *QueryDataSourceRequestFilter) SetRichText(val OptTextPropertyFilter) {
 	s.RichText = val
 }
 
 // SetNumber sets the value of Number.
-func (s *QueryDataSourceBodyParametersFilter) SetNumber(val OptNumberPropertyFilter) {
+func (s *QueryDataSourceRequestFilter) SetNumber(val OptNumberPropertyFilter) {
 	s.Number = val
 }
 
 // SetCheckbox sets the value of Checkbox.
-func (s *QueryDataSourceBodyParametersFilter) SetCheckbox(val OptCheckboxPropertyFilter) {
+func (s *QueryDataSourceRequestFilter) SetCheckbox(val OptCheckboxPropertyFilter) {
 	s.Checkbox = val
 }
 
 // SetSelect sets the value of Select.
-func (s *QueryDataSourceBodyParametersFilter) SetSelect(val OptSelectPropertyFilter) {
+func (s *QueryDataSourceRequestFilter) SetSelect(val OptSelectPropertyFilter) {
 	s.Select = val
 }
 
 // SetMultiSelect sets the value of MultiSelect.
-func (s *QueryDataSourceBodyParametersFilter) SetMultiSelect(val OptMultiSelectPropertyFilter) {
+func (s *QueryDataSourceRequestFilter) SetMultiSelect(val OptMultiSelectPropertyFilter) {
 	s.MultiSelect = val
 }
 
 // SetStatus sets the value of Status.
-func (s *QueryDataSourceBodyParametersFilter) SetStatus(val OptStatusPropertyFilter) {
+func (s *QueryDataSourceRequestFilter) SetStatus(val OptStatusPropertyFilter) {
 	s.Status = val
 }
 
 // SetDate sets the value of Date.
-func (s *QueryDataSourceBodyParametersFilter) SetDate(val OptDatePropertyFilter) {
+func (s *QueryDataSourceRequestFilter) SetDate(val OptDatePropertyFilter) {
 	s.Date = val
 }
 
 // SetPeople sets the value of People.
-func (s *QueryDataSourceBodyParametersFilter) SetPeople(val OptPeoplePropertyFilter) {
+func (s *QueryDataSourceRequestFilter) SetPeople(val OptPeoplePropertyFilter) {
 	s.People = val
 }
 
 // SetFiles sets the value of Files.
-func (s *QueryDataSourceBodyParametersFilter) SetFiles(val OptExistencePropertyFilter) {
+func (s *QueryDataSourceRequestFilter) SetFiles(val OptExistencePropertyFilter) {
 	s.Files = val
 }
 
 // SetURL sets the value of URL.
-func (s *QueryDataSourceBodyParametersFilter) SetURL(val OptTextPropertyFilter) {
+func (s *QueryDataSourceRequestFilter) SetURL(val OptTextPropertyFilter) {
 	s.URL = val
 }
 
 // SetEmail sets the value of Email.
-func (s *QueryDataSourceBodyParametersFilter) SetEmail(val OptTextPropertyFilter) {
+func (s *QueryDataSourceRequestFilter) SetEmail(val OptTextPropertyFilter) {
 	s.Email = val
 }
 
 // SetPhoneNumber sets the value of PhoneNumber.
-func (s *QueryDataSourceBodyParametersFilter) SetPhoneNumber(val OptTextPropertyFilter) {
+func (s *QueryDataSourceRequestFilter) SetPhoneNumber(val OptTextPropertyFilter) {
 	s.PhoneNumber = val
 }
 
 // SetRelation sets the value of Relation.
-func (s *QueryDataSourceBodyParametersFilter) SetRelation(val OptRelationPropertyFilter) {
+func (s *QueryDataSourceRequestFilter) SetRelation(val OptRelationPropertyFilter) {
 	s.Relation = val
 }
 
 // SetCreatedBy sets the value of CreatedBy.
-func (s *QueryDataSourceBodyParametersFilter) SetCreatedBy(val OptPeoplePropertyFilter) {
+func (s *QueryDataSourceRequestFilter) SetCreatedBy(val OptPeoplePropertyFilter) {
 	s.CreatedBy = val
 }
 
 // SetCreatedTime sets the value of CreatedTime.
-func (s *QueryDataSourceBodyParametersFilter) SetCreatedTime(val OptDatePropertyFilter) {
+func (s *QueryDataSourceRequestFilter) SetCreatedTime(val OptDatePropertyFilter) {
 	s.CreatedTime = val
 }
 
 // SetLastEditedBy sets the value of LastEditedBy.
-func (s *QueryDataSourceBodyParametersFilter) SetLastEditedBy(val OptPeoplePropertyFilter) {
+func (s *QueryDataSourceRequestFilter) SetLastEditedBy(val OptPeoplePropertyFilter) {
 	s.LastEditedBy = val
 }
 
 // SetLastEditedTime sets the value of LastEditedTime.
-func (s *QueryDataSourceBodyParametersFilter) SetLastEditedTime(val OptDatePropertyFilter) {
+func (s *QueryDataSourceRequestFilter) SetLastEditedTime(val OptDatePropertyFilter) {
 	s.LastEditedTime = val
 }
 
 // SetFormula sets the value of Formula.
-func (s *QueryDataSourceBodyParametersFilter) SetFormula(val OptFormulaPropertyFilter) {
+func (s *QueryDataSourceRequestFilter) SetFormula(val OptFormulaPropertyFilter) {
 	s.Formula = val
 }
 
 // SetUniqueID sets the value of UniqueID.
-func (s *QueryDataSourceBodyParametersFilter) SetUniqueID(val OptNumberPropertyFilter) {
+func (s *QueryDataSourceRequestFilter) SetUniqueID(val OptNumberPropertyFilter) {
 	s.UniqueID = val
 }
 
 // SetRollup sets the value of Rollup.
-func (s *QueryDataSourceBodyParametersFilter) SetRollup(val OptRollupPropertyFilter) {
+func (s *QueryDataSourceRequestFilter) SetRollup(val OptRollupPropertyFilter) {
 	s.Rollup = val
 }
 
 // SetVerification sets the value of Verification.
-func (s *QueryDataSourceBodyParametersFilter) SetVerification(val OptVerificationPropertyStatusFilter) {
+func (s *QueryDataSourceRequestFilter) SetVerification(val OptVerificationPropertyStatusFilter) {
 	s.Verification = val
 }
 
 // SetTimestamp sets the value of Timestamp.
-func (s *QueryDataSourceBodyParametersFilter) SetTimestamp(val OptQueryDataSourceBodyParametersFilterTimestamp) {
+func (s *QueryDataSourceRequestFilter) SetTimestamp(val OptQueryDataSourceRequestFilterTimestamp) {
 	s.Timestamp = val
 }
 
-type QueryDataSourceBodyParametersFilterTimestamp string
+type QueryDataSourceRequestFilterTimestamp string
 
 const (
-	QueryDataSourceBodyParametersFilterTimestampCreatedTime    QueryDataSourceBodyParametersFilterTimestamp = "created_time"
-	QueryDataSourceBodyParametersFilterTimestampLastEditedTime QueryDataSourceBodyParametersFilterTimestamp = "last_edited_time"
+	QueryDataSourceRequestFilterTimestampCreatedTime    QueryDataSourceRequestFilterTimestamp = "created_time"
+	QueryDataSourceRequestFilterTimestampLastEditedTime QueryDataSourceRequestFilterTimestamp = "last_edited_time"
 )
 
-// AllValues returns all QueryDataSourceBodyParametersFilterTimestamp values.
-func (QueryDataSourceBodyParametersFilterTimestamp) AllValues() []QueryDataSourceBodyParametersFilterTimestamp {
-	return []QueryDataSourceBodyParametersFilterTimestamp{
-		QueryDataSourceBodyParametersFilterTimestampCreatedTime,
-		QueryDataSourceBodyParametersFilterTimestampLastEditedTime,
+// AllValues returns all QueryDataSourceRequestFilterTimestamp values.
+func (QueryDataSourceRequestFilterTimestamp) AllValues() []QueryDataSourceRequestFilterTimestamp {
+	return []QueryDataSourceRequestFilterTimestamp{
+		QueryDataSourceRequestFilterTimestampCreatedTime,
+		QueryDataSourceRequestFilterTimestampLastEditedTime,
 	}
 }
 
 // MarshalText implements encoding.TextMarshaler.
-func (s QueryDataSourceBodyParametersFilterTimestamp) MarshalText() ([]byte, error) {
+func (s QueryDataSourceRequestFilterTimestamp) MarshalText() ([]byte, error) {
 	switch s {
-	case QueryDataSourceBodyParametersFilterTimestampCreatedTime:
+	case QueryDataSourceRequestFilterTimestampCreatedTime:
 		return []byte(s), nil
-	case QueryDataSourceBodyParametersFilterTimestampLastEditedTime:
+	case QueryDataSourceRequestFilterTimestampLastEditedTime:
 		return []byte(s), nil
 	default:
 		return nil, errors.Errorf("invalid value: %q", s)
@@ -46747,120 +46747,120 @@ func (s QueryDataSourceBodyParametersFilterTimestamp) MarshalText() ([]byte, err
 }
 
 // UnmarshalText implements encoding.TextUnmarshaler.
-func (s *QueryDataSourceBodyParametersFilterTimestamp) UnmarshalText(data []byte) error {
-	switch QueryDataSourceBodyParametersFilterTimestamp(data) {
-	case QueryDataSourceBodyParametersFilterTimestampCreatedTime:
-		*s = QueryDataSourceBodyParametersFilterTimestampCreatedTime
+func (s *QueryDataSourceRequestFilterTimestamp) UnmarshalText(data []byte) error {
+	switch QueryDataSourceRequestFilterTimestamp(data) {
+	case QueryDataSourceRequestFilterTimestampCreatedTime:
+		*s = QueryDataSourceRequestFilterTimestampCreatedTime
 		return nil
-	case QueryDataSourceBodyParametersFilterTimestampLastEditedTime:
-		*s = QueryDataSourceBodyParametersFilterTimestampLastEditedTime
+	case QueryDataSourceRequestFilterTimestampLastEditedTime:
+		*s = QueryDataSourceRequestFilterTimestampLastEditedTime
 		return nil
 	default:
 		return errors.Errorf("invalid value: %q", data)
 	}
 }
 
-type QueryDataSourceBodyParametersFilterType string
+type QueryDataSourceRequestFilterType string
 
 const (
-	QueryDataSourceBodyParametersFilterTypeTitle          QueryDataSourceBodyParametersFilterType = "title"
-	QueryDataSourceBodyParametersFilterTypeRichText       QueryDataSourceBodyParametersFilterType = "rich_text"
-	QueryDataSourceBodyParametersFilterTypeNumber         QueryDataSourceBodyParametersFilterType = "number"
-	QueryDataSourceBodyParametersFilterTypeCheckbox       QueryDataSourceBodyParametersFilterType = "checkbox"
-	QueryDataSourceBodyParametersFilterTypeSelect         QueryDataSourceBodyParametersFilterType = "select"
-	QueryDataSourceBodyParametersFilterTypeMultiSelect    QueryDataSourceBodyParametersFilterType = "multi_select"
-	QueryDataSourceBodyParametersFilterTypeStatus         QueryDataSourceBodyParametersFilterType = "status"
-	QueryDataSourceBodyParametersFilterTypeDate           QueryDataSourceBodyParametersFilterType = "date"
-	QueryDataSourceBodyParametersFilterTypePeople         QueryDataSourceBodyParametersFilterType = "people"
-	QueryDataSourceBodyParametersFilterTypeFiles          QueryDataSourceBodyParametersFilterType = "files"
-	QueryDataSourceBodyParametersFilterTypeURL            QueryDataSourceBodyParametersFilterType = "url"
-	QueryDataSourceBodyParametersFilterTypeEmail          QueryDataSourceBodyParametersFilterType = "email"
-	QueryDataSourceBodyParametersFilterTypePhoneNumber    QueryDataSourceBodyParametersFilterType = "phone_number"
-	QueryDataSourceBodyParametersFilterTypeRelation       QueryDataSourceBodyParametersFilterType = "relation"
-	QueryDataSourceBodyParametersFilterTypeCreatedBy      QueryDataSourceBodyParametersFilterType = "created_by"
-	QueryDataSourceBodyParametersFilterTypeCreatedTime    QueryDataSourceBodyParametersFilterType = "created_time"
-	QueryDataSourceBodyParametersFilterTypeLastEditedBy   QueryDataSourceBodyParametersFilterType = "last_edited_by"
-	QueryDataSourceBodyParametersFilterTypeLastEditedTime QueryDataSourceBodyParametersFilterType = "last_edited_time"
-	QueryDataSourceBodyParametersFilterTypeFormula        QueryDataSourceBodyParametersFilterType = "formula"
-	QueryDataSourceBodyParametersFilterTypeUniqueID       QueryDataSourceBodyParametersFilterType = "unique_id"
-	QueryDataSourceBodyParametersFilterTypeRollup         QueryDataSourceBodyParametersFilterType = "rollup"
-	QueryDataSourceBodyParametersFilterTypeVerification   QueryDataSourceBodyParametersFilterType = "verification"
+	QueryDataSourceRequestFilterTypeTitle          QueryDataSourceRequestFilterType = "title"
+	QueryDataSourceRequestFilterTypeRichText       QueryDataSourceRequestFilterType = "rich_text"
+	QueryDataSourceRequestFilterTypeNumber         QueryDataSourceRequestFilterType = "number"
+	QueryDataSourceRequestFilterTypeCheckbox       QueryDataSourceRequestFilterType = "checkbox"
+	QueryDataSourceRequestFilterTypeSelect         QueryDataSourceRequestFilterType = "select"
+	QueryDataSourceRequestFilterTypeMultiSelect    QueryDataSourceRequestFilterType = "multi_select"
+	QueryDataSourceRequestFilterTypeStatus         QueryDataSourceRequestFilterType = "status"
+	QueryDataSourceRequestFilterTypeDate           QueryDataSourceRequestFilterType = "date"
+	QueryDataSourceRequestFilterTypePeople         QueryDataSourceRequestFilterType = "people"
+	QueryDataSourceRequestFilterTypeFiles          QueryDataSourceRequestFilterType = "files"
+	QueryDataSourceRequestFilterTypeURL            QueryDataSourceRequestFilterType = "url"
+	QueryDataSourceRequestFilterTypeEmail          QueryDataSourceRequestFilterType = "email"
+	QueryDataSourceRequestFilterTypePhoneNumber    QueryDataSourceRequestFilterType = "phone_number"
+	QueryDataSourceRequestFilterTypeRelation       QueryDataSourceRequestFilterType = "relation"
+	QueryDataSourceRequestFilterTypeCreatedBy      QueryDataSourceRequestFilterType = "created_by"
+	QueryDataSourceRequestFilterTypeCreatedTime    QueryDataSourceRequestFilterType = "created_time"
+	QueryDataSourceRequestFilterTypeLastEditedBy   QueryDataSourceRequestFilterType = "last_edited_by"
+	QueryDataSourceRequestFilterTypeLastEditedTime QueryDataSourceRequestFilterType = "last_edited_time"
+	QueryDataSourceRequestFilterTypeFormula        QueryDataSourceRequestFilterType = "formula"
+	QueryDataSourceRequestFilterTypeUniqueID       QueryDataSourceRequestFilterType = "unique_id"
+	QueryDataSourceRequestFilterTypeRollup         QueryDataSourceRequestFilterType = "rollup"
+	QueryDataSourceRequestFilterTypeVerification   QueryDataSourceRequestFilterType = "verification"
 )
 
-// AllValues returns all QueryDataSourceBodyParametersFilterType values.
-func (QueryDataSourceBodyParametersFilterType) AllValues() []QueryDataSourceBodyParametersFilterType {
-	return []QueryDataSourceBodyParametersFilterType{
-		QueryDataSourceBodyParametersFilterTypeTitle,
-		QueryDataSourceBodyParametersFilterTypeRichText,
-		QueryDataSourceBodyParametersFilterTypeNumber,
-		QueryDataSourceBodyParametersFilterTypeCheckbox,
-		QueryDataSourceBodyParametersFilterTypeSelect,
-		QueryDataSourceBodyParametersFilterTypeMultiSelect,
-		QueryDataSourceBodyParametersFilterTypeStatus,
-		QueryDataSourceBodyParametersFilterTypeDate,
-		QueryDataSourceBodyParametersFilterTypePeople,
-		QueryDataSourceBodyParametersFilterTypeFiles,
-		QueryDataSourceBodyParametersFilterTypeURL,
-		QueryDataSourceBodyParametersFilterTypeEmail,
-		QueryDataSourceBodyParametersFilterTypePhoneNumber,
-		QueryDataSourceBodyParametersFilterTypeRelation,
-		QueryDataSourceBodyParametersFilterTypeCreatedBy,
-		QueryDataSourceBodyParametersFilterTypeCreatedTime,
-		QueryDataSourceBodyParametersFilterTypeLastEditedBy,
-		QueryDataSourceBodyParametersFilterTypeLastEditedTime,
-		QueryDataSourceBodyParametersFilterTypeFormula,
-		QueryDataSourceBodyParametersFilterTypeUniqueID,
-		QueryDataSourceBodyParametersFilterTypeRollup,
-		QueryDataSourceBodyParametersFilterTypeVerification,
+// AllValues returns all QueryDataSourceRequestFilterType values.
+func (QueryDataSourceRequestFilterType) AllValues() []QueryDataSourceRequestFilterType {
+	return []QueryDataSourceRequestFilterType{
+		QueryDataSourceRequestFilterTypeTitle,
+		QueryDataSourceRequestFilterTypeRichText,
+		QueryDataSourceRequestFilterTypeNumber,
+		QueryDataSourceRequestFilterTypeCheckbox,
+		QueryDataSourceRequestFilterTypeSelect,
+		QueryDataSourceRequestFilterTypeMultiSelect,
+		QueryDataSourceRequestFilterTypeStatus,
+		QueryDataSourceRequestFilterTypeDate,
+		QueryDataSourceRequestFilterTypePeople,
+		QueryDataSourceRequestFilterTypeFiles,
+		QueryDataSourceRequestFilterTypeURL,
+		QueryDataSourceRequestFilterTypeEmail,
+		QueryDataSourceRequestFilterTypePhoneNumber,
+		QueryDataSourceRequestFilterTypeRelation,
+		QueryDataSourceRequestFilterTypeCreatedBy,
+		QueryDataSourceRequestFilterTypeCreatedTime,
+		QueryDataSourceRequestFilterTypeLastEditedBy,
+		QueryDataSourceRequestFilterTypeLastEditedTime,
+		QueryDataSourceRequestFilterTypeFormula,
+		QueryDataSourceRequestFilterTypeUniqueID,
+		QueryDataSourceRequestFilterTypeRollup,
+		QueryDataSourceRequestFilterTypeVerification,
 	}
 }
 
 // MarshalText implements encoding.TextMarshaler.
-func (s QueryDataSourceBodyParametersFilterType) MarshalText() ([]byte, error) {
+func (s QueryDataSourceRequestFilterType) MarshalText() ([]byte, error) {
 	switch s {
-	case QueryDataSourceBodyParametersFilterTypeTitle:
+	case QueryDataSourceRequestFilterTypeTitle:
 		return []byte(s), nil
-	case QueryDataSourceBodyParametersFilterTypeRichText:
+	case QueryDataSourceRequestFilterTypeRichText:
 		return []byte(s), nil
-	case QueryDataSourceBodyParametersFilterTypeNumber:
+	case QueryDataSourceRequestFilterTypeNumber:
 		return []byte(s), nil
-	case QueryDataSourceBodyParametersFilterTypeCheckbox:
+	case QueryDataSourceRequestFilterTypeCheckbox:
 		return []byte(s), nil
-	case QueryDataSourceBodyParametersFilterTypeSelect:
+	case QueryDataSourceRequestFilterTypeSelect:
 		return []byte(s), nil
-	case QueryDataSourceBodyParametersFilterTypeMultiSelect:
+	case QueryDataSourceRequestFilterTypeMultiSelect:
 		return []byte(s), nil
-	case QueryDataSourceBodyParametersFilterTypeStatus:
+	case QueryDataSourceRequestFilterTypeStatus:
 		return []byte(s), nil
-	case QueryDataSourceBodyParametersFilterTypeDate:
+	case QueryDataSourceRequestFilterTypeDate:
 		return []byte(s), nil
-	case QueryDataSourceBodyParametersFilterTypePeople:
+	case QueryDataSourceRequestFilterTypePeople:
 		return []byte(s), nil
-	case QueryDataSourceBodyParametersFilterTypeFiles:
+	case QueryDataSourceRequestFilterTypeFiles:
 		return []byte(s), nil
-	case QueryDataSourceBodyParametersFilterTypeURL:
+	case QueryDataSourceRequestFilterTypeURL:
 		return []byte(s), nil
-	case QueryDataSourceBodyParametersFilterTypeEmail:
+	case QueryDataSourceRequestFilterTypeEmail:
 		return []byte(s), nil
-	case QueryDataSourceBodyParametersFilterTypePhoneNumber:
+	case QueryDataSourceRequestFilterTypePhoneNumber:
 		return []byte(s), nil
-	case QueryDataSourceBodyParametersFilterTypeRelation:
+	case QueryDataSourceRequestFilterTypeRelation:
 		return []byte(s), nil
-	case QueryDataSourceBodyParametersFilterTypeCreatedBy:
+	case QueryDataSourceRequestFilterTypeCreatedBy:
 		return []byte(s), nil
-	case QueryDataSourceBodyParametersFilterTypeCreatedTime:
+	case QueryDataSourceRequestFilterTypeCreatedTime:
 		return []byte(s), nil
-	case QueryDataSourceBodyParametersFilterTypeLastEditedBy:
+	case QueryDataSourceRequestFilterTypeLastEditedBy:
 		return []byte(s), nil
-	case QueryDataSourceBodyParametersFilterTypeLastEditedTime:
+	case QueryDataSourceRequestFilterTypeLastEditedTime:
 		return []byte(s), nil
-	case QueryDataSourceBodyParametersFilterTypeFormula:
+	case QueryDataSourceRequestFilterTypeFormula:
 		return []byte(s), nil
-	case QueryDataSourceBodyParametersFilterTypeUniqueID:
+	case QueryDataSourceRequestFilterTypeUniqueID:
 		return []byte(s), nil
-	case QueryDataSourceBodyParametersFilterTypeRollup:
+	case QueryDataSourceRequestFilterTypeRollup:
 		return []byte(s), nil
-	case QueryDataSourceBodyParametersFilterTypeVerification:
+	case QueryDataSourceRequestFilterTypeVerification:
 		return []byte(s), nil
 	default:
 		return nil, errors.Errorf("invalid value: %q", s)
@@ -46868,73 +46868,73 @@ func (s QueryDataSourceBodyParametersFilterType) MarshalText() ([]byte, error) {
 }
 
 // UnmarshalText implements encoding.TextUnmarshaler.
-func (s *QueryDataSourceBodyParametersFilterType) UnmarshalText(data []byte) error {
-	switch QueryDataSourceBodyParametersFilterType(data) {
-	case QueryDataSourceBodyParametersFilterTypeTitle:
-		*s = QueryDataSourceBodyParametersFilterTypeTitle
+func (s *QueryDataSourceRequestFilterType) UnmarshalText(data []byte) error {
+	switch QueryDataSourceRequestFilterType(data) {
+	case QueryDataSourceRequestFilterTypeTitle:
+		*s = QueryDataSourceRequestFilterTypeTitle
 		return nil
-	case QueryDataSourceBodyParametersFilterTypeRichText:
-		*s = QueryDataSourceBodyParametersFilterTypeRichText
+	case QueryDataSourceRequestFilterTypeRichText:
+		*s = QueryDataSourceRequestFilterTypeRichText
 		return nil
-	case QueryDataSourceBodyParametersFilterTypeNumber:
-		*s = QueryDataSourceBodyParametersFilterTypeNumber
+	case QueryDataSourceRequestFilterTypeNumber:
+		*s = QueryDataSourceRequestFilterTypeNumber
 		return nil
-	case QueryDataSourceBodyParametersFilterTypeCheckbox:
-		*s = QueryDataSourceBodyParametersFilterTypeCheckbox
+	case QueryDataSourceRequestFilterTypeCheckbox:
+		*s = QueryDataSourceRequestFilterTypeCheckbox
 		return nil
-	case QueryDataSourceBodyParametersFilterTypeSelect:
-		*s = QueryDataSourceBodyParametersFilterTypeSelect
+	case QueryDataSourceRequestFilterTypeSelect:
+		*s = QueryDataSourceRequestFilterTypeSelect
 		return nil
-	case QueryDataSourceBodyParametersFilterTypeMultiSelect:
-		*s = QueryDataSourceBodyParametersFilterTypeMultiSelect
+	case QueryDataSourceRequestFilterTypeMultiSelect:
+		*s = QueryDataSourceRequestFilterTypeMultiSelect
 		return nil
-	case QueryDataSourceBodyParametersFilterTypeStatus:
-		*s = QueryDataSourceBodyParametersFilterTypeStatus
+	case QueryDataSourceRequestFilterTypeStatus:
+		*s = QueryDataSourceRequestFilterTypeStatus
 		return nil
-	case QueryDataSourceBodyParametersFilterTypeDate:
-		*s = QueryDataSourceBodyParametersFilterTypeDate
+	case QueryDataSourceRequestFilterTypeDate:
+		*s = QueryDataSourceRequestFilterTypeDate
 		return nil
-	case QueryDataSourceBodyParametersFilterTypePeople:
-		*s = QueryDataSourceBodyParametersFilterTypePeople
+	case QueryDataSourceRequestFilterTypePeople:
+		*s = QueryDataSourceRequestFilterTypePeople
 		return nil
-	case QueryDataSourceBodyParametersFilterTypeFiles:
-		*s = QueryDataSourceBodyParametersFilterTypeFiles
+	case QueryDataSourceRequestFilterTypeFiles:
+		*s = QueryDataSourceRequestFilterTypeFiles
 		return nil
-	case QueryDataSourceBodyParametersFilterTypeURL:
-		*s = QueryDataSourceBodyParametersFilterTypeURL
+	case QueryDataSourceRequestFilterTypeURL:
+		*s = QueryDataSourceRequestFilterTypeURL
 		return nil
-	case QueryDataSourceBodyParametersFilterTypeEmail:
-		*s = QueryDataSourceBodyParametersFilterTypeEmail
+	case QueryDataSourceRequestFilterTypeEmail:
+		*s = QueryDataSourceRequestFilterTypeEmail
 		return nil
-	case QueryDataSourceBodyParametersFilterTypePhoneNumber:
-		*s = QueryDataSourceBodyParametersFilterTypePhoneNumber
+	case QueryDataSourceRequestFilterTypePhoneNumber:
+		*s = QueryDataSourceRequestFilterTypePhoneNumber
 		return nil
-	case QueryDataSourceBodyParametersFilterTypeRelation:
-		*s = QueryDataSourceBodyParametersFilterTypeRelation
+	case QueryDataSourceRequestFilterTypeRelation:
+		*s = QueryDataSourceRequestFilterTypeRelation
 		return nil
-	case QueryDataSourceBodyParametersFilterTypeCreatedBy:
-		*s = QueryDataSourceBodyParametersFilterTypeCreatedBy
+	case QueryDataSourceRequestFilterTypeCreatedBy:
+		*s = QueryDataSourceRequestFilterTypeCreatedBy
 		return nil
-	case QueryDataSourceBodyParametersFilterTypeCreatedTime:
-		*s = QueryDataSourceBodyParametersFilterTypeCreatedTime
+	case QueryDataSourceRequestFilterTypeCreatedTime:
+		*s = QueryDataSourceRequestFilterTypeCreatedTime
 		return nil
-	case QueryDataSourceBodyParametersFilterTypeLastEditedBy:
-		*s = QueryDataSourceBodyParametersFilterTypeLastEditedBy
+	case QueryDataSourceRequestFilterTypeLastEditedBy:
+		*s = QueryDataSourceRequestFilterTypeLastEditedBy
 		return nil
-	case QueryDataSourceBodyParametersFilterTypeLastEditedTime:
-		*s = QueryDataSourceBodyParametersFilterTypeLastEditedTime
+	case QueryDataSourceRequestFilterTypeLastEditedTime:
+		*s = QueryDataSourceRequestFilterTypeLastEditedTime
 		return nil
-	case QueryDataSourceBodyParametersFilterTypeFormula:
-		*s = QueryDataSourceBodyParametersFilterTypeFormula
+	case QueryDataSourceRequestFilterTypeFormula:
+		*s = QueryDataSourceRequestFilterTypeFormula
 		return nil
-	case QueryDataSourceBodyParametersFilterTypeUniqueID:
-		*s = QueryDataSourceBodyParametersFilterTypeUniqueID
+	case QueryDataSourceRequestFilterTypeUniqueID:
+		*s = QueryDataSourceRequestFilterTypeUniqueID
 		return nil
-	case QueryDataSourceBodyParametersFilterTypeRollup:
-		*s = QueryDataSourceBodyParametersFilterTypeRollup
+	case QueryDataSourceRequestFilterTypeRollup:
+		*s = QueryDataSourceRequestFilterTypeRollup
 		return nil
-	case QueryDataSourceBodyParametersFilterTypeVerification:
-		*s = QueryDataSourceBodyParametersFilterTypeVerification
+	case QueryDataSourceRequestFilterTypeVerification:
+		*s = QueryDataSourceRequestFilterTypeVerification
 		return nil
 	default:
 		return errors.Errorf("invalid value: %q", data)
@@ -46944,27 +46944,27 @@ func (s *QueryDataSourceBodyParametersFilterType) UnmarshalText(data []byte) err
 // Optionally filter the results to only include pages or data sources. Regular, non-wiki //
 // databases only support page children. The default behavior is no result type // filtering, in
 // other words, returning both pages and data sources for wikis.
-type QueryDataSourceBodyParametersResultType string
+type QueryDataSourceRequestResultType string
 
 const (
-	QueryDataSourceBodyParametersResultTypePage       QueryDataSourceBodyParametersResultType = "page"
-	QueryDataSourceBodyParametersResultTypeDataSource QueryDataSourceBodyParametersResultType = "data_source"
+	QueryDataSourceRequestResultTypePage       QueryDataSourceRequestResultType = "page"
+	QueryDataSourceRequestResultTypeDataSource QueryDataSourceRequestResultType = "data_source"
 )
 
-// AllValues returns all QueryDataSourceBodyParametersResultType values.
-func (QueryDataSourceBodyParametersResultType) AllValues() []QueryDataSourceBodyParametersResultType {
-	return []QueryDataSourceBodyParametersResultType{
-		QueryDataSourceBodyParametersResultTypePage,
-		QueryDataSourceBodyParametersResultTypeDataSource,
+// AllValues returns all QueryDataSourceRequestResultType values.
+func (QueryDataSourceRequestResultType) AllValues() []QueryDataSourceRequestResultType {
+	return []QueryDataSourceRequestResultType{
+		QueryDataSourceRequestResultTypePage,
+		QueryDataSourceRequestResultTypeDataSource,
 	}
 }
 
 // MarshalText implements encoding.TextMarshaler.
-func (s QueryDataSourceBodyParametersResultType) MarshalText() ([]byte, error) {
+func (s QueryDataSourceRequestResultType) MarshalText() ([]byte, error) {
 	switch s {
-	case QueryDataSourceBodyParametersResultTypePage:
+	case QueryDataSourceRequestResultTypePage:
 		return []byte(s), nil
-	case QueryDataSourceBodyParametersResultTypeDataSource:
+	case QueryDataSourceRequestResultTypeDataSource:
 		return []byte(s), nil
 	default:
 		return nil, errors.Errorf("invalid value: %q", s)
@@ -46972,76 +46972,76 @@ func (s QueryDataSourceBodyParametersResultType) MarshalText() ([]byte, error) {
 }
 
 // UnmarshalText implements encoding.TextUnmarshaler.
-func (s *QueryDataSourceBodyParametersResultType) UnmarshalText(data []byte) error {
-	switch QueryDataSourceBodyParametersResultType(data) {
-	case QueryDataSourceBodyParametersResultTypePage:
-		*s = QueryDataSourceBodyParametersResultTypePage
+func (s *QueryDataSourceRequestResultType) UnmarshalText(data []byte) error {
+	switch QueryDataSourceRequestResultType(data) {
+	case QueryDataSourceRequestResultTypePage:
+		*s = QueryDataSourceRequestResultTypePage
 		return nil
-	case QueryDataSourceBodyParametersResultTypeDataSource:
-		*s = QueryDataSourceBodyParametersResultTypeDataSource
+	case QueryDataSourceRequestResultTypeDataSource:
+		*s = QueryDataSourceRequestResultTypeDataSource
 		return nil
 	default:
 		return errors.Errorf("invalid value: %q", data)
 	}
 }
 
-type QueryDataSourceBodyParametersSortsItem struct {
-	Property  OptString                                          `json:"property"`
-	Direction QueryDataSourceBodyParametersSortsItemDirection    `json:"direction"`
-	Timestamp OptQueryDataSourceBodyParametersSortsItemTimestamp `json:"timestamp"`
+type QueryDataSourceRequestSortsItem struct {
+	Property  OptString                                   `json:"property"`
+	Direction QueryDataSourceRequestSortsItemDirection    `json:"direction"`
+	Timestamp OptQueryDataSourceRequestSortsItemTimestamp `json:"timestamp"`
 }
 
 // GetProperty returns the value of Property.
-func (s *QueryDataSourceBodyParametersSortsItem) GetProperty() OptString {
+func (s *QueryDataSourceRequestSortsItem) GetProperty() OptString {
 	return s.Property
 }
 
 // GetDirection returns the value of Direction.
-func (s *QueryDataSourceBodyParametersSortsItem) GetDirection() QueryDataSourceBodyParametersSortsItemDirection {
+func (s *QueryDataSourceRequestSortsItem) GetDirection() QueryDataSourceRequestSortsItemDirection {
 	return s.Direction
 }
 
 // GetTimestamp returns the value of Timestamp.
-func (s *QueryDataSourceBodyParametersSortsItem) GetTimestamp() OptQueryDataSourceBodyParametersSortsItemTimestamp {
+func (s *QueryDataSourceRequestSortsItem) GetTimestamp() OptQueryDataSourceRequestSortsItemTimestamp {
 	return s.Timestamp
 }
 
 // SetProperty sets the value of Property.
-func (s *QueryDataSourceBodyParametersSortsItem) SetProperty(val OptString) {
+func (s *QueryDataSourceRequestSortsItem) SetProperty(val OptString) {
 	s.Property = val
 }
 
 // SetDirection sets the value of Direction.
-func (s *QueryDataSourceBodyParametersSortsItem) SetDirection(val QueryDataSourceBodyParametersSortsItemDirection) {
+func (s *QueryDataSourceRequestSortsItem) SetDirection(val QueryDataSourceRequestSortsItemDirection) {
 	s.Direction = val
 }
 
 // SetTimestamp sets the value of Timestamp.
-func (s *QueryDataSourceBodyParametersSortsItem) SetTimestamp(val OptQueryDataSourceBodyParametersSortsItemTimestamp) {
+func (s *QueryDataSourceRequestSortsItem) SetTimestamp(val OptQueryDataSourceRequestSortsItemTimestamp) {
 	s.Timestamp = val
 }
 
-type QueryDataSourceBodyParametersSortsItemDirection string
+type QueryDataSourceRequestSortsItemDirection string
 
 const (
-	QueryDataSourceBodyParametersSortsItemDirectionAscending  QueryDataSourceBodyParametersSortsItemDirection = "ascending"
-	QueryDataSourceBodyParametersSortsItemDirectionDescending QueryDataSourceBodyParametersSortsItemDirection = "descending"
+	QueryDataSourceRequestSortsItemDirectionAscending  QueryDataSourceRequestSortsItemDirection = "ascending"
+	QueryDataSourceRequestSortsItemDirectionDescending QueryDataSourceRequestSortsItemDirection = "descending"
 )
 
-// AllValues returns all QueryDataSourceBodyParametersSortsItemDirection values.
-func (QueryDataSourceBodyParametersSortsItemDirection) AllValues() []QueryDataSourceBodyParametersSortsItemDirection {
-	return []QueryDataSourceBodyParametersSortsItemDirection{
-		QueryDataSourceBodyParametersSortsItemDirectionAscending,
-		QueryDataSourceBodyParametersSortsItemDirectionDescending,
+// AllValues returns all QueryDataSourceRequestSortsItemDirection values.
+func (QueryDataSourceRequestSortsItemDirection) AllValues() []QueryDataSourceRequestSortsItemDirection {
+	return []QueryDataSourceRequestSortsItemDirection{
+		QueryDataSourceRequestSortsItemDirectionAscending,
+		QueryDataSourceRequestSortsItemDirectionDescending,
 	}
 }
 
 // MarshalText implements encoding.TextMarshaler.
-func (s QueryDataSourceBodyParametersSortsItemDirection) MarshalText() ([]byte, error) {
+func (s QueryDataSourceRequestSortsItemDirection) MarshalText() ([]byte, error) {
 	switch s {
-	case QueryDataSourceBodyParametersSortsItemDirectionAscending:
+	case QueryDataSourceRequestSortsItemDirectionAscending:
 		return []byte(s), nil
-	case QueryDataSourceBodyParametersSortsItemDirectionDescending:
+	case QueryDataSourceRequestSortsItemDirectionDescending:
 		return []byte(s), nil
 	default:
 		return nil, errors.Errorf("invalid value: %q", s)
@@ -47049,40 +47049,40 @@ func (s QueryDataSourceBodyParametersSortsItemDirection) MarshalText() ([]byte, 
 }
 
 // UnmarshalText implements encoding.TextUnmarshaler.
-func (s *QueryDataSourceBodyParametersSortsItemDirection) UnmarshalText(data []byte) error {
-	switch QueryDataSourceBodyParametersSortsItemDirection(data) {
-	case QueryDataSourceBodyParametersSortsItemDirectionAscending:
-		*s = QueryDataSourceBodyParametersSortsItemDirectionAscending
+func (s *QueryDataSourceRequestSortsItemDirection) UnmarshalText(data []byte) error {
+	switch QueryDataSourceRequestSortsItemDirection(data) {
+	case QueryDataSourceRequestSortsItemDirectionAscending:
+		*s = QueryDataSourceRequestSortsItemDirectionAscending
 		return nil
-	case QueryDataSourceBodyParametersSortsItemDirectionDescending:
-		*s = QueryDataSourceBodyParametersSortsItemDirectionDescending
+	case QueryDataSourceRequestSortsItemDirectionDescending:
+		*s = QueryDataSourceRequestSortsItemDirectionDescending
 		return nil
 	default:
 		return errors.Errorf("invalid value: %q", data)
 	}
 }
 
-type QueryDataSourceBodyParametersSortsItemTimestamp string
+type QueryDataSourceRequestSortsItemTimestamp string
 
 const (
-	QueryDataSourceBodyParametersSortsItemTimestampCreatedTime    QueryDataSourceBodyParametersSortsItemTimestamp = "created_time"
-	QueryDataSourceBodyParametersSortsItemTimestampLastEditedTime QueryDataSourceBodyParametersSortsItemTimestamp = "last_edited_time"
+	QueryDataSourceRequestSortsItemTimestampCreatedTime    QueryDataSourceRequestSortsItemTimestamp = "created_time"
+	QueryDataSourceRequestSortsItemTimestampLastEditedTime QueryDataSourceRequestSortsItemTimestamp = "last_edited_time"
 )
 
-// AllValues returns all QueryDataSourceBodyParametersSortsItemTimestamp values.
-func (QueryDataSourceBodyParametersSortsItemTimestamp) AllValues() []QueryDataSourceBodyParametersSortsItemTimestamp {
-	return []QueryDataSourceBodyParametersSortsItemTimestamp{
-		QueryDataSourceBodyParametersSortsItemTimestampCreatedTime,
-		QueryDataSourceBodyParametersSortsItemTimestampLastEditedTime,
+// AllValues returns all QueryDataSourceRequestSortsItemTimestamp values.
+func (QueryDataSourceRequestSortsItemTimestamp) AllValues() []QueryDataSourceRequestSortsItemTimestamp {
+	return []QueryDataSourceRequestSortsItemTimestamp{
+		QueryDataSourceRequestSortsItemTimestampCreatedTime,
+		QueryDataSourceRequestSortsItemTimestampLastEditedTime,
 	}
 }
 
 // MarshalText implements encoding.TextMarshaler.
-func (s QueryDataSourceBodyParametersSortsItemTimestamp) MarshalText() ([]byte, error) {
+func (s QueryDataSourceRequestSortsItemTimestamp) MarshalText() ([]byte, error) {
 	switch s {
-	case QueryDataSourceBodyParametersSortsItemTimestampCreatedTime:
+	case QueryDataSourceRequestSortsItemTimestampCreatedTime:
 		return []byte(s), nil
-	case QueryDataSourceBodyParametersSortsItemTimestampLastEditedTime:
+	case QueryDataSourceRequestSortsItemTimestampLastEditedTime:
 		return []byte(s), nil
 	default:
 		return nil, errors.Errorf("invalid value: %q", s)
@@ -47090,13 +47090,13 @@ func (s QueryDataSourceBodyParametersSortsItemTimestamp) MarshalText() ([]byte, 
 }
 
 // UnmarshalText implements encoding.TextUnmarshaler.
-func (s *QueryDataSourceBodyParametersSortsItemTimestamp) UnmarshalText(data []byte) error {
-	switch QueryDataSourceBodyParametersSortsItemTimestamp(data) {
-	case QueryDataSourceBodyParametersSortsItemTimestampCreatedTime:
-		*s = QueryDataSourceBodyParametersSortsItemTimestampCreatedTime
+func (s *QueryDataSourceRequestSortsItemTimestamp) UnmarshalText(data []byte) error {
+	switch QueryDataSourceRequestSortsItemTimestamp(data) {
+	case QueryDataSourceRequestSortsItemTimestampCreatedTime:
+		*s = QueryDataSourceRequestSortsItemTimestampCreatedTime
 		return nil
-	case QueryDataSourceBodyParametersSortsItemTimestampLastEditedTime:
-		*s = QueryDataSourceBodyParametersSortsItemTimestampLastEditedTime
+	case QueryDataSourceRequestSortsItemTimestampLastEditedTime:
+		*s = QueryDataSourceRequestSortsItemTimestampLastEditedTime
 		return nil
 	default:
 		return errors.Errorf("invalid value: %q", data)
@@ -49073,107 +49073,107 @@ func (s *RollupSubfilterPropertyFilter) SetStatus(val OptStatusPropertyFilter) {
 	s.Status = val
 }
 
-// Ref: #/components/schemas/SearchBodyParameters
-type SearchBodyParameters struct {
-	Sort        OptSearchBodyParametersSort   `json:"sort"`
-	Query       OptString                     `json:"query"`
-	StartCursor OptString                     `json:"start_cursor"`
-	PageSize    OptFloat64                    `json:"page_size"`
-	Filter      OptSearchBodyParametersFilter `json:"filter"`
+// Ref: #/components/schemas/SearchRequest
+type SearchRequest struct {
+	Sort        OptSearchRequestSort   `json:"sort"`
+	Query       OptString              `json:"query"`
+	StartCursor OptString              `json:"start_cursor"`
+	PageSize    OptFloat64             `json:"page_size"`
+	Filter      OptSearchRequestFilter `json:"filter"`
 }
 
 // GetSort returns the value of Sort.
-func (s *SearchBodyParameters) GetSort() OptSearchBodyParametersSort {
+func (s *SearchRequest) GetSort() OptSearchRequestSort {
 	return s.Sort
 }
 
 // GetQuery returns the value of Query.
-func (s *SearchBodyParameters) GetQuery() OptString {
+func (s *SearchRequest) GetQuery() OptString {
 	return s.Query
 }
 
 // GetStartCursor returns the value of StartCursor.
-func (s *SearchBodyParameters) GetStartCursor() OptString {
+func (s *SearchRequest) GetStartCursor() OptString {
 	return s.StartCursor
 }
 
 // GetPageSize returns the value of PageSize.
-func (s *SearchBodyParameters) GetPageSize() OptFloat64 {
+func (s *SearchRequest) GetPageSize() OptFloat64 {
 	return s.PageSize
 }
 
 // GetFilter returns the value of Filter.
-func (s *SearchBodyParameters) GetFilter() OptSearchBodyParametersFilter {
+func (s *SearchRequest) GetFilter() OptSearchRequestFilter {
 	return s.Filter
 }
 
 // SetSort sets the value of Sort.
-func (s *SearchBodyParameters) SetSort(val OptSearchBodyParametersSort) {
+func (s *SearchRequest) SetSort(val OptSearchRequestSort) {
 	s.Sort = val
 }
 
 // SetQuery sets the value of Query.
-func (s *SearchBodyParameters) SetQuery(val OptString) {
+func (s *SearchRequest) SetQuery(val OptString) {
 	s.Query = val
 }
 
 // SetStartCursor sets the value of StartCursor.
-func (s *SearchBodyParameters) SetStartCursor(val OptString) {
+func (s *SearchRequest) SetStartCursor(val OptString) {
 	s.StartCursor = val
 }
 
 // SetPageSize sets the value of PageSize.
-func (s *SearchBodyParameters) SetPageSize(val OptFloat64) {
+func (s *SearchRequest) SetPageSize(val OptFloat64) {
 	s.PageSize = val
 }
 
 // SetFilter sets the value of Filter.
-func (s *SearchBodyParameters) SetFilter(val OptSearchBodyParametersFilter) {
+func (s *SearchRequest) SetFilter(val OptSearchRequestFilter) {
 	s.Filter = val
 }
 
-type SearchBodyParametersFilter struct {
-	Property SearchBodyParametersFilterProperty `json:"property"`
-	Value    SearchBodyParametersFilterValue    `json:"value"`
+type SearchRequestFilter struct {
+	Property SearchRequestFilterProperty `json:"property"`
+	Value    SearchRequestFilterValue    `json:"value"`
 }
 
 // GetProperty returns the value of Property.
-func (s *SearchBodyParametersFilter) GetProperty() SearchBodyParametersFilterProperty {
+func (s *SearchRequestFilter) GetProperty() SearchRequestFilterProperty {
 	return s.Property
 }
 
 // GetValue returns the value of Value.
-func (s *SearchBodyParametersFilter) GetValue() SearchBodyParametersFilterValue {
+func (s *SearchRequestFilter) GetValue() SearchRequestFilterValue {
 	return s.Value
 }
 
 // SetProperty sets the value of Property.
-func (s *SearchBodyParametersFilter) SetProperty(val SearchBodyParametersFilterProperty) {
+func (s *SearchRequestFilter) SetProperty(val SearchRequestFilterProperty) {
 	s.Property = val
 }
 
 // SetValue sets the value of Value.
-func (s *SearchBodyParametersFilter) SetValue(val SearchBodyParametersFilterValue) {
+func (s *SearchRequestFilter) SetValue(val SearchRequestFilterValue) {
 	s.Value = val
 }
 
-type SearchBodyParametersFilterProperty string
+type SearchRequestFilterProperty string
 
 const (
-	SearchBodyParametersFilterPropertyObject SearchBodyParametersFilterProperty = "object"
+	SearchRequestFilterPropertyObject SearchRequestFilterProperty = "object"
 )
 
-// AllValues returns all SearchBodyParametersFilterProperty values.
-func (SearchBodyParametersFilterProperty) AllValues() []SearchBodyParametersFilterProperty {
-	return []SearchBodyParametersFilterProperty{
-		SearchBodyParametersFilterPropertyObject,
+// AllValues returns all SearchRequestFilterProperty values.
+func (SearchRequestFilterProperty) AllValues() []SearchRequestFilterProperty {
+	return []SearchRequestFilterProperty{
+		SearchRequestFilterPropertyObject,
 	}
 }
 
 // MarshalText implements encoding.TextMarshaler.
-func (s SearchBodyParametersFilterProperty) MarshalText() ([]byte, error) {
+func (s SearchRequestFilterProperty) MarshalText() ([]byte, error) {
 	switch s {
-	case SearchBodyParametersFilterPropertyObject:
+	case SearchRequestFilterPropertyObject:
 		return []byte(s), nil
 	default:
 		return nil, errors.Errorf("invalid value: %q", s)
@@ -49181,37 +49181,37 @@ func (s SearchBodyParametersFilterProperty) MarshalText() ([]byte, error) {
 }
 
 // UnmarshalText implements encoding.TextUnmarshaler.
-func (s *SearchBodyParametersFilterProperty) UnmarshalText(data []byte) error {
-	switch SearchBodyParametersFilterProperty(data) {
-	case SearchBodyParametersFilterPropertyObject:
-		*s = SearchBodyParametersFilterPropertyObject
+func (s *SearchRequestFilterProperty) UnmarshalText(data []byte) error {
+	switch SearchRequestFilterProperty(data) {
+	case SearchRequestFilterPropertyObject:
+		*s = SearchRequestFilterPropertyObject
 		return nil
 	default:
 		return errors.Errorf("invalid value: %q", data)
 	}
 }
 
-type SearchBodyParametersFilterValue string
+type SearchRequestFilterValue string
 
 const (
-	SearchBodyParametersFilterValuePage       SearchBodyParametersFilterValue = "page"
-	SearchBodyParametersFilterValueDataSource SearchBodyParametersFilterValue = "data_source"
+	SearchRequestFilterValuePage       SearchRequestFilterValue = "page"
+	SearchRequestFilterValueDataSource SearchRequestFilterValue = "data_source"
 )
 
-// AllValues returns all SearchBodyParametersFilterValue values.
-func (SearchBodyParametersFilterValue) AllValues() []SearchBodyParametersFilterValue {
-	return []SearchBodyParametersFilterValue{
-		SearchBodyParametersFilterValuePage,
-		SearchBodyParametersFilterValueDataSource,
+// AllValues returns all SearchRequestFilterValue values.
+func (SearchRequestFilterValue) AllValues() []SearchRequestFilterValue {
+	return []SearchRequestFilterValue{
+		SearchRequestFilterValuePage,
+		SearchRequestFilterValueDataSource,
 	}
 }
 
 // MarshalText implements encoding.TextMarshaler.
-func (s SearchBodyParametersFilterValue) MarshalText() ([]byte, error) {
+func (s SearchRequestFilterValue) MarshalText() ([]byte, error) {
 	switch s {
-	case SearchBodyParametersFilterValuePage:
+	case SearchRequestFilterValuePage:
 		return []byte(s), nil
-	case SearchBodyParametersFilterValueDataSource:
+	case SearchRequestFilterValueDataSource:
 		return []byte(s), nil
 	default:
 		return nil, errors.Errorf("invalid value: %q", s)
@@ -49219,65 +49219,65 @@ func (s SearchBodyParametersFilterValue) MarshalText() ([]byte, error) {
 }
 
 // UnmarshalText implements encoding.TextUnmarshaler.
-func (s *SearchBodyParametersFilterValue) UnmarshalText(data []byte) error {
-	switch SearchBodyParametersFilterValue(data) {
-	case SearchBodyParametersFilterValuePage:
-		*s = SearchBodyParametersFilterValuePage
+func (s *SearchRequestFilterValue) UnmarshalText(data []byte) error {
+	switch SearchRequestFilterValue(data) {
+	case SearchRequestFilterValuePage:
+		*s = SearchRequestFilterValuePage
 		return nil
-	case SearchBodyParametersFilterValueDataSource:
-		*s = SearchBodyParametersFilterValueDataSource
+	case SearchRequestFilterValueDataSource:
+		*s = SearchRequestFilterValueDataSource
 		return nil
 	default:
 		return errors.Errorf("invalid value: %q", data)
 	}
 }
 
-type SearchBodyParametersSort struct {
-	Timestamp SearchBodyParametersSortTimestamp `json:"timestamp"`
-	Direction SearchBodyParametersSortDirection `json:"direction"`
+type SearchRequestSort struct {
+	Timestamp SearchRequestSortTimestamp `json:"timestamp"`
+	Direction SearchRequestSortDirection `json:"direction"`
 }
 
 // GetTimestamp returns the value of Timestamp.
-func (s *SearchBodyParametersSort) GetTimestamp() SearchBodyParametersSortTimestamp {
+func (s *SearchRequestSort) GetTimestamp() SearchRequestSortTimestamp {
 	return s.Timestamp
 }
 
 // GetDirection returns the value of Direction.
-func (s *SearchBodyParametersSort) GetDirection() SearchBodyParametersSortDirection {
+func (s *SearchRequestSort) GetDirection() SearchRequestSortDirection {
 	return s.Direction
 }
 
 // SetTimestamp sets the value of Timestamp.
-func (s *SearchBodyParametersSort) SetTimestamp(val SearchBodyParametersSortTimestamp) {
+func (s *SearchRequestSort) SetTimestamp(val SearchRequestSortTimestamp) {
 	s.Timestamp = val
 }
 
 // SetDirection sets the value of Direction.
-func (s *SearchBodyParametersSort) SetDirection(val SearchBodyParametersSortDirection) {
+func (s *SearchRequestSort) SetDirection(val SearchRequestSortDirection) {
 	s.Direction = val
 }
 
-type SearchBodyParametersSortDirection string
+type SearchRequestSortDirection string
 
 const (
-	SearchBodyParametersSortDirectionAscending  SearchBodyParametersSortDirection = "ascending"
-	SearchBodyParametersSortDirectionDescending SearchBodyParametersSortDirection = "descending"
+	SearchRequestSortDirectionAscending  SearchRequestSortDirection = "ascending"
+	SearchRequestSortDirectionDescending SearchRequestSortDirection = "descending"
 )
 
-// AllValues returns all SearchBodyParametersSortDirection values.
-func (SearchBodyParametersSortDirection) AllValues() []SearchBodyParametersSortDirection {
-	return []SearchBodyParametersSortDirection{
-		SearchBodyParametersSortDirectionAscending,
-		SearchBodyParametersSortDirectionDescending,
+// AllValues returns all SearchRequestSortDirection values.
+func (SearchRequestSortDirection) AllValues() []SearchRequestSortDirection {
+	return []SearchRequestSortDirection{
+		SearchRequestSortDirectionAscending,
+		SearchRequestSortDirectionDescending,
 	}
 }
 
 // MarshalText implements encoding.TextMarshaler.
-func (s SearchBodyParametersSortDirection) MarshalText() ([]byte, error) {
+func (s SearchRequestSortDirection) MarshalText() ([]byte, error) {
 	switch s {
-	case SearchBodyParametersSortDirectionAscending:
+	case SearchRequestSortDirectionAscending:
 		return []byte(s), nil
-	case SearchBodyParametersSortDirectionDescending:
+	case SearchRequestSortDirectionDescending:
 		return []byte(s), nil
 	default:
 		return nil, errors.Errorf("invalid value: %q", s)
@@ -49285,36 +49285,36 @@ func (s SearchBodyParametersSortDirection) MarshalText() ([]byte, error) {
 }
 
 // UnmarshalText implements encoding.TextUnmarshaler.
-func (s *SearchBodyParametersSortDirection) UnmarshalText(data []byte) error {
-	switch SearchBodyParametersSortDirection(data) {
-	case SearchBodyParametersSortDirectionAscending:
-		*s = SearchBodyParametersSortDirectionAscending
+func (s *SearchRequestSortDirection) UnmarshalText(data []byte) error {
+	switch SearchRequestSortDirection(data) {
+	case SearchRequestSortDirectionAscending:
+		*s = SearchRequestSortDirectionAscending
 		return nil
-	case SearchBodyParametersSortDirectionDescending:
-		*s = SearchBodyParametersSortDirectionDescending
+	case SearchRequestSortDirectionDescending:
+		*s = SearchRequestSortDirectionDescending
 		return nil
 	default:
 		return errors.Errorf("invalid value: %q", data)
 	}
 }
 
-type SearchBodyParametersSortTimestamp string
+type SearchRequestSortTimestamp string
 
 const (
-	SearchBodyParametersSortTimestampLastEditedTime SearchBodyParametersSortTimestamp = "last_edited_time"
+	SearchRequestSortTimestampLastEditedTime SearchRequestSortTimestamp = "last_edited_time"
 )
 
-// AllValues returns all SearchBodyParametersSortTimestamp values.
-func (SearchBodyParametersSortTimestamp) AllValues() []SearchBodyParametersSortTimestamp {
-	return []SearchBodyParametersSortTimestamp{
-		SearchBodyParametersSortTimestampLastEditedTime,
+// AllValues returns all SearchRequestSortTimestamp values.
+func (SearchRequestSortTimestamp) AllValues() []SearchRequestSortTimestamp {
+	return []SearchRequestSortTimestamp{
+		SearchRequestSortTimestampLastEditedTime,
 	}
 }
 
 // MarshalText implements encoding.TextMarshaler.
-func (s SearchBodyParametersSortTimestamp) MarshalText() ([]byte, error) {
+func (s SearchRequestSortTimestamp) MarshalText() ([]byte, error) {
 	switch s {
-	case SearchBodyParametersSortTimestampLastEditedTime:
+	case SearchRequestSortTimestampLastEditedTime:
 		return []byte(s), nil
 	default:
 		return nil, errors.Errorf("invalid value: %q", s)
@@ -49322,10 +49322,10 @@ func (s SearchBodyParametersSortTimestamp) MarshalText() ([]byte, error) {
 }
 
 // UnmarshalText implements encoding.TextUnmarshaler.
-func (s *SearchBodyParametersSortTimestamp) UnmarshalText(data []byte) error {
-	switch SearchBodyParametersSortTimestamp(data) {
-	case SearchBodyParametersSortTimestampLastEditedTime:
-		*s = SearchBodyParametersSortTimestampLastEditedTime
+func (s *SearchRequestSortTimestamp) UnmarshalText(data []byte) error {
+	switch SearchRequestSortTimestamp(data) {
+	case SearchRequestSortTimestampLastEditedTime:
+		*s = SearchRequestSortTimestampLastEditedTime
 		return nil
 	default:
 		return errors.Errorf("invalid value: %q", data)
@@ -52013,10 +52013,10 @@ func (s *UniqueIdPropertyValueResponse) SetNumber(val NilFloat64) {
 	s.Number = val
 }
 
-// Ref: #/components/schemas/UpdateBlockBodyParameters
-type UpdateBlockBodyParameters struct {
+// Ref: #/components/schemas/UpdateBlockRequest
+type UpdateBlockRequest struct {
 	Embed            OptUpdateMediaContentWithUrlAndCaptionRequest      `json:"embed"`
-	Type             OptUpdateBlockBodyParametersType                   `json:"type"`
+	Type             OptUpdateBlockRequestType                          `json:"type"`
 	Archived         OptBool                                            `json:"archived"`
 	InTrash          OptBool                                            `json:"in_trash"`
 	Bookmark         OptUpdateMediaContentWithUrlAndCaptionRequest      `json:"bookmark"`
@@ -52025,12 +52025,12 @@ type UpdateBlockBodyParameters struct {
 	Pdf              OptUpdateMediaContentWithFileAndCaptionRequest     `json:"pdf"`
 	File             OptUpdateMediaContentWithFileNameAndCaptionRequest `json:"file"`
 	Audio            OptUpdateMediaContentWithFileAndCaptionRequest     `json:"audio"`
-	Code             OptUpdateBlockBodyParametersCode                   `json:"code"`
+	Code             OptUpdateBlockRequestCode                          `json:"code"`
 	Equation         OptContentWithExpressionRequest                    `json:"equation"`
-	Divider          *UpdateBlockBodyParametersDivider                  `json:"divider"`
-	Breadcrumb       *UpdateBlockBodyParametersBreadcrumb               `json:"breadcrumb"`
-	TableOfContents  OptUpdateBlockBodyParametersTableOfContents        `json:"table_of_contents"`
-	LinkToPage       OptUpdateBlockBodyParametersLinkToPage             `json:"link_to_page"`
+	Divider          *UpdateBlockRequestDivider                         `json:"divider"`
+	Breadcrumb       *UpdateBlockRequestBreadcrumb                      `json:"breadcrumb"`
+	TableOfContents  OptUpdateBlockRequestTableOfContents               `json:"table_of_contents"`
+	LinkToPage       OptUpdateBlockRequestLinkToPage                    `json:"link_to_page"`
 	TableRow         OptContentWithTableRowRequest                      `json:"table_row"`
 	Heading1         OptHeaderContentWithRichTextAndColorRequest        `json:"heading_1"`
 	Heading2         OptHeaderContentWithRichTextAndColorRequest        `json:"heading_2"`
@@ -52039,489 +52039,489 @@ type UpdateBlockBodyParameters struct {
 	BulletedListItem OptContentWithRichTextAndColorRequest              `json:"bulleted_list_item"`
 	NumberedListItem OptContentWithRichTextAndColorRequest              `json:"numbered_list_item"`
 	Quote            OptContentWithRichTextAndColorRequest              `json:"quote"`
-	ToDo             OptUpdateBlockBodyParametersToDo                   `json:"to_do"`
+	ToDo             OptUpdateBlockRequestToDo                          `json:"to_do"`
 	Toggle           OptContentWithRichTextAndColorRequest              `json:"toggle"`
 	Template         OptContentWithRichTextRequest                      `json:"template"`
-	Callout          OptUpdateBlockBodyParametersCallout                `json:"callout"`
-	SyncedBlock      OptUpdateBlockBodyParametersSyncedBlock            `json:"synced_block"`
-	Table            OptUpdateBlockBodyParametersTable                  `json:"table"`
-	Column           OptUpdateBlockBodyParametersColumn                 `json:"column"`
+	Callout          OptUpdateBlockRequestCallout                       `json:"callout"`
+	SyncedBlock      OptUpdateBlockRequestSyncedBlock                   `json:"synced_block"`
+	Table            OptUpdateBlockRequestTable                         `json:"table"`
+	Column           OptUpdateBlockRequestColumn                        `json:"column"`
 }
 
 // GetEmbed returns the value of Embed.
-func (s *UpdateBlockBodyParameters) GetEmbed() OptUpdateMediaContentWithUrlAndCaptionRequest {
+func (s *UpdateBlockRequest) GetEmbed() OptUpdateMediaContentWithUrlAndCaptionRequest {
 	return s.Embed
 }
 
 // GetType returns the value of Type.
-func (s *UpdateBlockBodyParameters) GetType() OptUpdateBlockBodyParametersType {
+func (s *UpdateBlockRequest) GetType() OptUpdateBlockRequestType {
 	return s.Type
 }
 
 // GetArchived returns the value of Archived.
-func (s *UpdateBlockBodyParameters) GetArchived() OptBool {
+func (s *UpdateBlockRequest) GetArchived() OptBool {
 	return s.Archived
 }
 
 // GetInTrash returns the value of InTrash.
-func (s *UpdateBlockBodyParameters) GetInTrash() OptBool {
+func (s *UpdateBlockRequest) GetInTrash() OptBool {
 	return s.InTrash
 }
 
 // GetBookmark returns the value of Bookmark.
-func (s *UpdateBlockBodyParameters) GetBookmark() OptUpdateMediaContentWithUrlAndCaptionRequest {
+func (s *UpdateBlockRequest) GetBookmark() OptUpdateMediaContentWithUrlAndCaptionRequest {
 	return s.Bookmark
 }
 
 // GetImage returns the value of Image.
-func (s *UpdateBlockBodyParameters) GetImage() OptUpdateMediaContentWithFileAndCaptionRequest {
+func (s *UpdateBlockRequest) GetImage() OptUpdateMediaContentWithFileAndCaptionRequest {
 	return s.Image
 }
 
 // GetVideo returns the value of Video.
-func (s *UpdateBlockBodyParameters) GetVideo() OptUpdateMediaContentWithFileAndCaptionRequest {
+func (s *UpdateBlockRequest) GetVideo() OptUpdateMediaContentWithFileAndCaptionRequest {
 	return s.Video
 }
 
 // GetPdf returns the value of Pdf.
-func (s *UpdateBlockBodyParameters) GetPdf() OptUpdateMediaContentWithFileAndCaptionRequest {
+func (s *UpdateBlockRequest) GetPdf() OptUpdateMediaContentWithFileAndCaptionRequest {
 	return s.Pdf
 }
 
 // GetFile returns the value of File.
-func (s *UpdateBlockBodyParameters) GetFile() OptUpdateMediaContentWithFileNameAndCaptionRequest {
+func (s *UpdateBlockRequest) GetFile() OptUpdateMediaContentWithFileNameAndCaptionRequest {
 	return s.File
 }
 
 // GetAudio returns the value of Audio.
-func (s *UpdateBlockBodyParameters) GetAudio() OptUpdateMediaContentWithFileAndCaptionRequest {
+func (s *UpdateBlockRequest) GetAudio() OptUpdateMediaContentWithFileAndCaptionRequest {
 	return s.Audio
 }
 
 // GetCode returns the value of Code.
-func (s *UpdateBlockBodyParameters) GetCode() OptUpdateBlockBodyParametersCode {
+func (s *UpdateBlockRequest) GetCode() OptUpdateBlockRequestCode {
 	return s.Code
 }
 
 // GetEquation returns the value of Equation.
-func (s *UpdateBlockBodyParameters) GetEquation() OptContentWithExpressionRequest {
+func (s *UpdateBlockRequest) GetEquation() OptContentWithExpressionRequest {
 	return s.Equation
 }
 
 // GetDivider returns the value of Divider.
-func (s *UpdateBlockBodyParameters) GetDivider() *UpdateBlockBodyParametersDivider {
+func (s *UpdateBlockRequest) GetDivider() *UpdateBlockRequestDivider {
 	return s.Divider
 }
 
 // GetBreadcrumb returns the value of Breadcrumb.
-func (s *UpdateBlockBodyParameters) GetBreadcrumb() *UpdateBlockBodyParametersBreadcrumb {
+func (s *UpdateBlockRequest) GetBreadcrumb() *UpdateBlockRequestBreadcrumb {
 	return s.Breadcrumb
 }
 
 // GetTableOfContents returns the value of TableOfContents.
-func (s *UpdateBlockBodyParameters) GetTableOfContents() OptUpdateBlockBodyParametersTableOfContents {
+func (s *UpdateBlockRequest) GetTableOfContents() OptUpdateBlockRequestTableOfContents {
 	return s.TableOfContents
 }
 
 // GetLinkToPage returns the value of LinkToPage.
-func (s *UpdateBlockBodyParameters) GetLinkToPage() OptUpdateBlockBodyParametersLinkToPage {
+func (s *UpdateBlockRequest) GetLinkToPage() OptUpdateBlockRequestLinkToPage {
 	return s.LinkToPage
 }
 
 // GetTableRow returns the value of TableRow.
-func (s *UpdateBlockBodyParameters) GetTableRow() OptContentWithTableRowRequest {
+func (s *UpdateBlockRequest) GetTableRow() OptContentWithTableRowRequest {
 	return s.TableRow
 }
 
 // GetHeading1 returns the value of Heading1.
-func (s *UpdateBlockBodyParameters) GetHeading1() OptHeaderContentWithRichTextAndColorRequest {
+func (s *UpdateBlockRequest) GetHeading1() OptHeaderContentWithRichTextAndColorRequest {
 	return s.Heading1
 }
 
 // GetHeading2 returns the value of Heading2.
-func (s *UpdateBlockBodyParameters) GetHeading2() OptHeaderContentWithRichTextAndColorRequest {
+func (s *UpdateBlockRequest) GetHeading2() OptHeaderContentWithRichTextAndColorRequest {
 	return s.Heading2
 }
 
 // GetHeading3 returns the value of Heading3.
-func (s *UpdateBlockBodyParameters) GetHeading3() OptHeaderContentWithRichTextAndColorRequest {
+func (s *UpdateBlockRequest) GetHeading3() OptHeaderContentWithRichTextAndColorRequest {
 	return s.Heading3
 }
 
 // GetParagraph returns the value of Paragraph.
-func (s *UpdateBlockBodyParameters) GetParagraph() OptContentWithRichTextAndColorRequest {
+func (s *UpdateBlockRequest) GetParagraph() OptContentWithRichTextAndColorRequest {
 	return s.Paragraph
 }
 
 // GetBulletedListItem returns the value of BulletedListItem.
-func (s *UpdateBlockBodyParameters) GetBulletedListItem() OptContentWithRichTextAndColorRequest {
+func (s *UpdateBlockRequest) GetBulletedListItem() OptContentWithRichTextAndColorRequest {
 	return s.BulletedListItem
 }
 
 // GetNumberedListItem returns the value of NumberedListItem.
-func (s *UpdateBlockBodyParameters) GetNumberedListItem() OptContentWithRichTextAndColorRequest {
+func (s *UpdateBlockRequest) GetNumberedListItem() OptContentWithRichTextAndColorRequest {
 	return s.NumberedListItem
 }
 
 // GetQuote returns the value of Quote.
-func (s *UpdateBlockBodyParameters) GetQuote() OptContentWithRichTextAndColorRequest {
+func (s *UpdateBlockRequest) GetQuote() OptContentWithRichTextAndColorRequest {
 	return s.Quote
 }
 
 // GetToDo returns the value of ToDo.
-func (s *UpdateBlockBodyParameters) GetToDo() OptUpdateBlockBodyParametersToDo {
+func (s *UpdateBlockRequest) GetToDo() OptUpdateBlockRequestToDo {
 	return s.ToDo
 }
 
 // GetToggle returns the value of Toggle.
-func (s *UpdateBlockBodyParameters) GetToggle() OptContentWithRichTextAndColorRequest {
+func (s *UpdateBlockRequest) GetToggle() OptContentWithRichTextAndColorRequest {
 	return s.Toggle
 }
 
 // GetTemplate returns the value of Template.
-func (s *UpdateBlockBodyParameters) GetTemplate() OptContentWithRichTextRequest {
+func (s *UpdateBlockRequest) GetTemplate() OptContentWithRichTextRequest {
 	return s.Template
 }
 
 // GetCallout returns the value of Callout.
-func (s *UpdateBlockBodyParameters) GetCallout() OptUpdateBlockBodyParametersCallout {
+func (s *UpdateBlockRequest) GetCallout() OptUpdateBlockRequestCallout {
 	return s.Callout
 }
 
 // GetSyncedBlock returns the value of SyncedBlock.
-func (s *UpdateBlockBodyParameters) GetSyncedBlock() OptUpdateBlockBodyParametersSyncedBlock {
+func (s *UpdateBlockRequest) GetSyncedBlock() OptUpdateBlockRequestSyncedBlock {
 	return s.SyncedBlock
 }
 
 // GetTable returns the value of Table.
-func (s *UpdateBlockBodyParameters) GetTable() OptUpdateBlockBodyParametersTable {
+func (s *UpdateBlockRequest) GetTable() OptUpdateBlockRequestTable {
 	return s.Table
 }
 
 // GetColumn returns the value of Column.
-func (s *UpdateBlockBodyParameters) GetColumn() OptUpdateBlockBodyParametersColumn {
+func (s *UpdateBlockRequest) GetColumn() OptUpdateBlockRequestColumn {
 	return s.Column
 }
 
 // SetEmbed sets the value of Embed.
-func (s *UpdateBlockBodyParameters) SetEmbed(val OptUpdateMediaContentWithUrlAndCaptionRequest) {
+func (s *UpdateBlockRequest) SetEmbed(val OptUpdateMediaContentWithUrlAndCaptionRequest) {
 	s.Embed = val
 }
 
 // SetType sets the value of Type.
-func (s *UpdateBlockBodyParameters) SetType(val OptUpdateBlockBodyParametersType) {
+func (s *UpdateBlockRequest) SetType(val OptUpdateBlockRequestType) {
 	s.Type = val
 }
 
 // SetArchived sets the value of Archived.
-func (s *UpdateBlockBodyParameters) SetArchived(val OptBool) {
+func (s *UpdateBlockRequest) SetArchived(val OptBool) {
 	s.Archived = val
 }
 
 // SetInTrash sets the value of InTrash.
-func (s *UpdateBlockBodyParameters) SetInTrash(val OptBool) {
+func (s *UpdateBlockRequest) SetInTrash(val OptBool) {
 	s.InTrash = val
 }
 
 // SetBookmark sets the value of Bookmark.
-func (s *UpdateBlockBodyParameters) SetBookmark(val OptUpdateMediaContentWithUrlAndCaptionRequest) {
+func (s *UpdateBlockRequest) SetBookmark(val OptUpdateMediaContentWithUrlAndCaptionRequest) {
 	s.Bookmark = val
 }
 
 // SetImage sets the value of Image.
-func (s *UpdateBlockBodyParameters) SetImage(val OptUpdateMediaContentWithFileAndCaptionRequest) {
+func (s *UpdateBlockRequest) SetImage(val OptUpdateMediaContentWithFileAndCaptionRequest) {
 	s.Image = val
 }
 
 // SetVideo sets the value of Video.
-func (s *UpdateBlockBodyParameters) SetVideo(val OptUpdateMediaContentWithFileAndCaptionRequest) {
+func (s *UpdateBlockRequest) SetVideo(val OptUpdateMediaContentWithFileAndCaptionRequest) {
 	s.Video = val
 }
 
 // SetPdf sets the value of Pdf.
-func (s *UpdateBlockBodyParameters) SetPdf(val OptUpdateMediaContentWithFileAndCaptionRequest) {
+func (s *UpdateBlockRequest) SetPdf(val OptUpdateMediaContentWithFileAndCaptionRequest) {
 	s.Pdf = val
 }
 
 // SetFile sets the value of File.
-func (s *UpdateBlockBodyParameters) SetFile(val OptUpdateMediaContentWithFileNameAndCaptionRequest) {
+func (s *UpdateBlockRequest) SetFile(val OptUpdateMediaContentWithFileNameAndCaptionRequest) {
 	s.File = val
 }
 
 // SetAudio sets the value of Audio.
-func (s *UpdateBlockBodyParameters) SetAudio(val OptUpdateMediaContentWithFileAndCaptionRequest) {
+func (s *UpdateBlockRequest) SetAudio(val OptUpdateMediaContentWithFileAndCaptionRequest) {
 	s.Audio = val
 }
 
 // SetCode sets the value of Code.
-func (s *UpdateBlockBodyParameters) SetCode(val OptUpdateBlockBodyParametersCode) {
+func (s *UpdateBlockRequest) SetCode(val OptUpdateBlockRequestCode) {
 	s.Code = val
 }
 
 // SetEquation sets the value of Equation.
-func (s *UpdateBlockBodyParameters) SetEquation(val OptContentWithExpressionRequest) {
+func (s *UpdateBlockRequest) SetEquation(val OptContentWithExpressionRequest) {
 	s.Equation = val
 }
 
 // SetDivider sets the value of Divider.
-func (s *UpdateBlockBodyParameters) SetDivider(val *UpdateBlockBodyParametersDivider) {
+func (s *UpdateBlockRequest) SetDivider(val *UpdateBlockRequestDivider) {
 	s.Divider = val
 }
 
 // SetBreadcrumb sets the value of Breadcrumb.
-func (s *UpdateBlockBodyParameters) SetBreadcrumb(val *UpdateBlockBodyParametersBreadcrumb) {
+func (s *UpdateBlockRequest) SetBreadcrumb(val *UpdateBlockRequestBreadcrumb) {
 	s.Breadcrumb = val
 }
 
 // SetTableOfContents sets the value of TableOfContents.
-func (s *UpdateBlockBodyParameters) SetTableOfContents(val OptUpdateBlockBodyParametersTableOfContents) {
+func (s *UpdateBlockRequest) SetTableOfContents(val OptUpdateBlockRequestTableOfContents) {
 	s.TableOfContents = val
 }
 
 // SetLinkToPage sets the value of LinkToPage.
-func (s *UpdateBlockBodyParameters) SetLinkToPage(val OptUpdateBlockBodyParametersLinkToPage) {
+func (s *UpdateBlockRequest) SetLinkToPage(val OptUpdateBlockRequestLinkToPage) {
 	s.LinkToPage = val
 }
 
 // SetTableRow sets the value of TableRow.
-func (s *UpdateBlockBodyParameters) SetTableRow(val OptContentWithTableRowRequest) {
+func (s *UpdateBlockRequest) SetTableRow(val OptContentWithTableRowRequest) {
 	s.TableRow = val
 }
 
 // SetHeading1 sets the value of Heading1.
-func (s *UpdateBlockBodyParameters) SetHeading1(val OptHeaderContentWithRichTextAndColorRequest) {
+func (s *UpdateBlockRequest) SetHeading1(val OptHeaderContentWithRichTextAndColorRequest) {
 	s.Heading1 = val
 }
 
 // SetHeading2 sets the value of Heading2.
-func (s *UpdateBlockBodyParameters) SetHeading2(val OptHeaderContentWithRichTextAndColorRequest) {
+func (s *UpdateBlockRequest) SetHeading2(val OptHeaderContentWithRichTextAndColorRequest) {
 	s.Heading2 = val
 }
 
 // SetHeading3 sets the value of Heading3.
-func (s *UpdateBlockBodyParameters) SetHeading3(val OptHeaderContentWithRichTextAndColorRequest) {
+func (s *UpdateBlockRequest) SetHeading3(val OptHeaderContentWithRichTextAndColorRequest) {
 	s.Heading3 = val
 }
 
 // SetParagraph sets the value of Paragraph.
-func (s *UpdateBlockBodyParameters) SetParagraph(val OptContentWithRichTextAndColorRequest) {
+func (s *UpdateBlockRequest) SetParagraph(val OptContentWithRichTextAndColorRequest) {
 	s.Paragraph = val
 }
 
 // SetBulletedListItem sets the value of BulletedListItem.
-func (s *UpdateBlockBodyParameters) SetBulletedListItem(val OptContentWithRichTextAndColorRequest) {
+func (s *UpdateBlockRequest) SetBulletedListItem(val OptContentWithRichTextAndColorRequest) {
 	s.BulletedListItem = val
 }
 
 // SetNumberedListItem sets the value of NumberedListItem.
-func (s *UpdateBlockBodyParameters) SetNumberedListItem(val OptContentWithRichTextAndColorRequest) {
+func (s *UpdateBlockRequest) SetNumberedListItem(val OptContentWithRichTextAndColorRequest) {
 	s.NumberedListItem = val
 }
 
 // SetQuote sets the value of Quote.
-func (s *UpdateBlockBodyParameters) SetQuote(val OptContentWithRichTextAndColorRequest) {
+func (s *UpdateBlockRequest) SetQuote(val OptContentWithRichTextAndColorRequest) {
 	s.Quote = val
 }
 
 // SetToDo sets the value of ToDo.
-func (s *UpdateBlockBodyParameters) SetToDo(val OptUpdateBlockBodyParametersToDo) {
+func (s *UpdateBlockRequest) SetToDo(val OptUpdateBlockRequestToDo) {
 	s.ToDo = val
 }
 
 // SetToggle sets the value of Toggle.
-func (s *UpdateBlockBodyParameters) SetToggle(val OptContentWithRichTextAndColorRequest) {
+func (s *UpdateBlockRequest) SetToggle(val OptContentWithRichTextAndColorRequest) {
 	s.Toggle = val
 }
 
 // SetTemplate sets the value of Template.
-func (s *UpdateBlockBodyParameters) SetTemplate(val OptContentWithRichTextRequest) {
+func (s *UpdateBlockRequest) SetTemplate(val OptContentWithRichTextRequest) {
 	s.Template = val
 }
 
 // SetCallout sets the value of Callout.
-func (s *UpdateBlockBodyParameters) SetCallout(val OptUpdateBlockBodyParametersCallout) {
+func (s *UpdateBlockRequest) SetCallout(val OptUpdateBlockRequestCallout) {
 	s.Callout = val
 }
 
 // SetSyncedBlock sets the value of SyncedBlock.
-func (s *UpdateBlockBodyParameters) SetSyncedBlock(val OptUpdateBlockBodyParametersSyncedBlock) {
+func (s *UpdateBlockRequest) SetSyncedBlock(val OptUpdateBlockRequestSyncedBlock) {
 	s.SyncedBlock = val
 }
 
 // SetTable sets the value of Table.
-func (s *UpdateBlockBodyParameters) SetTable(val OptUpdateBlockBodyParametersTable) {
+func (s *UpdateBlockRequest) SetTable(val OptUpdateBlockRequestTable) {
 	s.Table = val
 }
 
 // SetColumn sets the value of Column.
-func (s *UpdateBlockBodyParameters) SetColumn(val OptUpdateBlockBodyParametersColumn) {
+func (s *UpdateBlockRequest) SetColumn(val OptUpdateBlockRequestColumn) {
 	s.Column = val
 }
 
-type UpdateBlockBodyParametersBreadcrumb struct{}
+type UpdateBlockRequestBreadcrumb struct{}
 
-type UpdateBlockBodyParametersCallout struct {
+type UpdateBlockRequestCallout struct {
 	RichText []RichTextItemRequest `json:"rich_text"`
 	Icon     OptPageIconRequest    `json:"icon"`
 	Color    OptApiColor           `json:"color"`
 }
 
 // GetRichText returns the value of RichText.
-func (s *UpdateBlockBodyParametersCallout) GetRichText() []RichTextItemRequest {
+func (s *UpdateBlockRequestCallout) GetRichText() []RichTextItemRequest {
 	return s.RichText
 }
 
 // GetIcon returns the value of Icon.
-func (s *UpdateBlockBodyParametersCallout) GetIcon() OptPageIconRequest {
+func (s *UpdateBlockRequestCallout) GetIcon() OptPageIconRequest {
 	return s.Icon
 }
 
 // GetColor returns the value of Color.
-func (s *UpdateBlockBodyParametersCallout) GetColor() OptApiColor {
+func (s *UpdateBlockRequestCallout) GetColor() OptApiColor {
 	return s.Color
 }
 
 // SetRichText sets the value of RichText.
-func (s *UpdateBlockBodyParametersCallout) SetRichText(val []RichTextItemRequest) {
+func (s *UpdateBlockRequestCallout) SetRichText(val []RichTextItemRequest) {
 	s.RichText = val
 }
 
 // SetIcon sets the value of Icon.
-func (s *UpdateBlockBodyParametersCallout) SetIcon(val OptPageIconRequest) {
+func (s *UpdateBlockRequestCallout) SetIcon(val OptPageIconRequest) {
 	s.Icon = val
 }
 
 // SetColor sets the value of Color.
-func (s *UpdateBlockBodyParametersCallout) SetColor(val OptApiColor) {
+func (s *UpdateBlockRequestCallout) SetColor(val OptApiColor) {
 	s.Color = val
 }
 
-type UpdateBlockBodyParametersCode struct {
+type UpdateBlockRequestCode struct {
 	RichText []RichTextItemRequest `json:"rich_text"`
 	Language OptLanguageRequest    `json:"language"`
 	Caption  []RichTextItemRequest `json:"caption"`
 }
 
 // GetRichText returns the value of RichText.
-func (s *UpdateBlockBodyParametersCode) GetRichText() []RichTextItemRequest {
+func (s *UpdateBlockRequestCode) GetRichText() []RichTextItemRequest {
 	return s.RichText
 }
 
 // GetLanguage returns the value of Language.
-func (s *UpdateBlockBodyParametersCode) GetLanguage() OptLanguageRequest {
+func (s *UpdateBlockRequestCode) GetLanguage() OptLanguageRequest {
 	return s.Language
 }
 
 // GetCaption returns the value of Caption.
-func (s *UpdateBlockBodyParametersCode) GetCaption() []RichTextItemRequest {
+func (s *UpdateBlockRequestCode) GetCaption() []RichTextItemRequest {
 	return s.Caption
 }
 
 // SetRichText sets the value of RichText.
-func (s *UpdateBlockBodyParametersCode) SetRichText(val []RichTextItemRequest) {
+func (s *UpdateBlockRequestCode) SetRichText(val []RichTextItemRequest) {
 	s.RichText = val
 }
 
 // SetLanguage sets the value of Language.
-func (s *UpdateBlockBodyParametersCode) SetLanguage(val OptLanguageRequest) {
+func (s *UpdateBlockRequestCode) SetLanguage(val OptLanguageRequest) {
 	s.Language = val
 }
 
 // SetCaption sets the value of Caption.
-func (s *UpdateBlockBodyParametersCode) SetCaption(val []RichTextItemRequest) {
+func (s *UpdateBlockRequestCode) SetCaption(val []RichTextItemRequest) {
 	s.Caption = val
 }
 
-type UpdateBlockBodyParametersColumn struct {
+type UpdateBlockRequestColumn struct {
 	// Ratio between 0 and 1 of the width of this column relative to all columns in the list. // If not
 	// provided, uses an equal width.
 	WidthRatio OptFloat64 `json:"width_ratio"`
 }
 
 // GetWidthRatio returns the value of WidthRatio.
-func (s *UpdateBlockBodyParametersColumn) GetWidthRatio() OptFloat64 {
+func (s *UpdateBlockRequestColumn) GetWidthRatio() OptFloat64 {
 	return s.WidthRatio
 }
 
 // SetWidthRatio sets the value of WidthRatio.
-func (s *UpdateBlockBodyParametersColumn) SetWidthRatio(val OptFloat64) {
+func (s *UpdateBlockRequestColumn) SetWidthRatio(val OptFloat64) {
 	s.WidthRatio = val
 }
 
-type UpdateBlockBodyParametersDivider struct{}
+type UpdateBlockRequestDivider struct{}
 
-type UpdateBlockBodyParametersLinkToPage struct {
-	PageID     OptString                                  `json:"page_id"`
-	Type       OptUpdateBlockBodyParametersLinkToPageType `json:"type"`
-	DatabaseID OptString                                  `json:"database_id"`
-	CommentID  OptString                                  `json:"comment_id"`
+type UpdateBlockRequestLinkToPage struct {
+	PageID     OptString                           `json:"page_id"`
+	Type       OptUpdateBlockRequestLinkToPageType `json:"type"`
+	DatabaseID OptString                           `json:"database_id"`
+	CommentID  OptString                           `json:"comment_id"`
 }
 
 // GetPageID returns the value of PageID.
-func (s *UpdateBlockBodyParametersLinkToPage) GetPageID() OptString {
+func (s *UpdateBlockRequestLinkToPage) GetPageID() OptString {
 	return s.PageID
 }
 
 // GetType returns the value of Type.
-func (s *UpdateBlockBodyParametersLinkToPage) GetType() OptUpdateBlockBodyParametersLinkToPageType {
+func (s *UpdateBlockRequestLinkToPage) GetType() OptUpdateBlockRequestLinkToPageType {
 	return s.Type
 }
 
 // GetDatabaseID returns the value of DatabaseID.
-func (s *UpdateBlockBodyParametersLinkToPage) GetDatabaseID() OptString {
+func (s *UpdateBlockRequestLinkToPage) GetDatabaseID() OptString {
 	return s.DatabaseID
 }
 
 // GetCommentID returns the value of CommentID.
-func (s *UpdateBlockBodyParametersLinkToPage) GetCommentID() OptString {
+func (s *UpdateBlockRequestLinkToPage) GetCommentID() OptString {
 	return s.CommentID
 }
 
 // SetPageID sets the value of PageID.
-func (s *UpdateBlockBodyParametersLinkToPage) SetPageID(val OptString) {
+func (s *UpdateBlockRequestLinkToPage) SetPageID(val OptString) {
 	s.PageID = val
 }
 
 // SetType sets the value of Type.
-func (s *UpdateBlockBodyParametersLinkToPage) SetType(val OptUpdateBlockBodyParametersLinkToPageType) {
+func (s *UpdateBlockRequestLinkToPage) SetType(val OptUpdateBlockRequestLinkToPageType) {
 	s.Type = val
 }
 
 // SetDatabaseID sets the value of DatabaseID.
-func (s *UpdateBlockBodyParametersLinkToPage) SetDatabaseID(val OptString) {
+func (s *UpdateBlockRequestLinkToPage) SetDatabaseID(val OptString) {
 	s.DatabaseID = val
 }
 
 // SetCommentID sets the value of CommentID.
-func (s *UpdateBlockBodyParametersLinkToPage) SetCommentID(val OptString) {
+func (s *UpdateBlockRequestLinkToPage) SetCommentID(val OptString) {
 	s.CommentID = val
 }
 
-type UpdateBlockBodyParametersLinkToPageType string
+type UpdateBlockRequestLinkToPageType string
 
 const (
-	UpdateBlockBodyParametersLinkToPageTypePageID     UpdateBlockBodyParametersLinkToPageType = "page_id"
-	UpdateBlockBodyParametersLinkToPageTypeDatabaseID UpdateBlockBodyParametersLinkToPageType = "database_id"
-	UpdateBlockBodyParametersLinkToPageTypeCommentID  UpdateBlockBodyParametersLinkToPageType = "comment_id"
+	UpdateBlockRequestLinkToPageTypePageID     UpdateBlockRequestLinkToPageType = "page_id"
+	UpdateBlockRequestLinkToPageTypeDatabaseID UpdateBlockRequestLinkToPageType = "database_id"
+	UpdateBlockRequestLinkToPageTypeCommentID  UpdateBlockRequestLinkToPageType = "comment_id"
 )
 
-// AllValues returns all UpdateBlockBodyParametersLinkToPageType values.
-func (UpdateBlockBodyParametersLinkToPageType) AllValues() []UpdateBlockBodyParametersLinkToPageType {
-	return []UpdateBlockBodyParametersLinkToPageType{
-		UpdateBlockBodyParametersLinkToPageTypePageID,
-		UpdateBlockBodyParametersLinkToPageTypeDatabaseID,
-		UpdateBlockBodyParametersLinkToPageTypeCommentID,
+// AllValues returns all UpdateBlockRequestLinkToPageType values.
+func (UpdateBlockRequestLinkToPageType) AllValues() []UpdateBlockRequestLinkToPageType {
+	return []UpdateBlockRequestLinkToPageType{
+		UpdateBlockRequestLinkToPageTypePageID,
+		UpdateBlockRequestLinkToPageTypeDatabaseID,
+		UpdateBlockRequestLinkToPageTypeCommentID,
 	}
 }
 
 // MarshalText implements encoding.TextMarshaler.
-func (s UpdateBlockBodyParametersLinkToPageType) MarshalText() ([]byte, error) {
+func (s UpdateBlockRequestLinkToPageType) MarshalText() ([]byte, error) {
 	switch s {
-	case UpdateBlockBodyParametersLinkToPageTypePageID:
+	case UpdateBlockRequestLinkToPageTypePageID:
 		return []byte(s), nil
-	case UpdateBlockBodyParametersLinkToPageTypeDatabaseID:
+	case UpdateBlockRequestLinkToPageTypeDatabaseID:
 		return []byte(s), nil
-	case UpdateBlockBodyParametersLinkToPageTypeCommentID:
+	case UpdateBlockRequestLinkToPageTypeCommentID:
 		return []byte(s), nil
 	default:
 		return nil, errors.Errorf("invalid value: %q", s)
@@ -52529,78 +52529,78 @@ func (s UpdateBlockBodyParametersLinkToPageType) MarshalText() ([]byte, error) {
 }
 
 // UnmarshalText implements encoding.TextUnmarshaler.
-func (s *UpdateBlockBodyParametersLinkToPageType) UnmarshalText(data []byte) error {
-	switch UpdateBlockBodyParametersLinkToPageType(data) {
-	case UpdateBlockBodyParametersLinkToPageTypePageID:
-		*s = UpdateBlockBodyParametersLinkToPageTypePageID
+func (s *UpdateBlockRequestLinkToPageType) UnmarshalText(data []byte) error {
+	switch UpdateBlockRequestLinkToPageType(data) {
+	case UpdateBlockRequestLinkToPageTypePageID:
+		*s = UpdateBlockRequestLinkToPageTypePageID
 		return nil
-	case UpdateBlockBodyParametersLinkToPageTypeDatabaseID:
-		*s = UpdateBlockBodyParametersLinkToPageTypeDatabaseID
+	case UpdateBlockRequestLinkToPageTypeDatabaseID:
+		*s = UpdateBlockRequestLinkToPageTypeDatabaseID
 		return nil
-	case UpdateBlockBodyParametersLinkToPageTypeCommentID:
-		*s = UpdateBlockBodyParametersLinkToPageTypeCommentID
+	case UpdateBlockRequestLinkToPageTypeCommentID:
+		*s = UpdateBlockRequestLinkToPageTypeCommentID
 		return nil
 	default:
 		return errors.Errorf("invalid value: %q", data)
 	}
 }
 
-type UpdateBlockBodyParametersSyncedBlock struct {
-	SyncedFrom NilUpdateBlockBodyParametersSyncedBlockSyncedFrom `json:"synced_from"`
+type UpdateBlockRequestSyncedBlock struct {
+	SyncedFrom NilUpdateBlockRequestSyncedBlockSyncedFrom `json:"synced_from"`
 }
 
 // GetSyncedFrom returns the value of SyncedFrom.
-func (s *UpdateBlockBodyParametersSyncedBlock) GetSyncedFrom() NilUpdateBlockBodyParametersSyncedBlockSyncedFrom {
+func (s *UpdateBlockRequestSyncedBlock) GetSyncedFrom() NilUpdateBlockRequestSyncedBlockSyncedFrom {
 	return s.SyncedFrom
 }
 
 // SetSyncedFrom sets the value of SyncedFrom.
-func (s *UpdateBlockBodyParametersSyncedBlock) SetSyncedFrom(val NilUpdateBlockBodyParametersSyncedBlockSyncedFrom) {
+func (s *UpdateBlockRequestSyncedBlock) SetSyncedFrom(val NilUpdateBlockRequestSyncedBlockSyncedFrom) {
 	s.SyncedFrom = val
 }
 
-type UpdateBlockBodyParametersSyncedBlockSyncedFrom struct {
-	BlockID string                                                `json:"block_id"`
-	Type    OptUpdateBlockBodyParametersSyncedBlockSyncedFromType `json:"type"`
+type UpdateBlockRequestSyncedBlockSyncedFrom struct {
+	BlockID string                                         `json:"block_id"`
+	Type    OptUpdateBlockRequestSyncedBlockSyncedFromType `json:"type"`
 }
 
 // GetBlockID returns the value of BlockID.
-func (s *UpdateBlockBodyParametersSyncedBlockSyncedFrom) GetBlockID() string {
+func (s *UpdateBlockRequestSyncedBlockSyncedFrom) GetBlockID() string {
 	return s.BlockID
 }
 
 // GetType returns the value of Type.
-func (s *UpdateBlockBodyParametersSyncedBlockSyncedFrom) GetType() OptUpdateBlockBodyParametersSyncedBlockSyncedFromType {
+func (s *UpdateBlockRequestSyncedBlockSyncedFrom) GetType() OptUpdateBlockRequestSyncedBlockSyncedFromType {
 	return s.Type
 }
 
 // SetBlockID sets the value of BlockID.
-func (s *UpdateBlockBodyParametersSyncedBlockSyncedFrom) SetBlockID(val string) {
+func (s *UpdateBlockRequestSyncedBlockSyncedFrom) SetBlockID(val string) {
 	s.BlockID = val
 }
 
 // SetType sets the value of Type.
-func (s *UpdateBlockBodyParametersSyncedBlockSyncedFrom) SetType(val OptUpdateBlockBodyParametersSyncedBlockSyncedFromType) {
+func (s *UpdateBlockRequestSyncedBlockSyncedFrom) SetType(val OptUpdateBlockRequestSyncedBlockSyncedFromType) {
 	s.Type = val
 }
 
-type UpdateBlockBodyParametersSyncedBlockSyncedFromType string
+type UpdateBlockRequestSyncedBlockSyncedFromType string
 
 const (
-	UpdateBlockBodyParametersSyncedBlockSyncedFromTypeBlockID UpdateBlockBodyParametersSyncedBlockSyncedFromType = "block_id"
+	UpdateBlockRequestSyncedBlockSyncedFromTypeBlockID UpdateBlockRequestSyncedBlockSyncedFromType = "block_id"
 )
 
-// AllValues returns all UpdateBlockBodyParametersSyncedBlockSyncedFromType values.
-func (UpdateBlockBodyParametersSyncedBlockSyncedFromType) AllValues() []UpdateBlockBodyParametersSyncedBlockSyncedFromType {
-	return []UpdateBlockBodyParametersSyncedBlockSyncedFromType{
-		UpdateBlockBodyParametersSyncedBlockSyncedFromTypeBlockID,
+// AllValues returns all UpdateBlockRequestSyncedBlockSyncedFromType values.
+func (UpdateBlockRequestSyncedBlockSyncedFromType) AllValues() []UpdateBlockRequestSyncedBlockSyncedFromType {
+	return []UpdateBlockRequestSyncedBlockSyncedFromType{
+		UpdateBlockRequestSyncedBlockSyncedFromTypeBlockID,
 	}
 }
 
 // MarshalText implements encoding.TextMarshaler.
-func (s UpdateBlockBodyParametersSyncedBlockSyncedFromType) MarshalText() ([]byte, error) {
+func (s UpdateBlockRequestSyncedBlockSyncedFromType) MarshalText() ([]byte, error) {
 	switch s {
-	case UpdateBlockBodyParametersSyncedBlockSyncedFromTypeBlockID:
+	case UpdateBlockRequestSyncedBlockSyncedFromTypeBlockID:
 		return []byte(s), nil
 	default:
 		return nil, errors.Errorf("invalid value: %q", s)
@@ -52608,216 +52608,216 @@ func (s UpdateBlockBodyParametersSyncedBlockSyncedFromType) MarshalText() ([]byt
 }
 
 // UnmarshalText implements encoding.TextUnmarshaler.
-func (s *UpdateBlockBodyParametersSyncedBlockSyncedFromType) UnmarshalText(data []byte) error {
-	switch UpdateBlockBodyParametersSyncedBlockSyncedFromType(data) {
-	case UpdateBlockBodyParametersSyncedBlockSyncedFromTypeBlockID:
-		*s = UpdateBlockBodyParametersSyncedBlockSyncedFromTypeBlockID
+func (s *UpdateBlockRequestSyncedBlockSyncedFromType) UnmarshalText(data []byte) error {
+	switch UpdateBlockRequestSyncedBlockSyncedFromType(data) {
+	case UpdateBlockRequestSyncedBlockSyncedFromTypeBlockID:
+		*s = UpdateBlockRequestSyncedBlockSyncedFromTypeBlockID
 		return nil
 	default:
 		return errors.Errorf("invalid value: %q", data)
 	}
 }
 
-type UpdateBlockBodyParametersTable struct {
+type UpdateBlockRequestTable struct {
 	HasColumnHeader OptBool `json:"has_column_header"`
 	HasRowHeader    OptBool `json:"has_row_header"`
 }
 
 // GetHasColumnHeader returns the value of HasColumnHeader.
-func (s *UpdateBlockBodyParametersTable) GetHasColumnHeader() OptBool {
+func (s *UpdateBlockRequestTable) GetHasColumnHeader() OptBool {
 	return s.HasColumnHeader
 }
 
 // GetHasRowHeader returns the value of HasRowHeader.
-func (s *UpdateBlockBodyParametersTable) GetHasRowHeader() OptBool {
+func (s *UpdateBlockRequestTable) GetHasRowHeader() OptBool {
 	return s.HasRowHeader
 }
 
 // SetHasColumnHeader sets the value of HasColumnHeader.
-func (s *UpdateBlockBodyParametersTable) SetHasColumnHeader(val OptBool) {
+func (s *UpdateBlockRequestTable) SetHasColumnHeader(val OptBool) {
 	s.HasColumnHeader = val
 }
 
 // SetHasRowHeader sets the value of HasRowHeader.
-func (s *UpdateBlockBodyParametersTable) SetHasRowHeader(val OptBool) {
+func (s *UpdateBlockRequestTable) SetHasRowHeader(val OptBool) {
 	s.HasRowHeader = val
 }
 
-type UpdateBlockBodyParametersTableOfContents struct {
+type UpdateBlockRequestTableOfContents struct {
 	Color OptApiColor `json:"color"`
 }
 
 // GetColor returns the value of Color.
-func (s *UpdateBlockBodyParametersTableOfContents) GetColor() OptApiColor {
+func (s *UpdateBlockRequestTableOfContents) GetColor() OptApiColor {
 	return s.Color
 }
 
 // SetColor sets the value of Color.
-func (s *UpdateBlockBodyParametersTableOfContents) SetColor(val OptApiColor) {
+func (s *UpdateBlockRequestTableOfContents) SetColor(val OptApiColor) {
 	s.Color = val
 }
 
-type UpdateBlockBodyParametersToDo struct {
+type UpdateBlockRequestToDo struct {
 	RichText []RichTextItemRequest `json:"rich_text"`
 	Checked  OptBool               `json:"checked"`
 	Color    OptApiColor           `json:"color"`
 }
 
 // GetRichText returns the value of RichText.
-func (s *UpdateBlockBodyParametersToDo) GetRichText() []RichTextItemRequest {
+func (s *UpdateBlockRequestToDo) GetRichText() []RichTextItemRequest {
 	return s.RichText
 }
 
 // GetChecked returns the value of Checked.
-func (s *UpdateBlockBodyParametersToDo) GetChecked() OptBool {
+func (s *UpdateBlockRequestToDo) GetChecked() OptBool {
 	return s.Checked
 }
 
 // GetColor returns the value of Color.
-func (s *UpdateBlockBodyParametersToDo) GetColor() OptApiColor {
+func (s *UpdateBlockRequestToDo) GetColor() OptApiColor {
 	return s.Color
 }
 
 // SetRichText sets the value of RichText.
-func (s *UpdateBlockBodyParametersToDo) SetRichText(val []RichTextItemRequest) {
+func (s *UpdateBlockRequestToDo) SetRichText(val []RichTextItemRequest) {
 	s.RichText = val
 }
 
 // SetChecked sets the value of Checked.
-func (s *UpdateBlockBodyParametersToDo) SetChecked(val OptBool) {
+func (s *UpdateBlockRequestToDo) SetChecked(val OptBool) {
 	s.Checked = val
 }
 
 // SetColor sets the value of Color.
-func (s *UpdateBlockBodyParametersToDo) SetColor(val OptApiColor) {
+func (s *UpdateBlockRequestToDo) SetColor(val OptApiColor) {
 	s.Color = val
 }
 
-type UpdateBlockBodyParametersType string
+type UpdateBlockRequestType string
 
 const (
-	UpdateBlockBodyParametersTypeEmbed            UpdateBlockBodyParametersType = "embed"
-	UpdateBlockBodyParametersTypeBookmark         UpdateBlockBodyParametersType = "bookmark"
-	UpdateBlockBodyParametersTypeImage            UpdateBlockBodyParametersType = "image"
-	UpdateBlockBodyParametersTypeVideo            UpdateBlockBodyParametersType = "video"
-	UpdateBlockBodyParametersTypePdf              UpdateBlockBodyParametersType = "pdf"
-	UpdateBlockBodyParametersTypeFile             UpdateBlockBodyParametersType = "file"
-	UpdateBlockBodyParametersTypeAudio            UpdateBlockBodyParametersType = "audio"
-	UpdateBlockBodyParametersTypeCode             UpdateBlockBodyParametersType = "code"
-	UpdateBlockBodyParametersTypeEquation         UpdateBlockBodyParametersType = "equation"
-	UpdateBlockBodyParametersTypeDivider          UpdateBlockBodyParametersType = "divider"
-	UpdateBlockBodyParametersTypeBreadcrumb       UpdateBlockBodyParametersType = "breadcrumb"
-	UpdateBlockBodyParametersTypeTableOfContents  UpdateBlockBodyParametersType = "table_of_contents"
-	UpdateBlockBodyParametersTypeLinkToPage       UpdateBlockBodyParametersType = "link_to_page"
-	UpdateBlockBodyParametersTypeTableRow         UpdateBlockBodyParametersType = "table_row"
-	UpdateBlockBodyParametersTypeHeading1         UpdateBlockBodyParametersType = "heading_1"
-	UpdateBlockBodyParametersTypeHeading2         UpdateBlockBodyParametersType = "heading_2"
-	UpdateBlockBodyParametersTypeHeading3         UpdateBlockBodyParametersType = "heading_3"
-	UpdateBlockBodyParametersTypeParagraph        UpdateBlockBodyParametersType = "paragraph"
-	UpdateBlockBodyParametersTypeBulletedListItem UpdateBlockBodyParametersType = "bulleted_list_item"
-	UpdateBlockBodyParametersTypeNumberedListItem UpdateBlockBodyParametersType = "numbered_list_item"
-	UpdateBlockBodyParametersTypeQuote            UpdateBlockBodyParametersType = "quote"
-	UpdateBlockBodyParametersTypeToDo             UpdateBlockBodyParametersType = "to_do"
-	UpdateBlockBodyParametersTypeToggle           UpdateBlockBodyParametersType = "toggle"
-	UpdateBlockBodyParametersTypeTemplate         UpdateBlockBodyParametersType = "template"
-	UpdateBlockBodyParametersTypeCallout          UpdateBlockBodyParametersType = "callout"
-	UpdateBlockBodyParametersTypeSyncedBlock      UpdateBlockBodyParametersType = "synced_block"
-	UpdateBlockBodyParametersTypeTable            UpdateBlockBodyParametersType = "table"
-	UpdateBlockBodyParametersTypeColumn           UpdateBlockBodyParametersType = "column"
+	UpdateBlockRequestTypeEmbed            UpdateBlockRequestType = "embed"
+	UpdateBlockRequestTypeBookmark         UpdateBlockRequestType = "bookmark"
+	UpdateBlockRequestTypeImage            UpdateBlockRequestType = "image"
+	UpdateBlockRequestTypeVideo            UpdateBlockRequestType = "video"
+	UpdateBlockRequestTypePdf              UpdateBlockRequestType = "pdf"
+	UpdateBlockRequestTypeFile             UpdateBlockRequestType = "file"
+	UpdateBlockRequestTypeAudio            UpdateBlockRequestType = "audio"
+	UpdateBlockRequestTypeCode             UpdateBlockRequestType = "code"
+	UpdateBlockRequestTypeEquation         UpdateBlockRequestType = "equation"
+	UpdateBlockRequestTypeDivider          UpdateBlockRequestType = "divider"
+	UpdateBlockRequestTypeBreadcrumb       UpdateBlockRequestType = "breadcrumb"
+	UpdateBlockRequestTypeTableOfContents  UpdateBlockRequestType = "table_of_contents"
+	UpdateBlockRequestTypeLinkToPage       UpdateBlockRequestType = "link_to_page"
+	UpdateBlockRequestTypeTableRow         UpdateBlockRequestType = "table_row"
+	UpdateBlockRequestTypeHeading1         UpdateBlockRequestType = "heading_1"
+	UpdateBlockRequestTypeHeading2         UpdateBlockRequestType = "heading_2"
+	UpdateBlockRequestTypeHeading3         UpdateBlockRequestType = "heading_3"
+	UpdateBlockRequestTypeParagraph        UpdateBlockRequestType = "paragraph"
+	UpdateBlockRequestTypeBulletedListItem UpdateBlockRequestType = "bulleted_list_item"
+	UpdateBlockRequestTypeNumberedListItem UpdateBlockRequestType = "numbered_list_item"
+	UpdateBlockRequestTypeQuote            UpdateBlockRequestType = "quote"
+	UpdateBlockRequestTypeToDo             UpdateBlockRequestType = "to_do"
+	UpdateBlockRequestTypeToggle           UpdateBlockRequestType = "toggle"
+	UpdateBlockRequestTypeTemplate         UpdateBlockRequestType = "template"
+	UpdateBlockRequestTypeCallout          UpdateBlockRequestType = "callout"
+	UpdateBlockRequestTypeSyncedBlock      UpdateBlockRequestType = "synced_block"
+	UpdateBlockRequestTypeTable            UpdateBlockRequestType = "table"
+	UpdateBlockRequestTypeColumn           UpdateBlockRequestType = "column"
 )
 
-// AllValues returns all UpdateBlockBodyParametersType values.
-func (UpdateBlockBodyParametersType) AllValues() []UpdateBlockBodyParametersType {
-	return []UpdateBlockBodyParametersType{
-		UpdateBlockBodyParametersTypeEmbed,
-		UpdateBlockBodyParametersTypeBookmark,
-		UpdateBlockBodyParametersTypeImage,
-		UpdateBlockBodyParametersTypeVideo,
-		UpdateBlockBodyParametersTypePdf,
-		UpdateBlockBodyParametersTypeFile,
-		UpdateBlockBodyParametersTypeAudio,
-		UpdateBlockBodyParametersTypeCode,
-		UpdateBlockBodyParametersTypeEquation,
-		UpdateBlockBodyParametersTypeDivider,
-		UpdateBlockBodyParametersTypeBreadcrumb,
-		UpdateBlockBodyParametersTypeTableOfContents,
-		UpdateBlockBodyParametersTypeLinkToPage,
-		UpdateBlockBodyParametersTypeTableRow,
-		UpdateBlockBodyParametersTypeHeading1,
-		UpdateBlockBodyParametersTypeHeading2,
-		UpdateBlockBodyParametersTypeHeading3,
-		UpdateBlockBodyParametersTypeParagraph,
-		UpdateBlockBodyParametersTypeBulletedListItem,
-		UpdateBlockBodyParametersTypeNumberedListItem,
-		UpdateBlockBodyParametersTypeQuote,
-		UpdateBlockBodyParametersTypeToDo,
-		UpdateBlockBodyParametersTypeToggle,
-		UpdateBlockBodyParametersTypeTemplate,
-		UpdateBlockBodyParametersTypeCallout,
-		UpdateBlockBodyParametersTypeSyncedBlock,
-		UpdateBlockBodyParametersTypeTable,
-		UpdateBlockBodyParametersTypeColumn,
+// AllValues returns all UpdateBlockRequestType values.
+func (UpdateBlockRequestType) AllValues() []UpdateBlockRequestType {
+	return []UpdateBlockRequestType{
+		UpdateBlockRequestTypeEmbed,
+		UpdateBlockRequestTypeBookmark,
+		UpdateBlockRequestTypeImage,
+		UpdateBlockRequestTypeVideo,
+		UpdateBlockRequestTypePdf,
+		UpdateBlockRequestTypeFile,
+		UpdateBlockRequestTypeAudio,
+		UpdateBlockRequestTypeCode,
+		UpdateBlockRequestTypeEquation,
+		UpdateBlockRequestTypeDivider,
+		UpdateBlockRequestTypeBreadcrumb,
+		UpdateBlockRequestTypeTableOfContents,
+		UpdateBlockRequestTypeLinkToPage,
+		UpdateBlockRequestTypeTableRow,
+		UpdateBlockRequestTypeHeading1,
+		UpdateBlockRequestTypeHeading2,
+		UpdateBlockRequestTypeHeading3,
+		UpdateBlockRequestTypeParagraph,
+		UpdateBlockRequestTypeBulletedListItem,
+		UpdateBlockRequestTypeNumberedListItem,
+		UpdateBlockRequestTypeQuote,
+		UpdateBlockRequestTypeToDo,
+		UpdateBlockRequestTypeToggle,
+		UpdateBlockRequestTypeTemplate,
+		UpdateBlockRequestTypeCallout,
+		UpdateBlockRequestTypeSyncedBlock,
+		UpdateBlockRequestTypeTable,
+		UpdateBlockRequestTypeColumn,
 	}
 }
 
 // MarshalText implements encoding.TextMarshaler.
-func (s UpdateBlockBodyParametersType) MarshalText() ([]byte, error) {
+func (s UpdateBlockRequestType) MarshalText() ([]byte, error) {
 	switch s {
-	case UpdateBlockBodyParametersTypeEmbed:
+	case UpdateBlockRequestTypeEmbed:
 		return []byte(s), nil
-	case UpdateBlockBodyParametersTypeBookmark:
+	case UpdateBlockRequestTypeBookmark:
 		return []byte(s), nil
-	case UpdateBlockBodyParametersTypeImage:
+	case UpdateBlockRequestTypeImage:
 		return []byte(s), nil
-	case UpdateBlockBodyParametersTypeVideo:
+	case UpdateBlockRequestTypeVideo:
 		return []byte(s), nil
-	case UpdateBlockBodyParametersTypePdf:
+	case UpdateBlockRequestTypePdf:
 		return []byte(s), nil
-	case UpdateBlockBodyParametersTypeFile:
+	case UpdateBlockRequestTypeFile:
 		return []byte(s), nil
-	case UpdateBlockBodyParametersTypeAudio:
+	case UpdateBlockRequestTypeAudio:
 		return []byte(s), nil
-	case UpdateBlockBodyParametersTypeCode:
+	case UpdateBlockRequestTypeCode:
 		return []byte(s), nil
-	case UpdateBlockBodyParametersTypeEquation:
+	case UpdateBlockRequestTypeEquation:
 		return []byte(s), nil
-	case UpdateBlockBodyParametersTypeDivider:
+	case UpdateBlockRequestTypeDivider:
 		return []byte(s), nil
-	case UpdateBlockBodyParametersTypeBreadcrumb:
+	case UpdateBlockRequestTypeBreadcrumb:
 		return []byte(s), nil
-	case UpdateBlockBodyParametersTypeTableOfContents:
+	case UpdateBlockRequestTypeTableOfContents:
 		return []byte(s), nil
-	case UpdateBlockBodyParametersTypeLinkToPage:
+	case UpdateBlockRequestTypeLinkToPage:
 		return []byte(s), nil
-	case UpdateBlockBodyParametersTypeTableRow:
+	case UpdateBlockRequestTypeTableRow:
 		return []byte(s), nil
-	case UpdateBlockBodyParametersTypeHeading1:
+	case UpdateBlockRequestTypeHeading1:
 		return []byte(s), nil
-	case UpdateBlockBodyParametersTypeHeading2:
+	case UpdateBlockRequestTypeHeading2:
 		return []byte(s), nil
-	case UpdateBlockBodyParametersTypeHeading3:
+	case UpdateBlockRequestTypeHeading3:
 		return []byte(s), nil
-	case UpdateBlockBodyParametersTypeParagraph:
+	case UpdateBlockRequestTypeParagraph:
 		return []byte(s), nil
-	case UpdateBlockBodyParametersTypeBulletedListItem:
+	case UpdateBlockRequestTypeBulletedListItem:
 		return []byte(s), nil
-	case UpdateBlockBodyParametersTypeNumberedListItem:
+	case UpdateBlockRequestTypeNumberedListItem:
 		return []byte(s), nil
-	case UpdateBlockBodyParametersTypeQuote:
+	case UpdateBlockRequestTypeQuote:
 		return []byte(s), nil
-	case UpdateBlockBodyParametersTypeToDo:
+	case UpdateBlockRequestTypeToDo:
 		return []byte(s), nil
-	case UpdateBlockBodyParametersTypeToggle:
+	case UpdateBlockRequestTypeToggle:
 		return []byte(s), nil
-	case UpdateBlockBodyParametersTypeTemplate:
+	case UpdateBlockRequestTypeTemplate:
 		return []byte(s), nil
-	case UpdateBlockBodyParametersTypeCallout:
+	case UpdateBlockRequestTypeCallout:
 		return []byte(s), nil
-	case UpdateBlockBodyParametersTypeSyncedBlock:
+	case UpdateBlockRequestTypeSyncedBlock:
 		return []byte(s), nil
-	case UpdateBlockBodyParametersTypeTable:
+	case UpdateBlockRequestTypeTable:
 		return []byte(s), nil
-	case UpdateBlockBodyParametersTypeColumn:
+	case UpdateBlockRequestTypeColumn:
 		return []byte(s), nil
 	default:
 		return nil, errors.Errorf("invalid value: %q", s)
@@ -52825,91 +52825,91 @@ func (s UpdateBlockBodyParametersType) MarshalText() ([]byte, error) {
 }
 
 // UnmarshalText implements encoding.TextUnmarshaler.
-func (s *UpdateBlockBodyParametersType) UnmarshalText(data []byte) error {
-	switch UpdateBlockBodyParametersType(data) {
-	case UpdateBlockBodyParametersTypeEmbed:
-		*s = UpdateBlockBodyParametersTypeEmbed
+func (s *UpdateBlockRequestType) UnmarshalText(data []byte) error {
+	switch UpdateBlockRequestType(data) {
+	case UpdateBlockRequestTypeEmbed:
+		*s = UpdateBlockRequestTypeEmbed
 		return nil
-	case UpdateBlockBodyParametersTypeBookmark:
-		*s = UpdateBlockBodyParametersTypeBookmark
+	case UpdateBlockRequestTypeBookmark:
+		*s = UpdateBlockRequestTypeBookmark
 		return nil
-	case UpdateBlockBodyParametersTypeImage:
-		*s = UpdateBlockBodyParametersTypeImage
+	case UpdateBlockRequestTypeImage:
+		*s = UpdateBlockRequestTypeImage
 		return nil
-	case UpdateBlockBodyParametersTypeVideo:
-		*s = UpdateBlockBodyParametersTypeVideo
+	case UpdateBlockRequestTypeVideo:
+		*s = UpdateBlockRequestTypeVideo
 		return nil
-	case UpdateBlockBodyParametersTypePdf:
-		*s = UpdateBlockBodyParametersTypePdf
+	case UpdateBlockRequestTypePdf:
+		*s = UpdateBlockRequestTypePdf
 		return nil
-	case UpdateBlockBodyParametersTypeFile:
-		*s = UpdateBlockBodyParametersTypeFile
+	case UpdateBlockRequestTypeFile:
+		*s = UpdateBlockRequestTypeFile
 		return nil
-	case UpdateBlockBodyParametersTypeAudio:
-		*s = UpdateBlockBodyParametersTypeAudio
+	case UpdateBlockRequestTypeAudio:
+		*s = UpdateBlockRequestTypeAudio
 		return nil
-	case UpdateBlockBodyParametersTypeCode:
-		*s = UpdateBlockBodyParametersTypeCode
+	case UpdateBlockRequestTypeCode:
+		*s = UpdateBlockRequestTypeCode
 		return nil
-	case UpdateBlockBodyParametersTypeEquation:
-		*s = UpdateBlockBodyParametersTypeEquation
+	case UpdateBlockRequestTypeEquation:
+		*s = UpdateBlockRequestTypeEquation
 		return nil
-	case UpdateBlockBodyParametersTypeDivider:
-		*s = UpdateBlockBodyParametersTypeDivider
+	case UpdateBlockRequestTypeDivider:
+		*s = UpdateBlockRequestTypeDivider
 		return nil
-	case UpdateBlockBodyParametersTypeBreadcrumb:
-		*s = UpdateBlockBodyParametersTypeBreadcrumb
+	case UpdateBlockRequestTypeBreadcrumb:
+		*s = UpdateBlockRequestTypeBreadcrumb
 		return nil
-	case UpdateBlockBodyParametersTypeTableOfContents:
-		*s = UpdateBlockBodyParametersTypeTableOfContents
+	case UpdateBlockRequestTypeTableOfContents:
+		*s = UpdateBlockRequestTypeTableOfContents
 		return nil
-	case UpdateBlockBodyParametersTypeLinkToPage:
-		*s = UpdateBlockBodyParametersTypeLinkToPage
+	case UpdateBlockRequestTypeLinkToPage:
+		*s = UpdateBlockRequestTypeLinkToPage
 		return nil
-	case UpdateBlockBodyParametersTypeTableRow:
-		*s = UpdateBlockBodyParametersTypeTableRow
+	case UpdateBlockRequestTypeTableRow:
+		*s = UpdateBlockRequestTypeTableRow
 		return nil
-	case UpdateBlockBodyParametersTypeHeading1:
-		*s = UpdateBlockBodyParametersTypeHeading1
+	case UpdateBlockRequestTypeHeading1:
+		*s = UpdateBlockRequestTypeHeading1
 		return nil
-	case UpdateBlockBodyParametersTypeHeading2:
-		*s = UpdateBlockBodyParametersTypeHeading2
+	case UpdateBlockRequestTypeHeading2:
+		*s = UpdateBlockRequestTypeHeading2
 		return nil
-	case UpdateBlockBodyParametersTypeHeading3:
-		*s = UpdateBlockBodyParametersTypeHeading3
+	case UpdateBlockRequestTypeHeading3:
+		*s = UpdateBlockRequestTypeHeading3
 		return nil
-	case UpdateBlockBodyParametersTypeParagraph:
-		*s = UpdateBlockBodyParametersTypeParagraph
+	case UpdateBlockRequestTypeParagraph:
+		*s = UpdateBlockRequestTypeParagraph
 		return nil
-	case UpdateBlockBodyParametersTypeBulletedListItem:
-		*s = UpdateBlockBodyParametersTypeBulletedListItem
+	case UpdateBlockRequestTypeBulletedListItem:
+		*s = UpdateBlockRequestTypeBulletedListItem
 		return nil
-	case UpdateBlockBodyParametersTypeNumberedListItem:
-		*s = UpdateBlockBodyParametersTypeNumberedListItem
+	case UpdateBlockRequestTypeNumberedListItem:
+		*s = UpdateBlockRequestTypeNumberedListItem
 		return nil
-	case UpdateBlockBodyParametersTypeQuote:
-		*s = UpdateBlockBodyParametersTypeQuote
+	case UpdateBlockRequestTypeQuote:
+		*s = UpdateBlockRequestTypeQuote
 		return nil
-	case UpdateBlockBodyParametersTypeToDo:
-		*s = UpdateBlockBodyParametersTypeToDo
+	case UpdateBlockRequestTypeToDo:
+		*s = UpdateBlockRequestTypeToDo
 		return nil
-	case UpdateBlockBodyParametersTypeToggle:
-		*s = UpdateBlockBodyParametersTypeToggle
+	case UpdateBlockRequestTypeToggle:
+		*s = UpdateBlockRequestTypeToggle
 		return nil
-	case UpdateBlockBodyParametersTypeTemplate:
-		*s = UpdateBlockBodyParametersTypeTemplate
+	case UpdateBlockRequestTypeTemplate:
+		*s = UpdateBlockRequestTypeTemplate
 		return nil
-	case UpdateBlockBodyParametersTypeCallout:
-		*s = UpdateBlockBodyParametersTypeCallout
+	case UpdateBlockRequestTypeCallout:
+		*s = UpdateBlockRequestTypeCallout
 		return nil
-	case UpdateBlockBodyParametersTypeSyncedBlock:
-		*s = UpdateBlockBodyParametersTypeSyncedBlock
+	case UpdateBlockRequestTypeSyncedBlock:
+		*s = UpdateBlockRequestTypeSyncedBlock
 		return nil
-	case UpdateBlockBodyParametersTypeTable:
-		*s = UpdateBlockBodyParametersTypeTable
+	case UpdateBlockRequestTypeTable:
+		*s = UpdateBlockRequestTypeTable
 		return nil
-	case UpdateBlockBodyParametersTypeColumn:
-		*s = UpdateBlockBodyParametersTypeColumn
+	case UpdateBlockRequestTypeColumn:
+		*s = UpdateBlockRequestTypeColumn
 		return nil
 	default:
 		return errors.Errorf("invalid value: %q", data)
@@ -54272,11 +54272,11 @@ func (s *UpdateBlockResponseType) UnmarshalText(data []byte) error {
 
 type UpdateBlockResponseUnsupported struct{}
 
-// Ref: #/components/schemas/UpdateDatabaseBodyParameters
-type UpdateDatabaseBodyParameters struct {
+// Ref: #/components/schemas/UpdateDatabaseRequest
+type UpdateDatabaseRequest struct {
 	// The parent page or workspace to move the database to. If not provided, the database // will not be
 	// moved.
-	Parent OptUpdateDatabaseBodyParametersParent `json:"parent"`
+	Parent OptUpdateDatabaseRequestParent `json:"parent"`
 	// The updated title of the database, if any. If not provided, the title will not be // updated.
 	Title []RichTextItemRequest `json:"title"`
 	// The updated description of the database, if any. If not provided, the description will // not be
@@ -54299,147 +54299,147 @@ type UpdateDatabaseBodyParameters struct {
 }
 
 // GetParent returns the value of Parent.
-func (s *UpdateDatabaseBodyParameters) GetParent() OptUpdateDatabaseBodyParametersParent {
+func (s *UpdateDatabaseRequest) GetParent() OptUpdateDatabaseRequestParent {
 	return s.Parent
 }
 
 // GetTitle returns the value of Title.
-func (s *UpdateDatabaseBodyParameters) GetTitle() []RichTextItemRequest {
+func (s *UpdateDatabaseRequest) GetTitle() []RichTextItemRequest {
 	return s.Title
 }
 
 // GetDescription returns the value of Description.
-func (s *UpdateDatabaseBodyParameters) GetDescription() []RichTextItemRequest {
+func (s *UpdateDatabaseRequest) GetDescription() []RichTextItemRequest {
 	return s.Description
 }
 
 // GetIsInline returns the value of IsInline.
-func (s *UpdateDatabaseBodyParameters) GetIsInline() OptBool {
+func (s *UpdateDatabaseRequest) GetIsInline() OptBool {
 	return s.IsInline
 }
 
 // GetIcon returns the value of Icon.
-func (s *UpdateDatabaseBodyParameters) GetIcon() OptPageIconRequest {
+func (s *UpdateDatabaseRequest) GetIcon() OptPageIconRequest {
 	return s.Icon
 }
 
 // GetCover returns the value of Cover.
-func (s *UpdateDatabaseBodyParameters) GetCover() OptPageCoverRequest {
+func (s *UpdateDatabaseRequest) GetCover() OptPageCoverRequest {
 	return s.Cover
 }
 
 // GetInTrash returns the value of InTrash.
-func (s *UpdateDatabaseBodyParameters) GetInTrash() OptBool {
+func (s *UpdateDatabaseRequest) GetInTrash() OptBool {
 	return s.InTrash
 }
 
 // GetIsLocked returns the value of IsLocked.
-func (s *UpdateDatabaseBodyParameters) GetIsLocked() OptBool {
+func (s *UpdateDatabaseRequest) GetIsLocked() OptBool {
 	return s.IsLocked
 }
 
 // SetParent sets the value of Parent.
-func (s *UpdateDatabaseBodyParameters) SetParent(val OptUpdateDatabaseBodyParametersParent) {
+func (s *UpdateDatabaseRequest) SetParent(val OptUpdateDatabaseRequestParent) {
 	s.Parent = val
 }
 
 // SetTitle sets the value of Title.
-func (s *UpdateDatabaseBodyParameters) SetTitle(val []RichTextItemRequest) {
+func (s *UpdateDatabaseRequest) SetTitle(val []RichTextItemRequest) {
 	s.Title = val
 }
 
 // SetDescription sets the value of Description.
-func (s *UpdateDatabaseBodyParameters) SetDescription(val []RichTextItemRequest) {
+func (s *UpdateDatabaseRequest) SetDescription(val []RichTextItemRequest) {
 	s.Description = val
 }
 
 // SetIsInline sets the value of IsInline.
-func (s *UpdateDatabaseBodyParameters) SetIsInline(val OptBool) {
+func (s *UpdateDatabaseRequest) SetIsInline(val OptBool) {
 	s.IsInline = val
 }
 
 // SetIcon sets the value of Icon.
-func (s *UpdateDatabaseBodyParameters) SetIcon(val OptPageIconRequest) {
+func (s *UpdateDatabaseRequest) SetIcon(val OptPageIconRequest) {
 	s.Icon = val
 }
 
 // SetCover sets the value of Cover.
-func (s *UpdateDatabaseBodyParameters) SetCover(val OptPageCoverRequest) {
+func (s *UpdateDatabaseRequest) SetCover(val OptPageCoverRequest) {
 	s.Cover = val
 }
 
 // SetInTrash sets the value of InTrash.
-func (s *UpdateDatabaseBodyParameters) SetInTrash(val OptBool) {
+func (s *UpdateDatabaseRequest) SetInTrash(val OptBool) {
 	s.InTrash = val
 }
 
 // SetIsLocked sets the value of IsLocked.
-func (s *UpdateDatabaseBodyParameters) SetIsLocked(val OptBool) {
+func (s *UpdateDatabaseRequest) SetIsLocked(val OptBool) {
 	s.IsLocked = val
 }
 
 // The parent page or workspace to move the database to. If not provided, the database // will not be
 // moved.
-type UpdateDatabaseBodyParametersParent struct {
+type UpdateDatabaseRequestParent struct {
 	// Always `page_id`.
-	Type   UpdateDatabaseBodyParametersParentType `json:"type"`
-	PageID OptString                              `json:"page_id"`
+	Type   UpdateDatabaseRequestParentType `json:"type"`
+	PageID OptString                       `json:"page_id"`
 	// Always `true`.
-	Workspace OptUpdateDatabaseBodyParametersParentWorkspace `json:"workspace"`
+	Workspace OptUpdateDatabaseRequestParentWorkspace `json:"workspace"`
 }
 
 // GetType returns the value of Type.
-func (s *UpdateDatabaseBodyParametersParent) GetType() UpdateDatabaseBodyParametersParentType {
+func (s *UpdateDatabaseRequestParent) GetType() UpdateDatabaseRequestParentType {
 	return s.Type
 }
 
 // GetPageID returns the value of PageID.
-func (s *UpdateDatabaseBodyParametersParent) GetPageID() OptString {
+func (s *UpdateDatabaseRequestParent) GetPageID() OptString {
 	return s.PageID
 }
 
 // GetWorkspace returns the value of Workspace.
-func (s *UpdateDatabaseBodyParametersParent) GetWorkspace() OptUpdateDatabaseBodyParametersParentWorkspace {
+func (s *UpdateDatabaseRequestParent) GetWorkspace() OptUpdateDatabaseRequestParentWorkspace {
 	return s.Workspace
 }
 
 // SetType sets the value of Type.
-func (s *UpdateDatabaseBodyParametersParent) SetType(val UpdateDatabaseBodyParametersParentType) {
+func (s *UpdateDatabaseRequestParent) SetType(val UpdateDatabaseRequestParentType) {
 	s.Type = val
 }
 
 // SetPageID sets the value of PageID.
-func (s *UpdateDatabaseBodyParametersParent) SetPageID(val OptString) {
+func (s *UpdateDatabaseRequestParent) SetPageID(val OptString) {
 	s.PageID = val
 }
 
 // SetWorkspace sets the value of Workspace.
-func (s *UpdateDatabaseBodyParametersParent) SetWorkspace(val OptUpdateDatabaseBodyParametersParentWorkspace) {
+func (s *UpdateDatabaseRequestParent) SetWorkspace(val OptUpdateDatabaseRequestParentWorkspace) {
 	s.Workspace = val
 }
 
 // Always `page_id`.
-type UpdateDatabaseBodyParametersParentType string
+type UpdateDatabaseRequestParentType string
 
 const (
-	UpdateDatabaseBodyParametersParentTypePageID    UpdateDatabaseBodyParametersParentType = "page_id"
-	UpdateDatabaseBodyParametersParentTypeWorkspace UpdateDatabaseBodyParametersParentType = "workspace"
+	UpdateDatabaseRequestParentTypePageID    UpdateDatabaseRequestParentType = "page_id"
+	UpdateDatabaseRequestParentTypeWorkspace UpdateDatabaseRequestParentType = "workspace"
 )
 
-// AllValues returns all UpdateDatabaseBodyParametersParentType values.
-func (UpdateDatabaseBodyParametersParentType) AllValues() []UpdateDatabaseBodyParametersParentType {
-	return []UpdateDatabaseBodyParametersParentType{
-		UpdateDatabaseBodyParametersParentTypePageID,
-		UpdateDatabaseBodyParametersParentTypeWorkspace,
+// AllValues returns all UpdateDatabaseRequestParentType values.
+func (UpdateDatabaseRequestParentType) AllValues() []UpdateDatabaseRequestParentType {
+	return []UpdateDatabaseRequestParentType{
+		UpdateDatabaseRequestParentTypePageID,
+		UpdateDatabaseRequestParentTypeWorkspace,
 	}
 }
 
 // MarshalText implements encoding.TextMarshaler.
-func (s UpdateDatabaseBodyParametersParentType) MarshalText() ([]byte, error) {
+func (s UpdateDatabaseRequestParentType) MarshalText() ([]byte, error) {
 	switch s {
-	case UpdateDatabaseBodyParametersParentTypePageID:
+	case UpdateDatabaseRequestParentTypePageID:
 		return []byte(s), nil
-	case UpdateDatabaseBodyParametersParentTypeWorkspace:
+	case UpdateDatabaseRequestParentTypeWorkspace:
 		return []byte(s), nil
 	default:
 		return nil, errors.Errorf("invalid value: %q", s)
@@ -54447,13 +54447,13 @@ func (s UpdateDatabaseBodyParametersParentType) MarshalText() ([]byte, error) {
 }
 
 // UnmarshalText implements encoding.TextUnmarshaler.
-func (s *UpdateDatabaseBodyParametersParentType) UnmarshalText(data []byte) error {
-	switch UpdateDatabaseBodyParametersParentType(data) {
-	case UpdateDatabaseBodyParametersParentTypePageID:
-		*s = UpdateDatabaseBodyParametersParentTypePageID
+func (s *UpdateDatabaseRequestParentType) UnmarshalText(data []byte) error {
+	switch UpdateDatabaseRequestParentType(data) {
+	case UpdateDatabaseRequestParentTypePageID:
+		*s = UpdateDatabaseRequestParentTypePageID
 		return nil
-	case UpdateDatabaseBodyParametersParentTypeWorkspace:
-		*s = UpdateDatabaseBodyParametersParentTypeWorkspace
+	case UpdateDatabaseRequestParentTypeWorkspace:
+		*s = UpdateDatabaseRequestParentTypeWorkspace
 		return nil
 	default:
 		return errors.Errorf("invalid value: %q", data)
@@ -54461,16 +54461,16 @@ func (s *UpdateDatabaseBodyParametersParentType) UnmarshalText(data []byte) erro
 }
 
 // Always `true`.
-type UpdateDatabaseBodyParametersParentWorkspace bool
+type UpdateDatabaseRequestParentWorkspace bool
 
 const (
-	UpdateDatabaseBodyParametersParentWorkspaceTrue UpdateDatabaseBodyParametersParentWorkspace = true
+	UpdateDatabaseRequestParentWorkspaceTrue UpdateDatabaseRequestParentWorkspace = true
 )
 
-// AllValues returns all UpdateDatabaseBodyParametersParentWorkspace values.
-func (UpdateDatabaseBodyParametersParentWorkspace) AllValues() []UpdateDatabaseBodyParametersParentWorkspace {
-	return []UpdateDatabaseBodyParametersParentWorkspace{
-		UpdateDatabaseBodyParametersParentWorkspaceTrue,
+// AllValues returns all UpdateDatabaseRequestParentWorkspace values.
+func (UpdateDatabaseRequestParentWorkspace) AllValues() []UpdateDatabaseRequestParentWorkspace {
+	return []UpdateDatabaseRequestParentWorkspace{
+		UpdateDatabaseRequestParentWorkspaceTrue,
 	}
 }
 
@@ -55051,15 +55051,15 @@ func (s *UpdateMediaContentWithUrlAndCaptionRequest) SetCaption(val []RichTextIt
 	s.Caption = val
 }
 
-// Ref: #/components/schemas/UpdatePageBodyParameters
-type UpdatePageBodyParameters struct {
-	Properties OptUpdatePageBodyParametersProperties `json:"properties"`
-	Icon       OptPageIconRequest                    `json:"icon"`
-	Cover      OptPageCoverRequest                   `json:"cover"`
+// Ref: #/components/schemas/UpdatePageRequest
+type UpdatePageRequest struct {
+	Properties OptUpdatePageRequestProperties `json:"properties"`
+	Icon       OptPageIconRequest             `json:"icon"`
+	Cover      OptPageCoverRequest            `json:"cover"`
 	// Whether the page should be locked from editing in the Notion app UI. If not provided, // the
 	// locked state will not be updated.
-	IsLocked OptBool                             `json:"is_locked"`
-	Template OptUpdatePageBodyParametersTemplate `json:"template"`
+	IsLocked OptBool                      `json:"is_locked"`
+	Template OptUpdatePageRequestTemplate `json:"template"`
 	// Whether to erase all existing content from the page. When used with a template, the // template
 	// content replaces the existing content. When used without a template, simply // clears the page
 	// content.
@@ -55069,358 +55069,358 @@ type UpdatePageBodyParameters struct {
 }
 
 // GetProperties returns the value of Properties.
-func (s *UpdatePageBodyParameters) GetProperties() OptUpdatePageBodyParametersProperties {
+func (s *UpdatePageRequest) GetProperties() OptUpdatePageRequestProperties {
 	return s.Properties
 }
 
 // GetIcon returns the value of Icon.
-func (s *UpdatePageBodyParameters) GetIcon() OptPageIconRequest {
+func (s *UpdatePageRequest) GetIcon() OptPageIconRequest {
 	return s.Icon
 }
 
 // GetCover returns the value of Cover.
-func (s *UpdatePageBodyParameters) GetCover() OptPageCoverRequest {
+func (s *UpdatePageRequest) GetCover() OptPageCoverRequest {
 	return s.Cover
 }
 
 // GetIsLocked returns the value of IsLocked.
-func (s *UpdatePageBodyParameters) GetIsLocked() OptBool {
+func (s *UpdatePageRequest) GetIsLocked() OptBool {
 	return s.IsLocked
 }
 
 // GetTemplate returns the value of Template.
-func (s *UpdatePageBodyParameters) GetTemplate() OptUpdatePageBodyParametersTemplate {
+func (s *UpdatePageRequest) GetTemplate() OptUpdatePageRequestTemplate {
 	return s.Template
 }
 
 // GetEraseContent returns the value of EraseContent.
-func (s *UpdatePageBodyParameters) GetEraseContent() OptBool {
+func (s *UpdatePageRequest) GetEraseContent() OptBool {
 	return s.EraseContent
 }
 
 // GetArchived returns the value of Archived.
-func (s *UpdatePageBodyParameters) GetArchived() OptBool {
+func (s *UpdatePageRequest) GetArchived() OptBool {
 	return s.Archived
 }
 
 // GetInTrash returns the value of InTrash.
-func (s *UpdatePageBodyParameters) GetInTrash() OptBool {
+func (s *UpdatePageRequest) GetInTrash() OptBool {
 	return s.InTrash
 }
 
 // SetProperties sets the value of Properties.
-func (s *UpdatePageBodyParameters) SetProperties(val OptUpdatePageBodyParametersProperties) {
+func (s *UpdatePageRequest) SetProperties(val OptUpdatePageRequestProperties) {
 	s.Properties = val
 }
 
 // SetIcon sets the value of Icon.
-func (s *UpdatePageBodyParameters) SetIcon(val OptPageIconRequest) {
+func (s *UpdatePageRequest) SetIcon(val OptPageIconRequest) {
 	s.Icon = val
 }
 
 // SetCover sets the value of Cover.
-func (s *UpdatePageBodyParameters) SetCover(val OptPageCoverRequest) {
+func (s *UpdatePageRequest) SetCover(val OptPageCoverRequest) {
 	s.Cover = val
 }
 
 // SetIsLocked sets the value of IsLocked.
-func (s *UpdatePageBodyParameters) SetIsLocked(val OptBool) {
+func (s *UpdatePageRequest) SetIsLocked(val OptBool) {
 	s.IsLocked = val
 }
 
 // SetTemplate sets the value of Template.
-func (s *UpdatePageBodyParameters) SetTemplate(val OptUpdatePageBodyParametersTemplate) {
+func (s *UpdatePageRequest) SetTemplate(val OptUpdatePageRequestTemplate) {
 	s.Template = val
 }
 
 // SetEraseContent sets the value of EraseContent.
-func (s *UpdatePageBodyParameters) SetEraseContent(val OptBool) {
+func (s *UpdatePageRequest) SetEraseContent(val OptBool) {
 	s.EraseContent = val
 }
 
 // SetArchived sets the value of Archived.
-func (s *UpdatePageBodyParameters) SetArchived(val OptBool) {
+func (s *UpdatePageRequest) SetArchived(val OptBool) {
 	s.Archived = val
 }
 
 // SetInTrash sets the value of InTrash.
-func (s *UpdatePageBodyParameters) SetInTrash(val OptBool) {
+func (s *UpdatePageRequest) SetInTrash(val OptBool) {
 	s.InTrash = val
 }
 
-type UpdatePageBodyParametersProperties map[string]UpdatePageBodyParametersPropertiesItem
+type UpdatePageRequestProperties map[string]UpdatePageRequestPropertiesItem
 
-func (s *UpdatePageBodyParametersProperties) init() UpdatePageBodyParametersProperties {
+func (s *UpdatePageRequestProperties) init() UpdatePageRequestProperties {
 	m := *s
 	if m == nil {
-		m = map[string]UpdatePageBodyParametersPropertiesItem{}
+		m = map[string]UpdatePageRequestPropertiesItem{}
 		*s = m
 	}
 	return m
 }
 
-type UpdatePageBodyParametersPropertiesItem struct {
-	Title       []RichTextItemRequest                                   `json:"title"`
-	Type        OptUpdatePageBodyParametersPropertiesItemType           `json:"type"`
-	RichText    []RichTextItemRequest                                   `json:"rich_text"`
-	Number      OptNilFloat64                                           `json:"number"`
-	URL         OptNilString                                            `json:"url"`
-	Select      OptNilUpdatePageBodyParametersPropertiesItemSelect      `json:"select"`
-	MultiSelect []UpdatePageBodyParametersPropertiesItemMultiSelectItem `json:"multi_select"`
-	People      []UpdatePageBodyParametersPropertiesItemPeopleItem      `json:"people"`
-	Email       OptNilString                                            `json:"email"`
-	PhoneNumber OptNilString                                            `json:"phone_number"`
-	Date        OptDateRequest                                          `json:"date"`
-	Checkbox    OptBool                                                 `json:"checkbox"`
-	Relation    []RelationItemPropertyValueResponse                     `json:"relation"`
-	Files       []UpdatePageBodyParametersPropertiesItemFilesItem       `json:"files"`
-	Status      OptNilUpdatePageBodyParametersPropertiesItemStatus      `json:"status"`
-	Place       OptNilUpdatePageBodyParametersPropertiesItemPlace       `json:"place"`
+type UpdatePageRequestPropertiesItem struct {
+	Title       []RichTextItemRequest                            `json:"title"`
+	Type        OptUpdatePageRequestPropertiesItemType           `json:"type"`
+	RichText    []RichTextItemRequest                            `json:"rich_text"`
+	Number      OptNilFloat64                                    `json:"number"`
+	URL         OptNilString                                     `json:"url"`
+	Select      OptNilUpdatePageRequestPropertiesItemSelect      `json:"select"`
+	MultiSelect []UpdatePageRequestPropertiesItemMultiSelectItem `json:"multi_select"`
+	People      []UpdatePageRequestPropertiesItemPeopleItem      `json:"people"`
+	Email       OptNilString                                     `json:"email"`
+	PhoneNumber OptNilString                                     `json:"phone_number"`
+	Date        OptDateRequest                                   `json:"date"`
+	Checkbox    OptBool                                          `json:"checkbox"`
+	Relation    []RelationItemPropertyValueResponse              `json:"relation"`
+	Files       []UpdatePageRequestPropertiesItemFilesItem       `json:"files"`
+	Status      OptNilUpdatePageRequestPropertiesItemStatus      `json:"status"`
+	Place       OptNilUpdatePageRequestPropertiesItemPlace       `json:"place"`
 }
 
 // GetTitle returns the value of Title.
-func (s *UpdatePageBodyParametersPropertiesItem) GetTitle() []RichTextItemRequest {
+func (s *UpdatePageRequestPropertiesItem) GetTitle() []RichTextItemRequest {
 	return s.Title
 }
 
 // GetType returns the value of Type.
-func (s *UpdatePageBodyParametersPropertiesItem) GetType() OptUpdatePageBodyParametersPropertiesItemType {
+func (s *UpdatePageRequestPropertiesItem) GetType() OptUpdatePageRequestPropertiesItemType {
 	return s.Type
 }
 
 // GetRichText returns the value of RichText.
-func (s *UpdatePageBodyParametersPropertiesItem) GetRichText() []RichTextItemRequest {
+func (s *UpdatePageRequestPropertiesItem) GetRichText() []RichTextItemRequest {
 	return s.RichText
 }
 
 // GetNumber returns the value of Number.
-func (s *UpdatePageBodyParametersPropertiesItem) GetNumber() OptNilFloat64 {
+func (s *UpdatePageRequestPropertiesItem) GetNumber() OptNilFloat64 {
 	return s.Number
 }
 
 // GetURL returns the value of URL.
-func (s *UpdatePageBodyParametersPropertiesItem) GetURL() OptNilString {
+func (s *UpdatePageRequestPropertiesItem) GetURL() OptNilString {
 	return s.URL
 }
 
 // GetSelect returns the value of Select.
-func (s *UpdatePageBodyParametersPropertiesItem) GetSelect() OptNilUpdatePageBodyParametersPropertiesItemSelect {
+func (s *UpdatePageRequestPropertiesItem) GetSelect() OptNilUpdatePageRequestPropertiesItemSelect {
 	return s.Select
 }
 
 // GetMultiSelect returns the value of MultiSelect.
-func (s *UpdatePageBodyParametersPropertiesItem) GetMultiSelect() []UpdatePageBodyParametersPropertiesItemMultiSelectItem {
+func (s *UpdatePageRequestPropertiesItem) GetMultiSelect() []UpdatePageRequestPropertiesItemMultiSelectItem {
 	return s.MultiSelect
 }
 
 // GetPeople returns the value of People.
-func (s *UpdatePageBodyParametersPropertiesItem) GetPeople() []UpdatePageBodyParametersPropertiesItemPeopleItem {
+func (s *UpdatePageRequestPropertiesItem) GetPeople() []UpdatePageRequestPropertiesItemPeopleItem {
 	return s.People
 }
 
 // GetEmail returns the value of Email.
-func (s *UpdatePageBodyParametersPropertiesItem) GetEmail() OptNilString {
+func (s *UpdatePageRequestPropertiesItem) GetEmail() OptNilString {
 	return s.Email
 }
 
 // GetPhoneNumber returns the value of PhoneNumber.
-func (s *UpdatePageBodyParametersPropertiesItem) GetPhoneNumber() OptNilString {
+func (s *UpdatePageRequestPropertiesItem) GetPhoneNumber() OptNilString {
 	return s.PhoneNumber
 }
 
 // GetDate returns the value of Date.
-func (s *UpdatePageBodyParametersPropertiesItem) GetDate() OptDateRequest {
+func (s *UpdatePageRequestPropertiesItem) GetDate() OptDateRequest {
 	return s.Date
 }
 
 // GetCheckbox returns the value of Checkbox.
-func (s *UpdatePageBodyParametersPropertiesItem) GetCheckbox() OptBool {
+func (s *UpdatePageRequestPropertiesItem) GetCheckbox() OptBool {
 	return s.Checkbox
 }
 
 // GetRelation returns the value of Relation.
-func (s *UpdatePageBodyParametersPropertiesItem) GetRelation() []RelationItemPropertyValueResponse {
+func (s *UpdatePageRequestPropertiesItem) GetRelation() []RelationItemPropertyValueResponse {
 	return s.Relation
 }
 
 // GetFiles returns the value of Files.
-func (s *UpdatePageBodyParametersPropertiesItem) GetFiles() []UpdatePageBodyParametersPropertiesItemFilesItem {
+func (s *UpdatePageRequestPropertiesItem) GetFiles() []UpdatePageRequestPropertiesItemFilesItem {
 	return s.Files
 }
 
 // GetStatus returns the value of Status.
-func (s *UpdatePageBodyParametersPropertiesItem) GetStatus() OptNilUpdatePageBodyParametersPropertiesItemStatus {
+func (s *UpdatePageRequestPropertiesItem) GetStatus() OptNilUpdatePageRequestPropertiesItemStatus {
 	return s.Status
 }
 
 // GetPlace returns the value of Place.
-func (s *UpdatePageBodyParametersPropertiesItem) GetPlace() OptNilUpdatePageBodyParametersPropertiesItemPlace {
+func (s *UpdatePageRequestPropertiesItem) GetPlace() OptNilUpdatePageRequestPropertiesItemPlace {
 	return s.Place
 }
 
 // SetTitle sets the value of Title.
-func (s *UpdatePageBodyParametersPropertiesItem) SetTitle(val []RichTextItemRequest) {
+func (s *UpdatePageRequestPropertiesItem) SetTitle(val []RichTextItemRequest) {
 	s.Title = val
 }
 
 // SetType sets the value of Type.
-func (s *UpdatePageBodyParametersPropertiesItem) SetType(val OptUpdatePageBodyParametersPropertiesItemType) {
+func (s *UpdatePageRequestPropertiesItem) SetType(val OptUpdatePageRequestPropertiesItemType) {
 	s.Type = val
 }
 
 // SetRichText sets the value of RichText.
-func (s *UpdatePageBodyParametersPropertiesItem) SetRichText(val []RichTextItemRequest) {
+func (s *UpdatePageRequestPropertiesItem) SetRichText(val []RichTextItemRequest) {
 	s.RichText = val
 }
 
 // SetNumber sets the value of Number.
-func (s *UpdatePageBodyParametersPropertiesItem) SetNumber(val OptNilFloat64) {
+func (s *UpdatePageRequestPropertiesItem) SetNumber(val OptNilFloat64) {
 	s.Number = val
 }
 
 // SetURL sets the value of URL.
-func (s *UpdatePageBodyParametersPropertiesItem) SetURL(val OptNilString) {
+func (s *UpdatePageRequestPropertiesItem) SetURL(val OptNilString) {
 	s.URL = val
 }
 
 // SetSelect sets the value of Select.
-func (s *UpdatePageBodyParametersPropertiesItem) SetSelect(val OptNilUpdatePageBodyParametersPropertiesItemSelect) {
+func (s *UpdatePageRequestPropertiesItem) SetSelect(val OptNilUpdatePageRequestPropertiesItemSelect) {
 	s.Select = val
 }
 
 // SetMultiSelect sets the value of MultiSelect.
-func (s *UpdatePageBodyParametersPropertiesItem) SetMultiSelect(val []UpdatePageBodyParametersPropertiesItemMultiSelectItem) {
+func (s *UpdatePageRequestPropertiesItem) SetMultiSelect(val []UpdatePageRequestPropertiesItemMultiSelectItem) {
 	s.MultiSelect = val
 }
 
 // SetPeople sets the value of People.
-func (s *UpdatePageBodyParametersPropertiesItem) SetPeople(val []UpdatePageBodyParametersPropertiesItemPeopleItem) {
+func (s *UpdatePageRequestPropertiesItem) SetPeople(val []UpdatePageRequestPropertiesItemPeopleItem) {
 	s.People = val
 }
 
 // SetEmail sets the value of Email.
-func (s *UpdatePageBodyParametersPropertiesItem) SetEmail(val OptNilString) {
+func (s *UpdatePageRequestPropertiesItem) SetEmail(val OptNilString) {
 	s.Email = val
 }
 
 // SetPhoneNumber sets the value of PhoneNumber.
-func (s *UpdatePageBodyParametersPropertiesItem) SetPhoneNumber(val OptNilString) {
+func (s *UpdatePageRequestPropertiesItem) SetPhoneNumber(val OptNilString) {
 	s.PhoneNumber = val
 }
 
 // SetDate sets the value of Date.
-func (s *UpdatePageBodyParametersPropertiesItem) SetDate(val OptDateRequest) {
+func (s *UpdatePageRequestPropertiesItem) SetDate(val OptDateRequest) {
 	s.Date = val
 }
 
 // SetCheckbox sets the value of Checkbox.
-func (s *UpdatePageBodyParametersPropertiesItem) SetCheckbox(val OptBool) {
+func (s *UpdatePageRequestPropertiesItem) SetCheckbox(val OptBool) {
 	s.Checkbox = val
 }
 
 // SetRelation sets the value of Relation.
-func (s *UpdatePageBodyParametersPropertiesItem) SetRelation(val []RelationItemPropertyValueResponse) {
+func (s *UpdatePageRequestPropertiesItem) SetRelation(val []RelationItemPropertyValueResponse) {
 	s.Relation = val
 }
 
 // SetFiles sets the value of Files.
-func (s *UpdatePageBodyParametersPropertiesItem) SetFiles(val []UpdatePageBodyParametersPropertiesItemFilesItem) {
+func (s *UpdatePageRequestPropertiesItem) SetFiles(val []UpdatePageRequestPropertiesItemFilesItem) {
 	s.Files = val
 }
 
 // SetStatus sets the value of Status.
-func (s *UpdatePageBodyParametersPropertiesItem) SetStatus(val OptNilUpdatePageBodyParametersPropertiesItemStatus) {
+func (s *UpdatePageRequestPropertiesItem) SetStatus(val OptNilUpdatePageRequestPropertiesItemStatus) {
 	s.Status = val
 }
 
 // SetPlace sets the value of Place.
-func (s *UpdatePageBodyParametersPropertiesItem) SetPlace(val OptNilUpdatePageBodyParametersPropertiesItemPlace) {
+func (s *UpdatePageRequestPropertiesItem) SetPlace(val OptNilUpdatePageRequestPropertiesItemPlace) {
 	s.Place = val
 }
 
-type UpdatePageBodyParametersPropertiesItemFilesItem struct {
-	File       OptInternalFileRequest                                 `json:"file"`
-	Name       OptString                                              `json:"name"`
-	Type       OptUpdatePageBodyParametersPropertiesItemFilesItemType `json:"type"`
-	External   OptExternalFileRequest                                 `json:"external"`
-	FileUpload OptFileUploadIdRequest                                 `json:"file_upload"`
+type UpdatePageRequestPropertiesItemFilesItem struct {
+	File       OptInternalFileRequest                          `json:"file"`
+	Name       OptString                                       `json:"name"`
+	Type       OptUpdatePageRequestPropertiesItemFilesItemType `json:"type"`
+	External   OptExternalFileRequest                          `json:"external"`
+	FileUpload OptFileUploadIdRequest                          `json:"file_upload"`
 }
 
 // GetFile returns the value of File.
-func (s *UpdatePageBodyParametersPropertiesItemFilesItem) GetFile() OptInternalFileRequest {
+func (s *UpdatePageRequestPropertiesItemFilesItem) GetFile() OptInternalFileRequest {
 	return s.File
 }
 
 // GetName returns the value of Name.
-func (s *UpdatePageBodyParametersPropertiesItemFilesItem) GetName() OptString {
+func (s *UpdatePageRequestPropertiesItemFilesItem) GetName() OptString {
 	return s.Name
 }
 
 // GetType returns the value of Type.
-func (s *UpdatePageBodyParametersPropertiesItemFilesItem) GetType() OptUpdatePageBodyParametersPropertiesItemFilesItemType {
+func (s *UpdatePageRequestPropertiesItemFilesItem) GetType() OptUpdatePageRequestPropertiesItemFilesItemType {
 	return s.Type
 }
 
 // GetExternal returns the value of External.
-func (s *UpdatePageBodyParametersPropertiesItemFilesItem) GetExternal() OptExternalFileRequest {
+func (s *UpdatePageRequestPropertiesItemFilesItem) GetExternal() OptExternalFileRequest {
 	return s.External
 }
 
 // GetFileUpload returns the value of FileUpload.
-func (s *UpdatePageBodyParametersPropertiesItemFilesItem) GetFileUpload() OptFileUploadIdRequest {
+func (s *UpdatePageRequestPropertiesItemFilesItem) GetFileUpload() OptFileUploadIdRequest {
 	return s.FileUpload
 }
 
 // SetFile sets the value of File.
-func (s *UpdatePageBodyParametersPropertiesItemFilesItem) SetFile(val OptInternalFileRequest) {
+func (s *UpdatePageRequestPropertiesItemFilesItem) SetFile(val OptInternalFileRequest) {
 	s.File = val
 }
 
 // SetName sets the value of Name.
-func (s *UpdatePageBodyParametersPropertiesItemFilesItem) SetName(val OptString) {
+func (s *UpdatePageRequestPropertiesItemFilesItem) SetName(val OptString) {
 	s.Name = val
 }
 
 // SetType sets the value of Type.
-func (s *UpdatePageBodyParametersPropertiesItemFilesItem) SetType(val OptUpdatePageBodyParametersPropertiesItemFilesItemType) {
+func (s *UpdatePageRequestPropertiesItemFilesItem) SetType(val OptUpdatePageRequestPropertiesItemFilesItemType) {
 	s.Type = val
 }
 
 // SetExternal sets the value of External.
-func (s *UpdatePageBodyParametersPropertiesItemFilesItem) SetExternal(val OptExternalFileRequest) {
+func (s *UpdatePageRequestPropertiesItemFilesItem) SetExternal(val OptExternalFileRequest) {
 	s.External = val
 }
 
 // SetFileUpload sets the value of FileUpload.
-func (s *UpdatePageBodyParametersPropertiesItemFilesItem) SetFileUpload(val OptFileUploadIdRequest) {
+func (s *UpdatePageRequestPropertiesItemFilesItem) SetFileUpload(val OptFileUploadIdRequest) {
 	s.FileUpload = val
 }
 
-type UpdatePageBodyParametersPropertiesItemFilesItemType string
+type UpdatePageRequestPropertiesItemFilesItemType string
 
 const (
-	UpdatePageBodyParametersPropertiesItemFilesItemTypeFile       UpdatePageBodyParametersPropertiesItemFilesItemType = "file"
-	UpdatePageBodyParametersPropertiesItemFilesItemTypeExternal   UpdatePageBodyParametersPropertiesItemFilesItemType = "external"
-	UpdatePageBodyParametersPropertiesItemFilesItemTypeFileUpload UpdatePageBodyParametersPropertiesItemFilesItemType = "file_upload"
+	UpdatePageRequestPropertiesItemFilesItemTypeFile       UpdatePageRequestPropertiesItemFilesItemType = "file"
+	UpdatePageRequestPropertiesItemFilesItemTypeExternal   UpdatePageRequestPropertiesItemFilesItemType = "external"
+	UpdatePageRequestPropertiesItemFilesItemTypeFileUpload UpdatePageRequestPropertiesItemFilesItemType = "file_upload"
 )
 
-// AllValues returns all UpdatePageBodyParametersPropertiesItemFilesItemType values.
-func (UpdatePageBodyParametersPropertiesItemFilesItemType) AllValues() []UpdatePageBodyParametersPropertiesItemFilesItemType {
-	return []UpdatePageBodyParametersPropertiesItemFilesItemType{
-		UpdatePageBodyParametersPropertiesItemFilesItemTypeFile,
-		UpdatePageBodyParametersPropertiesItemFilesItemTypeExternal,
-		UpdatePageBodyParametersPropertiesItemFilesItemTypeFileUpload,
+// AllValues returns all UpdatePageRequestPropertiesItemFilesItemType values.
+func (UpdatePageRequestPropertiesItemFilesItemType) AllValues() []UpdatePageRequestPropertiesItemFilesItemType {
+	return []UpdatePageRequestPropertiesItemFilesItemType{
+		UpdatePageRequestPropertiesItemFilesItemTypeFile,
+		UpdatePageRequestPropertiesItemFilesItemTypeExternal,
+		UpdatePageRequestPropertiesItemFilesItemTypeFileUpload,
 	}
 }
 
 // MarshalText implements encoding.TextMarshaler.
-func (s UpdatePageBodyParametersPropertiesItemFilesItemType) MarshalText() ([]byte, error) {
+func (s UpdatePageRequestPropertiesItemFilesItemType) MarshalText() ([]byte, error) {
 	switch s {
-	case UpdatePageBodyParametersPropertiesItemFilesItemTypeFile:
+	case UpdatePageRequestPropertiesItemFilesItemTypeFile:
 		return []byte(s), nil
-	case UpdatePageBodyParametersPropertiesItemFilesItemTypeExternal:
+	case UpdatePageRequestPropertiesItemFilesItemTypeExternal:
 		return []byte(s), nil
-	case UpdatePageBodyParametersPropertiesItemFilesItemTypeFileUpload:
+	case UpdatePageRequestPropertiesItemFilesItemTypeFileUpload:
 		return []byte(s), nil
 	default:
 		return nil, errors.Errorf("invalid value: %q", s)
@@ -55428,23 +55428,23 @@ func (s UpdatePageBodyParametersPropertiesItemFilesItemType) MarshalText() ([]by
 }
 
 // UnmarshalText implements encoding.TextUnmarshaler.
-func (s *UpdatePageBodyParametersPropertiesItemFilesItemType) UnmarshalText(data []byte) error {
-	switch UpdatePageBodyParametersPropertiesItemFilesItemType(data) {
-	case UpdatePageBodyParametersPropertiesItemFilesItemTypeFile:
-		*s = UpdatePageBodyParametersPropertiesItemFilesItemTypeFile
+func (s *UpdatePageRequestPropertiesItemFilesItemType) UnmarshalText(data []byte) error {
+	switch UpdatePageRequestPropertiesItemFilesItemType(data) {
+	case UpdatePageRequestPropertiesItemFilesItemTypeFile:
+		*s = UpdatePageRequestPropertiesItemFilesItemTypeFile
 		return nil
-	case UpdatePageBodyParametersPropertiesItemFilesItemTypeExternal:
-		*s = UpdatePageBodyParametersPropertiesItemFilesItemTypeExternal
+	case UpdatePageRequestPropertiesItemFilesItemTypeExternal:
+		*s = UpdatePageRequestPropertiesItemFilesItemTypeExternal
 		return nil
-	case UpdatePageBodyParametersPropertiesItemFilesItemTypeFileUpload:
-		*s = UpdatePageBodyParametersPropertiesItemFilesItemTypeFileUpload
+	case UpdatePageRequestPropertiesItemFilesItemTypeFileUpload:
+		*s = UpdatePageRequestPropertiesItemFilesItemTypeFileUpload
 		return nil
 	default:
 		return errors.Errorf("invalid value: %q", data)
 	}
 }
 
-type UpdatePageBodyParametersPropertiesItemMultiSelectItem struct {
+type UpdatePageRequestPropertiesItemMultiSelectItem struct {
 	ID          OptString      `json:"id"`
 	Name        OptString      `json:"name"`
 	Color       OptSelectColor `json:"color"`
@@ -55452,105 +55452,105 @@ type UpdatePageBodyParametersPropertiesItemMultiSelectItem struct {
 }
 
 // GetID returns the value of ID.
-func (s *UpdatePageBodyParametersPropertiesItemMultiSelectItem) GetID() OptString {
+func (s *UpdatePageRequestPropertiesItemMultiSelectItem) GetID() OptString {
 	return s.ID
 }
 
 // GetName returns the value of Name.
-func (s *UpdatePageBodyParametersPropertiesItemMultiSelectItem) GetName() OptString {
+func (s *UpdatePageRequestPropertiesItemMultiSelectItem) GetName() OptString {
 	return s.Name
 }
 
 // GetColor returns the value of Color.
-func (s *UpdatePageBodyParametersPropertiesItemMultiSelectItem) GetColor() OptSelectColor {
+func (s *UpdatePageRequestPropertiesItemMultiSelectItem) GetColor() OptSelectColor {
 	return s.Color
 }
 
 // GetDescription returns the value of Description.
-func (s *UpdatePageBodyParametersPropertiesItemMultiSelectItem) GetDescription() OptNilString {
+func (s *UpdatePageRequestPropertiesItemMultiSelectItem) GetDescription() OptNilString {
 	return s.Description
 }
 
 // SetID sets the value of ID.
-func (s *UpdatePageBodyParametersPropertiesItemMultiSelectItem) SetID(val OptString) {
+func (s *UpdatePageRequestPropertiesItemMultiSelectItem) SetID(val OptString) {
 	s.ID = val
 }
 
 // SetName sets the value of Name.
-func (s *UpdatePageBodyParametersPropertiesItemMultiSelectItem) SetName(val OptString) {
+func (s *UpdatePageRequestPropertiesItemMultiSelectItem) SetName(val OptString) {
 	s.Name = val
 }
 
 // SetColor sets the value of Color.
-func (s *UpdatePageBodyParametersPropertiesItemMultiSelectItem) SetColor(val OptSelectColor) {
+func (s *UpdatePageRequestPropertiesItemMultiSelectItem) SetColor(val OptSelectColor) {
 	s.Color = val
 }
 
 // SetDescription sets the value of Description.
-func (s *UpdatePageBodyParametersPropertiesItemMultiSelectItem) SetDescription(val OptNilString) {
+func (s *UpdatePageRequestPropertiesItemMultiSelectItem) SetDescription(val OptNilString) {
 	s.Description = val
 }
 
-type UpdatePageBodyParametersPropertiesItemPeopleItem struct {
+type UpdatePageRequestPropertiesItemPeopleItem struct {
 	// The ID of the user.
 	ID string `json:"id"`
 	// The user object type name.
-	Object OptUpdatePageBodyParametersPropertiesItemPeopleItemObject `json:"object"`
-	Name   OptNilString                                              `json:"name"`
+	Object OptUpdatePageRequestPropertiesItemPeopleItemObject `json:"object"`
+	Name   OptNilString                                       `json:"name"`
 }
 
 // GetID returns the value of ID.
-func (s *UpdatePageBodyParametersPropertiesItemPeopleItem) GetID() string {
+func (s *UpdatePageRequestPropertiesItemPeopleItem) GetID() string {
 	return s.ID
 }
 
 // GetObject returns the value of Object.
-func (s *UpdatePageBodyParametersPropertiesItemPeopleItem) GetObject() OptUpdatePageBodyParametersPropertiesItemPeopleItemObject {
+func (s *UpdatePageRequestPropertiesItemPeopleItem) GetObject() OptUpdatePageRequestPropertiesItemPeopleItemObject {
 	return s.Object
 }
 
 // GetName returns the value of Name.
-func (s *UpdatePageBodyParametersPropertiesItemPeopleItem) GetName() OptNilString {
+func (s *UpdatePageRequestPropertiesItemPeopleItem) GetName() OptNilString {
 	return s.Name
 }
 
 // SetID sets the value of ID.
-func (s *UpdatePageBodyParametersPropertiesItemPeopleItem) SetID(val string) {
+func (s *UpdatePageRequestPropertiesItemPeopleItem) SetID(val string) {
 	s.ID = val
 }
 
 // SetObject sets the value of Object.
-func (s *UpdatePageBodyParametersPropertiesItemPeopleItem) SetObject(val OptUpdatePageBodyParametersPropertiesItemPeopleItemObject) {
+func (s *UpdatePageRequestPropertiesItemPeopleItem) SetObject(val OptUpdatePageRequestPropertiesItemPeopleItemObject) {
 	s.Object = val
 }
 
 // SetName sets the value of Name.
-func (s *UpdatePageBodyParametersPropertiesItemPeopleItem) SetName(val OptNilString) {
+func (s *UpdatePageRequestPropertiesItemPeopleItem) SetName(val OptNilString) {
 	s.Name = val
 }
 
 // The user object type name.
-type UpdatePageBodyParametersPropertiesItemPeopleItemObject string
+type UpdatePageRequestPropertiesItemPeopleItemObject string
 
 const (
-	UpdatePageBodyParametersPropertiesItemPeopleItemObjectUser  UpdatePageBodyParametersPropertiesItemPeopleItemObject = "user"
-	UpdatePageBodyParametersPropertiesItemPeopleItemObjectGroup UpdatePageBodyParametersPropertiesItemPeopleItemObject = "group"
+	UpdatePageRequestPropertiesItemPeopleItemObjectUser  UpdatePageRequestPropertiesItemPeopleItemObject = "user"
+	UpdatePageRequestPropertiesItemPeopleItemObjectGroup UpdatePageRequestPropertiesItemPeopleItemObject = "group"
 )
 
-// AllValues returns all UpdatePageBodyParametersPropertiesItemPeopleItemObject values.
-func (UpdatePageBodyParametersPropertiesItemPeopleItemObject) AllValues() []UpdatePageBodyParametersPropertiesItemPeopleItemObject {
-	return []UpdatePageBodyParametersPropertiesItemPeopleItemObject{
-		UpdatePageBodyParametersPropertiesItemPeopleItemObjectUser,
-		UpdatePageBodyParametersPropertiesItemPeopleItemObjectGroup,
+// AllValues returns all UpdatePageRequestPropertiesItemPeopleItemObject values.
+func (UpdatePageRequestPropertiesItemPeopleItemObject) AllValues() []UpdatePageRequestPropertiesItemPeopleItemObject {
+	return []UpdatePageRequestPropertiesItemPeopleItemObject{
+		UpdatePageRequestPropertiesItemPeopleItemObjectUser,
+		UpdatePageRequestPropertiesItemPeopleItemObjectGroup,
 	}
 }
 
 // MarshalText implements encoding.TextMarshaler.
-func (s UpdatePageBodyParametersPropertiesItemPeopleItemObject) MarshalText() ([]byte, error) {
+func (s UpdatePageRequestPropertiesItemPeopleItemObject) MarshalText() ([]byte, error) {
 	switch s {
-	case UpdatePageBodyParametersPropertiesItemPeopleItemObjectUser:
+	case UpdatePageRequestPropertiesItemPeopleItemObjectUser:
 		return []byte(s), nil
-	case UpdatePageBodyParametersPropertiesItemPeopleItemObjectGroup:
+	case UpdatePageRequestPropertiesItemPeopleItemObjectGroup:
 		return []byte(s), nil
 	default:
 		return nil, errors.Errorf("invalid value: %q", s)
@@ -55558,20 +55558,20 @@ func (s UpdatePageBodyParametersPropertiesItemPeopleItemObject) MarshalText() ([
 }
 
 // UnmarshalText implements encoding.TextUnmarshaler.
-func (s *UpdatePageBodyParametersPropertiesItemPeopleItemObject) UnmarshalText(data []byte) error {
-	switch UpdatePageBodyParametersPropertiesItemPeopleItemObject(data) {
-	case UpdatePageBodyParametersPropertiesItemPeopleItemObjectUser:
-		*s = UpdatePageBodyParametersPropertiesItemPeopleItemObjectUser
+func (s *UpdatePageRequestPropertiesItemPeopleItemObject) UnmarshalText(data []byte) error {
+	switch UpdatePageRequestPropertiesItemPeopleItemObject(data) {
+	case UpdatePageRequestPropertiesItemPeopleItemObjectUser:
+		*s = UpdatePageRequestPropertiesItemPeopleItemObjectUser
 		return nil
-	case UpdatePageBodyParametersPropertiesItemPeopleItemObjectGroup:
-		*s = UpdatePageBodyParametersPropertiesItemPeopleItemObjectGroup
+	case UpdatePageRequestPropertiesItemPeopleItemObjectGroup:
+		*s = UpdatePageRequestPropertiesItemPeopleItemObjectGroup
 		return nil
 	default:
 		return errors.Errorf("invalid value: %q", data)
 	}
 }
 
-type UpdatePageBodyParametersPropertiesItemPlace struct {
+type UpdatePageRequestPropertiesItemPlace struct {
 	Lat           float64      `json:"lat"`
 	Lon           float64      `json:"lon"`
 	Name          OptNilString `json:"name"`
@@ -55581,66 +55581,66 @@ type UpdatePageBodyParametersPropertiesItemPlace struct {
 }
 
 // GetLat returns the value of Lat.
-func (s *UpdatePageBodyParametersPropertiesItemPlace) GetLat() float64 {
+func (s *UpdatePageRequestPropertiesItemPlace) GetLat() float64 {
 	return s.Lat
 }
 
 // GetLon returns the value of Lon.
-func (s *UpdatePageBodyParametersPropertiesItemPlace) GetLon() float64 {
+func (s *UpdatePageRequestPropertiesItemPlace) GetLon() float64 {
 	return s.Lon
 }
 
 // GetName returns the value of Name.
-func (s *UpdatePageBodyParametersPropertiesItemPlace) GetName() OptNilString {
+func (s *UpdatePageRequestPropertiesItemPlace) GetName() OptNilString {
 	return s.Name
 }
 
 // GetAddress returns the value of Address.
-func (s *UpdatePageBodyParametersPropertiesItemPlace) GetAddress() OptNilString {
+func (s *UpdatePageRequestPropertiesItemPlace) GetAddress() OptNilString {
 	return s.Address
 }
 
 // GetAWSPlaceID returns the value of AWSPlaceID.
-func (s *UpdatePageBodyParametersPropertiesItemPlace) GetAWSPlaceID() OptNilString {
+func (s *UpdatePageRequestPropertiesItemPlace) GetAWSPlaceID() OptNilString {
 	return s.AWSPlaceID
 }
 
 // GetGooglePlaceID returns the value of GooglePlaceID.
-func (s *UpdatePageBodyParametersPropertiesItemPlace) GetGooglePlaceID() OptNilString {
+func (s *UpdatePageRequestPropertiesItemPlace) GetGooglePlaceID() OptNilString {
 	return s.GooglePlaceID
 }
 
 // SetLat sets the value of Lat.
-func (s *UpdatePageBodyParametersPropertiesItemPlace) SetLat(val float64) {
+func (s *UpdatePageRequestPropertiesItemPlace) SetLat(val float64) {
 	s.Lat = val
 }
 
 // SetLon sets the value of Lon.
-func (s *UpdatePageBodyParametersPropertiesItemPlace) SetLon(val float64) {
+func (s *UpdatePageRequestPropertiesItemPlace) SetLon(val float64) {
 	s.Lon = val
 }
 
 // SetName sets the value of Name.
-func (s *UpdatePageBodyParametersPropertiesItemPlace) SetName(val OptNilString) {
+func (s *UpdatePageRequestPropertiesItemPlace) SetName(val OptNilString) {
 	s.Name = val
 }
 
 // SetAddress sets the value of Address.
-func (s *UpdatePageBodyParametersPropertiesItemPlace) SetAddress(val OptNilString) {
+func (s *UpdatePageRequestPropertiesItemPlace) SetAddress(val OptNilString) {
 	s.Address = val
 }
 
 // SetAWSPlaceID sets the value of AWSPlaceID.
-func (s *UpdatePageBodyParametersPropertiesItemPlace) SetAWSPlaceID(val OptNilString) {
+func (s *UpdatePageRequestPropertiesItemPlace) SetAWSPlaceID(val OptNilString) {
 	s.AWSPlaceID = val
 }
 
 // SetGooglePlaceID sets the value of GooglePlaceID.
-func (s *UpdatePageBodyParametersPropertiesItemPlace) SetGooglePlaceID(val OptNilString) {
+func (s *UpdatePageRequestPropertiesItemPlace) SetGooglePlaceID(val OptNilString) {
 	s.GooglePlaceID = val
 }
 
-type UpdatePageBodyParametersPropertiesItemSelect struct {
+type UpdatePageRequestPropertiesItemSelect struct {
 	ID          OptString      `json:"id"`
 	Name        OptString      `json:"name"`
 	Color       OptSelectColor `json:"color"`
@@ -55648,46 +55648,46 @@ type UpdatePageBodyParametersPropertiesItemSelect struct {
 }
 
 // GetID returns the value of ID.
-func (s *UpdatePageBodyParametersPropertiesItemSelect) GetID() OptString {
+func (s *UpdatePageRequestPropertiesItemSelect) GetID() OptString {
 	return s.ID
 }
 
 // GetName returns the value of Name.
-func (s *UpdatePageBodyParametersPropertiesItemSelect) GetName() OptString {
+func (s *UpdatePageRequestPropertiesItemSelect) GetName() OptString {
 	return s.Name
 }
 
 // GetColor returns the value of Color.
-func (s *UpdatePageBodyParametersPropertiesItemSelect) GetColor() OptSelectColor {
+func (s *UpdatePageRequestPropertiesItemSelect) GetColor() OptSelectColor {
 	return s.Color
 }
 
 // GetDescription returns the value of Description.
-func (s *UpdatePageBodyParametersPropertiesItemSelect) GetDescription() OptNilString {
+func (s *UpdatePageRequestPropertiesItemSelect) GetDescription() OptNilString {
 	return s.Description
 }
 
 // SetID sets the value of ID.
-func (s *UpdatePageBodyParametersPropertiesItemSelect) SetID(val OptString) {
+func (s *UpdatePageRequestPropertiesItemSelect) SetID(val OptString) {
 	s.ID = val
 }
 
 // SetName sets the value of Name.
-func (s *UpdatePageBodyParametersPropertiesItemSelect) SetName(val OptString) {
+func (s *UpdatePageRequestPropertiesItemSelect) SetName(val OptString) {
 	s.Name = val
 }
 
 // SetColor sets the value of Color.
-func (s *UpdatePageBodyParametersPropertiesItemSelect) SetColor(val OptSelectColor) {
+func (s *UpdatePageRequestPropertiesItemSelect) SetColor(val OptSelectColor) {
 	s.Color = val
 }
 
 // SetDescription sets the value of Description.
-func (s *UpdatePageBodyParametersPropertiesItemSelect) SetDescription(val OptNilString) {
+func (s *UpdatePageRequestPropertiesItemSelect) SetDescription(val OptNilString) {
 	s.Description = val
 }
 
-type UpdatePageBodyParametersPropertiesItemStatus struct {
+type UpdatePageRequestPropertiesItemStatus struct {
 	ID          OptString      `json:"id"`
 	Name        OptString      `json:"name"`
 	Color       OptSelectColor `json:"color"`
@@ -55695,118 +55695,118 @@ type UpdatePageBodyParametersPropertiesItemStatus struct {
 }
 
 // GetID returns the value of ID.
-func (s *UpdatePageBodyParametersPropertiesItemStatus) GetID() OptString {
+func (s *UpdatePageRequestPropertiesItemStatus) GetID() OptString {
 	return s.ID
 }
 
 // GetName returns the value of Name.
-func (s *UpdatePageBodyParametersPropertiesItemStatus) GetName() OptString {
+func (s *UpdatePageRequestPropertiesItemStatus) GetName() OptString {
 	return s.Name
 }
 
 // GetColor returns the value of Color.
-func (s *UpdatePageBodyParametersPropertiesItemStatus) GetColor() OptSelectColor {
+func (s *UpdatePageRequestPropertiesItemStatus) GetColor() OptSelectColor {
 	return s.Color
 }
 
 // GetDescription returns the value of Description.
-func (s *UpdatePageBodyParametersPropertiesItemStatus) GetDescription() OptNilString {
+func (s *UpdatePageRequestPropertiesItemStatus) GetDescription() OptNilString {
 	return s.Description
 }
 
 // SetID sets the value of ID.
-func (s *UpdatePageBodyParametersPropertiesItemStatus) SetID(val OptString) {
+func (s *UpdatePageRequestPropertiesItemStatus) SetID(val OptString) {
 	s.ID = val
 }
 
 // SetName sets the value of Name.
-func (s *UpdatePageBodyParametersPropertiesItemStatus) SetName(val OptString) {
+func (s *UpdatePageRequestPropertiesItemStatus) SetName(val OptString) {
 	s.Name = val
 }
 
 // SetColor sets the value of Color.
-func (s *UpdatePageBodyParametersPropertiesItemStatus) SetColor(val OptSelectColor) {
+func (s *UpdatePageRequestPropertiesItemStatus) SetColor(val OptSelectColor) {
 	s.Color = val
 }
 
 // SetDescription sets the value of Description.
-func (s *UpdatePageBodyParametersPropertiesItemStatus) SetDescription(val OptNilString) {
+func (s *UpdatePageRequestPropertiesItemStatus) SetDescription(val OptNilString) {
 	s.Description = val
 }
 
-type UpdatePageBodyParametersPropertiesItemType string
+type UpdatePageRequestPropertiesItemType string
 
 const (
-	UpdatePageBodyParametersPropertiesItemTypeTitle       UpdatePageBodyParametersPropertiesItemType = "title"
-	UpdatePageBodyParametersPropertiesItemTypeRichText    UpdatePageBodyParametersPropertiesItemType = "rich_text"
-	UpdatePageBodyParametersPropertiesItemTypeNumber      UpdatePageBodyParametersPropertiesItemType = "number"
-	UpdatePageBodyParametersPropertiesItemTypeURL         UpdatePageBodyParametersPropertiesItemType = "url"
-	UpdatePageBodyParametersPropertiesItemTypeSelect      UpdatePageBodyParametersPropertiesItemType = "select"
-	UpdatePageBodyParametersPropertiesItemTypeMultiSelect UpdatePageBodyParametersPropertiesItemType = "multi_select"
-	UpdatePageBodyParametersPropertiesItemTypePeople      UpdatePageBodyParametersPropertiesItemType = "people"
-	UpdatePageBodyParametersPropertiesItemTypeEmail       UpdatePageBodyParametersPropertiesItemType = "email"
-	UpdatePageBodyParametersPropertiesItemTypePhoneNumber UpdatePageBodyParametersPropertiesItemType = "phone_number"
-	UpdatePageBodyParametersPropertiesItemTypeDate        UpdatePageBodyParametersPropertiesItemType = "date"
-	UpdatePageBodyParametersPropertiesItemTypeCheckbox    UpdatePageBodyParametersPropertiesItemType = "checkbox"
-	UpdatePageBodyParametersPropertiesItemTypeRelation    UpdatePageBodyParametersPropertiesItemType = "relation"
-	UpdatePageBodyParametersPropertiesItemTypeFiles       UpdatePageBodyParametersPropertiesItemType = "files"
-	UpdatePageBodyParametersPropertiesItemTypeStatus      UpdatePageBodyParametersPropertiesItemType = "status"
-	UpdatePageBodyParametersPropertiesItemTypePlace       UpdatePageBodyParametersPropertiesItemType = "place"
+	UpdatePageRequestPropertiesItemTypeTitle       UpdatePageRequestPropertiesItemType = "title"
+	UpdatePageRequestPropertiesItemTypeRichText    UpdatePageRequestPropertiesItemType = "rich_text"
+	UpdatePageRequestPropertiesItemTypeNumber      UpdatePageRequestPropertiesItemType = "number"
+	UpdatePageRequestPropertiesItemTypeURL         UpdatePageRequestPropertiesItemType = "url"
+	UpdatePageRequestPropertiesItemTypeSelect      UpdatePageRequestPropertiesItemType = "select"
+	UpdatePageRequestPropertiesItemTypeMultiSelect UpdatePageRequestPropertiesItemType = "multi_select"
+	UpdatePageRequestPropertiesItemTypePeople      UpdatePageRequestPropertiesItemType = "people"
+	UpdatePageRequestPropertiesItemTypeEmail       UpdatePageRequestPropertiesItemType = "email"
+	UpdatePageRequestPropertiesItemTypePhoneNumber UpdatePageRequestPropertiesItemType = "phone_number"
+	UpdatePageRequestPropertiesItemTypeDate        UpdatePageRequestPropertiesItemType = "date"
+	UpdatePageRequestPropertiesItemTypeCheckbox    UpdatePageRequestPropertiesItemType = "checkbox"
+	UpdatePageRequestPropertiesItemTypeRelation    UpdatePageRequestPropertiesItemType = "relation"
+	UpdatePageRequestPropertiesItemTypeFiles       UpdatePageRequestPropertiesItemType = "files"
+	UpdatePageRequestPropertiesItemTypeStatus      UpdatePageRequestPropertiesItemType = "status"
+	UpdatePageRequestPropertiesItemTypePlace       UpdatePageRequestPropertiesItemType = "place"
 )
 
-// AllValues returns all UpdatePageBodyParametersPropertiesItemType values.
-func (UpdatePageBodyParametersPropertiesItemType) AllValues() []UpdatePageBodyParametersPropertiesItemType {
-	return []UpdatePageBodyParametersPropertiesItemType{
-		UpdatePageBodyParametersPropertiesItemTypeTitle,
-		UpdatePageBodyParametersPropertiesItemTypeRichText,
-		UpdatePageBodyParametersPropertiesItemTypeNumber,
-		UpdatePageBodyParametersPropertiesItemTypeURL,
-		UpdatePageBodyParametersPropertiesItemTypeSelect,
-		UpdatePageBodyParametersPropertiesItemTypeMultiSelect,
-		UpdatePageBodyParametersPropertiesItemTypePeople,
-		UpdatePageBodyParametersPropertiesItemTypeEmail,
-		UpdatePageBodyParametersPropertiesItemTypePhoneNumber,
-		UpdatePageBodyParametersPropertiesItemTypeDate,
-		UpdatePageBodyParametersPropertiesItemTypeCheckbox,
-		UpdatePageBodyParametersPropertiesItemTypeRelation,
-		UpdatePageBodyParametersPropertiesItemTypeFiles,
-		UpdatePageBodyParametersPropertiesItemTypeStatus,
-		UpdatePageBodyParametersPropertiesItemTypePlace,
+// AllValues returns all UpdatePageRequestPropertiesItemType values.
+func (UpdatePageRequestPropertiesItemType) AllValues() []UpdatePageRequestPropertiesItemType {
+	return []UpdatePageRequestPropertiesItemType{
+		UpdatePageRequestPropertiesItemTypeTitle,
+		UpdatePageRequestPropertiesItemTypeRichText,
+		UpdatePageRequestPropertiesItemTypeNumber,
+		UpdatePageRequestPropertiesItemTypeURL,
+		UpdatePageRequestPropertiesItemTypeSelect,
+		UpdatePageRequestPropertiesItemTypeMultiSelect,
+		UpdatePageRequestPropertiesItemTypePeople,
+		UpdatePageRequestPropertiesItemTypeEmail,
+		UpdatePageRequestPropertiesItemTypePhoneNumber,
+		UpdatePageRequestPropertiesItemTypeDate,
+		UpdatePageRequestPropertiesItemTypeCheckbox,
+		UpdatePageRequestPropertiesItemTypeRelation,
+		UpdatePageRequestPropertiesItemTypeFiles,
+		UpdatePageRequestPropertiesItemTypeStatus,
+		UpdatePageRequestPropertiesItemTypePlace,
 	}
 }
 
 // MarshalText implements encoding.TextMarshaler.
-func (s UpdatePageBodyParametersPropertiesItemType) MarshalText() ([]byte, error) {
+func (s UpdatePageRequestPropertiesItemType) MarshalText() ([]byte, error) {
 	switch s {
-	case UpdatePageBodyParametersPropertiesItemTypeTitle:
+	case UpdatePageRequestPropertiesItemTypeTitle:
 		return []byte(s), nil
-	case UpdatePageBodyParametersPropertiesItemTypeRichText:
+	case UpdatePageRequestPropertiesItemTypeRichText:
 		return []byte(s), nil
-	case UpdatePageBodyParametersPropertiesItemTypeNumber:
+	case UpdatePageRequestPropertiesItemTypeNumber:
 		return []byte(s), nil
-	case UpdatePageBodyParametersPropertiesItemTypeURL:
+	case UpdatePageRequestPropertiesItemTypeURL:
 		return []byte(s), nil
-	case UpdatePageBodyParametersPropertiesItemTypeSelect:
+	case UpdatePageRequestPropertiesItemTypeSelect:
 		return []byte(s), nil
-	case UpdatePageBodyParametersPropertiesItemTypeMultiSelect:
+	case UpdatePageRequestPropertiesItemTypeMultiSelect:
 		return []byte(s), nil
-	case UpdatePageBodyParametersPropertiesItemTypePeople:
+	case UpdatePageRequestPropertiesItemTypePeople:
 		return []byte(s), nil
-	case UpdatePageBodyParametersPropertiesItemTypeEmail:
+	case UpdatePageRequestPropertiesItemTypeEmail:
 		return []byte(s), nil
-	case UpdatePageBodyParametersPropertiesItemTypePhoneNumber:
+	case UpdatePageRequestPropertiesItemTypePhoneNumber:
 		return []byte(s), nil
-	case UpdatePageBodyParametersPropertiesItemTypeDate:
+	case UpdatePageRequestPropertiesItemTypeDate:
 		return []byte(s), nil
-	case UpdatePageBodyParametersPropertiesItemTypeCheckbox:
+	case UpdatePageRequestPropertiesItemTypeCheckbox:
 		return []byte(s), nil
-	case UpdatePageBodyParametersPropertiesItemTypeRelation:
+	case UpdatePageRequestPropertiesItemTypeRelation:
 		return []byte(s), nil
-	case UpdatePageBodyParametersPropertiesItemTypeFiles:
+	case UpdatePageRequestPropertiesItemTypeFiles:
 		return []byte(s), nil
-	case UpdatePageBodyParametersPropertiesItemTypeStatus:
+	case UpdatePageRequestPropertiesItemTypeStatus:
 		return []byte(s), nil
-	case UpdatePageBodyParametersPropertiesItemTypePlace:
+	case UpdatePageRequestPropertiesItemTypePlace:
 		return []byte(s), nil
 	default:
 		return nil, errors.Errorf("invalid value: %q", s)
@@ -55814,104 +55814,104 @@ func (s UpdatePageBodyParametersPropertiesItemType) MarshalText() ([]byte, error
 }
 
 // UnmarshalText implements encoding.TextUnmarshaler.
-func (s *UpdatePageBodyParametersPropertiesItemType) UnmarshalText(data []byte) error {
-	switch UpdatePageBodyParametersPropertiesItemType(data) {
-	case UpdatePageBodyParametersPropertiesItemTypeTitle:
-		*s = UpdatePageBodyParametersPropertiesItemTypeTitle
+func (s *UpdatePageRequestPropertiesItemType) UnmarshalText(data []byte) error {
+	switch UpdatePageRequestPropertiesItemType(data) {
+	case UpdatePageRequestPropertiesItemTypeTitle:
+		*s = UpdatePageRequestPropertiesItemTypeTitle
 		return nil
-	case UpdatePageBodyParametersPropertiesItemTypeRichText:
-		*s = UpdatePageBodyParametersPropertiesItemTypeRichText
+	case UpdatePageRequestPropertiesItemTypeRichText:
+		*s = UpdatePageRequestPropertiesItemTypeRichText
 		return nil
-	case UpdatePageBodyParametersPropertiesItemTypeNumber:
-		*s = UpdatePageBodyParametersPropertiesItemTypeNumber
+	case UpdatePageRequestPropertiesItemTypeNumber:
+		*s = UpdatePageRequestPropertiesItemTypeNumber
 		return nil
-	case UpdatePageBodyParametersPropertiesItemTypeURL:
-		*s = UpdatePageBodyParametersPropertiesItemTypeURL
+	case UpdatePageRequestPropertiesItemTypeURL:
+		*s = UpdatePageRequestPropertiesItemTypeURL
 		return nil
-	case UpdatePageBodyParametersPropertiesItemTypeSelect:
-		*s = UpdatePageBodyParametersPropertiesItemTypeSelect
+	case UpdatePageRequestPropertiesItemTypeSelect:
+		*s = UpdatePageRequestPropertiesItemTypeSelect
 		return nil
-	case UpdatePageBodyParametersPropertiesItemTypeMultiSelect:
-		*s = UpdatePageBodyParametersPropertiesItemTypeMultiSelect
+	case UpdatePageRequestPropertiesItemTypeMultiSelect:
+		*s = UpdatePageRequestPropertiesItemTypeMultiSelect
 		return nil
-	case UpdatePageBodyParametersPropertiesItemTypePeople:
-		*s = UpdatePageBodyParametersPropertiesItemTypePeople
+	case UpdatePageRequestPropertiesItemTypePeople:
+		*s = UpdatePageRequestPropertiesItemTypePeople
 		return nil
-	case UpdatePageBodyParametersPropertiesItemTypeEmail:
-		*s = UpdatePageBodyParametersPropertiesItemTypeEmail
+	case UpdatePageRequestPropertiesItemTypeEmail:
+		*s = UpdatePageRequestPropertiesItemTypeEmail
 		return nil
-	case UpdatePageBodyParametersPropertiesItemTypePhoneNumber:
-		*s = UpdatePageBodyParametersPropertiesItemTypePhoneNumber
+	case UpdatePageRequestPropertiesItemTypePhoneNumber:
+		*s = UpdatePageRequestPropertiesItemTypePhoneNumber
 		return nil
-	case UpdatePageBodyParametersPropertiesItemTypeDate:
-		*s = UpdatePageBodyParametersPropertiesItemTypeDate
+	case UpdatePageRequestPropertiesItemTypeDate:
+		*s = UpdatePageRequestPropertiesItemTypeDate
 		return nil
-	case UpdatePageBodyParametersPropertiesItemTypeCheckbox:
-		*s = UpdatePageBodyParametersPropertiesItemTypeCheckbox
+	case UpdatePageRequestPropertiesItemTypeCheckbox:
+		*s = UpdatePageRequestPropertiesItemTypeCheckbox
 		return nil
-	case UpdatePageBodyParametersPropertiesItemTypeRelation:
-		*s = UpdatePageBodyParametersPropertiesItemTypeRelation
+	case UpdatePageRequestPropertiesItemTypeRelation:
+		*s = UpdatePageRequestPropertiesItemTypeRelation
 		return nil
-	case UpdatePageBodyParametersPropertiesItemTypeFiles:
-		*s = UpdatePageBodyParametersPropertiesItemTypeFiles
+	case UpdatePageRequestPropertiesItemTypeFiles:
+		*s = UpdatePageRequestPropertiesItemTypeFiles
 		return nil
-	case UpdatePageBodyParametersPropertiesItemTypeStatus:
-		*s = UpdatePageBodyParametersPropertiesItemTypeStatus
+	case UpdatePageRequestPropertiesItemTypeStatus:
+		*s = UpdatePageRequestPropertiesItemTypeStatus
 		return nil
-	case UpdatePageBodyParametersPropertiesItemTypePlace:
-		*s = UpdatePageBodyParametersPropertiesItemTypePlace
+	case UpdatePageRequestPropertiesItemTypePlace:
+		*s = UpdatePageRequestPropertiesItemTypePlace
 		return nil
 	default:
 		return errors.Errorf("invalid value: %q", data)
 	}
 }
 
-type UpdatePageBodyParametersTemplate struct {
-	Type       UpdatePageBodyParametersTemplateType `json:"type"`
-	TemplateID OptString                            `json:"template_id"`
+type UpdatePageRequestTemplate struct {
+	Type       UpdatePageRequestTemplateType `json:"type"`
+	TemplateID OptString                     `json:"template_id"`
 }
 
 // GetType returns the value of Type.
-func (s *UpdatePageBodyParametersTemplate) GetType() UpdatePageBodyParametersTemplateType {
+func (s *UpdatePageRequestTemplate) GetType() UpdatePageRequestTemplateType {
 	return s.Type
 }
 
 // GetTemplateID returns the value of TemplateID.
-func (s *UpdatePageBodyParametersTemplate) GetTemplateID() OptString {
+func (s *UpdatePageRequestTemplate) GetTemplateID() OptString {
 	return s.TemplateID
 }
 
 // SetType sets the value of Type.
-func (s *UpdatePageBodyParametersTemplate) SetType(val UpdatePageBodyParametersTemplateType) {
+func (s *UpdatePageRequestTemplate) SetType(val UpdatePageRequestTemplateType) {
 	s.Type = val
 }
 
 // SetTemplateID sets the value of TemplateID.
-func (s *UpdatePageBodyParametersTemplate) SetTemplateID(val OptString) {
+func (s *UpdatePageRequestTemplate) SetTemplateID(val OptString) {
 	s.TemplateID = val
 }
 
-type UpdatePageBodyParametersTemplateType string
+type UpdatePageRequestTemplateType string
 
 const (
-	UpdatePageBodyParametersTemplateTypeDefault    UpdatePageBodyParametersTemplateType = "default"
-	UpdatePageBodyParametersTemplateTypeTemplateID UpdatePageBodyParametersTemplateType = "template_id"
+	UpdatePageRequestTemplateTypeDefault    UpdatePageRequestTemplateType = "default"
+	UpdatePageRequestTemplateTypeTemplateID UpdatePageRequestTemplateType = "template_id"
 )
 
-// AllValues returns all UpdatePageBodyParametersTemplateType values.
-func (UpdatePageBodyParametersTemplateType) AllValues() []UpdatePageBodyParametersTemplateType {
-	return []UpdatePageBodyParametersTemplateType{
-		UpdatePageBodyParametersTemplateTypeDefault,
-		UpdatePageBodyParametersTemplateTypeTemplateID,
+// AllValues returns all UpdatePageRequestTemplateType values.
+func (UpdatePageRequestTemplateType) AllValues() []UpdatePageRequestTemplateType {
+	return []UpdatePageRequestTemplateType{
+		UpdatePageRequestTemplateTypeDefault,
+		UpdatePageRequestTemplateTypeTemplateID,
 	}
 }
 
 // MarshalText implements encoding.TextMarshaler.
-func (s UpdatePageBodyParametersTemplateType) MarshalText() ([]byte, error) {
+func (s UpdatePageRequestTemplateType) MarshalText() ([]byte, error) {
 	switch s {
-	case UpdatePageBodyParametersTemplateTypeDefault:
+	case UpdatePageRequestTemplateTypeDefault:
 		return []byte(s), nil
-	case UpdatePageBodyParametersTemplateTypeTemplateID:
+	case UpdatePageRequestTemplateTypeTemplateID:
 		return []byte(s), nil
 	default:
 		return nil, errors.Errorf("invalid value: %q", s)
@@ -55919,13 +55919,13 @@ func (s UpdatePageBodyParametersTemplateType) MarshalText() ([]byte, error) {
 }
 
 // UnmarshalText implements encoding.TextUnmarshaler.
-func (s *UpdatePageBodyParametersTemplateType) UnmarshalText(data []byte) error {
-	switch UpdatePageBodyParametersTemplateType(data) {
-	case UpdatePageBodyParametersTemplateTypeDefault:
-		*s = UpdatePageBodyParametersTemplateTypeDefault
+func (s *UpdatePageRequestTemplateType) UnmarshalText(data []byte) error {
+	switch UpdatePageRequestTemplateType(data) {
+	case UpdatePageRequestTemplateTypeDefault:
+		*s = UpdatePageRequestTemplateTypeDefault
 		return nil
-	case UpdatePageBodyParametersTemplateTypeTemplateID:
-		*s = UpdatePageBodyParametersTemplateTypeTemplateID
+	case UpdatePageRequestTemplateTypeTemplateID:
+		*s = UpdatePageRequestTemplateTypeTemplateID
 		return nil
 	default:
 		return errors.Errorf("invalid value: %q", data)

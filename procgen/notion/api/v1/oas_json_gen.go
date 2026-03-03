@@ -461,14 +461,14 @@ func (s *ApiTranscriptionStatus) UnmarshalJSON(data []byte) error {
 }
 
 // Encode implements json.Marshaler.
-func (s *AppendBlockChildrenBodyParameters) Encode(e *jx.Encoder) {
+func (s *AppendBlockChildrenRequest) Encode(e *jx.Encoder) {
 	e.ObjStart()
 	s.encodeFields(e)
 	e.ObjEnd()
 }
 
 // encodeFields encodes fields.
-func (s *AppendBlockChildrenBodyParameters) encodeFields(e *jx.Encoder) {
+func (s *AppendBlockChildrenRequest) encodeFields(e *jx.Encoder) {
 	{
 		e.FieldStart("children")
 		e.ArrStart()
@@ -491,16 +491,16 @@ func (s *AppendBlockChildrenBodyParameters) encodeFields(e *jx.Encoder) {
 	}
 }
 
-var jsonFieldsNameOfAppendBlockChildrenBodyParameters = [3]string{
+var jsonFieldsNameOfAppendBlockChildrenRequest = [3]string{
 	0: "children",
 	1: "after",
 	2: "position",
 }
 
-// Decode decodes AppendBlockChildrenBodyParameters from json.
-func (s *AppendBlockChildrenBodyParameters) Decode(d *jx.Decoder) error {
+// Decode decodes AppendBlockChildrenRequest from json.
+func (s *AppendBlockChildrenRequest) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode AppendBlockChildrenBodyParameters to nil")
+		return errors.New("invalid: unable to decode AppendBlockChildrenRequest to nil")
 	}
 	var requiredBitSet [1]uint8
 
@@ -549,7 +549,7 @@ func (s *AppendBlockChildrenBodyParameters) Decode(d *jx.Decoder) error {
 		}
 		return nil
 	}); err != nil {
-		return errors.Wrap(err, "decode AppendBlockChildrenBodyParameters")
+		return errors.Wrap(err, "decode AppendBlockChildrenRequest")
 	}
 	// Validate required fields.
 	var failures []validate.FieldError
@@ -566,8 +566,8 @@ func (s *AppendBlockChildrenBodyParameters) Decode(d *jx.Decoder) error {
 				bitIdx := bits.TrailingZeros8(result)
 				fieldIdx := i*8 + bitIdx
 				var name string
-				if fieldIdx < len(jsonFieldsNameOfAppendBlockChildrenBodyParameters) {
-					name = jsonFieldsNameOfAppendBlockChildrenBodyParameters[fieldIdx]
+				if fieldIdx < len(jsonFieldsNameOfAppendBlockChildrenRequest) {
+					name = jsonFieldsNameOfAppendBlockChildrenRequest[fieldIdx]
 				} else {
 					name = strconv.Itoa(fieldIdx)
 				}
@@ -588,14 +588,14 @@ func (s *AppendBlockChildrenBodyParameters) Decode(d *jx.Decoder) error {
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s *AppendBlockChildrenBodyParameters) MarshalJSON() ([]byte, error) {
+func (s *AppendBlockChildrenRequest) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *AppendBlockChildrenBodyParameters) UnmarshalJSON(data []byte) error {
+func (s *AppendBlockChildrenRequest) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
@@ -12517,14 +12517,14 @@ func (s *ContentWithTableRowResponse) UnmarshalJSON(data []byte) error {
 }
 
 // Encode implements json.Marshaler.
-func (s *CreateCommentBodyParameters) Encode(e *jx.Encoder) {
+func (s *CreateCommentRequest) Encode(e *jx.Encoder) {
 	e.ObjStart()
 	s.encodeFields(e)
 	e.ObjEnd()
 }
 
 // encodeFields encodes fields.
-func (s *CreateCommentBodyParameters) encodeFields(e *jx.Encoder) {
+func (s *CreateCommentRequest) encodeFields(e *jx.Encoder) {
 	{
 		e.FieldStart("rich_text")
 		e.ArrStart()
@@ -12563,7 +12563,7 @@ func (s *CreateCommentBodyParameters) encodeFields(e *jx.Encoder) {
 	}
 }
 
-var jsonFieldsNameOfCreateCommentBodyParameters = [5]string{
+var jsonFieldsNameOfCreateCommentRequest = [5]string{
 	0: "rich_text",
 	1: "attachments",
 	2: "display_name",
@@ -12571,10 +12571,10 @@ var jsonFieldsNameOfCreateCommentBodyParameters = [5]string{
 	4: "discussion_id",
 }
 
-// Decode decodes CreateCommentBodyParameters from json.
-func (s *CreateCommentBodyParameters) Decode(d *jx.Decoder) error {
+// Decode decodes CreateCommentRequest from json.
+func (s *CreateCommentRequest) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode CreateCommentBodyParameters to nil")
+		return errors.New("invalid: unable to decode CreateCommentRequest to nil")
 	}
 	var requiredBitSet [1]uint8
 
@@ -12600,9 +12600,9 @@ func (s *CreateCommentBodyParameters) Decode(d *jx.Decoder) error {
 			}
 		case "attachments":
 			if err := func() error {
-				s.Attachments = make([]CreateCommentBodyParametersAttachmentsItem, 0)
+				s.Attachments = make([]CreateCommentRequestAttachmentsItem, 0)
 				if err := d.Arr(func(d *jx.Decoder) error {
-					var elem CreateCommentBodyParametersAttachmentsItem
+					var elem CreateCommentRequestAttachmentsItem
 					if err := elem.Decode(d); err != nil {
 						return err
 					}
@@ -12650,7 +12650,7 @@ func (s *CreateCommentBodyParameters) Decode(d *jx.Decoder) error {
 		}
 		return nil
 	}); err != nil {
-		return errors.Wrap(err, "decode CreateCommentBodyParameters")
+		return errors.Wrap(err, "decode CreateCommentRequest")
 	}
 	// Validate required fields.
 	var failures []validate.FieldError
@@ -12667,8 +12667,8 @@ func (s *CreateCommentBodyParameters) Decode(d *jx.Decoder) error {
 				bitIdx := bits.TrailingZeros8(result)
 				fieldIdx := i*8 + bitIdx
 				var name string
-				if fieldIdx < len(jsonFieldsNameOfCreateCommentBodyParameters) {
-					name = jsonFieldsNameOfCreateCommentBodyParameters[fieldIdx]
+				if fieldIdx < len(jsonFieldsNameOfCreateCommentRequest) {
+					name = jsonFieldsNameOfCreateCommentRequest[fieldIdx]
 				} else {
 					name = strconv.Itoa(fieldIdx)
 				}
@@ -12689,27 +12689,27 @@ func (s *CreateCommentBodyParameters) Decode(d *jx.Decoder) error {
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s *CreateCommentBodyParameters) MarshalJSON() ([]byte, error) {
+func (s *CreateCommentRequest) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *CreateCommentBodyParameters) UnmarshalJSON(data []byte) error {
+func (s *CreateCommentRequest) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
 // Encode implements json.Marshaler.
-func (s *CreateCommentBodyParametersAttachmentsItem) Encode(e *jx.Encoder) {
+func (s *CreateCommentRequestAttachmentsItem) Encode(e *jx.Encoder) {
 	e.ObjStart()
 	s.encodeFields(e)
 	e.ObjEnd()
 }
 
 // encodeFields encodes fields.
-func (s *CreateCommentBodyParametersAttachmentsItem) encodeFields(e *jx.Encoder) {
+func (s *CreateCommentRequestAttachmentsItem) encodeFields(e *jx.Encoder) {
 	{
 		e.FieldStart("file_upload_id")
 		e.Str(s.FileUploadID)
@@ -12722,15 +12722,15 @@ func (s *CreateCommentBodyParametersAttachmentsItem) encodeFields(e *jx.Encoder)
 	}
 }
 
-var jsonFieldsNameOfCreateCommentBodyParametersAttachmentsItem = [2]string{
+var jsonFieldsNameOfCreateCommentRequestAttachmentsItem = [2]string{
 	0: "file_upload_id",
 	1: "type",
 }
 
-// Decode decodes CreateCommentBodyParametersAttachmentsItem from json.
-func (s *CreateCommentBodyParametersAttachmentsItem) Decode(d *jx.Decoder) error {
+// Decode decodes CreateCommentRequestAttachmentsItem from json.
+func (s *CreateCommentRequestAttachmentsItem) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode CreateCommentBodyParametersAttachmentsItem to nil")
+		return errors.New("invalid: unable to decode CreateCommentRequestAttachmentsItem to nil")
 	}
 	var requiredBitSet [1]uint8
 
@@ -12763,7 +12763,7 @@ func (s *CreateCommentBodyParametersAttachmentsItem) Decode(d *jx.Decoder) error
 		}
 		return nil
 	}); err != nil {
-		return errors.Wrap(err, "decode CreateCommentBodyParametersAttachmentsItem")
+		return errors.Wrap(err, "decode CreateCommentRequestAttachmentsItem")
 	}
 	// Validate required fields.
 	var failures []validate.FieldError
@@ -12780,8 +12780,8 @@ func (s *CreateCommentBodyParametersAttachmentsItem) Decode(d *jx.Decoder) error
 				bitIdx := bits.TrailingZeros8(result)
 				fieldIdx := i*8 + bitIdx
 				var name string
-				if fieldIdx < len(jsonFieldsNameOfCreateCommentBodyParametersAttachmentsItem) {
-					name = jsonFieldsNameOfCreateCommentBodyParametersAttachmentsItem[fieldIdx]
+				if fieldIdx < len(jsonFieldsNameOfCreateCommentRequestAttachmentsItem) {
+					name = jsonFieldsNameOfCreateCommentRequestAttachmentsItem[fieldIdx]
 				} else {
 					name = strconv.Itoa(fieldIdx)
 				}
@@ -12802,65 +12802,65 @@ func (s *CreateCommentBodyParametersAttachmentsItem) Decode(d *jx.Decoder) error
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s *CreateCommentBodyParametersAttachmentsItem) MarshalJSON() ([]byte, error) {
+func (s *CreateCommentRequestAttachmentsItem) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *CreateCommentBodyParametersAttachmentsItem) UnmarshalJSON(data []byte) error {
+func (s *CreateCommentRequestAttachmentsItem) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
-// Encode encodes CreateCommentBodyParametersAttachmentsItemType as json.
-func (s CreateCommentBodyParametersAttachmentsItemType) Encode(e *jx.Encoder) {
+// Encode encodes CreateCommentRequestAttachmentsItemType as json.
+func (s CreateCommentRequestAttachmentsItemType) Encode(e *jx.Encoder) {
 	e.Str(string(s))
 }
 
-// Decode decodes CreateCommentBodyParametersAttachmentsItemType from json.
-func (s *CreateCommentBodyParametersAttachmentsItemType) Decode(d *jx.Decoder) error {
+// Decode decodes CreateCommentRequestAttachmentsItemType from json.
+func (s *CreateCommentRequestAttachmentsItemType) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode CreateCommentBodyParametersAttachmentsItemType to nil")
+		return errors.New("invalid: unable to decode CreateCommentRequestAttachmentsItemType to nil")
 	}
 	v, err := d.StrBytes()
 	if err != nil {
 		return err
 	}
 	// Try to use constant string.
-	switch CreateCommentBodyParametersAttachmentsItemType(v) {
-	case CreateCommentBodyParametersAttachmentsItemTypeFileUpload:
-		*s = CreateCommentBodyParametersAttachmentsItemTypeFileUpload
+	switch CreateCommentRequestAttachmentsItemType(v) {
+	case CreateCommentRequestAttachmentsItemTypeFileUpload:
+		*s = CreateCommentRequestAttachmentsItemTypeFileUpload
 	default:
-		*s = CreateCommentBodyParametersAttachmentsItemType(v)
+		*s = CreateCommentRequestAttachmentsItemType(v)
 	}
 
 	return nil
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s CreateCommentBodyParametersAttachmentsItemType) MarshalJSON() ([]byte, error) {
+func (s CreateCommentRequestAttachmentsItemType) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *CreateCommentBodyParametersAttachmentsItemType) UnmarshalJSON(data []byte) error {
+func (s *CreateCommentRequestAttachmentsItemType) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
 // Encode implements json.Marshaler.
-func (s *CreateCommentBodyParametersDisplayName) Encode(e *jx.Encoder) {
+func (s *CreateCommentRequestDisplayName) Encode(e *jx.Encoder) {
 	e.ObjStart()
 	s.encodeFields(e)
 	e.ObjEnd()
 }
 
 // encodeFields encodes fields.
-func (s *CreateCommentBodyParametersDisplayName) encodeFields(e *jx.Encoder) {
+func (s *CreateCommentRequestDisplayName) encodeFields(e *jx.Encoder) {
 	{
 		e.FieldStart("type")
 		s.Type.Encode(e)
@@ -12873,15 +12873,15 @@ func (s *CreateCommentBodyParametersDisplayName) encodeFields(e *jx.Encoder) {
 	}
 }
 
-var jsonFieldsNameOfCreateCommentBodyParametersDisplayName = [2]string{
+var jsonFieldsNameOfCreateCommentRequestDisplayName = [2]string{
 	0: "type",
 	1: "custom",
 }
 
-// Decode decodes CreateCommentBodyParametersDisplayName from json.
-func (s *CreateCommentBodyParametersDisplayName) Decode(d *jx.Decoder) error {
+// Decode decodes CreateCommentRequestDisplayName from json.
+func (s *CreateCommentRequestDisplayName) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode CreateCommentBodyParametersDisplayName to nil")
+		return errors.New("invalid: unable to decode CreateCommentRequestDisplayName to nil")
 	}
 	var requiredBitSet [1]uint8
 
@@ -12912,7 +12912,7 @@ func (s *CreateCommentBodyParametersDisplayName) Decode(d *jx.Decoder) error {
 		}
 		return nil
 	}); err != nil {
-		return errors.Wrap(err, "decode CreateCommentBodyParametersDisplayName")
+		return errors.Wrap(err, "decode CreateCommentRequestDisplayName")
 	}
 	// Validate required fields.
 	var failures []validate.FieldError
@@ -12929,8 +12929,8 @@ func (s *CreateCommentBodyParametersDisplayName) Decode(d *jx.Decoder) error {
 				bitIdx := bits.TrailingZeros8(result)
 				fieldIdx := i*8 + bitIdx
 				var name string
-				if fieldIdx < len(jsonFieldsNameOfCreateCommentBodyParametersDisplayName) {
-					name = jsonFieldsNameOfCreateCommentBodyParametersDisplayName[fieldIdx]
+				if fieldIdx < len(jsonFieldsNameOfCreateCommentRequestDisplayName) {
+					name = jsonFieldsNameOfCreateCommentRequestDisplayName[fieldIdx]
 				} else {
 					name = strconv.Itoa(fieldIdx)
 				}
@@ -12951,41 +12951,41 @@ func (s *CreateCommentBodyParametersDisplayName) Decode(d *jx.Decoder) error {
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s *CreateCommentBodyParametersDisplayName) MarshalJSON() ([]byte, error) {
+func (s *CreateCommentRequestDisplayName) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *CreateCommentBodyParametersDisplayName) UnmarshalJSON(data []byte) error {
+func (s *CreateCommentRequestDisplayName) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
 // Encode implements json.Marshaler.
-func (s *CreateCommentBodyParametersDisplayNameCustom) Encode(e *jx.Encoder) {
+func (s *CreateCommentRequestDisplayNameCustom) Encode(e *jx.Encoder) {
 	e.ObjStart()
 	s.encodeFields(e)
 	e.ObjEnd()
 }
 
 // encodeFields encodes fields.
-func (s *CreateCommentBodyParametersDisplayNameCustom) encodeFields(e *jx.Encoder) {
+func (s *CreateCommentRequestDisplayNameCustom) encodeFields(e *jx.Encoder) {
 	{
 		e.FieldStart("name")
 		e.Str(s.Name)
 	}
 }
 
-var jsonFieldsNameOfCreateCommentBodyParametersDisplayNameCustom = [1]string{
+var jsonFieldsNameOfCreateCommentRequestDisplayNameCustom = [1]string{
 	0: "name",
 }
 
-// Decode decodes CreateCommentBodyParametersDisplayNameCustom from json.
-func (s *CreateCommentBodyParametersDisplayNameCustom) Decode(d *jx.Decoder) error {
+// Decode decodes CreateCommentRequestDisplayNameCustom from json.
+func (s *CreateCommentRequestDisplayNameCustom) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode CreateCommentBodyParametersDisplayNameCustom to nil")
+		return errors.New("invalid: unable to decode CreateCommentRequestDisplayNameCustom to nil")
 	}
 	var requiredBitSet [1]uint8
 
@@ -13008,7 +13008,7 @@ func (s *CreateCommentBodyParametersDisplayNameCustom) Decode(d *jx.Decoder) err
 		}
 		return nil
 	}); err != nil {
-		return errors.Wrap(err, "decode CreateCommentBodyParametersDisplayNameCustom")
+		return errors.Wrap(err, "decode CreateCommentRequestDisplayNameCustom")
 	}
 	// Validate required fields.
 	var failures []validate.FieldError
@@ -13025,8 +13025,8 @@ func (s *CreateCommentBodyParametersDisplayNameCustom) Decode(d *jx.Decoder) err
 				bitIdx := bits.TrailingZeros8(result)
 				fieldIdx := i*8 + bitIdx
 				var name string
-				if fieldIdx < len(jsonFieldsNameOfCreateCommentBodyParametersDisplayNameCustom) {
-					name = jsonFieldsNameOfCreateCommentBodyParametersDisplayNameCustom[fieldIdx]
+				if fieldIdx < len(jsonFieldsNameOfCreateCommentRequestDisplayNameCustom) {
+					name = jsonFieldsNameOfCreateCommentRequestDisplayNameCustom[fieldIdx]
 				} else {
 					name = strconv.Itoa(fieldIdx)
 				}
@@ -13047,69 +13047,69 @@ func (s *CreateCommentBodyParametersDisplayNameCustom) Decode(d *jx.Decoder) err
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s *CreateCommentBodyParametersDisplayNameCustom) MarshalJSON() ([]byte, error) {
+func (s *CreateCommentRequestDisplayNameCustom) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *CreateCommentBodyParametersDisplayNameCustom) UnmarshalJSON(data []byte) error {
+func (s *CreateCommentRequestDisplayNameCustom) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
-// Encode encodes CreateCommentBodyParametersDisplayNameType as json.
-func (s CreateCommentBodyParametersDisplayNameType) Encode(e *jx.Encoder) {
+// Encode encodes CreateCommentRequestDisplayNameType as json.
+func (s CreateCommentRequestDisplayNameType) Encode(e *jx.Encoder) {
 	e.Str(string(s))
 }
 
-// Decode decodes CreateCommentBodyParametersDisplayNameType from json.
-func (s *CreateCommentBodyParametersDisplayNameType) Decode(d *jx.Decoder) error {
+// Decode decodes CreateCommentRequestDisplayNameType from json.
+func (s *CreateCommentRequestDisplayNameType) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode CreateCommentBodyParametersDisplayNameType to nil")
+		return errors.New("invalid: unable to decode CreateCommentRequestDisplayNameType to nil")
 	}
 	v, err := d.StrBytes()
 	if err != nil {
 		return err
 	}
 	// Try to use constant string.
-	switch CreateCommentBodyParametersDisplayNameType(v) {
-	case CreateCommentBodyParametersDisplayNameTypeIntegration:
-		*s = CreateCommentBodyParametersDisplayNameTypeIntegration
-	case CreateCommentBodyParametersDisplayNameTypeUser:
-		*s = CreateCommentBodyParametersDisplayNameTypeUser
-	case CreateCommentBodyParametersDisplayNameTypeCustom:
-		*s = CreateCommentBodyParametersDisplayNameTypeCustom
+	switch CreateCommentRequestDisplayNameType(v) {
+	case CreateCommentRequestDisplayNameTypeIntegration:
+		*s = CreateCommentRequestDisplayNameTypeIntegration
+	case CreateCommentRequestDisplayNameTypeUser:
+		*s = CreateCommentRequestDisplayNameTypeUser
+	case CreateCommentRequestDisplayNameTypeCustom:
+		*s = CreateCommentRequestDisplayNameTypeCustom
 	default:
-		*s = CreateCommentBodyParametersDisplayNameType(v)
+		*s = CreateCommentRequestDisplayNameType(v)
 	}
 
 	return nil
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s CreateCommentBodyParametersDisplayNameType) MarshalJSON() ([]byte, error) {
+func (s CreateCommentRequestDisplayNameType) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *CreateCommentBodyParametersDisplayNameType) UnmarshalJSON(data []byte) error {
+func (s *CreateCommentRequestDisplayNameType) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
 // Encode implements json.Marshaler.
-func (s *CreateCommentBodyParametersParent) Encode(e *jx.Encoder) {
+func (s *CreateCommentRequestParent) Encode(e *jx.Encoder) {
 	e.ObjStart()
 	s.encodeFields(e)
 	e.ObjEnd()
 }
 
 // encodeFields encodes fields.
-func (s *CreateCommentBodyParametersParent) encodeFields(e *jx.Encoder) {
+func (s *CreateCommentRequestParent) encodeFields(e *jx.Encoder) {
 	{
 		if s.PageID.Set {
 			e.FieldStart("page_id")
@@ -13130,16 +13130,16 @@ func (s *CreateCommentBodyParametersParent) encodeFields(e *jx.Encoder) {
 	}
 }
 
-var jsonFieldsNameOfCreateCommentBodyParametersParent = [3]string{
+var jsonFieldsNameOfCreateCommentRequestParent = [3]string{
 	0: "page_id",
 	1: "type",
 	2: "block_id",
 }
 
-// Decode decodes CreateCommentBodyParametersParent from json.
-func (s *CreateCommentBodyParametersParent) Decode(d *jx.Decoder) error {
+// Decode decodes CreateCommentRequestParent from json.
+func (s *CreateCommentRequestParent) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode CreateCommentBodyParametersParent to nil")
+		return errors.New("invalid: unable to decode CreateCommentRequestParent to nil")
 	}
 
 	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
@@ -13179,61 +13179,61 @@ func (s *CreateCommentBodyParametersParent) Decode(d *jx.Decoder) error {
 		}
 		return nil
 	}); err != nil {
-		return errors.Wrap(err, "decode CreateCommentBodyParametersParent")
+		return errors.Wrap(err, "decode CreateCommentRequestParent")
 	}
 
 	return nil
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s *CreateCommentBodyParametersParent) MarshalJSON() ([]byte, error) {
+func (s *CreateCommentRequestParent) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *CreateCommentBodyParametersParent) UnmarshalJSON(data []byte) error {
+func (s *CreateCommentRequestParent) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
-// Encode encodes CreateCommentBodyParametersParentType as json.
-func (s CreateCommentBodyParametersParentType) Encode(e *jx.Encoder) {
+// Encode encodes CreateCommentRequestParentType as json.
+func (s CreateCommentRequestParentType) Encode(e *jx.Encoder) {
 	e.Str(string(s))
 }
 
-// Decode decodes CreateCommentBodyParametersParentType from json.
-func (s *CreateCommentBodyParametersParentType) Decode(d *jx.Decoder) error {
+// Decode decodes CreateCommentRequestParentType from json.
+func (s *CreateCommentRequestParentType) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode CreateCommentBodyParametersParentType to nil")
+		return errors.New("invalid: unable to decode CreateCommentRequestParentType to nil")
 	}
 	v, err := d.StrBytes()
 	if err != nil {
 		return err
 	}
 	// Try to use constant string.
-	switch CreateCommentBodyParametersParentType(v) {
-	case CreateCommentBodyParametersParentTypePageID:
-		*s = CreateCommentBodyParametersParentTypePageID
-	case CreateCommentBodyParametersParentTypeBlockID:
-		*s = CreateCommentBodyParametersParentTypeBlockID
+	switch CreateCommentRequestParentType(v) {
+	case CreateCommentRequestParentTypePageID:
+		*s = CreateCommentRequestParentTypePageID
+	case CreateCommentRequestParentTypeBlockID:
+		*s = CreateCommentRequestParentTypeBlockID
 	default:
-		*s = CreateCommentBodyParametersParentType(v)
+		*s = CreateCommentRequestParentType(v)
 	}
 
 	return nil
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s CreateCommentBodyParametersParentType) MarshalJSON() ([]byte, error) {
+func (s CreateCommentRequestParentType) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *CreateCommentBodyParametersParentType) UnmarshalJSON(data []byte) error {
+func (s *CreateCommentRequestParentType) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
@@ -13853,14 +13853,14 @@ func (s *CreateCommentResponseObject) UnmarshalJSON(data []byte) error {
 }
 
 // Encode implements json.Marshaler.
-func (s *CreateDatabaseBodyParameters) Encode(e *jx.Encoder) {
+func (s *CreateDatabaseRequest) Encode(e *jx.Encoder) {
 	e.ObjStart()
 	s.encodeFields(e)
 	e.ObjEnd()
 }
 
 // encodeFields encodes fields.
-func (s *CreateDatabaseBodyParameters) encodeFields(e *jx.Encoder) {
+func (s *CreateDatabaseRequest) encodeFields(e *jx.Encoder) {
 	{
 		e.FieldStart("parent")
 		s.Parent.Encode(e)
@@ -13911,7 +13911,7 @@ func (s *CreateDatabaseBodyParameters) encodeFields(e *jx.Encoder) {
 	}
 }
 
-var jsonFieldsNameOfCreateDatabaseBodyParameters = [7]string{
+var jsonFieldsNameOfCreateDatabaseRequest = [7]string{
 	0: "parent",
 	1: "title",
 	2: "description",
@@ -13921,10 +13921,10 @@ var jsonFieldsNameOfCreateDatabaseBodyParameters = [7]string{
 	6: "cover",
 }
 
-// Decode decodes CreateDatabaseBodyParameters from json.
-func (s *CreateDatabaseBodyParameters) Decode(d *jx.Decoder) error {
+// Decode decodes CreateDatabaseRequest from json.
+func (s *CreateDatabaseRequest) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode CreateDatabaseBodyParameters to nil")
+		return errors.New("invalid: unable to decode CreateDatabaseRequest to nil")
 	}
 	var requiredBitSet [1]uint8
 
@@ -14019,7 +14019,7 @@ func (s *CreateDatabaseBodyParameters) Decode(d *jx.Decoder) error {
 		}
 		return nil
 	}); err != nil {
-		return errors.Wrap(err, "decode CreateDatabaseBodyParameters")
+		return errors.Wrap(err, "decode CreateDatabaseRequest")
 	}
 	// Validate required fields.
 	var failures []validate.FieldError
@@ -14036,8 +14036,8 @@ func (s *CreateDatabaseBodyParameters) Decode(d *jx.Decoder) error {
 				bitIdx := bits.TrailingZeros8(result)
 				fieldIdx := i*8 + bitIdx
 				var name string
-				if fieldIdx < len(jsonFieldsNameOfCreateDatabaseBodyParameters) {
-					name = jsonFieldsNameOfCreateDatabaseBodyParameters[fieldIdx]
+				if fieldIdx < len(jsonFieldsNameOfCreateDatabaseRequest) {
+					name = jsonFieldsNameOfCreateDatabaseRequest[fieldIdx]
 				} else {
 					name = strconv.Itoa(fieldIdx)
 				}
@@ -14058,27 +14058,27 @@ func (s *CreateDatabaseBodyParameters) Decode(d *jx.Decoder) error {
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s *CreateDatabaseBodyParameters) MarshalJSON() ([]byte, error) {
+func (s *CreateDatabaseRequest) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *CreateDatabaseBodyParameters) UnmarshalJSON(data []byte) error {
+func (s *CreateDatabaseRequest) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
 // Encode implements json.Marshaler.
-func (s *CreateDatabaseBodyParametersParent) Encode(e *jx.Encoder) {
+func (s *CreateDatabaseRequestParent) Encode(e *jx.Encoder) {
 	e.ObjStart()
 	s.encodeFields(e)
 	e.ObjEnd()
 }
 
 // encodeFields encodes fields.
-func (s *CreateDatabaseBodyParametersParent) encodeFields(e *jx.Encoder) {
+func (s *CreateDatabaseRequestParent) encodeFields(e *jx.Encoder) {
 	{
 		e.FieldStart("type")
 		s.Type.Encode(e)
@@ -14097,16 +14097,16 @@ func (s *CreateDatabaseBodyParametersParent) encodeFields(e *jx.Encoder) {
 	}
 }
 
-var jsonFieldsNameOfCreateDatabaseBodyParametersParent = [3]string{
+var jsonFieldsNameOfCreateDatabaseRequestParent = [3]string{
 	0: "type",
 	1: "page_id",
 	2: "workspace",
 }
 
-// Decode decodes CreateDatabaseBodyParametersParent from json.
-func (s *CreateDatabaseBodyParametersParent) Decode(d *jx.Decoder) error {
+// Decode decodes CreateDatabaseRequestParent from json.
+func (s *CreateDatabaseRequestParent) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode CreateDatabaseBodyParametersParent to nil")
+		return errors.New("invalid: unable to decode CreateDatabaseRequestParent to nil")
 	}
 	var requiredBitSet [1]uint8
 
@@ -14147,7 +14147,7 @@ func (s *CreateDatabaseBodyParametersParent) Decode(d *jx.Decoder) error {
 		}
 		return nil
 	}); err != nil {
-		return errors.Wrap(err, "decode CreateDatabaseBodyParametersParent")
+		return errors.Wrap(err, "decode CreateDatabaseRequestParent")
 	}
 	// Validate required fields.
 	var failures []validate.FieldError
@@ -14164,8 +14164,8 @@ func (s *CreateDatabaseBodyParametersParent) Decode(d *jx.Decoder) error {
 				bitIdx := bits.TrailingZeros8(result)
 				fieldIdx := i*8 + bitIdx
 				var name string
-				if fieldIdx < len(jsonFieldsNameOfCreateDatabaseBodyParametersParent) {
-					name = jsonFieldsNameOfCreateDatabaseBodyParametersParent[fieldIdx]
+				if fieldIdx < len(jsonFieldsNameOfCreateDatabaseRequestParent) {
+					name = jsonFieldsNameOfCreateDatabaseRequestParent[fieldIdx]
 				} else {
 					name = strconv.Itoa(fieldIdx)
 				}
@@ -14186,86 +14186,86 @@ func (s *CreateDatabaseBodyParametersParent) Decode(d *jx.Decoder) error {
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s *CreateDatabaseBodyParametersParent) MarshalJSON() ([]byte, error) {
+func (s *CreateDatabaseRequestParent) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *CreateDatabaseBodyParametersParent) UnmarshalJSON(data []byte) error {
+func (s *CreateDatabaseRequestParent) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
-// Encode encodes CreateDatabaseBodyParametersParentType as json.
-func (s CreateDatabaseBodyParametersParentType) Encode(e *jx.Encoder) {
+// Encode encodes CreateDatabaseRequestParentType as json.
+func (s CreateDatabaseRequestParentType) Encode(e *jx.Encoder) {
 	e.Str(string(s))
 }
 
-// Decode decodes CreateDatabaseBodyParametersParentType from json.
-func (s *CreateDatabaseBodyParametersParentType) Decode(d *jx.Decoder) error {
+// Decode decodes CreateDatabaseRequestParentType from json.
+func (s *CreateDatabaseRequestParentType) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode CreateDatabaseBodyParametersParentType to nil")
+		return errors.New("invalid: unable to decode CreateDatabaseRequestParentType to nil")
 	}
 	v, err := d.StrBytes()
 	if err != nil {
 		return err
 	}
 	// Try to use constant string.
-	switch CreateDatabaseBodyParametersParentType(v) {
-	case CreateDatabaseBodyParametersParentTypePageID:
-		*s = CreateDatabaseBodyParametersParentTypePageID
-	case CreateDatabaseBodyParametersParentTypeWorkspace:
-		*s = CreateDatabaseBodyParametersParentTypeWorkspace
+	switch CreateDatabaseRequestParentType(v) {
+	case CreateDatabaseRequestParentTypePageID:
+		*s = CreateDatabaseRequestParentTypePageID
+	case CreateDatabaseRequestParentTypeWorkspace:
+		*s = CreateDatabaseRequestParentTypeWorkspace
 	default:
-		*s = CreateDatabaseBodyParametersParentType(v)
+		*s = CreateDatabaseRequestParentType(v)
 	}
 
 	return nil
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s CreateDatabaseBodyParametersParentType) MarshalJSON() ([]byte, error) {
+func (s CreateDatabaseRequestParentType) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *CreateDatabaseBodyParametersParentType) UnmarshalJSON(data []byte) error {
+func (s *CreateDatabaseRequestParentType) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
-// Encode encodes CreateDatabaseBodyParametersParentWorkspace as json.
-func (s CreateDatabaseBodyParametersParentWorkspace) Encode(e *jx.Encoder) {
+// Encode encodes CreateDatabaseRequestParentWorkspace as json.
+func (s CreateDatabaseRequestParentWorkspace) Encode(e *jx.Encoder) {
 	e.Bool(bool(s))
 }
 
-// Decode decodes CreateDatabaseBodyParametersParentWorkspace from json.
-func (s *CreateDatabaseBodyParametersParentWorkspace) Decode(d *jx.Decoder) error {
+// Decode decodes CreateDatabaseRequestParentWorkspace from json.
+func (s *CreateDatabaseRequestParentWorkspace) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode CreateDatabaseBodyParametersParentWorkspace to nil")
+		return errors.New("invalid: unable to decode CreateDatabaseRequestParentWorkspace to nil")
 	}
 	v, err := d.Bool()
 	if err != nil {
 		return err
 	}
-	*s = CreateDatabaseBodyParametersParentWorkspace(v)
+	*s = CreateDatabaseRequestParentWorkspace(v)
 
 	return nil
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s CreateDatabaseBodyParametersParentWorkspace) MarshalJSON() ([]byte, error) {
+func (s CreateDatabaseRequestParentWorkspace) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *CreateDatabaseBodyParametersParentWorkspace) UnmarshalJSON(data []byte) error {
+func (s *CreateDatabaseRequestParentWorkspace) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
@@ -14675,14 +14675,14 @@ func (s *CreateDatabaseResponseObject) UnmarshalJSON(data []byte) error {
 }
 
 // Encode implements json.Marshaler.
-func (s *CreatePageBodyParameters) Encode(e *jx.Encoder) {
+func (s *CreatePageRequest) Encode(e *jx.Encoder) {
 	e.ObjStart()
 	s.encodeFields(e)
 	e.ObjEnd()
 }
 
 // encodeFields encodes fields.
-func (s *CreatePageBodyParameters) encodeFields(e *jx.Encoder) {
+func (s *CreatePageRequest) encodeFields(e *jx.Encoder) {
 	{
 		if s.Parent.Set {
 			e.FieldStart("parent")
@@ -14747,7 +14747,7 @@ func (s *CreatePageBodyParameters) encodeFields(e *jx.Encoder) {
 	}
 }
 
-var jsonFieldsNameOfCreatePageBodyParameters = [9]string{
+var jsonFieldsNameOfCreatePageRequest = [9]string{
 	0: "parent",
 	1: "properties",
 	2: "icon",
@@ -14759,10 +14759,10 @@ var jsonFieldsNameOfCreatePageBodyParameters = [9]string{
 	8: "position",
 }
 
-// Decode decodes CreatePageBodyParameters from json.
-func (s *CreatePageBodyParameters) Decode(d *jx.Decoder) error {
+// Decode decodes CreatePageRequest from json.
+func (s *CreatePageRequest) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode CreatePageBodyParameters to nil")
+		return errors.New("invalid: unable to decode CreatePageRequest to nil")
 	}
 
 	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
@@ -14876,34 +14876,34 @@ func (s *CreatePageBodyParameters) Decode(d *jx.Decoder) error {
 		}
 		return nil
 	}); err != nil {
-		return errors.Wrap(err, "decode CreatePageBodyParameters")
+		return errors.Wrap(err, "decode CreatePageRequest")
 	}
 
 	return nil
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s *CreatePageBodyParameters) MarshalJSON() ([]byte, error) {
+func (s *CreatePageRequest) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *CreatePageBodyParameters) UnmarshalJSON(data []byte) error {
+func (s *CreatePageRequest) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
 // Encode implements json.Marshaler.
-func (s *CreatePageBodyParametersParent) Encode(e *jx.Encoder) {
+func (s *CreatePageRequestParent) Encode(e *jx.Encoder) {
 	e.ObjStart()
 	s.encodeFields(e)
 	e.ObjEnd()
 }
 
 // encodeFields encodes fields.
-func (s *CreatePageBodyParametersParent) encodeFields(e *jx.Encoder) {
+func (s *CreatePageRequestParent) encodeFields(e *jx.Encoder) {
 	{
 		if s.PageID.Set {
 			e.FieldStart("page_id")
@@ -14936,7 +14936,7 @@ func (s *CreatePageBodyParametersParent) encodeFields(e *jx.Encoder) {
 	}
 }
 
-var jsonFieldsNameOfCreatePageBodyParametersParent = [5]string{
+var jsonFieldsNameOfCreatePageRequestParent = [5]string{
 	0: "page_id",
 	1: "type",
 	2: "database_id",
@@ -14944,10 +14944,10 @@ var jsonFieldsNameOfCreatePageBodyParametersParent = [5]string{
 	4: "workspace",
 }
 
-// Decode decodes CreatePageBodyParametersParent from json.
-func (s *CreatePageBodyParametersParent) Decode(d *jx.Decoder) error {
+// Decode decodes CreatePageRequestParent from json.
+func (s *CreatePageRequestParent) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode CreatePageBodyParametersParent to nil")
+		return errors.New("invalid: unable to decode CreatePageRequestParent to nil")
 	}
 
 	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
@@ -15007,110 +15007,110 @@ func (s *CreatePageBodyParametersParent) Decode(d *jx.Decoder) error {
 		}
 		return nil
 	}); err != nil {
-		return errors.Wrap(err, "decode CreatePageBodyParametersParent")
+		return errors.Wrap(err, "decode CreatePageRequestParent")
 	}
 
 	return nil
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s *CreatePageBodyParametersParent) MarshalJSON() ([]byte, error) {
+func (s *CreatePageRequestParent) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *CreatePageBodyParametersParent) UnmarshalJSON(data []byte) error {
+func (s *CreatePageRequestParent) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
-// Encode encodes CreatePageBodyParametersParentType as json.
-func (s CreatePageBodyParametersParentType) Encode(e *jx.Encoder) {
+// Encode encodes CreatePageRequestParentType as json.
+func (s CreatePageRequestParentType) Encode(e *jx.Encoder) {
 	e.Str(string(s))
 }
 
-// Decode decodes CreatePageBodyParametersParentType from json.
-func (s *CreatePageBodyParametersParentType) Decode(d *jx.Decoder) error {
+// Decode decodes CreatePageRequestParentType from json.
+func (s *CreatePageRequestParentType) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode CreatePageBodyParametersParentType to nil")
+		return errors.New("invalid: unable to decode CreatePageRequestParentType to nil")
 	}
 	v, err := d.StrBytes()
 	if err != nil {
 		return err
 	}
 	// Try to use constant string.
-	switch CreatePageBodyParametersParentType(v) {
-	case CreatePageBodyParametersParentTypePageID:
-		*s = CreatePageBodyParametersParentTypePageID
-	case CreatePageBodyParametersParentTypeDatabaseID:
-		*s = CreatePageBodyParametersParentTypeDatabaseID
-	case CreatePageBodyParametersParentTypeDataSourceID:
-		*s = CreatePageBodyParametersParentTypeDataSourceID
-	case CreatePageBodyParametersParentTypeWorkspace:
-		*s = CreatePageBodyParametersParentTypeWorkspace
+	switch CreatePageRequestParentType(v) {
+	case CreatePageRequestParentTypePageID:
+		*s = CreatePageRequestParentTypePageID
+	case CreatePageRequestParentTypeDatabaseID:
+		*s = CreatePageRequestParentTypeDatabaseID
+	case CreatePageRequestParentTypeDataSourceID:
+		*s = CreatePageRequestParentTypeDataSourceID
+	case CreatePageRequestParentTypeWorkspace:
+		*s = CreatePageRequestParentTypeWorkspace
 	default:
-		*s = CreatePageBodyParametersParentType(v)
+		*s = CreatePageRequestParentType(v)
 	}
 
 	return nil
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s CreatePageBodyParametersParentType) MarshalJSON() ([]byte, error) {
+func (s CreatePageRequestParentType) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *CreatePageBodyParametersParentType) UnmarshalJSON(data []byte) error {
+func (s *CreatePageRequestParentType) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
-// Encode encodes CreatePageBodyParametersParentWorkspace as json.
-func (s CreatePageBodyParametersParentWorkspace) Encode(e *jx.Encoder) {
+// Encode encodes CreatePageRequestParentWorkspace as json.
+func (s CreatePageRequestParentWorkspace) Encode(e *jx.Encoder) {
 	e.Bool(bool(s))
 }
 
-// Decode decodes CreatePageBodyParametersParentWorkspace from json.
-func (s *CreatePageBodyParametersParentWorkspace) Decode(d *jx.Decoder) error {
+// Decode decodes CreatePageRequestParentWorkspace from json.
+func (s *CreatePageRequestParentWorkspace) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode CreatePageBodyParametersParentWorkspace to nil")
+		return errors.New("invalid: unable to decode CreatePageRequestParentWorkspace to nil")
 	}
 	v, err := d.Bool()
 	if err != nil {
 		return err
 	}
-	*s = CreatePageBodyParametersParentWorkspace(v)
+	*s = CreatePageRequestParentWorkspace(v)
 
 	return nil
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s CreatePageBodyParametersParentWorkspace) MarshalJSON() ([]byte, error) {
+func (s CreatePageRequestParentWorkspace) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *CreatePageBodyParametersParentWorkspace) UnmarshalJSON(data []byte) error {
+func (s *CreatePageRequestParentWorkspace) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
 // Encode implements json.Marshaler.
-func (s CreatePageBodyParametersProperties) Encode(e *jx.Encoder) {
+func (s CreatePageRequestProperties) Encode(e *jx.Encoder) {
 	e.ObjStart()
 	s.encodeFields(e)
 	e.ObjEnd()
 }
 
 // encodeFields implements json.Marshaler.
-func (s CreatePageBodyParametersProperties) encodeFields(e *jx.Encoder) {
+func (s CreatePageRequestProperties) encodeFields(e *jx.Encoder) {
 	for k, elem := range s {
 		e.FieldStart(k)
 
@@ -15118,14 +15118,14 @@ func (s CreatePageBodyParametersProperties) encodeFields(e *jx.Encoder) {
 	}
 }
 
-// Decode decodes CreatePageBodyParametersProperties from json.
-func (s *CreatePageBodyParametersProperties) Decode(d *jx.Decoder) error {
+// Decode decodes CreatePageRequestProperties from json.
+func (s *CreatePageRequestProperties) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode CreatePageBodyParametersProperties to nil")
+		return errors.New("invalid: unable to decode CreatePageRequestProperties to nil")
 	}
 	m := s.init()
 	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
-		var elem CreatePageBodyParametersPropertiesItem
+		var elem CreatePageRequestPropertiesItem
 		if err := func() error {
 			if err := elem.Decode(d); err != nil {
 				return err
@@ -15137,34 +15137,34 @@ func (s *CreatePageBodyParametersProperties) Decode(d *jx.Decoder) error {
 		m[string(k)] = elem
 		return nil
 	}); err != nil {
-		return errors.Wrap(err, "decode CreatePageBodyParametersProperties")
+		return errors.Wrap(err, "decode CreatePageRequestProperties")
 	}
 
 	return nil
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s CreatePageBodyParametersProperties) MarshalJSON() ([]byte, error) {
+func (s CreatePageRequestProperties) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *CreatePageBodyParametersProperties) UnmarshalJSON(data []byte) error {
+func (s *CreatePageRequestProperties) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
 // Encode implements json.Marshaler.
-func (s *CreatePageBodyParametersPropertiesItem) Encode(e *jx.Encoder) {
+func (s *CreatePageRequestPropertiesItem) Encode(e *jx.Encoder) {
 	e.ObjStart()
 	s.encodeFields(e)
 	e.ObjEnd()
 }
 
 // encodeFields encodes fields.
-func (s *CreatePageBodyParametersPropertiesItem) encodeFields(e *jx.Encoder) {
+func (s *CreatePageRequestPropertiesItem) encodeFields(e *jx.Encoder) {
 	{
 		if s.Title != nil {
 			e.FieldStart("title")
@@ -15287,7 +15287,7 @@ func (s *CreatePageBodyParametersPropertiesItem) encodeFields(e *jx.Encoder) {
 	}
 }
 
-var jsonFieldsNameOfCreatePageBodyParametersPropertiesItem = [16]string{
+var jsonFieldsNameOfCreatePageRequestPropertiesItem = [16]string{
 	0:  "title",
 	1:  "type",
 	2:  "rich_text",
@@ -15306,10 +15306,10 @@ var jsonFieldsNameOfCreatePageBodyParametersPropertiesItem = [16]string{
 	15: "place",
 }
 
-// Decode decodes CreatePageBodyParametersPropertiesItem from json.
-func (s *CreatePageBodyParametersPropertiesItem) Decode(d *jx.Decoder) error {
+// Decode decodes CreatePageRequestPropertiesItem from json.
+func (s *CreatePageRequestPropertiesItem) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode CreatePageBodyParametersPropertiesItem to nil")
+		return errors.New("invalid: unable to decode CreatePageRequestPropertiesItem to nil")
 	}
 
 	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
@@ -15390,9 +15390,9 @@ func (s *CreatePageBodyParametersPropertiesItem) Decode(d *jx.Decoder) error {
 			}
 		case "multi_select":
 			if err := func() error {
-				s.MultiSelect = make([]CreatePageBodyParametersPropertiesItemMultiSelectItem, 0)
+				s.MultiSelect = make([]CreatePageRequestPropertiesItemMultiSelectItem, 0)
 				if err := d.Arr(func(d *jx.Decoder) error {
-					var elem CreatePageBodyParametersPropertiesItemMultiSelectItem
+					var elem CreatePageRequestPropertiesItemMultiSelectItem
 					if err := elem.Decode(d); err != nil {
 						return err
 					}
@@ -15407,9 +15407,9 @@ func (s *CreatePageBodyParametersPropertiesItem) Decode(d *jx.Decoder) error {
 			}
 		case "people":
 			if err := func() error {
-				s.People = make([]CreatePageBodyParametersPropertiesItemPeopleItem, 0)
+				s.People = make([]CreatePageRequestPropertiesItemPeopleItem, 0)
 				if err := d.Arr(func(d *jx.Decoder) error {
-					var elem CreatePageBodyParametersPropertiesItemPeopleItem
+					var elem CreatePageRequestPropertiesItemPeopleItem
 					if err := elem.Decode(d); err != nil {
 						return err
 					}
@@ -15481,9 +15481,9 @@ func (s *CreatePageBodyParametersPropertiesItem) Decode(d *jx.Decoder) error {
 			}
 		case "files":
 			if err := func() error {
-				s.Files = make([]CreatePageBodyParametersPropertiesItemFilesItem, 0)
+				s.Files = make([]CreatePageRequestPropertiesItemFilesItem, 0)
 				if err := d.Arr(func(d *jx.Decoder) error {
-					var elem CreatePageBodyParametersPropertiesItemFilesItem
+					var elem CreatePageRequestPropertiesItemFilesItem
 					if err := elem.Decode(d); err != nil {
 						return err
 					}
@@ -15521,34 +15521,34 @@ func (s *CreatePageBodyParametersPropertiesItem) Decode(d *jx.Decoder) error {
 		}
 		return nil
 	}); err != nil {
-		return errors.Wrap(err, "decode CreatePageBodyParametersPropertiesItem")
+		return errors.Wrap(err, "decode CreatePageRequestPropertiesItem")
 	}
 
 	return nil
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s *CreatePageBodyParametersPropertiesItem) MarshalJSON() ([]byte, error) {
+func (s *CreatePageRequestPropertiesItem) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *CreatePageBodyParametersPropertiesItem) UnmarshalJSON(data []byte) error {
+func (s *CreatePageRequestPropertiesItem) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
 // Encode implements json.Marshaler.
-func (s *CreatePageBodyParametersPropertiesItemFilesItem) Encode(e *jx.Encoder) {
+func (s *CreatePageRequestPropertiesItemFilesItem) Encode(e *jx.Encoder) {
 	e.ObjStart()
 	s.encodeFields(e)
 	e.ObjEnd()
 }
 
 // encodeFields encodes fields.
-func (s *CreatePageBodyParametersPropertiesItemFilesItem) encodeFields(e *jx.Encoder) {
+func (s *CreatePageRequestPropertiesItemFilesItem) encodeFields(e *jx.Encoder) {
 	{
 		if s.File.Set {
 			e.FieldStart("file")
@@ -15581,7 +15581,7 @@ func (s *CreatePageBodyParametersPropertiesItemFilesItem) encodeFields(e *jx.Enc
 	}
 }
 
-var jsonFieldsNameOfCreatePageBodyParametersPropertiesItemFilesItem = [5]string{
+var jsonFieldsNameOfCreatePageRequestPropertiesItemFilesItem = [5]string{
 	0: "file",
 	1: "name",
 	2: "type",
@@ -15589,10 +15589,10 @@ var jsonFieldsNameOfCreatePageBodyParametersPropertiesItemFilesItem = [5]string{
 	4: "file_upload",
 }
 
-// Decode decodes CreatePageBodyParametersPropertiesItemFilesItem from json.
-func (s *CreatePageBodyParametersPropertiesItemFilesItem) Decode(d *jx.Decoder) error {
+// Decode decodes CreatePageRequestPropertiesItemFilesItem from json.
+func (s *CreatePageRequestPropertiesItemFilesItem) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode CreatePageBodyParametersPropertiesItemFilesItem to nil")
+		return errors.New("invalid: unable to decode CreatePageRequestPropertiesItemFilesItem to nil")
 	}
 
 	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
@@ -15652,76 +15652,76 @@ func (s *CreatePageBodyParametersPropertiesItemFilesItem) Decode(d *jx.Decoder) 
 		}
 		return nil
 	}); err != nil {
-		return errors.Wrap(err, "decode CreatePageBodyParametersPropertiesItemFilesItem")
+		return errors.Wrap(err, "decode CreatePageRequestPropertiesItemFilesItem")
 	}
 
 	return nil
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s *CreatePageBodyParametersPropertiesItemFilesItem) MarshalJSON() ([]byte, error) {
+func (s *CreatePageRequestPropertiesItemFilesItem) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *CreatePageBodyParametersPropertiesItemFilesItem) UnmarshalJSON(data []byte) error {
+func (s *CreatePageRequestPropertiesItemFilesItem) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
-// Encode encodes CreatePageBodyParametersPropertiesItemFilesItemType as json.
-func (s CreatePageBodyParametersPropertiesItemFilesItemType) Encode(e *jx.Encoder) {
+// Encode encodes CreatePageRequestPropertiesItemFilesItemType as json.
+func (s CreatePageRequestPropertiesItemFilesItemType) Encode(e *jx.Encoder) {
 	e.Str(string(s))
 }
 
-// Decode decodes CreatePageBodyParametersPropertiesItemFilesItemType from json.
-func (s *CreatePageBodyParametersPropertiesItemFilesItemType) Decode(d *jx.Decoder) error {
+// Decode decodes CreatePageRequestPropertiesItemFilesItemType from json.
+func (s *CreatePageRequestPropertiesItemFilesItemType) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode CreatePageBodyParametersPropertiesItemFilesItemType to nil")
+		return errors.New("invalid: unable to decode CreatePageRequestPropertiesItemFilesItemType to nil")
 	}
 	v, err := d.StrBytes()
 	if err != nil {
 		return err
 	}
 	// Try to use constant string.
-	switch CreatePageBodyParametersPropertiesItemFilesItemType(v) {
-	case CreatePageBodyParametersPropertiesItemFilesItemTypeFile:
-		*s = CreatePageBodyParametersPropertiesItemFilesItemTypeFile
-	case CreatePageBodyParametersPropertiesItemFilesItemTypeExternal:
-		*s = CreatePageBodyParametersPropertiesItemFilesItemTypeExternal
-	case CreatePageBodyParametersPropertiesItemFilesItemTypeFileUpload:
-		*s = CreatePageBodyParametersPropertiesItemFilesItemTypeFileUpload
+	switch CreatePageRequestPropertiesItemFilesItemType(v) {
+	case CreatePageRequestPropertiesItemFilesItemTypeFile:
+		*s = CreatePageRequestPropertiesItemFilesItemTypeFile
+	case CreatePageRequestPropertiesItemFilesItemTypeExternal:
+		*s = CreatePageRequestPropertiesItemFilesItemTypeExternal
+	case CreatePageRequestPropertiesItemFilesItemTypeFileUpload:
+		*s = CreatePageRequestPropertiesItemFilesItemTypeFileUpload
 	default:
-		*s = CreatePageBodyParametersPropertiesItemFilesItemType(v)
+		*s = CreatePageRequestPropertiesItemFilesItemType(v)
 	}
 
 	return nil
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s CreatePageBodyParametersPropertiesItemFilesItemType) MarshalJSON() ([]byte, error) {
+func (s CreatePageRequestPropertiesItemFilesItemType) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *CreatePageBodyParametersPropertiesItemFilesItemType) UnmarshalJSON(data []byte) error {
+func (s *CreatePageRequestPropertiesItemFilesItemType) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
 // Encode implements json.Marshaler.
-func (s *CreatePageBodyParametersPropertiesItemMultiSelectItem) Encode(e *jx.Encoder) {
+func (s *CreatePageRequestPropertiesItemMultiSelectItem) Encode(e *jx.Encoder) {
 	e.ObjStart()
 	s.encodeFields(e)
 	e.ObjEnd()
 }
 
 // encodeFields encodes fields.
-func (s *CreatePageBodyParametersPropertiesItemMultiSelectItem) encodeFields(e *jx.Encoder) {
+func (s *CreatePageRequestPropertiesItemMultiSelectItem) encodeFields(e *jx.Encoder) {
 	{
 		if s.ID.Set {
 			e.FieldStart("id")
@@ -15748,17 +15748,17 @@ func (s *CreatePageBodyParametersPropertiesItemMultiSelectItem) encodeFields(e *
 	}
 }
 
-var jsonFieldsNameOfCreatePageBodyParametersPropertiesItemMultiSelectItem = [4]string{
+var jsonFieldsNameOfCreatePageRequestPropertiesItemMultiSelectItem = [4]string{
 	0: "id",
 	1: "name",
 	2: "color",
 	3: "description",
 }
 
-// Decode decodes CreatePageBodyParametersPropertiesItemMultiSelectItem from json.
-func (s *CreatePageBodyParametersPropertiesItemMultiSelectItem) Decode(d *jx.Decoder) error {
+// Decode decodes CreatePageRequestPropertiesItemMultiSelectItem from json.
+func (s *CreatePageRequestPropertiesItemMultiSelectItem) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode CreatePageBodyParametersPropertiesItemMultiSelectItem to nil")
+		return errors.New("invalid: unable to decode CreatePageRequestPropertiesItemMultiSelectItem to nil")
 	}
 
 	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
@@ -15808,34 +15808,34 @@ func (s *CreatePageBodyParametersPropertiesItemMultiSelectItem) Decode(d *jx.Dec
 		}
 		return nil
 	}); err != nil {
-		return errors.Wrap(err, "decode CreatePageBodyParametersPropertiesItemMultiSelectItem")
+		return errors.Wrap(err, "decode CreatePageRequestPropertiesItemMultiSelectItem")
 	}
 
 	return nil
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s *CreatePageBodyParametersPropertiesItemMultiSelectItem) MarshalJSON() ([]byte, error) {
+func (s *CreatePageRequestPropertiesItemMultiSelectItem) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *CreatePageBodyParametersPropertiesItemMultiSelectItem) UnmarshalJSON(data []byte) error {
+func (s *CreatePageRequestPropertiesItemMultiSelectItem) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
 // Encode implements json.Marshaler.
-func (s *CreatePageBodyParametersPropertiesItemPeopleItem) Encode(e *jx.Encoder) {
+func (s *CreatePageRequestPropertiesItemPeopleItem) Encode(e *jx.Encoder) {
 	e.ObjStart()
 	s.encodeFields(e)
 	e.ObjEnd()
 }
 
 // encodeFields encodes fields.
-func (s *CreatePageBodyParametersPropertiesItemPeopleItem) encodeFields(e *jx.Encoder) {
+func (s *CreatePageRequestPropertiesItemPeopleItem) encodeFields(e *jx.Encoder) {
 	{
 		e.FieldStart("id")
 		e.Str(s.ID)
@@ -15854,16 +15854,16 @@ func (s *CreatePageBodyParametersPropertiesItemPeopleItem) encodeFields(e *jx.En
 	}
 }
 
-var jsonFieldsNameOfCreatePageBodyParametersPropertiesItemPeopleItem = [3]string{
+var jsonFieldsNameOfCreatePageRequestPropertiesItemPeopleItem = [3]string{
 	0: "id",
 	1: "object",
 	2: "name",
 }
 
-// Decode decodes CreatePageBodyParametersPropertiesItemPeopleItem from json.
-func (s *CreatePageBodyParametersPropertiesItemPeopleItem) Decode(d *jx.Decoder) error {
+// Decode decodes CreatePageRequestPropertiesItemPeopleItem from json.
+func (s *CreatePageRequestPropertiesItemPeopleItem) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode CreatePageBodyParametersPropertiesItemPeopleItem to nil")
+		return errors.New("invalid: unable to decode CreatePageRequestPropertiesItemPeopleItem to nil")
 	}
 	var requiredBitSet [1]uint8
 
@@ -15906,7 +15906,7 @@ func (s *CreatePageBodyParametersPropertiesItemPeopleItem) Decode(d *jx.Decoder)
 		}
 		return nil
 	}); err != nil {
-		return errors.Wrap(err, "decode CreatePageBodyParametersPropertiesItemPeopleItem")
+		return errors.Wrap(err, "decode CreatePageRequestPropertiesItemPeopleItem")
 	}
 	// Validate required fields.
 	var failures []validate.FieldError
@@ -15923,8 +15923,8 @@ func (s *CreatePageBodyParametersPropertiesItemPeopleItem) Decode(d *jx.Decoder)
 				bitIdx := bits.TrailingZeros8(result)
 				fieldIdx := i*8 + bitIdx
 				var name string
-				if fieldIdx < len(jsonFieldsNameOfCreatePageBodyParametersPropertiesItemPeopleItem) {
-					name = jsonFieldsNameOfCreatePageBodyParametersPropertiesItemPeopleItem[fieldIdx]
+				if fieldIdx < len(jsonFieldsNameOfCreatePageRequestPropertiesItemPeopleItem) {
+					name = jsonFieldsNameOfCreatePageRequestPropertiesItemPeopleItem[fieldIdx]
 				} else {
 					name = strconv.Itoa(fieldIdx)
 				}
@@ -15945,67 +15945,67 @@ func (s *CreatePageBodyParametersPropertiesItemPeopleItem) Decode(d *jx.Decoder)
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s *CreatePageBodyParametersPropertiesItemPeopleItem) MarshalJSON() ([]byte, error) {
+func (s *CreatePageRequestPropertiesItemPeopleItem) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *CreatePageBodyParametersPropertiesItemPeopleItem) UnmarshalJSON(data []byte) error {
+func (s *CreatePageRequestPropertiesItemPeopleItem) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
-// Encode encodes CreatePageBodyParametersPropertiesItemPeopleItemObject as json.
-func (s CreatePageBodyParametersPropertiesItemPeopleItemObject) Encode(e *jx.Encoder) {
+// Encode encodes CreatePageRequestPropertiesItemPeopleItemObject as json.
+func (s CreatePageRequestPropertiesItemPeopleItemObject) Encode(e *jx.Encoder) {
 	e.Str(string(s))
 }
 
-// Decode decodes CreatePageBodyParametersPropertiesItemPeopleItemObject from json.
-func (s *CreatePageBodyParametersPropertiesItemPeopleItemObject) Decode(d *jx.Decoder) error {
+// Decode decodes CreatePageRequestPropertiesItemPeopleItemObject from json.
+func (s *CreatePageRequestPropertiesItemPeopleItemObject) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode CreatePageBodyParametersPropertiesItemPeopleItemObject to nil")
+		return errors.New("invalid: unable to decode CreatePageRequestPropertiesItemPeopleItemObject to nil")
 	}
 	v, err := d.StrBytes()
 	if err != nil {
 		return err
 	}
 	// Try to use constant string.
-	switch CreatePageBodyParametersPropertiesItemPeopleItemObject(v) {
-	case CreatePageBodyParametersPropertiesItemPeopleItemObjectUser:
-		*s = CreatePageBodyParametersPropertiesItemPeopleItemObjectUser
-	case CreatePageBodyParametersPropertiesItemPeopleItemObjectGroup:
-		*s = CreatePageBodyParametersPropertiesItemPeopleItemObjectGroup
+	switch CreatePageRequestPropertiesItemPeopleItemObject(v) {
+	case CreatePageRequestPropertiesItemPeopleItemObjectUser:
+		*s = CreatePageRequestPropertiesItemPeopleItemObjectUser
+	case CreatePageRequestPropertiesItemPeopleItemObjectGroup:
+		*s = CreatePageRequestPropertiesItemPeopleItemObjectGroup
 	default:
-		*s = CreatePageBodyParametersPropertiesItemPeopleItemObject(v)
+		*s = CreatePageRequestPropertiesItemPeopleItemObject(v)
 	}
 
 	return nil
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s CreatePageBodyParametersPropertiesItemPeopleItemObject) MarshalJSON() ([]byte, error) {
+func (s CreatePageRequestPropertiesItemPeopleItemObject) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *CreatePageBodyParametersPropertiesItemPeopleItemObject) UnmarshalJSON(data []byte) error {
+func (s *CreatePageRequestPropertiesItemPeopleItemObject) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
 // Encode implements json.Marshaler.
-func (s *CreatePageBodyParametersPropertiesItemPlace) Encode(e *jx.Encoder) {
+func (s *CreatePageRequestPropertiesItemPlace) Encode(e *jx.Encoder) {
 	e.ObjStart()
 	s.encodeFields(e)
 	e.ObjEnd()
 }
 
 // encodeFields encodes fields.
-func (s *CreatePageBodyParametersPropertiesItemPlace) encodeFields(e *jx.Encoder) {
+func (s *CreatePageRequestPropertiesItemPlace) encodeFields(e *jx.Encoder) {
 	{
 		e.FieldStart("lat")
 		e.Float64(s.Lat)
@@ -16040,7 +16040,7 @@ func (s *CreatePageBodyParametersPropertiesItemPlace) encodeFields(e *jx.Encoder
 	}
 }
 
-var jsonFieldsNameOfCreatePageBodyParametersPropertiesItemPlace = [6]string{
+var jsonFieldsNameOfCreatePageRequestPropertiesItemPlace = [6]string{
 	0: "lat",
 	1: "lon",
 	2: "name",
@@ -16049,10 +16049,10 @@ var jsonFieldsNameOfCreatePageBodyParametersPropertiesItemPlace = [6]string{
 	5: "google_place_id",
 }
 
-// Decode decodes CreatePageBodyParametersPropertiesItemPlace from json.
-func (s *CreatePageBodyParametersPropertiesItemPlace) Decode(d *jx.Decoder) error {
+// Decode decodes CreatePageRequestPropertiesItemPlace from json.
+func (s *CreatePageRequestPropertiesItemPlace) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode CreatePageBodyParametersPropertiesItemPlace to nil")
+		return errors.New("invalid: unable to decode CreatePageRequestPropertiesItemPlace to nil")
 	}
 	var requiredBitSet [1]uint8
 
@@ -16127,7 +16127,7 @@ func (s *CreatePageBodyParametersPropertiesItemPlace) Decode(d *jx.Decoder) erro
 		}
 		return nil
 	}); err != nil {
-		return errors.Wrap(err, "decode CreatePageBodyParametersPropertiesItemPlace")
+		return errors.Wrap(err, "decode CreatePageRequestPropertiesItemPlace")
 	}
 	// Validate required fields.
 	var failures []validate.FieldError
@@ -16144,8 +16144,8 @@ func (s *CreatePageBodyParametersPropertiesItemPlace) Decode(d *jx.Decoder) erro
 				bitIdx := bits.TrailingZeros8(result)
 				fieldIdx := i*8 + bitIdx
 				var name string
-				if fieldIdx < len(jsonFieldsNameOfCreatePageBodyParametersPropertiesItemPlace) {
-					name = jsonFieldsNameOfCreatePageBodyParametersPropertiesItemPlace[fieldIdx]
+				if fieldIdx < len(jsonFieldsNameOfCreatePageRequestPropertiesItemPlace) {
+					name = jsonFieldsNameOfCreatePageRequestPropertiesItemPlace[fieldIdx]
 				} else {
 					name = strconv.Itoa(fieldIdx)
 				}
@@ -16166,27 +16166,27 @@ func (s *CreatePageBodyParametersPropertiesItemPlace) Decode(d *jx.Decoder) erro
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s *CreatePageBodyParametersPropertiesItemPlace) MarshalJSON() ([]byte, error) {
+func (s *CreatePageRequestPropertiesItemPlace) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *CreatePageBodyParametersPropertiesItemPlace) UnmarshalJSON(data []byte) error {
+func (s *CreatePageRequestPropertiesItemPlace) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
 // Encode implements json.Marshaler.
-func (s *CreatePageBodyParametersPropertiesItemSelect) Encode(e *jx.Encoder) {
+func (s *CreatePageRequestPropertiesItemSelect) Encode(e *jx.Encoder) {
 	e.ObjStart()
 	s.encodeFields(e)
 	e.ObjEnd()
 }
 
 // encodeFields encodes fields.
-func (s *CreatePageBodyParametersPropertiesItemSelect) encodeFields(e *jx.Encoder) {
+func (s *CreatePageRequestPropertiesItemSelect) encodeFields(e *jx.Encoder) {
 	{
 		if s.ID.Set {
 			e.FieldStart("id")
@@ -16213,17 +16213,17 @@ func (s *CreatePageBodyParametersPropertiesItemSelect) encodeFields(e *jx.Encode
 	}
 }
 
-var jsonFieldsNameOfCreatePageBodyParametersPropertiesItemSelect = [4]string{
+var jsonFieldsNameOfCreatePageRequestPropertiesItemSelect = [4]string{
 	0: "id",
 	1: "name",
 	2: "color",
 	3: "description",
 }
 
-// Decode decodes CreatePageBodyParametersPropertiesItemSelect from json.
-func (s *CreatePageBodyParametersPropertiesItemSelect) Decode(d *jx.Decoder) error {
+// Decode decodes CreatePageRequestPropertiesItemSelect from json.
+func (s *CreatePageRequestPropertiesItemSelect) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode CreatePageBodyParametersPropertiesItemSelect to nil")
+		return errors.New("invalid: unable to decode CreatePageRequestPropertiesItemSelect to nil")
 	}
 
 	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
@@ -16273,34 +16273,34 @@ func (s *CreatePageBodyParametersPropertiesItemSelect) Decode(d *jx.Decoder) err
 		}
 		return nil
 	}); err != nil {
-		return errors.Wrap(err, "decode CreatePageBodyParametersPropertiesItemSelect")
+		return errors.Wrap(err, "decode CreatePageRequestPropertiesItemSelect")
 	}
 
 	return nil
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s *CreatePageBodyParametersPropertiesItemSelect) MarshalJSON() ([]byte, error) {
+func (s *CreatePageRequestPropertiesItemSelect) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *CreatePageBodyParametersPropertiesItemSelect) UnmarshalJSON(data []byte) error {
+func (s *CreatePageRequestPropertiesItemSelect) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
 // Encode implements json.Marshaler.
-func (s *CreatePageBodyParametersPropertiesItemStatus) Encode(e *jx.Encoder) {
+func (s *CreatePageRequestPropertiesItemStatus) Encode(e *jx.Encoder) {
 	e.ObjStart()
 	s.encodeFields(e)
 	e.ObjEnd()
 }
 
 // encodeFields encodes fields.
-func (s *CreatePageBodyParametersPropertiesItemStatus) encodeFields(e *jx.Encoder) {
+func (s *CreatePageRequestPropertiesItemStatus) encodeFields(e *jx.Encoder) {
 	{
 		if s.ID.Set {
 			e.FieldStart("id")
@@ -16327,17 +16327,17 @@ func (s *CreatePageBodyParametersPropertiesItemStatus) encodeFields(e *jx.Encode
 	}
 }
 
-var jsonFieldsNameOfCreatePageBodyParametersPropertiesItemStatus = [4]string{
+var jsonFieldsNameOfCreatePageRequestPropertiesItemStatus = [4]string{
 	0: "id",
 	1: "name",
 	2: "color",
 	3: "description",
 }
 
-// Decode decodes CreatePageBodyParametersPropertiesItemStatus from json.
-func (s *CreatePageBodyParametersPropertiesItemStatus) Decode(d *jx.Decoder) error {
+// Decode decodes CreatePageRequestPropertiesItemStatus from json.
+func (s *CreatePageRequestPropertiesItemStatus) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode CreatePageBodyParametersPropertiesItemStatus to nil")
+		return errors.New("invalid: unable to decode CreatePageRequestPropertiesItemStatus to nil")
 	}
 
 	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
@@ -16387,100 +16387,100 @@ func (s *CreatePageBodyParametersPropertiesItemStatus) Decode(d *jx.Decoder) err
 		}
 		return nil
 	}); err != nil {
-		return errors.Wrap(err, "decode CreatePageBodyParametersPropertiesItemStatus")
+		return errors.Wrap(err, "decode CreatePageRequestPropertiesItemStatus")
 	}
 
 	return nil
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s *CreatePageBodyParametersPropertiesItemStatus) MarshalJSON() ([]byte, error) {
+func (s *CreatePageRequestPropertiesItemStatus) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *CreatePageBodyParametersPropertiesItemStatus) UnmarshalJSON(data []byte) error {
+func (s *CreatePageRequestPropertiesItemStatus) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
-// Encode encodes CreatePageBodyParametersPropertiesItemType as json.
-func (s CreatePageBodyParametersPropertiesItemType) Encode(e *jx.Encoder) {
+// Encode encodes CreatePageRequestPropertiesItemType as json.
+func (s CreatePageRequestPropertiesItemType) Encode(e *jx.Encoder) {
 	e.Str(string(s))
 }
 
-// Decode decodes CreatePageBodyParametersPropertiesItemType from json.
-func (s *CreatePageBodyParametersPropertiesItemType) Decode(d *jx.Decoder) error {
+// Decode decodes CreatePageRequestPropertiesItemType from json.
+func (s *CreatePageRequestPropertiesItemType) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode CreatePageBodyParametersPropertiesItemType to nil")
+		return errors.New("invalid: unable to decode CreatePageRequestPropertiesItemType to nil")
 	}
 	v, err := d.StrBytes()
 	if err != nil {
 		return err
 	}
 	// Try to use constant string.
-	switch CreatePageBodyParametersPropertiesItemType(v) {
-	case CreatePageBodyParametersPropertiesItemTypeTitle:
-		*s = CreatePageBodyParametersPropertiesItemTypeTitle
-	case CreatePageBodyParametersPropertiesItemTypeRichText:
-		*s = CreatePageBodyParametersPropertiesItemTypeRichText
-	case CreatePageBodyParametersPropertiesItemTypeNumber:
-		*s = CreatePageBodyParametersPropertiesItemTypeNumber
-	case CreatePageBodyParametersPropertiesItemTypeURL:
-		*s = CreatePageBodyParametersPropertiesItemTypeURL
-	case CreatePageBodyParametersPropertiesItemTypeSelect:
-		*s = CreatePageBodyParametersPropertiesItemTypeSelect
-	case CreatePageBodyParametersPropertiesItemTypeMultiSelect:
-		*s = CreatePageBodyParametersPropertiesItemTypeMultiSelect
-	case CreatePageBodyParametersPropertiesItemTypePeople:
-		*s = CreatePageBodyParametersPropertiesItemTypePeople
-	case CreatePageBodyParametersPropertiesItemTypeEmail:
-		*s = CreatePageBodyParametersPropertiesItemTypeEmail
-	case CreatePageBodyParametersPropertiesItemTypePhoneNumber:
-		*s = CreatePageBodyParametersPropertiesItemTypePhoneNumber
-	case CreatePageBodyParametersPropertiesItemTypeDate:
-		*s = CreatePageBodyParametersPropertiesItemTypeDate
-	case CreatePageBodyParametersPropertiesItemTypeCheckbox:
-		*s = CreatePageBodyParametersPropertiesItemTypeCheckbox
-	case CreatePageBodyParametersPropertiesItemTypeRelation:
-		*s = CreatePageBodyParametersPropertiesItemTypeRelation
-	case CreatePageBodyParametersPropertiesItemTypeFiles:
-		*s = CreatePageBodyParametersPropertiesItemTypeFiles
-	case CreatePageBodyParametersPropertiesItemTypeStatus:
-		*s = CreatePageBodyParametersPropertiesItemTypeStatus
-	case CreatePageBodyParametersPropertiesItemTypePlace:
-		*s = CreatePageBodyParametersPropertiesItemTypePlace
+	switch CreatePageRequestPropertiesItemType(v) {
+	case CreatePageRequestPropertiesItemTypeTitle:
+		*s = CreatePageRequestPropertiesItemTypeTitle
+	case CreatePageRequestPropertiesItemTypeRichText:
+		*s = CreatePageRequestPropertiesItemTypeRichText
+	case CreatePageRequestPropertiesItemTypeNumber:
+		*s = CreatePageRequestPropertiesItemTypeNumber
+	case CreatePageRequestPropertiesItemTypeURL:
+		*s = CreatePageRequestPropertiesItemTypeURL
+	case CreatePageRequestPropertiesItemTypeSelect:
+		*s = CreatePageRequestPropertiesItemTypeSelect
+	case CreatePageRequestPropertiesItemTypeMultiSelect:
+		*s = CreatePageRequestPropertiesItemTypeMultiSelect
+	case CreatePageRequestPropertiesItemTypePeople:
+		*s = CreatePageRequestPropertiesItemTypePeople
+	case CreatePageRequestPropertiesItemTypeEmail:
+		*s = CreatePageRequestPropertiesItemTypeEmail
+	case CreatePageRequestPropertiesItemTypePhoneNumber:
+		*s = CreatePageRequestPropertiesItemTypePhoneNumber
+	case CreatePageRequestPropertiesItemTypeDate:
+		*s = CreatePageRequestPropertiesItemTypeDate
+	case CreatePageRequestPropertiesItemTypeCheckbox:
+		*s = CreatePageRequestPropertiesItemTypeCheckbox
+	case CreatePageRequestPropertiesItemTypeRelation:
+		*s = CreatePageRequestPropertiesItemTypeRelation
+	case CreatePageRequestPropertiesItemTypeFiles:
+		*s = CreatePageRequestPropertiesItemTypeFiles
+	case CreatePageRequestPropertiesItemTypeStatus:
+		*s = CreatePageRequestPropertiesItemTypeStatus
+	case CreatePageRequestPropertiesItemTypePlace:
+		*s = CreatePageRequestPropertiesItemTypePlace
 	default:
-		*s = CreatePageBodyParametersPropertiesItemType(v)
+		*s = CreatePageRequestPropertiesItemType(v)
 	}
 
 	return nil
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s CreatePageBodyParametersPropertiesItemType) MarshalJSON() ([]byte, error) {
+func (s CreatePageRequestPropertiesItemType) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *CreatePageBodyParametersPropertiesItemType) UnmarshalJSON(data []byte) error {
+func (s *CreatePageRequestPropertiesItemType) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
 // Encode implements json.Marshaler.
-func (s *CreatePageBodyParametersTemplate) Encode(e *jx.Encoder) {
+func (s *CreatePageRequestTemplate) Encode(e *jx.Encoder) {
 	e.ObjStart()
 	s.encodeFields(e)
 	e.ObjEnd()
 }
 
 // encodeFields encodes fields.
-func (s *CreatePageBodyParametersTemplate) encodeFields(e *jx.Encoder) {
+func (s *CreatePageRequestTemplate) encodeFields(e *jx.Encoder) {
 	{
 		e.FieldStart("type")
 		s.Type.Encode(e)
@@ -16493,15 +16493,15 @@ func (s *CreatePageBodyParametersTemplate) encodeFields(e *jx.Encoder) {
 	}
 }
 
-var jsonFieldsNameOfCreatePageBodyParametersTemplate = [2]string{
+var jsonFieldsNameOfCreatePageRequestTemplate = [2]string{
 	0: "type",
 	1: "template_id",
 }
 
-// Decode decodes CreatePageBodyParametersTemplate from json.
-func (s *CreatePageBodyParametersTemplate) Decode(d *jx.Decoder) error {
+// Decode decodes CreatePageRequestTemplate from json.
+func (s *CreatePageRequestTemplate) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode CreatePageBodyParametersTemplate to nil")
+		return errors.New("invalid: unable to decode CreatePageRequestTemplate to nil")
 	}
 	var requiredBitSet [1]uint8
 
@@ -16532,7 +16532,7 @@ func (s *CreatePageBodyParametersTemplate) Decode(d *jx.Decoder) error {
 		}
 		return nil
 	}); err != nil {
-		return errors.Wrap(err, "decode CreatePageBodyParametersTemplate")
+		return errors.Wrap(err, "decode CreatePageRequestTemplate")
 	}
 	// Validate required fields.
 	var failures []validate.FieldError
@@ -16549,8 +16549,8 @@ func (s *CreatePageBodyParametersTemplate) Decode(d *jx.Decoder) error {
 				bitIdx := bits.TrailingZeros8(result)
 				fieldIdx := i*8 + bitIdx
 				var name string
-				if fieldIdx < len(jsonFieldsNameOfCreatePageBodyParametersTemplate) {
-					name = jsonFieldsNameOfCreatePageBodyParametersTemplate[fieldIdx]
+				if fieldIdx < len(jsonFieldsNameOfCreatePageRequestTemplate) {
+					name = jsonFieldsNameOfCreatePageRequestTemplate[fieldIdx]
 				} else {
 					name = strconv.Itoa(fieldIdx)
 				}
@@ -16571,56 +16571,56 @@ func (s *CreatePageBodyParametersTemplate) Decode(d *jx.Decoder) error {
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s *CreatePageBodyParametersTemplate) MarshalJSON() ([]byte, error) {
+func (s *CreatePageRequestTemplate) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *CreatePageBodyParametersTemplate) UnmarshalJSON(data []byte) error {
+func (s *CreatePageRequestTemplate) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
-// Encode encodes CreatePageBodyParametersTemplateType as json.
-func (s CreatePageBodyParametersTemplateType) Encode(e *jx.Encoder) {
+// Encode encodes CreatePageRequestTemplateType as json.
+func (s CreatePageRequestTemplateType) Encode(e *jx.Encoder) {
 	e.Str(string(s))
 }
 
-// Decode decodes CreatePageBodyParametersTemplateType from json.
-func (s *CreatePageBodyParametersTemplateType) Decode(d *jx.Decoder) error {
+// Decode decodes CreatePageRequestTemplateType from json.
+func (s *CreatePageRequestTemplateType) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode CreatePageBodyParametersTemplateType to nil")
+		return errors.New("invalid: unable to decode CreatePageRequestTemplateType to nil")
 	}
 	v, err := d.StrBytes()
 	if err != nil {
 		return err
 	}
 	// Try to use constant string.
-	switch CreatePageBodyParametersTemplateType(v) {
-	case CreatePageBodyParametersTemplateTypeNone:
-		*s = CreatePageBodyParametersTemplateTypeNone
-	case CreatePageBodyParametersTemplateTypeDefault:
-		*s = CreatePageBodyParametersTemplateTypeDefault
-	case CreatePageBodyParametersTemplateTypeTemplateID:
-		*s = CreatePageBodyParametersTemplateTypeTemplateID
+	switch CreatePageRequestTemplateType(v) {
+	case CreatePageRequestTemplateTypeNone:
+		*s = CreatePageRequestTemplateTypeNone
+	case CreatePageRequestTemplateTypeDefault:
+		*s = CreatePageRequestTemplateTypeDefault
+	case CreatePageRequestTemplateTypeTemplateID:
+		*s = CreatePageRequestTemplateTypeTemplateID
 	default:
-		*s = CreatePageBodyParametersTemplateType(v)
+		*s = CreatePageRequestTemplateType(v)
 	}
 
 	return nil
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s CreatePageBodyParametersTemplateType) MarshalJSON() ([]byte, error) {
+func (s CreatePageRequestTemplateType) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *CreatePageBodyParametersTemplateType) UnmarshalJSON(data []byte) error {
+func (s *CreatePageRequestTemplateType) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
@@ -37434,8 +37434,8 @@ func (s *NilString) UnmarshalJSON(data []byte) error {
 	return s.Decode(d)
 }
 
-// Encode encodes UpdateBlockBodyParametersSyncedBlockSyncedFrom as json.
-func (o NilUpdateBlockBodyParametersSyncedBlockSyncedFrom) Encode(e *jx.Encoder) {
+// Encode encodes UpdateBlockRequestSyncedBlockSyncedFrom as json.
+func (o NilUpdateBlockRequestSyncedBlockSyncedFrom) Encode(e *jx.Encoder) {
 	if o.Null {
 		e.Null()
 		return
@@ -37443,17 +37443,17 @@ func (o NilUpdateBlockBodyParametersSyncedBlockSyncedFrom) Encode(e *jx.Encoder)
 	o.Value.Encode(e)
 }
 
-// Decode decodes UpdateBlockBodyParametersSyncedBlockSyncedFrom from json.
-func (o *NilUpdateBlockBodyParametersSyncedBlockSyncedFrom) Decode(d *jx.Decoder) error {
+// Decode decodes UpdateBlockRequestSyncedBlockSyncedFrom from json.
+func (o *NilUpdateBlockRequestSyncedBlockSyncedFrom) Decode(d *jx.Decoder) error {
 	if o == nil {
-		return errors.New("invalid: unable to decode NilUpdateBlockBodyParametersSyncedBlockSyncedFrom to nil")
+		return errors.New("invalid: unable to decode NilUpdateBlockRequestSyncedBlockSyncedFrom to nil")
 	}
 	if d.Next() == jx.Null {
 		if err := d.Null(); err != nil {
 			return err
 		}
 
-		var v UpdateBlockBodyParametersSyncedBlockSyncedFrom
+		var v UpdateBlockRequestSyncedBlockSyncedFrom
 		o.Value = v
 		o.Null = true
 		return nil
@@ -37466,14 +37466,14 @@ func (o *NilUpdateBlockBodyParametersSyncedBlockSyncedFrom) Decode(d *jx.Decoder
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s NilUpdateBlockBodyParametersSyncedBlockSyncedFrom) MarshalJSON() ([]byte, error) {
+func (s NilUpdateBlockRequestSyncedBlockSyncedFrom) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *NilUpdateBlockBodyParametersSyncedBlockSyncedFrom) UnmarshalJSON(data []byte) error {
+func (s *NilUpdateBlockRequestSyncedBlockSyncedFrom) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
@@ -40162,18 +40162,18 @@ func (s *OptContentWithTableRowResponse) UnmarshalJSON(data []byte) error {
 	return s.Decode(d)
 }
 
-// Encode encodes CreateCommentBodyParametersAttachmentsItemType as json.
-func (o OptCreateCommentBodyParametersAttachmentsItemType) Encode(e *jx.Encoder) {
+// Encode encodes CreateCommentRequestAttachmentsItemType as json.
+func (o OptCreateCommentRequestAttachmentsItemType) Encode(e *jx.Encoder) {
 	if !o.Set {
 		return
 	}
 	e.Str(string(o.Value))
 }
 
-// Decode decodes CreateCommentBodyParametersAttachmentsItemType from json.
-func (o *OptCreateCommentBodyParametersAttachmentsItemType) Decode(d *jx.Decoder) error {
+// Decode decodes CreateCommentRequestAttachmentsItemType from json.
+func (o *OptCreateCommentRequestAttachmentsItemType) Decode(d *jx.Decoder) error {
 	if o == nil {
-		return errors.New("invalid: unable to decode OptCreateCommentBodyParametersAttachmentsItemType to nil")
+		return errors.New("invalid: unable to decode OptCreateCommentRequestAttachmentsItemType to nil")
 	}
 	o.Set = true
 	if err := o.Value.Decode(d); err != nil {
@@ -40183,30 +40183,30 @@ func (o *OptCreateCommentBodyParametersAttachmentsItemType) Decode(d *jx.Decoder
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s OptCreateCommentBodyParametersAttachmentsItemType) MarshalJSON() ([]byte, error) {
+func (s OptCreateCommentRequestAttachmentsItemType) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *OptCreateCommentBodyParametersAttachmentsItemType) UnmarshalJSON(data []byte) error {
+func (s *OptCreateCommentRequestAttachmentsItemType) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
-// Encode encodes CreateCommentBodyParametersDisplayName as json.
-func (o OptCreateCommentBodyParametersDisplayName) Encode(e *jx.Encoder) {
+// Encode encodes CreateCommentRequestDisplayName as json.
+func (o OptCreateCommentRequestDisplayName) Encode(e *jx.Encoder) {
 	if !o.Set {
 		return
 	}
 	o.Value.Encode(e)
 }
 
-// Decode decodes CreateCommentBodyParametersDisplayName from json.
-func (o *OptCreateCommentBodyParametersDisplayName) Decode(d *jx.Decoder) error {
+// Decode decodes CreateCommentRequestDisplayName from json.
+func (o *OptCreateCommentRequestDisplayName) Decode(d *jx.Decoder) error {
 	if o == nil {
-		return errors.New("invalid: unable to decode OptCreateCommentBodyParametersDisplayName to nil")
+		return errors.New("invalid: unable to decode OptCreateCommentRequestDisplayName to nil")
 	}
 	o.Set = true
 	if err := o.Value.Decode(d); err != nil {
@@ -40216,30 +40216,30 @@ func (o *OptCreateCommentBodyParametersDisplayName) Decode(d *jx.Decoder) error 
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s OptCreateCommentBodyParametersDisplayName) MarshalJSON() ([]byte, error) {
+func (s OptCreateCommentRequestDisplayName) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *OptCreateCommentBodyParametersDisplayName) UnmarshalJSON(data []byte) error {
+func (s *OptCreateCommentRequestDisplayName) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
-// Encode encodes CreateCommentBodyParametersDisplayNameCustom as json.
-func (o OptCreateCommentBodyParametersDisplayNameCustom) Encode(e *jx.Encoder) {
+// Encode encodes CreateCommentRequestDisplayNameCustom as json.
+func (o OptCreateCommentRequestDisplayNameCustom) Encode(e *jx.Encoder) {
 	if !o.Set {
 		return
 	}
 	o.Value.Encode(e)
 }
 
-// Decode decodes CreateCommentBodyParametersDisplayNameCustom from json.
-func (o *OptCreateCommentBodyParametersDisplayNameCustom) Decode(d *jx.Decoder) error {
+// Decode decodes CreateCommentRequestDisplayNameCustom from json.
+func (o *OptCreateCommentRequestDisplayNameCustom) Decode(d *jx.Decoder) error {
 	if o == nil {
-		return errors.New("invalid: unable to decode OptCreateCommentBodyParametersDisplayNameCustom to nil")
+		return errors.New("invalid: unable to decode OptCreateCommentRequestDisplayNameCustom to nil")
 	}
 	o.Set = true
 	if err := o.Value.Decode(d); err != nil {
@@ -40249,30 +40249,30 @@ func (o *OptCreateCommentBodyParametersDisplayNameCustom) Decode(d *jx.Decoder) 
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s OptCreateCommentBodyParametersDisplayNameCustom) MarshalJSON() ([]byte, error) {
+func (s OptCreateCommentRequestDisplayNameCustom) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *OptCreateCommentBodyParametersDisplayNameCustom) UnmarshalJSON(data []byte) error {
+func (s *OptCreateCommentRequestDisplayNameCustom) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
-// Encode encodes CreateCommentBodyParametersParent as json.
-func (o OptCreateCommentBodyParametersParent) Encode(e *jx.Encoder) {
+// Encode encodes CreateCommentRequestParent as json.
+func (o OptCreateCommentRequestParent) Encode(e *jx.Encoder) {
 	if !o.Set {
 		return
 	}
 	o.Value.Encode(e)
 }
 
-// Decode decodes CreateCommentBodyParametersParent from json.
-func (o *OptCreateCommentBodyParametersParent) Decode(d *jx.Decoder) error {
+// Decode decodes CreateCommentRequestParent from json.
+func (o *OptCreateCommentRequestParent) Decode(d *jx.Decoder) error {
 	if o == nil {
-		return errors.New("invalid: unable to decode OptCreateCommentBodyParametersParent to nil")
+		return errors.New("invalid: unable to decode OptCreateCommentRequestParent to nil")
 	}
 	o.Set = true
 	if err := o.Value.Decode(d); err != nil {
@@ -40282,30 +40282,30 @@ func (o *OptCreateCommentBodyParametersParent) Decode(d *jx.Decoder) error {
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s OptCreateCommentBodyParametersParent) MarshalJSON() ([]byte, error) {
+func (s OptCreateCommentRequestParent) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *OptCreateCommentBodyParametersParent) UnmarshalJSON(data []byte) error {
+func (s *OptCreateCommentRequestParent) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
-// Encode encodes CreateCommentBodyParametersParentType as json.
-func (o OptCreateCommentBodyParametersParentType) Encode(e *jx.Encoder) {
+// Encode encodes CreateCommentRequestParentType as json.
+func (o OptCreateCommentRequestParentType) Encode(e *jx.Encoder) {
 	if !o.Set {
 		return
 	}
 	e.Str(string(o.Value))
 }
 
-// Decode decodes CreateCommentBodyParametersParentType from json.
-func (o *OptCreateCommentBodyParametersParentType) Decode(d *jx.Decoder) error {
+// Decode decodes CreateCommentRequestParentType from json.
+func (o *OptCreateCommentRequestParentType) Decode(d *jx.Decoder) error {
 	if o == nil {
-		return errors.New("invalid: unable to decode OptCreateCommentBodyParametersParentType to nil")
+		return errors.New("invalid: unable to decode OptCreateCommentRequestParentType to nil")
 	}
 	o.Set = true
 	if err := o.Value.Decode(d); err != nil {
@@ -40315,14 +40315,14 @@ func (o *OptCreateCommentBodyParametersParentType) Decode(d *jx.Decoder) error {
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s OptCreateCommentBodyParametersParentType) MarshalJSON() ([]byte, error) {
+func (s OptCreateCommentRequestParentType) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *OptCreateCommentBodyParametersParentType) UnmarshalJSON(data []byte) error {
+func (s *OptCreateCommentRequestParentType) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
@@ -40360,18 +40360,18 @@ func (s *OptCreateCommentResponseDisplayName) UnmarshalJSON(data []byte) error {
 	return s.Decode(d)
 }
 
-// Encode encodes CreateDatabaseBodyParametersParentWorkspace as json.
-func (o OptCreateDatabaseBodyParametersParentWorkspace) Encode(e *jx.Encoder) {
+// Encode encodes CreateDatabaseRequestParentWorkspace as json.
+func (o OptCreateDatabaseRequestParentWorkspace) Encode(e *jx.Encoder) {
 	if !o.Set {
 		return
 	}
 	e.Bool(bool(o.Value))
 }
 
-// Decode decodes CreateDatabaseBodyParametersParentWorkspace from json.
-func (o *OptCreateDatabaseBodyParametersParentWorkspace) Decode(d *jx.Decoder) error {
+// Decode decodes CreateDatabaseRequestParentWorkspace from json.
+func (o *OptCreateDatabaseRequestParentWorkspace) Decode(d *jx.Decoder) error {
 	if o == nil {
-		return errors.New("invalid: unable to decode OptCreateDatabaseBodyParametersParentWorkspace to nil")
+		return errors.New("invalid: unable to decode OptCreateDatabaseRequestParentWorkspace to nil")
 	}
 	o.Set = true
 	if err := o.Value.Decode(d); err != nil {
@@ -40381,30 +40381,30 @@ func (o *OptCreateDatabaseBodyParametersParentWorkspace) Decode(d *jx.Decoder) e
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s OptCreateDatabaseBodyParametersParentWorkspace) MarshalJSON() ([]byte, error) {
+func (s OptCreateDatabaseRequestParentWorkspace) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *OptCreateDatabaseBodyParametersParentWorkspace) UnmarshalJSON(data []byte) error {
+func (s *OptCreateDatabaseRequestParentWorkspace) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
-// Encode encodes CreatePageBodyParametersParent as json.
-func (o OptCreatePageBodyParametersParent) Encode(e *jx.Encoder) {
+// Encode encodes CreatePageRequestParent as json.
+func (o OptCreatePageRequestParent) Encode(e *jx.Encoder) {
 	if !o.Set {
 		return
 	}
 	o.Value.Encode(e)
 }
 
-// Decode decodes CreatePageBodyParametersParent from json.
-func (o *OptCreatePageBodyParametersParent) Decode(d *jx.Decoder) error {
+// Decode decodes CreatePageRequestParent from json.
+func (o *OptCreatePageRequestParent) Decode(d *jx.Decoder) error {
 	if o == nil {
-		return errors.New("invalid: unable to decode OptCreatePageBodyParametersParent to nil")
+		return errors.New("invalid: unable to decode OptCreatePageRequestParent to nil")
 	}
 	o.Set = true
 	if err := o.Value.Decode(d); err != nil {
@@ -40414,30 +40414,30 @@ func (o *OptCreatePageBodyParametersParent) Decode(d *jx.Decoder) error {
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s OptCreatePageBodyParametersParent) MarshalJSON() ([]byte, error) {
+func (s OptCreatePageRequestParent) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *OptCreatePageBodyParametersParent) UnmarshalJSON(data []byte) error {
+func (s *OptCreatePageRequestParent) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
-// Encode encodes CreatePageBodyParametersParentType as json.
-func (o OptCreatePageBodyParametersParentType) Encode(e *jx.Encoder) {
+// Encode encodes CreatePageRequestParentType as json.
+func (o OptCreatePageRequestParentType) Encode(e *jx.Encoder) {
 	if !o.Set {
 		return
 	}
 	e.Str(string(o.Value))
 }
 
-// Decode decodes CreatePageBodyParametersParentType from json.
-func (o *OptCreatePageBodyParametersParentType) Decode(d *jx.Decoder) error {
+// Decode decodes CreatePageRequestParentType from json.
+func (o *OptCreatePageRequestParentType) Decode(d *jx.Decoder) error {
 	if o == nil {
-		return errors.New("invalid: unable to decode OptCreatePageBodyParametersParentType to nil")
+		return errors.New("invalid: unable to decode OptCreatePageRequestParentType to nil")
 	}
 	o.Set = true
 	if err := o.Value.Decode(d); err != nil {
@@ -40447,30 +40447,30 @@ func (o *OptCreatePageBodyParametersParentType) Decode(d *jx.Decoder) error {
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s OptCreatePageBodyParametersParentType) MarshalJSON() ([]byte, error) {
+func (s OptCreatePageRequestParentType) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *OptCreatePageBodyParametersParentType) UnmarshalJSON(data []byte) error {
+func (s *OptCreatePageRequestParentType) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
-// Encode encodes CreatePageBodyParametersParentWorkspace as json.
-func (o OptCreatePageBodyParametersParentWorkspace) Encode(e *jx.Encoder) {
+// Encode encodes CreatePageRequestParentWorkspace as json.
+func (o OptCreatePageRequestParentWorkspace) Encode(e *jx.Encoder) {
 	if !o.Set {
 		return
 	}
 	e.Bool(bool(o.Value))
 }
 
-// Decode decodes CreatePageBodyParametersParentWorkspace from json.
-func (o *OptCreatePageBodyParametersParentWorkspace) Decode(d *jx.Decoder) error {
+// Decode decodes CreatePageRequestParentWorkspace from json.
+func (o *OptCreatePageRequestParentWorkspace) Decode(d *jx.Decoder) error {
 	if o == nil {
-		return errors.New("invalid: unable to decode OptCreatePageBodyParametersParentWorkspace to nil")
+		return errors.New("invalid: unable to decode OptCreatePageRequestParentWorkspace to nil")
 	}
 	o.Set = true
 	if err := o.Value.Decode(d); err != nil {
@@ -40480,33 +40480,33 @@ func (o *OptCreatePageBodyParametersParentWorkspace) Decode(d *jx.Decoder) error
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s OptCreatePageBodyParametersParentWorkspace) MarshalJSON() ([]byte, error) {
+func (s OptCreatePageRequestParentWorkspace) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *OptCreatePageBodyParametersParentWorkspace) UnmarshalJSON(data []byte) error {
+func (s *OptCreatePageRequestParentWorkspace) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
-// Encode encodes CreatePageBodyParametersProperties as json.
-func (o OptCreatePageBodyParametersProperties) Encode(e *jx.Encoder) {
+// Encode encodes CreatePageRequestProperties as json.
+func (o OptCreatePageRequestProperties) Encode(e *jx.Encoder) {
 	if !o.Set {
 		return
 	}
 	o.Value.Encode(e)
 }
 
-// Decode decodes CreatePageBodyParametersProperties from json.
-func (o *OptCreatePageBodyParametersProperties) Decode(d *jx.Decoder) error {
+// Decode decodes CreatePageRequestProperties from json.
+func (o *OptCreatePageRequestProperties) Decode(d *jx.Decoder) error {
 	if o == nil {
-		return errors.New("invalid: unable to decode OptCreatePageBodyParametersProperties to nil")
+		return errors.New("invalid: unable to decode OptCreatePageRequestProperties to nil")
 	}
 	o.Set = true
-	o.Value = make(CreatePageBodyParametersProperties)
+	o.Value = make(CreatePageRequestProperties)
 	if err := o.Value.Decode(d); err != nil {
 		return err
 	}
@@ -40514,30 +40514,30 @@ func (o *OptCreatePageBodyParametersProperties) Decode(d *jx.Decoder) error {
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s OptCreatePageBodyParametersProperties) MarshalJSON() ([]byte, error) {
+func (s OptCreatePageRequestProperties) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *OptCreatePageBodyParametersProperties) UnmarshalJSON(data []byte) error {
+func (s *OptCreatePageRequestProperties) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
-// Encode encodes CreatePageBodyParametersPropertiesItemFilesItemType as json.
-func (o OptCreatePageBodyParametersPropertiesItemFilesItemType) Encode(e *jx.Encoder) {
+// Encode encodes CreatePageRequestPropertiesItemFilesItemType as json.
+func (o OptCreatePageRequestPropertiesItemFilesItemType) Encode(e *jx.Encoder) {
 	if !o.Set {
 		return
 	}
 	e.Str(string(o.Value))
 }
 
-// Decode decodes CreatePageBodyParametersPropertiesItemFilesItemType from json.
-func (o *OptCreatePageBodyParametersPropertiesItemFilesItemType) Decode(d *jx.Decoder) error {
+// Decode decodes CreatePageRequestPropertiesItemFilesItemType from json.
+func (o *OptCreatePageRequestPropertiesItemFilesItemType) Decode(d *jx.Decoder) error {
 	if o == nil {
-		return errors.New("invalid: unable to decode OptCreatePageBodyParametersPropertiesItemFilesItemType to nil")
+		return errors.New("invalid: unable to decode OptCreatePageRequestPropertiesItemFilesItemType to nil")
 	}
 	o.Set = true
 	if err := o.Value.Decode(d); err != nil {
@@ -40547,30 +40547,30 @@ func (o *OptCreatePageBodyParametersPropertiesItemFilesItemType) Decode(d *jx.De
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s OptCreatePageBodyParametersPropertiesItemFilesItemType) MarshalJSON() ([]byte, error) {
+func (s OptCreatePageRequestPropertiesItemFilesItemType) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *OptCreatePageBodyParametersPropertiesItemFilesItemType) UnmarshalJSON(data []byte) error {
+func (s *OptCreatePageRequestPropertiesItemFilesItemType) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
-// Encode encodes CreatePageBodyParametersPropertiesItemPeopleItemObject as json.
-func (o OptCreatePageBodyParametersPropertiesItemPeopleItemObject) Encode(e *jx.Encoder) {
+// Encode encodes CreatePageRequestPropertiesItemPeopleItemObject as json.
+func (o OptCreatePageRequestPropertiesItemPeopleItemObject) Encode(e *jx.Encoder) {
 	if !o.Set {
 		return
 	}
 	e.Str(string(o.Value))
 }
 
-// Decode decodes CreatePageBodyParametersPropertiesItemPeopleItemObject from json.
-func (o *OptCreatePageBodyParametersPropertiesItemPeopleItemObject) Decode(d *jx.Decoder) error {
+// Decode decodes CreatePageRequestPropertiesItemPeopleItemObject from json.
+func (o *OptCreatePageRequestPropertiesItemPeopleItemObject) Decode(d *jx.Decoder) error {
 	if o == nil {
-		return errors.New("invalid: unable to decode OptCreatePageBodyParametersPropertiesItemPeopleItemObject to nil")
+		return errors.New("invalid: unable to decode OptCreatePageRequestPropertiesItemPeopleItemObject to nil")
 	}
 	o.Set = true
 	if err := o.Value.Decode(d); err != nil {
@@ -40580,30 +40580,30 @@ func (o *OptCreatePageBodyParametersPropertiesItemPeopleItemObject) Decode(d *jx
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s OptCreatePageBodyParametersPropertiesItemPeopleItemObject) MarshalJSON() ([]byte, error) {
+func (s OptCreatePageRequestPropertiesItemPeopleItemObject) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *OptCreatePageBodyParametersPropertiesItemPeopleItemObject) UnmarshalJSON(data []byte) error {
+func (s *OptCreatePageRequestPropertiesItemPeopleItemObject) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
-// Encode encodes CreatePageBodyParametersPropertiesItemType as json.
-func (o OptCreatePageBodyParametersPropertiesItemType) Encode(e *jx.Encoder) {
+// Encode encodes CreatePageRequestPropertiesItemType as json.
+func (o OptCreatePageRequestPropertiesItemType) Encode(e *jx.Encoder) {
 	if !o.Set {
 		return
 	}
 	e.Str(string(o.Value))
 }
 
-// Decode decodes CreatePageBodyParametersPropertiesItemType from json.
-func (o *OptCreatePageBodyParametersPropertiesItemType) Decode(d *jx.Decoder) error {
+// Decode decodes CreatePageRequestPropertiesItemType from json.
+func (o *OptCreatePageRequestPropertiesItemType) Decode(d *jx.Decoder) error {
 	if o == nil {
-		return errors.New("invalid: unable to decode OptCreatePageBodyParametersPropertiesItemType to nil")
+		return errors.New("invalid: unable to decode OptCreatePageRequestPropertiesItemType to nil")
 	}
 	o.Set = true
 	if err := o.Value.Decode(d); err != nil {
@@ -40613,30 +40613,30 @@ func (o *OptCreatePageBodyParametersPropertiesItemType) Decode(d *jx.Decoder) er
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s OptCreatePageBodyParametersPropertiesItemType) MarshalJSON() ([]byte, error) {
+func (s OptCreatePageRequestPropertiesItemType) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *OptCreatePageBodyParametersPropertiesItemType) UnmarshalJSON(data []byte) error {
+func (s *OptCreatePageRequestPropertiesItemType) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
-// Encode encodes CreatePageBodyParametersTemplate as json.
-func (o OptCreatePageBodyParametersTemplate) Encode(e *jx.Encoder) {
+// Encode encodes CreatePageRequestTemplate as json.
+func (o OptCreatePageRequestTemplate) Encode(e *jx.Encoder) {
 	if !o.Set {
 		return
 	}
 	o.Value.Encode(e)
 }
 
-// Decode decodes CreatePageBodyParametersTemplate from json.
-func (o *OptCreatePageBodyParametersTemplate) Decode(d *jx.Decoder) error {
+// Decode decodes CreatePageRequestTemplate from json.
+func (o *OptCreatePageRequestTemplate) Decode(d *jx.Decoder) error {
 	if o == nil {
-		return errors.New("invalid: unable to decode OptCreatePageBodyParametersTemplate to nil")
+		return errors.New("invalid: unable to decode OptCreatePageRequestTemplate to nil")
 	}
 	o.Set = true
 	if err := o.Value.Decode(d); err != nil {
@@ -40646,14 +40646,14 @@ func (o *OptCreatePageBodyParametersTemplate) Decode(d *jx.Decoder) error {
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s OptCreatePageBodyParametersTemplate) MarshalJSON() ([]byte, error) {
+func (s OptCreatePageRequestTemplate) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *OptCreatePageBodyParametersTemplate) UnmarshalJSON(data []byte) error {
+func (s *OptCreatePageRequestTemplate) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
@@ -44146,8 +44146,8 @@ func (s *OptNilBool) UnmarshalJSON(data []byte) error {
 	return s.Decode(d)
 }
 
-// Encode encodes CreatePageBodyParametersPropertiesItemPlace as json.
-func (o OptNilCreatePageBodyParametersPropertiesItemPlace) Encode(e *jx.Encoder) {
+// Encode encodes CreatePageRequestPropertiesItemPlace as json.
+func (o OptNilCreatePageRequestPropertiesItemPlace) Encode(e *jx.Encoder) {
 	if !o.Set {
 		return
 	}
@@ -44158,17 +44158,17 @@ func (o OptNilCreatePageBodyParametersPropertiesItemPlace) Encode(e *jx.Encoder)
 	o.Value.Encode(e)
 }
 
-// Decode decodes CreatePageBodyParametersPropertiesItemPlace from json.
-func (o *OptNilCreatePageBodyParametersPropertiesItemPlace) Decode(d *jx.Decoder) error {
+// Decode decodes CreatePageRequestPropertiesItemPlace from json.
+func (o *OptNilCreatePageRequestPropertiesItemPlace) Decode(d *jx.Decoder) error {
 	if o == nil {
-		return errors.New("invalid: unable to decode OptNilCreatePageBodyParametersPropertiesItemPlace to nil")
+		return errors.New("invalid: unable to decode OptNilCreatePageRequestPropertiesItemPlace to nil")
 	}
 	if d.Next() == jx.Null {
 		if err := d.Null(); err != nil {
 			return err
 		}
 
-		var v CreatePageBodyParametersPropertiesItemPlace
+		var v CreatePageRequestPropertiesItemPlace
 		o.Value = v
 		o.Set = true
 		o.Null = true
@@ -44183,20 +44183,20 @@ func (o *OptNilCreatePageBodyParametersPropertiesItemPlace) Decode(d *jx.Decoder
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s OptNilCreatePageBodyParametersPropertiesItemPlace) MarshalJSON() ([]byte, error) {
+func (s OptNilCreatePageRequestPropertiesItemPlace) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *OptNilCreatePageBodyParametersPropertiesItemPlace) UnmarshalJSON(data []byte) error {
+func (s *OptNilCreatePageRequestPropertiesItemPlace) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
-// Encode encodes CreatePageBodyParametersPropertiesItemSelect as json.
-func (o OptNilCreatePageBodyParametersPropertiesItemSelect) Encode(e *jx.Encoder) {
+// Encode encodes CreatePageRequestPropertiesItemSelect as json.
+func (o OptNilCreatePageRequestPropertiesItemSelect) Encode(e *jx.Encoder) {
 	if !o.Set {
 		return
 	}
@@ -44207,17 +44207,17 @@ func (o OptNilCreatePageBodyParametersPropertiesItemSelect) Encode(e *jx.Encoder
 	o.Value.Encode(e)
 }
 
-// Decode decodes CreatePageBodyParametersPropertiesItemSelect from json.
-func (o *OptNilCreatePageBodyParametersPropertiesItemSelect) Decode(d *jx.Decoder) error {
+// Decode decodes CreatePageRequestPropertiesItemSelect from json.
+func (o *OptNilCreatePageRequestPropertiesItemSelect) Decode(d *jx.Decoder) error {
 	if o == nil {
-		return errors.New("invalid: unable to decode OptNilCreatePageBodyParametersPropertiesItemSelect to nil")
+		return errors.New("invalid: unable to decode OptNilCreatePageRequestPropertiesItemSelect to nil")
 	}
 	if d.Next() == jx.Null {
 		if err := d.Null(); err != nil {
 			return err
 		}
 
-		var v CreatePageBodyParametersPropertiesItemSelect
+		var v CreatePageRequestPropertiesItemSelect
 		o.Value = v
 		o.Set = true
 		o.Null = true
@@ -44232,20 +44232,20 @@ func (o *OptNilCreatePageBodyParametersPropertiesItemSelect) Decode(d *jx.Decode
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s OptNilCreatePageBodyParametersPropertiesItemSelect) MarshalJSON() ([]byte, error) {
+func (s OptNilCreatePageRequestPropertiesItemSelect) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *OptNilCreatePageBodyParametersPropertiesItemSelect) UnmarshalJSON(data []byte) error {
+func (s *OptNilCreatePageRequestPropertiesItemSelect) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
-// Encode encodes CreatePageBodyParametersPropertiesItemStatus as json.
-func (o OptNilCreatePageBodyParametersPropertiesItemStatus) Encode(e *jx.Encoder) {
+// Encode encodes CreatePageRequestPropertiesItemStatus as json.
+func (o OptNilCreatePageRequestPropertiesItemStatus) Encode(e *jx.Encoder) {
 	if !o.Set {
 		return
 	}
@@ -44256,17 +44256,17 @@ func (o OptNilCreatePageBodyParametersPropertiesItemStatus) Encode(e *jx.Encoder
 	o.Value.Encode(e)
 }
 
-// Decode decodes CreatePageBodyParametersPropertiesItemStatus from json.
-func (o *OptNilCreatePageBodyParametersPropertiesItemStatus) Decode(d *jx.Decoder) error {
+// Decode decodes CreatePageRequestPropertiesItemStatus from json.
+func (o *OptNilCreatePageRequestPropertiesItemStatus) Decode(d *jx.Decoder) error {
 	if o == nil {
-		return errors.New("invalid: unable to decode OptNilCreatePageBodyParametersPropertiesItemStatus to nil")
+		return errors.New("invalid: unable to decode OptNilCreatePageRequestPropertiesItemStatus to nil")
 	}
 	if d.Next() == jx.Null {
 		if err := d.Null(); err != nil {
 			return err
 		}
 
-		var v CreatePageBodyParametersPropertiesItemStatus
+		var v CreatePageRequestPropertiesItemStatus
 		o.Value = v
 		o.Set = true
 		o.Null = true
@@ -44281,14 +44281,14 @@ func (o *OptNilCreatePageBodyParametersPropertiesItemStatus) Decode(d *jx.Decode
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s OptNilCreatePageBodyParametersPropertiesItemStatus) MarshalJSON() ([]byte, error) {
+func (s OptNilCreatePageRequestPropertiesItemStatus) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *OptNilCreatePageBodyParametersPropertiesItemStatus) UnmarshalJSON(data []byte) error {
+func (s *OptNilCreatePageRequestPropertiesItemStatus) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
@@ -44542,8 +44542,8 @@ func (s *OptNilString) UnmarshalJSON(data []byte) error {
 	return s.Decode(d)
 }
 
-// Encode encodes UpdatePageBodyParametersPropertiesItemPlace as json.
-func (o OptNilUpdatePageBodyParametersPropertiesItemPlace) Encode(e *jx.Encoder) {
+// Encode encodes UpdatePageRequestPropertiesItemPlace as json.
+func (o OptNilUpdatePageRequestPropertiesItemPlace) Encode(e *jx.Encoder) {
 	if !o.Set {
 		return
 	}
@@ -44554,17 +44554,17 @@ func (o OptNilUpdatePageBodyParametersPropertiesItemPlace) Encode(e *jx.Encoder)
 	o.Value.Encode(e)
 }
 
-// Decode decodes UpdatePageBodyParametersPropertiesItemPlace from json.
-func (o *OptNilUpdatePageBodyParametersPropertiesItemPlace) Decode(d *jx.Decoder) error {
+// Decode decodes UpdatePageRequestPropertiesItemPlace from json.
+func (o *OptNilUpdatePageRequestPropertiesItemPlace) Decode(d *jx.Decoder) error {
 	if o == nil {
-		return errors.New("invalid: unable to decode OptNilUpdatePageBodyParametersPropertiesItemPlace to nil")
+		return errors.New("invalid: unable to decode OptNilUpdatePageRequestPropertiesItemPlace to nil")
 	}
 	if d.Next() == jx.Null {
 		if err := d.Null(); err != nil {
 			return err
 		}
 
-		var v UpdatePageBodyParametersPropertiesItemPlace
+		var v UpdatePageRequestPropertiesItemPlace
 		o.Value = v
 		o.Set = true
 		o.Null = true
@@ -44579,20 +44579,20 @@ func (o *OptNilUpdatePageBodyParametersPropertiesItemPlace) Decode(d *jx.Decoder
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s OptNilUpdatePageBodyParametersPropertiesItemPlace) MarshalJSON() ([]byte, error) {
+func (s OptNilUpdatePageRequestPropertiesItemPlace) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *OptNilUpdatePageBodyParametersPropertiesItemPlace) UnmarshalJSON(data []byte) error {
+func (s *OptNilUpdatePageRequestPropertiesItemPlace) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
-// Encode encodes UpdatePageBodyParametersPropertiesItemSelect as json.
-func (o OptNilUpdatePageBodyParametersPropertiesItemSelect) Encode(e *jx.Encoder) {
+// Encode encodes UpdatePageRequestPropertiesItemSelect as json.
+func (o OptNilUpdatePageRequestPropertiesItemSelect) Encode(e *jx.Encoder) {
 	if !o.Set {
 		return
 	}
@@ -44603,17 +44603,17 @@ func (o OptNilUpdatePageBodyParametersPropertiesItemSelect) Encode(e *jx.Encoder
 	o.Value.Encode(e)
 }
 
-// Decode decodes UpdatePageBodyParametersPropertiesItemSelect from json.
-func (o *OptNilUpdatePageBodyParametersPropertiesItemSelect) Decode(d *jx.Decoder) error {
+// Decode decodes UpdatePageRequestPropertiesItemSelect from json.
+func (o *OptNilUpdatePageRequestPropertiesItemSelect) Decode(d *jx.Decoder) error {
 	if o == nil {
-		return errors.New("invalid: unable to decode OptNilUpdatePageBodyParametersPropertiesItemSelect to nil")
+		return errors.New("invalid: unable to decode OptNilUpdatePageRequestPropertiesItemSelect to nil")
 	}
 	if d.Next() == jx.Null {
 		if err := d.Null(); err != nil {
 			return err
 		}
 
-		var v UpdatePageBodyParametersPropertiesItemSelect
+		var v UpdatePageRequestPropertiesItemSelect
 		o.Value = v
 		o.Set = true
 		o.Null = true
@@ -44628,20 +44628,20 @@ func (o *OptNilUpdatePageBodyParametersPropertiesItemSelect) Decode(d *jx.Decode
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s OptNilUpdatePageBodyParametersPropertiesItemSelect) MarshalJSON() ([]byte, error) {
+func (s OptNilUpdatePageRequestPropertiesItemSelect) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *OptNilUpdatePageBodyParametersPropertiesItemSelect) UnmarshalJSON(data []byte) error {
+func (s *OptNilUpdatePageRequestPropertiesItemSelect) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
-// Encode encodes UpdatePageBodyParametersPropertiesItemStatus as json.
-func (o OptNilUpdatePageBodyParametersPropertiesItemStatus) Encode(e *jx.Encoder) {
+// Encode encodes UpdatePageRequestPropertiesItemStatus as json.
+func (o OptNilUpdatePageRequestPropertiesItemStatus) Encode(e *jx.Encoder) {
 	if !o.Set {
 		return
 	}
@@ -44652,17 +44652,17 @@ func (o OptNilUpdatePageBodyParametersPropertiesItemStatus) Encode(e *jx.Encoder
 	o.Value.Encode(e)
 }
 
-// Decode decodes UpdatePageBodyParametersPropertiesItemStatus from json.
-func (o *OptNilUpdatePageBodyParametersPropertiesItemStatus) Decode(d *jx.Decoder) error {
+// Decode decodes UpdatePageRequestPropertiesItemStatus from json.
+func (o *OptNilUpdatePageRequestPropertiesItemStatus) Decode(d *jx.Decoder) error {
 	if o == nil {
-		return errors.New("invalid: unable to decode OptNilUpdatePageBodyParametersPropertiesItemStatus to nil")
+		return errors.New("invalid: unable to decode OptNilUpdatePageRequestPropertiesItemStatus to nil")
 	}
 	if d.Next() == jx.Null {
 		if err := d.Null(); err != nil {
 			return err
 		}
 
-		var v UpdatePageBodyParametersPropertiesItemStatus
+		var v UpdatePageRequestPropertiesItemStatus
 		o.Value = v
 		o.Set = true
 		o.Null = true
@@ -44677,14 +44677,14 @@ func (o *OptNilUpdatePageBodyParametersPropertiesItemStatus) Decode(d *jx.Decode
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s OptNilUpdatePageBodyParametersPropertiesItemStatus) MarshalJSON() ([]byte, error) {
+func (s OptNilUpdatePageRequestPropertiesItemStatus) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *OptNilUpdatePageBodyParametersPropertiesItemStatus) UnmarshalJSON(data []byte) error {
+func (s *OptNilUpdatePageRequestPropertiesItemStatus) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
@@ -47626,18 +47626,18 @@ func (s *OptPropertyOrTimestampFilterType) UnmarshalJSON(data []byte) error {
 	return s.Decode(d)
 }
 
-// Encode encodes QueryDataSourceBodyParametersFilter as json.
-func (o OptQueryDataSourceBodyParametersFilter) Encode(e *jx.Encoder) {
+// Encode encodes QueryDataSourceRequestFilter as json.
+func (o OptQueryDataSourceRequestFilter) Encode(e *jx.Encoder) {
 	if !o.Set {
 		return
 	}
 	o.Value.Encode(e)
 }
 
-// Decode decodes QueryDataSourceBodyParametersFilter from json.
-func (o *OptQueryDataSourceBodyParametersFilter) Decode(d *jx.Decoder) error {
+// Decode decodes QueryDataSourceRequestFilter from json.
+func (o *OptQueryDataSourceRequestFilter) Decode(d *jx.Decoder) error {
 	if o == nil {
-		return errors.New("invalid: unable to decode OptQueryDataSourceBodyParametersFilter to nil")
+		return errors.New("invalid: unable to decode OptQueryDataSourceRequestFilter to nil")
 	}
 	o.Set = true
 	if err := o.Value.Decode(d); err != nil {
@@ -47647,30 +47647,30 @@ func (o *OptQueryDataSourceBodyParametersFilter) Decode(d *jx.Decoder) error {
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s OptQueryDataSourceBodyParametersFilter) MarshalJSON() ([]byte, error) {
+func (s OptQueryDataSourceRequestFilter) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *OptQueryDataSourceBodyParametersFilter) UnmarshalJSON(data []byte) error {
+func (s *OptQueryDataSourceRequestFilter) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
-// Encode encodes QueryDataSourceBodyParametersFilterTimestamp as json.
-func (o OptQueryDataSourceBodyParametersFilterTimestamp) Encode(e *jx.Encoder) {
+// Encode encodes QueryDataSourceRequestFilterTimestamp as json.
+func (o OptQueryDataSourceRequestFilterTimestamp) Encode(e *jx.Encoder) {
 	if !o.Set {
 		return
 	}
 	e.Str(string(o.Value))
 }
 
-// Decode decodes QueryDataSourceBodyParametersFilterTimestamp from json.
-func (o *OptQueryDataSourceBodyParametersFilterTimestamp) Decode(d *jx.Decoder) error {
+// Decode decodes QueryDataSourceRequestFilterTimestamp from json.
+func (o *OptQueryDataSourceRequestFilterTimestamp) Decode(d *jx.Decoder) error {
 	if o == nil {
-		return errors.New("invalid: unable to decode OptQueryDataSourceBodyParametersFilterTimestamp to nil")
+		return errors.New("invalid: unable to decode OptQueryDataSourceRequestFilterTimestamp to nil")
 	}
 	o.Set = true
 	if err := o.Value.Decode(d); err != nil {
@@ -47680,30 +47680,30 @@ func (o *OptQueryDataSourceBodyParametersFilterTimestamp) Decode(d *jx.Decoder) 
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s OptQueryDataSourceBodyParametersFilterTimestamp) MarshalJSON() ([]byte, error) {
+func (s OptQueryDataSourceRequestFilterTimestamp) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *OptQueryDataSourceBodyParametersFilterTimestamp) UnmarshalJSON(data []byte) error {
+func (s *OptQueryDataSourceRequestFilterTimestamp) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
-// Encode encodes QueryDataSourceBodyParametersFilterType as json.
-func (o OptQueryDataSourceBodyParametersFilterType) Encode(e *jx.Encoder) {
+// Encode encodes QueryDataSourceRequestFilterType as json.
+func (o OptQueryDataSourceRequestFilterType) Encode(e *jx.Encoder) {
 	if !o.Set {
 		return
 	}
 	e.Str(string(o.Value))
 }
 
-// Decode decodes QueryDataSourceBodyParametersFilterType from json.
-func (o *OptQueryDataSourceBodyParametersFilterType) Decode(d *jx.Decoder) error {
+// Decode decodes QueryDataSourceRequestFilterType from json.
+func (o *OptQueryDataSourceRequestFilterType) Decode(d *jx.Decoder) error {
 	if o == nil {
-		return errors.New("invalid: unable to decode OptQueryDataSourceBodyParametersFilterType to nil")
+		return errors.New("invalid: unable to decode OptQueryDataSourceRequestFilterType to nil")
 	}
 	o.Set = true
 	if err := o.Value.Decode(d); err != nil {
@@ -47713,30 +47713,30 @@ func (o *OptQueryDataSourceBodyParametersFilterType) Decode(d *jx.Decoder) error
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s OptQueryDataSourceBodyParametersFilterType) MarshalJSON() ([]byte, error) {
+func (s OptQueryDataSourceRequestFilterType) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *OptQueryDataSourceBodyParametersFilterType) UnmarshalJSON(data []byte) error {
+func (s *OptQueryDataSourceRequestFilterType) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
-// Encode encodes QueryDataSourceBodyParametersResultType as json.
-func (o OptQueryDataSourceBodyParametersResultType) Encode(e *jx.Encoder) {
+// Encode encodes QueryDataSourceRequestResultType as json.
+func (o OptQueryDataSourceRequestResultType) Encode(e *jx.Encoder) {
 	if !o.Set {
 		return
 	}
 	e.Str(string(o.Value))
 }
 
-// Decode decodes QueryDataSourceBodyParametersResultType from json.
-func (o *OptQueryDataSourceBodyParametersResultType) Decode(d *jx.Decoder) error {
+// Decode decodes QueryDataSourceRequestResultType from json.
+func (o *OptQueryDataSourceRequestResultType) Decode(d *jx.Decoder) error {
 	if o == nil {
-		return errors.New("invalid: unable to decode OptQueryDataSourceBodyParametersResultType to nil")
+		return errors.New("invalid: unable to decode OptQueryDataSourceRequestResultType to nil")
 	}
 	o.Set = true
 	if err := o.Value.Decode(d); err != nil {
@@ -47746,30 +47746,30 @@ func (o *OptQueryDataSourceBodyParametersResultType) Decode(d *jx.Decoder) error
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s OptQueryDataSourceBodyParametersResultType) MarshalJSON() ([]byte, error) {
+func (s OptQueryDataSourceRequestResultType) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *OptQueryDataSourceBodyParametersResultType) UnmarshalJSON(data []byte) error {
+func (s *OptQueryDataSourceRequestResultType) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
-// Encode encodes QueryDataSourceBodyParametersSortsItemTimestamp as json.
-func (o OptQueryDataSourceBodyParametersSortsItemTimestamp) Encode(e *jx.Encoder) {
+// Encode encodes QueryDataSourceRequestSortsItemTimestamp as json.
+func (o OptQueryDataSourceRequestSortsItemTimestamp) Encode(e *jx.Encoder) {
 	if !o.Set {
 		return
 	}
 	e.Str(string(o.Value))
 }
 
-// Decode decodes QueryDataSourceBodyParametersSortsItemTimestamp from json.
-func (o *OptQueryDataSourceBodyParametersSortsItemTimestamp) Decode(d *jx.Decoder) error {
+// Decode decodes QueryDataSourceRequestSortsItemTimestamp from json.
+func (o *OptQueryDataSourceRequestSortsItemTimestamp) Decode(d *jx.Decoder) error {
 	if o == nil {
-		return errors.New("invalid: unable to decode OptQueryDataSourceBodyParametersSortsItemTimestamp to nil")
+		return errors.New("invalid: unable to decode OptQueryDataSourceRequestSortsItemTimestamp to nil")
 	}
 	o.Set = true
 	if err := o.Value.Decode(d); err != nil {
@@ -47779,14 +47779,14 @@ func (o *OptQueryDataSourceBodyParametersSortsItemTimestamp) Decode(d *jx.Decode
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s OptQueryDataSourceBodyParametersSortsItemTimestamp) MarshalJSON() ([]byte, error) {
+func (s OptQueryDataSourceRequestSortsItemTimestamp) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *OptQueryDataSourceBodyParametersSortsItemTimestamp) UnmarshalJSON(data []byte) error {
+func (s *OptQueryDataSourceRequestSortsItemTimestamp) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
@@ -48452,18 +48452,18 @@ func (s *OptRollupSubfilterPropertyFilter) UnmarshalJSON(data []byte) error {
 	return s.Decode(d)
 }
 
-// Encode encodes SearchBodyParametersFilter as json.
-func (o OptSearchBodyParametersFilter) Encode(e *jx.Encoder) {
+// Encode encodes SearchRequestFilter as json.
+func (o OptSearchRequestFilter) Encode(e *jx.Encoder) {
 	if !o.Set {
 		return
 	}
 	o.Value.Encode(e)
 }
 
-// Decode decodes SearchBodyParametersFilter from json.
-func (o *OptSearchBodyParametersFilter) Decode(d *jx.Decoder) error {
+// Decode decodes SearchRequestFilter from json.
+func (o *OptSearchRequestFilter) Decode(d *jx.Decoder) error {
 	if o == nil {
-		return errors.New("invalid: unable to decode OptSearchBodyParametersFilter to nil")
+		return errors.New("invalid: unable to decode OptSearchRequestFilter to nil")
 	}
 	o.Set = true
 	if err := o.Value.Decode(d); err != nil {
@@ -48473,30 +48473,30 @@ func (o *OptSearchBodyParametersFilter) Decode(d *jx.Decoder) error {
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s OptSearchBodyParametersFilter) MarshalJSON() ([]byte, error) {
+func (s OptSearchRequestFilter) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *OptSearchBodyParametersFilter) UnmarshalJSON(data []byte) error {
+func (s *OptSearchRequestFilter) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
-// Encode encodes SearchBodyParametersSort as json.
-func (o OptSearchBodyParametersSort) Encode(e *jx.Encoder) {
+// Encode encodes SearchRequestSort as json.
+func (o OptSearchRequestSort) Encode(e *jx.Encoder) {
 	if !o.Set {
 		return
 	}
 	o.Value.Encode(e)
 }
 
-// Decode decodes SearchBodyParametersSort from json.
-func (o *OptSearchBodyParametersSort) Decode(d *jx.Decoder) error {
+// Decode decodes SearchRequestSort from json.
+func (o *OptSearchRequestSort) Decode(d *jx.Decoder) error {
 	if o == nil {
-		return errors.New("invalid: unable to decode OptSearchBodyParametersSort to nil")
+		return errors.New("invalid: unable to decode OptSearchRequestSort to nil")
 	}
 	o.Set = true
 	if err := o.Value.Decode(d); err != nil {
@@ -48506,14 +48506,14 @@ func (o *OptSearchBodyParametersSort) Decode(d *jx.Decoder) error {
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s OptSearchBodyParametersSort) MarshalJSON() ([]byte, error) {
+func (s OptSearchRequestSort) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *OptSearchBodyParametersSort) UnmarshalJSON(data []byte) error {
+func (s *OptSearchRequestSort) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
@@ -49775,18 +49775,18 @@ func (s *OptUniqueIdPropertyValueResponse) UnmarshalJSON(data []byte) error {
 	return s.Decode(d)
 }
 
-// Encode encodes UpdateBlockBodyParametersCallout as json.
-func (o OptUpdateBlockBodyParametersCallout) Encode(e *jx.Encoder) {
+// Encode encodes UpdateBlockRequestCallout as json.
+func (o OptUpdateBlockRequestCallout) Encode(e *jx.Encoder) {
 	if !o.Set {
 		return
 	}
 	o.Value.Encode(e)
 }
 
-// Decode decodes UpdateBlockBodyParametersCallout from json.
-func (o *OptUpdateBlockBodyParametersCallout) Decode(d *jx.Decoder) error {
+// Decode decodes UpdateBlockRequestCallout from json.
+func (o *OptUpdateBlockRequestCallout) Decode(d *jx.Decoder) error {
 	if o == nil {
-		return errors.New("invalid: unable to decode OptUpdateBlockBodyParametersCallout to nil")
+		return errors.New("invalid: unable to decode OptUpdateBlockRequestCallout to nil")
 	}
 	o.Set = true
 	if err := o.Value.Decode(d); err != nil {
@@ -49796,30 +49796,30 @@ func (o *OptUpdateBlockBodyParametersCallout) Decode(d *jx.Decoder) error {
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s OptUpdateBlockBodyParametersCallout) MarshalJSON() ([]byte, error) {
+func (s OptUpdateBlockRequestCallout) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *OptUpdateBlockBodyParametersCallout) UnmarshalJSON(data []byte) error {
+func (s *OptUpdateBlockRequestCallout) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
-// Encode encodes UpdateBlockBodyParametersCode as json.
-func (o OptUpdateBlockBodyParametersCode) Encode(e *jx.Encoder) {
+// Encode encodes UpdateBlockRequestCode as json.
+func (o OptUpdateBlockRequestCode) Encode(e *jx.Encoder) {
 	if !o.Set {
 		return
 	}
 	o.Value.Encode(e)
 }
 
-// Decode decodes UpdateBlockBodyParametersCode from json.
-func (o *OptUpdateBlockBodyParametersCode) Decode(d *jx.Decoder) error {
+// Decode decodes UpdateBlockRequestCode from json.
+func (o *OptUpdateBlockRequestCode) Decode(d *jx.Decoder) error {
 	if o == nil {
-		return errors.New("invalid: unable to decode OptUpdateBlockBodyParametersCode to nil")
+		return errors.New("invalid: unable to decode OptUpdateBlockRequestCode to nil")
 	}
 	o.Set = true
 	if err := o.Value.Decode(d); err != nil {
@@ -49829,30 +49829,30 @@ func (o *OptUpdateBlockBodyParametersCode) Decode(d *jx.Decoder) error {
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s OptUpdateBlockBodyParametersCode) MarshalJSON() ([]byte, error) {
+func (s OptUpdateBlockRequestCode) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *OptUpdateBlockBodyParametersCode) UnmarshalJSON(data []byte) error {
+func (s *OptUpdateBlockRequestCode) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
-// Encode encodes UpdateBlockBodyParametersColumn as json.
-func (o OptUpdateBlockBodyParametersColumn) Encode(e *jx.Encoder) {
+// Encode encodes UpdateBlockRequestColumn as json.
+func (o OptUpdateBlockRequestColumn) Encode(e *jx.Encoder) {
 	if !o.Set {
 		return
 	}
 	o.Value.Encode(e)
 }
 
-// Decode decodes UpdateBlockBodyParametersColumn from json.
-func (o *OptUpdateBlockBodyParametersColumn) Decode(d *jx.Decoder) error {
+// Decode decodes UpdateBlockRequestColumn from json.
+func (o *OptUpdateBlockRequestColumn) Decode(d *jx.Decoder) error {
 	if o == nil {
-		return errors.New("invalid: unable to decode OptUpdateBlockBodyParametersColumn to nil")
+		return errors.New("invalid: unable to decode OptUpdateBlockRequestColumn to nil")
 	}
 	o.Set = true
 	if err := o.Value.Decode(d); err != nil {
@@ -49862,30 +49862,30 @@ func (o *OptUpdateBlockBodyParametersColumn) Decode(d *jx.Decoder) error {
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s OptUpdateBlockBodyParametersColumn) MarshalJSON() ([]byte, error) {
+func (s OptUpdateBlockRequestColumn) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *OptUpdateBlockBodyParametersColumn) UnmarshalJSON(data []byte) error {
+func (s *OptUpdateBlockRequestColumn) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
-// Encode encodes UpdateBlockBodyParametersLinkToPage as json.
-func (o OptUpdateBlockBodyParametersLinkToPage) Encode(e *jx.Encoder) {
+// Encode encodes UpdateBlockRequestLinkToPage as json.
+func (o OptUpdateBlockRequestLinkToPage) Encode(e *jx.Encoder) {
 	if !o.Set {
 		return
 	}
 	o.Value.Encode(e)
 }
 
-// Decode decodes UpdateBlockBodyParametersLinkToPage from json.
-func (o *OptUpdateBlockBodyParametersLinkToPage) Decode(d *jx.Decoder) error {
+// Decode decodes UpdateBlockRequestLinkToPage from json.
+func (o *OptUpdateBlockRequestLinkToPage) Decode(d *jx.Decoder) error {
 	if o == nil {
-		return errors.New("invalid: unable to decode OptUpdateBlockBodyParametersLinkToPage to nil")
+		return errors.New("invalid: unable to decode OptUpdateBlockRequestLinkToPage to nil")
 	}
 	o.Set = true
 	if err := o.Value.Decode(d); err != nil {
@@ -49895,30 +49895,30 @@ func (o *OptUpdateBlockBodyParametersLinkToPage) Decode(d *jx.Decoder) error {
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s OptUpdateBlockBodyParametersLinkToPage) MarshalJSON() ([]byte, error) {
+func (s OptUpdateBlockRequestLinkToPage) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *OptUpdateBlockBodyParametersLinkToPage) UnmarshalJSON(data []byte) error {
+func (s *OptUpdateBlockRequestLinkToPage) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
-// Encode encodes UpdateBlockBodyParametersLinkToPageType as json.
-func (o OptUpdateBlockBodyParametersLinkToPageType) Encode(e *jx.Encoder) {
+// Encode encodes UpdateBlockRequestLinkToPageType as json.
+func (o OptUpdateBlockRequestLinkToPageType) Encode(e *jx.Encoder) {
 	if !o.Set {
 		return
 	}
 	e.Str(string(o.Value))
 }
 
-// Decode decodes UpdateBlockBodyParametersLinkToPageType from json.
-func (o *OptUpdateBlockBodyParametersLinkToPageType) Decode(d *jx.Decoder) error {
+// Decode decodes UpdateBlockRequestLinkToPageType from json.
+func (o *OptUpdateBlockRequestLinkToPageType) Decode(d *jx.Decoder) error {
 	if o == nil {
-		return errors.New("invalid: unable to decode OptUpdateBlockBodyParametersLinkToPageType to nil")
+		return errors.New("invalid: unable to decode OptUpdateBlockRequestLinkToPageType to nil")
 	}
 	o.Set = true
 	if err := o.Value.Decode(d); err != nil {
@@ -49928,30 +49928,30 @@ func (o *OptUpdateBlockBodyParametersLinkToPageType) Decode(d *jx.Decoder) error
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s OptUpdateBlockBodyParametersLinkToPageType) MarshalJSON() ([]byte, error) {
+func (s OptUpdateBlockRequestLinkToPageType) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *OptUpdateBlockBodyParametersLinkToPageType) UnmarshalJSON(data []byte) error {
+func (s *OptUpdateBlockRequestLinkToPageType) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
-// Encode encodes UpdateBlockBodyParametersSyncedBlock as json.
-func (o OptUpdateBlockBodyParametersSyncedBlock) Encode(e *jx.Encoder) {
+// Encode encodes UpdateBlockRequestSyncedBlock as json.
+func (o OptUpdateBlockRequestSyncedBlock) Encode(e *jx.Encoder) {
 	if !o.Set {
 		return
 	}
 	o.Value.Encode(e)
 }
 
-// Decode decodes UpdateBlockBodyParametersSyncedBlock from json.
-func (o *OptUpdateBlockBodyParametersSyncedBlock) Decode(d *jx.Decoder) error {
+// Decode decodes UpdateBlockRequestSyncedBlock from json.
+func (o *OptUpdateBlockRequestSyncedBlock) Decode(d *jx.Decoder) error {
 	if o == nil {
-		return errors.New("invalid: unable to decode OptUpdateBlockBodyParametersSyncedBlock to nil")
+		return errors.New("invalid: unable to decode OptUpdateBlockRequestSyncedBlock to nil")
 	}
 	o.Set = true
 	if err := o.Value.Decode(d); err != nil {
@@ -49961,30 +49961,30 @@ func (o *OptUpdateBlockBodyParametersSyncedBlock) Decode(d *jx.Decoder) error {
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s OptUpdateBlockBodyParametersSyncedBlock) MarshalJSON() ([]byte, error) {
+func (s OptUpdateBlockRequestSyncedBlock) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *OptUpdateBlockBodyParametersSyncedBlock) UnmarshalJSON(data []byte) error {
+func (s *OptUpdateBlockRequestSyncedBlock) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
-// Encode encodes UpdateBlockBodyParametersSyncedBlockSyncedFromType as json.
-func (o OptUpdateBlockBodyParametersSyncedBlockSyncedFromType) Encode(e *jx.Encoder) {
+// Encode encodes UpdateBlockRequestSyncedBlockSyncedFromType as json.
+func (o OptUpdateBlockRequestSyncedBlockSyncedFromType) Encode(e *jx.Encoder) {
 	if !o.Set {
 		return
 	}
 	e.Str(string(o.Value))
 }
 
-// Decode decodes UpdateBlockBodyParametersSyncedBlockSyncedFromType from json.
-func (o *OptUpdateBlockBodyParametersSyncedBlockSyncedFromType) Decode(d *jx.Decoder) error {
+// Decode decodes UpdateBlockRequestSyncedBlockSyncedFromType from json.
+func (o *OptUpdateBlockRequestSyncedBlockSyncedFromType) Decode(d *jx.Decoder) error {
 	if o == nil {
-		return errors.New("invalid: unable to decode OptUpdateBlockBodyParametersSyncedBlockSyncedFromType to nil")
+		return errors.New("invalid: unable to decode OptUpdateBlockRequestSyncedBlockSyncedFromType to nil")
 	}
 	o.Set = true
 	if err := o.Value.Decode(d); err != nil {
@@ -49994,30 +49994,30 @@ func (o *OptUpdateBlockBodyParametersSyncedBlockSyncedFromType) Decode(d *jx.Dec
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s OptUpdateBlockBodyParametersSyncedBlockSyncedFromType) MarshalJSON() ([]byte, error) {
+func (s OptUpdateBlockRequestSyncedBlockSyncedFromType) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *OptUpdateBlockBodyParametersSyncedBlockSyncedFromType) UnmarshalJSON(data []byte) error {
+func (s *OptUpdateBlockRequestSyncedBlockSyncedFromType) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
-// Encode encodes UpdateBlockBodyParametersTable as json.
-func (o OptUpdateBlockBodyParametersTable) Encode(e *jx.Encoder) {
+// Encode encodes UpdateBlockRequestTable as json.
+func (o OptUpdateBlockRequestTable) Encode(e *jx.Encoder) {
 	if !o.Set {
 		return
 	}
 	o.Value.Encode(e)
 }
 
-// Decode decodes UpdateBlockBodyParametersTable from json.
-func (o *OptUpdateBlockBodyParametersTable) Decode(d *jx.Decoder) error {
+// Decode decodes UpdateBlockRequestTable from json.
+func (o *OptUpdateBlockRequestTable) Decode(d *jx.Decoder) error {
 	if o == nil {
-		return errors.New("invalid: unable to decode OptUpdateBlockBodyParametersTable to nil")
+		return errors.New("invalid: unable to decode OptUpdateBlockRequestTable to nil")
 	}
 	o.Set = true
 	if err := o.Value.Decode(d); err != nil {
@@ -50027,30 +50027,30 @@ func (o *OptUpdateBlockBodyParametersTable) Decode(d *jx.Decoder) error {
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s OptUpdateBlockBodyParametersTable) MarshalJSON() ([]byte, error) {
+func (s OptUpdateBlockRequestTable) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *OptUpdateBlockBodyParametersTable) UnmarshalJSON(data []byte) error {
+func (s *OptUpdateBlockRequestTable) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
-// Encode encodes UpdateBlockBodyParametersTableOfContents as json.
-func (o OptUpdateBlockBodyParametersTableOfContents) Encode(e *jx.Encoder) {
+// Encode encodes UpdateBlockRequestTableOfContents as json.
+func (o OptUpdateBlockRequestTableOfContents) Encode(e *jx.Encoder) {
 	if !o.Set {
 		return
 	}
 	o.Value.Encode(e)
 }
 
-// Decode decodes UpdateBlockBodyParametersTableOfContents from json.
-func (o *OptUpdateBlockBodyParametersTableOfContents) Decode(d *jx.Decoder) error {
+// Decode decodes UpdateBlockRequestTableOfContents from json.
+func (o *OptUpdateBlockRequestTableOfContents) Decode(d *jx.Decoder) error {
 	if o == nil {
-		return errors.New("invalid: unable to decode OptUpdateBlockBodyParametersTableOfContents to nil")
+		return errors.New("invalid: unable to decode OptUpdateBlockRequestTableOfContents to nil")
 	}
 	o.Set = true
 	if err := o.Value.Decode(d); err != nil {
@@ -50060,30 +50060,30 @@ func (o *OptUpdateBlockBodyParametersTableOfContents) Decode(d *jx.Decoder) erro
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s OptUpdateBlockBodyParametersTableOfContents) MarshalJSON() ([]byte, error) {
+func (s OptUpdateBlockRequestTableOfContents) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *OptUpdateBlockBodyParametersTableOfContents) UnmarshalJSON(data []byte) error {
+func (s *OptUpdateBlockRequestTableOfContents) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
-// Encode encodes UpdateBlockBodyParametersToDo as json.
-func (o OptUpdateBlockBodyParametersToDo) Encode(e *jx.Encoder) {
+// Encode encodes UpdateBlockRequestToDo as json.
+func (o OptUpdateBlockRequestToDo) Encode(e *jx.Encoder) {
 	if !o.Set {
 		return
 	}
 	o.Value.Encode(e)
 }
 
-// Decode decodes UpdateBlockBodyParametersToDo from json.
-func (o *OptUpdateBlockBodyParametersToDo) Decode(d *jx.Decoder) error {
+// Decode decodes UpdateBlockRequestToDo from json.
+func (o *OptUpdateBlockRequestToDo) Decode(d *jx.Decoder) error {
 	if o == nil {
-		return errors.New("invalid: unable to decode OptUpdateBlockBodyParametersToDo to nil")
+		return errors.New("invalid: unable to decode OptUpdateBlockRequestToDo to nil")
 	}
 	o.Set = true
 	if err := o.Value.Decode(d); err != nil {
@@ -50093,30 +50093,30 @@ func (o *OptUpdateBlockBodyParametersToDo) Decode(d *jx.Decoder) error {
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s OptUpdateBlockBodyParametersToDo) MarshalJSON() ([]byte, error) {
+func (s OptUpdateBlockRequestToDo) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *OptUpdateBlockBodyParametersToDo) UnmarshalJSON(data []byte) error {
+func (s *OptUpdateBlockRequestToDo) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
-// Encode encodes UpdateBlockBodyParametersType as json.
-func (o OptUpdateBlockBodyParametersType) Encode(e *jx.Encoder) {
+// Encode encodes UpdateBlockRequestType as json.
+func (o OptUpdateBlockRequestType) Encode(e *jx.Encoder) {
 	if !o.Set {
 		return
 	}
 	e.Str(string(o.Value))
 }
 
-// Decode decodes UpdateBlockBodyParametersType from json.
-func (o *OptUpdateBlockBodyParametersType) Decode(d *jx.Decoder) error {
+// Decode decodes UpdateBlockRequestType from json.
+func (o *OptUpdateBlockRequestType) Decode(d *jx.Decoder) error {
 	if o == nil {
-		return errors.New("invalid: unable to decode OptUpdateBlockBodyParametersType to nil")
+		return errors.New("invalid: unable to decode OptUpdateBlockRequestType to nil")
 	}
 	o.Set = true
 	if err := o.Value.Decode(d); err != nil {
@@ -50126,14 +50126,14 @@ func (o *OptUpdateBlockBodyParametersType) Decode(d *jx.Decoder) error {
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s OptUpdateBlockBodyParametersType) MarshalJSON() ([]byte, error) {
+func (s OptUpdateBlockRequestType) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *OptUpdateBlockBodyParametersType) UnmarshalJSON(data []byte) error {
+func (s *OptUpdateBlockRequestType) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
@@ -50402,18 +50402,18 @@ func (s *OptUpdateBlockResponseType) UnmarshalJSON(data []byte) error {
 	return s.Decode(d)
 }
 
-// Encode encodes UpdateDatabaseBodyParametersParent as json.
-func (o OptUpdateDatabaseBodyParametersParent) Encode(e *jx.Encoder) {
+// Encode encodes UpdateDatabaseRequestParent as json.
+func (o OptUpdateDatabaseRequestParent) Encode(e *jx.Encoder) {
 	if !o.Set {
 		return
 	}
 	o.Value.Encode(e)
 }
 
-// Decode decodes UpdateDatabaseBodyParametersParent from json.
-func (o *OptUpdateDatabaseBodyParametersParent) Decode(d *jx.Decoder) error {
+// Decode decodes UpdateDatabaseRequestParent from json.
+func (o *OptUpdateDatabaseRequestParent) Decode(d *jx.Decoder) error {
 	if o == nil {
-		return errors.New("invalid: unable to decode OptUpdateDatabaseBodyParametersParent to nil")
+		return errors.New("invalid: unable to decode OptUpdateDatabaseRequestParent to nil")
 	}
 	o.Set = true
 	if err := o.Value.Decode(d); err != nil {
@@ -50423,30 +50423,30 @@ func (o *OptUpdateDatabaseBodyParametersParent) Decode(d *jx.Decoder) error {
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s OptUpdateDatabaseBodyParametersParent) MarshalJSON() ([]byte, error) {
+func (s OptUpdateDatabaseRequestParent) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *OptUpdateDatabaseBodyParametersParent) UnmarshalJSON(data []byte) error {
+func (s *OptUpdateDatabaseRequestParent) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
-// Encode encodes UpdateDatabaseBodyParametersParentWorkspace as json.
-func (o OptUpdateDatabaseBodyParametersParentWorkspace) Encode(e *jx.Encoder) {
+// Encode encodes UpdateDatabaseRequestParentWorkspace as json.
+func (o OptUpdateDatabaseRequestParentWorkspace) Encode(e *jx.Encoder) {
 	if !o.Set {
 		return
 	}
 	e.Bool(bool(o.Value))
 }
 
-// Decode decodes UpdateDatabaseBodyParametersParentWorkspace from json.
-func (o *OptUpdateDatabaseBodyParametersParentWorkspace) Decode(d *jx.Decoder) error {
+// Decode decodes UpdateDatabaseRequestParentWorkspace from json.
+func (o *OptUpdateDatabaseRequestParentWorkspace) Decode(d *jx.Decoder) error {
 	if o == nil {
-		return errors.New("invalid: unable to decode OptUpdateDatabaseBodyParametersParentWorkspace to nil")
+		return errors.New("invalid: unable to decode OptUpdateDatabaseRequestParentWorkspace to nil")
 	}
 	o.Set = true
 	if err := o.Value.Decode(d); err != nil {
@@ -50456,14 +50456,14 @@ func (o *OptUpdateDatabaseBodyParametersParentWorkspace) Decode(d *jx.Decoder) e
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s OptUpdateDatabaseBodyParametersParentWorkspace) MarshalJSON() ([]byte, error) {
+func (s OptUpdateDatabaseRequestParentWorkspace) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *OptUpdateDatabaseBodyParametersParentWorkspace) UnmarshalJSON(data []byte) error {
+func (s *OptUpdateDatabaseRequestParentWorkspace) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
@@ -50567,21 +50567,21 @@ func (s *OptUpdateMediaContentWithUrlAndCaptionRequest) UnmarshalJSON(data []byt
 	return s.Decode(d)
 }
 
-// Encode encodes UpdatePageBodyParametersProperties as json.
-func (o OptUpdatePageBodyParametersProperties) Encode(e *jx.Encoder) {
+// Encode encodes UpdatePageRequestProperties as json.
+func (o OptUpdatePageRequestProperties) Encode(e *jx.Encoder) {
 	if !o.Set {
 		return
 	}
 	o.Value.Encode(e)
 }
 
-// Decode decodes UpdatePageBodyParametersProperties from json.
-func (o *OptUpdatePageBodyParametersProperties) Decode(d *jx.Decoder) error {
+// Decode decodes UpdatePageRequestProperties from json.
+func (o *OptUpdatePageRequestProperties) Decode(d *jx.Decoder) error {
 	if o == nil {
-		return errors.New("invalid: unable to decode OptUpdatePageBodyParametersProperties to nil")
+		return errors.New("invalid: unable to decode OptUpdatePageRequestProperties to nil")
 	}
 	o.Set = true
-	o.Value = make(UpdatePageBodyParametersProperties)
+	o.Value = make(UpdatePageRequestProperties)
 	if err := o.Value.Decode(d); err != nil {
 		return err
 	}
@@ -50589,30 +50589,30 @@ func (o *OptUpdatePageBodyParametersProperties) Decode(d *jx.Decoder) error {
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s OptUpdatePageBodyParametersProperties) MarshalJSON() ([]byte, error) {
+func (s OptUpdatePageRequestProperties) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *OptUpdatePageBodyParametersProperties) UnmarshalJSON(data []byte) error {
+func (s *OptUpdatePageRequestProperties) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
-// Encode encodes UpdatePageBodyParametersPropertiesItemFilesItemType as json.
-func (o OptUpdatePageBodyParametersPropertiesItemFilesItemType) Encode(e *jx.Encoder) {
+// Encode encodes UpdatePageRequestPropertiesItemFilesItemType as json.
+func (o OptUpdatePageRequestPropertiesItemFilesItemType) Encode(e *jx.Encoder) {
 	if !o.Set {
 		return
 	}
 	e.Str(string(o.Value))
 }
 
-// Decode decodes UpdatePageBodyParametersPropertiesItemFilesItemType from json.
-func (o *OptUpdatePageBodyParametersPropertiesItemFilesItemType) Decode(d *jx.Decoder) error {
+// Decode decodes UpdatePageRequestPropertiesItemFilesItemType from json.
+func (o *OptUpdatePageRequestPropertiesItemFilesItemType) Decode(d *jx.Decoder) error {
 	if o == nil {
-		return errors.New("invalid: unable to decode OptUpdatePageBodyParametersPropertiesItemFilesItemType to nil")
+		return errors.New("invalid: unable to decode OptUpdatePageRequestPropertiesItemFilesItemType to nil")
 	}
 	o.Set = true
 	if err := o.Value.Decode(d); err != nil {
@@ -50622,30 +50622,30 @@ func (o *OptUpdatePageBodyParametersPropertiesItemFilesItemType) Decode(d *jx.De
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s OptUpdatePageBodyParametersPropertiesItemFilesItemType) MarshalJSON() ([]byte, error) {
+func (s OptUpdatePageRequestPropertiesItemFilesItemType) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *OptUpdatePageBodyParametersPropertiesItemFilesItemType) UnmarshalJSON(data []byte) error {
+func (s *OptUpdatePageRequestPropertiesItemFilesItemType) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
-// Encode encodes UpdatePageBodyParametersPropertiesItemPeopleItemObject as json.
-func (o OptUpdatePageBodyParametersPropertiesItemPeopleItemObject) Encode(e *jx.Encoder) {
+// Encode encodes UpdatePageRequestPropertiesItemPeopleItemObject as json.
+func (o OptUpdatePageRequestPropertiesItemPeopleItemObject) Encode(e *jx.Encoder) {
 	if !o.Set {
 		return
 	}
 	e.Str(string(o.Value))
 }
 
-// Decode decodes UpdatePageBodyParametersPropertiesItemPeopleItemObject from json.
-func (o *OptUpdatePageBodyParametersPropertiesItemPeopleItemObject) Decode(d *jx.Decoder) error {
+// Decode decodes UpdatePageRequestPropertiesItemPeopleItemObject from json.
+func (o *OptUpdatePageRequestPropertiesItemPeopleItemObject) Decode(d *jx.Decoder) error {
 	if o == nil {
-		return errors.New("invalid: unable to decode OptUpdatePageBodyParametersPropertiesItemPeopleItemObject to nil")
+		return errors.New("invalid: unable to decode OptUpdatePageRequestPropertiesItemPeopleItemObject to nil")
 	}
 	o.Set = true
 	if err := o.Value.Decode(d); err != nil {
@@ -50655,30 +50655,30 @@ func (o *OptUpdatePageBodyParametersPropertiesItemPeopleItemObject) Decode(d *jx
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s OptUpdatePageBodyParametersPropertiesItemPeopleItemObject) MarshalJSON() ([]byte, error) {
+func (s OptUpdatePageRequestPropertiesItemPeopleItemObject) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *OptUpdatePageBodyParametersPropertiesItemPeopleItemObject) UnmarshalJSON(data []byte) error {
+func (s *OptUpdatePageRequestPropertiesItemPeopleItemObject) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
-// Encode encodes UpdatePageBodyParametersPropertiesItemType as json.
-func (o OptUpdatePageBodyParametersPropertiesItemType) Encode(e *jx.Encoder) {
+// Encode encodes UpdatePageRequestPropertiesItemType as json.
+func (o OptUpdatePageRequestPropertiesItemType) Encode(e *jx.Encoder) {
 	if !o.Set {
 		return
 	}
 	e.Str(string(o.Value))
 }
 
-// Decode decodes UpdatePageBodyParametersPropertiesItemType from json.
-func (o *OptUpdatePageBodyParametersPropertiesItemType) Decode(d *jx.Decoder) error {
+// Decode decodes UpdatePageRequestPropertiesItemType from json.
+func (o *OptUpdatePageRequestPropertiesItemType) Decode(d *jx.Decoder) error {
 	if o == nil {
-		return errors.New("invalid: unable to decode OptUpdatePageBodyParametersPropertiesItemType to nil")
+		return errors.New("invalid: unable to decode OptUpdatePageRequestPropertiesItemType to nil")
 	}
 	o.Set = true
 	if err := o.Value.Decode(d); err != nil {
@@ -50688,30 +50688,30 @@ func (o *OptUpdatePageBodyParametersPropertiesItemType) Decode(d *jx.Decoder) er
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s OptUpdatePageBodyParametersPropertiesItemType) MarshalJSON() ([]byte, error) {
+func (s OptUpdatePageRequestPropertiesItemType) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *OptUpdatePageBodyParametersPropertiesItemType) UnmarshalJSON(data []byte) error {
+func (s *OptUpdatePageRequestPropertiesItemType) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
-// Encode encodes UpdatePageBodyParametersTemplate as json.
-func (o OptUpdatePageBodyParametersTemplate) Encode(e *jx.Encoder) {
+// Encode encodes UpdatePageRequestTemplate as json.
+func (o OptUpdatePageRequestTemplate) Encode(e *jx.Encoder) {
 	if !o.Set {
 		return
 	}
 	o.Value.Encode(e)
 }
 
-// Decode decodes UpdatePageBodyParametersTemplate from json.
-func (o *OptUpdatePageBodyParametersTemplate) Decode(d *jx.Decoder) error {
+// Decode decodes UpdatePageRequestTemplate from json.
+func (o *OptUpdatePageRequestTemplate) Decode(d *jx.Decoder) error {
 	if o == nil {
-		return errors.New("invalid: unable to decode OptUpdatePageBodyParametersTemplate to nil")
+		return errors.New("invalid: unable to decode OptUpdatePageRequestTemplate to nil")
 	}
 	o.Set = true
 	if err := o.Value.Decode(d); err != nil {
@@ -50721,14 +50721,14 @@ func (o *OptUpdatePageBodyParametersTemplate) Decode(d *jx.Decoder) error {
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s OptUpdatePageBodyParametersTemplate) MarshalJSON() ([]byte, error) {
+func (s OptUpdatePageRequestTemplate) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *OptUpdatePageBodyParametersTemplate) UnmarshalJSON(data []byte) error {
+func (s *OptUpdatePageRequestTemplate) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
@@ -64470,14 +64470,14 @@ func (s *PropertyOrTimestampFilterType) UnmarshalJSON(data []byte) error {
 }
 
 // Encode implements json.Marshaler.
-func (s *QueryDataSourceBodyParameters) Encode(e *jx.Encoder) {
+func (s *QueryDataSourceRequest) Encode(e *jx.Encoder) {
 	e.ObjStart()
 	s.encodeFields(e)
 	e.ObjEnd()
 }
 
 // encodeFields encodes fields.
-func (s *QueryDataSourceBodyParameters) encodeFields(e *jx.Encoder) {
+func (s *QueryDataSourceRequest) encodeFields(e *jx.Encoder) {
 	{
 		if s.Sorts != nil {
 			e.FieldStart("sorts")
@@ -64526,7 +64526,7 @@ func (s *QueryDataSourceBodyParameters) encodeFields(e *jx.Encoder) {
 	}
 }
 
-var jsonFieldsNameOfQueryDataSourceBodyParameters = [7]string{
+var jsonFieldsNameOfQueryDataSourceRequest = [7]string{
 	0: "sorts",
 	1: "filter",
 	2: "start_cursor",
@@ -64536,19 +64536,19 @@ var jsonFieldsNameOfQueryDataSourceBodyParameters = [7]string{
 	6: "result_type",
 }
 
-// Decode decodes QueryDataSourceBodyParameters from json.
-func (s *QueryDataSourceBodyParameters) Decode(d *jx.Decoder) error {
+// Decode decodes QueryDataSourceRequest from json.
+func (s *QueryDataSourceRequest) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode QueryDataSourceBodyParameters to nil")
+		return errors.New("invalid: unable to decode QueryDataSourceRequest to nil")
 	}
 
 	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
 		switch string(k) {
 		case "sorts":
 			if err := func() error {
-				s.Sorts = make([]QueryDataSourceBodyParametersSortsItem, 0)
+				s.Sorts = make([]QueryDataSourceRequestSortsItem, 0)
 				if err := d.Arr(func(d *jx.Decoder) error {
-					var elem QueryDataSourceBodyParametersSortsItem
+					var elem QueryDataSourceRequestSortsItem
 					if err := elem.Decode(d); err != nil {
 						return err
 					}
@@ -64626,34 +64626,34 @@ func (s *QueryDataSourceBodyParameters) Decode(d *jx.Decoder) error {
 		}
 		return nil
 	}); err != nil {
-		return errors.Wrap(err, "decode QueryDataSourceBodyParameters")
+		return errors.Wrap(err, "decode QueryDataSourceRequest")
 	}
 
 	return nil
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s *QueryDataSourceBodyParameters) MarshalJSON() ([]byte, error) {
+func (s *QueryDataSourceRequest) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *QueryDataSourceBodyParameters) UnmarshalJSON(data []byte) error {
+func (s *QueryDataSourceRequest) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
 // Encode implements json.Marshaler.
-func (s *QueryDataSourceBodyParametersFilter) Encode(e *jx.Encoder) {
+func (s *QueryDataSourceRequestFilter) Encode(e *jx.Encoder) {
 	e.ObjStart()
 	s.encodeFields(e)
 	e.ObjEnd()
 }
 
 // encodeFields encodes fields.
-func (s *QueryDataSourceBodyParametersFilter) encodeFields(e *jx.Encoder) {
+func (s *QueryDataSourceRequestFilter) encodeFields(e *jx.Encoder) {
 	{
 		if s.Or != nil {
 			e.FieldStart("or")
@@ -64818,7 +64818,7 @@ func (s *QueryDataSourceBodyParametersFilter) encodeFields(e *jx.Encoder) {
 	}
 }
 
-var jsonFieldsNameOfQueryDataSourceBodyParametersFilter = [27]string{
+var jsonFieldsNameOfQueryDataSourceRequestFilter = [27]string{
 	0:  "or",
 	1:  "and",
 	2:  "title",
@@ -64848,10 +64848,10 @@ var jsonFieldsNameOfQueryDataSourceBodyParametersFilter = [27]string{
 	26: "timestamp",
 }
 
-// Decode decodes QueryDataSourceBodyParametersFilter from json.
-func (s *QueryDataSourceBodyParametersFilter) Decode(d *jx.Decoder) error {
+// Decode decodes QueryDataSourceRequestFilter from json.
+func (s *QueryDataSourceRequestFilter) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode QueryDataSourceBodyParametersFilter to nil")
+		return errors.New("invalid: unable to decode QueryDataSourceRequestFilter to nil")
 	}
 
 	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
@@ -65129,194 +65129,194 @@ func (s *QueryDataSourceBodyParametersFilter) Decode(d *jx.Decoder) error {
 		}
 		return nil
 	}); err != nil {
-		return errors.Wrap(err, "decode QueryDataSourceBodyParametersFilter")
+		return errors.Wrap(err, "decode QueryDataSourceRequestFilter")
 	}
 
 	return nil
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s *QueryDataSourceBodyParametersFilter) MarshalJSON() ([]byte, error) {
+func (s *QueryDataSourceRequestFilter) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *QueryDataSourceBodyParametersFilter) UnmarshalJSON(data []byte) error {
+func (s *QueryDataSourceRequestFilter) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
-// Encode encodes QueryDataSourceBodyParametersFilterTimestamp as json.
-func (s QueryDataSourceBodyParametersFilterTimestamp) Encode(e *jx.Encoder) {
+// Encode encodes QueryDataSourceRequestFilterTimestamp as json.
+func (s QueryDataSourceRequestFilterTimestamp) Encode(e *jx.Encoder) {
 	e.Str(string(s))
 }
 
-// Decode decodes QueryDataSourceBodyParametersFilterTimestamp from json.
-func (s *QueryDataSourceBodyParametersFilterTimestamp) Decode(d *jx.Decoder) error {
+// Decode decodes QueryDataSourceRequestFilterTimestamp from json.
+func (s *QueryDataSourceRequestFilterTimestamp) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode QueryDataSourceBodyParametersFilterTimestamp to nil")
+		return errors.New("invalid: unable to decode QueryDataSourceRequestFilterTimestamp to nil")
 	}
 	v, err := d.StrBytes()
 	if err != nil {
 		return err
 	}
 	// Try to use constant string.
-	switch QueryDataSourceBodyParametersFilterTimestamp(v) {
-	case QueryDataSourceBodyParametersFilterTimestampCreatedTime:
-		*s = QueryDataSourceBodyParametersFilterTimestampCreatedTime
-	case QueryDataSourceBodyParametersFilterTimestampLastEditedTime:
-		*s = QueryDataSourceBodyParametersFilterTimestampLastEditedTime
+	switch QueryDataSourceRequestFilterTimestamp(v) {
+	case QueryDataSourceRequestFilterTimestampCreatedTime:
+		*s = QueryDataSourceRequestFilterTimestampCreatedTime
+	case QueryDataSourceRequestFilterTimestampLastEditedTime:
+		*s = QueryDataSourceRequestFilterTimestampLastEditedTime
 	default:
-		*s = QueryDataSourceBodyParametersFilterTimestamp(v)
+		*s = QueryDataSourceRequestFilterTimestamp(v)
 	}
 
 	return nil
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s QueryDataSourceBodyParametersFilterTimestamp) MarshalJSON() ([]byte, error) {
+func (s QueryDataSourceRequestFilterTimestamp) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *QueryDataSourceBodyParametersFilterTimestamp) UnmarshalJSON(data []byte) error {
+func (s *QueryDataSourceRequestFilterTimestamp) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
-// Encode encodes QueryDataSourceBodyParametersFilterType as json.
-func (s QueryDataSourceBodyParametersFilterType) Encode(e *jx.Encoder) {
+// Encode encodes QueryDataSourceRequestFilterType as json.
+func (s QueryDataSourceRequestFilterType) Encode(e *jx.Encoder) {
 	e.Str(string(s))
 }
 
-// Decode decodes QueryDataSourceBodyParametersFilterType from json.
-func (s *QueryDataSourceBodyParametersFilterType) Decode(d *jx.Decoder) error {
+// Decode decodes QueryDataSourceRequestFilterType from json.
+func (s *QueryDataSourceRequestFilterType) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode QueryDataSourceBodyParametersFilterType to nil")
+		return errors.New("invalid: unable to decode QueryDataSourceRequestFilterType to nil")
 	}
 	v, err := d.StrBytes()
 	if err != nil {
 		return err
 	}
 	// Try to use constant string.
-	switch QueryDataSourceBodyParametersFilterType(v) {
-	case QueryDataSourceBodyParametersFilterTypeTitle:
-		*s = QueryDataSourceBodyParametersFilterTypeTitle
-	case QueryDataSourceBodyParametersFilterTypeRichText:
-		*s = QueryDataSourceBodyParametersFilterTypeRichText
-	case QueryDataSourceBodyParametersFilterTypeNumber:
-		*s = QueryDataSourceBodyParametersFilterTypeNumber
-	case QueryDataSourceBodyParametersFilterTypeCheckbox:
-		*s = QueryDataSourceBodyParametersFilterTypeCheckbox
-	case QueryDataSourceBodyParametersFilterTypeSelect:
-		*s = QueryDataSourceBodyParametersFilterTypeSelect
-	case QueryDataSourceBodyParametersFilterTypeMultiSelect:
-		*s = QueryDataSourceBodyParametersFilterTypeMultiSelect
-	case QueryDataSourceBodyParametersFilterTypeStatus:
-		*s = QueryDataSourceBodyParametersFilterTypeStatus
-	case QueryDataSourceBodyParametersFilterTypeDate:
-		*s = QueryDataSourceBodyParametersFilterTypeDate
-	case QueryDataSourceBodyParametersFilterTypePeople:
-		*s = QueryDataSourceBodyParametersFilterTypePeople
-	case QueryDataSourceBodyParametersFilterTypeFiles:
-		*s = QueryDataSourceBodyParametersFilterTypeFiles
-	case QueryDataSourceBodyParametersFilterTypeURL:
-		*s = QueryDataSourceBodyParametersFilterTypeURL
-	case QueryDataSourceBodyParametersFilterTypeEmail:
-		*s = QueryDataSourceBodyParametersFilterTypeEmail
-	case QueryDataSourceBodyParametersFilterTypePhoneNumber:
-		*s = QueryDataSourceBodyParametersFilterTypePhoneNumber
-	case QueryDataSourceBodyParametersFilterTypeRelation:
-		*s = QueryDataSourceBodyParametersFilterTypeRelation
-	case QueryDataSourceBodyParametersFilterTypeCreatedBy:
-		*s = QueryDataSourceBodyParametersFilterTypeCreatedBy
-	case QueryDataSourceBodyParametersFilterTypeCreatedTime:
-		*s = QueryDataSourceBodyParametersFilterTypeCreatedTime
-	case QueryDataSourceBodyParametersFilterTypeLastEditedBy:
-		*s = QueryDataSourceBodyParametersFilterTypeLastEditedBy
-	case QueryDataSourceBodyParametersFilterTypeLastEditedTime:
-		*s = QueryDataSourceBodyParametersFilterTypeLastEditedTime
-	case QueryDataSourceBodyParametersFilterTypeFormula:
-		*s = QueryDataSourceBodyParametersFilterTypeFormula
-	case QueryDataSourceBodyParametersFilterTypeUniqueID:
-		*s = QueryDataSourceBodyParametersFilterTypeUniqueID
-	case QueryDataSourceBodyParametersFilterTypeRollup:
-		*s = QueryDataSourceBodyParametersFilterTypeRollup
-	case QueryDataSourceBodyParametersFilterTypeVerification:
-		*s = QueryDataSourceBodyParametersFilterTypeVerification
+	switch QueryDataSourceRequestFilterType(v) {
+	case QueryDataSourceRequestFilterTypeTitle:
+		*s = QueryDataSourceRequestFilterTypeTitle
+	case QueryDataSourceRequestFilterTypeRichText:
+		*s = QueryDataSourceRequestFilterTypeRichText
+	case QueryDataSourceRequestFilterTypeNumber:
+		*s = QueryDataSourceRequestFilterTypeNumber
+	case QueryDataSourceRequestFilterTypeCheckbox:
+		*s = QueryDataSourceRequestFilterTypeCheckbox
+	case QueryDataSourceRequestFilterTypeSelect:
+		*s = QueryDataSourceRequestFilterTypeSelect
+	case QueryDataSourceRequestFilterTypeMultiSelect:
+		*s = QueryDataSourceRequestFilterTypeMultiSelect
+	case QueryDataSourceRequestFilterTypeStatus:
+		*s = QueryDataSourceRequestFilterTypeStatus
+	case QueryDataSourceRequestFilterTypeDate:
+		*s = QueryDataSourceRequestFilterTypeDate
+	case QueryDataSourceRequestFilterTypePeople:
+		*s = QueryDataSourceRequestFilterTypePeople
+	case QueryDataSourceRequestFilterTypeFiles:
+		*s = QueryDataSourceRequestFilterTypeFiles
+	case QueryDataSourceRequestFilterTypeURL:
+		*s = QueryDataSourceRequestFilterTypeURL
+	case QueryDataSourceRequestFilterTypeEmail:
+		*s = QueryDataSourceRequestFilterTypeEmail
+	case QueryDataSourceRequestFilterTypePhoneNumber:
+		*s = QueryDataSourceRequestFilterTypePhoneNumber
+	case QueryDataSourceRequestFilterTypeRelation:
+		*s = QueryDataSourceRequestFilterTypeRelation
+	case QueryDataSourceRequestFilterTypeCreatedBy:
+		*s = QueryDataSourceRequestFilterTypeCreatedBy
+	case QueryDataSourceRequestFilterTypeCreatedTime:
+		*s = QueryDataSourceRequestFilterTypeCreatedTime
+	case QueryDataSourceRequestFilterTypeLastEditedBy:
+		*s = QueryDataSourceRequestFilterTypeLastEditedBy
+	case QueryDataSourceRequestFilterTypeLastEditedTime:
+		*s = QueryDataSourceRequestFilterTypeLastEditedTime
+	case QueryDataSourceRequestFilterTypeFormula:
+		*s = QueryDataSourceRequestFilterTypeFormula
+	case QueryDataSourceRequestFilterTypeUniqueID:
+		*s = QueryDataSourceRequestFilterTypeUniqueID
+	case QueryDataSourceRequestFilterTypeRollup:
+		*s = QueryDataSourceRequestFilterTypeRollup
+	case QueryDataSourceRequestFilterTypeVerification:
+		*s = QueryDataSourceRequestFilterTypeVerification
 	default:
-		*s = QueryDataSourceBodyParametersFilterType(v)
+		*s = QueryDataSourceRequestFilterType(v)
 	}
 
 	return nil
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s QueryDataSourceBodyParametersFilterType) MarshalJSON() ([]byte, error) {
+func (s QueryDataSourceRequestFilterType) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *QueryDataSourceBodyParametersFilterType) UnmarshalJSON(data []byte) error {
+func (s *QueryDataSourceRequestFilterType) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
-// Encode encodes QueryDataSourceBodyParametersResultType as json.
-func (s QueryDataSourceBodyParametersResultType) Encode(e *jx.Encoder) {
+// Encode encodes QueryDataSourceRequestResultType as json.
+func (s QueryDataSourceRequestResultType) Encode(e *jx.Encoder) {
 	e.Str(string(s))
 }
 
-// Decode decodes QueryDataSourceBodyParametersResultType from json.
-func (s *QueryDataSourceBodyParametersResultType) Decode(d *jx.Decoder) error {
+// Decode decodes QueryDataSourceRequestResultType from json.
+func (s *QueryDataSourceRequestResultType) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode QueryDataSourceBodyParametersResultType to nil")
+		return errors.New("invalid: unable to decode QueryDataSourceRequestResultType to nil")
 	}
 	v, err := d.StrBytes()
 	if err != nil {
 		return err
 	}
 	// Try to use constant string.
-	switch QueryDataSourceBodyParametersResultType(v) {
-	case QueryDataSourceBodyParametersResultTypePage:
-		*s = QueryDataSourceBodyParametersResultTypePage
-	case QueryDataSourceBodyParametersResultTypeDataSource:
-		*s = QueryDataSourceBodyParametersResultTypeDataSource
+	switch QueryDataSourceRequestResultType(v) {
+	case QueryDataSourceRequestResultTypePage:
+		*s = QueryDataSourceRequestResultTypePage
+	case QueryDataSourceRequestResultTypeDataSource:
+		*s = QueryDataSourceRequestResultTypeDataSource
 	default:
-		*s = QueryDataSourceBodyParametersResultType(v)
+		*s = QueryDataSourceRequestResultType(v)
 	}
 
 	return nil
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s QueryDataSourceBodyParametersResultType) MarshalJSON() ([]byte, error) {
+func (s QueryDataSourceRequestResultType) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *QueryDataSourceBodyParametersResultType) UnmarshalJSON(data []byte) error {
+func (s *QueryDataSourceRequestResultType) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
 // Encode implements json.Marshaler.
-func (s *QueryDataSourceBodyParametersSortsItem) Encode(e *jx.Encoder) {
+func (s *QueryDataSourceRequestSortsItem) Encode(e *jx.Encoder) {
 	e.ObjStart()
 	s.encodeFields(e)
 	e.ObjEnd()
 }
 
 // encodeFields encodes fields.
-func (s *QueryDataSourceBodyParametersSortsItem) encodeFields(e *jx.Encoder) {
+func (s *QueryDataSourceRequestSortsItem) encodeFields(e *jx.Encoder) {
 	{
 		if s.Property.Set {
 			e.FieldStart("property")
@@ -65335,16 +65335,16 @@ func (s *QueryDataSourceBodyParametersSortsItem) encodeFields(e *jx.Encoder) {
 	}
 }
 
-var jsonFieldsNameOfQueryDataSourceBodyParametersSortsItem = [3]string{
+var jsonFieldsNameOfQueryDataSourceRequestSortsItem = [3]string{
 	0: "property",
 	1: "direction",
 	2: "timestamp",
 }
 
-// Decode decodes QueryDataSourceBodyParametersSortsItem from json.
-func (s *QueryDataSourceBodyParametersSortsItem) Decode(d *jx.Decoder) error {
+// Decode decodes QueryDataSourceRequestSortsItem from json.
+func (s *QueryDataSourceRequestSortsItem) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode QueryDataSourceBodyParametersSortsItem to nil")
+		return errors.New("invalid: unable to decode QueryDataSourceRequestSortsItem to nil")
 	}
 	var requiredBitSet [1]uint8
 
@@ -65385,7 +65385,7 @@ func (s *QueryDataSourceBodyParametersSortsItem) Decode(d *jx.Decoder) error {
 		}
 		return nil
 	}); err != nil {
-		return errors.Wrap(err, "decode QueryDataSourceBodyParametersSortsItem")
+		return errors.Wrap(err, "decode QueryDataSourceRequestSortsItem")
 	}
 	// Validate required fields.
 	var failures []validate.FieldError
@@ -65402,8 +65402,8 @@ func (s *QueryDataSourceBodyParametersSortsItem) Decode(d *jx.Decoder) error {
 				bitIdx := bits.TrailingZeros8(result)
 				fieldIdx := i*8 + bitIdx
 				var name string
-				if fieldIdx < len(jsonFieldsNameOfQueryDataSourceBodyParametersSortsItem) {
-					name = jsonFieldsNameOfQueryDataSourceBodyParametersSortsItem[fieldIdx]
+				if fieldIdx < len(jsonFieldsNameOfQueryDataSourceRequestSortsItem) {
+					name = jsonFieldsNameOfQueryDataSourceRequestSortsItem[fieldIdx]
 				} else {
 					name = strconv.Itoa(fieldIdx)
 				}
@@ -65424,94 +65424,94 @@ func (s *QueryDataSourceBodyParametersSortsItem) Decode(d *jx.Decoder) error {
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s *QueryDataSourceBodyParametersSortsItem) MarshalJSON() ([]byte, error) {
+func (s *QueryDataSourceRequestSortsItem) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *QueryDataSourceBodyParametersSortsItem) UnmarshalJSON(data []byte) error {
+func (s *QueryDataSourceRequestSortsItem) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
-// Encode encodes QueryDataSourceBodyParametersSortsItemDirection as json.
-func (s QueryDataSourceBodyParametersSortsItemDirection) Encode(e *jx.Encoder) {
+// Encode encodes QueryDataSourceRequestSortsItemDirection as json.
+func (s QueryDataSourceRequestSortsItemDirection) Encode(e *jx.Encoder) {
 	e.Str(string(s))
 }
 
-// Decode decodes QueryDataSourceBodyParametersSortsItemDirection from json.
-func (s *QueryDataSourceBodyParametersSortsItemDirection) Decode(d *jx.Decoder) error {
+// Decode decodes QueryDataSourceRequestSortsItemDirection from json.
+func (s *QueryDataSourceRequestSortsItemDirection) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode QueryDataSourceBodyParametersSortsItemDirection to nil")
+		return errors.New("invalid: unable to decode QueryDataSourceRequestSortsItemDirection to nil")
 	}
 	v, err := d.StrBytes()
 	if err != nil {
 		return err
 	}
 	// Try to use constant string.
-	switch QueryDataSourceBodyParametersSortsItemDirection(v) {
-	case QueryDataSourceBodyParametersSortsItemDirectionAscending:
-		*s = QueryDataSourceBodyParametersSortsItemDirectionAscending
-	case QueryDataSourceBodyParametersSortsItemDirectionDescending:
-		*s = QueryDataSourceBodyParametersSortsItemDirectionDescending
+	switch QueryDataSourceRequestSortsItemDirection(v) {
+	case QueryDataSourceRequestSortsItemDirectionAscending:
+		*s = QueryDataSourceRequestSortsItemDirectionAscending
+	case QueryDataSourceRequestSortsItemDirectionDescending:
+		*s = QueryDataSourceRequestSortsItemDirectionDescending
 	default:
-		*s = QueryDataSourceBodyParametersSortsItemDirection(v)
+		*s = QueryDataSourceRequestSortsItemDirection(v)
 	}
 
 	return nil
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s QueryDataSourceBodyParametersSortsItemDirection) MarshalJSON() ([]byte, error) {
+func (s QueryDataSourceRequestSortsItemDirection) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *QueryDataSourceBodyParametersSortsItemDirection) UnmarshalJSON(data []byte) error {
+func (s *QueryDataSourceRequestSortsItemDirection) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
-// Encode encodes QueryDataSourceBodyParametersSortsItemTimestamp as json.
-func (s QueryDataSourceBodyParametersSortsItemTimestamp) Encode(e *jx.Encoder) {
+// Encode encodes QueryDataSourceRequestSortsItemTimestamp as json.
+func (s QueryDataSourceRequestSortsItemTimestamp) Encode(e *jx.Encoder) {
 	e.Str(string(s))
 }
 
-// Decode decodes QueryDataSourceBodyParametersSortsItemTimestamp from json.
-func (s *QueryDataSourceBodyParametersSortsItemTimestamp) Decode(d *jx.Decoder) error {
+// Decode decodes QueryDataSourceRequestSortsItemTimestamp from json.
+func (s *QueryDataSourceRequestSortsItemTimestamp) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode QueryDataSourceBodyParametersSortsItemTimestamp to nil")
+		return errors.New("invalid: unable to decode QueryDataSourceRequestSortsItemTimestamp to nil")
 	}
 	v, err := d.StrBytes()
 	if err != nil {
 		return err
 	}
 	// Try to use constant string.
-	switch QueryDataSourceBodyParametersSortsItemTimestamp(v) {
-	case QueryDataSourceBodyParametersSortsItemTimestampCreatedTime:
-		*s = QueryDataSourceBodyParametersSortsItemTimestampCreatedTime
-	case QueryDataSourceBodyParametersSortsItemTimestampLastEditedTime:
-		*s = QueryDataSourceBodyParametersSortsItemTimestampLastEditedTime
+	switch QueryDataSourceRequestSortsItemTimestamp(v) {
+	case QueryDataSourceRequestSortsItemTimestampCreatedTime:
+		*s = QueryDataSourceRequestSortsItemTimestampCreatedTime
+	case QueryDataSourceRequestSortsItemTimestampLastEditedTime:
+		*s = QueryDataSourceRequestSortsItemTimestampLastEditedTime
 	default:
-		*s = QueryDataSourceBodyParametersSortsItemTimestamp(v)
+		*s = QueryDataSourceRequestSortsItemTimestamp(v)
 	}
 
 	return nil
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s QueryDataSourceBodyParametersSortsItemTimestamp) MarshalJSON() ([]byte, error) {
+func (s QueryDataSourceRequestSortsItemTimestamp) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *QueryDataSourceBodyParametersSortsItemTimestamp) UnmarshalJSON(data []byte) error {
+func (s *QueryDataSourceRequestSortsItemTimestamp) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
@@ -69068,14 +69068,14 @@ func (s *RollupSubfilterPropertyFilter) UnmarshalJSON(data []byte) error {
 }
 
 // Encode implements json.Marshaler.
-func (s *SearchBodyParameters) Encode(e *jx.Encoder) {
+func (s *SearchRequest) Encode(e *jx.Encoder) {
 	e.ObjStart()
 	s.encodeFields(e)
 	e.ObjEnd()
 }
 
 // encodeFields encodes fields.
-func (s *SearchBodyParameters) encodeFields(e *jx.Encoder) {
+func (s *SearchRequest) encodeFields(e *jx.Encoder) {
 	{
 		if s.Sort.Set {
 			e.FieldStart("sort")
@@ -69108,7 +69108,7 @@ func (s *SearchBodyParameters) encodeFields(e *jx.Encoder) {
 	}
 }
 
-var jsonFieldsNameOfSearchBodyParameters = [5]string{
+var jsonFieldsNameOfSearchRequest = [5]string{
 	0: "sort",
 	1: "query",
 	2: "start_cursor",
@@ -69116,10 +69116,10 @@ var jsonFieldsNameOfSearchBodyParameters = [5]string{
 	4: "filter",
 }
 
-// Decode decodes SearchBodyParameters from json.
-func (s *SearchBodyParameters) Decode(d *jx.Decoder) error {
+// Decode decodes SearchRequest from json.
+func (s *SearchRequest) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode SearchBodyParameters to nil")
+		return errors.New("invalid: unable to decode SearchRequest to nil")
 	}
 
 	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
@@ -69179,34 +69179,34 @@ func (s *SearchBodyParameters) Decode(d *jx.Decoder) error {
 		}
 		return nil
 	}); err != nil {
-		return errors.Wrap(err, "decode SearchBodyParameters")
+		return errors.Wrap(err, "decode SearchRequest")
 	}
 
 	return nil
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s *SearchBodyParameters) MarshalJSON() ([]byte, error) {
+func (s *SearchRequest) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *SearchBodyParameters) UnmarshalJSON(data []byte) error {
+func (s *SearchRequest) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
 // Encode implements json.Marshaler.
-func (s *SearchBodyParametersFilter) Encode(e *jx.Encoder) {
+func (s *SearchRequestFilter) Encode(e *jx.Encoder) {
 	e.ObjStart()
 	s.encodeFields(e)
 	e.ObjEnd()
 }
 
 // encodeFields encodes fields.
-func (s *SearchBodyParametersFilter) encodeFields(e *jx.Encoder) {
+func (s *SearchRequestFilter) encodeFields(e *jx.Encoder) {
 	{
 		e.FieldStart("property")
 		s.Property.Encode(e)
@@ -69217,15 +69217,15 @@ func (s *SearchBodyParametersFilter) encodeFields(e *jx.Encoder) {
 	}
 }
 
-var jsonFieldsNameOfSearchBodyParametersFilter = [2]string{
+var jsonFieldsNameOfSearchRequestFilter = [2]string{
 	0: "property",
 	1: "value",
 }
 
-// Decode decodes SearchBodyParametersFilter from json.
-func (s *SearchBodyParametersFilter) Decode(d *jx.Decoder) error {
+// Decode decodes SearchRequestFilter from json.
+func (s *SearchRequestFilter) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode SearchBodyParametersFilter to nil")
+		return errors.New("invalid: unable to decode SearchRequestFilter to nil")
 	}
 	var requiredBitSet [1]uint8
 
@@ -69256,7 +69256,7 @@ func (s *SearchBodyParametersFilter) Decode(d *jx.Decoder) error {
 		}
 		return nil
 	}); err != nil {
-		return errors.Wrap(err, "decode SearchBodyParametersFilter")
+		return errors.Wrap(err, "decode SearchRequestFilter")
 	}
 	// Validate required fields.
 	var failures []validate.FieldError
@@ -69273,8 +69273,8 @@ func (s *SearchBodyParametersFilter) Decode(d *jx.Decoder) error {
 				bitIdx := bits.TrailingZeros8(result)
 				fieldIdx := i*8 + bitIdx
 				var name string
-				if fieldIdx < len(jsonFieldsNameOfSearchBodyParametersFilter) {
-					name = jsonFieldsNameOfSearchBodyParametersFilter[fieldIdx]
+				if fieldIdx < len(jsonFieldsNameOfSearchRequestFilter) {
+					name = jsonFieldsNameOfSearchRequestFilter[fieldIdx]
 				} else {
 					name = strconv.Itoa(fieldIdx)
 				}
@@ -69295,105 +69295,105 @@ func (s *SearchBodyParametersFilter) Decode(d *jx.Decoder) error {
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s *SearchBodyParametersFilter) MarshalJSON() ([]byte, error) {
+func (s *SearchRequestFilter) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *SearchBodyParametersFilter) UnmarshalJSON(data []byte) error {
+func (s *SearchRequestFilter) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
-// Encode encodes SearchBodyParametersFilterProperty as json.
-func (s SearchBodyParametersFilterProperty) Encode(e *jx.Encoder) {
+// Encode encodes SearchRequestFilterProperty as json.
+func (s SearchRequestFilterProperty) Encode(e *jx.Encoder) {
 	e.Str(string(s))
 }
 
-// Decode decodes SearchBodyParametersFilterProperty from json.
-func (s *SearchBodyParametersFilterProperty) Decode(d *jx.Decoder) error {
+// Decode decodes SearchRequestFilterProperty from json.
+func (s *SearchRequestFilterProperty) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode SearchBodyParametersFilterProperty to nil")
+		return errors.New("invalid: unable to decode SearchRequestFilterProperty to nil")
 	}
 	v, err := d.StrBytes()
 	if err != nil {
 		return err
 	}
 	// Try to use constant string.
-	switch SearchBodyParametersFilterProperty(v) {
-	case SearchBodyParametersFilterPropertyObject:
-		*s = SearchBodyParametersFilterPropertyObject
+	switch SearchRequestFilterProperty(v) {
+	case SearchRequestFilterPropertyObject:
+		*s = SearchRequestFilterPropertyObject
 	default:
-		*s = SearchBodyParametersFilterProperty(v)
+		*s = SearchRequestFilterProperty(v)
 	}
 
 	return nil
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s SearchBodyParametersFilterProperty) MarshalJSON() ([]byte, error) {
+func (s SearchRequestFilterProperty) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *SearchBodyParametersFilterProperty) UnmarshalJSON(data []byte) error {
+func (s *SearchRequestFilterProperty) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
-// Encode encodes SearchBodyParametersFilterValue as json.
-func (s SearchBodyParametersFilterValue) Encode(e *jx.Encoder) {
+// Encode encodes SearchRequestFilterValue as json.
+func (s SearchRequestFilterValue) Encode(e *jx.Encoder) {
 	e.Str(string(s))
 }
 
-// Decode decodes SearchBodyParametersFilterValue from json.
-func (s *SearchBodyParametersFilterValue) Decode(d *jx.Decoder) error {
+// Decode decodes SearchRequestFilterValue from json.
+func (s *SearchRequestFilterValue) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode SearchBodyParametersFilterValue to nil")
+		return errors.New("invalid: unable to decode SearchRequestFilterValue to nil")
 	}
 	v, err := d.StrBytes()
 	if err != nil {
 		return err
 	}
 	// Try to use constant string.
-	switch SearchBodyParametersFilterValue(v) {
-	case SearchBodyParametersFilterValuePage:
-		*s = SearchBodyParametersFilterValuePage
-	case SearchBodyParametersFilterValueDataSource:
-		*s = SearchBodyParametersFilterValueDataSource
+	switch SearchRequestFilterValue(v) {
+	case SearchRequestFilterValuePage:
+		*s = SearchRequestFilterValuePage
+	case SearchRequestFilterValueDataSource:
+		*s = SearchRequestFilterValueDataSource
 	default:
-		*s = SearchBodyParametersFilterValue(v)
+		*s = SearchRequestFilterValue(v)
 	}
 
 	return nil
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s SearchBodyParametersFilterValue) MarshalJSON() ([]byte, error) {
+func (s SearchRequestFilterValue) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *SearchBodyParametersFilterValue) UnmarshalJSON(data []byte) error {
+func (s *SearchRequestFilterValue) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
 // Encode implements json.Marshaler.
-func (s *SearchBodyParametersSort) Encode(e *jx.Encoder) {
+func (s *SearchRequestSort) Encode(e *jx.Encoder) {
 	e.ObjStart()
 	s.encodeFields(e)
 	e.ObjEnd()
 }
 
 // encodeFields encodes fields.
-func (s *SearchBodyParametersSort) encodeFields(e *jx.Encoder) {
+func (s *SearchRequestSort) encodeFields(e *jx.Encoder) {
 	{
 		e.FieldStart("timestamp")
 		s.Timestamp.Encode(e)
@@ -69404,15 +69404,15 @@ func (s *SearchBodyParametersSort) encodeFields(e *jx.Encoder) {
 	}
 }
 
-var jsonFieldsNameOfSearchBodyParametersSort = [2]string{
+var jsonFieldsNameOfSearchRequestSort = [2]string{
 	0: "timestamp",
 	1: "direction",
 }
 
-// Decode decodes SearchBodyParametersSort from json.
-func (s *SearchBodyParametersSort) Decode(d *jx.Decoder) error {
+// Decode decodes SearchRequestSort from json.
+func (s *SearchRequestSort) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode SearchBodyParametersSort to nil")
+		return errors.New("invalid: unable to decode SearchRequestSort to nil")
 	}
 	var requiredBitSet [1]uint8
 
@@ -69443,7 +69443,7 @@ func (s *SearchBodyParametersSort) Decode(d *jx.Decoder) error {
 		}
 		return nil
 	}); err != nil {
-		return errors.Wrap(err, "decode SearchBodyParametersSort")
+		return errors.Wrap(err, "decode SearchRequestSort")
 	}
 	// Validate required fields.
 	var failures []validate.FieldError
@@ -69460,8 +69460,8 @@ func (s *SearchBodyParametersSort) Decode(d *jx.Decoder) error {
 				bitIdx := bits.TrailingZeros8(result)
 				fieldIdx := i*8 + bitIdx
 				var name string
-				if fieldIdx < len(jsonFieldsNameOfSearchBodyParametersSort) {
-					name = jsonFieldsNameOfSearchBodyParametersSort[fieldIdx]
+				if fieldIdx < len(jsonFieldsNameOfSearchRequestSort) {
+					name = jsonFieldsNameOfSearchRequestSort[fieldIdx]
 				} else {
 					name = strconv.Itoa(fieldIdx)
 				}
@@ -69482,92 +69482,92 @@ func (s *SearchBodyParametersSort) Decode(d *jx.Decoder) error {
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s *SearchBodyParametersSort) MarshalJSON() ([]byte, error) {
+func (s *SearchRequestSort) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *SearchBodyParametersSort) UnmarshalJSON(data []byte) error {
+func (s *SearchRequestSort) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
-// Encode encodes SearchBodyParametersSortDirection as json.
-func (s SearchBodyParametersSortDirection) Encode(e *jx.Encoder) {
+// Encode encodes SearchRequestSortDirection as json.
+func (s SearchRequestSortDirection) Encode(e *jx.Encoder) {
 	e.Str(string(s))
 }
 
-// Decode decodes SearchBodyParametersSortDirection from json.
-func (s *SearchBodyParametersSortDirection) Decode(d *jx.Decoder) error {
+// Decode decodes SearchRequestSortDirection from json.
+func (s *SearchRequestSortDirection) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode SearchBodyParametersSortDirection to nil")
+		return errors.New("invalid: unable to decode SearchRequestSortDirection to nil")
 	}
 	v, err := d.StrBytes()
 	if err != nil {
 		return err
 	}
 	// Try to use constant string.
-	switch SearchBodyParametersSortDirection(v) {
-	case SearchBodyParametersSortDirectionAscending:
-		*s = SearchBodyParametersSortDirectionAscending
-	case SearchBodyParametersSortDirectionDescending:
-		*s = SearchBodyParametersSortDirectionDescending
+	switch SearchRequestSortDirection(v) {
+	case SearchRequestSortDirectionAscending:
+		*s = SearchRequestSortDirectionAscending
+	case SearchRequestSortDirectionDescending:
+		*s = SearchRequestSortDirectionDescending
 	default:
-		*s = SearchBodyParametersSortDirection(v)
+		*s = SearchRequestSortDirection(v)
 	}
 
 	return nil
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s SearchBodyParametersSortDirection) MarshalJSON() ([]byte, error) {
+func (s SearchRequestSortDirection) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *SearchBodyParametersSortDirection) UnmarshalJSON(data []byte) error {
+func (s *SearchRequestSortDirection) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
-// Encode encodes SearchBodyParametersSortTimestamp as json.
-func (s SearchBodyParametersSortTimestamp) Encode(e *jx.Encoder) {
+// Encode encodes SearchRequestSortTimestamp as json.
+func (s SearchRequestSortTimestamp) Encode(e *jx.Encoder) {
 	e.Str(string(s))
 }
 
-// Decode decodes SearchBodyParametersSortTimestamp from json.
-func (s *SearchBodyParametersSortTimestamp) Decode(d *jx.Decoder) error {
+// Decode decodes SearchRequestSortTimestamp from json.
+func (s *SearchRequestSortTimestamp) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode SearchBodyParametersSortTimestamp to nil")
+		return errors.New("invalid: unable to decode SearchRequestSortTimestamp to nil")
 	}
 	v, err := d.StrBytes()
 	if err != nil {
 		return err
 	}
 	// Try to use constant string.
-	switch SearchBodyParametersSortTimestamp(v) {
-	case SearchBodyParametersSortTimestampLastEditedTime:
-		*s = SearchBodyParametersSortTimestampLastEditedTime
+	switch SearchRequestSortTimestamp(v) {
+	case SearchRequestSortTimestampLastEditedTime:
+		*s = SearchRequestSortTimestampLastEditedTime
 	default:
-		*s = SearchBodyParametersSortTimestamp(v)
+		*s = SearchRequestSortTimestamp(v)
 	}
 
 	return nil
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s SearchBodyParametersSortTimestamp) MarshalJSON() ([]byte, error) {
+func (s SearchRequestSortTimestamp) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *SearchBodyParametersSortTimestamp) UnmarshalJSON(data []byte) error {
+func (s *SearchRequestSortTimestamp) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
@@ -74329,14 +74329,14 @@ func (s *UniqueIdPropertyValueResponse) UnmarshalJSON(data []byte) error {
 }
 
 // Encode implements json.Marshaler.
-func (s *UpdateBlockBodyParameters) Encode(e *jx.Encoder) {
+func (s *UpdateBlockRequest) Encode(e *jx.Encoder) {
 	e.ObjStart()
 	s.encodeFields(e)
 	e.ObjEnd()
 }
 
 // encodeFields encodes fields.
-func (s *UpdateBlockBodyParameters) encodeFields(e *jx.Encoder) {
+func (s *UpdateBlockRequest) encodeFields(e *jx.Encoder) {
 	{
 		if s.Embed.Set {
 			e.FieldStart("embed")
@@ -74525,7 +74525,7 @@ func (s *UpdateBlockBodyParameters) encodeFields(e *jx.Encoder) {
 	}
 }
 
-var jsonFieldsNameOfUpdateBlockBodyParameters = [31]string{
+var jsonFieldsNameOfUpdateBlockRequest = [31]string{
 	0:  "embed",
 	1:  "type",
 	2:  "archived",
@@ -74559,10 +74559,10 @@ var jsonFieldsNameOfUpdateBlockBodyParameters = [31]string{
 	30: "column",
 }
 
-// Decode decodes UpdateBlockBodyParameters from json.
-func (s *UpdateBlockBodyParameters) Decode(d *jx.Decoder) error {
+// Decode decodes UpdateBlockRequest from json.
+func (s *UpdateBlockRequest) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode UpdateBlockBodyParameters to nil")
+		return errors.New("invalid: unable to decode UpdateBlockRequest to nil")
 	}
 
 	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
@@ -74690,7 +74690,7 @@ func (s *UpdateBlockBodyParameters) Decode(d *jx.Decoder) error {
 		case "divider":
 			if err := func() error {
 				s.Divider = nil
-				var elem UpdateBlockBodyParametersDivider
+				var elem UpdateBlockRequestDivider
 				if err := elem.Decode(d); err != nil {
 					return err
 				}
@@ -74702,7 +74702,7 @@ func (s *UpdateBlockBodyParameters) Decode(d *jx.Decoder) error {
 		case "breadcrumb":
 			if err := func() error {
 				s.Breadcrumb = nil
-				var elem UpdateBlockBodyParametersBreadcrumb
+				var elem UpdateBlockRequestBreadcrumb
 				if err := elem.Decode(d); err != nil {
 					return err
 				}
@@ -74886,42 +74886,42 @@ func (s *UpdateBlockBodyParameters) Decode(d *jx.Decoder) error {
 		}
 		return nil
 	}); err != nil {
-		return errors.Wrap(err, "decode UpdateBlockBodyParameters")
+		return errors.Wrap(err, "decode UpdateBlockRequest")
 	}
 
 	return nil
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s *UpdateBlockBodyParameters) MarshalJSON() ([]byte, error) {
+func (s *UpdateBlockRequest) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *UpdateBlockBodyParameters) UnmarshalJSON(data []byte) error {
+func (s *UpdateBlockRequest) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
 // Encode implements json.Marshaler.
-func (s *UpdateBlockBodyParametersBreadcrumb) Encode(e *jx.Encoder) {
+func (s *UpdateBlockRequestBreadcrumb) Encode(e *jx.Encoder) {
 	e.ObjStart()
 	s.encodeFields(e)
 	e.ObjEnd()
 }
 
 // encodeFields encodes fields.
-func (s *UpdateBlockBodyParametersBreadcrumb) encodeFields(e *jx.Encoder) {
+func (s *UpdateBlockRequestBreadcrumb) encodeFields(e *jx.Encoder) {
 }
 
-var jsonFieldsNameOfUpdateBlockBodyParametersBreadcrumb = [0]string{}
+var jsonFieldsNameOfUpdateBlockRequestBreadcrumb = [0]string{}
 
-// Decode decodes UpdateBlockBodyParametersBreadcrumb from json.
-func (s *UpdateBlockBodyParametersBreadcrumb) Decode(d *jx.Decoder) error {
+// Decode decodes UpdateBlockRequestBreadcrumb from json.
+func (s *UpdateBlockRequestBreadcrumb) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode UpdateBlockBodyParametersBreadcrumb to nil")
+		return errors.New("invalid: unable to decode UpdateBlockRequestBreadcrumb to nil")
 	}
 
 	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
@@ -74930,34 +74930,34 @@ func (s *UpdateBlockBodyParametersBreadcrumb) Decode(d *jx.Decoder) error {
 			return d.Skip()
 		}
 	}); err != nil {
-		return errors.Wrap(err, "decode UpdateBlockBodyParametersBreadcrumb")
+		return errors.Wrap(err, "decode UpdateBlockRequestBreadcrumb")
 	}
 
 	return nil
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s *UpdateBlockBodyParametersBreadcrumb) MarshalJSON() ([]byte, error) {
+func (s *UpdateBlockRequestBreadcrumb) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *UpdateBlockBodyParametersBreadcrumb) UnmarshalJSON(data []byte) error {
+func (s *UpdateBlockRequestBreadcrumb) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
 // Encode implements json.Marshaler.
-func (s *UpdateBlockBodyParametersCallout) Encode(e *jx.Encoder) {
+func (s *UpdateBlockRequestCallout) Encode(e *jx.Encoder) {
 	e.ObjStart()
 	s.encodeFields(e)
 	e.ObjEnd()
 }
 
 // encodeFields encodes fields.
-func (s *UpdateBlockBodyParametersCallout) encodeFields(e *jx.Encoder) {
+func (s *UpdateBlockRequestCallout) encodeFields(e *jx.Encoder) {
 	{
 		if s.RichText != nil {
 			e.FieldStart("rich_text")
@@ -74982,16 +74982,16 @@ func (s *UpdateBlockBodyParametersCallout) encodeFields(e *jx.Encoder) {
 	}
 }
 
-var jsonFieldsNameOfUpdateBlockBodyParametersCallout = [3]string{
+var jsonFieldsNameOfUpdateBlockRequestCallout = [3]string{
 	0: "rich_text",
 	1: "icon",
 	2: "color",
 }
 
-// Decode decodes UpdateBlockBodyParametersCallout from json.
-func (s *UpdateBlockBodyParametersCallout) Decode(d *jx.Decoder) error {
+// Decode decodes UpdateBlockRequestCallout from json.
+func (s *UpdateBlockRequestCallout) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode UpdateBlockBodyParametersCallout to nil")
+		return errors.New("invalid: unable to decode UpdateBlockRequestCallout to nil")
 	}
 
 	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
@@ -75038,34 +75038,34 @@ func (s *UpdateBlockBodyParametersCallout) Decode(d *jx.Decoder) error {
 		}
 		return nil
 	}); err != nil {
-		return errors.Wrap(err, "decode UpdateBlockBodyParametersCallout")
+		return errors.Wrap(err, "decode UpdateBlockRequestCallout")
 	}
 
 	return nil
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s *UpdateBlockBodyParametersCallout) MarshalJSON() ([]byte, error) {
+func (s *UpdateBlockRequestCallout) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *UpdateBlockBodyParametersCallout) UnmarshalJSON(data []byte) error {
+func (s *UpdateBlockRequestCallout) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
 // Encode implements json.Marshaler.
-func (s *UpdateBlockBodyParametersCode) Encode(e *jx.Encoder) {
+func (s *UpdateBlockRequestCode) Encode(e *jx.Encoder) {
 	e.ObjStart()
 	s.encodeFields(e)
 	e.ObjEnd()
 }
 
 // encodeFields encodes fields.
-func (s *UpdateBlockBodyParametersCode) encodeFields(e *jx.Encoder) {
+func (s *UpdateBlockRequestCode) encodeFields(e *jx.Encoder) {
 	{
 		if s.RichText != nil {
 			e.FieldStart("rich_text")
@@ -75094,16 +75094,16 @@ func (s *UpdateBlockBodyParametersCode) encodeFields(e *jx.Encoder) {
 	}
 }
 
-var jsonFieldsNameOfUpdateBlockBodyParametersCode = [3]string{
+var jsonFieldsNameOfUpdateBlockRequestCode = [3]string{
 	0: "rich_text",
 	1: "language",
 	2: "caption",
 }
 
-// Decode decodes UpdateBlockBodyParametersCode from json.
-func (s *UpdateBlockBodyParametersCode) Decode(d *jx.Decoder) error {
+// Decode decodes UpdateBlockRequestCode from json.
+func (s *UpdateBlockRequestCode) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode UpdateBlockBodyParametersCode to nil")
+		return errors.New("invalid: unable to decode UpdateBlockRequestCode to nil")
 	}
 
 	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
@@ -75157,34 +75157,34 @@ func (s *UpdateBlockBodyParametersCode) Decode(d *jx.Decoder) error {
 		}
 		return nil
 	}); err != nil {
-		return errors.Wrap(err, "decode UpdateBlockBodyParametersCode")
+		return errors.Wrap(err, "decode UpdateBlockRequestCode")
 	}
 
 	return nil
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s *UpdateBlockBodyParametersCode) MarshalJSON() ([]byte, error) {
+func (s *UpdateBlockRequestCode) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *UpdateBlockBodyParametersCode) UnmarshalJSON(data []byte) error {
+func (s *UpdateBlockRequestCode) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
 // Encode implements json.Marshaler.
-func (s *UpdateBlockBodyParametersColumn) Encode(e *jx.Encoder) {
+func (s *UpdateBlockRequestColumn) Encode(e *jx.Encoder) {
 	e.ObjStart()
 	s.encodeFields(e)
 	e.ObjEnd()
 }
 
 // encodeFields encodes fields.
-func (s *UpdateBlockBodyParametersColumn) encodeFields(e *jx.Encoder) {
+func (s *UpdateBlockRequestColumn) encodeFields(e *jx.Encoder) {
 	{
 		if s.WidthRatio.Set {
 			e.FieldStart("width_ratio")
@@ -75193,14 +75193,14 @@ func (s *UpdateBlockBodyParametersColumn) encodeFields(e *jx.Encoder) {
 	}
 }
 
-var jsonFieldsNameOfUpdateBlockBodyParametersColumn = [1]string{
+var jsonFieldsNameOfUpdateBlockRequestColumn = [1]string{
 	0: "width_ratio",
 }
 
-// Decode decodes UpdateBlockBodyParametersColumn from json.
-func (s *UpdateBlockBodyParametersColumn) Decode(d *jx.Decoder) error {
+// Decode decodes UpdateBlockRequestColumn from json.
+func (s *UpdateBlockRequestColumn) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode UpdateBlockBodyParametersColumn to nil")
+		return errors.New("invalid: unable to decode UpdateBlockRequestColumn to nil")
 	}
 
 	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
@@ -75220,42 +75220,42 @@ func (s *UpdateBlockBodyParametersColumn) Decode(d *jx.Decoder) error {
 		}
 		return nil
 	}); err != nil {
-		return errors.Wrap(err, "decode UpdateBlockBodyParametersColumn")
+		return errors.Wrap(err, "decode UpdateBlockRequestColumn")
 	}
 
 	return nil
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s *UpdateBlockBodyParametersColumn) MarshalJSON() ([]byte, error) {
+func (s *UpdateBlockRequestColumn) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *UpdateBlockBodyParametersColumn) UnmarshalJSON(data []byte) error {
+func (s *UpdateBlockRequestColumn) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
 // Encode implements json.Marshaler.
-func (s *UpdateBlockBodyParametersDivider) Encode(e *jx.Encoder) {
+func (s *UpdateBlockRequestDivider) Encode(e *jx.Encoder) {
 	e.ObjStart()
 	s.encodeFields(e)
 	e.ObjEnd()
 }
 
 // encodeFields encodes fields.
-func (s *UpdateBlockBodyParametersDivider) encodeFields(e *jx.Encoder) {
+func (s *UpdateBlockRequestDivider) encodeFields(e *jx.Encoder) {
 }
 
-var jsonFieldsNameOfUpdateBlockBodyParametersDivider = [0]string{}
+var jsonFieldsNameOfUpdateBlockRequestDivider = [0]string{}
 
-// Decode decodes UpdateBlockBodyParametersDivider from json.
-func (s *UpdateBlockBodyParametersDivider) Decode(d *jx.Decoder) error {
+// Decode decodes UpdateBlockRequestDivider from json.
+func (s *UpdateBlockRequestDivider) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode UpdateBlockBodyParametersDivider to nil")
+		return errors.New("invalid: unable to decode UpdateBlockRequestDivider to nil")
 	}
 
 	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
@@ -75264,34 +75264,34 @@ func (s *UpdateBlockBodyParametersDivider) Decode(d *jx.Decoder) error {
 			return d.Skip()
 		}
 	}); err != nil {
-		return errors.Wrap(err, "decode UpdateBlockBodyParametersDivider")
+		return errors.Wrap(err, "decode UpdateBlockRequestDivider")
 	}
 
 	return nil
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s *UpdateBlockBodyParametersDivider) MarshalJSON() ([]byte, error) {
+func (s *UpdateBlockRequestDivider) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *UpdateBlockBodyParametersDivider) UnmarshalJSON(data []byte) error {
+func (s *UpdateBlockRequestDivider) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
 // Encode implements json.Marshaler.
-func (s *UpdateBlockBodyParametersLinkToPage) Encode(e *jx.Encoder) {
+func (s *UpdateBlockRequestLinkToPage) Encode(e *jx.Encoder) {
 	e.ObjStart()
 	s.encodeFields(e)
 	e.ObjEnd()
 }
 
 // encodeFields encodes fields.
-func (s *UpdateBlockBodyParametersLinkToPage) encodeFields(e *jx.Encoder) {
+func (s *UpdateBlockRequestLinkToPage) encodeFields(e *jx.Encoder) {
 	{
 		if s.PageID.Set {
 			e.FieldStart("page_id")
@@ -75318,17 +75318,17 @@ func (s *UpdateBlockBodyParametersLinkToPage) encodeFields(e *jx.Encoder) {
 	}
 }
 
-var jsonFieldsNameOfUpdateBlockBodyParametersLinkToPage = [4]string{
+var jsonFieldsNameOfUpdateBlockRequestLinkToPage = [4]string{
 	0: "page_id",
 	1: "type",
 	2: "database_id",
 	3: "comment_id",
 }
 
-// Decode decodes UpdateBlockBodyParametersLinkToPage from json.
-func (s *UpdateBlockBodyParametersLinkToPage) Decode(d *jx.Decoder) error {
+// Decode decodes UpdateBlockRequestLinkToPage from json.
+func (s *UpdateBlockRequestLinkToPage) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode UpdateBlockBodyParametersLinkToPage to nil")
+		return errors.New("invalid: unable to decode UpdateBlockRequestLinkToPage to nil")
 	}
 
 	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
@@ -75378,90 +75378,90 @@ func (s *UpdateBlockBodyParametersLinkToPage) Decode(d *jx.Decoder) error {
 		}
 		return nil
 	}); err != nil {
-		return errors.Wrap(err, "decode UpdateBlockBodyParametersLinkToPage")
+		return errors.Wrap(err, "decode UpdateBlockRequestLinkToPage")
 	}
 
 	return nil
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s *UpdateBlockBodyParametersLinkToPage) MarshalJSON() ([]byte, error) {
+func (s *UpdateBlockRequestLinkToPage) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *UpdateBlockBodyParametersLinkToPage) UnmarshalJSON(data []byte) error {
+func (s *UpdateBlockRequestLinkToPage) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
-// Encode encodes UpdateBlockBodyParametersLinkToPageType as json.
-func (s UpdateBlockBodyParametersLinkToPageType) Encode(e *jx.Encoder) {
+// Encode encodes UpdateBlockRequestLinkToPageType as json.
+func (s UpdateBlockRequestLinkToPageType) Encode(e *jx.Encoder) {
 	e.Str(string(s))
 }
 
-// Decode decodes UpdateBlockBodyParametersLinkToPageType from json.
-func (s *UpdateBlockBodyParametersLinkToPageType) Decode(d *jx.Decoder) error {
+// Decode decodes UpdateBlockRequestLinkToPageType from json.
+func (s *UpdateBlockRequestLinkToPageType) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode UpdateBlockBodyParametersLinkToPageType to nil")
+		return errors.New("invalid: unable to decode UpdateBlockRequestLinkToPageType to nil")
 	}
 	v, err := d.StrBytes()
 	if err != nil {
 		return err
 	}
 	// Try to use constant string.
-	switch UpdateBlockBodyParametersLinkToPageType(v) {
-	case UpdateBlockBodyParametersLinkToPageTypePageID:
-		*s = UpdateBlockBodyParametersLinkToPageTypePageID
-	case UpdateBlockBodyParametersLinkToPageTypeDatabaseID:
-		*s = UpdateBlockBodyParametersLinkToPageTypeDatabaseID
-	case UpdateBlockBodyParametersLinkToPageTypeCommentID:
-		*s = UpdateBlockBodyParametersLinkToPageTypeCommentID
+	switch UpdateBlockRequestLinkToPageType(v) {
+	case UpdateBlockRequestLinkToPageTypePageID:
+		*s = UpdateBlockRequestLinkToPageTypePageID
+	case UpdateBlockRequestLinkToPageTypeDatabaseID:
+		*s = UpdateBlockRequestLinkToPageTypeDatabaseID
+	case UpdateBlockRequestLinkToPageTypeCommentID:
+		*s = UpdateBlockRequestLinkToPageTypeCommentID
 	default:
-		*s = UpdateBlockBodyParametersLinkToPageType(v)
+		*s = UpdateBlockRequestLinkToPageType(v)
 	}
 
 	return nil
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s UpdateBlockBodyParametersLinkToPageType) MarshalJSON() ([]byte, error) {
+func (s UpdateBlockRequestLinkToPageType) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *UpdateBlockBodyParametersLinkToPageType) UnmarshalJSON(data []byte) error {
+func (s *UpdateBlockRequestLinkToPageType) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
 // Encode implements json.Marshaler.
-func (s *UpdateBlockBodyParametersSyncedBlock) Encode(e *jx.Encoder) {
+func (s *UpdateBlockRequestSyncedBlock) Encode(e *jx.Encoder) {
 	e.ObjStart()
 	s.encodeFields(e)
 	e.ObjEnd()
 }
 
 // encodeFields encodes fields.
-func (s *UpdateBlockBodyParametersSyncedBlock) encodeFields(e *jx.Encoder) {
+func (s *UpdateBlockRequestSyncedBlock) encodeFields(e *jx.Encoder) {
 	{
 		e.FieldStart("synced_from")
 		s.SyncedFrom.Encode(e)
 	}
 }
 
-var jsonFieldsNameOfUpdateBlockBodyParametersSyncedBlock = [1]string{
+var jsonFieldsNameOfUpdateBlockRequestSyncedBlock = [1]string{
 	0: "synced_from",
 }
 
-// Decode decodes UpdateBlockBodyParametersSyncedBlock from json.
-func (s *UpdateBlockBodyParametersSyncedBlock) Decode(d *jx.Decoder) error {
+// Decode decodes UpdateBlockRequestSyncedBlock from json.
+func (s *UpdateBlockRequestSyncedBlock) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode UpdateBlockBodyParametersSyncedBlock to nil")
+		return errors.New("invalid: unable to decode UpdateBlockRequestSyncedBlock to nil")
 	}
 	var requiredBitSet [1]uint8
 
@@ -75482,7 +75482,7 @@ func (s *UpdateBlockBodyParametersSyncedBlock) Decode(d *jx.Decoder) error {
 		}
 		return nil
 	}); err != nil {
-		return errors.Wrap(err, "decode UpdateBlockBodyParametersSyncedBlock")
+		return errors.Wrap(err, "decode UpdateBlockRequestSyncedBlock")
 	}
 	// Validate required fields.
 	var failures []validate.FieldError
@@ -75499,8 +75499,8 @@ func (s *UpdateBlockBodyParametersSyncedBlock) Decode(d *jx.Decoder) error {
 				bitIdx := bits.TrailingZeros8(result)
 				fieldIdx := i*8 + bitIdx
 				var name string
-				if fieldIdx < len(jsonFieldsNameOfUpdateBlockBodyParametersSyncedBlock) {
-					name = jsonFieldsNameOfUpdateBlockBodyParametersSyncedBlock[fieldIdx]
+				if fieldIdx < len(jsonFieldsNameOfUpdateBlockRequestSyncedBlock) {
+					name = jsonFieldsNameOfUpdateBlockRequestSyncedBlock[fieldIdx]
 				} else {
 					name = strconv.Itoa(fieldIdx)
 				}
@@ -75521,27 +75521,27 @@ func (s *UpdateBlockBodyParametersSyncedBlock) Decode(d *jx.Decoder) error {
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s *UpdateBlockBodyParametersSyncedBlock) MarshalJSON() ([]byte, error) {
+func (s *UpdateBlockRequestSyncedBlock) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *UpdateBlockBodyParametersSyncedBlock) UnmarshalJSON(data []byte) error {
+func (s *UpdateBlockRequestSyncedBlock) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
 // Encode implements json.Marshaler.
-func (s *UpdateBlockBodyParametersSyncedBlockSyncedFrom) Encode(e *jx.Encoder) {
+func (s *UpdateBlockRequestSyncedBlockSyncedFrom) Encode(e *jx.Encoder) {
 	e.ObjStart()
 	s.encodeFields(e)
 	e.ObjEnd()
 }
 
 // encodeFields encodes fields.
-func (s *UpdateBlockBodyParametersSyncedBlockSyncedFrom) encodeFields(e *jx.Encoder) {
+func (s *UpdateBlockRequestSyncedBlockSyncedFrom) encodeFields(e *jx.Encoder) {
 	{
 		e.FieldStart("block_id")
 		e.Str(s.BlockID)
@@ -75554,15 +75554,15 @@ func (s *UpdateBlockBodyParametersSyncedBlockSyncedFrom) encodeFields(e *jx.Enco
 	}
 }
 
-var jsonFieldsNameOfUpdateBlockBodyParametersSyncedBlockSyncedFrom = [2]string{
+var jsonFieldsNameOfUpdateBlockRequestSyncedBlockSyncedFrom = [2]string{
 	0: "block_id",
 	1: "type",
 }
 
-// Decode decodes UpdateBlockBodyParametersSyncedBlockSyncedFrom from json.
-func (s *UpdateBlockBodyParametersSyncedBlockSyncedFrom) Decode(d *jx.Decoder) error {
+// Decode decodes UpdateBlockRequestSyncedBlockSyncedFrom from json.
+func (s *UpdateBlockRequestSyncedBlockSyncedFrom) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode UpdateBlockBodyParametersSyncedBlockSyncedFrom to nil")
+		return errors.New("invalid: unable to decode UpdateBlockRequestSyncedBlockSyncedFrom to nil")
 	}
 	var requiredBitSet [1]uint8
 
@@ -75595,7 +75595,7 @@ func (s *UpdateBlockBodyParametersSyncedBlockSyncedFrom) Decode(d *jx.Decoder) e
 		}
 		return nil
 	}); err != nil {
-		return errors.Wrap(err, "decode UpdateBlockBodyParametersSyncedBlockSyncedFrom")
+		return errors.Wrap(err, "decode UpdateBlockRequestSyncedBlockSyncedFrom")
 	}
 	// Validate required fields.
 	var failures []validate.FieldError
@@ -75612,8 +75612,8 @@ func (s *UpdateBlockBodyParametersSyncedBlockSyncedFrom) Decode(d *jx.Decoder) e
 				bitIdx := bits.TrailingZeros8(result)
 				fieldIdx := i*8 + bitIdx
 				var name string
-				if fieldIdx < len(jsonFieldsNameOfUpdateBlockBodyParametersSyncedBlockSyncedFrom) {
-					name = jsonFieldsNameOfUpdateBlockBodyParametersSyncedBlockSyncedFrom[fieldIdx]
+				if fieldIdx < len(jsonFieldsNameOfUpdateBlockRequestSyncedBlockSyncedFrom) {
+					name = jsonFieldsNameOfUpdateBlockRequestSyncedBlockSyncedFrom[fieldIdx]
 				} else {
 					name = strconv.Itoa(fieldIdx)
 				}
@@ -75634,65 +75634,65 @@ func (s *UpdateBlockBodyParametersSyncedBlockSyncedFrom) Decode(d *jx.Decoder) e
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s *UpdateBlockBodyParametersSyncedBlockSyncedFrom) MarshalJSON() ([]byte, error) {
+func (s *UpdateBlockRequestSyncedBlockSyncedFrom) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *UpdateBlockBodyParametersSyncedBlockSyncedFrom) UnmarshalJSON(data []byte) error {
+func (s *UpdateBlockRequestSyncedBlockSyncedFrom) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
-// Encode encodes UpdateBlockBodyParametersSyncedBlockSyncedFromType as json.
-func (s UpdateBlockBodyParametersSyncedBlockSyncedFromType) Encode(e *jx.Encoder) {
+// Encode encodes UpdateBlockRequestSyncedBlockSyncedFromType as json.
+func (s UpdateBlockRequestSyncedBlockSyncedFromType) Encode(e *jx.Encoder) {
 	e.Str(string(s))
 }
 
-// Decode decodes UpdateBlockBodyParametersSyncedBlockSyncedFromType from json.
-func (s *UpdateBlockBodyParametersSyncedBlockSyncedFromType) Decode(d *jx.Decoder) error {
+// Decode decodes UpdateBlockRequestSyncedBlockSyncedFromType from json.
+func (s *UpdateBlockRequestSyncedBlockSyncedFromType) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode UpdateBlockBodyParametersSyncedBlockSyncedFromType to nil")
+		return errors.New("invalid: unable to decode UpdateBlockRequestSyncedBlockSyncedFromType to nil")
 	}
 	v, err := d.StrBytes()
 	if err != nil {
 		return err
 	}
 	// Try to use constant string.
-	switch UpdateBlockBodyParametersSyncedBlockSyncedFromType(v) {
-	case UpdateBlockBodyParametersSyncedBlockSyncedFromTypeBlockID:
-		*s = UpdateBlockBodyParametersSyncedBlockSyncedFromTypeBlockID
+	switch UpdateBlockRequestSyncedBlockSyncedFromType(v) {
+	case UpdateBlockRequestSyncedBlockSyncedFromTypeBlockID:
+		*s = UpdateBlockRequestSyncedBlockSyncedFromTypeBlockID
 	default:
-		*s = UpdateBlockBodyParametersSyncedBlockSyncedFromType(v)
+		*s = UpdateBlockRequestSyncedBlockSyncedFromType(v)
 	}
 
 	return nil
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s UpdateBlockBodyParametersSyncedBlockSyncedFromType) MarshalJSON() ([]byte, error) {
+func (s UpdateBlockRequestSyncedBlockSyncedFromType) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *UpdateBlockBodyParametersSyncedBlockSyncedFromType) UnmarshalJSON(data []byte) error {
+func (s *UpdateBlockRequestSyncedBlockSyncedFromType) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
 // Encode implements json.Marshaler.
-func (s *UpdateBlockBodyParametersTable) Encode(e *jx.Encoder) {
+func (s *UpdateBlockRequestTable) Encode(e *jx.Encoder) {
 	e.ObjStart()
 	s.encodeFields(e)
 	e.ObjEnd()
 }
 
 // encodeFields encodes fields.
-func (s *UpdateBlockBodyParametersTable) encodeFields(e *jx.Encoder) {
+func (s *UpdateBlockRequestTable) encodeFields(e *jx.Encoder) {
 	{
 		if s.HasColumnHeader.Set {
 			e.FieldStart("has_column_header")
@@ -75707,15 +75707,15 @@ func (s *UpdateBlockBodyParametersTable) encodeFields(e *jx.Encoder) {
 	}
 }
 
-var jsonFieldsNameOfUpdateBlockBodyParametersTable = [2]string{
+var jsonFieldsNameOfUpdateBlockRequestTable = [2]string{
 	0: "has_column_header",
 	1: "has_row_header",
 }
 
-// Decode decodes UpdateBlockBodyParametersTable from json.
-func (s *UpdateBlockBodyParametersTable) Decode(d *jx.Decoder) error {
+// Decode decodes UpdateBlockRequestTable from json.
+func (s *UpdateBlockRequestTable) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode UpdateBlockBodyParametersTable to nil")
+		return errors.New("invalid: unable to decode UpdateBlockRequestTable to nil")
 	}
 
 	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
@@ -75745,34 +75745,34 @@ func (s *UpdateBlockBodyParametersTable) Decode(d *jx.Decoder) error {
 		}
 		return nil
 	}); err != nil {
-		return errors.Wrap(err, "decode UpdateBlockBodyParametersTable")
+		return errors.Wrap(err, "decode UpdateBlockRequestTable")
 	}
 
 	return nil
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s *UpdateBlockBodyParametersTable) MarshalJSON() ([]byte, error) {
+func (s *UpdateBlockRequestTable) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *UpdateBlockBodyParametersTable) UnmarshalJSON(data []byte) error {
+func (s *UpdateBlockRequestTable) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
 // Encode implements json.Marshaler.
-func (s *UpdateBlockBodyParametersTableOfContents) Encode(e *jx.Encoder) {
+func (s *UpdateBlockRequestTableOfContents) Encode(e *jx.Encoder) {
 	e.ObjStart()
 	s.encodeFields(e)
 	e.ObjEnd()
 }
 
 // encodeFields encodes fields.
-func (s *UpdateBlockBodyParametersTableOfContents) encodeFields(e *jx.Encoder) {
+func (s *UpdateBlockRequestTableOfContents) encodeFields(e *jx.Encoder) {
 	{
 		if s.Color.Set {
 			e.FieldStart("color")
@@ -75781,14 +75781,14 @@ func (s *UpdateBlockBodyParametersTableOfContents) encodeFields(e *jx.Encoder) {
 	}
 }
 
-var jsonFieldsNameOfUpdateBlockBodyParametersTableOfContents = [1]string{
+var jsonFieldsNameOfUpdateBlockRequestTableOfContents = [1]string{
 	0: "color",
 }
 
-// Decode decodes UpdateBlockBodyParametersTableOfContents from json.
-func (s *UpdateBlockBodyParametersTableOfContents) Decode(d *jx.Decoder) error {
+// Decode decodes UpdateBlockRequestTableOfContents from json.
+func (s *UpdateBlockRequestTableOfContents) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode UpdateBlockBodyParametersTableOfContents to nil")
+		return errors.New("invalid: unable to decode UpdateBlockRequestTableOfContents to nil")
 	}
 
 	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
@@ -75808,34 +75808,34 @@ func (s *UpdateBlockBodyParametersTableOfContents) Decode(d *jx.Decoder) error {
 		}
 		return nil
 	}); err != nil {
-		return errors.Wrap(err, "decode UpdateBlockBodyParametersTableOfContents")
+		return errors.Wrap(err, "decode UpdateBlockRequestTableOfContents")
 	}
 
 	return nil
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s *UpdateBlockBodyParametersTableOfContents) MarshalJSON() ([]byte, error) {
+func (s *UpdateBlockRequestTableOfContents) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *UpdateBlockBodyParametersTableOfContents) UnmarshalJSON(data []byte) error {
+func (s *UpdateBlockRequestTableOfContents) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
 // Encode implements json.Marshaler.
-func (s *UpdateBlockBodyParametersToDo) Encode(e *jx.Encoder) {
+func (s *UpdateBlockRequestToDo) Encode(e *jx.Encoder) {
 	e.ObjStart()
 	s.encodeFields(e)
 	e.ObjEnd()
 }
 
 // encodeFields encodes fields.
-func (s *UpdateBlockBodyParametersToDo) encodeFields(e *jx.Encoder) {
+func (s *UpdateBlockRequestToDo) encodeFields(e *jx.Encoder) {
 	{
 		if s.RichText != nil {
 			e.FieldStart("rich_text")
@@ -75860,16 +75860,16 @@ func (s *UpdateBlockBodyParametersToDo) encodeFields(e *jx.Encoder) {
 	}
 }
 
-var jsonFieldsNameOfUpdateBlockBodyParametersToDo = [3]string{
+var jsonFieldsNameOfUpdateBlockRequestToDo = [3]string{
 	0: "rich_text",
 	1: "checked",
 	2: "color",
 }
 
-// Decode decodes UpdateBlockBodyParametersToDo from json.
-func (s *UpdateBlockBodyParametersToDo) Decode(d *jx.Decoder) error {
+// Decode decodes UpdateBlockRequestToDo from json.
+func (s *UpdateBlockRequestToDo) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode UpdateBlockBodyParametersToDo to nil")
+		return errors.New("invalid: unable to decode UpdateBlockRequestToDo to nil")
 	}
 
 	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
@@ -75916,113 +75916,113 @@ func (s *UpdateBlockBodyParametersToDo) Decode(d *jx.Decoder) error {
 		}
 		return nil
 	}); err != nil {
-		return errors.Wrap(err, "decode UpdateBlockBodyParametersToDo")
+		return errors.Wrap(err, "decode UpdateBlockRequestToDo")
 	}
 
 	return nil
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s *UpdateBlockBodyParametersToDo) MarshalJSON() ([]byte, error) {
+func (s *UpdateBlockRequestToDo) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *UpdateBlockBodyParametersToDo) UnmarshalJSON(data []byte) error {
+func (s *UpdateBlockRequestToDo) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
-// Encode encodes UpdateBlockBodyParametersType as json.
-func (s UpdateBlockBodyParametersType) Encode(e *jx.Encoder) {
+// Encode encodes UpdateBlockRequestType as json.
+func (s UpdateBlockRequestType) Encode(e *jx.Encoder) {
 	e.Str(string(s))
 }
 
-// Decode decodes UpdateBlockBodyParametersType from json.
-func (s *UpdateBlockBodyParametersType) Decode(d *jx.Decoder) error {
+// Decode decodes UpdateBlockRequestType from json.
+func (s *UpdateBlockRequestType) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode UpdateBlockBodyParametersType to nil")
+		return errors.New("invalid: unable to decode UpdateBlockRequestType to nil")
 	}
 	v, err := d.StrBytes()
 	if err != nil {
 		return err
 	}
 	// Try to use constant string.
-	switch UpdateBlockBodyParametersType(v) {
-	case UpdateBlockBodyParametersTypeEmbed:
-		*s = UpdateBlockBodyParametersTypeEmbed
-	case UpdateBlockBodyParametersTypeBookmark:
-		*s = UpdateBlockBodyParametersTypeBookmark
-	case UpdateBlockBodyParametersTypeImage:
-		*s = UpdateBlockBodyParametersTypeImage
-	case UpdateBlockBodyParametersTypeVideo:
-		*s = UpdateBlockBodyParametersTypeVideo
-	case UpdateBlockBodyParametersTypePdf:
-		*s = UpdateBlockBodyParametersTypePdf
-	case UpdateBlockBodyParametersTypeFile:
-		*s = UpdateBlockBodyParametersTypeFile
-	case UpdateBlockBodyParametersTypeAudio:
-		*s = UpdateBlockBodyParametersTypeAudio
-	case UpdateBlockBodyParametersTypeCode:
-		*s = UpdateBlockBodyParametersTypeCode
-	case UpdateBlockBodyParametersTypeEquation:
-		*s = UpdateBlockBodyParametersTypeEquation
-	case UpdateBlockBodyParametersTypeDivider:
-		*s = UpdateBlockBodyParametersTypeDivider
-	case UpdateBlockBodyParametersTypeBreadcrumb:
-		*s = UpdateBlockBodyParametersTypeBreadcrumb
-	case UpdateBlockBodyParametersTypeTableOfContents:
-		*s = UpdateBlockBodyParametersTypeTableOfContents
-	case UpdateBlockBodyParametersTypeLinkToPage:
-		*s = UpdateBlockBodyParametersTypeLinkToPage
-	case UpdateBlockBodyParametersTypeTableRow:
-		*s = UpdateBlockBodyParametersTypeTableRow
-	case UpdateBlockBodyParametersTypeHeading1:
-		*s = UpdateBlockBodyParametersTypeHeading1
-	case UpdateBlockBodyParametersTypeHeading2:
-		*s = UpdateBlockBodyParametersTypeHeading2
-	case UpdateBlockBodyParametersTypeHeading3:
-		*s = UpdateBlockBodyParametersTypeHeading3
-	case UpdateBlockBodyParametersTypeParagraph:
-		*s = UpdateBlockBodyParametersTypeParagraph
-	case UpdateBlockBodyParametersTypeBulletedListItem:
-		*s = UpdateBlockBodyParametersTypeBulletedListItem
-	case UpdateBlockBodyParametersTypeNumberedListItem:
-		*s = UpdateBlockBodyParametersTypeNumberedListItem
-	case UpdateBlockBodyParametersTypeQuote:
-		*s = UpdateBlockBodyParametersTypeQuote
-	case UpdateBlockBodyParametersTypeToDo:
-		*s = UpdateBlockBodyParametersTypeToDo
-	case UpdateBlockBodyParametersTypeToggle:
-		*s = UpdateBlockBodyParametersTypeToggle
-	case UpdateBlockBodyParametersTypeTemplate:
-		*s = UpdateBlockBodyParametersTypeTemplate
-	case UpdateBlockBodyParametersTypeCallout:
-		*s = UpdateBlockBodyParametersTypeCallout
-	case UpdateBlockBodyParametersTypeSyncedBlock:
-		*s = UpdateBlockBodyParametersTypeSyncedBlock
-	case UpdateBlockBodyParametersTypeTable:
-		*s = UpdateBlockBodyParametersTypeTable
-	case UpdateBlockBodyParametersTypeColumn:
-		*s = UpdateBlockBodyParametersTypeColumn
+	switch UpdateBlockRequestType(v) {
+	case UpdateBlockRequestTypeEmbed:
+		*s = UpdateBlockRequestTypeEmbed
+	case UpdateBlockRequestTypeBookmark:
+		*s = UpdateBlockRequestTypeBookmark
+	case UpdateBlockRequestTypeImage:
+		*s = UpdateBlockRequestTypeImage
+	case UpdateBlockRequestTypeVideo:
+		*s = UpdateBlockRequestTypeVideo
+	case UpdateBlockRequestTypePdf:
+		*s = UpdateBlockRequestTypePdf
+	case UpdateBlockRequestTypeFile:
+		*s = UpdateBlockRequestTypeFile
+	case UpdateBlockRequestTypeAudio:
+		*s = UpdateBlockRequestTypeAudio
+	case UpdateBlockRequestTypeCode:
+		*s = UpdateBlockRequestTypeCode
+	case UpdateBlockRequestTypeEquation:
+		*s = UpdateBlockRequestTypeEquation
+	case UpdateBlockRequestTypeDivider:
+		*s = UpdateBlockRequestTypeDivider
+	case UpdateBlockRequestTypeBreadcrumb:
+		*s = UpdateBlockRequestTypeBreadcrumb
+	case UpdateBlockRequestTypeTableOfContents:
+		*s = UpdateBlockRequestTypeTableOfContents
+	case UpdateBlockRequestTypeLinkToPage:
+		*s = UpdateBlockRequestTypeLinkToPage
+	case UpdateBlockRequestTypeTableRow:
+		*s = UpdateBlockRequestTypeTableRow
+	case UpdateBlockRequestTypeHeading1:
+		*s = UpdateBlockRequestTypeHeading1
+	case UpdateBlockRequestTypeHeading2:
+		*s = UpdateBlockRequestTypeHeading2
+	case UpdateBlockRequestTypeHeading3:
+		*s = UpdateBlockRequestTypeHeading3
+	case UpdateBlockRequestTypeParagraph:
+		*s = UpdateBlockRequestTypeParagraph
+	case UpdateBlockRequestTypeBulletedListItem:
+		*s = UpdateBlockRequestTypeBulletedListItem
+	case UpdateBlockRequestTypeNumberedListItem:
+		*s = UpdateBlockRequestTypeNumberedListItem
+	case UpdateBlockRequestTypeQuote:
+		*s = UpdateBlockRequestTypeQuote
+	case UpdateBlockRequestTypeToDo:
+		*s = UpdateBlockRequestTypeToDo
+	case UpdateBlockRequestTypeToggle:
+		*s = UpdateBlockRequestTypeToggle
+	case UpdateBlockRequestTypeTemplate:
+		*s = UpdateBlockRequestTypeTemplate
+	case UpdateBlockRequestTypeCallout:
+		*s = UpdateBlockRequestTypeCallout
+	case UpdateBlockRequestTypeSyncedBlock:
+		*s = UpdateBlockRequestTypeSyncedBlock
+	case UpdateBlockRequestTypeTable:
+		*s = UpdateBlockRequestTypeTable
+	case UpdateBlockRequestTypeColumn:
+		*s = UpdateBlockRequestTypeColumn
 	default:
-		*s = UpdateBlockBodyParametersType(v)
+		*s = UpdateBlockRequestType(v)
 	}
 
 	return nil
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s UpdateBlockBodyParametersType) MarshalJSON() ([]byte, error) {
+func (s UpdateBlockRequestType) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *UpdateBlockBodyParametersType) UnmarshalJSON(data []byte) error {
+func (s *UpdateBlockRequestType) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
@@ -78253,14 +78253,14 @@ func (s *UpdateBlockResponseUnsupported) UnmarshalJSON(data []byte) error {
 }
 
 // Encode implements json.Marshaler.
-func (s *UpdateDatabaseBodyParameters) Encode(e *jx.Encoder) {
+func (s *UpdateDatabaseRequest) Encode(e *jx.Encoder) {
 	e.ObjStart()
 	s.encodeFields(e)
 	e.ObjEnd()
 }
 
 // encodeFields encodes fields.
-func (s *UpdateDatabaseBodyParameters) encodeFields(e *jx.Encoder) {
+func (s *UpdateDatabaseRequest) encodeFields(e *jx.Encoder) {
 	{
 		if s.Parent.Set {
 			e.FieldStart("parent")
@@ -78319,7 +78319,7 @@ func (s *UpdateDatabaseBodyParameters) encodeFields(e *jx.Encoder) {
 	}
 }
 
-var jsonFieldsNameOfUpdateDatabaseBodyParameters = [8]string{
+var jsonFieldsNameOfUpdateDatabaseRequest = [8]string{
 	0: "parent",
 	1: "title",
 	2: "description",
@@ -78330,10 +78330,10 @@ var jsonFieldsNameOfUpdateDatabaseBodyParameters = [8]string{
 	7: "is_locked",
 }
 
-// Decode decodes UpdateDatabaseBodyParameters from json.
-func (s *UpdateDatabaseBodyParameters) Decode(d *jx.Decoder) error {
+// Decode decodes UpdateDatabaseRequest from json.
+func (s *UpdateDatabaseRequest) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode UpdateDatabaseBodyParameters to nil")
+		return errors.New("invalid: unable to decode UpdateDatabaseRequest to nil")
 	}
 
 	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
@@ -78437,34 +78437,34 @@ func (s *UpdateDatabaseBodyParameters) Decode(d *jx.Decoder) error {
 		}
 		return nil
 	}); err != nil {
-		return errors.Wrap(err, "decode UpdateDatabaseBodyParameters")
+		return errors.Wrap(err, "decode UpdateDatabaseRequest")
 	}
 
 	return nil
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s *UpdateDatabaseBodyParameters) MarshalJSON() ([]byte, error) {
+func (s *UpdateDatabaseRequest) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *UpdateDatabaseBodyParameters) UnmarshalJSON(data []byte) error {
+func (s *UpdateDatabaseRequest) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
 // Encode implements json.Marshaler.
-func (s *UpdateDatabaseBodyParametersParent) Encode(e *jx.Encoder) {
+func (s *UpdateDatabaseRequestParent) Encode(e *jx.Encoder) {
 	e.ObjStart()
 	s.encodeFields(e)
 	e.ObjEnd()
 }
 
 // encodeFields encodes fields.
-func (s *UpdateDatabaseBodyParametersParent) encodeFields(e *jx.Encoder) {
+func (s *UpdateDatabaseRequestParent) encodeFields(e *jx.Encoder) {
 	{
 		e.FieldStart("type")
 		s.Type.Encode(e)
@@ -78483,16 +78483,16 @@ func (s *UpdateDatabaseBodyParametersParent) encodeFields(e *jx.Encoder) {
 	}
 }
 
-var jsonFieldsNameOfUpdateDatabaseBodyParametersParent = [3]string{
+var jsonFieldsNameOfUpdateDatabaseRequestParent = [3]string{
 	0: "type",
 	1: "page_id",
 	2: "workspace",
 }
 
-// Decode decodes UpdateDatabaseBodyParametersParent from json.
-func (s *UpdateDatabaseBodyParametersParent) Decode(d *jx.Decoder) error {
+// Decode decodes UpdateDatabaseRequestParent from json.
+func (s *UpdateDatabaseRequestParent) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode UpdateDatabaseBodyParametersParent to nil")
+		return errors.New("invalid: unable to decode UpdateDatabaseRequestParent to nil")
 	}
 	var requiredBitSet [1]uint8
 
@@ -78533,7 +78533,7 @@ func (s *UpdateDatabaseBodyParametersParent) Decode(d *jx.Decoder) error {
 		}
 		return nil
 	}); err != nil {
-		return errors.Wrap(err, "decode UpdateDatabaseBodyParametersParent")
+		return errors.Wrap(err, "decode UpdateDatabaseRequestParent")
 	}
 	// Validate required fields.
 	var failures []validate.FieldError
@@ -78550,8 +78550,8 @@ func (s *UpdateDatabaseBodyParametersParent) Decode(d *jx.Decoder) error {
 				bitIdx := bits.TrailingZeros8(result)
 				fieldIdx := i*8 + bitIdx
 				var name string
-				if fieldIdx < len(jsonFieldsNameOfUpdateDatabaseBodyParametersParent) {
-					name = jsonFieldsNameOfUpdateDatabaseBodyParametersParent[fieldIdx]
+				if fieldIdx < len(jsonFieldsNameOfUpdateDatabaseRequestParent) {
+					name = jsonFieldsNameOfUpdateDatabaseRequestParent[fieldIdx]
 				} else {
 					name = strconv.Itoa(fieldIdx)
 				}
@@ -78572,86 +78572,86 @@ func (s *UpdateDatabaseBodyParametersParent) Decode(d *jx.Decoder) error {
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s *UpdateDatabaseBodyParametersParent) MarshalJSON() ([]byte, error) {
+func (s *UpdateDatabaseRequestParent) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *UpdateDatabaseBodyParametersParent) UnmarshalJSON(data []byte) error {
+func (s *UpdateDatabaseRequestParent) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
-// Encode encodes UpdateDatabaseBodyParametersParentType as json.
-func (s UpdateDatabaseBodyParametersParentType) Encode(e *jx.Encoder) {
+// Encode encodes UpdateDatabaseRequestParentType as json.
+func (s UpdateDatabaseRequestParentType) Encode(e *jx.Encoder) {
 	e.Str(string(s))
 }
 
-// Decode decodes UpdateDatabaseBodyParametersParentType from json.
-func (s *UpdateDatabaseBodyParametersParentType) Decode(d *jx.Decoder) error {
+// Decode decodes UpdateDatabaseRequestParentType from json.
+func (s *UpdateDatabaseRequestParentType) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode UpdateDatabaseBodyParametersParentType to nil")
+		return errors.New("invalid: unable to decode UpdateDatabaseRequestParentType to nil")
 	}
 	v, err := d.StrBytes()
 	if err != nil {
 		return err
 	}
 	// Try to use constant string.
-	switch UpdateDatabaseBodyParametersParentType(v) {
-	case UpdateDatabaseBodyParametersParentTypePageID:
-		*s = UpdateDatabaseBodyParametersParentTypePageID
-	case UpdateDatabaseBodyParametersParentTypeWorkspace:
-		*s = UpdateDatabaseBodyParametersParentTypeWorkspace
+	switch UpdateDatabaseRequestParentType(v) {
+	case UpdateDatabaseRequestParentTypePageID:
+		*s = UpdateDatabaseRequestParentTypePageID
+	case UpdateDatabaseRequestParentTypeWorkspace:
+		*s = UpdateDatabaseRequestParentTypeWorkspace
 	default:
-		*s = UpdateDatabaseBodyParametersParentType(v)
+		*s = UpdateDatabaseRequestParentType(v)
 	}
 
 	return nil
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s UpdateDatabaseBodyParametersParentType) MarshalJSON() ([]byte, error) {
+func (s UpdateDatabaseRequestParentType) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *UpdateDatabaseBodyParametersParentType) UnmarshalJSON(data []byte) error {
+func (s *UpdateDatabaseRequestParentType) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
-// Encode encodes UpdateDatabaseBodyParametersParentWorkspace as json.
-func (s UpdateDatabaseBodyParametersParentWorkspace) Encode(e *jx.Encoder) {
+// Encode encodes UpdateDatabaseRequestParentWorkspace as json.
+func (s UpdateDatabaseRequestParentWorkspace) Encode(e *jx.Encoder) {
 	e.Bool(bool(s))
 }
 
-// Decode decodes UpdateDatabaseBodyParametersParentWorkspace from json.
-func (s *UpdateDatabaseBodyParametersParentWorkspace) Decode(d *jx.Decoder) error {
+// Decode decodes UpdateDatabaseRequestParentWorkspace from json.
+func (s *UpdateDatabaseRequestParentWorkspace) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode UpdateDatabaseBodyParametersParentWorkspace to nil")
+		return errors.New("invalid: unable to decode UpdateDatabaseRequestParentWorkspace to nil")
 	}
 	v, err := d.Bool()
 	if err != nil {
 		return err
 	}
-	*s = UpdateDatabaseBodyParametersParentWorkspace(v)
+	*s = UpdateDatabaseRequestParentWorkspace(v)
 
 	return nil
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s UpdateDatabaseBodyParametersParentWorkspace) MarshalJSON() ([]byte, error) {
+func (s UpdateDatabaseRequestParentWorkspace) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *UpdateDatabaseBodyParametersParentWorkspace) UnmarshalJSON(data []byte) error {
+func (s *UpdateDatabaseRequestParentWorkspace) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
@@ -79385,14 +79385,14 @@ func (s *UpdateMediaContentWithUrlAndCaptionRequest) UnmarshalJSON(data []byte) 
 }
 
 // Encode implements json.Marshaler.
-func (s *UpdatePageBodyParameters) Encode(e *jx.Encoder) {
+func (s *UpdatePageRequest) Encode(e *jx.Encoder) {
 	e.ObjStart()
 	s.encodeFields(e)
 	e.ObjEnd()
 }
 
 // encodeFields encodes fields.
-func (s *UpdatePageBodyParameters) encodeFields(e *jx.Encoder) {
+func (s *UpdatePageRequest) encodeFields(e *jx.Encoder) {
 	{
 		if s.Properties.Set {
 			e.FieldStart("properties")
@@ -79443,7 +79443,7 @@ func (s *UpdatePageBodyParameters) encodeFields(e *jx.Encoder) {
 	}
 }
 
-var jsonFieldsNameOfUpdatePageBodyParameters = [8]string{
+var jsonFieldsNameOfUpdatePageRequest = [8]string{
 	0: "properties",
 	1: "icon",
 	2: "cover",
@@ -79454,10 +79454,10 @@ var jsonFieldsNameOfUpdatePageBodyParameters = [8]string{
 	7: "in_trash",
 }
 
-// Decode decodes UpdatePageBodyParameters from json.
-func (s *UpdatePageBodyParameters) Decode(d *jx.Decoder) error {
+// Decode decodes UpdatePageRequest from json.
+func (s *UpdatePageRequest) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode UpdatePageBodyParameters to nil")
+		return errors.New("invalid: unable to decode UpdatePageRequest to nil")
 	}
 
 	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
@@ -79547,34 +79547,34 @@ func (s *UpdatePageBodyParameters) Decode(d *jx.Decoder) error {
 		}
 		return nil
 	}); err != nil {
-		return errors.Wrap(err, "decode UpdatePageBodyParameters")
+		return errors.Wrap(err, "decode UpdatePageRequest")
 	}
 
 	return nil
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s *UpdatePageBodyParameters) MarshalJSON() ([]byte, error) {
+func (s *UpdatePageRequest) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *UpdatePageBodyParameters) UnmarshalJSON(data []byte) error {
+func (s *UpdatePageRequest) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
 // Encode implements json.Marshaler.
-func (s UpdatePageBodyParametersProperties) Encode(e *jx.Encoder) {
+func (s UpdatePageRequestProperties) Encode(e *jx.Encoder) {
 	e.ObjStart()
 	s.encodeFields(e)
 	e.ObjEnd()
 }
 
 // encodeFields implements json.Marshaler.
-func (s UpdatePageBodyParametersProperties) encodeFields(e *jx.Encoder) {
+func (s UpdatePageRequestProperties) encodeFields(e *jx.Encoder) {
 	for k, elem := range s {
 		e.FieldStart(k)
 
@@ -79582,14 +79582,14 @@ func (s UpdatePageBodyParametersProperties) encodeFields(e *jx.Encoder) {
 	}
 }
 
-// Decode decodes UpdatePageBodyParametersProperties from json.
-func (s *UpdatePageBodyParametersProperties) Decode(d *jx.Decoder) error {
+// Decode decodes UpdatePageRequestProperties from json.
+func (s *UpdatePageRequestProperties) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode UpdatePageBodyParametersProperties to nil")
+		return errors.New("invalid: unable to decode UpdatePageRequestProperties to nil")
 	}
 	m := s.init()
 	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
-		var elem UpdatePageBodyParametersPropertiesItem
+		var elem UpdatePageRequestPropertiesItem
 		if err := func() error {
 			if err := elem.Decode(d); err != nil {
 				return err
@@ -79601,34 +79601,34 @@ func (s *UpdatePageBodyParametersProperties) Decode(d *jx.Decoder) error {
 		m[string(k)] = elem
 		return nil
 	}); err != nil {
-		return errors.Wrap(err, "decode UpdatePageBodyParametersProperties")
+		return errors.Wrap(err, "decode UpdatePageRequestProperties")
 	}
 
 	return nil
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s UpdatePageBodyParametersProperties) MarshalJSON() ([]byte, error) {
+func (s UpdatePageRequestProperties) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *UpdatePageBodyParametersProperties) UnmarshalJSON(data []byte) error {
+func (s *UpdatePageRequestProperties) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
 // Encode implements json.Marshaler.
-func (s *UpdatePageBodyParametersPropertiesItem) Encode(e *jx.Encoder) {
+func (s *UpdatePageRequestPropertiesItem) Encode(e *jx.Encoder) {
 	e.ObjStart()
 	s.encodeFields(e)
 	e.ObjEnd()
 }
 
 // encodeFields encodes fields.
-func (s *UpdatePageBodyParametersPropertiesItem) encodeFields(e *jx.Encoder) {
+func (s *UpdatePageRequestPropertiesItem) encodeFields(e *jx.Encoder) {
 	{
 		if s.Title != nil {
 			e.FieldStart("title")
@@ -79751,7 +79751,7 @@ func (s *UpdatePageBodyParametersPropertiesItem) encodeFields(e *jx.Encoder) {
 	}
 }
 
-var jsonFieldsNameOfUpdatePageBodyParametersPropertiesItem = [16]string{
+var jsonFieldsNameOfUpdatePageRequestPropertiesItem = [16]string{
 	0:  "title",
 	1:  "type",
 	2:  "rich_text",
@@ -79770,10 +79770,10 @@ var jsonFieldsNameOfUpdatePageBodyParametersPropertiesItem = [16]string{
 	15: "place",
 }
 
-// Decode decodes UpdatePageBodyParametersPropertiesItem from json.
-func (s *UpdatePageBodyParametersPropertiesItem) Decode(d *jx.Decoder) error {
+// Decode decodes UpdatePageRequestPropertiesItem from json.
+func (s *UpdatePageRequestPropertiesItem) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode UpdatePageBodyParametersPropertiesItem to nil")
+		return errors.New("invalid: unable to decode UpdatePageRequestPropertiesItem to nil")
 	}
 
 	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
@@ -79854,9 +79854,9 @@ func (s *UpdatePageBodyParametersPropertiesItem) Decode(d *jx.Decoder) error {
 			}
 		case "multi_select":
 			if err := func() error {
-				s.MultiSelect = make([]UpdatePageBodyParametersPropertiesItemMultiSelectItem, 0)
+				s.MultiSelect = make([]UpdatePageRequestPropertiesItemMultiSelectItem, 0)
 				if err := d.Arr(func(d *jx.Decoder) error {
-					var elem UpdatePageBodyParametersPropertiesItemMultiSelectItem
+					var elem UpdatePageRequestPropertiesItemMultiSelectItem
 					if err := elem.Decode(d); err != nil {
 						return err
 					}
@@ -79871,9 +79871,9 @@ func (s *UpdatePageBodyParametersPropertiesItem) Decode(d *jx.Decoder) error {
 			}
 		case "people":
 			if err := func() error {
-				s.People = make([]UpdatePageBodyParametersPropertiesItemPeopleItem, 0)
+				s.People = make([]UpdatePageRequestPropertiesItemPeopleItem, 0)
 				if err := d.Arr(func(d *jx.Decoder) error {
-					var elem UpdatePageBodyParametersPropertiesItemPeopleItem
+					var elem UpdatePageRequestPropertiesItemPeopleItem
 					if err := elem.Decode(d); err != nil {
 						return err
 					}
@@ -79945,9 +79945,9 @@ func (s *UpdatePageBodyParametersPropertiesItem) Decode(d *jx.Decoder) error {
 			}
 		case "files":
 			if err := func() error {
-				s.Files = make([]UpdatePageBodyParametersPropertiesItemFilesItem, 0)
+				s.Files = make([]UpdatePageRequestPropertiesItemFilesItem, 0)
 				if err := d.Arr(func(d *jx.Decoder) error {
-					var elem UpdatePageBodyParametersPropertiesItemFilesItem
+					var elem UpdatePageRequestPropertiesItemFilesItem
 					if err := elem.Decode(d); err != nil {
 						return err
 					}
@@ -79985,34 +79985,34 @@ func (s *UpdatePageBodyParametersPropertiesItem) Decode(d *jx.Decoder) error {
 		}
 		return nil
 	}); err != nil {
-		return errors.Wrap(err, "decode UpdatePageBodyParametersPropertiesItem")
+		return errors.Wrap(err, "decode UpdatePageRequestPropertiesItem")
 	}
 
 	return nil
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s *UpdatePageBodyParametersPropertiesItem) MarshalJSON() ([]byte, error) {
+func (s *UpdatePageRequestPropertiesItem) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *UpdatePageBodyParametersPropertiesItem) UnmarshalJSON(data []byte) error {
+func (s *UpdatePageRequestPropertiesItem) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
 // Encode implements json.Marshaler.
-func (s *UpdatePageBodyParametersPropertiesItemFilesItem) Encode(e *jx.Encoder) {
+func (s *UpdatePageRequestPropertiesItemFilesItem) Encode(e *jx.Encoder) {
 	e.ObjStart()
 	s.encodeFields(e)
 	e.ObjEnd()
 }
 
 // encodeFields encodes fields.
-func (s *UpdatePageBodyParametersPropertiesItemFilesItem) encodeFields(e *jx.Encoder) {
+func (s *UpdatePageRequestPropertiesItemFilesItem) encodeFields(e *jx.Encoder) {
 	{
 		if s.File.Set {
 			e.FieldStart("file")
@@ -80045,7 +80045,7 @@ func (s *UpdatePageBodyParametersPropertiesItemFilesItem) encodeFields(e *jx.Enc
 	}
 }
 
-var jsonFieldsNameOfUpdatePageBodyParametersPropertiesItemFilesItem = [5]string{
+var jsonFieldsNameOfUpdatePageRequestPropertiesItemFilesItem = [5]string{
 	0: "file",
 	1: "name",
 	2: "type",
@@ -80053,10 +80053,10 @@ var jsonFieldsNameOfUpdatePageBodyParametersPropertiesItemFilesItem = [5]string{
 	4: "file_upload",
 }
 
-// Decode decodes UpdatePageBodyParametersPropertiesItemFilesItem from json.
-func (s *UpdatePageBodyParametersPropertiesItemFilesItem) Decode(d *jx.Decoder) error {
+// Decode decodes UpdatePageRequestPropertiesItemFilesItem from json.
+func (s *UpdatePageRequestPropertiesItemFilesItem) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode UpdatePageBodyParametersPropertiesItemFilesItem to nil")
+		return errors.New("invalid: unable to decode UpdatePageRequestPropertiesItemFilesItem to nil")
 	}
 
 	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
@@ -80116,76 +80116,76 @@ func (s *UpdatePageBodyParametersPropertiesItemFilesItem) Decode(d *jx.Decoder) 
 		}
 		return nil
 	}); err != nil {
-		return errors.Wrap(err, "decode UpdatePageBodyParametersPropertiesItemFilesItem")
+		return errors.Wrap(err, "decode UpdatePageRequestPropertiesItemFilesItem")
 	}
 
 	return nil
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s *UpdatePageBodyParametersPropertiesItemFilesItem) MarshalJSON() ([]byte, error) {
+func (s *UpdatePageRequestPropertiesItemFilesItem) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *UpdatePageBodyParametersPropertiesItemFilesItem) UnmarshalJSON(data []byte) error {
+func (s *UpdatePageRequestPropertiesItemFilesItem) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
-// Encode encodes UpdatePageBodyParametersPropertiesItemFilesItemType as json.
-func (s UpdatePageBodyParametersPropertiesItemFilesItemType) Encode(e *jx.Encoder) {
+// Encode encodes UpdatePageRequestPropertiesItemFilesItemType as json.
+func (s UpdatePageRequestPropertiesItemFilesItemType) Encode(e *jx.Encoder) {
 	e.Str(string(s))
 }
 
-// Decode decodes UpdatePageBodyParametersPropertiesItemFilesItemType from json.
-func (s *UpdatePageBodyParametersPropertiesItemFilesItemType) Decode(d *jx.Decoder) error {
+// Decode decodes UpdatePageRequestPropertiesItemFilesItemType from json.
+func (s *UpdatePageRequestPropertiesItemFilesItemType) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode UpdatePageBodyParametersPropertiesItemFilesItemType to nil")
+		return errors.New("invalid: unable to decode UpdatePageRequestPropertiesItemFilesItemType to nil")
 	}
 	v, err := d.StrBytes()
 	if err != nil {
 		return err
 	}
 	// Try to use constant string.
-	switch UpdatePageBodyParametersPropertiesItemFilesItemType(v) {
-	case UpdatePageBodyParametersPropertiesItemFilesItemTypeFile:
-		*s = UpdatePageBodyParametersPropertiesItemFilesItemTypeFile
-	case UpdatePageBodyParametersPropertiesItemFilesItemTypeExternal:
-		*s = UpdatePageBodyParametersPropertiesItemFilesItemTypeExternal
-	case UpdatePageBodyParametersPropertiesItemFilesItemTypeFileUpload:
-		*s = UpdatePageBodyParametersPropertiesItemFilesItemTypeFileUpload
+	switch UpdatePageRequestPropertiesItemFilesItemType(v) {
+	case UpdatePageRequestPropertiesItemFilesItemTypeFile:
+		*s = UpdatePageRequestPropertiesItemFilesItemTypeFile
+	case UpdatePageRequestPropertiesItemFilesItemTypeExternal:
+		*s = UpdatePageRequestPropertiesItemFilesItemTypeExternal
+	case UpdatePageRequestPropertiesItemFilesItemTypeFileUpload:
+		*s = UpdatePageRequestPropertiesItemFilesItemTypeFileUpload
 	default:
-		*s = UpdatePageBodyParametersPropertiesItemFilesItemType(v)
+		*s = UpdatePageRequestPropertiesItemFilesItemType(v)
 	}
 
 	return nil
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s UpdatePageBodyParametersPropertiesItemFilesItemType) MarshalJSON() ([]byte, error) {
+func (s UpdatePageRequestPropertiesItemFilesItemType) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *UpdatePageBodyParametersPropertiesItemFilesItemType) UnmarshalJSON(data []byte) error {
+func (s *UpdatePageRequestPropertiesItemFilesItemType) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
 // Encode implements json.Marshaler.
-func (s *UpdatePageBodyParametersPropertiesItemMultiSelectItem) Encode(e *jx.Encoder) {
+func (s *UpdatePageRequestPropertiesItemMultiSelectItem) Encode(e *jx.Encoder) {
 	e.ObjStart()
 	s.encodeFields(e)
 	e.ObjEnd()
 }
 
 // encodeFields encodes fields.
-func (s *UpdatePageBodyParametersPropertiesItemMultiSelectItem) encodeFields(e *jx.Encoder) {
+func (s *UpdatePageRequestPropertiesItemMultiSelectItem) encodeFields(e *jx.Encoder) {
 	{
 		if s.ID.Set {
 			e.FieldStart("id")
@@ -80212,17 +80212,17 @@ func (s *UpdatePageBodyParametersPropertiesItemMultiSelectItem) encodeFields(e *
 	}
 }
 
-var jsonFieldsNameOfUpdatePageBodyParametersPropertiesItemMultiSelectItem = [4]string{
+var jsonFieldsNameOfUpdatePageRequestPropertiesItemMultiSelectItem = [4]string{
 	0: "id",
 	1: "name",
 	2: "color",
 	3: "description",
 }
 
-// Decode decodes UpdatePageBodyParametersPropertiesItemMultiSelectItem from json.
-func (s *UpdatePageBodyParametersPropertiesItemMultiSelectItem) Decode(d *jx.Decoder) error {
+// Decode decodes UpdatePageRequestPropertiesItemMultiSelectItem from json.
+func (s *UpdatePageRequestPropertiesItemMultiSelectItem) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode UpdatePageBodyParametersPropertiesItemMultiSelectItem to nil")
+		return errors.New("invalid: unable to decode UpdatePageRequestPropertiesItemMultiSelectItem to nil")
 	}
 
 	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
@@ -80272,34 +80272,34 @@ func (s *UpdatePageBodyParametersPropertiesItemMultiSelectItem) Decode(d *jx.Dec
 		}
 		return nil
 	}); err != nil {
-		return errors.Wrap(err, "decode UpdatePageBodyParametersPropertiesItemMultiSelectItem")
+		return errors.Wrap(err, "decode UpdatePageRequestPropertiesItemMultiSelectItem")
 	}
 
 	return nil
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s *UpdatePageBodyParametersPropertiesItemMultiSelectItem) MarshalJSON() ([]byte, error) {
+func (s *UpdatePageRequestPropertiesItemMultiSelectItem) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *UpdatePageBodyParametersPropertiesItemMultiSelectItem) UnmarshalJSON(data []byte) error {
+func (s *UpdatePageRequestPropertiesItemMultiSelectItem) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
 // Encode implements json.Marshaler.
-func (s *UpdatePageBodyParametersPropertiesItemPeopleItem) Encode(e *jx.Encoder) {
+func (s *UpdatePageRequestPropertiesItemPeopleItem) Encode(e *jx.Encoder) {
 	e.ObjStart()
 	s.encodeFields(e)
 	e.ObjEnd()
 }
 
 // encodeFields encodes fields.
-func (s *UpdatePageBodyParametersPropertiesItemPeopleItem) encodeFields(e *jx.Encoder) {
+func (s *UpdatePageRequestPropertiesItemPeopleItem) encodeFields(e *jx.Encoder) {
 	{
 		e.FieldStart("id")
 		e.Str(s.ID)
@@ -80318,16 +80318,16 @@ func (s *UpdatePageBodyParametersPropertiesItemPeopleItem) encodeFields(e *jx.En
 	}
 }
 
-var jsonFieldsNameOfUpdatePageBodyParametersPropertiesItemPeopleItem = [3]string{
+var jsonFieldsNameOfUpdatePageRequestPropertiesItemPeopleItem = [3]string{
 	0: "id",
 	1: "object",
 	2: "name",
 }
 
-// Decode decodes UpdatePageBodyParametersPropertiesItemPeopleItem from json.
-func (s *UpdatePageBodyParametersPropertiesItemPeopleItem) Decode(d *jx.Decoder) error {
+// Decode decodes UpdatePageRequestPropertiesItemPeopleItem from json.
+func (s *UpdatePageRequestPropertiesItemPeopleItem) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode UpdatePageBodyParametersPropertiesItemPeopleItem to nil")
+		return errors.New("invalid: unable to decode UpdatePageRequestPropertiesItemPeopleItem to nil")
 	}
 	var requiredBitSet [1]uint8
 
@@ -80370,7 +80370,7 @@ func (s *UpdatePageBodyParametersPropertiesItemPeopleItem) Decode(d *jx.Decoder)
 		}
 		return nil
 	}); err != nil {
-		return errors.Wrap(err, "decode UpdatePageBodyParametersPropertiesItemPeopleItem")
+		return errors.Wrap(err, "decode UpdatePageRequestPropertiesItemPeopleItem")
 	}
 	// Validate required fields.
 	var failures []validate.FieldError
@@ -80387,8 +80387,8 @@ func (s *UpdatePageBodyParametersPropertiesItemPeopleItem) Decode(d *jx.Decoder)
 				bitIdx := bits.TrailingZeros8(result)
 				fieldIdx := i*8 + bitIdx
 				var name string
-				if fieldIdx < len(jsonFieldsNameOfUpdatePageBodyParametersPropertiesItemPeopleItem) {
-					name = jsonFieldsNameOfUpdatePageBodyParametersPropertiesItemPeopleItem[fieldIdx]
+				if fieldIdx < len(jsonFieldsNameOfUpdatePageRequestPropertiesItemPeopleItem) {
+					name = jsonFieldsNameOfUpdatePageRequestPropertiesItemPeopleItem[fieldIdx]
 				} else {
 					name = strconv.Itoa(fieldIdx)
 				}
@@ -80409,67 +80409,67 @@ func (s *UpdatePageBodyParametersPropertiesItemPeopleItem) Decode(d *jx.Decoder)
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s *UpdatePageBodyParametersPropertiesItemPeopleItem) MarshalJSON() ([]byte, error) {
+func (s *UpdatePageRequestPropertiesItemPeopleItem) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *UpdatePageBodyParametersPropertiesItemPeopleItem) UnmarshalJSON(data []byte) error {
+func (s *UpdatePageRequestPropertiesItemPeopleItem) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
-// Encode encodes UpdatePageBodyParametersPropertiesItemPeopleItemObject as json.
-func (s UpdatePageBodyParametersPropertiesItemPeopleItemObject) Encode(e *jx.Encoder) {
+// Encode encodes UpdatePageRequestPropertiesItemPeopleItemObject as json.
+func (s UpdatePageRequestPropertiesItemPeopleItemObject) Encode(e *jx.Encoder) {
 	e.Str(string(s))
 }
 
-// Decode decodes UpdatePageBodyParametersPropertiesItemPeopleItemObject from json.
-func (s *UpdatePageBodyParametersPropertiesItemPeopleItemObject) Decode(d *jx.Decoder) error {
+// Decode decodes UpdatePageRequestPropertiesItemPeopleItemObject from json.
+func (s *UpdatePageRequestPropertiesItemPeopleItemObject) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode UpdatePageBodyParametersPropertiesItemPeopleItemObject to nil")
+		return errors.New("invalid: unable to decode UpdatePageRequestPropertiesItemPeopleItemObject to nil")
 	}
 	v, err := d.StrBytes()
 	if err != nil {
 		return err
 	}
 	// Try to use constant string.
-	switch UpdatePageBodyParametersPropertiesItemPeopleItemObject(v) {
-	case UpdatePageBodyParametersPropertiesItemPeopleItemObjectUser:
-		*s = UpdatePageBodyParametersPropertiesItemPeopleItemObjectUser
-	case UpdatePageBodyParametersPropertiesItemPeopleItemObjectGroup:
-		*s = UpdatePageBodyParametersPropertiesItemPeopleItemObjectGroup
+	switch UpdatePageRequestPropertiesItemPeopleItemObject(v) {
+	case UpdatePageRequestPropertiesItemPeopleItemObjectUser:
+		*s = UpdatePageRequestPropertiesItemPeopleItemObjectUser
+	case UpdatePageRequestPropertiesItemPeopleItemObjectGroup:
+		*s = UpdatePageRequestPropertiesItemPeopleItemObjectGroup
 	default:
-		*s = UpdatePageBodyParametersPropertiesItemPeopleItemObject(v)
+		*s = UpdatePageRequestPropertiesItemPeopleItemObject(v)
 	}
 
 	return nil
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s UpdatePageBodyParametersPropertiesItemPeopleItemObject) MarshalJSON() ([]byte, error) {
+func (s UpdatePageRequestPropertiesItemPeopleItemObject) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *UpdatePageBodyParametersPropertiesItemPeopleItemObject) UnmarshalJSON(data []byte) error {
+func (s *UpdatePageRequestPropertiesItemPeopleItemObject) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
 // Encode implements json.Marshaler.
-func (s *UpdatePageBodyParametersPropertiesItemPlace) Encode(e *jx.Encoder) {
+func (s *UpdatePageRequestPropertiesItemPlace) Encode(e *jx.Encoder) {
 	e.ObjStart()
 	s.encodeFields(e)
 	e.ObjEnd()
 }
 
 // encodeFields encodes fields.
-func (s *UpdatePageBodyParametersPropertiesItemPlace) encodeFields(e *jx.Encoder) {
+func (s *UpdatePageRequestPropertiesItemPlace) encodeFields(e *jx.Encoder) {
 	{
 		e.FieldStart("lat")
 		e.Float64(s.Lat)
@@ -80504,7 +80504,7 @@ func (s *UpdatePageBodyParametersPropertiesItemPlace) encodeFields(e *jx.Encoder
 	}
 }
 
-var jsonFieldsNameOfUpdatePageBodyParametersPropertiesItemPlace = [6]string{
+var jsonFieldsNameOfUpdatePageRequestPropertiesItemPlace = [6]string{
 	0: "lat",
 	1: "lon",
 	2: "name",
@@ -80513,10 +80513,10 @@ var jsonFieldsNameOfUpdatePageBodyParametersPropertiesItemPlace = [6]string{
 	5: "google_place_id",
 }
 
-// Decode decodes UpdatePageBodyParametersPropertiesItemPlace from json.
-func (s *UpdatePageBodyParametersPropertiesItemPlace) Decode(d *jx.Decoder) error {
+// Decode decodes UpdatePageRequestPropertiesItemPlace from json.
+func (s *UpdatePageRequestPropertiesItemPlace) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode UpdatePageBodyParametersPropertiesItemPlace to nil")
+		return errors.New("invalid: unable to decode UpdatePageRequestPropertiesItemPlace to nil")
 	}
 	var requiredBitSet [1]uint8
 
@@ -80591,7 +80591,7 @@ func (s *UpdatePageBodyParametersPropertiesItemPlace) Decode(d *jx.Decoder) erro
 		}
 		return nil
 	}); err != nil {
-		return errors.Wrap(err, "decode UpdatePageBodyParametersPropertiesItemPlace")
+		return errors.Wrap(err, "decode UpdatePageRequestPropertiesItemPlace")
 	}
 	// Validate required fields.
 	var failures []validate.FieldError
@@ -80608,8 +80608,8 @@ func (s *UpdatePageBodyParametersPropertiesItemPlace) Decode(d *jx.Decoder) erro
 				bitIdx := bits.TrailingZeros8(result)
 				fieldIdx := i*8 + bitIdx
 				var name string
-				if fieldIdx < len(jsonFieldsNameOfUpdatePageBodyParametersPropertiesItemPlace) {
-					name = jsonFieldsNameOfUpdatePageBodyParametersPropertiesItemPlace[fieldIdx]
+				if fieldIdx < len(jsonFieldsNameOfUpdatePageRequestPropertiesItemPlace) {
+					name = jsonFieldsNameOfUpdatePageRequestPropertiesItemPlace[fieldIdx]
 				} else {
 					name = strconv.Itoa(fieldIdx)
 				}
@@ -80630,27 +80630,27 @@ func (s *UpdatePageBodyParametersPropertiesItemPlace) Decode(d *jx.Decoder) erro
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s *UpdatePageBodyParametersPropertiesItemPlace) MarshalJSON() ([]byte, error) {
+func (s *UpdatePageRequestPropertiesItemPlace) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *UpdatePageBodyParametersPropertiesItemPlace) UnmarshalJSON(data []byte) error {
+func (s *UpdatePageRequestPropertiesItemPlace) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
 // Encode implements json.Marshaler.
-func (s *UpdatePageBodyParametersPropertiesItemSelect) Encode(e *jx.Encoder) {
+func (s *UpdatePageRequestPropertiesItemSelect) Encode(e *jx.Encoder) {
 	e.ObjStart()
 	s.encodeFields(e)
 	e.ObjEnd()
 }
 
 // encodeFields encodes fields.
-func (s *UpdatePageBodyParametersPropertiesItemSelect) encodeFields(e *jx.Encoder) {
+func (s *UpdatePageRequestPropertiesItemSelect) encodeFields(e *jx.Encoder) {
 	{
 		if s.ID.Set {
 			e.FieldStart("id")
@@ -80677,17 +80677,17 @@ func (s *UpdatePageBodyParametersPropertiesItemSelect) encodeFields(e *jx.Encode
 	}
 }
 
-var jsonFieldsNameOfUpdatePageBodyParametersPropertiesItemSelect = [4]string{
+var jsonFieldsNameOfUpdatePageRequestPropertiesItemSelect = [4]string{
 	0: "id",
 	1: "name",
 	2: "color",
 	3: "description",
 }
 
-// Decode decodes UpdatePageBodyParametersPropertiesItemSelect from json.
-func (s *UpdatePageBodyParametersPropertiesItemSelect) Decode(d *jx.Decoder) error {
+// Decode decodes UpdatePageRequestPropertiesItemSelect from json.
+func (s *UpdatePageRequestPropertiesItemSelect) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode UpdatePageBodyParametersPropertiesItemSelect to nil")
+		return errors.New("invalid: unable to decode UpdatePageRequestPropertiesItemSelect to nil")
 	}
 
 	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
@@ -80737,34 +80737,34 @@ func (s *UpdatePageBodyParametersPropertiesItemSelect) Decode(d *jx.Decoder) err
 		}
 		return nil
 	}); err != nil {
-		return errors.Wrap(err, "decode UpdatePageBodyParametersPropertiesItemSelect")
+		return errors.Wrap(err, "decode UpdatePageRequestPropertiesItemSelect")
 	}
 
 	return nil
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s *UpdatePageBodyParametersPropertiesItemSelect) MarshalJSON() ([]byte, error) {
+func (s *UpdatePageRequestPropertiesItemSelect) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *UpdatePageBodyParametersPropertiesItemSelect) UnmarshalJSON(data []byte) error {
+func (s *UpdatePageRequestPropertiesItemSelect) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
 // Encode implements json.Marshaler.
-func (s *UpdatePageBodyParametersPropertiesItemStatus) Encode(e *jx.Encoder) {
+func (s *UpdatePageRequestPropertiesItemStatus) Encode(e *jx.Encoder) {
 	e.ObjStart()
 	s.encodeFields(e)
 	e.ObjEnd()
 }
 
 // encodeFields encodes fields.
-func (s *UpdatePageBodyParametersPropertiesItemStatus) encodeFields(e *jx.Encoder) {
+func (s *UpdatePageRequestPropertiesItemStatus) encodeFields(e *jx.Encoder) {
 	{
 		if s.ID.Set {
 			e.FieldStart("id")
@@ -80791,17 +80791,17 @@ func (s *UpdatePageBodyParametersPropertiesItemStatus) encodeFields(e *jx.Encode
 	}
 }
 
-var jsonFieldsNameOfUpdatePageBodyParametersPropertiesItemStatus = [4]string{
+var jsonFieldsNameOfUpdatePageRequestPropertiesItemStatus = [4]string{
 	0: "id",
 	1: "name",
 	2: "color",
 	3: "description",
 }
 
-// Decode decodes UpdatePageBodyParametersPropertiesItemStatus from json.
-func (s *UpdatePageBodyParametersPropertiesItemStatus) Decode(d *jx.Decoder) error {
+// Decode decodes UpdatePageRequestPropertiesItemStatus from json.
+func (s *UpdatePageRequestPropertiesItemStatus) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode UpdatePageBodyParametersPropertiesItemStatus to nil")
+		return errors.New("invalid: unable to decode UpdatePageRequestPropertiesItemStatus to nil")
 	}
 
 	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
@@ -80851,100 +80851,100 @@ func (s *UpdatePageBodyParametersPropertiesItemStatus) Decode(d *jx.Decoder) err
 		}
 		return nil
 	}); err != nil {
-		return errors.Wrap(err, "decode UpdatePageBodyParametersPropertiesItemStatus")
+		return errors.Wrap(err, "decode UpdatePageRequestPropertiesItemStatus")
 	}
 
 	return nil
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s *UpdatePageBodyParametersPropertiesItemStatus) MarshalJSON() ([]byte, error) {
+func (s *UpdatePageRequestPropertiesItemStatus) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *UpdatePageBodyParametersPropertiesItemStatus) UnmarshalJSON(data []byte) error {
+func (s *UpdatePageRequestPropertiesItemStatus) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
-// Encode encodes UpdatePageBodyParametersPropertiesItemType as json.
-func (s UpdatePageBodyParametersPropertiesItemType) Encode(e *jx.Encoder) {
+// Encode encodes UpdatePageRequestPropertiesItemType as json.
+func (s UpdatePageRequestPropertiesItemType) Encode(e *jx.Encoder) {
 	e.Str(string(s))
 }
 
-// Decode decodes UpdatePageBodyParametersPropertiesItemType from json.
-func (s *UpdatePageBodyParametersPropertiesItemType) Decode(d *jx.Decoder) error {
+// Decode decodes UpdatePageRequestPropertiesItemType from json.
+func (s *UpdatePageRequestPropertiesItemType) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode UpdatePageBodyParametersPropertiesItemType to nil")
+		return errors.New("invalid: unable to decode UpdatePageRequestPropertiesItemType to nil")
 	}
 	v, err := d.StrBytes()
 	if err != nil {
 		return err
 	}
 	// Try to use constant string.
-	switch UpdatePageBodyParametersPropertiesItemType(v) {
-	case UpdatePageBodyParametersPropertiesItemTypeTitle:
-		*s = UpdatePageBodyParametersPropertiesItemTypeTitle
-	case UpdatePageBodyParametersPropertiesItemTypeRichText:
-		*s = UpdatePageBodyParametersPropertiesItemTypeRichText
-	case UpdatePageBodyParametersPropertiesItemTypeNumber:
-		*s = UpdatePageBodyParametersPropertiesItemTypeNumber
-	case UpdatePageBodyParametersPropertiesItemTypeURL:
-		*s = UpdatePageBodyParametersPropertiesItemTypeURL
-	case UpdatePageBodyParametersPropertiesItemTypeSelect:
-		*s = UpdatePageBodyParametersPropertiesItemTypeSelect
-	case UpdatePageBodyParametersPropertiesItemTypeMultiSelect:
-		*s = UpdatePageBodyParametersPropertiesItemTypeMultiSelect
-	case UpdatePageBodyParametersPropertiesItemTypePeople:
-		*s = UpdatePageBodyParametersPropertiesItemTypePeople
-	case UpdatePageBodyParametersPropertiesItemTypeEmail:
-		*s = UpdatePageBodyParametersPropertiesItemTypeEmail
-	case UpdatePageBodyParametersPropertiesItemTypePhoneNumber:
-		*s = UpdatePageBodyParametersPropertiesItemTypePhoneNumber
-	case UpdatePageBodyParametersPropertiesItemTypeDate:
-		*s = UpdatePageBodyParametersPropertiesItemTypeDate
-	case UpdatePageBodyParametersPropertiesItemTypeCheckbox:
-		*s = UpdatePageBodyParametersPropertiesItemTypeCheckbox
-	case UpdatePageBodyParametersPropertiesItemTypeRelation:
-		*s = UpdatePageBodyParametersPropertiesItemTypeRelation
-	case UpdatePageBodyParametersPropertiesItemTypeFiles:
-		*s = UpdatePageBodyParametersPropertiesItemTypeFiles
-	case UpdatePageBodyParametersPropertiesItemTypeStatus:
-		*s = UpdatePageBodyParametersPropertiesItemTypeStatus
-	case UpdatePageBodyParametersPropertiesItemTypePlace:
-		*s = UpdatePageBodyParametersPropertiesItemTypePlace
+	switch UpdatePageRequestPropertiesItemType(v) {
+	case UpdatePageRequestPropertiesItemTypeTitle:
+		*s = UpdatePageRequestPropertiesItemTypeTitle
+	case UpdatePageRequestPropertiesItemTypeRichText:
+		*s = UpdatePageRequestPropertiesItemTypeRichText
+	case UpdatePageRequestPropertiesItemTypeNumber:
+		*s = UpdatePageRequestPropertiesItemTypeNumber
+	case UpdatePageRequestPropertiesItemTypeURL:
+		*s = UpdatePageRequestPropertiesItemTypeURL
+	case UpdatePageRequestPropertiesItemTypeSelect:
+		*s = UpdatePageRequestPropertiesItemTypeSelect
+	case UpdatePageRequestPropertiesItemTypeMultiSelect:
+		*s = UpdatePageRequestPropertiesItemTypeMultiSelect
+	case UpdatePageRequestPropertiesItemTypePeople:
+		*s = UpdatePageRequestPropertiesItemTypePeople
+	case UpdatePageRequestPropertiesItemTypeEmail:
+		*s = UpdatePageRequestPropertiesItemTypeEmail
+	case UpdatePageRequestPropertiesItemTypePhoneNumber:
+		*s = UpdatePageRequestPropertiesItemTypePhoneNumber
+	case UpdatePageRequestPropertiesItemTypeDate:
+		*s = UpdatePageRequestPropertiesItemTypeDate
+	case UpdatePageRequestPropertiesItemTypeCheckbox:
+		*s = UpdatePageRequestPropertiesItemTypeCheckbox
+	case UpdatePageRequestPropertiesItemTypeRelation:
+		*s = UpdatePageRequestPropertiesItemTypeRelation
+	case UpdatePageRequestPropertiesItemTypeFiles:
+		*s = UpdatePageRequestPropertiesItemTypeFiles
+	case UpdatePageRequestPropertiesItemTypeStatus:
+		*s = UpdatePageRequestPropertiesItemTypeStatus
+	case UpdatePageRequestPropertiesItemTypePlace:
+		*s = UpdatePageRequestPropertiesItemTypePlace
 	default:
-		*s = UpdatePageBodyParametersPropertiesItemType(v)
+		*s = UpdatePageRequestPropertiesItemType(v)
 	}
 
 	return nil
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s UpdatePageBodyParametersPropertiesItemType) MarshalJSON() ([]byte, error) {
+func (s UpdatePageRequestPropertiesItemType) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *UpdatePageBodyParametersPropertiesItemType) UnmarshalJSON(data []byte) error {
+func (s *UpdatePageRequestPropertiesItemType) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
 // Encode implements json.Marshaler.
-func (s *UpdatePageBodyParametersTemplate) Encode(e *jx.Encoder) {
+func (s *UpdatePageRequestTemplate) Encode(e *jx.Encoder) {
 	e.ObjStart()
 	s.encodeFields(e)
 	e.ObjEnd()
 }
 
 // encodeFields encodes fields.
-func (s *UpdatePageBodyParametersTemplate) encodeFields(e *jx.Encoder) {
+func (s *UpdatePageRequestTemplate) encodeFields(e *jx.Encoder) {
 	{
 		e.FieldStart("type")
 		s.Type.Encode(e)
@@ -80957,15 +80957,15 @@ func (s *UpdatePageBodyParametersTemplate) encodeFields(e *jx.Encoder) {
 	}
 }
 
-var jsonFieldsNameOfUpdatePageBodyParametersTemplate = [2]string{
+var jsonFieldsNameOfUpdatePageRequestTemplate = [2]string{
 	0: "type",
 	1: "template_id",
 }
 
-// Decode decodes UpdatePageBodyParametersTemplate from json.
-func (s *UpdatePageBodyParametersTemplate) Decode(d *jx.Decoder) error {
+// Decode decodes UpdatePageRequestTemplate from json.
+func (s *UpdatePageRequestTemplate) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode UpdatePageBodyParametersTemplate to nil")
+		return errors.New("invalid: unable to decode UpdatePageRequestTemplate to nil")
 	}
 	var requiredBitSet [1]uint8
 
@@ -80996,7 +80996,7 @@ func (s *UpdatePageBodyParametersTemplate) Decode(d *jx.Decoder) error {
 		}
 		return nil
 	}); err != nil {
-		return errors.Wrap(err, "decode UpdatePageBodyParametersTemplate")
+		return errors.Wrap(err, "decode UpdatePageRequestTemplate")
 	}
 	// Validate required fields.
 	var failures []validate.FieldError
@@ -81013,8 +81013,8 @@ func (s *UpdatePageBodyParametersTemplate) Decode(d *jx.Decoder) error {
 				bitIdx := bits.TrailingZeros8(result)
 				fieldIdx := i*8 + bitIdx
 				var name string
-				if fieldIdx < len(jsonFieldsNameOfUpdatePageBodyParametersTemplate) {
-					name = jsonFieldsNameOfUpdatePageBodyParametersTemplate[fieldIdx]
+				if fieldIdx < len(jsonFieldsNameOfUpdatePageRequestTemplate) {
+					name = jsonFieldsNameOfUpdatePageRequestTemplate[fieldIdx]
 				} else {
 					name = strconv.Itoa(fieldIdx)
 				}
@@ -81035,54 +81035,54 @@ func (s *UpdatePageBodyParametersTemplate) Decode(d *jx.Decoder) error {
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s *UpdatePageBodyParametersTemplate) MarshalJSON() ([]byte, error) {
+func (s *UpdatePageRequestTemplate) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *UpdatePageBodyParametersTemplate) UnmarshalJSON(data []byte) error {
+func (s *UpdatePageRequestTemplate) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
 
-// Encode encodes UpdatePageBodyParametersTemplateType as json.
-func (s UpdatePageBodyParametersTemplateType) Encode(e *jx.Encoder) {
+// Encode encodes UpdatePageRequestTemplateType as json.
+func (s UpdatePageRequestTemplateType) Encode(e *jx.Encoder) {
 	e.Str(string(s))
 }
 
-// Decode decodes UpdatePageBodyParametersTemplateType from json.
-func (s *UpdatePageBodyParametersTemplateType) Decode(d *jx.Decoder) error {
+// Decode decodes UpdatePageRequestTemplateType from json.
+func (s *UpdatePageRequestTemplateType) Decode(d *jx.Decoder) error {
 	if s == nil {
-		return errors.New("invalid: unable to decode UpdatePageBodyParametersTemplateType to nil")
+		return errors.New("invalid: unable to decode UpdatePageRequestTemplateType to nil")
 	}
 	v, err := d.StrBytes()
 	if err != nil {
 		return err
 	}
 	// Try to use constant string.
-	switch UpdatePageBodyParametersTemplateType(v) {
-	case UpdatePageBodyParametersTemplateTypeDefault:
-		*s = UpdatePageBodyParametersTemplateTypeDefault
-	case UpdatePageBodyParametersTemplateTypeTemplateID:
-		*s = UpdatePageBodyParametersTemplateTypeTemplateID
+	switch UpdatePageRequestTemplateType(v) {
+	case UpdatePageRequestTemplateTypeDefault:
+		*s = UpdatePageRequestTemplateTypeDefault
+	case UpdatePageRequestTemplateTypeTemplateID:
+		*s = UpdatePageRequestTemplateTypeTemplateID
 	default:
-		*s = UpdatePageBodyParametersTemplateType(v)
+		*s = UpdatePageRequestTemplateType(v)
 	}
 
 	return nil
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s UpdatePageBodyParametersTemplateType) MarshalJSON() ([]byte, error) {
+func (s UpdatePageRequestTemplateType) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *UpdatePageBodyParametersTemplateType) UnmarshalJSON(data []byte) error {
+func (s *UpdatePageRequestTemplateType) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }

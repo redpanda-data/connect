@@ -126,7 +126,7 @@ func (s ApiTranscriptionStatus) Validate() error {
 	}
 }
 
-func (s *AppendBlockChildrenBodyParameters) Validate() error {
+func (s *AppendBlockChildrenRequest) Validate() error {
 	if s == nil {
 		return validate.ErrNilPointer
 	}
@@ -5882,7 +5882,7 @@ func (s *ContentWithTableRowResponse) Validate() error {
 	return nil
 }
 
-func (s *CreateCommentBodyParameters) Validate() error {
+func (s *CreateCommentRequest) Validate() error {
 	if s == nil {
 		return validate.ErrNilPointer
 	}
@@ -5983,7 +5983,7 @@ func (s *CreateCommentBodyParameters) Validate() error {
 	return nil
 }
 
-func (s *CreateCommentBodyParametersAttachmentsItem) Validate() error {
+func (s *CreateCommentRequestAttachmentsItem) Validate() error {
 	if s == nil {
 		return validate.ErrNilPointer
 	}
@@ -6013,7 +6013,7 @@ func (s *CreateCommentBodyParametersAttachmentsItem) Validate() error {
 	return nil
 }
 
-func (s CreateCommentBodyParametersAttachmentsItemType) Validate() error {
+func (s CreateCommentRequestAttachmentsItemType) Validate() error {
 	switch s {
 	case "file_upload":
 		return nil
@@ -6022,7 +6022,7 @@ func (s CreateCommentBodyParametersAttachmentsItemType) Validate() error {
 	}
 }
 
-func (s *CreateCommentBodyParametersDisplayName) Validate() error {
+func (s *CreateCommentRequestDisplayName) Validate() error {
 	if s == nil {
 		return validate.ErrNilPointer
 	}
@@ -6045,7 +6045,7 @@ func (s *CreateCommentBodyParametersDisplayName) Validate() error {
 	return nil
 }
 
-func (s CreateCommentBodyParametersDisplayNameType) Validate() error {
+func (s CreateCommentRequestDisplayNameType) Validate() error {
 	switch s {
 	case "integration":
 		return nil
@@ -6058,7 +6058,7 @@ func (s CreateCommentBodyParametersDisplayNameType) Validate() error {
 	}
 }
 
-func (s *CreateCommentBodyParametersParent) Validate() error {
+func (s *CreateCommentRequestParent) Validate() error {
 	if s == nil {
 		return validate.ErrNilPointer
 	}
@@ -6088,7 +6088,7 @@ func (s *CreateCommentBodyParametersParent) Validate() error {
 	return nil
 }
 
-func (s CreateCommentBodyParametersParentType) Validate() error {
+func (s CreateCommentRequestParentType) Validate() error {
 	switch s {
 	case "page_id":
 		return nil
@@ -6334,7 +6334,7 @@ func (s CreateCommentResponseObject) Validate() error {
 	}
 }
 
-func (s *CreateDatabaseBodyParameters) Validate() error {
+func (s *CreateDatabaseRequest) Validate() error {
 	if s == nil {
 		return validate.ErrNilPointer
 	}
@@ -6461,7 +6461,7 @@ func (s *CreateDatabaseBodyParameters) Validate() error {
 	return nil
 }
 
-func (s *CreateDatabaseBodyParametersParent) Validate() error {
+func (s *CreateDatabaseRequestParent) Validate() error {
 	if s == nil {
 		return validate.ErrNilPointer
 	}
@@ -6502,7 +6502,7 @@ func (s *CreateDatabaseBodyParametersParent) Validate() error {
 	return nil
 }
 
-func (s CreateDatabaseBodyParametersParentType) Validate() error {
+func (s CreateDatabaseRequestParentType) Validate() error {
 	switch s {
 	case "page_id":
 		return nil
@@ -6513,7 +6513,7 @@ func (s CreateDatabaseBodyParametersParentType) Validate() error {
 	}
 }
 
-func (s CreateDatabaseBodyParametersParentWorkspace) Validate() error {
+func (s CreateDatabaseRequestParentWorkspace) Validate() error {
 	switch s {
 	case true:
 		return nil
@@ -6681,7 +6681,7 @@ func (s CreateDatabaseResponseObject) Validate() error {
 	}
 }
 
-func (s *CreatePageBodyParameters) Validate() error {
+func (s *CreatePageRequest) Validate() error {
 	if s == nil {
 		return validate.ErrNilPointer
 	}
@@ -6851,7 +6851,7 @@ func (s *CreatePageBodyParameters) Validate() error {
 	return nil
 }
 
-func (s *CreatePageBodyParametersParent) Validate() error {
+func (s *CreatePageRequestParent) Validate() error {
 	if s == nil {
 		return validate.ErrNilPointer
 	}
@@ -6899,7 +6899,7 @@ func (s *CreatePageBodyParametersParent) Validate() error {
 	return nil
 }
 
-func (s CreatePageBodyParametersParentType) Validate() error {
+func (s CreatePageRequestParentType) Validate() error {
 	switch s {
 	case "page_id":
 		return nil
@@ -6914,7 +6914,7 @@ func (s CreatePageBodyParametersParentType) Validate() error {
 	}
 }
 
-func (s CreatePageBodyParametersParentWorkspace) Validate() error {
+func (s CreatePageRequestParentWorkspace) Validate() error {
 	switch s {
 	case true:
 		return nil
@@ -6923,7 +6923,7 @@ func (s CreatePageBodyParametersParentWorkspace) Validate() error {
 	}
 }
 
-func (s CreatePageBodyParametersProperties) Validate() error {
+func (s CreatePageRequestProperties) Validate() error {
 	var failures []validate.FieldError
 	for key, elem := range s {
 		if err := func() error {
@@ -6945,7 +6945,7 @@ func (s CreatePageBodyParametersProperties) Validate() error {
 	return nil
 }
 
-func (s *CreatePageBodyParametersPropertiesItem) Validate() error {
+func (s *CreatePageRequestPropertiesItem) Validate() error {
 	if s == nil {
 		return validate.ErrNilPointer
 	}
@@ -7172,7 +7172,7 @@ func (s *CreatePageBodyParametersPropertiesItem) Validate() error {
 	return nil
 }
 
-func (s *CreatePageBodyParametersPropertiesItemFilesItem) Validate() error {
+func (s *CreatePageRequestPropertiesItemFilesItem) Validate() error {
 	if s == nil {
 		return validate.ErrNilPointer
 	}
@@ -7202,7 +7202,7 @@ func (s *CreatePageBodyParametersPropertiesItemFilesItem) Validate() error {
 	return nil
 }
 
-func (s CreatePageBodyParametersPropertiesItemFilesItemType) Validate() error {
+func (s CreatePageRequestPropertiesItemFilesItemType) Validate() error {
 	switch s {
 	case "file":
 		return nil
@@ -7215,7 +7215,7 @@ func (s CreatePageBodyParametersPropertiesItemFilesItemType) Validate() error {
 	}
 }
 
-func (s *CreatePageBodyParametersPropertiesItemMultiSelectItem) Validate() error {
+func (s *CreatePageRequestPropertiesItemMultiSelectItem) Validate() error {
 	if s == nil {
 		return validate.ErrNilPointer
 	}
@@ -7245,7 +7245,7 @@ func (s *CreatePageBodyParametersPropertiesItemMultiSelectItem) Validate() error
 	return nil
 }
 
-func (s *CreatePageBodyParametersPropertiesItemPeopleItem) Validate() error {
+func (s *CreatePageRequestPropertiesItemPeopleItem) Validate() error {
 	if s == nil {
 		return validate.ErrNilPointer
 	}
@@ -7275,7 +7275,7 @@ func (s *CreatePageBodyParametersPropertiesItemPeopleItem) Validate() error {
 	return nil
 }
 
-func (s CreatePageBodyParametersPropertiesItemPeopleItemObject) Validate() error {
+func (s CreatePageRequestPropertiesItemPeopleItemObject) Validate() error {
 	switch s {
 	case "user":
 		return nil
@@ -7286,7 +7286,7 @@ func (s CreatePageBodyParametersPropertiesItemPeopleItemObject) Validate() error
 	}
 }
 
-func (s *CreatePageBodyParametersPropertiesItemPlace) Validate() error {
+func (s *CreatePageRequestPropertiesItemPlace) Validate() error {
 	if s == nil {
 		return validate.ErrNilPointer
 	}
@@ -7320,7 +7320,7 @@ func (s *CreatePageBodyParametersPropertiesItemPlace) Validate() error {
 	return nil
 }
 
-func (s *CreatePageBodyParametersPropertiesItemSelect) Validate() error {
+func (s *CreatePageRequestPropertiesItemSelect) Validate() error {
 	if s == nil {
 		return validate.ErrNilPointer
 	}
@@ -7350,7 +7350,7 @@ func (s *CreatePageBodyParametersPropertiesItemSelect) Validate() error {
 	return nil
 }
 
-func (s *CreatePageBodyParametersPropertiesItemStatus) Validate() error {
+func (s *CreatePageRequestPropertiesItemStatus) Validate() error {
 	if s == nil {
 		return validate.ErrNilPointer
 	}
@@ -7380,7 +7380,7 @@ func (s *CreatePageBodyParametersPropertiesItemStatus) Validate() error {
 	return nil
 }
 
-func (s CreatePageBodyParametersPropertiesItemType) Validate() error {
+func (s CreatePageRequestPropertiesItemType) Validate() error {
 	switch s {
 	case "title":
 		return nil
@@ -7417,7 +7417,7 @@ func (s CreatePageBodyParametersPropertiesItemType) Validate() error {
 	}
 }
 
-func (s *CreatePageBodyParametersTemplate) Validate() error {
+func (s *CreatePageRequestTemplate) Validate() error {
 	if s == nil {
 		return validate.ErrNilPointer
 	}
@@ -7440,7 +7440,7 @@ func (s *CreatePageBodyParametersTemplate) Validate() error {
 	return nil
 }
 
-func (s CreatePageBodyParametersTemplateType) Validate() error {
+func (s CreatePageRequestTemplateType) Validate() error {
 	switch s {
 	case "none":
 		return nil
@@ -18453,7 +18453,7 @@ func (s PropertyOrTimestampFilterType) Validate() error {
 	}
 }
 
-func (s *QueryDataSourceBodyParameters) Validate() error {
+func (s *QueryDataSourceRequest) Validate() error {
 	if s == nil {
 		return validate.ErrNilPointer
 	}
@@ -18544,7 +18544,7 @@ func (s *QueryDataSourceBodyParameters) Validate() error {
 	return nil
 }
 
-func (s *QueryDataSourceBodyParametersFilter) Validate() error {
+func (s *QueryDataSourceRequestFilter) Validate() error {
 	if s == nil {
 		return validate.ErrNilPointer
 	}
@@ -18992,7 +18992,7 @@ func (s *QueryDataSourceBodyParametersFilter) Validate() error {
 	return nil
 }
 
-func (s QueryDataSourceBodyParametersFilterTimestamp) Validate() error {
+func (s QueryDataSourceRequestFilterTimestamp) Validate() error {
 	switch s {
 	case "created_time":
 		return nil
@@ -19003,7 +19003,7 @@ func (s QueryDataSourceBodyParametersFilterTimestamp) Validate() error {
 	}
 }
 
-func (s QueryDataSourceBodyParametersFilterType) Validate() error {
+func (s QueryDataSourceRequestFilterType) Validate() error {
 	switch s {
 	case "title":
 		return nil
@@ -19054,7 +19054,7 @@ func (s QueryDataSourceBodyParametersFilterType) Validate() error {
 	}
 }
 
-func (s QueryDataSourceBodyParametersResultType) Validate() error {
+func (s QueryDataSourceRequestResultType) Validate() error {
 	switch s {
 	case "page":
 		return nil
@@ -19065,7 +19065,7 @@ func (s QueryDataSourceBodyParametersResultType) Validate() error {
 	}
 }
 
-func (s *QueryDataSourceBodyParametersSortsItem) Validate() error {
+func (s *QueryDataSourceRequestSortsItem) Validate() error {
 	if s == nil {
 		return validate.ErrNilPointer
 	}
@@ -19106,7 +19106,7 @@ func (s *QueryDataSourceBodyParametersSortsItem) Validate() error {
 	return nil
 }
 
-func (s QueryDataSourceBodyParametersSortsItemDirection) Validate() error {
+func (s QueryDataSourceRequestSortsItemDirection) Validate() error {
 	switch s {
 	case "ascending":
 		return nil
@@ -19117,7 +19117,7 @@ func (s QueryDataSourceBodyParametersSortsItemDirection) Validate() error {
 	}
 }
 
-func (s QueryDataSourceBodyParametersSortsItemTimestamp) Validate() error {
+func (s QueryDataSourceRequestSortsItemTimestamp) Validate() error {
 	switch s {
 	case "created_time":
 		return nil
@@ -20189,7 +20189,7 @@ func (s *RollupSubfilterPropertyFilter) Validate() error {
 	return nil
 }
 
-func (s *SearchBodyParameters) Validate() error {
+func (s *SearchRequest) Validate() error {
 	if s == nil {
 		return validate.ErrNilPointer
 	}
@@ -20255,7 +20255,7 @@ func (s *SearchBodyParameters) Validate() error {
 	return nil
 }
 
-func (s *SearchBodyParametersFilter) Validate() error {
+func (s *SearchRequestFilter) Validate() error {
 	if s == nil {
 		return validate.ErrNilPointer
 	}
@@ -20289,7 +20289,7 @@ func (s *SearchBodyParametersFilter) Validate() error {
 	return nil
 }
 
-func (s SearchBodyParametersFilterProperty) Validate() error {
+func (s SearchRequestFilterProperty) Validate() error {
 	switch s {
 	case "object":
 		return nil
@@ -20298,7 +20298,7 @@ func (s SearchBodyParametersFilterProperty) Validate() error {
 	}
 }
 
-func (s SearchBodyParametersFilterValue) Validate() error {
+func (s SearchRequestFilterValue) Validate() error {
 	switch s {
 	case "page":
 		return nil
@@ -20309,7 +20309,7 @@ func (s SearchBodyParametersFilterValue) Validate() error {
 	}
 }
 
-func (s *SearchBodyParametersSort) Validate() error {
+func (s *SearchRequestSort) Validate() error {
 	if s == nil {
 		return validate.ErrNilPointer
 	}
@@ -20343,7 +20343,7 @@ func (s *SearchBodyParametersSort) Validate() error {
 	return nil
 }
 
-func (s SearchBodyParametersSortDirection) Validate() error {
+func (s SearchRequestSortDirection) Validate() error {
 	switch s {
 	case "ascending":
 		return nil
@@ -20354,7 +20354,7 @@ func (s SearchBodyParametersSortDirection) Validate() error {
 	}
 }
 
-func (s SearchBodyParametersSortTimestamp) Validate() error {
+func (s SearchRequestSortTimestamp) Validate() error {
 	switch s {
 	case "last_edited_time":
 		return nil
@@ -21976,7 +21976,7 @@ func (s *UniqueIdPropertyValueResponse) Validate() error {
 	return nil
 }
 
-func (s *UpdateBlockBodyParameters) Validate() error {
+func (s *UpdateBlockRequest) Validate() error {
 	if s == nil {
 		return validate.ErrNilPointer
 	}
@@ -22438,7 +22438,7 @@ func (s *UpdateBlockBodyParameters) Validate() error {
 	return nil
 }
 
-func (s *UpdateBlockBodyParametersCallout) Validate() error {
+func (s *UpdateBlockRequestCallout) Validate() error {
 	if s == nil {
 		return validate.ErrNilPointer
 	}
@@ -22511,7 +22511,7 @@ func (s *UpdateBlockBodyParametersCallout) Validate() error {
 	return nil
 }
 
-func (s *UpdateBlockBodyParametersCode) Validate() error {
+func (s *UpdateBlockRequestCode) Validate() error {
 	if s == nil {
 		return validate.ErrNilPointer
 	}
@@ -22591,7 +22591,7 @@ func (s *UpdateBlockBodyParametersCode) Validate() error {
 	return nil
 }
 
-func (s *UpdateBlockBodyParametersColumn) Validate() error {
+func (s *UpdateBlockRequestColumn) Validate() error {
 	if s == nil {
 		return validate.ErrNilPointer
 	}
@@ -22621,7 +22621,7 @@ func (s *UpdateBlockBodyParametersColumn) Validate() error {
 	return nil
 }
 
-func (s *UpdateBlockBodyParametersLinkToPage) Validate() error {
+func (s *UpdateBlockRequestLinkToPage) Validate() error {
 	if s == nil {
 		return validate.ErrNilPointer
 	}
@@ -22651,7 +22651,7 @@ func (s *UpdateBlockBodyParametersLinkToPage) Validate() error {
 	return nil
 }
 
-func (s UpdateBlockBodyParametersLinkToPageType) Validate() error {
+func (s UpdateBlockRequestLinkToPageType) Validate() error {
 	switch s {
 	case "page_id":
 		return nil
@@ -22664,7 +22664,7 @@ func (s UpdateBlockBodyParametersLinkToPageType) Validate() error {
 	}
 }
 
-func (s *UpdateBlockBodyParametersSyncedBlock) Validate() error {
+func (s *UpdateBlockRequestSyncedBlock) Validate() error {
 	if s == nil {
 		return validate.ErrNilPointer
 	}
@@ -22694,7 +22694,7 @@ func (s *UpdateBlockBodyParametersSyncedBlock) Validate() error {
 	return nil
 }
 
-func (s *UpdateBlockBodyParametersSyncedBlockSyncedFrom) Validate() error {
+func (s *UpdateBlockRequestSyncedBlockSyncedFrom) Validate() error {
 	if s == nil {
 		return validate.ErrNilPointer
 	}
@@ -22724,7 +22724,7 @@ func (s *UpdateBlockBodyParametersSyncedBlockSyncedFrom) Validate() error {
 	return nil
 }
 
-func (s UpdateBlockBodyParametersSyncedBlockSyncedFromType) Validate() error {
+func (s UpdateBlockRequestSyncedBlockSyncedFromType) Validate() error {
 	switch s {
 	case "block_id":
 		return nil
@@ -22733,7 +22733,7 @@ func (s UpdateBlockBodyParametersSyncedBlockSyncedFromType) Validate() error {
 	}
 }
 
-func (s *UpdateBlockBodyParametersTableOfContents) Validate() error {
+func (s *UpdateBlockRequestTableOfContents) Validate() error {
 	if s == nil {
 		return validate.ErrNilPointer
 	}
@@ -22763,7 +22763,7 @@ func (s *UpdateBlockBodyParametersTableOfContents) Validate() error {
 	return nil
 }
 
-func (s *UpdateBlockBodyParametersToDo) Validate() error {
+func (s *UpdateBlockRequestToDo) Validate() error {
 	if s == nil {
 		return validate.ErrNilPointer
 	}
@@ -22818,7 +22818,7 @@ func (s *UpdateBlockBodyParametersToDo) Validate() error {
 	return nil
 }
 
-func (s UpdateBlockBodyParametersType) Validate() error {
+func (s UpdateBlockRequestType) Validate() error {
 	switch s {
 	case "embed":
 		return nil
@@ -23904,7 +23904,7 @@ func (s UpdateBlockResponseType) Validate() error {
 	}
 }
 
-func (s *UpdateDatabaseBodyParameters) Validate() error {
+func (s *UpdateDatabaseRequest) Validate() error {
 	if s == nil {
 		return validate.ErrNilPointer
 	}
@@ -24020,7 +24020,7 @@ func (s *UpdateDatabaseBodyParameters) Validate() error {
 	return nil
 }
 
-func (s *UpdateDatabaseBodyParametersParent) Validate() error {
+func (s *UpdateDatabaseRequestParent) Validate() error {
 	if s == nil {
 		return validate.ErrNilPointer
 	}
@@ -24061,7 +24061,7 @@ func (s *UpdateDatabaseBodyParametersParent) Validate() error {
 	return nil
 }
 
-func (s UpdateDatabaseBodyParametersParentType) Validate() error {
+func (s UpdateDatabaseRequestParentType) Validate() error {
 	switch s {
 	case "page_id":
 		return nil
@@ -24072,7 +24072,7 @@ func (s UpdateDatabaseBodyParametersParentType) Validate() error {
 	}
 }
 
-func (s UpdateDatabaseBodyParametersParentWorkspace) Validate() error {
+func (s UpdateDatabaseRequestParentWorkspace) Validate() error {
 	switch s {
 	case true:
 		return nil
@@ -24351,7 +24351,7 @@ func (s *UpdateMediaContentWithUrlAndCaptionRequest) Validate() error {
 	return nil
 }
 
-func (s *UpdatePageBodyParameters) Validate() error {
+func (s *UpdatePageRequest) Validate() error {
 	if s == nil {
 		return validate.ErrNilPointer
 	}
@@ -24435,7 +24435,7 @@ func (s *UpdatePageBodyParameters) Validate() error {
 	return nil
 }
 
-func (s UpdatePageBodyParametersProperties) Validate() error {
+func (s UpdatePageRequestProperties) Validate() error {
 	var failures []validate.FieldError
 	for key, elem := range s {
 		if err := func() error {
@@ -24457,7 +24457,7 @@ func (s UpdatePageBodyParametersProperties) Validate() error {
 	return nil
 }
 
-func (s *UpdatePageBodyParametersPropertiesItem) Validate() error {
+func (s *UpdatePageRequestPropertiesItem) Validate() error {
 	if s == nil {
 		return validate.ErrNilPointer
 	}
@@ -24684,7 +24684,7 @@ func (s *UpdatePageBodyParametersPropertiesItem) Validate() error {
 	return nil
 }
 
-func (s *UpdatePageBodyParametersPropertiesItemFilesItem) Validate() error {
+func (s *UpdatePageRequestPropertiesItemFilesItem) Validate() error {
 	if s == nil {
 		return validate.ErrNilPointer
 	}
@@ -24714,7 +24714,7 @@ func (s *UpdatePageBodyParametersPropertiesItemFilesItem) Validate() error {
 	return nil
 }
 
-func (s UpdatePageBodyParametersPropertiesItemFilesItemType) Validate() error {
+func (s UpdatePageRequestPropertiesItemFilesItemType) Validate() error {
 	switch s {
 	case "file":
 		return nil
@@ -24727,7 +24727,7 @@ func (s UpdatePageBodyParametersPropertiesItemFilesItemType) Validate() error {
 	}
 }
 
-func (s *UpdatePageBodyParametersPropertiesItemMultiSelectItem) Validate() error {
+func (s *UpdatePageRequestPropertiesItemMultiSelectItem) Validate() error {
 	if s == nil {
 		return validate.ErrNilPointer
 	}
@@ -24757,7 +24757,7 @@ func (s *UpdatePageBodyParametersPropertiesItemMultiSelectItem) Validate() error
 	return nil
 }
 
-func (s *UpdatePageBodyParametersPropertiesItemPeopleItem) Validate() error {
+func (s *UpdatePageRequestPropertiesItemPeopleItem) Validate() error {
 	if s == nil {
 		return validate.ErrNilPointer
 	}
@@ -24787,7 +24787,7 @@ func (s *UpdatePageBodyParametersPropertiesItemPeopleItem) Validate() error {
 	return nil
 }
 
-func (s UpdatePageBodyParametersPropertiesItemPeopleItemObject) Validate() error {
+func (s UpdatePageRequestPropertiesItemPeopleItemObject) Validate() error {
 	switch s {
 	case "user":
 		return nil
@@ -24798,7 +24798,7 @@ func (s UpdatePageBodyParametersPropertiesItemPeopleItemObject) Validate() error
 	}
 }
 
-func (s *UpdatePageBodyParametersPropertiesItemPlace) Validate() error {
+func (s *UpdatePageRequestPropertiesItemPlace) Validate() error {
 	if s == nil {
 		return validate.ErrNilPointer
 	}
@@ -24832,7 +24832,7 @@ func (s *UpdatePageBodyParametersPropertiesItemPlace) Validate() error {
 	return nil
 }
 
-func (s *UpdatePageBodyParametersPropertiesItemSelect) Validate() error {
+func (s *UpdatePageRequestPropertiesItemSelect) Validate() error {
 	if s == nil {
 		return validate.ErrNilPointer
 	}
@@ -24862,7 +24862,7 @@ func (s *UpdatePageBodyParametersPropertiesItemSelect) Validate() error {
 	return nil
 }
 
-func (s *UpdatePageBodyParametersPropertiesItemStatus) Validate() error {
+func (s *UpdatePageRequestPropertiesItemStatus) Validate() error {
 	if s == nil {
 		return validate.ErrNilPointer
 	}
@@ -24892,7 +24892,7 @@ func (s *UpdatePageBodyParametersPropertiesItemStatus) Validate() error {
 	return nil
 }
 
-func (s UpdatePageBodyParametersPropertiesItemType) Validate() error {
+func (s UpdatePageRequestPropertiesItemType) Validate() error {
 	switch s {
 	case "title":
 		return nil
@@ -24929,7 +24929,7 @@ func (s UpdatePageBodyParametersPropertiesItemType) Validate() error {
 	}
 }
 
-func (s *UpdatePageBodyParametersTemplate) Validate() error {
+func (s *UpdatePageRequestTemplate) Validate() error {
 	if s == nil {
 		return validate.ErrNilPointer
 	}
@@ -24952,7 +24952,7 @@ func (s *UpdatePageBodyParametersTemplate) Validate() error {
 	return nil
 }
 
-func (s UpdatePageBodyParametersTemplateType) Validate() error {
+func (s UpdatePageRequestTemplateType) Validate() error {
 	switch s {
 	case "default":
 		return nil

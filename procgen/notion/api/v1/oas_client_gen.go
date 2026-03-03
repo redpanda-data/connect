@@ -39,7 +39,7 @@ type Invoker interface {
 	// Append block children.
 	//
 	// PATCH /v1/blocks/{id}/children
-	BlocksIDChildrenPatch(ctx context.Context, request *AppendBlockChildrenBodyParameters, params BlocksIDChildrenPatchParams) (*AppendBlockChildrenResponseHeaders, error)
+	BlocksIDChildrenPatch(ctx context.Context, request *AppendBlockChildrenRequest, params BlocksIDChildrenPatchParams) (*AppendBlockChildrenResponseHeaders, error)
 	// BlocksIDDelete invokes BlocksIDDelete operation.
 	//
 	// Delete a block.
@@ -58,7 +58,7 @@ type Invoker interface {
 	// notion.com/reference/update-a-block).
 	//
 	// PATCH /v1/blocks/{id}
-	BlocksIDPatch(ctx context.Context, request *UpdateBlockBodyParameters, params BlocksIDPatchParams) (*UpdateBlockResponseHeaders, error)
+	BlocksIDPatch(ctx context.Context, request *UpdateBlockRequest, params BlocksIDPatchParams) (*UpdateBlockResponseHeaders, error)
 	// CommentsGet invokes CommentsGet operation.
 	//
 	// Retrieve a user object using the ID specified in the request path.
@@ -70,7 +70,7 @@ type Invoker interface {
 	// Add comment to discussion.
 	//
 	// POST /v1/comments
-	CommentsPost(ctx context.Context, request *CreateCommentBodyParameters, params CommentsPostParams) (*CreateCommentResponseHeaders, error)
+	CommentsPost(ctx context.Context, request *CreateCommentRequest, params CommentsPostParams) (*CreateCommentResponseHeaders, error)
 	// DatabasesIDGet invokes DatabasesIDGet operation.
 	//
 	// Retrieves a database object using the ID specified in the request path.
@@ -82,19 +82,19 @@ type Invoker interface {
 	// Update database properties.
 	//
 	// PATCH /v1/databases/{id}
-	DatabasesIDPatch(ctx context.Context, request *UpdateDatabaseBodyParameters, params DatabasesIDPatchParams) (*UpdateDatabaseResponseHeaders, error)
+	DatabasesIDPatch(ctx context.Context, request *UpdateDatabaseRequest, params DatabasesIDPatchParams) (*UpdateDatabaseResponseHeaders, error)
 	// DatabasesIDQueryPost invokes DatabasesIDQueryPost operation.
 	//
 	// Filter a database.
 	//
 	// POST /v1/databases/{id}/query
-	DatabasesIDQueryPost(ctx context.Context, request *QueryDataSourceBodyParameters, params DatabasesIDQueryPostParams) (*QueryDataSourceResponseHeaders, error)
+	DatabasesIDQueryPost(ctx context.Context, request *QueryDataSourceRequest, params DatabasesIDQueryPostParams) (*QueryDataSourceResponseHeaders, error)
 	// DatabasesPost invokes DatabasesPost operation.
 	//
 	// Create a database.
 	//
 	// POST /v1/databases/
-	DatabasesPost(ctx context.Context, request *CreateDatabaseBodyParameters, params DatabasesPostParams) (*CreateDatabaseResponseHeaders, error)
+	DatabasesPost(ctx context.Context, request *CreateDatabaseRequest, params DatabasesPostParams) (*CreateDatabaseResponseHeaders, error)
 	// PagesIDGet invokes PagesIDGet operation.
 	//
 	// Retrieves a Page object using the ID in the request path. This endpoint exposes page properties,
@@ -107,7 +107,7 @@ type Invoker interface {
 	// Archive a page.
 	//
 	// PATCH /v1/pages/{id}
-	PagesIDPatch(ctx context.Context, request *UpdatePageBodyParameters, params PagesIDPatchParams) (*UpdatePageResponseHeaders, error)
+	PagesIDPatch(ctx context.Context, request *UpdatePageRequest, params PagesIDPatchParams) (*UpdatePageResponseHeaders, error)
 	// PagesPageIDPropertiesPropertyIDGet invokes PagesPageIDPropertiesPropertyIDGet operation.
 	//
 	// Retrieve a page property item.
@@ -119,13 +119,13 @@ type Invoker interface {
 	// Create a page with content.
 	//
 	// POST /v1/pages/
-	PagesPost(ctx context.Context, request *CreatePageBodyParameters, params PagesPostParams) (*CreatePageResponseHeaders, error)
+	PagesPost(ctx context.Context, request *CreatePageRequest, params PagesPostParams) (*CreatePageResponseHeaders, error)
 	// SearchPost invokes SearchPost operation.
 	//
 	// Search.
 	//
 	// POST /v1/search
-	SearchPost(ctx context.Context, request *SearchBodyParameters, params SearchPostParams) (*SearchResponseHeaders, error)
+	SearchPost(ctx context.Context, request *SearchRequest, params SearchPostParams) (*SearchResponseHeaders, error)
 	// UsersGet invokes UsersGet operation.
 	//
 	// Returns a paginated list of user objects for a workspace.
@@ -356,12 +356,12 @@ func (c *Client) sendBlocksIDChildrenGet(ctx context.Context, params BlocksIDChi
 // Append block children.
 //
 // PATCH /v1/blocks/{id}/children
-func (c *Client) BlocksIDChildrenPatch(ctx context.Context, request *AppendBlockChildrenBodyParameters, params BlocksIDChildrenPatchParams) (*AppendBlockChildrenResponseHeaders, error) {
+func (c *Client) BlocksIDChildrenPatch(ctx context.Context, request *AppendBlockChildrenRequest, params BlocksIDChildrenPatchParams) (*AppendBlockChildrenResponseHeaders, error) {
 	res, err := c.sendBlocksIDChildrenPatch(ctx, request, params)
 	return res, err
 }
 
-func (c *Client) sendBlocksIDChildrenPatch(ctx context.Context, request *AppendBlockChildrenBodyParameters, params BlocksIDChildrenPatchParams) (res *AppendBlockChildrenResponseHeaders, err error) {
+func (c *Client) sendBlocksIDChildrenPatch(ctx context.Context, request *AppendBlockChildrenRequest, params BlocksIDChildrenPatchParams) (res *AppendBlockChildrenResponseHeaders, err error) {
 	// Validate request before sending.
 	if err := func() error {
 		if err := request.Validate(); err != nil {
@@ -796,12 +796,12 @@ func (c *Client) sendBlocksIDGet(ctx context.Context, params BlocksIDGetParams) 
 // notion.com/reference/update-a-block).
 //
 // PATCH /v1/blocks/{id}
-func (c *Client) BlocksIDPatch(ctx context.Context, request *UpdateBlockBodyParameters, params BlocksIDPatchParams) (*UpdateBlockResponseHeaders, error) {
+func (c *Client) BlocksIDPatch(ctx context.Context, request *UpdateBlockRequest, params BlocksIDPatchParams) (*UpdateBlockResponseHeaders, error) {
 	res, err := c.sendBlocksIDPatch(ctx, request, params)
 	return res, err
 }
 
-func (c *Client) sendBlocksIDPatch(ctx context.Context, request *UpdateBlockBodyParameters, params BlocksIDPatchParams) (res *UpdateBlockResponseHeaders, err error) {
+func (c *Client) sendBlocksIDPatch(ctx context.Context, request *UpdateBlockRequest, params BlocksIDPatchParams) (res *UpdateBlockResponseHeaders, err error) {
 	// Validate request before sending.
 	if err := func() error {
 		if err := request.Validate(); err != nil {
@@ -1112,12 +1112,12 @@ func (c *Client) sendCommentsGet(ctx context.Context, params CommentsGetParams) 
 // Add comment to discussion.
 //
 // POST /v1/comments
-func (c *Client) CommentsPost(ctx context.Context, request *CreateCommentBodyParameters, params CommentsPostParams) (*CreateCommentResponseHeaders, error) {
+func (c *Client) CommentsPost(ctx context.Context, request *CreateCommentRequest, params CommentsPostParams) (*CreateCommentResponseHeaders, error) {
 	res, err := c.sendCommentsPost(ctx, request, params)
 	return res, err
 }
 
-func (c *Client) sendCommentsPost(ctx context.Context, request *CreateCommentBodyParameters, params CommentsPostParams) (res *CreateCommentResponseHeaders, err error) {
+func (c *Client) sendCommentsPost(ctx context.Context, request *CreateCommentRequest, params CommentsPostParams) (res *CreateCommentResponseHeaders, err error) {
 	// Validate request before sending.
 	if err := func() error {
 		if err := request.Validate(); err != nil {
@@ -1390,12 +1390,12 @@ func (c *Client) sendDatabasesIDGet(ctx context.Context, params DatabasesIDGetPa
 // Update database properties.
 //
 // PATCH /v1/databases/{id}
-func (c *Client) DatabasesIDPatch(ctx context.Context, request *UpdateDatabaseBodyParameters, params DatabasesIDPatchParams) (*UpdateDatabaseResponseHeaders, error) {
+func (c *Client) DatabasesIDPatch(ctx context.Context, request *UpdateDatabaseRequest, params DatabasesIDPatchParams) (*UpdateDatabaseResponseHeaders, error) {
 	res, err := c.sendDatabasesIDPatch(ctx, request, params)
 	return res, err
 }
 
-func (c *Client) sendDatabasesIDPatch(ctx context.Context, request *UpdateDatabaseBodyParameters, params DatabasesIDPatchParams) (res *UpdateDatabaseResponseHeaders, err error) {
+func (c *Client) sendDatabasesIDPatch(ctx context.Context, request *UpdateDatabaseRequest, params DatabasesIDPatchParams) (res *UpdateDatabaseResponseHeaders, err error) {
 	// Validate request before sending.
 	if err := func() error {
 		if err := request.Validate(); err != nil {
@@ -1544,12 +1544,12 @@ func (c *Client) sendDatabasesIDPatch(ctx context.Context, request *UpdateDataba
 // Filter a database.
 //
 // POST /v1/databases/{id}/query
-func (c *Client) DatabasesIDQueryPost(ctx context.Context, request *QueryDataSourceBodyParameters, params DatabasesIDQueryPostParams) (*QueryDataSourceResponseHeaders, error) {
+func (c *Client) DatabasesIDQueryPost(ctx context.Context, request *QueryDataSourceRequest, params DatabasesIDQueryPostParams) (*QueryDataSourceResponseHeaders, error) {
 	res, err := c.sendDatabasesIDQueryPost(ctx, request, params)
 	return res, err
 }
 
-func (c *Client) sendDatabasesIDQueryPost(ctx context.Context, request *QueryDataSourceBodyParameters, params DatabasesIDQueryPostParams) (res *QueryDataSourceResponseHeaders, err error) {
+func (c *Client) sendDatabasesIDQueryPost(ctx context.Context, request *QueryDataSourceRequest, params DatabasesIDQueryPostParams) (res *QueryDataSourceResponseHeaders, err error) {
 	// Validate request before sending.
 	if err := func() error {
 		if err := request.Validate(); err != nil {
@@ -1699,12 +1699,12 @@ func (c *Client) sendDatabasesIDQueryPost(ctx context.Context, request *QueryDat
 // Create a database.
 //
 // POST /v1/databases/
-func (c *Client) DatabasesPost(ctx context.Context, request *CreateDatabaseBodyParameters, params DatabasesPostParams) (*CreateDatabaseResponseHeaders, error) {
+func (c *Client) DatabasesPost(ctx context.Context, request *CreateDatabaseRequest, params DatabasesPostParams) (*CreateDatabaseResponseHeaders, error) {
 	res, err := c.sendDatabasesPost(ctx, request, params)
 	return res, err
 }
 
-func (c *Client) sendDatabasesPost(ctx context.Context, request *CreateDatabaseBodyParameters, params DatabasesPostParams) (res *CreateDatabaseResponseHeaders, err error) {
+func (c *Client) sendDatabasesPost(ctx context.Context, request *CreateDatabaseRequest, params DatabasesPostParams) (res *CreateDatabaseResponseHeaders, err error) {
 	// Validate request before sending.
 	if err := func() error {
 		if err := request.Validate(); err != nil {
@@ -1978,12 +1978,12 @@ func (c *Client) sendPagesIDGet(ctx context.Context, params PagesIDGetParams) (r
 // Archive a page.
 //
 // PATCH /v1/pages/{id}
-func (c *Client) PagesIDPatch(ctx context.Context, request *UpdatePageBodyParameters, params PagesIDPatchParams) (*UpdatePageResponseHeaders, error) {
+func (c *Client) PagesIDPatch(ctx context.Context, request *UpdatePageRequest, params PagesIDPatchParams) (*UpdatePageResponseHeaders, error) {
 	res, err := c.sendPagesIDPatch(ctx, request, params)
 	return res, err
 }
 
-func (c *Client) sendPagesIDPatch(ctx context.Context, request *UpdatePageBodyParameters, params PagesIDPatchParams) (res *UpdatePageResponseHeaders, err error) {
+func (c *Client) sendPagesIDPatch(ctx context.Context, request *UpdatePageRequest, params PagesIDPatchParams) (res *UpdatePageResponseHeaders, err error) {
 	// Validate request before sending.
 	if err := func() error {
 		if err := request.Validate(); err != nil {
@@ -2293,12 +2293,12 @@ func (c *Client) sendPagesPageIDPropertiesPropertyIDGet(ctx context.Context, par
 // Create a page with content.
 //
 // POST /v1/pages/
-func (c *Client) PagesPost(ctx context.Context, request *CreatePageBodyParameters, params PagesPostParams) (*CreatePageResponseHeaders, error) {
+func (c *Client) PagesPost(ctx context.Context, request *CreatePageRequest, params PagesPostParams) (*CreatePageResponseHeaders, error) {
 	res, err := c.sendPagesPost(ctx, request, params)
 	return res, err
 }
 
-func (c *Client) sendPagesPost(ctx context.Context, request *CreatePageBodyParameters, params PagesPostParams) (res *CreatePageResponseHeaders, err error) {
+func (c *Client) sendPagesPost(ctx context.Context, request *CreatePageRequest, params PagesPostParams) (res *CreatePageResponseHeaders, err error) {
 	// Validate request before sending.
 	if err := func() error {
 		if err := request.Validate(); err != nil {
@@ -2429,12 +2429,12 @@ func (c *Client) sendPagesPost(ctx context.Context, request *CreatePageBodyParam
 // Search.
 //
 // POST /v1/search
-func (c *Client) SearchPost(ctx context.Context, request *SearchBodyParameters, params SearchPostParams) (*SearchResponseHeaders, error) {
+func (c *Client) SearchPost(ctx context.Context, request *SearchRequest, params SearchPostParams) (*SearchResponseHeaders, error) {
 	res, err := c.sendSearchPost(ctx, request, params)
 	return res, err
 }
 
-func (c *Client) sendSearchPost(ctx context.Context, request *SearchBodyParameters, params SearchPostParams) (res *SearchResponseHeaders, err error) {
+func (c *Client) sendSearchPost(ctx context.Context, request *SearchRequest, params SearchPostParams) (res *SearchResponseHeaders, err error) {
 	// Validate request before sending.
 	if err := func() error {
 		if err := request.Validate(); err != nil {

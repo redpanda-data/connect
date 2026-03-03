@@ -644,6 +644,45 @@ function processAllPendingTypes() {
 }
 
 // ---------------------------------------------------------------------------
+// 5b. Rename *BodyParameters schemas to *Request
+// ---------------------------------------------------------------------------
+
+function renameBodyParameterSchemas() {
+	const renames = new Map<string, string>();
+	for (const name of schemas.keys()) {
+		if (name.endsWith("BodyParameters")) {
+			renames.set(name, name.replace(/BodyParameters$/, "Request"));
+		}
+	}
+	for (const [oldName, newName] of renames) {
+		const schema = schemas.get(oldName)!;
+		schemas.delete(oldName);
+		schemas.set(newName, schema);
+	}
+	// Rewrite $ref strings in all schemas
+	const oldPrefix = "#/components/schemas/";
+	for (const schema of schemas.values()) {
+		rewriteRefs(schema, renames, oldPrefix);
+	}
+}
+
+function rewriteRefs(
+	obj: any,
+	renames: Map<string, string>,
+	prefix: string,
+): void {
+	if (obj == null || typeof obj !== "object") return;
+	if (typeof obj.$ref === "string" && obj.$ref.startsWith(prefix)) {
+		const name = obj.$ref.slice(prefix.length);
+		const newName = renames.get(name);
+		if (newName) obj.$ref = prefix + newName;
+	}
+	for (const val of Object.values(obj)) {
+		rewriteRefs(val, renames, prefix);
+	}
+}
+
+// ---------------------------------------------------------------------------
 // 6. Build request body schema from Parameters type
 // ---------------------------------------------------------------------------
 
@@ -657,23 +696,25 @@ function buildRequestBodySchema(ep: EndpointMeta): Schema | null {
 	// We need to extract only the body params
 	// Strategy: look for the Body-specific type (e.g., CreatePageBodyParameters)
 	const bodyTypeName = `${ep.constName.charAt(0).toUpperCase() + ep.constName.slice(1)}BodyParameters`;
+	const requestName = bodyTypeName.replace(/BodyParameters$/, "Request");
 	const bodyType = knownTypes.get(bodyTypeName);
 
 	if (bodyType) {
 		if (!schemas.has(bodyTypeName) && !processingTypes.has(bodyTypeName)) {
 			pendingTypes.add(bodyTypeName);
 		}
-		return { $ref: `#/components/schemas/${bodyTypeName}` };
+		return { $ref: `#/components/schemas/${requestName}` };
 	}
 
 	// Fall back to the full Parameters type
+	const fallbackName = ep.paramsTypeName.replace(/Parameters$/, "Request");
 	if (
 		!schemas.has(ep.paramsTypeName) &&
 		!processingTypes.has(ep.paramsTypeName)
 	) {
 		pendingTypes.add(ep.paramsTypeName);
 	}
-	return { $ref: `#/components/schemas/${ep.paramsTypeName}` };
+	return { $ref: `#/components/schemas/${fallbackName}` };
 }
 
 // ---------------------------------------------------------------------------
@@ -1255,6 +1296,9 @@ function mergeIntoSpec(
 
 	// Process all pending types
 	processAllPendingTypes();
+
+	// Rename *BodyParameters schemas to *Request
+	renameBodyParameterSchemas();
 
 	// Add all schemas to components
 	for (const [name, schema] of schemas) {

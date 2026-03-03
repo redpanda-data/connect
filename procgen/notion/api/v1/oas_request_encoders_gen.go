@@ -11,7 +11,7 @@ import (
 )
 
 func encodeBlocksIDChildrenPatchRequest(
-	req *AppendBlockChildrenBodyParameters,
+	req *AppendBlockChildrenRequest,
 	r *http.Request,
 ) error {
 	const contentType = "application/json"
@@ -25,7 +25,7 @@ func encodeBlocksIDChildrenPatchRequest(
 }
 
 func encodeBlocksIDPatchRequest(
-	req *UpdateBlockBodyParameters,
+	req *UpdateBlockRequest,
 	r *http.Request,
 ) error {
 	const contentType = "application/json"
@@ -39,7 +39,7 @@ func encodeBlocksIDPatchRequest(
 }
 
 func encodeCommentsPostRequest(
-	req *CreateCommentBodyParameters,
+	req *CreateCommentRequest,
 	r *http.Request,
 ) error {
 	const contentType = "application/json"
@@ -53,7 +53,7 @@ func encodeCommentsPostRequest(
 }
 
 func encodeDatabasesIDPatchRequest(
-	req *UpdateDatabaseBodyParameters,
+	req *UpdateDatabaseRequest,
 	r *http.Request,
 ) error {
 	const contentType = "application/json"
@@ -67,7 +67,7 @@ func encodeDatabasesIDPatchRequest(
 }
 
 func encodeDatabasesIDQueryPostRequest(
-	req *QueryDataSourceBodyParameters,
+	req *QueryDataSourceRequest,
 	r *http.Request,
 ) error {
 	const contentType = "application/json"
@@ -81,7 +81,7 @@ func encodeDatabasesIDQueryPostRequest(
 }
 
 func encodeDatabasesPostRequest(
-	req *CreateDatabaseBodyParameters,
+	req *CreateDatabaseRequest,
 	r *http.Request,
 ) error {
 	const contentType = "application/json"
@@ -95,7 +95,7 @@ func encodeDatabasesPostRequest(
 }
 
 func encodePagesIDPatchRequest(
-	req *UpdatePageBodyParameters,
+	req *UpdatePageRequest,
 	r *http.Request,
 ) error {
 	const contentType = "application/json"
@@ -109,7 +109,7 @@ func encodePagesIDPatchRequest(
 }
 
 func encodePagesPostRequest(
-	req *CreatePageBodyParameters,
+	req *CreatePageRequest,
 	r *http.Request,
 ) error {
 	const contentType = "application/json"
@@ -123,7 +123,7 @@ func encodePagesPostRequest(
 }
 
 func encodeSearchPostRequest(
-	req *SearchBodyParameters,
+	req *SearchRequest,
 	r *http.Request,
 ) error {
 	const contentType = "application/json"
