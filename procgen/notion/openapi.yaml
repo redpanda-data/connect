@@ -13626,6 +13626,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/GetUserResponse"
+      operationId: UsersIDGet
   /v1/users:
     get:
       tags:
@@ -13800,6 +13801,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ListUsersResponse"
+      operationId: UsersGet
   /v1/users/me:
     get:
       tags:
@@ -13973,6 +13975,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/GetSelfResponse"
+      operationId: UsersMeGet
   /v1/databases/{id}:
     get:
       tags:
@@ -14153,6 +14156,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/GetDatabaseResponse"
+      operationId: DatabasesIDGet
     patch:
       tags:
         - Databases
@@ -14337,6 +14341,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/UpdateDatabaseResponse"
+      operationId: DatabasesIDPatch
   /v1/databases/{id}/query:
     post:
       tags:
@@ -14532,6 +14537,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/QueryDataSourceResponse"
+      operationId: DatabasesIDQueryPost
   /v1/databases/:
     post:
       tags:
@@ -14716,6 +14722,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/CreateDatabaseResponse"
+      operationId: DatabasesPost
   /v1/pages/:
     post:
       tags:
@@ -14905,6 +14912,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/CreatePageResponse"
+      operationId: PagesPost
   /v1/pages/{id}:
     get:
       tags:
@@ -15086,6 +15094,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/GetPageResponse"
+      operationId: PagesIDGet
     patch:
       tags:
         - Pages
@@ -15270,6 +15279,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/UpdatePageResponse"
+      operationId: PagesIDPatch
   /v1/pages/{page_id}/properties/{property_id}:
     get:
       tags:
@@ -15454,6 +15464,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/GetPagePropertyResponse"
+      operationId: PagesPageIDPropertiesPropertyIDGet
   /v1/blocks/{id}/children:
     get:
       tags:
@@ -15631,6 +15642,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ListBlockChildrenResponse"
+      operationId: BlocksIDChildrenGet
     patch:
       tags:
         - Blocks
@@ -15821,6 +15833,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AppendBlockChildrenResponse"
+      operationId: BlocksIDChildrenPatch
   /v1/blocks/{id}:
     patch:
       tags:
@@ -16009,6 +16022,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/UpdateBlockResponse"
+      operationId: BlocksIDPatch
     get:
       tags:
         - Blocks
@@ -16188,6 +16202,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/GetBlockResponse"
+      operationId: BlocksIDGet
     delete:
       tags:
         - Blocks
@@ -16366,6 +16381,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DeleteBlockResponse"
+      operationId: BlocksIDDelete
   /v1/search:
     post:
       tags:
@@ -16555,6 +16571,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SearchResponse"
+      operationId: SearchPost
   /v1/comments:
     get:
       tags:
@@ -16684,6 +16701,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ListCommentsResponse"
+      operationId: CommentsGet
     post:
       tags:
         - Comments
@@ -16812,3 +16830,4 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/CreateCommentResponse"
+      operationId: CommentsPost

@@ -4,25 +4,24 @@ import (
 	"context"
 	"testing"
 
+	nv1 "github.com/redpanda-data/connect/v4/procgen/notion/api/v1"
 	"github.com/stretchr/testify/require"
-
-	"github.com/redpanda-data/connect/v4/procgen/notion/notionapi"
 )
 
 type tokenSource struct {
 	token string
 }
 
-func (t *tokenSource) BearerAuth(_ context.Context, _ notionapi.OperationName) (notionapi.BearerAuth, error) {
-	return notionapi.BearerAuth{Token: t.token}, nil
+func (t *tokenSource) BearerAuth(_ context.Context, _ nv1.OperationName) (nv1.BearerAuth, error) {
+	return nv1.BearerAuth{Token: t.token}, nil
 }
 
-func TestV1UsersGet(t *testing.T) {
-	client, err := notionapi.NewClient("https://api.notion.com", &tokenSource{token: "ntn_b89409055012xxojYsLeGAGwziAEEHbClkNcl302Q0K8ZG"})
+func TestUsersGet(t *testing.T) {
+	client, err := nv1.NewClient("https://api.notion.com", &tokenSource{token: "ntn_b89409055012xxojYsLeGAGwziAEEHbClkNcl302Q0K8ZG"})
 	require.NoError(t, err)
 
-	resp, err := client.V1UsersGet(context.Background(), notionapi.V1UsersGetParams{
-		NotionVersion: notionapi.NewOptString("2022-06-28"),
+	resp, err := client.UsersGet(context.Background(), nv1.UsersGetParams{
+		NotionVersion: nv1.NewOptString("2022-06-28"),
 	})
 	require.NoError(t, err)
 	require.NotNil(t, resp)

@@ -24,13 +24,13 @@ tasks:
       - openapi.yaml
     silent: true
 
-  notionapi:
+  api:
     desc: Generate Go client from OpenAPI spec
     deps: [openapi]
     cmds:
-      - go run github.com/ogen-go/ogen/cmd/ogen --config ../ogen.yaml --package notionapi --target notionapi --clean openapi.yaml
+      - go run github.com/ogen-go/ogen/cmd/ogen --config ../ogen.yaml --package v1 --target api/v1 --clean openapi.yaml
     sources:
       - openapi.yaml
       - ../ogen.yaml
     generates:
-      - notionapi/**/*.go
+      - api/v1/**/*.go

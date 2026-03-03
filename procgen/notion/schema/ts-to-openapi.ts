@@ -1206,7 +1206,34 @@ function postProcessSchemas() {
 }
 
 // ---------------------------------------------------------------------------
-// 8. Merge schemas into OpenAPI spec
+// 8. Generate operationId from path + method
+// ---------------------------------------------------------------------------
+
+function pathToOperationId(path: string, method: string): string {
+	// Strip /v1/ prefix and trailing slash
+	const stripped = path.replace(/^\/v1\//, "").replace(/\/+$/, "");
+	const segments = stripped.split("/").filter(Boolean);
+	const pascal = segments
+		.map((seg) => {
+			// {param_name} → PascalCase of param_name
+			const name = seg.replace(/^\{|\}$/g, "");
+			return name
+				.split("_")
+				.map((w) =>
+					w.toLowerCase() === "id"
+						? "ID"
+						: w.charAt(0).toUpperCase() + w.slice(1).toLowerCase(),
+				)
+				.join("");
+		})
+		.join("");
+	const methodPascal =
+		method.charAt(0).toUpperCase() + method.slice(1).toLowerCase();
+	return pascal + methodPascal;
+}
+
+// ---------------------------------------------------------------------------
+// 9. Merge schemas into OpenAPI spec
 // ---------------------------------------------------------------------------
 
 function mergeIntoSpec(
@@ -1242,6 +1269,9 @@ function mergeIntoSpec(
 		)) {
 			if (!["get", "post", "put", "patch", "delete"].includes(method))
 				continue;
+
+			// Set operationId to strip V1 prefix from generated names
+			opObj.operationId = pathToOperationId(path, method);
 
 			const specKey = `${method} ${path}`;
 			const ep = matched.get(specKey);
