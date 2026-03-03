@@ -310,18 +310,20 @@ root = [
 `)
 }
 
-type migratorResKey string
-
-func migratorKey(label string) migratorResKey {
-	if label == "" {
-		label = "default"
-	}
-	return migratorResKey("migrator_" + label)
+// migratorKey scopes the Migrator stored in GetOrSetGeneric by label and
+// stream, so each stream gets its own Migrator even when labels collide.
+type migratorKey struct {
+	label, stream string
 }
 
 func newMigratorFrom(mgr *service.Resources) *Migrator {
-	m, _ := mgr.GetOrSetGeneric(migratorKey(mgr.Label()), NewMigrator(mgr))
-	return m.(*Migrator)
+	label := mgr.Label()
+	if label == "" {
+		label = "default"
+	}
+
+	v, _ := mgr.GetOrSetGeneric(migratorKey{label, mgr.StreamID()}, NewMigrator(mgr))
+	return v.(*Migrator)
 }
 
 type migratorBatchInput struct {
