@@ -25,6 +25,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -239,6 +240,9 @@ type Client struct {
 
 	// Cache the SObject list to avoid refetching
 	sobjectList []SObjectInfo
+
+	// SObjects that returned 400 during data fetch — never retry them
+	unsupportedSObjects map[string]struct{}
 }
 
 func (s *Client) getBearerToken() string {
@@ -257,9 +261,8 @@ func NewClient(orgURL, clientID, clientSecret, apiVersion string, maxRetries int
 		retryOpts: RetryOptions{
 			MaxRetries: maxRetries,
 		},
-		httpClient: metrics.NewInstrumentedClient(
-			m, "salesforce_http",
-			httpClient),
+		httpClient:          metrics.NewInstrumentedClient(m, "salesforce_http", httpClient),
+		unsupportedSObjects: make(map[string]struct{}),
 	}, nil
 }
 
@@ -416,9 +419,29 @@ func (s *Client) GetNextBatch(ctx context.Context, cursor Cursor) (service.Messa
 			return nil, cursor, false, err
 		}
 	} else {
+		// Skip SObjects that previously returned 400
+		if _, unsupported := s.unsupportedSObjects[currentSObject.Name]; unsupported {
+			skipCursor := cursor
+			skipCursor.SObjectIndex++
+			skipCursor.NextURL = ""
+			return nil, skipCursor, false, nil
+		}
+
 		// First query for this SObject
-		queryResults, err = s.queryFirstPage(ctx, currentSObject)
+		soql := buildSOQL(currentSObject.Name, currentSObject.Fields)
+		queryResults, err = s.GetSObjectData(ctx, soql)
 		if err != nil {
+			// 400 means the SObject requires filter criteria or doesn't support unrestricted SOQL.
+			// Record it permanently so future cycles don't retry it.
+			var httpErr *HTTPError
+			if errors.As(err, &httpErr) && httpErr.StatusCode == http.StatusBadRequest {
+				s.unsupportedSObjects[currentSObject.Name] = struct{}{}
+				s.log.Warnf("Skipping SObject %s permanently: query not supported (400): query=%q reason=%s", currentSObject.Name, soql, httpErr.Body)
+				skipCursor := cursor
+				skipCursor.SObjectIndex++
+				skipCursor.NextURL = ""
+				return nil, skipCursor, false, nil
+			}
 			return nil, cursor, false, err
 		}
 	}
@@ -552,10 +575,6 @@ func (s *Client) loadSObjectList(ctx context.Context) error {
 	return nil
 }
 
-func (s *Client) queryFirstPage(ctx context.Context, sobj SObjectInfo) ([]byte, error) {
-	soql := buildSOQL(sobj.Name, sobj.Fields)
-	return s.GetSObjectData(ctx, soql)
-}
 
 func (s *Client) fetchNextRecordsPage(ctx context.Context, nextURL string) ([]byte, error) {
 	apiUrl, err := url.Parse(s.orgURL + nextURL)
