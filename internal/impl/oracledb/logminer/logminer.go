@@ -21,17 +21,6 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/impl/oracledb/replication"
 )
 
-// ChangeEvent represents the final change event emitted to Kafka
-type ChangeEvent struct {
-	SCN       replication.SCN
-	Operation string // "CREATE", "UPDATE", "DELETE"
-	Schema    string
-	Table     string
-	Data      map[string]any
-	Timestamp time.Time
-	TxnID     string
-}
-
 // LogMiner tracks and streams all change events from the configured change
 // tables tracked in tables.
 type LogMiner struct {
@@ -96,8 +85,8 @@ func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replicat
 
 		// logminer specific
 		logMinerQuery: logMinerQuery,
-		logCollector:  NewLogFileCollector(db),
-		sessionMgr:    NewSessionManager(db, cfg),
+		logCollector:  NewLogFileCollector(),
+		sessionMgr:    NewSessionManager(cfg),
 		txnCache:      NewInMemoryCache(cfg.MaxTransactionEvents, metrics, logger),
 		dmlParser:     sqlredo.NewParser(),
 	}
@@ -106,9 +95,17 @@ func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replicat
 
 // ReadChanges streams the change events from the configured SQL Server change tables.
 func (lm *LogMiner) ReadChanges(ctx context.Context, startPos replication.SCN) error {
-	// apply nls session for consistent logminer datetime output. (sql.DB is a connection pool,
-	// so we need to ensure NLS settings are applied to the connection used by LogMiner).
-	if err := replication.ApplyNLSSettings(ctx, lm.db); err != nil {
+	// Acquire a dedicated connection so that all LogMiner session operations
+	// (NLS settings, ADD_LOGFILE, START_LOGMNR, V$LOGMNR_CONTENTS queries) execute
+	// on the same underlying Oracle session. Using lm.db directly risks different
+	// calls being routed to different pool connections, breaking session-scoped state.
+	conn, err := lm.db.Conn(ctx)
+	if err != nil {
+		return fmt.Errorf("acquiring dedicated LogMiner connection: %w", err)
+	}
+	defer conn.Close()
+
+	if err := replication.ApplyNLSSettings(ctx, conn); err != nil {
 		return fmt.Errorf("applying NLS settings for LogMiner: %w", err)
 	}
 
@@ -117,7 +114,7 @@ func (lm *LogMiner) ReadChanges(ctx context.Context, startPos replication.SCN) e
 
 	defer func() {
 		if lm.sessionActive {
-			if err := lm.sessionMgr.EndSession(ctx); err != nil {
+			if err := lm.sessionMgr.EndSession(ctx, conn); err != nil {
 				lm.log.Errorf("ending LogMiner session on exit: %v", err)
 			}
 			lm.sessionActive = false
@@ -129,7 +126,7 @@ func (lm *LogMiner) ReadChanges(ctx context.Context, startPos replication.SCN) e
 		case <-ctx.Done():
 			return ctx.Err()
 		default:
-			if caughtUp, err := lm.miningCycle(ctx); err != nil {
+			if caughtUp, err := lm.miningCycle(ctx, conn); err != nil {
 				return fmt.Errorf("mining logs: %w", err)
 			} else if caughtUp {
 				lm.log.Infof("Caught up with redo logs, backing off")
@@ -166,10 +163,10 @@ func (lm *LogMiner) FindStartPos(ctx context.Context) (replication.SCN, error) {
 	return replication.SCN(firstSCN), nil
 }
 
-func (lm *LogMiner) miningCycle(ctx context.Context) (caughtUp bool, err error) {
+func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp bool, err error) {
 	// Get database's current SCN to know our target
 	var dbCurrentSCN uint64
-	if err := lm.db.QueryRowContext(ctx, "SELECT CURRENT_SCN FROM V$DATABASE").Scan(&dbCurrentSCN); err != nil {
+	if err := conn.QueryRowContext(ctx, "SELECT CURRENT_SCN FROM V$DATABASE").Scan(&dbCurrentSCN); err != nil {
 		return false, fmt.Errorf("fetching current SCN: %w", err)
 	}
 
@@ -186,7 +183,7 @@ func (lm *LogMiner) miningCycle(ctx context.Context) (caughtUp bool, err error) 
 	// with ENDSCN=0 freezes the session's view at session start time, making events written
 	// after session start invisible. Per-window restart with explicit endSCN ensures all
 	// events in [currentSCN, endSCN] are visible.
-	if err := lm.prepareLogsAndStartSession(ctx, lm.currentSCN, endSCN); err != nil {
+	if err := lm.prepareLogsAndStartSession(ctx, conn, lm.currentSCN, endSCN); err != nil {
 		// Check for ORA-01291: missing log file error and provide helpful message
 		if strings.Contains(err.Error(), "ORA-01291") {
 			//nolint:staticcheck
@@ -210,7 +207,7 @@ func (lm *LogMiner) miningCycle(ctx context.Context) (caughtUp bool, err error) 
 
 	// Query and process redoEvents from V$LOGMNR_CONTENTS
 	// The session is already active, just query it
-	redoEvents, err := lm.queryLogMinerContents(ctx, lm.currentSCN, endSCN)
+	redoEvents, err := lm.queryLogMinerContents(ctx, conn, lm.currentSCN, endSCN)
 	if err != nil {
 		return false, fmt.Errorf("querying logminer contents between %d and %d: %w", lm.currentSCN, endSCN, err)
 	}
@@ -273,9 +270,9 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 	return nil
 }
 
-func (lm *LogMiner) queryLogMinerContents(ctx context.Context, startSCN, endSCN uint64) ([]*sqlredo.RedoEvent, error) {
+func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, startSCN, endSCN uint64) ([]*sqlredo.RedoEvent, error) {
 	// Use the pre-built query from initialization
-	rows, err := lm.db.QueryContext(ctx, lm.logMinerQuery, startSCN, endSCN)
+	rows, err := conn.QueryContext(ctx, lm.logMinerQuery, startSCN, endSCN)
 	if err != nil {
 		return nil, fmt.Errorf("querying logminer: %w", err)
 	}
@@ -324,18 +321,16 @@ type LogFile struct {
 }
 
 // LogFileCollector finds relevant log files to mine
-type LogFileCollector struct {
-	db *sql.DB
-}
+type LogFileCollector struct{}
 
 // NewLogFileCollector creates a new *LogFileCollector which is responsible for
 // discovering the relevant log files to mine.
-func NewLogFileCollector(db *sql.DB) *LogFileCollector {
-	return &LogFileCollector{db: db}
+func NewLogFileCollector() *LogFileCollector {
+	return &LogFileCollector{}
 }
 
 // GetLogs collects all log files containing changes from the given SCN
-func (lfc *LogFileCollector) GetLogs(ctx context.Context, offsetSCN uint64) ([]*LogFile, error) {
+func (*LogFileCollector) GetLogs(ctx context.Context, conn *sql.Conn, offsetSCN uint64) ([]*LogFile, error) {
 	query := `
 		SELECT FILE_NAME, FIRST_CHANGE, NEXT_CHANGE, SEQ, TYPE, THREAD
 		FROM (
@@ -377,7 +372,7 @@ func (lfc *LogFileCollector) GetLogs(ctx context.Context, offsetSCN uint64) ([]*
 		ORDER BY SEQ
 	`
 
-	rows, err := lfc.db.QueryContext(ctx, query, offsetSCN)
+	rows, err := conn.QueryContext(ctx, query, offsetSCN)
 	if err != nil {
 		return nil, fmt.Errorf("querying all logs containing changes from SCN %d: %w", offsetSCN, err)
 	}
@@ -434,17 +429,17 @@ func deduplicateLogs(archived, online []*LogFile) []*LogFile {
 // START_LOGMNR would freeze the session's view at session-start time, making events
 // written after that point invisible. An explicit endSCN ensures all events in
 // [startSCN, endSCN] are accessible.
-func (lm *LogMiner) prepareLogsAndStartSession(ctx context.Context, startSCN, endSCN uint64) error {
+func (lm *LogMiner) prepareLogsAndStartSession(ctx context.Context, conn *sql.Conn, startSCN, endSCN uint64) error {
 	// End existing session if active
 	if lm.sessionActive {
-		if err := lm.sessionMgr.EndSession(ctx); err != nil {
+		if err := lm.sessionMgr.EndSession(ctx, conn); err != nil {
 			lm.log.Errorf("Failed to end existing LogMiner session: %v", err)
 		}
 		lm.sessionActive = false
 	}
 
 	// Collect log files that contain changes from current SCN
-	logFiles, err := lm.logCollector.GetLogs(ctx, startSCN)
+	logFiles, err := lm.logCollector.GetLogs(ctx, conn, startSCN)
 	if err != nil {
 		return fmt.Errorf("collecting redo logs for logminer: %w", err)
 	}
@@ -455,13 +450,13 @@ func (lm *LogMiner) prepareLogsAndStartSession(ctx context.Context, startSCN, en
 	for i, file := range logFiles {
 		// if first log file, ensure we clear existing logs
 		isFirstFile := i == 0
-		if err := lm.sessionMgr.AddLogFile(ctx, file.FileName, isFirstFile); err != nil {
+		if err := lm.sessionMgr.AddLogFile(ctx, conn, file.FileName, isFirstFile); err != nil {
 			return fmt.Errorf("loading log filename '%s' into logminer: %w", file.FileName, err)
 		}
 		lm.log.Debugf("Loaded redo log file %s into LogMiner", file.FileName)
 	}
 
-	if err := lm.sessionMgr.StartSession(ctx, startSCN, endSCN, false); err != nil {
+	if err := lm.sessionMgr.StartSession(ctx, conn, startSCN, endSCN, false); err != nil {
 		return fmt.Errorf("starting logminer session: %w", err)
 	}
 	lm.sessionActive = true

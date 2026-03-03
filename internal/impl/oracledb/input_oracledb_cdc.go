@@ -319,14 +319,15 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (err error) {
 	}
 
 	// setup snapshotting and streaming
-	// logminer processor
+
 	type streamProcessor interface {
 		FindStartPos(ctx context.Context) (replication.SCN, error)
 		ReadChanges(ctx context.Context, startPos replication.SCN) error
 	}
 	var (
 		snapshotter *replication.Snapshot
-		streaming   streamProcessor
+		// logminer processor
+		streaming streamProcessor
 	)
 
 	// no cached SCN means we're not recovering from a restart
