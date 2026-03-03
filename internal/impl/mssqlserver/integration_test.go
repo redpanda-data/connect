@@ -11,6 +11,7 @@ package mssqlserver_test
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"sync"
 	"testing"
@@ -759,7 +760,9 @@ microsoft_sql_server_cdc:
 	license.InjectTestService(stream.Resources())
 
 	go func() {
-		require.NoError(t, stream.Run(t.Context()))
+		if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+			t.Error(err)
+		}
 	}()
 
 	// Wait for the snapshot row to arrive.
