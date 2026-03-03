@@ -284,7 +284,7 @@ array:list
 					Description("Enable automatic schema evolution. When enabled, new columns will be automatically added to the table.").
 					Default(false),
 				service.NewInterpolatedStringField(ioFieldSchemaEvolutionPartitionSpec).
-					Description("A bloblang expression to evalutate when a new table is created to determine the table's partition spec. The result of the mapping should be an iceberg partition spec in the same string format as the https://docs.redpanda.com/current/manage/iceberg/about-iceberg-topics/#use-custom-partitioning[^Redpanda Streaming Topic Property]").
+					Description("A bloblang expression to evaluate when a new table is created to determine the table's partition spec. The result of the mapping should be an iceberg partition spec in the same string format as the https://docs.redpanda.com/current/manage/iceberg/about-iceberg-topics/#use-custom-partitioning[^Redpanda Streaming Topic Property]").
 					Example(`(col1)`).
 					Example(`(nested.col)`).
 					Example(`(year(my_ts_col))`).

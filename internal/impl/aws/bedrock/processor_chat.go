@@ -66,7 +66,7 @@ For more information, see the https://docs.aws.amazon.com/bedrock/latest/usergui
 			LintRule(`root = this < 1 { ["field must be greater than or equal to 1"] }`)).
 		Field(service.NewFloatField(bedcpFieldTemp).
 			Optional().
-			Description("The likelihood of the model selecting higher-probability options while generating a response. A lower value makes the model omre likely to choose higher-probability options, while a higher value makes the model more likely to choose lower-probability options.").
+			Description("The likelihood of the model selecting higher-probability options while generating a response. A lower value makes the model more likely to choose higher-probability options, while a higher value makes the model more likely to choose lower-probability options.").
 			LintRule(`root = if this < 0 || this > 1 { ["field must be between 0.0-1.0"] }`)).
 		Field(service.NewStringListField(bedcpFieldStop).
 			Optional().
