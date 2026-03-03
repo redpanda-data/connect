@@ -244,7 +244,7 @@ func (p *blocksIDChildrenPatchProcessor) Process(ctx context.Context, msg *servi
 		return nil, fmt.Errorf("reading message body: %w", err)
 	}
 
-	var reqBody v1.AppendBlockChildrenBodyParameters
+	var reqBody v1.AppendBlockChildrenRequest
 	if err := reqBody.UnmarshalJSON(bodyBytes); err != nil {
 		return nil, fmt.Errorf("unmarshaling request body: %w", err)
 	}
@@ -431,7 +431,7 @@ func (p *blocksIDPatchProcessor) Process(ctx context.Context, msg *service.Messa
 		return nil, fmt.Errorf("reading message body: %w", err)
 	}
 
-	var reqBody v1.UpdateBlockBodyParameters
+	var reqBody v1.UpdateBlockRequest
 	if err := reqBody.UnmarshalJSON(bodyBytes); err != nil {
 		return nil, fmt.Errorf("unmarshaling request body: %w", err)
 	}
@@ -569,7 +569,7 @@ func (p *commentsPostProcessor) Process(ctx context.Context, msg *service.Messag
 		return nil, fmt.Errorf("reading message body: %w", err)
 	}
 
-	var reqBody v1.CreateCommentBodyParameters
+	var reqBody v1.CreateCommentRequest
 	if err := reqBody.UnmarshalJSON(bodyBytes); err != nil {
 		return nil, fmt.Errorf("unmarshaling request body: %w", err)
 	}
@@ -698,7 +698,7 @@ func (p *databasesIDPatchProcessor) Process(ctx context.Context, msg *service.Me
 		return nil, fmt.Errorf("reading message body: %w", err)
 	}
 
-	var reqBody v1.UpdateDatabaseBodyParameters
+	var reqBody v1.UpdateDatabaseRequest
 	if err := reqBody.UnmarshalJSON(bodyBytes); err != nil {
 		return nil, fmt.Errorf("unmarshaling request body: %w", err)
 	}
@@ -769,7 +769,7 @@ func (p *databasesIDQueryPostProcessor) Process(ctx context.Context, msg *servic
 		return nil, fmt.Errorf("reading message body: %w", err)
 	}
 
-	var reqBody v1.QueryDataSourceBodyParameters
+	var reqBody v1.QueryDataSourceRequest
 	if err := reqBody.UnmarshalJSON(bodyBytes); err != nil {
 		return nil, fmt.Errorf("unmarshaling request body: %w", err)
 	}
@@ -826,7 +826,7 @@ func (p *databasesPostProcessor) Process(ctx context.Context, msg *service.Messa
 		return nil, fmt.Errorf("reading message body: %w", err)
 	}
 
-	var reqBody v1.CreateDatabaseBodyParameters
+	var reqBody v1.CreateDatabaseRequest
 	if err := reqBody.UnmarshalJSON(bodyBytes); err != nil {
 		return nil, fmt.Errorf("unmarshaling request body: %w", err)
 	}
@@ -955,7 +955,7 @@ func (p *pagesIDPatchProcessor) Process(ctx context.Context, msg *service.Messag
 		return nil, fmt.Errorf("reading message body: %w", err)
 	}
 
-	var reqBody v1.UpdatePageBodyParameters
+	var reqBody v1.UpdatePageRequest
 	if err := reqBody.UnmarshalJSON(bodyBytes); err != nil {
 		return nil, fmt.Errorf("unmarshaling request body: %w", err)
 	}
@@ -1083,7 +1083,7 @@ func (p *pagesPostProcessor) Process(ctx context.Context, msg *service.Message) 
 		return nil, fmt.Errorf("reading message body: %w", err)
 	}
 
-	var reqBody v1.CreatePageBodyParameters
+	var reqBody v1.CreatePageRequest
 	if err := reqBody.UnmarshalJSON(bodyBytes); err != nil {
 		return nil, fmt.Errorf("unmarshaling request body: %w", err)
 	}
@@ -1140,7 +1140,7 @@ func (p *searchPostProcessor) Process(ctx context.Context, msg *service.Message)
 		return nil, fmt.Errorf("reading message body: %w", err)
 	}
 
-	var reqBody v1.SearchBodyParameters
+	var reqBody v1.SearchRequest
 	if err := reqBody.UnmarshalJSON(bodyBytes); err != nil {
 		return nil, fmt.Errorf("unmarshaling request body: %w", err)
 	}
