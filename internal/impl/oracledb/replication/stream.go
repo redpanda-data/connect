@@ -86,9 +86,14 @@ func VerifyUserTables(ctx context.Context, db *sql.DB, tableFilter *confx.Regexp
 	return userTables, nil
 }
 
+// Satisfy both *sql.DB and *sql.Conn, allowing NLS settings to be applied to both *sql.Db (snapshots) and *sql.Conn (streaming)
+type dbExecer interface {
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+}
+
 // ApplyNLSSettings ensures consistent datetime formatting for connection session.
 // This is important for reading redo_logs and ensures consistency with snapshotting.
-func ApplyNLSSettings(ctx context.Context, db *sql.DB) error {
+func ApplyNLSSettings(ctx context.Context, db dbExecer) error {
 	if _, err := db.ExecContext(ctx, "ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD HH24:MI:SS'"); err != nil {
 		return fmt.Errorf("setting NLS_DATE_FORMAT: %w", err)
 	}
