@@ -95,7 +95,7 @@ func (b *RecordBatcher) RemoveMessages(batch service.MessageBatch) {
 
 type checkpointer interface {
 	Set(ctx context.Context, shardID, sequenceNumber string) error
-	GetCheckpointLimit() int
+	CheckpointLimit() int
 }
 
 // AckMessages marks messages as acknowledged and checkpoints if threshold is reached.
@@ -136,7 +136,7 @@ func (b *RecordBatcher) AckMessages(
 		b.pendingCount[shardID] += shardMessageCounts[shardID]
 
 		// Check if we should checkpoint
-		if b.pendingCount[shardID] >= cp.GetCheckpointLimit() {
+		if b.pendingCount[shardID] >= cp.CheckpointLimit() {
 			if err := cp.Set(ctx, shardID, seq); err != nil {
 				return err
 			}
@@ -150,9 +150,9 @@ func (b *RecordBatcher) AckMessages(
 	return nil
 }
 
-// GetPendingCheckpoints returns a copy of all pending checkpoints that haven't
+// PendingCheckpoints returns a copy of all pending checkpoints that haven't
 // been persisted yet.
-func (b *RecordBatcher) GetPendingCheckpoints() map[string]string {
+func (b *RecordBatcher) PendingCheckpoints() map[string]string {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -206,8 +206,8 @@ func (b *RecordBatcher) SetPendingCount(shardID string, count int) {
 	b.pendingCount[shardID] = count
 }
 
-// GetMessageCheckpoint returns the checkpoint info for a message. Exported for testing.
-func (b *RecordBatcher) GetMessageCheckpoint(msg *service.Message) (shardID, sequenceNumber string, exists bool) {
+// MessageCheckpoint returns the checkpoint info for a message.
+func (b *RecordBatcher) MessageCheckpoint(msg *service.Message) (shardID, sequenceNumber string, exists bool) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	cp, ok := b.messageTracker[msg]

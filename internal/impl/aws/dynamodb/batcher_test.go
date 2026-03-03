@@ -46,7 +46,7 @@ func (m *mockCheckpointer) Set(_ context.Context, shardID, sequenceNumber string
 	return nil
 }
 
-func (m *mockCheckpointer) GetCheckpointLimit() int {
+func (m *mockCheckpointer) CheckpointLimit() int {
 	return m.checkpointLimit
 }
 
@@ -182,9 +182,9 @@ func TestBatcherSequenceNumberPerMessage(t *testing.T) {
 	batcher.AddMessages(batch, "shard-001")
 
 	// Verify each message has its own sequence number
-	_, seq0, exists0 := batcher.GetMessageCheckpoint(batch[0])
-	_, seq1, exists1 := batcher.GetMessageCheckpoint(batch[1])
-	_, seq2, exists2 := batcher.GetMessageCheckpoint(batch[2])
+	_, seq0, exists0 := batcher.MessageCheckpoint(batch[0])
+	_, seq1, exists1 := batcher.MessageCheckpoint(batch[1])
+	_, seq2, exists2 := batcher.MessageCheckpoint(batch[2])
 
 	assert.True(t, exists0)
 	assert.True(t, exists1)
@@ -238,7 +238,7 @@ func TestBatcherUsesLatestSequenceForCheckpoint(t *testing.T) {
 
 	latestSeq := ""
 	for _, msg := range outOfOrder {
-		_, seq, exists := batcher.GetMessageCheckpoint(msg)
+		_, seq, exists := batcher.MessageCheckpoint(msg)
 		if exists && seq > latestSeq {
 			latestSeq = seq
 		}
@@ -349,7 +349,7 @@ func TestBatcherMaxTrackedShardsLimit(t *testing.T) {
 		// Manually set pending count high enough to trigger checkpoint
 		batcher.SetPendingCount(shardID, 2)
 		for _, msg := range batch {
-			_, seq, exists := batcher.GetMessageCheckpoint(msg)
+			_, seq, exists := batcher.MessageCheckpoint(msg)
 			if exists {
 				batcher.SetLastCheckpoint(shardID, seq)
 			}
