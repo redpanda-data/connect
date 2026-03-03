@@ -641,9 +641,21 @@ func (e *NotCommittedError) Error() string {
 		e.ExpectedRowSequencer)
 }
 
+// CommitBackoffOptions controls the backoff used when polling for committed status.
+type CommitBackoffOptions struct {
+	// InitialInterval is the first interval between status polls.
+	InitialInterval time.Duration
+	// MaxInterval is the maximum interval between status polls.
+	MaxInterval time.Duration
+	// MaxElapsedTime is the total time limit before giving up. Zero means no limit.
+	MaxElapsedTime time.Duration
+	// Multiplier is the factor by which the interval grows on each poll.
+	Multiplier float64
+}
+
 // WaitUntilCommitted waits until all the data in the channel has been committed
 // along with how many polls it took to get that.
-func (c *SnowflakeIngestionChannel) WaitUntilCommitted(ctx context.Context, timeout time.Duration) (int, error) {
+func (c *SnowflakeIngestionChannel) WaitUntilCommitted(ctx context.Context, bo CommitBackoffOptions) (int, error) {
 	var polls int
 	err := backoff.Retry(func() error {
 		polls++
@@ -688,12 +700,11 @@ func (c *SnowflakeIngestionChannel) WaitUntilCommitted(ctx context.Context, time
 		}
 		return nil
 	}, backoff.WithContext(
-		// 32, 64, 128, 256, 512, 512, ...
 		backoff.NewExponentialBackOff(
-			backoff.WithInitialInterval(32*time.Millisecond),
-			backoff.WithMultiplier(2),
-			backoff.WithMaxInterval(512*time.Millisecond),
-			backoff.WithMaxElapsedTime(timeout),
+			backoff.WithInitialInterval(bo.InitialInterval),
+			backoff.WithMultiplier(bo.Multiplier),
+			backoff.WithMaxInterval(bo.MaxInterval),
+			backoff.WithMaxElapsedTime(bo.MaxElapsedTime),
 		),
 		ctx,
 	))
