@@ -47,6 +47,10 @@ const (
 	sqsoFieldMaxRecordsCount = "max_records_per_request"
 )
 
+// sqsMaxBatchSize is the maximum total byte size of a single SQS message or
+// batch (256 KB).
+const sqsMaxBatchSize = 256 << 10
+
 type sqsoConfig struct {
 	URL                    *service.InterpolatedString
 	MessageGroupID         *service.InterpolatedString
@@ -62,40 +66,40 @@ type sqsoConfig struct {
 
 func sqsoConfigFromParsed(pConf *service.ParsedConfig) (conf sqsoConfig, err error) {
 	if conf.URL, err = pConf.FieldInterpolatedString(sqsoFieldURL); err != nil {
-		return
+		return conf, err
 	}
 	if pConf.Contains(sqsoFieldMessageGroupID) {
 		if conf.MessageGroupID, err = pConf.FieldInterpolatedString(sqsoFieldMessageGroupID); err != nil {
-			return
+			return conf, err
 		}
 	}
 	if pConf.Contains(sqsoFieldMessageDedupeID) {
 		if conf.MessageDeduplicationID, err = pConf.FieldInterpolatedString(sqsoFieldMessageDedupeID); err != nil {
-			return
+			return conf, err
 		}
 	}
 	if pConf.Contains(sqsoFieldDelaySeconds) {
 		if conf.DelaySeconds, err = pConf.FieldInterpolatedString(sqsoFieldDelaySeconds); err != nil {
-			return
+			return conf, err
 		}
 	}
 	if conf.Metadata, err = pConf.FieldMetadataExcludeFilter(sqsoFieldMetadata); err != nil {
-		return
+		return conf, err
 	}
 	if conf.aconf, err = GetSession(context.TODO(), pConf); err != nil {
-		return
+		return conf, err
 	}
 	if conf.backoffCtor, err = retries.CommonRetryBackOffCtorFromParsed(pConf); err != nil {
-		return
+		return conf, err
 	}
 	if conf.MaxRecordsCount, err = pConf.FieldInt(sqsoFieldMaxRecordsCount); err != nil {
-		return
+		return conf, err
 	}
 	if conf.MaxRecordsCount <= 0 || conf.MaxRecordsCount > 10 {
 		err = errors.New("field " + sqsoFieldMaxRecordsCount + " must be >0 and <= 10")
-		return
+		return conf, err
 	}
-	return
+	return conf, err
 }
 
 func sqsoOutputSpec() *service.ConfigSpec {
@@ -142,17 +146,17 @@ func init() {
 	service.MustRegisterBatchOutput("aws_sqs", sqsoOutputSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (out service.BatchOutput, batchPolicy service.BatchPolicy, maxInFlight int, err error) {
 			if maxInFlight, err = conf.FieldMaxInFlight(); err != nil {
-				return
+				return out, batchPolicy, maxInFlight, err
 			}
 			if batchPolicy, err = conf.FieldBatchPolicy(sqsoFieldBatching); err != nil {
-				return
+				return out, batchPolicy, maxInFlight, err
 			}
 			var wConf sqsoConfig
 			if wConf, err = sqsoConfigFromParsed(conf); err != nil {
-				return
+				return out, batchPolicy, maxInFlight, err
 			}
 			out, err = newSQSWriter(wConf, mgr)
-			return
+			return out, batchPolicy, maxInFlight, err
 		})
 }
 
@@ -219,6 +223,25 @@ var sqsAttributeKeyInvalidCharRegexp = regexp.MustCompile(`(^\.)|(\.\.)|(^aws\.)
 
 func isValidSQSAttribute(k string) bool {
 	return len(sqsAttributeKeyInvalidCharRegexp.FindStringIndex(strings.ToLower(k))) == 0
+}
+
+// sqsEntrySize returns the byte size of an SQS batch entry as counted toward
+// the SQS 256 KB per-message and per-batch limits. SQS counts the message
+// body, attribute names, attribute string values, and attribute data type
+// strings. Only StringValue is counted because this component exclusively
+// produces String-type message attributes.
+func sqsEntrySize(entry *types.SendMessageBatchRequestEntry) int {
+	size := len(aws.ToString(entry.MessageBody))
+	for k, v := range entry.MessageAttributes {
+		size += len(k)
+		if v.StringValue != nil {
+			size += len(*v.StringValue)
+		}
+		if v.DataType != nil {
+			size += len(*v.DataType)
+		}
+	}
+	return size
 }
 
 func (a *sqsWriter) getSQSAttributes(batch service.MessageBatch, i int) (sqsAttributes, error) {
@@ -303,6 +326,7 @@ func (a *sqsWriter) WriteBatch(ctx context.Context, batch service.MessageBatch) 
 	backOff := a.conf.backoffCtor()
 
 	entries := map[string][]types.SendMessageBatchRequestEntry{}
+	entrySizes := map[string][]int{}
 	attrMap := map[string]sqsAttributes{}
 
 	urlExecutor := batch.InterpolationExecutor(a.conf.URL)
@@ -320,20 +344,43 @@ func (a *sqsWriter) WriteBatch(ctx context.Context, batch service.MessageBatch) 
 		if err != nil {
 			return fmt.Errorf("error interpolating %s: %w", sqsoFieldURL, err)
 		}
-		entries[url] = append(entries[url], types.SendMessageBatchRequestEntry{
+		entry := types.SendMessageBatchRequestEntry{
 			Id:                     &id,
 			MessageBody:            attrs.content,
 			MessageAttributes:      attrs.attrMap,
 			MessageGroupId:         attrs.groupID,
 			MessageDeduplicationId: attrs.dedupeID,
 			DelaySeconds:           attrs.delaySeconds,
-		})
+		}
+		entrySize := sqsEntrySize(&entry)
+		if entrySize > sqsMaxBatchSize {
+			err := fmt.Errorf("batch message %d exceeds the maximum SQS payload limit of 256 KB", i)
+			a.log.With("error", err).Error("Failed to prepare record")
+			return err
+		}
+		entries[url] = append(entries[url], entry)
+		entrySizes[url] = append(entrySizes[url], entrySize)
 	}
 
-	for url, entries := range entries {
-		backOff.Reset()
-		if err := a.writeChunk(ctx, url, entries, attrMap, backOff); err != nil {
-			return err
+	for url, urlEntries := range entries {
+		sizes := entrySizes[url]
+		// Split entries into byte-size-aware chunks before passing to
+		// writeChunk, which handles count-based splitting internally.
+		for len(urlEntries) > 0 {
+			var chunkBytes, n int
+			for n < len(urlEntries) {
+				if n > 0 && chunkBytes+sizes[n] > sqsMaxBatchSize {
+					break
+				}
+				chunkBytes += sizes[n]
+				n++
+			}
+			backOff.Reset()
+			if err := a.writeChunk(ctx, url, urlEntries[:n], attrMap, backOff); err != nil {
+				return err
+			}
+			urlEntries = urlEntries[n:]
+			sizes = sizes[n:]
 		}
 	}
 
