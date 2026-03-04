@@ -309,7 +309,12 @@ func goModuleInfo() (modulePath string, moduleRoot string, err error) {
 
 func loadOgenConfig(cfgPath string) (gen.Options, error) {
 	var opts gen.Options
-	opts.Logger = zap.NewNop()
+
+	logger, err := zap.NewDevelopment()
+	if err != nil {
+		return opts, fmt.Errorf("creating logger: %w", err)
+	}
+	opts.Logger = logger
 
 	if cfgPath == "" {
 		return opts, nil
@@ -325,7 +330,6 @@ func loadOgenConfig(cfgPath string) (gen.Options, error) {
 	if err := d.Decode(&opts); err != nil {
 		return opts, err
 	}
-	opts.Logger = zap.NewNop()
 
 	return opts, nil
 }
