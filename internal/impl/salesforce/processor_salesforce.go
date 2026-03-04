@@ -63,6 +63,9 @@ type salesforceProcessor struct {
 
 	// gRPC client for CDC/Pub/Sub streaming (lazy-initialized)
 	grpcClient *salesforcegrpc.Client
+
+	// Number of SObjects to fetch in parallel during the REST snapshot
+	parallelFetch int
 }
 
 func init() {
@@ -188,7 +191,10 @@ pipeline:
 			Default("10s")).
 		Field(service.NewStringField("cache_resource").
 			Description("Name of the Benthos cache resource used for checkpointing state (must be defined in cache_resources).").
-			Default("salesforce_checkpoint"))
+			Default("salesforce_checkpoint")).
+		Field(service.NewIntField("parallel_fetch").
+			Description("Number of SObjects to fetch concurrently during the REST snapshot (no-query mode). Higher values improve throughput but consume more API quota.").
+			Default(1))
 }
 
 func newSalesforceProcessor(conf *service.ParsedConfig, mgr *service.Resources) (*salesforceProcessor, error) {
@@ -301,6 +307,14 @@ func newSalesforceProcessor(conf *service.ParsedConfig, mgr *service.Resources) 
 		return nil, err
 	}
 
+	parallelFetch, err := conf.FieldInt("parallel_fetch")
+	if err != nil {
+		return nil, err
+	}
+	if parallelFetch < 1 {
+		parallelFetch = 1
+	}
+
 	// Build the CDC topic name: pubsub_topic takes priority, otherwise derive from cdc_objects
 	cdcTopicName := pubsubTopic
 	if cdcTopicName == "" {
@@ -331,6 +345,7 @@ func newSalesforceProcessor(conf *service.ParsedConfig, mgr *service.Resources) 
 		grpcReconnectMaxDelay:    grpcReconnectMaxDelay,
 		grpcReconnectMaxAttempts: grpcReconnectMaxAttempts,
 		grpcShutdownTimeout:      grpcShutdownTimeout,
+		parallelFetch:            parallelFetch,
 	}, nil
 }
 

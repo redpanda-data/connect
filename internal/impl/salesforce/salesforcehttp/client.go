@@ -31,6 +31,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -218,11 +219,11 @@ type SObjectInfo struct {
 	Fields []string // Cached field names
 }
 
-// Cursor represents the current position in the batch processing
+// Cursor represents the current position in the batch processing.
+// Slots drives parallel fetching; each slot independently tracks its pagination state.
 type Cursor struct {
-	SObjectIndex int    `json:"sobject_index"`
-	SObjectName  string `json:"sobject_name"`
-	NextURL      string `json:"next_url"` // For pagination within an SObject
+	Slots      []ParallelSlot `json:"slots,omitempty"`
+	NextAssign int            `json:"next_assign"`
 }
 
 // Client is the implementation of Salesforce API queries. It holds the client state and orchestrates calls into the salesforcehttp package.
@@ -238,8 +239,9 @@ type Client struct {
 	retryOpts    RetryOptions
 	log          *service.Logger
 
-	// Cache the SObject list to avoid refetching
-	sobjectList []SObjectInfo
+	// sobjectList is populated once and then read-only; mu protects the initial load.
+	sobjectListMu sync.Mutex
+	sobjectList   []SObjectInfo
 
 	// SObjects that returned 400 during data fetch — never retry them
 	unsupportedSObjects map[string]struct{}
@@ -299,61 +301,6 @@ func (s *Client) GraphQL(ctx context.Context, query string) ([]byte, error) {
 	return s.callSalesforceAPIWithBody(ctx, apiUrl, bodyBytes)
 }
 
-// RestQueryAll is deprecated - use GetNextBatch instead.
-// Kept for backward compatibility.
-func (s *Client) RestQueryAll(ctx context.Context) (service.MessageBatch, error) {
-	var batch service.MessageBatch
-
-	raw, err := s.GetAllSObjectResources(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	var list SObjectList
-	if err := json.Unmarshal(raw, &list); err != nil {
-		return nil, err
-	}
-
-	skipList := map[string]bool{
-		"AIUpdateRecordEvent": true,
-	}
-
-	for _, sobj := range list.Sobjects {
-		if skipList[sobj.Name] {
-			continue
-		}
-
-		describeJSON, err := s.GetSObjectResource(ctx, sobj.Name)
-		if err != nil {
-			return nil, err
-		}
-
-		fields, err := extractFieldNames(describeJSON)
-		if err != nil {
-			return nil, err
-		}
-
-		soql := buildSOQL(sobj.Name, fields)
-		queryResults, err := s.GetSObjectData(ctx, soql)
-		if err != nil {
-			return nil, err
-		}
-
-		var qr QueryResult
-		if err := json.Unmarshal(queryResults, &qr); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal query result: %w", err)
-		}
-
-		msg := service.NewMessage(queryResults)
-		msg.MetaSet("sobject", sobj.Name)
-		msg.MetaSet("total_size", strconv.Itoa(qr.TotalSize))
-
-		batch = append(batch, msg)
-	}
-
-	return batch, nil
-}
-
 // RestQueryFiltered fetches data using the provided SOQL query via the REST API.
 // Returns one message per record in the result set.
 func (s *Client) RestQueryFiltered(ctx context.Context, soql string) (service.MessageBatch, error) {
@@ -391,90 +338,145 @@ func (s *Client) GraphQLQueryFiltered(ctx context.Context, query string) (servic
 	return service.MessageBatch{msg}, nil
 }
 
-// GetNextBatch returns the next batch of records based on the cursor.
-// This is the key method for cursor-based batching support.
-func (s *Client) GetNextBatch(ctx context.Context, cursor Cursor) (service.MessageBatch, Cursor, bool, error) {
-	// Step 1: Ensure we have the SObject list loaded
+// GetNextBatchParallel fetches up to parallelFetch SObjects concurrently per call.
+// It maintains a slot-based cursor so each slot independently tracks its pagination state.
+func (s *Client) GetNextBatchParallel(ctx context.Context, cursor Cursor, parallelFetch int) (service.MessageBatch, Cursor, bool, error) {
+	// Load the SObject list exactly once. The mutex prevents concurrent reloads which
+	// would produce a list with a different length than the cursor's slot indices expect.
+	s.sobjectListMu.Lock()
 	if len(s.sobjectList) == 0 {
 		if err := s.loadSObjectList(ctx); err != nil {
+			s.sobjectListMu.Unlock()
 			return nil, cursor, false, err
 		}
 	}
+	// Capture a local snapshot so goroutines use a consistent view even if the field
+	// is ever replaced in a future call.
+	sobjectList := s.sobjectList
+	s.sobjectListMu.Unlock()
 
-	// Step 2: Check if we've exhausted all SObjects
-	if cursor.SObjectIndex >= len(s.sobjectList) {
-		return nil, cursor, true, nil // done = true
+	// Fill any empty slot capacity with the next unassigned SObjects
+	for len(cursor.Slots) < parallelFetch && cursor.NextAssign < len(sobjectList) {
+		next := sobjectList[cursor.NextAssign]
+		cursor.Slots = append(cursor.Slots, ParallelSlot{
+			SObjectIndex: cursor.NextAssign,
+			SObjectName:  next.Name,
+		})
+		cursor.NextAssign++
 	}
 
-	currentSObject := s.sobjectList[cursor.SObjectIndex]
+	if len(cursor.Slots) == 0 {
+		return nil, cursor, true, nil // all SObjects processed
+	}
 
-	var queryResults []byte
-	var err error
+	type slotResult struct {
+		slotIdx int
+		records []json.RawMessage
+		nextURL string
+		done    bool
+		skipped bool
+	}
 
-	// Step 3: Handle pagination within the current SObject
-	if cursor.NextURL != "" {
-		// Continue fetching from pagination URL
-		queryResults, err = s.fetchNextRecordsPage(ctx, cursor.NextURL)
-		if err != nil {
-			return nil, cursor, false, err
-		}
-	} else {
-		// Skip SObjects that previously returned 400
-		if _, unsupported := s.unsupportedSObjects[currentSObject.Name]; unsupported {
-			skipCursor := cursor
-			skipCursor.SObjectIndex++
-			skipCursor.NextURL = ""
-			return nil, skipCursor, false, nil
-		}
+	results := make([]slotResult, len(cursor.Slots))
+	var wg sync.WaitGroup
 
-		// First query for this SObject
-		soql := buildSOQL(currentSObject.Name, currentSObject.Fields)
-		queryResults, err = s.GetSObjectData(ctx, soql)
-		if err != nil {
-			// 400 means the SObject requires filter criteria or doesn't support unrestricted SOQL.
-			// Record it permanently so future cycles don't retry it.
-			var httpErr *HTTPError
-			if errors.As(err, &httpErr) && httpErr.StatusCode == http.StatusBadRequest {
-				s.unsupportedSObjects[currentSObject.Name] = struct{}{}
-				s.log.Warnf("Skipping SObject %s permanently: query not supported (400): query=%q reason=%s", currentSObject.Name, soql, httpErr.Body)
-				skipCursor := cursor
-				skipCursor.SObjectIndex++
-				skipCursor.NextURL = ""
-				return nil, skipCursor, false, nil
+	for i, slot := range cursor.Slots {
+		wg.Add(1)
+		go func(i int, slot ParallelSlot) {
+			defer wg.Done()
+
+			// Skip permanently unsupported SObjects
+			if _, bad := s.unsupportedSObjects[slot.SObjectName]; bad {
+				results[i] = slotResult{slotIdx: i, done: true, skipped: true}
+				return
 			}
-			return nil, cursor, false, err
+
+			var raw []byte
+			var err error
+
+			if slot.NextURL != "" {
+				raw, err = s.fetchNextRecordsPage(ctx, slot.NextURL)
+			} else {
+				if slot.SObjectIndex >= len(sobjectList) {
+					s.log.Warnf("Slot index %d out of range (list has %d items), skipping %s", slot.SObjectIndex, len(sobjectList), slot.SObjectName)
+					results[i] = slotResult{slotIdx: i, done: true, skipped: true}
+					return
+				}
+				soql := buildSOQL(slot.SObjectName, sobjectList[slot.SObjectIndex].Fields)
+				raw, err = s.GetSObjectData(ctx, soql)
+				if err != nil {
+					var httpErr *HTTPError
+					if errors.As(err, &httpErr) && httpErr.StatusCode == http.StatusBadRequest {
+						s.unsupportedSObjects[slot.SObjectName] = struct{}{}
+						s.log.Warnf("Skipping SObject %s permanently: query not supported (400): query=%q reason=%s",
+							slot.SObjectName, soql, httpErr.Body)
+						results[i] = slotResult{slotIdx: i, done: true, skipped: true}
+						return
+					}
+					s.log.Errorf("Failed to fetch SObject %s: %v", slot.SObjectName, err)
+					results[i] = slotResult{slotIdx: i} // keep slot, retry next trigger
+					return
+				}
+			}
+
+			var qr QueryResult
+			if err := json.Unmarshal(raw, &qr); err != nil {
+				s.log.Errorf("Failed to unmarshal response for SObject %s: %v", slot.SObjectName, err)
+				results[i] = slotResult{slotIdx: i} // keep slot, retry next trigger
+				return
+			}
+
+			results[i] = slotResult{
+				slotIdx: i,
+				records: qr.Records,
+				nextURL: qr.NextRecordsUrl,
+				done:    qr.NextRecordsUrl == "",
+			}
+		}(i, slot)
+	}
+
+	wg.Wait()
+
+	// Build output batch and updated slot list
+	var batch service.MessageBatch
+	newSlots := make([]ParallelSlot, 0, len(cursor.Slots))
+
+	for i, res := range results {
+		slot := cursor.Slots[res.slotIdx]
+
+		for _, record := range res.records {
+			msg := service.NewMessage(record)
+			msg.MetaSet("sobject", slot.SObjectName)
+			batch = append(batch, msg)
+		}
+
+		if !res.done {
+			// SObject has more pages — update NextURL and keep slot
+			newSlots = append(newSlots, ParallelSlot{
+				SObjectIndex: slot.SObjectIndex,
+				SObjectName:  slot.SObjectName,
+				NextURL:      res.nextURL,
+			})
+		} else {
+			// Slot is done — assign next available SObject if any
+			if cursor.NextAssign < len(sobjectList) {
+				next := sobjectList[cursor.NextAssign]
+				newSlots = append(newSlots, ParallelSlot{
+					SObjectIndex: cursor.NextAssign,
+					SObjectName:  next.Name,
+				})
+				cursor.NextAssign++
+			}
+			if !res.skipped && len(res.records) > 0 {
+				s.log.Debugf("SObject %s fully fetched (slot %d)", slot.SObjectName, i)
+			}
 		}
 	}
 
-	// Step 4: Parse the result to check for nextRecordsUrl
-	var qr QueryResult
-	if err := json.Unmarshal(queryResults, &qr); err != nil {
-		return nil, cursor, false, fmt.Errorf("failed to unmarshal query result: %w", err)
-	}
+	cursor.Slots = newSlots
+	done := len(cursor.Slots) == 0
 
-	// Step 5: Update cursor
-	nextCursor := cursor
-	nextCursor.SObjectName = currentSObject.Name
-
-	if qr.NextRecordsUrl != "" {
-		// More pages exist for this SObject
-		nextCursor.NextURL = qr.NextRecordsUrl
-	} else {
-		// Move to next SObject
-		nextCursor.SObjectIndex++
-		nextCursor.NextURL = ""
-	}
-
-	// Step 6: Create message batch — one message per record
-	var batch service.MessageBatch
-	for _, record := range qr.Records {
-		msg := service.NewMessage(record)
-		msg.MetaSet("sobject", currentSObject.Name)
-		msg.MetaSet("total_size", strconv.Itoa(qr.TotalSize))
-		batch = append(batch, msg)
-	}
-
-	return batch, nextCursor, false, nil
+	return batch, cursor, done, nil
 }
 
 // callSalesforceAPIWithBody sends an authenticated POST request with a JSON body.
@@ -530,6 +532,8 @@ func (s *Client) doSalesforcePostRequest(ctx context.Context, u *url.URL, body [
 	return DoRequestWithRetries(ctx, s.httpClient, newReq, s.retryOpts)
 }
 
+// loadSObjectList fetches the full SObject catalogue and describes each one in parallel
+// (up to 20 concurrent describe calls) to build the ordered field list for SOQL generation.
 func (s *Client) loadSObjectList(ctx context.Context) error {
 	raw, err := s.GetAllSObjectResources(ctx)
 	if err != nil {
@@ -545,31 +549,65 @@ func (s *Client) loadSObjectList(ctx context.Context) error {
 		"AIUpdateRecordEvent": true,
 	}
 
-	s.sobjectList = make([]SObjectInfo, 0)
-	for _, sobj := range list.Sobjects {
+	// Collect queryable candidates, preserving order.
+	type candidate struct {
+		idx  int
+		name string
+	}
+	var candidates []candidate
+	for i, sobj := range list.Sobjects {
 		if skipList[sobj.Name] || !sobj.Queryable {
 			continue
 		}
-
-		describeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-		describeJSON, err := s.GetSObjectResource(describeCtx, sobj.Name)
-		cancel()
-		if err != nil {
-			s.log.Warnf("Skipping SObject %s: failed to describe: %v", sobj.Name, err)
-			continue
-		}
-
-		fields, err := extractFieldNames(describeJSON)
-		if err != nil {
-			s.log.Warnf("Skipping SObject %s: failed to extract fields: %v", sobj.Name, err)
-			continue
-		}
-
-		s.sobjectList = append(s.sobjectList, SObjectInfo{
-			Name:   sobj.Name,
-			Fields: fields,
-		})
+		candidates = append(candidates, candidate{i, sobj.Name})
 	}
+
+	s.log.Infof("Describing %d queryable SObjects in parallel...", len(candidates))
+
+	// Describe all SObjects concurrently (semaphore limits to 20 in-flight at once).
+	const describeConcurrency = 20
+	type describeResult struct {
+		pos    int
+		info   SObjectInfo
+		failed bool
+	}
+	results := make([]describeResult, len(candidates))
+	sem := make(chan struct{}, describeConcurrency)
+	var wg sync.WaitGroup
+
+	for pos, c := range candidates {
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(pos int, name string) {
+			defer wg.Done()
+			defer func() { <-sem }()
+
+			describeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			describeJSON, err := s.GetSObjectResource(describeCtx, name)
+			cancel()
+			if err != nil {
+				s.log.Warnf("Skipping SObject %s: failed to describe: %v", name, err)
+				results[pos] = describeResult{pos: pos, failed: true}
+				return
+			}
+			fields, err := extractFieldNames(describeJSON)
+			if err != nil {
+				s.log.Warnf("Skipping SObject %s: failed to extract fields: %v", name, err)
+				results[pos] = describeResult{pos: pos, failed: true}
+				return
+			}
+			results[pos] = describeResult{pos: pos, info: SObjectInfo{Name: name, Fields: fields}}
+		}(pos, c.name)
+	}
+	wg.Wait()
+
+	sobjectList := make([]SObjectInfo, 0, len(candidates))
+	for _, res := range results {
+		if !res.failed {
+			sobjectList = append(sobjectList, res.info)
+		}
+	}
+	s.sobjectList = sobjectList
 
 	s.log.Infof("Loaded %d queryable SObjects for batching", len(s.sobjectList))
 	return nil

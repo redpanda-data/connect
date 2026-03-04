@@ -127,7 +127,7 @@ func (s *salesforceProcessor) dispatchWithCheckpoint(ctx context.Context) (servi
 		return nil, nil
 	}
 
-	batch, nextCursor, done, err := s.client.GetNextBatch(ctx, state.RestCursor)
+	batch, nextCursor, done, err := s.client.GetNextBatchParallel(ctx, state.RestCursor, s.parallelFetch)
 	if err != nil {
 		return nil, fmt.Errorf("GetNextBatch failed: %w", err)
 	}

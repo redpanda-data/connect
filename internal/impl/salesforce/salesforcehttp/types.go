@@ -54,6 +54,13 @@ type DescribeResult struct {
 	} `json:"fields"`
 }
 
+// ParallelSlot tracks the fetch state for one parallel worker slot.
+type ParallelSlot struct {
+	SObjectIndex int    `json:"sobject_index"`
+	SObjectName  string `json:"sobject_name"`
+	NextURL      string `json:"next_url"`
+}
+
 // QueryResult of the salesforce search query
 type QueryResult struct {
 	TotalSize      int               `json:"totalSize"`
