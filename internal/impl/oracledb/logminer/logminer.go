@@ -472,11 +472,11 @@ func toMessageEvent(dml *sqlredo.DMLEvent, scn uint64) *replication.MessageEvent
 
 	switch dml.Operation {
 	case sqlredo.OpInsert:
-		m.Operation = replication.MessageOperationInsert.String()
+		m.Operation = replication.MessageOperationInsert
 	case sqlredo.OpUpdate:
-		m.Operation = replication.MessageOperationUpdate.String()
+		m.Operation = replication.MessageOperationUpdate
 	case sqlredo.OpDelete:
-		m.Operation = replication.MessageOperationDelete.String()
+		m.Operation = replication.MessageOperationDelete
 	}
 
 	return m

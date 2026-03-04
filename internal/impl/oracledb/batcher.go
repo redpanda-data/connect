@@ -137,7 +137,7 @@ func (b *batchPublisher) Publish(ctx context.Context, m *replication.MessageEven
 	msg := service.NewMessage(data)
 	msg.MetaSet("schema", m.Schema)
 	msg.MetaSet("table", m.Table)
-	msg.MetaSet("operation", m.Operation)
+	msg.MetaSet("operation", m.Operation.String())
 	if m.SCN.IsValid() {
 		msg.MetaSet("scn", m.SCN.String())
 	}
