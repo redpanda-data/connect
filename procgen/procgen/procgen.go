@@ -6,8 +6,7 @@
 //
 // https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
-// Package procgen generates Redpanda Connect processors from OpenAPI specs.
-package procgen
+package main
 
 import (
 	"bytes"
@@ -521,4 +520,11 @@ func toLowerCamel(s string) string {
 		return strings.ToLower(s[:1]) + s[1:]
 	}
 	return strings.ToLower(s[:i-1]) + s[i-1:]
+}
+
+func main() {
+	if err := Run(os.Args[1:]); err != nil {
+		fmt.Fprintf(os.Stderr, "%+v\n", err)
+		os.Exit(1)
+	}
 }

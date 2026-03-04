@@ -29,7 +29,7 @@ tasks:
     deps: [openapi]
     cmds:
       - >-
-        go run ../procgen/cmd/procgen
+        go run ../procgen
         --service notion
         --template notion_processors.go.tmpl
         --package .
