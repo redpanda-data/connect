@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"sync"
 
 	"github.com/go-faster/errors"
 	"github.com/ogen-go/ogen/validate"
@@ -80,33 +81,30 @@ func baseProcessorFromParsed(conf *service.ParsedConfig, log *service.Logger) (b
 func (p *baseProcessor) Close(context.Context) error { return nil }
 
 // handleAPIError checks for HTTP status errors and sets metadata.
-// On HTTP errors, returns the message with error set so it flows downstream.
-// On other errors, returns a processing failure.
-func handleAPIError(msg *service.Message, err error) (service.MessageBatch, error) {
+// On HTTP errors, sets status code metadata on the message and returns a
+// wrapped error. On other errors, returns a generic request failure.
+func handleAPIError(msg *service.Message, err error) error {
 	if unexpectedStatus, ok := errors.Into[*validate.UnexpectedStatusCodeError](err); ok {
-		out := msg.Copy()
-		out.MetaSetMut("http_status_code", unexpectedStatus.StatusCode)
-		out.SetError(fmt.Errorf("Notion API error (status %d): %w", unexpectedStatus.StatusCode, err))
-		return service.MessageBatch{out}, nil
+		msg.MetaSetMut("http_status_code", unexpectedStatus.StatusCode)
+		return fmt.Errorf("Notion API error (status %d): %w", unexpectedStatus.StatusCode, err)
 	}
-	return nil, fmt.Errorf("Notion API request failed: %w", err)
+	return fmt.Errorf("Notion API request failed: %w", err)
 }
 
-// marshalResponse serializes the typed response to JSON on a copy of the message.
-func marshalResponse(msg *service.Message, resp any) (service.MessageBatch, error) {
-	out := msg.Copy()
+// marshalResponse serializes the typed response to JSON and sets it on the message.
+func marshalResponse(msg *service.Message, resp any) error {
 	b, err := json.Marshal(resp)
 	if err != nil {
-		return nil, fmt.Errorf("marshaling response: %w", err)
+		return fmt.Errorf("marshaling response: %w", err)
 	}
-	out.SetBytes(b)
-	return service.MessageBatch{out}, nil
+	msg.SetBytes(b)
+	return nil
 }
 
 // V1BlocksIDChildrenGet processor — get /v1/blocks/{id}/children
 
 func init() {
-	service.MustRegisterProcessor(
+	service.MustRegisterBatchProcessor(
 		"notion_v1_blocks_id_children_get",
 		v1BlocksIDChildrenGetConfig(),
 		newV1BlocksIDChildrenGetProcessor,
@@ -132,7 +130,7 @@ type v1BlocksIDChildrenGetProcessor struct {
 	pageSize *service.InterpolatedString
 }
 
-func newV1BlocksIDChildrenGetProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
+func newV1BlocksIDChildrenGetProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
 	base, err := baseProcessorFromParsed(conf, mgr.Logger())
 	if err != nil {
 		return nil, err
@@ -151,25 +149,44 @@ func newV1BlocksIDChildrenGetProcessor(conf *service.ParsedConfig, mgr *service.
 	return p, nil
 }
 
-func (p *v1BlocksIDChildrenGetProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
+func (p *v1BlocksIDChildrenGetProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
+	batch = batch.Copy()
+
+	var wg sync.WaitGroup
+	wg.Add(len(batch))
+	for i := range batch {
+		go func(idx int) {
+			defer wg.Done()
+			if err := p.processV1BlocksIDChildrenGet(ctx, idx, batch); err != nil {
+				batch[idx].SetError(err)
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	return []service.MessageBatch{batch}, nil
+}
+
+func (p *v1BlocksIDChildrenGetProcessor) processV1BlocksIDChildrenGet(ctx context.Context, idx int, batch service.MessageBatch) error {
+	msg := batch[idx]
 	params := v1.V1BlocksIDChildrenGetParams{
 		NotionVersion: v1.NewOptString(p.notionVersion),
 	}
 	{
-		v, err := p.id.TryString(msg)
+		v, err := batch.TryInterpolatedString(idx, p.id)
 		if err != nil {
-			return nil, fmt.Errorf("interpolating id: %w", err)
+			return fmt.Errorf("interpolating id: %w", err)
 		}
 		params.ID = v
 	}
 	if p.pageSize != nil {
-		v, err := p.pageSize.TryString(msg)
+		v, err := batch.TryInterpolatedString(idx, p.pageSize)
 		if err != nil {
-			return nil, fmt.Errorf("interpolating page_size: %w", err)
+			return fmt.Errorf("interpolating page_size: %w", err)
 		}
 		intVal, err := strconv.Atoi(v)
 		if err != nil {
-			return nil, fmt.Errorf("page_size must be integer: %w", err)
+			return fmt.Errorf("page_size must be integer: %w", err)
 		}
 		params.PageSize = v1.NewOptInt(intVal)
 	}
@@ -183,7 +200,7 @@ func (p *v1BlocksIDChildrenGetProcessor) Process(ctx context.Context, msg *servi
 // V1BlocksIDChildrenPatch processor — patch /v1/blocks/{id}/children
 
 func init() {
-	service.MustRegisterProcessor(
+	service.MustRegisterBatchProcessor(
 		"notion_v1_blocks_id_children_patch",
 		v1BlocksIDChildrenPatchConfig(),
 		newV1BlocksIDChildrenPatchProcessor,
@@ -205,7 +222,7 @@ type v1BlocksIDChildrenPatchProcessor struct {
 	id *service.InterpolatedString
 }
 
-func newV1BlocksIDChildrenPatchProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
+func newV1BlocksIDChildrenPatchProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
 	base, err := baseProcessorFromParsed(conf, mgr.Logger())
 	if err != nil {
 		return nil, err
@@ -219,28 +236,47 @@ func newV1BlocksIDChildrenPatchProcessor(conf *service.ParsedConfig, mgr *servic
 	return p, nil
 }
 
-func (p *v1BlocksIDChildrenPatchProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
+func (p *v1BlocksIDChildrenPatchProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
+	batch = batch.Copy()
+
+	var wg sync.WaitGroup
+	wg.Add(len(batch))
+	for i := range batch {
+		go func(idx int) {
+			defer wg.Done()
+			if err := p.processV1BlocksIDChildrenPatch(ctx, idx, batch); err != nil {
+				batch[idx].SetError(err)
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	return []service.MessageBatch{batch}, nil
+}
+
+func (p *v1BlocksIDChildrenPatchProcessor) processV1BlocksIDChildrenPatch(ctx context.Context, idx int, batch service.MessageBatch) error {
+	msg := batch[idx]
 	params := v1.V1BlocksIDChildrenPatchParams{
 		NotionVersion: v1.NewOptString(p.notionVersion),
 	}
 	{
-		v, err := p.id.TryString(msg)
+		v, err := batch.TryInterpolatedString(idx, p.id)
 		if err != nil {
-			return nil, fmt.Errorf("interpolating id: %w", err)
+			return fmt.Errorf("interpolating id: %w", err)
 		}
 		params.ID = v
 	}
 	b, err := msg.AsBytes()
 	if err != nil {
-		return nil, fmt.Errorf("reading message body: %w", err)
+		return fmt.Errorf("reading message body: %w", err)
 	}
 
 	var req v1.AppendBlockChildrenRequest
 	if err := req.UnmarshalJSON(b); err != nil {
-		return nil, fmt.Errorf("unmarshaling request body: %w", err)
+		return fmt.Errorf("unmarshaling request body: %w", err)
 	}
 	if err := req.Validate(); err != nil {
-		return nil, fmt.Errorf("validating request body: %w", err)
+		return fmt.Errorf("validating request body: %w", err)
 	}
 
 	res, err := p.client.V1BlocksIDChildrenPatch(ctx, &req, params)
@@ -253,7 +289,7 @@ func (p *v1BlocksIDChildrenPatchProcessor) Process(ctx context.Context, msg *ser
 // V1BlocksIDDelete processor — delete /v1/blocks/{id}
 
 func init() {
-	service.MustRegisterProcessor(
+	service.MustRegisterBatchProcessor(
 		"notion_v1_blocks_id_delete",
 		v1BlocksIDDeleteConfig(),
 		newV1BlocksIDDeleteProcessor,
@@ -275,7 +311,7 @@ type v1BlocksIDDeleteProcessor struct {
 	id *service.InterpolatedString
 }
 
-func newV1BlocksIDDeleteProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
+func newV1BlocksIDDeleteProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
 	base, err := baseProcessorFromParsed(conf, mgr.Logger())
 	if err != nil {
 		return nil, err
@@ -289,14 +325,33 @@ func newV1BlocksIDDeleteProcessor(conf *service.ParsedConfig, mgr *service.Resou
 	return p, nil
 }
 
-func (p *v1BlocksIDDeleteProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
+func (p *v1BlocksIDDeleteProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
+	batch = batch.Copy()
+
+	var wg sync.WaitGroup
+	wg.Add(len(batch))
+	for i := range batch {
+		go func(idx int) {
+			defer wg.Done()
+			if err := p.processV1BlocksIDDelete(ctx, idx, batch); err != nil {
+				batch[idx].SetError(err)
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	return []service.MessageBatch{batch}, nil
+}
+
+func (p *v1BlocksIDDeleteProcessor) processV1BlocksIDDelete(ctx context.Context, idx int, batch service.MessageBatch) error {
+	msg := batch[idx]
 	params := v1.V1BlocksIDDeleteParams{
 		NotionVersion: v1.NewOptString(p.notionVersion),
 	}
 	{
-		v, err := p.id.TryString(msg)
+		v, err := batch.TryInterpolatedString(idx, p.id)
 		if err != nil {
-			return nil, fmt.Errorf("interpolating id: %w", err)
+			return fmt.Errorf("interpolating id: %w", err)
 		}
 		params.ID = v
 	}
@@ -310,7 +365,7 @@ func (p *v1BlocksIDDeleteProcessor) Process(ctx context.Context, msg *service.Me
 // V1BlocksIDGet processor — get /v1/blocks/{id}
 
 func init() {
-	service.MustRegisterProcessor(
+	service.MustRegisterBatchProcessor(
 		"notion_v1_blocks_id_get",
 		v1BlocksIDGetConfig(),
 		newV1BlocksIDGetProcessor,
@@ -332,7 +387,7 @@ type v1BlocksIDGetProcessor struct {
 	id *service.InterpolatedString
 }
 
-func newV1BlocksIDGetProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
+func newV1BlocksIDGetProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
 	base, err := baseProcessorFromParsed(conf, mgr.Logger())
 	if err != nil {
 		return nil, err
@@ -346,14 +401,33 @@ func newV1BlocksIDGetProcessor(conf *service.ParsedConfig, mgr *service.Resource
 	return p, nil
 }
 
-func (p *v1BlocksIDGetProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
+func (p *v1BlocksIDGetProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
+	batch = batch.Copy()
+
+	var wg sync.WaitGroup
+	wg.Add(len(batch))
+	for i := range batch {
+		go func(idx int) {
+			defer wg.Done()
+			if err := p.processV1BlocksIDGet(ctx, idx, batch); err != nil {
+				batch[idx].SetError(err)
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	return []service.MessageBatch{batch}, nil
+}
+
+func (p *v1BlocksIDGetProcessor) processV1BlocksIDGet(ctx context.Context, idx int, batch service.MessageBatch) error {
+	msg := batch[idx]
 	params := v1.V1BlocksIDGetParams{
 		NotionVersion: v1.NewOptString(p.notionVersion),
 	}
 	{
-		v, err := p.id.TryString(msg)
+		v, err := batch.TryInterpolatedString(idx, p.id)
 		if err != nil {
-			return nil, fmt.Errorf("interpolating id: %w", err)
+			return fmt.Errorf("interpolating id: %w", err)
 		}
 		params.ID = v
 	}
@@ -367,7 +441,7 @@ func (p *v1BlocksIDGetProcessor) Process(ctx context.Context, msg *service.Messa
 // V1BlocksIDPatch processor — patch /v1/blocks/{id}
 
 func init() {
-	service.MustRegisterProcessor(
+	service.MustRegisterBatchProcessor(
 		"notion_v1_blocks_id_patch",
 		v1BlocksIDPatchConfig(),
 		newV1BlocksIDPatchProcessor,
@@ -390,7 +464,7 @@ type v1BlocksIDPatchProcessor struct {
 	id *service.InterpolatedString
 }
 
-func newV1BlocksIDPatchProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
+func newV1BlocksIDPatchProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
 	base, err := baseProcessorFromParsed(conf, mgr.Logger())
 	if err != nil {
 		return nil, err
@@ -404,28 +478,47 @@ func newV1BlocksIDPatchProcessor(conf *service.ParsedConfig, mgr *service.Resour
 	return p, nil
 }
 
-func (p *v1BlocksIDPatchProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
+func (p *v1BlocksIDPatchProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
+	batch = batch.Copy()
+
+	var wg sync.WaitGroup
+	wg.Add(len(batch))
+	for i := range batch {
+		go func(idx int) {
+			defer wg.Done()
+			if err := p.processV1BlocksIDPatch(ctx, idx, batch); err != nil {
+				batch[idx].SetError(err)
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	return []service.MessageBatch{batch}, nil
+}
+
+func (p *v1BlocksIDPatchProcessor) processV1BlocksIDPatch(ctx context.Context, idx int, batch service.MessageBatch) error {
+	msg := batch[idx]
 	params := v1.V1BlocksIDPatchParams{
 		NotionVersion: v1.NewOptString(p.notionVersion),
 	}
 	{
-		v, err := p.id.TryString(msg)
+		v, err := batch.TryInterpolatedString(idx, p.id)
 		if err != nil {
-			return nil, fmt.Errorf("interpolating id: %w", err)
+			return fmt.Errorf("interpolating id: %w", err)
 		}
 		params.ID = v
 	}
 	b, err := msg.AsBytes()
 	if err != nil {
-		return nil, fmt.Errorf("reading message body: %w", err)
+		return fmt.Errorf("reading message body: %w", err)
 	}
 
 	var req v1.UpdateBlockRequest
 	if err := req.UnmarshalJSON(b); err != nil {
-		return nil, fmt.Errorf("unmarshaling request body: %w", err)
+		return fmt.Errorf("unmarshaling request body: %w", err)
 	}
 	if err := req.Validate(); err != nil {
-		return nil, fmt.Errorf("validating request body: %w", err)
+		return fmt.Errorf("validating request body: %w", err)
 	}
 
 	res, err := p.client.V1BlocksIDPatch(ctx, &req, params)
@@ -438,7 +531,7 @@ func (p *v1BlocksIDPatchProcessor) Process(ctx context.Context, msg *service.Mes
 // V1CommentsGet processor — get /v1/comments
 
 func init() {
-	service.MustRegisterProcessor(
+	service.MustRegisterBatchProcessor(
 		"notion_v1_comments_get",
 		v1CommentsGetConfig(),
 		newV1CommentsGetProcessor,
@@ -466,7 +559,7 @@ type v1CommentsGetProcessor struct {
 	pageSize *service.InterpolatedString
 }
 
-func newV1CommentsGetProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
+func newV1CommentsGetProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
 	base, err := baseProcessorFromParsed(conf, mgr.Logger())
 	if err != nil {
 		return nil, err
@@ -487,25 +580,44 @@ func newV1CommentsGetProcessor(conf *service.ParsedConfig, mgr *service.Resource
 	return p, nil
 }
 
-func (p *v1CommentsGetProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
+func (p *v1CommentsGetProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
+	batch = batch.Copy()
+
+	var wg sync.WaitGroup
+	wg.Add(len(batch))
+	for i := range batch {
+		go func(idx int) {
+			defer wg.Done()
+			if err := p.processV1CommentsGet(ctx, idx, batch); err != nil {
+				batch[idx].SetError(err)
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	return []service.MessageBatch{batch}, nil
+}
+
+func (p *v1CommentsGetProcessor) processV1CommentsGet(ctx context.Context, idx int, batch service.MessageBatch) error {
+	msg := batch[idx]
 	params := v1.V1CommentsGetParams{
 		NotionVersion: v1.NewOptString(p.notionVersion),
 	}
 	if p.blockID != nil {
-		v, err := p.blockID.TryString(msg)
+		v, err := batch.TryInterpolatedString(idx, p.blockID)
 		if err != nil {
-			return nil, fmt.Errorf("interpolating block_id: %w", err)
+			return fmt.Errorf("interpolating block_id: %w", err)
 		}
 		params.BlockID = v1.NewOptString(v)
 	}
 	if p.pageSize != nil {
-		v, err := p.pageSize.TryString(msg)
+		v, err := batch.TryInterpolatedString(idx, p.pageSize)
 		if err != nil {
-			return nil, fmt.Errorf("interpolating page_size: %w", err)
+			return fmt.Errorf("interpolating page_size: %w", err)
 		}
 		intVal, err := strconv.Atoi(v)
 		if err != nil {
-			return nil, fmt.Errorf("page_size must be integer: %w", err)
+			return fmt.Errorf("page_size must be integer: %w", err)
 		}
 		params.PageSize = v1.NewOptInt(intVal)
 	}
@@ -519,7 +631,7 @@ func (p *v1CommentsGetProcessor) Process(ctx context.Context, msg *service.Messa
 // V1CommentsPost processor — post /v1/comments
 
 func init() {
-	service.MustRegisterProcessor(
+	service.MustRegisterBatchProcessor(
 		"notion_v1_comments_post",
 		v1CommentsPostConfig(),
 		newV1CommentsPostProcessor,
@@ -537,7 +649,7 @@ type v1CommentsPostProcessor struct {
 	baseProcessor
 }
 
-func newV1CommentsPostProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
+func newV1CommentsPostProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
 	base, err := baseProcessorFromParsed(conf, mgr.Logger())
 	if err != nil {
 		return nil, err
@@ -548,21 +660,40 @@ func newV1CommentsPostProcessor(conf *service.ParsedConfig, mgr *service.Resourc
 	return p, nil
 }
 
-func (p *v1CommentsPostProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
+func (p *v1CommentsPostProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
+	batch = batch.Copy()
+
+	var wg sync.WaitGroup
+	wg.Add(len(batch))
+	for i := range batch {
+		go func(idx int) {
+			defer wg.Done()
+			if err := p.processV1CommentsPost(ctx, idx, batch); err != nil {
+				batch[idx].SetError(err)
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	return []service.MessageBatch{batch}, nil
+}
+
+func (p *v1CommentsPostProcessor) processV1CommentsPost(ctx context.Context, idx int, batch service.MessageBatch) error {
+	msg := batch[idx]
 	params := v1.V1CommentsPostParams{
 		NotionVersion: v1.NewOptString(p.notionVersion),
 	}
 	b, err := msg.AsBytes()
 	if err != nil {
-		return nil, fmt.Errorf("reading message body: %w", err)
+		return fmt.Errorf("reading message body: %w", err)
 	}
 
 	var req v1.CreateCommentRequest
 	if err := req.UnmarshalJSON(b); err != nil {
-		return nil, fmt.Errorf("unmarshaling request body: %w", err)
+		return fmt.Errorf("unmarshaling request body: %w", err)
 	}
 	if err := req.Validate(); err != nil {
-		return nil, fmt.Errorf("validating request body: %w", err)
+		return fmt.Errorf("validating request body: %w", err)
 	}
 
 	res, err := p.client.V1CommentsPost(ctx, &req, params)
@@ -575,7 +706,7 @@ func (p *v1CommentsPostProcessor) Process(ctx context.Context, msg *service.Mess
 // V1DatabasesIDGet processor — get /v1/databases/{id}
 
 func init() {
-	service.MustRegisterProcessor(
+	service.MustRegisterBatchProcessor(
 		"notion_v1_databases_id_get",
 		v1DatabasesIDGetConfig(),
 		newV1DatabasesIDGetProcessor,
@@ -598,7 +729,7 @@ type v1DatabasesIDGetProcessor struct {
 	id *service.InterpolatedString
 }
 
-func newV1DatabasesIDGetProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
+func newV1DatabasesIDGetProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
 	base, err := baseProcessorFromParsed(conf, mgr.Logger())
 	if err != nil {
 		return nil, err
@@ -612,14 +743,33 @@ func newV1DatabasesIDGetProcessor(conf *service.ParsedConfig, mgr *service.Resou
 	return p, nil
 }
 
-func (p *v1DatabasesIDGetProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
+func (p *v1DatabasesIDGetProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
+	batch = batch.Copy()
+
+	var wg sync.WaitGroup
+	wg.Add(len(batch))
+	for i := range batch {
+		go func(idx int) {
+			defer wg.Done()
+			if err := p.processV1DatabasesIDGet(ctx, idx, batch); err != nil {
+				batch[idx].SetError(err)
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	return []service.MessageBatch{batch}, nil
+}
+
+func (p *v1DatabasesIDGetProcessor) processV1DatabasesIDGet(ctx context.Context, idx int, batch service.MessageBatch) error {
+	msg := batch[idx]
 	params := v1.V1DatabasesIDGetParams{
 		NotionVersion: v1.NewOptString(p.notionVersion),
 	}
 	{
-		v, err := p.id.TryString(msg)
+		v, err := batch.TryInterpolatedString(idx, p.id)
 		if err != nil {
-			return nil, fmt.Errorf("interpolating id: %w", err)
+			return fmt.Errorf("interpolating id: %w", err)
 		}
 		params.ID = v
 	}
@@ -633,7 +783,7 @@ func (p *v1DatabasesIDGetProcessor) Process(ctx context.Context, msg *service.Me
 // V1DatabasesIDPatch processor — patch /v1/databases/{id}
 
 func init() {
-	service.MustRegisterProcessor(
+	service.MustRegisterBatchProcessor(
 		"notion_v1_databases_id_patch",
 		v1DatabasesIDPatchConfig(),
 		newV1DatabasesIDPatchProcessor,
@@ -655,7 +805,7 @@ type v1DatabasesIDPatchProcessor struct {
 	id *service.InterpolatedString
 }
 
-func newV1DatabasesIDPatchProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
+func newV1DatabasesIDPatchProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
 	base, err := baseProcessorFromParsed(conf, mgr.Logger())
 	if err != nil {
 		return nil, err
@@ -669,28 +819,47 @@ func newV1DatabasesIDPatchProcessor(conf *service.ParsedConfig, mgr *service.Res
 	return p, nil
 }
 
-func (p *v1DatabasesIDPatchProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
+func (p *v1DatabasesIDPatchProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
+	batch = batch.Copy()
+
+	var wg sync.WaitGroup
+	wg.Add(len(batch))
+	for i := range batch {
+		go func(idx int) {
+			defer wg.Done()
+			if err := p.processV1DatabasesIDPatch(ctx, idx, batch); err != nil {
+				batch[idx].SetError(err)
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	return []service.MessageBatch{batch}, nil
+}
+
+func (p *v1DatabasesIDPatchProcessor) processV1DatabasesIDPatch(ctx context.Context, idx int, batch service.MessageBatch) error {
+	msg := batch[idx]
 	params := v1.V1DatabasesIDPatchParams{
 		NotionVersion: v1.NewOptString(p.notionVersion),
 	}
 	{
-		v, err := p.id.TryString(msg)
+		v, err := batch.TryInterpolatedString(idx, p.id)
 		if err != nil {
-			return nil, fmt.Errorf("interpolating id: %w", err)
+			return fmt.Errorf("interpolating id: %w", err)
 		}
 		params.ID = v
 	}
 	b, err := msg.AsBytes()
 	if err != nil {
-		return nil, fmt.Errorf("reading message body: %w", err)
+		return fmt.Errorf("reading message body: %w", err)
 	}
 
 	var req v1.UpdateDatabaseRequest
 	if err := req.UnmarshalJSON(b); err != nil {
-		return nil, fmt.Errorf("unmarshaling request body: %w", err)
+		return fmt.Errorf("unmarshaling request body: %w", err)
 	}
 	if err := req.Validate(); err != nil {
-		return nil, fmt.Errorf("validating request body: %w", err)
+		return fmt.Errorf("validating request body: %w", err)
 	}
 
 	res, err := p.client.V1DatabasesIDPatch(ctx, &req, params)
@@ -703,7 +872,7 @@ func (p *v1DatabasesIDPatchProcessor) Process(ctx context.Context, msg *service.
 // V1DatabasesIDQueryPost processor — post /v1/databases/{id}/query
 
 func init() {
-	service.MustRegisterProcessor(
+	service.MustRegisterBatchProcessor(
 		"notion_v1_databases_id_query_post",
 		v1DatabasesIDQueryPostConfig(),
 		newV1DatabasesIDQueryPostProcessor,
@@ -725,7 +894,7 @@ type v1DatabasesIDQueryPostProcessor struct {
 	id *service.InterpolatedString
 }
 
-func newV1DatabasesIDQueryPostProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
+func newV1DatabasesIDQueryPostProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
 	base, err := baseProcessorFromParsed(conf, mgr.Logger())
 	if err != nil {
 		return nil, err
@@ -739,28 +908,47 @@ func newV1DatabasesIDQueryPostProcessor(conf *service.ParsedConfig, mgr *service
 	return p, nil
 }
 
-func (p *v1DatabasesIDQueryPostProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
+func (p *v1DatabasesIDQueryPostProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
+	batch = batch.Copy()
+
+	var wg sync.WaitGroup
+	wg.Add(len(batch))
+	for i := range batch {
+		go func(idx int) {
+			defer wg.Done()
+			if err := p.processV1DatabasesIDQueryPost(ctx, idx, batch); err != nil {
+				batch[idx].SetError(err)
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	return []service.MessageBatch{batch}, nil
+}
+
+func (p *v1DatabasesIDQueryPostProcessor) processV1DatabasesIDQueryPost(ctx context.Context, idx int, batch service.MessageBatch) error {
+	msg := batch[idx]
 	params := v1.V1DatabasesIDQueryPostParams{
 		NotionVersion: v1.NewOptString(p.notionVersion),
 	}
 	{
-		v, err := p.id.TryString(msg)
+		v, err := batch.TryInterpolatedString(idx, p.id)
 		if err != nil {
-			return nil, fmt.Errorf("interpolating id: %w", err)
+			return fmt.Errorf("interpolating id: %w", err)
 		}
 		params.ID = v
 	}
 	b, err := msg.AsBytes()
 	if err != nil {
-		return nil, fmt.Errorf("reading message body: %w", err)
+		return fmt.Errorf("reading message body: %w", err)
 	}
 
 	var req v1.QueryDataSourceRequest
 	if err := req.UnmarshalJSON(b); err != nil {
-		return nil, fmt.Errorf("unmarshaling request body: %w", err)
+		return fmt.Errorf("unmarshaling request body: %w", err)
 	}
 	if err := req.Validate(); err != nil {
-		return nil, fmt.Errorf("validating request body: %w", err)
+		return fmt.Errorf("validating request body: %w", err)
 	}
 
 	res, err := p.client.V1DatabasesIDQueryPost(ctx, &req, params)
@@ -773,7 +961,7 @@ func (p *v1DatabasesIDQueryPostProcessor) Process(ctx context.Context, msg *serv
 // V1DatabasesPost processor — post /v1/databases/
 
 func init() {
-	service.MustRegisterProcessor(
+	service.MustRegisterBatchProcessor(
 		"notion_v1_databases_post",
 		v1DatabasesPostConfig(),
 		newV1DatabasesPostProcessor,
@@ -791,7 +979,7 @@ type v1DatabasesPostProcessor struct {
 	baseProcessor
 }
 
-func newV1DatabasesPostProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
+func newV1DatabasesPostProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
 	base, err := baseProcessorFromParsed(conf, mgr.Logger())
 	if err != nil {
 		return nil, err
@@ -802,21 +990,40 @@ func newV1DatabasesPostProcessor(conf *service.ParsedConfig, mgr *service.Resour
 	return p, nil
 }
 
-func (p *v1DatabasesPostProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
+func (p *v1DatabasesPostProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
+	batch = batch.Copy()
+
+	var wg sync.WaitGroup
+	wg.Add(len(batch))
+	for i := range batch {
+		go func(idx int) {
+			defer wg.Done()
+			if err := p.processV1DatabasesPost(ctx, idx, batch); err != nil {
+				batch[idx].SetError(err)
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	return []service.MessageBatch{batch}, nil
+}
+
+func (p *v1DatabasesPostProcessor) processV1DatabasesPost(ctx context.Context, idx int, batch service.MessageBatch) error {
+	msg := batch[idx]
 	params := v1.V1DatabasesPostParams{
 		NotionVersion: v1.NewOptString(p.notionVersion),
 	}
 	b, err := msg.AsBytes()
 	if err != nil {
-		return nil, fmt.Errorf("reading message body: %w", err)
+		return fmt.Errorf("reading message body: %w", err)
 	}
 
 	var req v1.CreateDatabaseRequest
 	if err := req.UnmarshalJSON(b); err != nil {
-		return nil, fmt.Errorf("unmarshaling request body: %w", err)
+		return fmt.Errorf("unmarshaling request body: %w", err)
 	}
 	if err := req.Validate(); err != nil {
-		return nil, fmt.Errorf("validating request body: %w", err)
+		return fmt.Errorf("validating request body: %w", err)
 	}
 
 	res, err := p.client.V1DatabasesPost(ctx, &req, params)
@@ -829,7 +1036,7 @@ func (p *v1DatabasesPostProcessor) Process(ctx context.Context, msg *service.Mes
 // V1PagesIDGet processor — get /v1/pages/{id}
 
 func init() {
-	service.MustRegisterProcessor(
+	service.MustRegisterBatchProcessor(
 		"notion_v1_pages_id_get",
 		v1PagesIDGetConfig(),
 		newV1PagesIDGetProcessor,
@@ -852,7 +1059,7 @@ type v1PagesIDGetProcessor struct {
 	id *service.InterpolatedString
 }
 
-func newV1PagesIDGetProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
+func newV1PagesIDGetProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
 	base, err := baseProcessorFromParsed(conf, mgr.Logger())
 	if err != nil {
 		return nil, err
@@ -866,14 +1073,33 @@ func newV1PagesIDGetProcessor(conf *service.ParsedConfig, mgr *service.Resources
 	return p, nil
 }
 
-func (p *v1PagesIDGetProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
+func (p *v1PagesIDGetProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
+	batch = batch.Copy()
+
+	var wg sync.WaitGroup
+	wg.Add(len(batch))
+	for i := range batch {
+		go func(idx int) {
+			defer wg.Done()
+			if err := p.processV1PagesIDGet(ctx, idx, batch); err != nil {
+				batch[idx].SetError(err)
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	return []service.MessageBatch{batch}, nil
+}
+
+func (p *v1PagesIDGetProcessor) processV1PagesIDGet(ctx context.Context, idx int, batch service.MessageBatch) error {
+	msg := batch[idx]
 	params := v1.V1PagesIDGetParams{
 		NotionVersion: v1.NewOptString(p.notionVersion),
 	}
 	{
-		v, err := p.id.TryString(msg)
+		v, err := batch.TryInterpolatedString(idx, p.id)
 		if err != nil {
-			return nil, fmt.Errorf("interpolating id: %w", err)
+			return fmt.Errorf("interpolating id: %w", err)
 		}
 		params.ID = v
 	}
@@ -887,7 +1113,7 @@ func (p *v1PagesIDGetProcessor) Process(ctx context.Context, msg *service.Messag
 // V1PagesIDPatch processor — patch /v1/pages/{id}
 
 func init() {
-	service.MustRegisterProcessor(
+	service.MustRegisterBatchProcessor(
 		"notion_v1_pages_id_patch",
 		v1PagesIDPatchConfig(),
 		newV1PagesIDPatchProcessor,
@@ -909,7 +1135,7 @@ type v1PagesIDPatchProcessor struct {
 	id *service.InterpolatedString
 }
 
-func newV1PagesIDPatchProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
+func newV1PagesIDPatchProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
 	base, err := baseProcessorFromParsed(conf, mgr.Logger())
 	if err != nil {
 		return nil, err
@@ -923,28 +1149,47 @@ func newV1PagesIDPatchProcessor(conf *service.ParsedConfig, mgr *service.Resourc
 	return p, nil
 }
 
-func (p *v1PagesIDPatchProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
+func (p *v1PagesIDPatchProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
+	batch = batch.Copy()
+
+	var wg sync.WaitGroup
+	wg.Add(len(batch))
+	for i := range batch {
+		go func(idx int) {
+			defer wg.Done()
+			if err := p.processV1PagesIDPatch(ctx, idx, batch); err != nil {
+				batch[idx].SetError(err)
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	return []service.MessageBatch{batch}, nil
+}
+
+func (p *v1PagesIDPatchProcessor) processV1PagesIDPatch(ctx context.Context, idx int, batch service.MessageBatch) error {
+	msg := batch[idx]
 	params := v1.V1PagesIDPatchParams{
 		NotionVersion: v1.NewOptString(p.notionVersion),
 	}
 	{
-		v, err := p.id.TryString(msg)
+		v, err := batch.TryInterpolatedString(idx, p.id)
 		if err != nil {
-			return nil, fmt.Errorf("interpolating id: %w", err)
+			return fmt.Errorf("interpolating id: %w", err)
 		}
 		params.ID = v
 	}
 	b, err := msg.AsBytes()
 	if err != nil {
-		return nil, fmt.Errorf("reading message body: %w", err)
+		return fmt.Errorf("reading message body: %w", err)
 	}
 
 	var req v1.UpdatePageRequest
 	if err := req.UnmarshalJSON(b); err != nil {
-		return nil, fmt.Errorf("unmarshaling request body: %w", err)
+		return fmt.Errorf("unmarshaling request body: %w", err)
 	}
 	if err := req.Validate(); err != nil {
-		return nil, fmt.Errorf("validating request body: %w", err)
+		return fmt.Errorf("validating request body: %w", err)
 	}
 
 	res, err := p.client.V1PagesIDPatch(ctx, &req, params)
@@ -957,7 +1202,7 @@ func (p *v1PagesIDPatchProcessor) Process(ctx context.Context, msg *service.Mess
 // V1PagesPageIDPropertiesPropertyIDGet processor — get /v1/pages/{page_id}/properties/{property_id}
 
 func init() {
-	service.MustRegisterProcessor(
+	service.MustRegisterBatchProcessor(
 		"notion_v1_pages_page_id_properties_property_id_get",
 		v1PagesPageIDPropertiesPropertyIDGetConfig(),
 		newV1PagesPageIDPropertiesPropertyIDGetProcessor,
@@ -982,7 +1227,7 @@ type v1PagesPageIDPropertiesPropertyIDGetProcessor struct {
 	propertyID *service.InterpolatedString
 }
 
-func newV1PagesPageIDPropertiesPropertyIDGetProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
+func newV1PagesPageIDPropertiesPropertyIDGetProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
 	base, err := baseProcessorFromParsed(conf, mgr.Logger())
 	if err != nil {
 		return nil, err
@@ -999,21 +1244,40 @@ func newV1PagesPageIDPropertiesPropertyIDGetProcessor(conf *service.ParsedConfig
 	return p, nil
 }
 
-func (p *v1PagesPageIDPropertiesPropertyIDGetProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
+func (p *v1PagesPageIDPropertiesPropertyIDGetProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
+	batch = batch.Copy()
+
+	var wg sync.WaitGroup
+	wg.Add(len(batch))
+	for i := range batch {
+		go func(idx int) {
+			defer wg.Done()
+			if err := p.processV1PagesPageIDPropertiesPropertyIDGet(ctx, idx, batch); err != nil {
+				batch[idx].SetError(err)
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	return []service.MessageBatch{batch}, nil
+}
+
+func (p *v1PagesPageIDPropertiesPropertyIDGetProcessor) processV1PagesPageIDPropertiesPropertyIDGet(ctx context.Context, idx int, batch service.MessageBatch) error {
+	msg := batch[idx]
 	params := v1.V1PagesPageIDPropertiesPropertyIDGetParams{
 		NotionVersion: v1.NewOptString(p.notionVersion),
 	}
 	{
-		v, err := p.pageID.TryString(msg)
+		v, err := batch.TryInterpolatedString(idx, p.pageID)
 		if err != nil {
-			return nil, fmt.Errorf("interpolating page_id: %w", err)
+			return fmt.Errorf("interpolating page_id: %w", err)
 		}
 		params.PageID = v
 	}
 	{
-		v, err := p.propertyID.TryString(msg)
+		v, err := batch.TryInterpolatedString(idx, p.propertyID)
 		if err != nil {
-			return nil, fmt.Errorf("interpolating property_id: %w", err)
+			return fmt.Errorf("interpolating property_id: %w", err)
 		}
 		params.PropertyID = v
 	}
@@ -1027,7 +1291,7 @@ func (p *v1PagesPageIDPropertiesPropertyIDGetProcessor) Process(ctx context.Cont
 // V1PagesPost processor — post /v1/pages/
 
 func init() {
-	service.MustRegisterProcessor(
+	service.MustRegisterBatchProcessor(
 		"notion_v1_pages_post",
 		v1PagesPostConfig(),
 		newV1PagesPostProcessor,
@@ -1045,7 +1309,7 @@ type v1PagesPostProcessor struct {
 	baseProcessor
 }
 
-func newV1PagesPostProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
+func newV1PagesPostProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
 	base, err := baseProcessorFromParsed(conf, mgr.Logger())
 	if err != nil {
 		return nil, err
@@ -1056,21 +1320,40 @@ func newV1PagesPostProcessor(conf *service.ParsedConfig, mgr *service.Resources)
 	return p, nil
 }
 
-func (p *v1PagesPostProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
+func (p *v1PagesPostProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
+	batch = batch.Copy()
+
+	var wg sync.WaitGroup
+	wg.Add(len(batch))
+	for i := range batch {
+		go func(idx int) {
+			defer wg.Done()
+			if err := p.processV1PagesPost(ctx, idx, batch); err != nil {
+				batch[idx].SetError(err)
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	return []service.MessageBatch{batch}, nil
+}
+
+func (p *v1PagesPostProcessor) processV1PagesPost(ctx context.Context, idx int, batch service.MessageBatch) error {
+	msg := batch[idx]
 	params := v1.V1PagesPostParams{
 		NotionVersion: v1.NewOptString(p.notionVersion),
 	}
 	b, err := msg.AsBytes()
 	if err != nil {
-		return nil, fmt.Errorf("reading message body: %w", err)
+		return fmt.Errorf("reading message body: %w", err)
 	}
 
 	var req v1.CreatePageRequest
 	if err := req.UnmarshalJSON(b); err != nil {
-		return nil, fmt.Errorf("unmarshaling request body: %w", err)
+		return fmt.Errorf("unmarshaling request body: %w", err)
 	}
 	if err := req.Validate(); err != nil {
-		return nil, fmt.Errorf("validating request body: %w", err)
+		return fmt.Errorf("validating request body: %w", err)
 	}
 
 	res, err := p.client.V1PagesPost(ctx, &req, params)
@@ -1083,7 +1366,7 @@ func (p *v1PagesPostProcessor) Process(ctx context.Context, msg *service.Message
 // V1SearchPost processor — post /v1/search
 
 func init() {
-	service.MustRegisterProcessor(
+	service.MustRegisterBatchProcessor(
 		"notion_v1_search_post",
 		v1SearchPostConfig(),
 		newV1SearchPostProcessor,
@@ -1101,7 +1384,7 @@ type v1SearchPostProcessor struct {
 	baseProcessor
 }
 
-func newV1SearchPostProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
+func newV1SearchPostProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
 	base, err := baseProcessorFromParsed(conf, mgr.Logger())
 	if err != nil {
 		return nil, err
@@ -1112,21 +1395,40 @@ func newV1SearchPostProcessor(conf *service.ParsedConfig, mgr *service.Resources
 	return p, nil
 }
 
-func (p *v1SearchPostProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
+func (p *v1SearchPostProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
+	batch = batch.Copy()
+
+	var wg sync.WaitGroup
+	wg.Add(len(batch))
+	for i := range batch {
+		go func(idx int) {
+			defer wg.Done()
+			if err := p.processV1SearchPost(ctx, idx, batch); err != nil {
+				batch[idx].SetError(err)
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	return []service.MessageBatch{batch}, nil
+}
+
+func (p *v1SearchPostProcessor) processV1SearchPost(ctx context.Context, idx int, batch service.MessageBatch) error {
+	msg := batch[idx]
 	params := v1.V1SearchPostParams{
 		NotionVersion: v1.NewOptString(p.notionVersion),
 	}
 	b, err := msg.AsBytes()
 	if err != nil {
-		return nil, fmt.Errorf("reading message body: %w", err)
+		return fmt.Errorf("reading message body: %w", err)
 	}
 
 	var req v1.SearchRequest
 	if err := req.UnmarshalJSON(b); err != nil {
-		return nil, fmt.Errorf("unmarshaling request body: %w", err)
+		return fmt.Errorf("unmarshaling request body: %w", err)
 	}
 	if err := req.Validate(); err != nil {
-		return nil, fmt.Errorf("validating request body: %w", err)
+		return fmt.Errorf("validating request body: %w", err)
 	}
 
 	res, err := p.client.V1SearchPost(ctx, &req, params)
@@ -1139,7 +1441,7 @@ func (p *v1SearchPostProcessor) Process(ctx context.Context, msg *service.Messag
 // V1UsersGet processor — get /v1/users
 
 func init() {
-	service.MustRegisterProcessor(
+	service.MustRegisterBatchProcessor(
 		"notion_v1_users_get",
 		v1UsersGetConfig(),
 		newV1UsersGetProcessor,
@@ -1158,7 +1460,7 @@ type v1UsersGetProcessor struct {
 	baseProcessor
 }
 
-func newV1UsersGetProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
+func newV1UsersGetProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
 	base, err := baseProcessorFromParsed(conf, mgr.Logger())
 	if err != nil {
 		return nil, err
@@ -1169,7 +1471,26 @@ func newV1UsersGetProcessor(conf *service.ParsedConfig, mgr *service.Resources) 
 	return p, nil
 }
 
-func (p *v1UsersGetProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
+func (p *v1UsersGetProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
+	batch = batch.Copy()
+
+	var wg sync.WaitGroup
+	wg.Add(len(batch))
+	for i := range batch {
+		go func(idx int) {
+			defer wg.Done()
+			if err := p.processV1UsersGet(ctx, idx, batch); err != nil {
+				batch[idx].SetError(err)
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	return []service.MessageBatch{batch}, nil
+}
+
+func (p *v1UsersGetProcessor) processV1UsersGet(ctx context.Context, idx int, batch service.MessageBatch) error {
+	msg := batch[idx]
 	params := v1.V1UsersGetParams{
 		NotionVersion: v1.NewOptString(p.notionVersion),
 	}
@@ -1183,7 +1504,7 @@ func (p *v1UsersGetProcessor) Process(ctx context.Context, msg *service.Message)
 // V1UsersIDGet processor — get /v1/users/{id}
 
 func init() {
-	service.MustRegisterProcessor(
+	service.MustRegisterBatchProcessor(
 		"notion_v1_users_id_get",
 		v1UsersIDGetConfig(),
 		newV1UsersIDGetProcessor,
@@ -1206,7 +1527,7 @@ type v1UsersIDGetProcessor struct {
 	id *service.InterpolatedString
 }
 
-func newV1UsersIDGetProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
+func newV1UsersIDGetProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
 	base, err := baseProcessorFromParsed(conf, mgr.Logger())
 	if err != nil {
 		return nil, err
@@ -1220,14 +1541,33 @@ func newV1UsersIDGetProcessor(conf *service.ParsedConfig, mgr *service.Resources
 	return p, nil
 }
 
-func (p *v1UsersIDGetProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
+func (p *v1UsersIDGetProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
+	batch = batch.Copy()
+
+	var wg sync.WaitGroup
+	wg.Add(len(batch))
+	for i := range batch {
+		go func(idx int) {
+			defer wg.Done()
+			if err := p.processV1UsersIDGet(ctx, idx, batch); err != nil {
+				batch[idx].SetError(err)
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	return []service.MessageBatch{batch}, nil
+}
+
+func (p *v1UsersIDGetProcessor) processV1UsersIDGet(ctx context.Context, idx int, batch service.MessageBatch) error {
+	msg := batch[idx]
 	params := v1.V1UsersIDGetParams{
 		NotionVersion: v1.NewOptString(p.notionVersion),
 	}
 	{
-		v, err := p.id.TryString(msg)
+		v, err := batch.TryInterpolatedString(idx, p.id)
 		if err != nil {
-			return nil, fmt.Errorf("interpolating id: %w", err)
+			return fmt.Errorf("interpolating id: %w", err)
 		}
 		params.ID = v
 	}
@@ -1241,7 +1581,7 @@ func (p *v1UsersIDGetProcessor) Process(ctx context.Context, msg *service.Messag
 // V1UsersMeGet processor — get /v1/users/me
 
 func init() {
-	service.MustRegisterProcessor(
+	service.MustRegisterBatchProcessor(
 		"notion_v1_users_me_get",
 		v1UsersMeGetConfig(),
 		newV1UsersMeGetProcessor,
@@ -1259,7 +1599,7 @@ type v1UsersMeGetProcessor struct {
 	baseProcessor
 }
 
-func newV1UsersMeGetProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
+func newV1UsersMeGetProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
 	base, err := baseProcessorFromParsed(conf, mgr.Logger())
 	if err != nil {
 		return nil, err
@@ -1270,7 +1610,26 @@ func newV1UsersMeGetProcessor(conf *service.ParsedConfig, mgr *service.Resources
 	return p, nil
 }
 
-func (p *v1UsersMeGetProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
+func (p *v1UsersMeGetProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
+	batch = batch.Copy()
+
+	var wg sync.WaitGroup
+	wg.Add(len(batch))
+	for i := range batch {
+		go func(idx int) {
+			defer wg.Done()
+			if err := p.processV1UsersMeGet(ctx, idx, batch); err != nil {
+				batch[idx].SetError(err)
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	return []service.MessageBatch{batch}, nil
+}
+
+func (p *v1UsersMeGetProcessor) processV1UsersMeGet(ctx context.Context, idx int, batch service.MessageBatch) error {
+	msg := batch[idx]
 	params := v1.V1UsersMeGetParams{
 		NotionVersion: v1.NewOptString(p.notionVersion),
 	}

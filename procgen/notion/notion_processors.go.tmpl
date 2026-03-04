@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
@@ -77,34 +78,31 @@ func baseProcessorFromParsed(conf *service.ParsedConfig, log *service.Logger) (b
 func (p *baseProcessor) Close(context.Context) error { return nil }
 
 // handleAPIError checks for HTTP status errors and sets metadata.
-// On HTTP errors, returns the message with error set so it flows downstream.
-// On other errors, returns a processing failure.
-func handleAPIError(msg *service.Message, err error) (service.MessageBatch, error) {
+// On HTTP errors, sets status code metadata on the message and returns a
+// wrapped error. On other errors, returns a generic request failure.
+func handleAPIError(msg *service.Message, err error) error {
 	if unexpectedStatus, ok := errors.Into[*validate.UnexpectedStatusCodeError](err); ok {
-		out := msg.Copy()
-		out.MetaSetMut("http_status_code", unexpectedStatus.StatusCode)
-		out.SetError(fmt.Errorf("{{ .Service | title }} API error (status %d): %w", unexpectedStatus.StatusCode, err))
-		return service.MessageBatch{out}, nil
+		msg.MetaSetMut("http_status_code", unexpectedStatus.StatusCode)
+		return fmt.Errorf("{{ .Service | title }} API error (status %d): %w", unexpectedStatus.StatusCode, err)
 	}
-	return nil, fmt.Errorf("{{ .Service | title }} API request failed: %w", err)
+	return fmt.Errorf("{{ .Service | title }} API request failed: %w", err)
 }
 
-// marshalResponse serializes the typed response to JSON on a copy of the message.
-func marshalResponse(msg *service.Message, resp any) (service.MessageBatch, error) {
-	out := msg.Copy()
+// marshalResponse serializes the typed response to JSON and sets it on the message.
+func marshalResponse(msg *service.Message, resp any) error {
 	b, err := json.Marshal(resp)
 	if err != nil {
-		return nil, fmt.Errorf("marshaling response: %w", err)
+		return fmt.Errorf("marshaling response: %w", err)
 	}
-	out.SetBytes(b)
-	return service.MessageBatch{out}, nil
+	msg.SetBytes(b)
+	return nil
 }
 
 {{ range .Operations }}
 // {{ .Name }} processor — {{ .HTTPMethod }} {{ .Path }}
 
 func init() {
-	service.MustRegisterProcessor(
+	service.MustRegisterBatchProcessor(
 		"{{ .ProcessorName }}",
 		{{ .Name | lowerFirst }}Config(),
 		new{{ .Name }}Processor,
@@ -146,7 +144,7 @@ type {{ .Name | lowerFirst }}Processor struct {
 	{{- end }}
 }
 
-func new{{ .Name }}Processor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
+func new{{ .Name }}Processor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
 	base, err := baseProcessorFromParsed(conf, mgr.Logger())
 	if err != nil {
 		return nil, err
@@ -170,7 +168,26 @@ func new{{ .Name }}Processor(conf *service.ParsedConfig, mgr *service.Resources)
 	return p, nil
 }
 
-func (p *{{ .Name | lowerFirst }}Processor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
+func (p *{{ .Name | lowerFirst }}Processor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
+	batch = batch.Copy()
+
+	var wg sync.WaitGroup
+	wg.Add(len(batch))
+	for i := range batch {
+		go func(idx int) {
+			defer wg.Done()
+			if err := p.process{{ .Name }}(ctx, idx, batch); err != nil {
+				batch[idx].SetError(err)
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	return []service.MessageBatch{batch}, nil
+}
+
+func (p *{{ .Name | lowerFirst }}Processor) process{{ .Name }}(ctx context.Context, idx int, batch service.MessageBatch) error {
+	msg := batch[idx]
 	params := v1.{{ .ParamsTypeName }}{
 		{{- range $.SharedHeaders }}
 		{{ .GoParamName }}: v1.NewOptString(p.{{ .GoParamName | lowerFirst }}),
@@ -179,9 +196,9 @@ func (p *{{ .Name | lowerFirst }}Processor) Process(ctx context.Context, msg *se
 
 	{{- range .PathParams }}
 	{
-		v, err := p.{{ .GoFieldName }}.TryString(msg)
+		v, err := batch.TryInterpolatedString(idx, p.{{ .GoFieldName }})
 		if err != nil {
-			return nil, fmt.Errorf("interpolating {{ .FieldName }}: %w", err)
+			return fmt.Errorf("interpolating {{ .FieldName }}: %w", err)
 		}
 		params.{{ .GoParamName }} = v
 	}
@@ -189,14 +206,14 @@ func (p *{{ .Name | lowerFirst }}Processor) Process(ctx context.Context, msg *se
 
 	{{- range .QueryParams }}
 	if p.{{ .GoFieldName }} != nil {
-		v, err := p.{{ .GoFieldName }}.TryString(msg)
+		v, err := batch.TryInterpolatedString(idx, p.{{ .GoFieldName }})
 		if err != nil {
-			return nil, fmt.Errorf("interpolating {{ .FieldName }}: %w", err)
+			return fmt.Errorf("interpolating {{ .FieldName }}: %w", err)
 		}
 		{{- if .IsOptInt }}
 		intVal, err := strconv.Atoi(v)
 		if err != nil {
-			return nil, fmt.Errorf("{{ .FieldName }} must be integer: %w", err)
+			return fmt.Errorf("{{ .FieldName }} must be integer: %w", err)
 		}
 		params.{{ .GoParamName }} = v1.NewOptInt(intVal)
 		{{- else if .IsOptString }}
@@ -210,15 +227,15 @@ func (p *{{ .Name | lowerFirst }}Processor) Process(ctx context.Context, msg *se
 	{{- if .HasRequestBody }}
 	b, err := msg.AsBytes()
 	if err != nil {
-		return nil, fmt.Errorf("reading message body: %w", err)
+		return fmt.Errorf("reading message body: %w", err)
 	}
 
 	var req v1.{{ .RequestTypeName }}
 	if err := req.UnmarshalJSON(b); err != nil {
-		return nil, fmt.Errorf("unmarshaling request body: %w", err)
+		return fmt.Errorf("unmarshaling request body: %w", err)
 	}
 	if err := req.Validate(); err != nil {
-		return nil, fmt.Errorf("validating request body: %w", err)
+		return fmt.Errorf("validating request body: %w", err)
 	}
 
 	res, err := p.client.{{ .Name }}(ctx, &req, params)
