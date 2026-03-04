@@ -150,6 +150,7 @@ output:
       only_empty: false
     topic: ${! @kafka_topic }
     topic_replication_factor: "3" # No default (optional)
+    sync_topic_interval: 5m
     sync_topic_acls: false
     serverless: false
     provenance_header: redpanda-migrator-provenance
@@ -160,17 +161,17 @@ output:
 --
 ======
 
-The `redpanda_migrator` output performs all migration work. 
+The `redpanda_migrator` output performs all migration work.
 It coordinates topics, schema registry, and consumer groups to migrate data from a source Kafka/Redpanda cluster to a destination cluster.
 
-**IMPORTANT:** This output requires a corresponding `redpanda_migrator` input in the same pipeline. 
+**IMPORTANT:** This output requires a corresponding `redpanda_migrator` input in the same pipeline.
 Each pipeline must have both input and output components configured.
 
-**Multiple migrator pairs:** When using multiple migrator pairs in a single pipeline, 
-the mapping between input and output components is done based on the label field. 
+**Multiple migrator pairs:** When using multiple migrator pairs in a single pipeline,
+the mapping between input and output components is done based on the label field.
 The label of the input and output must match exactly for proper coordination.
 
-**Performance tuning for high throughput:** For workloads with high message rates or large messages, 
+**Performance tuning for high throughput:** For workloads with high message rates or large messages,
 adjust the following settings to optimize throughput:
 
 On the paired input component:
@@ -1560,6 +1561,25 @@ The replication factor for created topics. If not specified, inherits the replic
 topic_replication_factor: "3"
 
 topic_replication_factor: '1  # For single-node clusters'
+```
+
+=== `sync_topic_interval`
+
+How often to synchronize topics from the source cluster to the destination. This creates destination topics for any new source topics, including empty topics with no message flow. Set to 0s to disable periodic sync (topics are still created on first message).
+
+
+*Type*: `string`
+
+*Default*: `"5m"`
+
+```yml
+# Examples
+
+sync_topic_interval: '0s     # Disable periodic sync'
+
+sync_topic_interval: '1m     # Sync every minute'
+
+sync_topic_interval: '5m     # Sync every 5 minutes'
 ```
 
 === `sync_topic_acls`
