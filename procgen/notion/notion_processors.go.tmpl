@@ -221,13 +221,13 @@ func (p *{{ .Name | lowerFirst }}Processor) Process(ctx context.Context, msg *se
 		return nil, fmt.Errorf("validating request body: %w", err)
 	}
 
-	resp, err := p.client.{{ .Name }}(ctx, &reqBody, params)
+	res, err := p.client.{{ .Name }}(ctx, &reqBody, params)
 	{{- else }}
-	resp, err := p.client.{{ .Name }}(ctx, params)
+	res, err := p.client.{{ .Name }}(ctx, params)
 	{{- end }}
 	if err != nil {
 		return handleAPIError(msg, err)
 	}
-	return marshalResponse(msg, &resp)
+	return marshalResponse(msg, &res)
 }
 {{ end }}
