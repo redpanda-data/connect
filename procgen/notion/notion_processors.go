@@ -11,6 +11,7 @@ import (
 
 	"github.com/go-faster/errors"
 	"github.com/ogen-go/ogen/validate"
+	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	v1 "github.com/redpanda-data/connect/v4/procgen/notion/api/v1"
@@ -49,33 +50,34 @@ func sharedConfigFields() []*service.ConfigField {
 type baseProcessor struct {
 	client        *v1.Client
 	notionVersion string
+	mapping       *bloblang.Executor
 	log           *service.Logger
 }
 
-func baseProcessorFromParsed(conf *service.ParsedConfig, log *service.Logger) (baseProcessor, error) {
+func baseProcessorFromParsed(conf *service.ParsedConfig, log *service.Logger) (p baseProcessor, err error) {
+	p.log = log
+
 	apiKey, err := conf.FieldString(npFieldAPIKey)
 	if err != nil {
-		return baseProcessor{}, err
+		return p, err
 	}
-	notionVersion, err := conf.FieldString(npFieldNotionVersion)
-	if err != nil {
-		return baseProcessor{}, err
+	if p.notionVersion, err = conf.FieldString(npFieldNotionVersion); err != nil {
+		return p, err
 	}
 	serverURL, err := conf.FieldString(npFieldServerURL)
 	if err != nil {
-		return baseProcessor{}, err
+		return p, err
+	}
+	if p.client, err = v1.NewClient(serverURL, &securitySource{token: apiKey}); err != nil {
+		return p, fmt.Errorf("creating Notion client: %w", err)
+	}
+	if conf.Contains("mapping") {
+		if p.mapping, err = conf.FieldBloblang("mapping"); err != nil {
+			return p, err
+		}
 	}
 
-	client, err := v1.NewClient(serverURL, &securitySource{token: apiKey})
-	if err != nil {
-		return baseProcessor{}, fmt.Errorf("creating Notion client: %w", err)
-	}
-
-	return baseProcessor{
-		client:        client,
-		notionVersion: notionVersion,
-		log:           log,
-	}, nil
+	return p, nil
 }
 
 func (p *baseProcessor) Close(context.Context) error { return nil }
@@ -212,6 +214,9 @@ func v1BlocksIDChildrenPatchConfig() *service.ConfigSpec {
 		Categories("Services", "Notion").
 		Summary("Append block children `PATCH /v1/blocks/{id}/children`").
 		Fields(sharedConfigFields()...).Fields(
+		service.NewBloblangField("mapping").
+			Optional().
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to messages before unmarshaling into the request body."),
 		service.NewInterpolatedStringField("id").
 			Description(""),
 	)
@@ -266,6 +271,18 @@ func (p *v1BlocksIDChildrenPatchProcessor) processV1BlocksIDChildrenPatch(ctx co
 		}
 		params.ID = v
 	}
+	if p.mapping != nil {
+		structured, err := msg.AsStructured()
+		if err != nil {
+			return fmt.Errorf("parsing message for mapping: %w", err)
+		}
+		mapped, err := p.mapping.Query(structured)
+		if err != nil {
+			return fmt.Errorf("executing mapping: %w", err)
+		}
+		msg.SetStructured(mapped)
+	}
+
 	b, err := msg.AsBytes()
 	if err != nil {
 		return fmt.Errorf("reading message body: %w", err)
@@ -454,6 +471,9 @@ func v1BlocksIDPatchConfig() *service.ConfigSpec {
 		Summary("Update a block `PATCH /v1/blocks/{id}`").
 		Description("This endpoint allows you to update block content. [See Full Documentation](https://developers.notion.com/reference/update-a-block)").
 		Fields(sharedConfigFields()...).Fields(
+		service.NewBloblangField("mapping").
+			Optional().
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to messages before unmarshaling into the request body."),
 		service.NewInterpolatedStringField("id").
 			Description(""),
 	)
@@ -508,6 +528,18 @@ func (p *v1BlocksIDPatchProcessor) processV1BlocksIDPatch(ctx context.Context, i
 		}
 		params.ID = v
 	}
+	if p.mapping != nil {
+		structured, err := msg.AsStructured()
+		if err != nil {
+			return fmt.Errorf("parsing message for mapping: %w", err)
+		}
+		mapped, err := p.mapping.Query(structured)
+		if err != nil {
+			return fmt.Errorf("executing mapping: %w", err)
+		}
+		msg.SetStructured(mapped)
+	}
+
 	b, err := msg.AsBytes()
 	if err != nil {
 		return fmt.Errorf("reading message body: %w", err)
@@ -642,7 +674,11 @@ func v1CommentsPostConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Services", "Notion").
 		Summary("Add comment to discussion `POST /v1/comments`").
-		Fields(sharedConfigFields()...).Fields()
+		Fields(sharedConfigFields()...).Fields(
+		service.NewBloblangField("mapping").
+			Optional().
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to messages before unmarshaling into the request body."),
+	)
 }
 
 type v1CommentsPostProcessor struct {
@@ -683,6 +719,18 @@ func (p *v1CommentsPostProcessor) processV1CommentsPost(ctx context.Context, idx
 	params := v1.V1CommentsPostParams{
 		NotionVersion: v1.NewOptString(p.notionVersion),
 	}
+	if p.mapping != nil {
+		structured, err := msg.AsStructured()
+		if err != nil {
+			return fmt.Errorf("parsing message for mapping: %w", err)
+		}
+		mapped, err := p.mapping.Query(structured)
+		if err != nil {
+			return fmt.Errorf("executing mapping: %w", err)
+		}
+		msg.SetStructured(mapped)
+	}
+
 	b, err := msg.AsBytes()
 	if err != nil {
 		return fmt.Errorf("reading message body: %w", err)
@@ -795,6 +843,9 @@ func v1DatabasesIDPatchConfig() *service.ConfigSpec {
 		Categories("Services", "Notion").
 		Summary("Update database properties `PATCH /v1/databases/{id}`").
 		Fields(sharedConfigFields()...).Fields(
+		service.NewBloblangField("mapping").
+			Optional().
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to messages before unmarshaling into the request body."),
 		service.NewInterpolatedStringField("id").
 			Description(""),
 	)
@@ -849,6 +900,18 @@ func (p *v1DatabasesIDPatchProcessor) processV1DatabasesIDPatch(ctx context.Cont
 		}
 		params.ID = v
 	}
+	if p.mapping != nil {
+		structured, err := msg.AsStructured()
+		if err != nil {
+			return fmt.Errorf("parsing message for mapping: %w", err)
+		}
+		mapped, err := p.mapping.Query(structured)
+		if err != nil {
+			return fmt.Errorf("executing mapping: %w", err)
+		}
+		msg.SetStructured(mapped)
+	}
+
 	b, err := msg.AsBytes()
 	if err != nil {
 		return fmt.Errorf("reading message body: %w", err)
@@ -884,6 +947,9 @@ func v1DatabasesIDQueryPostConfig() *service.ConfigSpec {
 		Categories("Services", "Notion").
 		Summary("Filter a database `POST /v1/databases/{id}/query`").
 		Fields(sharedConfigFields()...).Fields(
+		service.NewBloblangField("mapping").
+			Optional().
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to messages before unmarshaling into the request body."),
 		service.NewInterpolatedStringField("id").
 			Description(""),
 	)
@@ -938,6 +1004,18 @@ func (p *v1DatabasesIDQueryPostProcessor) processV1DatabasesIDQueryPost(ctx cont
 		}
 		params.ID = v
 	}
+	if p.mapping != nil {
+		structured, err := msg.AsStructured()
+		if err != nil {
+			return fmt.Errorf("parsing message for mapping: %w", err)
+		}
+		mapped, err := p.mapping.Query(structured)
+		if err != nil {
+			return fmt.Errorf("executing mapping: %w", err)
+		}
+		msg.SetStructured(mapped)
+	}
+
 	b, err := msg.AsBytes()
 	if err != nil {
 		return fmt.Errorf("reading message body: %w", err)
@@ -972,7 +1050,11 @@ func v1DatabasesPostConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Services", "Notion").
 		Summary("Create a database `POST /v1/databases/`").
-		Fields(sharedConfigFields()...).Fields()
+		Fields(sharedConfigFields()...).Fields(
+		service.NewBloblangField("mapping").
+			Optional().
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to messages before unmarshaling into the request body."),
+	)
 }
 
 type v1DatabasesPostProcessor struct {
@@ -1013,6 +1095,18 @@ func (p *v1DatabasesPostProcessor) processV1DatabasesPost(ctx context.Context, i
 	params := v1.V1DatabasesPostParams{
 		NotionVersion: v1.NewOptString(p.notionVersion),
 	}
+	if p.mapping != nil {
+		structured, err := msg.AsStructured()
+		if err != nil {
+			return fmt.Errorf("parsing message for mapping: %w", err)
+		}
+		mapped, err := p.mapping.Query(structured)
+		if err != nil {
+			return fmt.Errorf("executing mapping: %w", err)
+		}
+		msg.SetStructured(mapped)
+	}
+
 	b, err := msg.AsBytes()
 	if err != nil {
 		return fmt.Errorf("reading message body: %w", err)
@@ -1125,6 +1219,9 @@ func v1PagesIDPatchConfig() *service.ConfigSpec {
 		Categories("Services", "Notion").
 		Summary("Archive a page `PATCH /v1/pages/{id}`").
 		Fields(sharedConfigFields()...).Fields(
+		service.NewBloblangField("mapping").
+			Optional().
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to messages before unmarshaling into the request body."),
 		service.NewInterpolatedStringField("id").
 			Description(""),
 	)
@@ -1179,6 +1276,18 @@ func (p *v1PagesIDPatchProcessor) processV1PagesIDPatch(ctx context.Context, idx
 		}
 		params.ID = v
 	}
+	if p.mapping != nil {
+		structured, err := msg.AsStructured()
+		if err != nil {
+			return fmt.Errorf("parsing message for mapping: %w", err)
+		}
+		mapped, err := p.mapping.Query(structured)
+		if err != nil {
+			return fmt.Errorf("executing mapping: %w", err)
+		}
+		msg.SetStructured(mapped)
+	}
+
 	b, err := msg.AsBytes()
 	if err != nil {
 		return fmt.Errorf("reading message body: %w", err)
@@ -1302,7 +1411,11 @@ func v1PagesPostConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Services", "Notion").
 		Summary("Create a page with content `POST /v1/pages/`").
-		Fields(sharedConfigFields()...).Fields()
+		Fields(sharedConfigFields()...).Fields(
+		service.NewBloblangField("mapping").
+			Optional().
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to messages before unmarshaling into the request body."),
+	)
 }
 
 type v1PagesPostProcessor struct {
@@ -1343,6 +1456,18 @@ func (p *v1PagesPostProcessor) processV1PagesPost(ctx context.Context, idx int, 
 	params := v1.V1PagesPostParams{
 		NotionVersion: v1.NewOptString(p.notionVersion),
 	}
+	if p.mapping != nil {
+		structured, err := msg.AsStructured()
+		if err != nil {
+			return fmt.Errorf("parsing message for mapping: %w", err)
+		}
+		mapped, err := p.mapping.Query(structured)
+		if err != nil {
+			return fmt.Errorf("executing mapping: %w", err)
+		}
+		msg.SetStructured(mapped)
+	}
+
 	b, err := msg.AsBytes()
 	if err != nil {
 		return fmt.Errorf("reading message body: %w", err)
@@ -1377,7 +1502,11 @@ func v1SearchPostConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Services", "Notion").
 		Summary("Search `POST /v1/search`").
-		Fields(sharedConfigFields()...).Fields()
+		Fields(sharedConfigFields()...).Fields(
+		service.NewBloblangField("mapping").
+			Optional().
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to messages before unmarshaling into the request body."),
+	)
 }
 
 type v1SearchPostProcessor struct {
@@ -1418,6 +1547,18 @@ func (p *v1SearchPostProcessor) processV1SearchPost(ctx context.Context, idx int
 	params := v1.V1SearchPostParams{
 		NotionVersion: v1.NewOptString(p.notionVersion),
 	}
+	if p.mapping != nil {
+		structured, err := msg.AsStructured()
+		if err != nil {
+			return fmt.Errorf("parsing message for mapping: %w", err)
+		}
+		mapped, err := p.mapping.Query(structured)
+		if err != nil {
+			return fmt.Errorf("executing mapping: %w", err)
+		}
+		msg.SetStructured(mapped)
+	}
+
 	b, err := msg.AsBytes()
 	if err != nil {
 		return fmt.Errorf("reading message body: %w", err)

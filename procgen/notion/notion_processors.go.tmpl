@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	v1 "{{ .APIPackage }}"
@@ -46,33 +47,34 @@ func sharedConfigFields() []*service.ConfigField {
 type baseProcessor struct {
 	client        *v1.Client
 	notionVersion string
+	mapping       *bloblang.Executor
 	log           *service.Logger
 }
 
-func baseProcessorFromParsed(conf *service.ParsedConfig, log *service.Logger) (baseProcessor, error) {
+func baseProcessorFromParsed(conf *service.ParsedConfig, log *service.Logger) (p baseProcessor, err error) {
+	p.log = log
+
 	apiKey, err := conf.FieldString(npFieldAPIKey)
 	if err != nil {
-		return baseProcessor{}, err
+		return p, err
 	}
-	notionVersion, err := conf.FieldString(npFieldNotionVersion)
-	if err != nil {
-		return baseProcessor{}, err
+	if p.notionVersion, err = conf.FieldString(npFieldNotionVersion); err != nil {
+		return p, err
 	}
 	serverURL, err := conf.FieldString(npFieldServerURL)
 	if err != nil {
-		return baseProcessor{}, err
+		return p, err
+	}
+	if p.client, err = v1.NewClient(serverURL, &securitySource{token: apiKey}); err != nil {
+		return p, fmt.Errorf("creating {{ .Service | title }} client: %w", err)
+	}
+	if conf.Contains("mapping") {
+		if p.mapping, err = conf.FieldBloblang("mapping"); err != nil {
+			return p, err
+		}
 	}
 
-	client, err := v1.NewClient(serverURL, &securitySource{token: apiKey})
-	if err != nil {
-		return baseProcessor{}, fmt.Errorf("creating {{ .Service | title }} client: %w", err)
-	}
-
-	return baseProcessor{
-		client:        client,
-		notionVersion: notionVersion,
-		log:           log,
-	}, nil
+	return p, nil
 }
 
 func (p *baseProcessor) Close(context.Context) error { return nil }
@@ -117,6 +119,11 @@ func {{ .Name | lowerFirst }}Config() *service.ConfigSpec {
 		Description({{ .Description | printf "%q" }}).
 		{{- end }}
 		Fields(sharedConfigFields()...).Fields(
+		{{- if .HasRequestBody }}
+		service.NewBloblangField("mapping").
+			Optional().
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to messages before unmarshaling into the request body."),
+		{{- end }}
 		{{- range .PathParams }}
 		service.NewInterpolatedStringField("{{ .FieldName }}").
 			Description({{ .Description | printf "%q" }}),
@@ -225,6 +232,18 @@ func (p *{{ .Name | lowerFirst }}Processor) process{{ .Name }}(ctx context.Conte
 	{{- end }}
 
 	{{- if .HasRequestBody }}
+	if p.mapping != nil {
+		structured, err := msg.AsStructured()
+		if err != nil {
+			return fmt.Errorf("parsing message for mapping: %w", err)
+		}
+		mapped, err := p.mapping.Query(structured)
+		if err != nil {
+			return fmt.Errorf("executing mapping: %w", err)
+		}
+		msg.SetStructured(mapped)
+	}
+
 	b, err := msg.AsBytes()
 	if err != nil {
 		return fmt.Errorf("reading message body: %w", err)
