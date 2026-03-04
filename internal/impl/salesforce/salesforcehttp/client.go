@@ -205,12 +205,66 @@ func (s *Client) GetSObjectData(ctx context.Context, query string) ([]byte, erro
 	q.Set("q", query)
 	apiUrl.RawQuery = q.Encode()
 
-	body, err := s.callSalesforceAPI(ctx, apiUrl)
+	body, err := s.callSalesforceQueryAPI(ctx, apiUrl)
 	if err != nil {
 		return nil, err
 	}
 
 	return body, nil
+}
+
+// callSalesforceQueryAPI is like callSalesforceAPI but adds the Sforce-Query-Options
+// batchSize header so Salesforce returns at most queryBatchSize records per page.
+func (s *Client) callSalesforceQueryAPI(ctx context.Context, u *url.URL) ([]byte, error) {
+	s.log.Debugf("Query API call: %s", u.String())
+
+	if s.getBearerToken() == "" {
+		if err := s.updateAndSetBearerToken(ctx); err != nil {
+			return nil, err
+		}
+	}
+
+	body, err := s.doSalesforceQueryRequest(ctx, u)
+	if err == nil {
+		return body, nil
+	}
+
+	httpErr, ok := err.(*HTTPError)
+	if !ok {
+		return nil, err
+	}
+
+	if httpErr.StatusCode != http.StatusUnauthorized {
+		return nil, err
+	}
+
+	s.log.Warn("Salesforce token expired, refreshing token...")
+	if err := s.updateAndSetBearerToken(ctx); err != nil {
+		return nil, fmt.Errorf("failed to refresh token: %w", err)
+	}
+
+	retryBody, retryErr := s.doSalesforceQueryRequest(ctx, u)
+	if retryErr != nil {
+		return nil, fmt.Errorf("request failed: %w", retryErr)
+	}
+
+	return retryBody, nil
+}
+
+func (s *Client) doSalesforceQueryRequest(ctx context.Context, u *url.URL) ([]byte, error) {
+	newReq := func() (*http.Request, error) {
+		req, err := http.NewRequestWithContext(ctx, "GET", u.String(), nil)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Accept", "application/json")
+		req.Header.Set("User-Agent", "Redpanda-Connect")
+		req.Header.Set("Authorization", "Bearer "+s.getBearerToken())
+		req.Header.Set("Sforce-Query-Options", fmt.Sprintf("batchSize=%d", s.queryBatchSize))
+		return req, nil
+	}
+
+	return DoRequestWithRetries(ctx, s.httpClient, newReq, s.retryOpts)
 }
 
 // SObjectInfo holds basic info about an SObject
@@ -243,6 +297,10 @@ type Client struct {
 	sobjectListMu sync.Mutex
 	sobjectList   []SObjectInfo
 
+	// queryBatchSize controls the Sforce-Query-Options batchSize header (200–2000).
+	// Smaller values produce faster individual responses at the cost of more pages.
+	queryBatchSize int
+
 	// SObjects that returned 400 during data fetch — never retry them
 	unsupportedSObjects map[string]struct{}
 }
@@ -253,7 +311,12 @@ func (s *Client) getBearerToken() string {
 }
 
 // NewClient is the constructor for a Client object
-func NewClient(orgURL, clientID, clientSecret, apiVersion string, maxRetries int, httpClient *http.Client, log *service.Logger, m *service.Metrics) (*Client, error) {
+func NewClient(orgURL, clientID, clientSecret, apiVersion string, maxRetries, queryBatchSize int, httpClient *http.Client, log *service.Logger, m *service.Metrics) (*Client, error) {
+	if queryBatchSize < 200 {
+		queryBatchSize = 200
+	} else if queryBatchSize > 2000 {
+		queryBatchSize = 2000
+	}
 	return &Client{
 		log:          log,
 		orgURL:       orgURL,
@@ -264,6 +327,7 @@ func NewClient(orgURL, clientID, clientSecret, apiVersion string, maxRetries int
 			MaxRetries: maxRetries,
 		},
 		httpClient:          metrics.NewInstrumentedClient(m, "salesforce_http", httpClient),
+		queryBatchSize:      queryBatchSize,
 		unsupportedSObjects: make(map[string]struct{}),
 	}, nil
 }
@@ -413,6 +477,18 @@ func (s *Client) GetNextBatchParallel(ctx context.Context, cursor Cursor, parall
 						results[i] = slotResult{slotIdx: i, done: true, skipped: true}
 						return
 					}
+					if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+						s.unsupportedSObjects[slot.SObjectName] = struct{}{}
+						s.log.Warnf("Skipping SObject %s permanently: query timed out: query=%q", slot.SObjectName, soql)
+						results[i] = slotResult{slotIdx: i, done: true, skipped: true}
+						return
+					}
+					if strings.Contains(err.Error(), "request header list") {
+						s.unsupportedSObjects[slot.SObjectName] = struct{}{}
+						s.log.Warnf("Skipping SObject %s permanently: query URL too large (too many fields)", slot.SObjectName)
+						results[i] = slotResult{slotIdx: i, done: true, skipped: true}
+						return
+					}
 					s.log.Errorf("Failed to fetch SObject %s: %v", slot.SObjectName, err)
 					results[i] = slotResult{slotIdx: i} // keep slot, retry next trigger
 					return
@@ -546,7 +622,28 @@ func (s *Client) loadSObjectList(ctx context.Context) error {
 	}
 
 	skipList := map[string]bool{
-		"AIUpdateRecordEvent": true,
+		"AIUpdateRecordEvent":              true,
+		"AccountUserTerritory2View":        true,
+		"ApexTypeImplementor":      true,
+		"ActionableListMember":     true,
+		"ApexPageInfo":             true,
+		"AuraDefinitionBundleInfo": true,
+		"AuraDefinitionInfo":       true,
+		"AppTabMember":             true,
+		"Campaign":                 true,
+		"ColorDefinition":          true,
+		"ContentDocumentLink":      true,
+		"ContentFolderItem":        true,
+		"ContentFolderMember":      true,
+		"DataType":                 true,
+		"DatacloudAddress":         true,
+		"DataStatistics":           true,
+		"EntityParticle":           true,
+		"FieldChangeSnapshot":      true,
+		"FieldDefinition":          true,
+		"EntityDefinition":         true,
+		"FlexQueueItem":            true,
+		"FlowDefinitionView":       true,
 	}
 
 	// Collect queryable candidates, preserving order.
@@ -620,7 +717,7 @@ func (s *Client) fetchNextRecordsPage(ctx context.Context, nextURL string) ([]by
 		return nil, fmt.Errorf("invalid next records URL: %w", err)
 	}
 
-	return s.callSalesforceAPI(ctx, apiUrl)
+	return s.callSalesforceQueryAPI(ctx, apiUrl)
 }
 
 func extractFieldNames(describeJSON []byte) ([]string, error) {

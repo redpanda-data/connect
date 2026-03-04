@@ -194,7 +194,10 @@ pipeline:
 			Default("salesforce_checkpoint")).
 		Field(service.NewIntField("parallel_fetch").
 			Description("Number of SObjects to fetch concurrently during the REST snapshot (no-query mode). Higher values improve throughput but consume more API quota.").
-			Default(1))
+			Default(1)).
+		Field(service.NewIntField("query_batch_size").
+			Description("Number of records Salesforce returns per query page (200–2000). Lower values reduce individual response size and avoid timeouts on wide SObjects.").
+			Default(2000))
 }
 
 func newSalesforceProcessor(conf *service.ParsedConfig, mgr *service.Resources) (*salesforceProcessor, error) {
@@ -315,6 +318,11 @@ func newSalesforceProcessor(conf *service.ParsedConfig, mgr *service.Resources) 
 		parallelFetch = 1
 	}
 
+	queryBatchSize, err := conf.FieldInt("query_batch_size")
+	if err != nil {
+		return nil, err
+	}
+
 	// Build the CDC topic name: pubsub_topic takes priority, otherwise derive from cdc_objects
 	cdcTopicName := pubsubTopic
 	if cdcTopicName == "" {
@@ -323,7 +331,7 @@ func newSalesforceProcessor(conf *service.ParsedConfig, mgr *service.Resources) 
 
 	httpClient := &http.Client{Timeout: timeout}
 
-	salesforceHttp, err := salesforcehttp.NewClient(orgURL, clientID, clientSecret, apiVersion, maxRetries, httpClient, mgr.Logger(), mgr.Metrics())
+	salesforceHttp, err := salesforcehttp.NewClient(orgURL, clientID, clientSecret, apiVersion, maxRetries, queryBatchSize, httpClient, mgr.Logger(), mgr.Metrics())
 	if err != nil {
 		return nil, err
 	}

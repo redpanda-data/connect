@@ -117,13 +117,9 @@ func (s *salesforceProcessor) dispatchWithCheckpoint(ctx context.Context) (servi
 		return s.dispatchCDC(ctx, state)
 	}
 
-	// If snapshot is already complete but CDC is not enabled, reset for next scan
+	// If snapshot is already complete and CDC is not enabled, stay idle
 	if state.SnapshotComplete {
-		state.SnapshotComplete = false
-		state.RestCursor = salesforcehttp.Cursor{}
-		if err := s.saveState(ctx, state); err != nil {
-			s.log.Errorf("failed to reset state after completion: %v", err)
-		}
+		s.log.Info("Snapshot already complete, all Salesforce data has been read. Staying idle.")
 		return nil, nil
 	}
 
@@ -145,12 +141,8 @@ func (s *salesforceProcessor) dispatchWithCheckpoint(ctx context.Context) (servi
 			return nil, nil
 		}
 
-		// CDC not enabled: reset for next full scan
-		s.log.Info("All Salesforce records processed, waiting for next poll interval")
-		state.SnapshotComplete = false
-		if err := s.saveState(ctx, state); err != nil {
-			s.log.Errorf("failed to reset checkpoint after completion: %v", err)
-		}
+		// CDC not enabled: stay idle, snapshot is done
+		s.log.Info("All Salesforce records processed")
 		return nil, nil
 	}
 
@@ -406,7 +398,7 @@ func (s *salesforceProcessor) loadState(ctx context.Context) (ProcessorState, er
 	// Try loading new format first
 	raw, err := s.accessCache(ctx, "sf_state")
 	if err != nil {
-		return ProcessorState{}, nil
+		return ProcessorState{}, fmt.Errorf("failed to read checkpoint from cache: %w", err)
 	}
 	if raw != "" {
 		var state ProcessorState
@@ -419,7 +411,7 @@ func (s *salesforceProcessor) loadState(ctx context.Context) (ProcessorState, er
 	// Backward compatibility: try old "sf_cursor" key
 	oldRaw, err := s.accessCache(ctx, "sf_cursor")
 	if err != nil {
-		return ProcessorState{}, nil
+		return ProcessorState{}, fmt.Errorf("failed to read legacy checkpoint from cache: %w", err)
 	}
 	if oldRaw != "" {
 		var cursor salesforcehttp.Cursor
