@@ -222,7 +222,6 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 	}
 
 	lm.currentSCN = endSCN
-
 	return endSCN >= dbCurrentSCN, nil
 }
 
@@ -249,7 +248,7 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 			return fmt.Errorf("parsing sql redo event into dml event: %w", err)
 		}
 
-		lm.txnCache.AddEvent(redoEvent.TransactionID, redoEvent.SCN, event)
+		lm.txnCache.AddEvent(redoEvent.TransactionID, redoEvent.SCN, &event)
 
 	case sqlredo.OpCommit:
 		// Flush all buffered events for this transaction

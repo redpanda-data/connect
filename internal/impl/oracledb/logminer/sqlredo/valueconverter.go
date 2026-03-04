@@ -22,8 +22,8 @@ type OracleValueConverter struct {
 }
 
 // NewOracleValueConverter creates a new converter with the specified timezone
-func NewOracleValueConverter(timezone *time.Location) *OracleValueConverter {
-	return &OracleValueConverter{
+func NewOracleValueConverter(timezone *time.Location) OracleValueConverter {
+	return OracleValueConverter{
 		timezone: timezone,
 	}
 }

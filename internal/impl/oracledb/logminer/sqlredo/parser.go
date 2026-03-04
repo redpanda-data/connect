@@ -24,7 +24,7 @@ import (
 //	UPDATE: update "schema"."table" set "C1" = 'v1', "C2" = 'v2' where "C1" = 'old1' and "C2" = 'old2';
 //	DELETE: delete from "schema"."table" where "C1" = 'v1' and "C2" = 'v2';
 type Parser struct {
-	valueConverter *OracleValueConverter
+	valueConverter OracleValueConverter
 }
 
 // NewParser creates a new Parser instance for parsing SQL_REDO statements.
@@ -38,12 +38,12 @@ func NewParser() *Parser {
 }
 
 // RedoEventToDMLEvent converts a RedoEvent (from V$LOGMNR_CONTENTS) into a DMLEvent
-func (p *Parser) RedoEventToDMLEvent(redoEvent *RedoEvent) (*DMLEvent, error) {
+func (p Parser) RedoEventToDMLEvent(redoEvent *RedoEvent) (DMLEvent, error) {
 	if len(redoEvent.SQLRedo.String) == 0 {
-		return nil, errors.New("empty SQL statement")
+		return DMLEvent{}, errors.New("empty SQL statement")
 	}
 
-	event := &DMLEvent{
+	event := DMLEvent{
 		Operation: redoEvent.Operation,
 		Timestamp: redoEvent.Timestamp,
 	}
@@ -63,13 +63,13 @@ func (p *Parser) RedoEventToDMLEvent(redoEvent *RedoEvent) (*DMLEvent, error) {
 	// Parse SQL to AST
 	stmt, err := ParseSQLCommand(redoEvent.SQLRedo.String)
 	if err != nil {
-		return nil, fmt.Errorf("parsing sql from redo log: %w", err)
+		return DMLEvent{}, fmt.Errorf("parsing sql from redo log: %w", err)
 	}
 
 	// Extract values from AST
 	newValues, _, err := ExtractValuesFromAST(stmt)
 	if err != nil {
-		return nil, fmt.Errorf("extracting values from AST: %w", err)
+		return DMLEvent{}, fmt.Errorf("extracting values from AST: %w", err)
 	}
 
 	event.Data = make(map[string]any, len(newValues))
