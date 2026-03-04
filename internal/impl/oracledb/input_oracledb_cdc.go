@@ -41,6 +41,13 @@ const (
 	ociFieldBatching                  = "batching"
 
 	shutdownTimeout = 5 * time.Second
+
+	//-- logminer specific
+	ociFieldLogMiner             = "logminer"
+	ociFieldSCNWindowSize        = "scn_window_size"
+	ociFieldBackoffInterval      = "backoff_interval"
+	ociFieldMiningStrategy       = "strategy"
+	ociFieldMaxTransactionEvents = "max_transaction_events"
 )
 
 func init() {
@@ -83,7 +90,23 @@ When using the default Oracle based cache, the Connect user requires permission 
 		Description("The maximum number of rows to be streamed in a single batch when taking a snapshot.").
 		Default(1000),
 	).
-	Field(logminer.NewConfigFields()).
+	// logminer config
+	Field(service.NewObjectField(ociFieldLogMiner,
+		service.NewIntField(ociFieldSCNWindowSize).
+			Description("The SCN range to mine per cycle. Each cycle reads changes between the current SCN and current SCN + scn_window_size. Smaller values mean more frequent queries with lower memory usage but higher overhead; larger values reduce query frequency and improve throughput at the cost of higher memory usage per cycle.").
+			Default(logminer.DefaultSCNWindowSize),
+		service.NewDurationField(ociFieldBackoffInterval).
+			Description("The interval between attempts to check for new changes once all data is processed. For low traffic tables increasing this value can reduce network traffic to the server.").
+			Default(logminer.DefaultBackoffInterval.String()).
+			Example("5s").Example("1m"),
+		service.NewStringField(ociFieldMiningStrategy).
+			Description("Controls how LogMiner retrieves data dictionary information. `online_catalog` (default) uses the current data dictionary for best performance but cannot capture DDL changes. `online_catalog` currently only supported.").
+			Default(logminer.DefaultMiningStrategy),
+		service.NewIntField(ociFieldMaxTransactionEvents).
+			Description("The maximum number of events that can be buffered for a single transaction. If a transaction exceeds this limit it is discarded and its events will not be emitted. Set to 0 to disable the limit.").
+			Default(logminer.DefaultMaxTransactionEvents),
+	).Description("LogMiner configuration settings."),
+	).
 	Field(service.NewStringListField(ociFieldTablesInclude).
 		Description("Regular expressions for tables to include.").
 		Example("SCHEMA.PRODUCTS"),
@@ -550,28 +573,28 @@ func parseLogMinerConfig(conf *service.ParsedConfig) (*logminer.Config, error) {
 		err error
 		cfg *logminer.Config
 	)
-	if conf.Contains(logminer.OciFieldLogMiner) {
-		lmConf := conf.Namespace(logminer.OciFieldLogMiner)
+	if conf.Contains(ociFieldLogMiner) {
+		lmConf := conf.Namespace(ociFieldLogMiner)
 		cfg = logminer.NewDefaultConfig()
-		if cfg.SCNWindowSize, err = lmConf.FieldInt(logminer.OciFieldSCNWindowSize); err != nil {
+		if cfg.SCNWindowSize, err = lmConf.FieldInt(ociFieldSCNWindowSize); err != nil {
 			return nil, err
 		}
 		if cfg.SCNWindowSize <= 0 {
-			return nil, fmt.Errorf("logminer.%s must be greater than 0, got %d", logminer.OciFieldSCNWindowSize, cfg.SCNWindowSize)
+			return nil, fmt.Errorf("logminer.%s must be greater than 0, got %d", ociFieldSCNWindowSize, cfg.SCNWindowSize)
 		}
-		if cfg.MiningBackoffInterval, err = lmConf.FieldDuration(logminer.OciFieldBackoffInterval); err != nil {
+		if cfg.MiningBackoffInterval, err = lmConf.FieldDuration(ociFieldBackoffInterval); err != nil {
 			return nil, err
 		}
-		if strategy, err := lmConf.FieldString(logminer.OciFieldMiningStrategy); err != nil {
+		if strategy, err := lmConf.FieldString(ociFieldMiningStrategy); err != nil {
 			return nil, err
 		} else {
 			cfg.MiningStrategy = logminer.MiningStrategy(strategy)
 		}
-		if cfg.MaxTransactionEvents, err = lmConf.FieldInt(logminer.OciFieldMaxTransactionEvents); err != nil {
+		if cfg.MaxTransactionEvents, err = lmConf.FieldInt(ociFieldMaxTransactionEvents); err != nil {
 			return nil, err
 		}
 		if cfg.MaxTransactionEvents < 0 {
-			return nil, fmt.Errorf("logminer.%s must be greater than or equal to 0, got %d", logminer.OciFieldMaxTransactionEvents, cfg.MaxTransactionEvents)
+			return nil, fmt.Errorf("logminer.%s must be greater than or equal to 0, got %d", ociFieldMaxTransactionEvents, cfg.MaxTransactionEvents)
 		}
 	}
 
