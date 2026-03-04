@@ -305,28 +305,36 @@ func querySnapshotTable(ctx context.Context, tx *sql.Tx, table UserTable, pk []s
 	// Oracle uses positional parameters (:1, :2, etc.) or named parameters
 	var (
 		lastSeenPkVals []any
-		conditions     []string
 		paramIdx       int
+		where          strings.Builder
 	)
 
+	where.WriteString("WHERE ")
 	for i := range pk {
-		var condParts []string
+		if i > 0 {
+			where.WriteString(" OR ")
+		}
+		where.WriteString("(")
 		// Add equality conditions for all previous columns
 		for j := range i {
+			if j > 0 {
+				where.WriteString(" AND ")
+			}
 			paramIdx++
-			condParts = append(condParts, fmt.Sprintf(`"%s" = :%d`, pk[j], paramIdx))
+			fmt.Fprintf(&where, `"%s" = :%d`, pk[j], paramIdx)
 			lastSeenPkVals = append(lastSeenPkVals, lastSeenPkVal[pk[j]])
 		}
 		// Add greater-than condition for current column
+		if i > 0 {
+			where.WriteString(" AND ")
+		}
 		paramIdx++
-		condParts = append(condParts, fmt.Sprintf(`"%s" > :%d`, pk[i], paramIdx))
+		fmt.Fprintf(&where, `"%s" > :%d`, pk[i], paramIdx)
 		lastSeenPkVals = append(lastSeenPkVals, lastSeenPkVal[pk[i]])
-
-		conditions = append(conditions, "("+strings.Join(condParts, " AND ")+")")
+		where.WriteString(")")
 	}
 
-	res := "WHERE " + strings.Join(conditions, " OR ")
-	snapshotQueryParts = append(snapshotQueryParts, res)
+	snapshotQueryParts = append(snapshotQueryParts, where.String())
 	snapshotQueryParts = append(snapshotQueryParts, buildOrderByClause(pk))
 	snapshotQueryParts = append(snapshotQueryParts, fmt.Sprintf("FETCH FIRST %d ROWS ONLY", limit))
 	q := strings.Join(snapshotQueryParts, " ")
