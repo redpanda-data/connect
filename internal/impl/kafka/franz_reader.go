@@ -171,11 +171,11 @@ Finally, it's also possible to specify an explicit offset to consume from by add
 			Default("45s").
 			Advanced(),
 		service.NewDurationField(kfrFieldSessionTimeout).
-			Description("When using a consumer group, `session_timeout` sets how long a member in hte group can go between heartbeats. If a member does not heartbeat in this timeout, the broker will remove the member from the group and initiate a rebalance.").
+			Description("When using a consumer group, `session_timeout` sets how long a member in the group can go between heartbeats. If a member does not heartbeat in this timeout, the broker will remove the member from the group and initiate a rebalance.").
 			Default("1m").
 			Advanced(),
 		service.NewDurationField(kfrFieldHeartbeatInterval).
-			Description("When using a consumer group, `heartbeat_interval` sets how long a group member goes between heartbeats to Kafka. Kafka uses heartbeats to ensure that a group member's sesion stays active. This value should be no higher than 1/3rd of the `session_timeout`. This is equivalent to the Java heartbeat.interval.ms setting.").
+			Description("When using a consumer group, `heartbeat_interval` sets how long a group member goes between heartbeats to Kafka. Kafka uses heartbeats to ensure that a group member's session stays active. This value should be no higher than 1/3rd of the `session_timeout`. This is equivalent to the Java heartbeat.interval.ms setting.").
 			Default("3s").
 			Advanced(),
 		service.NewBoolField(kfrFieldStartFromOldest).

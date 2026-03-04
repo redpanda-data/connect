@@ -601,7 +601,7 @@ func (s *Stream) processSnapshot(ctx context.Context, snapshotter *snapshotter) 
 
 		var prev primaryKey
 		ranges := [][2]primaryKey{}
-		// We have a sorted key space, sample every N keys to get a uniform distibution.
+		// We have a sorted key space, sample every N keys to get a uniform distribution.
 		chunkSize := len(splits) / s.maxSnapshotWorkers
 		for i := chunkSize; i < len(splits); i += chunkSize {
 			pk := splits[i]

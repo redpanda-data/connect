@@ -48,7 +48,7 @@ output:
     apikey: <Your API Key>`).
 		Example(
 			"To Timeplus Enterprise (self-hosted)",
-			"For self-housted Timeplus Enterprise, you will need to specify the username and password as well as the URL of the App server",
+			"For self-hosted Timeplus Enterprise, you will need to specify the username and password as well as the URL of the App server",
 			`
 output:
   timeplus:
@@ -69,13 +69,13 @@ output:
     password: pw`).
 		Example(
 			"Unstructured message",
-			"If the upstream source or pipeline returns unstructured message such as string, you can leverage the output processors to wrap it into a stucture message and then pass it to the output. This example create a strcutre mesasge with `raw` field and store the original string content into this field. You can modify the name of this `raw` field to whatever you want. Please make sure the destiation stream contains such field",
+			"If the upstream source or pipeline returns unstructured message such as string, you can leverage the output processors to wrap it into a structured message and then pass it to the output. This example create a structured message with `raw` field and store the original string content into this field. You can modify the name of this `raw` field to whatever you want. Please make sure the destination stream contains such field",
 			`
 output:
   timeplus:
     workspace: my_workspace_id
     stream: mystream
-    apikey: <Api key genereated on web console>
+    apikey: <Api key generated on web console>
 
   processors:
     - mapping: |

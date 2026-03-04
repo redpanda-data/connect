@@ -322,7 +322,7 @@ output:
 		).
 		Example(
 			"HTTP Server to push data to Snowflake",
-			`This example demonstrates how to create an HTTP server input that can recieve HTTP PUT requests
+			`This example demonstrates how to create an HTTP server input that can receive HTTP PUT requests
 with JSON payloads, that are buffered locally then written to Snowflake in batches.
 
 NOTE: This example uses a buffer to respond to the HTTP request immediately, so it's possible that failures to deliver data could result in data loss.

@@ -226,7 +226,7 @@ Parallelism for snapshot phase.
 
 === `snapshot_auto_bucket_sharding`
 
-If true, determine parallel snapshot chunks using `$bucketAuto` instead of the `splitVector` command. This allows parallel collection reading in environments where privledged access to the MongoDB cluster is not allowed such as MongoDB Atlas.
+If true, determine parallel snapshot chunks using `$bucketAuto` instead of the `splitVector` command. This allows parallel collection reading in environments where privileged access to the MongoDB cluster is not allowed such as MongoDB Atlas.
 
 
 *Type*: `bool`

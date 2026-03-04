@@ -39,7 +39,7 @@ Writes a batch of messages to Kafka brokers and waits for acknowledgement before
 `).
 		Fields(redpandaOutputConfigFields()...).
 		LintRule(FranzWriterConfigLints()).
-		Example("Simple Common Output", "Data is generated and written to a topic bar, targetting the cluster configured within the redpanda block at the bottom. This is useful as it allows us to configure TLS and SASL only once for potentially multiple inputs and outputs.", `
+		Example("Simple Common Output", "Data is generated and written to a topic bar, targeting the cluster configured within the redpanda block at the bottom. This is useful as it allows us to configure TLS and SASL only once for potentially multiple inputs and outputs.", `
 input:
   generate:
     interval: 1s

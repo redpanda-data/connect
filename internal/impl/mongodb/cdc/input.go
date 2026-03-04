@@ -115,7 +115,7 @@ Each message omitted by this plugin has the following metadata:
   this < 1 => ["field snapshot_parallelism must be greater or equal to 1."],
 }`),
 			service.NewBoolField(fieldBucketSharding).
-				Description("If true, determine parallel snapshot chunks using `$bucketAuto` instead of the `splitVector` command. This allows parallel collection reading in environments where privledged access to the MongoDB cluster is not allowed such as MongoDB Atlas.").
+				Description("If true, determine parallel snapshot chunks using `$bucketAuto` instead of the `splitVector` command. This allows parallel collection reading in environments where privileged access to the MongoDB cluster is not allowed such as MongoDB Atlas.").
 				Default(false).
 				Advanced(),
 			service.NewStringAnnotatedEnumField(fieldDocumentMode, map[string]string{
