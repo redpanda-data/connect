@@ -35,6 +35,7 @@ import (
 const (
 	rmoFieldTopic                  = "topic"
 	rmoFieldTopicReplicationFactor = "topic_replication_factor"
+	rmoFieldSyncTopicInterval      = "sync_topic_interval"
 	rmoFieldSyncTopicACLs          = "sync_topic_acls"
 	rmoFieldServerless             = "serverless"
 	rmoFieldProvenanceHeader       = "provenance_header"
@@ -258,7 +259,13 @@ output:
 			Example("3").
 			Example("1  # For single-node clusters").
 			Optional()).
-		// ACL fields
+		Field(service.NewDurationField(rmoFieldSyncTopicInterval).
+			Description("How often to synchronize topics from the source cluster to the destination. This creates destination topics for any new source topics, including empty topics with no message flow. Set to 0s to disable periodic sync (topics are still created on first message).").
+			Example("0s     # Disable periodic sync").
+			Example("1m     # Sync every minute").
+			Example("5m     # Sync every 5 minutes").
+			Default("5m").
+			Advanced()).
 		Field(service.NewBoolField(rmoFieldSyncTopicACLs).
 			Description("Whether to synchronise topic ACLs from source to destination cluster. ACLs are transformed safely: ALLOW WRITE permissions are excluded, and ALLOW ALL is downgraded to ALLOW READ to prevent conflicts.").
 			Default(false)).
@@ -551,9 +558,20 @@ func (m *Migrator) onOutputConnected(_ context.Context, fw franzWriter) error {
 	m.groups.dstAdm = dstAdm
 	m.mu.Unlock()
 
-	// Syncing topics is deferred until the first message is received because
-	// we use GetConsumeTopics, which is only available after the first message
-	// is received.
+	// Start a periodic topic sync loop to handle empty topics that would
+	// otherwise never trigger creation via message flow, and to pick up
+	// new topics that appear after the initial data migration.
+	go m.topic.SyncLoop(ctx, dstAdm, func() (*kadm.Client, func() []string) {
+		m.mu.RLock()
+		src := m.src
+		srcAdm := m.srcAdm
+		m.mu.RUnlock()
+
+		if src == nil || srcAdm == nil {
+			return nil, nil
+		}
+		return srcAdm, src.GetConsumeTopics
+	})
 
 	// Sync the schema registry once
 	if err := m.sr.Sync(ctx); err != nil {

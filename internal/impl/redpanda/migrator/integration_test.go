@@ -1202,7 +1202,6 @@ func TestIntegrationMigratorEmptyTopicReplication(t *testing.T) {
 	integration.CheckSkip(t)
 
 	const (
-		numMessages    = 100
 		topicPopulated = "topic_populated"
 		topicEmpty     = "topic_empty"
 	)
@@ -1216,13 +1215,10 @@ func TestIntegrationMigratorEmptyTopicReplication(t *testing.T) {
 	src.CreateTopic(topicPopulated)
 	src.CreateTopic(topicEmpty)
 
-	t.Log("When: Messages are written only to the populated topic")
-	for i := range numMessages {
-		src.Produce(topicPopulated, []byte(strconv.Itoa(i)))
-	}
-	t.Logf("Successfully wrote %d messages to topic %s", numMessages, topicPopulated)
+	t.Log("And: A single message in the populated topic to bootstrap the consumer group")
+	src.Produce(topicPopulated, []byte("bootstrap"))
 
-	t.Log("And: Migrator is started for both topics")
+	t.Log("When: Migrator is started with a 1s topic sync interval")
 	const yamlTmpl = `
 input:
   redpanda_migrator:
@@ -1235,6 +1231,7 @@ input:
 output:
   redpanda_migrator:
     seed_brokers: [ {{.Dst.BrokerAddr}} ]
+    sync_topic_interval: 1s
 logger:
   level: DEBUG
 `
@@ -1258,9 +1255,7 @@ logger:
 	sb := service.NewStreamBuilder()
 	require.NoError(t, sb.SetYAML(yamlBuf.String()))
 
-	msgChan := make(chan *service.Message, numMessages)
-	require.NoError(t, sb.AddConsumerFunc(func(_ context.Context, m *service.Message) error {
-		msgChan <- m
+	require.NoError(t, sb.AddConsumerFunc(func(_ context.Context, _ *service.Message) error {
 		return nil
 	}))
 
@@ -1276,35 +1271,13 @@ logger:
 		require.NoError(t, stream.StopWithin(stopStreamTimeout))
 	})
 
-	t.Logf("Then: All %d messages from %s are migrated", numMessages, topicPopulated)
-	for i := range numMessages {
-		select {
-		case <-msgChan:
-		case <-time.After(redpandaTestWaitTimeout):
-			t.Fatalf("Timed out waiting for message %d of %d", i+1, numMessages)
-		}
-	}
-
-	t.Logf("And: Populated topic %s exists on destination with %d messages", topicPopulated, numMessages)
-	assert.Eventually(t, func() bool {
-		eo, err := dst.Admin.ListEndOffsets(t.Context(), topicPopulated)
-		if err != nil {
-			t.Logf("list end offsets error for %s: %v", topicPopulated, err)
-			return false
-		}
-		var total int64
-		eo.Each(func(lo kadm.ListedOffset) {
-			total += lo.Offset
-		})
-		return total == int64(numMessages)
-	}, redpandaTestWaitTimeout, 500*time.Millisecond)
-
-	t.Logf("And: Empty topic %s exists on destination with 0 messages", topicEmpty)
+	t.Log("Then: Both topics exist on destination within 2s (synced by the periodic loop)")
 	assert.Eventually(t, func() bool {
 		topics := dst.ListTopics()
-		return slices.Contains(topics, topicEmpty)
-	}, redpandaTestWaitTimeout, 500*time.Millisecond)
+		return slices.Contains(topics, topicPopulated) && slices.Contains(topics, topicEmpty)
+	}, 2*time.Second, 200*time.Millisecond, "expected both topics to be synced within 2s")
 
+	t.Log("And: Empty topic has 0 messages on destination")
 	eo, err := dst.Admin.ListEndOffsets(t.Context(), topicEmpty)
 	require.NoError(t, err)
 	var emptyTotal int64

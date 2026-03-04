@@ -30,9 +30,12 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
-// TopicMigratorConfig controls how topics are created and synchronised on the
+// TopicMigratorConfig controls how topics are created and synchronized on the
 // destination cluster during migration.
 type TopicMigratorConfig struct {
+	// Interval is the period between topic sync runs. Zero disables periodic
+	// sync (topics are still created on first message).
+	Interval time.Duration
 	// NameResolver is an optional template used to derive the destination topic
 	// name from a source topic. When nil, the source name is used as-is.
 	NameResolver *service.InterpolatedString
@@ -49,6 +52,11 @@ type TopicMigratorConfig struct {
 
 func (m *TopicMigratorConfig) initFromParsed(pConf *service.ParsedConfig) error {
 	var err error
+
+	m.Interval, err = pConf.FieldDuration(rmoFieldSyncTopicInterval)
+	if err != nil {
+		return fmt.Errorf("get topic sync interval field: %w", err)
+	}
 
 	if pConf.Contains(rmoFieldTopic) {
 		if m.NameResolver, err = pConf.FieldInterpolatedString(rmoFieldTopic); err != nil {
@@ -144,6 +152,50 @@ func (m *topicMigrator) SyncOnce(
 	}
 	m.log.Infof("Topic migration: starting initial topic sync")
 	return m.Sync(ctx, srcAdm, dstAdm, topics)
+}
+
+// SyncLoop runs the topic sync in a loop at the configured interval until ctx
+// is done. If the interval is <= 0, no periodic sync is performed.
+//
+// The getSource callback returns the source admin client and a function that
+// returns the list of consumed topics. It is called on every tick because the
+// input side may not be connected yet when the output starts the loop. If
+// getSource returns nil values the tick is skipped.
+func (m *topicMigrator) SyncLoop(
+	ctx context.Context,
+	dstAdm *kadm.Client,
+	getSource func() (*kadm.Client, func() []string),
+) {
+	if m.conf.Interval <= 0 {
+		m.log.Info("Topic migration: periodic topic sync disabled (interval <= 0)")
+		return
+	}
+
+	m.log.Infof("Topic migration: starting topic sync loop every %s", m.conf.Interval)
+
+	t := time.NewTicker(m.conf.Interval)
+	defer t.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			m.log.Info("Topic migration: stopping topic sync loop")
+			return
+		case <-t.C:
+			srcAdm, getTopics := getSource()
+			if srcAdm == nil || getTopics == nil {
+				m.log.Warn("Topic migration: sync skipped, input not connected yet")
+				continue
+			}
+
+			if err := m.Sync(ctx, srcAdm, dstAdm, getTopics); err != nil {
+				if errors.Is(err, context.Canceled) {
+					return
+				}
+				m.log.Errorf("Topic migration: sync error: %v", err)
+			}
+		}
+	}
 }
 
 // hasKnownTopics returns true if there are any known topics.
