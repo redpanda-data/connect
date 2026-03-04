@@ -228,6 +228,6 @@ func (p *{{ .Name | lowerFirst }}Processor) Process(ctx context.Context, msg *se
 	if err != nil {
 		return handleAPIError(msg, err)
 	}
-	return marshalResponse(msg, &resp.Response)
+	return marshalResponse(msg, &resp)
 }
 {{ end }}

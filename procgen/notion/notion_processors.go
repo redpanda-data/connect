@@ -177,7 +177,7 @@ func (p *blocksIDChildrenGetProcessor) Process(ctx context.Context, msg *service
 	if err != nil {
 		return handleAPIError(msg, err)
 	}
-	return marshalResponse(msg, &resp.Response)
+	return marshalResponse(msg, &resp)
 }
 
 // BlocksIDChildrenPatch processor — patch /v1/blocks/{id}/children
@@ -247,7 +247,7 @@ func (p *blocksIDChildrenPatchProcessor) Process(ctx context.Context, msg *servi
 	if err != nil {
 		return handleAPIError(msg, err)
 	}
-	return marshalResponse(msg, &resp.Response)
+	return marshalResponse(msg, &resp)
 }
 
 // BlocksIDDelete processor — delete /v1/blocks/{id}
@@ -304,7 +304,7 @@ func (p *blocksIDDeleteProcessor) Process(ctx context.Context, msg *service.Mess
 	if err != nil {
 		return handleAPIError(msg, err)
 	}
-	return marshalResponse(msg, &resp.Response)
+	return marshalResponse(msg, &resp)
 }
 
 // BlocksIDGet processor — get /v1/blocks/{id}
@@ -361,7 +361,7 @@ func (p *blocksIDGetProcessor) Process(ctx context.Context, msg *service.Message
 	if err != nil {
 		return handleAPIError(msg, err)
 	}
-	return marshalResponse(msg, &resp.Response)
+	return marshalResponse(msg, &resp)
 }
 
 // BlocksIDPatch processor — patch /v1/blocks/{id}
@@ -432,7 +432,7 @@ func (p *blocksIDPatchProcessor) Process(ctx context.Context, msg *service.Messa
 	if err != nil {
 		return handleAPIError(msg, err)
 	}
-	return marshalResponse(msg, &resp.Response)
+	return marshalResponse(msg, &resp)
 }
 
 // CommentsGet processor — get /v1/comments
@@ -513,7 +513,7 @@ func (p *commentsGetProcessor) Process(ctx context.Context, msg *service.Message
 	if err != nil {
 		return handleAPIError(msg, err)
 	}
-	return marshalResponse(msg, &resp.Response)
+	return marshalResponse(msg, &resp)
 }
 
 // CommentsPost processor — post /v1/comments
@@ -569,7 +569,7 @@ func (p *commentsPostProcessor) Process(ctx context.Context, msg *service.Messag
 	if err != nil {
 		return handleAPIError(msg, err)
 	}
-	return marshalResponse(msg, &resp.Response)
+	return marshalResponse(msg, &resp)
 }
 
 // DatabasesIDGet processor — get /v1/databases/{id}
@@ -627,7 +627,7 @@ func (p *databasesIDGetProcessor) Process(ctx context.Context, msg *service.Mess
 	if err != nil {
 		return handleAPIError(msg, err)
 	}
-	return marshalResponse(msg, &resp.Response)
+	return marshalResponse(msg, &resp)
 }
 
 // DatabasesIDPatch processor — patch /v1/databases/{id}
@@ -697,7 +697,7 @@ func (p *databasesIDPatchProcessor) Process(ctx context.Context, msg *service.Me
 	if err != nil {
 		return handleAPIError(msg, err)
 	}
-	return marshalResponse(msg, &resp.Response)
+	return marshalResponse(msg, &resp)
 }
 
 // DatabasesIDQueryPost processor — post /v1/databases/{id}/query
@@ -767,7 +767,7 @@ func (p *databasesIDQueryPostProcessor) Process(ctx context.Context, msg *servic
 	if err != nil {
 		return handleAPIError(msg, err)
 	}
-	return marshalResponse(msg, &resp.Response)
+	return marshalResponse(msg, &resp)
 }
 
 // DatabasesPost processor — post /v1/databases/
@@ -823,7 +823,7 @@ func (p *databasesPostProcessor) Process(ctx context.Context, msg *service.Messa
 	if err != nil {
 		return handleAPIError(msg, err)
 	}
-	return marshalResponse(msg, &resp.Response)
+	return marshalResponse(msg, &resp)
 }
 
 // PagesIDGet processor — get /v1/pages/{id}
@@ -881,7 +881,7 @@ func (p *pagesIDGetProcessor) Process(ctx context.Context, msg *service.Message)
 	if err != nil {
 		return handleAPIError(msg, err)
 	}
-	return marshalResponse(msg, &resp.Response)
+	return marshalResponse(msg, &resp)
 }
 
 // PagesIDPatch processor — patch /v1/pages/{id}
@@ -951,7 +951,7 @@ func (p *pagesIDPatchProcessor) Process(ctx context.Context, msg *service.Messag
 	if err != nil {
 		return handleAPIError(msg, err)
 	}
-	return marshalResponse(msg, &resp.Response)
+	return marshalResponse(msg, &resp)
 }
 
 // PagesPageIDPropertiesPropertyIDGet processor — get /v1/pages/{page_id}/properties/{property_id}
@@ -1021,7 +1021,7 @@ func (p *pagesPageIDPropertiesPropertyIDGetProcessor) Process(ctx context.Contex
 	if err != nil {
 		return handleAPIError(msg, err)
 	}
-	return marshalResponse(msg, &resp.Response)
+	return marshalResponse(msg, &resp)
 }
 
 // PagesPost processor — post /v1/pages/
@@ -1077,7 +1077,7 @@ func (p *pagesPostProcessor) Process(ctx context.Context, msg *service.Message) 
 	if err != nil {
 		return handleAPIError(msg, err)
 	}
-	return marshalResponse(msg, &resp.Response)
+	return marshalResponse(msg, &resp)
 }
 
 // SearchPost processor — post /v1/search
@@ -1133,7 +1133,7 @@ func (p *searchPostProcessor) Process(ctx context.Context, msg *service.Message)
 	if err != nil {
 		return handleAPIError(msg, err)
 	}
-	return marshalResponse(msg, &resp.Response)
+	return marshalResponse(msg, &resp)
 }
 
 // UsersGet processor — get /v1/users
@@ -1177,7 +1177,7 @@ func (p *usersGetProcessor) Process(ctx context.Context, msg *service.Message) (
 	if err != nil {
 		return handleAPIError(msg, err)
 	}
-	return marshalResponse(msg, &resp.Response)
+	return marshalResponse(msg, &resp)
 }
 
 // UsersIDGet processor — get /v1/users/{id}
@@ -1235,7 +1235,7 @@ func (p *usersIDGetProcessor) Process(ctx context.Context, msg *service.Message)
 	if err != nil {
 		return handleAPIError(msg, err)
 	}
-	return marshalResponse(msg, &resp.Response)
+	return marshalResponse(msg, &resp)
 }
 
 // UsersMeGet processor — get /v1/users/me
@@ -1278,5 +1278,5 @@ func (p *usersMeGetProcessor) Process(ctx context.Context, msg *service.Message)
 	if err != nil {
 		return handleAPIError(msg, err)
 	}
-	return marshalResponse(msg, &resp.Response)
+	return marshalResponse(msg, &resp)
 }
