@@ -16,6 +16,7 @@ package cloudwatch
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"testing"
@@ -26,8 +27,10 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs/types"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 
 	_ "github.com/redpanda-data/connect/v4/public/components/pure"
@@ -108,6 +111,40 @@ func createLogGroupWithEvents(ctx context.Context, t testing.TB, cwlPort, logGro
 	return nil
 }
 
+// newTestCWLClient creates a CloudWatch Logs client pointed at the localstack endpoint.
+func newTestCWLClient(t testing.TB, cwlPort string) cloudWatchLogsAPI {
+	t.Helper()
+	endpoint := fmt.Sprintf("http://localhost:%v", cwlPort)
+
+	conf, err := config.LoadDefaultConfig(context.Background(),
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider("xxxxx", "xxxxx", "xxxxx")),
+		config.WithRegion("us-east-1"),
+	)
+	require.NoError(t, err)
+
+	conf.BaseEndpoint = &endpoint
+	return cloudwatchlogs.NewFromConfig(conf)
+}
+
+// collectMessages reads batches from the input until at least wantCount messages
+// are collected or the context expires.
+func collectMessages(t testing.TB, input *cloudWatchLogsInput, wantCount int, timeout time.Duration) []*service.Message {
+	t.Helper()
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	var all []*service.Message
+	for len(all) < wantCount {
+		batch, _, err := input.ReadBatch(ctx)
+		if err != nil {
+			break
+		}
+		all = append(all, batch...)
+	}
+	return all
+}
+
 func cloudWatchLogsIntegrationSuite(t *testing.T, lsPort string) {
 	t.Run("basic_consumption", func(t *testing.T) {
 		logGroupName := "test-log-group-" + t.Name()
@@ -115,40 +152,32 @@ func cloudWatchLogsIntegrationSuite(t *testing.T, lsPort string) {
 
 		// Create log group with events
 		require.NoError(t, createLogGroupWithEvents(ctx, t, lsPort, logGroupName, 10))
-
-		// Give LocalStack a moment to process
 		time.Sleep(500 * time.Millisecond)
 
-		template := fmt.Sprintf(`
-input:
-  aws_cloudwatch_logs:
-    log_group_name: %s
-    endpoint: http://localhost:$PORT
-    region: us-east-1
-    credentials:
-      id: xxxxx
-      secret: xxxxx
-      token: xxxxx
-    poll_interval: 1s
-    structured_log: false
+		input := &cloudWatchLogsInput{
+			conf: cloudWatchLogsInputConfig{
+				LogGroupName:  logGroupName,
+				PollInterval:  1 * time.Second,
+				Limit:         1000,
+				StructuredLog: false,
+				APITimeout:    30 * time.Second,
+			},
+			log:    service.MockResources().Logger(),
+			client: newTestCWLClient(t, lsPort),
+		}
 
-output:
-  drop: {}
-`, logGroupName)
+		require.NoError(t, input.Connect(ctx))
+		t.Cleanup(func() { _ = input.Close(ctx) })
 
-		integration.StreamTests(
-			integration.StreamTestOpenClose(),
-		).Run(
-			t, template,
-			integration.StreamTestOptPort(lsPort),
-		)
+		msgs := collectMessages(t, input, 10, 30*time.Second)
+		require.Len(t, msgs, 10)
 	})
 
 	t.Run("with_filter_pattern", func(t *testing.T) {
 		logGroupName := "test-log-group-filter-" + t.Name()
 		ctx := context.Background()
 
-		// Create log group and stream
+		// Create log group and stream with mixed log levels
 		endpoint := fmt.Sprintf("http://localhost:%v", lsPort)
 		conf, err := config.LoadDefaultConfig(ctx,
 			config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider("xxxxx", "xxxxx", "xxxxx")),
@@ -171,7 +200,6 @@ output:
 		})
 		require.NoError(t, err)
 
-		// Put events with different log levels
 		baseTime := time.Now().Add(-1 * time.Hour).UnixMilli()
 		events := []types.InputLogEvent{
 			{Message: aws.String("[ERROR] error message 1"), Timestamp: aws.Int64(baseTime)},
@@ -186,33 +214,29 @@ output:
 			LogEvents:     events,
 		})
 		require.NoError(t, err)
-
 		time.Sleep(500 * time.Millisecond)
 
-		template := fmt.Sprintf(`
-input:
-  aws_cloudwatch_logs:
-    log_group_name: %s
-    filter_pattern: "[ERROR]"
-    endpoint: http://localhost:$PORT
-    region: us-east-1
-    credentials:
-      id: xxxxx
-      secret: xxxxx
-      token: xxxxx
-    poll_interval: 1s
-    structured_log: false
+		filterPattern := "[ERROR]"
+		input := &cloudWatchLogsInput{
+			conf: cloudWatchLogsInputConfig{
+				LogGroupName:  logGroupName,
+				FilterPattern: &filterPattern,
+				PollInterval:  1 * time.Second,
+				Limit:         1000,
+				StructuredLog: false,
+				APITimeout:    30 * time.Second,
+			},
+			log:    service.MockResources().Logger(),
+			client: newTestCWLClient(t, lsPort),
+		}
 
-output:
-  drop: {}
-`, logGroupName)
+		require.NoError(t, input.Connect(ctx))
+		t.Cleanup(func() { _ = input.Close(ctx) })
 
-		integration.StreamTests(
-			integration.StreamTestOpenClose(),
-		).Run(
-			t, template,
-			integration.StreamTestOptPort(lsPort),
-		)
+		// LocalStack may not support filter_pattern, so accept 2..4 messages
+		msgs := collectMessages(t, input, 2, 30*time.Second)
+		assert.GreaterOrEqual(t, len(msgs), 2)
+		assert.LessOrEqual(t, len(msgs), 4)
 	})
 
 	t.Run("structured_log_output", func(t *testing.T) {
@@ -222,28 +246,35 @@ output:
 		require.NoError(t, createLogGroupWithEvents(ctx, t, lsPort, logGroupName, 5))
 		time.Sleep(500 * time.Millisecond)
 
-		template := fmt.Sprintf(`
-input:
-  aws_cloudwatch_logs:
-    log_group_name: %s
-    endpoint: http://localhost:$PORT
-    region: us-east-1
-    credentials:
-      id: xxxxx
-      secret: xxxxx
-      token: xxxxx
-    poll_interval: 1s
-    structured_log: true
+		input := &cloudWatchLogsInput{
+			conf: cloudWatchLogsInputConfig{
+				LogGroupName:  logGroupName,
+				PollInterval:  1 * time.Second,
+				Limit:         1000,
+				StructuredLog: true,
+				APITimeout:    30 * time.Second,
+			},
+			log:    service.MockResources().Logger(),
+			client: newTestCWLClient(t, lsPort),
+		}
 
-output:
-  drop: {}
-`, logGroupName)
+		require.NoError(t, input.Connect(ctx))
+		t.Cleanup(func() { _ = input.Close(ctx) })
 
-		integration.StreamTests(
-			integration.StreamTestOpenClose(),
-		).Run(
-			t, template,
-			integration.StreamTestOptPort(lsPort),
-		)
+		msgs := collectMessages(t, input, 5, 30*time.Second)
+		require.Len(t, msgs, 5)
+
+		// Verify structured JSON output
+		for _, msg := range msgs {
+			raw, err := msg.AsBytes()
+			require.NoError(t, err)
+
+			var obj map[string]any
+			require.NoError(t, json.Unmarshal(raw, &obj), "message should be valid JSON: %s", string(raw))
+			assert.Contains(t, obj, "message")
+			assert.Contains(t, obj, "log_group")
+			assert.Contains(t, obj, "timestamp")
+			assert.Equal(t, logGroupName, obj["log_group"])
+		}
 	})
 }
