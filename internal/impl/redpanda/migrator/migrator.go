@@ -55,21 +55,21 @@ func migratorInputConfig() *service.ConfigSpec {
 		Version("4.67.0").
 		Summary("Kafka consumer for migration pipelines. All migration logic is handled by the redpanda_migrator output.").
 		Description(`
-The ` + "`redpanda_migrator`" + ` input simply consumes records from the source cluster and forwards them downstream. 
-It does not perform topic/schema/group synchronisation. 
+The ` + "`redpanda_migrator`" + ` input simply consumes records from the source cluster and forwards them downstream.
+It does not perform topic/schema/group synchronisation.
 All migration features and coordination live in the paired ` + "`redpanda_migrator`" + ` output.
 
-**IMPORTANT:** This input requires a corresponding ` + "`redpanda_migrator`" + ` output in the same pipeline. 
+**IMPORTANT:** This input requires a corresponding ` + "`redpanda_migrator`" + ` output in the same pipeline.
 Each pipeline must have both input and output components configured.
 For capabilities, guarantees, scheduling, and examples, see the output documentation.
 
-**Performance tuning for high throughput:** For workloads with high message rates or large messages, 
+**Performance tuning for high throughput:** For workloads with high message rates or large messages,
 adjust the following fields to increase buffer sizes and batch processing:
 
 - ` + "`partition_buffer_bytes: 2MB`" + `
 - ` + "`max_yield_batch_bytes: 1MB`" + `
 
-These settings allow the consumer to buffer more data per partition and yield larger batches, 
+These settings allow the consumer to buffer more data per partition and yield larger batches,
 reducing overhead and improving throughput at the cost of higher memory usage.`).
 		// Kafka fields
 		Fields(kafka.FranzConnectionFields()...).
@@ -88,17 +88,17 @@ func migratorOutputConfig() *service.ConfigSpec {
 		Version("4.67.0").
 		Summary("A specialised Kafka producer for comprehensive data migration between Apache Kafka and Redpanda clusters.").
 		Description(`
-The `+"`redpanda_migrator`"+` output performs all migration work. 
+The `+"`redpanda_migrator`"+` output performs all migration work.
 It coordinates topics, schema registry, and consumer groups to migrate data from a source Kafka/Redpanda cluster to a destination cluster.
 
-**IMPORTANT:** This output requires a corresponding `+"`redpanda_migrator`"+` input in the same pipeline. 
+**IMPORTANT:** This output requires a corresponding `+"`redpanda_migrator`"+` input in the same pipeline.
 Each pipeline must have both input and output components configured.
 
-**Multiple migrator pairs:** When using multiple migrator pairs in a single pipeline, 
-the mapping between input and output components is done based on the label field. 
+**Multiple migrator pairs:** When using multiple migrator pairs in a single pipeline,
+the mapping between input and output components is done based on the label field.
 The label of the input and output must match exactly for proper coordination.
 
-**Performance tuning for high throughput:** For workloads with high message rates or large messages, 
+**Performance tuning for high throughput:** For workloads with high message rates or large messages,
 adjust the following settings to optimize throughput:
 
 On the paired input component:
