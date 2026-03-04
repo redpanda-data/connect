@@ -199,7 +199,7 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 				"   - Increase input batching.count for better throughput\n"+
 				"   - Use faster output (e.g., drop: {} for benchmarking)\n\n"+
 				"3. Restart the connector from the current database SCN to skip missing logs:\n"+
-				"   Note: This will result in data loss for events in the purged logs.",
+				"   Note: This will result in data loss for events in the purged logs, so a snapshot may be required.",
 				lm.currentSCN, err, lm.cfg.SCNWindowSize, lm.cfg.MiningBackoffInterval)
 		}
 		return false, fmt.Errorf("preparing logs and starting session at position %d: %w", lm.currentSCN, err)
