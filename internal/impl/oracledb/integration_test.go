@@ -12,6 +12,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -512,15 +513,11 @@ func TestIntegration_OracleDBCDC_SnapshotAndStreaming_AllTypes(t *testing.T) {
 		binary_col        RAW(16),
 		varbinary_col     RAW(255),
 
-		-- Large Object Data Types (commented out to avoid TTC errors)
-		-- varcharmax_col    CLOB,
-		-- nvarcharmax_col   NCLOB,
-		-- varbinarymax_col  BLOB,
+		-- Large Object Data Types
+		clob_col          CLOB,
 
 		-- Other Data Types
 		bit_col           NUMBER(1)                    -- Boolean-like (0,1,NULL)
-		-- xml_col           XMLTYPE,
-		-- json_col          CLOB                          -- JSON stored as CLOB
 	)`
 	err = db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.all_data_types", q)
 	require.NoError(t, err)
@@ -535,16 +532,14 @@ func TestIntegration_OracleDBCDC_SnapshotAndStreaming_AllTypes(t *testing.T) {
 		date_col, datetime_col, datetime2_col, smalldatetime_col,
 		time_col, datetimeoffset_col, char_col, varchar_col,
 		nchar_col, nvarchar_col, binary_col, varbinary_col,
-		-- varcharmax_col, nvarcharmax_col, varbinarymax_col,
-		bit_col -- , xml_col, json_col
+		clob_col, bit_col
 	) VALUES (
 		:1, :2, :3, :4,
 		:5, :6, :7, :8,
 		:9, :10, :11, :12,
 		:13, :14, :15, :16,
 		:17, :18, :19, :20,
-		-- :21, :22, :23,
-		:21 -- , :22, :23
+		:21, :22
 	)`
 
 	t.Log("Inserting min values for testing snapshot data...")
@@ -571,10 +566,8 @@ func TestIntegration_OracleDBCDC_SnapshotAndStreaming_AllTypes(t *testing.T) {
 			"",           // nvarchar2(255)
 			[]byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}, // raw(16)
 			[]byte{0x00}, // raw(255)
-			// "",              // clob (varcharmax_col) - LOB columns commented out
-			// "",              // nclob (nvarcharmax_col)
-			// []byte{0x00},    // blob (varbinarymax_col)
-			0, // bit (number)
+			nil,          // clob (null for snapshot min)
+			0,            // bit (number)
 			// "<root></root>", // xmltype
 			// "{}",            // json (clob)
 		)
@@ -662,12 +655,10 @@ oracledb_cdc:
 			"Max varchar value",  // varchar2(255)
 			"ZZZZZZZZZZ",         // nchar(10)
 			"Max nvarchar value", // nvarchar2(255)
-			make([]byte, 16),     // raw(16) filled with zeros
-			make([]byte, 255),    // raw(255) max
-			// "Max varchar(max)",   // clob (varcharmax_col) - LOB columns commented out
-			// "Max nvarchar(max)",  // nclob (nvarcharmax_col)
-			// make([]byte, 255),    // blob (varbinarymax_col)
-			1, // bit max (number)
+			make([]byte, 16),              // raw(16) filled with zeros
+			make([]byte, 255),             // raw(255) max
+			strings.Repeat("A", 5000),     // clob: 5000 chars forces LOB_WRITE events
+			1,                             // bit max (number)
 			// "<root>max</root>",   // xmltype
 			// `{"max": true}`,      // json (clob)
 		)
@@ -708,6 +699,7 @@ oracledb_cdc:
 		"BINARY_COL": "AAAAAAAAAAAAAAAAAAAAAA==",
 		"BIT_COL": 0,
 		"CHAR_COL": "AAAAAAAAAA",
+		"CLOB_COL": null,
 		"DATE_COL": "0001-01-01T00:00:00Z",
 		"DATETIME2_COL": "0001-01-01T00:00:00Z",
 		"DATETIME_COL": "1753-01-01T00:00:00Z",
@@ -764,11 +756,12 @@ oracledb_cdc:
 		// "VARCHARMAX_COL": "Max varchar(max)",
 		// "XML_COL": "\u003croot\u003emax\u003c/root\u003e"
 		// }`, outBatches[1], "Failed to assert max result from streaming")
-		require.JSONEq(t, `{
+		wantStreaming := fmt.Sprintf(`{
 		"BIGINT_COL": "9223372036854775807",
 		"BINARY_COL": "AAAAAAAAAAAAAAAAAAAAAA==",
 		"BIT_COL": "1",
 		"CHAR_COL": "ZZZZZZZZZZ",
+		"CLOB_COL": %q,
 		"DATE_COL": "9999-12-31T00:00:00Z",
 		"DATETIME2_COL": "9999-12-31T23:59:59.9999999Z",
 		"DATETIME_COL": "9999-12-31T23:59:59.997Z",
@@ -786,6 +779,91 @@ oracledb_cdc:
 		"TINYINT_COL": "255",
 		"VARBINARY_COL": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
 		"VARCHAR_COL": "Max varchar value"
-		}`, outBatches[1], "Failed to assert max result from streaming")
+		}`, strings.Repeat("A", 5000))
+		require.JSONEq(t, wantStreaming, outBatches[1], "Failed to assert max result from streaming")
 	}
+}
+
+// TestIntegration_OracleDBCDC_OperationCodeScan verifies that CDC insert events
+// are received with the correct "operation" metadata value of "insert".
+//
+// This test currently FAILS due to a bug in Operation.Scan in
+// logminer/sqlredo/events.go: the method handles case int: but the Oracle
+// database/sql driver passes OPERATION_CODE as int64 (per the driver.Value
+// spec). The int64 falls through to the default branch and returns
+// "cannot scan int64 to operation code", preventing events from being emitted.
+func TestIntegration_OracleDBCDC_OperationCodeScan(t *testing.T) {
+	integration.CheckSkip(t)
+	t.Parallel()
+
+	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t, "latest")
+	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.op_scan", "CREATE TABLE testdb.op_scan (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
+
+	type capturedMsg struct {
+		body      string
+		operation string
+	}
+	var (
+		outMessages   []capturedMsg
+		outMessagesMu sync.Mutex
+		stream        *service.Stream
+		err           error
+	)
+
+	cfg := `
+oracledb_cdc:
+  connection_string: %s
+  stream_snapshot: false
+  logminer:
+    scn_window_size: 20000
+    backoff_interval: 1s
+  include: ["TESTDB.OP_SCAN"]`
+
+	streamBuilder := service.NewStreamBuilder()
+	require.NoError(t, streamBuilder.AddInputYAML(fmt.Sprintf(cfg, connStr)))
+	require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
+
+	require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+		outMessagesMu.Lock()
+		defer outMessagesMu.Unlock()
+		for _, msg := range mb {
+			msgBytes, err := msg.AsBytes()
+			assert.NoError(t, err)
+			op, _ := msg.MetaGet("operation")
+			outMessages = append(outMessages, capturedMsg{body: string(msgBytes), operation: op})
+		}
+		return nil
+	}))
+
+	stream, err = streamBuilder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(stream.Resources())
+
+	go func() {
+		if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+			t.Error(err)
+		}
+	}()
+
+	// Wait for LogMiner to start, then insert rows.
+	time.Sleep(10 * time.Second)
+	for range 3 {
+		db.MustExec("INSERT INTO testdb.op_scan (id) VALUES (DEFAULT)")
+	}
+
+	// Wait for all 3 inserts to arrive. Times out if OPERATION_CODE int64 scan fails.
+	assert.Eventually(t, func() bool {
+		outMessagesMu.Lock()
+		defer outMessagesMu.Unlock()
+		return len(outMessages) >= 3
+	}, time.Minute*2, time.Second, "expected 3 CDC insert messages; Operation.Scan may be failing to handle int64 from the Oracle driver")
+
+	outMessagesMu.Lock()
+	defer outMessagesMu.Unlock()
+	for i, msg := range outMessages {
+		assert.Equalf(t, "insert", msg.operation,
+			"message %d has wrong operation metadata (body: %s)", i, msg.body)
+	}
+
+	require.NoError(t, stream.StopWithin(time.Second*10))
 }

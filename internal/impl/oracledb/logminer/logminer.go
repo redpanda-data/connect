@@ -13,6 +13,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -40,6 +41,24 @@ type LogMiner struct {
 	txnCache      TransactionCache
 
 	currentLogFiles []*LogFile
+
+	// activeLobs tracks in-progress LOB assemblies per transaction, keyed by txnID.
+	activeLobs map[string][]*lobAssembly
+}
+
+// lobChunk holds a single data chunk from a LOB_WRITE event.
+type lobChunk struct {
+	Offset int
+	Data   string
+}
+
+// lobAssembly accumulates LOB chunks for a single column write within a transaction.
+type lobAssembly struct {
+	Schema string
+	Table  string
+	Column string
+	Binary bool
+	Chunks []lobChunk
 }
 
 // NewMiner creates a new instance of LogMiner responsible for paging through change events based on the tables param.
@@ -50,8 +69,8 @@ func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replicat
 	var buf strings.Builder
 	if len(userTables) > 0 {
 		buf.WriteString(" AND (")
-		buf.WriteString("OPERATION_CODE IN (6, 7, 36)")           // Allow all transaction control events
-		buf.WriteString(" OR (OPERATION_CODE IN (1, 2, 3) AND (") // Filter DML by table
+		buf.WriteString("OPERATION_CODE IN (6, 7, 36)")                    // Allow all transaction control events
+		buf.WriteString(" OR (OPERATION_CODE IN (1, 2, 3, 9, 10, 11, 29) AND (") // Filter DML and LOB ops by table
 		for i, t := range userTables {
 			if i > 0 {
 				buf.WriteString(" OR ")
@@ -87,6 +106,7 @@ func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replicat
 		sessionMgr:    NewSessionManager(cfg),
 		txnCache:      NewInMemoryCache(cfg.MaxTransactionEvents, metrics, logger),
 		dmlParser:     sqlredo.NewParser(),
+		activeLobs:    make(map[string][]*lobAssembly),
 	}
 	return lm
 }
@@ -247,9 +267,22 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 
 		lm.txnCache.AddEvent(redoEvent.TransactionID, redoEvent.SCN, &event)
 
+	case sqlredo.OpSelectLobLocator:
+		lm.handleSelectLobLocator(redoEvent)
+
+	case sqlredo.OpLobWrite:
+		lm.handleLobWrite(redoEvent)
+
+	case sqlredo.OpLobTrim, sqlredo.OpLobErase:
+		lm.log.Debugf("Skipping unsupported LOB operation %s for %s.%s (txn=%s)",
+			redoEvent.Operation, redoEvent.SchemaName.String, redoEvent.TableName.String, redoEvent.TransactionID)
+
 	case sqlredo.OpCommit:
 		// Flush all buffered events for this transaction
 		if txn := lm.txnCache.GetTransaction(redoEvent.TransactionID); txn != nil {
+			// Merge any accumulated LOB data into DML events before publishing
+			lm.mergeLobsIntoEvents(redoEvent.TransactionID, txn.Events)
+
 			for _, dmlEvent := range txn.Events {
 				msg := toMessageEvent(dmlEvent, redoEvent.SCN)
 				if err := lm.publisher.Publish(ctx, msg); err != nil {
@@ -259,10 +292,12 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 
 			lm.txnCache.CommitTransaction(redoEvent.TransactionID)
 		}
+		delete(lm.activeLobs, redoEvent.TransactionID)
 
 	case sqlredo.OpRollback:
 		// Discard all buffered events for this transaction
 		lm.txnCache.RollbackTransaction(redoEvent.TransactionID)
+		delete(lm.activeLobs, redoEvent.TransactionID)
 	}
 
 	return nil
@@ -459,6 +494,91 @@ func (lm *LogMiner) prepareLogsAndStartSession(ctx context.Context, conn *sql.Co
 	lm.log.Debugf("Started LogMiner session from SCN %d to SCN %d", startSCN, endSCN)
 
 	return nil
+}
+
+// handleSelectLobLocator records the start of a LOB write sequence for the
+// given transaction. Subsequent LOB_WRITE events for this transaction append
+// chunks to the most recently opened lobAssembly.
+func (lm *LogMiner) handleSelectLobLocator(ev *sqlredo.RedoEvent) {
+	if !ev.SQLRedo.Valid {
+		return
+	}
+	loc, err := sqlredo.ParseSelectLobLocator(ev.SQLRedo.String)
+	if err != nil {
+		lm.log.Warnf("Failed to parse SELECT_LOB_LOCATOR SQL (txn=%s): %v", ev.TransactionID, err)
+		return
+	}
+	if loc.Binary {
+		lm.log.Debugf("BLOB support is limited; binary LOB data will be stored as hex (txn=%s, col=%s)",
+			ev.TransactionID, loc.Column)
+	}
+	asm := &lobAssembly{
+		Schema: ev.SchemaName.String,
+		Table:  ev.TableName.String,
+		Column: loc.Column,
+		Binary: loc.Binary,
+	}
+	lm.activeLobs[ev.TransactionID] = append(lm.activeLobs[ev.TransactionID], asm)
+}
+
+// handleLobWrite appends a data chunk from a LOB_WRITE event to the most
+// recently opened lobAssembly for the transaction.
+func (lm *LogMiner) handleLobWrite(ev *sqlredo.RedoEvent) {
+	if !ev.SQLRedo.Valid {
+		return
+	}
+	asms := lm.activeLobs[ev.TransactionID]
+	if len(asms) == 0 {
+		lm.log.Warnf("LOB_WRITE received without preceding SELECT_LOB_LOCATOR (txn=%s)", ev.TransactionID)
+		return
+	}
+	asm := asms[len(asms)-1]
+	lw, err := sqlredo.ParseLobWrite(ev.SQLRedo.String)
+	if err != nil {
+		lm.log.Warnf("Failed to parse LOB_WRITE SQL (txn=%s, col=%s): %v", ev.TransactionID, asm.Column, err)
+		return
+	}
+	asm.Chunks = append(asm.Chunks, lobChunk{Offset: lw.Offset, Data: lw.Data})
+}
+
+// mergeLobsIntoEvents finds the last DML event for each pending LOB assembly's
+// table and injects the assembled column value into its Data map.
+func (lm *LogMiner) mergeLobsIntoEvents(txnID string, events []*sqlredo.DMLEvent) {
+	asms := lm.activeLobs[txnID]
+	for _, asm := range asms {
+		if len(asm.Chunks) == 0 {
+			continue
+		}
+		merged := assembleLob(asm)
+		for i := len(events) - 1; i >= 0; i-- {
+			ev := events[i]
+			if ev.Schema == asm.Schema && ev.Table == asm.Table {
+				if ev.Data == nil {
+					ev.Data = make(map[string]any)
+				}
+				ev.Data[asm.Column] = merged
+				break
+			}
+		}
+	}
+}
+
+// assembleLob merges LOB chunks into a single string, sorted by offset.
+// Gaps between chunks are filled with spaces (matching Debezium's approach).
+func assembleLob(asm *lobAssembly) string {
+	sort.Slice(asm.Chunks, func(i, j int) bool {
+		return asm.Chunks[i].Offset < asm.Chunks[j].Offset
+	})
+	var sb strings.Builder
+	pos := 0
+	for _, chunk := range asm.Chunks {
+		if chunk.Offset > pos {
+			sb.WriteString(strings.Repeat(" ", chunk.Offset-pos))
+		}
+		sb.WriteString(chunk.Data)
+		pos = chunk.Offset + len(chunk.Data)
+	}
+	return sb.String()
 }
 
 func toMessageEvent(dml *sqlredo.DMLEvent, scn uint64) *replication.MessageEvent {

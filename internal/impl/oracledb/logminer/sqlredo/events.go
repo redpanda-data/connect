@@ -34,6 +34,16 @@ const (
 	OpCommit
 	// OpRollback represents a transaction ROLLBACK operation
 	OpRollback
+	// OpSelectLobLocator represents a SEL_LOB_LOCATOR operation (code 9),
+	// which precedes LOB_WRITE events and identifies which column is being written.
+	OpSelectLobLocator Operation = 9
+	// OpLobWrite represents a LOB_WRITE operation (code 10) that carries a
+	// chunk of LOB data to be assembled into the final column value.
+	OpLobWrite Operation = 10
+	// OpLobTrim represents a LOB_TRIM operation (code 11).
+	OpLobTrim Operation = 11
+	// OpLobErase represents a LOB_ERASE operation (code 29).
+	OpLobErase Operation = 29
 )
 
 // String converts the operation type to a string equivalent.
@@ -90,6 +100,14 @@ func operationFromCode(code int) Operation {
 		return OpStart
 	case 7:
 		return OpCommit
+	case 9:
+		return OpSelectLobLocator
+	case 10:
+		return OpLobWrite
+	case 11:
+		return OpLobTrim
+	case 29:
+		return OpLobErase
 	case 36:
 		return OpRollback
 	default:
