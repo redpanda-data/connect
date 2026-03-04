@@ -28,122 +28,122 @@ func trimTrailingSlashes(u *url.URL) {
 
 // Invoker invokes operations described by OpenAPI v3 specification.
 type Invoker interface {
-	// BlocksIDChildrenGet invokes BlocksIDChildrenGet operation.
+	// V1BlocksIDChildrenGet invokes V1BlocksIDChildrenGet operation.
 	//
 	// Retrieve block children.
 	//
 	// GET /v1/blocks/{id}/children
-	BlocksIDChildrenGet(ctx context.Context, params BlocksIDChildrenGetParams) (*ListBlockChildrenResponse, error)
-	// BlocksIDChildrenPatch invokes BlocksIDChildrenPatch operation.
+	V1BlocksIDChildrenGet(ctx context.Context, params V1BlocksIDChildrenGetParams) (*ListBlockChildrenResponse, error)
+	// V1BlocksIDChildrenPatch invokes V1BlocksIDChildrenPatch operation.
 	//
 	// Append block children.
 	//
 	// PATCH /v1/blocks/{id}/children
-	BlocksIDChildrenPatch(ctx context.Context, request *AppendBlockChildrenRequest, params BlocksIDChildrenPatchParams) (*AppendBlockChildrenResponse, error)
-	// BlocksIDDelete invokes BlocksIDDelete operation.
+	V1BlocksIDChildrenPatch(ctx context.Context, request *AppendBlockChildrenRequest, params V1BlocksIDChildrenPatchParams) (*AppendBlockChildrenResponse, error)
+	// V1BlocksIDDelete invokes V1BlocksIDDelete operation.
 	//
 	// Delete a block.
 	//
 	// DELETE /v1/blocks/{id}
-	BlocksIDDelete(ctx context.Context, params BlocksIDDeleteParams) (*DeleteBlockResponse, error)
-	// BlocksIDGet invokes BlocksIDGet operation.
+	V1BlocksIDDelete(ctx context.Context, params V1BlocksIDDeleteParams) (*DeleteBlockResponse, error)
+	// V1BlocksIDGet invokes V1BlocksIDGet operation.
 	//
 	// Retrieve a block.
 	//
 	// GET /v1/blocks/{id}
-	BlocksIDGet(ctx context.Context, params BlocksIDGetParams) (*GetBlockResponse, error)
-	// BlocksIDPatch invokes BlocksIDPatch operation.
+	V1BlocksIDGet(ctx context.Context, params V1BlocksIDGetParams) (*GetBlockResponse, error)
+	// V1BlocksIDPatch invokes V1BlocksIDPatch operation.
 	//
 	// This endpoint allows you to update block content. [See Full Documentation](https://developers.
 	// notion.com/reference/update-a-block).
 	//
 	// PATCH /v1/blocks/{id}
-	BlocksIDPatch(ctx context.Context, request *UpdateBlockRequest, params BlocksIDPatchParams) (*UpdateBlockResponse, error)
-	// CommentsGet invokes CommentsGet operation.
+	V1BlocksIDPatch(ctx context.Context, request *UpdateBlockRequest, params V1BlocksIDPatchParams) (*UpdateBlockResponse, error)
+	// V1CommentsGet invokes V1CommentsGet operation.
 	//
 	// Retrieve a user object using the ID specified in the request path.
 	//
 	// GET /v1/comments
-	CommentsGet(ctx context.Context, params CommentsGetParams) (*ListCommentsResponse, error)
-	// CommentsPost invokes CommentsPost operation.
+	V1CommentsGet(ctx context.Context, params V1CommentsGetParams) (*ListCommentsResponse, error)
+	// V1CommentsPost invokes V1CommentsPost operation.
 	//
 	// Add comment to discussion.
 	//
 	// POST /v1/comments
-	CommentsPost(ctx context.Context, request *CreateCommentRequest, params CommentsPostParams) (*CreateCommentResponse, error)
-	// DatabasesIDGet invokes DatabasesIDGet operation.
+	V1CommentsPost(ctx context.Context, request *CreateCommentRequest, params V1CommentsPostParams) (*CreateCommentResponse, error)
+	// V1DatabasesIDGet invokes V1DatabasesIDGet operation.
 	//
 	// Retrieves a database object using the ID specified in the request path.
 	//
 	// GET /v1/databases/{id}
-	DatabasesIDGet(ctx context.Context, params DatabasesIDGetParams) (*GetDatabaseResponse, error)
-	// DatabasesIDPatch invokes DatabasesIDPatch operation.
+	V1DatabasesIDGet(ctx context.Context, params V1DatabasesIDGetParams) (*GetDatabaseResponse, error)
+	// V1DatabasesIDPatch invokes V1DatabasesIDPatch operation.
 	//
 	// Update database properties.
 	//
 	// PATCH /v1/databases/{id}
-	DatabasesIDPatch(ctx context.Context, request *UpdateDatabaseRequest, params DatabasesIDPatchParams) (*UpdateDatabaseResponse, error)
-	// DatabasesIDQueryPost invokes DatabasesIDQueryPost operation.
+	V1DatabasesIDPatch(ctx context.Context, request *UpdateDatabaseRequest, params V1DatabasesIDPatchParams) (*UpdateDatabaseResponse, error)
+	// V1DatabasesIDQueryPost invokes V1DatabasesIDQueryPost operation.
 	//
 	// Filter a database.
 	//
 	// POST /v1/databases/{id}/query
-	DatabasesIDQueryPost(ctx context.Context, request *QueryDataSourceRequest, params DatabasesIDQueryPostParams) (*QueryDataSourceResponse, error)
-	// DatabasesPost invokes DatabasesPost operation.
+	V1DatabasesIDQueryPost(ctx context.Context, request *QueryDataSourceRequest, params V1DatabasesIDQueryPostParams) (*QueryDataSourceResponse, error)
+	// V1DatabasesPost invokes V1DatabasesPost operation.
 	//
 	// Create a database.
 	//
 	// POST /v1/databases/
-	DatabasesPost(ctx context.Context, request *CreateDatabaseRequest, params DatabasesPostParams) (*CreateDatabaseResponse, error)
-	// PagesIDGet invokes PagesIDGet operation.
+	V1DatabasesPost(ctx context.Context, request *CreateDatabaseRequest, params V1DatabasesPostParams) (*CreateDatabaseResponse, error)
+	// V1PagesIDGet invokes V1PagesIDGet operation.
 	//
 	// Retrieves a Page object using the ID in the request path. This endpoint exposes page properties,
 	// not page content.
 	//
 	// GET /v1/pages/{id}
-	PagesIDGet(ctx context.Context, params PagesIDGetParams) (*GetPageResponse, error)
-	// PagesIDPatch invokes PagesIDPatch operation.
+	V1PagesIDGet(ctx context.Context, params V1PagesIDGetParams) (*GetPageResponse, error)
+	// V1PagesIDPatch invokes V1PagesIDPatch operation.
 	//
 	// Archive a page.
 	//
 	// PATCH /v1/pages/{id}
-	PagesIDPatch(ctx context.Context, request *UpdatePageRequest, params PagesIDPatchParams) (*UpdatePageResponse, error)
-	// PagesPageIDPropertiesPropertyIDGet invokes PagesPageIDPropertiesPropertyIDGet operation.
+	V1PagesIDPatch(ctx context.Context, request *UpdatePageRequest, params V1PagesIDPatchParams) (*UpdatePageResponse, error)
+	// V1PagesPageIDPropertiesPropertyIDGet invokes V1PagesPageIDPropertiesPropertyIDGet operation.
 	//
 	// Retrieve a page property item.
 	//
 	// GET /v1/pages/{page_id}/properties/{property_id}
-	PagesPageIDPropertiesPropertyIDGet(ctx context.Context, params PagesPageIDPropertiesPropertyIDGetParams) (*GetPagePropertyResponse, error)
-	// PagesPost invokes PagesPost operation.
+	V1PagesPageIDPropertiesPropertyIDGet(ctx context.Context, params V1PagesPageIDPropertiesPropertyIDGetParams) (*GetPagePropertyResponse, error)
+	// V1PagesPost invokes V1PagesPost operation.
 	//
 	// Create a page with content.
 	//
 	// POST /v1/pages/
-	PagesPost(ctx context.Context, request *CreatePageRequest, params PagesPostParams) (*CreatePageResponse, error)
-	// SearchPost invokes SearchPost operation.
+	V1PagesPost(ctx context.Context, request *CreatePageRequest, params V1PagesPostParams) (*CreatePageResponse, error)
+	// V1SearchPost invokes V1SearchPost operation.
 	//
 	// Search.
 	//
 	// POST /v1/search
-	SearchPost(ctx context.Context, request *SearchRequest, params SearchPostParams) (*SearchResponse, error)
-	// UsersGet invokes UsersGet operation.
+	V1SearchPost(ctx context.Context, request *SearchRequest, params V1SearchPostParams) (*SearchResponse, error)
+	// V1UsersGet invokes V1UsersGet operation.
 	//
 	// Returns a paginated list of user objects for a workspace.
 	//
 	// GET /v1/users
-	UsersGet(ctx context.Context, params UsersGetParams) (*ListUsersResponse, error)
-	// UsersIDGet invokes UsersIDGet operation.
+	V1UsersGet(ctx context.Context, params V1UsersGetParams) (*ListUsersResponse, error)
+	// V1UsersIDGet invokes V1UsersIDGet operation.
 	//
 	// Retrieve a user object using the ID specified in the request path.
 	//
 	// GET /v1/users/{id}
-	UsersIDGet(ctx context.Context, params UsersIDGetParams) (*UserObjectResponse, error)
-	// UsersMeGet invokes UsersMeGet operation.
+	V1UsersIDGet(ctx context.Context, params V1UsersIDGetParams) (*UserObjectResponse, error)
+	// V1UsersMeGet invokes V1UsersMeGet operation.
 	//
 	// Retrieve your token’s bot user.
 	//
 	// GET /v1/users/me
-	UsersMeGet(ctx context.Context, params UsersMeGetParams) (*UserObjectResponse, error)
+	V1UsersMeGet(ctx context.Context, params V1UsersMeGetParams) (*UserObjectResponse, error)
 }
 
 // Client implements OAS client.
@@ -187,19 +187,19 @@ func (c *Client) requestURL(ctx context.Context) *url.URL {
 	return u
 }
 
-// BlocksIDChildrenGet invokes BlocksIDChildrenGet operation.
+// V1BlocksIDChildrenGet invokes V1BlocksIDChildrenGet operation.
 //
 // Retrieve block children.
 //
 // GET /v1/blocks/{id}/children
-func (c *Client) BlocksIDChildrenGet(ctx context.Context, params BlocksIDChildrenGetParams) (*ListBlockChildrenResponse, error) {
-	res, err := c.sendBlocksIDChildrenGet(ctx, params)
+func (c *Client) V1BlocksIDChildrenGet(ctx context.Context, params V1BlocksIDChildrenGetParams) (*ListBlockChildrenResponse, error) {
+	res, err := c.sendV1BlocksIDChildrenGet(ctx, params)
 	return res, err
 }
 
-func (c *Client) sendBlocksIDChildrenGet(ctx context.Context, params BlocksIDChildrenGetParams) (res *ListBlockChildrenResponse, err error) {
+func (c *Client) sendV1BlocksIDChildrenGet(ctx context.Context, params V1BlocksIDChildrenGetParams) (res *ListBlockChildrenResponse, err error) {
 	otelAttrs := []attribute.KeyValue{
-		otelogen.OperationID("BlocksIDChildrenGet"),
+		otelogen.OperationID("V1BlocksIDChildrenGet"),
 		semconv.HTTPRequestMethodKey.String("GET"),
 		semconv.URLTemplateKey.String("/v1/blocks/{id}/children"),
 	}
@@ -217,7 +217,7 @@ func (c *Client) sendBlocksIDChildrenGet(ctx context.Context, params BlocksIDChi
 	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
 
 	// Start a span for this request.
-	ctx, span := c.cfg.Tracer.Start(ctx, BlocksIDChildrenGetOperation,
+	ctx, span := c.cfg.Tracer.Start(ctx, V1BlocksIDChildrenGetOperation,
 		trace.WithAttributes(otelAttrs...),
 		clientSpanKind,
 	)
@@ -306,7 +306,7 @@ func (c *Client) sendBlocksIDChildrenGet(ctx context.Context, params BlocksIDChi
 		var satisfied bitset
 		{
 			stage = "Security:BearerAuth"
-			switch err := c.securityBearerAuth(ctx, BlocksIDChildrenGetOperation, r); {
+			switch err := c.securityBearerAuth(ctx, V1BlocksIDChildrenGetOperation, r); {
 			case err == nil: // if NO error
 				satisfied[0] |= 1 << 0
 			case errors.Is(err, ogenerrors.ErrSkipClientSecurity):
@@ -343,7 +343,7 @@ func (c *Client) sendBlocksIDChildrenGet(ctx context.Context, params BlocksIDChi
 	defer body.Close()
 
 	stage = "DecodeResponse"
-	result, err := decodeBlocksIDChildrenGetResponse(resp)
+	result, err := decodeV1BlocksIDChildrenGetResponse(resp)
 	if err != nil {
 		return res, errors.Wrap(err, "decode response")
 	}
@@ -351,17 +351,17 @@ func (c *Client) sendBlocksIDChildrenGet(ctx context.Context, params BlocksIDChi
 	return result, nil
 }
 
-// BlocksIDChildrenPatch invokes BlocksIDChildrenPatch operation.
+// V1BlocksIDChildrenPatch invokes V1BlocksIDChildrenPatch operation.
 //
 // Append block children.
 //
 // PATCH /v1/blocks/{id}/children
-func (c *Client) BlocksIDChildrenPatch(ctx context.Context, request *AppendBlockChildrenRequest, params BlocksIDChildrenPatchParams) (*AppendBlockChildrenResponse, error) {
-	res, err := c.sendBlocksIDChildrenPatch(ctx, request, params)
+func (c *Client) V1BlocksIDChildrenPatch(ctx context.Context, request *AppendBlockChildrenRequest, params V1BlocksIDChildrenPatchParams) (*AppendBlockChildrenResponse, error) {
+	res, err := c.sendV1BlocksIDChildrenPatch(ctx, request, params)
 	return res, err
 }
 
-func (c *Client) sendBlocksIDChildrenPatch(ctx context.Context, request *AppendBlockChildrenRequest, params BlocksIDChildrenPatchParams) (res *AppendBlockChildrenResponse, err error) {
+func (c *Client) sendV1BlocksIDChildrenPatch(ctx context.Context, request *AppendBlockChildrenRequest, params V1BlocksIDChildrenPatchParams) (res *AppendBlockChildrenResponse, err error) {
 	// Validate request before sending.
 	if err := func() error {
 		if err := request.Validate(); err != nil {
@@ -372,7 +372,7 @@ func (c *Client) sendBlocksIDChildrenPatch(ctx context.Context, request *AppendB
 		return res, errors.Wrap(err, "validate")
 	}
 	otelAttrs := []attribute.KeyValue{
-		otelogen.OperationID("BlocksIDChildrenPatch"),
+		otelogen.OperationID("V1BlocksIDChildrenPatch"),
 		semconv.HTTPRequestMethodKey.String("PATCH"),
 		semconv.URLTemplateKey.String("/v1/blocks/{id}/children"),
 	}
@@ -390,7 +390,7 @@ func (c *Client) sendBlocksIDChildrenPatch(ctx context.Context, request *AppendB
 	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
 
 	// Start a span for this request.
-	ctx, span := c.cfg.Tracer.Start(ctx, BlocksIDChildrenPatchOperation,
+	ctx, span := c.cfg.Tracer.Start(ctx, V1BlocksIDChildrenPatchOperation,
 		trace.WithAttributes(otelAttrs...),
 		clientSpanKind,
 	)
@@ -435,7 +435,7 @@ func (c *Client) sendBlocksIDChildrenPatch(ctx context.Context, request *AppendB
 	if err != nil {
 		return res, errors.Wrap(err, "create request")
 	}
-	if err := encodeBlocksIDChildrenPatchRequest(request, r); err != nil {
+	if err := encodeV1BlocksIDChildrenPatchRequest(request, r); err != nil {
 		return res, errors.Wrap(err, "encode request")
 	}
 
@@ -461,7 +461,7 @@ func (c *Client) sendBlocksIDChildrenPatch(ctx context.Context, request *AppendB
 		var satisfied bitset
 		{
 			stage = "Security:BearerAuth"
-			switch err := c.securityBearerAuth(ctx, BlocksIDChildrenPatchOperation, r); {
+			switch err := c.securityBearerAuth(ctx, V1BlocksIDChildrenPatchOperation, r); {
 			case err == nil: // if NO error
 				satisfied[0] |= 1 << 0
 			case errors.Is(err, ogenerrors.ErrSkipClientSecurity):
@@ -498,7 +498,7 @@ func (c *Client) sendBlocksIDChildrenPatch(ctx context.Context, request *AppendB
 	defer body.Close()
 
 	stage = "DecodeResponse"
-	result, err := decodeBlocksIDChildrenPatchResponse(resp)
+	result, err := decodeV1BlocksIDChildrenPatchResponse(resp)
 	if err != nil {
 		return res, errors.Wrap(err, "decode response")
 	}
@@ -506,19 +506,19 @@ func (c *Client) sendBlocksIDChildrenPatch(ctx context.Context, request *AppendB
 	return result, nil
 }
 
-// BlocksIDDelete invokes BlocksIDDelete operation.
+// V1BlocksIDDelete invokes V1BlocksIDDelete operation.
 //
 // Delete a block.
 //
 // DELETE /v1/blocks/{id}
-func (c *Client) BlocksIDDelete(ctx context.Context, params BlocksIDDeleteParams) (*DeleteBlockResponse, error) {
-	res, err := c.sendBlocksIDDelete(ctx, params)
+func (c *Client) V1BlocksIDDelete(ctx context.Context, params V1BlocksIDDeleteParams) (*DeleteBlockResponse, error) {
+	res, err := c.sendV1BlocksIDDelete(ctx, params)
 	return res, err
 }
 
-func (c *Client) sendBlocksIDDelete(ctx context.Context, params BlocksIDDeleteParams) (res *DeleteBlockResponse, err error) {
+func (c *Client) sendV1BlocksIDDelete(ctx context.Context, params V1BlocksIDDeleteParams) (res *DeleteBlockResponse, err error) {
 	otelAttrs := []attribute.KeyValue{
-		otelogen.OperationID("BlocksIDDelete"),
+		otelogen.OperationID("V1BlocksIDDelete"),
 		semconv.HTTPRequestMethodKey.String("DELETE"),
 		semconv.URLTemplateKey.String("/v1/blocks/{id}"),
 	}
@@ -536,7 +536,7 @@ func (c *Client) sendBlocksIDDelete(ctx context.Context, params BlocksIDDeletePa
 	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
 
 	// Start a span for this request.
-	ctx, span := c.cfg.Tracer.Start(ctx, BlocksIDDeleteOperation,
+	ctx, span := c.cfg.Tracer.Start(ctx, V1BlocksIDDeleteOperation,
 		trace.WithAttributes(otelAttrs...),
 		clientSpanKind,
 	)
@@ -603,7 +603,7 @@ func (c *Client) sendBlocksIDDelete(ctx context.Context, params BlocksIDDeletePa
 		var satisfied bitset
 		{
 			stage = "Security:BearerAuth"
-			switch err := c.securityBearerAuth(ctx, BlocksIDDeleteOperation, r); {
+			switch err := c.securityBearerAuth(ctx, V1BlocksIDDeleteOperation, r); {
 			case err == nil: // if NO error
 				satisfied[0] |= 1 << 0
 			case errors.Is(err, ogenerrors.ErrSkipClientSecurity):
@@ -640,7 +640,7 @@ func (c *Client) sendBlocksIDDelete(ctx context.Context, params BlocksIDDeletePa
 	defer body.Close()
 
 	stage = "DecodeResponse"
-	result, err := decodeBlocksIDDeleteResponse(resp)
+	result, err := decodeV1BlocksIDDeleteResponse(resp)
 	if err != nil {
 		return res, errors.Wrap(err, "decode response")
 	}
@@ -648,19 +648,19 @@ func (c *Client) sendBlocksIDDelete(ctx context.Context, params BlocksIDDeletePa
 	return result, nil
 }
 
-// BlocksIDGet invokes BlocksIDGet operation.
+// V1BlocksIDGet invokes V1BlocksIDGet operation.
 //
 // Retrieve a block.
 //
 // GET /v1/blocks/{id}
-func (c *Client) BlocksIDGet(ctx context.Context, params BlocksIDGetParams) (*GetBlockResponse, error) {
-	res, err := c.sendBlocksIDGet(ctx, params)
+func (c *Client) V1BlocksIDGet(ctx context.Context, params V1BlocksIDGetParams) (*GetBlockResponse, error) {
+	res, err := c.sendV1BlocksIDGet(ctx, params)
 	return res, err
 }
 
-func (c *Client) sendBlocksIDGet(ctx context.Context, params BlocksIDGetParams) (res *GetBlockResponse, err error) {
+func (c *Client) sendV1BlocksIDGet(ctx context.Context, params V1BlocksIDGetParams) (res *GetBlockResponse, err error) {
 	otelAttrs := []attribute.KeyValue{
-		otelogen.OperationID("BlocksIDGet"),
+		otelogen.OperationID("V1BlocksIDGet"),
 		semconv.HTTPRequestMethodKey.String("GET"),
 		semconv.URLTemplateKey.String("/v1/blocks/{id}"),
 	}
@@ -678,7 +678,7 @@ func (c *Client) sendBlocksIDGet(ctx context.Context, params BlocksIDGetParams) 
 	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
 
 	// Start a span for this request.
-	ctx, span := c.cfg.Tracer.Start(ctx, BlocksIDGetOperation,
+	ctx, span := c.cfg.Tracer.Start(ctx, V1BlocksIDGetOperation,
 		trace.WithAttributes(otelAttrs...),
 		clientSpanKind,
 	)
@@ -745,7 +745,7 @@ func (c *Client) sendBlocksIDGet(ctx context.Context, params BlocksIDGetParams) 
 		var satisfied bitset
 		{
 			stage = "Security:BearerAuth"
-			switch err := c.securityBearerAuth(ctx, BlocksIDGetOperation, r); {
+			switch err := c.securityBearerAuth(ctx, V1BlocksIDGetOperation, r); {
 			case err == nil: // if NO error
 				satisfied[0] |= 1 << 0
 			case errors.Is(err, ogenerrors.ErrSkipClientSecurity):
@@ -782,7 +782,7 @@ func (c *Client) sendBlocksIDGet(ctx context.Context, params BlocksIDGetParams) 
 	defer body.Close()
 
 	stage = "DecodeResponse"
-	result, err := decodeBlocksIDGetResponse(resp)
+	result, err := decodeV1BlocksIDGetResponse(resp)
 	if err != nil {
 		return res, errors.Wrap(err, "decode response")
 	}
@@ -790,18 +790,18 @@ func (c *Client) sendBlocksIDGet(ctx context.Context, params BlocksIDGetParams) 
 	return result, nil
 }
 
-// BlocksIDPatch invokes BlocksIDPatch operation.
+// V1BlocksIDPatch invokes V1BlocksIDPatch operation.
 //
 // This endpoint allows you to update block content. [See Full Documentation](https://developers.
 // notion.com/reference/update-a-block).
 //
 // PATCH /v1/blocks/{id}
-func (c *Client) BlocksIDPatch(ctx context.Context, request *UpdateBlockRequest, params BlocksIDPatchParams) (*UpdateBlockResponse, error) {
-	res, err := c.sendBlocksIDPatch(ctx, request, params)
+func (c *Client) V1BlocksIDPatch(ctx context.Context, request *UpdateBlockRequest, params V1BlocksIDPatchParams) (*UpdateBlockResponse, error) {
+	res, err := c.sendV1BlocksIDPatch(ctx, request, params)
 	return res, err
 }
 
-func (c *Client) sendBlocksIDPatch(ctx context.Context, request *UpdateBlockRequest, params BlocksIDPatchParams) (res *UpdateBlockResponse, err error) {
+func (c *Client) sendV1BlocksIDPatch(ctx context.Context, request *UpdateBlockRequest, params V1BlocksIDPatchParams) (res *UpdateBlockResponse, err error) {
 	// Validate request before sending.
 	if err := func() error {
 		if err := request.Validate(); err != nil {
@@ -812,7 +812,7 @@ func (c *Client) sendBlocksIDPatch(ctx context.Context, request *UpdateBlockRequ
 		return res, errors.Wrap(err, "validate")
 	}
 	otelAttrs := []attribute.KeyValue{
-		otelogen.OperationID("BlocksIDPatch"),
+		otelogen.OperationID("V1BlocksIDPatch"),
 		semconv.HTTPRequestMethodKey.String("PATCH"),
 		semconv.URLTemplateKey.String("/v1/blocks/{id}"),
 	}
@@ -830,7 +830,7 @@ func (c *Client) sendBlocksIDPatch(ctx context.Context, request *UpdateBlockRequ
 	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
 
 	// Start a span for this request.
-	ctx, span := c.cfg.Tracer.Start(ctx, BlocksIDPatchOperation,
+	ctx, span := c.cfg.Tracer.Start(ctx, V1BlocksIDPatchOperation,
 		trace.WithAttributes(otelAttrs...),
 		clientSpanKind,
 	)
@@ -874,7 +874,7 @@ func (c *Client) sendBlocksIDPatch(ctx context.Context, request *UpdateBlockRequ
 	if err != nil {
 		return res, errors.Wrap(err, "create request")
 	}
-	if err := encodeBlocksIDPatchRequest(request, r); err != nil {
+	if err := encodeV1BlocksIDPatchRequest(request, r); err != nil {
 		return res, errors.Wrap(err, "encode request")
 	}
 
@@ -900,7 +900,7 @@ func (c *Client) sendBlocksIDPatch(ctx context.Context, request *UpdateBlockRequ
 		var satisfied bitset
 		{
 			stage = "Security:BearerAuth"
-			switch err := c.securityBearerAuth(ctx, BlocksIDPatchOperation, r); {
+			switch err := c.securityBearerAuth(ctx, V1BlocksIDPatchOperation, r); {
 			case err == nil: // if NO error
 				satisfied[0] |= 1 << 0
 			case errors.Is(err, ogenerrors.ErrSkipClientSecurity):
@@ -937,7 +937,7 @@ func (c *Client) sendBlocksIDPatch(ctx context.Context, request *UpdateBlockRequ
 	defer body.Close()
 
 	stage = "DecodeResponse"
-	result, err := decodeBlocksIDPatchResponse(resp)
+	result, err := decodeV1BlocksIDPatchResponse(resp)
 	if err != nil {
 		return res, errors.Wrap(err, "decode response")
 	}
@@ -945,19 +945,19 @@ func (c *Client) sendBlocksIDPatch(ctx context.Context, request *UpdateBlockRequ
 	return result, nil
 }
 
-// CommentsGet invokes CommentsGet operation.
+// V1CommentsGet invokes V1CommentsGet operation.
 //
 // Retrieve a user object using the ID specified in the request path.
 //
 // GET /v1/comments
-func (c *Client) CommentsGet(ctx context.Context, params CommentsGetParams) (*ListCommentsResponse, error) {
-	res, err := c.sendCommentsGet(ctx, params)
+func (c *Client) V1CommentsGet(ctx context.Context, params V1CommentsGetParams) (*ListCommentsResponse, error) {
+	res, err := c.sendV1CommentsGet(ctx, params)
 	return res, err
 }
 
-func (c *Client) sendCommentsGet(ctx context.Context, params CommentsGetParams) (res *ListCommentsResponse, err error) {
+func (c *Client) sendV1CommentsGet(ctx context.Context, params V1CommentsGetParams) (res *ListCommentsResponse, err error) {
 	otelAttrs := []attribute.KeyValue{
-		otelogen.OperationID("CommentsGet"),
+		otelogen.OperationID("V1CommentsGet"),
 		semconv.HTTPRequestMethodKey.String("GET"),
 		semconv.URLTemplateKey.String("/v1/comments"),
 	}
@@ -975,7 +975,7 @@ func (c *Client) sendCommentsGet(ctx context.Context, params CommentsGetParams) 
 	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
 
 	// Start a span for this request.
-	ctx, span := c.cfg.Tracer.Start(ctx, CommentsGetOperation,
+	ctx, span := c.cfg.Tracer.Start(ctx, V1CommentsGetOperation,
 		trace.WithAttributes(otelAttrs...),
 		clientSpanKind,
 	)
@@ -1062,7 +1062,7 @@ func (c *Client) sendCommentsGet(ctx context.Context, params CommentsGetParams) 
 		var satisfied bitset
 		{
 			stage = "Security:BearerAuth"
-			switch err := c.securityBearerAuth(ctx, CommentsGetOperation, r); {
+			switch err := c.securityBearerAuth(ctx, V1CommentsGetOperation, r); {
 			case err == nil: // if NO error
 				satisfied[0] |= 1 << 0
 			case errors.Is(err, ogenerrors.ErrSkipClientSecurity):
@@ -1099,7 +1099,7 @@ func (c *Client) sendCommentsGet(ctx context.Context, params CommentsGetParams) 
 	defer body.Close()
 
 	stage = "DecodeResponse"
-	result, err := decodeCommentsGetResponse(resp)
+	result, err := decodeV1CommentsGetResponse(resp)
 	if err != nil {
 		return res, errors.Wrap(err, "decode response")
 	}
@@ -1107,17 +1107,17 @@ func (c *Client) sendCommentsGet(ctx context.Context, params CommentsGetParams) 
 	return result, nil
 }
 
-// CommentsPost invokes CommentsPost operation.
+// V1CommentsPost invokes V1CommentsPost operation.
 //
 // Add comment to discussion.
 //
 // POST /v1/comments
-func (c *Client) CommentsPost(ctx context.Context, request *CreateCommentRequest, params CommentsPostParams) (*CreateCommentResponse, error) {
-	res, err := c.sendCommentsPost(ctx, request, params)
+func (c *Client) V1CommentsPost(ctx context.Context, request *CreateCommentRequest, params V1CommentsPostParams) (*CreateCommentResponse, error) {
+	res, err := c.sendV1CommentsPost(ctx, request, params)
 	return res, err
 }
 
-func (c *Client) sendCommentsPost(ctx context.Context, request *CreateCommentRequest, params CommentsPostParams) (res *CreateCommentResponse, err error) {
+func (c *Client) sendV1CommentsPost(ctx context.Context, request *CreateCommentRequest, params V1CommentsPostParams) (res *CreateCommentResponse, err error) {
 	// Validate request before sending.
 	if err := func() error {
 		if err := request.Validate(); err != nil {
@@ -1128,7 +1128,7 @@ func (c *Client) sendCommentsPost(ctx context.Context, request *CreateCommentReq
 		return res, errors.Wrap(err, "validate")
 	}
 	otelAttrs := []attribute.KeyValue{
-		otelogen.OperationID("CommentsPost"),
+		otelogen.OperationID("V1CommentsPost"),
 		semconv.HTTPRequestMethodKey.String("POST"),
 		semconv.URLTemplateKey.String("/v1/comments"),
 	}
@@ -1146,7 +1146,7 @@ func (c *Client) sendCommentsPost(ctx context.Context, request *CreateCommentReq
 	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
 
 	// Start a span for this request.
-	ctx, span := c.cfg.Tracer.Start(ctx, CommentsPostOperation,
+	ctx, span := c.cfg.Tracer.Start(ctx, V1CommentsPostOperation,
 		trace.WithAttributes(otelAttrs...),
 		clientSpanKind,
 	)
@@ -1172,7 +1172,7 @@ func (c *Client) sendCommentsPost(ctx context.Context, request *CreateCommentReq
 	if err != nil {
 		return res, errors.Wrap(err, "create request")
 	}
-	if err := encodeCommentsPostRequest(request, r); err != nil {
+	if err := encodeV1CommentsPostRequest(request, r); err != nil {
 		return res, errors.Wrap(err, "encode request")
 	}
 
@@ -1198,7 +1198,7 @@ func (c *Client) sendCommentsPost(ctx context.Context, request *CreateCommentReq
 		var satisfied bitset
 		{
 			stage = "Security:BearerAuth"
-			switch err := c.securityBearerAuth(ctx, CommentsPostOperation, r); {
+			switch err := c.securityBearerAuth(ctx, V1CommentsPostOperation, r); {
 			case err == nil: // if NO error
 				satisfied[0] |= 1 << 0
 			case errors.Is(err, ogenerrors.ErrSkipClientSecurity):
@@ -1235,7 +1235,7 @@ func (c *Client) sendCommentsPost(ctx context.Context, request *CreateCommentReq
 	defer body.Close()
 
 	stage = "DecodeResponse"
-	result, err := decodeCommentsPostResponse(resp)
+	result, err := decodeV1CommentsPostResponse(resp)
 	if err != nil {
 		return res, errors.Wrap(err, "decode response")
 	}
@@ -1243,19 +1243,19 @@ func (c *Client) sendCommentsPost(ctx context.Context, request *CreateCommentReq
 	return result, nil
 }
 
-// DatabasesIDGet invokes DatabasesIDGet operation.
+// V1DatabasesIDGet invokes V1DatabasesIDGet operation.
 //
 // Retrieves a database object using the ID specified in the request path.
 //
 // GET /v1/databases/{id}
-func (c *Client) DatabasesIDGet(ctx context.Context, params DatabasesIDGetParams) (*GetDatabaseResponse, error) {
-	res, err := c.sendDatabasesIDGet(ctx, params)
+func (c *Client) V1DatabasesIDGet(ctx context.Context, params V1DatabasesIDGetParams) (*GetDatabaseResponse, error) {
+	res, err := c.sendV1DatabasesIDGet(ctx, params)
 	return res, err
 }
 
-func (c *Client) sendDatabasesIDGet(ctx context.Context, params DatabasesIDGetParams) (res *GetDatabaseResponse, err error) {
+func (c *Client) sendV1DatabasesIDGet(ctx context.Context, params V1DatabasesIDGetParams) (res *GetDatabaseResponse, err error) {
 	otelAttrs := []attribute.KeyValue{
-		otelogen.OperationID("DatabasesIDGet"),
+		otelogen.OperationID("V1DatabasesIDGet"),
 		semconv.HTTPRequestMethodKey.String("GET"),
 		semconv.URLTemplateKey.String("/v1/databases/{id}"),
 	}
@@ -1273,7 +1273,7 @@ func (c *Client) sendDatabasesIDGet(ctx context.Context, params DatabasesIDGetPa
 	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
 
 	// Start a span for this request.
-	ctx, span := c.cfg.Tracer.Start(ctx, DatabasesIDGetOperation,
+	ctx, span := c.cfg.Tracer.Start(ctx, V1DatabasesIDGetOperation,
 		trace.WithAttributes(otelAttrs...),
 		clientSpanKind,
 	)
@@ -1340,7 +1340,7 @@ func (c *Client) sendDatabasesIDGet(ctx context.Context, params DatabasesIDGetPa
 		var satisfied bitset
 		{
 			stage = "Security:BearerAuth"
-			switch err := c.securityBearerAuth(ctx, DatabasesIDGetOperation, r); {
+			switch err := c.securityBearerAuth(ctx, V1DatabasesIDGetOperation, r); {
 			case err == nil: // if NO error
 				satisfied[0] |= 1 << 0
 			case errors.Is(err, ogenerrors.ErrSkipClientSecurity):
@@ -1377,7 +1377,7 @@ func (c *Client) sendDatabasesIDGet(ctx context.Context, params DatabasesIDGetPa
 	defer body.Close()
 
 	stage = "DecodeResponse"
-	result, err := decodeDatabasesIDGetResponse(resp)
+	result, err := decodeV1DatabasesIDGetResponse(resp)
 	if err != nil {
 		return res, errors.Wrap(err, "decode response")
 	}
@@ -1385,17 +1385,17 @@ func (c *Client) sendDatabasesIDGet(ctx context.Context, params DatabasesIDGetPa
 	return result, nil
 }
 
-// DatabasesIDPatch invokes DatabasesIDPatch operation.
+// V1DatabasesIDPatch invokes V1DatabasesIDPatch operation.
 //
 // Update database properties.
 //
 // PATCH /v1/databases/{id}
-func (c *Client) DatabasesIDPatch(ctx context.Context, request *UpdateDatabaseRequest, params DatabasesIDPatchParams) (*UpdateDatabaseResponse, error) {
-	res, err := c.sendDatabasesIDPatch(ctx, request, params)
+func (c *Client) V1DatabasesIDPatch(ctx context.Context, request *UpdateDatabaseRequest, params V1DatabasesIDPatchParams) (*UpdateDatabaseResponse, error) {
+	res, err := c.sendV1DatabasesIDPatch(ctx, request, params)
 	return res, err
 }
 
-func (c *Client) sendDatabasesIDPatch(ctx context.Context, request *UpdateDatabaseRequest, params DatabasesIDPatchParams) (res *UpdateDatabaseResponse, err error) {
+func (c *Client) sendV1DatabasesIDPatch(ctx context.Context, request *UpdateDatabaseRequest, params V1DatabasesIDPatchParams) (res *UpdateDatabaseResponse, err error) {
 	// Validate request before sending.
 	if err := func() error {
 		if err := request.Validate(); err != nil {
@@ -1406,7 +1406,7 @@ func (c *Client) sendDatabasesIDPatch(ctx context.Context, request *UpdateDataba
 		return res, errors.Wrap(err, "validate")
 	}
 	otelAttrs := []attribute.KeyValue{
-		otelogen.OperationID("DatabasesIDPatch"),
+		otelogen.OperationID("V1DatabasesIDPatch"),
 		semconv.HTTPRequestMethodKey.String("PATCH"),
 		semconv.URLTemplateKey.String("/v1/databases/{id}"),
 	}
@@ -1424,7 +1424,7 @@ func (c *Client) sendDatabasesIDPatch(ctx context.Context, request *UpdateDataba
 	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
 
 	// Start a span for this request.
-	ctx, span := c.cfg.Tracer.Start(ctx, DatabasesIDPatchOperation,
+	ctx, span := c.cfg.Tracer.Start(ctx, V1DatabasesIDPatchOperation,
 		trace.WithAttributes(otelAttrs...),
 		clientSpanKind,
 	)
@@ -1468,7 +1468,7 @@ func (c *Client) sendDatabasesIDPatch(ctx context.Context, request *UpdateDataba
 	if err != nil {
 		return res, errors.Wrap(err, "create request")
 	}
-	if err := encodeDatabasesIDPatchRequest(request, r); err != nil {
+	if err := encodeV1DatabasesIDPatchRequest(request, r); err != nil {
 		return res, errors.Wrap(err, "encode request")
 	}
 
@@ -1494,7 +1494,7 @@ func (c *Client) sendDatabasesIDPatch(ctx context.Context, request *UpdateDataba
 		var satisfied bitset
 		{
 			stage = "Security:BearerAuth"
-			switch err := c.securityBearerAuth(ctx, DatabasesIDPatchOperation, r); {
+			switch err := c.securityBearerAuth(ctx, V1DatabasesIDPatchOperation, r); {
 			case err == nil: // if NO error
 				satisfied[0] |= 1 << 0
 			case errors.Is(err, ogenerrors.ErrSkipClientSecurity):
@@ -1531,7 +1531,7 @@ func (c *Client) sendDatabasesIDPatch(ctx context.Context, request *UpdateDataba
 	defer body.Close()
 
 	stage = "DecodeResponse"
-	result, err := decodeDatabasesIDPatchResponse(resp)
+	result, err := decodeV1DatabasesIDPatchResponse(resp)
 	if err != nil {
 		return res, errors.Wrap(err, "decode response")
 	}
@@ -1539,17 +1539,17 @@ func (c *Client) sendDatabasesIDPatch(ctx context.Context, request *UpdateDataba
 	return result, nil
 }
 
-// DatabasesIDQueryPost invokes DatabasesIDQueryPost operation.
+// V1DatabasesIDQueryPost invokes V1DatabasesIDQueryPost operation.
 //
 // Filter a database.
 //
 // POST /v1/databases/{id}/query
-func (c *Client) DatabasesIDQueryPost(ctx context.Context, request *QueryDataSourceRequest, params DatabasesIDQueryPostParams) (*QueryDataSourceResponse, error) {
-	res, err := c.sendDatabasesIDQueryPost(ctx, request, params)
+func (c *Client) V1DatabasesIDQueryPost(ctx context.Context, request *QueryDataSourceRequest, params V1DatabasesIDQueryPostParams) (*QueryDataSourceResponse, error) {
+	res, err := c.sendV1DatabasesIDQueryPost(ctx, request, params)
 	return res, err
 }
 
-func (c *Client) sendDatabasesIDQueryPost(ctx context.Context, request *QueryDataSourceRequest, params DatabasesIDQueryPostParams) (res *QueryDataSourceResponse, err error) {
+func (c *Client) sendV1DatabasesIDQueryPost(ctx context.Context, request *QueryDataSourceRequest, params V1DatabasesIDQueryPostParams) (res *QueryDataSourceResponse, err error) {
 	// Validate request before sending.
 	if err := func() error {
 		if err := request.Validate(); err != nil {
@@ -1560,7 +1560,7 @@ func (c *Client) sendDatabasesIDQueryPost(ctx context.Context, request *QueryDat
 		return res, errors.Wrap(err, "validate")
 	}
 	otelAttrs := []attribute.KeyValue{
-		otelogen.OperationID("DatabasesIDQueryPost"),
+		otelogen.OperationID("V1DatabasesIDQueryPost"),
 		semconv.HTTPRequestMethodKey.String("POST"),
 		semconv.URLTemplateKey.String("/v1/databases/{id}/query"),
 	}
@@ -1578,7 +1578,7 @@ func (c *Client) sendDatabasesIDQueryPost(ctx context.Context, request *QueryDat
 	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
 
 	// Start a span for this request.
-	ctx, span := c.cfg.Tracer.Start(ctx, DatabasesIDQueryPostOperation,
+	ctx, span := c.cfg.Tracer.Start(ctx, V1DatabasesIDQueryPostOperation,
 		trace.WithAttributes(otelAttrs...),
 		clientSpanKind,
 	)
@@ -1623,7 +1623,7 @@ func (c *Client) sendDatabasesIDQueryPost(ctx context.Context, request *QueryDat
 	if err != nil {
 		return res, errors.Wrap(err, "create request")
 	}
-	if err := encodeDatabasesIDQueryPostRequest(request, r); err != nil {
+	if err := encodeV1DatabasesIDQueryPostRequest(request, r); err != nil {
 		return res, errors.Wrap(err, "encode request")
 	}
 
@@ -1649,7 +1649,7 @@ func (c *Client) sendDatabasesIDQueryPost(ctx context.Context, request *QueryDat
 		var satisfied bitset
 		{
 			stage = "Security:BearerAuth"
-			switch err := c.securityBearerAuth(ctx, DatabasesIDQueryPostOperation, r); {
+			switch err := c.securityBearerAuth(ctx, V1DatabasesIDQueryPostOperation, r); {
 			case err == nil: // if NO error
 				satisfied[0] |= 1 << 0
 			case errors.Is(err, ogenerrors.ErrSkipClientSecurity):
@@ -1686,7 +1686,7 @@ func (c *Client) sendDatabasesIDQueryPost(ctx context.Context, request *QueryDat
 	defer body.Close()
 
 	stage = "DecodeResponse"
-	result, err := decodeDatabasesIDQueryPostResponse(resp)
+	result, err := decodeV1DatabasesIDQueryPostResponse(resp)
 	if err != nil {
 		return res, errors.Wrap(err, "decode response")
 	}
@@ -1694,17 +1694,17 @@ func (c *Client) sendDatabasesIDQueryPost(ctx context.Context, request *QueryDat
 	return result, nil
 }
 
-// DatabasesPost invokes DatabasesPost operation.
+// V1DatabasesPost invokes V1DatabasesPost operation.
 //
 // Create a database.
 //
 // POST /v1/databases/
-func (c *Client) DatabasesPost(ctx context.Context, request *CreateDatabaseRequest, params DatabasesPostParams) (*CreateDatabaseResponse, error) {
-	res, err := c.sendDatabasesPost(ctx, request, params)
+func (c *Client) V1DatabasesPost(ctx context.Context, request *CreateDatabaseRequest, params V1DatabasesPostParams) (*CreateDatabaseResponse, error) {
+	res, err := c.sendV1DatabasesPost(ctx, request, params)
 	return res, err
 }
 
-func (c *Client) sendDatabasesPost(ctx context.Context, request *CreateDatabaseRequest, params DatabasesPostParams) (res *CreateDatabaseResponse, err error) {
+func (c *Client) sendV1DatabasesPost(ctx context.Context, request *CreateDatabaseRequest, params V1DatabasesPostParams) (res *CreateDatabaseResponse, err error) {
 	// Validate request before sending.
 	if err := func() error {
 		if err := request.Validate(); err != nil {
@@ -1715,7 +1715,7 @@ func (c *Client) sendDatabasesPost(ctx context.Context, request *CreateDatabaseR
 		return res, errors.Wrap(err, "validate")
 	}
 	otelAttrs := []attribute.KeyValue{
-		otelogen.OperationID("DatabasesPost"),
+		otelogen.OperationID("V1DatabasesPost"),
 		semconv.HTTPRequestMethodKey.String("POST"),
 		semconv.URLTemplateKey.String("/v1/databases/"),
 	}
@@ -1733,7 +1733,7 @@ func (c *Client) sendDatabasesPost(ctx context.Context, request *CreateDatabaseR
 	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
 
 	// Start a span for this request.
-	ctx, span := c.cfg.Tracer.Start(ctx, DatabasesPostOperation,
+	ctx, span := c.cfg.Tracer.Start(ctx, V1DatabasesPostOperation,
 		trace.WithAttributes(otelAttrs...),
 		clientSpanKind,
 	)
@@ -1759,7 +1759,7 @@ func (c *Client) sendDatabasesPost(ctx context.Context, request *CreateDatabaseR
 	if err != nil {
 		return res, errors.Wrap(err, "create request")
 	}
-	if err := encodeDatabasesPostRequest(request, r); err != nil {
+	if err := encodeV1DatabasesPostRequest(request, r); err != nil {
 		return res, errors.Wrap(err, "encode request")
 	}
 
@@ -1785,7 +1785,7 @@ func (c *Client) sendDatabasesPost(ctx context.Context, request *CreateDatabaseR
 		var satisfied bitset
 		{
 			stage = "Security:BearerAuth"
-			switch err := c.securityBearerAuth(ctx, DatabasesPostOperation, r); {
+			switch err := c.securityBearerAuth(ctx, V1DatabasesPostOperation, r); {
 			case err == nil: // if NO error
 				satisfied[0] |= 1 << 0
 			case errors.Is(err, ogenerrors.ErrSkipClientSecurity):
@@ -1822,7 +1822,7 @@ func (c *Client) sendDatabasesPost(ctx context.Context, request *CreateDatabaseR
 	defer body.Close()
 
 	stage = "DecodeResponse"
-	result, err := decodeDatabasesPostResponse(resp)
+	result, err := decodeV1DatabasesPostResponse(resp)
 	if err != nil {
 		return res, errors.Wrap(err, "decode response")
 	}
@@ -1830,20 +1830,20 @@ func (c *Client) sendDatabasesPost(ctx context.Context, request *CreateDatabaseR
 	return result, nil
 }
 
-// PagesIDGet invokes PagesIDGet operation.
+// V1PagesIDGet invokes V1PagesIDGet operation.
 //
 // Retrieves a Page object using the ID in the request path. This endpoint exposes page properties,
 // not page content.
 //
 // GET /v1/pages/{id}
-func (c *Client) PagesIDGet(ctx context.Context, params PagesIDGetParams) (*GetPageResponse, error) {
-	res, err := c.sendPagesIDGet(ctx, params)
+func (c *Client) V1PagesIDGet(ctx context.Context, params V1PagesIDGetParams) (*GetPageResponse, error) {
+	res, err := c.sendV1PagesIDGet(ctx, params)
 	return res, err
 }
 
-func (c *Client) sendPagesIDGet(ctx context.Context, params PagesIDGetParams) (res *GetPageResponse, err error) {
+func (c *Client) sendV1PagesIDGet(ctx context.Context, params V1PagesIDGetParams) (res *GetPageResponse, err error) {
 	otelAttrs := []attribute.KeyValue{
-		otelogen.OperationID("PagesIDGet"),
+		otelogen.OperationID("V1PagesIDGet"),
 		semconv.HTTPRequestMethodKey.String("GET"),
 		semconv.URLTemplateKey.String("/v1/pages/{id}"),
 	}
@@ -1861,7 +1861,7 @@ func (c *Client) sendPagesIDGet(ctx context.Context, params PagesIDGetParams) (r
 	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
 
 	// Start a span for this request.
-	ctx, span := c.cfg.Tracer.Start(ctx, PagesIDGetOperation,
+	ctx, span := c.cfg.Tracer.Start(ctx, V1PagesIDGetOperation,
 		trace.WithAttributes(otelAttrs...),
 		clientSpanKind,
 	)
@@ -1928,7 +1928,7 @@ func (c *Client) sendPagesIDGet(ctx context.Context, params PagesIDGetParams) (r
 		var satisfied bitset
 		{
 			stage = "Security:BearerAuth"
-			switch err := c.securityBearerAuth(ctx, PagesIDGetOperation, r); {
+			switch err := c.securityBearerAuth(ctx, V1PagesIDGetOperation, r); {
 			case err == nil: // if NO error
 				satisfied[0] |= 1 << 0
 			case errors.Is(err, ogenerrors.ErrSkipClientSecurity):
@@ -1965,7 +1965,7 @@ func (c *Client) sendPagesIDGet(ctx context.Context, params PagesIDGetParams) (r
 	defer body.Close()
 
 	stage = "DecodeResponse"
-	result, err := decodePagesIDGetResponse(resp)
+	result, err := decodeV1PagesIDGetResponse(resp)
 	if err != nil {
 		return res, errors.Wrap(err, "decode response")
 	}
@@ -1973,17 +1973,17 @@ func (c *Client) sendPagesIDGet(ctx context.Context, params PagesIDGetParams) (r
 	return result, nil
 }
 
-// PagesIDPatch invokes PagesIDPatch operation.
+// V1PagesIDPatch invokes V1PagesIDPatch operation.
 //
 // Archive a page.
 //
 // PATCH /v1/pages/{id}
-func (c *Client) PagesIDPatch(ctx context.Context, request *UpdatePageRequest, params PagesIDPatchParams) (*UpdatePageResponse, error) {
-	res, err := c.sendPagesIDPatch(ctx, request, params)
+func (c *Client) V1PagesIDPatch(ctx context.Context, request *UpdatePageRequest, params V1PagesIDPatchParams) (*UpdatePageResponse, error) {
+	res, err := c.sendV1PagesIDPatch(ctx, request, params)
 	return res, err
 }
 
-func (c *Client) sendPagesIDPatch(ctx context.Context, request *UpdatePageRequest, params PagesIDPatchParams) (res *UpdatePageResponse, err error) {
+func (c *Client) sendV1PagesIDPatch(ctx context.Context, request *UpdatePageRequest, params V1PagesIDPatchParams) (res *UpdatePageResponse, err error) {
 	// Validate request before sending.
 	if err := func() error {
 		if err := request.Validate(); err != nil {
@@ -1994,7 +1994,7 @@ func (c *Client) sendPagesIDPatch(ctx context.Context, request *UpdatePageReques
 		return res, errors.Wrap(err, "validate")
 	}
 	otelAttrs := []attribute.KeyValue{
-		otelogen.OperationID("PagesIDPatch"),
+		otelogen.OperationID("V1PagesIDPatch"),
 		semconv.HTTPRequestMethodKey.String("PATCH"),
 		semconv.URLTemplateKey.String("/v1/pages/{id}"),
 	}
@@ -2012,7 +2012,7 @@ func (c *Client) sendPagesIDPatch(ctx context.Context, request *UpdatePageReques
 	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
 
 	// Start a span for this request.
-	ctx, span := c.cfg.Tracer.Start(ctx, PagesIDPatchOperation,
+	ctx, span := c.cfg.Tracer.Start(ctx, V1PagesIDPatchOperation,
 		trace.WithAttributes(otelAttrs...),
 		clientSpanKind,
 	)
@@ -2056,7 +2056,7 @@ func (c *Client) sendPagesIDPatch(ctx context.Context, request *UpdatePageReques
 	if err != nil {
 		return res, errors.Wrap(err, "create request")
 	}
-	if err := encodePagesIDPatchRequest(request, r); err != nil {
+	if err := encodeV1PagesIDPatchRequest(request, r); err != nil {
 		return res, errors.Wrap(err, "encode request")
 	}
 
@@ -2082,7 +2082,7 @@ func (c *Client) sendPagesIDPatch(ctx context.Context, request *UpdatePageReques
 		var satisfied bitset
 		{
 			stage = "Security:BearerAuth"
-			switch err := c.securityBearerAuth(ctx, PagesIDPatchOperation, r); {
+			switch err := c.securityBearerAuth(ctx, V1PagesIDPatchOperation, r); {
 			case err == nil: // if NO error
 				satisfied[0] |= 1 << 0
 			case errors.Is(err, ogenerrors.ErrSkipClientSecurity):
@@ -2119,7 +2119,7 @@ func (c *Client) sendPagesIDPatch(ctx context.Context, request *UpdatePageReques
 	defer body.Close()
 
 	stage = "DecodeResponse"
-	result, err := decodePagesIDPatchResponse(resp)
+	result, err := decodeV1PagesIDPatchResponse(resp)
 	if err != nil {
 		return res, errors.Wrap(err, "decode response")
 	}
@@ -2127,19 +2127,19 @@ func (c *Client) sendPagesIDPatch(ctx context.Context, request *UpdatePageReques
 	return result, nil
 }
 
-// PagesPageIDPropertiesPropertyIDGet invokes PagesPageIDPropertiesPropertyIDGet operation.
+// V1PagesPageIDPropertiesPropertyIDGet invokes V1PagesPageIDPropertiesPropertyIDGet operation.
 //
 // Retrieve a page property item.
 //
 // GET /v1/pages/{page_id}/properties/{property_id}
-func (c *Client) PagesPageIDPropertiesPropertyIDGet(ctx context.Context, params PagesPageIDPropertiesPropertyIDGetParams) (*GetPagePropertyResponse, error) {
-	res, err := c.sendPagesPageIDPropertiesPropertyIDGet(ctx, params)
+func (c *Client) V1PagesPageIDPropertiesPropertyIDGet(ctx context.Context, params V1PagesPageIDPropertiesPropertyIDGetParams) (*GetPagePropertyResponse, error) {
+	res, err := c.sendV1PagesPageIDPropertiesPropertyIDGet(ctx, params)
 	return res, err
 }
 
-func (c *Client) sendPagesPageIDPropertiesPropertyIDGet(ctx context.Context, params PagesPageIDPropertiesPropertyIDGetParams) (res *GetPagePropertyResponse, err error) {
+func (c *Client) sendV1PagesPageIDPropertiesPropertyIDGet(ctx context.Context, params V1PagesPageIDPropertiesPropertyIDGetParams) (res *GetPagePropertyResponse, err error) {
 	otelAttrs := []attribute.KeyValue{
-		otelogen.OperationID("PagesPageIDPropertiesPropertyIDGet"),
+		otelogen.OperationID("V1PagesPageIDPropertiesPropertyIDGet"),
 		semconv.HTTPRequestMethodKey.String("GET"),
 		semconv.URLTemplateKey.String("/v1/pages/{page_id}/properties/{property_id}"),
 	}
@@ -2157,7 +2157,7 @@ func (c *Client) sendPagesPageIDPropertiesPropertyIDGet(ctx context.Context, par
 	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
 
 	// Start a span for this request.
-	ctx, span := c.cfg.Tracer.Start(ctx, PagesPageIDPropertiesPropertyIDGetOperation,
+	ctx, span := c.cfg.Tracer.Start(ctx, V1PagesPageIDPropertiesPropertyIDGetOperation,
 		trace.WithAttributes(otelAttrs...),
 		clientSpanKind,
 	)
@@ -2243,7 +2243,7 @@ func (c *Client) sendPagesPageIDPropertiesPropertyIDGet(ctx context.Context, par
 		var satisfied bitset
 		{
 			stage = "Security:BearerAuth"
-			switch err := c.securityBearerAuth(ctx, PagesPageIDPropertiesPropertyIDGetOperation, r); {
+			switch err := c.securityBearerAuth(ctx, V1PagesPageIDPropertiesPropertyIDGetOperation, r); {
 			case err == nil: // if NO error
 				satisfied[0] |= 1 << 0
 			case errors.Is(err, ogenerrors.ErrSkipClientSecurity):
@@ -2280,7 +2280,7 @@ func (c *Client) sendPagesPageIDPropertiesPropertyIDGet(ctx context.Context, par
 	defer body.Close()
 
 	stage = "DecodeResponse"
-	result, err := decodePagesPageIDPropertiesPropertyIDGetResponse(resp)
+	result, err := decodeV1PagesPageIDPropertiesPropertyIDGetResponse(resp)
 	if err != nil {
 		return res, errors.Wrap(err, "decode response")
 	}
@@ -2288,17 +2288,17 @@ func (c *Client) sendPagesPageIDPropertiesPropertyIDGet(ctx context.Context, par
 	return result, nil
 }
 
-// PagesPost invokes PagesPost operation.
+// V1PagesPost invokes V1PagesPost operation.
 //
 // Create a page with content.
 //
 // POST /v1/pages/
-func (c *Client) PagesPost(ctx context.Context, request *CreatePageRequest, params PagesPostParams) (*CreatePageResponse, error) {
-	res, err := c.sendPagesPost(ctx, request, params)
+func (c *Client) V1PagesPost(ctx context.Context, request *CreatePageRequest, params V1PagesPostParams) (*CreatePageResponse, error) {
+	res, err := c.sendV1PagesPost(ctx, request, params)
 	return res, err
 }
 
-func (c *Client) sendPagesPost(ctx context.Context, request *CreatePageRequest, params PagesPostParams) (res *CreatePageResponse, err error) {
+func (c *Client) sendV1PagesPost(ctx context.Context, request *CreatePageRequest, params V1PagesPostParams) (res *CreatePageResponse, err error) {
 	// Validate request before sending.
 	if err := func() error {
 		if err := request.Validate(); err != nil {
@@ -2309,7 +2309,7 @@ func (c *Client) sendPagesPost(ctx context.Context, request *CreatePageRequest, 
 		return res, errors.Wrap(err, "validate")
 	}
 	otelAttrs := []attribute.KeyValue{
-		otelogen.OperationID("PagesPost"),
+		otelogen.OperationID("V1PagesPost"),
 		semconv.HTTPRequestMethodKey.String("POST"),
 		semconv.URLTemplateKey.String("/v1/pages/"),
 	}
@@ -2327,7 +2327,7 @@ func (c *Client) sendPagesPost(ctx context.Context, request *CreatePageRequest, 
 	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
 
 	// Start a span for this request.
-	ctx, span := c.cfg.Tracer.Start(ctx, PagesPostOperation,
+	ctx, span := c.cfg.Tracer.Start(ctx, V1PagesPostOperation,
 		trace.WithAttributes(otelAttrs...),
 		clientSpanKind,
 	)
@@ -2353,7 +2353,7 @@ func (c *Client) sendPagesPost(ctx context.Context, request *CreatePageRequest, 
 	if err != nil {
 		return res, errors.Wrap(err, "create request")
 	}
-	if err := encodePagesPostRequest(request, r); err != nil {
+	if err := encodeV1PagesPostRequest(request, r); err != nil {
 		return res, errors.Wrap(err, "encode request")
 	}
 
@@ -2379,7 +2379,7 @@ func (c *Client) sendPagesPost(ctx context.Context, request *CreatePageRequest, 
 		var satisfied bitset
 		{
 			stage = "Security:BearerAuth"
-			switch err := c.securityBearerAuth(ctx, PagesPostOperation, r); {
+			switch err := c.securityBearerAuth(ctx, V1PagesPostOperation, r); {
 			case err == nil: // if NO error
 				satisfied[0] |= 1 << 0
 			case errors.Is(err, ogenerrors.ErrSkipClientSecurity):
@@ -2416,7 +2416,7 @@ func (c *Client) sendPagesPost(ctx context.Context, request *CreatePageRequest, 
 	defer body.Close()
 
 	stage = "DecodeResponse"
-	result, err := decodePagesPostResponse(resp)
+	result, err := decodeV1PagesPostResponse(resp)
 	if err != nil {
 		return res, errors.Wrap(err, "decode response")
 	}
@@ -2424,17 +2424,17 @@ func (c *Client) sendPagesPost(ctx context.Context, request *CreatePageRequest, 
 	return result, nil
 }
 
-// SearchPost invokes SearchPost operation.
+// V1SearchPost invokes V1SearchPost operation.
 //
 // Search.
 //
 // POST /v1/search
-func (c *Client) SearchPost(ctx context.Context, request *SearchRequest, params SearchPostParams) (*SearchResponse, error) {
-	res, err := c.sendSearchPost(ctx, request, params)
+func (c *Client) V1SearchPost(ctx context.Context, request *SearchRequest, params V1SearchPostParams) (*SearchResponse, error) {
+	res, err := c.sendV1SearchPost(ctx, request, params)
 	return res, err
 }
 
-func (c *Client) sendSearchPost(ctx context.Context, request *SearchRequest, params SearchPostParams) (res *SearchResponse, err error) {
+func (c *Client) sendV1SearchPost(ctx context.Context, request *SearchRequest, params V1SearchPostParams) (res *SearchResponse, err error) {
 	// Validate request before sending.
 	if err := func() error {
 		if err := request.Validate(); err != nil {
@@ -2445,7 +2445,7 @@ func (c *Client) sendSearchPost(ctx context.Context, request *SearchRequest, par
 		return res, errors.Wrap(err, "validate")
 	}
 	otelAttrs := []attribute.KeyValue{
-		otelogen.OperationID("SearchPost"),
+		otelogen.OperationID("V1SearchPost"),
 		semconv.HTTPRequestMethodKey.String("POST"),
 		semconv.URLTemplateKey.String("/v1/search"),
 	}
@@ -2463,7 +2463,7 @@ func (c *Client) sendSearchPost(ctx context.Context, request *SearchRequest, par
 	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
 
 	// Start a span for this request.
-	ctx, span := c.cfg.Tracer.Start(ctx, SearchPostOperation,
+	ctx, span := c.cfg.Tracer.Start(ctx, V1SearchPostOperation,
 		trace.WithAttributes(otelAttrs...),
 		clientSpanKind,
 	)
@@ -2489,7 +2489,7 @@ func (c *Client) sendSearchPost(ctx context.Context, request *SearchRequest, par
 	if err != nil {
 		return res, errors.Wrap(err, "create request")
 	}
-	if err := encodeSearchPostRequest(request, r); err != nil {
+	if err := encodeV1SearchPostRequest(request, r); err != nil {
 		return res, errors.Wrap(err, "encode request")
 	}
 
@@ -2515,7 +2515,7 @@ func (c *Client) sendSearchPost(ctx context.Context, request *SearchRequest, par
 		var satisfied bitset
 		{
 			stage = "Security:BearerAuth"
-			switch err := c.securityBearerAuth(ctx, SearchPostOperation, r); {
+			switch err := c.securityBearerAuth(ctx, V1SearchPostOperation, r); {
 			case err == nil: // if NO error
 				satisfied[0] |= 1 << 0
 			case errors.Is(err, ogenerrors.ErrSkipClientSecurity):
@@ -2552,7 +2552,7 @@ func (c *Client) sendSearchPost(ctx context.Context, request *SearchRequest, par
 	defer body.Close()
 
 	stage = "DecodeResponse"
-	result, err := decodeSearchPostResponse(resp)
+	result, err := decodeV1SearchPostResponse(resp)
 	if err != nil {
 		return res, errors.Wrap(err, "decode response")
 	}
@@ -2560,19 +2560,19 @@ func (c *Client) sendSearchPost(ctx context.Context, request *SearchRequest, par
 	return result, nil
 }
 
-// UsersGet invokes UsersGet operation.
+// V1UsersGet invokes V1UsersGet operation.
 //
 // Returns a paginated list of user objects for a workspace.
 //
 // GET /v1/users
-func (c *Client) UsersGet(ctx context.Context, params UsersGetParams) (*ListUsersResponse, error) {
-	res, err := c.sendUsersGet(ctx, params)
+func (c *Client) V1UsersGet(ctx context.Context, params V1UsersGetParams) (*ListUsersResponse, error) {
+	res, err := c.sendV1UsersGet(ctx, params)
 	return res, err
 }
 
-func (c *Client) sendUsersGet(ctx context.Context, params UsersGetParams) (res *ListUsersResponse, err error) {
+func (c *Client) sendV1UsersGet(ctx context.Context, params V1UsersGetParams) (res *ListUsersResponse, err error) {
 	otelAttrs := []attribute.KeyValue{
-		otelogen.OperationID("UsersGet"),
+		otelogen.OperationID("V1UsersGet"),
 		semconv.HTTPRequestMethodKey.String("GET"),
 		semconv.URLTemplateKey.String("/v1/users"),
 	}
@@ -2590,7 +2590,7 @@ func (c *Client) sendUsersGet(ctx context.Context, params UsersGetParams) (res *
 	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
 
 	// Start a span for this request.
-	ctx, span := c.cfg.Tracer.Start(ctx, UsersGetOperation,
+	ctx, span := c.cfg.Tracer.Start(ctx, V1UsersGetOperation,
 		trace.WithAttributes(otelAttrs...),
 		clientSpanKind,
 	)
@@ -2639,7 +2639,7 @@ func (c *Client) sendUsersGet(ctx context.Context, params UsersGetParams) (res *
 		var satisfied bitset
 		{
 			stage = "Security:BearerAuth"
-			switch err := c.securityBearerAuth(ctx, UsersGetOperation, r); {
+			switch err := c.securityBearerAuth(ctx, V1UsersGetOperation, r); {
 			case err == nil: // if NO error
 				satisfied[0] |= 1 << 0
 			case errors.Is(err, ogenerrors.ErrSkipClientSecurity):
@@ -2676,7 +2676,7 @@ func (c *Client) sendUsersGet(ctx context.Context, params UsersGetParams) (res *
 	defer body.Close()
 
 	stage = "DecodeResponse"
-	result, err := decodeUsersGetResponse(resp)
+	result, err := decodeV1UsersGetResponse(resp)
 	if err != nil {
 		return res, errors.Wrap(err, "decode response")
 	}
@@ -2684,19 +2684,19 @@ func (c *Client) sendUsersGet(ctx context.Context, params UsersGetParams) (res *
 	return result, nil
 }
 
-// UsersIDGet invokes UsersIDGet operation.
+// V1UsersIDGet invokes V1UsersIDGet operation.
 //
 // Retrieve a user object using the ID specified in the request path.
 //
 // GET /v1/users/{id}
-func (c *Client) UsersIDGet(ctx context.Context, params UsersIDGetParams) (*UserObjectResponse, error) {
-	res, err := c.sendUsersIDGet(ctx, params)
+func (c *Client) V1UsersIDGet(ctx context.Context, params V1UsersIDGetParams) (*UserObjectResponse, error) {
+	res, err := c.sendV1UsersIDGet(ctx, params)
 	return res, err
 }
 
-func (c *Client) sendUsersIDGet(ctx context.Context, params UsersIDGetParams) (res *UserObjectResponse, err error) {
+func (c *Client) sendV1UsersIDGet(ctx context.Context, params V1UsersIDGetParams) (res *UserObjectResponse, err error) {
 	otelAttrs := []attribute.KeyValue{
-		otelogen.OperationID("UsersIDGet"),
+		otelogen.OperationID("V1UsersIDGet"),
 		semconv.HTTPRequestMethodKey.String("GET"),
 		semconv.URLTemplateKey.String("/v1/users/{id}"),
 	}
@@ -2714,7 +2714,7 @@ func (c *Client) sendUsersIDGet(ctx context.Context, params UsersIDGetParams) (r
 	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
 
 	// Start a span for this request.
-	ctx, span := c.cfg.Tracer.Start(ctx, UsersIDGetOperation,
+	ctx, span := c.cfg.Tracer.Start(ctx, V1UsersIDGetOperation,
 		trace.WithAttributes(otelAttrs...),
 		clientSpanKind,
 	)
@@ -2781,7 +2781,7 @@ func (c *Client) sendUsersIDGet(ctx context.Context, params UsersIDGetParams) (r
 		var satisfied bitset
 		{
 			stage = "Security:BearerAuth"
-			switch err := c.securityBearerAuth(ctx, UsersIDGetOperation, r); {
+			switch err := c.securityBearerAuth(ctx, V1UsersIDGetOperation, r); {
 			case err == nil: // if NO error
 				satisfied[0] |= 1 << 0
 			case errors.Is(err, ogenerrors.ErrSkipClientSecurity):
@@ -2818,7 +2818,7 @@ func (c *Client) sendUsersIDGet(ctx context.Context, params UsersIDGetParams) (r
 	defer body.Close()
 
 	stage = "DecodeResponse"
-	result, err := decodeUsersIDGetResponse(resp)
+	result, err := decodeV1UsersIDGetResponse(resp)
 	if err != nil {
 		return res, errors.Wrap(err, "decode response")
 	}
@@ -2826,19 +2826,19 @@ func (c *Client) sendUsersIDGet(ctx context.Context, params UsersIDGetParams) (r
 	return result, nil
 }
 
-// UsersMeGet invokes UsersMeGet operation.
+// V1UsersMeGet invokes V1UsersMeGet operation.
 //
 // Retrieve your token’s bot user.
 //
 // GET /v1/users/me
-func (c *Client) UsersMeGet(ctx context.Context, params UsersMeGetParams) (*UserObjectResponse, error) {
-	res, err := c.sendUsersMeGet(ctx, params)
+func (c *Client) V1UsersMeGet(ctx context.Context, params V1UsersMeGetParams) (*UserObjectResponse, error) {
+	res, err := c.sendV1UsersMeGet(ctx, params)
 	return res, err
 }
 
-func (c *Client) sendUsersMeGet(ctx context.Context, params UsersMeGetParams) (res *UserObjectResponse, err error) {
+func (c *Client) sendV1UsersMeGet(ctx context.Context, params V1UsersMeGetParams) (res *UserObjectResponse, err error) {
 	otelAttrs := []attribute.KeyValue{
-		otelogen.OperationID("UsersMeGet"),
+		otelogen.OperationID("V1UsersMeGet"),
 		semconv.HTTPRequestMethodKey.String("GET"),
 		semconv.URLTemplateKey.String("/v1/users/me"),
 	}
@@ -2856,7 +2856,7 @@ func (c *Client) sendUsersMeGet(ctx context.Context, params UsersMeGetParams) (r
 	c.requests.Add(ctx, 1, metric.WithAttributes(otelAttrs...))
 
 	// Start a span for this request.
-	ctx, span := c.cfg.Tracer.Start(ctx, UsersMeGetOperation,
+	ctx, span := c.cfg.Tracer.Start(ctx, V1UsersMeGetOperation,
 		trace.WithAttributes(otelAttrs...),
 		clientSpanKind,
 	)
@@ -2905,7 +2905,7 @@ func (c *Client) sendUsersMeGet(ctx context.Context, params UsersMeGetParams) (r
 		var satisfied bitset
 		{
 			stage = "Security:BearerAuth"
-			switch err := c.securityBearerAuth(ctx, UsersMeGetOperation, r); {
+			switch err := c.securityBearerAuth(ctx, V1UsersMeGetOperation, r); {
 			case err == nil: // if NO error
 				satisfied[0] |= 1 << 0
 			case errors.Is(err, ogenerrors.ErrSkipClientSecurity):
@@ -2942,7 +2942,7 @@ func (c *Client) sendUsersMeGet(ctx context.Context, params UsersMeGetParams) (r
 	defer body.Close()
 
 	stage = "DecodeResponse"
-	result, err := decodeUsersMeGetResponse(resp)
+	result, err := decodeV1UsersMeGetResponse(resp)
 	if err != nil {
 		return res, errors.Wrap(err, "decode response")
 	}

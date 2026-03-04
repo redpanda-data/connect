@@ -1251,8 +1251,8 @@ function postProcessSchemas() {
 // ---------------------------------------------------------------------------
 
 function pathToOperationId(path: string, method: string): string {
-	// Strip /v1/ prefix and trailing slash
-	const stripped = path.replace(/^\/v1\//, "").replace(/\/+$/, "");
+	// Strip leading slash and trailing slash
+	const stripped = path.replace(/^\//, "").replace(/\/+$/, "");
 	const segments = stripped.split("/").filter(Boolean);
 	const pascal = segments
 		.map((seg) => {

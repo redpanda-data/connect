@@ -13626,7 +13626,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/GetUserResponse"
-      operationId: UsersIDGet
+      operationId: V1UsersIDGet
   /v1/users:
     get:
       tags:
@@ -13801,7 +13801,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ListUsersResponse"
-      operationId: UsersGet
+      operationId: V1UsersGet
   /v1/users/me:
     get:
       tags:
@@ -13975,7 +13975,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/GetSelfResponse"
-      operationId: UsersMeGet
+      operationId: V1UsersMeGet
   /v1/databases/{id}:
     get:
       tags:
@@ -14156,7 +14156,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/GetDatabaseResponse"
-      operationId: DatabasesIDGet
+      operationId: V1DatabasesIDGet
     patch:
       tags:
         - Databases
@@ -14341,7 +14341,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/UpdateDatabaseResponse"
-      operationId: DatabasesIDPatch
+      operationId: V1DatabasesIDPatch
   /v1/databases/{id}/query:
     post:
       tags:
@@ -14537,7 +14537,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/QueryDataSourceResponse"
-      operationId: DatabasesIDQueryPost
+      operationId: V1DatabasesIDQueryPost
   /v1/databases/:
     post:
       tags:
@@ -14722,7 +14722,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/CreateDatabaseResponse"
-      operationId: DatabasesPost
+      operationId: V1DatabasesPost
   /v1/pages/:
     post:
       tags:
@@ -14912,7 +14912,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/CreatePageResponse"
-      operationId: PagesPost
+      operationId: V1PagesPost
   /v1/pages/{id}:
     get:
       tags:
@@ -15094,7 +15094,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/GetPageResponse"
-      operationId: PagesIDGet
+      operationId: V1PagesIDGet
     patch:
       tags:
         - Pages
@@ -15279,7 +15279,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/UpdatePageResponse"
-      operationId: PagesIDPatch
+      operationId: V1PagesIDPatch
   /v1/pages/{page_id}/properties/{property_id}:
     get:
       tags:
@@ -15464,7 +15464,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/GetPagePropertyResponse"
-      operationId: PagesPageIDPropertiesPropertyIDGet
+      operationId: V1PagesPageIDPropertiesPropertyIDGet
   /v1/blocks/{id}/children:
     get:
       tags:
@@ -15642,7 +15642,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ListBlockChildrenResponse"
-      operationId: BlocksIDChildrenGet
+      operationId: V1BlocksIDChildrenGet
     patch:
       tags:
         - Blocks
@@ -15833,7 +15833,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AppendBlockChildrenResponse"
-      operationId: BlocksIDChildrenPatch
+      operationId: V1BlocksIDChildrenPatch
   /v1/blocks/{id}:
     patch:
       tags:
@@ -16022,7 +16022,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/UpdateBlockResponse"
-      operationId: BlocksIDPatch
+      operationId: V1BlocksIDPatch
     get:
       tags:
         - Blocks
@@ -16202,7 +16202,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/GetBlockResponse"
-      operationId: BlocksIDGet
+      operationId: V1BlocksIDGet
     delete:
       tags:
         - Blocks
@@ -16381,7 +16381,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DeleteBlockResponse"
-      operationId: BlocksIDDelete
+      operationId: V1BlocksIDDelete
   /v1/search:
     post:
       tags:
@@ -16571,7 +16571,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SearchResponse"
-      operationId: SearchPost
+      operationId: V1SearchPost
   /v1/comments:
     get:
       tags:
@@ -16701,7 +16701,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ListCommentsResponse"
-      operationId: CommentsGet
+      operationId: V1CommentsGet
     post:
       tags:
         - Comments
@@ -16830,4 +16830,4 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/CreateCommentResponse"
-      operationId: CommentsPost
+      operationId: V1CommentsPost

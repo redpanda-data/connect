@@ -2,113 +2,113 @@
 
 package v1
 
-// BlocksIDChildrenGetParams is parameters of BlocksIDChildrenGet operation.
-type BlocksIDChildrenGetParams struct {
+// V1BlocksIDChildrenGetParams is parameters of V1BlocksIDChildrenGet operation.
+type V1BlocksIDChildrenGetParams struct {
 	NotionVersion OptString `json:",omitempty,omitzero"`
 	PageSize      OptInt    `json:",omitempty,omitzero"`
 	ID            string
 }
 
-// BlocksIDChildrenPatchParams is parameters of BlocksIDChildrenPatch operation.
-type BlocksIDChildrenPatchParams struct {
+// V1BlocksIDChildrenPatchParams is parameters of V1BlocksIDChildrenPatch operation.
+type V1BlocksIDChildrenPatchParams struct {
 	NotionVersion OptString `json:",omitempty,omitzero"`
 	ID            string
 }
 
-// BlocksIDDeleteParams is parameters of BlocksIDDelete operation.
-type BlocksIDDeleteParams struct {
+// V1BlocksIDDeleteParams is parameters of V1BlocksIDDelete operation.
+type V1BlocksIDDeleteParams struct {
 	NotionVersion OptString `json:",omitempty,omitzero"`
 	ID            string
 }
 
-// BlocksIDGetParams is parameters of BlocksIDGet operation.
-type BlocksIDGetParams struct {
+// V1BlocksIDGetParams is parameters of V1BlocksIDGet operation.
+type V1BlocksIDGetParams struct {
 	NotionVersion OptString `json:",omitempty,omitzero"`
 	ID            string
 }
 
-// BlocksIDPatchParams is parameters of BlocksIDPatch operation.
-type BlocksIDPatchParams struct {
+// V1BlocksIDPatchParams is parameters of V1BlocksIDPatch operation.
+type V1BlocksIDPatchParams struct {
 	NotionVersion OptString `json:",omitempty,omitzero"`
 	ID            string
 }
 
-// CommentsGetParams is parameters of CommentsGet operation.
-type CommentsGetParams struct {
+// V1CommentsGetParams is parameters of V1CommentsGet operation.
+type V1CommentsGetParams struct {
 	NotionVersion OptString `json:",omitempty,omitzero"`
 	BlockID       OptString `json:",omitempty,omitzero"`
 	PageSize      OptInt    `json:",omitempty,omitzero"`
 }
 
-// CommentsPostParams is parameters of CommentsPost operation.
-type CommentsPostParams struct {
+// V1CommentsPostParams is parameters of V1CommentsPost operation.
+type V1CommentsPostParams struct {
 	NotionVersion OptString `json:",omitempty,omitzero"`
 }
 
-// DatabasesIDGetParams is parameters of DatabasesIDGet operation.
-type DatabasesIDGetParams struct {
-	NotionVersion OptString `json:",omitempty,omitzero"`
-	ID            string
-}
-
-// DatabasesIDPatchParams is parameters of DatabasesIDPatch operation.
-type DatabasesIDPatchParams struct {
+// V1DatabasesIDGetParams is parameters of V1DatabasesIDGet operation.
+type V1DatabasesIDGetParams struct {
 	NotionVersion OptString `json:",omitempty,omitzero"`
 	ID            string
 }
 
-// DatabasesIDQueryPostParams is parameters of DatabasesIDQueryPost operation.
-type DatabasesIDQueryPostParams struct {
+// V1DatabasesIDPatchParams is parameters of V1DatabasesIDPatch operation.
+type V1DatabasesIDPatchParams struct {
 	NotionVersion OptString `json:",omitempty,omitzero"`
 	ID            string
 }
 
-// DatabasesPostParams is parameters of DatabasesPost operation.
-type DatabasesPostParams struct {
-	NotionVersion OptString `json:",omitempty,omitzero"`
-}
-
-// PagesIDGetParams is parameters of PagesIDGet operation.
-type PagesIDGetParams struct {
+// V1DatabasesIDQueryPostParams is parameters of V1DatabasesIDQueryPost operation.
+type V1DatabasesIDQueryPostParams struct {
 	NotionVersion OptString `json:",omitempty,omitzero"`
 	ID            string
 }
 
-// PagesIDPatchParams is parameters of PagesIDPatch operation.
-type PagesIDPatchParams struct {
+// V1DatabasesPostParams is parameters of V1DatabasesPost operation.
+type V1DatabasesPostParams struct {
+	NotionVersion OptString `json:",omitempty,omitzero"`
+}
+
+// V1PagesIDGetParams is parameters of V1PagesIDGet operation.
+type V1PagesIDGetParams struct {
 	NotionVersion OptString `json:",omitempty,omitzero"`
 	ID            string
 }
 
-// PagesPageIDPropertiesPropertyIDGetParams is parameters of PagesPageIDPropertiesPropertyIDGet operation.
-type PagesPageIDPropertiesPropertyIDGetParams struct {
+// V1PagesIDPatchParams is parameters of V1PagesIDPatch operation.
+type V1PagesIDPatchParams struct {
+	NotionVersion OptString `json:",omitempty,omitzero"`
+	ID            string
+}
+
+// V1PagesPageIDPropertiesPropertyIDGetParams is parameters of V1PagesPageIDPropertiesPropertyIDGet operation.
+type V1PagesPageIDPropertiesPropertyIDGetParams struct {
 	NotionVersion OptString `json:",omitempty,omitzero"`
 	PageID        string
 	PropertyID    string
 }
 
-// PagesPostParams is parameters of PagesPost operation.
-type PagesPostParams struct {
+// V1PagesPostParams is parameters of V1PagesPost operation.
+type V1PagesPostParams struct {
 	NotionVersion OptString `json:",omitempty,omitzero"`
 }
 
-// SearchPostParams is parameters of SearchPost operation.
-type SearchPostParams struct {
+// V1SearchPostParams is parameters of V1SearchPost operation.
+type V1SearchPostParams struct {
 	NotionVersion OptString `json:",omitempty,omitzero"`
 }
 
-// UsersGetParams is parameters of UsersGet operation.
-type UsersGetParams struct {
+// V1UsersGetParams is parameters of V1UsersGet operation.
+type V1UsersGetParams struct {
 	NotionVersion OptString `json:",omitempty,omitzero"`
 }
 
-// UsersIDGetParams is parameters of UsersIDGet operation.
-type UsersIDGetParams struct {
+// V1UsersIDGetParams is parameters of V1UsersIDGet operation.
+type V1UsersIDGetParams struct {
 	NotionVersion OptString `json:",omitempty,omitzero"`
 	ID            string
 }
 
-// UsersMeGetParams is parameters of UsersMeGet operation.
-type UsersMeGetParams struct {
+// V1UsersMeGetParams is parameters of V1UsersMeGet operation.
+type V1UsersMeGetParams struct {
 	NotionVersion OptString `json:",omitempty,omitzero"`
 }

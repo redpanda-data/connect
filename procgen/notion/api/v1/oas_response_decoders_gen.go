@@ -13,7 +13,7 @@ import (
 	"github.com/ogen-go/ogen/validate"
 )
 
-func decodeBlocksIDChildrenGetResponse(resp *http.Response) (res *ListBlockChildrenResponse, _ error) {
+func decodeV1BlocksIDChildrenGetResponse(resp *http.Response) (res *ListBlockChildrenResponse, _ error) {
 	switch resp.StatusCode {
 	case 200:
 		// Code 200.
@@ -63,7 +63,7 @@ func decodeBlocksIDChildrenGetResponse(resp *http.Response) (res *ListBlockChild
 	return res, validate.UnexpectedStatusCodeWithResponse(resp)
 }
 
-func decodeBlocksIDChildrenPatchResponse(resp *http.Response) (res *AppendBlockChildrenResponse, _ error) {
+func decodeV1BlocksIDChildrenPatchResponse(resp *http.Response) (res *AppendBlockChildrenResponse, _ error) {
 	switch resp.StatusCode {
 	case 200:
 		// Code 200.
@@ -113,7 +113,7 @@ func decodeBlocksIDChildrenPatchResponse(resp *http.Response) (res *AppendBlockC
 	return res, validate.UnexpectedStatusCodeWithResponse(resp)
 }
 
-func decodeBlocksIDDeleteResponse(resp *http.Response) (res *DeleteBlockResponse, _ error) {
+func decodeV1BlocksIDDeleteResponse(resp *http.Response) (res *DeleteBlockResponse, _ error) {
 	switch resp.StatusCode {
 	case 200:
 		// Code 200.
@@ -163,7 +163,7 @@ func decodeBlocksIDDeleteResponse(resp *http.Response) (res *DeleteBlockResponse
 	return res, validate.UnexpectedStatusCodeWithResponse(resp)
 }
 
-func decodeBlocksIDGetResponse(resp *http.Response) (res *GetBlockResponse, _ error) {
+func decodeV1BlocksIDGetResponse(resp *http.Response) (res *GetBlockResponse, _ error) {
 	switch resp.StatusCode {
 	case 200:
 		// Code 200.
@@ -213,7 +213,7 @@ func decodeBlocksIDGetResponse(resp *http.Response) (res *GetBlockResponse, _ er
 	return res, validate.UnexpectedStatusCodeWithResponse(resp)
 }
 
-func decodeBlocksIDPatchResponse(resp *http.Response) (res *UpdateBlockResponse, _ error) {
+func decodeV1BlocksIDPatchResponse(resp *http.Response) (res *UpdateBlockResponse, _ error) {
 	switch resp.StatusCode {
 	case 200:
 		// Code 200.
@@ -263,7 +263,7 @@ func decodeBlocksIDPatchResponse(resp *http.Response) (res *UpdateBlockResponse,
 	return res, validate.UnexpectedStatusCodeWithResponse(resp)
 }
 
-func decodeCommentsGetResponse(resp *http.Response) (res *ListCommentsResponse, _ error) {
+func decodeV1CommentsGetResponse(resp *http.Response) (res *ListCommentsResponse, _ error) {
 	switch resp.StatusCode {
 	case 200:
 		// Code 200.
@@ -313,7 +313,7 @@ func decodeCommentsGetResponse(resp *http.Response) (res *ListCommentsResponse, 
 	return res, validate.UnexpectedStatusCodeWithResponse(resp)
 }
 
-func decodeCommentsPostResponse(resp *http.Response) (res *CreateCommentResponse, _ error) {
+func decodeV1CommentsPostResponse(resp *http.Response) (res *CreateCommentResponse, _ error) {
 	switch resp.StatusCode {
 	case 200:
 		// Code 200.
@@ -363,7 +363,7 @@ func decodeCommentsPostResponse(resp *http.Response) (res *CreateCommentResponse
 	return res, validate.UnexpectedStatusCodeWithResponse(resp)
 }
 
-func decodeDatabasesIDGetResponse(resp *http.Response) (res *GetDatabaseResponse, _ error) {
+func decodeV1DatabasesIDGetResponse(resp *http.Response) (res *GetDatabaseResponse, _ error) {
 	switch resp.StatusCode {
 	case 200:
 		// Code 200.
@@ -413,7 +413,7 @@ func decodeDatabasesIDGetResponse(resp *http.Response) (res *GetDatabaseResponse
 	return res, validate.UnexpectedStatusCodeWithResponse(resp)
 }
 
-func decodeDatabasesIDPatchResponse(resp *http.Response) (res *UpdateDatabaseResponse, _ error) {
+func decodeV1DatabasesIDPatchResponse(resp *http.Response) (res *UpdateDatabaseResponse, _ error) {
 	switch resp.StatusCode {
 	case 200:
 		// Code 200.
@@ -463,7 +463,7 @@ func decodeDatabasesIDPatchResponse(resp *http.Response) (res *UpdateDatabaseRes
 	return res, validate.UnexpectedStatusCodeWithResponse(resp)
 }
 
-func decodeDatabasesIDQueryPostResponse(resp *http.Response) (res *QueryDataSourceResponse, _ error) {
+func decodeV1DatabasesIDQueryPostResponse(resp *http.Response) (res *QueryDataSourceResponse, _ error) {
 	switch resp.StatusCode {
 	case 200:
 		// Code 200.
@@ -513,7 +513,7 @@ func decodeDatabasesIDQueryPostResponse(resp *http.Response) (res *QueryDataSour
 	return res, validate.UnexpectedStatusCodeWithResponse(resp)
 }
 
-func decodeDatabasesPostResponse(resp *http.Response) (res *CreateDatabaseResponse, _ error) {
+func decodeV1DatabasesPostResponse(resp *http.Response) (res *CreateDatabaseResponse, _ error) {
 	switch resp.StatusCode {
 	case 200:
 		// Code 200.
@@ -563,7 +563,7 @@ func decodeDatabasesPostResponse(resp *http.Response) (res *CreateDatabaseRespon
 	return res, validate.UnexpectedStatusCodeWithResponse(resp)
 }
 
-func decodePagesIDGetResponse(resp *http.Response) (res *GetPageResponse, _ error) {
+func decodeV1PagesIDGetResponse(resp *http.Response) (res *GetPageResponse, _ error) {
 	switch resp.StatusCode {
 	case 200:
 		// Code 200.
@@ -613,7 +613,7 @@ func decodePagesIDGetResponse(resp *http.Response) (res *GetPageResponse, _ erro
 	return res, validate.UnexpectedStatusCodeWithResponse(resp)
 }
 
-func decodePagesIDPatchResponse(resp *http.Response) (res *UpdatePageResponse, _ error) {
+func decodeV1PagesIDPatchResponse(resp *http.Response) (res *UpdatePageResponse, _ error) {
 	switch resp.StatusCode {
 	case 200:
 		// Code 200.
@@ -663,7 +663,7 @@ func decodePagesIDPatchResponse(resp *http.Response) (res *UpdatePageResponse, _
 	return res, validate.UnexpectedStatusCodeWithResponse(resp)
 }
 
-func decodePagesPageIDPropertiesPropertyIDGetResponse(resp *http.Response) (res *GetPagePropertyResponse, _ error) {
+func decodeV1PagesPageIDPropertiesPropertyIDGetResponse(resp *http.Response) (res *GetPagePropertyResponse, _ error) {
 	switch resp.StatusCode {
 	case 200:
 		// Code 200.
@@ -713,7 +713,7 @@ func decodePagesPageIDPropertiesPropertyIDGetResponse(resp *http.Response) (res 
 	return res, validate.UnexpectedStatusCodeWithResponse(resp)
 }
 
-func decodePagesPostResponse(resp *http.Response) (res *CreatePageResponse, _ error) {
+func decodeV1PagesPostResponse(resp *http.Response) (res *CreatePageResponse, _ error) {
 	switch resp.StatusCode {
 	case 200:
 		// Code 200.
@@ -763,7 +763,7 @@ func decodePagesPostResponse(resp *http.Response) (res *CreatePageResponse, _ er
 	return res, validate.UnexpectedStatusCodeWithResponse(resp)
 }
 
-func decodeSearchPostResponse(resp *http.Response) (res *SearchResponse, _ error) {
+func decodeV1SearchPostResponse(resp *http.Response) (res *SearchResponse, _ error) {
 	switch resp.StatusCode {
 	case 200:
 		// Code 200.
@@ -813,7 +813,7 @@ func decodeSearchPostResponse(resp *http.Response) (res *SearchResponse, _ error
 	return res, validate.UnexpectedStatusCodeWithResponse(resp)
 }
 
-func decodeUsersGetResponse(resp *http.Response) (res *ListUsersResponse, _ error) {
+func decodeV1UsersGetResponse(resp *http.Response) (res *ListUsersResponse, _ error) {
 	switch resp.StatusCode {
 	case 200:
 		// Code 200.
@@ -863,7 +863,7 @@ func decodeUsersGetResponse(resp *http.Response) (res *ListUsersResponse, _ erro
 	return res, validate.UnexpectedStatusCodeWithResponse(resp)
 }
 
-func decodeUsersIDGetResponse(resp *http.Response) (res *UserObjectResponse, _ error) {
+func decodeV1UsersIDGetResponse(resp *http.Response) (res *UserObjectResponse, _ error) {
 	switch resp.StatusCode {
 	case 200:
 		// Code 200.
@@ -913,7 +913,7 @@ func decodeUsersIDGetResponse(resp *http.Response) (res *UserObjectResponse, _ e
 	return res, validate.UnexpectedStatusCodeWithResponse(resp)
 }
 
-func decodeUsersMeGetResponse(resp *http.Response) (res *UserObjectResponse, _ error) {
+func decodeV1UsersMeGetResponse(resp *http.Response) (res *UserObjectResponse, _ error) {
 	switch resp.StatusCode {
 	case 200:
 		// Code 200.

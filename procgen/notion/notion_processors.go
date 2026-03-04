@@ -103,20 +103,20 @@ func marshalResponse(msg *service.Message, resp any) (service.MessageBatch, erro
 	return service.MessageBatch{out}, nil
 }
 
-// BlocksIDChildrenGet processor — get /v1/blocks/{id}/children
+// V1BlocksIDChildrenGet processor — get /v1/blocks/{id}/children
 
 func init() {
 	service.MustRegisterProcessor(
-		"notion_blocks_id_children_get",
-		blocksIDChildrenGetConfig(),
-		newBlocksIDChildrenGetProcessor,
+		"notion_v1_blocks_id_children_get",
+		v1BlocksIDChildrenGetConfig(),
+		newV1BlocksIDChildrenGetProcessor,
 	)
 }
 
-func blocksIDChildrenGetConfig() *service.ConfigSpec {
+func v1BlocksIDChildrenGetConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Services", "Notion").
-		Summary("Retrieve block children").
+		Summary("Retrieve block children `GET /v1/blocks/{id}/children`").
 		Fields(sharedConfigFields()...).Fields(
 		service.NewInterpolatedStringField("id").
 			Description(""),
@@ -126,19 +126,19 @@ func blocksIDChildrenGetConfig() *service.ConfigSpec {
 	)
 }
 
-type blocksIDChildrenGetProcessor struct {
+type v1BlocksIDChildrenGetProcessor struct {
 	baseProcessor
 	id       *service.InterpolatedString
 	pageSize *service.InterpolatedString
 }
 
-func newBlocksIDChildrenGetProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
+func newV1BlocksIDChildrenGetProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
 	base, err := baseProcessorFromParsed(conf, mgr.Logger())
 	if err != nil {
 		return nil, err
 	}
 
-	p := &blocksIDChildrenGetProcessor{baseProcessor: base}
+	p := &v1BlocksIDChildrenGetProcessor{baseProcessor: base}
 	if p.id, err = conf.FieldInterpolatedString("id"); err != nil {
 		return nil, err
 	}
@@ -151,8 +151,8 @@ func newBlocksIDChildrenGetProcessor(conf *service.ParsedConfig, mgr *service.Re
 	return p, nil
 }
 
-func (p *blocksIDChildrenGetProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
-	params := v1.BlocksIDChildrenGetParams{
+func (p *v1BlocksIDChildrenGetProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
+	params := v1.V1BlocksIDChildrenGetParams{
 		NotionVersion: v1.NewOptString(p.notionVersion),
 	}
 	{
@@ -173,45 +173,45 @@ func (p *blocksIDChildrenGetProcessor) Process(ctx context.Context, msg *service
 		}
 		params.PageSize = v1.NewOptInt(intVal)
 	}
-	resp, err := p.client.BlocksIDChildrenGet(ctx, params)
+	res, err := p.client.V1BlocksIDChildrenGet(ctx, params)
 	if err != nil {
 		return handleAPIError(msg, err)
 	}
-	return marshalResponse(msg, &resp)
+	return marshalResponse(msg, &res)
 }
 
-// BlocksIDChildrenPatch processor — patch /v1/blocks/{id}/children
+// V1BlocksIDChildrenPatch processor — patch /v1/blocks/{id}/children
 
 func init() {
 	service.MustRegisterProcessor(
-		"notion_blocks_id_children_patch",
-		blocksIDChildrenPatchConfig(),
-		newBlocksIDChildrenPatchProcessor,
+		"notion_v1_blocks_id_children_patch",
+		v1BlocksIDChildrenPatchConfig(),
+		newV1BlocksIDChildrenPatchProcessor,
 	)
 }
 
-func blocksIDChildrenPatchConfig() *service.ConfigSpec {
+func v1BlocksIDChildrenPatchConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Services", "Notion").
-		Summary("Append block children").
+		Summary("Append block children `PATCH /v1/blocks/{id}/children`").
 		Fields(sharedConfigFields()...).Fields(
 		service.NewInterpolatedStringField("id").
 			Description(""),
 	)
 }
 
-type blocksIDChildrenPatchProcessor struct {
+type v1BlocksIDChildrenPatchProcessor struct {
 	baseProcessor
 	id *service.InterpolatedString
 }
 
-func newBlocksIDChildrenPatchProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
+func newV1BlocksIDChildrenPatchProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
 	base, err := baseProcessorFromParsed(conf, mgr.Logger())
 	if err != nil {
 		return nil, err
 	}
 
-	p := &blocksIDChildrenPatchProcessor{baseProcessor: base}
+	p := &v1BlocksIDChildrenPatchProcessor{baseProcessor: base}
 	if p.id, err = conf.FieldInterpolatedString("id"); err != nil {
 		return nil, err
 	}
@@ -219,8 +219,8 @@ func newBlocksIDChildrenPatchProcessor(conf *service.ParsedConfig, mgr *service.
 	return p, nil
 }
 
-func (p *blocksIDChildrenPatchProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
-	params := v1.BlocksIDChildrenPatchParams{
+func (p *v1BlocksIDChildrenPatchProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
+	params := v1.V1BlocksIDChildrenPatchParams{
 		NotionVersion: v1.NewOptString(p.notionVersion),
 	}
 	{
@@ -230,58 +230,58 @@ func (p *blocksIDChildrenPatchProcessor) Process(ctx context.Context, msg *servi
 		}
 		params.ID = v
 	}
-	bodyBytes, err := msg.AsBytes()
+	b, err := msg.AsBytes()
 	if err != nil {
 		return nil, fmt.Errorf("reading message body: %w", err)
 	}
 
-	var reqBody v1.AppendBlockChildrenRequest
-	if err := reqBody.UnmarshalJSON(bodyBytes); err != nil {
+	var req v1.AppendBlockChildrenRequest
+	if err := req.UnmarshalJSON(b); err != nil {
 		return nil, fmt.Errorf("unmarshaling request body: %w", err)
 	}
-	if err := reqBody.Validate(); err != nil {
+	if err := req.Validate(); err != nil {
 		return nil, fmt.Errorf("validating request body: %w", err)
 	}
 
-	resp, err := p.client.BlocksIDChildrenPatch(ctx, &reqBody, params)
+	res, err := p.client.V1BlocksIDChildrenPatch(ctx, &req, params)
 	if err != nil {
 		return handleAPIError(msg, err)
 	}
-	return marshalResponse(msg, &resp)
+	return marshalResponse(msg, &res)
 }
 
-// BlocksIDDelete processor — delete /v1/blocks/{id}
+// V1BlocksIDDelete processor — delete /v1/blocks/{id}
 
 func init() {
 	service.MustRegisterProcessor(
-		"notion_blocks_id_delete",
-		blocksIDDeleteConfig(),
-		newBlocksIDDeleteProcessor,
+		"notion_v1_blocks_id_delete",
+		v1BlocksIDDeleteConfig(),
+		newV1BlocksIDDeleteProcessor,
 	)
 }
 
-func blocksIDDeleteConfig() *service.ConfigSpec {
+func v1BlocksIDDeleteConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Services", "Notion").
-		Summary("Delete a block").
+		Summary("Delete a block `DELETE /v1/blocks/{id}`").
 		Fields(sharedConfigFields()...).Fields(
 		service.NewInterpolatedStringField("id").
 			Description(""),
 	)
 }
 
-type blocksIDDeleteProcessor struct {
+type v1BlocksIDDeleteProcessor struct {
 	baseProcessor
 	id *service.InterpolatedString
 }
 
-func newBlocksIDDeleteProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
+func newV1BlocksIDDeleteProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
 	base, err := baseProcessorFromParsed(conf, mgr.Logger())
 	if err != nil {
 		return nil, err
 	}
 
-	p := &blocksIDDeleteProcessor{baseProcessor: base}
+	p := &v1BlocksIDDeleteProcessor{baseProcessor: base}
 	if p.id, err = conf.FieldInterpolatedString("id"); err != nil {
 		return nil, err
 	}
@@ -289,8 +289,8 @@ func newBlocksIDDeleteProcessor(conf *service.ParsedConfig, mgr *service.Resourc
 	return p, nil
 }
 
-func (p *blocksIDDeleteProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
-	params := v1.BlocksIDDeleteParams{
+func (p *v1BlocksIDDeleteProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
+	params := v1.V1BlocksIDDeleteParams{
 		NotionVersion: v1.NewOptString(p.notionVersion),
 	}
 	{
@@ -300,45 +300,45 @@ func (p *blocksIDDeleteProcessor) Process(ctx context.Context, msg *service.Mess
 		}
 		params.ID = v
 	}
-	resp, err := p.client.BlocksIDDelete(ctx, params)
+	res, err := p.client.V1BlocksIDDelete(ctx, params)
 	if err != nil {
 		return handleAPIError(msg, err)
 	}
-	return marshalResponse(msg, &resp)
+	return marshalResponse(msg, &res)
 }
 
-// BlocksIDGet processor — get /v1/blocks/{id}
+// V1BlocksIDGet processor — get /v1/blocks/{id}
 
 func init() {
 	service.MustRegisterProcessor(
-		"notion_blocks_id_get",
-		blocksIDGetConfig(),
-		newBlocksIDGetProcessor,
+		"notion_v1_blocks_id_get",
+		v1BlocksIDGetConfig(),
+		newV1BlocksIDGetProcessor,
 	)
 }
 
-func blocksIDGetConfig() *service.ConfigSpec {
+func v1BlocksIDGetConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Services", "Notion").
-		Summary("Retrieve a block").
+		Summary("Retrieve a block `GET /v1/blocks/{id}`").
 		Fields(sharedConfigFields()...).Fields(
 		service.NewInterpolatedStringField("id").
 			Description(""),
 	)
 }
 
-type blocksIDGetProcessor struct {
+type v1BlocksIDGetProcessor struct {
 	baseProcessor
 	id *service.InterpolatedString
 }
 
-func newBlocksIDGetProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
+func newV1BlocksIDGetProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
 	base, err := baseProcessorFromParsed(conf, mgr.Logger())
 	if err != nil {
 		return nil, err
 	}
 
-	p := &blocksIDGetProcessor{baseProcessor: base}
+	p := &v1BlocksIDGetProcessor{baseProcessor: base}
 	if p.id, err = conf.FieldInterpolatedString("id"); err != nil {
 		return nil, err
 	}
@@ -346,8 +346,8 @@ func newBlocksIDGetProcessor(conf *service.ParsedConfig, mgr *service.Resources)
 	return p, nil
 }
 
-func (p *blocksIDGetProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
-	params := v1.BlocksIDGetParams{
+func (p *v1BlocksIDGetProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
+	params := v1.V1BlocksIDGetParams{
 		NotionVersion: v1.NewOptString(p.notionVersion),
 	}
 	{
@@ -357,27 +357,27 @@ func (p *blocksIDGetProcessor) Process(ctx context.Context, msg *service.Message
 		}
 		params.ID = v
 	}
-	resp, err := p.client.BlocksIDGet(ctx, params)
+	res, err := p.client.V1BlocksIDGet(ctx, params)
 	if err != nil {
 		return handleAPIError(msg, err)
 	}
-	return marshalResponse(msg, &resp)
+	return marshalResponse(msg, &res)
 }
 
-// BlocksIDPatch processor — patch /v1/blocks/{id}
+// V1BlocksIDPatch processor — patch /v1/blocks/{id}
 
 func init() {
 	service.MustRegisterProcessor(
-		"notion_blocks_id_patch",
-		blocksIDPatchConfig(),
-		newBlocksIDPatchProcessor,
+		"notion_v1_blocks_id_patch",
+		v1BlocksIDPatchConfig(),
+		newV1BlocksIDPatchProcessor,
 	)
 }
 
-func blocksIDPatchConfig() *service.ConfigSpec {
+func v1BlocksIDPatchConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Services", "Notion").
-		Summary("Update a block").
+		Summary("Update a block `PATCH /v1/blocks/{id}`").
 		Description("This endpoint allows you to update block content. [See Full Documentation](https://developers.notion.com/reference/update-a-block)").
 		Fields(sharedConfigFields()...).Fields(
 		service.NewInterpolatedStringField("id").
@@ -385,18 +385,18 @@ func blocksIDPatchConfig() *service.ConfigSpec {
 	)
 }
 
-type blocksIDPatchProcessor struct {
+type v1BlocksIDPatchProcessor struct {
 	baseProcessor
 	id *service.InterpolatedString
 }
 
-func newBlocksIDPatchProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
+func newV1BlocksIDPatchProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
 	base, err := baseProcessorFromParsed(conf, mgr.Logger())
 	if err != nil {
 		return nil, err
 	}
 
-	p := &blocksIDPatchProcessor{baseProcessor: base}
+	p := &v1BlocksIDPatchProcessor{baseProcessor: base}
 	if p.id, err = conf.FieldInterpolatedString("id"); err != nil {
 		return nil, err
 	}
@@ -404,8 +404,8 @@ func newBlocksIDPatchProcessor(conf *service.ParsedConfig, mgr *service.Resource
 	return p, nil
 }
 
-func (p *blocksIDPatchProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
-	params := v1.BlocksIDPatchParams{
+func (p *v1BlocksIDPatchProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
+	params := v1.V1BlocksIDPatchParams{
 		NotionVersion: v1.NewOptString(p.notionVersion),
 	}
 	{
@@ -415,40 +415,40 @@ func (p *blocksIDPatchProcessor) Process(ctx context.Context, msg *service.Messa
 		}
 		params.ID = v
 	}
-	bodyBytes, err := msg.AsBytes()
+	b, err := msg.AsBytes()
 	if err != nil {
 		return nil, fmt.Errorf("reading message body: %w", err)
 	}
 
-	var reqBody v1.UpdateBlockRequest
-	if err := reqBody.UnmarshalJSON(bodyBytes); err != nil {
+	var req v1.UpdateBlockRequest
+	if err := req.UnmarshalJSON(b); err != nil {
 		return nil, fmt.Errorf("unmarshaling request body: %w", err)
 	}
-	if err := reqBody.Validate(); err != nil {
+	if err := req.Validate(); err != nil {
 		return nil, fmt.Errorf("validating request body: %w", err)
 	}
 
-	resp, err := p.client.BlocksIDPatch(ctx, &reqBody, params)
+	res, err := p.client.V1BlocksIDPatch(ctx, &req, params)
 	if err != nil {
 		return handleAPIError(msg, err)
 	}
-	return marshalResponse(msg, &resp)
+	return marshalResponse(msg, &res)
 }
 
-// CommentsGet processor — get /v1/comments
+// V1CommentsGet processor — get /v1/comments
 
 func init() {
 	service.MustRegisterProcessor(
-		"notion_comments_get",
-		commentsGetConfig(),
-		newCommentsGetProcessor,
+		"notion_v1_comments_get",
+		v1CommentsGetConfig(),
+		newV1CommentsGetProcessor,
 	)
 }
 
-func commentsGetConfig() *service.ConfigSpec {
+func v1CommentsGetConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Services", "Notion").
-		Summary("Retrieve comments").
+		Summary("Retrieve comments `GET /v1/comments`").
 		Description("Retrieve a user object using the ID specified in the request path.").
 		Fields(sharedConfigFields()...).Fields(
 		service.NewInterpolatedStringField("block_id").
@@ -460,19 +460,19 @@ func commentsGetConfig() *service.ConfigSpec {
 	)
 }
 
-type commentsGetProcessor struct {
+type v1CommentsGetProcessor struct {
 	baseProcessor
 	blockID  *service.InterpolatedString
 	pageSize *service.InterpolatedString
 }
 
-func newCommentsGetProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
+func newV1CommentsGetProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
 	base, err := baseProcessorFromParsed(conf, mgr.Logger())
 	if err != nil {
 		return nil, err
 	}
 
-	p := &commentsGetProcessor{baseProcessor: base}
+	p := &v1CommentsGetProcessor{baseProcessor: base}
 	if conf.Contains("block_id") {
 		if p.blockID, err = conf.FieldInterpolatedString("block_id"); err != nil {
 			return nil, err
@@ -487,8 +487,8 @@ func newCommentsGetProcessor(conf *service.ParsedConfig, mgr *service.Resources)
 	return p, nil
 }
 
-func (p *commentsGetProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
-	params := v1.CommentsGetParams{
+func (p *v1CommentsGetProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
+	params := v1.V1CommentsGetParams{
 		NotionVersion: v1.NewOptString(p.notionVersion),
 	}
 	if p.blockID != nil {
@@ -509,83 +509,83 @@ func (p *commentsGetProcessor) Process(ctx context.Context, msg *service.Message
 		}
 		params.PageSize = v1.NewOptInt(intVal)
 	}
-	resp, err := p.client.CommentsGet(ctx, params)
+	res, err := p.client.V1CommentsGet(ctx, params)
 	if err != nil {
 		return handleAPIError(msg, err)
 	}
-	return marshalResponse(msg, &resp)
+	return marshalResponse(msg, &res)
 }
 
-// CommentsPost processor — post /v1/comments
+// V1CommentsPost processor — post /v1/comments
 
 func init() {
 	service.MustRegisterProcessor(
-		"notion_comments_post",
-		commentsPostConfig(),
-		newCommentsPostProcessor,
+		"notion_v1_comments_post",
+		v1CommentsPostConfig(),
+		newV1CommentsPostProcessor,
 	)
 }
 
-func commentsPostConfig() *service.ConfigSpec {
+func v1CommentsPostConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Services", "Notion").
-		Summary("Add comment to discussion").
+		Summary("Add comment to discussion `POST /v1/comments`").
 		Fields(sharedConfigFields()...).Fields()
 }
 
-type commentsPostProcessor struct {
+type v1CommentsPostProcessor struct {
 	baseProcessor
 }
 
-func newCommentsPostProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
+func newV1CommentsPostProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
 	base, err := baseProcessorFromParsed(conf, mgr.Logger())
 	if err != nil {
 		return nil, err
 	}
 
-	p := &commentsPostProcessor{baseProcessor: base}
+	p := &v1CommentsPostProcessor{baseProcessor: base}
 
 	return p, nil
 }
 
-func (p *commentsPostProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
-	params := v1.CommentsPostParams{
+func (p *v1CommentsPostProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
+	params := v1.V1CommentsPostParams{
 		NotionVersion: v1.NewOptString(p.notionVersion),
 	}
-	bodyBytes, err := msg.AsBytes()
+	b, err := msg.AsBytes()
 	if err != nil {
 		return nil, fmt.Errorf("reading message body: %w", err)
 	}
 
-	var reqBody v1.CreateCommentRequest
-	if err := reqBody.UnmarshalJSON(bodyBytes); err != nil {
+	var req v1.CreateCommentRequest
+	if err := req.UnmarshalJSON(b); err != nil {
 		return nil, fmt.Errorf("unmarshaling request body: %w", err)
 	}
-	if err := reqBody.Validate(); err != nil {
+	if err := req.Validate(); err != nil {
 		return nil, fmt.Errorf("validating request body: %w", err)
 	}
 
-	resp, err := p.client.CommentsPost(ctx, &reqBody, params)
+	res, err := p.client.V1CommentsPost(ctx, &req, params)
 	if err != nil {
 		return handleAPIError(msg, err)
 	}
-	return marshalResponse(msg, &resp)
+	return marshalResponse(msg, &res)
 }
 
-// DatabasesIDGet processor — get /v1/databases/{id}
+// V1DatabasesIDGet processor — get /v1/databases/{id}
 
 func init() {
 	service.MustRegisterProcessor(
-		"notion_databases_id_get",
-		databasesIDGetConfig(),
-		newDatabasesIDGetProcessor,
+		"notion_v1_databases_id_get",
+		v1DatabasesIDGetConfig(),
+		newV1DatabasesIDGetProcessor,
 	)
 }
 
-func databasesIDGetConfig() *service.ConfigSpec {
+func v1DatabasesIDGetConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Services", "Notion").
-		Summary("Retrieve a database").
+		Summary("Retrieve a database `GET /v1/databases/{id}`").
 		Description("Retrieves a database object using the ID specified in the request path. ").
 		Fields(sharedConfigFields()...).Fields(
 		service.NewInterpolatedStringField("id").
@@ -593,18 +593,18 @@ func databasesIDGetConfig() *service.ConfigSpec {
 	)
 }
 
-type databasesIDGetProcessor struct {
+type v1DatabasesIDGetProcessor struct {
 	baseProcessor
 	id *service.InterpolatedString
 }
 
-func newDatabasesIDGetProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
+func newV1DatabasesIDGetProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
 	base, err := baseProcessorFromParsed(conf, mgr.Logger())
 	if err != nil {
 		return nil, err
 	}
 
-	p := &databasesIDGetProcessor{baseProcessor: base}
+	p := &v1DatabasesIDGetProcessor{baseProcessor: base}
 	if p.id, err = conf.FieldInterpolatedString("id"); err != nil {
 		return nil, err
 	}
@@ -612,8 +612,8 @@ func newDatabasesIDGetProcessor(conf *service.ParsedConfig, mgr *service.Resourc
 	return p, nil
 }
 
-func (p *databasesIDGetProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
-	params := v1.DatabasesIDGetParams{
+func (p *v1DatabasesIDGetProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
+	params := v1.V1DatabasesIDGetParams{
 		NotionVersion: v1.NewOptString(p.notionVersion),
 	}
 	{
@@ -623,45 +623,45 @@ func (p *databasesIDGetProcessor) Process(ctx context.Context, msg *service.Mess
 		}
 		params.ID = v
 	}
-	resp, err := p.client.DatabasesIDGet(ctx, params)
+	res, err := p.client.V1DatabasesIDGet(ctx, params)
 	if err != nil {
 		return handleAPIError(msg, err)
 	}
-	return marshalResponse(msg, &resp)
+	return marshalResponse(msg, &res)
 }
 
-// DatabasesIDPatch processor — patch /v1/databases/{id}
+// V1DatabasesIDPatch processor — patch /v1/databases/{id}
 
 func init() {
 	service.MustRegisterProcessor(
-		"notion_databases_id_patch",
-		databasesIDPatchConfig(),
-		newDatabasesIDPatchProcessor,
+		"notion_v1_databases_id_patch",
+		v1DatabasesIDPatchConfig(),
+		newV1DatabasesIDPatchProcessor,
 	)
 }
 
-func databasesIDPatchConfig() *service.ConfigSpec {
+func v1DatabasesIDPatchConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Services", "Notion").
-		Summary("Update database properties").
+		Summary("Update database properties `PATCH /v1/databases/{id}`").
 		Fields(sharedConfigFields()...).Fields(
 		service.NewInterpolatedStringField("id").
 			Description(""),
 	)
 }
 
-type databasesIDPatchProcessor struct {
+type v1DatabasesIDPatchProcessor struct {
 	baseProcessor
 	id *service.InterpolatedString
 }
 
-func newDatabasesIDPatchProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
+func newV1DatabasesIDPatchProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
 	base, err := baseProcessorFromParsed(conf, mgr.Logger())
 	if err != nil {
 		return nil, err
 	}
 
-	p := &databasesIDPatchProcessor{baseProcessor: base}
+	p := &v1DatabasesIDPatchProcessor{baseProcessor: base}
 	if p.id, err = conf.FieldInterpolatedString("id"); err != nil {
 		return nil, err
 	}
@@ -669,8 +669,8 @@ func newDatabasesIDPatchProcessor(conf *service.ParsedConfig, mgr *service.Resou
 	return p, nil
 }
 
-func (p *databasesIDPatchProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
-	params := v1.DatabasesIDPatchParams{
+func (p *v1DatabasesIDPatchProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
+	params := v1.V1DatabasesIDPatchParams{
 		NotionVersion: v1.NewOptString(p.notionVersion),
 	}
 	{
@@ -680,58 +680,58 @@ func (p *databasesIDPatchProcessor) Process(ctx context.Context, msg *service.Me
 		}
 		params.ID = v
 	}
-	bodyBytes, err := msg.AsBytes()
+	b, err := msg.AsBytes()
 	if err != nil {
 		return nil, fmt.Errorf("reading message body: %w", err)
 	}
 
-	var reqBody v1.UpdateDatabaseRequest
-	if err := reqBody.UnmarshalJSON(bodyBytes); err != nil {
+	var req v1.UpdateDatabaseRequest
+	if err := req.UnmarshalJSON(b); err != nil {
 		return nil, fmt.Errorf("unmarshaling request body: %w", err)
 	}
-	if err := reqBody.Validate(); err != nil {
+	if err := req.Validate(); err != nil {
 		return nil, fmt.Errorf("validating request body: %w", err)
 	}
 
-	resp, err := p.client.DatabasesIDPatch(ctx, &reqBody, params)
+	res, err := p.client.V1DatabasesIDPatch(ctx, &req, params)
 	if err != nil {
 		return handleAPIError(msg, err)
 	}
-	return marshalResponse(msg, &resp)
+	return marshalResponse(msg, &res)
 }
 
-// DatabasesIDQueryPost processor — post /v1/databases/{id}/query
+// V1DatabasesIDQueryPost processor — post /v1/databases/{id}/query
 
 func init() {
 	service.MustRegisterProcessor(
-		"notion_databases_id_query_post",
-		databasesIDQueryPostConfig(),
-		newDatabasesIDQueryPostProcessor,
+		"notion_v1_databases_id_query_post",
+		v1DatabasesIDQueryPostConfig(),
+		newV1DatabasesIDQueryPostProcessor,
 	)
 }
 
-func databasesIDQueryPostConfig() *service.ConfigSpec {
+func v1DatabasesIDQueryPostConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Services", "Notion").
-		Summary("Filter a database").
+		Summary("Filter a database `POST /v1/databases/{id}/query`").
 		Fields(sharedConfigFields()...).Fields(
 		service.NewInterpolatedStringField("id").
 			Description(""),
 	)
 }
 
-type databasesIDQueryPostProcessor struct {
+type v1DatabasesIDQueryPostProcessor struct {
 	baseProcessor
 	id *service.InterpolatedString
 }
 
-func newDatabasesIDQueryPostProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
+func newV1DatabasesIDQueryPostProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
 	base, err := baseProcessorFromParsed(conf, mgr.Logger())
 	if err != nil {
 		return nil, err
 	}
 
-	p := &databasesIDQueryPostProcessor{baseProcessor: base}
+	p := &v1DatabasesIDQueryPostProcessor{baseProcessor: base}
 	if p.id, err = conf.FieldInterpolatedString("id"); err != nil {
 		return nil, err
 	}
@@ -739,8 +739,8 @@ func newDatabasesIDQueryPostProcessor(conf *service.ParsedConfig, mgr *service.R
 	return p, nil
 }
 
-func (p *databasesIDQueryPostProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
-	params := v1.DatabasesIDQueryPostParams{
+func (p *v1DatabasesIDQueryPostProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
+	params := v1.V1DatabasesIDQueryPostParams{
 		NotionVersion: v1.NewOptString(p.notionVersion),
 	}
 	{
@@ -750,96 +750,96 @@ func (p *databasesIDQueryPostProcessor) Process(ctx context.Context, msg *servic
 		}
 		params.ID = v
 	}
-	bodyBytes, err := msg.AsBytes()
+	b, err := msg.AsBytes()
 	if err != nil {
 		return nil, fmt.Errorf("reading message body: %w", err)
 	}
 
-	var reqBody v1.QueryDataSourceRequest
-	if err := reqBody.UnmarshalJSON(bodyBytes); err != nil {
+	var req v1.QueryDataSourceRequest
+	if err := req.UnmarshalJSON(b); err != nil {
 		return nil, fmt.Errorf("unmarshaling request body: %w", err)
 	}
-	if err := reqBody.Validate(); err != nil {
+	if err := req.Validate(); err != nil {
 		return nil, fmt.Errorf("validating request body: %w", err)
 	}
 
-	resp, err := p.client.DatabasesIDQueryPost(ctx, &reqBody, params)
+	res, err := p.client.V1DatabasesIDQueryPost(ctx, &req, params)
 	if err != nil {
 		return handleAPIError(msg, err)
 	}
-	return marshalResponse(msg, &resp)
+	return marshalResponse(msg, &res)
 }
 
-// DatabasesPost processor — post /v1/databases/
+// V1DatabasesPost processor — post /v1/databases/
 
 func init() {
 	service.MustRegisterProcessor(
-		"notion_databases_post",
-		databasesPostConfig(),
-		newDatabasesPostProcessor,
+		"notion_v1_databases_post",
+		v1DatabasesPostConfig(),
+		newV1DatabasesPostProcessor,
 	)
 }
 
-func databasesPostConfig() *service.ConfigSpec {
+func v1DatabasesPostConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Services", "Notion").
-		Summary("Create a database").
+		Summary("Create a database `POST /v1/databases/`").
 		Fields(sharedConfigFields()...).Fields()
 }
 
-type databasesPostProcessor struct {
+type v1DatabasesPostProcessor struct {
 	baseProcessor
 }
 
-func newDatabasesPostProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
+func newV1DatabasesPostProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
 	base, err := baseProcessorFromParsed(conf, mgr.Logger())
 	if err != nil {
 		return nil, err
 	}
 
-	p := &databasesPostProcessor{baseProcessor: base}
+	p := &v1DatabasesPostProcessor{baseProcessor: base}
 
 	return p, nil
 }
 
-func (p *databasesPostProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
-	params := v1.DatabasesPostParams{
+func (p *v1DatabasesPostProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
+	params := v1.V1DatabasesPostParams{
 		NotionVersion: v1.NewOptString(p.notionVersion),
 	}
-	bodyBytes, err := msg.AsBytes()
+	b, err := msg.AsBytes()
 	if err != nil {
 		return nil, fmt.Errorf("reading message body: %w", err)
 	}
 
-	var reqBody v1.CreateDatabaseRequest
-	if err := reqBody.UnmarshalJSON(bodyBytes); err != nil {
+	var req v1.CreateDatabaseRequest
+	if err := req.UnmarshalJSON(b); err != nil {
 		return nil, fmt.Errorf("unmarshaling request body: %w", err)
 	}
-	if err := reqBody.Validate(); err != nil {
+	if err := req.Validate(); err != nil {
 		return nil, fmt.Errorf("validating request body: %w", err)
 	}
 
-	resp, err := p.client.DatabasesPost(ctx, &reqBody, params)
+	res, err := p.client.V1DatabasesPost(ctx, &req, params)
 	if err != nil {
 		return handleAPIError(msg, err)
 	}
-	return marshalResponse(msg, &resp)
+	return marshalResponse(msg, &res)
 }
 
-// PagesIDGet processor — get /v1/pages/{id}
+// V1PagesIDGet processor — get /v1/pages/{id}
 
 func init() {
 	service.MustRegisterProcessor(
-		"notion_pages_id_get",
-		pagesIDGetConfig(),
-		newPagesIDGetProcessor,
+		"notion_v1_pages_id_get",
+		v1PagesIDGetConfig(),
+		newV1PagesIDGetProcessor,
 	)
 }
 
-func pagesIDGetConfig() *service.ConfigSpec {
+func v1PagesIDGetConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Services", "Notion").
-		Summary("Retrieve a page").
+		Summary("Retrieve a page `GET /v1/pages/{id}`").
 		Description("Retrieves a Page object using the ID in the request path. This endpoint exposes page properties, not page content. ").
 		Fields(sharedConfigFields()...).Fields(
 		service.NewInterpolatedStringField("id").
@@ -847,18 +847,18 @@ func pagesIDGetConfig() *service.ConfigSpec {
 	)
 }
 
-type pagesIDGetProcessor struct {
+type v1PagesIDGetProcessor struct {
 	baseProcessor
 	id *service.InterpolatedString
 }
 
-func newPagesIDGetProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
+func newV1PagesIDGetProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
 	base, err := baseProcessorFromParsed(conf, mgr.Logger())
 	if err != nil {
 		return nil, err
 	}
 
-	p := &pagesIDGetProcessor{baseProcessor: base}
+	p := &v1PagesIDGetProcessor{baseProcessor: base}
 	if p.id, err = conf.FieldInterpolatedString("id"); err != nil {
 		return nil, err
 	}
@@ -866,8 +866,8 @@ func newPagesIDGetProcessor(conf *service.ParsedConfig, mgr *service.Resources) 
 	return p, nil
 }
 
-func (p *pagesIDGetProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
-	params := v1.PagesIDGetParams{
+func (p *v1PagesIDGetProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
+	params := v1.V1PagesIDGetParams{
 		NotionVersion: v1.NewOptString(p.notionVersion),
 	}
 	{
@@ -877,45 +877,45 @@ func (p *pagesIDGetProcessor) Process(ctx context.Context, msg *service.Message)
 		}
 		params.ID = v
 	}
-	resp, err := p.client.PagesIDGet(ctx, params)
+	res, err := p.client.V1PagesIDGet(ctx, params)
 	if err != nil {
 		return handleAPIError(msg, err)
 	}
-	return marshalResponse(msg, &resp)
+	return marshalResponse(msg, &res)
 }
 
-// PagesIDPatch processor — patch /v1/pages/{id}
+// V1PagesIDPatch processor — patch /v1/pages/{id}
 
 func init() {
 	service.MustRegisterProcessor(
-		"notion_pages_id_patch",
-		pagesIDPatchConfig(),
-		newPagesIDPatchProcessor,
+		"notion_v1_pages_id_patch",
+		v1PagesIDPatchConfig(),
+		newV1PagesIDPatchProcessor,
 	)
 }
 
-func pagesIDPatchConfig() *service.ConfigSpec {
+func v1PagesIDPatchConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Services", "Notion").
-		Summary("Archive a page").
+		Summary("Archive a page `PATCH /v1/pages/{id}`").
 		Fields(sharedConfigFields()...).Fields(
 		service.NewInterpolatedStringField("id").
 			Description(""),
 	)
 }
 
-type pagesIDPatchProcessor struct {
+type v1PagesIDPatchProcessor struct {
 	baseProcessor
 	id *service.InterpolatedString
 }
 
-func newPagesIDPatchProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
+func newV1PagesIDPatchProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
 	base, err := baseProcessorFromParsed(conf, mgr.Logger())
 	if err != nil {
 		return nil, err
 	}
 
-	p := &pagesIDPatchProcessor{baseProcessor: base}
+	p := &v1PagesIDPatchProcessor{baseProcessor: base}
 	if p.id, err = conf.FieldInterpolatedString("id"); err != nil {
 		return nil, err
 	}
@@ -923,8 +923,8 @@ func newPagesIDPatchProcessor(conf *service.ParsedConfig, mgr *service.Resources
 	return p, nil
 }
 
-func (p *pagesIDPatchProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
-	params := v1.PagesIDPatchParams{
+func (p *v1PagesIDPatchProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
+	params := v1.V1PagesIDPatchParams{
 		NotionVersion: v1.NewOptString(p.notionVersion),
 	}
 	{
@@ -934,40 +934,40 @@ func (p *pagesIDPatchProcessor) Process(ctx context.Context, msg *service.Messag
 		}
 		params.ID = v
 	}
-	bodyBytes, err := msg.AsBytes()
+	b, err := msg.AsBytes()
 	if err != nil {
 		return nil, fmt.Errorf("reading message body: %w", err)
 	}
 
-	var reqBody v1.UpdatePageRequest
-	if err := reqBody.UnmarshalJSON(bodyBytes); err != nil {
+	var req v1.UpdatePageRequest
+	if err := req.UnmarshalJSON(b); err != nil {
 		return nil, fmt.Errorf("unmarshaling request body: %w", err)
 	}
-	if err := reqBody.Validate(); err != nil {
+	if err := req.Validate(); err != nil {
 		return nil, fmt.Errorf("validating request body: %w", err)
 	}
 
-	resp, err := p.client.PagesIDPatch(ctx, &reqBody, params)
+	res, err := p.client.V1PagesIDPatch(ctx, &req, params)
 	if err != nil {
 		return handleAPIError(msg, err)
 	}
-	return marshalResponse(msg, &resp)
+	return marshalResponse(msg, &res)
 }
 
-// PagesPageIDPropertiesPropertyIDGet processor — get /v1/pages/{page_id}/properties/{property_id}
+// V1PagesPageIDPropertiesPropertyIDGet processor — get /v1/pages/{page_id}/properties/{property_id}
 
 func init() {
 	service.MustRegisterProcessor(
-		"notion_pages_page_id_properties_property_id_get",
-		pagesPageIDPropertiesPropertyIDGetConfig(),
-		newPagesPageIDPropertiesPropertyIDGetProcessor,
+		"notion_v1_pages_page_id_properties_property_id_get",
+		v1PagesPageIDPropertiesPropertyIDGetConfig(),
+		newV1PagesPageIDPropertiesPropertyIDGetProcessor,
 	)
 }
 
-func pagesPageIDPropertiesPropertyIDGetConfig() *service.ConfigSpec {
+func v1PagesPageIDPropertiesPropertyIDGetConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Services", "Notion").
-		Summary("Retrieve a page property item").
+		Summary("Retrieve a page property item `GET /v1/pages/{page_id}/properties/{property_id}`").
 		Fields(sharedConfigFields()...).Fields(
 		service.NewInterpolatedStringField("page_id").
 			Description(""),
@@ -976,19 +976,19 @@ func pagesPageIDPropertiesPropertyIDGetConfig() *service.ConfigSpec {
 	)
 }
 
-type pagesPageIDPropertiesPropertyIDGetProcessor struct {
+type v1PagesPageIDPropertiesPropertyIDGetProcessor struct {
 	baseProcessor
 	pageID     *service.InterpolatedString
 	propertyID *service.InterpolatedString
 }
 
-func newPagesPageIDPropertiesPropertyIDGetProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
+func newV1PagesPageIDPropertiesPropertyIDGetProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
 	base, err := baseProcessorFromParsed(conf, mgr.Logger())
 	if err != nil {
 		return nil, err
 	}
 
-	p := &pagesPageIDPropertiesPropertyIDGetProcessor{baseProcessor: base}
+	p := &v1PagesPageIDPropertiesPropertyIDGetProcessor{baseProcessor: base}
 	if p.pageID, err = conf.FieldInterpolatedString("page_id"); err != nil {
 		return nil, err
 	}
@@ -999,8 +999,8 @@ func newPagesPageIDPropertiesPropertyIDGetProcessor(conf *service.ParsedConfig, 
 	return p, nil
 }
 
-func (p *pagesPageIDPropertiesPropertyIDGetProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
-	params := v1.PagesPageIDPropertiesPropertyIDGetParams{
+func (p *v1PagesPageIDPropertiesPropertyIDGetProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
+	params := v1.V1PagesPageIDPropertiesPropertyIDGetParams{
 		NotionVersion: v1.NewOptString(p.notionVersion),
 	}
 	{
@@ -1017,183 +1017,183 @@ func (p *pagesPageIDPropertiesPropertyIDGetProcessor) Process(ctx context.Contex
 		}
 		params.PropertyID = v
 	}
-	resp, err := p.client.PagesPageIDPropertiesPropertyIDGet(ctx, params)
+	res, err := p.client.V1PagesPageIDPropertiesPropertyIDGet(ctx, params)
 	if err != nil {
 		return handleAPIError(msg, err)
 	}
-	return marshalResponse(msg, &resp)
+	return marshalResponse(msg, &res)
 }
 
-// PagesPost processor — post /v1/pages/
+// V1PagesPost processor — post /v1/pages/
 
 func init() {
 	service.MustRegisterProcessor(
-		"notion_pages_post",
-		pagesPostConfig(),
-		newPagesPostProcessor,
+		"notion_v1_pages_post",
+		v1PagesPostConfig(),
+		newV1PagesPostProcessor,
 	)
 }
 
-func pagesPostConfig() *service.ConfigSpec {
+func v1PagesPostConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Services", "Notion").
-		Summary("Create a page with content").
+		Summary("Create a page with content `POST /v1/pages/`").
 		Fields(sharedConfigFields()...).Fields()
 }
 
-type pagesPostProcessor struct {
+type v1PagesPostProcessor struct {
 	baseProcessor
 }
 
-func newPagesPostProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
+func newV1PagesPostProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
 	base, err := baseProcessorFromParsed(conf, mgr.Logger())
 	if err != nil {
 		return nil, err
 	}
 
-	p := &pagesPostProcessor{baseProcessor: base}
+	p := &v1PagesPostProcessor{baseProcessor: base}
 
 	return p, nil
 }
 
-func (p *pagesPostProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
-	params := v1.PagesPostParams{
+func (p *v1PagesPostProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
+	params := v1.V1PagesPostParams{
 		NotionVersion: v1.NewOptString(p.notionVersion),
 	}
-	bodyBytes, err := msg.AsBytes()
+	b, err := msg.AsBytes()
 	if err != nil {
 		return nil, fmt.Errorf("reading message body: %w", err)
 	}
 
-	var reqBody v1.CreatePageRequest
-	if err := reqBody.UnmarshalJSON(bodyBytes); err != nil {
+	var req v1.CreatePageRequest
+	if err := req.UnmarshalJSON(b); err != nil {
 		return nil, fmt.Errorf("unmarshaling request body: %w", err)
 	}
-	if err := reqBody.Validate(); err != nil {
+	if err := req.Validate(); err != nil {
 		return nil, fmt.Errorf("validating request body: %w", err)
 	}
 
-	resp, err := p.client.PagesPost(ctx, &reqBody, params)
+	res, err := p.client.V1PagesPost(ctx, &req, params)
 	if err != nil {
 		return handleAPIError(msg, err)
 	}
-	return marshalResponse(msg, &resp)
+	return marshalResponse(msg, &res)
 }
 
-// SearchPost processor — post /v1/search
+// V1SearchPost processor — post /v1/search
 
 func init() {
 	service.MustRegisterProcessor(
-		"notion_search_post",
-		searchPostConfig(),
-		newSearchPostProcessor,
+		"notion_v1_search_post",
+		v1SearchPostConfig(),
+		newV1SearchPostProcessor,
 	)
 }
 
-func searchPostConfig() *service.ConfigSpec {
+func v1SearchPostConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Services", "Notion").
-		Summary("Search").
+		Summary("Search `POST /v1/search`").
 		Fields(sharedConfigFields()...).Fields()
 }
 
-type searchPostProcessor struct {
+type v1SearchPostProcessor struct {
 	baseProcessor
 }
 
-func newSearchPostProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
+func newV1SearchPostProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
 	base, err := baseProcessorFromParsed(conf, mgr.Logger())
 	if err != nil {
 		return nil, err
 	}
 
-	p := &searchPostProcessor{baseProcessor: base}
+	p := &v1SearchPostProcessor{baseProcessor: base}
 
 	return p, nil
 }
 
-func (p *searchPostProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
-	params := v1.SearchPostParams{
+func (p *v1SearchPostProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
+	params := v1.V1SearchPostParams{
 		NotionVersion: v1.NewOptString(p.notionVersion),
 	}
-	bodyBytes, err := msg.AsBytes()
+	b, err := msg.AsBytes()
 	if err != nil {
 		return nil, fmt.Errorf("reading message body: %w", err)
 	}
 
-	var reqBody v1.SearchRequest
-	if err := reqBody.UnmarshalJSON(bodyBytes); err != nil {
+	var req v1.SearchRequest
+	if err := req.UnmarshalJSON(b); err != nil {
 		return nil, fmt.Errorf("unmarshaling request body: %w", err)
 	}
-	if err := reqBody.Validate(); err != nil {
+	if err := req.Validate(); err != nil {
 		return nil, fmt.Errorf("validating request body: %w", err)
 	}
 
-	resp, err := p.client.SearchPost(ctx, &reqBody, params)
+	res, err := p.client.V1SearchPost(ctx, &req, params)
 	if err != nil {
 		return handleAPIError(msg, err)
 	}
-	return marshalResponse(msg, &resp)
+	return marshalResponse(msg, &res)
 }
 
-// UsersGet processor — get /v1/users
+// V1UsersGet processor — get /v1/users
 
 func init() {
 	service.MustRegisterProcessor(
-		"notion_users_get",
-		usersGetConfig(),
-		newUsersGetProcessor,
+		"notion_v1_users_get",
+		v1UsersGetConfig(),
+		newV1UsersGetProcessor,
 	)
 }
 
-func usersGetConfig() *service.ConfigSpec {
+func v1UsersGetConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Services", "Notion").
-		Summary("List all users").
+		Summary("List all users `GET /v1/users`").
 		Description("Returns a paginated list of user objects for a workspace").
 		Fields(sharedConfigFields()...).Fields()
 }
 
-type usersGetProcessor struct {
+type v1UsersGetProcessor struct {
 	baseProcessor
 }
 
-func newUsersGetProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
+func newV1UsersGetProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
 	base, err := baseProcessorFromParsed(conf, mgr.Logger())
 	if err != nil {
 		return nil, err
 	}
 
-	p := &usersGetProcessor{baseProcessor: base}
+	p := &v1UsersGetProcessor{baseProcessor: base}
 
 	return p, nil
 }
 
-func (p *usersGetProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
-	params := v1.UsersGetParams{
+func (p *v1UsersGetProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
+	params := v1.V1UsersGetParams{
 		NotionVersion: v1.NewOptString(p.notionVersion),
 	}
-	resp, err := p.client.UsersGet(ctx, params)
+	res, err := p.client.V1UsersGet(ctx, params)
 	if err != nil {
 		return handleAPIError(msg, err)
 	}
-	return marshalResponse(msg, &resp)
+	return marshalResponse(msg, &res)
 }
 
-// UsersIDGet processor — get /v1/users/{id}
+// V1UsersIDGet processor — get /v1/users/{id}
 
 func init() {
 	service.MustRegisterProcessor(
-		"notion_users_id_get",
-		usersIDGetConfig(),
-		newUsersIDGetProcessor,
+		"notion_v1_users_id_get",
+		v1UsersIDGetConfig(),
+		newV1UsersIDGetProcessor,
 	)
 }
 
-func usersIDGetConfig() *service.ConfigSpec {
+func v1UsersIDGetConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Services", "Notion").
-		Summary("Retrieve a user").
+		Summary("Retrieve a user `GET /v1/users/{id}`").
 		Description("Retrieve a user object using the ID specified in the request path.").
 		Fields(sharedConfigFields()...).Fields(
 		service.NewInterpolatedStringField("id").
@@ -1201,18 +1201,18 @@ func usersIDGetConfig() *service.ConfigSpec {
 	)
 }
 
-type usersIDGetProcessor struct {
+type v1UsersIDGetProcessor struct {
 	baseProcessor
 	id *service.InterpolatedString
 }
 
-func newUsersIDGetProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
+func newV1UsersIDGetProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
 	base, err := baseProcessorFromParsed(conf, mgr.Logger())
 	if err != nil {
 		return nil, err
 	}
 
-	p := &usersIDGetProcessor{baseProcessor: base}
+	p := &v1UsersIDGetProcessor{baseProcessor: base}
 	if p.id, err = conf.FieldInterpolatedString("id"); err != nil {
 		return nil, err
 	}
@@ -1220,8 +1220,8 @@ func newUsersIDGetProcessor(conf *service.ParsedConfig, mgr *service.Resources) 
 	return p, nil
 }
 
-func (p *usersIDGetProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
-	params := v1.UsersIDGetParams{
+func (p *v1UsersIDGetProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
+	params := v1.V1UsersIDGetParams{
 		NotionVersion: v1.NewOptString(p.notionVersion),
 	}
 	{
@@ -1231,52 +1231,52 @@ func (p *usersIDGetProcessor) Process(ctx context.Context, msg *service.Message)
 		}
 		params.ID = v
 	}
-	resp, err := p.client.UsersIDGet(ctx, params)
+	res, err := p.client.V1UsersIDGet(ctx, params)
 	if err != nil {
 		return handleAPIError(msg, err)
 	}
-	return marshalResponse(msg, &resp)
+	return marshalResponse(msg, &res)
 }
 
-// UsersMeGet processor — get /v1/users/me
+// V1UsersMeGet processor — get /v1/users/me
 
 func init() {
 	service.MustRegisterProcessor(
-		"notion_users_me_get",
-		usersMeGetConfig(),
-		newUsersMeGetProcessor,
+		"notion_v1_users_me_get",
+		v1UsersMeGetConfig(),
+		newV1UsersMeGetProcessor,
 	)
 }
 
-func usersMeGetConfig() *service.ConfigSpec {
+func v1UsersMeGetConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Services", "Notion").
-		Summary("Retrieve your token’s bot user").
+		Summary("Retrieve your token’s bot user `GET /v1/users/me`").
 		Fields(sharedConfigFields()...).Fields()
 }
 
-type usersMeGetProcessor struct {
+type v1UsersMeGetProcessor struct {
 	baseProcessor
 }
 
-func newUsersMeGetProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
+func newV1UsersMeGetProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
 	base, err := baseProcessorFromParsed(conf, mgr.Logger())
 	if err != nil {
 		return nil, err
 	}
 
-	p := &usersMeGetProcessor{baseProcessor: base}
+	p := &v1UsersMeGetProcessor{baseProcessor: base}
 
 	return p, nil
 }
 
-func (p *usersMeGetProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
-	params := v1.UsersMeGetParams{
+func (p *v1UsersMeGetProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
+	params := v1.V1UsersMeGetParams{
 		NotionVersion: v1.NewOptString(p.notionVersion),
 	}
-	resp, err := p.client.UsersMeGet(ctx, params)
+	res, err := p.client.V1UsersMeGet(ctx, params)
 	if err != nil {
 		return handleAPIError(msg, err)
 	}
-	return marshalResponse(msg, &resp)
+	return marshalResponse(msg, &res)
 }

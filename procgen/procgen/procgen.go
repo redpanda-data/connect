@@ -480,6 +480,7 @@ func generateProcessorFile(data TemplateData, tmplContent, targetDir, outputFile
 		"lowerFirst": toLowerCamel,
 		"snakeCase":  pascalToSnake,
 		"title":      strings.Title,
+		"upper":      strings.ToUpper,
 	}).Parse(tmplContent)
 	if err != nil {
 		return fmt.Errorf("parsing template: %w", err)
@@ -505,14 +506,14 @@ func generateProcessorFile(data TemplateData, tmplContent, targetDir, outputFile
 	return nil
 }
 
-// pascalToSnake converts "BlocksIDChildrenGet" to "blocks_id_children_get".
+// pascalToSnake converts "V1BlocksIDChildrenGet" to "v1_blocks_id_children_get".
 func pascalToSnake(s string) string {
 	var result strings.Builder
 	for i, r := range s {
 		if unicode.IsUpper(r) {
 			if i > 0 {
 				prev := rune(s[i-1])
-				if unicode.IsLower(prev) {
+				if unicode.IsLower(prev) || unicode.IsDigit(prev) {
 					result.WriteByte('_')
 				} else if unicode.IsUpper(prev) && i+1 < len(s) && unicode.IsLower(rune(s[i+1])) {
 					result.WriteByte('_')

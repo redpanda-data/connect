@@ -10,7 +10,7 @@ import (
 	ht "github.com/ogen-go/ogen/http"
 )
 
-func encodeBlocksIDChildrenPatchRequest(
+func encodeV1BlocksIDChildrenPatchRequest(
 	req *AppendBlockChildrenRequest,
 	r *http.Request,
 ) error {
@@ -24,7 +24,7 @@ func encodeBlocksIDChildrenPatchRequest(
 	return nil
 }
 
-func encodeBlocksIDPatchRequest(
+func encodeV1BlocksIDPatchRequest(
 	req *UpdateBlockRequest,
 	r *http.Request,
 ) error {
@@ -38,7 +38,7 @@ func encodeBlocksIDPatchRequest(
 	return nil
 }
 
-func encodeCommentsPostRequest(
+func encodeV1CommentsPostRequest(
 	req *CreateCommentRequest,
 	r *http.Request,
 ) error {
@@ -52,7 +52,7 @@ func encodeCommentsPostRequest(
 	return nil
 }
 
-func encodeDatabasesIDPatchRequest(
+func encodeV1DatabasesIDPatchRequest(
 	req *UpdateDatabaseRequest,
 	r *http.Request,
 ) error {
@@ -66,7 +66,7 @@ func encodeDatabasesIDPatchRequest(
 	return nil
 }
 
-func encodeDatabasesIDQueryPostRequest(
+func encodeV1DatabasesIDQueryPostRequest(
 	req *QueryDataSourceRequest,
 	r *http.Request,
 ) error {
@@ -80,7 +80,7 @@ func encodeDatabasesIDQueryPostRequest(
 	return nil
 }
 
-func encodeDatabasesPostRequest(
+func encodeV1DatabasesPostRequest(
 	req *CreateDatabaseRequest,
 	r *http.Request,
 ) error {
@@ -94,7 +94,7 @@ func encodeDatabasesPostRequest(
 	return nil
 }
 
-func encodePagesIDPatchRequest(
+func encodeV1PagesIDPatchRequest(
 	req *UpdatePageRequest,
 	r *http.Request,
 ) error {
@@ -108,7 +108,7 @@ func encodePagesIDPatchRequest(
 	return nil
 }
 
-func encodePagesPostRequest(
+func encodeV1PagesPostRequest(
 	req *CreatePageRequest,
 	r *http.Request,
 ) error {
@@ -122,7 +122,7 @@ func encodePagesPostRequest(
 	return nil
 }
 
-func encodeSearchPostRequest(
+func encodeV1SearchPostRequest(
 	req *SearchRequest,
 	r *http.Request,
 ) error {

@@ -114,7 +114,7 @@ func init() {
 func {{ .Name | lowerFirst }}Config() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Services", {{ $.Service | title | printf "%q" }}).
-		Summary({{ .Summary | printf "%q" }}).
+		Summary({{ printf "%s `%s %s`" .Summary (upper .HTTPMethod) .Path | printf "%q" }}).
 		{{- if .Description }}
 		Description({{ .Description | printf "%q" }}).
 		{{- end }}
@@ -208,20 +208,20 @@ func (p *{{ .Name | lowerFirst }}Processor) Process(ctx context.Context, msg *se
 	{{- end }}
 
 	{{- if .HasRequestBody }}
-	bodyBytes, err := msg.AsBytes()
+	b, err := msg.AsBytes()
 	if err != nil {
 		return nil, fmt.Errorf("reading message body: %w", err)
 	}
 
-	var reqBody v1.{{ .RequestTypeName }}
-	if err := reqBody.UnmarshalJSON(bodyBytes); err != nil {
+	var req v1.{{ .RequestTypeName }}
+	if err := req.UnmarshalJSON(b); err != nil {
 		return nil, fmt.Errorf("unmarshaling request body: %w", err)
 	}
-	if err := reqBody.Validate(); err != nil {
+	if err := req.Validate(); err != nil {
 		return nil, fmt.Errorf("validating request body: %w", err)
 	}
 
-	res, err := p.client.{{ .Name }}(ctx, &reqBody, params)
+	res, err := p.client.{{ .Name }}(ctx, &req, params)
 	{{- else }}
 	res, err := p.client.{{ .Name }}(ctx, params)
 	{{- end }}
