@@ -179,6 +179,9 @@ func Run(args []string) error {
 		return fmt.Errorf("parsing spec: %w", err)
 	}
 
+	// Strip transport/CDN response headers captured by Postman.
+	stripResponseHeaders(spec)
+
 	// Extract default server URL from spec.
 	defaultURL := ""
 	if len(spec.Servers) > 0 {
@@ -309,7 +312,7 @@ func goModuleInfo() (modulePath string, moduleRoot string, err error) {
 func loadOgenConfig(cfgPath string) (gen.Options, error) {
 	var opts gen.Options
 
-	logger, err := zap.NewDevelopment()
+	logger, err := zap.NewDevelopment(zap.AddStacktrace(zap.ErrorLevel))
 	if err != nil {
 		return opts, fmt.Errorf("creating logger: %w", err)
 	}
@@ -330,7 +333,29 @@ func loadOgenConfig(cfgPath string) (gen.Options, error) {
 		return opts, err
 	}
 
+	opts.Logger = logger
 	return opts, nil
+}
+
+// stripResponseHeaders removes all response headers from the spec.
+// Postman collections capture transport headers (CF-RAY, Set-Cookie, ETag, etc.)
+// that are not part of the API contract and cause noisy ogen warnings.
+func stripResponseHeaders(spec *ogen.Spec) {
+	for _, item := range spec.Paths {
+		for _, op := range []*ogen.Operation{
+			item.Get, item.Put, item.Post, item.Delete,
+			item.Options, item.Head, item.Patch, item.Trace,
+		} {
+			if op == nil {
+				continue
+			}
+			for _, resp := range op.Responses {
+				if resp != nil {
+					resp.Headers = nil
+				}
+			}
+		}
+	}
 }
 
 // detectSharedHeaders finds header parameters that appear on all operations
@@ -454,7 +479,7 @@ func generateProcessorFile(data TemplateData, tmplContent, targetDir, outputFile
 	tmpl, err := template.New("processors").Funcs(template.FuncMap{
 		"lowerFirst": toLowerCamel,
 		"snakeCase":  pascalToSnake,
-		"title":      strings.ToTitle,
+		"title":      strings.Title,
 	}).Parse(tmplContent)
 	if err != nil {
 		return fmt.Errorf("parsing template: %w", err)

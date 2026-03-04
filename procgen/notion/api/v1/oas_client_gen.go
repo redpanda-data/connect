@@ -33,117 +33,117 @@ type Invoker interface {
 	// Retrieve block children.
 	//
 	// GET /v1/blocks/{id}/children
-	BlocksIDChildrenGet(ctx context.Context, params BlocksIDChildrenGetParams) (*ListBlockChildrenResponseHeaders, error)
+	BlocksIDChildrenGet(ctx context.Context, params BlocksIDChildrenGetParams) (*ListBlockChildrenResponse, error)
 	// BlocksIDChildrenPatch invokes BlocksIDChildrenPatch operation.
 	//
 	// Append block children.
 	//
 	// PATCH /v1/blocks/{id}/children
-	BlocksIDChildrenPatch(ctx context.Context, request *AppendBlockChildrenRequest, params BlocksIDChildrenPatchParams) (*AppendBlockChildrenResponseHeaders, error)
+	BlocksIDChildrenPatch(ctx context.Context, request *AppendBlockChildrenRequest, params BlocksIDChildrenPatchParams) (*AppendBlockChildrenResponse, error)
 	// BlocksIDDelete invokes BlocksIDDelete operation.
 	//
 	// Delete a block.
 	//
 	// DELETE /v1/blocks/{id}
-	BlocksIDDelete(ctx context.Context, params BlocksIDDeleteParams) (*DeleteBlockResponseHeaders, error)
+	BlocksIDDelete(ctx context.Context, params BlocksIDDeleteParams) (*DeleteBlockResponse, error)
 	// BlocksIDGet invokes BlocksIDGet operation.
 	//
 	// Retrieve a block.
 	//
 	// GET /v1/blocks/{id}
-	BlocksIDGet(ctx context.Context, params BlocksIDGetParams) (*GetBlockResponseHeaders, error)
+	BlocksIDGet(ctx context.Context, params BlocksIDGetParams) (*GetBlockResponse, error)
 	// BlocksIDPatch invokes BlocksIDPatch operation.
 	//
 	// This endpoint allows you to update block content. [See Full Documentation](https://developers.
 	// notion.com/reference/update-a-block).
 	//
 	// PATCH /v1/blocks/{id}
-	BlocksIDPatch(ctx context.Context, request *UpdateBlockRequest, params BlocksIDPatchParams) (*UpdateBlockResponseHeaders, error)
+	BlocksIDPatch(ctx context.Context, request *UpdateBlockRequest, params BlocksIDPatchParams) (*UpdateBlockResponse, error)
 	// CommentsGet invokes CommentsGet operation.
 	//
 	// Retrieve a user object using the ID specified in the request path.
 	//
 	// GET /v1/comments
-	CommentsGet(ctx context.Context, params CommentsGetParams) (*ListCommentsResponseHeaders, error)
+	CommentsGet(ctx context.Context, params CommentsGetParams) (*ListCommentsResponse, error)
 	// CommentsPost invokes CommentsPost operation.
 	//
 	// Add comment to discussion.
 	//
 	// POST /v1/comments
-	CommentsPost(ctx context.Context, request *CreateCommentRequest, params CommentsPostParams) (*CreateCommentResponseHeaders, error)
+	CommentsPost(ctx context.Context, request *CreateCommentRequest, params CommentsPostParams) (*CreateCommentResponse, error)
 	// DatabasesIDGet invokes DatabasesIDGet operation.
 	//
 	// Retrieves a database object using the ID specified in the request path.
 	//
 	// GET /v1/databases/{id}
-	DatabasesIDGet(ctx context.Context, params DatabasesIDGetParams) (*GetDatabaseResponseHeaders, error)
+	DatabasesIDGet(ctx context.Context, params DatabasesIDGetParams) (*GetDatabaseResponse, error)
 	// DatabasesIDPatch invokes DatabasesIDPatch operation.
 	//
 	// Update database properties.
 	//
 	// PATCH /v1/databases/{id}
-	DatabasesIDPatch(ctx context.Context, request *UpdateDatabaseRequest, params DatabasesIDPatchParams) (*UpdateDatabaseResponseHeaders, error)
+	DatabasesIDPatch(ctx context.Context, request *UpdateDatabaseRequest, params DatabasesIDPatchParams) (*UpdateDatabaseResponse, error)
 	// DatabasesIDQueryPost invokes DatabasesIDQueryPost operation.
 	//
 	// Filter a database.
 	//
 	// POST /v1/databases/{id}/query
-	DatabasesIDQueryPost(ctx context.Context, request *QueryDataSourceRequest, params DatabasesIDQueryPostParams) (*QueryDataSourceResponseHeaders, error)
+	DatabasesIDQueryPost(ctx context.Context, request *QueryDataSourceRequest, params DatabasesIDQueryPostParams) (*QueryDataSourceResponse, error)
 	// DatabasesPost invokes DatabasesPost operation.
 	//
 	// Create a database.
 	//
 	// POST /v1/databases/
-	DatabasesPost(ctx context.Context, request *CreateDatabaseRequest, params DatabasesPostParams) (*CreateDatabaseResponseHeaders, error)
+	DatabasesPost(ctx context.Context, request *CreateDatabaseRequest, params DatabasesPostParams) (*CreateDatabaseResponse, error)
 	// PagesIDGet invokes PagesIDGet operation.
 	//
 	// Retrieves a Page object using the ID in the request path. This endpoint exposes page properties,
 	// not page content.
 	//
 	// GET /v1/pages/{id}
-	PagesIDGet(ctx context.Context, params PagesIDGetParams) (*GetPageResponseHeaders, error)
+	PagesIDGet(ctx context.Context, params PagesIDGetParams) (*GetPageResponse, error)
 	// PagesIDPatch invokes PagesIDPatch operation.
 	//
 	// Archive a page.
 	//
 	// PATCH /v1/pages/{id}
-	PagesIDPatch(ctx context.Context, request *UpdatePageRequest, params PagesIDPatchParams) (*UpdatePageResponseHeaders, error)
+	PagesIDPatch(ctx context.Context, request *UpdatePageRequest, params PagesIDPatchParams) (*UpdatePageResponse, error)
 	// PagesPageIDPropertiesPropertyIDGet invokes PagesPageIDPropertiesPropertyIDGet operation.
 	//
 	// Retrieve a page property item.
 	//
 	// GET /v1/pages/{page_id}/properties/{property_id}
-	PagesPageIDPropertiesPropertyIDGet(ctx context.Context, params PagesPageIDPropertiesPropertyIDGetParams) (*GetPagePropertyResponseHeaders, error)
+	PagesPageIDPropertiesPropertyIDGet(ctx context.Context, params PagesPageIDPropertiesPropertyIDGetParams) (*GetPagePropertyResponse, error)
 	// PagesPost invokes PagesPost operation.
 	//
 	// Create a page with content.
 	//
 	// POST /v1/pages/
-	PagesPost(ctx context.Context, request *CreatePageRequest, params PagesPostParams) (*CreatePageResponseHeaders, error)
+	PagesPost(ctx context.Context, request *CreatePageRequest, params PagesPostParams) (*CreatePageResponse, error)
 	// SearchPost invokes SearchPost operation.
 	//
 	// Search.
 	//
 	// POST /v1/search
-	SearchPost(ctx context.Context, request *SearchRequest, params SearchPostParams) (*SearchResponseHeaders, error)
+	SearchPost(ctx context.Context, request *SearchRequest, params SearchPostParams) (*SearchResponse, error)
 	// UsersGet invokes UsersGet operation.
 	//
 	// Returns a paginated list of user objects for a workspace.
 	//
 	// GET /v1/users
-	UsersGet(ctx context.Context, params UsersGetParams) (*ListUsersResponseHeaders, error)
+	UsersGet(ctx context.Context, params UsersGetParams) (*ListUsersResponse, error)
 	// UsersIDGet invokes UsersIDGet operation.
 	//
 	// Retrieve a user object using the ID specified in the request path.
 	//
 	// GET /v1/users/{id}
-	UsersIDGet(ctx context.Context, params UsersIDGetParams) (*UserObjectResponseHeaders, error)
+	UsersIDGet(ctx context.Context, params UsersIDGetParams) (*UserObjectResponse, error)
 	// UsersMeGet invokes UsersMeGet operation.
 	//
 	// Retrieve your token’s bot user.
 	//
 	// GET /v1/users/me
-	UsersMeGet(ctx context.Context, params UsersMeGetParams) (*UserObjectResponseHeaders, error)
+	UsersMeGet(ctx context.Context, params UsersMeGetParams) (*UserObjectResponse, error)
 }
 
 // Client implements OAS client.
@@ -192,12 +192,12 @@ func (c *Client) requestURL(ctx context.Context) *url.URL {
 // Retrieve block children.
 //
 // GET /v1/blocks/{id}/children
-func (c *Client) BlocksIDChildrenGet(ctx context.Context, params BlocksIDChildrenGetParams) (*ListBlockChildrenResponseHeaders, error) {
+func (c *Client) BlocksIDChildrenGet(ctx context.Context, params BlocksIDChildrenGetParams) (*ListBlockChildrenResponse, error) {
 	res, err := c.sendBlocksIDChildrenGet(ctx, params)
 	return res, err
 }
 
-func (c *Client) sendBlocksIDChildrenGet(ctx context.Context, params BlocksIDChildrenGetParams) (res *ListBlockChildrenResponseHeaders, err error) {
+func (c *Client) sendBlocksIDChildrenGet(ctx context.Context, params BlocksIDChildrenGetParams) (res *ListBlockChildrenResponse, err error) {
 	otelAttrs := []attribute.KeyValue{
 		otelogen.OperationID("BlocksIDChildrenGet"),
 		semconv.HTTPRequestMethodKey.String("GET"),
@@ -356,12 +356,12 @@ func (c *Client) sendBlocksIDChildrenGet(ctx context.Context, params BlocksIDChi
 // Append block children.
 //
 // PATCH /v1/blocks/{id}/children
-func (c *Client) BlocksIDChildrenPatch(ctx context.Context, request *AppendBlockChildrenRequest, params BlocksIDChildrenPatchParams) (*AppendBlockChildrenResponseHeaders, error) {
+func (c *Client) BlocksIDChildrenPatch(ctx context.Context, request *AppendBlockChildrenRequest, params BlocksIDChildrenPatchParams) (*AppendBlockChildrenResponse, error) {
 	res, err := c.sendBlocksIDChildrenPatch(ctx, request, params)
 	return res, err
 }
 
-func (c *Client) sendBlocksIDChildrenPatch(ctx context.Context, request *AppendBlockChildrenRequest, params BlocksIDChildrenPatchParams) (res *AppendBlockChildrenResponseHeaders, err error) {
+func (c *Client) sendBlocksIDChildrenPatch(ctx context.Context, request *AppendBlockChildrenRequest, params BlocksIDChildrenPatchParams) (res *AppendBlockChildrenResponse, err error) {
 	// Validate request before sending.
 	if err := func() error {
 		if err := request.Validate(); err != nil {
@@ -511,12 +511,12 @@ func (c *Client) sendBlocksIDChildrenPatch(ctx context.Context, request *AppendB
 // Delete a block.
 //
 // DELETE /v1/blocks/{id}
-func (c *Client) BlocksIDDelete(ctx context.Context, params BlocksIDDeleteParams) (*DeleteBlockResponseHeaders, error) {
+func (c *Client) BlocksIDDelete(ctx context.Context, params BlocksIDDeleteParams) (*DeleteBlockResponse, error) {
 	res, err := c.sendBlocksIDDelete(ctx, params)
 	return res, err
 }
 
-func (c *Client) sendBlocksIDDelete(ctx context.Context, params BlocksIDDeleteParams) (res *DeleteBlockResponseHeaders, err error) {
+func (c *Client) sendBlocksIDDelete(ctx context.Context, params BlocksIDDeleteParams) (res *DeleteBlockResponse, err error) {
 	otelAttrs := []attribute.KeyValue{
 		otelogen.OperationID("BlocksIDDelete"),
 		semconv.HTTPRequestMethodKey.String("DELETE"),
@@ -653,12 +653,12 @@ func (c *Client) sendBlocksIDDelete(ctx context.Context, params BlocksIDDeletePa
 // Retrieve a block.
 //
 // GET /v1/blocks/{id}
-func (c *Client) BlocksIDGet(ctx context.Context, params BlocksIDGetParams) (*GetBlockResponseHeaders, error) {
+func (c *Client) BlocksIDGet(ctx context.Context, params BlocksIDGetParams) (*GetBlockResponse, error) {
 	res, err := c.sendBlocksIDGet(ctx, params)
 	return res, err
 }
 
-func (c *Client) sendBlocksIDGet(ctx context.Context, params BlocksIDGetParams) (res *GetBlockResponseHeaders, err error) {
+func (c *Client) sendBlocksIDGet(ctx context.Context, params BlocksIDGetParams) (res *GetBlockResponse, err error) {
 	otelAttrs := []attribute.KeyValue{
 		otelogen.OperationID("BlocksIDGet"),
 		semconv.HTTPRequestMethodKey.String("GET"),
@@ -796,12 +796,12 @@ func (c *Client) sendBlocksIDGet(ctx context.Context, params BlocksIDGetParams) 
 // notion.com/reference/update-a-block).
 //
 // PATCH /v1/blocks/{id}
-func (c *Client) BlocksIDPatch(ctx context.Context, request *UpdateBlockRequest, params BlocksIDPatchParams) (*UpdateBlockResponseHeaders, error) {
+func (c *Client) BlocksIDPatch(ctx context.Context, request *UpdateBlockRequest, params BlocksIDPatchParams) (*UpdateBlockResponse, error) {
 	res, err := c.sendBlocksIDPatch(ctx, request, params)
 	return res, err
 }
 
-func (c *Client) sendBlocksIDPatch(ctx context.Context, request *UpdateBlockRequest, params BlocksIDPatchParams) (res *UpdateBlockResponseHeaders, err error) {
+func (c *Client) sendBlocksIDPatch(ctx context.Context, request *UpdateBlockRequest, params BlocksIDPatchParams) (res *UpdateBlockResponse, err error) {
 	// Validate request before sending.
 	if err := func() error {
 		if err := request.Validate(); err != nil {
@@ -950,12 +950,12 @@ func (c *Client) sendBlocksIDPatch(ctx context.Context, request *UpdateBlockRequ
 // Retrieve a user object using the ID specified in the request path.
 //
 // GET /v1/comments
-func (c *Client) CommentsGet(ctx context.Context, params CommentsGetParams) (*ListCommentsResponseHeaders, error) {
+func (c *Client) CommentsGet(ctx context.Context, params CommentsGetParams) (*ListCommentsResponse, error) {
 	res, err := c.sendCommentsGet(ctx, params)
 	return res, err
 }
 
-func (c *Client) sendCommentsGet(ctx context.Context, params CommentsGetParams) (res *ListCommentsResponseHeaders, err error) {
+func (c *Client) sendCommentsGet(ctx context.Context, params CommentsGetParams) (res *ListCommentsResponse, err error) {
 	otelAttrs := []attribute.KeyValue{
 		otelogen.OperationID("CommentsGet"),
 		semconv.HTTPRequestMethodKey.String("GET"),
@@ -1112,12 +1112,12 @@ func (c *Client) sendCommentsGet(ctx context.Context, params CommentsGetParams) 
 // Add comment to discussion.
 //
 // POST /v1/comments
-func (c *Client) CommentsPost(ctx context.Context, request *CreateCommentRequest, params CommentsPostParams) (*CreateCommentResponseHeaders, error) {
+func (c *Client) CommentsPost(ctx context.Context, request *CreateCommentRequest, params CommentsPostParams) (*CreateCommentResponse, error) {
 	res, err := c.sendCommentsPost(ctx, request, params)
 	return res, err
 }
 
-func (c *Client) sendCommentsPost(ctx context.Context, request *CreateCommentRequest, params CommentsPostParams) (res *CreateCommentResponseHeaders, err error) {
+func (c *Client) sendCommentsPost(ctx context.Context, request *CreateCommentRequest, params CommentsPostParams) (res *CreateCommentResponse, err error) {
 	// Validate request before sending.
 	if err := func() error {
 		if err := request.Validate(); err != nil {
@@ -1248,12 +1248,12 @@ func (c *Client) sendCommentsPost(ctx context.Context, request *CreateCommentReq
 // Retrieves a database object using the ID specified in the request path.
 //
 // GET /v1/databases/{id}
-func (c *Client) DatabasesIDGet(ctx context.Context, params DatabasesIDGetParams) (*GetDatabaseResponseHeaders, error) {
+func (c *Client) DatabasesIDGet(ctx context.Context, params DatabasesIDGetParams) (*GetDatabaseResponse, error) {
 	res, err := c.sendDatabasesIDGet(ctx, params)
 	return res, err
 }
 
-func (c *Client) sendDatabasesIDGet(ctx context.Context, params DatabasesIDGetParams) (res *GetDatabaseResponseHeaders, err error) {
+func (c *Client) sendDatabasesIDGet(ctx context.Context, params DatabasesIDGetParams) (res *GetDatabaseResponse, err error) {
 	otelAttrs := []attribute.KeyValue{
 		otelogen.OperationID("DatabasesIDGet"),
 		semconv.HTTPRequestMethodKey.String("GET"),
@@ -1390,12 +1390,12 @@ func (c *Client) sendDatabasesIDGet(ctx context.Context, params DatabasesIDGetPa
 // Update database properties.
 //
 // PATCH /v1/databases/{id}
-func (c *Client) DatabasesIDPatch(ctx context.Context, request *UpdateDatabaseRequest, params DatabasesIDPatchParams) (*UpdateDatabaseResponseHeaders, error) {
+func (c *Client) DatabasesIDPatch(ctx context.Context, request *UpdateDatabaseRequest, params DatabasesIDPatchParams) (*UpdateDatabaseResponse, error) {
 	res, err := c.sendDatabasesIDPatch(ctx, request, params)
 	return res, err
 }
 
-func (c *Client) sendDatabasesIDPatch(ctx context.Context, request *UpdateDatabaseRequest, params DatabasesIDPatchParams) (res *UpdateDatabaseResponseHeaders, err error) {
+func (c *Client) sendDatabasesIDPatch(ctx context.Context, request *UpdateDatabaseRequest, params DatabasesIDPatchParams) (res *UpdateDatabaseResponse, err error) {
 	// Validate request before sending.
 	if err := func() error {
 		if err := request.Validate(); err != nil {
@@ -1544,12 +1544,12 @@ func (c *Client) sendDatabasesIDPatch(ctx context.Context, request *UpdateDataba
 // Filter a database.
 //
 // POST /v1/databases/{id}/query
-func (c *Client) DatabasesIDQueryPost(ctx context.Context, request *QueryDataSourceRequest, params DatabasesIDQueryPostParams) (*QueryDataSourceResponseHeaders, error) {
+func (c *Client) DatabasesIDQueryPost(ctx context.Context, request *QueryDataSourceRequest, params DatabasesIDQueryPostParams) (*QueryDataSourceResponse, error) {
 	res, err := c.sendDatabasesIDQueryPost(ctx, request, params)
 	return res, err
 }
 
-func (c *Client) sendDatabasesIDQueryPost(ctx context.Context, request *QueryDataSourceRequest, params DatabasesIDQueryPostParams) (res *QueryDataSourceResponseHeaders, err error) {
+func (c *Client) sendDatabasesIDQueryPost(ctx context.Context, request *QueryDataSourceRequest, params DatabasesIDQueryPostParams) (res *QueryDataSourceResponse, err error) {
 	// Validate request before sending.
 	if err := func() error {
 		if err := request.Validate(); err != nil {
@@ -1699,12 +1699,12 @@ func (c *Client) sendDatabasesIDQueryPost(ctx context.Context, request *QueryDat
 // Create a database.
 //
 // POST /v1/databases/
-func (c *Client) DatabasesPost(ctx context.Context, request *CreateDatabaseRequest, params DatabasesPostParams) (*CreateDatabaseResponseHeaders, error) {
+func (c *Client) DatabasesPost(ctx context.Context, request *CreateDatabaseRequest, params DatabasesPostParams) (*CreateDatabaseResponse, error) {
 	res, err := c.sendDatabasesPost(ctx, request, params)
 	return res, err
 }
 
-func (c *Client) sendDatabasesPost(ctx context.Context, request *CreateDatabaseRequest, params DatabasesPostParams) (res *CreateDatabaseResponseHeaders, err error) {
+func (c *Client) sendDatabasesPost(ctx context.Context, request *CreateDatabaseRequest, params DatabasesPostParams) (res *CreateDatabaseResponse, err error) {
 	// Validate request before sending.
 	if err := func() error {
 		if err := request.Validate(); err != nil {
@@ -1836,12 +1836,12 @@ func (c *Client) sendDatabasesPost(ctx context.Context, request *CreateDatabaseR
 // not page content.
 //
 // GET /v1/pages/{id}
-func (c *Client) PagesIDGet(ctx context.Context, params PagesIDGetParams) (*GetPageResponseHeaders, error) {
+func (c *Client) PagesIDGet(ctx context.Context, params PagesIDGetParams) (*GetPageResponse, error) {
 	res, err := c.sendPagesIDGet(ctx, params)
 	return res, err
 }
 
-func (c *Client) sendPagesIDGet(ctx context.Context, params PagesIDGetParams) (res *GetPageResponseHeaders, err error) {
+func (c *Client) sendPagesIDGet(ctx context.Context, params PagesIDGetParams) (res *GetPageResponse, err error) {
 	otelAttrs := []attribute.KeyValue{
 		otelogen.OperationID("PagesIDGet"),
 		semconv.HTTPRequestMethodKey.String("GET"),
@@ -1978,12 +1978,12 @@ func (c *Client) sendPagesIDGet(ctx context.Context, params PagesIDGetParams) (r
 // Archive a page.
 //
 // PATCH /v1/pages/{id}
-func (c *Client) PagesIDPatch(ctx context.Context, request *UpdatePageRequest, params PagesIDPatchParams) (*UpdatePageResponseHeaders, error) {
+func (c *Client) PagesIDPatch(ctx context.Context, request *UpdatePageRequest, params PagesIDPatchParams) (*UpdatePageResponse, error) {
 	res, err := c.sendPagesIDPatch(ctx, request, params)
 	return res, err
 }
 
-func (c *Client) sendPagesIDPatch(ctx context.Context, request *UpdatePageRequest, params PagesIDPatchParams) (res *UpdatePageResponseHeaders, err error) {
+func (c *Client) sendPagesIDPatch(ctx context.Context, request *UpdatePageRequest, params PagesIDPatchParams) (res *UpdatePageResponse, err error) {
 	// Validate request before sending.
 	if err := func() error {
 		if err := request.Validate(); err != nil {
@@ -2132,12 +2132,12 @@ func (c *Client) sendPagesIDPatch(ctx context.Context, request *UpdatePageReques
 // Retrieve a page property item.
 //
 // GET /v1/pages/{page_id}/properties/{property_id}
-func (c *Client) PagesPageIDPropertiesPropertyIDGet(ctx context.Context, params PagesPageIDPropertiesPropertyIDGetParams) (*GetPagePropertyResponseHeaders, error) {
+func (c *Client) PagesPageIDPropertiesPropertyIDGet(ctx context.Context, params PagesPageIDPropertiesPropertyIDGetParams) (*GetPagePropertyResponse, error) {
 	res, err := c.sendPagesPageIDPropertiesPropertyIDGet(ctx, params)
 	return res, err
 }
 
-func (c *Client) sendPagesPageIDPropertiesPropertyIDGet(ctx context.Context, params PagesPageIDPropertiesPropertyIDGetParams) (res *GetPagePropertyResponseHeaders, err error) {
+func (c *Client) sendPagesPageIDPropertiesPropertyIDGet(ctx context.Context, params PagesPageIDPropertiesPropertyIDGetParams) (res *GetPagePropertyResponse, err error) {
 	otelAttrs := []attribute.KeyValue{
 		otelogen.OperationID("PagesPageIDPropertiesPropertyIDGet"),
 		semconv.HTTPRequestMethodKey.String("GET"),
@@ -2293,12 +2293,12 @@ func (c *Client) sendPagesPageIDPropertiesPropertyIDGet(ctx context.Context, par
 // Create a page with content.
 //
 // POST /v1/pages/
-func (c *Client) PagesPost(ctx context.Context, request *CreatePageRequest, params PagesPostParams) (*CreatePageResponseHeaders, error) {
+func (c *Client) PagesPost(ctx context.Context, request *CreatePageRequest, params PagesPostParams) (*CreatePageResponse, error) {
 	res, err := c.sendPagesPost(ctx, request, params)
 	return res, err
 }
 
-func (c *Client) sendPagesPost(ctx context.Context, request *CreatePageRequest, params PagesPostParams) (res *CreatePageResponseHeaders, err error) {
+func (c *Client) sendPagesPost(ctx context.Context, request *CreatePageRequest, params PagesPostParams) (res *CreatePageResponse, err error) {
 	// Validate request before sending.
 	if err := func() error {
 		if err := request.Validate(); err != nil {
@@ -2429,12 +2429,12 @@ func (c *Client) sendPagesPost(ctx context.Context, request *CreatePageRequest, 
 // Search.
 //
 // POST /v1/search
-func (c *Client) SearchPost(ctx context.Context, request *SearchRequest, params SearchPostParams) (*SearchResponseHeaders, error) {
+func (c *Client) SearchPost(ctx context.Context, request *SearchRequest, params SearchPostParams) (*SearchResponse, error) {
 	res, err := c.sendSearchPost(ctx, request, params)
 	return res, err
 }
 
-func (c *Client) sendSearchPost(ctx context.Context, request *SearchRequest, params SearchPostParams) (res *SearchResponseHeaders, err error) {
+func (c *Client) sendSearchPost(ctx context.Context, request *SearchRequest, params SearchPostParams) (res *SearchResponse, err error) {
 	// Validate request before sending.
 	if err := func() error {
 		if err := request.Validate(); err != nil {
@@ -2565,12 +2565,12 @@ func (c *Client) sendSearchPost(ctx context.Context, request *SearchRequest, par
 // Returns a paginated list of user objects for a workspace.
 //
 // GET /v1/users
-func (c *Client) UsersGet(ctx context.Context, params UsersGetParams) (*ListUsersResponseHeaders, error) {
+func (c *Client) UsersGet(ctx context.Context, params UsersGetParams) (*ListUsersResponse, error) {
 	res, err := c.sendUsersGet(ctx, params)
 	return res, err
 }
 
-func (c *Client) sendUsersGet(ctx context.Context, params UsersGetParams) (res *ListUsersResponseHeaders, err error) {
+func (c *Client) sendUsersGet(ctx context.Context, params UsersGetParams) (res *ListUsersResponse, err error) {
 	otelAttrs := []attribute.KeyValue{
 		otelogen.OperationID("UsersGet"),
 		semconv.HTTPRequestMethodKey.String("GET"),
@@ -2689,12 +2689,12 @@ func (c *Client) sendUsersGet(ctx context.Context, params UsersGetParams) (res *
 // Retrieve a user object using the ID specified in the request path.
 //
 // GET /v1/users/{id}
-func (c *Client) UsersIDGet(ctx context.Context, params UsersIDGetParams) (*UserObjectResponseHeaders, error) {
+func (c *Client) UsersIDGet(ctx context.Context, params UsersIDGetParams) (*UserObjectResponse, error) {
 	res, err := c.sendUsersIDGet(ctx, params)
 	return res, err
 }
 
-func (c *Client) sendUsersIDGet(ctx context.Context, params UsersIDGetParams) (res *UserObjectResponseHeaders, err error) {
+func (c *Client) sendUsersIDGet(ctx context.Context, params UsersIDGetParams) (res *UserObjectResponse, err error) {
 	otelAttrs := []attribute.KeyValue{
 		otelogen.OperationID("UsersIDGet"),
 		semconv.HTTPRequestMethodKey.String("GET"),
@@ -2831,12 +2831,12 @@ func (c *Client) sendUsersIDGet(ctx context.Context, params UsersIDGetParams) (r
 // Retrieve your token’s bot user.
 //
 // GET /v1/users/me
-func (c *Client) UsersMeGet(ctx context.Context, params UsersMeGetParams) (*UserObjectResponseHeaders, error) {
+func (c *Client) UsersMeGet(ctx context.Context, params UsersMeGetParams) (*UserObjectResponse, error) {
 	res, err := c.sendUsersMeGet(ctx, params)
 	return res, err
 }
 
-func (c *Client) sendUsersMeGet(ctx context.Context, params UsersMeGetParams) (res *UserObjectResponseHeaders, err error) {
+func (c *Client) sendUsersMeGet(ctx context.Context, params UsersMeGetParams) (res *UserObjectResponse, err error) {
 	otelAttrs := []attribute.KeyValue{
 		otelogen.OperationID("UsersMeGet"),
 		semconv.HTTPRequestMethodKey.String("GET"),
