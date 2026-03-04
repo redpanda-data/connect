@@ -132,21 +132,21 @@ input:
 --
 ======
 
-The `redpanda_migrator` input simply consumes records from the source cluster and forwards them downstream. 
-It does not perform topic/schema/group synchronisation. 
+The `redpanda_migrator` input simply consumes records from the source cluster and forwards them downstream.
+It does not perform topic/schema/group synchronisation.
 All migration features and coordination live in the paired `redpanda_migrator` output.
 
-**IMPORTANT:** This input requires a corresponding `redpanda_migrator` output in the same pipeline. 
+**IMPORTANT:** This input requires a corresponding `redpanda_migrator` output in the same pipeline.
 Each pipeline must have both input and output components configured.
 For capabilities, guarantees, scheduling, and examples, see the output documentation.
 
-**Performance tuning for high throughput:** For workloads with high message rates or large messages, 
+**Performance tuning for high throughput:** For workloads with high message rates or large messages,
 adjust the following fields to increase buffer sizes and batch processing:
 
 - `partition_buffer_bytes: 2MB`
 - `max_yield_batch_bytes: 1MB`
 
-These settings allow the consumer to buffer more data per partition and yield larger batches, 
+These settings allow the consumer to buffer more data per partition and yield larger batches,
 reducing overhead and improving throughput at the cost of higher memory usage.
 
 == Fields
