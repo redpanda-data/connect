@@ -32,16 +32,16 @@ func NewOracleValueConverter(timezone *time.Location) OracleValueConverter {
 var (
 	// TO_TIMESTAMP('2020-01-15 10:30:00','YYYY-MM-DD HH24:MI:SS')
 	// TO_TIMESTAMP('2020-01-15 10:30:00.123456','YYYY-MM-DD HH24:MI:SS.FF6')
-	toTimestampPattern = regexp.MustCompile(`(?i)TO_TIMESTAMP\('([^']+)'(?:,\s*'[^']*')?\)`)
+	toTimestampPattern = regexp.MustCompile(`(?i)TO_TIMESTAMP\('(?P<value>[^']+)'(?:,\s*'[^']*')?\)`)
 
 	// TO_DATE('2020-01-15','YYYY-MM-DD')
-	toDatePattern = regexp.MustCompile(`(?i)TO_DATE\('([^']+)',\s*'([^']+)'\)`)
+	toDatePattern = regexp.MustCompile(`(?i)TO_DATE\('(?P<value>[^']+)',\s*'(?P<format>[^']+)'\)`)
 
 	// TO_TIMESTAMP_TZ('2020-01-15 10:30:00 +00:00')
-	toTimestampTzPattern = regexp.MustCompile(`(?i)TO_TIMESTAMP_TZ\('([^']+)'\)`)
+	toTimestampTzPattern = regexp.MustCompile(`(?i)TO_TIMESTAMP_TZ\('(?P<value>[^']+)'\)`)
 
 	// HEXTORAW('48656C6C6F') - converts hex string to bytes
-	hexToRawPattern = regexp.MustCompile(`(?i)HEXTORAW\('([0-9A-Fa-f]+)'\)`)
+	hexToRawPattern = regexp.MustCompile(`(?i)HEXTORAW\('(?P<hex>[0-9A-Fa-f]+)'\)`)
 
 	// EMPTY_CLOB() or EMPTY_BLOB()
 	emptyLobPattern = regexp.MustCompile(`(?i)EMPTY_(CLOB|BLOB)\(\)`)
@@ -82,8 +82,8 @@ func (c *OracleValueConverter) convertDateValue(value string) any {
 		return nil
 	}
 
-	dateStr := matches[1]
-	formatStr := matches[2] // Oracle format like 'YYYY-MM-DD'
+	dateStr := matches[toDatePattern.SubexpIndex("value")]
+	formatStr := matches[toDatePattern.SubexpIndex("format")] // Oracle format like 'YYYY-MM-DD'
 
 	// Convert Oracle format to Go format
 	goFormat := c.oracleFormatToGo(formatStr)
@@ -115,7 +115,7 @@ func (c *OracleValueConverter) convertTimestampValue(value string) any {
 		return nil
 	}
 
-	timestampStr := matches[1]
+	timestampStr := matches[toTimestampPattern.SubexpIndex("value")]
 
 	// Try common timestamp formats
 	formats := []string{
@@ -143,7 +143,7 @@ func (*OracleValueConverter) convertTimestampWithZone(value string) any {
 		return nil
 	}
 
-	timestampStr := matches[1]
+	timestampStr := matches[toTimestampTzPattern.SubexpIndex("value")]
 
 	// Try formats with timezone
 	formats := []string{
