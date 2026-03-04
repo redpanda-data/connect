@@ -46,6 +46,7 @@ const (
 	ociFieldLogMiner             = "logminer"
 	ociFieldSCNWindowSize        = "scn_window_size"
 	ociFieldBackoffInterval      = "backoff_interval"
+	ociFieldMiningInterval       = "mining_interval"
 	ociFieldMiningStrategy       = "strategy"
 	ociFieldMaxTransactionEvents = "max_transaction_events"
 )
@@ -97,8 +98,12 @@ When using the default Oracle based cache, the Connect user requires permission 
 			Default(logminer.DefaultSCNWindowSize),
 		service.NewDurationField(ociFieldBackoffInterval).
 			Description("The interval between attempts to check for new changes once all data is processed. For low traffic tables increasing this value can reduce network traffic to the server.").
-			Default(logminer.DefaultBackoffInterval.String()).
+			Default(logminer.DefaultMiningBackoffInterval.String()).
 			Example("5s").Example("1m"),
+		service.NewDurationField(ociFieldMiningInterval).
+			Description("The interval between mining cycles during normal operation. Controls how frequently LogMiner polls for new changes when not caught up.").
+			Default(logminer.DefaultMiningInterval.String()).
+			Example("100ms").Example("1s"),
 		service.NewStringField(ociFieldMiningStrategy).
 			Description("Controls how LogMiner retrieves data dictionary information. `online_catalog` (default) uses the current data dictionary for best performance but cannot capture DDL changes. `online_catalog` currently only supported.").
 			Default(logminer.DefaultMiningStrategy),
@@ -583,6 +588,9 @@ func parseLogMinerConfig(conf *service.ParsedConfig) (*logminer.Config, error) {
 			return nil, fmt.Errorf("logminer.%s must be greater than 0, got %d", ociFieldSCNWindowSize, cfg.SCNWindowSize)
 		}
 		if cfg.MiningBackoffInterval, err = lmConf.FieldDuration(ociFieldBackoffInterval); err != nil {
+			return nil, err
+		}
+		if cfg.MiningInterval, err = lmConf.FieldDuration(ociFieldMiningInterval); err != nil {
 			return nil, err
 		}
 		if strategy, err := lmConf.FieldString(ociFieldMiningStrategy); err != nil {

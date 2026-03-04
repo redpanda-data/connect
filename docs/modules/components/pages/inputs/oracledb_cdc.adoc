@@ -46,6 +46,7 @@ input:
     logminer:
       scn_window_size: 20000
       backoff_interval: 5s
+      mining_interval: 300ms
       strategy: online_catalog
       max_transaction_events: 0
     include: [] # No default (required)
@@ -79,6 +80,7 @@ input:
     logminer:
       scn_window_size: 20000
       backoff_interval: 5s
+      mining_interval: 300ms
       strategy: online_catalog
       max_transaction_events: 0
     include: [] # No default (required)
@@ -197,6 +199,23 @@ The interval between attempts to check for new changes once all data is processe
 backoff_interval: 5s
 
 backoff_interval: 1m
+```
+
+=== `logminer.mining_interval`
+
+The interval between mining cycles during normal operation. Controls how frequently LogMiner polls for new changes when not caught up.
+
+
+*Type*: `string`
+
+*Default*: `"300ms"`
+
+```yml
+# Examples
+
+mining_interval: 100ms
+
+mining_interval: 1s
 ```
 
 === `logminer.strategy`
