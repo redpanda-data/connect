@@ -18,8 +18,14 @@ import (
 // SessionManager manages LogMiner sessions, such as loading
 // logs into LogMiner then starting/ending mining sessions.
 type SessionManager struct {
-	cfg  *Config
-	opts []string
+	cfg    *Config
+	opts   []string
+	active bool
+}
+
+// IsActive returns true if a LogMiner session is currently active.
+func (sm *SessionManager) IsActive() bool {
+	return sm.active
 }
 
 // NewSessionManager creates a new SessionManager with the specified configuration.
@@ -77,14 +83,16 @@ func (sm *SessionManager) StartSession(ctx context.Context, conn *sql.Conn, star
 		return fmt.Errorf("starting logminer session: %w", err)
 	}
 
+	sm.active = true
 	return nil
 }
 
 // EndSession ends the current LogMiner session
-func (SessionManager) EndSession(ctx context.Context, conn *sql.Conn) error {
+func (sm *SessionManager) EndSession(ctx context.Context, conn *sql.Conn) error {
 	if _, err := conn.ExecContext(ctx, "BEGIN SYS.DBMS_LOGMNR.END_LOGMNR(); END;"); err != nil {
 		return fmt.Errorf("ending logminer session: %w", err)
 	}
 
+	sm.active = false
 	return nil
 }

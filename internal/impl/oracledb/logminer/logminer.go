@@ -39,8 +39,6 @@ type LogMiner struct {
 	logMinerQuery string
 	txnCache      TransactionCache
 
-	// Session state tracking (for keeping session alive between iterations)
-	sessionActive   bool
 	currentLogFiles []*LogFile
 }
 
@@ -113,11 +111,10 @@ func (lm *LogMiner) ReadChanges(ctx context.Context, startPos replication.SCN) e
 	lm.log.Infof("Starting streaming change events for %d table(s) beginning from SCN: %d", len(lm.tables), lm.currentSCN)
 
 	defer func() {
-		if lm.sessionActive {
+		if lm.sessionMgr.IsActive() {
 			if err := lm.sessionMgr.EndSession(ctx, conn); err != nil {
 				lm.log.Errorf("ending LogMiner session on exit: %v", err)
 			}
-			lm.sessionActive = false
 		}
 	}()
 
@@ -432,11 +429,10 @@ func deduplicateLogs(archived, online []*LogFile) []*LogFile {
 // [startSCN, endSCN] are accessible.
 func (lm *LogMiner) prepareLogsAndStartSession(ctx context.Context, conn *sql.Conn, startSCN, endSCN uint64) error {
 	// End existing session if active
-	if lm.sessionActive {
+	if lm.sessionMgr.IsActive() {
 		if err := lm.sessionMgr.EndSession(ctx, conn); err != nil {
 			lm.log.Errorf("Failed to end existing LogMiner session: %v", err)
 		}
-		lm.sessionActive = false
 	}
 
 	// Collect log files that contain changes from current SCN
@@ -460,7 +456,6 @@ func (lm *LogMiner) prepareLogsAndStartSession(ctx context.Context, conn *sql.Co
 	if err := lm.sessionMgr.StartSession(ctx, conn, startSCN, endSCN, false); err != nil {
 		return fmt.Errorf("starting logminer session: %w", err)
 	}
-	lm.sessionActive = true
 	lm.log.Debugf("Started LogMiner session from SCN %d to SCN %d", startSCN, endSCN)
 
 	return nil
