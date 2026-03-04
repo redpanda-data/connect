@@ -1410,9 +1410,10 @@ function main() {
 	console.log("\n\nPhase 4b: Post-process schemas for ogen compatibility");
 	postProcessSchemas();
 
-	// Re-write schemas to spec after post-processing
-	for (const [name, schema] of schemas) {
-		spec.components.schemas[name] = schema;
+	// Re-write schemas to spec sorted alphabetically so output is stable
+	spec.components.schemas = {};
+	for (const name of [...schemas.keys()].sort()) {
+		spec.components.schemas[name] = schemas.get(name)!;
 	}
 
 	console.log("\n\nPhase 5: Write enhanced OpenAPI spec");
