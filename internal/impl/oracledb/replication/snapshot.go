@@ -232,7 +232,7 @@ func (s *Snapshot) processBatch(ctx context.Context, tx *sql.Tx, table UserTable
 			Table:     table.Name,
 			Schema:    table.Schema,
 			Data:      row,
-			Operation: MessageOperationRead.String(),
+			Operation: MessageOperationRead,
 			SCN:       0,
 		}
 		if err = s.publisher.Publish(ctx, &m); err != nil {
