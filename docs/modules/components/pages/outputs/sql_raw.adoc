@@ -162,6 +162,7 @@ A database <<drivers, driver>> to use.
 Options:
 `mysql`
 , `postgres`
+, `pgx`
 , `clickhouse`
 , `mssql`
 , `sqlite`

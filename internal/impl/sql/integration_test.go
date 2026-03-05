@@ -750,7 +750,6 @@ func TestIntegrationPostgres(t *testing.T) {
 		"postgres",
 		"pgx",
 	} {
-		driver := driver
 		t.Run(fmt.Sprintf("driver %s", driver), func(t *testing.T) {
 			var db *sql.DB
 			t.Cleanup(func() {
@@ -828,7 +827,6 @@ func TestIntegrationPostgresVector(t *testing.T) {
 		"postgres",
 		"pgx",
 	} {
-		driver := driver
 		t.Run(fmt.Sprintf("driver %s", driver), func(t *testing.T) {
 			var db *sql.DB
 			t.Cleanup(func() {

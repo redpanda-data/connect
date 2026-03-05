@@ -27,7 +27,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
-var driverField = service.NewStringEnumField("driver", "mysql", "postgres", "clickhouse", "mssql", "sqlite", "oracle", "snowflake", "trino", "gocosmos", "spanner", "databricks").
+var driverField = service.NewStringEnumField("driver", "mysql", "postgres", "pgx", "clickhouse", "mssql", "sqlite", "oracle", "snowflake", "trino", "gocosmos", "spanner", "databricks").
 	Description("A database <<drivers, driver>> to use.")
 
 var dsnField = service.NewStringField("dsn").
