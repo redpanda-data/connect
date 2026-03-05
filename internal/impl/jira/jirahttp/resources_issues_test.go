@@ -73,11 +73,8 @@ func TestSearchAllIssues_PaginatesAndAggregates(t *testing.T) {
 	// Build a minimal jiraProc with our test server and short timeouts.
 	j := &Client{
 		baseURL:    srv.URL,
-		username:   "u",
-		apiToken:   "t",
 		maxResults: 2,
 		httpClient: srv.Client(),
-		retryOpts:  RetryOptions{MaxRetries: 0},
 	}
 
 	// Act
@@ -122,11 +119,8 @@ func TestSearchIssuesPage_SendsExpectedQueryParams(t *testing.T) {
 
 	j := &Client{
 		baseURL:    srv.URL,
-		username:   "u",
-		apiToken:   "t",
 		maxResults: 50,
 		httpClient: srv.Client(),
-		retryOpts:  RetryOptions{MaxRetries: 0},
 	}
 
 	ctx := t.Context()
@@ -155,11 +149,8 @@ func TestSearchIssuesPage_PropagatesParams(t *testing.T) {
 
 	j := &Client{
 		baseURL:    srv.URL,
-		username:   "u",
-		apiToken:   "t",
 		maxResults: 10,
 		httpClient: srv.Client(),
-		retryOpts:  RetryOptions{MaxRetries: 0},
 	}
 
 	ctx := t.Context()

@@ -34,10 +34,9 @@ func TestJiraProcessorConfigValidation(t *testing.T) {
 		{
 			name: "missing base_url",
 			configYAML: `
-username: "user" # no base_url
+username: "user"
 api_token: "token"
 max_results_per_page: 50
-max_retries: 5
 `,
 			wantErrSub: "base_url",
 		},
@@ -48,7 +47,6 @@ base_url: "not a url"
 username: "user"
 api_token: "token"
 max_results_per_page: 50
-max_retries: 5
 `,
 			wantErrSub: "base_url",
 		},
@@ -63,16 +61,17 @@ api_token: "token"
 		},
 		{
 			name: "missing api_token",
-			configYAML: `base_url: "http://example.invalid"
+			configYAML: `
+base_url: "https://example.com"
 username: "user"
 api_token: ""
-base_url: "https://example.com"
 `,
 			wantErrSub: "api_token",
 		},
 		{
 			name: "max_results_per_page too small",
-			configYAML: `base_url: "http://example.invalid"
+			configYAML: `
+base_url: "http://example.invalid"
 username: "user"
 api_token: "token"
 max_results_per_page: 0
@@ -81,21 +80,13 @@ max_results_per_page: 0
 		},
 		{
 			name: "max_results_per_page too large",
-			configYAML: `base_url: "http://example.invalid"
+			configYAML: `
+base_url: "http://example.invalid"
 username: "user"
 api_token: "token"
 max_results_per_page: 100000
 `,
 			wantErrSub: "max_results_per_page",
-		},
-		{
-			name: "max_retries negative",
-			configYAML: `base_url: "http://example.invalid"
-username: "user"
-api_token: "token"
-max_retries: -1
-`,
-			wantErrSub: "max_retries",
 		},
 		{
 			name: "valid minimal (defaults kick in)",
@@ -108,11 +99,11 @@ api_token: "token"
 		},
 		{
 			name: "valid explicit",
-			configYAML: `base_url: "http://example.invalid"
+			configYAML: `
+base_url: "http://example.invalid"
 username: "user"
 api_token: "token"
 max_results_per_page: 200
-max_retries: 5
 `,
 			wantErrSub: "",
 		},
