@@ -13,11 +13,8 @@
 // limitations under the License.
 
 // client.go implements low-level interactions with the Jira REST API.
-// It defines the base API path, provides a helper for making authenticated Jira API requests with retry
-// and error handling, and exposes utilities for retrieving custom fields.
-//
-// These functions are primarily used by the Jira processor when preparing
-// queries and resolving custom field identifiers.
+// It defines the base API path, provides a helper for making authenticated Jira API requests
+// and exposes utilities for retrieving custom fields.
 
 package jirahttp
 
@@ -25,21 +22,29 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
-	"github.com/redpanda-data/connect/v4/internal/impl/jira/jirahttp/http_metrics"
 )
 
 // jiraAPIBasePath is the base path for Jira Rest API
 const jiraAPIBasePath = "/rest/api/3"
 
-// This is the general function that calls Jira API on a specific URL using the URL object.
-// It applies standard header parameters to all calls, Authorization, User-Agent and Accept.
-// It uses the helper functions to check against possible response codes and handling the retry-after mechanism
+// httpDoer abstracts HTTP request execution. *http.Client satisfies this
+// interface.
+type httpDoer interface {
+	Do(req *http.Request) (*http.Response, error)
+}
+
+// callJiraApi calls the Jira API at the given URL. Auth, retry, metrics, and
+// rate limiting are handled by the underlying httpDoer (*http.Client assembled
+// by httpclient.NewClient in production). This method sets Jira-specific headers and performs the
+// X-Seraph-LoginReason auth header check.
 func (j *Client) callJiraApi(ctx context.Context, u *url.URL) ([]byte, error) {
 	j.log.Debugf("API call: %s", u.String())
 
@@ -47,15 +52,44 @@ func (j *Client) callJiraApi(ctx context.Context, u *url.URL) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("creating request: %v", err)
 	}
-	req.SetBasicAuth(j.username, j.apiToken)
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", "Redpanda-Connect")
 
-	body, err := DoRequestWithRetries(ctx, j.httpClient, req, j.retryOpts)
+	resp, err := j.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %v", err)
 	}
+	defer resp.Body.Close()
 
+	// Check for auth header-signaled problems on 200 OK (e.g., X-Seraph-LoginReason).
+	if j.authHeaderPolicy != nil && resp.StatusCode == http.StatusOK {
+		val := strings.TrimSpace(resp.Header.Get(j.authHeaderPolicy.HeaderName))
+		if val != "" && j.authHeaderPolicy.IsProblem(val) {
+			body, _ := io.ReadAll(resp.Body)
+			return nil, &HTTPError{
+				StatusCode: resp.StatusCode,
+				Reason:     fmt.Sprintf("auth/login issue indicated by %s=%q", j.authHeaderPolicy.HeaderName, val),
+				Body:       string(body),
+				Headers:    resp.Header.Clone(),
+			}
+		}
+	}
+
+	// Non-2xx => return as HTTPError.
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, &HTTPError{
+			StatusCode: resp.StatusCode,
+			Reason:     http.StatusText(resp.StatusCode),
+			Body:       string(body),
+			Headers:    resp.Header.Clone(),
+		}
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("reading response body: %w", err)
+	}
 	return body, nil
 }
 
@@ -122,31 +156,27 @@ func (j *Client) getCustomFieldsPage(ctx context.Context, startAt int) (*CustomF
 	return &result, nil
 }
 
-// Client is the implementation of Jira API queries. It holds the client state and orchestrates calls into the jirahttp package.
+// Client is the implementation of Jira API queries. It holds the client state
+// and orchestrates calls into the jirahttp package.
 type Client struct {
-	baseURL    string
-	username   string
-	apiToken   string
-	maxResults int
-	retryOpts  RetryOptions
-	httpClient *http.Client
-	log        *service.Logger
+	baseURL          string
+	maxResults       int
+	authHeaderPolicy *AuthHeaderPolicy
+	httpClient       httpDoer
+	log              *service.Logger
 }
 
-// NewClient is the constructor ofr a Client object.
-func NewClient(log *service.Logger, baseUrl, username, apiToken string, maxResults, maxRetries int, metrics *service.Metrics, httpClient *http.Client, headerPolicy *AuthHeaderPolicy) (*Client, error) {
+// NewClient constructs a Client. The httpDoer handles auth, retry, metrics,
+// and rate limiting (typically an *http.Client from httpclient.NewClient).
+func NewClient(log *service.Logger, baseURL string, maxResults int, httpClient httpDoer, headerPolicy *AuthHeaderPolicy) *Client {
+	if log == nil {
+		log = service.NewLoggerFromSlog(slog.New(slog.DiscardHandler))
+	}
 	return &Client{
-		log:        log,
-		baseURL:    baseUrl,
-		username:   username,
-		apiToken:   apiToken,
-		maxResults: maxResults,
-		retryOpts: RetryOptions{
-			MaxRetries:       maxRetries,
-			AuthHeaderPolicy: headerPolicy,
-		},
-		httpClient: http_metrics.NewInstrumentedClient(
-			metrics, "jira_http",
-			httpClient),
-	}, nil
+		log:              log,
+		baseURL:          baseURL,
+		maxResults:       maxResults,
+		httpClient:       httpClient,
+		authHeaderPolicy: headerPolicy,
+	}
 }

@@ -27,6 +27,19 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
+// authClient wraps an *http.Client and sets basic auth on every request.
+// Used in integration tests to simulate the httpclient auth transport.
+type authClient struct {
+	inner    *http.Client
+	username string
+	token    string
+}
+
+func (c *authClient) Do(req *http.Request) (*http.Response, error) {
+	req.SetBasicAuth(c.username, c.token)
+	return c.inner.Do(req)
+}
+
 func TestProcessor_EndToEnd_Issues(t *testing.T) {
 	// Fake Jira server with:
 	// - /rest/api/3/field/search (custom fields paging)
@@ -132,10 +145,12 @@ func TestProcessor_EndToEnd_Issues(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	jiraHttp, err := jirahttp.NewClient(nil, srv.URL, user, token, 2, 0, nil, &http.Client{Timeout: 5 * time.Second}, nil)
-	if err != nil {
-		t.Fatalf("Process error: %v", err)
+	ac := &authClient{
+		inner:    &http.Client{Timeout: 5 * time.Second},
+		username: user,
+		token:    token,
 	}
+	jiraHttp := jirahttp.NewClient(nil, srv.URL, 2, ac, nil)
 
 	j := &jiraProcessor{
 		client: jiraHttp,
@@ -204,10 +219,10 @@ func TestProcessor_EndToEnd_Projects(t *testing.T) {
 			callsField++
 			q := r.URL.Query()
 			if q.Get("type") == "" {
-				// Don’t use t.Fatalf here — it runs in a different goroutine and will cause EOF.
+				// Don't use t.Fatalf here — it runs in a different goroutine and will cause EOF.
 				t.Errorf("field/search missing type=custom, got %v", q)
 			}
-			// Return a single-page response (IsLast=true) so we don’t paginate.
+			// Return a single-page response (IsLast=true) so we don't paginate.
 			_ = json.NewEncoder(w).Encode(jirahttp.CustomFieldSearchResponse{
 				Fields: []jirahttp.CustomField{
 					{FieldID: "custom_field_10100", FieldName: "Story Points"},
@@ -257,10 +272,12 @@ func TestProcessor_EndToEnd_Projects(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	jiraHttp, err := jirahttp.NewClient(nil, srv.URL, user, token, 2, 0, nil, &http.Client{Timeout: 5 * time.Second}, nil)
-	if err != nil {
-		t.Fatalf("Process error: %v", err)
+	ac := &authClient{
+		inner:    &http.Client{Timeout: 5 * time.Second},
+		username: user,
+		token:    token,
 	}
+	jiraHttp := jirahttp.NewClient(nil, srv.URL, 2, ac, nil)
 
 	j := &jiraProcessor{
 		client: jiraHttp,

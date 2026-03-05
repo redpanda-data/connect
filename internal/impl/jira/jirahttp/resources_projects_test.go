@@ -66,11 +66,8 @@ func TestSearchAllProjects_PaginatesViaStartAt(t *testing.T) {
 
 	j := &Client{
 		baseURL:    srv.URL,
-		username:   "u",
-		apiToken:   "t",
 		maxResults: 2,
 		httpClient: srv.Client(),
-		retryOpts:  RetryOptions{MaxRetries: 0},
 	}
 
 	ctx := t.Context()
@@ -100,11 +97,8 @@ func TestSearchProjectsPage_SendsParamsAndMaxResults(t *testing.T) {
 
 	j := &Client{
 		baseURL:    srv.URL,
-		username:   "u",
-		apiToken:   "t",
 		maxResults: 50,
 		httpClient: srv.Client(),
-		retryOpts:  RetryOptions{MaxRetries: 0},
 	}
 
 	ctx := t.Context()
