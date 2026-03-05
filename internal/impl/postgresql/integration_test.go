@@ -1013,6 +1013,7 @@ postgres_cdc:
 			if _, ok := d["lsn"]; ok {
 				d["lsn"] = "XXX/XXX" // Consistent LSN for assertions below
 			}
+			delete(d, "schema") // Not under test here; tested in TestIntegrationPostgresSchemaMetadata
 			outBatches = append(outBatches, data)
 		}
 		return nil
