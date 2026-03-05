@@ -552,7 +552,7 @@ require (
 	golang.org/x/oauth2 v0.35.0
 	golang.org/x/sys v0.41.0
 	golang.org/x/term v0.40.0 // indirect
-	golang.org/x/time v0.14.0 // indirect
+	golang.org/x/time v0.14.0
 	golang.org/x/tools v0.42.0 // indirect
 	golang.org/x/xerrors v0.0.0-20240903120638-7835f813f4da // indirect
 	google.golang.org/genai v1.30.0
