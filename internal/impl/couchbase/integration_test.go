@@ -103,7 +103,7 @@ func setupCouchbase(tb testing.TB) (*dockertest.Pool, *dockertest.Resource, erro
 		return nil, nil, err
 	}
 
-	// Look for readyness
+	// Look for readiness
 	var stderr bytes.Buffer
 	time.Sleep(15 * time.Second)
 	for {

@@ -5,7 +5,7 @@ pipeline:
 processor_resources:
   - label: http_submit
     http:
-      url: http://nonexistant.foo/
+      url: http://nonexistent.foo/
       verb: POST
 
 tests:

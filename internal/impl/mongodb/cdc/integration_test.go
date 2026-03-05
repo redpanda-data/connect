@@ -540,7 +540,7 @@ mongodb_cdc:
 	output.NackAll()
 	// For some reason the stream's Run doesn't exit until the context is cancelled.
 	// I'm not sure why that doesn't work, but for this test we can just cancel and
-	// let the cancelation happen after the test is done.
+	// let the cancellation happen after the test is done.
 	//
 	// Ideally wait would return immediately after StopNow is called...
 	wait := stream.RunAsyncWithErrors(t)

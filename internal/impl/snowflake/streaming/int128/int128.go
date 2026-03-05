@@ -6,8 +6,8 @@
 //
 // https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
-// package int128 contains an implmentation of int128 that is more
-// efficent (no allocations) compared to math/big.Int
+// package int128 contains an implementation of int128 that is more
+// efficient (no allocations) compared to math/big.Int
 //
 // Several Snowflake data types are under the hood int128 (date/time),
 // so we can use this type and not hurt performance.
@@ -81,7 +81,7 @@ var (
 	}
 )
 
-// Num is a *signed* int128 type that is more efficent than big.Int
+// Num is a *signed* int128 type that is more efficient than big.Int
 //
 // Default value is 0
 type Num struct {

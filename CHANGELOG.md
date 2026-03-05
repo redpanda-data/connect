@@ -207,7 +207,7 @@ All notable changes to this project will be documented in this file.
 
 - `redpanda_migrator` output now supports two-way syncing using provenance headers (@mmatczuk)
 - `schema_registry_encode` gains a new `protobuf.serialize_to_json` option that is by default true. If disabled, then messages are decoded into a structured format which preserves types better and is faster. (@rockwotj)
-- Add `decode` option to field `operator` in `protobuf` processor that decodes messages into a structured format (as opposed to serializing to JSON) that perserves types better and is faster. (@rockwotj)
+- Add `decode` option to field `operator` in `protobuf` processor that decodes messages into a structured format (as opposed to serializing to JSON) that preserves types better and is faster. (@rockwotj)
 - `redpanda_migrator` output `schema_registry.interval` default value changed to `5m` enabling continuous schema migration by default. (@mmatczuk)
 - The `redpanda` and `redpanda_migrator` input and output `metadata_max_age` default value changed to `1m`. (@mmatczuk)
 
@@ -463,7 +463,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
-- The way in which custom parameters for the experimental `mcp-server` subcommand are defined have changed. When defined they will now yield a JSON message to tool processors and outputs instead of complementary metadata keys, and there is no longer an implicit `value` field under these cirumstances. (@rockwotj)
+- The way in which custom parameters for the experimental `mcp-server` subcommand are defined have changed. When defined they will now yield a JSON message to tool processors and outputs instead of complementary metadata keys, and there is no longer an implicit `value` field under these circumstances. (@rockwotj)
 - The old deprecated `elasticsearch` output has been removed. This is not a change we would traditionally make without waiting for a major version increment. However, a dependency of the library used in this component is compromised and is now a significant security concern, which warrants the immediate removal. (@Jeffail)
 
 ## 4.54.1 - 2025-04-30
@@ -1121,7 +1121,7 @@ All notable changes to this project will be documented in this file.
 
 - Bloblang error messages for bad function/method names or parameters should now be improved in mappings that use shorthand for `root = ...`.
 - All redis components now support usernames within the configured URL for authentication.
-- The `protobuf` processor now supports targetting nested types from proto files.
+- The `protobuf` processor now supports targeting nested types from proto files.
 - The `schema_registry_encode` and `schema_registry_decode` processors should no longer double escape URL unsafe characters within subjects when querying their latest versions.
 
 ## 4.23.0 - 2023-10-30
@@ -1738,7 +1738,7 @@ This is a major version release, for more information and guidance on how to mig
 - The `dedupe` processor now acts upon individual messages by default, and the `hash` field has been removed.
 - The `log` processor now executes for each individual message of a batch.
 - The `sleep` processor now executes for each individual message of a batch.
-- The `benthos test` subcommand no longer walks when targetting a directory, instead use triple-dot syntax (`./dir/...`) or wildcard patterns.
+- The `benthos test` subcommand no longer walks when targeting a directory, instead use triple-dot syntax (`./dir/...`) or wildcard patterns.
 - Go API: Module name has changed to `github.com/benthosdev/benthos/v4`.
 - Go API: All packages within the `lib` directory have been removed in favour of the newer [APIs within `public`](https://pkg.go.dev/github.com/benthosdev/benthos/v4/public).
 - Go API: Distributed tracing is now via the Open Telemetry client library.
@@ -2212,7 +2212,7 @@ This is a major version release, for more information and guidance on how to mig
 
 ### Changed
 
-- Go API: Component implementations now require explicit import from `./public/components/all` in order to be invokable. This should be done automatically at all plugin and custom build entry points. If, however, you notice that your builds have begun complaining that known components do not exist then you will need to explicitly import the package with `_ "github.com/Jeffail/benthos/v3/public/components/all"`, if this is the case then please report it as an issue so that it can be dealt with.
+- Go API: Component implementations now require explicit import from `./public/components/all` in order to be invocable. This should be done automatically at all plugin and custom build entry points. If, however, you notice that your builds have begun complaining that known components do not exist then you will need to explicitly import the package with `_ "github.com/Jeffail/benthos/v3/public/components/all"`, if this is the case then please report it as an issue so that it can be dealt with.
 
 ## 3.42.1 - 2021-03-26
 
@@ -3205,7 +3205,7 @@ This is a major version release, for more information and guidance on how to mig
 
 ### Added
 
-- Go API: A new service method `RunWithOpts` has been added in order to accomodate service customisations with opt funcs.
+- Go API: A new service method `RunWithOpts` has been added in order to accommodate service customisations with opt funcs.
 
 ## 2.8.1 - 2019-06-28
 

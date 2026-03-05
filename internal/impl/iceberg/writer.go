@@ -120,7 +120,7 @@ func (w *writer) Write(ctx context.Context, batch service.MessageBatch) error {
 			int64(len(pf.result.data)),
 		)
 		if err != nil {
-			return fmt.Errorf("unable to create data file buider: %w", err)
+			return fmt.Errorf("unable to create data file builder: %w", err)
 		}
 
 		// Extract parquet statistics

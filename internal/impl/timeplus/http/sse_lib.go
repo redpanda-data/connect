@@ -79,7 +79,7 @@ func containsDoubleNewline(data []byte) (int, int) {
 	crlfcrlf := bytes.Index(data, []byte("\r\n\r\n"))
 	// Find the earliest position of a double newline combination
 	minPos := minPosInt(crcr, minPosInt(lflf, minPosInt(crlflf, minPosInt(lfcrlf, crlfcrlf))))
-	// Detemine the length of the sequence
+	// Determine the length of the sequence
 	nlen := 2
 	switch minPos {
 	case crlfcrlf:

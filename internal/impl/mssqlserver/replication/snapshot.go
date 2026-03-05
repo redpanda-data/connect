@@ -69,7 +69,7 @@ func (s *Snapshot) Prepare(ctx context.Context) (LSN, error) {
 		return nil, err
 	} else if len(maxLSN) == 0 {
 		// rare, but possible if the user enabled CDC on a table seconds before running snapshot or the agent has stopped working for some reason
-		return nil, errors.New("unable to captue max_lsn, this can be due to reasons such as the log scanning agent has stopped")
+		return nil, errors.New("unable to capture max_lsn, this can be due to reasons such as the log scanning agent has stopped")
 	}
 
 	return maxLSN, nil

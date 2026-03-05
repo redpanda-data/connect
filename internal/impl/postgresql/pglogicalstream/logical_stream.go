@@ -466,7 +466,7 @@ func (s *Stream) streamMessages(currentLSN LSN) error {
 			if err != nil {
 				return fmt.Errorf("decoding postgres changes failed: %w", err)
 			}
-			// See the explaination above about lastEmittedCommitLSN but if this is a commit message, we want to
+			// See the explanation above about lastEmittedCommitLSN but if this is a commit message, we want to
 			// only remap the commit of the last message in a transaction, so only update the remapped value if
 			// it was a suppressed commit, otherwise we just provide a noop mapping of commit LSN
 			switch result {
@@ -759,7 +759,7 @@ func (s *Stream) Messages() chan []StreamMessage {
 	return s.messages
 }
 
-// Errors is a channel that can be used to see if and error has occured internally and the stream should be restarted.
+// Errors is a channel that can be used to see if and error has occurred internally and the stream should be restarted.
 func (s *Stream) Errors() chan error {
 	return s.errors
 }

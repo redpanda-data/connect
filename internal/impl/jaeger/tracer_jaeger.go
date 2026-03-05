@@ -127,7 +127,7 @@ func NewJaeger(config jaegerConfig) (trace.TracerProvider, error) {
 		case "const":
 			sampler = tracesdk.TraceIDRatioBased(config.SamplerParam)
 		case "probabilistic":
-			return nil, errors.New("probabalistic sampling is no longer available")
+			return nil, errors.New("probabilistic sampling is no longer available")
 		case "ratelimiting":
 			return nil, errors.New("rate limited sampling is no longer available")
 		case "remote":
