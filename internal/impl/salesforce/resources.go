@@ -87,13 +87,17 @@ func (s *salesforceProcessor) Dispatch(
 		if !req.Filter.Enabled {
 			return s.dispatchWithCheckpoint(ctx)
 		}
-		return s.client.RestQueryFiltered(ctx, req.Filter.Value)
+		return s.dispatchFilteredOnce(ctx, func() (service.MessageBatch, error) {
+			return s.client.RestQueryFiltered(ctx, req.Filter.Value)
+		})
 
 	case QueryGraphQL:
 		if !req.Filter.Enabled {
 			return nil, errors.New("unhandled query type: QueryGraphQL - not filtered")
 		}
-		return s.client.GraphQLQueryFiltered(ctx, req.Filter.Value)
+		return s.dispatchFilteredOnce(ctx, func() (service.MessageBatch, error) {
+			return s.client.GraphQLQueryFiltered(ctx, req.Filter.Value)
+		})
 
 	default:
 		return nil, fmt.Errorf("unhandled query type: %v", req.QueryType)
@@ -150,6 +154,35 @@ func (s *salesforceProcessor) dispatchWithCheckpoint(ctx context.Context) (servi
 	state.RestCursor = nextCursor
 	if err := s.saveState(ctx, state); err != nil {
 		return nil, fmt.Errorf("failed to save checkpoint: %w", err)
+	}
+
+	return batch, nil
+}
+
+// dispatchFilteredOnce runs a user-provided query exactly once, using the checkpoint
+// to stay idle on subsequent triggers once the query has completed.
+func (s *salesforceProcessor) dispatchFilteredOnce(ctx context.Context, fetch func() (service.MessageBatch, error)) (service.MessageBatch, error) {
+	s.dispatchMu.Lock()
+	defer s.dispatchMu.Unlock()
+
+	state, err := s.loadState(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load checkpoint: %w", err)
+	}
+
+	if state.SnapshotComplete {
+		s.log.Info("Query already executed, all data has been read. Staying idle.")
+		return nil, nil
+	}
+
+	batch, err := fetch()
+	if err != nil {
+		return nil, err
+	}
+
+	state.SnapshotComplete = true
+	if err := s.saveState(ctx, state); err != nil {
+		s.log.Errorf("failed to save checkpoint after query: %v", err)
 	}
 
 	return batch, nil

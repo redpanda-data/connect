@@ -25,6 +25,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -66,6 +67,10 @@ type salesforceProcessor struct {
 
 	// Number of SObjects to fetch in parallel during the REST snapshot
 	parallelFetch int
+
+	// dispatchMu serializes dispatch calls to prevent concurrent triggers from
+	// executing the same fetch before the checkpoint is saved.
+	dispatchMu sync.Mutex
 }
 
 func init() {

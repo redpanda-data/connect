@@ -29,6 +29,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -389,17 +390,113 @@ func (s *Client) RestQueryFiltered(ctx context.Context, soql string) (service.Me
 	return batch, nil
 }
 
-// GraphQLQueryFiltered fetches data using the provided GraphQL query.
+// GraphQLQueryFiltered fetches all pages of a GraphQL query using cursor-based pagination.
+// The query must include pageInfo { hasNextPage endCursor } in the selection set.
 func (s *Client) GraphQLQueryFiltered(ctx context.Context, query string) (service.MessageBatch, error) {
-	raw, err := s.GraphQL(ctx, query)
-	if err != nil {
-		return nil, err
+	var batch service.MessageBatch
+	cursor := ""
+
+	for {
+		q := injectGraphQLCursor(query, cursor)
+		if cursor != "" && q == query {
+			s.log.Warn("GraphQL cursor injection failed: query unchanged, cannot paginate further")
+			break
+		}
+		raw, err := s.GraphQL(ctx, q)
+		if err != nil {
+			return nil, err
+		}
+
+		var result map[string]json.RawMessage
+		if err := json.Unmarshal(raw, &result); err != nil {
+			return nil, fmt.Errorf("failed to parse GraphQL response: %w", err)
+		}
+
+		edges, pageInfo, found := findGraphQLEdges(result)
+		if !found {
+			// No edges structure found — return raw response as single message
+			msg := service.NewMessage(raw)
+			msg.MetaSet("query", query)
+			return service.MessageBatch{msg}, nil
+		}
+
+		for _, edge := range edges {
+			var e GraphQLEdge
+			if err := json.Unmarshal(edge, &e); err != nil {
+				s.log.Warnf("Failed to unmarshal GraphQL edge: %v", err)
+				continue
+			}
+			msg := service.NewMessage(e.Node)
+			msg.MetaSet("query", query)
+			batch = append(batch, msg)
+		}
+
+		if !pageInfo.HasNextPage {
+			break
+		}
+		cursor = pageInfo.EndCursor
 	}
 
-	msg := service.NewMessage(raw)
-	msg.MetaSet("query", query)
+	return batch, nil
+}
 
-	return service.MessageBatch{msg}, nil
+var (
+	// reGraphQLFirstParam matches existing (first: N) argument.
+	reGraphQLFirstParam = regexp.MustCompile(`\(first:\s*\d+`)
+	// reGraphQLPascalObject matches the first PascalCase object name followed by {
+	// (i.e. Salesforce SObject names like FlowOrchestration, Account, etc.)
+	reGraphQLPascalObject = regexp.MustCompile(`\b([A-Z][a-zA-Z0-9_]*)\s*\{`)
+)
+
+// injectGraphQLCursor adds after: "cursor" into the query for the next page.
+// Handles two cases:
+//   - Query has (first: N): injects , after: "cursor" inside existing args
+//   - Query has no args: injects (after: "cursor") before { of the first PascalCase object
+func injectGraphQLCursor(query, cursor string) string {
+	if cursor == "" {
+		return query
+	}
+	afterClause := fmt.Sprintf(`after: "%s"`, cursor)
+
+	// Case 1: existing (first: N) arg — append after inside parens
+	if reGraphQLFirstParam.MatchString(query) {
+		return reGraphQLFirstParam.ReplaceAllString(query, "$0, "+afterClause)
+	}
+
+	// Case 2: no args — inject (after: "cursor") before { of first PascalCase object
+	replaced := false
+	return reGraphQLPascalObject.ReplaceAllStringFunc(query, func(match string) string {
+		if replaced {
+			return match
+		}
+		parts := reGraphQLPascalObject.FindStringSubmatch(match)
+		replaced = true
+		return fmt.Sprintf("%s(%s) {", parts[1], afterClause)
+	})
+}
+
+// findGraphQLEdges recursively traverses a GraphQL response to find the first node
+// containing an "edges" array, returning the edges and pageInfo.
+func findGraphQLEdges(data map[string]json.RawMessage) ([]json.RawMessage, GraphQLPageInfo, bool) {
+	if edgesRaw, ok := data["edges"]; ok {
+		var edges []json.RawMessage
+		if err := json.Unmarshal(edgesRaw, &edges); err == nil {
+			var pageInfo GraphQLPageInfo
+			if piRaw, ok := data["pageInfo"]; ok {
+				_ = json.Unmarshal(piRaw, &pageInfo)
+			}
+			return edges, pageInfo, true
+		}
+	}
+	for _, v := range data {
+		var nested map[string]json.RawMessage
+		if err := json.Unmarshal(v, &nested); err == nil {
+			if edges, pageInfo, ok := findGraphQLEdges(nested); ok {
+				return edges, pageInfo, ok
+			}
+		}
+	}
+	return nil, GraphQLPageInfo{}, false
 }
 
 // GetNextBatchParallel fetches up to parallelFetch SObjects concurrently per call.

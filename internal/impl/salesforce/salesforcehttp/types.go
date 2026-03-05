@@ -68,3 +68,14 @@ type QueryResult struct {
 	NextRecordsUrl string            `json:"nextRecordsUrl,omitempty"`
 	Records        []json.RawMessage `json:"records"`
 }
+
+// GraphQLPageInfo holds pagination info from a Salesforce GraphQL response.
+type GraphQLPageInfo struct {
+	HasNextPage bool   `json:"hasNextPage"`
+	EndCursor   string `json:"endCursor"`
+}
+
+// GraphQLEdge wraps a single node in a Salesforce GraphQL edges array.
+type GraphQLEdge struct {
+	Node json.RawMessage `json:"node"`
+}
