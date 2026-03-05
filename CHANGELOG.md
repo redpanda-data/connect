@@ -26,6 +26,7 @@ All notable changes to this project will be documented in this file.
 - `test` command: Templates registered via the `-t` flag are now correctly available during test execution. (@Phantal)
 - benthos: Fixed a regression where input and output resources imported but unused were being initialized. (@Jeffail)
 - redpanda/migrator: fix key scoping to prevent label collision (@mmatczuk)
+- postgres_cdc: Fixed issue where snapshot chunksize can be 0 (@josephwoodward)
 
 
 ## 4.81.0 - 2026-02-18
