@@ -144,7 +144,7 @@ require (
 	github.com/rabbitmq/amqp091-go v1.10.0
 	github.com/rcrowley/go-metrics v0.0.0-20250401214520-65e299d6c5c9
 	github.com/redis/go-redis/v9 v9.14.0
-	github.com/redpanda-data/benthos/v4 v4.66.0
+	github.com/redpanda-data/benthos/v4 v4.67.0
 	github.com/redpanda-data/common-go/authz v0.2.0
 	github.com/redpanda-data/common-go/license v0.0.0-20260109170727-1dd9f5d22ee1
 	github.com/redpanda-data/common-go/redpanda-otel-exporter v0.4.0
@@ -513,8 +513,8 @@ require (
 	github.com/prometheus/procfs v0.17.0 // indirect
 	github.com/quipo/dependencysolver v0.0.0-20170801134659-2b009cb4ddcc // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
-	github.com/rickb777/period v1.0.22 // indirect
-	github.com/rickb777/plural v1.4.7 // indirect
+	github.com/rickb777/period v1.0.24 // indirect
+	github.com/rickb777/plural v1.4.8 // indirect
 	github.com/rivo/uniseg v0.4.7
 	github.com/robfig/cron/v3 v3.0.1 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
