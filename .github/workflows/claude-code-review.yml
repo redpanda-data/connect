@@ -64,7 +64,7 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           allowed_bots: ""
-          allowed_non_write_users: ""
+          allowed_non_write_users: "*"
           track_progress: true
           show_full_output: true
           claude_args: >
@@ -85,7 +85,7 @@ jobs:
             **Assumptions:**
             - All tools are functional and will work without error. Do not test tools or make exploratory calls. Make sure this is clear to every subagent that is launched.
             - Only call a tool if it is required to complete the task. Every tool call should have a clear purpose.
-            
+
             **INIT: Setup**
             - Create a todo list before starting.
             - The PR diff is pre-saved at `/tmp/pr.diff`. Use `Read /tmp/pr.diff` as the primary review input. Do NOT read full source files unless the diff context is insufficient to evaluate an issue (e.g., you need surrounding code, imports, or pattern context across the file).
