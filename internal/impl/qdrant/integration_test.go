@@ -244,7 +244,7 @@ qdrant:
 		output = append(output, m)
 		return nil
 	})
-	require.NoError(t, err, "failed to create conusmer")
+	require.NoError(t, err, "failed to create consumer")
 	stream, err := builder.Build()
 	require.NoError(t, err, "failed to create stream")
 	streamCtx, cancel := context.WithCancel(ctx)

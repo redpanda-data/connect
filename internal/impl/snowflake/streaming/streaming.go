@@ -583,7 +583,7 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch servic
 	return insertStats, err
 }
 
-// IngestionFailedError is an error that occurs when registing a BDEC file with Snowflake.
+// IngestionFailedError is an error that occurs when registering a BDEC file with Snowflake.
 type IngestionFailedError struct {
 	DatabaseName, SchemaName, TableName string
 	ChannelName                         string

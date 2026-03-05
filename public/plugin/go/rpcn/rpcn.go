@@ -17,7 +17,7 @@
 package rpcn
 
 // !!! NOTE !!!
-// If you're looking at the source of this package to reimplment it for your language then please open
+// If you're looking at the source of this package to reimplement it for your language then please open
 // an issue at github.com/redpanda-data/connect and let us know. We would love to help you out, and it's
 // likely we're going to move quickly here and change versions and you're going to be way better off
 // working with us instead of trying to keep up with changes here. And if you're willing to write an SDK

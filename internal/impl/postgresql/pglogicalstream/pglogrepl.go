@@ -377,7 +377,7 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 }
 
 // GetPublicationTables returns a list of tables currently in the publication
-// Arguments, in order: list of the tables, exist for all tables, errror.
+// Arguments, in order: list of the tables, exist for all tables, error.
 func GetPublicationTables(ctx context.Context, conn *pgconn.PgConn, publicationName string) ([]TableFQN, bool, error) {
 	query, err := sanitize.SQLQuery(`
 		SELECT DISTINCT

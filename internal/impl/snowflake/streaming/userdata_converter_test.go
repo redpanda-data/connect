@@ -505,7 +505,7 @@ func TestTimestampLTZConverter(t *testing.T) {
 			input:     "2013-04-28T20:57:00Z",
 			err:       true,
 			scale:     0,
-			precision: 9, // Mor precision needed
+			precision: 9, // More precision needed
 		},
 	}
 	for _, tc := range tests {

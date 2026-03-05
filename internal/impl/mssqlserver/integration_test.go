@@ -59,7 +59,7 @@ func TestIntegration_MicrosoftSQLServerCDC_SnapshotAndStreaming(t *testing.T) {
 			stream       *service.Stream
 			err          error
 		)
-		t.Log("Lauching component...")
+		t.Log("Launching component...")
 		{
 			cfg := `
 microsoft_sql_server_cdc:
@@ -157,7 +157,7 @@ microsoft_sql_server_cdc:
 			stream       *service.Stream
 			err          error
 		)
-		t.Log("Lauching component...")
+		t.Log("Launching component...")
 		{
 			cfg := `
 microsoft_sql_server_cdc:
@@ -263,7 +263,7 @@ func TestIntegration_MicrosoftSQLServerCDC_ConcurrentSnapshot(t *testing.T) {
 		stream       *service.Stream
 		err          error
 	)
-	t.Log("Lauching component...")
+	t.Log("Launching component...")
 	{
 		cfg := `
 microsoft_sql_server_cdc:
@@ -335,7 +335,7 @@ microsoft_sql_server_cdc:
 		outBatchesMu sync.Mutex
 	)
 
-	t.Log("Lauching component to stream initial data...")
+	t.Log("Launching component to stream initial data...")
 	{
 		require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
 			msgBytes, err := mb[0].AsBytes()

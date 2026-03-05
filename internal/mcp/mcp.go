@@ -48,7 +48,7 @@ func (g *gMux) HandleFunc(pattern string, handler func(http.ResponseWriter, *htt
 	g.m.Path(pattern).HandlerFunc(handler) // TODO: PathPrefix?
 }
 
-// Server runs an mcp server against a target directory, with an optiona base
+// Server runs an mcp server against a target directory, with an optional base
 // URL for an HTTP server.
 type Server struct {
 	base             *mcp.Server

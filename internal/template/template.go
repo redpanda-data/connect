@@ -52,7 +52,7 @@ func WithRenames(renames map[string]string) Options {
 	}
 }
 
-// CreateTemplate generates the embeded filesystem to the output directory replacing variables found in vars.
+// CreateTemplate generates the embedded filesystem to the output directory replacing variables found in vars.
 func CreateTemplate(tfs fs.ReadFileFS, outputDir string, options ...Options) error {
 	o := opts{
 		root:      ".",

@@ -21,7 +21,7 @@ type APIError struct {
 
 var _ error = &APIError{}
 
-// Error statisfies the Error interface.
+// Error satisfies the Error interface.
 func (e *APIError) Error() string {
 	msg := e.Message
 	if msg == "" {
