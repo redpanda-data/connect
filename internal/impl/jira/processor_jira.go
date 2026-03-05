@@ -22,16 +22,15 @@
 // Search API or related resource APIs.
 //
 // The jiraProcessor handles pagination, retries, and optional field expansion in
-// order to make working with Jira’s API more convenient inside message-oriented
+// order to make working with Jira's API more convenient inside message-oriented
 // workflows.
 package jira
 
 import (
 	"context"
 	"errors"
-	"net/http"
-	"net/url"
 
+	"github.com/redpanda-data/connect/v4/internal/httpclient"
 	"github.com/redpanda-data/connect/v4/internal/impl/jira/jirahttp"
 	"github.com/redpanda-data/connect/v4/internal/license"
 
@@ -47,7 +46,7 @@ type jiraProcessor struct {
 
 // newJiraProcessorConfigSpec creates a new Configuration specification for the Jira processor.
 func newJiraProcessorConfigSpec() *service.ConfigSpec {
-	return service.NewConfigSpec().
+	spec := service.NewConfigSpec().
 		Categories("Services").
 		Version("4.68.0").
 		Summary("Queries Jira resources and returns structured data").
@@ -77,7 +76,7 @@ pipeline:
 `).
 		Example(
 			"Full configuration with tuning",
-			"Complete configuration with pagination, timeout, and retry settings",
+			"Complete configuration with pagination and timeout settings",
 			`
 pipeline:
   processors:
@@ -86,11 +85,8 @@ pipeline:
         username: "${JIRA_USERNAME}"
         api_token: "${JIRA_API_TOKEN}"
         max_results_per_page: 200
-        request_timeout: "30s"
-        max_retries: 50
+        timeout: "30s"
 `).
-		Field(service.NewStringField("base_url").
-			Description("Jira instance base URL (e.g., https://your-domain.atlassian.net)")).
 		Field(service.NewStringField("username").
 			Description("Jira instance account username/email")).
 		Field(service.NewStringField("api_token").
@@ -98,13 +94,11 @@ pipeline:
 			Secret()).
 		Field(service.NewIntField("max_results_per_page").
 			Description("Maximum number of results to return per page when calling JIRA API").
-			Default(50)).
-		Field(service.NewDurationField("request_timeout").
-			Description("HTTP request timeout").
-			Default("30s")).
-		Field(service.NewIntField("max_retries").
-			Description("Maximum number of retries in case of 429 HTTP Status Code").
-			Default(10))
+			Default(50))
+
+	spec.Fields(httpclient.Fields("")...)
+
+	return spec
 }
 
 // newJiraProcessor initializes and returns a jiraProcessor instance based
@@ -116,41 +110,51 @@ func newJiraProcessor(conf *service.ParsedConfig, mgr *service.Resources) (*jira
 		return nil, err
 	}
 
-	baseURL, err := conf.FieldString("base_url")
+	httpCfg, err := httpclient.NewConfigFromParsed(conf)
 	if err != nil {
 		return nil, err
-	}
-
-	if _, err := url.ParseRequestURI(baseURL); err != nil {
-		return nil, errors.New("base_url is not a valid URL")
 	}
 
 	username, err := conf.FieldString("username")
 	if err != nil {
 		return nil, err
 	}
+	if username == "" {
+		return nil, errors.New("username must not be empty")
+	}
 
 	apiToken, err := conf.FieldString("api_token")
 	if err != nil {
 		return nil, err
 	}
-
-	timeout, err := conf.FieldDuration("request_timeout")
-	if err != nil {
-		return nil, err
+	if apiToken == "" {
+		return nil, errors.New("api_token must not be empty")
 	}
 
 	maxResults, err := conf.FieldInt("max_results_per_page")
 	if err != nil {
 		return nil, err
 	}
+	if maxResults <= 0 || maxResults > 5000 {
+		return nil, errors.New("max_results_per_page must be between 1 and 5000")
+	}
 
-	maxRetries, err := conf.FieldInt("max_retries")
+	// Wire Jira basic auth into the httpclient auth signer.
+	httpCfg.AuthSigner = httpclient.BasicAuthSigner(username, apiToken)
+
+	// Configure retry: retry on 429/5xx, drop on 401/403.
+	httpCfg.Retry = &httpclient.RetryConfig{
+		MaxRetries:    3,
+		RetryStatuses: []int{429, 502, 503, 504},
+		DropStatuses:  []int{401, 403},
+	}
+
+	httpCfg.MetricPrefix = "jira_http"
+
+	httpClient, err := httpclient.NewClient(httpCfg, mgr)
 	if err != nil {
 		return nil, err
 	}
-
-	httpClient := &http.Client{Timeout: timeout}
 
 	headerPolicy := &jirahttp.AuthHeaderPolicy{
 		HeaderName: "X-Seraph-LoginReason",
@@ -159,10 +163,7 @@ func newJiraProcessor(conf *service.ParsedConfig, mgr *service.Resources) (*jira
 		},
 	}
 
-	jiraHttp, err := jirahttp.NewClient(mgr.Logger(), baseURL, username, apiToken, maxResults, maxRetries, mgr.Metrics(), httpClient, headerPolicy)
-	if err != nil {
-		return nil, err
-	}
+	jiraHttp := jirahttp.NewClient(mgr.Logger(), httpCfg.BaseURL, maxResults, httpClient, headerPolicy)
 
 	return &jiraProcessor{
 		client: jiraHttp,
@@ -191,7 +192,9 @@ func (j *jiraProcessor) Process(ctx context.Context, msg *service.Message) (serv
 }
 
 // Close shuts down the Jira processor.
-func (*jiraProcessor) Close(context.Context) error { return nil }
+func (*jiraProcessor) Close(context.Context) error {
+	return nil
+}
 
 // init registers the Jira processor with Benthos, wiring its configuration spec and constructor.
 func init() {
