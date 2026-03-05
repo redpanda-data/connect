@@ -156,7 +156,7 @@ func NewSQLSelectProcessorFromConfig(conf *service.ParsedConfig, mgr *service.Re
 
 	s.builder = squirrel.Select(columns...).From(tableStr)
 	switch driverStr {
-	case "postgres", "clickhouse":
+	case "postgres", "pgx", "clickhouse":
 		s.builder = s.builder.PlaceholderFormat(squirrel.Dollar)
 	case "oracle", "gocosmos":
 		s.builder = s.builder.PlaceholderFormat(squirrel.Colon)
