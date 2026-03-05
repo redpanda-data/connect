@@ -931,6 +931,8 @@ func mapMessageColumn(v any, col schema.TableColumn) (any, error) {
 	switch col.Type {
 	case schema.TYPE_NUMBER:
 		switch n := v.(type) {
+		case int:
+			return int64(n), nil
 		case int8:
 			return int32(n), nil
 		case int16:
@@ -939,6 +941,8 @@ func mapMessageColumn(v any, col schema.TableColumn) (any, error) {
 			return n, nil
 		case int64:
 			return n, nil
+		case uint:
+			return int64(n), nil
 		case uint8:
 			return int32(n), nil
 		case uint16:
