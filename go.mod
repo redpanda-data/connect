@@ -117,7 +117,7 @@ require (
 	github.com/microcosm-cc/bluemonday v1.0.27
 	github.com/microsoft/go-mssqldb v1.9.3
 	github.com/microsoft/gocosmos v1.1.1
-	github.com/modelcontextprotocol/go-sdk v1.1.0
+	github.com/modelcontextprotocol/go-sdk v1.3.1
 	github.com/nats-io/nats.go v1.46.1
 	github.com/nats-io/nkeys v0.4.11
 	github.com/nats-io/stan.go v0.10.4
@@ -234,7 +234,7 @@ require (
 	github.com/certifi/gocertifi v0.0.0-20210507211836-431795d63e8d // indirect
 	github.com/clipperhouse/stringish v0.1.1 // indirect
 	github.com/clipperhouse/uax29/v2 v2.3.0 // indirect
-	github.com/cloudflare/circl v1.6.1 // indirect
+	github.com/cloudflare/circl v1.6.3 // indirect
 	github.com/cncf/xds/go v0.0.0-20251210132809-ee656c7534f5 // indirect
 	github.com/containerd/console v1.0.5 // indirect
 	github.com/containerd/errdefs v1.0.0 // indirect
@@ -253,7 +253,7 @@ require (
 	github.com/go-jose/go-jose/v3 v3.0.4 // indirect
 	github.com/go-quicktest/qt v1.101.1-0.20240301121107-c6c8733fa1e6 // indirect
 	github.com/goccy/go-yaml v1.17.1 // indirect
-	github.com/google/jsonschema-go v0.3.0 // indirect
+	github.com/google/jsonschema-go v0.4.2 // indirect
 	github.com/google/wire v0.7.0 // indirect
 	github.com/gookit/color v1.5.4 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
@@ -295,6 +295,7 @@ require (
 	github.com/pterm/pterm v0.12.82 // indirect
 	github.com/rs/zerolog v1.34.0 // indirect
 	github.com/samber/lo v1.51.0 // indirect
+	github.com/segmentio/encoding v0.5.3 // indirect
 	github.com/sergi/go-diff v1.4.0 // indirect
 	github.com/shirou/gopsutil/v4 v4.25.7 // indirect
 	github.com/skeema/knownhosts v1.3.1 // indirect
