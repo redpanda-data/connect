@@ -487,6 +487,24 @@ s.data[key] = val
 s.mu.Unlock()
 ```
 
+## Config Objects Over Functional Options
+
+Prefer Config structs over the functional options pattern. Config structs are explicit, inspectable, and straightforward. Functional options add indirection without meaningful benefit for this codebase.
+
+```go
+// Right
+type ClientConfig struct {
+	Timeout    time.Duration
+	MaxRetries int
+	BaseURL    string
+}
+
+func NewClient(cfg ClientConfig) *Client {
+
+// Wrong
+func NewClient(opts ...Option) *Client {
+```
+
 ## Configurable Time Parameters
 
 Every time-related value (timeouts, backoffs, intervals, retry delays) must be exposed as a YAML-configurable field. Do not hardcode durations.
