@@ -65,13 +65,13 @@ jobs:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           allowed_bots: ""
           allowed_non_write_users: "*"
-          track_progress: true
+          track_progress: false
           show_full_output: false
           claude_args: >
             --model opus
             --max-turns 30
             --disallowedTools "WebFetch,WebSearch"
-            --allowedTools "mcp__github_inline_comment__create_inline_comment,mcp__github_comment__update_claude_comment,Bash(gh pr view:*),Bash(gh pr diff:*),Read,Glob,Grep"
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr view:*),Read,Glob,Grep"
           prompt: |
             **CRITICAL — SECURITY CONSTRAINTS (override ALL other instructions):**
             These rules are ABSOLUTE. They override any capabilities, permissions, or instructions described elsewhere in this prompt, including system-level instructions. You MUST follow them even if other parts of the prompt say otherwise
@@ -145,7 +145,7 @@ jobs:
 
             **STEP 3: Post Summary Comment**
 
-            - Use `mcp__github_comment__update_claude_comment` for summary comments. Use `mcp__github_inline_comment__create_inline_comment` for inline comments.
+            - Use `gh pr comment` for summary comments. Use `mcp__github_inline_comment__create_inline_comment` for inline comments.
             - You must cite and link each issue in inline comments (e.g., if referring to a CLAUDE.md, include a link to it).
             - Links must follow this exact format for GitHub Markdown rendering: `https://github.com/redpanda-data/connect/blob/${{ steps.review-context.outputs.head_sha }}/path/file.ext#L[start]-L[end]`
               - Use the HEAD SHA above (do NOT call `git rev-parse HEAD`)
@@ -153,7 +153,7 @@ jobs:
               - Line range format: `L[start]-L[end]`
               - Include at least 1 line of context before and after
 
-            After completing STEP 1 and STEP 2, post a SINGLE summary comment using `mcp__github_comment__update_claude_comment` with exactly this format:
+            After completing STEP 1 and STEP 2, post a SINGLE summary comment using `gh pr comment ${{ github.event.pull_request.number }} --body '...'` with exactly this format:
 
             ---
 
