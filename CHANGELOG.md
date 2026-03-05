@@ -3,15 +3,16 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## 4.82.0 - TBD
+## 4.82.0 - 2026-03-05
 
 ### Added
 
-- Add configuration option to set client name for `redis` connections.
-- (Benthos) The `command` processor now emits the `exit_code` metadata field. (@mihaitodor)
-- The `postgres_cdc` input now adds schema metadata to consumed messages, this can be used for automatic schema conversion in processors such as `schema_registry_encode`. (@Jeffail)
-- New `iceberg` output, allows writing Iceberg data to REST catalogs in s3, gcs and adls. (@rockwotj)
-- The `microsoft_sql_server_cdc` input now adds schema metadata to consumed messages, this can be used for automatic schema conversion in processors such as `schema_registry_encode`. (@Jeffail)
+- redis: Add configuration option to set client name for `redis` connections. (@nhaberla)
+- benthos: The `command` processor now emits the `exit_code` metadata field. (@mihaitodor)
+- postgres_cdc: Input now adds schema metadata to consumed messages, this can be used for automatic schema conversion in processors such as `schema_registry_encode`. (@Jeffail)
+- iceberg: New output, allows writing Iceberg data to REST catalogs in s3, gcs and adls. (@rockwotj)
+- microsoft_sql_server_cdc: Input now adds schema metadata to consumed messages, this can be used for automatic schema conversion in processors such as `schema_registry_encode`. (@Jeffail)
+- otlp: Add oauth2 support and service account fallback to schemaregistry (@mmatczuk)
 
 ### Changed
 
@@ -23,7 +24,9 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - `test` command: Templates registered via the `-t` flag are now correctly available during test execution. (@Phantal)
-- (Benthos) Fixed a regression where input and output resources imported but unused were being initialized. (@Jeffail)
+- benthos: Fixed a regression where input and output resources imported but unused were being initialized. (@Jeffail)
+- redpanda/migrator: fix key scoping to prevent label collision (@mmatczuk)
+
 
 ## 4.81.0 - 2026-02-18
 
