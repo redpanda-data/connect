@@ -34,6 +34,30 @@ jobs:
             exit 1
           fi
 
+      - name: Prepare review context
+        id: review-context
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Pre-save diff to avoid Bash output overflow and cascading paginated reads
+          gh pr diff ${{ github.event.pull_request.number }} > /tmp/pr.diff
+
+          # Inject review guides into env so they appear directly in the prompt (no Read calls needed)
+          {
+            echo "REVIEW_GUIDES<<__REVIEW_GUIDES_EOF__"
+            echo "# Go Development Patterns"
+            echo ""
+            cat .claude/agents/godev.md
+            echo ""
+            echo "# Test Patterns"
+            echo ""
+            cat .claude/agents/tester.md
+            echo "__REVIEW_GUIDES_EOF__"
+          } >> "$GITHUB_ENV"
+
+          # Export HEAD SHA for GitHub link construction
+          echo "head_sha=${{ github.event.pull_request.head.sha }}" >> "$GITHUB_OUTPUT"
+
       - name: Run Claude Code Review
         id: claude-review
         uses: anthropics/claude-code-action@v1
@@ -64,11 +88,11 @@ jobs:
             
             **INIT: Setup**
             - Create a todo list before starting.
-            - Use gh CLI to fetch PR data (e.g., `gh pr view`, `gh pr diff`). Do not use web fetch.
-            - Use `gh pr diff <number>` as the primary review input. Do NOT read full source files unless the diff context is insufficient to evaluate an issue (e.g., you need surrounding code, imports, or pattern context across the file).
+            - The PR diff is pre-saved at `/tmp/pr.diff`. Use `Read /tmp/pr.diff` as the primary review input. Do NOT read full source files unless the diff context is insufficient to evaluate an issue (e.g., you need surrounding code, imports, or pattern context across the file).
             - Use `gh pr view <number> --json files` to list changed files if needed.
             - Do NOT use `git diff origin/main` — the checkout is shallow and `origin/main` is unavailable.
-            - Read `.claude/agents/godev.md` and `.claude/agents/tester.md` exactly once at the start for reference. Do not re-read them.
+            - Project Go patterns and test patterns are provided below in the **Reference: Project Patterns** section. Do NOT read `.claude/agents/godev.md` or `.claude/agents/tester.md`.
+            - The HEAD SHA for constructing GitHub links is: `${{ steps.review-context.outputs.head_sha }}`
 
             **STEP 1: Commit Policy Validation**
 
@@ -123,8 +147,8 @@ jobs:
 
             - Use `mcp__github_comment__update_claude_comment` for summary comments. Use `mcp__github_inline_comment__create_inline_comment` for inline comments.
             - You must cite and link each issue in inline comments (e.g., if referring to a CLAUDE.md, include a link to it).
-            - Links must follow this exact format for GitHub Markdown rendering: `https://github.com/redpanda-data/connect/blob/[full-sha]/path/file.ext#L[start]-L[end]`
-              - Full git SHA required (not abbreviated, not a command like `$(git rev-parse HEAD)`)
+            - Links must follow this exact format for GitHub Markdown rendering: `https://github.com/redpanda-data/connect/blob/${{ steps.review-context.outputs.head_sha }}/path/file.ext#L[start]-L[end]`
+              - Use the HEAD SHA above (do NOT call `git rev-parse HEAD`)
               - `#L` notation after filename
               - Line range format: `L[start]-L[end]`
               - Include at least 1 line of context before and after
@@ -142,3 +166,7 @@ jobs:
             <either "LGTM" if no code review issues, or a numbered list of violations>
 
             ---
+
+            **Reference: Project Patterns**
+
+            ${{ env.REVIEW_GUIDES }}
