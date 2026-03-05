@@ -151,7 +151,7 @@ func TestMyBloblangFn(t *testing.T) {
 For parse-time errors:
 
 ```go
-func TestMyBloblangFn_BadArgs(t *testing.T) {
+func TestMyBloblangFnBadArgs(t *testing.T) {
 	ex, err := bloblang.Parse(`root = my_function("invalid-arg")`)
 	require.ErrorContains(t, err, "invalid argument: invalid-arg")
 	require.Nil(t, ex)
@@ -574,6 +574,7 @@ t.Cleanup(func() {
 
 - Unit tests: `internal/impl/category/thing_test.go` next to the code they test.
 - Integration tests: `integration_test.go` or `{feature}_integration_test.go`.
+- Test function names use camelCase, not underscores. Write `TestMyProcessorBadArgs`, not `TestMyProcessor_BadArgs`.
 - Do not use build tags. Use `integration.CheckSkip(t)` at the start of every integration test function.
 - All test files need the correct license header (Apache 2.0 for community, RCL for enterprise). CI enforces this.
 - Do not use `tc := tc` in loop bodies. Go 1.22+ fixed loop variable scoping.
