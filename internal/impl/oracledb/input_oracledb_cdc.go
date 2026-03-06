@@ -67,10 +67,10 @@ Additionally, if ` + "`" + ociFieldStreamSnapshot + "`" + ` is set to true, then
 
 This input adds the following metadata fields to each message:
 
-- schema: Schema of the table that the message originated from
-- table: Name of the table that the message originated from
+- table_schema: Schema of the table that the message originated from.
+- table_name: Name of the table that the message originated from.
 - operation: Type of operation that generated the message: "read", "delete", "insert", or "update". "read" is from messages that are read in the initial snapshot phase.
-- scn: the System Change Number in Oracle
+- scn: the System Change Number in Oracle.
 
 == Permissions
 
