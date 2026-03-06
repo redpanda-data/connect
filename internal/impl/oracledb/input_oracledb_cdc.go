@@ -49,6 +49,7 @@ const (
 	ociFieldMiningInterval       = "mining_interval"
 	ociFieldMiningStrategy       = "strategy"
 	ociFieldMaxTransactionEvents = "max_transaction_events"
+	ociFieldIncludeLOBEvents     = "include_lob_events"
 )
 
 func init() {
@@ -110,6 +111,9 @@ When using the default Oracle based cache, the Connect user requires permission 
 		service.NewIntField(ociFieldMaxTransactionEvents).
 			Description("The maximum number of events that can be buffered for a single transaction. If a transaction exceeds this limit it is discarded and its events will not be emitted. Set to 0 to disable the limit.").
 			Default(logminer.DefaultMaxTransactionEvents),
+		service.NewBoolField(ociFieldIncludeLOBEvents).
+			Description("When set to false, events containing LOB values (CLOB, BLOB, NCLOB) are skipped. Useful for reducing noise and resources when LOB columns are not relevant to downstream consumers.").
+			Default(logminer.DefaultIncludeLOBEvents),
 	).Description("LogMiner configuration settings."),
 	).
 	Field(service.NewStringListField(ociFieldTablesInclude).
@@ -603,6 +607,9 @@ func parseLogMinerConfig(conf *service.ParsedConfig) (*logminer.Config, error) {
 		}
 		if cfg.MaxTransactionEvents < 0 {
 			return nil, fmt.Errorf("logminer.%s must be greater than or equal to 0, got %d", ociFieldMaxTransactionEvents, cfg.MaxTransactionEvents)
+		}
+		if cfg.IncludeLOBEvents, err = lmConf.FieldBool(ociFieldIncludeLOBEvents); err != nil {
+			return nil, err
 		}
 	}
 
