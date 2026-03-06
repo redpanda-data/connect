@@ -27,7 +27,7 @@ jobs:
         package:
           - ./internal/impl/amqp09
           - ./internal/impl/amqp1
-          - ./internal/impl/aws
+          - ./internal/impl/aws/...
           # - ./internal/impl/azure
           # - ./internal/impl/beanstalkd
           - ./internal/impl/cassandra
