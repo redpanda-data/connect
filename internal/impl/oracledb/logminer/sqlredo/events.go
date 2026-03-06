@@ -63,13 +63,13 @@ func (op *Operation) Scan(src any) error {
 	}
 
 	switch v := src.(type) {
-	case int:
+	case int64:
 		*op = operationFromCode(v)
 	case string:
 		if val, err := strconv.ParseInt(v, 10, 64); err != nil {
 			return fmt.Errorf("parsing operation code: %w", err)
 		} else {
-			*op = operationFromCode(int(val))
+			*op = operationFromCode(val)
 		}
 	default:
 		return fmt.Errorf("cannot scan %T to operation code", src)
@@ -78,7 +78,7 @@ func (op *Operation) Scan(src any) error {
 }
 
 // operationFromCode converts an operation code integer into an Operation type
-func operationFromCode(code int) Operation {
+func operationFromCode(code int64) Operation {
 	switch code {
 	case 1:
 		return OpInsert
