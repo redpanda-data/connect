@@ -38,8 +38,6 @@ type LogMiner struct {
 	// Pre-built query string for LogMiner contents
 	logMinerQuery string
 	txnCache      TransactionCache
-
-	currentLogFiles []*LogFile
 }
 
 // NewMiner creates a new instance of LogMiner responsible for paging through change events based on the tables param.
@@ -84,7 +82,7 @@ func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replicat
 		// logminer specific
 		logMinerQuery: logMinerQuery,
 		logCollector:  NewLogFileCollector(),
-		sessionMgr:    NewSessionManager(cfg),
+		sessionMgr:    NewSessionManager(cfg, logger),
 		txnCache:      NewInMemoryCache(cfg.MaxTransactionEvents, metrics, logger),
 		dmlParser:     sqlredo.NewParser(),
 	}
@@ -436,26 +434,22 @@ func (lm *LogMiner) prepareLogsAndStartSession(ctx context.Context, conn *sql.Co
 	}
 
 	// Collect log files that contain changes from current SCN
-	logFiles, err := lm.logCollector.GetLogs(ctx, conn, startSCN)
-	if err != nil {
+	var (
+		logFiles []*LogFile
+		err      error
+	)
+	if logFiles, err = lm.logCollector.GetLogs(ctx, conn, startSCN); err != nil {
 		return fmt.Errorf("collecting redo logs for logminer: %w", err)
 	}
 	lm.log.Debugf("Collected %d redo log file(s) for LogMiner", len(logFiles))
-	lm.currentLogFiles = logFiles
 
-	// Load redo logs into LogMiner
-	for i, file := range logFiles {
-		// if first log file, ensure we clear existing logs
-		isFirstFile := i == 0
-		if err := lm.sessionMgr.AddLogFile(ctx, conn, file.FileName, isFirstFile); err != nil {
-			return fmt.Errorf("loading log filename '%s' into logminer: %w", file.FileName, err)
-		}
-		lm.log.Debugf("Loaded redo log file %s into LogMiner", file.FileName)
+	if err := lm.sessionMgr.AddLogFile(ctx, conn, logFiles); err != nil {
+		return fmt.Errorf("loading %d log files into logminer: %w", len(logFiles), err)
 	}
-
 	if err := lm.sessionMgr.StartSession(ctx, conn, startSCN, endSCN, false); err != nil {
 		return fmt.Errorf("starting logminer session: %w", err)
 	}
+
 	lm.log.Debugf("Started LogMiner session from SCN %d to SCN %d", startSCN, endSCN)
 
 	return nil

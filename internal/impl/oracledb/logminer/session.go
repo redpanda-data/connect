@@ -13,6 +13,8 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 // SessionManager manages LogMiner sessions, such as loading
@@ -21,16 +23,12 @@ type SessionManager struct {
 	cfg    *Config
 	opts   []string
 	active bool
-}
-
-// IsActive returns true if a LogMiner session is currently active.
-func (sm *SessionManager) IsActive() bool {
-	return sm.active
+	log    *service.Logger
 }
 
 // NewSessionManager creates a new SessionManager with the specified configuration.
 // It initializes LogMiner options based on the mining strategy (e.g., DICT_FROM_ONLINE_CATALOG).
-func NewSessionManager(cfg *Config) *SessionManager {
+func NewSessionManager(cfg *Config, logger *service.Logger) *SessionManager {
 	options := []string{
 		"DBMS_LOGMNR.NO_ROWID_IN_STMT",
 	}
@@ -45,23 +43,25 @@ func NewSessionManager(cfg *Config) *SessionManager {
 	return &SessionManager{
 		cfg:  cfg,
 		opts: options,
+		log:  logger,
 	}
 }
 
-// AddLogFile adds a redo log file to the LogMiner session for mining.
-// If isFirst is true, it clears any previously added files before adding this one.
-// Otherwise, it adds the file to the existing list of files to be mined.
-func (SessionManager) AddLogFile(ctx context.Context, conn *sql.Conn, filename string, isFirst bool) error {
-	var opt string
-	if isFirst {
-		opt = "DBMS_LOGMNR.NEW" // Clears previous files and adds this one
-	} else {
-		opt = "DBMS_LOGMNR.ADDFILE" // Adds to existing list
-	}
+// AddLogFile adds one or more redo log files to the LogMiner session for mining, clearing
+// previously loaded files before adding new files to the list of files to be mined.
+func (sm *SessionManager) AddLogFile(ctx context.Context, conn *sql.Conn, files []*LogFile) error {
+	for i, f := range files {
+		opt := "DBMS_LOGMNR.ADDFILE"
+		if i == 0 {
+			opt = "DBMS_LOGMNR.NEW" // Clears previous files and adds this one
+		}
 
-	q := fmt.Sprintf("BEGIN DBMS_LOGMNR.ADD_LOGFILE(LOGFILENAME => :1, OPTIONS => %s); END;", opt)
-	if _, err := conn.ExecContext(ctx, q, filename); err != nil {
-		return fmt.Errorf("adding logminer log file '%s' with option '%s': %w", filename, opt, err)
+		q := fmt.Sprintf("BEGIN DBMS_LOGMNR.ADD_LOGFILE(LOGFILENAME => :1, OPTIONS => %s); END;", opt)
+		if _, err := conn.ExecContext(ctx, q, f.FileName); err != nil {
+			return fmt.Errorf("adding logminer log file '%s' with option '%s': %w", f.FileName, opt, err)
+		}
+
+		sm.log.Debugf("Loaded redo log file '%s' into LogMiner", f.FileName)
 	}
 
 	return nil
@@ -95,4 +95,9 @@ func (sm *SessionManager) EndSession(ctx context.Context, conn *sql.Conn) error 
 
 	sm.active = false
 	return nil
+}
+
+// IsActive returns true if a LogMiner session is currently active.
+func (sm *SessionManager) IsActive() bool {
+	return sm.active
 }
