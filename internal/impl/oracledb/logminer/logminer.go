@@ -12,14 +12,20 @@ import (
 	"context"
 	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
+
+	goora "github.com/sijms/go-ora/v2/network"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/impl/oracledb/logminer/sqlredo"
 	"github.com/redpanda-data/connect/v4/internal/impl/oracledb/replication"
 )
+
+// https://docs.oracle.com/en/error-help/db/ora-01291/
+var errCodeMissingLogFile = 1291
 
 // LogMiner tracks and streams all change events from the configured change
 // tables tracked in tables.
@@ -111,7 +117,9 @@ func (lm *LogMiner) ReadChanges(ctx context.Context, startPos replication.SCN) e
 	defer func() {
 		if lm.sessionMgr.IsActive() {
 			if err := lm.sessionMgr.EndSession(ctx, conn); err != nil {
-				lm.log.Errorf("ending LogMiner session on exit: %v", err)
+				if ctx.Err() == nil && !errors.Is(err, context.Canceled) {
+					lm.log.Errorf("ending LogMiner session on exit: %v", err)
+				}
 			}
 		}
 	}()
@@ -181,8 +189,8 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 	// after session start invisible. Per-window restart with explicit endSCN ensures all
 	// events in [currentSCN, endSCN] are visible.
 	if err := lm.prepareLogsAndStartSession(ctx, conn, lm.currentSCN, endSCN); err != nil {
-		// Check for ORA-01291: missing log file error and provide helpful message
-		if strings.Contains(err.Error(), "ORA-01291") {
+		var oraErr *goora.OracleError
+		if errors.As(err, &oraErr) && oraErr.ErrCode == errCodeMissingLogFile {
 			//nolint:staticcheck
 			return false, fmt.Errorf("preparing logs and starting session at position %d: %w\n\n"+
 				"This error indicates archived redo logs have been purged before LogMiner could process them.\n"+
@@ -267,6 +275,9 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 }
 
 func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, startSCN, endSCN uint64) ([]*sqlredo.RedoEvent, error) {
+	if len(lm.tables) == 0 {
+		return nil, nil
+	}
 	// Use the pre-built query from initialization
 	rows, err := conn.QueryContext(ctx, lm.logMinerQuery, startSCN, endSCN)
 	if err != nil {

@@ -431,7 +431,7 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (err error) {
 			}
 			return nil
 		})
-		if err := wg.Wait(); err != nil && !errors.Is(err, context.Canceled) {
+		if err := wg.Wait(); err != nil && softCtx.Err() == nil && !errors.Is(err, context.Canceled) {
 			o.log.Errorf("Error during Oracle CDC Component: %s", err)
 		} else {
 			o.log.Info("Successfully shutdown Oracle CDC Component")
