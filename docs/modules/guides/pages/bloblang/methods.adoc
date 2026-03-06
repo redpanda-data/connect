@@ -3868,7 +3868,7 @@ The following algorithms require a key, which is specified as a second argument:
 
 ==== Parameters
 
-*`algorithm`* &lt;string&gt; The hashing algorithm to use.  
+*`algorithm`* &lt;string&gt; The hasing algorithm to use.  
 *`key`* &lt;(optional) string&gt; An optional key to use.  
 *`polynomial`* &lt;string, default `"IEEE"`&gt; An optional polynomial key to use when selecting the `crc32` algorithm, otherwise ignored. Options are `IEEE` (default), `Castagnoli` and `Koopman`  
 
