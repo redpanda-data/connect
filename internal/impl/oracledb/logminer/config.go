@@ -25,8 +25,6 @@ var (
 	// per transaction before they're discarded.
 	// Used to prevent large events resulting in memory exhaustion.
 	DefaultMaxTransactionEvents = 0
-	// DefaultIncludeLOBEvents controls whether LOB (CLOB, BLOB, NCLOB) events are included.
-	DefaultIncludeLOBEvents = false
 )
 
 // MiningStrategy defines how LogMiner accesses dictionary information
@@ -44,7 +42,6 @@ type Config struct {
 	MiningInterval        time.Duration
 	MiningStrategy        MiningStrategy
 	MaxTransactionEvents  int
-	IncludeLOBEvents      bool
 }
 
 // NewDefaultConfig returns a Config with default values

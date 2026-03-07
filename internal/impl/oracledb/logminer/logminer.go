@@ -245,12 +245,6 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 			return nil
 		}
 
-		if !lm.cfg.IncludeLOBEvents && isLOBEvent(redoEvent.SQLRedo.String) {
-			lm.log.Debugf("Skipping LOB event (operation=%s, table=%s.%s, scn=%d, txn=%s)",
-				redoEvent.Operation, redoEvent.SchemaName.String, redoEvent.TableName.String, redoEvent.SCN, redoEvent.TransactionID)
-			return nil
-		}
-
 		// Parse sql insert/update/delete sql statements into key/value object
 		event, err := lm.dmlParser.RedoEventToDMLEvent(redoEvent)
 		if err != nil {
@@ -471,17 +465,6 @@ func (lm *LogMiner) prepareLogsAndStartSession(ctx context.Context, conn *sql.Co
 	lm.log.Debugf("Started LogMiner session from SCN %d to SCN %d", startSCN, endSCN)
 
 	return nil
-}
-
-// isLOBEvent reports whether a SQL_REDO string contains LOB markers.
-// Oracle writes LOB values as EMPTY_CLOB()/EMPTY_BLOB() placeholders (for out-of-line storage)
-// or TO_CLOB(...)/TO_BLOB(...)/TO_NCLOB(...) literals (for inline values).
-func isLOBEvent(sqlRedo string) bool {
-	return strings.Contains(sqlRedo, "EMPTY_CLOB()") ||
-		strings.Contains(sqlRedo, "EMPTY_BLOB()") ||
-		strings.Contains(sqlRedo, "TO_CLOB(") ||
-		strings.Contains(sqlRedo, "TO_BLOB(") ||
-		strings.Contains(sqlRedo, "TO_NCLOB(")
 }
 
 func toMessageEvent(dml *sqlredo.DMLEvent, scn uint64) *replication.MessageEvent {
