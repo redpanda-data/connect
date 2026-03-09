@@ -1,6 +1,6 @@
 module github.com/redpanda-data/connect/v4
 
-go 1.26
+go 1.26.1
 
 replace github.com/99designs/keyring => github.com/Jeffail/keyring v1.2.3
 
@@ -198,7 +198,7 @@ require (
 	go.starlark.net v0.0.0-20250318223901-d9371fef63fe
 	go.uber.org/multierr v1.11.0
 	golang.org/x/crypto v0.48.0
-	golang.org/x/net v0.50.0
+	golang.org/x/net v0.51.0
 	golang.org/x/sync v0.19.0
 	golang.org/x/text v0.34.0
 	google.golang.org/api v0.267.0
