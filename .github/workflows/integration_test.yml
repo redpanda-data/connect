@@ -118,13 +118,13 @@ jobs:
 
       - name: Checkout PR branch
         if: ${{ github.event_name == 'issue_comment' }}
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           ref: refs/pull/${{ github.event.issue.number }}/merge
 
       - name: Checkout code
         if: ${{ github.event_name != 'issue_comment' }}
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Install Go
         uses: actions/setup-go@v6
