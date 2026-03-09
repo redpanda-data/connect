@@ -29,7 +29,7 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
-func TestIntegration_OracleDBCDC_SnapshotAndStreaming(t *testing.T) {
+func TestIntegrationOracleDBCDCSnapshotAndStreaming(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
@@ -137,7 +137,7 @@ oracledb_cdc:
 	require.NoError(t, stream.StopWithin(time.Second*10))
 }
 
-func TestIntegration_OracleDBCDC_ConcurrentSnapshot(t *testing.T) {
+func TestIntegrationOracleDBCDCConcurrentSnapshot(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
@@ -217,7 +217,7 @@ oracledb_cdc:
 	require.NoError(t, stream.StopWithin(time.Second*10))
 }
 
-func TestIntegration_OracleDBCDC_ResumesFromCheckpoint(t *testing.T) {
+func TestIntegrationOracleDBCDCResumesFromCheckpoint(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
@@ -344,7 +344,7 @@ oracledb_cdc:
 	}
 }
 
-func TestIntegration_OracleDBCDC_Streaming(t *testing.T) {
+func TestIntegrationOracleDBCDCStreaming(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
@@ -476,7 +476,7 @@ oracledb_cdc:
 	require.NoError(t, stream.StopWithin(time.Second*10))
 }
 
-func TestIntegration_OracleDBCDC_SnapshotAndStreaming_AllTypes(t *testing.T) {
+func TestIntegrationOracleDBCDCSnapshotAndStreamingAllTypes(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
