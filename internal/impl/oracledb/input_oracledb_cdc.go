@@ -390,7 +390,6 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (err error) {
 
 		// snapshot if no SCN exists then store checkpoint once complete
 		if snapshotter != nil {
-			defer snapshotter.Close()
 			if maxSCN, err = o.processSnapshot(softCtx, snapshotter); err != nil {
 				if o.stopSig.IsHardStopSignalled() {
 					o.log.Errorf("Shutting down snapshotting process: %s", err)
