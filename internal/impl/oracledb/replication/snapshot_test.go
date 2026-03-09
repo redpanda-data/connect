@@ -25,7 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestIntegration_Snapshot(t *testing.T) {
+func TestIntegrationSnapshot(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 

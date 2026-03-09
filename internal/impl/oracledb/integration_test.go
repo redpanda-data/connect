@@ -423,11 +423,11 @@ oracledb_cdc:
 		t.Helper()
 		results := make(map[string][]*service.Message)
 		for i, msg := range msgs {
-			schema, ok := msg.MetaGet("schema")
-			require.Truef(t, ok, "message %d missing 'schema' metadata", i)
+			schema, ok := msg.MetaGet("table_schema")
+			require.Truef(t, ok, "message %d missing 'table_schema' metadata", i)
 
-			table, ok := msg.MetaGet("table")
-			require.Truef(t, ok, "message %d missing 'table' metadata", i)
+			table, ok := msg.MetaGet("table_name")
+			require.Truef(t, ok, "message %d missing 'table_name' metadata", i)
 
 			key := fmt.Sprintf("%s.%s", schema, table)
 			results[key] = append(results[key], msg)
