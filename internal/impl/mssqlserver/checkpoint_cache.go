@@ -81,6 +81,11 @@ func newCheckpointCache(
 		return nil, fmt.Errorf("connecting to microsoft sql server for caching checkpoints: %w", err)
 	}
 
+	if err := createUpsertStoredProc(ctx, db, cacheTable); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("creating checkpoint cache write stored procedure: %w", err)
+	}
+
 	if created, err := createCacheTable(ctx, db, cacheTable); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("creating checkpoint cache table '%s': %w", cacheTable.String(), err)
@@ -88,11 +93,6 @@ func newCheckpointCache(
 		log.Infof("Created checkpoint cache table '%s'", cacheTable.String())
 	} else {
 		log.Infof("Found existing checkpoint cache table '%s'", cacheTable.String())
-	}
-
-	if err := createUpsertStoredProc(ctx, db, cacheTable); err != nil {
-		_ = db.Close()
-		return nil, fmt.Errorf("creating checkpoint cache write stored procedure: %w", err)
 	}
 
 	// create a prepared statement for calling the stored proc (created in same schema as cache table) during Set operations to remove avoidable overhead
