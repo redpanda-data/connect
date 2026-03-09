@@ -18,6 +18,7 @@ import (
 
 	"github.com/Jeffail/checkpoint"
 	"github.com/Jeffail/shutdown"
+	_ "github.com/sijms/go-ora/v2"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
