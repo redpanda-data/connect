@@ -304,6 +304,9 @@ type Client struct {
 
 	// SObjects that returned 400 during data fetch — never retry them
 	unsupportedSObjects map[string]struct{}
+
+	// SObjects whose REST query URL is too large — fetch via GraphQL instead
+	graphqlFallbackObjects map[string]struct{}
 }
 
 func (s *Client) getBearerToken() string {
@@ -329,7 +332,8 @@ func NewClient(orgURL, clientID, clientSecret, apiVersion string, maxRetries, qu
 		},
 		httpClient:          metrics.NewInstrumentedClient(m, "salesforce_http", httpClient),
 		queryBatchSize:      queryBatchSize,
-		unsupportedSObjects: make(map[string]struct{}),
+		unsupportedSObjects:    make(map[string]struct{}),
+		graphqlFallbackObjects: make(map[string]struct{}),
 	}, nil
 }
 
@@ -531,11 +535,12 @@ func (s *Client) GetNextBatchParallel(ctx context.Context, cursor Cursor, parall
 	}
 
 	type slotResult struct {
-		slotIdx int
-		records []json.RawMessage
-		nextURL string
-		done    bool
-		skipped bool
+		slotIdx       int
+		records       []json.RawMessage
+		nextURL       string
+		graphqlCursor string
+		done          bool
+		skipped       bool
 	}
 
 	results := make([]slotResult, len(cursor.Slots))
@@ -549,6 +554,55 @@ func (s *Client) GetNextBatchParallel(ctx context.Context, cursor Cursor, parall
 			// Skip permanently unsupported SObjects
 			if _, bad := s.unsupportedSObjects[slot.SObjectName]; bad {
 				results[i] = slotResult{slotIdx: i, done: true, skipped: true}
+				return
+			}
+
+			// Use GraphQL for SObjects whose REST URL is too large
+			if _, useGraphQL := s.graphqlFallbackObjects[slot.SObjectName]; useGraphQL {
+				if slot.SObjectIndex >= len(sobjectList) {
+					results[i] = slotResult{slotIdx: i, done: true, skipped: true}
+					return
+				}
+				gqlQuery := buildSObjectGraphQLQuery(slot.SObjectName, sobjectList[slot.SObjectIndex].Fields, slot.GraphQLCursor)
+				raw, err := s.GraphQL(ctx, gqlQuery)
+				if err != nil {
+					s.unsupportedSObjects[slot.SObjectName] = struct{}{}
+					s.log.Warnf("Skipping SObject %s permanently: GraphQL fallback failed: %v", slot.SObjectName, err)
+					results[i] = slotResult{slotIdx: i, done: true, skipped: true}
+					return
+				}
+				var result map[string]json.RawMessage
+				if err := json.Unmarshal(raw, &result); err != nil {
+					s.unsupportedSObjects[slot.SObjectName] = struct{}{}
+					s.log.Warnf("Skipping SObject %s permanently: failed to parse GraphQL response: %v", slot.SObjectName, err)
+					results[i] = slotResult{slotIdx: i, done: true, skipped: true}
+					return
+				}
+				edges, pageInfo, found := findGraphQLEdges(result)
+				if !found {
+					s.unsupportedSObjects[slot.SObjectName] = struct{}{}
+					s.log.Warnf("Skipping SObject %s permanently: no edges in GraphQL response", slot.SObjectName)
+					results[i] = slotResult{slotIdx: i, done: true, skipped: true}
+					return
+				}
+				var records []json.RawMessage
+				for _, edge := range edges {
+					var e GraphQLEdge
+					if err := json.Unmarshal(edge, &e); err != nil {
+						continue
+					}
+					records = append(records, e.Node)
+				}
+				var nextCursor string
+				if pageInfo.HasNextPage {
+					nextCursor = pageInfo.EndCursor
+				}
+				results[i] = slotResult{
+					slotIdx:       i,
+					records:       records,
+					graphqlCursor: nextCursor,
+					done:          !pageInfo.HasNextPage,
+				}
 				return
 			}
 
@@ -567,10 +621,10 @@ func (s *Client) GetNextBatchParallel(ctx context.Context, cursor Cursor, parall
 				raw, err = s.GetSObjectData(ctx, soql)
 				if err != nil {
 					var httpErr *HTTPError
-					if errors.As(err, &httpErr) && httpErr.StatusCode == http.StatusBadRequest {
+					if errors.As(err, &httpErr) && (httpErr.StatusCode == http.StatusBadRequest || httpErr.StatusCode == http.StatusForbidden) {
 						s.unsupportedSObjects[slot.SObjectName] = struct{}{}
-						s.log.Warnf("Skipping SObject %s permanently: query not supported (400): query=%q reason=%s",
-							slot.SObjectName, soql, httpErr.Body)
+						s.log.Warnf("Skipping SObject %s permanently: query not supported (%d): query=%q reason=%s",
+							slot.SObjectName, httpErr.StatusCode, soql, httpErr.Body)
 						results[i] = slotResult{slotIdx: i, done: true, skipped: true}
 						return
 					}
@@ -581,9 +635,9 @@ func (s *Client) GetNextBatchParallel(ctx context.Context, cursor Cursor, parall
 						return
 					}
 					if strings.Contains(err.Error(), "request header list") {
-						s.unsupportedSObjects[slot.SObjectName] = struct{}{}
-						s.log.Warnf("Skipping SObject %s permanently: query URL too large (too many fields)", slot.SObjectName)
-						results[i] = slotResult{slotIdx: i, done: true, skipped: true}
+						s.graphqlFallbackObjects[slot.SObjectName] = struct{}{}
+						s.log.Warnf("SObject %s REST URL too large, will retry via GraphQL", slot.SObjectName)
+						results[i] = slotResult{slotIdx: i} // keep slot, retry via GraphQL next trigger
 						return
 					}
 					s.log.Errorf("Failed to fetch SObject %s: %v", slot.SObjectName, err)
@@ -624,11 +678,12 @@ func (s *Client) GetNextBatchParallel(ctx context.Context, cursor Cursor, parall
 		}
 
 		if !res.done {
-			// SObject has more pages — update NextURL and keep slot
+			// SObject has more pages — update pagination state and keep slot
 			newSlots = append(newSlots, ParallelSlot{
-				SObjectIndex: slot.SObjectIndex,
-				SObjectName:  slot.SObjectName,
-				NextURL:      res.nextURL,
+				SObjectIndex:  slot.SObjectIndex,
+				SObjectName:   slot.SObjectName,
+				NextURL:       res.nextURL,
+				GraphQLCursor: res.graphqlCursor,
 			})
 		} else {
 			// Slot is done — assign next available SObject if any
@@ -834,4 +889,23 @@ func extractFieldNames(describeJSON []byte) ([]string, error) {
 func buildSOQL(objectName string, fields []string) string {
 	fieldList := strings.Join(fields, ", ")
 	return fmt.Sprintf("SELECT %s FROM %s", fieldList, objectName)
+}
+
+// buildSObjectGraphQLQuery constructs a Salesforce GraphQL query for a given SObject.
+// All fields are wrapped in { value } as required by the Salesforce UI API GraphQL format.
+// When cursor is non-empty, after: "cursor" pagination is injected.
+func buildSObjectGraphQLQuery(objectName string, fields []string, cursor string) string {
+	fieldLines := make([]string, 0, len(fields))
+	for _, f := range fields {
+		fieldLines = append(fieldLines, f+" { value }")
+	}
+	fieldSelection := strings.Join(fieldLines, "\n            ")
+
+	args := fmt.Sprintf("first: %d", 2000)
+	if cursor != "" {
+		args += fmt.Sprintf(`, after: "%s"`, cursor)
+	}
+
+	return fmt.Sprintf(`{ uiapi { query { %s(%s) { edges { node { %s } } pageInfo { hasNextPage endCursor } } } } }`,
+		objectName, args, fieldSelection)
 }

@@ -56,9 +56,10 @@ type DescribeResult struct {
 
 // ParallelSlot tracks the fetch state for one parallel worker slot.
 type ParallelSlot struct {
-	SObjectIndex int    `json:"sobject_index"`
-	SObjectName  string `json:"sobject_name"`
-	NextURL      string `json:"next_url"`
+	SObjectIndex  int    `json:"sobject_index"`
+	SObjectName   string `json:"sobject_name"`
+	NextURL       string `json:"next_url"`
+	GraphQLCursor string `json:"graphql_cursor,omitempty"`
 }
 
 // QueryResult of the salesforce search query
