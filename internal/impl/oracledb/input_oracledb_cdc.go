@@ -57,7 +57,7 @@ func init() {
 
 var oracleDBStreamConfigSpec = service.NewConfigSpec().
 	Categories("Services").
-	Version("0.0.1").
+	Version("4.83.0").
 	Summary("Enables Change Data Capture by consuming from OracleDB.").
 	Description(`Streams changes from an Oracle database for Change Data Capture (CDC).
 Additionally, if ` + "`" + ociFieldStreamSnapshot + "`" + ` is set to true, then the existing data in the database is also streamed too.
