@@ -96,7 +96,7 @@ pipeline:
 			Description("Maximum number of results to return per page when calling JIRA API").
 			Default(50))
 
-	for _, f := range httpclient.Fields() {
+	for _, f := range httpclient.Fields("") {
 		spec = spec.Field(f)
 	}
 
