@@ -3,14 +3,16 @@
 package notion
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"strconv"
+	"io"
+	"net/http"
+	"net/url"
+	"strings"
 	"sync"
 
-	"github.com/go-faster/errors"
-	"github.com/ogen-go/ogen/validate"
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
 
@@ -19,18 +21,11 @@ import (
 	v1 "github.com/redpanda-data/connect/v4/procgen/notion/api/v1"
 )
 
-// securitySource implements v1.SecuritySource.
-type securitySource struct {
-	token string
-}
-
-func (s *securitySource) BearerAuth(_ context.Context, _ v1.OperationName) (v1.BearerAuth, error) {
-	return v1.BearerAuth{Token: s.token}, nil
-}
-
 const (
-	npFieldAPIKey        = "api_key"
-	npFieldNotionVersion = "notion_version"
+	npFieldAPIKey          = "api_key"
+	npFieldNotionVersion   = "notion_version"
+	npFieldRequestMapping  = "request_mapping"
+	npFieldResponseMapping = "response_mapping"
 )
 
 func sharedConfigFields() []*service.ConfigField {
@@ -46,17 +41,19 @@ func sharedConfigFields() []*service.ConfigField {
 }
 
 type baseProcessor struct {
-	client        *v1.Client
-	notionVersion string
-	mapping       *bloblang.Executor
-	log           *service.Logger
+	httpClient      *http.Client
+	baseURL         string
+	apiKey          string
+	notionVersion   string
+	requestMapping  *bloblang.Executor
+	responseMapping *bloblang.Executor
+	log             *service.Logger
 }
 
 func baseProcessorFromParsed(conf *service.ParsedConfig, mgr *service.Resources) (p baseProcessor, err error) {
 	p.log = mgr.Logger()
 
-	apiKey, err := conf.FieldString(npFieldAPIKey)
-	if err != nil {
+	if p.apiKey, err = conf.FieldString(npFieldAPIKey); err != nil {
 		return p, err
 	}
 	if p.notionVersion, err = conf.FieldString(npFieldNotionVersion); err != nil {
@@ -69,16 +66,18 @@ func baseProcessorFromParsed(conf *service.ParsedConfig, mgr *service.Resources)
 	}
 	httpCfg.MetricPrefix = "notion_http"
 
-	httpClient, err := httpclient.NewClient(httpCfg, mgr)
-	if err != nil {
+	if p.httpClient, err = httpclient.NewClient(httpCfg, mgr); err != nil {
 		return p, fmt.Errorf("creating HTTP client: %w", err)
 	}
+	p.baseURL = strings.TrimRight(httpCfg.BaseURL, "/")
 
-	if p.client, err = v1.NewClient(httpCfg.BaseURL, &securitySource{token: apiKey}, v1.WithClient(httpClient)); err != nil {
-		return p, fmt.Errorf("creating Notion client: %w", err)
+	if conf.Contains(npFieldRequestMapping) {
+		if p.requestMapping, err = conf.FieldBloblang(npFieldRequestMapping); err != nil {
+			return p, err
+		}
 	}
-	if conf.Contains("mapping") {
-		if p.mapping, err = conf.FieldBloblang("mapping"); err != nil {
+	if conf.Contains(npFieldResponseMapping) {
+		if p.responseMapping, err = conf.FieldBloblang(npFieldResponseMapping); err != nil {
 			return p, err
 		}
 	}
@@ -88,25 +87,15 @@ func baseProcessorFromParsed(conf *service.ParsedConfig, mgr *service.Resources)
 
 func (p *baseProcessor) Close(context.Context) error { return nil }
 
-// handleAPIError checks for HTTP status errors and sets metadata.
-// On HTTP errors, sets status code metadata on the message and returns a
-// wrapped error. On other errors, returns a generic request failure.
-func handleAPIError(msg *service.Message, err error) error {
-	if unexpectedStatus, ok := errors.Into[*validate.UnexpectedStatusCodeError](err); ok {
-		msg.MetaSetMut("http_status_code", unexpectedStatus.StatusCode)
-		return fmt.Errorf("Notion API error (status %d): %w", unexpectedStatus.StatusCode, err)
+// headerMap converts http.Header to a simple string map (first value per key).
+func headerMap(h http.Header) map[string]string {
+	m := make(map[string]string, len(h))
+	for k, v := range h {
+		if len(v) > 0 {
+			m[k] = v[0]
+		}
 	}
-	return fmt.Errorf("Notion API request failed: %w", err)
-}
-
-// marshalResponse serializes the typed response to JSON and sets it on the message.
-func marshalResponse(msg *service.Message, resp any) error {
-	b, err := json.Marshal(resp)
-	if err != nil {
-		return fmt.Errorf("marshaling response: %w", err)
-	}
-	msg.SetBytes(b)
-	return nil
+	return m
 }
 
 // V1BlocksIDChildrenGet processor — get /v1/blocks/{id}/children
@@ -124,6 +113,9 @@ func v1BlocksIDChildrenGetConfig() *service.ConfigSpec {
 		Categories("Services", "Notion").
 		Summary("Retrieve block children `GET /v1/blocks/{id}/children`").
 		Fields(sharedConfigFields()...).Fields(
+		service.NewBloblangField(npFieldResponseMapping).
+			Optional().
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
 		service.NewInterpolatedStringField("id").
 			Description(""),
 		service.NewInterpolatedStringField("page_size").
@@ -177,32 +169,95 @@ func (p *v1BlocksIDChildrenGetProcessor) ProcessBatch(ctx context.Context, batch
 
 func (p *v1BlocksIDChildrenGetProcessor) processV1BlocksIDChildrenGet(ctx context.Context, idx int, batch service.MessageBatch) error {
 	msg := batch[idx]
-	params := v1.V1BlocksIDChildrenGetParams{
-		NotionVersion: v1.NewOptString(p.notionVersion),
-	}
+
+	// Save original message content for response merge.
+	originalStructured, _ := msg.AsStructured()
+
+	// Build URL.
+	rawURL := p.baseURL + "/v1/blocks/{id}/children"
 	{
 		v, err := batch.TryInterpolatedString(idx, p.id)
 		if err != nil {
 			return fmt.Errorf("interpolating id: %w", err)
 		}
-		params.ID = v
+		rawURL = strings.Replace(rawURL, "{id}", url.PathEscape(v), 1)
 	}
+
+	// Build query parameters.
+	query := make(url.Values)
 	if p.pageSize != nil {
 		v, err := batch.TryInterpolatedString(idx, p.pageSize)
 		if err != nil {
 			return fmt.Errorf("interpolating page_size: %w", err)
 		}
-		intVal, err := strconv.Atoi(v)
-		if err != nil {
-			return fmt.Errorf("page_size must be integer: %w", err)
-		}
-		params.PageSize = v1.NewOptInt(intVal)
+		query.Set("page_size", v)
 	}
-	res, err := p.client.V1BlocksIDChildrenGet(ctx, params)
+	if len(query) > 0 {
+		rawURL += "?" + query.Encode()
+	}
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", rawURL, nil)
 	if err != nil {
-		return handleAPIError(msg, err)
+		return fmt.Errorf("creating HTTP request: %w", err)
 	}
-	return marshalResponse(msg, &res)
+
+	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
+	httpReq.Header.Set("Notion-Version", p.notionVersion)
+
+	resp, err := p.httpClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("Notion API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("reading response body: %w", err)
+	}
+
+	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
+	var body any
+	if len(respBody) > 0 {
+		var jsonBody any
+		if json.Unmarshal(respBody, &jsonBody) == nil {
+			body = jsonBody
+		} else {
+			body = string(respBody)
+		}
+	}
+
+	envelope := map[string]any{
+		"v1BlocksIDChildrenGetResponse": map[string]any{
+			"status_code": resp.StatusCode,
+			"headers":     headerMap(resp.Header),
+			"body":        body,
+		},
+	}
+
+	// Merge with original message.
+	if originalMap, ok := originalStructured.(map[string]any); ok {
+		for k, v := range envelope {
+			originalMap[k] = v
+		}
+		envelope = originalMap
+	}
+
+	// Apply response mapping.
+	if p.responseMapping != nil {
+		mapped, mapErr := p.responseMapping.Query(envelope)
+		if mapErr != nil {
+			return fmt.Errorf("executing response_mapping: %w", mapErr)
+		}
+		msg.SetStructured(mapped)
+	} else {
+		msg.SetStructured(envelope)
+	}
+
+	if resp.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", resp.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	}
+
+	return nil
 }
 
 // V1BlocksIDChildrenPatch processor — patch /v1/blocks/{id}/children
@@ -220,9 +275,12 @@ func v1BlocksIDChildrenPatchConfig() *service.ConfigSpec {
 		Categories("Services", "Notion").
 		Summary("Append block children `PATCH /v1/blocks/{id}/children`").
 		Fields(sharedConfigFields()...).Fields(
-		service.NewBloblangField("mapping").
+		service.NewBloblangField(npFieldRequestMapping).
 			Optional().
-			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to messages before unmarshaling into the request body."),
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to messages before sending the request body."),
+		service.NewBloblangField(npFieldResponseMapping).
+			Optional().
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
 		service.NewInterpolatedStringField("id").
 			Description(""),
 	)
@@ -267,24 +325,29 @@ func (p *v1BlocksIDChildrenPatchProcessor) ProcessBatch(ctx context.Context, bat
 
 func (p *v1BlocksIDChildrenPatchProcessor) processV1BlocksIDChildrenPatch(ctx context.Context, idx int, batch service.MessageBatch) error {
 	msg := batch[idx]
-	params := v1.V1BlocksIDChildrenPatchParams{
-		NotionVersion: v1.NewOptString(p.notionVersion),
-	}
+
+	// Save original message content for response merge.
+	originalStructured, _ := msg.AsStructured()
+
+	// Build URL.
+	rawURL := p.baseURL + "/v1/blocks/{id}/children"
 	{
 		v, err := batch.TryInterpolatedString(idx, p.id)
 		if err != nil {
 			return fmt.Errorf("interpolating id: %w", err)
 		}
-		params.ID = v
+		rawURL = strings.Replace(rawURL, "{id}", url.PathEscape(v), 1)
 	}
-	if p.mapping != nil {
+
+	// Apply request mapping and validate request body.
+	if p.requestMapping != nil {
 		structured, err := msg.AsStructured()
 		if err != nil {
-			return fmt.Errorf("parsing message for mapping: %w", err)
+			return fmt.Errorf("parsing message for request_mapping: %w", err)
 		}
-		mapped, err := p.mapping.Query(structured)
+		mapped, err := p.requestMapping.Query(structured)
 		if err != nil {
-			return fmt.Errorf("executing mapping: %w", err)
+			return fmt.Errorf("executing request_mapping: %w", err)
 		}
 		msg.SetStructured(mapped)
 	}
@@ -294,19 +357,83 @@ func (p *v1BlocksIDChildrenPatchProcessor) processV1BlocksIDChildrenPatch(ctx co
 		return fmt.Errorf("reading message body: %w", err)
 	}
 
-	var req v1.AppendBlockChildrenRequest
-	if err := req.UnmarshalJSON(b); err != nil {
+	var reqBody v1.AppendBlockChildrenRequest
+	if err := reqBody.UnmarshalJSON(b); err != nil {
 		return fmt.Errorf("unmarshaling request body: %w", err)
 	}
-	if err := req.Validate(); err != nil {
+	if err := reqBody.Validate(); err != nil {
 		return fmt.Errorf("validating request body: %w", err)
 	}
 
-	res, err := p.client.V1BlocksIDChildrenPatch(ctx, &req, params)
+	reqBytes, err := reqBody.MarshalJSON()
 	if err != nil {
-		return handleAPIError(msg, err)
+		return fmt.Errorf("marshaling request body: %w", err)
 	}
-	return marshalResponse(msg, &res)
+
+	httpReq, err := http.NewRequestWithContext(ctx, "PATCH", rawURL, bytes.NewReader(reqBytes))
+	if err != nil {
+		return fmt.Errorf("creating HTTP request: %w", err)
+	}
+
+	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
+	httpReq.Header.Set("Notion-Version", p.notionVersion)
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := p.httpClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("Notion API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("reading response body: %w", err)
+	}
+
+	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
+	var body any
+	if len(respBody) > 0 {
+		var jsonBody any
+		if json.Unmarshal(respBody, &jsonBody) == nil {
+			body = jsonBody
+		} else {
+			body = string(respBody)
+		}
+	}
+
+	envelope := map[string]any{
+		"v1BlocksIDChildrenPatchResponse": map[string]any{
+			"status_code": resp.StatusCode,
+			"headers":     headerMap(resp.Header),
+			"body":        body,
+		},
+	}
+
+	// Merge with original message.
+	if originalMap, ok := originalStructured.(map[string]any); ok {
+		for k, v := range envelope {
+			originalMap[k] = v
+		}
+		envelope = originalMap
+	}
+
+	// Apply response mapping.
+	if p.responseMapping != nil {
+		mapped, mapErr := p.responseMapping.Query(envelope)
+		if mapErr != nil {
+			return fmt.Errorf("executing response_mapping: %w", mapErr)
+		}
+		msg.SetStructured(mapped)
+	} else {
+		msg.SetStructured(envelope)
+	}
+
+	if resp.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", resp.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	}
+
+	return nil
 }
 
 // V1BlocksIDDelete processor — delete /v1/blocks/{id}
@@ -324,6 +451,9 @@ func v1BlocksIDDeleteConfig() *service.ConfigSpec {
 		Categories("Services", "Notion").
 		Summary("Delete a block `DELETE /v1/blocks/{id}`").
 		Fields(sharedConfigFields()...).Fields(
+		service.NewBloblangField(npFieldResponseMapping).
+			Optional().
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
 		service.NewInterpolatedStringField("id").
 			Description(""),
 	)
@@ -368,21 +498,82 @@ func (p *v1BlocksIDDeleteProcessor) ProcessBatch(ctx context.Context, batch serv
 
 func (p *v1BlocksIDDeleteProcessor) processV1BlocksIDDelete(ctx context.Context, idx int, batch service.MessageBatch) error {
 	msg := batch[idx]
-	params := v1.V1BlocksIDDeleteParams{
-		NotionVersion: v1.NewOptString(p.notionVersion),
-	}
+
+	// Save original message content for response merge.
+	originalStructured, _ := msg.AsStructured()
+
+	// Build URL.
+	rawURL := p.baseURL + "/v1/blocks/{id}"
 	{
 		v, err := batch.TryInterpolatedString(idx, p.id)
 		if err != nil {
 			return fmt.Errorf("interpolating id: %w", err)
 		}
-		params.ID = v
+		rawURL = strings.Replace(rawURL, "{id}", url.PathEscape(v), 1)
 	}
-	res, err := p.client.V1BlocksIDDelete(ctx, params)
+	httpReq, err := http.NewRequestWithContext(ctx, "DELETE", rawURL, nil)
 	if err != nil {
-		return handleAPIError(msg, err)
+		return fmt.Errorf("creating HTTP request: %w", err)
 	}
-	return marshalResponse(msg, &res)
+
+	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
+	httpReq.Header.Set("Notion-Version", p.notionVersion)
+
+	resp, err := p.httpClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("Notion API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("reading response body: %w", err)
+	}
+
+	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
+	var body any
+	if len(respBody) > 0 {
+		var jsonBody any
+		if json.Unmarshal(respBody, &jsonBody) == nil {
+			body = jsonBody
+		} else {
+			body = string(respBody)
+		}
+	}
+
+	envelope := map[string]any{
+		"v1BlocksIDDeleteResponse": map[string]any{
+			"status_code": resp.StatusCode,
+			"headers":     headerMap(resp.Header),
+			"body":        body,
+		},
+	}
+
+	// Merge with original message.
+	if originalMap, ok := originalStructured.(map[string]any); ok {
+		for k, v := range envelope {
+			originalMap[k] = v
+		}
+		envelope = originalMap
+	}
+
+	// Apply response mapping.
+	if p.responseMapping != nil {
+		mapped, mapErr := p.responseMapping.Query(envelope)
+		if mapErr != nil {
+			return fmt.Errorf("executing response_mapping: %w", mapErr)
+		}
+		msg.SetStructured(mapped)
+	} else {
+		msg.SetStructured(envelope)
+	}
+
+	if resp.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", resp.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	}
+
+	return nil
 }
 
 // V1BlocksIDGet processor — get /v1/blocks/{id}
@@ -400,6 +591,9 @@ func v1BlocksIDGetConfig() *service.ConfigSpec {
 		Categories("Services", "Notion").
 		Summary("Retrieve a block `GET /v1/blocks/{id}`").
 		Fields(sharedConfigFields()...).Fields(
+		service.NewBloblangField(npFieldResponseMapping).
+			Optional().
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
 		service.NewInterpolatedStringField("id").
 			Description(""),
 	)
@@ -444,21 +638,82 @@ func (p *v1BlocksIDGetProcessor) ProcessBatch(ctx context.Context, batch service
 
 func (p *v1BlocksIDGetProcessor) processV1BlocksIDGet(ctx context.Context, idx int, batch service.MessageBatch) error {
 	msg := batch[idx]
-	params := v1.V1BlocksIDGetParams{
-		NotionVersion: v1.NewOptString(p.notionVersion),
-	}
+
+	// Save original message content for response merge.
+	originalStructured, _ := msg.AsStructured()
+
+	// Build URL.
+	rawURL := p.baseURL + "/v1/blocks/{id}"
 	{
 		v, err := batch.TryInterpolatedString(idx, p.id)
 		if err != nil {
 			return fmt.Errorf("interpolating id: %w", err)
 		}
-		params.ID = v
+		rawURL = strings.Replace(rawURL, "{id}", url.PathEscape(v), 1)
 	}
-	res, err := p.client.V1BlocksIDGet(ctx, params)
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", rawURL, nil)
 	if err != nil {
-		return handleAPIError(msg, err)
+		return fmt.Errorf("creating HTTP request: %w", err)
 	}
-	return marshalResponse(msg, &res)
+
+	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
+	httpReq.Header.Set("Notion-Version", p.notionVersion)
+
+	resp, err := p.httpClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("Notion API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("reading response body: %w", err)
+	}
+
+	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
+	var body any
+	if len(respBody) > 0 {
+		var jsonBody any
+		if json.Unmarshal(respBody, &jsonBody) == nil {
+			body = jsonBody
+		} else {
+			body = string(respBody)
+		}
+	}
+
+	envelope := map[string]any{
+		"v1BlocksIDGetResponse": map[string]any{
+			"status_code": resp.StatusCode,
+			"headers":     headerMap(resp.Header),
+			"body":        body,
+		},
+	}
+
+	// Merge with original message.
+	if originalMap, ok := originalStructured.(map[string]any); ok {
+		for k, v := range envelope {
+			originalMap[k] = v
+		}
+		envelope = originalMap
+	}
+
+	// Apply response mapping.
+	if p.responseMapping != nil {
+		mapped, mapErr := p.responseMapping.Query(envelope)
+		if mapErr != nil {
+			return fmt.Errorf("executing response_mapping: %w", mapErr)
+		}
+		msg.SetStructured(mapped)
+	} else {
+		msg.SetStructured(envelope)
+	}
+
+	if resp.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", resp.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	}
+
+	return nil
 }
 
 // V1BlocksIDPatch processor — patch /v1/blocks/{id}
@@ -477,9 +732,12 @@ func v1BlocksIDPatchConfig() *service.ConfigSpec {
 		Summary("Update a block `PATCH /v1/blocks/{id}`").
 		Description("This endpoint allows you to update block content. [See Full Documentation](https://developers.notion.com/reference/update-a-block)").
 		Fields(sharedConfigFields()...).Fields(
-		service.NewBloblangField("mapping").
+		service.NewBloblangField(npFieldRequestMapping).
 			Optional().
-			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to messages before unmarshaling into the request body."),
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to messages before sending the request body."),
+		service.NewBloblangField(npFieldResponseMapping).
+			Optional().
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
 		service.NewInterpolatedStringField("id").
 			Description(""),
 	)
@@ -524,24 +782,29 @@ func (p *v1BlocksIDPatchProcessor) ProcessBatch(ctx context.Context, batch servi
 
 func (p *v1BlocksIDPatchProcessor) processV1BlocksIDPatch(ctx context.Context, idx int, batch service.MessageBatch) error {
 	msg := batch[idx]
-	params := v1.V1BlocksIDPatchParams{
-		NotionVersion: v1.NewOptString(p.notionVersion),
-	}
+
+	// Save original message content for response merge.
+	originalStructured, _ := msg.AsStructured()
+
+	// Build URL.
+	rawURL := p.baseURL + "/v1/blocks/{id}"
 	{
 		v, err := batch.TryInterpolatedString(idx, p.id)
 		if err != nil {
 			return fmt.Errorf("interpolating id: %w", err)
 		}
-		params.ID = v
+		rawURL = strings.Replace(rawURL, "{id}", url.PathEscape(v), 1)
 	}
-	if p.mapping != nil {
+
+	// Apply request mapping and validate request body.
+	if p.requestMapping != nil {
 		structured, err := msg.AsStructured()
 		if err != nil {
-			return fmt.Errorf("parsing message for mapping: %w", err)
+			return fmt.Errorf("parsing message for request_mapping: %w", err)
 		}
-		mapped, err := p.mapping.Query(structured)
+		mapped, err := p.requestMapping.Query(structured)
 		if err != nil {
-			return fmt.Errorf("executing mapping: %w", err)
+			return fmt.Errorf("executing request_mapping: %w", err)
 		}
 		msg.SetStructured(mapped)
 	}
@@ -551,19 +814,83 @@ func (p *v1BlocksIDPatchProcessor) processV1BlocksIDPatch(ctx context.Context, i
 		return fmt.Errorf("reading message body: %w", err)
 	}
 
-	var req v1.UpdateBlockRequest
-	if err := req.UnmarshalJSON(b); err != nil {
+	var reqBody v1.UpdateBlockRequest
+	if err := reqBody.UnmarshalJSON(b); err != nil {
 		return fmt.Errorf("unmarshaling request body: %w", err)
 	}
-	if err := req.Validate(); err != nil {
+	if err := reqBody.Validate(); err != nil {
 		return fmt.Errorf("validating request body: %w", err)
 	}
 
-	res, err := p.client.V1BlocksIDPatch(ctx, &req, params)
+	reqBytes, err := reqBody.MarshalJSON()
 	if err != nil {
-		return handleAPIError(msg, err)
+		return fmt.Errorf("marshaling request body: %w", err)
 	}
-	return marshalResponse(msg, &res)
+
+	httpReq, err := http.NewRequestWithContext(ctx, "PATCH", rawURL, bytes.NewReader(reqBytes))
+	if err != nil {
+		return fmt.Errorf("creating HTTP request: %w", err)
+	}
+
+	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
+	httpReq.Header.Set("Notion-Version", p.notionVersion)
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := p.httpClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("Notion API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("reading response body: %w", err)
+	}
+
+	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
+	var body any
+	if len(respBody) > 0 {
+		var jsonBody any
+		if json.Unmarshal(respBody, &jsonBody) == nil {
+			body = jsonBody
+		} else {
+			body = string(respBody)
+		}
+	}
+
+	envelope := map[string]any{
+		"v1BlocksIDPatchResponse": map[string]any{
+			"status_code": resp.StatusCode,
+			"headers":     headerMap(resp.Header),
+			"body":        body,
+		},
+	}
+
+	// Merge with original message.
+	if originalMap, ok := originalStructured.(map[string]any); ok {
+		for k, v := range envelope {
+			originalMap[k] = v
+		}
+		envelope = originalMap
+	}
+
+	// Apply response mapping.
+	if p.responseMapping != nil {
+		mapped, mapErr := p.responseMapping.Query(envelope)
+		if mapErr != nil {
+			return fmt.Errorf("executing response_mapping: %w", mapErr)
+		}
+		msg.SetStructured(mapped)
+	} else {
+		msg.SetStructured(envelope)
+	}
+
+	if resp.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", resp.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	}
+
+	return nil
 }
 
 // V1CommentsGet processor — get /v1/comments
@@ -582,6 +909,9 @@ func v1CommentsGetConfig() *service.ConfigSpec {
 		Summary("Retrieve comments `GET /v1/comments`").
 		Description("Retrieve a user object using the ID specified in the request path.").
 		Fields(sharedConfigFields()...).Fields(
+		service.NewBloblangField(npFieldResponseMapping).
+			Optional().
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
 		service.NewInterpolatedStringField("block_id").
 			Description("").
 			Optional(),
@@ -638,32 +968,95 @@ func (p *v1CommentsGetProcessor) ProcessBatch(ctx context.Context, batch service
 
 func (p *v1CommentsGetProcessor) processV1CommentsGet(ctx context.Context, idx int, batch service.MessageBatch) error {
 	msg := batch[idx]
-	params := v1.V1CommentsGetParams{
-		NotionVersion: v1.NewOptString(p.notionVersion),
-	}
+
+	// Save original message content for response merge.
+	originalStructured, _ := msg.AsStructured()
+
+	// Build URL.
+	rawURL := p.baseURL + "/v1/comments"
+
+	// Build query parameters.
+	query := make(url.Values)
 	if p.blockID != nil {
 		v, err := batch.TryInterpolatedString(idx, p.blockID)
 		if err != nil {
 			return fmt.Errorf("interpolating block_id: %w", err)
 		}
-		params.BlockID = v1.NewOptString(v)
+		query.Set("block_id", v)
 	}
 	if p.pageSize != nil {
 		v, err := batch.TryInterpolatedString(idx, p.pageSize)
 		if err != nil {
 			return fmt.Errorf("interpolating page_size: %w", err)
 		}
-		intVal, err := strconv.Atoi(v)
-		if err != nil {
-			return fmt.Errorf("page_size must be integer: %w", err)
-		}
-		params.PageSize = v1.NewOptInt(intVal)
+		query.Set("page_size", v)
 	}
-	res, err := p.client.V1CommentsGet(ctx, params)
+	if len(query) > 0 {
+		rawURL += "?" + query.Encode()
+	}
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", rawURL, nil)
 	if err != nil {
-		return handleAPIError(msg, err)
+		return fmt.Errorf("creating HTTP request: %w", err)
 	}
-	return marshalResponse(msg, &res)
+
+	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
+	httpReq.Header.Set("Notion-Version", p.notionVersion)
+
+	resp, err := p.httpClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("Notion API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("reading response body: %w", err)
+	}
+
+	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
+	var body any
+	if len(respBody) > 0 {
+		var jsonBody any
+		if json.Unmarshal(respBody, &jsonBody) == nil {
+			body = jsonBody
+		} else {
+			body = string(respBody)
+		}
+	}
+
+	envelope := map[string]any{
+		"v1CommentsGetResponse": map[string]any{
+			"status_code": resp.StatusCode,
+			"headers":     headerMap(resp.Header),
+			"body":        body,
+		},
+	}
+
+	// Merge with original message.
+	if originalMap, ok := originalStructured.(map[string]any); ok {
+		for k, v := range envelope {
+			originalMap[k] = v
+		}
+		envelope = originalMap
+	}
+
+	// Apply response mapping.
+	if p.responseMapping != nil {
+		mapped, mapErr := p.responseMapping.Query(envelope)
+		if mapErr != nil {
+			return fmt.Errorf("executing response_mapping: %w", mapErr)
+		}
+		msg.SetStructured(mapped)
+	} else {
+		msg.SetStructured(envelope)
+	}
+
+	if resp.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", resp.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	}
+
+	return nil
 }
 
 // V1CommentsPost processor — post /v1/comments
@@ -681,9 +1074,12 @@ func v1CommentsPostConfig() *service.ConfigSpec {
 		Categories("Services", "Notion").
 		Summary("Add comment to discussion `POST /v1/comments`").
 		Fields(sharedConfigFields()...).Fields(
-		service.NewBloblangField("mapping").
+		service.NewBloblangField(npFieldRequestMapping).
 			Optional().
-			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to messages before unmarshaling into the request body."),
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to messages before sending the request body."),
+		service.NewBloblangField(npFieldResponseMapping).
+			Optional().
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
 	)
 }
 
@@ -722,17 +1118,22 @@ func (p *v1CommentsPostProcessor) ProcessBatch(ctx context.Context, batch servic
 
 func (p *v1CommentsPostProcessor) processV1CommentsPost(ctx context.Context, idx int, batch service.MessageBatch) error {
 	msg := batch[idx]
-	params := v1.V1CommentsPostParams{
-		NotionVersion: v1.NewOptString(p.notionVersion),
-	}
-	if p.mapping != nil {
+
+	// Save original message content for response merge.
+	originalStructured, _ := msg.AsStructured()
+
+	// Build URL.
+	rawURL := p.baseURL + "/v1/comments"
+
+	// Apply request mapping and validate request body.
+	if p.requestMapping != nil {
 		structured, err := msg.AsStructured()
 		if err != nil {
-			return fmt.Errorf("parsing message for mapping: %w", err)
+			return fmt.Errorf("parsing message for request_mapping: %w", err)
 		}
-		mapped, err := p.mapping.Query(structured)
+		mapped, err := p.requestMapping.Query(structured)
 		if err != nil {
-			return fmt.Errorf("executing mapping: %w", err)
+			return fmt.Errorf("executing request_mapping: %w", err)
 		}
 		msg.SetStructured(mapped)
 	}
@@ -742,19 +1143,83 @@ func (p *v1CommentsPostProcessor) processV1CommentsPost(ctx context.Context, idx
 		return fmt.Errorf("reading message body: %w", err)
 	}
 
-	var req v1.CreateCommentRequest
-	if err := req.UnmarshalJSON(b); err != nil {
+	var reqBody v1.CreateCommentRequest
+	if err := reqBody.UnmarshalJSON(b); err != nil {
 		return fmt.Errorf("unmarshaling request body: %w", err)
 	}
-	if err := req.Validate(); err != nil {
+	if err := reqBody.Validate(); err != nil {
 		return fmt.Errorf("validating request body: %w", err)
 	}
 
-	res, err := p.client.V1CommentsPost(ctx, &req, params)
+	reqBytes, err := reqBody.MarshalJSON()
 	if err != nil {
-		return handleAPIError(msg, err)
+		return fmt.Errorf("marshaling request body: %w", err)
 	}
-	return marshalResponse(msg, &res)
+
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", rawURL, bytes.NewReader(reqBytes))
+	if err != nil {
+		return fmt.Errorf("creating HTTP request: %w", err)
+	}
+
+	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
+	httpReq.Header.Set("Notion-Version", p.notionVersion)
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := p.httpClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("Notion API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("reading response body: %w", err)
+	}
+
+	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
+	var body any
+	if len(respBody) > 0 {
+		var jsonBody any
+		if json.Unmarshal(respBody, &jsonBody) == nil {
+			body = jsonBody
+		} else {
+			body = string(respBody)
+		}
+	}
+
+	envelope := map[string]any{
+		"v1CommentsPostResponse": map[string]any{
+			"status_code": resp.StatusCode,
+			"headers":     headerMap(resp.Header),
+			"body":        body,
+		},
+	}
+
+	// Merge with original message.
+	if originalMap, ok := originalStructured.(map[string]any); ok {
+		for k, v := range envelope {
+			originalMap[k] = v
+		}
+		envelope = originalMap
+	}
+
+	// Apply response mapping.
+	if p.responseMapping != nil {
+		mapped, mapErr := p.responseMapping.Query(envelope)
+		if mapErr != nil {
+			return fmt.Errorf("executing response_mapping: %w", mapErr)
+		}
+		msg.SetStructured(mapped)
+	} else {
+		msg.SetStructured(envelope)
+	}
+
+	if resp.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", resp.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	}
+
+	return nil
 }
 
 // V1DatabasesIDGet processor — get /v1/databases/{id}
@@ -773,6 +1238,9 @@ func v1DatabasesIDGetConfig() *service.ConfigSpec {
 		Summary("Retrieve a database `GET /v1/databases/{id}`").
 		Description("Retrieves a database object using the ID specified in the request path. ").
 		Fields(sharedConfigFields()...).Fields(
+		service.NewBloblangField(npFieldResponseMapping).
+			Optional().
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
 		service.NewInterpolatedStringField("id").
 			Description(""),
 	)
@@ -817,21 +1285,82 @@ func (p *v1DatabasesIDGetProcessor) ProcessBatch(ctx context.Context, batch serv
 
 func (p *v1DatabasesIDGetProcessor) processV1DatabasesIDGet(ctx context.Context, idx int, batch service.MessageBatch) error {
 	msg := batch[idx]
-	params := v1.V1DatabasesIDGetParams{
-		NotionVersion: v1.NewOptString(p.notionVersion),
-	}
+
+	// Save original message content for response merge.
+	originalStructured, _ := msg.AsStructured()
+
+	// Build URL.
+	rawURL := p.baseURL + "/v1/databases/{id}"
 	{
 		v, err := batch.TryInterpolatedString(idx, p.id)
 		if err != nil {
 			return fmt.Errorf("interpolating id: %w", err)
 		}
-		params.ID = v
+		rawURL = strings.Replace(rawURL, "{id}", url.PathEscape(v), 1)
 	}
-	res, err := p.client.V1DatabasesIDGet(ctx, params)
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", rawURL, nil)
 	if err != nil {
-		return handleAPIError(msg, err)
+		return fmt.Errorf("creating HTTP request: %w", err)
 	}
-	return marshalResponse(msg, &res)
+
+	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
+	httpReq.Header.Set("Notion-Version", p.notionVersion)
+
+	resp, err := p.httpClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("Notion API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("reading response body: %w", err)
+	}
+
+	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
+	var body any
+	if len(respBody) > 0 {
+		var jsonBody any
+		if json.Unmarshal(respBody, &jsonBody) == nil {
+			body = jsonBody
+		} else {
+			body = string(respBody)
+		}
+	}
+
+	envelope := map[string]any{
+		"v1DatabasesIDGetResponse": map[string]any{
+			"status_code": resp.StatusCode,
+			"headers":     headerMap(resp.Header),
+			"body":        body,
+		},
+	}
+
+	// Merge with original message.
+	if originalMap, ok := originalStructured.(map[string]any); ok {
+		for k, v := range envelope {
+			originalMap[k] = v
+		}
+		envelope = originalMap
+	}
+
+	// Apply response mapping.
+	if p.responseMapping != nil {
+		mapped, mapErr := p.responseMapping.Query(envelope)
+		if mapErr != nil {
+			return fmt.Errorf("executing response_mapping: %w", mapErr)
+		}
+		msg.SetStructured(mapped)
+	} else {
+		msg.SetStructured(envelope)
+	}
+
+	if resp.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", resp.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	}
+
+	return nil
 }
 
 // V1DatabasesIDPatch processor — patch /v1/databases/{id}
@@ -849,9 +1378,12 @@ func v1DatabasesIDPatchConfig() *service.ConfigSpec {
 		Categories("Services", "Notion").
 		Summary("Update database properties `PATCH /v1/databases/{id}`").
 		Fields(sharedConfigFields()...).Fields(
-		service.NewBloblangField("mapping").
+		service.NewBloblangField(npFieldRequestMapping).
 			Optional().
-			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to messages before unmarshaling into the request body."),
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to messages before sending the request body."),
+		service.NewBloblangField(npFieldResponseMapping).
+			Optional().
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
 		service.NewInterpolatedStringField("id").
 			Description(""),
 	)
@@ -896,24 +1428,29 @@ func (p *v1DatabasesIDPatchProcessor) ProcessBatch(ctx context.Context, batch se
 
 func (p *v1DatabasesIDPatchProcessor) processV1DatabasesIDPatch(ctx context.Context, idx int, batch service.MessageBatch) error {
 	msg := batch[idx]
-	params := v1.V1DatabasesIDPatchParams{
-		NotionVersion: v1.NewOptString(p.notionVersion),
-	}
+
+	// Save original message content for response merge.
+	originalStructured, _ := msg.AsStructured()
+
+	// Build URL.
+	rawURL := p.baseURL + "/v1/databases/{id}"
 	{
 		v, err := batch.TryInterpolatedString(idx, p.id)
 		if err != nil {
 			return fmt.Errorf("interpolating id: %w", err)
 		}
-		params.ID = v
+		rawURL = strings.Replace(rawURL, "{id}", url.PathEscape(v), 1)
 	}
-	if p.mapping != nil {
+
+	// Apply request mapping and validate request body.
+	if p.requestMapping != nil {
 		structured, err := msg.AsStructured()
 		if err != nil {
-			return fmt.Errorf("parsing message for mapping: %w", err)
+			return fmt.Errorf("parsing message for request_mapping: %w", err)
 		}
-		mapped, err := p.mapping.Query(structured)
+		mapped, err := p.requestMapping.Query(structured)
 		if err != nil {
-			return fmt.Errorf("executing mapping: %w", err)
+			return fmt.Errorf("executing request_mapping: %w", err)
 		}
 		msg.SetStructured(mapped)
 	}
@@ -923,19 +1460,83 @@ func (p *v1DatabasesIDPatchProcessor) processV1DatabasesIDPatch(ctx context.Cont
 		return fmt.Errorf("reading message body: %w", err)
 	}
 
-	var req v1.UpdateDatabaseRequest
-	if err := req.UnmarshalJSON(b); err != nil {
+	var reqBody v1.UpdateDatabaseRequest
+	if err := reqBody.UnmarshalJSON(b); err != nil {
 		return fmt.Errorf("unmarshaling request body: %w", err)
 	}
-	if err := req.Validate(); err != nil {
+	if err := reqBody.Validate(); err != nil {
 		return fmt.Errorf("validating request body: %w", err)
 	}
 
-	res, err := p.client.V1DatabasesIDPatch(ctx, &req, params)
+	reqBytes, err := reqBody.MarshalJSON()
 	if err != nil {
-		return handleAPIError(msg, err)
+		return fmt.Errorf("marshaling request body: %w", err)
 	}
-	return marshalResponse(msg, &res)
+
+	httpReq, err := http.NewRequestWithContext(ctx, "PATCH", rawURL, bytes.NewReader(reqBytes))
+	if err != nil {
+		return fmt.Errorf("creating HTTP request: %w", err)
+	}
+
+	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
+	httpReq.Header.Set("Notion-Version", p.notionVersion)
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := p.httpClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("Notion API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("reading response body: %w", err)
+	}
+
+	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
+	var body any
+	if len(respBody) > 0 {
+		var jsonBody any
+		if json.Unmarshal(respBody, &jsonBody) == nil {
+			body = jsonBody
+		} else {
+			body = string(respBody)
+		}
+	}
+
+	envelope := map[string]any{
+		"v1DatabasesIDPatchResponse": map[string]any{
+			"status_code": resp.StatusCode,
+			"headers":     headerMap(resp.Header),
+			"body":        body,
+		},
+	}
+
+	// Merge with original message.
+	if originalMap, ok := originalStructured.(map[string]any); ok {
+		for k, v := range envelope {
+			originalMap[k] = v
+		}
+		envelope = originalMap
+	}
+
+	// Apply response mapping.
+	if p.responseMapping != nil {
+		mapped, mapErr := p.responseMapping.Query(envelope)
+		if mapErr != nil {
+			return fmt.Errorf("executing response_mapping: %w", mapErr)
+		}
+		msg.SetStructured(mapped)
+	} else {
+		msg.SetStructured(envelope)
+	}
+
+	if resp.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", resp.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	}
+
+	return nil
 }
 
 // V1DatabasesIDQueryPost processor — post /v1/databases/{id}/query
@@ -953,9 +1554,12 @@ func v1DatabasesIDQueryPostConfig() *service.ConfigSpec {
 		Categories("Services", "Notion").
 		Summary("Filter a database `POST /v1/databases/{id}/query`").
 		Fields(sharedConfigFields()...).Fields(
-		service.NewBloblangField("mapping").
+		service.NewBloblangField(npFieldRequestMapping).
 			Optional().
-			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to messages before unmarshaling into the request body."),
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to messages before sending the request body."),
+		service.NewBloblangField(npFieldResponseMapping).
+			Optional().
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
 		service.NewInterpolatedStringField("id").
 			Description(""),
 	)
@@ -1000,24 +1604,29 @@ func (p *v1DatabasesIDQueryPostProcessor) ProcessBatch(ctx context.Context, batc
 
 func (p *v1DatabasesIDQueryPostProcessor) processV1DatabasesIDQueryPost(ctx context.Context, idx int, batch service.MessageBatch) error {
 	msg := batch[idx]
-	params := v1.V1DatabasesIDQueryPostParams{
-		NotionVersion: v1.NewOptString(p.notionVersion),
-	}
+
+	// Save original message content for response merge.
+	originalStructured, _ := msg.AsStructured()
+
+	// Build URL.
+	rawURL := p.baseURL + "/v1/databases/{id}/query"
 	{
 		v, err := batch.TryInterpolatedString(idx, p.id)
 		if err != nil {
 			return fmt.Errorf("interpolating id: %w", err)
 		}
-		params.ID = v
+		rawURL = strings.Replace(rawURL, "{id}", url.PathEscape(v), 1)
 	}
-	if p.mapping != nil {
+
+	// Apply request mapping and validate request body.
+	if p.requestMapping != nil {
 		structured, err := msg.AsStructured()
 		if err != nil {
-			return fmt.Errorf("parsing message for mapping: %w", err)
+			return fmt.Errorf("parsing message for request_mapping: %w", err)
 		}
-		mapped, err := p.mapping.Query(structured)
+		mapped, err := p.requestMapping.Query(structured)
 		if err != nil {
-			return fmt.Errorf("executing mapping: %w", err)
+			return fmt.Errorf("executing request_mapping: %w", err)
 		}
 		msg.SetStructured(mapped)
 	}
@@ -1027,19 +1636,83 @@ func (p *v1DatabasesIDQueryPostProcessor) processV1DatabasesIDQueryPost(ctx cont
 		return fmt.Errorf("reading message body: %w", err)
 	}
 
-	var req v1.QueryDataSourceRequest
-	if err := req.UnmarshalJSON(b); err != nil {
+	var reqBody v1.QueryDataSourceRequest
+	if err := reqBody.UnmarshalJSON(b); err != nil {
 		return fmt.Errorf("unmarshaling request body: %w", err)
 	}
-	if err := req.Validate(); err != nil {
+	if err := reqBody.Validate(); err != nil {
 		return fmt.Errorf("validating request body: %w", err)
 	}
 
-	res, err := p.client.V1DatabasesIDQueryPost(ctx, &req, params)
+	reqBytes, err := reqBody.MarshalJSON()
 	if err != nil {
-		return handleAPIError(msg, err)
+		return fmt.Errorf("marshaling request body: %w", err)
 	}
-	return marshalResponse(msg, &res)
+
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", rawURL, bytes.NewReader(reqBytes))
+	if err != nil {
+		return fmt.Errorf("creating HTTP request: %w", err)
+	}
+
+	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
+	httpReq.Header.Set("Notion-Version", p.notionVersion)
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := p.httpClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("Notion API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("reading response body: %w", err)
+	}
+
+	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
+	var body any
+	if len(respBody) > 0 {
+		var jsonBody any
+		if json.Unmarshal(respBody, &jsonBody) == nil {
+			body = jsonBody
+		} else {
+			body = string(respBody)
+		}
+	}
+
+	envelope := map[string]any{
+		"v1DatabasesIDQueryPostResponse": map[string]any{
+			"status_code": resp.StatusCode,
+			"headers":     headerMap(resp.Header),
+			"body":        body,
+		},
+	}
+
+	// Merge with original message.
+	if originalMap, ok := originalStructured.(map[string]any); ok {
+		for k, v := range envelope {
+			originalMap[k] = v
+		}
+		envelope = originalMap
+	}
+
+	// Apply response mapping.
+	if p.responseMapping != nil {
+		mapped, mapErr := p.responseMapping.Query(envelope)
+		if mapErr != nil {
+			return fmt.Errorf("executing response_mapping: %w", mapErr)
+		}
+		msg.SetStructured(mapped)
+	} else {
+		msg.SetStructured(envelope)
+	}
+
+	if resp.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", resp.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	}
+
+	return nil
 }
 
 // V1DatabasesPost processor — post /v1/databases/
@@ -1057,9 +1730,12 @@ func v1DatabasesPostConfig() *service.ConfigSpec {
 		Categories("Services", "Notion").
 		Summary("Create a database `POST /v1/databases/`").
 		Fields(sharedConfigFields()...).Fields(
-		service.NewBloblangField("mapping").
+		service.NewBloblangField(npFieldRequestMapping).
 			Optional().
-			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to messages before unmarshaling into the request body."),
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to messages before sending the request body."),
+		service.NewBloblangField(npFieldResponseMapping).
+			Optional().
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
 	)
 }
 
@@ -1098,17 +1774,22 @@ func (p *v1DatabasesPostProcessor) ProcessBatch(ctx context.Context, batch servi
 
 func (p *v1DatabasesPostProcessor) processV1DatabasesPost(ctx context.Context, idx int, batch service.MessageBatch) error {
 	msg := batch[idx]
-	params := v1.V1DatabasesPostParams{
-		NotionVersion: v1.NewOptString(p.notionVersion),
-	}
-	if p.mapping != nil {
+
+	// Save original message content for response merge.
+	originalStructured, _ := msg.AsStructured()
+
+	// Build URL.
+	rawURL := p.baseURL + "/v1/databases/"
+
+	// Apply request mapping and validate request body.
+	if p.requestMapping != nil {
 		structured, err := msg.AsStructured()
 		if err != nil {
-			return fmt.Errorf("parsing message for mapping: %w", err)
+			return fmt.Errorf("parsing message for request_mapping: %w", err)
 		}
-		mapped, err := p.mapping.Query(structured)
+		mapped, err := p.requestMapping.Query(structured)
 		if err != nil {
-			return fmt.Errorf("executing mapping: %w", err)
+			return fmt.Errorf("executing request_mapping: %w", err)
 		}
 		msg.SetStructured(mapped)
 	}
@@ -1118,19 +1799,83 @@ func (p *v1DatabasesPostProcessor) processV1DatabasesPost(ctx context.Context, i
 		return fmt.Errorf("reading message body: %w", err)
 	}
 
-	var req v1.CreateDatabaseRequest
-	if err := req.UnmarshalJSON(b); err != nil {
+	var reqBody v1.CreateDatabaseRequest
+	if err := reqBody.UnmarshalJSON(b); err != nil {
 		return fmt.Errorf("unmarshaling request body: %w", err)
 	}
-	if err := req.Validate(); err != nil {
+	if err := reqBody.Validate(); err != nil {
 		return fmt.Errorf("validating request body: %w", err)
 	}
 
-	res, err := p.client.V1DatabasesPost(ctx, &req, params)
+	reqBytes, err := reqBody.MarshalJSON()
 	if err != nil {
-		return handleAPIError(msg, err)
+		return fmt.Errorf("marshaling request body: %w", err)
 	}
-	return marshalResponse(msg, &res)
+
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", rawURL, bytes.NewReader(reqBytes))
+	if err != nil {
+		return fmt.Errorf("creating HTTP request: %w", err)
+	}
+
+	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
+	httpReq.Header.Set("Notion-Version", p.notionVersion)
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := p.httpClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("Notion API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("reading response body: %w", err)
+	}
+
+	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
+	var body any
+	if len(respBody) > 0 {
+		var jsonBody any
+		if json.Unmarshal(respBody, &jsonBody) == nil {
+			body = jsonBody
+		} else {
+			body = string(respBody)
+		}
+	}
+
+	envelope := map[string]any{
+		"v1DatabasesPostResponse": map[string]any{
+			"status_code": resp.StatusCode,
+			"headers":     headerMap(resp.Header),
+			"body":        body,
+		},
+	}
+
+	// Merge with original message.
+	if originalMap, ok := originalStructured.(map[string]any); ok {
+		for k, v := range envelope {
+			originalMap[k] = v
+		}
+		envelope = originalMap
+	}
+
+	// Apply response mapping.
+	if p.responseMapping != nil {
+		mapped, mapErr := p.responseMapping.Query(envelope)
+		if mapErr != nil {
+			return fmt.Errorf("executing response_mapping: %w", mapErr)
+		}
+		msg.SetStructured(mapped)
+	} else {
+		msg.SetStructured(envelope)
+	}
+
+	if resp.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", resp.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	}
+
+	return nil
 }
 
 // V1PagesIDGet processor — get /v1/pages/{id}
@@ -1149,6 +1894,9 @@ func v1PagesIDGetConfig() *service.ConfigSpec {
 		Summary("Retrieve a page `GET /v1/pages/{id}`").
 		Description("Retrieves a Page object using the ID in the request path. This endpoint exposes page properties, not page content. ").
 		Fields(sharedConfigFields()...).Fields(
+		service.NewBloblangField(npFieldResponseMapping).
+			Optional().
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
 		service.NewInterpolatedStringField("id").
 			Description(""),
 	)
@@ -1193,21 +1941,82 @@ func (p *v1PagesIDGetProcessor) ProcessBatch(ctx context.Context, batch service.
 
 func (p *v1PagesIDGetProcessor) processV1PagesIDGet(ctx context.Context, idx int, batch service.MessageBatch) error {
 	msg := batch[idx]
-	params := v1.V1PagesIDGetParams{
-		NotionVersion: v1.NewOptString(p.notionVersion),
-	}
+
+	// Save original message content for response merge.
+	originalStructured, _ := msg.AsStructured()
+
+	// Build URL.
+	rawURL := p.baseURL + "/v1/pages/{id}"
 	{
 		v, err := batch.TryInterpolatedString(idx, p.id)
 		if err != nil {
 			return fmt.Errorf("interpolating id: %w", err)
 		}
-		params.ID = v
+		rawURL = strings.Replace(rawURL, "{id}", url.PathEscape(v), 1)
 	}
-	res, err := p.client.V1PagesIDGet(ctx, params)
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", rawURL, nil)
 	if err != nil {
-		return handleAPIError(msg, err)
+		return fmt.Errorf("creating HTTP request: %w", err)
 	}
-	return marshalResponse(msg, &res)
+
+	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
+	httpReq.Header.Set("Notion-Version", p.notionVersion)
+
+	resp, err := p.httpClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("Notion API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("reading response body: %w", err)
+	}
+
+	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
+	var body any
+	if len(respBody) > 0 {
+		var jsonBody any
+		if json.Unmarshal(respBody, &jsonBody) == nil {
+			body = jsonBody
+		} else {
+			body = string(respBody)
+		}
+	}
+
+	envelope := map[string]any{
+		"v1PagesIDGetResponse": map[string]any{
+			"status_code": resp.StatusCode,
+			"headers":     headerMap(resp.Header),
+			"body":        body,
+		},
+	}
+
+	// Merge with original message.
+	if originalMap, ok := originalStructured.(map[string]any); ok {
+		for k, v := range envelope {
+			originalMap[k] = v
+		}
+		envelope = originalMap
+	}
+
+	// Apply response mapping.
+	if p.responseMapping != nil {
+		mapped, mapErr := p.responseMapping.Query(envelope)
+		if mapErr != nil {
+			return fmt.Errorf("executing response_mapping: %w", mapErr)
+		}
+		msg.SetStructured(mapped)
+	} else {
+		msg.SetStructured(envelope)
+	}
+
+	if resp.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", resp.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	}
+
+	return nil
 }
 
 // V1PagesIDPatch processor — patch /v1/pages/{id}
@@ -1225,9 +2034,12 @@ func v1PagesIDPatchConfig() *service.ConfigSpec {
 		Categories("Services", "Notion").
 		Summary("Archive a page `PATCH /v1/pages/{id}`").
 		Fields(sharedConfigFields()...).Fields(
-		service.NewBloblangField("mapping").
+		service.NewBloblangField(npFieldRequestMapping).
 			Optional().
-			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to messages before unmarshaling into the request body."),
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to messages before sending the request body."),
+		service.NewBloblangField(npFieldResponseMapping).
+			Optional().
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
 		service.NewInterpolatedStringField("id").
 			Description(""),
 	)
@@ -1272,24 +2084,29 @@ func (p *v1PagesIDPatchProcessor) ProcessBatch(ctx context.Context, batch servic
 
 func (p *v1PagesIDPatchProcessor) processV1PagesIDPatch(ctx context.Context, idx int, batch service.MessageBatch) error {
 	msg := batch[idx]
-	params := v1.V1PagesIDPatchParams{
-		NotionVersion: v1.NewOptString(p.notionVersion),
-	}
+
+	// Save original message content for response merge.
+	originalStructured, _ := msg.AsStructured()
+
+	// Build URL.
+	rawURL := p.baseURL + "/v1/pages/{id}"
 	{
 		v, err := batch.TryInterpolatedString(idx, p.id)
 		if err != nil {
 			return fmt.Errorf("interpolating id: %w", err)
 		}
-		params.ID = v
+		rawURL = strings.Replace(rawURL, "{id}", url.PathEscape(v), 1)
 	}
-	if p.mapping != nil {
+
+	// Apply request mapping and validate request body.
+	if p.requestMapping != nil {
 		structured, err := msg.AsStructured()
 		if err != nil {
-			return fmt.Errorf("parsing message for mapping: %w", err)
+			return fmt.Errorf("parsing message for request_mapping: %w", err)
 		}
-		mapped, err := p.mapping.Query(structured)
+		mapped, err := p.requestMapping.Query(structured)
 		if err != nil {
-			return fmt.Errorf("executing mapping: %w", err)
+			return fmt.Errorf("executing request_mapping: %w", err)
 		}
 		msg.SetStructured(mapped)
 	}
@@ -1299,19 +2116,83 @@ func (p *v1PagesIDPatchProcessor) processV1PagesIDPatch(ctx context.Context, idx
 		return fmt.Errorf("reading message body: %w", err)
 	}
 
-	var req v1.UpdatePageRequest
-	if err := req.UnmarshalJSON(b); err != nil {
+	var reqBody v1.UpdatePageRequest
+	if err := reqBody.UnmarshalJSON(b); err != nil {
 		return fmt.Errorf("unmarshaling request body: %w", err)
 	}
-	if err := req.Validate(); err != nil {
+	if err := reqBody.Validate(); err != nil {
 		return fmt.Errorf("validating request body: %w", err)
 	}
 
-	res, err := p.client.V1PagesIDPatch(ctx, &req, params)
+	reqBytes, err := reqBody.MarshalJSON()
 	if err != nil {
-		return handleAPIError(msg, err)
+		return fmt.Errorf("marshaling request body: %w", err)
 	}
-	return marshalResponse(msg, &res)
+
+	httpReq, err := http.NewRequestWithContext(ctx, "PATCH", rawURL, bytes.NewReader(reqBytes))
+	if err != nil {
+		return fmt.Errorf("creating HTTP request: %w", err)
+	}
+
+	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
+	httpReq.Header.Set("Notion-Version", p.notionVersion)
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := p.httpClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("Notion API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("reading response body: %w", err)
+	}
+
+	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
+	var body any
+	if len(respBody) > 0 {
+		var jsonBody any
+		if json.Unmarshal(respBody, &jsonBody) == nil {
+			body = jsonBody
+		} else {
+			body = string(respBody)
+		}
+	}
+
+	envelope := map[string]any{
+		"v1PagesIDPatchResponse": map[string]any{
+			"status_code": resp.StatusCode,
+			"headers":     headerMap(resp.Header),
+			"body":        body,
+		},
+	}
+
+	// Merge with original message.
+	if originalMap, ok := originalStructured.(map[string]any); ok {
+		for k, v := range envelope {
+			originalMap[k] = v
+		}
+		envelope = originalMap
+	}
+
+	// Apply response mapping.
+	if p.responseMapping != nil {
+		mapped, mapErr := p.responseMapping.Query(envelope)
+		if mapErr != nil {
+			return fmt.Errorf("executing response_mapping: %w", mapErr)
+		}
+		msg.SetStructured(mapped)
+	} else {
+		msg.SetStructured(envelope)
+	}
+
+	if resp.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", resp.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	}
+
+	return nil
 }
 
 // V1PagesPageIDPropertiesPropertyIDGet processor — get /v1/pages/{page_id}/properties/{property_id}
@@ -1329,6 +2210,9 @@ func v1PagesPageIDPropertiesPropertyIDGetConfig() *service.ConfigSpec {
 		Categories("Services", "Notion").
 		Summary("Retrieve a page property item `GET /v1/pages/{page_id}/properties/{property_id}`").
 		Fields(sharedConfigFields()...).Fields(
+		service.NewBloblangField(npFieldResponseMapping).
+			Optional().
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
 		service.NewInterpolatedStringField("page_id").
 			Description(""),
 		service.NewInterpolatedStringField("property_id").
@@ -1379,28 +2263,89 @@ func (p *v1PagesPageIDPropertiesPropertyIDGetProcessor) ProcessBatch(ctx context
 
 func (p *v1PagesPageIDPropertiesPropertyIDGetProcessor) processV1PagesPageIDPropertiesPropertyIDGet(ctx context.Context, idx int, batch service.MessageBatch) error {
 	msg := batch[idx]
-	params := v1.V1PagesPageIDPropertiesPropertyIDGetParams{
-		NotionVersion: v1.NewOptString(p.notionVersion),
-	}
+
+	// Save original message content for response merge.
+	originalStructured, _ := msg.AsStructured()
+
+	// Build URL.
+	rawURL := p.baseURL + "/v1/pages/{page_id}/properties/{property_id}"
 	{
 		v, err := batch.TryInterpolatedString(idx, p.pageID)
 		if err != nil {
 			return fmt.Errorf("interpolating page_id: %w", err)
 		}
-		params.PageID = v
+		rawURL = strings.Replace(rawURL, "{page_id}", url.PathEscape(v), 1)
 	}
 	{
 		v, err := batch.TryInterpolatedString(idx, p.propertyID)
 		if err != nil {
 			return fmt.Errorf("interpolating property_id: %w", err)
 		}
-		params.PropertyID = v
+		rawURL = strings.Replace(rawURL, "{property_id}", url.PathEscape(v), 1)
 	}
-	res, err := p.client.V1PagesPageIDPropertiesPropertyIDGet(ctx, params)
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", rawURL, nil)
 	if err != nil {
-		return handleAPIError(msg, err)
+		return fmt.Errorf("creating HTTP request: %w", err)
 	}
-	return marshalResponse(msg, &res)
+
+	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
+	httpReq.Header.Set("Notion-Version", p.notionVersion)
+
+	resp, err := p.httpClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("Notion API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("reading response body: %w", err)
+	}
+
+	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
+	var body any
+	if len(respBody) > 0 {
+		var jsonBody any
+		if json.Unmarshal(respBody, &jsonBody) == nil {
+			body = jsonBody
+		} else {
+			body = string(respBody)
+		}
+	}
+
+	envelope := map[string]any{
+		"v1PagesPageIDPropertiesPropertyIDGetResponse": map[string]any{
+			"status_code": resp.StatusCode,
+			"headers":     headerMap(resp.Header),
+			"body":        body,
+		},
+	}
+
+	// Merge with original message.
+	if originalMap, ok := originalStructured.(map[string]any); ok {
+		for k, v := range envelope {
+			originalMap[k] = v
+		}
+		envelope = originalMap
+	}
+
+	// Apply response mapping.
+	if p.responseMapping != nil {
+		mapped, mapErr := p.responseMapping.Query(envelope)
+		if mapErr != nil {
+			return fmt.Errorf("executing response_mapping: %w", mapErr)
+		}
+		msg.SetStructured(mapped)
+	} else {
+		msg.SetStructured(envelope)
+	}
+
+	if resp.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", resp.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	}
+
+	return nil
 }
 
 // V1PagesPost processor — post /v1/pages/
@@ -1418,9 +2363,12 @@ func v1PagesPostConfig() *service.ConfigSpec {
 		Categories("Services", "Notion").
 		Summary("Create a page with content `POST /v1/pages/`").
 		Fields(sharedConfigFields()...).Fields(
-		service.NewBloblangField("mapping").
+		service.NewBloblangField(npFieldRequestMapping).
 			Optional().
-			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to messages before unmarshaling into the request body."),
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to messages before sending the request body."),
+		service.NewBloblangField(npFieldResponseMapping).
+			Optional().
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
 	)
 }
 
@@ -1459,17 +2407,22 @@ func (p *v1PagesPostProcessor) ProcessBatch(ctx context.Context, batch service.M
 
 func (p *v1PagesPostProcessor) processV1PagesPost(ctx context.Context, idx int, batch service.MessageBatch) error {
 	msg := batch[idx]
-	params := v1.V1PagesPostParams{
-		NotionVersion: v1.NewOptString(p.notionVersion),
-	}
-	if p.mapping != nil {
+
+	// Save original message content for response merge.
+	originalStructured, _ := msg.AsStructured()
+
+	// Build URL.
+	rawURL := p.baseURL + "/v1/pages/"
+
+	// Apply request mapping and validate request body.
+	if p.requestMapping != nil {
 		structured, err := msg.AsStructured()
 		if err != nil {
-			return fmt.Errorf("parsing message for mapping: %w", err)
+			return fmt.Errorf("parsing message for request_mapping: %w", err)
 		}
-		mapped, err := p.mapping.Query(structured)
+		mapped, err := p.requestMapping.Query(structured)
 		if err != nil {
-			return fmt.Errorf("executing mapping: %w", err)
+			return fmt.Errorf("executing request_mapping: %w", err)
 		}
 		msg.SetStructured(mapped)
 	}
@@ -1479,19 +2432,83 @@ func (p *v1PagesPostProcessor) processV1PagesPost(ctx context.Context, idx int, 
 		return fmt.Errorf("reading message body: %w", err)
 	}
 
-	var req v1.CreatePageRequest
-	if err := req.UnmarshalJSON(b); err != nil {
+	var reqBody v1.CreatePageRequest
+	if err := reqBody.UnmarshalJSON(b); err != nil {
 		return fmt.Errorf("unmarshaling request body: %w", err)
 	}
-	if err := req.Validate(); err != nil {
+	if err := reqBody.Validate(); err != nil {
 		return fmt.Errorf("validating request body: %w", err)
 	}
 
-	res, err := p.client.V1PagesPost(ctx, &req, params)
+	reqBytes, err := reqBody.MarshalJSON()
 	if err != nil {
-		return handleAPIError(msg, err)
+		return fmt.Errorf("marshaling request body: %w", err)
 	}
-	return marshalResponse(msg, &res)
+
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", rawURL, bytes.NewReader(reqBytes))
+	if err != nil {
+		return fmt.Errorf("creating HTTP request: %w", err)
+	}
+
+	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
+	httpReq.Header.Set("Notion-Version", p.notionVersion)
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := p.httpClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("Notion API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("reading response body: %w", err)
+	}
+
+	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
+	var body any
+	if len(respBody) > 0 {
+		var jsonBody any
+		if json.Unmarshal(respBody, &jsonBody) == nil {
+			body = jsonBody
+		} else {
+			body = string(respBody)
+		}
+	}
+
+	envelope := map[string]any{
+		"v1PagesPostResponse": map[string]any{
+			"status_code": resp.StatusCode,
+			"headers":     headerMap(resp.Header),
+			"body":        body,
+		},
+	}
+
+	// Merge with original message.
+	if originalMap, ok := originalStructured.(map[string]any); ok {
+		for k, v := range envelope {
+			originalMap[k] = v
+		}
+		envelope = originalMap
+	}
+
+	// Apply response mapping.
+	if p.responseMapping != nil {
+		mapped, mapErr := p.responseMapping.Query(envelope)
+		if mapErr != nil {
+			return fmt.Errorf("executing response_mapping: %w", mapErr)
+		}
+		msg.SetStructured(mapped)
+	} else {
+		msg.SetStructured(envelope)
+	}
+
+	if resp.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", resp.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	}
+
+	return nil
 }
 
 // V1SearchPost processor — post /v1/search
@@ -1509,9 +2526,12 @@ func v1SearchPostConfig() *service.ConfigSpec {
 		Categories("Services", "Notion").
 		Summary("Search `POST /v1/search`").
 		Fields(sharedConfigFields()...).Fields(
-		service.NewBloblangField("mapping").
+		service.NewBloblangField(npFieldRequestMapping).
 			Optional().
-			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to messages before unmarshaling into the request body."),
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to messages before sending the request body."),
+		service.NewBloblangField(npFieldResponseMapping).
+			Optional().
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
 	)
 }
 
@@ -1550,17 +2570,22 @@ func (p *v1SearchPostProcessor) ProcessBatch(ctx context.Context, batch service.
 
 func (p *v1SearchPostProcessor) processV1SearchPost(ctx context.Context, idx int, batch service.MessageBatch) error {
 	msg := batch[idx]
-	params := v1.V1SearchPostParams{
-		NotionVersion: v1.NewOptString(p.notionVersion),
-	}
-	if p.mapping != nil {
+
+	// Save original message content for response merge.
+	originalStructured, _ := msg.AsStructured()
+
+	// Build URL.
+	rawURL := p.baseURL + "/v1/search"
+
+	// Apply request mapping and validate request body.
+	if p.requestMapping != nil {
 		structured, err := msg.AsStructured()
 		if err != nil {
-			return fmt.Errorf("parsing message for mapping: %w", err)
+			return fmt.Errorf("parsing message for request_mapping: %w", err)
 		}
-		mapped, err := p.mapping.Query(structured)
+		mapped, err := p.requestMapping.Query(structured)
 		if err != nil {
-			return fmt.Errorf("executing mapping: %w", err)
+			return fmt.Errorf("executing request_mapping: %w", err)
 		}
 		msg.SetStructured(mapped)
 	}
@@ -1570,19 +2595,83 @@ func (p *v1SearchPostProcessor) processV1SearchPost(ctx context.Context, idx int
 		return fmt.Errorf("reading message body: %w", err)
 	}
 
-	var req v1.SearchRequest
-	if err := req.UnmarshalJSON(b); err != nil {
+	var reqBody v1.SearchRequest
+	if err := reqBody.UnmarshalJSON(b); err != nil {
 		return fmt.Errorf("unmarshaling request body: %w", err)
 	}
-	if err := req.Validate(); err != nil {
+	if err := reqBody.Validate(); err != nil {
 		return fmt.Errorf("validating request body: %w", err)
 	}
 
-	res, err := p.client.V1SearchPost(ctx, &req, params)
+	reqBytes, err := reqBody.MarshalJSON()
 	if err != nil {
-		return handleAPIError(msg, err)
+		return fmt.Errorf("marshaling request body: %w", err)
 	}
-	return marshalResponse(msg, &res)
+
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", rawURL, bytes.NewReader(reqBytes))
+	if err != nil {
+		return fmt.Errorf("creating HTTP request: %w", err)
+	}
+
+	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
+	httpReq.Header.Set("Notion-Version", p.notionVersion)
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := p.httpClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("Notion API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("reading response body: %w", err)
+	}
+
+	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
+	var body any
+	if len(respBody) > 0 {
+		var jsonBody any
+		if json.Unmarshal(respBody, &jsonBody) == nil {
+			body = jsonBody
+		} else {
+			body = string(respBody)
+		}
+	}
+
+	envelope := map[string]any{
+		"v1SearchPostResponse": map[string]any{
+			"status_code": resp.StatusCode,
+			"headers":     headerMap(resp.Header),
+			"body":        body,
+		},
+	}
+
+	// Merge with original message.
+	if originalMap, ok := originalStructured.(map[string]any); ok {
+		for k, v := range envelope {
+			originalMap[k] = v
+		}
+		envelope = originalMap
+	}
+
+	// Apply response mapping.
+	if p.responseMapping != nil {
+		mapped, mapErr := p.responseMapping.Query(envelope)
+		if mapErr != nil {
+			return fmt.Errorf("executing response_mapping: %w", mapErr)
+		}
+		msg.SetStructured(mapped)
+	} else {
+		msg.SetStructured(envelope)
+	}
+
+	if resp.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", resp.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	}
+
+	return nil
 }
 
 // V1UsersGet processor — get /v1/users
@@ -1600,7 +2689,11 @@ func v1UsersGetConfig() *service.ConfigSpec {
 		Categories("Services", "Notion").
 		Summary("List all users `GET /v1/users`").
 		Description("Returns a paginated list of user objects for a workspace").
-		Fields(sharedConfigFields()...).Fields()
+		Fields(sharedConfigFields()...).Fields(
+		service.NewBloblangField(npFieldResponseMapping).
+			Optional().
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
+	)
 }
 
 type v1UsersGetProcessor struct {
@@ -1638,14 +2731,75 @@ func (p *v1UsersGetProcessor) ProcessBatch(ctx context.Context, batch service.Me
 
 func (p *v1UsersGetProcessor) processV1UsersGet(ctx context.Context, idx int, batch service.MessageBatch) error {
 	msg := batch[idx]
-	params := v1.V1UsersGetParams{
-		NotionVersion: v1.NewOptString(p.notionVersion),
-	}
-	res, err := p.client.V1UsersGet(ctx, params)
+
+	// Save original message content for response merge.
+	originalStructured, _ := msg.AsStructured()
+
+	// Build URL.
+	rawURL := p.baseURL + "/v1/users"
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", rawURL, nil)
 	if err != nil {
-		return handleAPIError(msg, err)
+		return fmt.Errorf("creating HTTP request: %w", err)
 	}
-	return marshalResponse(msg, &res)
+
+	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
+	httpReq.Header.Set("Notion-Version", p.notionVersion)
+
+	resp, err := p.httpClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("Notion API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("reading response body: %w", err)
+	}
+
+	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
+	var body any
+	if len(respBody) > 0 {
+		var jsonBody any
+		if json.Unmarshal(respBody, &jsonBody) == nil {
+			body = jsonBody
+		} else {
+			body = string(respBody)
+		}
+	}
+
+	envelope := map[string]any{
+		"v1UsersGetResponse": map[string]any{
+			"status_code": resp.StatusCode,
+			"headers":     headerMap(resp.Header),
+			"body":        body,
+		},
+	}
+
+	// Merge with original message.
+	if originalMap, ok := originalStructured.(map[string]any); ok {
+		for k, v := range envelope {
+			originalMap[k] = v
+		}
+		envelope = originalMap
+	}
+
+	// Apply response mapping.
+	if p.responseMapping != nil {
+		mapped, mapErr := p.responseMapping.Query(envelope)
+		if mapErr != nil {
+			return fmt.Errorf("executing response_mapping: %w", mapErr)
+		}
+		msg.SetStructured(mapped)
+	} else {
+		msg.SetStructured(envelope)
+	}
+
+	if resp.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", resp.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	}
+
+	return nil
 }
 
 // V1UsersIDGet processor — get /v1/users/{id}
@@ -1664,6 +2818,9 @@ func v1UsersIDGetConfig() *service.ConfigSpec {
 		Summary("Retrieve a user `GET /v1/users/{id}`").
 		Description("Retrieve a user object using the ID specified in the request path.").
 		Fields(sharedConfigFields()...).Fields(
+		service.NewBloblangField(npFieldResponseMapping).
+			Optional().
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
 		service.NewInterpolatedStringField("id").
 			Description(""),
 	)
@@ -1708,21 +2865,82 @@ func (p *v1UsersIDGetProcessor) ProcessBatch(ctx context.Context, batch service.
 
 func (p *v1UsersIDGetProcessor) processV1UsersIDGet(ctx context.Context, idx int, batch service.MessageBatch) error {
 	msg := batch[idx]
-	params := v1.V1UsersIDGetParams{
-		NotionVersion: v1.NewOptString(p.notionVersion),
-	}
+
+	// Save original message content for response merge.
+	originalStructured, _ := msg.AsStructured()
+
+	// Build URL.
+	rawURL := p.baseURL + "/v1/users/{id}"
 	{
 		v, err := batch.TryInterpolatedString(idx, p.id)
 		if err != nil {
 			return fmt.Errorf("interpolating id: %w", err)
 		}
-		params.ID = v
+		rawURL = strings.Replace(rawURL, "{id}", url.PathEscape(v), 1)
 	}
-	res, err := p.client.V1UsersIDGet(ctx, params)
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", rawURL, nil)
 	if err != nil {
-		return handleAPIError(msg, err)
+		return fmt.Errorf("creating HTTP request: %w", err)
 	}
-	return marshalResponse(msg, &res)
+
+	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
+	httpReq.Header.Set("Notion-Version", p.notionVersion)
+
+	resp, err := p.httpClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("Notion API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("reading response body: %w", err)
+	}
+
+	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
+	var body any
+	if len(respBody) > 0 {
+		var jsonBody any
+		if json.Unmarshal(respBody, &jsonBody) == nil {
+			body = jsonBody
+		} else {
+			body = string(respBody)
+		}
+	}
+
+	envelope := map[string]any{
+		"v1UsersIDGetResponse": map[string]any{
+			"status_code": resp.StatusCode,
+			"headers":     headerMap(resp.Header),
+			"body":        body,
+		},
+	}
+
+	// Merge with original message.
+	if originalMap, ok := originalStructured.(map[string]any); ok {
+		for k, v := range envelope {
+			originalMap[k] = v
+		}
+		envelope = originalMap
+	}
+
+	// Apply response mapping.
+	if p.responseMapping != nil {
+		mapped, mapErr := p.responseMapping.Query(envelope)
+		if mapErr != nil {
+			return fmt.Errorf("executing response_mapping: %w", mapErr)
+		}
+		msg.SetStructured(mapped)
+	} else {
+		msg.SetStructured(envelope)
+	}
+
+	if resp.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", resp.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	}
+
+	return nil
 }
 
 // V1UsersMeGet processor — get /v1/users/me
@@ -1739,7 +2957,11 @@ func v1UsersMeGetConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Services", "Notion").
 		Summary("Retrieve your token’s bot user `GET /v1/users/me`").
-		Fields(sharedConfigFields()...).Fields()
+		Fields(sharedConfigFields()...).Fields(
+		service.NewBloblangField(npFieldResponseMapping).
+			Optional().
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
+	)
 }
 
 type v1UsersMeGetProcessor struct {
@@ -1777,12 +2999,73 @@ func (p *v1UsersMeGetProcessor) ProcessBatch(ctx context.Context, batch service.
 
 func (p *v1UsersMeGetProcessor) processV1UsersMeGet(ctx context.Context, idx int, batch service.MessageBatch) error {
 	msg := batch[idx]
-	params := v1.V1UsersMeGetParams{
-		NotionVersion: v1.NewOptString(p.notionVersion),
-	}
-	res, err := p.client.V1UsersMeGet(ctx, params)
+
+	// Save original message content for response merge.
+	originalStructured, _ := msg.AsStructured()
+
+	// Build URL.
+	rawURL := p.baseURL + "/v1/users/me"
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", rawURL, nil)
 	if err != nil {
-		return handleAPIError(msg, err)
+		return fmt.Errorf("creating HTTP request: %w", err)
 	}
-	return marshalResponse(msg, &res)
+
+	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
+	httpReq.Header.Set("Notion-Version", p.notionVersion)
+
+	resp, err := p.httpClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("Notion API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("reading response body: %w", err)
+	}
+
+	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
+	var body any
+	if len(respBody) > 0 {
+		var jsonBody any
+		if json.Unmarshal(respBody, &jsonBody) == nil {
+			body = jsonBody
+		} else {
+			body = string(respBody)
+		}
+	}
+
+	envelope := map[string]any{
+		"v1UsersMeGetResponse": map[string]any{
+			"status_code": resp.StatusCode,
+			"headers":     headerMap(resp.Header),
+			"body":        body,
+		},
+	}
+
+	// Merge with original message.
+	if originalMap, ok := originalStructured.(map[string]any); ok {
+		for k, v := range envelope {
+			originalMap[k] = v
+		}
+		envelope = originalMap
+	}
+
+	// Apply response mapping.
+	if p.responseMapping != nil {
+		mapped, mapErr := p.responseMapping.Query(envelope)
+		if mapErr != nil {
+			return fmt.Errorf("executing response_mapping: %w", mapErr)
+		}
+		msg.SetStructured(mapped)
+	} else {
+		msg.SetStructured(envelope)
+	}
+
+	if resp.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", resp.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	}
+
+	return nil
 }

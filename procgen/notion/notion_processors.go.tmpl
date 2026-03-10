@@ -3,9 +3,14 @@
 package {{ .Package }}
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"strings"
 	"sync"
 
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
@@ -16,18 +21,11 @@ import (
 	v1 "{{ .APIPackage }}"
 )
 
-// securitySource implements v1.SecuritySource.
-type securitySource struct {
-	token string
-}
-
-func (s *securitySource) BearerAuth(_ context.Context, _ v1.OperationName) (v1.BearerAuth, error) {
-	return v1.BearerAuth{Token: s.token}, nil
-}
-
 const (
-	npFieldAPIKey        = "api_key"
-	npFieldNotionVersion = "notion_version"
+	npFieldAPIKey          = "api_key"
+	npFieldNotionVersion   = "notion_version"
+	npFieldRequestMapping  = "request_mapping"
+	npFieldResponseMapping = "response_mapping"
 )
 
 func sharedConfigFields() []*service.ConfigField {
@@ -43,17 +41,19 @@ func sharedConfigFields() []*service.ConfigField {
 }
 
 type baseProcessor struct {
-	client        *v1.Client
-	notionVersion string
-	mapping       *bloblang.Executor
-	log           *service.Logger
+	httpClient      *http.Client
+	baseURL         string
+	apiKey          string
+	notionVersion   string
+	requestMapping  *bloblang.Executor
+	responseMapping *bloblang.Executor
+	log             *service.Logger
 }
 
 func baseProcessorFromParsed(conf *service.ParsedConfig, mgr *service.Resources) (p baseProcessor, err error) {
 	p.log = mgr.Logger()
 
-	apiKey, err := conf.FieldString(npFieldAPIKey)
-	if err != nil {
+	if p.apiKey, err = conf.FieldString(npFieldAPIKey); err != nil {
 		return p, err
 	}
 	if p.notionVersion, err = conf.FieldString(npFieldNotionVersion); err != nil {
@@ -66,16 +66,18 @@ func baseProcessorFromParsed(conf *service.ParsedConfig, mgr *service.Resources)
 	}
 	httpCfg.MetricPrefix = "notion_http"
 
-	httpClient, err := httpclient.NewClient(httpCfg, mgr)
-	if err != nil {
+	if p.httpClient, err = httpclient.NewClient(httpCfg, mgr); err != nil {
 		return p, fmt.Errorf("creating HTTP client: %w", err)
 	}
+	p.baseURL = strings.TrimRight(httpCfg.BaseURL, "/")
 
-	if p.client, err = v1.NewClient(httpCfg.BaseURL, &securitySource{token: apiKey}, v1.WithClient(httpClient)); err != nil {
-		return p, fmt.Errorf("creating {{ .Service | title }} client: %w", err)
+	if conf.Contains(npFieldRequestMapping) {
+		if p.requestMapping, err = conf.FieldBloblang(npFieldRequestMapping); err != nil {
+			return p, err
+		}
 	}
-	if conf.Contains("mapping") {
-		if p.mapping, err = conf.FieldBloblang("mapping"); err != nil {
+	if conf.Contains(npFieldResponseMapping) {
+		if p.responseMapping, err = conf.FieldBloblang(npFieldResponseMapping); err != nil {
 			return p, err
 		}
 	}
@@ -85,25 +87,15 @@ func baseProcessorFromParsed(conf *service.ParsedConfig, mgr *service.Resources)
 
 func (p *baseProcessor) Close(context.Context) error { return nil }
 
-// handleAPIError checks for HTTP status errors and sets metadata.
-// On HTTP errors, sets status code metadata on the message and returns a
-// wrapped error. On other errors, returns a generic request failure.
-func handleAPIError(msg *service.Message, err error) error {
-	if unexpectedStatus, ok := errors.Into[*validate.UnexpectedStatusCodeError](err); ok {
-		msg.MetaSetMut("http_status_code", unexpectedStatus.StatusCode)
-		return fmt.Errorf("{{ .Service | title }} API error (status %d): %w", unexpectedStatus.StatusCode, err)
+// headerMap converts http.Header to a simple string map (first value per key).
+func headerMap(h http.Header) map[string]string {
+	m := make(map[string]string, len(h))
+	for k, v := range h {
+		if len(v) > 0 {
+			m[k] = v[0]
+		}
 	}
-	return fmt.Errorf("{{ .Service | title }} API request failed: %w", err)
-}
-
-// marshalResponse serializes the typed response to JSON and sets it on the message.
-func marshalResponse(msg *service.Message, resp any) error {
-	b, err := json.Marshal(resp)
-	if err != nil {
-		return fmt.Errorf("marshaling response: %w", err)
-	}
-	msg.SetBytes(b)
-	return nil
+	return m
 }
 
 {{ range .Operations }}
@@ -126,10 +118,13 @@ func {{ .Name | lowerFirst }}Config() *service.ConfigSpec {
 		{{- end }}
 		Fields(sharedConfigFields()...).Fields(
 		{{- if .HasRequestBody }}
-		service.NewBloblangField("mapping").
+		service.NewBloblangField(npFieldRequestMapping).
 			Optional().
-			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to messages before unmarshaling into the request body."),
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to messages before sending the request body."),
 		{{- end }}
+		service.NewBloblangField(npFieldResponseMapping).
+			Optional().
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
 		{{- range .PathParams }}
 		service.NewInterpolatedStringField("{{ .FieldName }}").
 			Description({{ .Description | printf "%q" }}),
@@ -201,51 +196,51 @@ func (p *{{ .Name | lowerFirst }}Processor) ProcessBatch(ctx context.Context, ba
 
 func (p *{{ .Name | lowerFirst }}Processor) process{{ .Name }}(ctx context.Context, idx int, batch service.MessageBatch) error {
 	msg := batch[idx]
-	params := v1.{{ .ParamsTypeName }}{
-		{{- range $.SharedHeaders }}
-		{{ .GoParamName }}: v1.NewOptString(p.{{ .GoParamName | lowerFirst }}),
-		{{- end }}
-	}
 
+	// Save original message content for response merge.
+	originalStructured, _ := msg.AsStructured()
+
+	// Build URL.
+	rawURL := p.baseURL + {{ .Path | printf "%q" }}
 	{{- range .PathParams }}
 	{
 		v, err := batch.TryInterpolatedString(idx, p.{{ .GoFieldName }})
 		if err != nil {
 			return fmt.Errorf("interpolating {{ .FieldName }}: %w", err)
 		}
-		params.{{ .GoParamName }} = v
+		rawURL = strings.Replace(rawURL, {{ printf "{%s}" .FieldName | printf "%q" }}, url.PathEscape(v), 1)
 	}
 	{{- end }}
 
+	{{- if .QueryParams }}
+
+	// Build query parameters.
+	query := make(url.Values)
 	{{- range .QueryParams }}
 	if p.{{ .GoFieldName }} != nil {
 		v, err := batch.TryInterpolatedString(idx, p.{{ .GoFieldName }})
 		if err != nil {
 			return fmt.Errorf("interpolating {{ .FieldName }}: %w", err)
 		}
-		{{- if .IsOptInt }}
-		intVal, err := strconv.Atoi(v)
-		if err != nil {
-			return fmt.Errorf("{{ .FieldName }} must be integer: %w", err)
-		}
-		params.{{ .GoParamName }} = v1.NewOptInt(intVal)
-		{{- else if .IsOptString }}
-		params.{{ .GoParamName }} = v1.NewOptString(v)
-		{{- else }}
-		params.{{ .GoParamName }} = v
-		{{- end }}
+		query.Set("{{ .FieldName }}", v)
+	}
+	{{- end }}
+	if len(query) > 0 {
+		rawURL += "?" + query.Encode()
 	}
 	{{- end }}
 
 	{{- if .HasRequestBody }}
-	if p.mapping != nil {
+
+	// Apply request mapping and validate request body.
+	if p.requestMapping != nil {
 		structured, err := msg.AsStructured()
 		if err != nil {
-			return fmt.Errorf("parsing message for mapping: %w", err)
+			return fmt.Errorf("parsing message for request_mapping: %w", err)
 		}
-		mapped, err := p.mapping.Query(structured)
+		mapped, err := p.requestMapping.Query(structured)
 		if err != nil {
-			return fmt.Errorf("executing mapping: %w", err)
+			return fmt.Errorf("executing request_mapping: %w", err)
 		}
 		msg.SetStructured(mapped)
 	}
@@ -255,21 +250,87 @@ func (p *{{ .Name | lowerFirst }}Processor) process{{ .Name }}(ctx context.Conte
 		return fmt.Errorf("reading message body: %w", err)
 	}
 
-	var req v1.{{ .RequestTypeName }}
-	if err := req.UnmarshalJSON(b); err != nil {
+	var reqBody v1.{{ .RequestTypeName }}
+	if err := reqBody.UnmarshalJSON(b); err != nil {
 		return fmt.Errorf("unmarshaling request body: %w", err)
 	}
-	if err := req.Validate(); err != nil {
+	if err := reqBody.Validate(); err != nil {
 		return fmt.Errorf("validating request body: %w", err)
 	}
 
-	res, err := p.client.{{ .Name }}(ctx, &req, params)
+	reqBytes, err := reqBody.MarshalJSON()
+	if err != nil {
+		return fmt.Errorf("marshaling request body: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, {{ .HTTPMethod | upper | printf "%q" }}, rawURL, bytes.NewReader(reqBytes))
 	{{- else }}
-	res, err := p.client.{{ .Name }}(ctx, params)
+	httpReq, err := http.NewRequestWithContext(ctx, {{ .HTTPMethod | upper | printf "%q" }}, rawURL, nil)
 	{{- end }}
 	if err != nil {
-		return handleAPIError(msg, err)
+		return fmt.Errorf("creating HTTP request: %w", err)
 	}
-	return marshalResponse(msg, &res)
+
+	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
+	httpReq.Header.Set("Notion-Version", p.notionVersion)
+	{{- if .HasRequestBody }}
+	httpReq.Header.Set("Content-Type", "application/json")
+	{{- end }}
+
+	resp, err := p.httpClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("{{ $.Service | title }} API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("reading response body: %w", err)
+	}
+
+	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
+	var body any
+	if len(respBody) > 0 {
+		var jsonBody any
+		if json.Unmarshal(respBody, &jsonBody) == nil {
+			body = jsonBody
+		} else {
+			body = string(respBody)
+		}
+	}
+
+	envelope := map[string]any{
+		"{{ .Name | lowerFirst }}Response": map[string]any{
+			"status_code": resp.StatusCode,
+			"headers":     headerMap(resp.Header),
+			"body":        body,
+		},
+	}
+
+	// Merge with original message.
+	if originalMap, ok := originalStructured.(map[string]any); ok {
+		for k, v := range envelope {
+			originalMap[k] = v
+		}
+		envelope = originalMap
+	}
+
+	// Apply response mapping.
+	if p.responseMapping != nil {
+		mapped, mapErr := p.responseMapping.Query(envelope)
+		if mapErr != nil {
+			return fmt.Errorf("executing response_mapping: %w", mapErr)
+		}
+		msg.SetStructured(mapped)
+	} else {
+		msg.SetStructured(envelope)
+	}
+
+	if resp.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", resp.StatusCode)
+		return fmt.Errorf("{{ $.Service | title }} API error (status %d)", resp.StatusCode)
+	}
+
+	return nil
 }
 {{ end }}

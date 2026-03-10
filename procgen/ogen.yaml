@@ -11,10 +11,8 @@ generator:
   ignore_not_implemented:
     - "type-based discrimination with same jxType"
     - "complicated reference"
+  # Only generate schemas, JSON encoding, and validators (no client/server).
+  # Processors build HTTP requests directly and handle raw responses.
   features:
-    enable:
-      - "paths/client"
-      # - "client/security/reentrant"
-      - "client/request/validation"
-      - "ogen/otel"
+    enable: []
     disable_all: true
