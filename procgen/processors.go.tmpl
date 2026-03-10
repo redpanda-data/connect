@@ -22,20 +22,26 @@ import (
 )
 
 const (
-	npFieldAPIKey          = "api_key"
-	npFieldNotionVersion   = "notion_version"
-	npFieldRequestMapping  = "request_mapping"
-	npFieldResponseMapping = "response_mapping"
+	fieldAPIKey          = "api_key"
+	fieldRequestMapping  = "request_mapping"
+	fieldResponseMapping = "response_mapping"
+	{{- range .SharedHeaders }}
+	field{{ .GoParamName }}   = "{{ .FieldName }}"
+	{{- end }}
 )
 
 func sharedConfigFields() []*service.ConfigField {
 	fields := []*service.ConfigField{
-		service.NewStringField(npFieldAPIKey).
+		service.NewStringField(fieldAPIKey).
 			Secret().
 			Description("The {{ .Service | title }} API integration token."),
-		service.NewStringField(npFieldNotionVersion).
-			Default("2022-06-28").
-			Description("The Notion API version."),
+		{{- range .SharedHeaders }}
+		service.NewStringField(field{{ .GoParamName }}).
+			{{- if .DefaultValue }}
+			Default({{ .DefaultValue | printf "%q" }}).
+			{{- end }}
+			Description({{ if .Description }}{{ .Description | printf "%q" }}{{ else }}{{ printf "The %s header value." .HeaderName | printf "%q" }}{{ end }}),
+		{{- end }}
 	}
 	return append(fields, httpclient.Fields({{ .DefaultServerURL | printf "%q" }})...)
 }
@@ -44,7 +50,9 @@ type baseProcessor struct {
 	httpClient      *http.Client
 	baseURL         string
 	apiKey          string
-	notionVersion   string
+	{{- range .SharedHeaders }}
+	{{ .GoParamName | lowerFirst }}   string
+	{{- end }}
 	requestMapping  *bloblang.Executor
 	responseMapping *bloblang.Executor
 	log             *service.Logger
@@ -53,31 +61,33 @@ type baseProcessor struct {
 func baseProcessorFromParsed(conf *service.ParsedConfig, mgr *service.Resources) (p baseProcessor, err error) {
 	p.log = mgr.Logger()
 
-	if p.apiKey, err = conf.FieldString(npFieldAPIKey); err != nil {
+	if p.apiKey, err = conf.FieldString(fieldAPIKey); err != nil {
 		return p, err
 	}
-	if p.notionVersion, err = conf.FieldString(npFieldNotionVersion); err != nil {
+	{{- range .SharedHeaders }}
+	if p.{{ .GoParamName | lowerFirst }}, err = conf.FieldString(field{{ .GoParamName }}); err != nil {
 		return p, err
 	}
+	{{- end }}
 
 	httpCfg, err := httpclient.NewConfigFromParsed(conf)
 	if err != nil {
 		return p, err
 	}
-	httpCfg.MetricPrefix = "notion_http"
+	httpCfg.MetricPrefix = "{{ .Service }}_http"
 
 	if p.httpClient, err = httpclient.NewClient(httpCfg, mgr); err != nil {
 		return p, fmt.Errorf("creating HTTP client: %w", err)
 	}
 	p.baseURL = strings.TrimRight(httpCfg.BaseURL, "/")
 
-	if conf.Contains(npFieldRequestMapping) {
-		if p.requestMapping, err = conf.FieldBloblang(npFieldRequestMapping); err != nil {
+	if conf.Contains(fieldRequestMapping) {
+		if p.requestMapping, err = conf.FieldBloblang(fieldRequestMapping); err != nil {
 			return p, err
 		}
 	}
-	if conf.Contains(npFieldResponseMapping) {
-		if p.responseMapping, err = conf.FieldBloblang(npFieldResponseMapping); err != nil {
+	if conf.Contains(fieldResponseMapping) {
+		if p.responseMapping, err = conf.FieldBloblang(fieldResponseMapping); err != nil {
 			return p, err
 		}
 	}
@@ -118,11 +128,11 @@ func {{ .Name | lowerFirst }}Config() *service.ConfigSpec {
 		{{- end }}
 		Fields(sharedConfigFields()...).Fields(
 		{{- if .HasRequestBody }}
-		service.NewBloblangField(npFieldRequestMapping).
+		service.NewBloblangField(fieldRequestMapping).
 			Optional().
 			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to messages before sending the request body."),
 		{{- end }}
-		service.NewBloblangField(npFieldResponseMapping).
+		service.NewBloblangField(fieldResponseMapping).
 			Optional().
 			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
 		{{- range .PathParams }}
@@ -272,7 +282,9 @@ func (p *{{ .Name | lowerFirst }}Processor) process{{ .Name }}(ctx context.Conte
 	}
 
 	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
-	httpReq.Header.Set("Notion-Version", p.notionVersion)
+	{{- range $.SharedHeaders }}
+	httpReq.Header.Set({{ .HeaderName | printf "%q" }}, p.{{ .GoParamName | lowerFirst }})
+	{{- end }}
 	{{- if .HasRequestBody }}
 	httpReq.Header.Set("Content-Type", "application/json")
 	{{- end }}

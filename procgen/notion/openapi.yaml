@@ -13457,7 +13457,9 @@ paths:
           in: header
           schema:
             type: string
+            default: 2022-06-28
           example: "{{NOTION_VERSION}}"
+          description: The Notion API version.
         - name: id
           in: path
           schema:
@@ -13638,7 +13640,9 @@ paths:
           in: header
           schema:
             type: string
+            default: 2022-06-28
           example: "{{NOTION_VERSION}}"
+          description: The Notion API version.
       responses:
         "200":
           description: OK
@@ -13812,7 +13816,9 @@ paths:
           in: header
           schema:
             type: string
+            default: 2022-06-28
           example: "{{NOTION_VERSION}}"
+          description: The Notion API version.
       responses:
         "200":
           description: OK
@@ -13987,7 +13993,9 @@ paths:
           in: header
           schema:
             type: string
+            default: 2022-06-28
           example: "{{NOTION_VERSION}}"
+          description: The Notion API version.
         - name: id
           in: path
           schema:
@@ -14172,7 +14180,9 @@ paths:
           in: header
           schema:
             type: string
+            default: 2022-06-28
           example: "{{NOTION_VERSION}}"
+          description: The Notion API version.
         - name: id
           in: path
           schema:
@@ -14368,7 +14378,9 @@ paths:
           in: header
           schema:
             type: string
+            default: 2022-06-28
           example: "{{NOTION_VERSION}}"
+          description: The Notion API version.
         - name: id
           in: path
           schema:
@@ -14559,7 +14571,9 @@ paths:
           in: header
           schema:
             type: string
+            default: 2022-06-28
           example: "{{NOTION_VERSION}}"
+          description: The Notion API version.
       responses:
         "200":
           description: OK
@@ -14749,7 +14763,9 @@ paths:
           in: header
           schema:
             type: string
+            default: 2022-06-28
           example: "{{NOTION_VERSION}}"
+          description: The Notion API version.
       responses:
         "200":
           description: OK
@@ -14925,7 +14941,9 @@ paths:
           in: header
           schema:
             type: string
+            default: 2022-06-28
           example: "{{NOTION_VERSION}}"
+          description: The Notion API version.
         - name: id
           in: path
           schema:
@@ -15110,7 +15128,9 @@ paths:
           in: header
           schema:
             type: string
+            default: 2022-06-28
           example: "{{NOTION_VERSION}}"
+          description: The Notion API version.
         - name: id
           in: path
           schema:
@@ -15290,7 +15310,9 @@ paths:
           in: header
           schema:
             type: string
+            default: 2022-06-28
           example: "{{NOTION_VERSION}}"
+          description: The Notion API version.
         - name: page_id
           in: path
           schema:
@@ -15475,7 +15497,9 @@ paths:
           in: header
           schema:
             type: string
+            default: 2022-06-28
           example: "{{NOTION_VERSION}}"
+          description: The Notion API version.
         - name: page_size
           in: query
           schema:
@@ -15668,7 +15692,9 @@ paths:
           in: header
           schema:
             type: string
+            default: 2022-06-28
           example: "{{NOTION_VERSION}}"
+          description: The Notion API version.
         - name: id
           in: path
           schema:
@@ -15852,7 +15878,9 @@ paths:
           in: header
           schema:
             type: string
+            default: 2022-06-28
           example: "{{NOTION_VERSION}}"
+          description: The Notion API version.
         - name: id
           in: path
           schema:
@@ -16032,7 +16060,9 @@ paths:
           in: header
           schema:
             type: string
+            default: 2022-06-28
           example: "{{NOTION_VERSION}}"
+          description: The Notion API version.
         - name: id
           in: path
           schema:
@@ -16212,7 +16242,9 @@ paths:
           in: header
           schema:
             type: string
+            default: 2022-06-28
           example: "{{NOTION_VERSION}}"
+          description: The Notion API version.
         - name: id
           in: path
           schema:
@@ -16403,7 +16435,9 @@ paths:
           in: header
           schema:
             type: string
+            default: 2022-06-28
           example: "{{NOTION_VERSION}}"
+          description: The Notion API version.
         - name: Authorization
           in: header
           schema:
@@ -16583,7 +16617,9 @@ paths:
           in: header
           schema:
             type: string
+            default: 2022-06-28
           example: "{{NOTION_VERSION}}"
+          description: The Notion API version.
         - name: block_id
           in: query
           schema:
@@ -16722,7 +16758,9 @@ paths:
           in: header
           schema:
             type: string
+            default: 2022-06-28
           example: "{{NOTION_VERSION}}"
+          description: The Notion API version.
       responses:
         "200":
           description: OK

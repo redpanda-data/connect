@@ -22,18 +22,18 @@ import (
 )
 
 const (
-	npFieldAPIKey          = "api_key"
-	npFieldNotionVersion   = "notion_version"
-	npFieldRequestMapping  = "request_mapping"
-	npFieldResponseMapping = "response_mapping"
+	fieldAPIKey          = "api_key"
+	fieldRequestMapping  = "request_mapping"
+	fieldResponseMapping = "response_mapping"
+	fieldNotionVersion   = "notion_version"
 )
 
 func sharedConfigFields() []*service.ConfigField {
 	fields := []*service.ConfigField{
-		service.NewStringField(npFieldAPIKey).
+		service.NewStringField(fieldAPIKey).
 			Secret().
 			Description("The Notion API integration token."),
-		service.NewStringField(npFieldNotionVersion).
+		service.NewStringField(fieldNotionVersion).
 			Default("2022-06-28").
 			Description("The Notion API version."),
 	}
@@ -53,10 +53,10 @@ type baseProcessor struct {
 func baseProcessorFromParsed(conf *service.ParsedConfig, mgr *service.Resources) (p baseProcessor, err error) {
 	p.log = mgr.Logger()
 
-	if p.apiKey, err = conf.FieldString(npFieldAPIKey); err != nil {
+	if p.apiKey, err = conf.FieldString(fieldAPIKey); err != nil {
 		return p, err
 	}
-	if p.notionVersion, err = conf.FieldString(npFieldNotionVersion); err != nil {
+	if p.notionVersion, err = conf.FieldString(fieldNotionVersion); err != nil {
 		return p, err
 	}
 
@@ -71,13 +71,13 @@ func baseProcessorFromParsed(conf *service.ParsedConfig, mgr *service.Resources)
 	}
 	p.baseURL = strings.TrimRight(httpCfg.BaseURL, "/")
 
-	if conf.Contains(npFieldRequestMapping) {
-		if p.requestMapping, err = conf.FieldBloblang(npFieldRequestMapping); err != nil {
+	if conf.Contains(fieldRequestMapping) {
+		if p.requestMapping, err = conf.FieldBloblang(fieldRequestMapping); err != nil {
 			return p, err
 		}
 	}
-	if conf.Contains(npFieldResponseMapping) {
-		if p.responseMapping, err = conf.FieldBloblang(npFieldResponseMapping); err != nil {
+	if conf.Contains(fieldResponseMapping) {
+		if p.responseMapping, err = conf.FieldBloblang(fieldResponseMapping); err != nil {
 			return p, err
 		}
 	}
@@ -113,7 +113,7 @@ func v1BlocksIDChildrenGetConfig() *service.ConfigSpec {
 		Categories("Services", "Notion").
 		Summary("Retrieve block children `GET /v1/blocks/{id}/children`").
 		Fields(sharedConfigFields()...).Fields(
-		service.NewBloblangField(npFieldResponseMapping).
+		service.NewBloblangField(fieldResponseMapping).
 			Optional().
 			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
 		service.NewInterpolatedStringField("id").
@@ -275,10 +275,10 @@ func v1BlocksIDChildrenPatchConfig() *service.ConfigSpec {
 		Categories("Services", "Notion").
 		Summary("Append block children `PATCH /v1/blocks/{id}/children`").
 		Fields(sharedConfigFields()...).Fields(
-		service.NewBloblangField(npFieldRequestMapping).
+		service.NewBloblangField(fieldRequestMapping).
 			Optional().
 			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to messages before sending the request body."),
-		service.NewBloblangField(npFieldResponseMapping).
+		service.NewBloblangField(fieldResponseMapping).
 			Optional().
 			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
 		service.NewInterpolatedStringField("id").
@@ -451,7 +451,7 @@ func v1BlocksIDDeleteConfig() *service.ConfigSpec {
 		Categories("Services", "Notion").
 		Summary("Delete a block `DELETE /v1/blocks/{id}`").
 		Fields(sharedConfigFields()...).Fields(
-		service.NewBloblangField(npFieldResponseMapping).
+		service.NewBloblangField(fieldResponseMapping).
 			Optional().
 			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
 		service.NewInterpolatedStringField("id").
@@ -591,7 +591,7 @@ func v1BlocksIDGetConfig() *service.ConfigSpec {
 		Categories("Services", "Notion").
 		Summary("Retrieve a block `GET /v1/blocks/{id}`").
 		Fields(sharedConfigFields()...).Fields(
-		service.NewBloblangField(npFieldResponseMapping).
+		service.NewBloblangField(fieldResponseMapping).
 			Optional().
 			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
 		service.NewInterpolatedStringField("id").
@@ -732,10 +732,10 @@ func v1BlocksIDPatchConfig() *service.ConfigSpec {
 		Summary("Update a block `PATCH /v1/blocks/{id}`").
 		Description("This endpoint allows you to update block content. [See Full Documentation](https://developers.notion.com/reference/update-a-block)").
 		Fields(sharedConfigFields()...).Fields(
-		service.NewBloblangField(npFieldRequestMapping).
+		service.NewBloblangField(fieldRequestMapping).
 			Optional().
 			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to messages before sending the request body."),
-		service.NewBloblangField(npFieldResponseMapping).
+		service.NewBloblangField(fieldResponseMapping).
 			Optional().
 			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
 		service.NewInterpolatedStringField("id").
@@ -909,7 +909,7 @@ func v1CommentsGetConfig() *service.ConfigSpec {
 		Summary("Retrieve comments `GET /v1/comments`").
 		Description("Retrieve a user object using the ID specified in the request path.").
 		Fields(sharedConfigFields()...).Fields(
-		service.NewBloblangField(npFieldResponseMapping).
+		service.NewBloblangField(fieldResponseMapping).
 			Optional().
 			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
 		service.NewInterpolatedStringField("block_id").
@@ -1074,10 +1074,10 @@ func v1CommentsPostConfig() *service.ConfigSpec {
 		Categories("Services", "Notion").
 		Summary("Add comment to discussion `POST /v1/comments`").
 		Fields(sharedConfigFields()...).Fields(
-		service.NewBloblangField(npFieldRequestMapping).
+		service.NewBloblangField(fieldRequestMapping).
 			Optional().
 			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to messages before sending the request body."),
-		service.NewBloblangField(npFieldResponseMapping).
+		service.NewBloblangField(fieldResponseMapping).
 			Optional().
 			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
 	)
@@ -1238,7 +1238,7 @@ func v1DatabasesIDGetConfig() *service.ConfigSpec {
 		Summary("Retrieve a database `GET /v1/databases/{id}`").
 		Description("Retrieves a database object using the ID specified in the request path. ").
 		Fields(sharedConfigFields()...).Fields(
-		service.NewBloblangField(npFieldResponseMapping).
+		service.NewBloblangField(fieldResponseMapping).
 			Optional().
 			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
 		service.NewInterpolatedStringField("id").
@@ -1378,10 +1378,10 @@ func v1DatabasesIDPatchConfig() *service.ConfigSpec {
 		Categories("Services", "Notion").
 		Summary("Update database properties `PATCH /v1/databases/{id}`").
 		Fields(sharedConfigFields()...).Fields(
-		service.NewBloblangField(npFieldRequestMapping).
+		service.NewBloblangField(fieldRequestMapping).
 			Optional().
 			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to messages before sending the request body."),
-		service.NewBloblangField(npFieldResponseMapping).
+		service.NewBloblangField(fieldResponseMapping).
 			Optional().
 			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
 		service.NewInterpolatedStringField("id").
@@ -1554,10 +1554,10 @@ func v1DatabasesIDQueryPostConfig() *service.ConfigSpec {
 		Categories("Services", "Notion").
 		Summary("Filter a database `POST /v1/databases/{id}/query`").
 		Fields(sharedConfigFields()...).Fields(
-		service.NewBloblangField(npFieldRequestMapping).
+		service.NewBloblangField(fieldRequestMapping).
 			Optional().
 			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to messages before sending the request body."),
-		service.NewBloblangField(npFieldResponseMapping).
+		service.NewBloblangField(fieldResponseMapping).
 			Optional().
 			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
 		service.NewInterpolatedStringField("id").
@@ -1730,10 +1730,10 @@ func v1DatabasesPostConfig() *service.ConfigSpec {
 		Categories("Services", "Notion").
 		Summary("Create a database `POST /v1/databases/`").
 		Fields(sharedConfigFields()...).Fields(
-		service.NewBloblangField(npFieldRequestMapping).
+		service.NewBloblangField(fieldRequestMapping).
 			Optional().
 			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to messages before sending the request body."),
-		service.NewBloblangField(npFieldResponseMapping).
+		service.NewBloblangField(fieldResponseMapping).
 			Optional().
 			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
 	)
@@ -1894,7 +1894,7 @@ func v1PagesIDGetConfig() *service.ConfigSpec {
 		Summary("Retrieve a page `GET /v1/pages/{id}`").
 		Description("Retrieves a Page object using the ID in the request path. This endpoint exposes page properties, not page content. ").
 		Fields(sharedConfigFields()...).Fields(
-		service.NewBloblangField(npFieldResponseMapping).
+		service.NewBloblangField(fieldResponseMapping).
 			Optional().
 			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
 		service.NewInterpolatedStringField("id").
@@ -2034,10 +2034,10 @@ func v1PagesIDPatchConfig() *service.ConfigSpec {
 		Categories("Services", "Notion").
 		Summary("Archive a page `PATCH /v1/pages/{id}`").
 		Fields(sharedConfigFields()...).Fields(
-		service.NewBloblangField(npFieldRequestMapping).
+		service.NewBloblangField(fieldRequestMapping).
 			Optional().
 			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to messages before sending the request body."),
-		service.NewBloblangField(npFieldResponseMapping).
+		service.NewBloblangField(fieldResponseMapping).
 			Optional().
 			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
 		service.NewInterpolatedStringField("id").
@@ -2210,7 +2210,7 @@ func v1PagesPageIDPropertiesPropertyIDGetConfig() *service.ConfigSpec {
 		Categories("Services", "Notion").
 		Summary("Retrieve a page property item `GET /v1/pages/{page_id}/properties/{property_id}`").
 		Fields(sharedConfigFields()...).Fields(
-		service.NewBloblangField(npFieldResponseMapping).
+		service.NewBloblangField(fieldResponseMapping).
 			Optional().
 			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
 		service.NewInterpolatedStringField("page_id").
@@ -2363,10 +2363,10 @@ func v1PagesPostConfig() *service.ConfigSpec {
 		Categories("Services", "Notion").
 		Summary("Create a page with content `POST /v1/pages/`").
 		Fields(sharedConfigFields()...).Fields(
-		service.NewBloblangField(npFieldRequestMapping).
+		service.NewBloblangField(fieldRequestMapping).
 			Optional().
 			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to messages before sending the request body."),
-		service.NewBloblangField(npFieldResponseMapping).
+		service.NewBloblangField(fieldResponseMapping).
 			Optional().
 			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
 	)
@@ -2526,10 +2526,10 @@ func v1SearchPostConfig() *service.ConfigSpec {
 		Categories("Services", "Notion").
 		Summary("Search `POST /v1/search`").
 		Fields(sharedConfigFields()...).Fields(
-		service.NewBloblangField(npFieldRequestMapping).
+		service.NewBloblangField(fieldRequestMapping).
 			Optional().
 			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to messages before sending the request body."),
-		service.NewBloblangField(npFieldResponseMapping).
+		service.NewBloblangField(fieldResponseMapping).
 			Optional().
 			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
 	)
@@ -2690,7 +2690,7 @@ func v1UsersGetConfig() *service.ConfigSpec {
 		Summary("List all users `GET /v1/users`").
 		Description("Returns a paginated list of user objects for a workspace").
 		Fields(sharedConfigFields()...).Fields(
-		service.NewBloblangField(npFieldResponseMapping).
+		service.NewBloblangField(fieldResponseMapping).
 			Optional().
 			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
 	)
@@ -2818,7 +2818,7 @@ func v1UsersIDGetConfig() *service.ConfigSpec {
 		Summary("Retrieve a user `GET /v1/users/{id}`").
 		Description("Retrieve a user object using the ID specified in the request path.").
 		Fields(sharedConfigFields()...).Fields(
-		service.NewBloblangField(npFieldResponseMapping).
+		service.NewBloblangField(fieldResponseMapping).
 			Optional().
 			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
 		service.NewInterpolatedStringField("id").
@@ -2958,7 +2958,7 @@ func v1UsersMeGetConfig() *service.ConfigSpec {
 		Categories("Services", "Notion").
 		Summary("Retrieve your token’s bot user `GET /v1/users/me`").
 		Fields(sharedConfigFields()...).Fields(
-		service.NewBloblangField(npFieldResponseMapping).
+		service.NewBloblangField(fieldResponseMapping).
 			Optional().
 			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
 	)

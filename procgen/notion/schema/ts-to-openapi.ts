@@ -1407,6 +1407,19 @@ function main() {
 	mergeIntoSpec(spec, operations, matched);
 	console.log(`  Generated ${schemas.size} schemas`);
 
+	// Set default for Notion-Version header params (not in Postman collection).
+	for (const [, methods] of Object.entries(spec.paths ?? {})) {
+		for (const [, op] of Object.entries(methods as Record<string, any>)) {
+			if (!op?.parameters) continue;
+			for (const param of op.parameters) {
+				if (param.name === "Notion-Version" && param.in === "header") {
+					param.schema = { ...param.schema, default: "2022-06-28" };
+					param.description ??= "The Notion API version.";
+				}
+			}
+		}
+	}
+
 	console.log("\n\nPhase 4b: Post-process schemas for ogen compatibility");
 	postProcessSchemas();
 

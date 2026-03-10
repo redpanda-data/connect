@@ -31,6 +31,6 @@ tasks:
       - >-
         go run ../procgen
         --service notion
-        --template notion_processors.go.tmpl
+        --template ../processors.go.tmpl
         --package .
         ../ogen.yaml openapi.yaml
