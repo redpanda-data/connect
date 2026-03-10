@@ -14,6 +14,8 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
 
+	"github.com/redpanda-data/connect/v4/internal/httpclient"
+
 	v1 "github.com/redpanda-data/connect/v4/procgen/notion/api/v1"
 )
 
@@ -29,22 +31,18 @@ func (s *securitySource) BearerAuth(_ context.Context, _ v1.OperationName) (v1.B
 const (
 	npFieldAPIKey        = "api_key"
 	npFieldNotionVersion = "notion_version"
-	npFieldServerURL     = "server_url"
 )
 
 func sharedConfigFields() []*service.ConfigField {
-	return []*service.ConfigField{
+	fields := []*service.ConfigField{
 		service.NewStringField(npFieldAPIKey).
 			Secret().
 			Description("The Notion API integration token."),
 		service.NewStringField(npFieldNotionVersion).
 			Default("2022-06-28").
 			Description("The Notion API version."),
-		service.NewStringField(npFieldServerURL).
-			Default("https://api.notion.com").
-			Advanced().
-			Description("The Notion API server URL."),
 	}
+	return append(fields, httpclient.Fields("https://api.notion.com")...)
 }
 
 type baseProcessor struct {
@@ -54,8 +52,8 @@ type baseProcessor struct {
 	log           *service.Logger
 }
 
-func baseProcessorFromParsed(conf *service.ParsedConfig, log *service.Logger) (p baseProcessor, err error) {
-	p.log = log
+func baseProcessorFromParsed(conf *service.ParsedConfig, mgr *service.Resources) (p baseProcessor, err error) {
+	p.log = mgr.Logger()
 
 	apiKey, err := conf.FieldString(npFieldAPIKey)
 	if err != nil {
@@ -64,11 +62,19 @@ func baseProcessorFromParsed(conf *service.ParsedConfig, log *service.Logger) (p
 	if p.notionVersion, err = conf.FieldString(npFieldNotionVersion); err != nil {
 		return p, err
 	}
-	serverURL, err := conf.FieldString(npFieldServerURL)
+
+	httpCfg, err := httpclient.NewConfigFromParsed(conf)
 	if err != nil {
 		return p, err
 	}
-	if p.client, err = v1.NewClient(serverURL, &securitySource{token: apiKey}); err != nil {
+	httpCfg.MetricPrefix = "notion_http"
+
+	httpClient, err := httpclient.NewClient(httpCfg, mgr)
+	if err != nil {
+		return p, fmt.Errorf("creating HTTP client: %w", err)
+	}
+
+	if p.client, err = v1.NewClient(httpCfg.BaseURL, &securitySource{token: apiKey}, v1.WithClient(httpClient)); err != nil {
 		return p, fmt.Errorf("creating Notion client: %w", err)
 	}
 	if conf.Contains("mapping") {
@@ -133,7 +139,7 @@ type v1BlocksIDChildrenGetProcessor struct {
 }
 
 func newV1BlocksIDChildrenGetProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
-	base, err := baseProcessorFromParsed(conf, mgr.Logger())
+	base, err := baseProcessorFromParsed(conf, mgr)
 	if err != nil {
 		return nil, err
 	}
@@ -228,7 +234,7 @@ type v1BlocksIDChildrenPatchProcessor struct {
 }
 
 func newV1BlocksIDChildrenPatchProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
-	base, err := baseProcessorFromParsed(conf, mgr.Logger())
+	base, err := baseProcessorFromParsed(conf, mgr)
 	if err != nil {
 		return nil, err
 	}
@@ -329,7 +335,7 @@ type v1BlocksIDDeleteProcessor struct {
 }
 
 func newV1BlocksIDDeleteProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
-	base, err := baseProcessorFromParsed(conf, mgr.Logger())
+	base, err := baseProcessorFromParsed(conf, mgr)
 	if err != nil {
 		return nil, err
 	}
@@ -405,7 +411,7 @@ type v1BlocksIDGetProcessor struct {
 }
 
 func newV1BlocksIDGetProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
-	base, err := baseProcessorFromParsed(conf, mgr.Logger())
+	base, err := baseProcessorFromParsed(conf, mgr)
 	if err != nil {
 		return nil, err
 	}
@@ -485,7 +491,7 @@ type v1BlocksIDPatchProcessor struct {
 }
 
 func newV1BlocksIDPatchProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
-	base, err := baseProcessorFromParsed(conf, mgr.Logger())
+	base, err := baseProcessorFromParsed(conf, mgr)
 	if err != nil {
 		return nil, err
 	}
@@ -592,7 +598,7 @@ type v1CommentsGetProcessor struct {
 }
 
 func newV1CommentsGetProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
-	base, err := baseProcessorFromParsed(conf, mgr.Logger())
+	base, err := baseProcessorFromParsed(conf, mgr)
 	if err != nil {
 		return nil, err
 	}
@@ -686,7 +692,7 @@ type v1CommentsPostProcessor struct {
 }
 
 func newV1CommentsPostProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
-	base, err := baseProcessorFromParsed(conf, mgr.Logger())
+	base, err := baseProcessorFromParsed(conf, mgr)
 	if err != nil {
 		return nil, err
 	}
@@ -778,7 +784,7 @@ type v1DatabasesIDGetProcessor struct {
 }
 
 func newV1DatabasesIDGetProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
-	base, err := baseProcessorFromParsed(conf, mgr.Logger())
+	base, err := baseProcessorFromParsed(conf, mgr)
 	if err != nil {
 		return nil, err
 	}
@@ -857,7 +863,7 @@ type v1DatabasesIDPatchProcessor struct {
 }
 
 func newV1DatabasesIDPatchProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
-	base, err := baseProcessorFromParsed(conf, mgr.Logger())
+	base, err := baseProcessorFromParsed(conf, mgr)
 	if err != nil {
 		return nil, err
 	}
@@ -961,7 +967,7 @@ type v1DatabasesIDQueryPostProcessor struct {
 }
 
 func newV1DatabasesIDQueryPostProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
-	base, err := baseProcessorFromParsed(conf, mgr.Logger())
+	base, err := baseProcessorFromParsed(conf, mgr)
 	if err != nil {
 		return nil, err
 	}
@@ -1062,7 +1068,7 @@ type v1DatabasesPostProcessor struct {
 }
 
 func newV1DatabasesPostProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
-	base, err := baseProcessorFromParsed(conf, mgr.Logger())
+	base, err := baseProcessorFromParsed(conf, mgr)
 	if err != nil {
 		return nil, err
 	}
@@ -1154,7 +1160,7 @@ type v1PagesIDGetProcessor struct {
 }
 
 func newV1PagesIDGetProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
-	base, err := baseProcessorFromParsed(conf, mgr.Logger())
+	base, err := baseProcessorFromParsed(conf, mgr)
 	if err != nil {
 		return nil, err
 	}
@@ -1233,7 +1239,7 @@ type v1PagesIDPatchProcessor struct {
 }
 
 func newV1PagesIDPatchProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
-	base, err := baseProcessorFromParsed(conf, mgr.Logger())
+	base, err := baseProcessorFromParsed(conf, mgr)
 	if err != nil {
 		return nil, err
 	}
@@ -1337,7 +1343,7 @@ type v1PagesPageIDPropertiesPropertyIDGetProcessor struct {
 }
 
 func newV1PagesPageIDPropertiesPropertyIDGetProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
-	base, err := baseProcessorFromParsed(conf, mgr.Logger())
+	base, err := baseProcessorFromParsed(conf, mgr)
 	if err != nil {
 		return nil, err
 	}
@@ -1423,7 +1429,7 @@ type v1PagesPostProcessor struct {
 }
 
 func newV1PagesPostProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
-	base, err := baseProcessorFromParsed(conf, mgr.Logger())
+	base, err := baseProcessorFromParsed(conf, mgr)
 	if err != nil {
 		return nil, err
 	}
@@ -1514,7 +1520,7 @@ type v1SearchPostProcessor struct {
 }
 
 func newV1SearchPostProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
-	base, err := baseProcessorFromParsed(conf, mgr.Logger())
+	base, err := baseProcessorFromParsed(conf, mgr)
 	if err != nil {
 		return nil, err
 	}
@@ -1602,7 +1608,7 @@ type v1UsersGetProcessor struct {
 }
 
 func newV1UsersGetProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
-	base, err := baseProcessorFromParsed(conf, mgr.Logger())
+	base, err := baseProcessorFromParsed(conf, mgr)
 	if err != nil {
 		return nil, err
 	}
@@ -1669,7 +1675,7 @@ type v1UsersIDGetProcessor struct {
 }
 
 func newV1UsersIDGetProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
-	base, err := baseProcessorFromParsed(conf, mgr.Logger())
+	base, err := baseProcessorFromParsed(conf, mgr)
 	if err != nil {
 		return nil, err
 	}
@@ -1741,7 +1747,7 @@ type v1UsersMeGetProcessor struct {
 }
 
 func newV1UsersMeGetProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
-	base, err := baseProcessorFromParsed(conf, mgr.Logger())
+	base, err := baseProcessorFromParsed(conf, mgr)
 	if err != nil {
 		return nil, err
 	}
