@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 
 - redis: Add configuration option to set client name for `redis` connections. (@nhaberla)
 - benthos: The `command` processor now emits the `exit_code` metadata field. (@mihaitodor)
+- schema_registry_encode: Add metadata-driven schema registration mode. When `schema_metadata` is set, the processor reads a common schema from message metadata, converts it to Avro or JSON Schema, registers it with the schema registry, and encodes the message. This enables CDC inputs to automatically register schemas without pre-registration. The top-level `avro_raw_json` field is deprecated in favor of a new `avro` config block.
 - postgres_cdc: Input now adds schema metadata to consumed messages, this can be used for automatic schema conversion in processors such as `schema_registry_encode`. (@Jeffail)
 - iceberg: New output, allows writing Iceberg data to REST catalogs in s3, gcs and adls. (@rockwotj)
 - microsoft_sql_server_cdc: Input now adds schema metadata to consumed messages, this can be used for automatic schema conversion in processors such as `schema_registry_encode`. (@Jeffail)

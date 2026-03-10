@@ -41,6 +41,12 @@ schema_registry_encode:
   url: "" # No default (required)
   subject: foo # No default (required)
   refresh_period: 10m
+  schema_metadata: ""
+  format: "" # No default (optional)
+  avro:
+    raw_json: false # No default (optional)
+    record_name: ""
+    namespace: ""
 ```
 
 --
@@ -55,7 +61,13 @@ schema_registry_encode:
   url: "" # No default (required)
   subject: foo # No default (required)
   refresh_period: 10m
-  avro_raw_json: false
+  schema_metadata: ""
+  format: "" # No default (optional)
+  normalize: true
+  avro:
+    raw_json: false # No default (optional)
+    record_name: ""
+    namespace: ""
   oauth:
     enabled: false
     consumer_key: ""
@@ -83,11 +95,13 @@ schema_registry_encode:
 --
 ======
 
-Encodes messages automatically from schemas obtains from a https://docs.confluent.io/platform/current/schema-registry/index.html[Confluent Schema Registry service^] by polling the service for the latest schema version for target subjects.
+Encodes messages automatically from schemas obtained from a https://docs.confluent.io/platform/current/schema-registry/index.html[Confluent Schema Registry service^] by polling the service for the latest schema version for target subjects.
+
+Alternatively, when `schema_metadata` is set, the processor reads a schema in benthos common schema format from message metadata (as produced by CDC inputs such as `postgresql`, `mysql_cdc`, and `microsoft_sql_server_cdc`), converts it to the target `format` (Avro or JSON Schema), registers it with the schema registry, and encodes the message. This is useful when the schema is not pre-registered in the registry and instead travels with the data.
 
 If a message fails to encode under the schema then it will remain unchanged and the error can be caught using xref:configuration:error_handling.adoc[error handling methods].
 
-Avro, Protobuf and Json schemas are supported, all are capable of expanding from schema references as of v4.22.0.
+Avro, Protobuf and JSON Schema formats are supported. In registry-pull mode all three are auto-detected from the registry. In metadata mode Avro and JSON Schema are supported, with the target format selected via the `format` field. Schema references are supported in registry-pull mode as of v4.22.0.
 
 == Avro JSON format
 
@@ -102,11 +116,13 @@ For example, the union schema `["null","string","Foo"]`, where `Foo` is a record
 - the string `"a"` as `\{"string": "a"}`; and
 - a `Foo` instance as `\{"Foo": {...}}`, where `{...}` indicates the JSON encoding of a `Foo` instance.
 
-However, it is possible to instead consume documents in https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodecForStandardJSONFull[standard/raw JSON format^] by setting the field <<avro_raw_json, `avro_raw_json`>> to `true`.
+However, it is possible to instead consume documents in https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodecForStandardJSONFull[standard/raw JSON format^] by setting `avro.raw_json` to `true`. This is strongly recommended when using `schema_metadata` mode, as CDC sources emit standard JSON rather than Avro JSON.
+
+NOTE: The top-level `avro_raw_json` field is deprecated in favor of `avro.raw_json`.
 
 === Known issues
 
-Important! There is an outstanding issue in the https://github.com/linkedin/goavro[avro serializing library^] that Redpanda Connect uses which means it https://github.com/linkedin/goavro/issues/252[doesn't encode logical types correctly^]. It's still possible to encode logical types that are in-line with the spec if `avro_raw_json` is set to true, though now of course non-logical types will not be in-line with the spec.
+Important! There is an outstanding issue in the https://github.com/linkedin/goavro[avro serializing library^] that Redpanda Connect uses which means it https://github.com/linkedin/goavro/issues/252[doesn't encode logical types correctly^]. It's still possible to encode logical types that are in-line with the spec if `avro.raw_json` is set to true, though now of course non-logical types will not be in-line with the spec.
 
 == Protobuf format
 
@@ -163,15 +179,70 @@ refresh_period: 60s
 refresh_period: 1h
 ```
 
-=== `avro_raw_json`
+=== `schema_metadata`
 
-Whether messages encoded in Avro format should be parsed as normal JSON ("json that meets the expectations of regular internet json") rather than https://avro.apache.org/docs/current/specification/_print/#json-encoding[Avro JSON^]. If `true` the schema returned from the subject should be parsed as https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodecForStandardJSONFull[standard json^] instead of as https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodec[avro json^]. There is a https://github.com/linkedin/goavro/blob/5ec5a5ee7ec82e16e6e2b438d610e1cab2588393/union.go#L224-L249[comment in goavro^], the https://github.com/linkedin/goavro[underlining library used for avro serialization^], that explains in more detail the difference between standard json and avro json.
+When set, the processor reads a schema in benthos common schema format from this metadata key on each message, converts it to the format specified by `format`, registers it with the schema registry under the configured subject, and encodes the message. When empty (the default), the processor pulls the latest schema from the registry instead.
+
+
+*Type*: `string`
+
+*Default*: `""`
+
+=== `format`
+
+The encoding format to use when converting a common schema from metadata. Required when `schema_metadata` is set.
+
+
+*Type*: `string`
+
+
+Options:
+`avro`
+, `json_schema`
+.
+
+=== `normalize`
+
+Whether to normalize the schema before registering with the schema registry (schema_metadata mode only).
 
 
 *Type*: `bool`
 
-*Default*: `false`
-Requires version 3.59.0 or newer
+*Default*: `true`
+
+=== `avro`
+
+Configuration for Avro encoding.
+
+
+*Type*: `object`
+
+
+=== `avro.raw_json`
+
+Whether messages encoded in Avro format should be parsed as normal JSON rather than Avro JSON. Overrides the deprecated top-level `avro_raw_json` when set.
+
+
+*Type*: `bool`
+
+
+=== `avro.record_name`
+
+The name to use for the root Avro record type when encoding from a common schema (schema_metadata mode). If empty, derived from the subject.
+
+
+*Type*: `string`
+
+*Default*: `""`
+
+=== `avro.namespace`
+
+The Avro namespace for the root record type when encoding from a common schema (schema_metadata mode).
+
+
+*Type*: `string`
+
+*Default*: `""`
 
 === `oauth`
 
