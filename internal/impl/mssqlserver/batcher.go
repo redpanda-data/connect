@@ -166,14 +166,14 @@ func (b *batchPublisher) Publish(ctx context.Context, m replication.MessageEvent
 	}
 
 	msg := service.NewMessage(data)
-	msg.MetaSet("schema", m.Schema)
+	msg.MetaSet("database_schema", m.Schema)
 	msg.MetaSet("table", m.Table)
 	msg.MetaSet("operation", m.Operation)
 	if len(m.LSN) != 0 {
 		msg.MetaSet("lsn", string(m.LSN))
 	}
 	if s := b.getOrComputeTableSchema(m.Table, m.ColumnNames, m.ColumnTypes); s != nil {
-		msg.MetaSetImmut("common_schema", service.ImmutableAny{V: s})
+		msg.MetaSetImmut("schema", service.ImmutableAny{V: s})
 	}
 
 	var flushedBatch []*service.Message

@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+### Changed
+
+- microsoft_sql_server_cdc: The `schema` metadata field (containing the SQL schema name of the source table) has been renamed to `database_schema`. The `common_schema` metadata field (containing the benthos common schema) has been renamed to `schema` for consistency with the `mysql_cdc` and `postgres_cdc` inputs. (@Jeffail)
+
 ## 4.82.0 - 2026-03-05
 
 ### Added
