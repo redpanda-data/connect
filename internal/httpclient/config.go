@@ -177,10 +177,17 @@ type Config struct {
 // Fields returns the YAML configuration field specs for the HTTP client.
 // Auth is not included — products configure auth programmatically via
 // Config.AuthSigner (see BasicAuthSigner, BearerTokenSigner).
-func Fields() []*service.ConfigField {
+//
+// If baseURL is non-empty it is used as the default value for the base_url
+// field; otherwise the field is required (no default).
+func Fields(baseURL string) []*service.ConfigField {
+	baseURLField := service.NewStringField(cFieldBaseURL).
+		Description("Base URL of the target service (e.g., https://api.example.com). TLS is enabled automatically for https URLs.")
+	if baseURL != "" {
+		baseURLField = baseURLField.Default(baseURL)
+	}
 	fields := []*service.ConfigField{
-		service.NewStringField(cFieldBaseURL).
-			Description("Base URL of the target service (e.g., https://api.example.com). TLS is enabled automatically for https URLs."),
+		baseURLField,
 
 		service.NewDurationField(cFieldTimeout).
 			Description("HTTP request timeout.").
