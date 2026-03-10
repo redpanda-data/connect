@@ -505,6 +505,10 @@ func NewClient(cfg ClientConfig) *Client {
 func NewClient(opts ...Option) *Client {
 ```
 
+## Deterministic Config Spec Defaults
+
+Config spec defaults must be static/deterministic values environment-dependent values as spec defaults.
+
 ## Configurable Time Parameters
 
 Every time-related value (timeouts, backoffs, intervals, retry delays) must be exposed as a YAML-configurable field. Do not hardcode durations.
