@@ -746,7 +746,7 @@ microsoft_sql_server_cdc:
 	require.NoError(t, streamBuilder.AddInputYAML(cfg))
 	require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
 		for _, msg := range mb {
-			s, _ := msg.MetaGetMut("common_schema")
+			s, _ := msg.MetaGetMut("schema")
 			op, _ := msg.MetaGet("operation")
 			receivedMu.Lock()
 			received = append(received, msgMeta{schema: s, op: op})
