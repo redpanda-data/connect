@@ -60,7 +60,7 @@ func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replicat
 			if i > 0 {
 				buf.WriteString(" OR ")
 			}
-			fmt.Fprintf(&buf, "(SEG_OWNER = '%s' AND TABLE_NAME = '%s')", t.Schema, t.Name)
+			fmt.Fprintf(&buf, "(SEG_OWNER = '%s' AND TABLE_NAME = '%s')", strings.ReplaceAll(t.Schema, "'", "''"), strings.ReplaceAll(t.Name, "'", "''"))
 		}
 		buf.WriteString(")))")
 	}
