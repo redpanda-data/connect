@@ -191,6 +191,11 @@ func NewServer(
 				w3cTraceContext := propagation.TraceContext{}
 				ctx = w3cTraceContext.Extract(ctx, propagation.HeaderCarrier(extra.Header))
 			}
+			// Prefer the new standardized traceparent in _meta
+			if meta := req.GetParams().GetMeta(); meta != nil {
+				w3cTraceContext := propagation.TraceContext{}
+				ctx = w3cTraceContext.Extract(ctx, anyMapCarrier(meta))
+			}
 			return next(ctx, method, req)
 		}
 	})

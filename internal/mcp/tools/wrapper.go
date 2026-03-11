@@ -20,12 +20,16 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
 	"gopkg.in/yaml.v3"
 
+	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
@@ -98,13 +102,27 @@ func (w *ResourcesWrapper) Close(ctx context.Context) error {
 	return closeFn(ctx)
 }
 
-func (w *ResourcesWrapper) initSpan(ctx context.Context, name string) (context.Context, trace.Span) {
-	return w.resources.OtelTracer().Tracer("rpcn-mcp").Start(ctx, name)
+func (w *ResourcesWrapper) initSpan(ctx context.Context, methodName, toolName string, meta map[string]any) (context.Context, trace.Span) {
+	opts := []trace.SpanStartOption{
+		trace.WithSpanKind(trace.SpanKindServer),
+		trace.WithAttributes(
+			attribute.String("mcp.method.name", methodName),
+			attribute.String("gen_ai.tool.name", toolName),
+			attribute.String("gen_ai.operation.name", "execute_tool"),
+		),
+	}
+	return w.resources.OtelTracer().Tracer("rpcn-mcp").Start(ctx, methodName+" "+toolName, opts...)
 }
 
-func (w *ResourcesWrapper) initMsgSpan(name string, msg *service.Message) (*service.Message, trace.Span) {
-	ctx, t := w.initSpan(msg.Context(), name)
-	return msg.WithContext(ctx), t
+func (w *ResourcesWrapper) initMsgSpan(methodName, toolName string, meta map[string]any, msg *service.Message) (*service.Message, trace.Span) {
+	ctx, span := w.initSpan(msg.Context(), methodName, toolName, meta)
+	return msg.WithContext(ctx), span
+}
+
+func recordError(span trace.Span, err error, errType string) {
+	span.RecordError(err)
+	span.SetAttributes(attribute.String("error.type", errType))
+	span.SetStatus(codes.Error, err.Error())
 }
 
 type mcpProperty struct {
@@ -202,21 +220,19 @@ func (w *ResourcesWrapper) AddCacheYAML(fileBytes []byte) error {
 			"required": []string{"key"},
 		},
 	}, func(ctx context.Context, request *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		ctx, span := w.initSpan(ctx, res.Label)
+		ctx, span := w.initSpan(ctx, "tools/call", "get-"+res.Label, request.GetParams().GetMeta())
 		defer span.End()
-
-		span.SetAttributes(attribute.String("operation", "get"))
 
 		var args map[string]any
 		if err := json.Unmarshal(request.Params.Arguments, &args); err != nil {
-			span.RecordError(err)
+			recordError(span, err, "invalid_params")
 			return nil, err
 		}
 
 		key, exists := args["key"].(string)
 		if !exists {
 			err := errors.New("missing key [string] argument")
-			span.RecordError(err)
+			recordError(span, err, "invalid_params")
 			return nil, err
 		}
 
@@ -227,11 +243,11 @@ func (w *ResourcesWrapper) AddCacheYAML(fileBytes []byte) error {
 		if err := w.resources.AccessCache(ctx, res.Label, func(c service.Cache) {
 			value, getErr = c.Get(ctx, key)
 		}); err != nil {
-			span.RecordError(err)
+			recordError(span, err, "tool_error")
 			return nil, err
 		}
 		if getErr != nil {
-			span.RecordError(getErr)
+			recordError(span, getErr, "tool_error")
 			return nil, getErr
 		}
 
@@ -264,21 +280,19 @@ func (w *ResourcesWrapper) AddCacheYAML(fileBytes []byte) error {
 			"required": []string{"key", "value"},
 		},
 	}, func(ctx context.Context, request *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		ctx, span := w.initSpan(ctx, res.Label)
+		ctx, span := w.initSpan(ctx, "tools/call", "set-"+res.Label, request.GetParams().GetMeta())
 		defer span.End()
-
-		span.SetAttributes(attribute.String("operation", "set"))
 
 		var args map[string]any
 		if err := json.Unmarshal(request.Params.Arguments, &args); err != nil {
-			span.RecordError(err)
+			recordError(span, err, "invalid_params")
 			return nil, err
 		}
 
 		key, exists := args["key"].(string)
 		if !exists {
 			err := errors.New("missing key [string] argument")
-			span.RecordError(err)
+			recordError(span, err, "invalid_params")
 			return nil, err
 		}
 
@@ -287,7 +301,7 @@ func (w *ResourcesWrapper) AddCacheYAML(fileBytes []byte) error {
 		value, exists := args["value"].(string)
 		if !exists {
 			err := errors.New("missing value [string] argument")
-			span.RecordError(err)
+			recordError(span, err, "invalid_params")
 			return nil, err
 		}
 
@@ -297,11 +311,11 @@ func (w *ResourcesWrapper) AddCacheYAML(fileBytes []byte) error {
 		if err := w.resources.AccessCache(ctx, res.Label, func(c service.Cache) {
 			setErr = c.Set(ctx, key, []byte(value), nil)
 		}); err != nil {
-			span.RecordError(err)
+			recordError(span, err, "tool_error")
 			return nil, err
 		}
 		if setErr != nil {
-			span.RecordError(setErr)
+			recordError(span, setErr, "tool_error")
 			return nil, setErr
 		}
 
@@ -356,8 +370,12 @@ func (w *ResourcesWrapper) AddInputYAML(fileBytes []byte) error {
 			},
 		},
 	}, func(ctx context.Context, request *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		ctx, span := w.initSpan(ctx, "tools/call", res.Label, request.GetParams().GetMeta())
+		defer span.End()
+
 		var args map[string]any
 		if err := json.Unmarshal(request.Params.Arguments, &args); err != nil {
+			recordError(span, err, "invalid_params")
 			return nil, err
 		}
 
@@ -389,9 +407,11 @@ func (w *ResourcesWrapper) AddInputYAML(fileBytes []byte) error {
 				}
 			}
 		}); err != nil {
+			recordError(span, err, "tool_error")
 			return nil, err
 		}
 		if iErr != nil {
+			recordError(span, iErr, "tool_error")
 			return nil, iErr
 		}
 
@@ -399,6 +419,7 @@ func (w *ResourcesWrapper) AddInputYAML(fileBytes []byte) error {
 		for _, m := range resBatch {
 			mBytes, err := m.AsBytes()
 			if err != nil {
+				recordError(span, err, "tool_error")
 				return nil, err
 			}
 
@@ -476,16 +497,25 @@ func (w *ResourcesWrapper) AddProcessorYAML(fileBytes []byte) error {
 		InputSchema: inputSchema,
 	}, func(ctx context.Context, request *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		msg := service.NewMessage(nil)
-		msg, span := w.initMsgSpan(res.Label, msg.WithContext(ctx))
+		msg, span := w.initMsgSpan("tools/call", res.Label, request.GetParams().GetMeta(), msg.WithContext(ctx))
 		defer span.End()
 
 		var args map[string]any
 		if err := json.Unmarshal(request.Params.Arguments, &args); err != nil {
+			recordError(span, err, "invalid_params")
 			return nil, err
 		}
 
+		traceheaders := slices.Concat(
+			propagation.TraceContext{}.Fields(),
+			propagation.Baggage{}.Fields(),
+		)
 		for k, v := range request.GetParams().GetMeta() {
+			if slices.Contains(traceheaders, k) {
+				continue
+			}
 			msg.MetaSetMut(k, v)
+			attrString(span, fmt.Sprintf("mcp._meta.%s", k), bloblang.ValueToString(v))
 		}
 
 		for k, required := range params {
@@ -500,16 +530,7 @@ func (w *ResourcesWrapper) AddProcessorYAML(fileBytes []byte) error {
 			msg.SetBytes([]byte(value))
 		} else {
 			for k, v := range args {
-				switch t := v.(type) {
-				case string:
-					attrString(span, k, t)
-				case []byte:
-					attrString(span, k, string(t))
-				case bool:
-					span.SetAttributes(attribute.Bool(k, t))
-				case float64:
-					span.SetAttributes(attribute.Float64(k, t))
-				}
+				attrString(span, k, bloblang.ValueToString(v))
 			}
 			msg.SetStructured(args)
 		}
@@ -519,24 +540,24 @@ func (w *ResourcesWrapper) AddProcessorYAML(fileBytes []byte) error {
 		if err := w.resources.AccessProcessor(ctx, res.Label, func(p *service.ResourceProcessor) {
 			resBatch, procErr = p.Process(ctx, msg)
 		}); err != nil {
-			span.RecordError(err)
+			recordError(span, err, "tool_error")
 			return nil, err
 		}
 		if procErr != nil {
-			span.RecordError(procErr)
+			recordError(span, procErr, "tool_error")
 			return nil, procErr
 		}
 
 		var content []mcp.Content
 		for _, m := range resBatch {
 			if err := m.GetError(); err != nil {
-				span.RecordError(err)
+				recordError(span, err, "tool_error")
 				return nil, err
 			}
 
 			mBytes, err := m.AsBytes()
 			if err != nil {
-				span.RecordError(err)
+				recordError(span, err, "tool_error")
 				return nil, err
 			}
 
@@ -637,7 +658,7 @@ func (w *ResourcesWrapper) AddOutputYAML(fileBytes []byte) error {
 				return nil, fmt.Errorf("message %v was not an object", i)
 			}
 
-			msg, span := w.initMsgSpan(res.Label, service.NewMessage(nil).WithContext(ctx))
+			msg, span := w.initMsgSpan("tools/call", res.Label, request.GetParams().GetMeta(), service.NewMessage(nil).WithContext(ctx))
 			defer span.End()
 			if len(res.Meta.MCP.Properties) == 0 {
 				contents, exists := mObj["value"].(string)
@@ -670,13 +691,13 @@ func (w *ResourcesWrapper) AddOutputYAML(fileBytes []byte) error {
 			outErr = o.WriteBatch(ctx, inBatch)
 		}); err != nil {
 			for _, s := range spans {
-				s.RecordError(err)
+				recordError(s, err, "tool_error")
 			}
 			return nil, err
 		}
 		if outErr != nil {
 			for _, s := range spans {
-				s.RecordError(outErr)
+				recordError(s, outErr, "tool_error")
 			}
 			return nil, outErr
 		}
