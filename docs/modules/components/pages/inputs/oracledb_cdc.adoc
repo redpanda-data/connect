@@ -108,7 +108,7 @@ Additionally, if `stream_snapshot` is set to true, then the existing data in the
 
 This input adds the following metadata fields to each message:
 
-- table_schema: Schema of the table that the message originated from.
+- database_schema: The database schema for the table where the message originates from.
 - table_name: Name of the table that the message originated from.
 - operation: Type of operation that generated the message: "read", "delete", "insert", or "update". "read" is from messages that are read in the initial snapshot phase.
 - scn: the System Change Number in Oracle.
