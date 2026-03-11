@@ -228,9 +228,15 @@ func (s *Snapshot) getCurrentBinlogPosition(ctx context.Context) (position, erro
 		executedGtidSet any
 	)
 
-	row := s.snapshotConn.QueryRowContext(ctx, "SHOW MASTER STATUS")
-	if err := row.Scan(&file, &offset, &binlogDoDB, &binlogIgnoreDB, &executedGtidSet); err != nil {
-		return position{}, err
+	scanRow := func(row *sql.Row) error {
+		return row.Scan(&file, &offset, &binlogDoDB, &binlogIgnoreDB, &executedGtidSet)
+	}
+
+	// "SHOW BINARY LOG STATUS" replaces "SHOW MASTER STATUS" IN MySQL 8.4+
+	if err := scanRow(s.snapshotConn.QueryRowContext(ctx, "SHOW BINARY LOG STATUS")); err != nil {
+		if err = scanRow(s.snapshotConn.QueryRowContext(ctx, "SHOW MASTER STATUS")); err != nil {
+			return position{}, err
+		}
 	}
 
 	return position{
