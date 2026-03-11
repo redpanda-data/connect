@@ -484,11 +484,12 @@ func (w *ResourcesWrapper) AddProcessorYAML(fileBytes []byte) error {
 			return nil, err
 		}
 
+		for k, v := range request.GetParams().GetMeta() {
+			msg.MetaSetMut(k, v)
+		}
+
 		for k, required := range params {
-			if v, exists := args[k]; exists {
-				msg.MetaSetMut(k, v)
-				attrString(span, k, fmt.Sprintf("%v", v))
-			} else if required {
+			if _, exists := args[k]; !exists && required {
 				return nil, fmt.Errorf("required parameter '%v' was missing", k)
 			}
 		}

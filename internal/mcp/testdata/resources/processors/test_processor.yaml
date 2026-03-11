@@ -2,6 +2,7 @@ label: test-processor
 mapping: |
   root = this
   root.processed = true
+  root.meta = @
 meta:
   tags: [test]
   mcp:
