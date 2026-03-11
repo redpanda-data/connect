@@ -25,13 +25,37 @@ component_type_dropdown::[]
 
 Splits a string by a delimiter into an array.
 
+
+[tabs]
+======
+Common::
++
+--
+
 ```yml
-# Config fields, showing default values
+# Common config fields, showing default values
 label: ""
 string_split:
   delimiter: ""
   empty_as_null: false
 ```
+
+--
+Advanced::
++
+--
+
+```yml
+# All config fields, showing default values
+label: ""
+string_split:
+  delimiter: ""
+  emit_bytes: false
+  empty_as_null: false
+```
+
+--
+======
 
 == Fields
 
@@ -43,6 +67,15 @@ The delimiter to split the string by.
 *Type*: `string`
 
 *Default*: `"\n"`
+
+=== `emit_bytes`
+
+When true, the output will be bloblang bytes instead of strings.
+
+
+*Type*: `bool`
+
+*Default*: `false`
 
 === `empty_as_null`
 

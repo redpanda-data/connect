@@ -45,9 +45,9 @@ func TestStringSplit(t *testing.T) {
 			conf:  `{}`,
 			input: []byte("foo\nbar\nbaz"),
 			expected: []any{
-				[]byte("foo"),
-				[]byte("bar"),
-				[]byte("baz"),
+				"foo",
+				"bar",
+				"baz",
 			},
 		},
 		{
@@ -55,19 +55,19 @@ func TestStringSplit(t *testing.T) {
 			conf:  `delimiter: ","`,
 			input: []byte("one,two,three"),
 			expected: []any{
-				[]byte("one"),
-				[]byte("two"),
-				[]byte("three"),
+				"one",
+				"two",
+				"three",
 			},
 		},
 		{
-			name:  "empty_as_null false leaves empty parts as empty byte slices",
+			name:  "empty_as_null false leaves empty parts as empty strings",
 			conf:  `empty_as_null: false`,
 			input: []byte("a\n\nb"),
 			expected: []any{
-				[]byte("a"),
-				[]byte(""),
-				[]byte("b"),
+				"a",
+				"",
+				"b",
 			},
 		},
 		{
@@ -75,9 +75,9 @@ func TestStringSplit(t *testing.T) {
 			conf:  `empty_as_null: true`,
 			input: []byte("a\n\nb"),
 			expected: []any{
-				[]byte("a"),
+				"a",
 				nil,
-				[]byte("b"),
+				"b",
 			},
 		},
 		{
@@ -85,14 +85,14 @@ func TestStringSplit(t *testing.T) {
 			conf:  `{}`,
 			input: []byte("no newlines here"),
 			expected: []any{
-				[]byte("no newlines here"),
+				"no newlines here",
 			},
 		},
 		{
-			name:     "empty input produces single empty byte slice",
+			name:     "empty input produces single empty string",
 			conf:     `{}`,
 			input:    []byte(""),
-			expected: []any{[]byte("")},
+			expected: []any{""},
 		},
 		{
 			name:     "empty input with empty_as_null produces single nil",
@@ -105,10 +105,10 @@ func TestStringSplit(t *testing.T) {
 			conf:  `{}`,
 			input: []byte("a\n\n\nb"),
 			expected: []any{
-				[]byte("a"),
-				[]byte(""),
-				[]byte(""),
-				[]byte("b"),
+				"a",
+				"",
+				"",
+				"b",
 			},
 		},
 		{
@@ -116,8 +116,27 @@ func TestStringSplit(t *testing.T) {
 			conf:  `empty_as_null: true`,
 			input: []byte("a\n\n\nb"),
 			expected: []any{
-				[]byte("a"),
+				"a",
 				nil,
+				nil,
+				"b",
+			},
+		},
+		{
+			name:  "emit_bytes returns byte slices",
+			conf:  `emit_bytes: true`,
+			input: []byte("foo\nbar"),
+			expected: []any{
+				[]byte("foo"),
+				[]byte("bar"),
+			},
+		},
+		{
+			name:  "emit_bytes with empty_as_null",
+			conf:  "emit_bytes: true\nempty_as_null: true",
+			input: []byte("a\n\nb"),
+			expected: []any{
+				[]byte("a"),
 				nil,
 				[]byte("b"),
 			},
@@ -130,11 +149,12 @@ func TestStringSplit(t *testing.T) {
 			t.Cleanup(func() { require.NoError(t, proc.Close(context.Background())) })
 
 			msg := service.NewMessage(tt.input)
-			batch, err := proc.Process(t.Context(), msg)
+			batches, err := proc.ProcessBatch(t.Context(), service.MessageBatch{msg})
 			require.NoError(t, err)
-			require.Len(t, batch, 1)
+			require.Len(t, batches, 1)
+			require.Len(t, batches[0], 1)
 
-			got, err := batch[0].AsStructured()
+			got, err := batches[0][0].AsStructured()
 			require.NoError(t, err)
 			assert.Equal(t, tt.expected, got)
 		})

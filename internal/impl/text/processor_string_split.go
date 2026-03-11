@@ -17,17 +17,20 @@ package text
 import (
 	"bytes"
 	"context"
+	"strings"
+	"unsafe"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 const (
 	ssFieldDelimiter   = "delimiter"
+	ssFieldEmitBytes   = "emit_bytes"
 	ssFieldEmptyAsNull = "empty_as_null"
 )
 
 func init() {
-	service.MustRegisterProcessor("string_split", stringSplitSpec(), newStringSplit)
+	service.MustRegisterBatchProcessor("string_split", stringSplitSpec(), newStringSplit)
 }
 
 func stringSplitSpec() *service.ConfigSpec {
@@ -38,6 +41,10 @@ func stringSplitSpec() *service.ConfigSpec {
 			service.NewStringField(ssFieldDelimiter).
 				Default("\n").
 				Description("The delimiter to split the string by."),
+			service.NewBoolField(ssFieldEmitBytes).
+				Default(false).
+				Advanced().
+				Description("When true, the output will be bloblang bytes instead of strings."),
 			service.NewBoolField(ssFieldEmptyAsNull).
 				Default(false).
 				Description("When true, empty strings resulting from the split are converted to null."),
@@ -45,12 +52,19 @@ func stringSplitSpec() *service.ConfigSpec {
 }
 
 type stringSplitProc struct {
-	delimiter   []byte
+	delimiter    []byte
+	delimiterStr string
+
+	emitBytes   bool
 	emptyAsNull bool
 }
 
-func newStringSplit(conf *service.ParsedConfig, _ *service.Resources) (service.Processor, error) {
+func newStringSplit(conf *service.ParsedConfig, _ *service.Resources) (service.BatchProcessor, error) {
 	delimiter, err := conf.FieldString(ssFieldDelimiter)
+	if err != nil {
+		return nil, err
+	}
+	emitBytes, err := conf.FieldBool(ssFieldEmitBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -59,26 +73,45 @@ func newStringSplit(conf *service.ParsedConfig, _ *service.Resources) (service.P
 		return nil, err
 	}
 	return &stringSplitProc{
-		delimiter:   []byte(delimiter),
-		emptyAsNull: emptyAsNull,
+		delimiter:    []byte(delimiter),
+		delimiterStr: delimiter,
+		emitBytes:    emitBytes,
+		emptyAsNull:  emptyAsNull,
 	}, nil
 }
 
-func (p *stringSplitProc) Process(_ context.Context, msg *service.Message) (service.MessageBatch, error) {
-	b, err := msg.AsBytes()
-	if err != nil {
-		return nil, err
-	}
-	result := byteSplit(b, p.delimiter)
-	if p.emptyAsNull {
-		for i, v := range result {
-			if s, ok := v.([]byte); ok && len(s) == 0 {
-				result[i] = nil
+func (p *stringSplitProc) ProcessBatch(_ context.Context, input service.MessageBatch) ([]service.MessageBatch, error) {
+	batch := make(service.MessageBatch, len(input))
+	for i, msg := range input {
+		b, err := msg.AsBytes()
+		if err != nil {
+			return nil, err
+		}
+		var result []any
+		if p.emitBytes {
+			result = byteSplit(b, p.delimiter)
+			if p.emptyAsNull {
+				for i, v := range result {
+					if s, ok := v.([]byte); ok && len(s) == 0 {
+						result[i] = nil
+					}
+				}
+			}
+		} else {
+			result = stringSplit(unsafe.String(unsafe.SliceData(b), len(b)), p.delimiterStr)
+			if p.emptyAsNull {
+				for i, v := range result {
+					if s, ok := v.(string); ok && len(s) == 0 {
+						result[i] = nil
+					}
+				}
 			}
 		}
+		copy := msg.Copy()
+		copy.SetStructuredMut(result)
+		batch[i] = copy
 	}
-	msg.SetStructuredMut(result)
-	return service.MessageBatch{msg}, nil
+	return []service.MessageBatch{batch}, nil
 }
 
 func (*stringSplitProc) Close(context.Context) error { return nil }
@@ -101,6 +134,27 @@ func byteSplit(s []byte, sep []byte) []any {
 	i := 0
 	for i < n {
 		m := bytes.Index(s, sep)
+		if m < 0 {
+			break
+		}
+		a[i] = s[:m]
+		s = s[m+len(sep):]
+		i++
+	}
+	a[i] = s
+	return a[:i+1]
+}
+
+func stringSplit(s string, sep string) []any {
+	if len(sep) == 0 {
+		return toAnySlice(strings.Split(s, sep))
+	}
+	n := min(strings.Count(s, sep)+1, len(s)+1)
+	a := make([]any, n)
+	n--
+	i := 0
+	for i < n {
+		m := strings.Index(s, sep)
 		if m < 0 {
 			break
 		}
