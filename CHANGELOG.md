@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.86.0 - TBD
+
+### Added
+
+- Added a new `string_split` processor that can be used instead of bloblang's `split` method in certain high-performance scenarios. ([@rockwotj](https://github.com/rockwotj), [#4187](https://github.com/redpanda-data/connect/pull/4187))
+
 ## 4.85.0 - 2026-03-26
 
 ### Added
