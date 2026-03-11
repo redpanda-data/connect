@@ -957,6 +957,119 @@ read_until:
 	batchMu.Unlock()
 }
 
+func TestIntegrationSnapshotParallel(t *testing.T) {
+	t.Parallel()
+	integration.CheckSkip(t)
+	pool, err := dockertest.NewPool("")
+	require.NoError(t, err)
+
+	resource, db, err := ResourceWithPostgreSQLVersion(t, pool, "16")
+	require.NoError(t, err)
+	require.NoError(t, resource.Expire(120))
+
+	hostAndPort := resource.GetHostPort("5432/tcp")
+	hostAndPortSplited := strings.Split(hostAndPort, ":")
+	password := "l]YLSc|4[i56%{gY"
+
+	// Pre-insert rows into both tables so both pipelines have snapshot data.
+	const numRows = 100
+	for range numRows {
+		_, err = db.Exec("INSERT INTO seq DEFAULT VALUES")
+		require.NoError(t, err)
+		_, err = db.Exec(`INSERT INTO flights (name, created_at) VALUES ('test', NOW())`)
+		require.NoError(t, err)
+	}
+
+	databaseURL := fmt.Sprintf("user=user_name password=%s dbname=dbname sslmode=disable host=%s port=%s", password, hostAndPortSplited[0], hostAndPortSplited[1])
+
+	buildPipeline := func(slotName string) (*service.Stream, *[]int64, *sync.Mutex) {
+		// max_parallel_snapshot_tables: 2 exercises the parallel errgroup scan path within
+		// a single pipeline (two goroutines scanning seq and flights concurrently).
+		// Running two such pipelines simultaneously exercises the concurrent-pipeline scenario
+		// from the bug report.
+		tmpl := fmt.Sprintf(`
+read_until:
+  idle_timeout: 5s
+  input:
+    postgres_cdc:
+        dsn: %s
+        slot_name: %s
+        stream_snapshot: true
+        snapshot_batch_size: 10
+        max_parallel_snapshot_tables: 2
+        schema: public
+        tables:
+          - seq
+          - flights
+`, databaseURL, slotName)
+
+		builder := service.NewStreamBuilder()
+		require.NoError(t, builder.SetLoggerYAML(`level: DEBUG`))
+		require.NoError(t, builder.AddInputYAML(tmpl))
+
+		var mu sync.Mutex
+		var ids []int64
+		require.NoError(t, builder.AddBatchConsumerFunc(func(_ context.Context, batch service.MessageBatch) error {
+			mu.Lock()
+			defer mu.Unlock()
+			for _, msg := range batch {
+				data, err := msg.AsStructured()
+				if err != nil {
+					return err
+				}
+				if id, ok := data.(map[string]any)["id"]; ok {
+					n, err := id.(json.Number).Int64()
+					if err != nil {
+						return err
+					}
+					ids = append(ids, n)
+				}
+			}
+			return nil
+		}))
+
+		stream, err := builder.Build()
+		require.NoError(t, err)
+		license.InjectTestService(stream.Resources())
+		return stream, &ids, &mu
+	}
+
+	streamA, idsA, muA := buildPipeline("test_slot_parallel_a")
+	streamB, idsB, muB := buildPipeline("test_slot_parallel_b")
+
+	// Start both pipelines concurrently. With the bug, one or both will hang during
+	// the snapshot phase: their scanTableRange goroutines block on s.messages <- batch
+	// while holding open DB transactions, and the idle_timeout never fires because the
+	// pipeline is not yet in the streaming phase. The test will time out.
+	doneA := make(chan error, 1)
+	doneB := make(chan error, 1)
+	go func() { doneA <- streamA.Run(t.Context()) }()
+	go func() { doneB <- streamB.Run(t.Context()) }()
+
+	deadline := time.After(60 * time.Second)
+	select {
+	case err := <-doneA:
+		require.NoError(t, err)
+	case <-deadline:
+		require.Fail(t, "pipeline A timed out - concurrent snapshot deadlock suspected")
+	}
+	select {
+	case err := <-doneB:
+		require.NoError(t, err)
+	case <-deadline:
+		require.Fail(t, "pipeline B timed out - concurrent snapshot deadlock suspected")
+	}
+
+	// Both pipelines should have received all rows from both tables.
+	muA.Lock()
+	assert.Len(t, *idsA, numRows*2, "pipeline A did not receive all rows from both tables")
+	muA.Unlock()
+
+	muB.Lock()
+	assert.Len(t, *idsB, numRows*2, "pipeline B did not receive all rows from both tables")
+	muB.Unlock()
+}
+
 func TestIntegrationPostgresMetadata(t *testing.T) {
 	t.Parallel()
 	integration.CheckSkip(t)

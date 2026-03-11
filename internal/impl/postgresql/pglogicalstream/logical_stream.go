@@ -602,7 +602,10 @@ func (s *Stream) processSnapshot(ctx context.Context, snapshotter *snapshotter) 
 		var prev primaryKey
 		ranges := [][2]primaryKey{}
 		// We have a sorted key space, sample every N keys to get a uniform distribution.
-		chunkSize := len(splits) / s.maxSnapshotWorkers
+		// Use max(1, ...) to avoid chunkSize=0 when splits < maxSnapshotWorkers (e.g. small tables
+		// that fit on a single page produce only one sample), which would otherwise cause an
+		// infinite loop.
+		chunkSize := max(1, len(splits)/s.maxSnapshotWorkers)
 		for i := chunkSize; i < len(splits); i += chunkSize {
 			pk := splits[i]
 			ranges = append(ranges, [2]primaryKey{prev, pk})
@@ -612,10 +615,11 @@ func (s *Stream) processSnapshot(ctx context.Context, snapshotter *snapshotter) 
 
 		if len(ranges) > 1 {
 			s.logger.Infof(
-				"created plan in %v to split %s into %d chunks and process in parallel",
+				"created plan in %v to split %s into %d chunks of %d and process in parallel",
 				time.Since(planStartTime),
 				table,
 				len(ranges),
+				chunkSize,
 			)
 		} else {
 			s.logger.Infof(
@@ -740,6 +744,8 @@ func (s *Stream) scanTableRange(ctx context.Context, snapshotter *snapshotter, t
 		sendStartTime := time.Now()
 		select {
 		case s.messages <- batch:
+		case <-ctx.Done():
+			return ctx.Err()
 		case <-s.shutSig.SoftStopChan():
 			return nil
 		}
