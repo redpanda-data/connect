@@ -664,44 +664,189 @@ func TestIntegrationSchemaRegistryMigratorCompatibilityFromSource(t *testing.T) 
 func TestIntegrationSchemaRegistryMigratorServerlessImportMode(t *testing.T) {
 	integration.CheckSkip(t)
 
-	t.Log("Given: source and destination Schema Registry")
-	src, dst := startSchemaRegistrySourceAndDestination(t)
+	t.Run("multi_version_subjects_with_shared_dependency", func(t *testing.T) {
+		t.Log("Given: source and destination Schema Registry")
+		src, dst := startSchemaRegistrySourceAndDestination(t)
+		ctx := t.Context()
 
-	t.Log("And: destination starts in READWRITE mode")
-	ctx := t.Context()
-	modeRes := dst.SetMode(ctx, sr.ModeReadWrite)
-	require.NoError(t, modeRes[0].Err)
+		t.Log("And: destination starts in READWRITE mode")
+		modeRes := dst.SetMode(ctx, sr.ModeReadWrite)
+		require.NoError(t, modeRes[0].Err)
 
-	t.Log("And: a schema exists at source")
-	const (
-		subj   = "serverless-test"
-		schema = `{"type":"string"}`
-	)
-	_, err := src.CreateSchema(ctx, subj, sr.Schema{Schema: schema})
-	require.NoError(t, err)
+		t.Log("And: a shared base subject with two versions")
+		const baseSubj = "import-mode-base"
+		_, err := src.CreateSchema(ctx, baseSubj, sr.Schema{Schema: dummyAvroSchemaV1, Type: sr.TypeAvro})
+		require.NoError(t, err)
+		baseSS, err := src.CreateSchema(ctx, baseSubj, sr.Schema{Schema: dummyAvroSchemaV2, Type: sr.TypeAvro})
+		require.NoError(t, err)
 
-	t.Log("When: migrator runs in serverless mode")
-	conf := migrator.SchemaRegistryMigratorConfig{
-		Enabled:    true,
-		Versions:   migrator.VersionsLatest,
-		Serverless: true,
-	}
-	m := migrator.NewSchemaRegistryMigratorForTesting(t, conf, src, dst)
+		t.Log("And: two subjects each with three versions referencing the shared base")
+		leafSubjects := []string{"import-mode-alpha", "import-mode-beta"}
+		for _, subj := range leafSubjects {
+			schemas := []string{
+				`{"type":"record","name":"Wrapper","fields":[{"name":"ref","type":"MultiRecord"}]}`,
+				`{"type":"record","name":"Wrapper","fields":[{"name":"ref","type":"MultiRecord"},{"name":"x","type":"int","default":0}]}`,
+				`{"type":"record","name":"Wrapper","fields":[{"name":"ref","type":"MultiRecord"},{"name":"x","type":"int","default":0},{"name":"y","type":"int","default":0}]}`,
+			}
+			ref := sr.SchemaReference{
+				Name:    "MultiRecord",
+				Subject: baseSubj,
+				Version: baseSS.Version,
+			}
+			for _, s := range schemas {
+				_, err := src.CreateSchema(ctx, subj, sr.Schema{
+					Schema:     s,
+					Type:       sr.TypeAvro,
+					References: []sr.SchemaReference{ref},
+				})
+				require.NoError(t, err)
+			}
+		}
 
-	syncCtx, cancel := context.WithTimeout(ctx, redpandaTestWaitTimeout)
-	defer cancel()
-	require.NoError(t, m.Sync(syncCtx))
+		t.Log("When: migrator runs in serverless mode with all versions")
+		importModeCalls := make(map[string]int)
+		conf := migrator.SchemaRegistryMigratorConfig{
+			Enabled:    true,
+			Versions:   migrator.VersionsAll,
+			Serverless: true,
+			TestingOnSetImportMode: func(subject string) {
+				importModeCalls[subject]++
+			},
+		}
+		m := migrator.NewSchemaRegistryMigratorForTesting(t, conf, src, dst)
 
-	t.Log("Then: schema exists at destination")
-	dstSchema, err := dst.SchemaByVersion(ctx, subj, 1)
-	require.NoError(t, err)
-	assert.Equal(t, subj, dstSchema.Subject)
-	assert.True(t, migrator.SchemaStringEquals(schema, dstSchema.Schema.Schema, dstSchema.Type))
+		syncCtx, cancel := context.WithTimeout(ctx, redpandaTestWaitTimeout)
+		defer cancel()
+		require.NoError(t, m.Sync(syncCtx))
 
-	t.Log("And: destination mode is restored to READWRITE")
-	mode := dst.Mode(ctx)
-	require.NoError(t, mode[0].Err)
-	assert.Equal(t, "READWRITE", mode[0].Mode.String())
+		t.Log("Then: import mode was set exactly once per destination subject")
+		allSubjects := append(leafSubjects, baseSubj)
+		for _, subj := range allSubjects {
+			assert.Containsf(t, importModeCalls, subj, "expected import mode call for %s", subj)
+			assert.Equalf(t, 1, importModeCalls[subj], "import mode set %d times for subject %s, expected 1", importModeCalls[subj], subj)
+		}
+
+		t.Log("And: all schema versions exist at the destination")
+		for _, subj := range leafSubjects {
+			for v := 1; v <= 3; v++ {
+				sd, err := dst.SchemaByVersion(ctx, subj, v)
+				require.NoErrorf(t, err, "expected version %d for subject %s", v, subj)
+				assert.Equal(t, v, sd.Version)
+			}
+		}
+		for v := 1; v <= 2; v++ {
+			sd, err := dst.SchemaByVersion(ctx, baseSubj, v)
+			require.NoErrorf(t, err, "expected version %d for base subject", v)
+			assert.Equal(t, v, sd.Version)
+		}
+
+		t.Log("And: per-subject mode is restored (not left in IMPORT)")
+		for _, subj := range allSubjects {
+			res := dst.Mode(ctx, subj)
+			if res[0].Err != nil {
+				assert.Contains(t, res[0].Err.Error(), "does not have subject-level mode configured",
+					"unexpected error checking mode for subject %s", subj)
+			} else {
+				assert.NotEqualf(t, sr.ModeImport, res[0].Mode,
+					"subject %s should not be left in IMPORT mode after migration", subj)
+			}
+		}
+	})
+
+	t.Run("single_subject_multiple_versions", func(t *testing.T) {
+		t.Log("Given: source and destination Schema Registry")
+		src, dst := startSchemaRegistrySourceAndDestination(t)
+		ctx := t.Context()
+
+		t.Log("And: destination starts in READWRITE mode")
+		modeRes := dst.SetMode(ctx, sr.ModeReadWrite)
+		require.NoError(t, modeRes[0].Err)
+
+		t.Log("And: a single subject with three versions")
+		const subj = "import-mode-single"
+		_, err := src.CreateSchema(ctx, subj, sr.Schema{Schema: dummyAvroSchemaV1, Type: sr.TypeAvro})
+		require.NoError(t, err)
+		_, err = src.CreateSchema(ctx, subj, sr.Schema{Schema: dummyAvroSchemaV2, Type: sr.TypeAvro})
+		require.NoError(t, err)
+		_, err = src.CreateSchema(ctx, subj, sr.Schema{Schema: dummyAvroSchemaV3, Type: sr.TypeAvro})
+		require.NoError(t, err)
+
+		t.Log("When: migrator runs in serverless mode with all versions")
+		importModeCalls := make(map[string]int)
+		conf := migrator.SchemaRegistryMigratorConfig{
+			Enabled:    true,
+			Versions:   migrator.VersionsAll,
+			Serverless: true,
+			TestingOnSetImportMode: func(subject string) {
+				importModeCalls[subject]++
+			},
+		}
+		m := migrator.NewSchemaRegistryMigratorForTesting(t, conf, src, dst)
+
+		syncCtx, cancel := context.WithTimeout(ctx, redpandaTestWaitTimeout)
+		defer cancel()
+		require.NoError(t, m.Sync(syncCtx))
+
+		t.Log("Then: import mode was set exactly once despite three versions")
+		assert.Equal(t, 1, importModeCalls[subj], "expected exactly 1 import mode call for %s", subj)
+
+		t.Log("And: all versions exist at the destination")
+		for v := 1; v <= 3; v++ {
+			sd, err := dst.SchemaByVersion(ctx, subj, v)
+			require.NoErrorf(t, err, "expected version %d", v)
+			assert.Equal(t, v, sd.Version)
+		}
+
+		t.Log("And: subject mode is restored (not left in IMPORT)")
+		res := dst.Mode(ctx, subj)
+		if res[0].Err != nil {
+			assert.Contains(t, res[0].Err.Error(), "does not have subject-level mode configured")
+		} else {
+			assert.NotEqual(t, sr.ModeImport, res[0].Mode,
+				"subject %s should not be left in IMPORT mode", subj)
+		}
+	})
+
+	t.Run("subject_already_in_import_mode", func(t *testing.T) {
+		t.Log("Given: source and destination Schema Registry")
+		src, dst := startSchemaRegistrySourceAndDestination(t)
+		ctx := t.Context()
+
+		t.Log("And: a source subject with one version")
+		const subj = "import-mode-preset"
+		_, err := src.CreateSchema(ctx, subj, sr.Schema{Schema: dummyAvroSchemaV1, Type: sr.TypeAvro})
+		require.NoError(t, err)
+
+		t.Log("And: the destination subject is already in IMPORT mode")
+		modeRes := dst.SetMode(ctx, sr.ModeImport, subj)
+		require.NoError(t, modeRes[0].Err)
+
+		t.Log("When: migrator runs in serverless mode")
+		importModeCalls := make(map[string]int)
+		conf := migrator.SchemaRegistryMigratorConfig{
+			Enabled:    true,
+			Versions:   migrator.VersionsAll,
+			Serverless: true,
+			TestingOnSetImportMode: func(subject string) {
+				importModeCalls[subject]++
+			},
+		}
+		m := migrator.NewSchemaRegistryMigratorForTesting(t, conf, src, dst)
+
+		syncCtx, cancel := context.WithTimeout(ctx, redpandaTestWaitTimeout)
+		defer cancel()
+		require.NoError(t, m.Sync(syncCtx))
+
+		t.Log("Then: import mode was not set again")
+		assert.Zero(t, importModeCalls[subj],
+			"should not set import mode for subject already in IMPORT mode")
+
+		t.Log("And: subject remains in IMPORT mode")
+		res := dst.Mode(ctx, subj)
+		require.NoError(t, res[0].Err)
+		assert.Equal(t, sr.ModeImport, res[0].Mode,
+			"subject should remain in IMPORT mode")
+	})
 }
 
 func TestIntegrationSchemaRegistryMigratorDFS(t *testing.T) {

@@ -251,6 +251,12 @@ type SchemaRegistryMigratorConfig struct {
 	// Serverless narrows the set of schema configuration keys to those
 	// supported by serverless clusters.
 	Serverless bool
+
+	// TestingOnSetImportMode, when non-nil, is called every time
+	// TrySetImportMode actually sets a subject to IMPORT mode.
+	// The argument is the resolved destination subject name.
+	// This field is only intended for use in tests.
+	TestingOnSetImportMode func(subject string)
 }
 
 // initFromParsed initializes the schema registry migrator with configuration from parsed config.
@@ -339,6 +345,11 @@ func (m *SchemaRegistryMigratorConfig) initFromParsed(pConf *service.ParsedConfi
 	return nil
 }
 
+type subjectSchema struct {
+	sr.SubjectSchema
+	Last bool
+}
+
 type schemaSubjectVersion struct {
 	Subject string
 	Version int
@@ -396,11 +407,11 @@ func (m *schemaRegistryMigrator) ListSubjectSchemas(ctx context.Context) ([]sr.S
 	}
 
 	var schemas []sr.SubjectSchema
-	for s, err := range m.listSubjectSchemas(ctx, m.src, m.conf.Versions, nil) {
+	for ss, err := range m.listSubjectSchemas(ctx, m.src, m.conf.Versions, nil) {
 		if err != nil {
 			return nil, err
 		}
-		schemas = append(schemas, s)
+		schemas = append(schemas, ss.SubjectSchema)
 	}
 
 	// Sort by schema ID ascending
@@ -416,8 +427,8 @@ func (m *schemaRegistryMigrator) listSubjectSchemas(
 	client *sr.Client,
 	versions Versions,
 	filter func(subject string, version int) bool,
-) iter.Seq2[sr.SubjectSchema, error] {
-	return func(yield func(sr.SubjectSchema, error) bool) {
+) iter.Seq2[subjectSchema, error] {
+	return func(yield func(subjectSchema, error) bool) {
 		if m.conf.IncludeDeleted {
 			ctx = sr.WithParams(ctx, sr.ShowDeleted)
 		}
@@ -425,7 +436,7 @@ func (m *schemaRegistryMigrator) listSubjectSchemas(
 		// List and filter subjects
 		subs, err := client.Subjects(ctx)
 		if err != nil {
-			yield(sr.SubjectSchema{}, fmt.Errorf("list subjects: %w", err))
+			yield(subjectSchema{}, fmt.Errorf("list subjects: %w", err))
 			return
 		}
 		subs = m.conf.Filtered(subs)
@@ -442,15 +453,15 @@ func (m *schemaRegistryMigrator) listSubjectSchemas(
 				if err != nil {
 					err = fmt.Errorf("get latest schema for subject %q: %w", s, err)
 				}
-				if !yield(schema, err) {
+				if !yield(subjectSchema{SubjectSchema: schema, Last: true}, err) {
 					return
 				}
 			}
 		case VersionsAll:
-			for _, s := range subs {
+			for i, s := range subs {
 				vers, err := client.SubjectVersions(ctx, s)
 				if err != nil {
-					if !yield(sr.SubjectSchema{}, fmt.Errorf("get versions for subject %q: %w", s, err)) {
+					if !yield(subjectSchema{}, fmt.Errorf("get versions for subject %q: %w", s, err)) {
 						return
 					}
 				}
@@ -465,13 +476,13 @@ func (m *schemaRegistryMigrator) listSubjectSchemas(
 					if err != nil {
 						err = fmt.Errorf("get schema for subject %q version %d: %w", s, v, err)
 					}
-					if !yield(schema, err) {
+					if !yield(subjectSchema{SubjectSchema: schema, Last: i == len(subs)-1}, err) {
 						return
 					}
 				}
 			}
 		default:
-			yield(sr.SubjectSchema{}, fmt.Errorf("unsupported versions mode: %q", versions))
+			yield(subjectSchema{}, fmt.Errorf("unsupported versions mode: %q", versions))
 		}
 	}
 }
@@ -636,7 +647,13 @@ func (m *schemaRegistryMigrator) Sync(ctx context.Context) error {
 		return ok
 	}
 
-	workCh := make(chan sr.SubjectSchema, m.conf.MaxParallelHTTPRequests)
+	modeMgr, err := m.newImportModeManager(ctx)
+	if err != nil {
+		return fmt.Errorf("create import mode changer: %w", err)
+	}
+	defer modeMgr.Close()
+
+	workCh := make(chan subjectSchema, m.conf.MaxParallelHTTPRequests)
 	g, ctx := errgroup.WithContext(ctx)
 
 	// Producer: send root subjects to channel
@@ -660,9 +677,12 @@ func (m *schemaRegistryMigrator) Sync(ctx context.Context) error {
 	for range m.conf.MaxParallelHTTPRequests {
 		g.Go(func() error {
 			for ss := range workCh {
-				err := m.dfsSubjectSchemasFunc(ctx, m.src, ss, filter, func(s sr.SubjectSchema) error {
+				err := m.dfsSubjectSchemasFunc(ctx, m.src, ss.SubjectSchema, filter, func(s sr.SubjectSchema) error {
 					m.log.Debugf("Schema migration: syncing subject=%s version=%d id=%d", s.Subject, s.Version, s.ID)
 
+					if err := modeMgr.TrySetImportMode(ctx, s); err != nil {
+						return fmt.Errorf("ensuring IMPORT mode in destination for subject %s: %w", s.Subject, err)
+					}
 					info, err := m.syncSubjectSchema(ctx, s)
 					if err != nil {
 						return fmt.Errorf("sync subject schema %s version %d: %w", s.Subject, s.Version, err)
@@ -685,6 +705,11 @@ func (m *schemaRegistryMigrator) Sync(ctx context.Context) error {
 
 					return nil
 				})
+				if ss.Last {
+					if err := modeMgr.Restore(ss.SubjectSchema); err != nil {
+						m.log.Warnf("Schema migration: %v", err)
+					}
+				}
 				if err != nil {
 					return err
 				}
@@ -762,15 +787,6 @@ func (m *schemaRegistryMigrator) syncSubjectSchema(ctx context.Context, ss sr.Su
 	if dstSubject != ss.Subject {
 		m.log.Debugf("Schema migration: resolved subject=%s version=%d => subject=%s",
 			ss.Subject, ss.Version, dstSubject)
-	}
-
-	// Ensure subject is in IMPORT mode for serverless registries
-	if m.conf.Serverless {
-		restoreMode, err := m.ensureSubjectImportMode(ctx, dstSubject)
-		if err != nil {
-			return schemaInfo{}, fmt.Errorf("ensure IMPORT mode for subject %s: %w", dstSubject, err)
-		}
-		defer restoreMode()
 	}
 
 	if m.conf.Normalize {
@@ -924,52 +940,173 @@ func srGlobalMode(ctx context.Context, client *sr.Client) (sr.Mode, error) {
 	return res[0].Mode, nil
 }
 
-// ensureSubjectImportMode checks if the destination subject is in IMPORT mode.
-// If not in IMPORT mode, it switches to IMPORT mode and returns a function to
-// restore the original mode.
-func (m *schemaRegistryMigrator) ensureSubjectImportMode(ctx context.Context, subject string) (func(), error) {
-	noop := func() {}
+// importModeManager manages per-subject IMPORT mode transitions for serverless
+// schema registries. It sets each destination subject to IMPORT mode at most
+// once (before the first version is written). Callers use Restore to revert a
+// subject to its previous mode once all its versions have been migrated.
+//
+// When the destination global mode is already IMPORT, or when the migrator is
+// not in serverless mode, all operations are no-ops.
+type importModeManager struct {
+	*schemaRegistryMigrator
+	active   bool
+	mu       sync.RWMutex
+	prevMode map[string]sr.Mode // destination subject to its previous mode (or noMode if not set)
+}
 
-	// Check global mode first, if global mode is IMPORT, subject is implicitly IMPORT
+func (m *schemaRegistryMigrator) newImportModeManager(ctx context.Context) (*importModeManager, error) {
+	c := &importModeManager{schemaRegistryMigrator: m}
+	if !m.conf.Serverless {
+		return c, nil
+	}
+
 	mode, err := srGlobalMode(ctx, m.dst)
 	if err != nil {
-		return noop, err
+		return nil, err
 	}
 	if mode == sr.ModeImport {
-		return noop, nil
+		return c, nil
 	}
 
-	mode, err = srSubjectMode(ctx, m.dst, subject)
+	c.active = true
+	c.prevMode = make(map[string]sr.Mode)
+	return c, nil
+}
+
+// TrySetImportMode sets the subject to IMPORT mode if not already done.
+// No-op when inactive or when the destination subject was already switched.
+func (c *importModeManager) TrySetImportMode(ctx context.Context, src sr.SubjectSchema) error {
+	if !c.active {
+		return nil
+	}
+
+	dstSubject, err := c.resolveSubject(src.Subject, src.Version)
+	if err != nil {
+		return err
+	}
+
+	// Fast path: destination subject already tracked.
+	c.mu.RLock()
+	_, ok := c.prevMode[dstSubject]
+	c.mu.RUnlock()
+	if ok {
+		return nil
+	}
+
+	// Slow path: hold exclusive lock across the entire check-fetch-set
+	// sequence to prevent concurrent goroutines from racing on the same
+	// subject and clobbering the original mode.
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if _, ok := c.prevMode[dstSubject]; ok {
+		return nil
+	}
+
+	mode, err := srSubjectMode(ctx, c.dst, dstSubject)
 	if err != nil {
 		if strings.Contains(err.Error(), "does not have subject-level mode configured") {
 			mode = noMode
 		} else {
-			return noop, err
+			return err
 		}
 	} else if mode == sr.ModeImport {
-		return noop, nil
+		c.prevMode[dstSubject] = mode
+		return nil
 	}
 
-	m.log.Infof("Schema migration: setting subject=%s mode to %s for migration", subject, sr.ModeImport)
-	if err := srSetSubjectMode(ctx, m.dst, sr.ModeImport, subject); err != nil {
+	c.log.Infof("Schema migration: setting subject=%s mode to %s for migration", dstSubject, sr.ModeImport)
+	if err := srSetSubjectMode(ctx, c.dst, sr.ModeImport, dstSubject); err != nil {
 		if strings.Contains(err.Error(), "Invalid mode. Valid values are") {
-			m.log.Warnf("Schema migration: destination schema registry does not support IMPORT mode for subject=%s, proceeding without mode change", subject)
-			return noop, nil
+			c.log.Warnf("Schema migration: destination schema registry does not support IMPORT mode for subject=%s, proceeding without mode change", dstSubject)
+			return nil
 		}
-		return noop, fmt.Errorf("setting IMPORT mode: %w", err)
+		return fmt.Errorf("setting IMPORT mode: %w", err)
 	}
 
-	return func() {
-		if mode == noMode {
-			m.log.Infof("Schema migration: resetting subject=%s mode", subject)
-		} else {
-			m.log.Infof("Schema migration: restoring subject=%s mode to %s", subject, mode)
+	c.prevMode[dstSubject] = mode
+
+	if c.conf.TestingOnSetImportMode != nil {
+		c.conf.TestingOnSetImportMode(dstSubject)
+	}
+
+	return nil
+}
+
+// Restore restores the tracked destination subject to its previous mode and
+// removes it from the tracked set. No-op when inactive or when the subject
+// was not switched.
+func (c *importModeManager) Restore(src sr.SubjectSchema) error {
+	if !c.active {
+		return nil
+	}
+
+	dstSubject, err := c.resolveSubject(src.Subject, src.Version)
+	if err != nil {
+		return fmt.Errorf("resolving destination subject for %s: %w", src.Subject, err)
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if err := c.restoreLocked(dstSubject); err != nil {
+		return fmt.Errorf("restoring subject=%s mode to %s: %w",
+			dstSubject, c.prevMode[dstSubject], err)
+	}
+	return nil
+}
+
+// Close restores any remaining subjects that were not explicitly restored.
+// Intended as a safety net on error paths.
+func (c *importModeManager) Close() {
+	if !c.active {
+		return
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	const retryCount = 3
+	for range retryCount {
+		if len(c.prevMode) == 0 {
+			break
 		}
 
-		if err := srSetSubjectMode(context.Background(), m.dst, mode, subject); err != nil {
-			m.log.Errorf("Schema migration: failed to restore subject=%s: %v", subject, err)
+		for dstSubject := range c.prevMode {
+			if err := c.restoreLocked(dstSubject); err != nil {
+				c.log.Warnf("Schema migration: failed to restore subject=%s mode to %s: %v",
+					dstSubject, c.prevMode[dstSubject], err)
+			}
 		}
-	}, nil
+	}
+
+	if len(c.prevMode) > 0 {
+		remaining := make([]string, 0, len(c.prevMode))
+		for dstSubject := range c.prevMode {
+			remaining = append(remaining, dstSubject)
+		}
+		c.log.Errorf("Schema migration: failed to restore mode giving up subjects=%s attempts=%d",
+			remaining, retryCount)
+	}
+}
+
+func (c *importModeManager) restoreLocked(dstSubject string) error {
+	prevMode, ok := c.prevMode[dstSubject]
+	if !ok {
+		return nil
+	}
+
+	if prevMode == noMode {
+		c.log.Infof("Schema migration: resetting subject=%s mode", dstSubject)
+	} else {
+		c.log.Infof("Schema migration: restoring subject=%s mode to %s", dstSubject, prevMode)
+	}
+
+	err := srSetSubjectMode(context.Background(), c.dst, prevMode, dstSubject)
+	if err == nil {
+		delete(c.prevMode, dstSubject)
+	}
+	return err
 }
 
 func srSubjectMode(ctx context.Context, client *sr.Client, subject string) (sr.Mode, error) {
