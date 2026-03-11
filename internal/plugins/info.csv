@@ -293,6 +293,7 @@ sqlite                    ,buffer    ,sqlite                    ,0.0.0   ,commun
 statsd                    ,metric    ,statsd                    ,0.0.0   ,certified  ,n          ,n     ,n
 stdin                     ,input     ,stdin                     ,0.0.0   ,certified  ,n          ,n     ,n
 stdout                    ,output    ,stdout                    ,0.0.0   ,certified  ,n          ,n     ,n
+string_split              ,processor ,string_split              ,4.84.0  ,community  ,n          ,y     ,y
 subprocess                ,input     ,subprocess                ,0.0.0   ,community  ,n          ,n     ,n
 subprocess                ,output    ,subprocess                ,0.0.0   ,community  ,n          ,n     ,n
 subprocess                ,processor ,subprocess                ,0.0.0   ,community  ,n          ,n     ,n
