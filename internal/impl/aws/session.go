@@ -20,6 +20,7 @@ import (
 	"net/http"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	awshttp "github.com/aws/aws-sdk-go-v2/aws/transport/http"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/credentials/ec2rolecreds"
@@ -63,14 +64,18 @@ func GetSession(ctx context.Context, parsedConf *service.ParsedConfig, opts ...f
 			return aws.Config{}, err
 		}
 
-		// Cloning the default values for the Transport to ensure we get
-		// all the public settings from the 'http.DefaultTransport'.
-		transport := http.DefaultTransport.(*http.Transport).Clone()
-		transport.DialContext = d.DialContext
-
-		httpClient := &http.Client{
-			Transport: transport,
-		}
+		httpClient := awshttp.NewBuildableClient().WithTransportOptions(func(transport *http.Transport) {
+			defaultTransport := http.DefaultTransport.(*http.Transport)
+			transport.DialContext = d.DialContext
+			// Cloning the default values for the Transport to ensure we get
+			// all the public settings from the 'http.DefaultTransport'.
+			transport.Proxy = defaultTransport.Proxy
+			transport.ForceAttemptHTTP2 = defaultTransport.ForceAttemptHTTP2
+			transport.MaxIdleConns = defaultTransport.MaxIdleConns
+			transport.IdleConnTimeout = defaultTransport.IdleConnTimeout
+			transport.TLSHandshakeTimeout = defaultTransport.TLSHandshakeTimeout
+			transport.ExpectContinueTimeout = defaultTransport.ExpectContinueTimeout
+		})
 
 		opts = append(opts, config.WithHTTPClient(httpClient))
 	}
