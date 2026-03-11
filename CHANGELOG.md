@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- mongodb_cdc: Input now adds `schema` metadata to consumed messages. Schema is extracted from the collection's `$jsonSchema` validator when available, otherwise inferred from document structure. This can be used for automatic schema conversion in processors such as `parquet_encode`. (@Jeffail)
+
 ### Changed
 
 - microsoft_sql_server_cdc: The `schema` metadata field (containing the SQL schema name of the source table) has been renamed to `database_schema`. The `common_schema` metadata field (containing the benthos common schema) has been renamed to `schema` for consistency with the `mysql_cdc` and `postgres_cdc` inputs. (@Jeffail)
