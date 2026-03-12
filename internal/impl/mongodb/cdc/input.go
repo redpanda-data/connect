@@ -435,6 +435,21 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 	if !ok {
 		return fmt.Errorf("unable to get oplog last commit timestamp, got %s", helloReply.String())
 	}
+	// Tier 1: pre-fetch $jsonSchema validators for all watched collections
+	// during Connect() so the stream goroutine is not delayed.
+	for _, coll := range m.collections {
+		s, keys, err := fetchCollectionSchema(ctx, m.db, coll)
+		if err != nil {
+			m.logger.Warnf("Failed to fetch $jsonSchema for collection %s: %v", coll, err)
+			continue
+		}
+		if s != nil {
+			m.collectionSchemasMu.Lock()
+			m.collectionSchemas[coll] = &cachedSchema{schema: s, keys: keys}
+			m.collectionSchemasMu.Unlock()
+		}
+	}
+
 	shutsig := shutdown.NewSignaller()
 	m.shutsig = shutsig
 	go func() {
@@ -445,19 +460,6 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 		}
 		defer cancel()
 		defer shutsig.TriggerHasStopped()
-		// Tier 1: pre-fetch $jsonSchema validators for all watched collections.
-		for _, coll := range m.collections {
-			s, keys, err := fetchCollectionSchema(ctx, m.db, coll)
-			if err != nil {
-				m.logger.Warnf("Failed to fetch $jsonSchema for collection %s: %v", coll, err)
-				continue
-			}
-			if s != nil {
-				m.collectionSchemasMu.Lock()
-				m.collectionSchemas[coll] = &cachedSchema{schema: s, keys: keys}
-				m.collectionSchemasMu.Unlock()
-			}
-		}
 
 		opts := options.ChangeStream().
 			SetBatchSize(int32(m.readBatchSize)).
@@ -977,19 +979,16 @@ func (m *mongoCDC) newMongoDBCDCMessage(doc any, operationType, collectionName s
 func (m *mongoCDC) getOrInferCollectionSchema(collectionName string, doc bson.M) any {
 	docKeys := sortedMapKeys(doc)
 
-	m.collectionSchemasMu.RLock()
-	cached, ok := m.collectionSchemas[collectionName]
-	m.collectionSchemasMu.RUnlock()
+	m.collectionSchemasMu.Lock()
+	defer m.collectionSchemasMu.Unlock()
 
-	if ok && slices.Equal(cached.keys, docKeys) {
+	if cached, ok := m.collectionSchemas[collectionName]; ok && slices.Equal(cached.keys, docKeys) {
 		return cached.schema
 	}
 
 	// Cache miss or key-set mismatch — (re-)infer.
 	s, keys := inferSchemaFromDocument(collectionName, doc)
-	m.collectionSchemasMu.Lock()
 	m.collectionSchemas[collectionName] = &cachedSchema{schema: s, keys: keys}
-	m.collectionSchemasMu.Unlock()
 	return s
 }
 

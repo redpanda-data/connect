@@ -1170,23 +1170,26 @@ mongodb_cdc:
 	s := schemas[0]
 	assert.Equal(t, "foo", s.Name)
 	assert.Equal(t, schema.Object, s.Type)
-	// The $jsonSchema validator has 3 properties (name, age, active) but the document
-	// has 4 fields (_id, name, age, active). The Tier 1 schema from the validator won't
-	// include _id, so key-set fingerprinting will detect the mismatch on the first document
-	// and re-infer via Tier 2. The result should have all 4 fields from the document.
+	// The $jsonSchema validator has 3 properties (name, age, active). The _id field
+	// is auto-injected into the Tier 1 schema so the key-set fingerprint matches the
+	// document's 4 fields (_id, active, age, name). The Tier 1 schema is preserved,
+	// keeping the required/optional classification from the validator.
 	require.Len(t, s.Children, 4)
 	assert.Equal(t, "_id", s.Children[0].Name)
 	assert.Equal(t, schema.String, s.Children[0].Type)
+	assert.True(t, s.Children[0].Optional) // auto-injected
+
 	assert.Equal(t, "active", s.Children[1].Name)
 	assert.Equal(t, schema.Boolean, s.Children[1].Type)
+	assert.True(t, s.Children[1].Optional) // not in required
+
 	assert.Equal(t, "age", s.Children[2].Name)
 	assert.Equal(t, schema.Int32, s.Children[2].Type)
+	assert.True(t, s.Children[2].Optional) // not in required
+
 	assert.Equal(t, "name", s.Children[3].Name)
 	assert.Equal(t, schema.String, s.Children[3].Type)
-	// After Tier 2 re-inference, all fields are Optional: true (Tier 2 always marks optional).
-	for _, c := range s.Children {
-		assert.True(t, c.Optional, "%s should be optional after Tier 2 re-inference", c.Name)
-	}
+	assert.False(t, s.Children[3].Optional) // in required — Tier 1 preserved
 }
 
 func TestIntegrationMongoCDCPartialUpdateSchema(t *testing.T) {
