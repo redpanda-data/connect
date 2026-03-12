@@ -3,6 +3,8 @@ name: Claude Code Review
 on:
   pull_request:
     types: [opened, synchronize, ready_for_review, reopened]
+  pull_request_target:
+    types: [opened, synchronize, ready_for_review, reopened]
 
 concurrency:
   group: claude-review-${{ github.event.pull_request.number }}
@@ -10,6 +12,11 @@ concurrency:
 
 jobs:
   claude-review:
+    if: >
+      (github.event_name == 'pull_request' &&
+       github.event.pull_request.head.repo.full_name == github.repository) ||
+      (github.event_name == 'pull_request_target' &&
+       github.event.pull_request.head.repo.full_name != github.repository)
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -20,7 +27,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
-          fetch-depth: ${{ github.event.pull_request.commits }}
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 1
           persist-credentials: false
 
       - name: Check for Claude config changes
@@ -29,8 +37,8 @@ jobs:
         run: |
           MODIFIED_FILES=$(gh pr view ${{ github.event.pull_request.number }} --json files --jq '.files[].path')
           echo "$MODIFIED_FILES"
-          if echo "$MODIFIED_FILES" | grep -qE '(^|/)\.claude/|CLAUDE\.md$'; then
-            echo "::error::PR modifies .claude/ or CLAUDE.md files. Aborting review."
+          if echo "$MODIFIED_FILES" | grep -qE '(^|/)\.claude/|CLAUDE\.md$|^\.github/workflows/'; then
+            echo "::error::PR modifies .claude/, CLAUDE.md, or .github/workflows/ files. Aborting review."
             exit 1
           fi
 
