@@ -187,7 +187,8 @@ type partitionTracker struct {
 	outBatchChan chan<- batchWithAckFn
 	commitFn     func(r *kgo.Record)
 
-	shutSig *shutdown.Signaller
+	closeCtx context.Context
+	shutSig  *shutdown.Signaller
 }
 
 func newPartitionTracker(batcher *service.Batcher, batchChan chan<- batchWithAckFn, commitFn func(r *kgo.Record)) *partitionTracker {
@@ -277,11 +278,11 @@ func (p *partitionTracker) loop() {
 		case <-p.shutSig.SoftStopChan():
 			if p.batcher != nil {
 				p.batcherLock.Lock()
-				if batch, _ := p.batcher.Flush(context.Background()); len(batch) > 0 {
+				if batch, _ := p.batcher.Flush(p.closeCtx); len(batch) > 0 {
 					record := p.topBatchRecord
 					p.topBatchRecord = nil
 					p.batcherLock.Unlock()
-					_ = p.sendBatch(context.Background(), batch, record)
+					_ = p.sendBatch(p.closeCtx, batch, record)
 				} else {
 					p.batcherLock.Unlock()
 				}
@@ -358,6 +359,7 @@ func (p *partitionTracker) pauseFetch(limit int) (pauseFetch bool) {
 }
 
 func (p *partitionTracker) close(ctx context.Context) error {
+	p.closeCtx = ctx
 	p.shutSig.TriggerSoftStop()
 	select {
 	case <-ctx.Done():

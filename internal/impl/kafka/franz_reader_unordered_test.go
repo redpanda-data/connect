@@ -110,7 +110,7 @@ func TestCheckpointTracker_ClearRevokedOnReassign(t *testing.T) {
 	ct := newCheckpointTracker(
 		service.MockResources(),
 		batchChan,
-		func(r *kgo.Record) {},
+		func(_ *kgo.Record) {},
 		service.BatchPolicy{},
 	)
 
@@ -151,7 +151,7 @@ func TestCheckpointTracker_SoftStopFlushesBatcher(t *testing.T) {
 	ct := newCheckpointTracker(
 		res,
 		batchChan,
-		func(r *kgo.Record) {},
+		func(_ *kgo.Record) {},
 		batchPol,
 	)
 
