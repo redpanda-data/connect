@@ -12,6 +12,7 @@ import (
 	"context"
 	"crypto/subtle"
 	"crypto/tls"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"net"
@@ -407,6 +408,14 @@ func (s *traceServiceServer) Export(ctx context.Context, req ptraceotlp.ExportRe
 			marshalErr = err
 			return false
 		}
+		msg.MetaSet(
+			MetadataKeyTraceID,
+			base64.StdEncoding.EncodeToString(span.GetTraceId()),
+		)
+		msg.MetaSet(
+			MetadataKeySpanID,
+			base64.StdEncoding.EncodeToString(span.GetSpanId()),
+		)
 
 		batch = append(batch, msg)
 		return true

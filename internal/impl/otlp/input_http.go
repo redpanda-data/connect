@@ -12,6 +12,7 @@ import (
 	"context"
 	"crypto/subtle"
 	"crypto/tls"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -477,6 +478,14 @@ func (hi *httpOTLPInput) handler() http.Handler {
 					marshalErr = err
 					return false
 				}
+				msg.MetaSet(
+					MetadataKeyTraceID,
+					base64.StdEncoding.EncodeToString(span.GetTraceId()),
+				)
+				msg.MetaSet(
+					MetadataKeySpanID,
+					base64.StdEncoding.EncodeToString(span.GetSpanId()),
+				)
 
 				batch = append(batch, msg)
 				return true
