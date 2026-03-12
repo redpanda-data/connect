@@ -141,6 +141,9 @@ func (b *batchPublisher) Publish(ctx context.Context, m *replication.MessageEven
 	if m.SCN.IsValid() {
 		msg.MetaSet("scn", m.SCN.String())
 	}
+	if m.CheckpointSCN.IsValid() {
+		msg.MetaSet("checkpoint_scn", m.CheckpointSCN.String())
+	}
 
 	var flushedBatch []*service.Message
 	b.batcherMu.Lock()
@@ -169,8 +172,13 @@ func (b *batchPublisher) publishBatch(ctx context.Context, batch service.Message
 
 	lastMsg := batch[len(batch)-1]
 	var checkpointSCN replication.SCN
-	// snapshot records don't have a scn as we don't track those
-	if scn, ok := lastMsg.MetaGet("scn"); ok {
+	// Prefer checkpoint_scn (which accounts for open transactions) otherwise fall back to scn.
+	// Snapshot records don't have an scn so we don't track those.
+	scnKey := "checkpoint_scn"
+	if _, ok := lastMsg.MetaGet(scnKey); !ok {
+		scnKey = "scn"
+	}
+	if scn, ok := lastMsg.MetaGet(scnKey); ok {
 		var parseErr error
 		checkpointSCN, parseErr = replication.ParseSCN(scn)
 		if parseErr != nil {

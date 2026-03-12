@@ -9,6 +9,8 @@
 package logminer
 
 import (
+	"math"
+
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/impl/oracledb/logminer/sqlredo"
 )
@@ -127,6 +129,19 @@ func (tc *InMemoryCache) CommitTransaction(txnID string) {
 
 	delete(tc.transactions, txnID)
 	tc.transactionsMetric.Decr(1)
+}
+
+// LowWatermarkSCN returns the lowest start SCN among all currently open
+// (uncommitted) transactions. Returns math.MaxUint64 if no open transactions.
+// This behaviour is specific to in-memory caches and not part of the cache interface.
+func (tc *InMemoryCache) LowWatermarkSCN(excludeTxnID string) uint64 {
+	lowestOpenSCN := uint64(math.MaxUint64)
+	for id, txn := range tc.transactions {
+		if id != excludeTxnID {
+			lowestOpenSCN = min(lowestOpenSCN, txn.SCN)
+		}
+	}
+	return lowestOpenSCN
 }
 
 // RollbackTransaction removes the rolled back transaction from the cache, discarding all buffered events.

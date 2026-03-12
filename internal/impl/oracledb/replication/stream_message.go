@@ -101,10 +101,11 @@ func (op OpType) String() string {
 
 // MessageEvent represents a single change from Table's change table in the database.
 type MessageEvent struct {
-	SCN       SCN       `json:"start_scn"`
-	Operation OpType    `json:"operation"`
-	Schema    string    `json:"schema"`
-	Table     string    `json:"table"`
-	Data      any       `json:"data"`
-	Timestamp time.Time `json:"timestamp"`
+	SCN           SCN       `json:"start_scn"`
+	CheckpointSCN SCN       `json:"-"`
+	Operation     OpType    `json:"operation"`
+	Schema        string    `json:"schema"`
+	Table         string    `json:"table"`
+	Data          any       `json:"data"`
+	Timestamp     time.Time `json:"timestamp"`
 }

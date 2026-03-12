@@ -14,6 +14,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -254,12 +255,27 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 		lm.txnCache.AddEvent(redoEvent.TransactionID, redoEvent.SCN, &event)
 
 	case sqlredo.OpCommit:
-		// Flush all buffered events for this transaction
+		// Flush all buffered events for given transaction ID
 		if txn := lm.txnCache.GetTransaction(redoEvent.TransactionID); txn != nil {
+			safeCheckpointSCN := redoEvent.SCN
+
+			// InMemory cache specific behaviour
+			if cache, ok := lm.txnCache.(*InMemoryCache); ok {
+				// Compute the safe checkpoint SCN. If other transactions are still
+				// open, we must not advance the checkpoint past their start SCN - 1,
+				// otherwise a restart with in-memory cache would miss their already-seen DML events.
+				if lowestOpenSCN := cache.LowWatermarkSCN(redoEvent.TransactionID); lowestOpenSCN != math.MaxUint64 && lowestOpenSCN > 0 {
+					// We subtract 1 because the query resumes from the point before (i.e. SCN > checkpoint)
+					if lowestOpenSCN-1 < safeCheckpointSCN {
+						safeCheckpointSCN = lowestOpenSCN - 1
+					}
+				}
+			}
+
 			for _, dmlEvent := range txn.Events {
-				msg := toMessageEvent(dmlEvent, redoEvent.SCN)
+				msg := toMessageEvent(dmlEvent, redoEvent.SCN, safeCheckpointSCN)
 				if err := lm.publisher.Publish(ctx, msg); err != nil {
-					return fmt.Errorf("publishing event with SCN '%d`: %w", redoEvent.SCN, err)
+					return fmt.Errorf("publishing event with SCN '%d': %w", redoEvent.SCN, err)
 				}
 			}
 
@@ -467,13 +483,14 @@ func (lm *LogMiner) prepareLogsAndStartSession(ctx context.Context, conn *sql.Co
 	return nil
 }
 
-func toMessageEvent(dml *sqlredo.DMLEvent, scn uint64) *replication.MessageEvent {
+func toMessageEvent(dml *sqlredo.DMLEvent, scn uint64, checkpointSCN uint64) *replication.MessageEvent {
 	m := &replication.MessageEvent{
-		SCN:       replication.SCN(scn),
-		Schema:    dml.Schema,
-		Table:     dml.Table,
-		Data:      dml.Data,
-		Timestamp: dml.Timestamp,
+		SCN:           replication.SCN(scn),
+		CheckpointSCN: replication.SCN(checkpointSCN),
+		Schema:        dml.Schema,
+		Table:         dml.Table,
+		Data:          dml.Data,
+		Timestamp:     dml.Timestamp,
 	}
 
 	switch dml.Operation {
