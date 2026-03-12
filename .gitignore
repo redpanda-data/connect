@@ -13,3 +13,4 @@ release_notes.md
 .op
 __pycache__
 *.test
+/bench
