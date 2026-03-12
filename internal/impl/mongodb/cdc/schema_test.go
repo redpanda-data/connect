@@ -83,21 +83,25 @@ func TestSchemaFromJSONSchemaBasic(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.NotNil(t, s)
-	assert.Equal(t, []string{"age", "name"}, keys)
+	assert.Equal(t, []string{"_id", "age", "name"}, keys) // _id auto-injected
 
 	c := parseSchema(t, s)
 	assert.Equal(t, "test_coll", c.Name)
 	assert.Equal(t, schema.Object, c.Type)
-	require.Len(t, c.Children, 2)
+	require.Len(t, c.Children, 3)
 
-	// Sorted alphabetically
-	assert.Equal(t, "age", c.Children[0].Name)
-	assert.Equal(t, schema.Int32, c.Children[0].Type)
-	assert.True(t, c.Children[0].Optional) // not in required
+	// Sorted alphabetically, _id auto-injected first
+	assert.Equal(t, "_id", c.Children[0].Name)
+	assert.Equal(t, schema.String, c.Children[0].Type)
+	assert.True(t, c.Children[0].Optional) // auto-injected
 
-	assert.Equal(t, "name", c.Children[1].Name)
-	assert.Equal(t, schema.String, c.Children[1].Type)
-	assert.False(t, c.Children[1].Optional) // in required
+	assert.Equal(t, "age", c.Children[1].Name)
+	assert.Equal(t, schema.Int32, c.Children[1].Type)
+	assert.True(t, c.Children[1].Optional) // not in required
+
+	assert.Equal(t, "name", c.Children[2].Name)
+	assert.Equal(t, schema.String, c.Children[2].Type)
+	assert.False(t, c.Children[2].Optional) // in required
 }
 
 func TestSchemaFromJSONSchemaBsonTypeArray(t *testing.T) {
@@ -337,24 +341,14 @@ func TestSchemaFromJSONSchemaFieldOrdering(t *testing.T) {
 		for i, ch := range c.Children {
 			names[i] = ch.Name
 		}
-		assert.Equal(t, []string{"alpha", "mike", "zulu"}, names)
-		assert.Equal(t, []string{"alpha", "mike", "zulu"}, keys)
+		assert.Equal(t, []string{"_id", "alpha", "mike", "zulu"}, names)
+		assert.Equal(t, []string{"_id", "alpha", "mike", "zulu"}, keys)
 	}
 }
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-func TestKeysFromSchema(t *testing.T) {
-	s, _ := inferSchemaFromDocument("coll", bson.M{
-		"c_field": "c",
-		"a_field": "a",
-		"b_field": "b",
-	})
-	keys := keysFromSchema(s)
-	assert.Equal(t, []string{"a_field", "b_field", "c_field"}, keys)
-}
 
 func TestSortedMapKeys(t *testing.T) {
 	m := bson.M{"z": 1, "a": 2, "m": 3}

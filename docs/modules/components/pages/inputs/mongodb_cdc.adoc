@@ -91,11 +91,27 @@ By default MongoDB does not propagate changes in all cases. In order to capture 
 
 == Metadata
 
-Each message omitted by this plugin has the following metadata:
+Each message emitted by this plugin has the following metadata:
 
-- operation: either "create", "replace", "delete" or "update" for changes streamed. Documents from the initial snapshot have the operation set to "read".
+- operation: either "insert", "replace", "delete" or "update" for changes streamed. Documents from the initial snapshot have the operation set to "read".
 - collection: the collection the document was written to.
 - operation_time: the oplog time for when this operation occurred.
+- schema: the collection schema in benthos common schema format (set as immutable metadata). Extracted from the collection's `$jsonSchema` validator if available, otherwise inferred from the first document seen. Not present on messages where no schema could be determined (e.g. deletes without pre-images when no prior schema is cached).
+
+== Schema Detection
+
+Schema metadata is discovered using a two-tier strategy:
+
+1. *$jsonSchema validators* are preferred and queried at startup for each watched collection. When a validator exists, the schema provides accurate type information and required/optional field classification.
+2. When no validator exists, schema is *inferred from the first document* received per collection. All fields are marked optional.
+
+*Change detection:* when a document's top-level field set differs from the cached schema, the schema is re-inferred from that document. This applies to both validator-sourced and inference-sourced schemas.
+
+*Limitations:* type changes within existing fields and structural changes inside nested subdocuments are not detected automatically. Restart the input to force a full schema refresh.
+
+*Fields with null values, unknown BSON types, or mixed-type arrays* are mapped to the `Any` schema type. The `parquet_encode` processor does not support `Any` and will error if it encounters one. Add an upstream processor (e.g. `mapping`) to convert or remove these fields before `parquet_encode`.
+
+*Schema stability:* MongoDB collections may contain documents with varying field sets. When this occurs, the schema updates on each structural change, which can cause frequent schema version bumps in schema registries with compatibility modes. For schema registry targets, configuring a `$jsonSchema` validator on the collection is strongly recommended.
     
 
 == Fields

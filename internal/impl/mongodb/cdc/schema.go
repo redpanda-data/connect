@@ -30,7 +30,7 @@ import (
 func fetchCollectionSchema(ctx context.Context, db *mongo.Database, collectionName string) (any, []string, error) {
 	cursor, err := db.ListCollections(ctx, bson.M{"name": collectionName})
 	if err != nil {
-		return nil, nil, fmt.Errorf("listCollections: %w", err)
+		return nil, nil, fmt.Errorf("listing collections: %w", err)
 	}
 	defer cursor.Close(ctx)
 
@@ -39,7 +39,7 @@ func fetchCollectionSchema(ctx context.Context, db *mongo.Database, collectionNa
 	}
 	var info bson.M
 	if err := cursor.Decode(&info); err != nil {
-		return nil, nil, fmt.Errorf("decode collection info: %w", err)
+		return nil, nil, fmt.Errorf("decoding collection info: %w", err)
 	}
 
 	opts, _ := info["options"].(bson.M)
@@ -57,7 +57,7 @@ func fetchCollectionSchema(ctx context.Context, db *mongo.Database, collectionNa
 
 	s, keys, err := schemaFromJSONSchema(collectionName, jsonSchema)
 	if err != nil {
-		return nil, nil, fmt.Errorf("convert $jsonSchema: %w", err)
+		return nil, nil, fmt.Errorf("converting $jsonSchema: %w", err)
 	}
 	return s, keys, nil
 }
@@ -83,6 +83,16 @@ func schemaFromJSONSchema(collectionName string, jsonSchema bson.M) (any, []stri
 	}
 
 	children, keys := jsonSchemaPropsToChildren(props, requiredSet)
+
+	// $jsonSchema validators almost never declare _id, but every document has
+	// it. Without _id the key-set fingerprint will always mismatch on the
+	// first real document and the Tier 1 schema will be discarded immediately.
+	// Inject _id as an optional String field when it is not already present.
+	if !slices.Contains(keys, "_id") {
+		children = slices.Insert(children, 0, schema.Common{Name: "_id", Type: schema.String, Optional: true})
+		keys = slices.Insert(keys, 0, "_id")
+	}
+
 	c := schema.Common{
 		Name:     collectionName,
 		Type:     schema.Object,
@@ -339,22 +349,6 @@ func sortedMapKeys(m bson.M) []string {
 	keys := make([]string, 0, len(m))
 	for k := range m {
 		keys = append(keys, k)
-	}
-	slices.Sort(keys)
-	return keys
-}
-
-// keysFromSchema extracts sorted top-level field names from a serialised
-// schema.Common (the output of ToAny()). Used to populate the key fingerprint
-// for Tier 1 schemas fetched at startup.
-func keysFromSchema(s any) []string {
-	c, err := schema.ParseFromAny(s)
-	if err != nil {
-		return nil
-	}
-	keys := make([]string, 0, len(c.Children))
-	for _, child := range c.Children {
-		keys = append(keys, child.Name)
 	}
 	slices.Sort(keys)
 	return keys
