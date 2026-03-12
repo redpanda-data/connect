@@ -15,6 +15,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -175,9 +177,7 @@ func seedTable(
 	errCh := make(chan error, 1)
 
 	for range numWorkers {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			for j := range jobs {
 				if err := writeBatch(ctx, client, tableName, j.from, j.to, itemFn); err != nil {
 					select {
@@ -193,7 +193,7 @@ func seedTable(
 					fmt.Printf("Progress: %d/%d items (%.0f items/sec)\n", n, total, float64(n)/elapsed)
 				}
 			}
-		}()
+		})
 	}
 
 	for from := 0; from < total; from += batchSize {
@@ -246,66 +246,66 @@ func writeBatch(
 
 // item factories --------------------------------------------------------------
 
-func sAttr(v string) types.AttributeValue  { return &types.AttributeValueMemberS{Value: v} }
-func nAttr(v string) types.AttributeValue  { return &types.AttributeValueMemberN{Value: v} }
-func bAttr(v bool) types.AttributeValue    { return &types.AttributeValueMemberBOOL{Value: v} }
+func sAttr(v string) types.AttributeValue { return &types.AttributeValueMemberS{Value: v} }
+func nAttr(v string) types.AttributeValue { return &types.AttributeValueMemberN{Value: v} }
+func bAttr(v bool) types.AttributeValue   { return &types.AttributeValueMemberBOOL{Value: v} }
 
 func makeUserItem(n int) map[string]types.AttributeValue {
 	dob := time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC).AddDate(0, 0, n%10000).Format("2006-01-02")
-	about := ""
+	var about strings.Builder
 	for range 50 {
-		about += fmt.Sprintf("This is about user %d. ", n)
+		fmt.Fprintf(&about, "This is about user %d. ", n)
 	}
 	return map[string]types.AttributeValue{
 		"id":            sAttr(fmt.Sprintf("user-%d", n)),
 		"name":          sAttr(fmt.Sprintf("user-%d", n)),
 		"surname":       sAttr(fmt.Sprintf("surname-%d", n)),
-		"about":         sAttr(about),
+		"about":         sAttr(about.String()),
 		"email":         sAttr(fmt.Sprintf("user%d@example.com", n)),
 		"date_of_birth": sAttr(dob),
 		"created_at":    sAttr(time.Now().UTC().Format(time.RFC3339)),
 		"is_active":     bAttr(n%2 == 0),
-		"login_count":   nAttr(fmt.Sprintf("%d", n%100)),
+		"login_count":   nAttr(strconv.Itoa(n % 100)),
 		"balance":       nAttr(fmt.Sprintf("%.2f", float64(n%1000)+float64(n%100)/100.0)),
 	}
 }
 
 func makeProductItem(n int) map[string]types.AttributeValue {
 	dateAdded := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC).AddDate(0, 0, n%1825).Format("2006-01-02")
-	desc := ""
+	var desc strings.Builder
 	for range 50 {
-		desc += fmt.Sprintf("Product description for item %d. ", n)
+		fmt.Fprintf(&desc, "Product description for item %d. ", n)
 	}
 	return map[string]types.AttributeValue{
 		"id":           sAttr(fmt.Sprintf("product-%d", n)),
 		"name":         sAttr(fmt.Sprintf("Product %d", n)),
 		"info":         sAttr(fmt.Sprintf("SKU-%08d", n)),
-		"description":  sAttr(desc),
+		"description":  sAttr(desc.String()),
 		"email":        sAttr(fmt.Sprintf("vendor%d@example.com", n)),
 		"date_added":   sAttr(dateAdded),
 		"created_at":   sAttr(time.Now().UTC().Format(time.RFC3339)),
 		"is_active":    bAttr(n%3 != 0),
-		"basket_count": nAttr(fmt.Sprintf("%d", n%500)),
+		"basket_count": nAttr(strconv.Itoa(n % 500)),
 		"price":        nAttr(fmt.Sprintf("%.2f", float64(n%10000)/100.0)),
 	}
 }
 
 func makeOrderItem(n int) map[string]types.AttributeValue {
 	orderDate := time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC).AddDate(0, 0, n%730).Format("2006-01-02")
-	notes := ""
+	var notes strings.Builder
 	for range 50 {
-		notes += fmt.Sprintf("Order notes for order %d. ", n)
+		fmt.Fprintf(&notes, "Order notes for order %d. ", n)
 	}
 	qty := n%10 + 1
 	return map[string]types.AttributeValue{
 		"id":         sAttr(fmt.Sprintf("order-%d", n)),
 		"user_id":    sAttr(fmt.Sprintf("user-%d", n%10000)),
 		"product_id": sAttr(fmt.Sprintf("product-%d", n%5000)),
-		"notes":      sAttr(notes),
+		"notes":      sAttr(notes.String()),
 		"status":     sAttr(orderStatuses[n%5]),
 		"order_date": sAttr(orderDate),
 		"created_at": sAttr(time.Now().UTC().Format(time.RFC3339)),
-		"quantity":   nAttr(fmt.Sprintf("%d", qty)),
+		"quantity":   nAttr(strconv.Itoa(qty)),
 		"total":      nAttr(fmt.Sprintf("%.2f", float64(n%10000)/100.0*float64(qty))),
 	}
 }
