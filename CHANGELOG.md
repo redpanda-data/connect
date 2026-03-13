@@ -3,15 +3,24 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## Unreleased
+## 4.83.0 - 2026-03-13
 
 ### Added
 
 - mongodb_cdc: Input now adds `schema` metadata to consumed messages. Schema is extracted from the collection's `$jsonSchema` validator when available, otherwise inferred from document structure. This can be used for automatic schema conversion in processors such as `parquet_encode`. (@Jeffail)
+- oracledb_cdc: Adds support for CDC via LogMiner (@josephwoodward)
+- benthos: Add NewMessageWithContext to service package for constructing messages with an associated context. (@prakhargarg105)
+- redpanda(migrator): refcount-based IMPORT mode management for serverless SR (@mmatczuk)
+- Go API: Added composable HTTP client with layered RoundTripper chain (@mmatczuk)
 
 ### Changed
 
 - microsoft_sql_server_cdc: The `schema` metadata field (containing the SQL schema name of the source table) has been renamed to `database_schema`. The `common_schema` metadata field (containing the benthos common schema) has been renamed to `schema` for consistency with the `mysql_cdc` and `postgres_cdc` inputs. (@Jeffail)
+
+### Fixed
+
+- mysql_cdc: replace deprecated 'SHOW MASTER STATUS' for 8.4+ (@josephwoodward)
+- postgresql_cdc: fix issue with hang due to chunksize being 0 (@josephwoodward)
 
 ## 4.82.0 - 2026-03-05
 
