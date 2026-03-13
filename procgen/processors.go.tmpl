@@ -46,6 +46,9 @@ func sharedConfigFields() []*service.ConfigField {
 	return append(fields, httpclient.Fields({{ .DefaultServerURL | printf "%q" }})...)
 }
 
+// messageFunc processes a single message within a batch.
+type messageFunc func(ctx context.Context, idx int, batch service.MessageBatch) error
+
 type baseProcessor struct {
 	httpClient      *http.Client
 	baseURL         string
@@ -97,6 +100,32 @@ func baseProcessorFromParsed(conf *service.ParsedConfig, mgr *service.Resources)
 
 func (p *baseProcessor) Close(context.Context) error { return nil }
 
+// processBatch copies the batch and processes each message concurrently using fn.
+func (p *baseProcessor) processBatch(ctx context.Context, batch service.MessageBatch, fn messageFunc) ([]service.MessageBatch, error) {
+	batch = batch.Copy()
+
+	var wg sync.WaitGroup
+	wg.Add(len(batch))
+	for i := range batch {
+		go func(idx int) {
+			defer wg.Done()
+			if err := fn(ctx, idx, batch); err != nil {
+				batch[idx].SetError(err)
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	return []service.MessageBatch{batch}, nil
+}
+
+// apiResponse holds the parsed result of an HTTP call.
+type apiResponse struct {
+	StatusCode int
+	Headers    map[string]string
+	Body       any // JSON-parsed body, or raw string if not JSON
+}
+
 // headerMap converts http.Header to a simple string map (first value per key).
 func headerMap(h http.Header) map[string]string {
 	m := make(map[string]string, len(h))
@@ -106,6 +135,129 @@ func headerMap(h http.Header) map[string]string {
 		}
 	}
 	return m
+}
+
+// doRequest executes an HTTP request and returns the parsed response.
+func (p *baseProcessor) doRequest(ctx context.Context, method, rawURL string, reqBody io.Reader) (*apiResponse, error) {
+	httpReq, err := http.NewRequestWithContext(ctx, method, rawURL, reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("creating HTTP request: %w", err)
+	}
+
+	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
+	{{- range .SharedHeaders }}
+	httpReq.Header.Set({{ .HeaderName | printf "%q" }}, p.{{ .GoParamName | lowerFirst }})
+	{{- end }}
+	if reqBody != nil {
+		httpReq.Header.Set("Content-Type", "application/json")
+	}
+
+	res, err := p.httpClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("{{ .Service | title }} API request failed: %w", err)
+	}
+	defer res.Body.Close()
+
+	resBytes, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, fmt.Errorf("reading response body: %w", err)
+	}
+
+	var body any
+	if len(resBytes) > 0 {
+		var jsonBody any
+		if json.Unmarshal(resBytes, &jsonBody) == nil {
+			body = jsonBody
+		} else {
+			body = string(resBytes)
+		}
+	}
+
+	return &apiResponse{
+		StatusCode: res.StatusCode,
+		Headers:    headerMap(res.Header),
+		Body:       body,
+	}, nil
+}
+
+// handleResponse builds the response envelope, merges with the original message,
+// applies the response mapping, and returns an error for non-2xx status codes.
+func (p *baseProcessor) handleResponse(msg *service.Message, originalStructured any, resKey string, res *apiResponse) error {
+	envelope := map[string]any{
+		resKey: map[string]any{
+			"status_code": res.StatusCode,
+			"headers":     res.Headers,
+			"body":        res.Body,
+		},
+	}
+
+	if originalMap, ok := originalStructured.(map[string]any); ok {
+		for k, v := range envelope {
+			originalMap[k] = v
+		}
+		envelope = originalMap
+	}
+
+	if p.responseMapping != nil {
+		mapped, err := p.responseMapping.Query(envelope)
+		if err != nil {
+			return fmt.Errorf("executing response_mapping: %w", err)
+		}
+		msg.SetStructured(mapped)
+	} else {
+		msg.SetStructured(envelope)
+	}
+
+	if res.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", res.StatusCode)
+		return fmt.Errorf("{{ .Service | title }} API error (status %d)", res.StatusCode)
+	}
+
+	return nil
+}
+
+// jsonBody is implemented by ogen-generated request types that support JSON
+// marshaling and validation.
+type jsonBody interface {
+	UnmarshalJSON([]byte) error
+	MarshalJSON() ([]byte, error)
+	Validate() error
+}
+
+// marshalJSONRequest applies the request mapping and validates the request body
+// using the ogen-generated type, returning the marshaled JSON as an io.Reader.
+func marshalJSONRequest[Req jsonBody](msg *service.Message, mapping *bloblang.Executor) (io.Reader, error) {
+	if mapping != nil {
+		structured, err := msg.AsStructured()
+		if err != nil {
+			return nil, fmt.Errorf("parsing message for request_mapping: %w", err)
+		}
+		mapped, err := mapping.Query(structured)
+		if err != nil {
+			return nil, fmt.Errorf("executing request_mapping: %w", err)
+		}
+		msg.SetStructured(mapped)
+	}
+
+	b, err := msg.AsBytes()
+	if err != nil {
+		return nil, fmt.Errorf("reading message body: %w", err)
+	}
+
+	var reqBody Req
+	if err := reqBody.UnmarshalJSON(b); err != nil {
+		return nil, fmt.Errorf("unmarshaling request body: %w", err)
+	}
+	if err := reqBody.Validate(); err != nil {
+		return nil, fmt.Errorf("validating request body: %w", err)
+	}
+
+	reqBytes, err := reqBody.MarshalJSON()
+	if err != nil {
+		return nil, fmt.Errorf("marshaling request body: %w", err)
+	}
+
+	return bytes.NewReader(reqBytes), nil
 }
 
 {{ range .Operations }}
@@ -157,6 +309,8 @@ func {{ .Name | lowerFirst }}Config() *service.ConfigSpec {
 		){{- end }}
 }
 
+{{- if or .PathParams .QueryParams }}
+
 type {{ .Name | lowerFirst }}Processor struct {
 	baseProcessor
 	{{- range .PathParams }}
@@ -192,30 +346,13 @@ func new{{ .Name }}Processor(conf *service.ParsedConfig, mgr *service.Resources)
 }
 
 func (p *{{ .Name | lowerFirst }}Processor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
-	batch = batch.Copy()
-
-	var wg sync.WaitGroup
-	wg.Add(len(batch))
-	for i := range batch {
-		go func(idx int) {
-			defer wg.Done()
-			if err := p.process{{ .Name }}(ctx, idx, batch); err != nil {
-				batch[idx].SetError(err)
-			}
-		}(i)
-	}
-	wg.Wait()
-
-	return []service.MessageBatch{batch}, nil
+	return p.processBatch(ctx, batch, p.processMessage)
 }
 
-func (p *{{ .Name | lowerFirst }}Processor) process{{ .Name }}(ctx context.Context, idx int, batch service.MessageBatch) error {
+func (p *{{ .Name | lowerFirst }}Processor) processMessage(ctx context.Context, idx int, batch service.MessageBatch) error {
 	msg := batch[idx]
-
-	// Save original message content for response merge.
 	originalStructured, _ := msg.AsStructured()
 
-	// Build URL.
 	rawURL := p.baseURL + {{ .Path | printf "%q" }}
 	{{- range .PathParams }}
 	{
@@ -228,8 +365,6 @@ func (p *{{ .Name | lowerFirst }}Processor) process{{ .Name }}(ctx context.Conte
 	{{- end }}
 
 	{{- if .QueryParams }}
-
-	// Build query parameters.
 	query := make(url.Values)
 	{{- range .QueryParams }}
 	if p.{{ .GoFieldName }} != nil {
@@ -246,108 +381,59 @@ func (p *{{ .Name | lowerFirst }}Processor) process{{ .Name }}(ctx context.Conte
 	{{- end }}
 
 	{{- if .HasRequestBody }}
-
-	// Apply request mapping and validate request body.
-	if p.requestMapping != nil {
-		structured, err := msg.AsStructured()
-		if err != nil {
-			return fmt.Errorf("parsing message for request_mapping: %w", err)
-		}
-		mapped, err := p.requestMapping.Query(structured)
-		if err != nil {
-			return fmt.Errorf("executing request_mapping: %w", err)
-		}
-		msg.SetStructured(mapped)
-	}
-
-	b, err := msg.AsBytes()
+	reqReader, err := marshalJSONRequest[*v1.{{ .RequestTypeName }}](msg, p.requestMapping)
 	if err != nil {
-		return fmt.Errorf("reading message body: %w", err)
+		return err
 	}
-
-	var reqBody v1.{{ .RequestTypeName }}
-	if err := reqBody.UnmarshalJSON(b); err != nil {
-		return fmt.Errorf("unmarshaling request body: %w", err)
-	}
-	if err := reqBody.Validate(); err != nil {
-		return fmt.Errorf("validating request body: %w", err)
-	}
-
-	reqBytes, err := reqBody.MarshalJSON()
-	if err != nil {
-		return fmt.Errorf("marshaling request body: %w", err)
-	}
-
-	httpReq, err := http.NewRequestWithContext(ctx, {{ .HTTPMethod | httpMethod }}, rawURL, bytes.NewReader(reqBytes))
+	res, err := p.doRequest(ctx, {{ .HTTPMethod | httpMethod }}, rawURL, reqReader)
 	{{- else }}
-	httpReq, err := http.NewRequestWithContext(ctx, {{ .HTTPMethod | httpMethod }}, rawURL, nil)
+	res, err := p.doRequest(ctx, {{ .HTTPMethod | httpMethod }}, rawURL, nil)
 	{{- end }}
 	if err != nil {
-		return fmt.Errorf("creating HTTP request: %w", err)
+		return err
 	}
 
-	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
-	{{- range $.SharedHeaders }}
-	httpReq.Header.Set({{ .HeaderName | printf "%q" }}, p.{{ .GoParamName | lowerFirst }})
-	{{- end }}
-	{{- if .HasRequestBody }}
-	httpReq.Header.Set("Content-Type", "application/json")
-	{{- end }}
-
-	res, err := p.httpClient.Do(httpReq)
-	if err != nil {
-		return fmt.Errorf("{{ $.Service | title }} API request failed: %w", err)
-	}
-	defer res.Body.Close()
-
-	resBody, err := io.ReadAll(res.Body)
-	if err != nil {
-		return fmt.Errorf("reading response body: %w", err)
-	}
-
-	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
-	var body any
-	if len(resBody) > 0 {
-		var jsonBody any
-		if json.Unmarshal(resBody, &jsonBody) == nil {
-			body = jsonBody
-		} else {
-			body = string(resBody)
-		}
-	}
-
-	envelope := map[string]any{
-		"{{ .Name | lowerFirst }}Response": map[string]any{
-			"status_code": res.StatusCode,
-			"headers":     headerMap(res.Header),
-			"body":        body,
-		},
-	}
-
-	// Merge with original message.
-	if originalMap, ok := originalStructured.(map[string]any); ok {
-		for k, v := range envelope {
-			originalMap[k] = v
-		}
-		envelope = originalMap
-	}
-
-	// Apply response mapping.
-	if p.responseMapping != nil {
-		mapped, mapErr := p.responseMapping.Query(envelope)
-		if mapErr != nil {
-			return fmt.Errorf("executing response_mapping: %w", mapErr)
-		}
-		msg.SetStructured(mapped)
-	} else {
-		msg.SetStructured(envelope)
-	}
-
-	if res.StatusCode >= 400 {
-		msg.MetaSetMut("http_status_code", res.StatusCode)
-		return fmt.Errorf("{{ $.Service | title }} API error (status %d)", res.StatusCode)
-	}
-
-	return nil
+	return p.handleResponse(msg, originalStructured, "{{ .Name | lowerFirst }}Response", res)
 }
+
+{{- else }}
+{{/* Processors with no path/query params use baseProcessor directly. */}}
+
+type {{ .Name | lowerFirst }}Processor struct {
+	baseProcessor
+}
+
+func new{{ .Name }}Processor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
+	base, err := baseProcessorFromParsed(conf, mgr)
+	if err != nil {
+		return nil, err
+	}
+	return &{{ .Name | lowerFirst }}Processor{baseProcessor: base}, nil
+}
+
+func (p *{{ .Name | lowerFirst }}Processor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
+	return p.processBatch(ctx, batch, p.processMessage)
+}
+
+func (p *{{ .Name | lowerFirst }}Processor) processMessage(ctx context.Context, idx int, batch service.MessageBatch) error {
+	msg := batch[idx]
+	originalStructured, _ := msg.AsStructured()
+
+	{{- if .HasRequestBody }}
+	reqReader, err := marshalJSONRequest[*v1.{{ .RequestTypeName }}](msg, p.requestMapping)
+	if err != nil {
+		return err
+	}
+	res, err := p.doRequest(ctx, {{ .HTTPMethod | httpMethod }}, p.baseURL+{{ .Path | printf "%q" }}, reqReader)
+	{{- else }}
+	res, err := p.doRequest(ctx, {{ .HTTPMethod | httpMethod }}, p.baseURL+{{ .Path | printf "%q" }}, nil)
+	{{- end }}
+	if err != nil {
+		return err
+	}
+
+	return p.handleResponse(msg, originalStructured, "{{ .Name | lowerFirst }}Response", res)
+}
+
+{{- end }}
 {{ end }}
