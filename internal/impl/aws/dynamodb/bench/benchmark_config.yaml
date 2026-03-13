@@ -1,0 +1,33 @@
+http:
+  debug_endpoints: true
+
+input:
+  aws_dynamodb_cdc:
+    tables:
+      - bench-users
+      - bench-products
+      - bench-orders
+    table_discovery_mode: includelist
+    checkpoint_table: bench-checkpoints
+    endpoint: http://localhost:8000
+    region: us-east-1
+    credentials:
+      id: xxxxx
+      secret: xxxxx
+      token: xxxxx
+    batch_size: 1000
+
+output:
+  processors:
+    - benchmark:
+        interval: 1s
+        count_bytes: true
+  drop: {}
+
+logger:
+  level: INFO
+
+metrics:
+  prometheus:
+    add_process_metrics: true
+    add_go_metrics: true
