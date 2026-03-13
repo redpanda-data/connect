@@ -189,7 +189,8 @@ type partitionTracker struct {
 	outBatchChan chan<- batchWithAckFn
 	commitFn     func(r *kgo.Record)
 
-	shutSig *shutdown.Signaller
+	closeCtx context.Context
+	shutSig  *shutdown.Signaller
 }
 
 func newPartitionTracker(batcher *service.Batcher, batchChan chan<- batchWithAckFn, commitFn func(r *kgo.Record)) *partitionTracker {
@@ -277,6 +278,17 @@ func (p *partitionTracker) loop() {
 				}
 			}
 		case <-p.shutSig.SoftStopChan():
+			if p.batcher != nil {
+				p.batcherLock.Lock()
+				if batch, _ := p.batcher.Flush(p.closeCtx); len(batch) > 0 {
+					record := p.topBatchRecord
+					p.topBatchRecord = nil
+					p.batcherLock.Unlock()
+					_ = p.sendBatch(p.closeCtx, batch, record)
+				} else {
+					p.batcherLock.Unlock()
+				}
+			}
 			return
 		}
 	}
@@ -349,6 +361,7 @@ func (p *partitionTracker) pauseFetch(limit int) (pauseFetch bool) {
 }
 
 func (p *partitionTracker) close(ctx context.Context) error {
+	p.closeCtx = ctx
 	p.shutSig.TriggerSoftStop()
 	select {
 	case <-ctx.Done():
@@ -361,8 +374,9 @@ func (p *partitionTracker) close(ctx context.Context) error {
 //------------------------------------------------------------------------------
 
 type checkpointTracker struct {
-	mut    sync.Mutex
-	topics map[string]map[int32]*partitionTracker
+	mut     sync.Mutex
+	topics  map[string]map[int32]*partitionTracker
+	revoked map[string]map[int32]struct{}
 
 	res       *service.Resources
 	batchChan chan<- batchWithAckFn
@@ -378,6 +392,7 @@ func newCheckpointTracker(
 ) *checkpointTracker {
 	return &checkpointTracker{
 		topics:    map[string]map[int32]*partitionTracker{},
+		revoked:   map[string]map[int32]struct{}{},
 		res:       res,
 		batchChan: batchChan,
 		commitFn:  releaseFn,
@@ -452,12 +467,46 @@ func (c *checkpointTracker) removeTopicPartitions(ctx context.Context, m map[str
 			if trackedPartition, exists := trackedTopic[lostPartition]; exists {
 				_ = trackedPartition.close(ctx)
 			}
+			if c.revoked[topicName] == nil {
+				c.revoked[topicName] = map[int32]struct{}{}
+			}
+			c.revoked[topicName][lostPartition] = struct{}{}
 			delete(trackedTopic, lostPartition)
 		}
 		if len(trackedTopic) == 0 {
 			delete(c.topics, topicName)
 		}
 	}
+}
+
+func (c *checkpointTracker) clearRevoked(m map[string][]int32) {
+	c.mut.Lock()
+	defer c.mut.Unlock()
+
+	for topicName, partitions := range m {
+		revokedParts, exists := c.revoked[topicName]
+		if !exists {
+			continue
+		}
+		for _, partition := range partitions {
+			delete(revokedParts, partition)
+		}
+		if len(revokedParts) == 0 {
+			delete(c.revoked, topicName)
+		}
+	}
+}
+
+func (c *checkpointTracker) isRevoked(topic string, partition int32) bool {
+	c.mut.Lock()
+	defer c.mut.Unlock()
+
+	parts, ok := c.revoked[topic]
+	if !ok {
+		return false
+	}
+	_, revoked := parts[partition]
+	return revoked
 }
 
 //------------------------------------------------------------------------------
@@ -498,16 +547,18 @@ func (f *FranzReaderUnordered) Connect(ctx context.Context) error {
 	batchChan := make(chan batchWithAckFn)
 
 	var cl *kgo.Client
-	commitFn := func(*kgo.Record) {}
+	checkpoints := newCheckpointTracker(f.res, batchChan, func(*kgo.Record) {}, f.batchPolicy)
 	if f.consumerGroup != "" {
-		commitFn = func(r *kgo.Record) {
+		checkpoints.commitFn = func(r *kgo.Record) {
 			if cl == nil {
+				return
+			}
+			if checkpoints.isRevoked(r.Topic, r.Partition) {
 				return
 			}
 			cl.MarkCommitRecords(r)
 		}
 	}
-	checkpoints := newCheckpointTracker(f.res, batchChan, commitFn, f.batchPolicy)
 
 	clientOpts, err := f.clientOpts()
 	if err != nil {
@@ -525,6 +576,9 @@ func (f *FranzReaderUnordered) Connect(ctx context.Context) error {
 			kgo.OnPartitionsLost(func(rctx context.Context, _ *kgo.Client, m map[string][]int32) {
 				// No point trying to commit our offsets, just clean up our topic map
 				checkpoints.removeTopicPartitions(rctx, m)
+			}),
+			kgo.OnPartitionsAssigned(func(_ context.Context, _ *kgo.Client, m map[string][]int32) {
+				checkpoints.clearRevoked(m)
 			}),
 			kgo.ConsumerGroup(f.consumerGroup),
 			kgo.AutoCommitMarks(),
