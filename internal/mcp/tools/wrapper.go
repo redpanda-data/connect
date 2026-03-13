@@ -111,7 +111,20 @@ func (w *ResourcesWrapper) initSpan(ctx context.Context, methodName, toolName st
 			attribute.String("gen_ai.operation.name", "execute_tool"),
 		),
 	}
-	return w.resources.OtelTracer().Tracer("rpcn-mcp").Start(ctx, methodName+" "+toolName, opts...)
+	ctx, span := w.resources.OtelTracer().Tracer("rpcn-mcp").Start(ctx, methodName+" "+toolName, opts...)
+
+	traceHeaders := slices.Concat(
+		propagation.TraceContext{}.Fields(),
+		propagation.Baggage{}.Fields(),
+	)
+	for k, v := range meta {
+		if slices.Contains(traceHeaders, k) {
+			continue
+		}
+		attrString(span, "mcp._meta."+k, bloblang.ValueToString(v))
+	}
+
+	return ctx, span
 }
 
 func (w *ResourcesWrapper) initMsgSpan(methodName, toolName string, meta map[string]any, msg *service.Message) (*service.Message, trace.Span) {
@@ -506,16 +519,15 @@ func (w *ResourcesWrapper) AddProcessorYAML(fileBytes []byte) error {
 			return nil, err
 		}
 
-		traceheaders := slices.Concat(
+		traceHeaders := slices.Concat(
 			propagation.TraceContext{}.Fields(),
 			propagation.Baggage{}.Fields(),
 		)
 		for k, v := range request.GetParams().GetMeta() {
-			if slices.Contains(traceheaders, k) {
+			if slices.Contains(traceHeaders, k) {
 				continue
 			}
 			msg.MetaSetMut(k, v)
-			attrString(span, fmt.Sprintf("mcp._meta.%s", k), bloblang.ValueToString(v))
 		}
 
 		for k, required := range params {
