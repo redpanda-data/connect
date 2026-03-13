@@ -123,8 +123,8 @@ func {{ .Name | lowerFirst }}Config() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Services", {{ $.Service | title | printf "%q" }}).
 		Summary({{ printf "%s `%s %s`" .Summary (upper .HTTPMethod) .Path | printf "%q" }}).
-		{{- if .Description }}
-		Description({{ .Description | printf "%q" }}).
+		{{- if or .Description .DocURL }}
+		Description({{ if .DocURL }}{{ if .Description }}{{ printf "%s\n\nAPI reference: %s" .Description .DocURL | printf "%q" }}{{ else }}{{ printf "API reference: %s" .DocURL | printf "%q" }}{{ end }}{{ else }}{{ .Description | printf "%q" }}{{ end }}).
 		{{- end }}
 		Fields(sharedConfigFields()...).Fields(
 		{{- if .HasRequestBody }}
@@ -149,7 +149,12 @@ func {{ .Name | lowerFirst }}Config() *service.ConfigSpec {
 			Optional(),
 		{{- end }}
 		{{- end }}
-		)
+		){{- range .Examples }}.
+		Example(
+			{{ .Name | printf "%q" }},
+			{{ . | exampleSummary | printf "%q" }},
+			"",
+		){{- end }}
 }
 
 type {{ .Name | lowerFirst }}Processor struct {

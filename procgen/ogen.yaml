@@ -6,11 +6,13 @@ parser:
   # Allowed authentication schemes. See https://swagger.io/specification/#security-scheme-object. Default is full list.
   authentication_schemes:
     - "bearer"
+    - "basic"
 
 generator:
   ignore_not_implemented:
     - "type-based discrimination with same jxType"
     - "complicated reference"
+    - "complex anyOf"
   # Only generate schemas, JSON encoding, and validators (no client/server).
   # Processors build HTTP requests directly and handle raw responses.
   features:

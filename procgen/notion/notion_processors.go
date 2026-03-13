@@ -34,8 +34,7 @@ func sharedConfigFields() []*service.ConfigField {
 			Secret().
 			Description("The Notion API integration token."),
 		service.NewStringField(fieldNotionVersion).
-			Default("2022-06-28").
-			Description("The Notion API version."),
+			Description("The [API version](/reference/versioning) to use for this request. The latest version is `2026-03-11`."),
 	}
 	return append(fields, httpclient.Fields("https://api.notion.com")...)
 }
@@ -98,58 +97,50 @@ func headerMap(h http.Header) map[string]string {
 	return m
 }
 
-// V1BlocksIDChildrenGet processor — get /v1/blocks/{id}/children
+// CompleteFileUpload processor — post /v1/file_uploads/{file_upload_id}/complete
 
 func init() {
 	service.MustRegisterBatchProcessor(
-		"notion_v1_blocks_id_children_get",
-		v1BlocksIDChildrenGetConfig(),
-		newV1BlocksIDChildrenGetProcessor,
+		"notion_complete_file_upload",
+		completeFileUploadConfig(),
+		newCompleteFileUploadProcessor,
 	)
 }
 
-func v1BlocksIDChildrenGetConfig() *service.ConfigSpec {
+func completeFileUploadConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Services", "Notion").
-		Summary("Retrieve block children `GET /v1/blocks/{id}/children`").
+		Summary("Complete a multi-part file upload `POST /v1/file_uploads/{file_upload_id}/complete`").
+		Description("API reference: https://developers.notion.com/reference/complete-file-upload").
 		Fields(sharedConfigFields()...).Fields(
 		service.NewBloblangField(fieldResponseMapping).
 			Optional().
 			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
-		service.NewInterpolatedStringField("id").
+		service.NewInterpolatedStringField("file_upload_id").
 			Description(""),
-		service.NewInterpolatedStringField("page_size").
-			Description("").
-			Optional(),
 	)
 }
 
-type v1BlocksIDChildrenGetProcessor struct {
+type completeFileUploadProcessor struct {
 	baseProcessor
-	id       *service.InterpolatedString
-	pageSize *service.InterpolatedString
+	fileUploadID *service.InterpolatedString
 }
 
-func newV1BlocksIDChildrenGetProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
+func newCompleteFileUploadProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
 	base, err := baseProcessorFromParsed(conf, mgr)
 	if err != nil {
 		return nil, err
 	}
 
-	p := &v1BlocksIDChildrenGetProcessor{baseProcessor: base}
-	if p.id, err = conf.FieldInterpolatedString("id"); err != nil {
+	p := &completeFileUploadProcessor{baseProcessor: base}
+	if p.fileUploadID, err = conf.FieldInterpolatedString("file_upload_id"); err != nil {
 		return nil, err
-	}
-	if conf.Contains("page_size") {
-		if p.pageSize, err = conf.FieldInterpolatedString("page_size"); err != nil {
-			return nil, err
-		}
 	}
 
 	return p, nil
 }
 
-func (p *v1BlocksIDChildrenGetProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
+func (p *completeFileUploadProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
 	batch = batch.Copy()
 
 	var wg sync.WaitGroup
@@ -157,7 +148,7 @@ func (p *v1BlocksIDChildrenGetProcessor) ProcessBatch(ctx context.Context, batch
 	for i := range batch {
 		go func(idx int) {
 			defer wg.Done()
-			if err := p.processV1BlocksIDChildrenGet(ctx, idx, batch); err != nil {
+			if err := p.processCompleteFileUpload(ctx, idx, batch); err != nil {
 				batch[idx].SetError(err)
 			}
 		}(i)
@@ -167,35 +158,22 @@ func (p *v1BlocksIDChildrenGetProcessor) ProcessBatch(ctx context.Context, batch
 	return []service.MessageBatch{batch}, nil
 }
 
-func (p *v1BlocksIDChildrenGetProcessor) processV1BlocksIDChildrenGet(ctx context.Context, idx int, batch service.MessageBatch) error {
+func (p *completeFileUploadProcessor) processCompleteFileUpload(ctx context.Context, idx int, batch service.MessageBatch) error {
 	msg := batch[idx]
 
 	// Save original message content for response merge.
 	originalStructured, _ := msg.AsStructured()
 
 	// Build URL.
-	rawURL := p.baseURL + "/v1/blocks/{id}/children"
+	rawURL := p.baseURL + "/v1/file_uploads/{file_upload_id}/complete"
 	{
-		v, err := batch.TryInterpolatedString(idx, p.id)
+		v, err := batch.TryInterpolatedString(idx, p.fileUploadID)
 		if err != nil {
-			return fmt.Errorf("interpolating id: %w", err)
+			return fmt.Errorf("interpolating file_upload_id: %w", err)
 		}
-		rawURL = strings.Replace(rawURL, "{id}", url.PathEscape(v), 1)
+		rawURL = strings.Replace(rawURL, "{file_upload_id}", url.PathEscape(v), 1)
 	}
-
-	// Build query parameters.
-	query := make(url.Values)
-	if p.pageSize != nil {
-		v, err := batch.TryInterpolatedString(idx, p.pageSize)
-		if err != nil {
-			return fmt.Errorf("interpolating page_size: %w", err)
-		}
-		query.Set("page_size", v)
-	}
-	if len(query) > 0 {
-		rawURL += "?" + query.Encode()
-	}
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", rawURL, nil)
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", rawURL, nil)
 	if err != nil {
 		return fmt.Errorf("creating HTTP request: %w", err)
 	}
@@ -226,7 +204,7 @@ func (p *v1BlocksIDChildrenGetProcessor) processV1BlocksIDChildrenGet(ctx contex
 	}
 
 	envelope := map[string]any{
-		"v1BlocksIDChildrenGetResponse": map[string]any{
+		"completeFileUploadResponse": map[string]any{
 			"status_code": resp.StatusCode,
 			"headers":     headerMap(resp.Header),
 			"body":        body,
@@ -260,20 +238,21 @@ func (p *v1BlocksIDChildrenGetProcessor) processV1BlocksIDChildrenGet(ctx contex
 	return nil
 }
 
-// V1BlocksIDChildrenPatch processor — patch /v1/blocks/{id}/children
+// CreateAComment processor — post /v1/comments
 
 func init() {
 	service.MustRegisterBatchProcessor(
-		"notion_v1_blocks_id_children_patch",
-		v1BlocksIDChildrenPatchConfig(),
-		newV1BlocksIDChildrenPatchProcessor,
+		"notion_create_a_comment",
+		createACommentConfig(),
+		newCreateACommentProcessor,
 	)
 }
 
-func v1BlocksIDChildrenPatchConfig() *service.ConfigSpec {
+func createACommentConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Services", "Notion").
-		Summary("Append block children `PATCH /v1/blocks/{id}/children`").
+		Summary("Create a comment `POST /v1/comments`").
+		Description("API reference: https://developers.notion.com/reference/create-a-comment").
 		Fields(sharedConfigFields()...).Fields(
 		service.NewBloblangField(fieldRequestMapping).
 			Optional().
@@ -281,31 +260,35 @@ func v1BlocksIDChildrenPatchConfig() *service.ConfigSpec {
 		service.NewBloblangField(fieldResponseMapping).
 			Optional().
 			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
-		service.NewInterpolatedStringField("id").
-			Description(""),
-	)
+	).
+		Example(
+			"Add comment to page",
+			"Request body:\n```json\n{\n  \"parent\": {\n    \"page_id\": \"{{PAGE_ID}}\"\n  },\n  \"rich_text\": [\n    {\n      \"text\": {\n        \"content\": \"Hello world\"\n      }\n    }\n  ]\n}\n```\n\nResponse body:\n```json\n{\n  \"object\": \"comment\",\n  \"id\": \"be20daa4-31ed-45a2-9591-24f3dc3a61c2\",\n  \"parent\": {\n    \"type\": \"page_id\",\n    \"page_id\": \"5c6a2821-6bb1-4a7e-b6e1-c50111515c3d\"\n  },\n  \"discussion_id\": \"cf4df352-6cc8-433c-9296-7f3550bfe421\",\n  \"created_time\": \"2022-07-18T21:50:00.000Z\",\n  \"last_edited_time\": \"2022-07-18T21:50:00.000Z\",\n  \"created_by\": {\n    \"object\": \"user\",\n    \"id\": \"e450a39e-9051-4d36-bc4e-8581611fc592\"\n  },\n  \"rich_text\": [\n    {\n      \"type\": \"text\",\n      \"text\": {\n        \"content\": \"Hello world\",\n        \"link\": null\n      },\n      \"annotations\": {\n        \"bold\": false,\n        \"italic\": false,\n        \"strikethrough\": false,\n        \"underline\": false,\n        \"code\": false,\n        \"color\": \"default\"\n      },\n      \"plain_text\": \"Hello world\",\n      \"href\": null\n    }\n  ]\n}\n```",
+			"",
+		).
+		Example(
+			"Add comment to discussion",
+			"Request body:\n```json\n{\n  \"discussion_id\": \"{{DISCUSSION_ID}}\",\n  \"rich_text\": [\n    {\n      \"text\": {\n        \"content\": \"https://www.healthline.com/nutrition/10-proven-benefits-of-kale\",\n        \"link\": {\n          \"type\": \"url\",\n          \"url\": \"https://www.healthline.com/nutrition/10-proven-benefits-of-kale\"\n        }\n      }\n    }\n  ]\n}\n```\n\nResponse body:\n```json\n{\n  \"object\": \"comment\",\n  \"id\": \"6cd52483-6d55-4f8a-a724-4adb1c17ed43\",\n  \"parent\": {\n    \"type\": \"block_id\",\n    \"block_id\": \"5d4ca33c-d6b7-4675-93d9-84b70af45d1c\"\n  },\n  \"discussion_id\": \"ce18f8c6-ef2a-427f-b416-43531fc7c117\",\n  \"created_time\": \"2022-07-18T21:48:00.000Z\",\n  \"last_edited_time\": \"2022-07-18T21:48:00.000Z\",\n  \"created_by\": {\n    \"object\": \"user\",\n    \"id\": \"e450a39e-9051-4d36-bc4e-8581611fc592\"\n  },\n  \"rich_text\": [\n    {\n      \"type\": \"text\",\n      \"text\": {\n        \"content\": \"https://www.healthline.com/nutrition/10-proven-benefits-of-kale\",\n        \"link\": {\n          \"url\": \"https://www.healthline.com/nutrition/10-proven-benefits-of-kale\"\n        }\n      },\n      \"annotations\": {\n        \"bold\": false,\n        \"italic\": false,\n        \"strikethrough\": false,\n        \"underline\": false,\n        \"code\": false,\n        \"color\": \"default\"\n      },\n      \"plain_text\": \"https://www.healthline.com/nutrition/10-proven-benefits-of-kale\",\n      \"href\": \"https://www.healthline.com/nutrition/10-proven-benefits-of-kale\"\n    }\n  ]\n}\n```",
+			"",
+		)
 }
 
-type v1BlocksIDChildrenPatchProcessor struct {
+type createACommentProcessor struct {
 	baseProcessor
-	id *service.InterpolatedString
 }
 
-func newV1BlocksIDChildrenPatchProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
+func newCreateACommentProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
 	base, err := baseProcessorFromParsed(conf, mgr)
 	if err != nil {
 		return nil, err
 	}
 
-	p := &v1BlocksIDChildrenPatchProcessor{baseProcessor: base}
-	if p.id, err = conf.FieldInterpolatedString("id"); err != nil {
-		return nil, err
-	}
+	p := &createACommentProcessor{baseProcessor: base}
 
 	return p, nil
 }
 
-func (p *v1BlocksIDChildrenPatchProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
+func (p *createACommentProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
 	batch = batch.Copy()
 
 	var wg sync.WaitGroup
@@ -313,7 +296,7 @@ func (p *v1BlocksIDChildrenPatchProcessor) ProcessBatch(ctx context.Context, bat
 	for i := range batch {
 		go func(idx int) {
 			defer wg.Done()
-			if err := p.processV1BlocksIDChildrenPatch(ctx, idx, batch); err != nil {
+			if err := p.processCreateAComment(ctx, idx, batch); err != nil {
 				batch[idx].SetError(err)
 			}
 		}(i)
@@ -323,21 +306,14 @@ func (p *v1BlocksIDChildrenPatchProcessor) ProcessBatch(ctx context.Context, bat
 	return []service.MessageBatch{batch}, nil
 }
 
-func (p *v1BlocksIDChildrenPatchProcessor) processV1BlocksIDChildrenPatch(ctx context.Context, idx int, batch service.MessageBatch) error {
+func (p *createACommentProcessor) processCreateAComment(ctx context.Context, idx int, batch service.MessageBatch) error {
 	msg := batch[idx]
 
 	// Save original message content for response merge.
 	originalStructured, _ := msg.AsStructured()
 
 	// Build URL.
-	rawURL := p.baseURL + "/v1/blocks/{id}/children"
-	{
-		v, err := batch.TryInterpolatedString(idx, p.id)
-		if err != nil {
-			return fmt.Errorf("interpolating id: %w", err)
-		}
-		rawURL = strings.Replace(rawURL, "{id}", url.PathEscape(v), 1)
-	}
+	rawURL := p.baseURL + "/v1/comments"
 
 	// Apply request mapping and validate request body.
 	if p.requestMapping != nil {
@@ -357,7 +333,7 @@ func (p *v1BlocksIDChildrenPatchProcessor) processV1BlocksIDChildrenPatch(ctx co
 		return fmt.Errorf("reading message body: %w", err)
 	}
 
-	var reqBody v1.AppendBlockChildrenRequest
+	var reqBody v1.CreateACommentReq
 	if err := reqBody.UnmarshalJSON(b); err != nil {
 		return fmt.Errorf("unmarshaling request body: %w", err)
 	}
@@ -370,7 +346,7 @@ func (p *v1BlocksIDChildrenPatchProcessor) processV1BlocksIDChildrenPatch(ctx co
 		return fmt.Errorf("marshaling request body: %w", err)
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, "PATCH", rawURL, bytes.NewReader(reqBytes))
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", rawURL, bytes.NewReader(reqBytes))
 	if err != nil {
 		return fmt.Errorf("creating HTTP request: %w", err)
 	}
@@ -402,7 +378,7 @@ func (p *v1BlocksIDChildrenPatchProcessor) processV1BlocksIDChildrenPatch(ctx co
 	}
 
 	envelope := map[string]any{
-		"v1BlocksIDChildrenPatchResponse": map[string]any{
+		"createACommentResponse": map[string]any{
 			"status_code": resp.StatusCode,
 			"headers":     headerMap(resp.Header),
 			"body":        body,
@@ -436,49 +412,47 @@ func (p *v1BlocksIDChildrenPatchProcessor) processV1BlocksIDChildrenPatch(ctx co
 	return nil
 }
 
-// V1BlocksIDDelete processor — delete /v1/blocks/{id}
+// CreateADatabase processor — post /v1/data_sources
 
 func init() {
 	service.MustRegisterBatchProcessor(
-		"notion_v1_blocks_id_delete",
-		v1BlocksIDDeleteConfig(),
-		newV1BlocksIDDeleteProcessor,
+		"notion_create_a_database",
+		createADatabaseConfig(),
+		newCreateADatabaseProcessor,
 	)
 }
 
-func v1BlocksIDDeleteConfig() *service.ConfigSpec {
+func createADatabaseConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Services", "Notion").
-		Summary("Delete a block `DELETE /v1/blocks/{id}`").
+		Summary("Create a data source `POST /v1/data_sources`").
+		Description("API reference: https://developers.notion.com/reference/create-a-database").
 		Fields(sharedConfigFields()...).Fields(
+		service.NewBloblangField(fieldRequestMapping).
+			Optional().
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to messages before sending the request body."),
 		service.NewBloblangField(fieldResponseMapping).
 			Optional().
 			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
-		service.NewInterpolatedStringField("id").
-			Description(""),
 	)
 }
 
-type v1BlocksIDDeleteProcessor struct {
+type createADatabaseProcessor struct {
 	baseProcessor
-	id *service.InterpolatedString
 }
 
-func newV1BlocksIDDeleteProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
+func newCreateADatabaseProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
 	base, err := baseProcessorFromParsed(conf, mgr)
 	if err != nil {
 		return nil, err
 	}
 
-	p := &v1BlocksIDDeleteProcessor{baseProcessor: base}
-	if p.id, err = conf.FieldInterpolatedString("id"); err != nil {
-		return nil, err
-	}
+	p := &createADatabaseProcessor{baseProcessor: base}
 
 	return p, nil
 }
 
-func (p *v1BlocksIDDeleteProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
+func (p *createADatabaseProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
 	batch = batch.Copy()
 
 	var wg sync.WaitGroup
@@ -486,7 +460,7 @@ func (p *v1BlocksIDDeleteProcessor) ProcessBatch(ctx context.Context, batch serv
 	for i := range batch {
 		go func(idx int) {
 			defer wg.Done()
-			if err := p.processV1BlocksIDDelete(ctx, idx, batch); err != nil {
+			if err := p.processCreateADatabase(ctx, idx, batch); err != nil {
 				batch[idx].SetError(err)
 			}
 		}(i)
@@ -496,20 +470,525 @@ func (p *v1BlocksIDDeleteProcessor) ProcessBatch(ctx context.Context, batch serv
 	return []service.MessageBatch{batch}, nil
 }
 
-func (p *v1BlocksIDDeleteProcessor) processV1BlocksIDDelete(ctx context.Context, idx int, batch service.MessageBatch) error {
+func (p *createADatabaseProcessor) processCreateADatabase(ctx context.Context, idx int, batch service.MessageBatch) error {
 	msg := batch[idx]
 
 	// Save original message content for response merge.
 	originalStructured, _ := msg.AsStructured()
 
 	// Build URL.
-	rawURL := p.baseURL + "/v1/blocks/{id}"
-	{
-		v, err := batch.TryInterpolatedString(idx, p.id)
+	rawURL := p.baseURL + "/v1/data_sources"
+
+	// Apply request mapping and validate request body.
+	if p.requestMapping != nil {
+		structured, err := msg.AsStructured()
 		if err != nil {
-			return fmt.Errorf("interpolating id: %w", err)
+			return fmt.Errorf("parsing message for request_mapping: %w", err)
 		}
-		rawURL = strings.Replace(rawURL, "{id}", url.PathEscape(v), 1)
+		mapped, err := p.requestMapping.Query(structured)
+		if err != nil {
+			return fmt.Errorf("executing request_mapping: %w", err)
+		}
+		msg.SetStructured(mapped)
+	}
+
+	b, err := msg.AsBytes()
+	if err != nil {
+		return fmt.Errorf("reading message body: %w", err)
+	}
+
+	var reqBody v1.CreateADatabaseReq
+	if err := reqBody.UnmarshalJSON(b); err != nil {
+		return fmt.Errorf("unmarshaling request body: %w", err)
+	}
+	if err := reqBody.Validate(); err != nil {
+		return fmt.Errorf("validating request body: %w", err)
+	}
+
+	reqBytes, err := reqBody.MarshalJSON()
+	if err != nil {
+		return fmt.Errorf("marshaling request body: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", rawURL, bytes.NewReader(reqBytes))
+	if err != nil {
+		return fmt.Errorf("creating HTTP request: %w", err)
+	}
+
+	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
+	httpReq.Header.Set("Notion-Version", p.notionVersion)
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := p.httpClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("Notion API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("reading response body: %w", err)
+	}
+
+	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
+	var body any
+	if len(respBody) > 0 {
+		var jsonBody any
+		if json.Unmarshal(respBody, &jsonBody) == nil {
+			body = jsonBody
+		} else {
+			body = string(respBody)
+		}
+	}
+
+	envelope := map[string]any{
+		"createADatabaseResponse": map[string]any{
+			"status_code": resp.StatusCode,
+			"headers":     headerMap(resp.Header),
+			"body":        body,
+		},
+	}
+
+	// Merge with original message.
+	if originalMap, ok := originalStructured.(map[string]any); ok {
+		for k, v := range envelope {
+			originalMap[k] = v
+		}
+		envelope = originalMap
+	}
+
+	// Apply response mapping.
+	if p.responseMapping != nil {
+		mapped, mapErr := p.responseMapping.Query(envelope)
+		if mapErr != nil {
+			return fmt.Errorf("executing response_mapping: %w", mapErr)
+		}
+		msg.SetStructured(mapped)
+	} else {
+		msg.SetStructured(envelope)
+	}
+
+	if resp.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", resp.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	}
+
+	return nil
+}
+
+// CreateDatabase processor — post /v1/databases
+
+func init() {
+	service.MustRegisterBatchProcessor(
+		"notion_create_database",
+		createDatabaseConfig(),
+		newCreateDatabaseProcessor,
+	)
+}
+
+func createDatabaseConfig() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Categories("Services", "Notion").
+		Summary("Create a database `POST /v1/databases`").
+		Description("API reference: https://developers.notion.com/reference/create-database").
+		Fields(sharedConfigFields()...).Fields(
+		service.NewBloblangField(fieldRequestMapping).
+			Optional().
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to messages before sending the request body."),
+		service.NewBloblangField(fieldResponseMapping).
+			Optional().
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
+	).
+		Example(
+			"Create a database",
+			"Request body:\n```json\n{\n  \"parent\": {\n    \"type\": \"page_id\",\n    \"page_id\": \"{{PAGE_ID}}\"\n  },\n  \"title\": [\n    {\n      \"type\": \"text\",\n      \"text\": {\n        \"content\": \"Grocery List\",\n        \"link\": null\n      }\n    }\n  ],\n  \"properties\": {\n    \"Name\": {\n      \"title\": {}\n    },\n    \"Description\": {\n      \"rich_text\": {}\n    },\n    \"In stock\": {\n      \"checkbox\": {}\n    },\n    \"Food group\": {\n      \"select\": {\n        \"options\": [\n          {\n            \"name\": \"🥦Vegetable\",\n            \"color\": \"green\"\n          },\n          {\n            \"name\": \"🍎Fruit\",\n            \"color\": \"red\"\n          },\n          {\n            \"name\": \"💪Protein\",\n            \"color\": \"yellow\"\n          }\n        ]\n      }\n    },\n    \"Price\": {\n      \"number\": {\n        \"format\": \"dollar\"\n      }\n    },\n    \"Last ordered\": {\n      \"date\": {}\n    },\n    \"Store availability\": {\n      \"type\": \"multi_select\",\n      \"multi_select\": {\n        \"options\": [\n          {\n            \"name\": \"Duc Loi Market\",\n            \"color\": \"blue\"\n          },\n          {\n            \"name\": \"Rainbow Grocery\",\n            \"color\": \"gray\"\n          },\n          {\n            \"name\": \"Nijiya Market\",\n            \"color\": \"purple\"\n          },\n          {\n            \"name\": \"Gus's Community Market\",\n            \"color\": \"yellow\"\n          }\n        ]\n      }\n    },\n    \"+1\": {\n      \"people\": {}\n    },\n    \"Photo\": {\n      \"files\": {}\n    }\n  }\n}\n```\n\nResponse body:\n```json\n{\n  \"object\": \"database\",\n  \"id\": \"23cde96c-0ad8-41d8-bfa2-b477c63dd52a\",\n  \"cover\": null,\n  \"icon\": null,\n  \"created_time\": \"2022-02-24T22:06:00.000Z\",\n  \"created_by\": {\n    \"object\": \"user\",\n    \"id\": \"92a680bb-6970-4726-952b-4f4c03bff617\"\n  },\n  \"last_edited_by\": {\n    \"object\": \"user\",\n    \"id\": \"92a680bb-6970-4726-952b-4f4c03bff617\"\n  },\n  \"last_edited_time\": \"2022-02-24T22:06:00.000Z\",\n  \"title\": [\n    {\n      \"type\": \"text\",\n      \"text\": {\n        \"content\": \"Grocery List\",\n        \"link\": null\n      },\n      \"annotations\": {\n        \"bold\": false,\n        \"italic\": false,\n        \"strikethrough\": false,\n        \"underline\": false,\n        \"code\": false,\n        \"color\": \"default\"\n      },\n      \"plain_text\": \"Grocery List\",\n      \"href\": null\n    }\n  ],\n  \"properties\": {\n    \"Description\": {\n      \"id\": \"%3EWW~\",\n      \"name\": \"Description\",\n      \"type\": \"rich_text\",\n      \"rich_text\": {}\n    },\n    \"Last ordered\": {\n      \"id\": \"O%5C%3BK\",\n      \"name\": \"Last ordered\",\n      \"type\": \"date\",\n      \"date\": {}\n    },\n    \"In stock\": {\n      \"id\": \"Pya%5C\",\n      \"name\": \"In stock\",\n      \"type\": \"checkbox\",\n      \"checkbox\": {}\n    },\n    \"+1\": {\n      \"id\": \"%5CSky\",\n      \"name\": \"+1\",\n      \"type\": \"people\",\n      \"people\": {}\n    },\n    \"Photo\": {\n      \"id\": \"dSrT\",\n      \"name\": \"Photo\",\n      \"type\": \"files\",\n      \"files\": {}\n    },\n    \"Store availability\": {\n      \"id\": \"jRd%3E\",\n      \"name\": \"Store availability\",\n      \"type\": \"multi_select\",\n      \"multi_select\": {\n        \"options\": [\n          {\n            \"id\": \"8e6441ee-8f17-4833-a2fe-68af5dced24f\",\n            \"name\": \"Duc Loi Market\",\n            \"color\": \"blue\"\n          },\n          {\n            \"id\": \"64a9da77-9805-461f-9773-1e176fdbd203\",\n            \"name\": \"Rainbow Grocery\",\n            \"color\": \"gray\"\n          },\n          {\n            \"id\": \"012d0436-66a1-4613-a1bd-314b1d1d059b\",\n            \"name\": \"Nijiya Market\",\n            \"color\": \"purple\"\n          },\n          {\n            \"id\": \"63ab31f9-8cbd-4d02-8688-752376f455ea\",\n            \"name\": \"Gus's Community Market\",\n            \"color\": \"yellow\"\n          }\n        ]\n      }\n    },\n    \"Food group\": {\n      \"id\": \"q%5DO%5B\",\n      \"name\": \"Food group\",\n      \"type\": \"select\",\n      \"select\": {\n        \"options\": [\n          {\n            \"id\": \"392af858-f42f-43ea-a171-7c0ca5c0a683\",\n            \"name\": \"🥦Vegetable\",\n            \"color\": \"green\"\n          },\n          {\n            \"id\": \"df461a24-14c6-494a-8c61-55775fedbdcd\",\n            \"name\": \"🍎Fruit\",\n            \"color\": \"red\"\n          },\n          {\n            \"id\": \"0ff22aaa-348e-4194-83c2-67a76dfb10fc\",\n            \"name\": \"💪Protein\",\n            \"color\": \"yellow\"\n          }\n        ]\n      }\n    },\n    \"Price\": {\n      \"id\": \"t%60jj\",\n      \"name\": \"Price\",\n      \"type\": \"number\",\n      \"number\": {\n        \"format\": \"dollar\"\n      }\n    },\n    \"Name\": {\n      \"id\": \"title\",\n      \"name\": \"Name\",\n      \"type\": \"title\",\n      \"title\": {}\n    }\n  },\n  \"parent\": {\n    \"type\": \"page_id\",\n    \"page_id\": \"c4d39556-6364-46a1-8a61-ebbb668f7445\"\n  },\n  \"url\": \"https://www.notion.so/23cde96c0ad841d8bfa2b477c63dd52a\",\n  \"archived\": false\n}\n```",
+			"",
+		)
+}
+
+type createDatabaseProcessor struct {
+	baseProcessor
+}
+
+func newCreateDatabaseProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
+	base, err := baseProcessorFromParsed(conf, mgr)
+	if err != nil {
+		return nil, err
+	}
+
+	p := &createDatabaseProcessor{baseProcessor: base}
+
+	return p, nil
+}
+
+func (p *createDatabaseProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
+	batch = batch.Copy()
+
+	var wg sync.WaitGroup
+	wg.Add(len(batch))
+	for i := range batch {
+		go func(idx int) {
+			defer wg.Done()
+			if err := p.processCreateDatabase(ctx, idx, batch); err != nil {
+				batch[idx].SetError(err)
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	return []service.MessageBatch{batch}, nil
+}
+
+func (p *createDatabaseProcessor) processCreateDatabase(ctx context.Context, idx int, batch service.MessageBatch) error {
+	msg := batch[idx]
+
+	// Save original message content for response merge.
+	originalStructured, _ := msg.AsStructured()
+
+	// Build URL.
+	rawURL := p.baseURL + "/v1/databases"
+
+	// Apply request mapping and validate request body.
+	if p.requestMapping != nil {
+		structured, err := msg.AsStructured()
+		if err != nil {
+			return fmt.Errorf("parsing message for request_mapping: %w", err)
+		}
+		mapped, err := p.requestMapping.Query(structured)
+		if err != nil {
+			return fmt.Errorf("executing request_mapping: %w", err)
+		}
+		msg.SetStructured(mapped)
+	}
+
+	b, err := msg.AsBytes()
+	if err != nil {
+		return fmt.Errorf("reading message body: %w", err)
+	}
+
+	var reqBody v1.CreateDatabaseReq
+	if err := reqBody.UnmarshalJSON(b); err != nil {
+		return fmt.Errorf("unmarshaling request body: %w", err)
+	}
+	if err := reqBody.Validate(); err != nil {
+		return fmt.Errorf("validating request body: %w", err)
+	}
+
+	reqBytes, err := reqBody.MarshalJSON()
+	if err != nil {
+		return fmt.Errorf("marshaling request body: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", rawURL, bytes.NewReader(reqBytes))
+	if err != nil {
+		return fmt.Errorf("creating HTTP request: %w", err)
+	}
+
+	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
+	httpReq.Header.Set("Notion-Version", p.notionVersion)
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := p.httpClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("Notion API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("reading response body: %w", err)
+	}
+
+	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
+	var body any
+	if len(respBody) > 0 {
+		var jsonBody any
+		if json.Unmarshal(respBody, &jsonBody) == nil {
+			body = jsonBody
+		} else {
+			body = string(respBody)
+		}
+	}
+
+	envelope := map[string]any{
+		"createDatabaseResponse": map[string]any{
+			"status_code": resp.StatusCode,
+			"headers":     headerMap(resp.Header),
+			"body":        body,
+		},
+	}
+
+	// Merge with original message.
+	if originalMap, ok := originalStructured.(map[string]any); ok {
+		for k, v := range envelope {
+			originalMap[k] = v
+		}
+		envelope = originalMap
+	}
+
+	// Apply response mapping.
+	if p.responseMapping != nil {
+		mapped, mapErr := p.responseMapping.Query(envelope)
+		if mapErr != nil {
+			return fmt.Errorf("executing response_mapping: %w", mapErr)
+		}
+		msg.SetStructured(mapped)
+	} else {
+		msg.SetStructured(envelope)
+	}
+
+	if resp.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", resp.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	}
+
+	return nil
+}
+
+// CreateFile processor — post /v1/file_uploads
+
+func init() {
+	service.MustRegisterBatchProcessor(
+		"notion_create_file",
+		createFileConfig(),
+		newCreateFileProcessor,
+	)
+}
+
+func createFileConfig() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Categories("Services", "Notion").
+		Summary("Create a file upload `POST /v1/file_uploads`").
+		Description("API reference: https://developers.notion.com/reference/create-file").
+		Fields(sharedConfigFields()...).Fields(
+		service.NewBloblangField(fieldRequestMapping).
+			Optional().
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to messages before sending the request body."),
+		service.NewBloblangField(fieldResponseMapping).
+			Optional().
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
+	)
+}
+
+type createFileProcessor struct {
+	baseProcessor
+}
+
+func newCreateFileProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
+	base, err := baseProcessorFromParsed(conf, mgr)
+	if err != nil {
+		return nil, err
+	}
+
+	p := &createFileProcessor{baseProcessor: base}
+
+	return p, nil
+}
+
+func (p *createFileProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
+	batch = batch.Copy()
+
+	var wg sync.WaitGroup
+	wg.Add(len(batch))
+	for i := range batch {
+		go func(idx int) {
+			defer wg.Done()
+			if err := p.processCreateFile(ctx, idx, batch); err != nil {
+				batch[idx].SetError(err)
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	return []service.MessageBatch{batch}, nil
+}
+
+func (p *createFileProcessor) processCreateFile(ctx context.Context, idx int, batch service.MessageBatch) error {
+	msg := batch[idx]
+
+	// Save original message content for response merge.
+	originalStructured, _ := msg.AsStructured()
+
+	// Build URL.
+	rawURL := p.baseURL + "/v1/file_uploads"
+
+	// Apply request mapping and validate request body.
+	if p.requestMapping != nil {
+		structured, err := msg.AsStructured()
+		if err != nil {
+			return fmt.Errorf("parsing message for request_mapping: %w", err)
+		}
+		mapped, err := p.requestMapping.Query(structured)
+		if err != nil {
+			return fmt.Errorf("executing request_mapping: %w", err)
+		}
+		msg.SetStructured(mapped)
+	}
+
+	b, err := msg.AsBytes()
+	if err != nil {
+		return fmt.Errorf("reading message body: %w", err)
+	}
+
+	var reqBody v1.CreateFileReq
+	if err := reqBody.UnmarshalJSON(b); err != nil {
+		return fmt.Errorf("unmarshaling request body: %w", err)
+	}
+	if err := reqBody.Validate(); err != nil {
+		return fmt.Errorf("validating request body: %w", err)
+	}
+
+	reqBytes, err := reqBody.MarshalJSON()
+	if err != nil {
+		return fmt.Errorf("marshaling request body: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", rawURL, bytes.NewReader(reqBytes))
+	if err != nil {
+		return fmt.Errorf("creating HTTP request: %w", err)
+	}
+
+	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
+	httpReq.Header.Set("Notion-Version", p.notionVersion)
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := p.httpClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("Notion API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("reading response body: %w", err)
+	}
+
+	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
+	var body any
+	if len(respBody) > 0 {
+		var jsonBody any
+		if json.Unmarshal(respBody, &jsonBody) == nil {
+			body = jsonBody
+		} else {
+			body = string(respBody)
+		}
+	}
+
+	envelope := map[string]any{
+		"createFileResponse": map[string]any{
+			"status_code": resp.StatusCode,
+			"headers":     headerMap(resp.Header),
+			"body":        body,
+		},
+	}
+
+	// Merge with original message.
+	if originalMap, ok := originalStructured.(map[string]any); ok {
+		for k, v := range envelope {
+			originalMap[k] = v
+		}
+		envelope = originalMap
+	}
+
+	// Apply response mapping.
+	if p.responseMapping != nil {
+		mapped, mapErr := p.responseMapping.Query(envelope)
+		if mapErr != nil {
+			return fmt.Errorf("executing response_mapping: %w", mapErr)
+		}
+		msg.SetStructured(mapped)
+	} else {
+		msg.SetStructured(envelope)
+	}
+
+	if resp.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", resp.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	}
+
+	return nil
+}
+
+// DeleteABlock processor — delete /v1/blocks/{block_id}
+
+func init() {
+	service.MustRegisterBatchProcessor(
+		"notion_delete_a_block",
+		deleteABlockConfig(),
+		newDeleteABlockProcessor,
+	)
+}
+
+func deleteABlockConfig() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Categories("Services", "Notion").
+		Summary("Delete a block `DELETE /v1/blocks/{block_id}`").
+		Description("API reference: https://developers.notion.com/reference/delete-a-block").
+		Fields(sharedConfigFields()...).Fields(
+		service.NewBloblangField(fieldResponseMapping).
+			Optional().
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
+		service.NewInterpolatedStringField("block_id").
+			Description(""),
+	).
+		Example(
+			"Delete a block",
+			"Response body:\n```json\n{\n  \"object\": \"block\",\n  \"id\": \"4868767d-9029-4b9d-a41b-652ef4c9c7b9\",\n  \"created_time\": \"2021-08-06T17:46:00.000Z\",\n  \"last_edited_time\": \"2022-02-24T22:26:00.000Z\",\n  \"created_by\": {\n    \"object\": \"user\",\n    \"id\": \"6794760a-1f15-45cd-9c65-0dfe42f5135a\"\n  },\n  \"last_edited_by\": {\n    \"object\": \"user\",\n    \"id\": \"92a680bb-6970-4726-952b-4f4c03bff617\"\n  },\n  \"has_children\": false,\n  \"archived\": true,\n  \"type\": \"paragraph\",\n  \"paragraph\": {\n    \"text\": [\n      {\n        \"type\": \"text\",\n        \"text\": {\n          \"content\": \"hello to you\",\n          \"link\": null\n        },\n        \"annotations\": {\n          \"bold\": false,\n          \"italic\": false,\n          \"strikethrough\": false,\n          \"underline\": false,\n          \"code\": false,\n          \"color\": \"default\"\n        },\n        \"plain_text\": \"hello to you\",\n        \"href\": null\n      }\n    ]\n  }\n}\n```",
+			"",
+		)
+}
+
+type deleteABlockProcessor struct {
+	baseProcessor
+	blockID *service.InterpolatedString
+}
+
+func newDeleteABlockProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
+	base, err := baseProcessorFromParsed(conf, mgr)
+	if err != nil {
+		return nil, err
+	}
+
+	p := &deleteABlockProcessor{baseProcessor: base}
+	if p.blockID, err = conf.FieldInterpolatedString("block_id"); err != nil {
+		return nil, err
+	}
+
+	return p, nil
+}
+
+func (p *deleteABlockProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
+	batch = batch.Copy()
+
+	var wg sync.WaitGroup
+	wg.Add(len(batch))
+	for i := range batch {
+		go func(idx int) {
+			defer wg.Done()
+			if err := p.processDeleteABlock(ctx, idx, batch); err != nil {
+				batch[idx].SetError(err)
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	return []service.MessageBatch{batch}, nil
+}
+
+func (p *deleteABlockProcessor) processDeleteABlock(ctx context.Context, idx int, batch service.MessageBatch) error {
+	msg := batch[idx]
+
+	// Save original message content for response merge.
+	originalStructured, _ := msg.AsStructured()
+
+	// Build URL.
+	rawURL := p.baseURL + "/v1/blocks/{block_id}"
+	{
+		v, err := batch.TryInterpolatedString(idx, p.blockID)
+		if err != nil {
+			return fmt.Errorf("interpolating block_id: %w", err)
+		}
+		rawURL = strings.Replace(rawURL, "{block_id}", url.PathEscape(v), 1)
 	}
 	httpReq, err := http.NewRequestWithContext(ctx, "DELETE", rawURL, nil)
 	if err != nil {
@@ -542,7 +1021,7 @@ func (p *v1BlocksIDDeleteProcessor) processV1BlocksIDDelete(ctx context.Context,
 	}
 
 	envelope := map[string]any{
-		"v1BlocksIDDeleteResponse": map[string]any{
+		"deleteABlockResponse": map[string]any{
 			"status_code": resp.StatusCode,
 			"headers":     headerMap(resp.Header),
 			"body":        body,
@@ -576,366 +1055,60 @@ func (p *v1BlocksIDDeleteProcessor) processV1BlocksIDDelete(ctx context.Context,
 	return nil
 }
 
-// V1BlocksIDGet processor — get /v1/blocks/{id}
+// GetBlockChildren processor — get /v1/blocks/{block_id}/children
 
 func init() {
 	service.MustRegisterBatchProcessor(
-		"notion_v1_blocks_id_get",
-		v1BlocksIDGetConfig(),
-		newV1BlocksIDGetProcessor,
+		"notion_get_block_children",
+		getBlockChildrenConfig(),
+		newGetBlockChildrenProcessor,
 	)
 }
 
-func v1BlocksIDGetConfig() *service.ConfigSpec {
+func getBlockChildrenConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Services", "Notion").
-		Summary("Retrieve a block `GET /v1/blocks/{id}`").
-		Fields(sharedConfigFields()...).Fields(
-		service.NewBloblangField(fieldResponseMapping).
-			Optional().
-			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
-		service.NewInterpolatedStringField("id").
-			Description(""),
-	)
-}
-
-type v1BlocksIDGetProcessor struct {
-	baseProcessor
-	id *service.InterpolatedString
-}
-
-func newV1BlocksIDGetProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
-	base, err := baseProcessorFromParsed(conf, mgr)
-	if err != nil {
-		return nil, err
-	}
-
-	p := &v1BlocksIDGetProcessor{baseProcessor: base}
-	if p.id, err = conf.FieldInterpolatedString("id"); err != nil {
-		return nil, err
-	}
-
-	return p, nil
-}
-
-func (p *v1BlocksIDGetProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
-	batch = batch.Copy()
-
-	var wg sync.WaitGroup
-	wg.Add(len(batch))
-	for i := range batch {
-		go func(idx int) {
-			defer wg.Done()
-			if err := p.processV1BlocksIDGet(ctx, idx, batch); err != nil {
-				batch[idx].SetError(err)
-			}
-		}(i)
-	}
-	wg.Wait()
-
-	return []service.MessageBatch{batch}, nil
-}
-
-func (p *v1BlocksIDGetProcessor) processV1BlocksIDGet(ctx context.Context, idx int, batch service.MessageBatch) error {
-	msg := batch[idx]
-
-	// Save original message content for response merge.
-	originalStructured, _ := msg.AsStructured()
-
-	// Build URL.
-	rawURL := p.baseURL + "/v1/blocks/{id}"
-	{
-		v, err := batch.TryInterpolatedString(idx, p.id)
-		if err != nil {
-			return fmt.Errorf("interpolating id: %w", err)
-		}
-		rawURL = strings.Replace(rawURL, "{id}", url.PathEscape(v), 1)
-	}
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", rawURL, nil)
-	if err != nil {
-		return fmt.Errorf("creating HTTP request: %w", err)
-	}
-
-	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
-	httpReq.Header.Set("Notion-Version", p.notionVersion)
-
-	resp, err := p.httpClient.Do(httpReq)
-	if err != nil {
-		return fmt.Errorf("Notion API request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("reading response body: %w", err)
-	}
-
-	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
-	var body any
-	if len(respBody) > 0 {
-		var jsonBody any
-		if json.Unmarshal(respBody, &jsonBody) == nil {
-			body = jsonBody
-		} else {
-			body = string(respBody)
-		}
-	}
-
-	envelope := map[string]any{
-		"v1BlocksIDGetResponse": map[string]any{
-			"status_code": resp.StatusCode,
-			"headers":     headerMap(resp.Header),
-			"body":        body,
-		},
-	}
-
-	// Merge with original message.
-	if originalMap, ok := originalStructured.(map[string]any); ok {
-		for k, v := range envelope {
-			originalMap[k] = v
-		}
-		envelope = originalMap
-	}
-
-	// Apply response mapping.
-	if p.responseMapping != nil {
-		mapped, mapErr := p.responseMapping.Query(envelope)
-		if mapErr != nil {
-			return fmt.Errorf("executing response_mapping: %w", mapErr)
-		}
-		msg.SetStructured(mapped)
-	} else {
-		msg.SetStructured(envelope)
-	}
-
-	if resp.StatusCode >= 400 {
-		msg.MetaSetMut("http_status_code", resp.StatusCode)
-		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
-	}
-
-	return nil
-}
-
-// V1BlocksIDPatch processor — patch /v1/blocks/{id}
-
-func init() {
-	service.MustRegisterBatchProcessor(
-		"notion_v1_blocks_id_patch",
-		v1BlocksIDPatchConfig(),
-		newV1BlocksIDPatchProcessor,
-	)
-}
-
-func v1BlocksIDPatchConfig() *service.ConfigSpec {
-	return service.NewConfigSpec().
-		Categories("Services", "Notion").
-		Summary("Update a block `PATCH /v1/blocks/{id}`").
-		Description("This endpoint allows you to update block content. [See Full Documentation](https://developers.notion.com/reference/update-a-block)").
-		Fields(sharedConfigFields()...).Fields(
-		service.NewBloblangField(fieldRequestMapping).
-			Optional().
-			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to messages before sending the request body."),
-		service.NewBloblangField(fieldResponseMapping).
-			Optional().
-			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
-		service.NewInterpolatedStringField("id").
-			Description(""),
-	)
-}
-
-type v1BlocksIDPatchProcessor struct {
-	baseProcessor
-	id *service.InterpolatedString
-}
-
-func newV1BlocksIDPatchProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
-	base, err := baseProcessorFromParsed(conf, mgr)
-	if err != nil {
-		return nil, err
-	}
-
-	p := &v1BlocksIDPatchProcessor{baseProcessor: base}
-	if p.id, err = conf.FieldInterpolatedString("id"); err != nil {
-		return nil, err
-	}
-
-	return p, nil
-}
-
-func (p *v1BlocksIDPatchProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
-	batch = batch.Copy()
-
-	var wg sync.WaitGroup
-	wg.Add(len(batch))
-	for i := range batch {
-		go func(idx int) {
-			defer wg.Done()
-			if err := p.processV1BlocksIDPatch(ctx, idx, batch); err != nil {
-				batch[idx].SetError(err)
-			}
-		}(i)
-	}
-	wg.Wait()
-
-	return []service.MessageBatch{batch}, nil
-}
-
-func (p *v1BlocksIDPatchProcessor) processV1BlocksIDPatch(ctx context.Context, idx int, batch service.MessageBatch) error {
-	msg := batch[idx]
-
-	// Save original message content for response merge.
-	originalStructured, _ := msg.AsStructured()
-
-	// Build URL.
-	rawURL := p.baseURL + "/v1/blocks/{id}"
-	{
-		v, err := batch.TryInterpolatedString(idx, p.id)
-		if err != nil {
-			return fmt.Errorf("interpolating id: %w", err)
-		}
-		rawURL = strings.Replace(rawURL, "{id}", url.PathEscape(v), 1)
-	}
-
-	// Apply request mapping and validate request body.
-	if p.requestMapping != nil {
-		structured, err := msg.AsStructured()
-		if err != nil {
-			return fmt.Errorf("parsing message for request_mapping: %w", err)
-		}
-		mapped, err := p.requestMapping.Query(structured)
-		if err != nil {
-			return fmt.Errorf("executing request_mapping: %w", err)
-		}
-		msg.SetStructured(mapped)
-	}
-
-	b, err := msg.AsBytes()
-	if err != nil {
-		return fmt.Errorf("reading message body: %w", err)
-	}
-
-	var reqBody v1.UpdateBlockRequest
-	if err := reqBody.UnmarshalJSON(b); err != nil {
-		return fmt.Errorf("unmarshaling request body: %w", err)
-	}
-	if err := reqBody.Validate(); err != nil {
-		return fmt.Errorf("validating request body: %w", err)
-	}
-
-	reqBytes, err := reqBody.MarshalJSON()
-	if err != nil {
-		return fmt.Errorf("marshaling request body: %w", err)
-	}
-
-	httpReq, err := http.NewRequestWithContext(ctx, "PATCH", rawURL, bytes.NewReader(reqBytes))
-	if err != nil {
-		return fmt.Errorf("creating HTTP request: %w", err)
-	}
-
-	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
-	httpReq.Header.Set("Notion-Version", p.notionVersion)
-	httpReq.Header.Set("Content-Type", "application/json")
-
-	resp, err := p.httpClient.Do(httpReq)
-	if err != nil {
-		return fmt.Errorf("Notion API request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("reading response body: %w", err)
-	}
-
-	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
-	var body any
-	if len(respBody) > 0 {
-		var jsonBody any
-		if json.Unmarshal(respBody, &jsonBody) == nil {
-			body = jsonBody
-		} else {
-			body = string(respBody)
-		}
-	}
-
-	envelope := map[string]any{
-		"v1BlocksIDPatchResponse": map[string]any{
-			"status_code": resp.StatusCode,
-			"headers":     headerMap(resp.Header),
-			"body":        body,
-		},
-	}
-
-	// Merge with original message.
-	if originalMap, ok := originalStructured.(map[string]any); ok {
-		for k, v := range envelope {
-			originalMap[k] = v
-		}
-		envelope = originalMap
-	}
-
-	// Apply response mapping.
-	if p.responseMapping != nil {
-		mapped, mapErr := p.responseMapping.Query(envelope)
-		if mapErr != nil {
-			return fmt.Errorf("executing response_mapping: %w", mapErr)
-		}
-		msg.SetStructured(mapped)
-	} else {
-		msg.SetStructured(envelope)
-	}
-
-	if resp.StatusCode >= 400 {
-		msg.MetaSetMut("http_status_code", resp.StatusCode)
-		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
-	}
-
-	return nil
-}
-
-// V1CommentsGet processor — get /v1/comments
-
-func init() {
-	service.MustRegisterBatchProcessor(
-		"notion_v1_comments_get",
-		v1CommentsGetConfig(),
-		newV1CommentsGetProcessor,
-	)
-}
-
-func v1CommentsGetConfig() *service.ConfigSpec {
-	return service.NewConfigSpec().
-		Categories("Services", "Notion").
-		Summary("Retrieve comments `GET /v1/comments`").
-		Description("Retrieve a user object using the ID specified in the request path.").
+		Summary("Retrieve block children `GET /v1/blocks/{block_id}/children`").
+		Description("API reference: https://developers.notion.com/reference/get-block-children").
 		Fields(sharedConfigFields()...).Fields(
 		service.NewBloblangField(fieldResponseMapping).
 			Optional().
 			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
 		service.NewInterpolatedStringField("block_id").
+			Description(""),
+		service.NewInterpolatedStringField("start_cursor").
 			Description("").
 			Optional(),
 		service.NewInterpolatedStringField("page_size").
 			Description("").
 			Optional(),
-	)
+	).
+		Example(
+			"Retrieve block children",
+			"Response body:\n```json\n{\n  \"object\": \"list\",\n  \"results\": [\n    {\n      \"object\": \"block\",\n      \"id\": \"48c1ffb5-2789-4025-937b-2c35eaaaab3f\",\n      \"created_time\": \"2021-04-27T20:38:19.437Z\",\n      \"last_edited_time\": \"2021-04-27T20:38:19.437Z\",\n      \"has_children\": false,\n      \"type\": \"unsupported\",\n      \"unsupported\": {}\n    },\n    {\n      \"object\": \"block\",\n      \"id\": \"e381a0a3-4efb-4ba9-aa93-45b70fa9ce7f\",\n      \"created_time\": \"2021-04-27T20:38:19.437Z\",\n      \"last_edited_time\": \"2021-04-27T20:38:19.437Z\",\n      \"has_children\": false,\n      \"type\": \"paragraph\",\n      \"paragraph\": {\n        \"text\": [\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"I think we can all agree that Silicon Valley needs more adult supervision right about now.\",\n              \"link\": null\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": false,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \"I think we can all agree that Silicon Valley needs more adult supervision right about now.\",\n            \"href\": null\n          }\n        ]\n      }\n    },\n    {\n      \"object\": \"block\",\n      \"id\": \"ce5f79ac-8145-44ab-be3b-8ad143d6f8a7\",\n      \"created_time\": \"2021-04-27T20:38:19.437Z\",\n      \"last_edited_time\": \"2021-04-27T20:38:19.437Z\",\n      \"has_children\": false,\n      \"type\": \"paragraph\",\n      \"paragraph\": {\n        \"text\": [\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"Is the solution for its companies to hire a chief ethics officer?\",\n              \"link\": null\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": false,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \"Is the solution for its companies to hire a chief ethics officer?\",\n            \"href\": null\n          }\n        ]\n      }\n    },\n    {\n      \"object\": \"block\",\n      \"id\": \"0387b374-7847-4ddc-bc53-6b0813ce4ed4\",\n      \"created_time\": \"2021-04-27T20:38:19.437Z\",\n      \"last_edited_time\": \"2021-04-27T20:38:19.437Z\",\n      \"has_children\": false,\n      \"type\": \"paragraph\",\n      \"paragraph\": {\n        \"text\": [\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"While some tech companies like Google have top compliance officers and others turn to legal teams to police themselves, no big tech companies that I know of have yet taken this step. But a lot of them seem to be talking about it, and I’ve discussed the idea with several chief executives recently. Why? Because slowly, then all at once, it feels like too many digital leaders have lost their minds.\",\n              \"link\": null\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": false,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \"While some tech companies like Google have top compliance officers and others turn to legal teams to police themselves, no big tech companies that I know of have yet taken this step. But a lot of them seem to be talking about it, and I’ve discussed the idea with several chief executives recently. Why? Because slowly, then all at once, it feels like too many digital leaders have lost their minds.\",\n            \"href\": null\n          }\n        ]\n      }\n    },\n    {\n      \"object\": \"block\",\n      \"id\": \"da035311-5af3-48bc-8279-d28d9f4ef2e2\",\n      \"created_time\": \"2021-04-27T20:38:19.437Z\",\n      \"last_edited_time\": \"2021-04-27T20:38:19.437Z\",\n      \"has_children\": false,\n      \"type\": \"paragraph\",\n      \"paragraph\": {\n        \"text\": [\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"It’s probably no surprise, considering the complex problems the tech industry faces. As one ethical quandary after another has hit its profoundly ill-prepared executives, their once-pristine reputations have fallen like palm trees in a hurricane. These last two weeks alone show how tech is stumbling to react to big world issues armed with only bubble world skills:\",\n              \"link\": null\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": false,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \"It’s probably no surprise, considering the complex problems the tech industry faces. As one ethical quandary after another has hit its profoundly ill-prepared executives, their once-pristine reputations have fallen like palm trees in a hurricane. These last two weeks alone show how tech is stumbling to react to big world issues armed with only bubble world skills:\",\n            \"href\": null\n          }\n        ]\n      }\n    },\n    {\n      \"object\": \"block\",\n      \"id\": \"63a60fca-4a11-43eb-8773-c5f0164a3117\",\n      \"created_time\": \"2021-04-27T20:38:19.437Z\",\n      \"last_edited_time\": \"2021-04-27T20:38:19.437Z\",\n      \"has_children\": false,\n      \"type\": \"paragraph\",\n      \"paragraph\": {\n        \"text\": [\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"As a journalist is beheaded and dismembered at the direction of Saudi Arabian leaders (allegedly, but the killers did bring a bone saw), Silicon Valley is swimming in oceans of money from the kingdom’s Public Investment Fund. Saudi funding includes hundreds of millions for Magic Leap, and huge investments in hot public companies like Tesla. Most significantly: Saudis have invested about $45 billion in SoftBank’s giant Vision Fund, which has in turn doused the tech landscape — $4.4 billion to WeWork, $250 million to Slack, and $300 million to the dog-walking app Wag. In total Uber has gotten almost $14 billion, either through direct investments from the Public Investment Fund or through the Saudis’ funding of the Vision Fund. A billion here, a billion there and it all adds up.\",\n              \"link\": null\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": false,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \"As a journalist is beheaded and dismembered at the direction of Saudi Arabian leaders (allegedly, but the killers did bring a bone saw), Silicon Valley is swimming in oceans of money from the kingdom’s Public Investment Fund. Saudi funding includes hundreds of millions for Magic Leap, and huge investments in hot public companies like Tesla. Most significantly: Saudis have invested about $45 billion in SoftBank’s giant Vision Fund, which has in turn doused the tech landscape — $4.4 billion to WeWork, $250 million to Slack, and $300 million to the dog-walking app Wag. In total Uber has gotten almost $14 billion, either through direct investments from the Public Investment Fund or through the Saudis’ funding of the Vision Fund. A billion here, a billion there and it all adds up.\",\n            \"href\": null\n          }\n        ]\n      }\n    },\n    {\n      \"object\": \"block\",\n      \"id\": \"8c58c8f1-86ae-4a14-b6b9-74f5fa579620\",\n      \"created_time\": \"2021-04-27T20:38:19.437Z\",\n      \"last_edited_time\": \"2021-04-27T20:38:19.437Z\",\n      \"has_children\": false,\n      \"type\": \"paragraph\",\n      \"paragraph\": {\n        \"text\": [\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"[\",\n              \"link\": null\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": false,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \"[\",\n            \"href\": null\n          },\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"Kara Swisher answered your questions about her column \",\n              \"link\": null\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": true,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \"Kara Swisher answered your questions about her column \",\n            \"href\": null\n          },\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"on Twitter\",\n              \"link\": {\n                \"url\": \"https://twitter.com/karaswisher/status/1054842303922298880\"\n              }\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": true,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \"on Twitter\",\n            \"href\": \"https://twitter.com/karaswisher/status/1054842303922298880\"\n          },\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \".\",\n              \"link\": null\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": true,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \".\",\n            \"href\": null\n          },\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"]\",\n              \"link\": null\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": false,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \"]\",\n            \"href\": null\n          }\n        ]\n      }\n    },\n    {\n      \"object\": \"block\",\n      \"id\": \"875d3aff-086b-45da-9ed1-bc3ddb185229\",\n      \"created_time\": \"2021-04-27T20:38:19.437Z\",\n      \"last_edited_time\": \"2021-04-27T20:38:19.437Z\",\n      \"has_children\": false,\n      \"type\": \"paragraph\",\n      \"paragraph\": {\n        \"text\": [\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"Facebook introduced a new home video device called Portal, and promised that what could be seen as a surveillance tool would not share data for the sake of ad targeting. Soon after, as \",\n              \"link\": null\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": false,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \"Facebook introduced a new home video device called Portal, and promised that what could be seen as a surveillance tool would not share data for the sake of ad targeting. Soon after, as \",\n            \"href\": null\n          },\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"reported by Recode\",\n              \"link\": {\n                \"url\": \"https://www.recode.net/2018/10/16/17966102/facebook-portal-ad-targeting-data-collection\"\n              }\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": false,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \"reported by Recode\",\n            \"href\": \"https://www.recode.net/2018/10/16/17966102/facebook-portal-ad-targeting-data-collection\"\n          },\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \", Facebook admitted that “data about who you call and data about which apps you use on Portal \",\n              \"link\": null\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": false,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \", Facebook admitted that “data about who you call and data about which apps you use on Portal \",\n            \"href\": null\n          },\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"can\",\n              \"link\": null\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": true,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \"can\",\n            \"href\": null\n          },\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \" be used to target you with ads on other Facebook-owned properties.” Oh. Um. That’s awkward.\",\n              \"link\": null\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": false,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \" be used to target you with ads on other Facebook-owned properties.” Oh. Um. That’s awkward.\",\n            \"href\": null\n          }\n        ]\n      }\n    },\n    {\n      \"object\": \"block\",\n      \"id\": \"306ab0fb-6daa-4c5b-b1f7-f51a5f92b6ff\",\n      \"created_time\": \"2021-04-27T20:38:19.437Z\",\n      \"last_edited_time\": \"2021-04-27T20:38:19.437Z\",\n      \"has_children\": false,\n      \"type\": \"paragraph\",\n      \"paragraph\": {\n        \"text\": [\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"After agreeing to pay $20 million to the Securities and Exchange Commission for an ill-advised tweet about possible funding (from the Saudis, by the way), the Tesla co-founder Elon Musk proceeded to troll the regulatory agency on, you got it, Twitter. And even though the \",\n              \"link\": null\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": false,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \"After agreeing to pay $20 million to the Securities and Exchange Commission for an ill-advised tweet about possible funding (from the Saudis, by the way), the Tesla co-founder Elon Musk proceeded to troll the regulatory agency on, you got it, Twitter. And even though the \",\n            \"href\": null\n          },\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"settlement called for some kind of control of his communications\",\n              \"link\": {\n                \"url\": \"https://www.sec.gov/news/press-release/2018-226\"\n              }\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": false,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \"settlement called for some kind of control of his communications\",\n            \"href\": \"https://www.sec.gov/news/press-release/2018-226\"\n          },\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \", it appears that Mr. Musk will continue tweeting until someone steals his phone.\",\n              \"link\": null\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": false,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \", it appears that Mr. Musk will continue tweeting until someone steals his phone.\",\n            \"href\": null\n          }\n        ]\n      }\n    },\n    {\n      \"object\": \"block\",\n      \"id\": \"122b1457-4129-4513-abaa-7cce7d66e4a1\",\n      \"created_time\": \"2021-04-27T20:38:19.437Z\",\n      \"last_edited_time\": \"2021-04-27T20:38:19.437Z\",\n      \"has_children\": false,\n      \"type\": \"paragraph\",\n      \"paragraph\": {\n        \"text\": [\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"Finally, Google took six months to make public that user data on its social network, Google Plus, \",\n              \"link\": null\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": false,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \"Finally, Google took six months to make public that user data on its social network, Google Plus, \",\n            \"href\": null\n          },\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"had been exposed\",\n              \"link\": {\n                \"url\": \"https://www.nytimes.com/2018/10/08/technology/google-plus-security-disclosure.html?module=inline\"\n              }\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": false,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \"had been exposed\",\n            \"href\": \"https://www.nytimes.com/2018/10/08/technology/google-plus-security-disclosure.html?module=inline\"\n          },\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \" and that profiles of up to 500,000 users may have been compromised. While the service failed long ago, because it was pretty much designed by antisocial people, this lack of concern for privacy was profound.\",\n              \"link\": null\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": false,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \" and that profiles of up to 500,000 users may have been compromised. While the service failed long ago, because it was pretty much designed by antisocial people, this lack of concern for privacy was profound.\",\n            \"href\": null\n          }\n        ]\n      }\n    },\n    {\n      \"object\": \"block\",\n      \"id\": \"4d4af599-556f-4d8b-af8e-4d01ebe2aa27\",\n      \"created_time\": \"2021-04-27T20:38:19.437Z\",\n      \"last_edited_time\": \"2021-04-27T20:38:19.437Z\",\n      \"has_children\": false,\n      \"type\": \"paragraph\",\n      \"paragraph\": {\n        \"text\": [\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"Grappling with what to say and do about the disasters they themselves create is only the beginning. Then there are the broader issues that the denizens of Silicon Valley expect their employers to have a stance on: immigration, income inequality, artificial intelligence, automation, transgender rights, climate change, privacy, data rights and whether tech companies should be helping the government do controversial things. It’s an ethical swamp out there.\",\n              \"link\": null\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": false,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \"Grappling with what to say and do about the disasters they themselves create is only the beginning. Then there are the broader issues that the denizens of Silicon Valley expect their employers to have a stance on: immigration, income inequality, artificial intelligence, automation, transgender rights, climate change, privacy, data rights and whether tech companies should be helping the government do controversial things. It’s an ethical swamp out there.\",\n            \"href\": null\n          }\n        ]\n      }\n    },\n    {\n      \"object\": \"block\",\n      \"id\": \"f5775df5-59eb-4533-a2cb-e150412ec4f6\",\n      \"created_time\": \"2021-04-27T20:38:19.437Z\",\n      \"last_edited_time\": \"2021-04-27T20:38:19.437Z\",\n      \"has_children\": false,\n      \"type\": \"paragraph\",\n      \"paragraph\": {\n        \"text\": [\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"That’s why, in a recent interview, Marc Benioff, the co-chief executive and a founder of Salesforce, told me he was in the process of hiring a chief ethical officer to help anticipate and address any thorny conundrums it might encounter as a business — like the decision it had to make a few months back about whether it should stop providing recruitment software for Customs and Border Protection because of the government’s policy of separating immigrant families at the border.\",\n              \"link\": null\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": false,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \"That’s why, in a recent interview, Marc Benioff, the co-chief executive and a founder of Salesforce, told me he was in the process of hiring a chief ethical officer to help anticipate and address any thorny conundrums it might encounter as a business — like the decision it had to make a few months back about whether it should stop providing recruitment software for Customs and Border Protection because of the government’s policy of separating immigrant families at the border.\",\n            \"href\": null\n          }\n        ]\n      }\n    },\n    {\n      \"object\": \"block\",\n      \"id\": \"31405c6e-7ece-4667-8c4d-36c9d79a0bfa\",\n      \"created_time\": \"2021-04-27T20:38:19.437Z\",\n      \"last_edited_time\": \"2021-04-27T20:38:19.437Z\",\n      \"has_children\": false,\n      \"type\": \"paragraph\",\n      \"paragraph\": {\n        \"text\": [\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"Amid much criticism, Mr. Benioff decided to keep the contract, but said he would focus more on social and political issues.\",\n              \"link\": null\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": false,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \"Amid much criticism, Mr. Benioff decided to keep the contract, but said he would focus more on social and political issues.\",\n            \"href\": null\n          }\n        ]\n      }\n    },\n    {\n      \"object\": \"block\",\n      \"id\": \"a2ab7e8a-d521-401d-89ae-9eb27efb9990\",\n      \"created_time\": \"2021-04-27T20:38:19.437Z\",\n      \"last_edited_time\": \"2021-04-27T20:38:19.437Z\",\n      \"has_children\": false,\n      \"type\": \"paragraph\",\n      \"paragraph\": {\n        \"text\": [\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"At a recent company event, he elaborated: “We can have a structured conversation not just with our own employees myopically, but by bringing in the key advisers, supporters and pundits and philosophers and everybody necessary to ask the question if what we are doing today is ethical and humane.”\",\n              \"link\": null\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": false,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \"At a recent company event, he elaborated: “We can have a structured conversation not just with our own employees myopically, but by bringing in the key advisers, supporters and pundits and philosophers and everybody necessary to ask the question if what we are doing today is ethical and humane.”\",\n            \"href\": null\n          }\n        ]\n      }\n    },\n    {\n      \"object\": \"block\",\n      \"id\": \"a4498e1e-8b85-48d7-802a-db447ca7d1ac\",\n      \"created_time\": \"2021-04-27T20:38:19.437Z\",\n      \"last_edited_time\": \"2021-04-27T20:38:19.437Z\",\n      \"has_children\": false,\n      \"type\": \"paragraph\",\n      \"paragraph\": {\n        \"text\": [\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"23andMe has also toyed with the idea of hiring a chief ethics officer. In an interview I did this week with its chief executive, Anne Wojcicki, she said the genetics company had even interviewed candidates, but that many of them wanted to remain in academia to be freer to ponder these issues. She acknowledged that the collection of DNA data is rife with ethical considerations, but said, “I think it has to be our management and leaders who have to add this to our skill set, rather than just hire one person to determine this.”\",\n              \"link\": null\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": false,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \"23andMe has also toyed with the idea of hiring a chief ethics officer. In an interview I did this week with its chief executive, Anne Wojcicki, she said the genetics company had even interviewed candidates, but that many of them wanted to remain in academia to be freer to ponder these issues. She acknowledged that the collection of DNA data is rife with ethical considerations, but said, “I think it has to be our management and leaders who have to add this to our skill set, rather than just hire one person to determine this.”\",\n            \"href\": null\n          }\n        ]\n      }\n    },\n    {\n      \"object\": \"block\",\n      \"id\": \"cbf7e7e0-5552-4b3f-b09e-9dcca120931c\",\n      \"created_time\": \"2021-04-27T20:38:19.437Z\",\n      \"last_edited_time\": \"2021-04-27T20:38:19.437Z\",\n      \"has_children\": false,\n      \"type\": \"paragraph\",\n      \"paragraph\": {\n        \"text\": [\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"When asked about the idea of a single source of wisdom on ethics, some point out that legal or diversity/inclusion departments are designed for that purpose and that the ethics should really come from the top — the chief executive.\",\n              \"link\": null\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": false,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \"When asked about the idea of a single source of wisdom on ethics, some point out that legal or diversity/inclusion departments are designed for that purpose and that the ethics should really come from the top — the chief executive.\",\n            \"href\": null\n          }\n        ]\n      }\n    },\n    {\n      \"object\": \"block\",\n      \"id\": \"d24b2887-0f1f-4e91-99c1-c295bed8ad65\",\n      \"created_time\": \"2021-04-27T20:38:19.437Z\",\n      \"last_edited_time\": \"2021-04-27T20:38:19.437Z\",\n      \"has_children\": false,\n      \"type\": \"paragraph\",\n      \"paragraph\": {\n        \"text\": [\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"Also of concern is the possibility that a single person would not get listened to or, worse, get steamrollered. And, if the person was bad at the job, of course, it could drag the whole thing down.\",\n              \"link\": null\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": false,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \"Also of concern is the possibility that a single person would not get listened to or, worse, get steamrollered. And, if the person was bad at the job, of course, it could drag the whole thing down.\",\n            \"href\": null\n          }\n        ]\n      }\n    },\n    {\n      \"object\": \"block\",\n      \"id\": \"78c55f65-c8b8-4364-a369-c40699968e90\",\n      \"created_time\": \"2021-04-27T20:38:19.437Z\",\n      \"last_edited_time\": \"2021-04-27T20:38:19.437Z\",\n      \"has_children\": false,\n      \"type\": \"paragraph\",\n      \"paragraph\": {\n        \"text\": [\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"Others are more worried that the move would be nothing but window dressing. One consultant who focuses on ethics, but did not want to be named, told me: “We haven’t even defined ethics, so what even is ethical use, especially for Silicon Valley companies that are babies in this game?”\",\n              \"link\": null\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": false,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \"Others are more worried that the move would be nothing but window dressing. One consultant who focuses on ethics, but did not want to be named, told me: “We haven’t even defined ethics, so what even is ethical use, especially for Silicon Valley companies that are babies in this game?”\",\n            \"href\": null\n          }\n        ]\n      }\n    },\n    {\n      \"object\": \"block\",\n      \"id\": \"0b492111-1586-4a73-8848-04f0c391aadc\",\n      \"created_time\": \"2021-04-27T20:38:19.437Z\",\n      \"last_edited_time\": \"2021-04-27T20:38:19.437Z\",\n      \"has_children\": false,\n      \"type\": \"paragraph\",\n      \"paragraph\": {\n        \"text\": [\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"How can an industry that, unlike other business sectors, persistently promotes itself as doing good, learn to do that in reality? Do you want to not do harm, or do you want to do good? These are two totally different things.\",\n              \"link\": null\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": false,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \"How can an industry that, unlike other business sectors, persistently promotes itself as doing good, learn to do that in reality? Do you want to not do harm, or do you want to do good? These are two totally different things.\",\n            \"href\": null\n          }\n        ]\n      }\n    },\n    {\n      \"object\": \"block\",\n      \"id\": \"302f8229-2404-460b-8c3c-e7058b4365e5\",\n      \"created_time\": \"2021-04-27T20:38:19.437Z\",\n      \"last_edited_time\": \"2021-04-27T20:38:19.437Z\",\n      \"has_children\": false,\n      \"type\": \"paragraph\",\n      \"paragraph\": {\n        \"text\": [\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"And how do you put an official ethical system in place without it seeming like you’re telling everyone how to behave? Who gets to decide those rules anyway, setting a moral path for the industry and — considering tech companies’ enormous power — the world.\",\n              \"link\": null\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": false,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \"And how do you put an official ethical system in place without it seeming like you’re telling everyone how to behave? Who gets to decide those rules anyway, setting a moral path for the industry and — considering tech companies’ enormous power — the world.\",\n            \"href\": null\n          }\n        ]\n      }\n    },\n    {\n      \"object\": \"block\",\n      \"id\": \"8f9bc91c-5662-4b3f-a110-809f46b79f49\",\n      \"created_time\": \"2021-04-27T20:38:19.437Z\",\n      \"last_edited_time\": \"2021-04-27T20:38:19.437Z\",\n      \"has_children\": false,\n      \"type\": \"paragraph\",\n      \"paragraph\": {\n        \"text\": [\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"Like I said, adult supervision. Or maybe, better still, Silicon Valley itself has to grow up.\",\n              \"link\": null\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": false,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \"Like I said, adult supervision. Or maybe, better still, Silicon Valley itself has to grow up.\",\n            \"href\": null\n          }\n        ]\n      }\n    },\n    {\n      \"object\": \"block\",\n      \"id\": \"7bea1831-a25c-4b3e-8c9b-b37de814f948\",\n      \"created_time\": \"2021-04-27T20:38:19.437Z\",\n      \"last_edited_time\": \"2021-04-27T20:38:19.437Z\",\n      \"has_children\": false,\n      \"type\": \"paragraph\",\n      \"paragraph\": {\n        \"text\": [\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"Follow The New York Times Opinion section on \",\n              \"link\": null\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": true,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \"Follow The New York Times Opinion section on \",\n            \"href\": null\n          },\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"Facebook\",\n              \"link\": {\n                \"url\": \"https://www.facebook.com/nytopinion\"\n              }\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": true,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \"Facebook\",\n            \"href\": \"https://www.facebook.com/nytopinion\"\n          },\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \", \",\n              \"link\": null\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": true,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \", \",\n            \"href\": null\n          },\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"Twitter (@NYTopinion)\",\n              \"link\": {\n                \"url\": \"http://twitter.com/NYTOpinion\"\n              }\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": true,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \"Twitter (@NYTopinion)\",\n            \"href\": \"http://twitter.com/NYTOpinion\"\n          },\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \" and \",\n              \"link\": null\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": true,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \" and \",\n            \"href\": null\n          },\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"Instagram\",\n              \"link\": {\n                \"url\": \"https://www.instagram.com/nytopinion/\"\n              }\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": true,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \"Instagram\",\n            \"href\": \"https://www.instagram.com/nytopinion/\"\n          },\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \", and sign up for the \",\n              \"link\": null\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": true,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \", and sign up for the \",\n            \"href\": null\n          },\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"Opinion Today newsletter\",\n              \"link\": {\n                \"url\": \"http://www.nytimes.com/newsletters/opiniontoday/\"\n              }\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": true,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \"Opinion Today newsletter\",\n            \"href\": \"http://www.nytimes.com/newsletters/opiniontoday/\"\n          },\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \".\",\n              \"link\": null\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": true,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \".\",\n            \"href\": null\n          }\n        ]\n      }\n    }\n  ],\n  \"next_cursor\": null,\n  \"has_more\": false\n}\n```",
+			"",
+		)
 }
 
-type v1CommentsGetProcessor struct {
+type getBlockChildrenProcessor struct {
 	baseProcessor
-	blockID  *service.InterpolatedString
-	pageSize *service.InterpolatedString
+	blockID     *service.InterpolatedString
+	startCursor *service.InterpolatedString
+	pageSize    *service.InterpolatedString
 }
 
-func newV1CommentsGetProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
+func newGetBlockChildrenProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
 	base, err := baseProcessorFromParsed(conf, mgr)
 	if err != nil {
 		return nil, err
 	}
 
-	p := &v1CommentsGetProcessor{baseProcessor: base}
-	if conf.Contains("block_id") {
-		if p.blockID, err = conf.FieldInterpolatedString("block_id"); err != nil {
+	p := &getBlockChildrenProcessor{baseProcessor: base}
+	if p.blockID, err = conf.FieldInterpolatedString("block_id"); err != nil {
+		return nil, err
+	}
+	if conf.Contains("start_cursor") {
+		if p.startCursor, err = conf.FieldInterpolatedString("start_cursor"); err != nil {
 			return nil, err
 		}
 	}
@@ -948,7 +1121,7 @@ func newV1CommentsGetProcessor(conf *service.ParsedConfig, mgr *service.Resource
 	return p, nil
 }
 
-func (p *v1CommentsGetProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
+func (p *getBlockChildrenProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
 	batch = batch.Copy()
 
 	var wg sync.WaitGroup
@@ -956,7 +1129,7 @@ func (p *v1CommentsGetProcessor) ProcessBatch(ctx context.Context, batch service
 	for i := range batch {
 		go func(idx int) {
 			defer wg.Done()
-			if err := p.processV1CommentsGet(ctx, idx, batch); err != nil {
+			if err := p.processGetBlockChildren(ctx, idx, batch); err != nil {
 				batch[idx].SetError(err)
 			}
 		}(i)
@@ -966,23 +1139,30 @@ func (p *v1CommentsGetProcessor) ProcessBatch(ctx context.Context, batch service
 	return []service.MessageBatch{batch}, nil
 }
 
-func (p *v1CommentsGetProcessor) processV1CommentsGet(ctx context.Context, idx int, batch service.MessageBatch) error {
+func (p *getBlockChildrenProcessor) processGetBlockChildren(ctx context.Context, idx int, batch service.MessageBatch) error {
 	msg := batch[idx]
 
 	// Save original message content for response merge.
 	originalStructured, _ := msg.AsStructured()
 
 	// Build URL.
-	rawURL := p.baseURL + "/v1/comments"
-
-	// Build query parameters.
-	query := make(url.Values)
-	if p.blockID != nil {
+	rawURL := p.baseURL + "/v1/blocks/{block_id}/children"
+	{
 		v, err := batch.TryInterpolatedString(idx, p.blockID)
 		if err != nil {
 			return fmt.Errorf("interpolating block_id: %w", err)
 		}
-		query.Set("block_id", v)
+		rawURL = strings.Replace(rawURL, "{block_id}", url.PathEscape(v), 1)
+	}
+
+	// Build query parameters.
+	query := make(url.Values)
+	if p.startCursor != nil {
+		v, err := batch.TryInterpolatedString(idx, p.startCursor)
+		if err != nil {
+			return fmt.Errorf("interpolating start_cursor: %w", err)
+		}
+		query.Set("start_cursor", v)
 	}
 	if p.pageSize != nil {
 		v, err := batch.TryInterpolatedString(idx, p.pageSize)
@@ -1025,7 +1205,7 @@ func (p *v1CommentsGetProcessor) processV1CommentsGet(ctx context.Context, idx i
 	}
 
 	envelope := map[string]any{
-		"v1CommentsGetResponse": map[string]any{
+		"getBlockChildrenResponse": map[string]any{
 			"status_code": resp.StatusCode,
 			"headers":     headerMap(resp.Header),
 			"body":        body,
@@ -1059,46 +1239,49 @@ func (p *v1CommentsGetProcessor) processV1CommentsGet(ctx context.Context, idx i
 	return nil
 }
 
-// V1CommentsPost processor — post /v1/comments
+// GetSelf processor — get /v1/users/me
 
 func init() {
 	service.MustRegisterBatchProcessor(
-		"notion_v1_comments_post",
-		v1CommentsPostConfig(),
-		newV1CommentsPostProcessor,
+		"notion_get_self",
+		getSelfConfig(),
+		newGetSelfProcessor,
 	)
 }
 
-func v1CommentsPostConfig() *service.ConfigSpec {
+func getSelfConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Services", "Notion").
-		Summary("Add comment to discussion `POST /v1/comments`").
+		Summary("Retrieve your token's bot user `GET /v1/users/me`").
+		Description("API reference: https://developers.notion.com/reference/get-self").
 		Fields(sharedConfigFields()...).Fields(
-		service.NewBloblangField(fieldRequestMapping).
-			Optional().
-			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to messages before sending the request body."),
 		service.NewBloblangField(fieldResponseMapping).
 			Optional().
 			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
-	)
+	).
+		Example(
+			"Retrieve your token’s bot user",
+			"Response body:\n```json\n{\n  \"object\": \"user\",\n  \"id\": \"92a680bb-6970-4726-952b-4f4c03bff617\",\n  \"name\": \"Leotastic\",\n  \"avatar_url\": null,\n  \"type\": \"bot\",\n  \"bot\": {\n    \"owner\": {\n      \"type\": \"workspace\",\n      \"workspace\": true\n    }\n  }\n}\n```",
+			"",
+		)
 }
 
-type v1CommentsPostProcessor struct {
+type getSelfProcessor struct {
 	baseProcessor
 }
 
-func newV1CommentsPostProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
+func newGetSelfProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
 	base, err := baseProcessorFromParsed(conf, mgr)
 	if err != nil {
 		return nil, err
 	}
 
-	p := &v1CommentsPostProcessor{baseProcessor: base}
+	p := &getSelfProcessor{baseProcessor: base}
 
 	return p, nil
 }
 
-func (p *v1CommentsPostProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
+func (p *getSelfProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
 	batch = batch.Copy()
 
 	var wg sync.WaitGroup
@@ -1106,7 +1289,7 @@ func (p *v1CommentsPostProcessor) ProcessBatch(ctx context.Context, batch servic
 	for i := range batch {
 		go func(idx int) {
 			defer wg.Done()
-			if err := p.processV1CommentsPost(ctx, idx, batch); err != nil {
+			if err := p.processGetSelf(ctx, idx, batch); err != nil {
 				batch[idx].SetError(err)
 			}
 		}(i)
@@ -1116,1888 +1299,7 @@ func (p *v1CommentsPostProcessor) ProcessBatch(ctx context.Context, batch servic
 	return []service.MessageBatch{batch}, nil
 }
 
-func (p *v1CommentsPostProcessor) processV1CommentsPost(ctx context.Context, idx int, batch service.MessageBatch) error {
-	msg := batch[idx]
-
-	// Save original message content for response merge.
-	originalStructured, _ := msg.AsStructured()
-
-	// Build URL.
-	rawURL := p.baseURL + "/v1/comments"
-
-	// Apply request mapping and validate request body.
-	if p.requestMapping != nil {
-		structured, err := msg.AsStructured()
-		if err != nil {
-			return fmt.Errorf("parsing message for request_mapping: %w", err)
-		}
-		mapped, err := p.requestMapping.Query(structured)
-		if err != nil {
-			return fmt.Errorf("executing request_mapping: %w", err)
-		}
-		msg.SetStructured(mapped)
-	}
-
-	b, err := msg.AsBytes()
-	if err != nil {
-		return fmt.Errorf("reading message body: %w", err)
-	}
-
-	var reqBody v1.CreateCommentRequest
-	if err := reqBody.UnmarshalJSON(b); err != nil {
-		return fmt.Errorf("unmarshaling request body: %w", err)
-	}
-	if err := reqBody.Validate(); err != nil {
-		return fmt.Errorf("validating request body: %w", err)
-	}
-
-	reqBytes, err := reqBody.MarshalJSON()
-	if err != nil {
-		return fmt.Errorf("marshaling request body: %w", err)
-	}
-
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", rawURL, bytes.NewReader(reqBytes))
-	if err != nil {
-		return fmt.Errorf("creating HTTP request: %w", err)
-	}
-
-	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
-	httpReq.Header.Set("Notion-Version", p.notionVersion)
-	httpReq.Header.Set("Content-Type", "application/json")
-
-	resp, err := p.httpClient.Do(httpReq)
-	if err != nil {
-		return fmt.Errorf("Notion API request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("reading response body: %w", err)
-	}
-
-	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
-	var body any
-	if len(respBody) > 0 {
-		var jsonBody any
-		if json.Unmarshal(respBody, &jsonBody) == nil {
-			body = jsonBody
-		} else {
-			body = string(respBody)
-		}
-	}
-
-	envelope := map[string]any{
-		"v1CommentsPostResponse": map[string]any{
-			"status_code": resp.StatusCode,
-			"headers":     headerMap(resp.Header),
-			"body":        body,
-		},
-	}
-
-	// Merge with original message.
-	if originalMap, ok := originalStructured.(map[string]any); ok {
-		for k, v := range envelope {
-			originalMap[k] = v
-		}
-		envelope = originalMap
-	}
-
-	// Apply response mapping.
-	if p.responseMapping != nil {
-		mapped, mapErr := p.responseMapping.Query(envelope)
-		if mapErr != nil {
-			return fmt.Errorf("executing response_mapping: %w", mapErr)
-		}
-		msg.SetStructured(mapped)
-	} else {
-		msg.SetStructured(envelope)
-	}
-
-	if resp.StatusCode >= 400 {
-		msg.MetaSetMut("http_status_code", resp.StatusCode)
-		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
-	}
-
-	return nil
-}
-
-// V1DatabasesIDGet processor — get /v1/databases/{id}
-
-func init() {
-	service.MustRegisterBatchProcessor(
-		"notion_v1_databases_id_get",
-		v1DatabasesIDGetConfig(),
-		newV1DatabasesIDGetProcessor,
-	)
-}
-
-func v1DatabasesIDGetConfig() *service.ConfigSpec {
-	return service.NewConfigSpec().
-		Categories("Services", "Notion").
-		Summary("Retrieve a database `GET /v1/databases/{id}`").
-		Description("Retrieves a database object using the ID specified in the request path. ").
-		Fields(sharedConfigFields()...).Fields(
-		service.NewBloblangField(fieldResponseMapping).
-			Optional().
-			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
-		service.NewInterpolatedStringField("id").
-			Description(""),
-	)
-}
-
-type v1DatabasesIDGetProcessor struct {
-	baseProcessor
-	id *service.InterpolatedString
-}
-
-func newV1DatabasesIDGetProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
-	base, err := baseProcessorFromParsed(conf, mgr)
-	if err != nil {
-		return nil, err
-	}
-
-	p := &v1DatabasesIDGetProcessor{baseProcessor: base}
-	if p.id, err = conf.FieldInterpolatedString("id"); err != nil {
-		return nil, err
-	}
-
-	return p, nil
-}
-
-func (p *v1DatabasesIDGetProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
-	batch = batch.Copy()
-
-	var wg sync.WaitGroup
-	wg.Add(len(batch))
-	for i := range batch {
-		go func(idx int) {
-			defer wg.Done()
-			if err := p.processV1DatabasesIDGet(ctx, idx, batch); err != nil {
-				batch[idx].SetError(err)
-			}
-		}(i)
-	}
-	wg.Wait()
-
-	return []service.MessageBatch{batch}, nil
-}
-
-func (p *v1DatabasesIDGetProcessor) processV1DatabasesIDGet(ctx context.Context, idx int, batch service.MessageBatch) error {
-	msg := batch[idx]
-
-	// Save original message content for response merge.
-	originalStructured, _ := msg.AsStructured()
-
-	// Build URL.
-	rawURL := p.baseURL + "/v1/databases/{id}"
-	{
-		v, err := batch.TryInterpolatedString(idx, p.id)
-		if err != nil {
-			return fmt.Errorf("interpolating id: %w", err)
-		}
-		rawURL = strings.Replace(rawURL, "{id}", url.PathEscape(v), 1)
-	}
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", rawURL, nil)
-	if err != nil {
-		return fmt.Errorf("creating HTTP request: %w", err)
-	}
-
-	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
-	httpReq.Header.Set("Notion-Version", p.notionVersion)
-
-	resp, err := p.httpClient.Do(httpReq)
-	if err != nil {
-		return fmt.Errorf("Notion API request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("reading response body: %w", err)
-	}
-
-	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
-	var body any
-	if len(respBody) > 0 {
-		var jsonBody any
-		if json.Unmarshal(respBody, &jsonBody) == nil {
-			body = jsonBody
-		} else {
-			body = string(respBody)
-		}
-	}
-
-	envelope := map[string]any{
-		"v1DatabasesIDGetResponse": map[string]any{
-			"status_code": resp.StatusCode,
-			"headers":     headerMap(resp.Header),
-			"body":        body,
-		},
-	}
-
-	// Merge with original message.
-	if originalMap, ok := originalStructured.(map[string]any); ok {
-		for k, v := range envelope {
-			originalMap[k] = v
-		}
-		envelope = originalMap
-	}
-
-	// Apply response mapping.
-	if p.responseMapping != nil {
-		mapped, mapErr := p.responseMapping.Query(envelope)
-		if mapErr != nil {
-			return fmt.Errorf("executing response_mapping: %w", mapErr)
-		}
-		msg.SetStructured(mapped)
-	} else {
-		msg.SetStructured(envelope)
-	}
-
-	if resp.StatusCode >= 400 {
-		msg.MetaSetMut("http_status_code", resp.StatusCode)
-		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
-	}
-
-	return nil
-}
-
-// V1DatabasesIDPatch processor — patch /v1/databases/{id}
-
-func init() {
-	service.MustRegisterBatchProcessor(
-		"notion_v1_databases_id_patch",
-		v1DatabasesIDPatchConfig(),
-		newV1DatabasesIDPatchProcessor,
-	)
-}
-
-func v1DatabasesIDPatchConfig() *service.ConfigSpec {
-	return service.NewConfigSpec().
-		Categories("Services", "Notion").
-		Summary("Update database properties `PATCH /v1/databases/{id}`").
-		Fields(sharedConfigFields()...).Fields(
-		service.NewBloblangField(fieldRequestMapping).
-			Optional().
-			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to messages before sending the request body."),
-		service.NewBloblangField(fieldResponseMapping).
-			Optional().
-			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
-		service.NewInterpolatedStringField("id").
-			Description(""),
-	)
-}
-
-type v1DatabasesIDPatchProcessor struct {
-	baseProcessor
-	id *service.InterpolatedString
-}
-
-func newV1DatabasesIDPatchProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
-	base, err := baseProcessorFromParsed(conf, mgr)
-	if err != nil {
-		return nil, err
-	}
-
-	p := &v1DatabasesIDPatchProcessor{baseProcessor: base}
-	if p.id, err = conf.FieldInterpolatedString("id"); err != nil {
-		return nil, err
-	}
-
-	return p, nil
-}
-
-func (p *v1DatabasesIDPatchProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
-	batch = batch.Copy()
-
-	var wg sync.WaitGroup
-	wg.Add(len(batch))
-	for i := range batch {
-		go func(idx int) {
-			defer wg.Done()
-			if err := p.processV1DatabasesIDPatch(ctx, idx, batch); err != nil {
-				batch[idx].SetError(err)
-			}
-		}(i)
-	}
-	wg.Wait()
-
-	return []service.MessageBatch{batch}, nil
-}
-
-func (p *v1DatabasesIDPatchProcessor) processV1DatabasesIDPatch(ctx context.Context, idx int, batch service.MessageBatch) error {
-	msg := batch[idx]
-
-	// Save original message content for response merge.
-	originalStructured, _ := msg.AsStructured()
-
-	// Build URL.
-	rawURL := p.baseURL + "/v1/databases/{id}"
-	{
-		v, err := batch.TryInterpolatedString(idx, p.id)
-		if err != nil {
-			return fmt.Errorf("interpolating id: %w", err)
-		}
-		rawURL = strings.Replace(rawURL, "{id}", url.PathEscape(v), 1)
-	}
-
-	// Apply request mapping and validate request body.
-	if p.requestMapping != nil {
-		structured, err := msg.AsStructured()
-		if err != nil {
-			return fmt.Errorf("parsing message for request_mapping: %w", err)
-		}
-		mapped, err := p.requestMapping.Query(structured)
-		if err != nil {
-			return fmt.Errorf("executing request_mapping: %w", err)
-		}
-		msg.SetStructured(mapped)
-	}
-
-	b, err := msg.AsBytes()
-	if err != nil {
-		return fmt.Errorf("reading message body: %w", err)
-	}
-
-	var reqBody v1.UpdateDatabaseRequest
-	if err := reqBody.UnmarshalJSON(b); err != nil {
-		return fmt.Errorf("unmarshaling request body: %w", err)
-	}
-	if err := reqBody.Validate(); err != nil {
-		return fmt.Errorf("validating request body: %w", err)
-	}
-
-	reqBytes, err := reqBody.MarshalJSON()
-	if err != nil {
-		return fmt.Errorf("marshaling request body: %w", err)
-	}
-
-	httpReq, err := http.NewRequestWithContext(ctx, "PATCH", rawURL, bytes.NewReader(reqBytes))
-	if err != nil {
-		return fmt.Errorf("creating HTTP request: %w", err)
-	}
-
-	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
-	httpReq.Header.Set("Notion-Version", p.notionVersion)
-	httpReq.Header.Set("Content-Type", "application/json")
-
-	resp, err := p.httpClient.Do(httpReq)
-	if err != nil {
-		return fmt.Errorf("Notion API request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("reading response body: %w", err)
-	}
-
-	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
-	var body any
-	if len(respBody) > 0 {
-		var jsonBody any
-		if json.Unmarshal(respBody, &jsonBody) == nil {
-			body = jsonBody
-		} else {
-			body = string(respBody)
-		}
-	}
-
-	envelope := map[string]any{
-		"v1DatabasesIDPatchResponse": map[string]any{
-			"status_code": resp.StatusCode,
-			"headers":     headerMap(resp.Header),
-			"body":        body,
-		},
-	}
-
-	// Merge with original message.
-	if originalMap, ok := originalStructured.(map[string]any); ok {
-		for k, v := range envelope {
-			originalMap[k] = v
-		}
-		envelope = originalMap
-	}
-
-	// Apply response mapping.
-	if p.responseMapping != nil {
-		mapped, mapErr := p.responseMapping.Query(envelope)
-		if mapErr != nil {
-			return fmt.Errorf("executing response_mapping: %w", mapErr)
-		}
-		msg.SetStructured(mapped)
-	} else {
-		msg.SetStructured(envelope)
-	}
-
-	if resp.StatusCode >= 400 {
-		msg.MetaSetMut("http_status_code", resp.StatusCode)
-		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
-	}
-
-	return nil
-}
-
-// V1DatabasesIDQueryPost processor — post /v1/databases/{id}/query
-
-func init() {
-	service.MustRegisterBatchProcessor(
-		"notion_v1_databases_id_query_post",
-		v1DatabasesIDQueryPostConfig(),
-		newV1DatabasesIDQueryPostProcessor,
-	)
-}
-
-func v1DatabasesIDQueryPostConfig() *service.ConfigSpec {
-	return service.NewConfigSpec().
-		Categories("Services", "Notion").
-		Summary("Filter a database `POST /v1/databases/{id}/query`").
-		Fields(sharedConfigFields()...).Fields(
-		service.NewBloblangField(fieldRequestMapping).
-			Optional().
-			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to messages before sending the request body."),
-		service.NewBloblangField(fieldResponseMapping).
-			Optional().
-			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
-		service.NewInterpolatedStringField("id").
-			Description(""),
-	)
-}
-
-type v1DatabasesIDQueryPostProcessor struct {
-	baseProcessor
-	id *service.InterpolatedString
-}
-
-func newV1DatabasesIDQueryPostProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
-	base, err := baseProcessorFromParsed(conf, mgr)
-	if err != nil {
-		return nil, err
-	}
-
-	p := &v1DatabasesIDQueryPostProcessor{baseProcessor: base}
-	if p.id, err = conf.FieldInterpolatedString("id"); err != nil {
-		return nil, err
-	}
-
-	return p, nil
-}
-
-func (p *v1DatabasesIDQueryPostProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
-	batch = batch.Copy()
-
-	var wg sync.WaitGroup
-	wg.Add(len(batch))
-	for i := range batch {
-		go func(idx int) {
-			defer wg.Done()
-			if err := p.processV1DatabasesIDQueryPost(ctx, idx, batch); err != nil {
-				batch[idx].SetError(err)
-			}
-		}(i)
-	}
-	wg.Wait()
-
-	return []service.MessageBatch{batch}, nil
-}
-
-func (p *v1DatabasesIDQueryPostProcessor) processV1DatabasesIDQueryPost(ctx context.Context, idx int, batch service.MessageBatch) error {
-	msg := batch[idx]
-
-	// Save original message content for response merge.
-	originalStructured, _ := msg.AsStructured()
-
-	// Build URL.
-	rawURL := p.baseURL + "/v1/databases/{id}/query"
-	{
-		v, err := batch.TryInterpolatedString(idx, p.id)
-		if err != nil {
-			return fmt.Errorf("interpolating id: %w", err)
-		}
-		rawURL = strings.Replace(rawURL, "{id}", url.PathEscape(v), 1)
-	}
-
-	// Apply request mapping and validate request body.
-	if p.requestMapping != nil {
-		structured, err := msg.AsStructured()
-		if err != nil {
-			return fmt.Errorf("parsing message for request_mapping: %w", err)
-		}
-		mapped, err := p.requestMapping.Query(structured)
-		if err != nil {
-			return fmt.Errorf("executing request_mapping: %w", err)
-		}
-		msg.SetStructured(mapped)
-	}
-
-	b, err := msg.AsBytes()
-	if err != nil {
-		return fmt.Errorf("reading message body: %w", err)
-	}
-
-	var reqBody v1.QueryDataSourceRequest
-	if err := reqBody.UnmarshalJSON(b); err != nil {
-		return fmt.Errorf("unmarshaling request body: %w", err)
-	}
-	if err := reqBody.Validate(); err != nil {
-		return fmt.Errorf("validating request body: %w", err)
-	}
-
-	reqBytes, err := reqBody.MarshalJSON()
-	if err != nil {
-		return fmt.Errorf("marshaling request body: %w", err)
-	}
-
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", rawURL, bytes.NewReader(reqBytes))
-	if err != nil {
-		return fmt.Errorf("creating HTTP request: %w", err)
-	}
-
-	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
-	httpReq.Header.Set("Notion-Version", p.notionVersion)
-	httpReq.Header.Set("Content-Type", "application/json")
-
-	resp, err := p.httpClient.Do(httpReq)
-	if err != nil {
-		return fmt.Errorf("Notion API request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("reading response body: %w", err)
-	}
-
-	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
-	var body any
-	if len(respBody) > 0 {
-		var jsonBody any
-		if json.Unmarshal(respBody, &jsonBody) == nil {
-			body = jsonBody
-		} else {
-			body = string(respBody)
-		}
-	}
-
-	envelope := map[string]any{
-		"v1DatabasesIDQueryPostResponse": map[string]any{
-			"status_code": resp.StatusCode,
-			"headers":     headerMap(resp.Header),
-			"body":        body,
-		},
-	}
-
-	// Merge with original message.
-	if originalMap, ok := originalStructured.(map[string]any); ok {
-		for k, v := range envelope {
-			originalMap[k] = v
-		}
-		envelope = originalMap
-	}
-
-	// Apply response mapping.
-	if p.responseMapping != nil {
-		mapped, mapErr := p.responseMapping.Query(envelope)
-		if mapErr != nil {
-			return fmt.Errorf("executing response_mapping: %w", mapErr)
-		}
-		msg.SetStructured(mapped)
-	} else {
-		msg.SetStructured(envelope)
-	}
-
-	if resp.StatusCode >= 400 {
-		msg.MetaSetMut("http_status_code", resp.StatusCode)
-		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
-	}
-
-	return nil
-}
-
-// V1DatabasesPost processor — post /v1/databases/
-
-func init() {
-	service.MustRegisterBatchProcessor(
-		"notion_v1_databases_post",
-		v1DatabasesPostConfig(),
-		newV1DatabasesPostProcessor,
-	)
-}
-
-func v1DatabasesPostConfig() *service.ConfigSpec {
-	return service.NewConfigSpec().
-		Categories("Services", "Notion").
-		Summary("Create a database `POST /v1/databases/`").
-		Fields(sharedConfigFields()...).Fields(
-		service.NewBloblangField(fieldRequestMapping).
-			Optional().
-			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to messages before sending the request body."),
-		service.NewBloblangField(fieldResponseMapping).
-			Optional().
-			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
-	)
-}
-
-type v1DatabasesPostProcessor struct {
-	baseProcessor
-}
-
-func newV1DatabasesPostProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
-	base, err := baseProcessorFromParsed(conf, mgr)
-	if err != nil {
-		return nil, err
-	}
-
-	p := &v1DatabasesPostProcessor{baseProcessor: base}
-
-	return p, nil
-}
-
-func (p *v1DatabasesPostProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
-	batch = batch.Copy()
-
-	var wg sync.WaitGroup
-	wg.Add(len(batch))
-	for i := range batch {
-		go func(idx int) {
-			defer wg.Done()
-			if err := p.processV1DatabasesPost(ctx, idx, batch); err != nil {
-				batch[idx].SetError(err)
-			}
-		}(i)
-	}
-	wg.Wait()
-
-	return []service.MessageBatch{batch}, nil
-}
-
-func (p *v1DatabasesPostProcessor) processV1DatabasesPost(ctx context.Context, idx int, batch service.MessageBatch) error {
-	msg := batch[idx]
-
-	// Save original message content for response merge.
-	originalStructured, _ := msg.AsStructured()
-
-	// Build URL.
-	rawURL := p.baseURL + "/v1/databases/"
-
-	// Apply request mapping and validate request body.
-	if p.requestMapping != nil {
-		structured, err := msg.AsStructured()
-		if err != nil {
-			return fmt.Errorf("parsing message for request_mapping: %w", err)
-		}
-		mapped, err := p.requestMapping.Query(structured)
-		if err != nil {
-			return fmt.Errorf("executing request_mapping: %w", err)
-		}
-		msg.SetStructured(mapped)
-	}
-
-	b, err := msg.AsBytes()
-	if err != nil {
-		return fmt.Errorf("reading message body: %w", err)
-	}
-
-	var reqBody v1.CreateDatabaseRequest
-	if err := reqBody.UnmarshalJSON(b); err != nil {
-		return fmt.Errorf("unmarshaling request body: %w", err)
-	}
-	if err := reqBody.Validate(); err != nil {
-		return fmt.Errorf("validating request body: %w", err)
-	}
-
-	reqBytes, err := reqBody.MarshalJSON()
-	if err != nil {
-		return fmt.Errorf("marshaling request body: %w", err)
-	}
-
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", rawURL, bytes.NewReader(reqBytes))
-	if err != nil {
-		return fmt.Errorf("creating HTTP request: %w", err)
-	}
-
-	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
-	httpReq.Header.Set("Notion-Version", p.notionVersion)
-	httpReq.Header.Set("Content-Type", "application/json")
-
-	resp, err := p.httpClient.Do(httpReq)
-	if err != nil {
-		return fmt.Errorf("Notion API request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("reading response body: %w", err)
-	}
-
-	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
-	var body any
-	if len(respBody) > 0 {
-		var jsonBody any
-		if json.Unmarshal(respBody, &jsonBody) == nil {
-			body = jsonBody
-		} else {
-			body = string(respBody)
-		}
-	}
-
-	envelope := map[string]any{
-		"v1DatabasesPostResponse": map[string]any{
-			"status_code": resp.StatusCode,
-			"headers":     headerMap(resp.Header),
-			"body":        body,
-		},
-	}
-
-	// Merge with original message.
-	if originalMap, ok := originalStructured.(map[string]any); ok {
-		for k, v := range envelope {
-			originalMap[k] = v
-		}
-		envelope = originalMap
-	}
-
-	// Apply response mapping.
-	if p.responseMapping != nil {
-		mapped, mapErr := p.responseMapping.Query(envelope)
-		if mapErr != nil {
-			return fmt.Errorf("executing response_mapping: %w", mapErr)
-		}
-		msg.SetStructured(mapped)
-	} else {
-		msg.SetStructured(envelope)
-	}
-
-	if resp.StatusCode >= 400 {
-		msg.MetaSetMut("http_status_code", resp.StatusCode)
-		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
-	}
-
-	return nil
-}
-
-// V1PagesIDGet processor — get /v1/pages/{id}
-
-func init() {
-	service.MustRegisterBatchProcessor(
-		"notion_v1_pages_id_get",
-		v1PagesIDGetConfig(),
-		newV1PagesIDGetProcessor,
-	)
-}
-
-func v1PagesIDGetConfig() *service.ConfigSpec {
-	return service.NewConfigSpec().
-		Categories("Services", "Notion").
-		Summary("Retrieve a page `GET /v1/pages/{id}`").
-		Description("Retrieves a Page object using the ID in the request path. This endpoint exposes page properties, not page content. ").
-		Fields(sharedConfigFields()...).Fields(
-		service.NewBloblangField(fieldResponseMapping).
-			Optional().
-			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
-		service.NewInterpolatedStringField("id").
-			Description(""),
-	)
-}
-
-type v1PagesIDGetProcessor struct {
-	baseProcessor
-	id *service.InterpolatedString
-}
-
-func newV1PagesIDGetProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
-	base, err := baseProcessorFromParsed(conf, mgr)
-	if err != nil {
-		return nil, err
-	}
-
-	p := &v1PagesIDGetProcessor{baseProcessor: base}
-	if p.id, err = conf.FieldInterpolatedString("id"); err != nil {
-		return nil, err
-	}
-
-	return p, nil
-}
-
-func (p *v1PagesIDGetProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
-	batch = batch.Copy()
-
-	var wg sync.WaitGroup
-	wg.Add(len(batch))
-	for i := range batch {
-		go func(idx int) {
-			defer wg.Done()
-			if err := p.processV1PagesIDGet(ctx, idx, batch); err != nil {
-				batch[idx].SetError(err)
-			}
-		}(i)
-	}
-	wg.Wait()
-
-	return []service.MessageBatch{batch}, nil
-}
-
-func (p *v1PagesIDGetProcessor) processV1PagesIDGet(ctx context.Context, idx int, batch service.MessageBatch) error {
-	msg := batch[idx]
-
-	// Save original message content for response merge.
-	originalStructured, _ := msg.AsStructured()
-
-	// Build URL.
-	rawURL := p.baseURL + "/v1/pages/{id}"
-	{
-		v, err := batch.TryInterpolatedString(idx, p.id)
-		if err != nil {
-			return fmt.Errorf("interpolating id: %w", err)
-		}
-		rawURL = strings.Replace(rawURL, "{id}", url.PathEscape(v), 1)
-	}
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", rawURL, nil)
-	if err != nil {
-		return fmt.Errorf("creating HTTP request: %w", err)
-	}
-
-	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
-	httpReq.Header.Set("Notion-Version", p.notionVersion)
-
-	resp, err := p.httpClient.Do(httpReq)
-	if err != nil {
-		return fmt.Errorf("Notion API request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("reading response body: %w", err)
-	}
-
-	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
-	var body any
-	if len(respBody) > 0 {
-		var jsonBody any
-		if json.Unmarshal(respBody, &jsonBody) == nil {
-			body = jsonBody
-		} else {
-			body = string(respBody)
-		}
-	}
-
-	envelope := map[string]any{
-		"v1PagesIDGetResponse": map[string]any{
-			"status_code": resp.StatusCode,
-			"headers":     headerMap(resp.Header),
-			"body":        body,
-		},
-	}
-
-	// Merge with original message.
-	if originalMap, ok := originalStructured.(map[string]any); ok {
-		for k, v := range envelope {
-			originalMap[k] = v
-		}
-		envelope = originalMap
-	}
-
-	// Apply response mapping.
-	if p.responseMapping != nil {
-		mapped, mapErr := p.responseMapping.Query(envelope)
-		if mapErr != nil {
-			return fmt.Errorf("executing response_mapping: %w", mapErr)
-		}
-		msg.SetStructured(mapped)
-	} else {
-		msg.SetStructured(envelope)
-	}
-
-	if resp.StatusCode >= 400 {
-		msg.MetaSetMut("http_status_code", resp.StatusCode)
-		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
-	}
-
-	return nil
-}
-
-// V1PagesIDPatch processor — patch /v1/pages/{id}
-
-func init() {
-	service.MustRegisterBatchProcessor(
-		"notion_v1_pages_id_patch",
-		v1PagesIDPatchConfig(),
-		newV1PagesIDPatchProcessor,
-	)
-}
-
-func v1PagesIDPatchConfig() *service.ConfigSpec {
-	return service.NewConfigSpec().
-		Categories("Services", "Notion").
-		Summary("Archive a page `PATCH /v1/pages/{id}`").
-		Fields(sharedConfigFields()...).Fields(
-		service.NewBloblangField(fieldRequestMapping).
-			Optional().
-			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to messages before sending the request body."),
-		service.NewBloblangField(fieldResponseMapping).
-			Optional().
-			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
-		service.NewInterpolatedStringField("id").
-			Description(""),
-	)
-}
-
-type v1PagesIDPatchProcessor struct {
-	baseProcessor
-	id *service.InterpolatedString
-}
-
-func newV1PagesIDPatchProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
-	base, err := baseProcessorFromParsed(conf, mgr)
-	if err != nil {
-		return nil, err
-	}
-
-	p := &v1PagesIDPatchProcessor{baseProcessor: base}
-	if p.id, err = conf.FieldInterpolatedString("id"); err != nil {
-		return nil, err
-	}
-
-	return p, nil
-}
-
-func (p *v1PagesIDPatchProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
-	batch = batch.Copy()
-
-	var wg sync.WaitGroup
-	wg.Add(len(batch))
-	for i := range batch {
-		go func(idx int) {
-			defer wg.Done()
-			if err := p.processV1PagesIDPatch(ctx, idx, batch); err != nil {
-				batch[idx].SetError(err)
-			}
-		}(i)
-	}
-	wg.Wait()
-
-	return []service.MessageBatch{batch}, nil
-}
-
-func (p *v1PagesIDPatchProcessor) processV1PagesIDPatch(ctx context.Context, idx int, batch service.MessageBatch) error {
-	msg := batch[idx]
-
-	// Save original message content for response merge.
-	originalStructured, _ := msg.AsStructured()
-
-	// Build URL.
-	rawURL := p.baseURL + "/v1/pages/{id}"
-	{
-		v, err := batch.TryInterpolatedString(idx, p.id)
-		if err != nil {
-			return fmt.Errorf("interpolating id: %w", err)
-		}
-		rawURL = strings.Replace(rawURL, "{id}", url.PathEscape(v), 1)
-	}
-
-	// Apply request mapping and validate request body.
-	if p.requestMapping != nil {
-		structured, err := msg.AsStructured()
-		if err != nil {
-			return fmt.Errorf("parsing message for request_mapping: %w", err)
-		}
-		mapped, err := p.requestMapping.Query(structured)
-		if err != nil {
-			return fmt.Errorf("executing request_mapping: %w", err)
-		}
-		msg.SetStructured(mapped)
-	}
-
-	b, err := msg.AsBytes()
-	if err != nil {
-		return fmt.Errorf("reading message body: %w", err)
-	}
-
-	var reqBody v1.UpdatePageRequest
-	if err := reqBody.UnmarshalJSON(b); err != nil {
-		return fmt.Errorf("unmarshaling request body: %w", err)
-	}
-	if err := reqBody.Validate(); err != nil {
-		return fmt.Errorf("validating request body: %w", err)
-	}
-
-	reqBytes, err := reqBody.MarshalJSON()
-	if err != nil {
-		return fmt.Errorf("marshaling request body: %w", err)
-	}
-
-	httpReq, err := http.NewRequestWithContext(ctx, "PATCH", rawURL, bytes.NewReader(reqBytes))
-	if err != nil {
-		return fmt.Errorf("creating HTTP request: %w", err)
-	}
-
-	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
-	httpReq.Header.Set("Notion-Version", p.notionVersion)
-	httpReq.Header.Set("Content-Type", "application/json")
-
-	resp, err := p.httpClient.Do(httpReq)
-	if err != nil {
-		return fmt.Errorf("Notion API request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("reading response body: %w", err)
-	}
-
-	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
-	var body any
-	if len(respBody) > 0 {
-		var jsonBody any
-		if json.Unmarshal(respBody, &jsonBody) == nil {
-			body = jsonBody
-		} else {
-			body = string(respBody)
-		}
-	}
-
-	envelope := map[string]any{
-		"v1PagesIDPatchResponse": map[string]any{
-			"status_code": resp.StatusCode,
-			"headers":     headerMap(resp.Header),
-			"body":        body,
-		},
-	}
-
-	// Merge with original message.
-	if originalMap, ok := originalStructured.(map[string]any); ok {
-		for k, v := range envelope {
-			originalMap[k] = v
-		}
-		envelope = originalMap
-	}
-
-	// Apply response mapping.
-	if p.responseMapping != nil {
-		mapped, mapErr := p.responseMapping.Query(envelope)
-		if mapErr != nil {
-			return fmt.Errorf("executing response_mapping: %w", mapErr)
-		}
-		msg.SetStructured(mapped)
-	} else {
-		msg.SetStructured(envelope)
-	}
-
-	if resp.StatusCode >= 400 {
-		msg.MetaSetMut("http_status_code", resp.StatusCode)
-		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
-	}
-
-	return nil
-}
-
-// V1PagesPageIDPropertiesPropertyIDGet processor — get /v1/pages/{page_id}/properties/{property_id}
-
-func init() {
-	service.MustRegisterBatchProcessor(
-		"notion_v1_pages_page_id_properties_property_id_get",
-		v1PagesPageIDPropertiesPropertyIDGetConfig(),
-		newV1PagesPageIDPropertiesPropertyIDGetProcessor,
-	)
-}
-
-func v1PagesPageIDPropertiesPropertyIDGetConfig() *service.ConfigSpec {
-	return service.NewConfigSpec().
-		Categories("Services", "Notion").
-		Summary("Retrieve a page property item `GET /v1/pages/{page_id}/properties/{property_id}`").
-		Fields(sharedConfigFields()...).Fields(
-		service.NewBloblangField(fieldResponseMapping).
-			Optional().
-			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
-		service.NewInterpolatedStringField("page_id").
-			Description(""),
-		service.NewInterpolatedStringField("property_id").
-			Description(""),
-	)
-}
-
-type v1PagesPageIDPropertiesPropertyIDGetProcessor struct {
-	baseProcessor
-	pageID     *service.InterpolatedString
-	propertyID *service.InterpolatedString
-}
-
-func newV1PagesPageIDPropertiesPropertyIDGetProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
-	base, err := baseProcessorFromParsed(conf, mgr)
-	if err != nil {
-		return nil, err
-	}
-
-	p := &v1PagesPageIDPropertiesPropertyIDGetProcessor{baseProcessor: base}
-	if p.pageID, err = conf.FieldInterpolatedString("page_id"); err != nil {
-		return nil, err
-	}
-	if p.propertyID, err = conf.FieldInterpolatedString("property_id"); err != nil {
-		return nil, err
-	}
-
-	return p, nil
-}
-
-func (p *v1PagesPageIDPropertiesPropertyIDGetProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
-	batch = batch.Copy()
-
-	var wg sync.WaitGroup
-	wg.Add(len(batch))
-	for i := range batch {
-		go func(idx int) {
-			defer wg.Done()
-			if err := p.processV1PagesPageIDPropertiesPropertyIDGet(ctx, idx, batch); err != nil {
-				batch[idx].SetError(err)
-			}
-		}(i)
-	}
-	wg.Wait()
-
-	return []service.MessageBatch{batch}, nil
-}
-
-func (p *v1PagesPageIDPropertiesPropertyIDGetProcessor) processV1PagesPageIDPropertiesPropertyIDGet(ctx context.Context, idx int, batch service.MessageBatch) error {
-	msg := batch[idx]
-
-	// Save original message content for response merge.
-	originalStructured, _ := msg.AsStructured()
-
-	// Build URL.
-	rawURL := p.baseURL + "/v1/pages/{page_id}/properties/{property_id}"
-	{
-		v, err := batch.TryInterpolatedString(idx, p.pageID)
-		if err != nil {
-			return fmt.Errorf("interpolating page_id: %w", err)
-		}
-		rawURL = strings.Replace(rawURL, "{page_id}", url.PathEscape(v), 1)
-	}
-	{
-		v, err := batch.TryInterpolatedString(idx, p.propertyID)
-		if err != nil {
-			return fmt.Errorf("interpolating property_id: %w", err)
-		}
-		rawURL = strings.Replace(rawURL, "{property_id}", url.PathEscape(v), 1)
-	}
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", rawURL, nil)
-	if err != nil {
-		return fmt.Errorf("creating HTTP request: %w", err)
-	}
-
-	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
-	httpReq.Header.Set("Notion-Version", p.notionVersion)
-
-	resp, err := p.httpClient.Do(httpReq)
-	if err != nil {
-		return fmt.Errorf("Notion API request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("reading response body: %w", err)
-	}
-
-	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
-	var body any
-	if len(respBody) > 0 {
-		var jsonBody any
-		if json.Unmarshal(respBody, &jsonBody) == nil {
-			body = jsonBody
-		} else {
-			body = string(respBody)
-		}
-	}
-
-	envelope := map[string]any{
-		"v1PagesPageIDPropertiesPropertyIDGetResponse": map[string]any{
-			"status_code": resp.StatusCode,
-			"headers":     headerMap(resp.Header),
-			"body":        body,
-		},
-	}
-
-	// Merge with original message.
-	if originalMap, ok := originalStructured.(map[string]any); ok {
-		for k, v := range envelope {
-			originalMap[k] = v
-		}
-		envelope = originalMap
-	}
-
-	// Apply response mapping.
-	if p.responseMapping != nil {
-		mapped, mapErr := p.responseMapping.Query(envelope)
-		if mapErr != nil {
-			return fmt.Errorf("executing response_mapping: %w", mapErr)
-		}
-		msg.SetStructured(mapped)
-	} else {
-		msg.SetStructured(envelope)
-	}
-
-	if resp.StatusCode >= 400 {
-		msg.MetaSetMut("http_status_code", resp.StatusCode)
-		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
-	}
-
-	return nil
-}
-
-// V1PagesPost processor — post /v1/pages/
-
-func init() {
-	service.MustRegisterBatchProcessor(
-		"notion_v1_pages_post",
-		v1PagesPostConfig(),
-		newV1PagesPostProcessor,
-	)
-}
-
-func v1PagesPostConfig() *service.ConfigSpec {
-	return service.NewConfigSpec().
-		Categories("Services", "Notion").
-		Summary("Create a page with content `POST /v1/pages/`").
-		Fields(sharedConfigFields()...).Fields(
-		service.NewBloblangField(fieldRequestMapping).
-			Optional().
-			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to messages before sending the request body."),
-		service.NewBloblangField(fieldResponseMapping).
-			Optional().
-			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
-	)
-}
-
-type v1PagesPostProcessor struct {
-	baseProcessor
-}
-
-func newV1PagesPostProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
-	base, err := baseProcessorFromParsed(conf, mgr)
-	if err != nil {
-		return nil, err
-	}
-
-	p := &v1PagesPostProcessor{baseProcessor: base}
-
-	return p, nil
-}
-
-func (p *v1PagesPostProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
-	batch = batch.Copy()
-
-	var wg sync.WaitGroup
-	wg.Add(len(batch))
-	for i := range batch {
-		go func(idx int) {
-			defer wg.Done()
-			if err := p.processV1PagesPost(ctx, idx, batch); err != nil {
-				batch[idx].SetError(err)
-			}
-		}(i)
-	}
-	wg.Wait()
-
-	return []service.MessageBatch{batch}, nil
-}
-
-func (p *v1PagesPostProcessor) processV1PagesPost(ctx context.Context, idx int, batch service.MessageBatch) error {
-	msg := batch[idx]
-
-	// Save original message content for response merge.
-	originalStructured, _ := msg.AsStructured()
-
-	// Build URL.
-	rawURL := p.baseURL + "/v1/pages/"
-
-	// Apply request mapping and validate request body.
-	if p.requestMapping != nil {
-		structured, err := msg.AsStructured()
-		if err != nil {
-			return fmt.Errorf("parsing message for request_mapping: %w", err)
-		}
-		mapped, err := p.requestMapping.Query(structured)
-		if err != nil {
-			return fmt.Errorf("executing request_mapping: %w", err)
-		}
-		msg.SetStructured(mapped)
-	}
-
-	b, err := msg.AsBytes()
-	if err != nil {
-		return fmt.Errorf("reading message body: %w", err)
-	}
-
-	var reqBody v1.CreatePageRequest
-	if err := reqBody.UnmarshalJSON(b); err != nil {
-		return fmt.Errorf("unmarshaling request body: %w", err)
-	}
-	if err := reqBody.Validate(); err != nil {
-		return fmt.Errorf("validating request body: %w", err)
-	}
-
-	reqBytes, err := reqBody.MarshalJSON()
-	if err != nil {
-		return fmt.Errorf("marshaling request body: %w", err)
-	}
-
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", rawURL, bytes.NewReader(reqBytes))
-	if err != nil {
-		return fmt.Errorf("creating HTTP request: %w", err)
-	}
-
-	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
-	httpReq.Header.Set("Notion-Version", p.notionVersion)
-	httpReq.Header.Set("Content-Type", "application/json")
-
-	resp, err := p.httpClient.Do(httpReq)
-	if err != nil {
-		return fmt.Errorf("Notion API request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("reading response body: %w", err)
-	}
-
-	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
-	var body any
-	if len(respBody) > 0 {
-		var jsonBody any
-		if json.Unmarshal(respBody, &jsonBody) == nil {
-			body = jsonBody
-		} else {
-			body = string(respBody)
-		}
-	}
-
-	envelope := map[string]any{
-		"v1PagesPostResponse": map[string]any{
-			"status_code": resp.StatusCode,
-			"headers":     headerMap(resp.Header),
-			"body":        body,
-		},
-	}
-
-	// Merge with original message.
-	if originalMap, ok := originalStructured.(map[string]any); ok {
-		for k, v := range envelope {
-			originalMap[k] = v
-		}
-		envelope = originalMap
-	}
-
-	// Apply response mapping.
-	if p.responseMapping != nil {
-		mapped, mapErr := p.responseMapping.Query(envelope)
-		if mapErr != nil {
-			return fmt.Errorf("executing response_mapping: %w", mapErr)
-		}
-		msg.SetStructured(mapped)
-	} else {
-		msg.SetStructured(envelope)
-	}
-
-	if resp.StatusCode >= 400 {
-		msg.MetaSetMut("http_status_code", resp.StatusCode)
-		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
-	}
-
-	return nil
-}
-
-// V1SearchPost processor — post /v1/search
-
-func init() {
-	service.MustRegisterBatchProcessor(
-		"notion_v1_search_post",
-		v1SearchPostConfig(),
-		newV1SearchPostProcessor,
-	)
-}
-
-func v1SearchPostConfig() *service.ConfigSpec {
-	return service.NewConfigSpec().
-		Categories("Services", "Notion").
-		Summary("Search `POST /v1/search`").
-		Fields(sharedConfigFields()...).Fields(
-		service.NewBloblangField(fieldRequestMapping).
-			Optional().
-			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to messages before sending the request body."),
-		service.NewBloblangField(fieldResponseMapping).
-			Optional().
-			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
-	)
-}
-
-type v1SearchPostProcessor struct {
-	baseProcessor
-}
-
-func newV1SearchPostProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
-	base, err := baseProcessorFromParsed(conf, mgr)
-	if err != nil {
-		return nil, err
-	}
-
-	p := &v1SearchPostProcessor{baseProcessor: base}
-
-	return p, nil
-}
-
-func (p *v1SearchPostProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
-	batch = batch.Copy()
-
-	var wg sync.WaitGroup
-	wg.Add(len(batch))
-	for i := range batch {
-		go func(idx int) {
-			defer wg.Done()
-			if err := p.processV1SearchPost(ctx, idx, batch); err != nil {
-				batch[idx].SetError(err)
-			}
-		}(i)
-	}
-	wg.Wait()
-
-	return []service.MessageBatch{batch}, nil
-}
-
-func (p *v1SearchPostProcessor) processV1SearchPost(ctx context.Context, idx int, batch service.MessageBatch) error {
-	msg := batch[idx]
-
-	// Save original message content for response merge.
-	originalStructured, _ := msg.AsStructured()
-
-	// Build URL.
-	rawURL := p.baseURL + "/v1/search"
-
-	// Apply request mapping and validate request body.
-	if p.requestMapping != nil {
-		structured, err := msg.AsStructured()
-		if err != nil {
-			return fmt.Errorf("parsing message for request_mapping: %w", err)
-		}
-		mapped, err := p.requestMapping.Query(structured)
-		if err != nil {
-			return fmt.Errorf("executing request_mapping: %w", err)
-		}
-		msg.SetStructured(mapped)
-	}
-
-	b, err := msg.AsBytes()
-	if err != nil {
-		return fmt.Errorf("reading message body: %w", err)
-	}
-
-	var reqBody v1.SearchRequest
-	if err := reqBody.UnmarshalJSON(b); err != nil {
-		return fmt.Errorf("unmarshaling request body: %w", err)
-	}
-	if err := reqBody.Validate(); err != nil {
-		return fmt.Errorf("validating request body: %w", err)
-	}
-
-	reqBytes, err := reqBody.MarshalJSON()
-	if err != nil {
-		return fmt.Errorf("marshaling request body: %w", err)
-	}
-
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", rawURL, bytes.NewReader(reqBytes))
-	if err != nil {
-		return fmt.Errorf("creating HTTP request: %w", err)
-	}
-
-	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
-	httpReq.Header.Set("Notion-Version", p.notionVersion)
-	httpReq.Header.Set("Content-Type", "application/json")
-
-	resp, err := p.httpClient.Do(httpReq)
-	if err != nil {
-		return fmt.Errorf("Notion API request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("reading response body: %w", err)
-	}
-
-	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
-	var body any
-	if len(respBody) > 0 {
-		var jsonBody any
-		if json.Unmarshal(respBody, &jsonBody) == nil {
-			body = jsonBody
-		} else {
-			body = string(respBody)
-		}
-	}
-
-	envelope := map[string]any{
-		"v1SearchPostResponse": map[string]any{
-			"status_code": resp.StatusCode,
-			"headers":     headerMap(resp.Header),
-			"body":        body,
-		},
-	}
-
-	// Merge with original message.
-	if originalMap, ok := originalStructured.(map[string]any); ok {
-		for k, v := range envelope {
-			originalMap[k] = v
-		}
-		envelope = originalMap
-	}
-
-	// Apply response mapping.
-	if p.responseMapping != nil {
-		mapped, mapErr := p.responseMapping.Query(envelope)
-		if mapErr != nil {
-			return fmt.Errorf("executing response_mapping: %w", mapErr)
-		}
-		msg.SetStructured(mapped)
-	} else {
-		msg.SetStructured(envelope)
-	}
-
-	if resp.StatusCode >= 400 {
-		msg.MetaSetMut("http_status_code", resp.StatusCode)
-		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
-	}
-
-	return nil
-}
-
-// V1UsersGet processor — get /v1/users
-
-func init() {
-	service.MustRegisterBatchProcessor(
-		"notion_v1_users_get",
-		v1UsersGetConfig(),
-		newV1UsersGetProcessor,
-	)
-}
-
-func v1UsersGetConfig() *service.ConfigSpec {
-	return service.NewConfigSpec().
-		Categories("Services", "Notion").
-		Summary("List all users `GET /v1/users`").
-		Description("Returns a paginated list of user objects for a workspace").
-		Fields(sharedConfigFields()...).Fields(
-		service.NewBloblangField(fieldResponseMapping).
-			Optional().
-			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
-	)
-}
-
-type v1UsersGetProcessor struct {
-	baseProcessor
-}
-
-func newV1UsersGetProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
-	base, err := baseProcessorFromParsed(conf, mgr)
-	if err != nil {
-		return nil, err
-	}
-
-	p := &v1UsersGetProcessor{baseProcessor: base}
-
-	return p, nil
-}
-
-func (p *v1UsersGetProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
-	batch = batch.Copy()
-
-	var wg sync.WaitGroup
-	wg.Add(len(batch))
-	for i := range batch {
-		go func(idx int) {
-			defer wg.Done()
-			if err := p.processV1UsersGet(ctx, idx, batch); err != nil {
-				batch[idx].SetError(err)
-			}
-		}(i)
-	}
-	wg.Wait()
-
-	return []service.MessageBatch{batch}, nil
-}
-
-func (p *v1UsersGetProcessor) processV1UsersGet(ctx context.Context, idx int, batch service.MessageBatch) error {
-	msg := batch[idx]
-
-	// Save original message content for response merge.
-	originalStructured, _ := msg.AsStructured()
-
-	// Build URL.
-	rawURL := p.baseURL + "/v1/users"
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", rawURL, nil)
-	if err != nil {
-		return fmt.Errorf("creating HTTP request: %w", err)
-	}
-
-	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
-	httpReq.Header.Set("Notion-Version", p.notionVersion)
-
-	resp, err := p.httpClient.Do(httpReq)
-	if err != nil {
-		return fmt.Errorf("Notion API request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("reading response body: %w", err)
-	}
-
-	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
-	var body any
-	if len(respBody) > 0 {
-		var jsonBody any
-		if json.Unmarshal(respBody, &jsonBody) == nil {
-			body = jsonBody
-		} else {
-			body = string(respBody)
-		}
-	}
-
-	envelope := map[string]any{
-		"v1UsersGetResponse": map[string]any{
-			"status_code": resp.StatusCode,
-			"headers":     headerMap(resp.Header),
-			"body":        body,
-		},
-	}
-
-	// Merge with original message.
-	if originalMap, ok := originalStructured.(map[string]any); ok {
-		for k, v := range envelope {
-			originalMap[k] = v
-		}
-		envelope = originalMap
-	}
-
-	// Apply response mapping.
-	if p.responseMapping != nil {
-		mapped, mapErr := p.responseMapping.Query(envelope)
-		if mapErr != nil {
-			return fmt.Errorf("executing response_mapping: %w", mapErr)
-		}
-		msg.SetStructured(mapped)
-	} else {
-		msg.SetStructured(envelope)
-	}
-
-	if resp.StatusCode >= 400 {
-		msg.MetaSetMut("http_status_code", resp.StatusCode)
-		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
-	}
-
-	return nil
-}
-
-// V1UsersIDGet processor — get /v1/users/{id}
-
-func init() {
-	service.MustRegisterBatchProcessor(
-		"notion_v1_users_id_get",
-		v1UsersIDGetConfig(),
-		newV1UsersIDGetProcessor,
-	)
-}
-
-func v1UsersIDGetConfig() *service.ConfigSpec {
-	return service.NewConfigSpec().
-		Categories("Services", "Notion").
-		Summary("Retrieve a user `GET /v1/users/{id}`").
-		Description("Retrieve a user object using the ID specified in the request path.").
-		Fields(sharedConfigFields()...).Fields(
-		service.NewBloblangField(fieldResponseMapping).
-			Optional().
-			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
-		service.NewInterpolatedStringField("id").
-			Description(""),
-	)
-}
-
-type v1UsersIDGetProcessor struct {
-	baseProcessor
-	id *service.InterpolatedString
-}
-
-func newV1UsersIDGetProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
-	base, err := baseProcessorFromParsed(conf, mgr)
-	if err != nil {
-		return nil, err
-	}
-
-	p := &v1UsersIDGetProcessor{baseProcessor: base}
-	if p.id, err = conf.FieldInterpolatedString("id"); err != nil {
-		return nil, err
-	}
-
-	return p, nil
-}
-
-func (p *v1UsersIDGetProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
-	batch = batch.Copy()
-
-	var wg sync.WaitGroup
-	wg.Add(len(batch))
-	for i := range batch {
-		go func(idx int) {
-			defer wg.Done()
-			if err := p.processV1UsersIDGet(ctx, idx, batch); err != nil {
-				batch[idx].SetError(err)
-			}
-		}(i)
-	}
-	wg.Wait()
-
-	return []service.MessageBatch{batch}, nil
-}
-
-func (p *v1UsersIDGetProcessor) processV1UsersIDGet(ctx context.Context, idx int, batch service.MessageBatch) error {
-	msg := batch[idx]
-
-	// Save original message content for response merge.
-	originalStructured, _ := msg.AsStructured()
-
-	// Build URL.
-	rawURL := p.baseURL + "/v1/users/{id}"
-	{
-		v, err := batch.TryInterpolatedString(idx, p.id)
-		if err != nil {
-			return fmt.Errorf("interpolating id: %w", err)
-		}
-		rawURL = strings.Replace(rawURL, "{id}", url.PathEscape(v), 1)
-	}
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", rawURL, nil)
-	if err != nil {
-		return fmt.Errorf("creating HTTP request: %w", err)
-	}
-
-	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
-	httpReq.Header.Set("Notion-Version", p.notionVersion)
-
-	resp, err := p.httpClient.Do(httpReq)
-	if err != nil {
-		return fmt.Errorf("Notion API request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("reading response body: %w", err)
-	}
-
-	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
-	var body any
-	if len(respBody) > 0 {
-		var jsonBody any
-		if json.Unmarshal(respBody, &jsonBody) == nil {
-			body = jsonBody
-		} else {
-			body = string(respBody)
-		}
-	}
-
-	envelope := map[string]any{
-		"v1UsersIDGetResponse": map[string]any{
-			"status_code": resp.StatusCode,
-			"headers":     headerMap(resp.Header),
-			"body":        body,
-		},
-	}
-
-	// Merge with original message.
-	if originalMap, ok := originalStructured.(map[string]any); ok {
-		for k, v := range envelope {
-			originalMap[k] = v
-		}
-		envelope = originalMap
-	}
-
-	// Apply response mapping.
-	if p.responseMapping != nil {
-		mapped, mapErr := p.responseMapping.Query(envelope)
-		if mapErr != nil {
-			return fmt.Errorf("executing response_mapping: %w", mapErr)
-		}
-		msg.SetStructured(mapped)
-	} else {
-		msg.SetStructured(envelope)
-	}
-
-	if resp.StatusCode >= 400 {
-		msg.MetaSetMut("http_status_code", resp.StatusCode)
-		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
-	}
-
-	return nil
-}
-
-// V1UsersMeGet processor — get /v1/users/me
-
-func init() {
-	service.MustRegisterBatchProcessor(
-		"notion_v1_users_me_get",
-		v1UsersMeGetConfig(),
-		newV1UsersMeGetProcessor,
-	)
-}
-
-func v1UsersMeGetConfig() *service.ConfigSpec {
-	return service.NewConfigSpec().
-		Categories("Services", "Notion").
-		Summary("Retrieve your token’s bot user `GET /v1/users/me`").
-		Fields(sharedConfigFields()...).Fields(
-		service.NewBloblangField(fieldResponseMapping).
-			Optional().
-			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
-	)
-}
-
-type v1UsersMeGetProcessor struct {
-	baseProcessor
-}
-
-func newV1UsersMeGetProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
-	base, err := baseProcessorFromParsed(conf, mgr)
-	if err != nil {
-		return nil, err
-	}
-
-	p := &v1UsersMeGetProcessor{baseProcessor: base}
-
-	return p, nil
-}
-
-func (p *v1UsersMeGetProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
-	batch = batch.Copy()
-
-	var wg sync.WaitGroup
-	wg.Add(len(batch))
-	for i := range batch {
-		go func(idx int) {
-			defer wg.Done()
-			if err := p.processV1UsersMeGet(ctx, idx, batch); err != nil {
-				batch[idx].SetError(err)
-			}
-		}(i)
-	}
-	wg.Wait()
-
-	return []service.MessageBatch{batch}, nil
-}
-
-func (p *v1UsersMeGetProcessor) processV1UsersMeGet(ctx context.Context, idx int, batch service.MessageBatch) error {
+func (p *getSelfProcessor) processGetSelf(ctx context.Context, idx int, batch service.MessageBatch) error {
 	msg := batch[idx]
 
 	// Save original message content for response merge.
@@ -3036,7 +1338,3941 @@ func (p *v1UsersMeGetProcessor) processV1UsersMeGet(ctx context.Context, idx int
 	}
 
 	envelope := map[string]any{
-		"v1UsersMeGetResponse": map[string]any{
+		"getSelfResponse": map[string]any{
+			"status_code": resp.StatusCode,
+			"headers":     headerMap(resp.Header),
+			"body":        body,
+		},
+	}
+
+	// Merge with original message.
+	if originalMap, ok := originalStructured.(map[string]any); ok {
+		for k, v := range envelope {
+			originalMap[k] = v
+		}
+		envelope = originalMap
+	}
+
+	// Apply response mapping.
+	if p.responseMapping != nil {
+		mapped, mapErr := p.responseMapping.Query(envelope)
+		if mapErr != nil {
+			return fmt.Errorf("executing response_mapping: %w", mapErr)
+		}
+		msg.SetStructured(mapped)
+	} else {
+		msg.SetStructured(envelope)
+	}
+
+	if resp.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", resp.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	}
+
+	return nil
+}
+
+// GetUser processor — get /v1/users/{user_id}
+
+func init() {
+	service.MustRegisterBatchProcessor(
+		"notion_get_user",
+		getUserConfig(),
+		newGetUserProcessor,
+	)
+}
+
+func getUserConfig() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Categories("Services", "Notion").
+		Summary("Retrieve a user `GET /v1/users/{user_id}`").
+		Description("API reference: https://developers.notion.com/reference/get-user").
+		Fields(sharedConfigFields()...).Fields(
+		service.NewBloblangField(fieldResponseMapping).
+			Optional().
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
+		service.NewInterpolatedStringField("user_id").
+			Description(""),
+	).
+		Example(
+			"Retrieve a user",
+			"Response body:\n```json\n{\n  \"object\": \"user\",\n  \"id\": \"6794760a-1f15-45cd-9c65-0dfe42f5135a\",\n  \"name\": \"Aman Gupta\",\n  \"avatar_url\": null,\n  \"type\": \"person\",\n  \"person\": {\n    \"email\": \"XXXXXXXXXXX\"\n  }\n}\n```",
+			"",
+		)
+}
+
+type getUserProcessor struct {
+	baseProcessor
+	userID *service.InterpolatedString
+}
+
+func newGetUserProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
+	base, err := baseProcessorFromParsed(conf, mgr)
+	if err != nil {
+		return nil, err
+	}
+
+	p := &getUserProcessor{baseProcessor: base}
+	if p.userID, err = conf.FieldInterpolatedString("user_id"); err != nil {
+		return nil, err
+	}
+
+	return p, nil
+}
+
+func (p *getUserProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
+	batch = batch.Copy()
+
+	var wg sync.WaitGroup
+	wg.Add(len(batch))
+	for i := range batch {
+		go func(idx int) {
+			defer wg.Done()
+			if err := p.processGetUser(ctx, idx, batch); err != nil {
+				batch[idx].SetError(err)
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	return []service.MessageBatch{batch}, nil
+}
+
+func (p *getUserProcessor) processGetUser(ctx context.Context, idx int, batch service.MessageBatch) error {
+	msg := batch[idx]
+
+	// Save original message content for response merge.
+	originalStructured, _ := msg.AsStructured()
+
+	// Build URL.
+	rawURL := p.baseURL + "/v1/users/{user_id}"
+	{
+		v, err := batch.TryInterpolatedString(idx, p.userID)
+		if err != nil {
+			return fmt.Errorf("interpolating user_id: %w", err)
+		}
+		rawURL = strings.Replace(rawURL, "{user_id}", url.PathEscape(v), 1)
+	}
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", rawURL, nil)
+	if err != nil {
+		return fmt.Errorf("creating HTTP request: %w", err)
+	}
+
+	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
+	httpReq.Header.Set("Notion-Version", p.notionVersion)
+
+	resp, err := p.httpClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("Notion API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("reading response body: %w", err)
+	}
+
+	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
+	var body any
+	if len(respBody) > 0 {
+		var jsonBody any
+		if json.Unmarshal(respBody, &jsonBody) == nil {
+			body = jsonBody
+		} else {
+			body = string(respBody)
+		}
+	}
+
+	envelope := map[string]any{
+		"getUserResponse": map[string]any{
+			"status_code": resp.StatusCode,
+			"headers":     headerMap(resp.Header),
+			"body":        body,
+		},
+	}
+
+	// Merge with original message.
+	if originalMap, ok := originalStructured.(map[string]any); ok {
+		for k, v := range envelope {
+			originalMap[k] = v
+		}
+		envelope = originalMap
+	}
+
+	// Apply response mapping.
+	if p.responseMapping != nil {
+		mapped, mapErr := p.responseMapping.Query(envelope)
+		if mapErr != nil {
+			return fmt.Errorf("executing response_mapping: %w", mapErr)
+		}
+		msg.SetStructured(mapped)
+	} else {
+		msg.SetStructured(envelope)
+	}
+
+	if resp.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", resp.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	}
+
+	return nil
+}
+
+// GetUsers processor — get /v1/users
+
+func init() {
+	service.MustRegisterBatchProcessor(
+		"notion_get_users",
+		getUsersConfig(),
+		newGetUsersProcessor,
+	)
+}
+
+func getUsersConfig() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Categories("Services", "Notion").
+		Summary("List all users `GET /v1/users`").
+		Description("API reference: https://developers.notion.com/reference/get-users").
+		Fields(sharedConfigFields()...).Fields(
+		service.NewBloblangField(fieldResponseMapping).
+			Optional().
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
+		service.NewInterpolatedStringField("start_cursor").
+			Description("").
+			Optional(),
+		service.NewInterpolatedStringField("page_size").
+			Description("").
+			Optional(),
+	).
+		Example(
+			"List all users",
+			"Response body:\n```json\n{\n  \"object\": \"list\",\n  \"results\": [\n    {\n      \"object\": \"user\",\n      \"id\": \"6794760a-1f15-45cd-9c65-0dfe42f5135a\",\n      \"name\": \"Aman Gupta\",\n      \"avatar_url\": null,\n      \"type\": \"person\",\n      \"person\": {\n        \"email\": \"XXXXXXXXXX\"\n      }\n    },\n    {\n      \"object\": \"user\",\n      \"id\": \"92a680bb-6970-4726-952b-4f4c03bff617\",\n      \"name\": \"Leotastic\",\n      \"avatar_url\": null,\n      \"type\": \"bot\",\n      \"bot\": {\n        \"owner\": {\n          \"type\": \"workspace\",\n          \"workspace\": true\n        }\n      }\n    }\n  ],\n  \"next_cursor\": null,\n  \"has_more\": false\n}\n```",
+			"",
+		)
+}
+
+type getUsersProcessor struct {
+	baseProcessor
+	startCursor *service.InterpolatedString
+	pageSize    *service.InterpolatedString
+}
+
+func newGetUsersProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
+	base, err := baseProcessorFromParsed(conf, mgr)
+	if err != nil {
+		return nil, err
+	}
+
+	p := &getUsersProcessor{baseProcessor: base}
+	if conf.Contains("start_cursor") {
+		if p.startCursor, err = conf.FieldInterpolatedString("start_cursor"); err != nil {
+			return nil, err
+		}
+	}
+	if conf.Contains("page_size") {
+		if p.pageSize, err = conf.FieldInterpolatedString("page_size"); err != nil {
+			return nil, err
+		}
+	}
+
+	return p, nil
+}
+
+func (p *getUsersProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
+	batch = batch.Copy()
+
+	var wg sync.WaitGroup
+	wg.Add(len(batch))
+	for i := range batch {
+		go func(idx int) {
+			defer wg.Done()
+			if err := p.processGetUsers(ctx, idx, batch); err != nil {
+				batch[idx].SetError(err)
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	return []service.MessageBatch{batch}, nil
+}
+
+func (p *getUsersProcessor) processGetUsers(ctx context.Context, idx int, batch service.MessageBatch) error {
+	msg := batch[idx]
+
+	// Save original message content for response merge.
+	originalStructured, _ := msg.AsStructured()
+
+	// Build URL.
+	rawURL := p.baseURL + "/v1/users"
+
+	// Build query parameters.
+	query := make(url.Values)
+	if p.startCursor != nil {
+		v, err := batch.TryInterpolatedString(idx, p.startCursor)
+		if err != nil {
+			return fmt.Errorf("interpolating start_cursor: %w", err)
+		}
+		query.Set("start_cursor", v)
+	}
+	if p.pageSize != nil {
+		v, err := batch.TryInterpolatedString(idx, p.pageSize)
+		if err != nil {
+			return fmt.Errorf("interpolating page_size: %w", err)
+		}
+		query.Set("page_size", v)
+	}
+	if len(query) > 0 {
+		rawURL += "?" + query.Encode()
+	}
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", rawURL, nil)
+	if err != nil {
+		return fmt.Errorf("creating HTTP request: %w", err)
+	}
+
+	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
+	httpReq.Header.Set("Notion-Version", p.notionVersion)
+
+	resp, err := p.httpClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("Notion API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("reading response body: %w", err)
+	}
+
+	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
+	var body any
+	if len(respBody) > 0 {
+		var jsonBody any
+		if json.Unmarshal(respBody, &jsonBody) == nil {
+			body = jsonBody
+		} else {
+			body = string(respBody)
+		}
+	}
+
+	envelope := map[string]any{
+		"getUsersResponse": map[string]any{
+			"status_code": resp.StatusCode,
+			"headers":     headerMap(resp.Header),
+			"body":        body,
+		},
+	}
+
+	// Merge with original message.
+	if originalMap, ok := originalStructured.(map[string]any); ok {
+		for k, v := range envelope {
+			originalMap[k] = v
+		}
+		envelope = originalMap
+	}
+
+	// Apply response mapping.
+	if p.responseMapping != nil {
+		mapped, mapErr := p.responseMapping.Query(envelope)
+		if mapErr != nil {
+			return fmt.Errorf("executing response_mapping: %w", mapErr)
+		}
+		msg.SetStructured(mapped)
+	} else {
+		msg.SetStructured(envelope)
+	}
+
+	if resp.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", resp.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	}
+
+	return nil
+}
+
+// ListComments processor — get /v1/comments
+
+func init() {
+	service.MustRegisterBatchProcessor(
+		"notion_list_comments",
+		listCommentsConfig(),
+		newListCommentsProcessor,
+	)
+}
+
+func listCommentsConfig() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Categories("Services", "Notion").
+		Summary("List comments `GET /v1/comments`").
+		Description("API reference: https://developers.notion.com/reference/list-comments").
+		Fields(sharedConfigFields()...).Fields(
+		service.NewBloblangField(fieldResponseMapping).
+			Optional().
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
+		service.NewInterpolatedStringField("block_id").
+			Description(""),
+		service.NewInterpolatedStringField("start_cursor").
+			Description("").
+			Optional(),
+		service.NewInterpolatedStringField("page_size").
+			Description("").
+			Optional(),
+	).
+		Example(
+			"Retrieve comments",
+			"Response body:\n```json\n{\n  \"object\": \"list\",\n  \"results\": [\n    {\n      \"object\": \"comment\",\n      \"id\": \"ed4c62f2-c0ad-4081-b6b8-dad025637741\",\n      \"parent\": {\n        \"type\": \"block_id\",\n        \"block_id\": \"5d4ca33c-d6b7-4675-93d9-84b70af45d1c\"\n      },\n      \"discussion_id\": \"ce18f8c6-ef2a-427f-b416-43531fc7c117\",\n      \"created_time\": \"2022-07-15T21:38:00.000Z\",\n      \"last_edited_time\": \"2022-07-15T21:38:00.000Z\",\n      \"created_by\": {\n        \"object\": \"user\",\n        \"id\": \"952f41bb-da96-4d36-9c2e-74924eee8ef1\"\n      },\n      \"rich_text\": [\n        {\n          \"type\": \"text\",\n          \"text\": {\n            \"content\": \"Please cite your source\",\n            \"link\": null\n          },\n          \"annotations\": {\n            \"bold\": false,\n            \"italic\": false,\n            \"strikethrough\": false,\n            \"underline\": false,\n            \"code\": false,\n            \"color\": \"default\"\n          },\n          \"plain_text\": \"Please cite your source\",\n          \"href\": null\n        }\n      ]\n    },\n    {\n      \"object\": \"comment\",\n      \"id\": \"8949cb38-aee6-4c62-ba96-6ef7df9b4cf2\",\n      \"parent\": {\n        \"type\": \"block_id\",\n        \"block_id\": \"5d4ca33c-d6b7-4675-93d9-84b70af45d1c\"\n      },\n      \"discussion_id\": \"e63f446f-a84a-4cab-8f5a-b9e7779ecb67\",\n      \"created_time\": \"2022-07-15T21:38:00.000Z\",\n      \"last_edited_time\": \"2022-07-15T21:38:00.000Z\",\n      \"created_by\": {\n        \"object\": \"user\",\n        \"id\": \"952f41bb-da96-4d36-9c2e-74924eee8ef1\"\n      },\n      \"rich_text\": [\n        {\n          \"type\": \"text\",\n          \"text\": {\n            \"content\": \"What other nutrients does kale have?\",\n            \"link\": null\n          },\n          \"annotations\": {\n            \"bold\": false,\n            \"italic\": false,\n            \"strikethrough\": false,\n            \"underline\": false,\n            \"code\": false,\n            \"color\": \"default\"\n          },\n          \"plain_text\": \"What other nutrients does kale have?\",\n          \"href\": null\n        }\n      ]\n    },\n    {\n      \"object\": \"comment\",\n      \"id\": \"6cd52483-6d55-4f8a-a724-4adb1c17ed43\",\n      \"parent\": {\n        \"type\": \"block_id\",\n        \"block_id\": \"5d4ca33c-d6b7-4675-93d9-84b70af45d1c\"\n      },\n      \"discussion_id\": \"ce18f8c6-ef2a-427f-b416-43531fc7c117\",\n      \"created_time\": \"2022-07-18T21:48:00.000Z\",\n      \"last_edited_time\": \"2022-07-18T21:48:00.000Z\",\n      \"created_by\": {\n        \"object\": \"user\",\n        \"id\": \"e450a39e-9051-4d36-bc4e-8581611fc592\"\n      },\n      \"rich_text\": [\n        {\n          \"type\": \"text\",\n          \"text\": {\n            \"content\": \"https://www.healthline.com/nutrition/10-proven-benefits-of-kale\",\n            \"link\": {\n              \"url\": \"https://www.healthline.com/nutrition/10-proven-benefits-of-kale\"\n            }\n          },\n          \"annotations\": {\n            \"bold\": false,\n            \"italic\": false,\n            \"strikethrough\": false,\n            \"underline\": false,\n            \"code\": false,\n            \"color\": \"default\"\n          },\n          \"plain_text\": \"https://www.healthline.com/nutrition/10-proven-benefits-of-kale\",\n          \"href\": \"https://www.healthline.com/nutrition/10-proven-benefits-of-kale\"\n        }\n      ]\n    }\n  ],\n  \"next_cursor\": null,\n  \"has_more\": false,\n  \"type\": \"comment\",\n  \"comment\": {}\n}\n```",
+			"",
+		)
+}
+
+type listCommentsProcessor struct {
+	baseProcessor
+	blockID     *service.InterpolatedString
+	startCursor *service.InterpolatedString
+	pageSize    *service.InterpolatedString
+}
+
+func newListCommentsProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
+	base, err := baseProcessorFromParsed(conf, mgr)
+	if err != nil {
+		return nil, err
+	}
+
+	p := &listCommentsProcessor{baseProcessor: base}
+	if conf.Contains("block_id") {
+		if p.blockID, err = conf.FieldInterpolatedString("block_id"); err != nil {
+			return nil, err
+		}
+	}
+	if conf.Contains("start_cursor") {
+		if p.startCursor, err = conf.FieldInterpolatedString("start_cursor"); err != nil {
+			return nil, err
+		}
+	}
+	if conf.Contains("page_size") {
+		if p.pageSize, err = conf.FieldInterpolatedString("page_size"); err != nil {
+			return nil, err
+		}
+	}
+
+	return p, nil
+}
+
+func (p *listCommentsProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
+	batch = batch.Copy()
+
+	var wg sync.WaitGroup
+	wg.Add(len(batch))
+	for i := range batch {
+		go func(idx int) {
+			defer wg.Done()
+			if err := p.processListComments(ctx, idx, batch); err != nil {
+				batch[idx].SetError(err)
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	return []service.MessageBatch{batch}, nil
+}
+
+func (p *listCommentsProcessor) processListComments(ctx context.Context, idx int, batch service.MessageBatch) error {
+	msg := batch[idx]
+
+	// Save original message content for response merge.
+	originalStructured, _ := msg.AsStructured()
+
+	// Build URL.
+	rawURL := p.baseURL + "/v1/comments"
+
+	// Build query parameters.
+	query := make(url.Values)
+	if p.blockID != nil {
+		v, err := batch.TryInterpolatedString(idx, p.blockID)
+		if err != nil {
+			return fmt.Errorf("interpolating block_id: %w", err)
+		}
+		query.Set("block_id", v)
+	}
+	if p.startCursor != nil {
+		v, err := batch.TryInterpolatedString(idx, p.startCursor)
+		if err != nil {
+			return fmt.Errorf("interpolating start_cursor: %w", err)
+		}
+		query.Set("start_cursor", v)
+	}
+	if p.pageSize != nil {
+		v, err := batch.TryInterpolatedString(idx, p.pageSize)
+		if err != nil {
+			return fmt.Errorf("interpolating page_size: %w", err)
+		}
+		query.Set("page_size", v)
+	}
+	if len(query) > 0 {
+		rawURL += "?" + query.Encode()
+	}
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", rawURL, nil)
+	if err != nil {
+		return fmt.Errorf("creating HTTP request: %w", err)
+	}
+
+	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
+	httpReq.Header.Set("Notion-Version", p.notionVersion)
+
+	resp, err := p.httpClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("Notion API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("reading response body: %w", err)
+	}
+
+	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
+	var body any
+	if len(respBody) > 0 {
+		var jsonBody any
+		if json.Unmarshal(respBody, &jsonBody) == nil {
+			body = jsonBody
+		} else {
+			body = string(respBody)
+		}
+	}
+
+	envelope := map[string]any{
+		"listCommentsResponse": map[string]any{
+			"status_code": resp.StatusCode,
+			"headers":     headerMap(resp.Header),
+			"body":        body,
+		},
+	}
+
+	// Merge with original message.
+	if originalMap, ok := originalStructured.(map[string]any); ok {
+		for k, v := range envelope {
+			originalMap[k] = v
+		}
+		envelope = originalMap
+	}
+
+	// Apply response mapping.
+	if p.responseMapping != nil {
+		mapped, mapErr := p.responseMapping.Query(envelope)
+		if mapErr != nil {
+			return fmt.Errorf("executing response_mapping: %w", mapErr)
+		}
+		msg.SetStructured(mapped)
+	} else {
+		msg.SetStructured(envelope)
+	}
+
+	if resp.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", resp.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	}
+
+	return nil
+}
+
+// ListDataSourceTemplates processor — get /v1/data_sources/{data_source_id}/templates
+
+func init() {
+	service.MustRegisterBatchProcessor(
+		"notion_list_data_source_templates",
+		listDataSourceTemplatesConfig(),
+		newListDataSourceTemplatesProcessor,
+	)
+}
+
+func listDataSourceTemplatesConfig() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Categories("Services", "Notion").
+		Summary("List templates in a data source `GET /v1/data_sources/{data_source_id}/templates`").
+		Description("API reference: https://developers.notion.com/reference/list-data-source-templates").
+		Fields(sharedConfigFields()...).Fields(
+		service.NewBloblangField(fieldResponseMapping).
+			Optional().
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
+		service.NewInterpolatedStringField("data_source_id").
+			Description(""),
+		service.NewInterpolatedStringField("name").
+			Description("").
+			Optional(),
+		service.NewInterpolatedStringField("start_cursor").
+			Description("").
+			Optional(),
+		service.NewInterpolatedStringField("page_size").
+			Description("").
+			Optional(),
+	)
+}
+
+type listDataSourceTemplatesProcessor struct {
+	baseProcessor
+	dataSourceID *service.InterpolatedString
+	name         *service.InterpolatedString
+	startCursor  *service.InterpolatedString
+	pageSize     *service.InterpolatedString
+}
+
+func newListDataSourceTemplatesProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
+	base, err := baseProcessorFromParsed(conf, mgr)
+	if err != nil {
+		return nil, err
+	}
+
+	p := &listDataSourceTemplatesProcessor{baseProcessor: base}
+	if p.dataSourceID, err = conf.FieldInterpolatedString("data_source_id"); err != nil {
+		return nil, err
+	}
+	if conf.Contains("name") {
+		if p.name, err = conf.FieldInterpolatedString("name"); err != nil {
+			return nil, err
+		}
+	}
+	if conf.Contains("start_cursor") {
+		if p.startCursor, err = conf.FieldInterpolatedString("start_cursor"); err != nil {
+			return nil, err
+		}
+	}
+	if conf.Contains("page_size") {
+		if p.pageSize, err = conf.FieldInterpolatedString("page_size"); err != nil {
+			return nil, err
+		}
+	}
+
+	return p, nil
+}
+
+func (p *listDataSourceTemplatesProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
+	batch = batch.Copy()
+
+	var wg sync.WaitGroup
+	wg.Add(len(batch))
+	for i := range batch {
+		go func(idx int) {
+			defer wg.Done()
+			if err := p.processListDataSourceTemplates(ctx, idx, batch); err != nil {
+				batch[idx].SetError(err)
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	return []service.MessageBatch{batch}, nil
+}
+
+func (p *listDataSourceTemplatesProcessor) processListDataSourceTemplates(ctx context.Context, idx int, batch service.MessageBatch) error {
+	msg := batch[idx]
+
+	// Save original message content for response merge.
+	originalStructured, _ := msg.AsStructured()
+
+	// Build URL.
+	rawURL := p.baseURL + "/v1/data_sources/{data_source_id}/templates"
+	{
+		v, err := batch.TryInterpolatedString(idx, p.dataSourceID)
+		if err != nil {
+			return fmt.Errorf("interpolating data_source_id: %w", err)
+		}
+		rawURL = strings.Replace(rawURL, "{data_source_id}", url.PathEscape(v), 1)
+	}
+
+	// Build query parameters.
+	query := make(url.Values)
+	if p.name != nil {
+		v, err := batch.TryInterpolatedString(idx, p.name)
+		if err != nil {
+			return fmt.Errorf("interpolating name: %w", err)
+		}
+		query.Set("name", v)
+	}
+	if p.startCursor != nil {
+		v, err := batch.TryInterpolatedString(idx, p.startCursor)
+		if err != nil {
+			return fmt.Errorf("interpolating start_cursor: %w", err)
+		}
+		query.Set("start_cursor", v)
+	}
+	if p.pageSize != nil {
+		v, err := batch.TryInterpolatedString(idx, p.pageSize)
+		if err != nil {
+			return fmt.Errorf("interpolating page_size: %w", err)
+		}
+		query.Set("page_size", v)
+	}
+	if len(query) > 0 {
+		rawURL += "?" + query.Encode()
+	}
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", rawURL, nil)
+	if err != nil {
+		return fmt.Errorf("creating HTTP request: %w", err)
+	}
+
+	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
+	httpReq.Header.Set("Notion-Version", p.notionVersion)
+
+	resp, err := p.httpClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("Notion API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("reading response body: %w", err)
+	}
+
+	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
+	var body any
+	if len(respBody) > 0 {
+		var jsonBody any
+		if json.Unmarshal(respBody, &jsonBody) == nil {
+			body = jsonBody
+		} else {
+			body = string(respBody)
+		}
+	}
+
+	envelope := map[string]any{
+		"listDataSourceTemplatesResponse": map[string]any{
+			"status_code": resp.StatusCode,
+			"headers":     headerMap(resp.Header),
+			"body":        body,
+		},
+	}
+
+	// Merge with original message.
+	if originalMap, ok := originalStructured.(map[string]any); ok {
+		for k, v := range envelope {
+			originalMap[k] = v
+		}
+		envelope = originalMap
+	}
+
+	// Apply response mapping.
+	if p.responseMapping != nil {
+		mapped, mapErr := p.responseMapping.Query(envelope)
+		if mapErr != nil {
+			return fmt.Errorf("executing response_mapping: %w", mapErr)
+		}
+		msg.SetStructured(mapped)
+	} else {
+		msg.SetStructured(envelope)
+	}
+
+	if resp.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", resp.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	}
+
+	return nil
+}
+
+// ListFileUploads processor — get /v1/file_uploads
+
+func init() {
+	service.MustRegisterBatchProcessor(
+		"notion_list_file_uploads",
+		listFileUploadsConfig(),
+		newListFileUploadsProcessor,
+	)
+}
+
+func listFileUploadsConfig() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Categories("Services", "Notion").
+		Summary("List file uploads `GET /v1/file_uploads`").
+		Description("API reference: https://developers.notion.com/reference/list-file-uploads").
+		Fields(sharedConfigFields()...).Fields(
+		service.NewBloblangField(fieldResponseMapping).
+			Optional().
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
+		service.NewInterpolatedStringField("status").
+			Description("").
+			Optional(),
+		service.NewInterpolatedStringField("start_cursor").
+			Description("").
+			Optional(),
+		service.NewInterpolatedStringField("page_size").
+			Description("").
+			Optional(),
+	)
+}
+
+type listFileUploadsProcessor struct {
+	baseProcessor
+	status      *service.InterpolatedString
+	startCursor *service.InterpolatedString
+	pageSize    *service.InterpolatedString
+}
+
+func newListFileUploadsProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
+	base, err := baseProcessorFromParsed(conf, mgr)
+	if err != nil {
+		return nil, err
+	}
+
+	p := &listFileUploadsProcessor{baseProcessor: base}
+	if conf.Contains("status") {
+		if p.status, err = conf.FieldInterpolatedString("status"); err != nil {
+			return nil, err
+		}
+	}
+	if conf.Contains("start_cursor") {
+		if p.startCursor, err = conf.FieldInterpolatedString("start_cursor"); err != nil {
+			return nil, err
+		}
+	}
+	if conf.Contains("page_size") {
+		if p.pageSize, err = conf.FieldInterpolatedString("page_size"); err != nil {
+			return nil, err
+		}
+	}
+
+	return p, nil
+}
+
+func (p *listFileUploadsProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
+	batch = batch.Copy()
+
+	var wg sync.WaitGroup
+	wg.Add(len(batch))
+	for i := range batch {
+		go func(idx int) {
+			defer wg.Done()
+			if err := p.processListFileUploads(ctx, idx, batch); err != nil {
+				batch[idx].SetError(err)
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	return []service.MessageBatch{batch}, nil
+}
+
+func (p *listFileUploadsProcessor) processListFileUploads(ctx context.Context, idx int, batch service.MessageBatch) error {
+	msg := batch[idx]
+
+	// Save original message content for response merge.
+	originalStructured, _ := msg.AsStructured()
+
+	// Build URL.
+	rawURL := p.baseURL + "/v1/file_uploads"
+
+	// Build query parameters.
+	query := make(url.Values)
+	if p.status != nil {
+		v, err := batch.TryInterpolatedString(idx, p.status)
+		if err != nil {
+			return fmt.Errorf("interpolating status: %w", err)
+		}
+		query.Set("status", v)
+	}
+	if p.startCursor != nil {
+		v, err := batch.TryInterpolatedString(idx, p.startCursor)
+		if err != nil {
+			return fmt.Errorf("interpolating start_cursor: %w", err)
+		}
+		query.Set("start_cursor", v)
+	}
+	if p.pageSize != nil {
+		v, err := batch.TryInterpolatedString(idx, p.pageSize)
+		if err != nil {
+			return fmt.Errorf("interpolating page_size: %w", err)
+		}
+		query.Set("page_size", v)
+	}
+	if len(query) > 0 {
+		rawURL += "?" + query.Encode()
+	}
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", rawURL, nil)
+	if err != nil {
+		return fmt.Errorf("creating HTTP request: %w", err)
+	}
+
+	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
+	httpReq.Header.Set("Notion-Version", p.notionVersion)
+
+	resp, err := p.httpClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("Notion API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("reading response body: %w", err)
+	}
+
+	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
+	var body any
+	if len(respBody) > 0 {
+		var jsonBody any
+		if json.Unmarshal(respBody, &jsonBody) == nil {
+			body = jsonBody
+		} else {
+			body = string(respBody)
+		}
+	}
+
+	envelope := map[string]any{
+		"listFileUploadsResponse": map[string]any{
+			"status_code": resp.StatusCode,
+			"headers":     headerMap(resp.Header),
+			"body":        body,
+		},
+	}
+
+	// Merge with original message.
+	if originalMap, ok := originalStructured.(map[string]any); ok {
+		for k, v := range envelope {
+			originalMap[k] = v
+		}
+		envelope = originalMap
+	}
+
+	// Apply response mapping.
+	if p.responseMapping != nil {
+		mapped, mapErr := p.responseMapping.Query(envelope)
+		if mapErr != nil {
+			return fmt.Errorf("executing response_mapping: %w", mapErr)
+		}
+		msg.SetStructured(mapped)
+	} else {
+		msg.SetStructured(envelope)
+	}
+
+	if resp.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", resp.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	}
+
+	return nil
+}
+
+// MovePage processor — post /v1/pages/{page_id}/move
+
+func init() {
+	service.MustRegisterBatchProcessor(
+		"notion_move_page",
+		movePageConfig(),
+		newMovePageProcessor,
+	)
+}
+
+func movePageConfig() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Categories("Services", "Notion").
+		Summary("Move a page `POST /v1/pages/{page_id}/move`").
+		Description("API reference: https://developers.notion.com/reference/move-page").
+		Fields(sharedConfigFields()...).Fields(
+		service.NewBloblangField(fieldRequestMapping).
+			Optional().
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to messages before sending the request body."),
+		service.NewBloblangField(fieldResponseMapping).
+			Optional().
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
+		service.NewInterpolatedStringField("page_id").
+			Description(""),
+	)
+}
+
+type movePageProcessor struct {
+	baseProcessor
+	pageID *service.InterpolatedString
+}
+
+func newMovePageProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
+	base, err := baseProcessorFromParsed(conf, mgr)
+	if err != nil {
+		return nil, err
+	}
+
+	p := &movePageProcessor{baseProcessor: base}
+	if p.pageID, err = conf.FieldInterpolatedString("page_id"); err != nil {
+		return nil, err
+	}
+
+	return p, nil
+}
+
+func (p *movePageProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
+	batch = batch.Copy()
+
+	var wg sync.WaitGroup
+	wg.Add(len(batch))
+	for i := range batch {
+		go func(idx int) {
+			defer wg.Done()
+			if err := p.processMovePage(ctx, idx, batch); err != nil {
+				batch[idx].SetError(err)
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	return []service.MessageBatch{batch}, nil
+}
+
+func (p *movePageProcessor) processMovePage(ctx context.Context, idx int, batch service.MessageBatch) error {
+	msg := batch[idx]
+
+	// Save original message content for response merge.
+	originalStructured, _ := msg.AsStructured()
+
+	// Build URL.
+	rawURL := p.baseURL + "/v1/pages/{page_id}/move"
+	{
+		v, err := batch.TryInterpolatedString(idx, p.pageID)
+		if err != nil {
+			return fmt.Errorf("interpolating page_id: %w", err)
+		}
+		rawURL = strings.Replace(rawURL, "{page_id}", url.PathEscape(v), 1)
+	}
+
+	// Apply request mapping and validate request body.
+	if p.requestMapping != nil {
+		structured, err := msg.AsStructured()
+		if err != nil {
+			return fmt.Errorf("parsing message for request_mapping: %w", err)
+		}
+		mapped, err := p.requestMapping.Query(structured)
+		if err != nil {
+			return fmt.Errorf("executing request_mapping: %w", err)
+		}
+		msg.SetStructured(mapped)
+	}
+
+	b, err := msg.AsBytes()
+	if err != nil {
+		return fmt.Errorf("reading message body: %w", err)
+	}
+
+	var reqBody v1.MovePageReq
+	if err := reqBody.UnmarshalJSON(b); err != nil {
+		return fmt.Errorf("unmarshaling request body: %w", err)
+	}
+	if err := reqBody.Validate(); err != nil {
+		return fmt.Errorf("validating request body: %w", err)
+	}
+
+	reqBytes, err := reqBody.MarshalJSON()
+	if err != nil {
+		return fmt.Errorf("marshaling request body: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", rawURL, bytes.NewReader(reqBytes))
+	if err != nil {
+		return fmt.Errorf("creating HTTP request: %w", err)
+	}
+
+	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
+	httpReq.Header.Set("Notion-Version", p.notionVersion)
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := p.httpClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("Notion API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("reading response body: %w", err)
+	}
+
+	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
+	var body any
+	if len(respBody) > 0 {
+		var jsonBody any
+		if json.Unmarshal(respBody, &jsonBody) == nil {
+			body = jsonBody
+		} else {
+			body = string(respBody)
+		}
+	}
+
+	envelope := map[string]any{
+		"movePageResponse": map[string]any{
+			"status_code": resp.StatusCode,
+			"headers":     headerMap(resp.Header),
+			"body":        body,
+		},
+	}
+
+	// Merge with original message.
+	if originalMap, ok := originalStructured.(map[string]any); ok {
+		for k, v := range envelope {
+			originalMap[k] = v
+		}
+		envelope = originalMap
+	}
+
+	// Apply response mapping.
+	if p.responseMapping != nil {
+		mapped, mapErr := p.responseMapping.Query(envelope)
+		if mapErr != nil {
+			return fmt.Errorf("executing response_mapping: %w", mapErr)
+		}
+		msg.SetStructured(mapped)
+	} else {
+		msg.SetStructured(envelope)
+	}
+
+	if resp.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", resp.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	}
+
+	return nil
+}
+
+// PatchBlockChildren processor — patch /v1/blocks/{block_id}/children
+
+func init() {
+	service.MustRegisterBatchProcessor(
+		"notion_patch_block_children",
+		patchBlockChildrenConfig(),
+		newPatchBlockChildrenProcessor,
+	)
+}
+
+func patchBlockChildrenConfig() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Categories("Services", "Notion").
+		Summary("Append block children `PATCH /v1/blocks/{block_id}/children`").
+		Description("API reference: https://developers.notion.com/reference/patch-block-children").
+		Fields(sharedConfigFields()...).Fields(
+		service.NewBloblangField(fieldRequestMapping).
+			Optional().
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to messages before sending the request body."),
+		service.NewBloblangField(fieldResponseMapping).
+			Optional().
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
+		service.NewInterpolatedStringField("block_id").
+			Description(""),
+	).
+		Example(
+			"Append block children",
+			"Request body:\n```json\n{\n  \"children\": [\n    {\n      \"object\": \"block\",\n      \"type\": \"heading_2\",\n      \"heading_2\": {\n        \"rich_text\": [\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"Lacinato kale\"\n            }\n          }\n        ]\n      }\n    },\n    {\n      \"object\": \"block\",\n      \"type\": \"paragraph\",\n      \"paragraph\": {\n        \"rich_text\": [\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"Lacinato kale is a variety of kale with a long tradition in Italian cuisine, especially that of Tuscany. It is also known as Tuscan kale, Italian kale, dinosaur kale, kale, flat back kale, palm tree kale, or black Tuscan palm.\",\n              \"link\": {\n                \"url\": \"https://en.wikipedia.org/wiki/Lacinato_kale\"\n              }\n            }\n          }\n        ]\n      }\n    }\n  ]\n}\n```\n\nResponse body:\n```json\n{\n  \"object\": \"block\",\n  \"id\": \"a1712d54-53e4-4893-a69d-4d581cd2c845\",\n  \"created_time\": \"2021-04-27T20:38:19.437Z\",\n  \"last_edited_time\": \"2021-05-12T06:07:37.724Z\",\n  \"has_children\": true,\n  \"type\": \"child_page\",\n  \"child_page\": {\n    \"title\": \"Who Will Teach Silicon Valley to Be Ethical? \"\n  }\n}\n```",
+			"",
+		)
+}
+
+type patchBlockChildrenProcessor struct {
+	baseProcessor
+	blockID *service.InterpolatedString
+}
+
+func newPatchBlockChildrenProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
+	base, err := baseProcessorFromParsed(conf, mgr)
+	if err != nil {
+		return nil, err
+	}
+
+	p := &patchBlockChildrenProcessor{baseProcessor: base}
+	if p.blockID, err = conf.FieldInterpolatedString("block_id"); err != nil {
+		return nil, err
+	}
+
+	return p, nil
+}
+
+func (p *patchBlockChildrenProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
+	batch = batch.Copy()
+
+	var wg sync.WaitGroup
+	wg.Add(len(batch))
+	for i := range batch {
+		go func(idx int) {
+			defer wg.Done()
+			if err := p.processPatchBlockChildren(ctx, idx, batch); err != nil {
+				batch[idx].SetError(err)
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	return []service.MessageBatch{batch}, nil
+}
+
+func (p *patchBlockChildrenProcessor) processPatchBlockChildren(ctx context.Context, idx int, batch service.MessageBatch) error {
+	msg := batch[idx]
+
+	// Save original message content for response merge.
+	originalStructured, _ := msg.AsStructured()
+
+	// Build URL.
+	rawURL := p.baseURL + "/v1/blocks/{block_id}/children"
+	{
+		v, err := batch.TryInterpolatedString(idx, p.blockID)
+		if err != nil {
+			return fmt.Errorf("interpolating block_id: %w", err)
+		}
+		rawURL = strings.Replace(rawURL, "{block_id}", url.PathEscape(v), 1)
+	}
+
+	// Apply request mapping and validate request body.
+	if p.requestMapping != nil {
+		structured, err := msg.AsStructured()
+		if err != nil {
+			return fmt.Errorf("parsing message for request_mapping: %w", err)
+		}
+		mapped, err := p.requestMapping.Query(structured)
+		if err != nil {
+			return fmt.Errorf("executing request_mapping: %w", err)
+		}
+		msg.SetStructured(mapped)
+	}
+
+	b, err := msg.AsBytes()
+	if err != nil {
+		return fmt.Errorf("reading message body: %w", err)
+	}
+
+	var reqBody v1.PatchBlockChildrenReq
+	if err := reqBody.UnmarshalJSON(b); err != nil {
+		return fmt.Errorf("unmarshaling request body: %w", err)
+	}
+	if err := reqBody.Validate(); err != nil {
+		return fmt.Errorf("validating request body: %w", err)
+	}
+
+	reqBytes, err := reqBody.MarshalJSON()
+	if err != nil {
+		return fmt.Errorf("marshaling request body: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, "PATCH", rawURL, bytes.NewReader(reqBytes))
+	if err != nil {
+		return fmt.Errorf("creating HTTP request: %w", err)
+	}
+
+	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
+	httpReq.Header.Set("Notion-Version", p.notionVersion)
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := p.httpClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("Notion API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("reading response body: %w", err)
+	}
+
+	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
+	var body any
+	if len(respBody) > 0 {
+		var jsonBody any
+		if json.Unmarshal(respBody, &jsonBody) == nil {
+			body = jsonBody
+		} else {
+			body = string(respBody)
+		}
+	}
+
+	envelope := map[string]any{
+		"patchBlockChildrenResponse": map[string]any{
+			"status_code": resp.StatusCode,
+			"headers":     headerMap(resp.Header),
+			"body":        body,
+		},
+	}
+
+	// Merge with original message.
+	if originalMap, ok := originalStructured.(map[string]any); ok {
+		for k, v := range envelope {
+			originalMap[k] = v
+		}
+		envelope = originalMap
+	}
+
+	// Apply response mapping.
+	if p.responseMapping != nil {
+		mapped, mapErr := p.responseMapping.Query(envelope)
+		if mapErr != nil {
+			return fmt.Errorf("executing response_mapping: %w", mapErr)
+		}
+		msg.SetStructured(mapped)
+	} else {
+		msg.SetStructured(envelope)
+	}
+
+	if resp.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", resp.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	}
+
+	return nil
+}
+
+// PatchPage processor — patch /v1/pages/{page_id}
+
+func init() {
+	service.MustRegisterBatchProcessor(
+		"notion_patch_page",
+		patchPageConfig(),
+		newPatchPageProcessor,
+	)
+}
+
+func patchPageConfig() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Categories("Services", "Notion").
+		Summary("Update page `PATCH /v1/pages/{page_id}`").
+		Description("API reference: https://developers.notion.com/reference/patch-page").
+		Fields(sharedConfigFields()...).Fields(
+		service.NewBloblangField(fieldRequestMapping).
+			Optional().
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to messages before sending the request body."),
+		service.NewBloblangField(fieldResponseMapping).
+			Optional().
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
+		service.NewInterpolatedStringField("page_id").
+			Description(""),
+	).
+		Example(
+			"Update page properties",
+			"Request body:\n```json\n{\n  \"properties\": {\n    \"Status\": {\n      \"select\": {\n        \"name\": \"Reading\"\n      }\n    }\n  }\n}\n```\n\nResponse body:\n```json\n{\n  \"object\": \"page\",\n  \"id\": \"a1712d54-53e4-4893-a69d-4d581cd2c845\",\n  \"created_time\": \"2021-04-27T20:38:19.437Z\",\n  \"last_edited_time\": \"2021-04-28T23:12:53.160Z\",\n  \"parent\": {\n    \"type\": \"database_id\",\n    \"database_id\": \"8e2c2b76-9e1d-47d2-87b9-ed3035d607ae\"\n  },\n  \"archived\": false,\n  \"properties\": {\n    \"Score /5\": {\n      \"id\": \")Y7\\\"\",\n      \"type\": \"select\",\n      \"select\": {\n        \"id\": \"b7307e35-c80a-4cb5-bb6b-6054523b394a\",\n        \"name\": \"⭐️⭐️⭐️⭐️\",\n        \"color\": \"default\"\n      }\n    },\n    \"Type\": {\n      \"id\": \"/7eo\",\n      \"type\": \"select\",\n      \"select\": {\n        \"id\": \"f96d0d0a-5564-4a20-ab15-5f040d49759e\",\n        \"name\": \"Article\",\n        \"color\": \"default\"\n      }\n    },\n    \"Publisher\": {\n      \"id\": \">$Pb\",\n      \"type\": \"select\",\n      \"select\": {\n        \"id\": \"c5ee409a-f307-4176-99ee-6e424fa89afa\",\n        \"name\": \"NYT\",\n        \"color\": \"default\"\n      }\n    },\n    \"Summary\": {\n      \"id\": \"?\\\\25\",\n      \"type\": \"rich_text\",\n      \"rich_text\": [\n        {\n          \"type\": \"text\",\n          \"text\": {\n            \"content\": \"Some think chief ethics officers could help technology companies navigate political and social questions.\",\n            \"link\": null\n          },\n          \"annotations\": {\n            \"bold\": false,\n            \"italic\": false,\n            \"strikethrough\": false,\n            \"underline\": false,\n            \"code\": false,\n            \"color\": \"default\"\n          },\n          \"plain_text\": \"Some think chief ethics officers could help technology companies navigate political and social questions.\",\n          \"href\": null\n        }\n      ]\n    },\n    \"Publishing/Release Date\": {\n      \"id\": \"?ex+\",\n      \"type\": \"date\",\n      \"date\": {\n        \"start\": \"2018-10-21\",\n        \"end\": null\n      }\n    },\n    \"Link\": {\n      \"id\": \"VVMi\",\n      \"type\": \"url\",\n      \"url\": \"https://www.nytimes.com/2018/10/21/opinion/who-will-teach-silicon-valley-to-be-ethical.html\"\n    },\n    \"Read\": {\n      \"id\": \"_MWJ\",\n      \"type\": \"checkbox\",\n      \"checkbox\": true\n    },\n    \"Status\": {\n      \"id\": \"`zz5\",\n      \"type\": \"select\",\n      \"select\": {\n        \"id\": \"5925ba22-0126-4b58-90c7-b8bbb2c3c895\",\n        \"name\": \"Reading\",\n        \"color\": \"red\"\n      }\n    },\n    \"Author\": {\n      \"id\": \"qNw_\",\n      \"type\": \"multi_select\",\n      \"multi_select\": [\n        {\n          \"id\": \"833e2c78-35ed-4601-badc-50c323341d76\",\n          \"name\": \"Kara Swisher\",\n          \"color\": \"default\"\n        }\n      ]\n    },\n    \"Name\": {\n      \"id\": \"title\",\n      \"type\": \"title\",\n      \"title\": [\n        {\n          \"type\": \"text\",\n          \"text\": {\n            \"content\": \"Who Will Teach Silicon Valley to Be Ethical? \",\n            \"link\": null\n          },\n          \"annotations\": {\n            \"bold\": false,\n            \"italic\": false,\n            \"strikethrough\": false,\n            \"underline\": false,\n            \"code\": false,\n            \"color\": \"default\"\n          },\n          \"plain_text\": \"Who Will Teach Silicon Valley to Be Ethical? \",\n          \"href\": null\n        }\n      ]\n    }\n  }\n}\n```",
+			"",
+		).
+		Example(
+			"Archive a page",
+			"Request body:\n```json\n{\n  \"archived\": true\n}\n```\n\nResponse body:\n```json\n{\n  \"object\": \"block\",\n  \"id\": \"2646ac0d-df90-4bab-bb4e-75e3cb972ed1\",\n  \"created_time\": \"2022-02-24T22:14:00.000Z\",\n  \"last_edited_time\": \"2022-02-24T22:15:00.000Z\",\n  \"created_by\": {\n    \"object\": \"user\",\n    \"id\": \"6794760a-1f15-45cd-9c65-0dfe42f5135a\"\n  },\n  \"last_edited_by\": {\n    \"object\": \"user\",\n    \"id\": \"92a680bb-6970-4726-952b-4f4c03bff617\"\n  },\n  \"has_children\": false,\n  \"archived\": true,\n  \"type\": \"child_page\",\n  \"child_page\": {\n    \"title\": \"\"\n  }\n}\n```",
+			"",
+		)
+}
+
+type patchPageProcessor struct {
+	baseProcessor
+	pageID *service.InterpolatedString
+}
+
+func newPatchPageProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
+	base, err := baseProcessorFromParsed(conf, mgr)
+	if err != nil {
+		return nil, err
+	}
+
+	p := &patchPageProcessor{baseProcessor: base}
+	if p.pageID, err = conf.FieldInterpolatedString("page_id"); err != nil {
+		return nil, err
+	}
+
+	return p, nil
+}
+
+func (p *patchPageProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
+	batch = batch.Copy()
+
+	var wg sync.WaitGroup
+	wg.Add(len(batch))
+	for i := range batch {
+		go func(idx int) {
+			defer wg.Done()
+			if err := p.processPatchPage(ctx, idx, batch); err != nil {
+				batch[idx].SetError(err)
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	return []service.MessageBatch{batch}, nil
+}
+
+func (p *patchPageProcessor) processPatchPage(ctx context.Context, idx int, batch service.MessageBatch) error {
+	msg := batch[idx]
+
+	// Save original message content for response merge.
+	originalStructured, _ := msg.AsStructured()
+
+	// Build URL.
+	rawURL := p.baseURL + "/v1/pages/{page_id}"
+	{
+		v, err := batch.TryInterpolatedString(idx, p.pageID)
+		if err != nil {
+			return fmt.Errorf("interpolating page_id: %w", err)
+		}
+		rawURL = strings.Replace(rawURL, "{page_id}", url.PathEscape(v), 1)
+	}
+
+	// Apply request mapping and validate request body.
+	if p.requestMapping != nil {
+		structured, err := msg.AsStructured()
+		if err != nil {
+			return fmt.Errorf("parsing message for request_mapping: %w", err)
+		}
+		mapped, err := p.requestMapping.Query(structured)
+		if err != nil {
+			return fmt.Errorf("executing request_mapping: %w", err)
+		}
+		msg.SetStructured(mapped)
+	}
+
+	b, err := msg.AsBytes()
+	if err != nil {
+		return fmt.Errorf("reading message body: %w", err)
+	}
+
+	var reqBody v1.PatchPageReq
+	if err := reqBody.UnmarshalJSON(b); err != nil {
+		return fmt.Errorf("unmarshaling request body: %w", err)
+	}
+	if err := reqBody.Validate(); err != nil {
+		return fmt.Errorf("validating request body: %w", err)
+	}
+
+	reqBytes, err := reqBody.MarshalJSON()
+	if err != nil {
+		return fmt.Errorf("marshaling request body: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, "PATCH", rawURL, bytes.NewReader(reqBytes))
+	if err != nil {
+		return fmt.Errorf("creating HTTP request: %w", err)
+	}
+
+	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
+	httpReq.Header.Set("Notion-Version", p.notionVersion)
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := p.httpClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("Notion API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("reading response body: %w", err)
+	}
+
+	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
+	var body any
+	if len(respBody) > 0 {
+		var jsonBody any
+		if json.Unmarshal(respBody, &jsonBody) == nil {
+			body = jsonBody
+		} else {
+			body = string(respBody)
+		}
+	}
+
+	envelope := map[string]any{
+		"patchPageResponse": map[string]any{
+			"status_code": resp.StatusCode,
+			"headers":     headerMap(resp.Header),
+			"body":        body,
+		},
+	}
+
+	// Merge with original message.
+	if originalMap, ok := originalStructured.(map[string]any); ok {
+		for k, v := range envelope {
+			originalMap[k] = v
+		}
+		envelope = originalMap
+	}
+
+	// Apply response mapping.
+	if p.responseMapping != nil {
+		mapped, mapErr := p.responseMapping.Query(envelope)
+		if mapErr != nil {
+			return fmt.Errorf("executing response_mapping: %w", mapErr)
+		}
+		msg.SetStructured(mapped)
+	} else {
+		msg.SetStructured(envelope)
+	}
+
+	if resp.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", resp.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	}
+
+	return nil
+}
+
+// PostDatabaseQuery processor — post /v1/data_sources/{data_source_id}/query
+
+func init() {
+	service.MustRegisterBatchProcessor(
+		"notion_post_database_query",
+		postDatabaseQueryConfig(),
+		newPostDatabaseQueryProcessor,
+	)
+}
+
+func postDatabaseQueryConfig() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Categories("Services", "Notion").
+		Summary("Query a data source `POST /v1/data_sources/{data_source_id}/query`").
+		Description("API reference: https://developers.notion.com/reference/post-database-query").
+		Fields(sharedConfigFields()...).Fields(
+		service.NewBloblangField(fieldRequestMapping).
+			Optional().
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to messages before sending the request body."),
+		service.NewBloblangField(fieldResponseMapping).
+			Optional().
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
+		service.NewInterpolatedStringField("data_source_id").
+			Description(""),
+		service.NewInterpolatedStringField("filter_properties").
+			Description("").
+			Optional(),
+	)
+}
+
+type postDatabaseQueryProcessor struct {
+	baseProcessor
+	dataSourceID     *service.InterpolatedString
+	filterProperties *service.InterpolatedString
+}
+
+func newPostDatabaseQueryProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
+	base, err := baseProcessorFromParsed(conf, mgr)
+	if err != nil {
+		return nil, err
+	}
+
+	p := &postDatabaseQueryProcessor{baseProcessor: base}
+	if p.dataSourceID, err = conf.FieldInterpolatedString("data_source_id"); err != nil {
+		return nil, err
+	}
+	if conf.Contains("filter_properties") {
+		if p.filterProperties, err = conf.FieldInterpolatedString("filter_properties"); err != nil {
+			return nil, err
+		}
+	}
+
+	return p, nil
+}
+
+func (p *postDatabaseQueryProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
+	batch = batch.Copy()
+
+	var wg sync.WaitGroup
+	wg.Add(len(batch))
+	for i := range batch {
+		go func(idx int) {
+			defer wg.Done()
+			if err := p.processPostDatabaseQuery(ctx, idx, batch); err != nil {
+				batch[idx].SetError(err)
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	return []service.MessageBatch{batch}, nil
+}
+
+func (p *postDatabaseQueryProcessor) processPostDatabaseQuery(ctx context.Context, idx int, batch service.MessageBatch) error {
+	msg := batch[idx]
+
+	// Save original message content for response merge.
+	originalStructured, _ := msg.AsStructured()
+
+	// Build URL.
+	rawURL := p.baseURL + "/v1/data_sources/{data_source_id}/query"
+	{
+		v, err := batch.TryInterpolatedString(idx, p.dataSourceID)
+		if err != nil {
+			return fmt.Errorf("interpolating data_source_id: %w", err)
+		}
+		rawURL = strings.Replace(rawURL, "{data_source_id}", url.PathEscape(v), 1)
+	}
+
+	// Build query parameters.
+	query := make(url.Values)
+	if p.filterProperties != nil {
+		v, err := batch.TryInterpolatedString(idx, p.filterProperties)
+		if err != nil {
+			return fmt.Errorf("interpolating filter_properties: %w", err)
+		}
+		query.Set("filter_properties", v)
+	}
+	if len(query) > 0 {
+		rawURL += "?" + query.Encode()
+	}
+
+	// Apply request mapping and validate request body.
+	if p.requestMapping != nil {
+		structured, err := msg.AsStructured()
+		if err != nil {
+			return fmt.Errorf("parsing message for request_mapping: %w", err)
+		}
+		mapped, err := p.requestMapping.Query(structured)
+		if err != nil {
+			return fmt.Errorf("executing request_mapping: %w", err)
+		}
+		msg.SetStructured(mapped)
+	}
+
+	b, err := msg.AsBytes()
+	if err != nil {
+		return fmt.Errorf("reading message body: %w", err)
+	}
+
+	var reqBody v1.PostDatabaseQueryReq
+	if err := reqBody.UnmarshalJSON(b); err != nil {
+		return fmt.Errorf("unmarshaling request body: %w", err)
+	}
+	if err := reqBody.Validate(); err != nil {
+		return fmt.Errorf("validating request body: %w", err)
+	}
+
+	reqBytes, err := reqBody.MarshalJSON()
+	if err != nil {
+		return fmt.Errorf("marshaling request body: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", rawURL, bytes.NewReader(reqBytes))
+	if err != nil {
+		return fmt.Errorf("creating HTTP request: %w", err)
+	}
+
+	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
+	httpReq.Header.Set("Notion-Version", p.notionVersion)
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := p.httpClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("Notion API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("reading response body: %w", err)
+	}
+
+	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
+	var body any
+	if len(respBody) > 0 {
+		var jsonBody any
+		if json.Unmarshal(respBody, &jsonBody) == nil {
+			body = jsonBody
+		} else {
+			body = string(respBody)
+		}
+	}
+
+	envelope := map[string]any{
+		"postDatabaseQueryResponse": map[string]any{
+			"status_code": resp.StatusCode,
+			"headers":     headerMap(resp.Header),
+			"body":        body,
+		},
+	}
+
+	// Merge with original message.
+	if originalMap, ok := originalStructured.(map[string]any); ok {
+		for k, v := range envelope {
+			originalMap[k] = v
+		}
+		envelope = originalMap
+	}
+
+	// Apply response mapping.
+	if p.responseMapping != nil {
+		mapped, mapErr := p.responseMapping.Query(envelope)
+		if mapErr != nil {
+			return fmt.Errorf("executing response_mapping: %w", mapErr)
+		}
+		msg.SetStructured(mapped)
+	} else {
+		msg.SetStructured(envelope)
+	}
+
+	if resp.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", resp.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	}
+
+	return nil
+}
+
+// PostPage processor — post /v1/pages
+
+func init() {
+	service.MustRegisterBatchProcessor(
+		"notion_post_page",
+		postPageConfig(),
+		newPostPageProcessor,
+	)
+}
+
+func postPageConfig() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Categories("Services", "Notion").
+		Summary("Create a page `POST /v1/pages`").
+		Description("API reference: https://developers.notion.com/reference/post-page").
+		Fields(sharedConfigFields()...).Fields(
+		service.NewBloblangField(fieldRequestMapping).
+			Optional().
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to messages before sending the request body."),
+		service.NewBloblangField(fieldResponseMapping).
+			Optional().
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
+	).
+		Example(
+			"Create a page",
+			"Request body:\n```json\n{\n  \"parent\": {\n    \"database_id\": \"{{DATABASE_ID}}\"\n  },\n  \"properties\": {\n    \"Type\": {\n      \"select\": {\n        \"id\": \"f96d0d0a-5564-4a20-ab15-5f040d49759e\",\n        \"name\": \"Article\",\n        \"color\": \"default\"\n      }\n    },\n    \"Score /5\": {\n      \"select\": {\n        \"id\": \"5c944de7-3f4b-4567-b3a1-fa2c71c540b6\",\n        \"name\": \"⭐️⭐️⭐️⭐️⭐️\",\n        \"color\": \"default\"\n      }\n    },\n    \"Name\": {\n      \"title\": [\n        {\n          \"text\": {\n            \"content\": \"New Media Article\"\n          }\n        }\n      ]\n    },\n    \"Status\": {\n      \"select\": {\n        \"id\": \"8c4a056e-6709-4dd1-ba58-d34d9480855a\",\n        \"name\": \"Ready to Start\",\n        \"color\": \"yellow\"\n      }\n    },\n    \"Publisher\": {\n      \"select\": {\n        \"id\": \"01f82d08-aa1f-4884-a4e0-3bc32f909ec4\",\n        \"name\": \"The Atlantic\",\n        \"color\": \"red\"\n      }\n    },\n    \"Publishing/Release Date\": {\n      \"date\": {\n        \"start\": \"2020-12-08T12:00:00Z\",\n        \"end\": null\n      }\n    },\n    \"Link\": {\n      \"url\": \"https://www.nytimes.com/2018/10/21/opinion/who-will-teach-silicon-valley-to-be-ethical.html\"\n    },\n    \"Summary\": {\n      \"rich_text\": [\n        {\n          \"type\": \"text\",\n          \"text\": {\n            \"content\": \"Some think chief ethics officers could help technology companies navigate political and social questions.\",\n            \"link\": null\n          },\n          \"annotations\": {\n            \"bold\": false,\n            \"italic\": false,\n            \"strikethrough\": false,\n            \"underline\": false,\n            \"code\": false,\n            \"color\": \"default\"\n          },\n          \"plain_text\": \"Some think chief ethics officers could help technology companies navigate political and social questions.\",\n          \"href\": null\n        }\n      ]\n    },\n    \"Read\": {\n      \"checkbox\": false\n    }\n  }\n}\n```\n\nResponse body:\n```json\n{\n  \"object\": \"page\",\n  \"id\": \"f3a1f364-6ca1-41d2-8986-552ae37c1bdf\",\n  \"created_time\": \"2022-03-02T05:24:00.000Z\",\n  \"last_edited_time\": \"2022-03-02T05:24:00.000Z\",\n  \"created_by\": {\n    \"object\": \"user\",\n    \"id\": \"92a680bb-6970-4726-952b-4f4c03bff617\"\n  },\n  \"last_edited_by\": {\n    \"object\": \"user\",\n    \"id\": \"92a680bb-6970-4726-952b-4f4c03bff617\"\n  },\n  \"cover\": null,\n  \"icon\": null,\n  \"parent\": {\n    \"type\": \"database_id\",\n    \"database_id\": \"8e2c2b76-9e1d-47d2-87b9-ed3035d607ae\"\n  },\n  \"archived\": false,\n  \"properties\": {\n    \"Score /5\": {\n      \"id\": \")Y7%22\",\n      \"type\": \"select\",\n      \"select\": {\n        \"id\": \"5c944de7-3f4b-4567-b3a1-fa2c71c540b6\",\n        \"name\": \"⭐️⭐️⭐️⭐️⭐️\",\n        \"color\": \"default\"\n      }\n    },\n    \"Type\": {\n      \"id\": \"%2F7eo\",\n      \"type\": \"select\",\n      \"select\": {\n        \"id\": \"f96d0d0a-5564-4a20-ab15-5f040d49759e\",\n        \"name\": \"Article\",\n        \"color\": \"default\"\n      }\n    },\n    \"Publisher\": {\n      \"id\": \"%3E%24Pb\",\n      \"type\": \"select\",\n      \"select\": {\n        \"id\": \"01f82d08-aa1f-4884-a4e0-3bc32f909ec4\",\n        \"name\": \"The Atlantic\",\n        \"color\": \"red\"\n      }\n    },\n    \"Summary\": {\n      \"id\": \"%3F%5C25\",\n      \"type\": \"rich_text\",\n      \"rich_text\": [\n        {\n          \"type\": \"text\",\n          \"text\": {\n            \"content\": \"Some think chief ethics officers could help technology companies navigate political and social questions.\",\n            \"link\": null\n          },\n          \"annotations\": {\n            \"bold\": false,\n            \"italic\": false,\n            \"strikethrough\": false,\n            \"underline\": false,\n            \"code\": false,\n            \"color\": \"default\"\n          },\n          \"plain_text\": \"Some think chief ethics officers could help technology companies navigate political and social questions.\",\n          \"href\": null\n        }\n      ]\n    },\n    \"Publishing/Release Date\": {\n      \"id\": \"%3Fex%2B\",\n      \"type\": \"date\",\n      \"date\": {\n        \"start\": \"2020-12-08T12:00:00.000+00:00\",\n        \"end\": null,\n        \"time_zone\": null\n      }\n    },\n    \"Link\": {\n      \"id\": \"VVMi\",\n      \"type\": \"url\",\n      \"url\": \"https://www.nytimes.com/2018/10/21/opinion/who-will-teach-silicon-valley-to-be-ethical.html\"\n    },\n    \"Read\": {\n      \"id\": \"_MWJ\",\n      \"type\": \"checkbox\",\n      \"checkbox\": false\n    },\n    \"Status\": {\n      \"id\": \"%60zz5\",\n      \"type\": \"select\",\n      \"select\": {\n        \"id\": \"8c4a056e-6709-4dd1-ba58-d34d9480855a\",\n        \"name\": \"Ready to Start\",\n        \"color\": \"yellow\"\n      }\n    },\n    \"Author\": {\n      \"id\": \"qNw_\",\n      \"type\": \"multi_select\",\n      \"multi_select\": []\n    },\n    \"Name\": {\n      \"id\": \"title\",\n      \"type\": \"title\",\n      \"title\": [\n        {\n          \"type\": \"text\",\n          \"text\": {\n            \"content\": \"New Media Article\",\n            \"link\": null\n          },\n          \"annotations\": {\n            \"bold\": false,\n            \"italic\": false,\n            \"strikethrough\": false,\n            \"underline\": false,\n            \"code\": false,\n            \"color\": \"default\"\n          },\n          \"plain_text\": \"New Media Article\",\n          \"href\": null\n        }\n      ]\n    }\n  },\n  \"url\": \"https://www.notion.so/New-Media-Article-f3a1f3646ca141d28986552ae37c1bdf\"\n}\n```",
+			"",
+		).
+		Example(
+			"Create a page with content",
+			"Request body:\n```json\n{\n  \"parent\": {\n    \"database_id\": \"{{DATABASE_ID}}\"\n  },\n  \"properties\": {\n    \"Type\": {\n      \"select\": {\n        \"id\": \"f96d0d0a-5564-4a20-ab15-5f040d49759e\",\n        \"name\": \"Article\",\n        \"color\": \"default\"\n      }\n    },\n    \"Score /5\": {\n      \"select\": {\n        \"id\": \"5c944de7-3f4b-4567-b3a1-fa2c71c540b6\",\n        \"name\": \"⭐️⭐️⭐️⭐️⭐️\",\n        \"color\": \"default\"\n      }\n    },\n    \"Name\": {\n      \"title\": [\n        {\n          \"text\": {\n            \"content\": \"New Media Article\"\n          }\n        }\n      ]\n    },\n    \"Status\": {\n      \"select\": {\n        \"id\": \"8c4a056e-6709-4dd1-ba58-d34d9480855a\",\n        \"name\": \"Ready to Start\",\n        \"color\": \"yellow\"\n      }\n    },\n    \"Publisher\": {\n      \"select\": {\n        \"id\": \"01f82d08-aa1f-4884-a4e0-3bc32f909ec4\",\n        \"name\": \"The Atlantic\",\n        \"color\": \"red\"\n      }\n    },\n    \"Publishing/Release Date\": {\n      \"date\": {\n        \"start\": \"2020-12-08T12:00:00Z\",\n        \"end\": null\n      }\n    },\n    \"Link\": {\n      \"url\": \"https://www.nytimes.com/2018/10/21/opinion/who-will-teach-silicon-valley-to-be-ethical.html\"\n    },\n    \"Summary\": {\n      \"rich_text\": [\n        {\n          \"type\": \"text\",\n          \"text\": {\n            \"content\": \"Some think chief ethics officers could help technology companies navigate political and social questions.\",\n            \"link\": null\n          },\n          \"annotations\": {\n            \"bold\": false,\n            \"italic\": false,\n            \"strikethrough\": false,\n            \"underline\": false,\n            \"code\": false,\n            \"color\": \"default\"\n          },\n          \"plain_text\": \"Some think chief ethics officers could help technology companies navigate political and social questions.\",\n          \"href\": null\n        }\n      ]\n    },\n    \"Read\": {\n      \"checkbox\": false\n    }\n  },\n  \"children\": [\n    {\n      \"object\": \"block\",\n      \"type\": \"heading_2\",\n      \"heading_2\": {\n        \"rich_text\": [\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"Lacinato kale\"\n            }\n          }\n        ]\n      }\n    },\n    {\n      \"object\": \"block\",\n      \"type\": \"paragraph\",\n      \"paragraph\": {\n        \"rich_text\": [\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"Lacinato kale is a variety of kale with a long tradition in Italian cuisine, especially that of Tuscany. It is also known as Tuscan kale, Italian kale, dinosaur kale, kale, flat back kale, palm tree kale, or black Tuscan palm.\",\n              \"link\": {\n                \"url\": \"https://en.wikipedia.org/wiki/Lacinato_kale\"\n              }\n            }\n          }\n        ]\n      }\n    }\n  ]\n}\n```\n\nResponse body:\n```json\n{\n  \"object\": \"page\",\n  \"id\": \"672b014a-2626-4ada-9211-fb3613d07ae2\",\n  \"created_time\": \"2022-03-02T05:24:00.000Z\",\n  \"last_edited_time\": \"2022-03-02T05:24:00.000Z\",\n  \"created_by\": {\n    \"object\": \"user\",\n    \"id\": \"92a680bb-6970-4726-952b-4f4c03bff617\"\n  },\n  \"last_edited_by\": {\n    \"object\": \"user\",\n    \"id\": \"92a680bb-6970-4726-952b-4f4c03bff617\"\n  },\n  \"cover\": null,\n  \"icon\": null,\n  \"parent\": {\n    \"type\": \"database_id\",\n    \"database_id\": \"8e2c2b76-9e1d-47d2-87b9-ed3035d607ae\"\n  },\n  \"archived\": false,\n  \"properties\": {\n    \"Score /5\": {\n      \"id\": \")Y7%22\",\n      \"type\": \"select\",\n      \"select\": {\n        \"id\": \"5c944de7-3f4b-4567-b3a1-fa2c71c540b6\",\n        \"name\": \"⭐️⭐️⭐️⭐️⭐️\",\n        \"color\": \"default\"\n      }\n    },\n    \"Type\": {\n      \"id\": \"%2F7eo\",\n      \"type\": \"select\",\n      \"select\": {\n        \"id\": \"672b014a-2626-4ada-9211-fb3613d07ae2\",\n        \"name\": \"Article\",\n        \"color\": \"default\"\n      }\n    },\n    \"Publisher\": {\n      \"id\": \"%3E%24Pb\",\n      \"type\": \"select\",\n      \"select\": {\n        \"id\": \"01f82d08-aa1f-4884-a4e0-3bc32f909ec4\",\n        \"name\": \"The Atlantic\",\n        \"color\": \"red\"\n      }\n    },\n    \"Summary\": {\n      \"id\": \"%3F%5C25\",\n      \"type\": \"rich_text\",\n      \"rich_text\": [\n        {\n          \"type\": \"text\",\n          \"text\": {\n            \"content\": \"Some think chief ethics officers could help technology companies navigate political and social questions.\",\n            \"link\": null\n          },\n          \"annotations\": {\n            \"bold\": false,\n            \"italic\": false,\n            \"strikethrough\": false,\n            \"underline\": false,\n            \"code\": false,\n            \"color\": \"default\"\n          },\n          \"plain_text\": \"Some think chief ethics officers could help technology companies navigate political and social questions.\",\n          \"href\": null\n        }\n      ]\n    },\n    \"Publishing/Release Date\": {\n      \"id\": \"%3Fex%2B\",\n      \"type\": \"date\",\n      \"date\": {\n        \"start\": \"2020-12-08T12:00:00.000+00:00\",\n        \"end\": null,\n        \"time_zone\": null\n      }\n    },\n    \"Link\": {\n      \"id\": \"VVMi\",\n      \"type\": \"url\",\n      \"url\": \"https://www.nytimes.com/2018/10/21/opinion/who-will-teach-silicon-valley-to-be-ethical.html\"\n    },\n    \"Read\": {\n      \"id\": \"_MWJ\",\n      \"type\": \"checkbox\",\n      \"checkbox\": false\n    },\n    \"Status\": {\n      \"id\": \"%60zz5\",\n      \"type\": \"select\",\n      \"select\": {\n        \"id\": \"8c4a056e-6709-4dd1-ba58-d34d9480855a\",\n        \"name\": \"Ready to Start\",\n        \"color\": \"yellow\"\n      }\n    },\n    \"Author\": {\n      \"id\": \"qNw_\",\n      \"type\": \"multi_select\",\n      \"multi_select\": []\n    },\n    \"Name\": {\n      \"id\": \"title\",\n      \"type\": \"title\",\n      \"title\": [\n        {\n          \"type\": \"text\",\n          \"text\": {\n            \"content\": \"New Media Article\",\n            \"link\": null\n          },\n          \"annotations\": {\n            \"bold\": false,\n            \"italic\": false,\n            \"strikethrough\": false,\n            \"underline\": false,\n            \"code\": false,\n            \"color\": \"default\"\n          },\n          \"plain_text\": \"New Media Article\",\n          \"href\": null\n        }\n      ]\n    }\n  },\n  \"url\": \"https://www.notion.so/New-Media-Article-672b014a26264ada9211fb3613d07ae2\"\n}\n```",
+			"",
+		)
+}
+
+type postPageProcessor struct {
+	baseProcessor
+}
+
+func newPostPageProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
+	base, err := baseProcessorFromParsed(conf, mgr)
+	if err != nil {
+		return nil, err
+	}
+
+	p := &postPageProcessor{baseProcessor: base}
+
+	return p, nil
+}
+
+func (p *postPageProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
+	batch = batch.Copy()
+
+	var wg sync.WaitGroup
+	wg.Add(len(batch))
+	for i := range batch {
+		go func(idx int) {
+			defer wg.Done()
+			if err := p.processPostPage(ctx, idx, batch); err != nil {
+				batch[idx].SetError(err)
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	return []service.MessageBatch{batch}, nil
+}
+
+func (p *postPageProcessor) processPostPage(ctx context.Context, idx int, batch service.MessageBatch) error {
+	msg := batch[idx]
+
+	// Save original message content for response merge.
+	originalStructured, _ := msg.AsStructured()
+
+	// Build URL.
+	rawURL := p.baseURL + "/v1/pages"
+
+	// Apply request mapping and validate request body.
+	if p.requestMapping != nil {
+		structured, err := msg.AsStructured()
+		if err != nil {
+			return fmt.Errorf("parsing message for request_mapping: %w", err)
+		}
+		mapped, err := p.requestMapping.Query(structured)
+		if err != nil {
+			return fmt.Errorf("executing request_mapping: %w", err)
+		}
+		msg.SetStructured(mapped)
+	}
+
+	b, err := msg.AsBytes()
+	if err != nil {
+		return fmt.Errorf("reading message body: %w", err)
+	}
+
+	var reqBody v1.PostPageReq
+	if err := reqBody.UnmarshalJSON(b); err != nil {
+		return fmt.Errorf("unmarshaling request body: %w", err)
+	}
+	if err := reqBody.Validate(); err != nil {
+		return fmt.Errorf("validating request body: %w", err)
+	}
+
+	reqBytes, err := reqBody.MarshalJSON()
+	if err != nil {
+		return fmt.Errorf("marshaling request body: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", rawURL, bytes.NewReader(reqBytes))
+	if err != nil {
+		return fmt.Errorf("creating HTTP request: %w", err)
+	}
+
+	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
+	httpReq.Header.Set("Notion-Version", p.notionVersion)
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := p.httpClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("Notion API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("reading response body: %w", err)
+	}
+
+	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
+	var body any
+	if len(respBody) > 0 {
+		var jsonBody any
+		if json.Unmarshal(respBody, &jsonBody) == nil {
+			body = jsonBody
+		} else {
+			body = string(respBody)
+		}
+	}
+
+	envelope := map[string]any{
+		"postPageResponse": map[string]any{
+			"status_code": resp.StatusCode,
+			"headers":     headerMap(resp.Header),
+			"body":        body,
+		},
+	}
+
+	// Merge with original message.
+	if originalMap, ok := originalStructured.(map[string]any); ok {
+		for k, v := range envelope {
+			originalMap[k] = v
+		}
+		envelope = originalMap
+	}
+
+	// Apply response mapping.
+	if p.responseMapping != nil {
+		mapped, mapErr := p.responseMapping.Query(envelope)
+		if mapErr != nil {
+			return fmt.Errorf("executing response_mapping: %w", mapErr)
+		}
+		msg.SetStructured(mapped)
+	} else {
+		msg.SetStructured(envelope)
+	}
+
+	if resp.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", resp.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	}
+
+	return nil
+}
+
+// PostSearch processor — post /v1/search
+
+func init() {
+	service.MustRegisterBatchProcessor(
+		"notion_post_search",
+		postSearchConfig(),
+		newPostSearchProcessor,
+	)
+}
+
+func postSearchConfig() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Categories("Services", "Notion").
+		Summary("Search by title `POST /v1/search`").
+		Description("API reference: https://developers.notion.com/reference/post-search").
+		Fields(sharedConfigFields()...).Fields(
+		service.NewBloblangField(fieldRequestMapping).
+			Optional().
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to messages before sending the request body."),
+		service.NewBloblangField(fieldResponseMapping).
+			Optional().
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
+	).
+		Example(
+			"Search",
+			"Request body:\n```json\n{\n  \"query\": \"Media Article\",\n  \"sort\": {\n    \"direction\": \"ascending\",\n    \"timestamp\": \"last_edited_time\"\n  }\n}\n```\n\nResponse body:\n```json\n{\n  \"object\": \"list\",\n  \"results\": [\n    {\n      \"object\": \"page\",\n      \"id\": \"ae1905c3-b77b-475b-b98f-7596c242137f\",\n      \"created_time\": \"2021-05-21T16:41:00.000Z\",\n      \"last_edited_time\": \"2021-05-21T16:41:00.000Z\",\n      \"created_by\": {\n        \"object\": \"user\",\n        \"id\": \"92a680bb-6970-4726-952b-4f4c03bff617\"\n      },\n      \"last_edited_by\": {\n        \"object\": \"user\",\n        \"id\": \"92a680bb-6970-4726-952b-4f4c03bff617\"\n      },\n      \"cover\": null,\n      \"icon\": null,\n      \"parent\": {\n        \"type\": \"database_id\",\n        \"database_id\": \"8e2c2b76-9e1d-47d2-87b9-ed3035d607ae\"\n      },\n      \"archived\": false,\n      \"properties\": {\n        \"Score /5\": {\n          \"id\": \")Y7%22\",\n          \"type\": \"select\",\n          \"select\": {\n            \"id\": \"5c944de7-3f4b-4567-b3a1-fa2c71c540b6\",\n            \"name\": \"⭐️⭐️⭐️⭐️⭐️\",\n            \"color\": \"default\"\n          }\n        },\n        \"Type\": {\n          \"id\": \"%2F7eo\",\n          \"type\": \"select\",\n          \"select\": {\n            \"id\": \"f96d0d0a-5564-4a20-ab15-5f040d49759e\",\n            \"name\": \"Article\",\n            \"color\": \"default\"\n          }\n        },\n        \"Publisher\": {\n          \"id\": \"%3E%24Pb\",\n          \"type\": \"select\",\n          \"select\": {\n            \"id\": \"01f82d08-aa1f-4884-a4e0-3bc32f909ec4\",\n            \"name\": \"The Atlantic\",\n            \"color\": \"red\"\n          }\n        },\n        \"Summary\": {\n          \"id\": \"%3F%5C25\",\n          \"type\": \"rich_text\",\n          \"rich_text\": [\n            {\n              \"type\": \"text\",\n              \"text\": {\n                \"content\": \"Some think chief ethics officers could help technology companies navigate political and social questions.\",\n                \"link\": null\n              },\n              \"annotations\": {\n                \"bold\": true,\n                \"italic\": true,\n                \"strikethrough\": true,\n                \"underline\": true,\n                \"code\": true,\n                \"color\": \"default\"\n              },\n              \"plain_text\": \"Some think chief ethics officers could help technology companies navigate political and social questions.\",\n              \"href\": null\n            }\n          ]\n        },\n        \"Publishing/Release Date\": {\n          \"id\": \"%3Fex%2B\",\n          \"type\": \"date\",\n          \"date\": {\n            \"start\": \"2020-12-08T12:00:00.000+00:00\",\n            \"end\": null,\n            \"time_zone\": null\n          }\n        },\n        \"Link\": {\n          \"id\": \"VVMi\",\n          \"type\": \"url\",\n          \"url\": \"https://www.nytimes.com/2018/10/21/opinion/who-will-teach-silicon-valley-to-be-ethical.html\"\n        },\n        \"Read\": {\n          \"id\": \"_MWJ\",\n          \"type\": \"checkbox\",\n          \"checkbox\": false\n        },\n        \"Status\": {\n          \"id\": \"%60zz5\",\n          \"type\": \"select\",\n          \"select\": {\n            \"id\": \"8c4a056e-6709-4dd1-ba58-d34d9480855a\",\n            \"name\": \"Ready to Start\",\n            \"color\": \"yellow\"\n          }\n        },\n        \"Author\": {\n          \"id\": \"qNw_\",\n          \"type\": \"multi_select\",\n          \"multi_select\": []\n        },\n        \"Name\": {\n          \"id\": \"title\",\n          \"type\": \"title\",\n          \"title\": [\n            {\n              \"type\": \"text\",\n              \"text\": {\n                \"content\": \"New Media Article\",\n                \"link\": null\n              },\n              \"annotations\": {\n                \"bold\": false,\n                \"italic\": false,\n                \"strikethrough\": false,\n                \"underline\": false,\n                \"code\": false,\n                \"color\": \"default\"\n              },\n              \"plain_text\": \"New Media Article\",\n              \"href\": null\n            }\n          ]\n        }\n      },\n      \"url\": \"https://www.notion.so/New-Media-Article-ae1905c3b77b475bb98f7596c242137f\"\n    },\n    {\n      \"object\": \"page\",\n      \"id\": \"8f16061d-4b77-4dbc-bf04-e8b0b4319b5a\",\n      \"created_time\": \"2021-05-21T16:42:00.000Z\",\n      \"last_edited_time\": \"2021-05-21T16:42:00.000Z\",\n      \"created_by\": {\n        \"object\": \"user\",\n        \"id\": \"92a680bb-6970-4726-952b-4f4c03bff617\"\n      },\n      \"last_edited_by\": {\n        \"object\": \"user\",\n        \"id\": \"92a680bb-6970-4726-952b-4f4c03bff617\"\n      },\n      \"cover\": null,\n      \"icon\": null,\n      \"parent\": {\n        \"type\": \"database_id\",\n        \"database_id\": \"7a94f22f-59ae-484d-90ac-4aeddd667641\"\n      },\n      \"archived\": false,\n      \"properties\": {\n        \"Score /5\": {\n          \"id\": \")Y7%22\",\n          \"type\": \"select\",\n          \"select\": {\n            \"id\": \"5c944de7-3f4b-4567-b3a1-fa2c71c540b6\",\n            \"name\": \"⭐️⭐️⭐️⭐️⭐️\",\n            \"color\": \"default\"\n          }\n        },\n        \"Type\": {\n          \"id\": \"%2F7eo\",\n          \"type\": \"select\",\n          \"select\": {\n            \"id\": \"f96d0d0a-5564-4a20-ab15-5f040d49759e\",\n            \"name\": \"Article\",\n            \"color\": \"default\"\n          }\n        },\n        \"Publisher\": {\n          \"id\": \"%3E%24Pb\",\n          \"type\": \"select\",\n          \"select\": {\n            \"id\": \"01f82d08-aa1f-4884-a4e0-3bc32f909ec4\",\n            \"name\": \"The Atlantic\",\n            \"color\": \"red\"\n          }\n        },\n        \"Summary\": {\n          \"id\": \"%3F%5C25\",\n          \"type\": \"rich_text\",\n          \"rich_text\": [\n            {\n              \"type\": \"text\",\n              \"text\": {\n                \"content\": \"Some think chief ethics officers could help technology companies navigate political and social questions.\",\n                \"link\": null\n              },\n              \"annotations\": {\n                \"bold\": true,\n                \"italic\": true,\n                \"strikethrough\": true,\n                \"underline\": true,\n                \"code\": true,\n                \"color\": \"default\"\n              },\n              \"plain_text\": \"Some think chief ethics officers could help technology companies navigate political and social questions.\",\n              \"href\": null\n            }\n          ]\n        },\n        \"Publishing/Release Date\": {\n          \"id\": \"%3Fex%2B\",\n          \"type\": \"date\",\n          \"date\": {\n            \"start\": \"2020-12-08T12:00:00.000+00:00\",\n            \"end\": null,\n            \"time_zone\": null\n          }\n        },\n        \"date\": {\n          \"id\": \"Lpwp\",\n          \"type\": \"date\",\n          \"date\": null\n        },\n        \"Link\": {\n          \"id\": \"VVMi\",\n          \"type\": \"url\",\n          \"url\": \"https://www.nytimes.com/2018/10/21/opinion/who-will-teach-silicon-valley-to-be-ethical.html\"\n        },\n        \"Wine Pairing\": {\n          \"id\": \"WO%40Z\",\n          \"type\": \"rich_text\",\n          \"rich_text\": []\n        },\n        \"Read\": {\n          \"id\": \"_MWJ\",\n          \"type\": \"checkbox\",\n          \"checkbox\": false\n        },\n        \"Status\": {\n          \"id\": \"%60zz5\",\n          \"type\": \"select\",\n          \"select\": {\n            \"id\": \"8c4a056e-6709-4dd1-ba58-d34d9480855a\",\n            \"name\": \"Ready to Start\",\n            \"color\": \"yellow\"\n          }\n        },\n        \"Author\": {\n          \"id\": \"qNw_\",\n          \"type\": \"multi_select\",\n          \"multi_select\": []\n        },\n        \"Name\": {\n          \"id\": \"title\",\n          \"type\": \"title\",\n          \"title\": [\n            {\n              \"type\": \"text\",\n              \"text\": {\n                \"content\": \"New Media Article\",\n                \"link\": null\n              },\n              \"annotations\": {\n                \"bold\": false,\n                \"italic\": false,\n                \"strikethrough\": false,\n                \"underline\": false,\n                \"code\": false,\n                \"color\": \"default\"\n              },\n              \"plain_text\": \"New Media Article\",\n              \"href\": null\n            }\n          ]\n        }\n      },\n      \"url\": \"https://www.notion.so/New-Media-Article-8f16061d4b774dbcbf04e8b0b4319b5a\"\n    },\n    {\n      \"object\": \"page\",\n      \"id\": \"dc2a9117-163d-4075-907e-604b2f04c504\",\n      \"created_time\": \"2021-06-15T17:23:00.000Z\",\n      \"last_edited_time\": \"2021-06-15T17:23:00.000Z\",\n      \"created_by\": {\n        \"object\": \"user\",\n        \"id\": \"92a680bb-6970-4726-952b-4f4c03bff617\"\n      },\n      \"last_edited_by\": {\n        \"object\": \"user\",\n        \"id\": \"92a680bb-6970-4726-952b-4f4c03bff617\"\n      },\n      \"cover\": null,\n      \"icon\": null,\n      \"parent\": {\n        \"type\": \"database_id\",\n        \"database_id\": \"7a94f22f-59ae-484d-90ac-4aeddd667641\"\n      },\n      \"archived\": false,\n      \"properties\": {\n        \"Score /5\": {\n          \"id\": \")Y7%22\",\n          \"type\": \"select\",\n          \"select\": {\n            \"id\": \"5c944de7-3f4b-4567-b3a1-fa2c71c540b6\",\n            \"name\": \"⭐️⭐️⭐️⭐️⭐️\",\n            \"color\": \"default\"\n          }\n        },\n        \"Type\": {\n          \"id\": \"%2F7eo\",\n          \"type\": \"select\",\n          \"select\": {\n            \"id\": \"f96d0d0a-5564-4a20-ab15-5f040d49759e\",\n            \"name\": \"Article\",\n            \"color\": \"default\"\n          }\n        },\n        \"Publisher\": {\n          \"id\": \"%3E%24Pb\",\n          \"type\": \"select\",\n          \"select\": {\n            \"id\": \"01f82d08-aa1f-4884-a4e0-3bc32f909ec4\",\n            \"name\": \"The Atlantic\",\n            \"color\": \"red\"\n          }\n        },\n        \"Summary\": {\n          \"id\": \"%3F%5C25\",\n          \"type\": \"rich_text\",\n          \"rich_text\": [\n            {\n              \"type\": \"text\",\n              \"text\": {\n                \"content\": \"Some think chief ethics officers could help technology companies navigate political and social questions.\",\n                \"link\": null\n              },\n              \"annotations\": {\n                \"bold\": false,\n                \"italic\": false,\n                \"strikethrough\": false,\n                \"underline\": false,\n                \"code\": false,\n                \"color\": \"default\"\n              },\n              \"plain_text\": \"Some think chief ethics officers could help technology companies navigate political and social questions.\",\n              \"href\": null\n            }\n          ]\n        },\n        \"Publishing/Release Date\": {\n          \"id\": \"%3Fex%2B\",\n          \"type\": \"date\",\n          \"date\": {\n            \"start\": \"2020-12-08T12:00:00.000+00:00\",\n            \"end\": null,\n            \"time_zone\": null\n          }\n        },\n        \"date\": {\n          \"id\": \"Lpwp\",\n          \"type\": \"date\",\n          \"date\": null\n        },\n        \"Link\": {\n          \"id\": \"VVMi\",\n          \"type\": \"url\",\n          \"url\": \"https://www.nytimes.com/2018/10/21/opinion/who-will-teach-silicon-valley-to-be-ethical.html\"\n        },\n        \"Wine Pairing\": {\n          \"id\": \"WO%40Z\",\n          \"type\": \"rich_text\",\n          \"rich_text\": []\n        },\n        \"Read\": {\n          \"id\": \"_MWJ\",\n          \"type\": \"checkbox\",\n          \"checkbox\": false\n        },\n        \"Status\": {\n          \"id\": \"%60zz5\",\n          \"type\": \"select\",\n          \"select\": {\n            \"id\": \"8c4a056e-6709-4dd1-ba58-d34d9480855a\",\n            \"name\": \"Ready to Start\",\n            \"color\": \"yellow\"\n          }\n        },\n        \"Author\": {\n          \"id\": \"qNw_\",\n          \"type\": \"multi_select\",\n          \"multi_select\": []\n        },\n        \"Name\": {\n          \"id\": \"title\",\n          \"type\": \"title\",\n          \"title\": [\n            {\n              \"type\": \"text\",\n              \"text\": {\n                \"content\": \"New Media Article\",\n                \"link\": null\n              },\n              \"annotations\": {\n                \"bold\": false,\n                \"italic\": false,\n                \"strikethrough\": false,\n                \"underline\": false,\n                \"code\": false,\n                \"color\": \"default\"\n              },\n              \"plain_text\": \"New Media Article\",\n              \"href\": null\n            }\n          ]\n        }\n      },\n      \"url\": \"https://www.notion.so/New-Media-Article-dc2a9117163d4075907e604b2f04c504\"\n    },\n    {\n      \"object\": \"page\",\n      \"id\": \"c443c084-4637-4df2-ba37-b3c8a7e3d062\",\n      \"created_time\": \"2021-06-15T17:23:00.000Z\",\n      \"last_edited_time\": \"2021-06-15T17:23:00.000Z\",\n      \"created_by\": {\n        \"object\": \"user\",\n        \"id\": \"92a680bb-6970-4726-952b-4f4c03bff617\"\n      },\n      \"last_edited_by\": {\n        \"object\": \"user\",\n        \"id\": \"92a680bb-6970-4726-952b-4f4c03bff617\"\n      },\n      \"cover\": null,\n      \"icon\": null,\n      \"parent\": {\n        \"type\": \"database_id\",\n        \"database_id\": \"7a94f22f-59ae-484d-90ac-4aeddd667641\"\n      },\n      \"archived\": false,\n      \"properties\": {\n        \"Score /5\": {\n          \"id\": \")Y7%22\",\n          \"type\": \"select\",\n          \"select\": {\n            \"id\": \"5c944de7-3f4b-4567-b3a1-fa2c71c540b6\",\n            \"name\": \"⭐️⭐️⭐️⭐️⭐️\",\n            \"color\": \"default\"\n          }\n        },\n        \"Type\": {\n          \"id\": \"%2F7eo\",\n          \"type\": \"select\",\n          \"select\": {\n            \"id\": \"f96d0d0a-5564-4a20-ab15-5f040d49759e\",\n            \"name\": \"Article\",\n            \"color\": \"default\"\n          }\n        },\n        \"Publisher\": {\n          \"id\": \"%3E%24Pb\",\n          \"type\": \"select\",\n          \"select\": {\n            \"id\": \"01f82d08-aa1f-4884-a4e0-3bc32f909ec4\",\n            \"name\": \"The Atlantic\",\n            \"color\": \"red\"\n          }\n        },\n        \"Summary\": {\n          \"id\": \"%3F%5C25\",\n          \"type\": \"rich_text\",\n          \"rich_text\": [\n            {\n              \"type\": \"text\",\n              \"text\": {\n                \"content\": \"Some think chief ethics officers could help technology companies navigate political and social questions.\",\n                \"link\": null\n              },\n              \"annotations\": {\n                \"bold\": false,\n                \"italic\": false,\n                \"strikethrough\": false,\n                \"underline\": false,\n                \"code\": false,\n                \"color\": \"default\"\n              },\n              \"plain_text\": \"Some think chief ethics officers could help technology companies navigate political and social questions.\",\n              \"href\": null\n            }\n          ]\n        },\n        \"Publishing/Release Date\": {\n          \"id\": \"%3Fex%2B\",\n          \"type\": \"date\",\n          \"date\": {\n            \"start\": \"2020-12-08T12:00:00.000+00:00\",\n            \"end\": null,\n            \"time_zone\": null\n          }\n        },\n        \"date\": {\n          \"id\": \"Lpwp\",\n          \"type\": \"date\",\n          \"date\": null\n        },\n        \"Link\": {\n          \"id\": \"VVMi\",\n          \"type\": \"url\",\n          \"url\": \"https://www.nytimes.com/2018/10/21/opinion/who-will-teach-silicon-valley-to-be-ethical.html\"\n        },\n        \"Wine Pairing\": {\n          \"id\": \"WO%40Z\",\n          \"type\": \"rich_text\",\n          \"rich_text\": []\n        },\n        \"Read\": {\n          \"id\": \"_MWJ\",\n          \"type\": \"checkbox\",\n          \"checkbox\": false\n        },\n        \"Status\": {\n          \"id\": \"%60zz5\",\n          \"type\": \"select\",\n          \"select\": {\n            \"id\": \"8c4a056e-6709-4dd1-ba58-d34d9480855a\",\n            \"name\": \"Ready to Start\",\n            \"color\": \"yellow\"\n          }\n        },\n        \"Author\": {\n          \"id\": \"qNw_\",\n          \"type\": \"multi_select\",\n          \"multi_select\": []\n        },\n        \"Name\": {\n          \"id\": \"title\",\n          \"type\": \"title\",\n          \"title\": [\n            {\n              \"type\": \"text\",\n              \"text\": {\n                \"content\": \"New Media Article\",\n                \"link\": null\n              },\n              \"annotations\": {\n                \"bold\": false,\n                \"italic\": false,\n                \"strikethrough\": false,\n                \"underline\": false,\n                \"code\": false,\n                \"color\": \"default\"\n              },\n              \"plain_text\": \"New Media Article\",\n              \"href\": null\n            }\n          ]\n        }\n      },\n      \"url\": \"https://www.notion.so/New-Media-Article-c443c08446374df2ba37b3c8a7e3d062\"\n    },\n    {\n      \"object\": \"page\",\n      \"id\": \"0ac85319-05c5-4b5b-b812-7ea0f6476ea0\",\n      \"created_time\": \"2021-06-15T17:23:00.000Z\",\n      \"last_edited_time\": \"2021-06-15T17:23:00.000Z\",\n      \"created_by\": {\n        \"object\": \"user\",\n        \"id\": \"92a680bb-6970-4726-952b-4f4c03bff617\"\n      },\n      \"last_edited_by\": {\n        \"object\": \"user\",\n        \"id\": \"92a680bb-6970-4726-952b-4f4c03bff617\"\n      },\n      \"cover\": null,\n      \"icon\": null,\n      \"parent\": {\n        \"type\": \"database_id\",\n        \"database_id\": \"7a94f22f-59ae-484d-90ac-4aeddd667641\"\n      },\n      \"archived\": false,\n      \"properties\": {\n        \"Score /5\": {\n          \"id\": \")Y7%22\",\n          \"type\": \"select\",\n          \"select\": {\n            \"id\": \"5c944de7-3f4b-4567-b3a1-fa2c71c540b6\",\n            \"name\": \"⭐️⭐️⭐️⭐️⭐️\",\n            \"color\": \"default\"\n          }\n        },\n        \"Type\": {\n          \"id\": \"%2F7eo\",\n          \"type\": \"select\",\n          \"select\": {\n            \"id\": \"f96d0d0a-5564-4a20-ab15-5f040d49759e\",\n            \"name\": \"Article\",\n            \"color\": \"default\"\n          }\n        },\n        \"Publisher\": {\n          \"id\": \"%3E%24Pb\",\n          \"type\": \"select\",\n          \"select\": {\n            \"id\": \"01f82d08-aa1f-4884-a4e0-3bc32f909ec4\",\n            \"name\": \"The Atlantic\",\n            \"color\": \"red\"\n          }\n        },\n        \"Summary\": {\n          \"id\": \"%3F%5C25\",\n          \"type\": \"rich_text\",\n          \"rich_text\": [\n            {\n              \"type\": \"text\",\n              \"text\": {\n                \"content\": \"Some think chief ethics officers could help technology companies navigate political and social questions.\",\n                \"link\": null\n              },\n              \"annotations\": {\n                \"bold\": false,\n                \"italic\": false,\n                \"strikethrough\": false,\n                \"underline\": false,\n                \"code\": false,\n                \"color\": \"default\"\n              },\n              \"plain_text\": \"Some think chief ethics officers could help technology companies navigate political and social questions.\",\n              \"href\": null\n            }\n          ]\n        },\n        \"Publishing/Release Date\": {\n          \"id\": \"%3Fex%2B\",\n          \"type\": \"date\",\n          \"date\": {\n            \"start\": \"2020-12-08T12:00:00.000+00:00\",\n            \"end\": null,\n            \"time_zone\": null\n          }\n        },\n        \"date\": {\n          \"id\": \"Lpwp\",\n          \"type\": \"date\",\n          \"date\": null\n        },\n        \"Link\": {\n          \"id\": \"VVMi\",\n          \"type\": \"url\",\n          \"url\": \"https://www.nytimes.com/2018/10/21/opinion/who-will-teach-silicon-valley-to-be-ethical.html\"\n        },\n        \"Wine Pairing\": {\n          \"id\": \"WO%40Z\",\n          \"type\": \"rich_text\",\n          \"rich_text\": []\n        },\n        \"Read\": {\n          \"id\": \"_MWJ\",\n          \"type\": \"checkbox\",\n          \"checkbox\": false\n        },\n        \"Status\": {\n          \"id\": \"%60zz5\",\n          \"type\": \"select\",\n          \"select\": {\n            \"id\": \"8c4a056e-6709-4dd1-ba58-d34d9480855a\",\n            \"name\": \"Ready to Start\",\n            \"color\": \"yellow\"\n          }\n        },\n        \"Author\": {\n          \"id\": \"qNw_\",\n          \"type\": \"multi_select\",\n          \"multi_select\": []\n        },\n        \"Name\": {\n          \"id\": \"title\",\n          \"type\": \"title\",\n          \"title\": [\n            {\n              \"type\": \"text\",\n              \"text\": {\n                \"content\": \"New Media Article\",\n                \"link\": null\n              },\n              \"annotations\": {\n                \"bold\": false,\n                \"italic\": false,\n                \"strikethrough\": false,\n                \"underline\": false,\n                \"code\": false,\n                \"color\": \"default\"\n              },\n              \"plain_text\": \"New Media Article\",\n              \"href\": null\n            }\n          ]\n        }\n      },\n      \"url\": \"https://www.notion.so/New-Media-Article-0ac8531905c54b5bb8127ea0f6476ea0\"\n    },\n    {\n      \"object\": \"page\",\n      \"id\": \"794fc25a-7f59-419d-a6e5-d9f0b516ecc7\",\n      \"created_time\": \"2021-06-15T17:24:00.000Z\",\n      \"last_edited_time\": \"2021-06-15T17:24:00.000Z\",\n      \"created_by\": {\n        \"object\": \"user\",\n        \"id\": \"92a680bb-6970-4726-952b-4f4c03bff617\"\n      },\n      \"last_edited_by\": {\n        \"object\": \"user\",\n        \"id\": \"92a680bb-6970-4726-952b-4f4c03bff617\"\n      },\n      \"cover\": null,\n      \"icon\": null,\n      \"parent\": {\n        \"type\": \"database_id\",\n        \"database_id\": \"7a94f22f-59ae-484d-90ac-4aeddd667641\"\n      },\n      \"archived\": false,\n      \"properties\": {\n        \"Score /5\": {\n          \"id\": \")Y7%22\",\n          \"type\": \"select\",\n          \"select\": {\n            \"id\": \"5c944de7-3f4b-4567-b3a1-fa2c71c540b6\",\n            \"name\": \"⭐️⭐️⭐️⭐️⭐️\",\n            \"color\": \"default\"\n          }\n        },\n        \"Type\": {\n          \"id\": \"%2F7eo\",\n          \"type\": \"select\",\n          \"select\": {\n            \"id\": \"f96d0d0a-5564-4a20-ab15-5f040d49759e\",\n            \"name\": \"Article\",\n            \"color\": \"default\"\n          }\n        },\n        \"Publisher\": {\n          \"id\": \"%3E%24Pb\",\n          \"type\": \"select\",\n          \"select\": {\n            \"id\": \"01f82d08-aa1f-4884-a4e0-3bc32f909ec4\",\n            \"name\": \"The Atlantic\",\n            \"color\": \"red\"\n          }\n        },\n        \"Summary\": {\n          \"id\": \"%3F%5C25\",\n          \"type\": \"rich_text\",\n          \"rich_text\": [\n            {\n              \"type\": \"text\",\n              \"text\": {\n                \"content\": \"Some think chief ethics officers could help technology companies navigate political and social questions.\",\n                \"link\": null\n              },\n              \"annotations\": {\n                \"bold\": false,\n                \"italic\": false,\n                \"strikethrough\": false,\n                \"underline\": false,\n                \"code\": false,\n                \"color\": \"default\"\n              },\n              \"plain_text\": \"Some think chief ethics officers could help technology companies navigate political and social questions.\",\n              \"href\": null\n            }\n          ]\n        },\n        \"Publishing/Release Date\": {\n          \"id\": \"%3Fex%2B\",\n          \"type\": \"date\",\n          \"date\": {\n            \"start\": \"2020-12-08T12:00:00.000+00:00\",\n            \"end\": null,\n            \"time_zone\": null\n          }\n        },\n        \"date\": {\n          \"id\": \"Lpwp\",\n          \"type\": \"date\",\n          \"date\": null\n        },\n        \"Link\": {\n          \"id\": \"VVMi\",\n          \"type\": \"url\",\n          \"url\": \"https://www.nytimes.com/2018/10/21/opinion/who-will-teach-silicon-valley-to-be-ethical.html\"\n        },\n        \"Wine Pairing\": {\n          \"id\": \"WO%40Z\",\n          \"type\": \"rich_text\",\n          \"rich_text\": []\n        },\n        \"Read\": {\n          \"id\": \"_MWJ\",\n          \"type\": \"checkbox\",\n          \"checkbox\": false\n        },\n        \"Status\": {\n          \"id\": \"%60zz5\",\n          \"type\": \"select\",\n          \"select\": {\n            \"id\": \"8c4a056e-6709-4dd1-ba58-d34d9480855a\",\n            \"name\": \"Ready to Start\",\n            \"color\": \"yellow\"\n          }\n        },\n        \"Author\": {\n          \"id\": \"qNw_\",\n          \"type\": \"multi_select\",\n          \"multi_select\": []\n        },\n        \"Name\": {\n          \"id\": \"title\",\n          \"type\": \"title\",\n          \"title\": [\n            {\n              \"type\": \"text\",\n              \"text\": {\n                \"content\": \"New Media Article\",\n                \"link\": null\n              },\n              \"annotations\": {\n                \"bold\": false,\n                \"italic\": false,\n                \"strikethrough\": false,\n                \"underline\": false,\n                \"code\": false,\n                \"color\": \"default\"\n              },\n              \"plain_text\": \"New Media Article\",\n              \"href\": null\n            }\n          ]\n        }\n      },\n      \"url\": \"https://www.notion.so/New-Media-Article-794fc25a7f59419da6e5d9f0b516ecc7\"\n    },\n    {\n      \"object\": \"page\",\n      \"id\": \"41ad30b7-98e7-4c55-bf21-7ac7f09c2fd5\",\n      \"created_time\": \"2021-06-15T17:24:00.000Z\",\n      \"last_edited_time\": \"2021-06-15T17:24:00.000Z\",\n      \"created_by\": {\n        \"object\": \"user\",\n        \"id\": \"92a680bb-6970-4726-952b-4f4c03bff617\"\n      },\n      \"last_edited_by\": {\n        \"object\": \"user\",\n        \"id\": \"92a680bb-6970-4726-952b-4f4c03bff617\"\n      },\n      \"cover\": null,\n      \"icon\": null,\n      \"parent\": {\n        \"type\": \"database_id\",\n        \"database_id\": \"7a94f22f-59ae-484d-90ac-4aeddd667641\"\n      },\n      \"archived\": false,\n      \"properties\": {\n        \"Score /5\": {\n          \"id\": \")Y7%22\",\n          \"type\": \"select\",\n          \"select\": {\n            \"id\": \"5c944de7-3f4b-4567-b3a1-fa2c71c540b6\",\n            \"name\": \"⭐️⭐️⭐️⭐️⭐️\",\n            \"color\": \"default\"\n          }\n        },\n        \"Type\": {\n          \"id\": \"%2F7eo\",\n          \"type\": \"select\",\n          \"select\": {\n            \"id\": \"f96d0d0a-5564-4a20-ab15-5f040d49759e\",\n            \"name\": \"Article\",\n            \"color\": \"default\"\n          }\n        },\n        \"Publisher\": {\n          \"id\": \"%3E%24Pb\",\n          \"type\": \"select\",\n          \"select\": {\n            \"id\": \"01f82d08-aa1f-4884-a4e0-3bc32f909ec4\",\n            \"name\": \"The Atlantic\",\n            \"color\": \"red\"\n          }\n        },\n        \"Summary\": {\n          \"id\": \"%3F%5C25\",\n          \"type\": \"rich_text\",\n          \"rich_text\": [\n            {\n              \"type\": \"text\",\n              \"text\": {\n                \"content\": \"Some think chief ethics officers could help technology companies navigate political and social questions.\",\n                \"link\": null\n              },\n              \"annotations\": {\n                \"bold\": false,\n                \"italic\": false,\n                \"strikethrough\": false,\n                \"underline\": false,\n                \"code\": false,\n                \"color\": \"default\"\n              },\n              \"plain_text\": \"Some think chief ethics officers could help technology companies navigate political and social questions.\",\n              \"href\": null\n            }\n          ]\n        },\n        \"Publishing/Release Date\": {\n          \"id\": \"%3Fex%2B\",\n          \"type\": \"date\",\n          \"date\": {\n            \"start\": \"2020-12-08T12:00:00.000+00:00\",\n            \"end\": null,\n            \"time_zone\": null\n          }\n        },\n        \"date\": {\n          \"id\": \"Lpwp\",\n          \"type\": \"date\",\n          \"date\": null\n        },\n        \"Link\": {\n          \"id\": \"VVMi\",\n          \"type\": \"url\",\n          \"url\": \"https://www.nytimes.com/2018/10/21/opinion/who-will-teach-silicon-valley-to-be-ethical.html\"\n        },\n        \"Wine Pairing\": {\n          \"id\": \"WO%40Z\",\n          \"type\": \"rich_text\",\n          \"rich_text\": []\n        },\n        \"Read\": {\n          \"id\": \"_MWJ\",\n          \"type\": \"checkbox\",\n          \"checkbox\": false\n        },\n        \"Status\": {\n          \"id\": \"%60zz5\",\n          \"type\": \"select\",\n          \"select\": {\n            \"id\": \"b598e780-263b-4b02-862c-9bf7a91859ac\",\n            \"name\": \"New Option\",\n            \"color\": \"orange\"\n          }\n        },\n        \"Author\": {\n          \"id\": \"qNw_\",\n          \"type\": \"multi_select\",\n          \"multi_select\": []\n        },\n        \"Name\": {\n          \"id\": \"title\",\n          \"type\": \"title\",\n          \"title\": [\n            {\n              \"type\": \"text\",\n              \"text\": {\n                \"content\": \"New Media Article\",\n                \"link\": null\n              },\n              \"annotations\": {\n                \"bold\": false,\n                \"italic\": false,\n                \"strikethrough\": false,\n                \"underline\": false,\n                \"code\": false,\n                \"color\": \"default\"\n              },\n              \"plain_text\": \"New Media Article\",\n              \"href\": null\n            }\n          ]\n        }\n      },\n      \"url\": \"https://www.notion.so/New-Media-Article-41ad30b798e74c55bf217ac7f09c2fd5\"\n    },\n    {\n      \"object\": \"page\",\n      \"id\": \"6a313bae-fdd3-4617-9bd6-5b132f23be35\",\n      \"created_time\": \"2021-06-15T17:24:00.000Z\",\n      \"last_edited_time\": \"2021-06-15T17:24:00.000Z\",\n      \"created_by\": {\n        \"object\": \"user\",\n        \"id\": \"92a680bb-6970-4726-952b-4f4c03bff617\"\n      },\n      \"last_edited_by\": {\n        \"object\": \"user\",\n        \"id\": \"92a680bb-6970-4726-952b-4f4c03bff617\"\n      },\n      \"cover\": null,\n      \"icon\": null,\n      \"parent\": {\n        \"type\": \"database_id\",\n        \"database_id\": \"7a94f22f-59ae-484d-90ac-4aeddd667641\"\n      },\n      \"archived\": false,\n      \"properties\": {\n        \"Score /5\": {\n          \"id\": \")Y7%22\",\n          \"type\": \"select\",\n          \"select\": {\n            \"id\": \"5c944de7-3f4b-4567-b3a1-fa2c71c540b6\",\n            \"name\": \"⭐️⭐️⭐️⭐️⭐️\",\n            \"color\": \"default\"\n          }\n        },\n        \"Type\": {\n          \"id\": \"%2F7eo\",\n          \"type\": \"select\",\n          \"select\": {\n            \"id\": \"f96d0d0a-5564-4a20-ab15-5f040d49759e\",\n            \"name\": \"Article\",\n            \"color\": \"default\"\n          }\n        },\n        \"Publisher\": {\n          \"id\": \"%3E%24Pb\",\n          \"type\": \"select\",\n          \"select\": {\n            \"id\": \"01f82d08-aa1f-4884-a4e0-3bc32f909ec4\",\n            \"name\": \"The Atlantic\",\n            \"color\": \"red\"\n          }\n        },\n        \"Summary\": {\n          \"id\": \"%3F%5C25\",\n          \"type\": \"rich_text\",\n          \"rich_text\": [\n            {\n              \"type\": \"text\",\n              \"text\": {\n                \"content\": \"Some think chief ethics officers could help technology companies navigate political and social questions.\",\n                \"link\": null\n              },\n              \"annotations\": {\n                \"bold\": false,\n                \"italic\": false,\n                \"strikethrough\": false,\n                \"underline\": false,\n                \"code\": false,\n                \"color\": \"default\"\n              },\n              \"plain_text\": \"Some think chief ethics officers could help technology companies navigate political and social questions.\",\n              \"href\": null\n            }\n          ]\n        },\n        \"Publishing/Release Date\": {\n          \"id\": \"%3Fex%2B\",\n          \"type\": \"date\",\n          \"date\": {\n            \"start\": \"2020-12-08T12:00:00.000+00:00\",\n            \"end\": null,\n            \"time_zone\": null\n          }\n        },\n        \"date\": {\n          \"id\": \"Lpwp\",\n          \"type\": \"date\",\n          \"date\": null\n        },\n        \"Link\": {\n          \"id\": \"VVMi\",\n          \"type\": \"url\",\n          \"url\": \"https://www.nytimes.com/2018/10/21/opinion/who-will-teach-silicon-valley-to-be-ethical.html\"\n        },\n        \"Wine Pairing\": {\n          \"id\": \"WO%40Z\",\n          \"type\": \"rich_text\",\n          \"rich_text\": []\n        },\n        \"Read\": {\n          \"id\": \"_MWJ\",\n          \"type\": \"checkbox\",\n          \"checkbox\": false\n        },\n        \"Status\": {\n          \"id\": \"%60zz5\",\n          \"type\": \"select\",\n          \"select\": {\n            \"id\": \"ad038109-97d3-4b5d-a93a-3b88229b1b58\",\n            \"name\": \"New Option 3\",\n            \"color\": \"purple\"\n          }\n        },\n        \"Author\": {\n          \"id\": \"qNw_\",\n          \"type\": \"multi_select\",\n          \"multi_select\": []\n        },\n        \"Name\": {\n          \"id\": \"title\",\n          \"type\": \"title\",\n          \"title\": [\n            {\n              \"type\": \"text\",\n              \"text\": {\n                \"content\": \"New Media Article\",\n                \"link\": null\n              },\n              \"annotations\": {\n                \"bold\": false,\n                \"italic\": false,\n                \"strikethrough\": false,\n                \"underline\": false,\n                \"code\": false,\n                \"color\": \"default\"\n              },\n              \"plain_text\": \"New Media Article\",\n              \"href\": null\n            }\n          ]\n        }\n      },\n      \"url\": \"https://www.notion.so/New-Media-Article-6a313baefdd346179bd65b132f23be35\"\n    }\n  ],\n  \"next_cursor\": null,\n  \"has_more\": false\n}\n```",
+			"",
+		)
+}
+
+type postSearchProcessor struct {
+	baseProcessor
+}
+
+func newPostSearchProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
+	base, err := baseProcessorFromParsed(conf, mgr)
+	if err != nil {
+		return nil, err
+	}
+
+	p := &postSearchProcessor{baseProcessor: base}
+
+	return p, nil
+}
+
+func (p *postSearchProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
+	batch = batch.Copy()
+
+	var wg sync.WaitGroup
+	wg.Add(len(batch))
+	for i := range batch {
+		go func(idx int) {
+			defer wg.Done()
+			if err := p.processPostSearch(ctx, idx, batch); err != nil {
+				batch[idx].SetError(err)
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	return []service.MessageBatch{batch}, nil
+}
+
+func (p *postSearchProcessor) processPostSearch(ctx context.Context, idx int, batch service.MessageBatch) error {
+	msg := batch[idx]
+
+	// Save original message content for response merge.
+	originalStructured, _ := msg.AsStructured()
+
+	// Build URL.
+	rawURL := p.baseURL + "/v1/search"
+
+	// Apply request mapping and validate request body.
+	if p.requestMapping != nil {
+		structured, err := msg.AsStructured()
+		if err != nil {
+			return fmt.Errorf("parsing message for request_mapping: %w", err)
+		}
+		mapped, err := p.requestMapping.Query(structured)
+		if err != nil {
+			return fmt.Errorf("executing request_mapping: %w", err)
+		}
+		msg.SetStructured(mapped)
+	}
+
+	b, err := msg.AsBytes()
+	if err != nil {
+		return fmt.Errorf("reading message body: %w", err)
+	}
+
+	var reqBody v1.PostSearchReq
+	if err := reqBody.UnmarshalJSON(b); err != nil {
+		return fmt.Errorf("unmarshaling request body: %w", err)
+	}
+	if err := reqBody.Validate(); err != nil {
+		return fmt.Errorf("validating request body: %w", err)
+	}
+
+	reqBytes, err := reqBody.MarshalJSON()
+	if err != nil {
+		return fmt.Errorf("marshaling request body: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", rawURL, bytes.NewReader(reqBytes))
+	if err != nil {
+		return fmt.Errorf("creating HTTP request: %w", err)
+	}
+
+	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
+	httpReq.Header.Set("Notion-Version", p.notionVersion)
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := p.httpClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("Notion API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("reading response body: %w", err)
+	}
+
+	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
+	var body any
+	if len(respBody) > 0 {
+		var jsonBody any
+		if json.Unmarshal(respBody, &jsonBody) == nil {
+			body = jsonBody
+		} else {
+			body = string(respBody)
+		}
+	}
+
+	envelope := map[string]any{
+		"postSearchResponse": map[string]any{
+			"status_code": resp.StatusCode,
+			"headers":     headerMap(resp.Header),
+			"body":        body,
+		},
+	}
+
+	// Merge with original message.
+	if originalMap, ok := originalStructured.(map[string]any); ok {
+		for k, v := range envelope {
+			originalMap[k] = v
+		}
+		envelope = originalMap
+	}
+
+	// Apply response mapping.
+	if p.responseMapping != nil {
+		mapped, mapErr := p.responseMapping.Query(envelope)
+		if mapErr != nil {
+			return fmt.Errorf("executing response_mapping: %w", mapErr)
+		}
+		msg.SetStructured(mapped)
+	} else {
+		msg.SetStructured(envelope)
+	}
+
+	if resp.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", resp.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	}
+
+	return nil
+}
+
+// RetrieveABlock processor — get /v1/blocks/{block_id}
+
+func init() {
+	service.MustRegisterBatchProcessor(
+		"notion_retrieve_a_block",
+		retrieveABlockConfig(),
+		newRetrieveABlockProcessor,
+	)
+}
+
+func retrieveABlockConfig() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Categories("Services", "Notion").
+		Summary("Retrieve a block `GET /v1/blocks/{block_id}`").
+		Description("API reference: https://developers.notion.com/reference/retrieve-a-block").
+		Fields(sharedConfigFields()...).Fields(
+		service.NewBloblangField(fieldResponseMapping).
+			Optional().
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
+		service.NewInterpolatedStringField("block_id").
+			Description(""),
+	).
+		Example(
+			"Retrieve a block",
+			"Response body:\n```json\n{\n  \"object\": \"block\",\n  \"id\": \"4868767d-9029-4b9d-a41b-652ef4c9c7b9\",\n  \"created_time\": \"2021-08-06T17:46:00.000Z\",\n  \"last_edited_time\": \"2021-08-12T00:12:00.000Z\",\n  \"has_children\": false,\n  \"type\": \"paragraph\",\n  \"paragraph\": {\n    \"text\": [\n      {\n        \"type\": \"text\",\n        \"text\": {\n          \"content\": \"hello to you\",\n          \"link\": null\n        },\n        \"annotations\": {\n          \"bold\": false,\n          \"italic\": false,\n          \"strikethrough\": false,\n          \"underline\": false,\n          \"code\": false,\n          \"color\": \"default\"\n        },\n        \"plain_text\": \"hello to you\",\n        \"href\": null\n      }\n    ]\n  }\n}\n```",
+			"",
+		)
+}
+
+type retrieveABlockProcessor struct {
+	baseProcessor
+	blockID *service.InterpolatedString
+}
+
+func newRetrieveABlockProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
+	base, err := baseProcessorFromParsed(conf, mgr)
+	if err != nil {
+		return nil, err
+	}
+
+	p := &retrieveABlockProcessor{baseProcessor: base}
+	if p.blockID, err = conf.FieldInterpolatedString("block_id"); err != nil {
+		return nil, err
+	}
+
+	return p, nil
+}
+
+func (p *retrieveABlockProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
+	batch = batch.Copy()
+
+	var wg sync.WaitGroup
+	wg.Add(len(batch))
+	for i := range batch {
+		go func(idx int) {
+			defer wg.Done()
+			if err := p.processRetrieveABlock(ctx, idx, batch); err != nil {
+				batch[idx].SetError(err)
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	return []service.MessageBatch{batch}, nil
+}
+
+func (p *retrieveABlockProcessor) processRetrieveABlock(ctx context.Context, idx int, batch service.MessageBatch) error {
+	msg := batch[idx]
+
+	// Save original message content for response merge.
+	originalStructured, _ := msg.AsStructured()
+
+	// Build URL.
+	rawURL := p.baseURL + "/v1/blocks/{block_id}"
+	{
+		v, err := batch.TryInterpolatedString(idx, p.blockID)
+		if err != nil {
+			return fmt.Errorf("interpolating block_id: %w", err)
+		}
+		rawURL = strings.Replace(rawURL, "{block_id}", url.PathEscape(v), 1)
+	}
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", rawURL, nil)
+	if err != nil {
+		return fmt.Errorf("creating HTTP request: %w", err)
+	}
+
+	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
+	httpReq.Header.Set("Notion-Version", p.notionVersion)
+
+	resp, err := p.httpClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("Notion API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("reading response body: %w", err)
+	}
+
+	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
+	var body any
+	if len(respBody) > 0 {
+		var jsonBody any
+		if json.Unmarshal(respBody, &jsonBody) == nil {
+			body = jsonBody
+		} else {
+			body = string(respBody)
+		}
+	}
+
+	envelope := map[string]any{
+		"retrieveABlockResponse": map[string]any{
+			"status_code": resp.StatusCode,
+			"headers":     headerMap(resp.Header),
+			"body":        body,
+		},
+	}
+
+	// Merge with original message.
+	if originalMap, ok := originalStructured.(map[string]any); ok {
+		for k, v := range envelope {
+			originalMap[k] = v
+		}
+		envelope = originalMap
+	}
+
+	// Apply response mapping.
+	if p.responseMapping != nil {
+		mapped, mapErr := p.responseMapping.Query(envelope)
+		if mapErr != nil {
+			return fmt.Errorf("executing response_mapping: %w", mapErr)
+		}
+		msg.SetStructured(mapped)
+	} else {
+		msg.SetStructured(envelope)
+	}
+
+	if resp.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", resp.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	}
+
+	return nil
+}
+
+// RetrieveADataSource processor — get /v1/data_sources/{data_source_id}
+
+func init() {
+	service.MustRegisterBatchProcessor(
+		"notion_retrieve_a_data_source",
+		retrieveADataSourceConfig(),
+		newRetrieveADataSourceProcessor,
+	)
+}
+
+func retrieveADataSourceConfig() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Categories("Services", "Notion").
+		Summary("Retrieve a data source `GET /v1/data_sources/{data_source_id}`").
+		Description("API reference: https://developers.notion.com/reference/retrieve-a-data-source").
+		Fields(sharedConfigFields()...).Fields(
+		service.NewBloblangField(fieldResponseMapping).
+			Optional().
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
+		service.NewInterpolatedStringField("data_source_id").
+			Description(""),
+	)
+}
+
+type retrieveADataSourceProcessor struct {
+	baseProcessor
+	dataSourceID *service.InterpolatedString
+}
+
+func newRetrieveADataSourceProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
+	base, err := baseProcessorFromParsed(conf, mgr)
+	if err != nil {
+		return nil, err
+	}
+
+	p := &retrieveADataSourceProcessor{baseProcessor: base}
+	if p.dataSourceID, err = conf.FieldInterpolatedString("data_source_id"); err != nil {
+		return nil, err
+	}
+
+	return p, nil
+}
+
+func (p *retrieveADataSourceProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
+	batch = batch.Copy()
+
+	var wg sync.WaitGroup
+	wg.Add(len(batch))
+	for i := range batch {
+		go func(idx int) {
+			defer wg.Done()
+			if err := p.processRetrieveADataSource(ctx, idx, batch); err != nil {
+				batch[idx].SetError(err)
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	return []service.MessageBatch{batch}, nil
+}
+
+func (p *retrieveADataSourceProcessor) processRetrieveADataSource(ctx context.Context, idx int, batch service.MessageBatch) error {
+	msg := batch[idx]
+
+	// Save original message content for response merge.
+	originalStructured, _ := msg.AsStructured()
+
+	// Build URL.
+	rawURL := p.baseURL + "/v1/data_sources/{data_source_id}"
+	{
+		v, err := batch.TryInterpolatedString(idx, p.dataSourceID)
+		if err != nil {
+			return fmt.Errorf("interpolating data_source_id: %w", err)
+		}
+		rawURL = strings.Replace(rawURL, "{data_source_id}", url.PathEscape(v), 1)
+	}
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", rawURL, nil)
+	if err != nil {
+		return fmt.Errorf("creating HTTP request: %w", err)
+	}
+
+	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
+	httpReq.Header.Set("Notion-Version", p.notionVersion)
+
+	resp, err := p.httpClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("Notion API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("reading response body: %w", err)
+	}
+
+	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
+	var body any
+	if len(respBody) > 0 {
+		var jsonBody any
+		if json.Unmarshal(respBody, &jsonBody) == nil {
+			body = jsonBody
+		} else {
+			body = string(respBody)
+		}
+	}
+
+	envelope := map[string]any{
+		"retrieveADataSourceResponse": map[string]any{
+			"status_code": resp.StatusCode,
+			"headers":     headerMap(resp.Header),
+			"body":        body,
+		},
+	}
+
+	// Merge with original message.
+	if originalMap, ok := originalStructured.(map[string]any); ok {
+		for k, v := range envelope {
+			originalMap[k] = v
+		}
+		envelope = originalMap
+	}
+
+	// Apply response mapping.
+	if p.responseMapping != nil {
+		mapped, mapErr := p.responseMapping.Query(envelope)
+		if mapErr != nil {
+			return fmt.Errorf("executing response_mapping: %w", mapErr)
+		}
+		msg.SetStructured(mapped)
+	} else {
+		msg.SetStructured(envelope)
+	}
+
+	if resp.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", resp.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	}
+
+	return nil
+}
+
+// RetrieveAPage processor — get /v1/pages/{page_id}
+
+func init() {
+	service.MustRegisterBatchProcessor(
+		"notion_retrieve_a_page",
+		retrieveAPageConfig(),
+		newRetrieveAPageProcessor,
+	)
+}
+
+func retrieveAPageConfig() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Categories("Services", "Notion").
+		Summary("Retrieve a page `GET /v1/pages/{page_id}`").
+		Description("API reference: https://developers.notion.com/reference/retrieve-a-page").
+		Fields(sharedConfigFields()...).Fields(
+		service.NewBloblangField(fieldResponseMapping).
+			Optional().
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
+		service.NewInterpolatedStringField("page_id").
+			Description(""),
+		service.NewInterpolatedStringField("filter_properties").
+			Description("").
+			Optional(),
+	).
+		Example(
+			"Retrieve a page",
+			"Response body:\n```json\n{\n  \"object\": \"page\",\n  \"id\": \"c4d39556-6364-46a1-8a61-ebbb668f7445\",\n  \"created_time\": \"2021-04-27T20:38:00.000Z\",\n  \"last_edited_time\": \"2022-03-02T05:22:00.000Z\",\n  \"created_by\": {\n    \"object\": \"user\",\n    \"id\": \"6794760a-1f15-45cd-9c65-0dfe42f5135a\"\n  },\n  \"last_edited_by\": {\n    \"object\": \"user\",\n    \"id\": \"92a680bb-6970-4726-952b-4f4c03bff617\"\n  },\n  \"cover\": null,\n  \"icon\": {\n    \"type\": \"emoji\",\n    \"emoji\": \"📕\"\n  },\n  \"parent\": {\n    \"type\": \"page_id\",\n    \"page_id\": \"c1218692-102d-4b47-ab38-c21900b3557b\"\n  },\n  \"archived\": false,\n  \"properties\": {\n    \"title\": {\n      \"id\": \"title\",\n      \"type\": \"title\",\n      \"title\": [\n        {\n          \"type\": \"text\",\n          \"text\": {\n            \"content\": \"Reading List\",\n            \"link\": null\n          },\n          \"annotations\": {\n            \"bold\": false,\n            \"italic\": false,\n            \"strikethrough\": false,\n            \"underline\": false,\n            \"code\": false,\n            \"color\": \"default\"\n          },\n          \"plain_text\": \"Reading List\",\n          \"href\": null\n        }\n      ]\n    }\n  },\n  \"url\": \"https://www.notion.so/Reading-List-c4d39556636446a18a61ebbb668f7445\"\n}\n```",
+			"",
+		)
+}
+
+type retrieveAPageProcessor struct {
+	baseProcessor
+	pageID           *service.InterpolatedString
+	filterProperties *service.InterpolatedString
+}
+
+func newRetrieveAPageProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
+	base, err := baseProcessorFromParsed(conf, mgr)
+	if err != nil {
+		return nil, err
+	}
+
+	p := &retrieveAPageProcessor{baseProcessor: base}
+	if p.pageID, err = conf.FieldInterpolatedString("page_id"); err != nil {
+		return nil, err
+	}
+	if conf.Contains("filter_properties") {
+		if p.filterProperties, err = conf.FieldInterpolatedString("filter_properties"); err != nil {
+			return nil, err
+		}
+	}
+
+	return p, nil
+}
+
+func (p *retrieveAPageProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
+	batch = batch.Copy()
+
+	var wg sync.WaitGroup
+	wg.Add(len(batch))
+	for i := range batch {
+		go func(idx int) {
+			defer wg.Done()
+			if err := p.processRetrieveAPage(ctx, idx, batch); err != nil {
+				batch[idx].SetError(err)
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	return []service.MessageBatch{batch}, nil
+}
+
+func (p *retrieveAPageProcessor) processRetrieveAPage(ctx context.Context, idx int, batch service.MessageBatch) error {
+	msg := batch[idx]
+
+	// Save original message content for response merge.
+	originalStructured, _ := msg.AsStructured()
+
+	// Build URL.
+	rawURL := p.baseURL + "/v1/pages/{page_id}"
+	{
+		v, err := batch.TryInterpolatedString(idx, p.pageID)
+		if err != nil {
+			return fmt.Errorf("interpolating page_id: %w", err)
+		}
+		rawURL = strings.Replace(rawURL, "{page_id}", url.PathEscape(v), 1)
+	}
+
+	// Build query parameters.
+	query := make(url.Values)
+	if p.filterProperties != nil {
+		v, err := batch.TryInterpolatedString(idx, p.filterProperties)
+		if err != nil {
+			return fmt.Errorf("interpolating filter_properties: %w", err)
+		}
+		query.Set("filter_properties", v)
+	}
+	if len(query) > 0 {
+		rawURL += "?" + query.Encode()
+	}
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", rawURL, nil)
+	if err != nil {
+		return fmt.Errorf("creating HTTP request: %w", err)
+	}
+
+	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
+	httpReq.Header.Set("Notion-Version", p.notionVersion)
+
+	resp, err := p.httpClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("Notion API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("reading response body: %w", err)
+	}
+
+	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
+	var body any
+	if len(respBody) > 0 {
+		var jsonBody any
+		if json.Unmarshal(respBody, &jsonBody) == nil {
+			body = jsonBody
+		} else {
+			body = string(respBody)
+		}
+	}
+
+	envelope := map[string]any{
+		"retrieveAPageResponse": map[string]any{
+			"status_code": resp.StatusCode,
+			"headers":     headerMap(resp.Header),
+			"body":        body,
+		},
+	}
+
+	// Merge with original message.
+	if originalMap, ok := originalStructured.(map[string]any); ok {
+		for k, v := range envelope {
+			originalMap[k] = v
+		}
+		envelope = originalMap
+	}
+
+	// Apply response mapping.
+	if p.responseMapping != nil {
+		mapped, mapErr := p.responseMapping.Query(envelope)
+		if mapErr != nil {
+			return fmt.Errorf("executing response_mapping: %w", mapErr)
+		}
+		msg.SetStructured(mapped)
+	} else {
+		msg.SetStructured(envelope)
+	}
+
+	if resp.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", resp.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	}
+
+	return nil
+}
+
+// RetrieveAPageProperty processor — get /v1/pages/{page_id}/properties/{property_id}
+
+func init() {
+	service.MustRegisterBatchProcessor(
+		"notion_retrieve_a_page_property",
+		retrieveAPagePropertyConfig(),
+		newRetrieveAPagePropertyProcessor,
+	)
+}
+
+func retrieveAPagePropertyConfig() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Categories("Services", "Notion").
+		Summary("Retrieve a page property item `GET /v1/pages/{page_id}/properties/{property_id}`").
+		Description("API reference: https://developers.notion.com/reference/retrieve-a-page-property").
+		Fields(sharedConfigFields()...).Fields(
+		service.NewBloblangField(fieldResponseMapping).
+			Optional().
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
+		service.NewInterpolatedStringField("page_id").
+			Description(""),
+		service.NewInterpolatedStringField("property_id").
+			Description(""),
+		service.NewInterpolatedStringField("start_cursor").
+			Description("").
+			Optional(),
+		service.NewInterpolatedStringField("page_size").
+			Description("").
+			Optional(),
+	).
+		Example(
+			"Retrieve a page property item",
+			"Response body:\n```json\n{\n  \"object\": \"property_item\",\n  \"type\": \"select\",\n  \"select\": {\n    \"id\": \"5c944de7-3f4b-4567-b3a1-fa2c71c540b6\",\n    \"name\": \"⭐️⭐️⭐️⭐️⭐️\",\n    \"color\": \"default\"\n  }\n}\n```",
+			"",
+		)
+}
+
+type retrieveAPagePropertyProcessor struct {
+	baseProcessor
+	pageID      *service.InterpolatedString
+	propertyID  *service.InterpolatedString
+	startCursor *service.InterpolatedString
+	pageSize    *service.InterpolatedString
+}
+
+func newRetrieveAPagePropertyProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
+	base, err := baseProcessorFromParsed(conf, mgr)
+	if err != nil {
+		return nil, err
+	}
+
+	p := &retrieveAPagePropertyProcessor{baseProcessor: base}
+	if p.pageID, err = conf.FieldInterpolatedString("page_id"); err != nil {
+		return nil, err
+	}
+	if p.propertyID, err = conf.FieldInterpolatedString("property_id"); err != nil {
+		return nil, err
+	}
+	if conf.Contains("start_cursor") {
+		if p.startCursor, err = conf.FieldInterpolatedString("start_cursor"); err != nil {
+			return nil, err
+		}
+	}
+	if conf.Contains("page_size") {
+		if p.pageSize, err = conf.FieldInterpolatedString("page_size"); err != nil {
+			return nil, err
+		}
+	}
+
+	return p, nil
+}
+
+func (p *retrieveAPagePropertyProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
+	batch = batch.Copy()
+
+	var wg sync.WaitGroup
+	wg.Add(len(batch))
+	for i := range batch {
+		go func(idx int) {
+			defer wg.Done()
+			if err := p.processRetrieveAPageProperty(ctx, idx, batch); err != nil {
+				batch[idx].SetError(err)
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	return []service.MessageBatch{batch}, nil
+}
+
+func (p *retrieveAPagePropertyProcessor) processRetrieveAPageProperty(ctx context.Context, idx int, batch service.MessageBatch) error {
+	msg := batch[idx]
+
+	// Save original message content for response merge.
+	originalStructured, _ := msg.AsStructured()
+
+	// Build URL.
+	rawURL := p.baseURL + "/v1/pages/{page_id}/properties/{property_id}"
+	{
+		v, err := batch.TryInterpolatedString(idx, p.pageID)
+		if err != nil {
+			return fmt.Errorf("interpolating page_id: %w", err)
+		}
+		rawURL = strings.Replace(rawURL, "{page_id}", url.PathEscape(v), 1)
+	}
+	{
+		v, err := batch.TryInterpolatedString(idx, p.propertyID)
+		if err != nil {
+			return fmt.Errorf("interpolating property_id: %w", err)
+		}
+		rawURL = strings.Replace(rawURL, "{property_id}", url.PathEscape(v), 1)
+	}
+
+	// Build query parameters.
+	query := make(url.Values)
+	if p.startCursor != nil {
+		v, err := batch.TryInterpolatedString(idx, p.startCursor)
+		if err != nil {
+			return fmt.Errorf("interpolating start_cursor: %w", err)
+		}
+		query.Set("start_cursor", v)
+	}
+	if p.pageSize != nil {
+		v, err := batch.TryInterpolatedString(idx, p.pageSize)
+		if err != nil {
+			return fmt.Errorf("interpolating page_size: %w", err)
+		}
+		query.Set("page_size", v)
+	}
+	if len(query) > 0 {
+		rawURL += "?" + query.Encode()
+	}
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", rawURL, nil)
+	if err != nil {
+		return fmt.Errorf("creating HTTP request: %w", err)
+	}
+
+	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
+	httpReq.Header.Set("Notion-Version", p.notionVersion)
+
+	resp, err := p.httpClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("Notion API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("reading response body: %w", err)
+	}
+
+	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
+	var body any
+	if len(respBody) > 0 {
+		var jsonBody any
+		if json.Unmarshal(respBody, &jsonBody) == nil {
+			body = jsonBody
+		} else {
+			body = string(respBody)
+		}
+	}
+
+	envelope := map[string]any{
+		"retrieveAPagePropertyResponse": map[string]any{
+			"status_code": resp.StatusCode,
+			"headers":     headerMap(resp.Header),
+			"body":        body,
+		},
+	}
+
+	// Merge with original message.
+	if originalMap, ok := originalStructured.(map[string]any); ok {
+		for k, v := range envelope {
+			originalMap[k] = v
+		}
+		envelope = originalMap
+	}
+
+	// Apply response mapping.
+	if p.responseMapping != nil {
+		mapped, mapErr := p.responseMapping.Query(envelope)
+		if mapErr != nil {
+			return fmt.Errorf("executing response_mapping: %w", mapErr)
+		}
+		msg.SetStructured(mapped)
+	} else {
+		msg.SetStructured(envelope)
+	}
+
+	if resp.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", resp.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	}
+
+	return nil
+}
+
+// RetrieveComment processor — get /v1/comments/{comment_id}
+
+func init() {
+	service.MustRegisterBatchProcessor(
+		"notion_retrieve_comment",
+		retrieveCommentConfig(),
+		newRetrieveCommentProcessor,
+	)
+}
+
+func retrieveCommentConfig() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Categories("Services", "Notion").
+		Summary("Retrieve a comment `GET /v1/comments/{comment_id}`").
+		Description("API reference: https://developers.notion.com/reference/retrieve-comment").
+		Fields(sharedConfigFields()...).Fields(
+		service.NewBloblangField(fieldResponseMapping).
+			Optional().
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
+		service.NewInterpolatedStringField("comment_id").
+			Description(""),
+	)
+}
+
+type retrieveCommentProcessor struct {
+	baseProcessor
+	commentID *service.InterpolatedString
+}
+
+func newRetrieveCommentProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
+	base, err := baseProcessorFromParsed(conf, mgr)
+	if err != nil {
+		return nil, err
+	}
+
+	p := &retrieveCommentProcessor{baseProcessor: base}
+	if p.commentID, err = conf.FieldInterpolatedString("comment_id"); err != nil {
+		return nil, err
+	}
+
+	return p, nil
+}
+
+func (p *retrieveCommentProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
+	batch = batch.Copy()
+
+	var wg sync.WaitGroup
+	wg.Add(len(batch))
+	for i := range batch {
+		go func(idx int) {
+			defer wg.Done()
+			if err := p.processRetrieveComment(ctx, idx, batch); err != nil {
+				batch[idx].SetError(err)
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	return []service.MessageBatch{batch}, nil
+}
+
+func (p *retrieveCommentProcessor) processRetrieveComment(ctx context.Context, idx int, batch service.MessageBatch) error {
+	msg := batch[idx]
+
+	// Save original message content for response merge.
+	originalStructured, _ := msg.AsStructured()
+
+	// Build URL.
+	rawURL := p.baseURL + "/v1/comments/{comment_id}"
+	{
+		v, err := batch.TryInterpolatedString(idx, p.commentID)
+		if err != nil {
+			return fmt.Errorf("interpolating comment_id: %w", err)
+		}
+		rawURL = strings.Replace(rawURL, "{comment_id}", url.PathEscape(v), 1)
+	}
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", rawURL, nil)
+	if err != nil {
+		return fmt.Errorf("creating HTTP request: %w", err)
+	}
+
+	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
+	httpReq.Header.Set("Notion-Version", p.notionVersion)
+
+	resp, err := p.httpClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("Notion API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("reading response body: %w", err)
+	}
+
+	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
+	var body any
+	if len(respBody) > 0 {
+		var jsonBody any
+		if json.Unmarshal(respBody, &jsonBody) == nil {
+			body = jsonBody
+		} else {
+			body = string(respBody)
+		}
+	}
+
+	envelope := map[string]any{
+		"retrieveCommentResponse": map[string]any{
+			"status_code": resp.StatusCode,
+			"headers":     headerMap(resp.Header),
+			"body":        body,
+		},
+	}
+
+	// Merge with original message.
+	if originalMap, ok := originalStructured.(map[string]any); ok {
+		for k, v := range envelope {
+			originalMap[k] = v
+		}
+		envelope = originalMap
+	}
+
+	// Apply response mapping.
+	if p.responseMapping != nil {
+		mapped, mapErr := p.responseMapping.Query(envelope)
+		if mapErr != nil {
+			return fmt.Errorf("executing response_mapping: %w", mapErr)
+		}
+		msg.SetStructured(mapped)
+	} else {
+		msg.SetStructured(envelope)
+	}
+
+	if resp.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", resp.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	}
+
+	return nil
+}
+
+// RetrieveDatabase processor — get /v1/databases/{database_id}
+
+func init() {
+	service.MustRegisterBatchProcessor(
+		"notion_retrieve_database",
+		retrieveDatabaseConfig(),
+		newRetrieveDatabaseProcessor,
+	)
+}
+
+func retrieveDatabaseConfig() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Categories("Services", "Notion").
+		Summary("Retrieve a database `GET /v1/databases/{database_id}`").
+		Description("API reference: https://developers.notion.com/reference/retrieve-database").
+		Fields(sharedConfigFields()...).Fields(
+		service.NewBloblangField(fieldResponseMapping).
+			Optional().
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
+		service.NewInterpolatedStringField("database_id").
+			Description(""),
+	).
+		Example(
+			"Retrieve a database",
+			"Response body:\n```json\n{\n  \"object\": \"database\",\n  \"id\": \"8e2c2b76-9e1d-47d2-87b9-ed3035d607ae\",\n  \"cover\": null,\n  \"icon\": null,\n  \"created_time\": \"2021-04-27T20:38:00.000Z\",\n  \"created_by\": {\n    \"object\": \"user\",\n    \"id\": \"6794760a-1f15-45cd-9c65-0dfe42f5135a\"\n  },\n  \"last_edited_by\": {\n    \"object\": \"user\",\n    \"id\": \"6794760a-1f15-45cd-9c65-0dfe42f5135a\"\n  },\n  \"last_edited_time\": \"2022-02-24T22:14:00.000Z\",\n  \"title\": [\n    {\n      \"type\": \"text\",\n      \"text\": {\n        \"content\": \"Ever Better Reading List Title\",\n        \"link\": null\n      },\n      \"annotations\": {\n        \"bold\": false,\n        \"italic\": false,\n        \"strikethrough\": false,\n        \"underline\": false,\n        \"code\": false,\n        \"color\": \"default\"\n      },\n      \"plain_text\": \"Ever Better Reading List Title\",\n      \"href\": null\n    }\n  ],\n  \"properties\": {\n    \"Score /5\": {\n      \"id\": \")Y7%22\",\n      \"name\": \"Score /5\",\n      \"type\": \"select\",\n      \"select\": {\n        \"options\": [\n          {\n            \"id\": \"5c944de7-3f4b-4567-b3a1-fa2c71c540b6\",\n            \"name\": \"⭐️⭐️⭐️⭐️⭐️\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"b7307e35-c80a-4cb5-bb6b-6054523b394a\",\n            \"name\": \"⭐️⭐️⭐️⭐️\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"9b1e1349-8e24-40ba-bbca-84a61296bc81\",\n            \"name\": \"⭐️⭐️⭐️\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"66d3d050-086c-4a91-8c56-d55dc67e7789\",\n            \"name\": \"⭐️⭐️\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"d3782c76-0396-467f-928e-46bf0c9d5fba\",\n            \"name\": \"⭐️\",\n            \"color\": \"default\"\n          }\n        ]\n      }\n    },\n    \"Type\": {\n      \"id\": \"%2F7eo\",\n      \"name\": \"Type\",\n      \"type\": \"select\",\n      \"select\": {\n        \"options\": [\n          {\n            \"id\": \"f96d0d0a-5564-4a20-ab15-5f040d49759e\",\n            \"name\": \"Article\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"4ac85597-5db1-4e0a-9c02-445575c38f76\",\n            \"name\": \"TV Series\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"2991748a-5745-4c3b-9c9b-2d6846a6fa1f\",\n            \"name\": \"Film\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"82f3bace-be25-410d-87fe-561c9c22492f\",\n            \"name\": \"Podcast\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"861f1076-1cc4-429a-a781-54947d727a4a\",\n            \"name\": \"Academic Journal\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"9cc30548-59d6-4cd3-94bc-d234081525c4\",\n            \"name\": \"Essay Resource\",\n            \"color\": \"default\"\n          }\n        ]\n      }\n    },\n    \"Publisher\": {\n      \"id\": \"%3E%24Pb\",\n      \"name\": \"Publisher\",\n      \"type\": \"select\",\n      \"select\": {\n        \"options\": [\n          {\n            \"id\": \"c5ee409a-f307-4176-99ee-6e424fa89afa\",\n            \"name\": \"NYT\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"1b9b0c0c-17b0-4292-ad12-1364a51849de\",\n            \"name\": \"Netflix\",\n            \"color\": \"blue\"\n          },\n          {\n            \"id\": \"f3533637-278f-4501-b394-d9753bf3c101\",\n            \"name\": \"Indie\",\n            \"color\": \"brown\"\n          },\n          {\n            \"id\": \"e70d713c-4be4-4b40-a44d-fb413c8b9d7e\",\n            \"name\": \"Bon Appetit\",\n            \"color\": \"yellow\"\n          },\n          {\n            \"id\": \"9c2bd667-0a10-4be4-a044-35a537a14ab9\",\n            \"name\": \"Franklin Institute\",\n            \"color\": \"pink\"\n          },\n          {\n            \"id\": \"6849b5f0-e641-4ec5-83cb-1ffe23011060\",\n            \"name\": \"Springer\",\n            \"color\": \"orange\"\n          },\n          {\n            \"id\": \"6a5bff63-a72d-4464-a5d0-1a601af2adf6\",\n            \"name\": \"Emerald Group\",\n            \"color\": \"gray\"\n          },\n          {\n            \"id\": \"01f82d08-aa1f-4884-a4e0-3bc32f909ec4\",\n            \"name\": \"The Atlantic\",\n            \"color\": \"red\"\n          }\n        ]\n      }\n    },\n    \"Summary\": {\n      \"id\": \"%3F%5C25\",\n      \"name\": \"Summary\",\n      \"type\": \"rich_text\",\n      \"rich_text\": {}\n    },\n    \"Publishing/Release Date\": {\n      \"id\": \"%3Fex%2B\",\n      \"name\": \"Publishing/Release Date\",\n      \"type\": \"date\",\n      \"date\": {}\n    },\n    \"Link\": {\n      \"id\": \"VVMi\",\n      \"name\": \"Link\",\n      \"type\": \"url\",\n      \"url\": {}\n    },\n    \"Read\": {\n      \"id\": \"_MWJ\",\n      \"name\": \"Read\",\n      \"type\": \"checkbox\",\n      \"checkbox\": {}\n    },\n    \"Status\": {\n      \"id\": \"%60zz5\",\n      \"name\": \"Status\",\n      \"type\": \"select\",\n      \"select\": {\n        \"options\": [\n          {\n            \"id\": \"8c4a056e-6709-4dd1-ba58-d34d9480855a\",\n            \"name\": \"Ready to Start\",\n            \"color\": \"yellow\"\n          },\n          {\n            \"id\": \"5925ba22-0126-4b58-90c7-b8bbb2c3c895\",\n            \"name\": \"Reading\",\n            \"color\": \"red\"\n          },\n          {\n            \"id\": \"59aa9043-07b4-4bf4-8734-3164b13af44a\",\n            \"name\": \"Finished\",\n            \"color\": \"blue\"\n          },\n          {\n            \"id\": \"f961978d-02eb-4998-933a-33c2ec378564\",\n            \"name\": \"Listening\",\n            \"color\": \"red\"\n          },\n          {\n            \"id\": \"1d450853-b27a-45e2-979f-448aa1bd35de\",\n            \"name\": \"Watching\",\n            \"color\": \"red\"\n          }\n        ]\n      }\n    },\n    \"Author\": {\n      \"id\": \"qNw_\",\n      \"name\": \"Author\",\n      \"type\": \"multi_select\",\n      \"multi_select\": {\n        \"options\": [\n          {\n            \"id\": \"15592971-7b30-43d5-9406-2eb69b13fcae\",\n            \"name\": \"Spencer Greenberg\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"b80a988e-dccf-4f74-b764-6ca0e49ed1b8\",\n            \"name\": \"Seth Stephens-Davidowitz\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"0e71ee06-199d-46a4-834c-01084c8f76cb\",\n            \"name\": \"Andrew Russell\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"5807ec38-4879-4455-9f30-5352e90e8b79\",\n            \"name\": \"Lee Vinsel\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"4cf10a64-f3da-449c-8e04-ce6e338bbdbd\",\n            \"name\": \"Megan Greenwell\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"833e2c78-35ed-4601-badc-50c323341d76\",\n            \"name\": \"Kara Swisher\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"82e594e2-b1c5-4271-ac19-1a723a94a533\",\n            \"name\": \"Paul Romer\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"ae3a2cbe-1fc9-4376-be35-331628b34623\",\n            \"name\": \"Karen Swallow Prior\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"da068e78-dfe2-4434-9fd7-b7450b3e5830\",\n            \"name\": \"Judith Shulevitz\",\n            \"color\": \"default\"\n          }\n        ]\n      }\n    },\n    \"Name\": {\n      \"id\": \"title\",\n      \"name\": \"Name\",\n      \"type\": \"title\",\n      \"title\": {}\n    }\n  },\n  \"parent\": {\n    \"type\": \"page_id\",\n    \"page_id\": \"c4d39556-6364-46a1-8a61-ebbb668f7445\"\n  },\n  \"url\": \"https://www.notion.so/8e2c2b769e1d47d287b9ed3035d607ae\",\n  \"archived\": false\n}\n```",
+			"",
+		)
+}
+
+type retrieveDatabaseProcessor struct {
+	baseProcessor
+	databaseID *service.InterpolatedString
+}
+
+func newRetrieveDatabaseProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
+	base, err := baseProcessorFromParsed(conf, mgr)
+	if err != nil {
+		return nil, err
+	}
+
+	p := &retrieveDatabaseProcessor{baseProcessor: base}
+	if p.databaseID, err = conf.FieldInterpolatedString("database_id"); err != nil {
+		return nil, err
+	}
+
+	return p, nil
+}
+
+func (p *retrieveDatabaseProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
+	batch = batch.Copy()
+
+	var wg sync.WaitGroup
+	wg.Add(len(batch))
+	for i := range batch {
+		go func(idx int) {
+			defer wg.Done()
+			if err := p.processRetrieveDatabase(ctx, idx, batch); err != nil {
+				batch[idx].SetError(err)
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	return []service.MessageBatch{batch}, nil
+}
+
+func (p *retrieveDatabaseProcessor) processRetrieveDatabase(ctx context.Context, idx int, batch service.MessageBatch) error {
+	msg := batch[idx]
+
+	// Save original message content for response merge.
+	originalStructured, _ := msg.AsStructured()
+
+	// Build URL.
+	rawURL := p.baseURL + "/v1/databases/{database_id}"
+	{
+		v, err := batch.TryInterpolatedString(idx, p.databaseID)
+		if err != nil {
+			return fmt.Errorf("interpolating database_id: %w", err)
+		}
+		rawURL = strings.Replace(rawURL, "{database_id}", url.PathEscape(v), 1)
+	}
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", rawURL, nil)
+	if err != nil {
+		return fmt.Errorf("creating HTTP request: %w", err)
+	}
+
+	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
+	httpReq.Header.Set("Notion-Version", p.notionVersion)
+
+	resp, err := p.httpClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("Notion API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("reading response body: %w", err)
+	}
+
+	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
+	var body any
+	if len(respBody) > 0 {
+		var jsonBody any
+		if json.Unmarshal(respBody, &jsonBody) == nil {
+			body = jsonBody
+		} else {
+			body = string(respBody)
+		}
+	}
+
+	envelope := map[string]any{
+		"retrieveDatabaseResponse": map[string]any{
+			"status_code": resp.StatusCode,
+			"headers":     headerMap(resp.Header),
+			"body":        body,
+		},
+	}
+
+	// Merge with original message.
+	if originalMap, ok := originalStructured.(map[string]any); ok {
+		for k, v := range envelope {
+			originalMap[k] = v
+		}
+		envelope = originalMap
+	}
+
+	// Apply response mapping.
+	if p.responseMapping != nil {
+		mapped, mapErr := p.responseMapping.Query(envelope)
+		if mapErr != nil {
+			return fmt.Errorf("executing response_mapping: %w", mapErr)
+		}
+		msg.SetStructured(mapped)
+	} else {
+		msg.SetStructured(envelope)
+	}
+
+	if resp.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", resp.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	}
+
+	return nil
+}
+
+// RetrieveFileUpload processor — get /v1/file_uploads/{file_upload_id}
+
+func init() {
+	service.MustRegisterBatchProcessor(
+		"notion_retrieve_file_upload",
+		retrieveFileUploadConfig(),
+		newRetrieveFileUploadProcessor,
+	)
+}
+
+func retrieveFileUploadConfig() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Categories("Services", "Notion").
+		Summary("Retrieve a file upload `GET /v1/file_uploads/{file_upload_id}`").
+		Description("API reference: https://developers.notion.com/reference/retrieve-file-upload").
+		Fields(sharedConfigFields()...).Fields(
+		service.NewBloblangField(fieldResponseMapping).
+			Optional().
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
+		service.NewInterpolatedStringField("file_upload_id").
+			Description(""),
+	)
+}
+
+type retrieveFileUploadProcessor struct {
+	baseProcessor
+	fileUploadID *service.InterpolatedString
+}
+
+func newRetrieveFileUploadProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
+	base, err := baseProcessorFromParsed(conf, mgr)
+	if err != nil {
+		return nil, err
+	}
+
+	p := &retrieveFileUploadProcessor{baseProcessor: base}
+	if p.fileUploadID, err = conf.FieldInterpolatedString("file_upload_id"); err != nil {
+		return nil, err
+	}
+
+	return p, nil
+}
+
+func (p *retrieveFileUploadProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
+	batch = batch.Copy()
+
+	var wg sync.WaitGroup
+	wg.Add(len(batch))
+	for i := range batch {
+		go func(idx int) {
+			defer wg.Done()
+			if err := p.processRetrieveFileUpload(ctx, idx, batch); err != nil {
+				batch[idx].SetError(err)
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	return []service.MessageBatch{batch}, nil
+}
+
+func (p *retrieveFileUploadProcessor) processRetrieveFileUpload(ctx context.Context, idx int, batch service.MessageBatch) error {
+	msg := batch[idx]
+
+	// Save original message content for response merge.
+	originalStructured, _ := msg.AsStructured()
+
+	// Build URL.
+	rawURL := p.baseURL + "/v1/file_uploads/{file_upload_id}"
+	{
+		v, err := batch.TryInterpolatedString(idx, p.fileUploadID)
+		if err != nil {
+			return fmt.Errorf("interpolating file_upload_id: %w", err)
+		}
+		rawURL = strings.Replace(rawURL, "{file_upload_id}", url.PathEscape(v), 1)
+	}
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", rawURL, nil)
+	if err != nil {
+		return fmt.Errorf("creating HTTP request: %w", err)
+	}
+
+	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
+	httpReq.Header.Set("Notion-Version", p.notionVersion)
+
+	resp, err := p.httpClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("Notion API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("reading response body: %w", err)
+	}
+
+	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
+	var body any
+	if len(respBody) > 0 {
+		var jsonBody any
+		if json.Unmarshal(respBody, &jsonBody) == nil {
+			body = jsonBody
+		} else {
+			body = string(respBody)
+		}
+	}
+
+	envelope := map[string]any{
+		"retrieveFileUploadResponse": map[string]any{
+			"status_code": resp.StatusCode,
+			"headers":     headerMap(resp.Header),
+			"body":        body,
+		},
+	}
+
+	// Merge with original message.
+	if originalMap, ok := originalStructured.(map[string]any); ok {
+		for k, v := range envelope {
+			originalMap[k] = v
+		}
+		envelope = originalMap
+	}
+
+	// Apply response mapping.
+	if p.responseMapping != nil {
+		mapped, mapErr := p.responseMapping.Query(envelope)
+		if mapErr != nil {
+			return fmt.Errorf("executing response_mapping: %w", mapErr)
+		}
+		msg.SetStructured(mapped)
+	} else {
+		msg.SetStructured(envelope)
+	}
+
+	if resp.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", resp.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	}
+
+	return nil
+}
+
+// RetrievePageMarkdown processor — get /v1/pages/{page_id}/markdown
+
+func init() {
+	service.MustRegisterBatchProcessor(
+		"notion_retrieve_page_markdown",
+		retrievePageMarkdownConfig(),
+		newRetrievePageMarkdownProcessor,
+	)
+}
+
+func retrievePageMarkdownConfig() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Categories("Services", "Notion").
+		Summary("Retrieve a page as markdown `GET /v1/pages/{page_id}/markdown`").
+		Description("API reference: https://developers.notion.com/reference/retrieve-page-markdown").
+		Fields(sharedConfigFields()...).Fields(
+		service.NewBloblangField(fieldResponseMapping).
+			Optional().
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
+		service.NewInterpolatedStringField("page_id").
+			Description(""),
+		service.NewInterpolatedStringField("include_transcript").
+			Description("").
+			Optional(),
+	)
+}
+
+type retrievePageMarkdownProcessor struct {
+	baseProcessor
+	pageID            *service.InterpolatedString
+	includeTranscript *service.InterpolatedString
+}
+
+func newRetrievePageMarkdownProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
+	base, err := baseProcessorFromParsed(conf, mgr)
+	if err != nil {
+		return nil, err
+	}
+
+	p := &retrievePageMarkdownProcessor{baseProcessor: base}
+	if p.pageID, err = conf.FieldInterpolatedString("page_id"); err != nil {
+		return nil, err
+	}
+	if conf.Contains("include_transcript") {
+		if p.includeTranscript, err = conf.FieldInterpolatedString("include_transcript"); err != nil {
+			return nil, err
+		}
+	}
+
+	return p, nil
+}
+
+func (p *retrievePageMarkdownProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
+	batch = batch.Copy()
+
+	var wg sync.WaitGroup
+	wg.Add(len(batch))
+	for i := range batch {
+		go func(idx int) {
+			defer wg.Done()
+			if err := p.processRetrievePageMarkdown(ctx, idx, batch); err != nil {
+				batch[idx].SetError(err)
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	return []service.MessageBatch{batch}, nil
+}
+
+func (p *retrievePageMarkdownProcessor) processRetrievePageMarkdown(ctx context.Context, idx int, batch service.MessageBatch) error {
+	msg := batch[idx]
+
+	// Save original message content for response merge.
+	originalStructured, _ := msg.AsStructured()
+
+	// Build URL.
+	rawURL := p.baseURL + "/v1/pages/{page_id}/markdown"
+	{
+		v, err := batch.TryInterpolatedString(idx, p.pageID)
+		if err != nil {
+			return fmt.Errorf("interpolating page_id: %w", err)
+		}
+		rawURL = strings.Replace(rawURL, "{page_id}", url.PathEscape(v), 1)
+	}
+
+	// Build query parameters.
+	query := make(url.Values)
+	if p.includeTranscript != nil {
+		v, err := batch.TryInterpolatedString(idx, p.includeTranscript)
+		if err != nil {
+			return fmt.Errorf("interpolating include_transcript: %w", err)
+		}
+		query.Set("include_transcript", v)
+	}
+	if len(query) > 0 {
+		rawURL += "?" + query.Encode()
+	}
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", rawURL, nil)
+	if err != nil {
+		return fmt.Errorf("creating HTTP request: %w", err)
+	}
+
+	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
+	httpReq.Header.Set("Notion-Version", p.notionVersion)
+
+	resp, err := p.httpClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("Notion API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("reading response body: %w", err)
+	}
+
+	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
+	var body any
+	if len(respBody) > 0 {
+		var jsonBody any
+		if json.Unmarshal(respBody, &jsonBody) == nil {
+			body = jsonBody
+		} else {
+			body = string(respBody)
+		}
+	}
+
+	envelope := map[string]any{
+		"retrievePageMarkdownResponse": map[string]any{
+			"status_code": resp.StatusCode,
+			"headers":     headerMap(resp.Header),
+			"body":        body,
+		},
+	}
+
+	// Merge with original message.
+	if originalMap, ok := originalStructured.(map[string]any); ok {
+		for k, v := range envelope {
+			originalMap[k] = v
+		}
+		envelope = originalMap
+	}
+
+	// Apply response mapping.
+	if p.responseMapping != nil {
+		mapped, mapErr := p.responseMapping.Query(envelope)
+		if mapErr != nil {
+			return fmt.Errorf("executing response_mapping: %w", mapErr)
+		}
+		msg.SetStructured(mapped)
+	} else {
+		msg.SetStructured(envelope)
+	}
+
+	if resp.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", resp.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	}
+
+	return nil
+}
+
+// UpdateABlock processor — patch /v1/blocks/{block_id}
+
+func init() {
+	service.MustRegisterBatchProcessor(
+		"notion_update_a_block",
+		updateABlockConfig(),
+		newUpdateABlockProcessor,
+	)
+}
+
+func updateABlockConfig() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Categories("Services", "Notion").
+		Summary("Update a block `PATCH /v1/blocks/{block_id}`").
+		Description("API reference: https://developers.notion.com/reference/update-a-block").
+		Fields(sharedConfigFields()...).Fields(
+		service.NewBloblangField(fieldRequestMapping).
+			Optional().
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to messages before sending the request body."),
+		service.NewBloblangField(fieldResponseMapping).
+			Optional().
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
+		service.NewInterpolatedStringField("block_id").
+			Description(""),
+	).
+		Example(
+			"Update a block",
+			"Request body:\n```json\n{\n  \"paragraph\": {\n    \"rich_text\": [\n      {\n        \"type\": \"text\",\n        \"text\": {\n          \"content\": \"hello to you\"\n        }\n      }\n    ]\n  }\n}\n```\n\nResponse body:\n```json\n{\n  \"object\": \"block\",\n  \"id\": \"4868767d-9029-4b9d-a41b-652ef4c9c7b9\",\n  \"created_time\": \"2021-08-06T17:46:00.000Z\",\n  \"last_edited_time\": \"2021-08-12T00:12:00.000Z\",\n  \"has_children\": false,\n  \"type\": \"paragraph\",\n  \"paragraph\": {\n    \"text\": [\n      {\n        \"type\": \"text\",\n        \"text\": {\n          \"content\": \"hello to you\",\n          \"link\": null\n        },\n        \"annotations\": {\n          \"bold\": false,\n          \"italic\": false,\n          \"strikethrough\": false,\n          \"underline\": false,\n          \"code\": false,\n          \"color\": \"default\"\n        },\n        \"plain_text\": \"hello to you\",\n        \"href\": null\n      }\n    ]\n  }\n}\n```",
+			"",
+		)
+}
+
+type updateABlockProcessor struct {
+	baseProcessor
+	blockID *service.InterpolatedString
+}
+
+func newUpdateABlockProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
+	base, err := baseProcessorFromParsed(conf, mgr)
+	if err != nil {
+		return nil, err
+	}
+
+	p := &updateABlockProcessor{baseProcessor: base}
+	if p.blockID, err = conf.FieldInterpolatedString("block_id"); err != nil {
+		return nil, err
+	}
+
+	return p, nil
+}
+
+func (p *updateABlockProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
+	batch = batch.Copy()
+
+	var wg sync.WaitGroup
+	wg.Add(len(batch))
+	for i := range batch {
+		go func(idx int) {
+			defer wg.Done()
+			if err := p.processUpdateABlock(ctx, idx, batch); err != nil {
+				batch[idx].SetError(err)
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	return []service.MessageBatch{batch}, nil
+}
+
+func (p *updateABlockProcessor) processUpdateABlock(ctx context.Context, idx int, batch service.MessageBatch) error {
+	msg := batch[idx]
+
+	// Save original message content for response merge.
+	originalStructured, _ := msg.AsStructured()
+
+	// Build URL.
+	rawURL := p.baseURL + "/v1/blocks/{block_id}"
+	{
+		v, err := batch.TryInterpolatedString(idx, p.blockID)
+		if err != nil {
+			return fmt.Errorf("interpolating block_id: %w", err)
+		}
+		rawURL = strings.Replace(rawURL, "{block_id}", url.PathEscape(v), 1)
+	}
+
+	// Apply request mapping and validate request body.
+	if p.requestMapping != nil {
+		structured, err := msg.AsStructured()
+		if err != nil {
+			return fmt.Errorf("parsing message for request_mapping: %w", err)
+		}
+		mapped, err := p.requestMapping.Query(structured)
+		if err != nil {
+			return fmt.Errorf("executing request_mapping: %w", err)
+		}
+		msg.SetStructured(mapped)
+	}
+
+	b, err := msg.AsBytes()
+	if err != nil {
+		return fmt.Errorf("reading message body: %w", err)
+	}
+
+	var reqBody v1.UpdateABlockReq
+	if err := reqBody.UnmarshalJSON(b); err != nil {
+		return fmt.Errorf("unmarshaling request body: %w", err)
+	}
+	if err := reqBody.Validate(); err != nil {
+		return fmt.Errorf("validating request body: %w", err)
+	}
+
+	reqBytes, err := reqBody.MarshalJSON()
+	if err != nil {
+		return fmt.Errorf("marshaling request body: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, "PATCH", rawURL, bytes.NewReader(reqBytes))
+	if err != nil {
+		return fmt.Errorf("creating HTTP request: %w", err)
+	}
+
+	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
+	httpReq.Header.Set("Notion-Version", p.notionVersion)
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := p.httpClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("Notion API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("reading response body: %w", err)
+	}
+
+	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
+	var body any
+	if len(respBody) > 0 {
+		var jsonBody any
+		if json.Unmarshal(respBody, &jsonBody) == nil {
+			body = jsonBody
+		} else {
+			body = string(respBody)
+		}
+	}
+
+	envelope := map[string]any{
+		"updateABlockResponse": map[string]any{
+			"status_code": resp.StatusCode,
+			"headers":     headerMap(resp.Header),
+			"body":        body,
+		},
+	}
+
+	// Merge with original message.
+	if originalMap, ok := originalStructured.(map[string]any); ok {
+		for k, v := range envelope {
+			originalMap[k] = v
+		}
+		envelope = originalMap
+	}
+
+	// Apply response mapping.
+	if p.responseMapping != nil {
+		mapped, mapErr := p.responseMapping.Query(envelope)
+		if mapErr != nil {
+			return fmt.Errorf("executing response_mapping: %w", mapErr)
+		}
+		msg.SetStructured(mapped)
+	} else {
+		msg.SetStructured(envelope)
+	}
+
+	if resp.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", resp.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	}
+
+	return nil
+}
+
+// UpdateADataSource processor — patch /v1/data_sources/{data_source_id}
+
+func init() {
+	service.MustRegisterBatchProcessor(
+		"notion_update_a_data_source",
+		updateADataSourceConfig(),
+		newUpdateADataSourceProcessor,
+	)
+}
+
+func updateADataSourceConfig() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Categories("Services", "Notion").
+		Summary("Update a data source `PATCH /v1/data_sources/{data_source_id}`").
+		Description("API reference: https://developers.notion.com/reference/update-a-data-source").
+		Fields(sharedConfigFields()...).Fields(
+		service.NewBloblangField(fieldRequestMapping).
+			Optional().
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to messages before sending the request body."),
+		service.NewBloblangField(fieldResponseMapping).
+			Optional().
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
+		service.NewInterpolatedStringField("data_source_id").
+			Description(""),
+	)
+}
+
+type updateADataSourceProcessor struct {
+	baseProcessor
+	dataSourceID *service.InterpolatedString
+}
+
+func newUpdateADataSourceProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
+	base, err := baseProcessorFromParsed(conf, mgr)
+	if err != nil {
+		return nil, err
+	}
+
+	p := &updateADataSourceProcessor{baseProcessor: base}
+	if p.dataSourceID, err = conf.FieldInterpolatedString("data_source_id"); err != nil {
+		return nil, err
+	}
+
+	return p, nil
+}
+
+func (p *updateADataSourceProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
+	batch = batch.Copy()
+
+	var wg sync.WaitGroup
+	wg.Add(len(batch))
+	for i := range batch {
+		go func(idx int) {
+			defer wg.Done()
+			if err := p.processUpdateADataSource(ctx, idx, batch); err != nil {
+				batch[idx].SetError(err)
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	return []service.MessageBatch{batch}, nil
+}
+
+func (p *updateADataSourceProcessor) processUpdateADataSource(ctx context.Context, idx int, batch service.MessageBatch) error {
+	msg := batch[idx]
+
+	// Save original message content for response merge.
+	originalStructured, _ := msg.AsStructured()
+
+	// Build URL.
+	rawURL := p.baseURL + "/v1/data_sources/{data_source_id}"
+	{
+		v, err := batch.TryInterpolatedString(idx, p.dataSourceID)
+		if err != nil {
+			return fmt.Errorf("interpolating data_source_id: %w", err)
+		}
+		rawURL = strings.Replace(rawURL, "{data_source_id}", url.PathEscape(v), 1)
+	}
+
+	// Apply request mapping and validate request body.
+	if p.requestMapping != nil {
+		structured, err := msg.AsStructured()
+		if err != nil {
+			return fmt.Errorf("parsing message for request_mapping: %w", err)
+		}
+		mapped, err := p.requestMapping.Query(structured)
+		if err != nil {
+			return fmt.Errorf("executing request_mapping: %w", err)
+		}
+		msg.SetStructured(mapped)
+	}
+
+	b, err := msg.AsBytes()
+	if err != nil {
+		return fmt.Errorf("reading message body: %w", err)
+	}
+
+	var reqBody v1.UpdateADataSourceReq
+	if err := reqBody.UnmarshalJSON(b); err != nil {
+		return fmt.Errorf("unmarshaling request body: %w", err)
+	}
+	if err := reqBody.Validate(); err != nil {
+		return fmt.Errorf("validating request body: %w", err)
+	}
+
+	reqBytes, err := reqBody.MarshalJSON()
+	if err != nil {
+		return fmt.Errorf("marshaling request body: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, "PATCH", rawURL, bytes.NewReader(reqBytes))
+	if err != nil {
+		return fmt.Errorf("creating HTTP request: %w", err)
+	}
+
+	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
+	httpReq.Header.Set("Notion-Version", p.notionVersion)
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := p.httpClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("Notion API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("reading response body: %w", err)
+	}
+
+	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
+	var body any
+	if len(respBody) > 0 {
+		var jsonBody any
+		if json.Unmarshal(respBody, &jsonBody) == nil {
+			body = jsonBody
+		} else {
+			body = string(respBody)
+		}
+	}
+
+	envelope := map[string]any{
+		"updateADataSourceResponse": map[string]any{
+			"status_code": resp.StatusCode,
+			"headers":     headerMap(resp.Header),
+			"body":        body,
+		},
+	}
+
+	// Merge with original message.
+	if originalMap, ok := originalStructured.(map[string]any); ok {
+		for k, v := range envelope {
+			originalMap[k] = v
+		}
+		envelope = originalMap
+	}
+
+	// Apply response mapping.
+	if p.responseMapping != nil {
+		mapped, mapErr := p.responseMapping.Query(envelope)
+		if mapErr != nil {
+			return fmt.Errorf("executing response_mapping: %w", mapErr)
+		}
+		msg.SetStructured(mapped)
+	} else {
+		msg.SetStructured(envelope)
+	}
+
+	if resp.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", resp.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	}
+
+	return nil
+}
+
+// UpdateDatabase processor — patch /v1/databases/{database_id}
+
+func init() {
+	service.MustRegisterBatchProcessor(
+		"notion_update_database",
+		updateDatabaseConfig(),
+		newUpdateDatabaseProcessor,
+	)
+}
+
+func updateDatabaseConfig() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Categories("Services", "Notion").
+		Summary("Update a database `PATCH /v1/databases/{database_id}`").
+		Description("API reference: https://developers.notion.com/reference/update-database").
+		Fields(sharedConfigFields()...).Fields(
+		service.NewBloblangField(fieldRequestMapping).
+			Optional().
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to messages before sending the request body."),
+		service.NewBloblangField(fieldResponseMapping).
+			Optional().
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
+		service.NewInterpolatedStringField("database_id").
+			Description(""),
+	).
+		Example(
+			"Update a database",
+			"Request body:\n```json\n{\n  \"title\": [\n    {\n      \"text\": {\n        \"content\": \"Ever Better Reading List Title\"\n      }\n    }\n  ],\n  \"properties\": {\n    \"Wine Pairing\": {\n      \"rich_text\": {}\n    }\n  }\n}\n```\n\nResponse body:\n```json\n{\n  \"object\": \"database\",\n  \"id\": \"8e2c2b76-9e1d-47d2-87b9-ed3035d607ae\",\n  \"cover\": null,\n  \"icon\": null,\n  \"created_time\": \"2021-04-27T20:38:00.000Z\",\n  \"created_by\": {\n    \"object\": \"user\",\n    \"id\": \"6794760a-1f15-45cd-9c65-0dfe42f5135a\"\n  },\n  \"last_edited_by\": {\n    \"object\": \"user\",\n    \"id\": \"92a680bb-6970-4726-952b-4f4c03bff617\"\n  },\n  \"last_edited_time\": \"2022-02-24T22:08:00.000Z\",\n  \"title\": [\n    {\n      \"type\": \"text\",\n      \"text\": {\n        \"content\": \"Ever Better Reading List Title\",\n        \"link\": null\n      },\n      \"annotations\": {\n        \"bold\": false,\n        \"italic\": false,\n        \"strikethrough\": false,\n        \"underline\": false,\n        \"code\": false,\n        \"color\": \"default\"\n      },\n      \"plain_text\": \"Ever Better Reading List Title\",\n      \"href\": null\n    }\n  ],\n  \"properties\": {\n    \"Score /5\": {\n      \"id\": \")Y7\\\"\",\n      \"name\": \"Score /5\",\n      \"type\": \"select\",\n      \"select\": {\n        \"options\": [\n          {\n            \"id\": \"5c944de7-3f4b-4567-b3a1-fa2c71c540b6\",\n            \"name\": \"⭐️⭐️⭐️⭐️⭐️\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"b7307e35-c80a-4cb5-bb6b-6054523b394a\",\n            \"name\": \"⭐️⭐️⭐️⭐️\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"9b1e1349-8e24-40ba-bbca-84a61296bc81\",\n            \"name\": \"⭐️⭐️⭐️\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"66d3d050-086c-4a91-8c56-d55dc67e7789\",\n            \"name\": \"⭐️⭐️\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"d3782c76-0396-467f-928e-46bf0c9d5fba\",\n            \"name\": \"⭐️\",\n            \"color\": \"default\"\n          }\n        ]\n      }\n    },\n    \"Type\": {\n      \"id\": \"/7eo\",\n      \"name\": \"Type\",\n      \"type\": \"select\",\n      \"select\": {\n        \"options\": [\n          {\n            \"id\": \"f96d0d0a-5564-4a20-ab15-5f040d49759e\",\n            \"name\": \"Article\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"4ac85597-5db1-4e0a-9c02-445575c38f76\",\n            \"name\": \"TV Series\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"2991748a-5745-4c3b-9c9b-2d6846a6fa1f\",\n            \"name\": \"Film\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"82f3bace-be25-410d-87fe-561c9c22492f\",\n            \"name\": \"Podcast\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"861f1076-1cc4-429a-a781-54947d727a4a\",\n            \"name\": \"Academic Journal\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"9cc30548-59d6-4cd3-94bc-d234081525c4\",\n            \"name\": \"Essay Resource\",\n            \"color\": \"default\"\n          }\n        ]\n      }\n    },\n    \"Publisher\": {\n      \"id\": \">$Pb\",\n      \"name\": \"Publisher\",\n      \"type\": \"select\",\n      \"select\": {\n        \"options\": [\n          {\n            \"id\": \"c5ee409a-f307-4176-99ee-6e424fa89afa\",\n            \"name\": \"NYT\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"1b9b0c0c-17b0-4292-ad12-1364a51849de\",\n            \"name\": \"Netflix\",\n            \"color\": \"blue\"\n          },\n          {\n            \"id\": \"f3533637-278f-4501-b394-d9753bf3c101\",\n            \"name\": \"Indie\",\n            \"color\": \"brown\"\n          },\n          {\n            \"id\": \"e70d713c-4be4-4b40-a44d-fb413c8b9d7e\",\n            \"name\": \"Bon Appetit\",\n            \"color\": \"yellow\"\n          },\n          {\n            \"id\": \"9c2bd667-0a10-4be4-a044-35a537a14ab9\",\n            \"name\": \"Franklin Institute\",\n            \"color\": \"pink\"\n          },\n          {\n            \"id\": \"6849b5f0-e641-4ec5-83cb-1ffe23011060\",\n            \"name\": \"Springer\",\n            \"color\": \"orange\"\n          },\n          {\n            \"id\": \"6a5bff63-a72d-4464-a5d0-1a601af2adf6\",\n            \"name\": \"Emerald Group\",\n            \"color\": \"gray\"\n          },\n          {\n            \"id\": \"01f82d08-aa1f-4884-a4e0-3bc32f909ec4\",\n            \"name\": \"The Atlantic\",\n            \"color\": \"red\"\n          }\n        ]\n      }\n    },\n    \"Summary\": {\n      \"id\": \"?\\\\25\",\n      \"name\": \"Summary\",\n      \"type\": \"rich_text\",\n      \"rich_text\": {}\n    },\n    \"Publishing/Release Date\": {\n      \"id\": \"?ex+\",\n      \"name\": \"Publishing/Release Date\",\n      \"type\": \"date\",\n      \"date\": {}\n    },\n    \"Link\": {\n      \"id\": \"VVMi\",\n      \"name\": \"Link\",\n      \"type\": \"url\",\n      \"url\": {}\n    },\n    \"Wine Pairing\": {\n      \"id\": \"Y=H]\",\n      \"name\": \"Wine Pairing\",\n      \"type\": \"rich_text\",\n      \"rich_text\": {}\n    },\n    \"Read\": {\n      \"id\": \"_MWJ\",\n      \"name\": \"Read\",\n      \"type\": \"checkbox\",\n      \"checkbox\": {}\n    },\n    \"Status\": {\n      \"id\": \"`zz5\",\n      \"name\": \"Status\",\n      \"type\": \"select\",\n      \"select\": {\n        \"options\": [\n          {\n            \"id\": \"8c4a056e-6709-4dd1-ba58-d34d9480855a\",\n            \"name\": \"Ready to Start\",\n            \"color\": \"yellow\"\n          },\n          {\n            \"id\": \"5925ba22-0126-4b58-90c7-b8bbb2c3c895\",\n            \"name\": \"Reading\",\n            \"color\": \"red\"\n          },\n          {\n            \"id\": \"59aa9043-07b4-4bf4-8734-3164b13af44a\",\n            \"name\": \"Finished\",\n            \"color\": \"blue\"\n          },\n          {\n            \"id\": \"f961978d-02eb-4998-933a-33c2ec378564\",\n            \"name\": \"Listening\",\n            \"color\": \"red\"\n          },\n          {\n            \"id\": \"1d450853-b27a-45e2-979f-448aa1bd35de\",\n            \"name\": \"Watching\",\n            \"color\": \"red\"\n          }\n        ]\n      }\n    },\n    \"Author\": {\n      \"id\": \"qNw_\",\n      \"name\": \"Author\",\n      \"type\": \"multi_select\",\n      \"multi_select\": {\n        \"options\": [\n          {\n            \"id\": \"15592971-7b30-43d5-9406-2eb69b13fcae\",\n            \"name\": \"Spencer Greenberg\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"b80a988e-dccf-4f74-b764-6ca0e49ed1b8\",\n            \"name\": \"Seth Stephens-Davidowitz\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"0e71ee06-199d-46a4-834c-01084c8f76cb\",\n            \"name\": \"Andrew Russell\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"5807ec38-4879-4455-9f30-5352e90e8b79\",\n            \"name\": \"Lee Vinsel\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"4cf10a64-f3da-449c-8e04-ce6e338bbdbd\",\n            \"name\": \"Megan Greenwell\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"833e2c78-35ed-4601-badc-50c323341d76\",\n            \"name\": \"Kara Swisher\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"82e594e2-b1c5-4271-ac19-1a723a94a533\",\n            \"name\": \"Paul Romer\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"ae3a2cbe-1fc9-4376-be35-331628b34623\",\n            \"name\": \"Karen Swallow Prior\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"da068e78-dfe2-4434-9fd7-b7450b3e5830\",\n            \"name\": \"Judith Shulevitz\",\n            \"color\": \"default\"\n          }\n        ]\n      }\n    },\n    \"Name\": {\n      \"id\": \"title\",\n      \"name\": \"Name\",\n      \"type\": \"title\",\n      \"title\": {}\n    }\n  },\n  \"parent\": {\n    \"type\": \"page_id\",\n    \"page_id\": \"c4d39556-6364-46a1-8a61-ebbb668f7445\"\n  },\n  \"url\": \"https://www.notion.so/8e2c2b769e1d47d287b9ed3035d607ae\",\n  \"archived\": false\n}\n```",
+			"",
+		).
+		Example(
+			"Update database properties",
+			"Request body:\n```json\n{\n  \"properties\": {\n    \"Wine Pairing\": {\n      \"name\": \"New Property Name\"\n    }\n  }\n}\n```\n\nResponse body:\n```json\n{\n  \"object\": \"database\",\n  \"id\": \"8e2c2b76-9e1d-47d2-87b9-ed3035d607ae\",\n  \"cover\": null,\n  \"icon\": null,\n  \"created_time\": \"2021-04-27T20:38:00.000Z\",\n  \"created_by\": {\n    \"object\": \"user\",\n    \"id\": \"6794760a-1f15-45cd-9c65-0dfe42f5135a\"\n  },\n  \"last_edited_by\": {\n    \"object\": \"user\",\n    \"id\": \"92a680bb-6970-4726-952b-4f4c03bff617\"\n  },\n  \"last_edited_time\": \"2022-02-24T22:08:00.000Z\",\n  \"title\": [\n    {\n      \"type\": \"text\",\n      \"text\": {\n        \"content\": \"Ever Better Reading List Title\",\n        \"link\": null\n      },\n      \"annotations\": {\n        \"bold\": false,\n        \"italic\": false,\n        \"strikethrough\": false,\n        \"underline\": false,\n        \"code\": false,\n        \"color\": \"default\"\n      },\n      \"plain_text\": \"Ever Better Reading List Title\",\n      \"href\": null\n    }\n  ],\n  \"properties\": {\n    \"Score /5\": {\n      \"id\": \")Y7\\\"\",\n      \"name\": \"Score /5\",\n      \"type\": \"select\",\n      \"select\": {\n        \"options\": [\n          {\n            \"id\": \"5c944de7-3f4b-4567-b3a1-fa2c71c540b6\",\n            \"name\": \"⭐️⭐️⭐️⭐️⭐️\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"b7307e35-c80a-4cb5-bb6b-6054523b394a\",\n            \"name\": \"⭐️⭐️⭐️⭐️\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"9b1e1349-8e24-40ba-bbca-84a61296bc81\",\n            \"name\": \"⭐️⭐️⭐️\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"66d3d050-086c-4a91-8c56-d55dc67e7789\",\n            \"name\": \"⭐️⭐️\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"d3782c76-0396-467f-928e-46bf0c9d5fba\",\n            \"name\": \"⭐️\",\n            \"color\": \"default\"\n          }\n        ]\n      }\n    },\n    \"Type\": {\n      \"id\": \"/7eo\",\n      \"name\": \"Type\",\n      \"type\": \"select\",\n      \"select\": {\n        \"options\": [\n          {\n            \"id\": \"f96d0d0a-5564-4a20-ab15-5f040d49759e\",\n            \"name\": \"Article\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"4ac85597-5db1-4e0a-9c02-445575c38f76\",\n            \"name\": \"TV Series\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"2991748a-5745-4c3b-9c9b-2d6846a6fa1f\",\n            \"name\": \"Film\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"82f3bace-be25-410d-87fe-561c9c22492f\",\n            \"name\": \"Podcast\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"861f1076-1cc4-429a-a781-54947d727a4a\",\n            \"name\": \"Academic Journal\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"9cc30548-59d6-4cd3-94bc-d234081525c4\",\n            \"name\": \"Essay Resource\",\n            \"color\": \"default\"\n          }\n        ]\n      }\n    },\n    \"Publisher\": {\n      \"id\": \">$Pb\",\n      \"name\": \"Publisher\",\n      \"type\": \"select\",\n      \"select\": {\n        \"options\": [\n          {\n            \"id\": \"c5ee409a-f307-4176-99ee-6e424fa89afa\",\n            \"name\": \"NYT\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"1b9b0c0c-17b0-4292-ad12-1364a51849de\",\n            \"name\": \"Netflix\",\n            \"color\": \"blue\"\n          },\n          {\n            \"id\": \"f3533637-278f-4501-b394-d9753bf3c101\",\n            \"name\": \"Indie\",\n            \"color\": \"brown\"\n          },\n          {\n            \"id\": \"e70d713c-4be4-4b40-a44d-fb413c8b9d7e\",\n            \"name\": \"Bon Appetit\",\n            \"color\": \"yellow\"\n          },\n          {\n            \"id\": \"9c2bd667-0a10-4be4-a044-35a537a14ab9\",\n            \"name\": \"Franklin Institute\",\n            \"color\": \"pink\"\n          },\n          {\n            \"id\": \"6849b5f0-e641-4ec5-83cb-1ffe23011060\",\n            \"name\": \"Springer\",\n            \"color\": \"orange\"\n          },\n          {\n            \"id\": \"6a5bff63-a72d-4464-a5d0-1a601af2adf6\",\n            \"name\": \"Emerald Group\",\n            \"color\": \"gray\"\n          },\n          {\n            \"id\": \"01f82d08-aa1f-4884-a4e0-3bc32f909ec4\",\n            \"name\": \"The Atlantic\",\n            \"color\": \"red\"\n          }\n        ]\n      }\n    },\n    \"Summary\": {\n      \"id\": \"?\\\\25\",\n      \"name\": \"Summary\",\n      \"type\": \"rich_text\",\n      \"rich_text\": {}\n    },\n    \"Publishing/Release Date\": {\n      \"id\": \"?ex+\",\n      \"name\": \"Publishing/Release Date\",\n      \"type\": \"date\",\n      \"date\": {}\n    },\n    \"Link\": {\n      \"id\": \"VVMi\",\n      \"name\": \"Link\",\n      \"type\": \"url\",\n      \"url\": {}\n    },\n    \"Wine Pairing\": {\n      \"id\": \"Y=H]\",\n      \"name\": \"Wine Pairing\",\n      \"type\": \"rich_text\",\n      \"rich_text\": {}\n    },\n    \"Read\": {\n      \"id\": \"_MWJ\",\n      \"name\": \"Read\",\n      \"type\": \"checkbox\",\n      \"checkbox\": {}\n    },\n    \"Status\": {\n      \"id\": \"`zz5\",\n      \"name\": \"Status\",\n      \"type\": \"select\",\n      \"select\": {\n        \"options\": [\n          {\n            \"id\": \"8c4a056e-6709-4dd1-ba58-d34d9480855a\",\n            \"name\": \"Ready to Start\",\n            \"color\": \"yellow\"\n          },\n          {\n            \"id\": \"5925ba22-0126-4b58-90c7-b8bbb2c3c895\",\n            \"name\": \"Reading\",\n            \"color\": \"red\"\n          },\n          {\n            \"id\": \"59aa9043-07b4-4bf4-8734-3164b13af44a\",\n            \"name\": \"Finished\",\n            \"color\": \"blue\"\n          },\n          {\n            \"id\": \"f961978d-02eb-4998-933a-33c2ec378564\",\n            \"name\": \"Listening\",\n            \"color\": \"red\"\n          },\n          {\n            \"id\": \"1d450853-b27a-45e2-979f-448aa1bd35de\",\n            \"name\": \"Watching\",\n            \"color\": \"red\"\n          }\n        ]\n      }\n    },\n    \"Author\": {\n      \"id\": \"qNw_\",\n      \"name\": \"Author\",\n      \"type\": \"multi_select\",\n      \"multi_select\": {\n        \"options\": [\n          {\n            \"id\": \"15592971-7b30-43d5-9406-2eb69b13fcae\",\n            \"name\": \"Spencer Greenberg\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"b80a988e-dccf-4f74-b764-6ca0e49ed1b8\",\n            \"name\": \"Seth Stephens-Davidowitz\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"0e71ee06-199d-46a4-834c-01084c8f76cb\",\n            \"name\": \"Andrew Russell\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"5807ec38-4879-4455-9f30-5352e90e8b79\",\n            \"name\": \"Lee Vinsel\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"4cf10a64-f3da-449c-8e04-ce6e338bbdbd\",\n            \"name\": \"Megan Greenwell\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"833e2c78-35ed-4601-badc-50c323341d76\",\n            \"name\": \"Kara Swisher\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"82e594e2-b1c5-4271-ac19-1a723a94a533\",\n            \"name\": \"Paul Romer\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"ae3a2cbe-1fc9-4376-be35-331628b34623\",\n            \"name\": \"Karen Swallow Prior\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"da068e78-dfe2-4434-9fd7-b7450b3e5830\",\n            \"name\": \"Judith Shulevitz\",\n            \"color\": \"default\"\n          }\n        ]\n      }\n    },\n    \"Name\": {\n      \"id\": \"title\",\n      \"name\": \"Name\",\n      \"type\": \"title\",\n      \"title\": {}\n    }\n  },\n  \"parent\": {\n    \"type\": \"page_id\",\n    \"page_id\": \"c4d39556-6364-46a1-8a61-ebbb668f7445\"\n  },\n  \"url\": \"https://www.notion.so/8e2c2b769e1d47d287b9ed3035d607ae\",\n  \"archived\": false\n}\n```",
+			"",
+		)
+}
+
+type updateDatabaseProcessor struct {
+	baseProcessor
+	databaseID *service.InterpolatedString
+}
+
+func newUpdateDatabaseProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
+	base, err := baseProcessorFromParsed(conf, mgr)
+	if err != nil {
+		return nil, err
+	}
+
+	p := &updateDatabaseProcessor{baseProcessor: base}
+	if p.databaseID, err = conf.FieldInterpolatedString("database_id"); err != nil {
+		return nil, err
+	}
+
+	return p, nil
+}
+
+func (p *updateDatabaseProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
+	batch = batch.Copy()
+
+	var wg sync.WaitGroup
+	wg.Add(len(batch))
+	for i := range batch {
+		go func(idx int) {
+			defer wg.Done()
+			if err := p.processUpdateDatabase(ctx, idx, batch); err != nil {
+				batch[idx].SetError(err)
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	return []service.MessageBatch{batch}, nil
+}
+
+func (p *updateDatabaseProcessor) processUpdateDatabase(ctx context.Context, idx int, batch service.MessageBatch) error {
+	msg := batch[idx]
+
+	// Save original message content for response merge.
+	originalStructured, _ := msg.AsStructured()
+
+	// Build URL.
+	rawURL := p.baseURL + "/v1/databases/{database_id}"
+	{
+		v, err := batch.TryInterpolatedString(idx, p.databaseID)
+		if err != nil {
+			return fmt.Errorf("interpolating database_id: %w", err)
+		}
+		rawURL = strings.Replace(rawURL, "{database_id}", url.PathEscape(v), 1)
+	}
+
+	// Apply request mapping and validate request body.
+	if p.requestMapping != nil {
+		structured, err := msg.AsStructured()
+		if err != nil {
+			return fmt.Errorf("parsing message for request_mapping: %w", err)
+		}
+		mapped, err := p.requestMapping.Query(structured)
+		if err != nil {
+			return fmt.Errorf("executing request_mapping: %w", err)
+		}
+		msg.SetStructured(mapped)
+	}
+
+	b, err := msg.AsBytes()
+	if err != nil {
+		return fmt.Errorf("reading message body: %w", err)
+	}
+
+	var reqBody v1.UpdateDatabaseReq
+	if err := reqBody.UnmarshalJSON(b); err != nil {
+		return fmt.Errorf("unmarshaling request body: %w", err)
+	}
+	if err := reqBody.Validate(); err != nil {
+		return fmt.Errorf("validating request body: %w", err)
+	}
+
+	reqBytes, err := reqBody.MarshalJSON()
+	if err != nil {
+		return fmt.Errorf("marshaling request body: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, "PATCH", rawURL, bytes.NewReader(reqBytes))
+	if err != nil {
+		return fmt.Errorf("creating HTTP request: %w", err)
+	}
+
+	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
+	httpReq.Header.Set("Notion-Version", p.notionVersion)
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := p.httpClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("Notion API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("reading response body: %w", err)
+	}
+
+	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
+	var body any
+	if len(respBody) > 0 {
+		var jsonBody any
+		if json.Unmarshal(respBody, &jsonBody) == nil {
+			body = jsonBody
+		} else {
+			body = string(respBody)
+		}
+	}
+
+	envelope := map[string]any{
+		"updateDatabaseResponse": map[string]any{
+			"status_code": resp.StatusCode,
+			"headers":     headerMap(resp.Header),
+			"body":        body,
+		},
+	}
+
+	// Merge with original message.
+	if originalMap, ok := originalStructured.(map[string]any); ok {
+		for k, v := range envelope {
+			originalMap[k] = v
+		}
+		envelope = originalMap
+	}
+
+	// Apply response mapping.
+	if p.responseMapping != nil {
+		mapped, mapErr := p.responseMapping.Query(envelope)
+		if mapErr != nil {
+			return fmt.Errorf("executing response_mapping: %w", mapErr)
+		}
+		msg.SetStructured(mapped)
+	} else {
+		msg.SetStructured(envelope)
+	}
+
+	if resp.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", resp.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	}
+
+	return nil
+}
+
+// UpdatePageMarkdown processor — patch /v1/pages/{page_id}/markdown
+
+func init() {
+	service.MustRegisterBatchProcessor(
+		"notion_update_page_markdown",
+		updatePageMarkdownConfig(),
+		newUpdatePageMarkdownProcessor,
+	)
+}
+
+func updatePageMarkdownConfig() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Categories("Services", "Notion").
+		Summary("Update a page's content as markdown `PATCH /v1/pages/{page_id}/markdown`").
+		Description("API reference: https://developers.notion.com/reference/update-page-markdown").
+		Fields(sharedConfigFields()...).Fields(
+		service.NewBloblangField(fieldRequestMapping).
+			Optional().
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to messages before sending the request body."),
+		service.NewBloblangField(fieldResponseMapping).
+			Optional().
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang] mapping applied to the response envelope before setting the message content."),
+		service.NewInterpolatedStringField("page_id").
+			Description(""),
+	)
+}
+
+type updatePageMarkdownProcessor struct {
+	baseProcessor
+	pageID *service.InterpolatedString
+}
+
+func newUpdatePageMarkdownProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
+	base, err := baseProcessorFromParsed(conf, mgr)
+	if err != nil {
+		return nil, err
+	}
+
+	p := &updatePageMarkdownProcessor{baseProcessor: base}
+	if p.pageID, err = conf.FieldInterpolatedString("page_id"); err != nil {
+		return nil, err
+	}
+
+	return p, nil
+}
+
+func (p *updatePageMarkdownProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
+	batch = batch.Copy()
+
+	var wg sync.WaitGroup
+	wg.Add(len(batch))
+	for i := range batch {
+		go func(idx int) {
+			defer wg.Done()
+			if err := p.processUpdatePageMarkdown(ctx, idx, batch); err != nil {
+				batch[idx].SetError(err)
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	return []service.MessageBatch{batch}, nil
+}
+
+func (p *updatePageMarkdownProcessor) processUpdatePageMarkdown(ctx context.Context, idx int, batch service.MessageBatch) error {
+	msg := batch[idx]
+
+	// Save original message content for response merge.
+	originalStructured, _ := msg.AsStructured()
+
+	// Build URL.
+	rawURL := p.baseURL + "/v1/pages/{page_id}/markdown"
+	{
+		v, err := batch.TryInterpolatedString(idx, p.pageID)
+		if err != nil {
+			return fmt.Errorf("interpolating page_id: %w", err)
+		}
+		rawURL = strings.Replace(rawURL, "{page_id}", url.PathEscape(v), 1)
+	}
+
+	// Apply request mapping and validate request body.
+	if p.requestMapping != nil {
+		structured, err := msg.AsStructured()
+		if err != nil {
+			return fmt.Errorf("parsing message for request_mapping: %w", err)
+		}
+		mapped, err := p.requestMapping.Query(structured)
+		if err != nil {
+			return fmt.Errorf("executing request_mapping: %w", err)
+		}
+		msg.SetStructured(mapped)
+	}
+
+	b, err := msg.AsBytes()
+	if err != nil {
+		return fmt.Errorf("reading message body: %w", err)
+	}
+
+	var reqBody v1.UpdatePageMarkdownReq
+	if err := reqBody.UnmarshalJSON(b); err != nil {
+		return fmt.Errorf("unmarshaling request body: %w", err)
+	}
+	if err := reqBody.Validate(); err != nil {
+		return fmt.Errorf("validating request body: %w", err)
+	}
+
+	reqBytes, err := reqBody.MarshalJSON()
+	if err != nil {
+		return fmt.Errorf("marshaling request body: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, "PATCH", rawURL, bytes.NewReader(reqBytes))
+	if err != nil {
+		return fmt.Errorf("creating HTTP request: %w", err)
+	}
+
+	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
+	httpReq.Header.Set("Notion-Version", p.notionVersion)
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := p.httpClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("Notion API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("reading response body: %w", err)
+	}
+
+	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
+	var body any
+	if len(respBody) > 0 {
+		var jsonBody any
+		if json.Unmarshal(respBody, &jsonBody) == nil {
+			body = jsonBody
+		} else {
+			body = string(respBody)
+		}
+	}
+
+	envelope := map[string]any{
+		"updatePageMarkdownResponse": map[string]any{
 			"status_code": resp.StatusCode,
 			"headers":     headerMap(resp.Header),
 			"body":        body,

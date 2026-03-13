@@ -1,5 +1,4 @@
 version: "3"
-
 tasks:
   openapi:
     desc: Download OpenAPI spec from Notion developer docs
@@ -8,13 +7,37 @@ tasks:
     generates:
       - openapi.json
 
+  downgrade:
+    desc: Downgrade OpenAPI 3.1 spec to 3.0 for ogen compatibility
+    deps: [openapi]
+    cmds:
+      - bun run downgrade_openapi.ts openapi.json openapi_ogen.json
+    sources:
+      - openapi.json
+      - downgrade_openapi.ts
+    generates:
+      - openapi_ogen.json
+
+  info:
+    desc: Generate info.json (doc URLs, ignored endpoints) from OpenAPI spec
+    deps: [openapi]
+    cmds:
+      - bun run gen_info.ts openapi.json https://developers.notion.com/reference info.json
+    sources:
+      - openapi.json
+      - gen_info.ts
+    generates:
+      - info.json
+
   procgen:
     desc: Generate Go client and processors from OpenAPI spec
-    deps: [openapi]
+    deps: [downgrade, info]
     cmds:
       - >-
         go run ../procgen
         --service notion
         --template ../processors.go.tmpl
         --package .
-        ../ogen.yaml openapi.json
+        --postman postman_collection.json
+        --info info.json
+        ../ogen.yaml openapi_ogen.json

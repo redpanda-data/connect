@@ -10,11 +10,13 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"text/template"
 	"unicode"
@@ -49,6 +51,13 @@ type SharedHeader struct {
 	Description  string
 }
 
+// Example holds a request/response example extracted from a Postman collection.
+type Example struct {
+	Name         string // Postman item name, e.g. "Query a database"
+	RequestBody  string // JSON request body (empty for GET/DELETE)
+	ResponseBody string // JSON response body from first saved response
+}
+
 // OpInfo describes a single API operation for template rendering.
 type OpInfo struct {
 	Name            string // "BlocksIDChildrenGet"
@@ -60,8 +69,10 @@ type OpInfo struct {
 	PathParams      []ParamInfo
 	QueryParams     []ParamInfo
 	HasRequestBody  bool
-	RequestTypeName string // "QueryDataSourceBodyParameters"
-	ParamsTypeName  string // "BlocksIDChildrenGetParams"
+	RequestTypeName string    // "QueryDataSourceBodyParameters"
+	ParamsTypeName  string    // "BlocksIDChildrenGetParams"
+	DocURL          string    // "https://developers.notion.com/reference/post-page"
+	Examples        []Example // Postman examples matched by method+path
 }
 
 // AllParams returns path and query params combined.
@@ -102,6 +113,8 @@ func Run(args []string) error {
 	tmplPath := set.String("template", "", "Path to Go template file")
 	pkg := set.String("package", "", "Processor output directory (default: impl/<service>)")
 	apiPackage := set.String("api-package", "", "API client output directory (default: <package>/api/v1)")
+	postmanPath := set.String("postman", "", "Path to Postman collection JSON (optional)")
+	infoPath := set.String("info", "", "Path to info.json with doc URLs and ignored endpoints (optional)")
 
 	if err := set.Parse(args); err != nil {
 		return err
@@ -221,6 +234,24 @@ func Run(args []string) error {
 		sharedHeaderNames[strings.ToLower(sh.HeaderName)] = true
 	}
 
+	// Load endpoint info (doc URLs, ignored endpoints) if provided.
+	var endpointInfo endpointInfoFile
+	if *infoPath != "" {
+		endpointInfo, err = loadEndpointInfo(*infoPath)
+		if err != nil {
+			return fmt.Errorf("loading endpoint info: %w", err)
+		}
+	}
+
+	// Load Postman examples if provided.
+	postmanExamples := make(map[string][]Example)
+	if *postmanPath != "" {
+		postmanExamples, err = loadPostmanExamples(*postmanPath)
+		if err != nil {
+			return fmt.Errorf("loading Postman collection: %w", err)
+		}
+	}
+
 	// Build template data and generate processor file.
 	td := TemplateData{
 		Package:          procPkgName,
@@ -228,7 +259,7 @@ func Run(args []string) error {
 		Service:          *service,
 		DefaultServerURL: defaultURL,
 		SharedHeaders:    sharedHeaders,
-		Operations:       buildOps(operations, *service, sharedHeaderNames),
+		Operations:       buildOps(operations, *service, sharedHeaderNames, endpointInfo, postmanExamples),
 	}
 
 	if err := generateProcessorFile(td, string(tmplData), pkgDir, outputFilename); err != nil {
@@ -416,10 +447,18 @@ func detectSharedHeaders(ops []*ir.Operation) []SharedHeader {
 	return out
 }
 
-func buildOps(ops []*ir.Operation, prefix string, sharedHeaderNames map[string]bool) []OpInfo {
+func buildOps(ops []*ir.Operation, prefix string, sharedHeaderNames map[string]bool, info endpointInfoFile, postmanExamples map[string][]Example) []OpInfo {
 	out := make([]OpInfo, 0, len(ops))
 	for _, op := range ops {
-		info := OpInfo{
+		key := normalizeKey(op.Spec.HTTPMethod, op.Spec.Path.String())
+
+		// Skip ignored endpoints.
+		if info.Ignored[key] {
+			fmt.Printf("Skipping ignored endpoint: %s (%s)\n", key, op.Name)
+			continue
+		}
+
+		opInfo := OpInfo{
 			Name:           op.Name,
 			ProcessorName:  prefix + "_" + pascalToSnake(op.Name),
 			Summary:        op.Summary,
@@ -429,26 +468,30 @@ func buildOps(ops []*ir.Operation, prefix string, sharedHeaderNames map[string]b
 			ParamsTypeName: op.Name + "Params",
 		}
 
+		// Look up doc URL and examples by normalized method+path key.
+		opInfo.DocURL = info.DocURLs[key]
+		opInfo.Examples = postmanExamples[key]
+
 		for _, p := range op.PathParams() {
 			if isSharedParam(p, sharedHeaderNames) {
 				continue
 			}
-			info.PathParams = append(info.PathParams, buildParamInfo(p))
+			opInfo.PathParams = append(opInfo.PathParams, buildParamInfo(p))
 		}
 
 		for _, p := range op.QueryParams() {
 			if isSharedParam(p, sharedHeaderNames) {
 				continue
 			}
-			info.QueryParams = append(info.QueryParams, buildParamInfo(p))
+			opInfo.QueryParams = append(opInfo.QueryParams, buildParamInfo(p))
 		}
 
 		if op.Request != nil && op.Request.Type != nil {
-			info.HasRequestBody = true
-			info.RequestTypeName = op.Request.Type.Name
+			opInfo.HasRequestBody = true
+			opInfo.RequestTypeName = op.Request.Type.Name
 		}
 
-		out = append(out, info)
+		out = append(out, opInfo)
 	}
 	return out
 }
@@ -475,12 +518,175 @@ func isSharedParam(p *ir.Parameter, sharedHeaderNames map[string]bool) bool {
 	return false
 }
 
+// pathParamRe matches path parameters in both {id} and :id styles.
+var pathParamRe = regexp.MustCompile(`\{[^}]+\}|:[a-zA-Z_]+`)
+
+// normalizeKey produces a lookup key like "GET /v1/users/{}" from a method and path.
+// All path parameters ({id}, {page_id}, :id) are replaced with {}.
+func normalizeKey(method, path string) string {
+	normalized := pathParamRe.ReplaceAllString(path, "{}")
+	normalized = strings.TrimRight(normalized, "/")
+	return strings.ToUpper(method) + " " + normalized
+}
+
+// endpointInfoFile holds the parsed info.json structure.
+type endpointInfoFile struct {
+	DocURLs map[string]string // "METHOD /path" → documentation URL
+	Ignored map[string]bool   // "METHOD /path" → true (endpoints to skip)
+}
+
+// loadEndpointInfo reads info.json containing doc URLs and ignored endpoints.
+func loadEndpointInfo(path string) (endpointInfoFile, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return endpointInfoFile{}, err
+	}
+	var raw struct {
+		DocURLs map[string]string `json:"doc_urls"`
+		Ignored []string          `json:"ignored"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return endpointInfoFile{}, err
+	}
+	ignored := make(map[string]bool, len(raw.Ignored))
+	for _, key := range raw.Ignored {
+		ignored[key] = true
+	}
+	return endpointInfoFile{
+		DocURLs: raw.DocURLs,
+		Ignored: ignored,
+	}, nil
+}
+
+// postmanCollection represents the top-level Postman collection structure.
+type postmanCollection struct {
+	Item []postmanFolder `json:"item"`
+}
+
+type postmanFolder struct {
+	Name     string            `json:"name"`
+	Item     []postmanFolder   `json:"item"`
+	Request  *postmanRequest   `json:"request"`
+	Response []postmanResponse `json:"response"`
+}
+
+type postmanRequest struct {
+	Method string       `json:"method"`
+	URL    postmanURL   `json:"url"`
+	Body   *postmanBody `json:"body"`
+}
+
+type postmanURL struct {
+	Raw string `json:"raw"`
+}
+
+type postmanBody struct {
+	Mode string `json:"mode"`
+	Raw  string `json:"raw"`
+}
+
+type postmanResponse struct {
+	Name string `json:"name"`
+	Body string `json:"body"`
+}
+
+// loadPostmanExamples parses a Postman collection and returns examples grouped
+// by normalized "METHOD /path" key.
+func loadPostmanExamples(path string) (map[string][]Example, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var coll postmanCollection
+	if err := json.Unmarshal(data, &coll); err != nil {
+		return nil, err
+	}
+
+	result := make(map[string][]Example)
+	flattenPostmanItems(coll.Item, result)
+	return result, nil
+}
+
+func flattenPostmanItems(items []postmanFolder, result map[string][]Example) {
+	for _, item := range items {
+		if len(item.Item) > 0 {
+			flattenPostmanItems(item.Item, result)
+			continue
+		}
+		if item.Request == nil {
+			continue
+		}
+
+		method := strings.ToUpper(item.Request.Method)
+		rawPath := extractPath(item.Request.URL.Raw)
+		key := normalizeKey(method, rawPath)
+
+		ex := Example{Name: item.Name}
+
+		if item.Request.Body != nil && item.Request.Body.Raw != "" {
+			ex.RequestBody = prettyJSON(item.Request.Body.Raw)
+		}
+
+		if len(item.Response) > 0 && item.Response[0].Body != "" {
+			ex.ResponseBody = prettyJSON(item.Response[0].Body)
+		}
+
+		result[key] = append(result[key], ex)
+	}
+}
+
+// extractPath extracts the path portion from a Postman raw URL.
+// e.g. "https://api.notion.com/v1/users/:id" → "/v1/users/:id"
+func extractPath(raw string) string {
+	if idx := strings.Index(raw, "?"); idx >= 0 {
+		raw = raw[:idx]
+	}
+	if idx := strings.Index(raw, "//"); idx >= 0 {
+		rest := raw[idx+2:]
+		if slash := strings.Index(rest, "/"); slash >= 0 {
+			return rest[slash:]
+		}
+	}
+	return raw
+}
+
+// exampleSummary builds a documentation summary string from request and response bodies.
+func exampleSummary(ex Example) string {
+	var b strings.Builder
+	if ex.RequestBody != "" {
+		b.WriteString("Request body:\n```json\n")
+		b.WriteString(ex.RequestBody)
+		b.WriteString("\n```")
+	}
+	if ex.ResponseBody != "" {
+		if b.Len() > 0 {
+			b.WriteString("\n\n")
+		}
+		b.WriteString("Response body:\n```json\n")
+		b.WriteString(ex.ResponseBody)
+		b.WriteString("\n```")
+	}
+	return b.String()
+}
+
+// prettyJSON re-formats a JSON string with indentation, or returns the
+// original string if it's not valid JSON.
+func prettyJSON(s string) string {
+	s = strings.TrimSpace(s)
+	var buf bytes.Buffer
+	if err := json.Indent(&buf, []byte(s), "", "  "); err != nil {
+		return s
+	}
+	return buf.String()
+}
+
 func generateProcessorFile(data TemplateData, tmplContent, targetDir, outputFilename string) error {
 	tmpl, err := template.New("processors").Funcs(template.FuncMap{
-		"lowerFirst": toLowerCamel,
-		"snakeCase":  pascalToSnake,
-		"title":      strings.Title,
-		"upper":      strings.ToUpper,
+		"lowerFirst":     toLowerCamel,
+		"snakeCase":      pascalToSnake,
+		"title":          strings.Title,
+		"upper":          strings.ToUpper,
+		"exampleSummary": exampleSummary,
 	}).Parse(tmplContent)
 	if err != nil {
 		return fmt.Errorf("parsing template: %w", err)

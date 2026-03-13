@@ -2,132 +2,288 @@
 
 package v1
 
-// V1BlocksIDChildrenGetParams is parameters of V1BlocksIDChildrenGet operation.
-type V1BlocksIDChildrenGetParams struct {
-	// The Notion API version.
-	NotionVersion OptString `json:",omitempty,omitzero"`
-	PageSize      OptInt    `json:",omitempty,omitzero"`
-	ID            string
+// CompleteFileUploadParams is parameters of complete-file-upload operation.
+type CompleteFileUploadParams struct {
+	FileUploadID IdRequest
+	// The [API version](/reference/versioning) to use for this request. The latest version is
+	// `2026-03-11`.
+	NotionVersion NotionVersion
 }
 
-// V1BlocksIDChildrenPatchParams is parameters of V1BlocksIDChildrenPatch operation.
-type V1BlocksIDChildrenPatchParams struct {
-	// The Notion API version.
-	NotionVersion OptString `json:",omitempty,omitzero"`
-	ID            string
+// CreateACommentParams is parameters of create-a-comment operation.
+type CreateACommentParams struct {
+	// The [API version](/reference/versioning) to use for this request. The latest version is
+	// `2026-03-11`.
+	NotionVersion NotionVersion
 }
 
-// V1BlocksIDDeleteParams is parameters of V1BlocksIDDelete operation.
-type V1BlocksIDDeleteParams struct {
-	// The Notion API version.
-	NotionVersion OptString `json:",omitempty,omitzero"`
-	ID            string
+// CreateADatabaseParams is parameters of create-a-database operation.
+type CreateADatabaseParams struct {
+	// The [API version](/reference/versioning) to use for this request. The latest version is
+	// `2026-03-11`.
+	NotionVersion NotionVersion
 }
 
-// V1BlocksIDGetParams is parameters of V1BlocksIDGet operation.
-type V1BlocksIDGetParams struct {
-	// The Notion API version.
-	NotionVersion OptString `json:",omitempty,omitzero"`
-	ID            string
+// CreateATokenParams is parameters of create-a-token operation.
+type CreateATokenParams struct {
+	// The [API version](/reference/versioning) to use for this request. The latest version is
+	// `2026-03-11`.
+	NotionVersion NotionVersion
 }
 
-// V1BlocksIDPatchParams is parameters of V1BlocksIDPatch operation.
-type V1BlocksIDPatchParams struct {
-	// The Notion API version.
-	NotionVersion OptString `json:",omitempty,omitzero"`
-	ID            string
+// CreateDatabaseParams is parameters of create-database operation.
+type CreateDatabaseParams struct {
+	// The [API version](/reference/versioning) to use for this request. The latest version is
+	// `2026-03-11`.
+	NotionVersion NotionVersion
 }
 
-// V1CommentsGetParams is parameters of V1CommentsGet operation.
-type V1CommentsGetParams struct {
-	// The Notion API version.
-	NotionVersion OptString `json:",omitempty,omitzero"`
-	BlockID       OptString `json:",omitempty,omitzero"`
-	PageSize      OptInt    `json:",omitempty,omitzero"`
+// CreateFileParams is parameters of create-file operation.
+type CreateFileParams struct {
+	// The [API version](/reference/versioning) to use for this request. The latest version is
+	// `2026-03-11`.
+	NotionVersion NotionVersion
 }
 
-// V1CommentsPostParams is parameters of V1CommentsPost operation.
-type V1CommentsPostParams struct {
-	// The Notion API version.
-	NotionVersion OptString `json:",omitempty,omitzero"`
+// DeleteABlockParams is parameters of delete-a-block operation.
+type DeleteABlockParams struct {
+	BlockID IdRequest
+	// The [API version](/reference/versioning) to use for this request. The latest version is
+	// `2026-03-11`.
+	NotionVersion NotionVersion
 }
 
-// V1DatabasesIDGetParams is parameters of V1DatabasesIDGet operation.
-type V1DatabasesIDGetParams struct {
-	// The Notion API version.
-	NotionVersion OptString `json:",omitempty,omitzero"`
-	ID            string
+// GetBlockChildrenParams is parameters of get-block-children operation.
+type GetBlockChildrenParams struct {
+	BlockID     IdRequest
+	StartCursor OptUUID    `json:",omitempty,omitzero"`
+	PageSize    OptFloat64 `json:",omitempty,omitzero"`
+	// The [API version](/reference/versioning) to use for this request. The latest version is
+	// `2026-03-11`.
+	NotionVersion NotionVersion
 }
 
-// V1DatabasesIDPatchParams is parameters of V1DatabasesIDPatch operation.
-type V1DatabasesIDPatchParams struct {
-	// The Notion API version.
-	NotionVersion OptString `json:",omitempty,omitzero"`
-	ID            string
+// GetSelfParams is parameters of get-self operation.
+type GetSelfParams struct {
+	// The [API version](/reference/versioning) to use for this request. The latest version is
+	// `2026-03-11`.
+	NotionVersion NotionVersion
 }
 
-// V1DatabasesIDQueryPostParams is parameters of V1DatabasesIDQueryPost operation.
-type V1DatabasesIDQueryPostParams struct {
-	// The Notion API version.
-	NotionVersion OptString `json:",omitempty,omitzero"`
-	ID            string
+// GetUserParams is parameters of get-user operation.
+type GetUserParams struct {
+	UserID IdRequest
+	// The [API version](/reference/versioning) to use for this request. The latest version is
+	// `2026-03-11`.
+	NotionVersion NotionVersion
 }
 
-// V1DatabasesPostParams is parameters of V1DatabasesPost operation.
-type V1DatabasesPostParams struct {
-	// The Notion API version.
-	NotionVersion OptString `json:",omitempty,omitzero"`
+// GetUsersParams is parameters of get-users operation.
+type GetUsersParams struct {
+	StartCursor OptString  `json:",omitempty,omitzero"`
+	PageSize    OptFloat64 `json:",omitempty,omitzero"`
+	// The [API version](/reference/versioning) to use for this request. The latest version is
+	// `2026-03-11`.
+	NotionVersion NotionVersion
 }
 
-// V1PagesIDGetParams is parameters of V1PagesIDGet operation.
-type V1PagesIDGetParams struct {
-	// The Notion API version.
-	NotionVersion OptString `json:",omitempty,omitzero"`
-	ID            string
+// IntrospectTokenParams is parameters of introspect-token operation.
+type IntrospectTokenParams struct {
+	// The [API version](/reference/versioning) to use for this request. The latest version is
+	// `2026-03-11`.
+	NotionVersion NotionVersion
 }
 
-// V1PagesIDPatchParams is parameters of V1PagesIDPatch operation.
-type V1PagesIDPatchParams struct {
-	// The Notion API version.
-	NotionVersion OptString `json:",omitempty,omitzero"`
-	ID            string
+// ListCommentsParams is parameters of list-comments operation.
+type ListCommentsParams struct {
+	BlockID     IdRequest
+	StartCursor OptString `json:",omitempty,omitzero"`
+	PageSize    OptInt    `json:",omitempty,omitzero"`
+	// The [API version](/reference/versioning) to use for this request. The latest version is
+	// `2026-03-11`.
+	NotionVersion NotionVersion
 }
 
-// V1PagesPageIDPropertiesPropertyIDGetParams is parameters of V1PagesPageIDPropertiesPropertyIDGet operation.
-type V1PagesPageIDPropertiesPropertyIDGetParams struct {
-	// The Notion API version.
-	NotionVersion OptString `json:",omitempty,omitzero"`
-	PageID        string
-	PropertyID    string
+// ListDataSourceTemplatesParams is parameters of list-data-source-templates operation.
+type ListDataSourceTemplatesParams struct {
+	DataSourceID IdRequest
+	Name         OptString `json:",omitempty,omitzero"`
+	StartCursor  OptString `json:",omitempty,omitzero"`
+	PageSize     OptInt    `json:",omitempty,omitzero"`
+	// The [API version](/reference/versioning) to use for this request. The latest version is
+	// `2026-03-11`.
+	NotionVersion NotionVersion
 }
 
-// V1PagesPostParams is parameters of V1PagesPost operation.
-type V1PagesPostParams struct {
-	// The Notion API version.
-	NotionVersion OptString `json:",omitempty,omitzero"`
+// ListFileUploadsParams is parameters of list-file-uploads operation.
+type ListFileUploadsParams struct {
+	Status      OptListFileUploadsStatus `json:",omitempty,omitzero"`
+	StartCursor OptString                `json:",omitempty,omitzero"`
+	PageSize    OptInt                   `json:",omitempty,omitzero"`
+	// The [API version](/reference/versioning) to use for this request. The latest version is
+	// `2026-03-11`.
+	NotionVersion NotionVersion
 }
 
-// V1SearchPostParams is parameters of V1SearchPost operation.
-type V1SearchPostParams struct {
-	// The Notion API version.
-	NotionVersion OptString `json:",omitempty,omitzero"`
+// MovePageParams is parameters of move-page operation.
+type MovePageParams struct {
+	PageID IdRequest
+	// The [API version](/reference/versioning) to use for this request. The latest version is
+	// `2026-03-11`.
+	NotionVersion NotionVersion
 }
 
-// V1UsersGetParams is parameters of V1UsersGet operation.
-type V1UsersGetParams struct {
-	// The Notion API version.
-	NotionVersion OptString `json:",omitempty,omitzero"`
+// PatchBlockChildrenParams is parameters of patch-block-children operation.
+type PatchBlockChildrenParams struct {
+	BlockID IdRequest
+	// The [API version](/reference/versioning) to use for this request. The latest version is
+	// `2026-03-11`.
+	NotionVersion NotionVersion
 }
 
-// V1UsersIDGetParams is parameters of V1UsersIDGet operation.
-type V1UsersIDGetParams struct {
-	// The Notion API version.
-	NotionVersion OptString `json:",omitempty,omitzero"`
-	ID            string
+// PatchPageParams is parameters of patch-page operation.
+type PatchPageParams struct {
+	PageID IdRequest
+	// The [API version](/reference/versioning) to use for this request. The latest version is
+	// `2026-03-11`.
+	NotionVersion NotionVersion
 }
 
-// V1UsersMeGetParams is parameters of V1UsersMeGet operation.
-type V1UsersMeGetParams struct {
-	// The Notion API version.
-	NotionVersion OptString `json:",omitempty,omitzero"`
+// PostDatabaseQueryParams is parameters of post-database-query operation.
+type PostDatabaseQueryParams struct {
+	DataSourceID     IdRequest
+	FilterProperties []string `json:",omitempty"`
+	// The [API version](/reference/versioning) to use for this request. The latest version is
+	// `2026-03-11`.
+	NotionVersion NotionVersion
+}
+
+// PostPageParams is parameters of post-page operation.
+type PostPageParams struct {
+	// The [API version](/reference/versioning) to use for this request. The latest version is
+	// `2026-03-11`.
+	NotionVersion NotionVersion
+}
+
+// PostSearchParams is parameters of post-search operation.
+type PostSearchParams struct {
+	// The [API version](/reference/versioning) to use for this request. The latest version is
+	// `2026-03-11`.
+	NotionVersion NotionVersion
+}
+
+// RetrieveABlockParams is parameters of retrieve-a-block operation.
+type RetrieveABlockParams struct {
+	BlockID IdRequest
+	// The [API version](/reference/versioning) to use for this request. The latest version is
+	// `2026-03-11`.
+	NotionVersion NotionVersion
+}
+
+// RetrieveADataSourceParams is parameters of retrieve-a-data-source operation.
+type RetrieveADataSourceParams struct {
+	DataSourceID IdRequest
+	// The [API version](/reference/versioning) to use for this request. The latest version is
+	// `2026-03-11`.
+	NotionVersion NotionVersion
+}
+
+// RetrieveAPageParams is parameters of retrieve-a-page operation.
+type RetrieveAPageParams struct {
+	PageID           IdRequest
+	FilterProperties []string `json:",omitempty"`
+	// The [API version](/reference/versioning) to use for this request. The latest version is
+	// `2026-03-11`.
+	NotionVersion NotionVersion
+}
+
+// RetrieveAPagePropertyParams is parameters of retrieve-a-page-property operation.
+type RetrieveAPagePropertyParams struct {
+	PageID      IdRequest
+	PropertyID  string
+	StartCursor OptString `json:",omitempty,omitzero"`
+	PageSize    OptInt    `json:",omitempty,omitzero"`
+	// The [API version](/reference/versioning) to use for this request. The latest version is
+	// `2026-03-11`.
+	NotionVersion NotionVersion
+}
+
+// RetrieveCommentParams is parameters of retrieve-comment operation.
+type RetrieveCommentParams struct {
+	CommentID IdRequest
+	// The [API version](/reference/versioning) to use for this request. The latest version is
+	// `2026-03-11`.
+	NotionVersion NotionVersion
+}
+
+// RetrieveDatabaseParams is parameters of retrieve-database operation.
+type RetrieveDatabaseParams struct {
+	DatabaseID IdRequest
+	// The [API version](/reference/versioning) to use for this request. The latest version is
+	// `2026-03-11`.
+	NotionVersion NotionVersion
+}
+
+// RetrieveFileUploadParams is parameters of retrieve-file-upload operation.
+type RetrieveFileUploadParams struct {
+	FileUploadID IdRequest
+	// The [API version](/reference/versioning) to use for this request. The latest version is
+	// `2026-03-11`.
+	NotionVersion NotionVersion
+}
+
+// RetrievePageMarkdownParams is parameters of retrieve-page-markdown operation.
+type RetrievePageMarkdownParams struct {
+	PageID            IdRequest
+	IncludeTranscript OptBool `json:",omitempty,omitzero"`
+	// The [API version](/reference/versioning) to use for this request. The latest version is
+	// `2026-03-11`.
+	NotionVersion NotionVersion
+}
+
+// RevokeTokenParams is parameters of revoke-token operation.
+type RevokeTokenParams struct {
+	// The [API version](/reference/versioning) to use for this request. The latest version is
+	// `2026-03-11`.
+	NotionVersion NotionVersion
+}
+
+// UpdateABlockParams is parameters of update-a-block operation.
+type UpdateABlockParams struct {
+	BlockID IdRequest
+	// The [API version](/reference/versioning) to use for this request. The latest version is
+	// `2026-03-11`.
+	NotionVersion NotionVersion
+}
+
+// UpdateADataSourceParams is parameters of update-a-data-source operation.
+type UpdateADataSourceParams struct {
+	DataSourceID IdRequest
+	// The [API version](/reference/versioning) to use for this request. The latest version is
+	// `2026-03-11`.
+	NotionVersion NotionVersion
+}
+
+// UpdateDatabaseParams is parameters of update-database operation.
+type UpdateDatabaseParams struct {
+	DatabaseID IdRequest
+	// The [API version](/reference/versioning) to use for this request. The latest version is
+	// `2026-03-11`.
+	NotionVersion NotionVersion
+}
+
+// UpdatePageMarkdownParams is parameters of update-page-markdown operation.
+type UpdatePageMarkdownParams struct {
+	PageID IdRequest
+	// The [API version](/reference/versioning) to use for this request. The latest version is
+	// `2026-03-11`.
+	NotionVersion NotionVersion
+}
+
+// UploadFileParams is parameters of upload-file operation.
+type UploadFileParams struct {
+	FileUploadID IdRequest
+	// The [API version](/reference/versioning) to use for this request. The latest version is
+	// `2026-03-11`.
+	NotionVersion NotionVersion
 }
