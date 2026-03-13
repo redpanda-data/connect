@@ -81,6 +81,9 @@ input:
       user_credentials_file: ./user.creds # No default (optional)
       user_jwt: "" # No default (optional)
       user_nkey_seed: "" # No default (optional)
+      user: "" # No default (optional)
+      password: "" # No default (optional)
+      token: "" # No default (optional)
     extract_tracing_map: root = @ # No default (optional)
 ```
 
@@ -137,6 +140,14 @@ Alternatively, the `user_jwt` field can contain a plain text JWT and the `user_n
 the plain text NKey Seed.
 
 https://docs.nats.io/using-nats/developer/connecting/creds[More details^].
+
+=== Token
+
+The `token` field can contain a plain text token string for https://docs.nats.io/running-a-nats-service/configuration/securing_nats/auth_intro/tokens[token-based authentication^].
+
+=== User and password
+
+The `user` and `password` fields can be used for https://docs.nats.io/running-a-nats-service/configuration/securing_nats/auth_intro/username_password[username/password authentication^].
 
 == Fields
 
@@ -487,6 +498,40 @@ This field contains sensitive information that usually shouldn't be added to a c
 === `auth.user_nkey_seed`
 
 An optional plain text user NKey Seed (given along with the corresponding user JWT).
+[CAUTION]
+====
+This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
+====
+
+
+
+*Type*: `string`
+
+
+=== `auth.user`
+
+An optional plain text user name (given along with the corresponding user password).
+
+
+*Type*: `string`
+
+
+=== `auth.password`
+
+An optional plain text password (given along with the corresponding user name).
+[CAUTION]
+====
+This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
+====
+
+
+
+*Type*: `string`
+
+
+=== `auth.token`
+
+An optional plain text token.
 [CAUTION]
 ====
 This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
