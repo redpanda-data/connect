@@ -650,7 +650,9 @@ func extractPath(raw string) string {
 	return raw
 }
 
-// exampleSummary builds a documentation summary string from request and response bodies.
+// exampleSummary builds a Go raw string literal (backtick-delimited) containing
+// request and response body examples. Backticks in the content are escaped by
+// breaking out of the raw string and concatenating a quoted backtick.
 func exampleSummary(ex Example) string {
 	var b strings.Builder
 	if ex.RequestBody != "" {
@@ -666,7 +668,32 @@ func exampleSummary(ex Example) string {
 		b.WriteString(ex.ResponseBody)
 		b.WriteString("\n```")
 	}
-	return b.String()
+	content := b.String()
+	// Backticks can't appear inside raw strings. Escape them as: ` + "`" + `
+	escaped := strings.ReplaceAll(content, "`", "` + \"`\" + `")
+	return "`" + escaped + "`"
+}
+
+// httpMethod converts an HTTP method string to the corresponding http.Method* constant.
+func httpMethod(method string) string {
+	switch strings.ToUpper(method) {
+	case "GET":
+		return "http.MethodGet"
+	case "POST":
+		return "http.MethodPost"
+	case "PUT":
+		return "http.MethodPut"
+	case "PATCH":
+		return "http.MethodPatch"
+	case "DELETE":
+		return "http.MethodDelete"
+	case "HEAD":
+		return "http.MethodHead"
+	case "OPTIONS":
+		return "http.MethodOptions"
+	default:
+		return fmt.Sprintf("%q", strings.ToUpper(method))
+	}
 }
 
 // prettyJSON re-formats a JSON string with indentation, or returns the
@@ -687,6 +714,7 @@ func generateProcessorFile(data TemplateData, tmplContent, targetDir, outputFile
 		"title":          strings.Title,
 		"upper":          strings.ToUpper,
 		"exampleSummary": exampleSummary,
+		"httpMethod":     httpMethod,
 	}).Parse(tmplContent)
 	if err != nil {
 		return fmt.Errorf("parsing template: %w", err)

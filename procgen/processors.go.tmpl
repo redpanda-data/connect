@@ -109,7 +109,7 @@ func headerMap(h http.Header) map[string]string {
 }
 
 {{ range .Operations }}
-// {{ .Name }} processor — {{ .HTTPMethod }} {{ .Path }}
+// {{ .Name }} processor — {{ .HTTPMethod | upper }} {{ .Path }}
 
 func init() {
 	service.MustRegisterBatchProcessor(
@@ -152,7 +152,7 @@ func {{ .Name | lowerFirst }}Config() *service.ConfigSpec {
 		){{- range .Examples }}.
 		Example(
 			{{ .Name | printf "%q" }},
-			{{ . | exampleSummary | printf "%q" }},
+			{{ . | exampleSummary }},
 			"",
 		){{- end }}
 }
@@ -278,9 +278,9 @@ func (p *{{ .Name | lowerFirst }}Processor) process{{ .Name }}(ctx context.Conte
 		return fmt.Errorf("marshaling request body: %w", err)
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, {{ .HTTPMethod | upper | printf "%q" }}, rawURL, bytes.NewReader(reqBytes))
+	httpReq, err := http.NewRequestWithContext(ctx, {{ .HTTPMethod | httpMethod }}, rawURL, bytes.NewReader(reqBytes))
 	{{- else }}
-	httpReq, err := http.NewRequestWithContext(ctx, {{ .HTTPMethod | upper | printf "%q" }}, rawURL, nil)
+	httpReq, err := http.NewRequestWithContext(ctx, {{ .HTTPMethod | httpMethod }}, rawURL, nil)
 	{{- end }}
 	if err != nil {
 		return fmt.Errorf("creating HTTP request: %w", err)
@@ -294,32 +294,32 @@ func (p *{{ .Name | lowerFirst }}Processor) process{{ .Name }}(ctx context.Conte
 	httpReq.Header.Set("Content-Type", "application/json")
 	{{- end }}
 
-	resp, err := p.httpClient.Do(httpReq)
+	res, err := p.httpClient.Do(httpReq)
 	if err != nil {
 		return fmt.Errorf("{{ $.Service | title }} API request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer res.Body.Close()
 
-	respBody, err := io.ReadAll(resp.Body)
+	resBody, err := io.ReadAll(res.Body)
 	if err != nil {
 		return fmt.Errorf("reading response body: %w", err)
 	}
 
 	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
 	var body any
-	if len(respBody) > 0 {
+	if len(resBody) > 0 {
 		var jsonBody any
-		if json.Unmarshal(respBody, &jsonBody) == nil {
+		if json.Unmarshal(resBody, &jsonBody) == nil {
 			body = jsonBody
 		} else {
-			body = string(respBody)
+			body = string(resBody)
 		}
 	}
 
 	envelope := map[string]any{
 		"{{ .Name | lowerFirst }}Response": map[string]any{
-			"status_code": resp.StatusCode,
-			"headers":     headerMap(resp.Header),
+			"status_code": res.StatusCode,
+			"headers":     headerMap(res.Header),
 			"body":        body,
 		},
 	}
@@ -343,9 +343,9 @@ func (p *{{ .Name | lowerFirst }}Processor) process{{ .Name }}(ctx context.Conte
 		msg.SetStructured(envelope)
 	}
 
-	if resp.StatusCode >= 400 {
-		msg.MetaSetMut("http_status_code", resp.StatusCode)
-		return fmt.Errorf("{{ $.Service | title }} API error (status %d)", resp.StatusCode)
+	if res.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", res.StatusCode)
+		return fmt.Errorf("{{ $.Service | title }} API error (status %d)", res.StatusCode)
 	}
 
 	return nil

@@ -97,7 +97,7 @@ func headerMap(h http.Header) map[string]string {
 	return m
 }
 
-// CompleteFileUpload processor — post /v1/file_uploads/{file_upload_id}/complete
+// CompleteFileUpload processor — POST /v1/file_uploads/{file_upload_id}/complete
 
 func init() {
 	service.MustRegisterBatchProcessor(
@@ -173,7 +173,7 @@ func (p *completeFileUploadProcessor) processCompleteFileUpload(ctx context.Cont
 		}
 		rawURL = strings.Replace(rawURL, "{file_upload_id}", url.PathEscape(v), 1)
 	}
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", rawURL, nil)
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, rawURL, nil)
 	if err != nil {
 		return fmt.Errorf("creating HTTP request: %w", err)
 	}
@@ -181,32 +181,32 @@ func (p *completeFileUploadProcessor) processCompleteFileUpload(ctx context.Cont
 	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
 	httpReq.Header.Set("Notion-Version", p.notionVersion)
 
-	resp, err := p.httpClient.Do(httpReq)
+	res, err := p.httpClient.Do(httpReq)
 	if err != nil {
 		return fmt.Errorf("Notion API request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer res.Body.Close()
 
-	respBody, err := io.ReadAll(resp.Body)
+	resBody, err := io.ReadAll(res.Body)
 	if err != nil {
 		return fmt.Errorf("reading response body: %w", err)
 	}
 
 	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
 	var body any
-	if len(respBody) > 0 {
+	if len(resBody) > 0 {
 		var jsonBody any
-		if json.Unmarshal(respBody, &jsonBody) == nil {
+		if json.Unmarshal(resBody, &jsonBody) == nil {
 			body = jsonBody
 		} else {
-			body = string(respBody)
+			body = string(resBody)
 		}
 	}
 
 	envelope := map[string]any{
 		"completeFileUploadResponse": map[string]any{
-			"status_code": resp.StatusCode,
-			"headers":     headerMap(resp.Header),
+			"status_code": res.StatusCode,
+			"headers":     headerMap(res.Header),
 			"body":        body,
 		},
 	}
@@ -230,15 +230,15 @@ func (p *completeFileUploadProcessor) processCompleteFileUpload(ctx context.Cont
 		msg.SetStructured(envelope)
 	}
 
-	if resp.StatusCode >= 400 {
-		msg.MetaSetMut("http_status_code", resp.StatusCode)
-		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	if res.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", res.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", res.StatusCode)
 	}
 
 	return nil
 }
 
-// CreateAComment processor — post /v1/comments
+// CreateAComment processor — POST /v1/comments
 
 func init() {
 	service.MustRegisterBatchProcessor(
@@ -263,12 +263,120 @@ func createACommentConfig() *service.ConfigSpec {
 	).
 		Example(
 			"Add comment to page",
-			"Request body:\n```json\n{\n  \"parent\": {\n    \"page_id\": \"{{PAGE_ID}}\"\n  },\n  \"rich_text\": [\n    {\n      \"text\": {\n        \"content\": \"Hello world\"\n      }\n    }\n  ]\n}\n```\n\nResponse body:\n```json\n{\n  \"object\": \"comment\",\n  \"id\": \"be20daa4-31ed-45a2-9591-24f3dc3a61c2\",\n  \"parent\": {\n    \"type\": \"page_id\",\n    \"page_id\": \"5c6a2821-6bb1-4a7e-b6e1-c50111515c3d\"\n  },\n  \"discussion_id\": \"cf4df352-6cc8-433c-9296-7f3550bfe421\",\n  \"created_time\": \"2022-07-18T21:50:00.000Z\",\n  \"last_edited_time\": \"2022-07-18T21:50:00.000Z\",\n  \"created_by\": {\n    \"object\": \"user\",\n    \"id\": \"e450a39e-9051-4d36-bc4e-8581611fc592\"\n  },\n  \"rich_text\": [\n    {\n      \"type\": \"text\",\n      \"text\": {\n        \"content\": \"Hello world\",\n        \"link\": null\n      },\n      \"annotations\": {\n        \"bold\": false,\n        \"italic\": false,\n        \"strikethrough\": false,\n        \"underline\": false,\n        \"code\": false,\n        \"color\": \"default\"\n      },\n      \"plain_text\": \"Hello world\",\n      \"href\": null\n    }\n  ]\n}\n```",
+			`Request body:
+`+"`"+``+"`"+``+"`"+`json
+{
+  "parent": {
+    "page_id": "{{PAGE_ID}}"
+  },
+  "rich_text": [
+    {
+      "text": {
+        "content": "Hello world"
+      }
+    }
+  ]
+}
+`+"`"+``+"`"+``+"`"+`
+
+Response body:
+`+"`"+``+"`"+``+"`"+`json
+{
+  "object": "comment",
+  "id": "be20daa4-31ed-45a2-9591-24f3dc3a61c2",
+  "parent": {
+    "type": "page_id",
+    "page_id": "5c6a2821-6bb1-4a7e-b6e1-c50111515c3d"
+  },
+  "discussion_id": "cf4df352-6cc8-433c-9296-7f3550bfe421",
+  "created_time": "2022-07-18T21:50:00.000Z",
+  "last_edited_time": "2022-07-18T21:50:00.000Z",
+  "created_by": {
+    "object": "user",
+    "id": "e450a39e-9051-4d36-bc4e-8581611fc592"
+  },
+  "rich_text": [
+    {
+      "type": "text",
+      "text": {
+        "content": "Hello world",
+        "link": null
+      },
+      "annotations": {
+        "bold": false,
+        "italic": false,
+        "strikethrough": false,
+        "underline": false,
+        "code": false,
+        "color": "default"
+      },
+      "plain_text": "Hello world",
+      "href": null
+    }
+  ]
+}
+`+"`"+``+"`"+``+"`"+``,
 			"",
 		).
 		Example(
 			"Add comment to discussion",
-			"Request body:\n```json\n{\n  \"discussion_id\": \"{{DISCUSSION_ID}}\",\n  \"rich_text\": [\n    {\n      \"text\": {\n        \"content\": \"https://www.healthline.com/nutrition/10-proven-benefits-of-kale\",\n        \"link\": {\n          \"type\": \"url\",\n          \"url\": \"https://www.healthline.com/nutrition/10-proven-benefits-of-kale\"\n        }\n      }\n    }\n  ]\n}\n```\n\nResponse body:\n```json\n{\n  \"object\": \"comment\",\n  \"id\": \"6cd52483-6d55-4f8a-a724-4adb1c17ed43\",\n  \"parent\": {\n    \"type\": \"block_id\",\n    \"block_id\": \"5d4ca33c-d6b7-4675-93d9-84b70af45d1c\"\n  },\n  \"discussion_id\": \"ce18f8c6-ef2a-427f-b416-43531fc7c117\",\n  \"created_time\": \"2022-07-18T21:48:00.000Z\",\n  \"last_edited_time\": \"2022-07-18T21:48:00.000Z\",\n  \"created_by\": {\n    \"object\": \"user\",\n    \"id\": \"e450a39e-9051-4d36-bc4e-8581611fc592\"\n  },\n  \"rich_text\": [\n    {\n      \"type\": \"text\",\n      \"text\": {\n        \"content\": \"https://www.healthline.com/nutrition/10-proven-benefits-of-kale\",\n        \"link\": {\n          \"url\": \"https://www.healthline.com/nutrition/10-proven-benefits-of-kale\"\n        }\n      },\n      \"annotations\": {\n        \"bold\": false,\n        \"italic\": false,\n        \"strikethrough\": false,\n        \"underline\": false,\n        \"code\": false,\n        \"color\": \"default\"\n      },\n      \"plain_text\": \"https://www.healthline.com/nutrition/10-proven-benefits-of-kale\",\n      \"href\": \"https://www.healthline.com/nutrition/10-proven-benefits-of-kale\"\n    }\n  ]\n}\n```",
+			`Request body:
+`+"`"+``+"`"+``+"`"+`json
+{
+  "discussion_id": "{{DISCUSSION_ID}}",
+  "rich_text": [
+    {
+      "text": {
+        "content": "https://www.healthline.com/nutrition/10-proven-benefits-of-kale",
+        "link": {
+          "type": "url",
+          "url": "https://www.healthline.com/nutrition/10-proven-benefits-of-kale"
+        }
+      }
+    }
+  ]
+}
+`+"`"+``+"`"+``+"`"+`
+
+Response body:
+`+"`"+``+"`"+``+"`"+`json
+{
+  "object": "comment",
+  "id": "6cd52483-6d55-4f8a-a724-4adb1c17ed43",
+  "parent": {
+    "type": "block_id",
+    "block_id": "5d4ca33c-d6b7-4675-93d9-84b70af45d1c"
+  },
+  "discussion_id": "ce18f8c6-ef2a-427f-b416-43531fc7c117",
+  "created_time": "2022-07-18T21:48:00.000Z",
+  "last_edited_time": "2022-07-18T21:48:00.000Z",
+  "created_by": {
+    "object": "user",
+    "id": "e450a39e-9051-4d36-bc4e-8581611fc592"
+  },
+  "rich_text": [
+    {
+      "type": "text",
+      "text": {
+        "content": "https://www.healthline.com/nutrition/10-proven-benefits-of-kale",
+        "link": {
+          "url": "https://www.healthline.com/nutrition/10-proven-benefits-of-kale"
+        }
+      },
+      "annotations": {
+        "bold": false,
+        "italic": false,
+        "strikethrough": false,
+        "underline": false,
+        "code": false,
+        "color": "default"
+      },
+      "plain_text": "https://www.healthline.com/nutrition/10-proven-benefits-of-kale",
+      "href": "https://www.healthline.com/nutrition/10-proven-benefits-of-kale"
+    }
+  ]
+}
+`+"`"+``+"`"+``+"`"+``,
 			"",
 		)
 }
@@ -346,7 +454,7 @@ func (p *createACommentProcessor) processCreateAComment(ctx context.Context, idx
 		return fmt.Errorf("marshaling request body: %w", err)
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", rawURL, bytes.NewReader(reqBytes))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, rawURL, bytes.NewReader(reqBytes))
 	if err != nil {
 		return fmt.Errorf("creating HTTP request: %w", err)
 	}
@@ -355,32 +463,32 @@ func (p *createACommentProcessor) processCreateAComment(ctx context.Context, idx
 	httpReq.Header.Set("Notion-Version", p.notionVersion)
 	httpReq.Header.Set("Content-Type", "application/json")
 
-	resp, err := p.httpClient.Do(httpReq)
+	res, err := p.httpClient.Do(httpReq)
 	if err != nil {
 		return fmt.Errorf("Notion API request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer res.Body.Close()
 
-	respBody, err := io.ReadAll(resp.Body)
+	resBody, err := io.ReadAll(res.Body)
 	if err != nil {
 		return fmt.Errorf("reading response body: %w", err)
 	}
 
 	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
 	var body any
-	if len(respBody) > 0 {
+	if len(resBody) > 0 {
 		var jsonBody any
-		if json.Unmarshal(respBody, &jsonBody) == nil {
+		if json.Unmarshal(resBody, &jsonBody) == nil {
 			body = jsonBody
 		} else {
-			body = string(respBody)
+			body = string(resBody)
 		}
 	}
 
 	envelope := map[string]any{
 		"createACommentResponse": map[string]any{
-			"status_code": resp.StatusCode,
-			"headers":     headerMap(resp.Header),
+			"status_code": res.StatusCode,
+			"headers":     headerMap(res.Header),
 			"body":        body,
 		},
 	}
@@ -404,15 +512,15 @@ func (p *createACommentProcessor) processCreateAComment(ctx context.Context, idx
 		msg.SetStructured(envelope)
 	}
 
-	if resp.StatusCode >= 400 {
-		msg.MetaSetMut("http_status_code", resp.StatusCode)
-		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	if res.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", res.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", res.StatusCode)
 	}
 
 	return nil
 }
 
-// CreateADatabase processor — post /v1/data_sources
+// CreateADatabase processor — POST /v1/data_sources
 
 func init() {
 	service.MustRegisterBatchProcessor(
@@ -510,7 +618,7 @@ func (p *createADatabaseProcessor) processCreateADatabase(ctx context.Context, i
 		return fmt.Errorf("marshaling request body: %w", err)
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", rawURL, bytes.NewReader(reqBytes))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, rawURL, bytes.NewReader(reqBytes))
 	if err != nil {
 		return fmt.Errorf("creating HTTP request: %w", err)
 	}
@@ -519,32 +627,32 @@ func (p *createADatabaseProcessor) processCreateADatabase(ctx context.Context, i
 	httpReq.Header.Set("Notion-Version", p.notionVersion)
 	httpReq.Header.Set("Content-Type", "application/json")
 
-	resp, err := p.httpClient.Do(httpReq)
+	res, err := p.httpClient.Do(httpReq)
 	if err != nil {
 		return fmt.Errorf("Notion API request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer res.Body.Close()
 
-	respBody, err := io.ReadAll(resp.Body)
+	resBody, err := io.ReadAll(res.Body)
 	if err != nil {
 		return fmt.Errorf("reading response body: %w", err)
 	}
 
 	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
 	var body any
-	if len(respBody) > 0 {
+	if len(resBody) > 0 {
 		var jsonBody any
-		if json.Unmarshal(respBody, &jsonBody) == nil {
+		if json.Unmarshal(resBody, &jsonBody) == nil {
 			body = jsonBody
 		} else {
-			body = string(respBody)
+			body = string(resBody)
 		}
 	}
 
 	envelope := map[string]any{
 		"createADatabaseResponse": map[string]any{
-			"status_code": resp.StatusCode,
-			"headers":     headerMap(resp.Header),
+			"status_code": res.StatusCode,
+			"headers":     headerMap(res.Header),
 			"body":        body,
 		},
 	}
@@ -568,15 +676,15 @@ func (p *createADatabaseProcessor) processCreateADatabase(ctx context.Context, i
 		msg.SetStructured(envelope)
 	}
 
-	if resp.StatusCode >= 400 {
-		msg.MetaSetMut("http_status_code", resp.StatusCode)
-		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	if res.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", res.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", res.StatusCode)
 	}
 
 	return nil
 }
 
-// CreateDatabase processor — post /v1/databases
+// CreateDatabase processor — POST /v1/databases
 
 func init() {
 	service.MustRegisterBatchProcessor(
@@ -601,7 +709,234 @@ func createDatabaseConfig() *service.ConfigSpec {
 	).
 		Example(
 			"Create a database",
-			"Request body:\n```json\n{\n  \"parent\": {\n    \"type\": \"page_id\",\n    \"page_id\": \"{{PAGE_ID}}\"\n  },\n  \"title\": [\n    {\n      \"type\": \"text\",\n      \"text\": {\n        \"content\": \"Grocery List\",\n        \"link\": null\n      }\n    }\n  ],\n  \"properties\": {\n    \"Name\": {\n      \"title\": {}\n    },\n    \"Description\": {\n      \"rich_text\": {}\n    },\n    \"In stock\": {\n      \"checkbox\": {}\n    },\n    \"Food group\": {\n      \"select\": {\n        \"options\": [\n          {\n            \"name\": \"🥦Vegetable\",\n            \"color\": \"green\"\n          },\n          {\n            \"name\": \"🍎Fruit\",\n            \"color\": \"red\"\n          },\n          {\n            \"name\": \"💪Protein\",\n            \"color\": \"yellow\"\n          }\n        ]\n      }\n    },\n    \"Price\": {\n      \"number\": {\n        \"format\": \"dollar\"\n      }\n    },\n    \"Last ordered\": {\n      \"date\": {}\n    },\n    \"Store availability\": {\n      \"type\": \"multi_select\",\n      \"multi_select\": {\n        \"options\": [\n          {\n            \"name\": \"Duc Loi Market\",\n            \"color\": \"blue\"\n          },\n          {\n            \"name\": \"Rainbow Grocery\",\n            \"color\": \"gray\"\n          },\n          {\n            \"name\": \"Nijiya Market\",\n            \"color\": \"purple\"\n          },\n          {\n            \"name\": \"Gus's Community Market\",\n            \"color\": \"yellow\"\n          }\n        ]\n      }\n    },\n    \"+1\": {\n      \"people\": {}\n    },\n    \"Photo\": {\n      \"files\": {}\n    }\n  }\n}\n```\n\nResponse body:\n```json\n{\n  \"object\": \"database\",\n  \"id\": \"23cde96c-0ad8-41d8-bfa2-b477c63dd52a\",\n  \"cover\": null,\n  \"icon\": null,\n  \"created_time\": \"2022-02-24T22:06:00.000Z\",\n  \"created_by\": {\n    \"object\": \"user\",\n    \"id\": \"92a680bb-6970-4726-952b-4f4c03bff617\"\n  },\n  \"last_edited_by\": {\n    \"object\": \"user\",\n    \"id\": \"92a680bb-6970-4726-952b-4f4c03bff617\"\n  },\n  \"last_edited_time\": \"2022-02-24T22:06:00.000Z\",\n  \"title\": [\n    {\n      \"type\": \"text\",\n      \"text\": {\n        \"content\": \"Grocery List\",\n        \"link\": null\n      },\n      \"annotations\": {\n        \"bold\": false,\n        \"italic\": false,\n        \"strikethrough\": false,\n        \"underline\": false,\n        \"code\": false,\n        \"color\": \"default\"\n      },\n      \"plain_text\": \"Grocery List\",\n      \"href\": null\n    }\n  ],\n  \"properties\": {\n    \"Description\": {\n      \"id\": \"%3EWW~\",\n      \"name\": \"Description\",\n      \"type\": \"rich_text\",\n      \"rich_text\": {}\n    },\n    \"Last ordered\": {\n      \"id\": \"O%5C%3BK\",\n      \"name\": \"Last ordered\",\n      \"type\": \"date\",\n      \"date\": {}\n    },\n    \"In stock\": {\n      \"id\": \"Pya%5C\",\n      \"name\": \"In stock\",\n      \"type\": \"checkbox\",\n      \"checkbox\": {}\n    },\n    \"+1\": {\n      \"id\": \"%5CSky\",\n      \"name\": \"+1\",\n      \"type\": \"people\",\n      \"people\": {}\n    },\n    \"Photo\": {\n      \"id\": \"dSrT\",\n      \"name\": \"Photo\",\n      \"type\": \"files\",\n      \"files\": {}\n    },\n    \"Store availability\": {\n      \"id\": \"jRd%3E\",\n      \"name\": \"Store availability\",\n      \"type\": \"multi_select\",\n      \"multi_select\": {\n        \"options\": [\n          {\n            \"id\": \"8e6441ee-8f17-4833-a2fe-68af5dced24f\",\n            \"name\": \"Duc Loi Market\",\n            \"color\": \"blue\"\n          },\n          {\n            \"id\": \"64a9da77-9805-461f-9773-1e176fdbd203\",\n            \"name\": \"Rainbow Grocery\",\n            \"color\": \"gray\"\n          },\n          {\n            \"id\": \"012d0436-66a1-4613-a1bd-314b1d1d059b\",\n            \"name\": \"Nijiya Market\",\n            \"color\": \"purple\"\n          },\n          {\n            \"id\": \"63ab31f9-8cbd-4d02-8688-752376f455ea\",\n            \"name\": \"Gus's Community Market\",\n            \"color\": \"yellow\"\n          }\n        ]\n      }\n    },\n    \"Food group\": {\n      \"id\": \"q%5DO%5B\",\n      \"name\": \"Food group\",\n      \"type\": \"select\",\n      \"select\": {\n        \"options\": [\n          {\n            \"id\": \"392af858-f42f-43ea-a171-7c0ca5c0a683\",\n            \"name\": \"🥦Vegetable\",\n            \"color\": \"green\"\n          },\n          {\n            \"id\": \"df461a24-14c6-494a-8c61-55775fedbdcd\",\n            \"name\": \"🍎Fruit\",\n            \"color\": \"red\"\n          },\n          {\n            \"id\": \"0ff22aaa-348e-4194-83c2-67a76dfb10fc\",\n            \"name\": \"💪Protein\",\n            \"color\": \"yellow\"\n          }\n        ]\n      }\n    },\n    \"Price\": {\n      \"id\": \"t%60jj\",\n      \"name\": \"Price\",\n      \"type\": \"number\",\n      \"number\": {\n        \"format\": \"dollar\"\n      }\n    },\n    \"Name\": {\n      \"id\": \"title\",\n      \"name\": \"Name\",\n      \"type\": \"title\",\n      \"title\": {}\n    }\n  },\n  \"parent\": {\n    \"type\": \"page_id\",\n    \"page_id\": \"c4d39556-6364-46a1-8a61-ebbb668f7445\"\n  },\n  \"url\": \"https://www.notion.so/23cde96c0ad841d8bfa2b477c63dd52a\",\n  \"archived\": false\n}\n```",
+			`Request body:
+`+"`"+``+"`"+``+"`"+`json
+{
+  "parent": {
+    "type": "page_id",
+    "page_id": "{{PAGE_ID}}"
+  },
+  "title": [
+    {
+      "type": "text",
+      "text": {
+        "content": "Grocery List",
+        "link": null
+      }
+    }
+  ],
+  "properties": {
+    "Name": {
+      "title": {}
+    },
+    "Description": {
+      "rich_text": {}
+    },
+    "In stock": {
+      "checkbox": {}
+    },
+    "Food group": {
+      "select": {
+        "options": [
+          {
+            "name": "🥦Vegetable",
+            "color": "green"
+          },
+          {
+            "name": "🍎Fruit",
+            "color": "red"
+          },
+          {
+            "name": "💪Protein",
+            "color": "yellow"
+          }
+        ]
+      }
+    },
+    "Price": {
+      "number": {
+        "format": "dollar"
+      }
+    },
+    "Last ordered": {
+      "date": {}
+    },
+    "Store availability": {
+      "type": "multi_select",
+      "multi_select": {
+        "options": [
+          {
+            "name": "Duc Loi Market",
+            "color": "blue"
+          },
+          {
+            "name": "Rainbow Grocery",
+            "color": "gray"
+          },
+          {
+            "name": "Nijiya Market",
+            "color": "purple"
+          },
+          {
+            "name": "Gus's Community Market",
+            "color": "yellow"
+          }
+        ]
+      }
+    },
+    "+1": {
+      "people": {}
+    },
+    "Photo": {
+      "files": {}
+    }
+  }
+}
+`+"`"+``+"`"+``+"`"+`
+
+Response body:
+`+"`"+``+"`"+``+"`"+`json
+{
+  "object": "database",
+  "id": "23cde96c-0ad8-41d8-bfa2-b477c63dd52a",
+  "cover": null,
+  "icon": null,
+  "created_time": "2022-02-24T22:06:00.000Z",
+  "created_by": {
+    "object": "user",
+    "id": "92a680bb-6970-4726-952b-4f4c03bff617"
+  },
+  "last_edited_by": {
+    "object": "user",
+    "id": "92a680bb-6970-4726-952b-4f4c03bff617"
+  },
+  "last_edited_time": "2022-02-24T22:06:00.000Z",
+  "title": [
+    {
+      "type": "text",
+      "text": {
+        "content": "Grocery List",
+        "link": null
+      },
+      "annotations": {
+        "bold": false,
+        "italic": false,
+        "strikethrough": false,
+        "underline": false,
+        "code": false,
+        "color": "default"
+      },
+      "plain_text": "Grocery List",
+      "href": null
+    }
+  ],
+  "properties": {
+    "Description": {
+      "id": "%3EWW~",
+      "name": "Description",
+      "type": "rich_text",
+      "rich_text": {}
+    },
+    "Last ordered": {
+      "id": "O%5C%3BK",
+      "name": "Last ordered",
+      "type": "date",
+      "date": {}
+    },
+    "In stock": {
+      "id": "Pya%5C",
+      "name": "In stock",
+      "type": "checkbox",
+      "checkbox": {}
+    },
+    "+1": {
+      "id": "%5CSky",
+      "name": "+1",
+      "type": "people",
+      "people": {}
+    },
+    "Photo": {
+      "id": "dSrT",
+      "name": "Photo",
+      "type": "files",
+      "files": {}
+    },
+    "Store availability": {
+      "id": "jRd%3E",
+      "name": "Store availability",
+      "type": "multi_select",
+      "multi_select": {
+        "options": [
+          {
+            "id": "8e6441ee-8f17-4833-a2fe-68af5dced24f",
+            "name": "Duc Loi Market",
+            "color": "blue"
+          },
+          {
+            "id": "64a9da77-9805-461f-9773-1e176fdbd203",
+            "name": "Rainbow Grocery",
+            "color": "gray"
+          },
+          {
+            "id": "012d0436-66a1-4613-a1bd-314b1d1d059b",
+            "name": "Nijiya Market",
+            "color": "purple"
+          },
+          {
+            "id": "63ab31f9-8cbd-4d02-8688-752376f455ea",
+            "name": "Gus's Community Market",
+            "color": "yellow"
+          }
+        ]
+      }
+    },
+    "Food group": {
+      "id": "q%5DO%5B",
+      "name": "Food group",
+      "type": "select",
+      "select": {
+        "options": [
+          {
+            "id": "392af858-f42f-43ea-a171-7c0ca5c0a683",
+            "name": "🥦Vegetable",
+            "color": "green"
+          },
+          {
+            "id": "df461a24-14c6-494a-8c61-55775fedbdcd",
+            "name": "🍎Fruit",
+            "color": "red"
+          },
+          {
+            "id": "0ff22aaa-348e-4194-83c2-67a76dfb10fc",
+            "name": "💪Protein",
+            "color": "yellow"
+          }
+        ]
+      }
+    },
+    "Price": {
+      "id": "t%60jj",
+      "name": "Price",
+      "type": "number",
+      "number": {
+        "format": "dollar"
+      }
+    },
+    "Name": {
+      "id": "title",
+      "name": "Name",
+      "type": "title",
+      "title": {}
+    }
+  },
+  "parent": {
+    "type": "page_id",
+    "page_id": "c4d39556-6364-46a1-8a61-ebbb668f7445"
+  },
+  "url": "https://www.notion.so/23cde96c0ad841d8bfa2b477c63dd52a",
+  "archived": false
+}
+`+"`"+``+"`"+``+"`"+``,
 			"",
 		)
 }
@@ -679,7 +1014,7 @@ func (p *createDatabaseProcessor) processCreateDatabase(ctx context.Context, idx
 		return fmt.Errorf("marshaling request body: %w", err)
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", rawURL, bytes.NewReader(reqBytes))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, rawURL, bytes.NewReader(reqBytes))
 	if err != nil {
 		return fmt.Errorf("creating HTTP request: %w", err)
 	}
@@ -688,32 +1023,32 @@ func (p *createDatabaseProcessor) processCreateDatabase(ctx context.Context, idx
 	httpReq.Header.Set("Notion-Version", p.notionVersion)
 	httpReq.Header.Set("Content-Type", "application/json")
 
-	resp, err := p.httpClient.Do(httpReq)
+	res, err := p.httpClient.Do(httpReq)
 	if err != nil {
 		return fmt.Errorf("Notion API request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer res.Body.Close()
 
-	respBody, err := io.ReadAll(resp.Body)
+	resBody, err := io.ReadAll(res.Body)
 	if err != nil {
 		return fmt.Errorf("reading response body: %w", err)
 	}
 
 	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
 	var body any
-	if len(respBody) > 0 {
+	if len(resBody) > 0 {
 		var jsonBody any
-		if json.Unmarshal(respBody, &jsonBody) == nil {
+		if json.Unmarshal(resBody, &jsonBody) == nil {
 			body = jsonBody
 		} else {
-			body = string(respBody)
+			body = string(resBody)
 		}
 	}
 
 	envelope := map[string]any{
 		"createDatabaseResponse": map[string]any{
-			"status_code": resp.StatusCode,
-			"headers":     headerMap(resp.Header),
+			"status_code": res.StatusCode,
+			"headers":     headerMap(res.Header),
 			"body":        body,
 		},
 	}
@@ -737,15 +1072,15 @@ func (p *createDatabaseProcessor) processCreateDatabase(ctx context.Context, idx
 		msg.SetStructured(envelope)
 	}
 
-	if resp.StatusCode >= 400 {
-		msg.MetaSetMut("http_status_code", resp.StatusCode)
-		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	if res.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", res.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", res.StatusCode)
 	}
 
 	return nil
 }
 
-// CreateFile processor — post /v1/file_uploads
+// CreateFile processor — POST /v1/file_uploads
 
 func init() {
 	service.MustRegisterBatchProcessor(
@@ -843,7 +1178,7 @@ func (p *createFileProcessor) processCreateFile(ctx context.Context, idx int, ba
 		return fmt.Errorf("marshaling request body: %w", err)
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", rawURL, bytes.NewReader(reqBytes))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, rawURL, bytes.NewReader(reqBytes))
 	if err != nil {
 		return fmt.Errorf("creating HTTP request: %w", err)
 	}
@@ -852,32 +1187,32 @@ func (p *createFileProcessor) processCreateFile(ctx context.Context, idx int, ba
 	httpReq.Header.Set("Notion-Version", p.notionVersion)
 	httpReq.Header.Set("Content-Type", "application/json")
 
-	resp, err := p.httpClient.Do(httpReq)
+	res, err := p.httpClient.Do(httpReq)
 	if err != nil {
 		return fmt.Errorf("Notion API request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer res.Body.Close()
 
-	respBody, err := io.ReadAll(resp.Body)
+	resBody, err := io.ReadAll(res.Body)
 	if err != nil {
 		return fmt.Errorf("reading response body: %w", err)
 	}
 
 	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
 	var body any
-	if len(respBody) > 0 {
+	if len(resBody) > 0 {
 		var jsonBody any
-		if json.Unmarshal(respBody, &jsonBody) == nil {
+		if json.Unmarshal(resBody, &jsonBody) == nil {
 			body = jsonBody
 		} else {
-			body = string(respBody)
+			body = string(resBody)
 		}
 	}
 
 	envelope := map[string]any{
 		"createFileResponse": map[string]any{
-			"status_code": resp.StatusCode,
-			"headers":     headerMap(resp.Header),
+			"status_code": res.StatusCode,
+			"headers":     headerMap(res.Header),
 			"body":        body,
 		},
 	}
@@ -901,15 +1236,15 @@ func (p *createFileProcessor) processCreateFile(ctx context.Context, idx int, ba
 		msg.SetStructured(envelope)
 	}
 
-	if resp.StatusCode >= 400 {
-		msg.MetaSetMut("http_status_code", resp.StatusCode)
-		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	if res.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", res.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", res.StatusCode)
 	}
 
 	return nil
 }
 
-// DeleteABlock processor — delete /v1/blocks/{block_id}
+// DeleteABlock processor — DELETE /v1/blocks/{block_id}
 
 func init() {
 	service.MustRegisterBatchProcessor(
@@ -933,7 +1268,47 @@ func deleteABlockConfig() *service.ConfigSpec {
 	).
 		Example(
 			"Delete a block",
-			"Response body:\n```json\n{\n  \"object\": \"block\",\n  \"id\": \"4868767d-9029-4b9d-a41b-652ef4c9c7b9\",\n  \"created_time\": \"2021-08-06T17:46:00.000Z\",\n  \"last_edited_time\": \"2022-02-24T22:26:00.000Z\",\n  \"created_by\": {\n    \"object\": \"user\",\n    \"id\": \"6794760a-1f15-45cd-9c65-0dfe42f5135a\"\n  },\n  \"last_edited_by\": {\n    \"object\": \"user\",\n    \"id\": \"92a680bb-6970-4726-952b-4f4c03bff617\"\n  },\n  \"has_children\": false,\n  \"archived\": true,\n  \"type\": \"paragraph\",\n  \"paragraph\": {\n    \"text\": [\n      {\n        \"type\": \"text\",\n        \"text\": {\n          \"content\": \"hello to you\",\n          \"link\": null\n        },\n        \"annotations\": {\n          \"bold\": false,\n          \"italic\": false,\n          \"strikethrough\": false,\n          \"underline\": false,\n          \"code\": false,\n          \"color\": \"default\"\n        },\n        \"plain_text\": \"hello to you\",\n        \"href\": null\n      }\n    ]\n  }\n}\n```",
+			`Response body:
+`+"`"+``+"`"+``+"`"+`json
+{
+  "object": "block",
+  "id": "4868767d-9029-4b9d-a41b-652ef4c9c7b9",
+  "created_time": "2021-08-06T17:46:00.000Z",
+  "last_edited_time": "2022-02-24T22:26:00.000Z",
+  "created_by": {
+    "object": "user",
+    "id": "6794760a-1f15-45cd-9c65-0dfe42f5135a"
+  },
+  "last_edited_by": {
+    "object": "user",
+    "id": "92a680bb-6970-4726-952b-4f4c03bff617"
+  },
+  "has_children": false,
+  "archived": true,
+  "type": "paragraph",
+  "paragraph": {
+    "text": [
+      {
+        "type": "text",
+        "text": {
+          "content": "hello to you",
+          "link": null
+        },
+        "annotations": {
+          "bold": false,
+          "italic": false,
+          "strikethrough": false,
+          "underline": false,
+          "code": false,
+          "color": "default"
+        },
+        "plain_text": "hello to you",
+        "href": null
+      }
+    ]
+  }
+}
+`+"`"+``+"`"+``+"`"+``,
 			"",
 		)
 }
@@ -990,7 +1365,7 @@ func (p *deleteABlockProcessor) processDeleteABlock(ctx context.Context, idx int
 		}
 		rawURL = strings.Replace(rawURL, "{block_id}", url.PathEscape(v), 1)
 	}
-	httpReq, err := http.NewRequestWithContext(ctx, "DELETE", rawURL, nil)
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodDelete, rawURL, nil)
 	if err != nil {
 		return fmt.Errorf("creating HTTP request: %w", err)
 	}
@@ -998,32 +1373,32 @@ func (p *deleteABlockProcessor) processDeleteABlock(ctx context.Context, idx int
 	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
 	httpReq.Header.Set("Notion-Version", p.notionVersion)
 
-	resp, err := p.httpClient.Do(httpReq)
+	res, err := p.httpClient.Do(httpReq)
 	if err != nil {
 		return fmt.Errorf("Notion API request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer res.Body.Close()
 
-	respBody, err := io.ReadAll(resp.Body)
+	resBody, err := io.ReadAll(res.Body)
 	if err != nil {
 		return fmt.Errorf("reading response body: %w", err)
 	}
 
 	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
 	var body any
-	if len(respBody) > 0 {
+	if len(resBody) > 0 {
 		var jsonBody any
-		if json.Unmarshal(respBody, &jsonBody) == nil {
+		if json.Unmarshal(resBody, &jsonBody) == nil {
 			body = jsonBody
 		} else {
-			body = string(respBody)
+			body = string(resBody)
 		}
 	}
 
 	envelope := map[string]any{
 		"deleteABlockResponse": map[string]any{
-			"status_code": resp.StatusCode,
-			"headers":     headerMap(resp.Header),
+			"status_code": res.StatusCode,
+			"headers":     headerMap(res.Header),
 			"body":        body,
 		},
 	}
@@ -1047,15 +1422,15 @@ func (p *deleteABlockProcessor) processDeleteABlock(ctx context.Context, idx int
 		msg.SetStructured(envelope)
 	}
 
-	if resp.StatusCode >= 400 {
-		msg.MetaSetMut("http_status_code", resp.StatusCode)
-		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	if res.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", res.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", res.StatusCode)
 	}
 
 	return nil
 }
 
-// GetBlockChildren processor — get /v1/blocks/{block_id}/children
+// GetBlockChildren processor — GET /v1/blocks/{block_id}/children
 
 func init() {
 	service.MustRegisterBatchProcessor(
@@ -1085,7 +1460,990 @@ func getBlockChildrenConfig() *service.ConfigSpec {
 	).
 		Example(
 			"Retrieve block children",
-			"Response body:\n```json\n{\n  \"object\": \"list\",\n  \"results\": [\n    {\n      \"object\": \"block\",\n      \"id\": \"48c1ffb5-2789-4025-937b-2c35eaaaab3f\",\n      \"created_time\": \"2021-04-27T20:38:19.437Z\",\n      \"last_edited_time\": \"2021-04-27T20:38:19.437Z\",\n      \"has_children\": false,\n      \"type\": \"unsupported\",\n      \"unsupported\": {}\n    },\n    {\n      \"object\": \"block\",\n      \"id\": \"e381a0a3-4efb-4ba9-aa93-45b70fa9ce7f\",\n      \"created_time\": \"2021-04-27T20:38:19.437Z\",\n      \"last_edited_time\": \"2021-04-27T20:38:19.437Z\",\n      \"has_children\": false,\n      \"type\": \"paragraph\",\n      \"paragraph\": {\n        \"text\": [\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"I think we can all agree that Silicon Valley needs more adult supervision right about now.\",\n              \"link\": null\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": false,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \"I think we can all agree that Silicon Valley needs more adult supervision right about now.\",\n            \"href\": null\n          }\n        ]\n      }\n    },\n    {\n      \"object\": \"block\",\n      \"id\": \"ce5f79ac-8145-44ab-be3b-8ad143d6f8a7\",\n      \"created_time\": \"2021-04-27T20:38:19.437Z\",\n      \"last_edited_time\": \"2021-04-27T20:38:19.437Z\",\n      \"has_children\": false,\n      \"type\": \"paragraph\",\n      \"paragraph\": {\n        \"text\": [\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"Is the solution for its companies to hire a chief ethics officer?\",\n              \"link\": null\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": false,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \"Is the solution for its companies to hire a chief ethics officer?\",\n            \"href\": null\n          }\n        ]\n      }\n    },\n    {\n      \"object\": \"block\",\n      \"id\": \"0387b374-7847-4ddc-bc53-6b0813ce4ed4\",\n      \"created_time\": \"2021-04-27T20:38:19.437Z\",\n      \"last_edited_time\": \"2021-04-27T20:38:19.437Z\",\n      \"has_children\": false,\n      \"type\": \"paragraph\",\n      \"paragraph\": {\n        \"text\": [\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"While some tech companies like Google have top compliance officers and others turn to legal teams to police themselves, no big tech companies that I know of have yet taken this step. But a lot of them seem to be talking about it, and I’ve discussed the idea with several chief executives recently. Why? Because slowly, then all at once, it feels like too many digital leaders have lost their minds.\",\n              \"link\": null\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": false,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \"While some tech companies like Google have top compliance officers and others turn to legal teams to police themselves, no big tech companies that I know of have yet taken this step. But a lot of them seem to be talking about it, and I’ve discussed the idea with several chief executives recently. Why? Because slowly, then all at once, it feels like too many digital leaders have lost their minds.\",\n            \"href\": null\n          }\n        ]\n      }\n    },\n    {\n      \"object\": \"block\",\n      \"id\": \"da035311-5af3-48bc-8279-d28d9f4ef2e2\",\n      \"created_time\": \"2021-04-27T20:38:19.437Z\",\n      \"last_edited_time\": \"2021-04-27T20:38:19.437Z\",\n      \"has_children\": false,\n      \"type\": \"paragraph\",\n      \"paragraph\": {\n        \"text\": [\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"It’s probably no surprise, considering the complex problems the tech industry faces. As one ethical quandary after another has hit its profoundly ill-prepared executives, their once-pristine reputations have fallen like palm trees in a hurricane. These last two weeks alone show how tech is stumbling to react to big world issues armed with only bubble world skills:\",\n              \"link\": null\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": false,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \"It’s probably no surprise, considering the complex problems the tech industry faces. As one ethical quandary after another has hit its profoundly ill-prepared executives, their once-pristine reputations have fallen like palm trees in a hurricane. These last two weeks alone show how tech is stumbling to react to big world issues armed with only bubble world skills:\",\n            \"href\": null\n          }\n        ]\n      }\n    },\n    {\n      \"object\": \"block\",\n      \"id\": \"63a60fca-4a11-43eb-8773-c5f0164a3117\",\n      \"created_time\": \"2021-04-27T20:38:19.437Z\",\n      \"last_edited_time\": \"2021-04-27T20:38:19.437Z\",\n      \"has_children\": false,\n      \"type\": \"paragraph\",\n      \"paragraph\": {\n        \"text\": [\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"As a journalist is beheaded and dismembered at the direction of Saudi Arabian leaders (allegedly, but the killers did bring a bone saw), Silicon Valley is swimming in oceans of money from the kingdom’s Public Investment Fund. Saudi funding includes hundreds of millions for Magic Leap, and huge investments in hot public companies like Tesla. Most significantly: Saudis have invested about $45 billion in SoftBank’s giant Vision Fund, which has in turn doused the tech landscape — $4.4 billion to WeWork, $250 million to Slack, and $300 million to the dog-walking app Wag. In total Uber has gotten almost $14 billion, either through direct investments from the Public Investment Fund or through the Saudis’ funding of the Vision Fund. A billion here, a billion there and it all adds up.\",\n              \"link\": null\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": false,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \"As a journalist is beheaded and dismembered at the direction of Saudi Arabian leaders (allegedly, but the killers did bring a bone saw), Silicon Valley is swimming in oceans of money from the kingdom’s Public Investment Fund. Saudi funding includes hundreds of millions for Magic Leap, and huge investments in hot public companies like Tesla. Most significantly: Saudis have invested about $45 billion in SoftBank’s giant Vision Fund, which has in turn doused the tech landscape — $4.4 billion to WeWork, $250 million to Slack, and $300 million to the dog-walking app Wag. In total Uber has gotten almost $14 billion, either through direct investments from the Public Investment Fund or through the Saudis’ funding of the Vision Fund. A billion here, a billion there and it all adds up.\",\n            \"href\": null\n          }\n        ]\n      }\n    },\n    {\n      \"object\": \"block\",\n      \"id\": \"8c58c8f1-86ae-4a14-b6b9-74f5fa579620\",\n      \"created_time\": \"2021-04-27T20:38:19.437Z\",\n      \"last_edited_time\": \"2021-04-27T20:38:19.437Z\",\n      \"has_children\": false,\n      \"type\": \"paragraph\",\n      \"paragraph\": {\n        \"text\": [\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"[\",\n              \"link\": null\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": false,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \"[\",\n            \"href\": null\n          },\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"Kara Swisher answered your questions about her column \",\n              \"link\": null\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": true,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \"Kara Swisher answered your questions about her column \",\n            \"href\": null\n          },\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"on Twitter\",\n              \"link\": {\n                \"url\": \"https://twitter.com/karaswisher/status/1054842303922298880\"\n              }\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": true,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \"on Twitter\",\n            \"href\": \"https://twitter.com/karaswisher/status/1054842303922298880\"\n          },\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \".\",\n              \"link\": null\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": true,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \".\",\n            \"href\": null\n          },\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"]\",\n              \"link\": null\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": false,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \"]\",\n            \"href\": null\n          }\n        ]\n      }\n    },\n    {\n      \"object\": \"block\",\n      \"id\": \"875d3aff-086b-45da-9ed1-bc3ddb185229\",\n      \"created_time\": \"2021-04-27T20:38:19.437Z\",\n      \"last_edited_time\": \"2021-04-27T20:38:19.437Z\",\n      \"has_children\": false,\n      \"type\": \"paragraph\",\n      \"paragraph\": {\n        \"text\": [\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"Facebook introduced a new home video device called Portal, and promised that what could be seen as a surveillance tool would not share data for the sake of ad targeting. Soon after, as \",\n              \"link\": null\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": false,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \"Facebook introduced a new home video device called Portal, and promised that what could be seen as a surveillance tool would not share data for the sake of ad targeting. Soon after, as \",\n            \"href\": null\n          },\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"reported by Recode\",\n              \"link\": {\n                \"url\": \"https://www.recode.net/2018/10/16/17966102/facebook-portal-ad-targeting-data-collection\"\n              }\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": false,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \"reported by Recode\",\n            \"href\": \"https://www.recode.net/2018/10/16/17966102/facebook-portal-ad-targeting-data-collection\"\n          },\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \", Facebook admitted that “data about who you call and data about which apps you use on Portal \",\n              \"link\": null\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": false,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \", Facebook admitted that “data about who you call and data about which apps you use on Portal \",\n            \"href\": null\n          },\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"can\",\n              \"link\": null\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": true,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \"can\",\n            \"href\": null\n          },\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \" be used to target you with ads on other Facebook-owned properties.” Oh. Um. That’s awkward.\",\n              \"link\": null\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": false,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \" be used to target you with ads on other Facebook-owned properties.” Oh. Um. That’s awkward.\",\n            \"href\": null\n          }\n        ]\n      }\n    },\n    {\n      \"object\": \"block\",\n      \"id\": \"306ab0fb-6daa-4c5b-b1f7-f51a5f92b6ff\",\n      \"created_time\": \"2021-04-27T20:38:19.437Z\",\n      \"last_edited_time\": \"2021-04-27T20:38:19.437Z\",\n      \"has_children\": false,\n      \"type\": \"paragraph\",\n      \"paragraph\": {\n        \"text\": [\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"After agreeing to pay $20 million to the Securities and Exchange Commission for an ill-advised tweet about possible funding (from the Saudis, by the way), the Tesla co-founder Elon Musk proceeded to troll the regulatory agency on, you got it, Twitter. And even though the \",\n              \"link\": null\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": false,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \"After agreeing to pay $20 million to the Securities and Exchange Commission for an ill-advised tweet about possible funding (from the Saudis, by the way), the Tesla co-founder Elon Musk proceeded to troll the regulatory agency on, you got it, Twitter. And even though the \",\n            \"href\": null\n          },\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"settlement called for some kind of control of his communications\",\n              \"link\": {\n                \"url\": \"https://www.sec.gov/news/press-release/2018-226\"\n              }\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": false,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \"settlement called for some kind of control of his communications\",\n            \"href\": \"https://www.sec.gov/news/press-release/2018-226\"\n          },\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \", it appears that Mr. Musk will continue tweeting until someone steals his phone.\",\n              \"link\": null\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": false,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \", it appears that Mr. Musk will continue tweeting until someone steals his phone.\",\n            \"href\": null\n          }\n        ]\n      }\n    },\n    {\n      \"object\": \"block\",\n      \"id\": \"122b1457-4129-4513-abaa-7cce7d66e4a1\",\n      \"created_time\": \"2021-04-27T20:38:19.437Z\",\n      \"last_edited_time\": \"2021-04-27T20:38:19.437Z\",\n      \"has_children\": false,\n      \"type\": \"paragraph\",\n      \"paragraph\": {\n        \"text\": [\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"Finally, Google took six months to make public that user data on its social network, Google Plus, \",\n              \"link\": null\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": false,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \"Finally, Google took six months to make public that user data on its social network, Google Plus, \",\n            \"href\": null\n          },\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"had been exposed\",\n              \"link\": {\n                \"url\": \"https://www.nytimes.com/2018/10/08/technology/google-plus-security-disclosure.html?module=inline\"\n              }\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": false,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \"had been exposed\",\n            \"href\": \"https://www.nytimes.com/2018/10/08/technology/google-plus-security-disclosure.html?module=inline\"\n          },\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \" and that profiles of up to 500,000 users may have been compromised. While the service failed long ago, because it was pretty much designed by antisocial people, this lack of concern for privacy was profound.\",\n              \"link\": null\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": false,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \" and that profiles of up to 500,000 users may have been compromised. While the service failed long ago, because it was pretty much designed by antisocial people, this lack of concern for privacy was profound.\",\n            \"href\": null\n          }\n        ]\n      }\n    },\n    {\n      \"object\": \"block\",\n      \"id\": \"4d4af599-556f-4d8b-af8e-4d01ebe2aa27\",\n      \"created_time\": \"2021-04-27T20:38:19.437Z\",\n      \"last_edited_time\": \"2021-04-27T20:38:19.437Z\",\n      \"has_children\": false,\n      \"type\": \"paragraph\",\n      \"paragraph\": {\n        \"text\": [\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"Grappling with what to say and do about the disasters they themselves create is only the beginning. Then there are the broader issues that the denizens of Silicon Valley expect their employers to have a stance on: immigration, income inequality, artificial intelligence, automation, transgender rights, climate change, privacy, data rights and whether tech companies should be helping the government do controversial things. It’s an ethical swamp out there.\",\n              \"link\": null\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": false,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \"Grappling with what to say and do about the disasters they themselves create is only the beginning. Then there are the broader issues that the denizens of Silicon Valley expect their employers to have a stance on: immigration, income inequality, artificial intelligence, automation, transgender rights, climate change, privacy, data rights and whether tech companies should be helping the government do controversial things. It’s an ethical swamp out there.\",\n            \"href\": null\n          }\n        ]\n      }\n    },\n    {\n      \"object\": \"block\",\n      \"id\": \"f5775df5-59eb-4533-a2cb-e150412ec4f6\",\n      \"created_time\": \"2021-04-27T20:38:19.437Z\",\n      \"last_edited_time\": \"2021-04-27T20:38:19.437Z\",\n      \"has_children\": false,\n      \"type\": \"paragraph\",\n      \"paragraph\": {\n        \"text\": [\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"That’s why, in a recent interview, Marc Benioff, the co-chief executive and a founder of Salesforce, told me he was in the process of hiring a chief ethical officer to help anticipate and address any thorny conundrums it might encounter as a business — like the decision it had to make a few months back about whether it should stop providing recruitment software for Customs and Border Protection because of the government’s policy of separating immigrant families at the border.\",\n              \"link\": null\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": false,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \"That’s why, in a recent interview, Marc Benioff, the co-chief executive and a founder of Salesforce, told me he was in the process of hiring a chief ethical officer to help anticipate and address any thorny conundrums it might encounter as a business — like the decision it had to make a few months back about whether it should stop providing recruitment software for Customs and Border Protection because of the government’s policy of separating immigrant families at the border.\",\n            \"href\": null\n          }\n        ]\n      }\n    },\n    {\n      \"object\": \"block\",\n      \"id\": \"31405c6e-7ece-4667-8c4d-36c9d79a0bfa\",\n      \"created_time\": \"2021-04-27T20:38:19.437Z\",\n      \"last_edited_time\": \"2021-04-27T20:38:19.437Z\",\n      \"has_children\": false,\n      \"type\": \"paragraph\",\n      \"paragraph\": {\n        \"text\": [\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"Amid much criticism, Mr. Benioff decided to keep the contract, but said he would focus more on social and political issues.\",\n              \"link\": null\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": false,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \"Amid much criticism, Mr. Benioff decided to keep the contract, but said he would focus more on social and political issues.\",\n            \"href\": null\n          }\n        ]\n      }\n    },\n    {\n      \"object\": \"block\",\n      \"id\": \"a2ab7e8a-d521-401d-89ae-9eb27efb9990\",\n      \"created_time\": \"2021-04-27T20:38:19.437Z\",\n      \"last_edited_time\": \"2021-04-27T20:38:19.437Z\",\n      \"has_children\": false,\n      \"type\": \"paragraph\",\n      \"paragraph\": {\n        \"text\": [\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"At a recent company event, he elaborated: “We can have a structured conversation not just with our own employees myopically, but by bringing in the key advisers, supporters and pundits and philosophers and everybody necessary to ask the question if what we are doing today is ethical and humane.”\",\n              \"link\": null\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": false,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \"At a recent company event, he elaborated: “We can have a structured conversation not just with our own employees myopically, but by bringing in the key advisers, supporters and pundits and philosophers and everybody necessary to ask the question if what we are doing today is ethical and humane.”\",\n            \"href\": null\n          }\n        ]\n      }\n    },\n    {\n      \"object\": \"block\",\n      \"id\": \"a4498e1e-8b85-48d7-802a-db447ca7d1ac\",\n      \"created_time\": \"2021-04-27T20:38:19.437Z\",\n      \"last_edited_time\": \"2021-04-27T20:38:19.437Z\",\n      \"has_children\": false,\n      \"type\": \"paragraph\",\n      \"paragraph\": {\n        \"text\": [\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"23andMe has also toyed with the idea of hiring a chief ethics officer. In an interview I did this week with its chief executive, Anne Wojcicki, she said the genetics company had even interviewed candidates, but that many of them wanted to remain in academia to be freer to ponder these issues. She acknowledged that the collection of DNA data is rife with ethical considerations, but said, “I think it has to be our management and leaders who have to add this to our skill set, rather than just hire one person to determine this.”\",\n              \"link\": null\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": false,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \"23andMe has also toyed with the idea of hiring a chief ethics officer. In an interview I did this week with its chief executive, Anne Wojcicki, she said the genetics company had even interviewed candidates, but that many of them wanted to remain in academia to be freer to ponder these issues. She acknowledged that the collection of DNA data is rife with ethical considerations, but said, “I think it has to be our management and leaders who have to add this to our skill set, rather than just hire one person to determine this.”\",\n            \"href\": null\n          }\n        ]\n      }\n    },\n    {\n      \"object\": \"block\",\n      \"id\": \"cbf7e7e0-5552-4b3f-b09e-9dcca120931c\",\n      \"created_time\": \"2021-04-27T20:38:19.437Z\",\n      \"last_edited_time\": \"2021-04-27T20:38:19.437Z\",\n      \"has_children\": false,\n      \"type\": \"paragraph\",\n      \"paragraph\": {\n        \"text\": [\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"When asked about the idea of a single source of wisdom on ethics, some point out that legal or diversity/inclusion departments are designed for that purpose and that the ethics should really come from the top — the chief executive.\",\n              \"link\": null\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": false,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \"When asked about the idea of a single source of wisdom on ethics, some point out that legal or diversity/inclusion departments are designed for that purpose and that the ethics should really come from the top — the chief executive.\",\n            \"href\": null\n          }\n        ]\n      }\n    },\n    {\n      \"object\": \"block\",\n      \"id\": \"d24b2887-0f1f-4e91-99c1-c295bed8ad65\",\n      \"created_time\": \"2021-04-27T20:38:19.437Z\",\n      \"last_edited_time\": \"2021-04-27T20:38:19.437Z\",\n      \"has_children\": false,\n      \"type\": \"paragraph\",\n      \"paragraph\": {\n        \"text\": [\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"Also of concern is the possibility that a single person would not get listened to or, worse, get steamrollered. And, if the person was bad at the job, of course, it could drag the whole thing down.\",\n              \"link\": null\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": false,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \"Also of concern is the possibility that a single person would not get listened to or, worse, get steamrollered. And, if the person was bad at the job, of course, it could drag the whole thing down.\",\n            \"href\": null\n          }\n        ]\n      }\n    },\n    {\n      \"object\": \"block\",\n      \"id\": \"78c55f65-c8b8-4364-a369-c40699968e90\",\n      \"created_time\": \"2021-04-27T20:38:19.437Z\",\n      \"last_edited_time\": \"2021-04-27T20:38:19.437Z\",\n      \"has_children\": false,\n      \"type\": \"paragraph\",\n      \"paragraph\": {\n        \"text\": [\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"Others are more worried that the move would be nothing but window dressing. One consultant who focuses on ethics, but did not want to be named, told me: “We haven’t even defined ethics, so what even is ethical use, especially for Silicon Valley companies that are babies in this game?”\",\n              \"link\": null\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": false,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \"Others are more worried that the move would be nothing but window dressing. One consultant who focuses on ethics, but did not want to be named, told me: “We haven’t even defined ethics, so what even is ethical use, especially for Silicon Valley companies that are babies in this game?”\",\n            \"href\": null\n          }\n        ]\n      }\n    },\n    {\n      \"object\": \"block\",\n      \"id\": \"0b492111-1586-4a73-8848-04f0c391aadc\",\n      \"created_time\": \"2021-04-27T20:38:19.437Z\",\n      \"last_edited_time\": \"2021-04-27T20:38:19.437Z\",\n      \"has_children\": false,\n      \"type\": \"paragraph\",\n      \"paragraph\": {\n        \"text\": [\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"How can an industry that, unlike other business sectors, persistently promotes itself as doing good, learn to do that in reality? Do you want to not do harm, or do you want to do good? These are two totally different things.\",\n              \"link\": null\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": false,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \"How can an industry that, unlike other business sectors, persistently promotes itself as doing good, learn to do that in reality? Do you want to not do harm, or do you want to do good? These are two totally different things.\",\n            \"href\": null\n          }\n        ]\n      }\n    },\n    {\n      \"object\": \"block\",\n      \"id\": \"302f8229-2404-460b-8c3c-e7058b4365e5\",\n      \"created_time\": \"2021-04-27T20:38:19.437Z\",\n      \"last_edited_time\": \"2021-04-27T20:38:19.437Z\",\n      \"has_children\": false,\n      \"type\": \"paragraph\",\n      \"paragraph\": {\n        \"text\": [\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"And how do you put an official ethical system in place without it seeming like you’re telling everyone how to behave? Who gets to decide those rules anyway, setting a moral path for the industry and — considering tech companies’ enormous power — the world.\",\n              \"link\": null\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": false,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \"And how do you put an official ethical system in place without it seeming like you’re telling everyone how to behave? Who gets to decide those rules anyway, setting a moral path for the industry and — considering tech companies’ enormous power — the world.\",\n            \"href\": null\n          }\n        ]\n      }\n    },\n    {\n      \"object\": \"block\",\n      \"id\": \"8f9bc91c-5662-4b3f-a110-809f46b79f49\",\n      \"created_time\": \"2021-04-27T20:38:19.437Z\",\n      \"last_edited_time\": \"2021-04-27T20:38:19.437Z\",\n      \"has_children\": false,\n      \"type\": \"paragraph\",\n      \"paragraph\": {\n        \"text\": [\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"Like I said, adult supervision. Or maybe, better still, Silicon Valley itself has to grow up.\",\n              \"link\": null\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": false,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \"Like I said, adult supervision. Or maybe, better still, Silicon Valley itself has to grow up.\",\n            \"href\": null\n          }\n        ]\n      }\n    },\n    {\n      \"object\": \"block\",\n      \"id\": \"7bea1831-a25c-4b3e-8c9b-b37de814f948\",\n      \"created_time\": \"2021-04-27T20:38:19.437Z\",\n      \"last_edited_time\": \"2021-04-27T20:38:19.437Z\",\n      \"has_children\": false,\n      \"type\": \"paragraph\",\n      \"paragraph\": {\n        \"text\": [\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"Follow The New York Times Opinion section on \",\n              \"link\": null\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": true,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \"Follow The New York Times Opinion section on \",\n            \"href\": null\n          },\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"Facebook\",\n              \"link\": {\n                \"url\": \"https://www.facebook.com/nytopinion\"\n              }\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": true,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \"Facebook\",\n            \"href\": \"https://www.facebook.com/nytopinion\"\n          },\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \", \",\n              \"link\": null\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": true,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \", \",\n            \"href\": null\n          },\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"Twitter (@NYTopinion)\",\n              \"link\": {\n                \"url\": \"http://twitter.com/NYTOpinion\"\n              }\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": true,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \"Twitter (@NYTopinion)\",\n            \"href\": \"http://twitter.com/NYTOpinion\"\n          },\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \" and \",\n              \"link\": null\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": true,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \" and \",\n            \"href\": null\n          },\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"Instagram\",\n              \"link\": {\n                \"url\": \"https://www.instagram.com/nytopinion/\"\n              }\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": true,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \"Instagram\",\n            \"href\": \"https://www.instagram.com/nytopinion/\"\n          },\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \", and sign up for the \",\n              \"link\": null\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": true,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \", and sign up for the \",\n            \"href\": null\n          },\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"Opinion Today newsletter\",\n              \"link\": {\n                \"url\": \"http://www.nytimes.com/newsletters/opiniontoday/\"\n              }\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": true,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \"Opinion Today newsletter\",\n            \"href\": \"http://www.nytimes.com/newsletters/opiniontoday/\"\n          },\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \".\",\n              \"link\": null\n            },\n            \"annotations\": {\n              \"bold\": false,\n              \"italic\": true,\n              \"strikethrough\": false,\n              \"underline\": false,\n              \"code\": false,\n              \"color\": \"default\"\n            },\n            \"plain_text\": \".\",\n            \"href\": null\n          }\n        ]\n      }\n    }\n  ],\n  \"next_cursor\": null,\n  \"has_more\": false\n}\n```",
+			`Response body:
+`+"`"+``+"`"+``+"`"+`json
+{
+  "object": "list",
+  "results": [
+    {
+      "object": "block",
+      "id": "48c1ffb5-2789-4025-937b-2c35eaaaab3f",
+      "created_time": "2021-04-27T20:38:19.437Z",
+      "last_edited_time": "2021-04-27T20:38:19.437Z",
+      "has_children": false,
+      "type": "unsupported",
+      "unsupported": {}
+    },
+    {
+      "object": "block",
+      "id": "e381a0a3-4efb-4ba9-aa93-45b70fa9ce7f",
+      "created_time": "2021-04-27T20:38:19.437Z",
+      "last_edited_time": "2021-04-27T20:38:19.437Z",
+      "has_children": false,
+      "type": "paragraph",
+      "paragraph": {
+        "text": [
+          {
+            "type": "text",
+            "text": {
+              "content": "I think we can all agree that Silicon Valley needs more adult supervision right about now.",
+              "link": null
+            },
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": "I think we can all agree that Silicon Valley needs more adult supervision right about now.",
+            "href": null
+          }
+        ]
+      }
+    },
+    {
+      "object": "block",
+      "id": "ce5f79ac-8145-44ab-be3b-8ad143d6f8a7",
+      "created_time": "2021-04-27T20:38:19.437Z",
+      "last_edited_time": "2021-04-27T20:38:19.437Z",
+      "has_children": false,
+      "type": "paragraph",
+      "paragraph": {
+        "text": [
+          {
+            "type": "text",
+            "text": {
+              "content": "Is the solution for its companies to hire a chief ethics officer?",
+              "link": null
+            },
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": "Is the solution for its companies to hire a chief ethics officer?",
+            "href": null
+          }
+        ]
+      }
+    },
+    {
+      "object": "block",
+      "id": "0387b374-7847-4ddc-bc53-6b0813ce4ed4",
+      "created_time": "2021-04-27T20:38:19.437Z",
+      "last_edited_time": "2021-04-27T20:38:19.437Z",
+      "has_children": false,
+      "type": "paragraph",
+      "paragraph": {
+        "text": [
+          {
+            "type": "text",
+            "text": {
+              "content": "While some tech companies like Google have top compliance officers and others turn to legal teams to police themselves, no big tech companies that I know of have yet taken this step. But a lot of them seem to be talking about it, and I’ve discussed the idea with several chief executives recently. Why? Because slowly, then all at once, it feels like too many digital leaders have lost their minds.",
+              "link": null
+            },
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": "While some tech companies like Google have top compliance officers and others turn to legal teams to police themselves, no big tech companies that I know of have yet taken this step. But a lot of them seem to be talking about it, and I’ve discussed the idea with several chief executives recently. Why? Because slowly, then all at once, it feels like too many digital leaders have lost their minds.",
+            "href": null
+          }
+        ]
+      }
+    },
+    {
+      "object": "block",
+      "id": "da035311-5af3-48bc-8279-d28d9f4ef2e2",
+      "created_time": "2021-04-27T20:38:19.437Z",
+      "last_edited_time": "2021-04-27T20:38:19.437Z",
+      "has_children": false,
+      "type": "paragraph",
+      "paragraph": {
+        "text": [
+          {
+            "type": "text",
+            "text": {
+              "content": "It’s probably no surprise, considering the complex problems the tech industry faces. As one ethical quandary after another has hit its profoundly ill-prepared executives, their once-pristine reputations have fallen like palm trees in a hurricane. These last two weeks alone show how tech is stumbling to react to big world issues armed with only bubble world skills:",
+              "link": null
+            },
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": "It’s probably no surprise, considering the complex problems the tech industry faces. As one ethical quandary after another has hit its profoundly ill-prepared executives, their once-pristine reputations have fallen like palm trees in a hurricane. These last two weeks alone show how tech is stumbling to react to big world issues armed with only bubble world skills:",
+            "href": null
+          }
+        ]
+      }
+    },
+    {
+      "object": "block",
+      "id": "63a60fca-4a11-43eb-8773-c5f0164a3117",
+      "created_time": "2021-04-27T20:38:19.437Z",
+      "last_edited_time": "2021-04-27T20:38:19.437Z",
+      "has_children": false,
+      "type": "paragraph",
+      "paragraph": {
+        "text": [
+          {
+            "type": "text",
+            "text": {
+              "content": "As a journalist is beheaded and dismembered at the direction of Saudi Arabian leaders (allegedly, but the killers did bring a bone saw), Silicon Valley is swimming in oceans of money from the kingdom’s Public Investment Fund. Saudi funding includes hundreds of millions for Magic Leap, and huge investments in hot public companies like Tesla. Most significantly: Saudis have invested about $45 billion in SoftBank’s giant Vision Fund, which has in turn doused the tech landscape — $4.4 billion to WeWork, $250 million to Slack, and $300 million to the dog-walking app Wag. In total Uber has gotten almost $14 billion, either through direct investments from the Public Investment Fund or through the Saudis’ funding of the Vision Fund. A billion here, a billion there and it all adds up.",
+              "link": null
+            },
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": "As a journalist is beheaded and dismembered at the direction of Saudi Arabian leaders (allegedly, but the killers did bring a bone saw), Silicon Valley is swimming in oceans of money from the kingdom’s Public Investment Fund. Saudi funding includes hundreds of millions for Magic Leap, and huge investments in hot public companies like Tesla. Most significantly: Saudis have invested about $45 billion in SoftBank’s giant Vision Fund, which has in turn doused the tech landscape — $4.4 billion to WeWork, $250 million to Slack, and $300 million to the dog-walking app Wag. In total Uber has gotten almost $14 billion, either through direct investments from the Public Investment Fund or through the Saudis’ funding of the Vision Fund. A billion here, a billion there and it all adds up.",
+            "href": null
+          }
+        ]
+      }
+    },
+    {
+      "object": "block",
+      "id": "8c58c8f1-86ae-4a14-b6b9-74f5fa579620",
+      "created_time": "2021-04-27T20:38:19.437Z",
+      "last_edited_time": "2021-04-27T20:38:19.437Z",
+      "has_children": false,
+      "type": "paragraph",
+      "paragraph": {
+        "text": [
+          {
+            "type": "text",
+            "text": {
+              "content": "[",
+              "link": null
+            },
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": "[",
+            "href": null
+          },
+          {
+            "type": "text",
+            "text": {
+              "content": "Kara Swisher answered your questions about her column ",
+              "link": null
+            },
+            "annotations": {
+              "bold": false,
+              "italic": true,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": "Kara Swisher answered your questions about her column ",
+            "href": null
+          },
+          {
+            "type": "text",
+            "text": {
+              "content": "on Twitter",
+              "link": {
+                "url": "https://twitter.com/karaswisher/status/1054842303922298880"
+              }
+            },
+            "annotations": {
+              "bold": false,
+              "italic": true,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": "on Twitter",
+            "href": "https://twitter.com/karaswisher/status/1054842303922298880"
+          },
+          {
+            "type": "text",
+            "text": {
+              "content": ".",
+              "link": null
+            },
+            "annotations": {
+              "bold": false,
+              "italic": true,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": ".",
+            "href": null
+          },
+          {
+            "type": "text",
+            "text": {
+              "content": "]",
+              "link": null
+            },
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": "]",
+            "href": null
+          }
+        ]
+      }
+    },
+    {
+      "object": "block",
+      "id": "875d3aff-086b-45da-9ed1-bc3ddb185229",
+      "created_time": "2021-04-27T20:38:19.437Z",
+      "last_edited_time": "2021-04-27T20:38:19.437Z",
+      "has_children": false,
+      "type": "paragraph",
+      "paragraph": {
+        "text": [
+          {
+            "type": "text",
+            "text": {
+              "content": "Facebook introduced a new home video device called Portal, and promised that what could be seen as a surveillance tool would not share data for the sake of ad targeting. Soon after, as ",
+              "link": null
+            },
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": "Facebook introduced a new home video device called Portal, and promised that what could be seen as a surveillance tool would not share data for the sake of ad targeting. Soon after, as ",
+            "href": null
+          },
+          {
+            "type": "text",
+            "text": {
+              "content": "reported by Recode",
+              "link": {
+                "url": "https://www.recode.net/2018/10/16/17966102/facebook-portal-ad-targeting-data-collection"
+              }
+            },
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": "reported by Recode",
+            "href": "https://www.recode.net/2018/10/16/17966102/facebook-portal-ad-targeting-data-collection"
+          },
+          {
+            "type": "text",
+            "text": {
+              "content": ", Facebook admitted that “data about who you call and data about which apps you use on Portal ",
+              "link": null
+            },
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": ", Facebook admitted that “data about who you call and data about which apps you use on Portal ",
+            "href": null
+          },
+          {
+            "type": "text",
+            "text": {
+              "content": "can",
+              "link": null
+            },
+            "annotations": {
+              "bold": false,
+              "italic": true,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": "can",
+            "href": null
+          },
+          {
+            "type": "text",
+            "text": {
+              "content": " be used to target you with ads on other Facebook-owned properties.” Oh. Um. That’s awkward.",
+              "link": null
+            },
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": " be used to target you with ads on other Facebook-owned properties.” Oh. Um. That’s awkward.",
+            "href": null
+          }
+        ]
+      }
+    },
+    {
+      "object": "block",
+      "id": "306ab0fb-6daa-4c5b-b1f7-f51a5f92b6ff",
+      "created_time": "2021-04-27T20:38:19.437Z",
+      "last_edited_time": "2021-04-27T20:38:19.437Z",
+      "has_children": false,
+      "type": "paragraph",
+      "paragraph": {
+        "text": [
+          {
+            "type": "text",
+            "text": {
+              "content": "After agreeing to pay $20 million to the Securities and Exchange Commission for an ill-advised tweet about possible funding (from the Saudis, by the way), the Tesla co-founder Elon Musk proceeded to troll the regulatory agency on, you got it, Twitter. And even though the ",
+              "link": null
+            },
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": "After agreeing to pay $20 million to the Securities and Exchange Commission for an ill-advised tweet about possible funding (from the Saudis, by the way), the Tesla co-founder Elon Musk proceeded to troll the regulatory agency on, you got it, Twitter. And even though the ",
+            "href": null
+          },
+          {
+            "type": "text",
+            "text": {
+              "content": "settlement called for some kind of control of his communications",
+              "link": {
+                "url": "https://www.sec.gov/news/press-release/2018-226"
+              }
+            },
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": "settlement called for some kind of control of his communications",
+            "href": "https://www.sec.gov/news/press-release/2018-226"
+          },
+          {
+            "type": "text",
+            "text": {
+              "content": ", it appears that Mr. Musk will continue tweeting until someone steals his phone.",
+              "link": null
+            },
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": ", it appears that Mr. Musk will continue tweeting until someone steals his phone.",
+            "href": null
+          }
+        ]
+      }
+    },
+    {
+      "object": "block",
+      "id": "122b1457-4129-4513-abaa-7cce7d66e4a1",
+      "created_time": "2021-04-27T20:38:19.437Z",
+      "last_edited_time": "2021-04-27T20:38:19.437Z",
+      "has_children": false,
+      "type": "paragraph",
+      "paragraph": {
+        "text": [
+          {
+            "type": "text",
+            "text": {
+              "content": "Finally, Google took six months to make public that user data on its social network, Google Plus, ",
+              "link": null
+            },
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": "Finally, Google took six months to make public that user data on its social network, Google Plus, ",
+            "href": null
+          },
+          {
+            "type": "text",
+            "text": {
+              "content": "had been exposed",
+              "link": {
+                "url": "https://www.nytimes.com/2018/10/08/technology/google-plus-security-disclosure.html?module=inline"
+              }
+            },
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": "had been exposed",
+            "href": "https://www.nytimes.com/2018/10/08/technology/google-plus-security-disclosure.html?module=inline"
+          },
+          {
+            "type": "text",
+            "text": {
+              "content": " and that profiles of up to 500,000 users may have been compromised. While the service failed long ago, because it was pretty much designed by antisocial people, this lack of concern for privacy was profound.",
+              "link": null
+            },
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": " and that profiles of up to 500,000 users may have been compromised. While the service failed long ago, because it was pretty much designed by antisocial people, this lack of concern for privacy was profound.",
+            "href": null
+          }
+        ]
+      }
+    },
+    {
+      "object": "block",
+      "id": "4d4af599-556f-4d8b-af8e-4d01ebe2aa27",
+      "created_time": "2021-04-27T20:38:19.437Z",
+      "last_edited_time": "2021-04-27T20:38:19.437Z",
+      "has_children": false,
+      "type": "paragraph",
+      "paragraph": {
+        "text": [
+          {
+            "type": "text",
+            "text": {
+              "content": "Grappling with what to say and do about the disasters they themselves create is only the beginning. Then there are the broader issues that the denizens of Silicon Valley expect their employers to have a stance on: immigration, income inequality, artificial intelligence, automation, transgender rights, climate change, privacy, data rights and whether tech companies should be helping the government do controversial things. It’s an ethical swamp out there.",
+              "link": null
+            },
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": "Grappling with what to say and do about the disasters they themselves create is only the beginning. Then there are the broader issues that the denizens of Silicon Valley expect their employers to have a stance on: immigration, income inequality, artificial intelligence, automation, transgender rights, climate change, privacy, data rights and whether tech companies should be helping the government do controversial things. It’s an ethical swamp out there.",
+            "href": null
+          }
+        ]
+      }
+    },
+    {
+      "object": "block",
+      "id": "f5775df5-59eb-4533-a2cb-e150412ec4f6",
+      "created_time": "2021-04-27T20:38:19.437Z",
+      "last_edited_time": "2021-04-27T20:38:19.437Z",
+      "has_children": false,
+      "type": "paragraph",
+      "paragraph": {
+        "text": [
+          {
+            "type": "text",
+            "text": {
+              "content": "That’s why, in a recent interview, Marc Benioff, the co-chief executive and a founder of Salesforce, told me he was in the process of hiring a chief ethical officer to help anticipate and address any thorny conundrums it might encounter as a business — like the decision it had to make a few months back about whether it should stop providing recruitment software for Customs and Border Protection because of the government’s policy of separating immigrant families at the border.",
+              "link": null
+            },
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": "That’s why, in a recent interview, Marc Benioff, the co-chief executive and a founder of Salesforce, told me he was in the process of hiring a chief ethical officer to help anticipate and address any thorny conundrums it might encounter as a business — like the decision it had to make a few months back about whether it should stop providing recruitment software for Customs and Border Protection because of the government’s policy of separating immigrant families at the border.",
+            "href": null
+          }
+        ]
+      }
+    },
+    {
+      "object": "block",
+      "id": "31405c6e-7ece-4667-8c4d-36c9d79a0bfa",
+      "created_time": "2021-04-27T20:38:19.437Z",
+      "last_edited_time": "2021-04-27T20:38:19.437Z",
+      "has_children": false,
+      "type": "paragraph",
+      "paragraph": {
+        "text": [
+          {
+            "type": "text",
+            "text": {
+              "content": "Amid much criticism, Mr. Benioff decided to keep the contract, but said he would focus more on social and political issues.",
+              "link": null
+            },
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": "Amid much criticism, Mr. Benioff decided to keep the contract, but said he would focus more on social and political issues.",
+            "href": null
+          }
+        ]
+      }
+    },
+    {
+      "object": "block",
+      "id": "a2ab7e8a-d521-401d-89ae-9eb27efb9990",
+      "created_time": "2021-04-27T20:38:19.437Z",
+      "last_edited_time": "2021-04-27T20:38:19.437Z",
+      "has_children": false,
+      "type": "paragraph",
+      "paragraph": {
+        "text": [
+          {
+            "type": "text",
+            "text": {
+              "content": "At a recent company event, he elaborated: “We can have a structured conversation not just with our own employees myopically, but by bringing in the key advisers, supporters and pundits and philosophers and everybody necessary to ask the question if what we are doing today is ethical and humane.”",
+              "link": null
+            },
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": "At a recent company event, he elaborated: “We can have a structured conversation not just with our own employees myopically, but by bringing in the key advisers, supporters and pundits and philosophers and everybody necessary to ask the question if what we are doing today is ethical and humane.”",
+            "href": null
+          }
+        ]
+      }
+    },
+    {
+      "object": "block",
+      "id": "a4498e1e-8b85-48d7-802a-db447ca7d1ac",
+      "created_time": "2021-04-27T20:38:19.437Z",
+      "last_edited_time": "2021-04-27T20:38:19.437Z",
+      "has_children": false,
+      "type": "paragraph",
+      "paragraph": {
+        "text": [
+          {
+            "type": "text",
+            "text": {
+              "content": "23andMe has also toyed with the idea of hiring a chief ethics officer. In an interview I did this week with its chief executive, Anne Wojcicki, she said the genetics company had even interviewed candidates, but that many of them wanted to remain in academia to be freer to ponder these issues. She acknowledged that the collection of DNA data is rife with ethical considerations, but said, “I think it has to be our management and leaders who have to add this to our skill set, rather than just hire one person to determine this.”",
+              "link": null
+            },
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": "23andMe has also toyed with the idea of hiring a chief ethics officer. In an interview I did this week with its chief executive, Anne Wojcicki, she said the genetics company had even interviewed candidates, but that many of them wanted to remain in academia to be freer to ponder these issues. She acknowledged that the collection of DNA data is rife with ethical considerations, but said, “I think it has to be our management and leaders who have to add this to our skill set, rather than just hire one person to determine this.”",
+            "href": null
+          }
+        ]
+      }
+    },
+    {
+      "object": "block",
+      "id": "cbf7e7e0-5552-4b3f-b09e-9dcca120931c",
+      "created_time": "2021-04-27T20:38:19.437Z",
+      "last_edited_time": "2021-04-27T20:38:19.437Z",
+      "has_children": false,
+      "type": "paragraph",
+      "paragraph": {
+        "text": [
+          {
+            "type": "text",
+            "text": {
+              "content": "When asked about the idea of a single source of wisdom on ethics, some point out that legal or diversity/inclusion departments are designed for that purpose and that the ethics should really come from the top — the chief executive.",
+              "link": null
+            },
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": "When asked about the idea of a single source of wisdom on ethics, some point out that legal or diversity/inclusion departments are designed for that purpose and that the ethics should really come from the top — the chief executive.",
+            "href": null
+          }
+        ]
+      }
+    },
+    {
+      "object": "block",
+      "id": "d24b2887-0f1f-4e91-99c1-c295bed8ad65",
+      "created_time": "2021-04-27T20:38:19.437Z",
+      "last_edited_time": "2021-04-27T20:38:19.437Z",
+      "has_children": false,
+      "type": "paragraph",
+      "paragraph": {
+        "text": [
+          {
+            "type": "text",
+            "text": {
+              "content": "Also of concern is the possibility that a single person would not get listened to or, worse, get steamrollered. And, if the person was bad at the job, of course, it could drag the whole thing down.",
+              "link": null
+            },
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": "Also of concern is the possibility that a single person would not get listened to or, worse, get steamrollered. And, if the person was bad at the job, of course, it could drag the whole thing down.",
+            "href": null
+          }
+        ]
+      }
+    },
+    {
+      "object": "block",
+      "id": "78c55f65-c8b8-4364-a369-c40699968e90",
+      "created_time": "2021-04-27T20:38:19.437Z",
+      "last_edited_time": "2021-04-27T20:38:19.437Z",
+      "has_children": false,
+      "type": "paragraph",
+      "paragraph": {
+        "text": [
+          {
+            "type": "text",
+            "text": {
+              "content": "Others are more worried that the move would be nothing but window dressing. One consultant who focuses on ethics, but did not want to be named, told me: “We haven’t even defined ethics, so what even is ethical use, especially for Silicon Valley companies that are babies in this game?”",
+              "link": null
+            },
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": "Others are more worried that the move would be nothing but window dressing. One consultant who focuses on ethics, but did not want to be named, told me: “We haven’t even defined ethics, so what even is ethical use, especially for Silicon Valley companies that are babies in this game?”",
+            "href": null
+          }
+        ]
+      }
+    },
+    {
+      "object": "block",
+      "id": "0b492111-1586-4a73-8848-04f0c391aadc",
+      "created_time": "2021-04-27T20:38:19.437Z",
+      "last_edited_time": "2021-04-27T20:38:19.437Z",
+      "has_children": false,
+      "type": "paragraph",
+      "paragraph": {
+        "text": [
+          {
+            "type": "text",
+            "text": {
+              "content": "How can an industry that, unlike other business sectors, persistently promotes itself as doing good, learn to do that in reality? Do you want to not do harm, or do you want to do good? These are two totally different things.",
+              "link": null
+            },
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": "How can an industry that, unlike other business sectors, persistently promotes itself as doing good, learn to do that in reality? Do you want to not do harm, or do you want to do good? These are two totally different things.",
+            "href": null
+          }
+        ]
+      }
+    },
+    {
+      "object": "block",
+      "id": "302f8229-2404-460b-8c3c-e7058b4365e5",
+      "created_time": "2021-04-27T20:38:19.437Z",
+      "last_edited_time": "2021-04-27T20:38:19.437Z",
+      "has_children": false,
+      "type": "paragraph",
+      "paragraph": {
+        "text": [
+          {
+            "type": "text",
+            "text": {
+              "content": "And how do you put an official ethical system in place without it seeming like you’re telling everyone how to behave? Who gets to decide those rules anyway, setting a moral path for the industry and — considering tech companies’ enormous power — the world.",
+              "link": null
+            },
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": "And how do you put an official ethical system in place without it seeming like you’re telling everyone how to behave? Who gets to decide those rules anyway, setting a moral path for the industry and — considering tech companies’ enormous power — the world.",
+            "href": null
+          }
+        ]
+      }
+    },
+    {
+      "object": "block",
+      "id": "8f9bc91c-5662-4b3f-a110-809f46b79f49",
+      "created_time": "2021-04-27T20:38:19.437Z",
+      "last_edited_time": "2021-04-27T20:38:19.437Z",
+      "has_children": false,
+      "type": "paragraph",
+      "paragraph": {
+        "text": [
+          {
+            "type": "text",
+            "text": {
+              "content": "Like I said, adult supervision. Or maybe, better still, Silicon Valley itself has to grow up.",
+              "link": null
+            },
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": "Like I said, adult supervision. Or maybe, better still, Silicon Valley itself has to grow up.",
+            "href": null
+          }
+        ]
+      }
+    },
+    {
+      "object": "block",
+      "id": "7bea1831-a25c-4b3e-8c9b-b37de814f948",
+      "created_time": "2021-04-27T20:38:19.437Z",
+      "last_edited_time": "2021-04-27T20:38:19.437Z",
+      "has_children": false,
+      "type": "paragraph",
+      "paragraph": {
+        "text": [
+          {
+            "type": "text",
+            "text": {
+              "content": "Follow The New York Times Opinion section on ",
+              "link": null
+            },
+            "annotations": {
+              "bold": false,
+              "italic": true,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": "Follow The New York Times Opinion section on ",
+            "href": null
+          },
+          {
+            "type": "text",
+            "text": {
+              "content": "Facebook",
+              "link": {
+                "url": "https://www.facebook.com/nytopinion"
+              }
+            },
+            "annotations": {
+              "bold": false,
+              "italic": true,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": "Facebook",
+            "href": "https://www.facebook.com/nytopinion"
+          },
+          {
+            "type": "text",
+            "text": {
+              "content": ", ",
+              "link": null
+            },
+            "annotations": {
+              "bold": false,
+              "italic": true,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": ", ",
+            "href": null
+          },
+          {
+            "type": "text",
+            "text": {
+              "content": "Twitter (@NYTopinion)",
+              "link": {
+                "url": "http://twitter.com/NYTOpinion"
+              }
+            },
+            "annotations": {
+              "bold": false,
+              "italic": true,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": "Twitter (@NYTopinion)",
+            "href": "http://twitter.com/NYTOpinion"
+          },
+          {
+            "type": "text",
+            "text": {
+              "content": " and ",
+              "link": null
+            },
+            "annotations": {
+              "bold": false,
+              "italic": true,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": " and ",
+            "href": null
+          },
+          {
+            "type": "text",
+            "text": {
+              "content": "Instagram",
+              "link": {
+                "url": "https://www.instagram.com/nytopinion/"
+              }
+            },
+            "annotations": {
+              "bold": false,
+              "italic": true,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": "Instagram",
+            "href": "https://www.instagram.com/nytopinion/"
+          },
+          {
+            "type": "text",
+            "text": {
+              "content": ", and sign up for the ",
+              "link": null
+            },
+            "annotations": {
+              "bold": false,
+              "italic": true,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": ", and sign up for the ",
+            "href": null
+          },
+          {
+            "type": "text",
+            "text": {
+              "content": "Opinion Today newsletter",
+              "link": {
+                "url": "http://www.nytimes.com/newsletters/opiniontoday/"
+              }
+            },
+            "annotations": {
+              "bold": false,
+              "italic": true,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": "Opinion Today newsletter",
+            "href": "http://www.nytimes.com/newsletters/opiniontoday/"
+          },
+          {
+            "type": "text",
+            "text": {
+              "content": ".",
+              "link": null
+            },
+            "annotations": {
+              "bold": false,
+              "italic": true,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": ".",
+            "href": null
+          }
+        ]
+      }
+    }
+  ],
+  "next_cursor": null,
+  "has_more": false
+}
+`+"`"+``+"`"+``+"`"+``,
 			"",
 		)
 }
@@ -1174,7 +2532,7 @@ func (p *getBlockChildrenProcessor) processGetBlockChildren(ctx context.Context,
 	if len(query) > 0 {
 		rawURL += "?" + query.Encode()
 	}
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", rawURL, nil)
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
 		return fmt.Errorf("creating HTTP request: %w", err)
 	}
@@ -1182,32 +2540,32 @@ func (p *getBlockChildrenProcessor) processGetBlockChildren(ctx context.Context,
 	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
 	httpReq.Header.Set("Notion-Version", p.notionVersion)
 
-	resp, err := p.httpClient.Do(httpReq)
+	res, err := p.httpClient.Do(httpReq)
 	if err != nil {
 		return fmt.Errorf("Notion API request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer res.Body.Close()
 
-	respBody, err := io.ReadAll(resp.Body)
+	resBody, err := io.ReadAll(res.Body)
 	if err != nil {
 		return fmt.Errorf("reading response body: %w", err)
 	}
 
 	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
 	var body any
-	if len(respBody) > 0 {
+	if len(resBody) > 0 {
 		var jsonBody any
-		if json.Unmarshal(respBody, &jsonBody) == nil {
+		if json.Unmarshal(resBody, &jsonBody) == nil {
 			body = jsonBody
 		} else {
-			body = string(respBody)
+			body = string(resBody)
 		}
 	}
 
 	envelope := map[string]any{
 		"getBlockChildrenResponse": map[string]any{
-			"status_code": resp.StatusCode,
-			"headers":     headerMap(resp.Header),
+			"status_code": res.StatusCode,
+			"headers":     headerMap(res.Header),
 			"body":        body,
 		},
 	}
@@ -1231,15 +2589,15 @@ func (p *getBlockChildrenProcessor) processGetBlockChildren(ctx context.Context,
 		msg.SetStructured(envelope)
 	}
 
-	if resp.StatusCode >= 400 {
-		msg.MetaSetMut("http_status_code", resp.StatusCode)
-		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	if res.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", res.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", res.StatusCode)
 	}
 
 	return nil
 }
 
-// GetSelf processor — get /v1/users/me
+// GetSelf processor — GET /v1/users/me
 
 func init() {
 	service.MustRegisterBatchProcessor(
@@ -1261,7 +2619,22 @@ func getSelfConfig() *service.ConfigSpec {
 	).
 		Example(
 			"Retrieve your token’s bot user",
-			"Response body:\n```json\n{\n  \"object\": \"user\",\n  \"id\": \"92a680bb-6970-4726-952b-4f4c03bff617\",\n  \"name\": \"Leotastic\",\n  \"avatar_url\": null,\n  \"type\": \"bot\",\n  \"bot\": {\n    \"owner\": {\n      \"type\": \"workspace\",\n      \"workspace\": true\n    }\n  }\n}\n```",
+			`Response body:
+`+"`"+``+"`"+``+"`"+`json
+{
+  "object": "user",
+  "id": "92a680bb-6970-4726-952b-4f4c03bff617",
+  "name": "Leotastic",
+  "avatar_url": null,
+  "type": "bot",
+  "bot": {
+    "owner": {
+      "type": "workspace",
+      "workspace": true
+    }
+  }
+}
+`+"`"+``+"`"+``+"`"+``,
 			"",
 		)
 }
@@ -1307,7 +2680,7 @@ func (p *getSelfProcessor) processGetSelf(ctx context.Context, idx int, batch se
 
 	// Build URL.
 	rawURL := p.baseURL + "/v1/users/me"
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", rawURL, nil)
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
 		return fmt.Errorf("creating HTTP request: %w", err)
 	}
@@ -1315,32 +2688,32 @@ func (p *getSelfProcessor) processGetSelf(ctx context.Context, idx int, batch se
 	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
 	httpReq.Header.Set("Notion-Version", p.notionVersion)
 
-	resp, err := p.httpClient.Do(httpReq)
+	res, err := p.httpClient.Do(httpReq)
 	if err != nil {
 		return fmt.Errorf("Notion API request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer res.Body.Close()
 
-	respBody, err := io.ReadAll(resp.Body)
+	resBody, err := io.ReadAll(res.Body)
 	if err != nil {
 		return fmt.Errorf("reading response body: %w", err)
 	}
 
 	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
 	var body any
-	if len(respBody) > 0 {
+	if len(resBody) > 0 {
 		var jsonBody any
-		if json.Unmarshal(respBody, &jsonBody) == nil {
+		if json.Unmarshal(resBody, &jsonBody) == nil {
 			body = jsonBody
 		} else {
-			body = string(respBody)
+			body = string(resBody)
 		}
 	}
 
 	envelope := map[string]any{
 		"getSelfResponse": map[string]any{
-			"status_code": resp.StatusCode,
-			"headers":     headerMap(resp.Header),
+			"status_code": res.StatusCode,
+			"headers":     headerMap(res.Header),
 			"body":        body,
 		},
 	}
@@ -1364,15 +2737,15 @@ func (p *getSelfProcessor) processGetSelf(ctx context.Context, idx int, batch se
 		msg.SetStructured(envelope)
 	}
 
-	if resp.StatusCode >= 400 {
-		msg.MetaSetMut("http_status_code", resp.StatusCode)
-		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	if res.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", res.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", res.StatusCode)
 	}
 
 	return nil
 }
 
-// GetUser processor — get /v1/users/{user_id}
+// GetUser processor — GET /v1/users/{user_id}
 
 func init() {
 	service.MustRegisterBatchProcessor(
@@ -1396,7 +2769,19 @@ func getUserConfig() *service.ConfigSpec {
 	).
 		Example(
 			"Retrieve a user",
-			"Response body:\n```json\n{\n  \"object\": \"user\",\n  \"id\": \"6794760a-1f15-45cd-9c65-0dfe42f5135a\",\n  \"name\": \"Aman Gupta\",\n  \"avatar_url\": null,\n  \"type\": \"person\",\n  \"person\": {\n    \"email\": \"XXXXXXXXXXX\"\n  }\n}\n```",
+			`Response body:
+`+"`"+``+"`"+``+"`"+`json
+{
+  "object": "user",
+  "id": "6794760a-1f15-45cd-9c65-0dfe42f5135a",
+  "name": "Aman Gupta",
+  "avatar_url": null,
+  "type": "person",
+  "person": {
+    "email": "XXXXXXXXXXX"
+  }
+}
+`+"`"+``+"`"+``+"`"+``,
 			"",
 		)
 }
@@ -1453,7 +2838,7 @@ func (p *getUserProcessor) processGetUser(ctx context.Context, idx int, batch se
 		}
 		rawURL = strings.Replace(rawURL, "{user_id}", url.PathEscape(v), 1)
 	}
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", rawURL, nil)
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
 		return fmt.Errorf("creating HTTP request: %w", err)
 	}
@@ -1461,32 +2846,32 @@ func (p *getUserProcessor) processGetUser(ctx context.Context, idx int, batch se
 	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
 	httpReq.Header.Set("Notion-Version", p.notionVersion)
 
-	resp, err := p.httpClient.Do(httpReq)
+	res, err := p.httpClient.Do(httpReq)
 	if err != nil {
 		return fmt.Errorf("Notion API request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer res.Body.Close()
 
-	respBody, err := io.ReadAll(resp.Body)
+	resBody, err := io.ReadAll(res.Body)
 	if err != nil {
 		return fmt.Errorf("reading response body: %w", err)
 	}
 
 	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
 	var body any
-	if len(respBody) > 0 {
+	if len(resBody) > 0 {
 		var jsonBody any
-		if json.Unmarshal(respBody, &jsonBody) == nil {
+		if json.Unmarshal(resBody, &jsonBody) == nil {
 			body = jsonBody
 		} else {
-			body = string(respBody)
+			body = string(resBody)
 		}
 	}
 
 	envelope := map[string]any{
 		"getUserResponse": map[string]any{
-			"status_code": resp.StatusCode,
-			"headers":     headerMap(resp.Header),
+			"status_code": res.StatusCode,
+			"headers":     headerMap(res.Header),
 			"body":        body,
 		},
 	}
@@ -1510,15 +2895,15 @@ func (p *getUserProcessor) processGetUser(ctx context.Context, idx int, batch se
 		msg.SetStructured(envelope)
 	}
 
-	if resp.StatusCode >= 400 {
-		msg.MetaSetMut("http_status_code", resp.StatusCode)
-		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	if res.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", res.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", res.StatusCode)
 	}
 
 	return nil
 }
 
-// GetUsers processor — get /v1/users
+// GetUsers processor — GET /v1/users
 
 func init() {
 	service.MustRegisterBatchProcessor(
@@ -1546,7 +2931,39 @@ func getUsersConfig() *service.ConfigSpec {
 	).
 		Example(
 			"List all users",
-			"Response body:\n```json\n{\n  \"object\": \"list\",\n  \"results\": [\n    {\n      \"object\": \"user\",\n      \"id\": \"6794760a-1f15-45cd-9c65-0dfe42f5135a\",\n      \"name\": \"Aman Gupta\",\n      \"avatar_url\": null,\n      \"type\": \"person\",\n      \"person\": {\n        \"email\": \"XXXXXXXXXX\"\n      }\n    },\n    {\n      \"object\": \"user\",\n      \"id\": \"92a680bb-6970-4726-952b-4f4c03bff617\",\n      \"name\": \"Leotastic\",\n      \"avatar_url\": null,\n      \"type\": \"bot\",\n      \"bot\": {\n        \"owner\": {\n          \"type\": \"workspace\",\n          \"workspace\": true\n        }\n      }\n    }\n  ],\n  \"next_cursor\": null,\n  \"has_more\": false\n}\n```",
+			`Response body:
+`+"`"+``+"`"+``+"`"+`json
+{
+  "object": "list",
+  "results": [
+    {
+      "object": "user",
+      "id": "6794760a-1f15-45cd-9c65-0dfe42f5135a",
+      "name": "Aman Gupta",
+      "avatar_url": null,
+      "type": "person",
+      "person": {
+        "email": "XXXXXXXXXX"
+      }
+    },
+    {
+      "object": "user",
+      "id": "92a680bb-6970-4726-952b-4f4c03bff617",
+      "name": "Leotastic",
+      "avatar_url": null,
+      "type": "bot",
+      "bot": {
+        "owner": {
+          "type": "workspace",
+          "workspace": true
+        }
+      }
+    }
+  ],
+  "next_cursor": null,
+  "has_more": false
+}
+`+"`"+``+"`"+``+"`"+``,
 			"",
 		)
 }
@@ -1624,7 +3041,7 @@ func (p *getUsersProcessor) processGetUsers(ctx context.Context, idx int, batch 
 	if len(query) > 0 {
 		rawURL += "?" + query.Encode()
 	}
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", rawURL, nil)
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
 		return fmt.Errorf("creating HTTP request: %w", err)
 	}
@@ -1632,32 +3049,32 @@ func (p *getUsersProcessor) processGetUsers(ctx context.Context, idx int, batch 
 	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
 	httpReq.Header.Set("Notion-Version", p.notionVersion)
 
-	resp, err := p.httpClient.Do(httpReq)
+	res, err := p.httpClient.Do(httpReq)
 	if err != nil {
 		return fmt.Errorf("Notion API request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer res.Body.Close()
 
-	respBody, err := io.ReadAll(resp.Body)
+	resBody, err := io.ReadAll(res.Body)
 	if err != nil {
 		return fmt.Errorf("reading response body: %w", err)
 	}
 
 	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
 	var body any
-	if len(respBody) > 0 {
+	if len(resBody) > 0 {
 		var jsonBody any
-		if json.Unmarshal(respBody, &jsonBody) == nil {
+		if json.Unmarshal(resBody, &jsonBody) == nil {
 			body = jsonBody
 		} else {
-			body = string(respBody)
+			body = string(resBody)
 		}
 	}
 
 	envelope := map[string]any{
 		"getUsersResponse": map[string]any{
-			"status_code": resp.StatusCode,
-			"headers":     headerMap(resp.Header),
+			"status_code": res.StatusCode,
+			"headers":     headerMap(res.Header),
 			"body":        body,
 		},
 	}
@@ -1681,15 +3098,15 @@ func (p *getUsersProcessor) processGetUsers(ctx context.Context, idx int, batch 
 		msg.SetStructured(envelope)
 	}
 
-	if resp.StatusCode >= 400 {
-		msg.MetaSetMut("http_status_code", resp.StatusCode)
-		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	if res.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", res.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", res.StatusCode)
 	}
 
 	return nil
 }
 
-// ListComments processor — get /v1/comments
+// ListComments processor — GET /v1/comments
 
 func init() {
 	service.MustRegisterBatchProcessor(
@@ -1719,7 +3136,122 @@ func listCommentsConfig() *service.ConfigSpec {
 	).
 		Example(
 			"Retrieve comments",
-			"Response body:\n```json\n{\n  \"object\": \"list\",\n  \"results\": [\n    {\n      \"object\": \"comment\",\n      \"id\": \"ed4c62f2-c0ad-4081-b6b8-dad025637741\",\n      \"parent\": {\n        \"type\": \"block_id\",\n        \"block_id\": \"5d4ca33c-d6b7-4675-93d9-84b70af45d1c\"\n      },\n      \"discussion_id\": \"ce18f8c6-ef2a-427f-b416-43531fc7c117\",\n      \"created_time\": \"2022-07-15T21:38:00.000Z\",\n      \"last_edited_time\": \"2022-07-15T21:38:00.000Z\",\n      \"created_by\": {\n        \"object\": \"user\",\n        \"id\": \"952f41bb-da96-4d36-9c2e-74924eee8ef1\"\n      },\n      \"rich_text\": [\n        {\n          \"type\": \"text\",\n          \"text\": {\n            \"content\": \"Please cite your source\",\n            \"link\": null\n          },\n          \"annotations\": {\n            \"bold\": false,\n            \"italic\": false,\n            \"strikethrough\": false,\n            \"underline\": false,\n            \"code\": false,\n            \"color\": \"default\"\n          },\n          \"plain_text\": \"Please cite your source\",\n          \"href\": null\n        }\n      ]\n    },\n    {\n      \"object\": \"comment\",\n      \"id\": \"8949cb38-aee6-4c62-ba96-6ef7df9b4cf2\",\n      \"parent\": {\n        \"type\": \"block_id\",\n        \"block_id\": \"5d4ca33c-d6b7-4675-93d9-84b70af45d1c\"\n      },\n      \"discussion_id\": \"e63f446f-a84a-4cab-8f5a-b9e7779ecb67\",\n      \"created_time\": \"2022-07-15T21:38:00.000Z\",\n      \"last_edited_time\": \"2022-07-15T21:38:00.000Z\",\n      \"created_by\": {\n        \"object\": \"user\",\n        \"id\": \"952f41bb-da96-4d36-9c2e-74924eee8ef1\"\n      },\n      \"rich_text\": [\n        {\n          \"type\": \"text\",\n          \"text\": {\n            \"content\": \"What other nutrients does kale have?\",\n            \"link\": null\n          },\n          \"annotations\": {\n            \"bold\": false,\n            \"italic\": false,\n            \"strikethrough\": false,\n            \"underline\": false,\n            \"code\": false,\n            \"color\": \"default\"\n          },\n          \"plain_text\": \"What other nutrients does kale have?\",\n          \"href\": null\n        }\n      ]\n    },\n    {\n      \"object\": \"comment\",\n      \"id\": \"6cd52483-6d55-4f8a-a724-4adb1c17ed43\",\n      \"parent\": {\n        \"type\": \"block_id\",\n        \"block_id\": \"5d4ca33c-d6b7-4675-93d9-84b70af45d1c\"\n      },\n      \"discussion_id\": \"ce18f8c6-ef2a-427f-b416-43531fc7c117\",\n      \"created_time\": \"2022-07-18T21:48:00.000Z\",\n      \"last_edited_time\": \"2022-07-18T21:48:00.000Z\",\n      \"created_by\": {\n        \"object\": \"user\",\n        \"id\": \"e450a39e-9051-4d36-bc4e-8581611fc592\"\n      },\n      \"rich_text\": [\n        {\n          \"type\": \"text\",\n          \"text\": {\n            \"content\": \"https://www.healthline.com/nutrition/10-proven-benefits-of-kale\",\n            \"link\": {\n              \"url\": \"https://www.healthline.com/nutrition/10-proven-benefits-of-kale\"\n            }\n          },\n          \"annotations\": {\n            \"bold\": false,\n            \"italic\": false,\n            \"strikethrough\": false,\n            \"underline\": false,\n            \"code\": false,\n            \"color\": \"default\"\n          },\n          \"plain_text\": \"https://www.healthline.com/nutrition/10-proven-benefits-of-kale\",\n          \"href\": \"https://www.healthline.com/nutrition/10-proven-benefits-of-kale\"\n        }\n      ]\n    }\n  ],\n  \"next_cursor\": null,\n  \"has_more\": false,\n  \"type\": \"comment\",\n  \"comment\": {}\n}\n```",
+			`Response body:
+`+"`"+``+"`"+``+"`"+`json
+{
+  "object": "list",
+  "results": [
+    {
+      "object": "comment",
+      "id": "ed4c62f2-c0ad-4081-b6b8-dad025637741",
+      "parent": {
+        "type": "block_id",
+        "block_id": "5d4ca33c-d6b7-4675-93d9-84b70af45d1c"
+      },
+      "discussion_id": "ce18f8c6-ef2a-427f-b416-43531fc7c117",
+      "created_time": "2022-07-15T21:38:00.000Z",
+      "last_edited_time": "2022-07-15T21:38:00.000Z",
+      "created_by": {
+        "object": "user",
+        "id": "952f41bb-da96-4d36-9c2e-74924eee8ef1"
+      },
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Please cite your source",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Please cite your source",
+          "href": null
+        }
+      ]
+    },
+    {
+      "object": "comment",
+      "id": "8949cb38-aee6-4c62-ba96-6ef7df9b4cf2",
+      "parent": {
+        "type": "block_id",
+        "block_id": "5d4ca33c-d6b7-4675-93d9-84b70af45d1c"
+      },
+      "discussion_id": "e63f446f-a84a-4cab-8f5a-b9e7779ecb67",
+      "created_time": "2022-07-15T21:38:00.000Z",
+      "last_edited_time": "2022-07-15T21:38:00.000Z",
+      "created_by": {
+        "object": "user",
+        "id": "952f41bb-da96-4d36-9c2e-74924eee8ef1"
+      },
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "What other nutrients does kale have?",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "What other nutrients does kale have?",
+          "href": null
+        }
+      ]
+    },
+    {
+      "object": "comment",
+      "id": "6cd52483-6d55-4f8a-a724-4adb1c17ed43",
+      "parent": {
+        "type": "block_id",
+        "block_id": "5d4ca33c-d6b7-4675-93d9-84b70af45d1c"
+      },
+      "discussion_id": "ce18f8c6-ef2a-427f-b416-43531fc7c117",
+      "created_time": "2022-07-18T21:48:00.000Z",
+      "last_edited_time": "2022-07-18T21:48:00.000Z",
+      "created_by": {
+        "object": "user",
+        "id": "e450a39e-9051-4d36-bc4e-8581611fc592"
+      },
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "https://www.healthline.com/nutrition/10-proven-benefits-of-kale",
+            "link": {
+              "url": "https://www.healthline.com/nutrition/10-proven-benefits-of-kale"
+            }
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "https://www.healthline.com/nutrition/10-proven-benefits-of-kale",
+          "href": "https://www.healthline.com/nutrition/10-proven-benefits-of-kale"
+        }
+      ]
+    }
+  ],
+  "next_cursor": null,
+  "has_more": false,
+  "type": "comment",
+  "comment": {}
+}
+`+"`"+``+"`"+``+"`"+``,
 			"",
 		)
 }
@@ -1810,7 +3342,7 @@ func (p *listCommentsProcessor) processListComments(ctx context.Context, idx int
 	if len(query) > 0 {
 		rawURL += "?" + query.Encode()
 	}
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", rawURL, nil)
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
 		return fmt.Errorf("creating HTTP request: %w", err)
 	}
@@ -1818,32 +3350,32 @@ func (p *listCommentsProcessor) processListComments(ctx context.Context, idx int
 	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
 	httpReq.Header.Set("Notion-Version", p.notionVersion)
 
-	resp, err := p.httpClient.Do(httpReq)
+	res, err := p.httpClient.Do(httpReq)
 	if err != nil {
 		return fmt.Errorf("Notion API request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer res.Body.Close()
 
-	respBody, err := io.ReadAll(resp.Body)
+	resBody, err := io.ReadAll(res.Body)
 	if err != nil {
 		return fmt.Errorf("reading response body: %w", err)
 	}
 
 	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
 	var body any
-	if len(respBody) > 0 {
+	if len(resBody) > 0 {
 		var jsonBody any
-		if json.Unmarshal(respBody, &jsonBody) == nil {
+		if json.Unmarshal(resBody, &jsonBody) == nil {
 			body = jsonBody
 		} else {
-			body = string(respBody)
+			body = string(resBody)
 		}
 	}
 
 	envelope := map[string]any{
 		"listCommentsResponse": map[string]any{
-			"status_code": resp.StatusCode,
-			"headers":     headerMap(resp.Header),
+			"status_code": res.StatusCode,
+			"headers":     headerMap(res.Header),
 			"body":        body,
 		},
 	}
@@ -1867,15 +3399,15 @@ func (p *listCommentsProcessor) processListComments(ctx context.Context, idx int
 		msg.SetStructured(envelope)
 	}
 
-	if resp.StatusCode >= 400 {
-		msg.MetaSetMut("http_status_code", resp.StatusCode)
-		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	if res.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", res.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", res.StatusCode)
 	}
 
 	return nil
 }
 
-// ListDataSourceTemplates processor — get /v1/data_sources/{data_source_id}/templates
+// ListDataSourceTemplates processor — GET /v1/data_sources/{data_source_id}/templates
 
 func init() {
 	service.MustRegisterBatchProcessor(
@@ -2005,7 +3537,7 @@ func (p *listDataSourceTemplatesProcessor) processListDataSourceTemplates(ctx co
 	if len(query) > 0 {
 		rawURL += "?" + query.Encode()
 	}
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", rawURL, nil)
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
 		return fmt.Errorf("creating HTTP request: %w", err)
 	}
@@ -2013,32 +3545,32 @@ func (p *listDataSourceTemplatesProcessor) processListDataSourceTemplates(ctx co
 	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
 	httpReq.Header.Set("Notion-Version", p.notionVersion)
 
-	resp, err := p.httpClient.Do(httpReq)
+	res, err := p.httpClient.Do(httpReq)
 	if err != nil {
 		return fmt.Errorf("Notion API request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer res.Body.Close()
 
-	respBody, err := io.ReadAll(resp.Body)
+	resBody, err := io.ReadAll(res.Body)
 	if err != nil {
 		return fmt.Errorf("reading response body: %w", err)
 	}
 
 	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
 	var body any
-	if len(respBody) > 0 {
+	if len(resBody) > 0 {
 		var jsonBody any
-		if json.Unmarshal(respBody, &jsonBody) == nil {
+		if json.Unmarshal(resBody, &jsonBody) == nil {
 			body = jsonBody
 		} else {
-			body = string(respBody)
+			body = string(resBody)
 		}
 	}
 
 	envelope := map[string]any{
 		"listDataSourceTemplatesResponse": map[string]any{
-			"status_code": resp.StatusCode,
-			"headers":     headerMap(resp.Header),
+			"status_code": res.StatusCode,
+			"headers":     headerMap(res.Header),
 			"body":        body,
 		},
 	}
@@ -2062,15 +3594,15 @@ func (p *listDataSourceTemplatesProcessor) processListDataSourceTemplates(ctx co
 		msg.SetStructured(envelope)
 	}
 
-	if resp.StatusCode >= 400 {
-		msg.MetaSetMut("http_status_code", resp.StatusCode)
-		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	if res.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", res.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", res.StatusCode)
 	}
 
 	return nil
 }
 
-// ListFileUploads processor — get /v1/file_uploads
+// ListFileUploads processor — GET /v1/file_uploads
 
 func init() {
 	service.MustRegisterBatchProcessor(
@@ -2187,7 +3719,7 @@ func (p *listFileUploadsProcessor) processListFileUploads(ctx context.Context, i
 	if len(query) > 0 {
 		rawURL += "?" + query.Encode()
 	}
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", rawURL, nil)
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
 		return fmt.Errorf("creating HTTP request: %w", err)
 	}
@@ -2195,32 +3727,32 @@ func (p *listFileUploadsProcessor) processListFileUploads(ctx context.Context, i
 	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
 	httpReq.Header.Set("Notion-Version", p.notionVersion)
 
-	resp, err := p.httpClient.Do(httpReq)
+	res, err := p.httpClient.Do(httpReq)
 	if err != nil {
 		return fmt.Errorf("Notion API request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer res.Body.Close()
 
-	respBody, err := io.ReadAll(resp.Body)
+	resBody, err := io.ReadAll(res.Body)
 	if err != nil {
 		return fmt.Errorf("reading response body: %w", err)
 	}
 
 	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
 	var body any
-	if len(respBody) > 0 {
+	if len(resBody) > 0 {
 		var jsonBody any
-		if json.Unmarshal(respBody, &jsonBody) == nil {
+		if json.Unmarshal(resBody, &jsonBody) == nil {
 			body = jsonBody
 		} else {
-			body = string(respBody)
+			body = string(resBody)
 		}
 	}
 
 	envelope := map[string]any{
 		"listFileUploadsResponse": map[string]any{
-			"status_code": resp.StatusCode,
-			"headers":     headerMap(resp.Header),
+			"status_code": res.StatusCode,
+			"headers":     headerMap(res.Header),
 			"body":        body,
 		},
 	}
@@ -2244,15 +3776,15 @@ func (p *listFileUploadsProcessor) processListFileUploads(ctx context.Context, i
 		msg.SetStructured(envelope)
 	}
 
-	if resp.StatusCode >= 400 {
-		msg.MetaSetMut("http_status_code", resp.StatusCode)
-		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	if res.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", res.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", res.StatusCode)
 	}
 
 	return nil
 }
 
-// MovePage processor — post /v1/pages/{page_id}/move
+// MovePage processor — POST /v1/pages/{page_id}/move
 
 func init() {
 	service.MustRegisterBatchProcessor(
@@ -2363,7 +3895,7 @@ func (p *movePageProcessor) processMovePage(ctx context.Context, idx int, batch 
 		return fmt.Errorf("marshaling request body: %w", err)
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", rawURL, bytes.NewReader(reqBytes))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, rawURL, bytes.NewReader(reqBytes))
 	if err != nil {
 		return fmt.Errorf("creating HTTP request: %w", err)
 	}
@@ -2372,32 +3904,32 @@ func (p *movePageProcessor) processMovePage(ctx context.Context, idx int, batch 
 	httpReq.Header.Set("Notion-Version", p.notionVersion)
 	httpReq.Header.Set("Content-Type", "application/json")
 
-	resp, err := p.httpClient.Do(httpReq)
+	res, err := p.httpClient.Do(httpReq)
 	if err != nil {
 		return fmt.Errorf("Notion API request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer res.Body.Close()
 
-	respBody, err := io.ReadAll(resp.Body)
+	resBody, err := io.ReadAll(res.Body)
 	if err != nil {
 		return fmt.Errorf("reading response body: %w", err)
 	}
 
 	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
 	var body any
-	if len(respBody) > 0 {
+	if len(resBody) > 0 {
 		var jsonBody any
-		if json.Unmarshal(respBody, &jsonBody) == nil {
+		if json.Unmarshal(resBody, &jsonBody) == nil {
 			body = jsonBody
 		} else {
-			body = string(respBody)
+			body = string(resBody)
 		}
 	}
 
 	envelope := map[string]any{
 		"movePageResponse": map[string]any{
-			"status_code": resp.StatusCode,
-			"headers":     headerMap(resp.Header),
+			"status_code": res.StatusCode,
+			"headers":     headerMap(res.Header),
 			"body":        body,
 		},
 	}
@@ -2421,15 +3953,15 @@ func (p *movePageProcessor) processMovePage(ctx context.Context, idx int, batch 
 		msg.SetStructured(envelope)
 	}
 
-	if resp.StatusCode >= 400 {
-		msg.MetaSetMut("http_status_code", resp.StatusCode)
-		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	if res.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", res.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", res.StatusCode)
 	}
 
 	return nil
 }
 
-// PatchBlockChildren processor — patch /v1/blocks/{block_id}/children
+// PatchBlockChildren processor — PATCH /v1/blocks/{block_id}/children
 
 func init() {
 	service.MustRegisterBatchProcessor(
@@ -2456,7 +3988,59 @@ func patchBlockChildrenConfig() *service.ConfigSpec {
 	).
 		Example(
 			"Append block children",
-			"Request body:\n```json\n{\n  \"children\": [\n    {\n      \"object\": \"block\",\n      \"type\": \"heading_2\",\n      \"heading_2\": {\n        \"rich_text\": [\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"Lacinato kale\"\n            }\n          }\n        ]\n      }\n    },\n    {\n      \"object\": \"block\",\n      \"type\": \"paragraph\",\n      \"paragraph\": {\n        \"rich_text\": [\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"Lacinato kale is a variety of kale with a long tradition in Italian cuisine, especially that of Tuscany. It is also known as Tuscan kale, Italian kale, dinosaur kale, kale, flat back kale, palm tree kale, or black Tuscan palm.\",\n              \"link\": {\n                \"url\": \"https://en.wikipedia.org/wiki/Lacinato_kale\"\n              }\n            }\n          }\n        ]\n      }\n    }\n  ]\n}\n```\n\nResponse body:\n```json\n{\n  \"object\": \"block\",\n  \"id\": \"a1712d54-53e4-4893-a69d-4d581cd2c845\",\n  \"created_time\": \"2021-04-27T20:38:19.437Z\",\n  \"last_edited_time\": \"2021-05-12T06:07:37.724Z\",\n  \"has_children\": true,\n  \"type\": \"child_page\",\n  \"child_page\": {\n    \"title\": \"Who Will Teach Silicon Valley to Be Ethical? \"\n  }\n}\n```",
+			`Request body:
+`+"`"+``+"`"+``+"`"+`json
+{
+  "children": [
+    {
+      "object": "block",
+      "type": "heading_2",
+      "heading_2": {
+        "rich_text": [
+          {
+            "type": "text",
+            "text": {
+              "content": "Lacinato kale"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "object": "block",
+      "type": "paragraph",
+      "paragraph": {
+        "rich_text": [
+          {
+            "type": "text",
+            "text": {
+              "content": "Lacinato kale is a variety of kale with a long tradition in Italian cuisine, especially that of Tuscany. It is also known as Tuscan kale, Italian kale, dinosaur kale, kale, flat back kale, palm tree kale, or black Tuscan palm.",
+              "link": {
+                "url": "https://en.wikipedia.org/wiki/Lacinato_kale"
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
+`+"`"+``+"`"+``+"`"+`
+
+Response body:
+`+"`"+``+"`"+``+"`"+`json
+{
+  "object": "block",
+  "id": "a1712d54-53e4-4893-a69d-4d581cd2c845",
+  "created_time": "2021-04-27T20:38:19.437Z",
+  "last_edited_time": "2021-05-12T06:07:37.724Z",
+  "has_children": true,
+  "type": "child_page",
+  "child_page": {
+    "title": "Who Will Teach Silicon Valley to Be Ethical? "
+  }
+}
+`+"`"+``+"`"+``+"`"+``,
 			"",
 		)
 }
@@ -2545,7 +4129,7 @@ func (p *patchBlockChildrenProcessor) processPatchBlockChildren(ctx context.Cont
 		return fmt.Errorf("marshaling request body: %w", err)
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, "PATCH", rawURL, bytes.NewReader(reqBytes))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPatch, rawURL, bytes.NewReader(reqBytes))
 	if err != nil {
 		return fmt.Errorf("creating HTTP request: %w", err)
 	}
@@ -2554,32 +4138,32 @@ func (p *patchBlockChildrenProcessor) processPatchBlockChildren(ctx context.Cont
 	httpReq.Header.Set("Notion-Version", p.notionVersion)
 	httpReq.Header.Set("Content-Type", "application/json")
 
-	resp, err := p.httpClient.Do(httpReq)
+	res, err := p.httpClient.Do(httpReq)
 	if err != nil {
 		return fmt.Errorf("Notion API request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer res.Body.Close()
 
-	respBody, err := io.ReadAll(resp.Body)
+	resBody, err := io.ReadAll(res.Body)
 	if err != nil {
 		return fmt.Errorf("reading response body: %w", err)
 	}
 
 	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
 	var body any
-	if len(respBody) > 0 {
+	if len(resBody) > 0 {
 		var jsonBody any
-		if json.Unmarshal(respBody, &jsonBody) == nil {
+		if json.Unmarshal(resBody, &jsonBody) == nil {
 			body = jsonBody
 		} else {
-			body = string(respBody)
+			body = string(resBody)
 		}
 	}
 
 	envelope := map[string]any{
 		"patchBlockChildrenResponse": map[string]any{
-			"status_code": resp.StatusCode,
-			"headers":     headerMap(resp.Header),
+			"status_code": res.StatusCode,
+			"headers":     headerMap(res.Header),
 			"body":        body,
 		},
 	}
@@ -2603,15 +4187,15 @@ func (p *patchBlockChildrenProcessor) processPatchBlockChildren(ctx context.Cont
 		msg.SetStructured(envelope)
 	}
 
-	if resp.StatusCode >= 400 {
-		msg.MetaSetMut("http_status_code", resp.StatusCode)
-		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	if res.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", res.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", res.StatusCode)
 	}
 
 	return nil
 }
 
-// PatchPage processor — patch /v1/pages/{page_id}
+// PatchPage processor — PATCH /v1/pages/{page_id}
 
 func init() {
 	service.MustRegisterBatchProcessor(
@@ -2638,12 +4222,180 @@ func patchPageConfig() *service.ConfigSpec {
 	).
 		Example(
 			"Update page properties",
-			"Request body:\n```json\n{\n  \"properties\": {\n    \"Status\": {\n      \"select\": {\n        \"name\": \"Reading\"\n      }\n    }\n  }\n}\n```\n\nResponse body:\n```json\n{\n  \"object\": \"page\",\n  \"id\": \"a1712d54-53e4-4893-a69d-4d581cd2c845\",\n  \"created_time\": \"2021-04-27T20:38:19.437Z\",\n  \"last_edited_time\": \"2021-04-28T23:12:53.160Z\",\n  \"parent\": {\n    \"type\": \"database_id\",\n    \"database_id\": \"8e2c2b76-9e1d-47d2-87b9-ed3035d607ae\"\n  },\n  \"archived\": false,\n  \"properties\": {\n    \"Score /5\": {\n      \"id\": \")Y7\\\"\",\n      \"type\": \"select\",\n      \"select\": {\n        \"id\": \"b7307e35-c80a-4cb5-bb6b-6054523b394a\",\n        \"name\": \"⭐️⭐️⭐️⭐️\",\n        \"color\": \"default\"\n      }\n    },\n    \"Type\": {\n      \"id\": \"/7eo\",\n      \"type\": \"select\",\n      \"select\": {\n        \"id\": \"f96d0d0a-5564-4a20-ab15-5f040d49759e\",\n        \"name\": \"Article\",\n        \"color\": \"default\"\n      }\n    },\n    \"Publisher\": {\n      \"id\": \">$Pb\",\n      \"type\": \"select\",\n      \"select\": {\n        \"id\": \"c5ee409a-f307-4176-99ee-6e424fa89afa\",\n        \"name\": \"NYT\",\n        \"color\": \"default\"\n      }\n    },\n    \"Summary\": {\n      \"id\": \"?\\\\25\",\n      \"type\": \"rich_text\",\n      \"rich_text\": [\n        {\n          \"type\": \"text\",\n          \"text\": {\n            \"content\": \"Some think chief ethics officers could help technology companies navigate political and social questions.\",\n            \"link\": null\n          },\n          \"annotations\": {\n            \"bold\": false,\n            \"italic\": false,\n            \"strikethrough\": false,\n            \"underline\": false,\n            \"code\": false,\n            \"color\": \"default\"\n          },\n          \"plain_text\": \"Some think chief ethics officers could help technology companies navigate political and social questions.\",\n          \"href\": null\n        }\n      ]\n    },\n    \"Publishing/Release Date\": {\n      \"id\": \"?ex+\",\n      \"type\": \"date\",\n      \"date\": {\n        \"start\": \"2018-10-21\",\n        \"end\": null\n      }\n    },\n    \"Link\": {\n      \"id\": \"VVMi\",\n      \"type\": \"url\",\n      \"url\": \"https://www.nytimes.com/2018/10/21/opinion/who-will-teach-silicon-valley-to-be-ethical.html\"\n    },\n    \"Read\": {\n      \"id\": \"_MWJ\",\n      \"type\": \"checkbox\",\n      \"checkbox\": true\n    },\n    \"Status\": {\n      \"id\": \"`zz5\",\n      \"type\": \"select\",\n      \"select\": {\n        \"id\": \"5925ba22-0126-4b58-90c7-b8bbb2c3c895\",\n        \"name\": \"Reading\",\n        \"color\": \"red\"\n      }\n    },\n    \"Author\": {\n      \"id\": \"qNw_\",\n      \"type\": \"multi_select\",\n      \"multi_select\": [\n        {\n          \"id\": \"833e2c78-35ed-4601-badc-50c323341d76\",\n          \"name\": \"Kara Swisher\",\n          \"color\": \"default\"\n        }\n      ]\n    },\n    \"Name\": {\n      \"id\": \"title\",\n      \"type\": \"title\",\n      \"title\": [\n        {\n          \"type\": \"text\",\n          \"text\": {\n            \"content\": \"Who Will Teach Silicon Valley to Be Ethical? \",\n            \"link\": null\n          },\n          \"annotations\": {\n            \"bold\": false,\n            \"italic\": false,\n            \"strikethrough\": false,\n            \"underline\": false,\n            \"code\": false,\n            \"color\": \"default\"\n          },\n          \"plain_text\": \"Who Will Teach Silicon Valley to Be Ethical? \",\n          \"href\": null\n        }\n      ]\n    }\n  }\n}\n```",
+			`Request body:
+`+"`"+``+"`"+``+"`"+`json
+{
+  "properties": {
+    "Status": {
+      "select": {
+        "name": "Reading"
+      }
+    }
+  }
+}
+`+"`"+``+"`"+``+"`"+`
+
+Response body:
+`+"`"+``+"`"+``+"`"+`json
+{
+  "object": "page",
+  "id": "a1712d54-53e4-4893-a69d-4d581cd2c845",
+  "created_time": "2021-04-27T20:38:19.437Z",
+  "last_edited_time": "2021-04-28T23:12:53.160Z",
+  "parent": {
+    "type": "database_id",
+    "database_id": "8e2c2b76-9e1d-47d2-87b9-ed3035d607ae"
+  },
+  "archived": false,
+  "properties": {
+    "Score /5": {
+      "id": ")Y7\"",
+      "type": "select",
+      "select": {
+        "id": "b7307e35-c80a-4cb5-bb6b-6054523b394a",
+        "name": "⭐️⭐️⭐️⭐️",
+        "color": "default"
+      }
+    },
+    "Type": {
+      "id": "/7eo",
+      "type": "select",
+      "select": {
+        "id": "f96d0d0a-5564-4a20-ab15-5f040d49759e",
+        "name": "Article",
+        "color": "default"
+      }
+    },
+    "Publisher": {
+      "id": ">$Pb",
+      "type": "select",
+      "select": {
+        "id": "c5ee409a-f307-4176-99ee-6e424fa89afa",
+        "name": "NYT",
+        "color": "default"
+      }
+    },
+    "Summary": {
+      "id": "?\\25",
+      "type": "rich_text",
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Some think chief ethics officers could help technology companies navigate political and social questions.",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Some think chief ethics officers could help technology companies navigate political and social questions.",
+          "href": null
+        }
+      ]
+    },
+    "Publishing/Release Date": {
+      "id": "?ex+",
+      "type": "date",
+      "date": {
+        "start": "2018-10-21",
+        "end": null
+      }
+    },
+    "Link": {
+      "id": "VVMi",
+      "type": "url",
+      "url": "https://www.nytimes.com/2018/10/21/opinion/who-will-teach-silicon-valley-to-be-ethical.html"
+    },
+    "Read": {
+      "id": "_MWJ",
+      "type": "checkbox",
+      "checkbox": true
+    },
+    "Status": {
+      "id": "`+"`"+`zz5",
+      "type": "select",
+      "select": {
+        "id": "5925ba22-0126-4b58-90c7-b8bbb2c3c895",
+        "name": "Reading",
+        "color": "red"
+      }
+    },
+    "Author": {
+      "id": "qNw_",
+      "type": "multi_select",
+      "multi_select": [
+        {
+          "id": "833e2c78-35ed-4601-badc-50c323341d76",
+          "name": "Kara Swisher",
+          "color": "default"
+        }
+      ]
+    },
+    "Name": {
+      "id": "title",
+      "type": "title",
+      "title": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Who Will Teach Silicon Valley to Be Ethical? ",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Who Will Teach Silicon Valley to Be Ethical? ",
+          "href": null
+        }
+      ]
+    }
+  }
+}
+`+"`"+``+"`"+``+"`"+``,
 			"",
 		).
 		Example(
 			"Archive a page",
-			"Request body:\n```json\n{\n  \"archived\": true\n}\n```\n\nResponse body:\n```json\n{\n  \"object\": \"block\",\n  \"id\": \"2646ac0d-df90-4bab-bb4e-75e3cb972ed1\",\n  \"created_time\": \"2022-02-24T22:14:00.000Z\",\n  \"last_edited_time\": \"2022-02-24T22:15:00.000Z\",\n  \"created_by\": {\n    \"object\": \"user\",\n    \"id\": \"6794760a-1f15-45cd-9c65-0dfe42f5135a\"\n  },\n  \"last_edited_by\": {\n    \"object\": \"user\",\n    \"id\": \"92a680bb-6970-4726-952b-4f4c03bff617\"\n  },\n  \"has_children\": false,\n  \"archived\": true,\n  \"type\": \"child_page\",\n  \"child_page\": {\n    \"title\": \"\"\n  }\n}\n```",
+			`Request body:
+`+"`"+``+"`"+``+"`"+`json
+{
+  "archived": true
+}
+`+"`"+``+"`"+``+"`"+`
+
+Response body:
+`+"`"+``+"`"+``+"`"+`json
+{
+  "object": "block",
+  "id": "2646ac0d-df90-4bab-bb4e-75e3cb972ed1",
+  "created_time": "2022-02-24T22:14:00.000Z",
+  "last_edited_time": "2022-02-24T22:15:00.000Z",
+  "created_by": {
+    "object": "user",
+    "id": "6794760a-1f15-45cd-9c65-0dfe42f5135a"
+  },
+  "last_edited_by": {
+    "object": "user",
+    "id": "92a680bb-6970-4726-952b-4f4c03bff617"
+  },
+  "has_children": false,
+  "archived": true,
+  "type": "child_page",
+  "child_page": {
+    "title": ""
+  }
+}
+`+"`"+``+"`"+``+"`"+``,
 			"",
 		)
 }
@@ -2732,7 +4484,7 @@ func (p *patchPageProcessor) processPatchPage(ctx context.Context, idx int, batc
 		return fmt.Errorf("marshaling request body: %w", err)
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, "PATCH", rawURL, bytes.NewReader(reqBytes))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPatch, rawURL, bytes.NewReader(reqBytes))
 	if err != nil {
 		return fmt.Errorf("creating HTTP request: %w", err)
 	}
@@ -2741,32 +4493,32 @@ func (p *patchPageProcessor) processPatchPage(ctx context.Context, idx int, batc
 	httpReq.Header.Set("Notion-Version", p.notionVersion)
 	httpReq.Header.Set("Content-Type", "application/json")
 
-	resp, err := p.httpClient.Do(httpReq)
+	res, err := p.httpClient.Do(httpReq)
 	if err != nil {
 		return fmt.Errorf("Notion API request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer res.Body.Close()
 
-	respBody, err := io.ReadAll(resp.Body)
+	resBody, err := io.ReadAll(res.Body)
 	if err != nil {
 		return fmt.Errorf("reading response body: %w", err)
 	}
 
 	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
 	var body any
-	if len(respBody) > 0 {
+	if len(resBody) > 0 {
 		var jsonBody any
-		if json.Unmarshal(respBody, &jsonBody) == nil {
+		if json.Unmarshal(resBody, &jsonBody) == nil {
 			body = jsonBody
 		} else {
-			body = string(respBody)
+			body = string(resBody)
 		}
 	}
 
 	envelope := map[string]any{
 		"patchPageResponse": map[string]any{
-			"status_code": resp.StatusCode,
-			"headers":     headerMap(resp.Header),
+			"status_code": res.StatusCode,
+			"headers":     headerMap(res.Header),
 			"body":        body,
 		},
 	}
@@ -2790,15 +4542,15 @@ func (p *patchPageProcessor) processPatchPage(ctx context.Context, idx int, batc
 		msg.SetStructured(envelope)
 	}
 
-	if resp.StatusCode >= 400 {
-		msg.MetaSetMut("http_status_code", resp.StatusCode)
-		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	if res.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", res.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", res.StatusCode)
 	}
 
 	return nil
 }
 
-// PostDatabaseQuery processor — post /v1/data_sources/{data_source_id}/query
+// PostDatabaseQuery processor — POST /v1/data_sources/{data_source_id}/query
 
 func init() {
 	service.MustRegisterBatchProcessor(
@@ -2931,7 +4683,7 @@ func (p *postDatabaseQueryProcessor) processPostDatabaseQuery(ctx context.Contex
 		return fmt.Errorf("marshaling request body: %w", err)
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", rawURL, bytes.NewReader(reqBytes))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, rawURL, bytes.NewReader(reqBytes))
 	if err != nil {
 		return fmt.Errorf("creating HTTP request: %w", err)
 	}
@@ -2940,32 +4692,32 @@ func (p *postDatabaseQueryProcessor) processPostDatabaseQuery(ctx context.Contex
 	httpReq.Header.Set("Notion-Version", p.notionVersion)
 	httpReq.Header.Set("Content-Type", "application/json")
 
-	resp, err := p.httpClient.Do(httpReq)
+	res, err := p.httpClient.Do(httpReq)
 	if err != nil {
 		return fmt.Errorf("Notion API request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer res.Body.Close()
 
-	respBody, err := io.ReadAll(resp.Body)
+	resBody, err := io.ReadAll(res.Body)
 	if err != nil {
 		return fmt.Errorf("reading response body: %w", err)
 	}
 
 	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
 	var body any
-	if len(respBody) > 0 {
+	if len(resBody) > 0 {
 		var jsonBody any
-		if json.Unmarshal(respBody, &jsonBody) == nil {
+		if json.Unmarshal(resBody, &jsonBody) == nil {
 			body = jsonBody
 		} else {
-			body = string(respBody)
+			body = string(resBody)
 		}
 	}
 
 	envelope := map[string]any{
 		"postDatabaseQueryResponse": map[string]any{
-			"status_code": resp.StatusCode,
-			"headers":     headerMap(resp.Header),
+			"status_code": res.StatusCode,
+			"headers":     headerMap(res.Header),
 			"body":        body,
 		},
 	}
@@ -2989,15 +4741,15 @@ func (p *postDatabaseQueryProcessor) processPostDatabaseQuery(ctx context.Contex
 		msg.SetStructured(envelope)
 	}
 
-	if resp.StatusCode >= 400 {
-		msg.MetaSetMut("http_status_code", resp.StatusCode)
-		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	if res.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", res.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", res.StatusCode)
 	}
 
 	return nil
 }
 
-// PostPage processor — post /v1/pages
+// PostPage processor — POST /v1/pages
 
 func init() {
 	service.MustRegisterBatchProcessor(
@@ -3022,12 +4774,471 @@ func postPageConfig() *service.ConfigSpec {
 	).
 		Example(
 			"Create a page",
-			"Request body:\n```json\n{\n  \"parent\": {\n    \"database_id\": \"{{DATABASE_ID}}\"\n  },\n  \"properties\": {\n    \"Type\": {\n      \"select\": {\n        \"id\": \"f96d0d0a-5564-4a20-ab15-5f040d49759e\",\n        \"name\": \"Article\",\n        \"color\": \"default\"\n      }\n    },\n    \"Score /5\": {\n      \"select\": {\n        \"id\": \"5c944de7-3f4b-4567-b3a1-fa2c71c540b6\",\n        \"name\": \"⭐️⭐️⭐️⭐️⭐️\",\n        \"color\": \"default\"\n      }\n    },\n    \"Name\": {\n      \"title\": [\n        {\n          \"text\": {\n            \"content\": \"New Media Article\"\n          }\n        }\n      ]\n    },\n    \"Status\": {\n      \"select\": {\n        \"id\": \"8c4a056e-6709-4dd1-ba58-d34d9480855a\",\n        \"name\": \"Ready to Start\",\n        \"color\": \"yellow\"\n      }\n    },\n    \"Publisher\": {\n      \"select\": {\n        \"id\": \"01f82d08-aa1f-4884-a4e0-3bc32f909ec4\",\n        \"name\": \"The Atlantic\",\n        \"color\": \"red\"\n      }\n    },\n    \"Publishing/Release Date\": {\n      \"date\": {\n        \"start\": \"2020-12-08T12:00:00Z\",\n        \"end\": null\n      }\n    },\n    \"Link\": {\n      \"url\": \"https://www.nytimes.com/2018/10/21/opinion/who-will-teach-silicon-valley-to-be-ethical.html\"\n    },\n    \"Summary\": {\n      \"rich_text\": [\n        {\n          \"type\": \"text\",\n          \"text\": {\n            \"content\": \"Some think chief ethics officers could help technology companies navigate political and social questions.\",\n            \"link\": null\n          },\n          \"annotations\": {\n            \"bold\": false,\n            \"italic\": false,\n            \"strikethrough\": false,\n            \"underline\": false,\n            \"code\": false,\n            \"color\": \"default\"\n          },\n          \"plain_text\": \"Some think chief ethics officers could help technology companies navigate political and social questions.\",\n          \"href\": null\n        }\n      ]\n    },\n    \"Read\": {\n      \"checkbox\": false\n    }\n  }\n}\n```\n\nResponse body:\n```json\n{\n  \"object\": \"page\",\n  \"id\": \"f3a1f364-6ca1-41d2-8986-552ae37c1bdf\",\n  \"created_time\": \"2022-03-02T05:24:00.000Z\",\n  \"last_edited_time\": \"2022-03-02T05:24:00.000Z\",\n  \"created_by\": {\n    \"object\": \"user\",\n    \"id\": \"92a680bb-6970-4726-952b-4f4c03bff617\"\n  },\n  \"last_edited_by\": {\n    \"object\": \"user\",\n    \"id\": \"92a680bb-6970-4726-952b-4f4c03bff617\"\n  },\n  \"cover\": null,\n  \"icon\": null,\n  \"parent\": {\n    \"type\": \"database_id\",\n    \"database_id\": \"8e2c2b76-9e1d-47d2-87b9-ed3035d607ae\"\n  },\n  \"archived\": false,\n  \"properties\": {\n    \"Score /5\": {\n      \"id\": \")Y7%22\",\n      \"type\": \"select\",\n      \"select\": {\n        \"id\": \"5c944de7-3f4b-4567-b3a1-fa2c71c540b6\",\n        \"name\": \"⭐️⭐️⭐️⭐️⭐️\",\n        \"color\": \"default\"\n      }\n    },\n    \"Type\": {\n      \"id\": \"%2F7eo\",\n      \"type\": \"select\",\n      \"select\": {\n        \"id\": \"f96d0d0a-5564-4a20-ab15-5f040d49759e\",\n        \"name\": \"Article\",\n        \"color\": \"default\"\n      }\n    },\n    \"Publisher\": {\n      \"id\": \"%3E%24Pb\",\n      \"type\": \"select\",\n      \"select\": {\n        \"id\": \"01f82d08-aa1f-4884-a4e0-3bc32f909ec4\",\n        \"name\": \"The Atlantic\",\n        \"color\": \"red\"\n      }\n    },\n    \"Summary\": {\n      \"id\": \"%3F%5C25\",\n      \"type\": \"rich_text\",\n      \"rich_text\": [\n        {\n          \"type\": \"text\",\n          \"text\": {\n            \"content\": \"Some think chief ethics officers could help technology companies navigate political and social questions.\",\n            \"link\": null\n          },\n          \"annotations\": {\n            \"bold\": false,\n            \"italic\": false,\n            \"strikethrough\": false,\n            \"underline\": false,\n            \"code\": false,\n            \"color\": \"default\"\n          },\n          \"plain_text\": \"Some think chief ethics officers could help technology companies navigate political and social questions.\",\n          \"href\": null\n        }\n      ]\n    },\n    \"Publishing/Release Date\": {\n      \"id\": \"%3Fex%2B\",\n      \"type\": \"date\",\n      \"date\": {\n        \"start\": \"2020-12-08T12:00:00.000+00:00\",\n        \"end\": null,\n        \"time_zone\": null\n      }\n    },\n    \"Link\": {\n      \"id\": \"VVMi\",\n      \"type\": \"url\",\n      \"url\": \"https://www.nytimes.com/2018/10/21/opinion/who-will-teach-silicon-valley-to-be-ethical.html\"\n    },\n    \"Read\": {\n      \"id\": \"_MWJ\",\n      \"type\": \"checkbox\",\n      \"checkbox\": false\n    },\n    \"Status\": {\n      \"id\": \"%60zz5\",\n      \"type\": \"select\",\n      \"select\": {\n        \"id\": \"8c4a056e-6709-4dd1-ba58-d34d9480855a\",\n        \"name\": \"Ready to Start\",\n        \"color\": \"yellow\"\n      }\n    },\n    \"Author\": {\n      \"id\": \"qNw_\",\n      \"type\": \"multi_select\",\n      \"multi_select\": []\n    },\n    \"Name\": {\n      \"id\": \"title\",\n      \"type\": \"title\",\n      \"title\": [\n        {\n          \"type\": \"text\",\n          \"text\": {\n            \"content\": \"New Media Article\",\n            \"link\": null\n          },\n          \"annotations\": {\n            \"bold\": false,\n            \"italic\": false,\n            \"strikethrough\": false,\n            \"underline\": false,\n            \"code\": false,\n            \"color\": \"default\"\n          },\n          \"plain_text\": \"New Media Article\",\n          \"href\": null\n        }\n      ]\n    }\n  },\n  \"url\": \"https://www.notion.so/New-Media-Article-f3a1f3646ca141d28986552ae37c1bdf\"\n}\n```",
+			`Request body:
+`+"`"+``+"`"+``+"`"+`json
+{
+  "parent": {
+    "database_id": "{{DATABASE_ID}}"
+  },
+  "properties": {
+    "Type": {
+      "select": {
+        "id": "f96d0d0a-5564-4a20-ab15-5f040d49759e",
+        "name": "Article",
+        "color": "default"
+      }
+    },
+    "Score /5": {
+      "select": {
+        "id": "5c944de7-3f4b-4567-b3a1-fa2c71c540b6",
+        "name": "⭐️⭐️⭐️⭐️⭐️",
+        "color": "default"
+      }
+    },
+    "Name": {
+      "title": [
+        {
+          "text": {
+            "content": "New Media Article"
+          }
+        }
+      ]
+    },
+    "Status": {
+      "select": {
+        "id": "8c4a056e-6709-4dd1-ba58-d34d9480855a",
+        "name": "Ready to Start",
+        "color": "yellow"
+      }
+    },
+    "Publisher": {
+      "select": {
+        "id": "01f82d08-aa1f-4884-a4e0-3bc32f909ec4",
+        "name": "The Atlantic",
+        "color": "red"
+      }
+    },
+    "Publishing/Release Date": {
+      "date": {
+        "start": "2020-12-08T12:00:00Z",
+        "end": null
+      }
+    },
+    "Link": {
+      "url": "https://www.nytimes.com/2018/10/21/opinion/who-will-teach-silicon-valley-to-be-ethical.html"
+    },
+    "Summary": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Some think chief ethics officers could help technology companies navigate political and social questions.",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Some think chief ethics officers could help technology companies navigate political and social questions.",
+          "href": null
+        }
+      ]
+    },
+    "Read": {
+      "checkbox": false
+    }
+  }
+}
+`+"`"+``+"`"+``+"`"+`
+
+Response body:
+`+"`"+``+"`"+``+"`"+`json
+{
+  "object": "page",
+  "id": "f3a1f364-6ca1-41d2-8986-552ae37c1bdf",
+  "created_time": "2022-03-02T05:24:00.000Z",
+  "last_edited_time": "2022-03-02T05:24:00.000Z",
+  "created_by": {
+    "object": "user",
+    "id": "92a680bb-6970-4726-952b-4f4c03bff617"
+  },
+  "last_edited_by": {
+    "object": "user",
+    "id": "92a680bb-6970-4726-952b-4f4c03bff617"
+  },
+  "cover": null,
+  "icon": null,
+  "parent": {
+    "type": "database_id",
+    "database_id": "8e2c2b76-9e1d-47d2-87b9-ed3035d607ae"
+  },
+  "archived": false,
+  "properties": {
+    "Score /5": {
+      "id": ")Y7%22",
+      "type": "select",
+      "select": {
+        "id": "5c944de7-3f4b-4567-b3a1-fa2c71c540b6",
+        "name": "⭐️⭐️⭐️⭐️⭐️",
+        "color": "default"
+      }
+    },
+    "Type": {
+      "id": "%2F7eo",
+      "type": "select",
+      "select": {
+        "id": "f96d0d0a-5564-4a20-ab15-5f040d49759e",
+        "name": "Article",
+        "color": "default"
+      }
+    },
+    "Publisher": {
+      "id": "%3E%24Pb",
+      "type": "select",
+      "select": {
+        "id": "01f82d08-aa1f-4884-a4e0-3bc32f909ec4",
+        "name": "The Atlantic",
+        "color": "red"
+      }
+    },
+    "Summary": {
+      "id": "%3F%5C25",
+      "type": "rich_text",
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Some think chief ethics officers could help technology companies navigate political and social questions.",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Some think chief ethics officers could help technology companies navigate political and social questions.",
+          "href": null
+        }
+      ]
+    },
+    "Publishing/Release Date": {
+      "id": "%3Fex%2B",
+      "type": "date",
+      "date": {
+        "start": "2020-12-08T12:00:00.000+00:00",
+        "end": null,
+        "time_zone": null
+      }
+    },
+    "Link": {
+      "id": "VVMi",
+      "type": "url",
+      "url": "https://www.nytimes.com/2018/10/21/opinion/who-will-teach-silicon-valley-to-be-ethical.html"
+    },
+    "Read": {
+      "id": "_MWJ",
+      "type": "checkbox",
+      "checkbox": false
+    },
+    "Status": {
+      "id": "%60zz5",
+      "type": "select",
+      "select": {
+        "id": "8c4a056e-6709-4dd1-ba58-d34d9480855a",
+        "name": "Ready to Start",
+        "color": "yellow"
+      }
+    },
+    "Author": {
+      "id": "qNw_",
+      "type": "multi_select",
+      "multi_select": []
+    },
+    "Name": {
+      "id": "title",
+      "type": "title",
+      "title": [
+        {
+          "type": "text",
+          "text": {
+            "content": "New Media Article",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "New Media Article",
+          "href": null
+        }
+      ]
+    }
+  },
+  "url": "https://www.notion.so/New-Media-Article-f3a1f3646ca141d28986552ae37c1bdf"
+}
+`+"`"+``+"`"+``+"`"+``,
 			"",
 		).
 		Example(
 			"Create a page with content",
-			"Request body:\n```json\n{\n  \"parent\": {\n    \"database_id\": \"{{DATABASE_ID}}\"\n  },\n  \"properties\": {\n    \"Type\": {\n      \"select\": {\n        \"id\": \"f96d0d0a-5564-4a20-ab15-5f040d49759e\",\n        \"name\": \"Article\",\n        \"color\": \"default\"\n      }\n    },\n    \"Score /5\": {\n      \"select\": {\n        \"id\": \"5c944de7-3f4b-4567-b3a1-fa2c71c540b6\",\n        \"name\": \"⭐️⭐️⭐️⭐️⭐️\",\n        \"color\": \"default\"\n      }\n    },\n    \"Name\": {\n      \"title\": [\n        {\n          \"text\": {\n            \"content\": \"New Media Article\"\n          }\n        }\n      ]\n    },\n    \"Status\": {\n      \"select\": {\n        \"id\": \"8c4a056e-6709-4dd1-ba58-d34d9480855a\",\n        \"name\": \"Ready to Start\",\n        \"color\": \"yellow\"\n      }\n    },\n    \"Publisher\": {\n      \"select\": {\n        \"id\": \"01f82d08-aa1f-4884-a4e0-3bc32f909ec4\",\n        \"name\": \"The Atlantic\",\n        \"color\": \"red\"\n      }\n    },\n    \"Publishing/Release Date\": {\n      \"date\": {\n        \"start\": \"2020-12-08T12:00:00Z\",\n        \"end\": null\n      }\n    },\n    \"Link\": {\n      \"url\": \"https://www.nytimes.com/2018/10/21/opinion/who-will-teach-silicon-valley-to-be-ethical.html\"\n    },\n    \"Summary\": {\n      \"rich_text\": [\n        {\n          \"type\": \"text\",\n          \"text\": {\n            \"content\": \"Some think chief ethics officers could help technology companies navigate political and social questions.\",\n            \"link\": null\n          },\n          \"annotations\": {\n            \"bold\": false,\n            \"italic\": false,\n            \"strikethrough\": false,\n            \"underline\": false,\n            \"code\": false,\n            \"color\": \"default\"\n          },\n          \"plain_text\": \"Some think chief ethics officers could help technology companies navigate political and social questions.\",\n          \"href\": null\n        }\n      ]\n    },\n    \"Read\": {\n      \"checkbox\": false\n    }\n  },\n  \"children\": [\n    {\n      \"object\": \"block\",\n      \"type\": \"heading_2\",\n      \"heading_2\": {\n        \"rich_text\": [\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"Lacinato kale\"\n            }\n          }\n        ]\n      }\n    },\n    {\n      \"object\": \"block\",\n      \"type\": \"paragraph\",\n      \"paragraph\": {\n        \"rich_text\": [\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": \"Lacinato kale is a variety of kale with a long tradition in Italian cuisine, especially that of Tuscany. It is also known as Tuscan kale, Italian kale, dinosaur kale, kale, flat back kale, palm tree kale, or black Tuscan palm.\",\n              \"link\": {\n                \"url\": \"https://en.wikipedia.org/wiki/Lacinato_kale\"\n              }\n            }\n          }\n        ]\n      }\n    }\n  ]\n}\n```\n\nResponse body:\n```json\n{\n  \"object\": \"page\",\n  \"id\": \"672b014a-2626-4ada-9211-fb3613d07ae2\",\n  \"created_time\": \"2022-03-02T05:24:00.000Z\",\n  \"last_edited_time\": \"2022-03-02T05:24:00.000Z\",\n  \"created_by\": {\n    \"object\": \"user\",\n    \"id\": \"92a680bb-6970-4726-952b-4f4c03bff617\"\n  },\n  \"last_edited_by\": {\n    \"object\": \"user\",\n    \"id\": \"92a680bb-6970-4726-952b-4f4c03bff617\"\n  },\n  \"cover\": null,\n  \"icon\": null,\n  \"parent\": {\n    \"type\": \"database_id\",\n    \"database_id\": \"8e2c2b76-9e1d-47d2-87b9-ed3035d607ae\"\n  },\n  \"archived\": false,\n  \"properties\": {\n    \"Score /5\": {\n      \"id\": \")Y7%22\",\n      \"type\": \"select\",\n      \"select\": {\n        \"id\": \"5c944de7-3f4b-4567-b3a1-fa2c71c540b6\",\n        \"name\": \"⭐️⭐️⭐️⭐️⭐️\",\n        \"color\": \"default\"\n      }\n    },\n    \"Type\": {\n      \"id\": \"%2F7eo\",\n      \"type\": \"select\",\n      \"select\": {\n        \"id\": \"672b014a-2626-4ada-9211-fb3613d07ae2\",\n        \"name\": \"Article\",\n        \"color\": \"default\"\n      }\n    },\n    \"Publisher\": {\n      \"id\": \"%3E%24Pb\",\n      \"type\": \"select\",\n      \"select\": {\n        \"id\": \"01f82d08-aa1f-4884-a4e0-3bc32f909ec4\",\n        \"name\": \"The Atlantic\",\n        \"color\": \"red\"\n      }\n    },\n    \"Summary\": {\n      \"id\": \"%3F%5C25\",\n      \"type\": \"rich_text\",\n      \"rich_text\": [\n        {\n          \"type\": \"text\",\n          \"text\": {\n            \"content\": \"Some think chief ethics officers could help technology companies navigate political and social questions.\",\n            \"link\": null\n          },\n          \"annotations\": {\n            \"bold\": false,\n            \"italic\": false,\n            \"strikethrough\": false,\n            \"underline\": false,\n            \"code\": false,\n            \"color\": \"default\"\n          },\n          \"plain_text\": \"Some think chief ethics officers could help technology companies navigate political and social questions.\",\n          \"href\": null\n        }\n      ]\n    },\n    \"Publishing/Release Date\": {\n      \"id\": \"%3Fex%2B\",\n      \"type\": \"date\",\n      \"date\": {\n        \"start\": \"2020-12-08T12:00:00.000+00:00\",\n        \"end\": null,\n        \"time_zone\": null\n      }\n    },\n    \"Link\": {\n      \"id\": \"VVMi\",\n      \"type\": \"url\",\n      \"url\": \"https://www.nytimes.com/2018/10/21/opinion/who-will-teach-silicon-valley-to-be-ethical.html\"\n    },\n    \"Read\": {\n      \"id\": \"_MWJ\",\n      \"type\": \"checkbox\",\n      \"checkbox\": false\n    },\n    \"Status\": {\n      \"id\": \"%60zz5\",\n      \"type\": \"select\",\n      \"select\": {\n        \"id\": \"8c4a056e-6709-4dd1-ba58-d34d9480855a\",\n        \"name\": \"Ready to Start\",\n        \"color\": \"yellow\"\n      }\n    },\n    \"Author\": {\n      \"id\": \"qNw_\",\n      \"type\": \"multi_select\",\n      \"multi_select\": []\n    },\n    \"Name\": {\n      \"id\": \"title\",\n      \"type\": \"title\",\n      \"title\": [\n        {\n          \"type\": \"text\",\n          \"text\": {\n            \"content\": \"New Media Article\",\n            \"link\": null\n          },\n          \"annotations\": {\n            \"bold\": false,\n            \"italic\": false,\n            \"strikethrough\": false,\n            \"underline\": false,\n            \"code\": false,\n            \"color\": \"default\"\n          },\n          \"plain_text\": \"New Media Article\",\n          \"href\": null\n        }\n      ]\n    }\n  },\n  \"url\": \"https://www.notion.so/New-Media-Article-672b014a26264ada9211fb3613d07ae2\"\n}\n```",
+			`Request body:
+`+"`"+``+"`"+``+"`"+`json
+{
+  "parent": {
+    "database_id": "{{DATABASE_ID}}"
+  },
+  "properties": {
+    "Type": {
+      "select": {
+        "id": "f96d0d0a-5564-4a20-ab15-5f040d49759e",
+        "name": "Article",
+        "color": "default"
+      }
+    },
+    "Score /5": {
+      "select": {
+        "id": "5c944de7-3f4b-4567-b3a1-fa2c71c540b6",
+        "name": "⭐️⭐️⭐️⭐️⭐️",
+        "color": "default"
+      }
+    },
+    "Name": {
+      "title": [
+        {
+          "text": {
+            "content": "New Media Article"
+          }
+        }
+      ]
+    },
+    "Status": {
+      "select": {
+        "id": "8c4a056e-6709-4dd1-ba58-d34d9480855a",
+        "name": "Ready to Start",
+        "color": "yellow"
+      }
+    },
+    "Publisher": {
+      "select": {
+        "id": "01f82d08-aa1f-4884-a4e0-3bc32f909ec4",
+        "name": "The Atlantic",
+        "color": "red"
+      }
+    },
+    "Publishing/Release Date": {
+      "date": {
+        "start": "2020-12-08T12:00:00Z",
+        "end": null
+      }
+    },
+    "Link": {
+      "url": "https://www.nytimes.com/2018/10/21/opinion/who-will-teach-silicon-valley-to-be-ethical.html"
+    },
+    "Summary": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Some think chief ethics officers could help technology companies navigate political and social questions.",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Some think chief ethics officers could help technology companies navigate political and social questions.",
+          "href": null
+        }
+      ]
+    },
+    "Read": {
+      "checkbox": false
+    }
+  },
+  "children": [
+    {
+      "object": "block",
+      "type": "heading_2",
+      "heading_2": {
+        "rich_text": [
+          {
+            "type": "text",
+            "text": {
+              "content": "Lacinato kale"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "object": "block",
+      "type": "paragraph",
+      "paragraph": {
+        "rich_text": [
+          {
+            "type": "text",
+            "text": {
+              "content": "Lacinato kale is a variety of kale with a long tradition in Italian cuisine, especially that of Tuscany. It is also known as Tuscan kale, Italian kale, dinosaur kale, kale, flat back kale, palm tree kale, or black Tuscan palm.",
+              "link": {
+                "url": "https://en.wikipedia.org/wiki/Lacinato_kale"
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
+`+"`"+``+"`"+``+"`"+`
+
+Response body:
+`+"`"+``+"`"+``+"`"+`json
+{
+  "object": "page",
+  "id": "672b014a-2626-4ada-9211-fb3613d07ae2",
+  "created_time": "2022-03-02T05:24:00.000Z",
+  "last_edited_time": "2022-03-02T05:24:00.000Z",
+  "created_by": {
+    "object": "user",
+    "id": "92a680bb-6970-4726-952b-4f4c03bff617"
+  },
+  "last_edited_by": {
+    "object": "user",
+    "id": "92a680bb-6970-4726-952b-4f4c03bff617"
+  },
+  "cover": null,
+  "icon": null,
+  "parent": {
+    "type": "database_id",
+    "database_id": "8e2c2b76-9e1d-47d2-87b9-ed3035d607ae"
+  },
+  "archived": false,
+  "properties": {
+    "Score /5": {
+      "id": ")Y7%22",
+      "type": "select",
+      "select": {
+        "id": "5c944de7-3f4b-4567-b3a1-fa2c71c540b6",
+        "name": "⭐️⭐️⭐️⭐️⭐️",
+        "color": "default"
+      }
+    },
+    "Type": {
+      "id": "%2F7eo",
+      "type": "select",
+      "select": {
+        "id": "672b014a-2626-4ada-9211-fb3613d07ae2",
+        "name": "Article",
+        "color": "default"
+      }
+    },
+    "Publisher": {
+      "id": "%3E%24Pb",
+      "type": "select",
+      "select": {
+        "id": "01f82d08-aa1f-4884-a4e0-3bc32f909ec4",
+        "name": "The Atlantic",
+        "color": "red"
+      }
+    },
+    "Summary": {
+      "id": "%3F%5C25",
+      "type": "rich_text",
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Some think chief ethics officers could help technology companies navigate political and social questions.",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Some think chief ethics officers could help technology companies navigate political and social questions.",
+          "href": null
+        }
+      ]
+    },
+    "Publishing/Release Date": {
+      "id": "%3Fex%2B",
+      "type": "date",
+      "date": {
+        "start": "2020-12-08T12:00:00.000+00:00",
+        "end": null,
+        "time_zone": null
+      }
+    },
+    "Link": {
+      "id": "VVMi",
+      "type": "url",
+      "url": "https://www.nytimes.com/2018/10/21/opinion/who-will-teach-silicon-valley-to-be-ethical.html"
+    },
+    "Read": {
+      "id": "_MWJ",
+      "type": "checkbox",
+      "checkbox": false
+    },
+    "Status": {
+      "id": "%60zz5",
+      "type": "select",
+      "select": {
+        "id": "8c4a056e-6709-4dd1-ba58-d34d9480855a",
+        "name": "Ready to Start",
+        "color": "yellow"
+      }
+    },
+    "Author": {
+      "id": "qNw_",
+      "type": "multi_select",
+      "multi_select": []
+    },
+    "Name": {
+      "id": "title",
+      "type": "title",
+      "title": [
+        {
+          "type": "text",
+          "text": {
+            "content": "New Media Article",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "New Media Article",
+          "href": null
+        }
+      ]
+    }
+  },
+  "url": "https://www.notion.so/New-Media-Article-672b014a26264ada9211fb3613d07ae2"
+}
+`+"`"+``+"`"+``+"`"+``,
 			"",
 		)
 }
@@ -3105,7 +5316,7 @@ func (p *postPageProcessor) processPostPage(ctx context.Context, idx int, batch 
 		return fmt.Errorf("marshaling request body: %w", err)
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", rawURL, bytes.NewReader(reqBytes))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, rawURL, bytes.NewReader(reqBytes))
 	if err != nil {
 		return fmt.Errorf("creating HTTP request: %w", err)
 	}
@@ -3114,32 +5325,32 @@ func (p *postPageProcessor) processPostPage(ctx context.Context, idx int, batch 
 	httpReq.Header.Set("Notion-Version", p.notionVersion)
 	httpReq.Header.Set("Content-Type", "application/json")
 
-	resp, err := p.httpClient.Do(httpReq)
+	res, err := p.httpClient.Do(httpReq)
 	if err != nil {
 		return fmt.Errorf("Notion API request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer res.Body.Close()
 
-	respBody, err := io.ReadAll(resp.Body)
+	resBody, err := io.ReadAll(res.Body)
 	if err != nil {
 		return fmt.Errorf("reading response body: %w", err)
 	}
 
 	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
 	var body any
-	if len(respBody) > 0 {
+	if len(resBody) > 0 {
 		var jsonBody any
-		if json.Unmarshal(respBody, &jsonBody) == nil {
+		if json.Unmarshal(resBody, &jsonBody) == nil {
 			body = jsonBody
 		} else {
-			body = string(respBody)
+			body = string(resBody)
 		}
 	}
 
 	envelope := map[string]any{
 		"postPageResponse": map[string]any{
-			"status_code": resp.StatusCode,
-			"headers":     headerMap(resp.Header),
+			"status_code": res.StatusCode,
+			"headers":     headerMap(res.Header),
 			"body":        body,
 		},
 	}
@@ -3163,15 +5374,15 @@ func (p *postPageProcessor) processPostPage(ctx context.Context, idx int, batch 
 		msg.SetStructured(envelope)
 	}
 
-	if resp.StatusCode >= 400 {
-		msg.MetaSetMut("http_status_code", resp.StatusCode)
-		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	if res.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", res.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", res.StatusCode)
 	}
 
 	return nil
 }
 
-// PostSearch processor — post /v1/search
+// PostSearch processor — POST /v1/search
 
 func init() {
 	service.MustRegisterBatchProcessor(
@@ -3196,7 +5407,1137 @@ func postSearchConfig() *service.ConfigSpec {
 	).
 		Example(
 			"Search",
-			"Request body:\n```json\n{\n  \"query\": \"Media Article\",\n  \"sort\": {\n    \"direction\": \"ascending\",\n    \"timestamp\": \"last_edited_time\"\n  }\n}\n```\n\nResponse body:\n```json\n{\n  \"object\": \"list\",\n  \"results\": [\n    {\n      \"object\": \"page\",\n      \"id\": \"ae1905c3-b77b-475b-b98f-7596c242137f\",\n      \"created_time\": \"2021-05-21T16:41:00.000Z\",\n      \"last_edited_time\": \"2021-05-21T16:41:00.000Z\",\n      \"created_by\": {\n        \"object\": \"user\",\n        \"id\": \"92a680bb-6970-4726-952b-4f4c03bff617\"\n      },\n      \"last_edited_by\": {\n        \"object\": \"user\",\n        \"id\": \"92a680bb-6970-4726-952b-4f4c03bff617\"\n      },\n      \"cover\": null,\n      \"icon\": null,\n      \"parent\": {\n        \"type\": \"database_id\",\n        \"database_id\": \"8e2c2b76-9e1d-47d2-87b9-ed3035d607ae\"\n      },\n      \"archived\": false,\n      \"properties\": {\n        \"Score /5\": {\n          \"id\": \")Y7%22\",\n          \"type\": \"select\",\n          \"select\": {\n            \"id\": \"5c944de7-3f4b-4567-b3a1-fa2c71c540b6\",\n            \"name\": \"⭐️⭐️⭐️⭐️⭐️\",\n            \"color\": \"default\"\n          }\n        },\n        \"Type\": {\n          \"id\": \"%2F7eo\",\n          \"type\": \"select\",\n          \"select\": {\n            \"id\": \"f96d0d0a-5564-4a20-ab15-5f040d49759e\",\n            \"name\": \"Article\",\n            \"color\": \"default\"\n          }\n        },\n        \"Publisher\": {\n          \"id\": \"%3E%24Pb\",\n          \"type\": \"select\",\n          \"select\": {\n            \"id\": \"01f82d08-aa1f-4884-a4e0-3bc32f909ec4\",\n            \"name\": \"The Atlantic\",\n            \"color\": \"red\"\n          }\n        },\n        \"Summary\": {\n          \"id\": \"%3F%5C25\",\n          \"type\": \"rich_text\",\n          \"rich_text\": [\n            {\n              \"type\": \"text\",\n              \"text\": {\n                \"content\": \"Some think chief ethics officers could help technology companies navigate political and social questions.\",\n                \"link\": null\n              },\n              \"annotations\": {\n                \"bold\": true,\n                \"italic\": true,\n                \"strikethrough\": true,\n                \"underline\": true,\n                \"code\": true,\n                \"color\": \"default\"\n              },\n              \"plain_text\": \"Some think chief ethics officers could help technology companies navigate political and social questions.\",\n              \"href\": null\n            }\n          ]\n        },\n        \"Publishing/Release Date\": {\n          \"id\": \"%3Fex%2B\",\n          \"type\": \"date\",\n          \"date\": {\n            \"start\": \"2020-12-08T12:00:00.000+00:00\",\n            \"end\": null,\n            \"time_zone\": null\n          }\n        },\n        \"Link\": {\n          \"id\": \"VVMi\",\n          \"type\": \"url\",\n          \"url\": \"https://www.nytimes.com/2018/10/21/opinion/who-will-teach-silicon-valley-to-be-ethical.html\"\n        },\n        \"Read\": {\n          \"id\": \"_MWJ\",\n          \"type\": \"checkbox\",\n          \"checkbox\": false\n        },\n        \"Status\": {\n          \"id\": \"%60zz5\",\n          \"type\": \"select\",\n          \"select\": {\n            \"id\": \"8c4a056e-6709-4dd1-ba58-d34d9480855a\",\n            \"name\": \"Ready to Start\",\n            \"color\": \"yellow\"\n          }\n        },\n        \"Author\": {\n          \"id\": \"qNw_\",\n          \"type\": \"multi_select\",\n          \"multi_select\": []\n        },\n        \"Name\": {\n          \"id\": \"title\",\n          \"type\": \"title\",\n          \"title\": [\n            {\n              \"type\": \"text\",\n              \"text\": {\n                \"content\": \"New Media Article\",\n                \"link\": null\n              },\n              \"annotations\": {\n                \"bold\": false,\n                \"italic\": false,\n                \"strikethrough\": false,\n                \"underline\": false,\n                \"code\": false,\n                \"color\": \"default\"\n              },\n              \"plain_text\": \"New Media Article\",\n              \"href\": null\n            }\n          ]\n        }\n      },\n      \"url\": \"https://www.notion.so/New-Media-Article-ae1905c3b77b475bb98f7596c242137f\"\n    },\n    {\n      \"object\": \"page\",\n      \"id\": \"8f16061d-4b77-4dbc-bf04-e8b0b4319b5a\",\n      \"created_time\": \"2021-05-21T16:42:00.000Z\",\n      \"last_edited_time\": \"2021-05-21T16:42:00.000Z\",\n      \"created_by\": {\n        \"object\": \"user\",\n        \"id\": \"92a680bb-6970-4726-952b-4f4c03bff617\"\n      },\n      \"last_edited_by\": {\n        \"object\": \"user\",\n        \"id\": \"92a680bb-6970-4726-952b-4f4c03bff617\"\n      },\n      \"cover\": null,\n      \"icon\": null,\n      \"parent\": {\n        \"type\": \"database_id\",\n        \"database_id\": \"7a94f22f-59ae-484d-90ac-4aeddd667641\"\n      },\n      \"archived\": false,\n      \"properties\": {\n        \"Score /5\": {\n          \"id\": \")Y7%22\",\n          \"type\": \"select\",\n          \"select\": {\n            \"id\": \"5c944de7-3f4b-4567-b3a1-fa2c71c540b6\",\n            \"name\": \"⭐️⭐️⭐️⭐️⭐️\",\n            \"color\": \"default\"\n          }\n        },\n        \"Type\": {\n          \"id\": \"%2F7eo\",\n          \"type\": \"select\",\n          \"select\": {\n            \"id\": \"f96d0d0a-5564-4a20-ab15-5f040d49759e\",\n            \"name\": \"Article\",\n            \"color\": \"default\"\n          }\n        },\n        \"Publisher\": {\n          \"id\": \"%3E%24Pb\",\n          \"type\": \"select\",\n          \"select\": {\n            \"id\": \"01f82d08-aa1f-4884-a4e0-3bc32f909ec4\",\n            \"name\": \"The Atlantic\",\n            \"color\": \"red\"\n          }\n        },\n        \"Summary\": {\n          \"id\": \"%3F%5C25\",\n          \"type\": \"rich_text\",\n          \"rich_text\": [\n            {\n              \"type\": \"text\",\n              \"text\": {\n                \"content\": \"Some think chief ethics officers could help technology companies navigate political and social questions.\",\n                \"link\": null\n              },\n              \"annotations\": {\n                \"bold\": true,\n                \"italic\": true,\n                \"strikethrough\": true,\n                \"underline\": true,\n                \"code\": true,\n                \"color\": \"default\"\n              },\n              \"plain_text\": \"Some think chief ethics officers could help technology companies navigate political and social questions.\",\n              \"href\": null\n            }\n          ]\n        },\n        \"Publishing/Release Date\": {\n          \"id\": \"%3Fex%2B\",\n          \"type\": \"date\",\n          \"date\": {\n            \"start\": \"2020-12-08T12:00:00.000+00:00\",\n            \"end\": null,\n            \"time_zone\": null\n          }\n        },\n        \"date\": {\n          \"id\": \"Lpwp\",\n          \"type\": \"date\",\n          \"date\": null\n        },\n        \"Link\": {\n          \"id\": \"VVMi\",\n          \"type\": \"url\",\n          \"url\": \"https://www.nytimes.com/2018/10/21/opinion/who-will-teach-silicon-valley-to-be-ethical.html\"\n        },\n        \"Wine Pairing\": {\n          \"id\": \"WO%40Z\",\n          \"type\": \"rich_text\",\n          \"rich_text\": []\n        },\n        \"Read\": {\n          \"id\": \"_MWJ\",\n          \"type\": \"checkbox\",\n          \"checkbox\": false\n        },\n        \"Status\": {\n          \"id\": \"%60zz5\",\n          \"type\": \"select\",\n          \"select\": {\n            \"id\": \"8c4a056e-6709-4dd1-ba58-d34d9480855a\",\n            \"name\": \"Ready to Start\",\n            \"color\": \"yellow\"\n          }\n        },\n        \"Author\": {\n          \"id\": \"qNw_\",\n          \"type\": \"multi_select\",\n          \"multi_select\": []\n        },\n        \"Name\": {\n          \"id\": \"title\",\n          \"type\": \"title\",\n          \"title\": [\n            {\n              \"type\": \"text\",\n              \"text\": {\n                \"content\": \"New Media Article\",\n                \"link\": null\n              },\n              \"annotations\": {\n                \"bold\": false,\n                \"italic\": false,\n                \"strikethrough\": false,\n                \"underline\": false,\n                \"code\": false,\n                \"color\": \"default\"\n              },\n              \"plain_text\": \"New Media Article\",\n              \"href\": null\n            }\n          ]\n        }\n      },\n      \"url\": \"https://www.notion.so/New-Media-Article-8f16061d4b774dbcbf04e8b0b4319b5a\"\n    },\n    {\n      \"object\": \"page\",\n      \"id\": \"dc2a9117-163d-4075-907e-604b2f04c504\",\n      \"created_time\": \"2021-06-15T17:23:00.000Z\",\n      \"last_edited_time\": \"2021-06-15T17:23:00.000Z\",\n      \"created_by\": {\n        \"object\": \"user\",\n        \"id\": \"92a680bb-6970-4726-952b-4f4c03bff617\"\n      },\n      \"last_edited_by\": {\n        \"object\": \"user\",\n        \"id\": \"92a680bb-6970-4726-952b-4f4c03bff617\"\n      },\n      \"cover\": null,\n      \"icon\": null,\n      \"parent\": {\n        \"type\": \"database_id\",\n        \"database_id\": \"7a94f22f-59ae-484d-90ac-4aeddd667641\"\n      },\n      \"archived\": false,\n      \"properties\": {\n        \"Score /5\": {\n          \"id\": \")Y7%22\",\n          \"type\": \"select\",\n          \"select\": {\n            \"id\": \"5c944de7-3f4b-4567-b3a1-fa2c71c540b6\",\n            \"name\": \"⭐️⭐️⭐️⭐️⭐️\",\n            \"color\": \"default\"\n          }\n        },\n        \"Type\": {\n          \"id\": \"%2F7eo\",\n          \"type\": \"select\",\n          \"select\": {\n            \"id\": \"f96d0d0a-5564-4a20-ab15-5f040d49759e\",\n            \"name\": \"Article\",\n            \"color\": \"default\"\n          }\n        },\n        \"Publisher\": {\n          \"id\": \"%3E%24Pb\",\n          \"type\": \"select\",\n          \"select\": {\n            \"id\": \"01f82d08-aa1f-4884-a4e0-3bc32f909ec4\",\n            \"name\": \"The Atlantic\",\n            \"color\": \"red\"\n          }\n        },\n        \"Summary\": {\n          \"id\": \"%3F%5C25\",\n          \"type\": \"rich_text\",\n          \"rich_text\": [\n            {\n              \"type\": \"text\",\n              \"text\": {\n                \"content\": \"Some think chief ethics officers could help technology companies navigate political and social questions.\",\n                \"link\": null\n              },\n              \"annotations\": {\n                \"bold\": false,\n                \"italic\": false,\n                \"strikethrough\": false,\n                \"underline\": false,\n                \"code\": false,\n                \"color\": \"default\"\n              },\n              \"plain_text\": \"Some think chief ethics officers could help technology companies navigate political and social questions.\",\n              \"href\": null\n            }\n          ]\n        },\n        \"Publishing/Release Date\": {\n          \"id\": \"%3Fex%2B\",\n          \"type\": \"date\",\n          \"date\": {\n            \"start\": \"2020-12-08T12:00:00.000+00:00\",\n            \"end\": null,\n            \"time_zone\": null\n          }\n        },\n        \"date\": {\n          \"id\": \"Lpwp\",\n          \"type\": \"date\",\n          \"date\": null\n        },\n        \"Link\": {\n          \"id\": \"VVMi\",\n          \"type\": \"url\",\n          \"url\": \"https://www.nytimes.com/2018/10/21/opinion/who-will-teach-silicon-valley-to-be-ethical.html\"\n        },\n        \"Wine Pairing\": {\n          \"id\": \"WO%40Z\",\n          \"type\": \"rich_text\",\n          \"rich_text\": []\n        },\n        \"Read\": {\n          \"id\": \"_MWJ\",\n          \"type\": \"checkbox\",\n          \"checkbox\": false\n        },\n        \"Status\": {\n          \"id\": \"%60zz5\",\n          \"type\": \"select\",\n          \"select\": {\n            \"id\": \"8c4a056e-6709-4dd1-ba58-d34d9480855a\",\n            \"name\": \"Ready to Start\",\n            \"color\": \"yellow\"\n          }\n        },\n        \"Author\": {\n          \"id\": \"qNw_\",\n          \"type\": \"multi_select\",\n          \"multi_select\": []\n        },\n        \"Name\": {\n          \"id\": \"title\",\n          \"type\": \"title\",\n          \"title\": [\n            {\n              \"type\": \"text\",\n              \"text\": {\n                \"content\": \"New Media Article\",\n                \"link\": null\n              },\n              \"annotations\": {\n                \"bold\": false,\n                \"italic\": false,\n                \"strikethrough\": false,\n                \"underline\": false,\n                \"code\": false,\n                \"color\": \"default\"\n              },\n              \"plain_text\": \"New Media Article\",\n              \"href\": null\n            }\n          ]\n        }\n      },\n      \"url\": \"https://www.notion.so/New-Media-Article-dc2a9117163d4075907e604b2f04c504\"\n    },\n    {\n      \"object\": \"page\",\n      \"id\": \"c443c084-4637-4df2-ba37-b3c8a7e3d062\",\n      \"created_time\": \"2021-06-15T17:23:00.000Z\",\n      \"last_edited_time\": \"2021-06-15T17:23:00.000Z\",\n      \"created_by\": {\n        \"object\": \"user\",\n        \"id\": \"92a680bb-6970-4726-952b-4f4c03bff617\"\n      },\n      \"last_edited_by\": {\n        \"object\": \"user\",\n        \"id\": \"92a680bb-6970-4726-952b-4f4c03bff617\"\n      },\n      \"cover\": null,\n      \"icon\": null,\n      \"parent\": {\n        \"type\": \"database_id\",\n        \"database_id\": \"7a94f22f-59ae-484d-90ac-4aeddd667641\"\n      },\n      \"archived\": false,\n      \"properties\": {\n        \"Score /5\": {\n          \"id\": \")Y7%22\",\n          \"type\": \"select\",\n          \"select\": {\n            \"id\": \"5c944de7-3f4b-4567-b3a1-fa2c71c540b6\",\n            \"name\": \"⭐️⭐️⭐️⭐️⭐️\",\n            \"color\": \"default\"\n          }\n        },\n        \"Type\": {\n          \"id\": \"%2F7eo\",\n          \"type\": \"select\",\n          \"select\": {\n            \"id\": \"f96d0d0a-5564-4a20-ab15-5f040d49759e\",\n            \"name\": \"Article\",\n            \"color\": \"default\"\n          }\n        },\n        \"Publisher\": {\n          \"id\": \"%3E%24Pb\",\n          \"type\": \"select\",\n          \"select\": {\n            \"id\": \"01f82d08-aa1f-4884-a4e0-3bc32f909ec4\",\n            \"name\": \"The Atlantic\",\n            \"color\": \"red\"\n          }\n        },\n        \"Summary\": {\n          \"id\": \"%3F%5C25\",\n          \"type\": \"rich_text\",\n          \"rich_text\": [\n            {\n              \"type\": \"text\",\n              \"text\": {\n                \"content\": \"Some think chief ethics officers could help technology companies navigate political and social questions.\",\n                \"link\": null\n              },\n              \"annotations\": {\n                \"bold\": false,\n                \"italic\": false,\n                \"strikethrough\": false,\n                \"underline\": false,\n                \"code\": false,\n                \"color\": \"default\"\n              },\n              \"plain_text\": \"Some think chief ethics officers could help technology companies navigate political and social questions.\",\n              \"href\": null\n            }\n          ]\n        },\n        \"Publishing/Release Date\": {\n          \"id\": \"%3Fex%2B\",\n          \"type\": \"date\",\n          \"date\": {\n            \"start\": \"2020-12-08T12:00:00.000+00:00\",\n            \"end\": null,\n            \"time_zone\": null\n          }\n        },\n        \"date\": {\n          \"id\": \"Lpwp\",\n          \"type\": \"date\",\n          \"date\": null\n        },\n        \"Link\": {\n          \"id\": \"VVMi\",\n          \"type\": \"url\",\n          \"url\": \"https://www.nytimes.com/2018/10/21/opinion/who-will-teach-silicon-valley-to-be-ethical.html\"\n        },\n        \"Wine Pairing\": {\n          \"id\": \"WO%40Z\",\n          \"type\": \"rich_text\",\n          \"rich_text\": []\n        },\n        \"Read\": {\n          \"id\": \"_MWJ\",\n          \"type\": \"checkbox\",\n          \"checkbox\": false\n        },\n        \"Status\": {\n          \"id\": \"%60zz5\",\n          \"type\": \"select\",\n          \"select\": {\n            \"id\": \"8c4a056e-6709-4dd1-ba58-d34d9480855a\",\n            \"name\": \"Ready to Start\",\n            \"color\": \"yellow\"\n          }\n        },\n        \"Author\": {\n          \"id\": \"qNw_\",\n          \"type\": \"multi_select\",\n          \"multi_select\": []\n        },\n        \"Name\": {\n          \"id\": \"title\",\n          \"type\": \"title\",\n          \"title\": [\n            {\n              \"type\": \"text\",\n              \"text\": {\n                \"content\": \"New Media Article\",\n                \"link\": null\n              },\n              \"annotations\": {\n                \"bold\": false,\n                \"italic\": false,\n                \"strikethrough\": false,\n                \"underline\": false,\n                \"code\": false,\n                \"color\": \"default\"\n              },\n              \"plain_text\": \"New Media Article\",\n              \"href\": null\n            }\n          ]\n        }\n      },\n      \"url\": \"https://www.notion.so/New-Media-Article-c443c08446374df2ba37b3c8a7e3d062\"\n    },\n    {\n      \"object\": \"page\",\n      \"id\": \"0ac85319-05c5-4b5b-b812-7ea0f6476ea0\",\n      \"created_time\": \"2021-06-15T17:23:00.000Z\",\n      \"last_edited_time\": \"2021-06-15T17:23:00.000Z\",\n      \"created_by\": {\n        \"object\": \"user\",\n        \"id\": \"92a680bb-6970-4726-952b-4f4c03bff617\"\n      },\n      \"last_edited_by\": {\n        \"object\": \"user\",\n        \"id\": \"92a680bb-6970-4726-952b-4f4c03bff617\"\n      },\n      \"cover\": null,\n      \"icon\": null,\n      \"parent\": {\n        \"type\": \"database_id\",\n        \"database_id\": \"7a94f22f-59ae-484d-90ac-4aeddd667641\"\n      },\n      \"archived\": false,\n      \"properties\": {\n        \"Score /5\": {\n          \"id\": \")Y7%22\",\n          \"type\": \"select\",\n          \"select\": {\n            \"id\": \"5c944de7-3f4b-4567-b3a1-fa2c71c540b6\",\n            \"name\": \"⭐️⭐️⭐️⭐️⭐️\",\n            \"color\": \"default\"\n          }\n        },\n        \"Type\": {\n          \"id\": \"%2F7eo\",\n          \"type\": \"select\",\n          \"select\": {\n            \"id\": \"f96d0d0a-5564-4a20-ab15-5f040d49759e\",\n            \"name\": \"Article\",\n            \"color\": \"default\"\n          }\n        },\n        \"Publisher\": {\n          \"id\": \"%3E%24Pb\",\n          \"type\": \"select\",\n          \"select\": {\n            \"id\": \"01f82d08-aa1f-4884-a4e0-3bc32f909ec4\",\n            \"name\": \"The Atlantic\",\n            \"color\": \"red\"\n          }\n        },\n        \"Summary\": {\n          \"id\": \"%3F%5C25\",\n          \"type\": \"rich_text\",\n          \"rich_text\": [\n            {\n              \"type\": \"text\",\n              \"text\": {\n                \"content\": \"Some think chief ethics officers could help technology companies navigate political and social questions.\",\n                \"link\": null\n              },\n              \"annotations\": {\n                \"bold\": false,\n                \"italic\": false,\n                \"strikethrough\": false,\n                \"underline\": false,\n                \"code\": false,\n                \"color\": \"default\"\n              },\n              \"plain_text\": \"Some think chief ethics officers could help technology companies navigate political and social questions.\",\n              \"href\": null\n            }\n          ]\n        },\n        \"Publishing/Release Date\": {\n          \"id\": \"%3Fex%2B\",\n          \"type\": \"date\",\n          \"date\": {\n            \"start\": \"2020-12-08T12:00:00.000+00:00\",\n            \"end\": null,\n            \"time_zone\": null\n          }\n        },\n        \"date\": {\n          \"id\": \"Lpwp\",\n          \"type\": \"date\",\n          \"date\": null\n        },\n        \"Link\": {\n          \"id\": \"VVMi\",\n          \"type\": \"url\",\n          \"url\": \"https://www.nytimes.com/2018/10/21/opinion/who-will-teach-silicon-valley-to-be-ethical.html\"\n        },\n        \"Wine Pairing\": {\n          \"id\": \"WO%40Z\",\n          \"type\": \"rich_text\",\n          \"rich_text\": []\n        },\n        \"Read\": {\n          \"id\": \"_MWJ\",\n          \"type\": \"checkbox\",\n          \"checkbox\": false\n        },\n        \"Status\": {\n          \"id\": \"%60zz5\",\n          \"type\": \"select\",\n          \"select\": {\n            \"id\": \"8c4a056e-6709-4dd1-ba58-d34d9480855a\",\n            \"name\": \"Ready to Start\",\n            \"color\": \"yellow\"\n          }\n        },\n        \"Author\": {\n          \"id\": \"qNw_\",\n          \"type\": \"multi_select\",\n          \"multi_select\": []\n        },\n        \"Name\": {\n          \"id\": \"title\",\n          \"type\": \"title\",\n          \"title\": [\n            {\n              \"type\": \"text\",\n              \"text\": {\n                \"content\": \"New Media Article\",\n                \"link\": null\n              },\n              \"annotations\": {\n                \"bold\": false,\n                \"italic\": false,\n                \"strikethrough\": false,\n                \"underline\": false,\n                \"code\": false,\n                \"color\": \"default\"\n              },\n              \"plain_text\": \"New Media Article\",\n              \"href\": null\n            }\n          ]\n        }\n      },\n      \"url\": \"https://www.notion.so/New-Media-Article-0ac8531905c54b5bb8127ea0f6476ea0\"\n    },\n    {\n      \"object\": \"page\",\n      \"id\": \"794fc25a-7f59-419d-a6e5-d9f0b516ecc7\",\n      \"created_time\": \"2021-06-15T17:24:00.000Z\",\n      \"last_edited_time\": \"2021-06-15T17:24:00.000Z\",\n      \"created_by\": {\n        \"object\": \"user\",\n        \"id\": \"92a680bb-6970-4726-952b-4f4c03bff617\"\n      },\n      \"last_edited_by\": {\n        \"object\": \"user\",\n        \"id\": \"92a680bb-6970-4726-952b-4f4c03bff617\"\n      },\n      \"cover\": null,\n      \"icon\": null,\n      \"parent\": {\n        \"type\": \"database_id\",\n        \"database_id\": \"7a94f22f-59ae-484d-90ac-4aeddd667641\"\n      },\n      \"archived\": false,\n      \"properties\": {\n        \"Score /5\": {\n          \"id\": \")Y7%22\",\n          \"type\": \"select\",\n          \"select\": {\n            \"id\": \"5c944de7-3f4b-4567-b3a1-fa2c71c540b6\",\n            \"name\": \"⭐️⭐️⭐️⭐️⭐️\",\n            \"color\": \"default\"\n          }\n        },\n        \"Type\": {\n          \"id\": \"%2F7eo\",\n          \"type\": \"select\",\n          \"select\": {\n            \"id\": \"f96d0d0a-5564-4a20-ab15-5f040d49759e\",\n            \"name\": \"Article\",\n            \"color\": \"default\"\n          }\n        },\n        \"Publisher\": {\n          \"id\": \"%3E%24Pb\",\n          \"type\": \"select\",\n          \"select\": {\n            \"id\": \"01f82d08-aa1f-4884-a4e0-3bc32f909ec4\",\n            \"name\": \"The Atlantic\",\n            \"color\": \"red\"\n          }\n        },\n        \"Summary\": {\n          \"id\": \"%3F%5C25\",\n          \"type\": \"rich_text\",\n          \"rich_text\": [\n            {\n              \"type\": \"text\",\n              \"text\": {\n                \"content\": \"Some think chief ethics officers could help technology companies navigate political and social questions.\",\n                \"link\": null\n              },\n              \"annotations\": {\n                \"bold\": false,\n                \"italic\": false,\n                \"strikethrough\": false,\n                \"underline\": false,\n                \"code\": false,\n                \"color\": \"default\"\n              },\n              \"plain_text\": \"Some think chief ethics officers could help technology companies navigate political and social questions.\",\n              \"href\": null\n            }\n          ]\n        },\n        \"Publishing/Release Date\": {\n          \"id\": \"%3Fex%2B\",\n          \"type\": \"date\",\n          \"date\": {\n            \"start\": \"2020-12-08T12:00:00.000+00:00\",\n            \"end\": null,\n            \"time_zone\": null\n          }\n        },\n        \"date\": {\n          \"id\": \"Lpwp\",\n          \"type\": \"date\",\n          \"date\": null\n        },\n        \"Link\": {\n          \"id\": \"VVMi\",\n          \"type\": \"url\",\n          \"url\": \"https://www.nytimes.com/2018/10/21/opinion/who-will-teach-silicon-valley-to-be-ethical.html\"\n        },\n        \"Wine Pairing\": {\n          \"id\": \"WO%40Z\",\n          \"type\": \"rich_text\",\n          \"rich_text\": []\n        },\n        \"Read\": {\n          \"id\": \"_MWJ\",\n          \"type\": \"checkbox\",\n          \"checkbox\": false\n        },\n        \"Status\": {\n          \"id\": \"%60zz5\",\n          \"type\": \"select\",\n          \"select\": {\n            \"id\": \"8c4a056e-6709-4dd1-ba58-d34d9480855a\",\n            \"name\": \"Ready to Start\",\n            \"color\": \"yellow\"\n          }\n        },\n        \"Author\": {\n          \"id\": \"qNw_\",\n          \"type\": \"multi_select\",\n          \"multi_select\": []\n        },\n        \"Name\": {\n          \"id\": \"title\",\n          \"type\": \"title\",\n          \"title\": [\n            {\n              \"type\": \"text\",\n              \"text\": {\n                \"content\": \"New Media Article\",\n                \"link\": null\n              },\n              \"annotations\": {\n                \"bold\": false,\n                \"italic\": false,\n                \"strikethrough\": false,\n                \"underline\": false,\n                \"code\": false,\n                \"color\": \"default\"\n              },\n              \"plain_text\": \"New Media Article\",\n              \"href\": null\n            }\n          ]\n        }\n      },\n      \"url\": \"https://www.notion.so/New-Media-Article-794fc25a7f59419da6e5d9f0b516ecc7\"\n    },\n    {\n      \"object\": \"page\",\n      \"id\": \"41ad30b7-98e7-4c55-bf21-7ac7f09c2fd5\",\n      \"created_time\": \"2021-06-15T17:24:00.000Z\",\n      \"last_edited_time\": \"2021-06-15T17:24:00.000Z\",\n      \"created_by\": {\n        \"object\": \"user\",\n        \"id\": \"92a680bb-6970-4726-952b-4f4c03bff617\"\n      },\n      \"last_edited_by\": {\n        \"object\": \"user\",\n        \"id\": \"92a680bb-6970-4726-952b-4f4c03bff617\"\n      },\n      \"cover\": null,\n      \"icon\": null,\n      \"parent\": {\n        \"type\": \"database_id\",\n        \"database_id\": \"7a94f22f-59ae-484d-90ac-4aeddd667641\"\n      },\n      \"archived\": false,\n      \"properties\": {\n        \"Score /5\": {\n          \"id\": \")Y7%22\",\n          \"type\": \"select\",\n          \"select\": {\n            \"id\": \"5c944de7-3f4b-4567-b3a1-fa2c71c540b6\",\n            \"name\": \"⭐️⭐️⭐️⭐️⭐️\",\n            \"color\": \"default\"\n          }\n        },\n        \"Type\": {\n          \"id\": \"%2F7eo\",\n          \"type\": \"select\",\n          \"select\": {\n            \"id\": \"f96d0d0a-5564-4a20-ab15-5f040d49759e\",\n            \"name\": \"Article\",\n            \"color\": \"default\"\n          }\n        },\n        \"Publisher\": {\n          \"id\": \"%3E%24Pb\",\n          \"type\": \"select\",\n          \"select\": {\n            \"id\": \"01f82d08-aa1f-4884-a4e0-3bc32f909ec4\",\n            \"name\": \"The Atlantic\",\n            \"color\": \"red\"\n          }\n        },\n        \"Summary\": {\n          \"id\": \"%3F%5C25\",\n          \"type\": \"rich_text\",\n          \"rich_text\": [\n            {\n              \"type\": \"text\",\n              \"text\": {\n                \"content\": \"Some think chief ethics officers could help technology companies navigate political and social questions.\",\n                \"link\": null\n              },\n              \"annotations\": {\n                \"bold\": false,\n                \"italic\": false,\n                \"strikethrough\": false,\n                \"underline\": false,\n                \"code\": false,\n                \"color\": \"default\"\n              },\n              \"plain_text\": \"Some think chief ethics officers could help technology companies navigate political and social questions.\",\n              \"href\": null\n            }\n          ]\n        },\n        \"Publishing/Release Date\": {\n          \"id\": \"%3Fex%2B\",\n          \"type\": \"date\",\n          \"date\": {\n            \"start\": \"2020-12-08T12:00:00.000+00:00\",\n            \"end\": null,\n            \"time_zone\": null\n          }\n        },\n        \"date\": {\n          \"id\": \"Lpwp\",\n          \"type\": \"date\",\n          \"date\": null\n        },\n        \"Link\": {\n          \"id\": \"VVMi\",\n          \"type\": \"url\",\n          \"url\": \"https://www.nytimes.com/2018/10/21/opinion/who-will-teach-silicon-valley-to-be-ethical.html\"\n        },\n        \"Wine Pairing\": {\n          \"id\": \"WO%40Z\",\n          \"type\": \"rich_text\",\n          \"rich_text\": []\n        },\n        \"Read\": {\n          \"id\": \"_MWJ\",\n          \"type\": \"checkbox\",\n          \"checkbox\": false\n        },\n        \"Status\": {\n          \"id\": \"%60zz5\",\n          \"type\": \"select\",\n          \"select\": {\n            \"id\": \"b598e780-263b-4b02-862c-9bf7a91859ac\",\n            \"name\": \"New Option\",\n            \"color\": \"orange\"\n          }\n        },\n        \"Author\": {\n          \"id\": \"qNw_\",\n          \"type\": \"multi_select\",\n          \"multi_select\": []\n        },\n        \"Name\": {\n          \"id\": \"title\",\n          \"type\": \"title\",\n          \"title\": [\n            {\n              \"type\": \"text\",\n              \"text\": {\n                \"content\": \"New Media Article\",\n                \"link\": null\n              },\n              \"annotations\": {\n                \"bold\": false,\n                \"italic\": false,\n                \"strikethrough\": false,\n                \"underline\": false,\n                \"code\": false,\n                \"color\": \"default\"\n              },\n              \"plain_text\": \"New Media Article\",\n              \"href\": null\n            }\n          ]\n        }\n      },\n      \"url\": \"https://www.notion.so/New-Media-Article-41ad30b798e74c55bf217ac7f09c2fd5\"\n    },\n    {\n      \"object\": \"page\",\n      \"id\": \"6a313bae-fdd3-4617-9bd6-5b132f23be35\",\n      \"created_time\": \"2021-06-15T17:24:00.000Z\",\n      \"last_edited_time\": \"2021-06-15T17:24:00.000Z\",\n      \"created_by\": {\n        \"object\": \"user\",\n        \"id\": \"92a680bb-6970-4726-952b-4f4c03bff617\"\n      },\n      \"last_edited_by\": {\n        \"object\": \"user\",\n        \"id\": \"92a680bb-6970-4726-952b-4f4c03bff617\"\n      },\n      \"cover\": null,\n      \"icon\": null,\n      \"parent\": {\n        \"type\": \"database_id\",\n        \"database_id\": \"7a94f22f-59ae-484d-90ac-4aeddd667641\"\n      },\n      \"archived\": false,\n      \"properties\": {\n        \"Score /5\": {\n          \"id\": \")Y7%22\",\n          \"type\": \"select\",\n          \"select\": {\n            \"id\": \"5c944de7-3f4b-4567-b3a1-fa2c71c540b6\",\n            \"name\": \"⭐️⭐️⭐️⭐️⭐️\",\n            \"color\": \"default\"\n          }\n        },\n        \"Type\": {\n          \"id\": \"%2F7eo\",\n          \"type\": \"select\",\n          \"select\": {\n            \"id\": \"f96d0d0a-5564-4a20-ab15-5f040d49759e\",\n            \"name\": \"Article\",\n            \"color\": \"default\"\n          }\n        },\n        \"Publisher\": {\n          \"id\": \"%3E%24Pb\",\n          \"type\": \"select\",\n          \"select\": {\n            \"id\": \"01f82d08-aa1f-4884-a4e0-3bc32f909ec4\",\n            \"name\": \"The Atlantic\",\n            \"color\": \"red\"\n          }\n        },\n        \"Summary\": {\n          \"id\": \"%3F%5C25\",\n          \"type\": \"rich_text\",\n          \"rich_text\": [\n            {\n              \"type\": \"text\",\n              \"text\": {\n                \"content\": \"Some think chief ethics officers could help technology companies navigate political and social questions.\",\n                \"link\": null\n              },\n              \"annotations\": {\n                \"bold\": false,\n                \"italic\": false,\n                \"strikethrough\": false,\n                \"underline\": false,\n                \"code\": false,\n                \"color\": \"default\"\n              },\n              \"plain_text\": \"Some think chief ethics officers could help technology companies navigate political and social questions.\",\n              \"href\": null\n            }\n          ]\n        },\n        \"Publishing/Release Date\": {\n          \"id\": \"%3Fex%2B\",\n          \"type\": \"date\",\n          \"date\": {\n            \"start\": \"2020-12-08T12:00:00.000+00:00\",\n            \"end\": null,\n            \"time_zone\": null\n          }\n        },\n        \"date\": {\n          \"id\": \"Lpwp\",\n          \"type\": \"date\",\n          \"date\": null\n        },\n        \"Link\": {\n          \"id\": \"VVMi\",\n          \"type\": \"url\",\n          \"url\": \"https://www.nytimes.com/2018/10/21/opinion/who-will-teach-silicon-valley-to-be-ethical.html\"\n        },\n        \"Wine Pairing\": {\n          \"id\": \"WO%40Z\",\n          \"type\": \"rich_text\",\n          \"rich_text\": []\n        },\n        \"Read\": {\n          \"id\": \"_MWJ\",\n          \"type\": \"checkbox\",\n          \"checkbox\": false\n        },\n        \"Status\": {\n          \"id\": \"%60zz5\",\n          \"type\": \"select\",\n          \"select\": {\n            \"id\": \"ad038109-97d3-4b5d-a93a-3b88229b1b58\",\n            \"name\": \"New Option 3\",\n            \"color\": \"purple\"\n          }\n        },\n        \"Author\": {\n          \"id\": \"qNw_\",\n          \"type\": \"multi_select\",\n          \"multi_select\": []\n        },\n        \"Name\": {\n          \"id\": \"title\",\n          \"type\": \"title\",\n          \"title\": [\n            {\n              \"type\": \"text\",\n              \"text\": {\n                \"content\": \"New Media Article\",\n                \"link\": null\n              },\n              \"annotations\": {\n                \"bold\": false,\n                \"italic\": false,\n                \"strikethrough\": false,\n                \"underline\": false,\n                \"code\": false,\n                \"color\": \"default\"\n              },\n              \"plain_text\": \"New Media Article\",\n              \"href\": null\n            }\n          ]\n        }\n      },\n      \"url\": \"https://www.notion.so/New-Media-Article-6a313baefdd346179bd65b132f23be35\"\n    }\n  ],\n  \"next_cursor\": null,\n  \"has_more\": false\n}\n```",
+			`Request body:
+`+"`"+``+"`"+``+"`"+`json
+{
+  "query": "Media Article",
+  "sort": {
+    "direction": "ascending",
+    "timestamp": "last_edited_time"
+  }
+}
+`+"`"+``+"`"+``+"`"+`
+
+Response body:
+`+"`"+``+"`"+``+"`"+`json
+{
+  "object": "list",
+  "results": [
+    {
+      "object": "page",
+      "id": "ae1905c3-b77b-475b-b98f-7596c242137f",
+      "created_time": "2021-05-21T16:41:00.000Z",
+      "last_edited_time": "2021-05-21T16:41:00.000Z",
+      "created_by": {
+        "object": "user",
+        "id": "92a680bb-6970-4726-952b-4f4c03bff617"
+      },
+      "last_edited_by": {
+        "object": "user",
+        "id": "92a680bb-6970-4726-952b-4f4c03bff617"
+      },
+      "cover": null,
+      "icon": null,
+      "parent": {
+        "type": "database_id",
+        "database_id": "8e2c2b76-9e1d-47d2-87b9-ed3035d607ae"
+      },
+      "archived": false,
+      "properties": {
+        "Score /5": {
+          "id": ")Y7%22",
+          "type": "select",
+          "select": {
+            "id": "5c944de7-3f4b-4567-b3a1-fa2c71c540b6",
+            "name": "⭐️⭐️⭐️⭐️⭐️",
+            "color": "default"
+          }
+        },
+        "Type": {
+          "id": "%2F7eo",
+          "type": "select",
+          "select": {
+            "id": "f96d0d0a-5564-4a20-ab15-5f040d49759e",
+            "name": "Article",
+            "color": "default"
+          }
+        },
+        "Publisher": {
+          "id": "%3E%24Pb",
+          "type": "select",
+          "select": {
+            "id": "01f82d08-aa1f-4884-a4e0-3bc32f909ec4",
+            "name": "The Atlantic",
+            "color": "red"
+          }
+        },
+        "Summary": {
+          "id": "%3F%5C25",
+          "type": "rich_text",
+          "rich_text": [
+            {
+              "type": "text",
+              "text": {
+                "content": "Some think chief ethics officers could help technology companies navigate political and social questions.",
+                "link": null
+              },
+              "annotations": {
+                "bold": true,
+                "italic": true,
+                "strikethrough": true,
+                "underline": true,
+                "code": true,
+                "color": "default"
+              },
+              "plain_text": "Some think chief ethics officers could help technology companies navigate political and social questions.",
+              "href": null
+            }
+          ]
+        },
+        "Publishing/Release Date": {
+          "id": "%3Fex%2B",
+          "type": "date",
+          "date": {
+            "start": "2020-12-08T12:00:00.000+00:00",
+            "end": null,
+            "time_zone": null
+          }
+        },
+        "Link": {
+          "id": "VVMi",
+          "type": "url",
+          "url": "https://www.nytimes.com/2018/10/21/opinion/who-will-teach-silicon-valley-to-be-ethical.html"
+        },
+        "Read": {
+          "id": "_MWJ",
+          "type": "checkbox",
+          "checkbox": false
+        },
+        "Status": {
+          "id": "%60zz5",
+          "type": "select",
+          "select": {
+            "id": "8c4a056e-6709-4dd1-ba58-d34d9480855a",
+            "name": "Ready to Start",
+            "color": "yellow"
+          }
+        },
+        "Author": {
+          "id": "qNw_",
+          "type": "multi_select",
+          "multi_select": []
+        },
+        "Name": {
+          "id": "title",
+          "type": "title",
+          "title": [
+            {
+              "type": "text",
+              "text": {
+                "content": "New Media Article",
+                "link": null
+              },
+              "annotations": {
+                "bold": false,
+                "italic": false,
+                "strikethrough": false,
+                "underline": false,
+                "code": false,
+                "color": "default"
+              },
+              "plain_text": "New Media Article",
+              "href": null
+            }
+          ]
+        }
+      },
+      "url": "https://www.notion.so/New-Media-Article-ae1905c3b77b475bb98f7596c242137f"
+    },
+    {
+      "object": "page",
+      "id": "8f16061d-4b77-4dbc-bf04-e8b0b4319b5a",
+      "created_time": "2021-05-21T16:42:00.000Z",
+      "last_edited_time": "2021-05-21T16:42:00.000Z",
+      "created_by": {
+        "object": "user",
+        "id": "92a680bb-6970-4726-952b-4f4c03bff617"
+      },
+      "last_edited_by": {
+        "object": "user",
+        "id": "92a680bb-6970-4726-952b-4f4c03bff617"
+      },
+      "cover": null,
+      "icon": null,
+      "parent": {
+        "type": "database_id",
+        "database_id": "7a94f22f-59ae-484d-90ac-4aeddd667641"
+      },
+      "archived": false,
+      "properties": {
+        "Score /5": {
+          "id": ")Y7%22",
+          "type": "select",
+          "select": {
+            "id": "5c944de7-3f4b-4567-b3a1-fa2c71c540b6",
+            "name": "⭐️⭐️⭐️⭐️⭐️",
+            "color": "default"
+          }
+        },
+        "Type": {
+          "id": "%2F7eo",
+          "type": "select",
+          "select": {
+            "id": "f96d0d0a-5564-4a20-ab15-5f040d49759e",
+            "name": "Article",
+            "color": "default"
+          }
+        },
+        "Publisher": {
+          "id": "%3E%24Pb",
+          "type": "select",
+          "select": {
+            "id": "01f82d08-aa1f-4884-a4e0-3bc32f909ec4",
+            "name": "The Atlantic",
+            "color": "red"
+          }
+        },
+        "Summary": {
+          "id": "%3F%5C25",
+          "type": "rich_text",
+          "rich_text": [
+            {
+              "type": "text",
+              "text": {
+                "content": "Some think chief ethics officers could help technology companies navigate political and social questions.",
+                "link": null
+              },
+              "annotations": {
+                "bold": true,
+                "italic": true,
+                "strikethrough": true,
+                "underline": true,
+                "code": true,
+                "color": "default"
+              },
+              "plain_text": "Some think chief ethics officers could help technology companies navigate political and social questions.",
+              "href": null
+            }
+          ]
+        },
+        "Publishing/Release Date": {
+          "id": "%3Fex%2B",
+          "type": "date",
+          "date": {
+            "start": "2020-12-08T12:00:00.000+00:00",
+            "end": null,
+            "time_zone": null
+          }
+        },
+        "date": {
+          "id": "Lpwp",
+          "type": "date",
+          "date": null
+        },
+        "Link": {
+          "id": "VVMi",
+          "type": "url",
+          "url": "https://www.nytimes.com/2018/10/21/opinion/who-will-teach-silicon-valley-to-be-ethical.html"
+        },
+        "Wine Pairing": {
+          "id": "WO%40Z",
+          "type": "rich_text",
+          "rich_text": []
+        },
+        "Read": {
+          "id": "_MWJ",
+          "type": "checkbox",
+          "checkbox": false
+        },
+        "Status": {
+          "id": "%60zz5",
+          "type": "select",
+          "select": {
+            "id": "8c4a056e-6709-4dd1-ba58-d34d9480855a",
+            "name": "Ready to Start",
+            "color": "yellow"
+          }
+        },
+        "Author": {
+          "id": "qNw_",
+          "type": "multi_select",
+          "multi_select": []
+        },
+        "Name": {
+          "id": "title",
+          "type": "title",
+          "title": [
+            {
+              "type": "text",
+              "text": {
+                "content": "New Media Article",
+                "link": null
+              },
+              "annotations": {
+                "bold": false,
+                "italic": false,
+                "strikethrough": false,
+                "underline": false,
+                "code": false,
+                "color": "default"
+              },
+              "plain_text": "New Media Article",
+              "href": null
+            }
+          ]
+        }
+      },
+      "url": "https://www.notion.so/New-Media-Article-8f16061d4b774dbcbf04e8b0b4319b5a"
+    },
+    {
+      "object": "page",
+      "id": "dc2a9117-163d-4075-907e-604b2f04c504",
+      "created_time": "2021-06-15T17:23:00.000Z",
+      "last_edited_time": "2021-06-15T17:23:00.000Z",
+      "created_by": {
+        "object": "user",
+        "id": "92a680bb-6970-4726-952b-4f4c03bff617"
+      },
+      "last_edited_by": {
+        "object": "user",
+        "id": "92a680bb-6970-4726-952b-4f4c03bff617"
+      },
+      "cover": null,
+      "icon": null,
+      "parent": {
+        "type": "database_id",
+        "database_id": "7a94f22f-59ae-484d-90ac-4aeddd667641"
+      },
+      "archived": false,
+      "properties": {
+        "Score /5": {
+          "id": ")Y7%22",
+          "type": "select",
+          "select": {
+            "id": "5c944de7-3f4b-4567-b3a1-fa2c71c540b6",
+            "name": "⭐️⭐️⭐️⭐️⭐️",
+            "color": "default"
+          }
+        },
+        "Type": {
+          "id": "%2F7eo",
+          "type": "select",
+          "select": {
+            "id": "f96d0d0a-5564-4a20-ab15-5f040d49759e",
+            "name": "Article",
+            "color": "default"
+          }
+        },
+        "Publisher": {
+          "id": "%3E%24Pb",
+          "type": "select",
+          "select": {
+            "id": "01f82d08-aa1f-4884-a4e0-3bc32f909ec4",
+            "name": "The Atlantic",
+            "color": "red"
+          }
+        },
+        "Summary": {
+          "id": "%3F%5C25",
+          "type": "rich_text",
+          "rich_text": [
+            {
+              "type": "text",
+              "text": {
+                "content": "Some think chief ethics officers could help technology companies navigate political and social questions.",
+                "link": null
+              },
+              "annotations": {
+                "bold": false,
+                "italic": false,
+                "strikethrough": false,
+                "underline": false,
+                "code": false,
+                "color": "default"
+              },
+              "plain_text": "Some think chief ethics officers could help technology companies navigate political and social questions.",
+              "href": null
+            }
+          ]
+        },
+        "Publishing/Release Date": {
+          "id": "%3Fex%2B",
+          "type": "date",
+          "date": {
+            "start": "2020-12-08T12:00:00.000+00:00",
+            "end": null,
+            "time_zone": null
+          }
+        },
+        "date": {
+          "id": "Lpwp",
+          "type": "date",
+          "date": null
+        },
+        "Link": {
+          "id": "VVMi",
+          "type": "url",
+          "url": "https://www.nytimes.com/2018/10/21/opinion/who-will-teach-silicon-valley-to-be-ethical.html"
+        },
+        "Wine Pairing": {
+          "id": "WO%40Z",
+          "type": "rich_text",
+          "rich_text": []
+        },
+        "Read": {
+          "id": "_MWJ",
+          "type": "checkbox",
+          "checkbox": false
+        },
+        "Status": {
+          "id": "%60zz5",
+          "type": "select",
+          "select": {
+            "id": "8c4a056e-6709-4dd1-ba58-d34d9480855a",
+            "name": "Ready to Start",
+            "color": "yellow"
+          }
+        },
+        "Author": {
+          "id": "qNw_",
+          "type": "multi_select",
+          "multi_select": []
+        },
+        "Name": {
+          "id": "title",
+          "type": "title",
+          "title": [
+            {
+              "type": "text",
+              "text": {
+                "content": "New Media Article",
+                "link": null
+              },
+              "annotations": {
+                "bold": false,
+                "italic": false,
+                "strikethrough": false,
+                "underline": false,
+                "code": false,
+                "color": "default"
+              },
+              "plain_text": "New Media Article",
+              "href": null
+            }
+          ]
+        }
+      },
+      "url": "https://www.notion.so/New-Media-Article-dc2a9117163d4075907e604b2f04c504"
+    },
+    {
+      "object": "page",
+      "id": "c443c084-4637-4df2-ba37-b3c8a7e3d062",
+      "created_time": "2021-06-15T17:23:00.000Z",
+      "last_edited_time": "2021-06-15T17:23:00.000Z",
+      "created_by": {
+        "object": "user",
+        "id": "92a680bb-6970-4726-952b-4f4c03bff617"
+      },
+      "last_edited_by": {
+        "object": "user",
+        "id": "92a680bb-6970-4726-952b-4f4c03bff617"
+      },
+      "cover": null,
+      "icon": null,
+      "parent": {
+        "type": "database_id",
+        "database_id": "7a94f22f-59ae-484d-90ac-4aeddd667641"
+      },
+      "archived": false,
+      "properties": {
+        "Score /5": {
+          "id": ")Y7%22",
+          "type": "select",
+          "select": {
+            "id": "5c944de7-3f4b-4567-b3a1-fa2c71c540b6",
+            "name": "⭐️⭐️⭐️⭐️⭐️",
+            "color": "default"
+          }
+        },
+        "Type": {
+          "id": "%2F7eo",
+          "type": "select",
+          "select": {
+            "id": "f96d0d0a-5564-4a20-ab15-5f040d49759e",
+            "name": "Article",
+            "color": "default"
+          }
+        },
+        "Publisher": {
+          "id": "%3E%24Pb",
+          "type": "select",
+          "select": {
+            "id": "01f82d08-aa1f-4884-a4e0-3bc32f909ec4",
+            "name": "The Atlantic",
+            "color": "red"
+          }
+        },
+        "Summary": {
+          "id": "%3F%5C25",
+          "type": "rich_text",
+          "rich_text": [
+            {
+              "type": "text",
+              "text": {
+                "content": "Some think chief ethics officers could help technology companies navigate political and social questions.",
+                "link": null
+              },
+              "annotations": {
+                "bold": false,
+                "italic": false,
+                "strikethrough": false,
+                "underline": false,
+                "code": false,
+                "color": "default"
+              },
+              "plain_text": "Some think chief ethics officers could help technology companies navigate political and social questions.",
+              "href": null
+            }
+          ]
+        },
+        "Publishing/Release Date": {
+          "id": "%3Fex%2B",
+          "type": "date",
+          "date": {
+            "start": "2020-12-08T12:00:00.000+00:00",
+            "end": null,
+            "time_zone": null
+          }
+        },
+        "date": {
+          "id": "Lpwp",
+          "type": "date",
+          "date": null
+        },
+        "Link": {
+          "id": "VVMi",
+          "type": "url",
+          "url": "https://www.nytimes.com/2018/10/21/opinion/who-will-teach-silicon-valley-to-be-ethical.html"
+        },
+        "Wine Pairing": {
+          "id": "WO%40Z",
+          "type": "rich_text",
+          "rich_text": []
+        },
+        "Read": {
+          "id": "_MWJ",
+          "type": "checkbox",
+          "checkbox": false
+        },
+        "Status": {
+          "id": "%60zz5",
+          "type": "select",
+          "select": {
+            "id": "8c4a056e-6709-4dd1-ba58-d34d9480855a",
+            "name": "Ready to Start",
+            "color": "yellow"
+          }
+        },
+        "Author": {
+          "id": "qNw_",
+          "type": "multi_select",
+          "multi_select": []
+        },
+        "Name": {
+          "id": "title",
+          "type": "title",
+          "title": [
+            {
+              "type": "text",
+              "text": {
+                "content": "New Media Article",
+                "link": null
+              },
+              "annotations": {
+                "bold": false,
+                "italic": false,
+                "strikethrough": false,
+                "underline": false,
+                "code": false,
+                "color": "default"
+              },
+              "plain_text": "New Media Article",
+              "href": null
+            }
+          ]
+        }
+      },
+      "url": "https://www.notion.so/New-Media-Article-c443c08446374df2ba37b3c8a7e3d062"
+    },
+    {
+      "object": "page",
+      "id": "0ac85319-05c5-4b5b-b812-7ea0f6476ea0",
+      "created_time": "2021-06-15T17:23:00.000Z",
+      "last_edited_time": "2021-06-15T17:23:00.000Z",
+      "created_by": {
+        "object": "user",
+        "id": "92a680bb-6970-4726-952b-4f4c03bff617"
+      },
+      "last_edited_by": {
+        "object": "user",
+        "id": "92a680bb-6970-4726-952b-4f4c03bff617"
+      },
+      "cover": null,
+      "icon": null,
+      "parent": {
+        "type": "database_id",
+        "database_id": "7a94f22f-59ae-484d-90ac-4aeddd667641"
+      },
+      "archived": false,
+      "properties": {
+        "Score /5": {
+          "id": ")Y7%22",
+          "type": "select",
+          "select": {
+            "id": "5c944de7-3f4b-4567-b3a1-fa2c71c540b6",
+            "name": "⭐️⭐️⭐️⭐️⭐️",
+            "color": "default"
+          }
+        },
+        "Type": {
+          "id": "%2F7eo",
+          "type": "select",
+          "select": {
+            "id": "f96d0d0a-5564-4a20-ab15-5f040d49759e",
+            "name": "Article",
+            "color": "default"
+          }
+        },
+        "Publisher": {
+          "id": "%3E%24Pb",
+          "type": "select",
+          "select": {
+            "id": "01f82d08-aa1f-4884-a4e0-3bc32f909ec4",
+            "name": "The Atlantic",
+            "color": "red"
+          }
+        },
+        "Summary": {
+          "id": "%3F%5C25",
+          "type": "rich_text",
+          "rich_text": [
+            {
+              "type": "text",
+              "text": {
+                "content": "Some think chief ethics officers could help technology companies navigate political and social questions.",
+                "link": null
+              },
+              "annotations": {
+                "bold": false,
+                "italic": false,
+                "strikethrough": false,
+                "underline": false,
+                "code": false,
+                "color": "default"
+              },
+              "plain_text": "Some think chief ethics officers could help technology companies navigate political and social questions.",
+              "href": null
+            }
+          ]
+        },
+        "Publishing/Release Date": {
+          "id": "%3Fex%2B",
+          "type": "date",
+          "date": {
+            "start": "2020-12-08T12:00:00.000+00:00",
+            "end": null,
+            "time_zone": null
+          }
+        },
+        "date": {
+          "id": "Lpwp",
+          "type": "date",
+          "date": null
+        },
+        "Link": {
+          "id": "VVMi",
+          "type": "url",
+          "url": "https://www.nytimes.com/2018/10/21/opinion/who-will-teach-silicon-valley-to-be-ethical.html"
+        },
+        "Wine Pairing": {
+          "id": "WO%40Z",
+          "type": "rich_text",
+          "rich_text": []
+        },
+        "Read": {
+          "id": "_MWJ",
+          "type": "checkbox",
+          "checkbox": false
+        },
+        "Status": {
+          "id": "%60zz5",
+          "type": "select",
+          "select": {
+            "id": "8c4a056e-6709-4dd1-ba58-d34d9480855a",
+            "name": "Ready to Start",
+            "color": "yellow"
+          }
+        },
+        "Author": {
+          "id": "qNw_",
+          "type": "multi_select",
+          "multi_select": []
+        },
+        "Name": {
+          "id": "title",
+          "type": "title",
+          "title": [
+            {
+              "type": "text",
+              "text": {
+                "content": "New Media Article",
+                "link": null
+              },
+              "annotations": {
+                "bold": false,
+                "italic": false,
+                "strikethrough": false,
+                "underline": false,
+                "code": false,
+                "color": "default"
+              },
+              "plain_text": "New Media Article",
+              "href": null
+            }
+          ]
+        }
+      },
+      "url": "https://www.notion.so/New-Media-Article-0ac8531905c54b5bb8127ea0f6476ea0"
+    },
+    {
+      "object": "page",
+      "id": "794fc25a-7f59-419d-a6e5-d9f0b516ecc7",
+      "created_time": "2021-06-15T17:24:00.000Z",
+      "last_edited_time": "2021-06-15T17:24:00.000Z",
+      "created_by": {
+        "object": "user",
+        "id": "92a680bb-6970-4726-952b-4f4c03bff617"
+      },
+      "last_edited_by": {
+        "object": "user",
+        "id": "92a680bb-6970-4726-952b-4f4c03bff617"
+      },
+      "cover": null,
+      "icon": null,
+      "parent": {
+        "type": "database_id",
+        "database_id": "7a94f22f-59ae-484d-90ac-4aeddd667641"
+      },
+      "archived": false,
+      "properties": {
+        "Score /5": {
+          "id": ")Y7%22",
+          "type": "select",
+          "select": {
+            "id": "5c944de7-3f4b-4567-b3a1-fa2c71c540b6",
+            "name": "⭐️⭐️⭐️⭐️⭐️",
+            "color": "default"
+          }
+        },
+        "Type": {
+          "id": "%2F7eo",
+          "type": "select",
+          "select": {
+            "id": "f96d0d0a-5564-4a20-ab15-5f040d49759e",
+            "name": "Article",
+            "color": "default"
+          }
+        },
+        "Publisher": {
+          "id": "%3E%24Pb",
+          "type": "select",
+          "select": {
+            "id": "01f82d08-aa1f-4884-a4e0-3bc32f909ec4",
+            "name": "The Atlantic",
+            "color": "red"
+          }
+        },
+        "Summary": {
+          "id": "%3F%5C25",
+          "type": "rich_text",
+          "rich_text": [
+            {
+              "type": "text",
+              "text": {
+                "content": "Some think chief ethics officers could help technology companies navigate political and social questions.",
+                "link": null
+              },
+              "annotations": {
+                "bold": false,
+                "italic": false,
+                "strikethrough": false,
+                "underline": false,
+                "code": false,
+                "color": "default"
+              },
+              "plain_text": "Some think chief ethics officers could help technology companies navigate political and social questions.",
+              "href": null
+            }
+          ]
+        },
+        "Publishing/Release Date": {
+          "id": "%3Fex%2B",
+          "type": "date",
+          "date": {
+            "start": "2020-12-08T12:00:00.000+00:00",
+            "end": null,
+            "time_zone": null
+          }
+        },
+        "date": {
+          "id": "Lpwp",
+          "type": "date",
+          "date": null
+        },
+        "Link": {
+          "id": "VVMi",
+          "type": "url",
+          "url": "https://www.nytimes.com/2018/10/21/opinion/who-will-teach-silicon-valley-to-be-ethical.html"
+        },
+        "Wine Pairing": {
+          "id": "WO%40Z",
+          "type": "rich_text",
+          "rich_text": []
+        },
+        "Read": {
+          "id": "_MWJ",
+          "type": "checkbox",
+          "checkbox": false
+        },
+        "Status": {
+          "id": "%60zz5",
+          "type": "select",
+          "select": {
+            "id": "8c4a056e-6709-4dd1-ba58-d34d9480855a",
+            "name": "Ready to Start",
+            "color": "yellow"
+          }
+        },
+        "Author": {
+          "id": "qNw_",
+          "type": "multi_select",
+          "multi_select": []
+        },
+        "Name": {
+          "id": "title",
+          "type": "title",
+          "title": [
+            {
+              "type": "text",
+              "text": {
+                "content": "New Media Article",
+                "link": null
+              },
+              "annotations": {
+                "bold": false,
+                "italic": false,
+                "strikethrough": false,
+                "underline": false,
+                "code": false,
+                "color": "default"
+              },
+              "plain_text": "New Media Article",
+              "href": null
+            }
+          ]
+        }
+      },
+      "url": "https://www.notion.so/New-Media-Article-794fc25a7f59419da6e5d9f0b516ecc7"
+    },
+    {
+      "object": "page",
+      "id": "41ad30b7-98e7-4c55-bf21-7ac7f09c2fd5",
+      "created_time": "2021-06-15T17:24:00.000Z",
+      "last_edited_time": "2021-06-15T17:24:00.000Z",
+      "created_by": {
+        "object": "user",
+        "id": "92a680bb-6970-4726-952b-4f4c03bff617"
+      },
+      "last_edited_by": {
+        "object": "user",
+        "id": "92a680bb-6970-4726-952b-4f4c03bff617"
+      },
+      "cover": null,
+      "icon": null,
+      "parent": {
+        "type": "database_id",
+        "database_id": "7a94f22f-59ae-484d-90ac-4aeddd667641"
+      },
+      "archived": false,
+      "properties": {
+        "Score /5": {
+          "id": ")Y7%22",
+          "type": "select",
+          "select": {
+            "id": "5c944de7-3f4b-4567-b3a1-fa2c71c540b6",
+            "name": "⭐️⭐️⭐️⭐️⭐️",
+            "color": "default"
+          }
+        },
+        "Type": {
+          "id": "%2F7eo",
+          "type": "select",
+          "select": {
+            "id": "f96d0d0a-5564-4a20-ab15-5f040d49759e",
+            "name": "Article",
+            "color": "default"
+          }
+        },
+        "Publisher": {
+          "id": "%3E%24Pb",
+          "type": "select",
+          "select": {
+            "id": "01f82d08-aa1f-4884-a4e0-3bc32f909ec4",
+            "name": "The Atlantic",
+            "color": "red"
+          }
+        },
+        "Summary": {
+          "id": "%3F%5C25",
+          "type": "rich_text",
+          "rich_text": [
+            {
+              "type": "text",
+              "text": {
+                "content": "Some think chief ethics officers could help technology companies navigate political and social questions.",
+                "link": null
+              },
+              "annotations": {
+                "bold": false,
+                "italic": false,
+                "strikethrough": false,
+                "underline": false,
+                "code": false,
+                "color": "default"
+              },
+              "plain_text": "Some think chief ethics officers could help technology companies navigate political and social questions.",
+              "href": null
+            }
+          ]
+        },
+        "Publishing/Release Date": {
+          "id": "%3Fex%2B",
+          "type": "date",
+          "date": {
+            "start": "2020-12-08T12:00:00.000+00:00",
+            "end": null,
+            "time_zone": null
+          }
+        },
+        "date": {
+          "id": "Lpwp",
+          "type": "date",
+          "date": null
+        },
+        "Link": {
+          "id": "VVMi",
+          "type": "url",
+          "url": "https://www.nytimes.com/2018/10/21/opinion/who-will-teach-silicon-valley-to-be-ethical.html"
+        },
+        "Wine Pairing": {
+          "id": "WO%40Z",
+          "type": "rich_text",
+          "rich_text": []
+        },
+        "Read": {
+          "id": "_MWJ",
+          "type": "checkbox",
+          "checkbox": false
+        },
+        "Status": {
+          "id": "%60zz5",
+          "type": "select",
+          "select": {
+            "id": "b598e780-263b-4b02-862c-9bf7a91859ac",
+            "name": "New Option",
+            "color": "orange"
+          }
+        },
+        "Author": {
+          "id": "qNw_",
+          "type": "multi_select",
+          "multi_select": []
+        },
+        "Name": {
+          "id": "title",
+          "type": "title",
+          "title": [
+            {
+              "type": "text",
+              "text": {
+                "content": "New Media Article",
+                "link": null
+              },
+              "annotations": {
+                "bold": false,
+                "italic": false,
+                "strikethrough": false,
+                "underline": false,
+                "code": false,
+                "color": "default"
+              },
+              "plain_text": "New Media Article",
+              "href": null
+            }
+          ]
+        }
+      },
+      "url": "https://www.notion.so/New-Media-Article-41ad30b798e74c55bf217ac7f09c2fd5"
+    },
+    {
+      "object": "page",
+      "id": "6a313bae-fdd3-4617-9bd6-5b132f23be35",
+      "created_time": "2021-06-15T17:24:00.000Z",
+      "last_edited_time": "2021-06-15T17:24:00.000Z",
+      "created_by": {
+        "object": "user",
+        "id": "92a680bb-6970-4726-952b-4f4c03bff617"
+      },
+      "last_edited_by": {
+        "object": "user",
+        "id": "92a680bb-6970-4726-952b-4f4c03bff617"
+      },
+      "cover": null,
+      "icon": null,
+      "parent": {
+        "type": "database_id",
+        "database_id": "7a94f22f-59ae-484d-90ac-4aeddd667641"
+      },
+      "archived": false,
+      "properties": {
+        "Score /5": {
+          "id": ")Y7%22",
+          "type": "select",
+          "select": {
+            "id": "5c944de7-3f4b-4567-b3a1-fa2c71c540b6",
+            "name": "⭐️⭐️⭐️⭐️⭐️",
+            "color": "default"
+          }
+        },
+        "Type": {
+          "id": "%2F7eo",
+          "type": "select",
+          "select": {
+            "id": "f96d0d0a-5564-4a20-ab15-5f040d49759e",
+            "name": "Article",
+            "color": "default"
+          }
+        },
+        "Publisher": {
+          "id": "%3E%24Pb",
+          "type": "select",
+          "select": {
+            "id": "01f82d08-aa1f-4884-a4e0-3bc32f909ec4",
+            "name": "The Atlantic",
+            "color": "red"
+          }
+        },
+        "Summary": {
+          "id": "%3F%5C25",
+          "type": "rich_text",
+          "rich_text": [
+            {
+              "type": "text",
+              "text": {
+                "content": "Some think chief ethics officers could help technology companies navigate political and social questions.",
+                "link": null
+              },
+              "annotations": {
+                "bold": false,
+                "italic": false,
+                "strikethrough": false,
+                "underline": false,
+                "code": false,
+                "color": "default"
+              },
+              "plain_text": "Some think chief ethics officers could help technology companies navigate political and social questions.",
+              "href": null
+            }
+          ]
+        },
+        "Publishing/Release Date": {
+          "id": "%3Fex%2B",
+          "type": "date",
+          "date": {
+            "start": "2020-12-08T12:00:00.000+00:00",
+            "end": null,
+            "time_zone": null
+          }
+        },
+        "date": {
+          "id": "Lpwp",
+          "type": "date",
+          "date": null
+        },
+        "Link": {
+          "id": "VVMi",
+          "type": "url",
+          "url": "https://www.nytimes.com/2018/10/21/opinion/who-will-teach-silicon-valley-to-be-ethical.html"
+        },
+        "Wine Pairing": {
+          "id": "WO%40Z",
+          "type": "rich_text",
+          "rich_text": []
+        },
+        "Read": {
+          "id": "_MWJ",
+          "type": "checkbox",
+          "checkbox": false
+        },
+        "Status": {
+          "id": "%60zz5",
+          "type": "select",
+          "select": {
+            "id": "ad038109-97d3-4b5d-a93a-3b88229b1b58",
+            "name": "New Option 3",
+            "color": "purple"
+          }
+        },
+        "Author": {
+          "id": "qNw_",
+          "type": "multi_select",
+          "multi_select": []
+        },
+        "Name": {
+          "id": "title",
+          "type": "title",
+          "title": [
+            {
+              "type": "text",
+              "text": {
+                "content": "New Media Article",
+                "link": null
+              },
+              "annotations": {
+                "bold": false,
+                "italic": false,
+                "strikethrough": false,
+                "underline": false,
+                "code": false,
+                "color": "default"
+              },
+              "plain_text": "New Media Article",
+              "href": null
+            }
+          ]
+        }
+      },
+      "url": "https://www.notion.so/New-Media-Article-6a313baefdd346179bd65b132f23be35"
+    }
+  ],
+  "next_cursor": null,
+  "has_more": false
+}
+`+"`"+``+"`"+``+"`"+``,
 			"",
 		)
 }
@@ -3274,7 +6615,7 @@ func (p *postSearchProcessor) processPostSearch(ctx context.Context, idx int, ba
 		return fmt.Errorf("marshaling request body: %w", err)
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", rawURL, bytes.NewReader(reqBytes))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, rawURL, bytes.NewReader(reqBytes))
 	if err != nil {
 		return fmt.Errorf("creating HTTP request: %w", err)
 	}
@@ -3283,32 +6624,32 @@ func (p *postSearchProcessor) processPostSearch(ctx context.Context, idx int, ba
 	httpReq.Header.Set("Notion-Version", p.notionVersion)
 	httpReq.Header.Set("Content-Type", "application/json")
 
-	resp, err := p.httpClient.Do(httpReq)
+	res, err := p.httpClient.Do(httpReq)
 	if err != nil {
 		return fmt.Errorf("Notion API request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer res.Body.Close()
 
-	respBody, err := io.ReadAll(resp.Body)
+	resBody, err := io.ReadAll(res.Body)
 	if err != nil {
 		return fmt.Errorf("reading response body: %w", err)
 	}
 
 	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
 	var body any
-	if len(respBody) > 0 {
+	if len(resBody) > 0 {
 		var jsonBody any
-		if json.Unmarshal(respBody, &jsonBody) == nil {
+		if json.Unmarshal(resBody, &jsonBody) == nil {
 			body = jsonBody
 		} else {
-			body = string(respBody)
+			body = string(resBody)
 		}
 	}
 
 	envelope := map[string]any{
 		"postSearchResponse": map[string]any{
-			"status_code": resp.StatusCode,
-			"headers":     headerMap(resp.Header),
+			"status_code": res.StatusCode,
+			"headers":     headerMap(res.Header),
 			"body":        body,
 		},
 	}
@@ -3332,15 +6673,15 @@ func (p *postSearchProcessor) processPostSearch(ctx context.Context, idx int, ba
 		msg.SetStructured(envelope)
 	}
 
-	if resp.StatusCode >= 400 {
-		msg.MetaSetMut("http_status_code", resp.StatusCode)
-		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	if res.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", res.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", res.StatusCode)
 	}
 
 	return nil
 }
 
-// RetrieveABlock processor — get /v1/blocks/{block_id}
+// RetrieveABlock processor — GET /v1/blocks/{block_id}
 
 func init() {
 	service.MustRegisterBatchProcessor(
@@ -3364,7 +6705,38 @@ func retrieveABlockConfig() *service.ConfigSpec {
 	).
 		Example(
 			"Retrieve a block",
-			"Response body:\n```json\n{\n  \"object\": \"block\",\n  \"id\": \"4868767d-9029-4b9d-a41b-652ef4c9c7b9\",\n  \"created_time\": \"2021-08-06T17:46:00.000Z\",\n  \"last_edited_time\": \"2021-08-12T00:12:00.000Z\",\n  \"has_children\": false,\n  \"type\": \"paragraph\",\n  \"paragraph\": {\n    \"text\": [\n      {\n        \"type\": \"text\",\n        \"text\": {\n          \"content\": \"hello to you\",\n          \"link\": null\n        },\n        \"annotations\": {\n          \"bold\": false,\n          \"italic\": false,\n          \"strikethrough\": false,\n          \"underline\": false,\n          \"code\": false,\n          \"color\": \"default\"\n        },\n        \"plain_text\": \"hello to you\",\n        \"href\": null\n      }\n    ]\n  }\n}\n```",
+			`Response body:
+`+"`"+``+"`"+``+"`"+`json
+{
+  "object": "block",
+  "id": "4868767d-9029-4b9d-a41b-652ef4c9c7b9",
+  "created_time": "2021-08-06T17:46:00.000Z",
+  "last_edited_time": "2021-08-12T00:12:00.000Z",
+  "has_children": false,
+  "type": "paragraph",
+  "paragraph": {
+    "text": [
+      {
+        "type": "text",
+        "text": {
+          "content": "hello to you",
+          "link": null
+        },
+        "annotations": {
+          "bold": false,
+          "italic": false,
+          "strikethrough": false,
+          "underline": false,
+          "code": false,
+          "color": "default"
+        },
+        "plain_text": "hello to you",
+        "href": null
+      }
+    ]
+  }
+}
+`+"`"+``+"`"+``+"`"+``,
 			"",
 		)
 }
@@ -3421,7 +6793,7 @@ func (p *retrieveABlockProcessor) processRetrieveABlock(ctx context.Context, idx
 		}
 		rawURL = strings.Replace(rawURL, "{block_id}", url.PathEscape(v), 1)
 	}
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", rawURL, nil)
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
 		return fmt.Errorf("creating HTTP request: %w", err)
 	}
@@ -3429,32 +6801,32 @@ func (p *retrieveABlockProcessor) processRetrieveABlock(ctx context.Context, idx
 	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
 	httpReq.Header.Set("Notion-Version", p.notionVersion)
 
-	resp, err := p.httpClient.Do(httpReq)
+	res, err := p.httpClient.Do(httpReq)
 	if err != nil {
 		return fmt.Errorf("Notion API request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer res.Body.Close()
 
-	respBody, err := io.ReadAll(resp.Body)
+	resBody, err := io.ReadAll(res.Body)
 	if err != nil {
 		return fmt.Errorf("reading response body: %w", err)
 	}
 
 	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
 	var body any
-	if len(respBody) > 0 {
+	if len(resBody) > 0 {
 		var jsonBody any
-		if json.Unmarshal(respBody, &jsonBody) == nil {
+		if json.Unmarshal(resBody, &jsonBody) == nil {
 			body = jsonBody
 		} else {
-			body = string(respBody)
+			body = string(resBody)
 		}
 	}
 
 	envelope := map[string]any{
 		"retrieveABlockResponse": map[string]any{
-			"status_code": resp.StatusCode,
-			"headers":     headerMap(resp.Header),
+			"status_code": res.StatusCode,
+			"headers":     headerMap(res.Header),
 			"body":        body,
 		},
 	}
@@ -3478,15 +6850,15 @@ func (p *retrieveABlockProcessor) processRetrieveABlock(ctx context.Context, idx
 		msg.SetStructured(envelope)
 	}
 
-	if resp.StatusCode >= 400 {
-		msg.MetaSetMut("http_status_code", resp.StatusCode)
-		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	if res.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", res.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", res.StatusCode)
 	}
 
 	return nil
 }
 
-// RetrieveADataSource processor — get /v1/data_sources/{data_source_id}
+// RetrieveADataSource processor — GET /v1/data_sources/{data_source_id}
 
 func init() {
 	service.MustRegisterBatchProcessor(
@@ -3562,7 +6934,7 @@ func (p *retrieveADataSourceProcessor) processRetrieveADataSource(ctx context.Co
 		}
 		rawURL = strings.Replace(rawURL, "{data_source_id}", url.PathEscape(v), 1)
 	}
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", rawURL, nil)
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
 		return fmt.Errorf("creating HTTP request: %w", err)
 	}
@@ -3570,32 +6942,32 @@ func (p *retrieveADataSourceProcessor) processRetrieveADataSource(ctx context.Co
 	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
 	httpReq.Header.Set("Notion-Version", p.notionVersion)
 
-	resp, err := p.httpClient.Do(httpReq)
+	res, err := p.httpClient.Do(httpReq)
 	if err != nil {
 		return fmt.Errorf("Notion API request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer res.Body.Close()
 
-	respBody, err := io.ReadAll(resp.Body)
+	resBody, err := io.ReadAll(res.Body)
 	if err != nil {
 		return fmt.Errorf("reading response body: %w", err)
 	}
 
 	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
 	var body any
-	if len(respBody) > 0 {
+	if len(resBody) > 0 {
 		var jsonBody any
-		if json.Unmarshal(respBody, &jsonBody) == nil {
+		if json.Unmarshal(resBody, &jsonBody) == nil {
 			body = jsonBody
 		} else {
-			body = string(respBody)
+			body = string(resBody)
 		}
 	}
 
 	envelope := map[string]any{
 		"retrieveADataSourceResponse": map[string]any{
-			"status_code": resp.StatusCode,
-			"headers":     headerMap(resp.Header),
+			"status_code": res.StatusCode,
+			"headers":     headerMap(res.Header),
 			"body":        body,
 		},
 	}
@@ -3619,15 +6991,15 @@ func (p *retrieveADataSourceProcessor) processRetrieveADataSource(ctx context.Co
 		msg.SetStructured(envelope)
 	}
 
-	if resp.StatusCode >= 400 {
-		msg.MetaSetMut("http_status_code", resp.StatusCode)
-		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	if res.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", res.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", res.StatusCode)
 	}
 
 	return nil
 }
 
-// RetrieveAPage processor — get /v1/pages/{page_id}
+// RetrieveAPage processor — GET /v1/pages/{page_id}
 
 func init() {
 	service.MustRegisterBatchProcessor(
@@ -3654,7 +7026,59 @@ func retrieveAPageConfig() *service.ConfigSpec {
 	).
 		Example(
 			"Retrieve a page",
-			"Response body:\n```json\n{\n  \"object\": \"page\",\n  \"id\": \"c4d39556-6364-46a1-8a61-ebbb668f7445\",\n  \"created_time\": \"2021-04-27T20:38:00.000Z\",\n  \"last_edited_time\": \"2022-03-02T05:22:00.000Z\",\n  \"created_by\": {\n    \"object\": \"user\",\n    \"id\": \"6794760a-1f15-45cd-9c65-0dfe42f5135a\"\n  },\n  \"last_edited_by\": {\n    \"object\": \"user\",\n    \"id\": \"92a680bb-6970-4726-952b-4f4c03bff617\"\n  },\n  \"cover\": null,\n  \"icon\": {\n    \"type\": \"emoji\",\n    \"emoji\": \"📕\"\n  },\n  \"parent\": {\n    \"type\": \"page_id\",\n    \"page_id\": \"c1218692-102d-4b47-ab38-c21900b3557b\"\n  },\n  \"archived\": false,\n  \"properties\": {\n    \"title\": {\n      \"id\": \"title\",\n      \"type\": \"title\",\n      \"title\": [\n        {\n          \"type\": \"text\",\n          \"text\": {\n            \"content\": \"Reading List\",\n            \"link\": null\n          },\n          \"annotations\": {\n            \"bold\": false,\n            \"italic\": false,\n            \"strikethrough\": false,\n            \"underline\": false,\n            \"code\": false,\n            \"color\": \"default\"\n          },\n          \"plain_text\": \"Reading List\",\n          \"href\": null\n        }\n      ]\n    }\n  },\n  \"url\": \"https://www.notion.so/Reading-List-c4d39556636446a18a61ebbb668f7445\"\n}\n```",
+			`Response body:
+`+"`"+``+"`"+``+"`"+`json
+{
+  "object": "page",
+  "id": "c4d39556-6364-46a1-8a61-ebbb668f7445",
+  "created_time": "2021-04-27T20:38:00.000Z",
+  "last_edited_time": "2022-03-02T05:22:00.000Z",
+  "created_by": {
+    "object": "user",
+    "id": "6794760a-1f15-45cd-9c65-0dfe42f5135a"
+  },
+  "last_edited_by": {
+    "object": "user",
+    "id": "92a680bb-6970-4726-952b-4f4c03bff617"
+  },
+  "cover": null,
+  "icon": {
+    "type": "emoji",
+    "emoji": "📕"
+  },
+  "parent": {
+    "type": "page_id",
+    "page_id": "c1218692-102d-4b47-ab38-c21900b3557b"
+  },
+  "archived": false,
+  "properties": {
+    "title": {
+      "id": "title",
+      "type": "title",
+      "title": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Reading List",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Reading List",
+          "href": null
+        }
+      ]
+    }
+  },
+  "url": "https://www.notion.so/Reading-List-c4d39556636446a18a61ebbb668f7445"
+}
+`+"`"+``+"`"+``+"`"+``,
 			"",
 		)
 }
@@ -3730,7 +7154,7 @@ func (p *retrieveAPageProcessor) processRetrieveAPage(ctx context.Context, idx i
 	if len(query) > 0 {
 		rawURL += "?" + query.Encode()
 	}
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", rawURL, nil)
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
 		return fmt.Errorf("creating HTTP request: %w", err)
 	}
@@ -3738,32 +7162,32 @@ func (p *retrieveAPageProcessor) processRetrieveAPage(ctx context.Context, idx i
 	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
 	httpReq.Header.Set("Notion-Version", p.notionVersion)
 
-	resp, err := p.httpClient.Do(httpReq)
+	res, err := p.httpClient.Do(httpReq)
 	if err != nil {
 		return fmt.Errorf("Notion API request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer res.Body.Close()
 
-	respBody, err := io.ReadAll(resp.Body)
+	resBody, err := io.ReadAll(res.Body)
 	if err != nil {
 		return fmt.Errorf("reading response body: %w", err)
 	}
 
 	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
 	var body any
-	if len(respBody) > 0 {
+	if len(resBody) > 0 {
 		var jsonBody any
-		if json.Unmarshal(respBody, &jsonBody) == nil {
+		if json.Unmarshal(resBody, &jsonBody) == nil {
 			body = jsonBody
 		} else {
-			body = string(respBody)
+			body = string(resBody)
 		}
 	}
 
 	envelope := map[string]any{
 		"retrieveAPageResponse": map[string]any{
-			"status_code": resp.StatusCode,
-			"headers":     headerMap(resp.Header),
+			"status_code": res.StatusCode,
+			"headers":     headerMap(res.Header),
 			"body":        body,
 		},
 	}
@@ -3787,15 +7211,15 @@ func (p *retrieveAPageProcessor) processRetrieveAPage(ctx context.Context, idx i
 		msg.SetStructured(envelope)
 	}
 
-	if resp.StatusCode >= 400 {
-		msg.MetaSetMut("http_status_code", resp.StatusCode)
-		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	if res.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", res.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", res.StatusCode)
 	}
 
 	return nil
 }
 
-// RetrieveAPageProperty processor — get /v1/pages/{page_id}/properties/{property_id}
+// RetrieveAPageProperty processor — GET /v1/pages/{page_id}/properties/{property_id}
 
 func init() {
 	service.MustRegisterBatchProcessor(
@@ -3827,7 +7251,18 @@ func retrieveAPagePropertyConfig() *service.ConfigSpec {
 	).
 		Example(
 			"Retrieve a page property item",
-			"Response body:\n```json\n{\n  \"object\": \"property_item\",\n  \"type\": \"select\",\n  \"select\": {\n    \"id\": \"5c944de7-3f4b-4567-b3a1-fa2c71c540b6\",\n    \"name\": \"⭐️⭐️⭐️⭐️⭐️\",\n    \"color\": \"default\"\n  }\n}\n```",
+			`Response body:
+`+"`"+``+"`"+``+"`"+`json
+{
+  "object": "property_item",
+  "type": "select",
+  "select": {
+    "id": "5c944de7-3f4b-4567-b3a1-fa2c71c540b6",
+    "name": "⭐️⭐️⭐️⭐️⭐️",
+    "color": "default"
+  }
+}
+`+"`"+``+"`"+``+"`"+``,
 			"",
 		)
 }
@@ -3927,7 +7362,7 @@ func (p *retrieveAPagePropertyProcessor) processRetrieveAPageProperty(ctx contex
 	if len(query) > 0 {
 		rawURL += "?" + query.Encode()
 	}
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", rawURL, nil)
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
 		return fmt.Errorf("creating HTTP request: %w", err)
 	}
@@ -3935,32 +7370,32 @@ func (p *retrieveAPagePropertyProcessor) processRetrieveAPageProperty(ctx contex
 	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
 	httpReq.Header.Set("Notion-Version", p.notionVersion)
 
-	resp, err := p.httpClient.Do(httpReq)
+	res, err := p.httpClient.Do(httpReq)
 	if err != nil {
 		return fmt.Errorf("Notion API request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer res.Body.Close()
 
-	respBody, err := io.ReadAll(resp.Body)
+	resBody, err := io.ReadAll(res.Body)
 	if err != nil {
 		return fmt.Errorf("reading response body: %w", err)
 	}
 
 	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
 	var body any
-	if len(respBody) > 0 {
+	if len(resBody) > 0 {
 		var jsonBody any
-		if json.Unmarshal(respBody, &jsonBody) == nil {
+		if json.Unmarshal(resBody, &jsonBody) == nil {
 			body = jsonBody
 		} else {
-			body = string(respBody)
+			body = string(resBody)
 		}
 	}
 
 	envelope := map[string]any{
 		"retrieveAPagePropertyResponse": map[string]any{
-			"status_code": resp.StatusCode,
-			"headers":     headerMap(resp.Header),
+			"status_code": res.StatusCode,
+			"headers":     headerMap(res.Header),
 			"body":        body,
 		},
 	}
@@ -3984,15 +7419,15 @@ func (p *retrieveAPagePropertyProcessor) processRetrieveAPageProperty(ctx contex
 		msg.SetStructured(envelope)
 	}
 
-	if resp.StatusCode >= 400 {
-		msg.MetaSetMut("http_status_code", resp.StatusCode)
-		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	if res.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", res.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", res.StatusCode)
 	}
 
 	return nil
 }
 
-// RetrieveComment processor — get /v1/comments/{comment_id}
+// RetrieveComment processor — GET /v1/comments/{comment_id}
 
 func init() {
 	service.MustRegisterBatchProcessor(
@@ -4068,7 +7503,7 @@ func (p *retrieveCommentProcessor) processRetrieveComment(ctx context.Context, i
 		}
 		rawURL = strings.Replace(rawURL, "{comment_id}", url.PathEscape(v), 1)
 	}
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", rawURL, nil)
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
 		return fmt.Errorf("creating HTTP request: %w", err)
 	}
@@ -4076,32 +7511,32 @@ func (p *retrieveCommentProcessor) processRetrieveComment(ctx context.Context, i
 	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
 	httpReq.Header.Set("Notion-Version", p.notionVersion)
 
-	resp, err := p.httpClient.Do(httpReq)
+	res, err := p.httpClient.Do(httpReq)
 	if err != nil {
 		return fmt.Errorf("Notion API request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer res.Body.Close()
 
-	respBody, err := io.ReadAll(resp.Body)
+	resBody, err := io.ReadAll(res.Body)
 	if err != nil {
 		return fmt.Errorf("reading response body: %w", err)
 	}
 
 	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
 	var body any
-	if len(respBody) > 0 {
+	if len(resBody) > 0 {
 		var jsonBody any
-		if json.Unmarshal(respBody, &jsonBody) == nil {
+		if json.Unmarshal(resBody, &jsonBody) == nil {
 			body = jsonBody
 		} else {
-			body = string(respBody)
+			body = string(resBody)
 		}
 	}
 
 	envelope := map[string]any{
 		"retrieveCommentResponse": map[string]any{
-			"status_code": resp.StatusCode,
-			"headers":     headerMap(resp.Header),
+			"status_code": res.StatusCode,
+			"headers":     headerMap(res.Header),
 			"body":        body,
 		},
 	}
@@ -4125,15 +7560,15 @@ func (p *retrieveCommentProcessor) processRetrieveComment(ctx context.Context, i
 		msg.SetStructured(envelope)
 	}
 
-	if resp.StatusCode >= 400 {
-		msg.MetaSetMut("http_status_code", resp.StatusCode)
-		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	if res.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", res.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", res.StatusCode)
 	}
 
 	return nil
 }
 
-// RetrieveDatabase processor — get /v1/databases/{database_id}
+// RetrieveDatabase processor — GET /v1/databases/{database_id}
 
 func init() {
 	service.MustRegisterBatchProcessor(
@@ -4157,7 +7592,292 @@ func retrieveDatabaseConfig() *service.ConfigSpec {
 	).
 		Example(
 			"Retrieve a database",
-			"Response body:\n```json\n{\n  \"object\": \"database\",\n  \"id\": \"8e2c2b76-9e1d-47d2-87b9-ed3035d607ae\",\n  \"cover\": null,\n  \"icon\": null,\n  \"created_time\": \"2021-04-27T20:38:00.000Z\",\n  \"created_by\": {\n    \"object\": \"user\",\n    \"id\": \"6794760a-1f15-45cd-9c65-0dfe42f5135a\"\n  },\n  \"last_edited_by\": {\n    \"object\": \"user\",\n    \"id\": \"6794760a-1f15-45cd-9c65-0dfe42f5135a\"\n  },\n  \"last_edited_time\": \"2022-02-24T22:14:00.000Z\",\n  \"title\": [\n    {\n      \"type\": \"text\",\n      \"text\": {\n        \"content\": \"Ever Better Reading List Title\",\n        \"link\": null\n      },\n      \"annotations\": {\n        \"bold\": false,\n        \"italic\": false,\n        \"strikethrough\": false,\n        \"underline\": false,\n        \"code\": false,\n        \"color\": \"default\"\n      },\n      \"plain_text\": \"Ever Better Reading List Title\",\n      \"href\": null\n    }\n  ],\n  \"properties\": {\n    \"Score /5\": {\n      \"id\": \")Y7%22\",\n      \"name\": \"Score /5\",\n      \"type\": \"select\",\n      \"select\": {\n        \"options\": [\n          {\n            \"id\": \"5c944de7-3f4b-4567-b3a1-fa2c71c540b6\",\n            \"name\": \"⭐️⭐️⭐️⭐️⭐️\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"b7307e35-c80a-4cb5-bb6b-6054523b394a\",\n            \"name\": \"⭐️⭐️⭐️⭐️\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"9b1e1349-8e24-40ba-bbca-84a61296bc81\",\n            \"name\": \"⭐️⭐️⭐️\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"66d3d050-086c-4a91-8c56-d55dc67e7789\",\n            \"name\": \"⭐️⭐️\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"d3782c76-0396-467f-928e-46bf0c9d5fba\",\n            \"name\": \"⭐️\",\n            \"color\": \"default\"\n          }\n        ]\n      }\n    },\n    \"Type\": {\n      \"id\": \"%2F7eo\",\n      \"name\": \"Type\",\n      \"type\": \"select\",\n      \"select\": {\n        \"options\": [\n          {\n            \"id\": \"f96d0d0a-5564-4a20-ab15-5f040d49759e\",\n            \"name\": \"Article\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"4ac85597-5db1-4e0a-9c02-445575c38f76\",\n            \"name\": \"TV Series\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"2991748a-5745-4c3b-9c9b-2d6846a6fa1f\",\n            \"name\": \"Film\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"82f3bace-be25-410d-87fe-561c9c22492f\",\n            \"name\": \"Podcast\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"861f1076-1cc4-429a-a781-54947d727a4a\",\n            \"name\": \"Academic Journal\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"9cc30548-59d6-4cd3-94bc-d234081525c4\",\n            \"name\": \"Essay Resource\",\n            \"color\": \"default\"\n          }\n        ]\n      }\n    },\n    \"Publisher\": {\n      \"id\": \"%3E%24Pb\",\n      \"name\": \"Publisher\",\n      \"type\": \"select\",\n      \"select\": {\n        \"options\": [\n          {\n            \"id\": \"c5ee409a-f307-4176-99ee-6e424fa89afa\",\n            \"name\": \"NYT\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"1b9b0c0c-17b0-4292-ad12-1364a51849de\",\n            \"name\": \"Netflix\",\n            \"color\": \"blue\"\n          },\n          {\n            \"id\": \"f3533637-278f-4501-b394-d9753bf3c101\",\n            \"name\": \"Indie\",\n            \"color\": \"brown\"\n          },\n          {\n            \"id\": \"e70d713c-4be4-4b40-a44d-fb413c8b9d7e\",\n            \"name\": \"Bon Appetit\",\n            \"color\": \"yellow\"\n          },\n          {\n            \"id\": \"9c2bd667-0a10-4be4-a044-35a537a14ab9\",\n            \"name\": \"Franklin Institute\",\n            \"color\": \"pink\"\n          },\n          {\n            \"id\": \"6849b5f0-e641-4ec5-83cb-1ffe23011060\",\n            \"name\": \"Springer\",\n            \"color\": \"orange\"\n          },\n          {\n            \"id\": \"6a5bff63-a72d-4464-a5d0-1a601af2adf6\",\n            \"name\": \"Emerald Group\",\n            \"color\": \"gray\"\n          },\n          {\n            \"id\": \"01f82d08-aa1f-4884-a4e0-3bc32f909ec4\",\n            \"name\": \"The Atlantic\",\n            \"color\": \"red\"\n          }\n        ]\n      }\n    },\n    \"Summary\": {\n      \"id\": \"%3F%5C25\",\n      \"name\": \"Summary\",\n      \"type\": \"rich_text\",\n      \"rich_text\": {}\n    },\n    \"Publishing/Release Date\": {\n      \"id\": \"%3Fex%2B\",\n      \"name\": \"Publishing/Release Date\",\n      \"type\": \"date\",\n      \"date\": {}\n    },\n    \"Link\": {\n      \"id\": \"VVMi\",\n      \"name\": \"Link\",\n      \"type\": \"url\",\n      \"url\": {}\n    },\n    \"Read\": {\n      \"id\": \"_MWJ\",\n      \"name\": \"Read\",\n      \"type\": \"checkbox\",\n      \"checkbox\": {}\n    },\n    \"Status\": {\n      \"id\": \"%60zz5\",\n      \"name\": \"Status\",\n      \"type\": \"select\",\n      \"select\": {\n        \"options\": [\n          {\n            \"id\": \"8c4a056e-6709-4dd1-ba58-d34d9480855a\",\n            \"name\": \"Ready to Start\",\n            \"color\": \"yellow\"\n          },\n          {\n            \"id\": \"5925ba22-0126-4b58-90c7-b8bbb2c3c895\",\n            \"name\": \"Reading\",\n            \"color\": \"red\"\n          },\n          {\n            \"id\": \"59aa9043-07b4-4bf4-8734-3164b13af44a\",\n            \"name\": \"Finished\",\n            \"color\": \"blue\"\n          },\n          {\n            \"id\": \"f961978d-02eb-4998-933a-33c2ec378564\",\n            \"name\": \"Listening\",\n            \"color\": \"red\"\n          },\n          {\n            \"id\": \"1d450853-b27a-45e2-979f-448aa1bd35de\",\n            \"name\": \"Watching\",\n            \"color\": \"red\"\n          }\n        ]\n      }\n    },\n    \"Author\": {\n      \"id\": \"qNw_\",\n      \"name\": \"Author\",\n      \"type\": \"multi_select\",\n      \"multi_select\": {\n        \"options\": [\n          {\n            \"id\": \"15592971-7b30-43d5-9406-2eb69b13fcae\",\n            \"name\": \"Spencer Greenberg\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"b80a988e-dccf-4f74-b764-6ca0e49ed1b8\",\n            \"name\": \"Seth Stephens-Davidowitz\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"0e71ee06-199d-46a4-834c-01084c8f76cb\",\n            \"name\": \"Andrew Russell\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"5807ec38-4879-4455-9f30-5352e90e8b79\",\n            \"name\": \"Lee Vinsel\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"4cf10a64-f3da-449c-8e04-ce6e338bbdbd\",\n            \"name\": \"Megan Greenwell\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"833e2c78-35ed-4601-badc-50c323341d76\",\n            \"name\": \"Kara Swisher\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"82e594e2-b1c5-4271-ac19-1a723a94a533\",\n            \"name\": \"Paul Romer\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"ae3a2cbe-1fc9-4376-be35-331628b34623\",\n            \"name\": \"Karen Swallow Prior\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"da068e78-dfe2-4434-9fd7-b7450b3e5830\",\n            \"name\": \"Judith Shulevitz\",\n            \"color\": \"default\"\n          }\n        ]\n      }\n    },\n    \"Name\": {\n      \"id\": \"title\",\n      \"name\": \"Name\",\n      \"type\": \"title\",\n      \"title\": {}\n    }\n  },\n  \"parent\": {\n    \"type\": \"page_id\",\n    \"page_id\": \"c4d39556-6364-46a1-8a61-ebbb668f7445\"\n  },\n  \"url\": \"https://www.notion.so/8e2c2b769e1d47d287b9ed3035d607ae\",\n  \"archived\": false\n}\n```",
+			`Response body:
+`+"`"+``+"`"+``+"`"+`json
+{
+  "object": "database",
+  "id": "8e2c2b76-9e1d-47d2-87b9-ed3035d607ae",
+  "cover": null,
+  "icon": null,
+  "created_time": "2021-04-27T20:38:00.000Z",
+  "created_by": {
+    "object": "user",
+    "id": "6794760a-1f15-45cd-9c65-0dfe42f5135a"
+  },
+  "last_edited_by": {
+    "object": "user",
+    "id": "6794760a-1f15-45cd-9c65-0dfe42f5135a"
+  },
+  "last_edited_time": "2022-02-24T22:14:00.000Z",
+  "title": [
+    {
+      "type": "text",
+      "text": {
+        "content": "Ever Better Reading List Title",
+        "link": null
+      },
+      "annotations": {
+        "bold": false,
+        "italic": false,
+        "strikethrough": false,
+        "underline": false,
+        "code": false,
+        "color": "default"
+      },
+      "plain_text": "Ever Better Reading List Title",
+      "href": null
+    }
+  ],
+  "properties": {
+    "Score /5": {
+      "id": ")Y7%22",
+      "name": "Score /5",
+      "type": "select",
+      "select": {
+        "options": [
+          {
+            "id": "5c944de7-3f4b-4567-b3a1-fa2c71c540b6",
+            "name": "⭐️⭐️⭐️⭐️⭐️",
+            "color": "default"
+          },
+          {
+            "id": "b7307e35-c80a-4cb5-bb6b-6054523b394a",
+            "name": "⭐️⭐️⭐️⭐️",
+            "color": "default"
+          },
+          {
+            "id": "9b1e1349-8e24-40ba-bbca-84a61296bc81",
+            "name": "⭐️⭐️⭐️",
+            "color": "default"
+          },
+          {
+            "id": "66d3d050-086c-4a91-8c56-d55dc67e7789",
+            "name": "⭐️⭐️",
+            "color": "default"
+          },
+          {
+            "id": "d3782c76-0396-467f-928e-46bf0c9d5fba",
+            "name": "⭐️",
+            "color": "default"
+          }
+        ]
+      }
+    },
+    "Type": {
+      "id": "%2F7eo",
+      "name": "Type",
+      "type": "select",
+      "select": {
+        "options": [
+          {
+            "id": "f96d0d0a-5564-4a20-ab15-5f040d49759e",
+            "name": "Article",
+            "color": "default"
+          },
+          {
+            "id": "4ac85597-5db1-4e0a-9c02-445575c38f76",
+            "name": "TV Series",
+            "color": "default"
+          },
+          {
+            "id": "2991748a-5745-4c3b-9c9b-2d6846a6fa1f",
+            "name": "Film",
+            "color": "default"
+          },
+          {
+            "id": "82f3bace-be25-410d-87fe-561c9c22492f",
+            "name": "Podcast",
+            "color": "default"
+          },
+          {
+            "id": "861f1076-1cc4-429a-a781-54947d727a4a",
+            "name": "Academic Journal",
+            "color": "default"
+          },
+          {
+            "id": "9cc30548-59d6-4cd3-94bc-d234081525c4",
+            "name": "Essay Resource",
+            "color": "default"
+          }
+        ]
+      }
+    },
+    "Publisher": {
+      "id": "%3E%24Pb",
+      "name": "Publisher",
+      "type": "select",
+      "select": {
+        "options": [
+          {
+            "id": "c5ee409a-f307-4176-99ee-6e424fa89afa",
+            "name": "NYT",
+            "color": "default"
+          },
+          {
+            "id": "1b9b0c0c-17b0-4292-ad12-1364a51849de",
+            "name": "Netflix",
+            "color": "blue"
+          },
+          {
+            "id": "f3533637-278f-4501-b394-d9753bf3c101",
+            "name": "Indie",
+            "color": "brown"
+          },
+          {
+            "id": "e70d713c-4be4-4b40-a44d-fb413c8b9d7e",
+            "name": "Bon Appetit",
+            "color": "yellow"
+          },
+          {
+            "id": "9c2bd667-0a10-4be4-a044-35a537a14ab9",
+            "name": "Franklin Institute",
+            "color": "pink"
+          },
+          {
+            "id": "6849b5f0-e641-4ec5-83cb-1ffe23011060",
+            "name": "Springer",
+            "color": "orange"
+          },
+          {
+            "id": "6a5bff63-a72d-4464-a5d0-1a601af2adf6",
+            "name": "Emerald Group",
+            "color": "gray"
+          },
+          {
+            "id": "01f82d08-aa1f-4884-a4e0-3bc32f909ec4",
+            "name": "The Atlantic",
+            "color": "red"
+          }
+        ]
+      }
+    },
+    "Summary": {
+      "id": "%3F%5C25",
+      "name": "Summary",
+      "type": "rich_text",
+      "rich_text": {}
+    },
+    "Publishing/Release Date": {
+      "id": "%3Fex%2B",
+      "name": "Publishing/Release Date",
+      "type": "date",
+      "date": {}
+    },
+    "Link": {
+      "id": "VVMi",
+      "name": "Link",
+      "type": "url",
+      "url": {}
+    },
+    "Read": {
+      "id": "_MWJ",
+      "name": "Read",
+      "type": "checkbox",
+      "checkbox": {}
+    },
+    "Status": {
+      "id": "%60zz5",
+      "name": "Status",
+      "type": "select",
+      "select": {
+        "options": [
+          {
+            "id": "8c4a056e-6709-4dd1-ba58-d34d9480855a",
+            "name": "Ready to Start",
+            "color": "yellow"
+          },
+          {
+            "id": "5925ba22-0126-4b58-90c7-b8bbb2c3c895",
+            "name": "Reading",
+            "color": "red"
+          },
+          {
+            "id": "59aa9043-07b4-4bf4-8734-3164b13af44a",
+            "name": "Finished",
+            "color": "blue"
+          },
+          {
+            "id": "f961978d-02eb-4998-933a-33c2ec378564",
+            "name": "Listening",
+            "color": "red"
+          },
+          {
+            "id": "1d450853-b27a-45e2-979f-448aa1bd35de",
+            "name": "Watching",
+            "color": "red"
+          }
+        ]
+      }
+    },
+    "Author": {
+      "id": "qNw_",
+      "name": "Author",
+      "type": "multi_select",
+      "multi_select": {
+        "options": [
+          {
+            "id": "15592971-7b30-43d5-9406-2eb69b13fcae",
+            "name": "Spencer Greenberg",
+            "color": "default"
+          },
+          {
+            "id": "b80a988e-dccf-4f74-b764-6ca0e49ed1b8",
+            "name": "Seth Stephens-Davidowitz",
+            "color": "default"
+          },
+          {
+            "id": "0e71ee06-199d-46a4-834c-01084c8f76cb",
+            "name": "Andrew Russell",
+            "color": "default"
+          },
+          {
+            "id": "5807ec38-4879-4455-9f30-5352e90e8b79",
+            "name": "Lee Vinsel",
+            "color": "default"
+          },
+          {
+            "id": "4cf10a64-f3da-449c-8e04-ce6e338bbdbd",
+            "name": "Megan Greenwell",
+            "color": "default"
+          },
+          {
+            "id": "833e2c78-35ed-4601-badc-50c323341d76",
+            "name": "Kara Swisher",
+            "color": "default"
+          },
+          {
+            "id": "82e594e2-b1c5-4271-ac19-1a723a94a533",
+            "name": "Paul Romer",
+            "color": "default"
+          },
+          {
+            "id": "ae3a2cbe-1fc9-4376-be35-331628b34623",
+            "name": "Karen Swallow Prior",
+            "color": "default"
+          },
+          {
+            "id": "da068e78-dfe2-4434-9fd7-b7450b3e5830",
+            "name": "Judith Shulevitz",
+            "color": "default"
+          }
+        ]
+      }
+    },
+    "Name": {
+      "id": "title",
+      "name": "Name",
+      "type": "title",
+      "title": {}
+    }
+  },
+  "parent": {
+    "type": "page_id",
+    "page_id": "c4d39556-6364-46a1-8a61-ebbb668f7445"
+  },
+  "url": "https://www.notion.so/8e2c2b769e1d47d287b9ed3035d607ae",
+  "archived": false
+}
+`+"`"+``+"`"+``+"`"+``,
 			"",
 		)
 }
@@ -4214,7 +7934,7 @@ func (p *retrieveDatabaseProcessor) processRetrieveDatabase(ctx context.Context,
 		}
 		rawURL = strings.Replace(rawURL, "{database_id}", url.PathEscape(v), 1)
 	}
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", rawURL, nil)
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
 		return fmt.Errorf("creating HTTP request: %w", err)
 	}
@@ -4222,32 +7942,32 @@ func (p *retrieveDatabaseProcessor) processRetrieveDatabase(ctx context.Context,
 	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
 	httpReq.Header.Set("Notion-Version", p.notionVersion)
 
-	resp, err := p.httpClient.Do(httpReq)
+	res, err := p.httpClient.Do(httpReq)
 	if err != nil {
 		return fmt.Errorf("Notion API request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer res.Body.Close()
 
-	respBody, err := io.ReadAll(resp.Body)
+	resBody, err := io.ReadAll(res.Body)
 	if err != nil {
 		return fmt.Errorf("reading response body: %w", err)
 	}
 
 	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
 	var body any
-	if len(respBody) > 0 {
+	if len(resBody) > 0 {
 		var jsonBody any
-		if json.Unmarshal(respBody, &jsonBody) == nil {
+		if json.Unmarshal(resBody, &jsonBody) == nil {
 			body = jsonBody
 		} else {
-			body = string(respBody)
+			body = string(resBody)
 		}
 	}
 
 	envelope := map[string]any{
 		"retrieveDatabaseResponse": map[string]any{
-			"status_code": resp.StatusCode,
-			"headers":     headerMap(resp.Header),
+			"status_code": res.StatusCode,
+			"headers":     headerMap(res.Header),
 			"body":        body,
 		},
 	}
@@ -4271,15 +7991,15 @@ func (p *retrieveDatabaseProcessor) processRetrieveDatabase(ctx context.Context,
 		msg.SetStructured(envelope)
 	}
 
-	if resp.StatusCode >= 400 {
-		msg.MetaSetMut("http_status_code", resp.StatusCode)
-		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	if res.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", res.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", res.StatusCode)
 	}
 
 	return nil
 }
 
-// RetrieveFileUpload processor — get /v1/file_uploads/{file_upload_id}
+// RetrieveFileUpload processor — GET /v1/file_uploads/{file_upload_id}
 
 func init() {
 	service.MustRegisterBatchProcessor(
@@ -4355,7 +8075,7 @@ func (p *retrieveFileUploadProcessor) processRetrieveFileUpload(ctx context.Cont
 		}
 		rawURL = strings.Replace(rawURL, "{file_upload_id}", url.PathEscape(v), 1)
 	}
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", rawURL, nil)
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
 		return fmt.Errorf("creating HTTP request: %w", err)
 	}
@@ -4363,32 +8083,32 @@ func (p *retrieveFileUploadProcessor) processRetrieveFileUpload(ctx context.Cont
 	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
 	httpReq.Header.Set("Notion-Version", p.notionVersion)
 
-	resp, err := p.httpClient.Do(httpReq)
+	res, err := p.httpClient.Do(httpReq)
 	if err != nil {
 		return fmt.Errorf("Notion API request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer res.Body.Close()
 
-	respBody, err := io.ReadAll(resp.Body)
+	resBody, err := io.ReadAll(res.Body)
 	if err != nil {
 		return fmt.Errorf("reading response body: %w", err)
 	}
 
 	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
 	var body any
-	if len(respBody) > 0 {
+	if len(resBody) > 0 {
 		var jsonBody any
-		if json.Unmarshal(respBody, &jsonBody) == nil {
+		if json.Unmarshal(resBody, &jsonBody) == nil {
 			body = jsonBody
 		} else {
-			body = string(respBody)
+			body = string(resBody)
 		}
 	}
 
 	envelope := map[string]any{
 		"retrieveFileUploadResponse": map[string]any{
-			"status_code": resp.StatusCode,
-			"headers":     headerMap(resp.Header),
+			"status_code": res.StatusCode,
+			"headers":     headerMap(res.Header),
 			"body":        body,
 		},
 	}
@@ -4412,15 +8132,15 @@ func (p *retrieveFileUploadProcessor) processRetrieveFileUpload(ctx context.Cont
 		msg.SetStructured(envelope)
 	}
 
-	if resp.StatusCode >= 400 {
-		msg.MetaSetMut("http_status_code", resp.StatusCode)
-		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	if res.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", res.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", res.StatusCode)
 	}
 
 	return nil
 }
 
-// RetrievePageMarkdown processor — get /v1/pages/{page_id}/markdown
+// RetrievePageMarkdown processor — GET /v1/pages/{page_id}/markdown
 
 func init() {
 	service.MustRegisterBatchProcessor(
@@ -4518,7 +8238,7 @@ func (p *retrievePageMarkdownProcessor) processRetrievePageMarkdown(ctx context.
 	if len(query) > 0 {
 		rawURL += "?" + query.Encode()
 	}
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", rawURL, nil)
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
 		return fmt.Errorf("creating HTTP request: %w", err)
 	}
@@ -4526,32 +8246,32 @@ func (p *retrievePageMarkdownProcessor) processRetrievePageMarkdown(ctx context.
 	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
 	httpReq.Header.Set("Notion-Version", p.notionVersion)
 
-	resp, err := p.httpClient.Do(httpReq)
+	res, err := p.httpClient.Do(httpReq)
 	if err != nil {
 		return fmt.Errorf("Notion API request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer res.Body.Close()
 
-	respBody, err := io.ReadAll(resp.Body)
+	resBody, err := io.ReadAll(res.Body)
 	if err != nil {
 		return fmt.Errorf("reading response body: %w", err)
 	}
 
 	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
 	var body any
-	if len(respBody) > 0 {
+	if len(resBody) > 0 {
 		var jsonBody any
-		if json.Unmarshal(respBody, &jsonBody) == nil {
+		if json.Unmarshal(resBody, &jsonBody) == nil {
 			body = jsonBody
 		} else {
-			body = string(respBody)
+			body = string(resBody)
 		}
 	}
 
 	envelope := map[string]any{
 		"retrievePageMarkdownResponse": map[string]any{
-			"status_code": resp.StatusCode,
-			"headers":     headerMap(resp.Header),
+			"status_code": res.StatusCode,
+			"headers":     headerMap(res.Header),
 			"body":        body,
 		},
 	}
@@ -4575,15 +8295,15 @@ func (p *retrievePageMarkdownProcessor) processRetrievePageMarkdown(ctx context.
 		msg.SetStructured(envelope)
 	}
 
-	if resp.StatusCode >= 400 {
-		msg.MetaSetMut("http_status_code", resp.StatusCode)
-		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	if res.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", res.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", res.StatusCode)
 	}
 
 	return nil
 }
 
-// UpdateABlock processor — patch /v1/blocks/{block_id}
+// UpdateABlock processor — PATCH /v1/blocks/{block_id}
 
 func init() {
 	service.MustRegisterBatchProcessor(
@@ -4610,7 +8330,54 @@ func updateABlockConfig() *service.ConfigSpec {
 	).
 		Example(
 			"Update a block",
-			"Request body:\n```json\n{\n  \"paragraph\": {\n    \"rich_text\": [\n      {\n        \"type\": \"text\",\n        \"text\": {\n          \"content\": \"hello to you\"\n        }\n      }\n    ]\n  }\n}\n```\n\nResponse body:\n```json\n{\n  \"object\": \"block\",\n  \"id\": \"4868767d-9029-4b9d-a41b-652ef4c9c7b9\",\n  \"created_time\": \"2021-08-06T17:46:00.000Z\",\n  \"last_edited_time\": \"2021-08-12T00:12:00.000Z\",\n  \"has_children\": false,\n  \"type\": \"paragraph\",\n  \"paragraph\": {\n    \"text\": [\n      {\n        \"type\": \"text\",\n        \"text\": {\n          \"content\": \"hello to you\",\n          \"link\": null\n        },\n        \"annotations\": {\n          \"bold\": false,\n          \"italic\": false,\n          \"strikethrough\": false,\n          \"underline\": false,\n          \"code\": false,\n          \"color\": \"default\"\n        },\n        \"plain_text\": \"hello to you\",\n        \"href\": null\n      }\n    ]\n  }\n}\n```",
+			`Request body:
+`+"`"+``+"`"+``+"`"+`json
+{
+  "paragraph": {
+    "rich_text": [
+      {
+        "type": "text",
+        "text": {
+          "content": "hello to you"
+        }
+      }
+    ]
+  }
+}
+`+"`"+``+"`"+``+"`"+`
+
+Response body:
+`+"`"+``+"`"+``+"`"+`json
+{
+  "object": "block",
+  "id": "4868767d-9029-4b9d-a41b-652ef4c9c7b9",
+  "created_time": "2021-08-06T17:46:00.000Z",
+  "last_edited_time": "2021-08-12T00:12:00.000Z",
+  "has_children": false,
+  "type": "paragraph",
+  "paragraph": {
+    "text": [
+      {
+        "type": "text",
+        "text": {
+          "content": "hello to you",
+          "link": null
+        },
+        "annotations": {
+          "bold": false,
+          "italic": false,
+          "strikethrough": false,
+          "underline": false,
+          "code": false,
+          "color": "default"
+        },
+        "plain_text": "hello to you",
+        "href": null
+      }
+    ]
+  }
+}
+`+"`"+``+"`"+``+"`"+``,
 			"",
 		)
 }
@@ -4699,7 +8466,7 @@ func (p *updateABlockProcessor) processUpdateABlock(ctx context.Context, idx int
 		return fmt.Errorf("marshaling request body: %w", err)
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, "PATCH", rawURL, bytes.NewReader(reqBytes))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPatch, rawURL, bytes.NewReader(reqBytes))
 	if err != nil {
 		return fmt.Errorf("creating HTTP request: %w", err)
 	}
@@ -4708,32 +8475,32 @@ func (p *updateABlockProcessor) processUpdateABlock(ctx context.Context, idx int
 	httpReq.Header.Set("Notion-Version", p.notionVersion)
 	httpReq.Header.Set("Content-Type", "application/json")
 
-	resp, err := p.httpClient.Do(httpReq)
+	res, err := p.httpClient.Do(httpReq)
 	if err != nil {
 		return fmt.Errorf("Notion API request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer res.Body.Close()
 
-	respBody, err := io.ReadAll(resp.Body)
+	resBody, err := io.ReadAll(res.Body)
 	if err != nil {
 		return fmt.Errorf("reading response body: %w", err)
 	}
 
 	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
 	var body any
-	if len(respBody) > 0 {
+	if len(resBody) > 0 {
 		var jsonBody any
-		if json.Unmarshal(respBody, &jsonBody) == nil {
+		if json.Unmarshal(resBody, &jsonBody) == nil {
 			body = jsonBody
 		} else {
-			body = string(respBody)
+			body = string(resBody)
 		}
 	}
 
 	envelope := map[string]any{
 		"updateABlockResponse": map[string]any{
-			"status_code": resp.StatusCode,
-			"headers":     headerMap(resp.Header),
+			"status_code": res.StatusCode,
+			"headers":     headerMap(res.Header),
 			"body":        body,
 		},
 	}
@@ -4757,15 +8524,15 @@ func (p *updateABlockProcessor) processUpdateABlock(ctx context.Context, idx int
 		msg.SetStructured(envelope)
 	}
 
-	if resp.StatusCode >= 400 {
-		msg.MetaSetMut("http_status_code", resp.StatusCode)
-		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	if res.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", res.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", res.StatusCode)
 	}
 
 	return nil
 }
 
-// UpdateADataSource processor — patch /v1/data_sources/{data_source_id}
+// UpdateADataSource processor — PATCH /v1/data_sources/{data_source_id}
 
 func init() {
 	service.MustRegisterBatchProcessor(
@@ -4876,7 +8643,7 @@ func (p *updateADataSourceProcessor) processUpdateADataSource(ctx context.Contex
 		return fmt.Errorf("marshaling request body: %w", err)
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, "PATCH", rawURL, bytes.NewReader(reqBytes))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPatch, rawURL, bytes.NewReader(reqBytes))
 	if err != nil {
 		return fmt.Errorf("creating HTTP request: %w", err)
 	}
@@ -4885,32 +8652,32 @@ func (p *updateADataSourceProcessor) processUpdateADataSource(ctx context.Contex
 	httpReq.Header.Set("Notion-Version", p.notionVersion)
 	httpReq.Header.Set("Content-Type", "application/json")
 
-	resp, err := p.httpClient.Do(httpReq)
+	res, err := p.httpClient.Do(httpReq)
 	if err != nil {
 		return fmt.Errorf("Notion API request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer res.Body.Close()
 
-	respBody, err := io.ReadAll(resp.Body)
+	resBody, err := io.ReadAll(res.Body)
 	if err != nil {
 		return fmt.Errorf("reading response body: %w", err)
 	}
 
 	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
 	var body any
-	if len(respBody) > 0 {
+	if len(resBody) > 0 {
 		var jsonBody any
-		if json.Unmarshal(respBody, &jsonBody) == nil {
+		if json.Unmarshal(resBody, &jsonBody) == nil {
 			body = jsonBody
 		} else {
-			body = string(respBody)
+			body = string(resBody)
 		}
 	}
 
 	envelope := map[string]any{
 		"updateADataSourceResponse": map[string]any{
-			"status_code": resp.StatusCode,
-			"headers":     headerMap(resp.Header),
+			"status_code": res.StatusCode,
+			"headers":     headerMap(res.Header),
 			"body":        body,
 		},
 	}
@@ -4934,15 +8701,15 @@ func (p *updateADataSourceProcessor) processUpdateADataSource(ctx context.Contex
 		msg.SetStructured(envelope)
 	}
 
-	if resp.StatusCode >= 400 {
-		msg.MetaSetMut("http_status_code", resp.StatusCode)
-		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	if res.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", res.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", res.StatusCode)
 	}
 
 	return nil
 }
 
-// UpdateDatabase processor — patch /v1/databases/{database_id}
+// UpdateDatabase processor — PATCH /v1/databases/{database_id}
 
 func init() {
 	service.MustRegisterBatchProcessor(
@@ -4969,12 +8736,623 @@ func updateDatabaseConfig() *service.ConfigSpec {
 	).
 		Example(
 			"Update a database",
-			"Request body:\n```json\n{\n  \"title\": [\n    {\n      \"text\": {\n        \"content\": \"Ever Better Reading List Title\"\n      }\n    }\n  ],\n  \"properties\": {\n    \"Wine Pairing\": {\n      \"rich_text\": {}\n    }\n  }\n}\n```\n\nResponse body:\n```json\n{\n  \"object\": \"database\",\n  \"id\": \"8e2c2b76-9e1d-47d2-87b9-ed3035d607ae\",\n  \"cover\": null,\n  \"icon\": null,\n  \"created_time\": \"2021-04-27T20:38:00.000Z\",\n  \"created_by\": {\n    \"object\": \"user\",\n    \"id\": \"6794760a-1f15-45cd-9c65-0dfe42f5135a\"\n  },\n  \"last_edited_by\": {\n    \"object\": \"user\",\n    \"id\": \"92a680bb-6970-4726-952b-4f4c03bff617\"\n  },\n  \"last_edited_time\": \"2022-02-24T22:08:00.000Z\",\n  \"title\": [\n    {\n      \"type\": \"text\",\n      \"text\": {\n        \"content\": \"Ever Better Reading List Title\",\n        \"link\": null\n      },\n      \"annotations\": {\n        \"bold\": false,\n        \"italic\": false,\n        \"strikethrough\": false,\n        \"underline\": false,\n        \"code\": false,\n        \"color\": \"default\"\n      },\n      \"plain_text\": \"Ever Better Reading List Title\",\n      \"href\": null\n    }\n  ],\n  \"properties\": {\n    \"Score /5\": {\n      \"id\": \")Y7\\\"\",\n      \"name\": \"Score /5\",\n      \"type\": \"select\",\n      \"select\": {\n        \"options\": [\n          {\n            \"id\": \"5c944de7-3f4b-4567-b3a1-fa2c71c540b6\",\n            \"name\": \"⭐️⭐️⭐️⭐️⭐️\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"b7307e35-c80a-4cb5-bb6b-6054523b394a\",\n            \"name\": \"⭐️⭐️⭐️⭐️\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"9b1e1349-8e24-40ba-bbca-84a61296bc81\",\n            \"name\": \"⭐️⭐️⭐️\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"66d3d050-086c-4a91-8c56-d55dc67e7789\",\n            \"name\": \"⭐️⭐️\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"d3782c76-0396-467f-928e-46bf0c9d5fba\",\n            \"name\": \"⭐️\",\n            \"color\": \"default\"\n          }\n        ]\n      }\n    },\n    \"Type\": {\n      \"id\": \"/7eo\",\n      \"name\": \"Type\",\n      \"type\": \"select\",\n      \"select\": {\n        \"options\": [\n          {\n            \"id\": \"f96d0d0a-5564-4a20-ab15-5f040d49759e\",\n            \"name\": \"Article\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"4ac85597-5db1-4e0a-9c02-445575c38f76\",\n            \"name\": \"TV Series\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"2991748a-5745-4c3b-9c9b-2d6846a6fa1f\",\n            \"name\": \"Film\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"82f3bace-be25-410d-87fe-561c9c22492f\",\n            \"name\": \"Podcast\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"861f1076-1cc4-429a-a781-54947d727a4a\",\n            \"name\": \"Academic Journal\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"9cc30548-59d6-4cd3-94bc-d234081525c4\",\n            \"name\": \"Essay Resource\",\n            \"color\": \"default\"\n          }\n        ]\n      }\n    },\n    \"Publisher\": {\n      \"id\": \">$Pb\",\n      \"name\": \"Publisher\",\n      \"type\": \"select\",\n      \"select\": {\n        \"options\": [\n          {\n            \"id\": \"c5ee409a-f307-4176-99ee-6e424fa89afa\",\n            \"name\": \"NYT\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"1b9b0c0c-17b0-4292-ad12-1364a51849de\",\n            \"name\": \"Netflix\",\n            \"color\": \"blue\"\n          },\n          {\n            \"id\": \"f3533637-278f-4501-b394-d9753bf3c101\",\n            \"name\": \"Indie\",\n            \"color\": \"brown\"\n          },\n          {\n            \"id\": \"e70d713c-4be4-4b40-a44d-fb413c8b9d7e\",\n            \"name\": \"Bon Appetit\",\n            \"color\": \"yellow\"\n          },\n          {\n            \"id\": \"9c2bd667-0a10-4be4-a044-35a537a14ab9\",\n            \"name\": \"Franklin Institute\",\n            \"color\": \"pink\"\n          },\n          {\n            \"id\": \"6849b5f0-e641-4ec5-83cb-1ffe23011060\",\n            \"name\": \"Springer\",\n            \"color\": \"orange\"\n          },\n          {\n            \"id\": \"6a5bff63-a72d-4464-a5d0-1a601af2adf6\",\n            \"name\": \"Emerald Group\",\n            \"color\": \"gray\"\n          },\n          {\n            \"id\": \"01f82d08-aa1f-4884-a4e0-3bc32f909ec4\",\n            \"name\": \"The Atlantic\",\n            \"color\": \"red\"\n          }\n        ]\n      }\n    },\n    \"Summary\": {\n      \"id\": \"?\\\\25\",\n      \"name\": \"Summary\",\n      \"type\": \"rich_text\",\n      \"rich_text\": {}\n    },\n    \"Publishing/Release Date\": {\n      \"id\": \"?ex+\",\n      \"name\": \"Publishing/Release Date\",\n      \"type\": \"date\",\n      \"date\": {}\n    },\n    \"Link\": {\n      \"id\": \"VVMi\",\n      \"name\": \"Link\",\n      \"type\": \"url\",\n      \"url\": {}\n    },\n    \"Wine Pairing\": {\n      \"id\": \"Y=H]\",\n      \"name\": \"Wine Pairing\",\n      \"type\": \"rich_text\",\n      \"rich_text\": {}\n    },\n    \"Read\": {\n      \"id\": \"_MWJ\",\n      \"name\": \"Read\",\n      \"type\": \"checkbox\",\n      \"checkbox\": {}\n    },\n    \"Status\": {\n      \"id\": \"`zz5\",\n      \"name\": \"Status\",\n      \"type\": \"select\",\n      \"select\": {\n        \"options\": [\n          {\n            \"id\": \"8c4a056e-6709-4dd1-ba58-d34d9480855a\",\n            \"name\": \"Ready to Start\",\n            \"color\": \"yellow\"\n          },\n          {\n            \"id\": \"5925ba22-0126-4b58-90c7-b8bbb2c3c895\",\n            \"name\": \"Reading\",\n            \"color\": \"red\"\n          },\n          {\n            \"id\": \"59aa9043-07b4-4bf4-8734-3164b13af44a\",\n            \"name\": \"Finished\",\n            \"color\": \"blue\"\n          },\n          {\n            \"id\": \"f961978d-02eb-4998-933a-33c2ec378564\",\n            \"name\": \"Listening\",\n            \"color\": \"red\"\n          },\n          {\n            \"id\": \"1d450853-b27a-45e2-979f-448aa1bd35de\",\n            \"name\": \"Watching\",\n            \"color\": \"red\"\n          }\n        ]\n      }\n    },\n    \"Author\": {\n      \"id\": \"qNw_\",\n      \"name\": \"Author\",\n      \"type\": \"multi_select\",\n      \"multi_select\": {\n        \"options\": [\n          {\n            \"id\": \"15592971-7b30-43d5-9406-2eb69b13fcae\",\n            \"name\": \"Spencer Greenberg\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"b80a988e-dccf-4f74-b764-6ca0e49ed1b8\",\n            \"name\": \"Seth Stephens-Davidowitz\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"0e71ee06-199d-46a4-834c-01084c8f76cb\",\n            \"name\": \"Andrew Russell\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"5807ec38-4879-4455-9f30-5352e90e8b79\",\n            \"name\": \"Lee Vinsel\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"4cf10a64-f3da-449c-8e04-ce6e338bbdbd\",\n            \"name\": \"Megan Greenwell\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"833e2c78-35ed-4601-badc-50c323341d76\",\n            \"name\": \"Kara Swisher\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"82e594e2-b1c5-4271-ac19-1a723a94a533\",\n            \"name\": \"Paul Romer\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"ae3a2cbe-1fc9-4376-be35-331628b34623\",\n            \"name\": \"Karen Swallow Prior\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"da068e78-dfe2-4434-9fd7-b7450b3e5830\",\n            \"name\": \"Judith Shulevitz\",\n            \"color\": \"default\"\n          }\n        ]\n      }\n    },\n    \"Name\": {\n      \"id\": \"title\",\n      \"name\": \"Name\",\n      \"type\": \"title\",\n      \"title\": {}\n    }\n  },\n  \"parent\": {\n    \"type\": \"page_id\",\n    \"page_id\": \"c4d39556-6364-46a1-8a61-ebbb668f7445\"\n  },\n  \"url\": \"https://www.notion.so/8e2c2b769e1d47d287b9ed3035d607ae\",\n  \"archived\": false\n}\n```",
+			`Request body:
+`+"`"+``+"`"+``+"`"+`json
+{
+  "title": [
+    {
+      "text": {
+        "content": "Ever Better Reading List Title"
+      }
+    }
+  ],
+  "properties": {
+    "Wine Pairing": {
+      "rich_text": {}
+    }
+  }
+}
+`+"`"+``+"`"+``+"`"+`
+
+Response body:
+`+"`"+``+"`"+``+"`"+`json
+{
+  "object": "database",
+  "id": "8e2c2b76-9e1d-47d2-87b9-ed3035d607ae",
+  "cover": null,
+  "icon": null,
+  "created_time": "2021-04-27T20:38:00.000Z",
+  "created_by": {
+    "object": "user",
+    "id": "6794760a-1f15-45cd-9c65-0dfe42f5135a"
+  },
+  "last_edited_by": {
+    "object": "user",
+    "id": "92a680bb-6970-4726-952b-4f4c03bff617"
+  },
+  "last_edited_time": "2022-02-24T22:08:00.000Z",
+  "title": [
+    {
+      "type": "text",
+      "text": {
+        "content": "Ever Better Reading List Title",
+        "link": null
+      },
+      "annotations": {
+        "bold": false,
+        "italic": false,
+        "strikethrough": false,
+        "underline": false,
+        "code": false,
+        "color": "default"
+      },
+      "plain_text": "Ever Better Reading List Title",
+      "href": null
+    }
+  ],
+  "properties": {
+    "Score /5": {
+      "id": ")Y7\"",
+      "name": "Score /5",
+      "type": "select",
+      "select": {
+        "options": [
+          {
+            "id": "5c944de7-3f4b-4567-b3a1-fa2c71c540b6",
+            "name": "⭐️⭐️⭐️⭐️⭐️",
+            "color": "default"
+          },
+          {
+            "id": "b7307e35-c80a-4cb5-bb6b-6054523b394a",
+            "name": "⭐️⭐️⭐️⭐️",
+            "color": "default"
+          },
+          {
+            "id": "9b1e1349-8e24-40ba-bbca-84a61296bc81",
+            "name": "⭐️⭐️⭐️",
+            "color": "default"
+          },
+          {
+            "id": "66d3d050-086c-4a91-8c56-d55dc67e7789",
+            "name": "⭐️⭐️",
+            "color": "default"
+          },
+          {
+            "id": "d3782c76-0396-467f-928e-46bf0c9d5fba",
+            "name": "⭐️",
+            "color": "default"
+          }
+        ]
+      }
+    },
+    "Type": {
+      "id": "/7eo",
+      "name": "Type",
+      "type": "select",
+      "select": {
+        "options": [
+          {
+            "id": "f96d0d0a-5564-4a20-ab15-5f040d49759e",
+            "name": "Article",
+            "color": "default"
+          },
+          {
+            "id": "4ac85597-5db1-4e0a-9c02-445575c38f76",
+            "name": "TV Series",
+            "color": "default"
+          },
+          {
+            "id": "2991748a-5745-4c3b-9c9b-2d6846a6fa1f",
+            "name": "Film",
+            "color": "default"
+          },
+          {
+            "id": "82f3bace-be25-410d-87fe-561c9c22492f",
+            "name": "Podcast",
+            "color": "default"
+          },
+          {
+            "id": "861f1076-1cc4-429a-a781-54947d727a4a",
+            "name": "Academic Journal",
+            "color": "default"
+          },
+          {
+            "id": "9cc30548-59d6-4cd3-94bc-d234081525c4",
+            "name": "Essay Resource",
+            "color": "default"
+          }
+        ]
+      }
+    },
+    "Publisher": {
+      "id": ">$Pb",
+      "name": "Publisher",
+      "type": "select",
+      "select": {
+        "options": [
+          {
+            "id": "c5ee409a-f307-4176-99ee-6e424fa89afa",
+            "name": "NYT",
+            "color": "default"
+          },
+          {
+            "id": "1b9b0c0c-17b0-4292-ad12-1364a51849de",
+            "name": "Netflix",
+            "color": "blue"
+          },
+          {
+            "id": "f3533637-278f-4501-b394-d9753bf3c101",
+            "name": "Indie",
+            "color": "brown"
+          },
+          {
+            "id": "e70d713c-4be4-4b40-a44d-fb413c8b9d7e",
+            "name": "Bon Appetit",
+            "color": "yellow"
+          },
+          {
+            "id": "9c2bd667-0a10-4be4-a044-35a537a14ab9",
+            "name": "Franklin Institute",
+            "color": "pink"
+          },
+          {
+            "id": "6849b5f0-e641-4ec5-83cb-1ffe23011060",
+            "name": "Springer",
+            "color": "orange"
+          },
+          {
+            "id": "6a5bff63-a72d-4464-a5d0-1a601af2adf6",
+            "name": "Emerald Group",
+            "color": "gray"
+          },
+          {
+            "id": "01f82d08-aa1f-4884-a4e0-3bc32f909ec4",
+            "name": "The Atlantic",
+            "color": "red"
+          }
+        ]
+      }
+    },
+    "Summary": {
+      "id": "?\\25",
+      "name": "Summary",
+      "type": "rich_text",
+      "rich_text": {}
+    },
+    "Publishing/Release Date": {
+      "id": "?ex+",
+      "name": "Publishing/Release Date",
+      "type": "date",
+      "date": {}
+    },
+    "Link": {
+      "id": "VVMi",
+      "name": "Link",
+      "type": "url",
+      "url": {}
+    },
+    "Wine Pairing": {
+      "id": "Y=H]",
+      "name": "Wine Pairing",
+      "type": "rich_text",
+      "rich_text": {}
+    },
+    "Read": {
+      "id": "_MWJ",
+      "name": "Read",
+      "type": "checkbox",
+      "checkbox": {}
+    },
+    "Status": {
+      "id": "`+"`"+`zz5",
+      "name": "Status",
+      "type": "select",
+      "select": {
+        "options": [
+          {
+            "id": "8c4a056e-6709-4dd1-ba58-d34d9480855a",
+            "name": "Ready to Start",
+            "color": "yellow"
+          },
+          {
+            "id": "5925ba22-0126-4b58-90c7-b8bbb2c3c895",
+            "name": "Reading",
+            "color": "red"
+          },
+          {
+            "id": "59aa9043-07b4-4bf4-8734-3164b13af44a",
+            "name": "Finished",
+            "color": "blue"
+          },
+          {
+            "id": "f961978d-02eb-4998-933a-33c2ec378564",
+            "name": "Listening",
+            "color": "red"
+          },
+          {
+            "id": "1d450853-b27a-45e2-979f-448aa1bd35de",
+            "name": "Watching",
+            "color": "red"
+          }
+        ]
+      }
+    },
+    "Author": {
+      "id": "qNw_",
+      "name": "Author",
+      "type": "multi_select",
+      "multi_select": {
+        "options": [
+          {
+            "id": "15592971-7b30-43d5-9406-2eb69b13fcae",
+            "name": "Spencer Greenberg",
+            "color": "default"
+          },
+          {
+            "id": "b80a988e-dccf-4f74-b764-6ca0e49ed1b8",
+            "name": "Seth Stephens-Davidowitz",
+            "color": "default"
+          },
+          {
+            "id": "0e71ee06-199d-46a4-834c-01084c8f76cb",
+            "name": "Andrew Russell",
+            "color": "default"
+          },
+          {
+            "id": "5807ec38-4879-4455-9f30-5352e90e8b79",
+            "name": "Lee Vinsel",
+            "color": "default"
+          },
+          {
+            "id": "4cf10a64-f3da-449c-8e04-ce6e338bbdbd",
+            "name": "Megan Greenwell",
+            "color": "default"
+          },
+          {
+            "id": "833e2c78-35ed-4601-badc-50c323341d76",
+            "name": "Kara Swisher",
+            "color": "default"
+          },
+          {
+            "id": "82e594e2-b1c5-4271-ac19-1a723a94a533",
+            "name": "Paul Romer",
+            "color": "default"
+          },
+          {
+            "id": "ae3a2cbe-1fc9-4376-be35-331628b34623",
+            "name": "Karen Swallow Prior",
+            "color": "default"
+          },
+          {
+            "id": "da068e78-dfe2-4434-9fd7-b7450b3e5830",
+            "name": "Judith Shulevitz",
+            "color": "default"
+          }
+        ]
+      }
+    },
+    "Name": {
+      "id": "title",
+      "name": "Name",
+      "type": "title",
+      "title": {}
+    }
+  },
+  "parent": {
+    "type": "page_id",
+    "page_id": "c4d39556-6364-46a1-8a61-ebbb668f7445"
+  },
+  "url": "https://www.notion.so/8e2c2b769e1d47d287b9ed3035d607ae",
+  "archived": false
+}
+`+"`"+``+"`"+``+"`"+``,
 			"",
 		).
 		Example(
 			"Update database properties",
-			"Request body:\n```json\n{\n  \"properties\": {\n    \"Wine Pairing\": {\n      \"name\": \"New Property Name\"\n    }\n  }\n}\n```\n\nResponse body:\n```json\n{\n  \"object\": \"database\",\n  \"id\": \"8e2c2b76-9e1d-47d2-87b9-ed3035d607ae\",\n  \"cover\": null,\n  \"icon\": null,\n  \"created_time\": \"2021-04-27T20:38:00.000Z\",\n  \"created_by\": {\n    \"object\": \"user\",\n    \"id\": \"6794760a-1f15-45cd-9c65-0dfe42f5135a\"\n  },\n  \"last_edited_by\": {\n    \"object\": \"user\",\n    \"id\": \"92a680bb-6970-4726-952b-4f4c03bff617\"\n  },\n  \"last_edited_time\": \"2022-02-24T22:08:00.000Z\",\n  \"title\": [\n    {\n      \"type\": \"text\",\n      \"text\": {\n        \"content\": \"Ever Better Reading List Title\",\n        \"link\": null\n      },\n      \"annotations\": {\n        \"bold\": false,\n        \"italic\": false,\n        \"strikethrough\": false,\n        \"underline\": false,\n        \"code\": false,\n        \"color\": \"default\"\n      },\n      \"plain_text\": \"Ever Better Reading List Title\",\n      \"href\": null\n    }\n  ],\n  \"properties\": {\n    \"Score /5\": {\n      \"id\": \")Y7\\\"\",\n      \"name\": \"Score /5\",\n      \"type\": \"select\",\n      \"select\": {\n        \"options\": [\n          {\n            \"id\": \"5c944de7-3f4b-4567-b3a1-fa2c71c540b6\",\n            \"name\": \"⭐️⭐️⭐️⭐️⭐️\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"b7307e35-c80a-4cb5-bb6b-6054523b394a\",\n            \"name\": \"⭐️⭐️⭐️⭐️\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"9b1e1349-8e24-40ba-bbca-84a61296bc81\",\n            \"name\": \"⭐️⭐️⭐️\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"66d3d050-086c-4a91-8c56-d55dc67e7789\",\n            \"name\": \"⭐️⭐️\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"d3782c76-0396-467f-928e-46bf0c9d5fba\",\n            \"name\": \"⭐️\",\n            \"color\": \"default\"\n          }\n        ]\n      }\n    },\n    \"Type\": {\n      \"id\": \"/7eo\",\n      \"name\": \"Type\",\n      \"type\": \"select\",\n      \"select\": {\n        \"options\": [\n          {\n            \"id\": \"f96d0d0a-5564-4a20-ab15-5f040d49759e\",\n            \"name\": \"Article\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"4ac85597-5db1-4e0a-9c02-445575c38f76\",\n            \"name\": \"TV Series\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"2991748a-5745-4c3b-9c9b-2d6846a6fa1f\",\n            \"name\": \"Film\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"82f3bace-be25-410d-87fe-561c9c22492f\",\n            \"name\": \"Podcast\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"861f1076-1cc4-429a-a781-54947d727a4a\",\n            \"name\": \"Academic Journal\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"9cc30548-59d6-4cd3-94bc-d234081525c4\",\n            \"name\": \"Essay Resource\",\n            \"color\": \"default\"\n          }\n        ]\n      }\n    },\n    \"Publisher\": {\n      \"id\": \">$Pb\",\n      \"name\": \"Publisher\",\n      \"type\": \"select\",\n      \"select\": {\n        \"options\": [\n          {\n            \"id\": \"c5ee409a-f307-4176-99ee-6e424fa89afa\",\n            \"name\": \"NYT\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"1b9b0c0c-17b0-4292-ad12-1364a51849de\",\n            \"name\": \"Netflix\",\n            \"color\": \"blue\"\n          },\n          {\n            \"id\": \"f3533637-278f-4501-b394-d9753bf3c101\",\n            \"name\": \"Indie\",\n            \"color\": \"brown\"\n          },\n          {\n            \"id\": \"e70d713c-4be4-4b40-a44d-fb413c8b9d7e\",\n            \"name\": \"Bon Appetit\",\n            \"color\": \"yellow\"\n          },\n          {\n            \"id\": \"9c2bd667-0a10-4be4-a044-35a537a14ab9\",\n            \"name\": \"Franklin Institute\",\n            \"color\": \"pink\"\n          },\n          {\n            \"id\": \"6849b5f0-e641-4ec5-83cb-1ffe23011060\",\n            \"name\": \"Springer\",\n            \"color\": \"orange\"\n          },\n          {\n            \"id\": \"6a5bff63-a72d-4464-a5d0-1a601af2adf6\",\n            \"name\": \"Emerald Group\",\n            \"color\": \"gray\"\n          },\n          {\n            \"id\": \"01f82d08-aa1f-4884-a4e0-3bc32f909ec4\",\n            \"name\": \"The Atlantic\",\n            \"color\": \"red\"\n          }\n        ]\n      }\n    },\n    \"Summary\": {\n      \"id\": \"?\\\\25\",\n      \"name\": \"Summary\",\n      \"type\": \"rich_text\",\n      \"rich_text\": {}\n    },\n    \"Publishing/Release Date\": {\n      \"id\": \"?ex+\",\n      \"name\": \"Publishing/Release Date\",\n      \"type\": \"date\",\n      \"date\": {}\n    },\n    \"Link\": {\n      \"id\": \"VVMi\",\n      \"name\": \"Link\",\n      \"type\": \"url\",\n      \"url\": {}\n    },\n    \"Wine Pairing\": {\n      \"id\": \"Y=H]\",\n      \"name\": \"Wine Pairing\",\n      \"type\": \"rich_text\",\n      \"rich_text\": {}\n    },\n    \"Read\": {\n      \"id\": \"_MWJ\",\n      \"name\": \"Read\",\n      \"type\": \"checkbox\",\n      \"checkbox\": {}\n    },\n    \"Status\": {\n      \"id\": \"`zz5\",\n      \"name\": \"Status\",\n      \"type\": \"select\",\n      \"select\": {\n        \"options\": [\n          {\n            \"id\": \"8c4a056e-6709-4dd1-ba58-d34d9480855a\",\n            \"name\": \"Ready to Start\",\n            \"color\": \"yellow\"\n          },\n          {\n            \"id\": \"5925ba22-0126-4b58-90c7-b8bbb2c3c895\",\n            \"name\": \"Reading\",\n            \"color\": \"red\"\n          },\n          {\n            \"id\": \"59aa9043-07b4-4bf4-8734-3164b13af44a\",\n            \"name\": \"Finished\",\n            \"color\": \"blue\"\n          },\n          {\n            \"id\": \"f961978d-02eb-4998-933a-33c2ec378564\",\n            \"name\": \"Listening\",\n            \"color\": \"red\"\n          },\n          {\n            \"id\": \"1d450853-b27a-45e2-979f-448aa1bd35de\",\n            \"name\": \"Watching\",\n            \"color\": \"red\"\n          }\n        ]\n      }\n    },\n    \"Author\": {\n      \"id\": \"qNw_\",\n      \"name\": \"Author\",\n      \"type\": \"multi_select\",\n      \"multi_select\": {\n        \"options\": [\n          {\n            \"id\": \"15592971-7b30-43d5-9406-2eb69b13fcae\",\n            \"name\": \"Spencer Greenberg\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"b80a988e-dccf-4f74-b764-6ca0e49ed1b8\",\n            \"name\": \"Seth Stephens-Davidowitz\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"0e71ee06-199d-46a4-834c-01084c8f76cb\",\n            \"name\": \"Andrew Russell\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"5807ec38-4879-4455-9f30-5352e90e8b79\",\n            \"name\": \"Lee Vinsel\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"4cf10a64-f3da-449c-8e04-ce6e338bbdbd\",\n            \"name\": \"Megan Greenwell\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"833e2c78-35ed-4601-badc-50c323341d76\",\n            \"name\": \"Kara Swisher\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"82e594e2-b1c5-4271-ac19-1a723a94a533\",\n            \"name\": \"Paul Romer\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"ae3a2cbe-1fc9-4376-be35-331628b34623\",\n            \"name\": \"Karen Swallow Prior\",\n            \"color\": \"default\"\n          },\n          {\n            \"id\": \"da068e78-dfe2-4434-9fd7-b7450b3e5830\",\n            \"name\": \"Judith Shulevitz\",\n            \"color\": \"default\"\n          }\n        ]\n      }\n    },\n    \"Name\": {\n      \"id\": \"title\",\n      \"name\": \"Name\",\n      \"type\": \"title\",\n      \"title\": {}\n    }\n  },\n  \"parent\": {\n    \"type\": \"page_id\",\n    \"page_id\": \"c4d39556-6364-46a1-8a61-ebbb668f7445\"\n  },\n  \"url\": \"https://www.notion.so/8e2c2b769e1d47d287b9ed3035d607ae\",\n  \"archived\": false\n}\n```",
+			`Request body:
+`+"`"+``+"`"+``+"`"+`json
+{
+  "properties": {
+    "Wine Pairing": {
+      "name": "New Property Name"
+    }
+  }
+}
+`+"`"+``+"`"+``+"`"+`
+
+Response body:
+`+"`"+``+"`"+``+"`"+`json
+{
+  "object": "database",
+  "id": "8e2c2b76-9e1d-47d2-87b9-ed3035d607ae",
+  "cover": null,
+  "icon": null,
+  "created_time": "2021-04-27T20:38:00.000Z",
+  "created_by": {
+    "object": "user",
+    "id": "6794760a-1f15-45cd-9c65-0dfe42f5135a"
+  },
+  "last_edited_by": {
+    "object": "user",
+    "id": "92a680bb-6970-4726-952b-4f4c03bff617"
+  },
+  "last_edited_time": "2022-02-24T22:08:00.000Z",
+  "title": [
+    {
+      "type": "text",
+      "text": {
+        "content": "Ever Better Reading List Title",
+        "link": null
+      },
+      "annotations": {
+        "bold": false,
+        "italic": false,
+        "strikethrough": false,
+        "underline": false,
+        "code": false,
+        "color": "default"
+      },
+      "plain_text": "Ever Better Reading List Title",
+      "href": null
+    }
+  ],
+  "properties": {
+    "Score /5": {
+      "id": ")Y7\"",
+      "name": "Score /5",
+      "type": "select",
+      "select": {
+        "options": [
+          {
+            "id": "5c944de7-3f4b-4567-b3a1-fa2c71c540b6",
+            "name": "⭐️⭐️⭐️⭐️⭐️",
+            "color": "default"
+          },
+          {
+            "id": "b7307e35-c80a-4cb5-bb6b-6054523b394a",
+            "name": "⭐️⭐️⭐️⭐️",
+            "color": "default"
+          },
+          {
+            "id": "9b1e1349-8e24-40ba-bbca-84a61296bc81",
+            "name": "⭐️⭐️⭐️",
+            "color": "default"
+          },
+          {
+            "id": "66d3d050-086c-4a91-8c56-d55dc67e7789",
+            "name": "⭐️⭐️",
+            "color": "default"
+          },
+          {
+            "id": "d3782c76-0396-467f-928e-46bf0c9d5fba",
+            "name": "⭐️",
+            "color": "default"
+          }
+        ]
+      }
+    },
+    "Type": {
+      "id": "/7eo",
+      "name": "Type",
+      "type": "select",
+      "select": {
+        "options": [
+          {
+            "id": "f96d0d0a-5564-4a20-ab15-5f040d49759e",
+            "name": "Article",
+            "color": "default"
+          },
+          {
+            "id": "4ac85597-5db1-4e0a-9c02-445575c38f76",
+            "name": "TV Series",
+            "color": "default"
+          },
+          {
+            "id": "2991748a-5745-4c3b-9c9b-2d6846a6fa1f",
+            "name": "Film",
+            "color": "default"
+          },
+          {
+            "id": "82f3bace-be25-410d-87fe-561c9c22492f",
+            "name": "Podcast",
+            "color": "default"
+          },
+          {
+            "id": "861f1076-1cc4-429a-a781-54947d727a4a",
+            "name": "Academic Journal",
+            "color": "default"
+          },
+          {
+            "id": "9cc30548-59d6-4cd3-94bc-d234081525c4",
+            "name": "Essay Resource",
+            "color": "default"
+          }
+        ]
+      }
+    },
+    "Publisher": {
+      "id": ">$Pb",
+      "name": "Publisher",
+      "type": "select",
+      "select": {
+        "options": [
+          {
+            "id": "c5ee409a-f307-4176-99ee-6e424fa89afa",
+            "name": "NYT",
+            "color": "default"
+          },
+          {
+            "id": "1b9b0c0c-17b0-4292-ad12-1364a51849de",
+            "name": "Netflix",
+            "color": "blue"
+          },
+          {
+            "id": "f3533637-278f-4501-b394-d9753bf3c101",
+            "name": "Indie",
+            "color": "brown"
+          },
+          {
+            "id": "e70d713c-4be4-4b40-a44d-fb413c8b9d7e",
+            "name": "Bon Appetit",
+            "color": "yellow"
+          },
+          {
+            "id": "9c2bd667-0a10-4be4-a044-35a537a14ab9",
+            "name": "Franklin Institute",
+            "color": "pink"
+          },
+          {
+            "id": "6849b5f0-e641-4ec5-83cb-1ffe23011060",
+            "name": "Springer",
+            "color": "orange"
+          },
+          {
+            "id": "6a5bff63-a72d-4464-a5d0-1a601af2adf6",
+            "name": "Emerald Group",
+            "color": "gray"
+          },
+          {
+            "id": "01f82d08-aa1f-4884-a4e0-3bc32f909ec4",
+            "name": "The Atlantic",
+            "color": "red"
+          }
+        ]
+      }
+    },
+    "Summary": {
+      "id": "?\\25",
+      "name": "Summary",
+      "type": "rich_text",
+      "rich_text": {}
+    },
+    "Publishing/Release Date": {
+      "id": "?ex+",
+      "name": "Publishing/Release Date",
+      "type": "date",
+      "date": {}
+    },
+    "Link": {
+      "id": "VVMi",
+      "name": "Link",
+      "type": "url",
+      "url": {}
+    },
+    "Wine Pairing": {
+      "id": "Y=H]",
+      "name": "Wine Pairing",
+      "type": "rich_text",
+      "rich_text": {}
+    },
+    "Read": {
+      "id": "_MWJ",
+      "name": "Read",
+      "type": "checkbox",
+      "checkbox": {}
+    },
+    "Status": {
+      "id": "`+"`"+`zz5",
+      "name": "Status",
+      "type": "select",
+      "select": {
+        "options": [
+          {
+            "id": "8c4a056e-6709-4dd1-ba58-d34d9480855a",
+            "name": "Ready to Start",
+            "color": "yellow"
+          },
+          {
+            "id": "5925ba22-0126-4b58-90c7-b8bbb2c3c895",
+            "name": "Reading",
+            "color": "red"
+          },
+          {
+            "id": "59aa9043-07b4-4bf4-8734-3164b13af44a",
+            "name": "Finished",
+            "color": "blue"
+          },
+          {
+            "id": "f961978d-02eb-4998-933a-33c2ec378564",
+            "name": "Listening",
+            "color": "red"
+          },
+          {
+            "id": "1d450853-b27a-45e2-979f-448aa1bd35de",
+            "name": "Watching",
+            "color": "red"
+          }
+        ]
+      }
+    },
+    "Author": {
+      "id": "qNw_",
+      "name": "Author",
+      "type": "multi_select",
+      "multi_select": {
+        "options": [
+          {
+            "id": "15592971-7b30-43d5-9406-2eb69b13fcae",
+            "name": "Spencer Greenberg",
+            "color": "default"
+          },
+          {
+            "id": "b80a988e-dccf-4f74-b764-6ca0e49ed1b8",
+            "name": "Seth Stephens-Davidowitz",
+            "color": "default"
+          },
+          {
+            "id": "0e71ee06-199d-46a4-834c-01084c8f76cb",
+            "name": "Andrew Russell",
+            "color": "default"
+          },
+          {
+            "id": "5807ec38-4879-4455-9f30-5352e90e8b79",
+            "name": "Lee Vinsel",
+            "color": "default"
+          },
+          {
+            "id": "4cf10a64-f3da-449c-8e04-ce6e338bbdbd",
+            "name": "Megan Greenwell",
+            "color": "default"
+          },
+          {
+            "id": "833e2c78-35ed-4601-badc-50c323341d76",
+            "name": "Kara Swisher",
+            "color": "default"
+          },
+          {
+            "id": "82e594e2-b1c5-4271-ac19-1a723a94a533",
+            "name": "Paul Romer",
+            "color": "default"
+          },
+          {
+            "id": "ae3a2cbe-1fc9-4376-be35-331628b34623",
+            "name": "Karen Swallow Prior",
+            "color": "default"
+          },
+          {
+            "id": "da068e78-dfe2-4434-9fd7-b7450b3e5830",
+            "name": "Judith Shulevitz",
+            "color": "default"
+          }
+        ]
+      }
+    },
+    "Name": {
+      "id": "title",
+      "name": "Name",
+      "type": "title",
+      "title": {}
+    }
+  },
+  "parent": {
+    "type": "page_id",
+    "page_id": "c4d39556-6364-46a1-8a61-ebbb668f7445"
+  },
+  "url": "https://www.notion.so/8e2c2b769e1d47d287b9ed3035d607ae",
+  "archived": false
+}
+`+"`"+``+"`"+``+"`"+``,
 			"",
 		)
 }
@@ -5063,7 +9441,7 @@ func (p *updateDatabaseProcessor) processUpdateDatabase(ctx context.Context, idx
 		return fmt.Errorf("marshaling request body: %w", err)
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, "PATCH", rawURL, bytes.NewReader(reqBytes))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPatch, rawURL, bytes.NewReader(reqBytes))
 	if err != nil {
 		return fmt.Errorf("creating HTTP request: %w", err)
 	}
@@ -5072,32 +9450,32 @@ func (p *updateDatabaseProcessor) processUpdateDatabase(ctx context.Context, idx
 	httpReq.Header.Set("Notion-Version", p.notionVersion)
 	httpReq.Header.Set("Content-Type", "application/json")
 
-	resp, err := p.httpClient.Do(httpReq)
+	res, err := p.httpClient.Do(httpReq)
 	if err != nil {
 		return fmt.Errorf("Notion API request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer res.Body.Close()
 
-	respBody, err := io.ReadAll(resp.Body)
+	resBody, err := io.ReadAll(res.Body)
 	if err != nil {
 		return fmt.Errorf("reading response body: %w", err)
 	}
 
 	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
 	var body any
-	if len(respBody) > 0 {
+	if len(resBody) > 0 {
 		var jsonBody any
-		if json.Unmarshal(respBody, &jsonBody) == nil {
+		if json.Unmarshal(resBody, &jsonBody) == nil {
 			body = jsonBody
 		} else {
-			body = string(respBody)
+			body = string(resBody)
 		}
 	}
 
 	envelope := map[string]any{
 		"updateDatabaseResponse": map[string]any{
-			"status_code": resp.StatusCode,
-			"headers":     headerMap(resp.Header),
+			"status_code": res.StatusCode,
+			"headers":     headerMap(res.Header),
 			"body":        body,
 		},
 	}
@@ -5121,15 +9499,15 @@ func (p *updateDatabaseProcessor) processUpdateDatabase(ctx context.Context, idx
 		msg.SetStructured(envelope)
 	}
 
-	if resp.StatusCode >= 400 {
-		msg.MetaSetMut("http_status_code", resp.StatusCode)
-		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	if res.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", res.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", res.StatusCode)
 	}
 
 	return nil
 }
 
-// UpdatePageMarkdown processor — patch /v1/pages/{page_id}/markdown
+// UpdatePageMarkdown processor — PATCH /v1/pages/{page_id}/markdown
 
 func init() {
 	service.MustRegisterBatchProcessor(
@@ -5240,7 +9618,7 @@ func (p *updatePageMarkdownProcessor) processUpdatePageMarkdown(ctx context.Cont
 		return fmt.Errorf("marshaling request body: %w", err)
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, "PATCH", rawURL, bytes.NewReader(reqBytes))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPatch, rawURL, bytes.NewReader(reqBytes))
 	if err != nil {
 		return fmt.Errorf("creating HTTP request: %w", err)
 	}
@@ -5249,32 +9627,32 @@ func (p *updatePageMarkdownProcessor) processUpdatePageMarkdown(ctx context.Cont
 	httpReq.Header.Set("Notion-Version", p.notionVersion)
 	httpReq.Header.Set("Content-Type", "application/json")
 
-	resp, err := p.httpClient.Do(httpReq)
+	res, err := p.httpClient.Do(httpReq)
 	if err != nil {
 		return fmt.Errorf("Notion API request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer res.Body.Close()
 
-	respBody, err := io.ReadAll(resp.Body)
+	resBody, err := io.ReadAll(res.Body)
 	if err != nil {
 		return fmt.Errorf("reading response body: %w", err)
 	}
 
 	// Build response envelope with raw body (JSON-parsed if possible, string otherwise).
 	var body any
-	if len(respBody) > 0 {
+	if len(resBody) > 0 {
 		var jsonBody any
-		if json.Unmarshal(respBody, &jsonBody) == nil {
+		if json.Unmarshal(resBody, &jsonBody) == nil {
 			body = jsonBody
 		} else {
-			body = string(respBody)
+			body = string(resBody)
 		}
 	}
 
 	envelope := map[string]any{
 		"updatePageMarkdownResponse": map[string]any{
-			"status_code": resp.StatusCode,
-			"headers":     headerMap(resp.Header),
+			"status_code": res.StatusCode,
+			"headers":     headerMap(res.Header),
 			"body":        body,
 		},
 	}
@@ -5298,9 +9676,9 @@ func (p *updatePageMarkdownProcessor) processUpdatePageMarkdown(ctx context.Cont
 		msg.SetStructured(envelope)
 	}
 
-	if resp.StatusCode >= 400 {
-		msg.MetaSetMut("http_status_code", resp.StatusCode)
-		return fmt.Errorf("Notion API error (status %d)", resp.StatusCode)
+	if res.StatusCode >= 400 {
+		msg.MetaSetMut("http_status_code", res.StatusCode)
+		return fmt.Errorf("Notion API error (status %d)", res.StatusCode)
 	}
 
 	return nil
