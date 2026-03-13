@@ -30,6 +30,7 @@ const (
 	kviFieldKey            = "key"
 	kviFieldIgnoreDeletes  = "ignore_deletes"
 	kviFieldIncludeHistory = "include_history"
+	kviFieldUpdatesOnly    = "updates_only"
 	kviFieldMetaOnly       = "meta_only"
 )
 
@@ -68,6 +69,10 @@ This input adds the following metadata fields to each message:
 				Description("Include all the history per key, not just the last one.").
 				Default(false).
 				Advanced(),
+			service.NewBoolField(kviFieldUpdatesOnly).
+				Description("Only receive updates to keys, skip delivering existing values on connect.").
+				Default(false).
+				Advanced(),
 			service.NewBoolField(kviFieldMetaOnly).
 				Description("Retrieve only the metadata of the entry").
 				Default(false).
@@ -94,6 +99,7 @@ type kvReader struct {
 	key            string
 	ignoreDeletes  bool
 	includeHistory bool
+	updatesOnly    bool
 	metaOnly       bool
 
 	log *service.Logger
@@ -129,6 +135,10 @@ func newKVReader(conf *service.ParsedConfig, mgr *service.Resources) (*kvReader,
 	}
 
 	if r.includeHistory, err = conf.FieldBool(kviFieldIncludeHistory); err != nil {
+		return nil, err
+	}
+
+	if r.updatesOnly, err = conf.FieldBool(kviFieldUpdatesOnly); err != nil {
 		return nil, err
 	}
 
@@ -191,6 +201,9 @@ func (r *kvReader) Connect(ctx context.Context) (err error) {
 	}
 	if r.includeHistory {
 		watchOpts = append(watchOpts, jetstream.IncludeHistory())
+	}
+	if r.updatesOnly {
+		watchOpts = append(watchOpts, jetstream.UpdatesOnly())
 	}
 	if r.metaOnly {
 		watchOpts = append(watchOpts, jetstream.MetaOnly())
