@@ -328,6 +328,11 @@ func httpTransportFieldSpec() *service.ConfigField {
 		Advanced()
 }
 
+// BaseURLFromParsed reads the base_url field from a parsed config.
+func BaseURLFromParsed(pConf *service.ParsedConfig) (string, error) {
+	return pConf.FieldString(cFieldBaseURL)
+}
+
 // NewConfigFromParsed parses a Config from a benthos parsed config.
 func NewConfigFromParsed(pConf *service.ParsedConfig) (Config, error) {
 	var cfg Config
