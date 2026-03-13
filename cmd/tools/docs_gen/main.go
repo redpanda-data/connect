@@ -33,6 +33,9 @@ import (
 	_ "github.com/redpanda-data/connect/v4/public/components/all"
 )
 
+//go:embed templates/bloblang_about.adoc.tmpl
+var templateBloblAboutRaw string
+
 //go:embed templates/bloblang_functions.adoc.tmpl
 var templateBloblFunctionsRaw string
 
@@ -61,6 +64,7 @@ var templateTestsRaw string
 var templateTemplatesRaw string
 
 var (
+	templateBloblAbout     *template.Template
 	templateBloblFunctions *template.Template
 	templateBloblMethods   *template.Template
 	templatePlugin         *template.Template
@@ -72,6 +76,7 @@ var (
 )
 
 func init() {
+	templateBloblAbout = template.Must(template.New("bloblang about").Parse(templateBloblAboutRaw))
 	templateBloblFunctions = template.Must(template.New("bloblang functions").Parse(templateBloblFunctionsRaw))
 	templateBloblMethods = template.Must(template.New("bloblang methods").Parse(templateBloblMethodsRaw))
 	templatePlugin = template.Must(template.New("plugin").Parse(templatePluginFieldsRaw + templatePluginRaw))
@@ -114,6 +119,7 @@ func main() {
 	getSchema().Environment().WalkScanners(viewForDir(path.Join(docsDir, "./scanners")))
 
 	// Bloblang stuff
+	doBloblangAbout(docsDir)
 	doBloblangMethods(docsDir)
 	doBloblangFunctions(docsDir)
 
@@ -159,6 +165,15 @@ func viewForDir(docsDir string) func(string, *service.ConfigView) {
 
 		create(name, path.Join(docsDir, name+".adoc"), buf.Bytes())
 	}
+}
+
+func doBloblangAbout(dir string) {
+	var buf bytes.Buffer
+	if err := templateBloblAbout.Execute(&buf, nil); err != nil {
+		panic(fmt.Sprintf("Failed to generate docs for bloblang about: %v", err))
+	}
+
+	create("bloblang about", filepath.Join(dir, "../..", "guides", "pages", "bloblang", "about.adoc"), buf.Bytes())
 }
 
 type functionCategory struct {
