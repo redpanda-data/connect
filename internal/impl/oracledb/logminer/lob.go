@@ -37,9 +37,8 @@ type LobAccumulator struct {
 	Schema     string
 	Table      string
 	Column     string
-	IsBinary   bool
-	IsNational bool // NCLOB: fragments are hex-decoded UTF-16BE bytes
-	PKValues   map[string]any
+	IsBinary bool
+	PKValues map[string]any
 	Fragments  []LobFragment
 }
 

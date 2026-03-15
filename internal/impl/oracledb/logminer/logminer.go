@@ -45,11 +45,11 @@ type LogMiner struct {
 	// Pre-built query string for LogMiner contents
 	logMinerQuery string
 	txnCache      TransactionCache
-	lobStates     map[string]*txnLOBState
 	// lobColTypes maps "SCHEMA.TABLE.COLUMN" (uppercase) to the Oracle data type
 	// ("CLOB", "BLOB", or "NCLOB") for all LOB columns across the tracked tables.
 	// Populated at startup by querying ALL_TAB_COLUMNS.
 	lobColTypes map[string]string
+	lobStates   map[string]*txnLOBState
 }
 
 // NewMiner creates a new instance of LogMiner responsible for paging through change events based on the tables param.
@@ -284,7 +284,6 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 		colTypeKey := strings.ToUpper(info.Schema + "." + info.Table + "." + info.Column)
 		lobType := lm.lobColTypes[colTypeKey] // "CLOB", "BLOB", "NCLOB", or "" if unknown
 		isBinary := lobType == "BLOB"
-		isNational := lobType == "NCLOB"
 
 		state := lm.getOrCreateLOBState(redoEvent.TransactionID)
 		key := lobKey{
@@ -295,12 +294,11 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 		}
 		if _, exists := state.accumulators[key]; !exists {
 			state.accumulators[key] = &LobAccumulator{
-				Schema:     info.Schema,
-				Table:      info.Table,
-				Column:     info.Column,
-				IsBinary:   isBinary,
-				IsNational: isNational,
-				PKValues:   info.PKValues,
+				Schema:   info.Schema,
+				Table:    info.Table,
+				Column:   info.Column,
+				IsBinary: isBinary,
+				PKValues: info.PKValues,
 			}
 		}
 		state.activeKey = &key

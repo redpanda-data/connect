@@ -85,19 +85,6 @@ func TestLobAccumulatorAssemble(t *testing.T) {
 		})
 	}
 
-	// NCLOB: Oracle delivers data as plain string literals in LOB_WRITE SQL.
-	t.Run("NCLOB single fragment as string literal", func(t *testing.T) {
-		a := &LobAccumulator{IsNational: true}
-		a.AddFragment(1, []byte("Hello"))
-		assert.Equal(t, "Hello", a.Assemble())
-	})
-
-	t.Run("NCLOB multi-fragment as string literals", func(t *testing.T) {
-		a := &LobAccumulator{IsNational: true}
-		a.AddFragment(1, []byte("Hello"))
-		a.AddFragment(6, []byte(" World"))
-		assert.Equal(t, "Hello World", a.Assemble())
-	})
 }
 
 func TestMergeLOBsCLOBIntoInsert(t *testing.T) {
@@ -152,31 +139,6 @@ func TestMergeLOBsBLOBIntoInsert(t *testing.T) {
 	assert.Equal(t, []byte("Hello World"), event.Data["CONTENT"])
 }
 
-func TestMergeLOBsNCLOBIntoInsert(t *testing.T) {
-	event := &sqlredo.DMLEvent{
-		Schema: "TESTDB",
-		Table:  "PRODUCTS",
-		Data:   map[string]any{"ID": "1", "DESCRIPTION": ""},
-	}
-
-	acc := &LobAccumulator{
-		Schema:     "TESTDB",
-		Table:      "PRODUCTS",
-		Column:     "DESCRIPTION",
-		IsNational: true,
-		PKValues:   map[string]any{"ID": "1"},
-	}
-	acc.AddFragment(1, []byte("Hi"))
-
-	pkStr := fmt.Sprintf("%v", map[string]any{"ID": "1"})
-	key := lobKey{Schema: "TESTDB", Table: "PRODUCTS", Column: "DESCRIPTION", PKString: pkStr}
-	state := newTxnLOBState()
-	state.accumulators[key] = acc
-
-	mergeLOBsIntoDMLEvents(state, []*sqlredo.DMLEvent{event}, nil)
-
-	assert.Equal(t, "Hi", event.Data["DESCRIPTION"])
-}
 
 func TestMergeLOBsNoMatchDifferentTable(t *testing.T) {
 	event := &sqlredo.DMLEvent{
