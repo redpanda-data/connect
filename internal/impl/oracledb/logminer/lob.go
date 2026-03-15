@@ -34,20 +34,17 @@ type LobFragment struct {
 // LobAccumulator collects LOB_WRITE fragments for a single LOB column value
 // and assembles them into the complete value on commit.
 type LobAccumulator struct {
-	Schema     string
-	Table      string
-	Column     string
-	IsBinary bool
-	PKValues map[string]any
-	Fragments  []LobFragment
+	Schema    string
+	Table     string
+	Column    string
+	IsBinary  bool
+	PKValues  map[string]any
+	Fragments []LobFragment
 }
 
-// AddFragment appends a fragment and keeps the slice sorted by offset (ascending).
+// AddFragment appends a fragment. Fragments need not be added in order.
 func (a *LobAccumulator) AddFragment(offset int64, data []byte) {
 	a.Fragments = append(a.Fragments, LobFragment{Offset: offset, Data: data})
-	sort.Slice(a.Fragments, func(i, j int) bool {
-		return a.Fragments[i].Offset < a.Fragments[j].Offset
-	})
 }
 
 // Assemble assembles all fragments into the final column value:
@@ -60,6 +57,10 @@ func (a *LobAccumulator) Assemble() any {
 	if len(a.Fragments) == 0 {
 		return nil
 	}
+
+	sort.Slice(a.Fragments, func(i, j int) bool {
+		return a.Fragments[i].Offset < a.Fragments[j].Offset
+	})
 
 	// Determine total length needed.
 	totalLen := int64(0)
