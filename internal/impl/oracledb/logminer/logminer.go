@@ -271,8 +271,6 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 		lm.txnCache.AddEvent(redoEvent.TransactionID, redoEvent.SCN, &event)
 
 	case sqlredo.OpSelectLobLocator:
-		lm.log.Debugf("Received SELECT_LOB_LOCATOR (scn=%d, txn=%s, sql_redo_valid=%v, sql_len=%d)",
-			redoEvent.SCN, redoEvent.TransactionID, redoEvent.SQLRedo.Valid, len(redoEvent.SQLRedo.String))
 		if !redoEvent.SQLRedo.Valid || redoEvent.SQLRedo.String == "" {
 			lm.log.Warnf("Skipping SELECT_LOB_LOCATOR with no SQL_REDO (scn=%d, txn=%s)", redoEvent.SCN, redoEvent.TransactionID)
 			return nil
@@ -306,14 +304,8 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 			}
 		}
 		state.activeKey = &key
-		lm.log.Debugf("SELECT_LOB_LOCATOR parsed: schema=%s table=%s col=%s type=%s pks=%v (scn=%d, txn=%s)",
-			info.Schema, info.Table, info.Column, lobType, info.PKValues, redoEvent.SCN, redoEvent.TransactionID)
 
 	case sqlredo.OpLobWrite:
-		lm.log.Debugf("Received LOB_WRITE (scn=%d, txn=%s, has_state=%v, has_active_key=%v)",
-			redoEvent.SCN, redoEvent.TransactionID,
-			lm.lobStates[redoEvent.TransactionID] != nil,
-			lm.lobStates[redoEvent.TransactionID] != nil && lm.lobStates[redoEvent.TransactionID].activeKey != nil)
 		state, exists := lm.lobStates[redoEvent.TransactionID]
 		if !exists || state.activeKey == nil {
 			lm.log.Warnf("Received LOB_WRITE without active LOB locator (scn=%d, txn=%s)", redoEvent.SCN, redoEvent.TransactionID)
@@ -412,7 +404,6 @@ func (lm *LogMiner) loadLOBColumnTypes(ctx context.Context, conn *sql.Conn) erro
 		}
 		key := owner + "." + tableName + "." + columnName
 		lm.lobColTypes[key] = dataType
-		lm.log.Debugf("LOB column detected: %s (%s)", key, dataType)
 	}
 	return rows.Err()
 }
