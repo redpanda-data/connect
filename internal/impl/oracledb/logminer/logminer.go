@@ -45,9 +45,9 @@ type LogMiner struct {
 	// Pre-built query string for LogMiner contents
 	logMinerQuery string
 	txnCache      TransactionCache
-	// lobColTypes maps "SCHEMA.TABLE.COLUMN" (uppercase) to the Oracle data type
-	// ("CLOB", "BLOB", or "NCLOB") for all LOB columns across the tracked tables.
-	// Populated at startup by querying ALL_TAB_COLUMNS.
+
+	// Redo logs don't include data types so we have to find lob types up front.
+	// ie "TESTDB.PRODUCTS.DESCRIPTION": "NCLOB",
 	lobColTypes map[string]string
 	lobStates   map[string]*txnLOBState
 }
@@ -124,6 +124,7 @@ func (lm *LogMiner) ReadChanges(ctx context.Context, startPos replication.SCN) e
 		return fmt.Errorf("applying NLS settings for LogMiner: %w", err)
 	}
 
+	// find all lob columns on start up as redo logs don't include column data types.
 	if err := lm.loadLOBColumnTypes(ctx, conn); err != nil {
 		return fmt.Errorf("loading LOB column types: %w", err)
 	}
@@ -281,8 +282,8 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 			return nil
 		}
 		// Resolve LOB type from the schema cache populated at startup.
-		colTypeKey := strings.ToUpper(info.Schema + "." + info.Table + "." + info.Column)
-		lobType := lm.lobColTypes[colTypeKey] // "CLOB", "BLOB", "NCLOB", or "" if unknown
+		colTypeKey := fmt.Sprintf("%s.%s.%s", info.Schema, info.Table, info.Column)
+		lobType := lm.lobColTypes[strings.ToUpper(colTypeKey)] // "CLOB", "BLOB", "NCLOB", or "" if unknown
 		isBinary := lobType == "BLOB"
 
 		state := lm.getOrCreateLOBState(redoEvent.TransactionID)
@@ -368,9 +369,6 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 	return nil
 }
 
-// loadLOBColumnTypes queries ALL_TAB_COLUMNS for the tracked tables and caches
-// the data type of every CLOB, BLOB, and NCLOB column. The cache key is
-// "SCHEMA.TABLE.COLUMN" (all uppercase); the value is the Oracle data type string.
 func (lm *LogMiner) loadLOBColumnTypes(ctx context.Context, conn *sql.Conn) error {
 	lm.lobColTypes = make(map[string]string)
 	if len(lm.tables) == 0 {
@@ -400,8 +398,9 @@ func (lm *LogMiner) loadLOBColumnTypes(ctx context.Context, conn *sql.Conn) erro
 		if err := rows.Scan(&owner, &tableName, &columnName, &dataType); err != nil {
 			return fmt.Errorf("scanning LOB column type row: %w", err)
 		}
-		key := owner + "." + tableName + "." + columnName
-		lm.lobColTypes[key] = dataType
+		// example: "TESTDB.PRODUCTS.DESCRIPTION" : "CLOB"
+		k := fmt.Sprintf("%s.%s.%s", owner, tableName, columnName)
+		lm.lobColTypes[k] = dataType
 	}
 	return rows.Err()
 }
@@ -410,6 +409,7 @@ func (lm *LogMiner) getOrCreateLOBState(txnID string) *txnLOBState {
 	if state, ok := lm.lobStates[txnID]; ok {
 		return state
 	}
+
 	state := newTxnLOBState()
 	lm.lobStates[txnID] = state
 	return state
