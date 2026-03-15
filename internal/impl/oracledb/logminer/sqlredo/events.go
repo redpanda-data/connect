@@ -36,6 +36,13 @@ const (
 	OpRollback
 )
 
+const (
+	// OpSelectLobLocator represents a SELECT_LOB_LOCATOR operation (op 9)
+	OpSelectLobLocator Operation = 9
+	// OpLobWrite represents a LOB_WRITE operation (op 10)
+	OpLobWrite Operation = 10
+)
+
 // String converts the operation type to a string equivalent.
 func (op Operation) String() string {
 	switch op {
@@ -51,6 +58,10 @@ func (op Operation) String() string {
 		return "commit"
 	case OpRollback:
 		return "rollback"
+	case OpSelectLobLocator:
+		return "select_lob_locator"
+	case OpLobWrite:
+		return "lob_write"
 	default:
 		return fmt.Sprintf("unknown operation (%d)", int64(op))
 	}
@@ -92,6 +103,10 @@ func operationFromCode(code int64) Operation {
 		return OpCommit
 	case 36:
 		return OpRollback
+	case 9:
+		return OpSelectLobLocator
+	case 10:
+		return OpLobWrite
 	default:
 		return OpUnknown
 	}
