@@ -100,6 +100,8 @@ func newLogMiner(pub replication.ChangePublisher, cache TransactionCache) *LogMi
 		txnCache:  cache,
 		dmlParser: sqlredo.NewParser(),
 		log:       service.NewLoggerFromSlog(slog.Default()),
+		cfg:       NewDefaultConfig(),
+		lobStates: make(map[string]*sqlredo.TxnLOBState),
 	}
 }
 

@@ -71,7 +71,7 @@ func TestIntegrationSnapshot(t *testing.T) {
 			{Schema: "TESTDB", Name: "SINGLE_KEY_TEST"},
 		}
 
-		snapshot, err := replication.NewSnapshot(t.Context(), connStr, tables, publisher, service.NewLoggerFromSlog(log), service.MockResources().Metrics())
+		snapshot, err := replication.NewSnapshot(t.Context(), connStr, tables, publisher, service.NewLoggerFromSlog(log), service.MockResources().Metrics(), false)
 		require.NoError(t, err)
 		defer snapshot.Close()
 
@@ -100,7 +100,7 @@ func TestIntegrationSnapshot(t *testing.T) {
 			{Schema: "TESTDB", Name: "COMPOSITE_KEY_TEST"},
 		}
 
-		snapshot, err := replication.NewSnapshot(t.Context(), connStr, tables, publisher, service.NewLoggerFromSlog(log), service.MockResources().Metrics())
+		snapshot, err := replication.NewSnapshot(t.Context(), connStr, tables, publisher, service.NewLoggerFromSlog(log), service.MockResources().Metrics(), false)
 		require.NoError(t, err)
 		defer snapshot.Close()
 
@@ -131,7 +131,7 @@ func TestIntegrationSnapshot(t *testing.T) {
 			{Schema: "TESTDB", Name: "THREE_COL_KEY_TEST"},
 		}
 
-		snapshot, err := replication.NewSnapshot(t.Context(), connStr, tables, publisher, service.NewLoggerFromSlog(log), service.MockResources().Metrics())
+		snapshot, err := replication.NewSnapshot(t.Context(), connStr, tables, publisher, service.NewLoggerFromSlog(log), service.MockResources().Metrics(), false)
 		require.NoError(t, err)
 		defer snapshot.Close()
 

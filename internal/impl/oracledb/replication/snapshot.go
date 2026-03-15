@@ -31,6 +31,7 @@ type Snapshot struct {
 	log                     *service.Logger
 	snapshotStatusMetric    *service.MetricGauge
 	snapshotRowsTotalMetric *service.MetricCounter
+	lobEnabled              bool
 }
 
 // NewSnapshot creates a new instance of Snapshot capable of snapshotting provided tables.
@@ -42,6 +43,7 @@ func NewSnapshot(ctx context.Context,
 	publisher ChangePublisher,
 	logger *service.Logger,
 	metrics *service.Metrics,
+	lobEnabled bool,
 ) (*Snapshot, error) {
 	db, err := sql.Open("oracle", connectionString)
 	if err != nil {
@@ -60,6 +62,7 @@ func NewSnapshot(ctx context.Context,
 		log:                     logger,
 		snapshotStatusMetric:    metrics.NewGauge("oracledb_cdc_snapshot_status", "table"),
 		snapshotRowsTotalMetric: metrics.NewCounter("oracledb_cdc_snapshot_rows_total", "table"),
+		lobEnabled:              lobEnabled,
 	}
 	return s, nil
 }
@@ -224,6 +227,9 @@ func (s *Snapshot) processBatch(ctx context.Context, tx *sql.Tx, table UserTable
 			if v, mapErr = mappers[idx](value); mapErr != nil {
 				return 0, mapErr
 			}
+			if !s.lobEnabled && isLOBType(types[idx].DatabaseTypeName()) {
+				v = ""
+			}
 			row[columns[idx]] = v
 			if _, ok := lastSeenPksValues[columns[idx]]; ok {
 				lastSeenPksValues[columns[idx]] = value
@@ -374,7 +380,7 @@ func prepSnapshotScannerAndMappers(cols []*sql.ColumnType) (values []any, mapper
 
 		// Oracle database type names
 		switch col.DatabaseTypeName() {
-		case "RAW", "LONG RAW", "BLOB":
+		case "RAW", "LONG RAW", "BLOB", "LongRaw":
 			val = new(sql.Null[[]byte])
 			mapper = snapshotValueMapper[[]byte]
 		case "DATE", "TIMESTAMP", "TIMESTAMP WITH TIME ZONE", "TIMESTAMP WITH LOCAL TIME ZONE",
@@ -408,7 +414,7 @@ func prepSnapshotScannerAndMappers(cols []*sql.ColumnType) (values []any, mapper
 		case "BINARY_FLOAT", "IBFloat", "BFloat", "BINARY_DOUBLE", "IBDouble", "BDouble":
 			val = new(sql.Null[float64])
 			mapper = snapshotValueMapper[float64]
-		case "CLOB", "NCLOB", "LONG":
+		case "CLOB", "NCLOB", "LONG", "LongVarChar":
 			// Character large objects - handle as string
 			val = new(sql.NullString)
 			mapper = stringMapping(func(s string) (any, error) {
@@ -456,6 +462,15 @@ func buildColumnMeta(types []*sql.ColumnType) []ColumnMeta {
 		}
 	}
 	return meta
+}
+
+func isLOBType(dbType string) bool {
+	switch dbType {
+	case "CLOB", "NCLOB", "BLOB", "LONG", "LONG RAW",
+		"LongVarChar", "LongRaw": // go-ora driver-level names for CLOB/NCLOB/LONG and BLOB/LONG RAW
+		return true
+	}
+	return false
 }
 
 func snapshotValueMapper[T any](v any) (any, error) {

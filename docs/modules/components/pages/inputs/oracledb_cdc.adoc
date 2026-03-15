@@ -49,6 +49,7 @@ input:
       mining_interval: 300ms
       strategy: online_catalog
       max_transaction_events: 0
+      lob_enabled: false
     include: [] # No default (required)
     exclude: [] # No default (optional)
     checkpoint_cache: "" # No default (optional)
@@ -83,6 +84,7 @@ input:
       mining_interval: 300ms
       strategy: online_catalog
       max_transaction_events: 0
+      lob_enabled: false
     include: [] # No default (required)
     exclude: [] # No default (optional)
     checkpoint_cache: "" # No default (optional)
@@ -236,6 +238,15 @@ The maximum number of events that can be buffered for a single transaction. If a
 *Type*: `int`
 
 *Default*: `0`
+
+=== `logminer.lob_enabled`
+
+When enabled, large object (CLOB, BLOB) columns are included in snapshot and streaming change events. By default, snapshot and streaming events include these columns but without values. Enabling this introduces additional performance overhead.
+
+
+*Type*: `bool`
+
+*Default*: `false`
 
 === `include`
 
