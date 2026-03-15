@@ -24,12 +24,13 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/redpanda-data/benthos/v4/public/service"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 const salesforcePubSubEndpoint = "api.pubsub.salesforce.com:443"
@@ -70,15 +71,15 @@ type Client struct {
 	instanceURL string
 	tenantID    string
 
-	stream      PubSub_SubscribeClient
-	config      SubscriptionConfig
+	stream       PubSub_SubscribeClient
+	config       SubscriptionConfig
 	lastReplayID []byte
-	eventBuffer chan *PubSubEvent
-	parentCtx   context.Context
-	cancel      context.CancelFunc
-	done        chan struct{}
-	streamErr   error
-	state       StreamState
+	eventBuffer  chan *PubSubEvent
+	parentCtx    context.Context
+	cancel       context.CancelFunc
+	done         chan struct{}
+	streamErr    error
+	state        StreamState
 
 	// Backoff configuration
 	baseBackoff  time.Duration

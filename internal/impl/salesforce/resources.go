@@ -25,9 +25,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/redpanda-data/benthos/v4/public/service"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/salesforce/salesforcegrpc"
 	"github.com/redpanda-data/connect/v4/internal/impl/salesforce/salesforcehttp"

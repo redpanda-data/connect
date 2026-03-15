@@ -330,8 +330,8 @@ func NewClient(orgURL, clientID, clientSecret, apiVersion string, maxRetries, qu
 		retryOpts: RetryOptions{
 			MaxRetries: maxRetries,
 		},
-		httpClient:          metrics.NewInstrumentedClient(m, "salesforce_http", httpClient),
-		queryBatchSize:      queryBatchSize,
+		httpClient:             metrics.NewInstrumentedClient(m, "salesforce_http", httpClient),
+		queryBatchSize:         queryBatchSize,
 		unsupportedSObjects:    make(map[string]struct{}),
 		graphqlFallbackObjects: make(map[string]struct{}),
 	}, nil
@@ -774,28 +774,28 @@ func (s *Client) loadSObjectList(ctx context.Context) error {
 	}
 
 	skipList := map[string]bool{
-		"AIUpdateRecordEvent":              true,
-		"AccountUserTerritory2View":        true,
-		"ApexTypeImplementor":      true,
-		"ActionableListMember":     true,
-		"ApexPageInfo":             true,
-		"AuraDefinitionBundleInfo": true,
-		"AuraDefinitionInfo":       true,
-		"AppTabMember":             true,
-		"Campaign":                 true,
-		"ColorDefinition":          true,
-		"ContentDocumentLink":      true,
-		"ContentFolderItem":        true,
-		"ContentFolderMember":      true,
-		"DataType":                 true,
-		"DatacloudAddress":         true,
-		"DataStatistics":           true,
-		"EntityParticle":           true,
-		"FieldChangeSnapshot":      true,
-		"FieldDefinition":          true,
-		"EntityDefinition":         true,
-		"FlexQueueItem":            true,
-		"FlowDefinitionView":       true,
+		"AIUpdateRecordEvent":       true,
+		"AccountUserTerritory2View": true,
+		"ApexTypeImplementor":       true,
+		"ActionableListMember":      true,
+		"ApexPageInfo":              true,
+		"AuraDefinitionBundleInfo":  true,
+		"AuraDefinitionInfo":        true,
+		"AppTabMember":              true,
+		"Campaign":                  true,
+		"ColorDefinition":           true,
+		"ContentDocumentLink":       true,
+		"ContentFolderItem":         true,
+		"ContentFolderMember":       true,
+		"DataType":                  true,
+		"DatacloudAddress":          true,
+		"DataStatistics":            true,
+		"EntityParticle":            true,
+		"FieldChangeSnapshot":       true,
+		"FieldDefinition":           true,
+		"EntityDefinition":          true,
+		"FlexQueueItem":             true,
+		"FlowDefinitionView":        true,
 	}
 
 	// Collect queryable candidates, preserving order.
@@ -862,7 +862,6 @@ func (s *Client) loadSObjectList(ctx context.Context) error {
 	return nil
 }
 
-
 func (s *Client) fetchNextRecordsPage(ctx context.Context, nextURL string) ([]byte, error) {
 	apiUrl, err := url.Parse(s.orgURL + nextURL)
 	if err != nil {
@@ -889,6 +888,106 @@ func extractFieldNames(describeJSON []byte) ([]string, error) {
 func buildSOQL(objectName string, fields []string) string {
 	fieldList := strings.Join(fields, ", ")
 	return fmt.Sprintf("SELECT %s FROM %s", fieldList, objectName)
+}
+
+// APIVersion returns the configured Salesforce REST API version string (e.g., "v65.0").
+func (s *Client) APIVersion() string { return s.apiVersion }
+
+// PostJSON sends an authenticated POST request with a JSON body to the given relative path.
+func (s *Client) PostJSON(ctx context.Context, path string, body []byte) ([]byte, error) {
+	u, err := url.Parse(s.orgURL + path)
+	if err != nil {
+		return nil, fmt.Errorf("invalid URL path %q: %w", path, err)
+	}
+	return s.callSalesforceAPIWithBody(ctx, u, body)
+}
+
+// PatchJSON sends an authenticated PATCH request with a JSON body to the given relative path.
+func (s *Client) PatchJSON(ctx context.Context, path string, body []byte) ([]byte, error) {
+	u, err := url.Parse(s.orgURL + path)
+	if err != nil {
+		return nil, fmt.Errorf("invalid URL path %q: %w", path, err)
+	}
+	return s.callSalesforceAPIPatch(ctx, u, body)
+}
+
+// PutCSV sends an authenticated PUT request with CSV body to the given relative path.
+func (s *Client) PutCSV(ctx context.Context, path string, csvData []byte) ([]byte, error) {
+	u, err := url.Parse(s.orgURL + path)
+	if err != nil {
+		return nil, fmt.Errorf("invalid URL path %q: %w", path, err)
+	}
+	return s.callSalesforceAPIPutCSV(ctx, u, csvData)
+}
+
+// GetJSON sends an authenticated GET request to the given relative path and returns the body.
+func (s *Client) GetJSON(ctx context.Context, path string) ([]byte, error) {
+	u, err := url.Parse(s.orgURL + path)
+	if err != nil {
+		return nil, fmt.Errorf("invalid URL path %q: %w", path, err)
+	}
+	return s.callSalesforceAPI(ctx, u)
+}
+
+func (s *Client) callSalesforceAPIPatch(ctx context.Context, u *url.URL, body []byte) ([]byte, error) {
+	if s.getBearerToken() == "" {
+		if err := s.updateAndSetBearerToken(ctx); err != nil {
+			return nil, err
+		}
+	}
+	newReq := func() (*http.Request, error) {
+		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, u.String(), bytes.NewReader(body))
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Accept", "application/json")
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("User-Agent", "Redpanda-Connect")
+		req.Header.Set("Authorization", "Bearer "+s.getBearerToken())
+		return req, nil
+	}
+	resp, err := DoRequestWithRetries(ctx, s.httpClient, newReq, s.retryOpts)
+	if err == nil {
+		return resp, nil
+	}
+	httpErr, ok := err.(*HTTPError)
+	if !ok || httpErr.StatusCode != http.StatusUnauthorized {
+		return nil, err
+	}
+	if err := s.updateAndSetBearerToken(ctx); err != nil {
+		return nil, fmt.Errorf("failed to refresh token: %w", err)
+	}
+	return DoRequestWithRetries(ctx, s.httpClient, newReq, s.retryOpts)
+}
+
+func (s *Client) callSalesforceAPIPutCSV(ctx context.Context, u *url.URL, csvData []byte) ([]byte, error) {
+	if s.getBearerToken() == "" {
+		if err := s.updateAndSetBearerToken(ctx); err != nil {
+			return nil, err
+		}
+	}
+	newReq := func() (*http.Request, error) {
+		req, err := http.NewRequestWithContext(ctx, http.MethodPut, u.String(), bytes.NewReader(csvData))
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Content-Type", "text/csv")
+		req.Header.Set("User-Agent", "Redpanda-Connect")
+		req.Header.Set("Authorization", "Bearer "+s.getBearerToken())
+		return req, nil
+	}
+	resp, err := DoRequestWithRetries(ctx, s.httpClient, newReq, s.retryOpts)
+	if err == nil {
+		return resp, nil
+	}
+	httpErr, ok := err.(*HTTPError)
+	if !ok || httpErr.StatusCode != http.StatusUnauthorized {
+		return nil, err
+	}
+	if err := s.updateAndSetBearerToken(ctx); err != nil {
+		return nil, fmt.Errorf("failed to refresh token: %w", err)
+	}
+	return DoRequestWithRetries(ctx, s.httpClient, newReq, s.retryOpts)
 }
 
 // buildSObjectGraphQLQuery constructs a Salesforce GraphQL query for a given SObject.
