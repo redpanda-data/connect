@@ -45,6 +45,13 @@ type LogMiner struct {
 	// Pre-built query string for LogMiner contents
 	logMinerQuery string
 	txnCache      TransactionCache
+
+	// Redo logs don't include data types so we have to find lob types up front.
+	// ie "TESTDB.PRODUCTS.DESCRIPTION": "NCLOB",
+	lobColTypes map[string]string
+	// lob types are split between redo log lines, we use lobStates to track them
+	// until we have all data to merge into published INSERT or UPDATE event.
+	lobStates map[string]*sqlredo.TxnLOBState
 }
 
 // NewMiner creates a new instance of LogMiner responsible for paging through change events based on the tables param.
@@ -54,8 +61,12 @@ func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replicat
 	// Transaction control operations (6=START, 7=COMMIT, 36=ROLLBACK) don't have table info
 	var buf strings.Builder
 	if len(userTables) > 0 {
-		buf.WriteString(" AND (")
-		buf.WriteString("OPERATION_CODE IN (6, 7, 36)")           // Allow all transaction control events
+		opCodes := "6, 7, 36"
+		if cfg.LobEnabled {
+			opCodes += ", 9, 10"
+		}
+		buf.WriteString(" AND (OPERATION_CODE IN (" + opCodes + ")")
+		// DML carries the real table name — filter by configured tables.
 		buf.WriteString(" OR (OPERATION_CODE IN (1, 2, 3) AND (") // Filter DML by table
 		for i, t := range userTables {
 			if i > 0 {
@@ -74,7 +85,8 @@ func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replicat
 			SEG_OWNER,
 			TIMESTAMP,
 			XID,
-			COMMIT_SCN
+			COMMIT_SCN,
+			CSF
 		FROM V$LOGMNR_CONTENTS
 		WHERE SCN > :1 AND SCN <= :2%s
 	`, buf.String())
@@ -92,6 +104,7 @@ func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replicat
 		sessionMgr:    NewSessionManager(cfg, logger),
 		txnCache:      NewInMemoryCache(cfg.MaxTransactionEvents, metrics, logger),
 		dmlParser:     sqlredo.NewParser(),
+		lobStates:     make(map[string]*sqlredo.TxnLOBState),
 	}
 	return lm
 }
@@ -110,6 +123,13 @@ func (lm *LogMiner) ReadChanges(ctx context.Context, startPos replication.SCN) e
 
 	if err := replication.ApplyNLSSettings(ctx, conn); err != nil {
 		return fmt.Errorf("applying NLS settings for LogMiner: %w", err)
+	}
+
+	// find all lob columns on start up as redo logs don't include column data types.
+	if lm.cfg.LobEnabled {
+		if err := lm.loadLOBColumnTypes(ctx, conn); err != nil {
+			return fmt.Errorf("discovering LOB column types: %w", err)
+		}
 	}
 
 	lm.currentSCN = uint64(startPos)
@@ -254,6 +274,67 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 
 		lm.txnCache.AddEvent(redoEvent.TransactionID, redoEvent.SCN, &event)
 
+	case sqlredo.OpSelectLobLocator:
+		if !lm.cfg.LobEnabled {
+			return nil
+		}
+		if !redoEvent.SQLRedo.Valid || redoEvent.SQLRedo.String == "" {
+			lm.log.Warnf("Skipping SELECT_LOB_LOCATOR with no SQL_REDO (scn=%d, txn=%s)", redoEvent.SCN, redoEvent.TransactionID)
+			return nil
+		}
+		info, err := sqlredo.ParseSelectLobLocator(redoEvent.SQLRedo.String)
+		if err != nil {
+			lm.log.Warnf("Failed to parse SELECT_LOB_LOCATOR SQL (scn=%d, txn=%s): %v\nSQL: %.500s", redoEvent.SCN, redoEvent.TransactionID, err, redoEvent.SQLRedo.String)
+			return nil
+		}
+		// Resolve LOB type from the schema cache populated at startup.
+		colKey := fmt.Sprintf("%s.%s.%s", info.Schema, info.Table, info.Column)
+		lobType := lm.lobColTypes[strings.ToUpper(colKey)] // "CLOB", "BLOB", "NCLOB", or "" if unknown
+
+		state := lm.getOrCreateLOBState(redoEvent.TransactionID)
+		key := sqlredo.LobKey{
+			Schema:   info.Schema,
+			Table:    info.Table,
+			Column:   info.Column,
+			PKString: sqlredo.FormatPKString(info.PKValues),
+		}
+		if _, exists := state.Accumulators[key]; !exists {
+			state.Accumulators[key] = &sqlredo.LobAccumulator{
+				Schema:   info.Schema,
+				Table:    info.Table,
+				Column:   info.Column,
+				PKValues: info.PKValues,
+				IsBinary: lobType == "BLOB",
+			}
+		}
+		state.ActiveKey = &key
+
+	case sqlredo.OpLobWrite:
+		if !lm.cfg.LobEnabled {
+			return nil
+		}
+		state, exists := lm.lobStates[redoEvent.TransactionID]
+		if !exists || state.ActiveKey == nil {
+			lm.log.Warnf("Received LOB_WRITE without active LOB locator (scn=%d, txn=%s)", redoEvent.SCN, redoEvent.TransactionID)
+			return nil
+		}
+		acc := state.Accumulators[*state.ActiveKey]
+		if acc == nil {
+			lm.log.Warnf("LOB_WRITE has active key but no accumulator (scn=%d, txn=%s)", redoEvent.SCN, redoEvent.TransactionID)
+			return nil
+		}
+		if !redoEvent.SQLRedo.Valid || redoEvent.SQLRedo.String == "" {
+			return nil
+		}
+		// NCLOB LOB_WRITE SQL delivers data as a plain string literal (same as CLOB),
+		// not as HEXTORAW. Only BLOB uses binary/hex encoding.
+		writeInfo, err := sqlredo.ParseLobWrite(redoEvent.SQLRedo.String, acc.IsBinary)
+		if err != nil {
+			lm.log.Warnf("Failed to parse LOB_WRITE SQL (scn=%d, txn=%s): %v\nSQL: %.500s", redoEvent.SCN, redoEvent.TransactionID, err, redoEvent.SQLRedo.String)
+			return nil
+		}
+		acc.AddFragment(writeInfo.Offset, writeInfo.Data)
+
 	case sqlredo.OpCommit:
 		// Flush all buffered events for given transaction ID
 		if txn := lm.txnCache.GetTransaction(redoEvent.TransactionID); txn != nil {
@@ -272,7 +353,50 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 				}
 			}
 
+			if lm.cfg.LobEnabled {
+				// Merge any accumulated LOB data into DML events before publishing.
+				if state, ok := lm.lobStates[redoEvent.TransactionID]; ok {
+					sqlredo.MergeLOBsIntoDMLEvents(state, txn.Events, lm.log)
+					delete(lm.lobStates, redoEvent.TransactionID)
+				}
+			}
+
+			// Build a set of schema.table pairs that have an INSERT in this transaction.
+			// Used below to detect and suppress Oracle-internal LOB-initialisation UPDATEs.
+			insertTables := make(map[string]struct{})
+			if lm.cfg.LobEnabled {
+				for _, ev := range txn.Events {
+					if ev.Operation == sqlredo.OpInsert {
+						insertTables[ev.Schema+"."+ev.Table] = struct{}{}
+					}
+				}
+
+				// Pre-pass: for each LOB-only UPDATE that accompanies an INSERT in this transaction,
+				// merge the actual LOB values into the INSERT before we start publishing.
+				//
+				// Oracle omits LOB columns from the INSERT SQL_REDO entirely and instead emits a
+				// separate UPDATE whose SET clause carries the real LOB data. We must propagate
+				// those values into the INSERT event before suppressing the UPDATE.
+				for _, dmlEvent := range txn.Events {
+					if dmlEvent.Operation != sqlredo.OpUpdate || !lm.isLOBOnlyEvent(dmlEvent) {
+						continue
+					}
+					if _, hasInsert := insertTables[dmlEvent.Schema+"."+dmlEvent.Table]; !hasInsert {
+						continue
+					}
+					sqlredo.MergeInlineLOBValues(dmlEvent.Data, dmlEvent.Schema, dmlEvent.Table, dmlEvent.OldValues, txn.Events, lm.log)
+				}
+			}
+
 			for _, dmlEvent := range txn.Events {
+				// Suppress Oracle-internal LOB-initialisation UPDATEs. Their LOB values have
+				// already been merged into the corresponding INSERT by the pre-pass above.
+				if lm.cfg.LobEnabled && dmlEvent.Operation == sqlredo.OpUpdate && lm.isLOBOnlyEvent(dmlEvent) {
+					if _, hasInsert := insertTables[dmlEvent.Schema+"."+dmlEvent.Table]; hasInsert {
+						lm.log.Debugf("suppressing LOB-only UPDATE for %s.%s — values merged into INSERT", dmlEvent.Schema, dmlEvent.Table)
+						continue
+					}
+				}
 				msg := toMessageEvent(dmlEvent, redoEvent.SCN, safeCheckpointSCN)
 				if err := lm.publisher.Publish(ctx, msg); err != nil {
 					return fmt.Errorf("publishing event with SCN '%d': %w", redoEvent.SCN, err)
@@ -284,10 +408,76 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 
 	case sqlredo.OpRollback:
 		// Discard all buffered events for this transaction
+		if lm.cfg.LobEnabled {
+			delete(lm.lobStates, redoEvent.TransactionID)
+		}
 		lm.txnCache.RollbackTransaction(redoEvent.TransactionID)
 	}
 
 	return nil
+}
+
+func (lm *LogMiner) loadLOBColumnTypes(ctx context.Context, conn *sql.Conn) error {
+	lm.lobColTypes = make(map[string]string)
+	if len(lm.tables) == 0 {
+		return nil
+	}
+
+	var qb strings.Builder
+	qb.WriteString(`SELECT OWNER, TABLE_NAME, COLUMN_NAME, DATA_TYPE FROM ALL_TAB_COLUMNS WHERE DATA_TYPE IN ('CLOB', 'BLOB', 'NCLOB') AND (`)
+	for i, t := range lm.tables {
+		if i > 0 {
+			qb.WriteString(" OR ")
+		}
+		fmt.Fprintf(&qb, "(OWNER = '%s' AND TABLE_NAME = '%s')",
+			strings.ReplaceAll(strings.ToUpper(t.Schema), "'", "''"),
+			strings.ReplaceAll(strings.ToUpper(t.Name), "'", "''"))
+	}
+	qb.WriteString(")")
+
+	rows, err := conn.QueryContext(ctx, qb.String())
+	if err != nil {
+		return fmt.Errorf("querying LOB column types: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var owner, tableName, columnName, dataType string
+		if err := rows.Scan(&owner, &tableName, &columnName, &dataType); err != nil {
+			return fmt.Errorf("scanning LOB column type row: %w", err)
+		}
+		// example: "TESTDB.PRODUCTS.DESCRIPTION" : "CLOB"
+		k := fmt.Sprintf("%s.%s.%s", owner, tableName, columnName)
+		lm.lobColTypes[k] = dataType
+	}
+	return rows.Err()
+}
+
+func (lm *LogMiner) getOrCreateLOBState(txnID string) *sqlredo.TxnLOBState {
+	if state, ok := lm.lobStates[txnID]; ok {
+		return state
+	}
+
+	s := sqlredo.NewTxnLOBState()
+	lm.lobStates[txnID] = s
+	return s
+}
+
+// isLOBOnlyEvent reports whether every column in ev.Data is a known LOB column.
+// This identifies Oracle's internal LOB-initialisation UPDATE events, which carry
+// only LOB column values and should be suppressed when a matching INSERT already
+// exists in the same transaction.
+func (lm *LogMiner) isLOBOnlyEvent(ev *sqlredo.DMLEvent) bool {
+	if len(ev.Data) == 0 {
+		return false
+	}
+	for col := range ev.Data {
+		key := strings.ToUpper(ev.Schema + "." + ev.Table + "." + col)
+		if _, exists := lm.lobColTypes[key]; !exists {
+			return false
+		}
+	}
+	return true
 }
 
 func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, startSCN, endSCN uint64) ([]*sqlredo.RedoEvent, error) {
@@ -302,12 +492,16 @@ func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, s
 	}
 	defer rows.Close()
 
-	var events []*sqlredo.RedoEvent
+	var (
+		events  []*sqlredo.RedoEvent
+		pending *sqlredo.RedoEvent // accumulates CSF continuation fragments
+	)
 	for rows.Next() {
 		event := &sqlredo.RedoEvent{}
 		var (
 			xid       []byte        // Oracle RAW type comes as []byte in Go
 			commitSCN sql.NullInt64 // COMMIT_SCN can be NULL for uncommitted transactions
+			csf       int64         // Continuation SQL Flag: 1 = more SQL in next row, 0 = complete
 		)
 
 		err := rows.Scan(
@@ -319,6 +513,7 @@ func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, s
 			&event.Timestamp,
 			&xid,
 			&commitSCN,
+			&csf,
 		)
 		if err != nil {
 			return nil, err
@@ -326,10 +521,44 @@ func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, s
 
 		// XID is Oracle's native transaction identifier (RAW(8) = 8 bytes)
 		event.TransactionID = hex.EncodeToString(xid)
+
+		// CSF (Continuation SQL Flag): Oracle splits long SQL across multiple rows.
+		// Rows with CSF=1 are continuation fragments; CSF=0 is the final (or only) row.
+		// Concatenate all fragments before emitting the event.
+		if pending != nil {
+			// Append this fragment's SQL to the accumulated SQL.
+			if event.SQLRedo.Valid {
+				pending.SQLRedo.String += event.SQLRedo.String
+			}
+			if csf == 0 {
+				// Final fragment — emit the accumulated event.
+				events = append(events, pending)
+				pending = nil
+			}
+			// If csf == 1, continue accumulating.
+			continue
+		}
+
+		if csf == 1 {
+			// Start accumulating a multi-part SQL.
+			pending = event
+			continue
+		}
+
 		events = append(events, event)
 	}
 
-	return events, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// Flush any incomplete pending event (shouldn't happen in practice).
+	if pending != nil {
+		lm.log.Warnf("Incomplete CSF SQL sequence at end of result set (scn=%d, op=%s, txn=%s)", pending.SCN, pending.Operation, pending.TransactionID)
+		events = append(events, pending)
+	}
+
+	return events, nil
 }
 
 // LogFile represents a redo or archive log file

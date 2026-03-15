@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -33,6 +34,7 @@ import (
 
 func TestIntegrationOracleDBCDCSnapshotAndStreaming(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	// Create tables
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t, "latest")
@@ -140,6 +142,7 @@ oracledb_cdc:
 
 func TestIntegrationOracleDBCDCConcurrentSnapshot(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	// Create tables
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t, "latest")
@@ -219,6 +222,7 @@ oracledb_cdc:
 
 func TestIntegrationOracleDBCDCResumesFromCheckpoint(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	// Create table
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t, "latest")
@@ -345,6 +349,7 @@ oracledb_cdc:
 
 func TestIntegrationOracleDBCDCStreaming(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	// Create tables
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t, "latest")
@@ -477,7 +482,6 @@ oracledb_cdc:
 func TestIntegrationOracleDBCDCSnapshotAndStreamingAllTypes(t *testing.T) {
 	integration.CheckSkip(t)
 
-	var err error
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t, "latest")
 	q := `
 	CREATE TABLE testdb.all_data_types (
@@ -509,17 +513,18 @@ func TestIntegrationOracleDBCDCSnapshotAndStreamingAllTypes(t *testing.T) {
 		binary_col        RAW(16),
 		varbinary_col     RAW(255),
 
-		-- Large Object Data Types (commented out to avoid TTC errors)
-		-- varcharmax_col    CLOB,
-		-- nvarcharmax_col   NCLOB,
-		-- varbinarymax_col  BLOB,
+		-- Large Object Data Types
+		varcharmax_col    CLOB,
+		oolvarcharmax_col CLOB, --out-of-line CLOB (LogMiner stores as a separate segement)
+		nvarcharmax_col   NCLOB,
+		varbinarymax_col  BLOB,
 
 		-- Other Data Types
-		bit_col           NUMBER(1)                    -- Boolean-like (0,1,NULL)
+		bit_col           NUMBER(1),                    -- Boolean-like (0,1,NULL)
 		-- xml_col           XMLTYPE,
-		-- json_col          CLOB                          -- JSON stored as CLOB
-	)`
-	err = db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.all_data_types", q)
+		json_col          CLOB                          -- JSON stored as CLOB
+	) LOB(oolvarcharmax_col) STORE AS BASICFILE (DISABLE STORAGE IN ROW NOCACHE LOGGING)`
+	err := db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.all_data_types", q)
 	require.NoError(t, err)
 
 	// disable supplemental logging before we insert snapshot data
@@ -532,16 +537,16 @@ func TestIntegrationOracleDBCDCSnapshotAndStreamingAllTypes(t *testing.T) {
 		date_col, datetime_col, datetime2_col, smalldatetime_col,
 		time_col, datetimeoffset_col, char_col, varchar_col,
 		nchar_col, nvarchar_col, binary_col, varbinary_col,
-		-- varcharmax_col, nvarcharmax_col, varbinarymax_col,
-		bit_col -- , xml_col, json_col
+		varcharmax_col, oolvarcharmax_col, nvarcharmax_col, varbinarymax_col,
+		bit_col, json_col
 	) VALUES (
 		:1, :2, :3, :4,
 		:5, :6, :7, :8,
 		:9, :10, :11, :12,
 		:13, :14, :15, :16,
 		:17, :18, :19, :20,
-		-- :21, :22, :23,
-		:21 -- , :22, :23
+		:21, :22, :23, :24,
+		:25, :26
 	)`
 
 	t.Log("Inserting min values for testing snapshot data...")
@@ -568,12 +573,12 @@ func TestIntegrationOracleDBCDCSnapshotAndStreamingAllTypes(t *testing.T) {
 			"",           // nvarchar2(255)
 			[]byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}, // raw(16)
 			[]byte{0x00}, // raw(255)
-			// "",              // clob (varcharmax_col) - LOB columns commented out
-			// "",              // nclob (nvarcharmax_col)
-			// []byte{0x00},    // blob (varbinarymax_col)
-			0, // bit (number)
-			// "<root></root>", // xmltype
-			// "{}",            // json (clob)
+			nil,          // clob (varcharmax_col)
+			nil,          // clob (oolvarcharmax_col)
+			nil,          // nclob (nvarcharmax_col)
+			nil,          // blob (varbinarymax_col)
+			0,            // bit (number)
+			nil,          // json (clob)
 		)
 	}
 
@@ -592,6 +597,7 @@ oracledb_cdc:
   stream_snapshot: true
   snapshot_max_batch_size: 100
   logminer:
+    lob_enabled: true
     scn_window_size: 20000
     backoff_interval: 1s
   include: ["TESTDB.ALL_DATA_TYPES"]`
@@ -637,6 +643,7 @@ oracledb_cdc:
 		t.Logf("Snapshot record received: %s", outBatches[0])
 	}
 
+	largeClob := strings.Repeat("A", 5000)
 	t.Log("Snapshot record(s) received, inserting max values for testing streaming...")
 	{
 		// insert max values for streaming
@@ -661,17 +668,14 @@ oracledb_cdc:
 			"Max nvarchar value", // nvarchar2(255)
 			make([]byte, 16),     // raw(16) filled with zeros
 			make([]byte, 255),    // raw(255) max
-			// "Max varchar(max)",   // clob (varcharmax_col) - LOB columns commented out
-			// "Max nvarchar(max)",  // nclob (nvarcharmax_col)
-			// make([]byte, 255),    // blob (varbinarymax_col)
-			1, // bit max (number)
-			// "<root>max</root>",   // xmltype
-			// `{"max": true}`,      // json (clob)
+			"Max varchar(max)",   // clob (varcharmax_col)
+			largeClob,            // clob (oolvarcharmax_col)
+			"Max nvarchar(max)",  // nclob (nvarcharmax_col)
+			make([]byte, 255),    // blob (varbinarymax_col)
+			1,                    // bit max (number)
+			`{"max": true}`,      // json (clob)
 		)
 
-		// verify we got at least 2 records (1 snapshot + 1+ streaming)
-		// Note: Oracle may split INSERT with LOB columns into multiple redo log entries,
-		// so we may get 2-3+ records total depending on how LOBs are handled
 		minWant := 2
 		t.Log("Waiting for streaming record(s)...")
 		assert.Eventually(t, func() bool {
@@ -712,59 +716,27 @@ oracledb_cdc:
 		"DECIMAL_COL": -9999999999999999999999999999.9999999999,
 		"FLOAT_COL": -1.79e+100,
 		"INT_COL": -2147483648,
+		"JSON_COL": null,
 		"NCHAR_COL": "АААААААААА",
 		"NUMERIC_COL": -999999999999999.99999,
 		"NVARCHAR_COL": null,
+		"NVARCHARMAX_COL": null,
 		"REAL_COL": -3.4e+37,
 		"SMALLDATETIME_COL": "1900-01-01T00:00:00Z",
 		"SMALLINT_COL": -32768,
 		"TIME_COL": "0001-01-01T00:00:00Z",
 		"TINYINT_COL": 0,
 		"VARBINARY_COL": "AA==",
-		"VARCHAR_COL": null
+		"VARBINARYMAX_COL": null,
+		"VARCHAR_COL": null,
+		"OOLVARCHARMAX_COL": null,
+		"VARCHARMAX_COL": null
 		}`, outBatches[0], "Failed to assert min result from snapshot")
 	}
 
 	t.Log("Verifying values from streaming...")
 	{
-		// Oracle may split INSERT statements with LOB columns into multiple redo log entries.
-		// The actual data might be in outBatches[1], outBatches[2], or split across both.
-		// Check which record has the non-EMPTY LOB values to determine which to validate.
-
 		// assert max - uppercase column names from Oracle
-		// BEFORE - With binary data
-		// require.JSONEq(t, `{
-		// "BIGINT_COL": 9223372036854775807,
-		// "BINARY_COL": "AAAAAAAAAAAAAAAAAAAAAA==",
-		// "BIT_COL": true,
-		// "CHAR_COL": "ZZZZZZZZZZ",
-		// "DATE_COL": "9999-12-31T00:00:00Z",
-		// "DATETIME2_COL": "9999-12-31T23:59:59.9999999Z",
-		// "DATETIME_COL": "9999-12-31T23:59:59.997Z",
-		// "DATETIMEOFFSET_COL": "9999-12-31T23:59:59.9999999+14:00",
-		// "DECIMAL_COL": 9999999999999999999999999999.9999999999,
-		// "FLOAT_COL": 1.79e+100,
-		// "INT_COL": 2147483647,
-		// "JSON_COL": "{\"max\": true}",
-		// "NCHAR_COL": "ZZZZZZZZZZ",
-		// "NUMERIC_COL": 999999999999999.99999,
-		// "NVARCHAR_COL": "Max nvarchar value",
-		// "NVARCHARMAX_COL": "Max nvarchar(max)",
-		// "REAL_COL": "3.4e+37",
-		// "SMALLDATETIME_COL": "2079-06-06T23:59:00Z",
-		// "SMALLINT_COL": 32767,
-		// "TIME_COL": "0001-01-01T23:59:59.9999999Z",
-		// "TINYINT_COL": 255,
-		// "VARBINARY_COL": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-		// "VARBINARYMAX_COL": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-		// "VARCHAR_COL": "Max varchar value",
-		// "VARCHARMAX_COL": "Max varchar(max)",
-		// "XML_COL": "\u003croot\u003emax\u003c/root\u003e"
-		// }`, outBatches[1], "Failed to assert max result from streaming")
-		// Streaming values are coerced to match snapshot types using schema
-		// metadata. Int64 columns become bare numbers, BINARY_FLOAT/DOUBLE
-		// become float64, and NUMBER columns with fractional scale become
-		// json.Number (bare numbers preserving exact precision).
 		require.JSONEq(t, `{
 		"BIGINT_COL": 9223372036854775807,
 		"BINARY_COL": "AAAAAAAAAAAAAAAAAAAAAA==",
@@ -777,74 +749,23 @@ oracledb_cdc:
 		"DECIMAL_COL": 9999999999999999999999999999.9999999999,
 		"FLOAT_COL": 1.79e+100,
 		"INT_COL": 2147483647,
+		"JSON_COL": "{\"max\": true}",
 		"NCHAR_COL": "ZZZZZZZZZZ",
 		"NUMERIC_COL": 999999999999999.99999,
 		"NVARCHAR_COL": "Max nvarchar value",
+		"NVARCHARMAX_COL": "Max nvarchar(max)",
 		"REAL_COL": 3.3999999e+37,
 		"SMALLDATETIME_COL": "2079-06-06T23:59:00Z",
 		"SMALLINT_COL": 32767,
 		"TIME_COL": "0001-01-01T23:59:59.9999999Z",
 		"TINYINT_COL": 255,
 		"VARBINARY_COL": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-		"VARCHAR_COL": "Max varchar value"
+		"VARBINARYMAX_COL": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+		"VARCHAR_COL": "Max varchar value",
+		"OOLVARCHARMAX_COL": "`+largeClob+`",
+		"VARCHARMAX_COL": "Max varchar(max)"
 		}`, outBatches[1], "Failed to assert max result from streaming")
 	}
-}
-
-// ---------------------------------------------------------------------------
-// Schema metadata integration tests
-// ---------------------------------------------------------------------------
-
-// extractSchema extracts and parses the schema metadata from a service.Message.
-// Returns a zero-value schema.Common if the metadata is absent.
-func extractSchema(t *testing.T, msg *service.Message) schema.Common {
-	t.Helper()
-	var raw any
-	_ = msg.MetaWalkMut(func(k string, v any) error {
-		if k == "schema" {
-			raw = v
-		}
-		return nil
-	})
-	if raw == nil {
-		return schema.Common{}
-	}
-	c, err := schema.ParseFromAny(raw)
-	require.NoError(t, err)
-	return c
-}
-
-// extractFingerprint extracts the fingerprint string from schema metadata.
-func extractFingerprint(t *testing.T, msg *service.Message) string {
-	t.Helper()
-	var raw any
-	_ = msg.MetaWalkMut(func(k string, v any) error {
-		if k == "schema" {
-			raw = v
-		}
-		return nil
-	})
-	if raw == nil {
-		return ""
-	}
-	m, ok := raw.(map[string]any)
-	if !ok {
-		return ""
-	}
-	fp, _ := m["fingerprint"].(string)
-	return fp
-}
-
-// childByName finds a child by name in a Common schema for test assertions.
-func childByName(t *testing.T, c schema.Common, name string) schema.Common {
-	t.Helper()
-	for i := range c.Children {
-		if c.Children[i].Name == name {
-			return c.Children[i]
-		}
-	}
-	t.Fatalf("child %q not found in schema %q", name, c.Name)
-	return schema.Common{}
 }
 
 func TestIntegrationOracleDBCDCSnapshotSchema(t *testing.T) {
@@ -899,34 +820,34 @@ oracledb_cdc:
 	require.Len(t, msgs, 2)
 
 	for i, msg := range msgs {
-		s := extractSchema(t, msg)
+		s := oracledbtest.ExtractSchema(t, msg)
 		assert.Equal(t, "SCHEMA_SNAP", s.Name, "msg %d", i)
 		assert.Equal(t, schema.Object, s.Type, "msg %d", i)
 		require.Len(t, s.Children, 5, "msg %d: expected 5 columns", i)
 
-		id := childByName(t, s, "ID")
+		id := oracledbtest.ChildByName(t, s, "ID")
 		assert.Equal(t, schema.Int64, id.Type, "NUMBER(10) with scale=0 should be Int64")
 		assert.True(t, id.Optional)
 
-		name := childByName(t, s, "NAME")
+		name := oracledbtest.ChildByName(t, s, "NAME")
 		assert.Equal(t, schema.String, name.Type)
 
-		createdAt := childByName(t, s, "CREATED_AT")
+		createdAt := oracledbtest.ChildByName(t, s, "CREATED_AT")
 		assert.Equal(t, schema.Timestamp, createdAt.Type)
 
-		data := childByName(t, s, "DATA")
+		data := oracledbtest.ChildByName(t, s, "DATA")
 		assert.Equal(t, schema.ByteArray, data.Type)
 
-		score := childByName(t, s, "SCORE")
+		score := oracledbtest.ChildByName(t, s, "SCORE")
 		assert.Equal(t, schema.Float32, score.Type)
 
-		fp := extractFingerprint(t, msg)
+		fp := oracledbtest.ExtractFingerprint(t, msg)
 		assert.NotEmpty(t, fp, "msg %d: fingerprint should be present", i)
 	}
 
 	// Both snapshot messages should have the same fingerprint
-	fp0 := extractFingerprint(t, msgs[0])
-	fp1 := extractFingerprint(t, msgs[1])
+	fp0 := oracledbtest.ExtractFingerprint(t, msgs[0])
+	fp1 := oracledbtest.ExtractFingerprint(t, msgs[1])
 	assert.Equal(t, fp0, fp1, "snapshot messages should have identical fingerprints")
 
 	require.NoError(t, stream.StopWithin(10*time.Second))
@@ -934,6 +855,7 @@ oracledb_cdc:
 
 func TestIntegrationOracleDBCDCStreamingInsertSchema(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t, "latest")
 	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.schema_ins",
@@ -984,13 +906,13 @@ oracledb_cdc:
 	require.Len(t, msgs, 2)
 
 	for i, msg := range msgs {
-		s := extractSchema(t, msg)
+		s := oracledbtest.ExtractSchema(t, msg)
 		assert.Equal(t, "SCHEMA_INS", s.Name, "msg %d", i)
 		require.Len(t, s.Children, 2, "msg %d", i)
 	}
 
 	// Fingerprint should be stable across inserts to the same table
-	assert.Equal(t, extractFingerprint(t, msgs[0]), extractFingerprint(t, msgs[1]))
+	assert.Equal(t, oracledbtest.ExtractFingerprint(t, msgs[0]), oracledbtest.ExtractFingerprint(t, msgs[1]))
 
 	require.NoError(t, stream.StopWithin(10*time.Second))
 }
@@ -1048,15 +970,15 @@ oracledb_cdc:
 	require.Len(t, msgs, 2)
 
 	// Both INSERT and UPDATE should carry the same full table schema
-	insertSchema := extractSchema(t, msgs[0])
-	updateSchema := extractSchema(t, msgs[1])
+	insertSchema := oracledbtest.ExtractSchema(t, msgs[0])
+	updateSchema := oracledbtest.ExtractSchema(t, msgs[1])
 
 	assert.Equal(t, "SCHEMA_UPD", insertSchema.Name)
 	assert.Equal(t, "SCHEMA_UPD", updateSchema.Name)
 	require.Len(t, insertSchema.Children, 4, "full table schema should have 4 columns")
 	require.Len(t, updateSchema.Children, 4, "UPDATE should carry full table schema, not just SET columns")
 
-	assert.Equal(t, extractFingerprint(t, msgs[0]), extractFingerprint(t, msgs[1]),
+	assert.Equal(t, oracledbtest.ExtractFingerprint(t, msgs[0]), oracledbtest.ExtractFingerprint(t, msgs[1]),
 		"INSERT and UPDATE on same table should have identical schema fingerprints")
 
 	require.NoError(t, stream.StopWithin(10*time.Second))
@@ -1113,14 +1035,14 @@ oracledb_cdc:
 	}
 	require.Len(t, msgs, 2)
 
-	insertSchema := extractSchema(t, msgs[0])
-	deleteSchema := extractSchema(t, msgs[1])
+	insertSchema := oracledbtest.ExtractSchema(t, msgs[0])
+	deleteSchema := oracledbtest.ExtractSchema(t, msgs[1])
 
 	assert.Equal(t, "SCHEMA_DEL", insertSchema.Name)
 	assert.Equal(t, "SCHEMA_DEL", deleteSchema.Name)
 	require.Len(t, deleteSchema.Children, 2, "DELETE should carry full table schema")
 
-	assert.Equal(t, extractFingerprint(t, msgs[0]), extractFingerprint(t, msgs[1]),
+	assert.Equal(t, oracledbtest.ExtractFingerprint(t, msgs[0]), oracledbtest.ExtractFingerprint(t, msgs[1]),
 		"INSERT and DELETE on same table should have identical schema fingerprints")
 
 	require.NoError(t, stream.StopWithin(10*time.Second))
@@ -1128,6 +1050,7 @@ oracledb_cdc:
 
 func TestIntegrationOracleDBCDCSchemaConsistentAcrossPhases(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Parallel()
 
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t, "latest")
 	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.schema_phases",
@@ -1196,8 +1119,8 @@ oracledb_cdc:
 	streamingMsg := outMsgs[0]
 	outMsgsMu.Unlock()
 
-	snapshotFP := extractFingerprint(t, snapshotMsg)
-	streamingFP := extractFingerprint(t, streamingMsg)
+	snapshotFP := oracledbtest.ExtractFingerprint(t, snapshotMsg)
+	streamingFP := oracledbtest.ExtractFingerprint(t, streamingMsg)
 
 	assert.NotEmpty(t, snapshotFP)
 	assert.NotEmpty(t, streamingFP)
@@ -1251,8 +1174,8 @@ oracledb_cdc:
 
 	msg1 := <-msgChan
 	require.NotNil(t, msg1)
-	fp1 := extractFingerprint(t, msg1)
-	s1 := extractSchema(t, msg1)
+	fp1 := oracledbtest.ExtractFingerprint(t, msg1)
+	s1 := oracledbtest.ExtractSchema(t, msg1)
 	require.Len(t, s1.Children, 2)
 
 	// ALTER TABLE to add a column, then drop and re-enable supplemental logging
@@ -1266,11 +1189,11 @@ oracledb_cdc:
 
 	msg2 := <-msgChan
 	require.NotNil(t, msg2)
-	fp2 := extractFingerprint(t, msg2)
-	s2 := extractSchema(t, msg2)
+	fp2 := oracledbtest.ExtractFingerprint(t, msg2)
+	s2 := oracledbtest.ExtractSchema(t, msg2)
 
 	require.Len(t, s2.Children, 3, "schema should include the new EMAIL column")
-	email := childByName(t, s2, "EMAIL")
+	email := oracledbtest.ChildByName(t, s2, "EMAIL")
 	assert.Equal(t, schema.String, email.Type)
 
 	assert.NotEqual(t, fp1, fp2, "fingerprint should change after column addition")
@@ -1333,8 +1256,8 @@ oracledb_cdc:
 	}
 	require.Len(t, byTable, 2)
 
-	s1 := extractSchema(t, byTable["SCHEMA_T1"])
-	s2 := extractSchema(t, byTable["SCHEMA_T2"])
+	s1 := oracledbtest.ExtractSchema(t, byTable["SCHEMA_T1"])
+	s2 := oracledbtest.ExtractSchema(t, byTable["SCHEMA_T2"])
 
 	assert.Equal(t, "SCHEMA_T1", s1.Name)
 	require.Len(t, s1.Children, 2)
@@ -1342,8 +1265,8 @@ oracledb_cdc:
 	assert.Equal(t, "SCHEMA_T2", s2.Name)
 	require.Len(t, s2.Children, 3)
 
-	fp1 := extractFingerprint(t, byTable["SCHEMA_T1"])
-	fp2 := extractFingerprint(t, byTable["SCHEMA_T2"])
+	fp1 := oracledbtest.ExtractFingerprint(t, byTable["SCHEMA_T1"])
+	fp2 := oracledbtest.ExtractFingerprint(t, byTable["SCHEMA_T2"])
 	assert.NotEqual(t, fp1, fp2, "different tables should have different fingerprints")
 
 	require.NoError(t, stream.StopWithin(10*time.Second))
@@ -1477,19 +1400,19 @@ oracledb_cdc:
 
 	// Verify schema metadata for both phases
 	for phase, msg := range map[string]*service.Message{"snapshot": snapshotMsg, "streaming": streamingMsg} {
-		s := extractSchema(t, msg)
+		s := oracledbtest.ExtractSchema(t, msg)
 		assert.Equal(t, "SCHEMA_TYPES", s.Name, "%s schema name", phase)
 		require.Len(t, s.Children, len(expectedTypes), "%s schema child count", phase)
 
 		for colName, wantType := range expectedTypes {
-			child := childByName(t, s, colName)
+			child := oracledbtest.ChildByName(t, s, colName)
 			assert.Equal(t, wantType, child.Type, "%s: column %s type", phase, colName)
 			assert.True(t, child.Optional, "%s: column %s should be optional", phase, colName)
 		}
 	}
 
 	// Verify fingerprints match across phases
-	assert.Equal(t, extractFingerprint(t, snapshotMsg), extractFingerprint(t, streamingMsg),
+	assert.Equal(t, oracledbtest.ExtractFingerprint(t, snapshotMsg), oracledbtest.ExtractFingerprint(t, streamingMsg),
 		"schema fingerprints should be identical across snapshot and streaming")
 
 	// Verify data value types are consistent across phases.

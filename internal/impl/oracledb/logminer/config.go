@@ -25,6 +25,8 @@ var (
 	// per transaction before they're discarded.
 	// Used to prevent large events resulting in memory exhaustion.
 	DefaultMaxTransactionEvents = 0
+	// DefaultLobEnabled controls whether LOB column processing is enabled.
+	DefaultLobEnabled = false
 )
 
 // MiningStrategy defines how LogMiner accesses dictionary information
@@ -42,6 +44,7 @@ type Config struct {
 	MiningInterval        time.Duration
 	MiningStrategy        MiningStrategy
 	MaxTransactionEvents  int
+	LobEnabled            bool
 }
 
 // NewDefaultConfig returns a Config with default values
@@ -52,5 +55,6 @@ func NewDefaultConfig() *Config {
 		MiningInterval:        DefaultMiningInterval,
 		MiningStrategy:        MiningStrategy(DefaultMiningStrategy),
 		MaxTransactionEvents:  DefaultMaxTransactionEvents,
+		LobEnabled:            DefaultLobEnabled,
 	}
 }
