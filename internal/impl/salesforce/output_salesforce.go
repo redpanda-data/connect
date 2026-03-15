@@ -11,9 +11,9 @@
 // messages to Salesforce using either the sObject Collections REST API (realtime mode)
 // or the Bulk API 2.0 (bulk mode).
 //
-// Each call to WriteBatch receives a batch of messages. In realtime mode the batch is
-// split into chunks of up to 200 records and written synchronously. In bulk mode a
-// full async job lifecycle is executed: create → upload CSV → close → poll → results.
+// Messages are routed to the correct SObject configuration based on the "topic" field
+// set by the per-topic processor. Each topic_mapping entry defines the SObject, operation,
+// external ID field, and write mode for a given Kafka topic.
 
 package salesforce
 
@@ -27,6 +27,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -42,16 +43,27 @@ const (
 	bulkPollInterval     = 5 * time.Second
 )
 
+// topicMapping holds the Salesforce write config for a single Kafka topic.
+type topicMapping struct {
+	sobject         string
+	operation       string
+	externalIDField string
+	mode            string
+	allOrNone       bool
+}
+
 // salesforceSinkOutput is the Redpanda Connect output implementation for writing to Salesforce.
 type salesforceSinkOutput struct {
 	log    *service.Logger
 	client *salesforcehttp.Client
 
-	sobject         string
-	operation       string // insert | update | upsert | delete
-	externalIDField string // required for upsert
-	mode            string // realtime | bulk
-	allOrNone       bool   // realtime only: fail whole batch on any error
+	// topicMappings maps Kafka topic name → Salesforce write config.
+	topicMappings map[string]topicMapping
+
+	// writableFields caches per-SObject updateable field sets, loaded lazily on first write.
+	writableFieldsMu sync.RWMutex
+	writableFields   map[string]map[string]struct{}
+	blockedFields    map[string][]string
 }
 
 func init() {
@@ -62,7 +74,6 @@ func init() {
 			if err != nil {
 				return nil, service.BatchPolicy{}, 0, err
 			}
-			// Max in-flight: 1 to ensure ordering; users can increase via pipeline threads.
 			return out, service.BatchPolicy{Count: 200, Period: "1s"}, 1, nil
 		},
 	); err != nil {
@@ -71,34 +82,35 @@ func init() {
 }
 
 func newSalesforceSinkConfigSpec() *service.ConfigSpec {
+	topicMappingSpec := service.NewObjectListField("topic_mappings",
+		service.NewStringField("topic").
+			Description("Kafka topic name to match against the message's 'topic' field"),
+		service.NewStringField("sobject").
+			Description("Salesforce SObject API name (e.g., Account, Contact, MyObject__c)"),
+		service.NewStringField("operation").
+			Description("Write operation: insert, update, upsert, or delete").
+			Default("upsert"),
+		service.NewStringField("external_id_field").
+			Description("External ID field name, required for upsert").
+			Default(""),
+		service.NewStringField("mode").
+			Description("Write mode: realtime (sObject Collections API) or bulk (Bulk API 2.0)").
+			Default(sinkModeRealtime),
+		service.NewBoolField("all_or_none").
+			Description("Realtime only: roll back the entire batch if any record fails").
+			Default(false),
+	).Description("Per-topic Salesforce write configuration. Each entry maps a Kafka topic to an SObject and write settings.")
+
 	return service.NewConfigSpec().
-		Summary("Writes messages to Salesforce using either the sObject Collections REST API or the Bulk API 2.0.").
-		Description(`Consumes batches of messages and writes them to a Salesforce SObject.
+		Summary("Writes messages to Salesforce, routing each Kafka topic to its own SObject configuration.").
+		Description(`Consumes batches of messages and writes them to Salesforce.
 
-**Realtime mode** (default) uses the sObject Collections API, which is synchronous and supports up to 200 records per call.
-Use this for low-latency writes where immediate feedback is required.
+Each message must have a ` + "`topic`" + ` field (set by the per-topic processor) and a ` + "`data`" + ` field
+containing the Salesforce record fields. The ` + "`topic`" + ` is used to look up the correct
+` + "`topic_mappings`" + ` entry which defines the SObject, operation, and write mode.
 
-**Bulk mode** uses the Bulk API 2.0, which is asynchronous and designed for large data volumes.
-The output creates a job, uploads all records as CSV, then polls until the job completes.
-
-## Operations
-
-| Operation | Description                                       |
-|-----------|---------------------------------------------------|
-| insert    | Create new records                                |
-| update    | Update existing records by Salesforce ID          |
-| upsert    | Insert or update by an external ID field          |
-| delete    | Delete records by Salesforce ID                   |
-
-## Input format
-
-Each message must be a JSON object whose keys map to Salesforce field API names.
-For **upsert**, the object must include the external ID field configured via ` + "`external_id_field`" + `.
-For **update** and **delete**, the object must include the Salesforce record ` + "`Id`" + `.
-
-## Consuming from multiple Kafka topics
-
-Use a ` + "`broker`" + ` input to fan-in from multiple topics and apply per-topic transformations:
+**Realtime mode** uses the sObject Collections REST API (synchronous, up to 200 records/call).
+**Bulk mode** uses the Bulk API 2.0 (asynchronous, polls until complete).
 
 ` + "```yaml" + `
 input:
@@ -109,28 +121,34 @@ input:
           topics: [salesforce-account]
           consumer_group: sf-sink-account
         processors:
-          - mapping: 'root.sobject = "Account"'
+          - mapping: |
+              root.topic = @kafka_topic
+              root.data = this
       - kafka_franz:
           seed_brokers: [localhost:9092]
           topics: [salesforce-contact]
           consumer_group: sf-sink-contact
         processors:
-          - mapping: 'root.sobject = "Contact"'
-
-pipeline:
-  processors:
-    - mapping: |
-        root = this.without("sobject")
+          - mapping: |
+              root.topic = @kafka_topic
+              root.data = this
 
 output:
   salesforce_sink:
     org_url: "${SALESFORCE_ORG_URL}"
     client_id: "${SALESFORCE_CLIENT_ID}"
     client_secret: "${SALESFORCE_CLIENT_SECRET}"
-    sobject: Account
-    operation: upsert
-    external_id_field: External_Id__c
-    mode: realtime
+    topic_mappings:
+      - topic: salesforce-account
+        sobject: Account
+        operation: upsert
+        external_id_field: External_Id__c
+        mode: realtime
+      - topic: salesforce-contact
+        sobject: Contact
+        operation: upsert
+        external_id_field: External_Id__c
+        mode: bulk
 ` + "```").
 		Field(service.NewStringField("org_url").
 			Description("Salesforce instance base URL (e.g., https://your-domain.salesforce.com)")).
@@ -148,20 +166,7 @@ output:
 		Field(service.NewIntField("max_retries").
 			Description("Maximum number of retries on 429 Too Many Requests").
 			Default(10)).
-		Field(service.NewStringField("sobject").
-			Description("Salesforce SObject API name to write to (e.g., Account, Contact, MyObject__c)")).
-		Field(service.NewStringField("operation").
-			Description("Write operation: insert, update, upsert, or delete").
-			Default("upsert")).
-		Field(service.NewStringField("external_id_field").
-			Description("External ID field name used for upsert operations").
-			Default("")).
-		Field(service.NewStringField("mode").
-			Description("Write mode: realtime (sObject Collections API, ≤200 records/call) or bulk (Bulk API 2.0, async)").
-			Default(sinkModeRealtime)).
-		Field(service.NewBoolField("all_or_none").
-			Description("Realtime mode only: if true, the entire batch is rolled back if any record fails").
-			Default(false))
+		Field(topicMappingSpec)
 }
 
 func newSalesforceSinkOutput(conf *service.ParsedConfig, mgr *service.Resources) (*salesforceSinkOutput, error) {
@@ -198,43 +203,58 @@ func newSalesforceSinkOutput(conf *service.ParsedConfig, mgr *service.Resources)
 		return nil, err
 	}
 
-	sobject, err := conf.FieldString("sobject")
+	mappingConfs, err := conf.FieldObjectList("topic_mappings")
 	if err != nil {
 		return nil, err
 	}
-	if sobject == "" {
-		return nil, errors.New("sobject must not be empty")
+	if len(mappingConfs) == 0 {
+		return nil, errors.New("topic_mappings must not be empty")
 	}
 
-	operation, err := conf.FieldString("operation")
-	if err != nil {
-		return nil, err
-	}
-	switch operation {
-	case "insert", "update", "upsert", "delete":
-	default:
-		return nil, fmt.Errorf("invalid operation %q: must be insert, update, upsert, or delete", operation)
-	}
-
-	externalIDField, err := conf.FieldString("external_id_field")
-	if err != nil {
-		return nil, err
-	}
-	if operation == "upsert" && externalIDField == "" {
-		return nil, errors.New("external_id_field is required when operation is upsert")
-	}
-
-	mode, err := conf.FieldString("mode")
-	if err != nil {
-		return nil, err
-	}
-	if mode != sinkModeRealtime && mode != sinkModeBulk {
-		return nil, fmt.Errorf("invalid mode %q: must be realtime or bulk", mode)
-	}
-
-	allOrNone, err := conf.FieldBool("all_or_none")
-	if err != nil {
-		return nil, err
+	topicMappings := make(map[string]topicMapping, len(mappingConfs))
+	for _, mc := range mappingConfs {
+		topic, err := mc.FieldString("topic")
+		if err != nil {
+			return nil, err
+		}
+		sobject, err := mc.FieldString("sobject")
+		if err != nil {
+			return nil, err
+		}
+		operation, err := mc.FieldString("operation")
+		if err != nil {
+			return nil, err
+		}
+		switch operation {
+		case "insert", "update", "upsert", "delete":
+		default:
+			return nil, fmt.Errorf("topic %q: invalid operation %q: must be insert, update, upsert, or delete", topic, operation)
+		}
+		externalIDField, err := mc.FieldString("external_id_field")
+		if err != nil {
+			return nil, err
+		}
+		if operation == "upsert" && externalIDField == "" {
+			return nil, fmt.Errorf("topic %q: external_id_field is required when operation is upsert", topic)
+		}
+		mode, err := mc.FieldString("mode")
+		if err != nil {
+			return nil, err
+		}
+		if mode != sinkModeRealtime && mode != sinkModeBulk {
+			return nil, fmt.Errorf("topic %q: invalid mode %q: must be realtime or bulk", topic, mode)
+		}
+		allOrNone, err := mc.FieldBool("all_or_none")
+		if err != nil {
+			return nil, err
+		}
+		topicMappings[topic] = topicMapping{
+			sobject:         sobject,
+			operation:       operation,
+			externalIDField: externalIDField,
+			mode:            mode,
+			allOrNone:       allOrNone,
+		}
 	}
 
 	httpClient := &http.Client{Timeout: timeout}
@@ -247,15 +267,15 @@ func newSalesforceSinkOutput(conf *service.ParsedConfig, mgr *service.Resources)
 	}
 
 	out := &salesforceSinkOutput{
-		log:             mgr.Logger(),
-		client:          sfClient,
-		sobject:         sobject,
-		operation:       operation,
-		externalIDField: externalIDField,
-		mode:            mode,
-		allOrNone:       allOrNone,
+		log:            mgr.Logger(),
+		client:         sfClient,
+		topicMappings:  topicMappings,
+		writableFields: make(map[string]map[string]struct{}),
+		blockedFields:  make(map[string][]string),
 	}
-	out.log.Infof("salesforce_sink: initialised (sobject=%s operation=%s mode=%s)", sobject, operation, mode)
+	for topic, m := range topicMappings {
+		out.log.Infof("salesforce_sink: topic=%s → sobject=%s operation=%s mode=%s", topic, m.sobject, m.operation, m.mode)
+	}
 	return out, nil
 }
 
@@ -264,39 +284,109 @@ func (s *salesforceSinkOutput) Connect(ctx context.Context) error {
 	if err := s.client.RefreshToken(ctx); err != nil {
 		return fmt.Errorf("salesforce_sink: failed to authenticate: %w", err)
 	}
-	s.log.Infof("salesforce_sink: connected (sobject=%s operation=%s mode=%s)", s.sobject, s.operation, s.mode)
+	s.log.Infof("salesforce_sink: connected to Salesforce")
 	return nil
 }
 
-// WriteBatch dispatches to the configured mode.
+// WriteBatch groups messages by topic and dispatches each group to the correct SObject config.
 func (s *salesforceSinkOutput) WriteBatch(ctx context.Context, batch service.MessageBatch) error {
 	if len(batch) == 0 {
 		return nil
 	}
 
-	s.log.Infof("salesforce_sink: received batch of %d message(s) (sobject=%s)", len(batch), s.sobject)
+	// Group messages by topic.
+	groups := make(map[string][]map[string]any)
 	for i, msg := range batch {
-		raw, _ := msg.AsBytes()
-		s.log.Infof("salesforce_sink: message[%d]: %s", i, string(raw))
+		raw, err := msg.AsBytes()
+		if err != nil {
+			return fmt.Errorf("message[%d]: failed to read bytes: %w", i, err)
+		}
+		var envelope map[string]any
+		if err := json.Unmarshal(raw, &envelope); err != nil {
+			return fmt.Errorf("message[%d]: failed to parse JSON: %w", i, err)
+		}
+
+		topic, _ := envelope["topic"].(string)
+		s.log.Infof("salesforce_sink: message[%d] topic=%s data=%v", i, topic, envelope["data"])
+
+		// Unwrap "data" field as the actual Salesforce record.
+		record := envelope
+		if inner, ok := envelope["data"].(map[string]any); ok {
+			record = inner
+		}
+		groups[topic] = append(groups[topic], record)
 	}
 
-	records, err := batchToRecords(batch)
-	if err != nil {
-		return fmt.Errorf("salesforce_sink: failed to parse batch: %w", err)
+	// Write each group using its topic mapping.
+	for topic, records := range groups {
+		mapping, ok := s.topicMappings[topic]
+		if !ok {
+			s.log.Warnf("salesforce_sink: no mapping for topic %q, skipping %d record(s)", topic, len(records))
+			continue
+		}
+		s.log.Infof("salesforce_sink: writing %d record(s) to %s (mode=%s)", len(records), mapping.sobject, mapping.mode)
+		switch mapping.mode {
+		case sinkModeRealtime:
+			if err := s.writeRealtime(ctx, records, mapping); err != nil {
+				return err
+			}
+		case sinkModeBulk:
+			if err := s.writeBulk(ctx, records, mapping); err != nil {
+				return err
+			}
+		}
 	}
-
-	switch s.mode {
-	case sinkModeRealtime:
-		return s.writeRealtime(ctx, records)
-	case sinkModeBulk:
-		return s.writeBulk(ctx, records)
-	default:
-		return fmt.Errorf("salesforce_sink: unknown mode %q", s.mode)
-	}
+	return nil
 }
 
 func (*salesforceSinkOutput) Close(_ context.Context) error {
 	return nil
+}
+
+// getWritableFields returns the cached updateable field set for an SObject, fetching it on first call.
+func (s *salesforceSinkOutput) getWritableFields(ctx context.Context, sobject string) (map[string]struct{}, error) {
+	s.writableFieldsMu.RLock()
+	fields, ok := s.writableFields[sobject]
+	s.writableFieldsMu.RUnlock()
+	if ok {
+		return fields, nil
+	}
+
+	fields, err := s.client.DescribeWritableFields(ctx, sobject)
+	if err != nil {
+		return nil, err
+	}
+
+	s.writableFieldsMu.Lock()
+	s.writableFields[sobject] = fields
+	s.writableFieldsMu.Unlock()
+
+	s.log.Infof("salesforce_sink: %s has %d updateable fields", sobject, len(fields))
+	return fields, nil
+}
+
+// blockFields removes fields from the writable cache for sobject and logs all blocked fields so far.
+// Called when Salesforce rejects fields with INVALID_FIELD_FOR_INSERT_UPDATE.
+func (s *salesforceSinkOutput) blockFields(sobject string, newBlocked []string) {
+	s.writableFieldsMu.Lock()
+	defer s.writableFieldsMu.Unlock()
+	fields := s.writableFields[sobject]
+	for _, f := range newBlocked {
+		delete(fields, f)
+		s.blockedFields[sobject] = append(s.blockedFields[sobject], f)
+	}
+	s.log.Warnf("salesforce_sink: %s: all profile-blocked fields (%d): %v", sobject, len(s.blockedFields[sobject]), s.blockedFields[sobject])
+}
+
+// filterRecord returns a copy of rec containing only updateable fields.
+func filterRecord(rec map[string]any, writable map[string]struct{}) map[string]any {
+	out := make(map[string]any, len(writable))
+	for k, v := range rec {
+		if _, ok := writable[k]; ok {
+			out[k] = v
+		}
+	}
+	return out
 }
 
 // ---------------------------------------------------------------------------
@@ -316,46 +406,44 @@ type salesforceAPIError struct {
 	Fields     []string `json:"fields"`
 }
 
-func (s *salesforceSinkOutput) writeRealtime(ctx context.Context, records []map[string]any) error {
-	// Chunk into groups of realtimeMaxChunkSize
+func (s *salesforceSinkOutput) writeRealtime(ctx context.Context, records []map[string]any, m topicMapping) error {
 	for start := 0; start < len(records); start += realtimeMaxChunkSize {
 		end := start + realtimeMaxChunkSize
 		if end > len(records) {
 			end = len(records)
 		}
-		if err := s.writeRealtimeChunk(ctx, records[start:end]); err != nil {
+		if err := s.writeRealtimeChunk(ctx, records[start:end], m); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (s *salesforceSinkOutput) writeRealtimeChunk(ctx context.Context, records []map[string]any) error {
-	// Inject the `attributes` wrapper required by sObject Collections
+func (s *salesforceSinkOutput) writeRealtimeChunk(ctx context.Context, records []map[string]any, m topicMapping) error {
+	writable, err := s.getWritableFields(ctx, m.sobject)
+	if err != nil {
+		return fmt.Errorf("salesforce_sink: could not describe %s: %w", m.sobject, err)
+	}
+
 	wrapped := make([]map[string]any, len(records))
 	for i, rec := range records {
-		r := make(map[string]any, len(rec)+1)
-		for k, v := range rec {
-			r[k] = v
-		}
-		r["attributes"] = map[string]string{"type": s.sobject}
+		r := filterRecord(rec, writable)
+		r["attributes"] = map[string]string{"type": m.sobject}
 		wrapped[i] = r
 	}
 
 	payload := map[string]any{
-		"allOrNone": s.allOrNone,
+		"allOrNone": m.allOrNone,
 		"records":   wrapped,
 	}
-
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("failed to marshal collections payload: %w", err)
 	}
 
-	// upsert and update use PATCH; insert uses POST; delete uses POST with _HttpMethod=DELETE override.
-	path := s.realtimePath()
+	path := realtimePath(m, s.client.APIVersion())
 	var respBody []byte
-	switch s.operation {
+	switch m.operation {
 	case "upsert", "update":
 		respBody, err = s.client.PatchJSON(ctx, path, body)
 	default:
@@ -365,10 +453,23 @@ func (s *salesforceSinkOutput) writeRealtimeChunk(ctx context.Context, records [
 		return fmt.Errorf("salesforce_sink realtime write failed: %w", err)
 	}
 
-	// Parse per-record results
 	var results []collectionsResponse
 	if err := json.Unmarshal(respBody, &results); err != nil {
 		return fmt.Errorf("salesforce_sink: failed to parse collections response: %w", err)
+	}
+
+	// Collect profile-blocked fields reported by Salesforce and retry once with them removed.
+	var blocked []string
+	for _, res := range results {
+		for _, e := range res.Errors {
+			if e.StatusCode == "INVALID_FIELD_FOR_INSERT_UPDATE" {
+				blocked = append(blocked, e.Fields...)
+			}
+		}
+	}
+	if len(blocked) > 0 {
+		s.blockFields(m.sobject, blocked)
+		return s.writeRealtimeChunk(ctx, records, m)
 	}
 
 	var errs []string
@@ -385,12 +486,11 @@ func (s *salesforceSinkOutput) writeRealtimeChunk(ctx context.Context, records [
 	return nil
 }
 
-// realtimePath returns the REST API path for the configured operation.
-func (s *salesforceSinkOutput) realtimePath() string {
-	base := "/services/data/" + s.client.APIVersion() + "/composite/sobjects"
-	switch s.operation {
+func realtimePath(m topicMapping, apiVersion string) string {
+	base := "/services/data/" + apiVersion + "/composite/sobjects"
+	switch m.operation {
 	case "upsert":
-		return base + "/" + s.sobject + "/" + s.externalIDField
+		return base + "/" + m.sobject + "/" + m.externalIDField
 	case "delete":
 		return base + "?_HttpMethod=DELETE"
 	default:
@@ -411,23 +511,33 @@ type bulkJobRequest struct {
 }
 
 type bulkJobResponse struct {
-	ID    string `json:"id"`
-	State string `json:"state"`
+	ID                   string `json:"id"`
+	State                string `json:"state"`
+	NumberRecordsFailed  int    `json:"numberRecordsFailed"`
+	NumberRecordsProcessed int  `json:"numberRecordsProcessed"`
 }
 
-func (s *salesforceSinkOutput) writeBulk(ctx context.Context, records []map[string]any) error {
+func (s *salesforceSinkOutput) writeBulk(ctx context.Context, records []map[string]any, m topicMapping) error {
 	if len(records) == 0 {
 		return nil
 	}
 
-	// 1. Create job
-	jobID, err := s.bulkCreateJob(ctx)
+	writable, err := s.getWritableFields(ctx, m.sobject)
+	if err != nil {
+		return fmt.Errorf("salesforce_sink: could not describe %s: %w", m.sobject, err)
+	}
+	filtered := make([]map[string]any, len(records))
+	for i, rec := range records {
+		filtered[i] = filterRecord(rec, writable)
+	}
+	records = filtered
+
+	jobID, err := s.bulkCreateJob(ctx, m)
 	if err != nil {
 		return fmt.Errorf("salesforce_sink bulk: create job: %w", err)
 	}
 	s.log.Infof("salesforce_sink bulk: created job %s", jobID)
 
-	// 2. Upload CSV
 	csvData, err := recordsToCSV(records)
 	if err != nil {
 		return fmt.Errorf("salesforce_sink bulk: build CSV: %w", err)
@@ -436,12 +546,10 @@ func (s *salesforceSinkOutput) writeBulk(ctx context.Context, records []map[stri
 		return fmt.Errorf("salesforce_sink bulk: upload CSV: %w", err)
 	}
 
-	// 3. Close job (signals Salesforce to start processing)
 	if err := s.bulkCloseJob(ctx, jobID); err != nil {
 		return fmt.Errorf("salesforce_sink bulk: close job: %w", err)
 	}
 
-	// 4. Poll until complete
 	if err := s.bulkPollUntilDone(ctx, jobID); err != nil {
 		return fmt.Errorf("salesforce_sink bulk: poll: %w", err)
 	}
@@ -450,15 +558,15 @@ func (s *salesforceSinkOutput) writeBulk(ctx context.Context, records []map[stri
 	return nil
 }
 
-func (s *salesforceSinkOutput) bulkCreateJob(ctx context.Context) (string, error) {
+func (s *salesforceSinkOutput) bulkCreateJob(ctx context.Context, m topicMapping) (string, error) {
 	req := bulkJobRequest{
-		Object:      s.sobject,
-		Operation:   s.operation,
+		Object:      m.sobject,
+		Operation:   m.operation,
 		ContentType: "CSV",
 		LineEnding:  "LF",
 	}
-	if s.operation == "upsert" {
-		req.ExternalIDFieldName = s.externalIDField
+	if m.operation == "upsert" {
+		req.ExternalIDFieldName = m.externalIDField
 	}
 
 	body, err := json.Marshal(req)
@@ -492,6 +600,40 @@ func (s *salesforceSinkOutput) bulkCloseJob(ctx context.Context, jobID string) e
 	return err
 }
 
+func (s *salesforceSinkOutput) bulkFetchFailedResults(ctx context.Context, jobID string, failed, processed int) error {
+	path := "/services/data/" + s.client.APIVersion() + "/jobs/ingest/" + jobID + "/failedResults"
+	body, err := s.client.GetJSON(ctx, path)
+	if err != nil {
+		return fmt.Errorf("bulk job %s: %d/%d record(s) failed (could not fetch details: %w)", jobID, failed, processed, err)
+	}
+
+	r := csv.NewReader(strings.NewReader(string(body)))
+	rows, err := r.ReadAll()
+	if err != nil || len(rows) < 2 {
+		return fmt.Errorf("bulk job %s: %d/%d record(s) failed (could not parse failed results)", jobID, failed, processed)
+	}
+
+	// First row is headers; sf__Error is always present in the Bulk API response.
+	headers := rows[0]
+	errorIdx := -1
+	for i, h := range headers {
+		if h == "sf__Error" {
+			errorIdx = i
+			break
+		}
+	}
+
+	var errs []string
+	for i, row := range rows[1:] {
+		msg := "unknown error"
+		if errorIdx >= 0 && errorIdx < len(row) {
+			msg = row[errorIdx]
+		}
+		errs = append(errs, fmt.Sprintf("record[%d]: %s", i, msg))
+	}
+	return fmt.Errorf("salesforce_sink bulk: job %s: %d/%d record(s) failed: %s", jobID, failed, processed, strings.Join(errs, "; "))
+}
+
 func (s *salesforceSinkOutput) bulkPollUntilDone(ctx context.Context, jobID string) error {
 	path := "/services/data/" + s.client.APIVersion() + "/jobs/ingest/" + jobID
 
@@ -514,6 +656,9 @@ func (s *salesforceSinkOutput) bulkPollUntilDone(ctx context.Context, jobID stri
 
 		switch job.State {
 		case "JobComplete":
+			if job.NumberRecordsFailed > 0 {
+				return s.bulkFetchFailedResults(ctx, jobID, job.NumberRecordsFailed, job.NumberRecordsProcessed)
+			}
 			return nil
 		case "Failed", "Aborted":
 			return fmt.Errorf("bulk job %s ended with state %q", jobID, job.State)
@@ -527,32 +672,12 @@ func (s *salesforceSinkOutput) bulkPollUntilDone(ctx context.Context, jobID stri
 // Helpers
 // ---------------------------------------------------------------------------
 
-// batchToRecords converts a MessageBatch into a slice of JSON maps.
-func batchToRecords(batch service.MessageBatch) ([]map[string]any, error) {
-	records := make([]map[string]any, 0, len(batch))
-	for i, msg := range batch {
-		raw, err := msg.AsBytes()
-		if err != nil {
-			return nil, fmt.Errorf("message[%d]: failed to read bytes: %w", i, err)
-		}
-		var rec map[string]any
-		if err := json.Unmarshal(raw, &rec); err != nil {
-			return nil, fmt.Errorf("message[%d]: failed to parse JSON: %w", i, err)
-		}
-		records = append(records, rec)
-	}
-	return records, nil
-}
-
 // recordsToCSV serialises a slice of maps into a CSV byte slice.
-// All keys from the first record are used as headers; missing fields in subsequent
-// records are left empty.
 func recordsToCSV(records []map[string]any) ([]byte, error) {
 	if len(records) == 0 {
 		return nil, nil
 	}
 
-	// Collect ordered headers from the first record
 	headers := make([]string, 0, len(records[0]))
 	for k := range records[0] {
 		headers = append(headers, k)
@@ -576,8 +701,5 @@ func recordsToCSV(records []map[string]any) ([]byte, error) {
 		}
 	}
 	w.Flush()
-	if err := w.Error(); err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
+	return buf.Bytes(), w.Error()
 }

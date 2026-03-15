@@ -202,7 +202,10 @@ pipeline:
 			Default(1)).
 		Field(service.NewIntField("query_batch_size").
 			Description("Number of records Salesforce returns per query page (200–2000). Lower values reduce individual response size and avoid timeouts on wide SObjects.").
-			Default(2000))
+			Default(2000)).
+		Field(service.NewStringListField("rest_objects").
+			Description("Limit the REST snapshot to only these SObject types (e.g., [\"Account\", \"Contact\"]). When empty, all queryable SObjects are fetched.").
+			Default([]any{}))
 }
 
 func newSalesforceProcessor(conf *service.ParsedConfig, mgr *service.Resources) (*salesforceProcessor, error) {
@@ -328,6 +331,11 @@ func newSalesforceProcessor(conf *service.ParsedConfig, mgr *service.Resources) 
 		return nil, err
 	}
 
+	restObjects, err := conf.FieldStringList("rest_objects")
+	if err != nil {
+		return nil, err
+	}
+
 	// Build the CDC topic name: pubsub_topic takes priority, otherwise derive from cdc_objects
 	cdcTopicName := pubsubTopic
 	if cdcTopicName == "" {
@@ -339,6 +347,10 @@ func newSalesforceProcessor(conf *service.ParsedConfig, mgr *service.Resources) 
 	salesforceHttp, err := salesforcehttp.NewClient(orgURL, clientID, clientSecret, apiVersion, maxRetries, queryBatchSize, httpClient, mgr.Logger(), mgr.Metrics())
 	if err != nil {
 		return nil, err
+	}
+
+	if len(restObjects) > 0 {
+		salesforceHttp.SetRestObjects(restObjects)
 	}
 
 	return &salesforceProcessor{

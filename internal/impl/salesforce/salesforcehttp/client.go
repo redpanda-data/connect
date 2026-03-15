@@ -307,6 +307,9 @@ type Client struct {
 
 	// SObjects whose REST query URL is too large — fetch via GraphQL instead
 	graphqlFallbackObjects map[string]struct{}
+
+	// restObjects, when non-empty, limits the REST snapshot to only these SObjects.
+	restObjects map[string]struct{}
 }
 
 func (s *Client) getBearerToken() string {
@@ -334,7 +337,17 @@ func NewClient(orgURL, clientID, clientSecret, apiVersion string, maxRetries, qu
 		queryBatchSize:         queryBatchSize,
 		unsupportedSObjects:    make(map[string]struct{}),
 		graphqlFallbackObjects: make(map[string]struct{}),
+		restObjects:            make(map[string]struct{}),
 	}, nil
+}
+
+// SetRestObjects limits the REST snapshot to only the named SObjects.
+// An empty slice removes the filter (all SObjects are fetched).
+func (s *Client) SetRestObjects(names []string) {
+	s.restObjects = make(map[string]struct{}, len(names))
+	for _, n := range names {
+		s.restObjects[n] = struct{}{}
+	}
 }
 
 // BearerToken returns the current OAuth bearer token.
@@ -808,6 +821,11 @@ func (s *Client) loadSObjectList(ctx context.Context) error {
 		if skipList[sobj.Name] || !sobj.Queryable {
 			continue
 		}
+		if len(s.restObjects) > 0 {
+			if _, ok := s.restObjects[sobj.Name]; !ok {
+				continue
+			}
+		}
 		candidates = append(candidates, candidate{i, sobj.Name})
 	}
 
@@ -882,6 +900,25 @@ func extractFieldNames(describeJSON []byte) ([]string, error) {
 		fields = append(fields, f.Name)
 	}
 
+	return fields, nil
+}
+
+// DescribeWritableFields returns the set of field names that are updateable for the given SObject.
+func (s *Client) DescribeWritableFields(ctx context.Context, sobject string) (map[string]struct{}, error) {
+	raw, err := s.GetSObjectResource(ctx, sobject)
+	if err != nil {
+		return nil, fmt.Errorf("describe %s: %w", sobject, err)
+	}
+	var dr DescribeResult
+	if err := json.Unmarshal(raw, &dr); err != nil {
+		return nil, fmt.Errorf("describe %s: parse: %w", sobject, err)
+	}
+	fields := make(map[string]struct{}, len(dr.Fields))
+	for _, f := range dr.Fields {
+		if f.Updateable {
+			fields[f.Name] = struct{}{}
+		}
+	}
 	return fields, nil
 }
 

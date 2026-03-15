@@ -50,7 +50,8 @@ type SObject struct {
 // DescribeResult sObject result
 type DescribeResult struct {
 	Fields []struct {
-		Name string `json:"name"`
+		Name       string `json:"name"`
+		Updateable bool   `json:"updateable"`
 	} `json:"fields"`
 }
 
