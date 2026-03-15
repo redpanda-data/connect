@@ -10,7 +10,6 @@ package logminer
 
 import (
 	"fmt"
-	"sort"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/impl/oracledb/logminer/sqlredo"
@@ -42,7 +41,7 @@ type LobAccumulator struct {
 	Fragments []LobFragment
 }
 
-// AddFragment appends a fragment. Fragments need not be added in order.
+// AddFragment appends a fragment.
 func (a *LobAccumulator) AddFragment(offset int64, data []byte) {
 	a.Fragments = append(a.Fragments, LobFragment{Offset: offset, Data: data})
 }
@@ -57,10 +56,6 @@ func (a *LobAccumulator) Assemble() any {
 	if len(a.Fragments) == 0 {
 		return nil
 	}
-
-	sort.Slice(a.Fragments, func(i, j int) bool {
-		return a.Fragments[i].Offset < a.Fragments[j].Offset
-	})
 
 	// Determine total length needed.
 	totalLen := int64(0)
