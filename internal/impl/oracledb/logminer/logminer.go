@@ -320,7 +320,7 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 		// not as HEXTORAW. Only BLOB uses binary/hex encoding.
 		writeInfo, err := sqlredo.ParseLobWrite(redoEvent.SQLRedo.String, acc.IsBinary)
 		if err != nil {
-			lm.log.Warnf("Failed to parse LOB_WRITE SQL (scn=%d, txn=%s): %v\nSQL (len=%d): %s", redoEvent.SCN, redoEvent.TransactionID, err, len(redoEvent.SQLRedo.String), redoEvent.SQLRedo.String)
+			lm.log.Warnf("Failed to parse LOB_WRITE SQL (scn=%d, txn=%s): %v\nSQL: %.500s", redoEvent.SCN, redoEvent.TransactionID, err, redoEvent.SQLRedo.String)
 			return nil
 		}
 		acc.AddFragment(writeInfo.Offset, writeInfo.Data)

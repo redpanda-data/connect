@@ -98,7 +98,7 @@ func TestMergeLOBsCLOBIntoInsert(t *testing.T) {
 		Schema:   "S",
 		Table:    "T",
 		Column:   "CONTENT",
-		IsBinary: false,
+
 		PKValues: map[string]any{"ID": "1"},
 	}
 	acc.AddFragment(1, []byte("Hello World"))
@@ -151,7 +151,7 @@ func TestMergeLOBsNoMatchDifferentTable(t *testing.T) {
 		Schema:   "S",
 		Table:    "OTHER",
 		Column:   "CONTENT",
-		IsBinary: false,
+
 		PKValues: map[string]any{"ID": "1"},
 	}
 	acc.AddFragment(1, []byte("New Value"))
@@ -177,7 +177,7 @@ func TestMergeLOBsNoMatchDifferentPK(t *testing.T) {
 		Schema:   "S",
 		Table:    "T",
 		Column:   "CONTENT",
-		IsBinary: false,
+
 		PKValues: map[string]any{"ID": "99"},
 	}
 	acc.AddFragment(1, []byte("New Value"))
@@ -208,7 +208,7 @@ func TestMergeLOBsMostRecentEventWins(t *testing.T) {
 		Schema:   "S",
 		Table:    "T",
 		Column:   "CONTENT",
-		IsBinary: false,
+
 		PKValues: map[string]any{"ID": "1"},
 	}
 	acc.AddFragment(1, []byte("LOB Value"))
@@ -235,7 +235,7 @@ func TestMergeLOBsEmptyAccumulatorSkipped(t *testing.T) {
 		Schema:   "S",
 		Table:    "T",
 		Column:   "CONTENT",
-		IsBinary: false,
+
 		PKValues: map[string]any{"ID": "1"},
 	}
 	// No fragments added
