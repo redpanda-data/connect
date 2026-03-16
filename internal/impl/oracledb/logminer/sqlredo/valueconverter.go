@@ -16,7 +16,7 @@ import (
 )
 
 // OracleValueConverter handles conversion of Oracle function calls and special values
-// to their proper Go types. This mirrors Debezium's OracleValueConverters.java and TimestampUtils.java
+// to their proper Go types.
 type OracleValueConverter struct {
 	timezone *time.Location
 }
