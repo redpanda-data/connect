@@ -71,6 +71,7 @@ This input adds the following metadata fields to each message:
 - table_name: Name of the table that the message originated from.
 - operation: Type of operation that generated the message: "read", "delete", "insert", or "update". "read" is from messages that are read in the initial snapshot phase.
 - scn: the System Change Number in Oracle.
+- schema: The table schema, for use with schema-aware downstream processors such as ` + "`schema_registry_encode`" + `. When new columns are detected in CDC events, the schema is automatically refreshed from the Oracle catalog. Dropped columns are reflected after a connector restart.
 
 == Permissions
 
@@ -329,6 +330,17 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (err error) {
 	if userTables, err = replication.VerifyUserTables(ctx, o.db, o.cfg.TablesFilter, o.log); err != nil {
 		return fmt.Errorf("verifying user defined tables: %w", err)
 	}
+
+	// Pre-fetch schemas for all monitored tables. A fresh cache is created on
+	// every Connect() so reconnections always reflect the current catalog state.
+	schemas := newSchemaCache(o.log)
+	for _, t := range userTables {
+		if _, fetchErr := schemas.schemaForEvent(ctx, o.db, t, nil); fetchErr != nil {
+			o.log.Warnf("Failed to pre-fetch schema for %s.%s: %v", t.Schema, t.Name, fetchErr)
+		}
+	}
+	o.publisher.schemas = schemas
+	o.publisher.db = o.db
 
 	if cachedSCN, err = o.getCachedSCN(ctx); err != nil {
 		if errors.Is(err, service.ErrKeyNotFound) {

@@ -9,6 +9,8 @@
 package sqlredo
 
 import (
+	"encoding/json"
+	"math"
 	"regexp"
 	"strconv"
 	"strings"
@@ -70,6 +72,16 @@ func (c *OracleValueConverter) ConvertValue(value any) any {
 	}
 	if emptyLobPattern.MatchString(str) {
 		return c.convertLobValue(str)
+	}
+
+	// Bare numeric literal: try integer first, then floating-point.
+	// This is only safe when called for bare (unquoted) SQL values —
+	// quoted string values must not reach this path.
+	if n, err := strconv.ParseInt(str, 10, 64); err == nil {
+		return n
+	}
+	if f, err := strconv.ParseFloat(str, 64); err == nil && !math.IsNaN(f) && !math.IsInf(f, 0) {
+		return json.Number(str)
 	}
 
 	return value

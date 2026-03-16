@@ -99,13 +99,25 @@ func (op OpType) String() string {
 	}
 }
 
+// ColumnMeta holds lightweight column type metadata for schema construction.
+// This carries type information from the snapshot phase (where sql.ColumnType
+// is available) to the batcher (where schema.Common objects are built).
+type ColumnMeta struct {
+	Name           string
+	TypeName       string
+	Precision      int64
+	Scale          int64
+	HasDecimalSize bool
+}
+
 // MessageEvent represents a single change from Table's change table in the database.
 type MessageEvent struct {
-	SCN           SCN       `json:"start_scn"`
-	CheckpointSCN SCN       `json:"-"`
-	Operation     OpType    `json:"operation"`
-	Schema        string    `json:"schema"`
-	Table         string    `json:"table"`
-	Data          any       `json:"data"`
-	Timestamp     time.Time `json:"timestamp"`
+	SCN           SCN          `json:"start_scn"`
+	CheckpointSCN SCN          `json:"-"`
+	Operation     OpType       `json:"operation"`
+	Schema        string       `json:"schema"`
+	Table         string       `json:"table"`
+	Data          any          `json:"data"`
+	Timestamp     time.Time    `json:"timestamp"`
+	ColumnMeta    []ColumnMeta `json:"-"`
 }

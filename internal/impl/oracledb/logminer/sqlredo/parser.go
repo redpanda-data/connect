@@ -66,17 +66,13 @@ func (p Parser) RedoEventToDMLEvent(redoEvent *RedoEvent) (DMLEvent, error) {
 		return DMLEvent{}, fmt.Errorf("parsing sql from redo log: %w", err)
 	}
 
-	// Extract values from AST
-	newValues, _, err := ExtractValuesFromAST(stmt)
+	// Extract values from AST, applying type conversion for bare (unquoted) values.
+	newValues, _, err := ExtractValuesFromAST(stmt, &p.valueConverter)
 	if err != nil {
 		return DMLEvent{}, fmt.Errorf("extracting values from AST: %w", err)
 	}
 
-	event.Data = make(map[string]any, len(newValues))
-	for k, v := range newValues {
-		// Convert Oracle SQL types (TO_DATE, TO_TIMESTAMP, etc.) to their Go equivalents
-		event.Data[k] = p.valueConverter.ConvertValue(v)
-	}
+	event.Data = newValues
 
 	return event, nil
 }
@@ -96,23 +92,27 @@ func ParseSQLCommand(sql string) (sqlparser.Statement, error) {
 
 // ExtractValuesFromAST extracts column->value mappings from a parsed statement.
 // Returns newValues (for INSERT/UPDATE) and oldValues (for UPDATE/DELETE WHERE clauses).
-func ExtractValuesFromAST(stmt sqlparser.Statement) (newValues, oldValues map[string]any, err error) {
+// When converter is non-nil, bare (unquoted) values are passed through ConvertValue
+// to produce typed Go values (e.g. numeric literals become int64 or json.Number).
+// Quoted string literals are always returned as plain strings without conversion.
+func ExtractValuesFromAST(stmt sqlparser.Statement, converter *OracleValueConverter) (newValues, oldValues map[string]any, err error) {
 	switch s := stmt.(type) {
 	case *sqlparser.Insert:
-		newValues = extractInsertValues(s)
+		newValues = extractInsertValues(s, converter)
 	case *sqlparser.Update:
-		newValues = extractUpdateSetValues(s)
-		oldValues = extractWhereValues(s.Where)
+		newValues = extractUpdateSetValues(s, converter)
+		oldValues = extractWhereValues(s.Where, converter)
 	case *sqlparser.Delete:
-		oldValues = extractWhereValues(s.Where)
+		oldValues = extractWhereValues(s.Where, converter)
 	default:
 		return nil, nil, fmt.Errorf("unsupported statement type: %T", stmt)
 	}
 	return newValues, oldValues, nil
 }
 
-// extractInsertValues extracts column-value pairs from an INSERT statement
-func extractInsertValues(stmt *sqlparser.Insert) map[string]any {
+// extractInsertValues extracts column-value pairs from an INSERT statement.
+// When converter is non-nil, bare values are passed through ConvertValue.
+func extractInsertValues(stmt *sqlparser.Insert, converter *OracleValueConverter) map[string]any {
 	result := make(map[string]any)
 
 	// Get column names
@@ -126,10 +126,8 @@ func extractInsertValues(stmt *sqlparser.Insert) map[string]any {
 		row := values[0]
 		for i, val := range row {
 			if i < len(columns) {
-				// Convert the value expression to a string representation
 				valStr := sqlparser.String(val)
-				// Strip quotes from string literals, keep functions/NULL as-is
-				if parsedVal := stripQuotesFromValue(valStr); parsedVal != nil {
+				if parsedVal := processValue(valStr, converter); parsedVal != nil {
 					result[columns[i]] = parsedVal
 				}
 			}
@@ -139,15 +137,15 @@ func extractInsertValues(stmt *sqlparser.Insert) map[string]any {
 	return result
 }
 
-// extractUpdateSetValues extracts column-value pairs from UPDATE SET clause
-func extractUpdateSetValues(stmt *sqlparser.Update) map[string]any {
+// extractUpdateSetValues extracts column-value pairs from UPDATE SET clause.
+// When converter is non-nil, bare values are passed through ConvertValue.
+func extractUpdateSetValues(stmt *sqlparser.Update, converter *OracleValueConverter) map[string]any {
 	result := make(map[string]any)
 
 	for _, expr := range stmt.Exprs {
 		colName := sqlparser.String(expr.Name)
 		valStr := sqlparser.String(expr.Expr)
-		// Strip quotes from string literals, keep functions/NULL as-is
-		if parsedVal := stripQuotesFromValue(valStr); parsedVal != nil {
+		if parsedVal := processValue(valStr, converter); parsedVal != nil {
 			result[colName] = parsedVal
 		}
 	}
@@ -155,40 +153,36 @@ func extractUpdateSetValues(stmt *sqlparser.Update) map[string]any {
 	return result
 }
 
-// extractWhereValues extracts column-value pairs from WHERE clause
+// extractWhereValues extracts column-value pairs from WHERE clause.
 // Handles simple equality conditions like: WHERE col1 = 'val1' AND col2 = 'val2'
-func extractWhereValues(where *sqlparser.Where) map[string]any {
+// When converter is non-nil, bare values are passed through ConvertValue.
+func extractWhereValues(where *sqlparser.Where, converter *OracleValueConverter) map[string]any {
 	if where == nil {
 		return make(map[string]any)
 	}
 
 	result := make(map[string]any)
-	extractWhereConditions(where.Expr, result)
+	extractWhereConditions(where.Expr, result, converter)
 	return result
 }
 
 // extractWhereConditions recursively extracts conditions from WHERE expression
-func extractWhereConditions(expr sqlparser.Expr, result map[string]any) {
+func extractWhereConditions(expr sqlparser.Expr, result map[string]any, converter *OracleValueConverter) {
 	switch e := expr.(type) {
 	case *sqlparser.AndExpr:
-		// Handle AND: recursively process left and right
-		extractWhereConditions(e.Left, result)
-		extractWhereConditions(e.Right, result)
+		extractWhereConditions(e.Left, result, converter)
+		extractWhereConditions(e.Right, result, converter)
 
 	case *sqlparser.OrExpr:
-		// Handle OR: recursively process left and right
-		extractWhereConditions(e.Left, result)
-		extractWhereConditions(e.Right, result)
+		extractWhereConditions(e.Left, result, converter)
+		extractWhereConditions(e.Right, result, converter)
 
 	case *sqlparser.ComparisonExpr:
-		// Handle comparison: col = 'value'
 		if e.Operator == "=" {
 			if colName, ok := e.Left.(*sqlparser.ColName); ok {
 				colStr := sqlparser.String(colName)
 				valStr := sqlparser.String(e.Right)
-				// Strip quotes from string literals, keep functions/NULL as-is
-				parsedVal := stripQuotesFromValue(valStr)
-				if parsedVal != nil {
+				if parsedVal := processValue(valStr, converter); parsedVal != nil {
 					result[colStr] = parsedVal
 				}
 			}
@@ -199,10 +193,11 @@ func extractWhereConditions(expr sqlparser.Expr, result map[string]any) {
 	}
 }
 
-// stripQuotesFromValue removes quotes from string literals and handles escaped quotes.
-// Returns nil for NULL values (to exclude them from the map, matching old parser behavior).
-// Keeps function calls and other non-string values as-is.
-func stripQuotesFromValue(valStr string) any {
+// processValue handles a SQL value string from the AST.
+// Returns nil for NULL values (to exclude them from the map).
+// For quoted string literals: strips quotes and returns as plain string (no conversion).
+// For bare values (function calls, numeric literals): passes through converter if non-nil.
+func processValue(valStr string, converter *OracleValueConverter) any {
 	valStr = strings.TrimSpace(valStr)
 
 	// Handle NULL - return nil to exclude from map
@@ -210,19 +205,20 @@ func stripQuotesFromValue(valStr string) any {
 		return nil
 	}
 
-	// If it's a quoted string literal, strip quotes and handle escapes
+	// Quoted string literal → strip quotes, return as plain string without conversion.
+	// This preserves VARCHAR values like '12345' as string("12345").
 	if len(valStr) >= 2 && valStr[0] == '\'' && valStr[len(valStr)-1] == '\'' {
-		// Strip outer quotes
 		unquoted := valStr[1 : len(valStr)-1]
-		// Handle escaped single quotes: \' -> ' and '' -> '
 		unquoted = strings.ReplaceAll(unquoted, "\\'", "'")
 		unquoted = strings.ReplaceAll(unquoted, "''", "'")
-		// Handle escaped double quotes: \" -> "
 		unquoted = strings.ReplaceAll(unquoted, "\\\"", "\"")
 		return unquoted
 	}
 
-	// Not a quoted string - return as-is (function calls, etc.)
+	// Bare value (function call, numeric literal) → convert if converter available.
+	if converter != nil {
+		return converter.ConvertValue(valStr)
+	}
 	return valStr
 }
 
