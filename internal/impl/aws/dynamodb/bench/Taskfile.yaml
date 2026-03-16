@@ -1,0 +1,53 @@
+version: '3'
+
+vars:
+  ENDPOINT: http://localhost:8000
+  REGION: us-east-1
+
+env:
+  AWS_ACCESS_KEY_ID: xxxxx
+  AWS_SECRET_ACCESS_KEY: xxxxx
+  AWS_DEFAULT_REGION: "{{.REGION}}"
+
+tasks:
+  run:
+    desc: Start DynamoDB, seed all tables, and run the benchmark
+    cmds:
+      - task: dynamodb:up
+      - cmd: sleep 2
+      - task: create
+      - task: seed
+      - go run ../../../../../cmd/redpanda-connect/main.go run ./benchmark_config.yaml
+
+  seed:
+    desc: Seed all tables in parallel
+    deps: [data:users, data:products, data:orders]
+
+  dynamodb:up:
+    cmd: |
+      docker run -d \
+      --name dynamodb-bench \
+      -p 8000:8000 \
+      amazon/dynamodb-local:latest \
+      -jar DynamoDBLocal.jar -sharedDb -inMemory
+
+  dynamodb:down:
+    cmd: docker rm -fv dynamodb-bench
+
+  dynamodb:logs:
+    cmd: docker logs -f dynamodb-bench
+
+  create:
+    cmd: go run . setup --endpoint {{.ENDPOINT}} --region {{.REGION}}
+
+  data:users:
+    cmd: go run . seed --table bench-users --endpoint {{.ENDPOINT}} --region {{.REGION}}
+
+  data:products:
+    cmd: go run . seed --table bench-products --endpoint {{.ENDPOINT}} --region {{.REGION}}
+
+  data:orders:
+    cmd: go run . seed --table bench-orders --endpoint {{.ENDPOINT}} --region {{.REGION}}
+
+  drop-checkpoint:
+    cmd: go run . drop-checkpoint --endpoint {{.ENDPOINT}} --region {{.REGION}}
