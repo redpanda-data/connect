@@ -335,7 +335,7 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (err error) {
 	// every Connect() so reconnections always reflect the current catalog state.
 	schemas := newSchemaCache(o.log)
 	for _, t := range userTables {
-		if _, fetchErr := schemas.schemaForEvent(ctx, o.db, t, nil); fetchErr != nil {
+		if _, _, fetchErr := schemas.schemaForEvent(ctx, o.db, t, nil); fetchErr != nil {
 			o.log.Warnf("Failed to pre-fetch schema for %s.%s: %v", t.Schema, t.Name, fetchErr)
 		}
 	}

@@ -377,7 +377,8 @@ func prepSnapshotScannerAndMappers(cols []*sql.ColumnType) (values []any, mapper
 		case "RAW", "LONG RAW", "BLOB":
 			val = new(sql.Null[[]byte])
 			mapper = snapshotValueMapper[[]byte]
-		case "DATE", "TIMESTAMP", "TIMESTAMP WITH TIME ZONE", "TIMESTAMP WITH LOCAL TIME ZONE":
+		case "DATE", "TIMESTAMP", "TIMESTAMP WITH TIME ZONE", "TIMESTAMP WITH LOCAL TIME ZONE",
+			"TimeStampTZ", "TimeStampDTY", "TimeStampTZ_DTY", "TimeStampLTZ_DTY", "TimeStampeLTZ", "TIMESTAMPTZ":
 			val = new(sql.NullTime)
 			mapper = func(v any) (any, error) {
 				s, ok := v.(*sql.NullTime)
@@ -404,7 +405,7 @@ func prepSnapshotScannerAndMappers(cols []*sql.ColumnType) (values []any, mapper
 					return json.Number(s), nil
 				})
 			}
-		case "BINARY_FLOAT", "BINARY_DOUBLE":
+		case "BINARY_FLOAT", "IBFloat", "BFloat", "BINARY_DOUBLE", "IBDouble", "BDouble":
 			val = new(sql.Null[float64])
 			mapper = snapshotValueMapper[float64]
 		case "CLOB", "NCLOB", "LONG":

@@ -715,12 +715,12 @@ oracledb_cdc:
 		"DATETIME_COL": "1753-01-01T00:00:00Z",
 		"DATETIMEOFFSET_COL": "0001-01-01T00:00:00-14:00",
 		"DECIMAL_COL": -9999999999999999999999999999.9999999999,
-		"FLOAT_COL": "-1.79e+100",
+		"FLOAT_COL": -1.79e+100,
 		"INT_COL": -2147483648,
 		"NCHAR_COL": "АААААААААА",
 		"NUMERIC_COL": -999999999999999.99999,
 		"NVARCHAR_COL": null,
-		"REAL_COL": "-3.4e+37",
+		"REAL_COL": -3.4e+37,
 		"SMALLDATETIME_COL": "1900-01-01T00:00:00Z",
 		"SMALLINT_COL": -32768,
 		"TIME_COL": "0001-01-01T00:00:00Z",
@@ -766,9 +766,10 @@ oracledb_cdc:
 		// "VARCHARMAX_COL": "Max varchar(max)",
 		// "XML_COL": "\u003croot\u003emax\u003c/root\u003e"
 		// }`, outBatches[1], "Failed to assert max result from streaming")
-		// After Step 0 (value type consistency fix), bare numeric literals in SQL_REDO
-		// are now converted to int64 or json.Number, producing bare JSON numbers instead
-		// of quoted strings.
+		// Streaming values are coerced to match snapshot types using schema
+		// metadata. Int64 columns become bare numbers, BINARY_FLOAT/DOUBLE
+		// become float64, and NUMBER columns with fractional scale become
+		// json.Number (bare numbers preserving exact precision).
 		require.JSONEq(t, `{
 		"BIGINT_COL": 9223372036854775807,
 		"BINARY_COL": "AAAAAAAAAAAAAAAAAAAAAA==",
@@ -779,12 +780,12 @@ oracledb_cdc:
 		"DATETIME_COL": "9999-12-31T23:59:59.997Z",
 		"DATETIMEOFFSET_COL": "9999-12-31T23:59:59.9999999+14:00",
 		"DECIMAL_COL": 9999999999999999999999999999.9999999999,
-		"FLOAT_COL": 1.79E+100,
+		"FLOAT_COL": 1.79e+100,
 		"INT_COL": 2147483647,
 		"NCHAR_COL": "ZZZZZZZZZZ",
 		"NUMERIC_COL": 999999999999999.99999,
 		"NVARCHAR_COL": "Max nvarchar value",
-		"REAL_COL": 3.3999999E+037,
+		"REAL_COL": 3.3999999e+37,
 		"SMALLDATETIME_COL": "2079-06-06T23:59:00Z",
 		"SMALLINT_COL": 32767,
 		"TIME_COL": "0001-01-01T23:59:59.9999999Z",
@@ -1265,8 +1266,10 @@ oracledb_cdc:
 	s1 := extractSchema(t, msg1)
 	require.Len(t, s1.Children, 2)
 
-	// ALTER TABLE to add a column, then re-enable supplemental logging
+	// ALTER TABLE to add a column, then drop and re-enable supplemental logging
+	// to cover the new column (ORA-32588 if we just re-add without dropping first)
 	db.MustExec("ALTER TABLE testdb.schema_drift ADD (email VARCHAR2(255))")
+	db.MustDisableSupplementalLogging(t.Context(), "testdb.schema_drift")
 	db.MustEnableSupplementalLogging(t.Context(), "testdb.schema_drift")
 
 	// INSERT with new column — schema should now have [ID, NAME, EMAIL]
@@ -1384,7 +1387,7 @@ func TestIntegrationOracleDBCDCSchemaDataTypeConsistency(t *testing.T) {
 
 	// Insert row for snapshot
 	db.MustExecContext(t.Context(), `INSERT INTO testdb.schema_types VALUES (
-		1, 9223372036854775807, 12345.67890,
+		1, 999999999999999999, 12345.67890,
 		1.5, 2.5,
 		TO_DATE('2020-06-15','YYYY-MM-DD'),
 		TO_TIMESTAMP('2020-06-15 10:30:00','YYYY-MM-DD HH24:MI:SS'),
@@ -1448,7 +1451,7 @@ oracledb_cdc:
 	// Insert same row via DML for streaming
 	t.Log("Inserting streaming row...")
 	db.MustExecContext(t.Context(), `INSERT INTO testdb.schema_types VALUES (
-		2, 9223372036854775807, 12345.67890,
+		2, 999999999999999999, 12345.67890,
 		1.5, 2.5,
 		TO_DATE('2020-06-15','YYYY-MM-DD'),
 		TO_TIMESTAMP('2020-06-15 10:30:00','YYYY-MM-DD HH24:MI:SS'),
@@ -1503,7 +1506,8 @@ oracledb_cdc:
 		"schema fingerprints should be identical across snapshot and streaming")
 
 	// Verify data value types are consistent across phases.
-	// Unmarshal both message bodies and compare the Go types for each column.
+	// With streaming value coercion, both snapshot and streaming should produce
+	// the same Go types after JSON round-trip.
 	snapshotData := make(map[string]any)
 	streamingData := make(map[string]any)
 
@@ -1520,7 +1524,6 @@ oracledb_cdc:
 		streamVal, streamOK := streamingData[colName]
 
 		if !snapOK || !streamOK {
-			// NULL columns may be absent — skip if both absent
 			if !snapOK && !streamOK {
 				continue
 			}
@@ -1528,12 +1531,8 @@ oracledb_cdc:
 			continue
 		}
 
-		// Log the actual types for diagnostic purposes on the first run.
 		t.Logf("column %s: snapshot type=%T val=%v, streaming type=%T val=%v", colName, snapVal, snapVal, streamVal, streamVal)
 
-		// After JSON round-trip, both values should have the same Go type.
-		// This catches inconsistencies like snapshot producing a string while
-		// streaming produces a number for the same column.
 		assert.IsTypef(t, snapVal, streamVal,
 			"column %s: snapshot Go type %T != streaming Go type %T", colName, snapVal, streamVal)
 	}

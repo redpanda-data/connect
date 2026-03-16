@@ -7,7 +7,11 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- oracledb_cdc: Input now adds `schema` metadata to consumed messages. Schema is fetched from Oracle's `ALL_TAB_COLUMNS` catalog with precision-aware NUMBER mapping. Column additions are detected automatically via addition-only drift detection; dropped columns are reflected after a connector restart. This can be used for automatic schema registration in processors such as `schema_registry_encode`.
+- oracledb_cdc: Input now adds `schema` metadata to consumed messages. Schema is fetched from Oracle's `ALL_TAB_COLUMNS` catalog with precision-aware NUMBER mapping. Column additions are detected automatically via addition-only drift detection; dropped columns are reflected after a connector restart. This can be used for automatic schema registration in processors such as `schema_registry_encode`. (@Jeffail)
+
+### Fixed
+
+- oracledb_cdc: Fixed snapshot/streaming value type inconsistency where NUMBER columns produced `json.Number` during snapshot but plain strings during streaming. Bare numeric literals in SQL_REDO are now converted to `int64` (for integers that fit) or `json.Number` (for decimals), matching the snapshot path. Quoted string values from VARCHAR columns are no longer incorrectly converted. (@Jeffail)
 
 ## 4.83.0 - 2026-03-13
 
@@ -18,11 +22,6 @@ All notable changes to this project will be documented in this file.
 - benthos: Add NewMessageWithContext to service package for constructing messages with an associated context. (@prakhargarg105)
 - redpanda(migrator): refcount-based IMPORT mode management for serverless SR (@mmatczuk)
 - Go API: Added composable HTTP client with layered RoundTripper chain (@mmatczuk)
-
-### Fixed
-
-- oracledb_cdc: Fixed snapshot/streaming value type inconsistency where NUMBER columns produced `json.Number` during snapshot but plain strings during streaming. Bare numeric literals in SQL_REDO are now converted to `int64` (for integers that fit) or `json.Number` (for decimals), matching the snapshot path. Quoted string values from VARCHAR columns are no longer incorrectly converted.
->>>>>>> 6821ffb79 (oracledb_cdc: add autoschema support)
 
 ### Changed
 
