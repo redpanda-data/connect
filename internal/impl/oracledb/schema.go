@@ -52,7 +52,7 @@ func oracleNumberToCommonType(precision, scale int64, hasDecimalInfo bool) schem
 	if !hasDecimalInfo {
 		return schema.String
 	}
-	if scale == 0 && precision > 0 && precision <= 18 {
+	if scale == 0 && precision > 0 && precision <= replication.MaxInt64DecimalPrecision {
 		return schema.Int64
 	}
 	return schema.String
