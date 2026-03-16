@@ -9,6 +9,7 @@
 package sqlredo
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -280,9 +281,64 @@ func TestConvertValue(t *testing.T) {
 			wantValue: "Hello World",
 		},
 		{
-			name:      "numeric string passes through without type metadata",
+			name:      "bare integer literal converts to int64",
 			input:     "123",
-			wantValue: "123",
+			wantValue: int64(123),
+		},
+		{
+			name:      "bare negative integer converts to int64",
+			input:     "-89",
+			wantValue: int64(-89),
+		},
+		{
+			name:      "bare zero converts to int64",
+			input:     "0",
+			wantValue: int64(0),
+		},
+		{
+			name:      "bare max int64 converts to int64",
+			input:     "9223372036854775807",
+			wantValue: int64(9223372036854775807),
+		},
+		{
+			name:      "bare value exceeding int64 converts to json.Number",
+			input:     "9223372036854775808",
+			wantValue: json.Number("9223372036854775808"),
+		},
+		{
+			name:      "bare decimal literal converts to json.Number",
+			input:     "45.67",
+			wantValue: json.Number("45.67"),
+		},
+		{
+			name:      "bare scientific notation converts to json.Number",
+			input:     "1.79E+100",
+			wantValue: json.Number("1.79E+100"),
+		},
+		{
+			name:      "Oracle BINARY_FLOAT format converts to json.Number",
+			input:     "3.3999999E+037",
+			wantValue: json.Number("3.3999999E+037"),
+		},
+		{
+			name:      "NaN rejected stays string",
+			input:     "NaN",
+			wantValue: "NaN",
+		},
+		{
+			name:      "Inf rejected stays string",
+			input:     "Inf",
+			wantValue: "Inf",
+		},
+		{
+			name:      "+Inf rejected stays string",
+			input:     "+Inf",
+			wantValue: "+Inf",
+		},
+		{
+			name:      "-Inf rejected stays string",
+			input:     "-Inf",
+			wantValue: "-Inf",
 		},
 		{
 			name:      "non-string value passes through",

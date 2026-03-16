@@ -10,6 +10,7 @@ package oracledb
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"sync"
@@ -28,9 +29,11 @@ type batchPublisher struct {
 	batcher   *service.Batcher
 	batcherMu sync.Mutex
 
-	checkpoint *checkpoint.Capped[replication.SCN]
-	msgChan    chan asyncMessage
-	cacheSCN   func(ctx context.Context, scn replication.SCN) error
+	checkpoint   *checkpoint.Capped[replication.SCN]
+	msgChan      chan asyncMessage
+	cacheSCN     func(ctx context.Context, scn replication.SCN) error
+	schemas      *schemaCache
+	db           *sql.DB
 
 	log     *service.Logger
 	shutSig *shutdown.Signaller
@@ -145,6 +148,22 @@ func (b *batchPublisher) Publish(ctx context.Context, m *replication.MessageEven
 		msg.MetaSet("checkpoint_scn", m.CheckpointSCN.String())
 	}
 
+	// Attach schema metadata for downstream processors (e.g. schema_registry_encode).
+	if b.schemas != nil {
+		table := replication.UserTable{Schema: m.Schema, Name: m.Table}
+		if m.ColumnMeta != nil {
+			b.schemas.seedFromColumnMeta(table, m.ColumnMeta)
+		}
+		eventKeys := mapKeys(m.Data)
+		s, sErr := b.schemas.schemaForEvent(ctx, b.db, table, eventKeys)
+		if sErr != nil {
+			b.log.Warnf("Failed to refresh schema for %s.%s: %v", m.Schema, m.Table, sErr)
+		}
+		if s != nil {
+			msg.MetaSetImmut("schema", service.ImmutableAny{V: s})
+		}
+	}
+
 	var flushedBatch []*service.Message
 	b.batcherMu.Lock()
 	if b.batcher.Add(msg) {
@@ -206,6 +225,19 @@ func (b *batchPublisher) publishBatch(ctx context.Context, batch service.Message
 	case <-ctx.Done():
 		return ctx.Err()
 	}
+}
+
+// mapKeys extracts the keys from a map for use in drift detection.
+func mapKeys(data any) []string {
+	m, ok := data.(map[string]any)
+	if !ok {
+		return nil
+	}
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	return keys
 }
 
 func (b *batchPublisher) msgs() <-chan asyncMessage {
