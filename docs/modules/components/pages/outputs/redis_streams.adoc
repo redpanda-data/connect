@@ -39,6 +39,7 @@ output:
   redis_streams:
     url: redis://:6379 # No default (required)
     stream: "" # No default (required)
+    id: '*'
     body_key: body
     max_length: 0
     max_in_flight: 64
@@ -73,6 +74,7 @@ output:
       root_cas_file: ""
       client_certs: []
     stream: "" # No default (required)
+    id: '*'
     body_key: body
     max_length: 0
     max_in_flight: 64
@@ -337,6 +339,28 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 
 *Type*: `string`
 
+
+=== `id`
+
+The entry ID for the stream message. Allows function interpolations. When set to `*` (the default), Redis auto-generates a unique ID based on the current time. Set a custom ID to control message ordering, for example to replay messages in upstream order.
+This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
+
+
+*Type*: `string`
+
+*Default*: `"*"`
+
+```yml
+# Examples
+
+id: '*'
+
+id: ${! @redis_stream }
+
+id: ${! this.id }
+
+id: ${! counter() }-0
+```
 
 === `body_key`
 
