@@ -29,11 +29,11 @@ type batchPublisher struct {
 	batcher   *service.Batcher
 	batcherMu sync.Mutex
 
-	checkpoint   *checkpoint.Capped[replication.SCN]
-	msgChan      chan asyncMessage
-	cacheSCN     func(ctx context.Context, scn replication.SCN) error
-	schemas      *schemaCache
-	db           *sql.DB
+	checkpoint *checkpoint.Capped[replication.SCN]
+	msgChan    chan asyncMessage
+	cacheSCN   func(ctx context.Context, scn replication.SCN) error
+	schemas    *schemaCache
+	db         *sql.DB
 
 	log     *service.Logger
 	shutSig *shutdown.Signaller
@@ -132,6 +132,30 @@ func (p *batchPublisher) loop() {
 // Publish turns the provided message into a service.Message before batching and
 // flushing them based on batch size or time elapsed.
 func (b *batchPublisher) Publish(ctx context.Context, m *replication.MessageEvent) error {
+	// Resolve schema first — needed both for metadata and value coercion.
+	var schemaAny any
+	if b.schemas != nil {
+		table := replication.UserTable{Schema: m.Schema, Name: m.Table}
+		if m.ColumnMeta != nil {
+			b.schemas.seedFromColumnMeta(table, m.ColumnMeta)
+		}
+		eventKeys := mapKeys(m.Data)
+		s, typeInfo, sErr := b.schemas.schemaForEvent(ctx, b.db, table, eventKeys)
+		if sErr != nil {
+			b.log.Warnf("Failed to refresh schema for %s.%s: %v", m.Schema, m.Table, sErr)
+		}
+		schemaAny = s
+
+		// Coerce streaming values to match snapshot types. Snapshot events
+		// already have correct Go types from sql.Scan; only streaming events
+		// (where LogMiner SQL_REDO quotes all INSERT values) need coercion.
+		if m.Operation != replication.MessageOperationRead && typeInfo != nil {
+			if dataMap, ok := m.Data.(map[string]any); ok {
+				coerceStreamingValues(dataMap, typeInfo, b.log)
+			}
+		}
+	}
+
 	data, err := json.Marshal(m.Data)
 	if err != nil {
 		return fmt.Errorf("marshalling message: %w", err)
@@ -148,20 +172,8 @@ func (b *batchPublisher) Publish(ctx context.Context, m *replication.MessageEven
 		msg.MetaSet("checkpoint_scn", m.CheckpointSCN.String())
 	}
 
-	// Attach schema metadata for downstream processors (e.g. schema_registry_encode).
-	if b.schemas != nil {
-		table := replication.UserTable{Schema: m.Schema, Name: m.Table}
-		if m.ColumnMeta != nil {
-			b.schemas.seedFromColumnMeta(table, m.ColumnMeta)
-		}
-		eventKeys := mapKeys(m.Data)
-		s, sErr := b.schemas.schemaForEvent(ctx, b.db, table, eventKeys)
-		if sErr != nil {
-			b.log.Warnf("Failed to refresh schema for %s.%s: %v", m.Schema, m.Table, sErr)
-		}
-		if s != nil {
-			msg.MetaSetImmut("schema", service.ImmutableAny{V: s})
-		}
+	if schemaAny != nil {
+		msg.MetaSetImmut("schema", service.ImmutableAny{V: schemaAny})
 	}
 
 	var flushedBatch []*service.Message

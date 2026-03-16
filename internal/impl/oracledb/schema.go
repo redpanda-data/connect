@@ -11,7 +11,10 @@ package oracledb
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
+	"math"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -25,13 +28,14 @@ import (
 // considers precision and scale for a more specific mapping.
 func oracleTypeToCommonType(dataType string) schema.CommonType {
 	switch strings.ToUpper(dataType) {
-	case "BINARY_FLOAT":
+	case "BINARY_FLOAT", "IBFLOAT", "BFLOAT":
 		return schema.Float32
-	case "BINARY_DOUBLE":
+	case "BINARY_DOUBLE", "IBDOUBLE", "BDOUBLE":
 		return schema.Float64
 	case "RAW", "LONG RAW", "BLOB":
 		return schema.ByteArray
-	case "DATE", "TIMESTAMP", "TIMESTAMP WITH TIME ZONE", "TIMESTAMP WITH LOCAL TIME ZONE":
+	case "DATE", "TIMESTAMP", "TIMESTAMP WITH TIME ZONE", "TIMESTAMP WITH LOCAL TIME ZONE",
+		"TIMESTAMPTZ", "TIMESTAMPDTY", "TIMESTAMPTZ_DTY", "TIMESTAMPLTZ_DTY", "TIMESTAMPELTZ":
 		return schema.Timestamp
 	case "JSON":
 		return schema.Any
@@ -78,8 +82,10 @@ type schemaCache struct {
 }
 
 type cachedSchema struct {
-	schema any                 // serialised schema.Common returned by ToAny()
-	keys   map[string]struct{} // column names for O(1) membership checks
+	schema      any                          // serialised schema.Common returned by ToAny()
+	keys        map[string]struct{}          // column names for O(1) membership checks
+	colTypes    map[string]schema.CommonType // column name → CommonType for value coercion
+	numericCols map[string]struct{}          // NUMBER columns that map to String (need json.Number coercion)
 }
 
 func newSchemaCache(log *service.Logger) *schemaCache {
@@ -104,8 +110,10 @@ ORDER BY COLUMN_ID`
 	defer rows.Close()
 
 	var (
-		children []schema.Common
-		keySet   = make(map[string]struct{})
+		children    []schema.Common
+		keySet      = make(map[string]struct{})
+		colTypes    = make(map[string]schema.CommonType)
+		numericCols = make(map[string]struct{})
 	)
 	for rows.Next() {
 		var (
@@ -119,7 +127,8 @@ ORDER BY COLUMN_ID`
 		}
 
 		var ct schema.CommonType
-		if isNumberType(dataType) {
+		isNum := isNumberType(dataType)
+		if isNum {
 			ct = oracleNumberToCommonType(precision.Int64, scale.Int64, precision.Valid && scale.Valid)
 		} else {
 			ct = oracleTypeToCommonType(dataType)
@@ -131,6 +140,10 @@ ORDER BY COLUMN_ID`
 			Optional: true,
 		})
 		keySet[colName] = struct{}{}
+		colTypes[colName] = ct
+		if isNum && ct == schema.String {
+			numericCols[colName] = struct{}{}
+		}
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterating column metadata: %w", err)
@@ -145,7 +158,7 @@ ORDER BY COLUMN_ID`
 		Optional: false,
 		Children: children,
 	}
-	return &cachedSchema{schema: c.ToAny(), keys: keySet}, nil
+	return &cachedSchema{schema: c.ToAny(), keys: keySet, colTypes: colTypes, numericCols: numericCols}, nil
 }
 
 // schemaForEvent returns the schema for the given table, refreshing the cache
@@ -157,7 +170,13 @@ ORDER BY COLUMN_ID`
 // This is intentional: it avoids TOCTOU races and is acceptable because
 // drift is rare (only on column additions). The tradeoff is that a slow
 // catalog query during drift will stall all concurrent Publish() calls.
-func (sc *schemaCache) schemaForEvent(ctx context.Context, db *sql.DB, table replication.UserTable, eventKeys []string) (any, error) {
+// columnTypeInfo holds the type metadata needed for streaming value coercion.
+type columnTypeInfo struct {
+	colTypes    map[string]schema.CommonType
+	numericCols map[string]struct{}
+}
+
+func (sc *schemaCache) schemaForEvent(ctx context.Context, db *sql.DB, table replication.UserTable, eventKeys []string) (any, *columnTypeInfo, error) {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
 
@@ -172,7 +191,7 @@ func (sc *schemaCache) schemaForEvent(ctx context.Context, db *sql.DB, table rep
 			}
 		}
 		if allKnown {
-			return cached.schema, nil
+			return cached.schema, &columnTypeInfo{cached.colTypes, cached.numericCols}, nil
 		}
 		sc.log.Debugf("Schema drift detected for %s: refreshing after unknown column in event", tableKey)
 	}
@@ -181,13 +200,13 @@ func (sc *schemaCache) schemaForEvent(ctx context.Context, db *sql.DB, table rep
 	if err != nil {
 		if existing, exists := sc.schemas[tableKey]; exists {
 			sc.log.Warnf("Failed to refresh schema for %s, using cached version: %v", tableKey, err)
-			return existing.schema, err
+			return existing.schema, &columnTypeInfo{existing.colTypes, existing.numericCols}, err
 		}
-		return nil, err
+		return nil, nil, err
 	}
 
 	sc.schemas[tableKey] = fresh
-	return fresh.schema, nil
+	return fresh.schema, &columnTypeInfo{fresh.colTypes, fresh.numericCols}, nil
 }
 
 // seedFromColumnMeta populates the cache from column metadata collected during
@@ -201,9 +220,12 @@ func (sc *schemaCache) seedFromColumnMeta(table replication.UserTable, meta []re
 
 	children := make([]schema.Common, 0, len(meta))
 	keySet := make(map[string]struct{}, len(meta))
+	colTypes := make(map[string]schema.CommonType, len(meta))
+	numericCols := make(map[string]struct{})
 	for _, m := range meta {
 		var ct schema.CommonType
-		if isNumberType(m.TypeName) {
+		isNum := isNumberType(m.TypeName)
+		if isNum {
 			ct = oracleNumberToCommonType(m.Precision, m.Scale, m.HasDecimalSize)
 		} else {
 			ct = oracleTypeToCommonType(m.TypeName)
@@ -214,6 +236,10 @@ func (sc *schemaCache) seedFromColumnMeta(table replication.UserTable, meta []re
 			Optional: true,
 		})
 		keySet[m.Name] = struct{}{}
+		colTypes[m.Name] = ct
+		if isNum && ct == schema.String {
+			numericCols[m.Name] = struct{}{}
+		}
 	}
 
 	c := schema.Common{
@@ -222,5 +248,75 @@ func (sc *schemaCache) seedFromColumnMeta(table replication.UserTable, meta []re
 		Optional: false,
 		Children: children,
 	}
-	sc.schemas[tableKey] = &cachedSchema{schema: c.ToAny(), keys: keySet}
+	sc.schemas[tableKey] = &cachedSchema{schema: c.ToAny(), keys: keySet, colTypes: colTypes, numericCols: numericCols}
+}
+
+// ---------------------------------------------------------------------------
+// Streaming value coercion
+// ---------------------------------------------------------------------------
+
+// coerceStreamingValues converts string values from LogMiner SQL_REDO parsing
+// to their proper Go types based on schema column metadata. This ensures type
+// consistency between snapshot (which returns native Go types via sql.Scan) and
+// streaming (which returns strings because LogMiner quotes all INSERT values).
+//
+// Only unambiguously numeric types are coerced: Int64, Float32, Float64.
+// Columns mapped to schema.String (including NUMBER with fractional scale) are
+// left as-is because we cannot distinguish them from VARCHAR2 using CommonType alone.
+//
+// The data map is mutated in place. On parse failure, the original string value
+// is preserved and a warning is logged.
+func coerceStreamingValues(data map[string]any, info *columnTypeInfo, log *service.Logger) {
+	if info == nil {
+		return
+	}
+	for col, val := range data {
+		ct, known := info.colTypes[col]
+		if !known {
+			continue
+		}
+
+		// Handle json.Number values produced by ConvertValue for bare float
+		// literals (e.g. BINARY_FLOAT/BINARY_DOUBLE). These need to be
+		// converted to float64 to match the snapshot path.
+		if jn, ok := val.(json.Number); ok {
+			switch ct {
+			case schema.Float32, schema.Float64:
+				if f, err := jn.Float64(); err == nil {
+					data[col] = f
+				}
+			case schema.Int64:
+				if n, err := jn.Int64(); err == nil {
+					data[col] = n
+				}
+			}
+			continue
+		}
+
+		s, ok := val.(string)
+		if !ok {
+			continue // already typed (nil, int64, time.Time, etc.)
+		}
+		switch ct {
+		case schema.Int64:
+			if n, err := strconv.ParseInt(s, 10, 64); err == nil {
+				data[col] = n
+			} else {
+				log.Warnf("coerce %s: cannot parse %q as int64: %v", col, s, err)
+			}
+		case schema.Float32, schema.Float64:
+			if f, err := strconv.ParseFloat(s, 64); err == nil && !math.IsNaN(f) && !math.IsInf(f, 0) {
+				data[col] = f
+			} else if err != nil {
+				log.Warnf("coerce %s: cannot parse %q as float64: %v", col, s, err)
+			}
+		case schema.String:
+			// NUMBER columns with fractional scale map to schema.String, same as
+			// VARCHAR2. Use numericCols to distinguish: only NUMBER-as-String
+			// columns get wrapped as json.Number to match snapshot behavior.
+			if _, isNumeric := info.numericCols[col]; isNumeric {
+				data[col] = json.Number(s)
+			}
+		}
+	}
 }

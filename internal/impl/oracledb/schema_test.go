@@ -10,6 +10,7 @@ package oracledb
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
 	"testing"
 
@@ -53,7 +54,7 @@ func childByName(t *testing.T, c schema.Common, name string) schema.Common {
 func seedCache(t *testing.T, sc *schemaCache, schemaName, tableName string, meta []replication.ColumnMeta) any {
 	t.Helper()
 	sc.seedFromColumnMeta(replication.UserTable{Schema: schemaName, Name: tableName}, meta)
-	s, err := sc.schemaForEvent(context.Background(), nil, replication.UserTable{Schema: schemaName, Name: tableName}, nil)
+	s, _, err := sc.schemaForEvent(context.Background(), nil, replication.UserTable{Schema: schemaName, Name: tableName}, nil)
 	require.NoError(t, err)
 	return s
 }
@@ -143,12 +144,21 @@ func TestIsNumberType(t *testing.T) {
 		typeName string
 		want     bool
 	}{
-		{"NUMBER", true}, {"number", true}, {"Number", true},
-		{"INTEGER", true}, {"integer", true},
-		{"INT", true}, {"int", true},
-		{"SMALLINT", true}, {"smallint", true},
-		{"FLOAT", true}, {"float", true},
-		{"VARCHAR2", false}, {"DATE", false}, {"BLOB", false}, {"", false},
+		{"NUMBER", true},
+		{"number", true},
+		{"Number", true},
+		{"INTEGER", true},
+		{"integer", true},
+		{"INT", true},
+		{"int", true},
+		{"SMALLINT", true},
+		{"smallint", true},
+		{"FLOAT", true},
+		{"float", true},
+		{"VARCHAR2", false},
+		{"DATE", false},
+		{"BLOB", false},
+		{"", false},
 	} {
 		t.Run(tt.typeName, func(t *testing.T) {
 			assert.Equal(t, tt.want, isNumberType(tt.typeName))
@@ -173,7 +183,7 @@ func TestSchemaCacheHit(t *testing.T) {
 
 	// All known subsets are cache hits.
 	for _, keys := range [][]string{{"A", "B", "C"}, {"A", "B"}, {"A"}, {}, nil} {
-		got, err := sc.schemaForEvent(ctx, nil, tbl, keys)
+		got, _, err := sc.schemaForEvent(ctx, nil, tbl, keys)
 		require.NoError(t, err)
 		assert.Equal(t, s, got, "expected cache hit for keys %v", keys)
 	}
@@ -191,7 +201,7 @@ func TestSchemaCacheSubsetKeysNoRefresh(t *testing.T) {
 
 	// [A, B] is a subset of [A, B, C] — should not trigger a re-fetch.
 	// Passing nil db proves no DB call is made (would panic on nil).
-	got, err := sc.schemaForEvent(context.Background(), nil, tbl, []string{"A", "B"})
+	got, _, err := sc.schemaForEvent(context.Background(), nil, tbl, []string{"A", "B"})
 	require.NoError(t, err)
 	require.NotNil(t, got)
 }
@@ -203,7 +213,7 @@ func TestSchemaCacheEmptyKeysNoRefresh(t *testing.T) {
 	})
 
 	// Empty keys (DELETE event) — always a cache hit.
-	got, err := sc.schemaForEvent(context.Background(), nil, replication.UserTable{Schema: "S", Name: "T"}, nil)
+	got, _, err := sc.schemaForEvent(context.Background(), nil, replication.UserTable{Schema: "S", Name: "T"}, nil)
 	require.NoError(t, err)
 	require.NotNil(t, got)
 }
@@ -243,7 +253,7 @@ func TestSchemaCacheSeedFromColumnMetaOverride(t *testing.T) {
 		{Name: "A", TypeName: "VARCHAR2"},
 		{Name: "B", TypeName: "NUMBER", Precision: 5, Scale: 0, HasDecimalSize: true},
 	})
-	s1, err := sc.schemaForEvent(context.Background(), nil, tbl, nil)
+	s1, _, err := sc.schemaForEvent(context.Background(), nil, tbl, nil)
 	require.NoError(t, err)
 	c1 := parseSchema(t, s1)
 	require.Len(t, c1.Children, 2)
@@ -254,7 +264,7 @@ func TestSchemaCacheSeedFromColumnMetaOverride(t *testing.T) {
 		{Name: "B", TypeName: "NUMBER", Precision: 5, Scale: 0, HasDecimalSize: true},
 		{Name: "C", TypeName: "DATE"},
 	})
-	s2, err := sc.schemaForEvent(context.Background(), nil, tbl, nil)
+	s2, _, err := sc.schemaForEvent(context.Background(), nil, tbl, nil)
 	require.NoError(t, err)
 	c2 := parseSchema(t, s2)
 	require.Len(t, c2.Children, 3)
@@ -312,4 +322,157 @@ func TestSchemaRoundTrip(t *testing.T) {
 		assert.Equal(t, wantType, child.Type, "field %s", name)
 		assert.True(t, child.Optional, "field %s should be optional", name)
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Streaming value coercion
+// ---------------------------------------------------------------------------
+
+func TestCoerceStreamingValues(t *testing.T) {
+	log := service.NewLoggerFromSlog(slog.Default())
+
+	tests := []struct {
+		name string
+		data map[string]any
+		info *columnTypeInfo
+		want map[string]any
+	}{
+		{
+			name: "int64 coercion",
+			data: map[string]any{"age": "42"},
+			info: &columnTypeInfo{colTypes: map[string]schema.CommonType{"age": schema.Int64}},
+			want: map[string]any{"age": int64(42)},
+		},
+		{
+			name: "float64 coercion",
+			data: map[string]any{"price": "3.14"},
+			info: &columnTypeInfo{colTypes: map[string]schema.CommonType{"price": schema.Float64}},
+			want: map[string]any{"price": float64(3.14)},
+		},
+		{
+			name: "float32 produces float64",
+			data: map[string]any{"ratio": "1.5"},
+			info: &columnTypeInfo{colTypes: map[string]schema.CommonType{"ratio": schema.Float32}},
+			want: map[string]any{"ratio": float64(1.5)},
+		},
+		{
+			name: "json.Number float coerced to float64",
+			data: map[string]any{"score": json.Number("1.5")},
+			info: &columnTypeInfo{colTypes: map[string]schema.CommonType{"score": schema.Float64}},
+			want: map[string]any{"score": float64(1.5)},
+		},
+		{
+			name: "json.Number float32 coerced to float64",
+			data: map[string]any{"ratio": json.Number("3.14")},
+			info: &columnTypeInfo{colTypes: map[string]schema.CommonType{"ratio": schema.Float32}},
+			want: map[string]any{"ratio": float64(3.14)},
+		},
+		{
+			name: "json.Number int coerced to int64",
+			data: map[string]any{"id": json.Number("42")},
+			info: &columnTypeInfo{colTypes: map[string]schema.CommonType{"id": schema.Int64}},
+			want: map[string]any{"id": int64(42)},
+		},
+		{
+			name: "numeric string NUMBER column to json.Number",
+			data: map[string]any{"amount": "12345.67890"},
+			info: &columnTypeInfo{
+				colTypes:    map[string]schema.CommonType{"amount": schema.String},
+				numericCols: map[string]struct{}{"amount": {}},
+			},
+			want: map[string]any{"amount": json.Number("12345.67890")},
+		},
+		{
+			name: "varchar2 string not coerced",
+			data: map[string]any{"name": "hello"},
+			info: &columnTypeInfo{
+				colTypes:    map[string]schema.CommonType{"name": schema.String},
+				numericCols: map[string]struct{}{},
+			},
+			want: map[string]any{"name": "hello"},
+		},
+		{
+			name: "already typed int64 left alone",
+			data: map[string]any{"id": int64(42)},
+			info: &columnTypeInfo{colTypes: map[string]schema.CommonType{"id": schema.Int64}},
+			want: map[string]any{"id": int64(42)},
+		},
+		{
+			name: "nil value stays nil",
+			data: map[string]any{"col": nil},
+			info: &columnTypeInfo{colTypes: map[string]schema.CommonType{"col": schema.Int64}},
+			want: map[string]any{"col": nil},
+		},
+		{
+			name: "unknown column unchanged",
+			data: map[string]any{"mystery": "value"},
+			info: &columnTypeInfo{colTypes: map[string]schema.CommonType{}},
+			want: map[string]any{"mystery": "value"},
+		},
+		{
+			name: "nil info is no-op",
+			data: map[string]any{"age": "99"},
+			info: nil,
+			want: map[string]any{"age": "99"},
+		},
+		{
+			name: "invalid int64 string preserved",
+			data: map[string]any{"count": "not-a-number"},
+			info: &columnTypeInfo{colTypes: map[string]schema.CommonType{"count": schema.Int64}},
+			want: map[string]any{"count": "not-a-number"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			coerceStreamingValues(tt.data, tt.info, log)
+			assert.Equal(t, tt.want, tt.data)
+		})
+	}
+}
+
+func TestCoerceStreamingValuesColumnTypeInfoFromCache(t *testing.T) {
+	// Verify that seedFromColumnMeta produces correct columnTypeInfo
+	// that can be used for coercion.
+	sc := testSchemaCache(t)
+	log := service.NewLoggerFromSlog(slog.Default())
+
+	tbl := replication.UserTable{Schema: "S", Name: "T"}
+	sc.seedFromColumnMeta(tbl, []replication.ColumnMeta{
+		{Name: "ID", TypeName: "NUMBER", Precision: 10, Scale: 0, HasDecimalSize: true},
+		{Name: "AMOUNT", TypeName: "NUMBER", Precision: 20, Scale: 5, HasDecimalSize: true},
+		{Name: "NAME", TypeName: "VARCHAR2"},
+		{Name: "SCORE", TypeName: "BINARY_FLOAT"},
+	})
+
+	_, typeInfo, err := sc.schemaForEvent(t.Context(), nil, tbl, nil)
+	require.NoError(t, err)
+	require.NotNil(t, typeInfo)
+
+	// ID: NUMBER(10,0) → Int64
+	assert.Equal(t, schema.Int64, typeInfo.colTypes["ID"])
+	// AMOUNT: NUMBER(20,5) → String + numericCols
+	assert.Equal(t, schema.String, typeInfo.colTypes["AMOUNT"])
+	_, isNumeric := typeInfo.numericCols["AMOUNT"]
+	assert.True(t, isNumeric, "AMOUNT should be in numericCols")
+	// NAME: VARCHAR2 → String but NOT in numericCols
+	assert.Equal(t, schema.String, typeInfo.colTypes["NAME"])
+	_, nameNumeric := typeInfo.numericCols["NAME"]
+	assert.False(t, nameNumeric, "NAME should not be in numericCols")
+	// SCORE: BINARY_FLOAT → Float32
+	assert.Equal(t, schema.Float32, typeInfo.colTypes["SCORE"])
+
+	// Verify coercion works with this typeInfo
+	data := map[string]any{
+		"ID":     "42",
+		"AMOUNT": "12345.67890",
+		"NAME":   "hello",
+		"SCORE":  "1.5",
+	}
+	coerceStreamingValues(data, typeInfo, log)
+
+	assert.Equal(t, int64(42), data["ID"])
+	assert.Equal(t, json.Number("12345.67890"), data["AMOUNT"])
+	assert.Equal(t, "hello", data["NAME"])
+	assert.Equal(t, float64(1.5), data["SCORE"])
 }
