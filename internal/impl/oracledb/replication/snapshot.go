@@ -396,7 +396,7 @@ func prepSnapshotScannerAndMappers(cols []*sql.ColumnType) (values []any, mapper
 			// to match the streaming path's ParseInt behavior.
 			// For all others, scan as json.Number to preserve arbitrary precision.
 			precision, scale, ok := col.DecimalSize()
-			if ok && scale == 0 && precision > 0 && precision <= 18 {
+			if ok && scale == 0 && precision > 0 && precision <= MaxInt64DecimalPrecision {
 				val = new(sql.Null[int64])
 				mapper = snapshotValueMapper[int64]
 			} else {
