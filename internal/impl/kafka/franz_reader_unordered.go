@@ -17,6 +17,7 @@ package kafka
 import (
 	"context"
 	"errors"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -31,6 +32,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
+// Deprecated: Use the franz_reader_toggled variant instead.
 const (
 	kruFieldConsumerGroup         = "consumer_group"
 	kruFieldCheckpointLimit       = "checkpoint_limit"
@@ -40,11 +42,9 @@ const (
 	kruFieldTopicLagRefreshPeriod = "topic_lag_refresh_period"
 )
 
-// FranzReaderUnorderedConfigFields returns config fields for customising the
-// behaviour of an unordered kafka reader using the franz-go library. This
-// reader is naive regarding message ordering, allows parallel processing across
-// a given partition, but still ensures that offsets are only committed when
-// safe.
+// FranzReaderUnorderedConfigFields is deprecated.
+//
+// Deprecated: Use the franz_reader_toggled variant instead.
 func FranzReaderUnorderedConfigFields() []*service.ConfigField {
 	return []*service.ConfigField{
 		service.NewStringField(kruFieldConsumerGroup).
@@ -84,12 +84,13 @@ type batchWithAckFn struct {
 // processing across a given partition, but still ensures that offsets are only
 // committed when safe.
 type FranzReaderUnordered struct {
-	clientOpts []kgo.Opt
+	clientOpts func() ([]kgo.Opt, error)
+
+	franzRecordToMsgFn func(record *kgo.Record) *service.Message
 
 	consumerGroup         string
 	checkpointLimit       int
 	commitPeriod          time.Duration
-	multiHeader           bool
 	batchPolicy           service.BatchPolicy
 	topicLagRefreshPeriod time.Duration
 
@@ -108,15 +109,18 @@ func (f *FranzReaderUnordered) storeBatchChan(c chan batchWithAckFn) {
 	f.batchChan.Store(c)
 }
 
-// NewFranzReaderUnorderedFromConfig attempts to instantiate a new
-// FranzReaderUnordered reader from a parsed config.
+// NewFranzReaderUnorderedFromConfig is deprecated.
+//
+// Deprecated: Use the toggled variant in future.
 func NewFranzReaderUnorderedFromConfig(conf *service.ParsedConfig, res *service.Resources, opts ...kgo.Opt) (*FranzReaderUnordered, error) {
 	f := FranzReaderUnordered{
 		res:     res,
 		log:     res.Logger(),
 		shutSig: shutdown.NewSignaller(),
 	}
-	f.clientOpts = append(f.clientOpts, opts...)
+	f.clientOpts = func() ([]kgo.Opt, error) {
+		return slices.Clone(opts), nil
+	}
 
 	f.consumerGroup, _ = conf.FieldString(kruFieldConsumerGroup)
 
@@ -133,8 +137,12 @@ func NewFranzReaderUnorderedFromConfig(conf *service.ParsedConfig, res *service.
 		return nil, err
 	}
 
-	if f.multiHeader, err = conf.FieldBool(kruFieldMultiHeader); err != nil {
+	multiHeader, err := conf.FieldBool(kruFieldMultiHeader)
+	if err != nil {
 		return nil, err
+	}
+	f.franzRecordToMsgFn = func(record *kgo.Record) *service.Message {
+		return FranzRecordToMessageV0(record, multiHeader)
 	}
 
 	if f.topicLagRefreshPeriod, err = conf.FieldDuration(kruFieldTopicLagRefreshPeriod); err != nil {
@@ -150,7 +158,7 @@ type msgWithRecord struct {
 }
 
 func (f *FranzReaderUnordered) recordToMessage(record *kgo.Record, consumerLag *ConsumerLag) *msgWithRecord {
-	msg := FranzRecordToMessageV0(record, f.multiHeader)
+	msg := f.franzRecordToMsgFn(record)
 	if consumerLag != nil {
 		lag := consumerLag.Load(record.Topic, record.Partition)
 		msg.MetaSetMut("kafka_lag", lag)
@@ -454,6 +462,28 @@ func (c *checkpointTracker) removeTopicPartitions(ctx context.Context, m map[str
 
 //------------------------------------------------------------------------------
 
+// ConnectionTest attempts to test the connection configuration of this input
+// without actually consuming data. The connection, if successful, is then
+// closed.
+func (f *FranzReaderUnordered) ConnectionTest(ctx context.Context) service.ConnectionTestResults {
+	clientOpts, err := f.clientOpts()
+	if err != nil {
+		return service.ConnectionTestFailed(err).AsList()
+	}
+
+	tmpClient, err := NewFranzClient(ctx, clientOpts...)
+	if err != nil {
+		return service.ConnectionTestFailed(err).AsList()
+	}
+	defer tmpClient.Close()
+
+	if err := tmpClient.Ping(ctx); err != nil {
+		return service.ConnectionTestFailed(err).AsList()
+	}
+
+	return service.ConnectionTestSucceeded().AsList()
+}
+
 // Connect to the kafka seed brokers.
 func (f *FranzReaderUnordered) Connect(ctx context.Context) error {
 	if f.getBatchChan() != nil {
@@ -479,8 +509,10 @@ func (f *FranzReaderUnordered) Connect(ctx context.Context) error {
 	}
 	checkpoints := newCheckpointTracker(f.res, batchChan, commitFn, f.batchPolicy)
 
-	var clientOpts []kgo.Opt
-	clientOpts = append(clientOpts, f.clientOpts...)
+	clientOpts, err := f.clientOpts()
+	if err != nil {
+		return err
+	}
 
 	if f.consumerGroup != "" {
 		clientOpts = append(clientOpts,
@@ -501,7 +533,6 @@ func (f *FranzReaderUnordered) Connect(ctx context.Context) error {
 		)
 	}
 
-	var err error
 	if cl, err = NewFranzClient(ctx, clientOpts...); err != nil {
 		return err
 	}

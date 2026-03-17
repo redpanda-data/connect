@@ -113,7 +113,7 @@ output:
   processors:
     - mapping: |
         meta id = this.id
-        # Performs a partial update ont he document.
+        # Performs a partial update on the document.
         root.doc = this
   elasticsearch_v8:
     urls: [localhost:9200]

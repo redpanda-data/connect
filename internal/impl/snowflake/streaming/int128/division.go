@@ -21,7 +21,7 @@ import "cmp"
 
 // Div computes a / b
 //
-// Division by zero panics
+// Division by zero panics.
 func Div(dividend, divisor Num) Num {
 	// algorithm is ported from absl::int128
 	if divisor == (Num{}) {
@@ -78,7 +78,7 @@ func CompareUnsigned(a, b Num) int {
 	return r
 }
 
-// uShr is unsigned shift right (no sign extending)
+// uShr is unsigned shift right (no sign extending).
 func uShr(v Num, amt uint) Num {
 	n := amt - 64
 	m := 64 - amt

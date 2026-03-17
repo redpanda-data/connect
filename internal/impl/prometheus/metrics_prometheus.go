@@ -340,7 +340,7 @@ func fromParsed(conf *service.ParsedConfig, log *service.Logger) (p *metrics, er
 		if pushInterval != "" {
 			interval, err := time.ParseDuration(pushInterval)
 			if err != nil {
-				return nil, fmt.Errorf("failed to parse push interval: %v", err)
+				return nil, fmt.Errorf("parsing push interval: %v", err)
 			}
 			go func() {
 				for {

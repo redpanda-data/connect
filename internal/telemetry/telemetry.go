@@ -57,7 +57,7 @@ const (
 	defaultExportPeriod = time.Hour * 24
 )
 
-// ParseRSAPrivateKeyFromPEM parses a PEM encoded PKCS1 or PKCS8 private key
+// ParseRSAPrivateKeyFromPEM parses a PEM encoded PKCS1 or PKCS8 private key.
 func ParseRSAPrivateKeyFromPEM(key []byte) (*rsa.PrivateKey, error) {
 	var err error
 

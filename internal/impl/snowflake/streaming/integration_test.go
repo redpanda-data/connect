@@ -4,7 +4,7 @@
 // License (the "License"); you may not use this file except in compliance with
 // the License. You may obtain a copy of the License at
 //
-// https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
+// https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
 package streaming_test
 
@@ -30,8 +30,9 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/impl/snowflake/streaming"
 )
 
+//go:fix inline
 func ptr[T any](v T) *T {
-	return &v
+	return new(v)
 }
 
 func msg(s string) *service.Message {
@@ -65,9 +66,9 @@ func setup(t *testing.T) (*streaming.SnowflakeRestClient, *streaming.SnowflakeSe
 	parseResult, err := x509.ParsePKCS8PrivateKey(block.Bytes)
 	require.NoError(t, err)
 	clientOptions := streaming.ClientOptions{
-		Account:        envOr("SNOWFLAKE_ACCOUNT", "WQKFXQQ-WI77362"),
-		URL:            fmt.Sprintf("https://%s.snowflakecomputing.com", envOr("SNOWFLAKE_ACCOUNT", "WQKFXQQ-WI77362")),
-		User:           envOr("SNOWFLAKE_USER", "ROCKWOODREDPANDA"),
+		Account:        envOr("SNOWFLAKE_ACCOUNT", "wqkfxqq-redpanda_aws"),
+		URL:            fmt.Sprintf("https://%s.snowflakecomputing.com", envOr("SNOWFLAKE_ACCOUNT", "wqkfxqq-redpanda_aws")),
+		User:           envOr("SNOWFLAKE_USER", "TYLERROCKWOOD"),
 		Role:           "ACCOUNTADMIN",
 		PrivateKey:     parseResult.(*rsa.PrivateKey),
 		ConnectVersion: "",
@@ -93,7 +94,7 @@ func TestAllSnowflakeDatatypes(t *testing.T) {
 	restClient, streamClient := setup(t)
 	channelOpts := streaming.ChannelOptions{
 		Name:         t.Name(),
-		DatabaseName: envOr("SNOWFLAKE_DB", "BABY_DATABASE"),
+		DatabaseName: envOr("SNOWFLAKE_DB", "TYLER_DB"),
 		SchemaName:   "PUBLIC",
 		TableName:    "TEST_TABLE_KITCHEN_SINK",
 		BuildOptions: streaming.BuildOptions{Parallelism: 1, ChunkSize: 50_000},
@@ -278,7 +279,7 @@ func TestIntegerCompat(t *testing.T) {
 	restClient, streamClient := setup(t)
 	channelOpts := streaming.ChannelOptions{
 		Name:         t.Name(),
-		DatabaseName: envOr("SNOWFLAKE_DB", "BABY_DATABASE"),
+		DatabaseName: envOr("SNOWFLAKE_DB", "TYLER_DB"),
 		SchemaName:   "PUBLIC",
 		TableName:    "TEST_INT_TABLE",
 		BuildOptions: streaming.BuildOptions{Parallelism: 1, ChunkSize: 50_000},
@@ -353,7 +354,7 @@ func TestTimestampCompat(t *testing.T) {
 	restClient, streamClient := setup(t)
 	channelOpts := streaming.ChannelOptions{
 		Name:         t.Name(),
-		DatabaseName: envOr("SNOWFLAKE_DB", "BABY_DATABASE"),
+		DatabaseName: envOr("SNOWFLAKE_DB", "TYLER_DB"),
 		SchemaName:   "PUBLIC",
 		TableName:    "TEST_TIMESTAMP_TABLE",
 		BuildOptions: streaming.BuildOptions{Parallelism: 1, ChunkSize: 50_000},
@@ -502,7 +503,7 @@ func TestChannelReopenFails(t *testing.T) {
 	restClient, streamClient := setup(t)
 	channelOpts := streaming.ChannelOptions{
 		Name:         t.Name(),
-		DatabaseName: envOr("SNOWFLAKE_DB", "BABY_DATABASE"),
+		DatabaseName: envOr("SNOWFLAKE_DB", "TYLER_DB"),
 		SchemaName:   "PUBLIC",
 		TableName:    "TEST_CHANNEL_TABLE",
 		BuildOptions: streaming.BuildOptions{Parallelism: 1, ChunkSize: 50_000},
@@ -567,7 +568,7 @@ func TestChannelOffsetToken(t *testing.T) {
 	restClient, streamClient := setup(t)
 	channelOpts := streaming.ChannelOptions{
 		Name:         t.Name(),
-		DatabaseName: envOr("SNOWFLAKE_DB", "BABY_DATABASE"),
+		DatabaseName: envOr("SNOWFLAKE_DB", "TYLER_DB"),
 		SchemaName:   "PUBLIC",
 		TableName:    "TEST_OFFSET_TOKEN_TABLE",
 		BuildOptions: streaming.BuildOptions{Parallelism: 1, ChunkSize: 50_000},
@@ -608,7 +609,12 @@ func TestChannelOffsetToken(t *testing.T) {
 	}, &streaming.OffsetTokenRange{Start: "0", End: "2"})
 	require.NoError(t, err)
 	require.Equal(t, ptr(streaming.OffsetToken("2")), channelA.LatestOffsetToken())
-	_, err = channelA.WaitUntilCommitted(ctx, time.Minute)
+	_, err = channelA.WaitUntilCommitted(ctx, streaming.CommitBackoffOptions{
+		InitialInterval: 32 * time.Millisecond,
+		MaxInterval:     512 * time.Millisecond,
+		MaxElapsedTime:  time.Minute,
+		Multiplier:      2,
+	})
 	require.NoError(t, err)
 	channelB, err := streamClient.OpenChannel(ctx, channelOpts)
 	require.NoError(t, err)

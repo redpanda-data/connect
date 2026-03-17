@@ -1,0 +1,53 @@
+version: '3'
+
+vars:
+  PROFILE_DIR: ./profiles
+
+tasks:
+  up:
+    cmds:
+      - docker compose up -d
+      - 'echo "Grafana: http://localhost:3000"'
+      - 'echo "Prometheus: http://localhost:9090"'
+    silent: true
+
+  down:
+    cmd: docker compose down -v --remove-orphans
+    silent: true
+
+  profile:
+    desc: "Capture all profiles (CPU, memory, blocking)"
+    cmds:
+      - task: profile:cpu
+      - task: profile:mem
+      - task: profile:block
+
+  profile:cpu:
+    desc: "Capture CPU profile for 30 seconds"
+    cmds:
+      - mkdir -p {{.PROFILE_DIR}}
+      - curl -o {{.PROFILE_DIR}}/cpu.pprof http://localhost:4195/debug/pprof/profile?seconds=30
+
+  profile:mem:
+    desc: "Capture memory profile"
+    cmds:
+      - mkdir -p {{.PROFILE_DIR}}
+      - curl -o {{.PROFILE_DIR}}/mem.pprof http://localhost:4195/debug/pprof/heap
+
+  profile:block:
+    desc: "Capture goroutine blocking profile"
+    cmds:
+      - mkdir -p {{.PROFILE_DIR}}
+      - curl -o {{.PROFILE_DIR}}/block.pprof http://localhost:4195/debug/pprof/block
+
+  pprof:cpu:
+    desc: "Open CPU profile in browser"
+    cmd: go tool pprof -http :8080 {{.PROFILE_DIR}}/cpu.pprof
+
+  pprof:mem:
+    desc: "Open memory profile in browser"
+    cmd: go tool pprof -http :8080 {{.PROFILE_DIR}}/mem.pprof
+
+  pprof:block:
+    desc: "Open blocking profile in browser"
+    cmd: go tool pprof -http :8080 {{.PROFILE_DIR}}/block.pprof

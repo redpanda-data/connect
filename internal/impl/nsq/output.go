@@ -97,6 +97,32 @@ func newNSQWriterFromParsed(conf *service.ParsedConfig, mgr *service.Resources) 
 	return
 }
 
+// ConnectionTest attempts to test the connection configuration of this output
+// without actually sending data. The connection, if successful, is then
+// closed.
+func (n *nsqWriter) ConnectionTest(_ context.Context) service.ConnectionTestResults {
+	cfg := nsq.NewConfig()
+	cfg.UserAgent = n.userAgent
+	if n.tlsConf != nil {
+		cfg.TlsV1 = true
+		cfg.TlsConfig = n.tlsConf
+	}
+
+	producer, err := nsq.NewProducer(n.address, cfg)
+	if err != nil {
+		return service.ConnectionTestFailed(err).AsList()
+	}
+	defer producer.Stop()
+
+	producer.SetLogger(llog.New(io.Discard, "", llog.Flags()), nsq.LogLevelError)
+
+	if err := producer.Ping(); err != nil {
+		return service.ConnectionTestFailed(err).AsList()
+	}
+
+	return service.ConnectionTestSucceeded().AsList()
+}
+
 func (n *nsqWriter) Connect(context.Context) error {
 	n.connMut.Lock()
 	defer n.connMut.Unlock()

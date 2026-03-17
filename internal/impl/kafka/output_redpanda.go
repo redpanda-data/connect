@@ -26,6 +26,7 @@ import (
 
 const (
 	roFieldMaxInFlight = "max_in_flight"
+	roFieldBatching    = "batching"
 )
 
 func redpandaOutputConfig() *service.ConfigSpec {
@@ -37,17 +38,45 @@ func redpandaOutputConfig() *service.ConfigSpec {
 Writes a batch of messages to Kafka brokers and waits for acknowledgement before propagating it back to the input.
 `).
 		Fields(redpandaOutputConfigFields()...).
-		LintRule(FranzWriterConfigLints())
+		LintRule(FranzWriterConfigLints()).
+		Example("Simple Common Output", "Data is generated and written to a topic bar, targeting the cluster configured within the redpanda block at the bottom. This is useful as it allows us to configure TLS and SASL only once for potentially multiple inputs and outputs.", `
+input:
+  generate:
+    interval: 1s
+    mapping: 'root.name = fake("name")'
+
+pipeline:
+  processors:
+    - mutation: |
+        root.id = uuid_v4()
+        root.loud_name = this.name.uppercase()
+
+output:
+  redpanda:
+    topic: bar
+    key: ${! @id }
+
+redpanda:
+  seed_brokers: [ "127.0.0.1:9092" ]
+  tls:
+    enabled: true
+  sasl:
+    - mechanism: SCRAM-SHA-512
+      password: bar
+      username: foo
+`)
 }
 
 func redpandaOutputConfigFields() []*service.ConfigField {
 	return slices.Concat(
-		FranzConnectionFields(),
+		FranzConnectionOptionalFields(),
 		FranzWriterConfigFields(),
 		[]*service.ConfigField{
 			service.NewIntField(roFieldMaxInFlight).
 				Description("The maximum number of batches to be sending in parallel at any given time.").
 				Default(256),
+			service.NewBatchPolicyField(roFieldBatching).
+				Description("Optional explicit batching policy for the output. Note that when batches are formed at the input level they can be expanded by this policy, but not contracted. When consuming data from a Redpanda input it is recommended to tune batches from the input config via the `max_yield_batch_bytes` field, or the `unordered_processing.batching` field if appropriate."),
 		},
 		FranzProducerFields(),
 	)
@@ -65,51 +94,69 @@ func init() {
 				return
 			}
 
-			var tmpOpts, clientOpts []kgo.Opt
-
 			var connDetails *FranzConnectionDetails
 			if connDetails, err = FranzConnectionDetailsFromConfig(conf, mgr.Logger()); err != nil {
 				return
 			}
-			clientOpts = append(clientOpts, connDetails.FranzOpts()...)
 
-			if tmpOpts, err = FranzProducerOptsFromConfig(conf); err != nil {
+			var producerOpts []kgo.Opt
+			if producerOpts, err = FranzProducerOptsFromConfig(conf); err != nil {
 				return
 			}
-			clientOpts = append(clientOpts, tmpOpts...)
 
-			var client *kgo.Client
-			var clientMut sync.Mutex
+			if batchPolicy, err = conf.FieldBatchPolicy(roFieldBatching); err != nil {
+				return
+			}
 
-			output, err = NewFranzWriterFromConfig(
-				conf,
-				NewFranzWriterHooks(
-					func(ctx context.Context, fn FranzSharedClientUseFn) error {
-						clientMut.Lock()
-						defer clientMut.Unlock()
+			if connDetails.IsConfigured() {
+				var client *kgo.Client
+				var clientMut sync.Mutex
 
-						if client == nil {
-							var err error
-							if client, err = NewFranzClient(ctx, clientOpts...); err != nil {
-								return err
+				output, err = NewFranzWriterFromConfig(
+					conf,
+					NewFranzWriterHooks(
+						func(ctx context.Context, fn FranzSharedClientUseFn) error {
+							clientMut.Lock()
+							defer clientMut.Unlock()
+
+							if client == nil {
+								var err error
+								if client, err = NewFranzClient(ctx, append(connDetails.FranzOpts(), producerOpts...)...); err != nil {
+									return err
+								}
 							}
-						}
-						return fn(&FranzSharedClientInfo{
-							Client:      client,
-							ConnDetails: connDetails,
-						})
-					}).WithYieldClientFn(
-					func(context.Context) error {
-						clientMut.Lock()
-						defer clientMut.Unlock()
+							return fn(&FranzSharedClientInfo{
+								Client:      client,
+								ConnDetails: connDetails,
+							})
+						}).WithYieldClientFn(
+						func(context.Context) error {
+							clientMut.Lock()
+							defer clientMut.Unlock()
 
-						if client == nil {
+							if client == nil {
+								return nil
+							}
+							client.Close()
+							client = nil
 							return nil
-						}
-						client.Close()
-						client = nil
-						return nil
-					}))
+						}))
+			} else {
+				mgr.Logger().Info("Connection fields omitted, falling back to common redpanda config.")
+
+				// We're using a common redpanda block to determine the connection.
+				output, err = NewFranzWriterFromConfig(
+					conf,
+					NewFranzWriterHooks(
+						func(_ context.Context, fn FranzSharedClientUseFn) error {
+							return FranzSharedClientUse(SharedGlobalRedpandaClientKey, mgr, fn)
+						},
+					).WithYieldClientFn(
+						func(context.Context) error { return nil },
+					),
+				)
+			}
+
 			return
 		})
 }

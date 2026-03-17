@@ -29,7 +29,6 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/confluent/sr"
-	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
 const (
@@ -186,10 +185,6 @@ We generally recommend altering this or temperature but not both.`).
 }
 
 func makeChatProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
-	if err := license.CheckRunningEnterprise(mgr); err != nil {
-		return nil, err
-	}
-
 	b, err := newBaseProcessor(conf)
 	if err != nil {
 		return nil, err
@@ -292,7 +287,7 @@ func makeChatProcessor(conf *service.ParsedConfig, mgr *service.Resources) (serv
 		}
 	case "text":
 		responseFormat.Type = "text"
-		responseFormat.Text = &cohere.TextResponseFormatV2{}
+		responseFormat.Text = &cohere.ChatTextResponseFormatV2{}
 	default:
 		return nil, fmt.Errorf("unknown %s: %q", ccpFieldResponseFormat, v)
 	}
@@ -345,7 +340,7 @@ func makeChatProcessor(conf *service.ParsedConfig, mgr *service.Resources) (serv
 			params[paramName] = param
 		}
 		tool := cohere.ToolV2{
-			Type: cohere.String("function"),
+			Type: new("function"),
 			Function: &cohere.ToolV2Function{
 				Name:        name,
 				Description: &desc,
@@ -454,7 +449,7 @@ func (p *chatProcessor) Process(ctx context.Context, msg *service.Message) (serv
 		}
 		body.Messages = append(body.Messages, &cohere.ChatMessageV2{
 			Role:   "system",
-			System: &cohere.SystemMessage{Content: &cohere.SystemMessageContent{String: s}},
+			System: &cohere.SystemMessageV2{Content: &cohere.SystemMessageV2Content{String: s}},
 		})
 	}
 	if p.userPrompt != nil {
@@ -464,7 +459,7 @@ func (p *chatProcessor) Process(ctx context.Context, msg *service.Message) (serv
 		}
 		body.Messages = append(body.Messages, &cohere.ChatMessageV2{
 			Role: "user",
-			User: &cohere.UserMessage{Content: &cohere.UserMessageContent{String: s}},
+			User: &cohere.UserMessageV2{Content: &cohere.UserMessageV2Content{String: s}},
 		})
 	} else {
 		b, err := msg.AsBytes()
@@ -473,14 +468,14 @@ func (p *chatProcessor) Process(ctx context.Context, msg *service.Message) (serv
 		}
 		body.Messages = append(body.Messages, &cohere.ChatMessageV2{
 			Role: "user",
-			User: &cohere.UserMessage{Content: &cohere.UserMessageContent{String: string(b)}},
+			User: &cohere.UserMessageV2{Content: &cohere.UserMessageV2Content{String: string(b)}},
 		})
 	}
 	for _, tool := range p.tools {
 		body.Tools = append(body.Tools, &tool.tool)
 	}
 	var err error
-	var resp *cohere.ChatResponse
+	var resp *cohere.V2ChatResponse
 	for i := 0; i <= p.maxToolCalls; i++ {
 		if i == p.maxToolCalls {
 			body.Tools = nil // Disallow tools
@@ -501,7 +496,7 @@ func (p *chatProcessor) Process(ctx context.Context, msg *service.Message) (serv
 			}
 			// Fix a bug in cohere API when the function arguments are null, it expects a valid JSON object in the response.
 			if tool.Function.Arguments == nil || *tool.Function.Arguments == "null" {
-				tool.Function.Arguments = cohere.String(`{}`)
+				tool.Function.Arguments = new(`{}`)
 			}
 		}
 		body.Messages = append(body.Messages, &cohere.ChatMessageV2{
@@ -544,7 +539,7 @@ func (p *chatProcessor) Process(ctx context.Context, msg *service.Message) (serv
 				}
 				outputs = append(outputs, &cohere.ToolContent{
 					Type: "text",
-					Text: &cohere.TextContent{Text: string(v)},
+					Text: &cohere.ChatTextContent{Text: string(v)},
 				})
 			}
 			body.Messages = append(body.Messages, &cohere.ChatMessageV2{

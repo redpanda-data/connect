@@ -297,6 +297,25 @@ func amqp09WriterFromParsed(conf *service.ParsedConfig, mgr *service.Resources) 
 	return &a, nil
 }
 
+// ConnectionTest attempts to test the connection configuration of this output
+// without actually sending data. The connection, if successful, is then
+// closed.
+func (a *amqp09Writer) ConnectionTest(_ context.Context) service.ConnectionTestResults {
+	conn, err := a.reDial(a.urls)
+	if err != nil {
+		return service.ConnectionTestFailed(err).AsList()
+	}
+	defer conn.Close()
+
+	amqpChan, err := conn.Channel()
+	if err != nil {
+		return service.ConnectionTestFailed(fmt.Errorf("amqp creating channel: %w", err)).AsList()
+	}
+	defer amqpChan.Close()
+
+	return service.ConnectionTestSucceeded().AsList()
+}
+
 func (a *amqp09Writer) Connect(context.Context) error {
 	a.connLock.Lock()
 	defer a.connLock.Unlock()
@@ -309,7 +328,7 @@ func (a *amqp09Writer) Connect(context.Context) error {
 	var amqpChan *amqp.Channel
 	if amqpChan, err = conn.Channel(); err != nil {
 		conn.Close()
-		return fmt.Errorf("amqp failed to create channel: %w", err)
+		return fmt.Errorf("amqp creating channel: %w", err)
 	}
 
 	if err = amqpChan.Confirm(false); err != nil {
@@ -325,7 +344,7 @@ func (a *amqp09Writer) Connect(context.Context) error {
 
 	if sExchange, isStatic := a.exchange.Static(); isStatic {
 		if err := a.declareExchange(sExchange); err != nil {
-			a.log.Errorf("Failed to declare exchange: %w", err)
+			a.log.Errorf("Failed to declare exchange: %v", err)
 		}
 	}
 	return nil
@@ -341,14 +360,14 @@ func (a *amqp09Writer) disconnect() error {
 	}
 	if a.conn != nil {
 		if err := a.conn.Close(); err != nil {
-			a.log.Errorf("Failed to close connection cleanly: %w", err)
+			a.log.Errorf("Failed to close connection cleanly: %v", err)
 		}
 		a.conn = nil
 	}
 	return nil
 }
 
-// declareExchange declare and memoize the declaration of an AMQP exchange
+// declareExchange declare and memoize the declaration of an AMQP exchange.
 func (a *amqp09Writer) declareExchange(exchange string) error {
 	if !a.exchangeDeclare {
 		return nil
@@ -377,13 +396,13 @@ func (a *amqp09Writer) declareExchange(exchange string) error {
 		false,                    // noWait
 		a.exchangeDeclareArgs,    // arguments
 	); err != nil {
-		return fmt.Errorf("amqp failed to declare exchange: %w", err)
+		return fmt.Errorf("declaring amqp exchange: %w", err)
 	}
 	a.exchangesDeclared[exchange] = struct{}{}
 	return nil
 }
 
-var errNoAck = errors.New("failed to receive acknowledgement")
+var errNoAck = errors.New("receiving acknowledgement")
 
 func (a *amqp09Writer) Write(ctx context.Context, msg *service.Message) error {
 	a.connLock.RLock()
@@ -441,7 +460,7 @@ func (a *amqp09Writer) Write(ctx context.Context, msg *service.Message) error {
 	if priorityString != "" {
 		priorityInt, err := strconv.Atoi(priorityString)
 		if err != nil {
-			return fmt.Errorf("failed to parse valid integer from priority expression: %w", err)
+			return fmt.Errorf("parsing valid integer from priority expression: %w", err)
 		}
 		if priorityInt > 9 || priorityInt < 0 {
 			return fmt.Errorf("invalid priority parsed from expression, must be <= 9 and >= 0, got %d", priorityInt)
@@ -489,7 +508,7 @@ func (a *amqp09Writer) Write(ctx context.Context, msg *service.Message) error {
 		return fmt.Errorf("exchange name interpolation error: %w", err)
 	}
 	if err := a.declareExchange(exchange); err != nil {
-		return fmt.Errorf("amqp failed to declare exchange: %w", err)
+		return fmt.Errorf("declaring amqp exchange: %w", err)
 	}
 
 	conf, err := amqpChan.PublishWithDeferredConfirmWithContext(
@@ -517,7 +536,7 @@ func (a *amqp09Writer) Write(ctx context.Context, msg *service.Message) error {
 	)
 	if err != nil {
 		_ = a.disconnect()
-		a.log.Errorf("Failed to send message: %w", err)
+		a.log.Errorf("Failed to send message: %v", err)
 		return service.ErrNotConnected
 	}
 	if !conf.Wait() {

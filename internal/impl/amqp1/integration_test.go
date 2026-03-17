@@ -111,6 +111,36 @@ input:
     source_address: "queue:/$ID"
 `
 
+	templateWithAnonymousTerminus := `
+output:
+  amqp_1:
+    url: amqp://guest:guest@localhost:$PORT/
+    target_address: ""
+    message_properties_to: "queue:/$ID"
+    max_in_flight: $MAX_IN_FLIGHT
+    metadata:
+      exclude_prefixes: [ $OUTPUT_META_EXCLUDE_PREFIX ]
+input:
+  amqp_1:
+    url: amqp://guest:guest@localhost:$PORT/
+    source_address: "queue:/$ID"
+`
+
+	templateWithAnonymousTerminusBloblang := `
+output:
+  amqp_1:
+    url: amqp://guest:guest@localhost:$PORT/
+    target_address: ""
+    message_properties_to: '${! meta("target_queue").or("queue:/$ID") }'
+    max_in_flight: $MAX_IN_FLIGHT
+    metadata:
+      exclude_prefixes: [ $OUTPUT_META_EXCLUDE_PREFIX ]
+input:
+  amqp_1:
+    url: amqp://guest:guest@localhost:$PORT/
+    source_address: "queue:/$ID"
+`
+
 	testcases := []struct {
 		label    string
 		template string
@@ -127,10 +157,17 @@ input:
 			label:    "should handle content type string",
 			template: templateWithContentTypeString,
 		},
+		{
+			label:    "should handle Anonymous Terminus pattern",
+			template: templateWithAnonymousTerminus,
+		},
+		{
+			label:    "should handle Anonymous Terminus with Bloblang interpolation",
+			template: templateWithAnonymousTerminusBloblang,
+		},
 	}
 
 	for _, tc := range testcases {
-		tc := tc
 		t.Run(tc.label, func(t *testing.T) {
 			suite := integration.StreamTests(
 				integration.StreamTestOpenClose(),

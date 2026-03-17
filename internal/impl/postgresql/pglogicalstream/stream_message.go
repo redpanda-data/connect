@@ -44,4 +44,7 @@ type StreamMessage struct {
 	Table     string  `json:"table"`
 	// For deleted messages - there will be old changes if replica identity set to full or empty changes
 	Data any `json:"data"`
+	// ColumnSchema contains the table's column schema in benthos common schema format.
+	// It is set as message metadata and excluded from JSON serialization.
+	ColumnSchema any `json:"-"`
 }

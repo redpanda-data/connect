@@ -15,6 +15,7 @@
 package sentry
 
 import (
+	"context"
 	"time"
 
 	"github.com/getsentry/sentry-go"
@@ -42,6 +43,12 @@ func NewTransport(t interface {
 
 func (t *mockTransport) Flush(timeout time.Duration) bool {
 	args := t.Called(timeout)
+
+	return args.Bool(0)
+}
+
+func (t *mockTransport) FlushWithContext(context context.Context) bool {
+	args := t.Called(context)
 
 	return args.Bool(0)
 }

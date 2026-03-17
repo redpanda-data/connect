@@ -61,7 +61,7 @@ var pythonProcessorEmbeddedTemplate embed.FS
 func InitializeProject(lang PluginLanguage, compType ComponentType, directory string) error {
 	abs, err := filepath.Abs(directory)
 	if err != nil {
-		return fmt.Errorf("failed to get absolute path for directory %s: %w", directory, err)
+		return fmt.Errorf("getting absolute path for directory %s: %w", directory, err)
 	}
 	projectName := filepath.Base(abs)
 	if err := compType.Validate(); err != nil {
@@ -104,7 +104,7 @@ func InitializeProject(lang PluginLanguage, compType ComponentType, directory st
 		}),
 	)
 	if err != nil {
-		return fmt.Errorf("failed to create template for %s: %w", lang, err)
+		return fmt.Errorf("creating template for %s: %w", lang, err)
 	}
 	fmt.Printf("plugin `%s` created at `%s`\n", projectName, abs)
 	switch lang {

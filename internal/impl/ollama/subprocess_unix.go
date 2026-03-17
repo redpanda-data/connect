@@ -78,15 +78,15 @@ func (c *runOllamaConfig) downloadOllama(ctx context.Context, path string) error
 	}
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
-		return fmt.Errorf("failed to download ollama binary: %w", err)
+		return fmt.Errorf("downloading ollama binary: %w", err)
 	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to download ollama binary: %w", err)
+		return fmt.Errorf("downloading ollama binary: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
-		return fmt.Errorf("failed to download ollama binary: status_code=%d", resp.StatusCode)
+		return fmt.Errorf("downloading ollama binary: status_code=%d", resp.StatusCode)
 	}
 
 	if !strings.HasSuffix(url, ".tgz") {

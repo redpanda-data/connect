@@ -13,35 +13,43 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/stdlib"
 )
 
 var re = regexp.MustCompile(`^(\d+)`)
 
-func openPgConnectionFromConfig(dbDSN string) (*sql.DB, error) {
-	return sql.Open("postgres", dbDSN)
+func openPgConnectionFromConfig(cfg *Config) (*sql.DB, error) {
+	parsedCfg, err := pgxpool.ParseConfig(cfg.DBRawDSN)
+	if err != nil {
+		return nil, err
+	}
+	parsedCfg.ConnConfig.Password = cfg.DBConfig.Password
+	parsedCfg.ConnConfig.TLSConfig = cfg.TLSConfig
+	return stdlib.OpenDB(*parsedCfg.ConnConfig), nil
 }
 
-func getPostgresVersion(dbDSN string) (int, error) {
-	conn, err := openPgConnectionFromConfig(dbDSN)
+func getPostgresVersion(cfg *Config) (int, error) {
+	conn, err := openPgConnectionFromConfig(cfg)
 	if err != nil {
-		return 0, fmt.Errorf("failed to connect to the database: %w", err)
+		return 0, fmt.Errorf("connecting to the database: %w", err)
 	}
 	defer conn.Close()
 
 	var versionString string
-	err = conn.QueryRow("SHOW server_version").Scan(&versionString)
-	if err != nil {
-		return 0, fmt.Errorf("failed to execute query: %w", err)
+	if err = conn.QueryRow("SHOW server_version").Scan(&versionString); err != nil {
+		return 0, fmt.Errorf("executing query: %w", err)
 	}
 
 	match := re.FindStringSubmatch(versionString)
 	if len(match) < 2 {
-		return 0, fmt.Errorf("failed to parse version string: %s", versionString)
+		return 0, fmt.Errorf("parsing version string: %s", versionString)
 	}
 
 	majorVersion, err := strconv.Atoi(match[1])
 	if err != nil {
-		return 0, fmt.Errorf("failed to convert version to integer: %w", err)
+		return 0, fmt.Errorf("converting version to integer: %w", err)
 	}
 
 	return majorVersion, nil

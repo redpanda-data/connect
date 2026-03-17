@@ -44,7 +44,7 @@ func TestSchemaRegistryDecoderConfigParse(t *testing.T) {
 			config: `
 url: huh#%#@$u*not////::example.com
 `,
-			errContains: `failed to parse url`,
+			errContains: `parsing url`,
 		},
 		{
 			name: "url with base path",
@@ -322,7 +322,6 @@ func TestSchemaRegistryDecodeAvro(t *testing.T) {
 	require.NoError(t, err)
 
 	for _, test := range tests {
-		test := test
 		fn := func(t *testing.T, useHamba bool) {
 			decoder := goAvroDecoder
 			if useHamba {
@@ -535,7 +534,6 @@ func TestSchemaRegistryDecodeAvroRawJson(t *testing.T) {
 	require.NoError(t, err)
 
 	for _, test := range tests {
-		test := test
 		fn := func(t *testing.T, useHamba bool) {
 			decoder := goAvroDecoder
 			if useHamba {
@@ -643,7 +641,7 @@ func TestSchemaRegistryDecodeProtobuf(t *testing.T) {
 		{
 			name:   "successful message",
 			input:  "\x00\x00\x00\x00\x01\x00\b\xa2\xb8\xe2\xec\xaf+\x12\x06User_2\x1a\bRegion_9\"\x05OTHER",
-			output: `{"registertime":"1490313321506","userid":"User_2","regionid":"Region_9","gender":"OTHER"}`,
+			output: `{"registertime":1490313321506,"userid":"User_2","regionid":"Region_9","gender":"OTHER"}`,
 		},
 		{
 			name:        "not supported message",
@@ -653,7 +651,6 @@ func TestSchemaRegistryDecodeProtobuf(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			outMsgs, err := decoder.Process(t.Context(), service.NewMessage([]byte(test.input)))
 			if test.errContains != "" {
@@ -717,7 +714,6 @@ func TestSchemaRegistryDecodeWithDefaultSchemaID(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			cfg := decodingConfig{}
 			cfg.avro.rawUnions = false
@@ -799,7 +795,6 @@ func TestSchemaRegistryDecodeJson(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			outMsgs, err := decoder.Process(t.Context(), service.NewMessage([]byte(test.input)))
 			if test.errContains != "" {

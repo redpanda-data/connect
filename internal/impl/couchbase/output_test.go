@@ -136,6 +136,9 @@ func TestIntegrationCouchbaseOutput(t *testing.T) {
 	t.Run("Replace", func(t *testing.T) {
 		testCouchbaseOutputReplace(payload, bucket, servicePort, t)
 	})
+	t.Run("Upsert TTL", func(t *testing.T) {
+		testCouchbaseOutputUpsertTTL(payload, bucket, servicePort, t)
+	})
 }
 
 func getOutput(tb testing.TB, config string) service.BatchOutput {
@@ -224,4 +227,24 @@ operation: 'remove'
 	})
 
 	assert.NoError(t, err)
+}
+
+func testCouchbaseOutputUpsertTTL(payload, bucket, port string, t *testing.T) {
+	config := fmt.Sprintf(`
+url: 'couchbase://localhost:%s'
+bucket: %s
+username: %s
+password: %s
+id: '${! json("id") }'
+content: 'root = this'
+operation: 'upsert'
+ttl: 1s
+`, port, bucket, username, password)
+
+	err := getOutput(t, config).WriteBatch(t.Context(), service.MessageBatch{
+		service.NewMessage([]byte(payload)),
+	})
+	assert.NoError(t, err)
+
+	time.Sleep(2 * time.Second)
 }

@@ -1,0 +1,27 @@
+# S3 Sink - Basic
+# Pattern: Cloud Storage - S3 Write
+# Difficulty: Intermediate
+
+input:
+  kafka_franz:
+    seed_brokers: ["${KAFKA_BROKER}"]
+    topics: ["${SOURCE_TOPIC}"]
+    consumer_group: "${CONSUMER_GROUP}"
+
+pipeline:
+  processors:
+    - mapping: |
+        root = this
+        meta s3_key = "data/%v/%v/%v.json".format(now().format("2006/01/02"), uuid_v4())
+
+output:
+  aws_s3:
+    bucket: "${S3_BUCKET}"
+    path: ${!metadata("s3_key")}
+    region: "${AWS_REGION}"
+    credentials:
+      id: "${AWS_ACCESS_KEY_ID}"
+      secret: "${AWS_SECRET_ACCESS_KEY}"
+    batching:
+      count: 100
+      period: 60s

@@ -15,11 +15,11 @@
 package ollama
 
 import (
+	"context"
 	"net/http"
 	"net/url"
 	"testing"
 
-	"github.com/ollama/ollama/api"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go/modules/ollama"
@@ -36,7 +36,7 @@ func createEmbeddingsProcessorForTest(t *testing.T, addr string) *ollamaEmbeddin
 		baseOllamaProcessor: &baseOllamaProcessor{
 			// use smallest model possible to make it cheaper
 			model:  "all-minilm",
-			client: api.NewClient(url, http.DefaultClient),
+			client: NewClient(url, http.DefaultClient),
 		},
 		text: nil,
 	}
@@ -48,11 +48,11 @@ func TestOllamaEmbeddingsIntegration(t *testing.T) {
 	ctx := t.Context()
 	ollamaContainer, err := ollama.Run(ctx, "ollama/ollama:0.9.0")
 	assert.NoError(t, err)
-	defer func() {
-		if err := ollamaContainer.Terminate(ctx); err != nil {
+	t.Cleanup(func() {
+		if err := ollamaContainer.Terminate(context.Background()); err != nil {
 			t.Fatalf("failed to terminate container: %s", err)
 		}
-	}()
+	})
 	addr, err := ollamaContainer.ConnectionString(ctx)
 	assert.NoError(t, err)
 	proc := createEmbeddingsProcessorForTest(t, addr)

@@ -21,8 +21,6 @@ import (
 	"github.com/Masterminds/squirrel"
 	"github.com/jackc/pgtype"
 
-	_ "github.com/lib/pq"
-
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream/sanitize"
@@ -42,14 +40,15 @@ type snapshotter struct {
 	txnPool pool.Capped[*sql.Tx]
 }
 
-// newSnapshotter creates a new Snapshotter instance
+// newSnapshotter creates a new Snapshotter instance.
 func newSnapshotter(
-	dbDSN string,
+	config *Config,
+	_ string,
 	logger *service.Logger,
 	snapshotName string,
 	maxReaders int,
 ) (*snapshotter, error) {
-	pgConn, err := openPgConnectionFromConfig(dbDSN)
+	pgConn, err := openPgConnectionFromConfig(config)
 	if err != nil {
 		return nil, err
 	}
@@ -216,7 +215,7 @@ _rpcn__sampled_keys AS MATERIALIZED (
 
 	query, err = sanitize.SQLQuery(query, table.String())
 	if err != nil {
-		return nil, fmt.Errorf("failed to sanitize query: %w", err)
+		return nil, fmt.Errorf("sanitizing query: %w", err)
 	}
 	rows, err := s.tx.QueryContext(ctx, query)
 	if err != nil {
@@ -225,7 +224,7 @@ _rpcn__sampled_keys AS MATERIALIZED (
 
 	columnTypes, err := rows.ColumnTypes()
 	if err != nil {
-		return nil, fmt.Errorf("failed to compute column types for key sampling: %w", err)
+		return nil, fmt.Errorf("computing column types for key sampling: %w", err)
 	}
 	scanArgs, valueGetters := prepareScannersAndGetters(columnTypes)
 	for rows.Next() {
@@ -257,7 +256,7 @@ type tuple struct {
 func (t *tuple) ToSql() (sql string, args []any, err error) {
 	sql = "(" + strings.Join(slices.Repeat([]string{"?"}, len(t.elements)), ", ") + ")"
 	args = t.elements
-	return
+	return sql, args, err
 }
 
 var _ squirrel.Sqlizer = &tuple{}
@@ -297,8 +296,8 @@ func prepareScannersAndGetters(columnTypes []*sql.ColumnType) ([]any, []func(any
 	valueGetters := make([]func(any) (any, error), len(columnTypes))
 
 	for i, v := range columnTypes {
-		switch v.DatabaseTypeName() {
-		case "VARCHAR", "TEXT", "UUID", "TIMESTAMP":
+		switch resolveTypeName(v.DatabaseTypeName()) {
+		case "VARCHAR", "TEXT", "UUID":
 			scanArgs[i] = new(sql.NullString)
 			valueGetters[i] = func(v any) (any, error) {
 				str := v.(*sql.NullString)
@@ -316,7 +315,16 @@ func prepareScannersAndGetters(columnTypes []*sql.ColumnType) ([]any, []func(any
 				}
 				return val.Bool, nil
 			}
-		case "INT4":
+		case "INT2", "INT4":
+			scanArgs[i] = new(sql.NullInt32)
+			valueGetters[i] = func(v any) (any, error) {
+				val := v.(*sql.NullInt32)
+				if !val.Valid {
+					return nil, nil
+				}
+				return val.Int32, nil
+			}
+		case "INT8":
 			scanArgs[i] = new(sql.NullInt64)
 			valueGetters[i] = func(v any) (any, error) {
 				val := v.(*sql.NullInt64)
@@ -325,7 +333,34 @@ func prepareScannersAndGetters(columnTypes []*sql.ColumnType) ([]any, []func(any
 				}
 				return val.Int64, nil
 			}
-		case "JSONB":
+		case "FLOAT4":
+			scanArgs[i] = new(sql.NullFloat64)
+			valueGetters[i] = func(v any) (any, error) {
+				val := v.(*sql.NullFloat64)
+				if !val.Valid {
+					return nil, nil
+				}
+				return float32(val.Float64), nil
+			}
+		case "FLOAT8":
+			scanArgs[i] = new(sql.NullFloat64)
+			valueGetters[i] = func(v any) (any, error) {
+				val := v.(*sql.NullFloat64)
+				if !val.Valid {
+					return nil, nil
+				}
+				return val.Float64, nil
+			}
+		case "DATE", "TIMESTAMP", "TIMESTAMPTZ":
+			scanArgs[i] = new(sql.NullTime)
+			valueGetters[i] = func(v any) (any, error) {
+				val := v.(*sql.NullTime)
+				if !val.Valid {
+					return nil, nil
+				}
+				return val.Time, nil
+			}
+		case "JSON", "JSONB":
 			scanArgs[i] = new(sql.NullString)
 			valueGetters[i] = func(v any) (any, error) {
 				str := v.(*sql.NullString)
@@ -400,7 +435,7 @@ func prepareScannersAndGetters(columnTypes []*sql.ColumnType) ([]any, []func(any
 
 				return newArray.Elements, nil
 			}
-		default:
+		default: // NUMERIC and other unhandled types scan as string.
 			scanArgs[i] = new(sql.NullString)
 			valueGetters[i] = func(v any) (any, error) {
 				val := v.(*sql.NullString)

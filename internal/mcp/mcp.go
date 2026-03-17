@@ -25,13 +25,14 @@ import (
 	"os"
 
 	"github.com/gorilla/mux"
-	"github.com/mark3labs/mcp-go/server"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.opentelemetry.io/otel/propagation"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/gateway"
 	"github.com/redpanda-data/connect/v4/internal/license"
+	"github.com/redpanda-data/connect/v4/internal/mcp/metrics"
 	"github.com/redpanda-data/connect/v4/internal/mcp/repository"
 	"github.com/redpanda-data/connect/v4/internal/mcp/starlark"
 	"github.com/redpanda-data/connect/v4/internal/mcp/tools"
@@ -47,13 +48,15 @@ func (g *gMux) HandleFunc(pattern string, handler func(http.ResponseWriter, *htt
 	g.m.Path(pattern).HandlerFunc(handler) // TODO: PathPrefix?
 }
 
-// Server runs an mcp server against a target directory, with an optiona base
+// Server runs an mcp server against a target directory, with an optional base
 // URL for an HTTP server.
 type Server struct {
-	base  *server.MCPServer
-	mux   *mux.Router
-	rpJWT *gateway.RPJWTMiddleware
-	cors  gateway.CORSConfig
+	base             *mcp.Server
+	mux              *mux.Router
+	observabilityMux *http.ServeMux
+	rpJWT            *gateway.RPJWTMiddleware
+	cors             gateway.CORSConfig
+	resources        *service.Resources
 }
 
 // NewServer initializes the MCP server.
@@ -64,14 +67,16 @@ func NewServer(
 	filterFunc func(label string) bool,
 	tagFilterFunc func(tags []string) bool,
 	licenseConfig license.Config,
+	auth *Authorizer,
 ) (*Server, error) {
 	// Create MCP server
-	s := server.NewMCPServer(
-		"Redpanda Runtime",
-		"1.0.0",
-	)
+	s := mcp.NewServer(&mcp.Implementation{
+		Name:    "Redpanda Runtime",
+		Version: "1.0.0",
+	}, nil)
 
 	mux := mux.NewRouter()
+	observabilityMux := http.NewServeMux()
 
 	env := service.GlobalEnvironment()
 
@@ -152,7 +157,43 @@ func NewServer(
 		return nil, err
 	}
 
+	// The metrics exporter should have registered itself via SetHTTPMux during Build()
+	// If it did, HandleFunc will have been called on our gMux wrapper
+	logger.Info("Finished building resources, metrics should be registered if configured")
+
+	// Register metrics endpoints on the observability mux (without authentication)
+	// by proxying to the main mux routes
+	observabilityMux.HandleFunc("/metrics", func(w http.ResponseWriter, r *http.Request) {
+		mux.ServeHTTP(w, r)
+	})
+	observabilityMux.HandleFunc("/stats", func(w http.ResponseWriter, r *http.Request) {
+		mux.ServeHTTP(w, r)
+	})
+
 	license.RegisterService(resources, licenseConfig)
+
+	// Add metrics middleware to track all MCP method calls
+	mcpMetrics := metrics.NewMetrics(resources.Metrics())
+	s.AddReceivingMiddleware(mcpMetrics.ReceivingMiddleware)
+	s.AddSendingMiddleware(mcpMetrics.SendingMiddleware)
+
+	if auth != nil {
+		if err := license.CheckRunningEnterprise(resources); err != nil {
+			return nil, fmt.Errorf("unable to apply authorization policy: %w", err)
+		}
+		s.AddReceivingMiddleware(auth.Middleware)
+	}
+
+	s.AddReceivingMiddleware(func(next mcp.MethodHandler) mcp.MethodHandler {
+		return func(ctx context.Context, method string, req mcp.Request) (result mcp.Result, err error) {
+			// Propagate tracing using the traceparent header from the request
+			if extra := req.GetExtra(); extra != nil && extra.Header != nil {
+				w3cTraceContext := propagation.TraceContext{}
+				ctx = w3cTraceContext.Extract(ctx, propagation.HeaderCarrier(extra.Header))
+			}
+			return next(ctx, method, req)
+		}
+	})
 
 	rpJWT, err := gateway.NewRPJWTMiddleware(resources)
 	if err != nil {
@@ -161,44 +202,39 @@ func NewServer(
 
 	cors := gateway.NewCORSConfigFromEnv()
 
-	return &Server{s, mux, rpJWT, cors}, nil
+	return &Server{
+		base:             s,
+		mux:              mux,
+		observabilityMux: observabilityMux,
+		rpJWT:            rpJWT,
+		cors:             cors,
+		resources:        resources,
+	}, nil
+}
+
+// Resources returns the server's service resources for testing purposes.
+func (m *Server) Resources() *service.Resources {
+	return m.resources
 }
 
 // ServeStdio attempts to run the MCP server in stdio mode.
 func (m *Server) ServeStdio() error {
-	if err := server.ServeStdio(m.base); err != nil {
-		return err
-	}
-	return nil
+	return m.base.Run(context.Background(), &mcp.StdioTransport{})
 }
 
 func (m *Server) addSSEEndpoints() {
-	sseServer := server.NewSSEServer(
-		m.base,
-		server.WithSSEContextFunc(func(ctx context.Context, r *http.Request) context.Context {
-			// Propagate tracing using the traceparent header from the request to the handlers in the MCP server.
-			w3cTraceContext := propagation.TraceContext{}
-			ctx = w3cTraceContext.Extract(ctx, propagation.HeaderCarrier(r.Header))
-			return ctx
-		}),
-	)
-
-	m.mux.PathPrefix("/sse").Handler(sseServer)
-	m.mux.PathPrefix("/message").Handler(sseServer)
+	sseHandler := mcp.NewSSEHandler(func(_ *http.Request) *mcp.Server {
+		return m.base
+	}, nil)
+	m.mux.PathPrefix("/sse").Handler(sseHandler)
+	m.mux.PathPrefix("/message").Handler(sseHandler)
 }
 
 func (m *Server) addStreamableEndpoints() {
-	streamableServer := server.NewStreamableHTTPServer(
-		m.base,
-		server.WithHTTPContextFunc(func(ctx context.Context, r *http.Request) context.Context {
-			// Propagate tracing using the traceparent header from the request to the handlers in the MCP server.
-			w3cTraceContext := propagation.TraceContext{}
-			ctx = w3cTraceContext.Extract(ctx, propagation.HeaderCarrier(r.Header))
-			return ctx
-		}),
-	)
-
-	m.mux.PathPrefix("/mcp").Handler(streamableServer)
+	streamableHandler := mcp.NewStreamableHTTPHandler(func(_ *http.Request) *mcp.Server {
+		return m.base
+	}, nil)
+	m.mux.PathPrefix("/mcp").Handler(streamableHandler)
 }
 
 // ServeHTTP attempts to run the MCP server over HTTP.
@@ -208,6 +244,25 @@ func (m *Server) ServeHTTP(ctx context.Context, l net.Listener) error {
 
 	srv := &http.Server{
 		Handler: m.cors.WrapHandler(m.rpJWT.Wrap(m.mux)),
+	}
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	go func() {
+		<-ctx.Done()
+		_ = srv.Shutdown(context.Background())
+	}()
+	err := srv.Serve(l)
+	if errors.Is(err, http.ErrServerClosed) {
+		return nil
+	}
+	return err
+}
+
+// ServeObservability serves the observability endpoints (metrics, stats) on a separate listener.
+// These endpoints are unauthenticated for easy access by monitoring systems.
+func (m *Server) ServeObservability(ctx context.Context, l net.Listener) error {
+	srv := &http.Server{
+		Handler: m.observabilityMux,
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()

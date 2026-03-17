@@ -1,0 +1,32 @@
+input:
+  generate:
+    count: 100
+    interval: 100ms
+    mapping: |
+      root.id = counter()
+      root.name = ["alice", "bob", "charlie"].index(counter() % 3)
+      root.event_type = ["click", "view", "purchase"].index(counter() % 3)
+      root.value = (counter() * 10) + random_int(max: 100)
+      root.ts = now()
+
+output:
+  iceberg:
+    catalog:
+      url: ${glue_catalog_url}
+      warehouse: ${warehouse}
+      auth:
+        aws_sigv4:
+          region: ${region}
+          service: glue
+    namespace: ${database_name}
+    table: events
+    storage:
+      aws_s3:
+        bucket: ${bucket_name}
+        region: ${region}
+    schema_evolution:
+      enabled: true
+      table_location: s3://${bucket_name}/
+    batching:
+      count: 50
+      period: 5s

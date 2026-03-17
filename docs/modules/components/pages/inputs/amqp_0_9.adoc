@@ -205,7 +205,7 @@ Expiration policy, describes the expiration period in milliseconds. Must be a po
 
 - x-max-age
 
-Controls the retention of a stream. Must be a strin, valid units: (Y, M, D, h, m, s) e.g. '7D' for a week.
+Controls the retention of a stream. Must be a string, valid units: (Y, M, D, h, m, s) e.g. '7D' for a week.
 
 - x-stream-max-segment-size-bytes
 

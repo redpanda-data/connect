@@ -5,49 +5,46 @@ run:
 linters:
   default: none
   enable:
+    - modernize
     - errcheck
     - govet
     - ineffassign
     - staticcheck
     - unused
     # Extra linters:
-    - wastedassign
-    # gocritic is very slow (golangci-lint v1.52.0)
-    # - gocritic
-    - revive
-    - unconvert
-    - durationcheck
     # - depguard
-    # - bodyclose
     # - gosec
     # - misspell
     # - prealloc
-    - perfsprint
-    - testifylint
-    - usetesting
-    - predeclared
-    - mirror
-    - rowserrcheck
     - bodyclose
+    - containedctx
+    - durationcheck
+    - gocritic # only ruleguard enabled (full gocritic is slow)
+    - mirror
     - nolintlint
+    - perfsprint
+    - predeclared
+    - revive
+    - rowserrcheck
+    - testifylint
+    - unconvert
+    - usetesting
+    - wastedassign
   settings:
     errcheck:
       exclude-functions:
         - (*github.com/redpanda-data/benthos/v4/internal/batch.Error).Failed
         - (*github.com/redpanda-data/benthos/v4/public/service.BatchError).Failed
     gocritic:
-      disabled-checks:
-        - hugeParam # Micro-optimisations
-        - rangeValCopy # Micro-optimisations
-        - ifElseChain # Mostly false positives
-        - ptrToRefParam # False positives?
-        - importShadow # Probably not worth the hassle...
-      enabled-tags:
-        - diagnostic
-        - experimental
-        - opinionated
-        - performance
-        - style
+      disable-all: true
+      enabled-checks:
+        - ruleguard
+        - unlambda
+        - deprecatedComment
+      settings:
+        ruleguard:
+          failOn: dsl
+          rules: .golangci/rules.go
     govet:
       disable:
         - fieldalignment
@@ -60,6 +57,7 @@ linters:
         # - name: defer
         # - name: early-return
         - name: exported
+        - name: get-return
         - name: superfluous-else
         - name: time-equal
         - name: unnecessary-stmt
@@ -88,6 +86,7 @@ linters:
     rules:
       - linters:
           - bodyclose
+          - godot
           - perfsprint
         path: _test.go
       - linters:
@@ -99,6 +98,34 @@ linters:
       - linters:
           - revive
         text: "exported method .*\\.(Close|Connect|Read|ReadBatch|Write|WriteBatch|Process|ProcessBatch|NextBatch|Create|EndOfInput) should have comment or be unexported"
+      - linters:
+          - staticcheck
+        text: "redpandatest.StartRedpanda is deprecated: Use StartSingleBroker or StartSingleBrokerWithConfig instead"
+        path: internal/impl/kafka
+      - linters:
+          - errcheck
+        text: "Error return value of.*Write.*is not checked"
+        path: internal/impl/otlp/otlpconv/conv.go
+      - linters:
+          - staticcheck
+        text: "SA1019.*cloud.google.com/go/pubsub"
+        path: internal/impl/gcp
+      - linters:
+          - staticcheck
+        text: "SA1019.*go.opentelemetry.io/otel/exporters/jaeger"
+        path: internal/impl/jaeger
+      - linters:
+          - staticcheck
+        text: "SA1019.*option.WithCredentialsJSON"
+        path: internal/impl/gcp
+      - linters:
+          - staticcheck
+        text: "SA1019.*model.IsValidMetricName"
+        path: internal/impl/prometheus
+      - linters:
+          - staticcheck
+        text: "SA1019.*github.com/jhump/protoreflect"
+        path: internal/impl/protobuf
     paths:
       - third_party$
       - builtin$
@@ -116,7 +143,7 @@ formatters:
       local-prefixes:
         - github.com/redpanda-data/
     gofumpt:
-      extra-rules: true
+      extra-rules: false
   exclusions:
     generated: lax
     paths:

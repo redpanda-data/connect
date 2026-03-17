@@ -21,13 +21,14 @@
 package runtimepb
 
 import (
+	reflect "reflect"
+	sync "sync"
+	unsafe "unsafe"
+
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	durationpb "google.golang.org/protobuf/types/known/durationpb"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
-	reflect "reflect"
-	sync "sync"
-	unsafe "unsafe"
 )
 
 const (
@@ -467,7 +468,7 @@ type isError_Detail interface {
 type Error_Backoff struct {
 	// BackOff is an error that plugins can optionally wrap another error with which instructs upstream components to wait for a specified period of time before retrying the errored call.
 	//
-	// Only suppported by Connect methods in the Input and Output services.
+	// Only supported by Connect methods in the Input and Output services.
 	Backoff *durationpb.Duration `protobuf:"bytes,2,opt,name=backoff,proto3,oneof"`
 }
 

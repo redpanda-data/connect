@@ -30,15 +30,20 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
-	"github.com/redpanda-data/connect/v4/internal/impl/protobuf"
+	"github.com/redpanda-data/connect/v4/internal/impl/protobuf/common"
 )
+
+type protobufOptions struct {
+	useProtoNames     bool
+	useEnumNumbers    bool
+	emitUnpopulated   bool
+	emitDefaultValues bool
+	serializeToJSON   bool
+}
 
 func (s *schemaRegistryDecoder) getProtobufDecoder(
 	ctx context.Context,
-	useProtoNames bool,
-	useEnumNumbers bool,
-	emitUnpopulated bool,
-	emitDefaultValues bool,
+	decoderOpts protobufOptions,
 	schema sr.Schema,
 ) (schemaDecoder, error) {
 	regMap := map[string]string{
@@ -51,9 +56,9 @@ func (s *schemaRegistryDecoder) getProtobufDecoder(
 		return nil, err
 	}
 
-	files, types, err := protobuf.RegistriesFromMap(regMap)
+	files, types, err := common.RegistriesFromMap(regMap)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse proto schema: %v", err)
+		return nil, fmt.Errorf("parsing proto schema: %v", err)
 	}
 
 	targetFile, err := files.FindFileByPath(".")
@@ -62,6 +67,28 @@ func (s *schemaRegistryDecoder) getProtobufDecoder(
 	}
 
 	msgTypes := targetFile.Messages()
+	opts := protojson.MarshalOptions{
+		Resolver:          types,
+		UseProtoNames:     decoderOpts.useProtoNames,
+		UseEnumNumbers:    decoderOpts.useEnumNumbers,
+		EmitUnpopulated:   decoderOpts.emitUnpopulated,
+		EmitDefaultValues: decoderOpts.emitDefaultValues,
+	}
+
+	// Cache a decoder as it's unlikely the type is going to change
+	// within a single processor for a given schema ID (which this is cached by)
+	var cachedMessageName protoreflect.FullName
+	var cachedDecoder common.ProtobufDecoder
+	var mu sync.Mutex
+	getDecoder := func(msgDesc protoreflect.MessageDescriptor) common.ProtobufDecoder {
+		mu.Lock()
+		defer mu.Unlock()
+		if msgDesc.FullName() != cachedMessageName {
+			cachedMessageName = msgDesc.FullName()
+			cachedDecoder = common.NewDynamicPbDecoder(msgDesc)
+		}
+		return cachedDecoder
+	}
 	return func(m *service.Message) error {
 		b, err := m.AsBytes()
 		if err != nil {
@@ -86,27 +113,15 @@ func (s *schemaRegistryDecoder) getProtobufDecoder(
 			}
 			msgDesc = targetDescriptors.Get(j)
 		}
-
-		dynMsg := dynamicpb.NewMessage(msgDesc)
+		decoder := getDecoder(msgDesc)
 		remaining := b[bytesRead:]
-
-		if err := proto.Unmarshal(remaining, dynMsg); err != nil {
-			return fmt.Errorf("failed to unmarshal protobuf message: %w", err)
-		}
-
-		data, err := protojson.MarshalOptions{
-			Resolver:          types,
-			UseProtoNames:     useProtoNames,
-			UseEnumNumbers:    useEnumNumbers,
-			EmitUnpopulated:   emitUnpopulated,
-			EmitDefaultValues: emitDefaultValues,
-		}.Marshal(dynMsg)
-		if err != nil {
-			return fmt.Errorf("failed to marshal JSON protobuf message: %w", err)
-		}
-
-		m.SetBytes(data)
-		return nil
+		return decoder.WithDecoded(remaining, func(msg proto.Message) error {
+			if decoderOpts.serializeToJSON {
+				return common.ToMessageSlow(msg.ProtoReflect(), opts, m)
+			} else {
+				return common.ToMessageFast(msg.ProtoReflect(), opts, m)
+			}
+		})
 	}, nil
 }
 
@@ -121,9 +136,9 @@ func (s *schemaRegistryEncoder) getProtobufEncoder(ctx context.Context, schema s
 		return nil, err
 	}
 
-	files, types, err := protobuf.RegistriesFromMap(regMap)
+	files, types, err := common.RegistriesFromMap(regMap)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse proto schema: %v", err)
+		return nil, fmt.Errorf("parsing proto schema: %v", err)
 	}
 
 	targetFile, err := files.FindFileByPath(".")
@@ -145,7 +160,7 @@ func (s *schemaRegistryEncoder) getProtobufEncoder(ctx context.Context, schema s
 
 		data, err := proto.Marshal(dynMsg)
 		if err != nil {
-			return fmt.Errorf("failed to marshal protobuf message: %w", err)
+			return fmt.Errorf("marshalling protobuf message: %w", err)
 		}
 
 		m.SetBytes(append(indexBytes, data...)) // TODO: Only allocate once by passing id through

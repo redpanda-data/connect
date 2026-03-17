@@ -328,7 +328,7 @@ func (s *sqlRawProcessor) ProcessBatch(ctx context.Context, batch service.Messag
 					_, err = tx.ExecContext(ctx, queryStr, args...)
 				}
 				if err != nil {
-					err = fmt.Errorf("failed to run query: %w", err)
+					err = fmt.Errorf("running query: %w", err)
 					break
 				}
 			} else {
@@ -339,13 +339,13 @@ func (s *sqlRawProcessor) ProcessBatch(ctx context.Context, batch service.Messag
 					rows, err = tx.QueryContext(ctx, queryStr, args...)
 				}
 				if err != nil {
-					err = fmt.Errorf("failed to run query: %w", err)
+					err = fmt.Errorf("running query: %w", err)
 					break
 				}
 
 				var jArray []any
 				if jArray, err = sqlRowsToArray(rows); err != nil {
-					err = fmt.Errorf("failed to convert rows: %w", err)
+					err = fmt.Errorf("converting rows: %w", err)
 					break
 				}
 

@@ -18,6 +18,7 @@ import (
 	"github.com/urfave/cli/v2"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/common-go/authz"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/kafka/enterprise"
 	"github.com/redpanda-data/connect/v4/internal/mcp"
@@ -28,6 +29,10 @@ func mcpServerCli(rpMgr *enterprise.GlobalRedpandaManager) *cli.Command {
 		&cli.StringFlag{
 			Name:  "address",
 			Usage: "An optional address to bind the MCP server to instead of running in stdio mode.",
+		},
+		&cli.StringFlag{
+			Name:  "observability-address",
+			Usage: "Address to bind the observability server (metrics, pprof) to. If not set, observability server is disabled. Only applies when --address is set.",
 		},
 		&cli.StringSliceFlag{
 			Name:  "tag",
@@ -50,8 +55,6 @@ func mcpServerCli(rpMgr *enterprise.GlobalRedpandaManager) *cli.Command {
 			customLintCli(),
 		},
 		Description: `
-!!EXPERIMENTAL!!
-
 Each resource will be exposed as a tool that AI can interact with:
 
   {{.BinaryName}} mcp-server ./repo
@@ -78,6 +81,7 @@ Each resource will be exposed as a tool that AI can interact with:
 			}))
 
 			addr := c.String("address")
+			observabilityAddr := c.String("observability-address")
 			if addr != "" {
 				// It's safe to initialise a stdout logger
 				fallbackLogger = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
@@ -106,6 +110,12 @@ Each resource will be exposed as a tool that AI can interact with:
 				return err
 			}
 
+			// Parse and resolve cloud auth flags
+			authzResourceName, authzPolicyFile, err := parseCloudAuthFlags(c.Context, c, secretLookupFn)
+			if err != nil {
+				return err
+			}
+
 			tagFilterStrs := c.StringSlice("tag")
 			var tagFilterREs []*regexp.Regexp
 			for _, f := range tagFilterStrs {
@@ -116,7 +126,15 @@ Each resource will be exposed as a tool that AI can interact with:
 				tagFilterREs = append(tagFilterREs, r)
 			}
 
-			if err := mcp.Run(logger, secretLookupFn, repositoryDir, addr, func(tags []string) bool {
+			var auth *mcp.Authorizer
+			if authzPolicyFile != "" && authzResourceName != "" {
+				auth, err = mcp.NewAuthorizer(authz.ResourceName(authzResourceName), authzPolicyFile, logger)
+				if err != nil {
+					return err
+				}
+			}
+
+			if err := mcp.Run(logger, secretLookupFn, repositoryDir, addr, observabilityAddr, func(tags []string) bool {
 				for _, f := range tagFilterREs {
 					var matched bool
 					for _, tag := range tags {
@@ -129,7 +147,7 @@ Each resource will be exposed as a tool that AI can interact with:
 					}
 				}
 				return true
-			}, licenseConfig); err != nil {
+			}, licenseConfig, auth); err != nil {
 				return err
 			}
 			return nil

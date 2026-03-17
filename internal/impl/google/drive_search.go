@@ -1,12 +1,10 @@
-/*
- * Copyright 2025 Redpanda Data, Inc.
- *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
- * License (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- *
- * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
- */
+// Copyright 2025 Redpanda Data, Inc.
+//
+// Licensed as a Redpanda Enterprise file under the Redpanda Community
+// License (the "License"); you may not use this file except in compliance with
+// the License. You may obtain a copy of the License at
+//
+// https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
 package google
 
@@ -25,10 +23,11 @@ import (
 )
 
 const (
-	driveSearchFieldQuery      = "query"
-	driveSearchFieldProjection = "projection"
-	driveSearchFieldLabels     = "include_label_ids"
-	driveSearchFieldMaxResults = "max_results"
+	driveSearchFieldQuery               = "query"
+	driveSearchFieldProjection          = "projection"
+	driveSearchFieldLabels              = "include_label_ids"
+	driveSearchFieldMaxResults          = "max_results"
+	driveSearchFieldSupportSharedDrives = "shared_drives"
 )
 
 func init() {
@@ -62,6 +61,9 @@ Search results are emitted as message batch, where each message is a https://dev
 			service.NewIntField(driveSearchFieldMaxResults).
 				Description("The maximum number of results to return.").
 				Default(64),
+			service.NewBoolField(driveSearchFieldSupportSharedDrives).
+				Description("Whether or not to include shared drives in the result.").
+				Default(false),
 		).
 		Example("Search & download files from Google Drive", "This examples downloads all the files from Google Drive that are returned in the query", `
 input:
@@ -83,10 +85,11 @@ output:
 
 type googleDriveSearchProcessor struct {
 	*baseProcessor[drive.Service]
-	query      *service.InterpolatedString
-	labels     *service.InterpolatedString
-	fields     []string
-	maxResults int
+	query        *service.InterpolatedString
+	labels       *service.InterpolatedString
+	fields       []string
+	maxResults   int
+	sharedDrives bool
 }
 
 // newGoogleDriveSearchProcessor creates a new instance of googleDriveSearchProcessor.
@@ -117,12 +120,18 @@ func newGoogleDriveSearchProcessor(conf *service.ParsedConfig, mgr *service.Reso
 		return nil, err
 	}
 
+	sharedDrives, err := conf.FieldBool(driveSearchFieldSupportSharedDrives)
+	if err != nil {
+		return nil, err
+	}
+
 	return &googleDriveSearchProcessor{
 		baseProcessor: base,
 		query:         query,
 		labels:        labels,
 		fields:        fields,
 		maxResults:    maxResults,
+		sharedDrives:  sharedDrives,
 	}, nil
 }
 
@@ -135,11 +144,11 @@ func (g *googleDriveSearchProcessor) Process(ctx context.Context, msg *service.M
 	}
 	q, err := g.query.TryString(msg)
 	if err != nil {
-		return nil, fmt.Errorf("failed to interpolate %s: %v", driveSearchFieldQuery, err)
+		return nil, fmt.Errorf("interpolating %s: %v", driveSearchFieldQuery, err)
 	}
 	l, err := g.labels.TryString(msg)
 	if err != nil {
-		return nil, fmt.Errorf("failed to interpolate %s: %v", driveSearchFieldLabels, err)
+		return nil, fmt.Errorf("interpolating %s: %v", driveSearchFieldLabels, err)
 	}
 	call := client.Files.List().
 		Context(ctx).
@@ -148,6 +157,13 @@ func (g *googleDriveSearchProcessor) Process(ctx context.Context, msg *service.M
 		Fields("nextPageToken", googleapi.Field("files("+strings.Join(g.fields, ",")+")"))
 	if l != "" {
 		call = call.IncludeLabels(l)
+	}
+	if g.sharedDrives {
+		// all of those flags are needed to look into shared drives
+		call.
+			SupportsAllDrives(g.sharedDrives).         // Flag 1: Tells API you know about Shared Drives
+			IncludeItemsFromAllDrives(g.sharedDrives). // Flag 2: Tells API to actually look in them
+			Corpora("allDrives")                       // Flag 3: Look everywhere the SA has access
 	}
 	var files []*drive.File
 	err = call.Pages(ctx, func(page *drive.FileList) error {
@@ -161,13 +177,13 @@ func (g *googleDriveSearchProcessor) Process(ctx context.Context, msg *service.M
 		err = nil
 	}
 	if err != nil {
-		return nil, fmt.Errorf("failed to query files in google drive: %v", err)
+		return nil, fmt.Errorf("querying files in google drive: %v", err)
 	}
 	batch := service.MessageBatch{}
 	for _, file := range files {
 		b, err := file.MarshalJSON()
 		if err != nil {
-			return nil, fmt.Errorf("failed to marshal file to JSON: %v", err)
+			return nil, fmt.Errorf("marshalling file to JSON: %v", err)
 		}
 		cpy := msg.Copy()
 		cpy.SetBytes(b)

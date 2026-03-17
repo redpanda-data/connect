@@ -48,7 +48,7 @@ func TestBatcherCancellation(t *testing.T) {
 	time.Sleep(5 * time.Millisecond)
 	require.False(t, done.Load())
 	cancel()
-	require.Eventually(t, func() bool { return done.Load() }, time.Second, time.Millisecond)
+	require.Eventually(t, done.Load, time.Second, time.Millisecond)
 
 	// test batcher cancellation
 	done.Store(false)
@@ -60,7 +60,7 @@ func TestBatcherCancellation(t *testing.T) {
 	time.Sleep(5 * time.Millisecond)
 	require.False(t, done.Load())
 	b.Close()
-	require.Eventually(t, func() bool { return done.Load() }, time.Second, time.Millisecond)
+	require.Eventually(t, done.Load, time.Second, time.Millisecond)
 }
 
 func TestBatching(t *testing.T) {

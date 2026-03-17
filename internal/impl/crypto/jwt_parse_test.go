@@ -90,7 +90,6 @@ func TestBloblangParseJwtHS(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.method, func(t *testing.T) {
 			mapping := fmt.Sprintf("root = this.%s(%q)", tc.method, secret)
 
@@ -172,7 +171,6 @@ func TestBloblangParseJwtRS(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.method, func(t *testing.T) {
 			mapping := fmt.Sprintf("root = this.%s(%q)", tc.method, dummySecretRSA)
 
@@ -260,7 +258,6 @@ func TestBloblangParseJwtEC(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.method, func(t *testing.T) {
 			mapping := fmt.Sprintf("root = this.%s(%q)", tc.method, tc.dummySecret)
 

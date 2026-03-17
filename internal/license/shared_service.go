@@ -12,21 +12,22 @@ import (
 	"errors"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/common-go/license"
 )
 
 // LoadFromResources attempts to access a license service from a provided
 // resources handle and returns the current license it tracks. An error is
 // returned if the license service cannot be accessed or cannot provide license
 // information.
-func LoadFromResources(res *service.Resources) (RedpandaLicense, error) {
+func LoadFromResources(res *service.Resources) (license.RedpandaLicense, error) {
 	svc := getSharedService(res)
 	if svc == nil {
-		return RedpandaLicense{}, errors.New("unable to access license service")
+		return nil, errors.New("unable to access license service")
 	}
 
 	l := svc.loadedLicense.Load()
 	if l == nil {
-		return RedpandaLicense{}, errors.New("unable to access license information")
+		return nil, errors.New("unable to access license information")
 	}
 
 	return *l, nil
@@ -39,8 +40,8 @@ func CheckRunningEnterprise(res *service.Resources) error {
 	if err != nil {
 		return err
 	}
-	if !l.AllowsEnterpriseFeatures() {
-		return errors.New("this feature requires a valid Redpanda Enterprise Edition license from https://redpanda.com/try-enterprise?origin=rpcn. For more information check out: https://docs.redpanda.com/redpanda-connect/get-started/licensing/")
+	if !l.AllowsEnterpriseFeatures() || !l.IncludesProduct(license.ProductConnect) {
+		return errors.New("this feature requires a valid Redpanda Enterprise Edition license that includes the Connect product. For more information check out: https://docs.redpanda.com/redpanda-connect/get-started/licensing/")
 	}
 	return nil
 }

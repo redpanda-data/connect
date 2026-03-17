@@ -243,7 +243,7 @@ func TestCaptureProcessor_FlushFailed(t *testing.T) {
 	require.NoError(t, err, "failed to create processor")
 
 	err = proc.Close(ctx)
-	require.ErrorContains(t, err, "failed to flush sentry events before timeout")
+	require.ErrorContains(t, err, "flushing sentry events before timeout")
 }
 
 // TestCaptureProcessor_EmptyContext checks that deleting context in mapping
@@ -431,7 +431,7 @@ func TestCaptureProcessor_ContextNotStructured(t *testing.T) {
 
 	msg := service.NewMessage([]byte(`{"name": "jane", "country": "us"}`))
 	b, err := proc.Process(ctx, msg)
-	require.ErrorContains(t, err, "failed to get structured data for context", "message mapping error not caught")
+	require.ErrorContains(t, err, "getting structured data for context", "message mapping error not caught")
 	require.Nil(t, b, "should not have received a message batch")
 
 	transport.AssertNotCalled(t, "SendEvent", mock.Anything)
@@ -518,7 +518,7 @@ func TestCaptureProcessor_InvalidTag(t *testing.T) {
 
 	msg := service.NewMessage([]byte(`{"name": "jane", "country": "us"}`))
 	b, err := proc.Process(ctx, msg)
-	require.ErrorContains(t, err, "failed to evaluate sentry tag: foo: simulated error", "message mapping error not caught")
+	require.ErrorContains(t, err, "evaluating sentry tag: foo: simulated error", "message mapping error not caught")
 	require.Nil(t, b, "should not have received a message batch")
 
 	transport.AssertNotCalled(t, "SendEvent", mock.Anything)

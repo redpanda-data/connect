@@ -145,7 +145,6 @@ url: `+url, nil)
 
 	wg.Add(10)
 	for i := range 10 {
-		i := i
 		go func() {
 			defer wg.Done()
 			period, err := rl.Access(ctx)

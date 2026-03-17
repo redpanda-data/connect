@@ -10,7 +10,6 @@ package cli
 
 import (
 	"context"
-	"crypto/tls"
 	"crypto/x509"
 	"fmt"
 	"log/slog"
@@ -22,22 +21,30 @@ import (
 	"github.com/urfave/cli/v2"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service/securetls"
 	"github.com/redpanda-data/connect/v4/internal/impl/kafka"
 	"github.com/redpanda-data/connect/v4/internal/license"
 	"github.com/redpanda-data/connect/v4/internal/secrets"
+	"github.com/redpanda-data/connect/v4/internal/serviceaccount"
 )
 
 const (
-	rfPipelineID        = "x-redpanda-pipeline-id"
-	rfLogsTopic         = "x-redpanda-logs-topic"
-	rfStatusTopic       = "x-redpanda-status-topic"
-	rfBrokers           = "x-redpanda-brokers"
-	rfTLSEnabled        = "x-redpanda-tls-enabled"
-	rfTLSSkipCertVerify = "x-redpanda-tls-skip-verify"
-	rfTLSRootCasFile    = "x-redpanda-root-cas-file"
-	rfSASLMechanism     = "x-redpanda-sasl-mechanism"
-	rfSASLUsername      = "x-redpanda-sasl-username"
-	rfSASLPassword      = "x-redpanda-sasl-password"
+	rfPipelineID             = "x-redpanda-pipeline-id"
+	rfLogsTopic              = "x-redpanda-logs-topic"
+	rfStatusTopic            = "x-redpanda-status-topic"
+	rfBrokers                = "x-redpanda-brokers"
+	rfTLSEnabled             = "x-redpanda-tls-enabled"
+	rfTLSSkipCertVerify      = "x-redpanda-tls-skip-verify"
+	rfTLSRootCasFile         = "x-redpanda-root-cas-file"
+	rfSASLMechanism          = "x-redpanda-sasl-mechanism"
+	rfSASLUsername           = "x-redpanda-sasl-username"
+	rfSASLPassword           = "x-redpanda-sasl-password"
+	rfCloudTokenURL          = "x-redpanda-cloud-service-account-token-url"
+	rfCloudClientID          = "x-redpanda-cloud-service-account-client-id"
+	rfCloudClientSecret      = "x-redpanda-cloud-service-account-client-secret"
+	rfCloudAudience          = "x-redpanda-cloud-service-account-audience"
+	rfCloudAuthzResourceName = "x-redpanda-cloud-authz-resource-name"
+	rfCloudAuthzPolicyFile   = "x-redpanda-cloud-authz-policy-file"
 )
 
 var secretsFlag = &cli.StringSliceFlag{
@@ -76,7 +83,6 @@ func applyLicenseFlag(c *cli.Context, conf *license.Config) {
 var chrootFlag = &cli.StringFlag{
 	Name: "chroot",
 	Usage: "Chroot into the provided directory after parsing configuration. " +
-		"The directory must not exist and will be created. " +
 		"Common /etc/ files are copied to the chroot directory, and the directory is made read-only. " +
 		"This flag is only supported on Linux.",
 }
@@ -144,6 +150,42 @@ func redpandaFlags() []cli.Flag {
 			Hidden: true,
 			Value:  "",
 		},
+		&cli.StringFlag{
+			Name:   rfCloudTokenURL,
+			Usage:  "OAuth2 token URL for service-account authentication",
+			Hidden: true,
+			Value:  "",
+		},
+		&cli.StringFlag{
+			Name:   rfCloudClientID,
+			Usage:  "OAuth2 client ID for service-account authentication",
+			Hidden: true,
+			Value:  "",
+		},
+		&cli.StringFlag{
+			Name:   rfCloudClientSecret,
+			Usage:  "OAuth2 client secret for service-account authentication",
+			Hidden: true,
+			Value:  "",
+		},
+		&cli.StringFlag{
+			Name:   rfCloudAudience,
+			Usage:  "OAuth2 audience parameter for service-account authentication",
+			Hidden: true,
+			Value:  "",
+		},
+		&cli.StringFlag{
+			Name:   rfCloudAuthzResourceName,
+			Usage:  "Authorization resource name for scope lookup in the policy file",
+			Hidden: true,
+			Value:  "",
+		},
+		&cli.PathFlag{
+			Name:   rfCloudAuthzPolicyFile,
+			Usage:  "Authorization policy file for enforcing permissions",
+			Hidden: true,
+			Value:  "",
+		},
 	}
 }
 
@@ -186,9 +228,8 @@ client_id: rpcn
 	connDetails.SeedBrokers = brokers
 
 	if connDetails.TLSEnabled = tlsEnabled; connDetails.TLSEnabled {
-		connDetails.TLSConf = &tls.Config{
-			MinVersion: tls.VersionTLS12,
-		}
+		// Use strict security level for Redpanda-to-Redpanda communication
+		connDetails.TLSConf = securetls.NewConfig(securetls.SecurityLevelStrict)
 
 		if rootCasFile != "" {
 			var caCert []byte
@@ -226,4 +267,43 @@ client_id: rpcn
 	}
 
 	return
+}
+
+// resolveSecret resolves a value that may contain a ${secrets.KEY} reference
+// using the provided secret lookup function.
+func resolveSecret(ctx context.Context, value string, lookupFn secrets.LookupFn) string {
+	if value == "" {
+		return value
+	}
+
+	// Check if value is a secret reference: ${...}
+	if strings.HasPrefix(value, "${") && strings.HasSuffix(value, "}") {
+		key := strings.TrimSuffix(strings.TrimPrefix(value, "${"), "}")
+		if resolved, ok := lookupFn(ctx, key); ok {
+			return resolved
+		}
+	}
+
+	return value
+}
+
+// parseCloudAuthFlags parses the OAuth2/cloud authentication CLI flags,
+// resolves any secret references, and initializes the global service account configuration.
+// returns the authz policy file (if specified).
+func parseCloudAuthFlags(ctx context.Context, c *cli.Context, secretLookupFn secrets.LookupFn) (authzResourceName, authzPolicyFile string, err error) {
+	tokenURL := resolveSecret(ctx, c.String(rfCloudTokenURL), secretLookupFn)
+	clientID := resolveSecret(ctx, c.String(rfCloudClientID), secretLookupFn)
+	clientSecret := resolveSecret(ctx, c.String(rfCloudClientSecret), secretLookupFn)
+	audience := resolveSecret(ctx, c.String(rfCloudAudience), secretLookupFn)
+	authzResourceName = resolveSecret(ctx, c.String(rfCloudAuthzResourceName), secretLookupFn)
+	authzPolicyFile = resolveSecret(ctx, c.Path(rfCloudAuthzPolicyFile), secretLookupFn)
+
+	// Initialize global service account config if credentials are provided
+	if tokenURL != "" && clientID != "" && clientSecret != "" {
+		if err := serviceaccount.InitGlobal(ctx, tokenURL, clientID, clientSecret, audience); err != nil {
+			return "", "", fmt.Errorf("initializing service account authentication: %w", err)
+		}
+	}
+
+	return authzResourceName, authzPolicyFile, nil
 }

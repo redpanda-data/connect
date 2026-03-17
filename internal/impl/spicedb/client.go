@@ -31,7 +31,7 @@ type clientConfig struct {
 	maxReceiveMessageSizeInBytes int
 }
 
-// load v1 client
+// load v1 client.
 func (cc *clientConfig) loadSpiceDBClient() (*authzed.Client, error) {
 	creds := insecure.NewCredentials()
 	if cc.tlsConf != nil {

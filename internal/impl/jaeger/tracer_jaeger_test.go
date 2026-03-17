@@ -24,7 +24,6 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	semconv "go.opentelemetry.io/otel/semconv/v1.7.0"
 
-	//nolint:staticcheck
 	"go.opentelemetry.io/otel/exporters/jaeger"
 )
 

@@ -28,10 +28,13 @@ func init() {
 
 	parquetParseSpec := bloblang.NewPluginSpec().
 		Category("Parsing").
-		Description("Decodes a https://parquet.apache.org/docs/[Parquet file^] into an array of objects, one for each row within the file.").
+		Description("Parses Apache Parquet binary data into an array of objects. Parquet is a columnar storage format optimized for analytics, commonly used with big data systems like Apache Spark, Hive, and cloud data warehouses. Each row in the Parquet file becomes an object in the output array.").
 		Param(bloblang.NewBoolParam("byte_array_as_string").
 			Description("Deprecated: This parameter is no longer used.").Default(false)).
-		Example("", `root = content().parse_parquet()`)
+		ExampleNotTested("Parse Parquet file data into structured objects",
+			`root.records = content().parse_parquet()`).
+		ExampleNotTested("Process Parquet data from a field and extract specific columns",
+			`root.users = this.parquet_data.parse_parquet().map_each(row -> {"name": row.name, "email": row.email})`)
 
 	if err := bloblang.RegisterMethodV2(
 		"parse_parquet", parquetParseSpec,

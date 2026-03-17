@@ -15,6 +15,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -82,7 +83,7 @@ func TestFunctionExamples(t *testing.T) {
 						pBytes, err := p.AsBytes()
 						require.NoError(t, err)
 
-						assert.Equal(t, exp, string(pBytes), fmt.Sprintf("%v-%v", i, j))
+						assertEqualOrJSON(t, exp, string(pBytes), fmt.Sprintf("%v-%v", i, j))
 					}
 				}
 			}
@@ -140,7 +141,7 @@ func TestMethodExamples(t *testing.T) {
 						pBytes, err := p.AsBytes()
 						require.NoError(t, err)
 
-						assert.Equal(t, exp, string(pBytes), fmt.Sprintf("%v-%v", i, j))
+						assertEqualOrJSON(t, exp, string(pBytes), fmt.Sprintf("%v-%v", i, j))
 					}
 				}
 			}
@@ -169,11 +170,30 @@ func TestMethodExamples(t *testing.T) {
 							pBytes, err := p.AsBytes()
 							require.NoError(t, err)
 
-							assert.Equal(t, exp, string(pBytes), fmt.Sprintf("%v-%v", i, j))
+							assertEqualOrJSON(t, exp, string(pBytes), fmt.Sprintf("%v-%v", i, j))
 						}
 					}
 				}
 			}
 		})
 	})
+}
+
+// assertEqualOrJSON compares two strings, attempting JSON semantic comparison
+// if both are valid JSON. Falls back to string comparison if either string is
+// not valid JSON.
+func assertEqualOrJSON(t *testing.T, expected, actual string, msgAndArgs ...any) bool {
+	t.Helper()
+
+	// Try to parse both as JSON and fallback to string comparison if either is
+	// not valid JSON
+	var a, b any
+	if err := json.Unmarshal([]byte(expected), &a); err != nil {
+		return assert.Equal(t, expected, actual, msgAndArgs...)
+	}
+	if err := json.Unmarshal([]byte(actual), &b); err != nil {
+		return assert.Equal(t, expected, actual, msgAndArgs...)
+	}
+
+	return assert.Equal(t, a, b, msgAndArgs...)
 }

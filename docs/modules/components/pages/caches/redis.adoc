@@ -51,6 +51,7 @@ redis:
   url: redis://:6379 # No default (required)
   kind: simple
   master: ""
+  client_name: redpanda-connect
   tls:
     enabled: false
     skip_cert_verify: false
@@ -124,6 +125,16 @@ Name of the redis master when `kind` is `failover`
 
 master: mymaster
 ```
+
+=== `client_name`
+
+Set the client name for the Redis connection.
+
+
+*Type*: `string`
+
+*Default*: `"redpanda-connect"`
+Requires version 4.82.0 or newer
 
 === `tls`
 

@@ -29,7 +29,6 @@ import (
 	"time"
 
 	"github.com/dustin/go-humanize"
-	"github.com/ollama/ollama/api"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
@@ -85,14 +84,14 @@ func commonFields() []*service.ConfigField {
 			Advanced().
 			Optional(),
 		service.NewStringField(bopFieldDownloadURL).
-			Description("If `" + bopFieldServerAddress + "` is not set - the URL to download the ollama binary from. Defaults to the offical Ollama GitHub release for this platform.").
+			Description("If `" + bopFieldServerAddress + "` is not set - the URL to download the ollama binary from. Defaults to the official Ollama GitHub release for this platform.").
 			Advanced().
 			Optional(),
 	}
 }
 
 func extractOptions(conf *service.ParsedConfig) (map[string]any, error) {
-	opts := api.Options{}
+	opts := Options{}
 	if conf.Contains(ocpFieldMaxTokens) {
 		v, err := conf.FieldInt(ocpFieldMaxTokens)
 		if err != nil {
@@ -243,7 +242,7 @@ type baseOllamaProcessor struct {
 	model  string
 	opts   map[string]any
 	ticket singleton.Ticket
-	client *api.Client
+	client *Client
 	logger *service.Logger
 }
 
@@ -282,7 +281,7 @@ func newBaseProcessor(conf *service.ParsedConfig, mgr *service.Resources) (p *ba
 		if err != nil {
 			return
 		}
-		p.client = api.NewClient(u, http.DefaultClient)
+		p.client = NewClient(u, http.DefaultClient)
 	} else {
 		var cacheDir string
 		if conf.Contains(bopFieldCacheDirectory) {
@@ -324,7 +323,7 @@ func newBaseProcessor(conf *service.ParsedConfig, mgr *service.Resources) (p *ba
 				_ = p.Close(context.Background())
 			}
 		}()
-		p.client, err = api.ClientFromEnvironment()
+		p.client, err = ClientFromEnvironment()
 		if err != nil {
 			return
 		}
@@ -356,10 +355,10 @@ func (o *baseOllamaProcessor) waitForServer(ctx context.Context) error {
 }
 
 func (o *baseOllamaProcessor) pullModel(ctx context.Context) error {
-	pr := api.PullRequest{
+	pr := PullRequest{
 		Model: o.model,
 	}
-	return o.client.Pull(ctx, &pr, func(resp api.ProgressResponse) error {
+	return o.client.Pull(ctx, &pr, func(resp ProgressResponse) error {
 		o.logger.Tracef("Pulling %q: %s [%s/%s]", o.model, resp.Status, humanize.Bytes(uint64(resp.Completed)), humanize.Bytes(uint64(resp.Total)))
 		return nil
 	})

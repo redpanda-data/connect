@@ -113,7 +113,7 @@ Expiration policy, describes the expiration period in milliseconds. Must be a po
 
 - x-max-age
 
-Controls the retention of a stream. Must be a strin, valid units: (Y, M, D, h, m, s) e.g. '7D' for a week.
+Controls the retention of a stream. Must be a string, valid units: (Y, M, D, h, m, s) e.g. '7D' for a week.
 
 - x-stream-max-segment-size-bytes
 
@@ -197,7 +197,7 @@ type amqp09BindingDeclare struct {
 
 //------------------------------------------------------------------------------
 
-var errAMQP09Connect = errors.New("failed to connect to server")
+var errAMQP09Connect = errors.New("connecting to server")
 
 type amqp09Reader struct {
 	conn         *amqp.Connection
@@ -276,7 +276,7 @@ func amqp09ReaderFromParsed(conf *service.ParsedConfig, mgr *service.Resources) 
 		for _, p := range nackPatternStrs {
 			r, err := regexp.Compile(p)
 			if err != nil {
-				return nil, fmt.Errorf("failed to compile nack reject pattern: %w", err)
+				return nil, fmt.Errorf("compiling nack reject pattern: %w", err)
 			}
 			a.nackRejectPattens = append(a.nackRejectPattens, r)
 		}
@@ -322,6 +322,25 @@ func amqp09ReaderFromParsed(conf *service.ParsedConfig, mgr *service.Resources) 
 }
 
 //------------------------------------------------------------------------------
+
+// ConnectionTest attempts to test the connection configuration of this input
+// without actually consuming data. The connection, if successful, is then
+// closed.
+func (a *amqp09Reader) ConnectionTest(_ context.Context) service.ConnectionTestResults {
+	conn, err := a.reDial(a.urls)
+	if err != nil {
+		return service.ConnectionTestFailed(err).AsList()
+	}
+	defer conn.Close()
+
+	amqpChan, err := conn.Channel()
+	if err != nil {
+		return service.ConnectionTestFailed(fmt.Errorf("AMQP 0.9 Channel: %w", err)).AsList()
+	}
+	defer amqpChan.Close()
+
+	return service.ConnectionTestSucceeded().AsList()
+}
 
 // Connect establishes a connection to an AMQP09 server.
 func (a *amqp09Reader) Connect(context.Context) (err error) {
@@ -409,13 +428,13 @@ func (a *amqp09Reader) disconnect() error {
 
 	if a.amqpChan != nil {
 		if err := a.amqpChan.Cancel(a.consumerTag, true); err != nil {
-			a.log.Errorf("Failed to cancel consumer: %w", err)
+			a.log.Errorf("Failed to cancel consumer: %v", err)
 		}
 		a.amqpChan = nil
 	}
 	if a.conn != nil {
 		if err := a.conn.Close(); err != nil {
-			a.log.Errorf("Failed to close connection cleanly: %w", err)
+			a.log.Errorf("Failed to close connection cleanly: %v", err)
 		}
 		a.conn = nil
 	}

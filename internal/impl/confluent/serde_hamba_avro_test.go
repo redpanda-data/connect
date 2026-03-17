@@ -130,7 +130,6 @@ func TestHambaAvroReferences(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			subj, err := service.NewInterpolatedString(test.subject)
 			require.NoError(t, err)
@@ -318,7 +317,6 @@ func TestHambaDecodeAvroUnions(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			cfg := decodingConfig{}
 			cfg.avro.useHamba = true
@@ -500,7 +498,6 @@ func TestHambaDecodeKafkaConnectTypes(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			encoder, err := newSchemaRegistryEncoder(urlStr, noopReqSign, nil, subject, true, schemaStaleAfter, time.Minute, service.MockResources())
 			require.NoError(t, err)
@@ -610,11 +607,19 @@ func TestHambaAvroSchemaExtraction(t *testing.T) {
 		schema, exists := decodedMsg.MetaGetMut("testschema")
 		assert.True(t, exists)
 
-		assert.Equal(t, map[string]any{
-			"name": "foo", "type": "OBJECT",
-			"children": []any{
-				map[string]any{"name": "Woof", "type": "STRING"},
-			},
-		}, schema)
+		// Check fields of interest instead of absolute comparison to allow for future schema extensions
+		schemaMap, ok := schema.(map[string]any)
+		require.True(t, ok, "schema should be a map")
+		assert.Equal(t, "foo", schemaMap["name"])
+		assert.Equal(t, "OBJECT", schemaMap["type"])
+
+		children, ok := schemaMap["children"].([]any)
+		require.True(t, ok, "children should be a slice")
+		require.Len(t, children, 1)
+
+		childMap, ok := children[0].(map[string]any)
+		require.True(t, ok, "child should be a map")
+		assert.Equal(t, "Woof", childMap["name"])
+		assert.Equal(t, "STRING", childMap["type"])
 	}
 }

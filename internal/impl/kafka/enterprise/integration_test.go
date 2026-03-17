@@ -32,7 +32,7 @@ import (
 
 	"github.com/redpanda-data/connect/v4/internal/impl/kafka"
 	"github.com/redpanda-data/connect/v4/internal/impl/kafka/enterprise"
-	"github.com/redpanda-data/connect/v4/internal/impl/kafka/redpandatest"
+	"github.com/redpanda-data/connect/v4/internal/impl/redpanda/redpandatest"
 	"github.com/redpanda-data/connect/v4/internal/license"
 	"github.com/redpanda-data/connect/v4/internal/protoconnect"
 	_ "github.com/redpanda-data/connect/v4/public/components/confluent"
@@ -236,7 +236,7 @@ max_message_bytes: 1MB
 	strmBuilder := service.NewStreamBuilder()
 
 	require.NoError(t, strmBuilder.AddOutputYAML(fmt.Sprintf(`
-redpanda_common:
+redpanda:
   topic: %v
 `, topicCustom)))
 
@@ -251,9 +251,9 @@ mapping: 'root = content().uppercase()'
 	require.NoError(t, err)
 
 	// Ooooo, this is rather yucky.
-	sharedRef, err := kafka.FranzSharedClientPop(enterprise.SharedGlobalRedpandaClientKey, conf.Resources())
+	sharedRef, err := kafka.FranzSharedClientPop(kafka.SharedGlobalRedpandaClientKey, conf.Resources())
 	require.NoError(t, err)
-	require.NoError(t, kafka.FranzSharedClientSet(enterprise.SharedGlobalRedpandaClientKey, sharedRef, strm.Resources()))
+	require.NoError(t, kafka.FranzSharedClientSet(kafka.SharedGlobalRedpandaClientKey, sharedRef, strm.Resources()))
 
 	license.InjectTestService(strm.Resources())
 

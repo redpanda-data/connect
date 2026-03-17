@@ -1,0 +1,17 @@
+{
+  "name": "redpanda-connect-plugins",
+  "version": "0.1.0",
+  "description": "Plugins for Redpanda Connect",
+  "owner": {
+    "name": "Redpanda Data",
+    "url": "https://redpanda.com"
+  },
+  "plugins": [
+    {
+      "name": "redpanda-connect",
+      "description": "YAML config and Bloblang authoring for Redpanda Connect",
+      "source": "./.claude-plugin/plugins/redpanda-connect",
+      "category": "development"
+    }
+  ]
+}

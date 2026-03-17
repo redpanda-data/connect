@@ -71,7 +71,7 @@ func setupCouchbase(tb testing.TB) (*dockertest.Pool, *dockertest.Resource, erro
 
 	pwd, err := os.Getwd()
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get working directory: %s", err)
+		return nil, nil, fmt.Errorf("getting working directory: %s", err)
 	}
 
 	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
@@ -103,7 +103,7 @@ func setupCouchbase(tb testing.TB) (*dockertest.Pool, *dockertest.Resource, erro
 		return nil, nil, err
 	}
 
-	// Look for readyness
+	// Look for readiness
 	var stderr bytes.Buffer
 	time.Sleep(15 * time.Second)
 	for {

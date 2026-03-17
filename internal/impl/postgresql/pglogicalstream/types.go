@@ -18,7 +18,7 @@ type TableFQN struct {
 	Table  string
 }
 
-// String satifies the Stringer interface
+// String satisfies the Stringer interface
 func (t TableFQN) String() string {
 	return fmt.Sprintf("%s.%s", t.Schema, t.Table)
 }

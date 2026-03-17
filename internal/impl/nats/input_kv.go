@@ -139,6 +139,19 @@ func newKVReader(conf *service.ParsedConfig, mgr *service.Resources) (*kvReader,
 	return r, nil
 }
 
+// ConnectionTest attempts to test the connection configuration of this input
+// without actually consuming data. The connection, if successful, is then
+// closed.
+func (r *kvReader) ConnectionTest(ctx context.Context) service.ConnectionTestResults {
+	conn, err := r.connDetails.get(ctx)
+	if err != nil {
+		return service.ConnectionTestFailed(err).AsList()
+	}
+	defer conn.Close()
+
+	return service.ConnectionTestSucceeded().AsList()
+}
+
 func (r *kvReader) Connect(ctx context.Context) (err error) {
 	r.connMut.Lock()
 	defer r.connMut.Unlock()

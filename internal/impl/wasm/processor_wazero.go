@@ -238,14 +238,14 @@ func (r *moduleRunner) allocateBytesInbound(ctx context.Context, data []byte) (c
 			_, err = r.goFree.Call(ctx, contentPtr)
 		}
 		if err != nil {
-			r.funcErr(fmt.Errorf("failed to free in-bound memory: %v", err))
+			r.funcErr(fmt.Errorf("freeing in-bound memory: %v", err))
 			return
 		}
 	})
 
 	// The pointer is a linear memory offset, which is where we write the name.
 	if !r.mod.Memory().Write(uint32(contentPtr), data) {
-		err = errors.New("failed to write in-bound memory")
+		err = errors.New("writing in-bound memory")
 		return
 	}
 	return

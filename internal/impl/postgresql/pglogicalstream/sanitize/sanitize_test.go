@@ -266,7 +266,6 @@ func TestIdentifierValidation(t *testing.T) {
 	}
 
 	for _, testcase := range tests {
-		testcase := testcase
 		t.Run(testcase.unquoted, func(t *testing.T) {
 			q, err := sanitize.NormalizePostgresIdentifier(testcase.quoted)
 			require.NoError(t, err)
@@ -284,7 +283,6 @@ func TestIdentifierValidation(t *testing.T) {
 	}
 
 	for _, i := range unquoted {
-		i := i
 		t.Run(i, func(t *testing.T) {
 			normalized, err := sanitize.NormalizePostgresIdentifier(i)
 			require.NoError(t, err)
@@ -308,7 +306,6 @@ func TestIdentifierValidation(t *testing.T) {
 	}
 
 	for _, i := range errorTests {
-		i := i
 		t.Run(i, func(t *testing.T) {
 			_, err := sanitize.NormalizePostgresIdentifier(i)
 			require.Error(t, err)

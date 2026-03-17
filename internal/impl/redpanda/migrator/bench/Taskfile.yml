@@ -1,0 +1,19 @@
+version: '3'
+
+tasks:
+  default:
+    - task: down
+    - task: up
+    - task: logs:migrator
+
+  up:
+    cmd: docker compose up -d
+
+  down:
+    cmd: docker compose down -v --remove-orphans
+
+  logs:loader:
+    cmd: docker compose logs -f loader
+
+  logs:migrator:
+    cmd: docker compose logs -f migrator

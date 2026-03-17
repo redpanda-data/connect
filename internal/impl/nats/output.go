@@ -116,6 +116,19 @@ func newNATSWriter(conf *service.ParsedConfig, mgr *service.Resources) (*natsWri
 	return &n, nil
 }
 
+// ConnectionTest attempts to test the connection configuration of this output
+// without actually sending data. The connection, if successful, is then
+// closed.
+func (n *natsWriter) ConnectionTest(ctx context.Context) service.ConnectionTestResults {
+	conn, err := n.connDetails.get(ctx)
+	if err != nil {
+		return service.ConnectionTestFailed(err).AsList()
+	}
+	defer conn.Close()
+
+	return service.ConnectionTestSucceeded().AsList()
+}
+
 func (n *natsWriter) Connect(ctx context.Context) error {
 	n.connMut.Lock()
 	defer n.connMut.Unlock()

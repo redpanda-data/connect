@@ -4,7 +4,7 @@
 // License (the "License"); you may not use this file except in compliance with
 // the License. You may obtain a copy of the License at
 //
-// https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
+// https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
 package snowflake
 
@@ -55,6 +55,13 @@ const (
 	ssoFieldSchemaEvolutionNewColumnTypeMapping = "new_column_type_mapping"
 	ssoFieldSchemaEvolutionProcessors           = "processors"
 	ssoFieldCommitTimeout                       = "commit_timeout"
+	ssoFieldCommitBackoff                       = "commit_backoff"
+	ssoFieldCommitBackoffInitInterval           = "initial_interval"
+	ssoFieldCommitBackoffMaxInterval            = "max_interval"
+	ssoFieldCommitBackoffMaxElapsedTime         = "max_elapsed_time"
+	ssoFieldCommitBackoffMultiplier             = "multiplier"
+	ssoFieldMessageFormat                       = "message_format"
+	ssoFieldTimestampFormat                     = "timestamp_format"
 
 	defaultSchemaEvolutionNewColumnMapping = `root = match this.value.type() {
   this == "string" => "STRING"
@@ -182,11 +189,38 @@ For more information about offset tokens, see https://docs.snowflake.com/en/user
 				Advanced().
 				Examples(`offset-${!"%016X".format(@kafka_offset)}`, `postgres-${!@lsn}`),
 			service.NewDurationField(ssoFieldCommitTimeout).
-				Description(`The max duration to wait until the data has been asynchronously committed to Snowflake.`).
-				Default("60s").
+				Description(`Deprecated: use `+"`commit_backoff.max_elapsed_time`"+` instead.`).
+				Default("").
 				Advanced().
-				Example("10s").
-				Example("10m"),
+				Deprecated(),
+			service.NewObjectField(ssoFieldCommitBackoff,
+				service.NewDurationField(ssoFieldCommitBackoffInitInterval).
+					Description("The initial period to wait between status polls.").
+					Default("32ms"),
+				service.NewDurationField(ssoFieldCommitBackoffMaxInterval).
+					Description("The maximum period to wait between status polls.").
+					Default("512ms"),
+				service.NewDurationField(ssoFieldCommitBackoffMaxElapsedTime).
+					Description("The maximum total time to wait for data to be committed. If zero then no limit is used.").
+					Default("60s"),
+				service.NewFloatField(ssoFieldCommitBackoffMultiplier).
+					Description("The factor by which the poll interval grows on each attempt.").
+					Default(2.0),
+			).
+				Description("Control how frequently Snowflake is polled to check if data has been committed.").
+				Advanced(),
+			service.NewStringAnnotatedEnumField(ssoFieldMessageFormat, map[string]string{
+				"object": "Messages are an object in JSON or bloblang where the key of the object is the column name in snowflake and the value is the value for the column",
+				"array":  "Messages are an array of values where the position in the array matches up the with ordinal of the column in snowflake",
+			}).
+				Description(`The format at which to expect incoming messages from the rest of the pipeline in.`).
+				Default("object").
+				Advanced().
+				Example("array"),
+			service.NewStringField(ssoFieldTimestampFormat).
+				Description("The format to parse string values for TIMESTAMP, TIMESTAMP_LTZ and TIMESTAMP_NTZ columns. Should be a layout for https://pkg.go.dev/time#Parse[^time.Parse] in Golang.").
+				Default(time.RFC3339Nano).
+				Advanced(),
 		).
 		LintRule(`root = match {
   this.exists("private_key") && this.exists("private_key_file") => [ "both `+"`private_key`"+` and `+"`private_key_file`"+` can't be set simultaneously" ],
@@ -243,7 +277,7 @@ NOTE: If attempting to do exactly-once its important that records are delivered 
 channel_name and offset_token first. Removing the offset_token is a safer option that will instruct Redpanda Connect to use its default at-least-once delivery model instead.`,
 			`
 input:
-  redpanda_common:
+  redpanda:
     topics: ["my_topic_going_to_snow"]
     consumer_group: "redpanda_connect_to_snowflake"
     # We want very large batches - each batch will be sent to Snowflake individually
@@ -282,13 +316,13 @@ output:
     # to Snowflake. See the ordering documentation for the "redpanda" input for more details.
     - retry:
         output:
-          redpanda_common:
+          redpanda:
             topic: "dead_letter_queue"
 `,
 		).
 		Example(
 			"HTTP Server to push data to Snowflake",
-			`This example demonstrates how to create an HTTP server input that can recieve HTTP PUT requests
+			`This example demonstrates how to create an HTTP server input that can receive HTTP PUT requests
 with JSON payloads, that are buffered locally then written to Snowflake in batches.
 
 NOTE: This example uses a buffer to respond to the HTTP request immediately, so it's possible that failures to deliver data could result in data loss.
@@ -429,6 +463,7 @@ func newSnowflakeStreamer(
 			return nil, err
 		}
 	}
+
 	schemaEvolutionMode := streaming.SchemaModeIgnoreExtra
 	var schemaEvolutionProcessors []*service.OwnedProcessor
 	var schemaEvolutionMapping *bloblang.Executor
@@ -511,7 +546,51 @@ func newSnowflakeStreamer(
 		return nil, err
 	}
 
-	commitTimeout, err := conf.FieldDuration(ssoFieldCommitTimeout)
+	commitBackoffConf := conf.Namespace(ssoFieldCommitBackoff)
+	commitBackoffInitInterval, err := commitBackoffConf.FieldDuration(ssoFieldCommitBackoffInitInterval)
+	if err != nil {
+		return nil, err
+	}
+	commitBackoffMaxInterval, err := commitBackoffConf.FieldDuration(ssoFieldCommitBackoffMaxInterval)
+	if err != nil {
+		return nil, err
+	}
+	commitBackoffMaxElapsedTime, err := commitBackoffConf.FieldDuration(ssoFieldCommitBackoffMaxElapsedTime)
+	if err != nil {
+		return nil, err
+	}
+	commitBackoffMultiplier, err := commitBackoffConf.FieldFloat(ssoFieldCommitBackoffMultiplier)
+	if err != nil {
+		return nil, err
+	}
+	// commit_timeout is deprecated. If explicitly set, it overrides commit_backoff.max_elapsed_time.
+	if legacyStr, _ := conf.FieldString(ssoFieldCommitTimeout); legacyStr != "" {
+		if commitBackoffMaxElapsedTime, err = conf.FieldDuration(ssoFieldCommitTimeout); err != nil {
+			return nil, err
+		}
+	}
+	commitBackoff := streaming.CommitBackoffOptions{
+		InitialInterval: commitBackoffInitInterval,
+		MaxInterval:     commitBackoffMaxInterval,
+		MaxElapsedTime:  commitBackoffMaxElapsedTime,
+		Multiplier:      commitBackoffMultiplier,
+	}
+
+	messageFormatStr, err := conf.FieldString(ssoFieldMessageFormat)
+	if err != nil {
+		return nil, err
+	}
+	msgFmt := streaming.MessageFormatObject
+	switch messageFormatStr {
+	case "object":
+		msgFmt = streaming.MessageFormatObject
+	case "array":
+		msgFmt = streaming.MessageFormatArray
+	default:
+		return nil, fmt.Errorf("unknown `%s`: %q", ssoFieldMessageFormat, messageFormatStr)
+	}
+
+	timestampFormat, err := conf.FieldString(ssoFieldTimestampFormat)
 	if err != nil {
 		return nil, err
 	}
@@ -592,18 +671,20 @@ func newSnowflakeStreamer(
 		var impl service.BatchOutput
 		if channelName != nil {
 			indexed := &snowpipeIndexedOutput{
-				channelName:   channelName,
-				client:        client,
-				db:            db,
-				schema:        schema,
-				table:         table,
-				role:          role,
-				logger:        mgr.Logger(),
-				metrics:       newSnowpipeMetrics(mgr.Metrics()),
-				buildOpts:     buildOpts,
-				offsetToken:   offsetToken,
-				schemaMode:    schemaEvolutionMode,
-				commitTimeout: commitTimeout,
+				channelName:     channelName,
+				client:          client,
+				db:              db,
+				schema:          schema,
+				table:           table,
+				role:            role,
+				logger:          mgr.Logger(),
+				metrics:         newSnowpipeMetrics(mgr.Metrics()),
+				buildOpts:       buildOpts,
+				offsetToken:     offsetToken,
+				schemaMode:      schemaEvolutionMode,
+				commitBackoff:   commitBackoff,
+				messageFormat:   msgFmt,
+				timestampFormat: timestampFormat,
 			}
 			indexed.channelPool = pool.NewIndexed(func(ctx context.Context, name string) (*streaming.SnowflakeIngestionChannel, error) {
 				hash := sha256.Sum256([]byte(name))
@@ -619,18 +700,20 @@ func newSnowflakeStreamer(
 				channelPrefix = fmt.Sprintf("Redpanda_Connect_%s.%s.%s", db, schema, table)
 			}
 			pooled := &snowpipePooledOutput{
-				channelPrefix: channelPrefix,
-				client:        client,
-				db:            db,
-				schema:        schema,
-				table:         table,
-				role:          role,
-				logger:        mgr.Logger(),
-				metrics:       newSnowpipeMetrics(mgr.Metrics()),
-				buildOpts:     buildOpts,
-				offsetToken:   offsetToken,
-				schemaMode:    schemaEvolutionMode,
-				commitTimeout: commitTimeout,
+				channelPrefix:   channelPrefix,
+				client:          client,
+				db:              db,
+				schema:          schema,
+				table:           table,
+				role:            role,
+				logger:          mgr.Logger(),
+				metrics:         newSnowpipeMetrics(mgr.Metrics()),
+				buildOpts:       buildOpts,
+				offsetToken:     offsetToken,
+				schemaMode:      schemaEvolutionMode,
+				commitBackoff:   commitBackoff,
+				messageFormat:   msgFmt,
+				timestampFormat: timestampFormat,
 			}
 			pooled.channelPool = pool.NewCapped(maxInFlight, func(ctx context.Context, id int) (*streaming.SnowflakeIngestionChannel, error) {
 				name := fmt.Sprintf("%s_%d", pooled.channelPrefix, id)
@@ -883,24 +966,28 @@ type snowpipePooledOutput struct {
 	channelPool   pool.Capped[*streaming.SnowflakeIngestionChannel]
 	metrics       *snowpipeMetrics
 	buildOpts     streaming.BuildOptions
-	commitTimeout time.Duration
+	commitBackoff streaming.CommitBackoffOptions
 
 	channelPrefix, db, schema, table, role string
 	offsetToken                            *service.InterpolatedString
 	logger                                 *service.Logger
 	schemaMode                             streaming.SchemaMode
+	messageFormat                          streaming.MessageFormat
+	timestampFormat                        string
 }
 
 func (o *snowpipePooledOutput) openChannel(ctx context.Context, name string, id int16) (*streaming.SnowflakeIngestionChannel, error) {
 	o.logger.Debugf("opening snowflake streaming channel for table `%s.%s.%s`: %s", o.db, o.schema, o.table, name)
 	return o.client.OpenChannel(ctx, streaming.ChannelOptions{
-		ID:           id,
-		Name:         name,
-		DatabaseName: o.db,
-		SchemaName:   o.schema,
-		TableName:    o.table,
-		BuildOptions: o.buildOpts,
-		SchemaMode:   o.schemaMode,
+		ID:              id,
+		Name:            name,
+		DatabaseName:    o.db,
+		SchemaName:      o.schema,
+		TableName:       o.table,
+		BuildOptions:    o.buildOpts,
+		SchemaMode:      o.schemaMode,
+		MessageFormat:   o.messageFormat,
+		TimestampFormat: o.timestampFormat,
 	})
 }
 
@@ -953,7 +1040,7 @@ func (o *snowpipePooledOutput) WriteBatch(ctx context.Context, batch service.Mes
 	}
 	o.logger.Debugf("done inserting %d rows using channel %s, stats: %+v", len(batch), channel.Name, stats)
 	commitStart := time.Now()
-	polls, err := channel.WaitUntilCommitted(ctx, o.commitTimeout)
+	polls, err := channel.WaitUntilCommitted(ctx, o.commitBackoff)
 	if err != nil {
 		reopened, reopenErr := o.openChannel(ctx, channel.Name, channel.ID)
 		if reopenErr == nil {
@@ -982,24 +1069,28 @@ type snowpipeIndexedOutput struct {
 	channelPool   pool.Indexed[*streaming.SnowflakeIngestionChannel]
 	metrics       *snowpipeMetrics
 	buildOpts     streaming.BuildOptions
-	commitTimeout time.Duration
+	commitBackoff streaming.CommitBackoffOptions
 
 	db, schema, table, role  string
 	offsetToken, channelName *service.InterpolatedString
 	logger                   *service.Logger
 	schemaMode               streaming.SchemaMode
+	messageFormat            streaming.MessageFormat
+	timestampFormat          string
 }
 
 func (o *snowpipeIndexedOutput) openChannel(ctx context.Context, name string, id int16) (*streaming.SnowflakeIngestionChannel, error) {
 	o.logger.Debugf("opening snowflake streaming channel for table `%s.%s.%s`: %s", o.db, o.schema, o.table, name)
 	return o.client.OpenChannel(ctx, streaming.ChannelOptions{
-		ID:           id,
-		Name:         name,
-		DatabaseName: o.db,
-		SchemaName:   o.schema,
-		TableName:    o.table,
-		BuildOptions: o.buildOpts,
-		SchemaMode:   o.schemaMode,
+		ID:              id,
+		Name:            name,
+		DatabaseName:    o.db,
+		SchemaName:      o.schema,
+		TableName:       o.table,
+		BuildOptions:    o.buildOpts,
+		SchemaMode:      o.schemaMode,
+		MessageFormat:   o.messageFormat,
+		TimestampFormat: o.timestampFormat,
 	})
 }
 
@@ -1056,7 +1147,7 @@ func (o *snowpipeIndexedOutput) WriteBatch(ctx context.Context, batch service.Me
 	}
 	o.logger.Debugf("done inserting %d rows using channel %s, stats: %+v", len(batch), channel.Name, stats)
 	commitStart := time.Now()
-	polls, err := channel.WaitUntilCommitted(ctx, o.commitTimeout)
+	polls, err := channel.WaitUntilCommitted(ctx, o.commitBackoff)
 	if err != nil {
 		reopened, reopenErr := o.openChannel(ctx, channel.Name, channel.ID)
 		if reopenErr == nil {

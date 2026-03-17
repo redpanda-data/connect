@@ -16,7 +16,9 @@ package nats
 
 import (
 	"testing"
+	"time"
 
+	"github.com/nats-io/nats.go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -189,5 +191,60 @@ auth:
 		require.NoError(t, err)
 
 		assert.False(t, e.connDetails.tlsHandshakeFirst)
+	})
+}
+
+func TestAssignMessageMetadata(t *testing.T) {
+	t.Run("low values", func(t *testing.T) {
+		msg := service.NewMessage([]byte("test"))
+		meta := &nats.MsgMetadata{
+			Sequence:     nats.SequencePair{Stream: 42, Consumer: 7},
+			NumDelivered: 3,
+			NumPending:   5,
+			Domain:       "testdomain",
+			Consumer:     "testconsumer",
+			Timestamp:    time.Date(2025, 10, 30, 15, 4, 5, 123456789, time.UTC),
+		}
+
+		assignMessageMetadata(meta, msg)
+
+		val, _ := msg.MetaGetMut("nats_sequence_stream")
+		assert.Equal(t, "42", val)
+		val, _ = msg.MetaGetMut("nats_sequence_consumer")
+		assert.Equal(t, "7", val)
+		val, _ = msg.MetaGetMut("nats_num_delivered")
+		assert.Equal(t, "3", val)
+		val, _ = msg.MetaGetMut("nats_num_pending")
+		assert.Equal(t, "5", val)
+		val, _ = msg.MetaGetMut("nats_domain")
+		assert.Equal(t, "testdomain", val)
+		val, _ = msg.MetaGetMut("nats_consumer")
+		assert.Equal(t, "testconsumer", val)
+		val, _ = msg.MetaGetMut("nats_timestamp_unix_nano")
+		assert.Equal(t, "1761836645123456789", val)
+	})
+
+	t.Run("uint64 values", func(t *testing.T) {
+		msg := service.NewMessage([]byte("high"))
+
+		highInt := uint64(18446744073709551615) // Max uint64 0xFFFFFFFFFFFFFFFF
+		highIntStr := "18446744073709551615"
+
+		meta := &nats.MsgMetadata{
+			Sequence:     nats.SequencePair{Stream: highInt, Consumer: highInt},
+			NumDelivered: highInt,
+			NumPending:   highInt,
+		}
+
+		assignMessageMetadata(meta, msg)
+
+		val, _ := msg.MetaGetMut("nats_sequence_stream")
+		assert.Equal(t, highIntStr, val)
+		val, _ = msg.MetaGetMut("nats_sequence_consumer")
+		assert.Equal(t, highIntStr, val)
+		val, _ = msg.MetaGetMut("nats_num_delivered")
+		assert.Equal(t, highIntStr, val)
+		val, _ = msg.MetaGetMut("nats_num_pending")
+		assert.Equal(t, highIntStr, val)
 	})
 }

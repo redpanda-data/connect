@@ -31,20 +31,20 @@ var envFileFlag = &cli.StringSliceFlag{
 func applyEnvFileFlag(c *cli.Context) error {
 	dotEnvPaths, err := service.Globs(service.OSFS(), c.StringSlice(cfEnvFile)...)
 	if err != nil {
-		return fmt.Errorf("failed to resolve env file glob pattern: %w", err)
+		return fmt.Errorf("resolving env file glob pattern: %w", err)
 	}
 	for _, dotEnvFile := range dotEnvPaths {
 		dotEnvBytes, err := service.ReadFile(service.OSFS(), dotEnvFile)
 		if err != nil {
-			return fmt.Errorf("failed to read dotenv file: %w", err)
+			return fmt.Errorf("reading dotenv file: %w", err)
 		}
 		vars, err := service.ParseEnvFile(dotEnvBytes)
 		if err != nil {
-			return fmt.Errorf("failed to parse dotenv file: %w", err)
+			return fmt.Errorf("parsing dotenv file: %w", err)
 		}
 		for k, v := range vars {
 			if err = os.Setenv(k, v); err != nil {
-				return fmt.Errorf("failed to set env var '%v': %w", k, err)
+				return fmt.Errorf("setting env var '%v': %w", k, err)
 			}
 		}
 	}

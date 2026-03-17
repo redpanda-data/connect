@@ -26,6 +26,7 @@ import (
 
 const (
 	soFieldStream       = "stream"
+	soFieldID           = "id"
 	soFieldBodyKey      = "body_key"
 	soFieldMaxLenApprox = "max_length"
 	soFieldMetadata     = "metadata"
@@ -45,6 +46,10 @@ Redis stream entries are key/value pairs, as such it is necessary to specify the
 		Fields(
 			service.NewInterpolatedStringField(soFieldStream).
 				Description("The stream to add messages to."),
+			service.NewInterpolatedStringField(soFieldID).
+				Description("The entry ID for the stream message. Allows function interpolations. When set to `*` (the default), Redis auto-generates a unique ID based on the current time. Set a custom ID to control message ordering, for example to replay messages in upstream order.").
+				Examples("*", "${! @redis_stream }", "${! this.id }", "${! counter() }-0").
+				Default("*"),
 			service.NewStringField(soFieldBodyKey).
 				Description("A key to set the raw body of the message to.").
 				Default("body"),
@@ -77,6 +82,7 @@ type redisStreamsWriter struct {
 	log *service.Logger
 
 	stream     *service.InterpolatedString
+	id         *service.InterpolatedString
 	streamStr  string
 	bodyKey    string
 	maxLen     int
@@ -98,6 +104,9 @@ func newRedisStreamsWriter(conf *service.ParsedConfig, mgr *service.Resources) (
 	if r.stream, err = conf.FieldInterpolatedString(soFieldStream); err != nil {
 		return
 	}
+	if r.id, err = conf.FieldInterpolatedString(soFieldID); err != nil {
+		return
+	}
 	if r.streamStr, err = conf.FieldString(soFieldStream); err != nil {
 		return
 	}
@@ -115,6 +124,22 @@ func newRedisStreamsWriter(conf *service.ParsedConfig, mgr *service.Resources) (
 		return nil, err
 	}
 	return r, nil
+}
+
+// ConnectionTest attempts to test the connection configuration of this output
+// without actually sending data. The connection, if successful, is then
+// closed.
+func (r *redisStreamsWriter) ConnectionTest(ctx context.Context) service.ConnectionTestResults {
+	client, err := r.clientCtor()
+	if err != nil {
+		return service.ConnectionTestFailed(err).AsList()
+	}
+	defer client.Close()
+
+	if _, err = client.Ping(ctx).Result(); err != nil {
+		return service.ConnectionTestFailed(err).AsList()
+	}
+	return service.ConnectionTestSucceeded().AsList()
 }
 
 func (r *redisStreamsWriter) Connect(ctx context.Context) error {
@@ -156,6 +181,10 @@ func (r *redisStreamsWriter) WriteBatch(ctx context.Context, batch service.Messa
 		if err != nil {
 			return fmt.Errorf("stream interpolation error: %w", err)
 		}
+		id, err := batch.TryInterpolatedString(0, r.id)
+		if err != nil {
+			return fmt.Errorf("id interpolation error: %w", err)
+		}
 
 		values, err := partToMap(batch[0])
 		if err != nil {
@@ -163,7 +192,7 @@ func (r *redisStreamsWriter) WriteBatch(ctx context.Context, batch service.Messa
 		}
 
 		if err := client.XAdd(ctx, &redis.XAddArgs{
-			ID:     "*",
+			ID:     id,
 			Stream: stream,
 			MaxLen: int64(r.maxLen),
 			Approx: true,
@@ -182,6 +211,10 @@ func (r *redisStreamsWriter) WriteBatch(ctx context.Context, batch service.Messa
 		if err != nil {
 			return fmt.Errorf("stream interpolation error: %w", err)
 		}
+		id, err := batch.TryInterpolatedString(i, r.id)
+		if err != nil {
+			return fmt.Errorf("id interpolation error: %w", err)
+		}
 
 		values, err := partToMap(batch[i])
 		if err != nil {
@@ -189,7 +222,7 @@ func (r *redisStreamsWriter) WriteBatch(ctx context.Context, batch service.Messa
 		}
 
 		_ = pipe.XAdd(ctx, &redis.XAddArgs{
-			ID:     "*",
+			ID:     id,
 			Stream: stream,
 			MaxLen: int64(r.maxLen),
 			Approx: true,

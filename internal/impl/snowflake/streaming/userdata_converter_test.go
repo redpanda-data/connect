@@ -1,12 +1,10 @@
-/*
- * Copyright 2024 Redpanda Data, Inc.
- *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
- * License (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- *
- * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
- */
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed as a Redpanda Enterprise file under the Redpanda Community
+// License (the "License"); you may not use this file except in compliance with
+// the License. You may obtain a copy of the License at
+//
+// https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
 package streaming
 
@@ -104,7 +102,6 @@ func TestTimeConverter(t *testing.T) {
 		},
 	}
 	for _, tc := range tests {
-		tc := tc
 		t.Run("", func(t *testing.T) {
 			c := &timeConverter{nullable: true, scale: tc.scale}
 			runTestcase(t, c, tc)
@@ -192,9 +189,28 @@ func TestNumberConverter(t *testing.T) {
 			scale:     4,
 			precision: 19,
 		},
+		{
+			name:      "[]byte Number(19, 4)",
+			input:     []byte("123.4321"),
+			output:    1234321,
+			scale:     4,
+			precision: 19,
+		},
+		{
+			name:      "[]byte Number(38, 28)",
+			input:     []byte("9123456789.9876543219876543211234567891"),
+			output:    int128.MustParse("91234567899876543219876543211234567891"),
+			precision: 38,
+			scale:     28,
+		},
+		{
+			name:      "[]byte Number(19, 0) Error",
+			input:     []byte("91234567899876543219876543211234567891"),
+			err:       true,
+			precision: 19,
+		},
 	}
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			c := &numberConverter{
 				nullable:  true,
@@ -209,17 +225,103 @@ func TestNumberConverter(t *testing.T) {
 func TestRealConverter(t *testing.T) {
 	tests := []validateTestCase{
 		{
+			name:   "float64",
 			input:  12345.54321,
 			output: 12345.54321,
 		},
 		{
+			name:   "float64 small",
 			input:  3.415,
 			output: 3.415,
 		},
+		{
+			name:   "int",
+			input:  42,
+			output: float64(42),
+		},
+		{
+			name:   "int8",
+			input:  int8(7),
+			output: float64(7),
+		},
+		{
+			name:   "int16",
+			input:  int16(256),
+			output: float64(256),
+		},
+		{
+			name:   "int32",
+			input:  int32(100000),
+			output: float64(100000),
+		},
+		{
+			name:   "int64",
+			input:  int64(999999),
+			output: float64(999999),
+		},
+		{
+			name:   "uint",
+			input:  uint(123),
+			output: float64(123),
+		},
+		{
+			name:   "uint8",
+			input:  uint8(200),
+			output: float64(200),
+		},
+		{
+			name:   "uint16",
+			input:  uint16(60000),
+			output: float64(60000),
+		},
+		{
+			name:   "uint32",
+			input:  uint32(3000000000),
+			output: float64(3000000000),
+		},
+		{
+			name:   "uint64",
+			input:  uint64(1234567890),
+			output: float64(1234567890),
+		},
+		{
+			name:   "float32",
+			input:  float32(3.14),
+			output: float64(float32(3.14)),
+		},
+		{
+			name:   "string",
+			input:  "123.456",
+			output: 123.456,
+		},
+		{
+			name:   "[]byte",
+			input:  []byte("789.012"),
+			output: 789.012,
+		},
+		{
+			name:   "json.Number",
+			input:  json.Number("99.99"),
+			output: 99.99,
+		},
+		{
+			name:  "string invalid",
+			input: "not_a_number",
+			err:   true,
+		},
+		{
+			name:  "[]byte invalid",
+			input: []byte("nope"),
+			err:   true,
+		},
+		{
+			name:   "nil",
+			input:  nil,
+			output: nil,
+		},
 	}
 	for _, tc := range tests {
-		tc := tc
-		t.Run("", func(t *testing.T) {
+		t.Run(tc.name, func(t *testing.T) {
 			c := &doubleConverter{nullable: true}
 			runTestcase(t, c, tc)
 		})
@@ -246,7 +348,6 @@ func TestBoolConverter(t *testing.T) {
 		},
 	}
 	for _, tc := range tests {
-		tc := tc
 		t.Run("", func(t *testing.T) {
 			c := &boolConverter{nullable: true}
 			runTestcase(t, c, tc)
@@ -266,7 +367,6 @@ func TestBinaryConverter(t *testing.T) {
 		},
 	}
 	for _, tc := range tests {
-		tc := tc
 		t.Run("", func(t *testing.T) {
 			c := &binaryConverter{nullable: true, maxLength: 56}
 			runTestcase(t, c, tc)
@@ -290,7 +390,6 @@ func TestStringConverter(t *testing.T) {
 		},
 	}
 	for _, tc := range tests {
-		tc := tc
 		t.Run("", func(t *testing.T) {
 			c := &binaryConverter{nullable: true, maxLength: 56, utf8: true}
 			runTestcase(t, c, tc)
@@ -344,17 +443,17 @@ func TestTimestampNTZConverter(t *testing.T) {
 		},
 	}
 	for _, tc := range tests {
-		tc := tc
 		t.Run("", func(t *testing.T) {
 			loc, err := time.LoadLocation("America/New_York")
 			require.NoError(t, err)
 			c := &timestampConverter{
-				nullable:  true,
-				scale:     tc.scale,
-				precision: tc.precision,
-				includeTZ: false,
-				trimTZ:    true,
-				defaultTZ: loc,
+				nullable:   true,
+				scale:      tc.scale,
+				precision:  tc.precision,
+				includeTZ:  false,
+				trimTZ:     true,
+				defaultTZ:  loc,
+				timeFormat: time.RFC3339Nano,
 			}
 			runTestcase(t, c, tc)
 		})
@@ -371,17 +470,17 @@ func TestTimestampTZConverter(t *testing.T) {
 		},
 	}
 	for _, tc := range tests {
-		tc := tc
 		t.Run("", func(t *testing.T) {
 			loc, err := time.LoadLocation("America/New_York")
 			require.NoError(t, err)
 			c := &timestampConverter{
-				nullable:  true,
-				scale:     tc.scale,
-				precision: tc.precision,
-				includeTZ: true,
-				trimTZ:    false,
-				defaultTZ: loc,
+				nullable:   true,
+				scale:      tc.scale,
+				precision:  tc.precision,
+				includeTZ:  true,
+				trimTZ:     false,
+				defaultTZ:  loc,
+				timeFormat: time.RFC3339Nano,
 			}
 			runTestcase(t, c, tc)
 		})
@@ -406,21 +505,21 @@ func TestTimestampLTZConverter(t *testing.T) {
 			input:     "2013-04-28T20:57:00Z",
 			err:       true,
 			scale:     0,
-			precision: 9, // Mor precision needed
+			precision: 9, // More precision needed
 		},
 	}
 	for _, tc := range tests {
-		tc := tc
 		t.Run("", func(t *testing.T) {
 			loc, err := time.LoadLocation("America/New_York")
 			require.NoError(t, err)
 			c := &timestampConverter{
-				nullable:  true,
-				scale:     tc.scale,
-				precision: tc.precision,
-				includeTZ: false,
-				trimTZ:    false,
-				defaultTZ: loc,
+				nullable:   true,
+				scale:      tc.scale,
+				precision:  tc.precision,
+				includeTZ:  false,
+				trimTZ:     false,
+				defaultTZ:  loc,
+				timeFormat: time.RFC3339Nano,
 			}
 			runTestcase(t, c, tc)
 		})
@@ -455,7 +554,6 @@ func TestDateConverter(t *testing.T) {
 		},
 	}
 	for _, tc := range tests {
-		tc := tc
 		t.Run("", func(t *testing.T) {
 			c := &dateConverter{nullable: true}
 			runTestcase(t, c, tc)
@@ -494,10 +592,9 @@ func (b *testTypedBuffer) WriteBytes(v []byte) {
 	b.output = v
 }
 
-func (b *testTypedBuffer) Prepare([]parquet.Value, int, int) {
+func (b *testTypedBuffer) Reset(*parquet.ColumnWriter, int) {
 	b.output = nil
 }
-func (*testTypedBuffer) Reset() {}
 
 func runTestcase(t *testing.T, dc dataConverter, tc validateTestCase) {
 	t.Helper()

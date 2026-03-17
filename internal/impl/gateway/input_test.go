@@ -18,10 +18,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/textproto"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/klauspost/compress/gzip"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -197,4 +200,255 @@ func readMultipart(res *http.Response) ([]string, error) {
 	}
 
 	return output, nil
+}
+
+// TestHTTPServerReload tests that the server can be restarted on the same port
+// without getting stuck in a "not ready" state. This simulates config reload behavior.
+func TestHTTPServerReload(t *testing.T) {
+	// Use a random available port
+	t.Setenv("REDPANDA_CLOUD_GATEWAY_ADDRESS", "127.0.0.1:0")
+
+	tCtx, done := context.WithTimeout(t.Context(), time.Second*30)
+	defer done()
+
+	// First server instance
+	pConf1, err := gateway.InputSpec().ParseYAML(`
+path: /testpost
+tcp:
+  reuse_port: true
+`, nil)
+	require.NoError(t, err)
+
+	h1, err := gateway.InputFromParsed(pConf1, service.MockResources())
+	require.NoError(t, err)
+
+	// Connect first server (binds to port)
+	require.NoError(t, h1.Connect(tCtx))
+
+	// Read handler goroutine for first server
+	received1 := make(chan struct{})
+	go func() {
+		batch, aFn, err := h1.ReadBatch(tCtx)
+		if err != nil {
+			return
+		}
+		require.NoError(t, aFn(tCtx, nil))
+		require.Len(t, batch, 1)
+		close(received1)
+	}()
+
+	// Give server time to start listening
+	time.Sleep(100 * time.Millisecond)
+
+	// Get the actual bound address from the first server
+	// Since we used port 0, we need to extract the actual port
+	// For this test, we'll use a fixed port instead
+	t.Setenv("REDPANDA_CLOUD_GATEWAY_ADDRESS", "127.0.0.1:19283")
+
+	// Recreate with fixed port
+	h1.Close(tCtx)
+
+	pConf1, err = gateway.InputSpec().ParseYAML(`
+path: /testpost
+tcp:
+  reuse_port: true
+`, nil)
+	require.NoError(t, err)
+
+	h1, err = gateway.InputFromParsed(pConf1, service.MockResources())
+	require.NoError(t, err)
+
+	require.NoError(t, h1.Connect(tCtx))
+
+	go func() {
+		batch, aFn, err := h1.ReadBatch(tCtx)
+		if err != nil {
+			return
+		}
+		require.NoError(t, aFn(tCtx, nil))
+		require.Len(t, batch, 1)
+		close(received1)
+	}()
+
+	time.Sleep(100 * time.Millisecond)
+
+	// Send request to first server
+	res, err := http.Post(
+		"http://127.0.0.1:19283/testpost",
+		"application/octet-stream",
+		bytes.NewBufferString("test message 1"),
+	)
+	require.NoError(t, err)
+	require.Equal(t, 200, res.StatusCode)
+	res.Body.Close()
+
+	// Wait for message to be received
+	select {
+	case <-received1:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Timeout waiting for first message")
+	}
+
+	// Close first server (releases port)
+	closeCtx, closeDone := context.WithTimeout(context.Background(), 5*time.Second)
+	defer closeDone()
+	require.NoError(t, h1.Close(closeCtx))
+
+	// Small delay to ensure port is fully released
+	time.Sleep(100 * time.Millisecond)
+
+	// Create second server instance on the same address (simulating reload)
+	pConf2, err := gateway.InputSpec().ParseYAML(`
+path: /testpost
+tcp:
+  reuse_port: true
+`, nil)
+	require.NoError(t, err)
+
+	h2, err := gateway.InputFromParsed(pConf2, service.MockResources())
+	require.NoError(t, err)
+
+	// This should succeed due to SO_REUSEADDR
+	require.NoError(t, h2.Connect(tCtx), "Failed to bind to port after reload - this is the bug we're fixing")
+
+	// Read handler goroutine for second server
+	received2 := make(chan struct{})
+	go func() {
+		batch, aFn, err := h2.ReadBatch(tCtx)
+		if err != nil {
+			return
+		}
+		require.NoError(t, aFn(tCtx, nil))
+		require.Len(t, batch, 1)
+		close(received2)
+	}()
+
+	time.Sleep(100 * time.Millisecond)
+
+	// Send request to second server - should work (not return 503)
+	res, err = http.Post(
+		"http://127.0.0.1:19283/testpost",
+		"application/octet-stream",
+		bytes.NewBufferString("test message 2"),
+	)
+	require.NoError(t, err)
+	require.Equal(t, 200, res.StatusCode, "Server returned non-200 status after reload")
+	res.Body.Close()
+
+	// Wait for message to be received
+	select {
+	case <-received2:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Timeout waiting for second message - server may not be accepting connections after reload")
+	}
+
+	// Cleanup
+	require.NoError(t, h2.Close(closeCtx))
+}
+
+func TestHTTPGzipResponseRemovesContentLength(t *testing.T) {
+	t.Setenv("REDPANDA_CLOUD_GATEWAY_ADDRESS", "0.0.0.0:1234")
+
+	tCtx, done := context.WithTimeout(t.Context(), time.Second*30)
+	defer done()
+
+	router := mux.NewRouter()
+
+	pConf, err := gateway.InputSpec().ParseYAML(`
+path: /testpost
+sync_response:
+  metadata_headers:
+    include_prefixes:
+      - "Content-Length"
+`, nil)
+	require.NoError(t, err)
+
+	h, err := gateway.InputFromParsed(pConf, service.MockResources())
+	require.NoError(t, err)
+
+	require.NoError(t, h.RegisterCustomMux(router))
+
+	server := httptest.NewServer(router)
+	defer server.Close()
+
+	responseBody := "bestdata"
+
+	// Test with Accept-Encoding: gzip — Content-Length must be removed because
+	// it was computed on the uncompressed payload and would be wrong after gzip.
+	go func() {
+		batch, aFn, err := h.ReadBatch(tCtx)
+		require.NoError(t, err)
+
+		for _, m := range batch {
+			m.SetBytes([]byte(responseBody))
+			m.MetaSetMut("Content-Length", strconv.Itoa(len(responseBody)))
+		}
+
+		require.NoError(t, batch.AddSyncResponse())
+		require.NoError(t, aFn(tCtx, nil))
+	}()
+
+	// Disable automatic decompression so we can inspect raw headers.
+	client := &http.Client{Transport: &http.Transport{DisableCompression: true}}
+	req, err := http.NewRequestWithContext(tCtx, http.MethodPost, server.URL+"/testpost",
+		strings.NewReader("data"))
+	require.NoError(t, err)
+	req.Header.Set("Accept-Encoding", "gzip")
+
+	res, err := client.Do(req)
+	require.NoError(t, err)
+	defer res.Body.Close()
+
+	require.Equal(t, 200, res.StatusCode)
+	assert.Equal(t, "gzip", res.Header.Get("Content-Encoding"))
+
+	// The user-set Content-Length (uncompressed size) must not appear in the
+	// response. Go's HTTP server may auto-compute the correct compressed
+	// Content-Length or use chunked encoding — either is fine, as long as the
+	// original (wrong) value is gone.
+	if cl := res.Header.Get("Content-Length"); cl != "" {
+		assert.NotEqual(t, strconv.Itoa(len(responseBody)), cl,
+			"Content-Length must not reflect the uncompressed size when gzip is applied")
+	}
+
+	compressed, err := io.ReadAll(res.Body)
+	require.NoError(t, err)
+
+	gr, err := gzip.NewReader(bytes.NewReader(compressed))
+	require.NoError(t, err)
+	decompressed, err := io.ReadAll(gr)
+	require.NoError(t, err)
+	assert.Equal(t, responseBody, string(decompressed))
+
+	// Test without Accept-Encoding: gzip — Content-Length must be preserved.
+	go func() {
+		batch, aFn, err := h.ReadBatch(tCtx)
+		require.NoError(t, err)
+
+		for _, m := range batch {
+			m.SetBytes([]byte(responseBody))
+			m.MetaSetMut("Content-Length", strconv.Itoa(len(responseBody)))
+		}
+
+		require.NoError(t, batch.AddSyncResponse())
+		require.NoError(t, aFn(tCtx, nil))
+	}()
+
+	// Use a client that does not automatically add Accept-Encoding: gzip.
+	noGzipClient := &http.Client{Transport: &http.Transport{DisableCompression: true}}
+	req2, err := http.NewRequestWithContext(tCtx, http.MethodPost, server.URL+"/testpost",
+		strings.NewReader("data"))
+	require.NoError(t, err)
+
+	res2, err := noGzipClient.Do(req2)
+	require.NoError(t, err)
+	defer res2.Body.Close()
+
+	require.Equal(t, 200, res2.StatusCode)
+	assert.Equal(t, strconv.Itoa(len(responseBody)), res2.Header.Get("Content-Length"),
+		"Content-Length must be preserved when gzip is not applied")
+
+	body2, err := io.ReadAll(res2.Body)
+	require.NoError(t, err)
+	assert.Equal(t, responseBody, string(body2))
 }

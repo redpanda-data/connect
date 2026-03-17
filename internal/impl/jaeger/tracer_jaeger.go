@@ -28,7 +28,6 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.7.0"
 	"go.opentelemetry.io/otel/trace"
 
-	//nolint:staticcheck
 	"go.opentelemetry.io/otel/exporters/jaeger"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -128,7 +127,7 @@ func NewJaeger(config jaegerConfig) (trace.TracerProvider, error) {
 		case "const":
 			sampler = tracesdk.TraceIDRatioBased(config.SamplerParam)
 		case "probabilistic":
-			return nil, errors.New("probabalistic sampling is no longer available")
+			return nil, errors.New("probabilistic sampling is no longer available")
 		case "ratelimiting":
 			return nil, errors.New("rate limited sampling is no longer available")
 		case "remote":
@@ -175,7 +174,7 @@ func NewJaeger(config jaegerConfig) (trace.TracerProvider, error) {
 	if i := config.FlushInterval; i != "" {
 		flushInterval, err := time.ParseDuration(i)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse flush interval '%s': %v", i, err)
+			return nil, fmt.Errorf("parsing flush interval '%s': %v", i, err)
 		}
 		batchOpts = append(batchOpts, tracesdk.WithBatchTimeout(flushInterval))
 	}

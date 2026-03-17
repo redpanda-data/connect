@@ -27,7 +27,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
-var driverField = service.NewStringEnumField("driver", "mysql", "postgres", "clickhouse", "mssql", "sqlite", "oracle", "snowflake", "trino", "gocosmos", "spanner").
+var driverField = service.NewStringEnumField("driver", "mysql", "postgres", "pgx", "clickhouse", "mssql", "sqlite", "oracle", "snowflake", "trino", "gocosmos", "spanner", "databricks").
 	Description("A database <<drivers, driver>> to use.")
 
 var dsnField = service.NewStringField("dsn").
@@ -35,7 +35,7 @@ var dsnField = service.NewStringField("dsn").
 
 ==== Drivers
 
-:driver-support: mysql=certified, postgres=certified, clickhouse=community, mssql=community, sqlite=certified, oracle=certified, snowflake=community, trino=community, gocosmos=community, spanner=community
+:driver-support: mysql=certified, postgres=certified, pgx=community, clickhouse=community, mssql=community, sqlite=certified, oracle=certified, snowflake=community, trino=community, gocosmos=community, spanner=community
 
 The following is a list of supported drivers, their placeholder style, and their respective DSN formats:
 
@@ -48,7 +48,7 @@ The following is a list of supported drivers, their placeholder style, and their
 ` + "| `mysql` " + `
 ` + "| `[username[:password]@][protocol[(address)]]/dbname[?param1=value1&...&paramN=valueN]` " + `
 
-` + "| `postgres` " + `
+` + "| `postgres` and `pgx` " + `
 ` + "| `postgres://[user[:password]@][netloc][:port][/dbname][?param1=value1&...]` " + `
 
 ` + "| `mssql` " + `
@@ -71,17 +71,22 @@ The following is a list of supported drivers, their placeholder style, and their
 
 ` + "| `spanner` " + `
 ` + "| projects/[PROJECT]/instances/[INSTANCE]/databases/[DATABASE] " + `
+
+` + "| `databricks` " + `
+` + "| `token:<access-token>@<server-hostname>:<port>/<http-path>` " + `
 |===
 
-Please note that the ` + "`postgres`" + ` driver enforces SSL by default, you can override this with the parameter ` + "`sslmode=disable`" + ` if required.
+Please note that the ` + "`postgres`" + ` and ` + "`pgx`" + ` drivers enforce SSL by default, you can override this with the parameter ` + "`sslmode=disable`" + ` if required.
+The ` + "`pgx`" + ` driver is an alternative to the standard ` + "`postgres`" + ` (pq) driver and comes with extra functionality such as support for array insertion.
 
-The ` + "`snowflake`" + ` driver supports multiple DSN formats. Please consult https://pkg.go.dev/github.com/snowflakedb/gosnowflake#hdr-Connection_String[the docs^] for more details. For https://docs.snowflake.com/en/user-guide/key-pair-auth.html#configuring-key-pair-authentication[key pair authentication^], the DSN has the following format: ` + "`<snowflake_user>@<snowflake_account>/<db_name>/<schema_name>?warehouse=<warehouse>&role=<role>&authenticator=snowflake_jwt&privateKey=<base64_url_encoded_private_key>`" + `, where the value for the ` + "`privateKey`" + ` parameter can be constructed from an unencrypted RSA private key file ` + "`rsa_key.p8`" + ` using ` + "`openssl enc -d -base64 -in rsa_key.p8 | basenc --base64url -w0`" + ` (you can use ` + "`gbasenc`" + ` insted of ` + "`basenc`" + ` on OSX if you install ` + "`coreutils`" + ` via Homebrew). If you have a password-encrypted private key, you can decrypt it using ` + "`openssl pkcs8 -in rsa_key_encrypted.p8 -out rsa_key.p8`" + `. Also, make sure fields such as the username are URL-encoded.
+The ` + "`snowflake`" + ` driver supports multiple DSN formats. Please consult https://pkg.go.dev/github.com/snowflakedb/gosnowflake#hdr-Connection_String[the docs^] for more details. For https://docs.snowflake.com/en/user-guide/key-pair-auth.html#configuring-key-pair-authentication[key pair authentication^], the DSN has the following format: ` + "`<snowflake_user>@<snowflake_account>/<db_name>/<schema_name>?warehouse=<warehouse>&role=<role>&authenticator=snowflake_jwt&privateKey=<base64_url_encoded_private_key>`" + `, where the value for the ` + "`privateKey`" + ` parameter can be constructed from an unencrypted RSA private key file ` + "`rsa_key.p8`" + ` using ` + "`openssl enc -d -base64 -in rsa_key.p8 | basenc --base64url -w0`" + ` (you can use ` + "`gbasenc`" + ` instead of ` + "`basenc`" + ` on OSX if you install ` + "`coreutils`" + ` via Homebrew). If you have a password-encrypted private key, you can decrypt it using ` + "`openssl pkcs8 -in rsa_key_encrypted.p8 -out rsa_key.p8`" + `. Also, make sure fields such as the username are URL-encoded.
 
 The ` + "https://pkg.go.dev/github.com/microsoft/gocosmos[`gocosmos`^]" + ` driver is still experimental, but it has support for https://learn.microsoft.com/en-us/azure/cosmos-db/hierarchical-partition-keys[hierarchical partition keys^] as well as https://learn.microsoft.com/en-us/azure/cosmos-db/nosql/how-to-query-container#cross-partition-query[cross-partition queries^]. Please refer to the https://github.com/microsoft/gocosmos/blob/main/SQL.md[SQL notes^] for details.`).
 	Example("clickhouse://username:password@host1:9000,host2:9000/database?dial_timeout=200ms&max_execution_time=60").
 	Example("foouser:foopassword@tcp(localhost:3306)/foodb").
 	Example("postgres://foouser:foopass@localhost:5432/foodb?sslmode=disable").
-	Example("oracle://foouser:foopass@localhost:1521/service_name")
+	Example("oracle://foouser:foopass@localhost:1521/service_name").
+	Example("token:dapi1234567890ab@dbc-a1b2345c-d6e7.cloud.databricks.com:443/sql/1.0/warehouses/abc123def456")
 
 func connFields() []*service.ConfigField {
 	return []*service.ConfigField{
@@ -154,6 +159,7 @@ func rawQueryField() *service.ConfigField {
 ` + "| `clickhouse` | Dollar sign |" + `
 ` + "| `mysql` | Question mark |" + `
 ` + "| `postgres` | Dollar sign |" + `
+` + "| `pgx` | Dollar sign |" + `
 ` + "| `mssql` | Question mark |" + `
 ` + "| `sqlite` | Question mark |" + `
 ` + "| `oracle` | Colon |" + `
@@ -248,7 +254,7 @@ func connSettingsFromParsed(
 			return
 		}
 		if tmpFiles, err = service.Globs(mgr.FS(), tmpFiles...); err != nil {
-			err = fmt.Errorf("failed to expand init_files glob patterns: %w", err)
+			err = fmt.Errorf("expanding init_files glob patterns: %w", err)
 			return
 		}
 		for _, p := range tmpFiles {

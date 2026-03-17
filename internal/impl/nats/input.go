@@ -147,6 +147,19 @@ func newNATSReader(conf *service.ParsedConfig, mgr *service.Resources) (*natsRea
 	return &n, nil
 }
 
+// ConnectionTest attempts to test the connection configuration of this input
+// without actually consuming data. The connection, if successful, is then
+// closed.
+func (n *natsReader) ConnectionTest(ctx context.Context) service.ConnectionTestResults {
+	conn, err := n.connDetails.get(ctx)
+	if err != nil {
+		return service.ConnectionTestFailed(err).AsList()
+	}
+	defer conn.Close()
+
+	return service.ConnectionTestSucceeded().AsList()
+}
+
 func (n *natsReader) Connect(ctx context.Context) error {
 	n.cMut.Lock()
 	defer n.cMut.Unlock()

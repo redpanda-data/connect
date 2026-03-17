@@ -188,7 +188,7 @@ func (w *outputWriter) Connect(context.Context) error {
 	w.logger.Tracef("Connecting to %s", w.host)
 	c, err := w.client.Index(w.host)
 	if err != nil {
-		w.logger.Tracef("error connecting to %s: %w", w.host, err)
+		w.logger.Tracef("error connecting to %s: %v", w.host, err)
 		return err
 	}
 	w.logger.Tracef("Connected to %s", w.host)
@@ -285,7 +285,7 @@ func (w *outputWriter) computeBatchedVectors(batch service.MessageBatch) (map[st
 		}
 		rawVec, err := vectorExec.Query(i)
 		if err != nil {
-			return nil, fmt.Errorf("failed to execute %s: %w", poFieldVectorMapping, err)
+			return nil, fmt.Errorf("executing %s: %w", poFieldVectorMapping, err)
 		}
 		if rawVec == nil {
 			continue
@@ -318,18 +318,18 @@ func (w *outputWriter) computeBatchedVectors(batch service.MessageBatch) (map[st
 		if metaExec != nil {
 			rawMeta, err = metaExec.Query(i)
 			if err != nil {
-				return nil, fmt.Errorf("failed to execute %s: %w", poFieldMetadataMapping, err)
+				return nil, fmt.Errorf("executing %s: %w", poFieldMetadataMapping, err)
 			}
 		}
 		var meta *pinecone.Metadata
 		if rawMeta != nil {
 			b, err := rawMeta.AsBytes()
 			if err != nil {
-				return nil, fmt.Errorf("failed to extract %s bytes: %w", poFieldMetadataMapping, err)
+				return nil, fmt.Errorf("extracting %s bytes: %w", poFieldMetadataMapping, err)
 			}
 			var m pinecone.Metadata
 			if err := m.UnmarshalJSON(b); err != nil {
-				return nil, fmt.Errorf("failed to convert %s to Pinecone metadata: %w", poFieldMetadataMapping, err)
+				return nil, fmt.Errorf("converting %s to Pinecone metadata: %w", poFieldMetadataMapping, err)
 			}
 			meta = &m
 		}

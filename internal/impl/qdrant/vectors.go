@@ -22,7 +22,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 )
 
-// newVectors converts the input into the appropriate *pb.Vectors format
+// newVectors converts the input into the appropriate *pb.Vectors format.
 func newVectors(input any) (map[string]*qdrant.Vector, error) {
 	namedVectors := make(map[string]*qdrant.Vector)
 
@@ -82,7 +82,7 @@ func newVectors(input any) (map[string]*qdrant.Vector, error) {
 	return namedVectors, nil
 }
 
-// Handle dense and multi-vectors
+// Handle dense and multi-vectors.
 func handleDenseOrMultiVector(input []any) (*qdrant.Vector, error) {
 	var vector *qdrant.Vector
 	var err error
@@ -104,7 +104,7 @@ func handleDenseOrMultiVector(input []any) (*qdrant.Vector, error) {
 	return vector, nil
 }
 
-// Convert a []any containing a dense vector to a *pb.Vector
+// Convert a []any containing a dense vector to a *pb.Vector.
 func convertToDenseVector(input []any) (*qdrant.Vector, error) {
 	data, err := convertToFloat32Slice(input)
 	if err != nil {
@@ -113,18 +113,18 @@ func convertToDenseVector(input []any) (*qdrant.Vector, error) {
 	return qdrant.NewVectorDense(data), nil
 }
 
-// Convert a [][]any containing a multi-vector to a *pb.Vector
+// Convert a [][]any containing a multi-vector to a *pb.Vector.
 func convertToMultiVector(input []any) (*qdrant.Vector, error) {
 	// Convert the []any to [][]float32
 	inputTyped := make([][]float32, len(input))
 	for i, vec := range input {
 		vecTyped, ok := vec.([]any)
 		if !ok {
-			return nil, fmt.Errorf("failed to convert vector at index %d to []any", i)
+			return nil, fmt.Errorf("converting vector at index %d to []any", i)
 		}
 		floats, err := convertToFloat32Slice(vecTyped)
 		if err != nil {
-			return nil, fmt.Errorf("failed to convert vector at index %d: %w", i, err)
+			return nil, fmt.Errorf("converting vector at index %d: %w", i, err)
 		}
 		inputTyped[i] = floats
 	}
@@ -132,7 +132,7 @@ func convertToMultiVector(input []any) (*qdrant.Vector, error) {
 	return qdrant.NewVectorMulti(inputTyped), nil
 }
 
-// Convert a map[string]any containing a sparse vector to a *pb.Vector
+// Convert a map[string]any containing a sparse vector to a *pb.Vector.
 func handleSparseVector(input map[string]any) (*qdrant.Vector, error) {
 	var (
 		indices []uint32
@@ -143,40 +143,40 @@ func handleSparseVector(input map[string]any) (*qdrant.Vector, error) {
 	if idx, ok := input["indices"].([]any); ok {
 		indices, err = convertToUint32Slice(idx)
 		if err != nil {
-			return nil, fmt.Errorf("failed to convert indices: %w", err)
+			return nil, fmt.Errorf("converting indices: %w", err)
 		}
 	}
 
 	if vals, ok := input["values"].([]any); ok {
 		data, err = convertToFloat32Slice(vals)
 		if err != nil {
-			return nil, fmt.Errorf("failed to convert values: %w", err)
+			return nil, fmt.Errorf("converting values: %w", err)
 		}
 	}
 
 	return qdrant.NewVectorSparse(indices, data), nil
 }
 
-// Convert a []any slice to a []float32 slice
+// Convert a []any slice to a []float32 slice.
 func convertToFloat32Slice(input []any) ([]float32, error) {
 	values := make([]float32, len(input))
 	for i, v := range input {
 		val, err := bloblang.ValueAsFloat32(v)
 		if err != nil {
-			return nil, fmt.Errorf("failed to convert value to float32 at index %d: %w", i, err)
+			return nil, fmt.Errorf("converting value to float32 at index %d: %w", i, err)
 		}
 		values[i] = val
 	}
 	return values, nil
 }
 
-// Convert a []any slice to a []uint32 slice
+// Convert a []any slice to a []uint32 slice.
 func convertToUint32Slice(input []any) ([]uint32, error) {
 	values := make([]uint32, len(input))
 	for i, v := range input {
 		val, err := bloblang.ValueAsInt64(v)
 		if err != nil {
-			return nil, fmt.Errorf("failed to convert value to int64 at index %d: %w", i, err)
+			return nil, fmt.Errorf("converting value to int64 at index %d: %w", i, err)
 		}
 		values[i] = uint32(val)
 	}

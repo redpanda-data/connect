@@ -1,0 +1,38 @@
+version: '3'
+
+vars:
+  GIT_ROOT:
+    sh: git rev-parse --show-toplevel
+  GLUE_REGION:
+    sh: cd terraform && terraform output -raw region 2>/dev/null || echo ""
+  GLUE_BUCKET:
+    sh: cd terraform && terraform output -raw bucket_name 2>/dev/null || echo ""
+  GLUE_DATABASE:
+    sh: cd terraform && terraform output -raw database_name 2>/dev/null || echo ""
+  GLUE_WAREHOUSE:
+    sh: cd terraform && terraform output -raw glue_warehouse 2>/dev/null || echo ""
+  ATHENA_WORKGROUP:
+    sh: cd terraform && terraform output -raw athena_workgroup 2>/dev/null || echo ""
+  ATHENA_RESULTS_BUCKET:
+    sh: cd terraform && terraform output -raw athena_results_bucket 2>/dev/null || echo ""
+
+includes:
+  terraform:
+    taskfile: ./terraform/terraform.yml
+    dir: terraform
+
+tasks:
+  test:
+    desc: Run Glue e2e tests
+    dir: '{{.GIT_ROOT}}'
+    cmds:
+      - >-
+        go test -v -timeout 5m
+        -run TestGlueE2E
+        ./internal/impl/iceberg/e2e/glue/...
+        -glue.region={{.GLUE_REGION}}
+        -glue.bucket={{.GLUE_BUCKET}}
+        -glue.database={{.GLUE_DATABASE}}
+        -glue.warehouse={{.GLUE_WAREHOUSE}}
+        -glue.athena-workgroup={{.ATHENA_WORKGROUP}}
+        -glue.athena-results-bucket={{.ATHENA_RESULTS_BUCKET}}

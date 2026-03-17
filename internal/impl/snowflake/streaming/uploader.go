@@ -1,12 +1,10 @@
-/*
- * Copyright 2024 Redpanda Data, Inc.
- *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
- * License (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- *
- * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
- */
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed as a Redpanda Enterprise file under the Redpanda Community
+// License (the "License"); you may not use this file except in compliance with
+// the License. You may obtain a copy of the License at
+//
+// https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
 package streaming
 
@@ -224,7 +222,7 @@ func newUploaderManager(client *SnowflakeRestClient, role string) *uploaderManag
 	m := &uploaderManager{state: nil, client: client, role: role}
 	// According to the Java SDK tokens are refreshed every hour on GCP
 	// and 2 hours on AWS. It seems in practice some customers only have
-	// tokens that live for 30 minutes, so we need to support ealier
+	// tokens that live for 30 minutes, so we need to support earlier
 	// refreshes (those are opt in however).
 	const refreshTime = time.Hour - time.Minute*5
 	m.periodic = *asyncroutine.NewPeriodicWithContext(refreshTime, m.RefreshUploader)

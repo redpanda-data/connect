@@ -139,7 +139,7 @@ func (*cosmosDBWriter) Connect(context.Context) error { return nil }
 func (c *cosmosDBWriter) WriteBatch(ctx context.Context, batch service.MessageBatch) error {
 	resp, err := cosmosdb.ExecMessageBatch(ctx, batch, c.containerClient, c.CRUDConfig, false)
 	if err != nil {
-		return fmt.Errorf("failed to execute transactional batch: %s", err)
+		return fmt.Errorf("executing transactional batch: %s", err)
 	}
 
 	c.logger.Debugf("Transactional batch executed successfully. ActivityID %s consumed %f RU", resp.ActivityID, resp.RequestCharge)
@@ -149,7 +149,7 @@ func (c *cosmosDBWriter) WriteBatch(ctx context.Context, batch service.MessageBa
 			c.logger.Errorf("Rejected batch element %d with status: %d", idx, opRes.StatusCode)
 		}
 
-		return errors.New("failed to write message batch")
+		return errors.New("writing message batch")
 	}
 
 	return nil

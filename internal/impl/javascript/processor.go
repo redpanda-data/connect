@@ -179,7 +179,7 @@ func newJavascriptProcessorFromConfig(conf *service.ParsedConfig, mgr *service.R
 		// Open file and read code
 		codeBytes, err := service.ReadFile(mgr.FS(), file)
 		if err != nil {
-			return nil, fmt.Errorf("failed to open target file: %s", err)
+			return nil, fmt.Errorf("opening target file: %s", err)
 		}
 		filename = file
 		code = string(codeBytes)
@@ -187,7 +187,7 @@ func newJavascriptProcessorFromConfig(conf *service.ParsedConfig, mgr *service.R
 
 	program, err := goja.Compile(filename, code, false)
 	if err != nil {
-		return nil, fmt.Errorf("failed to compile javascript code: %s", err)
+		return nil, fmt.Errorf("compiling javascript code: %s", err)
 	}
 
 	logger := mgr.Logger()

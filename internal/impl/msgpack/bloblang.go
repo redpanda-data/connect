@@ -26,18 +26,18 @@ func init() {
 
 	msgpackParseSpec := bloblang.NewPluginSpec().
 		Category("Parsing").
-		Description("Parses a https://msgpack.org/[MessagePack^] message into a structured document.").
-		Example("",
+		Description("Parses MessagePack binary data into a structured object. MessagePack is an efficient binary serialization format that is more compact than JSON while maintaining similar data structures. Commonly used for high-performance APIs and data interchange between microservices.").
+		Example("Parse MessagePack data from hex-encoded content",
 			`root = content().decode("hex").parse_msgpack()`,
 			[2]string{
 				`81a3666f6fa3626172`,
 				`{"foo":"bar"}`,
 			}).
-		Example("",
-			`root = this.encoded.decode("base64").parse_msgpack()`,
+		Example("Parse MessagePack from base64-encoded field",
+			`root.decoded = this.msgpack_data.decode("base64").parse_msgpack()`,
 			[2]string{
-				`{"encoded":"gaNmb2+jYmFy"}`,
-				`{"foo":"bar"}`,
+				`{"msgpack_data":"gaNmb2+jYmFy"}`,
+				`{"decoded":{"foo":"bar"}}`,
 			})
 
 	if err := bloblang.RegisterMethodV2(
@@ -61,18 +61,18 @@ func init() {
 
 	msgpackFormatSpec := bloblang.NewPluginSpec().
 		Category("Parsing").
-		Description("Formats data as a https://msgpack.org/[MessagePack^] message in bytes format.").
-		Example("",
+		Description("Serializes structured data into MessagePack binary format. MessagePack is a compact binary serialization that is faster and more space-efficient than JSON, making it ideal for network transmission and storage of structured data. Returns a byte array that can be further encoded as needed.").
+		Example("Serialize object to MessagePack and encode as hex for transmission",
 			`root = this.format_msgpack().encode("hex")`,
 			[2]string{
 				`{"foo":"bar"}`,
 				`81a3666f6fa3626172`,
 			}).
-		Example("",
-			`root.encoded = this.format_msgpack().encode("base64")`,
+		Example("Serialize data to MessagePack and base64 encode for embedding in JSON",
+			`root.msgpack_payload = this.data.format_msgpack().encode("base64")`,
 			[2]string{
-				`{"foo":"bar"}`,
-				`{"encoded":"gaNmb2+jYmFy"}`,
+				`{"data":{"foo":"bar"}}`,
+				`{"msgpack_payload":"gaNmb2+jYmFy"}`,
 			})
 
 	if err := bloblang.RegisterMethodV2(

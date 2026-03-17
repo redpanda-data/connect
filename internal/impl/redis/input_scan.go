@@ -94,6 +94,17 @@ type redisScanReader struct {
 	log    *service.Logger
 }
 
+// ConnectionTest attempts to test the connection configuration of this input
+// without actually consuming data. The connection, if successful, is then
+// closed.
+func (r *redisScanReader) ConnectionTest(ctx context.Context) service.ConnectionTestResults {
+	_, err := r.client.Ping(ctx).Result()
+	if err != nil {
+		return service.ConnectionTestFailed(err).AsList()
+	}
+	return service.ConnectionTestSucceeded().AsList()
+}
+
 func (r *redisScanReader) Connect(ctx context.Context) error {
 	_, err := r.client.Ping(ctx).Result()
 	if err != nil {

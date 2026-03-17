@@ -53,6 +53,7 @@ This input adds the following metadata fields to each message:
 - nats_num_pending
 - nats_domain
 - nats_timestamp_unix_nano
+- nats_consumer
 ` + "```" + `
 
 You can access these metadata fields using
@@ -220,7 +221,7 @@ func newJetStreamReaderFromConfig(conf *service.ParsedConfig, mgr *service.Resou
 	if ackWaitStr != "" {
 		j.ackWait, err = time.ParseDuration(ackWaitStr)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse ack wait duration: %v", err)
+			return nil, fmt.Errorf("parsing ack wait duration: %v", err)
 		}
 	}
 
@@ -231,6 +232,19 @@ func newJetStreamReaderFromConfig(conf *service.ParsedConfig, mgr *service.Resou
 }
 
 //------------------------------------------------------------------------------
+
+// ConnectionTest attempts to test the connection configuration of this input
+// without actually consuming data. The connection, if successful, is then
+// closed.
+func (j *jetStreamReader) ConnectionTest(ctx context.Context) service.ConnectionTestResults {
+	conn, err := j.connDetails.get(ctx)
+	if err != nil {
+		return service.ConnectionTestFailed(err).AsList()
+	}
+	defer conn.Close()
+
+	return service.ConnectionTestSucceeded().AsList()
+}
 
 func (j *jetStreamReader) Connect(ctx context.Context) (err error) {
 	j.connMut.Lock()
@@ -442,18 +456,23 @@ func (j *jetStreamReader) Close(ctx context.Context) error {
 	return nil
 }
 
+func assignMessageMetadata(metadata *nats.MsgMetadata, msg *service.Message) {
+	msg.MetaSet("nats_sequence_stream", strconv.FormatUint(metadata.Sequence.Stream, 10))
+	msg.MetaSet("nats_sequence_consumer", strconv.FormatUint(metadata.Sequence.Consumer, 10))
+	msg.MetaSet("nats_num_delivered", strconv.FormatUint(metadata.NumDelivered, 10))
+	msg.MetaSet("nats_num_pending", strconv.FormatUint(metadata.NumPending, 10))
+	msg.MetaSet("nats_domain", metadata.Domain)
+	msg.MetaSet("nats_consumer", metadata.Consumer)
+	msg.MetaSet("nats_timestamp_unix_nano", strconv.FormatInt(metadata.Timestamp.UnixNano(), 10))
+}
+
 func convertMessage(m *nats.Msg) (*service.Message, service.AckFunc, error) {
 	msg := service.NewMessage(m.Data)
 	msg.MetaSet("nats_subject", m.Subject)
 
 	metadata, err := m.Metadata()
 	if err == nil {
-		msg.MetaSet("nats_sequence_stream", strconv.Itoa(int(metadata.Sequence.Stream)))
-		msg.MetaSet("nats_sequence_consumer", strconv.Itoa(int(metadata.Sequence.Consumer)))
-		msg.MetaSet("nats_num_delivered", strconv.Itoa(int(metadata.NumDelivered)))
-		msg.MetaSet("nats_num_pending", strconv.Itoa(int(metadata.NumPending)))
-		msg.MetaSet("nats_domain", metadata.Domain)
-		msg.MetaSet("nats_timestamp_unix_nano", strconv.Itoa(int(metadata.Timestamp.UnixNano())))
+		assignMessageMetadata(metadata, msg)
 	}
 
 	for k := range m.Header {

@@ -101,7 +101,13 @@ output:
     channel_prefix: channel-${HOST} # No default (optional)
     channel_name: partition-${!@kafka_partition} # No default (optional)
     offset_token: offset-${!"%016X".format(@kafka_offset)} # No default (optional)
-    commit_timeout: 60s
+    commit_backoff:
+      initial_interval: 32ms
+      max_interval: 512ms
+      max_elapsed_time: 60s
+      multiplier: 2
+    message_format: object
+    timestamp_format: 2006-01-02T15:04:05.999999999Z07:00
 ```
 
 --
@@ -200,7 +206,7 @@ channel_name and offset_token first. Removing the offset_token is a safer option
 
 ```yaml
 input:
-  redpanda_common:
+  redpanda:
     topics: ["my_topic_going_to_snow"]
     consumer_group: "redpanda_connect_to_snowflake"
     # We want very large batches - each batch will be sent to Snowflake individually
@@ -239,7 +245,7 @@ output:
     # to Snowflake. See the ordering documentation for the "redpanda" input for more details.
     - retry:
         output:
-          redpanda_common:
+          redpanda:
             topic: "dead_letter_queue"
 ```
 
@@ -248,7 +254,7 @@ HTTP Server to push data to Snowflake::
 +
 --
 
-This example demonstrates how to create an HTTP server input that can recieve HTTP PUT requests
+This example demonstrates how to create an HTTP server input that can receive HTTP PUT requests
 with JSON payloads, that are buffered locally then written to Snowflake in batches.
 
 NOTE: This example uses a buffer to respond to the HTTP request immediately, so it's possible that failures to deliver data could result in data loss.
@@ -702,21 +708,82 @@ offset_token: offset-${!"%016X".format(@kafka_offset)}
 offset_token: postgres-${!@lsn}
 ```
 
-=== `commit_timeout`
+=== `commit_backoff`
 
-The max duration to wait until the data has been asynchronously committed to Snowflake.
+Control how frequently Snowflake is polled to check if data has been committed.
+
+
+*Type*: `object`
+
+
+=== `commit_backoff.initial_interval`
+
+The initial period to wait between status polls.
+
+
+*Type*: `string`
+
+*Default*: `"32ms"`
+
+=== `commit_backoff.max_interval`
+
+The maximum period to wait between status polls.
+
+
+*Type*: `string`
+
+*Default*: `"512ms"`
+
+=== `commit_backoff.max_elapsed_time`
+
+The maximum total time to wait for data to be committed. If zero then no limit is used.
 
 
 *Type*: `string`
 
 *Default*: `"60s"`
 
+=== `commit_backoff.multiplier`
+
+The factor by which the poll interval grows on each attempt.
+
+
+*Type*: `float`
+
+*Default*: `2`
+
+=== `message_format`
+
+The format at which to expect incoming messages from the rest of the pipeline in.
+
+
+*Type*: `string`
+
+*Default*: `"object"`
+
+|===
+| Option | Summary
+
+| `array`
+| Messages are an array of values where the position in the array matches up the with ordinal of the column in snowflake
+| `object`
+| Messages are an object in JSON or bloblang where the key of the object is the column name in snowflake and the value is the value for the column
+
+|===
+
 ```yml
 # Examples
 
-commit_timeout: 10s
-
-commit_timeout: 10m
+message_format: array
 ```
+
+=== `timestamp_format`
+
+The format to parse string values for TIMESTAMP, TIMESTAMP_LTZ and TIMESTAMP_NTZ columns. Should be a layout for https://pkg.go.dev/time#Parse[^time.Parse] in Golang.
+
+
+*Type*: `string`
+
+*Default*: `"2006-01-02T15:04:05.999999999Z07:00"`
 
 

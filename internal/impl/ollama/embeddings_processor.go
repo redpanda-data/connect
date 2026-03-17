@@ -19,11 +19,7 @@ import (
 	"errors"
 	"unicode/utf8"
 
-	"github.com/ollama/ollama/api"
-
 	"github.com/redpanda-data/benthos/v4/public/service"
-
-	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
 const (
@@ -77,6 +73,29 @@ output:
     vector_mapping: "root = this"
 `).
 		Example(
+			"Store embedding vectors in CyborgDB",
+			"Compute embeddings for some generated data and store it within xrefs:component:outputs/cyborgdb.adoc[CyborgDB]",
+			`input:
+  generate:
+    interval: 1s
+    mapping: |
+      root = {"text": fake("paragraph")}
+pipeline:
+  processors:
+  - ollama_embeddings:
+      model: snowflake-artic-embed
+      text: "${!this.text}"
+output:
+  cyborgdb:
+    host: "${CYBORGDB_HOST}"
+    api_key: "${CYBORGDB_API_KEY}"
+    index_key: "${CYBORGDB_INDEX_KEY}"
+    index_name: "my_encrypted_index"
+    operation: "upsert"
+    id: "root = uuid_v4()"
+    vector_mapping: "root = this"
+`).
+		Example(
 			"Store embedding vectors in Clickhouse",
 			"Compute embeddings for some generated data and store it within https://clickhouse.com/[Clickhouse^]",
 			`input:
@@ -104,10 +123,6 @@ output:
 }
 
 func makeOllamaEmbeddingProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
-	if err := license.CheckRunningEnterprise(mgr); err != nil {
-		return nil, err
-	}
-
 	p := ollamaEmbeddingProcessor{}
 	if conf.Contains(oepFieldText) {
 		pf, err := conf.FieldInterpolatedString(oepFieldText)
@@ -163,7 +178,7 @@ func (o *ollamaEmbeddingProcessor) computeText(msg *service.Message) (string, er
 }
 
 func (o *ollamaEmbeddingProcessor) generateEmbedding(ctx context.Context, text string) ([]float64, error) {
-	var req api.EmbeddingRequest
+	var req EmbeddingRequest
 	req.Model = o.model
 	req.Prompt = text
 	req.Options = o.opts

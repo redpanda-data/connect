@@ -249,7 +249,7 @@ func runEmulator(t *testing.T) emulator {
 		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusOK {
-			return fmt.Errorf("failed to query healthz, got status: %d", resp.StatusCode)
+			return fmt.Errorf("querying healthz, got status: %d", resp.StatusCode)
 		}
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {

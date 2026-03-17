@@ -91,7 +91,7 @@ func dropOrphanedStreams(ctx context.Context) error {
 	}
 	adm, err := adminapi.NewDatabaseAdminClient(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to create admin client: %w", err)
+		return fmt.Errorf("creating admin client: %w", err)
 	}
 
 	op, err := adm.UpdateDatabaseDdl(ctx, &databasepb.UpdateDatabaseDdlRequest{
@@ -99,7 +99,7 @@ func dropOrphanedStreams(ctx context.Context) error {
 		Statements: dropSQLs,
 	})
 	if err != nil {
-		return fmt.Errorf("failed to execute drop statements: %w", err)
+		return fmt.Errorf("executing drop statements: %w", err)
 	}
 	return op.Wait(ctx)
 }

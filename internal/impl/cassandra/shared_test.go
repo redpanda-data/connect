@@ -1,7 +1,23 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package cassandra
 
 import (
+	"reflect"
 	"testing"
+	"time"
 
 	"github.com/gocql/gocql"
 	"github.com/stretchr/testify/assert"
@@ -13,7 +29,7 @@ func TestNewHostSelectionPolicy(t *testing.T) {
 		name               string
 		localDC            string
 		localRack          string
-		expectedPolicyType interface{}
+		expectedPolicyType any
 		expectedError      bool
 	}{
 		{
@@ -51,6 +67,80 @@ func TestNewHostSelectionPolicy(t *testing.T) {
 			} else {
 				require.NotNil(t, policy, "Expected a policy but got nil")
 				assert.IsType(t, tc.expectedPolicyType, policy, "Returned policy has an unexpected type")
+			}
+		})
+	}
+}
+
+func Test_newReconnectionPolicy(t *testing.T) {
+	defaultPolicy := &gocql.ConstantReconnectionPolicy{MaxRetries: 3, Interval: 1 * time.Second}
+
+	testCases := []struct {
+		name              string
+		initialInterval   time.Duration
+		maxRetries        int
+		maxInterval       time.Duration
+		expectedPolicy    gocql.ReconnectionPolicy
+		expectExponential bool
+	}{
+		{
+			name:              "Valid Exponential",
+			initialInterval:   2 * time.Second,
+			maxRetries:        5,
+			maxInterval:       60 * time.Second,
+			expectedPolicy:    &gocql.ExponentialReconnectionPolicy{MaxRetries: 5, InitialInterval: 2 * time.Second, MaxInterval: 60 * time.Second},
+			expectExponential: true,
+		},
+		{
+			name:              "Zero InitialInterval",
+			initialInterval:   0,
+			maxRetries:        5,
+			maxInterval:       60 * time.Second,
+			expectedPolicy:    defaultPolicy,
+			expectExponential: false,
+		},
+		{
+			name:              "Zero MaxRetries",
+			initialInterval:   2 * time.Second,
+			maxRetries:        0,
+			maxInterval:       60 * time.Second,
+			expectedPolicy:    defaultPolicy,
+			expectExponential: false,
+		},
+		{
+			name:              "Zero MaxInterval",
+			initialInterval:   2 * time.Second,
+			maxRetries:        5,
+			maxInterval:       0,
+			expectedPolicy:    defaultPolicy,
+			expectExponential: false,
+		},
+		{
+			name:              "All Zero- Fallback to Constant",
+			initialInterval:   0,
+			maxRetries:        0,
+			maxInterval:       0,
+			expectedPolicy:    defaultPolicy,
+			expectExponential: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			policy := newReconnectionPolicy(tc.initialInterval, tc.maxRetries, tc.maxInterval)
+
+			_, isExponential := policy.(*gocql.ExponentialReconnectionPolicy)
+			if isExponential != tc.expectExponential {
+				t.Errorf("Expected exponential policy: %v, but got: %v", tc.expectExponential, isExponential)
+			}
+
+			_, isConstant := policy.(*gocql.ConstantReconnectionPolicy)
+			if isConstant == tc.expectExponential {
+				t.Errorf("Expected constant policy: %v, but got: %v", !tc.expectExponential, isConstant)
+			}
+
+			if !reflect.DeepEqual(policy, tc.expectedPolicy) {
+				t.Errorf("newReconnectionPolicy() = %v, want %v", policy, tc.expectedPolicy)
 			}
 		})
 	}

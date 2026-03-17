@@ -1,12 +1,10 @@
-/*
- * Copyright 2024 Redpanda Data, Inc.
- *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
- * License (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- *
- * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
- */
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed as a Redpanda Enterprise file under the Redpanda Community
+// License (the "License"); you may not use this file except in compliance with
+// the License. You may obtain a copy of the License at
+//
+// https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
 package streaming
 
@@ -62,10 +60,10 @@ func deriveKey(encryptionKey, diversifier string) ([]byte, error) {
 	hash := sha256.New()
 	hash.Write(decodedKey)
 	hash.Write([]byte(diversifier))
-	return hash.Sum(nil)[:], nil
+	return hash.Sum(nil), nil
 }
 
-// See Encyptor.encrypt in the Java SDK
+// See Encyptor.encrypt in the Java SDK.
 func encrypt(buf []byte, encryptionKey, diversifier string, iv int64) ([]byte, error) {
 	// Derive the key from the diversifier and the original encryptionKey from server
 	key, err := deriveKey(encryptionKey, diversifier)

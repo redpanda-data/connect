@@ -31,6 +31,8 @@ import (
 	"github.com/Jeffail/shutdown"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/utils/netutil"
+	"github.com/redpanda-data/common-go/authz"
 	"github.com/redpanda-data/connect/v4/internal/gateway"
 )
 
@@ -42,6 +44,9 @@ const (
 	hsiFieldResponseHeaders         = "headers"
 	hsiFieldResponseExtractMetadata = "metadata_headers"
 )
+
+// Gateway HTTP authorization permission
+const gatewayPermission authz.PermissionName = "dataplane_pipeline_gateway_invoke"
 
 type hsiConfig struct {
 	Path      string
@@ -149,7 +154,8 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 					}),
 				service.NewMetadataFilterField(hsiFieldResponseExtractMetadata).
 					Description("Specify criteria for which metadata values are added to the response as headers."),
-			).
+			),
+			netutil.ListenerConfigSpec().
 				Description("Customize messages returned via xref:guides:sync_responses.adoc[synchronous responses].").
 				Advanced(),
 		)
@@ -176,10 +182,12 @@ type Input struct {
 	log  *service.Logger
 	mgr  *service.Resources
 
+	lc     netutil.ListenerConfig
 	mux    *mux.Router
 	server *http.Server
 
 	rpJWTValidator *gateway.RPJWTMiddleware
+	authzPolicy    *gateway.FileWatchingAuthzResourcePolicy
 
 	batches chan batchAndAck
 
@@ -207,11 +215,28 @@ func InputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (*Inpu
 	if h.rpJWTValidator, err = gateway.NewRPJWTMiddleware(mgr); err != nil {
 		return nil, err
 	}
+	if authzConf, ok := gateway.ManagerAuthzConfig(mgr); ok {
+		h.authzPolicy, err = gateway.NewFileWatchingAuthzResourcePolicy(
+			authzConf.ResourceName,
+			authzConf.PolicyFile,
+			[]authz.PermissionName{gatewayPermission},
+			func(err error) {
+				mgr.Logger().With("error", err).Error("Authorization policy error")
+			},
+		)
+		if err != nil {
+			return nil, fmt.Errorf("initialize authorization policy: %w", err)
+		}
+	}
 
 	if h.conf.RateLimit != "" {
 		if !h.mgr.HasRateLimit(h.conf.RateLimit) {
 			return nil, fmt.Errorf("rate limit resource '%v' was not found", h.conf.RateLimit)
 		}
+	}
+
+	if h.lc, err = netutil.ListenerConfigFromParsed(pConf.Namespace("tcp")); err != nil {
+		return nil, fmt.Errorf("parse tcp config: %w", err)
 	}
 
 	return &h, nil
@@ -222,6 +247,9 @@ func InputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (*Inpu
 func (ri *Input) createHandler() (h http.Handler) {
 	h = http.HandlerFunc(ri.deliverHandler)
 	h = gzipHandler(h)
+	if ri.authzPolicy != nil {
+		h = gateway.AuthzMiddleware(ri.authzPolicy, gatewayPermission, h)
+	}
 	h = ri.rpJWTValidator.Wrap(h)
 	h = ri.conf.CORS.WrapHandler(h)
 	return
@@ -244,14 +272,22 @@ func (ri *Input) Connect(_ context.Context) error {
 	ri.mux = mux.NewRouter()
 	ri.mux.PathPrefix(ri.conf.Path).Handler(ri.createHandler())
 
+	var lc net.ListenConfig
+	if err := netutil.DecorateListenerConfig(&lc, ri.lc); err != nil {
+		return fmt.Errorf("configuring listener: %w", err)
+	}
+
+	l, err := lc.Listen(context.Background(), "tcp", ri.conf.Address)
+	if err != nil {
+		return fmt.Errorf("binding to address %s: %w", ri.conf.Address, err)
+	}
 	ri.server = &http.Server{Addr: ri.conf.Address, Handler: ri.mux}
 
 	go func() {
 		defer ri.shutSig.TriggerHasStopped()
-
 		ri.log.With("address", ri.conf.Address+ri.conf.Path).Info("Receiving HTTP messages")
-		if err := ri.server.ListenAndServe(); err != http.ErrServerClosed {
-			ri.log.With("error").Error("Server error")
+		if err := ri.server.Serve(l); errors.Is(err, http.ErrServerClosed) {
+			ri.log.With("error", err).Error("Server error")
 		}
 	}()
 	return nil
@@ -277,7 +313,7 @@ func extractBatchFromRequest(r *http.Request) (service.MessageBatch, error) {
 
 	mediaType, params, err := mime.ParseMediaType(contentType)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse media type: %w", err)
+		return nil, fmt.Errorf("parsing media type: %w", err)
 	}
 
 	if strings.HasPrefix(mediaType, "multipart/") {
@@ -288,18 +324,18 @@ func extractBatchFromRequest(r *http.Request) (service.MessageBatch, error) {
 				if errors.Is(err, io.EOF) {
 					break
 				}
-				return nil, fmt.Errorf("failed to obtain next multipart message part: %w", err)
+				return nil, fmt.Errorf("obtaining next multipart message part: %w", err)
 			}
 			var msgBytes []byte
 			if msgBytes, err = io.ReadAll(p); err != nil {
-				return nil, fmt.Errorf("failed to read multipart message part: %w", err)
+				return nil, fmt.Errorf("reading multipart message part: %w", err)
 			}
 			batch = append(batch, service.NewMessage(msgBytes))
 		}
 	} else {
 		var msgBytes []byte
 		if msgBytes, err = io.ReadAll(r.Body); err != nil {
-			return nil, fmt.Errorf("failed to read body: %w", err)
+			return nil, fmt.Errorf("reading body: %w", err)
 		}
 		batch = append(batch, service.NewMessage(msgBytes))
 	}
@@ -534,10 +570,7 @@ func (ri *Input) Close(ctx context.Context) error {
 	ri.shutSig.TriggerSoftStop()
 	defer ri.shutSig.TriggerHardStop()
 
-	if ri.server == nil {
-		return nil
-	}
-	return ri.server.Shutdown(ctx)
+	return errors.Join(ri.server.Shutdown(ctx), ri.authzPolicy.Close())
 }
 
 //------------------------------------------------------------------------------
@@ -547,11 +580,28 @@ type gzipResponseWriter struct {
 	http.ResponseWriter
 }
 
+// WriteHeader deletes any Content-Length before freezing headers. The
+// Content-Length was set for the uncompressed payload and is wrong after gzip.
+// Removing it lets Go's HTTP server use Transfer-Encoding: chunked instead.
+//
+// All current callers (deliverHandler) call WriteHeader explicitly before
+// Write, so this is the primary deletion site. Write also deletes it
+// defensively for any future caller that skips an explicit WriteHeader.
+func (w gzipResponseWriter) WriteHeader(code int) {
+	w.Header().Del("Content-Length")
+	w.ResponseWriter.WriteHeader(code)
+}
+
 func (w gzipResponseWriter) Write(b []byte) (int, error) {
 	if w.Header().Get("Content-Type") == "" {
 		// If no content type, apply sniffing algorithm to un-gzipped body.
 		w.Header().Set("Content-Type", http.DetectContentType(b))
 	}
+	// Defensive: if Write is called without an explicit WriteHeader, Go's
+	// implicit WriteHeader(200) fires on the underlying ResponseWriter
+	// directly, bypassing our override. Delete Content-Length here too so
+	// it is gone before the implicit header flush.
+	w.Header().Del("Content-Length")
 	return w.Writer.Write(b)
 }
 

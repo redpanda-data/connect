@@ -51,7 +51,6 @@ func TestParseXML(t *testing.T) {
 	}
 
 	for _, test := range testCases {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			targetClone, err := gabs.ParseJSON([]byte(gabs.Wrap(test.target).String()))
 			require.NoError(t, err)

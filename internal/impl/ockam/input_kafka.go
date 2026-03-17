@@ -27,7 +27,7 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/impl/kafka"
 )
 
-// this function is, almost, an exact copy of the init() function in ../kafka/input_kafka_franz.go
+// this function is, almost, an exact copy of the init() function in ../kafka/input_kafka_franz.go.
 func init() {
 	service.MustRegisterBatchInput("ockam_kafka", ockamKafkaInputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
@@ -53,7 +53,7 @@ func ockamKafkaInputConfig() *service.ConfigSpec {
 				service.NewTLSToggledField("tls"),
 			},
 			kafka.FranzConsumerFields(),
-			kafka.FranzReaderUnorderedConfigFields(),
+			kafka.FranzReaderUnorderedConfigFields(), //nolint:staticcheck // intentional use of deprecated API
 		)...).LintRule(kafka.FranzConsumerFieldLintRules)).
 		Field(service.NewBoolField("disable_content_encryption").Default(false)).
 		Field(service.NewStringField("enrollment_ticket").Optional()).
@@ -194,7 +194,7 @@ func newOckamKafkaInput(conf *service.ParsedConfig, mgr *service.Resources) (*oc
 		kgo.SeedBrokers(kafkaInletAddress),
 	)
 
-	kafkaReader, err := kafka.NewFranzReaderUnorderedFromConfig(conf.Namespace("kafka"), mgr, clientOpts...)
+	kafkaReader, err := kafka.NewFranzReaderUnorderedFromConfig(conf.Namespace("kafka"), mgr, clientOpts...) //nolint:staticcheck // intentional use of deprecated API
 	if err != nil {
 		return nil, err
 	}

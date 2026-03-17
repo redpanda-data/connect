@@ -47,11 +47,11 @@ Files that already exist will not be overwritten.
 
 				folderPath := filepath.Dir(fpath)
 				if err := os.MkdirAll(folderPath, 0o755); err != nil {
-					return fmt.Errorf("failed to create folder %v: %w", folderPath, err)
+					return fmt.Errorf("creating folder %v: %w", folderPath, err)
 				}
 
 				if err := os.WriteFile(fpath, []byte(v), 0o644); err != nil {
-					return fmt.Errorf("failed to write file %v: %w", fpath, err)
+					return fmt.Errorf("writing file %v: %w", fpath, err)
 				}
 			}
 			return nil

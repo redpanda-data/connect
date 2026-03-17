@@ -221,6 +221,19 @@ func (n *natsStreamReader) disconnect() {
 	}
 }
 
+// ConnectionTest attempts to test the connection configuration of this input
+// without actually consuming data. The connection, if successful, is then
+// closed.
+func (n *natsStreamReader) ConnectionTest(ctx context.Context) service.ConnectionTestResults {
+	conn, err := n.conf.connDetails.get(ctx)
+	if err != nil {
+		return service.ConnectionTestFailed(err).AsList()
+	}
+	defer conn.Close()
+
+	return service.ConnectionTestSucceeded().AsList()
+}
+
 func (n *natsStreamReader) Connect(ctx context.Context) error {
 	n.cMut.Lock()
 	defer n.cMut.Unlock()

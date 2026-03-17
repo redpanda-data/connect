@@ -94,7 +94,7 @@ func getKey(pConf *service.ParsedConfig, mgr *service.Resources, keyField, keyFi
 	} else if keyFileData != "" {
 		key, err = service.ReadFile(mgr.FS(), keyFileData)
 		if err != nil {
-			return nil, fmt.Errorf("failed to read key file: %s", err)
+			return nil, fmt.Errorf("reading key file: %s", err)
 		}
 	}
 
@@ -116,7 +116,7 @@ func sshAuthConfigFromParsed(pConf *service.ParsedConfig, mgr *service.Resources
 
 	privateKey, err := getKey(pConf, mgr, sFieldCredentialsPrivateKey, sFieldCredentialsPrivateKeyFile)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get private key: %s", err)
+		return nil, fmt.Errorf("getting private key: %s", err)
 	}
 
 	var signer ssh.Signer
@@ -133,7 +133,7 @@ func sshAuthConfigFromParsed(pConf *service.ParsedConfig, mgr *service.Resources
 			signer, err = ssh.ParsePrivateKeyWithPassphrase(privateKey, []byte(privateKeyPass))
 		}
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse private key: %s", err)
+			return nil, fmt.Errorf("parsing private key: %s", err)
 		}
 	}
 
@@ -155,7 +155,7 @@ func sshAuthConfigFromParsed(pConf *service.ParsedConfig, mgr *service.Resources
 
 	hostPubKey, err := getKey(pConf, mgr, sFieldCredentialsHostPublicKey, sFieldCredentialsHostPublicKeyFile)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get host public key: %s", err)
+		return nil, fmt.Errorf("getting host public key: %s", err)
 	}
 	var hostKeyAlgorithms []string
 	var keyCallback ssh.HostKeyCallback
@@ -174,7 +174,7 @@ func sshAuthConfigFromParsed(pConf *service.ParsedConfig, mgr *service.Resources
 			keyCallback, err = knownhosts.New("/etc/ssh/known_hosts")
 		}
 		if err != nil {
-			return nil, fmt.Errorf("failed to read known_hosts file: %s", err)
+			return nil, fmt.Errorf("reading known_hosts file: %s", err)
 		}
 	}
 

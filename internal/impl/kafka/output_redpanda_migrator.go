@@ -57,8 +57,8 @@ func redpandaMigratorOutputSpec() *service.ConfigSpec {
 		Description(`
 Writes a batch of messages to a Kafka broker and waits for acknowledgement before propagating it back to the input.
 
-This output should be used in combination with a `+"`redpanda_migrator`"+` input identified by the label specified in
-`+"`input_resource`"+` which it can query for topic and ACL configurations. Once connected, the output will attempt to
+This output should be used in combination with a ` + "`legacy_redpanda_migrator`" + ` input identified by the label specified in
+` + "`input_resource`" + ` which it can query for topic and ACL configurations. Once connected, the output will attempt to
 create all topics which the input consumes from along with their ACLs.
 
 If the configured broker does not contain the current message topic, this output attempts to create it along with its
@@ -66,24 +66,12 @@ ACLs.
 
 ACL migration adheres to the following principles:
 
-- `+"`ALLOW WRITE`"+` ACLs for topics are not migrated
-- `+"`ALLOW ALL`"+` ACLs for topics are downgraded to `+"`ALLOW READ`"+`
+- ` + "`ALLOW WRITE`" + ` ACLs for topics are not migrated
+- ` + "`ALLOW ALL`" + ` ACLs for topics are downgraded to ` + "`ALLOW READ`" + `
 - Only topic ACLs are migrated, group ACLs are not migrated
 `).
 		Fields(redpandaMigratorOutputConfigFields()...).
-		LintRule(FranzWriterConfigLints()).
-		Example("Transfer data", "Writes messages to the configured broker and creates topics and topic ACLs if they don't exist. It also ensures that the message order is preserved.", `
-output:
-  redpanda_migrator:
-    seed_brokers: [ "127.0.0.1:9093" ]
-    topic: ${! metadata("kafka_topic").or(throw("missing kafka_topic metadata")) }
-    key: ${! metadata("kafka_key") }
-    partitioner: manual
-    partition: ${! metadata("kafka_partition").or(throw("missing kafka_partition metadata")) }
-    timestamp_ms: ${! metadata("kafka_timestamp_ms").or(timestamp_unix_milli()) }
-    input_resource: redpanda_migrator_input
-    max_in_flight: 1
-`)
+		LintRule(FranzWriterConfigLints())
 }
 
 func redpandaMigratorOutputConfigFields() []*service.ConfigField {
@@ -97,7 +85,7 @@ func redpandaMigratorOutputConfigFields() []*service.ConfigField {
 				Description("The maximum number of batches to be sending in parallel at any given time.").
 				Default(256),
 			service.NewStringField(rmoFieldInputResource).
-				Description("The label of the redpanda_migrator input from which to read the configurations for topics and ACLs which need to be created.").
+				Description("The label of the legacy_redpanda_migrator input from which to read the configurations for topics and ACLs which need to be created.").
 				Default(rmiResourceDefaultLabel).
 				Advanced(),
 			service.NewBoolField(rmoFieldRepFactorOverride).
@@ -124,7 +112,7 @@ func redpandaMigratorOutputConfigFields() []*service.ConfigField {
 }
 
 func init() {
-	service.MustRegisterBatchOutput("redpanda_migrator", redpandaMigratorOutputSpec(),
+	service.MustRegisterBatchOutput("legacy_redpanda_migrator", redpandaMigratorOutputSpec().Deprecated(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (
 			output service.BatchOutput,
 			batchPolicy service.BatchPolicy,
@@ -203,7 +191,7 @@ func redpandaMigratorOutputFromParsed(conf *service.ParsedConfig, mgr *service.R
 	if err != nil {
 		return nil, err
 	}
-	o.OnWrite = o.onWrite
+	o.DecorateRecord = o.decorateRecord
 
 	if o.topicPrefix, err = conf.FieldString(rmoFieldTopicPrefix); err != nil {
 		return nil, err
@@ -256,22 +244,32 @@ func redpandaMigratorOutputFromParsed(conf *service.ParsedConfig, mgr *service.R
 	return o, nil
 }
 
-func (o *redpandaMigratorOutput) onWrite(ctx context.Context, _ *kgo.Client, records []*kgo.Record) error {
+func (o *redpandaMigratorOutput) decorateRecord(r *kgo.Record) error {
 	return FranzSharedClientUse(o.inputResource, o.mgr, func(details *FranzSharedClientInfo) error {
 		o.once.Do(func() {
 			o.logger.Infof("Creating topics for %s", o.inputResource)
-			count := o.tryCreateAllTopics(ctx, details)
+			count := o.tryCreateAllTopics(r.Context, details)
 			o.logger.Infof("Created %d topics for %s", count, o.inputResource)
 		})
 
-		if err := o.updateTopicsInRecords(ctx, details.Client, records); err != nil {
+		var err error
+
+		r.Topic, err = o.createTopicIfNeeded(r.Context, details.Client, r.Topic)
+		if err != nil {
 			return err
 		}
 		if o.translateSchemaIDs {
-			if err := o.updateSchemaIDsInRecords(ctx, records); err != nil {
-				return err
+			res, ok := o.mgr.GetGeneric(o.schemaRegistryOutputResource)
+			if !ok {
+				return fmt.Errorf("schema_registry output resource %q not found", o.schemaRegistryOutputResource)
+			}
+			srOutput := res.(*schemaRegistryOutput)
+
+			if err := o.updateRecordSchemaID(r.Context, srOutput, r); err != nil {
+				return fmt.Errorf("update schema ID in record offset %d on topic %s: %w", r.Offset, r.Topic, err)
 			}
 		}
+
 		return nil
 	})
 }
@@ -291,17 +289,6 @@ func (o *redpandaMigratorOutput) tryCreateAllTopics(ctx context.Context, details
 	}
 
 	return count
-}
-
-func (o *redpandaMigratorOutput) updateTopicsInRecords(ctx context.Context, inputClient *kgo.Client, records []*kgo.Record) error {
-	for _, record := range records {
-		destTopic, err := o.createTopicIfNeeded(ctx, inputClient, record.Topic)
-		if err != nil {
-			return err
-		}
-		record.Topic = destTopic
-	}
-	return nil
 }
 
 func (o *redpandaMigratorOutput) createTopicIfNeeded(ctx context.Context, inputClient *kgo.Client, topic string) (string, error) {
@@ -343,30 +330,14 @@ func (o *redpandaMigratorOutput) resolveTopic(topic string) (string, error) {
 	msg.MetaSetMut("kafka_topic", topic)
 	destTopic, err := o.destTopicResolver.TryString(msg)
 	if err != nil {
-		return "", fmt.Errorf("failed to parse destination topic: %s", err)
+		return "", fmt.Errorf("parsing destination topic: %s", err)
 	}
 	if destTopic == "" {
-		return "", errors.New("failed to parse destination topic: empty string")
+		return "", errors.New("parsing destination topic: empty string")
 	}
 	destTopic = o.topicPrefix + destTopic
 
 	return destTopic, nil
-}
-
-func (o *redpandaMigratorOutput) updateSchemaIDsInRecords(ctx context.Context, records []*kgo.Record) error {
-	res, ok := o.mgr.GetGeneric(o.schemaRegistryOutputResource)
-	if !ok {
-		return fmt.Errorf("schema_registry output resource %q not found", o.schemaRegistryOutputResource)
-	}
-	srOutput := res.(*schemaRegistryOutput)
-
-	for _, record := range records {
-		if err := o.updateRecordSchemaID(ctx, srOutput, record); err != nil {
-			return fmt.Errorf("update schema ID in record offset %d on topic %s: %w", record.Offset, record.Topic, err)
-		}
-	}
-
-	return nil
 }
 
 func (o *redpandaMigratorOutput) updateRecordSchemaID(ctx context.Context, srOutput *schemaRegistryOutput, record *kgo.Record) error {

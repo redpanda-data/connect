@@ -65,7 +65,7 @@ func MessageToProto(msg *service.Message) (*Message, error) {
 		return err
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to convert metadata: %w", err)
+		return nil, fmt.Errorf("converting metadata: %w", err)
 	}
 	return out, nil
 }

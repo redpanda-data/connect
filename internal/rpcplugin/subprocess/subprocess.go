@@ -112,19 +112,19 @@ func (s *Subprocess) Start() error {
 	stdoutPipe, err := cmd.StdoutPipe()
 	if err != nil {
 		cancel()
-		return fmt.Errorf("failed to create stdout pipe: %w", err)
+		return fmt.Errorf("creating stdout pipe: %w", err)
 	}
 	stderrPipe, err := cmd.StderrPipe()
 	if err != nil {
 		stdoutPipe.Close()
 		cancel()
-		return fmt.Errorf("failed to create stderr pipe: %w", err)
+		return fmt.Errorf("creating stderr pipe: %w", err)
 	}
 	if err := cmd.Start(); err != nil {
 		stdoutPipe.Close()
 		stderrPipe.Close()
 		cancel()
-		return fmt.Errorf("failed to start command: %w", err)
+		return fmt.Errorf("starting command: %w", err)
 	}
 	s.logger.Debugf("Subprocess started with PID: %d", cmd.Process.Pid)
 	s.wg.Add(3) // For stdout, stderr, and process wait goroutines

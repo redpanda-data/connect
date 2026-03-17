@@ -39,7 +39,16 @@ In order to subscribe to channels using the `+"`PSUBSCRIBE`"+` command set the f
 - `+"`h*llo`"+` subscribes to hllo and heeeello
 - `+"`h[ae]llo`"+` subscribes to hello and hallo, but not hillo
 
-Use `+"`\\`"+` to escape special characters if you want to match them verbatim.`).
+Use `+"`\\`"+` to escape special characters if you want to match them verbatim.
+
+== Metadata
+
+This input adds the following metadata fields to each message:
+
+- redis_pubsub_channel
+- redis_pubsub_pattern
+
+You can access these metadata fields using xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].`).
 		Categories("Services").
 		Fields(clientFields()...).
 		Fields(
@@ -93,6 +102,17 @@ func newRedisPubSubReader(conf *service.ParsedConfig, mgr *service.Resources) (*
 	return r, nil
 }
 
+// ConnectionTest attempts to test the connection configuration of this input
+// without actually consuming data. The connection, if successful, is then
+// closed.
+func (r *redisPubSubReader) ConnectionTest(ctx context.Context) service.ConnectionTestResults {
+	_, err := r.client.Ping(ctx).Result()
+	if err != nil {
+		return service.ConnectionTestFailed(err).AsList()
+	}
+	return service.ConnectionTestSucceeded().AsList()
+}
+
 func (r *redisPubSubReader) Connect(ctx context.Context) error {
 	r.cMut.Lock()
 	defer r.cMut.Unlock()
@@ -130,7 +150,10 @@ func (r *redisPubSubReader) Read(ctx context.Context) (*service.Message, service
 			_ = r.disconnect()
 			return nil, nil, service.ErrEndOfInput
 		}
-		return service.NewMessage([]byte(rMsg.Payload)), func(context.Context, error) error {
+		message := service.NewMessage([]byte(rMsg.Payload))
+		message.MetaSetMut("redis_pubsub_channel", rMsg.Channel)
+		message.MetaSetMut("redis_pubsub_pattern", rMsg.Pattern)
+		return message, func(context.Context, error) error {
 			return nil
 		}, nil
 	case <-ctx.Done():

@@ -29,7 +29,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 	"github.com/redpanda-data/connect/v4/internal/impl/kafka"
-	"github.com/redpanda-data/connect/v4/internal/impl/kafka/redpandatest"
+	"github.com/redpanda-data/connect/v4/internal/impl/redpanda/redpandatest"
 	_ "github.com/redpanda-data/connect/v4/public/components/confluent"
 
 	"github.com/ory/dockertest/v3"
@@ -38,7 +38,7 @@ import (
 	franz_sr "github.com/twmb/franz-go/pkg/sr"
 )
 
-func runRedpandaPairForSchemaMigration(t *testing.T) (src, dst redpandatest.RedpandaEndpoints) {
+func runRedpandaPairForSchemaMigration(t *testing.T) (src, dst redpandatest.Endpoints) {
 	pool, err := dockertest.NewPool("")
 	require.NoError(t, err)
 	pool.MaxWait = time.Minute
@@ -199,7 +199,7 @@ output:
 	}
 }
 
-func writeSchema(t *testing.T, sr redpandatest.RedpandaEndpoints, schema []byte, normalize, removeMetadata, removeRuleSet bool) {
+func writeSchema(t *testing.T, sr redpandatest.Endpoints, schema []byte, normalize, removeMetadata, removeRuleSet bool) {
 	streamBuilder := service.NewStreamBuilder()
 
 	// Set up a dummy `schema_registry` input which the output can connect to even though it won't need to fetch any
@@ -673,7 +673,7 @@ logger:
 	require.NoError(t, stream.Run(ctx))
 
 	// Verify all schemas migrated correctly
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		subject := fmt.Sprintf("%s-%d", baseSubject, i)
 
 		resp, err := http.DefaultClient.Get(fmt.Sprintf("%s/subjects/%s/versions/1", dst.SchemaRegistryURL, subject))

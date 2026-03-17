@@ -74,7 +74,7 @@ func authFieldSpec() *service.ConfigField {
 			Secret().
 			Optional().
 			Version("4.38.0").
-			Example("UDXU4RCSJNZOIQHZNWXHXORDPRTGNJAHAHFRGZNEEJCPQTT2M7NLCNF4"), // don't worry, this sample seed is from Nats offical doc
+			Example("UDXU4RCSJNZOIQHZNWXHXORDPRTGNJAHAHFRGZNEEJCPQTT2M7NLCNF4"), // don't worry, this sample seed is from Nats official doc
 		service.NewStringField("user_credentials_file").
 			Description("An optional file containing user credentials which consist of an user JWT and corresponding NKey seed.").
 			Example("./user.creds").
@@ -237,7 +237,7 @@ func homeDir() (string, error) {
 		var home string
 		if homeDrive == "" || homePath == "" {
 			if userProfile == "" {
-				return "", errors.New("nats: failed to get home dir, require %HOMEDRIVE% and %HOMEPATH% or %USERPROFILE%")
+				return "", errors.New("nats: getting home dir, require %HOMEDRIVE% and %HOMEPATH% or %USERPROFILE%")
 			}
 			home = userProfile
 		} else {
@@ -249,7 +249,7 @@ func homeDir() (string, error) {
 
 	home := os.Getenv("HOME")
 	if home == "" {
-		return "", errors.New("nats: failed to get home dir, require $HOME")
+		return "", errors.New("nats: getting home dir, require $HOME")
 	}
 	return home, nil
 }
@@ -272,12 +272,12 @@ func loadFileContents(filename string, fs *service.FS) ([]byte, error) {
 func nkeyOptionFromString(nkey string) (nats.Option, error) {
 	kp, err := nkeys.ParseDecoratedNKey([]byte(nkey))
 	if err != nil {
-		return nil, errors.New("failed to parse nkey")
+		return nil, errors.New("parsing nkey")
 	}
 
 	pub, err := kp.PublicKey()
 	if err != nil {
-		return nil, errors.New("failed to extract public key from nkey")
+		return nil, errors.New("extracting public key from nkey")
 	}
 	if !nkeys.IsValidPublicUserKey(pub) {
 		return nil, errors.New("invalid nkey user seed")

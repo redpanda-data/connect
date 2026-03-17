@@ -44,10 +44,10 @@ schema:
 
 	tctx := t.Context()
 	_, err = encodeProc.ProcessBatch(tctx, service.MessageBatch{
-		service.NewMessage([]byte(`{"id":12,"name":"foo"}`)),
+		service.NewMessage([]byte(`{"id":"bar","name":"foo"}`)),
 	})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "cannot create parquet value of type FLOAT from go value of type int64")
+	assert.Contains(t, err.Error(), "encoding panic")
 }
 
 func TestParquetEncodeDecodeRoundTrip(t *testing.T) {
@@ -210,7 +210,6 @@ func testParquetEncodeDecodeRoundTrip(t *testing.T, encodeProc *parquetEncodePro
 }`,
 		},
 	} {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			inBatch := service.MessageBatch{
 				service.NewMessage([]byte(test.input)),
@@ -329,7 +328,6 @@ func TestParquetEncodeProcessor(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			expectedDataBytes, err := json.Marshal(test.input)
 			require.NoError(t, err)
@@ -618,6 +616,35 @@ func TestParquetEncodeDynamicSchemaProcessor(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.JSONEq(t, string(expectedBytes), string(actualBytes))
+}
+
+func TestParquetEncodeDynamicSchemaAnyFieldError(t *testing.T) {
+	commonSchema := &schema.Common{
+		Type: schema.Object,
+		Children: []schema.Common{
+			{
+				Name: "id",
+				Type: schema.Int64,
+			},
+			{
+				Name: "payload",
+				Type: schema.Any,
+			},
+		},
+	}
+
+	inBatch := service.MessageBatch{
+		service.NewMessage([]byte(`{"id":1,"payload":{"key":"value"}}`)),
+	}
+	inBatch[0].MetaSetMut("schema", commonSchema.ToAny())
+
+	proc, err := newParquetEncodeProcessor(nil, nil, "schema", &parquet.Uncompressed)
+	require.NoError(t, err)
+
+	_, err = proc.ProcessBatch(t.Context(), inBatch)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "payload")
+	assert.Contains(t, err.Error(), "ANY")
 }
 
 func TestParquetEncodeProcessorConfigLinting(t *testing.T) {

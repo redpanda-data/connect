@@ -1,0 +1,92 @@
+# Kafka Topic Replication
+# Pattern: Replication - Kafka to Kafka
+# Difficulty: Intermediate
+
+# --- Input Configuration ---
+input:
+  label: consume_from_source
+  kafka_franz:
+    seed_brokers: ["${SOURCE_BROKER}"]
+    topics: ["${SOURCE_TOPIC}"]
+    consumer_group: "${CONSUMER_GROUP}"
+    auto_replay_nacks: true
+
+    # Security (optional)
+    sasl:
+      - mechanism: "${SASL_MECHANISM}"
+        username: "${SASL_USERNAME}"
+        password: "${SASL_PASSWORD}"
+    tls:
+      enabled: ${TLS_ENABLED:false}
+
+# --- Processing Pipeline ---
+pipeline:
+  processors:
+    # Preserve source metadata
+    - label: copy_metadata
+      mapping: |
+        # Save original Kafka metadata for replication
+        let kafka_meta = @.filter(kv -> kv.key.has_prefix("kafka_"))
+        meta = @.filter(kv -> !kv.key.has_prefix("kafka_"))
+        meta kafka_metadata = $kafka_meta
+
+# --- Output Configuration ---
+output:
+  label: replicate_with_retry
+  fallback:
+    # Try to write to destination
+    - label: write_to_destination
+      retry:
+        max_retries: 3
+        backoff:
+          initial_interval: 1s
+          max_interval: 10s
+        output:
+          kafka_franz:
+            seed_brokers: ["${DEST_BROKER}"]
+            topic: "${DEST_TOPIC_PREFIX}${!metadata(\"kafka_metadata\").kafka_topic}"
+
+            # Preserve source characteristics
+            partitioner: "manual"
+            partition: "${!metadata(\"kafka_metadata\").kafka_partition}"
+            key: "${!metadata(\"kafka_metadata\").kafka_key}"
+            timestamp: "${!metadata(\"kafka_metadata\").kafka_timestamp_unix}"
+
+            # Preserve headers
+            metadata:
+              include_patterns: [".*"]
+
+            # Idempotent writes prevent duplicates
+            idempotent_write: true
+
+            # Performance tuning
+            max_message_bytes: 1MiB
+            broker_write_max_bytes: 100MiB
+            max_in_flight: 256
+
+            # Security (optional)
+            sasl:
+              - mechanism: "${DEST_SASL_MECHANISM}"
+                username: "${DEST_SASL_USERNAME}"
+                password: "${DEST_SASL_PASSWORD}"
+            tls:
+              enabled: ${DEST_TLS_ENABLED:false}
+
+    # DLQ for poison messages
+    - label: write_to_dlq
+      file:
+        path: "${DLQ_PATH}/errors_${!metadata(\"kafka_metadata\").kafka_topic}_${!metadata(\"kafka_metadata\").kafka_partition}_${!metadata(\"kafka_metadata\").kafka_offset}.json"
+      processors:
+        - mapping: |
+            # Create DLQ message with full context
+            root.record.value = content().encode("base64")
+            root.record.key = metadata("kafka_metadata").kafka_key.encode("base64")
+            root.record.headers = metadata()
+            root.meta.offset = metadata("kafka_metadata").kafka_offset
+            root.meta.topic = metadata("kafka_metadata").kafka_topic
+            root.meta.partition = metadata("kafka_metadata").kafka_partition
+            root.error = metadata("fallback_error")
+
+        - log:
+            level: ERROR
+            message: "Replication failed: ${!metadata(\"fallback_error\")}"

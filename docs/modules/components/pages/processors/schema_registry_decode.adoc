@@ -46,6 +46,7 @@ schema_registry_decode:
     use_enum_numbers: false
     emit_unpopulated: false
     emit_default_values: false
+    serialize_to_json: true
   cache_duration: 10m
   url: "" # No default (required)
   default_schema_id: 0 # No default (optional)
@@ -85,6 +86,7 @@ schema_registry_decode:
     use_enum_numbers: false
     emit_unpopulated: false
     emit_default_values: false
+    serialize_to_json: true
   cache_duration: 10m
   url: "" # No default (required)
   default_schema_id: 0 # No default (optional)
@@ -315,6 +317,15 @@ Whether to emit default-valued primitive fields, empty lists, and empty maps. em
 
 *Default*: `false`
 
+=== `protobuf.serialize_to_json`
+
+If messages should be serialized to JSON bytes. If false then the message is kept in decoded form, which means that 64 bit integers are not converted to strings and types for bytes and google.protobuf.Timestamp are preserved (as they are not serialized to JSON strings).
+
+
+*Type*: `bool`
+
+*Default*: `true`
+
 === `cache_duration`
 
 The duration after which a schema is considered stale and will be removed from the cache.
@@ -342,7 +353,7 @@ The base URL of the schema registry service.
 
 === `default_schema_id`
 
-If set, this schema ID will be used when a message's schema header cannot be read (ErrBadHeader). If not set, schema header errors will be returned.
+If set, this schema ID will be used when a message's schema header cannot be read (ErrBadHeader). If not set, schema header errors will be returned. WARNING: This is configuration does not work with PROTOBUF schemas. You may also use `with_schema_registry_header` bloblang function to add a schema ID to messages.
 
 
 *Type*: `int`

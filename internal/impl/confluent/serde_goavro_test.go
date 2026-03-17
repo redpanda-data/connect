@@ -128,7 +128,6 @@ func TestAvroReferences(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			encoder, err := newSchemaRegistryEncoder(urlStr, noopReqSign, nil, subj, true, time.Minute*10, time.Minute, service.MockResources())
 			require.NoError(t, err)
@@ -181,6 +180,39 @@ func TestAvroReferences(t *testing.T) {
 			require.NoError(t, decodedMsg.GetError())
 			require.JSONEq(t, test.output, string(b))
 		})
+	}
+}
+
+// assertSchemaFieldsMatch checks that all expected fields in the expected schema match
+// the actual schema, while ignoring any extra fields (like "fingerprint") in the actual schema.
+// This allows tests to be resilient to future schema format extensions.
+func assertSchemaFieldsMatch(t *testing.T, expected, actual any) {
+	t.Helper()
+
+	switch exp := expected.(type) {
+	case map[string]any:
+		act, ok := actual.(map[string]any)
+		require.True(t, ok, "actual should be a map")
+
+		// Check that all expected keys exist and match
+		for key, expVal := range exp {
+			actVal, exists := act[key]
+			require.True(t, exists, "expected key %q not found in actual", key)
+			assertSchemaFieldsMatch(t, expVal, actVal)
+		}
+
+	case []any:
+		act, ok := actual.([]any)
+		require.True(t, ok, "actual should be a slice")
+		require.Len(t, act, len(exp), "slice lengths should match")
+
+		for i := range exp {
+			assertSchemaFieldsMatch(t, exp[i], act[i])
+		}
+
+	default:
+		// For primitive types, use direct equality
+		assert.Equal(t, expected, actual)
 	}
 }
 
@@ -269,7 +301,8 @@ func TestAvroSchemaExtraction(t *testing.T) {
 		schema, exists := decodedMsg.MetaGetMut("testschema")
 		assert.True(t, exists)
 
-		assert.Equal(t, map[string]any{
+		// Check fields of interest instead of absolute comparison to allow for future schema extensions
+		assertSchemaFieldsMatch(t, map[string]any{
 			"name": "foo", "type": "OBJECT",
 			"children": []any{
 				map[string]any{"name": "A", "type": "STRING"},
@@ -377,7 +410,8 @@ func TestAvroSchemaExtractionLameUnions(t *testing.T) {
 		schema, exists := decodedMsg.MetaGetMut("testschema")
 		assert.True(t, exists)
 
-		assert.Equal(t, map[string]any{
+		// Check fields of interest instead of absolute comparison to allow for future schema extensions
+		assertSchemaFieldsMatch(t, map[string]any{
 			"name": "foo", "type": "OBJECT",
 			"children": []any{
 				map[string]any{"name": "A", "type": "STRING"},

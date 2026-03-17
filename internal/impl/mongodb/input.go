@@ -164,6 +164,17 @@ type mongoInput struct {
 	logger       *service.Logger
 }
 
+// ConnectionTest attempts to test the connection configuration of this input
+// without actually consuming data. The connection, if successful, is then
+// closed.
+func (m *mongoInput) ConnectionTest(ctx context.Context) service.ConnectionTestResults {
+	err := m.client.Ping(ctx, nil)
+	if err != nil {
+		return service.ConnectionTestFailed(fmt.Errorf("ping failed: %w", err)).AsList()
+	}
+	return service.ConnectionTestSucceeded().AsList()
+}
+
 func (m *mongoInput) Connect(ctx context.Context) error {
 	if m.cursor != nil {
 		return nil

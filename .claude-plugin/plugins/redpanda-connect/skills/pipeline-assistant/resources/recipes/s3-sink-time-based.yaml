@@ -1,0 +1,28 @@
+# S3 Sink - Time-Based Partitioning
+# Pattern: Cloud Storage - Time-Based Partitioning
+# Difficulty: Advanced
+
+input:
+  kafka_franz:
+    seed_brokers: ["${KAFKA_BROKER}"]
+    topics: ["${SOURCE_TOPIC}"]
+    consumer_group: "${CONSUMER_GROUP}"
+
+pipeline:
+  processors:
+    - mapping: |
+        root = this
+        let ts = this.timestamp.ts_parse("2006-01-02T15:04:05Z")
+        meta s3_key = "data/%v/%v.json".format($ts.ts_format("2006/01/02/15"), uuid_v4())
+
+output:
+  aws_s3:
+    bucket: "${S3_BUCKET}"
+    path: ${!metadata("s3_key")}
+    region: "${AWS_REGION}"
+    credentials:
+      id: "${AWS_ACCESS_KEY_ID}"
+      secret: "${AWS_SECRET_ACCESS_KEY}"
+    batching:
+      count: 1000
+      period: 5m

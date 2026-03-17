@@ -1,0 +1,18 @@
+roles:
+  - id: mcp.admin
+    permissions:
+      - dataplane_mcpserver_initialize
+      - dataplane_mcpserver_ping
+      - dataplane_mcpserver_resources_list
+      - dataplane_mcpserver_resources_templates_list
+      - dataplane_mcpserver_resources_read
+      - dataplane_mcpserver_prompts_list
+      - dataplane_mcpserver_prompts_get
+      - dataplane_mcpserver_tools_list
+      - dataplane_mcpserver_tools_call
+      - dataplane_mcpserver_logging_set_level
+
+bindings:
+  - role: mcp.admin
+    principal: User:test@example.com
+    scope: organization/test-org/resourcegroup/default/dataplane/mcp-server

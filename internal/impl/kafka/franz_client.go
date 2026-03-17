@@ -17,6 +17,7 @@ package kafka
 import (
 	"context"
 	"crypto/tls"
+	"net"
 	"strings"
 	"time"
 
@@ -24,6 +25,7 @@ import (
 	"github.com/twmb/franz-go/pkg/sasl"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/utils/netutil"
 )
 
 const (
@@ -34,26 +36,38 @@ const (
 	kfcFieldMetadataMaxAge         = "metadata_max_age"
 	kfcFieldRequestTimeoutOverhead = "request_timeout_overhead"
 	kfcFieldConnIdleTimeout        = "conn_idle_timeout"
+
+	kfcFieldSeedBrokersDescription = "A list of broker addresses to connect to in order to establish connections. If an item of the list contains commas it will be expanded into multiple addresses."
 )
+
+// FranzConnectionOptionalFields returns a slice of connection fields but
+// with any non-optional fields switched to be optional.
+func FranzConnectionOptionalFields() []*service.ConfigField {
+	fields := FranzConnectionFields()
+	fields[0] = fields[0].
+		Description(kfcFieldSeedBrokersDescription + " When this field is omitted the global `redpanda` block will be referenced for connection details.").
+		Optional()
+	return fields
+}
 
 // FranzConnectionFields returns a slice of fields specifically for establishing
 // connections to kafka brokers via the franz-go library.
 func FranzConnectionFields() []*service.ConfigField {
 	return []*service.ConfigField{
 		service.NewStringListField(kfcFieldSeedBrokers).
-			Description("A list of broker addresses to connect to in order to establish connections. If an item of the list contains commas it will be expanded into multiple addresses.").
+			Description(kfcFieldSeedBrokersDescription).
 			Example([]string{"localhost:9092"}).
 			Example([]string{"foo:9092", "bar:9092"}).
 			Example([]string{"foo:9092,bar:9092"}),
 		service.NewStringField(kfcFieldClientID).
 			Description("An identifier for the client connection.").
-			Default("benthos").
+			Default("redpanda-connect").
 			Advanced(),
 		service.NewTLSToggledField(kfcFieldTLS),
 		SASLFields(),
 		service.NewDurationField(kfcFieldMetadataMaxAge).
 			Description("The maximum age of metadata before it is refreshed. This interval also controls how frequently regex topic patterns are re-evaluated to discover new matching topics.").
-			Default("5m").
+			Default("1m").
 			Advanced(),
 		service.NewDurationField(kfcFieldRequestTimeoutOverhead).
 			Description("The request time overhead. Uses the given time as overhead while deadlining requests. Roughly equivalent to request.timeout.ms, but grants additional time to requests that have timeout fields.").
@@ -63,6 +77,7 @@ func FranzConnectionFields() []*service.ConfigField {
 			Description("The rough amount of time to allow connections to idle before they are closed.").
 			Default("20s").
 			Advanced(),
+		netutil.DialerConfigSpec(),
 	}
 }
 
@@ -77,6 +92,7 @@ type FranzConnectionDetails struct {
 	MetaMaxAge             time.Duration
 	RequestTimeoutOverhead time.Duration
 	ConnIdleTimeout        time.Duration
+	DialerConfig           netutil.DialerConfig
 
 	Logger *service.Logger
 }
@@ -88,14 +104,17 @@ func FranzConnectionDetailsFromConfig(conf *service.ParsedConfig, log *service.L
 		Logger: log,
 	}
 
-	brokerList, err := conf.FieldStringList(kfcFieldSeedBrokers)
-	if err != nil {
-		return nil, err
-	}
-	for _, b := range brokerList {
-		d.SeedBrokers = append(d.SeedBrokers, strings.Split(b, ",")...)
+	if conf.Contains(kfcFieldSeedBrokers) {
+		brokerList, err := conf.FieldStringList(kfcFieldSeedBrokers)
+		if err != nil {
+			return nil, err
+		}
+		for _, b := range brokerList {
+			d.SeedBrokers = append(d.SeedBrokers, strings.Split(b, ",")...)
+		}
 	}
 
+	var err error
 	if d.TLSConf, d.TLSEnabled, err = conf.FieldTLSToggled(kfcFieldTLS); err != nil {
 		return nil, err
 	}
@@ -120,7 +139,18 @@ func FranzConnectionDetailsFromConfig(conf *service.ParsedConfig, log *service.L
 		return nil, err
 	}
 
+	if conf.Contains("tcp") {
+		if d.DialerConfig, err = netutil.DialerConfigFromParsed(conf.Namespace("tcp")); err != nil {
+			return nil, err
+		}
+	}
+
 	return &d, nil
+}
+
+// IsConfigured returns true if any of the connection fields have been set.
+func (d *FranzConnectionDetails) IsConfigured() bool {
+	return len(d.SeedBrokers) > 0
 }
 
 // FranzOpts returns a slice of franz-go opts that establish a connection
@@ -136,8 +166,20 @@ func (d *FranzConnectionDetails) FranzOpts() []kgo.Opt {
 		kgo.ConnIdleTimeout(d.ConnIdleTimeout),
 	}
 
-	if d.TLSEnabled {
-		opts = append(opts, kgo.DialTLSConfig(d.TLSConf))
+	{
+		var nd net.Dialer
+		if err := netutil.DecorateDialer(&nd, d.DialerConfig); err != nil {
+			d.Logger.Errorf("Failed to configure custom dialer: %v", err)
+		} else {
+			if d.TLSEnabled {
+				opts = append(opts, kgo.Dialer((&tls.Dialer{
+					NetDialer: &nd,
+					Config:    d.TLSConf,
+				}).DialContext))
+			} else {
+				opts = append(opts, kgo.Dialer(nd.DialContext))
+			}
+		}
 	}
 
 	return opts

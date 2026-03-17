@@ -39,8 +39,9 @@ input:
   ockam_kafka:
     kafka:
       seed_brokers: [] # No default (optional)
-      topics: [] # No default (required)
-      regexp_topics: false
+      topics: [] # No default (optional)
+      regexp_topics_include: [] # No default (optional)
+      regexp_topics_exclude: [] # No default (optional)
       transaction_isolation_level: read_uncommitted
       consumer_group: "" # No default (optional)
     disable_content_encryption: false
@@ -73,8 +74,9 @@ input:
         root_cas: ""
         root_cas_file: ""
         client_certs: []
-      topics: [] # No default (required)
-      regexp_topics: false
+      topics: [] # No default (optional)
+      regexp_topics_include: [] # No default (optional)
+      regexp_topics_exclude: [] # No default (optional)
       rack_id: ""
       instance_id: ""
       rebalance_timeout: 45s
@@ -340,14 +342,32 @@ topics:
   - foo:0-5
 ```
 
-=== `kafka.regexp_topics`
+=== `kafka.regexp_topics_include`
 
-Whether listed topics should be interpreted as regular expression patterns for matching multiple topics. When enabled, the client will periodically refresh the list of matching topics based on the `metadata_max_age` interval. When topics are specified with explicit partitions this field must remain set to `false`.
+A list of regular expression patterns for matching topics to consume from. When specified, the client will periodically refresh the list of matching topics based on the `metadata_max_age` interval. This enables regex mode and cannot be used together with the `topics` field. Use `regexp_topics_exclude` to exclude specific patterns.
 
 
-*Type*: `bool`
+*Type*: `array`
 
-*Default*: `false`
+
+```yml
+# Examples
+
+regexp_topics_include:
+  - logs_.*
+  - metrics_.*
+
+regexp_topics_include:
+  - events_[0-9]+
+```
+
+=== `kafka.regexp_topics_exclude`
+
+A list of regular expression patterns for excluding topics when regex mode is enabled (via `regexp_topics` or `regexp_topics_include`). Topics matching any of these patterns will be excluded from consumption, even if they match include patterns.
+
+
+*Type*: `array`
+
 
 === `kafka.rack_id`
 
@@ -378,7 +398,7 @@ When using a consumer group, `rebalance_timeout` sets how long group members are
 
 === `kafka.session_timeout`
 
-When using a consumer group, `session_timeout` sets how long a member in hte group can go between heartbeats. If a member does not heartbeat in this timeout, the broker will remove the member from the group and initiate a rebalance.
+When using a consumer group, `session_timeout` sets how long a member in the group can go between heartbeats. If a member does not heartbeat in this timeout, the broker will remove the member from the group and initiate a rebalance.
 
 
 *Type*: `string`
@@ -387,7 +407,7 @@ When using a consumer group, `session_timeout` sets how long a member in hte gro
 
 === `kafka.heartbeat_interval`
 
-When using a consumer group, `heartbeat_interval` sets how long a group member goes between heartbeats to Kafka. Kafka uses heartbeats to ensure that a group member's sesion stays active. This value should be no higher than 1/3rd of the `session_timeout`. This is equivalent to the Java heartbeat.interval.ms setting.
+When using a consumer group, `heartbeat_interval` sets how long a group member goes between heartbeats to Kafka. Kafka uses heartbeats to ensure that a group member's session stays active. This value should be no higher than 1/3rd of the `session_timeout`. This is equivalent to the Java heartbeat.interval.ms setting.
 
 
 *Type*: `string`

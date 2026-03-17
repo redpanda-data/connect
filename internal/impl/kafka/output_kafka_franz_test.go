@@ -70,7 +70,6 @@ kafka_franz:
 	}
 
 	for _, test := range testCases {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			err := service.NewStreamBuilder().AddOutputYAML(test.conf)
 			if test.errContains == "" {

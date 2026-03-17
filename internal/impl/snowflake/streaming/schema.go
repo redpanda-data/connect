@@ -1,17 +1,17 @@
-/*
- * Copyright 2024 Redpanda Data, Inc.
- *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
- * License (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- *
- * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
- */
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed as a Redpanda Enterprise file under the Redpanda Community
+// License (the "License"); you may not use this file except in compliance with
+// the License. You may obtain a copy of the License at
+//
+// https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
 package streaming
 
 import (
+	"cmp"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -83,8 +83,17 @@ func convertFixedType(column columnMetadata) (parquet.Node, dataConverter, typed
 // maxJSONSize is the size that any kind of semi-structured data can be, which is 16MiB minus a small overhead
 const maxJSONSize = 16*humanize.MiByte - 64
 
+type dataConverterOptions struct {
+	TimestampFormat string
+}
+
 // See ParquetTypeGenerator
-func constructParquetSchema(columns []columnMetadata) (*parquet.Schema, []*dataTransformer, map[string]string, error) {
+func constructParquetSchema(columns []columnMetadata, opts dataConverterOptions) (*parquet.Schema, []*dataTransformer, map[string]string, error) {
+	// Sort columns by ordinal so we can use array message formats to correctly zip columns and schemas
+	// I believe that snowflake returns columns in ordinal order already, but best to be safe.
+	slices.SortStableFunc(columns, func(a, b columnMetadata) int {
+		return cmp.Compare(a.Ordinal, b.Ordinal)
+	})
 	groupNode := parquet.Group{}
 	transformers := make([]*dataTransformer, len(columns))
 	// Don't write the sfVer key as it allows us to not have to narrow the numeric types in parquet.
@@ -156,12 +165,13 @@ func constructParquetSchema(columns []columnMetadata) (*parquet.Schema, []*dataT
 			// so ignore it and use the default precision for the column type
 			n = parquet.Decimal(int(scale), int(precision), pt)
 			converter = timestampConverter{
-				nullable:  column.Nullable,
-				scale:     scale,
-				precision: precision,
-				includeTZ: logicalType == "timestamp_tz",
-				trimTZ:    logicalType == "timestamp_ntz",
-				defaultTZ: time.UTC,
+				nullable:   column.Nullable,
+				scale:      scale,
+				precision:  precision,
+				includeTZ:  logicalType == "timestamp_tz",
+				trimTZ:     logicalType == "timestamp_ntz",
+				defaultTZ:  time.UTC,
+				timeFormat: opts.TimestampFormat,
 			}
 		case "time":
 			t := parquet.Int32Type

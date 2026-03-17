@@ -109,6 +109,19 @@ func newKVOutput(conf *service.ParsedConfig, mgr *service.Resources) (*kvOutput,
 
 //------------------------------------------------------------------------------
 
+// ConnectionTest attempts to test the connection configuration of this output
+// without actually sending data. The connection, if successful, is then
+// closed.
+func (kv *kvOutput) ConnectionTest(ctx context.Context) service.ConnectionTestResults {
+	conn, err := kv.connDetails.get(ctx)
+	if err != nil {
+		return service.ConnectionTestFailed(err).AsList()
+	}
+	defer conn.Close()
+
+	return service.ConnectionTestSucceeded().AsList()
+}
+
 func (kv *kvOutput) Connect(ctx context.Context) (err error) {
 	kv.connMut.Lock()
 	defer kv.connMut.Unlock()

@@ -22,7 +22,7 @@ import (
 
 func redpandaCommonInputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Beta().
+		Deprecated().
 		Categories("Services").
 		Summary("Consumes data from a Redpanda (Kafka) broker, using credentials defined in a common top-level `redpanda` config block.").
 		Fields(
@@ -40,7 +40,7 @@ When a consumer group is specified this input consumes one or more topics where 
 
 == Delivery Guarantees
 
-When using consumer groups the offsets of "delivered" records will be committed automatically and continuously, and in the event of restarts these committed offsets will be used in order to resume from where the input left off. Redpanda Connect guarantees at least once delivery by ensuring that records are only considerd to be delivered when all configured outputs that the record is routed to have confirmed delivery.
+When using consumer groups the offsets of "delivered" records will be committed automatically and continuously, and in the event of restarts these committed offsets will be used in order to resume from where the input left off. Redpanda Connect guarantees at least once delivery by ensuring that records are only considered to be delivered when all configured outputs that the record is routed to have confirmed delivery.
 
 == Ordering
 
@@ -108,7 +108,7 @@ func init() {
 				// to initialise in the background. Otherwise we get an annoying
 				// log.
 				for range 20 {
-					if err = kafka.FranzSharedClientUse(SharedGlobalRedpandaClientKey, mgr, func(details *kafka.FranzSharedClientInfo) error {
+					if err = kafka.FranzSharedClientUse(kafka.SharedGlobalRedpandaClientKey, mgr, func(details *kafka.FranzSharedClientInfo) error {
 						clientOpts = append(clientOpts, details.ConnDetails.FranzOpts()...)
 						return nil
 					}); err == nil {

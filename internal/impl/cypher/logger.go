@@ -25,7 +25,7 @@ type loggerAdapter struct {
 }
 
 func (l *loggerAdapter) Error(name, id string, err error) {
-	l.logger.Errorf("[%s %s] %w", name, id, err)
+	l.logger.Errorf("[%s %s] %v", name, id, err)
 }
 
 func (l *loggerAdapter) Warnf(name, id, msg string, args ...any) {

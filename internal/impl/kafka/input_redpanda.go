@@ -16,6 +16,7 @@ package kafka
 
 import (
 	"slices"
+	"time"
 
 	"github.com/twmb/franz-go/pkg/kgo"
 
@@ -32,7 +33,7 @@ When a consumer group is specified this input consumes one or more topics where 
 
 == Delivery Guarantees
 
-When using consumer groups the offsets of "delivered" records will be committed automatically and continuously, and in the event of restarts these committed offsets will be used in order to resume from where the input left off. Redpanda Connect guarantees at least once delivery by ensuring that records are only considerd to be delivered when all configured outputs that the record is routed to have confirmed delivery.
+When using consumer groups the offsets of "delivered" records will be committed automatically and continuously, and in the event of restarts these committed offsets will be used in order to resume from where the input left off. Redpanda Connect guarantees at least once delivery by ensuring that records are only considered to be delivered when all configured outputs that the record is routed to have confirmed delivery.
 
 == Ordering
 
@@ -59,7 +60,7 @@ output:
 
 == Batching
 
-Records are processed and delivered from each partition in batches as received from brokers. These batch sizes are therefore dynamically sized in order to optimise throughput, but can be tuned with the config fields ` + "`fetch_max_partition_bytes` and `fetch_max_bytes`" + `. Batches can be further broken down using the ` + "xref:components:processors/split.adoc[`split`] processor" + `.
+Records are processed and delivered from each partition in batches as received from brokers. These batch sizes are therefore dynamically sized in order to optimise throughput, but can be tuned with the config field ` + "`max_yield_batch_bytes`, or `unordered_processing.batching` when unordered processing is enabled" + `. Batches can be further broken down using the ` + "xref:components:processors/split.adoc[`split`] processor" + `.
 
 == Metrics
 
@@ -87,9 +88,9 @@ This input adds the following metadata fields to each message:
 
 func redpandaInputConfigFields() []*service.ConfigField {
 	return slices.Concat(
-		FranzConnectionFields(),
+		FranzConnectionOptionalFields(),
 		FranzConsumerFields(),
-		FranzReaderOrderedConfigFields(),
+		FranzReaderToggledConfigFields(),
 		[]*service.ConfigField{
 			service.NewAutoRetryNacksToggleField(),
 			service.NewForceTimelyNacksField(),
@@ -100,22 +101,47 @@ func redpandaInputConfigFields() []*service.ConfigField {
 func init() {
 	service.MustRegisterBatchInput("redpanda", redpandaInputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
-			tmpOpts, err := FranzConnectionOptsFromConfig(conf, mgr.Logger())
+			connDetails, err := FranzConnectionDetailsFromConfig(conf, mgr.Logger())
 			if err != nil {
 				return nil, err
 			}
-			clientOpts := slices.Clone(tmpOpts)
 
-			if tmpOpts, err = FranzConsumerOptsFromConfig(conf); err != nil {
+			consumerOpts, err := FranzConsumerOptsFromConfig(conf)
+			if err != nil {
 				return nil, err
 			}
-			clientOpts = append(clientOpts, tmpOpts...)
 
 			var rdr service.BatchInput
-			if rdr, err = NewFranzReaderOrderedFromConfig(conf, mgr, func() ([]kgo.Opt, error) {
-				return clientOpts, nil
-			}); err != nil {
-				return nil, err
+			if connDetails.IsConfigured() {
+				// We're using a custom connection from config.
+				clientOpts := append(connDetails.FranzOpts(), consumerOpts...)
+				if rdr, err = NewFranzReaderToggledFromConfig(conf, mgr, func() ([]kgo.Opt, error) {
+					return clientOpts, nil
+				}); err != nil {
+					return nil, err
+				}
+			} else {
+				mgr.Logger().Info("Connection fields omitted, falling back to common redpanda config.")
+
+				// We're using a common redpanda block to determine the connection.
+				if rdr, err = NewFranzReaderToggledFromConfig(conf, mgr, func() (clientOpts []kgo.Opt, err error) {
+					// Make multiple attempts here just to allow the redpanda logger
+					// to initialise in the background. Otherwise we get an annoying
+					// log.
+					for range 20 {
+						if err = FranzSharedClientUse(SharedGlobalRedpandaClientKey, mgr, func(details *FranzSharedClientInfo) error {
+							clientOpts = append(clientOpts, details.ConnDetails.FranzOpts()...)
+							return nil
+						}); err == nil {
+							clientOpts = append(clientOpts, consumerOpts...)
+							return
+						}
+						time.Sleep(time.Millisecond * 100)
+					}
+					return
+				}); err != nil {
+					return nil, err
+				}
 			}
 
 			if rdr, err = service.AutoRetryNacksBatchedToggled(conf, rdr); err != nil {

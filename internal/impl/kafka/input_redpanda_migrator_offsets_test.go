@@ -41,7 +41,7 @@ func createUpdateConsumerGroup(t *testing.T, client *kadm.Client, group string, 
 }
 
 func populateKafkaBroker(t *testing.T, client *kgo.Client, topic, metadata, group string) {
-	for i := 0; i < 6; i++ {
+	for i := range 6 {
 		ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 		rec := kgo.Record{
 			Topic:     topic,
@@ -114,7 +114,7 @@ func TestRedpandaMigratorOffsetsInput(t *testing.T) {
 
 	streamBuilder := service.NewStreamBuilder()
 	require.NoError(t, streamBuilder.AddInputYAML(fmt.Sprintf(`
-redpanda_migrator_offsets:
+legacy_redpanda_migrator_offsets:
   seed_brokers: %v
   topics: [ %s ]
   poll_interval: 3s
@@ -230,7 +230,7 @@ func TestRedpandaMigratorOffsetsInputTruncatedTopic(t *testing.T) {
 
 	streamBuilder := service.NewStreamBuilder()
 	require.NoError(t, streamBuilder.AddInputYAML(fmt.Sprintf(`
-redpanda_migrator_offsets:
+legacy_redpanda_migrator_offsets:
   seed_brokers: %v
   topics: [ %s ]
   poll_interval: 3s

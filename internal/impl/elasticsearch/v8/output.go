@@ -13,6 +13,15 @@
 // limitations under the License.
 package elasticsearch
 
+// NOTE: This implementation is intentionally duplicated in ../v9/output.go.
+// The Elasticsearch TypedAPI is designed to be stable across major versions,
+// differing only in import paths. This allows for:
+//   - Clear version boundaries for users
+//   - Independent deprecation of older versions
+//   - Dead code elimination benefits in v9+
+//
+// When modifying this file, check if ../v9/output.go needs the same changes.
+
 import (
 	"context"
 	"encoding/json"
@@ -178,7 +187,7 @@ output:
   processors:
     - mapping: |
         meta id = this.id
-        # Performs a partial update ont he document.
+        # Performs a partial update on the document.
         root.doc = this
   elasticsearch_v8:
     urls: [localhost:9200]
@@ -300,6 +309,24 @@ type esOutput struct {
 	client *elasticsearch.TypedClient
 }
 
+// ConnectionTest attempts to test the connection configuration of this output
+// without actually sending data. The connection, if successful, is then
+// closed.
+func (e *esOutput) ConnectionTest(ctx context.Context) service.ConnectionTestResults {
+	client, err := elasticsearch.NewTypedClient(e.conf.clientOpts)
+	if err != nil {
+		return service.ConnectionTestFailed(fmt.Errorf("creating client: %w", err)).AsList()
+	}
+
+	// Test connection by pinging the cluster
+	_, err = client.Info().Do(ctx)
+	if err != nil {
+		return service.ConnectionTestFailed(fmt.Errorf("connecting to cluster: %w", err)).AsList()
+	}
+
+	return service.ConnectionTestSucceeded().AsList()
+}
+
 func (e *esOutput) Connect(context.Context) error {
 	if e.client != nil {
 		return nil
@@ -349,7 +376,7 @@ func (e *esOutput) WriteBatch(ctx context.Context, batch service.MessageBatch) e
 	tookDuration := time.Duration(result.Took) * time.Millisecond
 
 	e.log.Debugf(
-		"Successfully dispatched [%s] documents in %s (%s docs/sec)",
+		"Successfully dispatched [%d] documents in %s (%f docs/sec)",
 		len(result.Items),
 		tookDuration,
 		float64(len(result.Items))/tookDuration.Seconds(),

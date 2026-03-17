@@ -43,9 +43,24 @@ const (
 	fieldMaxParallelSnapshotTables = "max_parallel_snapshot_tables"
 	fieldUnchangedToastValue       = "unchanged_toast_value"
 	fieldHeartbeatInterval         = "heartbeat_interval"
-
-	shutdownTimeout = 5 * time.Second
+	fieldAWSIAMAuth                = "aws"
+	// FieldAWSIAMAuthEnabled enabled field.
+	FieldAWSIAMAuthEnabled = "enabled"
+	shutdownTimeout        = 5 * time.Second
 )
+
+func notImportedAWSOptFn(_ context.Context, awsConf *service.ParsedConfig, _ *pgconn.Config, _ *service.Logger) (TokenBuilder, error) {
+	if enabled, _ := awsConf.FieldBool(FieldAWSIAMAuthEnabled); !enabled {
+		return nil, nil
+	}
+	return nil, errors.New("unable to configure AWS authentication as this binary does not import components/aws")
+}
+
+// AWSOptFn is populated with the child `aws` package when imported.
+var AWSOptFn = notImportedAWSOptFn
+
+// TokenBuilder can be used for fetching passwords at runtime during connection (ie. IAM auth tokens)
+type TokenBuilder func(context.Context) error
 
 type asyncMessage struct {
 	msg   service.MessageBatch
@@ -64,9 +79,10 @@ Additionally, if ` + "`" + fieldStreamSnapshot + "`" + ` is set to true, then th
 == Metadata
 
 This input adds the following metadata fields to each message:
-- table (Name of the table that the message originated from)
-- operation (Type of operation that generated the message: "read", "insert", "update", or "delete". "read" is from messages that are read in the initial snapshot phase. This will also be "begin" and "commit" if ` + "`" + fieldIncludeTxnMarkers + "`" + ` is enabled)
-- lsn (the log sequence number in postgres)
+- table: Name of the table that the message originated from
+- operation: Type of operation that generated the message: "read", "insert", "update", or "delete". "read" is from messages that are read in the initial snapshot phase. This will also be "begin" and "commit" if ` + "`" + fieldIncludeTxnMarkers + "`" + ` is enabled
+- lsn: the log sequence number in postgres
+- schema: The table schema in benthos common schema format, compatible with processors like parquet_encode
 		`).
 		Field(service.NewStringField(fieldDSN).
 			Description("The Data Source Name for the PostgreSQL database in the form of `postgres://[user[:password]@][netloc][:port][/dbname][?param1=value1&...]`. Please note that Postgres enforces SSL by default, you can override this with the parameter `sslmode=disable` if required.").
@@ -101,7 +117,11 @@ This input adds the following metadata fields to each message:
 			Description("If set to true, creates a temporary replication slot that is automatically dropped when the connection is closed.").
 			Default(false)).
 		Field(service.NewStringField(fieldSlotName).
-			Description("The name of the PostgreSQL logical replication slot to use. If not provided, a random name will be generated. You can create this slot manually before starting replication if desired.").
+			Description(`The name of the PostgreSQL logical replication slot to use. If not provided, a random name will be generated. You can create this slot manually before starting replication if desired.
+
+Note: To avoid needing to grant the replication user permission to create publications, you can manually create the publications ahead of time.
+This connector uses the naming pattern ` + "`pglog_stream_<replication_slot_name>`" + `, so be sure to create them using this convention.
+			`).
 			Example("my_test_slot")).
 		Field(service.NewDurationField(fieldPgStandbyTimeout).
 			Description("Specify the standby timeout before refreshing an idle connection.").
@@ -118,6 +138,7 @@ This input adds the following metadata fields to each message:
 			Description("The value to emit when there are unchanged TOAST values in the stream. This occurs for updates and deletes where REPLICA IDENTITY is not FULL.").
 			Default(nil).
 			Example("__redpanda_connect_unchanged_toast_value__").
+			Optional().
 			Advanced()).
 		Field(service.NewDurationField(fieldHeartbeatInterval).
 			Description("The interval at which to write heartbeat messages. Heartbeat messages are needed in scenarios when the subscribed tables are low frequency, but there are other high frequency tables writing. Due to the checkpointing mechanism for replication slots, not having new messages to acknowledge will prevent postgres from reclaiming the write ahead log, which can exhaust the local disk. Having heartbeats allows Redpanda Connect to safely acknowledge data periodically and move forward the committed point in the log so it can be reclaimed. Setting the duration to 0s will disable heartbeats entirely. Heartbeats are created by periodically writing logical messages to the write ahead log using `pg_logical_emit_message`.").
@@ -125,6 +146,47 @@ This input adds the following metadata fields to each message:
 			Example("0s").
 			Example("24h").
 			Advanced()).
+		Field(service.NewTLSField("tls")).
+		Description("Using this field overrides the SSL/TLS settings in the environment and DSN.").
+		Field(service.NewObjectField(fieldAWSIAMAuth,
+			service.NewBoolField(FieldAWSIAMAuthEnabled).
+				Description("Enable AWS IAM authentication for PostgreSQL. When enabled, an IAM authentication token is generated and used as the password.").
+				Default(false),
+			service.NewStringField("region").
+				Description("The AWS region where the PostgreSQL instance is located. If no region is specified then the environment default will be used.").
+				Optional(),
+			service.NewStringField("endpoint").
+				Description("The PostgreSQL endpoint hostname (e.g., mydb.abc123.us-east-1.rds.amazonaws.com)."),
+			service.NewStringField("id").
+				Description("The ID of credentials to use.").
+				Optional().Advanced(),
+			service.NewStringField("secret").
+				Description("The secret for the credentials being used.").
+				Optional().Advanced().Secret(),
+			service.NewStringField("token").
+				Description("The token for the credentials being used, required when using short term credentials.").
+				Optional().Advanced(),
+			service.NewStringField("role").
+				Description("Optional AWS IAM role ARN to assume for authentication. Alternatively, use `roles` array for role chaining instead.").
+				Optional(),
+			service.NewStringField("role_external_id").
+				Description("Optional external ID for the role assumption. Only used with the `role` field. Alternatively, use `roles` array for role chaining instead.").
+				Optional(),
+			service.NewObjectListField("roles",
+				service.NewStringField("role").
+					Default("").
+					Description("AWS IAM role ARN to assume."),
+				service.NewStringField("role_external_id").
+					Description("Optional external ID for the role assumption.").
+					Default("").
+					Optional(),
+			).
+				Description("Optional array of AWS IAM roles to assume for authentication. Roles can be assumed in sequence, enabling chaining for purposes such as cross-account access. Each role can optionally specify an external ID.").
+				Optional(),
+		).
+			Description("AWS IAM authentication configuration for PostgreSQL instances. When enabled, IAM credentials are used to generate temporary authentication tokens instead of a static password.").
+			Advanced().
+			Optional()).
 		Field(service.NewAutoRetryNacksToggleField()).
 		Field(service.NewBatchPolicyField(fieldBatching))
 }
@@ -146,6 +208,8 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		batching                  service.BatchPolicy
 		unchangedToastValue       any
 		heartbeatInterval         time.Duration
+		iamAuthEnabled            bool
+		iamAuthTokenBuilder       TokenBuilder
 	)
 
 	if err := license.CheckRunningEnterprise(mgr); err != nil {
@@ -155,7 +219,6 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 	if dsn, err = conf.FieldString(fieldDSN); err != nil {
 		return nil, err
 	}
-
 	if dbSlotName, err = conf.FieldString(fieldSlotName); err != nil {
 		return nil, err
 	}
@@ -221,12 +284,27 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		return nil, err
 	}
 
+	awsConf := conf.Namespace(fieldAWSIAMAuth)
+	iamAuthEnabled, _ = awsConf.FieldBool(FieldAWSIAMAuthEnabled)
+
 	pgConnConfig, err := pgconn.ParseConfigWithOptions(dsn, pgconn.ParseConfigOptions{
 		// Don't support dynamic reading of password
 		GetSSLPassword: func(context.Context) string { return "" },
 	})
 	if err != nil {
 		return nil, err
+	}
+
+	logger := mgr.Logger()
+
+	if iamAuthTokenBuilder, err = AWSOptFn(context.Background(), awsConf, pgConnConfig, logger); err != nil {
+		return nil, err
+	}
+	if pgConnConfig.TLSConfig, err = conf.FieldTLS("tls"); err != nil {
+		return nil, err
+	}
+	if pgConnConfig.TLSConfig != nil {
+		pgConnConfig.TLSConfig.ServerName = pgConnConfig.Host
 	}
 	// This is required for postgres to understand we're interested in replication.
 	// https://github.com/jackc/pglogrepl/issues/6
@@ -237,10 +315,12 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 
 	i := &pgStreamInput{
 		streamConfig: &pglogicalstream.Config{
-			DBConfig: pgConnConfig,
-			DBRawDSN: dsn,
-			DBSchema: schema,
-			DBTables: tables,
+			DBConfig:         pgConnConfig,
+			TLSConfig:        pgConnConfig.TLSConfig,
+			DBRawDSN:         dsn,
+			DBSchema:         schema,
+			DBTables:         tables,
+			RefreshAuthToken: iamAuthTokenBuilder,
 
 			IncludeTxnMarkers:        includeTxnMarkers,
 			ReplicationSlotName:      dbSlotName,
@@ -250,7 +330,7 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 			PgStandbyTimeout:         pgStandbyTimeout,
 			WalMonitorInterval:       walMonitorInterval,
 			MaxSnapshotWorkers:       maxParallelSnapshotTables,
-			Logger:                   mgr.Logger(),
+			Logger:                   logger,
 			UnchangedToastValue:      unchangedToastValue,
 			HeartbeatInterval:        heartbeatInterval,
 		},
@@ -263,6 +343,8 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		snapshotMetrics: snapshotMetrics,
 		replicationLag:  replicationLag,
 		stopSig:         shutdown.NewSignaller(),
+
+		iamAuthEnabled: iamAuthEnabled,
 	}
 
 	// Has stopped is how we notify that we're not connected. This will get reset at connection time.
@@ -276,7 +358,7 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 	return conf.WrapBatchInputExtractTracingSpanMapping("postgres_cdc", r)
 }
 
-// validateSimpleString ensures we aren't vuln to SQL injection
+// validateSimpleString ensures we aren't vuln to SQL injection.
 func validateSimpleString(s string) error {
 	for _, b := range []byte(s) {
 		isDigit := b >= '0' && b <= '9'
@@ -307,9 +389,19 @@ type pgStreamInput struct {
 	snapshotMetrics *service.MetricGauge
 	replicationLag  *service.MetricGauge
 	stopSig         *shutdown.Signaller
+
+	// IAM authentication fields
+	iamAuthEnabled bool
 }
 
 func (p *pgStreamInput) Connect(ctx context.Context) error {
+	// If IAM authentication is enabled, generate a new token
+	if p.iamAuthEnabled && p.streamConfig.RefreshAuthToken != nil {
+		if err := p.streamConfig.RefreshAuthToken(ctx); err != nil {
+			return fmt.Errorf("unable to generate IAM auth token: %w", err)
+		}
+	}
+
 	pgStream, err := pglogicalstream.NewPgStream(ctx, p.streamConfig)
 	if err != nil {
 		return fmt.Errorf("unable to create replication stream: %w", err)
@@ -383,6 +475,9 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 				batchMsg.MetaSet("operation", string(msg.Operation))
 				if msg.LSN != nil {
 					batchMsg.MetaSet("lsn", *msg.LSN)
+				}
+				if msg.ColumnSchema != nil {
+					batchMsg.MetaSetImmut("schema", service.ImmutableAny{V: msg.ColumnSchema})
 				}
 				if batcher.Add(batchMsg) {
 					flush = true

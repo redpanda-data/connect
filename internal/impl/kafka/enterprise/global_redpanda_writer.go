@@ -24,10 +24,6 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
-// SharedGlobalRedpandaClientKey points to a generic resource for obtaining the
-// global redpanda handle.
-const SharedGlobalRedpandaClientKey = "__redpanda_global"
-
 const (
 	grwFieldPipelineID  = "pipeline_id"
 	grwFieldLogsTopic   = "logs_topic"
@@ -136,8 +132,16 @@ func (l *GlobalRedpandaManager) InitWithCustomDetails(pipelineID, logsTopic, sta
 	}
 
 	// TODO: Enterprise check here?
+	resBuilder := service.NewResourceBuilder()
+	if l.fallbackLogger != nil {
+		resBuilder.SetBenthosLogger(l.fallbackLogger)
+	}
+	res, _, err := resBuilder.Build()
+	if err != nil {
+		return err
+	}
+	res = res.IntoPath("redpanda")
 
-	res := service.MockResources(service.MockResourcesOptUseLogger(l.fallbackLogger))
 	tmpO, err := wrapWriter(res, w)
 	if err != nil {
 		l.fallbackLogger.With("error", err.Error()).Warn("failed to initialise topic logs connection")
@@ -145,7 +149,7 @@ func (l *GlobalRedpandaManager) InitWithCustomDetails(pipelineID, logsTopic, sta
 	}
 
 	l.oCustom = tmpO
-	l.topicLogger.InitWithOutput(pipelineID, logsTopic, defaultLevel, l.oCustom)
+	l.topicLogger.InitWithOutput(pipelineID, logsTopic, &defaultLevel, l.oCustom)
 	l.statusEmitter.InitWithOutput(pipelineID, statusTopic, l.fallbackLogger, l.oCustom)
 
 	return nil
@@ -177,16 +181,21 @@ func (l *GlobalRedpandaManager) InitFromParsedConfig(pConf *service.ParsedConfig
 		return err
 	}
 
-	var logsLevel slog.Level
+	levelPtr := func(level slog.Level) *slog.Level {
+		return &level
+	}
+	var logsLevel *slog.Level
 	switch strings.ToLower(logsLevelStr) {
-	case "debug":
-		logsLevel = slog.LevelDebug
+	case "debug", "trace", "all":
+		logsLevel = levelPtr(slog.LevelDebug)
 	case "info":
-		logsLevel = slog.LevelInfo
+		logsLevel = levelPtr(slog.LevelInfo)
 	case "warn":
-		logsLevel = slog.LevelWarn
-	case "error":
-		logsLevel = slog.LevelError
+		logsLevel = levelPtr(slog.LevelWarn)
+	case "error", "fatal":
+		logsLevel = levelPtr(slog.LevelError)
+	case "off", "none":
+		// Logging disabled
 	default:
 		return fmt.Errorf("log level not recognized: %v", logsLevelStr)
 	}
@@ -201,7 +210,16 @@ func (l *GlobalRedpandaManager) InitFromParsedConfig(pConf *service.ParsedConfig
 		}
 	}
 
-	res := service.MockResources(service.MockResourcesOptUseLogger(l.fallbackLogger))
+	resBuilder := service.NewResourceBuilder()
+	if l.fallbackLogger != nil {
+		resBuilder.SetBenthosLogger(l.fallbackLogger)
+	}
+	res, _, err := resBuilder.Build()
+	if err != nil {
+		return err
+	}
+	res = res.IntoPath("redpanda")
+
 	tmpO, err := wrapWriter(res, w)
 	if err != nil {
 		l.fallbackLogger.With("error", err.Error()).Warn("failed to initialise topic logs connection")
@@ -245,6 +263,14 @@ func wrapWriter(res *service.Resources, w service.BatchOutput) (*service.OwnedOu
 	}
 
 	return tmpO, nil
+}
+
+// ConnectionTest attempts to test the global connectivity to Redpanda.
+func (l *GlobalRedpandaManager) ConnectionTest(ctx context.Context) service.ConnectionTestResults {
+	if l.o == nil && l.oCustom == nil {
+		return service.ConnectionTestNotSupported().AsList()
+	}
+	return l.o.ConnectionTest(ctx)
 }
 
 // Close the underlying connections of this manager.
@@ -334,6 +360,20 @@ func newTopicLoggerWriterFromConfig(conf *service.ParsedConfig, log *service.Log
 
 //------------------------------------------------------------------------------
 
+func (f *franzTopicLoggerWriter) ConnectionTest(ctx context.Context) service.ConnectionTestResults {
+	cl, err := kafka.NewFranzClient(ctx, f.clientOpts...)
+	if err != nil {
+		return service.ConnectionTestFailed(err).AsList()
+	}
+	defer cl.Close()
+
+	if err := cl.Ping(ctx); err != nil {
+		return service.ConnectionTestFailed(err).AsList()
+	}
+
+	return service.ConnectionTestSucceeded().AsList()
+}
+
 func (f *franzTopicLoggerWriter) Connect(ctx context.Context) error {
 	if f.client != nil {
 		return nil
@@ -345,11 +385,11 @@ func (f *franzTopicLoggerWriter) Connect(ctx context.Context) error {
 	}
 
 	if f.mgr != nil {
-		if err := kafka.FranzSharedClientSet(SharedGlobalRedpandaClientKey, &kafka.FranzSharedClientInfo{
+		if err := kafka.FranzSharedClientSet(kafka.SharedGlobalRedpandaClientKey, &kafka.FranzSharedClientInfo{
 			Client:      cl,
 			ConnDetails: f.connDetails,
 		}, f.mgr); err != nil {
-			return fmt.Errorf("failed to store global redpanda client: %w", err)
+			return fmt.Errorf("storing global redpanda client: %w", err)
 		}
 	}
 
@@ -393,7 +433,7 @@ func (f *franzTopicLoggerWriter) disconnect() {
 		return
 	}
 	if f.mgr != nil {
-		_, _ = kafka.FranzSharedClientPop(SharedGlobalRedpandaClientKey, f.mgr)
+		_, _ = kafka.FranzSharedClientPop(kafka.SharedGlobalRedpandaClientKey, f.mgr)
 	}
 	f.client.Close()
 	f.client = nil

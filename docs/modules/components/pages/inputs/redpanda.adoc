@@ -37,9 +37,10 @@ Common::
 input:
   label: ""
   redpanda:
-    seed_brokers: [] # No default (required)
-    topics: [] # No default (required)
-    regexp_topics: false
+    seed_brokers: [] # No default (optional)
+    topics: [] # No default (optional)
+    regexp_topics_include: [] # No default (optional)
+    regexp_topics_exclude: [] # No default (optional)
     transaction_isolation_level: read_uncommitted
     consumer_group: "" # No default (optional)
     auto_replay_nacks: true
@@ -55,8 +56,8 @@ Advanced::
 input:
   label: ""
   redpanda:
-    seed_brokers: [] # No default (required)
-    client_id: benthos
+    seed_brokers: [] # No default (optional)
+    client_id: redpanda-connect
     tls:
       enabled: false
       skip_cert_verify: false
@@ -65,11 +66,19 @@ input:
       root_cas_file: ""
       client_certs: []
     sasl: [] # No default (optional)
-    metadata_max_age: 5m
+    metadata_max_age: 1m
     request_timeout_overhead: 10s
     conn_idle_timeout: 20s
-    topics: [] # No default (required)
-    regexp_topics: false
+    tcp:
+      connect_timeout: 0s
+      keep_alive:
+        idle: 15s
+        interval: 15s
+        count: 9
+      tcp_user_timeout: 0s
+    topics: [] # No default (optional)
+    regexp_topics_include: [] # No default (optional)
+    regexp_topics_exclude: [] # No default (optional)
     rack_id: ""
     instance_id: ""
     rebalance_timeout: 45s
@@ -86,6 +95,15 @@ input:
     partition_buffer_bytes: 1MB
     topic_lag_refresh_period: 5s
     max_yield_batch_bytes: 32KB
+    unordered_processing:
+      enabled: false
+      checkpoint_limit: 1024
+      batching:
+        count: 0
+        byte_size: 0
+        period: ""
+        check: ""
+        processors: [] # No default (optional)
     auto_replay_nacks: true
     timely_nacks_maximum_wait: "" # No default (optional)
 ```
@@ -97,7 +115,7 @@ When a consumer group is specified this input consumes one or more topics where 
 
 == Delivery Guarantees
 
-When using consumer groups the offsets of "delivered" records will be committed automatically and continuously, and in the event of restarts these committed offsets will be used in order to resume from where the input left off. Redpanda Connect guarantees at least once delivery by ensuring that records are only considerd to be delivered when all configured outputs that the record is routed to have confirmed delivery.
+When using consumer groups the offsets of "delivered" records will be committed automatically and continuously, and in the event of restarts these committed offsets will be used in order to resume from where the input left off. Redpanda Connect guarantees at least once delivery by ensuring that records are only considered to be delivered when all configured outputs that the record is routed to have confirmed delivery.
 
 == Ordering
 
@@ -124,7 +142,7 @@ output:
 
 == Batching
 
-Records are processed and delivered from each partition in batches as received from brokers. These batch sizes are therefore dynamically sized in order to optimise throughput, but can be tuned with the config fields `fetch_max_partition_bytes` and `fetch_max_bytes`. Batches can be further broken down using the xref:components:processors/split.adoc[`split`] processor.
+Records are processed and delivered from each partition in batches as received from brokers. These batch sizes are therefore dynamically sized in order to optimise throughput, but can be tuned with the config field `max_yield_batch_bytes`, or `unordered_processing.batching` when unordered processing is enabled. Batches can be further broken down using the xref:components:processors/split.adoc[`split`] processor.
 
 == Metrics
 
@@ -151,7 +169,7 @@ This input adds the following metadata fields to each message:
 
 === `seed_brokers`
 
-A list of broker addresses to connect to in order to establish connections. If an item of the list contains commas it will be expanded into multiple addresses.
+A list of broker addresses to connect to in order to establish connections. If an item of the list contains commas it will be expanded into multiple addresses. When this field is omitted the global `redpanda` block will be referenced for connection details.
 
 
 *Type*: `array`
@@ -178,7 +196,7 @@ An identifier for the client connection.
 
 *Type*: `string`
 
-*Default*: `"benthos"`
+*Default*: `"redpanda-connect"`
 
 === `tls`
 
@@ -374,6 +392,8 @@ The SASL mechanism to use.
 | OAuth Bearer based authentication.
 | `PLAIN`
 | Plain text authentication.
+| `REDPANDA_CLOUD_SERVICE_ACCOUNT`
+| Redpanda Cloud Service Account authentication when running in Redpanda Cloud.
 | `SCRAM-SHA-256`
 | SCRAM based authentication as specified in RFC5802.
 | `SCRAM-SHA-512`
@@ -446,6 +466,67 @@ Allows you to specify a custom endpoint for the AWS API.
 
 *Type*: `string`
 
+
+=== `sasl[].aws.tcp`
+
+TCP socket configuration.
+
+
+*Type*: `object`
+
+
+=== `sasl[].aws.tcp.connect_timeout`
+
+Maximum amount of time a dial will wait for a connect to complete. Zero disables.
+
+
+*Type*: `string`
+
+*Default*: `"0s"`
+
+=== `sasl[].aws.tcp.keep_alive`
+
+TCP keep-alive probe configuration.
+
+
+*Type*: `object`
+
+
+=== `sasl[].aws.tcp.keep_alive.idle`
+
+Duration the connection must be idle before sending the first keep-alive probe. Zero defaults to 15s. Negative values disable keep-alive probes.
+
+
+*Type*: `string`
+
+*Default*: `"15s"`
+
+=== `sasl[].aws.tcp.keep_alive.interval`
+
+Duration between keep-alive probes. Zero defaults to 15s.
+
+
+*Type*: `string`
+
+*Default*: `"15s"`
+
+=== `sasl[].aws.tcp.keep_alive.count`
+
+Maximum unanswered keep-alive probes before dropping the connection. Zero defaults to 9.
+
+
+*Type*: `int`
+
+*Default*: `9`
+
+=== `sasl[].aws.tcp.tcp_user_timeout`
+
+Maximum time to wait for acknowledgment of transmitted data before killing the connection. Linux-only (kernel 2.6.37+), ignored on other platforms. When enabled, keep_alive.idle must be greater than this value per RFC 5482. Zero disables.
+
+
+*Type*: `string`
+
+*Default*: `"0s"`
 
 === `sasl[].aws.credentials`
 
@@ -524,7 +605,7 @@ The maximum age of metadata before it is refreshed. This interval also controls 
 
 *Type*: `string`
 
-*Default*: `"5m"`
+*Default*: `"1m"`
 
 === `request_timeout_overhead`
 
@@ -543,6 +624,67 @@ The rough amount of time to allow connections to idle before they are closed.
 *Type*: `string`
 
 *Default*: `"20s"`
+
+=== `tcp`
+
+TCP socket configuration.
+
+
+*Type*: `object`
+
+
+=== `tcp.connect_timeout`
+
+Maximum amount of time a dial will wait for a connect to complete. Zero disables.
+
+
+*Type*: `string`
+
+*Default*: `"0s"`
+
+=== `tcp.keep_alive`
+
+TCP keep-alive probe configuration.
+
+
+*Type*: `object`
+
+
+=== `tcp.keep_alive.idle`
+
+Duration the connection must be idle before sending the first keep-alive probe. Zero defaults to 15s. Negative values disable keep-alive probes.
+
+
+*Type*: `string`
+
+*Default*: `"15s"`
+
+=== `tcp.keep_alive.interval`
+
+Duration between keep-alive probes. Zero defaults to 15s.
+
+
+*Type*: `string`
+
+*Default*: `"15s"`
+
+=== `tcp.keep_alive.count`
+
+Maximum unanswered keep-alive probes before dropping the connection. Zero defaults to 9.
+
+
+*Type*: `int`
+
+*Default*: `9`
+
+=== `tcp.tcp_user_timeout`
+
+Maximum time to wait for acknowledgment of transmitted data before killing the connection. Linux-only (kernel 2.6.37+), ignored on other platforms. When enabled, keep_alive.idle must be greater than this value per RFC 5482. Zero disables.
+
+
+*Type*: `string`
+
+*Default*: `"0s"`
 
 === `topics`
 
@@ -581,14 +723,32 @@ topics:
   - foo:0-5
 ```
 
-=== `regexp_topics`
+=== `regexp_topics_include`
 
-Whether listed topics should be interpreted as regular expression patterns for matching multiple topics. When enabled, the client will periodically refresh the list of matching topics based on the `metadata_max_age` interval. When topics are specified with explicit partitions this field must remain set to `false`.
+A list of regular expression patterns for matching topics to consume from. When specified, the client will periodically refresh the list of matching topics based on the `metadata_max_age` interval. This enables regex mode and cannot be used together with the `topics` field. Use `regexp_topics_exclude` to exclude specific patterns.
 
 
-*Type*: `bool`
+*Type*: `array`
 
-*Default*: `false`
+
+```yml
+# Examples
+
+regexp_topics_include:
+  - logs_.*
+  - metrics_.*
+
+regexp_topics_include:
+  - events_[0-9]+
+```
+
+=== `regexp_topics_exclude`
+
+A list of regular expression patterns for excluding topics when regex mode is enabled (via `regexp_topics` or `regexp_topics_include`). Topics matching any of these patterns will be excluded from consumption, even if they match include patterns.
+
+
+*Type*: `array`
+
 
 === `rack_id`
 
@@ -619,7 +779,7 @@ When using a consumer group, `rebalance_timeout` sets how long group members are
 
 === `session_timeout`
 
-When using a consumer group, `session_timeout` sets how long a member in hte group can go between heartbeats. If a member does not heartbeat in this timeout, the broker will remove the member from the group and initiate a rebalance.
+When using a consumer group, `session_timeout` sets how long a member in the group can go between heartbeats. If a member does not heartbeat in this timeout, the broker will remove the member from the group and initiate a rebalance.
 
 
 *Type*: `string`
@@ -628,7 +788,7 @@ When using a consumer group, `session_timeout` sets how long a member in hte gro
 
 === `heartbeat_interval`
 
-When using a consumer group, `heartbeat_interval` sets how long a group member goes between heartbeats to Kafka. Kafka uses heartbeats to ensure that a group member's sesion stays active. This value should be no higher than 1/3rd of the `session_timeout`. This is equivalent to the Java heartbeat.interval.ms setting.
+When using a consumer group, `heartbeat_interval` sets how long a group member goes between heartbeats to Kafka. Kafka uses heartbeats to ensure that a group member's session stays active. This value should be no higher than 1/3rd of the `session_timeout`. This is equivalent to the Java heartbeat.interval.ms setting.
 
 
 *Type*: `string`
@@ -748,12 +908,140 @@ The period of time between each topic lag refresh cycle.
 
 === `max_yield_batch_bytes`
 
-The maximum size (in bytes) for each batch yielded by this input. When routed to a redpanda output without modification this would roughly translate to the batch.bytes config field of a traditional producer.
+The maximum size (in bytes) for each batch yielded by this input. This value must be less than or equal to the `partition_buffer_bytes`. If using Redpanda output, this value should not be greater than the `max_message_bytes` option value (1MB by default), and for high-throughput scenarios they should be equal.
 
 
 *Type*: `string`
 
 *Default*: `"32KB"`
+
+=== `unordered_processing`
+
+Configures partition consumers to allow parallel and therefore unordered processing of messages of any given partition. This allows for better utilization of processing threads and asynchronous publishing at the output level. The maximum parallelization of each partition is determined by the checkpoint_limit field.
+
+
+*Type*: `object`
+
+
+=== `unordered_processing.enabled`
+
+Whether to enable the unordered processing of messages from a given partition.
+
+
+*Type*: `bool`
+
+*Default*: `false`
+
+=== `unordered_processing.checkpoint_limit`
+
+Determines how many messages of the same partition can be processed in parallel before applying back pressure. When a message of a given offset is delivered to the output the offset is only allowed to be committed when all messages of prior offsets have also been delivered, this ensures at-least-once delivery guarantees. However, this mechanism also increases the likelihood of duplicates in the event of crashes or server faults, reducing the checkpoint limit will mitigate this.
+
+
+*Type*: `int`
+
+*Default*: `1024`
+
+=== `unordered_processing.batching`
+
+Allows you to configure a xref:configuration:batching.adoc[batching policy] that applies to individual topic partitions in order to batch messages together before flushing them for processing. Batching can be beneficial for performance as well as useful for windowed processing, and doing so this way preserves the ordering of topic partitions.
+
+
+*Type*: `object`
+
+
+```yml
+# Examples
+
+batching:
+  byte_size: 5000
+  count: 0
+  period: 1s
+
+batching:
+  count: 10
+  period: 1s
+
+batching:
+  check: this.contains("END BATCH")
+  count: 0
+  period: 1m
+```
+
+=== `unordered_processing.batching.count`
+
+A number of messages at which the batch should be flushed. If `0` disables count based batching.
+
+
+*Type*: `int`
+
+*Default*: `0`
+
+=== `unordered_processing.batching.byte_size`
+
+An amount of bytes at which the batch should be flushed. If `0` disables size based batching.
+
+
+*Type*: `int`
+
+*Default*: `0`
+
+=== `unordered_processing.batching.period`
+
+A period in which an incomplete batch should be flushed regardless of its size.
+
+
+*Type*: `string`
+
+*Default*: `""`
+
+```yml
+# Examples
+
+period: 1s
+
+period: 1m
+
+period: 500ms
+```
+
+=== `unordered_processing.batching.check`
+
+A xref:guides:bloblang/about.adoc[Bloblang query] that should return a boolean value indicating whether a message should end a batch.
+
+
+*Type*: `string`
+
+*Default*: `""`
+
+```yml
+# Examples
+
+check: this.type == "end_of_transaction"
+```
+
+=== `unordered_processing.batching.processors`
+
+A list of xref:components:processors/about.adoc[processors] to apply to a batch as it is flushed. This allows you to aggregate and archive the batch however you see fit. Please note that all resulting messages are flushed as a single batch, therefore splitting the batch into smaller batches using these processors is a no-op.
+
+
+*Type*: `array`
+
+
+```yml
+# Examples
+
+processors:
+  - archive:
+      format: concatenate
+
+processors:
+  - archive:
+      format: lines
+
+processors:
+  - archive:
+      format: json_array
+```
 
 === `auto_replay_nacks`
 

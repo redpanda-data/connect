@@ -3,6 +3,277 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.83.0 - 2026-03-13
+
+### Added
+
+- mongodb_cdc: Input now adds `schema` metadata to consumed messages. Schema is extracted from the collection's `$jsonSchema` validator when available, otherwise inferred from document structure. This can be used for automatic schema conversion in processors such as `parquet_encode`. (@Jeffail)
+- oracledb_cdc: Adds support for CDC via LogMiner (@josephwoodward)
+- benthos: Add NewMessageWithContext to service package for constructing messages with an associated context. (@prakhargarg105)
+- redpanda(migrator): refcount-based IMPORT mode management for serverless SR (@mmatczuk)
+- Go API: Added composable HTTP client with layered RoundTripper chain (@mmatczuk)
+
+### Changed
+
+- microsoft_sql_server_cdc: The `schema` metadata field (containing the SQL schema name of the source table) has been renamed to `database_schema`. The `common_schema` metadata field (containing the benthos common schema) has been renamed to `schema` for consistency with the `mysql_cdc` and `postgres_cdc` inputs. (@Jeffail)
+
+### Fixed
+
+- mysql_cdc: replace deprecated 'SHOW MASTER STATUS' for 8.4+ (@josephwoodward)
+- postgresql_cdc: fix issue with hang due to chunksize being 0 (@josephwoodward)
+
+## 4.82.0 - 2026-03-05
+
+### Added
+
+- redis: Add configuration option to set client name for `redis` connections. (@nhaberla)
+- benthos: The `command` processor now emits the `exit_code` metadata field. (@mihaitodor)
+- schema_registry_encode: Add metadata-driven schema registration mode. When `schema_metadata` is set, the processor reads a common schema from message metadata, converts it to Avro or JSON Schema, registers it with the schema registry, and encodes the message. This enables CDC inputs to automatically register schemas without pre-registration. The top-level `avro_raw_json` field is deprecated in favor of a new `avro` config block.
+- postgres_cdc: Input now adds schema metadata to consumed messages, this can be used for automatic schema conversion in processors such as `schema_registry_encode`. (@Jeffail)
+- iceberg: New output, allows writing Iceberg data to REST catalogs in s3, gcs and adls. (@rockwotj)
+- microsoft_sql_server_cdc: Input now adds schema metadata to consumed messages, this can be used for automatic schema conversion in processors such as `schema_registry_encode`. (@Jeffail)
+- otlp: Add oauth2 support and service account fallback to schemaregistry (@mmatczuk)
+
+### Changed
+
+- `snowflake_streaming` output: the commit polling backoff is now configurable via the `commit_backoff` object. The `commit_timeout` field is deprecated in favour of `commit_backoff.max_elapsed_time`.
+- `tigerbeetle_cdc` input: adds the `timeout_seconds` configuration and triggers
+   [monitoring](https://docs.redpanda.com/redpanda-connect/guides/monitoring/) in case
+   of lost connectivity with the TigerBeetle cluster. (@batiati)
+
+### Fixed
+
+- `test` command: Templates registered via the `-t` flag are now correctly available during test execution. (@Phantal)
+- benthos: Fixed a regression where input and output resources imported but unused were being initialized. (@Jeffail)
+- redpanda/migrator: fix key scoping to prevent label collision (@mmatczuk)
+- postgres_cdc: Fixed issue where snapshot chunksize can be 0 (@josephwoodward)
+
+
+## 4.81.0 - 2026-02-18
+
+### Added
+
+- The `mysql_cdc` input now adds schema metadata to consumed messages, this can be used for automatic schema conversion in processors such as `schema_registry_encode`. (@Jeffail)
+- (Benthos) Bloblang method `split` now supports converting empty substrings to `null` directly. (@rockwotj)
+- Go API: New `DiscoverAndRegisterPlugins` mechanism added to the `public/plugins/go/rpcnloader` package. (@prakhargarg105)
+
+## 4.80.1 - 2026-02-05
+
+### Changed
+
+- chroot: existing directories are now allowed. (@birdayz)
+
+## 4.80.0 - 2026-02-04
+
+### Added
+
+- otlp_grpc: add authorization support with JWT validation. (@mmatczuk)
+- redpanda/migrator: add `max_parallel_http_requests` field for concurrent schema migration. (@mmatczuk)
+- redpanda/migrator: implement DFS traversal for schema dependencies. (@mmatczuk)
+- redpanda/migrator: stream schemas instead of loading all into memory. (@mmatczuk)
+- redpanda/migrator: add progress logs to schema migration worker. (@mmatczuk)
+
+### Fixed
+
+- protobuf: remove hyperpb to fix memory leak. (@rockwotj)
+
+## 4.79.0 - 2026-01-30
+
+### Added
+
+- redis_pubsub: `redis_pubsub_channel` and `redis_pubsub_pattern` metadata fields added to input component. (@g-hurst)
+- snowflake_streaming: new `message_format` and `timestamp_format` advanced properties introduced. (@rockwotj)
+- New `dry-run` subcommand for testing the connections of provided configs. (@Jeffail)
+
+### Fixed
+
+- Setting the logging level to `TRACE`, `ALL`, `OFF` and `NONE` no longer emits an error. (@mihaitodor)
+
+## 4.78.0 - 2026-01-16
+
+### Added
+
+- add more ConnectionTest implementations (@Jeffail)
+- otel: add input and output components for OpenTelemetry OTEL protocol (@mmatczuk)
+- license: add support for Redpanda v1 licenses (@Jeffail)
+- aws: add `nack_visibility_timeout` field to `sqs` input (@squiidz)
+
+### Fixed
+
+- mcp: fix parsing of tool names for metrics (@alenkacz)
+- mcp: update permission names (@rockwotj)
+- (Benthos) http_server: Use `SO_REUSEADDR` to avoid being blocked by `TIME_WAIT` upon connector restart. (@vuldin)
+
+## 4.77.0 - 2026-01-06
+
+### Fixed
+
+- elasticsearch_v8: fix Debugf template to respect each argument types (@peczenyj)
+
+### Added
+
+- elasticsearch_v9: Add support for Elasticsearch v9 (@peczenyj)
+
+## 4.76.1 - 2025-12-22
+
+### Fixed
+
+- metrics: Fixed regression with license expiration metric (@birdayz)
+
+## 4.76.0 - 2025-12-18
+
+### Fixed
+
+- cgo builds now include FFI and zmq components (@rockwotj)
+- microsoft_sql_server_cdc: Make character encoding between snapshot and streaming consistent (@josephwoodward)
+
+### Added
+
+- metrics: Added support for global metric tags in statsd (@danspark)
+- metrics: Added license expiration metric (@mmatczuk)
+- redpanda/migrator: Automatically manage subject import mode in serverless (@mmatczuk)
+
+## 4.75.1 - 2025-12-16
+
+### Fixed
+
+- mysql_cdc: Fixed a regression where tls params are passed to mysql client when set via dns (@josephwoodward)
+
+## 4.75.0 - 2025-12-15
+
+### Added
+
+- Field `batching` added to the `redpanda` output. (@Jeffail)
+
+### Fixed
+
+- Fixed a regression in MCP servers to properly propagate traceparent headers in requests. (@rockwotj)
+
+## 4.74.0 - 2025-12-15
+
+### Added
+
+- redpanda/tracer: add oauth2 support for schema registry (@rockwotj)
+
+### Fixed
+
+- microsoft_sql_server_cdc: Fix tuple comparison when using composite keys (@josephwoodward)
+
+## 4.73.0 - 2025-12-12
+
+### Added
+
+- The `mcp-server` command exposes MCP metrics.
+- Couchbase: Add TTL (expiry) support. @sapk
+- CLI: Add support for listing bloblang functions and methods with jsonschema. (@mmatczuk)
+- CLI: Add input field to `blobl` command. (@mmatczuk)
+- socket_server: Add new listener options. (@alextreichler)
+
+### Fixed
+
+- The `mcp-server lint` subcommand now exits with status 1 when linting errors are detected.
+- CLI: Fix data race in `blobl` command where program exits before printing output. (@mmatczuk)
+- sequence: Fix input hanging when input fails. (@eduardodbr)
+
+## 4.72.0 - 2025-11-28
+
+### Added
+
+- Added Redpanda Cloud service account authentication to all redpanda/kafka based components (@rockwotj)
+- `mysql_cdc`: Support for chained or unchained IAM authentication (@josephwoodward)
+- `postgresql_cdc`: Support for chained IAM authentication (@josephwoodward)
+- `redpanda_migrator`: Add client timeout config for schema registry client (@josephwoodward)
+
+### Fixed
+
+- `schema_registry_decode`: Fix serde protobuf race condition in processor (@rockwotj)
+
+## 4.71.0 - 2025-11-21
+
+### Added
+
+- Introduce a new `redpanda` tracing component that sends spans directly to a Redpanda Broker topic (@rockwotj)
+- `sql_select`, `sql_raw`, `sql_insert`: Support `databricks` driver for all SQL components (@rohan-darji)
+- `postgres_cdc`: Added support for IAM authenticated users (@josephwoodward)
+- `redpanda_migrator`: Added `max_in_flight` config parameter (@mmatczuk)
+
+### Fixed
+
+- `redpanda_migrator`: Exact migration of empty consumer groups (@mmatczuk)
+- `redpanda_migrator`: Fix record reading in consumer group migraton for some multi-node setups (@mmatczuk)
+- `protobuf_processor`: Fix decode Hyperpb fallback (@jeffail)
+
+## 4.70.0 - 2025-11-13
+
+### Added
+
+- (PostgreSQL CDC) Support inlining SSL certificates in config (@alextreichler)
+- (AMQP Output) Added support for additional fields (@timo102)
+
+## 4.69.0 - 2025-11-07
+
+### Added
+
+- (Benthos) New `string.repeat(int)` method to repeat a string or byte array N times. (@rockwotj)
+- (Benthos) New `bytes` method to create a 0 initialized byte array. (@rockwotj)
+- Added `regexp_topics_include` and `regexp_topics_exclude` fields to `redpanda`, `redpanda_migrator`, `ockam` inputs. (@mmatczuk)
+- New `ffi` processor in CGO builds. (@rockwotj)
+- Add `tcp` connection options to `redpanda`, `redpanda_migrator` inputs and outputs as well as all AWS components. (@mmatczuk, @alextreichler)
+
+### Deprecated
+
+- The `regexp_topics` boolean field is now deprecated in favor of `regexp_topics_include`. (@mmatczuk)
+
+### Changed
+
+- `redpanda_migrator` output now supports two-way syncing using provenance headers (@mmatczuk)
+- `schema_registry_encode` gains a new `protobuf.serialize_to_json` option that is by default true. If disabled, then messages are decoded into a structured format which preserves types better and is faster. (@rockwotj)
+- Add `decode` option to field `operator` in `protobuf` processor that decodes messages into a structured format (as opposed to serializing to JSON) that preserves types better and is faster. (@rockwotj)
+- `redpanda_migrator` output `schema_registry.interval` default value changed to `5m` enabling continuous schema migration by default. (@mmatczuk)
+- The `redpanda` and `redpanda_migrator` input and output `metadata_max_age` default value changed to `1m`. (@mmatczuk)
+
+## 4.68.0 - 2025-10-24
+
+### Added
+
+- New `a2a_message` processor. (@birdayz)
+- New `jira` processor. (@zoltancsontosness, @atudose-ness)
+- (Benthos) Exporting a schema with the format `jsonschema` now includes `is_advanced`, `is_deprecated`, `is_optional`, `is_secret` extra fields. (@tomasz-sadura)
+- (MS SQL Server CDC) Now supports processing snapshots in parallel via the `max_parallel_snapshot_tables` configuration. (@josephwoodward)
+
+### Changed
+
+- The `kafka`, `kafka_franz` and `redpanda_common` inputs and outputs are now deprecated as their respective functionality has been rolled into the `redpanda` input and output. (@Jeffail)
+
+## 4.67.0 - 2025-10-13
+
+### Changed
+
+- Unified migrator: Introduced a single `redpanda_migrator` input/output pair replacing legacy `redpanda_migrator_bundle`, `redpanda_migrator_offsets`, and the standalone `schema_registry` output; pair components by matching `label`; all migration logic is centralised in the output. (@mmatczuk)
+- (MS SQL Server CDC): Updated to use data source SQL Server as default checkpoint cache if none is configured. (@josephwoodward)
+
+### Fixed
+
+- (MongoDB CDC) Fixed an issue with connecting to sharded databases. (@rockwotj)
+
+## 4.66.0 - 2025-10-03
+
+### Added
+
+- New `cyborgdb` output. (@ahellegit)
+
+### Fixed
+
+- Fixed an issue where MCP output tools would yield invalid JSON Schema properties. (@Jeffail)
+- The `test` subcommand no longer ignores environment variables. (@Nimon77)
+
+## 4.65.0 - 2025-09-23
+
+### Added
+
+- New `tigerbeetle_cdc` input. NOTE: This component will only be present in `cgo` builds. (@batiati)
+- (Benthos) New `json_array` scanner. (@Jeffail)
+
 ## 4.64.0 - 2025-09-19
 
 ### Added
@@ -49,7 +320,7 @@ All notable changes to this project will be documented in this file.
 - (Benthos) New Bloblang method `infer_schema`. (@Jeffail)
 - Custom s3 endpoints support in `snowflake_streaming` output. (@josephwoodward)
 - Experimental field `timely_nacks_maximum_wait` added to all kafka protocol inputs. (@Jeffail)
-- Added `subject_compatibility_level` to the `schema_registry` output. (@mmatczuk) 
+- Added `subject_compatibility_level` to the `schema_registry` output. (@mmatczuk)
 
 ### Fixed
 
@@ -213,7 +484,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
-- The way in which custom parameters for the experimental `mcp-server` subcommand are defined have changed. When defined they will now yield a JSON message to tool processors and outputs instead of complementary metadata keys, and there is no longer an implicit `value` field under these cirumstances. (@rockwotj)
+- The way in which custom parameters for the experimental `mcp-server` subcommand are defined have changed. When defined they will now yield a JSON message to tool processors and outputs instead of complementary metadata keys, and there is no longer an implicit `value` field under these circumstances. (@rockwotj)
 - The old deprecated `elasticsearch` output has been removed. This is not a change we would traditionally make without waiting for a major version increment. However, a dependency of the library used in this component is compromised and is now a significant security concern, which warrants the immediate removal. (@Jeffail)
 
 ## 4.54.1 - 2025-04-30
@@ -871,7 +1142,7 @@ All notable changes to this project will be documented in this file.
 
 - Bloblang error messages for bad function/method names or parameters should now be improved in mappings that use shorthand for `root = ...`.
 - All redis components now support usernames within the configured URL for authentication.
-- The `protobuf` processor now supports targetting nested types from proto files.
+- The `protobuf` processor now supports targeting nested types from proto files.
 - The `schema_registry_encode` and `schema_registry_decode` processors should no longer double escape URL unsafe characters within subjects when querying their latest versions.
 
 ## 4.23.0 - 2023-10-30
@@ -1488,7 +1759,7 @@ This is a major version release, for more information and guidance on how to mig
 - The `dedupe` processor now acts upon individual messages by default, and the `hash` field has been removed.
 - The `log` processor now executes for each individual message of a batch.
 - The `sleep` processor now executes for each individual message of a batch.
-- The `benthos test` subcommand no longer walks when targetting a directory, instead use triple-dot syntax (`./dir/...`) or wildcard patterns.
+- The `benthos test` subcommand no longer walks when targeting a directory, instead use triple-dot syntax (`./dir/...`) or wildcard patterns.
 - Go API: Module name has changed to `github.com/benthosdev/benthos/v4`.
 - Go API: All packages within the `lib` directory have been removed in favour of the newer [APIs within `public`](https://pkg.go.dev/github.com/benthosdev/benthos/v4/public).
 - Go API: Distributed tracing is now via the Open Telemetry client library.
@@ -1962,7 +2233,7 @@ This is a major version release, for more information and guidance on how to mig
 
 ### Changed
 
-- Go API: Component implementations now require explicit import from `./public/components/all` in order to be invokable. This should be done automatically at all plugin and custom build entry points. If, however, you notice that your builds have begun complaining that known components do not exist then you will need to explicitly import the package with `_ "github.com/Jeffail/benthos/v3/public/components/all"`, if this is the case then please report it as an issue so that it can be dealt with.
+- Go API: Component implementations now require explicit import from `./public/components/all` in order to be invocable. This should be done automatically at all plugin and custom build entry points. If, however, you notice that your builds have begun complaining that known components do not exist then you will need to explicitly import the package with `_ "github.com/Jeffail/benthos/v3/public/components/all"`, if this is the case then please report it as an issue so that it can be dealt with.
 
 ## 3.42.1 - 2021-03-26
 
@@ -2955,7 +3226,7 @@ This is a major version release, for more information and guidance on how to mig
 
 ### Added
 
-- Go API: A new service method `RunWithOpts` has been added in order to accomodate service customisations with opt funcs.
+- Go API: A new service method `RunWithOpts` has been added in order to accommodate service customisations with opt funcs.
 
 ## 2.8.1 - 2019-06-28
 

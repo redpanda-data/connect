@@ -1,0 +1,11 @@
+roles:
+  - id: mcp.user
+    permissions:
+      - dataplane_mcpserver_ping
+      - dataplane_mcpserver_tools_list
+      - dataplane_mcpserver_tools_call
+
+bindings:
+  - role: mcp.user
+    principal: User:test@example.com
+    scope: organization/test-org/resourcegroup/default/dataplane/mcp-server

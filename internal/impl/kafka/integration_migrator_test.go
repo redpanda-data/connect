@@ -36,10 +36,10 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
-	"github.com/redpanda-data/connect/v4/internal/impl/kafka/redpandatest"
+	"github.com/redpanda-data/connect/v4/internal/impl/redpanda/redpandatest"
 )
 
-func runRedpandaPairForMigrator(t *testing.T) (src, dst redpandatest.RedpandaEndpoints) {
+func runRedpandaPairForMigrator(t *testing.T) (src, dst redpandatest.Endpoints) {
 	pool, err := dockertest.NewPool("")
 	require.NoError(t, err)
 	pool.MaxWait = time.Minute
@@ -55,7 +55,7 @@ func runRedpandaPairForMigrator(t *testing.T) (src, dst redpandatest.RedpandaEnd
 	return src, dst
 }
 
-func runMigratorBundle(t *testing.T, src, dst redpandatest.RedpandaEndpoints, topic, topicPrefix string, suppressLogs bool, callback func(*service.Message)) {
+func runMigratorBundle(t *testing.T, src, dst redpandatest.Endpoints, topic, topicPrefix string, suppressLogs bool, callback func(*service.Message)) {
 	const migratorBundleTmpl = `
 input:
   redpanda_migrator_bundle:
@@ -113,8 +113,8 @@ output:
 	tmpl, err := template.New("migrator-bundle").Parse(migratorBundleTmpl)
 	require.NoError(t, err)
 	data := struct {
-		Src         redpandatest.RedpandaEndpoints
-		Dst         redpandatest.RedpandaEndpoints
+		Src         redpandatest.Endpoints
+		Dst         redpandatest.Endpoints
 		Topic       string
 		TopicPrefix string
 	}{
@@ -148,7 +148,9 @@ output:
 	// Run stream in the background and shut it down when the test is finished
 	done := make(chan struct{})
 	go func() {
-		require.NoError(t, stream.Run(t.Context()))
+		if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+			t.Error(err)
+		}
 		t.Log("Migrator pipeline shut down")
 		close(done)
 	}()
@@ -175,16 +177,16 @@ func (m *migratorPipeline) Cleanup(t *testing.T) {
 	t.Log("Migrator pipeline cleaned up")
 }
 
-func runOffsetsMigratorPipeline(t *testing.T, src, dst redpandatest.RedpandaEndpoints, topic string) *migratorPipeline {
+func runOffsetsMigratorPipeline(t *testing.T, src, dst redpandatest.Endpoints, topic string) *migratorPipeline {
 	yamlStr := fmt.Sprintf(`
 input:
-  redpanda_migrator_offsets:
+  legacy_redpanda_migrator_offsets:
     seed_brokers: [ %s ]
     topics: [ %s ]
     poll_interval: 2s
 
 output:
-  redpanda_migrator_offsets:
+  legacy_redpanda_migrator_offsets:
     seed_brokers: [ %s ]
 `, src.BrokerAddr, topic, dst.BrokerAddr)
 
@@ -814,7 +816,7 @@ func checkTopic(t *testing.T, brokerAddr, topic, retentionTime, principal string
 // produceMessages produces `count` messages to the given `topic` with the given `message` content. The
 // `timestampOffset` indicates an offset which gets added to the `counter()` Bloblang function which is used to generate
 // the message timestamps sequentially, the first one being `1 + timestampOffset`.
-func produceMessages(t *testing.T, rpe redpandatest.RedpandaEndpoints, topic, message string, timestampOffset, count int, encode bool, delay time.Duration) {
+func produceMessages(t *testing.T, rpe redpandatest.Endpoints, topic, message string, timestampOffset, count int, encode bool, delay time.Duration) {
 	streamBuilder := service.NewStreamBuilder()
 	config := ""
 	if encode {
@@ -867,7 +869,7 @@ output:
 // TODO: Since `read_until` can't guarantee that we will read `count` messages, `topic` needs to have exactly `count`
 // messages in it. We should add some mechanism to the Kafka inputs to allow us to read a range of offsets if possible
 // (or up to a certain offset).
-func readMessagesWithCG(t *testing.T, rpe redpandatest.RedpandaEndpoints, topic, consumerGroup, message string, count int, decode bool) {
+func readMessagesWithCG(t *testing.T, rpe redpandatest.Endpoints, topic, consumerGroup, message string, count int, decode bool) {
 	streamBuilder := service.NewStreamBuilder()
 	config := fmt.Sprintf(`
 input:

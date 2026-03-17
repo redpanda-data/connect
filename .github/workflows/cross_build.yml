@@ -10,8 +10,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        go-version: [oldstable, stable]
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest-32, macos-latest]
     runs-on: ${{ matrix.os }}
     permissions:
       contents: write
@@ -19,41 +18,17 @@ jobs:
       CGO_ENABLED: 0
     steps:
 
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
-    - name: Free up some disk space on ubuntu
-      if: ${{ runner.os == 'Linux' }}
-      run: |
-        # Workaround to provide additional free space for testing.
-        #   https://github.com/actions/virtual-environments/issues/2840
-        sudo rm -rf /usr/share/dotnet
-        sudo rm -rf /opt/ghc
-        sudo rm -rf "/usr/local/share/boost"
-        sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+      - name: Install Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: 'go.mod'
 
-    - name: Install Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: ${{ matrix.go-version }}
-
-    - name: Install Microsoft Go
-      if: ${{ runner.os == 'Linux' }}
-      run: |
-        GO_VERSION=go1.24 # $(go version | cut -d' ' -f3 | cut -d'.' -f1,2)
-        curl -sSLf -o "$RUNNER_TEMP/msgo.tgz" https://aka.ms/golang/release/latest/${GO_VERSION}.linux-amd64.tar.gz
-        [[ -d "$RUNNER_TEMP/bin" ]] || install -d -m 0755 "$RUNNER_TEMP/bin"
-        [[ -d "$RUNNER_TEMP/microsoft" ]] || install -d -m 0755 "$RUNNER_TEMP/microsoft"
-        tar -C "$RUNNER_TEMP/microsoft" -xf "$RUNNER_TEMP/msgo.tgz"
-        [[ -x "$RUNNER_TEMP/microsoft/go/bin/go" ]] && ln -s "$RUNNER_TEMP/microsoft/go/bin/go" "$RUNNER_TEMP/bin/microsoft-go"
-        echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
-
-    - name: Install patchelf
-      run: sudo apt-get update && sudo apt-get install -y patchelf
-
-    - name: GoReleaser
-      uses: goreleaser/goreleaser-action@v6
-      with:
-        args: release --snapshot --timeout 120m
+      - name: GoReleaser
+        uses: goreleaser/goreleaser-action@v7
+        with:
+          args: release --snapshot --timeout 120m --config ./.goreleaser/connect.yaml

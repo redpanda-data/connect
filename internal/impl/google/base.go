@@ -1,12 +1,10 @@
-/*
- * Copyright 2025 Redpanda Data, Inc.
- *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
- * License (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- *
- * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
- */
+// Copyright 2025 Redpanda Data, Inc.
+//
+// Licensed as a Redpanda Enterprise file under the Redpanda Community
+// License (the "License"); you may not use this file except in compliance with
+// the License. You may obtain a copy of the License at
+//
+// https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
 package google
 
@@ -104,7 +102,7 @@ func (g *baseProcessor[Service]) getDriveService(ctx context.Context) (*Service,
 	}
 	service, err = g.ctor(ctx, options...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create Drive service: %v", err)
+		return nil, fmt.Errorf("creating Drive service: %v", err)
 	}
 	g.service = service
 	return g.service, nil
@@ -118,7 +116,7 @@ func googleClientOptions(ctx context.Context, credentialsJSON string) (options [
 	if credentialsJSON == "" {
 		creds, err := google.FindDefaultCredentials(ctx, drive.DriveReadonlyScope)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create default google client: %v", err)
+			return nil, fmt.Errorf("creating default google client: %v", err)
 		}
 		options = append(options, option.WithTokenSource(creds.TokenSource))
 		if len(creds.JSON) > 0 {
@@ -133,7 +131,7 @@ func googleClientOptions(ctx context.Context, credentialsJSON string) (options [
 	} else {
 		jwtConfig, err := google.JWTConfigFromJSON([]byte(credentialsJSON), drive.DriveReadonlyScope)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse credentials: %v", err)
+			return nil, fmt.Errorf("parsing credentials: %v", err)
 		}
 		client := jwtConfig.Client(ctx)
 		options = append(options, option.WithHTTPClient(client))

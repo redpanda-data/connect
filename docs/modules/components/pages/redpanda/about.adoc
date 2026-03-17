@@ -42,7 +42,7 @@ Advanced::
 # All config fields, showing default values
 redpanda:
   seed_brokers: [] # No default (required)
-  client_id: benthos
+  client_id: redpanda-connect
   tls:
     enabled: false
     skip_cert_verify: false
@@ -51,9 +51,16 @@ redpanda:
     root_cas_file: ""
     client_certs: []
   sasl: [] # No default (optional)
-  metadata_max_age: 5m
+  metadata_max_age: 1m
   request_timeout_overhead: 10s
   conn_idle_timeout: 20s
+  tcp:
+    connect_timeout: 0s
+    keep_alive:
+      idle: 15s
+      interval: 15s
+      count: 9
+    tcp_user_timeout: 0s
   pipeline_id: ""
   logs_topic: ""
   logs_level: info
@@ -101,7 +108,7 @@ An identifier for the client connection.
 
 *Type*: `string`
 
-*Default*: `"benthos"`
+*Default*: `"redpanda-connect"`
 
 === `tls`
 
@@ -297,6 +304,8 @@ The SASL mechanism to use.
 | OAuth Bearer based authentication.
 | `PLAIN`
 | Plain text authentication.
+| `REDPANDA_CLOUD_SERVICE_ACCOUNT`
+| Redpanda Cloud Service Account authentication when running in Redpanda Cloud.
 | `SCRAM-SHA-256`
 | SCRAM based authentication as specified in RFC5802.
 | `SCRAM-SHA-512`
@@ -369,6 +378,67 @@ Allows you to specify a custom endpoint for the AWS API.
 
 *Type*: `string`
 
+
+=== `sasl[].aws.tcp`
+
+TCP socket configuration.
+
+
+*Type*: `object`
+
+
+=== `sasl[].aws.tcp.connect_timeout`
+
+Maximum amount of time a dial will wait for a connect to complete. Zero disables.
+
+
+*Type*: `string`
+
+*Default*: `"0s"`
+
+=== `sasl[].aws.tcp.keep_alive`
+
+TCP keep-alive probe configuration.
+
+
+*Type*: `object`
+
+
+=== `sasl[].aws.tcp.keep_alive.idle`
+
+Duration the connection must be idle before sending the first keep-alive probe. Zero defaults to 15s. Negative values disable keep-alive probes.
+
+
+*Type*: `string`
+
+*Default*: `"15s"`
+
+=== `sasl[].aws.tcp.keep_alive.interval`
+
+Duration between keep-alive probes. Zero defaults to 15s.
+
+
+*Type*: `string`
+
+*Default*: `"15s"`
+
+=== `sasl[].aws.tcp.keep_alive.count`
+
+Maximum unanswered keep-alive probes before dropping the connection. Zero defaults to 9.
+
+
+*Type*: `int`
+
+*Default*: `9`
+
+=== `sasl[].aws.tcp.tcp_user_timeout`
+
+Maximum time to wait for acknowledgment of transmitted data before killing the connection. Linux-only (kernel 2.6.37+), ignored on other platforms. When enabled, keep_alive.idle must be greater than this value per RFC 5482. Zero disables.
+
+
+*Type*: `string`
+
+*Default*: `"0s"`
 
 === `sasl[].aws.credentials`
 
@@ -447,7 +517,7 @@ The maximum age of metadata before it is refreshed. This interval also controls 
 
 *Type*: `string`
 
-*Default*: `"5m"`
+*Default*: `"1m"`
 
 === `request_timeout_overhead`
 
@@ -466,6 +536,67 @@ The rough amount of time to allow connections to idle before they are closed.
 *Type*: `string`
 
 *Default*: `"20s"`
+
+=== `tcp`
+
+TCP socket configuration.
+
+
+*Type*: `object`
+
+
+=== `tcp.connect_timeout`
+
+Maximum amount of time a dial will wait for a connect to complete. Zero disables.
+
+
+*Type*: `string`
+
+*Default*: `"0s"`
+
+=== `tcp.keep_alive`
+
+TCP keep-alive probe configuration.
+
+
+*Type*: `object`
+
+
+=== `tcp.keep_alive.idle`
+
+Duration the connection must be idle before sending the first keep-alive probe. Zero defaults to 15s. Negative values disable keep-alive probes.
+
+
+*Type*: `string`
+
+*Default*: `"15s"`
+
+=== `tcp.keep_alive.interval`
+
+Duration between keep-alive probes. Zero defaults to 15s.
+
+
+*Type*: `string`
+
+*Default*: `"15s"`
+
+=== `tcp.keep_alive.count`
+
+Maximum unanswered keep-alive probes before dropping the connection. Zero defaults to 9.
+
+
+*Type*: `int`
+
+*Default*: `9`
+
+=== `tcp.tcp_user_timeout`
+
+Maximum time to wait for acknowledgment of transmitted data before killing the connection. Linux-only (kernel 2.6.37+), ignored on other platforms. When enabled, keep_alive.idle must be greater than this value per RFC 5482. Zero disables.
+
+
+*Type*: `string`
+
+*Default*: `"0s"`
 
 === `pipeline_id`
 
@@ -546,7 +677,7 @@ Override the default murmur2 hashing partitioner.
 
 === `idempotent_write`
 
-Enable the idempotent write producer option. This requires the `IDEMPOTENT_WRITE` permission on `CLUSTER` and can be disabled if this permission is not available.
+Enable the idempotent write producer option. When enabled, the producer initializes a producer ID and uses it to guarantee exactly-once semantics per partition (no duplicates on retries). This requires the `IDEMPOTENT_WRITE` permission on the `CLUSTER` resource. If your cluster does not grant this permission or uses ACLs restrictively, disable this option. Note: Idempotent writes are strictly a win for data integrity but may be unavailable in restricted environments (e.g., some managed Kafka services, Redpanda with strict ACLs). Disabling this option is safe and only affects retry behavior—duplicates may occur on producer retries, but the pipeline will continue to function normally.
 
 
 *Type*: `bool`
@@ -589,7 +720,7 @@ The maximum period of time to wait for message sends before abandoning the reque
 
 === `max_message_bytes`
 
-The maximum space in bytes than an individual message may take, messages larger than this value will be rejected. This field corresponds to Kafka's `max.message.bytes`.
+The maximum size of a produced record batch in bytes. A `MESSAGE_TOO_LARGE` error is returned if a batch exceeds this limit. This field maps to the `max.message.bytes` Kafka property. Ensure the Redpanda broker's `kafka_batch_max_bytes` property is at least as large as this value, see https://docs.redpanda.com/current/reference/properties/cluster-properties/#kafka_batch_max_bytes.
 
 
 *Type*: `string`

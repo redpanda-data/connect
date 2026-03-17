@@ -195,7 +195,7 @@ func newCaptureProcessor(conf *service.ParsedConfig, mgr *service.Resources, opt
 
 	client, err := sentry.NewClient(*clientOptions)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create sentry client: %w", err)
+		return nil, fmt.Errorf("creating sentry client: %w", err)
 	}
 
 	version := mgr.EngineVersion()
@@ -249,7 +249,7 @@ func (proc *captureProcessor) Process(_ context.Context, msg *service.Message) (
 
 	message, err := proc.messageQ.TryString(msg)
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate sentry message: %w", err)
+		return nil, fmt.Errorf("generating sentry message: %w", err)
 	}
 
 	sentryCtx, err := proc.queryContext(msg)
@@ -261,14 +261,14 @@ func (proc *captureProcessor) Process(_ context.Context, msg *service.Message) (
 	for key, query := range proc.tagsQ {
 		tag, err := query.TryString(msg)
 		if err != nil {
-			return nil, fmt.Errorf("failed to evaluate sentry tag: %s: %w", key, err)
+			return nil, fmt.Errorf("evaluating sentry tag: %s: %w", key, err)
 		}
 		tags[key] = tag
 	}
 
 	extras, _, err := queryMapStringInterface(msg, proc.extrasQ, "extras")
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate sentry message: %w", err)
+		return nil, fmt.Errorf("generating sentry message: %w", err)
 	}
 
 	hub.WithScope(func(scope *sentry.Scope) {
@@ -284,7 +284,7 @@ func (proc *captureProcessor) Process(_ context.Context, msg *service.Message) (
 
 func (proc *captureProcessor) Close(context.Context) (err error) {
 	if flushed := proc.hub.Flush(proc.flushTimeout); !flushed {
-		err = errors.New("failed to flush sentry events before timeout")
+		err = errors.New("flushing sentry events before timeout")
 	}
 
 	if client := proc.hub.Client(); client != nil {
@@ -340,7 +340,7 @@ func queryMapStringInterface(
 
 	result, err := msg.BloblangQuery(blobl)
 	if err != nil {
-		return nil, false, fmt.Errorf("failed to query for %s: %w", name, err)
+		return nil, false, fmt.Errorf("querying for %s: %w", name, err)
 	}
 
 	if result == nil {
@@ -349,7 +349,7 @@ func queryMapStringInterface(
 
 	raw, err := result.AsStructured()
 	if err != nil {
-		return nil, false, fmt.Errorf("failed to get structured data for %s: %w", name, err)
+		return nil, false, fmt.Errorf("getting structured data for %s: %w", name, err)
 	}
 
 	c, ok := raw.(map[string]any)

@@ -170,14 +170,14 @@ snowpipe: '` + tc.snowpipe + `'
 			privateKeyPath:    "resources/ssh_keys/missing_key.pem",
 			stage:             "@test_stage",
 			compression:       "NONE",
-			errConfigContains: "failed to read private key resources/ssh_keys/missing_key.pem: open resources/ssh_keys/missing_key.pem: no such file or directory",
+			errConfigContains: "reading private key resources/ssh_keys/missing_key.pem: open resources/ssh_keys/missing_key.pem: no such file or directory",
 		},
 		{
 			name:              "fails to read encrypted SSH key without passphrase",
 			privateKeyPath:    "resources/ssh_keys/snowflake_rsa_key.p8",
 			stage:             "@test_stage",
 			compression:       "NONE",
-			errConfigContains: "failed to read private key: private key requires a passphrase, but private_key_pass was not supplied",
+			errConfigContains: "reading private key: private key requires a passphrase, but private_key_pass was not supplied",
 		},
 		{
 			name:           "executes snowflake query without compression",

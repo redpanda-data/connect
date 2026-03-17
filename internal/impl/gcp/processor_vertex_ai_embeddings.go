@@ -22,11 +22,8 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
-	"github.com/redpanda-data/connect/v4/internal/license"
-
 	aiplatform "cloud.google.com/go/aiplatform/apiv1"
 	"cloud.google.com/go/aiplatform/apiv1/aiplatformpb"
-	"cloud.google.com/go/vertexai/genai"
 
 	"google.golang.org/protobuf/types/known/structpb"
 
@@ -92,11 +89,7 @@ For more information, see the https://cloud.google.com/vertex-ai/generative-ai/d
 		)
 }
 
-func newVertexAIEmbeddingsProcessor(conf *service.ParsedConfig, mgr *service.Resources) (p service.Processor, err error) {
-	if err = license.CheckRunningEnterprise(mgr); err != nil {
-		return
-	}
-
+func newVertexAIEmbeddingsProcessor(conf *service.ParsedConfig, _ *service.Resources) (p service.Processor, err error) {
 	ctx := context.Background()
 	proc := &vertexAIEmbeddingsProcessor{}
 	var project string
@@ -153,7 +146,7 @@ func newVertexAIEmbeddingsProcessor(conf *service.ParsedConfig, mgr *service.Res
 		if err != nil {
 			return
 		}
-		proc.dims = genai.Ptr(float64(dims))
+		proc.dims = new(float64(dims))
 	}
 	p = proc
 	return
@@ -171,7 +164,7 @@ type vertexAIEmbeddingsProcessor struct {
 func (p *vertexAIEmbeddingsProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
 	text, err := p.computeText(msg)
 	if err != nil {
-		return nil, fmt.Errorf("failed to compute prompt: %w", err)
+		return nil, fmt.Errorf("computing prompt: %w", err)
 	}
 	input := structpb.NewStructValue(&structpb.Struct{
 		Fields: map[string]*structpb.Value{

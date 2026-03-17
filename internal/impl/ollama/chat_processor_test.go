@@ -16,11 +16,11 @@ package ollama
 
 import (
 	"bytes"
+	"context"
 	"net/http"
 	"net/url"
 	"testing"
 
-	"github.com/ollama/ollama/api"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go/modules/ollama"
@@ -37,7 +37,7 @@ func createCompletionProcessorForTest(t *testing.T, addr string) *ollamaCompleti
 		baseOllamaProcessor: &baseOllamaProcessor{
 			// use smallest model possible to make it cheaper
 			model:  "tinyllama",
-			client: api.NewClient(url, http.DefaultClient),
+			client: NewClient(url, http.DefaultClient),
 		},
 		userPrompt:   nil,
 		systemPrompt: nil,
@@ -50,11 +50,11 @@ func TestOllamaCompletionIntegration(t *testing.T) {
 	ctx := t.Context()
 	ollamaContainer, err := ollama.Run(ctx, "ollama/ollama:0.9.0")
 	assert.NoError(t, err)
-	defer func() {
-		if err := ollamaContainer.Terminate(ctx); err != nil {
+	t.Cleanup(func() {
+		if err := ollamaContainer.Terminate(context.Background()); err != nil {
 			t.Fatalf("failed to terminate container: %s", err)
 		}
-	}()
+	})
 	addr, err := ollamaContainer.ConnectionString(ctx)
 	assert.NoError(t, err)
 	proc := createCompletionProcessorForTest(t, addr)

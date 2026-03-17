@@ -111,6 +111,17 @@ func newOutputWriter(conf *service.ParsedConfig, res *service.Resources) (db *ou
 	return db, nil
 }
 
+// ConnectionTest attempts to test the connection configuration of this output
+// without actually sending data. The connection, if successful, is then
+// closed.
+func (m *outputWriter) ConnectionTest(ctx context.Context) service.ConnectionTestResults {
+	err := m.client.Ping(ctx, nil)
+	if err != nil {
+		return service.ConnectionTestFailed(fmt.Errorf("ping failed: %w", err)).AsList()
+	}
+	return service.ConnectionTestSucceeded().AsList()
+}
+
 // Connect attempts to establish a connection to the target mongo DB.
 func (m *outputWriter) Connect(ctx context.Context) error {
 	m.mu.Lock()

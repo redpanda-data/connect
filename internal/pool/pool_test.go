@@ -116,16 +116,14 @@ func TestRandomized(t *testing.T) {
 	})
 	var wg sync.WaitGroup
 	for range 25 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			for range 100 {
 				f, err := p.Acquire(t.Context())
 				require.NoError(t, err)
 				time.Sleep(time.Millisecond)
 				p.Release(f)
 			}
-		}()
+		})
 	}
 	wg.Wait()
 	// Technically possible to only create one if unlikely

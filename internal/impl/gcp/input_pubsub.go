@@ -158,7 +158,7 @@ func init() {
 func createSubscription(conf pbiConfig, client *pubsub.Client, log *service.Logger) {
 	subsExists, err := client.Subscription(conf.SubscriptionID).Exists(context.Background())
 	if err != nil {
-		log.Errorf("Error checking if subscription exists", err)
+		log.Errorf("Error checking if subscription exists: %v", err)
 		return
 	}
 

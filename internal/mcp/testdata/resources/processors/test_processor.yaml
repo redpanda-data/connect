@@ -1,0 +1,9 @@
+label: test-processor
+mapping: |
+  root = this
+  root.processed = true
+meta:
+  tags: [test]
+  mcp:
+    enabled: true
+    description: "Test processor that adds a 'processed' field"

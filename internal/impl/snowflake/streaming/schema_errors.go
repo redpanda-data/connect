@@ -1,12 +1,10 @@
-/*
- * Copyright 2024 Redpanda Data, Inc.
- *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
- * License (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- *
- * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
- */
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed as a Redpanda Enterprise file under the Redpanda Community
+// License (the "License"); you may not use this file except in compliance with
+// the License. You may obtain a copy of the License at
+//
+// https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
 package streaming
 
@@ -55,25 +53,25 @@ type NonNullColumnError struct {
 	columnName string
 }
 
-// ColumnName returns the column name with the NOT NULL constraint
+// ColumnName returns the column name with the NOT NULL constraint.
 func (e *NonNullColumnError) ColumnName() string {
 	// This name comes directly from the Snowflake API so I hope this is properly quoted...
 	return e.columnName
 }
 
-// Value returns nil
+// Value returns nil.
 func (*NonNullColumnError) Value() any {
 	return nil
 }
 
-// Message returns the message that caused this error
+// Message returns the message that caused this error.
 func (e *NonNullColumnError) Message() *service.Message {
 	return e.message
 }
 
-// Error implements the error interface
+// Error implements the error interface.
 func (e *NonNullColumnError) Error() string {
-	return fmt.Sprintf("column %q has a NOT NULL constraint and recieved a nil value", e.columnName)
+	return fmt.Sprintf("column %q has a NOT NULL constraint and received a nil value", e.columnName)
 }
 
 var (
@@ -108,17 +106,17 @@ func (e *MissingColumnError) ColumnName() string {
 }
 
 // RawName is the unquoted name of the new column - DO NOT USE IN SQL!
-// This is the more intutitve name for users in the mapping function
+// This is the more intutitve name for users in the mapping function.
 func (e *MissingColumnError) RawName() string {
 	return e.columnName
 }
 
-// Value returns the value that was associated with the missing column
+// Value returns the value that was associated with the missing column.
 func (e *MissingColumnError) Value() any {
 	return e.val
 }
 
-// Error implements the error interface
+// Error implements the error interface.
 func (e *MissingColumnError) Error() string {
 	return fmt.Sprintf("new data %+v with the name %q does not have an associated column", e.val, e.columnName)
 }
@@ -129,7 +127,7 @@ type InvalidTimestampFormatError struct {
 	val        string
 }
 
-// Error implements the error interface
+// Error implements the error interface.
 func (e *InvalidTimestampFormatError) Error() string {
 	return fmt.Sprintf("unable to parse %s value from %q - string time values must be in RFC 3339 format", e.columnType, e.val)
 }

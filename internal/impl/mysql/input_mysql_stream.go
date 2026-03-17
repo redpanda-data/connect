@@ -10,10 +10,12 @@ package mysql
 
 import (
 	"context"
+	"crypto/tls"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"regexp"
 	"strings"
 	"sync"
@@ -39,13 +41,30 @@ const (
 	fieldMySQLTables          = "tables"
 	fieldStreamSnapshot       = "stream_snapshot"
 	fieldSnapshotMaxBatchSize = "snapshot_max_batch_size"
+	fieldMaxReconnectAttempts = "max_reconnect_attempts"
 	fieldBatching             = "batching"
 	fieldCheckpointKey        = "checkpoint_key"
 	fieldCheckpointCache      = "checkpoint_cache"
 	fieldCheckpointLimit      = "checkpoint_limit"
+	fieldAWSIAMAuth           = "aws"
+	// FieldAWSIAMAuthEnabled enabled field.
+	FieldAWSIAMAuthEnabled = "enabled"
 
 	shutdownTimeout = 5 * time.Second
 )
+
+func notImportedAWSOptFn(_ context.Context, awsConf *service.ParsedConfig, _ *mysql.Config, _ *service.Logger) (TokenBuilder, error) {
+	if enabled, _ := awsConf.FieldBool(FieldAWSIAMAuthEnabled); !enabled {
+		return nil, nil
+	}
+	return nil, errors.New("unable to configure AWS authentication as this binary does not import components/aws")
+}
+
+// AWSOptFn is populated with the child `aws` package when imported.
+var AWSOptFn = notImportedAWSOptFn
+
+// TokenBuilder can be used for fetching passwords at runtime during connection (ie. IAM auth tokens)
+type TokenBuilder func(context.Context) error
 
 var mysqlStreamConfigSpec = service.NewConfigSpec().
 	Beta().
@@ -57,9 +76,10 @@ var mysqlStreamConfigSpec = service.NewConfigSpec().
 
 This input adds the following metadata fields to each message:
 
-- operation
-- table
-- binlog_position
+- operation: The type of operation (insert, update, delete, or read for snapshot messages)
+- table: The name of the table
+- binlog_position: The binlog position (for CDC messages only, not set for snapshot messages)
+- schema: The table schema in benthos common schema format, compatible with processors like parquet_encode
 `).
 	Fields(
 		service.NewStringAnnotatedEnumField(fieldMySQLFlavor, map[string]string{
@@ -83,12 +103,58 @@ This input adds the following metadata fields to each message:
 		service.NewIntField(fieldSnapshotMaxBatchSize).
 			Description("The maximum number of rows to be streamed in a single batch when taking a snapshot.").
 			Default(1000),
+		service.NewIntField(fieldMaxReconnectAttempts).
+			Description("The maximum number of attempts the MySQL driver will try to re-establish a broken connection before Connect attempts reconnection. A zero or negative number means infinite retry attempts.").
+			Advanced().
+			Default(10),
 		service.NewBoolField(fieldStreamSnapshot).
 			Description("If set to true, the connector will query all the existing data as a part of snapshot process. Otherwise, it will start from the current binlog position."),
 		service.NewAutoRetryNacksToggleField(),
 		service.NewIntField(fieldCheckpointLimit).
 			Description("The maximum number of messages that can be processed at a given time. Increasing this limit enables parallel processing and batching at the output level. Any given BinLog Position will not be acknowledged unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.").
 			Default(1024),
+		service.NewTLSField("tls").
+			Description("Using this field overrides the SSL/TLS settings in the environment and DSN.").
+			Optional(),
+		service.NewObjectField(fieldAWSIAMAuth,
+			service.NewBoolField(FieldAWSIAMAuthEnabled).
+				Description("Enable AWS IAM authentication for MySQL. When enabled, an IAM authentication token is generated and used as the password. When using IAM authentication ensure `"+fieldMaxReconnectAttempts+"` is set to a low value to ensure it can refresh credentials.").
+				Default(false),
+			service.NewStringField("region").
+				Description("The AWS region where the MySQL instance is located. If no region is specified then the environment default will be used.").
+				Optional(),
+			service.NewStringField("endpoint").
+				Description("The MySQL endpoint hostname (e.g., mydb.abc123.us-east-1.rds.amazonaws.com)."),
+			service.NewStringField("id").
+				Description("The ID of credentials to use.").
+				Optional().Advanced(),
+			service.NewStringField("secret").
+				Description("The secret for the credentials being used.").
+				Optional().Advanced().Secret(),
+			service.NewStringField("token").
+				Description("The token for the credentials being used, required when using short term credentials.").
+				Optional().Advanced(),
+			service.NewStringField("role").
+				Description("Optional AWS IAM role ARN to assume for authentication. Alternatively, use `roles` array for role chaining instead.").
+				Optional(),
+			service.NewStringField("role_external_id").
+				Description("Optional external ID for the role assumption. Only used with the `role` field. Alternatively, use `roles` array for role chaining instead.").
+				Optional(),
+			service.NewObjectListField("roles",
+				service.NewStringField("role").
+					Default("").
+					Description("AWS IAM role ARN to assume."),
+				service.NewStringField("role_external_id").
+					Description("Optional external ID for the role assumption.").
+					Default("").
+					Optional(),
+			).
+				Description("Optional array of AWS IAM roles to assume for authentication. Roles can be assumed in sequence, enabling chaining for purposes such as cross-account access. Each role can optionally specify an external ID.").
+				Optional(),
+		).
+			Description("AWS IAM authentication configuration for MySQL instances. When enabled, IAM credentials are used to generate temporary authentication tokens instead of a static password.").
+			Advanced().
+			Optional(),
 		service.NewBatchPolicyField(fieldBatching),
 	)
 
@@ -103,11 +169,12 @@ type mysqlStreamInput struct {
 	mutex  sync.Mutex
 	flavor string
 	// canal stands for mysql binlog listener connection
-	canal             *canal.Canal
-	mysqlConfig       *mysql.Config
-	binLogCache       string
-	binLogCacheKey    string
-	currentBinlogName string
+	canal                *canal.Canal
+	canalMaxConnAttempts int
+	mysqlConfig          *mysql.Config
+	binLogCache          string
+	binLogCacheKey       string
+	currentBinlogName    string
 
 	dsn            string
 	tables         []string
@@ -126,6 +193,17 @@ type mysqlStreamInput struct {
 	cp               *checkpoint.Capped[*position]
 
 	shutSig *shutdown.Signaller
+
+	// TLS configuration
+	customTLSConfig *tls.Config
+
+	// IAM authentication fields
+	iamAuthEnabled      bool
+	iamAuthTokenBuilder TokenBuilder
+
+	// Table schemas - stored as serialized format (map[string]any) for metadata
+	tableSchemas   map[string]any
+	tableSchemasMu sync.RWMutex
 }
 
 func newMySQLStreamInput(conf *service.ParsedConfig, res *service.Resources) (s service.BatchInput, err error) {
@@ -138,6 +216,7 @@ func newMySQLStreamInput(conf *service.ParsedConfig, res *service.Resources) (s 
 		rawMessageEvents: make(chan MessageEvent),
 		msgChan:          make(chan asyncMessage),
 		res:              res,
+		tableSchemas:     make(map[string]any),
 	}
 
 	var batching service.BatchPolicy
@@ -158,6 +237,34 @@ func newMySQLStreamInput(conf *service.ParsedConfig, res *service.Resources) (s 
 	}
 	// We require this configuration option is enabled.
 	i.mysqlConfig.ParseTime = true
+
+	// Configure TLS if specified
+	if i.customTLSConfig, err = conf.FieldTLS("tls"); err != nil {
+		return nil, err
+	}
+	if i.customTLSConfig != nil {
+		// Get ServerName from the address, stripping the port if present
+		host := i.mysqlConfig.Addr
+		if idx := strings.Index(host, ":"); idx != -1 {
+			host = host[:idx]
+		}
+		i.customTLSConfig.ServerName = host
+
+		tlsConfigKey := "custom-tls"
+		if err := mysql.RegisterTLSConfig(tlsConfigKey, i.customTLSConfig); err != nil {
+			return nil, fmt.Errorf("registering TLS config: %w", err)
+		}
+		i.mysqlConfig.TLSConfig = tlsConfigKey
+	}
+
+	// Configure AWS IAM authentication if enabled
+	awsConf := conf.Namespace(fieldAWSIAMAuth)
+	i.iamAuthEnabled, _ = awsConf.FieldBool(FieldAWSIAMAuthEnabled)
+
+	if i.iamAuthTokenBuilder, err = AWSOptFn(context.Background(), awsConf, i.mysqlConfig, res.Logger()); err != nil {
+		return nil, err
+	}
+
 	i.dsn = i.mysqlConfig.FormatDSN()
 
 	if i.tables, err = conf.FieldStringList(fieldMySQLTables); err != nil {
@@ -169,6 +276,10 @@ func newMySQLStreamInput(conf *service.ParsedConfig, res *service.Resources) (s 
 	}
 
 	if i.fieldSnapshotMaxBatchSize, err = conf.FieldInt(fieldSnapshotMaxBatchSize); err != nil {
+		return nil, err
+	}
+
+	if i.canalMaxConnAttempts, err = conf.FieldInt(fieldMaxReconnectAttempts); err != nil {
 		return nil, err
 	}
 
@@ -222,19 +333,31 @@ func init() {
 // ---- Redpanda Connect specific methods----
 
 func (i *mysqlStreamInput) Connect(ctx context.Context) error {
+	// If IAM authentication is enabled, generate a new token
+	if i.iamAuthEnabled && i.iamAuthTokenBuilder != nil {
+		if err := i.iamAuthTokenBuilder(ctx); err != nil {
+			return fmt.Errorf("unable to generate IAM auth token: %w", err)
+		}
+	}
+
 	canalConfig := canal.NewDefaultConfig()
 	canalConfig.Flavor = i.flavor
 	canalConfig.Addr = i.mysqlConfig.Addr
 	canalConfig.User = i.mysqlConfig.User
 	canalConfig.Password = i.mysqlConfig.Passwd
+	canalConfig.MaxReconnectAttempts = i.canalMaxConnAttempts
 	// resetting dump path since we are doing snapshot manually
 	// this is required since canal will try to prepare dumper on init stage
 	canalConfig.Dump.ExecutionPath = ""
 
 	// Parse and set additional parameters
 	canalConfig.Charset = i.mysqlConfig.Collation
-	if i.mysqlConfig.TLS != nil {
+	if i.customTLSConfig != nil {
+		canalConfig.TLSConfig = i.customTLSConfig
+		i.logger.Debugf("Using custom TLS config with ServerName: '%s'", i.customTLSConfig.ServerName)
+	} else if i.mysqlConfig.TLS != nil {
 		canalConfig.TLSConfig = i.mysqlConfig.TLS
+		i.logger.Debugf("Using TLS config from DSN")
 	}
 	// Parse time values as time.Time values not strings
 	canalConfig.ParseTime = true
@@ -261,9 +384,9 @@ func (i *mysqlStreamInput) Connect(ctx context.Context) error {
 	// create snapshot instance if we were requested and haven't finished it before.
 	var snapshot *Snapshot
 	if i.streamSnapshot && pos == nil {
-		db, err := sql.Open("mysql", i.dsn)
+		db, err := sql.Open("mysql", i.mysqlConfig.FormatDSN())
 		if err != nil {
-			return fmt.Errorf("failed to connect to MySQL server: %s", err)
+			return fmt.Errorf("connecting to MySQL server: %s", err)
 		}
 		snapshot = NewSnapshot(i.logger, db)
 	}
@@ -323,7 +446,7 @@ func (i *mysqlStreamInput) startMySQLSync(ctx context.Context, pos *position, sn
 	i.currentBinlogName = pos.Name
 	i.canal.SetEventHandler(i)
 	if err := i.canal.RunFrom(*pos); err != nil {
-		return fmt.Errorf("failed to start streaming: %w", err)
+		return fmt.Errorf("starting streaming: %w", err)
 	}
 	return nil
 }
@@ -331,6 +454,14 @@ func (i *mysqlStreamInput) startMySQLSync(ctx context.Context, pos *position, sn
 func (i *mysqlStreamInput) readSnapshot(ctx context.Context, snapshot *Snapshot) error {
 	// TODO(cdc): Process tables in parallel
 	for _, table := range i.tables {
+		// Pre-populate schema cache so snapshot messages carry schema metadata.
+		if tbl, err := i.canal.GetTable(i.mysqlConfig.DBName, table); err == nil {
+			if _, err := i.getTableSchema(tbl); err != nil {
+				i.logger.Warnf("Failed to pre-populate schema for table %s during snapshot: %v", table, err)
+			}
+		} else {
+			i.logger.Warnf("Failed to fetch schema for table %s during snapshot: %v", table, err)
+		}
 		tablePks, err := snapshot.getTablePrimaryKeys(ctx, table)
 		if err != nil {
 			return err
@@ -350,19 +481,19 @@ func (i *mysqlStreamInput) readSnapshot(ctx context.Context, snapshot *Snapshot)
 				batchRows, err = snapshot.querySnapshotTable(ctx, table, tablePks, &lastSeenPksValues, i.fieldSnapshotMaxBatchSize)
 			}
 			if err != nil {
-				return fmt.Errorf("failed to execute snapshot table query: %s", err)
+				return fmt.Errorf("executing snapshot table query: %s", err)
 			}
 
 			types, err := batchRows.ColumnTypes()
 			if err != nil {
-				return fmt.Errorf("failed to fetch column types: %s", err)
+				return fmt.Errorf("fetching column types: %s", err)
 			}
 
 			values, mappers := prepSnapshotScannerAndMappers(types)
 
 			columns, err := batchRows.Columns()
 			if err != nil {
-				return fmt.Errorf("failed to fetch columns: %s", err)
+				return fmt.Errorf("fetching columns: %s", err)
 			}
 
 			var batchRowsCount int
@@ -399,7 +530,7 @@ func (i *mysqlStreamInput) readSnapshot(ctx context.Context, snapshot *Snapshot)
 			}
 
 			if err := batchRows.Err(); err != nil {
-				return fmt.Errorf("failed to iterate snapshot table: %s", err)
+				return fmt.Errorf("iterating snapshot table: %s", err)
 			}
 
 			if batchRowsCount < i.fieldSnapshotMaxBatchSize {
@@ -454,7 +585,20 @@ func prepSnapshotScannerAndMappers(cols []*sql.ColumnType) (values []any, mapper
 				}
 				return s.Time, nil
 			}
-		case "TINYINT", "SMALLINT", "MEDIUMINT", "INT", "BIGINT", "YEAR":
+		case "TINYINT", "SMALLINT", "MEDIUMINT", "INT", "YEAR",
+			"UNSIGNED TINYINT", "UNSIGNED SMALLINT", "UNSIGNED MEDIUMINT":
+			val = new(sql.NullInt32)
+			mapper = func(v any) (any, error) {
+				s, ok := v.(*sql.NullInt32)
+				if !ok {
+					return nil, fmt.Errorf("expected %T got %T", int32(0), v)
+				}
+				if !s.Valid {
+					return nil, nil
+				}
+				return s.Int32, nil
+			}
+		case "BIGINT", "UNSIGNED INT", "UNSIGNED BIGINT":
 			val = new(sql.NullInt64)
 			mapper = func(v any) (any, error) {
 				s, ok := v.(*sql.NullInt64)
@@ -464,14 +608,17 @@ func prepSnapshotScannerAndMappers(cols []*sql.ColumnType) (values []any, mapper
 				if !s.Valid {
 					return nil, nil
 				}
-				return int(s.Int64), nil
+				return s.Int64, nil
 			}
 		case "DECIMAL", "NUMERIC":
 			val = new(sql.NullString)
 			mapper = stringMapping(func(s string) (any, error) {
-				return json.Number(s), nil
+				return s, nil
 			})
-		case "FLOAT", "DOUBLE":
+		case "FLOAT":
+			val = new(sql.Null[float32])
+			mapper = snapshotValueMapper[float32]
+		case "DOUBLE":
 			val = new(sql.Null[float64])
 			mapper = snapshotValueMapper[float64]
 		case "SET":
@@ -491,6 +638,34 @@ func prepSnapshotScannerAndMappers(cols []*sql.ColumnType) (values []any, mapper
 				err = json.Unmarshal([]byte(s), &v)
 				return
 			})
+		case "BIT":
+			val = new(sql.Null[[]byte])
+			mapper = func(v any) (any, error) {
+				s, ok := v.(*sql.Null[[]byte])
+				if !ok {
+					return nil, fmt.Errorf("expected %T got %T", &sql.Null[[]byte]{}, v)
+				}
+				if !s.Valid {
+					return nil, nil
+				}
+				var n int64
+				for _, b := range s.V {
+					n = (n << 8) | int64(b)
+				}
+				return n, nil
+			}
+		case "DATE":
+			val = new(sql.NullTime)
+			mapper = func(v any) (any, error) {
+				s, ok := v.(*sql.NullTime)
+				if !ok {
+					return nil, fmt.Errorf("expected %T got %T", &sql.NullTime{}, v)
+				}
+				if !s.Valid {
+					return nil, nil
+				}
+				return s.Time, nil
+			}
 		default:
 			val = new(sql.Null[string])
 			mapper = snapshotValueMapper[string]
@@ -515,19 +690,20 @@ func (i *mysqlStreamInput) readMessages(ctx context.Context) error {
 			}
 
 			if err := i.flushBatch(ctx, i.cp, flushedBatch); err != nil {
-				return fmt.Errorf("failed to flush periodic batch: %w", err)
+				return fmt.Errorf("flushing periodic batch: %w", err)
 			}
 		case me := <-i.rawMessageEvents:
-			row, err := json.Marshal(me.Row)
-			if err != nil {
-				return fmt.Errorf("failed to serialize row: %w", err)
-			}
-
-			mb := service.NewMessage(row)
+			mb := service.NewMessage(nil)
+			mb.SetStructuredMut(me.Row)
 			mb.MetaSet("operation", string(me.Operation))
 			mb.MetaSet("table", me.Table)
 			if me.Position != nil {
 				mb.MetaSet("binlog_position", binlogPositionToString(*me.Position))
+			}
+
+			// Add table schema if available
+			if tableSchema := i.getOrExtractTableSchemaByName(me.Table); tableSchema != nil {
+				mb.MetaSetImmut("schema", service.ImmutableAny{V: tableSchema})
 			}
 
 			if i.batchPolicy.Add(mb) {
@@ -537,7 +713,7 @@ func (i *mysqlStreamInput) readMessages(ctx context.Context) error {
 					return fmt.Errorf("flush batch error: %w", err)
 				}
 				if err := i.flushBatch(ctx, i.cp, flushedBatch); err != nil {
-					return fmt.Errorf("failed to flush batch: %w", err)
+					return fmt.Errorf("flushing batch: %w", err)
 				}
 			} else {
 				d, ok := i.batchPolicy.UntilNext()
@@ -571,7 +747,7 @@ func (i *mysqlStreamInput) flushBatch(
 
 	resolveFn, err := checkpointer.Track(ctx, binLogPos, int64(len(batch)))
 	if err != nil {
-		return fmt.Errorf("failed to track checkpoint for batch: %w", err)
+		return fmt.Errorf("tracking checkpoint for batch: %w", err)
 	}
 	msg := asyncMessage{
 		msg: batch,
@@ -682,7 +858,38 @@ func (i *mysqlStreamInput) OnRotate(_ *replication.EventHeader, re *replication.
 	return nil
 }
 
+// OnTableChanged is called when a table is created, altered, renamed, or dropped.
+// We invalidate the cached schema so it will be re-extracted on the next row event.
+func (i *mysqlStreamInput) OnTableChanged(_ *replication.EventHeader, schema, table string) error {
+	// Only invalidate cache for tables we're tracking
+	fullTableName := table
+	if schema != "" {
+		fullTableName = schema + "." + table
+	}
+
+	// Check if this is one of our tracked tables
+	isTracked := false
+	for _, t := range i.tables {
+		if t == table || t == fullTableName {
+			isTracked = true
+			break
+		}
+	}
+
+	if isTracked {
+		i.invalidateTableSchema(table)
+		i.logger.Infof("Schema cache invalidated for table %s.%s due to DDL change", schema, table)
+	}
+
+	return nil
+}
+
 func (i *mysqlStreamInput) OnRow(e *canal.RowsEvent) error {
+	// Extract and cache the table schema if we haven't seen this table yet
+	if _, err := i.getTableSchema(e.Table); err != nil {
+		return fmt.Errorf("extracting schema for table %s: %w", e.Table.Name, err)
+	}
+
 	switch e.Action {
 	case canal.InsertAction:
 		return i.onMessage(e, 0, 1)
@@ -722,12 +929,51 @@ func mapMessageColumn(v any, col schema.TableColumn) (any, error) {
 		return v, nil
 	}
 	switch col.Type {
+	case schema.TYPE_NUMBER:
+		switch n := v.(type) {
+		case int:
+			return int64(n), nil
+		case int8:
+			return int32(n), nil
+		case int16:
+			return int32(n), nil
+		case int32:
+			return n, nil
+		case int64:
+			return n, nil
+		case uint:
+			return int64(n), nil
+		case uint8:
+			return int32(n), nil
+		case uint16:
+			return int32(n), nil
+		case uint32:
+			return int64(n), nil
+		case uint64:
+			if n > math.MaxInt64 {
+				return n, nil
+			}
+			return int64(n), nil
+		default:
+			return nil, fmt.Errorf("expected integer value for number column got: %T", v)
+		}
+	case schema.TYPE_MEDIUM_INT:
+		switch n := v.(type) {
+		case int32:
+			return n, nil
+		case uint32:
+			return int32(n), nil
+		default:
+			return nil, fmt.Errorf("expected int32 or uint32 value for mediumint column got: %T", v)
+		}
+	case schema.TYPE_FLOAT:
+		return v, nil
 	case schema.TYPE_DECIMAL:
 		s, ok := v.(string)
 		if !ok {
 			return nil, fmt.Errorf("expected string value for decimal column got: %T", v)
 		}
-		return json.Number(s), nil
+		return s, nil
 	case schema.TYPE_SET:
 		bitset, ok := v.(int64)
 		if !ok {
@@ -741,11 +987,19 @@ func mapMessageColumn(v any, col schema.TableColumn) (any, error) {
 		}
 		return out, nil
 	case schema.TYPE_DATE:
-		date, ok := v.(string)
-		if !ok {
-			return nil, fmt.Errorf("expected string value for date column got: %T", v)
+		switch d := v.(type) {
+		case string:
+			return time.Parse("2006-01-02", d)
+		case time.Time:
+			return d, nil
+		default:
+			return nil, fmt.Errorf("expected string or time.Time for date column got: %T", v)
 		}
-		return time.Parse("2006-01-02", date)
+	case schema.TYPE_DATETIME, schema.TYPE_TIMESTAMP:
+		if _, ok := v.(string); ok {
+			return nil, nil
+		}
+		return v, nil
 	case schema.TYPE_ENUM:
 		ordinal, ok := v.(int64)
 		if !ok {
@@ -794,3 +1048,50 @@ func mapMessageColumn(v any, col schema.TableColumn) (any, error) {
 }
 
 // --- MySQL Canal handler methods end ----
+
+// ---- Schema extraction methods ----
+
+// getTableSchema retrieves the cached schema for a table, or extracts it if not yet cached.
+func (i *mysqlStreamInput) getTableSchema(table *schema.Table) (any, error) {
+	i.tableSchemasMu.RLock()
+	if cached, exists := i.tableSchemas[table.Name]; exists {
+		i.tableSchemasMu.RUnlock()
+		return cached, nil
+	}
+	i.tableSchemasMu.RUnlock()
+
+	// Extract schema from MySQL table
+	commonSchema, err := mysqlTableToCommonSchema(table)
+	if err != nil {
+		return nil, fmt.Errorf("converting table schema for %s: %w", table.Name, err)
+	}
+
+	// Serialize to generic format for metadata
+	serialized := commonSchema.ToAny()
+
+	// Cache it
+	i.tableSchemasMu.Lock()
+	i.tableSchemas[table.Name] = serialized
+	i.tableSchemasMu.Unlock()
+
+	return serialized, nil
+}
+
+// getOrExtractTableSchemaByName attempts to retrieve a cached schema by table name.
+// For snapshot messages, we may not have the canal Table object, so we return nil
+// and let the schema be extracted later when we see CDC events for this table.
+func (i *mysqlStreamInput) getOrExtractTableSchemaByName(tableName string) any {
+	i.tableSchemasMu.RLock()
+	defer i.tableSchemasMu.RUnlock()
+	return i.tableSchemas[tableName]
+}
+
+// invalidateTableSchema removes a table's schema from the cache.
+// This is called when a DDL change is detected via OnTableChanged.
+func (i *mysqlStreamInput) invalidateTableSchema(tableName string) {
+	i.tableSchemasMu.Lock()
+	defer i.tableSchemasMu.Unlock()
+	delete(i.tableSchemas, tableName)
+}
+
+// ---- Schema extraction methods end ----

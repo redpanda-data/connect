@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package timeplus
 
 import (
@@ -34,7 +48,7 @@ output:
     apikey: <Your API Key>`).
 		Example(
 			"To Timeplus Enterprise (self-hosted)",
-			"For self-housted Timeplus Enterprise, you will need to specify the username and password as well as the URL of the App server",
+			"For self-hosted Timeplus Enterprise, you will need to specify the username and password as well as the URL of the App server",
 			`
 output:
   timeplus:
@@ -55,13 +69,13 @@ output:
     password: pw`).
 		Example(
 			"Unstructured message",
-			"If the upstream source or pipeline returns unstructured message such as string, you can leverage the output processors to wrap it into a stucture message and then pass it to the output. This example create a strcutre mesasge with `raw` field and store the original string content into this field. You can modify the name of this `raw` field to whatever you want. Please make sure the destiation stream contains such field",
+			"If the upstream source or pipeline returns unstructured message such as string, you can leverage the output processors to wrap it into a structured message and then pass it to the output. This example create a structured message with `raw` field and store the original string content into this field. You can modify the name of this `raw` field to whatever you want. Please make sure the destination stream contains such field",
 			`
 output:
   timeplus:
     workspace: my_workspace_id
     stream: mystream
-    apikey: <Api key genereated on web console>
+    apikey: <Api key generated on web console>
 
   processors:
     - mapping: |
@@ -84,12 +98,12 @@ type timeplus struct {
 	client Writer
 }
 
-// Close implements service.Output
+// Close implements service.Output.
 func (*timeplus) Close(context.Context) error {
 	return nil
 }
 
-// Connect implements service.Output
+// Connect implements service.Output.
 func (t *timeplus) Connect(context.Context) error {
 	if t.client == nil {
 		return errors.New("client not initialized")
@@ -113,7 +127,7 @@ func (t *timeplus) WriteBatch(ctx context.Context, b service.MessageBatch) error
 
 		msgStructure, err := msg.AsStructured()
 		if err != nil {
-			return fmt.Errorf("failed to get structured message %w, skipping this message", err)
+			return fmt.Errorf("getting structured message %w, skipping this message", err)
 		}
 
 		msgJSON, OK := msgStructure.(map[string]any)

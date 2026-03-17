@@ -35,7 +35,7 @@ type Endpoint struct {
 	grpc_health_v1.UnimplementedHealthServer
 }
 
-// NewEndpoint constructs the Endpoint
+// NewEndpoint constructs the Endpoint.
 func NewEndpoint(port int16) *Endpoint {
 	srv := grpc.NewServer()
 	reflection.Register(srv)
@@ -49,12 +49,12 @@ func NewEndpoint(port int16) *Endpoint {
 	return e
 }
 
-// Run listens on the supplied GRPC health endpoint for unencrypted connections
+// Run listens on the supplied GRPC health endpoint for unencrypted connections.
 func (e *Endpoint) Run(ctx context.Context) error {
 	e.running.Store(true)
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", e.port))
 	if err != nil {
-		return fmt.Errorf("failed to listen: %w", err)
+		return fmt.Errorf("listening: %w", err)
 	}
 	errC := make(chan error, 1)
 	go func() {

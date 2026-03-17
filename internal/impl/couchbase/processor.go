@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/couchbase/gocb/v2"
 
@@ -44,6 +45,7 @@ func ProcessorConfig() *service.ConfigSpec {
 		Description("When inserting, replacing or upserting documents, each must have the `content` property set.").
 		Field(service.NewInterpolatedStringField("id").Description("Document id.").Example(`${! json("id") }`)).
 		Field(service.NewBloblangField("content").Description("Document content.").Optional()).
+		Field(service.NewDurationField("ttl").Description("An optional TTL to set for items.").Optional().Advanced()).
 		Field(service.NewStringAnnotatedEnumField("operation", map[string]string{
 			string(client.OperationGet):     "fetch a document.",
 			string(client.OperationInsert):  "insert a new document.",
@@ -70,7 +72,8 @@ type Processor struct {
 	*couchbaseClient
 	id      *service.InterpolatedString
 	content *bloblang.Executor
-	op      func(key string, data []byte) gocb.BulkOp
+	ttl     *time.Duration
+	op      func(key string, data []byte, ttl *time.Duration) gocb.BulkOp
 }
 
 // NewProcessor returns a Couchbase processor.
@@ -97,6 +100,15 @@ func NewProcessor(conf *service.ParsedConfig, _ *service.Resources) (*Processor,
 	if err != nil {
 		return nil, err
 	}
+
+	if conf.Contains("ttl") {
+		ttlTmp, err := conf.FieldDuration("ttl")
+		if err != nil {
+			return nil, err
+		}
+		p.ttl = &ttlTmp
+	}
+
 	switch client.Operation(op) {
 	case client.OperationGet:
 		p.op = get
@@ -156,7 +168,7 @@ func (p *Processor) ProcessBatch(_ context.Context, inBatch service.MessageBatch
 			}
 		}
 
-		ops[index] = p.op(k, content)
+		ops[index] = p.op(k, content, p.ttl)
 	}
 
 	// execute
