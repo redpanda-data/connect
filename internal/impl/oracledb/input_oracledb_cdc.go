@@ -321,9 +321,11 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (err error) {
 
 	// no cache specified so use default, internal oracle based cache
 	if o.cfg.SCNCache == "" && o.cpCache == nil {
-		if o.cpCache, err = newCheckpointCache(ctx, o.cfg.ConnectionString, o.cfg.CpCacheTableName, o.log); err != nil {
+		c, err := newCheckpointCache(ctx, o.cfg.ConnectionString, o.cfg.CpCacheTableName, o.log)
+		if err != nil {
 			return fmt.Errorf("initialising oracle based checkpoint cache: %w", err)
 		}
+		o.cpCache = c
 	}
 
 	if userTables, err = replication.VerifyUserTables(ctx, o.db, o.cfg.TablesFilter, o.log); err != nil {
