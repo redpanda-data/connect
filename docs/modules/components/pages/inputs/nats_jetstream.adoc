@@ -65,6 +65,7 @@ input:
     durable: "" # No default (optional)
     stream: "" # No default (optional)
     bind: false # No default (optional)
+    create_stream: false
     deliver: all
     ack_wait: 30s
     max_ack_pending: 1024
@@ -229,6 +230,15 @@ Indicates that the subscription should use an existing consumer.
 
 *Type*: `bool`
 
+
+=== `create_stream`
+
+Whether to automatically create the stream if it doesn't exist (requires the stream field to be set).
+
+
+*Type*: `bool`
+
+*Default*: `false`
 
 === `deliver`
 

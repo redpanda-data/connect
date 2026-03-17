@@ -333,7 +333,7 @@ func (j *jetStreamReader) Connect(ctx context.Context) (err error) {
 						Subjects: subjects,
 					})
 					if err != nil {
-						return fmt.Errorf("failed to create stream %s: %w", j.stream, err)
+						return fmt.Errorf("creating stream %s: %w", j.stream, err)
 					}
 					j.log.Infof("Created stream %s", j.stream)
 				} else {
