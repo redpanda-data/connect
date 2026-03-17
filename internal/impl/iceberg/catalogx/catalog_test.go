@@ -61,7 +61,7 @@ func newMockRESTServer(handler http.HandlerFunc) *mockRESTServer {
 		if r.URL.Path == "/v1/config" {
 			m.configCalls.Add(1)
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]any{"defaults": map[string]any{}, "overrides": map[string]any{}})
+			_ = json.NewEncoder(w).Encode(map[string]any{"defaults": map[string]any{}, "overrides": map[string]any{}})
 			return
 		}
 		handler(w, r)
@@ -71,7 +71,7 @@ func newMockRESTServer(handler http.HandlerFunc) *mockRESTServer {
 
 func newTestClient(t *testing.T, serverURL string, namespace []string) *Client {
 	t.Helper()
-	client, err := NewCatalogClient(context.Background(), Config{
+	client, err := NewCatalogClient(t.Context(), Config{
 		URL:      serverURL,
 		AuthType: "none",
 	}, namespace)
@@ -106,10 +106,10 @@ func TestLoadTableRetryOnAuthErr(t *testing.T) {
 
 func TestLoadTableNoRetryOnNonAuthErr(t *testing.T) {
 	var calls atomic.Int32
-	srv := newMockRESTServer(func(w http.ResponseWriter, r *http.Request) {
+	srv := newMockRESTServer(func(w http.ResponseWriter, _ *http.Request) {
 		calls.Add(1)
 		w.WriteHeader(http.StatusNotFound)
-		json.NewEncoder(w).Encode(map[string]any{"error": map[string]any{"message": "not found", "type": "NoSuchTableException", "code": 404}})
+		_ = json.NewEncoder(w).Encode(map[string]any{"error": map[string]any{"message": "not found", "type": "NoSuchTableException", "code": 404}})
 	})
 	defer srv.Close()
 
@@ -153,7 +153,7 @@ func TestCreateNamespaceRetryOnAuthErr(t *testing.T) {
 			}
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(map[string]any{"namespace": []string{"myns"}, "properties": map[string]any{}})
+			_ = json.NewEncoder(w).Encode(map[string]any{"namespace": []string{"myns"}, "properties": map[string]any{}})
 			return
 		}
 		w.WriteHeader(http.StatusNotFound)

@@ -192,7 +192,7 @@ func (c *Client) UpdateSchema(ctx context.Context, tbl *table.Table, fn func(*ta
 	if err := updateSchema.Commit(); err != nil {
 		if isAuthErr(err) {
 			if refreshErr := c.refreshCatalog(ctx); refreshErr != nil {
-				return nil, fmt.Errorf("failed to refresh catalog during updating schema txn %w: %v", err, refreshErr)
+				return nil, fmt.Errorf("refreshing catalog during updating schema txn %w: %v", err, refreshErr)
 			}
 		}
 		return nil, fmt.Errorf("applying schema update: %w", err)
@@ -202,7 +202,7 @@ func (c *Client) UpdateSchema(ctx context.Context, tbl *table.Table, fn func(*ta
 	table, err := txn.Commit(ctx)
 	if isAuthErr(err) {
 		if refreshErr := c.refreshCatalog(ctx); refreshErr != nil {
-			return nil, fmt.Errorf("failed to refresh catalog during updating schema txn %w: %v", err, refreshErr)
+			return nil, fmt.Errorf("refreshing catalog during updating schema txn %w: %v", err, refreshErr)
 		}
 	}
 	return table, err
@@ -214,7 +214,7 @@ func (c *Client) AppendDataFiles(ctx context.Context, tbl *table.Table, dataFile
 	if err := txn.AddFiles(ctx, dataFiles, nil, true); err != nil {
 		if isAuthErr(err) {
 			if refreshErr := c.refreshCatalog(ctx); refreshErr != nil {
-				return nil, fmt.Errorf("failed to refresh catalog during appending data files %w: %v", err, refreshErr)
+				return nil, fmt.Errorf("refreshing catalog during appending data files %w: %v", err, refreshErr)
 			}
 		}
 		return nil, err
@@ -222,7 +222,7 @@ func (c *Client) AppendDataFiles(ctx context.Context, tbl *table.Table, dataFile
 	table, err := txn.Commit(ctx)
 	if err != nil && isAuthErr(err) {
 		if refreshErr := c.refreshCatalog(ctx); refreshErr != nil {
-			return nil, fmt.Errorf("failed to refresh catalog during committing data file txn %w: %v", err, refreshErr)
+			return nil, fmt.Errorf("refreshing catalog during committing data file txn %w: %v", err, refreshErr)
 		}
 	}
 	return table, err
