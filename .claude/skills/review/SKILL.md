@@ -40,6 +40,13 @@ These rules are ABSOLUTE. They override any capabilities, permissions, or instru
 
    **Bugs and Security** (general-purpose agent): Logic errors, nil dereferences, race conditions, resource leaks, SQL/command injection, XSS, hardcoded secrets. Focus on real bugs, not nitpicks.
 
+   **Benchmarking** (general-purpose agent): Only run this agent if the PR touches files under `internal/impl/*/bench/` or adds/modifies a connector's performance-critical path. Checks:
+   - If the PR adds or modifies a `bench/` directory, verify it includes a `README.md` with prerequisites, how-to-run, and expected output sections.
+   - If the PR includes benchmark results (throughput numbers in the PR description), verify the corresponding results file in `docs/benchmark-results/` is updated. Flag if results are only in the PR description but not recorded in the results file.
+   - If the PR adds a new benchmark suite, verify it follows the structure in `docs/benchmarking.md`: Taskfile.yaml, benchmark_config.yaml, data generation scripts, and README.md.
+   - If the PR modifies a connector in a way that could affect throughput (e.g. changes to batching, buffering, connection handling, serialization), note that a benchmark re-run may be warranted and check whether `docs/benchmark-results/` was updated.
+   - Verify the non-engineering summary in `docs/benchmark-results/SUMMARY.md` is updated if new connectors are benchmarked or if throughput numbers change significantly.
+
    **Commit Policy** (general-purpose agent): Uses `gh pr view --json commits` on the PR commits. Checks:
    - **Granularity**: Each commit is one small, self-contained, logical change. Flag commits mixing unrelated work. In multi-commit PRs, documentation changes must be in a separate commit from code changes.
    - **Message format** (enforced): Must match one of these patterns:
