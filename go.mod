@@ -45,7 +45,7 @@ require (
 	github.com/PaesslerAG/gval v1.2.4
 	github.com/PaesslerAG/jsonpath v0.1.1
 	github.com/a2aproject/a2a-go v0.0.0-20251009070416-49deee794474
-	github.com/apache/iceberg-go v0.4.1-0.20260224162518-19bec10ab3a6
+	github.com/apache/iceberg-go v0.5.0
 	github.com/apache/pulsar-client-go v0.16.0
 	github.com/auth0/go-jwt-middleware/v2 v2.3.0
 	github.com/authzed/authzed-go v1.6.0
@@ -99,7 +99,7 @@ require (
 	github.com/go-mysql-org/go-mysql v1.13.0
 	github.com/go-resty/resty/v2 v2.16.5
 	github.com/go-sql-driver/mysql v1.9.3
-	github.com/go-viper/mapstructure/v2 v2.4.0
+	github.com/go-viper/mapstructure/v2 v2.5.0
 	github.com/gocql/gocql v1.7.0
 	github.com/gofrs/uuid/v5 v5.4.0
 	github.com/golang-jwt/jwt/v5 v5.3.1
@@ -197,10 +197,10 @@ require (
 	go.opentelemetry.io/otel/trace v1.40.0
 	go.starlark.net v0.0.0-20250318223901-d9371fef63fe
 	go.uber.org/multierr v1.11.0
-	golang.org/x/crypto v0.48.0
-	golang.org/x/net v0.51.0
-	golang.org/x/sync v0.19.0
-	golang.org/x/text v0.34.0
+	golang.org/x/crypto v0.49.0
+	golang.org/x/net v0.52.0
+	golang.org/x/sync v0.20.0
+	golang.org/x/text v0.35.0
 	google.golang.org/api v0.267.0
 	google.golang.org/protobuf v1.36.11
 	modernc.org/sqlite v1.46.1
@@ -226,7 +226,7 @@ require (
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/metric v0.55.0 // indirect
 	github.com/ProtonMail/go-crypto v1.3.0 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
-	github.com/apache/arrow-go/v18 v18.5.2-0.20260220015023-a886a5722b87 // indirect
+	github.com/apache/arrow-go/v18 v18.5.2 // indirect
 	github.com/apache/arrow/go/v12 v12.0.1 // indirect
 	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.39.6 // indirect
 	github.com/aws/aws-sdk-go-v2/service/signin v1.0.5 // indirect
@@ -324,8 +324,8 @@ require (
 	go.yaml.in/yaml/v2 v2.4.3 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	gocloud.dev v0.44.0 // indirect
-	golang.org/x/exp v0.0.0-20260218203240-3dfff04db8fa // indirect
-	golang.org/x/telemetry v0.0.0-20260209163413-e7419c687ee4 // indirect
+	golang.org/x/exp v0.0.0-20260312153236-7ab1446f8b90 // indirect
+	golang.org/x/telemetry v0.0.0-20260316223853-b6b0c46d1ccd // indirect
 	gopkg.in/go-jose/go-jose.v2 v2.6.3 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 	gotest.tools/gotestsum v1.8.2 // indirect
@@ -431,7 +431,7 @@ require (
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/go-sourcemap/sourcemap v2.1.4+incompatible // indirect
-	github.com/goccy/go-json v0.10.5 // indirect
+	github.com/goccy/go-json v0.10.6 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang-sql/civil v0.0.0-20220223132316-b832511892a9 // indirect
 	github.com/golang-sql/sqlexp v0.1.0 // indirect
@@ -525,7 +525,7 @@ require (
 	github.com/shopspring/decimal v1.4.0 // indirect
 	github.com/sirupsen/logrus v1.9.4 // indirect
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
-	github.com/stretchr/objx v0.5.2 // indirect
+	github.com/stretchr/objx v0.5.3 // indirect
 	github.com/testcontainers/testcontainers-go v0.40.0
 	github.com/testcontainers/testcontainers-go/modules/mongodb v0.39.0
 	github.com/tilinna/z85 v1.0.0 // indirect
@@ -548,12 +548,12 @@ require (
 	go.opentelemetry.io/proto/otlp v1.9.0 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
-	golang.org/x/mod v0.33.0 // indirect
+	golang.org/x/mod v0.34.0 // indirect
 	golang.org/x/oauth2 v0.35.0
-	golang.org/x/sys v0.41.0
-	golang.org/x/term v0.40.0 // indirect
+	golang.org/x/sys v0.42.0
+	golang.org/x/term v0.41.0 // indirect
 	golang.org/x/time v0.14.0
-	golang.org/x/tools v0.42.0 // indirect
+	golang.org/x/tools v0.43.0 // indirect
 	golang.org/x/xerrors v0.0.0-20240903120638-7835f813f4da // indirect
 	google.golang.org/genai v1.30.0
 	google.golang.org/genproto v0.0.0-20260128011058-8636f8732409 // indirect
