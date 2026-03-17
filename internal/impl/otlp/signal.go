@@ -15,6 +15,8 @@ package otlp
 const (
 	MetadataKeySignalType = "otel_signal_type"
 	MetadataKeyEncoding   = "otel_encoding"
+	MetadataKeySpanID     = "otel_span_id"
+	MetadataKeyTraceID    = "otel_trace_id"
 )
 
 // SignalType represents the type of OpenTelemetry signal (trace, log, or metric).
