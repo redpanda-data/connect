@@ -51,18 +51,20 @@ func (e *StaleSchemaError) Error() string {
 // committer batches data file commits for a single table.
 // Commits are serialized - only one commit at a time per committer.
 type committer struct {
-	table   *table.Table
-	cfg     CommitConfig
-	batcher *asyncroutine.Batcher[CommitInput, struct{}]
-	logger  *service.Logger
+	table       *table.Table
+	cfg         CommitConfig
+	reloadTable func(ctx context.Context) (*table.Table, error)
+	batcher     *asyncroutine.Batcher[CommitInput, struct{}]
+	logger      *service.Logger
 }
 
 // NewCommitter creates a new committer for a specific table.
-func NewCommitter(tbl *table.Table, cfg CommitConfig, logger *service.Logger) (*committer, error) {
+func NewCommitter(tbl *table.Table, cfg CommitConfig, reloadTable func(ctx context.Context) (*table.Table, error), logger *service.Logger) (*committer, error) {
 	c := &committer{
-		table:  tbl,
-		cfg:    cfg,
-		logger: logger,
+		table:       tbl,
+		cfg:         cfg,
+		reloadTable: reloadTable,
+		logger:      logger,
 	}
 
 	batcher, err := asyncroutine.NewBatcher(100, c.doCommit)
@@ -116,9 +118,18 @@ func (c *committer) doCommit(ctx context.Context, inputs []CommitInput) ([]struc
 		if errors.Is(err, rest.ErrCommitFailed) {
 			commitErr = err
 			c.logger.Warnf("Commit attempt %d/%d failed: %v", attempt, c.cfg.MaxRetries, err)
+			// Reload table to get fresh metadata before retrying.
+			if reloaded, reloadErr := c.reloadTable(ctx); reloadErr == nil {
+				c.table = reloaded
+			} else {
+				c.logger.Warnf("Failed to reload table during commit retry: %v", reloadErr)
+			}
 			continue
 		} else if err != nil {
-			// If we get an error other than a conflict then we should not retry.
+			// Non-retryable error: reload table so next call uses fresh metadata.
+			if reloaded, reloadErr := c.reloadTable(ctx); reloadErr == nil {
+				c.table = reloaded
+			}
 			commitErr = err
 			break
 		}
