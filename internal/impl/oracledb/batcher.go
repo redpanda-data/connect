@@ -10,6 +10,7 @@ package oracledb
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"sync"
@@ -31,6 +32,8 @@ type batchPublisher struct {
 	checkpoint *checkpoint.Capped[replication.SCN]
 	msgChan    chan asyncMessage
 	cacheSCN   func(ctx context.Context, scn replication.SCN) error
+	schemas    *schemaCache
+	db         *sql.DB
 
 	log     *service.Logger
 	shutSig *shutdown.Signaller
@@ -129,6 +132,30 @@ func (p *batchPublisher) loop() {
 // Publish turns the provided message into a service.Message before batching and
 // flushing them based on batch size or time elapsed.
 func (b *batchPublisher) Publish(ctx context.Context, m *replication.MessageEvent) error {
+	// Resolve schema first — needed both for metadata and value coercion.
+	var schemaAny any
+	if b.schemas != nil {
+		table := replication.UserTable{Schema: m.Schema, Name: m.Table}
+		if m.ColumnMeta != nil {
+			b.schemas.seedFromColumnMeta(table, m.ColumnMeta)
+		}
+		eventKeys := mapKeys(m.Data)
+		s, typeInfo, sErr := b.schemas.schemaForEvent(ctx, b.db, table, eventKeys)
+		if sErr != nil {
+			b.log.Warnf("Failed to refresh schema for %s.%s: %v", m.Schema, m.Table, sErr)
+		}
+		schemaAny = s
+
+		// Coerce streaming values to match snapshot types. Snapshot events
+		// already have correct Go types from sql.Scan; only streaming events
+		// (where LogMiner SQL_REDO quotes all INSERT values) need coercion.
+		if m.Operation != replication.MessageOperationRead && typeInfo != nil {
+			if dataMap, ok := m.Data.(map[string]any); ok {
+				coerceStreamingValues(dataMap, typeInfo, b.log)
+			}
+		}
+	}
+
 	data, err := json.Marshal(m.Data)
 	if err != nil {
 		return fmt.Errorf("marshalling message: %w", err)
@@ -143,6 +170,10 @@ func (b *batchPublisher) Publish(ctx context.Context, m *replication.MessageEven
 	}
 	if m.CheckpointSCN.IsValid() {
 		msg.MetaSet("checkpoint_scn", m.CheckpointSCN.String())
+	}
+
+	if schemaAny != nil {
+		msg.MetaSetImmut("schema", service.ImmutableAny{V: schemaAny})
 	}
 
 	var flushedBatch []*service.Message
@@ -206,6 +237,19 @@ func (b *batchPublisher) publishBatch(ctx context.Context, batch service.Message
 	case <-ctx.Done():
 		return ctx.Err()
 	}
+}
+
+// mapKeys extracts the keys from a map for use in drift detection.
+func mapKeys(data any) []string {
+	m, ok := data.(map[string]any)
+	if !ok {
+		return nil
+	}
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	return keys
 }
 
 func (b *batchPublisher) msgs() <-chan asyncMessage {

@@ -21,6 +21,11 @@ type SCN uint64
 // InvalidSCN represents an SCN value that's unset or invalid.
 const InvalidSCN SCN = 0
 
+// MaxInt64DecimalPrecision is the maximum number of decimal digits guaranteed
+// to fit in an int64. math.MaxInt64 is 19 digits but not all 19-digit values
+// fit, so 18 is the safe upper bound.
+const MaxInt64DecimalPrecision = 18
+
 // String formats the SCN to a string for logging.
 func (scn SCN) String() string {
 	return strconv.FormatUint(uint64(scn), 10)
@@ -99,13 +104,25 @@ func (op OpType) String() string {
 	}
 }
 
+// ColumnMeta holds lightweight column type metadata for schema construction.
+// This carries type information from the snapshot phase (where sql.ColumnType
+// is available) to the batcher (where schema.Common objects are built).
+type ColumnMeta struct {
+	Name           string
+	TypeName       string
+	Precision      int64
+	Scale          int64
+	HasDecimalSize bool
+}
+
 // MessageEvent represents a single change from Table's change table in the database.
 type MessageEvent struct {
-	SCN           SCN       `json:"start_scn"`
-	CheckpointSCN SCN       `json:"-"`
-	Operation     OpType    `json:"operation"`
-	Schema        string    `json:"schema"`
-	Table         string    `json:"table"`
-	Data          any       `json:"data"`
-	Timestamp     time.Time `json:"timestamp"`
+	SCN           SCN          `json:"start_scn"`
+	CheckpointSCN SCN          `json:"-"`
+	Operation     OpType       `json:"operation"`
+	Schema        string       `json:"schema"`
+	Table         string       `json:"table"`
+	Data          any          `json:"data"`
+	Timestamp     time.Time    `json:"timestamp"`
+	ColumnMeta    []ColumnMeta `json:"-"`
 }

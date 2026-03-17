@@ -206,6 +206,8 @@ func (s *Snapshot) processBatch(ctx context.Context, tx *sql.Tx, table UserTable
 		return 0, fmt.Errorf("fetch columns: %w", err)
 	}
 
+	colMeta := buildColumnMeta(types)
+
 	for batchRows.Next() {
 		batchCount++
 
@@ -229,11 +231,12 @@ func (s *Snapshot) processBatch(ctx context.Context, tx *sql.Tx, table UserTable
 		}
 
 		m := MessageEvent{
-			Table:     table.Name,
-			Schema:    table.Schema,
-			Data:      row,
-			Operation: MessageOperationRead,
-			SCN:       0,
+			Table:      table.Name,
+			Schema:     table.Schema,
+			Data:       row,
+			Operation:  MessageOperationRead,
+			SCN:        0,
+			ColumnMeta: colMeta,
 		}
 		if err = s.publisher.Publish(ctx, &m); err != nil {
 			return 0, fmt.Errorf("handling snapshot table row: %w", err)
@@ -374,7 +377,8 @@ func prepSnapshotScannerAndMappers(cols []*sql.ColumnType) (values []any, mapper
 		case "RAW", "LONG RAW", "BLOB":
 			val = new(sql.Null[[]byte])
 			mapper = snapshotValueMapper[[]byte]
-		case "DATE", "TIMESTAMP", "TIMESTAMP WITH TIME ZONE", "TIMESTAMP WITH LOCAL TIME ZONE":
+		case "DATE", "TIMESTAMP", "TIMESTAMP WITH TIME ZONE", "TIMESTAMP WITH LOCAL TIME ZONE",
+			"TimeStampTZ", "TimeStampDTY", "TimeStampTZ_DTY", "TimeStampLTZ_DTY", "TimeStampeLTZ", "TIMESTAMPTZ":
 			val = new(sql.NullTime)
 			mapper = func(v any) (any, error) {
 				s, ok := v.(*sql.NullTime)
@@ -387,13 +391,21 @@ func prepSnapshotScannerAndMappers(cols []*sql.ColumnType) (values []any, mapper
 				return s.Time, nil
 			}
 		case "NUMBER", "INTEGER", "INT", "SMALLINT", "FLOAT":
-			// Oracle NUMBER type can represent both integers and decimals
-			// Scan as string to preserve precision and avoid conversion errors
-			val = new(sql.NullString)
-			mapper = stringMapping(func(s string) (any, error) {
-				return json.Number(s), nil
-			})
-		case "BINARY_FLOAT", "BINARY_DOUBLE":
+			// Oracle NUMBER type can represent both integers and decimals.
+			// For integer-width columns (scale=0, precision<=18), scan as int64
+			// to match the streaming path's ParseInt behavior.
+			// For all others, scan as json.Number to preserve arbitrary precision.
+			precision, scale, ok := col.DecimalSize()
+			if ok && scale == 0 && precision > 0 && precision <= MaxInt64DecimalPrecision {
+				val = new(sql.Null[int64])
+				mapper = snapshotValueMapper[int64]
+			} else {
+				val = new(sql.NullString)
+				mapper = stringMapping(func(s string) (any, error) {
+					return json.Number(s), nil
+				})
+			}
+		case "BINARY_FLOAT", "IBFloat", "BFloat", "BINARY_DOUBLE", "IBDouble", "BDouble":
 			val = new(sql.Null[float64])
 			mapper = snapshotValueMapper[float64]
 		case "CLOB", "NCLOB", "LONG":
@@ -426,6 +438,24 @@ func buildOrderByClause(pk []string) string {
 		quoted[i] = `"` + col + `"`
 	}
 	return "ORDER BY " + strings.Join(quoted, ", ")
+}
+
+// buildColumnMeta extracts lightweight type metadata from sql.ColumnType values
+// for carrying through MessageEvent to the schema cache.
+func buildColumnMeta(types []*sql.ColumnType) []ColumnMeta {
+	meta := make([]ColumnMeta, len(types))
+	for i, ct := range types {
+		meta[i] = ColumnMeta{
+			Name:     ct.Name(),
+			TypeName: ct.DatabaseTypeName(),
+		}
+		if precision, scale, ok := ct.DecimalSize(); ok {
+			meta[i].Precision = precision
+			meta[i].Scale = scale
+			meta[i].HasDecimalSize = true
+		}
+	}
+	return meta
 }
 
 func snapshotValueMapper[T any](v any) (any, error) {
