@@ -53,3 +53,7 @@ Redpanda Connect will stream the CDC events via LogMiner as data is inserted.
 ```bash
 task sqlcl:drop-cache
 ```
+
+## Recording Results
+
+After running the benchmark, record your results in [`docs/benchmark-results/oracledb-cdc.md`](../../../../docs/benchmark-results/oracledb-cdc.md). Append a new dated section with environment details, dataset, throughput numbers, and observations. See [`docs/benchmarking.md`](../../../../docs/benchmarking.md) for the full guide.

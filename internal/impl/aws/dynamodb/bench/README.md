@@ -50,3 +50,7 @@ INFO rolling stats: 102000 msg/sec, 216 MB/sec   @service=redpanda-connect bytes
 
 > **Note:** DynamoDB Local uses a single shard per table. With 3 tables the connector fully saturates each shard. After all records are consumed throughput drops to 0 until new writes arrive. Real AWS DynamoDB scales horizontally with multiple shards per table.
 
+## Recording Results
+
+After running the benchmark, record your results in [`docs/benchmark-results/dynamodb-cdc.md`](../../../../../docs/benchmark-results/dynamodb-cdc.md). Append a new dated section with environment details, dataset, throughput numbers, and observations. See [`docs/benchmarking.md`](../../../../../docs/benchmarking.md) for the full guide.
+
