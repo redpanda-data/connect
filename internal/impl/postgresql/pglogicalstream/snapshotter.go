@@ -14,11 +14,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/netip"
 	"slices"
 	"strconv"
 	"strings"
-
-	"net/netip"
 
 	"github.com/Masterminds/squirrel"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -254,7 +253,6 @@ type tuple struct {
 	elements []any
 }
 
-//nolint:stylecheck // This is implementing an interface
 func (t *tuple) ToSql() (sql string, args []any, err error) {
 	sql = "(" + strings.Join(slices.Repeat([]string{"?"}, len(t.elements)), ", ") + ")"
 	args = t.elements
