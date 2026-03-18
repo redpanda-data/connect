@@ -17,7 +17,6 @@ package sentry
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/getsentry/sentry-go"
 	"github.com/stretchr/testify/mock"
@@ -53,7 +52,7 @@ func TestCaptureProcessor(t *testing.T) {
 		rawEvent = args.Get(0)
 	})
 	transport.On("Configure", mock.Anything).Return()
-	transport.On("Flush", mock.Anything).Return(true)
+	transport.On("FlushWithContext", mock.Anything).Return(true)
 	transport.On("Close", mock.Anything).Return()
 
 	proc, err := newCaptureProcessor(conf, service.MockResources(), withTransport(transport))
@@ -102,7 +101,7 @@ func TestCaptureProcessor_Sync(t *testing.T) {
 		rawEvent = args.Get(0)
 	})
 	transport.On("Configure", mock.Anything).Return()
-	transport.On("Flush", mock.Anything).Return(true)
+	transport.On("FlushWithContext", mock.Anything).Return(true)
 	transport.On("Close", mock.Anything).Return()
 
 	proc, err := newCaptureProcessor(conf, service.MockResources(), withTransport(transport))
@@ -139,7 +138,7 @@ func TestCaptureProcessor_InvalidMessage(t *testing.T) {
 
 	transport := NewTransport(t)
 	transport.On("Configure", mock.Anything).Return()
-	transport.On("Flush", mock.Anything).Return(true)
+	transport.On("FlushWithContext", mock.Anything).Return(true)
 	transport.On("Close", mock.Anything).Return()
 
 	proc, err := newCaptureProcessor(conf, service.MockResources(), withTransport(transport))
@@ -174,7 +173,7 @@ func TestCaptureProcessor_NoSampling(t *testing.T) {
 
 	transport := NewTransport(t)
 	transport.On("Configure", mock.Anything).Return()
-	transport.On("Flush", mock.Anything).Return(true)
+	transport.On("FlushWithContext", mock.Anything).Return(true)
 	transport.On("Close", mock.Anything).Return()
 
 	proc, err := newCaptureProcessor(conf, service.MockResources(), withTransport(transport))
@@ -194,9 +193,6 @@ func TestCaptureProcessor_FlushOnClose(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	t.Cleanup(cancel)
 
-	d, err := time.ParseDuration("3s")
-	require.NoError(t, err, "bad flush timeout duration")
-
 	spec := newCaptureProcessorConfig()
 	conf, err := spec.ParseYAML(`
   flush_timeout: 3s
@@ -211,7 +207,7 @@ func TestCaptureProcessor_FlushOnClose(t *testing.T) {
 
 	transport := NewTransport(t)
 	transport.On("Configure", mock.Anything).Return()
-	transport.On("Flush", d).Return(true)
+	transport.On("FlushWithContext", mock.Anything).Return(true)
 	transport.On("Close", mock.Anything).Return()
 
 	proc, err := newCaptureProcessor(conf, service.MockResources(), withTransport(transport))
@@ -236,7 +232,7 @@ func TestCaptureProcessor_FlushFailed(t *testing.T) {
 
 	transport := NewTransport(t)
 	transport.On("Configure", mock.Anything).Return()
-	transport.On("Flush", mock.Anything).Return(false)
+	transport.On("FlushWithContext", mock.Anything).Return(false)
 	transport.On("Close").Return()
 
 	proc, err := newCaptureProcessor(conf, service.MockResources(), withTransport(transport))
@@ -265,7 +261,7 @@ func TestCaptureProcessor_EmptyContext(t *testing.T) {
 		rawEvent = args.Get(0)
 	})
 	transport.On("Configure", mock.Anything).Return()
-	transport.On("Flush", mock.Anything).Return(true)
+	transport.On("FlushWithContext", mock.Anything).Return(true)
 	transport.On("Close", mock.Anything).Return()
 
 	proc, err := newCaptureProcessor(conf, service.MockResources(), withTransport(transport))
@@ -309,7 +305,7 @@ func TestCaptureProcessor_NoContext(t *testing.T) {
 		rawEvent = args.Get(0)
 	})
 	transport.On("Configure", mock.Anything).Return()
-	transport.On("Flush", mock.Anything).Return(true)
+	transport.On("FlushWithContext", mock.Anything).Return(true)
 	transport.On("Close", mock.Anything).Return()
 
 	proc, err := newCaptureProcessor(conf, service.MockResources(), withTransport(transport))
@@ -353,7 +349,7 @@ func TestCaptureProcessor_NilContextValue(t *testing.T) {
 		rawEvent = args.Get(0)
 	})
 	transport.On("Configure", mock.Anything).Return()
-	transport.On("Flush", mock.Anything).Return(true)
+	transport.On("FlushWithContext", mock.Anything).Return(true)
 	transport.On("Close", mock.Anything).Return()
 
 	proc, err := newCaptureProcessor(conf, service.MockResources(), withTransport(transport))
@@ -393,7 +389,7 @@ func TestCaptureProcessor_InvalidContext(t *testing.T) {
 
 	transport := NewTransport(t)
 	transport.On("Configure", mock.Anything).Return()
-	transport.On("Flush", mock.Anything).Return(true)
+	transport.On("FlushWithContext", mock.Anything).Return(true)
 	transport.On("Close", mock.Anything).Return()
 
 	proc, err := newCaptureProcessor(conf, service.MockResources(), withTransport(transport))
@@ -422,7 +418,7 @@ func TestCaptureProcessor_ContextNotStructured(t *testing.T) {
 
 	transport := NewTransport(t)
 	transport.On("Configure", mock.Anything).Return()
-	transport.On("Flush", mock.Anything).Return(true)
+	transport.On("FlushWithContext", mock.Anything).Return(true)
 	transport.On("Close", mock.Anything).Return()
 
 	proc, err := newCaptureProcessor(conf, service.MockResources(), withTransport(transport))
@@ -451,7 +447,7 @@ func TestCaptureProcessor_ContextNotMap(t *testing.T) {
 
 	transport := NewTransport(t)
 	transport.On("Configure", mock.Anything).Return()
-	transport.On("Flush", mock.Anything).Return(true)
+	transport.On("FlushWithContext", mock.Anything).Return(true)
 	transport.On("Close", mock.Anything).Return()
 
 	proc, err := newCaptureProcessor(conf, service.MockResources(), withTransport(transport))
@@ -480,7 +476,7 @@ func TestCaptureProcessor_ContextValueNotMap(t *testing.T) {
 
 	transport := NewTransport(t)
 	transport.On("Configure", mock.Anything).Return()
-	transport.On("Flush", mock.Anything).Return(true)
+	transport.On("FlushWithContext", mock.Anything).Return(true)
 	transport.On("Close", mock.Anything).Return()
 
 	proc, err := newCaptureProcessor(conf, service.MockResources(), withTransport(transport))
@@ -509,7 +505,7 @@ func TestCaptureProcessor_InvalidTag(t *testing.T) {
 
 	transport := NewTransport(t)
 	transport.On("Configure", mock.Anything).Return()
-	transport.On("Flush", mock.Anything).Return(true)
+	transport.On("FlushWithContext", mock.Anything).Return(true)
 	transport.On("Close", mock.Anything).Return()
 
 	proc, err := newCaptureProcessor(conf, service.MockResources(), withTransport(transport))
