@@ -437,7 +437,7 @@ func (e *esOutput) addOpToBatch(bulkWriter *bulk.Bulk, batch service.MessageBatc
 			Index_:   &index,
 			Id_:      optionalStr(id),
 			Pipeline: optionalStr(pipeline),
-			Routing:  optionalStr(routing),
+			Routing:  optionalStrSlice(routing),
 		}
 		if err := bulkWriter.IndexOp(op, msgBytes); err != nil {
 			return err
@@ -447,7 +447,7 @@ func (e *esOutput) addOpToBatch(bulkWriter *bulk.Bulk, batch service.MessageBatc
 			Index_:   &index,
 			Id_:      optionalStr(id),
 			Pipeline: optionalStr(pipeline),
-			Routing:  optionalStr(routing),
+			Routing:  optionalStrSlice(routing),
 		}
 		if err := bulkWriter.CreateOp(op, msgBytes); err != nil {
 			return err
@@ -456,7 +456,7 @@ func (e *esOutput) addOpToBatch(bulkWriter *bulk.Bulk, batch service.MessageBatc
 		op := types.UpdateOperation{
 			Id_:     &id,
 			Index_:  &index,
-			Routing: optionalStr(routing),
+			Routing: optionalStrSlice(routing),
 		}
 		if e.conf.retryOnConflict != 0 {
 			op.RetryOnConflict = &e.conf.retryOnConflict
@@ -479,7 +479,7 @@ func (e *esOutput) addOpToBatch(bulkWriter *bulk.Bulk, batch service.MessageBatc
 		op := types.DeleteOperation{
 			Id_:     &id,
 			Index_:  &index,
-			Routing: optionalStr(routing),
+			Routing: optionalStrSlice(routing),
 		}
 		if err := bulkWriter.DeleteOp(op); err != nil {
 			return err
@@ -499,6 +499,13 @@ func optionalStr(s string) *string {
 		return nil
 	}
 	return &s
+}
+
+func optionalStrSlice(s string) []string {
+	if s == "" {
+		return nil
+	}
+	return []string{s}
 }
 
 func (*esOutput) Close(context.Context) error {
