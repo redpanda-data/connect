@@ -137,72 +137,69 @@ func (r *Router) Route(ctx context.Context, batch service.MessageBatch) error {
 }
 
 // writeWithRetry writes a batch to a table with retry loop for schema evolution.
+// On any failure the writer is always closed so the next attempt reloads the table.
+// Every error gets at least one retry; schema evolution errors get up to maxSchemaEvolutionRetries.
 func (r *Router) writeWithRetry(ctx context.Context, key tableKey, batch service.MessageBatch) error {
 	entry := r.getOrCreateEntry(key)
 
-	for range maxSchemaEvolutionRetries {
+	for i := range maxSchemaEvolutionRetries {
 		err := r.doWrite(ctx, key, entry, batch)
 		if err == nil {
 			return nil
 		}
 
-		// Stale schema: the writer was using an outdated schema.
-		// Recreate the writer to pick up the current schema and retry.
-		var staleErr *StaleSchemaError
-		if errors.As(err, &staleErr) {
-			entry.mu.Lock()
-			r.closeWriter(entry)
-			entry.mu.Unlock()
-			r.logger.Debugf("Stale schema for %s.%s: %v, recreating writer", key.namespace, key.table, err)
-			continue
-		}
+		// Always close the writer on failure so the next attempt gets a fresh table.
+		entry.mu.Lock()
+		r.closeWriter(entry)
+		entry.mu.Unlock()
 
-		// Check if schema evolution is disabled - fail immediately
-		if !r.schemaEvoCfg.Enabled {
-			return fmt.Errorf("writing to %s.%s: %w", key.namespace, key.table, err)
-		}
-
-		// Handle specific errors with schema evolution
-		if errors.Is(err, catalog.ErrNoSuchNamespace) {
-			if err := r.createNamespace(ctx, key, entry); err != nil {
-				return fmt.Errorf("creating namespace %s: %w", key.namespace, err)
-			}
-			continue
-		}
-
-		if errors.Is(err, catalog.ErrNoSuchTable) {
-			createErr := r.createTable(ctx, key, batch, entry)
-			if createErr != nil {
-				// If table creation failed because namespace doesn't exist, create it first
-				if errors.Is(createErr, catalog.ErrNoSuchNamespace) {
-					if nsErr := r.createNamespace(ctx, key, entry); nsErr != nil {
-						return fmt.Errorf("creating namespace %s: %w", key.namespace, nsErr)
-					}
-					// Don't return error, continue retry loop to create table
-				} else {
-					return fmt.Errorf("creating table %s.%s: %w", key.namespace, key.table, createErr)
+		// When schema evolution is enabled, perform recovery actions for known errors.
+		if r.schemaEvoCfg.Enabled {
+			if errors.Is(err, catalog.ErrNoSuchNamespace) {
+				if nsErr := r.createNamespace(ctx, key, entry); nsErr != nil {
+					return fmt.Errorf("creating namespace %s: %w", key.namespace, nsErr)
 				}
+				continue
 			}
-			continue
+
+			if errors.Is(err, catalog.ErrNoSuchTable) {
+				createErr := r.createTable(ctx, key, batch, entry)
+				if createErr != nil {
+					if errors.Is(createErr, catalog.ErrNoSuchNamespace) {
+						if nsErr := r.createNamespace(ctx, key, entry); nsErr != nil {
+							return fmt.Errorf("creating namespace %s: %w", key.namespace, nsErr)
+						}
+					} else {
+						return fmt.Errorf("creating table %s.%s: %w", key.namespace, key.table, createErr)
+					}
+				}
+				continue
+			}
+
+			var schemaErr *BatchSchemaEvolutionError
+			if errors.As(err, &schemaErr) {
+				if evolveErr := r.evolveSchema(ctx, key, schemaErr, entry); evolveErr != nil {
+					return fmt.Errorf("evolving schema for %s.%s: %w", key.namespace, key.table, evolveErr)
+				}
+				continue
+			}
+
+			var reqNullErr *shredder.RequiredFieldNullError
+			if errors.As(err, &reqNullErr) {
+				if optErr := r.makeColumnOptional(ctx, key, reqNullErr, entry); optErr != nil {
+					return fmt.Errorf("making column optional for %s.%s: %w", key.namespace, key.table, optErr)
+				}
+				continue
+			}
 		}
 
-		var schemaErr *BatchSchemaEvolutionError
-		if errors.As(err, &schemaErr) {
-			if err := r.evolveSchema(ctx, key, schemaErr, entry); err != nil {
-				return fmt.Errorf("evolving schema for %s.%s: %w", key.namespace, key.table, err)
-			}
+		// For all other errors (including stale schema, auth errors, or when schema
+		// evolution is disabled): the writer is already closed. Always retry at least
+		// once so the fresh writer can recover from transient failures.
+		if i == 0 {
+			r.logger.Debugf("Write failed for %s.%s, retrying with fresh writer: %v", key.namespace, key.table, err)
 			continue
 		}
-
-		var reqNullErr *shredder.RequiredFieldNullError
-		if errors.As(err, &reqNullErr) {
-			if err := r.makeColumnOptional(ctx, key, reqNullErr, entry); err != nil {
-				return fmt.Errorf("making column optional for %s.%s: %w", key.namespace, key.table, err)
-			}
-			continue
-		}
-
-		// Unhandled error - fail
 		return fmt.Errorf("writing to %s.%s: %w", key.namespace, key.table, err)
 	}
 
@@ -499,8 +496,19 @@ func (r *Router) createWriter(ctx context.Context, key tableKey) (*writer, error
 		return nil, err
 	}
 
+	// reloadTable creates a fresh catalog client and reloads the table,
+	// allowing the committer to recover from stale metadata or auth errors.
+	reloadTable := func(ctx context.Context) (*table.Table, error) {
+		rc, err := catalogx.NewCatalogClient(ctx, r.catalogCfg, nsParts)
+		if err != nil {
+			return nil, fmt.Errorf("creating catalog client for table reload: %w", err)
+		}
+		defer rc.Close()
+		return rc.LoadTable(ctx, key.table)
+	}
+
 	// Create committer with its own table reference
-	comm, err := NewCommitter(committerTbl, r.commitCfg, r.logger)
+	comm, err := NewCommitter(committerTbl, r.commitCfg, reloadTable, r.logger)
 	if err != nil {
 		return nil, fmt.Errorf("creating committer: %w", err)
 	}
