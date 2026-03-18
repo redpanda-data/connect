@@ -672,9 +672,6 @@ oracledb_cdc:
 			`{"max": true}`,      // json (clob)
 		)
 
-		// verify we got at least 2 records (1 snapshot + 1+ streaming)
-		// Note: Oracle may split INSERT with LOB columns into multiple redo log entries,
-		// so we may get 2-3+ records total depending on how LOBs are handled
 		minWant := 2
 		t.Log("Waiting for streaming record(s)...")
 		assert.Eventually(t, func() bool {
@@ -734,44 +731,7 @@ oracledb_cdc:
 
 	t.Log("Verifying values from streaming...")
 	{
-		// Oracle may split INSERT statements with LOB columns into multiple redo log entries.
-		// The actual data might be in outBatches[1], outBatches[2], or split across both.
-		// Check which record has the non-EMPTY LOB values to determine which to validate.
-
 		// assert max - uppercase column names from Oracle
-		// BEFORE - With binary data
-		// require.JSONEq(t, `{
-		// "BIGINT_COL": 9223372036854775807,
-		// "BINARY_COL": "AAAAAAAAAAAAAAAAAAAAAA==",
-		// "BIT_COL": true,
-		// "CHAR_COL": "ZZZZZZZZZZ",
-		// "DATE_COL": "9999-12-31T00:00:00Z",
-		// "DATETIME2_COL": "9999-12-31T23:59:59.9999999Z",
-		// "DATETIME_COL": "9999-12-31T23:59:59.997Z",
-		// "DATETIMEOFFSET_COL": "9999-12-31T23:59:59.9999999+14:00",
-		// "DECIMAL_COL": 9999999999999999999999999999.9999999999,
-		// "FLOAT_COL": 1.79e+100,
-		// "INT_COL": 2147483647,
-		// "JSON_COL": "{\"max\": true}",
-		// "NCHAR_COL": "ZZZZZZZZZZ",
-		// "NUMERIC_COL": 999999999999999.99999,
-		// "NVARCHAR_COL": "Max nvarchar value",
-		// "NVARCHARMAX_COL": "Max nvarchar(max)",
-		// "REAL_COL": "3.4e+37",
-		// "SMALLDATETIME_COL": "2079-06-06T23:59:00Z",
-		// "SMALLINT_COL": 32767,
-		// "TIME_COL": "0001-01-01T23:59:59.9999999Z",
-		// "TINYINT_COL": 255,
-		// "VARBINARY_COL": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-		// "VARBINARYMAX_COL": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-		// "VARCHAR_COL": "Max varchar value",
-		// "VARCHARMAX_COL": "Max varchar(max)",
-		// "XML_COL": "\u003croot\u003emax\u003c/root\u003e"
-		// }`, outBatches[1], "Failed to assert max result from streaming")
-		// Streaming values are coerced to match snapshot types using schema
-		// metadata. Int64 columns become bare numbers, BINARY_FLOAT/DOUBLE
-		// become float64, and NUMBER columns with fractional scale become
-		// json.Number (bare numbers preserving exact precision).
 		require.JSONEq(t, `{
 		"BIGINT_COL": 9223372036854775807,
 		"BINARY_COL": "AAAAAAAAAAAAAAAAAAAAAA==",
@@ -784,9 +744,11 @@ oracledb_cdc:
 		"DECIMAL_COL": 9999999999999999999999999999.9999999999,
 		"FLOAT_COL": 1.79e+100,
 		"INT_COL": 2147483647,
+		"JSON_COL": "{\"max\": true}",
 		"NCHAR_COL": "ZZZZZZZZZZ",
 		"NUMERIC_COL": 999999999999999.99999,
 		"NVARCHAR_COL": "Max nvarchar value",
+		"NVARCHARMAX_COL": "Max nvarchar(max)",
 		"REAL_COL": 3.3999999e+37,
 		"SMALLDATETIME_COL": "2079-06-06T23:59:00Z",
 		"SMALLINT_COL": 32767,
