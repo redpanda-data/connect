@@ -60,7 +60,15 @@ generated with the https://docs.nats.io/nats-tools/nsc[nsc tool^].
 Alternatively, the ` + "`user_jwt`" + ` field can contain a plain text JWT and the ` + "`user_nkey_seed`" + `can contain
 the plain text NKey Seed.
 
-https://docs.nats.io/using-nats/developer/connecting/creds[More details^].`
+https://docs.nats.io/using-nats/developer/connecting/creds[More details^].
+
+=== Token
+
+The ` + "`token`" + ` field can contain a plain text token string for https://docs.nats.io/running-a-nats-service/configuration/securing_nats/auth_intro/tokens[token-based authentication^].
+
+=== User and password
+
+The ` + "`user`" + ` and ` + "`password`" + ` fields can be used for https://docs.nats.io/running-a-nats-service/configuration/securing_nats/auth_intro/username_password[username/password authentication^].`
 }
 
 func authFieldSpec() *service.ConfigField {
@@ -87,6 +95,17 @@ func authFieldSpec() *service.ConfigField {
 			Description("An optional plain text user NKey Seed (given along with the corresponding user JWT).").
 			Secret().
 			Optional(),
+		service.NewStringField("user").
+			Description("An optional plain text user name (given along with the corresponding user password).").
+			Optional(),
+		service.NewStringField("password").
+			Description("An optional plain text password (given along with the corresponding user name).").
+			Secret().
+			Optional(),
+		service.NewStringField("token").
+			Description("An optional plain text token.").
+			Secret().
+			Optional(),
 	).Description("Optional configuration of NATS authentication parameters.").
 		Advanced()
 }
@@ -97,47 +116,54 @@ type authConfig struct {
 	UserCredentialsFile string
 	UserJWT             string
 	UserNkeySeed        string
+	Token               string
+	User                string
+	Password            string
 }
 
 //------------------------------------------------------------------------------
 
+// authConfToOptions returns the NATS option for the single configured auth
+// method. AuthFromParsedConfig guarantees at most one method is set.
 func authConfToOptions(auth authConfig, fs *service.FS) []nats.Option {
-	var opts []nats.Option
-	if auth.NKeyFile != "" {
-		if opt, err := nats.NkeyOptionFromSeed(auth.NKeyFile); err != nil {
-			opts = append(opts, func(*nats.Options) error { return err })
-		} else {
-			opts = append(opts, opt)
+	switch {
+	case auth.NKeyFile != "":
+		opt, err := nats.NkeyOptionFromSeed(auth.NKeyFile)
+		if err != nil {
+			return []nats.Option{func(*nats.Options) error { return err }}
 		}
-	}
+		return []nats.Option{opt}
 
-	if auth.NKey != "" {
-		if opt, err := nkeyOptionFromString(auth.NKey); err != nil {
-			opts = append(opts, func(*nats.Options) error { return err })
-		} else {
-			opts = append(opts, opt)
+	case auth.NKey != "":
+		opt, err := nkeyOptionFromString(auth.NKey)
+		if err != nil {
+			return []nats.Option{func(*nats.Options) error { return err }}
 		}
-	}
+		return []nats.Option{opt}
 
 	// Previously we used nats.UserCredentials to authenticate. In order to
 	// support a custom FS implementation in our NATS components, we needed to
 	// switch to the nats.UserJWT option, while still preserving the behaviour
 	// of the nats.UserCredentials option, which includes things like path
 	// expansing, home directory support and wiping credentials held in memory
-	if auth.UserCredentialsFile != "" {
-		opts = append(opts, nats.UserJWT(
+	case auth.UserCredentialsFile != "":
+		return []nats.Option{nats.UserJWT(
 			userJWTHandler(auth.UserCredentialsFile, fs),
 			sigHandler(auth.UserCredentialsFile, fs),
-		))
-	}
+		)}
 
-	if auth.UserJWT != "" && auth.UserNkeySeed != "" {
-		opts = append(opts, nats.UserJWTAndSeed(
-			auth.UserJWT, auth.UserNkeySeed,
-		))
-	}
+	case auth.UserJWT != "" && auth.UserNkeySeed != "":
+		return []nats.Option{nats.UserJWTAndSeed(auth.UserJWT, auth.UserNkeySeed)}
 
-	return opts
+	case auth.Token != "":
+		return []nats.Option{nats.Token(auth.Token)}
+
+	case auth.User != "" || auth.Password != "":
+		return []nats.Option{nats.UserInfo(auth.User, auth.Password)}
+
+	default:
+		return nil
+	}
 }
 
 // AuthFromParsedConfig attempts to extract an auth config from a ParsedConfig.
@@ -172,6 +198,56 @@ func AuthFromParsedConfig(p *service.ParsedConfig) (c authConfig, err error) {
 		if c.UserNkeySeed, err = p.FieldString("user_nkey_seed"); err != nil {
 			return
 		}
+	}
+	if p.Contains("token") {
+		if c.Token, err = p.FieldString("token"); err != nil {
+			return
+		}
+	}
+
+	if p.Contains("user") || p.Contains("password") {
+		if !p.Contains("user") {
+			err = errors.New("missing auth.user config field")
+			return
+		}
+		if !p.Contains("password") {
+			err = errors.New("missing auth.password config field")
+			return
+		}
+		if c.User, err = p.FieldString("user"); err != nil {
+			return
+		}
+		if c.Password, err = p.FieldString("password"); err != nil {
+			return
+		}
+		if c.User == "" && c.Password == "" {
+			err = errors.New("auth.user and auth.password are both empty")
+			return
+		}
+	}
+
+	// Verify that at most one auth method is configured.
+	var methods []string
+	if c.NKeyFile != "" {
+		methods = append(methods, "nkey_file")
+	}
+	if c.NKey != "" {
+		methods = append(methods, "nkey")
+	}
+	if c.UserCredentialsFile != "" {
+		methods = append(methods, "user_credentials_file")
+	}
+	if c.UserJWT != "" {
+		methods = append(methods, "user_jwt+user_nkey_seed")
+	}
+	if c.Token != "" {
+		methods = append(methods, "token")
+	}
+	if c.User != "" || c.Password != "" {
+		methods = append(methods, "user+password")
+	}
+	if len(methods) > 1 {
+		err = fmt.Errorf("multiple auth methods configured (%s); only one is permitted", strings.Join(methods, ", "))
 	}
 	return
 }
