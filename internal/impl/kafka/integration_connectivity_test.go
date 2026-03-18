@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 	_ "github.com/redpanda-data/connect/v4/public/components/confluent"
