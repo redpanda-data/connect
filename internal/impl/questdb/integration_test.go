@@ -22,7 +22,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jackc/pgconn"
+	"github.com/jackc/pgx/v5/pgconn"
 	qdb "github.com/questdb/go-questdb-client/v4"
 
 	"github.com/ory/dockertest/v3"
