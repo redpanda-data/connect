@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 )
@@ -87,6 +88,7 @@ input:
 		integration.StreamTestOptSleepAfterInput(100*time.Millisecond),
 		integration.StreamTestOptSleepAfterOutput(100*time.Millisecond),
 		integration.StreamTestOptPort(resource.GetPort("1883/tcp")),
+		integration.StreamTestOptVarSet("VAR1", ""),
 	)
 	t.Run("with max in flight", func(t *testing.T) {
 		t.Parallel()
@@ -96,6 +98,7 @@ input:
 			integration.StreamTestOptSleepAfterOutput(100*time.Millisecond),
 			integration.StreamTestOptPort(resource.GetPort("1883/tcp")),
 			integration.StreamTestOptMaxInFlight(10),
+			integration.StreamTestOptVarSet("VAR1", ""),
 		)
 	})
 	t.Run("with generated suffix", func(t *testing.T) {
