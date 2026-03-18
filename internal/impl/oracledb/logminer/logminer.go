@@ -324,7 +324,6 @@ func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, s
 			return nil, err
 		}
 
-		// Convert XID to hex string (matches Debezium's approach)
 		// XID is Oracle's native transaction identifier (RAW(8) = 8 bytes)
 		event.TransactionID = hex.EncodeToString(xid)
 		events = append(events, event)
@@ -353,13 +352,13 @@ func NewLogFileCollector() *LogFileCollector {
 	return &LogFileCollector{}
 }
 
-// GetLogs collects all log files containing changes from the given SCN
-func (*LogFileCollector) GetLogs(ctx context.Context, conn *sql.Conn, offsetSCN uint64) ([]*LogFile, error) {
+// GetLogs collects log files whose SCN range overlaps [startSCN, endSCN].
+func (*LogFileCollector) GetLogs(ctx context.Context, conn *sql.Conn, startSCN, endSCN uint64) ([]*LogFile, error) {
 	query := `
 		SELECT FILE_NAME, FIRST_CHANGE, NEXT_CHANGE, SEQ, TYPE, THREAD
 		FROM (
 
-			-- Online redo logs that contain or come after our position
+			-- Online redo logs that overlap [startSCN, endSCN]
 			SELECT
 				MIN(F.MEMBER) AS FILE_NAME,
 				L.FIRST_CHANGE# FIRST_CHANGE,
@@ -369,12 +368,13 @@ func (*LogFileCollector) GetLogs(ctx context.Context, conn *sql.Conn, offsetSCN 
 				L.THREAD# AS THREAD
 			FROM V$LOGFILE F, V$LOG L
 			WHERE (L.STATUS = 'CURRENT' OR L.NEXT_CHANGE# >= :1)
+			AND L.FIRST_CHANGE# <= :2
 			AND F.GROUP# = L.GROUP#
 			GROUP BY L.FIRST_CHANGE#, L.NEXT_CHANGE#, L.SEQUENCE#, L.THREAD#
 
 			UNION
 
-			-- Archive logs with changes after our position
+			-- Archive logs that overlap [startSCN, endSCN]
 			SELECT
 				A.NAME AS FILE_NAME,
 				A.FIRST_CHANGE# FIRST_CHANGE,
@@ -387,6 +387,7 @@ func (*LogFileCollector) GetLogs(ctx context.Context, conn *sql.Conn, offsetSCN 
 			AND A.ARCHIVED = 'YES'
 			AND A.STATUS = 'A'
 			AND A.NEXT_CHANGE# >= :1
+			AND A.FIRST_CHANGE# <= :2
 			AND A.DEST_ID IN (
 				SELECT DEST_ID
 				FROM V$ARCHIVE_DEST_STATUS
@@ -396,9 +397,9 @@ func (*LogFileCollector) GetLogs(ctx context.Context, conn *sql.Conn, offsetSCN 
 		ORDER BY SEQ
 	`
 
-	rows, err := conn.QueryContext(ctx, query, offsetSCN)
+	rows, err := conn.QueryContext(ctx, query, startSCN, endSCN)
 	if err != nil {
-		return nil, fmt.Errorf("querying all logs containing changes from SCN %d: %w", offsetSCN, err)
+		return nil, fmt.Errorf("querying logs overlapping SCN range [%d, %d]: %w", startSCN, endSCN, err)
 	}
 	defer rows.Close()
 
@@ -466,7 +467,7 @@ func (lm *LogMiner) prepareLogsAndStartSession(ctx context.Context, conn *sql.Co
 		logFiles []*LogFile
 		err      error
 	)
-	if logFiles, err = lm.logCollector.GetLogs(ctx, conn, startSCN); err != nil {
+	if logFiles, err = lm.logCollector.GetLogs(ctx, conn, startSCN, endSCN); err != nil {
 		return fmt.Errorf("collecting redo logs for logminer: %w", err)
 	}
 	lm.log.Debugf("Collected %d redo log file(s) for LogMiner", len(logFiles))
