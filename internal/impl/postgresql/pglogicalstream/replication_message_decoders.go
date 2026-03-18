@@ -11,6 +11,7 @@ package pglogicalstream
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -187,8 +188,10 @@ func decodeTextColumnData(mi *pgtype.Map, data []byte, dataType uint32) (any, er
 			}
 			return uuid.UUID(typesValueForUUID).String(), nil
 		case "tsrange":
-			// Return the raw PostgreSQL text representation as a string.
-			return string(data), nil
+			// Strip inner quotes from range bounds. PostgreSQL quotes bounds that
+			// contain spaces (e.g. timestamps), producing ["t1","t2"). Remove them
+			// to match the format the old pgtype v4 Tsrange.Value() returned.
+			return strings.ReplaceAll(string(data), `"`, ""), nil
 		case "int2":
 			// pgx decodes int2 as int16; promote to int32 to match schema (Int32).
 			if v, ok := val.(int16); ok {

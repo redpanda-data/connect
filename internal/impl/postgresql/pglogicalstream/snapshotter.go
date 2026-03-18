@@ -389,12 +389,14 @@ func prepareScannersAndGetters(columnTypes []*sql.ColumnType) ([]any, []func(any
 				}
 				prefix, err := netip.ParsePrefix(val.String)
 				if err != nil {
-					// Try as a bare address (no CIDR suffix)
+					// Try as a bare address (no CIDR suffix).
+					// Reconstruct the full host prefix (/32 for IPv4, /128 for IPv6)
+					// to match the WAL path which always includes the prefix length.
 					addr, err2 := netip.ParseAddr(val.String)
 					if err2 != nil {
 						return nil, err
 					}
-					return addr.String(), nil
+					return netip.PrefixFrom(addr, addr.BitLen()).String(), nil
 				}
 				return prefix.String(), nil
 			}
@@ -405,7 +407,11 @@ func prepareScannersAndGetters(columnTypes []*sql.ColumnType) ([]any, []func(any
 				if !val.Valid {
 					return nil, nil
 				}
-				return val.String, nil
+				// PostgreSQL quotes range bounds that contain spaces (e.g. timestamps),
+				// producing ["2024-01-01 00:00:00","2024-12-31 00:00:00"). Strip the
+				// inner quotes to match the format the old pgtype v4 Tsrange.Value()
+				// returned: [2024-01-01 00:00:00,2024-12-31 00:00:00).
+				return strings.ReplaceAll(val.String, `"`, ""), nil
 			}
 		case "_INT4":
 			scanArgs[i] = new(sql.NullString)
