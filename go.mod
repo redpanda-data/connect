@@ -167,7 +167,6 @@ require (
 	github.com/trinodb/trino-go-client v0.333.0
 	github.com/twmb/franz-go v1.20.7
 	github.com/twmb/franz-go/pkg/kadm v1.17.2
-	github.com/twmb/franz-go/pkg/kfake v0.0.0-20251115002817-3affad808a82
 	github.com/twmb/franz-go/pkg/kmsg v1.12.0
 	github.com/twmb/franz-go/pkg/sr v1.7.0
 	github.com/twmb/go-cache v1.3.0
