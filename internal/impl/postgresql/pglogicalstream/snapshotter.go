@@ -295,6 +295,8 @@ func prepareScannersAndGetters(columnTypes []*sql.ColumnType) ([]any, []func(any
 	scanArgs := make([]any, len(columnTypes))
 	valueGetters := make([]func(any) (any, error), len(columnTypes))
 
+	pgTypeMap := pgtype.NewMap()
+
 	for i, v := range columnTypes {
 		switch resolveTypeName(v.DatabaseTypeName()) {
 		case "VARCHAR", "TEXT", "UUID":
@@ -419,9 +421,8 @@ func prepareScannersAndGetters(columnTypes []*sql.ColumnType) ([]any, []func(any
 				// pgtype.Int4Array behavior where null elements marshal
 				// to JSON null).
 				var result []*int32
-				m := pgtype.NewMap()
-				if err := m.SQLScanner(&result).Scan(val.String); err != nil {
-					return val.String, nil
+				if err := pgTypeMap.SQLScanner(&result).Scan(val.String); err != nil {
+					return nil, err
 				}
 				return result, nil
 			}
@@ -436,9 +437,8 @@ func prepareScannersAndGetters(columnTypes []*sql.ColumnType) ([]any, []func(any
 				// pgtype.TextArray behavior where null elements marshal
 				// to JSON null).
 				var result []*string
-				m := pgtype.NewMap()
-				if err := m.SQLScanner(&result).Scan(val.String); err != nil {
-					return val.String, nil
+				if err := pgTypeMap.SQLScanner(&result).Scan(val.String); err != nil {
+					return nil, err
 				}
 				return result, nil
 			}
