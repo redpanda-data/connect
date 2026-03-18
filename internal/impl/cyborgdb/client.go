@@ -64,7 +64,7 @@ type cyborgdbEncryptedIndex struct {
 }
 
 func (c *cyborgdbEncryptedIndex) Upsert(ctx context.Context, items []cyborgdb.VectorItem) error {
-	return c.index.Upsert(ctx, items)
+	return c.index.Upsert(ctx, cyborgdb.VectorItems(items))
 }
 
 func (c *cyborgdbEncryptedIndex) Delete(ctx context.Context, ids []string) error {
