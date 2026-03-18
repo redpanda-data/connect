@@ -187,8 +187,7 @@ func decodeTextColumnData(mi *pgtype.Map, data []byte, dataType uint32) (any, er
 			}
 			return uuid.UUID(typesValueForUUID).String(), nil
 		case "tsrange":
-			// Return the raw PostgreSQL text representation as a string.
-			return string(data), nil
+			return sanitizeTsrange(string(data)), nil
 		case "int2":
 			// pgx decodes int2 as int16; promote to int32 to match schema (Int32).
 			if v, ok := val.(int16); ok {

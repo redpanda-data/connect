@@ -385,14 +385,17 @@ func prepareScannersAndGetters(columnTypes []*sql.ColumnType) ([]any, []func(any
 				if !val.Valid {
 					return nil, nil
 				}
+				// Parse as prefix first (e.g. "192.168.1.0/24")
 				prefix, err := netip.ParsePrefix(val.String)
 				if err != nil {
-					// Try as a bare address (no CIDR suffix)
+					// Bare address (e.g. "192.168.1.1") — append host
+					// prefix length to match old pgtype.Inet behavior
+					// which always returned IPNet.String() with CIDR.
 					addr, err2 := netip.ParseAddr(val.String)
 					if err2 != nil {
 						return nil, err
 					}
-					return addr.String(), nil
+					prefix = netip.PrefixFrom(addr, addr.BitLen())
 				}
 				return prefix.String(), nil
 			}
@@ -403,7 +406,7 @@ func prepareScannersAndGetters(columnTypes []*sql.ColumnType) ([]any, []func(any
 				if !val.Valid {
 					return nil, nil
 				}
-				return val.String, nil
+				return sanitizeTsrange(val.String), nil
 			}
 		case "_INT4":
 			scanArgs[i] = new(sql.NullString)
@@ -412,7 +415,10 @@ func prepareScannersAndGetters(columnTypes []*sql.ColumnType) ([]any, []func(any
 				if !val.Valid {
 					return nil, nil
 				}
-				var result []int32
+				// Use []*int32 to handle NULL elements (matching old
+				// pgtype.Int4Array behavior where null elements marshal
+				// to JSON null).
+				var result []*int32
 				m := pgtype.NewMap()
 				if err := m.SQLScanner(&result).Scan(val.String); err != nil {
 					return val.String, nil
@@ -426,7 +432,10 @@ func prepareScannersAndGetters(columnTypes []*sql.ColumnType) ([]any, []func(any
 				if !val.Valid {
 					return nil, nil
 				}
-				var result []string
+				// Use []*string to handle NULL elements (matching old
+				// pgtype.TextArray behavior where null elements marshal
+				// to JSON null).
+				var result []*string
 				m := pgtype.NewMap()
 				if err := m.SQLScanner(&result).Scan(val.String); err != nil {
 					return val.String, nil
