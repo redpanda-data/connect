@@ -94,6 +94,7 @@ require (
 	github.com/generikvault/gvalstrings v0.0.0-20180926130504-471f38f0112a
 	github.com/getsentry/sentry-go v0.35.3
 	github.com/go-faker/faker/v4 v4.7.0
+	github.com/go-faster/jx v1.2.0
 	github.com/go-git/go-git/v5 v5.16.5
 	github.com/go-jose/go-jose/v4 v4.1.3
 	github.com/go-mysql-org/go-mysql v1.13.0
@@ -125,6 +126,7 @@ require (
 	github.com/nsf/jsondiff v0.0.0-20230430225905-43f6cf3098c1
 	github.com/nsqio/go-nsq v1.1.0
 	github.com/oauth2-proxy/mockoidc v0.0.0-20240214162133-caebfff84d25
+	github.com/ogen-go/ogen v1.20.1
 	github.com/oklog/ulid/v2 v2.1.1
 	github.com/opensearch-project/opensearch-go/v3 v3.1.0
 	github.com/ory/dockertest/v3 v3.12.0
@@ -144,7 +146,7 @@ require (
 	github.com/rabbitmq/amqp091-go v1.10.0
 	github.com/rcrowley/go-metrics v0.0.0-20250401214520-65e299d6c5c9
 	github.com/redis/go-redis/v9 v9.14.0
-	github.com/redpanda-data/benthos/v4 v4.68.0
+	github.com/redpanda-data/benthos/v4 v4.68.1-0.20260313145417-73f5e58ca9dc
 	github.com/redpanda-data/common-go/authz v0.2.0
 	github.com/redpanda-data/common-go/license v0.0.0-20260109170727-1dd9f5d22ee1
 	github.com/redpanda-data/common-go/redpanda-otel-exporter v0.4.0
@@ -426,7 +428,7 @@ require (
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.10 // indirect
 	github.com/go-faster/city v1.0.1 // indirect
-	github.com/go-faster/errors v0.7.1 // indirect
+	github.com/go-faster/errors v0.7.1
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
@@ -547,7 +549,7 @@ require (
 	go.opentelemetry.io/otel/metric v1.40.0
 	go.opentelemetry.io/proto/otlp v1.9.0 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
-	go.uber.org/zap v1.27.0 // indirect
+	go.uber.org/zap v1.27.1 // indirect
 	golang.org/x/mod v0.33.0 // indirect
 	golang.org/x/oauth2 v0.35.0
 	golang.org/x/sys v0.41.0

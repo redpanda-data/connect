@@ -173,6 +173,37 @@ none                      ,metric    ,none                      ,0.0.0   ,certif
 none                      ,tracer    ,none                      ,0.0.0   ,certified  ,n          ,y     ,y
 noop                      ,cache     ,noop                      ,4.27.0  ,certified  ,n          ,y     ,y
 noop                      ,processor ,noop                      ,0.0.0   ,certified  ,n          ,y     ,y
+notion_complete_file_upload,processor ,notion_complete_file_upload,0.0.0   ,enterprise ,n          ,y     ,y
+notion_create_a_comment   ,processor ,notion_create_a_comment   ,0.0.0   ,enterprise ,n          ,y     ,y
+notion_create_a_database  ,processor ,notion_create_a_database  ,0.0.0   ,enterprise ,n          ,y     ,y
+notion_create_database    ,processor ,notion_create_database    ,0.0.0   ,enterprise ,n          ,y     ,y
+notion_create_file        ,processor ,notion_create_file        ,0.0.0   ,enterprise ,n          ,y     ,y
+notion_delete_a_block     ,processor ,notion_delete_a_block     ,0.0.0   ,enterprise ,n          ,y     ,y
+notion_get_block_children ,processor ,notion_get_block_children ,0.0.0   ,enterprise ,n          ,y     ,y
+notion_get_self           ,processor ,notion_get_self           ,0.0.0   ,enterprise ,n          ,y     ,y
+notion_get_user           ,processor ,notion_get_user           ,0.0.0   ,enterprise ,n          ,y     ,y
+notion_get_users          ,processor ,notion_get_users          ,0.0.0   ,enterprise ,n          ,y     ,y
+notion_list_comments      ,processor ,notion_list_comments      ,0.0.0   ,enterprise ,n          ,y     ,y
+notion_list_data_source_templates,processor ,notion_list_data_source_templates,0.0.0   ,enterprise ,n          ,y     ,y
+notion_list_file_uploads  ,processor ,notion_list_file_uploads  ,0.0.0   ,enterprise ,n          ,y     ,y
+notion_move_page          ,processor ,notion_move_page          ,0.0.0   ,enterprise ,n          ,y     ,y
+notion_patch_block_children,processor ,notion_patch_block_children,0.0.0   ,enterprise ,n          ,y     ,y
+notion_patch_page         ,processor ,notion_patch_page         ,0.0.0   ,enterprise ,n          ,y     ,y
+notion_post_database_query,processor ,notion_post_database_query,0.0.0   ,enterprise ,n          ,y     ,y
+notion_post_page          ,processor ,notion_post_page          ,0.0.0   ,enterprise ,n          ,y     ,y
+notion_post_search        ,processor ,notion_post_search        ,0.0.0   ,enterprise ,n          ,y     ,y
+notion_retrieve_a_block   ,processor ,notion_retrieve_a_block   ,0.0.0   ,enterprise ,n          ,y     ,y
+notion_retrieve_a_data_source,processor ,notion_retrieve_a_data_source,0.0.0   ,enterprise ,n          ,y     ,y
+notion_retrieve_a_page    ,processor ,notion_retrieve_a_page    ,0.0.0   ,enterprise ,n          ,y     ,y
+notion_retrieve_a_page_property,processor ,notion_retrieve_a_page_property,0.0.0   ,enterprise ,n          ,y     ,y
+notion_retrieve_comment   ,processor ,notion_retrieve_comment   ,0.0.0   ,enterprise ,n          ,y     ,y
+notion_retrieve_database  ,processor ,notion_retrieve_database  ,0.0.0   ,enterprise ,n          ,y     ,y
+notion_retrieve_file_upload,processor ,notion_retrieve_file_upload,0.0.0   ,enterprise ,n          ,y     ,y
+notion_retrieve_page_markdown,processor ,notion_retrieve_page_markdown,0.0.0   ,enterprise ,n          ,y     ,y
+notion_update_a_block     ,processor ,notion_update_a_block     ,0.0.0   ,enterprise ,n          ,y     ,y
+notion_update_a_data_source,processor ,notion_update_a_data_source,0.0.0   ,enterprise ,n          ,y     ,y
+notion_update_database    ,processor ,notion_update_database    ,0.0.0   ,enterprise ,n          ,y     ,y
+notion_update_page_markdown,processor ,notion_update_page_markdown,0.0.0   ,enterprise ,n          ,y     ,y
 nsq                       ,input     ,nsq                       ,0.0.0   ,community  ,n          ,n     ,n
 nsq                       ,output    ,nsq                       ,0.0.0   ,community  ,n          ,n     ,n
 ockam_kafka               ,input     ,ockam_kafka               ,0.0.0   ,community  ,n          ,n     ,n
