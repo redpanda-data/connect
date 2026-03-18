@@ -1,0 +1,56 @@
+# Salesforce sink write benchmark
+# Generates synthetic Account records and upserts them into Salesforce,
+# measuring write throughput via the benchmark processor.
+#
+# Required env vars:
+#   export SALESFORCE_ORG_URL="https://your-domain.salesforce.com"
+#   export SALESFORCE_CLIENT_ID="your-connected-app-client-id"
+#   export SALESFORCE_CLIENT_SECRET="your-connected-app-client-secret"
+#
+# Optional:
+#   export BENCH_WRITE_MODE=realtime  (default: realtime, alternative: bulk)
+
+http:
+  debug_endpoints: true
+
+input:
+  generate:
+    interval: "1ns"
+    mapping: |
+      let id = counter()
+      root.topic      = "bench-account"
+      root.data = {
+        "External_Id__c": "bench-" + $id.string(),
+        "Phone":          "555-" + $id.string(),
+        "BillingCity":    "BenchCity",
+        "BillingState":   "CA",
+        "BillingCountry": "US",
+        "Description":    "benchmark record " + $id.string()
+      }
+
+pipeline:
+  processors:
+    - benchmark:
+        interval: 1s
+        count_bytes: true
+
+output:
+  salesforce_sink:
+    org_url: "${SALESFORCE_ORG_URL}"
+    client_id: "${SALESFORCE_CLIENT_ID}"
+    client_secret: "${SALESFORCE_CLIENT_SECRET}"
+    restapi_version: "v65.0"
+    request_timeout: "30s"
+    max_retries: 5
+    topic_mappings:
+      - topic: bench-account
+        sobject: Account
+        operation: upsert
+        external_id_field: External_Id__c
+        mode: "${BENCH_WRITE_MODE:realtime}"
+        all_or_none: false
+
+metrics:
+  prometheus:
+    add_process_metrics: true
+    add_go_metrics: true
