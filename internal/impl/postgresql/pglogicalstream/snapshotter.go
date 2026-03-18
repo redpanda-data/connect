@@ -18,8 +18,10 @@ import (
 	"strconv"
 	"strings"
 
+	"net/netip"
+
 	"github.com/Masterminds/squirrel"
-	"github.com/jackc/pgtype"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
@@ -381,59 +383,57 @@ func prepareScannersAndGetters(columnTypes []*sql.ColumnType) ([]any, []func(any
 		case "INET":
 			scanArgs[i] = new(sql.NullString)
 			valueGetters[i] = func(v any) (any, error) {
-				inet := pgtype.Inet{}
 				val := v.(*sql.NullString)
 				if !val.Valid {
 					return nil, nil
 				}
-				if err := inet.Scan(val.String); err != nil {
-					return nil, err
+				prefix, err := netip.ParsePrefix(val.String)
+				if err != nil {
+					// Try as a bare address (no CIDR suffix)
+					addr, err2 := netip.ParseAddr(val.String)
+					if err2 != nil {
+						return nil, err
+					}
+					return addr.String(), nil
 				}
-
-				return inet.IPNet.String(), nil
+				return prefix.String(), nil
 			}
 		case "TSRANGE":
 			scanArgs[i] = new(sql.NullString)
 			valueGetters[i] = func(v any) (any, error) {
-				newArray := pgtype.Tsrange{}
 				val := v.(*sql.NullString)
 				if !val.Valid {
 					return nil, nil
 				}
-				if err := newArray.Scan(val.String); err != nil {
-					return nil, err
-				}
-
-				vv, _ := newArray.Value()
-				return vv, nil
+				return val.String, nil
 			}
 		case "_INT4":
 			scanArgs[i] = new(sql.NullString)
 			valueGetters[i] = func(v any) (any, error) {
-				newArray := pgtype.Int4Array{}
 				val := v.(*sql.NullString)
 				if !val.Valid {
 					return nil, nil
 				}
-				if err := newArray.Scan(val.String); err != nil {
-					return nil, err
+				var result []int32
+				m := pgtype.NewMap()
+				if err := m.SQLScanner(&result).Scan(val.String); err != nil {
+					return val.String, nil
 				}
-
-				return newArray.Elements, nil
+				return result, nil
 			}
 		case "_TEXT":
 			scanArgs[i] = new(sql.NullString)
 			valueGetters[i] = func(v any) (any, error) {
-				newArray := pgtype.TextArray{}
 				val := v.(*sql.NullString)
 				if !val.Valid {
 					return nil, nil
 				}
-				if err := newArray.Scan(val.String); err != nil {
-					return nil, err
+				var result []string
+				m := pgtype.NewMap()
+				if err := m.SQLScanner(&result).Scan(val.String); err != nil {
+					return val.String, nil
 				}
-
-				return newArray.Elements, nil
+				return result, nil
 			}
 		default: // NUMERIC and other unhandled types scan as string.
 			scanArgs[i] = new(sql.NullString)
