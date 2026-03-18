@@ -514,15 +514,15 @@ func TestIntegrationOracleDBCDCSnapshotAndStreamingAllTypes(t *testing.T) {
 		binary_col        RAW(16),
 		varbinary_col     RAW(255),
 
-		-- Large Object Data Types (commented out to avoid TTC errors)
-		-- varcharmax_col    CLOB,
-		-- nvarcharmax_col   NCLOB,
-		-- varbinarymax_col  BLOB,
+		-- Large Object Data Types
+		varcharmax_col    CLOB,
+		nvarcharmax_col   NCLOB,
+		varbinarymax_col  BLOB,
 
 		-- Other Data Types
-		bit_col           NUMBER(1)                    -- Boolean-like (0,1,NULL)
+		bit_col           NUMBER(1),                    -- Boolean-like (0,1,NULL)
 		-- xml_col           XMLTYPE,
-		-- json_col          CLOB                          -- JSON stored as CLOB
+		json_col          CLOB                          -- JSON stored as CLOB
 	)`
 	err = db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.all_data_types", q)
 	require.NoError(t, err)
@@ -537,16 +537,16 @@ func TestIntegrationOracleDBCDCSnapshotAndStreamingAllTypes(t *testing.T) {
 		date_col, datetime_col, datetime2_col, smalldatetime_col,
 		time_col, datetimeoffset_col, char_col, varchar_col,
 		nchar_col, nvarchar_col, binary_col, varbinary_col,
-		-- varcharmax_col, nvarcharmax_col, varbinarymax_col,
-		bit_col -- , xml_col, json_col
+		varcharmax_col, nvarcharmax_col, varbinarymax_col,
+		bit_col, json_col
 	) VALUES (
 		:1, :2, :3, :4,
 		:5, :6, :7, :8,
 		:9, :10, :11, :12,
 		:13, :14, :15, :16,
 		:17, :18, :19, :20,
-		-- :21, :22, :23,
-		:21 -- , :22, :23
+		:21, :22, :23,
+		:24, :25
 	)`
 
 	t.Log("Inserting min values for testing snapshot data...")
@@ -573,12 +573,11 @@ func TestIntegrationOracleDBCDCSnapshotAndStreamingAllTypes(t *testing.T) {
 			"",           // nvarchar2(255)
 			[]byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}, // raw(16)
 			[]byte{0x00}, // raw(255)
-			// "",              // clob (varcharmax_col) - LOB columns commented out
-			// "",              // nclob (nvarcharmax_col)
-			// []byte{0x00},    // blob (varbinarymax_col)
-			0, // bit (number)
-			// "<root></root>", // xmltype
-			// "{}",            // json (clob)
+			nil,          // clob (varcharmax_col)
+			nil,          // nclob (nvarcharmax_col)
+			nil,          // blob (varbinarymax_col)
+			0,            // bit (number)
+			nil,          // json (clob)
 		)
 	}
 
@@ -666,12 +665,11 @@ oracledb_cdc:
 			"Max nvarchar value", // nvarchar2(255)
 			make([]byte, 16),     // raw(16) filled with zeros
 			make([]byte, 255),    // raw(255) max
-			// "Max varchar(max)",   // clob (varcharmax_col) - LOB columns commented out
-			// "Max nvarchar(max)",  // nclob (nvarcharmax_col)
-			// make([]byte, 255),    // blob (varbinarymax_col)
-			1, // bit max (number)
-			// "<root>max</root>",   // xmltype
-			// `{"max": true}`,      // json (clob)
+			"Max varchar(max)",   // clob (varcharmax_col)
+			"Max nvarchar(max)",  // nclob (nvarcharmax_col)
+			make([]byte, 255),    // blob (varbinarymax_col)
+			1,                    // bit max (number)
+			`{"max": true}`,      // json (clob)
 		)
 
 		// verify we got at least 2 records (1 snapshot + 1+ streaming)
@@ -717,16 +715,20 @@ oracledb_cdc:
 		"DECIMAL_COL": -9999999999999999999999999999.9999999999,
 		"FLOAT_COL": -1.79e+100,
 		"INT_COL": -2147483648,
+		"JSON_COL": null,
 		"NCHAR_COL": "АААААААААА",
 		"NUMERIC_COL": -999999999999999.99999,
 		"NVARCHAR_COL": null,
+		"NVARCHARMAX_COL": null,
 		"REAL_COL": -3.4e+37,
 		"SMALLDATETIME_COL": "1900-01-01T00:00:00Z",
 		"SMALLINT_COL": -32768,
 		"TIME_COL": "0001-01-01T00:00:00Z",
 		"TINYINT_COL": 0,
 		"VARBINARY_COL": "AA==",
-		"VARCHAR_COL": null
+		"VARBINARYMAX_COL": null,
+		"VARCHAR_COL": null,
+		"VARCHARMAX_COL": null
 		}`, outBatches[0], "Failed to assert min result from snapshot")
 	}
 
@@ -791,7 +793,9 @@ oracledb_cdc:
 		"TIME_COL": "0001-01-01T23:59:59.9999999Z",
 		"TINYINT_COL": 255,
 		"VARBINARY_COL": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-		"VARCHAR_COL": "Max varchar value"
+		"VARBINARYMAX_COL": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+		"VARCHAR_COL": "Max varchar value",
+		"VARCHARMAX_COL": "Max varchar(max)"
 		}`, outBatches[1], "Failed to assert max result from streaming")
 	}
 }

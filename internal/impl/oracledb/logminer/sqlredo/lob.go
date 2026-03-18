@@ -110,15 +110,20 @@ type TxnLOBState struct {
 	Accumulators map[LobKey]*LobAccumulator
 }
 
-// NewTxnLOBState creates a new isntance of NewTxnLOBState.
+// NewTxnLOBState creates a new TxnLOBState.
 func NewTxnLOBState() *TxnLOBState {
 	return &TxnLOBState{Accumulators: make(map[LobKey]*LobAccumulator)}
 }
 
 // MergeLOBsIntoDMLEvents matches each LOB accumulator to its corresponding DML
 // event (by schema, table, and PK values) and overwrites the LOB column value
-// with the assembled data. Events are searched in reverse order so that the most
-// recent matching DML wins.
+// with the assembled data.
+//
+// For small LOBs stored inline, Oracle emits both the original INSERT (with empty
+// LOB placeholders) and a subsequent LOB-initialisation UPDATE (with only LOB columns).
+// To ensure the LOB values land on the INSERT rather than the UPDATE, this function
+// first searches forward for an INSERT event with a matching PK, then falls back to
+// the most-recent matching DML event of any type.
 func MergeLOBsIntoDMLEvents(state *TxnLOBState, events []*DMLEvent, log *service.Logger) {
 	for _, acc := range state.Accumulators {
 		assembled := acc.Assemble()
@@ -130,13 +135,37 @@ func MergeLOBsIntoDMLEvents(state *TxnLOBState, events []*DMLEvent, log *service
 		}
 
 		merged := false
-		// Search in reverse for the most recent matching DML event.
+
+		// Prefer merging into an INSERT so that Oracle's internal LOB-initialisation
+		// UPDATE (which only carries LOB columns) does not shadow the original INSERT.
+		for i := 0; i < len(events); i++ {
+			ev := events[i]
+			if ev.Operation != OpInsert {
+				continue
+			}
+			if ev.Schema != acc.Schema || ev.Table != acc.Table {
+				continue
+			}
+			if pkMatches(ev.Data, acc.PKValues) {
+				ev.Data[acc.Column] = assembled
+				merged = true
+				if log != nil {
+					log.Debugf("LOB merge: set %s.%s.%s into INSERT (pks=%v, fragments=%d)", acc.Schema, acc.Table, acc.Column, acc.PKValues, len(acc.Fragments))
+				}
+				break
+			}
+		}
+
+		if merged {
+			continue
+		}
+
+		// Fall back to the most-recent matching DML event of any operation type.
 		for i := len(events) - 1; i >= 0; i-- {
 			ev := events[i]
 			if ev.Schema != acc.Schema || ev.Table != acc.Table {
 				continue
 			}
-
 			if pkMatches(ev.Data, acc.PKValues) {
 				ev.Data[acc.Column] = assembled
 				merged = true
@@ -146,8 +175,33 @@ func MergeLOBsIntoDMLEvents(state *TxnLOBState, events []*DMLEvent, log *service
 				break
 			}
 		}
+
 		if !merged && log != nil {
 			log.Debugf("LOB merge: no matching DML event found for %s.%s.%s (pks=%v)", acc.Schema, acc.Table, acc.Column, acc.PKValues)
+		}
+	}
+}
+
+// MergeInlineLOBValues merges LOB column values from an inline-LOB-only UPDATE into the
+// matching INSERT event(s) for the same row. Oracle emits exactly one LOB-init UPDATE
+// per INSERT row, so PK matching is skipped — values are merged into all INSERT events
+// for the same schema.table.
+//
+// This handles Oracle's behaviour of omitting LOB columns from INSERT SQL_REDO and
+// instead emitting a separate UPDATE whose SET clause carries the actual LOB data.
+func MergeInlineLOBValues(lobData map[string]any, schema, table string, events []*DMLEvent, log *service.Logger) {
+	for _, ev := range events {
+		if ev.Operation != OpInsert {
+			continue
+		}
+		if ev.Schema != schema || ev.Table != table {
+			continue
+		}
+		for col, val := range lobData {
+			ev.Data[col] = val
+		}
+		if log != nil {
+			log.Debugf("inline LOB merge: set %d LOB columns into INSERT for %s.%s", len(lobData), schema, table)
 		}
 	}
 }

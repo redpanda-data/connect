@@ -100,8 +100,8 @@ func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replicat
 		sessionMgr:    NewSessionManager(cfg, logger),
 		txnCache:      NewInMemoryCache(cfg.MaxTransactionEvents, metrics, logger),
 		dmlParser:     sqlredo.NewParser(),
+		lobStates:     make(map[string]*sqlredo.TxnLOBState),
 	}
-	lm.lobStates = make(map[string]*sqlredo.TxnLOBState)
 	return lm
 }
 
@@ -308,6 +308,7 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 		}
 		acc := state.Accumulators[*state.ActiveKey]
 		if acc == nil {
+			lm.log.Warnf("LOB_WRITE has active key but no accumulator (scn=%d, txn=%s)", redoEvent.SCN, redoEvent.TransactionID)
 			return nil
 		}
 		if !redoEvent.SQLRedo.Valid || redoEvent.SQLRedo.String == "" {
@@ -346,7 +347,40 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 				delete(lm.lobStates, redoEvent.TransactionID)
 			}
 
+			// Build a set of schema.table pairs that have an INSERT in this transaction.
+			// Used below to detect and suppress Oracle-internal LOB-initialisation UPDATEs.
+			insertTables := make(map[string]struct{})
+			for _, ev := range txn.Events {
+				if ev.Operation == sqlredo.OpInsert {
+					insertTables[ev.Schema+"."+ev.Table] = struct{}{}
+				}
+			}
+
+			// Pre-pass: for each LOB-only UPDATE that accompanies an INSERT in this transaction,
+			// merge the actual LOB values into the INSERT before we start publishing.
+			//
+			// Oracle omits LOB columns from the INSERT SQL_REDO entirely and instead emits a
+			// separate UPDATE whose SET clause carries the real LOB data. We must propagate
+			// those values into the INSERT event before suppressing the UPDATE.
 			for _, dmlEvent := range txn.Events {
+				if dmlEvent.Operation != sqlredo.OpUpdate || !lm.isLOBOnlyEvent(dmlEvent) {
+					continue
+				}
+				if _, hasInsert := insertTables[dmlEvent.Schema+"."+dmlEvent.Table]; !hasInsert {
+					continue
+				}
+				sqlredo.MergeInlineLOBValues(dmlEvent.Data, dmlEvent.Schema, dmlEvent.Table, txn.Events, lm.log)
+			}
+
+			for _, dmlEvent := range txn.Events {
+				// Suppress Oracle-internal LOB-initialisation UPDATEs. Their LOB values have
+				// already been merged into the corresponding INSERT by the pre-pass above.
+				if dmlEvent.Operation == sqlredo.OpUpdate && lm.isLOBOnlyEvent(dmlEvent) {
+					if _, hasInsert := insertTables[dmlEvent.Schema+"."+dmlEvent.Table]; hasInsert {
+						lm.log.Debugf("suppressing LOB-only UPDATE for %s.%s — values merged into INSERT", dmlEvent.Schema, dmlEvent.Table)
+						continue
+					}
+				}
 				msg := toMessageEvent(dmlEvent, redoEvent.SCN, safeCheckpointSCN)
 				if err := lm.publisher.Publish(ctx, msg); err != nil {
 					return fmt.Errorf("publishing event with SCN '%d': %w", redoEvent.SCN, err)
@@ -409,6 +443,23 @@ func (lm *LogMiner) getOrCreateLOBState(txnID string) *sqlredo.TxnLOBState {
 	s := sqlredo.NewTxnLOBState()
 	lm.lobStates[txnID] = s
 	return s
+}
+
+// isLOBOnlyEvent reports whether every column in ev.Data is a known LOB column.
+// This identifies Oracle's internal LOB-initialisation UPDATE events, which carry
+// only LOB column values and should be suppressed when a matching INSERT already
+// exists in the same transaction.
+func (lm *LogMiner) isLOBOnlyEvent(ev *sqlredo.DMLEvent) bool {
+	if len(ev.Data) == 0 {
+		return false
+	}
+	for col := range ev.Data {
+		key := strings.ToUpper(ev.Schema + "." + ev.Table + "." + col)
+		if _, exists := lm.lobColTypes[key]; !exists {
+			return false
+		}
+	}
+	return true
 }
 
 func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, startSCN, endSCN uint64) ([]*sqlredo.RedoEvent, error) {
