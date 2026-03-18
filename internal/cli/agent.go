@@ -33,7 +33,7 @@ func agentCli(rpMgr *enterprise.GlobalRedpandaManager) *cli.Command {
 
 	return &cli.Command{
 		Name:  "agent",
-		Usage: "Redpanda Connect commands.",
+		Usage: "Redpanda Connect agent commands.",
 		Subcommands: []*cli.Command{
 			{
 				Name:  "init",
