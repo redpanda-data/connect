@@ -10,8 +10,9 @@ package pglogicalstream
 
 import "strings"
 
-// sanitizeTsrange strips escaped quotes from Postgres tsrange text
-// representations. Postgres may return ranges like:
+// sanitizeTsrange strips quoting from Postgres tsrange text representations.
+//
+// Postgres quotes range bounds containing spaces, producing:
 //
 //	["2024-01-01 00:00:00","2024-12-31 00:00:00")
 //
@@ -20,7 +21,15 @@ import "strings"
 //
 //	[2024-01-01 00:00:00,2024-12-31 00:00:00)
 //
-// This function replicates that behavior without the old pgtype dependency.
+// This function replicates that behavior by stripping all double quotes.
+// This is safe for tsrange because timestamp bound values never contain
+// literal double quotes — they consist only of digits, dashes, colons,
+// spaces, and decimal points.
+//
+// NOTE: This function is NOT suitable for arbitrary range types whose
+// bound values may contain literal double quotes (e.g. text ranges).
+// For such types, a proper range parser that handles quoting and escaping
+// (like the old pgtype.ParseUntypedTextRange) would be needed.
 func sanitizeTsrange(s string) string {
 	return strings.ReplaceAll(s, `"`, "")
 }

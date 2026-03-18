@@ -253,6 +253,7 @@ type tuple struct {
 	elements []any
 }
 
+//nolint:stylecheck // This is implementing the squirrel.Sqlizer interface
 func (t *tuple) ToSql() (sql string, args []any, err error) {
 	sql = "(" + strings.Join(slices.Repeat([]string{"?"}, len(t.elements)), ", ") + ")"
 	args = t.elements
