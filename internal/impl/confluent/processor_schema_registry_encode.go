@@ -18,6 +18,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -627,6 +628,20 @@ func (s *schemaRegistryEncoder) getOrCreateMetaEncoder(ctx context.Context, meta
 			b, bErr := m.AsBytes()
 			if bErr != nil {
 				return bErr
+			}
+			// Convert ISO 8601 timestamp strings to epoch milliseconds
+			// before passing to goavro, which expects a numeric value for
+			// the Avro timestamp-millis logical type. CDC sources emit
+			// time.Time values that JSON-marshal to ISO 8601 strings.
+			var parsed map[string]any
+			if jErr := json.Unmarshal(b, &parsed); jErr != nil {
+				return fmt.Errorf("unmarshalling message for timestamp conversion: %w", jErr)
+			}
+			if cErr := convertTimestampFields(parsed, common); cErr != nil {
+				return fmt.Errorf("converting timestamp fields: %w", cErr)
+			}
+			if b, bErr = json.Marshal(parsed); bErr != nil {
+				return fmt.Errorf("re-marshalling message after timestamp conversion: %w", bErr)
 			}
 			native, _, nErr := codec.NativeFromTextual(b)
 			if nErr != nil {

@@ -1638,3 +1638,51 @@ avro:
 	// Despite 500 total calls, schema should only be registered once.
 	assert.Equal(t, 1, mockState.getCalls()["test-subject"])
 }
+
+func TestSchemaRegistryEncodeMetadataAvroTimestamp(t *testing.T) {
+	urlStr, mockState := runMetaMockRegistry(t)
+
+	spec := schemaRegistryEncoderConfig()
+	conf, err := spec.ParseYAML(fmt.Sprintf(`
+url: %s
+subject: products-value
+schema_metadata: schema
+format: avro
+avro:
+  raw_json: true
+`, urlStr), service.NewEnvironment())
+	require.NoError(t, err)
+
+	encoder, err := newSchemaRegistryEncoderFromConfig(conf, service.MockResources())
+	require.NoError(t, err)
+	defer func() { _ = encoder.Close(t.Context()) }()
+
+	// Simulate the exact schema a CDC source would produce for a table with
+	// a TIMESTAMPTZ column.
+	schemaMeta := makeCommonSchemaMeta(t,
+		schema.Common{Name: "id", Type: schema.Int32},
+		schema.Common{Name: "name", Type: schema.String},
+		schema.Common{Name: "price", Type: schema.String},
+		schema.Common{Name: "in_stock", Type: schema.Boolean},
+		schema.Common{Name: "created_at", Type: schema.Timestamp, Optional: true},
+	)
+
+	msg := service.NewMessage([]byte(`{"id":79,"name":"budget gadget","price":"79.06","in_stock":true,"created_at":"2026-03-19T10:05:09.934345Z"}`))
+	msg.MetaSetMut("schema", schemaMeta)
+
+	outBatches, err := encoder.ProcessBatch(t.Context(), service.MessageBatch{msg})
+	require.NoError(t, err)
+	require.Len(t, outBatches, 1)
+	require.Len(t, outBatches[0], 1)
+	require.NoError(t, outBatches[0][0].GetError(), "encoding a CDC message with a timestamp field should succeed")
+
+	b, err := outBatches[0][0].AsBytes()
+	require.NoError(t, err)
+
+	// Verify Confluent wire format header.
+	require.Greater(t, len(b), 5, "output must have wire header")
+	assert.Equal(t, byte(0x00), b[0], "magic byte")
+	schemaID := binary.BigEndian.Uint32(b[1:5])
+	assert.Equal(t, uint32(1), schemaID)
+	assert.Equal(t, 1, mockState.getCalls()["products-value"])
+}
