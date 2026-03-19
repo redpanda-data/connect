@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- schema_registry_encode: Fixed metadata-mode Avro encoding of timestamp fields from CDC sources. ISO 8601 timestamp strings are now converted to epoch milliseconds before Avro encoding, matching what the `timestamp-millis` logical type expects. (@Jeffail)
 - oracledb_cdc: Fixed snapshot/streaming value type inconsistency where NUMBER columns produced `json.Number` during snapshot but plain strings during streaming. Bare numeric literals in SQL_REDO are now converted to `int64` (for integers that fit) or `json.Number` (for decimals), matching the snapshot path. Quoted string values from VARCHAR columns are no longer incorrectly converted. (@Jeffail)
 
 ## 4.83.0 - 2026-03-13
