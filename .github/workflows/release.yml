@@ -206,7 +206,7 @@ jobs:
               - type: "divider"
               - type: "section"
                 text:
-                  type: "mrkdwn"
+                  type: "markdown"
                   text: "${{ steps.release.outputs.body }}"
               - type: "actions"
                 elements:
