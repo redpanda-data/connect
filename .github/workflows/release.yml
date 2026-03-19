@@ -204,10 +204,8 @@ jobs:
                   - type: "mrkdwn"
                     text: "*Author:*\n${{ steps.release.outputs.author }}"
               - type: "divider"
-              - type: "section"
-                text:
-                  type: "markdown"
-                  text: "${{ steps.release.outputs.body }}"
+              - type: "markdown"
+                text: "${{ steps.release.outputs.body }}"
               - type: "actions"
                 elements:
                   - type: "button"
