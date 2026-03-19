@@ -18,7 +18,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"slices"
 
 	"github.com/qdrant/go-client/qdrant"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -234,16 +233,18 @@ func (p *processor) Process(ctx context.Context, msg *service.Message) (service.
 		if k != "" {
 			vectorName = &k
 		}
-		if v.GetVectorsCount() > 0 {
+		switch vec := v.GetVector().(type) {
+		case *qdrant.Vector_MultiDense:
 			var vecs [][]float32
-			for chunk := range slices.Chunk(v.Data, int(v.GetVectorsCount())) {
-				vecs = append(vecs, chunk)
+			for _, dv := range vec.MultiDense.GetVectors() {
+				vecs = append(vecs, dv.GetData())
 			}
 			vector = qdrant.NewVectorInputMulti(vecs)
-		} else if v.Indices != nil {
-			vector = qdrant.NewVectorInputSparse(v.Indices.Data, v.Data)
-		} else {
-			vector = qdrant.NewVectorInputDense(v.Data)
+		case *qdrant.Vector_Sparse:
+			sv := vec.Sparse
+			vector = qdrant.NewVectorInputSparse(sv.GetIndices(), sv.GetValues())
+		default:
+			vector = qdrant.NewVectorInputDense(v.GetDense().GetData())
 		}
 	}
 	results, err := p.client.Query(
