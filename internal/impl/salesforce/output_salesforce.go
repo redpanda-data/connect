@@ -41,7 +41,15 @@ const (
 
 	realtimeMaxChunkSize = 200 // Salesforce sObject Collections API limit
 	bulkPollInterval     = 5 * time.Second
+	defaultMaxBulkJobs    = 10   // max concurrent in-flight bulk jobs
+	defaultBulkBatchSize  = 1000 // records per bulk job
 )
+
+// inFlightBulkJob tracks a bulk job submitted to Salesforce that is still being polled.
+type inFlightBulkJob struct {
+	jobID string
+	errCh chan error // buffered(1); receives exactly one value when polling completes
+}
 
 // topicMapping holds the Salesforce write config for a single Kafka topic.
 type topicMapping struct {
@@ -63,18 +71,27 @@ type salesforceSinkOutput struct {
 	// writableFields caches per-SObject updateable field sets, loaded lazily on first write.
 	writableFieldsMu sync.RWMutex
 	writableFields   map[string]map[string]struct{}
-	blockedFields    map[string][]string
+	blockedFields    map[string]map[string]struct{}
+
+	// bulkJobs tracks in-flight bulk jobs being polled in background goroutines.
+	bulkJobsMu  sync.Mutex
+	bulkJobs    []*inFlightBulkJob
+	maxBulkJobs int
 }
 
 func init() {
 	if err := service.RegisterBatchOutput(
 		"salesforce_sink", newSalesforceSinkConfigSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchOutput, service.BatchPolicy, int, error) {
+			batchSize, err := conf.FieldInt("bulk_batch_size")
+			if err != nil {
+				return nil, service.BatchPolicy{}, 0, err
+			}
 			out, err := newSalesforceSinkOutput(conf, mgr)
 			if err != nil {
 				return nil, service.BatchPolicy{}, 0, err
 			}
-			return out, service.BatchPolicy{Count: 200, Period: "1s"}, 1, nil
+			return out, service.BatchPolicy{Count: batchSize, Period: "5s"}, 1, nil
 		},
 	); err != nil {
 		panic(err)
@@ -166,6 +183,12 @@ output:
 		Field(service.NewIntField("max_retries").
 			Description("Maximum number of retries on 429 Too Many Requests").
 			Default(10)).
+		Field(service.NewIntField("bulk_batch_size").
+			Description("Number of records per bulk job. Also controls the output batch size.").
+			Default(defaultBulkBatchSize)).
+		Field(service.NewIntField("max_concurrent_bulk_jobs").
+			Description("Maximum number of bulk jobs polling concurrently in the background.").
+			Default(defaultMaxBulkJobs)).
 		Field(topicMappingSpec)
 }
 
@@ -199,6 +222,11 @@ func newSalesforceSinkOutput(conf *service.ParsedConfig, mgr *service.Resources)
 	}
 
 	maxRetries, err := conf.FieldInt("max_retries")
+	if err != nil {
+		return nil, err
+	}
+
+	maxConcurrentBulkJobs, err := conf.FieldInt("max_concurrent_bulk_jobs")
 	if err != nil {
 		return nil, err
 	}
@@ -271,7 +299,8 @@ func newSalesforceSinkOutput(conf *service.ParsedConfig, mgr *service.Resources)
 		client:         sfClient,
 		topicMappings:  topicMappings,
 		writableFields: make(map[string]map[string]struct{}),
-		blockedFields:  make(map[string][]string),
+		blockedFields:  make(map[string]map[string]struct{}),
+		maxBulkJobs:    maxConcurrentBulkJobs,
 	}
 	for topic, m := range topicMappings {
 		out.log.Infof("salesforce_sink: topic=%s → sobject=%s operation=%s mode=%s", topic, m.sobject, m.operation, m.mode)
@@ -307,7 +336,6 @@ func (s *salesforceSinkOutput) WriteBatch(ctx context.Context, batch service.Mes
 		}
 
 		topic, _ := envelope["topic"].(string)
-		s.log.Infof("salesforce_sink: message[%d] topic=%s data=%v", i, topic, envelope["data"])
 
 		// Unwrap "data" field as the actual Salesforce record.
 		record := envelope
@@ -339,8 +367,24 @@ func (s *salesforceSinkOutput) WriteBatch(ctx context.Context, batch service.Mes
 	return nil
 }
 
-func (*salesforceSinkOutput) Close(_ context.Context) error {
-	return nil
+func (s *salesforceSinkOutput) Close(ctx context.Context) error {
+	s.bulkJobsMu.Lock()
+	jobs := s.bulkJobs
+	s.bulkJobs = nil
+	s.bulkJobsMu.Unlock()
+
+	var firstErr error
+	for _, job := range jobs {
+		select {
+		case err := <-job.errCh:
+			if err != nil && firstErr == nil {
+				firstErr = err
+			}
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	return firstErr
 }
 
 // getWritableFields returns the cached updateable field set for an SObject, fetching it on first call.
@@ -371,11 +415,24 @@ func (s *salesforceSinkOutput) blockFields(sobject string, newBlocked []string) 
 	s.writableFieldsMu.Lock()
 	defer s.writableFieldsMu.Unlock()
 	fields := s.writableFields[sobject]
+	var newlyBlocked []string
 	for _, f := range newBlocked {
-		delete(fields, f)
-		s.blockedFields[sobject] = append(s.blockedFields[sobject], f)
+		if _, already := s.blockedFields[sobject][f]; !already {
+			delete(fields, f)
+			if s.blockedFields[sobject] == nil {
+				s.blockedFields[sobject] = make(map[string]struct{})
+			}
+			s.blockedFields[sobject][f] = struct{}{}
+			newlyBlocked = append(newlyBlocked, f)
+		}
 	}
-	s.log.Warnf("salesforce_sink: %s: all profile-blocked fields (%d): %v", sobject, len(s.blockedFields[sobject]), s.blockedFields[sobject])
+	if len(newlyBlocked) > 0 {
+		blocked := make([]string, 0, len(s.blockedFields[sobject]))
+		for f := range s.blockedFields[sobject] {
+			blocked = append(blocked, f)
+		}
+		s.log.Warnf("salesforce_sink: %s: profile-blocked fields (total %d): %v", sobject, len(blocked), blocked)
+	}
 }
 
 // filterRecord returns a copy of rec containing only updateable fields.
@@ -532,11 +589,36 @@ func (s *salesforceSinkOutput) writeBulk(ctx context.Context, records []map[stri
 	}
 	records = filtered
 
+	// Surface errors from any previously completed background jobs.
+	if err := s.drainCompletedBulkJobs(); err != nil {
+		return err
+	}
+
+	// If at max concurrency, block on the oldest in-flight job before submitting a new one.
+	s.bulkJobsMu.Lock()
+	for len(s.bulkJobs) >= s.maxBulkJobs {
+		oldest := s.bulkJobs[0]
+		s.bulkJobsMu.Unlock()
+		select {
+		case err := <-oldest.errCh:
+			s.bulkJobsMu.Lock()
+			s.bulkJobs = s.bulkJobs[1:]
+			if err != nil {
+				s.bulkJobsMu.Unlock()
+				return err
+			}
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	s.bulkJobsMu.Unlock()
+
+	// Submit: create → upload CSV → close (set UploadComplete). These are fast HTTP calls.
 	jobID, err := s.bulkCreateJob(ctx, m)
 	if err != nil {
 		return fmt.Errorf("salesforce_sink bulk: create job: %w", err)
 	}
-	s.log.Infof("salesforce_sink bulk: created job %s", jobID)
+	s.log.Infof("salesforce_sink bulk: created job %s (%d records)", jobID, len(records))
 
 	csvData, err := recordsToCSV(records)
 	if err != nil {
@@ -545,17 +627,48 @@ func (s *salesforceSinkOutput) writeBulk(ctx context.Context, records []map[stri
 	if err := s.bulkUploadCSV(ctx, jobID, csvData); err != nil {
 		return fmt.Errorf("salesforce_sink bulk: upload CSV: %w", err)
 	}
-
 	if err := s.bulkCloseJob(ctx, jobID); err != nil {
 		return fmt.Errorf("salesforce_sink bulk: close job: %w", err)
 	}
 
-	if err := s.bulkPollUntilDone(ctx, jobID); err != nil {
-		return fmt.Errorf("salesforce_sink bulk: poll: %w", err)
-	}
+	// Poll in background so the next WriteBatch can proceed immediately.
+	job := &inFlightBulkJob{jobID: jobID, errCh: make(chan error, 1)}
+	go func() {
+		if err := s.bulkPollUntilDone(context.Background(), jobID); err != nil {
+			s.log.Errorf("salesforce_sink bulk: job %s failed: %v", jobID, err)
+			job.errCh <- err
+		} else {
+			s.log.Infof("salesforce_sink bulk: job %s completed successfully", jobID)
+			job.errCh <- nil
+		}
+	}()
 
-	s.log.Infof("salesforce_sink bulk: job %s completed successfully", jobID)
+	s.bulkJobsMu.Lock()
+	s.bulkJobs = append(s.bulkJobs, job)
+	s.bulkJobsMu.Unlock()
 	return nil
+}
+
+// drainCompletedBulkJobs collects results from any finished background jobs without blocking.
+// Returns the first error encountered so the caller can surface it before submitting new work.
+func (s *salesforceSinkOutput) drainCompletedBulkJobs() error {
+	s.bulkJobsMu.Lock()
+	defer s.bulkJobsMu.Unlock()
+
+	var firstErr error
+	remaining := make([]*inFlightBulkJob, 0, len(s.bulkJobs))
+	for _, job := range s.bulkJobs {
+		select {
+		case err := <-job.errCh:
+			if err != nil && firstErr == nil {
+				firstErr = err
+			}
+		default:
+			remaining = append(remaining, job) // still running
+		}
+	}
+	s.bulkJobs = remaining
+	return firstErr
 }
 
 func (s *salesforceSinkOutput) bulkCreateJob(ctx context.Context, m topicMapping) (string, error) {
