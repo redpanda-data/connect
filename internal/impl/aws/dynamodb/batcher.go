@@ -85,6 +85,9 @@ func (b *RecordBatcher) AddMessages(batch service.MessageBatch, shardID string) 
 
 // RemoveMessages removes messages from tracking (used when messages are nacked).
 func (b *RecordBatcher) RemoveMessages(batch service.MessageBatch) {
+	if b == nil {
+		return
+	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -104,6 +107,9 @@ func (b *RecordBatcher) AckMessages(
 	cp checkpointer,
 	batch service.MessageBatch,
 ) error {
+	if b == nil {
+		return nil
+	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -164,6 +170,9 @@ func (b *RecordBatcher) PendingCheckpoints() map[string]string {
 // ShouldThrottle returns true if the message tracker is near capacity and
 // backpressure should be applied.
 func (b *RecordBatcher) ShouldThrottle() bool {
+	if b == nil {
+		return false
+	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
