@@ -62,6 +62,7 @@ type Request struct {
 type ProcessorState struct {
 	RestCursor       salesforcehttp.Cursor `json:"rest_cursor"`
 	SnapshotComplete bool                  `json:"snapshot_complete"`
+	FilteredCursor   string               `json:"filtered_cursor,omitempty"`
 	CDCReplayID      []byte                `json:"cdc_replay_id,omitempty"`
 	PubSubReplayID   []byte                `json:"pubsub_replay_id,omitempty"`
 	PubSubTopic      string                `json:"pubsub_topic,omitempty"`
@@ -88,16 +89,16 @@ func (s *salesforceProcessor) Dispatch(
 		if !req.Filter.Enabled {
 			return s.dispatchWithCheckpoint(ctx)
 		}
-		return s.dispatchFilteredOnce(ctx, func() (service.MessageBatch, error) {
-			return s.client.RestQueryFiltered(ctx, req.Filter.Value)
+		return s.dispatchFilteredPaged(ctx, func(cursor string) (service.MessageBatch, string, error) {
+			return s.client.RestQueryPage(ctx, req.Filter.Value, cursor)
 		})
 
 	case QueryGraphQL:
 		if !req.Filter.Enabled {
 			return nil, errors.New("unhandled query type: QueryGraphQL - not filtered")
 		}
-		return s.dispatchFilteredOnce(ctx, func() (service.MessageBatch, error) {
-			return s.client.GraphQLQueryFiltered(ctx, req.Filter.Value)
+		return s.dispatchFilteredPaged(ctx, func(cursor string) (service.MessageBatch, string, error) {
+			return s.client.GraphQLQueryPage(ctx, req.Filter.Value, cursor)
 		})
 
 	default:
@@ -160,9 +161,11 @@ func (s *salesforceProcessor) dispatchWithCheckpoint(ctx context.Context) (servi
 	return batch, nil
 }
 
-// dispatchFilteredOnce runs a user-provided query exactly once, using the checkpoint
-// to stay idle on subsequent triggers once the query has completed.
-func (s *salesforceProcessor) dispatchFilteredOnce(ctx context.Context, fetch func() (service.MessageBatch, error)) (service.MessageBatch, error) {
+// dispatchFilteredPaged fetches one page of a filtered query per trigger, checkpointing
+// the cursor after each page. Once all pages are consumed SnapshotComplete is set and
+// subsequent triggers stay idle. fetchPage receives the current cursor (empty on the
+// first call) and returns (batch, nextCursor, error); nextCursor is empty when done.
+func (s *salesforceProcessor) dispatchFilteredPaged(ctx context.Context, fetchPage func(cursor string) (service.MessageBatch, string, error)) (service.MessageBatch, error) {
 	s.dispatchMu.Lock()
 	defer s.dispatchMu.Unlock()
 
@@ -176,14 +179,17 @@ func (s *salesforceProcessor) dispatchFilteredOnce(ctx context.Context, fetch fu
 		return nil, nil
 	}
 
-	batch, err := fetch()
+	batch, nextCursor, err := fetchPage(state.FilteredCursor)
 	if err != nil {
 		return nil, err
 	}
 
-	state.SnapshotComplete = true
+	state.FilteredCursor = nextCursor
+	if nextCursor == "" {
+		state.SnapshotComplete = true
+	}
 	if err := s.saveState(ctx, state); err != nil {
-		s.log.Errorf("failed to save checkpoint after query: %v", err)
+		s.log.Errorf("failed to save checkpoint after query page: %v", err)
 	}
 
 	return batch, nil

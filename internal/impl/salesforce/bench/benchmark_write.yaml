@@ -17,7 +17,7 @@ input:
   generate:
     interval: "1ns"
     mapping: |
-      let id = counter()
+      let id = uuid_v4()
 
       let first_names = ["Mike", "Sarah", "James", "Emily", "Robert", "Jessica", "David", "Ashley", "John", "Amanda"]
       let last_names  = ["Garcia", "Smith", "Johnson", "Williams", "Brown", "Jones", "Miller", "Davis", "Wilson", "Moore"]
@@ -27,55 +27,54 @@ input:
       let states      = ["California", "California", "New York", "Illinois", "Washington"]
       let state_codes = ["CA", "CA", "NY", "IL", "WA"]
       let zip_codes   = ["94105", "90001", "10001", "60601", "98101"]
-      let countries   = ["United States"]
       let lead_src    = ["Marketing Event", "Web", "Phone Inquiry", "Partner Referral", "Trade Show"]
       let titles      = ["Customer", "Manager", "Director", "VP", "Engineer"]
       let pronouns    = ["He/Him/His", "She/Her/Hers", "They/Them/Theirs"]
 
-      let city_idx  = $id % $cities.length()
-      let first     = $first_names.index($id % $first_names.length())
-      let last      = $last_names.index($id % $last_names.length())
-      let street    = $streets.index($id % $streets.length())
-      let city      = $cities.index($city_idx)
-      let state     = $states.index($city_idx)
+      let city_idx   = random_int() % $cities.length()
+      let first      = $first_names.index(random_int() % $first_names.length())
+      let last       = $last_names.index(random_int() % $last_names.length())
+      let street     = $streets.index(random_int() % $streets.length())
+      let city       = $cities.index($city_idx)
+      let state      = $states.index($city_idx)
       let state_code = $state_codes.index($city_idx)
-      let zip       = $zip_codes.index($city_idx)
-      let country   = $countries.index(0)
+      let zip        = $zip_codes.index($city_idx)
+      let phone_sfx  = (random_int() % 9000 + 1000).string()
 
       root.topic = "bench-account"
       root.data = {
-        "External_ID__c":          "bench-" + $id.string(),
+        "External_ID__c":          "bench-" + $id,
         "FirstName":               $first,
         "LastName":                $last,
-        "Salutation":              $salutations.index($id % $salutations.length()),
+        "Salutation":              $salutations.index(random_int() % $salutations.length()),
         "IsPersonAccount":         true,
         "IsActive":                false,
         "RecordTypeId":            "012Hp000002iLwgIAE",
-        "Phone":                   "(415) 555-" + ($id % 9000 + 1000).string(),
-        "PersonMobilePhone":       "(415) 500-" + ($id % 9000 + 1000).string(),
-        "PersonEmail":             $first.lowercase() + "." + $last.lowercase() + $id.string() + "@example.com",
-        "PersonTitle":             $titles.index($id % $titles.length()),
-        "PersonLeadSource":        $lead_src.index($id % $lead_src.length()),
+        "Phone":                   "(415) 555-" + $phone_sfx,
+        "PersonMobilePhone":       "(415) 500-" + $phone_sfx,
+        "PersonEmail":             $first.lowercase() + "." + $last.lowercase() + "." + $id + "@example.com",
+        "PersonTitle":             $titles.index(random_int() % $titles.length()),
+        "PersonLeadSource":        $lead_src.index(random_int() % $lead_src.length()),
         "PersonBirthdate":         "1985-06-15",
         "PersonHasOptedOutOfEmail": false,
         "PersonDoNotCall":         false,
-        "AccountNumber":           "P" + ($id + 10000000).string(),
+        "AccountNumber":           "P" + $id,
         "BillingStreet":           $street,
         "BillingCity":             $city,
         "BillingState":            $state,
         "BillingPostalCode":       $zip,
-        "BillingCountry":          $country,
+        "BillingCountry":          "United States",
         "BillingStateCode":        $state_code,
         "BillingCountryCode":      "US",
         "ShippingStreet":          $street,
         "ShippingCity":            $city,
         "ShippingState":           $state,
         "ShippingPostalCode":      $zip,
-        "ShippingCountry":         $country,
+        "ShippingCountry":         "United States",
         "ShippingStateCode":       $state_code,
         "ShippingCountryCode":     "US",
         "CurrencyIsoCode":         "USD",
-        "SDO_PA_Inclusive_Pronouns__pc": $pronouns.index($id % $pronouns.length()),
+        "SDO_PA_Inclusive_Pronouns__pc": $pronouns.index(random_int() % $pronouns.length()),
         "SDO_Account_Priority__c": "Low Priority",
         "SDO_SPM_Region_Auto_Calc__c": "USA",
         "SDO_SPM_Segment_Auto_Calc__c": "SMB"
@@ -95,7 +94,9 @@ output:
     restapi_version: "v65.0"
     request_timeout: "30s"
     max_retries: 5
-    bulk_batch_size: 1000
+    max_in_flight: 10
+    bulk_batch_size: 200
+    max_concurrent_bulk_jobs: 30
     topic_mappings:
       - topic: bench-account
         sobject: Account

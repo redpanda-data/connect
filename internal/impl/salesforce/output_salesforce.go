@@ -87,11 +87,15 @@ func init() {
 			if err != nil {
 				return nil, service.BatchPolicy{}, 0, err
 			}
+			maxInFlight, err := conf.FieldInt("max_in_flight")
+			if err != nil {
+				return nil, service.BatchPolicy{}, 0, err
+			}
 			out, err := newSalesforceSinkOutput(conf, mgr)
 			if err != nil {
 				return nil, service.BatchPolicy{}, 0, err
 			}
-			return out, service.BatchPolicy{Count: batchSize, Period: "5s"}, 1, nil
+			return out, service.BatchPolicy{Count: batchSize, Period: "5s"}, maxInFlight, nil
 		},
 	); err != nil {
 		panic(err)
@@ -189,6 +193,9 @@ output:
 		Field(service.NewIntField("max_concurrent_bulk_jobs").
 			Description("Maximum number of bulk jobs polling concurrently in the background.").
 			Default(defaultMaxBulkJobs)).
+		Field(service.NewIntField("max_in_flight").
+			Description("Maximum number of batches to send concurrently. Increasing this improves realtime write throughput.").
+			Default(1)).
 		Field(topicMappingSpec)
 }
 

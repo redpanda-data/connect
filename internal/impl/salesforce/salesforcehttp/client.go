@@ -387,17 +387,26 @@ func (s *Client) GraphQL(ctx context.Context, query string) ([]byte, error) {
 	return s.callSalesforceAPIWithBody(ctx, apiUrl, bodyBytes)
 }
 
-// RestQueryFiltered fetches data using the provided SOQL query via the REST API.
-// Returns one message per record in the result set.
-func (s *Client) RestQueryFiltered(ctx context.Context, soql string) (service.MessageBatch, error) {
-	raw, err := s.GetSObjectData(ctx, soql)
+// RestQueryPage fetches one page of a SOQL query via the REST API.
+// Pass an empty nextURL on the first call; pass the returned nextURL on each subsequent call.
+// Returns (batch, nextURL, error) where nextURL is empty when there are no more pages.
+func (s *Client) RestQueryPage(ctx context.Context, soql, nextURL string) (service.MessageBatch, string, error) {
+	var (
+		raw []byte
+		err error
+	)
+	if nextURL == "" {
+		raw, err = s.GetSObjectData(ctx, soql)
+	} else {
+		raw, err = s.fetchNextRecordsPage(ctx, nextURL)
+	}
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	var qr QueryResult
 	if err := json.Unmarshal(raw, &qr); err != nil {
-		return nil, fmt.Errorf("failed to parse query result: %w", err)
+		return nil, "", fmt.Errorf("failed to parse query result: %w", err)
 	}
 
 	var batch service.MessageBatch
@@ -408,57 +417,56 @@ func (s *Client) RestQueryFiltered(ctx context.Context, soql string) (service.Me
 		batch = append(batch, msg)
 	}
 
-	return batch, nil
+	return batch, qr.NextRecordsUrl, nil
 }
 
-// GraphQLQueryFiltered fetches all pages of a GraphQL query using cursor-based pagination.
+// GraphQLQueryPage fetches one page of a GraphQL query.
+// Pass an empty cursor on the first call; pass the returned cursor on each subsequent call.
+// Returns (batch, nextCursor, error) where nextCursor is empty when there are no more pages.
 // The query must include pageInfo { hasNextPage endCursor } in the selection set.
-func (s *Client) GraphQLQueryFiltered(ctx context.Context, query string) (service.MessageBatch, error) {
-	var batch service.MessageBatch
-	cursor := ""
-
-	for {
-		q := injectGraphQLCursor(query, cursor)
-		if cursor != "" && q == query {
-			s.log.Warn("GraphQL cursor injection failed: query unchanged, cannot paginate further")
-			break
-		}
-		raw, err := s.GraphQL(ctx, q)
-		if err != nil {
-			return nil, err
-		}
-
-		var result map[string]json.RawMessage
-		if err := json.Unmarshal(raw, &result); err != nil {
-			return nil, fmt.Errorf("failed to parse GraphQL response: %w", err)
-		}
-
-		edges, pageInfo, found := findGraphQLEdges(result)
-		if !found {
-			// No edges structure found — return raw response as single message
-			msg := service.NewMessage(raw)
-			msg.MetaSet("query", query)
-			return service.MessageBatch{msg}, nil
-		}
-
-		for _, edge := range edges {
-			var e GraphQLEdge
-			if err := json.Unmarshal(edge, &e); err != nil {
-				s.log.Warnf("Failed to unmarshal GraphQL edge: %v", err)
-				continue
-			}
-			msg := service.NewMessage(e.Node)
-			msg.MetaSet("query", query)
-			batch = append(batch, msg)
-		}
-
-		if !pageInfo.HasNextPage {
-			break
-		}
-		cursor = pageInfo.EndCursor
+func (s *Client) GraphQLQueryPage(ctx context.Context, query, cursor string) (service.MessageBatch, string, error) {
+	q := injectGraphQLCursor(query, cursor)
+	if cursor != "" && q == query {
+		s.log.Warn("GraphQL cursor injection failed: query unchanged, cannot paginate further")
+		return nil, "", nil
 	}
 
-	return batch, nil
+	raw, err := s.GraphQL(ctx, q)
+	if err != nil {
+		return nil, "", err
+	}
+
+	var result map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &result); err != nil {
+		return nil, "", fmt.Errorf("failed to parse GraphQL response: %w", err)
+	}
+
+	edges, pageInfo, found := findGraphQLEdges(result)
+	if !found {
+		// No edges structure found — return raw response as single message
+		msg := service.NewMessage(raw)
+		msg.MetaSet("query", query)
+		return service.MessageBatch{msg}, "", nil
+	}
+
+	var batch service.MessageBatch
+	for _, edge := range edges {
+		var e GraphQLEdge
+		if err := json.Unmarshal(edge, &e); err != nil {
+			s.log.Warnf("Failed to unmarshal GraphQL edge: %v", err)
+			continue
+		}
+		msg := service.NewMessage(e.Node)
+		msg.MetaSet("query", query)
+		batch = append(batch, msg)
+	}
+
+	nextCursor := ""
+	if pageInfo.HasNextPage {
+		nextCursor = pageInfo.EndCursor
+	}
+
+	return batch, nextCursor, nil
 }
 
 var (
