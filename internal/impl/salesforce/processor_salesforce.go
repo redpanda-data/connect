@@ -409,18 +409,10 @@ func buildRequest(queryType, query string) (Request, error) {
 	return req, nil
 }
 
-func (s *salesforceProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
-	inputMsg, err := msg.AsBytes()
-	if err != nil {
-		s.log.Errorf("Failed to read input message: %v", err)
-		return nil, nil
-	}
-	s.log.Debugf("Fetching from Salesforce.. Input: %s", string(inputMsg))
-
+func (s *salesforceProcessor) Process(ctx context.Context, _ *service.Message) (service.MessageBatch, error) {
 	batch, err := s.Dispatch(ctx, s.req)
 	if err != nil {
-		s.log.Errorf("Salesforce dispatch failed: %v", err)
-		return nil, nil
+		return nil, err
 	}
 	return batch, nil
 }

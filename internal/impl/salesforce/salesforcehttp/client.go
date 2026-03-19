@@ -295,8 +295,12 @@ type Client struct {
 	log          *service.Logger
 
 	// sobjectList is populated once and then read-only; mu protects the initial load.
-	sobjectListMu sync.Mutex
-	sobjectList   []SObjectInfo
+	// sobjectListLoaded is set to true after the first load attempt (success or failure).
+	// sobjectListErr holds any error from the load so it can be re-returned on subsequent calls.
+	sobjectListMu     sync.Mutex
+	sobjectList       []SObjectInfo
+	sobjectListLoaded bool
+	sobjectListErr    error
 
 	// queryBatchSize controls the Sforce-Query-Options batchSize header (200–2000).
 	// Smaller values produce faster individual responses at the cost of more pages.
@@ -522,11 +526,17 @@ func (s *Client) GetNextBatchParallel(ctx context.Context, cursor Cursor, parall
 	// Load the SObject list exactly once. The mutex prevents concurrent reloads which
 	// would produce a list with a different length than the cursor's slot indices expect.
 	s.sobjectListMu.Lock()
-	if len(s.sobjectList) == 0 {
-		if err := s.loadSObjectList(ctx); err != nil {
-			s.sobjectListMu.Unlock()
-			return nil, cursor, false, err
+	if !s.sobjectListLoaded {
+		err := s.loadSObjectList(ctx)
+		s.sobjectListLoaded = true
+		s.sobjectListErr = err
+		if err != nil {
+			s.log.Errorf("Failed to load SObject list: %v", err)
 		}
+	}
+	if s.sobjectListErr != nil {
+		s.sobjectListMu.Unlock()
+		return nil, cursor, false, s.sobjectListErr
 	}
 	// Capture a local snapshot so goroutines use a consistent view even if the field
 	// is ever replaced in a future call.
@@ -544,16 +554,53 @@ func (s *Client) GetNextBatchParallel(ctx context.Context, cursor Cursor, parall
 	}
 
 	if len(cursor.Slots) == 0 {
-		return nil, cursor, true, nil // all SObjects processed
+		// cursor.NextAssign is past the end of the current sobjectList.
+		// This is expected when all SObjects have been processed, but can also happen
+		// if the sobjectList shrank (e.g. more items added to the static skipList) and a
+		// stale checkpoint had NextAssign beyond the new list length.
+		// Detect the latter: if NextAssign is past the end but the list is non-empty,
+		// reset the cursor so the snapshot restarts cleanly instead of silently completing.
+		if cursor.NextAssign > len(sobjectList) && len(sobjectList) > 0 {
+			s.log.Warnf("Checkpoint NextAssign=%d exceeds current SObject list length=%d — SObject list likely changed. Resetting cursor to restart snapshot.", cursor.NextAssign, len(sobjectList))
+			cursor.NextAssign = 0
+			cursor.Slots = nil
+			// Re-fill slots with the reset cursor
+			for len(cursor.Slots) < parallelFetch && cursor.NextAssign < len(sobjectList) {
+				next := sobjectList[cursor.NextAssign]
+				cursor.Slots = append(cursor.Slots, ParallelSlot{
+					SObjectIndex: cursor.NextAssign,
+					SObjectName:  next.Name,
+				})
+				cursor.NextAssign++
+			}
+		}
+		if len(cursor.Slots) == 0 {
+			return nil, cursor, true, nil // all SObjects processed
+		}
+	}
+
+	// Snapshot map state before launching goroutines. Goroutines must not write to
+	// s.unsupportedSObjects or s.graphqlFallbackObjects directly — concurrent map
+	// reads+writes cause a fatal panic in Go. Instead they set flags in slotResult
+	// and the main goroutine applies updates after wg.Wait().
+	unsupportedSnap := make(map[string]struct{}, len(s.unsupportedSObjects))
+	for k, v := range s.unsupportedSObjects {
+		unsupportedSnap[k] = v
+	}
+	graphqlFallbackSnap := make(map[string]struct{}, len(s.graphqlFallbackObjects))
+	for k, v := range s.graphqlFallbackObjects {
+		graphqlFallbackSnap[k] = v
 	}
 
 	type slotResult struct {
-		slotIdx       int
-		records       []json.RawMessage
-		nextURL       string
-		graphqlCursor string
-		done          bool
-		skipped       bool
+		slotIdx         int
+		records         []json.RawMessage
+		nextURL         string
+		graphqlCursor   string
+		done            bool
+		skipped         bool
+		markUnsupported bool // apply to s.unsupportedSObjects after wg.Wait
+		markGraphQL     bool // apply to s.graphqlFallbackObjects after wg.Wait
 	}
 
 	results := make([]slotResult, len(cursor.Slots))
@@ -564,14 +611,14 @@ func (s *Client) GetNextBatchParallel(ctx context.Context, cursor Cursor, parall
 		go func(i int, slot ParallelSlot) {
 			defer wg.Done()
 
-			// Skip permanently unsupported SObjects
-			if _, bad := s.unsupportedSObjects[slot.SObjectName]; bad {
+			// Skip permanently unsupported SObjects (read from snapshot — safe)
+			if _, bad := unsupportedSnap[slot.SObjectName]; bad {
 				results[i] = slotResult{slotIdx: i, done: true, skipped: true}
 				return
 			}
 
-			// Use GraphQL for SObjects whose REST URL is too large
-			if _, useGraphQL := s.graphqlFallbackObjects[slot.SObjectName]; useGraphQL {
+			// Use GraphQL for SObjects whose REST URL is too large (read from snapshot — safe)
+			if _, useGraphQL := graphqlFallbackSnap[slot.SObjectName]; useGraphQL {
 				if slot.SObjectIndex >= len(sobjectList) {
 					results[i] = slotResult{slotIdx: i, done: true, skipped: true}
 					return
@@ -579,23 +626,20 @@ func (s *Client) GetNextBatchParallel(ctx context.Context, cursor Cursor, parall
 				gqlQuery := buildSObjectGraphQLQuery(slot.SObjectName, sobjectList[slot.SObjectIndex].Fields, slot.GraphQLCursor)
 				raw, err := s.GraphQL(ctx, gqlQuery)
 				if err != nil {
-					s.unsupportedSObjects[slot.SObjectName] = struct{}{}
 					s.log.Warnf("Skipping SObject %s permanently: GraphQL fallback failed: %v", slot.SObjectName, err)
-					results[i] = slotResult{slotIdx: i, done: true, skipped: true}
+					results[i] = slotResult{slotIdx: i, done: true, skipped: true, markUnsupported: true}
 					return
 				}
 				var result map[string]json.RawMessage
 				if err := json.Unmarshal(raw, &result); err != nil {
-					s.unsupportedSObjects[slot.SObjectName] = struct{}{}
 					s.log.Warnf("Skipping SObject %s permanently: failed to parse GraphQL response: %v", slot.SObjectName, err)
-					results[i] = slotResult{slotIdx: i, done: true, skipped: true}
+					results[i] = slotResult{slotIdx: i, done: true, skipped: true, markUnsupported: true}
 					return
 				}
 				edges, pageInfo, found := findGraphQLEdges(result)
 				if !found {
-					s.unsupportedSObjects[slot.SObjectName] = struct{}{}
 					s.log.Warnf("Skipping SObject %s permanently: no edges in GraphQL response", slot.SObjectName)
-					results[i] = slotResult{slotIdx: i, done: true, skipped: true}
+					results[i] = slotResult{slotIdx: i, done: true, skipped: true, markUnsupported: true}
 					return
 				}
 				var records []json.RawMessage
@@ -634,23 +678,20 @@ func (s *Client) GetNextBatchParallel(ctx context.Context, cursor Cursor, parall
 				raw, err = s.GetSObjectData(ctx, soql)
 				if err != nil {
 					var httpErr *HTTPError
-					if errors.As(err, &httpErr) && (httpErr.StatusCode == http.StatusBadRequest || httpErr.StatusCode == http.StatusForbidden) {
-						s.unsupportedSObjects[slot.SObjectName] = struct{}{}
+					if errors.As(err, &httpErr) && (httpErr.StatusCode == http.StatusBadRequest || httpErr.StatusCode == http.StatusForbidden || httpErr.StatusCode == http.StatusInternalServerError) {
 						s.log.Warnf("Skipping SObject %s permanently: query not supported (%d): query=%q reason=%s",
 							slot.SObjectName, httpErr.StatusCode, soql, httpErr.Body)
-						results[i] = slotResult{slotIdx: i, done: true, skipped: true}
+						results[i] = slotResult{slotIdx: i, done: true, skipped: true, markUnsupported: true}
 						return
 					}
 					if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
-						s.unsupportedSObjects[slot.SObjectName] = struct{}{}
 						s.log.Warnf("Skipping SObject %s permanently: query timed out: query=%q", slot.SObjectName, soql)
-						results[i] = slotResult{slotIdx: i, done: true, skipped: true}
+						results[i] = slotResult{slotIdx: i, done: true, skipped: true, markUnsupported: true}
 						return
 					}
 					if strings.Contains(err.Error(), "request header list") {
-						s.graphqlFallbackObjects[slot.SObjectName] = struct{}{}
 						s.log.Warnf("SObject %s REST URL too large, will retry via GraphQL", slot.SObjectName)
-						results[i] = slotResult{slotIdx: i} // keep slot, retry via GraphQL next trigger
+						results[i] = slotResult{slotIdx: i, markGraphQL: true} // keep slot, retry via GraphQL next trigger
 						return
 					}
 					s.log.Errorf("Failed to fetch SObject %s: %v", slot.SObjectName, err)
@@ -676,6 +717,16 @@ func (s *Client) GetNextBatchParallel(ctx context.Context, cursor Cursor, parall
 	}
 
 	wg.Wait()
+
+	// Apply map updates from goroutines (safe — no goroutines running at this point)
+	for i, res := range results {
+		if res.markUnsupported {
+			s.unsupportedSObjects[cursor.Slots[i].SObjectName] = struct{}{}
+		}
+		if res.markGraphQL {
+			s.graphqlFallbackObjects[cursor.Slots[i].SObjectName] = struct{}{}
+		}
+	}
 
 	// Build output batch and updated slot list
 	var batch service.MessageBatch
@@ -776,39 +827,82 @@ func (s *Client) doSalesforcePostRequest(ctx context.Context, u *url.URL, body [
 // loadSObjectList fetches the full SObject catalogue and describes each one in parallel
 // (up to 20 concurrent describe calls) to build the ordered field list for SOQL generation.
 func (s *Client) loadSObjectList(ctx context.Context) error {
+	if len(s.restObjects) > 0 {
+		wanted := make([]string, 0, len(s.restObjects))
+		for n := range s.restObjects {
+			wanted = append(wanted, fmt.Sprintf("%q", n))
+		}
+		s.log.Infof("rest_objects filter active, looking for: %v", wanted)
+	}
+
 	raw, err := s.GetAllSObjectResources(ctx)
 	if err != nil {
 		return err
 	}
+	s.log.Infof("SObject list response size: %.1f KB", float64(len(raw))/1024)
 
 	var list SObjectList
 	if err := json.Unmarshal(raw, &list); err != nil {
-		return err
+		return fmt.Errorf("failed to parse SObject list (response: %.200s): %w", raw, err)
+	}
+	s.log.Infof("API returned %d total SObjects", len(list.Sobjects))
+	if len(list.Sobjects) == 0 {
+		return fmt.Errorf("Salesforce returned 0 SObjects — check credentials and org URL (response: %.200s)", raw)
 	}
 
 	skipList := map[string]bool{
-		"AIUpdateRecordEvent":       true,
-		"AccountUserTerritory2View": true,
-		"ApexTypeImplementor":       true,
-		"ActionableListMember":      true,
-		"ApexPageInfo":              true,
-		"AuraDefinitionBundleInfo":  true,
-		"AuraDefinitionInfo":        true,
-		"AppTabMember":              true,
-		"Campaign":                  true,
-		"ColorDefinition":           true,
-		"ContentDocumentLink":       true,
-		"ContentFolderItem":         true,
-		"ContentFolderMember":       true,
-		"DataType":                  true,
-		"DatacloudAddress":          true,
-		"DataStatistics":            true,
-		"EntityParticle":            true,
-		"FieldChangeSnapshot":       true,
-		"FieldDefinition":           true,
-		"EntityDefinition":          true,
-		"FlexQueueItem":             true,
-		"FlowDefinitionView":        true,
+		"AIUpdateRecordEvent":            true,
+		"AccountUserTerritory2View":      true,
+		"ActionableListMember":           true,
+		"ApexPageInfo":                   true,
+		"ApexTypeImplementor":            true,
+		"AppTabMember":                   true,
+		"AuraDefinitionBundleInfo":       true,
+		"AuraDefinitionInfo":             true,
+		"CategoryNode":                   true,
+		"ColorDefinition":                true,
+		"ConnectedApplication":           true,
+		"ContentDocumentLink":            true,
+		"ContentFolderItem":              true,
+		"ContentFolderMember":            true,
+		"DataStatistics":                 true,
+		"DataType":                       true,
+		"DatacloudAddress":               true,
+		"DecisionTable":                  true,
+		"DecisionTableDatasetLink":       true,
+		"EntityDefinition":               true,
+		"EntityParticle":                 true,
+		"ExpressionSetView":              true,
+		"FieldChangeSnapshot":            true,
+		"FieldDefinition":                true,
+		"FlexQueueItem":                  true,
+		"FlowDefinitionView":             true,
+		"FlowTestView":                   true,
+		"FlowVariableView":               true,
+		"FlowVersionView":                true,
+		"IconDefinition":                 true,
+		"IdeaComment":                    true,
+		"ListViewChartInstance":          true,
+		"LoyaltyPgmMbrPromEligView":      true,
+		"NetworkUserHistoryRecent":        true,
+		"ObjectUserTerritory2View":        true,
+		"OutgoingEmail":                   true,
+		"OutgoingEmailRelation":           true,
+		"OwnerChangeOptionInfo":           true,
+		"PicklistValueInfo":               true,
+		"PlatformAction":                  true,
+		"RecentFieldChange":               true,
+		"RelatedListColumnDefinition":     true,
+		"RelatedListDefinition":           true,
+		"RelationshipDomain":              true,
+		"RelationshipInfo":                true,
+		"SearchLayout":                    true,
+		"SiteDetail":                      true,
+		"UserEntityAccess":                true,
+		"UserFieldAccess":                 true,
+		"UserRecordAccess":                true,
+		"UserSharedFeature":               true,
+		"Vote":                            true,
 	}
 
 	// Collect queryable candidates, preserving order.
@@ -817,6 +911,7 @@ func (s *Client) loadSObjectList(ctx context.Context) error {
 		name string
 	}
 	var candidates []candidate
+	s.log.Infof("SObject list contains %d entries", len(list.Sobjects))
 	for i, sobj := range list.Sobjects {
 		if skipList[sobj.Name] || !sobj.Queryable {
 			continue
@@ -877,6 +972,27 @@ func (s *Client) loadSObjectList(ctx context.Context) error {
 	s.sobjectList = sobjectList
 
 	s.log.Infof("Loaded %d queryable SObjects for batching", len(s.sobjectList))
+
+	if len(s.sobjectList) == 0 {
+		if len(s.restObjects) > 0 {
+			// Report the status of each requested object specifically.
+			apiObjects := make(map[string]bool, len(list.Sobjects)) // name → queryable
+			for _, sobj := range list.Sobjects {
+				apiObjects[sobj.Name] = sobj.Queryable
+			}
+			details := make([]string, 0, len(s.restObjects))
+			for name := range s.restObjects {
+				if queryable, found := apiObjects[name]; found {
+					details = append(details, fmt.Sprintf("%q found but queryable=%v", name, queryable))
+				} else {
+					details = append(details, fmt.Sprintf("%q not found in API response", name))
+				}
+			}
+			return fmt.Errorf("none of the requested rest_objects produced queryable SObjects: %v", details)
+		}
+		s.log.Warn("No queryable SObjects found in this org")
+	}
+
 	return nil
 }
 

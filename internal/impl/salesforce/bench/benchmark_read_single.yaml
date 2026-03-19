@@ -7,6 +7,11 @@
 #   export SALESFORCE_CLIENT_ID="your-connected-app-client-id"
 #   export SALESFORCE_CLIENT_SECRET="your-connected-app-client-secret"
 
+logger:
+  level: INFO
+  format: logfmt
+  add_timestamp: true
+
 http:
   debug_endpoints: true
 
@@ -21,14 +26,12 @@ pipeline:
         org_url: "${SALESFORCE_ORG_URL}"
         client_id: "${SALESFORCE_CLIENT_ID}"
         client_secret: "${SALESFORCE_CLIENT_SECRET}"
-        restapi_version: "v65.0"
+        restapi_version: "v64.0"
         request_timeout: "30s"
         max_retries: 5
         cache_resource: sf_bench_checkpoint
-        parallel_fetch: 1
-        query_batch_size: 2000
-        rest_objects:
-          - Account
+        query_type: "rest"
+        query: "SELECT Id, Name FROM Account"
 
 output:
   processors:
