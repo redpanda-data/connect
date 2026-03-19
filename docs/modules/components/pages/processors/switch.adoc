@@ -63,7 +63,16 @@ A list of xref:components:processors/about.adoc[processors] to execute on a mess
 
 === `[].fallthrough`
 
-Indicates whether, if this case passes for a message, the next case should also be executed.
+Indicates whether, if this case passes for a message, the next case should also be executed without checking its condition.
+
+
+*Type*: `bool`
+
+*Default*: `false`
+
+=== `[].continue`
+
+Indicates whether, if this case passes for a message, the next case should also be tested. Unlike `fallthrough`, which skips the next case's check, `continue` will evaluate the next case's condition before executing.
 
 
 *Type*: `bool`
