@@ -20,6 +20,7 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
+	baws "github.com/redpanda-data/connect/v4/internal/impl/aws"
 	"github.com/redpanda-data/connect/v4/internal/impl/iceberg/catalogx"
 	"github.com/redpanda-data/connect/v4/internal/license"
 )
@@ -191,13 +192,13 @@ func parseCatalogConfig(conf *service.ParsedConfig) (catalogx.Config, error) {
 	// Check for AWS SigV4
 	if conf.Contains(ioFieldCatalog, ioFieldCatalogAuth, ioFieldCatalogAuthSigV4) {
 		cfg.AuthType = "sigv4"
-		// Parse optional region
-		if conf.Contains(ioFieldCatalog, ioFieldCatalogAuth, ioFieldCatalogAuthSigV4, ioFieldSigV4Region) {
-			cfg.SigV4Region, err = conf.FieldString(ioFieldCatalog, ioFieldCatalogAuth, ioFieldCatalogAuthSigV4, ioFieldSigV4Region)
-			if err != nil {
-				return cfg, err
-			}
+		sigv4Conf := conf.Namespace(ioFieldCatalog, ioFieldCatalogAuth, ioFieldCatalogAuthSigV4)
+		awsCfg, err := baws.GetSession(context.Background(), sigv4Conf)
+		if err != nil {
+			return cfg, fmt.Errorf("parsing sigv4 AWS config: %w", err)
 		}
+		cfg.SigV4AwsConfig = &awsCfg
+		cfg.SigV4Region = awsCfg.Region
 		// Parse service
 		if conf.Contains(ioFieldCatalog, ioFieldCatalogAuth, ioFieldCatalogAuthSigV4, ioFieldSigV4Service) {
 			cfg.SigV4Service, err = conf.FieldString(ioFieldCatalog, ioFieldCatalogAuth, ioFieldCatalogAuthSigV4, ioFieldSigV4Service)
@@ -273,21 +274,27 @@ func parseS3Props(conf *service.ParsedConfig) (iceberg.Properties, error) {
 		props[io.S3ForceVirtualAddressing] = "true"
 	}
 
-	// Get credentials - check for static credentials first
-	// The credentials field comes from config.SessionFields() which uses "credentials.id" and "credentials.secret"
-	if conf.Contains(ioFieldStorage, ioFieldStorageS3, "credentials", "id") {
-		accessKeyID, err := conf.FieldString(ioFieldStorage, ioFieldStorageS3, "credentials", "id")
+	// Get static credentials if provided
+	if conf.Contains(ioFieldStorage, ioFieldStorageS3, ioFieldS3Credentials, ioFieldS3CredID) {
+		accessKeyID, err := conf.FieldString(ioFieldStorage, ioFieldStorageS3, ioFieldS3Credentials, ioFieldS3CredID)
 		if err != nil {
 			return nil, err
 		}
 		props[io.S3AccessKeyID] = accessKeyID
 	}
-	if conf.Contains(ioFieldStorage, ioFieldStorageS3, "credentials", "secret") {
-		secretAccessKey, err := conf.FieldString(ioFieldStorage, ioFieldStorageS3, "credentials", "secret")
+	if conf.Contains(ioFieldStorage, ioFieldStorageS3, ioFieldS3Credentials, ioFieldS3CredSecret) {
+		secretAccessKey, err := conf.FieldString(ioFieldStorage, ioFieldStorageS3, ioFieldS3Credentials, ioFieldS3CredSecret)
 		if err != nil {
 			return nil, err
 		}
 		props[io.S3SecretAccessKey] = secretAccessKey
+	}
+	if conf.Contains(ioFieldStorage, ioFieldStorageS3, ioFieldS3Credentials, ioFieldS3CredToken) {
+		sessionToken, err := conf.FieldString(ioFieldStorage, ioFieldStorageS3, ioFieldS3Credentials, ioFieldS3CredToken)
+		if err != nil {
+			return nil, err
+		}
+		props[io.S3SessionToken] = sessionToken
 	}
 
 	return props, nil

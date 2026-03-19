@@ -21,6 +21,7 @@ import (
 	"github.com/apache/iceberg-go/catalog"
 	"github.com/apache/iceberg-go/catalog/rest"
 	"github.com/apache/iceberg-go/table"
+	"github.com/aws/aws-sdk-go-v2/aws"
 
 	"github.com/redpanda-data/connect/v4/internal/syncx"
 )
@@ -55,8 +56,9 @@ type Config struct {
 	BearerToken string
 
 	// AWS SigV4 fields
-	SigV4Region  string // AWS region for SigV4 signing (e.g., "us-east-1")
-	SigV4Service string // AWS service name for SigV4 signing (default: "execute-api")
+	SigV4Region    string      // AWS region for SigV4 signing (e.g., "us-east-1")
+	SigV4Service   string      // AWS service name for SigV4 signing (default: "execute-api")
+	SigV4AwsConfig *aws.Config // Optional explicit AWS config for SigV4 signing
 
 	// Custom HTTP headers
 	Headers map[string]string
@@ -84,7 +86,9 @@ func NewCatalogClient(ctx context.Context, cfg Config, namespace []string) (*Cli
 	case "bearer":
 		opts = append(opts, rest.WithOAuthToken(cfg.BearerToken))
 	case "sigv4":
-		// Use region/service-specific SigV4 if provided, otherwise use default
+		if cfg.SigV4AwsConfig != nil {
+			opts = append(opts, rest.WithAwsConfig(*cfg.SigV4AwsConfig))
+		}
 		if cfg.SigV4Region != "" || cfg.SigV4Service != "" {
 			opts = append(opts, rest.WithSigV4RegionSvc(cfg.SigV4Region, cfg.SigV4Service))
 		} else {
