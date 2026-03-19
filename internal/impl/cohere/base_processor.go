@@ -16,8 +16,9 @@ package cohere
 
 import (
 	"context"
+	"net/http"
 
-	coopt "github.com/cohere-ai/cohere-go/v2/option"
+	core "github.com/cohere-ai/cohere-go/v2/core"
 	coherev2 "github.com/cohere-ai/cohere-go/v2/v2"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -62,8 +63,7 @@ func newBaseProcessor(conf *service.ParsedConfig) (*baseProcessor, error) {
 		return nil, err
 	}
 	c := coherev2.NewClient(
-		coopt.WithBaseURL(bu),
-		coopt.WithToken(k),
+		&core.RequestOptions{BaseURL: bu, Token: k, HTTPHeader: make(http.Header)},
 	)
 	m, err := conf.FieldString(cpFieldModel)
 	if err != nil {

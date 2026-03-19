@@ -1,0 +1,43 @@
+version: '3'
+
+vars:
+  GIT_ROOT:
+    sh: git rev-parse --show-toplevel
+  AWS_REGION:
+    sh: cd terraform && terraform output -raw region 2>/dev/null || echo ""
+  AWS_BUCKET:
+    sh: cd terraform && terraform output -raw bucket_name 2>/dev/null || echo ""
+  AWS_ROLE_ARN:
+    sh: cd terraform && terraform output -raw role_arn 2>/dev/null || echo ""
+
+includes:
+  terraform:
+    taskfile: ./terraform/terraform.yml
+    dir: terraform
+
+tasks:
+  test:
+    desc: Run Polaris AWS credential vendoring e2e tests (basic)
+    dir: '{{.GIT_ROOT}}'
+    cmds:
+      - >-
+        go test -v -timeout 10m
+        -run TestPolarisAWSE2E_BasicWrite
+        ./internal/impl/iceberg/e2e/polaris-aws/...
+        -aws.region={{.AWS_REGION}}
+        -aws.bucket={{.AWS_BUCKET}}
+        -aws.role-arn={{.AWS_ROLE_ARN}}
+
+  test:soak:
+    desc: Run long-running credential refresh soak test
+    dir: '{{.GIT_ROOT}}'
+    cmds:
+      - >-
+        go test -v -timeout 3h
+        -run TestPolarisAWSE2E_CredentialRefreshSoak
+        ./internal/impl/iceberg/e2e/polaris-aws/...
+        -aws.region={{.AWS_REGION}}
+        -aws.bucket={{.AWS_BUCKET}}
+        -aws.role-arn={{.AWS_ROLE_ARN}}
+        -test.soak-duration={{.SOAK_DURATION | default "2h"}}
+        -test.batch-interval={{.BATCH_INTERVAL | default "5m"}}

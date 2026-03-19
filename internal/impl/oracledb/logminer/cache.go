@@ -137,7 +137,7 @@ func (tc *InMemoryCache) CommitTransaction(txnID string) {
 func (tc *InMemoryCache) LowWatermarkSCN(excludeTxnID string) uint64 {
 	lowestOpenSCN := uint64(math.MaxUint64)
 	for id, txn := range tc.transactions {
-		if id != excludeTxnID {
+		if id != excludeTxnID && len(txn.Events) > 0 {
 			lowestOpenSCN = min(lowestOpenSCN, txn.SCN)
 		}
 	}

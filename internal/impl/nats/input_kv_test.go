@@ -37,10 +37,8 @@ include_history: true
 meta_only: true
 max_reconnects: -1
 auth:
-  nkey_file: test auth n key file
-  user_credentials_file: test auth user creds file
-  user_jwt: test auth inline user JWT
-  user_nkey_seed: test auth inline user NKey Seed
+  user: test auth inline user name
+  password: test auth inline user password
 `
 
 		conf, err := spec.ParseYAML(inputConfig, env)
@@ -56,10 +54,54 @@ auth:
 		assert.True(t, e.includeHistory)
 		assert.True(t, e.metaOnly)
 		assert.Equal(t, -1, *e.connDetails.maxReconnects)
-		assert.Equal(t, "test auth n key file", e.connDetails.authConf.NKeyFile)
-		assert.Equal(t, "test auth user creds file", e.connDetails.authConf.UserCredentialsFile)
-		assert.Equal(t, "test auth inline user JWT", e.connDetails.authConf.UserJWT)
-		assert.Equal(t, "test auth inline user NKey Seed", e.connDetails.authConf.UserNkeySeed)
+		assert.Equal(t, "test auth inline user name", e.connDetails.authConf.User)
+		assert.Equal(t, "test auth inline user password", e.connDetails.authConf.Password)
+	})
+
+	t.Run("Missing password", func(t *testing.T) {
+		inputConfig := `
+urls: [ url1, url2 ]
+bucket: testbucket
+auth:
+  user: test auth inline user name
+`
+
+		conf, err := spec.ParseYAML(inputConfig, env)
+		require.NoError(t, err)
+
+		_, err = newKVReader(conf, service.MockResources())
+		require.ErrorContains(t, err, "missing auth.password")
+	})
+	t.Run("Missing user", func(t *testing.T) {
+		inputConfig := `
+urls: [ url1, url2 ]
+bucket: testbucket
+auth:
+  password: test auth inline user password
+`
+
+		conf, err := spec.ParseYAML(inputConfig, env)
+		require.NoError(t, err)
+
+		_, err = newKVReader(conf, service.MockResources())
+		require.ErrorContains(t, err, "missing auth.user")
+	})
+
+	t.Run("Multiple auth methods", func(t *testing.T) {
+		inputConfig := `
+urls: [ url1, url2 ]
+bucket: testbucket
+auth:
+  token: mytoken
+  user: myuser
+  password: mypassword
+`
+
+		conf, err := spec.ParseYAML(inputConfig, env)
+		require.NoError(t, err)
+
+		_, err = newKVReader(conf, service.MockResources())
+		require.ErrorContains(t, err, "multiple auth methods configured")
 	})
 
 	t.Run("Missing user_nkey_seed", func(t *testing.T) {

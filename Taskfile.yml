@@ -14,6 +14,7 @@ vars:
 includes:
   build: ./taskfiles/build.yml
   docker: ./taskfiles/docker.yml
+  gh: ./taskfiles/gh.yml
   test: ./taskfiles/test.yml
   tools: ./taskfiles/tools.yml
 

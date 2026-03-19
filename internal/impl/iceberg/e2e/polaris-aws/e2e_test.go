@@ -4,9 +4,9 @@
 // License (the "License"); you may not use this file except in compliance with
 // the License. You may obtain a copy of the License at
 //
-// https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
+// https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
-package polaris
+package polarisaws
 
 import (
 	"bytes"
@@ -16,13 +16,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"sort"
 	"testing"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
-	"github.com/apache/iceberg-go"
-	iceio "github.com/apache/iceberg-go/io"
+	awsconfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
@@ -35,38 +33,53 @@ import (
 )
 
 var (
-	storageAccount = flag.String("polaris.storage-account", "", "Azure storage account name")
-	accessKey      = flag.String("polaris.access-key", "", "Azure storage account access key")
-	container      = flag.String("polaris.container", "", "Azure storage container name")
-	tenantID       = flag.String("polaris.tenant-id", "", "Azure tenant ID")
-	spClientID     = flag.String("polaris.sp-client-id", "", "Service principal client ID for Polaris")
-	spClientSecret = flag.String("polaris.sp-client-secret", "", "Service principal client secret for Polaris")
+	awsRegion     = flag.String("aws.region", "us-east-1", "AWS region")
+	awsBucket     = flag.String("aws.bucket", "", "S3 warehouse bucket")
+	awsRoleArn    = flag.String("aws.role-arn", "", "IAM role ARN for Polaris credential vendoring")
+	soakDuration  = flag.Duration("test.soak-duration", 2*time.Hour, "Duration to run the soak test")
+	batchInterval = flag.Duration("test.batch-interval", 5*time.Minute, "Interval between batches")
 )
 
 func skipIfNotConfigured(t *testing.T) {
 	t.Helper()
-	if *storageAccount == "" || *accessKey == "" || *container == "" || *tenantID == "" || *spClientID == "" || *spClientSecret == "" {
-		t.Skip("set -polaris.storage-account, -polaris.access-key, -polaris.container, -polaris.tenant-id, -polaris.sp-client-id, -polaris.sp-client-secret flags to run Polaris e2e tests")
+	if *awsBucket == "" || *awsRoleArn == "" {
+		t.Skip("set -aws.bucket, -aws.role-arn flags to run Polaris AWS e2e tests")
 	}
 }
 
 func startPolaris(t *testing.T) string {
 	t.Helper()
 	ctx := context.Background()
+
+	// Load current AWS credentials to pass into the Polaris container
+	cfg, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(*awsRegion))
+	require.NoError(t, err)
+	creds, err := cfg.Credentials.Retrieve(ctx)
+	require.NoError(t, err)
+
+	env := map[string]string{
+		"POLARIS_BOOTSTRAP_CREDENTIALS": "POLARIS,root,secret",
+		"AWS_ACCESS_KEY_ID":             creds.AccessKeyID,
+		"AWS_SECRET_ACCESS_KEY":         creds.SecretAccessKey,
+		"AWS_REGION":                    *awsRegion,
+	}
+	if creds.SessionToken != "" {
+		env["AWS_SESSION_TOKEN"] = creds.SessionToken
+	}
+
 	ctr, err := testcontainers.Run(ctx, "apache/polaris:latest",
 		testcontainers.WithExposedPorts("8181/tcp", "8182/tcp"),
-		testcontainers.WithEnv(map[string]string{
-			"POLARIS_BOOTSTRAP_CREDENTIALS": "POLARIS,root,secret",
-			"AZURE_TENANT_ID":               *tenantID,
-			"AZURE_CLIENT_ID":               *spClientID,
-			"AZURE_CLIENT_SECRET":           *spClientSecret,
-		}),
+		testcontainers.WithEnv(env),
 		testcontainers.WithWaitStrategy(
 			wait.ForHTTP("/q/health/ready").WithPort("8182/tcp"),
 		),
 	)
 	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, ctr.Terminate(ctx)) })
+	t.Cleanup(func() {
+		if err := ctr.Terminate(ctx); err != nil {
+			t.Logf("failed to terminate container: %v", err)
+		}
+	})
 
 	host, err := ctr.Host(ctx)
 	require.NoError(t, err)
@@ -117,7 +130,7 @@ func polarisHTTP(t *testing.T, method, url, token string, payload any) {
 	require.Less(t, resp.StatusCode, 300, "%s %s failed (%d): %s", method, url, resp.StatusCode, string(respBody))
 }
 
-func createPolarisCatalog(t *testing.T, polarisURL, token, catalogName, warehouseLocation, tenantID string) {
+func createPolarisCatalog(t *testing.T, polarisURL, token, catalogName, warehouseLocation, roleArn string) {
 	t.Helper()
 	polarisHTTP(t, "POST", polarisURL+"/api/management/v1/catalogs", token, map[string]any{
 		"catalog": map[string]any{
@@ -127,9 +140,9 @@ func createPolarisCatalog(t *testing.T, polarisURL, token, catalogName, warehous
 				"default-base-location": warehouseLocation,
 			},
 			"storageConfigInfo": map[string]any{
-				"storageType":      "AZURE",
+				"storageType":      "S3",
 				"allowedLocations": []string{warehouseLocation},
-				"tenantId":         tenantID,
+				"roleArn":          roleArn,
 			},
 		},
 	})
@@ -169,18 +182,15 @@ func buildCatalogConfig(polarisURL, catalogName string) catalogx.Config {
 		OAuth2ClientID:     "root",
 		OAuth2ClientSecret: "secret",
 		OAuth2Scope:        "PRINCIPAL_ROLE:ALL",
-		AdditionalProps: iceberg.Properties{
-			iceio.ADLSSharedKeyAccountName: *storageAccount,
-			iceio.ADLSSharedKeyAccountKey:  *accessKey,
-		},
+		// No AdditionalProps — Polaris vends S3 credentials via STS AssumeRole
 	}
 }
 
-func newRouter(t *testing.T, catalogCfg catalogx.Config, namespace, table string, schemaEvo bool) *icebergimpl.Router {
+func newRouter(t *testing.T, catalogCfg catalogx.Config, namespace, tableName string, schemaEvo bool) *icebergimpl.Router {
 	t.Helper()
 	namespaceStr, err := service.NewInterpolatedString(namespace)
 	require.NoError(t, err)
-	tableStr, err := service.NewInterpolatedString(table)
+	tableStr, err := service.NewInterpolatedString(tableName)
 	require.NoError(t, err)
 
 	logger := service.MockResources().Logger()
@@ -207,56 +217,50 @@ func produce(t *testing.T, ctx context.Context, router *icebergimpl.Router, json
 	time.Sleep(2 * time.Second)
 }
 
-func adlsCleanup(t *testing.T, storageAcct, key, ctr, prefix string) {
+func s3Cleanup(t *testing.T, bucket, region, prefix string) {
 	t.Helper()
-	cred, err := azblob.NewSharedKeyCredential(storageAcct, key)
-	if err != nil {
-		t.Logf("warning: failed to create ADLS credential: %v", err)
-		return
-	}
-
-	serviceURL := fmt.Sprintf("https://%s.blob.core.windows.net", storageAcct)
-	client, err := azblob.NewClientWithSharedKeyCredential(serviceURL, cred, nil)
-	if err != nil {
-		t.Logf("warning: failed to create ADLS client: %v", err)
-		return
-	}
-
 	ctx := context.Background()
-	// Collect all blob paths, then delete deepest-first (required for HNS/ADLS Gen2)
-	var paths []string
-	pager := client.NewListBlobsFlatPager(ctr, &azblob.ListBlobsFlatOptions{
+
+	cfg, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(region))
+	if err != nil {
+		t.Logf("warning: failed to load AWS config for cleanup: %v", err)
+		return
+	}
+
+	client := s3.NewFromConfig(cfg)
+
+	paginator := s3.NewListObjectsV2Paginator(client, &s3.ListObjectsV2Input{
+		Bucket: &bucket,
 		Prefix: &prefix,
 	})
-	for pager.More() {
-		page, err := pager.NextPage(ctx)
+
+	for paginator.HasMorePages() {
+		page, err := paginator.NextPage(ctx)
 		if err != nil {
-			t.Logf("warning: failed to list blobs: %v", err)
+			t.Logf("warning: failed to list S3 objects: %v", err)
 			return
 		}
-		for _, blob := range page.Segment.BlobItems {
-			paths = append(paths, *blob.Name)
-		}
-	}
-	// Sort by length descending so leaf files are deleted before parent directories
-	sort.Slice(paths, func(i, j int) bool { return len(paths[i]) > len(paths[j]) })
-	for _, p := range paths {
-		if _, err := client.DeleteBlob(ctx, ctr, p, nil); err != nil {
-			t.Logf("warning: failed to delete blob %s: %v", p, err)
+		for _, obj := range page.Contents {
+			if _, err := client.DeleteObject(ctx, &s3.DeleteObjectInput{
+				Bucket: &bucket,
+				Key:    obj.Key,
+			}); err != nil {
+				t.Logf("warning: failed to delete S3 object %s: %v", *obj.Key, err)
+			}
 		}
 	}
 }
 
-func TestPolarisE2E_BasicWrite(t *testing.T) {
+func TestPolarisAWSE2E_BasicWrite(t *testing.T) {
 	skipIfNotConfigured(t)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	polarisURL := startPolaris(t)
 	token := getOAuth2Token(t, polarisURL)
 
 	catalogName := fmt.Sprintf("catalog_%d", time.Now().UnixNano())
-	warehouseLocation := fmt.Sprintf("abfss://%s@%s.dfs.core.windows.net/", *container, *storageAccount)
-	createPolarisCatalog(t, polarisURL, token, catalogName, warehouseLocation, *tenantID)
+	warehouseLocation := fmt.Sprintf("s3://%s/", *awsBucket)
+	createPolarisCatalog(t, polarisURL, token, catalogName, warehouseLocation, *awsRoleArn)
 	grantCatalogAccess(t, polarisURL, token, catalogName)
 
 	catalogCfg := buildCatalogConfig(polarisURL, catalogName)
@@ -269,7 +273,7 @@ func TestPolarisE2E_BasicWrite(t *testing.T) {
 	require.NoError(t, client.CreateNamespace(ctx, nil))
 
 	tableName := fmt.Sprintf("e2e_basic_%d", time.Now().UnixNano())
-	t.Cleanup(func() { adlsCleanup(t, *storageAccount, *accessKey, *container, namespace+"/"+tableName) })
+	t.Cleanup(func() { s3Cleanup(t, *awsBucket, *awsRegion, namespace+"/"+tableName) })
 
 	router := newRouter(t, catalogCfg, namespace, tableName, true)
 	produce(t, ctx, router,
@@ -304,16 +308,16 @@ func TestPolarisE2E_BasicWrite(t *testing.T) {
 	assert.Equal(t, "10", snapshot.Summary.Properties["total-records"])
 }
 
-func TestPolarisE2E_SchemaEvolution(t *testing.T) {
+func TestPolarisAWSE2E_SchemaEvolution(t *testing.T) {
 	skipIfNotConfigured(t)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	polarisURL := startPolaris(t)
 	token := getOAuth2Token(t, polarisURL)
 
 	catalogName := fmt.Sprintf("catalog_%d", time.Now().UnixNano())
-	warehouseLocation := fmt.Sprintf("abfss://%s@%s.dfs.core.windows.net/", *container, *storageAccount)
-	createPolarisCatalog(t, polarisURL, token, catalogName, warehouseLocation, *tenantID)
+	warehouseLocation := fmt.Sprintf("s3://%s/", *awsBucket)
+	createPolarisCatalog(t, polarisURL, token, catalogName, warehouseLocation, *awsRoleArn)
 	grantCatalogAccess(t, polarisURL, token, catalogName)
 
 	catalogCfg := buildCatalogConfig(polarisURL, catalogName)
@@ -326,7 +330,7 @@ func TestPolarisE2E_SchemaEvolution(t *testing.T) {
 	require.NoError(t, client.CreateNamespace(ctx, nil))
 
 	tableName := fmt.Sprintf("e2e_schema_evo_%d", time.Now().UnixNano())
-	t.Cleanup(func() { adlsCleanup(t, *storageAccount, *accessKey, *container, namespace+"/"+tableName) })
+	t.Cleanup(func() { s3Cleanup(t, *awsBucket, *awsRegion, namespace+"/"+tableName) })
 
 	router := newRouter(t, catalogCfg, namespace, tableName, true)
 
@@ -362,4 +366,83 @@ func TestPolarisE2E_SchemaEvolution(t *testing.T) {
 	snapshot := tbl.CurrentSnapshot()
 	require.NotNil(t, snapshot)
 	assert.Equal(t, "10", snapshot.Summary.Properties["total-records"])
+}
+
+func TestPolarisAWSE2E_CredentialRefreshSoak(t *testing.T) {
+	skipIfNotConfigured(t)
+
+	ctx := t.Context()
+	polarisURL := startPolaris(t)
+	token := getOAuth2Token(t, polarisURL)
+
+	catalogName := fmt.Sprintf("catalog_%d", time.Now().UnixNano())
+	warehouseLocation := fmt.Sprintf("s3://%s/", *awsBucket)
+	createPolarisCatalog(t, polarisURL, token, catalogName, warehouseLocation, *awsRoleArn)
+	grantCatalogAccess(t, polarisURL, token, catalogName)
+
+	catalogCfg := buildCatalogConfig(polarisURL, catalogName)
+	namespace := "soak_ns"
+
+	// Create namespace
+	client, err := catalogx.NewCatalogClient(ctx, catalogCfg, []string{namespace})
+	require.NoError(t, err)
+	defer client.Close()
+	require.NoError(t, client.CreateNamespace(ctx, nil))
+
+	tableName := fmt.Sprintf("soak_%d", time.Now().UnixNano())
+	t.Cleanup(func() { s3Cleanup(t, *awsBucket, *awsRegion, namespace+"/"+tableName) })
+
+	router := newRouter(t, catalogCfg, namespace, tableName, true)
+
+	startTime := time.Now()
+	deadline := startTime.Add(*soakDuration)
+	batchNum := 0
+	totalRecords := 0
+
+	t.Logf("Starting soak test: duration=%v, interval=%v", *soakDuration, *batchInterval)
+
+	// Write first batch immediately
+	batchNum++
+	writeBatch(t, ctx, router, batchNum, startTime, &totalRecords)
+
+	ticker := time.NewTicker(*batchInterval)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		if time.Now().After(deadline) {
+			goto verify
+		}
+		batchNum++
+		writeBatch(t, ctx, router, batchNum, startTime, &totalRecords)
+	}
+
+verify:
+	// Verify final state
+	t.Logf("Soak test complete: %d batches, %d total records, elapsed %v", batchNum, totalRecords, time.Since(startTime))
+
+	tbl, err := client.LoadTable(ctx, tableName)
+	require.NoError(t, err)
+
+	snapshot := tbl.CurrentSnapshot()
+	require.NotNil(t, snapshot)
+	t.Logf("Final snapshot: %s total records", snapshot.Summary.Properties["total-records"])
+	assert.Equal(t, fmt.Sprintf("%d", totalRecords), snapshot.Summary.Properties["total-records"])
+}
+
+func writeBatch(t *testing.T, ctx context.Context, router *icebergimpl.Router, batchNum int, startTime time.Time, totalRecords *int) {
+	t.Helper()
+	batchStart := time.Now()
+
+	records := make([]string, 10)
+	for i := range records {
+		id := (batchNum-1)*10 + i + 1
+		records[i] = fmt.Sprintf(`{"id": %d, "name": "user_%d", "batch": %d, "ts": "%s"}`,
+			id, id, batchNum, time.Now().Format(time.RFC3339))
+	}
+
+	produce(t, ctx, router, records...)
+	*totalRecords += 10
+
+	t.Logf("Batch %d: wrote 10 records (total: %d) in %v, elapsed: %v",
+		batchNum, *totalRecords, time.Since(batchStart), time.Since(startTime))
 }

@@ -3,15 +3,26 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## 4.84.0 - TBD
+## 4.84.0 - 2026-03-19
 
 ### Added
 
 - oracledb_cdc: Input now adds `schema` metadata to consumed messages. Schema is fetched from Oracle's `ALL_TAB_COLUMNS` catalog with precision-aware NUMBER mapping. Column additions are detected automatically via addition-only drift detection; dropped columns are reflected after a connector restart. This can be used for automatic schema registration in processors such as `schema_registry_encode`. (@Jeffail)
+- iceberg: Allow specifying aws credentials explicitly for sigv4 auth with glue. (@rockwotj)
+- redis_streams: Add interpolation support for entry ID. (@twmb)
+- nats: Add user/password and token authentication. (@ghstahl)
 
 ### Fixed
 
 - oracledb_cdc: Fixed snapshot/streaming value type inconsistency where NUMBER columns produced `json.Number` during snapshot but plain strings during streaming. Bare numeric literals in SQL_REDO are now converted to `int64` (for integers that fit) or `json.Number` (for decimals), matching the snapshot path. Quoted string values from VARCHAR columns are no longer incorrectly converted. (@Jeffail)
+- oracledb_cdc: Reduce the number of log files loaded into LogMiner to those only containing SCN range. (@josephwoodward)
+- iceberg: Fix credential renewal for vendored credentials as well as oauth2 authentication with the catalog. (@rockwotj)
+- iceberg: Remove usage of a disallowed table property for Databricks Unity Catalog. (@rockwotj)
+
+### Changed
+
+- aws_sqs: Enforce 256 KB message and batch size limits. (@twmb)
+- nats: Use JetStream package. (@nickchomey)
 
 ## 4.83.0 - 2026-03-13
 

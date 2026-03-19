@@ -147,6 +147,27 @@ root.safe_html = this.user_input.escape_html()
 # Out: {"safe_html":"&lt;script&gt;alert(&#39;xss&#39;)&lt;/script&gt;"}
 ```
 
+=== `escape_url_path`
+
+Encodes a string for safe use in URL path segments using percent-encoding. Unlike `escape_url_query`, spaces are encoded as `%20` instead of `+`. Use when building URL paths with dynamic segments.
+
+==== Examples
+
+
+```coffeescript
+root.escaped = this.value.escape_url_path()
+
+# In:  {"value":"foo & bar"}
+# Out: {"escaped":"foo%20&%20bar"}
+```
+
+```coffeescript
+root.url = "https://example.com/docs/" + this.path.escape_url_path()
+
+# In:  {"path":"my document.pdf"}
+# Out: {"url":"https://example.com/docs/my%20document.pdf"}
+```
+
 === `escape_url_query`
 
 Encodes a string for safe use in URL query parameters. Converts spaces to `+` and special characters to percent-encoded values. Use when building URLs with dynamic query parameters.
@@ -662,6 +683,27 @@ root.text = this.html.unescape_html()
 
 # In:  {"html":"&lt;p&gt;Hello &amp; goodbye&lt;/p&gt;"}
 # Out: {"text":"<p>Hello & goodbye</p>"}
+```
+
+=== `unescape_url_path`
+
+Decodes URL path percent-encoding, converting `%20` to spaces and other percent-encoded characters to their original values. Use for parsing URL path segments.
+
+==== Examples
+
+
+```coffeescript
+root.unescaped = this.value.unescape_url_path()
+
+# In:  {"value":"foo%20&%20bar"}
+# Out: {"unescaped":"foo & bar"}
+```
+
+```coffeescript
+root.filename = this.path.unescape_url_path()
+
+# In:  {"path":"my%20document.pdf"}
+# Out: {"filename":"my document.pdf"}
 ```
 
 === `unescape_url_query`
@@ -3578,6 +3620,20 @@ root.doc = this.doc.parse_json(use_number: true)
 # Out: {"doc":{"foo":"11380878173205700000000000000000000000000000000"}}
 ```
 
+=== `parse_logfmt`
+
+Attempts to parse a logfmt encoded string into an object. A logfmt string contains key=value pairs separated by spaces, where values can optionally be quoted.
+
+==== Examples
+
+
+```coffeescript
+root = this.msg.parse_logfmt()
+
+# In:  {"msg":"level=info msg=\"hello world\" dur=1.5s"}
+# Out: {"dur":"1.5s","level":"info","msg":"hello world"}
+```
+
 === `parse_msgpack`
 
 Parses MessagePack binary data into a structured object. MessagePack is an efficient binary serialization format that is more compact than JSON while maintaining similar data structures. Commonly used for high-performance APIs and data interchange between microservices.
@@ -3862,7 +3918,7 @@ root.encrypted = this.value.encrypt_aes("ctr", $key, $vector).encode("hex")
 
 Hashes a string or byte array according to a chosen algorithm and returns the result as a byte array. When mapping the result to a JSON field the value should be cast to a string using the method xref:guides:bloblang/methods.adoc#string[`string`], or encoded using the method xref:guides:bloblang/methods.adoc#encode[`encode`], otherwise it will be base64 encoded by default.
 
-Available algorithms are: `hmac_sha1`, `hmac_sha256`, `hmac_sha512`, `md5`, `sha1`, `sha256`, `sha512`, `xxhash64`, `crc32`, `fnv32`.
+Available algorithms are: `hmac_sha1`, `hmac_sha256`, `hmac_sha512`, `md5`, `sha1`, `sha256`, `sha512`, `sha3_256`, `sha3_512`, `xxhash64`, `crc32`, `fnv32`.
 
 The following algorithms require a key, which is specified as a second argument: `hmac_sha1`, `hmac_sha256`, `hmac_sha512`.
 

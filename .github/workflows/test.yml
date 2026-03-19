@@ -41,7 +41,7 @@ jobs:
           sudo docker image prune --all --force
 
       - name: Deps
-        run: task deps && git diff-index --quiet HEAD || { >&2 echo "Stale go.{mod,sum} detected. This can be fixed with 'task deps'."; exit 1; }
+        run: task deps && git diff HEAD -- go.mod go.sum && git diff-index HEAD --exit-code
 
       - name: Docs
         run: CGO_ENABLED=1 TAGS=x_benthos_extra task docs && test -z "$(git ls-files --others --modified --exclude-standard)" || { >&2 echo "Stale docs detected. This can be fixed with 'task docs'."; exit 1; }

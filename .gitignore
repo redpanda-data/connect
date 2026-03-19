@@ -13,3 +13,6 @@ release_notes.md
 .op
 __pycache__
 *.test
+*.test.exe
+compile_out.txt
+test_output.txt

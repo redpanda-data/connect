@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	pgtypes "github.com/jackc/pgtype"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -188,12 +187,7 @@ func decodeTextColumnData(mi *pgtype.Map, data []byte, dataType uint32) (any, er
 			}
 			return uuid.UUID(typesValueForUUID).String(), nil
 		case "tsrange":
-			newArray := pgtypes.Tsrange{}
-			if err := newArray.Scan(data); err != nil {
-				return nil, err
-			}
-			vv, _ := newArray.Value()
-			return vv, err
+			return sanitizeTsrange(string(data)), nil
 		case "int2":
 			// pgx decodes int2 as int16; promote to int32 to match schema (Int32).
 			if v, ok := val.(int16); ok {

@@ -51,6 +51,7 @@ func runRedpandaPairForSchemaMigration(t *testing.T) (src, dst redpandatest.Endp
 }
 
 func TestSchemaRegistryIntegration(t *testing.T) {
+	t.Skip("disabled: requires Redpanda import mode setup")
 	integration.CheckSkip(t)
 
 	dummySchema := `{"name":"foo", "type": "string"}`
@@ -242,6 +243,7 @@ schema_registry:
 }
 
 func TestSchemaRegistryProtobufSchemasIntegration(t *testing.T) {
+	t.Skip("disabled: requires Redpanda import mode setup")
 	integration.CheckSkip(t)
 
 	pool, err := dockertest.NewPool("")
@@ -390,6 +392,7 @@ message SampleRecord {
 }
 
 func TestSchemaRegistryDuplicateSchemaIntegration(t *testing.T) {
+	t.Skip("disabled: requires Redpanda import mode setup")
 	integration.CheckSkip(t)
 
 	src, dst := runRedpandaPairForSchemaMigration(t)
@@ -441,6 +444,7 @@ output:
 }
 
 func TestSchemaRegistryIDTranslationIntegration(t *testing.T) {
+	t.Skip("disabled: requires Redpanda import mode setup")
 	integration.CheckSkip(t)
 
 	src, dst := runRedpandaPairForSchemaMigration(t)
@@ -534,6 +538,7 @@ output:
 }
 
 func TestSchemaRegistryCompatibilityLevelIntegration(t *testing.T) {
+	t.Skip("disabled: requires Redpanda import mode setup")
 	integration.CheckSkip(t)
 
 	src, dst := runRedpandaPairForSchemaMigration(t)
@@ -600,6 +605,7 @@ output:
 }
 
 func TestSchemaRegistryMaxInFlightIntegration(t *testing.T) {
+	t.Skip("disabled: requires Redpanda import mode setup")
 	integration.CheckSkip(t)
 
 	src, dst := runRedpandaPairForSchemaMigration(t)

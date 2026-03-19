@@ -14,12 +14,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/netip"
 	"slices"
 	"strconv"
 	"strings"
 
 	"github.com/Masterminds/squirrel"
-	"github.com/jackc/pgtype"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
@@ -252,7 +253,7 @@ type tuple struct {
 	elements []any
 }
 
-//nolint:stylecheck // This is implementing an interface
+//nolint:stylecheck // This is implementing the squirrel.Sqlizer interface
 func (t *tuple) ToSql() (sql string, args []any, err error) {
 	sql = "(" + strings.Join(slices.Repeat([]string{"?"}, len(t.elements)), ", ") + ")"
 	args = t.elements
@@ -294,6 +295,8 @@ func (s *snapshotTxn) querySnapshotData(ctx context.Context, table TableFQN, min
 func prepareScannersAndGetters(columnTypes []*sql.ColumnType) ([]any, []func(any) (any, error)) {
 	scanArgs := make([]any, len(columnTypes))
 	valueGetters := make([]func(any) (any, error), len(columnTypes))
+
+	pgTypeMap := pgtype.NewMap()
 
 	for i, v := range columnTypes {
 		switch resolveTypeName(v.DatabaseTypeName()) {
@@ -381,59 +384,64 @@ func prepareScannersAndGetters(columnTypes []*sql.ColumnType) ([]any, []func(any
 		case "INET":
 			scanArgs[i] = new(sql.NullString)
 			valueGetters[i] = func(v any) (any, error) {
-				inet := pgtype.Inet{}
 				val := v.(*sql.NullString)
 				if !val.Valid {
 					return nil, nil
 				}
-				if err := inet.Scan(val.String); err != nil {
-					return nil, err
+				// Parse as prefix first (e.g. "192.168.1.0/24")
+				prefix, err := netip.ParsePrefix(val.String)
+				if err != nil {
+					// Bare address (e.g. "192.168.1.1") — append host
+					// prefix length to match old pgtype.Inet behavior
+					// which always returned IPNet.String() with CIDR.
+					addr, err2 := netip.ParseAddr(val.String)
+					if err2 != nil {
+						return nil, err
+					}
+					prefix = netip.PrefixFrom(addr, addr.BitLen())
 				}
-
-				return inet.IPNet.String(), nil
+				return prefix.String(), nil
 			}
 		case "TSRANGE":
 			scanArgs[i] = new(sql.NullString)
 			valueGetters[i] = func(v any) (any, error) {
-				newArray := pgtype.Tsrange{}
 				val := v.(*sql.NullString)
 				if !val.Valid {
 					return nil, nil
 				}
-				if err := newArray.Scan(val.String); err != nil {
-					return nil, err
-				}
-
-				vv, _ := newArray.Value()
-				return vv, nil
+				return sanitizeTsrange(val.String), nil
 			}
 		case "_INT4":
 			scanArgs[i] = new(sql.NullString)
 			valueGetters[i] = func(v any) (any, error) {
-				newArray := pgtype.Int4Array{}
 				val := v.(*sql.NullString)
 				if !val.Valid {
 					return nil, nil
 				}
-				if err := newArray.Scan(val.String); err != nil {
+				// Use []*int32 to handle NULL elements (matching old
+				// pgtype.Int4Array behavior where null elements marshal
+				// to JSON null).
+				var result []*int32
+				if err := pgTypeMap.SQLScanner(&result).Scan(val.String); err != nil {
 					return nil, err
 				}
-
-				return newArray.Elements, nil
+				return result, nil
 			}
 		case "_TEXT":
 			scanArgs[i] = new(sql.NullString)
 			valueGetters[i] = func(v any) (any, error) {
-				newArray := pgtype.TextArray{}
 				val := v.(*sql.NullString)
 				if !val.Valid {
 					return nil, nil
 				}
-				if err := newArray.Scan(val.String); err != nil {
+				// Use []*string to handle NULL elements (matching old
+				// pgtype.TextArray behavior where null elements marshal
+				// to JSON null).
+				var result []*string
+				if err := pgTypeMap.SQLScanner(&result).Scan(val.String); err != nil {
 					return nil, err
 				}
-
-				return newArray.Elements, nil
+				return result, nil
 			}
 		default: // NUMERIC and other unhandled types scan as string.
 			scanArgs[i] = new(sql.NullString)

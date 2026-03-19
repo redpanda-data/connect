@@ -32,7 +32,7 @@ func TestWriteParquet(t *testing.T) {
 		msg(`{"a":12353}`),
 	}
 	inputDataSchema := parquet.Group{
-		"A": parquet.Decimal(0, 18, parquet.Int32Type),
+		"A": parquet.Decimal(0, 18, parquet.Int64Type),
 	}
 	transformers := []*dataTransformer{
 		{
@@ -52,7 +52,7 @@ func TestWriteParquet(t *testing.T) {
 				Scale:        ptr.Int32(0),
 				Nullable:     true,
 			},
-			bufferFactory: int32TypedBufferFactory,
+			bufferFactory: int64TypedBufferFactory,
 		},
 	}
 	schema := parquet.NewSchema("bdec", inputDataSchema)
@@ -88,8 +88,8 @@ func TestWriteParquet(t *testing.T) {
 		)
 		require.NoError(t, err)
 		require.Equal(t, []map[string]any{
-			{"A": int32(2)},
-			{"A": int32(12353)},
+			{"A": float64(2)},
+			{"A": float64(12353)},
 		}, actual)
 		require.Equal(t, []*statsBuffer{
 			{

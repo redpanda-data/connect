@@ -25,7 +25,8 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager"
+	tmtypes "github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager/types"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 
@@ -48,7 +49,6 @@ const (
 	s3oFieldCacheControl            = "cache_control"
 	s3oFieldContentDisposition      = "content_disposition"
 	s3oFieldContentLanguage         = "content_language"
-	s3oFieldContentMD5              = "content_md5"
 	s3oFieldWebsiteRedirectLocation = "website_redirect_location"
 	s3oFieldMetadata                = "metadata"
 	s3oFieldStorageClass            = "storage_class"
@@ -75,7 +75,6 @@ type s3oConfig struct {
 	ChecksumAlgorithm       string
 	ContentDisposition      *service.InterpolatedString
 	ContentLanguage         *service.InterpolatedString
-	ContentMD5              *service.InterpolatedString
 	WebsiteRedirectLocation *service.InterpolatedString
 	Metadata                *service.MetadataExcludeFilter
 	StorageClass            *service.InterpolatedString
@@ -127,9 +126,6 @@ func s3oConfigFromParsed(pConf *service.ParsedConfig) (conf s3oConfig, err error
 		return
 	}
 	if conf.ContentLanguage, err = pConf.FieldInterpolatedString(s3oFieldContentLanguage); err != nil {
-		return
-	}
-	if conf.ContentMD5, err = pConf.FieldInterpolatedString(s3oFieldContentMD5); err != nil {
 		return
 	}
 	if conf.ChecksumAlgorithm, err = pConf.FieldString(s3oFieldChecksumAlgorithm); err != nil {
@@ -272,10 +268,6 @@ output:
 				Description("The content language to set for each object.").
 				Default("").
 				Advanced(),
-			service.NewInterpolatedStringField(s3oFieldContentMD5).
-				Description("The content MD5 to set for each object.").
-				Default("").
-				Advanced(),
 			service.NewInterpolatedStringField(s3oFieldWebsiteRedirectLocation).
 				Description("The website redirect location to set for each object.").
 				Default("").
@@ -348,7 +340,7 @@ func init() {
 
 type amazonS3Writer struct {
 	conf     s3oConfig
-	uploader *manager.Uploader
+	uploader *transfermanager.Client
 	log      *service.Logger
 }
 
@@ -393,7 +385,7 @@ func (a *amazonS3Writer) Connect(context.Context) error {
 			o.BaseEndpoint = a.conf.aconf.BaseEndpoint
 		}
 	})
-	a.uploader = manager.NewUploader(client)
+	a.uploader = transfermanager.New(client)
 	return nil
 }
 
@@ -441,13 +433,6 @@ func (a *amazonS3Writer) WriteBatch(wctx context.Context, msg service.MessageBat
 		if ce != "" {
 			contentLanguage = aws.String(ce)
 		}
-		var contentMD5 *string
-		if ce, err = msg.TryInterpolatedString(i, a.conf.ContentMD5); err != nil {
-			return fmt.Errorf("content MD5 interpolation: %w", err)
-		}
-		if ce != "" {
-			contentMD5 = aws.String(ce)
-		}
 		var websiteRedirectLocation *string
 		if ce, err = msg.TryInterpolatedString(i, a.conf.WebsiteRedirectLocation); err != nil {
 			return fmt.Errorf("website redirect location interpolation: %w", err)
@@ -476,7 +461,7 @@ func (a *amazonS3Writer) WriteBatch(wctx context.Context, msg service.MessageBat
 			return err
 		}
 
-		uploadInput := &s3.PutObjectInput{
+		uploadInput := &transfermanager.UploadObjectInput{
 			Bucket:                  &a.conf.Bucket,
 			Key:                     aws.String(key),
 			Body:                    bytes.NewReader(mBytes),
@@ -485,11 +470,10 @@ func (a *amazonS3Writer) WriteBatch(wctx context.Context, msg service.MessageBat
 			CacheControl:            cacheControl,
 			ContentDisposition:      contentDisposition,
 			ContentLanguage:         contentLanguage,
-			ContentMD5:              contentMD5,
 			WebsiteRedirectLocation: websiteRedirectLocation,
-			StorageClass:            types.StorageClass(storageClass),
+			StorageClass:            tmtypes.StorageClass(storageClass),
 			Metadata:                metadata,
-			ACL:                     a.conf.ObjectCannedACL,
+			ACL:                     tmtypes.ObjectCannedACL(a.conf.ObjectCannedACL),
 		}
 
 		// Prepare tags, escaping keys and values to ensure they're valid query string parameters.
@@ -506,22 +490,22 @@ func (a *amazonS3Writer) WriteBatch(wctx context.Context, msg service.MessageBat
 		}
 
 		if a.conf.KMSKeyID != "" {
-			uploadInput.ServerSideEncryption = types.ServerSideEncryptionAwsKms
-			uploadInput.SSEKMSKeyId = &a.conf.KMSKeyID
+			uploadInput.ServerSideEncryption = tmtypes.ServerSideEncryptionAwsKms
+			uploadInput.SSEKMSKeyID = &a.conf.KMSKeyID
 		}
 
 		if a.conf.ChecksumAlgorithm != "" {
-			uploadInput.ChecksumAlgorithm = types.ChecksumAlgorithm(a.conf.ChecksumAlgorithm)
+			uploadInput.ChecksumAlgorithm = tmtypes.ChecksumAlgorithm(a.conf.ChecksumAlgorithm)
 		}
 
 		// NOTE: This overrides the ServerSideEncryption set above. We need this to preserve
 		// backwards compatibility, where it is allowed to only set kms_key_id in the config and
 		// the ServerSideEncryption value of "aws:kms" is implied.
 		if a.conf.ServerSideEncryption != "" {
-			uploadInput.ServerSideEncryption = types.ServerSideEncryption(a.conf.ServerSideEncryption)
+			uploadInput.ServerSideEncryption = tmtypes.ServerSideEncryption(a.conf.ServerSideEncryption)
 		}
 
-		if _, err := a.uploader.Upload(ctx, uploadInput); err != nil {
+		if _, err := a.uploader.UploadObject(ctx, uploadInput); err != nil {
 			return err
 		}
 		return nil

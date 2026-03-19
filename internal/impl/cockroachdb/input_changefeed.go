@@ -23,8 +23,8 @@ import (
 	"sync"
 
 	"github.com/Jeffail/gabs/v2"
-	"github.com/jackc/pgx/v4"
-	"github.com/jackc/pgx/v4/pgxpool"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/Jeffail/checkpoint"
 
@@ -184,7 +184,7 @@ func (c *crdbChangefeedInput) Connect(ctx context.Context) (err error) {
 	}
 
 	if c.pgPool == nil {
-		if c.pgPool, err = pgxpool.ConnectConfig(ctx, c.pgConfig); err != nil {
+		if c.pgPool, err = pgxpool.NewWithConfig(ctx, c.pgConfig); err != nil {
 			return
 		}
 		defer func() {

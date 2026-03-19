@@ -916,11 +916,9 @@ read_until:
 	}))
 
 	// Continuously write so there is a chance we skip data between snapshot and stream hand off.
-	var count atomic.Int64
 	writer := asyncroutine.NewPeriodic(time.Microsecond, func() {
 		_, err := db.Exec("INSERT INTO seq DEFAULT VALUES")
 		require.NoError(t, err)
-		count.Add(1)
 	})
 	writer.Start()
 	t.Cleanup(writer.Stop)
@@ -948,8 +946,15 @@ read_until:
 		require.Fail(t, "stream did not complete in time")
 	}
 	require.NoError(t, streamOut.StopWithin(10*time.Second))
+
+	// Read the actual committed count from the database rather than
+	// relying on the atomic counter, which can race with the last
+	// INSERT commit.
+	var dbCount int64
+	require.NoError(t, db.QueryRow("SELECT COUNT(*) FROM seq").Scan(&dbCount))
+
 	expected := []int64{}
-	for i := range count.Load() {
+	for i := range dbCount {
 		expected = append(expected, i+1)
 	}
 	batchMu.Lock()

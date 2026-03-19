@@ -162,6 +162,11 @@ func (t *httpTransport) GetTask(ctx context.Context, query *a2a.TaskQueryParams)
 	return &task, nil
 }
 
+// ListTasks implements the tasks/list method.
+func (*httpTransport) ListTasks(_ context.Context, _ *a2a.ListTasksRequest) (*a2a.ListTasksResponse, error) {
+	return nil, errors.New("not implemented")
+}
+
 // SendStreamingMessage implements the message/stream method with SSE support.
 func (t *httpTransport) SendStreamingMessage(ctx context.Context, params *a2a.MessageSendParams) iter.Seq2[a2a.Event, error] {
 	return func(yield func(a2a.Event, error) bool) {
@@ -411,32 +416,32 @@ func (*httpTransport) parseEventByType(data []byte, eventType string) (a2a.Event
 
 // CancelTask implements the tasks/cancel method.
 func (*httpTransport) CancelTask(_ context.Context, _ *a2a.TaskIDParams) (*a2a.Task, error) {
-	return nil, a2aclient.ErrNotImplemented
+	return nil, errors.New("not implemented")
 }
 
 // GetTaskPushConfig implements the tasks/pushNotificationConfig/get method.
 func (*httpTransport) GetTaskPushConfig(_ context.Context, _ *a2a.GetTaskPushConfigParams) (*a2a.TaskPushConfig, error) {
-	return nil, a2aclient.ErrNotImplemented
+	return nil, errors.New("not implemented")
 }
 
 // ListTaskPushConfig implements the tasks/pushNotificationConfig/list method.
 func (*httpTransport) ListTaskPushConfig(_ context.Context, _ *a2a.ListTaskPushConfigParams) ([]*a2a.TaskPushConfig, error) {
-	return nil, a2aclient.ErrNotImplemented
+	return nil, errors.New("not implemented")
 }
 
 // SetTaskPushConfig implements the tasks/pushNotificationConfig/set method.
 func (*httpTransport) SetTaskPushConfig(_ context.Context, _ *a2a.TaskPushConfig) (*a2a.TaskPushConfig, error) {
-	return nil, a2aclient.ErrNotImplemented
+	return nil, errors.New("not implemented")
 }
 
 // DeleteTaskPushConfig implements the tasks/pushNotificationConfig/delete method.
 func (*httpTransport) DeleteTaskPushConfig(_ context.Context, _ *a2a.DeleteTaskPushConfigParams) error {
-	return a2aclient.ErrNotImplemented
+	return errors.New("not implemented")
 }
 
 // GetAgentCard retrieves the agent card from /.well-known/agent.json.
 func (*httpTransport) GetAgentCard(_ context.Context) (*a2a.AgentCard, error) {
-	return nil, a2aclient.ErrNotImplemented
+	return nil, errors.New("not implemented")
 }
 
 // Destroy cleans up resources.

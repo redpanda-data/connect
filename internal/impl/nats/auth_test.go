@@ -21,6 +21,7 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nkeys"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
@@ -75,4 +76,287 @@ func TestNatsAuthConfToOptions(t *testing.T) {
 	assert.NoError(t, err)
 
 	assert.Equal(t, sig, sigResult)
+}
+
+func TestAuthFromParsedConfigFieldMapping(t *testing.T) {
+	spec := service.NewConfigSpec().Fields(authFieldSpec())
+	env := service.NewEnvironment()
+
+	t.Run("nkey_file", func(t *testing.T) {
+		conf, err := spec.ParseYAML(`
+auth:
+  nkey_file: ./seed.nk
+`, env)
+		require.NoError(t, err)
+
+		c, err := AuthFromParsedConfig(conf.Namespace("auth"))
+		require.NoError(t, err)
+		assert.Equal(t, "./seed.nk", c.NKeyFile)
+		assert.Empty(t, c.NKey)
+		assert.Empty(t, c.UserCredentialsFile)
+		assert.Empty(t, c.UserJWT)
+		assert.Empty(t, c.UserNkeySeed)
+		assert.Empty(t, c.Token)
+		assert.Empty(t, c.User)
+		assert.Empty(t, c.Password)
+	})
+
+	t.Run("nkey", func(t *testing.T) {
+		conf, err := spec.ParseYAML(`
+auth:
+  nkey: UDXU4RCSJNZOIQHZNWXHXORDPRTGNJAHAHFRGZNEEJCPQTT2M7NLCNF4
+`, env)
+		require.NoError(t, err)
+
+		c, err := AuthFromParsedConfig(conf.Namespace("auth"))
+		require.NoError(t, err)
+		assert.Empty(t, c.NKeyFile)
+		assert.Equal(t, "UDXU4RCSJNZOIQHZNWXHXORDPRTGNJAHAHFRGZNEEJCPQTT2M7NLCNF4", c.NKey)
+		assert.Empty(t, c.UserCredentialsFile)
+		assert.Empty(t, c.UserJWT)
+		assert.Empty(t, c.UserNkeySeed)
+		assert.Empty(t, c.Token)
+		assert.Empty(t, c.User)
+		assert.Empty(t, c.Password)
+	})
+
+	t.Run("user_credentials_file", func(t *testing.T) {
+		conf, err := spec.ParseYAML(`
+auth:
+  user_credentials_file: ./user.creds
+`, env)
+		require.NoError(t, err)
+
+		c, err := AuthFromParsedConfig(conf.Namespace("auth"))
+		require.NoError(t, err)
+		assert.Empty(t, c.NKeyFile)
+		assert.Empty(t, c.NKey)
+		assert.Equal(t, "./user.creds", c.UserCredentialsFile)
+		assert.Empty(t, c.UserJWT)
+		assert.Empty(t, c.UserNkeySeed)
+		assert.Empty(t, c.Token)
+		assert.Empty(t, c.User)
+		assert.Empty(t, c.Password)
+	})
+
+	t.Run("user_jwt and user_nkey_seed", func(t *testing.T) {
+		conf, err := spec.ParseYAML(`
+auth:
+  user_jwt: myjwt
+  user_nkey_seed: myseed
+`, env)
+		require.NoError(t, err)
+
+		c, err := AuthFromParsedConfig(conf.Namespace("auth"))
+		require.NoError(t, err)
+		assert.Empty(t, c.NKeyFile)
+		assert.Empty(t, c.NKey)
+		assert.Empty(t, c.UserCredentialsFile)
+		assert.Equal(t, "myjwt", c.UserJWT)
+		assert.Equal(t, "myseed", c.UserNkeySeed)
+		assert.Empty(t, c.Token)
+		assert.Empty(t, c.User)
+		assert.Empty(t, c.Password)
+	})
+
+	t.Run("token", func(t *testing.T) {
+		conf, err := spec.ParseYAML(`
+auth:
+  token: mytoken
+`, env)
+		require.NoError(t, err)
+
+		c, err := AuthFromParsedConfig(conf.Namespace("auth"))
+		require.NoError(t, err)
+		assert.Empty(t, c.NKeyFile)
+		assert.Empty(t, c.NKey)
+		assert.Empty(t, c.UserCredentialsFile)
+		assert.Empty(t, c.UserJWT)
+		assert.Empty(t, c.UserNkeySeed)
+		assert.Equal(t, "mytoken", c.Token)
+		assert.Empty(t, c.User)
+		assert.Empty(t, c.Password)
+	})
+
+	t.Run("user and password", func(t *testing.T) {
+		conf, err := spec.ParseYAML(`
+auth:
+  user: myuser
+  password: mypassword
+`, env)
+		require.NoError(t, err)
+
+		c, err := AuthFromParsedConfig(conf.Namespace("auth"))
+		require.NoError(t, err)
+		assert.Empty(t, c.NKeyFile)
+		assert.Empty(t, c.NKey)
+		assert.Empty(t, c.UserCredentialsFile)
+		assert.Empty(t, c.UserJWT)
+		assert.Empty(t, c.UserNkeySeed)
+		assert.Empty(t, c.Token)
+		assert.Equal(t, "myuser", c.User)
+		assert.Equal(t, "mypassword", c.Password)
+	})
+
+	t.Run("empty user with non-empty password", func(t *testing.T) {
+		// NATS allows password-only auth; user can be empty.
+		conf, err := spec.ParseYAML(`
+auth:
+  user: ""
+  password: mypassword
+`, env)
+		require.NoError(t, err)
+
+		c, err := AuthFromParsedConfig(conf.Namespace("auth"))
+		require.NoError(t, err)
+		assert.Empty(t, c.User)
+		assert.Equal(t, "mypassword", c.Password)
+	})
+
+	t.Run("non-empty user with empty password", func(t *testing.T) {
+		conf, err := spec.ParseYAML(`
+auth:
+  user: myuser
+  password: ""
+`, env)
+		require.NoError(t, err)
+
+		c, err := AuthFromParsedConfig(conf.Namespace("auth"))
+		require.NoError(t, err)
+		assert.Equal(t, "myuser", c.User)
+		assert.Empty(t, c.Password)
+	})
+
+	t.Run("both user and password empty rejects", func(t *testing.T) {
+		conf, err := spec.ParseYAML(`
+auth:
+  user: ""
+  password: ""
+`, env)
+		require.NoError(t, err)
+
+		_, err = AuthFromParsedConfig(conf.Namespace("auth"))
+		require.ErrorContains(t, err, "auth.user and auth.password are both empty")
+	})
+
+	t.Run("no auth", func(t *testing.T) {
+		conf, err := spec.ParseYAML(`
+auth: {}
+`, env)
+		require.NoError(t, err)
+
+		c, err := AuthFromParsedConfig(conf.Namespace("auth"))
+		require.NoError(t, err)
+		assert.Empty(t, c.NKeyFile)
+		assert.Empty(t, c.NKey)
+		assert.Empty(t, c.UserCredentialsFile)
+		assert.Empty(t, c.UserJWT)
+		assert.Empty(t, c.UserNkeySeed)
+		assert.Empty(t, c.Token)
+		assert.Empty(t, c.User)
+		assert.Empty(t, c.Password)
+	})
+}
+
+func TestAuthFromParsedConfigMutualExclusion(t *testing.T) {
+	spec := service.NewConfigSpec().Fields(authFieldSpec())
+	env := service.NewEnvironment()
+
+	tests := []struct {
+		name    string
+		config  string
+		wantErr string
+	}{
+		{
+			name:    "token and user+password",
+			wantErr: "multiple auth methods configured",
+			config: `
+auth:
+  token: mytoken
+  user: myuser
+  password: mypassword
+`,
+		},
+		{
+			name:    "nkey_file and token",
+			wantErr: "multiple auth methods configured",
+			config: `
+auth:
+  nkey_file: ./seed.nk
+  token: mytoken
+`,
+		},
+		{
+			name:    "user_credentials_file and user+password",
+			wantErr: "multiple auth methods configured",
+			config: `
+auth:
+  user_credentials_file: ./user.creds
+  user: myuser
+  password: mypassword
+`,
+		},
+		{
+			name:    "nkey and user_jwt+user_nkey_seed",
+			wantErr: "multiple auth methods configured",
+			config: `
+auth:
+  nkey: UDXU4RCSJNZOIQHZNWXHXORDPRTGNJAHAHFRGZNEEJCPQTT2M7NLCNF4
+  user_jwt: myjwt
+  user_nkey_seed: myseed
+`,
+		},
+		{
+			name:    "all methods configured",
+			wantErr: "multiple auth methods configured",
+			config: `
+auth:
+  nkey_file: ./seed.nk
+  nkey: UDXU4RCSJNZOIQHZNWXHXORDPRTGNJAHAHFRGZNEEJCPQTT2M7NLCNF4
+  user_credentials_file: ./user.creds
+  user_jwt: myjwt
+  user_nkey_seed: myseed
+  token: mytoken
+  user: myuser
+  password: mypassword
+`,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			conf, err := spec.ParseYAML(tc.config, env)
+			require.NoError(t, err)
+
+			_, err = AuthFromParsedConfig(conf.Namespace("auth"))
+			require.ErrorContains(t, err, tc.wantErr)
+		})
+	}
+}
+
+func TestAuthConfToOptionsUserPassword(t *testing.T) {
+	t.Run("user with non-empty password applies UserInfo", func(t *testing.T) {
+		conf := authConfig{User: "alice", Password: "s3cret"}
+		opts := authConfToOptions(conf, service.NewFS(nil))
+		assert.Len(t, opts, 1, "expected exactly one NATS option for user+password")
+	})
+
+	t.Run("user with empty password still applies UserInfo", func(t *testing.T) {
+		conf := authConfig{User: "alice", Password: ""}
+		opts := authConfToOptions(conf, service.NewFS(nil))
+		assert.Len(t, opts, 1, "expected UserInfo option even with empty password")
+	})
+
+	t.Run("empty user with non-empty password applies UserInfo", func(t *testing.T) {
+		// NATS allows password-only auth where user is empty.
+		conf := authConfig{User: "", Password: "s3cret"}
+		opts := authConfToOptions(conf, service.NewFS(nil))
+		assert.Len(t, opts, 1, "expected UserInfo option even with empty user")
+	})
+
+	t.Run("no user no password produces no options", func(t *testing.T) {
+		conf := authConfig{}
+		opts := authConfToOptions(conf, service.NewFS(nil))
+		assert.Empty(t, opts)
+	})
 }

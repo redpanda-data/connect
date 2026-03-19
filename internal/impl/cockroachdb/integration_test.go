@@ -21,7 +21,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jackc/pgx/v4/pgxpool"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -60,7 +60,7 @@ func TestIntegrationCRDB(t *testing.T) {
 
 	require.NoError(t, pool.Retry(func() error {
 		if pgpool == nil {
-			if pgpool, err = pgxpool.Connect(t.Context(), fmt.Sprintf("postgresql://root@localhost:%v/defaultdb?sslmode=disable", port)); err != nil {
+			if pgpool, err = pgxpool.New(t.Context(), fmt.Sprintf("postgresql://root@localhost:%v/defaultdb?sslmode=disable", port)); err != nil {
 				return err
 			}
 		}
