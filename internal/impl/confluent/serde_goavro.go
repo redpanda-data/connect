@@ -83,39 +83,44 @@ func resolveGoAvroReferences(ctx context.Context, client *sr.Client, mapping *bl
 	return string(schemaHydratedBytes), nil
 }
 
-func (s *schemaRegistryEncoder) getAvroEncoder(ctx context.Context, schema franz_sr.Schema) (schemaEncoder, error) {
-	schemaSpec, err := resolveGoAvroReferences(ctx, s.client, nil, schema)
+func (s *schemaRegistryEncoder) getAvroEncoder(ctx context.Context, schemaRef franz_sr.Schema) (schemaEncoder, error) {
+	schemaSpec, err := resolveGoAvroReferences(ctx, s.client, nil, schemaRef)
 	if err != nil {
 		return nil, err
 	}
+	return s.newAvroEncoder(schemaSpec)
+}
 
+func (s *schemaRegistryEncoder) newAvroEncoder(avroJSON string) (schemaEncoder, error) {
 	var codec *goavro.Codec
+	var err error
 	if s.avroRawJSON {
-		if codec, err = goavro.NewCodecForStandardJSONFull(schemaSpec); err != nil {
-			return nil, err
-		}
+		codec, err = goavro.NewCodecForStandardJSONFull(avroJSON)
 	} else {
-		if codec, err = goavro.NewCodec(schemaSpec); err != nil {
-			return nil, err
-		}
+		codec, err = goavro.NewCodec(avroJSON)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("creating Avro codec: %w", err)
+	}
+
+	var parsedSchema any
+	if err := json.Unmarshal([]byte(avroJSON), &parsedSchema); err != nil {
+		return nil, fmt.Errorf("parsing Avro schema JSON: %w", err)
 	}
 
 	return func(m *service.Message) error {
-		b, err := m.AsBytes()
+		data, err := m.AsStructuredMut()
+		if err != nil {
+			return fmt.Errorf("extracting structured data: %w", err)
+		}
+		normalized, err := normalizeForAvroSchema(data, parsedSchema, s.avroRawJSON)
+		if err != nil {
+			return fmt.Errorf("normalizing data for Avro: %w", err)
+		}
+		binary, err := codec.BinaryFromNative(nil, normalized)
 		if err != nil {
 			return err
 		}
-
-		datum, _, err := codec.NativeFromTextual(b)
-		if err != nil {
-			return err
-		}
-
-		binary, err := codec.BinaryFromNative(nil, datum)
-		if err != nil {
-			return err
-		}
-
 		m.SetBytes(binary)
 		return nil
 	}, nil

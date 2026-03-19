@@ -27,7 +27,6 @@ import (
 	"time"
 
 	"github.com/Jeffail/shutdown"
-	"github.com/linkedin/goavro/v2"
 	franz_sr "github.com/twmb/franz-go/pkg/sr"
 	"github.com/xeipuuv/gojsonschema"
 
@@ -614,30 +613,9 @@ func (s *schemaRegistryEncoder) getOrCreateMetaEncoder(ctx context.Context, meta
 		schemaStr = avroJSON
 		schemaType = franz_sr.TypeAvro
 
-		var codec *goavro.Codec
-		if s.avroRawJSON {
-			codec, err = goavro.NewCodecForStandardJSONFull(avroJSON)
-		} else {
-			codec, err = goavro.NewCodec(avroJSON)
-		}
+		encoder, err = s.newAvroEncoder(avroJSON)
 		if err != nil {
-			return nil, 0, fmt.Errorf("creating Avro codec: %w", err)
-		}
-		encoder = func(m *service.Message) error {
-			b, bErr := m.AsBytes()
-			if bErr != nil {
-				return bErr
-			}
-			native, _, nErr := codec.NativeFromTextual(b)
-			if nErr != nil {
-				return nErr
-			}
-			binary, binErr := codec.BinaryFromNative(nil, native)
-			if binErr != nil {
-				return binErr
-			}
-			m.SetBytes(binary)
-			return nil
+			return nil, 0, err
 		}
 
 	case "json_schema":
