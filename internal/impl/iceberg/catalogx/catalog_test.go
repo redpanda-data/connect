@@ -190,11 +190,14 @@ func TestCheckNamespaceExistsRetryOnAuthErr(t *testing.T) {
 }
 
 func TestConcurrentRefreshCatalog(t *testing.T) {
-	var tableCalls atomic.Int32
-	srv := newMockRESTServer(func(w http.ResponseWriter, r *http.Request) {
+	// Return 403 until a catalog refresh has happened (configCalls > 1,
+	// since the initial NewCatalogClient also calls /v1/config).
+	// This is race-free: retries only happen after refreshCatalogOnAuthErr
+	// returns, which guarantees configCalls has been incremented.
+	var srv *mockRESTServer
+	srv = newMockRESTServer(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodHead && strings.Contains(r.URL.Path, "/tables/") {
-			n := tableCalls.Add(1)
-			if n <= 5 {
+			if srv.configCalls.Load() <= 1 {
 				w.WriteHeader(http.StatusForbidden)
 				return
 			}

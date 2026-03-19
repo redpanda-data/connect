@@ -45,6 +45,10 @@ const (
 	ioFieldS3Region             = "region"
 	ioFieldS3Endpoint           = "endpoint"
 	ioFieldS3ForcePathStyleURLs = "force_path_style_urls"
+	ioFieldS3Credentials        = "credentials"
+	ioFieldS3CredID             = "id"
+	ioFieldS3CredSecret         = "secret"
+	ioFieldS3CredToken          = "token"
 
 	// GCS storage fields
 	ioFieldStorageGCS  = "gcp_cloud_storage"
@@ -169,15 +173,12 @@ array:list
 						Optional().
 						Secret(),
 					service.NewObjectField(ioFieldCatalogAuthSigV4,
-						service.NewStringField(ioFieldSigV4Region).
-							Description("AWS region for SigV4 signing. If not specified, uses the region from AWS credentials.").
-							Optional().
-							Example("us-east-1"),
-						service.NewStringField(ioFieldSigV4Service).
-							Description("AWS service name for SigV4 signing.").
-							Advanced().
-							Optional(),
-					).Description("AWS SigV4 authentication (for AWS Glue Data Catalog or API Gateway). Uses the same credentials as the storage configuration.").
+						append(config.SessionFields(),
+							service.NewStringField(ioFieldSigV4Service).
+								Description("AWS service name for SigV4 signing.").
+								Advanced().
+								Optional())...,
+					).Description("AWS SigV4 authentication (for AWS Glue Data Catalog or API Gateway).").
 						Optional(),
 				).Description("Authentication configuration for the REST catalog. Only one authentication method can be active at a time.").
 					Optional(),
@@ -207,23 +208,34 @@ array:list
 			service.NewObjectField(ioFieldStorage,
 				// S3 storage configuration
 				service.NewObjectField(ioFieldStorageS3,
-					append([]*service.ConfigField{
-						service.NewStringField(ioFieldS3Bucket).
-							Description("The S3 bucket name.").
-							Example("my-iceberg-data"),
-						service.NewStringField(ioFieldS3Region).
-							Description("The AWS region.").
-							Optional().
-							Example("us-west-2"),
-						service.NewStringField(ioFieldS3Endpoint).
-							Description("Custom endpoint for S3-compatible storage (e.g., MinIO).").
-							Optional().
-							Example("http://localhost:9000"),
-						service.NewBoolField(ioFieldS3ForcePathStyleURLs).
-							Description("Forces the client API to use path style URLs, which is often required when connecting to custom endpoints.").
-							Default(false).
-							Advanced(),
-					}, config.SessionFields()...)...,
+					service.NewStringField(ioFieldS3Bucket).
+						Description("The S3 bucket name.").
+						Example("my-iceberg-data"),
+					service.NewStringField(ioFieldS3Region).
+						Description("The AWS region.").
+						Optional().
+						Example("us-west-2"),
+					service.NewStringField(ioFieldS3Endpoint).
+						Description("Custom endpoint for S3-compatible storage (e.g., MinIO).").
+						Optional().
+						Example("http://localhost:9000"),
+					service.NewBoolField(ioFieldS3ForcePathStyleURLs).
+						Description("Forces the client API to use path style URLs, which is often required when connecting to custom endpoints.").
+						Default(false).
+						Advanced(),
+					service.NewObjectField(ioFieldS3Credentials,
+						service.NewStringField(ioFieldS3CredID).
+							Description("The AWS access key ID.").
+							Optional(),
+						service.NewStringField(ioFieldS3CredSecret).
+							Description("The AWS secret access key.").
+							Optional().Secret(),
+						service.NewStringField(ioFieldS3CredToken).
+							Description("The AWS session token, required when using short term credentials.").
+							Optional(),
+					).Description("Static AWS credentials for S3 access. When not specified, credentials are loaded from the default AWS credential chain.").
+						Advanced().
+						Optional(),
 				).Description("S3 storage configuration.").
 					Optional(),
 
