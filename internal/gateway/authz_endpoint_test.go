@@ -86,7 +86,7 @@ func dataplanePolicy(roleID string, permissions []string, principal, scope strin
 	}
 }
 
-func TestEndpointWatchingAuthzPolicy_Authorizes(t *testing.T) {
+func TestEndpointWatchingAuthzPolicyAuthorizes(t *testing.T) {
 	t.Log("Given: policy materializer endpoint serving an allow policy")
 	policies := make(chan *policymaterializerv1.DataplanePolicy, 1)
 	policies <- dataplanePolicy(
@@ -133,7 +133,7 @@ func TestEndpointWatchingAuthzPolicy_Authorizes(t *testing.T) {
 	})
 }
 
-func TestEndpointWatchingAuthzPolicy_PolicyReload(t *testing.T) {
+func TestEndpointWatchingAuthzPolicyReload(t *testing.T) {
 	t.Log("Given: policy materializer endpoint that will push two policies")
 	policies := make(chan *policymaterializerv1.DataplanePolicy, 2)
 
@@ -168,18 +168,19 @@ func TestEndpointWatchingAuthzPolicy_PolicyReload(t *testing.T) {
 
 	t.Log("When: endpoint pushes an updated policy granting no permissions")
 	policies <- dataplanePolicy("empty", []string{}, string(authzTestPrincipal), string(authzTestResourceName))
-	time.Sleep(100 * time.Millisecond)
 
 	t.Run("updated_policy_denies_read", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
-		req = req.WithContext(gateway.ContextWithValidatedPrincipalID(req.Context(), authzTestPrincipal))
-		rec := httptest.NewRecorder()
-		middleware.ServeHTTP(rec, req)
-		assert.Equal(t, http.StatusForbidden, rec.Code)
+		assert.Eventually(t, func() bool {
+			req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+			req = req.WithContext(gateway.ContextWithValidatedPrincipalID(req.Context(), authzTestPrincipal))
+			rec := httptest.NewRecorder()
+			middleware.ServeHTTP(rec, req)
+			return rec.Code == http.StatusForbidden
+		}, 5*time.Second, 50*time.Millisecond)
 	})
 }
 
-func TestEndpointWatchingAuthzPolicy_Close(t *testing.T) {
+func TestEndpointWatchingAuthzPolicyClose(t *testing.T) {
 	policies := make(chan *policymaterializerv1.DataplanePolicy, 1)
 	policies <- dataplanePolicy(
 		"admin",
