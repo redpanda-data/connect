@@ -1,0 +1,7 @@
+version: '3'
+
+tasks:
+  clear-cache:
+    desc: Delete all GitHub Actions caches for the current branch
+    cmds:
+      - gh cache list --repo redpanda-data/connect --ref "refs/pull/$(gh pr view --json number -q .number)/merge" --json id -q '.[].id' | xargs -I{} gh cache delete {} --repo redpanda-data/connect
