@@ -146,6 +146,15 @@ func setupAuthz(resourceName authz.ResourceName, policyFile string) func(res *se
 	}
 }
 
+func setupAuthzEndpoint(resourceName authz.ResourceName, endpoint string) func(res *service.Resources) {
+	return func(res *service.Resources) {
+		gateway.SetManagerAuthzConfig(res, gateway.AuthzConfig{
+			ResourceName:   resourceName,
+			PolicyEndpoint: endpoint,
+		})
+	}
+}
+
 func newHTTPTestTracerProviderWithHeaders(
 	ctx context.Context,
 	endpoint string,

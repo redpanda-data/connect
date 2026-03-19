@@ -111,7 +111,7 @@ Each resource will be exposed as a tool that AI can interact with:
 			}
 
 			// Parse and resolve cloud auth flags
-			authzResourceName, authzPolicyFile, err := parseCloudAuthFlags(c.Context, c, secretLookupFn)
+			authzResourceName, authzPolicyFile, authzPolicyEndpoint, err := parseCloudAuthFlags(c.Context, c, secretLookupFn)
 			if err != nil {
 				return err
 			}
@@ -127,8 +127,12 @@ Each resource will be exposed as a tool that AI can interact with:
 			}
 
 			var auth *mcp.Authorizer
-			if authzPolicyFile != "" && authzResourceName != "" {
-				auth, err = mcp.NewAuthorizer(authz.ResourceName(authzResourceName), authzPolicyFile, logger)
+			if authzResourceName != "" {
+				if authzPolicyEndpoint != "" {
+					auth, err = mcp.NewAuthorizerFromEndpoint(authz.ResourceName(authzResourceName), authzPolicyEndpoint, logger)
+				} else if authzPolicyFile != "" {
+					auth, err = mcp.NewAuthorizer(authz.ResourceName(authzResourceName), authzPolicyFile, logger)
+				}
 				if err != nil {
 					return err
 				}

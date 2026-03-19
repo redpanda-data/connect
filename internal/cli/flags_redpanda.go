@@ -43,8 +43,9 @@ const (
 	rfCloudClientID          = "x-redpanda-cloud-service-account-client-id"
 	rfCloudClientSecret      = "x-redpanda-cloud-service-account-client-secret"
 	rfCloudAudience          = "x-redpanda-cloud-service-account-audience"
-	rfCloudAuthzResourceName = "x-redpanda-cloud-authz-resource-name"
-	rfCloudAuthzPolicyFile   = "x-redpanda-cloud-authz-policy-file"
+	rfCloudAuthzResourceName    = "x-redpanda-cloud-authz-resource-name"
+	rfCloudAuthzPolicyFile      = "x-redpanda-cloud-authz-policy-file"
+	rfCloudAuthzPolicyEndpoint  = "x-redpanda-cloud-authz-policy-endpoint"
 )
 
 var secretsFlag = &cli.StringSliceFlag{
@@ -186,6 +187,12 @@ func redpandaFlags() []cli.Flag {
 			Hidden: true,
 			Value:  "",
 		},
+		&cli.StringFlag{
+			Name:   rfCloudAuthzPolicyEndpoint,
+			Usage:  "Authorization policy gRPC streaming endpoint (e.g. http://policy-materializer.redpanda.svc.cluster.local:9091)",
+			Hidden: true,
+			Value:  "",
+		},
 	}
 }
 
@@ -289,21 +296,22 @@ func resolveSecret(ctx context.Context, value string, lookupFn secrets.LookupFn)
 
 // parseCloudAuthFlags parses the OAuth2/cloud authentication CLI flags,
 // resolves any secret references, and initializes the global service account configuration.
-// returns the authz policy file (if specified).
-func parseCloudAuthFlags(ctx context.Context, c *cli.Context, secretLookupFn secrets.LookupFn) (authzResourceName, authzPolicyFile string, err error) {
+// Returns the authz resource name, policy file, and policy endpoint (if specified).
+func parseCloudAuthFlags(ctx context.Context, c *cli.Context, secretLookupFn secrets.LookupFn) (authzResourceName, authzPolicyFile, authzPolicyEndpoint string, err error) {
 	tokenURL := resolveSecret(ctx, c.String(rfCloudTokenURL), secretLookupFn)
 	clientID := resolveSecret(ctx, c.String(rfCloudClientID), secretLookupFn)
 	clientSecret := resolveSecret(ctx, c.String(rfCloudClientSecret), secretLookupFn)
 	audience := resolveSecret(ctx, c.String(rfCloudAudience), secretLookupFn)
 	authzResourceName = resolveSecret(ctx, c.String(rfCloudAuthzResourceName), secretLookupFn)
 	authzPolicyFile = resolveSecret(ctx, c.Path(rfCloudAuthzPolicyFile), secretLookupFn)
+	authzPolicyEndpoint = resolveSecret(ctx, c.String(rfCloudAuthzPolicyEndpoint), secretLookupFn)
 
 	// Initialize global service account config if credentials are provided
 	if tokenURL != "" && clientID != "" && clientSecret != "" {
 		if err := serviceaccount.InitGlobal(ctx, tokenURL, clientID, clientSecret, audience); err != nil {
-			return "", "", fmt.Errorf("initializing service account authentication: %w", err)
+			return "", "", "", fmt.Errorf("initializing service account authentication: %w", err)
 		}
 	}
 
-	return authzResourceName, authzPolicyFile, nil
+	return authzResourceName, authzPolicyFile, authzPolicyEndpoint, nil
 }

@@ -216,14 +216,24 @@ func InputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (*Inpu
 		return nil, err
 	}
 	if authzConf, ok := gateway.ManagerAuthzConfig(mgr); ok {
-		h.authzPolicy, err = gateway.NewFileWatchingAuthzResourcePolicy(
-			authzConf.ResourceName,
-			authzConf.PolicyFile,
-			[]authz.PermissionName{gatewayPermission},
-			func(err error) {
-				mgr.Logger().With("error", err).Error("Authorization policy error")
-			},
-		)
+		errorCallback := func(err error) {
+			mgr.Logger().With("error", err).Error("Authorization policy error")
+		}
+		if authzConf.PolicyEndpoint != "" {
+			h.authzPolicy, err = gateway.NewEndpointWatchingAuthzResourcePolicy(
+				authzConf.ResourceName,
+				authzConf.PolicyEndpoint,
+				[]authz.PermissionName{gatewayPermission},
+				errorCallback,
+			)
+		} else if authzConf.PolicyFile != "" {
+			h.authzPolicy, err = gateway.NewFileWatchingAuthzResourcePolicy(
+				authzConf.ResourceName,
+				authzConf.PolicyFile,
+				[]authz.PermissionName{gatewayPermission},
+				errorCallback,
+			)
+		}
 		if err != nil {
 			return nil, fmt.Errorf("initialize authorization policy: %w", err)
 		}
