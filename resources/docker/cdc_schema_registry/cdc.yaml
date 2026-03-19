@@ -1,0 +1,42 @@
+#!/usr/bin/env -S redpanda-connect run
+
+http:
+  enabled: false
+
+input:
+  postgres_cdc:
+    dsn: postgres://demo:demo@localhost:5432/demo?sslmode=disable
+    slot_name: cdc_schema_demo
+    schema: public
+    tables: [products]
+    stream_snapshot: true
+    temporary_slot: true
+
+pipeline:
+  processors:
+    # Drop transaction markers, keep only data rows
+    - mutation: |
+        root = if @operation == "begin" || @operation == "commit" {
+          deleted()
+        }
+
+    # Encode using the common schema metadata from the CDC input.
+    # This auto-registers the Avro schema with the Schema Registry.
+    - schema_registry_encode:
+        url: http://localhost:8081
+        subject: products-value
+        schema_metadata: schema
+        format: avro
+        avro:
+          raw_json: true
+
+    - catch:
+      - log:
+          level: ERROR
+          message: ${! error() }
+      - bloblang: root = deleted()
+
+output:
+  kafka:
+    addresses: [localhost:9092]
+    topic: cdc.products
