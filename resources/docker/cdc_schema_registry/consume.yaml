@@ -1,0 +1,30 @@
+#!/usr/bin/env -S redpanda-connect run
+
+http:
+  enabled: false
+
+input:
+  kafka:
+    addresses: [localhost:9092]
+    consumer_group: cdc_demo_consumer
+    topics: [cdc.products]
+
+pipeline:
+  processors:
+    - schema_registry_decode:
+        url: http://localhost:8081
+
+    # Enrich decoded messages with CDC metadata for readability
+    - mapping: |
+        root.operation = @operation
+        root.table = @table
+        root.data = this
+
+    - catch:
+      - log:
+          level: ERROR
+          message: ${! error() }
+      - bloblang: root = deleted()
+
+output:
+  stdout: {}

@@ -1,0 +1,31 @@
+#!/usr/bin/env -S redpanda-connect run
+
+http:
+  enabled: false
+
+input:
+  generate:
+    interval: 2s
+    mapping: |
+      let categories = ["electronics", "clothing", "books", "food", "toys"]
+      let adjectives = ["premium", "budget", "vintage", "organic", "deluxe"]
+      let nouns = ["widget", "gadget", "gizmo", "doohickey", "thingamajig"]
+
+      root.name = $adjectives.index(random_int() % 5) + " " + $nouns.index(random_int() % 5)
+      root.category = $categories.index(random_int() % 5)
+      root.price = ((random_int() % 9900) + 100) / 100
+      root.in_stock = random_int() % 4 != 0
+
+output:
+  sql_insert:
+    driver: postgres
+    dsn: postgres://demo:demo@localhost:5432/demo?sslmode=disable
+    table: products
+    columns: [name, category, price, in_stock]
+    args_mapping: |
+      root = [
+        this.name,
+        this.category,
+        this.price.string(),
+        this.in_stock,
+      ]
