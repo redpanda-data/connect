@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+### Changed
+
+- schema_registry_encode: Avro encoding now handles timestamps from CDC sources (RFC3339 strings and `time.Time` values) automatically, nullable union fields are auto-wrapped regardless of `avro.raw_json`, and extra fields not in the schema are silently dropped rather than producing an error. (@Jeffail)
+
 ## 4.84.0 - 2026-03-19
 
 ### Added
