@@ -15,6 +15,7 @@
 package beanstalkd
 
 import (
+	"net"
 	"testing"
 	"time"
 
@@ -52,7 +53,11 @@ func TestIntegrationBeanstalkdOpenClose(t *testing.T) {
 
 	_ = resource.Expire(900)
 	require.NoError(t, pool.Retry(func() error {
-		return nil
+		conn, err := net.DialTimeout("tcp", resource.GetPort("11300/tcp"), time.Second)
+		if err != nil {
+			return err
+		}
+		return conn.Close()
 	}))
 
 	suite := integration.StreamTests(
@@ -80,7 +85,11 @@ func TestIntegrationBeanstalkdSendBatch(t *testing.T) {
 
 	_ = resource.Expire(900)
 	require.NoError(t, pool.Retry(func() error {
-		return nil
+		conn, err := net.DialTimeout("tcp", resource.GetPort("11300/tcp"), time.Second)
+		if err != nil {
+			return err
+		}
+		return conn.Close()
 	}))
 
 	suite := integration.StreamTests(
@@ -108,7 +117,11 @@ func TestIntegrationBeanstalkdStreamSequential(t *testing.T) {
 
 	_ = resource.Expire(900)
 	require.NoError(t, pool.Retry(func() error {
-		return nil
+		conn, err := net.DialTimeout("tcp", resource.GetPort("11300/tcp"), time.Second)
+		if err != nil {
+			return err
+		}
+		return conn.Close()
 	}))
 
 	suite := integration.StreamTests(
@@ -136,7 +149,11 @@ func TestIntegrationBeanstalkdStreamParallel(t *testing.T) {
 
 	_ = resource.Expire(900)
 	require.NoError(t, pool.Retry(func() error {
-		return nil
+		conn, err := net.DialTimeout("tcp", resource.GetPort("11300/tcp"), time.Second)
+		if err != nil {
+			return err
+		}
+		return conn.Close()
 	}))
 
 	suite := integration.StreamTests(
