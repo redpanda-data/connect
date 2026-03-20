@@ -213,12 +213,13 @@ func TestIntegrationSubscriberStartReturnsErrorOnPartitionError(t *testing.T) {
 		testPartitionMetadata("partition2"),
 	}))
 
-	// When partition2 returns an error
-	testErr := errors.New("test error from partition2")
-	mq.ExpectQuery("partition2").Return(testErr)
+	// Synchronize so partition2 only errors after partition1 has started querying,
+	// preventing a race where partition1 is cancelled before it calls query.
+	partition1Started := make(chan struct{})
 
-	// Then partition1 is aborted
+	// Then partition1 is aborted (set up first so it can signal before partition2 errors)
 	mq.ExpectQuery("partition1").Run(func(args mock.Arguments) {
+		close(partition1Started)
 		ctx := args.Get(0).(context.Context)
 		select {
 		case <-ctx.Done():
@@ -226,6 +227,16 @@ func TestIntegrationSubscriberStartReturnsErrorOnPartitionError(t *testing.T) {
 			t.Fatalf("timed out waiting for partition1 to be aborted")
 		}
 	}).Return(context.Canceled)
+
+	// When partition2 returns an error (only after partition1 has started)
+	testErr := errors.New("test error from partition2")
+	mq.ExpectQuery("partition2").Run(func(_ mock.Arguments) {
+		select {
+		case <-partition1Started:
+		case <-time.After(time.Second):
+			t.Fatalf("timed out waiting for partition1 to start")
+		}
+	}).Return(testErr)
 
 	require.ErrorIs(t, s.Run(t.Context()), testErr)
 	mq.AssertExpectations(t)
