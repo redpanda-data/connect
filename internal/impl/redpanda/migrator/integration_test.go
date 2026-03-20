@@ -1278,11 +1278,17 @@ logger:
 	}, 2*time.Second, 200*time.Millisecond, "expected both topics to be synced within 2s")
 
 	t.Log("And: Empty topic has 0 messages on destination")
-	eo, err := dst.Admin.ListEndOffsets(t.Context(), topicEmpty)
-	require.NoError(t, err)
-	var emptyTotal int64
-	eo.Each(func(lo kadm.ListedOffset) {
-		emptyTotal += lo.Offset
-	})
-	assert.Equal(t, int64(0), emptyTotal, "Empty topic should have 0 messages on destination")
+	assert.Eventually(t, func() bool {
+		eo, err := dst.Admin.ListEndOffsets(t.Context(), topicEmpty)
+		if err != nil {
+			return false
+		}
+		var emptyTotal int64
+		eo.Each(func(lo kadm.ListedOffset) {
+			if lo.Err == nil {
+				emptyTotal += lo.Offset
+			}
+		})
+		return emptyTotal == 0
+	}, 3*time.Second, 200*time.Millisecond, "Empty topic should have 0 messages on destination")
 }
