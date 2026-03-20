@@ -12,6 +12,10 @@ buf.build/gen/go/bufbuild/reflect/connectrpc/go v1.19.1-20240117202343-bf8f65e88
 buf.build/gen/go/bufbuild/reflect/connectrpc/go v1.19.1-20240117202343-bf8f65e8876c.2/go.mod h1:ZGK0ces5GRXffhjOIcqSMOVV3Y3rgIwnvMJfZ/JltTg=
 buf.build/gen/go/bufbuild/reflect/protocolbuffers/go v1.36.11-20240117202343-bf8f65e8876c.1 h1:GNe6TYoJCpZyllEaauf+YxQoq5Qky7kHpwzFYyaC6b0=
 buf.build/gen/go/bufbuild/reflect/protocolbuffers/go v1.36.11-20240117202343-bf8f65e8876c.1/go.mod h1:/OFuWMGv28g5AeZOuzwFNb7a1qB6FRH6AD/3KiXg9zA=
+buf.build/gen/go/redpandadata/common/connectrpc/go v1.19.1-20260316210807-5d899910f714.2 h1:WFDBeun991lHEE81gxs65F4BjxrANXCJX30EG27/eEk=
+buf.build/gen/go/redpandadata/common/connectrpc/go v1.19.1-20260316210807-5d899910f714.2/go.mod h1:WYi+JVAZapWgfZds0sJvwtl2uMOclfjgWyW3TIvv2KY=
+buf.build/gen/go/redpandadata/common/protocolbuffers/go v1.36.11-20260316210807-5d899910f714.1 h1:0VqRxdW7k+vkdxdVKPmlpWFdnUJPDJwlW4h4Kqibjuw=
+buf.build/gen/go/redpandadata/common/protocolbuffers/go v1.36.11-20260316210807-5d899910f714.1/go.mod h1:3w7EzexwlL6PIFGbbeKZ0yHfUlAmI0aBVzF/QoFb8Cg=
 buf.build/gen/go/redpandadata/otel/protocolbuffers/go v1.36.11-20260316210807-e2cbc78abc9a.1 h1:kjeXV0mG0gXFnsPFZL+ZPsT690jCNF65vQbLTbOgnzs=
 buf.build/gen/go/redpandadata/otel/protocolbuffers/go v1.36.11-20260316210807-e2cbc78abc9a.1/go.mod h1:akvBCH3f6fL10sDu4NppgjHrQITLe1m5YWLt/yiLEKI=
 cel.dev/expr v0.25.1 h1:1KrZg61W6TWSxuNZ37Xy49ps13NUovb66QLprthtwi4=
@@ -1562,8 +1566,8 @@ github.com/redis/go-redis/v9 v9.18.0 h1:pMkxYPkEbMPwRdenAzUNyFNrDgHx9U+DrBabWNfS
 github.com/redis/go-redis/v9 v9.18.0/go.mod h1:k3ufPphLU5YXwNTUcCRXGxUoF1fqxnhFQmscfkCoDA0=
 github.com/redpanda-data/benthos/v4 v4.69.0 h1:qmWnI5AlOLsGLTpCE+MwalXWu39EzLKEA0DdFleB3tc=
 github.com/redpanda-data/benthos/v4 v4.69.0/go.mod h1:j77/MAtOa5TPQLhqofxiW/u1JcKMTDDXbxDDfOewxAs=
-github.com/redpanda-data/common-go/authz v0.2.0 h1:KYBu/+eIdFlaR8qJXn5I52AJ9Zo4KzyV+R/ia92swko=
-github.com/redpanda-data/common-go/authz v0.2.0/go.mod h1:x1C0YQ5NhCg2uj09Oz0bwMwDTkazK8lwxfZshE5Lf3s=
+github.com/redpanda-data/common-go/authz v0.2.1-0.20260319205134-242ab3c168b8 h1:hZTIp81OUDNOTCTD0gM01b1t821pDbToU9jWnZRnd/E=
+github.com/redpanda-data/common-go/authz v0.2.1-0.20260319205134-242ab3c168b8/go.mod h1:sHhzCYf64ZYUBi7snbopQl+wQaKySbFsKCvGhmSckhk=
 github.com/redpanda-data/common-go/license v0.0.0-20260318014216-2bbd72bde0a0 h1:xL2THs63tUTZmTiBfBm/mrjFMrwQaHKduvgQ6gIizXg=
 github.com/redpanda-data/common-go/license v0.0.0-20260318014216-2bbd72bde0a0/go.mod h1:PgMlxeDgK6kcKUaRh3x6OGluyFzmU3C2HLi6A5dyzy0=
 github.com/redpanda-data/common-go/redpanda-otel-exporter v0.4.0 h1:lyLHsAMI4Ns8CqNDi2zuaslSNO5BHoMt+hvyoOKieII=

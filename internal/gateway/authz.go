@@ -20,13 +20,15 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/common-go/authz"
+	"github.com/redpanda-data/common-go/authz/authzcore"
 	"github.com/redpanda-data/common-go/authz/loader"
 )
 
 // AuthzConfig holds the configuration for authorization policy.
 type AuthzConfig struct {
-	ResourceName authz.ResourceName
-	PolicyFile   string
+	ResourceName   authz.ResourceName
+	PolicyFile     string
+	PolicyEndpoint string
 }
 
 type authzConfigKeyType int
@@ -56,19 +58,19 @@ type FileWatchingAuthzResourcePolicy struct {
 	value   atomic.Pointer[authz.ResourcePolicy]
 }
 
-// NewFileWatchingAuthzResourcePolicy loads an authorization policy from file and
-// watches it for changes. The notifyError callback is called on reload errors.
-func NewFileWatchingAuthzResourcePolicy(
+// newWatchingAuthzResourcePolicy is the shared constructor for file- and
+// endpoint-based policy watchers.
+func newWatchingAuthzResourcePolicy(
 	name authz.ResourceName,
-	file string,
+	watchFn authzcore.PolicyWatchFunc,
 	permissions []authz.PermissionName,
 	notifyError func(error),
 ) (*FileWatchingAuthzResourcePolicy, error) {
 	a := new(FileWatchingAuthzResourcePolicy)
 
-	policy, unwatch, err := loader.WatchPolicyFile(file, func(policy authz.Policy, err error) {
+	policy, unwatch, err := watchFn(func(policy authz.Policy, err error) {
 		if err != nil {
-			notifyError(fmt.Errorf("watching authorization policy file: %w", err))
+			notifyError(fmt.Errorf("watching authorization policy: %w", err))
 			return
 		}
 		rp, err := authz.NewResourcePolicy(policy, name, permissions)
@@ -79,7 +81,7 @@ func NewFileWatchingAuthzResourcePolicy(
 		a.value.Store(rp)
 	})
 	if err != nil {
-		return nil, fmt.Errorf("load authorization policy file: %w", err)
+		return nil, fmt.Errorf("load authorization policy: %w", err)
 	}
 	a.unwatch = unwatch
 
@@ -90,6 +92,33 @@ func NewFileWatchingAuthzResourcePolicy(
 	a.value.Store(rp)
 
 	return a, nil
+}
+
+// NewFileWatchingAuthzResourcePolicy loads an authorization policy from file and
+// watches it for changes. The notifyError callback is called on reload errors.
+func NewFileWatchingAuthzResourcePolicy(
+	name authz.ResourceName,
+	file string,
+	permissions []authz.PermissionName,
+	notifyError func(error),
+) (*FileWatchingAuthzResourcePolicy, error) {
+	watchFn := func(cb func(authz.Policy, error)) (authz.Policy, func() error, error) {
+		return loader.WatchPolicyFile(file, cb)
+	}
+	return newWatchingAuthzResourcePolicy(name, watchFn, permissions, notifyError)
+}
+
+// NewEndpointWatchingAuthzResourcePolicy loads an authorization policy from a
+// gRPC streaming endpoint and watches it for changes. The notifyError callback
+// is called on reload errors.
+func NewEndpointWatchingAuthzResourcePolicy(
+	name authz.ResourceName,
+	endpoint string,
+	permissions []authz.PermissionName,
+	notifyError func(error),
+) (*FileWatchingAuthzResourcePolicy, error) {
+	watchFn := loader.EndpointConfig{Address: endpoint}.PolicyWatchFunc()
+	return newWatchingAuthzResourcePolicy(name, watchFn, permissions, notifyError)
 }
 
 // Close closes the resource policy and stops watching the policy file.

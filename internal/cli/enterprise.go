@@ -54,12 +54,13 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 	}
 
 	var (
-		licenseConfig     = defaultLicenseConfig()
-		chrootPath        string
-		chrootPassthrough []string
-		disableTelemetry  bool
-		authzResourceName string
-		authzPolicyFile   string
+		licenseConfig       = defaultLicenseConfig()
+		chrootPath          string
+		chrootPassthrough   []string
+		disableTelemetry    bool
+		authzResourceName   string
+		authzPolicyFile     string
+		authzPolicyEndpoint string
 	)
 
 	flags := []cli.Flag{
@@ -145,10 +146,11 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 			}
 
 			// Store authorization configuration if present
-			if authzResourceName != "" && authzPolicyFile != "" {
+			if authzResourceName != "" && (authzPolicyFile != "" || authzPolicyEndpoint != "") {
 				gateway.SetManagerAuthzConfig(pConf.Resources(), gateway.AuthzConfig{
-					ResourceName: authz.ResourceName(authzResourceName),
-					PolicyFile:   authzPolicyFile,
+					ResourceName:   authz.ResourceName(authzResourceName),
+					PolicyFile:     authzPolicyFile,
+					PolicyEndpoint: authzPolicyEndpoint,
 				})
 			}
 
@@ -203,7 +205,7 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 				}
 
 				// Parse and resolve cloud auth flags
-				if authzResourceName, authzPolicyFile, err = parseCloudAuthFlags(c.Context, c, secretLookupFn); err != nil {
+				if authzResourceName, authzPolicyFile, authzPolicyEndpoint, err = parseCloudAuthFlags(c.Context, c, secretLookupFn); err != nil {
 					return err
 				}
 

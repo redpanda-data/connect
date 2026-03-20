@@ -36,8 +36,11 @@ import (
 
 	pb "buf.build/gen/go/redpandadata/otel/protocolbuffers/go/redpanda/otel/v1"
 
+	policymaterializerv1 "buf.build/gen/go/redpandadata/common/protocolbuffers/go/redpanda/policymaterializer/v1"
+
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
+	"github.com/redpanda-data/connect/v4/internal/gateway"
 	"github.com/redpanda-data/connect/v4/internal/gateway/gatewaytest"
 	"github.com/redpanda-data/connect/v4/internal/impl/otlp"
 )
@@ -410,6 +413,58 @@ func TestHTTPInput(t *testing.T) {
 				otlp.HTTPInputSpec(), otlp.HTTPInputFromParsed)
 		})
 	}
+}
+
+func TestHTTPInputWithEndpointAuthzInit(t *testing.T) {
+	t.Log("Given: a mock policy materializer endpoint serving an allow-all policy")
+	policies := make(chan *policymaterializerv1.DataplanePolicy, 1)
+	policies <- allowAllDataplanePolicy(
+		[]string{"dataplane_pipeline_otlp_http_invoke"},
+		"User:test@example.com",
+		string(authzHTTPResourceName),
+	)
+	endpointURL := startMockPolicyEndpoint(t, &mockPolicyMaterializerServer{policies: policies})
+
+	t.Log("When: OTLP HTTP input is created with PolicyEndpoint configured")
+	port, err := integration.GetFreePort()
+	require.NoError(t, err)
+	address := "127.0.0.1:" + strconv.Itoa(port)
+
+	yamlConfig := fmt.Sprintf(`address: "%s"
+encoding: protobuf`, address)
+	startInput(t, otlp.HTTPInputSpec(), otlp.HTTPInputFromParsed, yamlConfig,
+		setupAuthzEndpoint(authzHTTPResourceName, endpointURL))
+
+	t.Log("Then: input initializes without error")
+}
+
+func TestHTTPInputEndpointTakesPrecedenceOverFile(t *testing.T) {
+	t.Log("Given: a valid mock policy endpoint and a nonexistent policy file")
+	policies := make(chan *policymaterializerv1.DataplanePolicy, 1)
+	policies <- allowAllDataplanePolicy(
+		[]string{"dataplane_pipeline_otlp_http_invoke"},
+		"User:test@example.com",
+		string(authzHTTPResourceName),
+	)
+	endpointURL := startMockPolicyEndpoint(t, &mockPolicyMaterializerServer{policies: policies})
+
+	t.Log("When: OTLP HTTP input is created with both PolicyEndpoint and a nonexistent PolicyFile")
+	port, err := integration.GetFreePort()
+	require.NoError(t, err)
+	address := "127.0.0.1:" + strconv.Itoa(port)
+
+	yamlConfig := fmt.Sprintf(`address: "%s"
+encoding: protobuf`, address)
+	startInput(t, otlp.HTTPInputSpec(), otlp.HTTPInputFromParsed, yamlConfig,
+		func(res *service.Resources) {
+			gateway.SetManagerAuthzConfig(res, gateway.AuthzConfig{
+				ResourceName:   authzHTTPResourceName,
+				PolicyEndpoint: endpointURL,
+				PolicyFile:     "/nonexistent/policy/file.yaml", // ignored when endpoint set
+			})
+		})
+
+	t.Log("Then: input initializes successfully (endpoint takes priority over file)")
 }
 
 func TestIntegrationHTTPInputAuthz(t *testing.T) {

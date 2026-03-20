@@ -34,10 +34,14 @@ import (
 
 	pb "buf.build/gen/go/redpandadata/otel/protocolbuffers/go/redpanda/otel/v1"
 
+	policymaterializerv1 "buf.build/gen/go/redpandadata/common/protocolbuffers/go/redpanda/policymaterializer/v1"
+
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
+	"github.com/redpanda-data/connect/v4/internal/gateway"
 	"github.com/redpanda-data/connect/v4/internal/gateway/gatewaytest"
 	"github.com/redpanda-data/connect/v4/internal/impl/otlp"
+	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
 func newGRPCTestTracerProvider(ctx context.Context, endpoint string, opts ...otlptracegrpc.Option) (*sdktrace.TracerProvider, error) {
@@ -419,6 +423,65 @@ func TestGRPCInput(t *testing.T) {
 				otlp.GRPCInputSpec(), otlp.GRPCInputFromParsed)
 		})
 	}
+}
+
+// newGRPCInput constructs (but does not Connect) a gRPC input with the given
+// authz config option. This avoids the JWT guard that fires in Connect().
+func newGRPCInput(t *testing.T, opt func(*service.Resources)) service.BatchInput {
+	t.Helper()
+	port, err := integration.GetFreePort()
+	require.NoError(t, err)
+	pConf, err := otlp.GRPCInputSpec().ParseYAML(
+		fmt.Sprintf("address: \"127.0.0.1:%d\"\nencoding: protobuf", port), nil,
+	)
+	require.NoError(t, err)
+
+	res := service.MockResources()
+	license.InjectTestService(res)
+	opt(res)
+
+	input, err := otlp.GRPCInputFromParsed(pConf, res)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = input.Close(context.Background()) })
+	return input
+}
+
+func TestGRPCInputWithEndpointAuthzInit(t *testing.T) {
+	t.Log("Given: a mock policy materializer endpoint serving an allow-all policy")
+	policies := make(chan *policymaterializerv1.DataplanePolicy, 1)
+	policies <- allowAllDataplanePolicy(
+		[]string{"dataplane_pipeline_otlp_grpc_invoke"},
+		"User:test@example.com",
+		string(authzGRPCResourceName),
+	)
+	endpointURL := startMockPolicyEndpoint(t, &mockPolicyMaterializerServer{policies: policies})
+
+	t.Log("When: OTLP gRPC input is constructed with PolicyEndpoint configured")
+	newGRPCInput(t, setupAuthzEndpoint(authzGRPCResourceName, endpointURL))
+
+	t.Log("Then: input constructs without error (endpoint policy initialised)")
+}
+
+func TestGRPCInputEndpointTakesPrecedenceOverFile(t *testing.T) {
+	t.Log("Given: a valid mock policy endpoint and a nonexistent policy file")
+	policies := make(chan *policymaterializerv1.DataplanePolicy, 1)
+	policies <- allowAllDataplanePolicy(
+		[]string{"dataplane_pipeline_otlp_grpc_invoke"},
+		"User:test@example.com",
+		string(authzGRPCResourceName),
+	)
+	endpointURL := startMockPolicyEndpoint(t, &mockPolicyMaterializerServer{policies: policies})
+
+	t.Log("When: OTLP gRPC input is constructed with both PolicyEndpoint and a nonexistent PolicyFile")
+	newGRPCInput(t, func(res *service.Resources) {
+		gateway.SetManagerAuthzConfig(res, gateway.AuthzConfig{
+			ResourceName:   authzGRPCResourceName,
+			PolicyEndpoint: endpointURL,
+			PolicyFile:     "/nonexistent/policy/file.yaml", // ignored when endpoint set
+		})
+	})
+
+	t.Log("Then: input constructs successfully (endpoint takes priority over nonexistent file)")
 }
 
 func TestIntegrationGRPCInputAuthz(t *testing.T) {

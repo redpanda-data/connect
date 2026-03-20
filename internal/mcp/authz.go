@@ -65,12 +65,25 @@ var methodToPerm = map[string]authz.PermissionName{
 }
 
 // NewAuthorizer returns an MCP server authorizer which dynamically loads
-// (and watches) the configuration file for policy enforcement.
+// (and watches) the policy file for policy enforcement.
 func NewAuthorizer(name authz.ResourceName, file string, logger *slog.Logger) (*Authorizer, error) {
 	notifyError := func(err error) {
 		logger.Warn("authorization policy error", "err", err)
 	}
 	policy, err := gateway.NewFileWatchingAuthzResourcePolicy(name, file, allPermissions, notifyError)
+	if err != nil {
+		return nil, err
+	}
+	return &Authorizer{policy: policy}, nil
+}
+
+// NewAuthorizerFromEndpoint returns an MCP server authorizer which streams
+// policy updates from a gRPC policy-materializer endpoint.
+func NewAuthorizerFromEndpoint(name authz.ResourceName, endpoint string, logger *slog.Logger) (*Authorizer, error) {
+	notifyError := func(err error) {
+		logger.Warn("authorization policy error", "err", err)
+	}
+	policy, err := gateway.NewEndpointWatchingAuthzResourcePolicy(name, endpoint, allPermissions, notifyError)
 	if err != nil {
 		return nil, err
 	}
