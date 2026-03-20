@@ -125,11 +125,10 @@ func (lm *LogMiner) ReadChanges(ctx context.Context, startPos replication.SCN) e
 		return fmt.Errorf("applying NLS settings for LogMiner: %w", err)
 	}
 
-	// find all lob columns on start up as redo logs don't include column data types.
-	if lm.cfg.LOBEnabled {
-		if err := lm.loadLOBColumnTypes(ctx, conn); err != nil {
-			return fmt.Errorf("discovering LOB column types: %w", err)
-		}
+	// always find all lob columns on start up as redo logs don't include column data types.
+	// this also prevents inline lob rows being emitted as events.
+	if err := lm.loadLOBColumnTypes(ctx, conn); err != nil {
+		return fmt.Errorf("discovering LOB column types: %w", err)
 	}
 
 	lm.currentSCN = uint64(startPos)
@@ -363,13 +362,13 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 			// Build a set of schema.table pairs that have an INSERT in this transaction.
 			// Used below to detect and suppress Oracle-internal LOB-initialisation UPDATEs.
 			insertTables := make(map[string]struct{})
-			if lm.cfg.LOBEnabled {
-				for _, ev := range txn.Events {
-					if ev.Operation == sqlredo.OpInsert {
-						insertTables[ev.Schema+"."+ev.Table] = struct{}{}
-					}
+			for _, ev := range txn.Events {
+				if ev.Operation == sqlredo.OpInsert {
+					insertTables[ev.Schema+"."+ev.Table] = struct{}{}
 				}
+			}
 
+			if lm.cfg.LOBEnabled {
 				// Pre-pass: for each LOB-only UPDATE that accompanies an INSERT in this transaction,
 				// merge the actual LOB values into the INSERT before we start publishing.
 				//
@@ -390,7 +389,7 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 			for _, dmlEvent := range txn.Events {
 				// Suppress Oracle-internal LOB-initialisation UPDATEs. Their LOB values have
 				// already been merged into the corresponding INSERT by the pre-pass above.
-				if lm.cfg.LOBEnabled && dmlEvent.Operation == sqlredo.OpUpdate && lm.isLOBOnlyEvent(dmlEvent) {
+				if dmlEvent.Operation == sqlredo.OpUpdate && lm.isLOBOnlyEvent(dmlEvent) {
 					if _, hasInsert := insertTables[dmlEvent.Schema+"."+dmlEvent.Table]; hasInsert {
 						lm.log.Debugf("suppressing LOB-only UPDATE for %s.%s — values merged into INSERT", dmlEvent.Schema, dmlEvent.Table)
 						continue
