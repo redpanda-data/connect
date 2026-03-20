@@ -29,7 +29,7 @@ func TestIntegrationNanomsg(t *testing.T) {
 output:
   nanomsg:
     urls:
-      - tcp://localhost:$PORT
+      - tcp://127.0.0.1:$PORT
     bind: false
     socket_type: $VAR1
     poll_timeout: 5s
@@ -38,7 +38,7 @@ output:
 input:
   nanomsg:
     urls:
-      - tcp://0.0.0.0:$PORT
+      - tcp://127.0.0.1:$PORT
     bind: true
     socket_type: $VAR2
     sub_filters: [ $VAR3 ]

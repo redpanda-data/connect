@@ -130,7 +130,7 @@ func TestRedpandaIntegration(t *testing.T) {
 			"--mode dev-container",
 			"--set rpk.additional_start_flags=[--reactor-backend=epoll]",
 			"--kafka-addr 0.0.0.0:9092",
-			fmt.Sprintf("--advertise-kafka-addr localhost:%v", kafkaPort),
+			fmt.Sprintf("--advertise-kafka-addr 127.0.0.1:%v", kafkaPort),
 		},
 	}
 
@@ -143,13 +143,13 @@ func TestRedpandaIntegration(t *testing.T) {
 
 	_ = resource.Expire(900)
 	require.NoError(t, pool.Retry(func() error {
-		return createKafkaTopic(t.Context(), "localhost:"+kafkaPortStr, "testingconnection", 1)
+		return createKafkaTopic(t.Context(), "127.0.0.1:"+kafkaPortStr, "testingconnection", 1)
 	}))
 
 	template := `
 output:
   redpanda:
-    seed_brokers: [ localhost:$PORT ]
+    seed_brokers: [ 127.0.0.1:$PORT ]
     topic: topic-$ID
     max_in_flight: $MAX_IN_FLIGHT
     timeout: "5s"
@@ -160,7 +160,7 @@ output:
 
 input:
   redpanda:
-    seed_brokers: [ localhost:$PORT ]
+    seed_brokers: [ 127.0.0.1:$PORT ]
     topics: [ topic-$ID$VAR1 ]
     consumer_group: "$VAR4"
     commit_period: "1s"
@@ -179,7 +179,7 @@ input:
 		t, template,
 		integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
 			vars.General["VAR4"] = "group" + vars.ID
-			require.NoError(t, createKafkaTopic(ctx, "localhost:"+kafkaPortStr, vars.ID, 4))
+			require.NoError(t, createKafkaTopic(ctx, "127.0.0.1:"+kafkaPortStr, vars.ID, 4))
 		}),
 		integration.StreamTestOptPort(kafkaPortStr),
 		integration.StreamTestOptVarSet("VAR1", ""),
@@ -190,7 +190,7 @@ input:
 			t, template,
 			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
 				vars.General["VAR4"] = "group" + vars.ID
-				require.NoError(t, createKafkaTopic(ctx, "localhost:"+kafkaPortStr, vars.ID, 1))
+				require.NoError(t, createKafkaTopic(ctx, "127.0.0.1:"+kafkaPortStr, vars.ID, 1))
 			}),
 			integration.StreamTestOptPort(kafkaPortStr),
 			integration.StreamTestOptVarSet("VAR1", ""),
@@ -203,7 +203,7 @@ input:
 			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
 				topicName := "topic-" + vars.ID
 				vars.General["VAR1"] = fmt.Sprintf(":0,%v:1,%v:2,%v:3", topicName, topicName, topicName)
-				require.NoError(t, createKafkaTopic(ctx, "localhost:"+kafkaPortStr, vars.ID, 4))
+				require.NoError(t, createKafkaTopic(ctx, "127.0.0.1:"+kafkaPortStr, vars.ID, 4))
 			}),
 			integration.StreamTestOptPort(kafkaPortStr),
 			integration.StreamTestOptSleepAfterInput(time.Second*3),
@@ -214,7 +214,7 @@ input:
 			suite.Run(
 				t, template,
 				integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
-					require.NoError(t, createKafkaTopic(ctx, "localhost:"+kafkaPortStr, vars.ID, 4))
+					require.NoError(t, createKafkaTopic(ctx, "127.0.0.1:"+kafkaPortStr, vars.ID, 4))
 				}),
 				integration.StreamTestOptPort(kafkaPortStr),
 				integration.StreamTestOptSleepAfterInput(time.Second*3),
@@ -227,7 +227,7 @@ input:
 	manualPartitionTemplate := `
 output:
   redpanda:
-    seed_brokers: [ localhost:$PORT ]
+    seed_brokers: [ 127.0.0.1:$PORT ]
     topic: topic-$ID
     max_in_flight: $MAX_IN_FLIGHT
     timeout: "5s"
@@ -240,7 +240,7 @@ output:
 
 input:
   redpanda:
-    seed_brokers: [ localhost:$PORT ]
+    seed_brokers: [ 127.0.0.1:$PORT ]
     topics: [ topic-$ID$VAR1 ]
     consumer_group: "$VAR4"
     commit_period: "1s"
@@ -250,7 +250,7 @@ input:
 			t, manualPartitionTemplate,
 			integration.StreamTestOptPreTest(func(t testing.TB, _ context.Context, vars *integration.StreamTestConfigVars) {
 				vars.General["VAR4"] = "group" + vars.ID
-				require.NoError(t, createKafkaTopic(t.Context(), "localhost:"+kafkaPortStr, vars.ID, 1))
+				require.NoError(t, createKafkaTopic(t.Context(), "127.0.0.1:"+kafkaPortStr, vars.ID, 1))
 			}),
 			integration.StreamTestOptPort(kafkaPortStr),
 			integration.StreamTestOptVarSet("VAR1", ""),
@@ -410,7 +410,7 @@ func TestRedpandaSaslIntegration(t *testing.T) {
 			"--kafka-addr 0.0.0.0:9092",
 			"--set redpanda.enable_sasl=true",
 			`--set redpanda.superusers=["admin"]`,
-			fmt.Sprintf("--advertise-kafka-addr localhost:%v", kafkaPort),
+			fmt.Sprintf("--advertise-kafka-addr 127.0.0.1:%v", kafkaPort),
 		},
 	}
 
@@ -430,7 +430,7 @@ func TestRedpandaSaslIntegration(t *testing.T) {
 			_, aerr := resource.Exec([]string{
 				"rpk", "acl", "user", "create", "admin",
 				"--password", "foobar",
-				"--api-urls", "localhost:9644",
+				"--api-urls", "127.0.0.1:9644",
 			}, dockertest.ExecOptions{
 				StdErr: &stdErr,
 			})
@@ -442,13 +442,13 @@ func TestRedpandaSaslIntegration(t *testing.T) {
 			}
 			adminCreated = true
 		}
-		return createKafkaTopicSasl("localhost:"+kafkaPortStr, "testingconnection", 1)
+		return createKafkaTopicSasl("127.0.0.1:"+kafkaPortStr, "testingconnection", 1)
 	}))
 
 	template := `
 output:
   redpanda:
-    seed_brokers: [ localhost:$PORT ]
+    seed_brokers: [ 127.0.0.1:$PORT ]
     topic: topic-$ID
     max_in_flight: $MAX_IN_FLIGHT
     metadata:
@@ -460,7 +460,7 @@ output:
 
 input:
   redpanda:
-    seed_brokers: [ localhost:$PORT ]
+    seed_brokers: [ 127.0.0.1:$PORT ]
     topics: [ topic-$ID$VAR1 ]
     consumer_group: "$VAR4"
     sasl:
@@ -482,7 +482,7 @@ input:
 		t, template,
 		integration.StreamTestOptPreTest(func(t testing.TB, _ context.Context, vars *integration.StreamTestConfigVars) {
 			vars.General["VAR4"] = "group" + vars.ID
-			require.NoError(t, createKafkaTopicSasl("localhost:"+kafkaPortStr, vars.ID, 4))
+			require.NoError(t, createKafkaTopicSasl("127.0.0.1:"+kafkaPortStr, vars.ID, 4))
 		}),
 		integration.StreamTestOptPort(kafkaPortStr),
 		integration.StreamTestOptVarSet("VAR1", ""),
@@ -515,7 +515,7 @@ func TestRedpandaOutputFixedTimestampIntegration(t *testing.T) {
 			"--mode dev-container",
 			"--set rpk.additional_start_flags=[--reactor-backend=epoll]",
 			"--kafka-addr 0.0.0.0:9092",
-			fmt.Sprintf("--advertise-kafka-addr localhost:%v", kafkaPort),
+			fmt.Sprintf("--advertise-kafka-addr 127.0.0.1:%v", kafkaPort),
 		},
 	}
 
@@ -528,19 +528,19 @@ func TestRedpandaOutputFixedTimestampIntegration(t *testing.T) {
 
 	_ = resource.Expire(900)
 	require.NoError(t, pool.Retry(func() error {
-		return createKafkaTopic(t.Context(), "localhost:"+kafkaPortStr, "testingconnection", 1)
+		return createKafkaTopic(t.Context(), "127.0.0.1:"+kafkaPortStr, "testingconnection", 1)
 	}))
 
 	template := `
 output:
   redpanda:
-    seed_brokers: [ localhost:$PORT ]
+    seed_brokers: [ 127.0.0.1:$PORT ]
     topic: topic-$ID
     timestamp_ms: 1000000000000
 
 input:
   redpanda:
-    seed_brokers: [ localhost:$PORT ]
+    seed_brokers: [ 127.0.0.1:$PORT ]
     topics: [ topic-$ID ]
     consumer_group: "blobfish"
   processors:
@@ -555,7 +555,7 @@ input:
 	suite.Run(
 		t, template,
 		integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
-			require.NoError(t, createKafkaTopic(ctx, "localhost:"+kafkaPortStr, vars.ID, 1))
+			require.NoError(t, createKafkaTopic(ctx, "127.0.0.1:"+kafkaPortStr, vars.ID, 1))
 		}),
 		integration.StreamTestOptPort(kafkaPortStr),
 	)
@@ -587,7 +587,7 @@ func BenchmarkRedpandaIntegration(b *testing.B) {
 			"--mode dev-container",
 			"--set rpk.additional_start_flags=[--reactor-backend=epoll]",
 			"--kafka-addr 0.0.0.0:9092",
-			fmt.Sprintf("--advertise-kafka-addr localhost:%v", kafkaPort),
+			fmt.Sprintf("--advertise-kafka-addr 127.0.0.1:%v", kafkaPort),
 		},
 	}
 
@@ -600,7 +600,7 @@ func BenchmarkRedpandaIntegration(b *testing.B) {
 
 	_ = resource.Expire(900)
 	require.NoError(b, pool.Retry(func() error {
-		return createKafkaTopic(b.Context(), "localhost:"+kafkaPortStr, "testingconnection", 1)
+		return createKafkaTopic(b.Context(), "127.0.0.1:"+kafkaPortStr, "testingconnection", 1)
 	}))
 
 	// Ordered (new) client
@@ -608,7 +608,7 @@ func BenchmarkRedpandaIntegration(b *testing.B) {
 		template := `
 output:
   redpanda:
-    seed_brokers: [ localhost:$PORT ]
+    seed_brokers: [ 127.0.0.1:$PORT ]
     topic: topic-$ID
     max_in_flight: 128
     timeout: "5s"
@@ -617,7 +617,7 @@ output:
 
 input:
   redpanda:
-    seed_brokers: [ localhost:$PORT ]
+    seed_brokers: [ 127.0.0.1:$PORT ]
     topics: [ topic-$ID ]
     consumer_group: "$VAR3"
     commit_period: "1s"
@@ -632,7 +632,7 @@ input:
 			b, template,
 			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
 				vars.General["VAR3"] = "group" + vars.ID
-				require.NoError(t, createKafkaTopic(ctx, "localhost:"+kafkaPortStr, vars.ID, 1))
+				require.NoError(t, createKafkaTopic(ctx, "127.0.0.1:"+kafkaPortStr, vars.ID, 1))
 			}),
 			integration.StreamTestOptPort(kafkaPortStr),
 		)
