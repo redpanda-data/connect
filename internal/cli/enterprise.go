@@ -54,10 +54,10 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 	}
 
 	var (
-		licenseConfig     = defaultLicenseConfig()
-		chrootPath        string
-		chrootPassthrough []string
-		disableTelemetry  bool
+		licenseConfig       = defaultLicenseConfig()
+		chrootPath          string
+		chrootPassthrough   []string
+		disableTelemetry    bool
 		authzResourceName   string
 		authzPolicyFile     string
 		authzPolicyEndpoint string
