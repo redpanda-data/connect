@@ -21,6 +21,7 @@ import (
 	"cloud.google.com/go/spanner/admin/instance/apiv1/instancepb"
 	"github.com/ory/dockertest/v3"
 	"github.com/ory/dockertest/v3/docker"
+	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -67,7 +68,22 @@ func startSpannerEmulator(t *testing.T) (addr string) {
 		}
 		defer conn.Close()
 
-		return nil
+		// Make a real RPC to confirm the emulator is accepting connections.
+		adm, err := instance.NewInstanceAdminClient(context.Background(),
+			option.WithGRPCConn(conn),
+			option.WithoutAuthentication(),
+		)
+		if err != nil {
+			return err
+		}
+		it := adm.ListInstanceConfigs(context.Background(), &instancepb.ListInstanceConfigsRequest{
+			Parent: "projects/" + EmulatorProjectID,
+		})
+		_, err = it.Next()
+		if errors.Is(err, iterator.Done) {
+			return nil
+		}
+		return err
 	}); err != nil {
 		closeFn()
 		t.Fatal(err)
