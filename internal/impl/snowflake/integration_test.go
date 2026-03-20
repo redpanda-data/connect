@@ -72,7 +72,8 @@ func ReplaceConfig(s string) string {
 	).Replace(s)
 }
 
-func SetupConfig() {
+func SetupConfig(t testing.TB) {
+	t.Helper()
 	config.account = EnvOrDefault("SNOWFLAKE_ACCOUNT", "wqkfxqq-redpanda_aws")
 	config.user = EnvOrDefault("SNOWFLAKE_USER", "TYLERROCKWOOD")
 	config.db = EnvOrDefault("SNOWFLAKE_DB", "TYLER_DB")
@@ -80,13 +81,12 @@ func SetupConfig() {
 	config.schema = EnvOrDefault("SNOWFLAKE_SCHEMA", "PUBLIC")
 	config.privateKeyFile = EnvOrDefault("SNOWFLAKE_PRIVATE_KEY", "./streaming/resources/rsa_key.p8")
 	bytes, err := os.ReadFile(config.privateKeyFile)
-	if err != nil {
-		panic(err)
+	if errors.Is(err, os.ErrNotExist) {
+		t.Skip("no RSA private key, skipping snowflake test")
 	}
+	require.NoError(t, err)
 	privateKeyBlock, _ := pem.Decode(bytes)
-	if privateKeyBlock == nil {
-		panic("invalid private key file")
-	}
+	require.NotNil(t, privateKeyBlock, "invalid private key file")
 	config.privateKey = base64.URLEncoding.EncodeToString(privateKeyBlock.Bytes)
 	config.dsn = ReplaceConfig(
 		"$USER@$ACCOUNT.snowflakecomputing.com/$DB/$SCHEMA?role=$ROLE&warehouse=compute_wh&authenticator=snowflake_jwt&privateKey=$PRIVATE_KEY",
@@ -114,7 +114,7 @@ func ArrayBatch(rows [][]any) service.MessageBatch {
 }
 
 func SetupSnowflakeStream(t *testing.T, outputConfiguration string) (func(any) error, *service.Stream) {
-	SetupConfig()
+	SetupConfig(t)
 	t.Helper()
 	streamBuilder := service.NewStreamBuilder()
 	require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
