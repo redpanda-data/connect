@@ -76,6 +76,54 @@ jobs:
           skip-cache: true
           skip-save-cache: true
 
+  # Runs integration tests for any internal/impl/* packages changed in this PR.
+  #
+  # Trigger: add the 'run-integration-tests' label to the PR.
+  # The label is checked at job start — if added after the workflow triggered,
+  # re-run the workflow (or push a new commit) to pick it up.
+  #
+  # Package detection: diffs HEAD against the PR base branch and extracts
+  # unique affected internal/impl/* package directories. Tests run sequentially.
+  integration-test:
+    if: |
+      github.event_name == 'pull_request' &&
+      contains(github.event.pull_request.labels.*.name, 'run-integration-tests')
+    environment: integration-tests
+    runs-on: ubuntu-latest-32
+    env:
+      CGO_ENABLED: 0
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Install Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: "go.mod"
+
+      - name: Install Task
+        uses: ./.github/actions/setup-task
+
+      - name: Pull Latest Redpanda Image
+        run: task docker:pull-redpanda
+
+      - name: Run Integration Tests
+        run: |
+          mapfile -t pkgs < <(
+            git diff --name-only "$(git merge-base HEAD origin/${{ github.base_ref }})"...HEAD \
+              | { grep '^internal/impl/' || true; } \
+              | sed 's|/[^/]*$||' \
+              | sort -u
+          )
+          failed=0
+          for pkg in "${pkgs[@]}"; do
+            task test:integration-package PKG="./$pkg/..." || failed=1
+          done
+          exit $failed
+        timeout-minutes: 120
+
   test-push-to-cloudsmith:
     if: ${{ github.repository == 'redpanda-data/connect' || github.event_name != 'schedule' }}
     runs-on: ubuntu-latest
