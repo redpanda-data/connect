@@ -34,6 +34,10 @@ const (
 	OpCommit
 	// OpRollback represents a transaction ROLLBACK operation
 	OpRollback
+	// OpSelectLobLocator represents a SELECT_LOB_LOCATOR operation (op 9)
+	OpSelectLobLocator Operation = 9
+	// OpLobWrite represents a LOB_WRITE operation (op 10)
+	OpLobWrite Operation = 10
 )
 
 // String converts the operation type to a string equivalent.
@@ -51,6 +55,10 @@ func (op Operation) String() string {
 		return "commit"
 	case OpRollback:
 		return "rollback"
+	case OpSelectLobLocator:
+		return "select_lob_locator"
+	case OpLobWrite:
+		return "lob_write"
 	default:
 		return fmt.Sprintf("unknown operation (%d)", int64(op))
 	}
@@ -92,6 +100,10 @@ func operationFromCode(code int64) Operation {
 		return OpCommit
 	case 36:
 		return OpRollback
+	case 9:
+		return OpSelectLobLocator
+	case 10:
+		return OpLobWrite
 	default:
 		return OpUnknown
 	}
@@ -104,6 +116,9 @@ type DMLEvent struct {
 	Table     string
 	SQLRedo   string
 	Data      map[string]any
+	// OldValues holds the WHERE-clause column values for UPDATE and DELETE events.
+	// For LOB-init UPDATE events these are used to identify the source row for PK matching.
+	OldValues map[string]any
 	Timestamp time.Time
 }
 

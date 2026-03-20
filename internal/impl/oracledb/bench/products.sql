@@ -10,7 +10,7 @@ ALTER SESSION SET CURRENT_SCHEMA = testdb;
 /
 
 DECLARE
-    products_total NUMBER := 200000;
+    products_total NUMBER := 50000;
     products_batch_size NUMBER := 10000;
     products_current NUMBER := 0;
     products_batch_end NUMBER;
@@ -25,11 +25,12 @@ BEGIN
         END IF;
 
         -- Insert batch using a CTE-style approach
-        INSERT INTO testdb.products (name, info, description, email, date_added, join_date, created_at, is_active, basket_count, price)
+        INSERT INTO testdb.products (name, info, inlinedesc, outoflinedesc, email, date_added, join_date, created_at, is_active, basket_count, price)
         SELECT
             'product-' || n,                                                 -- name
             'info-' || n,                                                    -- info
-            RPAD('This is about product ' || n || '. ', 500000, 'X'),       -- description ~500 KB
+            RPAD('This is inlined' || n || '. ', 5, 'X'),                    -- description ~500 KB
+            RPAD('This out out of lined' || n || '. ', 100000, 'X'),         -- description ~500 KB
             'help' || n || '@example.com',                                   -- email
             SYSDATE - MOD(n, 10000),                                         -- date_added, spread over ~27 years
             SYSTIMESTAMP,                                                    -- join_date

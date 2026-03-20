@@ -67,12 +67,13 @@ func (p Parser) RedoEventToDMLEvent(redoEvent *RedoEvent) (DMLEvent, error) {
 	}
 
 	// Extract values from AST, applying type conversion for bare (unquoted) values.
-	newValues, _, err := ExtractValuesFromAST(stmt, &p.valueConverter)
+	newValues, oldValues, err := ExtractValuesFromAST(stmt, &p.valueConverter)
 	if err != nil {
 		return DMLEvent{}, fmt.Errorf("extracting values from AST: %w", err)
 	}
 
 	event.Data = newValues
+	event.OldValues = oldValues
 
 	return event, nil
 }

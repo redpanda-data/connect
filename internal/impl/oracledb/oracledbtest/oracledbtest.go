@@ -18,6 +18,9 @@ import (
 
 	_ "github.com/sijms/go-ora/v2"
 
+	"github.com/redpanda-data/benthos/v4/public/schema"
+	"github.com/redpanda-data/benthos/v4/public/service"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
@@ -227,4 +230,60 @@ func SetupTestWithOracleDBVersion(t *testing.T, version string) (string, *TestDB
 		assert.NoError(t, db.Close())
 	})
 	return pdbConnectionString, &TestDB{db, t}
+}
+
+// ---------------------------------------------------------------------------
+// Schema metadata integration tests
+// ---------------------------------------------------------------------------
+
+// ExtractSchema extracts and parses the schema metadata from a service.Message.
+// Returns a zero-value schema.Common if the metadata is absent.
+func ExtractSchema(t *testing.T, msg *service.Message) schema.Common {
+	t.Helper()
+	var raw any
+	_ = msg.MetaWalkMut(func(k string, v any) error {
+		if k == "schema" {
+			raw = v
+		}
+		return nil
+	})
+	if raw == nil {
+		return schema.Common{}
+	}
+	c, err := schema.ParseFromAny(raw)
+	require.NoError(t, err)
+	return c
+}
+
+// ExtractFingerprint extracts the fingerprint string from schema metadata.
+func ExtractFingerprint(t *testing.T, msg *service.Message) string {
+	t.Helper()
+	var raw any
+	_ = msg.MetaWalkMut(func(k string, v any) error {
+		if k == "schema" {
+			raw = v
+		}
+		return nil
+	})
+	if raw == nil {
+		return ""
+	}
+	m, ok := raw.(map[string]any)
+	if !ok {
+		return ""
+	}
+	fp, _ := m["fingerprint"].(string)
+	return fp
+}
+
+// ChildByName finds a child by name in a Common schema for test assertions.
+func ChildByName(t *testing.T, c schema.Common, name string) schema.Common {
+	t.Helper()
+	for i := range c.Children {
+		if c.Children[i].Name == name {
+			return c.Children[i]
+		}
+	}
+	t.Fatalf("child %q not found in schema %q", name, c.Name)
+	return schema.Common{}
 }

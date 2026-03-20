@@ -50,6 +50,7 @@ const (
 	ociFieldMiningInterval       = "mining_interval"
 	ociFieldMiningStrategy       = "strategy"
 	ociFieldMaxTransactionEvents = "max_transaction_events"
+	ociFieldLOBEnabled           = "lob_enabled"
 )
 
 func init() {
@@ -112,6 +113,9 @@ When using the default Oracle based cache, the Connect user requires permission 
 		service.NewIntField(ociFieldMaxTransactionEvents).
 			Description("The maximum number of events that can be buffered for a single transaction. If a transaction exceeds this limit it is discarded and its events will not be emitted. Set to 0 to disable the limit.").
 			Default(logminer.DefaultMaxTransactionEvents),
+		service.NewBoolField(ociFieldLOBEnabled).
+			Description("When enabled, large object (CLOB, BLOB) columns are included in both snapshot and streaming change events. When disabled, these columns are still present but contain no values. Enabling this option introduces additional performance overhead and increases memory requirements.").
+			Default(logminer.DefaultLOBEnabled),
 	).Description("LogMiner configuration settings."),
 	).
 	Field(service.NewStringListField(ociFieldTablesInclude).
@@ -375,7 +379,7 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (err error) {
 
 	// no cached SCN means we're not recovering from a restart
 	if o.cfg.StreamSnapshot && cachedSCN == replication.InvalidSCN {
-		if snapshotter, err = replication.NewSnapshot(ctx, o.cfg.ConnectionString, userTables, o.publisher, o.log, o.metrics); err != nil {
+		if snapshotter, err = replication.NewSnapshot(ctx, o.cfg.ConnectionString, userTables, o.publisher, o.lmCfg.LOBEnabled, o.log, o.metrics); err != nil {
 			return fmt.Errorf("creating database snapshotter: %w", err)
 		}
 		defer func() {
@@ -617,6 +621,9 @@ func parseLogMinerConfig(conf *service.ParsedConfig) (*logminer.Config, error) {
 		}
 		if cfg.MaxTransactionEvents < 0 {
 			return nil, fmt.Errorf("logminer.%s must be greater than or equal to 0, got %d", ociFieldMaxTransactionEvents, cfg.MaxTransactionEvents)
+		}
+		if cfg.LOBEnabled, err = lmConf.FieldBool(ociFieldLOBEnabled); err != nil {
+			return nil, err
 		}
 	}
 
