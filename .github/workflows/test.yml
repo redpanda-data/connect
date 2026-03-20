@@ -122,7 +122,10 @@ jobs:
             task test:integration-package PKG="./$pkg/..." || failed=1
           done
           exit $failed
-        timeout-minutes: 120
+        # 30m total: normally a single package is changed per PR, so 15m per-package
+        # timeout plus overhead fits comfortably. Keeps CI fast-failing instead of
+        # hanging for hours when Docker networking is degraded.
+        timeout-minutes: 30
 
   test-push-to-cloudsmith:
     if: ${{ github.repository == 'redpanda-data/connect' || github.event_name != 'schedule' }}
