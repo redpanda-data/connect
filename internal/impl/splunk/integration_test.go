@@ -71,7 +71,7 @@ func TestIntegrationSplunk(t *testing.T) {
 		tr := http.DefaultTransport.(*http.Transport).Clone()
 		tr.TLSClientConfig.InsecureSkipVerify = true
 		client := http.Client{Transport: tr}
-		resp, err := client.Get("https://localhost:" + serviceOutputPort + "//services/collector/health")
+		resp, err := client.Get("https://127.0.0.1:" + serviceOutputPort + "//services/collector/health")
 		if err != nil {
 			return err
 		}
@@ -99,7 +99,7 @@ output:
     pattern: fan_out_sequential
     outputs:
       - splunk_hec:
-          url: https://localhost:$VAR2/services/collector/event
+          url: https://127.0.0.1:$VAR2/services/collector/event
           token: "$VAR3"
           gzip: false
           event_host: "blobhost"
@@ -121,7 +121,7 @@ output:
 
 input:
   splunk:
-    url: https://localhost:$VAR1/services/search/v2/jobs/export
+    url: https://127.0.0.1:$VAR1/services/search/v2/jobs/export
     user: admin
     password: "$VAR3"
     query: |

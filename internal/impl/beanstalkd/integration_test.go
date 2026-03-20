@@ -29,12 +29,12 @@ import (
 const template string = `
 output:
   beanstalkd:
-    address: localhost:$PORT
+    address: 127.0.0.1:$PORT
     max_in_flight: $MAX_IN_FLIGHT
 
 input:
   beanstalkd:
-    address: localhost:$PORT
+    address: 127.0.0.1:$PORT
 `
 
 func TestIntegrationBeanstalkdOpenClose(t *testing.T) {
@@ -53,7 +53,7 @@ func TestIntegrationBeanstalkdOpenClose(t *testing.T) {
 
 	_ = resource.Expire(900)
 	require.NoError(t, pool.Retry(func() error {
-		conn, err := net.DialTimeout("tcp", resource.GetPort("11300/tcp"), time.Second)
+		conn, err := net.DialTimeout("tcp", "127.0.0.1:"+resource.GetPort("11300/tcp"), time.Second)
 		if err != nil {
 			return err
 		}
@@ -85,7 +85,7 @@ func TestIntegrationBeanstalkdSendBatch(t *testing.T) {
 
 	_ = resource.Expire(900)
 	require.NoError(t, pool.Retry(func() error {
-		conn, err := net.DialTimeout("tcp", resource.GetPort("11300/tcp"), time.Second)
+		conn, err := net.DialTimeout("tcp", "127.0.0.1:"+resource.GetPort("11300/tcp"), time.Second)
 		if err != nil {
 			return err
 		}
@@ -117,7 +117,7 @@ func TestIntegrationBeanstalkdStreamSequential(t *testing.T) {
 
 	_ = resource.Expire(900)
 	require.NoError(t, pool.Retry(func() error {
-		conn, err := net.DialTimeout("tcp", resource.GetPort("11300/tcp"), time.Second)
+		conn, err := net.DialTimeout("tcp", "127.0.0.1:"+resource.GetPort("11300/tcp"), time.Second)
 		if err != nil {
 			return err
 		}
@@ -149,7 +149,7 @@ func TestIntegrationBeanstalkdStreamParallel(t *testing.T) {
 
 	_ = resource.Expire(900)
 	require.NoError(t, pool.Retry(func() error {
-		conn, err := net.DialTimeout("tcp", resource.GetPort("11300/tcp"), time.Second)
+		conn, err := net.DialTimeout("tcp", "127.0.0.1:"+resource.GetPort("11300/tcp"), time.Second)
 		if err != nil {
 			return err
 		}

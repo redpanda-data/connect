@@ -311,7 +311,7 @@ func TestIntegrationCosmosDB(t *testing.T) {
 	listener, err := net.Listen("tcp", ":0")
 	require.NoError(t, err)
 	srv := &http.Server{Handler: http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
-		url, err := url.Parse("https://localhost:" + resource.GetPort("8081/tcp"))
+		url, err := url.Parse("https://127.0.0.1:" + resource.GetPort("8081/tcp"))
 		require.NoError(t, err)
 
 		customTransport := http.DefaultTransport.(*http.Transport).Clone()
@@ -337,7 +337,7 @@ func TestIntegrationCosmosDB(t *testing.T) {
 	require.NoError(t, err)
 
 	err = pool.Retry(func() error {
-		resp, err := http.Get("http://localhost:" + servicePort + "/_explorer/emulator.pem")
+		resp, err := http.Get("http://127.0.0.1:" + servicePort + "/_explorer/emulator.pem")
 		if err != nil {
 			return err
 		}
@@ -370,7 +370,7 @@ func TestIntegrationCosmosDB(t *testing.T) {
 		cred, err := azcosmos.NewKeyCredential(emulatorKey)
 		require.NoError(t, err)
 
-		client, err := azcosmos.NewClientWithKey("http://localhost:"+servicePort, cred, nil)
+		client, err := azcosmos.NewClientWithKey("http://127.0.0.1:"+servicePort, cred, nil)
 		require.NoError(t, err)
 
 		_, err = client.CreateDatabase(ctx, azcosmos.DatabaseProperties{
@@ -394,7 +394,7 @@ func TestIntegrationCosmosDB(t *testing.T) {
 		template := `
 output:
   azure_cosmosdb:
-    endpoint: http://localhost:$PORT
+    endpoint: http://127.0.0.1:$PORT
     account_key: $VAR1
     database: $VAR2-$ID
     container: $VAR3
@@ -409,7 +409,7 @@ output:
 
 input:
   azure_cosmosdb:
-    endpoint: http://localhost:$PORT
+    endpoint: http://127.0.0.1:$PORT
     account_key: $VAR1
     database: $VAR2-$ID
     container: $VAR3
@@ -454,7 +454,7 @@ input:
 		env := service.NewEnvironment()
 
 		createConfig, err := cosmosDBProcessorConfig().ParseYAML(fmt.Sprintf(`
-endpoint: http://localhost:%s
+endpoint: http://127.0.0.1:%s
 account_key: %s
 database: %s
 container: %s
@@ -465,7 +465,7 @@ operation: Create
 		require.NoError(t, err)
 
 		readConfig, err := cosmosDBProcessorConfig().ParseYAML(fmt.Sprintf(`
-endpoint: http://localhost:%s
+endpoint: http://127.0.0.1:%s
 account_key: %s
 database: %s
 container: %s
@@ -476,7 +476,7 @@ operation: Read
 		require.NoError(t, err)
 
 		patchConfig, err := cosmosDBProcessorConfig().ParseYAML(fmt.Sprintf(`
-endpoint: http://localhost:%s
+endpoint: http://127.0.0.1:%s
 account_key: %s
 database: %s
 container: %s
