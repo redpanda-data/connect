@@ -41,9 +41,9 @@ func NewSnapshot(ctx context.Context,
 	connectionString string,
 	tables []UserTable,
 	publisher ChangePublisher,
+	lobEnabled bool,
 	logger *service.Logger,
 	metrics *service.Metrics,
-	lobEnabled bool,
 ) (*Snapshot, error) {
 	db, err := sql.Open("oracle", connectionString)
 	if err != nil {

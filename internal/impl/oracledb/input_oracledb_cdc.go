@@ -50,7 +50,7 @@ const (
 	ociFieldMiningInterval       = "mining_interval"
 	ociFieldMiningStrategy       = "strategy"
 	ociFieldMaxTransactionEvents = "max_transaction_events"
-	ociFieldLobEnabled           = "lob_enabled"
+	ociFieldLOBEnabled           = "lob_enabled"
 )
 
 func init() {
@@ -113,9 +113,9 @@ When using the default Oracle based cache, the Connect user requires permission 
 		service.NewIntField(ociFieldMaxTransactionEvents).
 			Description("The maximum number of events that can be buffered for a single transaction. If a transaction exceeds this limit it is discarded and its events will not be emitted. Set to 0 to disable the limit.").
 			Default(logminer.DefaultMaxTransactionEvents),
-		service.NewBoolField(ociFieldLobEnabled).
+		service.NewBoolField(ociFieldLOBEnabled).
 			Description("When enabled, large object (CLOB, BLOB) columns are included in snapshot and streaming change events. By default, snapshot and streaming events include these columns but without values. Enabling this introduces additional performance overhead.").
-			Default(logminer.DefaultLobEnabled),
+			Default(logminer.DefaultLOBEnabled),
 	).Description("LogMiner configuration settings."),
 	).
 	Field(service.NewStringListField(ociFieldTablesInclude).
@@ -379,7 +379,7 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (err error) {
 
 	// no cached SCN means we're not recovering from a restart
 	if o.cfg.StreamSnapshot && cachedSCN == replication.InvalidSCN {
-		if snapshotter, err = replication.NewSnapshot(ctx, o.cfg.ConnectionString, userTables, o.publisher, o.log, o.metrics, o.lmCfg.LobEnabled); err != nil {
+		if snapshotter, err = replication.NewSnapshot(ctx, o.cfg.ConnectionString, userTables, o.publisher, o.lmCfg.LOBEnabled, o.log, o.metrics); err != nil {
 			return fmt.Errorf("creating database snapshotter: %w", err)
 		}
 		defer func() {
@@ -622,7 +622,7 @@ func parseLogMinerConfig(conf *service.ParsedConfig) (*logminer.Config, error) {
 		if cfg.MaxTransactionEvents < 0 {
 			return nil, fmt.Errorf("logminer.%s must be greater than or equal to 0, got %d", ociFieldMaxTransactionEvents, cfg.MaxTransactionEvents)
 		}
-		if cfg.LobEnabled, err = lmConf.FieldBool(ociFieldLobEnabled); err != nil {
+		if cfg.LOBEnabled, err = lmConf.FieldBool(ociFieldLOBEnabled); err != nil {
 			return nil, err
 		}
 	}

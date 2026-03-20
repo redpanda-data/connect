@@ -62,7 +62,7 @@ func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replicat
 	var buf strings.Builder
 	if len(userTables) > 0 {
 		opCodes := "6, 7, 36"
-		if cfg.LobEnabled {
+		if cfg.LOBEnabled {
 			opCodes += ", 9, 10"
 		}
 		buf.WriteString(" AND (OPERATION_CODE IN (" + opCodes + ")")
@@ -126,7 +126,7 @@ func (lm *LogMiner) ReadChanges(ctx context.Context, startPos replication.SCN) e
 	}
 
 	// find all lob columns on start up as redo logs don't include column data types.
-	if lm.cfg.LobEnabled {
+	if lm.cfg.LOBEnabled {
 		if err := lm.loadLOBColumnTypes(ctx, conn); err != nil {
 			return fmt.Errorf("discovering LOB column types: %w", err)
 		}
@@ -275,7 +275,7 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 		lm.txnCache.AddEvent(redoEvent.TransactionID, redoEvent.SCN, &event)
 
 	case sqlredo.OpSelectLobLocator:
-		if !lm.cfg.LobEnabled {
+		if !lm.cfg.LOBEnabled {
 			return nil
 		}
 		if !redoEvent.SQLRedo.Valid || redoEvent.SQLRedo.String == "" {
@@ -310,7 +310,7 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 		state.ActiveKey = &key
 
 	case sqlredo.OpLobWrite:
-		if !lm.cfg.LobEnabled {
+		if !lm.cfg.LOBEnabled {
 			return nil
 		}
 		state, exists := lm.lobStates[redoEvent.TransactionID]
@@ -353,7 +353,7 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 				}
 			}
 
-			if lm.cfg.LobEnabled {
+			if lm.cfg.LOBEnabled {
 				// Merge any accumulated LOB data into DML events before publishing.
 				if state, ok := lm.lobStates[redoEvent.TransactionID]; ok {
 					sqlredo.MergeLOBsIntoDMLEvents(state, txn.Events, lm.log)
@@ -363,7 +363,7 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 			// Build a set of schema.table pairs that have an INSERT in this transaction.
 			// Used below to detect and suppress Oracle-internal LOB-initialisation UPDATEs.
 			insertTables := make(map[string]struct{})
-			if lm.cfg.LobEnabled {
+			if lm.cfg.LOBEnabled {
 				for _, ev := range txn.Events {
 					if ev.Operation == sqlredo.OpInsert {
 						insertTables[ev.Schema+"."+ev.Table] = struct{}{}
@@ -390,7 +390,7 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 			for _, dmlEvent := range txn.Events {
 				// Suppress Oracle-internal LOB-initialisation UPDATEs. Their LOB values have
 				// already been merged into the corresponding INSERT by the pre-pass above.
-				if lm.cfg.LobEnabled && dmlEvent.Operation == sqlredo.OpUpdate && lm.isLOBOnlyEvent(dmlEvent) {
+				if lm.cfg.LOBEnabled && dmlEvent.Operation == sqlredo.OpUpdate && lm.isLOBOnlyEvent(dmlEvent) {
 					if _, hasInsert := insertTables[dmlEvent.Schema+"."+dmlEvent.Table]; hasInsert {
 						lm.log.Debugf("suppressing LOB-only UPDATE for %s.%s — values merged into INSERT", dmlEvent.Schema, dmlEvent.Table)
 						continue
@@ -409,13 +409,13 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 		// the cache (GetTransaction returns nil when MaxTransactionEvents is exceeded).
 		// Without this, LOB events that bypass the cache continue to accumulate in
 		// lobStates and are never freed.
-		if lm.cfg.LobEnabled {
+		if lm.cfg.LOBEnabled {
 			delete(lm.lobStates, redoEvent.TransactionID)
 		}
 
 	case sqlredo.OpRollback:
 		// Discard all buffered events for this transaction
-		if lm.cfg.LobEnabled {
+		if lm.cfg.LOBEnabled {
 			delete(lm.lobStates, redoEvent.TransactionID)
 		}
 		lm.txnCache.RollbackTransaction(redoEvent.TransactionID)
