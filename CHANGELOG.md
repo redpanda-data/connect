@@ -3,11 +3,19 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## Unreleased
+## 4.84.1 - 2026-03-20
+
+### Added
+
+- oracledb_cdc: Adds support for streaming LOB columns (@josephwoodward)
 
 ### Changed
 
 - schema_registry_encode: Avro encoding now handles timestamps from CDC sources (RFC3339 strings and `time.Time` values) automatically, nullable union fields are auto-wrapped regardless of `avro.raw_json`, and extra fields not in the schema are silently dropped rather than producing an error. (@Jeffail)
+
+### Fix
+
+- dynamodb_cdc: Fix shard readers polling too slowly. (@squiidz)
 
 ## 4.84.0 - 2026-03-19
 
