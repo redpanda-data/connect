@@ -357,7 +357,6 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 				// Merge any accumulated LOB data into DML events before publishing.
 				if state, ok := lm.lobStates[redoEvent.TransactionID]; ok {
 					sqlredo.MergeLOBsIntoDMLEvents(state, txn.Events, lm.log)
-					delete(lm.lobStates, redoEvent.TransactionID)
 				}
 			}
 
@@ -404,6 +403,14 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 			}
 
 			lm.txnCache.CommitTransaction(redoEvent.TransactionID)
+		}
+
+		// Always clean up lobStates on commit, including for transactions discarded by
+		// the cache (GetTransaction returns nil when MaxTransactionEvents is exceeded).
+		// Without this, LOB events that bypass the cache continue to accumulate in
+		// lobStates and are never freed.
+		if lm.cfg.LobEnabled {
+			delete(lm.lobStates, redoEvent.TransactionID)
 		}
 
 	case sqlredo.OpRollback:
