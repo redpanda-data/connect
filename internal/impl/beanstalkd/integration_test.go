@@ -15,7 +15,10 @@
 package beanstalkd
 
 import (
+	"bufio"
+	"fmt"
 	"net"
+	"strings"
 	"testing"
 	"time"
 
@@ -57,7 +60,20 @@ func TestIntegrationBeanstalkdOpenClose(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		return conn.Close()
+		defer conn.Close()
+		_ = conn.SetDeadline(time.Now().Add(time.Second))
+		// Send a beanstalkd command and read the response to confirm the server is ready.
+		if _, err = fmt.Fprintf(conn, "use default\r\n"); err != nil {
+			return err
+		}
+		resp, err := bufio.NewReader(conn).ReadString('\n')
+		if err != nil {
+			return err
+		}
+		if !strings.HasPrefix(resp, "USING") {
+			return fmt.Errorf("unexpected response: %s", resp)
+		}
+		return nil
 	}))
 
 	suite := integration.StreamTests(
@@ -89,7 +105,20 @@ func TestIntegrationBeanstalkdSendBatch(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		return conn.Close()
+		defer conn.Close()
+		_ = conn.SetDeadline(time.Now().Add(time.Second))
+		// Send a beanstalkd command and read the response to confirm the server is ready.
+		if _, err = fmt.Fprintf(conn, "use default\r\n"); err != nil {
+			return err
+		}
+		resp, err := bufio.NewReader(conn).ReadString('\n')
+		if err != nil {
+			return err
+		}
+		if !strings.HasPrefix(resp, "USING") {
+			return fmt.Errorf("unexpected response: %s", resp)
+		}
+		return nil
 	}))
 
 	suite := integration.StreamTests(
@@ -121,7 +150,20 @@ func TestIntegrationBeanstalkdStreamSequential(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		return conn.Close()
+		defer conn.Close()
+		_ = conn.SetDeadline(time.Now().Add(time.Second))
+		// Send a beanstalkd command and read the response to confirm the server is ready.
+		if _, err = fmt.Fprintf(conn, "use default\r\n"); err != nil {
+			return err
+		}
+		resp, err := bufio.NewReader(conn).ReadString('\n')
+		if err != nil {
+			return err
+		}
+		if !strings.HasPrefix(resp, "USING") {
+			return fmt.Errorf("unexpected response: %s", resp)
+		}
+		return nil
 	}))
 
 	suite := integration.StreamTests(
@@ -153,7 +195,20 @@ func TestIntegrationBeanstalkdStreamParallel(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		return conn.Close()
+		defer conn.Close()
+		_ = conn.SetDeadline(time.Now().Add(time.Second))
+		// Send a beanstalkd command and read the response to confirm the server is ready.
+		if _, err = fmt.Fprintf(conn, "use default\r\n"); err != nil {
+			return err
+		}
+		resp, err := bufio.NewReader(conn).ReadString('\n')
+		if err != nil {
+			return err
+		}
+		if !strings.HasPrefix(resp, "USING") {
+			return fmt.Errorf("unexpected response: %s", resp)
+		}
+		return nil
 	}))
 
 	suite := integration.StreamTests(
