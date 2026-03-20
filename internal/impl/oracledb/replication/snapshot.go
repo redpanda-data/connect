@@ -228,7 +228,7 @@ func (s *Snapshot) processBatch(ctx context.Context, tx *sql.Tx, table UserTable
 				return 0, mapErr
 			}
 			if !s.lobEnabled && isLOBType(types[idx].DatabaseTypeName()) {
-				v = ""
+				v = nil
 			}
 			row[columns[idx]] = v
 			if _, ok := lastSeenPksValues[columns[idx]]; ok {
