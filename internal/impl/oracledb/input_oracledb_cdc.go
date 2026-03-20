@@ -114,7 +114,7 @@ When using the default Oracle based cache, the Connect user requires permission 
 			Description("The maximum number of events that can be buffered for a single transaction. If a transaction exceeds this limit it is discarded and its events will not be emitted. Set to 0 to disable the limit.").
 			Default(logminer.DefaultMaxTransactionEvents),
 		service.NewBoolField(ociFieldLOBEnabled).
-			Description("When enabled, large object (CLOB, BLOB) columns are included in snapshot and streaming change events. By default, snapshot and streaming events include these columns but without values. Enabling this introduces additional performance overhead.").
+			Description("When enabled, large object (CLOB, BLOB) columns are included in both snapshot and streaming change events. When disabled, these columns are still present but contain no values. Enabling this option introduces additional performance overhead on the affected tables.").
 			Default(logminer.DefaultLOBEnabled),
 	).Description("LogMiner configuration settings."),
 	).

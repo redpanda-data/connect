@@ -26,7 +26,7 @@ var (
 	// Used to prevent large events resulting in memory exhaustion.
 	DefaultMaxTransactionEvents = 0
 	// DefaultLOBEnabled controls whether LOB column processing is enabled.
-	DefaultLOBEnabled = false
+	DefaultLOBEnabled = true
 )
 
 // MiningStrategy defines how LogMiner accesses dictionary information
