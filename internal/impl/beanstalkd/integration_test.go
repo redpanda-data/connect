@@ -15,6 +15,10 @@
 package beanstalkd
 
 import (
+	"bufio"
+	"fmt"
+	"net"
+	"strings"
 	"testing"
 	"time"
 
@@ -28,13 +32,35 @@ import (
 const template string = `
 output:
   beanstalkd:
-    address: localhost:$PORT
+    address: 127.0.0.1:$PORT
     max_in_flight: $MAX_IN_FLIGHT
 
 input:
   beanstalkd:
-    address: localhost:$PORT
+    address: 127.0.0.1:$PORT
 `
+
+func waitForBeanstalkd(pool *dockertest.Pool, resource *dockertest.Resource) error {
+	return pool.Retry(func() error {
+		conn, err := net.DialTimeout("tcp", "127.0.0.1:"+resource.GetPort("11300/tcp"), time.Second)
+		if err != nil {
+			return err
+		}
+		defer conn.Close()
+		_ = conn.SetDeadline(time.Now().Add(time.Second))
+		if _, err = fmt.Fprintf(conn, "use default\r\n"); err != nil {
+			return err
+		}
+		resp, err := bufio.NewReader(conn).ReadString('\n')
+		if err != nil {
+			return err
+		}
+		if !strings.HasPrefix(resp, "USING") {
+			return fmt.Errorf("unexpected response: %s", resp)
+		}
+		return nil
+	})
+}
 
 func TestIntegrationBeanstalkdOpenClose(t *testing.T) {
 	integration.CheckSkip(t)
@@ -51,9 +77,7 @@ func TestIntegrationBeanstalkdOpenClose(t *testing.T) {
 	})
 
 	_ = resource.Expire(900)
-	require.NoError(t, pool.Retry(func() error {
-		return nil
-	}))
+	require.NoError(t, waitForBeanstalkd(pool, resource))
 
 	suite := integration.StreamTests(
 		integration.StreamTestOpenClose(),
@@ -79,9 +103,7 @@ func TestIntegrationBeanstalkdSendBatch(t *testing.T) {
 	})
 
 	_ = resource.Expire(900)
-	require.NoError(t, pool.Retry(func() error {
-		return nil
-	}))
+	require.NoError(t, waitForBeanstalkd(pool, resource))
 
 	suite := integration.StreamTests(
 		integration.StreamTestSendBatch(10),
@@ -107,9 +129,7 @@ func TestIntegrationBeanstalkdStreamSequential(t *testing.T) {
 	})
 
 	_ = resource.Expire(900)
-	require.NoError(t, pool.Retry(func() error {
-		return nil
-	}))
+	require.NoError(t, waitForBeanstalkd(pool, resource))
 
 	suite := integration.StreamTests(
 		integration.StreamTestStreamSequential(100),
@@ -135,9 +155,7 @@ func TestIntegrationBeanstalkdStreamParallel(t *testing.T) {
 	})
 
 	_ = resource.Expire(900)
-	require.NoError(t, pool.Retry(func() error {
-		return nil
-	}))
+	require.NoError(t, waitForBeanstalkd(pool, resource))
 
 	suite := integration.StreamTests(
 		integration.StreamTestStreamParallel(100),
