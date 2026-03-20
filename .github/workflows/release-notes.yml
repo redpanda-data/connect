@@ -1,0 +1,114 @@
+name: Release Notes
+
+on:
+  schedule:
+    - cron: "0 12 * * 4" # every Thursday at noon UTC
+  workflow_dispatch:
+
+jobs:
+  list-merged:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: List merged PRs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "repos/${{ github.repository }}/compare/$(gh release view --json tagName -q '.tagName')...${{ github.ref_name }}" --jq '.commits[].sha' |
+          xargs -P8 -I{} gh api "repos/${{ github.repository }}/commits/{}/pulls" --jq '.[].number' |
+          sort -u |
+          xargs -I{} gh pr view {} --json number,author,commits,comments |
+          jq -s '[.[] | {
+            pr: .number,
+            author: .author.login,
+            commits: [.commits[] | .messageHeadline + (if .messageBody != "" then "\n\n" + .messageBody else "" end)],
+            summary: ([.comments[] | select(.author.login == "claude")] | last | .body)
+          }]' | tee "$RUNNER_TEMP/merged-prs.json" | jq .
+
+      - name: Classify PRs
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          jq --slurpfile prs "$RUNNER_TEMP/merged-prs.json" \
+            --rawfile prompt .github/ai/release-notes-classifier.txt \
+            '(.messages[] | select(.role == "system") | .content) = $prompt |
+             (.messages[] | select(.role == "user")   | .content) = ($prs[0] | tojson)' \
+            .github/ai/release-notes-classifier.json |
+          curl -fsSL https://api.anthropic.com/v1/messages \
+            -H "x-api-key: $ANTHROPIC_API_KEY" \
+            -H "anthropic-version: 2023-06-01" \
+            -H "content-type: application/json" \
+            --data-binary @- |
+          jq '.content[0].text | fromjson | .entries' |
+          tee "$RUNNER_TEMP/classified.json" |
+          jq -r --arg repo "${{ github.repository }}" '
+            [group_by(.category)[] | {
+              order: (.[0].category | if . == "ADDED" then 1 elif . == "FIXED" then 2 elif . == "CHANGED" then 3 else 4 end),
+              title: (.[0].category | .[0:1] + (.[1:] | ascii_downcase)),
+              items: (. | sort_by(.system))
+            }] | sort_by(.order)[] |
+            "### \(.title)\n",
+            (.items[] | "- \(.system): \(.description) (@\(.author)) ([#\(.pr)](https://github.com/\($repo)/pull/\(.pr)))"),
+            ""
+          ' | tee "$RUNNER_TEMP/changelog-entries.md" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Compute next version
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          CURRENT=$(gh release view --json tagName -q '.tagName' | sed 's/^v//')
+          MINOR=$(echo "$CURRENT" | cut -d. -f2)
+          NEXT="4.$((MINOR + 1)).0"
+          echo "next=$NEXT" >> "$GITHUB_OUTPUT"
+          echo "Next version: $NEXT"
+
+      - name: Update CHANGELOG.md and create PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NEXT: ${{ steps.version.outputs.next }}
+        run: |
+          ENTRIES=$(cat "$RUNNER_TEMP/changelog-entries.md")
+          if [ -z "$ENTRIES" ]; then
+            echo "::error::No classified entries found"
+            exit 1
+          fi
+
+          TAG="v$NEXT"
+          BRANCH="changelog/$TAG"
+
+          HEADER="## $NEXT - $(date -u +%Y-%m-%d)"
+          NEW_SECTION=$(printf '%s\n\n%s\n' "$HEADER" "$ENTRIES")
+
+          # Insert new section at line 6 (after the file header)
+          head -n 5 CHANGELOG.md > "$RUNNER_TEMP/CHANGELOG.md"
+          printf '%s\n' "$NEW_SECTION" >> "$RUNNER_TEMP/CHANGELOG.md"
+          tail -n +6 CHANGELOG.md >> "$RUNNER_TEMP/CHANGELOG.md"
+          mv "$RUNNER_TEMP/CHANGELOG.md" CHANGELOG.md
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Create or force-update branch
+          git checkout -B "$BRANCH"
+          git add CHANGELOG.md
+          git commit -m "Update changelog for $TAG"
+          git push -f origin "$BRANCH"
+
+          # Create or update PR
+          EXISTING_PR=$(gh pr list --head "$BRANCH" --json number -q '.[0].number')
+          if [ -n "$EXISTING_PR" ]; then
+            echo "Updating existing PR #$EXISTING_PR"
+          else
+            gh pr create \
+              --title "Update changelog for $TAG" \
+              --body "" \
+              --base main \
+              --head "$BRANCH"
+          fi

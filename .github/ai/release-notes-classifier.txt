@@ -1,0 +1,3 @@
+Transform each pull request into one or more changelog entries.
+Focus on user facing changes only. Skip CI, docs, chores, dependency bumps, code maintenance and internal tooling — do not emit entries for these.
+Use commit message prefixes to determine system (e.g. kafka, s3, gha). If no prefix, infer from changed code or PR context. If the change is general use "general" as the system.

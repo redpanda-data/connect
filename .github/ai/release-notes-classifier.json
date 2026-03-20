@@ -1,0 +1,54 @@
+{
+  "model": "claude-haiku-4-5",
+  "max_tokens": 4096,
+  "messages": [
+    {
+      "role": "system",
+      "content": "PROMPT"
+    },
+    {
+      "role": "user",
+      "content": "DATA"
+    }
+  ],
+  "output_config": {
+    "format": {
+      "type": "json_schema",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "entries": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "pr": { "type": "integer", "description": "PR number" },
+                "author": {
+                  "type": "string",
+                  "description": "GitHub handle of the PR author"
+                },
+                "category": {
+                  "type": "string",
+                  "enum": ["ADDED", "CHANGED", "FIXED", "DEPRECATED"],
+                  "description": "ADDED: new feature or system. FIXED: bug fix. CHANGED: modification to existing functionality, not a bug fix. DEPRECATED: deprecation of existing functionality or system."
+                },
+                "system": {
+                  "type": "string",
+                  "description": "Affected component or subsystem. Derive from commit message prefix (e.g. kafka, s3, gha). If no prefix, infer from changed code or PR context. Use lowercase."
+                },
+                "description": {
+                  "type": "string",
+                  "description": "One sentence from a user perspective: what changed and why it matters."
+                }
+              },
+              "required": ["pr", "author", "category", "system", "description"],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": ["entries"],
+        "additionalProperties": false
+      }
+    }
+  }
+}
