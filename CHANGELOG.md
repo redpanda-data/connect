@@ -68,6 +68,7 @@ All notable changes to this project will be documented in this file.
 - iceberg: New output, allows writing Iceberg data to REST catalogs in s3, gcs and adls. (@rockwotj)
 - microsoft_sql_server_cdc: Input now adds schema metadata to consumed messages, this can be used for automatic schema conversion in processors such as `schema_registry_encode`. (@Jeffail)
 - otlp: Add oauth2 support and service account fallback to schemaregistry (@mmatczuk)
+- sql_select, sql_raw, sql_insert: Add `pgx` as an alternate postgres driver. (@josephwoodward)
 
 ### Changed
 
