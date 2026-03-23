@@ -106,6 +106,7 @@ input:
         processors: [] # No default (optional)
     auto_replay_nacks: true
     timely_nacks_maximum_wait: "" # No default (optional)
+    extract_tracing_map: root = @ # No default (optional)
 ```
 
 --
@@ -1059,5 +1060,22 @@ EXPERIMENTAL: Specify a maximum period of time in which each message can be cons
 
 *Type*: `string`
 
+
+=== `extract_tracing_map`
+
+EXPERIMENTAL: A xref:guides:bloblang/about.adoc[Bloblang mapping] that attempts to extract an object containing tracing propagation information, which will then be used as the root tracing span for the message. The specification of the extracted fields must match the format used by the service wide tracer.
+
+
+*Type*: `string`
+
+Requires version 3.45.0 or newer
+
+```yml
+# Examples
+
+extract_tracing_map: root = @
+
+extract_tracing_map: root = this.meta.span
+```
 
 
