@@ -479,6 +479,193 @@ oracledb_cdc:
 	require.NoError(t, stream.StopWithin(time.Second*10))
 }
 
+func TestIntegrationOracleDBCDCLargeObjectColumnsToggle(t *testing.T) {
+	integration.CheckSkip(t)
+	t.Parallel()
+
+	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t, "latest")
+	sql := `CREATE TABLE testdb.lobdisabled (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,varcharcol VARCHAR2(255),inlinelob NCLOB,outoflinelob NCLOB)`
+	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.lobdisabled", sql))
+
+	sql = `CREATE TABLE testdb.lobenabled (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,varcharcol VARCHAR2(255),inlinelob NCLOB,outoflinelob NCLOB)`
+	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.lobenabled", sql))
+
+	var (
+		inline       = strings.Repeat("A", 50)
+		outofline    = strings.Repeat("B", 5000)
+		snapshotRows = 50
+
+		stream *service.Stream
+		err    error
+	)
+
+	cfg := `
+oracledb_cdc:
+  connection_string: %s
+  stream_snapshot: true
+  logminer:
+    lob_enabled: %s
+  include: ["%s"]`
+
+	t.Run("lob_enabled=false", func(t *testing.T) {
+		for range snapshotRows {
+			db.MustExec("INSERT INTO testdb.lobdisabled (varcharcol, inlinelob, outoflinelob) VALUES (:1, :2, :3)", "helloworld", inline, outofline)
+		}
+
+		var batch oracledbtest.Batch
+		t.Logf("%s: Launching component...", t.Name())
+		{
+			streamBuilder := service.NewStreamBuilder()
+			require.NoError(t, streamBuilder.AddInputYAML(fmt.Sprintf(cfg, connStr, "false", "TESTDB.LOBDISABLED")))
+			require.NoError(t, streamBuilder.SetLoggerYAML(`level: WARN`))
+
+			require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+				batch.Lock()
+				defer batch.Unlock()
+				for _, msg := range mb {
+					msgBytes, err := msg.AsBytes()
+					assert.NoError(t, err)
+					batch.Msgs = append(batch.Msgs, string(msgBytes))
+				}
+				return nil
+			}))
+
+			stream, err = streamBuilder.Build()
+			require.NoError(t, err)
+			license.InjectTestService(stream.Resources())
+
+			go func() {
+				if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+					t.Error(err)
+				}
+			}()
+		}
+
+		t.Logf("%s: assert snapshot...", t.Name())
+		{
+			var got int
+			assert.Eventually(t, func() bool {
+				got = batch.Count()
+				return got >= snapshotRows
+			}, time.Minute*5, time.Second*1)
+			assert.Truef(t, (got == snapshotRows), "Wanted %d snapshot messages but got %d", snapshotRows, got)
+
+			require.JSONEq(t, `{
+		"ID": 1,
+		"VARCHARCOL": "helloworld",
+		"INLINELOB": null,
+		"OUTOFLINELOB": null
+		}`, batch.Clone()[0], "Failed to assert snapshot LOB columns")
+		}
+
+		batch.Reset()
+
+		t.Logf("%s: assert streaming...", t.Name())
+		{
+			streamingRows := 50
+			for range streamingRows {
+				db.MustExec("INSERT INTO testdb.lobdisabled (varcharcol, inlinelob, outoflinelob) VALUES (:1, :2, :3)", "helloworld", inline, outofline)
+			}
+
+			var got int
+			assert.Eventually(t, func() bool {
+				got = batch.Count()
+				return got >= streamingRows
+			}, time.Minute*5, time.Second*1)
+			assert.Truef(t, (got == streamingRows), "Wanted %d streaming messages but got %d", streamingRows, got)
+
+			require.JSONEq(t, `{
+		"ID": 51,
+		"VARCHARCOL": "helloworld",
+		"INLINELOB": "",
+		"OUTOFLINELOB": ""
+		}`, batch.Clone()[0], "Failed to assert streaming LOB columns")
+		}
+
+		require.NoError(t, stream.StopWithin(time.Second*10))
+	})
+
+	db.MustExec(`TRUNCATE TABLE RPCN.CDC_CHECKPOINT_CACHE`)
+
+	t.Run("lob_enabled=true", func(t *testing.T) {
+		for range snapshotRows {
+			db.MustExec("INSERT INTO testdb.lobenabled (varcharcol, inlinelob, outoflinelob) VALUES (:1, :2, :3)", "helloworld", inline, outofline)
+		}
+
+		var batch oracledbtest.Batch
+		t.Logf("%s: Launching component...", t.Name())
+		{
+			streamBuilder := service.NewStreamBuilder()
+			require.NoError(t, streamBuilder.AddInputYAML(fmt.Sprintf(cfg, connStr, "true", "TESTDB.LOBENABLED")))
+			require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
+
+			require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+				batch.Lock()
+				defer batch.Unlock()
+				for _, msg := range mb {
+					msgBytes, err := msg.AsBytes()
+					assert.NoError(t, err)
+					batch.Msgs = append(batch.Msgs, string(msgBytes))
+				}
+				return nil
+			}))
+
+			stream, err = streamBuilder.Build()
+			require.NoError(t, err)
+			license.InjectTestService(stream.Resources())
+
+			go func() {
+				if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+					t.Error(err)
+				}
+			}()
+		}
+
+		t.Logf("%s: assert snapshot...", t.Name())
+		{
+			var got int
+			assert.Eventually(t, func() bool {
+				got = batch.Count()
+				return got >= snapshotRows
+			}, time.Minute*5, time.Second*1)
+			assert.Truef(t, (got == snapshotRows), "Wanted %d snapshot messages but got %d", snapshotRows, got)
+
+			require.JSONEq(t, `{
+		"ID": 1,
+		"VARCHARCOL": "helloworld",
+		"INLINELOB": "`+inline+`",
+		"OUTOFLINELOB": "`+outofline+`"
+		}`, batch.Clone()[0], "Failed to snapshot LOB columns")
+		}
+
+		batch.Reset()
+
+		t.Logf("%s: assert streaming...", t.Name())
+		{
+			streamingRows := 50
+			for range streamingRows {
+				db.MustExec("INSERT INTO testdb.lobenabled (varcharcol, inlinelob, outoflinelob) VALUES (:1, :2, :3)", "helloworld", inline, outofline)
+			}
+
+			var got int
+			assert.Eventually(t, func() bool {
+				got = batch.Count()
+				return got >= streamingRows
+			}, time.Minute*5, time.Second*1)
+			assert.Truef(t, (got == streamingRows), "Wanted %d streaming messages but got %d", streamingRows, got)
+
+			require.JSONEq(t, `{
+		"ID": 51,
+		"VARCHARCOL": "helloworld",
+		"INLINELOB": "`+inline+`",
+		"OUTOFLINELOB": "`+outofline+`"
+		}`, batch.Clone()[0], "Failed to assert streaming LOB columns")
+		}
+	})
+
+	require.NoError(t, stream.StopWithin(time.Second*10))
+}
+
 func TestIntegrationOracleDBCDCSnapshotAndStreamingAllTypes(t *testing.T) {
 	integration.CheckSkip(t)
 

@@ -12,7 +12,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -26,6 +28,33 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 )
+
+// Batch represents the expected test output.
+type Batch struct {
+	sync.Mutex
+	Msgs []string
+}
+
+// Reset sets the messages in the batch to nil.
+func (c *Batch) Reset() {
+	c.Lock()
+	defer c.Unlock()
+	c.Msgs = nil
+}
+
+// Count returns the total number of messages in the batch.
+func (c *Batch) Count() int {
+	c.Lock()
+	defer c.Unlock()
+	return len(c.Msgs)
+}
+
+// Clone returns a clone of the underlying Msgs.
+func (c *Batch) Clone() []string {
+	c.Lock()
+	defer c.Unlock()
+	return slices.Clone(c.Msgs)
+}
 
 // TestDB wraps sql.DB with testing utilities for Oracle database integration tests.
 // It provides helper methods for table creation, supplemental logging enablement, and assertions.
