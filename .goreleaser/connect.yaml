@@ -91,6 +91,19 @@ publishers:
     cmd: ./resources/scripts/push_pkg_to_cloudsmith.sh {{ .ArtifactPath }} {{ .Version }}
     env:
       - CLOUDSMITH_API_KEY={{ .Env.CLOUDSMITH_API_KEY }}
+  - name: Publish Linux packages to GCP Artifact Registry
+    ids:
+      - connect-linux-pkgs
+    cmd: |
+      {{- $repo := "redpanda" -}}
+      {{- if or (contains .Version "beta") (contains .Version "rc") -}}
+        {{- $repo = "redpanda-unstable" -}}
+      {{- end -}}
+      if [[ "{{ .ArtifactPath }}" == *.deb ]]; then
+        gcloud artifacts apt upload {{ $repo }}-apt --location=us-central1 --source={{ .ArtifactPath }} --project=production-devprod
+      else
+        gcloud artifacts yum upload {{ $repo }}-yum --location=us-central1 --source={{ .ArtifactPath }} --project=production-devprod
+      fi
 
 release:
   github:
