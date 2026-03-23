@@ -46,25 +46,25 @@ require (
 	github.com/Masterminds/squirrel v1.5.4
 	github.com/PaesslerAG/gval v1.2.4
 	github.com/PaesslerAG/jsonpath v0.1.1
-	github.com/a2aproject/a2a-go v0.3.10
+	github.com/a2aproject/a2a-go v0.3.12
 	github.com/apache/iceberg-go v0.5.0
 	github.com/apache/pulsar-client-go v0.18.0
 	github.com/auth0/go-jwt-middleware/v2 v2.3.1
 	github.com/authzed/authzed-go v1.8.0
 	github.com/authzed/grpcutil v0.0.0-20260105210157-e237581949c2
-	github.com/aws/aws-lambda-go v1.53.0
+	github.com/aws/aws-lambda-go v1.54.0
 	github.com/aws/aws-sdk-go-v2 v1.41.4
 	github.com/aws/aws-sdk-go-v2/config v1.32.12
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.12
-	github.com/aws/aws-sdk-go-v2/feature/dynamodb/expression v1.8.35
+	github.com/aws/aws-sdk-go-v2/feature/dynamodb/expression v1.8.36
 	github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager v0.1.10
 	github.com/aws/aws-sdk-go-v2/service/athena v1.57.3
 	github.com/aws/aws-sdk-go-v2/service/bedrockruntime v1.50.2
 	github.com/aws/aws-sdk-go-v2/service/cloudwatch v1.55.2
 	github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs v1.64.1
-	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.56.2
+	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.57.0
 	github.com/aws/aws-sdk-go-v2/service/firehose v1.42.12
-	github.com/aws/aws-sdk-go-v2/service/glue v1.138.0
+	github.com/aws/aws-sdk-go-v2/service/glue v1.139.0
 	github.com/aws/aws-sdk-go-v2/service/kinesis v1.43.3
 	github.com/aws/aws-sdk-go-v2/service/lambda v1.88.3
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.97.1
@@ -110,7 +110,7 @@ require (
 	github.com/gosimple/slug v1.15.0
 	github.com/hamba/avro/v2 v2.31.0
 	github.com/influxdata/influxdb1-client v0.0.0-20220302092344-a9ab5670611c
-	github.com/jackc/pgx/v5 v5.8.0
+	github.com/jackc/pgx/v5 v5.9.1
 	github.com/jhump/protoreflect v1.18.0
 	github.com/lib/pq v1.12.0
 	github.com/linkedin/goavro/v2 v2.15.0
@@ -150,11 +150,11 @@ require (
 	github.com/redpanda-data/common-go/license v0.0.0-20260318014216-2bbd72bde0a0
 	github.com/redpanda-data/common-go/redpanda-otel-exporter v0.4.0
 	github.com/redpanda-data/common-go/secrets v0.1.15
-	github.com/redpanda-data/connect/public/bundle/free/v4 v4.83.0
+	github.com/redpanda-data/connect/public/bundle/free/v4 v4.84.0
 	github.com/rs/xid v1.6.0
 	github.com/sashabaranov/go-openai v1.41.2
 	github.com/sijms/go-ora/v2 v2.9.0
-	github.com/slack-go/slack v0.19.0
+	github.com/slack-go/slack v0.20.0
 	github.com/smira/go-statsd v1.3.4
 	github.com/snowflakedb/gosnowflake v1.19.0
 	github.com/sourcegraph/conc v0.3.0
@@ -377,7 +377,7 @@ require (
 	github.com/ardielle/ardielle-go v1.5.2 // indirect
 	github.com/armon/go-metrics v0.3.10 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.7 // indirect
-	github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue v1.20.35 // indirect
+	github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue v1.20.36 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.18.20 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/rds/auth v1.6.20
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.20 // indirect
@@ -426,7 +426,7 @@ require (
 	github.com/dvsekhvalnov/jose2go v1.8.0 // indirect
 	github.com/eapache/go-resiliency v1.7.0 // indirect
 	github.com/eapache/queue v1.1.0 // indirect
-	github.com/fatih/color v1.18.0
+	github.com/fatih/color v1.19.0
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.13 // indirect
@@ -476,7 +476,7 @@ require (
 	github.com/jcmturner/gokrb5/v8 v8.4.4 // indirect
 	github.com/jcmturner/rpc/v2 v2.0.3 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
-	github.com/klauspost/compress v1.18.4
+	github.com/klauspost/compress v1.18.5
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
 	github.com/klauspost/pgzip v1.2.6 // indirect
 	github.com/kr/fs v0.1.0 // indirect
@@ -526,7 +526,7 @@ require (
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
 	github.com/stretchr/objx v0.5.3 // indirect
 	github.com/testcontainers/testcontainers-go v0.41.0
-	github.com/testcontainers/testcontainers-go/modules/mongodb v0.39.0
+	github.com/testcontainers/testcontainers-go/modules/mongodb v0.41.0
 	github.com/tilinna/z85 v1.0.0 // indirect
 	github.com/tklauser/go-sysconf v0.3.16 // indirect
 	github.com/tklauser/numcpus v0.11.0 // indirect
