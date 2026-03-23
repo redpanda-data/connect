@@ -77,6 +77,7 @@ func redpandaOutputConfigFields() []*service.ConfigField {
 				Default(256),
 			service.NewBatchPolicyField(roFieldBatching).
 				Description("Optional explicit batching policy for the output. Note that when batches are formed at the input level they can be expanded by this policy, but not contracted. When consuming data from a Redpanda input it is recommended to tune batches from the input config via the `max_yield_batch_bytes` field, or the `unordered_processing.batching` field if appropriate."),
+			service.NewInjectTracingSpanMappingField(),
 		},
 		FranzProducerFields(),
 	)
@@ -155,6 +156,10 @@ func init() {
 						func(context.Context) error { return nil },
 					),
 				)
+			}
+
+			if output, err = conf.WrapBatchOutputExtractTracingSpanMapping("redpanda", output); err != nil {
+				return
 			}
 
 			return

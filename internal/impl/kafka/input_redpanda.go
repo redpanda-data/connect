@@ -94,6 +94,7 @@ func redpandaInputConfigFields() []*service.ConfigField {
 		[]*service.ConfigField{
 			service.NewAutoRetryNacksToggleField(),
 			service.NewForceTimelyNacksField(),
+			service.NewExtractTracingSpanMappingField(),
 		},
 	)
 }
@@ -149,6 +150,10 @@ func init() {
 			}
 
 			if rdr, err = service.ForceTimelyNacksBatched(conf, rdr); err != nil {
+				return nil, err
+			}
+
+			if rdr, err = conf.WrapBatchInputExtractTracingSpanMapping("redpanda", rdr); err != nil {
 				return nil, err
 			}
 
