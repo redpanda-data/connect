@@ -113,7 +113,7 @@ func init() {
 				var client *kgo.Client
 				var clientMut sync.Mutex
 
-				output, err = NewFranzWriterFromConfig(
+				if output, err = NewFranzWriterFromConfig(
 					conf,
 					NewFranzWriterHooks(
 						func(ctx context.Context, fn FranzSharedClientUseFn) error {
@@ -141,12 +141,15 @@ func init() {
 							client.Close()
 							client = nil
 							return nil
-						}))
+						})); err != nil {
+					mgr.Logger().Errorf("Failed creating writer from config: %v", err)
+					return
+				}
 			} else {
 				mgr.Logger().Info("Connection fields omitted, falling back to common redpanda config.")
 
 				// We're using a common redpanda block to determine the connection.
-				output, err = NewFranzWriterFromConfig(
+				if output, err = NewFranzWriterFromConfig(
 					conf,
 					NewFranzWriterHooks(
 						func(_ context.Context, fn FranzSharedClientUseFn) error {
@@ -155,7 +158,10 @@ func init() {
 					).WithYieldClientFn(
 						func(context.Context) error { return nil },
 					),
-				)
+				); err != nil {
+					mgr.Logger().Errorf("Failed creating writer from config: %v", err)
+					return
+				}
 			}
 
 			if output, err = conf.WrapBatchOutputExtractTracingSpanMapping("redpanda", output); err != nil {
