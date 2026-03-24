@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  list-merged:
+  release-notes:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -46,63 +46,48 @@ jobs:
         run: |
           jq --slurpfile prs "$RUNNER_TEMP/merged-prs.json" \
             --rawfile prompt .github/ai/release-notes-classifier.txt \
-            '(.messages[] | select(.role == "system") | .content) = $prompt |
-             (.messages[] | select(.role == "user")   | .content) = ($prs[0] | tojson)' \
-            .github/ai/release-notes-classifier.json > "$RUNNER_TEMP/request.json"
-
-          echo '<details><summary>Classifier request</summary>' >> "$GITHUB_STEP_SUMMARY"
-          echo '' >> "$GITHUB_STEP_SUMMARY"
-          echo '```json' >> "$GITHUB_STEP_SUMMARY"
-          jq . "$RUNNER_TEMP/request.json" >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
-          echo '</details>' >> "$GITHUB_STEP_SUMMARY"
+            '.system = $prompt |
+             (.messages[] | select(.role == "user") | .content) = ($prs[0] | tojson)' \
+            .github/ai/release-notes-classifier.json | tee "$RUNNER_TEMP/request.json" | jq .
 
       - name: Classify PRs
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
-          RESPONSE=$(curl -fsSL https://api.anthropic.com/v1/messages \
+          HTTP_CODE=$(curl -sSL -o "$RUNNER_TEMP/response.json" -w '%{http_code}' \
+            https://api.anthropic.com/v1/messages \
             -H "x-api-key: $ANTHROPIC_API_KEY" \
             -H "anthropic-version: 2023-06-01" \
             -H "content-type: application/json" \
-            -d @"$RUNNER_TEMP/request.json") || {
-            echo "::error::Anthropic API call failed"
+            -d @"$RUNNER_TEMP/request.json")
+          if [ "$HTTP_CODE" -ne 200 ]; then
+            cat "$RUNNER_TEMP/response.json"
+            echo "::error::Anthropic API returned HTTP $HTTP_CODE"
             exit 1
-          }
+          fi
 
-          echo "$RESPONSE" | jq '.content[0].text | fromjson | .entries' > "$RUNNER_TEMP/classified.json"
-
-          echo '<details><summary>Classified PRs</summary>' >> "$GITHUB_STEP_SUMMARY"
-          echo '' >> "$GITHUB_STEP_SUMMARY"
-          echo '```json' >> "$GITHUB_STEP_SUMMARY"
-          jq . "$RUNNER_TEMP/classified.json" >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
-          echo '</details>' >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Update CHANGELOG.md and create PR
+      - name: Update CHANGELOG.md
         env:
           GH_TOKEN: ${{ github.token }}
           NEXT: ${{ steps.version.outputs.next }}
         run: |
           jq -r --arg repo "${{ github.repository }}" '
+            .content[0].text | fromjson | .entries |
             [group_by(.category)[] | {
               order: (.[0].category | if . == "ADDED" then 1 elif . == "FIXED" then 2 elif . == "CHANGED" then 3 else 4 end),
               title: (.[0].category | .[0:1] + (.[1:] | ascii_downcase)),
               items: (. | sort_by(.system))
             }] | sort_by(.order)[] |
             "### \(.title)\n",
-            (.items[] | "- \(.system): \(.description) (@\(.author)) ([#\(.pr)](https://github.com/\($repo)/pull/\(.pr)))"),
+            (.items[] | "- \(.system): \(.description) ([@\(.author)](https://github.com/\(.author)), [#\(.pr)](https://github.com/\($repo)/pull/\(.pr)))"),
             ""
-          ' "$RUNNER_TEMP/classified.json" | tee "$RUNNER_TEMP/changelog-entries.md" >> "$GITHUB_STEP_SUMMARY"
+          ' "$RUNNER_TEMP/response.json" | tee "$RUNNER_TEMP/changelog-entries.md" >> "$GITHUB_STEP_SUMMARY"
 
           ENTRIES=$(cat "$RUNNER_TEMP/changelog-entries.md")
           if [ -z "$ENTRIES" ]; then
             echo "::error::No classified entries found"
             exit 1
           fi
-
-          TAG="v$NEXT"
-          BRANCH="changelog/$TAG"
 
           HEADER="## $NEXT - $(date -u +%Y-%m-%d)"
           NEW_SECTION=$(printf '%s\n\n%s\n' "$HEADER" "$ENTRIES")
@@ -113,22 +98,27 @@ jobs:
           tail -n +6 CHANGELOG.md >> "$RUNNER_TEMP/CHANGELOG.md"
           mv "$RUNNER_TEMP/CHANGELOG.md" CHANGELOG.md
 
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+      - name: Create PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NEXT: ${{ steps.version.outputs.next }}
+        run: |
+          BRANCH="changelog/v$NEXT"
 
-          # Create or force-update branch
+          git config user.name "vbotbuildovich"
+          git config user.email "62446873+vbotbuildovich@users.noreply.github.com"
+
           git checkout -B "$BRANCH"
           git add CHANGELOG.md
-          git commit -m "Update changelog for $TAG"
+          git commit -m "Update changelog for v$NEXT"
           git push -f origin "$BRANCH"
 
-          # Create or update PR
           EXISTING_PR=$(gh pr list --head "$BRANCH" --json number -q '.[0].number')
           if [ -n "$EXISTING_PR" ]; then
             echo "Updating existing PR #$EXISTING_PR"
           else
             gh pr create \
-              --title "Update changelog for $TAG" \
+              --title "Update changelog for v$NEXT" \
               --body "" \
               --base main \
               --head "$BRANCH"
