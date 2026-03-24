@@ -70,7 +70,6 @@ type Client struct {
 	config       SubscriptionConfig
 	lastReplayID []byte
 	eventBuffer  chan *PubSubEvent
-	parentCtx    context.Context
 	cancel       context.CancelFunc
 	done         chan struct{}
 	streamErr    error
@@ -153,17 +152,16 @@ func (c *Client) Connect(ctx context.Context, replayPreset ReplayPreset, replayI
 		c.lastReplayID = replayID
 	}
 
-	c.parentCtx = ctx
-	return c.connectLocked()
+	return c.connectLocked(ctx)
 }
 
 // connectLocked opens a new stream and starts the receive loop.
 // Must be called with c.mu held.
-func (c *Client) connectLocked() error {
+func (c *Client) connectLocked(ctx context.Context) error {
 	c.state = StreamStateConnecting
 	c.streamErr = nil
 
-	streamCtx, cancel := context.WithCancel(c.parentCtx)
+	streamCtx, cancel := context.WithCancel(ctx)
 	c.cancel = cancel
 
 	md := metadata.Pairs(
@@ -203,7 +201,7 @@ func (c *Client) connectLocked() error {
 	c.state = StreamStateConnected
 
 	c.done = make(chan struct{})
-	go c.receiveLoop()
+	go c.receiveLoop(ctx)
 
 	return nil
 }
@@ -217,7 +215,7 @@ func isCDCTopic(topic string) bool {
 
 // receiveLoop reads from the gRPC stream and pushes decoded events into the buffer.
 // On stream errors it attempts reconnection with backoff instead of exiting.
-func (c *Client) receiveLoop() {
+func (c *Client) receiveLoop(ctx context.Context) {
 	defer close(c.done)
 
 	for {
@@ -236,7 +234,7 @@ func (c *Client) receiveLoop() {
 			c.lastError.Store(err)
 			c.lastErrorTime.Store(time.Now().UnixNano())
 
-			if reconnErr := c.reconnectWithBackoff(); reconnErr != nil {
+			if reconnErr := c.reconnectWithBackoff(ctx); reconnErr != nil {
 				c.mu.Lock()
 				c.streamErr = reconnErr
 				c.state = StreamStateDisconnected
@@ -263,7 +261,7 @@ func (c *Client) receiveLoop() {
 				continue
 			}
 
-			codec, err := c.schemaCache.GetCodec(c.parentCtx, event.SchemaId)
+			codec, err := c.schemaCache.GetCodec(ctx, event.SchemaId)
 			if err != nil {
 				c.log.Errorf("get schema for event (schemaID=%s): %v", event.SchemaId, err)
 				continue
@@ -317,7 +315,7 @@ func (c *Client) receiveLoop() {
 				c.lastError.Store(err)
 				c.lastErrorTime.Store(time.Now().UnixNano())
 
-				if reconnErr := c.reconnectWithBackoff(); reconnErr != nil {
+				if reconnErr := c.reconnectWithBackoff(ctx); reconnErr != nil {
 					c.mu.Lock()
 					c.streamErr = reconnErr
 					c.state = StreamStateDisconnected
@@ -353,10 +351,10 @@ func grpcBackoffWithJitter(base, maxDur time.Duration, attempt int) time.Duratio
 }
 
 // reconnectWithBackoff attempts to re-establish the subscription stream using
-// exponential backoff with jitter. It respects parentCtx cancellation and
+// exponential backoff with jitter. It respects ctx cancellation and
 // maxReconnect limits. On Unauthenticated errors it invokes the auth refresh
 // callback before retrying.
-func (c *Client) reconnectWithBackoff() error {
+func (c *Client) reconnectWithBackoff(ctx context.Context) error {
 	c.mu.Lock()
 	if c.state == StreamStateClosing {
 		c.mu.Unlock()
@@ -381,9 +379,9 @@ func (c *Client) reconnectWithBackoff() error {
 
 		t := time.NewTimer(delay)
 		select {
-		case <-c.parentCtx.Done():
+		case <-ctx.Done():
 			t.Stop()
-			return c.parentCtx.Err()
+			return ctx.Err()
 		case <-t.C:
 		}
 
@@ -414,7 +412,7 @@ func (c *Client) reconnectWithBackoff() error {
 			c.mu.Unlock()
 			return errors.New("client is closing, aborting reconnect")
 		}
-		err := c.connectLocked()
+		err := c.connectLocked(ctx)
 		c.mu.Unlock()
 
 		if err == nil {
@@ -597,11 +595,10 @@ func (c *Client) Reconfigure(ctx context.Context, cfg SubscriptionConfig) error 
 	c.config = cfg
 	c.eventBuffer = make(chan *PubSubEvent, cfg.BufferSize)
 	c.streamErr = nil
-	c.parentCtx = ctx
 	if len(cfg.ReplayID) > 0 {
 		c.lastReplayID = cfg.ReplayID
 	}
-	err := c.connectLocked()
+	err := c.connectLocked(ctx)
 	c.mu.Unlock()
 
 	return err
