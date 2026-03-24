@@ -25,9 +25,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
-	"github.com/ory/dockertest/v3"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/wait"
 
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 )
@@ -96,24 +96,22 @@ func TestIntegrationDynamoDBCache(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
-	pool, err := dockertest.NewPool("")
+	ctr, err := testcontainers.Run(t.Context(), "amazon/dynamodb-local:latest",
+		testcontainers.WithExposedPorts("8000/tcp"),
+		testcontainers.WithWaitStrategy(
+			wait.ForListeningPort("8000/tcp").WithStartupTimeout(30*time.Second),
+		),
+	)
+	testcontainers.CleanupContainer(t, ctr)
 	require.NoError(t, err)
 
-	pool.MaxWait = time.Second * 30
-
-	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
-		Repository:   "amazon/dynamodb-local",
-		ExposedPorts: []string{"8000/tcp"},
-	})
+	mp, err := ctr.MappedPort(t.Context(), "8000/tcp")
 	require.NoError(t, err)
-	t.Cleanup(func() {
-		assert.NoError(t, pool.Purge(resource))
-	})
+	dynamoPort := mp.Port()
 
-	_ = resource.Expire(900)
-	require.NoError(t, pool.Retry(func() error {
-		return createTable(t.Context(), t, resource.GetPort("8000/tcp"), "poketable")
-	}))
+	require.Eventually(t, func() bool {
+		return createTable(t.Context(), t, dynamoPort, "poketable") == nil
+	}, 30*time.Second, time.Second)
 
 	template := `
 cache_resources:
@@ -139,9 +137,9 @@ cache_resources:
 	)
 	suite.Run(
 		t, template,
-		integration.CacheTestOptPort(resource.GetPort("8000/tcp")),
+		integration.CacheTestOptPort(dynamoPort),
 		integration.CacheTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.CacheTestConfigVars) {
-			require.NoError(t, createTable(ctx, t, resource.GetPort("8000/tcp"), vars.ID))
+			require.NoError(t, createTable(ctx, t, dynamoPort, vars.ID))
 		}),
 	)
 }

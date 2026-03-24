@@ -15,16 +15,19 @@
 package redis
 
 import (
+	"context"
 	"fmt"
-	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/ory/dockertest/v3"
-	"github.com/ory/dockertest/v3/docker"
-	"github.com/stretchr/testify/assert"
+	"github.com/docker/docker/api/types/container"
+	"github.com/docker/go-connections/nat"
 	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/network"
+	"github.com/testcontainers/testcontainers-go/wait"
 
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 )
@@ -33,33 +36,32 @@ func TestIntegrationRedisCache(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
-	pool, err := dockertest.NewPool("")
+	ctr, err := testcontainers.Run(t.Context(), "redis:latest",
+		testcontainers.WithExposedPorts("6379/tcp"),
+		testcontainers.WithWaitStrategy(
+			wait.ForListeningPort("6379/tcp").WithStartupTimeout(30*time.Second),
+		),
+	)
+	testcontainers.CleanupContainer(t, ctr)
 	require.NoError(t, err)
 
-	pool.MaxWait = time.Second * 30
-
-	resource, err := pool.Run("redis", "latest", nil)
+	redisPort, err := ctr.MappedPort(t.Context(), "6379/tcp")
 	require.NoError(t, err)
-	t.Cleanup(func() {
-		assert.NoError(t, pool.Purge(resource))
-	})
 
-	_ = resource.Expire(900)
-	require.NoError(t, pool.Retry(func() error {
-		url := fmt.Sprintf("tcp://localhost:%v/1", resource.GetPort("6379/tcp"))
+	require.Eventually(t, func() bool {
+		url := fmt.Sprintf("tcp://localhost:%v/1", redisPort.Port())
 		pConf, cErr := redisCacheConfig().ParseYAML(fmt.Sprintf(`url: %v`, url), nil)
 		if cErr != nil {
-			return cErr
+			return false
 		}
 
 		r, cErr := newRedisCacheFromConfig(pConf)
 		if cErr != nil {
-			return cErr
+			return false
 		}
 
-		cErr = r.Set(t.Context(), "benthos_test_redis_connect", []byte("foo bar"), nil)
-		return cErr
-	}))
+		return r.Set(t.Context(), "benthos_test_redis_connect", []byte("foo bar"), nil) == nil
+	}, 30*time.Second, time.Second)
 
 	template := `
 cache_resources:
@@ -77,81 +79,64 @@ cache_resources:
 	)
 	suite.Run(
 		t, template,
-		integration.CacheTestOptPort(resource.GetPort("6379/tcp")),
+		integration.CacheTestOptPort(redisPort.Port()),
 	)
 }
 
 func TestIntegrationRedisClusterCache(t *testing.T) {
-	t.Skip("Skipping as networking often fails for this test")
-
 	integration.CheckSkip(t)
 	t.Parallel()
 
-	pool, err := dockertest.NewPool("")
-	require.NoError(t, err)
-	pool.MaxWait = time.Second * 30
-
-	networks, _ := pool.Client.ListNetworks()
-	hostIP := ""
-	for _, network := range networks {
-		if network.Name == "bridge" {
-			hostIP = network.IPAM.Config[0].Gateway
-		}
-	}
-	if runtime.GOOS == "darwin" {
-		hostIP = "0.0.0.0"
-	}
+	hostIP := "127.0.0.1"
 
 	exposedPorts := make([]string, 12)
-	portBindings := make(map[docker.Port][]docker.PortBinding, 12)
 	for i := range 6 {
-		p1 := fmt.Sprintf("%d/tcp", 7000+i)
-		p2 := fmt.Sprintf("%d/tcp", 17000+i)
-		exposedPorts[i] = p1
-		exposedPorts[i+6] = p2
-		portBindings[docker.Port(p1)] = []docker.PortBinding{{HostIP: "", HostPort: p1}}
-		portBindings[docker.Port(p2)] = []docker.PortBinding{{HostIP: "", HostPort: p2}}
+		exposedPorts[i] = fmt.Sprintf("%d/tcp", 7000+i)
+		exposedPorts[i+6] = fmt.Sprintf("%d/tcp", 17000+i)
 	}
 
-	cluster, err := pool.RunWithOptions(&dockertest.RunOptions{
-		Name:         "redis-cluster",
-		Repository:   "grokzen/redis-cluster",
-		Tag:          "6.0.7",
-		ExposedPorts: exposedPorts,
-		PortBindings: portBindings,
-		Env: []string{
-			"IP=" + hostIP,
-		},
-	})
+	ctr, err := testcontainers.Run(t.Context(), "grokzen/redis-cluster:6.0.7",
+		testcontainers.WithExposedPorts(exposedPorts...),
+		testcontainers.WithEnv(map[string]string{"IP": hostIP}),
+		testcontainers.WithHostConfigModifier(func(hc *container.HostConfig) {
+			hc.PortBindings = nat.PortMap{}
+			for i := range 6 {
+				p1 := nat.Port(fmt.Sprintf("%d/tcp", 7000+i))
+				p2 := nat.Port(fmt.Sprintf("%d/tcp", 17000+i))
+				hc.PortBindings[p1] = []nat.PortBinding{{HostIP: "0.0.0.0", HostPort: fmt.Sprintf("%d", 7000+i)}}
+				hc.PortBindings[p2] = []nat.PortBinding{{HostIP: "0.0.0.0", HostPort: fmt.Sprintf("%d", 17000+i)}}
+			}
+		}),
+		testcontainers.WithWaitStrategy(
+			wait.ForListeningPort("7000/tcp").WithStartupTimeout(60*time.Second),
+		),
+	)
+	testcontainers.CleanupContainer(t, ctr)
 	require.NoError(t, err)
-
-	t.Cleanup(func() {
-		assert.NoError(t, pool.Purge(cluster))
-	})
 
 	clusterURL := ""
 	for i := range 6 {
-		clusterURL += fmt.Sprintf("redis://%s:%s/0,", hostIP, fmt.Sprintf("%d", 7000+i))
+		clusterURL += fmt.Sprintf("redis://%s:%d/0,", hostIP, 7000+i)
 	}
 	clusterURL = strings.TrimSuffix(clusterURL, ",")
 
-	require.NoError(t, pool.Retry(func() error {
+	require.Eventually(t, func() bool {
 		pConf, cErr := redisCacheConfig().ParseYAML(fmt.Sprintf(`
 url: %v
 kind: cluster
 `, clusterURL), nil)
 		if cErr != nil {
-			return cErr
+			return false
 		}
 
 		r, cErr := newRedisCacheFromConfig(pConf)
 		if cErr != nil {
-			return cErr
+			return false
 		}
 
 		cErr = r.Set(t.Context(), "benthos_test_redis_connect", []byte("foo bar"), nil)
-		return cErr
-	}))
+		return cErr == nil
+	}, 60*time.Second, time.Second)
 
 	template := `
 cache_resources:
@@ -175,95 +160,69 @@ cache_resources:
 }
 
 func TestIntegrationRedisFailoverCache(t *testing.T) {
-	t.Skip("Skipping as networking often fails for this test")
-
 	integration.CheckSkip(t)
 	t.Parallel()
 
-	pool, err := dockertest.NewPool("")
+	rpNet, err := network.New(t.Context())
 	require.NoError(t, err)
-	pool.MaxWait = time.Second * 30
+	t.Cleanup(func() { _ = rpNet.Remove(context.Background()) })
 
-	networks, _ := pool.Client.ListNetworks()
-	hostIP := ""
-	for _, network := range networks {
-		if network.Name == "bridge" {
-			hostIP = network.IPAM.Config[0].Gateway
-		}
-	}
-	if runtime.GOOS == "darwin" {
-		hostIP = "0.0.0.0"
-	}
-
-	net, err := pool.CreateNetwork("redis-sentinel")
+	master, err := testcontainers.Run(t.Context(), "bitnami/redis:6.0.9",
+		network.WithNetwork([]string{"redis-master"}, rpNet),
+		testcontainers.WithExposedPorts("6379/tcp"),
+		testcontainers.WithEnv(map[string]string{"ALLOW_EMPTY_PASSWORD": "yes"}),
+		testcontainers.WithWaitStrategy(
+			wait.ForListeningPort("6379/tcp").WithStartupTimeout(30*time.Second),
+		),
+	)
+	testcontainers.CleanupContainer(t, master)
 	require.NoError(t, err)
 
-	t.Cleanup(func() {
-		_ = pool.RemoveNetwork(net)
-	})
-
-	master, err := pool.RunWithOptions(&dockertest.RunOptions{
-		Name:         "redis-master",
-		Repository:   "bitnami/redis",
-		Tag:          "6.0.9",
-		Networks:     []*dockertest.Network{net},
-		ExposedPorts: []string{"6379/tcp"},
-		PortBindings: map[docker.Port][]docker.PortBinding{
-			"6379/tcp": {{HostIP: "", HostPort: "6379/tcp"}},
-		},
-		Env: []string{
-			"ALLOW_EMPTY_PASSWORD=yes",
-		},
-	})
+	sentinelPort, err := integration.GetFreePort()
 	require.NoError(t, err)
 
-	sentinel, err := pool.RunWithOptions(&dockertest.RunOptions{
-		Name:       "redis-failover",
-		Repository: "bitnami/redis-sentinel",
-		Tag:        "6.0.9",
-		Networks:   []*dockertest.Network{net},
-		ExposedPorts: []string{
-			"26379/tcp",
-		},
-		PortBindings: map[docker.Port][]docker.PortBinding{
-			"26379/tcp": {{HostIP: "", HostPort: "26379/tcp"}},
-		},
-		Env: []string{
-			"REDIS_SENTINEL_ANNOUNCE_IP=" + hostIP,
-			"REDIS_SENTINEL_QUORUM=1",
-			"REDIS_MASTER_HOST=" + hostIP,
-			"REDIS_MASTER_PORT_NUMBER=" + master.GetPort("6379/tcp"),
-		},
-	})
+	sentinel, err := testcontainers.Run(t.Context(), "bitnami/redis-sentinel:6.0.9",
+		network.WithNetwork([]string{"redis-failover"}, rpNet),
+		testcontainers.WithExposedPorts("26379/tcp"),
+		testcontainers.WithHostConfigModifier(func(hc *container.HostConfig) {
+			hc.PortBindings = nat.PortMap{
+				"26379/tcp": []nat.PortBinding{{HostIP: "", HostPort: strconv.Itoa(sentinelPort)}},
+			}
+			hc.ExtraHosts = []string{"host.docker.internal:host-gateway"}
+		}),
+		testcontainers.WithEnv(map[string]string{
+			"REDIS_SENTINEL_ANNOUNCE_IP": "127.0.0.1",
+			"REDIS_SENTINEL_QUORUM":      "1",
+			"REDIS_MASTER_HOST":          "redis-master",
+			"REDIS_MASTER_PORT_NUMBER":   "6379",
+		}),
+		testcontainers.WithWaitStrategy(
+			wait.ForListeningPort("26379/tcp").WithStartupTimeout(30*time.Second),
+		),
+	)
+	testcontainers.CleanupContainer(t, sentinel)
 	require.NoError(t, err)
 
-	t.Cleanup(func() {
-		assert.NoError(t, pool.Purge(master))
-		assert.NoError(t, pool.Purge(sentinel))
-	})
+	clusterURL := fmt.Sprintf("redis://127.0.0.1:%d/0", sentinelPort)
 
-	clusterURL := ""
-	clusterURL += fmt.Sprintf("redis://%s:%s/0,", hostIP, sentinel.GetPort("26379/tcp"))
-	clusterURL = strings.TrimSuffix(clusterURL, ",")
-
-	require.NoError(t, pool.Retry(func() error {
+	require.Eventually(t, func() bool {
 		pConf, cErr := redisCacheConfig().ParseYAML(fmt.Sprintf(`
 url: %v
 kind: failover
 master: mymaster
 `, clusterURL), nil)
 		if cErr != nil {
-			return cErr
+			return false
 		}
 
 		r, cErr := newRedisCacheFromConfig(pConf)
 		if cErr != nil {
-			return cErr
+			return false
 		}
 
 		cErr = r.Set(t.Context(), "benthos_test_redis_connect", []byte("foo bar"), nil)
-		return cErr
-	}))
+		return cErr == nil
+	}, 60*time.Second, time.Second)
 
 	template := `
 cache_resources:

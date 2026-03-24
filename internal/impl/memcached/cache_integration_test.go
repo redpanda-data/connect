@@ -20,9 +20,9 @@ import (
 	"time"
 
 	"github.com/bradfitz/gomemcache/memcache"
-	"github.com/ory/dockertest/v3"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/wait"
 
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 )
@@ -31,32 +31,25 @@ func TestIntegrationMemcachedCache(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
-	pool, err := dockertest.NewPool("")
+	ctr, err := testcontainers.Run(t.Context(), "memcached:latest",
+		testcontainers.WithExposedPorts("11211/tcp"),
+		testcontainers.WithWaitStrategy(
+			wait.ForListeningPort("11211/tcp").WithStartupTimeout(30*time.Second),
+		),
+	)
+	testcontainers.CleanupContainer(t, ctr)
 	require.NoError(t, err)
 
-	pool.MaxWait = time.Second * 30
-
-	resource, err := pool.Run("memcached", "latest", nil)
+	mappedPort, err := ctr.MappedPort(t.Context(), "11211/tcp")
 	require.NoError(t, err)
-	t.Cleanup(func() {
-		assert.NoError(t, pool.Purge(resource))
-	})
+	port := mappedPort.Port()
 
-	_ = resource.Expire(900)
-	require.NoError(t, pool.Retry(func() error {
-		client := memcache.New(fmt.Sprintf("localhost:%v", resource.GetPort("11211/tcp")))
-		cErr := client.Set(&memcache.Item{
-			Key:        "testkey",
-			Value:      []byte("testvalue"),
-			Expiration: 30,
-		})
-		if cErr != nil {
-			return cErr
-		}
-		if _, cErr = client.Get("testkey"); cErr != nil {
-			return cErr
-		}
-		return nil
+	// Verify connectivity
+	client := memcache.New(fmt.Sprintf("localhost:%s", port))
+	require.NoError(t, client.Set(&memcache.Item{
+		Key:        "testkey",
+		Value:      []byte("testvalue"),
+		Expiration: 30,
 	}))
 
 	template := `
@@ -75,6 +68,6 @@ cache_resources:
 	)
 	suite.Run(
 		t, template,
-		integration.CacheTestOptPort(resource.GetPort("11211/tcp")),
+		integration.CacheTestOptPort(port),
 	)
 }

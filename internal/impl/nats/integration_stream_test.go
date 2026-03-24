@@ -20,9 +20,9 @@ import (
 	"time"
 
 	"github.com/nats-io/stan.go"
-	"github.com/ory/dockertest/v3"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/wait"
 
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 )
@@ -31,28 +31,29 @@ func TestIntegrationNatsStream(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
-	pool, err := dockertest.NewPool("")
+	ctr, err := testcontainers.Run(t.Context(), "nats-streaming:latest",
+		testcontainers.WithExposedPorts("4222/tcp"),
+		testcontainers.WithWaitStrategy(
+			wait.ForListeningPort("4222/tcp").WithStartupTimeout(30*time.Second),
+		),
+	)
+	testcontainers.CleanupContainer(t, ctr)
 	require.NoError(t, err)
 
-	pool.MaxWait = time.Second * 30
-	resource, err := pool.Run("nats-streaming", "latest", nil)
+	mp, err := ctr.MappedPort(t.Context(), "4222/tcp")
 	require.NoError(t, err)
-	t.Cleanup(func() {
-		assert.NoError(t, pool.Purge(resource))
-	})
 
-	_ = resource.Expire(900)
-	require.NoError(t, pool.Retry(func() error {
+	require.Eventually(t, func() bool {
 		natsConn, err := stan.Connect(
 			"test-cluster", "benthos_test_client",
-			stan.NatsURL(fmt.Sprintf("tcp://localhost:%v", resource.GetPort("4222/tcp"))),
+			stan.NatsURL(fmt.Sprintf("tcp://localhost:%v", mp.Port())),
 		)
 		if err != nil {
-			return err
+			return false
 		}
 		natsConn.Close()
-		return nil
-	}))
+		return true
+	}, 30*time.Second, time.Second)
 
 	template := `
 output:
@@ -85,7 +86,7 @@ input:
 		t, template,
 		integration.StreamTestOptSleepAfterInput(100*time.Millisecond),
 		integration.StreamTestOptSleepAfterOutput(100*time.Millisecond),
-		integration.StreamTestOptPort(resource.GetPort("4222/tcp")),
+		integration.StreamTestOptPort(mp.Port()),
 	)
 	t.Run("with max in flight", func(t *testing.T) {
 		t.Parallel()
@@ -93,7 +94,7 @@ input:
 			t, template,
 			integration.StreamTestOptSleepAfterInput(100*time.Millisecond),
 			integration.StreamTestOptSleepAfterOutput(100*time.Millisecond),
-			integration.StreamTestOptPort(resource.GetPort("4222/tcp")),
+			integration.StreamTestOptPort(mp.Port()),
 			integration.StreamTestOptMaxInFlight(10),
 		)
 	})

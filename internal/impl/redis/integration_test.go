@@ -21,10 +21,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ory/dockertest/v3"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/wait"
 
 	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -35,17 +36,19 @@ func TestIntegrationRedis(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
-	pool, err := dockertest.NewPool("")
+	ctr, err := testcontainers.Run(t.Context(), "redis:latest",
+		testcontainers.WithExposedPorts("6379/tcp"),
+		testcontainers.WithWaitStrategy(
+			wait.ForListeningPort("6379/tcp").WithStartupTimeout(30*time.Second),
+		),
+	)
+	testcontainers.CleanupContainer(t, ctr)
 	require.NoError(t, err)
 
-	pool.MaxWait = time.Second * 30
-	resource, err := pool.Run("redis", "latest", nil)
+	redisPort, err := ctr.MappedPort(t.Context(), "6379/tcp")
 	require.NoError(t, err)
-	t.Cleanup(func() {
-		assert.NoError(t, pool.Purge(resource))
-	})
 
-	urlStr := fmt.Sprintf("tcp://localhost:%v", resource.GetPort("6379/tcp"))
+	urlStr := fmt.Sprintf("tcp://localhost:%v", redisPort.Port())
 	uri, err := url.Parse(urlStr)
 	if err != nil {
 		t.Fatal(err)
@@ -56,10 +59,9 @@ func TestIntegrationRedis(t *testing.T) {
 		Network: uri.Scheme,
 	})
 
-	_ = resource.Expire(900)
-	require.NoError(t, pool.Retry(func() error {
-		return client.Ping(t.Context()).Err()
-	}))
+	require.Eventually(t, func() bool {
+		return client.Ping(t.Context()).Err() == nil
+	}, 30*time.Second, time.Second)
 
 	// STREAMS
 	t.Run("streams", func(t *testing.T) {
@@ -104,7 +106,7 @@ input:
 			t, template,
 			integration.StreamTestOptSleepAfterInput(100*time.Millisecond),
 			integration.StreamTestOptSleepAfterOutput(100*time.Millisecond),
-			integration.StreamTestOptPort(resource.GetPort("6379/tcp")),
+			integration.StreamTestOptPort(redisPort.Port()),
 		)
 		t.Run("with max in flight", func(t *testing.T) {
 			t.Parallel()
@@ -112,7 +114,7 @@ input:
 				t, template,
 				integration.StreamTestOptSleepAfterInput(100*time.Millisecond),
 				integration.StreamTestOptSleepAfterOutput(100*time.Millisecond),
-				integration.StreamTestOptPort(resource.GetPort("6379/tcp")),
+				integration.StreamTestOptPort(redisPort.Port()),
 				integration.StreamTestOptMaxInFlight(10),
 			)
 		})
@@ -121,7 +123,7 @@ input:
 	// Custom Entry ID
 	t.Run("streams_custom_id", func(t *testing.T) {
 		t.Parallel()
-		port := resource.GetPort("6379/tcp")
+		port := redisPort.Port()
 
 		t.Run("single_message", func(t *testing.T) {
 			t.Parallel()
@@ -219,7 +221,7 @@ input:
 			t, template,
 			integration.StreamTestOptSleepAfterInput(500*time.Millisecond),
 			integration.StreamTestOptSleepAfterOutput(500*time.Millisecond),
-			integration.StreamTestOptPort(resource.GetPort("6379/tcp")),
+			integration.StreamTestOptPort(redisPort.Port()),
 		)
 		t.Run("with max in flight", func(t *testing.T) {
 			t.Parallel()
@@ -227,7 +229,7 @@ input:
 				t, template,
 				integration.StreamTestOptSleepAfterInput(500*time.Millisecond),
 				integration.StreamTestOptSleepAfterOutput(500*time.Millisecond),
-				integration.StreamTestOptPort(resource.GetPort("6379/tcp")),
+				integration.StreamTestOptPort(redisPort.Port()),
 				integration.StreamTestOptMaxInFlight(10),
 			)
 		})
@@ -262,7 +264,7 @@ input:
 			t, template,
 			integration.StreamTestOptSleepAfterInput(100*time.Millisecond),
 			integration.StreamTestOptSleepAfterOutput(100*time.Millisecond),
-			integration.StreamTestOptPort(resource.GetPort("6379/tcp")),
+			integration.StreamTestOptPort(redisPort.Port()),
 		)
 		t.Run("with max in flight", func(t *testing.T) {
 			t.Parallel()
@@ -270,7 +272,7 @@ input:
 				t, template,
 				integration.StreamTestOptSleepAfterInput(100*time.Millisecond),
 				integration.StreamTestOptSleepAfterOutput(100*time.Millisecond),
-				integration.StreamTestOptPort(resource.GetPort("6379/tcp")),
+				integration.StreamTestOptPort(redisPort.Port()),
 				integration.StreamTestOptMaxInFlight(10),
 			)
 		})
@@ -304,7 +306,7 @@ cache_resources:
 			t, template,
 			integration.StreamTestOptSleepAfterInput(100*time.Millisecond),
 			integration.StreamTestOptSleepAfterOutput(100*time.Millisecond),
-			integration.StreamTestOptPort(resource.GetPort("6379/tcp")),
+			integration.StreamTestOptPort(redisPort.Port()),
 		)
 	})
 
@@ -321,7 +323,7 @@ output:
 `
 		hashGetFn := func(ctx context.Context, testID, id string) (string, []string, error) {
 			client := redis.NewClient(&redis.Options{
-				Addr:    fmt.Sprintf("localhost:%v", resource.GetPort("6379/tcp")),
+				Addr:    fmt.Sprintf("localhost:%v", redisPort.Port()),
 				Network: "tcp",
 			})
 			key := testID + "-" + id
@@ -340,7 +342,7 @@ output:
 			t, template,
 			integration.StreamTestOptSleepAfterInput(100*time.Millisecond),
 			integration.StreamTestOptSleepAfterOutput(100*time.Millisecond),
-			integration.StreamTestOptPort(resource.GetPort("6379/tcp")),
+			integration.StreamTestOptPort(redisPort.Port()),
 		)
 	})
 }
@@ -348,17 +350,19 @@ output:
 func BenchmarkIntegrationRedis(b *testing.B) {
 	integration.CheckSkip(b)
 
-	pool, err := dockertest.NewPool("")
+	ctr, err := testcontainers.Run(b.Context(), "redis:latest",
+		testcontainers.WithExposedPorts("6379/tcp"),
+		testcontainers.WithWaitStrategy(
+			wait.ForListeningPort("6379/tcp").WithStartupTimeout(30*time.Second),
+		),
+	)
+	testcontainers.CleanupContainer(b, ctr)
 	require.NoError(b, err)
 
-	pool.MaxWait = time.Second * 30
-	resource, err := pool.Run("redis", "latest", nil)
+	redisPort, err := ctr.MappedPort(b.Context(), "6379/tcp")
 	require.NoError(b, err)
-	b.Cleanup(func() {
-		assert.NoError(b, pool.Purge(resource))
-	})
 
-	urlStr := fmt.Sprintf("tcp://localhost:%v", resource.GetPort("6379/tcp"))
+	urlStr := fmt.Sprintf("tcp://localhost:%v", redisPort.Port())
 	uri, err := url.Parse(urlStr)
 	if err != nil {
 		b.Fatal(err)
@@ -369,10 +373,9 @@ func BenchmarkIntegrationRedis(b *testing.B) {
 		Network: uri.Scheme,
 	})
 
-	_ = resource.Expire(900)
-	require.NoError(b, pool.Retry(func() error {
-		return client.Ping(b.Context()).Err()
-	}))
+	require.Eventually(b, func() bool {
+		return client.Ping(b.Context()).Err() == nil
+	}, 30*time.Second, time.Second)
 
 	// STREAMS
 	b.Run("streams", func(b *testing.B) {
@@ -408,7 +411,7 @@ input:
 			b, template,
 			integration.StreamTestOptSleepAfterInput(100*time.Millisecond),
 			integration.StreamTestOptSleepAfterOutput(100*time.Millisecond),
-			integration.StreamTestOptPort(resource.GetPort("6379/tcp")),
+			integration.StreamTestOptPort(redisPort.Port()),
 		)
 	})
 
@@ -437,7 +440,7 @@ input:
 			b, template,
 			integration.StreamTestOptSleepAfterInput(500*time.Millisecond),
 			integration.StreamTestOptSleepAfterOutput(500*time.Millisecond),
-			integration.StreamTestOptPort(resource.GetPort("6379/tcp")),
+			integration.StreamTestOptPort(redisPort.Port()),
 		)
 	})
 
@@ -466,7 +469,7 @@ input:
 			b, template,
 			integration.StreamTestOptSleepAfterInput(100*time.Millisecond),
 			integration.StreamTestOptSleepAfterOutput(100*time.Millisecond),
-			integration.StreamTestOptPort(resource.GetPort("6379/tcp")),
+			integration.StreamTestOptPort(redisPort.Port()),
 		)
 	})
 }
@@ -475,17 +478,19 @@ func TestRedisConnectionTestIntegration(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
-	pool, err := dockertest.NewPool("")
+	ctr, err := testcontainers.Run(t.Context(), "redis:latest",
+		testcontainers.WithExposedPorts("6379/tcp"),
+		testcontainers.WithWaitStrategy(
+			wait.ForListeningPort("6379/tcp").WithStartupTimeout(30*time.Second),
+		),
+	)
+	testcontainers.CleanupContainer(t, ctr)
 	require.NoError(t, err)
 
-	pool.MaxWait = time.Second * 30
-	resource, err := pool.Run("redis", "latest", nil)
+	redisPort, err := ctr.MappedPort(t.Context(), "6379/tcp")
 	require.NoError(t, err)
-	t.Cleanup(func() {
-		assert.NoError(t, pool.Purge(resource))
-	})
 
-	urlStr := fmt.Sprintf("tcp://localhost:%v", resource.GetPort("6379/tcp"))
+	urlStr := fmt.Sprintf("tcp://localhost:%v", redisPort.Port())
 	uri, err := url.Parse(urlStr)
 	require.NoError(t, err)
 
@@ -494,12 +499,11 @@ func TestRedisConnectionTestIntegration(t *testing.T) {
 		Network: uri.Scheme,
 	})
 
-	_ = resource.Expire(900)
-	require.NoError(t, pool.Retry(func() error {
-		return client.Ping(t.Context()).Err()
-	}))
+	require.Eventually(t, func() bool {
+		return client.Ping(t.Context()).Err() == nil
+	}, 30*time.Second, time.Second)
 
-	port := resource.GetPort("6379/tcp")
+	port := redisPort.Port()
 
 	t.Run("streams_input_valid", func(t *testing.T) {
 		resBuilder := service.NewResourceBuilder()

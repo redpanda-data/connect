@@ -16,8 +16,6 @@ package kafka_test
 
 import (
 	"context"
-	"fmt"
-	"strconv"
 	"testing"
 	"time"
 
@@ -28,9 +26,6 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 	"github.com/redpanda-data/connect/v4/internal/impl/kafka"
 
-	"github.com/ory/dockertest/v3"
-	"github.com/ory/dockertest/v3/docker"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -38,44 +33,11 @@ func TestIntegrationCache(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
-	pool, err := dockertest.NewPool("")
-	require.NoError(t, err)
+	brokerAddr, kafkaPortStr := startRedpanda(t)
 
-	kafkaPort, err := integration.GetFreePort()
-	require.NoError(t, err)
-
-	kafkaPortStr := strconv.Itoa(kafkaPort)
-
-	options := &dockertest.RunOptions{
-		Repository:   "docker.redpanda.com/redpandadata/redpanda",
-		Tag:          "latest",
-		Hostname:     "redpanda",
-		ExposedPorts: []string{"9092/tcp"},
-		PortBindings: map[docker.Port][]docker.PortBinding{
-			"9092/tcp": {{HostIP: "", HostPort: kafkaPortStr + "/tcp"}},
-		},
-		Cmd: []string{
-			"redpanda",
-			"start",
-			"--node-id 0",
-			"--mode dev-container",
-			"--set rpk.additional_start_flags=[--reactor-backend=epoll]",
-			"--kafka-addr 0.0.0.0:9092",
-			fmt.Sprintf("--advertise-kafka-addr localhost:%v", kafkaPort),
-		},
-	}
-
-	pool.MaxWait = time.Minute
-	resource, err := pool.RunWithOptions(options)
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		assert.NoError(t, pool.Purge(resource))
-	})
-
-	_ = resource.Expire(900)
-	require.NoError(t, pool.Retry(func() error {
-		return createKafkaTopic(t.Context(), "localhost:"+kafkaPortStr, "testingconnection", 1)
-	}))
+	require.Eventually(t, func() bool {
+		return createKafkaTopic(t.Context(), brokerAddr, "testingconnection", 1) == nil
+	}, time.Minute, time.Second)
 
 	makeCache := func(p ...int32) (service.Cache, error) {
 		uuid := uuid.Must(uuid.NewV4()).String()
@@ -84,7 +46,7 @@ func TestIntegrationCache(t *testing.T) {
 			partitions = p[0]
 		}
 		// NOTE: In real life these should be compacted topics
-		err := createKafkaTopic(t.Context(), "localhost:"+kafkaPortStr, uuid, partitions)
+		err := createKafkaTopic(t.Context(), brokerAddr, uuid, partitions)
 		if err != nil {
 			return nil, err
 		}
@@ -152,44 +114,11 @@ func TestIntegrationCacheStandardized(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
-	pool, err := dockertest.NewPool("")
-	require.NoError(t, err)
+	brokerAddr, kafkaPortStr := startRedpanda(t)
 
-	kafkaPort, err := integration.GetFreePort()
-	require.NoError(t, err)
-
-	kafkaPortStr := strconv.Itoa(kafkaPort)
-
-	options := &dockertest.RunOptions{
-		Repository:   "docker.redpanda.com/redpandadata/redpanda",
-		Tag:          "latest",
-		Hostname:     "redpanda",
-		ExposedPorts: []string{"9092/tcp"},
-		PortBindings: map[docker.Port][]docker.PortBinding{
-			"9092/tcp": {{HostIP: "", HostPort: kafkaPortStr + "/tcp"}},
-		},
-		Cmd: []string{
-			"redpanda",
-			"start",
-			"--node-id 0",
-			"--mode dev-container",
-			"--set rpk.additional_start_flags=[--reactor-backend=epoll]",
-			"--kafka-addr 0.0.0.0:9092",
-			fmt.Sprintf("--advertise-kafka-addr localhost:%v", kafkaPort),
-		},
-	}
-
-	pool.MaxWait = time.Minute
-	resource, err := pool.RunWithOptions(options)
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		assert.NoError(t, pool.Purge(resource))
-	})
-
-	_ = resource.Expire(900)
-	require.NoError(t, pool.Retry(func() error {
-		return createKafkaTopic(t.Context(), "localhost:"+kafkaPortStr, "testingconnection", 1)
-	}))
+	require.Eventually(t, func() bool {
+		return createKafkaTopic(t.Context(), brokerAddr, "testingconnection", 1) == nil
+	}, time.Minute, time.Second)
 
 	suite := integration.CacheTests(
 		integration.CacheTestOpenClose(),
@@ -211,7 +140,7 @@ cache_resources:
 			t, template,
 			integration.CacheTestOptPort(kafkaPortStr),
 			integration.CacheTestOptPreTest(func(t testing.TB, _ context.Context, vars *integration.CacheTestConfigVars) {
-				err := createKafkaTopic(t.Context(), "localhost:"+kafkaPortStr, vars.ID, 1)
+				err := createKafkaTopic(t.Context(), brokerAddr, vars.ID, 1)
 				require.NoError(t, err)
 			}),
 		)
@@ -221,7 +150,7 @@ cache_resources:
 			t, template,
 			integration.CacheTestOptPort(kafkaPortStr),
 			integration.CacheTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.CacheTestConfigVars) {
-				err := createKafkaTopic(ctx, "localhost:"+kafkaPortStr, vars.ID, 16)
+				err := createKafkaTopic(ctx, brokerAddr, vars.ID, 16)
 				require.NoError(t, err)
 			}),
 		)

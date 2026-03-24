@@ -18,10 +18,10 @@ import (
 
 	_ "github.com/microsoft/go-mssqldb"
 
-	"github.com/ory/dockertest/v3"
-	"github.com/ory/dockertest/v3/docker"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go"
+	tcmssql "github.com/testcontainers/testcontainers-go/modules/mssql"
 )
 
 // TestDB wraps sql.DB with testing utilities for Microsoft SQL Server integration tests.
@@ -181,85 +181,71 @@ func (db *TestDB) CreateTableWithCDCEnabledIfNotExists(ctx context.Context, full
 // creates a testdb database, enables CDC, and returns the connection string and TestDB wrapper.
 // The container is automatically cleaned up when the test completes.
 func SetupTestWithMicrosoftSQLServerVersion(t *testing.T, version string) (string, *TestDB) {
-	pool, err := dockertest.NewPool("")
+	ctr, err := tcmssql.Run(t.Context(),
+		fmt.Sprintf("mcr.microsoft.com/mssql/server:%s", version),
+		testcontainers.WithImagePlatform("linux/amd64"),
+		tcmssql.WithAcceptEULA(),
+		tcmssql.WithPassword("YourStrong!Passw0rd"),
+		testcontainers.WithEnv(map[string]string{
+			"MSSQL_AGENT_ENABLED": "true",
+		}),
+	)
+	testcontainers.CleanupContainer(t, ctr)
 	require.NoError(t, err)
 
-	pool.MaxWait = time.Minute
-	// MS SQL Server specific environment variables
-	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
-		Repository: "mcr.microsoft.com/mssql/server",
-		Tag:        version,
-		Env: []string{
-			"ACCEPT_EULA=y",
-			"MSSQL_SA_PASSWORD=YourStrong!Passw0rd",
-			"MSSQL_AGENT_ENABLED=true",
-		},
-		Cmd:          []string{},
-		ExposedPorts: []string{"1433/tcp"},
-	}, func(config *docker.HostConfig) {
-		// set AutoRemove to true so that stopped container goes away by itself
-		config.AutoRemove = true
-		config.RestartPolicy = docker.RestartPolicy{
-			Name: "no",
-		}
-	})
+	connectionString, err := ctr.ConnectionString(t.Context(), "database=master", "encrypt=disable")
 	require.NoError(t, err)
-	t.Cleanup(func() {
-		assert.NoError(t, pool.Purge(resource))
-	})
 
-	port := resource.GetPort("1433/tcp")
-	connectionString := fmt.Sprintf("sqlserver://sa:YourStrong!Passw0rd@localhost:%s?database=%s&encrypt=disable", port, "master")
-
-	var db *sql.DB
-	err = pool.Retry(func() error {
-		var err error
-		db, err = sql.Open("mssql", connectionString)
+	// Retry creating testdb and enabling CDC — the SQL Agent may not be ready immediately.
+	require.Eventually(t, func() bool {
+		db, err := sql.Open("mssql", connectionString)
 		if err != nil {
-			return err
+			return false
 		}
-
-		db.SetMaxOpenConns(10)
-		db.SetMaxIdleConns(5)
-		db.SetConnMaxLifetime(time.Minute * 5)
+		defer db.Close()
 
 		if err = db.Ping(); err != nil {
-			return err
+			return false
 		}
 
-		_, err = db.Exec(`
+		if _, err = db.Exec(`
 			IF NOT EXISTS (SELECT name FROM sys.databases WHERE name = N'testdb')
 			BEGIN
 				CREATE DATABASE testdb;
-			END;`)
-		if err != nil {
-			return err
+			END;`); err != nil {
+			return false
 		}
-		db.Close()
 
-		// switch from using master to testdb as it avoids lots of permission issues with enabling CDC on tables
-		connectionString = fmt.Sprintf("sqlserver://sa:YourStrong!Passw0rd@localhost:%s?database=%s&encrypt=disable", port, "testdb")
-		db, err = sql.Open("mssql", connectionString)
-		if err != nil {
-			return err
+		return true
+	}, 2*time.Minute, 2*time.Second)
+
+	connectionString, err = ctr.ConnectionString(t.Context(), "database=testdb", "encrypt=disable")
+	require.NoError(t, err)
+
+	var db *sql.DB
+	require.Eventually(t, func() bool {
+		var openErr error
+		db, openErr = sql.Open("mssql", connectionString)
+		if openErr != nil {
+			return false
 		}
 
 		db.SetMaxOpenConns(10)
 		db.SetMaxIdleConns(5)
 		db.SetConnMaxLifetime(time.Minute * 5)
 
-		if err = db.Ping(); err != nil {
-			return err
+		if openErr = db.Ping(); openErr != nil {
+			return false
 		}
 
 		// enable CDC on database
-		if _, err = db.Exec("EXEC sys.sp_cdc_enable_db;"); err != nil {
-			return err
+		if _, openErr = db.Exec("EXEC sys.sp_cdc_enable_db;"); openErr != nil {
+			return false
 		}
 
-		return nil
-	})
-	require.NoError(t, err)
+		return true
+	}, 2*time.Minute, 2*time.Second)
+
 	t.Cleanup(func() {
 		assert.NoError(t, db.Close())
 	})
@@ -271,54 +257,39 @@ func SetupTestWithMicrosoftSQLServerVersion(t *testing.T, version string) (strin
 // Unlike SetupTestWithMicrosoftSQLServerVersion, this does not create testdb or enable CDC.
 // The container is automatically cleaned up when the test completes.
 func MustSetupTestWithMicrosoftSQLServerVersion(t *testing.T, version string) (string, *sql.DB) {
-	pool, err := dockertest.NewPool("")
+	ctr, err := tcmssql.Run(t.Context(),
+		fmt.Sprintf("mcr.microsoft.com/mssql/server:%s", version),
+		testcontainers.WithImagePlatform("linux/amd64"),
+		tcmssql.WithAcceptEULA(),
+		tcmssql.WithPassword("YourStrong!Passw0rd"),
+		testcontainers.WithEnv(map[string]string{
+			"MSSQL_AGENT_ENABLED": "true",
+		}),
+	)
+	testcontainers.CleanupContainer(t, ctr)
 	require.NoError(t, err)
 
-	pool.MaxWait = time.Minute
-	// MS SQL Server specific environment variables
-	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
-		Repository: "mcr.microsoft.com/mssql/server",
-		Tag:        version,
-		Env: []string{
-			"ACCEPT_EULA=y",
-			"MSSQL_SA_PASSWORD=YourStrong!Passw0rd",
-			"MSSQL_AGENT_ENABLED=true",
-		},
-		Cmd:          []string{},
-		ExposedPorts: []string{"1433/tcp"},
-	}, func(config *docker.HostConfig) {
-		// set AutoRemove to true so that stopped container goes away by itself
-		config.AutoRemove = true
-		config.RestartPolicy = docker.RestartPolicy{
-			Name: "no",
-		}
-	})
+	connectionString, err := ctr.ConnectionString(t.Context(), "database=master", "encrypt=disable")
 	require.NoError(t, err)
-	t.Cleanup(func() {
-		assert.NoError(t, pool.Purge(resource))
-	})
-
-	port := resource.GetPort("1433/tcp")
-	connectionString := fmt.Sprintf("sqlserver://sa:YourStrong!Passw0rd@localhost:%s?database=%s&encrypt=disable", port, "master")
 
 	var db *sql.DB
-	err = pool.Retry(func() error {
-		var err error
-		if db, err = sql.Open("mssql", connectionString); err != nil {
-			return err
+	require.Eventually(t, func() bool {
+		var openErr error
+		if db, openErr = sql.Open("mssql", connectionString); openErr != nil {
+			return false
 		}
 
 		db.SetMaxOpenConns(10)
 		db.SetMaxIdleConns(5)
 		db.SetConnMaxLifetime(time.Minute * 5)
 
-		if err = db.Ping(); err != nil {
-			return err
+		if openErr = db.Ping(); openErr != nil {
+			return false
 		}
 
-		return nil
-	})
-	require.NoError(t, err)
+		return true
+	}, 2*time.Minute, 2*time.Second)
+
 	t.Cleanup(func() {
 		assert.NoError(t, db.Close())
 	})

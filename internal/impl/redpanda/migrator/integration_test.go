@@ -515,7 +515,7 @@ func TestIntegrationRealMigratorConfluentToServerless(t *testing.T) {
 	topics := []string{"foo", "bar"}
 
 	t.Log("Given: Confluent server with Schema Registry as source")
-	src := startConfluent(t)
+	src := startConfluent(t, false)
 	ctx := t.Context()
 
 	t.Log("And: Topics and ACLs initialized on source")
