@@ -11,23 +11,10 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-      id-token: write
 
     steps:
-      - uses: aws-actions/configure-aws-credentials@v6
-        with:
-          aws-region: ${{ vars.RP_AWS_CRED_REGION }}
-          role-to-assume: arn:aws:iam::${{ secrets.RP_AWS_CRED_ACCOUNT_ID }}:role/${{ vars.RP_AWS_CRED_BASE_ROLE_NAME }}${{ github.event.repository.name }}
-      - uses: aws-actions/aws-secretsmanager-get-secrets@v2
-        with:
-          secret-ids: |
-            ,sdlc/prod/github/actions_bot_token
-          parse-json-secrets: true
-
       - name: Checkout
         uses: actions/checkout@v6
-        with:
-          token: ${{ env.ACTIONS_BOT_TOKEN }}
 
       - name: Compute next version
         id: version
@@ -113,13 +100,13 @@ jobs:
 
       - name: Create PR
         env:
-          GH_TOKEN: ${{ env.ACTIONS_BOT_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
           NEXT: ${{ steps.version.outputs.next }}
         run: |
           BRANCH="changelog/v$NEXT"
 
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "vbotbuildovich"
+          git config user.email "62446873+vbotbuildovich@users.noreply.github.com"
 
           git checkout -B "$BRANCH"
           git add CHANGELOG.md
