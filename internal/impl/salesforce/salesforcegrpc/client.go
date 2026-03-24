@@ -11,6 +11,7 @@ package salesforcegrpc
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"math/rand"
 	"strings"
@@ -38,10 +39,10 @@ func WithMetrics(m *service.Metrics) ClientOption {
 }
 
 // WithBackoff configures the reconnection backoff parameters.
-func WithBackoff(base, max time.Duration, maxAttempts int) ClientOption {
+func WithBackoff(base, maxDur time.Duration, maxAttempts int) ClientOption {
 	return func(c *Client) {
 		c.baseBackoff = base
-		c.maxBackoff = max
+		c.maxBackoff = maxDur
 		c.maxReconnect = maxAttempts
 	}
 }
@@ -111,7 +112,7 @@ func NewClient(
 		grpc.WithTransportCredentials(tlsCreds),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to Salesforce Pub/Sub API: %w", err)
+		return nil, fmt.Errorf("connect to Salesforce Pub/Sub API: %w", err)
 	}
 
 	pubsubClient := NewPubSubClient(conn)
@@ -176,7 +177,7 @@ func (c *Client) connectLocked() error {
 	if err != nil {
 		cancel()
 		c.state = StreamStateDisconnected
-		return fmt.Errorf("failed to open subscribe stream: %w", err)
+		return fmt.Errorf("open subscribe stream: %w", err)
 	}
 	c.stream = stream
 
@@ -195,7 +196,7 @@ func (c *Client) connectLocked() error {
 	if err := stream.Send(fetchReq); err != nil {
 		cancel()
 		c.state = StreamStateDisconnected
-		return fmt.Errorf("failed to send initial FetchRequest: %w", err)
+		return fmt.Errorf("send initial FetchRequest: %w", err)
 	}
 
 	c.log.Infof("Pub/Sub subscription started on topic %s (preset=%v)", c.config.TopicName, fetchReq.ReplayPreset)
@@ -262,15 +263,15 @@ func (c *Client) receiveLoop() {
 				continue
 			}
 
-			codec, err := c.schemaCache.GetCodec(context.Background(), event.SchemaId)
+			codec, err := c.schemaCache.GetCodec(c.parentCtx, event.SchemaId)
 			if err != nil {
-				c.log.Errorf("Failed to get schema for event (schemaID=%s): %v", event.SchemaId, err)
+				c.log.Errorf("get schema for event (schemaID=%s): %v", event.SchemaId, err)
 				continue
 			}
 
 			decoded, err := DecodeAvroPayload(codec, event.Payload)
 			if err != nil {
-				c.log.Errorf("Failed to decode Avro payload (schemaID=%s): %v", event.SchemaId, err)
+				c.log.Errorf("decode Avro payload (schemaID=%s): %v", event.SchemaId, err)
 				continue
 			}
 
@@ -312,7 +313,7 @@ func (c *Client) receiveLoop() {
 				NumRequested: c.config.BatchSize,
 			}
 			if err := c.stream.Send(flowReq); err != nil {
-				c.log.Errorf("Failed to send flow control FetchRequest: %v", err)
+				c.log.Errorf("send flow control FetchRequest: %v", err)
 				c.lastError.Store(err)
 				c.lastErrorTime.Store(time.Now().UnixNano())
 
@@ -329,22 +330,22 @@ func (c *Client) receiveLoop() {
 }
 
 // grpcBackoffWithJitter computes a backoff duration with jitter for the given attempt.
-func grpcBackoffWithJitter(base, max time.Duration, attempt int) time.Duration {
+func grpcBackoffWithJitter(base, maxDur time.Duration, attempt int) time.Duration {
 	if base <= 0 {
 		base = 500 * time.Millisecond
 	}
-	if max <= 0 {
-		max = 30 * time.Second
+	if maxDur <= 0 {
+		maxDur = 30 * time.Second
 	}
 
 	// Guard against overflow: if attempt is large, just use max
 	if attempt > 30 {
-		return max
+		return maxDur
 	}
 
 	d := base << uint(attempt)
-	if d <= 0 || d > max {
-		d = max
+	if d <= 0 || d > maxDur {
+		d = maxDur
 	}
 
 	jitter := time.Duration(rand.Int63n(int64(d))) - d/2
@@ -359,7 +360,7 @@ func (c *Client) reconnectWithBackoff() error {
 	c.mu.Lock()
 	if c.state == StreamStateClosing {
 		c.mu.Unlock()
-		return fmt.Errorf("client is closing, aborting reconnect")
+		return errors.New("client is closing, aborting reconnect")
 	}
 	c.state = StreamStateReconnecting
 	// Cancel the old stream context
@@ -411,7 +412,7 @@ func (c *Client) reconnectWithBackoff() error {
 		c.mu.Lock()
 		if c.state == StreamStateClosing {
 			c.mu.Unlock()
-			return fmt.Errorf("client is closing, aborting reconnect")
+			return errors.New("client is closing, aborting reconnect")
 		}
 		err := c.connectLocked()
 		c.mu.Unlock()
@@ -427,11 +428,11 @@ func (c *Client) reconnectWithBackoff() error {
 }
 
 // extractCDCFields populates CDC-specific fields on the event from the decoded Avro payload.
-func extractCDCFields(event *PubSubEvent, decoded map[string]interface{}) {
+func extractCDCFields(event *PubSubEvent, decoded map[string]any) {
 	if header, ok := decoded["ChangeEventHeader"]; ok {
-		if headerMap, ok := header.(map[string]interface{}); ok {
+		if headerMap, ok := header.(map[string]any); ok {
 			if ct, ok := headerMap["changeType"]; ok {
-				if ctMap, ok := ct.(map[string]interface{}); ok {
+				if ctMap, ok := ct.(map[string]any); ok {
 					if s, ok := ctMap["string"].(string); ok {
 						event.ChangeType = s
 					}
@@ -445,7 +446,7 @@ func extractCDCFields(event *PubSubEvent, decoded map[string]interface{}) {
 				}
 			}
 			if rids, ok := headerMap["recordIds"]; ok {
-				if arr, ok := rids.([]interface{}); ok {
+				if arr, ok := rids.([]any); ok {
 					for _, id := range arr {
 						if s, ok := id.(string); ok {
 							event.RecordIDs = append(event.RecordIDs, s)
@@ -454,8 +455,8 @@ func extractCDCFields(event *PubSubEvent, decoded map[string]interface{}) {
 				}
 			}
 			if cf, ok := headerMap["changedFields"]; ok {
-				if arr, ok := cf.([]interface{}); ok {
-					fields := make(map[string]interface{})
+				if arr, ok := cf.([]any); ok {
+					fields := make(map[string]any)
 					for _, f := range arr {
 						if s, ok := f.(string); ok {
 							if val, exists := decoded[s]; exists {

@@ -31,11 +31,11 @@ import (
 // salesforceProcessor is the Benthos salesforceProcessor implementation for Salesforce queries.
 // It holds the client state and orchestrates calls into the salesforcehttp package.
 type salesforceProcessor struct {
-	log         *service.Logger
-	client      *salesforcehttp.Client
-	res         *service.Resources
+	log               *service.Logger
+	client            *salesforcehttp.Client
+	res               *service.Resources
 	cacheResourceName string
-	req         Request
+	req               Request
 
 	// CDC configuration
 	cdcEnabled      bool
@@ -67,15 +67,38 @@ type salesforceProcessor struct {
 	dispatchMu sync.Mutex
 }
 
+const (
+	sfpFieldOrgURL                   = "org_url"
+	sfpFieldClientID                 = "client_id"
+	sfpFieldClientSecret             = "client_secret"
+	sfpFieldRESTAPIVersion           = "restapi_version"
+	sfpFieldRequestTimeout           = "request_timeout"
+	sfpFieldMaxRetries               = "max_retries"
+	sfpFieldQueryType                = "query_type"
+	sfpFieldQuery                    = "query"
+	sfpFieldCDCEnabled               = "cdc_enabled"
+	sfpFieldCDCObjects               = "cdc_objects"
+	sfpFieldCDCBatchSize             = "cdc_batch_size"
+	sfpFieldCDCBufferSize            = "cdc_buffer_size"
+	sfpFieldCDCReplayPreset          = "cdc_replay_preset"
+	sfpFieldPubSubTopic              = "pubsub_topic"
+	sfpFieldGRPCReconnectBaseDelay   = "grpc_reconnect_base_delay"
+	sfpFieldGRPCReconnectMaxDelay    = "grpc_reconnect_max_delay"
+	sfpFieldGRPCReconnectMaxAttempts = "grpc_reconnect_max_attempts"
+	sfpFieldGRPCShutdownTimeout      = "grpc_shutdown_timeout"
+	sfpFieldCacheResource            = "cache_resource"
+	sfpFieldParallelFetch            = "parallel_fetch"
+	sfpFieldQueryBatchSize           = "query_batch_size"
+	sfpFieldRESTObjects              = "rest_objects"
+)
+
 func init() {
-	if err := service.RegisterProcessor(
+	service.MustRegisterProcessor(
 		"salesforce", newSalesforceProcessorConfigSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
 			return newSalesforceProcessor(conf, mgr)
 		},
-	); err != nil {
-		panic(err)
-	}
+	)
 }
 
 // newSalesforceProcessorConfigSpec creates a new Configuration specification for the Salesforce processor
@@ -125,79 +148,79 @@ pipeline:
         client_secret: "${SALESFORCE_CLIENT_SECRET}"
         pubsub_topic: "/event/MyEvent__e"
 ` + "```").
-		Field(service.NewStringField("org_url").
+		Field(service.NewStringField(sfpFieldOrgURL).
 			Description("Salesforce instance base URL (e.g., https://your-domain.salesforce.com)")).
-		Field(service.NewStringField("client_id").
+		Field(service.NewStringField(sfpFieldClientID).
 			Description("Client ID for the Salesforce Connected App")).
-		Field(service.NewStringField("client_secret").
+		Field(service.NewStringField(sfpFieldClientSecret).
 			Description("Client Secret for the Salesforce Connected App").
 			Secret()).
-		Field(service.NewStringField("restapi_version").
+		Field(service.NewStringField(sfpFieldRESTAPIVersion).
 			Description("Salesforce REST API version to use (example: v64.0). Default: v65.0").
 			Default("v65.0")).
-		Field(service.NewDurationField("request_timeout").
+		Field(service.NewDurationField(sfpFieldRequestTimeout).
 			Description("HTTP request timeout").
 			Default("30s")).
-		Field(service.NewIntField("max_retries").
+		Field(service.NewIntField(sfpFieldMaxRetries).
 			Description("Maximum number of retries in case of 429 HTTP Status Code").
 			Default(10)).
 		// query_type selects which Salesforce API to use:
 		//   "rest"    – REST API (default). Without a query, fetches all SObjects with checkpointing.
 		//   "graphql" – GraphQL API. Requires a query to be provided.
-		Field(service.NewStringField("query_type").
+		Field(service.NewStringField(sfpFieldQueryType).
 			Description("API mode: \"rest\" (default) or \"graphql\"").
 			Default("rest")).
 		// query is an optional SOQL or GraphQL query string.
 		//   For rest:    a SOQL expression, e.g. "SELECT Id, Name FROM Account"
 		//   For graphql: a GraphQL query string
 		// When omitted the processor defaults to fetching all SObjects via REST with checkpointing.
-		Field(service.NewStringField("query").
+		Field(service.NewStringField(sfpFieldQuery).
 			Description("Optional SOQL (rest) or GraphQL query. When empty, all SObjects are fetched via REST.").
 			Default("")).
 		// CDC configuration fields
-		Field(service.NewBoolField("cdc_enabled").
+		Field(service.NewBoolField(sfpFieldCDCEnabled).
 			Description("Enable Change Data Capture streaming after REST snapshot completes").
 			Default(false)).
-		Field(service.NewStringListField("cdc_objects").
+		Field(service.NewStringListField(sfpFieldCDCObjects).
 			Description("SObject types to capture changes for (e.g., [\"Account\", \"Contact\"]). When empty, subscribes to /data/ChangeEvents for all objects.").
 			Default([]any{})).
-		Field(service.NewIntField("cdc_batch_size").
+		Field(service.NewIntField(sfpFieldCDCBatchSize).
 			Description("Number of CDC events to request per gRPC fetch").
 			Default(100)).
-		Field(service.NewIntField("cdc_buffer_size").
+		Field(service.NewIntField(sfpFieldCDCBufferSize).
 			Description("Size of the internal CDC event buffer").
 			Default(1000)).
-		Field(service.NewStringField("cdc_replay_preset").
+		Field(service.NewStringField(sfpFieldCDCReplayPreset).
 			Description("CDC replay preset when no checkpoint exists: \"latest\" (default) or \"earliest\"").
 			Default("latest")).
 		// Pub/Sub topic override (for Platform Events or arbitrary topics)
-		Field(service.NewStringField("pubsub_topic").
+		Field(service.NewStringField(sfpFieldPubSubTopic).
 			Description("Arbitrary Pub/Sub API topic (e.g., \"/event/MyEvent__e\"). When set, overrides cdc_objects for topic selection.").
 			Default("")).
 		// gRPC reconnection backoff settings
-		Field(service.NewDurationField("grpc_reconnect_base_delay").
+		Field(service.NewDurationField(sfpFieldGRPCReconnectBaseDelay).
 			Description("Base delay for gRPC reconnection backoff").
 			Default("500ms")).
-		Field(service.NewDurationField("grpc_reconnect_max_delay").
+		Field(service.NewDurationField(sfpFieldGRPCReconnectMaxDelay).
 			Description("Maximum delay for gRPC reconnection backoff").
 			Default("30s")).
-		Field(service.NewIntField("grpc_reconnect_max_attempts").
+		Field(service.NewIntField(sfpFieldGRPCReconnectMaxAttempts).
 			Description("Maximum number of gRPC reconnection attempts (0 = unlimited)").
 			Default(0)).
 		// gRPC shutdown timeout
-		Field(service.NewDurationField("grpc_shutdown_timeout").
+		Field(service.NewDurationField(sfpFieldGRPCShutdownTimeout).
 			Description("Timeout for graceful gRPC client shutdown").
 			Default("10s")).
-		Field(service.NewStringField("cache_resource").
+		Field(service.NewStringField(sfpFieldCacheResource).
 			Description("Name of the Benthos cache resource used for checkpointing state (must be defined in cache_resources).").
 			Default("salesforce_checkpoint")).
-		Field(service.NewIntField("parallel_fetch").
+		Field(service.NewIntField(sfpFieldParallelFetch).
 			Description("Number of SObjects to fetch concurrently during the REST snapshot (no-query mode). Higher values improve throughput but consume more API quota.").
 			Default(1)).
-		Field(service.NewIntField("query_batch_size").
+		Field(service.NewIntField(sfpFieldQueryBatchSize).
 			Description("Number of records Salesforce returns per query page (200–2000). Lower values reduce individual response size and avoid timeouts on wide SObjects.").
 			Default(2000)).
-		Field(service.NewStringListField("rest_objects").
+		Field(service.NewStringListField(sfpFieldRESTObjects).
 			Description("Limit the REST snapshot to only these SObject types (e.g., [\"Account\", \"Contact\"]). When empty, all queryable SObjects are fetched.").
 			Default([]any{}))
 }
@@ -207,7 +230,7 @@ func newSalesforceProcessor(conf *service.ParsedConfig, mgr *service.Resources) 
 		return nil, err
 	}
 
-	orgURL, err := conf.FieldString("org_url")
+	orgURL, err := conf.FieldString(sfpFieldOrgURL)
 	if err != nil {
 		return nil, err
 	}
@@ -216,37 +239,37 @@ func newSalesforceProcessor(conf *service.ParsedConfig, mgr *service.Resources) 
 		return nil, errors.New("org_url is not a valid URL")
 	}
 
-	clientID, err := conf.FieldString("client_id")
+	clientID, err := conf.FieldString(sfpFieldClientID)
 	if err != nil {
 		return nil, err
 	}
 
-	clientSecret, err := conf.FieldString("client_secret")
+	clientSecret, err := conf.FieldString(sfpFieldClientSecret)
 	if err != nil {
 		return nil, err
 	}
 
-	apiVersion, err := conf.FieldString("restapi_version")
+	apiVersion, err := conf.FieldString(sfpFieldRESTAPIVersion)
 	if err != nil {
 		return nil, err
 	}
 
-	timeout, err := conf.FieldDuration("request_timeout")
+	timeout, err := conf.FieldDuration(sfpFieldRequestTimeout)
 	if err != nil {
 		return nil, err
 	}
 
-	maxRetries, err := conf.FieldInt("max_retries")
+	maxRetries, err := conf.FieldInt(sfpFieldMaxRetries)
 	if err != nil {
 		return nil, err
 	}
 
-	queryType, err := conf.FieldString("query_type")
+	queryType, err := conf.FieldString(sfpFieldQueryType)
 	if err != nil {
 		return nil, err
 	}
 
-	query, err := conf.FieldString("query")
+	query, err := conf.FieldString(sfpFieldQuery)
 	if err != nil {
 		return nil, err
 	}
@@ -257,62 +280,62 @@ func newSalesforceProcessor(conf *service.ParsedConfig, mgr *service.Resources) 
 	}
 
 	// Parse CDC configuration
-	cdcEnabled, err := conf.FieldBool("cdc_enabled")
+	cdcEnabled, err := conf.FieldBool(sfpFieldCDCEnabled)
 	if err != nil {
 		return nil, err
 	}
 
-	cdcObjects, err := conf.FieldStringList("cdc_objects")
+	cdcObjects, err := conf.FieldStringList(sfpFieldCDCObjects)
 	if err != nil {
 		return nil, err
 	}
 
-	cdcBatchSize, err := conf.FieldInt("cdc_batch_size")
+	cdcBatchSize, err := conf.FieldInt(sfpFieldCDCBatchSize)
 	if err != nil {
 		return nil, err
 	}
 
-	cdcBufferSize, err := conf.FieldInt("cdc_buffer_size")
+	cdcBufferSize, err := conf.FieldInt(sfpFieldCDCBufferSize)
 	if err != nil {
 		return nil, err
 	}
 
-	cdcReplayPreset, err := conf.FieldString("cdc_replay_preset")
+	cdcReplayPreset, err := conf.FieldString(sfpFieldCDCReplayPreset)
 	if err != nil {
 		return nil, err
 	}
 
-	pubsubTopic, err := conf.FieldString("pubsub_topic")
+	pubsubTopic, err := conf.FieldString(sfpFieldPubSubTopic)
 	if err != nil {
 		return nil, err
 	}
 
-	grpcReconnectBaseDelay, err := conf.FieldDuration("grpc_reconnect_base_delay")
+	grpcReconnectBaseDelay, err := conf.FieldDuration(sfpFieldGRPCReconnectBaseDelay)
 	if err != nil {
 		return nil, err
 	}
 
-	grpcReconnectMaxDelay, err := conf.FieldDuration("grpc_reconnect_max_delay")
+	grpcReconnectMaxDelay, err := conf.FieldDuration(sfpFieldGRPCReconnectMaxDelay)
 	if err != nil {
 		return nil, err
 	}
 
-	grpcReconnectMaxAttempts, err := conf.FieldInt("grpc_reconnect_max_attempts")
+	grpcReconnectMaxAttempts, err := conf.FieldInt(sfpFieldGRPCReconnectMaxAttempts)
 	if err != nil {
 		return nil, err
 	}
 
-	grpcShutdownTimeout, err := conf.FieldDuration("grpc_shutdown_timeout")
+	grpcShutdownTimeout, err := conf.FieldDuration(sfpFieldGRPCShutdownTimeout)
 	if err != nil {
 		return nil, err
 	}
 
-	cacheResource, err := conf.FieldString("cache_resource")
+	cacheResource, err := conf.FieldString(sfpFieldCacheResource)
 	if err != nil {
 		return nil, err
 	}
 
-	parallelFetch, err := conf.FieldInt("parallel_fetch")
+	parallelFetch, err := conf.FieldInt(sfpFieldParallelFetch)
 	if err != nil {
 		return nil, err
 	}
@@ -320,12 +343,12 @@ func newSalesforceProcessor(conf *service.ParsedConfig, mgr *service.Resources) 
 		parallelFetch = 1
 	}
 
-	queryBatchSize, err := conf.FieldInt("query_batch_size")
+	queryBatchSize, err := conf.FieldInt(sfpFieldQueryBatchSize)
 	if err != nil {
 		return nil, err
 	}
 
-	restObjects, err := conf.FieldStringList("rest_objects")
+	restObjects, err := conf.FieldStringList(sfpFieldRESTObjects)
 	if err != nil {
 		return nil, err
 	}

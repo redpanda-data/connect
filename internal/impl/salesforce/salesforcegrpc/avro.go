@@ -75,12 +75,12 @@ func (sc *SchemaCache) GetCodec(ctx context.Context, schemaID string) (*goavro.C
 
 	schemaInfo, err := sc.pubsub.GetSchema(rpcCtx, &SchemaRequest{SchemaId: schemaID})
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch schema %s: %w", schemaID, err)
+		return nil, fmt.Errorf("fetch schema %s: %w", schemaID, err)
 	}
 
 	codec, err := goavro.NewCodec(schemaInfo.SchemaJson)
 	if err != nil {
-		return nil, fmt.Errorf("failed to compile Avro schema %s: %w", schemaID, err)
+		return nil, fmt.Errorf("compile Avro schema %s: %w", schemaID, err)
 	}
 
 	sc.codecs[schemaID] = codec
@@ -88,13 +88,13 @@ func (sc *SchemaCache) GetCodec(ctx context.Context, schemaID string) (*goavro.C
 }
 
 // DecodeAvroPayload decodes a binary Avro payload using the given codec.
-func DecodeAvroPayload(codec *goavro.Codec, payload []byte) (map[string]interface{}, error) {
+func DecodeAvroPayload(codec *goavro.Codec, payload []byte) (map[string]any, error) {
 	native, _, err := codec.NativeFromBinary(payload)
 	if err != nil {
-		return nil, fmt.Errorf("failed to decode Avro payload: %w", err)
+		return nil, fmt.Errorf("decode Avro payload: %w", err)
 	}
 
-	result, ok := native.(map[string]interface{})
+	result, ok := native.(map[string]any)
 	if !ok {
 		return nil, fmt.Errorf("decoded Avro payload is not a map, got %T", native)
 	}

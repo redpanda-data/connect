@@ -33,6 +33,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/salesforce/salesforcehttp"
+	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
 const (
@@ -41,8 +42,27 @@ const (
 
 	realtimeMaxChunkSize = 200 // Salesforce sObject Collections API limit
 	bulkPollInterval     = 5 * time.Second
-	defaultMaxBulkJobs    = 10   // max concurrent in-flight bulk jobs
-	defaultBulkBatchSize  = 1000 // records per bulk job
+	defaultMaxBulkJobs   = 10   // max concurrent in-flight bulk jobs
+	defaultBulkBatchSize = 1000 // records per bulk job
+)
+
+const (
+	sfsFieldOrgURL                = "org_url"
+	sfsFieldClientID              = "client_id"
+	sfsFieldClientSecret          = "client_secret"
+	sfsFieldRESTAPIVersion        = "restapi_version"
+	sfsFieldRequestTimeout        = "request_timeout"
+	sfsFieldMaxRetries            = "max_retries"
+	sfsFieldBulkBatchSize         = "bulk_batch_size"
+	sfsFieldMaxConcurrentBulkJobs = "max_concurrent_bulk_jobs"
+	sfsFieldMaxInFlight           = "max_in_flight"
+	sfsFieldTopicMappings         = "topic_mappings"
+	sfsTMFieldTopic               = "topic"
+	sfsTMFieldSObject             = "sobject"
+	sfsTMFieldOperation           = "operation"
+	sfsTMFieldExternalIDField     = "external_id_field"
+	sfsTMFieldMode                = "mode"
+	sfsTMFieldAllOrNone           = "all_or_none"
 )
 
 // inFlightBulkJob tracks a bulk job submitted to Salesforce that is still being polled.
@@ -77,19 +97,19 @@ type salesforceSinkOutput struct {
 	bulkJobsMu     sync.Mutex
 	bulkJobs       []*inFlightBulkJob
 	maxBulkJobs    int
-	shutdownCtx    context.Context
+	shutdownCtx    context.Context //nolint:containedctx // lifecycle context for background bulk-poll goroutines
 	shutdownCancel context.CancelFunc
 }
 
 func init() {
-	if err := service.RegisterBatchOutput(
+	service.MustRegisterBatchOutput(
 		"salesforce_sink", newSalesforceSinkConfigSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchOutput, service.BatchPolicy, int, error) {
-			batchSize, err := conf.FieldInt("bulk_batch_size")
+			batchSize, err := conf.FieldInt(sfsFieldBulkBatchSize)
 			if err != nil {
 				return nil, service.BatchPolicy{}, 0, err
 			}
-			maxInFlight, err := conf.FieldInt("max_in_flight")
+			maxInFlight, err := conf.FieldInt(sfsFieldMaxInFlight)
 			if err != nil {
 				return nil, service.BatchPolicy{}, 0, err
 			}
@@ -99,27 +119,25 @@ func init() {
 			}
 			return out, service.BatchPolicy{Count: batchSize, Period: "5s"}, maxInFlight, nil
 		},
-	); err != nil {
-		panic(err)
-	}
+	)
 }
 
 func newSalesforceSinkConfigSpec() *service.ConfigSpec {
-	topicMappingSpec := service.NewObjectListField("topic_mappings",
-		service.NewStringField("topic").
+	topicMappingSpec := service.NewObjectListField(sfsFieldTopicMappings,
+		service.NewStringField(sfsTMFieldTopic).
 			Description("Kafka topic name to match against the message's 'topic' field"),
-		service.NewStringField("sobject").
+		service.NewStringField(sfsTMFieldSObject).
 			Description("Salesforce SObject API name (e.g., Account, Contact, MyObject__c)"),
-		service.NewStringField("operation").
+		service.NewStringField(sfsTMFieldOperation).
 			Description("Write operation: insert, update, upsert, or delete").
 			Default("upsert"),
-		service.NewStringField("external_id_field").
+		service.NewStringField(sfsTMFieldExternalIDField).
 			Description("External ID field name, required for upsert").
 			Default(""),
-		service.NewStringField("mode").
+		service.NewStringField(sfsTMFieldMode).
 			Description("Write mode: realtime (sObject Collections API) or bulk (Bulk API 2.0)").
 			Default(sinkModeRealtime),
-		service.NewBoolField("all_or_none").
+		service.NewBoolField(sfsTMFieldAllOrNone).
 			Description("Realtime only: roll back the entire batch if any record fails").
 			Default(false),
 	).Description("Per-topic Salesforce write configuration. Each entry maps a Kafka topic to an SObject and write settings.")
@@ -173,36 +191,40 @@ output:
         external_id_field: External_Id__c
         mode: bulk
 ` + "```").
-		Field(service.NewStringField("org_url").
+		Field(service.NewStringField(sfsFieldOrgURL).
 			Description("Salesforce instance base URL (e.g., https://your-domain.salesforce.com)")).
-		Field(service.NewStringField("client_id").
+		Field(service.NewStringField(sfsFieldClientID).
 			Description("Client ID for the Salesforce Connected App")).
-		Field(service.NewStringField("client_secret").
+		Field(service.NewStringField(sfsFieldClientSecret).
 			Description("Client Secret for the Salesforce Connected App").
 			Secret()).
-		Field(service.NewStringField("restapi_version").
+		Field(service.NewStringField(sfsFieldRESTAPIVersion).
 			Description("Salesforce REST API version to use (e.g., v65.0)").
 			Default("v65.0")).
-		Field(service.NewDurationField("request_timeout").
+		Field(service.NewDurationField(sfsFieldRequestTimeout).
 			Description("HTTP request timeout").
 			Default("30s")).
-		Field(service.NewIntField("max_retries").
+		Field(service.NewIntField(sfsFieldMaxRetries).
 			Description("Maximum number of retries on 429 Too Many Requests").
 			Default(10)).
-		Field(service.NewIntField("bulk_batch_size").
+		Field(service.NewIntField(sfsFieldBulkBatchSize).
 			Description("Number of records per bulk job. Also controls the output batch size.").
 			Default(defaultBulkBatchSize)).
-		Field(service.NewIntField("max_concurrent_bulk_jobs").
+		Field(service.NewIntField(sfsFieldMaxConcurrentBulkJobs).
 			Description("Maximum number of bulk jobs polling concurrently in the background. Each in-flight job buffers its CSV payload in memory; lower this value if memory usage is a concern.").
 			Default(defaultMaxBulkJobs)).
-		Field(service.NewIntField("max_in_flight").
+		Field(service.NewIntField(sfsFieldMaxInFlight).
 			Description("Maximum number of batches to send concurrently. Increasing this improves realtime write throughput.").
 			Default(1)).
 		Field(topicMappingSpec)
 }
 
 func newSalesforceSinkOutput(conf *service.ParsedConfig, mgr *service.Resources) (*salesforceSinkOutput, error) {
-	orgURL, err := conf.FieldString("org_url")
+	if err := license.CheckRunningEnterprise(mgr); err != nil {
+		return nil, err
+	}
+
+	orgURL, err := conf.FieldString(sfsFieldOrgURL)
 	if err != nil {
 		return nil, err
 	}
@@ -210,37 +232,37 @@ func newSalesforceSinkOutput(conf *service.ParsedConfig, mgr *service.Resources)
 		return nil, errors.New("org_url is not a valid URL")
 	}
 
-	clientID, err := conf.FieldString("client_id")
+	clientID, err := conf.FieldString(sfsFieldClientID)
 	if err != nil {
 		return nil, err
 	}
 
-	clientSecret, err := conf.FieldString("client_secret")
+	clientSecret, err := conf.FieldString(sfsFieldClientSecret)
 	if err != nil {
 		return nil, err
 	}
 
-	apiVersion, err := conf.FieldString("restapi_version")
+	apiVersion, err := conf.FieldString(sfsFieldRESTAPIVersion)
 	if err != nil {
 		return nil, err
 	}
 
-	timeout, err := conf.FieldDuration("request_timeout")
+	timeout, err := conf.FieldDuration(sfsFieldRequestTimeout)
 	if err != nil {
 		return nil, err
 	}
 
-	maxRetries, err := conf.FieldInt("max_retries")
+	maxRetries, err := conf.FieldInt(sfsFieldMaxRetries)
 	if err != nil {
 		return nil, err
 	}
 
-	maxConcurrentBulkJobs, err := conf.FieldInt("max_concurrent_bulk_jobs")
+	maxConcurrentBulkJobs, err := conf.FieldInt(sfsFieldMaxConcurrentBulkJobs)
 	if err != nil {
 		return nil, err
 	}
 
-	mappingConfs, err := conf.FieldObjectList("topic_mappings")
+	mappingConfs, err := conf.FieldObjectList(sfsFieldTopicMappings)
 	if err != nil {
 		return nil, err
 	}
@@ -250,15 +272,15 @@ func newSalesforceSinkOutput(conf *service.ParsedConfig, mgr *service.Resources)
 
 	topicMappings := make(map[string]topicMapping, len(mappingConfs))
 	for _, mc := range mappingConfs {
-		topic, err := mc.FieldString("topic")
+		topic, err := mc.FieldString(sfsTMFieldTopic)
 		if err != nil {
 			return nil, err
 		}
-		sobject, err := mc.FieldString("sobject")
+		sobject, err := mc.FieldString(sfsTMFieldSObject)
 		if err != nil {
 			return nil, err
 		}
-		operation, err := mc.FieldString("operation")
+		operation, err := mc.FieldString(sfsTMFieldOperation)
 		if err != nil {
 			return nil, err
 		}
@@ -267,21 +289,21 @@ func newSalesforceSinkOutput(conf *service.ParsedConfig, mgr *service.Resources)
 		default:
 			return nil, fmt.Errorf("topic %q: invalid operation %q: must be insert, update, upsert, or delete", topic, operation)
 		}
-		externalIDField, err := mc.FieldString("external_id_field")
+		externalIDField, err := mc.FieldString(sfsTMFieldExternalIDField)
 		if err != nil {
 			return nil, err
 		}
 		if operation == "upsert" && externalIDField == "" {
 			return nil, fmt.Errorf("topic %q: external_id_field is required when operation is upsert", topic)
 		}
-		mode, err := mc.FieldString("mode")
+		mode, err := mc.FieldString(sfsTMFieldMode)
 		if err != nil {
 			return nil, err
 		}
 		if mode != sinkModeRealtime && mode != sinkModeBulk {
 			return nil, fmt.Errorf("topic %q: invalid mode %q: must be realtime or bulk", topic, mode)
 		}
-		allOrNone, err := mc.FieldBool("all_or_none")
+		allOrNone, err := mc.FieldBool(sfsTMFieldAllOrNone)
 		if err != nil {
 			return nil, err
 		}
@@ -323,7 +345,7 @@ func newSalesforceSinkOutput(conf *service.ParsedConfig, mgr *service.Resources)
 // Connect authenticates eagerly so that write failures are not caused by a missing token.
 func (s *salesforceSinkOutput) Connect(ctx context.Context) error {
 	if err := s.client.RefreshToken(ctx); err != nil {
-		return fmt.Errorf("salesforce_sink: failed to authenticate: %w", err)
+		return fmt.Errorf("salesforce_sink: auth connection: %w", err)
 	}
 	s.log.Infof("salesforce_sink: connected to Salesforce")
 	return nil
@@ -340,11 +362,11 @@ func (s *salesforceSinkOutput) WriteBatch(ctx context.Context, batch service.Mes
 	for i, msg := range batch {
 		raw, err := msg.AsBytes()
 		if err != nil {
-			return fmt.Errorf("message[%d]: failed to read bytes: %w", i, err)
+			return fmt.Errorf("message[%d]:  read bytes: %w", i, err)
 		}
 		var envelope map[string]any
 		if err := json.Unmarshal(raw, &envelope); err != nil {
-			return fmt.Errorf("message[%d]: failed to parse JSON: %w", i, err)
+			return fmt.Errorf("message[%d]: parse JSON: %w", i, err)
 		}
 
 		topic, _ := envelope["topic"].(string)
@@ -364,7 +386,7 @@ func (s *salesforceSinkOutput) WriteBatch(ctx context.Context, batch service.Mes
 			s.log.Warnf("salesforce_sink: no mapping for topic %q, skipping %d record(s)", topic, len(records))
 			continue
 		}
-		s.log.Infof("salesforce_sink: writing %d record(s) to %s (mode=%s)", len(records), mapping.sobject, mapping.mode)
+		s.log.Debugf("salesforce_sink: writing %d record(s) to %s (mode=%s)", len(records), mapping.sobject, mapping.mode)
 		switch mapping.mode {
 		case sinkModeRealtime:
 			if err := s.writeRealtime(ctx, records, mapping); err != nil {
@@ -479,10 +501,7 @@ type salesforceAPIError struct {
 
 func (s *salesforceSinkOutput) writeRealtime(ctx context.Context, records []map[string]any, m topicMapping) error {
 	for start := 0; start < len(records); start += realtimeMaxChunkSize {
-		end := start + realtimeMaxChunkSize
-		if end > len(records) {
-			end = len(records)
-		}
+		end := min(start+realtimeMaxChunkSize, len(records))
 		if err := s.writeRealtimeChunk(ctx, records[start:end], m, 1); err != nil {
 			return err
 		}
@@ -509,7 +528,7 @@ func (s *salesforceSinkOutput) writeRealtimeChunk(ctx context.Context, records [
 	}
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return fmt.Errorf("failed to marshal collections payload: %w", err)
+		return fmt.Errorf("marshal collections payload: %w", err)
 	}
 
 	path := realtimePath(m, s.client.APIVersion())
@@ -526,7 +545,7 @@ func (s *salesforceSinkOutput) writeRealtimeChunk(ctx context.Context, records [
 
 	var results []collectionsResponse
 	if err := json.Unmarshal(respBody, &results); err != nil {
-		return fmt.Errorf("salesforce_sink: failed to parse collections response: %w", err)
+		return fmt.Errorf("salesforce_sink: parse collections response: %w", err)
 	}
 
 	// Collect profile-blocked fields reported by Salesforce and retry once with them removed.
@@ -585,10 +604,10 @@ type bulkJobRequest struct {
 }
 
 type bulkJobResponse struct {
-	ID                   string `json:"id"`
-	State                string `json:"state"`
-	NumberRecordsFailed  int    `json:"numberRecordsFailed"`
-	NumberRecordsProcessed int  `json:"numberRecordsProcessed"`
+	ID                     string `json:"id"`
+	State                  string `json:"state"`
+	NumberRecordsFailed    int    `json:"numberRecordsFailed"`
+	NumberRecordsProcessed int    `json:"numberRecordsProcessed"`
 }
 
 func (s *salesforceSinkOutput) writeBulk(ctx context.Context, records []map[string]any, m topicMapping) error {
@@ -712,7 +731,7 @@ func (s *salesforceSinkOutput) bulkCreateJob(ctx context.Context, m topicMapping
 
 	var resp bulkJobResponse
 	if err := json.Unmarshal(respBody, &resp); err != nil {
-		return "", fmt.Errorf("failed to parse job create response: %w", err)
+		return "", fmt.Errorf("parse job create response: %w", err)
 	}
 	return resp.ID, nil
 }
@@ -724,9 +743,12 @@ func (s *salesforceSinkOutput) bulkUploadCSV(ctx context.Context, jobID string, 
 }
 
 func (s *salesforceSinkOutput) bulkCloseJob(ctx context.Context, jobID string) error {
-	body, _ := json.Marshal(map[string]string{"state": "UploadComplete"})
+	body, err := json.Marshal(map[string]string{"state": "UploadComplete"})
+	if err != nil {
+		return fmt.Errorf("internal error marshalling close-job request: %w", err)
+	}
 	path := "/services/data/" + s.client.APIVersion() + "/jobs/ingest/" + jobID
-	_, err := s.client.PatchJSON(ctx, path, body)
+	_, err = s.client.PatchJSON(ctx, path, body)
 	return err
 }
 
@@ -776,12 +798,12 @@ func (s *salesforceSinkOutput) bulkPollUntilDone(ctx context.Context, jobID stri
 
 		respBody, err := s.client.GetJSON(ctx, path)
 		if err != nil {
-			return fmt.Errorf("failed to poll job status: %w", err)
+			return fmt.Errorf("poll job status: %w", err)
 		}
 
 		var job bulkJobResponse
 		if err := json.Unmarshal(respBody, &job); err != nil {
-			return fmt.Errorf("failed to parse job status: %w", err)
+			return fmt.Errorf("parse job status: %w", err)
 		}
 
 		switch job.State {

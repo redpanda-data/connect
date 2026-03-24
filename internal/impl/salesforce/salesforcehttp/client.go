@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -69,7 +70,7 @@ func (s *Client) callSalesforceAPI(ctx context.Context, u *url.URL) ([]byte, err
 	s.log.Warn("Salesforce token expired, refreshing token...")
 	// Refresh token
 	if err := s.updateAndSetBearerToken(ctx); err != nil {
-		return nil, fmt.Errorf("failed to refresh token: %w", err)
+		return nil, fmt.Errorf("refresh token: %w", err)
 	}
 
 	// Retry once
@@ -238,7 +239,7 @@ func (s *Client) callSalesforceQueryAPI(ctx context.Context, u *url.URL) ([]byte
 
 	s.log.Warn("Salesforce token expired, refreshing token...")
 	if err := s.updateAndSetBearerToken(ctx); err != nil {
-		return nil, fmt.Errorf("failed to refresh token: %w", err)
+		return nil, fmt.Errorf("refresh token: %w", err)
 	}
 
 	retryBody, retryErr := s.doSalesforceQueryRequest(ctx, u)
@@ -382,7 +383,7 @@ func (s *Client) GraphQL(ctx context.Context, query string) ([]byte, error) {
 
 	bodyBytes, err := json.Marshal(payload)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal GraphQL payload: %w", err)
+		return nil, fmt.Errorf("marshal GraphQL payload: %w", err)
 	}
 
 	return s.callSalesforceAPIWithBody(ctx, apiUrl, bodyBytes)
@@ -407,7 +408,7 @@ func (s *Client) RestQueryPage(ctx context.Context, soql, nextURL string) (servi
 
 	var qr QueryResult
 	if err := json.Unmarshal(raw, &qr); err != nil {
-		return nil, "", fmt.Errorf("failed to parse query result: %w", err)
+		return nil, "", fmt.Errorf("parse query result: %w", err)
 	}
 
 	var batch service.MessageBatch
@@ -439,7 +440,7 @@ func (s *Client) GraphQLQueryPage(ctx context.Context, query, cursor string) (se
 
 	var result map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &result); err != nil {
-		return nil, "", fmt.Errorf("failed to parse GraphQL response: %w", err)
+		return nil, "", fmt.Errorf("parse GraphQL response: %w", err)
 	}
 
 	edges, pageInfo, found := findGraphQLEdges(result)
@@ -454,7 +455,7 @@ func (s *Client) GraphQLQueryPage(ctx context.Context, query, cursor string) (se
 	for _, edge := range edges {
 		var e GraphQLEdge
 		if err := json.Unmarshal(edge, &e); err != nil {
-			s.log.Warnf("Failed to unmarshal GraphQL edge: %v", err)
+			s.log.Warnf("unmarshal GraphQL edge: %v", err)
 			continue
 		}
 		msg := service.NewMessage(e.Node)
@@ -540,7 +541,7 @@ func (s *Client) GetNextBatchParallel(ctx context.Context, cursor Cursor, parall
 		s.sobjectListLoaded = true
 		s.sobjectListErr = err
 		if err != nil {
-			s.log.Errorf("Failed to load SObject list: %v", err)
+			s.log.Errorf("load SObject list: %v", err)
 		}
 	}
 	if s.sobjectListErr != nil {
@@ -593,13 +594,9 @@ func (s *Client) GetNextBatchParallel(ctx context.Context, cursor Cursor, parall
 	// reads+writes cause a fatal panic in Go. Instead they set flags in slotResult
 	// and the main goroutine applies updates after wg.Wait().
 	unsupportedSnap := make(map[string]struct{}, len(s.unsupportedSObjects))
-	for k, v := range s.unsupportedSObjects {
-		unsupportedSnap[k] = v
-	}
+	maps.Copy(unsupportedSnap, s.unsupportedSObjects)
 	graphqlFallbackSnap := make(map[string]struct{}, len(s.graphqlFallbackObjects))
-	for k, v := range s.graphqlFallbackObjects {
-		graphqlFallbackSnap[k] = v
-	}
+	maps.Copy(graphqlFallbackSnap, s.graphqlFallbackObjects)
 
 	type slotResult struct {
 		slotIdx         int
@@ -641,7 +638,7 @@ func (s *Client) GetNextBatchParallel(ctx context.Context, cursor Cursor, parall
 				}
 				var result map[string]json.RawMessage
 				if err := json.Unmarshal(raw, &result); err != nil {
-					s.log.Warnf("Skipping SObject %s permanently: failed to parse GraphQL response: %v", slot.SObjectName, err)
+					s.log.Warnf("Skipping SObject %s permanently: parse GraphQL response: %v", slot.SObjectName, err)
 					results[i] = slotResult{slotIdx: i, done: true, skipped: true, markUnsupported: true}
 					return
 				}
@@ -676,7 +673,7 @@ func (s *Client) GetNextBatchParallel(ctx context.Context, cursor Cursor, parall
 			var err error
 
 			if slot.NextURL != "" {
-				raw, err = s.fetchNextRecordsPage(ctx, slot.NextURL)
+				raw, _ = s.fetchNextRecordsPage(ctx, slot.NextURL)
 			} else {
 				if slot.SObjectIndex >= len(sobjectList) {
 					s.log.Warnf("Slot index %d out of range (list has %d items), skipping %s", slot.SObjectIndex, len(sobjectList), slot.SObjectName)
@@ -703,7 +700,7 @@ func (s *Client) GetNextBatchParallel(ctx context.Context, cursor Cursor, parall
 						results[i] = slotResult{slotIdx: i, markGraphQL: true} // keep slot, retry via GraphQL next trigger
 						return
 					}
-					s.log.Errorf("Failed to fetch SObject %s: %v", slot.SObjectName, err)
+					s.log.Errorf("fetch SObject %s: %v", slot.SObjectName, err)
 					results[i] = slotResult{slotIdx: i} // keep slot, retry next trigger
 					return
 				}
@@ -711,7 +708,7 @@ func (s *Client) GetNextBatchParallel(ctx context.Context, cursor Cursor, parall
 
 			var qr QueryResult
 			if err := json.Unmarshal(raw, &qr); err != nil {
-				s.log.Errorf("Failed to unmarshal response for SObject %s: %v", slot.SObjectName, err)
+				s.log.Errorf("unmarshal response for SObject %s: %v", slot.SObjectName, err)
 				results[i] = slotResult{slotIdx: i} // keep slot, retry next trigger
 				return
 			}
@@ -806,7 +803,7 @@ func (s *Client) callSalesforceAPIWithBody(ctx context.Context, u *url.URL, body
 
 	s.log.Warn("Salesforce token expired, refreshing token...")
 	if err := s.updateAndSetBearerToken(ctx); err != nil {
-		return nil, fmt.Errorf("failed to refresh token: %w", err)
+		return nil, fmt.Errorf("refresh token: %w", err)
 	}
 
 	retryResp, retryErr := s.doSalesforcePostRequest(ctx, u, body)
@@ -852,66 +849,66 @@ func (s *Client) loadSObjectList(ctx context.Context) error {
 
 	var list SObjectList
 	if err := json.Unmarshal(raw, &list); err != nil {
-		return fmt.Errorf("failed to parse SObject list (response: %.200s): %w", raw, err)
+		return fmt.Errorf("parse SObject list (response: %.200s): %w", raw, err)
 	}
 	s.log.Infof("API returned %d total SObjects", len(list.Sobjects))
 	if len(list.Sobjects) == 0 {
-		return fmt.Errorf("Salesforce returned 0 SObjects — check credentials and org URL (response: %.200s)", raw)
+		return fmt.Errorf("salesforce returned 0 SObjects — check credentials and org URL (response: %.200s)", raw)
 	}
 
 	skipList := map[string]bool{
-		"AIUpdateRecordEvent":            true,
-		"AccountUserTerritory2View":      true,
-		"ActionableListMember":           true,
-		"ApexPageInfo":                   true,
-		"ApexTypeImplementor":            true,
-		"AppTabMember":                   true,
-		"AuraDefinitionBundleInfo":       true,
-		"AuraDefinitionInfo":             true,
-		"CategoryNode":                   true,
-		"ColorDefinition":                true,
-		"ConnectedApplication":           true,
-		"ContentDocumentLink":            true,
-		"ContentFolderItem":              true,
-		"ContentFolderMember":            true,
-		"DataStatistics":                 true,
-		"DataType":                       true,
-		"DatacloudAddress":               true,
-		"DecisionTable":                  true,
-		"DecisionTableDatasetLink":       true,
-		"EntityDefinition":               true,
-		"EntityParticle":                 true,
-		"ExpressionSetView":              true,
-		"FieldChangeSnapshot":            true,
-		"FieldDefinition":                true,
-		"FlexQueueItem":                  true,
-		"FlowDefinitionView":             true,
-		"FlowTestView":                   true,
-		"FlowVariableView":               true,
-		"FlowVersionView":                true,
-		"IconDefinition":                 true,
-		"IdeaComment":                    true,
-		"ListViewChartInstance":          true,
-		"LoyaltyPgmMbrPromEligView":      true,
-		"NetworkUserHistoryRecent":        true,
-		"ObjectUserTerritory2View":        true,
-		"OutgoingEmail":                   true,
-		"OutgoingEmailRelation":           true,
-		"OwnerChangeOptionInfo":           true,
-		"PicklistValueInfo":               true,
-		"PlatformAction":                  true,
-		"RecentFieldChange":               true,
-		"RelatedListColumnDefinition":     true,
-		"RelatedListDefinition":           true,
-		"RelationshipDomain":              true,
-		"RelationshipInfo":                true,
-		"SearchLayout":                    true,
-		"SiteDetail":                      true,
-		"UserEntityAccess":                true,
-		"UserFieldAccess":                 true,
-		"UserRecordAccess":                true,
-		"UserSharedFeature":               true,
-		"Vote":                            true,
+		"AIUpdateRecordEvent":         true,
+		"AccountUserTerritory2View":   true,
+		"ActionableListMember":        true,
+		"ApexPageInfo":                true,
+		"ApexTypeImplementor":         true,
+		"AppTabMember":                true,
+		"AuraDefinitionBundleInfo":    true,
+		"AuraDefinitionInfo":          true,
+		"CategoryNode":                true,
+		"ColorDefinition":             true,
+		"ConnectedApplication":        true,
+		"ContentDocumentLink":         true,
+		"ContentFolderItem":           true,
+		"ContentFolderMember":         true,
+		"DataStatistics":              true,
+		"DataType":                    true,
+		"DatacloudAddress":            true,
+		"DecisionTable":               true,
+		"DecisionTableDatasetLink":    true,
+		"EntityDefinition":            true,
+		"EntityParticle":              true,
+		"ExpressionSetView":           true,
+		"FieldChangeSnapshot":         true,
+		"FieldDefinition":             true,
+		"FlexQueueItem":               true,
+		"FlowDefinitionView":          true,
+		"FlowTestView":                true,
+		"FlowVariableView":            true,
+		"FlowVersionView":             true,
+		"IconDefinition":              true,
+		"IdeaComment":                 true,
+		"ListViewChartInstance":       true,
+		"LoyaltyPgmMbrPromEligView":   true,
+		"NetworkUserHistoryRecent":    true,
+		"ObjectUserTerritory2View":    true,
+		"OutgoingEmail":               true,
+		"OutgoingEmailRelation":       true,
+		"OwnerChangeOptionInfo":       true,
+		"PicklistValueInfo":           true,
+		"PlatformAction":              true,
+		"RecentFieldChange":           true,
+		"RelatedListColumnDefinition": true,
+		"RelatedListDefinition":       true,
+		"RelationshipDomain":          true,
+		"RelationshipInfo":            true,
+		"SearchLayout":                true,
+		"SiteDetail":                  true,
+		"UserEntityAccess":            true,
+		"UserFieldAccess":             true,
+		"UserRecordAccess":            true,
+		"UserSharedFeature":           true,
+		"Vote":                        true,
 	}
 
 	// Collect queryable candidates, preserving order.
@@ -957,13 +954,13 @@ func (s *Client) loadSObjectList(ctx context.Context) error {
 			describeJSON, err := s.GetSObjectResource(describeCtx, name)
 			cancel()
 			if err != nil {
-				s.log.Warnf("Skipping SObject %s: failed to describe: %v", name, err)
+				s.log.Warnf("Skipping SObject %s: describe: %v", name, err)
 				results[pos] = describeResult{pos: pos, failed: true}
 				return
 			}
 			fields, err := extractFieldNames(describeJSON)
 			if err != nil {
-				s.log.Warnf("Skipping SObject %s: failed to extract fields: %v", name, err)
+				s.log.Warnf("Skipping SObject %s: extract fields: %v", name, err)
 				results[pos] = describeResult{pos: pos, failed: true}
 				return
 			}
@@ -1117,7 +1114,7 @@ func (s *Client) callSalesforceAPIPatch(ctx context.Context, u *url.URL, body []
 		return nil, err
 	}
 	if err := s.updateAndSetBearerToken(ctx); err != nil {
-		return nil, fmt.Errorf("failed to refresh token: %w", err)
+		return nil, fmt.Errorf("refresh token: %w", err)
 	}
 	return DoRequestWithRetries(ctx, s.httpClient, newReq, s.retryOpts)
 }
@@ -1147,7 +1144,7 @@ func (s *Client) callSalesforceAPIPutCSV(ctx context.Context, u *url.URL, csvDat
 		return nil, err
 	}
 	if err := s.updateAndSetBearerToken(ctx); err != nil {
-		return nil, fmt.Errorf("failed to refresh token: %w", err)
+		return nil, fmt.Errorf("refresh token: %w", err)
 	}
 	return DoRequestWithRetries(ctx, s.httpClient, newReq, s.retryOpts)
 }

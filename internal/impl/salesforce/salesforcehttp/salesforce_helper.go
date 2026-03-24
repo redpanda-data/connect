@@ -200,8 +200,11 @@ func backoffWithJitter(base, maxDuration time.Duration, attempt int) time.Durati
 	if maxDuration <= 0 {
 		maxDuration = 30 * time.Second
 	}
-	d := base << attempt
-	if d > maxDuration {
+	if attempt > 30 {
+		return maxDuration
+	}
+	d := base << uint(attempt)
+	if d <= 0 || d > maxDuration {
 		d = maxDuration
 	}
 	jitter := time.Duration(rand.Int63n(int64(d))) - d/2
@@ -230,7 +233,7 @@ func DoRequestWithRetries(
 	for {
 		req, err := newReq()
 		if err != nil {
-			return nil, fmt.Errorf("failed to build request: %w", err)
+			return nil, fmt.Errorf("build request: %w", err)
 		}
 		resp, err := client.Do(req.WithContext(ctx))
 		if err != nil {

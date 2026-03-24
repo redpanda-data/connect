@@ -14,8 +14,10 @@ import "time"
 type EventType int
 
 const (
-	EventTypeCDC      EventType = iota // Change Data Capture event
-	EventTypePlatform                  // Platform Event
+	// EventTypeCDC - Change Data Capture event
+	EventTypeCDC EventType = iota
+	// EventTypePlatform -  Platform Event
+	EventTypePlatform
 )
 
 // String returns a human-readable label for the EventType.
@@ -58,10 +60,10 @@ type PubSubEvent struct {
 	RecordIDs []string
 
 	// Fields contains the changed field values decoded from the Avro payload.
-	Fields map[string]interface{}
+	Fields map[string]any
 
 	// RawPayload is the full decoded Avro payload as a map.
-	RawPayload map[string]interface{}
+	RawPayload map[string]any
 }
 
 // CDCEvent is a backward-compatible alias for PubSubEvent.
@@ -80,10 +82,15 @@ type SubscriptionConfig struct {
 type StreamState int
 
 const (
+	// StreamStateDisconnected - disconnected state
 	StreamStateDisconnected StreamState = iota
+	// StreamStateConnecting - connecting state
 	StreamStateConnecting
+	// StreamStateConnected - connected state
 	StreamStateConnected
+	// StreamStateReconnecting - reconnecting state
 	StreamStateReconnecting
+	// StreamStateClosing - closing state
 	StreamStateClosing
 )
 

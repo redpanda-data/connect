@@ -117,7 +117,6 @@ max_retries: 5
 	}
 
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			env := service.NewEnvironment()
 			spec := newSalesforceProcessorConfigSpec()

@@ -56,7 +56,7 @@ type Request struct {
 type ProcessorState struct {
 	RestCursor       salesforcehttp.Cursor `json:"rest_cursor"`
 	SnapshotComplete bool                  `json:"snapshot_complete"`
-	FilteredCursor   string               `json:"filtered_cursor,omitempty"`
+	FilteredCursor   string                `json:"filtered_cursor,omitempty"`
 	CDCReplayID      []byte                `json:"cdc_replay_id,omitempty"`
 	PubSubReplayID   []byte                `json:"pubsub_replay_id,omitempty"`
 	PubSubTopic      string                `json:"pubsub_topic,omitempty"`
@@ -72,7 +72,7 @@ func (s *salesforceProcessor) Dispatch(
 	if s.pubsubTopic != "" && !s.cdcEnabled && !req.Filter.Enabled {
 		state, err := s.loadState(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("failed to load checkpoint: %w", err)
+			return nil, fmt.Errorf("load checkpoint: %w", err)
 		}
 		return s.dispatchPubSub(ctx, state)
 	}
@@ -105,7 +105,7 @@ func (s *salesforceProcessor) Dispatch(
 func (s *salesforceProcessor) dispatchWithCheckpoint(ctx context.Context) (service.MessageBatch, error) {
 	state, err := s.loadState(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load checkpoint: %w", err)
+		return nil, fmt.Errorf("load checkpoint: %w", err)
 	}
 
 	// If snapshot is complete and CDC is enabled, dispatch CDC events
@@ -133,7 +133,7 @@ func (s *salesforceProcessor) dispatchWithCheckpoint(ctx context.Context) (servi
 		state.SnapshotComplete = true
 		state.RestCursor = salesforcehttp.Cursor{}
 		if err := s.saveState(ctx, state); err != nil {
-			s.log.Errorf("failed to save snapshot completion: %v", err)
+			s.log.Errorf("save snapshot completion: %v", err)
 		}
 
 		if s.cdcEnabled {
@@ -149,7 +149,7 @@ func (s *salesforceProcessor) dispatchWithCheckpoint(ctx context.Context) (servi
 	// Persist checkpoint so we can resume from here on restart
 	state.RestCursor = nextCursor
 	if err := s.saveState(ctx, state); err != nil {
-		return nil, fmt.Errorf("failed to save checkpoint: %w", err)
+		return nil, fmt.Errorf("save checkpoint: %w", err)
 	}
 
 	return batch, nil
@@ -165,7 +165,7 @@ func (s *salesforceProcessor) dispatchFilteredPaged(ctx context.Context, fetchPa
 
 	state, err := s.loadState(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load checkpoint: %w", err)
+		return nil, fmt.Errorf("load checkpoint: %w", err)
 	}
 
 	if state.SnapshotComplete {
@@ -183,7 +183,7 @@ func (s *salesforceProcessor) dispatchFilteredPaged(ctx context.Context, fetchPa
 		state.SnapshotComplete = true
 	}
 	if err := s.saveState(ctx, state); err != nil {
-		s.log.Errorf("failed to save checkpoint after query page: %v", err)
+		s.log.Errorf("save checkpoint after query page: %v", err)
 	}
 
 	return batch, nil
@@ -196,7 +196,7 @@ func (s *salesforceProcessor) dispatchCDC(ctx context.Context, state ProcessorSt
 	// Lazy-init gRPC client if nil
 	if s.grpcClient == nil {
 		if err := s.initGRPCClient(ctx, state.CDCReplayID); err != nil {
-			return nil, fmt.Errorf("failed to init CDC gRPC client: %w", err)
+			return nil, fmt.Errorf("init CDC gRPC client: %w", err)
 		}
 	}
 
@@ -211,7 +211,7 @@ func (s *salesforceProcessor) dispatchCDC(ctx context.Context, state ProcessorSt
 			s.grpcClient = nil
 			state.CDCReplayID = nil
 			if saveErr := s.saveState(ctx, state); saveErr != nil {
-				s.log.Errorf("failed to clear stale replay_id: %v", saveErr)
+				s.log.Errorf("clear stale replay_id: %v", saveErr)
 			}
 			return nil, nil
 		}
@@ -235,7 +235,7 @@ func (s *salesforceProcessor) dispatchCDC(ctx context.Context, state ProcessorSt
 	if len(latestReplayID) > 0 {
 		state.CDCReplayID = latestReplayID
 		if err := s.saveState(ctx, state); err != nil {
-			return nil, fmt.Errorf("failed to checkpoint CDC replay_id: %w", err)
+			return nil, fmt.Errorf("checkpoint CDC replay_id: %w", err)
 		}
 	}
 
@@ -248,7 +248,7 @@ func (s *salesforceProcessor) dispatchPubSub(ctx context.Context, state Processo
 	if s.grpcClient == nil {
 		replayID := state.PubSubReplayID
 		if err := s.initGRPCClient(ctx, replayID); err != nil {
-			return nil, fmt.Errorf("failed to init Pub/Sub gRPC client: %w", err)
+			return nil, fmt.Errorf("init Pub/Sub gRPC client: %w", err)
 		}
 	}
 
@@ -262,7 +262,7 @@ func (s *salesforceProcessor) dispatchPubSub(ctx context.Context, state Processo
 			s.grpcClient = nil
 			state.PubSubReplayID = nil
 			if saveErr := s.saveState(ctx, state); saveErr != nil {
-				s.log.Errorf("failed to clear stale replay_id: %v", saveErr)
+				s.log.Errorf("clear stale replay_id: %v", saveErr)
 			}
 			return nil, nil
 		}
@@ -286,7 +286,7 @@ func (s *salesforceProcessor) dispatchPubSub(ctx context.Context, state Processo
 		state.PubSubReplayID = latestReplayID
 		state.PubSubTopic = s.pubsubTopic
 		if err := s.saveState(ctx, state); err != nil {
-			return nil, fmt.Errorf("failed to checkpoint Pub/Sub replay_id: %w", err)
+			return nil, fmt.Errorf("checkpoint Pub/Sub replay_id: %w", err)
 		}
 	}
 
@@ -300,7 +300,7 @@ func (s *salesforceProcessor) eventsToMessageBatch(events []*salesforcegrpc.PubS
 	for _, evt := range events {
 		payload, marshalErr := json.Marshal(evt.RawPayload)
 		if marshalErr != nil {
-			s.log.Errorf("Failed to marshal event payload: %v", marshalErr)
+			s.log.Errorf("marshal event payload: %v", marshalErr)
 			continue
 		}
 
@@ -334,7 +334,7 @@ func (s *salesforceProcessor) initGRPCClient(ctx context.Context, replayID []byt
 	// Ensure we have fresh auth
 	if s.client.BearerToken() == "" {
 		if err := s.client.RefreshToken(ctx); err != nil {
-			return fmt.Errorf("failed to obtain auth for gRPC: %w", err)
+			return fmt.Errorf("obtain auth for gRPC: %w", err)
 		}
 	}
 
@@ -353,7 +353,7 @@ func (s *salesforceProcessor) initGRPCClient(ctx context.Context, replayID []byt
 		salesforcegrpc.WithBackoff(s.grpcReconnectBaseDelay, s.grpcReconnectMaxDelay, s.grpcReconnectMaxAttempts),
 		salesforcegrpc.WithMetrics(s.res.Metrics()),
 		salesforcegrpc.WithAuthRefresh(func() (string, string, string, error) {
-			if err := s.client.RefreshToken(ctx); err != nil {
+			if err := s.client.RefreshToken(context.Background()); err != nil {
 				return "", "", "", err
 			}
 			return s.client.BearerToken(), s.client.InstanceURL(), s.client.TenantID(), nil
@@ -432,12 +432,12 @@ func (s *salesforceProcessor) loadState(ctx context.Context) (ProcessorState, er
 	// Try loading new format first
 	raw, err := s.accessCache(ctx, "sf_state")
 	if err != nil {
-		return ProcessorState{}, fmt.Errorf("failed to read checkpoint from cache: %w", err)
+		return ProcessorState{}, fmt.Errorf("read checkpoint from cache: %w", err)
 	}
 	if raw != "" {
 		var state ProcessorState
 		if err := json.Unmarshal([]byte(raw), &state); err != nil {
-			return ProcessorState{}, fmt.Errorf("failed to unmarshal state from cache: %w", err)
+			return ProcessorState{}, fmt.Errorf("unmarshal state from cache: %w", err)
 		}
 		return state, nil
 	}
@@ -445,18 +445,18 @@ func (s *salesforceProcessor) loadState(ctx context.Context) (ProcessorState, er
 	// Backward compatibility: try old "sf_cursor" key
 	oldRaw, err := s.accessCache(ctx, "sf_cursor")
 	if err != nil {
-		return ProcessorState{}, fmt.Errorf("failed to read legacy checkpoint from cache: %w", err)
+		return ProcessorState{}, fmt.Errorf("read legacy checkpoint from cache: %w", err)
 	}
 	if oldRaw != "" {
 		var cursor salesforcehttp.Cursor
 		if err := json.Unmarshal([]byte(oldRaw), &cursor); err != nil {
-			return ProcessorState{}, fmt.Errorf("failed to unmarshal old cursor from cache: %w", err)
+			return ProcessorState{}, fmt.Errorf("unmarshal old cursor from cache: %w", err)
 		}
 		s.log.Info("Migrating from old sf_cursor format to sf_state")
 		state := ProcessorState{RestCursor: cursor}
 		// Save in new format and clean up old key
 		if saveErr := s.saveState(ctx, state); saveErr != nil {
-			s.log.Errorf("failed to save migrated state: %v", saveErr)
+			s.log.Errorf("save migrated state: %v", saveErr)
 		}
 		return state, nil
 	}
@@ -467,11 +467,11 @@ func (s *salesforceProcessor) loadState(ctx context.Context) (ProcessorState, er
 func (s *salesforceProcessor) saveState(ctx context.Context, state ProcessorState) error {
 	b, err := json.Marshal(state)
 	if err != nil {
-		return fmt.Errorf("failed to marshal state: %w", err)
+		return fmt.Errorf("marshal state: %w", err)
 	}
 
 	if err := s.writeCache(ctx, "sf_state", string(b)); err != nil {
-		return fmt.Errorf("failed to write state to cache: %w", err)
+		return fmt.Errorf("write state to cache: %w", err)
 	}
 	return nil
 }
