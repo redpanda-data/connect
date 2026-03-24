@@ -574,7 +574,14 @@ func (s *salesforceSinkOutput) writeRealtimeChunk(ctx context.Context, records [
 		}
 	}
 	if len(errs) > 0 {
-		return fmt.Errorf("salesforce_sink: %d record(s) failed: %s", len(errs), strings.Join(errs, "; "))
+		if m.allOrNone {
+			// allOrNone=true: Salesforce rolled back the entire batch; propagate the error.
+			return fmt.Errorf("salesforce_sink: %d record(s) failed: %s", len(errs), strings.Join(errs, "; "))
+		}
+		// allOrNone=false: already-committed records must not be retried. Log failures
+		// as warnings and acknowledge the batch so Benthos does not cause duplicate writes.
+		s.log.Warnf("salesforce_sink: %s: %d record(s) failed (partial, batch acknowledged): %s",
+			m.sobject, len(errs), strings.Join(errs, "; "))
 	}
 	return nil
 }

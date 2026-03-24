@@ -216,7 +216,11 @@ func isCDCTopic(topic string) bool {
 // receiveLoop reads from the gRPC stream and pushes decoded events into the buffer.
 // On stream errors it attempts reconnection with backoff instead of exiting.
 func (c *Client) receiveLoop(ctx context.Context) {
-	defer close(c.done)
+	// Capture done at goroutine start. reconnectWithBackoff → connectLocked replaces
+	// c.done with a fresh channel for the new goroutine; closing the old reference
+	// here prevents a double-close panic when both goroutines eventually return.
+	done := c.done
+	defer close(done)
 
 	for {
 		resp, err := c.stream.Recv()

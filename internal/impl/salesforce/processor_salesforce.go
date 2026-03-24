@@ -108,7 +108,10 @@ func newSalesforceProcessorConfigSpec() *service.ConfigSpec {
 		Description(`This salesforceProcessor takes input messages containing Salesforce queries and returns Salesforce data.
 
 Supports the following Salesforce resources:
-- todo
+- SObject REST snapshot (all queryable SObjects or a filtered subset)
+- Filtered SOQL queries via REST or GraphQL
+- Change Data Capture (CDC) streaming via the Pub/Sub gRPC API
+- Platform Events via the Pub/Sub gRPC API
 
 Configuration examples:
 

@@ -70,6 +70,9 @@ func (s *salesforceProcessor) Dispatch(
 	// Standalone Platform Events mode: pubsub_topic is set without cdc_enabled
 	// and there's no REST filter — go straight to streaming.
 	if s.pubsubTopic != "" && !s.cdcEnabled && !req.Filter.Enabled {
+		s.dispatchMu.Lock()
+		defer s.dispatchMu.Unlock()
+
 		state, err := s.loadState(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("load checkpoint: %w", err)
@@ -103,6 +106,9 @@ func (s *salesforceProcessor) Dispatch(
 // dispatchWithCheckpoint fetches the next batch using cursor-based checkpointing.
 // When the REST snapshot completes and CDC is enabled, it transitions to CDC streaming.
 func (s *salesforceProcessor) dispatchWithCheckpoint(ctx context.Context) (service.MessageBatch, error) {
+	s.dispatchMu.Lock()
+	defer s.dispatchMu.Unlock()
+
 	state, err := s.loadState(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("load checkpoint: %w", err)
