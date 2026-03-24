@@ -566,3 +566,5 @@ require (
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
 )
+
+replace github.com/apache/iceberg-go => github.com/rockwotj/iceberg-go v0.4.1-0.20260319195818-92b6250742b5
