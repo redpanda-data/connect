@@ -91,6 +91,21 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Authenticate to GCP
+        if: ${{ github.event_name == 'push' }}
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/606234194099/locations/global/workloadIdentityPools/rp-cicd/providers/gh-connect
+          service_account: gh-connect@devprod-cicd-infra.iam.gserviceaccount.com
+
+      - name: Set up gcloud CLI
+        if: ${{ github.event_name == 'push' }}
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Exclude GCP credentials from git state
+        if: ${{ github.event_name == 'push' }}
+        run: echo 'gha-creds-*.json' >> .git/info/exclude
+
       - name: Install cloudsmith CLI (for publishing Linux packages)
         run: pip install cloudsmith-cli
 
