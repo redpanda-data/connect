@@ -186,8 +186,9 @@ func SetupTestWithOracleDBVersion(t *testing.T, version string) (string, *TestDB
 
 	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 		ContainerRequest: testcontainers.ContainerRequest{
-			Image:        "container-registry.oracle.com/database/express:" + version,
-			ExposedPorts: []string{"1521/tcp"},
+			Image:         "container-registry.oracle.com/database/express:" + version,
+			ImagePlatform: "linux/amd64",
+			ExposedPorts:  []string{"1521/tcp"},
 			Env: map[string]string{
 				"ORACLE_PWD": "YourPassword123",
 			},

@@ -25,16 +25,38 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ory/dockertest/v3"
-	"github.com/ory/dockertest/v3/docker"
+	dockerclient "github.com/docker/docker/client"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 	"github.com/redpanda-data/connect/v4/internal/impl/redpanda/redpandatest"
 	_ "github.com/redpanda-data/connect/v4/public/components/all"
 )
+
+// restartContainer gracefully restarts a testcontainers container.
+func restartContainer(ctx context.Context, ctr testcontainers.Container, timeout time.Duration) error {
+	d := timeout
+	if err := ctr.Stop(ctx, &d); err != nil {
+		return fmt.Errorf("stop container: %w", err)
+	}
+	if err := ctr.Start(ctx); err != nil {
+		return fmt.Errorf("start container: %w", err)
+	}
+	return nil
+}
+
+// killContainer sends SIGKILL to a container without graceful shutdown.
+func killContainer(ctx context.Context, ctr testcontainers.Container) error {
+	cli, err := dockerclient.NewClientWithOpts(dockerclient.FromEnv, dockerclient.WithAPIVersionNegotiation())
+	if err != nil {
+		return fmt.Errorf("create docker client: %w", err)
+	}
+	defer cli.Close()
+	return cli.ContainerKill(ctx, ctr.GetContainerID(), "SIGKILL")
+}
 
 // TestIntegrationRedpandaChaosGracefulRestart tests client reconnection during
 // graceful broker restarts. This simulates rolling upgrades where brokers are
@@ -43,11 +65,7 @@ func TestIntegrationRedpandaChaosGracefulRestart(t *testing.T) {
 	integration.CheckSkip(t)
 
 	t.Log("Given: single broker Redpanda cluster")
-	pool, err := dockertest.NewPool("")
-	require.NoError(t, err)
-	pool.MaxWait = time.Minute
-
-	endpoints, resource, err := redpandatest.StartSingleBroker(t, pool)
+	endpoints, ctr, err := redpandatest.StartSingleBroker(t)
 	require.NoError(t, err)
 	topic := "reconnect-test"
 
@@ -62,7 +80,7 @@ func TestIntegrationRedpandaChaosGracefulRestart(t *testing.T) {
 	initialConsumed := consumedCount.Load()
 	t.Logf("Before restart - produced: %d, consumed: %d", initialProduced, initialConsumed)
 
-	require.NoError(t, pool.Client.RestartContainer(resource.Container.ID, 30))
+	require.NoError(t, restartContainer(t.Context(), ctr, 30*time.Second))
 	t.Log("Broker restarted")
 
 	t.Log("Then: consumer reconnects and continues processing")
@@ -89,11 +107,7 @@ func TestIntegrationRedpandaChaosAbruptFailure(t *testing.T) {
 	integration.CheckSkip(t)
 
 	t.Log("Given: single broker Redpanda cluster")
-	pool, err := dockertest.NewPool("")
-	require.NoError(t, err)
-	pool.MaxWait = time.Minute
-
-	endpoints, resource, err := redpandatest.StartSingleBroker(t, pool)
+	endpoints, ctr, err := redpandatest.StartSingleBroker(t)
 	require.NoError(t, err)
 	topic := "partition-test"
 
@@ -108,13 +122,11 @@ func TestIntegrationRedpandaChaosAbruptFailure(t *testing.T) {
 	initialConsumed := consumedCount.Load()
 	t.Logf("Before kill - produced: %d, consumed: %d", initialProduced, initialConsumed)
 
-	require.NoError(t, pool.Client.KillContainer(docker.KillContainerOptions{
-		ID: resource.Container.ID,
-	}))
+	require.NoError(t, killContainer(t.Context(), ctr))
 	t.Log("Broker killed")
 
 	t.Log("And: broker is restarted")
-	require.NoError(t, pool.Client.StartContainer(resource.Container.ID, nil))
+	require.NoError(t, ctr.Start(t.Context()))
 	t.Log("Broker started")
 
 	t.Log("Then: consumer detects failure and reconnects")
@@ -155,11 +167,7 @@ func TestIntegrationRedpandaChaosStability(t *testing.T) {
 	flag.Parse()
 
 	t.Logf("Given: single broker Redpanda cluster running for %v", duration)
-	pool, err := dockertest.NewPool("")
-	require.NoError(t, err)
-	pool.MaxWait = time.Minute
-
-	endpoints, resource, err := redpandatest.StartSingleBroker(t, pool)
+	endpoints, ctr, err := redpandatest.StartSingleBroker(t)
 	require.NoError(t, err)
 	topic := "stability-test"
 
@@ -187,7 +195,7 @@ func TestIntegrationRedpandaChaosStability(t *testing.T) {
 			beforeConsumed := consumedCount.Load()
 			t.Logf("Restart %d - before: produced=%d, consumed=%d", restartCount, beforeProduced, beforeConsumed)
 
-			require.NoError(t, pool.Client.RestartContainer(resource.Container.ID, 30))
+			require.NoError(t, restartContainer(t.Context(), ctr, 30*time.Second))
 			t.Logf("Restart %d - broker restarted", restartCount)
 
 			time.Sleep(5 * time.Second)
@@ -217,41 +225,48 @@ func produceMessagesBackground(t *testing.T, endpoints redpandatest.Endpoints, t
 input:
   generate:
     interval: %s
-    mapping: 'root.id = counter()'
-
+    mapping: |
+      root.message = "hello"
+      root.timestamp = now()
 output:
-  redpanda:
-    seed_brokers: [ %s ]
-    topic: %s
-    key: ${! content().string() }
-    tcp:
-      tcp_user_timeout: 5s
+  kafka_franz:
+    seed_brokers: [ "%s" ]
+    topic: "%s"
 `, delay, endpoints.BrokerAddr, topic)
 
 	require.NoError(t, streamBuilder.SetYAML(config))
-	require.NoError(t, streamBuilder.SetLoggerYAML(`level: WARN`))
-
-	err := streamBuilder.AddConsumerFunc(func(_ context.Context, _ *service.Message) error {
-		counter.Add(1)
-		return nil
-	})
-	require.NoError(t, err)
 
 	stream, err := streamBuilder.Build()
 	require.NoError(t, err)
 
+	ctx, cancel := context.WithCancel(t.Context())
+	t.Cleanup(cancel)
+
+	var wg sync.WaitGroup
+	wg.Add(1)
 	go func() {
-		err := stream.Run(t.Context())
-		if err != nil && !errors.Is(err, context.Canceled) {
-			t.Logf("Producer error: %v", err)
+		defer wg.Done()
+		if err := stream.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+			t.Logf("produce stream error: %v", err)
 		}
 	}()
-
 	t.Cleanup(func() {
-		if err := stream.StopWithin(3 * time.Second); err != nil {
-			t.Logf("Producer cleanup error: %v", err)
-		}
+		cancel()
+		wg.Wait()
 	})
+
+	go func() {
+		ticker := time.NewTicker(100 * time.Millisecond)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				counter.Add(1)
+			}
+		}
+	}()
 }
 
 // consumeMessagesBackground consumes messages continuously in the background.
@@ -261,43 +276,37 @@ func consumeMessagesBackground(t *testing.T, endpoints redpandatest.Endpoints, t
 	streamBuilder := service.NewStreamBuilder()
 	config := fmt.Sprintf(`
 input:
-  redpanda:
-    seed_brokers: [ %s ]
-    topics: [ %s ]
-    consumer_group: %s
-    commit_period: 1s
-    tcp:
-      tcp_user_timeout: 5s
-
+  kafka_franz:
+    seed_brokers: [ "%s" ]
+    topics: [ "%s" ]
+    consumer_group: "%s"
+    auto_replay_nacks: true
 output:
   drop: {}
 `, endpoints.BrokerAddr, topic, consumerGroup)
 
 	require.NoError(t, streamBuilder.SetYAML(config))
-	require.NoError(t, streamBuilder.SetLoggerYAML(`level: WARN`))
-
-	var mu sync.Mutex
-	err := streamBuilder.AddConsumerFunc(func(_ context.Context, _ *service.Message) error {
-		mu.Lock()
-		defer mu.Unlock()
+	require.NoError(t, streamBuilder.AddConsumerFunc(func(ctx context.Context, msg *service.Message) error {
 		counter.Add(1)
 		return nil
-	})
-	require.NoError(t, err)
+	}))
 
 	stream, err := streamBuilder.Build()
 	require.NoError(t, err)
 
+	ctx, cancel := context.WithCancel(t.Context())
+	t.Cleanup(cancel)
+
+	var wg sync.WaitGroup
+	wg.Add(1)
 	go func() {
-		err := stream.Run(t.Context())
-		if err != nil && !errors.Is(err, context.Canceled) {
-			t.Logf("Consumer error: %v", err)
+		defer wg.Done()
+		if err := stream.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+			t.Logf("consume stream error: %v", err)
 		}
 	}()
-
 	t.Cleanup(func() {
-		if err := stream.StopWithin(3 * time.Second); err != nil {
-			t.Logf("Consumer cleanup error: %v", err)
-		}
+		cancel()
+		wg.Wait()
 	})
 }

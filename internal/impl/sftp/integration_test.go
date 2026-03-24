@@ -15,7 +15,6 @@
 package sftp
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -28,10 +27,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ory/dockertest/v3"
 	"github.com/pkg/sftp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/wait"
 	"golang.org/x/crypto/ssh"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -215,55 +215,34 @@ type emulator struct {
 }
 
 func runEmulator(t *testing.T) emulator {
-	pool, err := dockertest.NewPool("")
-	require.NoError(t, err)
-	pool.MaxWait = time.Second * 30
-
 	adminUsername := "admin"
 	adminPassword := "password"
-	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
-		Repository: "drakkan/sftpgo",
-		Tag:        "edge-alpine-slim",
-		Env: []string{
-			"SFTPGO_DATA_PROVIDER__CREATE_DEFAULT_ADMIN=true",
-			"SFTPGO_DEFAULT_ADMIN_USERNAME=" + adminUsername,
-			"SFTPGO_DEFAULT_ADMIN_PASSWORD=" + adminPassword,
-		},
-		ExposedPorts: []string{
-			"2022/tcp",
-			"8080/tcp",
-		},
-	})
+
+	ctr, err := testcontainers.Run(t.Context(), "drakkan/sftpgo:edge-alpine-slim",
+		testcontainers.WithExposedPorts("2022/tcp", "8080/tcp"),
+		testcontainers.WithEnv(map[string]string{
+			"SFTPGO_DATA_PROVIDER__CREATE_DEFAULT_ADMIN": "true",
+			"SFTPGO_DEFAULT_ADMIN_USERNAME":              adminUsername,
+			"SFTPGO_DEFAULT_ADMIN_PASSWORD":              adminPassword,
+		}),
+		testcontainers.WithWaitStrategy(
+			wait.ForHTTP("/healthz").WithPort("8080/tcp").WithStartupTimeout(30*time.Second),
+		),
+	)
+	testcontainers.CleanupContainer(t, ctr)
 	require.NoError(t, err)
-	t.Cleanup(func() {
-		assert.NoError(t, pool.Purge(resource))
-	})
 
-	_ = resource.Expire(900)
+	host, err := ctr.Host(t.Context())
+	require.NoError(t, err)
+	httpPort, err := ctr.MappedPort(t.Context(), "8080/tcp")
+	require.NoError(t, err)
+	sshPort, err := ctr.MappedPort(t.Context(), "2022/tcp")
+	require.NoError(t, err)
 
-	require.NoError(t, pool.Retry(func() error {
-		resp, err := http.Get("http://" + resource.GetHostPort("8080/tcp") + "/healthz")
-		if err != nil {
-			return err
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode != http.StatusOK {
-			return fmt.Errorf("querying healthz, got status: %d", resp.StatusCode)
-		}
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return err
-		}
-		if !bytes.Equal(body, []byte("ok")) {
-			return errors.New("failed healthz check, expected 'ok' response, got %s" + string(body))
-		}
-
-		return nil
-	}))
+	httpAddr := host + ":" + httpPort.Port()
 
 	// Get an access token for the admin user
-	req, err := http.NewRequest(http.MethodGet, "http://"+resource.GetHostPort("8080/tcp")+"/api/v2/token", nil)
+	req, err := http.NewRequest(http.MethodGet, "http://"+httpAddr+"/api/v2/token", nil)
 	require.NoError(t, err)
 	req.SetBasicAuth(adminUsername, adminPassword)
 	resp, err := http.DefaultClient.Do(req)
@@ -281,7 +260,7 @@ func runEmulator(t *testing.T) emulator {
 	// Create a user for SFTP access
 	req, err = http.NewRequest(
 		http.MethodPost,
-		"http://"+resource.GetHostPort("8080/tcp")+"/api/v2/users",
+		"http://"+httpAddr+"/api/v2/users",
 		strings.NewReader(
 			fmt.Sprintf(
 				`{"id": 1, "status": 1, "username": "%s", "password": "%s", "permissions": {"/": ["*"]}}`,
@@ -296,7 +275,7 @@ func runEmulator(t *testing.T) emulator {
 	defer resp.Body.Close()
 	require.Equal(t, http.StatusCreated, resp.StatusCode)
 
-	address := resource.GetHostPort("2022/tcp")
+	address := host + ":" + sshPort.Port()
 	var hostPubKey string
 	var sshClient *ssh.Client
 	require.EventuallyWithT(t, func(c *assert.CollectT) {

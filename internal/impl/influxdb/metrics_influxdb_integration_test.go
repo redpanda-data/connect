@@ -22,8 +22,9 @@ import (
 	"time"
 
 	client "github.com/influxdata/influxdb1-client/v2"
-	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/wait"
 
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 )
@@ -39,51 +40,29 @@ func TestInfluxIntegration(t *testing.T) {
 		t.Skip("Skipping integration test in short mode")
 	}
 
-	pool, err := dockertest.NewPool("")
-	if err != nil {
-		t.Skipf("Could not connect to docker: %s", err)
-	}
-	pool.MaxWait = time.Second * 30
+	ctr, err := testcontainers.Run(t.Context(), "influxdb:1.8.3-alpine",
+		testcontainers.WithExposedPorts("8086/tcp"),
+		testcontainers.WithEnv(map[string]string{
+			"INFLUXDB_DB":             "db0",
+			"INFLUXDB_ADMIN_USER":     "admin",
+			"INFLUXDB_ADMIN_PASSWORD": "admin",
+		}),
+		testcontainers.WithWaitStrategy(
+			wait.ForHTTP("/ping").WithPort("8086/tcp").WithStartupTimeout(30*time.Second),
+		),
+	)
+	testcontainers.CleanupContainer(t, ctr)
+	require.NoError(t, err)
 
-	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
-		Repository: "influxdb",
-		Tag:        "1.8.3-alpine",
-		Env: []string{
-			"INFLUXDB_DB=db0",
-			"INFLUXDB_ADMIN_USER=admin",
-			"INFLUXDB_ADMIN_PASSWORD=admin",
-		},
+	mappedPort, err := ctr.MappedPort(t.Context(), "8086/tcp")
+	require.NoError(t, err)
+
+	url := fmt.Sprintf("http://127.0.0.1:%s", mappedPort.Port())
+
+	c, err := client.NewHTTPClient(client.HTTPConfig{
+		Addr: url,
 	})
-	if err != nil {
-		t.Fatalf("Could not start resource: %v", err)
-	}
-
-	url := fmt.Sprintf("http://127.0.0.1:%v", resource.GetPort("8086/tcp"))
-
-	defer func() {
-		if err = pool.Purge(resource); err != nil {
-			t.Logf("Failed to clean up docker resource: %v", err)
-		}
-	}()
-
-	var c client.Client
-	if err = pool.Retry(func() error {
-		c, err = client.NewHTTPClient(client.HTTPConfig{
-			Addr: url,
-		})
-		if err != nil {
-			return fmt.Errorf("problem creating influx client: %s", err)
-		}
-		defer c.Close()
-
-		_, _, err = c.Ping(5 * time.Second)
-		if err != nil {
-			return fmt.Errorf("problem connecting to influx: %s", err)
-		}
-		return nil
-	}); err != nil {
-		t.Fatalf("Could not connect to influxdb docker container: %s", err)
-	}
+	require.NoError(t, err)
 
 	pConf, err := configSpec().ParseYAML(fmt.Sprintf(`
 url: %v

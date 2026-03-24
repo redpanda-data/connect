@@ -20,9 +20,10 @@ import (
 	"time"
 
 	"github.com/nats-io/nats.go"
-	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/wait"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
@@ -32,29 +33,27 @@ func TestIntegrationNatsReq(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
-	pool, err := dockertest.NewPool("")
+	ctr, err := testcontainers.Run(t.Context(), "nats:latest",
+		testcontainers.WithCmd("--trace"),
+		testcontainers.WithExposedPorts("4222/tcp"),
+		testcontainers.WithWaitStrategy(
+			wait.ForListeningPort("4222/tcp").WithStartupTimeout(30*time.Second),
+		),
+	)
+	testcontainers.CleanupContainer(t, ctr)
 	require.NoError(t, err)
 
-	pool.MaxWait = time.Second * 30
-	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
-		Repository: "nats",
-		Tag:        "latest",
-		Cmd:        []string{"--trace"},
-	})
+	mp, err := ctr.MappedPort(t.Context(), "4222/tcp")
 	require.NoError(t, err)
-	t.Cleanup(func() {
-		assert.NoError(t, pool.Purge(resource))
-	})
 
 	var natsConn *nats.Conn
-	_ = resource.Expire(900)
-	require.NoError(t, pool.Retry(func() error {
-		natsConn, err = nats.Connect(fmt.Sprintf("tcp://localhost:%v", resource.GetPort("4222/tcp")))
-		return err
-	}))
+	require.Eventually(t, func() bool {
+		natsConn, err = nats.Connect(fmt.Sprintf("tcp://localhost:%v", mp.Port()))
+		return err == nil
+	}, 30*time.Second, time.Second)
 
 	var sub *nats.Subscription
-	require.NoError(t, pool.Retry(func() error {
+	require.Eventually(t, func() bool {
 		sub, err = natsConn.Subscribe("test.>", func(m *nats.Msg) {
 			if m.Subject == "test.timeout" {
 				time.Sleep(2 * time.Second)
@@ -62,12 +61,8 @@ func TestIntegrationNatsReq(t *testing.T) {
 			resp := fmt.Sprintf("%s yourself", string(m.Data))
 			_ = m.Respond([]byte(resp))
 		})
-		if err != nil {
-			return err
-		}
-
-		return nil
-	}))
+		return err == nil
+	}, 30*time.Second, time.Second)
 	t.Cleanup(func() {
 		_ = sub.Unsubscribe()
 		natsConn.Close()
@@ -87,7 +82,7 @@ func TestIntegrationNatsReq(t *testing.T) {
 		}
 
 		t.Run("normal request", func(t *testing.T) {
-			url := fmt.Sprintf("tcp://localhost:%v", resource.GetPort("4222/tcp"))
+			url := fmt.Sprintf("tcp://localhost:%v", mp.Port())
 			require.NoError(t, err)
 
 			yaml := fmt.Sprintf(`
@@ -105,7 +100,7 @@ timeout: 1s`, url)
 		})
 
 		t.Run("timeout", func(t *testing.T) {
-			url := fmt.Sprintf("tcp://localhost:%v", resource.GetPort("4222/tcp"))
+			url := fmt.Sprintf("tcp://localhost:%v", mp.Port())
 			require.NoError(t, err)
 
 			yaml := fmt.Sprintf(`
@@ -119,7 +114,7 @@ timeout: 1s`, url)
 		})
 
 		t.Run("no listeners", func(t *testing.T) {
-			url := fmt.Sprintf("tcp://localhost:%v", resource.GetPort("4222/tcp"))
+			url := fmt.Sprintf("tcp://localhost:%v", mp.Port())
 
 			yaml := fmt.Sprintf(`
 urls: [%s]

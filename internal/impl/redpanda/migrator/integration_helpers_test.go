@@ -27,9 +27,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ory/dockertest/v3"
-	"github.com/ory/dockertest/v3/docker"
+	"github.com/docker/docker/api/types/container"
+	"github.com/docker/go-connections/nat"
 	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/network"
+	"github.com/testcontainers/testcontainers-go/wait"
 	"github.com/twmb/franz-go/pkg/kadm"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/kmsg"
@@ -61,9 +64,7 @@ type redpandatestConfigOpt func(redpandatestConfigOptKind, *redpandatest.Config)
 // startRedpandaSourceAndDestination starts two containers for Redpanda and
 // returns the EmbeddedRedpandaCluster for each container.
 func startRedpandaSourceAndDestination(t *testing.T, opts ...redpandatestConfigOpt) (src, dst EmbeddedRedpandaCluster) {
-	pool, err := dockertest.NewPool("")
-	require.NoError(t, err)
-	pool.MaxWait = time.Minute
+	var err error
 
 	src = EmbeddedRedpandaCluster{t: t}
 	dst = EmbeddedRedpandaCluster{t: t}
@@ -84,10 +85,10 @@ func startRedpandaSourceAndDestination(t *testing.T, opts ...redpandatestConfigO
 		opt(redpandatestConfigOptKindDst, &dstCfg)
 	}
 
-	src.Endpoints, _, err = redpandatest.StartSingleBrokerWithConfig(t, pool, srcCfg)
+	src.Endpoints, _, err = redpandatest.StartSingleBrokerWithConfig(t, srcCfg)
 	require.NoError(t, err)
 
-	dst.Endpoints, _, err = redpandatest.StartSingleBrokerWithConfig(t, pool, dstCfg)
+	dst.Endpoints, _, err = redpandatest.StartSingleBrokerWithConfig(t, dstCfg)
 	require.NoError(t, err)
 
 	src.Client, err = kgo.NewClient(
@@ -379,141 +380,131 @@ type EmbeddedConfluentCluster struct {
 	ConnectURL string
 }
 
-// startConfluent starts a Confluent CP cluster using Docker. Adapted from
+// startConfluent starts a Confluent CP cluster using testcontainers. Adapted from
 // https://github.com/confluentinc/cp-all-in-one/.
-func startConfluent(t *testing.T) EmbeddedConfluentCluster {
-	pool, err := dockertest.NewPool("")
-	require.NoError(t, err)
-	pool.MaxWait = 2 * time.Minute
-	return startConfluentInPool(t, pool, false)
-}
-
-const containerExpireSeconds = 3600
-
-// startConfluent starts a Confluent CP cluster using Docker. Adapted from
-// https://github.com/confluentinc/cp-all-in-one/.
-func startConfluentInPool(t *testing.T, pool *dockertest.Pool, connect bool) EmbeddedConfluentCluster {
+func startConfluent(t *testing.T, connect bool) EmbeddedConfluentCluster {
 	t.Helper()
 
-	// Get free ports for Kafka and Schema Registry
+	ctx := t.Context()
+
+	// Create a shared Docker network so containers can address each other by hostname.
+	rpNet, err := network.New(ctx)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		if err := rpNet.Remove(context.Background()); err != nil {
+			t.Logf("failed to remove docker network: %v", err)
+		}
+	})
+
+	// Get free ports for Kafka and Schema Registry external listeners.
 	kafkaPort, err := integration.GetFreePort()
 	require.NoError(t, err)
 	schemaRegistryPort, err := integration.GetFreePort()
 	require.NoError(t, err)
 
-	// Start Kafka container (Confluent CP Server)
-	kafkaOptions := &dockertest.RunOptions{
-		Repository: "confluentinc/cp-server",
-		Tag:        "8.0.0",
-		Hostname:   "broker",
-		Env: []string{
-			"KAFKA_NODE_ID=1",
-			"KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT",
-			fmt.Sprintf("KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://broker:29092,PLAINTEXT_HOST://localhost:%d", kafkaPort),
-			"KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1",
-			"KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0",
-			"KAFKA_CONFLUENT_LICENSE_TOPIC_REPLICATION_FACTOR=1",
-			"KAFKA_CONFLUENT_BALANCER_TOPIC_REPLICATION_FACTOR=1",
-			"KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1",
-			"KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1",
-			"KAFKA_DEFAULT_REPLICATION_FACTOR=1",
-			"KAFKA_MIN_INSYNC_REPLICAS=1",
-			"KAFKA_PROCESS_ROLES=broker,controller",
-			"KAFKA_CONTROLLER_QUORUM_VOTERS=1@broker:29093",
-			"KAFKA_LISTENERS=PLAINTEXT://broker:29092,CONTROLLER://broker:29093,PLAINTEXT_HOST://0.0.0.0:9092",
-			"KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT",
-			"KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER",
-			"KAFKA_LOG_DIRS=/tmp/kraft-combined-logs",
-			"CLUSTER_ID=MkU3OEVBNTcwNTJENDM2Qk",
-			"CONFLUENT_METRICS_ENABLE=false",
-			"CONFLUENT_SUPPORT_CUSTOMER_ID=anonymous",
+	// Start Kafka container (Confluent CP Server) with alias "broker" on the shared network.
+	kafkaContainer, err := testcontainers.Run(ctx, "confluentinc/cp-server:8.0.0",
+		network.WithNetwork([]string{"broker"}, rpNet),
+		testcontainers.WithExposedPorts("9092/tcp"),
+		testcontainers.WithHostConfigModifier(func(hc *container.HostConfig) {
+			hc.PortBindings = nat.PortMap{
+				"9092/tcp": []nat.PortBinding{{HostIP: "0.0.0.0", HostPort: strconv.Itoa(kafkaPort)}},
+			}
+		}),
+		testcontainers.WithEnv(map[string]string{
+			"KAFKA_NODE_ID":                                     "1",
+			"KAFKA_LISTENER_SECURITY_PROTOCOL_MAP":              "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT",
+			"KAFKA_ADVERTISED_LISTENERS":                        fmt.Sprintf("PLAINTEXT://broker:29092,PLAINTEXT_HOST://localhost:%d", kafkaPort),
+			"KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR":            "1",
+			"KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS":            "0",
+			"KAFKA_CONFLUENT_LICENSE_TOPIC_REPLICATION_FACTOR":  "1",
+			"KAFKA_CONFLUENT_BALANCER_TOPIC_REPLICATION_FACTOR": "1",
+			"KAFKA_TRANSACTION_STATE_LOG_MIN_ISR":               "1",
+			"KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR":    "1",
+			"KAFKA_DEFAULT_REPLICATION_FACTOR":                  "1",
+			"KAFKA_MIN_INSYNC_REPLICAS":                         "1",
+			"KAFKA_PROCESS_ROLES":                               "broker,controller",
+			"KAFKA_CONTROLLER_QUORUM_VOTERS":                    "1@broker:29093",
+			"KAFKA_LISTENERS":                                   "PLAINTEXT://broker:29092,CONTROLLER://broker:29093,PLAINTEXT_HOST://0.0.0.0:9092",
+			"KAFKA_INTER_BROKER_LISTENER_NAME":                  "PLAINTEXT",
+			"KAFKA_CONTROLLER_LISTENER_NAMES":                   "CONTROLLER",
+			"KAFKA_LOG_DIRS":                                    "/tmp/kraft-combined-logs",
+			"CLUSTER_ID":                                        "MkU3OEVBNTcwNTJENDM2Qk",
+			"CONFLUENT_METRICS_ENABLE":                          "false",
+			"CONFLUENT_SUPPORT_CUSTOMER_ID":                     "anonymous",
 			// Prevent log cleanup during testing
-			"KAFKA_LOG_RETENTION_MS=-1",
-			"KAFKA_LOG_RETENTION_BYTES=-1",
-			"KAFKA_LOG_SEGMENT_BYTES=1073741824",
-			"KAFKA_LOG_CLEANUP_POLICY=delete",
-			"KAFKA_LOG_CLEANER_ENABLE=false",
-		},
-		ExposedPorts: []string{"9092/tcp"},
-		PortBindings: map[docker.Port][]docker.PortBinding{
-			"9092/tcp": {{HostPort: fmt.Sprintf("%d", kafkaPort)}},
-		},
-	}
-
-	kafkaResource, err := pool.RunWithOptions(kafkaOptions, autoRemove)
+			"KAFKA_LOG_RETENTION_MS":    "-1",
+			"KAFKA_LOG_RETENTION_BYTES": "-1",
+			"KAFKA_LOG_SEGMENT_BYTES":   "1073741824",
+			"KAFKA_LOG_CLEANUP_POLICY":  "delete",
+			"KAFKA_LOG_CLEANER_ENABLE":  "false",
+		}),
+		testcontainers.WithWaitStrategy(
+			wait.ForListeningPort("9092/tcp").WithStartupTimeout(2*time.Minute),
+		),
+	)
+	testcontainers.CleanupContainer(t, kafkaContainer)
 	require.NoError(t, err)
-	require.NoError(t, kafkaResource.Expire(containerExpireSeconds))
-
-	t.Cleanup(func() {
-		require.NoError(t, pool.Purge(kafkaResource))
-	})
 
 	// Wait for Kafka to be healthy
 	brokerAddr := fmt.Sprintf("localhost:%d", kafkaPort)
-	require.NoError(t, pool.Retry(func() error {
+	require.Eventually(t, func() bool {
 		client, err := kgo.NewClient(
 			kgo.SeedBrokers(brokerAddr),
 			kgo.ClientID("health-check"),
 		)
 		if err != nil {
-			return err
+			return false
 		}
 		defer client.Close()
 
-		ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+		ctx2, cancel := context.WithTimeout(ctx, 5*time.Second)
 		defer cancel()
-		return client.Ping(ctx)
-	}))
+		return client.Ping(ctx2) == nil
+	}, 2*time.Minute, time.Second)
 	t.Log("Kafka container is healthy")
 
-	// Start Schema Registry container (Confluent CP Schema Registry)
-	schemaRegistryOptions := &dockertest.RunOptions{
-		Repository: "confluentinc/cp-schema-registry",
-		Tag:        "8.0.0",
-		Hostname:   "schema-registry",
-		Env: []string{
-			"SCHEMA_REGISTRY_HOST_NAME=schema-registry",
-			"SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS=broker:29092",
-			"SCHEMA_REGISTRY_LISTENERS=http://0.0.0.0:8081",
-		},
-		ExposedPorts: []string{"8081/tcp"},
-		PortBindings: map[docker.Port][]docker.PortBinding{
-			"8081/tcp": {{HostPort: fmt.Sprintf("%d", schemaRegistryPort)}},
-		},
-		Links: []string{fmt.Sprintf("%s:broker", kafkaResource.Container.Name)},
-	}
-
-	schemaRegistryResource, err := pool.RunWithOptions(schemaRegistryOptions, autoRemove)
+	// Start Schema Registry container with alias "schema-registry" on the shared network.
+	schemaRegistryContainer, err := testcontainers.Run(ctx, "confluentinc/cp-schema-registry:8.0.0",
+		network.WithNetwork([]string{"schema-registry"}, rpNet),
+		testcontainers.WithExposedPorts("8081/tcp"),
+		testcontainers.WithHostConfigModifier(func(hc *container.HostConfig) {
+			hc.PortBindings = nat.PortMap{
+				"8081/tcp": []nat.PortBinding{{HostIP: "0.0.0.0", HostPort: strconv.Itoa(schemaRegistryPort)}},
+			}
+		}),
+		testcontainers.WithEnv(map[string]string{
+			"SCHEMA_REGISTRY_HOST_NAME":                    "schema-registry",
+			"SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS": "broker:29092",
+			"SCHEMA_REGISTRY_LISTENERS":                    "http://0.0.0.0:8081",
+		}),
+		testcontainers.WithWaitStrategy(
+			wait.ForListeningPort("8081/tcp").WithStartupTimeout(2*time.Minute),
+		),
+	)
+	testcontainers.CleanupContainer(t, schemaRegistryContainer)
 	require.NoError(t, err)
-	require.NoError(t, schemaRegistryResource.Expire(containerExpireSeconds))
-
-	t.Cleanup(func() {
-		require.NoError(t, pool.Purge(schemaRegistryResource))
-	})
 
 	schemaRegistryURL := fmt.Sprintf("http://localhost:%d", schemaRegistryPort)
 
 	// Wait for Schema Registry to be healthy
-	require.NoError(t, pool.Retry(func() error {
-		ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
+	require.Eventually(t, func() bool {
+		ctx2, cancel := context.WithTimeout(ctx, 3*time.Second)
 		defer cancel()
 
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, schemaRegistryURL+"/subjects", nil)
+		req, err := http.NewRequestWithContext(ctx2, http.MethodGet, schemaRegistryURL+"/subjects", nil)
 		if err != nil {
-			return err
+			return false
 		}
 
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
-			return err
+			return false
 		}
 		defer resp.Body.Close()
 
-		if resp.StatusCode != http.StatusOK {
-			return fmt.Errorf("schema registry not ready, status: %d", resp.StatusCode)
-		}
-		return nil
-	}))
+		return resp.StatusCode == http.StatusOK
+	}, 2*time.Minute, time.Second)
 	t.Log("Schema Registry container is healthy")
 
 	// Start datagen connect
@@ -522,70 +513,60 @@ func startConfluentInPool(t *testing.T, pool *dockertest.Pool, connect bool) Emb
 		connectPort, err := integration.GetFreePort()
 		require.NoError(t, err)
 
-		connectOptions := &dockertest.RunOptions{
-			Repository: "cnfldemos/cp-server-connect-datagen",
-			Tag:        "0.6.4-7.6.0",
-			Hostname:   "connect",
-			Env: []string{
-				"CONNECT_BOOTSTRAP_SERVERS=broker:29092",
-				"CONNECT_REST_ADVERTISED_HOST_NAME=connect",
-				"CONNECT_GROUP_ID=compose-connect-group",
-				"CONNECT_CONFIG_STORAGE_TOPIC=docker-connect-configs",
-				"CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR=1",
-				"CONNECT_OFFSET_FLUSH_INTERVAL_MS=10000",
-				"CONNECT_OFFSET_STORAGE_TOPIC=docker-connect-offsets",
-				"CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR=1",
-				"CONNECT_STATUS_STORAGE_TOPIC=docker-connect-status",
-				"CONNECT_STATUS_STORAGE_REPLICATION_FACTOR=1",
-				"CONNECT_KEY_CONVERTER=org.apache.kafka.connect.storage.StringConverter",
-				"CONNECT_VALUE_CONVERTER=io.confluent.connect.avro.AvroConverter",
-				"CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_URL=http://schema-registry:8081",
-				"CLASSPATH=/usr/share/java/monitoring-interceptors/monitoring-interceptors-8.0.0.jar",
-				"CONNECT_PRODUCER_INTERCEPTOR_CLASSES=io.confluent.monitoring.clients.interceptor.MonitoringProducerInterceptor",
-				"CONNECT_CONSUMER_INTERCEPTOR_CLASSES=io.confluent.monitoring.clients.interceptor.MonitoringConsumerInterceptor",
-				"CONNECT_PLUGIN_PATH=/usr/share/java,/usr/share/confluent-hub-components",
-			},
-			ExposedPorts: []string{"8083/tcp"},
-			PortBindings: map[docker.Port][]docker.PortBinding{
-				"8083/tcp": {{HostPort: fmt.Sprintf("%d", connectPort)}},
-			},
-			Links: []string{
-				fmt.Sprintf("%s:broker", kafkaResource.Container.Name),
-				fmt.Sprintf("%s:schema-registry", schemaRegistryResource.Container.Name),
-			},
-		}
-
-		connectResource, err := pool.RunWithOptions(connectOptions, autoRemove)
+		connectContainer, err := testcontainers.Run(ctx, "cnfldemos/cp-server-connect-datagen:0.6.4-7.6.0",
+			network.WithNetwork([]string{"connect"}, rpNet),
+			testcontainers.WithExposedPorts("8083/tcp"),
+			testcontainers.WithHostConfigModifier(func(hc *container.HostConfig) {
+				hc.PortBindings = nat.PortMap{
+					"8083/tcp": []nat.PortBinding{{HostIP: "0.0.0.0", HostPort: strconv.Itoa(connectPort)}},
+				}
+			}),
+			testcontainers.WithEnv(map[string]string{
+				"CONNECT_BOOTSTRAP_SERVERS":                   "broker:29092",
+				"CONNECT_REST_ADVERTISED_HOST_NAME":           "connect",
+				"CONNECT_GROUP_ID":                            "compose-connect-group",
+				"CONNECT_CONFIG_STORAGE_TOPIC":                "docker-connect-configs",
+				"CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR":   "1",
+				"CONNECT_OFFSET_FLUSH_INTERVAL_MS":            "10000",
+				"CONNECT_OFFSET_STORAGE_TOPIC":                "docker-connect-offsets",
+				"CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR":   "1",
+				"CONNECT_STATUS_STORAGE_TOPIC":                "docker-connect-status",
+				"CONNECT_STATUS_STORAGE_REPLICATION_FACTOR":   "1",
+				"CONNECT_KEY_CONVERTER":                       "org.apache.kafka.connect.storage.StringConverter",
+				"CONNECT_VALUE_CONVERTER":                     "io.confluent.connect.avro.AvroConverter",
+				"CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_URL": "http://schema-registry:8081",
+				"CLASSPATH":                            "/usr/share/java/monitoring-interceptors/monitoring-interceptors-8.0.0.jar",
+				"CONNECT_PRODUCER_INTERCEPTOR_CLASSES": "io.confluent.monitoring.clients.interceptor.MonitoringProducerInterceptor",
+				"CONNECT_CONSUMER_INTERCEPTOR_CLASSES": "io.confluent.monitoring.clients.interceptor.MonitoringConsumerInterceptor",
+				"CONNECT_PLUGIN_PATH":                  "/usr/share/java,/usr/share/confluent-hub-components",
+			}),
+			testcontainers.WithWaitStrategy(
+				wait.ForListeningPort("8083/tcp").WithStartupTimeout(3*time.Minute),
+			),
+		)
+		testcontainers.CleanupContainer(t, connectContainer)
 		require.NoError(t, err)
-		require.NoError(t, connectResource.Expire(containerExpireSeconds))
-
-		t.Cleanup(func() {
-			require.NoError(t, pool.Purge(connectResource))
-		})
 
 		connectURL = fmt.Sprintf("http://localhost:%d", connectPort)
 
 		// Wait for Kafka Connect to be healthy
-		require.NoError(t, pool.Retry(func() error {
-			ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
+		require.Eventually(t, func() bool {
+			ctx2, cancel := context.WithTimeout(ctx, 3*time.Second)
 			defer cancel()
 
-			req, err := http.NewRequestWithContext(ctx, http.MethodGet, connectURL, nil)
+			req, err := http.NewRequestWithContext(ctx2, http.MethodGet, connectURL, nil)
 			if err != nil {
-				return err
+				return false
 			}
 
 			resp, err := http.DefaultClient.Do(req)
 			if err != nil {
-				return err
+				return false
 			}
 			defer resp.Body.Close()
 
-			if resp.StatusCode != http.StatusOK {
-				return fmt.Errorf("kafka connect not ready, status: %d", resp.StatusCode)
-			}
-			return nil
-		}))
+			return resp.StatusCode == http.StatusOK
+		}, 3*time.Minute, time.Second)
 		t.Log("Kafka Connect container is healthy")
 	}
 
@@ -639,8 +620,4 @@ func createConnector(ctx context.Context, connectURL, name string, config map[st
 	}
 
 	return nil
-}
-
-func autoRemove(hc *docker.HostConfig) {
-	hc.AutoRemove = true
 }

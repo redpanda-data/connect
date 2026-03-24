@@ -32,20 +32,16 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/impl/redpanda/redpandatest"
 	_ "github.com/redpanda-data/connect/v4/public/components/confluent"
 
-	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	franz_sr "github.com/twmb/franz-go/pkg/sr"
 )
 
 func runRedpandaPairForSchemaMigration(t *testing.T) (src, dst redpandatest.Endpoints) {
-	pool, err := dockertest.NewPool("")
+	var err error
+	src, err = redpandatest.StartRedpanda(t, false, true)
 	require.NoError(t, err)
-	pool.MaxWait = time.Minute
-
-	src, err = redpandatest.StartRedpanda(t, pool, false, true)
-	require.NoError(t, err)
-	dst, err = redpandatest.StartRedpanda(t, pool, false, true)
+	dst, err = redpandatest.StartRedpanda(t, false, true)
 	require.NoError(t, err)
 	return
 }
@@ -246,11 +242,7 @@ func TestSchemaRegistryProtobufSchemasIntegration(t *testing.T) {
 	t.Skip("disabled: requires Redpanda import mode setup")
 	integration.CheckSkip(t)
 
-	pool, err := dockertest.NewPool("")
-	require.NoError(t, err)
-	pool.MaxWait = time.Minute
-
-	sr, err := redpandatest.StartRedpanda(t, pool, false, true)
+	sr, err := redpandatest.StartRedpanda(t, false, true)
 	require.NoError(t, err)
 
 	t.Logf("Schema Registry URL: %s", sr.SchemaRegistryURL)

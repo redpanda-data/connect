@@ -20,8 +20,9 @@ import (
 	"time"
 
 	"github.com/neo4j/neo4j-go-driver/v5/neo4j"
-	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/wait"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
@@ -52,25 +53,22 @@ func TestIntegrationCypher(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
-	pool, err := dockertest.NewPool("")
-	if err != nil {
-		t.Skipf("Could not connect to docker: %s", err)
-	}
-	pool.MaxWait = time.Second * 60
+	ctr, err := testcontainers.Run(t.Context(), "neo4j:latest",
+		testcontainers.WithExposedPorts("7687/tcp"),
+		testcontainers.WithEnv(map[string]string{"NEO4J_AUTH": "none"}),
+		testcontainers.WithWaitStrategy(
+			wait.ForListeningPort("7687/tcp").WithStartupTimeout(60*time.Second),
+		),
+	)
+	testcontainers.CleanupContainer(t, ctr)
+	require.NoError(t, err)
 
-	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
-		Repository:   "neo4j",
-		ExposedPorts: []string{"7687/tcp"},
-		Env:          []string{"NEO4J_AUTH=none"},
-	})
-	require.NoError(t, err, "Could not start resource: %s", err)
-	t.Cleanup(func() {
-		if err = pool.Purge(resource); err != nil {
-			t.Logf("Failed to clean up docker resource: %v", err)
-		}
-	})
+	host, err := ctr.Host(t.Context())
+	require.NoError(t, err)
+	mappedPort, err := ctr.MappedPort(t.Context(), "7687/tcp")
+	require.NoError(t, err)
 
-	uri := fmt.Sprintf("bolt://127.0.0.1:%s", resource.GetPort("7687/tcp"))
+	uri := fmt.Sprintf("bolt://%s:%s", host, mappedPort.Port())
 	out := outputFromConf(t, `
 uri: %s
 cypher: |
@@ -83,9 +81,9 @@ args_mapping: |
   root.cit = this.city
   root.pop = this.population
     `, uri)
-	require.NoError(t, pool.Retry(func() error {
-		return out.Connect(t.Context())
-	}))
+	require.Eventually(t, func() bool {
+		return out.Connect(t.Context()) == nil
+	}, 60*time.Second, time.Second)
 	t.Cleanup(func() {
 		if err = out.Close(t.Context()); err != nil {
 			t.Logf("Failed to cleanup output: %v", err)
