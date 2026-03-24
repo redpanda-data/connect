@@ -46,8 +46,8 @@ jobs:
         run: |
           jq --slurpfile prs "$RUNNER_TEMP/merged-prs.json" \
             --rawfile prompt .github/ai/release-notes-classifier.txt \
-            '(.messages[] | select(.role == "system") | .content) = $prompt |
-             (.messages[] | select(.role == "user")   | .content) = ($prs[0] | tojson)' \
+            '.system = $prompt |
+             (.messages[] | select(.role == "user") | .content) = ($prs[0] | tojson)' \
             .github/ai/release-notes-classifier.json | tee "$RUNNER_TEMP/request.json" | jq .
 
       - name: Classify PRs
@@ -60,8 +60,8 @@ jobs:
             -H "anthropic-version: 2023-06-01" \
             -H "content-type: application/json" \
             -d @"$RUNNER_TEMP/request.json")
+          cat "$RUNNER_TEMP/response.json"
           if [ "$HTTP_CODE" -ne 200 ]; then
-            cat "$RUNNER_TEMP/response.json"
             echo "::error::Anthropic API returned HTTP $HTTP_CODE"
             exit 1
           fi
