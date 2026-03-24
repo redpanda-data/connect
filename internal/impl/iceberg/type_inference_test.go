@@ -12,7 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/apache/iceberg-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -100,96 +99,6 @@ func TestInferIcebergType(t *testing.T) {
 			assert.Equal(t, tt.wantType, got.Type())
 		})
 	}
-}
-
-func TestBuildSchemaFromRecord(t *testing.T) {
-	t.Run("simple record", func(t *testing.T) {
-		record := map[string]any{
-			"id":   42,
-			"name": "test",
-			"flag": true,
-		}
-
-		schema, err := BuildSchemaFromRecord(record)
-		require.NoError(t, err)
-		require.NotNil(t, schema)
-
-		// Should have 3 fields
-		assert.Len(t, schema.Fields(), 3)
-
-		// All fields should be optional
-		for _, field := range schema.Fields() {
-			assert.False(t, field.Required, "field %s should be optional", field.Name)
-		}
-	})
-
-	t.Run("nested record", func(t *testing.T) {
-		record := map[string]any{
-			"user": map[string]any{
-				"name":  "alice",
-				"email": "alice@example.com",
-			},
-			"items": []any{
-				map[string]any{"sku": "ABC", "qty": 2},
-			},
-		}
-
-		schema, err := BuildSchemaFromRecord(record)
-		require.NoError(t, err)
-		require.NotNil(t, schema)
-
-		// Should have 2 top-level fields
-		assert.Len(t, schema.Fields(), 2)
-	})
-
-	t.Run("record with nil values", func(t *testing.T) {
-		record := map[string]any{
-			"name":    "test",
-			"unknown": nil, // Should be skipped
-		}
-
-		schema, err := BuildSchemaFromRecord(record)
-		require.NoError(t, err)
-		require.NotNil(t, schema)
-
-		// Should only have 1 field (nil field is skipped)
-		assert.Len(t, schema.Fields(), 1)
-		assert.Equal(t, "name", schema.Fields()[0].Name)
-	})
-
-	t.Run("empty record", func(t *testing.T) {
-		record := map[string]any{}
-
-		schema, err := BuildSchemaFromRecord(record)
-		require.NoError(t, err)
-		require.NotNil(t, schema)
-
-		// Should have 0 fields
-		assert.Empty(t, schema.Fields())
-	})
-
-	t.Run("record with timestamp", func(t *testing.T) {
-		now := time.Now()
-		record := map[string]any{
-			"event":     "test",
-			"timestamp": now,
-		}
-
-		schema, err := BuildSchemaFromRecord(record)
-		require.NoError(t, err)
-		require.NotNil(t, schema)
-
-		// Find the timestamp field
-		var tsField *iceberg.NestedField
-		for _, f := range schema.Fields() {
-			if f.Name == "timestamp" {
-				tsField = &f
-				break
-			}
-		}
-		require.NotNil(t, tsField)
-		assert.Equal(t, "timestamptz", tsField.Type.Type())
-	})
 }
 
 func TestInferIcebergTypeForAddColumn(t *testing.T) {

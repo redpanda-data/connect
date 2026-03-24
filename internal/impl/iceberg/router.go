@@ -19,6 +19,7 @@ import (
 	"github.com/apache/iceberg-go/catalog"
 	"github.com/apache/iceberg-go/table"
 
+	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/impl/iceberg/catalogx"
 	"github.com/redpanda-data/connect/v4/internal/impl/iceberg/icebergx"
@@ -42,6 +43,12 @@ type SchemaEvolutionConfig struct {
 	// does not automatically assign them (e.g., AWS Glue). When set, new table
 	// locations are derived as {prefix}{namespace}/{table}.
 	TableLocation string
+	// SchemaMetadata is the name of a message metadata field containing a schema.Common
+	// definition for determining column types during schema evolution.
+	SchemaMetadata string
+	// NewColumnTypeMapping is an optional Bloblang mapping that can override inferred
+	// or schema-metadata-derived column types during schema evolution.
+	NewColumnTypeMapping *bloblang.Executor
 }
 
 const maxSchemaEvolutionRetries = 10
@@ -61,6 +68,7 @@ type Router struct {
 	tableStr     *service.InterpolatedString
 	schemaEvoCfg SchemaEvolutionConfig
 	commitCfg    CommitConfig
+	resolver     *typeResolver
 
 	entries sync.Map // tableKey -> *tableEntry
 
@@ -82,6 +90,7 @@ func NewRouter(
 		tableStr:     tableStr,
 		schemaEvoCfg: schemaEvoCfg,
 		commitCfg:    commitCfg,
+		resolver:     newTypeResolver(schemaEvoCfg.SchemaMetadata, schemaEvoCfg.NewColumnTypeMapping, logger),
 		logger:       logger,
 	}
 }
@@ -178,7 +187,7 @@ func (r *Router) writeWithRetry(ctx context.Context, key tableKey, batch service
 
 			var schemaErr *BatchSchemaEvolutionError
 			if errors.As(err, &schemaErr) {
-				if evolveErr := r.evolveSchema(ctx, key, schemaErr, entry); evolveErr != nil {
+				if evolveErr := r.evolveSchema(ctx, key, schemaErr, batch, entry); evolveErr != nil {
 					return fmt.Errorf("evolving schema for %s.%s: %w", key.namespace, key.table, evolveErr)
 				}
 				continue
@@ -308,8 +317,8 @@ func (r *Router) createTable(ctx context.Context, key tableKey, batch service.Me
 		return fmt.Errorf("first message is not an object, got %T", structured)
 	}
 
-	// Build schema from record
-	schema, err := BuildSchemaFromRecord(record)
+	// Build schema from record using the type resolver
+	schema, err := r.buildSchemaWithResolver(record, firstMsg, key)
 	if err != nil {
 		return fmt.Errorf("building schema from record: %w", err)
 	}
@@ -358,8 +367,32 @@ func (r *Router) createTable(ctx context.Context, key tableKey, batch service.Me
 	return nil
 }
 
+// buildSchemaWithResolver builds a schema using the type resolver for type resolution.
+func (r *Router) buildSchemaWithResolver(record map[string]any, msg *service.Message, key tableKey) (*iceberg.Schema, error) {
+	ti := newTypeInferrer()
+	fields := make([]iceberg.NestedField, 0, len(record))
+
+	for name, value := range record {
+		fieldType, err := r.resolver.resolveTypeForCreateTable(name, value, msg, key.namespace, key.table)
+		if err != nil {
+			return nil, fmt.Errorf("resolving type for field %q: %w", name, err)
+		}
+		if fieldType == nil {
+			continue // nil value, skip
+		}
+		fields = append(fields, iceberg.NestedField{
+			ID:       ti.allocateFieldID(),
+			Name:     name,
+			Type:     fieldType,
+			Required: false,
+		})
+	}
+
+	return iceberg.NewSchema(0, fields...), nil
+}
+
 // evolveSchema adds new columns to the table.
-func (r *Router) evolveSchema(ctx context.Context, key tableKey, schemaErr *BatchSchemaEvolutionError, entry *tableEntry) error {
+func (r *Router) evolveSchema(ctx context.Context, key tableKey, schemaErr *BatchSchemaEvolutionError, batch service.MessageBatch, entry *tableEntry) error {
 	entry.mu.Lock()
 	defer entry.mu.Unlock()
 
@@ -384,10 +417,10 @@ func (r *Router) evolveSchema(ctx context.Context, key tableKey, schemaErr *Batc
 	_, err = client.UpdateSchema(ctx, tbl, func(us *table.UpdateSchema) {
 		for _, fields := range groups {
 			for _, field := range fields {
-				// Infer type from sample value
-				fieldType, err := InferIcebergTypeForAddColumn(field.Value())
+				// Resolve type using the three-stage pipeline
+				fieldType, err := r.resolver.resolveTypeForAddColumn(field, batch[0], key.namespace, key.table)
 				if err != nil {
-					r.logger.Warnf("Failed to infer type for field %q: %v, using string", field.FieldName(), err)
+					r.logger.Warnf("Failed to resolve type for field %q: %v, using string", field.FieldName(), err)
 					fieldType = iceberg.StringType{}
 				}
 
