@@ -16,6 +16,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Compute next version
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          CURRENT=$(gh release view --json tagName -q '.tagName' | sed 's/^v//')
+          MINOR=$(echo "$CURRENT" | cut -d. -f2)
+          NEXT="4.$((MINOR + 1)).0"
+          echo "next=$NEXT" >> "$GITHUB_OUTPUT"
+          echo "**Next version:** $NEXT" >> "$GITHUB_STEP_SUMMARY"
+
       - name: List merged PRs
         env:
           GH_TOKEN: ${{ github.token }}
@@ -31,22 +42,48 @@ jobs:
             summary: ([.comments[] | select(.author.login == "claude")] | last | .body)
           }]' | tee "$RUNNER_TEMP/merged-prs.json" | jq .
 
-      - name: Classify PRs
-        env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      - name: Build classifier request
         run: |
           jq --slurpfile prs "$RUNNER_TEMP/merged-prs.json" \
             --rawfile prompt .github/ai/release-notes-classifier.txt \
             '(.messages[] | select(.role == "system") | .content) = $prompt |
              (.messages[] | select(.role == "user")   | .content) = ($prs[0] | tojson)' \
-            .github/ai/release-notes-classifier.json |
-          curl -fsSL https://api.anthropic.com/v1/messages \
+            .github/ai/release-notes-classifier.json > "$RUNNER_TEMP/request.json"
+
+          echo '<details><summary>Classifier request</summary>' >> "$GITHUB_STEP_SUMMARY"
+          echo '' >> "$GITHUB_STEP_SUMMARY"
+          echo '```json' >> "$GITHUB_STEP_SUMMARY"
+          jq . "$RUNNER_TEMP/request.json" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo '</details>' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Classify PRs
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          RESPONSE=$(curl -fsSL https://api.anthropic.com/v1/messages \
             -H "x-api-key: $ANTHROPIC_API_KEY" \
             -H "anthropic-version: 2023-06-01" \
             -H "content-type: application/json" \
-            --data-binary @- |
-          jq '.content[0].text | fromjson | .entries' |
-          tee "$RUNNER_TEMP/classified.json" |
+            -d @"$RUNNER_TEMP/request.json") || {
+            echo "::error::Anthropic API call failed"
+            exit 1
+          }
+
+          echo "$RESPONSE" | jq '.content[0].text | fromjson | .entries' > "$RUNNER_TEMP/classified.json"
+
+          echo '<details><summary>Classified PRs</summary>' >> "$GITHUB_STEP_SUMMARY"
+          echo '' >> "$GITHUB_STEP_SUMMARY"
+          echo '```json' >> "$GITHUB_STEP_SUMMARY"
+          jq . "$RUNNER_TEMP/classified.json" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo '</details>' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Update CHANGELOG.md and create PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NEXT: ${{ steps.version.outputs.next }}
+        run: |
           jq -r --arg repo "${{ github.repository }}" '
             [group_by(.category)[] | {
               order: (.[0].category | if . == "ADDED" then 1 elif . == "FIXED" then 2 elif . == "CHANGED" then 3 else 4 end),
@@ -56,24 +93,8 @@ jobs:
             "### \(.title)\n",
             (.items[] | "- \(.system): \(.description) (@\(.author)) ([#\(.pr)](https://github.com/\($repo)/pull/\(.pr)))"),
             ""
-          ' | tee "$RUNNER_TEMP/changelog-entries.md" >> "$GITHUB_STEP_SUMMARY"
+          ' "$RUNNER_TEMP/classified.json" | tee "$RUNNER_TEMP/changelog-entries.md" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Compute next version
-        id: version
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          CURRENT=$(gh release view --json tagName -q '.tagName' | sed 's/^v//')
-          MINOR=$(echo "$CURRENT" | cut -d. -f2)
-          NEXT="4.$((MINOR + 1)).0"
-          echo "next=$NEXT" >> "$GITHUB_OUTPUT"
-          echo "Next version: $NEXT"
-
-      - name: Update CHANGELOG.md and create PR
-        env:
-          GH_TOKEN: ${{ github.token }}
-          NEXT: ${{ steps.version.outputs.next }}
-        run: |
           ENTRIES=$(cat "$RUNNER_TEMP/changelog-entries.md")
           if [ -z "$ENTRIES" ]; then
             echo "::error::No classified entries found"
