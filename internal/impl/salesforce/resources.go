@@ -6,9 +6,9 @@
 //
 // https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
-// resources.go defines the salesforceProc salesforceProcessor struct and implements the resource dispatcher.
-// The searchResource function routes incoming queries to the appropriate
-// Salesforce resource handler (issues, projects, users, roles, etc.).
+// resources.go defines shared types and the core dispatch logic for the Salesforce processor.
+// It implements the Dispatch method that routes incoming requests to the appropriate
+// Salesforce API handler (REST snapshot, filtered SOQL/GraphQL, CDC, or Pub/Sub).
 
 package salesforce
 

@@ -334,6 +334,9 @@ func newSalesforceProcessor(conf *service.ParsedConfig, mgr *service.Resources) 
 	cdcTopicName := pubsubTopic
 	if cdcTopicName == "" {
 		cdcTopicName = buildCDCTopicName(cdcObjects)
+		if len(cdcObjects) > 1 {
+			mgr.Logger().Warnf("Multiple cdc_objects configured (%v): Salesforce Pub/Sub API does not support subscribing to multiple individual CDC channels in one subscription. Falling back to the catch-all topic /data/ChangeEvents, which captures changes for ALL objects. To subscribe to a single object's channel, specify exactly one entry in cdc_objects.", cdcObjects)
+		}
 	}
 
 	httpClient := &http.Client{Timeout: timeout}

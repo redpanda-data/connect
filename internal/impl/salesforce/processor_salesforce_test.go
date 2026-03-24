@@ -9,6 +9,8 @@
 package salesforce
 
 import (
+	"context"
+	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -16,6 +18,7 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
+	"github.com/redpanda-data/connect/v4/internal/impl/salesforce/salesforcehttp"
 	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
@@ -144,4 +147,77 @@ max_retries: 5
 			}
 		})
 	}
+}
+
+// newTestProcessor builds a salesforceProcessor wired up to a mock in-memory cache.
+// The returned resources object can be used to pre-seed cache keys.
+func newTestProcessor(t *testing.T) (*salesforceProcessor, *service.Resources) {
+	t.Helper()
+	mgr := service.MockResources(service.MockResourcesOptAddCache("salesforce_checkpoint"))
+	license.InjectTestService(mgr)
+	p := &salesforceProcessor{
+		log:               mgr.Logger(),
+		res:               mgr,
+		cacheResourceName: "salesforce_checkpoint",
+	}
+	return p, mgr
+}
+
+func TestLoadState_NewFormat(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	p, mgr := newTestProcessor(t)
+
+	want := ProcessorState{
+		SnapshotComplete: true,
+		FilteredCursor:   "cursor123",
+	}
+	b, err := json.Marshal(want)
+	require.NoError(t, err)
+
+	require.NoError(t, mgr.AccessCache(ctx, "salesforce_checkpoint", func(c service.Cache) {
+		require.NoError(t, c.Set(ctx, "sf_state", b, nil))
+	}))
+
+	got, err := p.loadState(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, want, got)
+}
+
+func TestLoadState_LegacyMigration(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	p, mgr := newTestProcessor(t)
+
+	legacyCursor := salesforcehttp.Cursor{NextAssign: 3}
+	b, err := json.Marshal(legacyCursor)
+	require.NoError(t, err)
+
+	require.NoError(t, mgr.AccessCache(ctx, "salesforce_checkpoint", func(c service.Cache) {
+		require.NoError(t, c.Set(ctx, "sf_cursor", b, nil))
+	}))
+
+	got, err := p.loadState(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, legacyCursor, got.RestCursor)
+	assert.False(t, got.SnapshotComplete)
+
+	// Verify the state was migrated to the new key
+	var migrated ProcessorState
+	require.NoError(t, mgr.AccessCache(ctx, "salesforce_checkpoint", func(c service.Cache) {
+		raw, err := c.Get(ctx, "sf_state")
+		require.NoError(t, err)
+		require.NoError(t, json.Unmarshal(raw, &migrated))
+	}))
+	assert.Equal(t, legacyCursor, migrated.RestCursor)
+}
+
+func TestLoadState_Empty(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	p, _ := newTestProcessor(t)
+
+	got, err := p.loadState(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, ProcessorState{}, got)
 }
