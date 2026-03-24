@@ -111,7 +111,7 @@ func (c *committer) doCommit(ctx context.Context, inputs []CommitInput) ([]struc
 		if c.cfg.MaxSnapshotAge > 0 {
 			props[table.MaxSnapshotAgeMsKey] = strconv.FormatInt(c.cfg.MaxSnapshotAge.Milliseconds(), 10)
 		}
-		if err := txn.AddDataFiles(ctx, allFiles, props); err != nil {
+		if err := txn.AddDataFiles(ctx, allFiles, props, table.WithoutAutoNameMapping()); err != nil {
 			return nil, fmt.Errorf("adding files: %w", err)
 		}
 		tbl, err := txn.Commit(ctx)

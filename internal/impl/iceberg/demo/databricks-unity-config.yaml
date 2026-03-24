@@ -1,0 +1,47 @@
+# E2E Redpanda Connect config for Databricks Unity Catalog (Iceberg REST)
+#
+# Prerequisites:
+#   1. A Databricks workspace with Unity Catalog enabled
+#   2. A service principal with OAuth2 M2M credentials (client_id + client_secret)
+#   3. The service principal needs USE CATALOG + USE SCHEMA + CREATE TABLE permissions
+#      on the target catalog/schema
+#
+# Run with:
+#   go run ./cmd/redpanda-connect run -e ./internal/impl/iceberg/demo/.env ./internal/impl/iceberg/demo/databricks-unity-config.yaml
+#
+# Verify in Databricks:
+#   SELECT * FROM rockwood-testing.default.events;
+
+input:
+  generate:
+    count: 100
+    interval: 100ms
+    mapping: |
+      root.id = counter()
+      root.name = ["alice", "bob", "charlie", "diana", "eve"].index(counter() % 5)
+      root.event_type = ["click", "view", "purchase"].index(counter() % 3)
+      root.value = (counter() * 10) + random_int(max: 100)
+      root.ts = now()
+
+output:
+  iceberg:
+    catalog:
+      url: https://${DATABRICKS_HOST}/api/2.1/unity-catalog/iceberg-rest
+      warehouse: rockwood-e2e
+      auth:
+        oauth2:
+          server_uri: https://${DATABRICKS_HOST}/oidc/v1/token
+          client_id: ${DATABRICKS_CLIENT_ID}
+          client_secret: ${DATABRICKS_CLIENT_SECRET}
+          scope: all-apis
+    namespace: default
+    table: events
+    storage:
+      aws_s3:
+        bucket: rockwood-iceberg-e2e-test
+        region: us-east-1
+    schema_evolution:
+      enabled: false
+    batching:
+      count: 50
+      period: 5s
