@@ -388,7 +388,7 @@ func (s *salesforceProcessor) accessCache(
 	var lastOffset string
 	var cacheErr error
 
-	if err := s.res.AccessCache(ctx, s.binLogCache, func(cache service.Cache) {
+	if err := s.res.AccessCache(ctx, s.cacheResourceName, func(cache service.Cache) {
 		val, err := cache.Get(ctx, key)
 		if err == nil {
 			lastOffset = string(val)
@@ -413,7 +413,7 @@ func (s *salesforceProcessor) writeCache(
 ) error {
 	var cacheErr error
 
-	if err := s.res.AccessCache(ctx, s.binLogCache, func(cache service.Cache) {
+	if err := s.res.AccessCache(ctx, s.cacheResourceName, func(cache service.Cache) {
 		cacheErr = cache.Set(ctx, key, []byte(value), nil)
 	}); err != nil {
 		return fmt.Errorf("unable to access cache for writing: %w", err)

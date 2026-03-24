@@ -6,9 +6,8 @@
 //
 // https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
-// Package salesforce provides a Benthos salesforceProcessor that integrates with the Salesforce APIs
-// to fetch data based on input messages. It allows querying Salesforce resources
-// such as .... TODO
+// Package salesforce provides a Redpanda Connect processor and output for integrating with Salesforce APIs.
+// It supports REST snapshot, filtered SOQL/GraphQL queries, CDC streaming, and Pub/Sub Platform Events.
 
 package salesforce
 
@@ -35,7 +34,7 @@ type salesforceProcessor struct {
 	log         *service.Logger
 	client      *salesforcehttp.Client
 	res         *service.Resources
-	binLogCache string
+	cacheResourceName string
 	req         Request
 
 	// CDC configuration
@@ -353,7 +352,7 @@ func newSalesforceProcessor(conf *service.ParsedConfig, mgr *service.Resources) 
 		log:                      mgr.Logger(),
 		res:                      mgr,
 		req:                      req,
-		binLogCache:              cacheResource,
+		cacheResourceName:        cacheResource,
 		cdcEnabled:               cdcEnabled,
 		cdcObjects:               cdcObjects,
 		cdcTopicName:             cdcTopicName,

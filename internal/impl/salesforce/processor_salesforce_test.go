@@ -15,6 +15,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
 func TestSalesforceProcessorConfigValidation(t *testing.T) {
@@ -122,7 +124,9 @@ max_retries: 5
 			var proc service.Processor
 			var procErr error
 			if err == nil {
-				proc, procErr = newSalesforceProcessor(conf, conf.Resources())
+				mgr := conf.Resources()
+				license.InjectTestService(mgr)
+				proc, procErr = newSalesforceProcessor(conf, mgr)
 			}
 
 			if tc.wantErrSub == "" {

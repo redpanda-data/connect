@@ -98,6 +98,9 @@ func (s *Client) doSalesforceRequest(ctx context.Context, u *url.URL) ([]byte, e
 
 // Function to get the Bearer token from Salesforce Oauth2.0 endpoint using client credentials grant type along with client id and client secret
 func (s *Client) updateAndSetBearerToken(ctx context.Context) error {
+	s.tokenMu.Lock()
+	defer s.tokenMu.Unlock()
+
 	apiUrl, err := url.Parse(s.orgURL + salesforceAPIBasePath + "/oauth2/token")
 	if err != nil {
 		return fmt.Errorf("invalid token endpoint URL: %w", err)
@@ -287,6 +290,10 @@ type Client struct {
 	httpClient   *http.Client
 	retryOpts    RetryOptions
 	log          *service.Logger
+
+	// tokenMu serialises concurrent token refresh calls so that a single 401 response
+	// shared across multiple goroutines triggers only one actual OAuth2 refresh.
+	tokenMu sync.Mutex
 
 	// sobjectList is populated once and then read-only; mu protects the initial load.
 	// sobjectListLoaded is set to true after the first load attempt (success or failure).

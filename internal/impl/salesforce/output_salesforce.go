@@ -1,11 +1,10 @@
 // Copyright 2026 Redpanda Data, Inc.
 //
-// Use of this software is governed by the Business Source License
-// included in the file licenses/BSL.md
+// Licensed as a Redpanda Enterprise file under the Redpanda Community
+// License (the "License"); you may not use this file except in compliance with
+// the License. You may obtain a copy of the License at
 //
-// As of the Change Date specified in that file, in accordance with
-// the Business Source License, use of this software will be governed
-// by the Apache License, Version 2.0
+// https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
 // output_salesforce.go implements a Redpanda Connect output component that writes
 // messages to Salesforce using either the sObject Collections REST API (realtime mode)
@@ -26,6 +25,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -74,9 +74,11 @@ type salesforceSinkOutput struct {
 	blockedFields    map[string]map[string]struct{}
 
 	// bulkJobs tracks in-flight bulk jobs being polled in background goroutines.
-	bulkJobsMu  sync.Mutex
-	bulkJobs    []*inFlightBulkJob
-	maxBulkJobs int
+	bulkJobsMu     sync.Mutex
+	bulkJobs       []*inFlightBulkJob
+	maxBulkJobs    int
+	shutdownCtx    context.Context
+	shutdownCancel context.CancelFunc
 }
 
 func init() {
@@ -191,7 +193,7 @@ output:
 			Description("Number of records per bulk job. Also controls the output batch size.").
 			Default(defaultBulkBatchSize)).
 		Field(service.NewIntField("max_concurrent_bulk_jobs").
-			Description("Maximum number of bulk jobs polling concurrently in the background.").
+			Description("Maximum number of bulk jobs polling concurrently in the background. Each in-flight job buffers its CSV payload in memory; lower this value if memory usage is a concern.").
 			Default(defaultMaxBulkJobs)).
 		Field(service.NewIntField("max_in_flight").
 			Description("Maximum number of batches to send concurrently. Increasing this improves realtime write throughput.").
@@ -301,6 +303,7 @@ func newSalesforceSinkOutput(conf *service.ParsedConfig, mgr *service.Resources)
 		return nil, err
 	}
 
+	shutdownCtx, shutdownCancel := context.WithCancel(context.Background())
 	out := &salesforceSinkOutput{
 		log:            mgr.Logger(),
 		client:         sfClient,
@@ -308,6 +311,8 @@ func newSalesforceSinkOutput(conf *service.ParsedConfig, mgr *service.Resources)
 		writableFields: make(map[string]map[string]struct{}),
 		blockedFields:  make(map[string]map[string]struct{}),
 		maxBulkJobs:    maxConcurrentBulkJobs,
+		shutdownCtx:    shutdownCtx,
+		shutdownCancel: shutdownCancel,
 	}
 	for topic, m := range topicMappings {
 		out.log.Infof("salesforce_sink: topic=%s → sobject=%s operation=%s mode=%s", topic, m.sobject, m.operation, m.mode)
@@ -375,6 +380,8 @@ func (s *salesforceSinkOutput) WriteBatch(ctx context.Context, batch service.Mes
 }
 
 func (s *salesforceSinkOutput) Close(ctx context.Context) error {
+	s.shutdownCancel()
+
 	s.bulkJobsMu.Lock()
 	jobs := s.bulkJobs
 	s.bulkJobs = nil
@@ -476,14 +483,14 @@ func (s *salesforceSinkOutput) writeRealtime(ctx context.Context, records []map[
 		if end > len(records) {
 			end = len(records)
 		}
-		if err := s.writeRealtimeChunk(ctx, records[start:end], m); err != nil {
+		if err := s.writeRealtimeChunk(ctx, records[start:end], m, 1); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (s *salesforceSinkOutput) writeRealtimeChunk(ctx context.Context, records []map[string]any, m topicMapping) error {
+func (s *salesforceSinkOutput) writeRealtimeChunk(ctx context.Context, records []map[string]any, m topicMapping, retries int) error {
 	writable, err := s.getWritableFields(ctx, m.sobject)
 	if err != nil {
 		return fmt.Errorf("salesforce_sink: could not describe %s: %w", m.sobject, err)
@@ -533,7 +540,10 @@ func (s *salesforceSinkOutput) writeRealtimeChunk(ctx context.Context, records [
 	}
 	if len(blocked) > 0 {
 		s.blockFields(m.sobject, blocked)
-		return s.writeRealtimeChunk(ctx, records, m)
+		if retries > 0 {
+			return s.writeRealtimeChunk(ctx, records, m, retries-1)
+		}
+		s.log.Warnf("salesforce_sink: %s: giving up after profile-blocked field retry; some records may have failed", m.sobject)
 	}
 
 	var errs []string
@@ -641,7 +651,7 @@ func (s *salesforceSinkOutput) writeBulk(ctx context.Context, records []map[stri
 	// Poll in background so the next WriteBatch can proceed immediately.
 	job := &inFlightBulkJob{jobID: jobID, errCh: make(chan error, 1)}
 	go func() {
-		if err := s.bulkPollUntilDone(context.Background(), jobID); err != nil {
+		if err := s.bulkPollUntilDone(s.shutdownCtx, jobID); err != nil {
 			s.log.Errorf("salesforce_sink bulk: job %s failed: %v", jobID, err)
 			job.errCh <- err
 		} else {
@@ -802,6 +812,7 @@ func recordsToCSV(records []map[string]any) ([]byte, error) {
 	for k := range records[0] {
 		headers = append(headers, k)
 	}
+	sort.Strings(headers)
 
 	var buf bytes.Buffer
 	w := csv.NewWriter(&buf)
