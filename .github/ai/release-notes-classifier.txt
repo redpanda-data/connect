@@ -1,3 +1,11 @@
 Transform each pull request into one or more changelog entries.
-Focus on user facing changes only. Skip CI, docs, chores, dependency bumps, code maintenance and internal tooling — do not emit entries for these.
-Use commit message prefixes to determine system (e.g. kafka, s3, gha). If no prefix, infer from changed code or PR context. If the change is general use "general" as the system.
+Focus on user-facing changes only.
+Skip PRs entirely if they match any of these categories — do not emit entries for them:
+- CI/CD, GitHub Actions, and build automation (commit prefixes: ci:, gha:, gh:)
+- Documentation-only changes (commit prefix: docs:)
+- Dependency bumps and go.mod-only changes
+- Code maintenance, refactoring, linting, and chores (commit prefix: chore:)
+- Internal tooling, test-only changes, and developer workflow improvements
+Use commit message prefixes to determine system (e.g. kafka, s3).
+If no prefix, infer from changed code or PR context.
+If the change is general use "general" as the system.

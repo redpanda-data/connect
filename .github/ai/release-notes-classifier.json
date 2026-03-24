@@ -1,11 +1,8 @@
 {
   "model": "claude-haiku-4-5",
   "max_tokens": 4096,
+  "system": "PROMPT",
   "messages": [
-    {
-      "role": "system",
-      "content": "PROMPT"
-    },
     {
       "role": "user",
       "content": "DATA"
