@@ -3,6 +3,15 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.85.0 - 2026-03-24
+
+### Added
+
+- redpanda: Added support for extracting and injecting tracing span mappings in Redpanda input and output connectors, enabling trace context propagation across pipelines connected via Kafka topics. ([@mmatczuk](https://github.com/mmatczuk), [#4146](https://github.com/redpanda-data/connect/pull/4146))
+
+### Fixed
+
+- redpanda: Fixed potential nil pointer error in Redpanda output when unable to create Franz writer by adding early error handling. ([@josephwoodward](https://github.com/josephwoodward), [#4149](https://github.com/redpanda-data/connect/pull/4149))
 ## 4.84.1 - 2026-03-20
 
 ### Added
