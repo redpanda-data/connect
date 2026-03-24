@@ -15,15 +15,14 @@
 package amqp1
 
 import (
-	"context"
 	"fmt"
 	"testing"
 	"time"
 
 	"github.com/Azure/go-amqp"
-	"github.com/ory/dockertest/v3"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/wait"
 
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 )
@@ -32,33 +31,30 @@ func TestIntegrationAMQP1(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
-	pool, err := dockertest.NewPool("")
-	require.NoError(t, err)
-
-	pool.MaxWait = time.Second * 30
-	resource, err := pool.Run("apache/activemq-classic",
-		"latest",
-		[]string{
-			"ACTIVEMQ_CONNECTION_USER=guest",
-			"ACTIVEMQ_CONNECTION_PASSWORD=guest",
-		},
+	ctr, err := testcontainers.Run(t.Context(), "apache/activemq-classic:latest",
+		testcontainers.WithExposedPorts("5672/tcp"),
+		testcontainers.WithEnv(map[string]string{
+			"ACTIVEMQ_CONNECTION_USER":     "guest",
+			"ACTIVEMQ_CONNECTION_PASSWORD": "guest",
+		}),
+		testcontainers.WithWaitStrategy(
+			wait.ForListeningPort("5672/tcp").WithStartupTimeout(time.Minute),
+		),
 	)
+	testcontainers.CleanupContainer(t, ctr)
 	require.NoError(t, err)
-	t.Cleanup(func() {
-		assert.NoError(t, pool.Purge(resource))
-	})
 
-	ctx, done := context.WithTimeout(t.Context(), time.Minute)
-	defer done()
+	mp, err := ctr.MappedPort(t.Context(), "5672/tcp")
+	require.NoError(t, err)
 
-	_ = resource.Expire(900)
-	require.NoError(t, pool.Retry(func() error {
-		client, err := amqp.Dial(ctx, fmt.Sprintf("amqp://guest:guest@localhost:%v/", resource.GetPort("5672/tcp")), nil)
+	require.Eventually(t, func() bool {
+		client, err := amqp.Dial(t.Context(), fmt.Sprintf("amqp://guest:guest@localhost:%v/", mp.Port()), nil)
 		if err == nil {
 			client.Close()
+			return true
 		}
-		return err
-	}))
+		return false
+	}, time.Minute, time.Second)
 
 	templateWithFieldURL := `
 output:
@@ -181,7 +177,7 @@ input:
 				t, tc.template,
 				integration.StreamTestOptSleepAfterInput(100*time.Millisecond),
 				integration.StreamTestOptSleepAfterOutput(100*time.Millisecond),
-				integration.StreamTestOptPort(resource.GetPort("5672/tcp")),
+				integration.StreamTestOptPort(mp.Port()),
 			)
 
 			t.Run("with max in flight", func(t *testing.T) {
@@ -190,7 +186,7 @@ input:
 					t, tc.template,
 					integration.StreamTestOptSleepAfterInput(100*time.Millisecond),
 					integration.StreamTestOptSleepAfterOutput(100*time.Millisecond),
-					integration.StreamTestOptPort(resource.GetPort("5672/tcp")),
+					integration.StreamTestOptPort(mp.Port()),
 					integration.StreamTestOptMaxInFlight(10),
 				)
 			})

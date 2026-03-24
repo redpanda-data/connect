@@ -16,43 +16,54 @@ package nsq
 
 import (
 	"fmt"
-	"net"
 	"testing"
 	"time"
 
-	"github.com/ory/dockertest/v3"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/wait"
 
 	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 )
 
+func startNSQD(t *testing.T) string {
+	t.Helper()
+
+	ctr, err := testcontainers.Run(t.Context(), "nsqio/nsq:v1.2.1",
+		testcontainers.WithCmd("/nsqd"),
+		testcontainers.WithExposedPorts("4150/tcp", "4151/tcp"),
+		testcontainers.WithWaitStrategy(
+			wait.ForListeningPort("4150/tcp").WithStartupTimeout(30*time.Second),
+		),
+	)
+	testcontainers.CleanupContainer(t, ctr)
+	require.NoError(t, err)
+
+	mappedPort, err := ctr.MappedPort(t.Context(), "4150/tcp")
+	require.NoError(t, err)
+	return mappedPort.Port()
+}
+
 func TestIntegrationNSQ(t *testing.T) {
+	integration.CheckSkip(t)
 	t.Parallel()
 
-	{
-		timeout := time.Second
-		conn, err := net.DialTimeout("tcp", "localhost:4150", timeout)
-		if err != nil {
-			t.Skip("Skipping NSQ tests as services are not running")
-		}
-		conn.Close()
-	}
+	port := startNSQD(t)
 
 	template := `
 output:
   nsq:
-    nsqd_tcp_address: localhost:4150
+    nsqd_tcp_address: localhost:$PORT
     topic: topic-$ID
     # user_agent: ""
     max_in_flight: $MAX_IN_FLIGHT
 
 input:
   nsq:
-    nsqd_tcp_addresses: [ localhost:4150 ]
-    lookupd_http_addresses: [ localhost:4160 ^]
+    nsqd_tcp_addresses: [ localhost:$PORT ]
+    lookupd_http_addresses: []
     topic: topic-$ID
     channel: channel-$ID
     # user_agent: ""
@@ -64,11 +75,11 @@ input:
 		integration.StreamTestSendBatch(10),
 		integration.StreamTestStreamParallel(1000),
 	)
-	suite.Run(t, template)
+	suite.Run(t, template, integration.StreamTestOptPort(port))
 
 	t.Run("with max in flight", func(t *testing.T) {
 		t.Parallel()
-		suite.Run(t, template, integration.StreamTestOptMaxInFlight(10))
+		suite.Run(t, template, integration.StreamTestOptPort(port), integration.StreamTestOptMaxInFlight(10))
 	})
 }
 
@@ -76,33 +87,7 @@ func TestNSQConnectionTestIntegration(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
-	pool, err := dockertest.NewPool("")
-	require.NoError(t, err)
-
-	pool.MaxWait = time.Second * 30
-	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
-		Repository:   "nsqio/nsq",
-		Tag:          "latest",
-		Cmd:          []string{"/nsqd"},
-		ExposedPorts: []string{"4150/tcp", "4151/tcp"},
-	})
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		assert.NoError(t, pool.Purge(resource))
-	})
-
-	_ = resource.Expire(900)
-	require.NoError(t, pool.Retry(func() error {
-		timeout := time.Second
-		conn, err := net.DialTimeout("tcp", "localhost:"+resource.GetPort("4150/tcp"), timeout)
-		if err != nil {
-			return err
-		}
-		conn.Close()
-		return nil
-	}))
-
-	port := resource.GetPort("4150/tcp")
+	port := startNSQD(t)
 
 	t.Run("input_valid", func(t *testing.T) {
 		resBuilder := service.NewResourceBuilder()

@@ -21,9 +21,9 @@ import (
 	"time"
 
 	"github.com/nats-io/nats.go"
-	"github.com/ory/dockertest/v3"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/wait"
 
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 )
@@ -32,26 +32,24 @@ func TestIntegrationNatsJetstream(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
-	pool, err := dockertest.NewPool("")
+	ctr, err := testcontainers.Run(t.Context(), "nats:latest",
+		testcontainers.WithCmd("--js"),
+		testcontainers.WithExposedPorts("4222/tcp"),
+		testcontainers.WithWaitStrategy(
+			wait.ForListeningPort("4222/tcp").WithStartupTimeout(30*time.Second),
+		),
+	)
+	testcontainers.CleanupContainer(t, ctr)
 	require.NoError(t, err)
 
-	pool.MaxWait = time.Second * 30
-	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
-		Repository: "nats",
-		Tag:        "latest",
-		Cmd:        []string{"--js"},
-	})
+	mp, err := ctr.MappedPort(t.Context(), "4222/tcp")
 	require.NoError(t, err)
-	t.Cleanup(func() {
-		assert.NoError(t, pool.Purge(resource))
-	})
 
 	var natsConn *nats.Conn
-	_ = resource.Expire(900)
-	require.NoError(t, pool.Retry(func() error {
-		natsConn, err = nats.Connect(fmt.Sprintf("tcp://localhost:%v", resource.GetPort("4222/tcp")))
-		return err
-	}))
+	require.Eventually(t, func() bool {
+		natsConn, err = nats.Connect(fmt.Sprintf("tcp://localhost:%v", mp.Port()))
+		return err == nil
+	}, 30*time.Second, time.Second)
 	t.Cleanup(func() {
 		natsConn.Close()
 	})
@@ -94,7 +92,7 @@ input:
 		}),
 		integration.StreamTestOptSleepAfterInput(100*time.Millisecond),
 		integration.StreamTestOptSleepAfterOutput(100*time.Millisecond),
-		integration.StreamTestOptPort(resource.GetPort("4222/tcp")),
+		integration.StreamTestOptPort(mp.Port()),
 	)
 }
 
@@ -102,26 +100,24 @@ func TestIntegrationNatsPullConsumer(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
-	pool, err := dockertest.NewPool("")
+	ctr, err := testcontainers.Run(t.Context(), "nats:latest",
+		testcontainers.WithCmd("--js"),
+		testcontainers.WithExposedPorts("4222/tcp"),
+		testcontainers.WithWaitStrategy(
+			wait.ForListeningPort("4222/tcp").WithStartupTimeout(30*time.Second),
+		),
+	)
+	testcontainers.CleanupContainer(t, ctr)
 	require.NoError(t, err)
 
-	pool.MaxWait = time.Second * 30
-	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
-		Repository: "nats",
-		Tag:        "latest",
-		Cmd:        []string{"--js"},
-	})
+	mp, err := ctr.MappedPort(t.Context(), "4222/tcp")
 	require.NoError(t, err)
-	t.Cleanup(func() {
-		assert.NoError(t, pool.Purge(resource))
-	})
 
 	var natsConn *nats.Conn
-	_ = resource.Expire(900)
-	require.NoError(t, pool.Retry(func() error {
-		natsConn, err = nats.Connect(fmt.Sprintf("tcp://localhost:%v", resource.GetPort("4222/tcp")))
-		return err
-	}))
+	require.Eventually(t, func() bool {
+		natsConn, err = nats.Connect(fmt.Sprintf("tcp://localhost:%v", mp.Port()))
+		return err == nil
+	}, 30*time.Second, time.Second)
 	t.Cleanup(func() {
 		natsConn.Close()
 	})
@@ -172,6 +168,6 @@ input:
 		}),
 		integration.StreamTestOptSleepAfterInput(100*time.Millisecond),
 		integration.StreamTestOptSleepAfterOutput(100*time.Millisecond),
-		integration.StreamTestOptPort(resource.GetPort("4222/tcp")),
+		integration.StreamTestOptPort(mp.Port()),
 	)
 }

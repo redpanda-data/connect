@@ -23,9 +23,10 @@ import (
 
 	"github.com/Jeffail/gabs/v2"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/wait"
 
 	_ "github.com/lib/pq"
 
@@ -38,41 +39,35 @@ func TestIntegrationExploration(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
-	pool, err := dockertest.NewPool("")
+	ctr, err := testcontainers.Run(t.Context(), "cockroachdb/cockroach:latest",
+		testcontainers.WithCmd("start-single-node", "--insecure"),
+		testcontainers.WithExposedPorts("8080/tcp", "26257/tcp"),
+		testcontainers.WithWaitStrategy(
+			wait.ForHTTP("/health").WithPort("8080/tcp").WithStartupTimeout(time.Minute),
+		),
+	)
+	testcontainers.CleanupContainer(t, ctr)
 	require.NoError(t, err)
 
-	pool.MaxWait = time.Second * 30
-	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
-		Repository:   "cockroachdb/cockroach",
-		Tag:          "latest",
-		Cmd:          []string{"start-single-node", "--insecure"},
-		ExposedPorts: []string{"8080/tcp", "26257/tcp"},
-	})
+	mappedPort, err := ctr.MappedPort(t.Context(), "26257/tcp")
 	require.NoError(t, err)
-	t.Cleanup(func() {
-		assert.NoError(t, pool.Purge(resource))
-	})
-
-	port := resource.GetPort("26257/tcp")
-	dsn := fmt.Sprintf("postgres://root@localhost:%v/defaultdb?sslmode=disable", port)
+	dsn := fmt.Sprintf("postgres://root@localhost:%v/defaultdb?sslmode=disable", mappedPort.Port())
 
 	var pgpool *pgxpool.Pool
-	require.NoError(t, resource.Expire(900))
-
-	require.NoError(t, pool.Retry(func() error {
+	require.Eventually(t, func() bool {
 		if pgpool == nil {
 			if pgpool, err = pgxpool.New(t.Context(), dsn); err != nil {
-				return err
+				return false
 			}
 		}
 		// Enable changefeeds
 		if _, err = pgpool.Exec(t.Context(), "SET CLUSTER SETTING kv.rangefeed.enabled = true;"); err != nil {
-			return err
+			return false
 		}
 		// Create table
 		_, err = pgpool.Exec(t.Context(), "CREATE TABLE foo (a INT PRIMARY KEY);")
-		return err
-	}))
+		return err == nil
+	}, time.Minute, time.Second)
 	t.Cleanup(func() {
 		pgpool.Close()
 	})

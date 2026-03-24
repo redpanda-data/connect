@@ -22,8 +22,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/wait"
 
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 )
@@ -32,28 +33,25 @@ func TestIntegrationCache(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
-	pool, err := dockertest.NewPool("")
-	if err != nil {
-		t.Skipf("Could not connect to docker: %s", err)
-	}
-	pool.MaxWait = 3 * time.Minute
+	ctr, err := testcontainers.Run(t.Context(), "postgres:latest",
+		testcontainers.WithExposedPorts("5432/tcp"),
+		testcontainers.WithEnv(map[string]string{
+			"POSTGRES_USER":     "testuser",
+			"POSTGRES_PASSWORD": "testpass",
+			"POSTGRES_DB":       "testdb",
+		}),
+		testcontainers.WithWaitStrategy(
+			wait.ForListeningPort("5432/tcp").WithStartupTimeout(3*time.Minute),
+		),
+	)
+	testcontainers.CleanupContainer(t, ctr)
+	require.NoError(t, err)
 
-	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
-		Repository:   "postgres",
-		ExposedPorts: []string{"5432/tcp"},
-		Env: []string{
-			"POSTGRES_USER=testuser",
-			"POSTGRES_PASSWORD=testpass",
-			"POSTGRES_DB=testdb",
-		},
-	})
+	mp, err := ctr.MappedPort(t.Context(), "5432/tcp")
 	require.NoError(t, err)
 
 	var db *sql.DB
 	t.Cleanup(func() {
-		if err = pool.Purge(resource); err != nil {
-			t.Logf("Failed to clean up docker resource: %s", err)
-		}
 		if db != nil {
 			db.Close()
 		}
@@ -68,22 +66,22 @@ func TestIntegrationCache(t *testing.T) {
 		return name, err
 	}
 
-	dsn := fmt.Sprintf("postgres://testuser:testpass@localhost:%s/testdb?sslmode=disable", resource.GetPort("5432/tcp"))
-	require.NoError(t, pool.Retry(func() error {
+	dsn := fmt.Sprintf("postgres://testuser:testpass@localhost:%s/testdb?sslmode=disable", mp.Port())
+	require.Eventually(t, func() bool {
 		db, err = sql.Open("postgres", dsn)
 		if err != nil {
-			return err
+			return false
 		}
 		if err = db.Ping(); err != nil {
 			db.Close()
 			db = nil
-			return err
+			return false
 		}
 		if _, err := createTable("footable"); err != nil {
-			return err
+			return false
 		}
-		return nil
-	}))
+		return true
+	}, 3*time.Minute, time.Second)
 
 	template := `
 cache_resources:

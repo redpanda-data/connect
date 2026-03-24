@@ -20,8 +20,9 @@ import (
 	"time"
 
 	"github.com/elastic/go-elasticsearch/v9"
-	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/wait"
 
 	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -33,23 +34,23 @@ func TestIntegrationElasticsearch(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	pool, err := dockertest.NewPool("")
+	ctr, err := testcontainers.Run(t.Context(), "docker.elastic.co/elasticsearch/elasticsearch:9.1.7",
+		testcontainers.WithExposedPorts("9200/tcp"),
+		testcontainers.WithEnv(map[string]string{
+			"discovery.type": "single-node",
+			"cluster.routing.allocation.disk.threshold_enabled": "false",
+			"xpack.security.enabled":                            "false",
+		}),
+		testcontainers.WithWaitStrategy(
+			wait.ForHTTP("/").WithPort("9200/tcp").WithStartupTimeout(time.Minute),
+		),
+	)
+	testcontainers.CleanupContainer(t, ctr)
 	require.NoError(t, err)
-	pool.MaxWait = time.Second * 60
 
-	resource, err := pool.Run("docker.elastic.co/elasticsearch/elasticsearch", "9.1.7", []string{
-		"discovery.type=single-node",
-		"cluster.routing.allocation.disk.threshold_enabled=false",
-		"xpack.security.enabled=false",
-	})
+	mappedPort, err := ctr.MappedPort(t.Context(), "9200/tcp")
 	require.NoError(t, err)
-	t.Cleanup(func() {
-		if err = pool.Purge(resource); err != nil {
-			t.Logf("Failed to clean up docker resource: %v", err)
-		}
-	})
-
-	url := fmt.Sprintf("http://127.0.0.1:%v", resource.GetPort("9200/tcp"))
+	url := fmt.Sprintf("http://127.0.0.1:%v", mappedPort.Port())
 
 	client, err := elasticsearch.NewTypedClient(elasticsearch.Config{
 		Addresses: []string{url},
@@ -190,23 +191,23 @@ func TestElasticsearchV9ConnectionTestIntegration(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	pool, err := dockertest.NewPool("")
+	ctr, err := testcontainers.Run(t.Context(), "docker.elastic.co/elasticsearch/elasticsearch:9.0.0",
+		testcontainers.WithExposedPorts("9200/tcp"),
+		testcontainers.WithEnv(map[string]string{
+			"discovery.type": "single-node",
+			"cluster.routing.allocation.disk.threshold_enabled": "false",
+			"xpack.security.enabled":                            "false",
+		}),
+		testcontainers.WithWaitStrategy(
+			wait.ForHTTP("/").WithPort("9200/tcp").WithStartupTimeout(time.Minute),
+		),
+	)
+	testcontainers.CleanupContainer(t, ctr)
 	require.NoError(t, err)
-	pool.MaxWait = time.Second * 60
 
-	resource, err := pool.Run("docker.elastic.co/elasticsearch/elasticsearch", "9.0.0", []string{
-		"discovery.type=single-node",
-		"cluster.routing.allocation.disk.threshold_enabled=false",
-		"xpack.security.enabled=false",
-	})
+	mappedPort, err := ctr.MappedPort(t.Context(), "9200/tcp")
 	require.NoError(t, err)
-	t.Cleanup(func() {
-		if err = pool.Purge(resource); err != nil {
-			t.Logf("Failed to clean up docker resource: %v", err)
-		}
-	})
-
-	url := fmt.Sprintf("http://127.0.0.1:%v", resource.GetPort("9200/tcp"))
+	url := fmt.Sprintf("http://127.0.0.1:%v", mappedPort.Port())
 
 	client, err := elasticsearch.NewTypedClient(elasticsearch.Config{
 		Addresses: []string{url},

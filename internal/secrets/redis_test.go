@@ -16,10 +16,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ory/dockertest/v3"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/wait"
 
 	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
@@ -29,33 +30,30 @@ func TestIntegrationRedis(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
-	pool, err := dockertest.NewPool("")
+	ctr, err := testcontainers.Run(t.Context(), "redis:latest",
+		testcontainers.WithExposedPorts("6379/tcp"),
+		testcontainers.WithWaitStrategy(
+			wait.ForListeningPort("6379/tcp").WithStartupTimeout(30*time.Second),
+		),
+	)
+	testcontainers.CleanupContainer(t, ctr)
 	require.NoError(t, err)
 
-	pool.MaxWait = time.Second * 30
-	resource, err := pool.Run("redis", "latest", nil)
+	redisPort, err := ctr.MappedPort(t.Context(), "6379/tcp")
 	require.NoError(t, err)
-	t.Cleanup(func() {
-		assert.NoError(t, pool.Purge(resource))
-	})
 
-	urlStr := fmt.Sprintf("redis://localhost:%v", resource.GetPort("6379/tcp"))
+	urlStr := fmt.Sprintf("redis://localhost:%v", redisPort.Port())
 	uri, err := url.Parse(urlStr)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	opts, err := redis.ParseURL(uri.String())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	client := redis.NewClient(opts)
 
-	_ = resource.Expire(900)
-	require.NoError(t, pool.Retry(func() error {
-		return client.Ping(t.Context()).Err()
-	}))
+	require.Eventually(t, func() bool {
+		return client.Ping(t.Context()).Err() == nil
+	}, 30*time.Second, time.Second)
 
 	ctx, done := context.WithTimeout(t.Context(), time.Minute)
 	defer done()
