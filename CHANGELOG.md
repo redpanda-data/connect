@@ -3,6 +3,16 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.85.0 - 2026-03-24
+
+### Added
+
+- gha: Automated changelog generation and auto-tagging workflows using AI-powered PR classification to streamline release notes creation. (@mmatczuk) ([#4144](https://github.com/redpanda-data/connect/pull/4144))
+- redpanda: Added extract and inject tracing span mapping support to redpanda input and output for trace context propagation across Kafka-connected pipelines. (@mmatczuk) ([#4146](https://github.com/redpanda-data/connect/pull/4146))
+
+### Fixed
+
+- redpanda: Fixed error handling in redpanda output when unable to create franz writer to prevent nil pointer dereference. (@josephwoodward) ([#4149](https://github.com/redpanda-data/connect/pull/4149))
 ## 4.84.1 - 2026-03-20
 
 ### Added
