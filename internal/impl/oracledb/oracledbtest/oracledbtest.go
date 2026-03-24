@@ -42,6 +42,13 @@ func (c *Batch) Reset() {
 	c.Msgs = nil
 }
 
+// Append appends msg to Msgs.
+func (c *Batch) Append(msg []byte) {
+	c.Lock()
+	defer c.Unlock()
+	c.Msgs = append(c.Msgs, string(msg))
+}
+
 // Count returns the total number of messages in the batch.
 func (c *Batch) Count() int {
 	c.Lock()
