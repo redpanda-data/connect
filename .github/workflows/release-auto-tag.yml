@@ -1,4 +1,4 @@
-name: Auto Tag
+name: Release Auto Tag
 
 on:
   pull_request:
