@@ -25,15 +25,15 @@ builds:
       -X github.com/redpanda-data/connect/v4/internal/telemetry.ExportDelay={{ if index .Env "CONNECT_TELEMETRY_DELAY"  }}{{ .Env.CONNECT_TELEMETRY_DELAY }}{{ else }}{{ end }}
       -X github.com/redpanda-data/connect/v4/internal/telemetry.ExportPeriod={{ if index .Env "CONNECT_TELEMETRY_PERIOD"  }}{{ .Env.CONNECT_TELEMETRY_PERIOD }}{{ else }}{{ end }}
 
-archives:
-  - id: connect-fips
-    ids: [connect-fips]
-    formats: tar.gz
-    name_template: 'redpanda-connect-fips_{{ .Version }}_{{ .Os }}_{{ .Arch }}{{ with .Arm }}v{{ . }}{{ end }}{{ with .Mips }}_{{ . }}{{ end }}{{ if not (eq .Amd64 "v1") }}{{ .Amd64 }}{{ end }}'
-    files:
-      - README-FIPS.md
-      - CHANGELOG.md
-      - licenses
+#archives:
+#  - id: connect-fips
+#    ids: [connect-fips]
+#    formats: tar.gz
+#    name_template: 'redpanda-connect-fips_{{ .Version }}_{{ .Os }}_{{ .Arch }}{{ with .Arm }}v{{ . }}{{ end }}{{ with .Mips }}_{{ . }}{{ end }}{{ if not (eq .Amd64 "v1") }}{{ .Amd64 }}{{ end }}'
+#    files:
+#      - README-FIPS.md
+#      - CHANGELOG.md
+#      - licenses
 
 nfpms:
   - id: connect-fips-pkgs
@@ -66,20 +66,26 @@ nfpms:
 
 publishers:
   # Gets run once per artifact (deb or rpm)
-  - name: Publish Linux packages to Cloudsmith
+#  - name: Publish Linux packages to Cloudsmith
+#    ids:
+#      - connect-fips-pkgs
+#    cmd: ./resources/scripts/push_pkg_to_cloudsmith.sh {{ .ArtifactPath }} {{ .Version }}
+#    env:
+#      - CLOUDSMITH_API_KEY={{ .Env.CLOUDSMITH_API_KEY }}
+  - name: Publish Linux packages to GCP Artifact Registry
     ids:
       - connect-fips-pkgs
-    cmd: ./resources/scripts/push_pkg_to_cloudsmith.sh {{ .ArtifactPath }} {{ .Version }}
-    env:
-      - CLOUDSMITH_API_KEY={{ .Env.CLOUDSMITH_API_KEY }}
+    cmd: ./resources/scripts/push_pkg_to_gcp_ar.sh {{ .ArtifactPath }} {{ .Version }}
 
 release:
-  github:
-    owner: redpanda-data
-    name: connect
-  prerelease: auto
-  replace_existing_artifacts: true
-  mode: keep-existing
+  disable: true
+#release:
+#  github:
+#    owner: redpanda-data
+#    name: connect
+#  prerelease: auto
+#  replace_existing_artifacts: true
+#  mode: keep-existing
 
-checksum:
-  split: true
+#checksum:
+#  split: true
