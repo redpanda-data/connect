@@ -1,0 +1,37 @@
+http:
+  debug_endpoints: true
+
+input:
+  oracledb_cdc:
+    connection_string: oracle://system:YourPassword123@localhost:1521/XE
+    stream_snapshot: false
+    snapshot_max_batch_size: 160000
+    logminer:
+      scn_window_size: 85000
+      backoff_interval: 0s
+      mining_interval: 0s
+    include:
+      - TESTDB.USERS
+      - TESTDB.PRODUCTS
+      - TESTDB.CART
+    batching:
+      count: 50000
+      period: 1s
+
+output:
+  # processors:
+  #   - benchmark:
+  #       interval: 1s
+  #       count_bytes: true
+  redpanda:
+    seed_brokers:
+      - localhost:9092
+    topic: connect-cdc
+
+logger:
+  level: INFO
+
+metrics:
+  prometheus:
+    add_process_metrics: true
+    add_go_metrics: true

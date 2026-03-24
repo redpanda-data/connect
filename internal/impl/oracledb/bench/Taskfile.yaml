@@ -50,3 +50,23 @@ tasks:
   rman:setup:
     desc: Configure RMAN archive log retention policy for local CDC development
     cmd: docker exec -i oracledb rman target / < rman_setup.rman
+
+  debezium:up:
+    desc: Start Debezium Server and Kafka
+    cmd: docker-compose -f docker-compose.debezium.yaml up -d
+
+  debezium:down:
+    desc: Stop and remove Debezium Server and Kafka (wipes volumes)
+    cmd: docker-compose -f docker-compose.debezium.yaml down -v
+
+  debezium:logs:
+    desc: Tail Debezium Server logs
+    cmd: docker logs -f debezium-server
+
+  debezium:kafka:offsets:
+    desc: Watch msgs/s on a Kafka topic (default oracle-cdc.TESTDB.USERS, override with TOPIC=...)
+    cmd: bash kafka-offsets.sh {{.TOPIC | default "oracle-cdc.TESTDB.USERS"}}
+
+  connect:kafka:offsets:
+    desc: Watch msgs/s on a Kafka topic (default connect-cdc.TESTDB.USERS, override with TOPIC=...)
+    cmd: bash kafka-offsets.sh {{.TOPIC | default "oracle-cdc.TESTDB.USERS"}}

@@ -10,7 +10,7 @@ ALTER SESSION SET CURRENT_SCHEMA = testdb;
 /
 
 DECLARE
-    users_total NUMBER := 500000;
+    users_total NUMBER := 1000000;
     users_batch_size NUMBER := 10000;
     users_current NUMBER := 0;
     users_batch_end NUMBER;
