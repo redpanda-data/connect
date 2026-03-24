@@ -21,10 +21,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ory/dockertest/v3"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/wait"
 
 	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -32,9 +33,7 @@ import (
 )
 
 func doSetupAndAssertions(setQueueDeclareAutoDelete bool, t *testing.T) {
-	assertQueueStateFromRabbitMQManagementAPI := func(resource *dockertest.Resource) {
-		require.NotNil(t, resource)
-
+	assertQueueStateFromRabbitMQManagementAPI := func(mgmtPort string) {
 		type Queue struct {
 			AutoDelete bool `json:"auto_delete"`
 		}
@@ -43,7 +42,7 @@ func doSetupAndAssertions(setQueueDeclareAutoDelete bool, t *testing.T) {
 			Timeout: time.Second * 5,
 		}
 
-		url := fmt.Sprintf("http://localhost:%v/api/queues", resource.GetPort("15672/tcp"))
+		url := fmt.Sprintf("http://localhost:%v/api/queues", mgmtPort)
 
 		req, err := http.NewRequest("GET", url, http.NoBody)
 		require.NoError(t, err)
@@ -112,25 +111,31 @@ input:
 	integration.CheckSkip(t)
 	t.Parallel()
 
-	pool, err := dockertest.NewPool("")
+	ctr, err := testcontainers.Run(t.Context(), "rabbitmq:management",
+		testcontainers.WithExposedPorts("5672/tcp", "15672/tcp"),
+		testcontainers.WithWaitStrategy(
+			wait.ForListeningPort("5672/tcp").WithStartupTimeout(time.Minute),
+		),
+	)
+	testcontainers.CleanupContainer(t, ctr)
 	require.NoError(t, err)
 
-	pool.MaxWait = time.Second * 30
-
-	resource, err := pool.Run("rabbitmq", "management", nil)
+	amqpPortM, err := ctr.MappedPort(t.Context(), "5672/tcp")
 	require.NoError(t, err)
-	t.Cleanup(func() {
-		assert.NoError(t, pool.Purge(resource))
-	})
+	amqpPort := amqpPortM.Port()
 
-	_ = resource.Expire(900)
-	require.NoError(t, pool.Retry(func() error {
-		client, err := amqp.Dial(fmt.Sprintf("amqp://guest:guest@localhost:%v/", resource.GetPort("5672/tcp")))
+	mgmtPortM, err := ctr.MappedPort(t.Context(), "15672/tcp")
+	require.NoError(t, err)
+	mgmtPort := mgmtPortM.Port()
+
+	require.Eventually(t, func() bool {
+		client, err := amqp.Dial(fmt.Sprintf("amqp://guest:guest@localhost:%v/", amqpPort))
 		if err == nil {
 			_ = client.Close()
+			return true
 		}
-		return err
-	}))
+		return false
+	}, time.Minute, time.Second)
 
 	suite := integration.StreamTests(
 		integration.StreamTestOpenClose(),
@@ -155,7 +160,7 @@ input:
 	streamTestOptFuncs := []integration.StreamTestOptFunc{
 		integration.StreamTestOptSleepAfterInput(500 * time.Millisecond),
 		integration.StreamTestOptSleepAfterOutput(500 * time.Millisecond),
-		integration.StreamTestOptPort(resource.GetPort("5672/tcp")),
+		integration.StreamTestOptPort(amqpPort),
 		integration.StreamTestOptVarSet("VAR1", "false"),
 	}
 
@@ -166,7 +171,7 @@ input:
 	)
 
 	t.Cleanup(func() {
-		assertQueueStateFromRabbitMQManagementAPI(resource)
+		assertQueueStateFromRabbitMQManagementAPI(mgmtPort)
 	})
 }
 
@@ -182,27 +187,27 @@ func TestAMQP09ConnectionTestIntegration(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
-	pool, err := dockertest.NewPool("")
+	ctr, err := testcontainers.Run(t.Context(), "rabbitmq:latest",
+		testcontainers.WithExposedPorts("5672/tcp"),
+		testcontainers.WithWaitStrategy(
+			wait.ForListeningPort("5672/tcp").WithStartupTimeout(time.Minute),
+		),
+	)
+	testcontainers.CleanupContainer(t, ctr)
 	require.NoError(t, err)
 
-	pool.MaxWait = time.Minute
-	resource, err := pool.Run("rabbitmq", "latest", nil)
+	mp, err := ctr.MappedPort(t.Context(), "5672/tcp")
 	require.NoError(t, err)
-	t.Cleanup(func() {
-		assert.NoError(t, pool.Purge(resource))
-	})
+	port := mp.Port()
 
-	_ = resource.Expire(900)
-	require.NoError(t, pool.Retry(func() error {
-		inConf, err := amqp.Dial(fmt.Sprintf("amqp://guest:guest@localhost:%v/", resource.GetPort("5672/tcp")))
+	require.Eventually(t, func() bool {
+		inConf, err := amqp.Dial(fmt.Sprintf("amqp://guest:guest@localhost:%v/", port))
 		if err != nil {
-			return err
+			return false
 		}
 		inConf.Close()
-		return nil
-	}))
-
-	port := resource.GetPort("5672/tcp")
+		return true
+	}, time.Minute, time.Second)
 
 	t.Run("input_valid", func(t *testing.T) {
 		resBuilder := service.NewResourceBuilder()

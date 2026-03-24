@@ -27,9 +27,10 @@ import (
 	os "github.com/opensearch-project/opensearch-go/v3"
 	osapi "github.com/opensearch-project/opensearch-go/v3/opensearchapi"
 
-	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/wait"
 
 	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -54,26 +55,28 @@ func TestIntegrationOpensearch(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
-	pool, err := dockertest.NewPool("")
-	if err != nil {
-		t.Skipf("Could not connect to docker: %s", err)
-	}
-	pool.MaxWait = time.Second * 60
+	ctr, err := testcontainers.Run(t.Context(), "opensearchproject/opensearch:latest",
+		testcontainers.WithExposedPorts("9200/tcp"),
+		testcontainers.WithEnv(map[string]string{
+			"discovery.type":          "single-node",
+			"DISABLE_SECURITY_PLUGIN": "true",
+		}),
+		testcontainers.WithWaitStrategy(
+			wait.ForHTTP("/").WithPort("9200/tcp").WithStartupTimeout(time.Minute),
+		),
+	)
+	testcontainers.CleanupContainer(t, ctr)
+	require.NoError(t, err)
 
-	resource, err := pool.Run("opensearchproject/opensearch", "latest", []string{
-		"discovery.type=single-node",
-		"DISABLE_SECURITY_PLUGIN=true",
-	})
-	if err != nil {
-		t.Fatalf("Could not start resource: %s", err)
-	}
+	mappedPort, err := ctr.MappedPort(t.Context(), "9200/tcp")
+	require.NoError(t, err)
 
-	urls := []string{fmt.Sprintf("http://127.0.0.1:%v", resource.GetPort("9200/tcp"))}
+	urls := []string{fmt.Sprintf("http://127.0.0.1:%v", mappedPort.Port())}
 	unreachableUrls := []string{"http://127.0.0.1:49151"}
 
 	var client *os.Client
 
-	if err = pool.Retry(func() error {
+	require.Eventually(t, func() bool {
 		opts := os.Config{
 			Addresses: urls,
 			Transport: http.DefaultTransport,
@@ -112,15 +115,10 @@ func TestIntegrationOpensearch(t *testing.T) {
 				}, nil)
 			}
 		}
-		return cerr
-	}); err != nil {
-		t.Fatalf("Could not connect to docker resource: %s", err)
-	}
+		return cerr == nil
+	}, time.Minute, time.Second, "Could not connect to OpenSearch")
 
 	defer func() {
-		if err = pool.Purge(resource); err != nil {
-			t.Logf("Failed to clean up docker resource: %v", err)
-		}
 	}()
 
 	t.Run("TestOpenSearchNoIndex", func(te *testing.T) {

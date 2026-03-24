@@ -17,7 +17,6 @@ package azure
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -32,9 +31,11 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/data/azcosmos"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"github.com/gofrs/uuid/v5"
-	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/modules/azure/azurite"
+	"github.com/testcontainers/testcontainers-go/wait"
 
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
@@ -47,44 +48,20 @@ func TestIntegrationAzure(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
-	pool, err := dockertest.NewPool("")
+	ctr, err := azurite.Run(t.Context(), "mcr.microsoft.com/azure-storage/azurite:latest",
+		testcontainers.WithCmdArgs("--skipApiVersionCheck"),
+	)
+	testcontainers.CleanupContainer(t, ctr)
 	require.NoError(t, err)
 
-	pool.MaxWait = 30 * time.Second
-	if deadline, ok := t.Deadline(); ok {
-		pool.MaxWait = time.Until(deadline) - 100*time.Millisecond
-	}
-
-	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
-		Repository: "mcr.microsoft.com/azure-storage/azurite",
-		// Expose blob, queue and table service ports
-		ExposedPorts: []string{"10000/tcp", "10001/tcp", "10002/tcp"},
-	})
+	blobPortM, err := ctr.MappedPort(t.Context(), azurite.BlobPort)
 	require.NoError(t, err)
-	t.Cleanup(func() {
-		assert.NoError(t, pool.Purge(resource))
-	})
+	queuePortM, err := ctr.MappedPort(t.Context(), azurite.QueuePort)
+	require.NoError(t, err)
+	tablePortM, err := ctr.MappedPort(t.Context(), azurite.TablePort)
+	require.NoError(t, err)
 
-	_ = resource.Expire(900)
-
-	connString := getEmulatorConnectionString(resource.GetPort("10000/tcp"), resource.GetPort("10001/tcp"), resource.GetPort("10002/tcp"))
-
-	// Wait for Azurite to start up
-	err = pool.Retry(func() error {
-		client, err := azblob.NewClientFromConnectionString(connString, nil)
-		if err != nil {
-			return err
-		}
-
-		ctx, done := context.WithTimeout(t.Context(), 1*time.Second)
-		defer done()
-
-		if _, err = client.NewListContainersPager(nil).NextPage(ctx); err != nil {
-			return err
-		}
-		return nil
-	})
-	require.NoError(t, err, "Failed to start Azurite")
+	connString := getEmulatorConnectionString(blobPortM.Port(), queuePortM.Port(), tablePortM.Port())
 
 	dummyContainer := "jotunheim"
 	dummyPrefix := "kvenn"
@@ -280,30 +257,29 @@ func TestIntegrationCosmosDB(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
-	pool, err := dockertest.NewPool("")
-	require.NoError(t, err)
-
-	pool.MaxWait = 30 * time.Second
+	cosmosStartupTimeout := 30 * time.Second
 	if deadline, ok := t.Deadline(); ok {
-		pool.MaxWait = time.Until(deadline) - 100*time.Millisecond
+		cosmosStartupTimeout = time.Until(deadline) - 100*time.Millisecond
 	}
 
-	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
-		Repository: "mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator",
-		Tag:        "latest",
-		Env: []string{
+	cosmosCtr, err := testcontainers.Run(t.Context(), "mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:latest",
+		testcontainers.WithImagePlatform("linux/amd64"),
+		testcontainers.WithExposedPorts("8081/tcp"),
+		testcontainers.WithEnv(map[string]string{
 			// The bigger the value, the longer it takes for the container to start up.
-			"AZURE_COSMOS_EMULATOR_PARTITION_COUNT=4",
-			"AZURE_COSMOS_EMULATOR_ENABLE_DATA_PERSISTENCE=false",
-		},
-		ExposedPorts: []string{"8081/tcp"},
-	})
+			"AZURE_COSMOS_EMULATOR_PARTITION_COUNT":         "4",
+			"AZURE_COSMOS_EMULATOR_ENABLE_DATA_PERSISTENCE": "false",
+		}),
+		testcontainers.WithWaitStrategy(
+			wait.ForListeningPort("8081/tcp").WithStartupTimeout(cosmosStartupTimeout),
+		),
+	)
+	testcontainers.CleanupContainer(t, cosmosCtr)
 	require.NoError(t, err)
-	t.Cleanup(func() {
-		assert.NoError(t, pool.Purge(resource))
-	})
 
-	_ = resource.Expire(900)
+	cosmosPortM, err := cosmosCtr.MappedPort(t.Context(), "8081/tcp")
+	require.NoError(t, err)
+	cosmosPort := cosmosPortM.Port()
 
 	// Start a HTTP -> HTTPS proxy server on a background goroutine to work around the self-signed certificate that the
 	// CosmosDB container provides, because unfortunately, it doesn't expose a plain HTTP endpoint.
@@ -311,7 +287,7 @@ func TestIntegrationCosmosDB(t *testing.T) {
 	listener, err := net.Listen("tcp", ":0")
 	require.NoError(t, err)
 	srv := &http.Server{Handler: http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
-		url, err := url.Parse("https://127.0.0.1:" + resource.GetPort("8081/tcp"))
+		url, err := url.Parse("https://127.0.0.1:" + cosmosPort)
 		require.NoError(t, err)
 
 		customTransport := http.DefaultTransport.(*http.Transport).Clone()
@@ -336,27 +312,22 @@ func TestIntegrationCosmosDB(t *testing.T) {
 	_, servicePort, err := net.SplitHostPort(listener.Addr().String())
 	require.NoError(t, err)
 
-	err = pool.Retry(func() error {
+	require.Eventually(t, func() bool {
 		resp, err := http.Get("http://127.0.0.1:" + servicePort + "/_explorer/emulator.pem")
 		if err != nil {
-			return err
+			return false
 		}
 		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusOK {
-			return fmt.Errorf("getting emulator.pem, got status: %d", resp.StatusCode)
+			return false
 		}
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
-			return err
+			return false
 		}
-		if len(body) == 0 {
-			return errors.New("getting emulator.pem")
-		}
-
-		return nil
-	})
-	require.NoError(t, err, "Failed to start CosmosDB emulator")
+		return len(body) > 0
+	}, cosmosStartupTimeout, time.Second, "Failed to start CosmosDB emulator")
 
 	emulatorKey := "C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw=="
 	dummyDatabase := "Asgard"

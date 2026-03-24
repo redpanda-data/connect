@@ -1671,10 +1671,18 @@ github.com/substrait-io/substrait-protobuf/go v0.84.0 h1:UcaZ+CE7l2UKJcNY9QlGcFF
 github.com/substrait-io/substrait-protobuf/go v0.84.0/go.mod h1:hn+Szm1NmZZc91FwWK9EXD/lmuGBSRTJ5IvHhlG1YnQ=
 github.com/testcontainers/testcontainers-go v0.41.0 h1:mfpsD0D36YgkxGj2LrIyxuwQ9i2wCKAD+ESsYM1wais=
 github.com/testcontainers/testcontainers-go v0.41.0/go.mod h1:pdFrEIfaPl24zmBjerWTTYaY0M6UHsqA1YSvsoU40MI=
+github.com/testcontainers/testcontainers-go/modules/azure v0.41.0 h1:Nxirpth+EKiseK+ltiFJRoZgOa6RlZKcvizt94m/SVw=
+github.com/testcontainers/testcontainers-go/modules/azure v0.41.0/go.mod h1:PyWvoXPogb/s9H4kNKcoSxNCn7bdVDMfM4DT0yta/eY=
+github.com/testcontainers/testcontainers-go/modules/cassandra v0.41.0 h1:q0Ce3JJGftinEn72vjGxN/ORxaPoKMkUVpVrhovoDow=
+github.com/testcontainers/testcontainers-go/modules/cassandra v0.41.0/go.mod h1:Ow6IG79zymegRMTaeNiH4J9fjhmRwu3I4i6kpvc4vaw=
 github.com/testcontainers/testcontainers-go/modules/compose v0.41.0 h1:6ttsQ6IilJYMoTFI2gu9l7KmKlnlY9XGkP0wtgh4rF4=
 github.com/testcontainers/testcontainers-go/modules/compose v0.41.0/go.mod h1:6PfaNLXsylvZE5CID8QMZ4fWjLHORvqm1xcGBncdzAY=
+github.com/testcontainers/testcontainers-go/modules/couchbase v0.41.0 h1:8Lv3ZnvTzxHRHeD1TWyiFZg+jkN1t3TJqnfoUu0eX2c=
+github.com/testcontainers/testcontainers-go/modules/couchbase v0.41.0/go.mod h1:lkGzggZ3Sp1MYzVI26r0vWwQdeaSrby2wLD8HM3TiW0=
 github.com/testcontainers/testcontainers-go/modules/mongodb v0.39.0 h1:DFCNstqIngh9+OdBRU/EVe+c9h+qlUdY+vzSc0lTFmw=
 github.com/testcontainers/testcontainers-go/modules/mongodb v0.39.0/go.mod h1:XpEcg+jhF8ICVVH+R1pxXv39TFKuchTZ7zAhzbx1nLU=
+github.com/testcontainers/testcontainers-go/modules/mssql v0.41.0 h1:YAuSa+IMTn0nA6iNvSAFgJEeJsQWSghFWu0ubebWXJI=
+github.com/testcontainers/testcontainers-go/modules/mssql v0.41.0/go.mod h1:3leIIvry5kLZr8uxMIDX0iL2TRwVx2UDDSkGJGlpsvQ=
 github.com/testcontainers/testcontainers-go/modules/ollama v0.41.0 h1:AFoSdu6G48ce0NVVFPIrp8VnkDmJ3qzXIMU9RDmKgms=
 github.com/testcontainers/testcontainers-go/modules/ollama v0.41.0/go.mod h1:of5soSlQ+lBn9kTjVoMRrrS/+KzzlQ7zUScUuzH+47U=
 github.com/testcontainers/testcontainers-go/modules/qdrant v0.41.0 h1:QS/T1byOTmFU2up96RMcpVbCWkGMX091T8K11/rzekk=
@@ -2652,8 +2660,6 @@ modernc.org/strutil v1.2.1/go.mod h1:EHkiggD70koQxjVdSBM3JKM7k6L0FbGE5eymy9i3B9A
 modernc.org/token v1.1.0 h1:Xl7Ap9dKaEs5kLoOQeQmPWevfnk/DM5qcLcYlA8ys6Y=
 modernc.org/token v1.1.0/go.mod h1:UGzOrNV1mAFSEB63lOFHIpNRUVMvYTc6yu1SMY/XTDM=
 nhooyr.io/websocket v1.8.7/go.mod h1:B70DZP8IakI65RVQ51MsWP/8jndNma26DVA/nFSCgW0=
-pgregory.net/rapid v1.2.0 h1:keKAYRcjm+e1F0oAuU5F5+YPAWcyxNNRK2wud503Gnk=
-pgregory.net/rapid v1.2.0/go.mod h1:PY5XlDGj0+V1FCq0o192FdRhpKHGTRIWBgqjDBTrq04=
 rsc.io/binaryregexp v0.2.0/go.mod h1:qTv7/COck+e2FymRvadv62gMdZztPaShugOCi3I+8D8=
 rsc.io/pdf v0.1.1/go.mod h1:n8OzWcQ6Sp37PL01nO98y4iUCRdTGarVfzxY20ICaU4=
 rsc.io/quote/v3 v3.1.0/go.mod h1:yEA65RcK8LyAZtP9Kv3t0HmxON59tX3rD+tICJqUlj0=
@@ -2666,5 +2672,7 @@ sigs.k8s.io/structured-merge-diff/v6 v6.3.2 h1:kwVWMx5yS1CrnFWA/2QHyRVJ8jM6dBA80
 sigs.k8s.io/structured-merge-diff/v6 v6.3.2/go.mod h1:M3W8sfWvn2HhQDIbGWj3S099YozAsymCo/wrT5ohRUE=
 sigs.k8s.io/yaml v1.6.0 h1:G8fkbMSAFqgEFgh4b1wmtzDnioxFCUgTZhlbj5P9QYs=
 sigs.k8s.io/yaml v1.6.0/go.mod h1:796bPqUfzR/0jLAl6XjHl3Ck7MiyVv8dbTdyT3/pMf4=
+software.sslmate.com/src/go-pkcs12 v0.7.0 h1:Db8W44cB54TWD7stUFFSWxdfpdn6fZVcDl0w3R4RVM0=
+software.sslmate.com/src/go-pkcs12 v0.7.0/go.mod h1:Qiz0EyvDRJjjxGyUQa2cCNZn/wMyzrRJ/qcDXOQazLI=
 tags.cncf.io/container-device-interface v1.1.0 h1:RnxNhxF1JOu6CJUVpetTYvrXHdxw9j9jFYgZpI+anSY=
 tags.cncf.io/container-device-interface v1.1.0/go.mod h1:76Oj0Yqp9FwTx/pySDc8Bxjpg+VqXfDb50cKAXVJ34Q=

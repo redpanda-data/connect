@@ -18,7 +18,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/twmb/franz-go/pkg/kerr"
@@ -91,11 +90,7 @@ func TestKafkaEnterpriseIntegration(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
-	pool, err := dockertest.NewPool("")
-	require.NoError(t, err)
-	pool.MaxWait = time.Minute
-
-	container, err := redpandatest.StartRedpanda(t, pool, true, false)
+	container, err := redpandatest.StartRedpanda(t, true, false)
 	require.NoError(t, err)
 
 	ctx, done := context.WithTimeout(t.Context(), time.Minute*3)

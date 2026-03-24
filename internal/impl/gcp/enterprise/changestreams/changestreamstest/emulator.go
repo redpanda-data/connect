@@ -13,14 +13,16 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"time"
 
 	"cloud.google.com/go/spanner"
 	adminapi "cloud.google.com/go/spanner/admin/database/apiv1"
 	adminpb "cloud.google.com/go/spanner/admin/database/apiv1/databasepb"
 	instance "cloud.google.com/go/spanner/admin/instance/apiv1"
 	"cloud.google.com/go/spanner/admin/instance/apiv1/instancepb"
-	"github.com/ory/dockertest/v3"
-	"github.com/ory/dockertest/v3/docker"
+	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/wait"
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 	"google.golang.org/grpc"
@@ -28,70 +30,50 @@ import (
 )
 
 func startSpannerEmulator(t *testing.T) (addr string) {
-	pool, err := dockertest.NewPool("")
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	t.Log("Starting emulator")
-	res, err := pool.RunWithOptions(&dockertest.RunOptions{
-		Repository: "gcr.io/cloud-spanner-emulator/emulator",
-		Tag:        "latest",
-		Env: []string{
-			"SPANNER_EMULATOR_HOST=0.0.0.0:9010",
-		},
-		ExposedPorts: []string{"9010/tcp"},
-	}, func(cfg *docker.HostConfig) {
-		cfg.AutoRemove = true
-		cfg.RestartPolicy = docker.RestartPolicy{
-			Name: "no",
-		}
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
 
-	closeFn := func() {
-		if err := pool.Purge(res); err != nil {
-			t.Errorf("Failed to purge resource: %v", err)
-		}
-		t.Log("Emulator stopped")
-	}
+	ctr, err := testcontainers.Run(t.Context(), "gcr.io/cloud-spanner-emulator/emulator:latest",
+		testcontainers.WithExposedPorts("9010/tcp"),
+		testcontainers.WithEnv(map[string]string{
+			"SPANNER_EMULATOR_HOST": "0.0.0.0:9010",
+		}),
+		testcontainers.WithWaitStrategy(
+			wait.ForListeningPort("9010/tcp").WithStartupTimeout(60*time.Second),
+		),
+	)
+	testcontainers.CleanupContainer(t, ctr)
+	require.NoError(t, err)
 
-	addr = "localhost:" + res.GetPort("9010/tcp")
+	mp, err := ctr.MappedPort(t.Context(), "9010/tcp")
+	require.NoError(t, err)
 
-	if err := pool.Retry(func() error {
+	addr = "localhost:" + mp.Port()
+
+	require.Eventually(t, func() bool {
 		t.Logf("Waiting for emulator to be ready at %s", addr)
-		conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-		if err != nil {
-			return err
+		conn, connErr := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		if connErr != nil {
+			return false
 		}
 		defer conn.Close()
 
 		// Make a real RPC to confirm the emulator is accepting connections.
-		adm, err := instance.NewInstanceAdminClient(context.Background(),
+		adm, admErr := instance.NewInstanceAdminClient(context.Background(),
 			option.WithGRPCConn(conn),
 			option.WithoutAuthentication(),
 		)
-		if err != nil {
-			return err
+		if admErr != nil {
+			return false
 		}
 		defer adm.Close()
 		it := adm.ListInstanceConfigs(context.Background(), &instancepb.ListInstanceConfigsRequest{
 			Parent: "projects/" + EmulatorProjectID,
 		})
-		_, err = it.Next()
-		if errors.Is(err, iterator.Done) {
-			return nil
-		}
-		return err
-	}); err != nil {
-		closeFn()
-		t.Fatal(err)
-	}
+		_, iterErr := it.Next()
+		return iterErr == nil || errors.Is(iterErr, iterator.Done)
+	}, 60*time.Second, time.Second)
 
-	t.Cleanup(closeFn)
-	return
+	return addr
 }
 
 const (

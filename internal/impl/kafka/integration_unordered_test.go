@@ -15,19 +15,13 @@
 package kafka_test
 
 import (
-	"bytes"
 	"context"
-	"errors"
 	"fmt"
-	"strconv"
 	"testing"
 	"time"
 
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 
-	"github.com/ory/dockertest/v3"
-	"github.com/ory/dockertest/v3/docker"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -35,44 +29,11 @@ func TestIntegrationUnordered(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
-	pool, err := dockertest.NewPool("")
-	require.NoError(t, err)
+	brokerAddr, kafkaPortStr := startRedpanda(t)
 
-	kafkaPort, err := integration.GetFreePort()
-	require.NoError(t, err)
-
-	kafkaPortStr := strconv.Itoa(kafkaPort)
-
-	options := &dockertest.RunOptions{
-		Repository:   "docker.redpanda.com/redpandadata/redpanda",
-		Tag:          "latest",
-		Hostname:     "redpanda",
-		ExposedPorts: []string{"9092/tcp"},
-		PortBindings: map[docker.Port][]docker.PortBinding{
-			"9092/tcp": {{HostIP: "", HostPort: kafkaPortStr + "/tcp"}},
-		},
-		Cmd: []string{
-			"redpanda",
-			"start",
-			"--node-id 0",
-			"--mode dev-container",
-			"--set rpk.additional_start_flags=[--reactor-backend=epoll]",
-			"--kafka-addr 0.0.0.0:9092",
-			fmt.Sprintf("--advertise-kafka-addr localhost:%v", kafkaPort),
-		},
-	}
-
-	pool.MaxWait = time.Minute
-	resource, err := pool.RunWithOptions(options)
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		assert.NoError(t, pool.Purge(resource))
-	})
-
-	_ = resource.Expire(900)
-	require.NoError(t, pool.Retry(func() error {
-		return createKafkaTopic(t.Context(), "localhost:"+kafkaPortStr, "testingconnection", 1)
-	}))
+	require.Eventually(t, func() bool {
+		return createKafkaTopic(t.Context(), brokerAddr, "testingconnection", 1) == nil
+	}, time.Minute, time.Second)
 
 	template := `
 output:
@@ -116,7 +77,7 @@ input:
 		t, template,
 		integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
 			vars.General["VAR4"] = "group" + vars.ID
-			require.NoError(t, createKafkaTopic(ctx, "localhost:"+kafkaPortStr, vars.ID, 4))
+			require.NoError(t, createKafkaTopic(ctx, brokerAddr, vars.ID, 4))
 		}),
 		integration.StreamTestOptPort(kafkaPortStr),
 		integration.StreamTestOptVarSet("VAR1", ""),
@@ -128,7 +89,7 @@ input:
 			t, template,
 			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
 				vars.General["VAR4"] = "group" + vars.ID
-				require.NoError(t, createKafkaTopic(ctx, "localhost:"+kafkaPortStr, vars.ID, 1))
+				require.NoError(t, createKafkaTopic(ctx, brokerAddr, vars.ID, 1))
 			}),
 			integration.StreamTestOptPort(kafkaPortStr),
 			integration.StreamTestOptVarSet("VAR1", ""),
@@ -142,7 +103,7 @@ input:
 			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
 				topicName := "topic-" + vars.ID
 				vars.General["VAR1"] = fmt.Sprintf(":0,%v:1,%v:2,%v:3", topicName, topicName, topicName)
-				require.NoError(t, createKafkaTopic(ctx, "localhost:"+kafkaPortStr, vars.ID, 4))
+				require.NoError(t, createKafkaTopic(ctx, brokerAddr, vars.ID, 4))
 			}),
 			integration.StreamTestOptPort(kafkaPortStr),
 			integration.StreamTestOptSleepAfterInput(time.Second*3),
@@ -154,7 +115,7 @@ input:
 			suite.Run(
 				t, template,
 				integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
-					require.NoError(t, createKafkaTopic(ctx, "localhost:"+kafkaPortStr, vars.ID, 4))
+					require.NoError(t, createKafkaTopic(ctx, brokerAddr, vars.ID, 4))
 				}),
 				integration.StreamTestOptPort(kafkaPortStr),
 				integration.StreamTestOptSleepAfterInput(time.Second*3),
@@ -191,7 +152,7 @@ input:
 			t, manualPartitionTemplate,
 			integration.StreamTestOptPreTest(func(t testing.TB, _ context.Context, vars *integration.StreamTestConfigVars) {
 				vars.General["VAR4"] = "group" + vars.ID
-				require.NoError(t, createKafkaTopic(t.Context(), "localhost:"+kafkaPortStr, vars.ID, 1))
+				require.NoError(t, createKafkaTopic(t.Context(), brokerAddr, vars.ID, 1))
 			}),
 			integration.StreamTestOptPort(kafkaPortStr),
 			integration.StreamTestOptVarSet("VAR1", ""),
@@ -203,65 +164,11 @@ func TestIntegrationUnorderedSasl(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
-	pool, err := dockertest.NewPool("")
-	require.NoError(t, err)
+	brokerAddr, kafkaPortStr := startRedpandaWithSASL(t)
 
-	kafkaPort, err := integration.GetFreePort()
-	require.NoError(t, err)
-
-	kafkaPortStr := strconv.Itoa(kafkaPort)
-
-	options := &dockertest.RunOptions{
-		Repository:   "docker.redpanda.com/redpandadata/redpanda",
-		Tag:          "latest",
-		Hostname:     "redpanda",
-		ExposedPorts: []string{"9092/tcp"},
-		PortBindings: map[docker.Port][]docker.PortBinding{
-			"9092/tcp": {{HostIP: "", HostPort: kafkaPortStr + "/tcp"}},
-		},
-		Cmd: []string{
-			"redpanda",
-			"start",
-			"--node-id 0",
-			"--mode dev-container",
-			"--set rpk.additional_start_flags=[--reactor-backend=epoll]",
-			"--kafka-addr 0.0.0.0:9092",
-			"--set redpanda.enable_sasl=true",
-			`--set redpanda.superusers=["admin"]`,
-			fmt.Sprintf("--advertise-kafka-addr localhost:%v", kafkaPort),
-		},
-	}
-
-	pool.MaxWait = time.Minute
-	resource, err := pool.RunWithOptions(options)
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		assert.NoError(t, pool.Purge(resource))
-	})
-
-	adminCreated := false
-
-	_ = resource.Expire(900)
-	require.NoError(t, pool.Retry(func() error {
-		if !adminCreated {
-			var stdErr bytes.Buffer
-			_, aerr := resource.Exec([]string{
-				"rpk", "acl", "user", "create", "admin",
-				"--password", "foobar",
-				"--api-urls", "localhost:9644",
-			}, dockertest.ExecOptions{
-				StdErr: &stdErr,
-			})
-			if aerr != nil {
-				return aerr
-			}
-			if stdErr.String() != "" {
-				return errors.New(stdErr.String())
-			}
-			adminCreated = true
-		}
-		return createKafkaTopicSasl("localhost:"+kafkaPortStr, "testingconnection", 1)
-	}))
+	require.Eventually(t, func() bool {
+		return createKafkaTopicSasl(brokerAddr, "testingconnection", 1) == nil
+	}, time.Minute, time.Second)
 
 	template := `
 output:
@@ -302,7 +209,7 @@ input:
 		t, template,
 		integration.StreamTestOptPreTest(func(t testing.TB, _ context.Context, vars *integration.StreamTestConfigVars) {
 			vars.General["VAR4"] = "group" + vars.ID
-			require.NoError(t, createKafkaTopicSasl("localhost:"+kafkaPortStr, vars.ID, 4))
+			require.NoError(t, createKafkaTopicSasl(brokerAddr, vars.ID, 4))
 		}),
 		integration.StreamTestOptPort(kafkaPortStr),
 		integration.StreamTestOptVarSet("VAR1", ""),
@@ -312,44 +219,11 @@ input:
 func BenchmarkIntegrationUnordered(b *testing.B) {
 	integration.CheckSkip(b)
 
-	pool, err := dockertest.NewPool("")
-	require.NoError(b, err)
+	brokerAddr, kafkaPortStr := startRedpanda(b)
 
-	kafkaPort, err := integration.GetFreePort()
-	require.NoError(b, err)
-
-	kafkaPortStr := strconv.Itoa(kafkaPort)
-
-	options := &dockertest.RunOptions{
-		Repository:   "docker.redpanda.com/redpandadata/redpanda",
-		Tag:          "latest",
-		Hostname:     "redpanda",
-		ExposedPorts: []string{"9092/tcp"},
-		PortBindings: map[docker.Port][]docker.PortBinding{
-			"9092/tcp": {{HostIP: "", HostPort: kafkaPortStr + "/tcp"}},
-		},
-		Cmd: []string{
-			"redpanda",
-			"start",
-			"--node-id 0",
-			"--mode dev-container",
-			"--set rpk.additional_start_flags=[--reactor-backend=epoll]",
-			"--kafka-addr 0.0.0.0:9092",
-			fmt.Sprintf("--advertise-kafka-addr localhost:%v", kafkaPort),
-		},
-	}
-
-	pool.MaxWait = time.Minute
-	resource, err := pool.RunWithOptions(options)
-	require.NoError(b, err)
-	b.Cleanup(func() {
-		assert.NoError(b, pool.Purge(resource))
-	})
-
-	_ = resource.Expire(900)
-	require.NoError(b, pool.Retry(func() error {
-		return createKafkaTopic(b.Context(), "localhost:"+kafkaPortStr, "testingconnection", 1)
-	}))
+	require.Eventually(b, func() bool {
+		return createKafkaTopic(b.Context(), brokerAddr, "testingconnection", 1) == nil
+	}, time.Minute, time.Second)
 
 	// Unordered (old) client
 	b.Run("unordered", func(b *testing.B) {
@@ -386,7 +260,7 @@ input:
 			b, template,
 			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
 				vars.General["VAR3"] = "group" + vars.ID
-				require.NoError(t, createKafkaTopic(ctx, "localhost:"+kafkaPortStr, vars.ID, 1))
+				require.NoError(t, createKafkaTopic(ctx, brokerAddr, vars.ID, 1))
 			}),
 			integration.StreamTestOptPort(kafkaPortStr),
 		)

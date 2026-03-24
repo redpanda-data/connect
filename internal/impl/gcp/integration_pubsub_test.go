@@ -23,9 +23,10 @@ import (
 	"time"
 
 	"cloud.google.com/go/pubsub"
-	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/wait"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
@@ -34,48 +35,39 @@ import (
 func TestIntegrationGCPPubSub(t *testing.T) {
 	integration.CheckSkip(t)
 
-	pool, err := dockertest.NewPool("")
-	require.NoError(t, err)
-
-	pool.MaxWait = time.Second * 30
-
 	dummyProject := "benthos"
 	dummyTopic := "blobfish"
-	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
-		Repository:   "thekevjames/gcloud-pubsub-emulator",
-		Tag:          "latest",
-		ExposedPorts: []string{"8681/tcp"},
-		Env: []string{
-			fmt.Sprintf("PUBSUB_PROJECT1=%s,%s", dummyProject, dummyTopic),
-		},
-	})
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		assert.NoError(t, pool.Purge(resource))
-	})
 
-	t.Setenv("PUBSUB_EMULATOR_HOST", fmt.Sprintf("localhost:%v", resource.GetPort("8681/tcp")))
+	ctr, err := testcontainers.Run(t.Context(), "thekevjames/gcloud-pubsub-emulator:latest",
+		testcontainers.WithExposedPorts("8681/tcp"),
+		testcontainers.WithEnv(map[string]string{
+			"PUBSUB_PROJECT1": fmt.Sprintf("%s,%s", dummyProject, dummyTopic),
+		}),
+		testcontainers.WithWaitStrategy(
+			wait.ForLog("Server started, listening on 8681").WithStartupTimeout(2*time.Minute),
+		),
+	)
+	testcontainers.CleanupContainer(t, ctr)
+	require.NoError(t, err)
+
+	mp, err := ctr.MappedPort(t.Context(), "8681/tcp")
+	require.NoError(t, err)
+
+	t.Setenv("PUBSUB_EMULATOR_HOST", fmt.Sprintf("localhost:%v", mp.Port()))
 	require.NotEqual(t, "localhost:", os.Getenv("PUBSUB_EMULATOR_HOST"))
 
-	_ = resource.Expire(900)
-	require.NoError(t, pool.Retry(func() error {
+	require.Eventually(t, func() bool {
 		ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 		defer cancel()
 		client, err := pubsub.NewClient(ctx, dummyProject)
 		if err != nil {
-			return err
+			return false
 		}
 		defer client.Close()
 
 		ok, err := client.Topic(dummyTopic).Exists(ctx)
-		if err != nil {
-			return err
-		} else if !ok {
-			return fmt.Errorf("finding topic: %s", dummyTopic)
-		}
-
-		return err
-	}))
+		return err == nil && ok
+	}, time.Minute, time.Second)
 
 	template := `
 output:

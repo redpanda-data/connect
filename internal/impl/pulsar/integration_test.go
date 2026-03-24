@@ -20,9 +20,9 @@ import (
 	"time"
 
 	"github.com/apache/pulsar-client-go/pulsar"
-	"github.com/ory/dockertest/v3"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/wait"
 
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 )
@@ -31,28 +31,26 @@ func TestIntegrationPulsar(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
-	pool, err := dockertest.NewPool("")
+	ctr, err := testcontainers.Run(t.Context(), "apachepulsar/pulsar-standalone:2.8.3",
+		testcontainers.WithImagePlatform("linux/amd64"),
+		testcontainers.WithExposedPorts("6650/tcp", "8080/tcp"),
+		testcontainers.WithWaitStrategy(
+			wait.ForHTTP("/admin/v2/brokers/ready").WithPort("8080/tcp").WithStartupTimeout(3*time.Minute),
+		),
+	)
+	testcontainers.CleanupContainer(t, ctr)
 	require.NoError(t, err)
 
-	pool.MaxWait = time.Minute * 2
-	if dline, ok := t.Deadline(); ok && time.Until(dline) < pool.MaxWait {
-		pool.MaxWait = time.Until(dline)
-	}
-
-	resource, err := pool.Run("apachepulsar/pulsar-standalone", "2.8.3", nil)
+	mappedPort, err := ctr.MappedPort(t.Context(), "6650/tcp")
 	require.NoError(t, err)
-	t.Cleanup(func() {
-		assert.NoError(t, pool.Purge(resource))
-	})
 
-	_ = resource.Expire(900)
-	require.NoError(t, pool.Retry(func() error {
+	require.Eventually(t, func() bool {
 		client, err := pulsar.NewClient(pulsar.ClientOptions{
-			URL:    fmt.Sprintf("pulsar://localhost:%v/", resource.GetPort("6650/tcp")),
+			URL:    fmt.Sprintf("pulsar://localhost:%v/", mappedPort.Port()),
 			Logger: NoopLogger(),
 		})
 		if err != nil {
-			return err
+			return false
 		}
 		prod, err := client.CreateProducer(pulsar.ProducerOptions{
 			Topic: "benthos-connection-test",
@@ -61,8 +59,8 @@ func TestIntegrationPulsar(t *testing.T) {
 			prod.Close()
 		}
 		client.Close()
-		return err
-	}))
+		return err == nil
+	}, 2*time.Minute, time.Second)
 
 	template := `
 output:
@@ -105,7 +103,7 @@ input:
 		t, template,
 		integration.StreamTestOptSleepAfterInput(500*time.Millisecond),
 		integration.StreamTestOptSleepAfterOutput(500*time.Millisecond),
-		integration.StreamTestOptPort(resource.GetPort("6650/tcp")),
+		integration.StreamTestOptPort(mappedPort.Port()),
 	)
 
 	t.Run("with topics pattern", func(t *testing.T) {
@@ -113,7 +111,7 @@ input:
 			t, patternTemplate,
 			integration.StreamTestOptSleepAfterInput(500*time.Millisecond),
 			integration.StreamTestOptSleepAfterOutput(500*time.Millisecond),
-			integration.StreamTestOptPort(resource.GetPort("6650/tcp")),
+			integration.StreamTestOptPort(mappedPort.Port()),
 		)
 	})
 
@@ -123,7 +121,7 @@ input:
 			t, template,
 			integration.StreamTestOptSleepAfterInput(500*time.Millisecond),
 			integration.StreamTestOptSleepAfterOutput(500*time.Millisecond),
-			integration.StreamTestOptPort(resource.GetPort("6650/tcp")),
+			integration.StreamTestOptPort(mappedPort.Port()),
 			integration.StreamTestOptMaxInFlight(10),
 		)
 	})

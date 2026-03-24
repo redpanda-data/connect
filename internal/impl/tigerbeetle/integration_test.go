@@ -29,11 +29,11 @@ import (
 	tb "github.com/tigerbeetle/tigerbeetle-go"
 	tb_types "github.com/tigerbeetle/tigerbeetle-go/pkg/types"
 
-	"github.com/ory/dockertest/v3"
-	"github.com/ory/dockertest/v3/docker"
-
+	"github.com/docker/docker/api/types/container"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/wait"
 
 	_ "github.com/redpanda-data/benthos/v4/public/components/io"
 	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
@@ -59,37 +59,28 @@ file:
 func setupTestWithTigerBeetle(t *testing.T, version string) (tb.Client, []string) {
 	t.Parallel()
 	integration.CheckSkip(t)
-	pool, err := dockertest.NewPool("")
-	require.NoError(t, err)
 
-	pool.MaxWait = time.Minute
-
-	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
-		Repository:  "ghcr.io/tigerbeetle/tigerbeetle",
-		Tag:         version,
-		SecurityOpt: []string{"seccomp=unconfined"}, // Required to allow io_uring syscalls.
-		Entrypoint:  []string{"sh"},
-		Cmd: []string{
+	ctr, err := testcontainers.Run(t.Context(), "ghcr.io/tigerbeetle/tigerbeetle:"+version,
+		testcontainers.WithExposedPorts("3000/tcp"),
+		testcontainers.WithEntrypoint("sh"),
+		testcontainers.WithCmd(
 			"-c",
-			"" +
-				"./tigerbeetle format --cluster=0 --replica-count=1 --replica=0 ./0_0.tigerbeetle;" +
+			"./tigerbeetle format --cluster=0 --replica-count=1 --replica=0 ./0_0.tigerbeetle;"+
 				"./tigerbeetle start --addresses=0.0.0.0:3000 --experimental --development ./0_0.tigerbeetle;",
-		},
-		ExposedPorts: []string{"3000/tcp"},
-	}, func(config *docker.HostConfig) {
-		// set AutoRemove to true so that stopped container goes away by itself
-		config.AutoRemove = true
-		config.RestartPolicy = docker.RestartPolicy{
-			Name: "no",
-		}
-	})
+		),
+		testcontainers.WithHostConfigModifier(func(hc *container.HostConfig) {
+			hc.SecurityOpt = []string{"seccomp=unconfined"} // Required to allow io_uring syscalls.
+		}),
+		testcontainers.WithWaitStrategy(
+			wait.ForListeningPort("3000/tcp").WithStartupTimeout(time.Minute),
+		),
+	)
+	testcontainers.CleanupContainer(t, ctr)
 	require.NoError(t, err)
-	t.Cleanup(func() {
-		assert.NoError(t, pool.Purge(resource))
-	})
 
-	time.Sleep(time.Second * 1)
-	port := resource.GetPort("3000/tcp")
+	mappedPort, err := ctr.MappedPort(t.Context(), "3000/tcp")
+	require.NoError(t, err)
+	port := mappedPort.Port()
 	addresses := []string{port}
 	t.Logf("TigerBeetle running at %s", addresses[0])
 

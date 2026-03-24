@@ -20,8 +20,9 @@ import (
 	"time"
 
 	v1 "github.com/authzed/authzed-go/proto/authzed/api/v1"
-	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/wait"
 	"google.golang.org/protobuf/encoding/protojson"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -32,26 +33,23 @@ func TestIntegrationSpiceDB(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 	ctx := t.Context()
-	pool, err := dockertest.NewPool("")
-	if err != nil {
-		t.Skipf("Could not connect to docker: %s", err)
-	}
-	t.Logf("=== Created docker pool")
-	pool.MaxWait = time.Second * 60
-	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
-		Repository:   "authzed/spicedb",
-		Tag:          "v1.37.1",
-		ExposedPorts: []string{"50051/tcp"},
-		Cmd:          []string{"serve-testing"},
-	})
-	require.NoError(t, err, "Could not start resource: %s", err)
-	t.Cleanup(func() {
-		if err = pool.Purge(resource); err != nil {
-			t.Logf("Failed to clean up docker resource: %v", err)
-		}
-	})
 
-	uri := fmt.Sprintf("127.0.0.1:%s", resource.GetPort("50051/tcp"))
+	ctr, err := testcontainers.Run(ctx, "authzed/spicedb:v1.37.1",
+		testcontainers.WithExposedPorts("50051/tcp"),
+		testcontainers.WithCmd("serve-testing"),
+		testcontainers.WithWaitStrategy(
+			wait.ForListeningPort("50051/tcp").WithStartupTimeout(60*time.Second),
+		),
+	)
+	testcontainers.CleanupContainer(t, ctr)
+	require.NoError(t, err)
+
+	host, err := ctr.Host(ctx)
+	require.NoError(t, err)
+	mappedPort, err := ctr.MappedPort(ctx, "50051/tcp")
+	require.NoError(t, err)
+
+	uri := fmt.Sprintf("%s:%s", host, mappedPort.Port())
 	confYaml := fmt.Sprintf(`
 endpoint: %s
 tls:
@@ -64,8 +62,8 @@ cache: test_cache
 	require.NoError(t, err)
 
 	var schemaZedToken string
-	err = pool.Retry(func() error {
-		r, err := client.WriteSchema(ctx, &v1.WriteSchemaRequest{
+	require.Eventually(t, func() bool {
+		r, schemaErr := client.WriteSchema(ctx, &v1.WriteSchemaRequest{
 			Schema: `
 definition user {}
 
@@ -84,26 +82,23 @@ definition document {
 	permission view = reader + writer
 }`,
 		})
-		if err != nil {
-			return err
+		if schemaErr != nil {
+			return false
 		}
 
 		schemaZedToken = r.WrittenAt.Token
-		return nil
-	})
-	require.NoError(t, err)
+		return true
+	}, 60*time.Second, time.Second)
 	t.Logf("=== Zed token: %s", schemaZedToken)
 	err = resources.AccessCache(ctx, "test_cache", func(c service.Cache) {
 		require.NoError(t, c.Add(ctx, "authzed.com/spicedb/watch/last_zed_token", []byte(schemaZedToken), nil))
 	})
 	require.NoError(t, err)
 
-	require.NoError(t, pool.Retry(func() error {
+	require.Eventually(t, func() bool {
 		t.Logf("=== Connecting to spicedb...")
-		err := wi.Connect(ctx)
-		require.NoError(t, err)
-		return err
-	}))
+		return wi.Connect(ctx) == nil
+	}, 60*time.Second, time.Second)
 	t.Logf("=== Connected to spicedb")
 	t.Cleanup(func() {
 		t.Logf("=== Cleaning up input")

@@ -18,12 +18,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ory/dockertest/v3"
-	"github.com/ory/dockertest/v3/docker"
-
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/wait"
 
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	_ "github.com/redpanda-data/benthos/v4/public/components/io"
@@ -49,60 +48,49 @@ func (db *testDB) Exec(query string, args ...any) {
 func setupTestWithMySQLVersion(t *testing.T, version string) (string, *testDB) {
 	t.Parallel()
 	integration.CheckSkip(t)
-	pool, err := dockertest.NewPool("")
-	require.NoError(t, err)
 
-	pool.MaxWait = time.Minute
-
-	// MySQL specific environment variables
-	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
-		Repository: "mysql",
-		Tag:        version,
-		Env: []string{
-			"MYSQL_ROOT_PASSWORD=password",
-			"MYSQL_DATABASE=testdb",
-		},
-		Cmd: []string{
+	ctr, err := testcontainers.Run(t.Context(), "mysql:"+version,
+		testcontainers.WithExposedPorts("3306/tcp"),
+		testcontainers.WithEnv(map[string]string{
+			"MYSQL_ROOT_PASSWORD": "password",
+			"MYSQL_DATABASE":      "testdb",
+		}),
+		testcontainers.WithCmd(
 			"--server-id=1",
 			"--log-bin=mysql-bin",
 			"--binlog-format=ROW",
 			"--binlog-row-image=FULL",
 			"--log-slave-updates=ON",
-		},
-		ExposedPorts: []string{"3306/tcp"},
-	}, func(config *docker.HostConfig) {
-		// set AutoRemove to true so that stopped container goes away by itself
-		config.AutoRemove = true
-		config.RestartPolicy = docker.RestartPolicy{
-			Name: "no",
-		}
-	})
+		),
+		testcontainers.WithWaitStrategy(
+			wait.ForListeningPort("3306/tcp").WithStartupTimeout(time.Minute),
+		),
+	)
+	testcontainers.CleanupContainer(t, ctr)
 	require.NoError(t, err)
-	t.Cleanup(func() {
-		assert.NoError(t, pool.Purge(resource))
-	})
 
-	port := resource.GetPort("3306/tcp")
+	mappedPort, err := ctr.MappedPort(t.Context(), "3306/tcp")
+	require.NoError(t, err)
+	port := mappedPort.Port()
+
 	dsn := fmt.Sprintf(
 		"root:password@tcp(localhost:%s)/testdb?timeout=30s&readTimeout=30s&writeTimeout=30s&multiStatements=true",
 		port,
 	)
 
 	var db *sql.DB
-	err = pool.Retry(func() error {
-		var err error
+	require.Eventually(t, func() bool {
 		db, err = sql.Open("mysql", dsn)
 		if err != nil {
-			return err
+			return false
 		}
 
 		db.SetMaxOpenConns(10)
 		db.SetMaxIdleConns(5)
 		db.SetConnMaxLifetime(time.Minute * 5)
 
-		return db.Ping()
-	})
-	require.NoError(t, err)
+		return db.Ping() == nil
+	}, time.Minute, time.Second)
 	t.Cleanup(func() {
 		assert.NoError(t, db.Close())
 	})

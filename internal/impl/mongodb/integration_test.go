@@ -22,9 +22,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ory/dockertest/v3"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/wait"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
@@ -42,30 +42,24 @@ func TestIntegrationMongoDB(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
-	pool, err := dockertest.NewPool("")
+	ctr, err := testcontainers.Run(t.Context(), "mongo:latest",
+		testcontainers.WithExposedPorts("27017/tcp"),
+		testcontainers.WithEnv(map[string]string{
+			"MONGO_INITDB_ROOT_USERNAME": "mongoadmin",
+			"MONGO_INITDB_ROOT_PASSWORD": "secret",
+		}),
+		testcontainers.WithWaitStrategy(
+			wait.ForListeningPort("27017/tcp").WithStartupTimeout(time.Minute),
+		),
+	)
+	testcontainers.CleanupContainer(t, ctr)
 	require.NoError(t, err)
 
-	pool.MaxWait = time.Second * 30
-
-	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
-		Repository: "mongo",
-		Tag:        "latest",
-		Env: []string{
-			"MONGO_INITDB_ROOT_USERNAME=mongoadmin",
-			"MONGO_INITDB_ROOT_PASSWORD=secret",
-		},
-		ExposedPorts: []string{"27017/tcp"},
-	})
+	mp, err := ctr.MappedPort(t.Context(), "27017/tcp")
 	require.NoError(t, err)
-
-	t.Cleanup(func() {
-		assert.NoError(t, pool.Purge(resource))
-	})
 
 	var mongoClient *mongo.Client
-
-	_ = resource.Expire(900)
-	require.NoError(t, pool.Retry(func() error {
+	require.Eventually(t, func() bool {
 		mongoClient, err = mongo.Connect(options.Client().
 			SetConnectTimeout(10 * time.Second).
 			SetTimeout(30 * time.Second).
@@ -74,9 +68,9 @@ func TestIntegrationMongoDB(t *testing.T) {
 				Username: "mongoadmin",
 				Password: "secret",
 			}).
-			ApplyURI("mongodb://localhost:" + resource.GetPort("27017/tcp")))
-		return err
-	}))
+			ApplyURI("mongodb://localhost:" + mp.Port()))
+		return err == nil
+	}, time.Minute, time.Second)
 
 	template := `
 output:
@@ -123,7 +117,7 @@ output:
 		)
 		suite.Run(
 			t, template,
-			integration.StreamTestOptPort(resource.GetPort("27017/tcp")),
+			integration.StreamTestOptPort(mp.Port()),
 			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
 				cName := generateCollectionName(vars.ID)
 				vars.General["VAR1"] = cName
@@ -154,7 +148,7 @@ cache_resources:
 		)
 		cacheSuite.Run(
 			t, cacheTemplate,
-			integration.CacheTestOptPort(resource.GetPort("27017/tcp")),
+			integration.CacheTestOptPort(mp.Port()),
 			integration.CacheTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.CacheTestConfigVars) {
 				cName := generateCollectionName(vars.ID)
 				vars.General["VAR1"] = cName
@@ -168,26 +162,23 @@ func TestMongoDBConnectionTestIntegration(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
-	pool, err := dockertest.NewPool("")
+	ctr, err := testcontainers.Run(t.Context(), "mongo:latest",
+		testcontainers.WithExposedPorts("27017/tcp"),
+		testcontainers.WithEnv(map[string]string{
+			"MONGO_INITDB_ROOT_USERNAME": "mongoadmin",
+			"MONGO_INITDB_ROOT_PASSWORD": "secret",
+		}),
+		testcontainers.WithWaitStrategy(
+			wait.ForListeningPort("27017/tcp").WithStartupTimeout(time.Minute),
+		),
+	)
+	testcontainers.CleanupContainer(t, ctr)
 	require.NoError(t, err)
 
-	pool.MaxWait = time.Second * 30
-	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
-		Repository: "mongo",
-		Tag:        "latest",
-		Env: []string{
-			"MONGO_INITDB_ROOT_USERNAME=mongoadmin",
-			"MONGO_INITDB_ROOT_PASSWORD=secret",
-		},
-		ExposedPorts: []string{"27017/tcp"},
-	})
+	mp, err := ctr.MappedPort(t.Context(), "27017/tcp")
 	require.NoError(t, err)
-	t.Cleanup(func() {
-		assert.NoError(t, pool.Purge(resource))
-	})
 
-	_ = resource.Expire(900)
-	require.NoError(t, pool.Retry(func() error {
+	require.Eventually(t, func() bool {
 		mongoClient, err := mongo.Connect(options.Client().
 			SetConnectTimeout(10 * time.Second).
 			SetTimeout(30 * time.Second).
@@ -196,17 +187,17 @@ func TestMongoDBConnectionTestIntegration(t *testing.T) {
 				Username: "mongoadmin",
 				Password: "secret",
 			}).
-			ApplyURI("mongodb://localhost:" + resource.GetPort("27017/tcp")))
+			ApplyURI("mongodb://localhost:" + mp.Port()))
 		if err != nil {
-			return err
+			return false
 		}
 		defer func() {
 			_ = mongoClient.Disconnect(t.Context())
 		}()
-		return mongoClient.Ping(t.Context(), nil)
-	}))
+		return mongoClient.Ping(t.Context(), nil) == nil
+	}, time.Minute, time.Second)
 
-	port := resource.GetPort("27017/tcp")
+	port := mp.Port()
 
 	t.Run("input_valid", func(t *testing.T) {
 		resBuilder := service.NewResourceBuilder()

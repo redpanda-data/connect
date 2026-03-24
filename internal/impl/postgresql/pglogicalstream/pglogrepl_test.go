@@ -15,7 +15,6 @@ import (
 	"fmt"
 	"math"
 	"slices"
-	"strings"
 	"testing"
 	"time"
 
@@ -24,11 +23,11 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgproto3"
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/ory/dockertest/v3"
-	"github.com/ory/dockertest/v3/docker"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/wait"
 
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 )
@@ -103,60 +102,49 @@ func closeConn(t testing.TB, conn *pgconn.PgConn) {
 	require.NoError(t, conn.Close(ctx))
 }
 
-func createDockerInstance(t *testing.T) (*dockertest.Pool, *dockertest.Resource, string) {
-	pool, err := dockertest.NewPool("")
+func createDockerInstance(t *testing.T) (cleanup func(), dbURL string) {
+	ctr, err := testcontainers.Run(t.Context(), "postgres:16",
+		testcontainers.WithExposedPorts("5432/tcp"),
+		testcontainers.WithEnv(map[string]string{
+			"POSTGRES_PASSWORD": "secret",
+			"POSTGRES_USER":     "user_name",
+			"POSTGRES_DB":       "dbname",
+		}),
+		testcontainers.WithCmd("postgres", "-c", "wal_level=logical"),
+		testcontainers.WithWaitStrategy(
+			wait.ForListeningPort("5432/tcp").WithStartupTimeout(2*time.Minute),
+		),
+	)
+	testcontainers.CleanupContainer(t, ctr)
 	require.NoError(t, err)
 
-	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
-		Repository: "postgres",
-		Tag:        "16",
-		Env: []string{
-			"POSTGRES_PASSWORD=secret",
-			"POSTGRES_USER=user_name",
-			"POSTGRES_DB=dbname",
-		},
-		Cmd: []string{
-			"postgres",
-			"-c", "wal_level=logical",
-		},
-	}, func(config *docker.HostConfig) {
-		config.AutoRemove = true
-		config.RestartPolicy = docker.RestartPolicy{Name: "no"}
-	})
-
+	host, err := ctr.Host(t.Context())
 	require.NoError(t, err)
-	require.NoError(t, resource.Expire(120))
+	mp, err := ctr.MappedPort(t.Context(), "5432/tcp")
+	require.NoError(t, err)
 
-	hostAndPort := resource.GetHostPort("5432/tcp")
-	hostAndPortSplited := strings.Split(hostAndPort, ":")
-	databaseURL := fmt.Sprintf("user=user_name password=secret dbname=dbname sslmode=disable host=%s port=%s replication=database", hostAndPortSplited[0], hostAndPortSplited[1])
+	databaseURL := fmt.Sprintf("user=user_name password=secret dbname=dbname sslmode=disable host=%s port=%s replication=database", host, mp.Port())
 
 	var db *sql.DB
-	pool.MaxWait = 120 * time.Second
-	err = pool.Retry(func() error {
+	require.Eventually(t, func() bool {
 		if db, err = sql.Open("postgres", databaseURL); err != nil {
-			return err
+			return false
 		}
+		return db.Ping() == nil
+	}, 2*time.Minute, time.Second)
 
-		if err = db.Ping(); err != nil {
-			return err
-		}
+	cleanup = func() {
+		// Container cleanup is handled by testcontainers.CleanupContainer
+	}
 
-		return err
-	})
-	require.NoError(t, err)
-
-	return pool, resource, databaseURL
+	return cleanup, databaseURL
 }
 
 func TestIntegrationIdentifySystem(t *testing.T) {
 	integration.CheckSkip(t)
 
-	pool, resource, dbURL := createDockerInstance(t)
-	defer func() {
-		err := pool.Purge(resource)
-		require.NoError(t, err)
-	}()
+	cleanup, dbURL := createDockerInstance(t)
+	defer cleanup()
 	ctx, cancel := context.WithTimeout(t.Context(), time.Second*100)
 	defer cancel()
 
@@ -178,11 +166,8 @@ func TestIntegrationIdentifySystem(t *testing.T) {
 func TestIntegrationCreateReplicationSlot(t *testing.T) {
 	integration.CheckSkip(t)
 
-	pool, resource, dbURL := createDockerInstance(t)
-	defer func() {
-		err := pool.Purge(resource)
-		require.NoError(t, err)
-	}()
+	cleanup, dbURL := createDockerInstance(t)
+	defer cleanup()
 	ctx, cancel := context.WithTimeout(t.Context(), time.Second*5)
 	defer cancel()
 
@@ -196,11 +181,8 @@ func TestIntegrationCreateReplicationSlot(t *testing.T) {
 func TestIntegrationDropReplicationSlot(t *testing.T) {
 	integration.CheckSkip(t)
 
-	pool, resource, dbURL := createDockerInstance(t)
-	defer func() {
-		err := pool.Purge(resource)
-		require.NoError(t, err)
-	}()
+	cleanup, dbURL := createDockerInstance(t)
+	defer cleanup()
 	ctx, cancel := context.WithTimeout(t.Context(), time.Second*5)
 	defer cancel()
 
@@ -221,11 +203,8 @@ func TestIntegrationDropReplicationSlot(t *testing.T) {
 func TestIntegrationCopyReplicationSlot(t *testing.T) {
 	integration.CheckSkip(t)
 
-	pool, resource, dbURL := createDockerInstance(t)
-	defer func() {
-		err := pool.Purge(resource)
-		require.NoError(t, err)
-	}()
+	cleanup, dbURL := createDockerInstance(t)
+	defer cleanup()
 	ctx, cancel := context.WithTimeout(t.Context(), time.Second*5)
 	defer cancel()
 
@@ -248,11 +227,8 @@ func TestIntegrationCopyReplicationSlot(t *testing.T) {
 func TestIntegrationCreatePublication(t *testing.T) {
 	integration.CheckSkip(t)
 
-	pool, resource, dbURL := createDockerInstance(t)
-	defer func() {
-		err := pool.Purge(resource)
-		require.NoError(t, err)
-	}()
+	cleanup, dbURL := createDockerInstance(t)
+	defer cleanup()
 
 	ctx, cancel := context.WithTimeout(t.Context(), time.Second*5)
 	defer cancel()
@@ -371,11 +347,8 @@ func TestIntegrationCreatePublication(t *testing.T) {
 func TestIntegrationStartReplication(t *testing.T) {
 	integration.CheckSkip(t)
 
-	pool, resource, dbURL := createDockerInstance(t)
-	defer func() {
-		err := pool.Purge(resource)
-		require.NoError(t, err)
-	}()
+	cleanup, dbURL := createDockerInstance(t)
+	defer cleanup()
 
 	ctx, cancel := context.WithTimeout(t.Context(), time.Second*5)
 	defer cancel()
@@ -530,11 +503,8 @@ drop table t;
 func TestIntegrationSendStandbyStatusUpdate(t *testing.T) {
 	integration.CheckSkip(t)
 
-	pool, resource, dbURL := createDockerInstance(t)
-	defer func() {
-		err := pool.Purge(resource)
-		require.NoError(t, err)
-	}()
+	cleanup, dbURL := createDockerInstance(t)
+	defer cleanup()
 
 	ctx, cancel := context.WithTimeout(t.Context(), time.Second*5)
 	defer cancel()

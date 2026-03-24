@@ -25,9 +25,10 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	qdb "github.com/questdb/go-questdb-client/v4"
 
-	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/wait"
 
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 )
@@ -38,35 +39,39 @@ func TestIntegrationQuestDB(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
-	pool, err := dockertest.NewPool("")
+	ctr, err := testcontainers.Run(t.Context(), "questdb/questdb:8.0.0",
+		testcontainers.WithExposedPorts("9000/tcp", "8812/tcp"),
+		testcontainers.WithEnv(map[string]string{
+			"JAVA_OPTS": "-Xms512m -Xmx512m",
+		}),
+		testcontainers.WithWaitStrategy(
+			wait.ForListeningPort("9000/tcp").WithStartupTimeout(3*time.Minute),
+		),
+	)
+	testcontainers.CleanupContainer(t, ctr)
 	require.NoError(t, err)
 
-	pool.MaxWait = time.Minute * 3
-	resource, err := pool.Run("questdb/questdb", "8.0.0", []string{
-		"JAVA_OPTS=-Xms512m -Xmx512m",
-	})
+	httpPortM, err := ctr.MappedPort(t.Context(), "9000/tcp")
 	require.NoError(t, err)
-	t.Cleanup(func() {
-		assert.NoError(t, pool.Purge(resource))
-	})
+	httpPort := httpPortM.Port()
 
-	if err = pool.Retry(func() error {
-		clientConfStr := fmt.Sprintf("http::addr=localhost:%v", resource.GetPort("9000/tcp"))
+	pgPortM, err := ctr.MappedPort(t.Context(), "8812/tcp")
+	require.NoError(t, err)
+	pgPort := pgPortM.Port()
+
+	// Verify QuestDB is ready
+	require.Eventually(t, func() bool {
+		clientConfStr := fmt.Sprintf("http::addr=localhost:%v", httpPort)
 		sender, err := qdb.LineSenderFromConf(ctx, clientConfStr)
 		if err != nil {
-			return err
+			return false
 		}
 		defer sender.Close(ctx)
-		err = sender.Table("ping").Int64Column("test", 42).AtNow(ctx)
-		if err != nil {
-			return err
+		if err := sender.Table("ping").Int64Column("test", 42).AtNow(ctx); err != nil {
+			return false
 		}
-		return sender.Flush(ctx)
-	}); err != nil {
-		t.Fatalf("Could not connect to docker resource: %s", err)
-	}
-
-	_ = resource.Expire(900)
+		return sender.Flush(ctx) == nil
+	}, 3*time.Minute, 2*time.Second, "Could not connect to QuestDB")
 
 	template := `
 output:
@@ -75,7 +80,7 @@ output:
     table: $ID
 `
 	queryGetFn := func(ctx context.Context, testID, messageID string) (string, []string, error) {
-		pgConn, err := pgconn.Connect(ctx, fmt.Sprintf("postgresql://admin:quest@localhost:%v", resource.GetPort("8812/tcp")))
+		pgConn, err := pgconn.Connect(ctx, fmt.Sprintf("postgresql://admin:quest@localhost:%v", pgPort))
 		require.NoError(t, err)
 		defer pgConn.Close(ctx)
 
@@ -102,6 +107,6 @@ output:
 	)
 	suite.Run(
 		t, template,
-		integration.StreamTestOptPort(resource.GetPort("9000/tcp")),
+		integration.StreamTestOptPort(httpPort),
 	)
 }

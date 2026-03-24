@@ -20,43 +20,46 @@ import (
 	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
-	"github.com/ory/dockertest/v3"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/wait"
 
 	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 )
 
+func startMQTT(t *testing.T) string {
+	t.Helper()
+
+	ctr, err := testcontainers.Run(t.Context(), "ncarlier/mqtt:latest",
+		testcontainers.WithExposedPorts("1883/tcp"),
+		testcontainers.WithWaitStrategy(
+			wait.ForListeningPort("1883/tcp").WithStartupTimeout(30*time.Second),
+		),
+	)
+	testcontainers.CleanupContainer(t, ctr)
+	require.NoError(t, err)
+
+	mappedPort, err := ctr.MappedPort(t.Context(), "1883/tcp")
+	require.NoError(t, err)
+	return mappedPort.Port()
+}
+
 func TestIntegrationMQTT(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
-	pool, err := dockertest.NewPool("")
-	require.NoError(t, err)
+	port := startMQTT(t)
 
-	pool.MaxWait = time.Second * 30
-	resource, err := pool.Run("ncarlier/mqtt", "latest", nil)
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		assert.NoError(t, pool.Purge(resource))
-	})
-
-	_ = resource.Expire(900)
-	require.NoError(t, pool.Retry(func() error {
-		inConf := mqtt.NewClientOptions().SetClientID("UNIT_TEST")
-		inConf = inConf.AddBroker(fmt.Sprintf("tcp://localhost:%v", resource.GetPort("1883/tcp")))
-
-		mIn := mqtt.NewClient(inConf)
-		tok := mIn.Connect()
-		tok.Wait()
-		if cErr := tok.Error(); cErr != nil {
-			return cErr
-		}
-		mIn.Disconnect(0)
-		return nil
-	}))
+	// Verify connectivity
+	inConf := mqtt.NewClientOptions().SetClientID("UNIT_TEST")
+	inConf = inConf.AddBroker(fmt.Sprintf("tcp://localhost:%v", port))
+	mIn := mqtt.NewClient(inConf)
+	tok := mIn.Connect()
+	tok.Wait()
+	require.NoError(t, tok.Error())
+	mIn.Disconnect(0)
 
 	template := `
 output:
@@ -87,7 +90,7 @@ input:
 		t, template,
 		integration.StreamTestOptSleepAfterInput(100*time.Millisecond),
 		integration.StreamTestOptSleepAfterOutput(100*time.Millisecond),
-		integration.StreamTestOptPort(resource.GetPort("1883/tcp")),
+		integration.StreamTestOptPort(port),
 		integration.StreamTestOptVarSet("VAR1", ""),
 	)
 	t.Run("with max in flight", func(t *testing.T) {
@@ -96,7 +99,7 @@ input:
 			t, template,
 			integration.StreamTestOptSleepAfterInput(100*time.Millisecond),
 			integration.StreamTestOptSleepAfterOutput(100*time.Millisecond),
-			integration.StreamTestOptPort(resource.GetPort("1883/tcp")),
+			integration.StreamTestOptPort(port),
 			integration.StreamTestOptMaxInFlight(10),
 			integration.StreamTestOptVarSet("VAR1", ""),
 		)
@@ -107,7 +110,7 @@ input:
 			t, template,
 			integration.StreamTestOptSleepAfterInput(100*time.Millisecond),
 			integration.StreamTestOptSleepAfterOutput(100*time.Millisecond),
-			integration.StreamTestOptPort(resource.GetPort("1883/tcp")),
+			integration.StreamTestOptPort(port),
 			integration.StreamTestOptMaxInFlight(10),
 			integration.StreamTestOptVarSet("VAR1", "nanoid"),
 		)
@@ -118,32 +121,7 @@ func TestMQTTConnectionTestIntegration(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
-	pool, err := dockertest.NewPool("")
-	require.NoError(t, err)
-
-	pool.MaxWait = time.Second * 30
-	resource, err := pool.Run("ncarlier/mqtt", "latest", nil)
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		assert.NoError(t, pool.Purge(resource))
-	})
-
-	_ = resource.Expire(900)
-	require.NoError(t, pool.Retry(func() error {
-		inConf := mqtt.NewClientOptions().SetClientID("UNIT_TEST")
-		inConf = inConf.AddBroker(fmt.Sprintf("tcp://localhost:%v", resource.GetPort("1883/tcp")))
-
-		mIn := mqtt.NewClient(inConf)
-		tok := mIn.Connect()
-		tok.Wait()
-		if cErr := tok.Error(); cErr != nil {
-			return cErr
-		}
-		mIn.Disconnect(0)
-		return nil
-	}))
-
-	port := resource.GetPort("1883/tcp")
+	port := startMQTT(t)
 
 	t.Run("input_valid", func(t *testing.T) {
 		resBuilder := service.NewResourceBuilder()
