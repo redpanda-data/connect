@@ -484,10 +484,10 @@ func TestIntegrationOracleDBCDCLargeObjectColumnsToggle(t *testing.T) {
 	t.Parallel()
 
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t, "latest")
-	sql := `CREATE TABLE testdb.lobdisabled (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,varcharcol VARCHAR2(255),inlinelob NCLOB,outoflinelob NCLOB)`
-	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.lobdisabled", sql))
 
-	sql = `CREATE TABLE testdb.lobenabled (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,varcharcol VARCHAR2(255),inlinelob NCLOB,outoflinelob NCLOB)`
+	sql := `CREATE TABLE testdb.lobdisabled (id NUMBER GENERATED ALWAYS AS IDENTITY (NOCACHE) PRIMARY KEY,varcharcol VARCHAR2(255),inlinelob NCLOB,outoflinelob NCLOB)`
+	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.lobdisabled", sql))
+	sql = `CREATE TABLE testdb.lobenabled (id NUMBER GENERATED ALWAYS AS IDENTITY (NOCACHE) PRIMARY KEY,varcharcol VARCHAR2(255),inlinelob NCLOB,outoflinelob NCLOB)`
 	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.lobenabled", sql))
 
 	var (
@@ -509,7 +509,7 @@ oracledb_cdc:
 
 	t.Run("lob_enabled=false", func(t *testing.T) {
 		for range snapshotRows {
-			db.MustExec("INSERT INTO testdb.lobdisabled (varcharcol, inlinelob, outoflinelob) VALUES (:1, :2, :3)", "helloworld", inline, outofline)
+			db.MustExec("INSERT INTO testdb.lobdisabled (varcharcol, inlinelob, outoflinelob) VALUES (:1, :2, :3)", "snapshot", inline, outofline)
 		}
 
 		var batch oracledbtest.Batch
@@ -548,11 +548,11 @@ oracledb_cdc:
 				got = batch.Count()
 				return got >= snapshotRows
 			}, time.Minute*5, time.Second*1)
-			assert.Truef(t, (got == snapshotRows), "Wanted %d snapshot messages but got %d", snapshotRows, got)
 
+			require.Truef(t, (got == snapshotRows), "Wanted %d snapshot messages but got %d", snapshotRows, got)
 			require.JSONEq(t, `{
 		"ID": 1,
-		"VARCHARCOL": "helloworld",
+		"VARCHARCOL": "snapshot",
 		"INLINELOB": null,
 		"OUTOFLINELOB": null
 		}`, batch.Clone()[0], "Failed to assert snapshot LOB columns")
@@ -564,7 +564,7 @@ oracledb_cdc:
 		{
 			streamingRows := 50
 			for range streamingRows {
-				db.MustExec("INSERT INTO testdb.lobdisabled (varcharcol, inlinelob, outoflinelob) VALUES (:1, :2, :3)", "helloworld", inline, outofline)
+				db.MustExec("INSERT INTO testdb.lobdisabled (varcharcol, inlinelob, outoflinelob) VALUES (:1, :2, :3)", "streaming", inline, outofline)
 			}
 
 			var got int
@@ -572,11 +572,11 @@ oracledb_cdc:
 				got = batch.Count()
 				return got >= streamingRows
 			}, time.Minute*5, time.Second*1)
-			assert.Truef(t, (got == streamingRows), "Wanted %d streaming messages but got %d", streamingRows, got)
 
+			require.Truef(t, (got == streamingRows), "Wanted %d streaming messages but got %d", streamingRows, got)
 			require.JSONEq(t, `{
 		"ID": 51,
-		"VARCHARCOL": "helloworld",
+		"VARCHARCOL": "streaming",
 		"INLINELOB": "",
 		"OUTOFLINELOB": ""
 		}`, batch.Clone()[0], "Failed to assert streaming LOB columns")
@@ -589,7 +589,7 @@ oracledb_cdc:
 
 	t.Run("lob_enabled=true", func(t *testing.T) {
 		for range snapshotRows {
-			db.MustExec("INSERT INTO testdb.lobenabled (varcharcol, inlinelob, outoflinelob) VALUES (:1, :2, :3)", "helloworld", inline, outofline)
+			db.MustExec("INSERT INTO testdb.lobenabled (varcharcol, inlinelob, outoflinelob) VALUES (:1, :2, :3)", "snapshot", inline, outofline)
 		}
 
 		var batch oracledbtest.Batch
@@ -628,11 +628,11 @@ oracledb_cdc:
 				got = batch.Count()
 				return got >= snapshotRows
 			}, time.Minute*5, time.Second*1)
-			assert.Truef(t, (got == snapshotRows), "Wanted %d snapshot messages but got %d", snapshotRows, got)
 
+			require.Truef(t, (got == snapshotRows), "Wanted %d snapshot messages but got %d", snapshotRows, got)
 			require.JSONEq(t, `{
 		"ID": 1,
-		"VARCHARCOL": "helloworld",
+		"VARCHARCOL": "snapshot",
 		"INLINELOB": "`+inline+`",
 		"OUTOFLINELOB": "`+outofline+`"
 		}`, batch.Clone()[0], "Failed to snapshot LOB columns")
@@ -644,7 +644,7 @@ oracledb_cdc:
 		{
 			streamingRows := 50
 			for range streamingRows {
-				db.MustExec("INSERT INTO testdb.lobenabled (varcharcol, inlinelob, outoflinelob) VALUES (:1, :2, :3)", "helloworld", inline, outofline)
+				db.MustExec("INSERT INTO testdb.lobenabled (varcharcol, inlinelob, outoflinelob) VALUES (:1, :2, :3)", "streaming", inline, outofline)
 			}
 
 			var got int
@@ -652,11 +652,11 @@ oracledb_cdc:
 				got = batch.Count()
 				return got >= streamingRows
 			}, time.Minute*5, time.Second*1)
-			assert.Truef(t, (got == streamingRows), "Wanted %d streaming messages but got %d", streamingRows, got)
 
+			require.Truef(t, (got == streamingRows), "Wanted %d streaming messages but got %d", streamingRows, got)
 			require.JSONEq(t, `{
 		"ID": 51,
-		"VARCHARCOL": "helloworld",
+		"VARCHARCOL": "streaming",
 		"INLINELOB": "`+inline+`",
 		"OUTOFLINELOB": "`+outofline+`"
 		}`, batch.Clone()[0], "Failed to assert streaming LOB columns")
