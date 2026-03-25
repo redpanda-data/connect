@@ -49,8 +49,8 @@ func WithBackoff(base, maxDur time.Duration, maxAttempts int) ClientOption {
 
 // WithAuthRefresh registers a callback that the client invokes when an
 // Unauthenticated error is encountered during reconnection. The callback
-// should return fresh credentials.
-func WithAuthRefresh(fn func() (token, url, tenantID string, err error)) ClientOption {
+// receives the reconnection context and should return fresh credentials.
+func WithAuthRefresh(fn func(ctx context.Context) (token, url, tenantID string, err error)) ClientOption {
 	return func(c *Client) { c.onAuthRefresh = fn }
 }
 
@@ -81,7 +81,7 @@ type Client struct {
 	maxReconnect int // 0 = unlimited
 
 	// Auth refresh callback (called on Unauthenticated errors during reconnect)
-	onAuthRefresh func() (token, url, tenantID string, err error)
+	onAuthRefresh func(ctx context.Context) (token, url, tenantID string, err error)
 
 	// Optional metrics
 	metrics *service.Metrics
@@ -395,7 +395,7 @@ func (c *Client) reconnectWithBackoff(ctx context.Context) error {
 				switch grpcErr.Code() {
 				case codes.Unauthenticated:
 					if c.onAuthRefresh != nil {
-						token, url, tid, err := c.onAuthRefresh()
+						token, url, tid, err := c.onAuthRefresh(ctx)
 						if err != nil {
 							c.log.Warnf("Auth refresh failed: %v", err)
 						} else {

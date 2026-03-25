@@ -472,7 +472,9 @@ func (s *salesforceProcessor) Close(ctx context.Context) error {
 		}
 	}
 
-	return s.grpcClient.CloseWithTimeout(s.grpcShutdownTimeout)
+	err := s.grpcClient.CloseWithTimeout(s.grpcShutdownTimeout)
+	s.grpcClient = nil
+	return err
 }
 
 // filterCDCEntity checks if a CDC event entity matches the configured objects.

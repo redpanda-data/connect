@@ -9,7 +9,6 @@
 package salesforce
 
 import (
-	"context"
 	"encoding/json"
 	"testing"
 
@@ -164,7 +163,7 @@ func newTestProcessor(t *testing.T) (*salesforceProcessor, *service.Resources) {
 
 func TestLoadState_NewFormat(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
+	ctx := t.Context()
 	p, mgr := newTestProcessor(t)
 
 	want := ProcessorState{
@@ -185,7 +184,7 @@ func TestLoadState_NewFormat(t *testing.T) {
 
 func TestLoadState_LegacyMigration(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
+	ctx := t.Context()
 	p, mgr := newTestProcessor(t)
 
 	legacyCursor := salesforcehttp.Cursor{NextAssign: 3}
@@ -213,7 +212,7 @@ func TestLoadState_LegacyMigration(t *testing.T) {
 
 func TestLoadState_Empty(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
+	ctx := t.Context()
 	p, _ := newTestProcessor(t)
 
 	got, err := p.loadState(ctx)

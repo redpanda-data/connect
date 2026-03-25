@@ -358,8 +358,8 @@ func (s *salesforceProcessor) initGRPCClient(ctx context.Context, replayID []byt
 		cfg,
 		salesforcegrpc.WithBackoff(s.grpcReconnectBaseDelay, s.grpcReconnectMaxDelay, s.grpcReconnectMaxAttempts),
 		salesforcegrpc.WithMetrics(s.res.Metrics()),
-		salesforcegrpc.WithAuthRefresh(func() (string, string, string, error) {
-			if err := s.client.RefreshToken(context.Background()); err != nil {
+		salesforcegrpc.WithAuthRefresh(func(ctx context.Context) (string, string, string, error) {
+			if err := s.client.RefreshToken(ctx); err != nil {
 				return "", "", "", err
 			}
 			return s.client.BearerToken(), s.client.InstanceURL(), s.client.TenantID(), nil
