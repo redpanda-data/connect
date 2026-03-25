@@ -433,13 +433,14 @@ func (s *salesforceSinkOutput) Close(ctx context.Context) error {
 	return firstErr
 }
 
-// getWritableFields returns the cached updateable field set for an SObject, fetching it on first call.
+// getWritableFields returns a copy of the cached updateable field set for an SObject, fetching it on first call.
+// A copy is returned so callers can iterate safely while blockFields mutates the underlying map concurrently.
 func (s *salesforceSinkOutput) getWritableFields(ctx context.Context, sobject string) (map[string]struct{}, error) {
 	s.writableFieldsMu.RLock()
 	fields, ok := s.writableFields[sobject]
 	s.writableFieldsMu.RUnlock()
 	if ok {
-		return fields, nil
+		return copyStringSet(fields), nil
 	}
 
 	fields, err := s.client.DescribeWritableFields(ctx, sobject)
@@ -452,7 +453,15 @@ func (s *salesforceSinkOutput) getWritableFields(ctx context.Context, sobject st
 	s.writableFieldsMu.Unlock()
 
 	s.log.Infof("salesforce_sink: %s has %d updateable fields", sobject, len(fields))
-	return fields, nil
+	return copyStringSet(fields), nil
+}
+
+func copyStringSet(m map[string]struct{}) map[string]struct{} {
+	cp := make(map[string]struct{}, len(m))
+	for k := range m {
+		cp[k] = struct{}{}
+	}
+	return cp
 }
 
 // blockFields removes fields from the writable cache for sobject and logs all blocked fields so far.
