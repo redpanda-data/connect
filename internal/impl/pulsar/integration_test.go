@@ -34,7 +34,7 @@ func TestIntegrationPulsar(t *testing.T) {
 	ctr, err := testcontainers.Run(t.Context(), "apachepulsar/pulsar-standalone:2.8.3",
 		testcontainers.WithImagePlatform("linux/amd64"),
 		testcontainers.WithExposedPorts("6650/tcp", "8080/tcp"),
-		testcontainers.WithWaitStrategy(
+		testcontainers.WithWaitStrategyAndDeadline(3*time.Minute,
 			wait.ForHTTP("/admin/v2/brokers/ready").WithPort("8080/tcp").WithStartupTimeout(3*time.Minute),
 		),
 	)
