@@ -30,7 +30,7 @@ output:
   nanomsg:
     urls:
       - tcp://127.0.0.1:$PORT
-    bind: false
+    bind: true
     socket_type: $VAR1
     poll_timeout: 5s
     max_in_flight: $MAX_IN_FLIGHT
@@ -39,7 +39,7 @@ input:
   nanomsg:
     urls:
       - tcp://127.0.0.1:$PORT
-    bind: true
+    bind: false
     socket_type: $VAR2
     sub_filters: [ $VAR3 ]
 `
@@ -54,6 +54,7 @@ input:
 		integration.StreamTestOptSleepAfterOutput(500*time.Millisecond),
 		integration.StreamTestOptVarSet("VAR1", "PUSH"),
 		integration.StreamTestOptVarSet("VAR2", "PULL"),
+		integration.StreamTestOptVarSet("VAR3", ""),
 	)
 	t.Run("with max in flight", func(t *testing.T) {
 		t.Parallel()
@@ -63,6 +64,7 @@ input:
 			integration.StreamTestOptSleepAfterOutput(500*time.Millisecond),
 			integration.StreamTestOptVarSet("VAR1", "PUSH"),
 			integration.StreamTestOptVarSet("VAR2", "PULL"),
+			integration.StreamTestOptVarSet("VAR3", ""),
 			integration.StreamTestOptMaxInFlight(10),
 		)
 	})
