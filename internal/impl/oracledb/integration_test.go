@@ -37,7 +37,7 @@ func TestIntegrationOracleDBCDCSnapshotAndStreaming(t *testing.T) {
 	t.Parallel()
 
 	// Create tables
-	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t, "latest")
+	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
 	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.foo", "CREATE TABLE testdb.foo (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
 	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.foo2", "CREATE TABLE testdb.foo2 (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
 	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb2.bar", "CREATE TABLE testdb2.bar (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
@@ -145,7 +145,7 @@ func TestIntegrationOracleDBCDCConcurrentSnapshot(t *testing.T) {
 	t.Parallel()
 
 	// Create tables
-	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t, "latest")
+	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
 	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.foo", "CREATE TABLE testdb.foo (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
 	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.foo2", "CREATE TABLE testdb.foo2 (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
 	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb2.bar", "CREATE TABLE testdb2.bar (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
@@ -225,7 +225,7 @@ func TestIntegrationOracleDBCDCResumesFromCheckpoint(t *testing.T) {
 	t.Parallel()
 
 	// Create table
-	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t, "latest")
+	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
 	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.foo", "CREATE TABLE testdb.foo (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
 
 	var (
@@ -352,7 +352,7 @@ func TestIntegrationOracleDBCDCStreaming(t *testing.T) {
 	t.Parallel()
 
 	// Create tables
-	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t, "latest")
+	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
 	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.foo", "CREATE TABLE testdb.foo (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, val NUMBER)"))
 	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.foo2", "CREATE TABLE testdb.foo2 (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, val NUMBER)"))
 	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb2.bar", "CREATE TABLE testdb2.bar (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, val NUMBER)"))
@@ -483,7 +483,7 @@ func TestIntegrationOracleDBCDCLargeObjectColumnsToggle(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
-	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t, "latest")
+	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
 
 	sql := `CREATE TABLE testdb.lobdisabled (id NUMBER GENERATED ALWAYS AS IDENTITY (NOCACHE) PRIMARY KEY,varcharcol VARCHAR2(255),inlinelob NCLOB,outoflinelob NCLOB)`
 	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.lobdisabled", sql))
@@ -669,7 +669,7 @@ oracledb_cdc:
 func TestIntegrationOracleDBCDCSnapshotAndStreamingAllTypes(t *testing.T) {
 	integration.CheckSkip(t)
 
-	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t, "latest")
+	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
 	q := `
 	CREATE TABLE testdb.all_data_types (
 		-- Numeric Data Types
@@ -958,7 +958,7 @@ oracledb_cdc:
 func TestIntegrationOracleDBCDCSnapshotSchema(t *testing.T) {
 	integration.CheckSkip(t)
 
-	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t, "latest")
+	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
 	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.schema_snap",
 		"CREATE TABLE testdb.schema_snap (id NUMBER(10) PRIMARY KEY, name VARCHAR2(100), created_at DATE, data RAW(16), score BINARY_FLOAT)"))
 
@@ -1044,7 +1044,7 @@ func TestIntegrationOracleDBCDCStreamingInsertSchema(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
-	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t, "latest")
+	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
 	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.schema_ins",
 		"CREATE TABLE testdb.schema_ins (id NUMBER(10) PRIMARY KEY, val VARCHAR2(50))"))
 
@@ -1107,7 +1107,7 @@ oracledb_cdc:
 func TestIntegrationOracleDBCDCStreamingUpdateSchema(t *testing.T) {
 	integration.CheckSkip(t)
 
-	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t, "latest")
+	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
 	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.schema_upd",
 		"CREATE TABLE testdb.schema_upd (id NUMBER(10) PRIMARY KEY, a VARCHAR2(50), b VARCHAR2(50), c VARCHAR2(50))"))
 
@@ -1174,7 +1174,7 @@ oracledb_cdc:
 func TestIntegrationOracleDBCDCStreamingDeleteSchema(t *testing.T) {
 	integration.CheckSkip(t)
 
-	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t, "latest")
+	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
 	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.schema_del",
 		"CREATE TABLE testdb.schema_del (id NUMBER(10) PRIMARY KEY, val VARCHAR2(50))"))
 
@@ -1239,7 +1239,7 @@ func TestIntegrationOracleDBCDCSchemaConsistentAcrossPhases(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
-	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t, "latest")
+	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
 	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.schema_phases",
 		"CREATE TABLE testdb.schema_phases (id NUMBER(10) PRIMARY KEY, val VARCHAR2(50))"))
 
@@ -1320,7 +1320,7 @@ oracledb_cdc:
 func TestIntegrationOracleDBCDCSchemaColumnAdded(t *testing.T) {
 	integration.CheckSkip(t)
 
-	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t, "latest")
+	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
 	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.schema_drift",
 		"CREATE TABLE testdb.schema_drift (id NUMBER(10) PRIMARY KEY, name VARCHAR2(100))"))
 
@@ -1391,7 +1391,7 @@ oracledb_cdc:
 func TestIntegrationOracleDBCDCMultiTableSchema(t *testing.T) {
 	integration.CheckSkip(t)
 
-	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t, "latest")
+	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
 	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.schema_t1",
 		"CREATE TABLE testdb.schema_t1 (id NUMBER(10) PRIMARY KEY, val VARCHAR2(50))"))
 	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.schema_t2",
@@ -1462,7 +1462,7 @@ oracledb_cdc:
 func TestIntegrationOracleDBCDCSchemaDataTypeConsistency(t *testing.T) {
 	integration.CheckSkip(t)
 
-	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t, "latest")
+	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
 	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.schema_types",
 		`CREATE TABLE testdb.schema_types (
 			int_col       NUMBER(10)      PRIMARY KEY,

@@ -178,17 +178,16 @@ func (db *TestDB) CreateTableWithSupplementalLoggingIfNotExists(ctx context.Cont
 	return nil
 }
 
-// SetupTestWithOracleDBVersion starts an Oracle XE Docker container with the specified version,
-// enables supplemental logging for CDC, and returns the connection string and TestDB wrapper.
+// SetupTestWithOracleDBVersion starts an Oracle Free Docker container, enables supplemental
+// logging for CDC, and returns the connection string and TestDB wrapper.
 // The container is automatically cleaned up when the test completes.
-func SetupTestWithOracleDBVersion(t *testing.T, version string) (string, *TestDB) {
+func SetupTestWithOracleDBVersion(t *testing.T) (string, *TestDB) {
 	ctx := t.Context()
 
 	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 		ContainerRequest: testcontainers.ContainerRequest{
-			Image:         "container-registry.oracle.com/database/express:" + version,
-			ImagePlatform: "linux/amd64",
-			ExposedPorts:  []string{"1521/tcp"},
+			Image:        "container-registry.oracle.com/database/free:latest-lite",
+			ExposedPorts: []string{"1521/tcp"},
 			Env: map[string]string{
 				"ORACLE_PWD": "YourPassword123",
 			},
@@ -206,7 +205,7 @@ func SetupTestWithOracleDBVersion(t *testing.T, version string) (string, *TestDB
 	host, err := container.Host(ctx)
 	require.NoError(t, err)
 
-	pdbConnectionString := fmt.Sprintf("oracle://system:YourPassword123@%s:%s/XE", host, port.Port())
+	pdbConnectionString := fmt.Sprintf("oracle://system:YourPassword123@%s:%s/FREE", host, port.Port())
 
 	db, err := sql.Open("oracle", pdbConnectionString)
 	require.NoError(t, err)

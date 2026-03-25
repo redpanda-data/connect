@@ -29,7 +29,7 @@ func TestIntegrationSnapshot(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
-	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t, "21.3.0-xe")
+	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 
 	// Create all tables upfront before running subtests. Oracle requires SCNs to advance
