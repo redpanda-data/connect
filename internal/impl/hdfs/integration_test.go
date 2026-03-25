@@ -41,10 +41,10 @@ func TestIntegrationHDFS(t *testing.T) {
 		testcontainers.WithExposedPorts("9000/tcp", "50070/tcp", "50075/tcp", "50010/tcp"),
 		testcontainers.WithHostConfigModifier(func(hc *container.HostConfig) {
 			hc.PortBindings = nat.PortMap{
-				"9000/tcp":  {{HostIP: "", HostPort: "9000/tcp"}},
-				"50070/tcp": {{HostIP: "", HostPort: "50070/tcp"}},
-				"50075/tcp": {{HostIP: "", HostPort: "50075/tcp"}},
-				"50010/tcp": {{HostIP: "", HostPort: "50010/tcp"}},
+				"9000/tcp":  {{HostIP: "", HostPort: "19000"}},
+				"50070/tcp": {{HostIP: "", HostPort: "19070"}},
+				"50075/tcp": {{HostIP: "", HostPort: "19075"}},
+				"50010/tcp": {{HostIP: "", HostPort: "19010"}},
 			}
 		}),
 		testcontainers.WithWaitStrategy(
@@ -57,7 +57,7 @@ func TestIntegrationHDFS(t *testing.T) {
 	require.Eventually(t, func() bool {
 		testFile := "/cluster_ready" + time.Now().Format("20060102150405")
 		client, err := hdfs.NewClient(hdfs.ClientOptions{
-			Addresses: []string{"localhost:9000"},
+			Addresses: []string{"localhost:19000"},
 			User:      "root",
 		})
 		if err != nil {
@@ -80,7 +80,7 @@ func TestIntegrationHDFS(t *testing.T) {
 	template := `
 output:
   hdfs:
-    hosts: [ localhost:9000 ]
+    hosts: [ localhost:19000 ]
     user: root
     directory: /$ID
     path: ${!counter()}-${!timestamp_unix_nano()}.txt
@@ -90,7 +90,7 @@ output:
 
 input:
   hdfs:
-    hosts: [ localhost:9000 ]
+    hosts: [ localhost:19000 ]
     user: root
     directory: /$ID
 `
