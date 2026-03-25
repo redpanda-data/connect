@@ -190,8 +190,8 @@ func TestRecordsToCSV(t *testing.T) {
 		wantRows    int
 	}{
 		{
-			name:    "empty records",
-			records: nil,
+			name:     "empty records",
+			records:  nil,
 			wantRows: 0,
 		},
 		{
@@ -277,8 +277,8 @@ func TestFilterRecord(t *testing.T) {
 		"Revenue__c": {},
 	}
 	rec := map[string]any{
-		"Name":          "Acme",
-		"Revenue__c":    1000,
+		"Name":           "Acme",
+		"Revenue__c":     1000,
 		"SystemField__c": "readonly",
 	}
 
