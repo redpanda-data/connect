@@ -57,8 +57,8 @@ func (r *typeResolver) resolveTypeForAddColumn(
 	// Stage 2: schema_metadata override
 	if r.schemaMetadataKey != "" {
 		if metaType, err := r.resolveFromSchemaMetadata(msg, field.FullPath()); err != nil {
-			r.logger.Warnf("Failed to resolve type from schema metadata for field %q: %v", field.FieldName(), err)
-		} else if metaType != nil {
+			return nil, fmt.Errorf("Failed to resolve type from schema metadata for field %v: %w", field.FullPath(), err)
+		} else {
 			inferredType = metaType
 		}
 	}
@@ -95,8 +95,8 @@ func (r *typeResolver) resolveTypeForCreateTable(
 	if r.schemaMetadataKey != "" {
 		path := icebergx.Path{{Kind: icebergx.PathField, Name: fieldName}}
 		if metaType, err := r.resolveFromSchemaMetadata(msg, path); err != nil {
-			r.logger.Warnf("Failed to resolve type from schema metadata for field %q: %v", fieldName, err)
-		} else if metaType != nil {
+			return nil, fmt.Errorf("Failed to resolve type from schema metadata for field %q: %w", fieldName, err)
+		} else {
 			inferredType = metaType
 		}
 	}
@@ -119,7 +119,7 @@ func (r *typeResolver) resolveTypeForCreateTable(
 func (r *typeResolver) resolveFromSchemaMetadata(msg *service.Message, fieldPath icebergx.Path) (iceberg.Type, error) {
 	metaAny, exists := msg.MetaGetMut(r.schemaMetadataKey)
 	if !exists {
-		return nil, nil
+		return nil, errors.New("missing schema metadata in message")
 	}
 
 	commonSchema, err := schema.ParseFromAny(metaAny)
@@ -129,7 +129,7 @@ func (r *typeResolver) resolveFromSchemaMetadata(msg *service.Message, fieldPath
 
 	field, found := findCommonField(commonSchema, fieldPath)
 	if !found {
-		return nil, nil
+		return nil, fmt.Errorf("field %s is missing in schema metadata", fieldPath.String())
 	}
 
 	return commonTypeToIcebergType(field)
