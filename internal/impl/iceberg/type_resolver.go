@@ -1,4 +1,4 @@
-// Copyright 2025 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed as a Redpanda Enterprise file under the Redpanda Community
 // License (the "License"); you may not use this file except in compliance with
@@ -44,7 +44,7 @@ func newTypeResolver(schemaMetadataKey string, newColumnTypeMapping *bloblang.Ex
 
 // resolveTypeForAddColumn resolves the Iceberg type for a new column being added via schema evolution.
 func (r *typeResolver) resolveTypeForAddColumn(
-	field *NewFieldError,
+	field *UnknownFieldError,
 	msg *service.Message,
 	namespace, table string,
 ) (iceberg.Type, error) {
@@ -103,10 +103,10 @@ func (r *typeResolver) resolveTypeForCreateTable(
 
 	// Stage 3: Bloblang mapping override (only for primitive/leaf types)
 	if r.newColumnTypeMapping != nil && isPrimitiveType(inferredType) {
-		field := NewNewFieldError(nil, fieldName, value)
+		field := NewUnknownFieldError(nil, fieldName, value)
 		mappedType, err := r.applyTypeMapping(field, inferredType, msg, namespace, table)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("applying type mapping for field %q: %w", field.FieldName(), err)
 		}
 		inferredType = mappedType
 	}
@@ -241,7 +241,7 @@ func commonArrayToIcebergList(c *schema.Common, ti *typeInferrer) (*iceberg.List
 
 // applyTypeMapping runs the Bloblang new_column_type_mapping.
 func (r *typeResolver) applyTypeMapping(
-	field *NewFieldError,
+	field *UnknownFieldError,
 	inferredType iceberg.Type,
 	msg *service.Message,
 	namespace, table string,

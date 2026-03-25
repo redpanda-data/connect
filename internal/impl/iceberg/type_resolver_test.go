@@ -1,4 +1,4 @@
-// Copyright 2025 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed as a Redpanda Enterprise file under the Redpanda Community
 // License (the "License"); you may not use this file except in compliance with
@@ -214,12 +214,12 @@ func TestTypeResolverResolveTypeForAddColumn(t *testing.T) {
 		msg := service.NewMessage(nil)
 		msg.SetStructuredMut(map[string]any{"name": "hello"})
 
-		field := NewNewFieldError(nil, "name", "hello")
+		field := NewUnknownFieldError(nil, "name", "hello")
 		got, err := r.resolveTypeForAddColumn(field, msg, "ns", "tbl")
 		require.NoError(t, err)
 		assert.Equal(t, "string", got.Type())
 
-		field = NewNewFieldError(nil, "count", 42)
+		field = NewUnknownFieldError(nil, "count", 42)
 		got, err = r.resolveTypeForAddColumn(field, msg, "ns", "tbl")
 		require.NoError(t, err)
 		assert.Equal(t, "double", got.Type())
@@ -238,7 +238,7 @@ func TestTypeResolverResolveTypeForAddColumn(t *testing.T) {
 		msg.SetStructuredMut(map[string]any{"count": 42})
 		msg.MetaSetMut("test_schema", commonSchema.ToAny())
 
-		field := NewNewFieldError(nil, "count", 42)
+		field := NewUnknownFieldError(nil, "count", 42)
 		got, err := r.resolveTypeForAddColumn(field, msg, "ns", "tbl")
 		require.NoError(t, err)
 		assert.Equal(t, "long", got.Type(), "should use Int64 from schema metadata, not Float64 from inference")
@@ -251,7 +251,7 @@ func TestTypeResolverResolveTypeForAddColumn(t *testing.T) {
 		msg := service.NewMessage(nil)
 		msg.SetStructuredMut(map[string]any{"count": 42})
 
-		field := NewNewFieldError(nil, "count", 42)
+		field := NewUnknownFieldError(nil, "count", 42)
 		got, err := r.resolveTypeForAddColumn(field, msg, "ns", "tbl")
 		require.NoError(t, err)
 		assert.Equal(t, "long", got.Type())
@@ -271,7 +271,7 @@ func TestTypeResolverResolveTypeForAddColumn(t *testing.T) {
 		msg.SetStructuredMut(map[string]any{"count": 42})
 		msg.MetaSetMut("test_schema", commonSchema.ToAny())
 
-		field := NewNewFieldError(nil, "count", 42)
+		field := NewUnknownFieldError(nil, "count", 42)
 		got, err := r.resolveTypeForAddColumn(field, msg, "ns", "tbl")
 		require.NoError(t, err)
 		// Mapping sees inferred_type="int" (from schema_metadata) and overrides to "long"
@@ -294,7 +294,7 @@ func TestTypeResolverResolveTypeForAddColumn(t *testing.T) {
 		msg.SetStructuredMut(map[string]any{"nested": map[string]any{"x": "hello"}})
 		msg.MetaSetMut("test_schema", commonSchema.ToAny())
 
-		field := NewNewFieldError(nil, "nested", map[string]any{"x": "hello"})
+		field := NewUnknownFieldError(nil, "nested", map[string]any{"x": "hello"})
 		got, err := r.resolveTypeForAddColumn(field, msg, "ns", "tbl")
 		require.NoError(t, err)
 		assert.Equal(t, "struct", got.Type(), "struct type should skip the bloblang mapping")
@@ -308,13 +308,13 @@ func TestTypeResolverResolveTypeForAddColumn(t *testing.T) {
 		msg.SetStructuredMut(map[string]any{"count": 42, "name": "test"})
 
 		// Numeric → inferred as "double" → mapping converts to "long"
-		field := NewNewFieldError(nil, "count", 42)
+		field := NewUnknownFieldError(nil, "count", 42)
 		got, err := r.resolveTypeForAddColumn(field, msg, "ns", "tbl")
 		require.NoError(t, err)
 		assert.Equal(t, "long", got.Type())
 
 		// String → inferred as "string" → mapping passes through
-		field = NewNewFieldError(nil, "name", "test")
+		field = NewUnknownFieldError(nil, "name", "test")
 		got, err = r.resolveTypeForAddColumn(field, msg, "ns", "tbl")
 		require.NoError(t, err)
 		assert.Equal(t, "string", got.Type())
