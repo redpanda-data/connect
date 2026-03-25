@@ -9,8 +9,8 @@
 package splunk
 
 import (
+	"crypto/tls"
 	"io"
-	"net/http"
 	"testing"
 	"time"
 
@@ -41,7 +41,7 @@ func TestIntegrationSplunk(t *testing.T) {
 		startupTimeout = time.Until(deadline) - 100*time.Millisecond
 	}
 
-	ctr, err := testcontainers.Run(t.Context(), "splunk/splunk:9.1.1",
+	ctr, err := testcontainers.Run(t.Context(), "splunk/splunk:9.3.3",
 		testcontainers.WithImagePlatform("linux/amd64"),
 		testcontainers.WithExposedPorts(containerInputPort, containerOutputPort),
 		testcontainers.WithEnv(map[string]string{
@@ -49,8 +49,18 @@ func TestIntegrationSplunk(t *testing.T) {
 			"SPLUNK_PASSWORD":   dummySplunkPassword,
 			"SPLUNK_HEC_TOKEN":  dummySplunkPassword,
 		}),
-		testcontainers.WithWaitStrategy(
-			wait.ForListeningPort(nat.Port(containerOutputPort)).WithStartupTimeout(startupTimeout),
+		testcontainers.WithWaitStrategyAndDeadline(startupTimeout,
+			wait.ForHTTP("/services/collector/health").
+				WithPort(nat.Port(containerOutputPort)).
+				WithTLS(true, &tls.Config{InsecureSkipVerify: true}). //nolint:gosec
+				WithResponseMatcher(func(body io.Reader) bool {
+					b, err := io.ReadAll(body)
+					if err != nil {
+						return false
+					}
+					return string(b) == `{"text":"HEC is healthy","code":17}`
+				}).
+				WithPollInterval(2*time.Second),
 		),
 	)
 	testcontainers.CleanupContainer(t, ctr)
@@ -63,27 +73,6 @@ func TestIntegrationSplunk(t *testing.T) {
 	outputPortM, err := ctr.MappedPort(t.Context(), nat.Port(containerOutputPort))
 	require.NoError(t, err)
 	serviceOutputPort := outputPortM.Port()
-
-	// Verify HEC is ready
-	require.Eventually(t, func() bool {
-		tr := http.DefaultTransport.(*http.Transport).Clone()
-		tr.TLSClientConfig.InsecureSkipVerify = true
-		client := http.Client{Transport: tr}
-		resp, err := client.Get("https://127.0.0.1:" + serviceOutputPort + "//services/collector/health")
-		if err != nil {
-			return false
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode != http.StatusOK {
-			return false
-		}
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return false
-		}
-		return string(body) == `{"text":"HEC is healthy","code":17}`
-	}, startupTimeout, 2*time.Second, "Failed to start Splunk emulator")
 
 	t.Run("splunk_hec output -> input roundtrip", func(t *testing.T) {
 		template := `
