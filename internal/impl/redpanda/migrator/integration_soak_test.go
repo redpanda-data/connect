@@ -20,7 +20,6 @@ import (
 	"errors"
 	"flag"
 	"math/rand"
-	"os"
 	"strconv"
 	"testing"
 	"text/template"
@@ -56,10 +55,7 @@ var (
 //
 // You can run resources/docker/profiling containers to get Metrics.
 func TestIntegrationMigratorSoak(t *testing.T) {
-	integration.CheckSkip(t)
-	if os.Getenv("CI") != "" {
-		t.Skip("Skipping soak test in CI")
-	}
+	integration.CheckSkipExact(t)
 
 	ctx := t.Context()
 
