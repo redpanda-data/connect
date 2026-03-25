@@ -17,12 +17,12 @@
 //  - Provides helpers for interpreting Salesforce HTTP responses with a focus on
 //  authentication and rate-limiting signals.
 //  - Central entry point: CheckSalesforceAuth(resp) which examines an http.Response and
-//  returns a *SalesforceError for common Salesforce conditions:
+//  returns a *HTTPError for common Salesforce conditions:
 //  - 401 Unauthorized: Likely invalid or expired access token.
 //  - 403 Forbidden: Authenticated but insufficient permissions.
 //  - 429 Too Many Requests: Salesforce is throttling; check Retry-After header.
 //  - On success (no issues detected), CheckSalesforceAuth returns nil.
-//  - On failure, SalesforceError includes StatusCode, Reason, Body, and Headers.
+//  - On failure, HTTPError includes StatusCode, Reason, Body, and Headers.
 //
 // When to use
 //  - Immediately after getting an *http.Response from Salesforce (e.g., client.Do(req)),
@@ -49,7 +49,7 @@
 //     if serr := salesforce_helper.CheckSalesforceAuth(resp); serr != nil {
 //     // This includes 401, 403, 429, and 200 + header-signaled problems.
 //     // You can inspect the error for details.
-//     if se, ok := serr.(*salesforce_helper.SalesforceError); ok {
+//     if se, ok := serr.(*salesforce_helper.HTTPError); ok {
 //     log.Printf("salesforce error: status=%d reason=%s", se.StatusCode, se.Reason)
 //     log.Printf("headers: %v", se.Headers)
 //     }
@@ -62,10 +62,10 @@
 //
 //  2. Handling rate limiting (429) with Retry-After
 //
-//     // If CheckSalesforceAuth returns a SalesforceError with StatusCode 429, look for Retry-After.
+//     // If CheckSalesforceAuth returns an HTTPError with StatusCode 429, look for Retry-After.
 //     jerr := salesforce_helper.CheckSalesforceAuth(resp)
 //     if jerr != nil {
-//     if je, ok := jerr.(*salesforce_helper.SalesforceError); ok && je.StatusCode == http.StatusTooManyRequests {
+//     if je, ok := jerr.(*salesforce_helper.HTTPError); ok && je.StatusCode == http.StatusTooManyRequests {
 //     retryAfter := je.Headers.Get("Retry-After") // integer seconds expected
 //     // Convert to a duration and sleep before retrying
 //     if secs, convErr := strconv.Atoi(strings.TrimSpace(retryAfter)); convErr == nil && secs >= 0 {
@@ -82,8 +82,8 @@
 //
 //     jerr := salesforce_helper.CheckSalesforceAuth(resp)
 //     if jerr != nil {
-//     // Use errors.As to extract *SalesforceError
-//     var je *salesforce_helper.SalesforceError
+//     // Use errors.As to extract *HTTPError
+//     var je *salesforce_helper.HTTPError
 //     if errors.As(jerr, &je) {
 //     switch je.StatusCode {
 //     case http.StatusUnauthorized:
@@ -102,10 +102,10 @@
 //
 // 4. Example helper wrapping a Salesforce call
 //
-//     func callSalesforce(ctx context.Context, client *http.Client, req *http.Request) ([]byte, *salesforce_helper.SalesforceError) {
+//     func callSalesforce(ctx context.Context, client *http.Client, req *http.Request) ([]byte, *salesforce_helper.HTTPError) {
 //     resp, err := client.Do(req.WithContext(ctx))
 //     if err != nil {
-//     return nil, &salesforce_helper.SalesforceError{
+//     return nil, &salesforce_helper.HTTPError{
 //     StatusCode: 0,
 //     Reason: fmt.Sprintf("transport error: %v", err),
 //     }
@@ -113,22 +113,22 @@
 //     defer resp.Body.Close()
 //
 //     if jerr := salesforce_helper.CheckSalesforceAuth(resp); jerr != nil {
-//     if je, ok := jerr.(*salesforce_helper.SalesforceError); ok {
+//     if je, ok := jerr.(*salesforce_helper.HTTPError); ok {
 //     return nil, je
 //     }
-//     // Wrap non-SalesforceError just in case (shouldn't happen).
-//     return nil, &salesforce_helper.SalesforceError{StatusCode: resp.StatusCode, Reason: jerr.Error()}
+//     // Wrap non-HTTPError just in case (shouldn't happen).
+//     return nil, &salesforce_helper.HTTPError{StatusCode: resp.StatusCode, Reason: jerr.Error()}
 //     }
 //
 //     data, readErr := io.ReadAll(resp.Body)
 //     if readErr != nil {
-//     return nil, &salesforce_helper.SalesforceError{StatusCode: resp.StatusCode, Reason: fmt.Sprintf("read error: %v", readErr)}
+//     return nil, &salesforce_helper.HTTPError{StatusCode: resp.StatusCode, Reason: fmt.Sprintf("read error: %v", readErr)}
 //     }
 //     return data, nil
 //     }
 //
-//	Inspecting SalesforceError
-//   - On error, CheckSalesforceAuth returns *SalesforceError containing:
+//	Inspecting HTTPError
+//   - On error, CheckSalesforceAuth returns *HTTPError containing:
 //   - StatusCode: HTTP status (or 200 in header-signaled cases).
 //   - Reason: High-level explanation (or http.StatusText for generic 4xx/5xx).
 //   - Body: Response body string (caller may truncate before logging).
@@ -137,7 +137,7 @@
 //   - Example:
 //
 // 	if jerr := salesforce_helper.CheckSalesforceAuth(resp); jerr != nil {
-// 	    if je, ok := jerr.(*salesforce_helper.SalesforceError); ok {
+// 	    if je, ok := jerr.(*salesforce_helper.HTTPError); ok {
 // 	        fmt.Printf("status=%d reason=%s\n", je.StatusCode, je.Reason)
 // 	    }
 // 	}
