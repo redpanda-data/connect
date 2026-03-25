@@ -323,24 +323,37 @@ func (s *Client) getBearerToken() string {
 	return v
 }
 
+// ClientConfig holds the configuration for creating a new Salesforce HTTP client.
+type ClientConfig struct {
+	OrgURL         string
+	ClientID       string
+	ClientSecret   string
+	APIVersion     string
+	MaxRetries     int
+	QueryBatchSize int
+	HTTPClient     *http.Client
+	Logger         *service.Logger
+	Metrics        *service.Metrics
+}
+
 // NewClient is the constructor for a Client object
-func NewClient(orgURL, clientID, clientSecret, apiVersion string, maxRetries, queryBatchSize int, httpClient *http.Client, log *service.Logger, m *service.Metrics) (*Client, error) {
-	if queryBatchSize < 200 {
-		queryBatchSize = 200
-	} else if queryBatchSize > 2000 {
-		queryBatchSize = 2000
+func NewClient(cfg ClientConfig) (*Client, error) {
+	if cfg.QueryBatchSize < 200 {
+		cfg.QueryBatchSize = 200
+	} else if cfg.QueryBatchSize > 2000 {
+		cfg.QueryBatchSize = 2000
 	}
 	return &Client{
-		log:          log,
-		orgURL:       orgURL,
-		clientID:     clientID,
-		clientSecret: clientSecret,
-		apiVersion:   apiVersion,
+		log:          cfg.Logger,
+		orgURL:       cfg.OrgURL,
+		clientID:     cfg.ClientID,
+		clientSecret: cfg.ClientSecret,
+		apiVersion:   cfg.APIVersion,
 		retryOpts: RetryOptions{
-			MaxRetries: maxRetries,
+			MaxRetries: cfg.MaxRetries,
 		},
-		httpClient:             metrics.NewInstrumentedClient(m, "salesforce_http", httpClient),
-		queryBatchSize:         queryBatchSize,
+		httpClient:             metrics.NewInstrumentedClient(cfg.Metrics, "salesforce_http", cfg.HTTPClient),
+		queryBatchSize:         cfg.QueryBatchSize,
 		unsupportedSObjects:    make(map[string]struct{}),
 		graphqlFallbackObjects: make(map[string]struct{}),
 		restObjects:            make(map[string]struct{}),

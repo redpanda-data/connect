@@ -344,26 +344,28 @@ func (s *salesforceProcessor) initGRPCClient(ctx context.Context, replayID []byt
 		}
 	}
 
-	cfg := salesforcegrpc.SubscriptionConfig{
-		TopicName:  s.cdcTopicName,
-		BatchSize:  s.cdcBatchSize,
-		BufferSize: int(s.cdcBufferSize),
-	}
-
 	grpcClient, err := salesforcegrpc.NewClient(
 		s.log,
 		s.client.InstanceURL(),
 		s.client.TenantID(),
 		s.client.BearerToken(),
-		cfg,
-		salesforcegrpc.WithBackoff(s.grpcReconnectBaseDelay, s.grpcReconnectMaxDelay, s.grpcReconnectMaxAttempts),
-		salesforcegrpc.WithMetrics(s.res.Metrics()),
-		salesforcegrpc.WithAuthRefresh(func(ctx context.Context) (string, string, string, error) {
-			if err := s.client.RefreshToken(ctx); err != nil {
-				return "", "", "", err
-			}
-			return s.client.BearerToken(), s.client.InstanceURL(), s.client.TenantID(), nil
-		}),
+		salesforcegrpc.SubscriptionConfig{
+			TopicName:  s.cdcTopicName,
+			BatchSize:  s.cdcBatchSize,
+			BufferSize: int(s.cdcBufferSize),
+		},
+		salesforcegrpc.Config{
+			BaseBackoff:  s.grpcReconnectBaseDelay,
+			MaxBackoff:   s.grpcReconnectMaxDelay,
+			MaxReconnect: s.grpcReconnectMaxAttempts,
+			Metrics:      s.res.Metrics(),
+			OnAuthRefresh: func(ctx context.Context) (string, string, string, error) {
+				if err := s.client.RefreshToken(ctx); err != nil {
+					return "", "", "", err
+				}
+				return s.client.BearerToken(), s.client.InstanceURL(), s.client.TenantID(), nil
+			},
+		},
 	)
 	if err != nil {
 		return err

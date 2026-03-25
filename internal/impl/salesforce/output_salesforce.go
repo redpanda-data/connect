@@ -99,6 +99,7 @@ type salesforceSinkOutput struct {
 	maxBulkJobs    int
 	shutdownCtx    context.Context //nolint:containedctx // lifecycle context for background bulk-poll goroutines
 	shutdownCancel context.CancelFunc
+	closeOnce      sync.Once
 }
 
 func init() {
@@ -316,11 +317,17 @@ func newSalesforceSinkOutput(conf *service.ParsedConfig, mgr *service.Resources)
 		}
 	}
 
-	httpClient := &http.Client{Timeout: timeout}
-	sfClient, err := salesforcehttp.NewClient(
-		orgURL, clientID, clientSecret, apiVersion,
-		maxRetries, 2000, httpClient, mgr.Logger(), mgr.Metrics(),
-	)
+	sfClient, err := salesforcehttp.NewClient(salesforcehttp.ClientConfig{
+		OrgURL:         orgURL,
+		ClientID:       clientID,
+		ClientSecret:   clientSecret,
+		APIVersion:     apiVersion,
+		MaxRetries:     maxRetries,
+		QueryBatchSize: 2000,
+		HTTPClient:     &http.Client{Timeout: timeout},
+		Logger:         mgr.Logger(),
+		Metrics:        mgr.Metrics(),
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -402,24 +409,27 @@ func (s *salesforceSinkOutput) WriteBatch(ctx context.Context, batch service.Mes
 }
 
 func (s *salesforceSinkOutput) Close(ctx context.Context) error {
-	s.shutdownCancel()
-
-	s.bulkJobsMu.Lock()
-	jobs := s.bulkJobs
-	s.bulkJobs = nil
-	s.bulkJobsMu.Unlock()
-
 	var firstErr error
-	for _, job := range jobs {
-		select {
-		case err := <-job.errCh:
-			if err != nil && firstErr == nil {
-				firstErr = err
+	s.closeOnce.Do(func() {
+		s.shutdownCancel()
+
+		s.bulkJobsMu.Lock()
+		jobs := s.bulkJobs
+		s.bulkJobs = nil
+		s.bulkJobsMu.Unlock()
+
+		for _, job := range jobs {
+			select {
+			case err := <-job.errCh:
+				if err != nil && firstErr == nil {
+					firstErr = err
+				}
+			case <-ctx.Done():
+				firstErr = ctx.Err()
+				return
 			}
-		case <-ctx.Done():
-			return ctx.Err()
 		}
-	}
+	})
 	return firstErr
 }
 

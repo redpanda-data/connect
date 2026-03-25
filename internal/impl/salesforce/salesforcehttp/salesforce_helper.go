@@ -159,7 +159,7 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"math/rand"
+	"math/rand/v2"
 	"net/http"
 	"strconv"
 	"strings"
@@ -207,7 +207,7 @@ func backoffWithJitter(base, maxDuration time.Duration, attempt int) time.Durati
 	if d <= 0 || d > maxDuration {
 		d = maxDuration
 	}
-	jitter := time.Duration(rand.Int63n(int64(d))) - d/2
+	jitter := time.Duration(rand.Int64N(int64(d))) - d/2
 	return d + jitter
 }
 

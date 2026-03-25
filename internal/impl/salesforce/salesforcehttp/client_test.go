@@ -9,7 +9,6 @@
 package salesforcehttp
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -32,20 +31,18 @@ func TestUpdateAndSetBearerToken_RealClient(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	client, err := NewClient(
-		ts.URL,
-		"id",
-		"secret",
-		"v65.0",
-		1,
-		2000,
-		ts.Client(),
-		nil,
-		nil,
-	)
+	client, err := NewClient(ClientConfig{
+		OrgURL:         ts.URL,
+		ClientID:       "id",
+		ClientSecret:   "secret",
+		APIVersion:     "v65.0",
+		MaxRetries:     1,
+		QueryBatchSize: 2000,
+		HTTPClient:     ts.Client(),
+	})
 	require.NoError(t, err)
 
-	err = client.updateAndSetBearerToken(context.Background())
+	err = client.updateAndSetBearerToken(t.Context())
 	require.NoError(t, err)
 	assert.Equal(t, "abc123", client.getBearerToken())
 }
@@ -88,20 +85,18 @@ func TestCallSalesforceApi_RefreshOn401_RealClient(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	client, err := NewClient(
-		ts.URL,
-		"id",
-		"secret",
-		"v65.0",
-		1,
-		2000,
-		ts.Client(),
-		nil,
-		nil,
-	)
+	client, err := NewClient(ClientConfig{
+		OrgURL:         ts.URL,
+		ClientID:       "id",
+		ClientSecret:   "secret",
+		APIVersion:     "v65.0",
+		MaxRetries:     1,
+		QueryBatchSize: 2000,
+		HTTPClient:     ts.Client(),
+	})
 	require.NoError(t, err)
 
-	body, err := client.callSalesforceAPI(context.Background(), mustParseURL(ts.URL+"/services/data/v65.0"))
+	body, err := client.callSalesforceAPI(t.Context(), mustParseURL(ts.URL+"/services/data/v65.0"))
 	require.NoError(t, err)
 
 	assert.Equal(t, `{"ok":true}`, string(body))

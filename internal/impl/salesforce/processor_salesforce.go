@@ -365,9 +365,17 @@ func newSalesforceProcessor(conf *service.ParsedConfig, mgr *service.Resources) 
 		}
 	}
 
-	httpClient := &http.Client{Timeout: timeout}
-
-	salesforceHttp, err := salesforcehttp.NewClient(orgURL, clientID, clientSecret, apiVersion, maxRetries, queryBatchSize, httpClient, mgr.Logger(), mgr.Metrics())
+	salesforceHttp, err := salesforcehttp.NewClient(salesforcehttp.ClientConfig{
+		OrgURL:         orgURL,
+		ClientID:       clientID,
+		ClientSecret:   clientSecret,
+		APIVersion:     apiVersion,
+		MaxRetries:     maxRetries,
+		QueryBatchSize: queryBatchSize,
+		HTTPClient:     &http.Client{Timeout: timeout},
+		Logger:         mgr.Logger(),
+		Metrics:        mgr.Metrics(),
+	})
 	if err != nil {
 		return nil, err
 	}

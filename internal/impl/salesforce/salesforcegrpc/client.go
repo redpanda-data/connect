@@ -1,4 +1,4 @@
-// Copyright 2024 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed as a Redpanda Enterprise file under the Redpanda Community
 // License (the "License"); you may not use this file except in compliance with
@@ -13,7 +13,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -30,28 +30,19 @@ import (
 
 const salesforcePubSubEndpoint = "api.pubsub.salesforce.com:443"
 
-// ClientOption is a functional option for configuring a Client.
-type ClientOption func(*Client)
-
-// WithMetrics attaches a Benthos metrics handle for counters and gauges.
-func WithMetrics(m *service.Metrics) ClientOption {
-	return func(c *Client) { c.metrics = m }
-}
-
-// WithBackoff configures the reconnection backoff parameters.
-func WithBackoff(base, maxDur time.Duration, maxAttempts int) ClientOption {
-	return func(c *Client) {
-		c.baseBackoff = base
-		c.maxBackoff = maxDur
-		c.maxReconnect = maxAttempts
-	}
-}
-
-// WithAuthRefresh registers a callback that the client invokes when an
-// Unauthenticated error is encountered during reconnection. The callback
-// receives the reconnection context and should return fresh credentials.
-func WithAuthRefresh(fn func(ctx context.Context) (token, url, tenantID string, err error)) ClientOption {
-	return func(c *Client) { c.onAuthRefresh = fn }
+// Config holds optional configuration for a gRPC Pub/Sub client.
+type Config struct {
+	// BaseBackoff is the initial reconnection delay (default 500ms).
+	BaseBackoff time.Duration
+	// MaxBackoff caps the reconnection delay (default 30s).
+	MaxBackoff time.Duration
+	// MaxReconnect limits reconnection attempts (0 = unlimited).
+	MaxReconnect int
+	// Metrics attaches a Benthos metrics handle for counters and gauges.
+	Metrics *service.Metrics
+	// OnAuthRefresh is called on Unauthenticated errors during reconnection.
+	// It receives the reconnection context and should return fresh credentials.
+	OnAuthRefresh func(ctx context.Context) (token, instanceURL, tenantID string, err error)
 }
 
 // Client manages a gRPC connection to the Salesforce Pub/Sub API.
@@ -96,13 +87,13 @@ type Client struct {
 }
 
 // NewClient creates a new gRPC client connected to the Salesforce Pub/Sub API.
-// The SubscriptionConfig specifies the topic, batch size, and buffer size.
-// Use ClientOption functions to configure backoff, metrics, and auth refresh.
+// sub specifies the topic, batch size, and buffer size.
+// cfg provides optional backoff, metrics, and auth refresh configuration.
 func NewClient(
 	log *service.Logger,
 	instanceURL, tenantID, bearerToken string,
-	cfg SubscriptionConfig,
-	opts ...ClientOption,
+	sub SubscriptionConfig,
+	cfg Config,
 ) (*Client, error) {
 	tlsCreds := credentials.NewTLS(&tls.Config{MinVersion: tls.VersionTLS12})
 
@@ -116,27 +107,33 @@ func NewClient(
 
 	pubsubClient := NewPubSubClient(conn)
 
-	c := &Client{
-		conn:        conn,
-		pubsub:      pubsubClient,
-		log:         log,
-		bearerToken: bearerToken,
-		instanceURL: instanceURL,
-		tenantID:    tenantID,
-		config:      cfg,
-		eventBuffer: make(chan *PubSubEvent, cfg.BufferSize),
-		done:        make(chan struct{}),
-		schemaCache: NewSchemaCache(pubsubClient, bearerToken, instanceURL, tenantID),
-		state:       StreamStateDisconnected,
-		baseBackoff: 500 * time.Millisecond,
-		maxBackoff:  30 * time.Second,
+	baseBackoff := cfg.BaseBackoff
+	if baseBackoff <= 0 {
+		baseBackoff = 500 * time.Millisecond
+	}
+	maxBackoff := cfg.MaxBackoff
+	if maxBackoff <= 0 {
+		maxBackoff = 30 * time.Second
 	}
 
-	for _, opt := range opts {
-		opt(c)
-	}
-
-	return c, nil
+	return &Client{
+		conn:          conn,
+		pubsub:        pubsubClient,
+		log:           log,
+		bearerToken:   bearerToken,
+		instanceURL:   instanceURL,
+		tenantID:      tenantID,
+		config:        sub,
+		eventBuffer:   make(chan *PubSubEvent, sub.BufferSize),
+		done:          make(chan struct{}),
+		schemaCache:   NewSchemaCache(pubsubClient, bearerToken, instanceURL, tenantID),
+		state:         StreamStateDisconnected,
+		baseBackoff:   baseBackoff,
+		maxBackoff:    maxBackoff,
+		maxReconnect:  cfg.MaxReconnect,
+		onAuthRefresh: cfg.OnAuthRefresh,
+		metrics:       cfg.Metrics,
+	}, nil
 }
 
 // Connect starts the subscribe stream and background goroutine to receive events.
@@ -350,7 +347,7 @@ func grpcBackoffWithJitter(base, maxDur time.Duration, attempt int) time.Duratio
 		d = maxDur
 	}
 
-	jitter := time.Duration(rand.Int63n(int64(d))) - d/2
+	jitter := time.Duration(rand.Int64N(int64(d))) - d/2
 	return d + jitter
 }
 
