@@ -447,6 +447,22 @@ func parseSchemaEvolutionConfig(conf *service.ParsedConfig) (SchemaEvolutionConf
 		}
 	}
 
+	// Parse schema_metadata
+	if conf.Contains(ioFieldSchemaEvolution, ioFieldSchemaEvolutionSchemaMetadata) {
+		cfg.SchemaMetadata, err = conf.FieldString(ioFieldSchemaEvolution, ioFieldSchemaEvolutionSchemaMetadata)
+		if err != nil {
+			return cfg, err
+		}
+	}
+
+	// Parse new_column_type_mapping
+	if conf.Contains(ioFieldSchemaEvolution, ioFieldSchemaEvolutionNewColumnTypeMapping) {
+		cfg.NewColumnTypeMapping, err = conf.Namespace(ioFieldSchemaEvolution).FieldBloblang(ioFieldSchemaEvolutionNewColumnTypeMapping)
+		if err != nil {
+			return cfg, err
+		}
+	}
+
 	return cfg, nil
 }
 

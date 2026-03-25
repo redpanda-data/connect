@@ -16,8 +16,8 @@ import (
 )
 
 var (
-	_ error            = &NewFieldError{}
-	_ SchemaFieldError = &NewFieldError{}
+	_ error            = &UnknownFieldError{}
+	_ SchemaFieldError = &UnknownFieldError{}
 	_ error            = &BatchSchemaEvolutionError{}
 )
 
@@ -33,18 +33,18 @@ type SchemaFieldError interface {
 	Value() any
 }
 
-// NewFieldError represents a single unknown field discovered during record shredding.
+// UnknownFieldError represents a single unknown field discovered during record shredding.
 // This error is returned when the shredder encounters a field that doesn't exist
 // in the current table schema.
-type NewFieldError struct {
+type UnknownFieldError struct {
 	parentPath icebergx.Path
 	fieldName  string
 	value      any
 }
 
-// NewNewFieldError creates a NewFieldError for a field that was discovered during shredding.
-func NewNewFieldError(parentPath icebergx.Path, fieldName string, value any) *NewFieldError {
-	return &NewFieldError{
+// NewUnknownFieldError creates an UnknownFieldError for a field that was discovered during shredding.
+func NewUnknownFieldError(parentPath icebergx.Path, fieldName string, value any) *UnknownFieldError {
+	return &UnknownFieldError{
 		parentPath: parentPath,
 		fieldName:  fieldName,
 		value:      value,
@@ -52,22 +52,22 @@ func NewNewFieldError(parentPath icebergx.Path, fieldName string, value any) *Ne
 }
 
 // ParentPath returns the path to the parent element containing the new field.
-func (e *NewFieldError) ParentPath() icebergx.Path {
+func (e *UnknownFieldError) ParentPath() icebergx.Path {
 	return e.parentPath
 }
 
 // FieldName returns the name of the new field.
-func (e *NewFieldError) FieldName() string {
+func (e *UnknownFieldError) FieldName() string {
 	return e.fieldName
 }
 
 // Value returns a sample value from the field for type inference.
-func (e *NewFieldError) Value() any {
+func (e *UnknownFieldError) Value() any {
 	return e.value
 }
 
 // Error implements the error interface.
-func (e *NewFieldError) Error() string {
+func (e *UnknownFieldError) Error() string {
 	if len(e.parentPath) == 0 {
 		return fmt.Sprintf("unknown field %q at root level", e.fieldName)
 	}
@@ -75,7 +75,7 @@ func (e *NewFieldError) Error() string {
 }
 
 // FullPath returns the complete path to the field including the field name.
-func (e *NewFieldError) FullPath() icebergx.Path {
+func (e *UnknownFieldError) FullPath() icebergx.Path {
 	return append(e.parentPath, icebergx.PathSegment{
 		Kind: icebergx.PathField,
 		Name: e.fieldName,
@@ -86,11 +86,11 @@ func (e *NewFieldError) FullPath() icebergx.Path {
 // This error is returned when schema evolution is needed and the router
 // should handle adding the new columns to the table.
 type BatchSchemaEvolutionError struct {
-	Errors []*NewFieldError
+	Errors []*UnknownFieldError
 }
 
 // NewBatchSchemaEvolutionError creates a BatchSchemaEvolutionError from a slice of field errors.
-func NewBatchSchemaEvolutionError(errors []*NewFieldError) *BatchSchemaEvolutionError {
+func NewBatchSchemaEvolutionError(errors []*UnknownFieldError) *BatchSchemaEvolutionError {
 	return &BatchSchemaEvolutionError{Errors: errors}
 }
 
@@ -115,8 +115,8 @@ func (e *BatchSchemaEvolutionError) Unwrap() []error {
 // GroupByParentPath groups the new field errors by their parent path.
 // This is useful when adding columns to nested structs, as all columns
 // for the same struct can be added in a single schema update.
-func (e *BatchSchemaEvolutionError) GroupByParentPath() map[string][]*NewFieldError {
-	groups := make(map[string][]*NewFieldError)
+func (e *BatchSchemaEvolutionError) GroupByParentPath() map[string][]*UnknownFieldError {
+	groups := make(map[string][]*UnknownFieldError)
 	for _, err := range e.Errors {
 		key := err.parentPath.String()
 		groups[key] = append(groups[key], err)

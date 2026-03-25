@@ -164,36 +164,6 @@ func (ti *typeInferrer) inferStructType(m map[string]any) (*iceberg.StructType, 
 	return &iceberg.StructType{FieldList: fields}, nil
 }
 
-// BuildSchemaFromRecord builds an Iceberg schema from a record (map[string]any).
-// This is used when creating a new table to infer the initial schema from the first message.
-// All fields are created as optional (Required: false) to allow for missing values.
-// The schema ID is set to 0 as it will be assigned by the catalog.
-func BuildSchemaFromRecord(record map[string]any) (*iceberg.Schema, error) {
-	ti := newTypeInferrer()
-	fields := make([]iceberg.NestedField, 0, len(record))
-
-	for name, value := range record {
-		fieldType, err := ti.inferType(value)
-		if err != nil {
-			return nil, fmt.Errorf("inferring type for field %q: %w", name, err)
-		}
-		if fieldType == nil {
-			// Skip nil values - we can't infer their type
-			// They'll be added later via schema evolution if seen with a value
-			continue
-		}
-		fields = append(fields, iceberg.NestedField{
-			ID:       ti.allocateFieldID(),
-			Name:     name,
-			Type:     fieldType,
-			Required: false, // All fields are optional
-		})
-	}
-
-	// Schema ID 0 - will be assigned by the catalog
-	return iceberg.NewSchema(0, fields...), nil
-}
-
 // InferIcebergTypeForAddColumn infers the type for a new column to be added via schema evolution.
 // This is similar to InferIcebergType but handles the special case where we need
 // to add a column at a specific path in the schema.

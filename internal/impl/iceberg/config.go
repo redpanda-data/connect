@@ -68,10 +68,12 @@ const (
 	ioFieldAzureAccessKey        = "storage_access_key"
 
 	// Schema evolution fields
-	ioFieldSchemaEvolution              = "schema_evolution"
-	ioFieldSchemaEvolutionEnabled       = "enabled"
-	ioFieldSchemaEvolutionPartitionSpec = "partition_spec"
-	ioFieldSchemaEvolutionTableLoc      = "table_location"
+	ioFieldSchemaEvolution                     = "schema_evolution"
+	ioFieldSchemaEvolutionEnabled              = "enabled"
+	ioFieldSchemaEvolutionPartitionSpec        = "partition_spec"
+	ioFieldSchemaEvolutionTableLoc             = "table_location"
+	ioFieldSchemaEvolutionSchemaMetadata       = "schema_metadata"
+	ioFieldSchemaEvolutionNewColumnTypeMapping = "new_column_type_mapping"
 
 	// Commit fields
 	ioFieldCommit               = "commit"
@@ -309,6 +311,15 @@ array:list
 					Description("A prefix used as the location for new tables when the catalog does not automatically assign one. For example, AWS Glue requires explicit table locations. When set, table locations are derived as `{prefix}{namespace}/{table}`.").
 					Example("s3://my-iceberg-bucket/").
 					Optional(),
+				service.NewStringField(ioFieldSchemaEvolutionSchemaMetadata).
+					Description("The name of a message metadata field containing a schema definition. When set, the schema is used to determine column types during schema evolution and table creation instead of inferring types from values. The schema must be in the standard common schema format (the same format used by the `parquet_encode` processor's `schema_metadata` field). For batches of messages, the first message's schema is used.").
+					Default("").
+					Optional().
+					Advanced(),
+				service.NewBloblangField(ioFieldSchemaEvolutionNewColumnTypeMapping).
+					Description("An optional Bloblang mapping to customize column types during schema evolution. This mapping is executed for each new column and can override the inferred or schema-metadata-derived type. The mapping receives an object with fields `name` (column name), `path` (dot-separated path), `value` (sample value), `inferred_type` (the type that would be used without this mapping), `message` (the full message body), `namespace`, and `table`. It must return a string with a valid Iceberg type name: `boolean`, `int`, `long`, `float`, `double`, `string`, `binary`, `date`, `time`, `timestamp`, `timestamptz`, `uuid`, `decimal(p,s)`, or `fixed[n]`.").
+					Optional().
+					Advanced(),
 			).Description("Schema evolution configuration.").
 				Optional().
 				Advanced(),

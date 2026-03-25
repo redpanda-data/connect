@@ -314,7 +314,7 @@ type parquetSink struct {
 	rowCount int
 
 	// newFields collects unknown fields discovered during shredding for schema evolution.
-	newFields  []*NewFieldError
+	newFields  []*UnknownFieldError
 	seenFields map[string]struct{} // dedup by full path
 }
 
@@ -353,7 +353,7 @@ func (s *parquetSink) EmitValue(sv shredder.ShreddedValue) error {
 }
 
 func (s *parquetSink) OnNewField(parentPath icebergx.Path, name string, value any) {
-	fe := NewNewFieldError(parentPath, name, value)
+	fe := NewUnknownFieldError(parentPath, name, value)
 	key := fe.FullPath().String()
 	if _, ok := s.seenFields[key]; ok {
 		return
@@ -366,7 +366,7 @@ func (s *parquetSink) OnNewField(parentPath icebergx.Path, name string, value an
 }
 
 // newFieldErrors returns the collected new field errors.
-func (s *parquetSink) newFieldErrors() []*NewFieldError {
+func (s *parquetSink) newFieldErrors() []*UnknownFieldError {
 	return s.newFields
 }
 
@@ -401,7 +401,7 @@ type bufferingSink struct {
 	partitionValues    []parquet.Value          // captured partition values
 
 	// newFields collects unknown fields discovered during shredding for schema evolution.
-	newFields  []*NewFieldError
+	newFields  []*UnknownFieldError
 	seenFields map[string]struct{} // dedup by full path
 }
 
@@ -435,7 +435,7 @@ func (s *bufferingSink) EmitValue(sv shredder.ShreddedValue) error {
 }
 
 func (s *bufferingSink) OnNewField(parentPath icebergx.Path, name string, value any) {
-	fe := NewNewFieldError(parentPath, name, value)
+	fe := NewUnknownFieldError(parentPath, name, value)
 	key := fe.FullPath().String()
 	if _, ok := s.seenFields[key]; ok {
 		return
@@ -448,7 +448,7 @@ func (s *bufferingSink) OnNewField(parentPath icebergx.Path, name string, value 
 }
 
 // newFieldErrors returns the collected new field errors.
-func (s *bufferingSink) newFieldErrors() []*NewFieldError {
+func (s *bufferingSink) newFieldErrors() []*UnknownFieldError {
 	return s.newFields
 }
 
