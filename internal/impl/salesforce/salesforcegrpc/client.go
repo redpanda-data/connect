@@ -445,6 +445,10 @@ func extractCDCFields(event *PubSubEvent, decoded map[string]any) {
 				}
 			}
 			if rids, ok := headerMap["recordIds"]; ok {
+				// unwrap Avro union: {"array": [...]}
+				if m, ok := rids.(map[string]any); ok {
+					rids = m["array"]
+				}
 				if arr, ok := rids.([]any); ok {
 					for _, id := range arr {
 						if s, ok := id.(string); ok {
@@ -454,6 +458,10 @@ func extractCDCFields(event *PubSubEvent, decoded map[string]any) {
 				}
 			}
 			if cf, ok := headerMap["changedFields"]; ok {
+				// unwrap Avro union: {"array": [...]}
+				if m, ok := cf.(map[string]any); ok {
+					cf = m["array"]
+				}
 				if arr, ok := cf.([]any); ok {
 					fields := make(map[string]any)
 					for _, f := range arr {
