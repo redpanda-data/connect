@@ -11,6 +11,7 @@ package splunk
 import (
 	"crypto/tls"
 	"io"
+	"runtime"
 	"testing"
 	"time"
 
@@ -29,6 +30,9 @@ import (
 
 func TestIntegrationSplunk(t *testing.T) {
 	integration.CheckSkip(t)
+	if runtime.GOOS == "darwin" {
+		t.Skip("CON-376: Splunk image is x86-only; Rosetta startup exceeds testcontainers 60s deadline")
+	}
 	t.Parallel()
 
 	dummySplunkPassword := "blobfishAreC00l!"
