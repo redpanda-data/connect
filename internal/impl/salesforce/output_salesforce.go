@@ -606,14 +606,16 @@ func (s *salesforceSinkOutput) writeRealtimeChunk(ctx context.Context, records [
 }
 
 func realtimePath(m topicMapping, apiVersion string) string {
-	base := "/services/data/" + apiVersion + "/composite/sobjects"
 	switch m.operation {
 	case "upsert":
-		return base + "/" + m.sobject + "/" + m.externalIDField
+		p, _ := url.JoinPath("/services/data", apiVersion, "composite/sobjects", m.sobject, m.externalIDField)
+		return p
 	case "delete":
-		return base + "?_HttpMethod=DELETE"
+		p, _ := url.JoinPath("/services/data", apiVersion, "composite/sobjects", m.sobject)
+		return p + "?_HttpMethod=DELETE"
 	default:
-		return base
+		p, _ := url.JoinPath("/services/data", apiVersion, "composite/sobjects", m.sobject)
+		return p
 	}
 }
 
