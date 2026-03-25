@@ -12,6 +12,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -54,6 +55,7 @@ func setupTestWithMySQLVersion(t *testing.T, version string) (string, *testDB) {
 		testcontainers.WithEnv(map[string]string{
 			"MYSQL_ROOT_PASSWORD": "password",
 			"MYSQL_DATABASE":      "testdb",
+			"TZ":                  "UTC",
 		}),
 		testcontainers.WithCmd(
 			"--server-id=1",
@@ -61,6 +63,7 @@ func setupTestWithMySQLVersion(t *testing.T, version string) (string, *testDB) {
 			"--binlog-format=ROW",
 			"--binlog-row-image=FULL",
 			"--log-slave-updates=ON",
+			"--default-time-zone=+00:00",
 		),
 		testcontainers.WithWaitStrategy(
 			wait.ForListeningPort("3306/tcp").WithStartupTimeout(time.Minute),
@@ -354,6 +357,8 @@ file:
 }
 
 func TestIntegrationMySQLCDCAllTypes(t *testing.T) {
+	os.Setenv("TZ", "UTC") //nolint:usetesting // t.Setenv panics with t.Parallel in setupTestWithMySQLVersion
+	time.Local = time.UTC
 	dsn, db := setupTestWithMySQLVersion(t, "8.0")
 	// Create table
 	db.Exec(`
