@@ -236,6 +236,7 @@ func (s *salesforceProcessor) dispatchCDC(ctx context.Context, state ProcessorSt
 	}
 
 	batch := s.eventsToMessageBatch(events)
+	s.logDroppedEvents()
 
 	// Checkpoint the replay_id
 	if len(latestReplayID) > 0 {
@@ -286,6 +287,7 @@ func (s *salesforceProcessor) dispatchPubSub(ctx context.Context, state Processo
 	}
 
 	batch := s.eventsToMessageBatch(events)
+	s.logDroppedEvents()
 
 	// Checkpoint the replay_id
 	if len(latestReplayID) > 0 {
@@ -297,6 +299,17 @@ func (s *salesforceProcessor) dispatchPubSub(ctx context.Context, state Processo
 	}
 
 	return batch, nil
+}
+
+// logDroppedEvents checks the gRPC client health and logs a warning if events have been
+// dropped since the last call. This surfaces buffer-full losses that would otherwise only
+// appear as a single warn log line buried in high-volume output.
+func (s *salesforceProcessor) logDroppedEvents() {
+	h := s.grpcClient.Health()
+	if h.EventsDropped > s.lastSeenDropped {
+		s.log.Warnf("salesforce: %d event(s) dropped due to full buffer since last batch (total dropped: %d)", h.EventsDropped-s.lastSeenDropped, h.EventsDropped)
+		s.lastSeenDropped = h.EventsDropped
+	}
 }
 
 // eventsToMessageBatch converts PubSubEvents to a Benthos MessageBatch,

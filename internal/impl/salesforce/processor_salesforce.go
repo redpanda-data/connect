@@ -59,6 +59,10 @@ type salesforceProcessor struct {
 	// gRPC client for CDC/Pub/Sub streaming (lazy-initialized)
 	grpcClient *salesforcegrpc.Client
 
+	// lastSeenDropped tracks the EventsDropped value from the previous dispatch call
+	// so we can log a warning whenever new drops are detected.
+	lastSeenDropped int64
+
 	// Number of SObjects to fetch in parallel during the REST snapshot
 	parallelFetch int
 
