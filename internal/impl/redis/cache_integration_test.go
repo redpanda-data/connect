@@ -167,9 +167,17 @@ func TestIntegrationRedisFailoverCache(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = rpNet.Remove(context.Background()) })
 
-	master, err := testcontainers.Run(t.Context(), "bitnami/redis:6.0.9",
+	masterPort, err := integration.GetFreePort()
+	require.NoError(t, err)
+
+	master, err := testcontainers.Run(t.Context(), "bitnami/redis:latest",
 		network.WithNetwork([]string{"redis-master"}, rpNet),
 		testcontainers.WithExposedPorts("6379/tcp"),
+		testcontainers.WithHostConfigModifier(func(hc *container.HostConfig) {
+			hc.PortBindings = nat.PortMap{
+				"6379/tcp": []nat.PortBinding{{HostIP: "", HostPort: strconv.Itoa(masterPort)}},
+			}
+		}),
 		testcontainers.WithEnv(map[string]string{"ALLOW_EMPTY_PASSWORD": "yes"}),
 		testcontainers.WithWaitStrategy(
 			wait.ForListeningPort("6379/tcp").WithStartupTimeout(30*time.Second),
@@ -181,7 +189,7 @@ func TestIntegrationRedisFailoverCache(t *testing.T) {
 	sentinelPort, err := integration.GetFreePort()
 	require.NoError(t, err)
 
-	sentinel, err := testcontainers.Run(t.Context(), "bitnami/redis-sentinel:6.0.9",
+	sentinel, err := testcontainers.Run(t.Context(), "bitnami/redis-sentinel:latest",
 		network.WithNetwork([]string{"redis-failover"}, rpNet),
 		testcontainers.WithExposedPorts("26379/tcp"),
 		testcontainers.WithHostConfigModifier(func(hc *container.HostConfig) {
@@ -191,10 +199,13 @@ func TestIntegrationRedisFailoverCache(t *testing.T) {
 			hc.ExtraHosts = []string{"host.docker.internal:host-gateway"}
 		}),
 		testcontainers.WithEnv(map[string]string{
-			"REDIS_SENTINEL_ANNOUNCE_IP": "127.0.0.1",
-			"REDIS_SENTINEL_QUORUM":      "1",
-			"REDIS_MASTER_HOST":          "redis-master",
-			"REDIS_MASTER_PORT_NUMBER":   "6379",
+			"REDIS_SENTINEL_ANNOUNCE_IP":   "127.0.0.1",
+			"REDIS_SENTINEL_ANNOUNCE_PORT": strconv.Itoa(sentinelPort),
+			"REDIS_SENTINEL_QUORUM":        "1",
+			// Point sentinel at the master via host-accessible address so that
+			// it stores and reports 127.0.0.1:masterPort to clients.
+			"REDIS_MASTER_HOST":        "host.docker.internal",
+			"REDIS_MASTER_PORT_NUMBER": strconv.Itoa(masterPort),
 		}),
 		testcontainers.WithWaitStrategy(
 			wait.ForListeningPort("26379/tcp").WithStartupTimeout(30*time.Second),
