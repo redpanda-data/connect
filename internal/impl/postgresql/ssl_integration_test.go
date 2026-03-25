@@ -27,8 +27,6 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 
-	"github.com/docker/docker/api/types/container"
-
 	_ "github.com/redpanda-data/benthos/v4/public/components/io"
 	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -112,6 +110,15 @@ hostssl all all all cert clientcert=%s
 			"POSTGRES_USER":     "testuser",
 			"POSTGRES_DB":       "dbname",
 		}),
+		// Override entrypoint to chown SSL cert files before starting postgres.
+		// WithFiles copies files as root; postgres requires the key to be owned
+		// by the postgres user. The wrapper chowns the files and then delegates
+		// to the original entrypoint.
+		testcontainers.WithEntrypoint(
+			"bash", "-c",
+			`chown postgres:postgres /var/lib/postgresql/server.crt /var/lib/postgresql/server.key /var/lib/postgresql/ca.crt && chmod 600 /var/lib/postgresql/server.key && exec docker-entrypoint.sh "$@"`,
+			"--",
+		),
 		testcontainers.WithCmd(
 			"postgres",
 			"-c", "wal_level=logical",
@@ -120,13 +127,23 @@ hostssl all all all cert clientcert=%s
 			"-c", "ssl_key_file=/var/lib/postgresql/server.key",
 			"-c", "ssl_ca_file=/var/lib/postgresql/ca.crt",
 		),
-		testcontainers.WithHostConfigModifier(func(hc *container.HostConfig) {
-			hc.Binds = []string{
-				fmt.Sprintf("%s:/var/lib/postgresql/server.crt", certs.serverCert),
-				fmt.Sprintf("%s:/var/lib/postgresql/server.key", certs.serverKey),
-				fmt.Sprintf("%s:/var/lib/postgresql/ca.crt", certs.caCert),
-			}
-		}),
+		testcontainers.WithFiles(
+			testcontainers.ContainerFile{
+				HostFilePath:      certs.serverCert,
+				ContainerFilePath: "/var/lib/postgresql/server.crt",
+				FileMode:          0o644,
+			},
+			testcontainers.ContainerFile{
+				HostFilePath:      certs.serverKey,
+				ContainerFilePath: "/var/lib/postgresql/server.key",
+				FileMode:          0o600,
+			},
+			testcontainers.ContainerFile{
+				HostFilePath:      certs.caCert,
+				ContainerFilePath: "/var/lib/postgresql/ca.crt",
+				FileMode:          0o644,
+			},
+		),
 		testcontainers.WithWaitStrategy(
 			wait.ForListeningPort("5432/tcp").WithStartupTimeout(2*time.Minute),
 		),
