@@ -189,7 +189,7 @@ func (s *salesforceProcessor) dispatchFilteredPaged(ctx context.Context, fetchPa
 		state.SnapshotComplete = true
 	}
 	if err := s.saveState(ctx, state); err != nil {
-		s.log.Errorf("save checkpoint after query page: %v", err)
+		return nil, fmt.Errorf("save checkpoint: %w", err)
 	}
 
 	return batch, nil
