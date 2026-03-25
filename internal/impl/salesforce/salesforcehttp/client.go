@@ -308,6 +308,9 @@ type Client struct {
 	// Smaller values produce faster individual responses at the cost of more pages.
 	queryBatchSize int
 
+	// sobjectsMu protects unsupportedSObjects and graphqlFallbackObjects.
+	sobjectsMu sync.RWMutex
+
 	// SObjects that returned 400 during data fetch — never retry them
 	unsupportedSObjects map[string]struct{}
 
@@ -606,10 +609,12 @@ func (s *Client) GetNextBatchParallel(ctx context.Context, cursor Cursor, parall
 	// s.unsupportedSObjects or s.graphqlFallbackObjects directly — concurrent map
 	// reads+writes cause a fatal panic in Go. Instead they set flags in slotResult
 	// and the main goroutine applies updates after wg.Wait().
+	s.sobjectsMu.RLock()
 	unsupportedSnap := make(map[string]struct{}, len(s.unsupportedSObjects))
 	maps.Copy(unsupportedSnap, s.unsupportedSObjects)
 	graphqlFallbackSnap := make(map[string]struct{}, len(s.graphqlFallbackObjects))
 	maps.Copy(graphqlFallbackSnap, s.graphqlFallbackObjects)
+	s.sobjectsMu.RUnlock()
 
 	type slotResult struct {
 		slotIdx         int
@@ -738,6 +743,7 @@ func (s *Client) GetNextBatchParallel(ctx context.Context, cursor Cursor, parall
 	wg.Wait()
 
 	// Apply map updates from goroutines (safe — no goroutines running at this point)
+	s.sobjectsMu.Lock()
 	for i, res := range results {
 		if res.markUnsupported {
 			s.unsupportedSObjects[cursor.Slots[i].SObjectName] = struct{}{}
@@ -746,6 +752,7 @@ func (s *Client) GetNextBatchParallel(ctx context.Context, cursor Cursor, parall
 			s.graphqlFallbackObjects[cursor.Slots[i].SObjectName] = struct{}{}
 		}
 	}
+	s.sobjectsMu.Unlock()
 
 	// Build output batch and updated slot list
 	var batch service.MessageBatch
