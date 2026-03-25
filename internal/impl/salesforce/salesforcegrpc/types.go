@@ -92,6 +92,8 @@ const (
 	StreamStateReconnecting
 	// StreamStateClosing - closing state
 	StreamStateClosing
+	// StreamStateReconfiguring - reconfiguring state; prevents reconnectWithBackoff from spawning new goroutines
+	StreamStateReconfiguring
 )
 
 // String returns a human-readable label for the StreamState.
@@ -107,6 +109,8 @@ func (s StreamState) String() string {
 		return "Reconnecting"
 	case StreamStateClosing:
 		return "Closing"
+	case StreamStateReconfiguring:
+		return "Reconfiguring"
 	default:
 		return "Unknown"
 	}

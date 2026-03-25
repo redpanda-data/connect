@@ -357,9 +357,9 @@ func grpcBackoffWithJitter(base, maxDur time.Duration, attempt int) time.Duratio
 // callback before retrying.
 func (c *Client) reconnectWithBackoff(ctx context.Context) error {
 	c.mu.Lock()
-	if c.state == StreamStateClosing {
+	if c.state == StreamStateClosing || c.state == StreamStateReconfiguring {
 		c.mu.Unlock()
-		return errors.New("client is closing, aborting reconnect")
+		return errors.New("client is closing or reconfiguring, aborting reconnect")
 	}
 	c.state = StreamStateReconnecting
 	// Cancel the old stream context
@@ -577,6 +577,7 @@ func (c *Client) Health() SubscriptionHealth {
 // new SubscriptionConfig, and reconnects.
 func (c *Client) Reconfigure(ctx context.Context, cfg SubscriptionConfig) error {
 	c.mu.Lock()
+	c.state = StreamStateReconfiguring // prevent receiveLoop from reconnecting while we reconfigure
 	oldCancel := c.cancel
 	oldDone := c.done
 	c.mu.Unlock()
