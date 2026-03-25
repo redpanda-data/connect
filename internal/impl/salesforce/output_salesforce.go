@@ -744,13 +744,6 @@ func (s *salesforceSinkOutput) drainCompletedBulkJobs() error {
 	return firstErr
 }
 
-
-func bulkIngestPath(apiVersion string, segments ...string) string {
-	parts := append([]string{"/services/data", apiVersion, "jobs/ingest"}, segments...)
-	p, _ := url.JoinPath(parts[0], parts[1:]...)
-	return p
-}
-
 func (s *salesforceSinkOutput) bulkCreateJob(ctx context.Context, m topicMapping) (string, error) {
 	req := bulkJobRequest{
 		Object:      m.sobject,

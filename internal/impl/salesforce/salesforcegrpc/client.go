@@ -78,12 +78,13 @@ type Client struct {
 	metrics *service.Metrics
 
 	// Atomic counters for health reporting
-	eventsReceived atomic.Int64
-	eventsDropped  atomic.Int64
-	reconnectCount atomic.Int64
-	lastEventTime  atomic.Int64 // unix nano
-	lastError      atomic.Value // stores error
-	lastErrorTime  atomic.Int64 // unix nano
+	eventsReceived     atomic.Int64
+	eventsDropped      atomic.Int64
+	eventsDecodeErrors atomic.Int64
+	reconnectCount     atomic.Int64
+	lastEventTime      atomic.Int64 // unix nano
+	lastError          atomic.Value // stores error
+	lastErrorTime      atomic.Int64 // unix nano
 }
 
 // NewClient creates a new gRPC client connected to the Salesforce Pub/Sub API.
@@ -265,12 +266,14 @@ func (c *Client) receiveLoop(ctx context.Context) {
 			codec, err := c.schemaCache.GetCodec(ctx, event.SchemaId)
 			if err != nil {
 				c.log.Errorf("get schema for event (schemaID=%s): %v", event.SchemaId, err)
+				c.eventsDecodeErrors.Add(1)
 				continue
 			}
 
 			decoded, err := DecodeAvroPayload(codec, event.Payload)
 			if err != nil {
 				c.log.Errorf("decode Avro payload (schemaID=%s): %v", event.SchemaId, err)
+				c.eventsDecodeErrors.Add(1)
 				continue
 			}
 
@@ -555,11 +558,12 @@ func (c *Client) Health() SubscriptionHealth {
 	c.mu.Unlock()
 
 	h := SubscriptionHealth{
-		State:          st,
-		TopicName:      topic,
-		EventsReceived: c.eventsReceived.Load(),
-		EventsDropped:  c.eventsDropped.Load(),
-		ReconnectCount: c.reconnectCount.Load(),
+		State:              st,
+		TopicName:          topic,
+		EventsReceived:     c.eventsReceived.Load(),
+		EventsDropped:      c.eventsDropped.Load(),
+		EventsDecodeErrors: c.eventsDecodeErrors.Load(),
+		ReconnectCount:     c.reconnectCount.Load(),
 	}
 
 	if t := c.lastEventTime.Load(); t > 0 {

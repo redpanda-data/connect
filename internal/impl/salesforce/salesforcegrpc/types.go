@@ -118,13 +118,14 @@ func (s StreamState) String() string {
 
 // SubscriptionHealth provides a point-in-time snapshot of the subscription's health.
 type SubscriptionHealth struct {
-	State             StreamState
-	TopicName         string
-	LastEventTime     time.Time
-	EventsReceived    int64
-	EventsDropped     int64
-	ReconnectCount    int64
-	BufferUtilization float64
-	LastError         error
-	LastErrorTime     time.Time
+	State              StreamState
+	TopicName          string
+	LastEventTime      time.Time
+	EventsReceived     int64
+	EventsDropped      int64
+	EventsDecodeErrors int64
+	ReconnectCount     int64
+	BufferUtilization  float64
+	LastError          error
+	LastErrorTime      time.Time
 }
