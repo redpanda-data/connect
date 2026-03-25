@@ -42,7 +42,7 @@ type UnknownFieldError struct {
 	value      any
 }
 
-// NewUnknownFieldError creates a NewFieldError for a field that was discovered during shredding.
+// NewUnknownFieldError creates an UnknownFieldError for a field that was discovered during shredding.
 func NewUnknownFieldError(parentPath icebergx.Path, fieldName string, value any) *UnknownFieldError {
 	return &UnknownFieldError{
 		parentPath: parentPath,

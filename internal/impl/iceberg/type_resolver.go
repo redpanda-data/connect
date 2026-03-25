@@ -57,7 +57,7 @@ func (r *typeResolver) resolveTypeForAddColumn(
 	// Stage 2: schema_metadata override
 	if r.schemaMetadataKey != "" {
 		if metaType, err := r.resolveFromSchemaMetadata(msg, field.FullPath()); err != nil {
-			return nil, fmt.Errorf("Failed to resolve type from schema metadata for field %v: %w", field.FullPath(), err)
+			return nil, fmt.Errorf("resolving type from schema metadata for field %v: %w", field.FullPath(), err)
 		} else {
 			inferredType = metaType
 		}
@@ -95,7 +95,7 @@ func (r *typeResolver) resolveTypeForCreateTable(
 	if r.schemaMetadataKey != "" {
 		path := icebergx.Path{{Kind: icebergx.PathField, Name: fieldName}}
 		if metaType, err := r.resolveFromSchemaMetadata(msg, path); err != nil {
-			return nil, fmt.Errorf("Failed to resolve type from schema metadata for field %q: %w", fieldName, err)
+			return nil, fmt.Errorf("resolving type from schema metadata for field %q: %w", fieldName, err)
 		} else {
 			inferredType = metaType
 		}
