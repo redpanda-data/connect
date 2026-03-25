@@ -162,12 +162,18 @@ func startMigratorAndWaitForMessages(t *testing.T, src, dst EmbeddedRedpandaClus
 		done <- struct{}{}
 		return nil
 	})
-	for range numMessages {
+	for i := range numMessages {
+		// The first message needs a longer timeout because the consumer group
+		// join/balance protocol takes several seconds to complete.
+		timeout := redpandaTestOpTimeout
+		if i == 0 {
+			timeout = redpandaTestWaitTimeout
+		}
 		select {
 		case <-done:
 			continue
-		case <-time.After(redpandaTestOpTimeout):
-			t.Fatal("Timed out waiting for messages")
+		case <-time.After(timeout):
+			t.Fatalf("Timed out waiting for message %d/%d", i+1, numMessages)
 		}
 	}
 }
