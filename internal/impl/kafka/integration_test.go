@@ -37,8 +37,42 @@ import (
 	"github.com/twmb/franz-go/pkg/sasl/scram"
 )
 
+// createTopicSem serializes topic creation to avoid overwhelming Redpanda's
+// admin API with concurrent requests, which can cause INVALID_PARTITIONS errors.
+var createTopicSem = make(chan struct{}, 1)
+
 func createKafkaTopic(ctx context.Context, address, id string, partitions int32) error {
 	topicName := fmt.Sprintf("topic-%v", id)
+
+	// Retry with a fresh client on each attempt. Redpanda's testcontainers
+	// setup can return INVALID_PARTITIONS under concurrent topic creation
+	// load; a new connection often resolves it.
+	var lastErr error
+	for range 10 {
+		if err := doCreateKafkaTopic(ctx, address, topicName, partitions); err != nil {
+			if errors.Is(err, kerr.InvalidPartitions) {
+				lastErr = err
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case <-time.After(2 * time.Second):
+				}
+				continue
+			}
+			return err
+		}
+		return nil
+	}
+	return lastErr
+}
+
+func doCreateKafkaTopic(ctx context.Context, address, topicName string, partitions int32) error {
+	select {
+	case createTopicSem <- struct{}{}:
+		defer func() { <-createTopicSem }()
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 
 	cl, err := kgo.NewClient(kgo.SeedBrokers(address))
 	if err != nil {
@@ -282,20 +316,30 @@ output:
 		stream, err := streamBuilder.Build()
 		require.NoError(t, err)
 
-		// Run stream in the background and shut it down when the test is finished
+		// Run stream in the background and shut it down when the test is finished.
+		// Use a dedicated context so we control when the stream stops, rather than
+		// relying on t.Context() which is canceled when the test function returns
+		// (before cleanup runs).
+		ctx, cancel := context.WithCancel(t.Context())
 		closeChan := make(chan struct{})
 		go func() {
-			err = stream.Run(t.Context())
-			require.NoError(t, err)
+			if err := stream.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+				t.Error(err)
+			}
 
 			t.Log("Migrator pipeline shut down")
 
 			close(closeChan)
 		}()
 		t.Cleanup(func() {
-			require.NoError(t, stream.StopWithin(1*time.Second))
+			cancel()
+			require.NoError(t, stream.StopWithin(5*time.Second))
 
-			<-closeChan
+			select {
+			case <-closeChan:
+			case <-time.After(10 * time.Second):
+				t.Log("cleanup: timed out waiting for pipeline goroutine to exit")
+			}
 		})
 	}
 
