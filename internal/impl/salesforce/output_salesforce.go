@@ -686,12 +686,21 @@ func (s *salesforceSinkOutput) writeBulk(ctx context.Context, records []map[stri
 
 	csvData, err := recordsToCSV(records)
 	if err != nil {
+		if abortErr := s.bulkAbortJob(context.Background(), jobID); abortErr != nil {
+			s.log.Warnf("salesforce_sink bulk: failed to abort job %s: %v", jobID, abortErr)
+		}
 		return fmt.Errorf("salesforce_sink bulk: build CSV: %w", err)
 	}
 	if err := s.bulkUploadCSV(ctx, jobID, csvData); err != nil {
+		if abortErr := s.bulkAbortJob(context.Background(), jobID); abortErr != nil {
+			s.log.Warnf("salesforce_sink bulk: failed to abort job %s: %v", jobID, abortErr)
+		}
 		return fmt.Errorf("salesforce_sink bulk: upload CSV: %w", err)
 	}
 	if err := s.bulkCloseJob(ctx, jobID); err != nil {
+		if abortErr := s.bulkAbortJob(context.Background(), jobID); abortErr != nil {
+			s.log.Warnf("salesforce_sink bulk: failed to abort job %s: %v", jobID, abortErr)
+		}
 		return fmt.Errorf("salesforce_sink bulk: close job: %w", err)
 	}
 
@@ -735,6 +744,13 @@ func (s *salesforceSinkOutput) drainCompletedBulkJobs() error {
 	return firstErr
 }
 
+
+func bulkIngestPath(apiVersion string, segments ...string) string {
+	parts := append([]string{"/services/data", apiVersion, "jobs/ingest"}, segments...)
+	p, _ := url.JoinPath(parts[0], parts[1:]...)
+	return p
+}
+
 func (s *salesforceSinkOutput) bulkCreateJob(ctx context.Context, m topicMapping) (string, error) {
 	req := bulkJobRequest{
 		Object:      m.sobject,
@@ -751,7 +767,7 @@ func (s *salesforceSinkOutput) bulkCreateJob(ctx context.Context, m topicMapping
 		return "", err
 	}
 
-	path := "/services/data/" + s.client.APIVersion() + "/jobs/ingest"
+	path, _ := url.JoinPath("/services/data", s.client.APIVersion(), "jobs/ingest")
 	respBody, err := s.client.PostJSON(ctx, path, body)
 	if err != nil {
 		return "", err
@@ -765,8 +781,18 @@ func (s *salesforceSinkOutput) bulkCreateJob(ctx context.Context, m topicMapping
 }
 
 func (s *salesforceSinkOutput) bulkUploadCSV(ctx context.Context, jobID string, csvData []byte) error {
-	path := "/services/data/" + s.client.APIVersion() + "/jobs/ingest/" + jobID + "/batches"
+	path, _ := url.JoinPath("/services/data", s.client.APIVersion(), "jobs/ingest", jobID, "batches")
 	_, err := s.client.PutCSV(ctx, path, csvData)
+	return err
+}
+
+func (s *salesforceSinkOutput) bulkAbortJob(ctx context.Context, jobID string) error {
+	body, err := json.Marshal(map[string]string{"state": "Aborted"})
+	if err != nil {
+		return fmt.Errorf("internal error marshalling abort-job request: %w", err)
+	}
+	path, _ := url.JoinPath("/services/data", s.client.APIVersion(), "jobs/ingest", jobID)
+	_, err = s.client.PatchJSON(ctx, path, body)
 	return err
 }
 
@@ -775,13 +801,13 @@ func (s *salesforceSinkOutput) bulkCloseJob(ctx context.Context, jobID string) e
 	if err != nil {
 		return fmt.Errorf("internal error marshalling close-job request: %w", err)
 	}
-	path := "/services/data/" + s.client.APIVersion() + "/jobs/ingest/" + jobID
+	path, _ := url.JoinPath("/services/data", s.client.APIVersion(), "jobs/ingest", jobID)
 	_, err = s.client.PatchJSON(ctx, path, body)
 	return err
 }
 
 func (s *salesforceSinkOutput) bulkFetchFailedResults(ctx context.Context, jobID string, failed, processed int) error {
-	path := "/services/data/" + s.client.APIVersion() + "/jobs/ingest/" + jobID + "/failedResults"
+	path, _ := url.JoinPath("/services/data", s.client.APIVersion(), "jobs/ingest", jobID, "failedResults")
 	body, err := s.client.GetJSON(ctx, path)
 	if err != nil {
 		return fmt.Errorf("bulk job %s: %d/%d record(s) failed (could not fetch details: %w)", jobID, failed, processed, err)
@@ -815,7 +841,7 @@ func (s *salesforceSinkOutput) bulkFetchFailedResults(ctx context.Context, jobID
 }
 
 func (s *salesforceSinkOutput) bulkPollUntilDone(ctx context.Context, jobID string) error {
-	path := "/services/data/" + s.client.APIVersion() + "/jobs/ingest/" + jobID
+	path, _ := url.JoinPath("/services/data", s.client.APIVersion(), "jobs/ingest", jobID)
 
 	for {
 		select {
