@@ -56,18 +56,18 @@ func NewTransport(m *service.Metrics, namespace string, base http.RoundTripper) 
 func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 	start := time.Now()
 
-	// in-flight ++
-	atomic.AddInt64(&t.inflightVal, 1)
-	t.inflight.Set(atomic.LoadInt64(&t.inflightVal))
+	// in-flight ++: AddInt64 returns the new value atomically, avoiding a
+	// separate LoadInt64 that could observe a different value.
+	t.inflight.Set(atomic.AddInt64(&t.inflightVal, 1))
 
 	// always record end-of-request updates
 	defer func() {
 		// duration in nanoseconds (MetricTimer expects int64)
 		t.duration.Timing(time.Since(start).Nanoseconds())
 		// in-flight --
-		atomic.AddInt64(&t.inflightVal, -1)
-		t.inflight.Set(atomic.LoadInt64(&t.inflightVal))
+		t.inflight.Set(atomic.AddInt64(&t.inflightVal, -1))
 	}()
+
 
 	t.total.Incr(1)
 
