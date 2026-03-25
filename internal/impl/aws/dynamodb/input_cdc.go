@@ -1424,18 +1424,16 @@ func (d *dynamoDBCDCInput) refreshShards(ctx context.Context) error {
 
 // startShardCoordinator spawns goroutines for each shard and manages shard refresh.
 func (d *dynamoDBCDCInput) startShardCoordinator(ctx context.Context) {
-	defer func() {
-		close(d.msgChan)
-		d.shutSig.TriggerHasStopped()
-	}()
-
-	// Track running shard readers
+	var shardWg sync.WaitGroup
 	activeShards := make(map[string]context.CancelFunc)
 	defer func() {
-		// Cancel all active shard readers on shutdown
+		// Cancel all active shard readers, wait for them to finish, then close channel
 		for _, cancelFn := range activeShards {
 			cancelFn()
 		}
+		shardWg.Wait()
+		close(d.msgChan)
+		d.shutSig.TriggerHasStopped()
 	}()
 
 	refreshTicker := time.NewTicker(shardRefreshInterval)
@@ -1456,7 +1454,9 @@ func (d *dynamoDBCDCInput) startShardCoordinator(ctx context.Context) {
 			if _, exists := activeShards[shardID]; !exists && !reader.exhausted {
 				shardCtx, shardCancel := context.WithCancel(ctx)
 				activeShards[shardID] = shardCancel
-				go d.startShardReader(shardCtx, shardID)
+				shardWg.Go(func() {
+					d.startShardReader(shardCtx, shardID)
+				})
 			}
 		}
 
