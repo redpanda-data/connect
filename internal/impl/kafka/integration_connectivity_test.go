@@ -262,7 +262,7 @@ func TestRedpandaConnectionTestPrematureConnectIntegration(t *testing.T) {
 label: aoutput
 redpanda:
   seed_brokers: [ %v ]
-  topic: testtopic
+  topic: topic-testtopic
 `, brokerAddr)))
 
 	resources, closeFn, err := resBuilder.Build()
@@ -286,7 +286,7 @@ redpanda:
 label: ainput
 redpanda:
   seed_brokers: [ %v ]
-  topics: [ testtopic ]
+  topics: [ topic-testtopic ]
   consumer_group: testingstuff
 `, brokerAddr)))
 
@@ -294,7 +294,7 @@ redpanda:
 label: aoutput
 redpanda:
   seed_brokers: [ %v ]
-  topic: testtopic
+  topic: topic-testtopic
 `, brokerAddr)))
 
 	resources, _, err = resBuilder.BuildSuspended()
@@ -318,7 +318,7 @@ redpanda:
 label: ainput
 redpanda:
   seed_brokers: [ %v ]
-  topics: [ testtopic ]
+  topics: [ topic-testtopic ]
   consumer_group: testingstuff
 `, brokerAddr)))
 
