@@ -642,7 +642,7 @@ func (s *Client) GetNextBatchParallel(ctx context.Context, cursor Cursor, parall
 					results[i] = slotResult{slotIdx: i, done: true, skipped: true}
 					return
 				}
-				gqlQuery := buildSObjectGraphQLQuery(slot.SObjectName, sobjectList[slot.SObjectIndex].Fields, slot.GraphQLCursor)
+				gqlQuery := buildSObjectGraphQLQuery(slot.SObjectName, sobjectList[slot.SObjectIndex].Fields, slot.GraphQLCursor, s.queryBatchSize)
 				raw, err := s.GraphQL(ctx, gqlQuery)
 				if err != nil {
 					s.log.Warnf("Skipping SObject %s permanently: GraphQL fallback failed: %v", slot.SObjectName, err)
@@ -1165,14 +1165,14 @@ func (s *Client) callSalesforceAPIPutCSV(ctx context.Context, u *url.URL, csvDat
 // buildSObjectGraphQLQuery constructs a Salesforce GraphQL query for a given SObject.
 // All fields are wrapped in { value } as required by the Salesforce UI API GraphQL format.
 // When cursor is non-empty, after: "cursor" pagination is injected.
-func buildSObjectGraphQLQuery(objectName string, fields []string, cursor string) string {
+func buildSObjectGraphQLQuery(objectName string, fields []string, cursor string, batchSize int) string {
 	fieldLines := make([]string, 0, len(fields))
 	for _, f := range fields {
 		fieldLines = append(fieldLines, f+" { value }")
 	}
 	fieldSelection := strings.Join(fieldLines, "\n            ")
 
-	args := fmt.Sprintf("first: %d", 2000)
+	args := fmt.Sprintf("first: %d", batchSize)
 	if cursor != "" {
 		args += fmt.Sprintf(`, after: "%s"`, cursor)
 	}
