@@ -327,8 +327,11 @@ func DoRequestWithRetries(
 		}
 
 		// Read the response body and close immediately (not defer — we're in a loop)
-		bodyBytes, _ := io.ReadAll(resp.Body)
+		bodyBytes, err := io.ReadAll(resp.Body)
 		resp.Body.Close()
+		if err != nil {
+			return nil, fmt.Errorf("reading response body: %w", err)
+		}
 		return bodyBytes, nil
 	}
 }
