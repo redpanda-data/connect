@@ -22,6 +22,8 @@ import (
 	"testing"
 	"time"
 
+	"runtime"
+
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/go-connections/nat"
 	"github.com/stretchr/testify/require"
@@ -161,6 +163,9 @@ cache_resources:
 
 func TestIntegrationRedisFailoverCache(t *testing.T) {
 	integration.CheckSkip(t)
+	if runtime.GOOS == "darwin" {
+		t.Skip("Redis sentinel networking requires Linux: sentinel resolves docker gateway IP which is unreachable from macOS host")
+	}
 	t.Parallel()
 
 	rpNet, err := network.New(t.Context())
@@ -196,14 +201,16 @@ func TestIntegrationRedisFailoverCache(t *testing.T) {
 			hc.PortBindings = nat.PortMap{
 				"26379/tcp": []nat.PortBinding{{HostIP: "", HostPort: strconv.Itoa(sentinelPort)}},
 			}
+			// Allow sentinel to reach the master via host.docker.internal.
 			hc.ExtraHosts = []string{"host.docker.internal:host-gateway"}
 		}),
 		testcontainers.WithEnv(map[string]string{
 			"REDIS_SENTINEL_ANNOUNCE_IP":   "127.0.0.1",
 			"REDIS_SENTINEL_ANNOUNCE_PORT": strconv.Itoa(sentinelPort),
 			"REDIS_SENTINEL_QUORUM":        "1",
-			// Point sentinel at the master via host-accessible address so that
-			// it stores and reports 127.0.0.1:masterPort to clients.
+			// Use host.docker.internal so sentinel stores a host-accessible address.
+			// Clients querying the sentinel get host.docker.internal:masterPort, which
+			// Docker Desktop resolves to 127.0.0.1 on the macOS host.
 			"REDIS_MASTER_HOST":        "host.docker.internal",
 			"REDIS_MASTER_PORT_NUMBER": strconv.Itoa(masterPort),
 		}),
