@@ -135,13 +135,13 @@ func (s *Client) updateAndSetBearerToken(ctx context.Context) error {
 		return fmt.Errorf("cannot map response to custom field struct: %w", err)
 	}
 	s.bearerToken.Store(result.AccessToken)
-	s.instanceURL = result.InstanceUrl
+	s.instanceURL.Store(result.InstanceUrl)
 
 	// Extract org ID from the identity URL: https://login.salesforce.com/id/{orgId}/{userId}
 	if result.Id != "" {
 		parts := strings.Split(strings.TrimRight(result.Id, "/"), "/")
 		if len(parts) >= 2 {
-			s.tenantID = parts[len(parts)-2]
+			s.tenantID.Store(parts[len(parts)-2])
 		}
 	}
 
@@ -286,8 +286,8 @@ type Client struct {
 	clientSecret string
 	apiVersion   string
 	bearerToken  atomic.Value
-	instanceURL  string
-	tenantID     string
+	instanceURL  atomic.Value
+	tenantID     atomic.Value
 	httpClient   *http.Client
 	retryOpts    RetryOptions
 	log          *service.Logger
@@ -373,10 +373,10 @@ func (s *Client) SetRestObjects(names []string) {
 func (s *Client) BearerToken() string { return s.getBearerToken() }
 
 // InstanceURL returns the Salesforce instance URL obtained during authentication.
-func (s *Client) InstanceURL() string { return s.instanceURL }
+func (s *Client) InstanceURL() string { v, _ := s.instanceURL.Load().(string); return v }
 
 // TenantID returns the Salesforce org/tenant ID extracted from the identity URL.
-func (s *Client) TenantID() string { return s.tenantID }
+func (s *Client) TenantID() string { v, _ := s.tenantID.Load().(string); return v }
 
 // RefreshToken forces a token refresh and returns an error if it fails.
 func (s *Client) RefreshToken(ctx context.Context) error {
