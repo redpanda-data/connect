@@ -40,6 +40,7 @@ func TestIntegrationElasticsearch(t *testing.T) {
 			"discovery.type": "single-node",
 			"cluster.routing.allocation.disk.threshold_enabled": "false",
 			"xpack.security.enabled":                            "false",
+			"ES_JAVA_OPTS":                                      "-Xms256m -Xmx256m",
 		}),
 		testcontainers.WithWaitStrategy(
 			wait.ForHTTP("/").WithPort("9200/tcp").WithStartupTimeout(time.Minute),
@@ -197,6 +198,7 @@ func TestElasticsearchV9ConnectionTestIntegration(t *testing.T) {
 			"discovery.type": "single-node",
 			"cluster.routing.allocation.disk.threshold_enabled": "false",
 			"xpack.security.enabled":                            "false",
+			"ES_JAVA_OPTS":                                      "-Xms256m -Xmx256m",
 		}),
 		testcontainers.WithWaitStrategy(
 			wait.ForHTTP("/").WithPort("9200/tcp").WithStartupTimeout(time.Minute),
