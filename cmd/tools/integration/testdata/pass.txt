@@ -1,0 +1,16 @@
+{"Action":"start-run","Package":"./internal/impl/memcached"}
+{"Action":"run","Test":"TestIntegrationMemcachedCache"}
+{"Action":"output","Test":"TestIntegrationMemcachedCache","Output":"=== RUN   TestIntegrationMemcachedCache\n"}
+{"Action":"run","Test":"TestIntegrationMemcachedCache/can_open_and_close"}
+{"Action":"run","Test":"TestIntegrationMemcachedCache/return_consistent_error_on_missing_key"}
+{"Action":"run","Test":"TestIntegrationMemcachedCache/add_with_duplicate_key_fails"}
+{"Action":"run","Test":"TestIntegrationMemcachedCache/can_set_and_delete_keys"}
+{"Action":"run","Test":"TestIntegrationMemcachedCache/can_get_and_set"}
+{"Action":"pass","Test":"TestIntegrationMemcachedCache/return_consistent_error_on_missing_key","Elapsed":0}
+{"Action":"pass","Test":"TestIntegrationMemcachedCache/can_open_and_close","Elapsed":0}
+{"Action":"pass","Test":"TestIntegrationMemcachedCache/add_with_duplicate_key_fails","Elapsed":0}
+{"Action":"pass","Test":"TestIntegrationMemcachedCache/can_get_and_set","Elapsed":0.03}
+{"Action":"pass","Test":"TestIntegrationMemcachedCache/can_set_and_delete_keys","Elapsed":1.2}
+{"Action":"pass","Test":"TestIntegrationMemcachedCache","Elapsed":1.06}
+{"Action":"pass","Elapsed":2.706}
+{"Action":"end-run"}
