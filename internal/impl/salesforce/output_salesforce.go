@@ -605,7 +605,12 @@ func (s *salesforceSinkOutput) writeRealtimeChunk(ctx context.Context, records [
 	}
 	if len(blocked) > 0 {
 		s.blockFields(m.sobject, blocked)
-		if retries > 0 {
+		// Only retry for idempotent operations (upsert/update). For insert, already-succeeded
+		// records have been committed by Salesforce and re-sending would create duplicates.
+		// When allOrNone=false the batch is partially committed, so retrying the full chunk
+		// is never safe for insert regardless of retries remaining.
+		canRetry := retries > 0 && (m.operation != "insert" || m.allOrNone)
+		if canRetry {
 			return s.writeRealtimeChunk(ctx, records, m, retries-1)
 		}
 		s.log.Warnf("salesforce_sink: %s: giving up after profile-blocked field retry; some records may have failed", m.sobject)
