@@ -37,6 +37,8 @@ output:
     max_retries: 10
     bulk_batch_size: 1000
     max_concurrent_bulk_jobs: 10
+    bulk_poll_interval: 5s
+    batch_period: 5s
     max_in_flight: 1
     topic_mappings: [] # No default (required)
 ```
@@ -164,6 +166,24 @@ Maximum number of bulk jobs polling concurrently in the background. Each in-flig
 *Type*: `int`
 
 *Default*: `10`
+
+=== `bulk_poll_interval`
+
+How often to poll Salesforce for bulk job completion status.
+
+
+*Type*: `string`
+
+*Default*: `"5s"`
+
+=== `batch_period`
+
+Maximum period to wait before flushing an incomplete batch.
+
+
+*Type*: `string`
+
+*Default*: `"5s"`
 
 === `max_in_flight`
 
