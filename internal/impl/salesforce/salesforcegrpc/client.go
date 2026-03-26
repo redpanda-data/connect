@@ -296,7 +296,7 @@ func (c *Client) receiveLoop(ctx context.Context) {
 			case c.eventBuffer <- pubsubEvent:
 				c.eventsReceived.Add(1)
 				c.lastEventTime.Store(time.Now().UnixNano())
-				c.log.Infof("Pub/Sub event received (topic=%s, schemaID=%s, replayID=%x)", pubsubEvent.TopicName, pubsubEvent.SchemaID, pubsubEvent.ReplayID)
+				c.log.Debugf("Pub/Sub event received (topic=%s, schemaID=%s, replayID=%x)", pubsubEvent.TopicName, pubsubEvent.SchemaID, pubsubEvent.ReplayID)
 			default:
 				c.eventsDropped.Add(1)
 				c.log.Warn("Pub/Sub event buffer full, dropping event")
