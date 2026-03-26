@@ -282,6 +282,19 @@ func isThrottlingError(err error) bool {
 	return isLimit || isProvisioned || isStreamsLimit
 }
 
+// isTrimmedDataAccessError returns true when a GetRecords call fails because the
+// shard iterator points past the oldest available stream record. This typically
+// happens when DynamoDB reorganises stream shards (e.g. after splits/merges or,
+// in DynamoDB Local, after the first write to an empty-stream shard). The caller
+// should obtain a fresh shard iterator and retry.
+func isTrimmedDataAccessError(err error) bool {
+	if err == nil {
+		return false
+	}
+	_, ok := errors.AsType[*streamstypes.TrimmedDataAccessException](err)
+	return ok
+}
+
 // SnapshotCheckpoint holds the progress of a snapshot scan.
 type SnapshotCheckpoint struct {
 	Complete        bool

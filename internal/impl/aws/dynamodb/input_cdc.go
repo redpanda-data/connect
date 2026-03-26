@@ -360,9 +360,10 @@ type tableStream struct {
 	checkpointer  *Checkpointer
 	recordBatcher *RecordBatcher
 
-	mu           sync.RWMutex // Level 2 lock - never hold when acquiring dynamoDBCDCInput.mu
-	shardReaders map[string]*dynamoDBShardReader
-	snapshot     *snapshotState
+	mu             sync.RWMutex // Level 2 lock - never hold when acquiring dynamoDBCDCInput.mu
+	shardReaders   map[string]*dynamoDBShardReader
+	snapshot       *snapshotState
+	shardRefreshCh chan struct{} // Signal coordinator to refresh shards immediately
 }
 
 // dynamoDBCDCInput is the main input struct for DynamoDB CDC.
@@ -383,13 +384,14 @@ type dynamoDBCDCInput struct {
 	tableStreams map[string]*tableStream // keyed by table name
 
 	// Legacy fields for backward compatibility with single table mode
-	resolvedTable string // Actual table name for single-table path; may differ from conf.tables in tag discovery mode
-	streamArn     *string
-	keySchema     []dynamodbtypes.KeySchemaElement // Table's primary key schema for deduplication
-	checkpointer  *Checkpointer
-	recordBatcher *RecordBatcher
-	shardReaders  map[string]*dynamoDBShardReader
-	snapshot      *snapshotState // nil if snapshot mode is "none"
+	resolvedTable  string // Actual table name for single-table path; may differ from conf.tables in tag discovery mode
+	streamArn      *string
+	keySchema      []dynamodbtypes.KeySchemaElement // Table's primary key schema for deduplication
+	checkpointer   *Checkpointer
+	recordBatcher  *RecordBatcher
+	shardReaders   map[string]*dynamoDBShardReader
+	snapshot       *snapshotState // nil if snapshot mode is "none"
+	shardRefreshCh chan struct{}  // Signal coordinator to refresh shards immediately
 
 	pendingAcks       sync.WaitGroup
 	backgroundWorkers sync.WaitGroup // Tracks background goroutines for proper cleanup
@@ -893,6 +895,7 @@ func (d *dynamoDBCDCInput) Connect(ctx context.Context) error {
 	// Initialize message channel with buffer to reduce blocking between scanner and processor
 	// Buffer size of 1000 allows scanner to work ahead without blocking
 	d.msgChan = make(chan asyncMessage, 1000)
+	d.shardRefreshCh = make(chan struct{}, 1)
 
 	// Discover tables based on configured mode
 	tables, err := d.discoverTables(ctx)
@@ -980,6 +983,17 @@ func (d *dynamoDBCDCInput) connectMultipleTables(ctx context.Context, tables []s
 
 	d.log.Infof("Successfully initialized %d table stream(s)", tableCount)
 
+	// Discover shards synchronously so that shard iterators (especially LATEST)
+	// are positioned before Connect returns. This prevents a race where writes
+	// between Connect() and async shard discovery would be invisible.
+	d.mu.RLock()
+	for tableName, ts := range d.tableStreams {
+		if err := d.refreshTableShards(ctx, tableName, ts); err != nil {
+			d.log.Warnf("Failed to discover shards for table %s: %v", tableName, err)
+		}
+	}
+	d.mu.RUnlock()
+
 	// Start coordinators for all tables
 	d.mu.RLock()
 	for tableName, ts := range d.tableStreams {
@@ -1054,12 +1068,13 @@ func (d *dynamoDBCDCInput) initializeTableStream(ctx context.Context, tableName 
 	// Create table stream
 	// Note: snapshot mode is not supported for multi-table streaming (validated at config time)
 	ts := &tableStream{
-		tableName:     tableName,
-		streamArn:     streamArn,
-		keySchema:     descTable.Table.KeySchema,
-		checkpointer:  checkpointer,
-		recordBatcher: recordBatcher,
-		shardReaders:  make(map[string]*dynamoDBShardReader),
+		tableName:      tableName,
+		streamArn:      streamArn,
+		keySchema:      descTable.Table.KeySchema,
+		checkpointer:   checkpointer,
+		recordBatcher:  recordBatcher,
+		shardReaders:   make(map[string]*dynamoDBShardReader),
+		shardRefreshCh: make(chan struct{}, 1),
 	}
 
 	d.tableStreams[tableName] = ts
@@ -1472,9 +1487,15 @@ func (d *dynamoDBCDCInput) startShardCoordinator(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
+		case <-d.shardRefreshCh:
+			// Immediate refresh triggered by a shard reader (e.g. TrimmedDataAccessException)
+			refreshCtx, refreshCancel := context.WithTimeout(ctx, defaultAPICallTimeout)
+			if err := d.refreshShards(refreshCtx); err != nil && !errors.Is(err, context.Canceled) {
+				d.log.Warnf("Failed to refresh shards: %v", err)
+			}
+			refreshCancel()
 		case <-refreshTicker.C:
 			// Refresh shards periodically to discover new shards
-			// Use a timeout context to prevent blocking on shutdown
 			refreshCtx, refreshCancel := context.WithTimeout(ctx, defaultAPICallTimeout)
 			if err := d.refreshShards(refreshCtx); err != nil && !errors.Is(err, context.Canceled) {
 				d.log.Warnf("Failed to refresh shards: %v", err)
@@ -1536,10 +1557,16 @@ func (d *dynamoDBCDCInput) startTableStreamCoordinator(ctx context.Context, tabl
 	d.log.Infof("Starting coordinator for table stream: %s", tableName)
 	defer d.log.Infof("Stopped coordinator for table stream: %s", tableName)
 
-	// Initialize shards for this table
-	if err := d.refreshTableShards(ctx, tableName, ts); err != nil {
-		d.log.Errorf("Failed to initialize shards for table %s: %v", tableName, err)
-		return
+	// Initialize shards for this table (skip if already done by connectMultipleTables).
+	ts.mu.RLock()
+	hasShards := len(ts.shardReaders) > 0
+	ts.mu.RUnlock()
+
+	if !hasShards {
+		if err := d.refreshTableShards(ctx, tableName, ts); err != nil {
+			d.log.Errorf("Failed to initialize shards for table %s: %v", tableName, err)
+			return
+		}
 	}
 
 	// Track running shard readers for this table
@@ -1584,6 +1611,13 @@ func (d *dynamoDBCDCInput) startTableStreamCoordinator(ctx context.Context, tabl
 		select {
 		case <-ctx.Done():
 			return
+		case <-ts.shardRefreshCh:
+			// Immediate refresh triggered by a shard reader (e.g. TrimmedDataAccessException)
+			refreshCtx, refreshCancel := context.WithTimeout(ctx, defaultAPICallTimeout)
+			if err := d.refreshTableShards(refreshCtx, tableName, ts); err != nil && !errors.Is(err, context.Canceled) {
+				d.log.Warnf("Failed to refresh shards for table %s: %v", tableName, err)
+			}
+			refreshCancel()
 		case <-refreshTicker.C:
 			// Refresh shards periodically to discover new shards
 			refreshCtx, refreshCancel := context.WithTimeout(ctx, defaultAPICallTimeout)
@@ -1764,6 +1798,34 @@ func (d *dynamoDBCDCInput) startTableShardReader(ctx context.Context, tableName 
 					return
 				}
 				continue
+			}
+			if isTrimmedDataAccessError(err) {
+				d.log.Warnf("Shard %s (table %s) trimmed, attempting iterator refresh", shardID, tableName)
+				iterRes, iterErr := d.streamsClient.GetShardIterator(ctx, &dynamodbstreams.GetShardIteratorInput{
+					StreamArn:         &ts.streamArn,
+					ShardId:           &shardID,
+					ShardIteratorType: types.ShardIteratorTypeTrimHorizon,
+				})
+				if iterErr == nil {
+					ts.mu.Lock()
+					if reader, ok := ts.shardReaders[shardID]; ok {
+						reader.iterator = iterRes.ShardIterator
+					}
+					ts.mu.Unlock()
+					continue
+				}
+				// Iterator refresh failed — shard is truly gone, mark exhausted and signal coordinator
+				d.log.Warnf("Shard %s (table %s) iterator refresh failed, marking exhausted: %v", shardID, tableName, iterErr)
+				ts.mu.Lock()
+				if reader, ok := ts.shardReaders[shardID]; ok {
+					reader.exhausted = true
+				}
+				ts.mu.Unlock()
+				select {
+				case ts.shardRefreshCh <- struct{}{}:
+				default:
+				}
+				return
 			}
 			d.log.Errorf("Failed to get records from shard %s (table %s): %v", shardID, tableName, err)
 			idleTimer.Reset(d.conf.pollInterval)
@@ -2095,6 +2157,34 @@ func (d *dynamoDBCDCInput) startShardReader(ctx context.Context, shardID string)
 					return
 				}
 				continue
+			}
+			if isTrimmedDataAccessError(err) {
+				d.log.Warnf("Shard %s trimmed, attempting iterator refresh", shardID)
+				iterRes, iterErr := d.streamsClient.GetShardIterator(ctx, &dynamodbstreams.GetShardIteratorInput{
+					StreamArn:         d.streamArn,
+					ShardId:           &shardID,
+					ShardIteratorType: types.ShardIteratorTypeTrimHorizon,
+				})
+				if iterErr == nil {
+					d.mu.Lock()
+					if reader, ok := d.shardReaders[shardID]; ok {
+						reader.iterator = iterRes.ShardIterator
+					}
+					d.mu.Unlock()
+					continue
+				}
+				// Iterator refresh failed — shard is truly gone, mark exhausted and signal coordinator
+				d.log.Warnf("Shard %s iterator refresh failed, marking exhausted: %v", shardID, iterErr)
+				d.mu.Lock()
+				if reader, ok := d.shardReaders[shardID]; ok {
+					reader.exhausted = true
+				}
+				d.mu.Unlock()
+				select {
+				case d.shardRefreshCh <- struct{}{}:
+				default:
+				}
+				return
 			}
 			d.log.Errorf("Failed to get records from shard %s: %v", shardID, err)
 			idleTimer.Reset(d.conf.pollInterval)
