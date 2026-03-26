@@ -48,7 +48,6 @@ func startMQTT(t *testing.T) string {
 
 func TestIntegrationMQTT(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	port := startMQTT(t)
 
@@ -119,7 +118,6 @@ input:
 
 func TestMQTTConnectionTestIntegration(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	port := startMQTT(t)
 

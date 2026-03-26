@@ -29,7 +29,6 @@ import (
 
 func TestIntegrationPulsar(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	ctr, err := testcontainers.Run(t.Context(), "apachepulsar/pulsar-standalone:2.8.3",
 		testcontainers.WithImagePlatform("linux/amd64"),

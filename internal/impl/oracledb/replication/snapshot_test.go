@@ -27,7 +27,6 @@ import (
 
 func TestIntegrationSnapshot(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))

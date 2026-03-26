@@ -46,7 +46,6 @@ import (
 
 func TestIntegrationAzure(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	ctr, err := azurite.Run(t.Context(), "mcr.microsoft.com/azure-storage/azurite:latest",
 		testcontainers.WithCmdArgs("--skipApiVersionCheck"),
@@ -258,7 +257,6 @@ input:
 
 func TestIntegrationCosmosDB(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	cosmosStartupTimeout := 30 * time.Second
 	if deadline, ok := t.Deadline(); ok {

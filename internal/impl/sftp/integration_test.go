@@ -48,7 +48,6 @@ var (
 
 func TestIntegrationSFTP(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	emulator := runEmulator(t)
 
@@ -124,7 +123,6 @@ cache_resources:
 
 func TestIntegrationSFTPDeleteOnFinish(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	emulator := runEmulator(t)
 

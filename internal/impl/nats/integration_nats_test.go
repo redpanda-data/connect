@@ -31,7 +31,6 @@ import (
 
 func TestIntegrationNats(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	ctr, err := testcontainers.Run(t.Context(), "nats:latest",
 		testcontainers.WithExposedPorts("4222/tcp"),
@@ -95,7 +94,6 @@ input:
 
 func TestNATSConnectionTestIntegration(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	ctr, err := testcontainers.Run(t.Context(), "nats:latest",
 		testcontainers.WithExposedPorts("4222/tcp"),
