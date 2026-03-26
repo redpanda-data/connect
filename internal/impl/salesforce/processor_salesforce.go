@@ -453,6 +453,9 @@ func (s *salesforceProcessor) Process(ctx context.Context, _ *service.Message) (
 }
 
 func (s *salesforceProcessor) Close(ctx context.Context) error {
+	s.dispatchMu.Lock()
+	defer s.dispatchMu.Unlock()
+
 	if s.grpcClient == nil {
 		return nil
 	}
