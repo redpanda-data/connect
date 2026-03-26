@@ -1076,6 +1076,7 @@ func buildSOQL(objectName string, fields []string) string {
 
 // APIVersion returns the configured Salesforce REST API version string (e.g., "v65.0").
 func (s *Client) APIVersion() string { return s.apiVersion }
+func (s *Client) OrgURL() string     { return s.orgURL }
 
 // PostJSON sends an authenticated POST request with a JSON body to the given relative path.
 func (s *Client) PostJSON(ctx context.Context, path string, body []byte) ([]byte, error) {
@@ -1111,6 +1112,41 @@ func (s *Client) GetJSON(ctx context.Context, path string) ([]byte, error) {
 		return nil, fmt.Errorf("invalid URL path %q: %w", path, err)
 	}
 	return s.callSalesforceAPI(ctx, u)
+}
+
+// DeleteJSON sends an authenticated DELETE request to the given URL (including query params) and returns the body.
+func (s *Client) DeleteJSON(ctx context.Context, rawURL string) ([]byte, error) {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return nil, fmt.Errorf("invalid URL %q: %w", rawURL, err)
+	}
+	if s.getBearerToken() == "" {
+		if err := s.updateAndSetBearerToken(ctx); err != nil {
+			return nil, err
+		}
+	}
+	newReq := func() (*http.Request, error) {
+		req, err := http.NewRequestWithContext(ctx, http.MethodDelete, u.String(), nil)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Accept", "application/json")
+		req.Header.Set("User-Agent", "Redpanda-Connect")
+		req.Header.Set("Authorization", "Bearer "+s.getBearerToken())
+		return req, nil
+	}
+	resp, err := DoRequestWithRetries(ctx, s.httpClient, newReq, s.retryOpts)
+	if err == nil {
+		return resp, nil
+	}
+	httpErr, ok := err.(*HTTPError)
+	if !ok || httpErr.StatusCode != http.StatusUnauthorized {
+		return nil, err
+	}
+	if err := s.updateAndSetBearerToken(ctx); err != nil {
+		return nil, fmt.Errorf("refresh token: %w", err)
+	}
+	return DoRequestWithRetries(ctx, s.httpClient, newReq, s.retryOpts)
 }
 
 func (s *Client) callSalesforceAPIPatch(ctx context.Context, u *url.URL, body []byte) ([]byte, error) {

@@ -26,6 +26,7 @@ import (
 	"net/http"
 	"net/url"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -534,29 +535,42 @@ func (s *salesforceSinkOutput) writeRealtimeChunk(ctx context.Context, records [
 		return fmt.Errorf("salesforce_sink: could not describe %s: %w", m.sobject, err)
 	}
 
-	wrapped := make([]map[string]any, len(records))
-	for i, rec := range records {
-		r := filterRecord(rec, writable)
-		r["attributes"] = map[string]string{"type": m.sobject}
-		wrapped[i] = r
-	}
-
-	payload := map[string]any{
-		"allOrNone": m.allOrNone,
-		"records":   wrapped,
-	}
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return fmt.Errorf("marshal collections payload: %w", err)
-	}
-
-	path := realtimePath(m, s.client.APIVersion())
 	var respBody []byte
-	switch m.operation {
-	case "upsert", "update":
-		respBody, err = s.client.PatchJSON(ctx, path, body)
-	default:
-		respBody, err = s.client.PostJSON(ctx, path, body)
+
+	if m.operation == "delete" {
+		// DELETE /composite/sobjects?ids=id1,id2&allOrNone=false — no body.
+		ids := make([]string, 0, len(records))
+		for _, rec := range records {
+			if id, ok := rec["Id"].(string); ok && id != "" {
+				ids = append(ids, id)
+			}
+		}
+		basePath, _ := url.JoinPath("/services/data", s.client.APIVersion(), "composite/sobjects")
+		rawURL := s.client.OrgURL() + basePath + "?ids=" + strings.Join(ids, ",") + "&allOrNone=" + strconv.FormatBool(m.allOrNone)
+		respBody, err = s.client.DeleteJSON(ctx, rawURL)
+	} else {
+		wrapped := make([]map[string]any, len(records))
+		for i, rec := range records {
+			r := filterRecord(rec, writable)
+			r["attributes"] = map[string]string{"type": m.sobject}
+			wrapped[i] = r
+		}
+		payload := map[string]any{
+			"allOrNone": m.allOrNone,
+			"records":   wrapped,
+		}
+		var body []byte
+		body, err = json.Marshal(payload)
+		if err != nil {
+			return fmt.Errorf("marshal collections payload: %w", err)
+		}
+		path := realtimePath(m, s.client.APIVersion())
+		switch m.operation {
+		case "upsert", "update":
+			respBody, err = s.client.PatchJSON(ctx, path, body)
+		default:
+			respBody, err = s.client.PostJSON(ctx, path, body)
+		}
 	}
 	if err != nil {
 		return fmt.Errorf("salesforce_sink realtime write failed: %w", err)
@@ -610,11 +624,8 @@ func realtimePath(m topicMapping, apiVersion string) string {
 	case "upsert":
 		p, _ := url.JoinPath("/services/data", apiVersion, "composite/sobjects", m.sobject, m.externalIDField)
 		return p
-	case "delete":
-		p, _ := url.JoinPath("/services/data", apiVersion, "composite/sobjects", m.sobject)
-		return p + "?_HttpMethod=DELETE"
 	default:
-		p, _ := url.JoinPath("/services/data", apiVersion, "composite/sobjects", m.sobject)
+		p, _ := url.JoinPath("/services/data", apiVersion, "composite/sobjects")
 		return p
 	}
 }
