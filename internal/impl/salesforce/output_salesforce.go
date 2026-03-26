@@ -460,10 +460,12 @@ func (s *salesforceSinkOutput) Close(ctx context.Context) error {
 func (s *salesforceSinkOutput) getWritableFields(ctx context.Context, sobject string) (map[string]struct{}, error) {
 	s.writableFieldsMu.RLock()
 	fields, ok := s.writableFields[sobject]
-	s.writableFieldsMu.RUnlock()
 	if ok {
-		return copyStringSet(fields), nil
+		cp := copyStringSet(fields)
+		s.writableFieldsMu.RUnlock()
+		return cp, nil
 	}
+	s.writableFieldsMu.RUnlock()
 
 	fields, err := s.client.DescribeWritableFields(ctx, sobject)
 	if err != nil {
