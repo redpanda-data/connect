@@ -46,29 +46,6 @@ func startRedpanda(t testing.TB) (brokerAddr, port string) {
 	return brokerAddr, port
 }
 
-// startRedpandaWithSchemaRegistry starts a single-node Redpanda container and
-// returns the broker address, port, and schema registry URL.
-func startRedpandaWithSchemaRegistry(t testing.TB) (brokerAddr, port, schemaRegistryURL string) {
-	t.Helper()
-
-	ctr, err := tcredpanda.Run(t.Context(),
-		"docker.redpanda.com/redpandadata/redpanda:latest",
-	)
-	testcontainers.CleanupContainer(t, ctr)
-	require.NoError(t, err)
-
-	brokerAddr, err = ctr.KafkaSeedBroker(t.Context())
-	require.NoError(t, err)
-
-	parts := strings.Split(brokerAddr, ":")
-	port = parts[len(parts)-1]
-
-	schemaRegistryURL, err = ctr.SchemaRegistryAddress(t.Context())
-	require.NoError(t, err)
-
-	return brokerAddr, port, schemaRegistryURL
-}
-
 // startRedpandaWithSASL starts a single-node Redpanda container with SASL
 // authentication enabled and creates an "admin" superuser with password "foobar".
 func startRedpandaWithSASL(t testing.TB) (brokerAddr, port string) {
