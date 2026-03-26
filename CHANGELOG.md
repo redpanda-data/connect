@@ -3,6 +3,19 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.85.0 - 2026-03-26
+
+### Added
+
+- iceberg: Added three-stage type resolution pipeline for Iceberg schema evolution with optional schema metadata override and Bloblang type mapping. ([@rockwotj](https://github.com/rockwotj), [#4167](https://github.com/redpanda-data/connect/pull/4167))
+- redpanda: Added tracing span mapping support to redpanda input and output for trace context propagation across Kafka-connected pipelines. ([@mmatczuk](https://github.com/mmatczuk), [#4146](https://github.com/redpanda-data/connect/pull/4146))
+- salesforce: Added Salesforce processor implementation with REST client, GraphQL support, real-time streaming, and bulk operations for reading and writing data. ([@ness-david-dedu](https://github.com/ness-david-dedu), [#4151](https://github.com/redpanda-data/connect/pull/4151))
+
+### Fixed
+
+- aws: Fixed send-on-closed-channel panic in dynamodb_cdc by ensuring shard reader goroutines complete before closing message channel. ([@squiidz](https://github.com/squiidz), [#4168](https://github.com/redpanda-data/connect/pull/4168))
+- redpanda: Fixed error handling in redpanda output when unable to create franz writer to prevent nil pointer dereference. ([@josephwoodward](https://github.com/josephwoodward), [#4149](https://github.com/redpanda-data/connect/pull/4149))
+
 ## 4.84.1 - 2026-03-20
 
 ### Added
