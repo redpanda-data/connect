@@ -387,7 +387,10 @@ func (s *salesforceSinkOutput) WriteBatch(ctx context.Context, batch service.Mes
 			return fmt.Errorf("message[%d]: parse JSON: %w", i, err)
 		}
 
-		topic, _ := envelope["topic"].(string)
+		topic, ok := envelope["topic"].(string)
+		if !ok || topic == "" {
+			return fmt.Errorf("message[%d]: missing or non-string \"topic\" field", i)
+		}
 
 		// Unwrap "data" field as the actual Salesforce record.
 		record := envelope
