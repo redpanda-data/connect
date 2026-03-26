@@ -102,6 +102,8 @@ func init() {
 
 type sqlInsertProcessor struct {
 	db      *sql.DB
+	table   string
+	columns []string
 	builder squirrel.InsertBuilder
 	dbMut   sync.RWMutex
 
@@ -140,11 +142,13 @@ func NewSQLInsertProcessorFromConfig(conf *service.ParsedConfig, mgr *service.Re
 	if err != nil {
 		return nil, err
 	}
+	s.table = tableStr
 
 	columns, err := conf.FieldStringList("columns")
 	if err != nil {
 		return nil, err
 	}
+	s.columns = columns
 
 	if conf.Contains("args_mapping") {
 		if s.argsMapping, err = conf.FieldBloblang("args_mapping"); err != nil {
@@ -208,6 +212,14 @@ func NewSQLInsertProcessorFromConfig(conf *service.ParsedConfig, mgr *service.Re
 	}
 
 	connSettings.apply(context.Background(), s.db, s.logger)
+	// For ClickHouse, replace the default no-op argsConverter with one that
+	// normalizes map/slice arguments to the concrete Go types the driver expects.
+	if driverStr == "clickhouse" {
+		if s.argsConverter, err = newClickhouseArgsConverter(context.Background(), s.db, s.table, s.columns); err != nil {
+			_ = s.db.Close()
+			return nil, err
+		}
+	}
 
 	go func() {
 		<-s.shutSig.HardStopChan()
