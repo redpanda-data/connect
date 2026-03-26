@@ -274,7 +274,7 @@ func (proc *captureProcessor) Process(_ context.Context, msg *service.Message) (
 	hub.WithScope(func(scope *sentry.Scope) {
 		scope.SetContexts(sentryCtx)
 		scope.SetTags(tags)
-		scope.SetExtras(extras)
+		scope.SetContext("extras", extras)
 
 		hub.CaptureMessage(message)
 	})
