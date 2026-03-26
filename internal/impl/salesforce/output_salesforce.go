@@ -97,7 +97,7 @@ type salesforceSinkOutput struct {
 	// bulkJobs tracks in-flight bulk jobs being polled in background goroutines.
 	bulkJobsMu       sync.Mutex
 	bulkJobs         []*inFlightBulkJob
-	maxBulkJobs      int
+	bulkSem          chan struct{} // capacity = max_concurrent_bulk_jobs; held while a job is in flight
 	bulkPollInterval time.Duration
 	shutdownCtx    context.Context //nolint:containedctx // lifecycle context for background bulk-poll goroutines
 	shutdownCancel context.CancelFunc
@@ -349,7 +349,7 @@ func newSalesforceSinkOutput(conf *service.ParsedConfig, mgr *service.Resources)
 		topicMappings:  topicMappings,
 		writableFields: make(map[string]map[string]struct{}),
 		blockedFields:  make(map[string]map[string]struct{}),
-		maxBulkJobs:      maxConcurrentBulkJobs,
+		bulkSem:          make(chan struct{}, maxConcurrentBulkJobs),
 		bulkPollInterval: bulkPollInterval,
 		shutdownCtx:    shutdownCtx,
 		shutdownCancel: shutdownCancel,
@@ -679,34 +679,18 @@ func (s *salesforceSinkOutput) writeBulk(ctx context.Context, records []map[stri
 		return err
 	}
 
-	// If at max concurrency, block on the oldest in-flight job before submitting a new one.
-	// The mutex is never held across the blocking select — lock only to read/write the slice.
-	s.bulkJobsMu.Lock()
-	atLimit := len(s.bulkJobs) >= s.maxBulkJobs
-	s.bulkJobsMu.Unlock()
-
-	for atLimit {
-		s.bulkJobsMu.Lock()
-		oldest := s.bulkJobs[0]
-		s.bulkJobsMu.Unlock()
-
-		select {
-		case err := <-oldest.errCh:
-			if err != nil {
-				return err
-			}
-			s.bulkJobsMu.Lock()
-			s.bulkJobs = s.bulkJobs[1:]
-			atLimit = len(s.bulkJobs) >= s.maxBulkJobs
-			s.bulkJobsMu.Unlock()
-		case <-ctx.Done():
-			return ctx.Err()
-		}
+	// Acquire a slot — blocks if at capacity, returns if ctx is cancelled.
+	// Sending into a buffered channel is atomic: no TOCTOU between check and reserve.
+	select {
+	case s.bulkSem <- struct{}{}:
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 
 	// Submit: create → upload CSV → close (set UploadComplete). These are fast HTTP calls.
 	jobID, err := s.bulkCreateJob(ctx, m)
 	if err != nil {
+		<-s.bulkSem
 		return fmt.Errorf("salesforce_sink bulk: create job: %w", err)
 	}
 	s.log.Infof("salesforce_sink bulk: created job %s (%d records)", jobID, len(records))
@@ -716,24 +700,28 @@ func (s *salesforceSinkOutput) writeBulk(ctx context.Context, records []map[stri
 		if abortErr := s.bulkAbortJob(context.Background(), jobID); abortErr != nil {
 			s.log.Warnf("salesforce_sink bulk: failed to abort job %s: %v", jobID, abortErr)
 		}
+		<-s.bulkSem
 		return fmt.Errorf("salesforce_sink bulk: build CSV: %w", err)
 	}
 	if err := s.bulkUploadCSV(ctx, jobID, csvData); err != nil {
 		if abortErr := s.bulkAbortJob(context.Background(), jobID); abortErr != nil {
 			s.log.Warnf("salesforce_sink bulk: failed to abort job %s: %v", jobID, abortErr)
 		}
+		<-s.bulkSem
 		return fmt.Errorf("salesforce_sink bulk: upload CSV: %w", err)
 	}
 	if err := s.bulkCloseJob(ctx, jobID); err != nil {
 		if abortErr := s.bulkAbortJob(context.Background(), jobID); abortErr != nil {
 			s.log.Warnf("salesforce_sink bulk: failed to abort job %s: %v", jobID, abortErr)
 		}
+		<-s.bulkSem
 		return fmt.Errorf("salesforce_sink bulk: close job: %w", err)
 	}
 
 	// Poll in background so the next WriteBatch can proceed immediately.
 	job := &inFlightBulkJob{jobID: jobID, errCh: make(chan error, 1)}
 	go func() {
+		defer func() { <-s.bulkSem }()
 		if err := s.bulkPollUntilDone(s.shutdownCtx, jobID); err != nil {
 			s.log.Errorf("salesforce_sink bulk: job %s failed: %v", jobID, err)
 			job.errCh <- err

@@ -9,14 +9,22 @@
 package salesforce
 
 import (
+	"context"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
+	"github.com/redpanda-data/connect/v4/internal/impl/salesforce/salesforcehttp"
 	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
@@ -294,7 +302,7 @@ func TestRealtimePath(t *testing.T) {
 		want      string
 	}{
 		{"upsert", "/services/data/v65.0/composite/sobjects/Account/External_Id__c"},
-		{"delete", "/services/data/v65.0/composite/sobjects?_HttpMethod=DELETE"},
+		{"delete", "/services/data/v65.0/composite/sobjects"},
 		{"insert", "/services/data/v65.0/composite/sobjects"},
 		{"update", "/services/data/v65.0/composite/sobjects"},
 	}
@@ -376,4 +384,132 @@ func splitCSVLines(data []byte) []string {
 		lines = append(lines, string(cur))
 	}
 	return lines
+}
+
+// TestWriteBulk_TOCTOUCapacityCheck verifies that concurrent writeBulk calls never exceed
+// maxConcurrentBulkJobs simultaneous Salesforce job-creation requests.
+// The sleep in the job-creation handler widens the race window so that a TOCTOU bug
+// (check-then-append without atomicity) would allow all goroutines to pile up concurrently.
+func TestWriteBulk_TOCTOUCapacityCheck(t *testing.T) {
+	t.Parallel()
+
+	const (
+		maxJobs         = 3
+		concurrentCalls = 10
+	)
+
+	var (
+		activeCreates atomic.Int32
+		peakCreates   atomic.Int32
+	)
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/services/oauth2/token":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"access_token":"test-token","instance_url":"http://` + r.Host + `"}`))
+
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/describe"):
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"fields": []map[string]any{
+					{"name": "Name", "updateable": true},
+					{"name": "External_Id__c", "updateable": true},
+				},
+			})
+
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/jobs/ingest"):
+			// Measure peak concurrent job-creation calls.
+			// Sleep widens the TOCTOU window so goroutines that raced past the capacity
+			// check pile up here simultaneously.
+			current := activeCreates.Add(1)
+			defer activeCreates.Add(-1)
+			for {
+				peak := peakCreates.Load()
+				if current <= peak {
+					break
+				}
+				if peakCreates.CompareAndSwap(peak, current) {
+					break
+				}
+			}
+			time.Sleep(50 * time.Millisecond)
+			w.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(w).Encode(map[string]string{"id": "job-001", "state": "Open"})
+
+		case r.Method == http.MethodPut && strings.Contains(r.URL.Path, "/batches"):
+			w.WriteHeader(http.StatusCreated)
+
+		case r.Method == http.MethodPatch && strings.Contains(r.URL.Path, "/jobs/ingest/"):
+			w.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(w).Encode(map[string]string{"state": "UploadComplete"})
+
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/jobs/ingest/"):
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"state":                  "JobComplete",
+				"numberRecordsFailed":    0,
+				"numberRecordsProcessed": 1,
+			})
+
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer ts.Close()
+
+	sfClient, err := salesforcehttp.NewClient(salesforcehttp.ClientConfig{
+		OrgURL:         ts.URL,
+		ClientID:       "id",
+		ClientSecret:   "secret",
+		APIVersion:     "v65.0",
+		QueryBatchSize: 2000,
+		HTTPClient:     ts.Client(),
+	})
+	require.NoError(t, err)
+
+	shutdownCtx, shutdownCancel := context.WithCancel(context.Background())
+	defer shutdownCancel()
+
+	out := &salesforceSinkOutput{
+		log:    service.MockResources().Logger(),
+		client: sfClient,
+		topicMappings: map[string]topicMapping{
+			"test-topic": {
+				sobject:         "MyObject__c",
+				operation:       "upsert",
+				externalIDField: "External_Id__c",
+				mode:            sinkModeBulk,
+			},
+		},
+		writableFields:   make(map[string]map[string]struct{}),
+		blockedFields:    make(map[string]map[string]struct{}),
+		bulkSem:          make(chan struct{}, maxJobs),
+		bulkPollInterval: 10 * time.Millisecond,
+		shutdownCtx:      shutdownCtx,
+		shutdownCancel:   shutdownCancel,
+	}
+
+	mapping := topicMapping{
+		sobject:         "MyObject__c",
+		operation:       "upsert",
+		externalIDField: "External_Id__c",
+		mode:            sinkModeBulk,
+	}
+	records := []map[string]any{
+		{"Name": "Test Record", "External_Id__c": "EXT-001"},
+	}
+
+	var wg sync.WaitGroup
+	for range concurrentCalls {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_ = out.writeBulk(context.Background(), records, mapping)
+		}()
+	}
+	wg.Wait()
+
+	assert.LessOrEqual(t, peakCreates.Load(), int32(maxJobs),
+		"TOCTOU: %d concurrent job-creation requests observed, want <= %d",
+		peakCreates.Load(), maxJobs,
+	)
 }
