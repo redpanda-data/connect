@@ -42,7 +42,6 @@ const (
 	sinkModeBulk     = "bulk"
 
 	realtimeMaxChunkSize = 200 // Salesforce sObject Collections API limit
-	bulkPollInterval     = 5 * time.Second
 	defaultMaxBulkJobs   = 10   // max concurrent in-flight bulk jobs
 	defaultBulkBatchSize = 1000 // records per bulk job
 )
@@ -56,6 +55,7 @@ const (
 	sfsFieldMaxRetries            = "max_retries"
 	sfsFieldBulkBatchSize         = "bulk_batch_size"
 	sfsFieldMaxConcurrentBulkJobs = "max_concurrent_bulk_jobs"
+	sfsFieldBulkPollInterval      = "bulk_poll_interval"
 	sfsFieldMaxInFlight           = "max_in_flight"
 	sfsFieldTopicMappings         = "topic_mappings"
 	sfsTMFieldTopic               = "topic"
@@ -95,9 +95,10 @@ type salesforceSinkOutput struct {
 	blockedFields    map[string]map[string]struct{}
 
 	// bulkJobs tracks in-flight bulk jobs being polled in background goroutines.
-	bulkJobsMu     sync.Mutex
-	bulkJobs       []*inFlightBulkJob
-	maxBulkJobs    int
+	bulkJobsMu       sync.Mutex
+	bulkJobs         []*inFlightBulkJob
+	maxBulkJobs      int
+	bulkPollInterval time.Duration
 	shutdownCtx    context.Context //nolint:containedctx // lifecycle context for background bulk-poll goroutines
 	shutdownCancel context.CancelFunc
 	closeOnce      sync.Once
@@ -215,6 +216,9 @@ output:
 		Field(service.NewIntField(sfsFieldMaxConcurrentBulkJobs).
 			Description("Maximum number of bulk jobs polling concurrently in the background. Each in-flight job buffers its CSV payload in memory; lower this value if memory usage is a concern.").
 			Default(defaultMaxBulkJobs)).
+		Field(service.NewDurationField(sfsFieldBulkPollInterval).
+			Description("How often to poll Salesforce for bulk job completion status.").
+			Default("5s")).
 		Field(service.NewIntField(sfsFieldMaxInFlight).
 			Description("Maximum number of batches to send concurrently. Increasing this improves realtime write throughput.").
 			Default(1)).
@@ -260,6 +264,11 @@ func newSalesforceSinkOutput(conf *service.ParsedConfig, mgr *service.Resources)
 	}
 
 	maxConcurrentBulkJobs, err := conf.FieldInt(sfsFieldMaxConcurrentBulkJobs)
+	if err != nil {
+		return nil, err
+	}
+
+	bulkPollInterval, err := conf.FieldDuration(sfsFieldBulkPollInterval)
 	if err != nil {
 		return nil, err
 	}
@@ -340,7 +349,8 @@ func newSalesforceSinkOutput(conf *service.ParsedConfig, mgr *service.Resources)
 		topicMappings:  topicMappings,
 		writableFields: make(map[string]map[string]struct{}),
 		blockedFields:  make(map[string]map[string]struct{}),
-		maxBulkJobs:    maxConcurrentBulkJobs,
+		maxBulkJobs:      maxConcurrentBulkJobs,
+		bulkPollInterval: bulkPollInterval,
 		shutdownCtx:    shutdownCtx,
 		shutdownCancel: shutdownCancel,
 	}
@@ -857,7 +867,7 @@ func (s *salesforceSinkOutput) bulkPollUntilDone(ctx context.Context, jobID stri
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-time.After(bulkPollInterval):
+		case <-time.After(s.bulkPollInterval):
 		}
 
 		respBody, err := s.client.GetJSON(ctx, path)
