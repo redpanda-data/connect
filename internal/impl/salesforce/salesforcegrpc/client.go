@@ -159,7 +159,7 @@ func (c *Client) connectLocked(ctx context.Context) error {
 	c.state = StreamStateConnecting
 	c.streamErr = nil
 
-	streamCtx, cancel := context.WithCancel(ctx)
+	streamCtx, cancel := context.WithCancel(context.Background())
 	c.cancel = cancel
 
 	md := metadata.Pairs(
