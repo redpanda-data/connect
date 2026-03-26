@@ -178,6 +178,19 @@ jobs:
           ignore-unfixed: true
           exit-code: 1
 
+  trigger-docs:
+    runs-on: ubuntu-latest
+    needs: goreleaser
+    if: github.event_name == 'push' && !contains(github.ref_name, '-')
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: Trigger update-docs workflow
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run update-docs.yml --repo ${{ github.repository }} --ref main
+
   notify-slack:
     runs-on: ubuntu-latest
     needs: goreleaser
