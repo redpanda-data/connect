@@ -28,7 +28,6 @@ import (
 
 func TestIntegrationRedis(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	ctr, err := testcontainers.Run(t.Context(), "redis:latest",
 		testcontainers.WithExposedPorts("6379/tcp"),

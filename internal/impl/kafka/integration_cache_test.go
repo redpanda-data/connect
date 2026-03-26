@@ -31,7 +31,6 @@ import (
 
 func TestIntegrationCache(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	brokerAddr, kafkaPortStr := startRedpanda(t)
 
@@ -112,7 +111,6 @@ func TestIntegrationCache(t *testing.T) {
 
 func TestIntegrationCacheStandardized(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	brokerAddr, kafkaPortStr := startRedpanda(t)
 

@@ -40,7 +40,6 @@ func generateCollectionName(testID string) string {
 
 func TestIntegrationMongoDB(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	ctr, err := testcontainers.Run(t.Context(), "mongo:latest",
 		testcontainers.WithExposedPorts("27017/tcp"),
@@ -160,7 +159,6 @@ cache_resources:
 
 func TestMongoDBConnectionTestIntegration(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	ctr, err := testcontainers.Run(t.Context(), "mongo:latest",
 		testcontainers.WithExposedPorts("27017/tcp"),

@@ -35,7 +35,6 @@ import (
 
 func TestIntegrationKinesis(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	servicePort := awstest.GetLocalStack(t)
 	kinesisIntegrationSuite(t, servicePort)

@@ -31,7 +31,6 @@ import (
 
 func TestIntegrationElasticsearch(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	ctx := t.Context()
 
@@ -190,7 +189,6 @@ elasticsearch_v8:
 
 func TestElasticsearchV8ConnectionTestIntegration(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	ctx := t.Context()
 

@@ -34,7 +34,6 @@ import (
 
 func TestIntegrationOracleDBCDCSnapshotAndStreaming(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	// Create tables
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
@@ -142,7 +141,6 @@ oracledb_cdc:
 
 func TestIntegrationOracleDBCDCConcurrentSnapshot(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	// Create tables
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
@@ -222,7 +220,6 @@ oracledb_cdc:
 
 func TestIntegrationOracleDBCDCResumesFromCheckpoint(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	// Create table
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
@@ -349,7 +346,6 @@ oracledb_cdc:
 
 func TestIntegrationOracleDBCDCStreaming(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	// Create tables
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
@@ -481,7 +477,6 @@ oracledb_cdc:
 
 func TestIntegrationOracleDBCDCLargeObjectColumnsToggle(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
 
@@ -1042,7 +1037,6 @@ oracledb_cdc:
 
 func TestIntegrationOracleDBCDCStreamingInsertSchema(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
 	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.schema_ins",
@@ -1237,7 +1231,6 @@ oracledb_cdc:
 
 func TestIntegrationOracleDBCDCSchemaConsistentAcrossPhases(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
 	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.schema_phases",

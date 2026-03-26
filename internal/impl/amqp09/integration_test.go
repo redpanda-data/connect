@@ -185,7 +185,6 @@ func TestIntegrationAMQP09WithQueueDeclareAutoDelete(t *testing.T) {
 
 func TestAMQP09ConnectionTestIntegration(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	ctr, err := testcontainers.Run(t.Context(), "rabbitmq:latest",
 		testcontainers.WithExposedPorts("5672/tcp"),

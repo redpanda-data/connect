@@ -17,12 +17,11 @@ package redis
 import (
 	"context"
 	"fmt"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
-
-	"runtime"
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/go-connections/nat"
@@ -36,7 +35,6 @@ import (
 
 func TestIntegrationRedisCache(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	ctr, err := testcontainers.Run(t.Context(), "redis:latest",
 		testcontainers.WithExposedPorts("6379/tcp"),
@@ -87,7 +85,6 @@ cache_resources:
 
 func TestIntegrationRedisClusterCache(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	hostIP := "127.0.0.1"
 
@@ -166,7 +163,6 @@ func TestIntegrationRedisFailoverCache(t *testing.T) {
 	if runtime.GOOS == "darwin" {
 		t.Skip("Redis sentinel networking requires Linux: sentinel resolves docker gateway IP which is unreachable from macOS host")
 	}
-	t.Parallel()
 
 	rpNet, err := network.New(t.Context())
 	require.NoError(t, err)
