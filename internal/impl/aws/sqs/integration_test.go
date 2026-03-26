@@ -29,7 +29,6 @@ import (
 
 func TestIntegrationSQS(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	servicePort := awstest.GetLocalStack(t)
 	sqsIntegrationSuite(t, servicePort)

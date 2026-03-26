@@ -48,7 +48,6 @@ func startNSQD(t *testing.T) string {
 
 func TestIntegrationNSQ(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	port := startNSQD(t)
 
@@ -85,7 +84,6 @@ input:
 
 func TestNSQConnectionTestIntegration(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	port := startNSQD(t)
 

@@ -88,7 +88,6 @@ func readNKafkaMessages(ctx context.Context, t testing.TB, address, topic string
 
 func TestKafkaEnterpriseIntegration(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	container, err := redpandatest.StartRedpanda(t, false)
 	require.NoError(t, err)

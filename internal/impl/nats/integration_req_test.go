@@ -31,7 +31,6 @@ import (
 
 func TestIntegrationNatsReq(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	ctr, err := testcontainers.Run(t.Context(), "nats:latest",
 		testcontainers.WithCmd("--trace"),

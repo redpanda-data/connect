@@ -238,7 +238,6 @@ file:
 
 func TestIntegration_MicrosoftSQLServerCDC_ConcurrentSnapshot(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	// Create tables
 	connStr, db := mssqlservertest.SetupTestWithMicrosoftSQLServerVersion(t)
@@ -314,7 +313,6 @@ microsoft_sql_server_cdc:
 
 func TestIntegration_MicrosoftSQLServerCDC_ResumesFromCheckpoint(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	// Create table
 	connStr, db := mssqlservertest.SetupTestWithMicrosoftSQLServerVersion(t)
@@ -395,7 +393,6 @@ microsoft_sql_server_cdc:
 
 func TestIntegration_MicrosoftSQLServerCDC_OrderingOfIterator(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	// Create table
 	connStr, db := mssqlservertest.SetupTestWithMicrosoftSQLServerVersion(t)
@@ -462,7 +459,6 @@ microsoft_sql_server_cdc:
 
 func TestIntegration_MicrosoftSQLServerCDC_SnapshotAndStreaming_AllTypes(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	connStr, db := mssqlservertest.SetupTestWithMicrosoftSQLServerVersion(t)
 	q := `
@@ -712,7 +708,6 @@ microsoft_sql_server_cdc:
 
 func TestIntegration_MicrosoftSQLServerCDC_SchemaMetadata(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	connStr, db := mssqlservertest.SetupTestWithMicrosoftSQLServerVersion(t)
 	require.NoError(t, db.CreateTableWithCDCEnabledIfNotExists(t.Context(), "dbo.schema_meta_test", `

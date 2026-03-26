@@ -31,7 +31,7 @@ import (
 
 func TestIntegrationSpiceDB(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
+
 	ctx := t.Context()
 
 	ctr, err := testcontainers.Run(ctx, "authzed/spicedb:v1.37.1",

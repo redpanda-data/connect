@@ -27,7 +27,6 @@ import (
 
 func TestIntegrationUnordered(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	brokerAddr, kafkaPortStr := startRedpanda(t)
 
@@ -162,7 +161,6 @@ input:
 
 func TestIntegrationUnorderedSasl(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	brokerAddr, kafkaPortStr := startRedpandaWithSASL(t)
 

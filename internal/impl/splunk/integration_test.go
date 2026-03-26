@@ -33,7 +33,6 @@ func TestIntegrationSplunk(t *testing.T) {
 	if runtime.GOOS == "darwin" {
 		t.Skip("CON-376: Splunk image is x86-only; Rosetta startup exceeds testcontainers 60s deadline")
 	}
-	t.Parallel()
 
 	dummySplunkPassword := "blobfishAreC00l!"
 	containerInputPort := "8089/tcp"

@@ -37,7 +37,6 @@ func TestIntegrationQuestDB(t *testing.T) {
 	ctx := t.Context()
 
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	ctr, err := testcontainers.Run(t.Context(), "questdb/questdb:8.0.0",
 		testcontainers.WithExposedPorts("9000/tcp", "8812/tcp"),

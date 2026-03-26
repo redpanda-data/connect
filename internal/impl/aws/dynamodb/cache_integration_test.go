@@ -94,7 +94,6 @@ func createTable(ctx context.Context, t testing.TB, dynamoPort, id string) error
 
 func TestIntegrationDynamoDBCache(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	ctr, err := testcontainers.Run(t.Context(), "amazon/dynamodb-local:latest",
 		testcontainers.WithExposedPorts("8000/tcp"),

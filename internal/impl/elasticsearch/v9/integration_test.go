@@ -31,7 +31,6 @@ import (
 
 func TestIntegrationElasticsearch(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	ctx := t.Context()
 	ctr, err := testcontainers.Run(t.Context(), "docker.elastic.co/elasticsearch/elasticsearch:9.1.7",
@@ -189,7 +188,6 @@ elasticsearch_v9:
 
 func TestElasticsearchV9ConnectionTestIntegration(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	ctx := t.Context()
 	ctr, err := testcontainers.Run(t.Context(), "docker.elastic.co/elasticsearch/elasticsearch:9.0.0",

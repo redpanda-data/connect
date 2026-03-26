@@ -29,7 +29,6 @@ import (
 
 func TestIntegrationNatsStream(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	ctr, err := testcontainers.Run(t.Context(), "nats-streaming:latest",
 		testcontainers.WithExposedPorts("4222/tcp"),

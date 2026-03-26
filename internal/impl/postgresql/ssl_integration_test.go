@@ -204,7 +204,6 @@ func TestIntegrationSSLVerifyFull(t *testing.T) {
 		t.Skip("Skipping test in CI")
 	}
 
-	t.Parallel()
 	integration.CheckSkip(t)
 
 	certs, cleanup := generateCerts(t)

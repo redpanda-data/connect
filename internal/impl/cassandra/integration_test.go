@@ -33,8 +33,6 @@ import (
 func TestIntegrationCassandra(t *testing.T) {
 	integration.CheckSkip(t)
 
-	t.Parallel()
-
 	ctr, err := tccassandra.Run(t.Context(), "cassandra:latest")
 	testcontainers.CleanupContainer(t, ctr)
 	require.NoError(t, err)

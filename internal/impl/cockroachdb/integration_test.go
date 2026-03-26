@@ -35,7 +35,6 @@ import (
 
 func TestIntegrationCRDB(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	tmpDir := t.TempDir()
 
