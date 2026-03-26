@@ -24,7 +24,7 @@ import (
 
 func TestIntegration_MicrosoftSQLServerCDC_CheckpointCache(t *testing.T) {
 	integration.CheckSkip(t)
-	connStr, db := mssqlservertest.MustSetupTestWithMicrosoftSQLServerVersion(t, "2022-latest")
+	connStr, db := mssqlservertest.MustSetupTestWithMicrosoftSQLServerVersion(t)
 
 	t.Run("cache initialises checkpoint table", func(t *testing.T) {
 		t.Parallel()

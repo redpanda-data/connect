@@ -180,9 +180,9 @@ func (db *TestDB) CreateTableWithCDCEnabledIfNotExists(ctx context.Context, full
 // SetupTestWithMicrosoftSQLServerVersion starts a Microsoft SQL Server Docker container with the specified version,
 // creates a testdb database, enables CDC, and returns the connection string and TestDB wrapper.
 // The container is automatically cleaned up when the test completes.
-func SetupTestWithMicrosoftSQLServerVersion(t *testing.T, version string) (string, *TestDB) {
+func SetupTestWithMicrosoftSQLServerVersion(t *testing.T) (string, *TestDB) {
 	ctr, err := tcmssql.Run(t.Context(),
-		fmt.Sprintf("mcr.microsoft.com/mssql/server:%s", version),
+		"mcr.microsoft.com/mssql/server:2025-latest",
 		testcontainers.WithImagePlatform("linux/amd64"),
 		tcmssql.WithAcceptEULA(),
 		tcmssql.WithPassword("YourStrong!Passw0rd"),
@@ -256,9 +256,9 @@ func SetupTestWithMicrosoftSQLServerVersion(t *testing.T, version string) (strin
 // and returns the connection string and raw sql.DB connected to the master database.
 // Unlike SetupTestWithMicrosoftSQLServerVersion, this does not create testdb or enable CDC.
 // The container is automatically cleaned up when the test completes.
-func MustSetupTestWithMicrosoftSQLServerVersion(t *testing.T, version string) (string, *sql.DB) {
+func MustSetupTestWithMicrosoftSQLServerVersion(t *testing.T) (string, *sql.DB) {
 	ctr, err := tcmssql.Run(t.Context(),
-		fmt.Sprintf("mcr.microsoft.com/mssql/server:%s", version),
+		"mcr.microsoft.com/mssql/server:2025-latest",
 		testcontainers.WithImagePlatform("linux/amd64"),
 		tcmssql.WithAcceptEULA(),
 		tcmssql.WithPassword("YourStrong!Passw0rd"),

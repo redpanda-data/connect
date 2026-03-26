@@ -967,7 +967,7 @@ func TestIntegrationMSSQL(t *testing.T) {
 	t.Parallel()
 
 	testPassword := "ins4n3lyStrongP4ssword"
-	ctr, err := testcontainers.Run(t.Context(), "mcr.microsoft.com/mssql/server:latest",
+	ctr, err := testcontainers.Run(t.Context(), "mcr.microsoft.com/mssql/server:2025-latest",
 		testcontainers.WithImagePlatform("linux/amd64"),
 		testcontainers.WithExposedPorts("1433/tcp"),
 		testcontainers.WithEnv(map[string]string{
