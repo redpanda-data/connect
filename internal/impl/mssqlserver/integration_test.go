@@ -37,7 +37,7 @@ func TestIntegration_MicrosoftSQLServerCDC_SnapshotAndStreaming(t *testing.T) {
 		t.Parallel()
 
 		// Create tables
-		connStr, db := mssqlservertest.SetupTestWithMicrosoftSQLServerVersion(t, "2022-latest")
+		connStr, db := mssqlservertest.SetupTestWithMicrosoftSQLServerVersion(t)
 		require.NoError(t, db.CreateTableWithCDCEnabledIfNotExists(t.Context(), "test.foo", "CREATE TABLE test.foo (id INT IDENTITY(1,1) PRIMARY KEY);"))
 		require.NoError(t, db.CreateTableWithCDCEnabledIfNotExists(t.Context(), "dbo.foo", "CREATE TABLE dbo.foo (id INT IDENTITY(1,1) PRIMARY KEY);"))
 		require.NoError(t, db.CreateTableWithCDCEnabledIfNotExists(t.Context(), "dbo.bar", "CREATE TABLE dbo.bar (id INT IDENTITY(1,1) PRIMARY KEY);"))
@@ -135,7 +135,7 @@ microsoft_sql_server_cdc:
 		t.Parallel()
 
 		// Create tables
-		connStr, db := mssqlservertest.SetupTestWithMicrosoftSQLServerVersion(t, "2022-latest")
+		connStr, db := mssqlservertest.SetupTestWithMicrosoftSQLServerVersion(t)
 		require.NoError(t, db.CreateTableWithCDCEnabledIfNotExists(t.Context(), "test.foo", "CREATE TABLE test.foo (id INT IDENTITY(1,1) PRIMARY KEY);"))
 		require.NoError(t, db.CreateTableWithCDCEnabledIfNotExists(t.Context(), "dbo.foo", "CREATE TABLE dbo.foo (id INT IDENTITY(1,1) PRIMARY KEY);"))
 		require.NoError(t, db.CreateTableWithCDCEnabledIfNotExists(t.Context(), "dbo.bar", "CREATE TABLE dbo.bar (id INT IDENTITY(1,1) PRIMARY KEY);"))
@@ -241,7 +241,7 @@ func TestIntegration_MicrosoftSQLServerCDC_ConcurrentSnapshot(t *testing.T) {
 	t.Parallel()
 
 	// Create tables
-	connStr, db := mssqlservertest.SetupTestWithMicrosoftSQLServerVersion(t, "2022-latest")
+	connStr, db := mssqlservertest.SetupTestWithMicrosoftSQLServerVersion(t)
 	require.NoError(t, db.CreateTableWithCDCEnabledIfNotExists(t.Context(), "test.foo", "CREATE TABLE test.foo (id INT IDENTITY(1,1) PRIMARY KEY);"))
 	require.NoError(t, db.CreateTableWithCDCEnabledIfNotExists(t.Context(), "dbo.foo", "CREATE TABLE dbo.foo (id INT IDENTITY(1,1) PRIMARY KEY);"))
 	require.NoError(t, db.CreateTableWithCDCEnabledIfNotExists(t.Context(), "dbo.bar", "CREATE TABLE dbo.bar (id INT IDENTITY(1,1) PRIMARY KEY);"))
@@ -317,7 +317,7 @@ func TestIntegration_MicrosoftSQLServerCDC_ResumesFromCheckpoint(t *testing.T) {
 	t.Parallel()
 
 	// Create table
-	connStr, db := mssqlservertest.SetupTestWithMicrosoftSQLServerVersion(t, "2022-latest")
+	connStr, db := mssqlservertest.SetupTestWithMicrosoftSQLServerVersion(t)
 	require.NoError(t, db.CreateTableWithCDCEnabledIfNotExists(t.Context(), "test.foo", "CREATE TABLE test.foo (id INT IDENTITY(1,1) PRIMARY KEY);"))
 
 	cfg := `
@@ -398,7 +398,7 @@ func TestIntegration_MicrosoftSQLServerCDC_OrderingOfIterator(t *testing.T) {
 	t.Parallel()
 
 	// Create table
-	connStr, db := mssqlservertest.SetupTestWithMicrosoftSQLServerVersion(t, "2022-latest")
+	connStr, db := mssqlservertest.SetupTestWithMicrosoftSQLServerVersion(t)
 	require.NoError(t, db.CreateTableWithCDCEnabledIfNotExists(t.Context(), "dbo.foo", `CREATE TABLE dbo.foo (a INT PRIMARY KEY);`))
 	require.NoError(t, db.CreateTableWithCDCEnabledIfNotExists(t.Context(), "boo.bar", `CREATE TABLE boo.bar (b INT PRIMARY KEY);`))
 
@@ -464,7 +464,7 @@ func TestIntegration_MicrosoftSQLServerCDC_SnapshotAndStreaming_AllTypes(t *test
 	integration.CheckSkip(t)
 	t.Parallel()
 
-	connStr, db := mssqlservertest.SetupTestWithMicrosoftSQLServerVersion(t, "2022-latest")
+	connStr, db := mssqlservertest.SetupTestWithMicrosoftSQLServerVersion(t)
 	q := `
 	CREATE TABLE dbo.all_data_types (
 		-- Numeric Data Types
@@ -714,7 +714,7 @@ func TestIntegration_MicrosoftSQLServerCDC_SchemaMetadata(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
-	connStr, db := mssqlservertest.SetupTestWithMicrosoftSQLServerVersion(t, "2022-latest")
+	connStr, db := mssqlservertest.SetupTestWithMicrosoftSQLServerVersion(t)
 	require.NoError(t, db.CreateTableWithCDCEnabledIfNotExists(t.Context(), "dbo.schema_meta_test", `
 		CREATE TABLE dbo.schema_meta_test (
 			id      INT          PRIMARY KEY,
