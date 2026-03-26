@@ -1,0 +1,14 @@
+{"Action":"start-run","Package":"./internal/impl/nats"}
+{"Action":"run","Test":"TestIntegrationNatsJetStream"}
+{"Action":"run","Test":"TestIntegrationNatsJetStream/can_produce"}
+{"Action":"run","Test":"TestIntegrationNatsJetStream/can_consume"}
+{"Action":"pass","Test":"TestIntegrationNatsJetStream/can_produce","Elapsed":0.03}
+{"Action":"output","Test":"TestIntegrationNatsJetStream/can_consume","Output":"    nats_test.go:89: timed out waiting for message\n"}
+{"Action":"fail","Test":"TestIntegrationNatsJetStream/can_consume","Elapsed":1.5}
+{"Action":"fail","Test":"TestIntegrationNatsJetStream","Elapsed":1.53}
+{"Action":"run","Test":"TestIntegrationNatsKV"}
+{"Action":"output","Test":"TestIntegrationNatsKV","Output":"--- SKIP: TestIntegrationNatsKV (0.00s)\n"}
+{"Action":"output","Test":"TestIntegrationNatsKV","Output":"    nats_kv_test.go:15: requires NATS 2.10+\n"}
+{"Action":"skip","Test":"TestIntegrationNatsKV","Elapsed":0}
+{"Action":"fail","Elapsed":3.456}
+{"Action":"end-run"}

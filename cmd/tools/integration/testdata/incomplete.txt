@@ -1,0 +1,5 @@
+{"Action":"start-run","Package":"./internal/impl/kafka"}
+{"Action":"run","Test":"TestIntegrationKafka"}
+{"Action":"run","Test":"TestIntegrationKafka/can_produce"}
+{"Action":"pass","Test":"TestIntegrationKafka/can_produce","Elapsed":0.5}
+{"Action":"run","Test":"TestIntegrationKafka/can_consume"}
