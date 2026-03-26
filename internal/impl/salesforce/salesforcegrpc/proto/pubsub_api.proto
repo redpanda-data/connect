@@ -1,0 +1,420 @@
+// Copyright 2026 Redpanda Data, Inc.
+//
+// Licensed as a Redpanda Enterprise file under the Redpanda Community
+// License (the "License"); you may not use this file except in compliance with
+// the License. You may obtain a copy of the License at
+//
+// https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
+
+/*
+ * Salesforce Pub/Sub API Version 1.
+ */
+
+syntax = "proto3";
+package eventbus.v1;
+
+option java_multiple_files = true;
+option java_package = "com.salesforce.eventbus.protobuf";
+option java_outer_classname = "PubSubProto";
+
+option go_package = "custom-connector/connect/internal/impl/salesforce/salesforcegrpc";
+
+/*
+ * Contains information about a topic and uniquely identifies it. TopicInfo is returned by the GetTopic RPC method.
+ */
+message TopicInfo {
+  // Topic name
+  string topic_name = 1;
+  // Tenant/org GUID
+  string tenant_guid = 2;
+  // Is publishing allowed?
+  bool can_publish = 3;
+  // Is subscription allowed?
+  bool can_subscribe = 4;
+  /* ID of the current topic schema, which can be used for
+   * publishing of generically serialized events.
+   */
+  string schema_id = 5;
+  // RPC ID used to trace errors.
+  string rpc_id = 6;
+}
+
+/*
+ * A request message for GetTopic. Note that the tenant/org is not directly referenced
+ * in the request, but is implicitly identified by the authentication headers.
+ */
+message TopicRequest {
+  // The name of the topic to retrieve.
+  string topic_name = 1;
+}
+
+/*
+ * Reserved for future use.
+ * Header that contains information for distributed tracing, filtering, routing, etc.
+ * For example, X-B3-* headers assigned by a publisher are stored with the event and
+ * can provide a full distributed trace of the event across its entire lifecycle.
+ */
+message EventHeader {
+  string key = 1;
+  bytes value = 2;
+}
+
+/*
+ * Represents an event that an event publishing app creates.
+ */
+message ProducerEvent {
+  // Either a user-provided ID or a system generated guid
+  string id = 1;
+  // Schema fingerprint for this event which is hash of the schema
+  string schema_id = 2;
+  // The message data field
+  bytes payload = 3;
+  // Reserved for future use. Key-value pairs of headers.
+  repeated EventHeader headers = 4;
+}
+
+/*
+ * Represents an event that is consumed in a subscriber client.
+ * In addition to the fields in ProducerEvent, ConsumerEvent has the replay_id field.
+ */
+message ConsumerEvent {
+  // The event with fields identical to ProducerEvent
+  ProducerEvent event = 1;
+  /* The replay ID of the event.
+   * A subscriber app can store the replay ID. When the app restarts, it can resume subscription
+   * starting from events in the event bus after the event with that replay ID.
+   */
+  bytes replay_id = 2;
+}
+
+/*
+ * Event publish result that the Publish RPC method returns. The result contains replay_id or a publish error.
+ */
+message PublishResult {
+  // Replay ID of the event
+  bytes replay_id = 1;
+  // Publish error if any
+  Error error = 2;
+  // Correlation key of the ProducerEvent
+  string correlation_key = 3;
+}
+
+// Contains error information for an error that an RPC method returns.
+message Error {
+  // Error code
+  ErrorCode code = 1;
+  // Error message
+  string msg = 2;
+}
+
+// Supported error codes
+enum ErrorCode {
+  UNKNOWN = 0;
+  PUBLISH = 1;
+  // ErrorCode for unrecoverable commit errors.
+  COMMIT = 2;
+}
+
+/*
+ * Supported subscription replay start values.
+ * By default, the subscription will start at the tip of the stream if ReplayPreset is not specified.
+ */
+enum ReplayPreset {
+  // Start the subscription at the tip of the stream.
+  LATEST = 0;
+  // Start the subscription at the earliest point in the stream.
+  EARLIEST = 1;
+  // Start the subscription after a custom point in the stream. This must be set with a valid replay_id in the FetchRequest.
+  CUSTOM = 2;
+}
+
+/*
+ * Request for the Subscribe streaming RPC method. This request is used to:
+ * 1. Establish the initial subscribe stream.
+ * 2. Request more events from the subscription stream.
+ * Flow Control is handled by the subscriber via num_requested.
+ * A client can specify a starting point for the subscription with replay_preset and replay_id combinations.
+ * If no replay_preset is specified, the subscription starts at LATEST (tip of the stream).
+ * replay_preset and replay_id values are only consumed as part of the first FetchRequest. If
+ * a client needs to start at another point in the stream, it must start a new subscription.
+ */
+message FetchRequest {
+  /*
+   * Identifies a topic for subscription in the very first FetchRequest of the stream. The topic cannot change
+   * in subsequent FetchRequests within the same subscribe stream, but can be omitted for efficiency.
+   */
+  string topic_name = 1;
+
+  /*
+   * Subscription starting point. This is consumed only as part of the first FetchRequest
+   * when the subscription is set up.
+   */
+  ReplayPreset replay_preset = 2;
+  /*
+   * If replay_preset of CUSTOM is selected, specify the subscription point to start after.
+   * This is consumed only as part of the first FetchRequest when the subscription is set up.
+   */
+  bytes replay_id = 3;
+  /*
+   * Number of events a client is ready to accept. Each subsequent FetchRequest informs the server
+   * of additional processing capacity available on the client side. There is no guarantee of equal number of
+   * FetchResponse messages to be sent back. There is not necessarily a correspondence between
+   * number of requested events in FetchRequest and the number of events returned in subsequent
+   * FetchResponses.
+   */
+  int32 num_requested = 4;
+  // For internal Salesforce use only.
+  string auth_refresh = 5;
+}
+
+/*
+ * Response for the Subscribe streaming RPC method. This returns ConsumerEvent(s).
+ * If there are no events to deliver, the server sends an empty batch fetch response with the latest replay ID. The
+ * empty fetch response is sent within 270 seconds. An empty fetch response provides a periodic keepalive from the
+ * server and the latest replay ID.
+ */
+message FetchResponse {
+  // Received events for subscription for client consumption
+  repeated ConsumerEvent events = 1;
+  // Latest replay ID of a subscription. Enables clients with an updated replay value so that they can keep track
+  // of their last consumed replay. Clients will not have to start a subscription at a very old replay in the case where a resubscribe is necessary.
+  bytes latest_replay_id = 2;
+  // RPC ID used to trace errors.
+  string rpc_id = 3;
+  // Number of remaining events to be delivered to the client for a Subscribe RPC call.
+  int32 pending_num_requested = 4;
+}
+
+/*
+ * Request for the GetSchema RPC method. The schema request is based on the event schema ID.
+ */
+message SchemaRequest {
+  // Schema fingerprint for this event, which is a hash of the schema.
+  string schema_id = 1;
+}
+
+/*
+ * Response for the GetSchema RPC method. This returns the schema ID and schema of an event.
+ */
+message SchemaInfo {
+  // Avro schema in JSON format
+  string schema_json = 1;
+  // Schema fingerprint
+  string schema_id = 2;
+  // RPC ID used to trace errors.
+  string rpc_id = 3;
+}
+
+// Request for the Publish and PublishStream RPC method.
+message PublishRequest {
+  // Topic to publish on
+  string topic_name = 1;
+  // Batch of ProducerEvent(s) to send
+  repeated ProducerEvent events = 2;
+  // For internal Salesforce use only.
+  string auth_refresh = 3;
+}
+
+/*
+ * Response for the Publish and PublishStream RPC methods. This returns
+ * a list of PublishResults for each event that the client attempted to
+ * publish. PublishResult indicates if publish succeeded or not
+ * for each event. It also returns the schema ID that was used to create
+ * the ProducerEvents in the PublishRequest.
+ */
+message PublishResponse {
+  // Publish results
+  repeated PublishResult results = 1;
+  // Schema fingerprint for this event, which is a hash of the schema
+  string schema_id = 2;
+  // RPC ID used to trace errors.
+  string rpc_id = 3;
+}
+
+/*
+ * This feature is part of an open beta release and is subject to the applicable
+ * Beta Services Terms provided at Agreements and Terms
+ * (https://www.salesforce.com/company/legal/agreements/).
+ *
+ * Request for the ManagedSubscribe streaming RPC method. This request is used to:
+ * 1. Establish the initial managed subscribe stream.
+ * 2. Request more events from the subscription stream.
+ * 3. Commit a Replay ID using CommitReplayRequest.
+ */
+message ManagedFetchRequest {
+  /*
+    * Managed subscription ID or developer name. This value corresponds to the
+    * ID or developer name of the ManagedEventSubscription Tooling API record.
+    * This value is consumed as part of the first ManagedFetchRequest only.
+    * The subscription_id cannot change in subsequent ManagedFetchRequests
+    * within the same subscribe stream, but can be omitted for efficiency.
+    */
+  string subscription_id = 1;
+  string developer_name = 2;
+  /*
+   * Number of events a client is ready to accept. Each subsequent FetchRequest informs the server
+   * of additional processing capacity available on the client side. There is no guarantee of equal number of
+   * FetchResponse messages to be sent back. There is not necessarily a correspondence between
+   * number of requested events in FetchRequest and the number of events returned in subsequent
+   * FetchResponses.
+   */
+  int32 num_requested = 3;
+  // For internal Salesforce use only.
+  string auth_refresh = 4;
+  CommitReplayRequest commit_replay_id_request = 5;
+}
+
+/*
+ * This feature is part of an open beta release and is subject to the applicable
+ * Beta Services Terms provided at Agreements and Terms
+ * (https://www.salesforce.com/company/legal/agreements/).
+ *
+ * Response for the ManagedSubscribe streaming RPC method. This can return
+ * ConsumerEvent(s) or CommitReplayResponse along with other metadata.
+ */
+message ManagedFetchResponse {
+  // Received events for subscription for client consumption
+  repeated ConsumerEvent events = 1;
+  // Latest replay ID of a subscription.
+  bytes latest_replay_id = 2;
+  // RPC ID used to trace errors.
+  string rpc_id = 3;
+  // Number of remaining events to be delivered to the client for a Subscribe RPC call.
+  int32 pending_num_requested = 4;
+  // commit response
+  CommitReplayResponse commit_response = 5;
+}
+
+/*
+ * This feature is part of an open beta release and is subject to the applicable
+ * Beta Services Terms provided at Agreements and Terms
+ * (https://www.salesforce.com/company/legal/agreements/).
+ *
+ * Request to commit a Replay ID for the last processed event or for the latest
+ * replay ID received in an empty batch of events.
+ */
+message CommitReplayRequest {
+  // commit_request_id to identify commit responses
+  string commit_request_id = 1;
+  // replayId to commit
+  bytes replay_id = 2;
+}
+
+/*
+ * This feature is part of an open beta release and is subject to the applicable
+ * Beta Services Terms provided at Agreements and Terms
+ * (https://www.salesforce.com/company/legal/agreements/).
+ *
+ * There is no guaranteed 1:1 CommitReplayRequest to CommitReplayResponse.
+ * N CommitReplayRequest(s) can get compressed in a batch resulting in a single
+ * CommitReplayResponse which reflects the latest values of last
+ * CommitReplayRequest in that batch.
+ */
+message CommitReplayResponse {
+  // commit_request_id to identify commit responses.
+  string commit_request_id = 1;
+  // replayId that may have been committed
+  bytes replay_id = 2;
+  // for failed commits
+  Error error = 3;
+  // time when server received request in epoch ms
+  int64 process_time = 4;
+}
+
+/*
+ * The Pub/Sub API provides a single interface for publishing and subscribing to platform events, including real-time
+ * event monitoring events, and change data capture events. The Pub/Sub API is a gRPC API that is based on HTTP/2.
+ *
+ * A session token is needed to authenticate. Any of the Salesforce supported
+ * OAuth flows can be used to obtain a session token:
+ * https://help.salesforce.com/articleView?id=sf.remoteaccess_oauth_flows.htm&type=5
+ *
+ * For each RPC, a client needs to pass authentication information
+ * as metadata headers (https://www.grpc.io/docs/guides/concepts/#metadata) with their method call.
+ *
+ * For Salesforce session token authentication, use:
+ *   accesstoken : access token
+ *   instanceurl : Salesforce instance URL
+ *   tenantid : tenant/org id of the client
+ *
+ * StatusException is thrown in case of response failure for any request.
+ */
+service PubSub {
+  /*
+   * Bidirectional streaming RPC to subscribe to a Topic. The subscription is pull-based. A client can request
+   * for more events as it consumes events. This enables a client to handle flow control based on the client's processing speed.
+   *
+   * Typical flow:
+   * 1. Client requests for X number of events via FetchRequest.
+   * 2. Server receives request and delivers events until X events are delivered to the client via one or more FetchResponse messages.
+   * 3. Client consumes the FetchResponse messages as they come.
+   * 4. Client issues new FetchRequest for Y more number of events. This request can
+   *    come before the server has delivered the earlier requested X number of events
+   *    so the client gets a continuous stream of events if any.
+   *
+   * If a client requests more events before the server finishes the last
+   * requested amount, the server appends the new amount to the current amount of
+   * events it still needs to fetch and deliver.
+   *
+   * A client can subscribe at any point in the stream by providing a replay option in the first FetchRequest.
+   * The replay option is honored for the first FetchRequest received from a client. Any subsequent FetchRequests with a
+   * new replay option are ignored. A client needs to call the Subscribe RPC again to restart the subscription
+   * at a new point in the stream.
+   *
+   * The first FetchRequest of the stream identifies the topic to subscribe to.
+   * If any subsequent FetchRequest provides topic_name, it must match what
+   * was provided in the first FetchRequest; otherwise, the RPC returns an error
+   * with INVALID_ARGUMENT status.
+   */
+  rpc Subscribe (stream FetchRequest) returns (stream FetchResponse);
+
+  // Get the event schema for a topic based on a schema ID.
+  rpc GetSchema (SchemaRequest) returns (SchemaInfo);
+
+  /*
+   * Get the topic Information related to the specified topic.
+   */
+  rpc GetTopic (TopicRequest) returns (TopicInfo);
+
+  /*
+   * Send a publish request to synchronously publish events to a topic.
+   */
+  rpc Publish (PublishRequest) returns (PublishResponse);
+
+  /*
+   * Bidirectional Streaming RPC to publish events to the event bus.
+   * PublishRequest contains the batch of events to publish.
+   *
+   * The first PublishRequest of the stream identifies the topic to publish on.
+   * If any subsequent PublishRequest provides topic_name, it must match what
+   * was provided in the first PublishRequest; otherwise, the RPC returns an error
+   * with INVALID_ARGUMENT status.
+   *
+   * The server returns a PublishResponse for each PublishRequest when publish is
+   * complete for the batch. A client does not have to wait for a PublishResponse
+   * before sending a new PublishRequest, i.e. multiple publish batches can be queued
+   * up, which allows for higher publish rate as a client can asynchronously
+   * publish more events while publishes are still in flight on the server side.
+   *
+   * PublishResponse holds a PublishResult for each event published that indicates success
+   * or failure of the publish. A client can then retry the publish as needed before sending
+   * more PublishRequests for new events to publish.
+   *
+   * A client must send a valid publish request with one or more events every 70 seconds to hold on to the stream.
+   * Otherwise, the server closes the stream and notifies the client. Once the client is notified of the stream closure,
+   * it must make a new PublishStream call to resume publishing.
+   */
+  rpc PublishStream (stream PublishRequest) returns (stream PublishResponse);
+
+  /*
+   * This feature is part of an open beta release and is subject to the applicable
+   * Beta Services Terms provided at Agreements and Terms
+   * (https://www.salesforce.com/company/legal/agreements/).
+   *
+   * Same as Subscribe, but for Managed Subscription clients.
+   * This feature is part of an open beta release.
+   */
+  rpc ManagedSubscribe (stream ManagedFetchRequest) returns (stream ManagedFetchResponse);
+}
+
+// Style guide: https://developers.google.com/protocol-buffers/docs/style

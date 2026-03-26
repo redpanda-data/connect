@@ -1,0 +1,51 @@
+# Salesforce REST snapshot benchmark — single SObject (Account)
+# Useful for isolating per-object throughput without the overhead of describing
+# and iterating all SObjects.
+#
+# Required env vars:
+#   export SALESFORCE_ORG_URL="https://your-domain.salesforce.com"
+#   export SALESFORCE_CLIENT_ID="your-connected-app-client-id"
+#   export SALESFORCE_CLIENT_SECRET="your-connected-app-client-secret"
+
+logger:
+  level: INFO
+  format: logfmt
+  add_timestamp: true
+
+http:
+  debug_endpoints: true
+
+input:
+  generate:
+    interval: "@every 1s"
+    mapping: 'root = {}'
+
+pipeline:
+  processors:
+    - salesforce:
+        org_url: "${SALESFORCE_ORG_URL}"
+        client_id: "${SALESFORCE_CLIENT_ID}"
+        client_secret: "${SALESFORCE_CLIENT_SECRET}"
+        restapi_version: "v64.0"
+        request_timeout: "30s"
+        max_retries: 5
+        cache_resource: sf_bench_checkpoint
+        query_type: "rest"
+        query: "SELECT Id, Name FROM Account"
+
+output:
+  processors:
+    - benchmark:
+        interval: 1s
+        count_bytes: true
+  drop: {}
+
+cache_resources:
+  - label: sf_bench_checkpoint
+    file:
+      directory: /tmp/sf_bench_checkpoint
+
+metrics:
+  prometheus:
+    add_process_metrics: true
+    add_go_metrics: true

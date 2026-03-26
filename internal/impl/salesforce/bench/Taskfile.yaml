@@ -1,0 +1,57 @@
+version: '3'
+
+tasks:
+  bench:run:
+    desc: Run REST snapshot benchmark (all SObjects, parallel_fetch=10)
+    cmds:
+      - mkdir -p /tmp/sf_bench_checkpoint
+      - go run ../../../../cmd/redpanda-connect/main.go run ./benchmark_read.yaml 2>&1 | tee /tmp/bench_output.txt
+
+  bench:run:fresh:
+    desc: Clear checkpoint then run benchmark, output to /tmp/bench_output.txt
+    cmds:
+      - rm -rf /tmp/sf_bench_checkpoint
+      - mkdir -p /tmp/sf_bench_checkpoint
+      - go run ../../../../cmd/redpanda-connect/main.go run ./benchmark_read.yaml 2>&1 | tee /tmp/bench_output.txt
+
+  bench:run:single:
+    desc: Run REST snapshot benchmark limited to Account only
+    cmds:
+      - mkdir -p /tmp/sf_bench_checkpoint
+      - go run ../../../../cmd/redpanda-connect/main.go run ./benchmark_read_single.yaml
+
+  bench:run:parallel-1:
+    desc: Run benchmark with parallel_fetch=1
+    cmds:
+      - mkdir -p /tmp/sf_bench_checkpoint
+      - go run ../../../../cmd/redpanda-connect/main.go run ./benchmark_read.yaml --set pipeline.processors.0.salesforce.parallel_fetch=1
+
+  bench:run:parallel-5:
+    desc: Run benchmark with parallel_fetch=5
+    cmds:
+      - mkdir -p /tmp/sf_bench_checkpoint
+      - go run ../../../../cmd/redpanda-connect/main.go run ./benchmark_read.yaml --set pipeline.processors.0.salesforce.parallel_fetch=5
+
+  bench:run:parallel-20:
+    desc: Run benchmark with parallel_fetch=20
+    cmds:
+      - mkdir -p /tmp/sf_bench_checkpoint
+      - go run ../../../../cmd/redpanda-connect/main.go run ./benchmark_read.yaml --set pipeline.processors.0.salesforce.parallel_fetch=20
+
+  bench:write:realtime:
+    desc: Run write benchmark using sObject Collections API (realtime mode)
+    cmds:
+      - mkdir -p /tmp/sf_bench_checkpoint
+      - BENCH_WRITE_MODE=realtime go run ../../../../cmd/redpanda-connect/main.go run ./benchmark_write.yaml
+
+  bench:write:bulk:
+    desc: Run write benchmark using Bulk API 2.0
+    cmds:
+      - mkdir -p /tmp/sf_bench_checkpoint
+      - BENCH_WRITE_MODE=bulk go run ../../../../cmd/redpanda-connect/main.go run ./benchmark_write.yaml
+
+  bench:clear-checkpoint:
+    desc: Delete all checkpoint state so the next run starts fresh
+    cmds:
+      - rm -rf /tmp/sf_bench_checkpoint
+      - mkdir -p /tmp/sf_bench_checkpoint
