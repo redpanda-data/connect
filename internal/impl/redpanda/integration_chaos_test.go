@@ -243,13 +243,11 @@ output:
 	t.Cleanup(cancel)
 
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		if err := stream.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
 			t.Logf("produce stream error: %v", err)
 		}
-	}()
+	})
 	t.Cleanup(func() {
 		cancel()
 		wg.Wait()
@@ -286,7 +284,7 @@ output:
 `, endpoints.BrokerAddr, topic, consumerGroup)
 
 	require.NoError(t, streamBuilder.SetYAML(config))
-	require.NoError(t, streamBuilder.AddConsumerFunc(func(ctx context.Context, msg *service.Message) error {
+	require.NoError(t, streamBuilder.AddConsumerFunc(func(_ context.Context, _ *service.Message) error {
 		counter.Add(1)
 		return nil
 	}))
@@ -298,13 +296,11 @@ output:
 	t.Cleanup(cancel)
 
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		if err := stream.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
 			t.Logf("consume stream error: %v", err)
 		}
-	}()
+	})
 	t.Cleanup(func() {
 		cancel()
 		wg.Wait()
