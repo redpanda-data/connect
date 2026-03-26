@@ -31,7 +31,6 @@ import (
 
 func TestIntegrationCache(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	ctr, err := testcontainers.Run(t.Context(), "postgres:latest",
 		testcontainers.WithExposedPorts("5432/tcp"),

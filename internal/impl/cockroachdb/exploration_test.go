@@ -37,7 +37,6 @@ import (
 
 func TestIntegrationExploration(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	ctr, err := testcontainers.Run(t.Context(), "cockroachdb/cockroach:latest",
 		testcontainers.WithCmd("start-single-node", "--insecure"),

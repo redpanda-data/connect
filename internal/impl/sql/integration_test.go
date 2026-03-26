@@ -691,7 +691,6 @@ func runClickhouseTest(t *testing.T, dsnScheme string) {
 
 func TestIntegrationClickhouse(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	tests := []struct {
 		name      string
@@ -716,7 +715,6 @@ func TestIntegrationClickhouse(t *testing.T) {
 
 func TestIntegrationPostgres(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	ctr, err := testcontainers.Run(t.Context(), "postgres:latest",
 		testcontainers.WithExposedPorts("5432/tcp"),
@@ -784,7 +782,6 @@ func TestIntegrationPostgres(t *testing.T) {
 
 func TestIntegrationPostgresVector(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	ctr, err := testcontainers.Run(t.Context(), "pgvector/pgvector:pg16",
 		testcontainers.WithExposedPorts("5432/tcp"),
@@ -905,7 +902,6 @@ suffix: ORDER BY embedding <-> '[3,1,2]' LIMIT 1
 
 func TestIntegrationMySQL(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	ctr, err := testcontainers.Run(t.Context(), "mysql:latest",
 		testcontainers.WithExposedPorts("3306/tcp"),
@@ -964,7 +960,6 @@ func TestIntegrationMySQL(t *testing.T) {
 
 func TestIntegrationMSSQL(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	testPassword := "ins4n3lyStrongP4ssword"
 	ctr, err := testcontainers.Run(t.Context(), "mcr.microsoft.com/mssql/server:2025-latest",
@@ -1023,7 +1018,6 @@ func TestIntegrationMSSQL(t *testing.T) {
 
 func TestIntegrationSQLite(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	var db *sql.DB
 	var err error
@@ -1066,7 +1060,6 @@ func TestIntegrationSQLite(t *testing.T) {
 
 func TestIntegrationOracle(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	ctr, err := testcontainers.Run(t.Context(), "gvenzl/oracle-free:slim-faststart",
 		testcontainers.WithExposedPorts("1521/tcp"),
@@ -1128,7 +1121,6 @@ func TestIntegrationOracle(t *testing.T) {
 
 func TestIntegrationTrino(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	testPassword := ""
 	ctr, err := testcontainers.Run(t.Context(), "trinodb/trino:latest",
@@ -1186,7 +1178,6 @@ create table %s (
 
 func TestIntegrationCosmosDB(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	ctr, err := testcontainers.Run(t.Context(), "mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:latest",
 		testcontainers.WithImagePlatform("linux/amd64"),

@@ -29,7 +29,6 @@ import (
 
 func TestIntegrationAMQP1(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	ctr, err := testcontainers.Run(t.Context(), "apache/activemq-classic:latest",
 		testcontainers.WithExposedPorts("5672/tcp"),

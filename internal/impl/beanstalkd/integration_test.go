@@ -55,7 +55,6 @@ func startBeanstalkd(t testing.TB) string {
 
 func TestIntegrationBeanstalkdOpenClose(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	port := startBeanstalkd(t)
 
@@ -70,7 +69,6 @@ func TestIntegrationBeanstalkdOpenClose(t *testing.T) {
 
 func TestIntegrationBeanstalkdSendBatch(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	port := startBeanstalkd(t)
 
@@ -85,7 +83,6 @@ func TestIntegrationBeanstalkdSendBatch(t *testing.T) {
 
 func TestIntegrationBeanstalkdStreamSequential(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	port := startBeanstalkd(t)
 
@@ -100,7 +97,6 @@ func TestIntegrationBeanstalkdStreamSequential(t *testing.T) {
 
 func TestIntegrationBeanstalkdStreamParallel(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	port := startBeanstalkd(t)
 

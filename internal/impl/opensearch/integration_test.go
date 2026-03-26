@@ -53,7 +53,6 @@ func outputFromConf(t testing.TB, confStr string, args ...any) *opensearch.Outpu
 
 func TestIntegrationOpensearch(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	ctr, err := testcontainers.Run(t.Context(), "opensearchproject/opensearch:latest",
 		testcontainers.WithExposedPorts("9200/tcp"),

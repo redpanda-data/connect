@@ -26,7 +26,6 @@ import (
 
 func TestIntegration_Snapshot_(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	connStr, db := mssqlservertest.SetupTestWithMicrosoftSQLServerVersion(t)
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))

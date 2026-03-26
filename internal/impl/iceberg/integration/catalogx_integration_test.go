@@ -31,7 +31,6 @@ import (
 
 func TestCatalogxIntegration(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	ctx := context.Background()
 	infra := setupTestInfra(t, ctx)

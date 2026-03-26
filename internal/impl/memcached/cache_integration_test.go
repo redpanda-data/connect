@@ -29,7 +29,6 @@ import (
 
 func TestIntegrationMemcachedCache(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	ctr, err := testcontainers.Run(t.Context(), "memcached:latest",
 		testcontainers.WithExposedPorts("11211/tcp"),

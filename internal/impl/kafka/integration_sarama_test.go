@@ -32,7 +32,6 @@ import (
 // Note: This test will take 10 minutes to complete unless you specify the `-timeout` flag explicitly. If you set `-timeout 0`, it will complete in a minute.
 func TestIntegrationSaramaCheckpointOneLockUp(t *testing.T) {
 	integration.CheckSkipExact(t)
-	t.Parallel()
 
 	brokerAddr, kafkaPortStr := startRedpanda(t)
 	require.Eventually(t, func() bool {
@@ -161,7 +160,6 @@ kafka:
 
 func TestIntegrationSaramaRedpanda(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	brokerAddr, kafkaPortStr := startRedpanda(t)
 
@@ -380,7 +378,6 @@ input:
 
 func TestIntegrationSaramaOutputFixedTimestamp(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	brokerAddr, kafkaPortStr := startRedpanda(t)
 

@@ -30,7 +30,6 @@ import (
 
 func TestIntegrationNatsJetstream(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	ctr, err := testcontainers.Run(t.Context(), "nats:latest",
 		testcontainers.WithCmd("--js"),
@@ -98,7 +97,6 @@ input:
 
 func TestIntegrationNatsPullConsumer(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	ctr, err := testcontainers.Run(t.Context(), "nats:latest",
 		testcontainers.WithCmd("--js"),

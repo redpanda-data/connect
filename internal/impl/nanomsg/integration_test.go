@@ -23,7 +23,6 @@ import (
 
 func TestIntegrationNanomsg(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	template := `
 output:

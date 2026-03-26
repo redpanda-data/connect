@@ -155,7 +155,6 @@ func ResourceWithPostgreSQLVersion(t *testing.T, version string) (string, *sql.D
 }
 
 func TestIntegrationPostgresNoTxnMarkers(t *testing.T) {
-	t.Parallel()
 	integration.CheckSkip(t)
 	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 	require.NoError(t, err)
@@ -338,7 +337,6 @@ pg_stream:
 }
 
 func TestIntegrationPostgresIncludeTxnMarkers(t *testing.T) {
-	t.Parallel()
 	integration.CheckSkip(t)
 	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 	require.NoError(t, err)
@@ -683,7 +681,6 @@ pg_stream:
 }
 
 func TestIntegrationTOASTValues(t *testing.T) {
-	t.Parallel()
 	integration.CheckSkip(t)
 
 	for _, replicaIdentity := range []string{"FULL", "DEFAULT", "ALT_UNCHANGED_TOAST"} {
@@ -788,7 +785,6 @@ pg_stream:
 }
 
 func TestIntegrationSnapshotConsistency(t *testing.T) {
-	t.Parallel()
 	integration.CheckSkip(t)
 	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 	require.NoError(t, err)
@@ -881,7 +877,6 @@ read_until:
 }
 
 func TestIntegrationSnapshotParallel(t *testing.T) {
-	t.Parallel()
 	integration.CheckSkip(t)
 	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 	require.NoError(t, err)
@@ -984,7 +979,6 @@ read_until:
 }
 
 func TestIntegrationPostgresMetadata(t *testing.T) {
-	t.Parallel()
 	integration.CheckSkip(t)
 	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 	require.NoError(t, err)
@@ -1086,7 +1080,6 @@ postgres_cdc:
 }
 
 func TestIntegrationHeartbeat(t *testing.T) {
-	t.Parallel()
 	integration.CheckSkip(t)
 	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 	require.NoError(t, err)
@@ -1173,7 +1166,6 @@ postgres_cdc:
 }
 
 func TestIntegrationPostgresCDCSchemaMetadata(t *testing.T) {
-	t.Parallel()
 	integration.CheckSkip(t)
 
 	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")

@@ -29,7 +29,6 @@ import (
 
 func TestIntegrationS3(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	servicePort := awstest.GetLocalStack(t)
 	s3IntegrationSuite(t, servicePort)
