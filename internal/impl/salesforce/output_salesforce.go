@@ -659,23 +659,29 @@ func (s *salesforceSinkOutput) writeBulk(ctx context.Context, records []map[stri
 	}
 
 	// If at max concurrency, block on the oldest in-flight job before submitting a new one.
+	// The mutex is never held across the blocking select — lock only to read/write the slice.
 	s.bulkJobsMu.Lock()
-	for len(s.bulkJobs) >= s.maxBulkJobs {
+	atLimit := len(s.bulkJobs) >= s.maxBulkJobs
+	s.bulkJobsMu.Unlock()
+
+	for atLimit {
+		s.bulkJobsMu.Lock()
 		oldest := s.bulkJobs[0]
 		s.bulkJobsMu.Unlock()
+
 		select {
 		case err := <-oldest.errCh:
-			s.bulkJobsMu.Lock()
-			s.bulkJobs = s.bulkJobs[1:]
 			if err != nil {
-				s.bulkJobsMu.Unlock()
 				return err
 			}
+			s.bulkJobsMu.Lock()
+			s.bulkJobs = s.bulkJobs[1:]
+			atLimit = len(s.bulkJobs) >= s.maxBulkJobs
+			s.bulkJobsMu.Unlock()
 		case <-ctx.Done():
 			return ctx.Err()
 		}
 	}
-	s.bulkJobsMu.Unlock()
 
 	// Submit: create → upload CSV → close (set UploadComplete). These are fast HTTP calls.
 	jobID, err := s.bulkCreateJob(ctx, m)
