@@ -1,0 +1,11 @@
+<results timestamp="20260326100000" package="./internal/impl/redis">
+=== RUN   TestIntegrationRedisCache
+=== RUN   TestIntegrationRedisCache/can_get_and_set
+=== RUN   TestIntegrationRedisCache/can_delete_keys
+--- PASS: TestIntegrationRedisCache/can_get_and_set (0.05s)
+--- FAIL: TestIntegrationRedisCache/can_delete_keys (0.10s)
+    redis_test.go:45: expected key to be deleted
+--- FAIL: TestIntegrationRedisCache (0.15s)
+FAIL
+FAIL	github.com/redpanda-data/connect/v4/internal/impl/redis	1.234s
+</results>

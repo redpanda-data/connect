@@ -1,0 +1,46 @@
+<results timestamp="20260326094101" package="./internal/impl/memcached">
+=== RUN   TestIntegrationMemcachedCache
+2026/03/26 09:41:02 github.com/testcontainers/testcontainers-go - Connected to docker: 
+  Server Version: 29.2.1
+  API Version: 1.51
+  Operating System: Ubuntu 24.04.4 LTS
+  Total Memory: 11933 MB
+  Testcontainers for Go Version: v0.41.0
+  Resolved Docker Host: unix:///Users/michal/.colima/default/docker.sock
+  Resolved Docker Socket Path: /Users/michal/.colima/default/docker.sock
+  Test SessionID: a58fa05cc1c2d53bcb5af180ded726735bff662ced016f0e79c69ab1204d9e1a
+  Test ProcessID: ef0c67fe-cbfc-41e0-a7f2-a63b23f6c3d1
+2026/03/26 09:41:02 🐳 Creating container for image memcached:latest
+2026/03/26 09:41:02 ✅ Container created: 949fcd5cac5d
+2026/03/26 09:41:02 🐳 Starting container: 949fcd5cac5d
+2026/03/26 09:41:02 ✅ Container started: 949fcd5cac5d
+2026/03/26 09:41:02 ⏳ Waiting for container id 949fcd5cac5d image: memcached:latest. Waiting for: all of: [port 11211/tcp to be listening]
+2026/03/26 09:41:02 🔔 Container is ready: 949fcd5cac5d
+=== RUN   TestIntegrationMemcachedCache/can_open_and_close
+=== PAUSE TestIntegrationMemcachedCache/can_open_and_close
+=== RUN   TestIntegrationMemcachedCache/return_consistent_error_on_missing_key
+=== PAUSE TestIntegrationMemcachedCache/return_consistent_error_on_missing_key
+=== RUN   TestIntegrationMemcachedCache/add_with_duplicate_key_fails
+=== PAUSE TestIntegrationMemcachedCache/add_with_duplicate_key_fails
+=== RUN   TestIntegrationMemcachedCache/can_set_and_delete_keys
+=== PAUSE TestIntegrationMemcachedCache/can_set_and_delete_keys
+=== RUN   TestIntegrationMemcachedCache/can_get_and_set
+=== PAUSE TestIntegrationMemcachedCache/can_get_and_set
+=== CONT  TestIntegrationMemcachedCache/can_open_and_close
+=== CONT  TestIntegrationMemcachedCache/can_set_and_delete_keys
+=== CONT  TestIntegrationMemcachedCache/add_with_duplicate_key_fails
+=== CONT  TestIntegrationMemcachedCache/can_get_and_set
+=== CONT  TestIntegrationMemcachedCache/return_consistent_error_on_missing_key
+2026/03/26 09:41:03 🐳 Stopping container: 949fcd5cac5d
+2026/03/26 09:41:04 ✅ Container stopped: 949fcd5cac5d
+2026/03/26 09:41:04 🐳 Terminating container: 949fcd5cac5d
+2026/03/26 09:41:04 🚫 Container terminated: 949fcd5cac5d
+--- PASS: TestIntegrationMemcachedCache (1.06s)
+    --- PASS: TestIntegrationMemcachedCache/return_consistent_error_on_missing_key (0.00s)
+    --- PASS: TestIntegrationMemcachedCache/can_open_and_close (0.00s)
+    --- PASS: TestIntegrationMemcachedCache/add_with_duplicate_key_fails (0.00s)
+    --- PASS: TestIntegrationMemcachedCache/can_get_and_set (0.03s)
+    --- PASS: TestIntegrationMemcachedCache/can_set_and_delete_keys (1.20s)
+PASS
+ok  	github.com/redpanda-data/connect/v4/internal/impl/memcached	2.706s
+</results>

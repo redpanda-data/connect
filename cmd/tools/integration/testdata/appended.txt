@@ -1,0 +1,9 @@
+<results timestamp="20260326" package="./internal/impl/test">
+=== RUN   TestIntegrationFoo
+    integration_test.go:42: some error
+--- FAIL: TestIntegrationFoo (1.00s)
+</results>
+<results timestamp="20260326" package="./internal/impl/test">
+=== RUN   TestIntegrationFoo
+--- PASS: TestIntegrationFoo (1.50s)
+</results>

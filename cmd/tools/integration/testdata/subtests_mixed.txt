@@ -1,0 +1,140 @@
+<results timestamp="20260326111539" package="./internal/impl/aws/dynamodb">
+=== RUN   TestIntegrationDynamoDBCache
+2026/03/26 11:16:23 github.com/testcontainers/testcontainers-go - Connected to docker: 
+  Server Version: 29.2.1
+  API Version: 1.51
+  Operating System: Ubuntu 24.04.4 LTS
+  Total Memory: 11933 MB
+  Testcontainers for Go Version: v0.41.0
+  Resolved Docker Host: unix:///Users/michal/.colima/default/docker.sock
+  Resolved Docker Socket Path: /Users/michal/.colima/default/docker.sock
+  Test SessionID: b8196f32efc28226218225f0c4e9dc96082391fa6688ba4d10512474bb6bf413
+  Test ProcessID: ca160b16-9dd8-44ce-8b4c-a2dea2d6fc71
+2026/03/26 11:16:23 🐳 Creating container for image amazon/dynamodb-local:latest
+2026/03/26 11:16:23 ✅ Container created: e513556615da
+2026/03/26 11:16:23 🐳 Starting container: e513556615da
+2026/03/26 11:16:23 ✅ Container started: e513556615da
+2026/03/26 11:16:23 ⏳ Waiting for container id e513556615da image: amazon/dynamodb-local:latest. Waiting for: all of: [port 8000/tcp to be listening]
+2026/03/26 11:16:25 🔔 Container is ready: e513556615da
+    cache_integration_test.go:68: Creating table: poketable
+=== RUN   TestIntegrationDynamoDBCache/can_open_and_close
+=== PAUSE TestIntegrationDynamoDBCache/can_open_and_close
+=== RUN   TestIntegrationDynamoDBCache/return_consistent_error_on_missing_key
+=== PAUSE TestIntegrationDynamoDBCache/return_consistent_error_on_missing_key
+=== RUN   TestIntegrationDynamoDBCache/add_with_duplicate_key_fails
+=== PAUSE TestIntegrationDynamoDBCache/add_with_duplicate_key_fails
+=== RUN   TestIntegrationDynamoDBCache/can_set_and_delete_keys
+=== PAUSE TestIntegrationDynamoDBCache/can_set_and_delete_keys
+=== RUN   TestIntegrationDynamoDBCache/can_get_and_set
+=== PAUSE TestIntegrationDynamoDBCache/can_get_and_set
+=== CONT  TestIntegrationDynamoDBCache/can_open_and_close
+=== CONT  TestIntegrationDynamoDBCache/can_set_and_delete_keys
+=== CONT  TestIntegrationDynamoDBCache/can_get_and_set
+=== CONT  TestIntegrationDynamoDBCache/return_consistent_error_on_missing_key
+=== CONT  TestIntegrationDynamoDBCache/add_with_duplicate_key_fails
+=== NAME  TestIntegrationDynamoDBCache/can_open_and_close
+    cache_integration_test.go:68: Creating table: 0fc82098-656b-4b61-995b-5cd73838ec8c
+=== NAME  TestIntegrationDynamoDBCache/can_set_and_delete_keys
+    cache_integration_test.go:68: Creating table: 8ea2a2c5-1745-4a95-8305-6e0fadb5f004
+=== NAME  TestIntegrationDynamoDBCache/add_with_duplicate_key_fails
+    cache_integration_test.go:68: Creating table: 5033337f-0bc9-4a9c-b42e-0b69ed1b5357
+=== NAME  TestIntegrationDynamoDBCache/return_consistent_error_on_missing_key
+    cache_integration_test.go:68: Creating table: 2bcd2d7f-9da7-4053-8051-8c81ede84985
+=== NAME  TestIntegrationDynamoDBCache/can_get_and_set
+    cache_integration_test.go:68: Creating table: 4a2350e0-f0a3-4749-9853-fed1af5feea7
+2026/03/26 11:16:25 🐳 Stopping container: e513556615da
+2026/03/26 11:16:26 ✅ Container stopped: e513556615da
+2026/03/26 11:16:26 🐳 Terminating container: e513556615da
+2026/03/26 11:16:26 🚫 Container terminated: e513556615da
+--- PASS: TestIntegrationDynamoDBCache (2.60s)
+    --- PASS: TestIntegrationDynamoDBCache/return_consistent_error_on_missing_key (0.05s)
+    --- PASS: TestIntegrationDynamoDBCache/can_open_and_close (0.07s)
+    --- PASS: TestIntegrationDynamoDBCache/add_with_duplicate_key_fails (0.07s)
+    --- PASS: TestIntegrationDynamoDBCache/can_set_and_delete_keys (0.08s)
+    --- PASS: TestIntegrationDynamoDBCache/can_get_and_set (0.18s)
+=== RUN   TestIntegrationDynamoDBStreams
+2026/03/26 11:16:26 🐳 Creating container for image amazon/dynamodb-local:latest
+2026/03/26 11:16:26 ✅ Container created: deaea5f9e413
+2026/03/26 11:16:26 🐳 Starting container: deaea5f9e413
+2026/03/26 11:16:26 ✅ Container started: deaea5f9e413
+2026/03/26 11:16:26 ⏳ Waiting for container id deaea5f9e413 image: amazon/dynamodb-local:latest. Waiting for: all of: [port 8000/tcp to be listening]
+2026/03/26 11:16:28 🔔 Container is ready: deaea5f9e413
+    input_cdc_integration_test.go:65: Creating table with streams: test-streams-table
+=== RUN   TestIntegrationDynamoDBStreams/ReadInsertEvents
+=== RUN   TestIntegrationDynamoDBStreams/ReadModifyEvents
+=== RUN   TestIntegrationDynamoDBStreams/ReadRemoveEvents
+=== RUN   TestIntegrationDynamoDBStreams/CheckpointResumption
+=== RUN   TestIntegrationDynamoDBStreams/VerifyRecordCount
+    input_cdc_integration_test.go:465: 
+        	Error Trace:	/Users/michal/RP/RPCN/connect-wt-1/internal/impl/aws/dynamodb/input_cdc_integration_test.go:465
+        	            				/Users/michal/RP/RPCN/connect-wt-1/internal/impl/aws/dynamodb/input_cdc_integration_test.go:192
+        	Error:      	"[INSERT INSERT INSERT INSERT INSERT INSERT INSERT INSERT INSERT INSERT INSERT INSERT INSERT INSERT INSERT INSERT INSERT INSERT INSERT INSERT]" should have 108 item(s), but has 20
+        	Test:       	TestIntegrationDynamoDBStreams/VerifyRecordCount
+        	Messages:   	Should receive exactly 108 events
+    input_cdc_integration_test.go:467: 
+        	Error Trace:	/Users/michal/RP/RPCN/connect-wt-1/internal/impl/aws/dynamodb/input_cdc_integration_test.go:467
+        	            				/Users/michal/RP/RPCN/connect-wt-1/internal/impl/aws/dynamodb/input_cdc_integration_test.go:192
+        	Error:      	Not equal: 
+        	            	expected: 100
+        	            	actual  : 20
+        	Test:       	TestIntegrationDynamoDBStreams/VerifyRecordCount
+        	Messages:   	Should receive 100 INSERT events
+    input_cdc_integration_test.go:469: 
+        	Error Trace:	/Users/michal/RP/RPCN/connect-wt-1/internal/impl/aws/dynamodb/input_cdc_integration_test.go:469
+        	            				/Users/michal/RP/RPCN/connect-wt-1/internal/impl/aws/dynamodb/input_cdc_integration_test.go:192
+        	Error:      	Not equal: 
+        	            	expected: 5
+        	            	actual  : 0
+        	Test:       	TestIntegrationDynamoDBStreams/VerifyRecordCount
+        	Messages:   	Should receive 5 MODIFY events
+    input_cdc_integration_test.go:471: 
+        	Error Trace:	/Users/michal/RP/RPCN/connect-wt-1/internal/impl/aws/dynamodb/input_cdc_integration_test.go:471
+        	            				/Users/michal/RP/RPCN/connect-wt-1/internal/impl/aws/dynamodb/input_cdc_integration_test.go:192
+        	Error:      	Not equal: 
+        	            	expected: 3
+        	            	actual  : 0
+        	Test:       	TestIntegrationDynamoDBStreams/VerifyRecordCount
+        	Messages:   	Should receive 3 REMOVE events
+    input_cdc_integration_test.go:474: Received 20 total events: 20 INSERTs, 0 MODIFYs, 0 REMOVEs
+2026/03/26 11:17:33 🐳 Stopping container: deaea5f9e413
+2026/03/26 11:17:34 ✅ Container stopped: deaea5f9e413
+2026/03/26 11:17:34 🐳 Terminating container: deaea5f9e413
+2026/03/26 11:17:34 🚫 Container terminated: deaea5f9e413
+--- FAIL: TestIntegrationDynamoDBStreams (67.69s)
+    --- PASS: TestIntegrationDynamoDBStreams/ReadInsertEvents (11.07s)
+    --- PASS: TestIntegrationDynamoDBStreams/ReadModifyEvents (11.04s)
+    --- PASS: TestIntegrationDynamoDBStreams/ReadRemoveEvents (11.04s)
+    --- PASS: TestIntegrationDynamoDBStreams/CheckpointResumption (20.07s)
+    --- FAIL: TestIntegrationDynamoDBStreams/VerifyRecordCount (12.20s)
+=== RUN   TestIntegrationDynamoDBSnapshot
+2026/03/26 11:17:34 🐳 Creating container for image amazon/dynamodb-local:latest
+2026/03/26 11:17:34 ✅ Container created: c8b86c091eb2
+2026/03/26 11:17:34 🐳 Starting container: c8b86c091eb2
+2026/03/26 11:17:34 ✅ Container started: c8b86c091eb2
+2026/03/26 11:17:34 ⏳ Waiting for container id c8b86c091eb2 image: amazon/dynamodb-local:latest. Waiting for: all of: [port 8000/tcp to be listening]
+2026/03/26 11:17:35 🔔 Container is ready: c8b86c091eb2
+    input_cdc_integration_test.go:65: Creating table with streams: test-snapshot-table
+=== RUN   TestIntegrationDynamoDBSnapshot/SnapshotOnlyMode
+    input_cdc_integration_test.go:638: Received ErrEndOfInput as expected for snapshot_only mode
+=== RUN   TestIntegrationDynamoDBSnapshot/SnapshotAndCDCMode
+=== RUN   TestIntegrationDynamoDBSnapshot/SnapshotResumeFromCheckpoint
+    input_cdc_integration_test.go:839: Successfully resumed snapshot from checkpoint
+2026/03/26 11:17:57 🐳 Stopping container: c8b86c091eb2
+2026/03/26 11:17:58 ✅ Container stopped: c8b86c091eb2
+2026/03/26 11:17:58 🐳 Terminating container: c8b86c091eb2
+2026/03/26 11:17:58 🚫 Container terminated: c8b86c091eb2
+--- PASS: TestIntegrationDynamoDBSnapshot (24.19s)
+    --- PASS: TestIntegrationDynamoDBSnapshot/SnapshotOnlyMode (0.21s)
+    --- PASS: TestIntegrationDynamoDBSnapshot/SnapshotAndCDCMode (1.17s)
+    --- PASS: TestIntegrationDynamoDBSnapshot/SnapshotResumeFromCheckpoint (20.66s)
+=== RUN   TestIntegrationDynamoDBMultiTable
+2026/03/26 11:17:58 🐳 Creating container for image amazon/dynamodb-local:latest
+2026/03/26 11:17:58 ✅ Container created: 6964a9b23b68
+2026/03/26 11:17:58 🐳 Starting container: 6964a9b23b68
+2026/03/26 11:17:58 ✅ Container started: 6964a9b23b68
+2026/03/26 11:17:58 ⏳ Waiting for container id 6964a9b23b68 image: amazon/dynamodb-local:latest. Waiting for: all of: [port 8000/tcp to be listening]
+2026/03/26 11:17:59 🔔 Container is ready: 6964a9b23b68
+    input_cdc_integration_test.go:65: Creating table with streams: test-multi-table-1
+    input_cdc_integration_test.go:65: Creating table with streams: test-multi-table-2
+    input_cdc_integration_test.go:65: Creating table with streams: test-multi-table-3
+=== RUN   TestIntegrationDynamoDBMultiTable/IncludeListMode

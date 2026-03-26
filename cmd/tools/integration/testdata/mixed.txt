@@ -1,0 +1,14 @@
+<results timestamp="20260326100000" package="./internal/impl/nats">
+=== RUN   TestIntegrationNatsJetStream
+=== RUN   TestIntegrationNatsJetStream/can_produce
+=== RUN   TestIntegrationNatsJetStream/can_consume
+--- PASS: TestIntegrationNatsJetStream/can_produce (0.03s)
+--- FAIL: TestIntegrationNatsJetStream/can_consume (1.50s)
+    nats_test.go:89: timed out waiting for message
+--- FAIL: TestIntegrationNatsJetStream (1.53s)
+=== RUN   TestIntegrationNatsKV
+--- SKIP: TestIntegrationNatsKV (0.00s)
+    nats_kv_test.go:15: requires NATS 2.10+
+FAIL
+FAIL	github.com/redpanda-data/connect/v4/internal/impl/nats	3.456s
+</results>

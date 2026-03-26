@@ -1,0 +1,7 @@
+<results timestamp="20260326100000" package="./internal/impl/splunk">
+=== RUN   TestIntegrationSplunk
+--- SKIP: TestIntegrationSplunk (0.00s)
+	integration_test.go:33: CON-376: Splunk image is x86-only, skipping on arm64
+PASS
+ok  	github.com/redpanda-data/connect/v4/internal/impl/splunk	0.456s
+</results>

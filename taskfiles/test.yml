@@ -29,6 +29,13 @@ tasks:
     cmds:
       - go test {{.GO_FLAGS}} -run "^Test.*Integration" -timeout {{.TIMEOUT}} {{if .CI}}{{else}}-v{{end}} {{.PKG}}
 
+  integration:
+    desc: Run all integration tests package by package (like CI)
+    aliases:
+      - it-all
+    cmds:
+      - go run ./cmd/tools/integration run {{.CLI_ARGS}}
+
   template:
     desc: Run template tests
     aliases:

@@ -1,0 +1,5 @@
+<results timestamp="20260326100000" package="./internal/impl/kafka">
+=== RUN   TestIntegrationKafka
+=== RUN   TestIntegrationKafka/can_produce
+--- PASS: TestIntegrationKafka/can_produce (0.50s)
+=== RUN   TestIntegrationKafka/can_consume
