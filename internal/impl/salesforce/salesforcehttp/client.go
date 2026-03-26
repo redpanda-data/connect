@@ -1076,7 +1076,9 @@ func buildSOQL(objectName string, fields []string) string {
 
 // APIVersion returns the configured Salesforce REST API version string (e.g., "v65.0").
 func (s *Client) APIVersion() string { return s.apiVersion }
-func (s *Client) OrgURL() string     { return s.orgURL }
+
+// OrgURL returns the base URL of the Salesforce org.
+func (s *Client) OrgURL() string { return s.orgURL }
 
 // PostJSON sends an authenticated POST request with a JSON body to the given relative path.
 func (s *Client) PostJSON(ctx context.Context, path string, body []byte) ([]byte, error) {

@@ -68,7 +68,6 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 		t.inflight.Set(atomic.AddInt64(&t.inflightVal, -1))
 	}()
 
-
 	t.total.Incr(1)
 
 	resp, err := t.base.RoundTrip(req)

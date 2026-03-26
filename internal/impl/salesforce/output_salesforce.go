@@ -41,7 +41,7 @@ const (
 	sinkModeRealtime = "realtime"
 	sinkModeBulk     = "bulk"
 
-	realtimeMaxChunkSize = 200 // Salesforce sObject Collections API limit
+	realtimeMaxChunkSize = 200  // Salesforce sObject Collections API limit
 	defaultMaxBulkJobs   = 10   // max concurrent in-flight bulk jobs
 	defaultBulkBatchSize = 1000 // records per bulk job
 )
@@ -56,6 +56,7 @@ const (
 	sfsFieldBulkBatchSize         = "bulk_batch_size"
 	sfsFieldMaxConcurrentBulkJobs = "max_concurrent_bulk_jobs"
 	sfsFieldBulkPollInterval      = "bulk_poll_interval"
+	sfsFieldBatchPeriod           = "batch_period"
 	sfsFieldMaxInFlight           = "max_in_flight"
 	sfsFieldTopicMappings         = "topic_mappings"
 	sfsTMFieldTopic               = "topic"
@@ -99,9 +100,9 @@ type salesforceSinkOutput struct {
 	bulkJobs         []*inFlightBulkJob
 	bulkSem          chan struct{} // capacity = max_concurrent_bulk_jobs; held while a job is in flight
 	bulkPollInterval time.Duration
-	shutdownCtx    context.Context //nolint:containedctx // lifecycle context for background bulk-poll goroutines
-	shutdownCancel context.CancelFunc
-	closeOnce      sync.Once
+	shutdownCtx      context.Context //nolint:containedctx // lifecycle context for background bulk-poll goroutines
+	shutdownCancel   context.CancelFunc
+	closeOnce        sync.Once
 }
 
 func init() {
@@ -109,6 +110,10 @@ func init() {
 		"salesforce_sink", newSalesforceSinkConfigSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchOutput, service.BatchPolicy, int, error) {
 			batchSize, err := conf.FieldInt(sfsFieldBulkBatchSize)
+			if err != nil {
+				return nil, service.BatchPolicy{}, 0, err
+			}
+			batchPeriod, err := conf.FieldDuration(sfsFieldBatchPeriod)
 			if err != nil {
 				return nil, service.BatchPolicy{}, 0, err
 			}
@@ -120,7 +125,7 @@ func init() {
 			if err != nil {
 				return nil, service.BatchPolicy{}, 0, err
 			}
-			return out, service.BatchPolicy{Count: batchSize, Period: "5s"}, maxInFlight, nil
+			return out, service.BatchPolicy{Count: batchSize, Period: batchPeriod.String()}, maxInFlight, nil
 		},
 	)
 }
@@ -218,6 +223,9 @@ output:
 			Default(defaultMaxBulkJobs)).
 		Field(service.NewDurationField(sfsFieldBulkPollInterval).
 			Description("How often to poll Salesforce for bulk job completion status.").
+			Default("5s")).
+		Field(service.NewDurationField(sfsFieldBatchPeriod).
+			Description("Maximum period to wait before flushing an incomplete batch.").
 			Default("5s")).
 		Field(service.NewIntField(sfsFieldMaxInFlight).
 			Description("Maximum number of batches to send concurrently. Increasing this improves realtime write throughput.").
@@ -344,15 +352,15 @@ func newSalesforceSinkOutput(conf *service.ParsedConfig, mgr *service.Resources)
 
 	shutdownCtx, shutdownCancel := context.WithCancel(context.Background())
 	out := &salesforceSinkOutput{
-		log:            mgr.Logger(),
-		client:         sfClient,
-		topicMappings:  topicMappings,
-		writableFields: make(map[string]map[string]struct{}),
-		blockedFields:  make(map[string]map[string]struct{}),
+		log:              mgr.Logger(),
+		client:           sfClient,
+		topicMappings:    topicMappings,
+		writableFields:   make(map[string]map[string]struct{}),
+		blockedFields:    make(map[string]map[string]struct{}),
 		bulkSem:          make(chan struct{}, maxConcurrentBulkJobs),
 		bulkPollInterval: bulkPollInterval,
-		shutdownCtx:    shutdownCtx,
-		shutdownCancel: shutdownCancel,
+		shutdownCtx:      shutdownCtx,
+		shutdownCancel:   shutdownCancel,
 	}
 	for topic, m := range topicMappings {
 		out.log.Infof("salesforce_sink: topic=%s → sobject=%s operation=%s mode=%s", topic, m.sobject, m.operation, m.mode)

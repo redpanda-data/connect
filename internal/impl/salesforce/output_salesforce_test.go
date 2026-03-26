@@ -500,11 +500,9 @@ func TestWriteBulk_TOCTOUCapacityCheck(t *testing.T) {
 
 	var wg sync.WaitGroup
 	for range concurrentCalls {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			_ = out.writeBulk(context.Background(), records, mapping)
-		}()
+		})
 	}
 	wg.Wait()
 
