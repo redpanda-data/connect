@@ -15,6 +15,7 @@
 package hdfs
 
 import (
+	"runtime"
 	"testing"
 	"time"
 
@@ -31,6 +32,9 @@ import (
 
 func TestIntegrationHDFS(t *testing.T) {
 	integration.CheckSkip(t)
+	if runtime.GOOS == "darwin" {
+		t.Skip("CON-377: HDFS datanode networking incompatible with Docker on macOS")
+	}
 
 	// Not parallel: HDFS requires fixed port bindings because the namenode
 	// reports localhost as the datanode address, and the client connects
