@@ -691,7 +691,12 @@ func (s *Client) GetNextBatchParallel(ctx context.Context, cursor Cursor, parall
 			var err error
 
 			if slot.NextURL != "" {
-				raw, _ = s.fetchNextRecordsPage(ctx, slot.NextURL)
+				raw, err = s.fetchNextRecordsPage(ctx, slot.NextURL)
+				if err != nil {
+					s.log.Errorf("fetch next page for SObject %s: %v", slot.SObjectName, err)
+					results[i] = slotResult{slotIdx: i} // keep slot, retry next trigger
+					return
+				}
 			} else {
 				if slot.SObjectIndex >= len(sobjectList) {
 					s.log.Warnf("Slot index %d out of range (list has %d items), skipping %s", slot.SObjectIndex, len(sobjectList), slot.SObjectName)
