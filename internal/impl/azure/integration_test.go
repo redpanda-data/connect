@@ -159,6 +159,12 @@ input:
 		dummyContainer := u4.String()
 		dummyFile := "ginnungagap.txt"
 
+		// Pre-create the container so it exists before stream tests and verification.
+		client, err := azblob.NewClientFromConnectionString(connString, nil)
+		require.NoError(t, err)
+		_, err = client.CreateContainer(t.Context(), dummyContainer, nil)
+		require.NoError(t, err)
+
 		// This is a bit gross, but by pushing `integration.StreamTests()` into a subtest we force them to run before
 		// asserting the that the container is empty below. This is necessary because `integration.StreamTests()` calls
 		// `t.Parallel()`.
@@ -173,9 +179,6 @@ input:
 				integration.StreamTestOptVarSet("VAR4", dummyFile),
 			)
 		})
-
-		client, err := azblob.NewClientFromConnectionString(connString, nil)
-		require.NoError(t, err)
 
 		ctx, done := context.WithTimeout(t.Context(), 1*time.Second)
 		defer done()
@@ -269,6 +272,9 @@ func TestIntegrationCosmosDB(t *testing.T) {
 			// The bigger the value, the longer it takes for the container to start up.
 			"AZURE_COSMOS_EMULATOR_PARTITION_COUNT":         "4",
 			"AZURE_COSMOS_EMULATOR_ENABLE_DATA_PERSISTENCE": "false",
+			// Override the emulator's advertised IP so the SDK doesn't try to connect to
+			// the container's internal Docker bridge IP (e.g. 172.17.0.x).
+			"AZURE_COSMOS_EMULATOR_IP_ADDRESS_OVERRIDE": "127.0.0.1",
 		}),
 		testcontainers.WithWaitStrategy(
 			wait.ForListeningPort("8081/tcp").WithStartupTimeout(cosmosStartupTimeout),
@@ -277,17 +283,22 @@ func TestIntegrationCosmosDB(t *testing.T) {
 	testcontainers.CleanupContainer(t, cosmosCtr)
 	require.NoError(t, err)
 
+	cosmosHost, err := cosmosCtr.Host(t.Context())
+	require.NoError(t, err)
 	cosmosPortM, err := cosmosCtr.MappedPort(t.Context(), "8081/tcp")
 	require.NoError(t, err)
 	cosmosPort := cosmosPortM.Port()
 
 	// Start a HTTP -> HTTPS proxy server on a background goroutine to work around the self-signed certificate that the
 	// CosmosDB container provides, because unfortunately, it doesn't expose a plain HTTP endpoint.
+	// The proxy must listen on port 8081 because the CosmosDB SDK discovers the emulator's endpoint from
+	// service responses. With AZURE_COSMOS_EMULATOR_IP_ADDRESS_OVERRIDE=127.0.0.1, the emulator advertises
+	// 127.0.0.1:8081, so the proxy must be on that port for subsequent SDK requests to be routed through it.
 	// This listener will be owned and closed automatically by the HTTP server
-	listener, err := net.Listen("tcp", ":0")
+	listener, err := net.Listen("tcp", ":8081")
 	require.NoError(t, err)
 	srv := &http.Server{Handler: http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
-		url, err := url.Parse("https://127.0.0.1:" + cosmosPort)
+		url, err := url.Parse("https://" + cosmosHost + ":" + cosmosPort)
 		require.NoError(t, err)
 
 		customTransport := http.DefaultTransport.(*http.Transport).Clone()
