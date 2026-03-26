@@ -471,10 +471,14 @@ func (s *salesforceSinkOutput) getWritableFields(ctx context.Context, sobject st
 	}
 
 	s.writableFieldsMu.Lock()
+	if existing, ok := s.writableFields[sobject]; ok {
+		s.writableFieldsMu.Unlock()
+		return copyStringSet(existing), nil
+	}
 	s.writableFields[sobject] = fields
 	s.writableFieldsMu.Unlock()
 
-	s.log.Infof("salesforce_sink: %s has %d updateable fields", sobject, len(fields))
+	s.log.Debugf("salesforce_sink: %s has %d updateable fields", sobject, len(fields))
 	return copyStringSet(fields), nil
 }
 
