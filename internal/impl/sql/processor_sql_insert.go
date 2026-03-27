@@ -215,7 +215,7 @@ func NewSQLInsertProcessorFromConfig(conf *service.ParsedConfig, mgr *service.Re
 	// For ClickHouse, replace the default no-op argsConverter with one that
 	// normalizes map/slice arguments to the concrete Go types the driver expects.
 	if driverStr == "clickhouse" {
-		if s.argsConverter, err = newClickhouseArgsConverter(context.Background(), s.db, s.table, s.columns); err != nil {
+		if s.argsConverter, err = newClickhouseArgsConverter(context.Background(), s.db, s.table, s.columns, s.logger); err != nil {
 			_ = s.db.Close()
 			return nil, err
 		}

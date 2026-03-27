@@ -15,17 +15,17 @@
 package sql
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
 	"reflect"
-	"regexp"
 	"slices"
 	"strings"
 
 	"github.com/pgvector/pgvector-go"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 func sqlRowsToArray(rows *sql.Rows) ([]any, error) {
@@ -136,7 +136,7 @@ func bloblValuesToPgSQLValues(v []any) []any {
 //
 // At connect time we introspect the column scan types once, then use them on
 // every batch to normalize only the arguments that need it.
-func newClickhouseArgsConverter(ctx context.Context, db *sql.DB, table string, columns []string) (argsConverter, error) {
+func newClickhouseArgsConverter(ctx context.Context, db *sql.DB, table string, columns []string, logger *service.Logger) (argsConverter, error) {
 	scanTypes, err := clickhouseColumnScanTypes(ctx, db, table, columns)
 	if err != nil {
 		return nil, err
@@ -150,6 +150,8 @@ func newClickhouseArgsConverter(ctx context.Context, db *sql.DB, table string, c
 			}
 			if normalized, ok := normalizeClickhouseValueToType(e, scanTypes[i]); ok {
 				o[i] = normalized
+			} else if scanTypes[i] != nil && clickhouseNeedsContainerNormalization(scanTypes[i]) {
+				logger.Warnf("ClickHouse: failed to normalize column %q (value type %T, target %v); passing original value to driver", columns[i], e, scanTypes[i])
 			}
 		}
 		return o
@@ -225,9 +227,7 @@ func normalizeClickhouseValueToType(v any, target reflect.Type) (any, bool) {
 	}
 
 	normalized := reflect.New(target)
-	dec := json.NewDecoder(bytes.NewReader(raw))
-	dec.UseNumber()
-	if err := dec.Decode(normalized.Interface()); err != nil {
+	if err := json.Unmarshal(raw, normalized.Interface()); err != nil {
 		return nil, false
 	}
 	return normalized.Elem().Interface(), true
@@ -245,25 +245,3 @@ func clickhouseNeedsContainerNormalization(target reflect.Type) bool {
 	}
 }
 
-var insertRegexp = regexp.MustCompile(`(?i)^\s*INSERT\s+INTO\s+(\S+)\s*\(([^)]+)\)`)
-
-// parseInsertTableColumns extracts the table name and column list from a
-// simple INSERT INTO table (col1, col2, ...) statement. This is used by
-// sql_raw to discover table/columns for ClickHouse Map type normalization,
-// since sql_raw doesn't have explicit table/columns config fields.
-// Returns ok=false if the query doesn't match the expected INSERT pattern.
-func parseInsertTableColumns(query string) (table string, columns []string, ok bool) {
-	m := insertRegexp.FindStringSubmatch(query)
-	if m == nil {
-		return "", nil, false
-	}
-	table = strings.Trim(m[1], "`\"")
-	for _, col := range strings.Split(m[2], ",") {
-		col = strings.TrimSpace(col)
-		col = strings.Trim(col, "`\"")
-		if col != "" {
-			columns = append(columns, col)
-		}
-	}
-	return table, columns, len(columns) > 0
-}

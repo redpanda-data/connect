@@ -238,7 +238,7 @@ func (s *sqlInsertOutput) Connect(ctx context.Context) error {
 	// This must happen at connect time because we need a live DB connection to
 	// introspect column types.
 	if s.driver == "clickhouse" {
-		if s.argsConverter, err = newClickhouseArgsConverter(ctx, s.db, s.table, s.columns); err != nil {
+		if s.argsConverter, err = newClickhouseArgsConverter(ctx, s.db, s.table, s.columns, s.logger); err != nil {
 			_ = s.db.Close()
 			s.db = nil
 			return err
