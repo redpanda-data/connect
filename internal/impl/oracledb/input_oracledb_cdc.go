@@ -262,6 +262,11 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 		return nil, err
 	}
 
+	connectionString, err = buildConnectionString(connectionString, nil)
+	if err != nil {
+		return nil, fmt.Errorf("building connection string: %w", err)
+	}
+
 	logger := resources.Logger()
 
 	o := oracleDBCDCInput{
@@ -315,6 +320,7 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (err error) {
 		_ = o.db.Close()
 		o.db = nil
 	}
+
 	if o.db, err = sql.Open("oracle", o.cfg.ConnectionString); err != nil {
 		return fmt.Errorf("connecting to oracle database: %w", err)
 	}
@@ -323,6 +329,10 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (err error) {
 			_ = o.db.Close()
 		}
 	}()
+
+	if err = o.db.PingContext(ctx); err != nil {
+		return fmt.Errorf("validating connection to oracle database: %w", err)
+	}
 
 	// no cache specified so use default, internal oracle based cache
 	if o.cfg.SCNCache == "" && o.cpCache == nil {
