@@ -129,7 +129,6 @@ func TestBenchmarkInsert10MRows(t *testing.T) {
 	)
 	for range numWorkers {
 		wg.Go(func() {
-
 			for {
 				if cur := atomic.LoadInt64(&rowsInserted); cur >= targetRows {
 					return
