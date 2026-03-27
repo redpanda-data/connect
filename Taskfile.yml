@@ -34,7 +34,9 @@ tasks:
     desc: Format code and tidy modules
     deps:
       - tools:install-golangci-lint
+      - tools:install-yamlfmt
     cmds:
+      - '{{.TOOLS_BIN_DIR}}/yamlfmt'
       - '{{.TOOLS_BIN_DIR}}/golangci-lint fmt cmd/... internal/... public/...'
       - go mod tidy
 
