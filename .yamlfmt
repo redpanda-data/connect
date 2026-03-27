@@ -1,0 +1,10 @@
+formatter:
+  type: basic
+  basic_formatter_config:
+    indent: 2
+    include_document_start: false
+    retain_line_breaks_single: true
+exclude:
+  - cmd/**
+  - internal/**
+  - public/**
