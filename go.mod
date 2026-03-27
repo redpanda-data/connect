@@ -19,10 +19,10 @@ ignore (
 require (
 	buf.build/gen/go/bufbuild/reflect/connectrpc/go v1.19.1-20240117202343-bf8f65e8876c.2
 	buf.build/gen/go/bufbuild/reflect/protocolbuffers/go v1.36.11-20240117202343-bf8f65e8876c.1
-	buf.build/gen/go/redpandadata/common/connectrpc/go v1.19.1-20260316210807-5d899910f714.2
-	buf.build/gen/go/redpandadata/common/protocolbuffers/go v1.36.11-20260316210807-5d899910f714.1
-	buf.build/gen/go/redpandadata/otel/protocolbuffers/go v1.36.11-20260316210807-e2cbc78abc9a.1
-	cloud.google.com/go/aiplatform v1.120.0
+	buf.build/gen/go/redpandadata/common/connectrpc/go v1.19.1-20260323171043-6e06f84ad823.2
+	buf.build/gen/go/redpandadata/common/protocolbuffers/go v1.36.11-20260323171043-6e06f84ad823.1
+	buf.build/gen/go/redpandadata/otel/protocolbuffers/go v1.36.11-20260323171043-3635d3966b23.1
+	cloud.google.com/go/aiplatform v1.121.0
 	cloud.google.com/go/bigquery v1.74.0
 	cloud.google.com/go/pubsub v1.50.1
 	cloud.google.com/go/spanner v1.88.0
@@ -46,28 +46,28 @@ require (
 	github.com/Masterminds/squirrel v1.5.4
 	github.com/PaesslerAG/gval v1.2.4
 	github.com/PaesslerAG/jsonpath v0.1.1
-	github.com/a2aproject/a2a-go v0.3.10
+	github.com/a2aproject/a2a-go v0.3.12
 	github.com/apache/iceberg-go v0.5.1-0.20260325145251-b168e015f814
 	github.com/apache/pulsar-client-go v0.18.0
 	github.com/auth0/go-jwt-middleware/v2 v2.3.1
 	github.com/authzed/authzed-go v1.8.0
 	github.com/authzed/grpcutil v0.0.0-20260105210157-e237581949c2
-	github.com/aws/aws-lambda-go v1.53.0
+	github.com/aws/aws-lambda-go v1.54.0
 	github.com/aws/aws-sdk-go-v2 v1.41.4
 	github.com/aws/aws-sdk-go-v2/config v1.32.12
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.12
-	github.com/aws/aws-sdk-go-v2/feature/dynamodb/expression v1.8.35
-	github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager v0.1.10
+	github.com/aws/aws-sdk-go-v2/feature/dynamodb/expression v1.8.36
+	github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager v0.1.11
 	github.com/aws/aws-sdk-go-v2/service/athena v1.57.3
-	github.com/aws/aws-sdk-go-v2/service/bedrockruntime v1.50.2
+	github.com/aws/aws-sdk-go-v2/service/bedrockruntime v1.50.3
 	github.com/aws/aws-sdk-go-v2/service/cloudwatch v1.55.2
-	github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs v1.64.1
-	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.56.2
+	github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs v1.64.2
+	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.57.0
 	github.com/aws/aws-sdk-go-v2/service/firehose v1.42.12
 	github.com/aws/aws-sdk-go-v2/service/glue v1.139.0
-	github.com/aws/aws-sdk-go-v2/service/kinesis v1.43.3
-	github.com/aws/aws-sdk-go-v2/service/lambda v1.88.3
-	github.com/aws/aws-sdk-go-v2/service/s3 v1.97.1
+	github.com/aws/aws-sdk-go-v2/service/kinesis v1.43.4
+	github.com/aws/aws-sdk-go-v2/service/lambda v1.88.4
+	github.com/aws/aws-sdk-go-v2/service/s3 v1.97.2
 	github.com/aws/aws-sdk-go-v2/service/sns v1.39.14
 	github.com/aws/aws-sdk-go-v2/service/sqs v1.42.24
 	github.com/aws/aws-sdk-go-v2/service/sts v1.41.9
@@ -81,7 +81,7 @@ require (
 	github.com/cenkalti/backoff/v4 v4.3.0
 	github.com/clbanning/mxj/v2 v2.7.0
 	github.com/colinmarc/hdfs v1.1.3
-	github.com/couchbase/gocb/v2 v2.12.0
+	github.com/couchbase/gocb/v2 v2.12.1
 	github.com/cyborginc/cyborgdb-go v0.15.0
 	github.com/databricks/databricks-sql-go v1.10.0
 	github.com/dgraph-io/ristretto/v2 v2.4.0
@@ -94,7 +94,7 @@ require (
 	github.com/elastic/go-elasticsearch/v8 v8.19.3
 	github.com/elastic/go-elasticsearch/v9 v9.3.1
 	github.com/generikvault/gvalstrings v0.0.0-20180926130504-471f38f0112a
-	github.com/getsentry/sentry-go v0.43.0
+	github.com/getsentry/sentry-go v0.44.1
 	github.com/go-faker/faker/v4 v4.7.0
 	github.com/go-git/go-git/v5 v5.17.0
 	github.com/go-jose/go-jose/v4 v4.1.3
@@ -110,7 +110,7 @@ require (
 	github.com/gosimple/slug v1.15.0
 	github.com/hamba/avro/v2 v2.31.0
 	github.com/influxdata/influxdb1-client v0.0.0-20220302092344-a9ab5670611c
-	github.com/jackc/pgx/v5 v5.8.0
+	github.com/jackc/pgx/v5 v5.9.1
 	github.com/jhump/protoreflect v1.18.0
 	github.com/lib/pq v1.12.0
 	github.com/linkedin/goavro/v2 v2.15.0
@@ -119,7 +119,7 @@ require (
 	github.com/microsoft/go-mssqldb v1.9.8
 	github.com/microsoft/gocosmos v1.1.1
 	github.com/modelcontextprotocol/go-sdk v1.4.1
-	github.com/nats-io/nats.go v1.49.0
+	github.com/nats-io/nats.go v1.50.0
 	github.com/nats-io/nkeys v0.4.15
 	github.com/nats-io/stan.go v0.10.4
 	github.com/neo4j/neo4j-go-driver/v5 v5.28.4
@@ -150,11 +150,11 @@ require (
 	github.com/redpanda-data/common-go/license v0.0.0-20260318014216-2bbd72bde0a0
 	github.com/redpanda-data/common-go/redpanda-otel-exporter v0.4.0
 	github.com/redpanda-data/common-go/secrets v0.1.15
-	github.com/redpanda-data/connect/public/bundle/free/v4 v4.83.0
+	github.com/redpanda-data/connect/public/bundle/free/v4 v4.84.0
 	github.com/rs/xid v1.6.0
 	github.com/sashabaranov/go-openai v1.41.2
 	github.com/sijms/go-ora/v2 v2.9.0
-	github.com/slack-go/slack v0.19.0
+	github.com/slack-go/slack v0.20.0
 	github.com/smira/go-statsd v1.3.4
 	github.com/snowflakedb/gosnowflake v1.19.0
 	github.com/sourcegraph/conc v0.3.0
@@ -163,7 +163,7 @@ require (
 	github.com/testcontainers/testcontainers-go/modules/qdrant v0.41.0
 	github.com/testcontainers/testcontainers-go/modules/redpanda v0.41.0
 	github.com/tetratelabs/wazero v1.11.0
-	github.com/tigerbeetle/tigerbeetle-go v0.16.77
+	github.com/tigerbeetle/tigerbeetle-go v0.16.78
 	github.com/timeplus-io/proton-go-driver/v2 v2.1.4
 	github.com/tmc/langchaingo v0.1.14
 	github.com/trinodb/trino-go-client v0.333.0
@@ -347,7 +347,7 @@ require (
 
 require (
 	cloud.google.com/go v0.123.0 // indirect
-	cloud.google.com/go/auth v0.18.2
+	cloud.google.com/go/auth v0.19.0
 	cloud.google.com/go/auth/oauth2adapt v0.2.8 // indirect
 	cloud.google.com/go/compute/metadata v0.9.0 // indirect
 	cloud.google.com/go/iam v1.5.3 // indirect
@@ -376,8 +376,8 @@ require (
 	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
 	github.com/ardielle/ardielle-go v1.5.2 // indirect
 	github.com/armon/go-metrics v0.3.10 // indirect
-	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.7 // indirect
-	github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue v1.20.35 // indirect
+	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.8 // indirect
+	github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue v1.20.36 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.18.20 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/rds/auth v1.6.20
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.20 // indirect
@@ -408,7 +408,7 @@ require (
 	github.com/cohere-ai/cohere-go/v2 v2.16.2
 	github.com/containerd/continuity v0.4.5 // indirect
 	github.com/containerd/log v0.1.0 // indirect
-	github.com/couchbase/gocbcore/v10 v10.9.0 // indirect
+	github.com/couchbase/gocbcore/v10 v10.9.1 // indirect
 	github.com/couchbase/gocbcoreps v0.1.5-0.20260107140814-1c3a03f888f8 // indirect
 	github.com/couchbase/goprotostellar v1.0.5 // indirect
 	github.com/couchbaselabs/gocbconnstr/v2 v2.0.0 // indirect
@@ -426,7 +426,7 @@ require (
 	github.com/dvsekhvalnov/jose2go v1.8.0 // indirect
 	github.com/eapache/go-resiliency v1.7.0 // indirect
 	github.com/eapache/queue v1.1.0 // indirect
-	github.com/fatih/color v1.18.0
+	github.com/fatih/color v1.19.0
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.13 // indirect
@@ -526,7 +526,7 @@ require (
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
 	github.com/stretchr/objx v0.5.3 // indirect
 	github.com/testcontainers/testcontainers-go v0.41.0
-	github.com/testcontainers/testcontainers-go/modules/mongodb v0.39.0
+	github.com/testcontainers/testcontainers-go/modules/mongodb v0.41.0
 	github.com/tilinna/z85 v1.0.0 // indirect
 	github.com/tklauser/go-sysconf v0.3.16 // indirect
 	github.com/tklauser/numcpus v0.11.0 // indirect
