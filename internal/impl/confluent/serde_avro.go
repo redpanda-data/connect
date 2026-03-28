@@ -19,7 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/linkedin/goavro/v2"
+	"github.com/twmb/avro"
 	franz_sr "github.com/twmb/franz-go/pkg/sr"
 
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
@@ -28,7 +28,7 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/impl/confluent/sr"
 )
 
-func resolveGoAvroReferences(ctx context.Context, client *sr.Client, mapping *bloblang.Executor, schema franz_sr.Schema) (string, error) {
+func resolveAvroReferences(ctx context.Context, client *sr.Client, mapping *bloblang.Executor, schema franz_sr.Schema) (string, error) {
 	mapSchema := func(s franz_sr.Schema) (string, error) {
 		if mapping == nil {
 			return s.Schema, nil
@@ -84,40 +84,27 @@ func resolveGoAvroReferences(ctx context.Context, client *sr.Client, mapping *bl
 }
 
 func (s *schemaRegistryEncoder) getAvroEncoder(ctx context.Context, schemaRef franz_sr.Schema) (schemaEncoder, error) {
-	schemaSpec, err := resolveGoAvroReferences(ctx, s.client, nil, schemaRef)
+	schemaSpec, err := resolveAvroReferences(ctx, s.client, nil, schemaRef)
 	if err != nil {
 		return nil, err
 	}
 	return s.newAvroEncoder(schemaSpec)
 }
 
-func (s *schemaRegistryEncoder) newAvroEncoder(avroJSON string) (schemaEncoder, error) {
-	var codec *goavro.Codec
-	var err error
-	if s.avroRawJSON {
-		codec, err = goavro.NewCodecForStandardJSONFull(avroJSON)
-	} else {
-		codec, err = goavro.NewCodec(avroJSON)
-	}
+func (*schemaRegistryEncoder) newAvroEncoder(avroJSON string) (schemaEncoder, error) {
+	schema, err := avro.Parse(avroJSON)
 	if err != nil {
-		return nil, fmt.Errorf("creating Avro codec: %w", err)
+		return nil, fmt.Errorf("parsing Avro schema: %w", err)
 	}
 
-	var parsedSchema any
-	if err := json.Unmarshal([]byte(avroJSON), &parsedSchema); err != nil {
-		return nil, fmt.Errorf("parsing Avro schema JSON: %w", err)
-	}
-
+	// Encode accepts both bare values (standard JSON) and tagged union
+	// maps (Avro JSON), so both avroRawJSON modes use the same path.
 	return func(m *service.Message) error {
 		data, err := m.AsStructuredMut()
 		if err != nil {
 			return fmt.Errorf("extracting structured data: %w", err)
 		}
-		normalized, err := normalizeForAvroSchema(data, parsedSchema, s.avroRawJSON)
-		if err != nil {
-			return fmt.Errorf("normalizing data for Avro: %w", err)
-		}
-		binary, err := codec.BinaryFromNative(nil, normalized)
+		binary, err := schema.Encode(data)
 		if err != nil {
 			return err
 		}
@@ -126,18 +113,24 @@ func (s *schemaRegistryEncoder) newAvroEncoder(avroJSON string) (schemaEncoder, 
 	}, nil
 }
 
-func (s *schemaRegistryDecoder) getGoAvroDecoder(ctx context.Context, aschema franz_sr.Schema) (schemaDecoder, error) {
-	schemaSpec, err := resolveGoAvroReferences(ctx, s.client, s.cfg.avro.mapping, aschema)
+func (s *schemaRegistryDecoder) getAvroDecoder(ctx context.Context, aschema franz_sr.Schema) (schemaDecoder, error) {
+	schemaSpec, err := resolveAvroReferences(ctx, s.client, s.cfg.avro.mapping, aschema)
 	if err != nil {
 		return nil, err
 	}
 
-	var codec *goavro.Codec
-	if s.cfg.avro.rawUnions {
-		codec, err = goavro.NewCodecForStandardJSONFull(schemaSpec)
-	} else {
-		codec, err = goavro.NewCodec(schemaSpec)
+	// Build parse options for preserve_logical_types: register custom
+	// types that convert time.Duration→time.Time for time-of-day fields,
+	// avro.Duration→string, and optionally Kafka Connect types.
+	var parseOpts []avro.SchemaOpt
+	if s.cfg.avro.preserveLogicalTypes {
+		parseOpts = append(parseOpts, preserveLogicalTypeOpts()...)
+		if s.cfg.avro.translateKafkaConnectTypes {
+			parseOpts = append(parseOpts, kafkaConnectTypeOpt())
+		}
 	}
+
+	schema, err := avro.Parse(schemaSpec, parseOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -151,22 +144,39 @@ func (s *schemaRegistryDecoder) getGoAvroDecoder(ctx context.Context, aschema fr
 		}
 	}
 
+	// Build decode options for union wrapping. Only needed for
+	// preserve_logical_types with non-raw unions (SetStructuredMut path).
+	// The EncodeJSON path handles its own union wrapping.
+	var decodeOpts []avro.Opt
+	if s.cfg.avro.preserveLogicalTypes && !s.cfg.avro.rawUnions {
+		decodeOpts = append(decodeOpts, avro.TaggedUnions(), avro.TagLogicalTypes())
+	}
+
 	decoder := func(m *service.Message) error {
 		b, err := m.AsBytes()
 		if err != nil {
 			return err
 		}
 
-		native, _, err := codec.NativeFromBinary(b)
-		if err != nil {
+		var native any
+		if _, err := schema.Decode(b, &native, decodeOpts...); err != nil {
 			return err
 		}
 
-		jb, err := codec.TextualFromNative(nil, native)
-		if err != nil {
-			return err
+		if s.cfg.avro.preserveLogicalTypes {
+			m.SetStructuredMut(native)
+		} else {
+			var jb []byte
+			if s.cfg.avro.rawUnions {
+				jb, err = schema.EncodeJSON(native, avro.LinkedinFloats())
+			} else {
+				jb, err = schema.EncodeJSON(native, avro.TaggedUnions(), avro.TagLogicalTypes(), avro.LinkedinFloats())
+			}
+			if err != nil {
+				return err
+			}
+			m.SetBytes(jb)
 		}
-		m.SetBytes(jb)
 
 		if commonSchema != nil {
 			m.MetaSetImmut(s.cfg.avro.storeSchemaMeta, service.ImmutableAny{V: commonSchema})

@@ -22,7 +22,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/linkedin/goavro/v2"
+	"github.com/twmb/avro"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
@@ -65,19 +65,22 @@ func init() {
 
 type avroOperator func(part *service.Message) error
 
-func newAvroToJSONOperator(encoding string, codec *goavro.Codec) (avroOperator, error) {
+func newAvroToJSONOperator(encoding string, schema *avro.Schema) (avroOperator, error) {
+	decodeOpts := []avro.Opt{avro.TaggedUnions(), avro.TagLogicalTypes()}
 	switch encoding {
 	case "textual":
+		// Input is Avro JSON bytes. Decode validates against the schema
+		// and produces structured data with tagged unions.
 		return func(part *service.Message) error {
 			pBytes, err := part.AsBytes()
 			if err != nil {
 				return err
 			}
-			jObj, _, err := codec.NativeFromTextual(pBytes)
-			if err != nil {
+			var native any
+			if err := schema.DecodeJSON(pBytes, &native, decodeOpts...); err != nil {
 				return fmt.Errorf("converting Avro document to JSON: %v", err)
 			}
-			part.SetStructuredMut(jObj)
+			part.SetStructuredMut(native)
 			return nil
 		}, nil
 	case "binary":
@@ -86,11 +89,11 @@ func newAvroToJSONOperator(encoding string, codec *goavro.Codec) (avroOperator, 
 			if err != nil {
 				return err
 			}
-			jObj, _, err := codec.NativeFromBinary(pBytes)
-			if err != nil {
+			var native any
+			if _, err := schema.Decode(pBytes, &native, decodeOpts...); err != nil {
 				return fmt.Errorf("converting Avro document to JSON: %v", err)
 			}
-			part.SetStructuredMut(jObj)
+			part.SetStructuredMut(native)
 			return nil
 		}, nil
 	case "single":
@@ -99,40 +102,42 @@ func newAvroToJSONOperator(encoding string, codec *goavro.Codec) (avroOperator, 
 			if err != nil {
 				return err
 			}
-			jObj, _, err := codec.NativeFromSingle(pBytes)
-			if err != nil {
+			var native any
+			if _, err := schema.DecodeSingleObject(pBytes, &native, decodeOpts...); err != nil {
 				return fmt.Errorf("converting Avro document to JSON: %v", err)
 			}
-			part.SetStructuredMut(jObj)
+			part.SetStructuredMut(native)
 			return nil
 		}, nil
 	}
 	return nil, fmt.Errorf("encoding '%v' not recognised", encoding)
 }
 
-func newAvroFromJSONOperator(encoding string, codec *goavro.Codec) (avroOperator, error) {
+func newAvroFromJSONOperator(encoding string, schema *avro.Schema) (avroOperator, error) {
 	switch encoding {
 	case "textual":
 		return func(part *service.Message) error {
-			jObj, err := part.AsStructured()
+			data, err := part.AsStructured()
 			if err != nil {
 				return fmt.Errorf("parsing message as JSON: %v", err)
 			}
-			var textual []byte
-			if textual, err = codec.TextualFromNative(nil, jObj); err != nil {
+			textual, err := schema.EncodeJSON(data, avro.TaggedUnions(), avro.TagLogicalTypes(), avro.LinkedinFloats())
+			if err != nil {
 				return fmt.Errorf("converting JSON to Avro schema: %v", err)
 			}
 			part.SetBytes(textual)
 			return nil
 		}, nil
 	case "binary":
+		// Encode accepts both bare and tagged union maps, so
+		// structured data from JSON input encodes directly.
 		return func(part *service.Message) error {
-			jObj, err := part.AsStructured()
+			data, err := part.AsStructured()
 			if err != nil {
-				return fmt.Errorf("parsing message as JSON: %v", err)
+				return fmt.Errorf("parsing message as structured: %v", err)
 			}
-			var binary []byte
-			if binary, err = codec.BinaryFromNative(nil, jObj); err != nil {
+			binary, err := schema.Encode(data)
+			if err != nil {
 				return fmt.Errorf("converting JSON to Avro schema: %v", err)
 			}
 			part.SetBytes(binary)
@@ -140,12 +145,12 @@ func newAvroFromJSONOperator(encoding string, codec *goavro.Codec) (avroOperator
 		}, nil
 	case "single":
 		return func(part *service.Message) error {
-			jObj, err := part.AsStructured()
+			data, err := part.AsStructured()
 			if err != nil {
-				return fmt.Errorf("parsing message as JSON: %v", err)
+				return fmt.Errorf("parsing message as structured: %v", err)
 			}
-			var single []byte
-			if single, err = codec.SingleFromNative(nil, jObj); err != nil {
+			single, err := schema.AppendSingleObject(nil, data)
+			if err != nil {
 				return fmt.Errorf("converting JSON to Avro schema: %v", err)
 			}
 			part.SetBytes(single)
@@ -155,12 +160,12 @@ func newAvroFromJSONOperator(encoding string, codec *goavro.Codec) (avroOperator
 	return nil, fmt.Errorf("encoding '%v' not recognised", encoding)
 }
 
-func strToAvroOperator(opStr, encoding string, codec *goavro.Codec) (avroOperator, error) {
+func strToAvroOperator(opStr, encoding string, schema *avro.Schema) (avroOperator, error) {
 	switch opStr {
 	case "to_json":
-		return newAvroToJSONOperator(encoding, codec)
+		return newAvroToJSONOperator(encoding, schema)
 	case "from_json":
-		return newAvroFromJSONOperator(encoding, codec)
+		return newAvroFromJSONOperator(encoding, schema)
 	}
 	return nil, fmt.Errorf("operator not recognised: %v", opStr)
 }
@@ -192,13 +197,13 @@ func loadSchema(schemaPath string) (string, error) {
 
 //------------------------------------------------------------------------------
 
-type avro struct {
+type avroProcessor struct {
 	operator avroOperator
 	log      *service.Logger
 }
 
 func newAvroFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
-	a := &avro{log: mgr.Logger()}
+	a := &avroProcessor{log: mgr.Logger()}
 
 	var operator, encoding, schema, schemaPath string
 	var err error
@@ -227,12 +232,12 @@ func newAvroFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (serv
 		return nil, errors.New("a schema must be specified with either the `schema` or `schema_path` fields")
 	}
 
-	codec, err := goavro.NewCodec(schema)
+	parsed, err := avro.Parse(schema)
 	if err != nil {
 		return nil, fmt.Errorf("parsing schema: %v", err)
 	}
 
-	if a.operator, err = strToAvroOperator(operator, encoding, codec); err != nil {
+	if a.operator, err = strToAvroOperator(operator, encoding, parsed); err != nil {
 		return nil, err
 	}
 	return a, nil
@@ -240,7 +245,7 @@ func newAvroFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (serv
 
 //------------------------------------------------------------------------------
 
-func (p *avro) Process(_ context.Context, msg *service.Message) (service.MessageBatch, error) {
+func (p *avroProcessor) Process(_ context.Context, msg *service.Message) (service.MessageBatch, error) {
 	err := p.operator(msg)
 	if err != nil {
 		p.log.Debugf("Operator failed: %v\n", err)
@@ -249,6 +254,6 @@ func (p *avro) Process(_ context.Context, msg *service.Message) (service.Message
 	return service.MessageBatch{msg}, nil
 }
 
-func (*avro) Close(context.Context) error {
+func (*avroProcessor) Close(context.Context) error {
 	return nil
 }

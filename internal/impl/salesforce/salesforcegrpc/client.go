@@ -263,14 +263,14 @@ func (c *Client) receiveLoop(ctx context.Context) {
 				continue
 			}
 
-			codec, err := c.schemaCache.GetCodec(ctx, event.SchemaId)
+			schema, err := c.schemaCache.GetSchema(ctx, event.SchemaId)
 			if err != nil {
 				c.log.Errorf("get schema for event (schemaID=%s): %v", event.SchemaId, err)
 				c.eventsDecodeErrors.Add(1)
 				continue
 			}
 
-			decoded, err := DecodeAvroPayload(codec, event.Payload)
+			decoded, err := DecodeAvroPayload(schema, event.Payload)
 			if err != nil {
 				c.log.Errorf("decode Avro payload (schemaID=%s): %v", event.SchemaId, err)
 				c.eventsDecodeErrors.Add(1)
