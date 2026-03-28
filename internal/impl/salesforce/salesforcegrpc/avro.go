@@ -13,16 +13,16 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/linkedin/goavro/v2"
+	"github.com/twmb/avro"
 	"google.golang.org/grpc/metadata"
 )
 
-// SchemaCache provides thread-safe caching of Avro codecs keyed by schema ID.
+// SchemaCache provides thread-safe caching of Avro schemas keyed by schema ID.
 // On cache miss it fetches the schema from the Salesforce Pub/Sub API via gRPC.
 type SchemaCache struct {
-	mu     sync.RWMutex
-	codecs map[string]*goavro.Codec
-	pubsub PubSubClient
+	mu      sync.RWMutex
+	schemas map[string]*avro.Schema
+	pubsub  PubSubClient
 
 	bearerToken string
 	instanceURL string
@@ -32,7 +32,7 @@ type SchemaCache struct {
 // NewSchemaCache creates a new SchemaCache that uses the given PubSubClient to fetch schemas.
 func NewSchemaCache(pubsub PubSubClient, bearerToken, instanceURL, tenantID string) *SchemaCache {
 	return &SchemaCache{
-		codecs:      make(map[string]*goavro.Codec),
+		schemas:     make(map[string]*avro.Schema),
 		pubsub:      pubsub,
 		bearerToken: bearerToken,
 		instanceURL: instanceURL,
@@ -49,12 +49,12 @@ func (sc *SchemaCache) UpdateAuth(bearerToken, instanceURL, tenantID string) {
 	sc.tenantID = tenantID
 }
 
-// GetCodec returns the cached Avro codec for the given schema ID, or fetches and caches it.
-func (sc *SchemaCache) GetCodec(ctx context.Context, schemaID string) (*goavro.Codec, error) {
+// GetSchema returns the cached Avro schema for the given schema ID, or fetches and caches it.
+func (sc *SchemaCache) GetSchema(ctx context.Context, schemaID string) (*avro.Schema, error) {
 	sc.mu.RLock()
-	if codec, ok := sc.codecs[schemaID]; ok {
+	if s, ok := sc.schemas[schemaID]; ok {
 		sc.mu.RUnlock()
-		return codec, nil
+		return s, nil
 	}
 	sc.mu.RUnlock()
 
@@ -62,8 +62,8 @@ func (sc *SchemaCache) GetCodec(ctx context.Context, schemaID string) (*goavro.C
 	defer sc.mu.Unlock()
 
 	// Double-check after acquiring write lock
-	if codec, ok := sc.codecs[schemaID]; ok {
-		return codec, nil
+	if s, ok := sc.schemas[schemaID]; ok {
+		return s, nil
 	}
 
 	md := metadata.Pairs(
@@ -78,26 +78,20 @@ func (sc *SchemaCache) GetCodec(ctx context.Context, schemaID string) (*goavro.C
 		return nil, fmt.Errorf("fetch schema %s: %w", schemaID, err)
 	}
 
-	codec, err := goavro.NewCodec(schemaInfo.SchemaJson)
+	s, err := avro.Parse(schemaInfo.SchemaJson)
 	if err != nil {
 		return nil, fmt.Errorf("compile Avro schema %s: %w", schemaID, err)
 	}
 
-	sc.codecs[schemaID] = codec
-	return codec, nil
+	sc.schemas[schemaID] = s
+	return s, nil
 }
 
-// DecodeAvroPayload decodes a binary Avro payload using the given codec.
-func DecodeAvroPayload(codec *goavro.Codec, payload []byte) (map[string]any, error) {
-	native, _, err := codec.NativeFromBinary(payload)
-	if err != nil {
+// DecodeAvroPayload decodes a binary Avro payload using the given schema.
+func DecodeAvroPayload(schema *avro.Schema, payload []byte) (map[string]any, error) {
+	var result map[string]any
+	if _, err := schema.Decode(payload, &result, avro.TaggedUnions()); err != nil {
 		return nil, fmt.Errorf("decode Avro payload: %w", err)
 	}
-
-	result, ok := native.(map[string]any)
-	if !ok {
-		return nil, fmt.Errorf("decoded Avro payload is not a map, got %T", native)
-	}
-
 	return result, nil
 }

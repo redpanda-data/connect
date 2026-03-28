@@ -16,7 +16,6 @@ package confluent
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 
 	"github.com/redpanda-data/benthos/v4/public/schema"
@@ -191,13 +190,21 @@ func ecsAvroFromAnyMap(cfg ecsAvroConfig, as map[string]any) (schema.Common, err
 	case string:
 		c.Type = ecsAvroTypeToCommon(t)
 	case map[string]any:
-		// This is so ridiculous, I can't believe they've allowed the type field
-		// to be a union of three different types SMDH.
-		if typeStr, ok := t["type"].(string); ok {
-			c.Type = ecsAvroTypeToCommon(typeStr)
-		} else {
-			return schema.Common{}, errors.New("detected an unrecognized `type` field of type object, missing a `type` field")
+		// The type field is an object (e.g. {"type":"map","values":"long"}).
+		// The old code only read t["type"] and lost the rest (values, items,
+		// fields, symbols). Recursing into the full object picks up all
+		// complex type metadata. We return early because the recursion
+		// handles the switch on c.Type below (which reads values/items/etc
+		// from as — but as is the outer field object, not the inner type).
+		var err error
+		c, err = ecsAvroFromAnyMap(cfg, t)
+		if err != nil {
+			return schema.Common{}, err
 		}
+		if name, ok := as["name"].(string); ok {
+			c.Name = name
+		}
+		return c, nil
 	default:
 		return schema.Common{}, fmt.Errorf("expected `type` field of type string or array, got %T", t)
 	}

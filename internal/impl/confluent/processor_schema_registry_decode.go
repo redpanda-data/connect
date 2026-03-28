@@ -56,7 +56,7 @@ For example, the union schema ` + "`[\"null\",\"string\",\"Foo\"]`, where `Foo`"
 - the string ` + "`\"a\"` as `{\"string\": \"a\"}`" + `; and
 - a ` + "`Foo` instance as `{\"Foo\": {...}}`, where `{...}` indicates the JSON encoding of a `Foo`" + ` instance.
 
-However, it is possible to instead create documents in https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodecForStandardJSONFull[standard/raw JSON format^] by setting the field ` + "<<avro_raw_json, `avro_raw_json`>> to `true`" + `.
+However, it is possible to instead create documents in standard/raw JSON format by setting the field ` + "<<avro_raw_json, `avro_raw_json`>> to `true`" + `.
 
 == Protobuf format
 
@@ -69,7 +69,7 @@ This processor also adds the following metadata to each outgoing message:
 schema_id: the ID of the schema in the schema registry that was associated with the message.
 `).
 		Field(service.NewBoolField("avro_raw_json").
-			Description("Whether Avro messages should be decoded into normal JSON (\"json that meets the expectations of regular internet json\") rather than https://avro.apache.org/docs/current/specification/_print/#json-encoding[Avro JSON^]. If `true` the schema returned from the subject should be decoded as https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodecForStandardJSONFull[standard json^] instead of as https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodec[avro json^]. There is a https://github.com/linkedin/goavro/blob/5ec5a5ee7ec82e16e6e2b438d610e1cab2588393/union.go#L224-L249[comment in goavro^], the https://github.com/linkedin/goavro[underlining library used for avro serialization^], that explains in more detail the difference between the standard json and avro json.").
+			Description("Whether Avro messages should be decoded into normal JSON (\"json that meets the expectations of regular internet json\") rather than https://avro.apache.org/docs/current/specification/_print/#json-encoding[Avro JSON^]. When true, union values are unwrapped (bare values instead of {\"type\": value} wrappers).").
 			Advanced().Default(false).Deprecated()).
 		Fields(
 			service.NewObjectField(
@@ -206,7 +206,7 @@ func init() {
 
 type decodingConfig struct {
 	avro struct {
-		useHamba                   bool
+		preserveLogicalTypes       bool
 		rawUnions                  bool
 		translateKafkaConnectTypes bool
 		mapping                    *bloblang.Executor
@@ -248,7 +248,7 @@ func newSchemaRegistryDecoderFromConfig(conf *service.ParsedConfig, mgr *service
 		return nil, err
 	}
 
-	cfg.avro.useHamba, err = conf.FieldBool("avro", "preserve_logical_types")
+	cfg.avro.preserveLogicalTypes, err = conf.FieldBool("avro", "preserve_logical_types")
 	if err != nil {
 		return nil, err
 	}
@@ -460,11 +460,7 @@ func (s *schemaRegistryDecoder) getDecoder(id int) (schemaDecoder, error) {
 	case franz_sr.TypeJSON:
 		decoder, err = s.getJSONDecoder(ctx, resPayload)
 	default:
-		if s.cfg.avro.useHamba {
-			decoder, err = s.getHambaAvroDecoder(ctx, resPayload)
-		} else {
-			decoder, err = s.getGoAvroDecoder(ctx, resPayload)
-		}
+		decoder, err = s.getAvroDecoder(ctx, resPayload)
 	}
 	if err != nil {
 		return nil, err

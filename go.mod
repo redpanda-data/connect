@@ -113,7 +113,6 @@ require (
 	github.com/jackc/pgx/v5 v5.9.1
 	github.com/jhump/protoreflect v1.18.0
 	github.com/lib/pq v1.12.0
-	github.com/linkedin/goavro/v2 v2.15.0
 	github.com/matoous/go-nanoid/v2 v2.1.0
 	github.com/microcosm-cc/bluemonday v1.0.27
 	github.com/microsoft/go-mssqldb v1.9.8
@@ -170,6 +169,7 @@ require (
 	github.com/timeplus-io/proton-go-driver/v2 v2.1.4
 	github.com/tmc/langchaingo v0.1.14
 	github.com/trinodb/trino-go-client v0.333.0
+	github.com/twmb/avro v1.3.4
 	github.com/twmb/franz-go v1.20.7
 	github.com/twmb/franz-go/pkg/kadm v1.17.2
 	github.com/twmb/franz-go/pkg/kmsg v1.12.0
@@ -279,6 +279,7 @@ require (
 	github.com/knadh/koanf/providers/file v1.2.1 // indirect
 	github.com/knadh/koanf/providers/rawbytes v1.0.0 // indirect
 	github.com/knadh/koanf/v2 v2.3.3 // indirect
+	github.com/linkedin/goavro/v2 v2.15.0 // indirect
 	github.com/lithammer/fuzzysearch v1.1.8 // indirect
 	github.com/mattn/go-runewidth v0.0.21 // indirect
 	github.com/mdelapenya/tlscert v0.2.0 // indirect

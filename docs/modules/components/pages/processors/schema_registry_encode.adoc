@@ -116,13 +116,9 @@ For example, the union schema `["null","string","Foo"]`, where `Foo` is a record
 - the string `"a"` as `\{"string": "a"}`; and
 - a `Foo` instance as `\{"Foo": {...}}`, where `{...}` indicates the JSON encoding of a `Foo` instance.
 
-However, it is possible to instead consume documents in https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodecForStandardJSONFull[standard/raw JSON format^] by setting `avro.raw_json` to `true`. This is strongly recommended when using `schema_metadata` mode, as CDC sources emit standard JSON rather than Avro JSON.
+However, it is possible to instead consume documents in standard/raw JSON format by setting `avro.raw_json` to `true`. This is strongly recommended when using `schema_metadata` mode, as CDC sources emit standard JSON rather than Avro JSON.
 
 NOTE: The top-level `avro_raw_json` field is deprecated in favor of `avro.raw_json`.
-
-=== Known issues
-
-Important! There is an outstanding issue in the https://github.com/linkedin/goavro[avro serializing library^] that Redpanda Connect uses which means it https://github.com/linkedin/goavro/issues/252[doesn't encode logical types correctly^]. It's still possible to encode logical types that are in-line with the spec if `avro.raw_json` is set to true, though now of course non-logical types will not be in-line with the spec.
 
 == Protobuf format
 

@@ -27,7 +27,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
-func TestHambaAvroReferences(t *testing.T) {
+func TestAvroPreservedReferences(t *testing.T) {
 	tCtx, done := context.WithTimeout(t.Context(), time.Second*10)
 	defer done()
 
@@ -138,7 +138,7 @@ func TestHambaAvroReferences(t *testing.T) {
 			require.NoError(t, err)
 
 			cfg := decodingConfig{}
-			cfg.avro.useHamba = true
+			cfg.avro.preserveLogicalTypes = true
 			cfg.avro.rawUnions = true
 			decoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, cfg, schemaStaleAfter, service.MockResources())
 			require.NoError(t, err)
@@ -189,7 +189,7 @@ func TestHambaAvroReferences(t *testing.T) {
 	}
 }
 
-func TestHambaDecodeAvroUnions(t *testing.T) {
+func TestAvroPreservedUnions(t *testing.T) {
 	tCtx, done := context.WithTimeout(t.Context(), time.Second*10)
 	defer done()
 
@@ -306,20 +306,20 @@ func TestHambaDecodeAvroUnions(t *testing.T) {
 			name:         "all types nested union",
 			input:        "AZ340UnQtM3BiI/ihdEBfH9KP+XDphvske0/HlUnSXt2V81gmbTQunPejR5yaHhxZHRsd2VscGRqdHgatLHK9QuZ0cXsD+eJsMYNv8a+2Qzc986nBuz76MAG97W//AmGzbjxDuGnvP4NptCcvQvqveF2n/uQ1gbf9eJMABQCcBZrY2hreHN6d29sawJhGm9hcnhscGZteG5rcWUCch5odmpycWR4cGliZGhzaG0CcxpiZ2lzcmR6eWFtcnlpAnQeanN2Y252bWpsbWJzaGlrAnYeZHlrdml1b2l3Z2N1c2RhAmgUcnl2aW96aWxqaQJ4GnZkaG5icnRkbXRxbWQCaRJkY29lYm1lY3MCbB5maHl6eWV1YnBiaHh5cmoABMHn5qsNBrOnYNqXtmbEr69wkjaZ1ALbv/9dGGJsbmxnbnJvYmx1Y4AqstKWqoEy4qfwyModq8jmuAKgqpm+8/zjpswBCv76A5LP83wuR7QwOQAUcmNwdmp5eG5ueA==",
 			unnestUnions: false,
-			output:       `{"arrayField":[1599687770,-2127082573,-1818624628,-1704448416,846847470,873275126,-1338502524,1998000963,-1877445105,1540592659,124530549,-895622864,-80502128],"booleanField":true,"bytesField":"VSdJe3ZXzWCZtNC6c96N","dateField":"1977-05-12T00:00:00Z","decimalBytesField":-43953964.01,"decimalFixedField":-90179493988032.6912,"doubleField":0.9240627803866316,"enumField":"B","fixedField":[6,179,167,96,218,151,182,102,196,175,175,112,146,54,153,212],"floatField":0.79100776,"intField":-77217295,"longField":7531641714966637864,"mapField":{"a":"oarxlpfmxnkqe","h":"ryviozilji","i":"dcoebmecs","l":"fhyzyeubpbhxyrj","p":"kchkxszwolk","r":"hvjrqdxpibdhshm","s":"bgisrdzyamryi","t":"jsvcnvmjlmbshik","v":"dykviuoiwgcusda","x":"vdhnbrtdmtqmd"},"recordField":{"nestedIntField":-98562030,"nestedStringField":"blnlgnrobluc"},"stringField":"rhxqdtlwelpdjtx","timeMicrosField":"0018-02-06T10:11:19.879705216Z","timeMillisField":"0000-12-28T04:53:24.074Z","timestampMicrosField":"1970-01-06T21:10:24.735729Z","timestampMillisField":"1997-03-24T02:51:42.617Z","unionField":{"int":-1790761441},"uuidField":"rcpvjyxnnx"}`,
+			output:       `{"arrayField":[1599687770,-2127082573,-1818624628,-1704448416,846847470,873275126,-1338502524,1998000963,-1877445105,1540592659,124530549,-895622864,-80502128],"booleanField":true,"bytesField":"VSdJe3ZXzWCZtNC6c96N","dateField":"1977-05-12T00:00:00Z","decimalBytesField":-43953964.01,"decimalFixedField":-90179493988032.6912,"doubleField":0.9240627803866316,"enumField":"B","fixedField":"BrOnYNqXtmbEr69wkjaZ1A==","floatField":0.79100776,"intField":-77217295,"longField":7531641714966637864,"mapField":{"a":"oarxlpfmxnkqe","h":"ryviozilji","i":"dcoebmecs","l":"fhyzyeubpbhxyrj","p":"kchkxszwolk","r":"hvjrqdxpibdhshm","s":"bgisrdzyamryi","t":"jsvcnvmjlmbshik","v":"dykviuoiwgcusda","x":"vdhnbrtdmtqmd"},"recordField":{"nestedIntField":-98562030,"nestedStringField":"blnlgnrobluc"},"stringField":"rhxqdtlwelpdjtx","timeMicrosField":"0018-02-06T10:11:19.879705216Z","timeMillisField":"0000-12-28T04:53:24.074Z","timestampMicrosField":"1970-01-06T21:10:24.735729Z","timestampMillisField":"1997-03-24T02:51:42.617Z","unionField":{"int":-1790761441},"uuidField":"rcpvjyxnnx"}`,
 		},
 		{
 			name:         "all types raw union",
 			input:        "AZ340UnQtM3BiI/ihdEBfH9KP+XDphvske0/HlUnSXt2V81gmbTQunPejR5yaHhxZHRsd2VscGRqdHgatLHK9QuZ0cXsD+eJsMYNv8a+2Qzc986nBuz76MAG97W//AmGzbjxDuGnvP4NptCcvQvqveF2n/uQ1gbf9eJMABQCcBZrY2hreHN6d29sawJhGm9hcnhscGZteG5rcWUCch5odmpycWR4cGliZGhzaG0CcxpiZ2lzcmR6eWFtcnlpAnQeanN2Y252bWpsbWJzaGlrAnYeZHlrdml1b2l3Z2N1c2RhAmgUcnl2aW96aWxqaQJ4GnZkaG5icnRkbXRxbWQCaRJkY29lYm1lY3MCbB5maHl6eWV1YnBiaHh5cmoABMHn5qsNBrOnYNqXtmbEr69wkjaZ1ALbv/9dGGJsbmxnbnJvYmx1Y4AqstKWqoEy4qfwyModq8jmuAKgqpm+8/zjpswBCv76A5LP83wuR7QwOQAUcmNwdmp5eG5ueA==",
 			unnestUnions: true,
-			output:       `{"arrayField":[1599687770,-2127082573,-1818624628,-1704448416,846847470,873275126,-1338502524,1998000963,-1877445105,1540592659,124530549,-895622864,-80502128],"booleanField":true,"bytesField":"VSdJe3ZXzWCZtNC6c96N","dateField":"1977-05-12T00:00:00Z","decimalBytesField":-43953964.01,"decimalFixedField":-90179493988032.6912,"doubleField":0.9240627803866316,"enumField":"B","fixedField":[6,179,167,96,218,151,182,102,196,175,175,112,146,54,153,212],"floatField":0.79100776,"intField":-77217295,"longField":7531641714966637864,"mapField":{"a":"oarxlpfmxnkqe","h":"ryviozilji","i":"dcoebmecs","l":"fhyzyeubpbhxyrj","p":"kchkxszwolk","r":"hvjrqdxpibdhshm","s":"bgisrdzyamryi","t":"jsvcnvmjlmbshik","v":"dykviuoiwgcusda","x":"vdhnbrtdmtqmd"},"recordField":{"nestedIntField":-98562030,"nestedStringField":"blnlgnrobluc"},"stringField":"rhxqdtlwelpdjtx","timeMicrosField":"0018-02-06T10:11:19.879705216Z","timeMillisField":"0000-12-28T04:53:24.074Z","timestampMicrosField":"1970-01-06T21:10:24.735729Z","timestampMillisField":"1997-03-24T02:51:42.617Z","unionField":-1790761441,"uuidField":"rcpvjyxnnx"}`,
+			output:       `{"arrayField":[1599687770,-2127082573,-1818624628,-1704448416,846847470,873275126,-1338502524,1998000963,-1877445105,1540592659,124530549,-895622864,-80502128],"booleanField":true,"bytesField":"VSdJe3ZXzWCZtNC6c96N","dateField":"1977-05-12T00:00:00Z","decimalBytesField":-43953964.01,"decimalFixedField":-90179493988032.6912,"doubleField":0.9240627803866316,"enumField":"B","fixedField":"BrOnYNqXtmbEr69wkjaZ1A==","floatField":0.79100776,"intField":-77217295,"longField":7531641714966637864,"mapField":{"a":"oarxlpfmxnkqe","h":"ryviozilji","i":"dcoebmecs","l":"fhyzyeubpbhxyrj","p":"kchkxszwolk","r":"hvjrqdxpibdhshm","s":"bgisrdzyamryi","t":"jsvcnvmjlmbshik","v":"dykviuoiwgcusda","x":"vdhnbrtdmtqmd"},"recordField":{"nestedIntField":-98562030,"nestedStringField":"blnlgnrobluc"},"stringField":"rhxqdtlwelpdjtx","timeMicrosField":"0018-02-06T10:11:19.879705216Z","timeMillisField":"0000-12-28T04:53:24.074Z","timestampMicrosField":"1970-01-06T21:10:24.735729Z","timestampMillisField":"1997-03-24T02:51:42.617Z","unionField":-1790761441,"uuidField":"rcpvjyxnnx"}`,
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			cfg := decodingConfig{}
-			cfg.avro.useHamba = true
+			cfg.avro.preserveLogicalTypes = true
 			cfg.avro.rawUnions = test.unnestUnions
 			decoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, cfg, schemaStaleAfter, service.MockResources())
 			require.NoError(t, err)
@@ -349,7 +349,7 @@ func TestHambaDecodeAvroUnions(t *testing.T) {
 	}
 }
 
-func TestHambaDecodeKafkaConnectTypes(t *testing.T) {
+func TestAvroKafkaConnectTypes(t *testing.T) {
 	tCtx, done := context.WithTimeout(t.Context(), time.Second*10)
 	defer done()
 
@@ -502,7 +502,7 @@ func TestHambaDecodeKafkaConnectTypes(t *testing.T) {
 			encoder, err := newSchemaRegistryEncoder(urlStr, noopReqSign, nil, subject, true, schemaStaleAfter, time.Minute, service.MockResources())
 			require.NoError(t, err)
 			cfg := decodingConfig{}
-			cfg.avro.useHamba = true
+			cfg.avro.preserveLogicalTypes = true
 			cfg.avro.rawUnions = true
 			cfg.avro.translateKafkaConnectTypes = true
 			decoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, cfg, schemaStaleAfter, service.MockResources())
@@ -529,7 +529,7 @@ func TestHambaDecodeKafkaConnectTypes(t *testing.T) {
 	}
 }
 
-func TestHambaAvroSchemaExtraction(t *testing.T) {
+func TestAvroPreservedSchemaExtraction(t *testing.T) {
 	tCtx, done := context.WithTimeout(t.Context(), time.Second*10)
 	defer done()
 
@@ -557,7 +557,7 @@ func TestHambaAvroSchemaExtraction(t *testing.T) {
 
 	cfg := decodingConfig{}
 	cfg.avro.rawUnions = true
-	cfg.avro.useHamba = true
+	cfg.avro.preserveLogicalTypes = true
 	cfg.avro.storeSchemaMeta = "testschema"
 	decoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, cfg, schemaStaleAfter, service.MockResources())
 	require.NoError(t, err)
