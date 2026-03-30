@@ -82,3 +82,8 @@ tasks:
     desc: Update bundles
     cmds:
       - sh ./resources/scripts/update_bundles.sh
+
+  schema:
+    desc: Generate JSON schema for YAML config validation
+    cmds:
+      - go run ./cmd/redpanda-connect list --format jsonschema > config/.schema.json
