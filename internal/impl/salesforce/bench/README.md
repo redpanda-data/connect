@@ -43,6 +43,45 @@ Clear it before each benchmark run to always start from scratch:
 task bench:clear-checkpoint
 ```
 
+## CDC Benchmark
+
+Streams Account change events in real time via the Salesforce Pub/Sub API (gRPC), measuring event delivery throughput.
+
+### Prerequisites
+
+Enable Change Data Capture for Account in your Salesforce org:
+
+> Setup → Change Data Capture → select **Account** → Save
+
+### Running
+
+In one terminal, generate a continuous stream of Account changes:
+
+```bash
+task bench:write:realtime
+```
+
+In a second terminal, start the CDC reader:
+
+```bash
+task bench:cdc
+```
+
+To start fresh (replay from the earliest available event):
+
+```bash
+task bench:cdc:fresh
+```
+
+### Expected Output
+
+```
+INFO rolling stats: 800 msg/sec, 1 MB/sec    @service=redpanda-connect ...
+INFO rolling stats: 950 msg/sec, 1 MB/sec    @service=redpanda-connect ...
+```
+
+CDC throughput is bounded by the Pub/Sub API batch size (`cdc_batch_size`) and the rate at which your org generates change events.
+
 ## Write Benchmark
 
 Generates synthetic Account records and upserts them into Salesforce.
@@ -73,3 +112,7 @@ Throughput depends on:
 - `query_batch_size` (2000 is the Salesforce max per page)
 - Network latency to the Salesforce instance
 - SObject field count (wide objects produce larger messages)
+
+## Recording Results
+
+Run the benchmark and record your results in [docs/benchmark-results/salesforce.md](../../../../docs/benchmark-results/salesforce.md), appending a new dated section with environment, dataset, throughput, and observations.
