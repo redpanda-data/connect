@@ -433,15 +433,18 @@ credentials:
 		"REMOVE": 0,
 	}
 
-	maxAttempts := 20
-	for attempt := 0; attempt < maxAttempts; attempt++ {
-		batch, _, err := input.ReadBatch(ctx)
-		if err != nil {
-			time.Sleep(100 * time.Millisecond)
-			continue
+	deadline := time.After(30 * time.Second)
+	for len(receivedEvents) < expectedTotalEvents {
+		select {
+		case <-deadline:
+			goto verifyResults
+		default:
 		}
 
-		if len(batch) == 0 {
+		readCtx, readCancel := context.WithTimeout(ctx, 3*time.Second)
+		batch, _, err := input.ReadBatch(readCtx)
+		readCancel()
+		if err != nil {
 			time.Sleep(100 * time.Millisecond)
 			continue
 		}
@@ -453,14 +456,8 @@ credentials:
 				eventCounts[eventName]++
 			}
 		}
-
-		// Check if we've received all expected events
-		if len(receivedEvents) >= expectedTotalEvents {
-			break
-		}
-
-		time.Sleep(100 * time.Millisecond)
 	}
+verifyResults:
 
 	// Verify counts
 	assert.Len(t, receivedEvents, expectedTotalEvents,
@@ -922,16 +919,20 @@ credentials:
 		_ = input.Close(ctx)
 	})
 
+	time.Sleep(100 * time.Millisecond)
+
 	// Insert items into both tables
 	require.NoError(t, putTestItem(ctx, client, tables[0], "multi-1", "table1-value"))
 	require.NoError(t, putTestItem(ctx, client, tables[1], "multi-2", "table2-value"))
 
 	// Read events from both tables
 	tablesFound := make(map[string]bool)
-	maxAttempts := 10
+	maxAttempts := 20
 
 	for attempt := 0; attempt < maxAttempts; attempt++ {
-		batch, _, err := input.ReadBatch(ctx)
+		readCtx, readCancel := context.WithTimeout(ctx, 3*time.Second)
+		batch, _, err := input.ReadBatch(readCtx)
+		readCancel()
 		if err != nil {
 			time.Sleep(100 * time.Millisecond)
 			continue
@@ -948,8 +949,6 @@ credentials:
 		if tablesFound[tables[0]] && tablesFound[tables[1]] {
 			break
 		}
-
-		time.Sleep(100 * time.Millisecond)
 	}
 
 	assert.True(t, tablesFound[tables[0]], "Should receive events from table 1")
@@ -993,10 +992,12 @@ credentials:
 
 	// Collect events and verify metadata
 	eventsWithMetadata := 0
-	maxAttempts := 10
+	maxAttempts := 20
 
 	for attempt := 0; attempt < maxAttempts && eventsWithMetadata < 2; attempt++ {
-		batch, _, err := input.ReadBatch(ctx)
+		readCtx, readCancel := context.WithTimeout(ctx, 3*time.Second)
+		batch, _, err := input.ReadBatch(readCtx)
+		readCancel()
 		if err != nil {
 			time.Sleep(100 * time.Millisecond)
 			continue
@@ -1015,8 +1016,6 @@ credentials:
 				eventsWithMetadata++
 			}
 		}
-
-		time.Sleep(100 * time.Millisecond)
 	}
 
 	assert.GreaterOrEqual(t, eventsWithMetadata, 2, "Should have received at least 2 events with complete metadata")
@@ -1059,10 +1058,12 @@ credentials:
 
 	// Collect events
 	eventsByTable := make(map[string]int)
-	maxAttempts := 10
+	maxAttempts := 20
 
 	for attempt := 0; attempt < maxAttempts; attempt++ {
-		batch, _, err := input.ReadBatch(ctx)
+		readCtx, readCancel := context.WithTimeout(ctx, 3*time.Second)
+		batch, _, err := input.ReadBatch(readCtx)
+		readCancel()
 		if err != nil {
 			time.Sleep(100 * time.Millisecond)
 			continue
@@ -1097,8 +1098,6 @@ credentials:
 		if eventsByTable[table1] > 0 && eventsByTable[table2] > 0 {
 			break
 		}
-
-		time.Sleep(100 * time.Millisecond)
 	}
 
 	assert.Greater(t, eventsByTable[table1], 0, "Should receive events from table 1")
@@ -1222,10 +1221,12 @@ credentials:
 
 	// Read events
 	tablesFound := make(map[string]bool)
-	maxAttempts := 15
+	maxAttempts := 20
 
 	for attempt := 0; attempt < maxAttempts; attempt++ {
-		batch, _, err := input.ReadBatch(ctx)
+		readCtx, readCancel := context.WithTimeout(ctx, 3*time.Second)
+		batch, _, err := input.ReadBatch(readCtx)
+		readCancel()
 		if err != nil {
 			time.Sleep(200 * time.Millisecond)
 			continue
@@ -1242,8 +1243,6 @@ credentials:
 		if len(tablesFound) >= 1 {
 			break
 		}
-
-		time.Sleep(200 * time.Millisecond)
 	}
 
 	// We should have discovered at least one tagged table
@@ -1287,10 +1286,12 @@ credentials:
 
 	// Try to read events
 	foundEvent := false
-	maxAttempts := 10
+	maxAttempts := 20
 
 	for attempt := 0; attempt < maxAttempts && !foundEvent; attempt++ {
-		batch, _, err := input.ReadBatch(ctx)
+		readCtx, readCancel := context.WithTimeout(ctx, 3*time.Second)
+		batch, _, err := input.ReadBatch(readCtx)
+		readCancel()
 		if err != nil {
 			time.Sleep(200 * time.Millisecond)
 			continue
@@ -1300,8 +1301,6 @@ credentials:
 			foundEvent = true
 			break
 		}
-
-		time.Sleep(200 * time.Millisecond)
 	}
 
 	// If tag value matching works, we should have found events
