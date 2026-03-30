@@ -126,6 +126,35 @@ func bloblValuesToPgSQLValues(v []any) []any {
 	return o
 }
 
+// bloblValuesToClickHouseValues converts json.Number values to their native int64 or float64
+// equivalents so the ClickHouse driver receives correctly-typed parameters
+// instead of strings.
+func bloblValuesToClickHouseValues(v []any) []any {
+	hasNumber := slices.ContainsFunc(v, func(e any) bool {
+		_, ok := e.(json.Number)
+		return ok
+	})
+	if !hasNumber {
+		return v
+	}
+	o := make([]any, len(v))
+	for i, e := range v {
+		n, ok := e.(json.Number)
+		if !ok {
+			o[i] = e
+			continue
+		}
+		if i64, err := n.Int64(); err == nil {
+			o[i] = i64
+		} else if f64, err := n.Float64(); err == nil {
+			o[i] = f64
+		} else {
+			o[i] = e
+		}
+	}
+	return o
+}
+
 // newClickhouseArgsConverter builds an argsConverter that coerces Bloblang
 // output values into the concrete Go types the ClickHouse driver expects.
 //
