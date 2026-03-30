@@ -9,67 +9,18 @@ on:
     types: [created]
   workflow_dispatch:
     inputs:
-      package:
-        description: 'Package to test (e.g. ./internal/impl/aws). Leave empty to run all.'
+      filter:
+        description: 'Package filter (e.g. aws kafka). Leave empty to run all.'
         required: false
         default: ''
         type: string
 
 jobs:
   integration-test:
-    if: ${{ github.event_name != 'issue_comment' && github.event.inputs.package == '' && (github.event_name != 'pull_request' || startsWith(github.event.pull_request.title, 'build(deps)')) }}
+    if: ${{ github.event_name != 'issue_comment' && github.event.inputs.filter == '' && (github.event_name != 'pull_request' || startsWith(github.event.pull_request.title, 'build(deps)')) }}
     runs-on: ubuntu-latest-32
     env:
       CGO_ENABLED: 0
-    strategy:
-      fail-fast: false
-      matrix:
-        package:
-          - ./internal/impl/amqp09
-          - ./internal/impl/amqp1
-          - ./internal/impl/aws/...
-          - ./internal/impl/azure
-          - ./internal/impl/beanstalkd
-          - ./internal/impl/cassandra
-          - ./internal/impl/cockroachdb
-          - ./internal/impl/couchbase
-          - ./internal/impl/elasticsearch/v8
-          - ./internal/impl/elasticsearch/v9
-          - ./internal/impl/gcp
-          - ./internal/impl/gcp/enterprise
-          - ./internal/impl/gcp/enterprise/changestreams
-          - ./internal/impl/gcp/enterprise/changestreams/metadata
-          - ./internal/impl/hdfs
-          - ./internal/impl/influxdb
-          - ./internal/impl/kafka
-          - ./internal/impl/kafka/enterprise
-          - ./internal/impl/memcached
-          - ./internal/impl/mssqlserver
-          - ./internal/impl/mongodb
-          - ./internal/impl/mongodb/cdc
-          - ./internal/impl/mqtt
-          - ./internal/impl/mysql
-          - ./internal/impl/nanomsg
-          - ./internal/impl/nats
-          - ./internal/impl/nsq
-          - ./internal/impl/opensearch
-          - ./internal/impl/oracledb
-          - ./internal/impl/postgresql
-          - ./internal/impl/pulsar
-          - ./internal/impl/qdrant
-          - ./internal/impl/questdb
-          - ./internal/impl/redis
-          - ./internal/impl/redpanda/migrator
-          - ./internal/impl/sftp
-          - ./internal/impl/snowflake
-          - ./internal/impl/snowflake/streaming
-          - ./internal/impl/splunk
-          - ./internal/impl/sql
-
-          # Requires CGO_ENABLED=1
-          # - ./internal/impl/tigerbeetle
-          # - ./internal/impl/zeromq
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -85,14 +36,29 @@ jobs:
       - name: Pull Latest Redpanda Image
         run: task docker:pull-redpanda
 
-      - name: Run Integration Tests for ${{ matrix.package }}
-        run: task test:integration-package PKG=${{ matrix.package }}
-        timeout-minutes: 30
+      - name: Run Integration Tests
+        run: task test:integration -- --output-dir "${{ runner.temp }}/integration"
+        timeout-minutes: 120
 
-  integration-test-package:
+      - name: Write Summary
+        if: always()
+        run: |
+          if [ -f "${{ runner.temp }}/integration/index.md" ]; then
+            cat "${{ runner.temp }}/integration/index.md" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload Test Output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-output
+          path: ${{ runner.temp }}/integration/
+          retention-days: 7
+
+  integration-test-filter:
     if: >-
       (github.event_name == 'issue_comment' && github.event.issue.pull_request && startsWith(github.event.comment.body, '/test ')) ||
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.package != '')
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.filter != '')
     runs-on: ubuntu-latest-32
     env:
       CGO_ENABLED: 0
@@ -108,14 +74,14 @@ jobs:
             exit 1
           fi
 
-      - name: Parse package from comment
+      - name: Parse filter from comment
         if: ${{ github.event_name == 'issue_comment' }}
         id: parse
         env:
           COMMENT_BODY: ${{ github.event.comment.body }}
         run: |
-          PACKAGE=$(echo "${COMMENT_BODY}" | sed 's|^/test ||')
-          echo "package=${PACKAGE}" >> "$GITHUB_OUTPUT"
+          FILTER=$(echo "${COMMENT_BODY}" | sed 's|^/test ||')
+          echo "filter=${FILTER}" >> "$GITHUB_OUTPUT"
 
       - name: Checkout PR branch
         if: ${{ github.event_name == 'issue_comment' }}
@@ -140,6 +106,21 @@ jobs:
 
       - name: Run Integration Tests
         env:
-          PACKAGE: ${{ steps.parse.outputs.package || github.event.inputs.package }}
-        run: task test:integration-package PKG="${PACKAGE}"
+          FILTER: ${{ steps.parse.outputs.filter || github.event.inputs.filter }}
+        run: task test:integration -- --output-dir "${{ runner.temp }}/integration" ${FILTER}
         timeout-minutes: 30
+
+      - name: Write Summary
+        if: always()
+        run: |
+          if [ -f "${{ runner.temp }}/integration/index.md" ]; then
+            cat "${{ runner.temp }}/integration/index.md" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload Test Output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-output
+          path: ${{ runner.temp }}/integration/
+          retention-days: 7

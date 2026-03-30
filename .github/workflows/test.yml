@@ -83,7 +83,7 @@ jobs:
   # re-run the workflow (or push a new commit) to pick it up.
   #
   # Package detection: diffs HEAD against the PR base branch and extracts
-  # unique affected internal/impl/* package directories. Tests run sequentially.
+  # unique affected internal/impl/* component names, passed as filters.
   integration-test:
     if: |
       github.event_name == 'pull_request' &&
@@ -109,23 +109,37 @@ jobs:
       - name: Pull Latest Redpanda Image
         run: task docker:pull-redpanda
 
-      - name: Run Integration Tests
+      - name: Detect changed packages
+        id: detect
         run: |
-          mapfile -t pkgs < <(
+          FILTERS=$(
             git diff --name-only "$(git merge-base HEAD origin/${{ github.base_ref }})"...HEAD \
               | { grep '^internal/impl/' || true; } \
-              | sed 's|/[^/]*$||' \
-              | sort -u
+              | cut -d/ -f3 \
+              | sort -u \
+              | tr '\n' ' '
           )
-          failed=0
-          for pkg in "${pkgs[@]}"; do
-            task test:integration-package PKG="./$pkg/..." || failed=1
-          done
-          exit $failed
-        # 30m total: normally a single package is changed per PR, so 15m per-package
-        # timeout plus overhead fits comfortably. Keeps CI fast-failing instead of
-        # hanging for hours when Docker networking is degraded.
+          echo "filters=${FILTERS}" >> "$GITHUB_OUTPUT"
+
+      - name: Run Integration Tests
+        if: ${{ steps.detect.outputs.filters != '' }}
+        run: task test:integration -- --output-dir "${{ runner.temp }}/integration" ${{ steps.detect.outputs.filters }}
         timeout-minutes: 30
+
+      - name: Write Summary
+        if: always() && steps.detect.outputs.filters != ''
+        run: |
+          if [ -f "${{ runner.temp }}/integration/index.md" ]; then
+            cat "${{ runner.temp }}/integration/index.md" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload Test Output
+        if: always() && steps.detect.outputs.filters != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-output
+          path: ${{ runner.temp }}/integration/
+          retention-days: 7
 
   test-push-to-cloudsmith:
     if: ${{ github.repository == 'redpanda-data/connect' || github.event_name != 'schedule' }}
