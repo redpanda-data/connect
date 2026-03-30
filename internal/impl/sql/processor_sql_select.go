@@ -108,8 +108,9 @@ type sqlSelectProcessor struct {
 	builder squirrel.SelectBuilder
 	dbMut   sync.RWMutex
 
-	where       string
-	argsMapping *bloblang.Executor
+	where         string
+	argsMapping   *bloblang.Executor
+	argsConverter argsConverter
 
 	logger  *service.Logger
 	shutSig *shutdown.Signaller
@@ -160,6 +161,13 @@ func NewSQLSelectProcessorFromConfig(conf *service.ParsedConfig, mgr *service.Re
 		s.builder = s.builder.PlaceholderFormat(squirrel.Dollar)
 	case "oracle", "gocosmos":
 		s.builder = s.builder.PlaceholderFormat(squirrel.Colon)
+	}
+
+	switch driverStr {
+	case "clickhouse":
+		s.argsConverter = bloblValuesToClickHouseValues
+	default:
+		s.argsConverter = func(v []any) []any { return v }
 	}
 
 	if conf.Contains("prefix") {
@@ -233,6 +241,7 @@ func (s *sqlSelectProcessor) ProcessBatch(ctx context.Context, batch service.Mes
 				msg.SetError(fmt.Errorf("mapping returned non-array result: %T", iargs))
 				continue
 			}
+			args = s.argsConverter(args)
 		}
 
 		queryBuilder := s.builder
