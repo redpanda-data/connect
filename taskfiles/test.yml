@@ -17,17 +17,12 @@ tasks:
     cmds:
       - go test {{.GO_FLAGS}} -timeout 3m -shuffle=on -race {{if .CI}}{{else}}-v{{end}} ./...
 
-  integration-package:
-    desc: Run integration tests for package PKG
+  integration:
+    desc: "Run integration tests (e.g. task test:integration -- aws kafka). See cmd/tools/integration/README.md"
     aliases:
       - it
-    requires:
-      vars:
-        - PKG
-    vars:
-      TIMEOUT: '{{if .CI}}15m{{else}}5m{{end}}'
     cmds:
-      - go test {{.GO_FLAGS}} -run "^Test.*Integration" -timeout {{.TIMEOUT}} {{if .CI}}{{else}}-v{{end}} {{.PKG}}
+      - go run ./cmd/tools/integration run {{.CLI_ARGS}}
 
   template:
     desc: Run template tests
