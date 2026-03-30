@@ -177,6 +177,9 @@ func clickhouseColumnScanTypes(ctx context.Context, db *sql.DB, table string, co
 	for i, ct := range columnTypes {
 		scanTypes[i] = ct.ScanType()
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 	return scanTypes, nil
 }
 
@@ -194,7 +197,7 @@ func normalizeClickhouseValueToType(v any, target reflect.Type) (any, bool) {
 	}
 	// Unwrap pointer types, recursing into the element type. Nullable ClickHouse
 	// columns (e.g. Nullable(Map(...))) surface as pointer scan types.
-	for target.Kind() == reflect.Pointer {
+	if target.Kind() == reflect.Pointer {
 		if v == nil {
 			return nil, true
 		}
@@ -244,4 +247,3 @@ func clickhouseNeedsContainerNormalization(target reflect.Type) bool {
 		return false
 	}
 }
-
