@@ -7,9 +7,15 @@ vars:
 tasks:
   install-all:
     deps:
+      - install-githooks
       - install-golangci-lint
-      - install-govulncheck
       - install-yamlfmt
+
+  install-githooks:
+    desc: Configure git to use .githooks directory
+    run: once
+    cmds:
+      - git config core.hooksPath .githooks
 
   install-golangci-lint:
     desc: Install golangci-lint
