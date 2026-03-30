@@ -792,6 +792,128 @@ func runClickhouseTest(t *testing.T, dsnScheme string) {
 
 	testSuite(t, "clickhouse", dsn, createTable)
 	testClickhouseMapInsertOutput(t, dsn, db)
+
+	// lastQuery flushes the ClickHouse query log and returns the most recent
+	// query that touched the given table.
+	lastQuery := func(t *testing.T, table string) string {
+		t.Helper()
+		_, err := db.ExecContext(t.Context(), `SYSTEM FLUSH LOGS`)
+		require.NoError(t, err)
+		rows, err := db.QueryContext(t.Context(), fmt.Sprintf(
+			`SELECT query FROM system.query_log WHERE query LIKE '%%%s%%' AND type = 'QueryFinish' ORDER BY event_time_microseconds DESC LIMIT 1`,
+			table,
+		))
+		require.NoError(t, err)
+		defer rows.Close()
+		require.True(t, rows.Next(), "no query_log entry for table %s", table)
+		var query string
+		require.NoError(t, rows.Scan(&query))
+		return query
+	}
+
+	t.Run("sql_select query log", func(t *testing.T) {
+		tableName, err := gonanoid.Generate("abcdefghijklmnopqrstuvwxyz", 12)
+		require.NoError(t, err)
+
+		_, err = db.ExecContext(t.Context(), fmt.Sprintf(`CREATE TABLE %s (id Int64, value Float64) ENGINE=MergeTree() ORDER BY id`, tableName))
+		require.NoError(t, err)
+		_, err = db.ExecContext(t.Context(), fmt.Sprintf(`INSERT INTO %s VALUES (?, ?)`, tableName), int64(1774903303), float64(3.14))
+		require.NoError(t, err)
+
+		t.Run("Int64 arg", func(t *testing.T) {
+			conf := fmt.Sprintf(`
+driver: clickhouse
+dsn: %s
+table: %s
+columns: [ "id" ]
+where: 'id = ?'
+args_mapping: 'root = [ this.id ]'
+`, dsn, tableName)
+			env := service.NewEnvironment()
+			selectConfig, err := isql.SelectProcessorConfig().ParseYAML(conf, env)
+			require.NoError(t, err)
+			selectProc, err := isql.NewSQLSelectProcessorFromConfig(selectConfig, service.MockResources())
+			require.NoError(t, err)
+			t.Cleanup(func() { selectProc.Close(t.Context()) })
+
+			_, err = selectProc.ProcessBatch(t.Context(), service.MessageBatch{service.NewMessage([]byte(`{"id":1774903303}`))})
+			require.NoError(t, err)
+
+			require.Contains(t, lastQuery(t, tableName), "WHERE id = 1774903303")
+		})
+
+		t.Run("Float64 arg", func(t *testing.T) {
+			conf := fmt.Sprintf(`
+driver: clickhouse
+dsn: %s
+table: %s
+columns: [ "value" ]
+where: 'value = ?'
+args_mapping: 'root = [ this.v ]'
+`, dsn, tableName)
+			env := service.NewEnvironment()
+			selectConfig, err := isql.SelectProcessorConfig().ParseYAML(conf, env)
+			require.NoError(t, err)
+			selectProc, err := isql.NewSQLSelectProcessorFromConfig(selectConfig, service.MockResources())
+			require.NoError(t, err)
+			t.Cleanup(func() { selectProc.Close(t.Context()) })
+
+			_, err = selectProc.ProcessBatch(t.Context(), service.MessageBatch{service.NewMessage([]byte(`{"v":3.14}`))})
+			require.NoError(t, err)
+
+			require.Contains(t, lastQuery(t, tableName), "WHERE value = 3.14")
+		})
+	})
+
+	t.Run("sql_raw query log", func(t *testing.T) {
+		tableName, err := gonanoid.Generate("abcdefghijklmnopqrstuvwxyz", 12)
+		require.NoError(t, err)
+
+		_, err = db.ExecContext(t.Context(), fmt.Sprintf(`CREATE TABLE %s (id Int64, value Float64) ENGINE=MergeTree() ORDER BY id`, tableName))
+		require.NoError(t, err)
+		_, err = db.ExecContext(t.Context(), fmt.Sprintf(`INSERT INTO %s VALUES (?, ?)`, tableName), int64(1774903303), float64(3.14))
+		require.NoError(t, err)
+
+		t.Run("Int64 arg", func(t *testing.T) {
+			conf := fmt.Sprintf(`
+driver: clickhouse
+dsn: %s
+query: 'SELECT id FROM %s WHERE id = $1'
+args_mapping: 'root = [ this.id ]'
+`, dsn, tableName)
+			env := service.NewEnvironment()
+			rawConfig, err := isql.RawProcessorConfig().ParseYAML(conf, env)
+			require.NoError(t, err)
+			rawProc, err := isql.NewSQLRawProcessorFromConfig(rawConfig, service.MockResources())
+			require.NoError(t, err)
+			t.Cleanup(func() { rawProc.Close(t.Context()) })
+
+			_, err = rawProc.ProcessBatch(t.Context(), service.MessageBatch{service.NewMessage([]byte(`{"id":1774903303}`))})
+			require.NoError(t, err)
+
+			require.Contains(t, lastQuery(t, tableName), "WHERE id = 1774903303")
+		})
+
+		t.Run("Float64 arg", func(t *testing.T) {
+			conf := fmt.Sprintf(`
+driver: clickhouse
+dsn: %s
+query: 'SELECT value FROM %s WHERE value = $1'
+args_mapping: 'root = [ this.v ]'
+`, dsn, tableName)
+			env := service.NewEnvironment()
+			rawConfig, err := isql.RawProcessorConfig().ParseYAML(conf, env)
+			require.NoError(t, err)
+			rawProc, err := isql.NewSQLRawProcessorFromConfig(rawConfig, service.MockResources())
+			require.NoError(t, err)
+			t.Cleanup(func() { rawProc.Close(t.Context()) })
+
+			_, err = rawProc.ProcessBatch(t.Context(), service.MessageBatch{service.NewMessage([]byte(`{"v":3.14}`))})
+			require.NoError(t, err)
+
+			require.Contains(t, lastQuery(t, tableName), "WHERE value = 3.14")
+		})
+	})
 }
 
 func TestIntegrationClickhouse(t *testing.T) {
