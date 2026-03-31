@@ -1,0 +1,64 @@
+# Salesforce CDC benchmark
+# Measures throughput of streaming Account change events via the Pub/Sub API.
+#
+# Prerequisites:
+#   1. Enable Change Data Capture for Account in Salesforce:
+#      Setup > Change Data Capture > select Account > Save
+#   2. Generate Account changes with the write benchmark in a separate terminal:
+#      BENCH_WRITE_MODE=realtime task bench:write:realtime
+#
+# Required env vars:
+#   export SALESFORCE_ORG_URL="https://your-domain.salesforce.com"
+#   export SALESFORCE_CLIENT_ID="your-connected-app-client-id"
+#   export SALESFORCE_CLIENT_SECRET="your-connected-app-client-secret"
+#
+# Optional:
+#   export BENCH_CDC_BATCH_SIZE=100    (default: 100)
+#   export BENCH_CDC_BUFFER_SIZE=1000  (default: 1000)
+
+logger:
+  level: INFO
+  format: logfmt
+  add_timestamp: true
+
+http:
+  debug_endpoints: true
+
+input:
+  generate:
+    interval: "@every 1s"
+    mapping: 'root = {}'
+
+pipeline:
+  processors:
+    - salesforce:
+        org_url: "${SALESFORCE_ORG_URL}"
+        client_id: "${SALESFORCE_CLIENT_ID}"
+        client_secret: "${SALESFORCE_CLIENT_SECRET}"
+        restapi_version: "v65.0"
+        request_timeout: "30s"
+        max_retries: 5
+        cache_resource: sf_bench_checkpoint
+        cdc_enabled: true
+        cdc_objects:
+          - Account
+        cdc_batch_size: 1000
+        cdc_buffer_size: ${BENCH_CDC_BUFFER_SIZE:1000}
+        cdc_replay_preset: "earliest"
+
+output:
+  processors:
+    - benchmark:
+        interval: 1s
+        count_bytes: true
+  drop: {}
+
+cache_resources:
+  - label: sf_bench_checkpoint
+    file:
+      directory: /tmp/sf_bench_checkpoint
+
+metrics:
+  prometheus:
+    add_process_metrics: true
+    add_go_metrics: true
