@@ -150,8 +150,24 @@ func (db *TestDB) CreateTableWithCDCEnabledIfNotExists(ctx context.Context, full
 			%s
 			%s
 		END;`, tableName, schema, createTableQuery, enableCDC, enableSnapshot)
-	if _, err := db.Exec(q); err != nil {
-		return err
+	// Retry when SQL Server Agent is still starting — sp_cdc_enable_table
+	// internally calls sp_cdc_add_job which requires a running Agent.
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+	deadline := time.Now().Add(2 * time.Minute)
+	for {
+		_, err := db.Exec(q)
+		if err == nil {
+			break
+		}
+		if !strings.Contains(err.Error(), "SQL Server Agent is starting") || time.Now().After(deadline) {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+		}
 	}
 
 	// wait for CDC table to be ready, this avoids time.sleeps
