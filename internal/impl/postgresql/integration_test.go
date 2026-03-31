@@ -78,15 +78,16 @@ func ResourceWithPostgreSQLVersion(t *testing.T, version string) (string, *sql.D
 
 	var db *sql.DB
 	require.Eventually(t, func() bool {
+		if db != nil {
+			db.Close()
+		}
 		if db, err = sql.Open("postgres", databaseURL); err != nil {
 			return false
 		}
 
-		t.Cleanup(func() {
-			_ = db.Close()
-		})
-
 		if err = db.Ping(); err != nil {
+			db.Close()
+			db = nil
 			return false
 		}
 
@@ -150,6 +151,11 @@ func ResourceWithPostgreSQLVersion(t *testing.T, version string) (string, *sql.D
 
 		return err == nil
 	}, 2*time.Minute, time.Second, "could not connect to postgres")
+	t.Cleanup(func() {
+		if db != nil {
+			_ = db.Close()
+		}
+	})
 
 	return databaseURL, db, nil
 }

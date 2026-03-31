@@ -240,6 +240,9 @@ func SetupTestWithMicrosoftSQLServerVersion(t *testing.T) (string, *TestDB) {
 
 	var db *sql.DB
 	require.Eventually(t, func() bool {
+		if db != nil {
+			db.Close()
+		}
 		var openErr error
 		db, openErr = sql.Open("mssql", connectionString)
 		if openErr != nil {
@@ -251,11 +254,15 @@ func SetupTestWithMicrosoftSQLServerVersion(t *testing.T) (string, *TestDB) {
 		db.SetConnMaxLifetime(time.Minute * 5)
 
 		if openErr = db.Ping(); openErr != nil {
+			db.Close()
+			db = nil
 			return false
 		}
 
 		// enable CDC on database
 		if _, openErr = db.Exec("EXEC sys.sp_cdc_enable_db;"); openErr != nil {
+			db.Close()
+			db = nil
 			return false
 		}
 
@@ -290,6 +297,9 @@ func MustSetupTestWithMicrosoftSQLServerVersion(t *testing.T) (string, *sql.DB) 
 
 	var db *sql.DB
 	require.Eventually(t, func() bool {
+		if db != nil {
+			db.Close()
+		}
 		var openErr error
 		if db, openErr = sql.Open("mssql", connectionString); openErr != nil {
 			return false
@@ -300,6 +310,8 @@ func MustSetupTestWithMicrosoftSQLServerVersion(t *testing.T) (string, *sql.DB) 
 		db.SetConnMaxLifetime(time.Minute * 5)
 
 		if openErr = db.Ping(); openErr != nil {
+			db.Close()
+			db = nil
 			return false
 		}
 

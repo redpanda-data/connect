@@ -671,6 +671,9 @@ func runClickhouseTest(t *testing.T, dsnScheme string) {
 
 	dsn := fmt.Sprintf("%s://localhost:%s/", dsnScheme, mappedPort.Port())
 	require.Eventually(t, func() bool {
+		if db != nil {
+			db.Close()
+		}
 		db, err = sql.Open("clickhouse", dsn)
 		if err != nil {
 			return false
@@ -681,6 +684,8 @@ func runClickhouseTest(t *testing.T, dsnScheme string) {
 			return false
 		}
 		if _, err := createTable("footable"); err != nil {
+			db.Close()
+			db = nil
 			return false
 		}
 		return true
@@ -941,6 +946,9 @@ func TestIntegrationMySQL(t *testing.T) {
 
 	dsn := fmt.Sprintf("testuser:testpass@tcp(localhost:%s)/testdb", mp.Port())
 	require.Eventually(t, func() bool {
+		if db != nil {
+			db.Close()
+		}
 		if db, err = sql.Open("mysql", dsn); err != nil {
 			return false
 		}
@@ -950,6 +958,8 @@ func TestIntegrationMySQL(t *testing.T) {
 			return false
 		}
 		if _, err := createTable("footable"); err != nil {
+			db.Close()
+			db = nil
 			return false
 		}
 		return true
@@ -998,6 +1008,9 @@ func TestIntegrationMSSQL(t *testing.T) {
 
 	dsn := fmt.Sprintf("sqlserver://sa:"+testPassword+"@localhost:%s?database=master", mp.Port())
 	require.Eventually(t, func() bool {
+		if db != nil {
+			db.Close()
+		}
 		db, err = sql.Open("mssql", dsn)
 		if err != nil {
 			return false
@@ -1008,6 +1021,8 @@ func TestIntegrationMSSQL(t *testing.T) {
 			return false
 		}
 		if _, err := createTable("footable"); err != nil {
+			db.Close()
+			db = nil
 			return false
 		}
 		return true
@@ -1099,6 +1114,9 @@ func TestIntegrationOracle(t *testing.T) {
 
 	dsn := fmt.Sprintf("oracle://system:testpass@localhost:%s/FREEPDB1", mp.Port())
 	require.Eventually(t, func() bool {
+		if db != nil {
+			db.Close()
+		}
 		db, err = sql.Open("oracle", dsn)
 		if err != nil {
 			return false
@@ -1111,6 +1129,8 @@ func TestIntegrationOracle(t *testing.T) {
 		}
 
 		if _, err := createTable("footable"); err != nil {
+			db.Close()
+			db = nil
 			return false
 		}
 		return true
@@ -1158,6 +1178,9 @@ create table %s (
 
 	dsn := fmt.Sprintf("http://trinouser:"+testPassword+"@localhost:%s", mp.Port())
 	require.Eventually(t, func() bool {
+		if db != nil {
+			db.Close()
+		}
 		db, err = sql.Open("trino", dsn)
 		if err != nil {
 			return false
@@ -1168,6 +1191,8 @@ create table %s (
 			return false
 		}
 		if _, err := createTable("test"); err != nil {
+			db.Close()
+			db = nil
 			return false
 		}
 		return true
@@ -1218,6 +1243,9 @@ func TestIntegrationCosmosDB(t *testing.T) {
 	)
 
 	require.Eventually(t, func() bool {
+		if db != nil {
+			db.Close()
+		}
 		db, err = sql.Open("gocosmos", dsn)
 		if err != nil {
 			return false
@@ -1228,9 +1256,13 @@ func TestIntegrationCosmosDB(t *testing.T) {
 			return false
 		}
 		if _, err := db.Exec(fmt.Sprintf(`create database %s`, dummyDatabase)); err != nil {
+			db.Close()
+			db = nil
 			return false
 		}
 		if _, err := createContainer(dummyContainer); err != nil {
+			db.Close()
+			db = nil
 			return false
 		}
 		return true
