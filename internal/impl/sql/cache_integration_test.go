@@ -67,6 +67,9 @@ func TestIntegrationCache(t *testing.T) {
 
 	dsn := fmt.Sprintf("postgres://testuser:testpass@localhost:%s/testdb?sslmode=disable", mp.Port())
 	require.Eventually(t, func() bool {
+		if db != nil {
+			db.Close()
+		}
 		db, err = sql.Open("postgres", dsn)
 		if err != nil {
 			return false
@@ -77,6 +80,8 @@ func TestIntegrationCache(t *testing.T) {
 			return false
 		}
 		if _, err := createTable("footable"); err != nil {
+			db.Close()
+			db = nil
 			return false
 		}
 		return true

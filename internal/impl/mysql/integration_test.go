@@ -83,6 +83,9 @@ func setupTestWithMySQLVersion(t *testing.T, version string) (string, *testDB) {
 
 	var db *sql.DB
 	require.Eventually(t, func() bool {
+		if db != nil {
+			db.Close()
+		}
 		db, err = sql.Open("mysql", dsn)
 		if err != nil {
 			return false
@@ -92,7 +95,12 @@ func setupTestWithMySQLVersion(t *testing.T, version string) (string, *testDB) {
 		db.SetMaxIdleConns(5)
 		db.SetConnMaxLifetime(time.Minute * 5)
 
-		return db.Ping() == nil
+		if db.Ping() != nil {
+			db.Close()
+			db = nil
+			return false
+		}
+		return true
 	}, time.Minute, time.Second)
 	t.Cleanup(func() {
 		assert.NoError(t, db.Close())

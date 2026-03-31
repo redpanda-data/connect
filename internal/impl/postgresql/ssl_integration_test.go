@@ -181,12 +181,20 @@ hostssl all all all cert clientcert=%s
 
 	var db *sql.DB
 	require.Eventually(t, func() bool {
+		if db != nil {
+			db.Close()
+		}
 		var dbErr error
 		db, dbErr = sql.Open("postgres", dsn)
 		if dbErr != nil {
 			return false
 		}
-		return db.Ping() == nil
+		if db.Ping() != nil {
+			db.Close()
+			db = nil
+			return false
+		}
+		return true
 	}, time.Minute, time.Second)
 
 	t.Cleanup(func() { _ = db.Close() })
