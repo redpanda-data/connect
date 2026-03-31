@@ -110,7 +110,8 @@ func (o *Output) TestFail(name, elapsed, outFile string, line int, cached bool) 
 		clr = o.dimPr
 		suffix = "(cached)"
 	}
-	o.testLine(clr, "FAIL", name, suffix+" -> "+outFile+fmt.Sprintf(":%d", line))
+	ref := fmt.Sprintf("%s:%d", outFile, line)
+	o.testLine(clr, "FAIL", name, suffix+" -> task test:show -- "+ref)
 	// Replace the markdown line with a clickable link.
 	o.replaceLastBufLine(fmt.Sprintf("- FAIL %s %s — [%s:%d](%s:%d)",
 		name, suffix, base, line, base, line))

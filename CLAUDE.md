@@ -71,17 +71,14 @@ task test                         # Run unit and template tests
 task test:unit                    # Run unit tests only (alias: task test:ut)
 task test:unit-race               # Run unit tests with race detection
 task test:template                # Run template/Bloblang tests (alias: task test:tmpl)
-task test:integration-package PKG=./internal/impl/kafka/...  # Run integration tests (alias: task test:it PKG=...)
+task test:integration                    # Run all integration tests (alias: task test:it)
+task test:integration -- aws kafka       # Run integration tests filtered by package name
 
 # Run specific test
 go test -v -run TestFunctionName ./internal/impl/category/
-
-# Run integration test for specific package (requires Docker)
-go test -v -run "^Test.*Integration.*$" ./internal/impl/kafka/
 ```
 
 Integration tests require Docker and are skipped by default.
-Run them individually per component.
 
 ### Code Quality
 ```bash
