@@ -13,9 +13,9 @@ package salesforce
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
-	"net/http"
 	"net/url"
 	"strings"
 	"sync"
@@ -23,6 +23,7 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
+	"github.com/redpanda-data/connect/v4/internal/httpclient"
 	"github.com/redpanda-data/connect/v4/internal/impl/salesforce/salesforcegrpc"
 	"github.com/redpanda-data/connect/v4/internal/impl/salesforce/salesforcehttp"
 	"github.com/redpanda-data/connect/v4/internal/license"
@@ -369,16 +370,32 @@ func newSalesforceProcessor(conf *service.ParsedConfig, mgr *service.Resources) 
 		}
 	}
 
+	httpCfg := httpclient.Config{
+		BaseURL:                orgURL,
+		Timeout:                timeout,
+		BackoffMaxRetries:      maxRetries,
+		BackoffInitialInterval: 500 * time.Millisecond,
+		BackoffMaxInterval:     30 * time.Second,
+		Transport:              httpclient.DefaultTransportConfig(),
+		MetricPrefix:           "salesforce_http",
+	}
+	if strings.HasPrefix(orgURL, "https://") {
+		httpCfg.TLSEnabled = true
+		httpCfg.TLSConf = &tls.Config{MinVersion: tls.VersionTLS12}
+	}
+	httpClient, err := httpclient.NewClient(httpCfg, mgr)
+	if err != nil {
+		return nil, fmt.Errorf("create HTTP client: %w", err)
+	}
+
 	salesforceHttp, err := salesforcehttp.NewClient(salesforcehttp.ClientConfig{
 		OrgURL:         orgURL,
 		ClientID:       clientID,
 		ClientSecret:   clientSecret,
 		APIVersion:     apiVersion,
-		MaxRetries:     maxRetries,
 		QueryBatchSize: queryBatchSize,
-		HTTPClient:     &http.Client{Timeout: timeout},
+		HTTPClient:     httpClient,
 		Logger:         mgr.Logger(),
-		Metrics:        mgr.Metrics(),
 	})
 	if err != nil {
 		return nil, err

@@ -36,7 +36,6 @@ func TestUpdateAndSetBearerToken_RealClient(t *testing.T) {
 		ClientID:       "id",
 		ClientSecret:   "secret",
 		APIVersion:     "v65.0",
-		MaxRetries:     1,
 		QueryBatchSize: 2000,
 		HTTPClient:     ts.Client(),
 	})
@@ -90,7 +89,6 @@ func TestCallSalesforceApi_RefreshOn401_RealClient(t *testing.T) {
 		ClientID:       "id",
 		ClientSecret:   "secret",
 		APIVersion:     "v65.0",
-		MaxRetries:     1,
 		QueryBatchSize: 2000,
 		HTTPClient:     ts.Client(),
 	})

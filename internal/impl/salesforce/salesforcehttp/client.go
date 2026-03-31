@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"maps"
 	"net/http"
 	"net/url"
@@ -31,70 +32,85 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/redpanda-data/connect/v4/internal/impl/salesforce/salesforcehttp/metrics"
-
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
+
+// httpDoer abstracts HTTP request execution. *http.Client satisfies this interface.
+type httpDoer interface {
+	Do(req *http.Request) (*http.Response, error)
+}
 
 // salesforceAPIBasePath is the base path for Salesforce Rest API
 const salesforceAPIBasePath = "/services"
 
-// This is the general function that calls Salesforce API on a specific URL using the URL object.
-// It applies standard header parameters to all calls, Authorization, User-Agent and Accept.
-// It uses the helper functions to check against possible response codes and handling the retry-after mechanism
-func (s *Client) callSalesforceAPI(ctx context.Context, u *url.URL) ([]byte, error) {
-	s.log.Debugf("API call: %s", u.String())
+// do executes req and returns the response body, returning *HTTPError for non-2xx responses.
+// 429 retry, metrics, logging, and tracing are handled by the underlying httpDoer transport chain.
+func (s *Client) do(req *http.Request) ([]byte, error) {
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("reading response body: %w", err)
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, &HTTPError{
+			StatusCode: resp.StatusCode,
+			Reason:     http.StatusText(resp.StatusCode),
+			Body:       string(body),
+			Headers:    resp.Header.Clone(),
+		}
+	}
+	return body, nil
+}
 
+// withAuth ensures a bearer token is present, calls doFn, and on 401 refreshes the token
+// and retries doFn once. doFn must re-read getBearerToken() on each invocation so that the
+// second call picks up the refreshed token.
+func (s *Client) withAuth(ctx context.Context, doFn func() ([]byte, error)) ([]byte, error) {
 	if s.getBearerToken() == "" {
 		if err := s.updateAndSetBearerToken(ctx); err != nil {
 			return nil, err
 		}
 	}
-
-	body, err := s.doSalesforceRequest(ctx, u)
+	body, err := doFn()
 	if err == nil {
 		return body, nil
 	}
-
-	// Check if it's an HTTPError
 	httpErr, ok := err.(*HTTPError)
-	if !ok {
+	if !ok || httpErr.StatusCode != http.StatusUnauthorized {
 		return nil, err
 	}
-
-	// Only refresh on 401
-	if httpErr.StatusCode != http.StatusUnauthorized {
-		return nil, err
-	}
-
 	s.log.Warn("Salesforce token expired, refreshing token...")
-	// Refresh token
 	if err := s.updateAndSetBearerToken(ctx); err != nil {
 		return nil, fmt.Errorf("refresh token: %w", err)
 	}
-
-	// Retry once
-	retryBody, retryErr := s.doSalesforceRequest(ctx, u)
-	if retryErr != nil {
-		return nil, fmt.Errorf("request failed: %w", retryErr)
+	body, err = doFn()
+	if err != nil {
+		return nil, fmt.Errorf("request failed after token refresh: %w", err)
 	}
+	return body, nil
+}
 
-	return retryBody, nil
+// callSalesforceAPI makes an authenticated GET request to u.
+func (s *Client) callSalesforceAPI(ctx context.Context, u *url.URL) ([]byte, error) {
+	s.log.Debugf("API call: %s", u.String())
+	return s.withAuth(ctx, func() ([]byte, error) {
+		return s.doSalesforceRequest(ctx, u)
+	})
 }
 
 func (s *Client) doSalesforceRequest(ctx context.Context, u *url.URL) ([]byte, error) {
-	newReq := func() (*http.Request, error) {
-		req, err := http.NewRequestWithContext(ctx, "GET", u.String(), nil)
-		if err != nil {
-			return nil, err
-		}
-		req.Header.Set("Accept", "application/json")
-		req.Header.Set("User-Agent", "Redpanda-Connect")
-		req.Header.Set("Authorization", "Bearer "+s.getBearerToken())
-		return req, nil
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+	if err != nil {
+		return nil, err
 	}
-
-	return DoRequestWithRetries(ctx, s.httpClient, newReq, s.retryOpts)
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", "Redpanda-Connect")
+	req.Header.Set("Authorization", "Bearer "+s.getBearerToken())
+	return s.do(req)
 }
 
 // Function to get the Bearer token from Salesforce Oauth2.0 endpoint using client credentials grant type along with client id and client secret
@@ -112,20 +128,20 @@ func (s *Client) updateAndSetBearerToken(ctx context.Context) error {
 	form.Set("grant_type", "client_credentials")
 	form.Set("client_id", s.clientID)
 	form.Set("client_secret", s.clientSecret)
-
 	encodedForm := form.Encode()
-	newReq := func() (*http.Request, error) {
-		req, err := http.NewRequestWithContext(ctx, "POST", apiUrl.String(), strings.NewReader(encodedForm))
-		if err != nil {
-			return nil, err
-		}
-		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-		req.Header.Set("Accept", "application/json")
-		req.Header.Set("User-Agent", "Redpanda-Connect")
-		return req, nil
-	}
 
-	body, err := DoRequestWithRetries(ctx, s.httpClient, newReq, s.retryOpts)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiUrl.String(), strings.NewReader(encodedForm))
+	if err != nil {
+		return fmt.Errorf("build token request: %w", err)
+	}
+	req.GetBody = func() (io.ReadCloser, error) {
+		return io.NopCloser(strings.NewReader(encodedForm)), nil
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", "Redpanda-Connect")
+
+	body, err := s.do(req)
 	if err != nil {
 		return fmt.Errorf("request failed: %w", err)
 	}
@@ -216,54 +232,21 @@ func (s *Client) GetSObjectData(ctx context.Context, query string) ([]byte, erro
 // batchSize header so Salesforce returns at most queryBatchSize records per page.
 func (s *Client) callSalesforceQueryAPI(ctx context.Context, u *url.URL) ([]byte, error) {
 	s.log.Debugf("Query API call: %s", u.String())
-
-	if s.getBearerToken() == "" {
-		if err := s.updateAndSetBearerToken(ctx); err != nil {
-			return nil, err
-		}
-	}
-
-	body, err := s.doSalesforceQueryRequest(ctx, u)
-	if err == nil {
-		return body, nil
-	}
-
-	httpErr, ok := err.(*HTTPError)
-	if !ok {
-		return nil, err
-	}
-
-	if httpErr.StatusCode != http.StatusUnauthorized {
-		return nil, err
-	}
-
-	s.log.Warn("Salesforce token expired, refreshing token...")
-	if err := s.updateAndSetBearerToken(ctx); err != nil {
-		return nil, fmt.Errorf("refresh token: %w", err)
-	}
-
-	retryBody, retryErr := s.doSalesforceQueryRequest(ctx, u)
-	if retryErr != nil {
-		return nil, fmt.Errorf("request failed: %w", retryErr)
-	}
-
-	return retryBody, nil
+	return s.withAuth(ctx, func() ([]byte, error) {
+		return s.doSalesforceQueryRequest(ctx, u)
+	})
 }
 
 func (s *Client) doSalesforceQueryRequest(ctx context.Context, u *url.URL) ([]byte, error) {
-	newReq := func() (*http.Request, error) {
-		req, err := http.NewRequestWithContext(ctx, "GET", u.String(), nil)
-		if err != nil {
-			return nil, err
-		}
-		req.Header.Set("Accept", "application/json")
-		req.Header.Set("User-Agent", "Redpanda-Connect")
-		req.Header.Set("Authorization", "Bearer "+s.getBearerToken())
-		req.Header.Set("Sforce-Query-Options", fmt.Sprintf("batchSize=%d", s.queryBatchSize))
-		return req, nil
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+	if err != nil {
+		return nil, err
 	}
-
-	return DoRequestWithRetries(ctx, s.httpClient, newReq, s.retryOpts)
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", "Redpanda-Connect")
+	req.Header.Set("Authorization", "Bearer "+s.getBearerToken())
+	req.Header.Set("Sforce-Query-Options", fmt.Sprintf("batchSize=%d", s.queryBatchSize))
+	return s.do(req)
 }
 
 // SObjectInfo holds basic info about an SObject
@@ -288,8 +271,7 @@ type Client struct {
 	bearerToken  atomic.Value
 	instanceURL  atomic.Value
 	tenantID     atomic.Value
-	httpClient   *http.Client
-	retryOpts    RetryOptions
+	httpClient   httpDoer
 	log          *service.Logger
 
 	// tokenMu serialises concurrent token refresh calls so that a single 401 response
@@ -327,16 +309,16 @@ func (s *Client) getBearerToken() string {
 }
 
 // ClientConfig holds the configuration for creating a new Salesforce HTTP client.
+// Auth, retry, metrics, logging, and tracing are handled by the HTTPClient (typically
+// assembled via httpclient.NewClient).
 type ClientConfig struct {
 	OrgURL         string
 	ClientID       string
 	ClientSecret   string
 	APIVersion     string
-	MaxRetries     int
 	QueryBatchSize int
-	HTTPClient     *http.Client
+	HTTPClient     httpDoer
 	Logger         *service.Logger
-	Metrics        *service.Metrics
 }
 
 // NewClient is the constructor for a Client object
@@ -347,15 +329,12 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 		cfg.QueryBatchSize = 2000
 	}
 	return &Client{
-		log:          cfg.Logger,
-		orgURL:       cfg.OrgURL,
-		clientID:     cfg.ClientID,
-		clientSecret: cfg.ClientSecret,
-		apiVersion:   cfg.APIVersion,
-		retryOpts: RetryOptions{
-			MaxRetries: cfg.MaxRetries,
-		},
-		httpClient:             metrics.NewInstrumentedClient(cfg.Metrics, "salesforce_http", cfg.HTTPClient),
+		log:                    cfg.Logger,
+		orgURL:                 cfg.OrgURL,
+		clientID:               cfg.ClientID,
+		clientSecret:           cfg.ClientSecret,
+		apiVersion:             cfg.APIVersion,
+		httpClient:             cfg.HTTPClient,
 		queryBatchSize:         cfg.QueryBatchSize,
 		unsupportedSObjects:    make(map[string]struct{}),
 		graphqlFallbackObjects: make(map[string]struct{}),
@@ -805,54 +784,24 @@ func (s *Client) GetNextBatchParallel(ctx context.Context, cursor Cursor, parall
 // callSalesforceAPIWithBody sends an authenticated POST request with a JSON body.
 func (s *Client) callSalesforceAPIWithBody(ctx context.Context, u *url.URL, body []byte) ([]byte, error) {
 	s.log.Debugf("API POST call: %s", u.String())
-
-	if s.getBearerToken() == "" {
-		if err := s.updateAndSetBearerToken(ctx); err != nil {
-			return nil, err
-		}
-	}
-
-	resp, err := s.doSalesforcePostRequest(ctx, u, body)
-	if err == nil {
-		return resp, nil
-	}
-
-	httpErr, ok := err.(*HTTPError)
-	if !ok {
-		return nil, err
-	}
-
-	if httpErr.StatusCode != http.StatusUnauthorized {
-		return nil, err
-	}
-
-	s.log.Warn("Salesforce token expired, refreshing token...")
-	if err := s.updateAndSetBearerToken(ctx); err != nil {
-		return nil, fmt.Errorf("refresh token: %w", err)
-	}
-
-	retryResp, retryErr := s.doSalesforcePostRequest(ctx, u, body)
-	if retryErr != nil {
-		return nil, fmt.Errorf("request failed: %w", retryErr)
-	}
-
-	return retryResp, nil
+	return s.withAuth(ctx, func() ([]byte, error) {
+		return s.doSalesforcePostRequest(ctx, u, body)
+	})
 }
 
 func (s *Client) doSalesforcePostRequest(ctx context.Context, u *url.URL, body []byte) ([]byte, error) {
-	newReq := func() (*http.Request, error) {
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, u.String(), bytes.NewReader(body))
-		if err != nil {
-			return nil, err
-		}
-		req.Header.Set("Accept", "application/json")
-		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("User-Agent", "Redpanda-Connect")
-		req.Header.Set("Authorization", "Bearer "+s.getBearerToken())
-		return req, nil
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u.String(), bytes.NewReader(body))
+	if err != nil {
+		return nil, err
 	}
-
-	return DoRequestWithRetries(ctx, s.httpClient, newReq, s.retryOpts)
+	req.GetBody = func() (io.ReadCloser, error) {
+		return io.NopCloser(bytes.NewReader(body)), nil
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", "Redpanda-Connect")
+	req.Header.Set("Authorization", "Bearer "+s.getBearerToken())
+	return s.do(req)
 }
 
 // loadSObjectList fetches the full SObject catalogue and describes each one in parallel
@@ -1122,12 +1071,7 @@ func (s *Client) DeleteJSON(ctx context.Context, rawURL string) ([]byte, error) 
 	if err != nil {
 		return nil, fmt.Errorf("invalid URL %q: %w", rawURL, err)
 	}
-	if s.getBearerToken() == "" {
-		if err := s.updateAndSetBearerToken(ctx); err != nil {
-			return nil, err
-		}
-	}
-	newReq := func() (*http.Request, error) {
+	return s.withAuth(ctx, func() ([]byte, error) {
 		req, err := http.NewRequestWithContext(ctx, http.MethodDelete, u.String(), nil)
 		if err != nil {
 			return nil, err
@@ -1135,81 +1079,41 @@ func (s *Client) DeleteJSON(ctx context.Context, rawURL string) ([]byte, error) 
 		req.Header.Set("Accept", "application/json")
 		req.Header.Set("User-Agent", "Redpanda-Connect")
 		req.Header.Set("Authorization", "Bearer "+s.getBearerToken())
-		return req, nil
-	}
-	resp, err := DoRequestWithRetries(ctx, s.httpClient, newReq, s.retryOpts)
-	if err == nil {
-		return resp, nil
-	}
-	httpErr, ok := err.(*HTTPError)
-	if !ok || httpErr.StatusCode != http.StatusUnauthorized {
-		return nil, err
-	}
-	if err := s.updateAndSetBearerToken(ctx); err != nil {
-		return nil, fmt.Errorf("refresh token: %w", err)
-	}
-	return DoRequestWithRetries(ctx, s.httpClient, newReq, s.retryOpts)
+		return s.do(req)
+	})
 }
 
 func (s *Client) callSalesforceAPIPatch(ctx context.Context, u *url.URL, body []byte) ([]byte, error) {
-	if s.getBearerToken() == "" {
-		if err := s.updateAndSetBearerToken(ctx); err != nil {
-			return nil, err
-		}
-	}
-	newReq := func() (*http.Request, error) {
+	return s.withAuth(ctx, func() ([]byte, error) {
 		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, u.String(), bytes.NewReader(body))
 		if err != nil {
 			return nil, err
+		}
+		req.GetBody = func() (io.ReadCloser, error) {
+			return io.NopCloser(bytes.NewReader(body)), nil
 		}
 		req.Header.Set("Accept", "application/json")
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("User-Agent", "Redpanda-Connect")
 		req.Header.Set("Authorization", "Bearer "+s.getBearerToken())
-		return req, nil
-	}
-	resp, err := DoRequestWithRetries(ctx, s.httpClient, newReq, s.retryOpts)
-	if err == nil {
-		return resp, nil
-	}
-	httpErr, ok := err.(*HTTPError)
-	if !ok || httpErr.StatusCode != http.StatusUnauthorized {
-		return nil, err
-	}
-	if err := s.updateAndSetBearerToken(ctx); err != nil {
-		return nil, fmt.Errorf("refresh token: %w", err)
-	}
-	return DoRequestWithRetries(ctx, s.httpClient, newReq, s.retryOpts)
+		return s.do(req)
+	})
 }
 
 func (s *Client) callSalesforceAPIPutCSV(ctx context.Context, u *url.URL, csvData []byte) ([]byte, error) {
-	if s.getBearerToken() == "" {
-		if err := s.updateAndSetBearerToken(ctx); err != nil {
-			return nil, err
-		}
-	}
-	newReq := func() (*http.Request, error) {
+	return s.withAuth(ctx, func() ([]byte, error) {
 		req, err := http.NewRequestWithContext(ctx, http.MethodPut, u.String(), bytes.NewReader(csvData))
 		if err != nil {
 			return nil, err
 		}
+		req.GetBody = func() (io.ReadCloser, error) {
+			return io.NopCloser(bytes.NewReader(csvData)), nil
+		}
 		req.Header.Set("Content-Type", "text/csv")
 		req.Header.Set("User-Agent", "Redpanda-Connect")
 		req.Header.Set("Authorization", "Bearer "+s.getBearerToken())
-		return req, nil
-	}
-	resp, err := DoRequestWithRetries(ctx, s.httpClient, newReq, s.retryOpts)
-	if err == nil {
-		return resp, nil
-	}
-	httpErr, ok := err.(*HTTPError)
-	if !ok || httpErr.StatusCode != http.StatusUnauthorized {
-		return nil, err
-	}
-	if err := s.updateAndSetBearerToken(ctx); err != nil {
-		return nil, fmt.Errorf("refresh token: %w", err)
-	}
-	return DoRequestWithRetries(ctx, s.httpClient, newReq, s.retryOpts)
+		return s.do(req)
+	})
 }
 
 // buildSObjectGraphQLQuery constructs a Salesforce GraphQL query for a given SObject.
