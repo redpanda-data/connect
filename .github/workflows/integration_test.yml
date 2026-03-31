@@ -57,7 +57,7 @@ jobs:
 
   integration-test-filter:
     if: >-
-      (github.event_name == 'issue_comment' && github.event.issue.pull_request && startsWith(github.event.comment.body, '/test ')) ||
+      (github.event_name == 'issue_comment' && github.event.issue.pull_request && startsWith(github.event.comment.body, '/integration ')) ||
       (github.event_name == 'workflow_dispatch' && github.event.inputs.filter != '') ||
       (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'run-integration-tests'))
     runs-on: ubuntu-latest-32
@@ -81,7 +81,7 @@ jobs:
         env:
           COMMENT_BODY: ${{ github.event.comment.body }}
         run: |
-          FILTER=$(echo "${COMMENT_BODY}" | sed 's|^/test ||')
+          FILTER=$(echo "${COMMENT_BODY}" | sed 's|^/integration ||')
           echo "filter=${FILTER}" >> "$GITHUB_OUTPUT"
 
       - name: Checkout PR branch
