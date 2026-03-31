@@ -149,6 +149,9 @@ func countFileLines(path string) (lines int, endsWithNewline bool, err error) {
 	for scanner.Scan() {
 		lines++
 	}
+	if err := scanner.Err(); err != nil {
+		return lines, false, err
+	}
 
 	// Check last byte directly.
 	buf := make([]byte, 1)

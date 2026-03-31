@@ -37,6 +37,10 @@ func main() {
 		if err := cmdRun(os.Args[2:]); err != nil {
 			log.Fatal(err)
 		}
+	case "show":
+		if err := cmdShow(os.Args[2:]); err != nil {
+			log.Fatal(err)
+		}
 	default:
 		log.Fatalf("unknown subcommand: %s", os.Args[1])
 	}
@@ -46,7 +50,8 @@ func printUsage() {
 	log.Println("Usage: integration <command> [flags] [packages...]")
 	log.Println("")
 	log.Println("Commands:")
-	log.Println("  run    Run integration tests package by package")
+	log.Println("  run      Run integration tests package by package")
+	log.Println("  show     Show test output for a failure reference (file:line)")
 	log.Println("")
 	log.Println("Flags for run:")
 	log.Println("  --output-dir   Directory for test output (default: .integration/<timestamp>)")
