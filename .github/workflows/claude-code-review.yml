@@ -27,6 +27,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          PERMISSION=$(gh api repos/${{ github.repository }}/collaborators/${{ github.event.pull_request.user.login }}/permission --jq '.permission')
+          if [[ "$PERMISSION" == "admin" || "$PERMISSION" == "write" ]]; then
+            echo "Author has write access, skipping config change check."
+            exit 0
+          fi
+
           MODIFIED_FILES=$(gh pr view ${{ github.event.pull_request.number }} --json files --jq '.files[].path')
           echo "$MODIFIED_FILES"
           if echo "$MODIFIED_FILES" | grep -qE '(^|/)\.claude/|CLAUDE\.md$'; then
