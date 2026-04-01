@@ -1,6 +1,6 @@
 = redis_script
 :type: processor
-:status: beta
+:status: experimental
 :categories: ["Integration"]
 
 

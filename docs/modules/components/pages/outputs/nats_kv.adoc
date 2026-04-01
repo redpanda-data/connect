@@ -1,6 +1,6 @@
 = nats_kv
 :type: output
-:status: beta
+:status: experimental
 :categories: ["Services"]
 
 

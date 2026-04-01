@@ -1,6 +1,6 @@
 = microsoft_sql_server_cdc
 :type: input
-:status: beta
+:status: experimental
 :categories: ["Services"]
 
 

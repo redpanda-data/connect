@@ -1,6 +1,6 @@
 = redpanda
 :type: cache
-:status: beta
+:status: experimental
 :categories: ["Services"]
 
 

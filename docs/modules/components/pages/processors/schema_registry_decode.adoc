@@ -1,6 +1,6 @@
 = schema_registry_decode
 :type: processor
-:status: beta
+:status: experimental
 :categories: ["Parsing","Integration"]
 
 

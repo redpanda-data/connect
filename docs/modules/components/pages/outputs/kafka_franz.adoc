@@ -1,6 +1,6 @@
 = kafka_franz
 :type: output
-:status: beta
+:status: experimental
 :categories: ["Services"]
 
 

@@ -505,10 +505,6 @@ root.the_rest = this.value.slice(0, -4)
 
 === `slug`
 
-[CAUTION]
-====
-This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
-====
 Converts a string into a URL-friendly slug by replacing spaces with hyphens, removing special characters, and converting to lowercase. Supports multiple languages for proper transliteration of non-ASCII characters.
 
 Introduced in version 4.2.0.
@@ -729,10 +725,6 @@ root.search = this.param.unescape_url_query()
 
 === `unicode_segments`
 
-[CAUTION]
-====
-This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
-====
 Splits text into segments based on Unicode text segmentation rules. Returns an array of strings representing individual graphemes (visual characters), words (including punctuation and whitespace), or sentences. Handles complex Unicode correctly, including emoji with skin tone modifiers and zero-width joiners.
 
 ==== Parameters
@@ -2448,10 +2440,6 @@ root.has_bar = this.thing.contains(20)
 
 === `diff`
 
-[CAUTION]
-====
-This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
-====
 Compares the current value with another value and returns a detailed changelog describing all differences. The changelog contains operations (create, update, delete) with their paths and values, enabling you to track changes between data versions, implement audit logs, or synchronize data between systems.
 
 Introduced in version 4.25.0.
@@ -2854,11 +2842,6 @@ root.joined_numbers = this.numbers.map_each(this.string()).join(",")
 
 === `json_path`
 
-[CAUTION]
-.Experimental
-====
-This method is experimental and therefore breaking changes could be made to it outside of major version releases.
-====
 Executes the given JSONPath expression on an object or array and returns the result. The JSONPath expression syntax can be found at https://goessner.net/articles/JsonPath/. For more complex logic, you can use Gval expressions (https://github.com/PaesslerAG/gval).
 
 ==== Parameters
@@ -3079,10 +3062,6 @@ root.combined = this.list1.merge(this.list2)
 
 === `patch`
 
-[CAUTION]
-====
-This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
-====
 Applies a changelog (created by the diff method) to the current value, transforming it according to the specified operations. This enables you to synchronize data, replay changes, or implement event sourcing patterns by applying recorded changes to reconstruct state.
 
 Introduced in version 4.25.0.
@@ -3976,10 +3955,6 @@ root.id = "example".uuid_v5("77f836b7-9f61-46c0-851e-9b6ca3535e69")
 
 === `vector`
 
-[CAUTION]
-====
-This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
-====
 Converts an array of numbers into a vector type suitable for insertion into SQL databases with vector/embedding support. This is commonly used with PostgreSQL's pgvector extension for storing and querying machine learning embeddings, enabling similarity search and vector operations in your database.
 
 Introduced in version 4.33.0.
@@ -4518,11 +4493,6 @@ root.signed = this.claims.sign_jwt_rs512(signing_secret: """-----BEGIN RSA PRIVA
 
 === `geoip_anonymous_ip`
 
-[CAUTION]
-.Experimental
-====
-This method is experimental and therefore breaking changes could be made to it outside of major version releases.
-====
 Looks up an IP address against a https://www.maxmind.com/en/home[MaxMind database file^] and, if found, returns an object describing the anonymous IP associated with it.
 
 ==== Parameters
@@ -4531,11 +4501,6 @@ Looks up an IP address against a https://www.maxmind.com/en/home[MaxMind databas
 
 === `geoip_asn`
 
-[CAUTION]
-.Experimental
-====
-This method is experimental and therefore breaking changes could be made to it outside of major version releases.
-====
 Looks up an IP address against a https://www.maxmind.com/en/home[MaxMind database file^] and, if found, returns an object describing the ASN associated with it.
 
 ==== Parameters
@@ -4544,11 +4509,6 @@ Looks up an IP address against a https://www.maxmind.com/en/home[MaxMind databas
 
 === `geoip_city`
 
-[CAUTION]
-.Experimental
-====
-This method is experimental and therefore breaking changes could be made to it outside of major version releases.
-====
 Looks up an IP address against a https://www.maxmind.com/en/home[MaxMind database file^] and, if found, returns an object describing the city associated with it.
 
 ==== Parameters
@@ -4557,11 +4517,6 @@ Looks up an IP address against a https://www.maxmind.com/en/home[MaxMind databas
 
 === `geoip_connection_type`
 
-[CAUTION]
-.Experimental
-====
-This method is experimental and therefore breaking changes could be made to it outside of major version releases.
-====
 Looks up an IP address against a https://www.maxmind.com/en/home[MaxMind database file^] and, if found, returns an object describing the connection type associated with it.
 
 ==== Parameters
@@ -4570,11 +4525,6 @@ Looks up an IP address against a https://www.maxmind.com/en/home[MaxMind databas
 
 === `geoip_country`
 
-[CAUTION]
-.Experimental
-====
-This method is experimental and therefore breaking changes could be made to it outside of major version releases.
-====
 Looks up an IP address against a https://www.maxmind.com/en/home[MaxMind database file^] and, if found, returns an object describing the country associated with it.
 
 ==== Parameters
@@ -4583,11 +4533,6 @@ Looks up an IP address against a https://www.maxmind.com/en/home[MaxMind databas
 
 === `geoip_domain`
 
-[CAUTION]
-.Experimental
-====
-This method is experimental and therefore breaking changes could be made to it outside of major version releases.
-====
 Looks up an IP address against a https://www.maxmind.com/en/home[MaxMind database file^] and, if found, returns an object describing the domain associated with it.
 
 ==== Parameters
@@ -4596,11 +4541,6 @@ Looks up an IP address against a https://www.maxmind.com/en/home[MaxMind databas
 
 === `geoip_enterprise`
 
-[CAUTION]
-.Experimental
-====
-This method is experimental and therefore breaking changes could be made to it outside of major version releases.
-====
 Looks up an IP address against a https://www.maxmind.com/en/home[MaxMind database file^] and, if found, returns an object describing the enterprise associated with it.
 
 ==== Parameters
@@ -4609,11 +4549,6 @@ Looks up an IP address against a https://www.maxmind.com/en/home[MaxMind databas
 
 === `geoip_isp`
 
-[CAUTION]
-.Experimental
-====
-This method is experimental and therefore breaking changes could be made to it outside of major version releases.
-====
 Looks up an IP address against a https://www.maxmind.com/en/home[MaxMind database file^] and, if found, returns an object describing the ISP associated with it.
 
 ==== Parameters

@@ -1,6 +1,6 @@
 = redpanda
 :type: input
-:status: beta
+:status: experimental
 :categories: ["Services"]
 
 

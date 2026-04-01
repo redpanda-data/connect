@@ -1,6 +1,6 @@
 = gcp_cloud_storage
 :type: input
-:status: beta
+:status: experimental
 :categories: ["Services","GCP"]
 
 
