@@ -108,301 +108,301 @@ func mustParseURL(s string) *url.URL {
 	return u
 }
 
-// ---- do tests ----
+func TestDo(t *testing.T) {
+	t.Run("2xx returns body", func(t *testing.T) {
+		t.Parallel()
 
-func TestDo_2xx_ReturnsBody(t *testing.T) {
-	t.Parallel()
-
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"ok":true}`))
-	}))
-	defer ts.Close()
-
-	client, err := NewClient(ClientConfig{
-		OrgURL:         ts.URL,
-		ClientID:       "id",
-		ClientSecret:   "secret",
-		APIVersion:     "v65.0",
-		QueryBatchSize: 2000,
-		HTTPClient:     ts.Client(),
-	})
-	require.NoError(t, err)
-
-	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, ts.URL+"/services/data/v65.0", nil)
-	require.NoError(t, err)
-
-	body, err := client.do(req)
-	require.NoError(t, err)
-	assert.Equal(t, `{"ok":true}`, string(body))
-}
-
-func TestDo_Non2xx_ReturnsHTTPError(t *testing.T) {
-	t.Parallel()
-
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("X-Salesforce-Error", "session-expired")
-		w.WriteHeader(http.StatusNotFound)
-		_, _ = w.Write([]byte(`not found`))
-	}))
-	defer ts.Close()
-
-	client, err := NewClient(ClientConfig{
-		OrgURL:         ts.URL,
-		ClientID:       "id",
-		ClientSecret:   "secret",
-		APIVersion:     "v65.0",
-		QueryBatchSize: 2000,
-		HTTPClient:     ts.Client(),
-	})
-	require.NoError(t, err)
-
-	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, ts.URL+"/services/data/v65.0", nil)
-	require.NoError(t, err)
-
-	_, err = client.do(req)
-	require.Error(t, err)
-
-	var httpErr *HTTPError
-	require.ErrorAs(t, err, &httpErr)
-	assert.Equal(t, http.StatusNotFound, httpErr.StatusCode)
-	assert.Equal(t, "not found", httpErr.Body)
-	assert.Equal(t, "session-expired", httpErr.Headers.Get("X-Salesforce-Error"))
-}
-
-func TestDo_5xx_ReturnsHTTPError(t *testing.T) {
-	t.Parallel()
-
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = w.Write([]byte(`server error`))
-	}))
-	defer ts.Close()
-
-	client, err := NewClient(ClientConfig{
-		OrgURL:         ts.URL,
-		ClientID:       "id",
-		ClientSecret:   "secret",
-		APIVersion:     "v65.0",
-		QueryBatchSize: 2000,
-		HTTPClient:     ts.Client(),
-	})
-	require.NoError(t, err)
-
-	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, ts.URL+"/services/data/v65.0", nil)
-	require.NoError(t, err)
-
-	_, err = client.do(req)
-	require.Error(t, err)
-
-	var httpErr *HTTPError
-	require.ErrorAs(t, err, &httpErr)
-	assert.Equal(t, http.StatusInternalServerError, httpErr.StatusCode)
-	assert.Equal(t, "server error", httpErr.Body)
-}
-
-// ---- withAuth tests ----
-
-func TestWithAuth_SuccessOnFirstCall(t *testing.T) {
-	t.Parallel()
-
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Error("unexpected HTTP call — token is already set")
-	}))
-	defer ts.Close()
-
-	client, err := NewClient(ClientConfig{
-		OrgURL:         ts.URL,
-		ClientID:       "id",
-		ClientSecret:   "secret",
-		APIVersion:     "v65.0",
-		QueryBatchSize: 2000,
-		HTTPClient:     ts.Client(),
-	})
-	require.NoError(t, err)
-	client.bearerToken.Store("existing-token")
-
-	calls := 0
-	body, err := client.withAuth(t.Context(), func() ([]byte, error) {
-		calls++
-		return []byte(`{"result":"ok"}`), nil
-	})
-
-	require.NoError(t, err)
-	assert.Equal(t, `{"result":"ok"}`, string(body))
-	assert.Equal(t, 1, calls)
-}
-
-func TestWithAuth_FetchesTokenIfEmpty(t *testing.T) {
-	t.Parallel()
-
-	tokenIssued := false
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/services/oauth2/token" {
-			tokenIssued = true
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"access_token":"fetched-token"}`))
-			return
-		}
-		t.Errorf("unexpected request to %s", r.URL.Path)
-	}))
-	defer ts.Close()
+			_, _ = w.Write([]byte(`{"ok":true}`))
+		}))
+		defer ts.Close()
 
-	client, err := NewClient(ClientConfig{
-		OrgURL:         ts.URL,
-		ClientID:       "id",
-		ClientSecret:   "secret",
-		APIVersion:     "v65.0",
-		QueryBatchSize: 2000,
-		HTTPClient:     ts.Client(),
-	})
-	require.NoError(t, err)
-	assert.Empty(t, client.getBearerToken())
+		client, err := NewClient(ClientConfig{
+			OrgURL:         ts.URL,
+			ClientID:       "id",
+			ClientSecret:   "secret",
+			APIVersion:     "v65.0",
+			QueryBatchSize: 2000,
+			HTTPClient:     ts.Client(),
+		})
+		require.NoError(t, err)
 
-	body, err := client.withAuth(t.Context(), func() ([]byte, error) {
-		return []byte(`{"fetched":true}`), nil
-	})
+		req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, ts.URL+"/services/data/v65.0", nil)
+		require.NoError(t, err)
 
-	require.NoError(t, err)
-	assert.Equal(t, `{"fetched":true}`, string(body))
-	assert.True(t, tokenIssued, "expected token endpoint to be called")
-	assert.Equal(t, "fetched-token", client.getBearerToken())
-}
-
-func TestWithAuth_401_DirectRefreshAndRetry(t *testing.T) {
-	t.Parallel()
-
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/services/oauth2/token" {
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"access_token":"refreshed-token"}`))
-			return
-		}
-		t.Errorf("unexpected request to %s", r.URL.Path)
-	}))
-	defer ts.Close()
-
-	client, err := NewClient(ClientConfig{
-		OrgURL:         ts.URL,
-		ClientID:       "id",
-		ClientSecret:   "secret",
-		APIVersion:     "v65.0",
-		QueryBatchSize: 2000,
-		HTTPClient:     ts.Client(),
-	})
-	require.NoError(t, err)
-	client.bearerToken.Store("stale-token")
-
-	calls := 0
-	body, err := client.withAuth(t.Context(), func() ([]byte, error) {
-		calls++
-		if calls == 1 {
-			return nil, &HTTPError{StatusCode: http.StatusUnauthorized, Reason: "Unauthorized"}
-		}
-		return []byte(`{"retried":true}`), nil
+		body, err := client.do(req)
+		require.NoError(t, err)
+		assert.Equal(t, `{"ok":true}`, string(body))
 	})
 
-	require.NoError(t, err)
-	assert.Equal(t, `{"retried":true}`, string(body))
-	assert.Equal(t, 2, calls)
-	assert.Equal(t, "refreshed-token", client.getBearerToken())
-}
+	t.Run("non-2xx returns HTTPError", func(t *testing.T) {
+		t.Parallel()
 
-func TestWithAuth_401_RefreshFails(t *testing.T) {
-	t.Parallel()
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("X-Salesforce-Error", "session-expired")
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`not found`))
+		}))
+		defer ts.Close()
 
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/services/oauth2/token" {
+		client, err := NewClient(ClientConfig{
+			OrgURL:         ts.URL,
+			ClientID:       "id",
+			ClientSecret:   "secret",
+			APIVersion:     "v65.0",
+			QueryBatchSize: 2000,
+			HTTPClient:     ts.Client(),
+		})
+		require.NoError(t, err)
+
+		req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, ts.URL+"/services/data/v65.0", nil)
+		require.NoError(t, err)
+
+		_, err = client.do(req)
+		require.Error(t, err)
+
+		var httpErr *HTTPError
+		require.ErrorAs(t, err, &httpErr)
+		assert.Equal(t, http.StatusNotFound, httpErr.StatusCode)
+		assert.Equal(t, "not found", httpErr.Body)
+		assert.Equal(t, "session-expired", httpErr.Headers.Get("X-Salesforce-Error"))
+	})
+
+	t.Run("5xx returns HTTPError", func(t *testing.T) {
+		t.Parallel()
+
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		t.Errorf("unexpected request to %s", r.URL.Path)
-	}))
-	defer ts.Close()
+			_, _ = w.Write([]byte(`server error`))
+		}))
+		defer ts.Close()
 
-	client, err := NewClient(ClientConfig{
-		OrgURL:         ts.URL,
-		ClientID:       "id",
-		ClientSecret:   "secret",
-		APIVersion:     "v65.0",
-		QueryBatchSize: 2000,
-		HTTPClient:     ts.Client(),
+		client, err := NewClient(ClientConfig{
+			OrgURL:         ts.URL,
+			ClientID:       "id",
+			ClientSecret:   "secret",
+			APIVersion:     "v65.0",
+			QueryBatchSize: 2000,
+			HTTPClient:     ts.Client(),
+		})
+		require.NoError(t, err)
+
+		req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, ts.URL+"/services/data/v65.0", nil)
+		require.NoError(t, err)
+
+		_, err = client.do(req)
+		require.Error(t, err)
+
+		var httpErr *HTTPError
+		require.ErrorAs(t, err, &httpErr)
+		assert.Equal(t, http.StatusInternalServerError, httpErr.StatusCode)
+		assert.Equal(t, "server error", httpErr.Body)
 	})
-	require.NoError(t, err)
-	client.bearerToken.Store("stale-token")
-
-	_, err = client.withAuth(t.Context(), func() ([]byte, error) {
-		return nil, &HTTPError{StatusCode: http.StatusUnauthorized, Reason: "Unauthorized"}
-	})
-
-	require.Error(t, err)
-	assert.ErrorContains(t, err, "refresh token")
 }
 
-func TestWithAuth_401_SecondCallFails(t *testing.T) {
-	t.Parallel()
+func TestWithAuth(t *testing.T) {
+	t.Run("success on first call", func(t *testing.T) {
+		t.Parallel()
 
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/services/oauth2/token" {
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"access_token":"new-token"}`))
-			return
-		}
-		t.Errorf("unexpected request to %s", r.URL.Path)
-	}))
-	defer ts.Close()
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			t.Error("unexpected HTTP call — token is already set")
+		}))
+		defer ts.Close()
 
-	client, err := NewClient(ClientConfig{
-		OrgURL:         ts.URL,
-		ClientID:       "id",
-		ClientSecret:   "secret",
-		APIVersion:     "v65.0",
-		QueryBatchSize: 2000,
-		HTTPClient:     ts.Client(),
+		client, err := NewClient(ClientConfig{
+			OrgURL:         ts.URL,
+			ClientID:       "id",
+			ClientSecret:   "secret",
+			APIVersion:     "v65.0",
+			QueryBatchSize: 2000,
+			HTTPClient:     ts.Client(),
+		})
+		require.NoError(t, err)
+		client.bearerToken.Store("existing-token")
+
+		calls := 0
+		body, err := client.withAuth(t.Context(), func() ([]byte, error) {
+			calls++
+			return []byte(`{"result":"ok"}`), nil
+		})
+
+		require.NoError(t, err)
+		assert.Equal(t, `{"result":"ok"}`, string(body))
+		assert.Equal(t, 1, calls)
 	})
-	require.NoError(t, err)
-	client.bearerToken.Store("stale-token")
 
-	calls := 0
-	_, err = client.withAuth(t.Context(), func() ([]byte, error) {
-		calls++
-		if calls == 1 {
+	t.Run("fetches token if empty", func(t *testing.T) {
+		t.Parallel()
+
+		tokenIssued := false
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == "/services/oauth2/token" {
+				tokenIssued = true
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte(`{"access_token":"fetched-token"}`))
+				return
+			}
+			t.Errorf("unexpected request to %s", r.URL.Path)
+		}))
+		defer ts.Close()
+
+		client, err := NewClient(ClientConfig{
+			OrgURL:         ts.URL,
+			ClientID:       "id",
+			ClientSecret:   "secret",
+			APIVersion:     "v65.0",
+			QueryBatchSize: 2000,
+			HTTPClient:     ts.Client(),
+		})
+		require.NoError(t, err)
+		assert.Empty(t, client.getBearerToken())
+
+		body, err := client.withAuth(t.Context(), func() ([]byte, error) {
+			return []byte(`{"fetched":true}`), nil
+		})
+
+		require.NoError(t, err)
+		assert.Equal(t, `{"fetched":true}`, string(body))
+		assert.True(t, tokenIssued, "expected token endpoint to be called")
+		assert.Equal(t, "fetched-token", client.getBearerToken())
+	})
+
+	t.Run("401 refreshes and retries", func(t *testing.T) {
+		t.Parallel()
+
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == "/services/oauth2/token" {
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte(`{"access_token":"refreshed-token"}`))
+				return
+			}
+			t.Errorf("unexpected request to %s", r.URL.Path)
+		}))
+		defer ts.Close()
+
+		client, err := NewClient(ClientConfig{
+			OrgURL:         ts.URL,
+			ClientID:       "id",
+			ClientSecret:   "secret",
+			APIVersion:     "v65.0",
+			QueryBatchSize: 2000,
+			HTTPClient:     ts.Client(),
+		})
+		require.NoError(t, err)
+		client.bearerToken.Store("stale-token")
+
+		calls := 0
+		body, err := client.withAuth(t.Context(), func() ([]byte, error) {
+			calls++
+			if calls == 1 {
+				return nil, &HTTPError{StatusCode: http.StatusUnauthorized, Reason: "Unauthorized"}
+			}
+			return []byte(`{"retried":true}`), nil
+		})
+
+		require.NoError(t, err)
+		assert.Equal(t, `{"retried":true}`, string(body))
+		assert.Equal(t, 2, calls)
+		assert.Equal(t, "refreshed-token", client.getBearerToken())
+	})
+
+	t.Run("401 refresh fails", func(t *testing.T) {
+		t.Parallel()
+
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == "/services/oauth2/token" {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			t.Errorf("unexpected request to %s", r.URL.Path)
+		}))
+		defer ts.Close()
+
+		client, err := NewClient(ClientConfig{
+			OrgURL:         ts.URL,
+			ClientID:       "id",
+			ClientSecret:   "secret",
+			APIVersion:     "v65.0",
+			QueryBatchSize: 2000,
+			HTTPClient:     ts.Client(),
+		})
+		require.NoError(t, err)
+		client.bearerToken.Store("stale-token")
+
+		_, err = client.withAuth(t.Context(), func() ([]byte, error) {
 			return nil, &HTTPError{StatusCode: http.StatusUnauthorized, Reason: "Unauthorized"}
-		}
-		return nil, &HTTPError{StatusCode: http.StatusBadRequest, Reason: "Bad Request"}
+		})
+
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "refresh token")
 	})
 
-	require.Error(t, err)
-	assert.ErrorContains(t, err, "request failed after token refresh")
-	assert.Equal(t, 2, calls)
-}
+	t.Run("401 second call fails", func(t *testing.T) {
+		t.Parallel()
 
-func TestWithAuth_NonHTTPError_NotRetried(t *testing.T) {
-	t.Parallel()
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == "/services/oauth2/token" {
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte(`{"access_token":"new-token"}`))
+				return
+			}
+			t.Errorf("unexpected request to %s", r.URL.Path)
+		}))
+		defer ts.Close()
 
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Error("unexpected HTTP call — non-HTTP errors should not trigger token refresh")
-	}))
-	defer ts.Close()
+		client, err := NewClient(ClientConfig{
+			OrgURL:         ts.URL,
+			ClientID:       "id",
+			ClientSecret:   "secret",
+			APIVersion:     "v65.0",
+			QueryBatchSize: 2000,
+			HTTPClient:     ts.Client(),
+		})
+		require.NoError(t, err)
+		client.bearerToken.Store("stale-token")
 
-	client, err := NewClient(ClientConfig{
-		OrgURL:         ts.URL,
-		ClientID:       "id",
-		ClientSecret:   "secret",
-		APIVersion:     "v65.0",
-		QueryBatchSize: 2000,
-		HTTPClient:     ts.Client(),
+		calls := 0
+		_, err = client.withAuth(t.Context(), func() ([]byte, error) {
+			calls++
+			if calls == 1 {
+				return nil, &HTTPError{StatusCode: http.StatusUnauthorized, Reason: "Unauthorized"}
+			}
+			return nil, &HTTPError{StatusCode: http.StatusBadRequest, Reason: "Bad Request"}
+		})
+
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "request failed after token refresh")
+		assert.Equal(t, 2, calls)
 	})
-	require.NoError(t, err)
-	client.bearerToken.Store("existing-token")
 
-	networkErr := fmt.Errorf("network error")
-	calls := 0
-	_, err = client.withAuth(t.Context(), func() ([]byte, error) {
-		calls++
-		return nil, networkErr
+	t.Run("non-HTTP error not retried", func(t *testing.T) {
+		t.Parallel()
+
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			t.Error("unexpected HTTP call — non-HTTP errors should not trigger token refresh")
+		}))
+		defer ts.Close()
+
+		client, err := NewClient(ClientConfig{
+			OrgURL:         ts.URL,
+			ClientID:       "id",
+			ClientSecret:   "secret",
+			APIVersion:     "v65.0",
+			QueryBatchSize: 2000,
+			HTTPClient:     ts.Client(),
+		})
+		require.NoError(t, err)
+		client.bearerToken.Store("existing-token")
+
+		networkErr := fmt.Errorf("network error")
+		calls := 0
+		_, err = client.withAuth(t.Context(), func() ([]byte, error) {
+			calls++
+			return nil, networkErr
+		})
+
+		require.ErrorIs(t, err, networkErr)
+		assert.Equal(t, 1, calls)
 	})
-
-	require.ErrorIs(t, err, networkErr)
-	assert.Equal(t, 1, calls)
 }
