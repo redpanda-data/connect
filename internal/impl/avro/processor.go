@@ -29,7 +29,6 @@ import (
 
 func avroConfigSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Beta().
 		Categories("Parsing").
 		Summary(`Performs Avro based operations on messages based on a schema.`).
 		Description(`

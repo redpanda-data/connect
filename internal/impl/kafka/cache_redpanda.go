@@ -32,7 +32,6 @@ const (
 
 func redpandaCacheConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Beta().
 		Categories("Services").
 		Summary(`A Kafka cache using the https://github.com/twmb/franz-go[Franz Kafka client library^].`).
 		Description(`

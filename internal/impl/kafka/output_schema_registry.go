@@ -53,7 +53,6 @@ const (
 
 func schemaRegistryOutputSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Beta().
 		Version("4.32.2").
 		Categories("Integration").
 		Summary(`Publishes schemas to SchemaRegistry.`).

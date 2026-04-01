@@ -39,7 +39,6 @@ const (
 
 func outputSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Beta().
 		Summary("Runs a query against a Cassandra database for each message in order to insert data.").
 		Description(`
 Query arguments can be set using a bloblang array for the fields using the `+"`args_mapping`"+` field.

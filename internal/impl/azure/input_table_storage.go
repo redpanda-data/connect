@@ -65,7 +65,6 @@ func tsiConfigFromParsed(pConf *service.ParsedConfig) (conf tsiConfig, err error
 
 func tsiSpec() *service.ConfigSpec {
 	return azureComponentSpec().
-		Beta().
 		Version("4.10.0").
 		Summary(`Queries an Azure Storage Account Table, optionally with multiple filters.`).
 		Description(`

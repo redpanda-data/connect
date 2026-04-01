@@ -29,7 +29,6 @@ const (
 func xmlProcSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Parsing").
-		Beta().
 		Summary(`Parses messages as an XML document, performs a mutation on the data, and then overwrites the previous contents with the new value.`).
 		Description(`
 == Operators

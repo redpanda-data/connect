@@ -69,7 +69,6 @@ type asyncMessage struct {
 
 func newPostgresCDCConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Beta().
 		Categories("Services").
 		Version("4.39.0").
 		Summary(`Streams changes from a PostgreSQL database using logical replication.`).
