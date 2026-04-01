@@ -27,9 +27,3 @@ func (e *HTTPError) Error() string {
 	return fmt.Sprintf("http error: status=%d reason=%s", e.StatusCode, e.Reason)
 }
 
-// AuthHeaderPolicy allows callers to declare a header that signals an auth problem
-// even on 200 OK responses (e.g., "auth-related").
-type AuthHeaderPolicy struct {
-	HeaderName string                // case-insensitive
-	IsProblem  func(val string) bool // return true if the header value indicates auth failure
-}
