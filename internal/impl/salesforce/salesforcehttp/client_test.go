@@ -20,7 +20,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestUpdateAndSetBearerToken_RealClient(t *testing.T) {
+func TestUpdateAndSetBearerTokenRealClient(t *testing.T) {
 	t.Parallel()
 
 	// Fake Salesforce OAuth server
@@ -47,7 +47,7 @@ func TestUpdateAndSetBearerToken_RealClient(t *testing.T) {
 	assert.Equal(t, "abc123", client.getBearerToken())
 }
 
-func TestCallSalesforceApi_RefreshOn401_RealClient(t *testing.T) {
+func TestCallSalesforceAPIRefreshOn401RealClient(t *testing.T) {
 	t.Parallel()
 
 	callCount := 0
@@ -109,7 +109,7 @@ func mustParseURL(s string) *url.URL {
 }
 
 func TestDo(t *testing.T) {
-	t.Run("2xx returns body", func(t *testing.T) {
+	t.Run("2xxReturnsBody", func(t *testing.T) {
 		t.Parallel()
 
 		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -136,7 +136,7 @@ func TestDo(t *testing.T) {
 		assert.Equal(t, `{"ok":true}`, string(body))
 	})
 
-	t.Run("non-2xx returns HTTPError", func(t *testing.T) {
+	t.Run("Non2xxReturnsHTTPError", func(t *testing.T) {
 		t.Parallel()
 
 		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -169,7 +169,7 @@ func TestDo(t *testing.T) {
 		assert.Equal(t, "session-expired", httpErr.Headers.Get("X-Salesforce-Error"))
 	})
 
-	t.Run("5xx returns HTTPError", func(t *testing.T) {
+	t.Run("5xxReturnsHTTPError", func(t *testing.T) {
 		t.Parallel()
 
 		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -202,7 +202,7 @@ func TestDo(t *testing.T) {
 }
 
 func TestWithAuth(t *testing.T) {
-	t.Run("success on first call", func(t *testing.T) {
+	t.Run("SuccessOnFirstCall", func(t *testing.T) {
 		t.Parallel()
 
 		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -232,7 +232,7 @@ func TestWithAuth(t *testing.T) {
 		assert.Equal(t, 1, calls)
 	})
 
-	t.Run("fetches token if empty", func(t *testing.T) {
+	t.Run("FetchesTokenIfEmpty", func(t *testing.T) {
 		t.Parallel()
 
 		tokenIssued := false
@@ -268,7 +268,7 @@ func TestWithAuth(t *testing.T) {
 		assert.Equal(t, "fetched-token", client.getBearerToken())
 	})
 
-	t.Run("401 refreshes and retries", func(t *testing.T) {
+	t.Run("401RefreshesAndRetries", func(t *testing.T) {
 		t.Parallel()
 
 		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -307,7 +307,7 @@ func TestWithAuth(t *testing.T) {
 		assert.Equal(t, "refreshed-token", client.getBearerToken())
 	})
 
-	t.Run("401 refresh fails", func(t *testing.T) {
+	t.Run("401RefreshFails", func(t *testing.T) {
 		t.Parallel()
 
 		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -338,7 +338,7 @@ func TestWithAuth(t *testing.T) {
 		assert.ErrorContains(t, err, "refresh token")
 	})
 
-	t.Run("401 second call fails", func(t *testing.T) {
+	t.Run("401SecondCallFails", func(t *testing.T) {
 		t.Parallel()
 
 		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -376,7 +376,7 @@ func TestWithAuth(t *testing.T) {
 		assert.Equal(t, 2, calls)
 	})
 
-	t.Run("non-HTTP error not retried", func(t *testing.T) {
+	t.Run("NonHTTPErrorNotRetried", func(t *testing.T) {
 		t.Parallel()
 
 		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
