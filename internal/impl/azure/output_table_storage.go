@@ -81,6 +81,7 @@ func tsoConfigFromParsed(pConf *service.ParsedConfig) (conf tsoConfig, err error
 
 func tsoSpec() *service.ConfigSpec {
 	return azureComponentSpec().
+		Stable().
 		Version("3.36.0").
 		Summary(`Stores messages in an Azure Table Storage table.`).
 		Description(`

@@ -33,6 +33,7 @@ const (
 
 func franzKafkaOutputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
+		Stable().
 		Categories("Services").
 		Version("3.61.0").
 		Summary("A Kafka output using the https://github.com/twmb/franz-go[Franz Kafka client library^].").

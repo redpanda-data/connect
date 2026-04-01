@@ -25,6 +25,7 @@ import (
 
 func processorConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
+		Stable().
 		Categories("Parsing").
 		Summary("Converts messages to or from the https://msgpack.org/[MessagePack^] format.").
 		Field(service.NewStringAnnotatedEnumField("operator", map[string]string{

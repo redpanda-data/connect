@@ -1,6 +1,6 @@
 = schema_registry_encode
 :type: processor
-:status: experimental
+:status: stable
 :categories: ["Parsing","Integration"]
 
 

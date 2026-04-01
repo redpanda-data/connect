@@ -1,6 +1,6 @@
 = msgpack
 :type: processor
-:status: experimental
+:status: stable
 :categories: ["Parsing"]
 
 

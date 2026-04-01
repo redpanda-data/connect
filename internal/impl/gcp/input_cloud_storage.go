@@ -67,6 +67,7 @@ func csiConfigFromParsed(pConf *service.ParsedConfig) (conf csiConfig, err error
 
 func csiSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
+		Stable().
 		Version("3.43.0").
 		Categories("Services", "GCP").
 		Summary(`Downloads objects within a Google Cloud Storage bucket, optionally filtered by a prefix.`).

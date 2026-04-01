@@ -25,6 +25,7 @@ import (
 
 func dataLakeSpec() *service.ConfigSpec {
 	return azureComponentSpec().
+		Stable().
 		Version("4.38.0").
 		Summary(`Sends message parts as files to an Azure Data Lake Gen2 filesystem. Each file is uploaded with the filename specified with the `+"`"+dloFieldPath+"`"+` field.`).
 		Description(`

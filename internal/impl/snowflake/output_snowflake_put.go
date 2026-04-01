@@ -55,6 +55,7 @@ const (
 
 func snowflakePutOutputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
+		Stable().
 		Categories("Services").
 		Version("4.0.0").
 		Summary("Sends messages to Snowflake stages and, optionally, calls Snowpipe to load this data into one or more tables.").

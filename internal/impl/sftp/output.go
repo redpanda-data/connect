@@ -36,6 +36,7 @@ const (
 
 func sftpOutputSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
+		Stable().
 		Categories("Network").
 		Version("3.39.0").
 		Summary(`Writes files to an SFTP server.`).

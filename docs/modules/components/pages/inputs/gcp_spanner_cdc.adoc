@@ -1,6 +1,6 @@
 = gcp_spanner_cdc
 :type: input
-:status: experimental
+:status: stable
 :categories: ["Services","GCP"]
 
 

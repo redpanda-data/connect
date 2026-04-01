@@ -1,6 +1,6 @@
 = nats_kv
 :type: processor
-:status: experimental
+:status: stable
 :categories: ["Services"]
 
 

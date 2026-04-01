@@ -1,6 +1,6 @@
 = schema_registry
 :type: output
-:status: experimental
+:status: stable
 :categories: ["Integration"]
 
 

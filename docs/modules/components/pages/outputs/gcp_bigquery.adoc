@@ -1,6 +1,6 @@
 = gcp_bigquery
 :type: output
-:status: experimental
+:status: stable
 :categories: ["GCP","Services"]
 
 

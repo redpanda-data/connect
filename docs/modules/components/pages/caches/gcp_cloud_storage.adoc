@@ -1,6 +1,6 @@
 = gcp_cloud_storage
 :type: cache
-:status: experimental
+:status: stable
 
 
 

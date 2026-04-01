@@ -1,6 +1,6 @@
 = influxdb
 :type: metrics
-:status: experimental
+:status: stable
 
 
 

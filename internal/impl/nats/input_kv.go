@@ -35,6 +35,7 @@ const (
 
 func natsKVInputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
+		Stable().
 		Categories("Services").
 		Version("4.12.0").
 		Summary("Watches for updates in a NATS key-value bucket.").

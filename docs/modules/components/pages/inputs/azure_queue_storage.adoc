@@ -1,6 +1,6 @@
 = azure_queue_storage
 :type: input
-:status: experimental
+:status: stable
 :categories: ["Services","Azure"]
 
 

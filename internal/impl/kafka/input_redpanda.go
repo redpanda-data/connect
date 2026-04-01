@@ -25,6 +25,7 @@ import (
 
 func redpandaInputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
+		Stable().
 		Categories("Services").
 		Summary(`A Kafka input using the https://github.com/twmb/franz-go[Franz Kafka client library^].`).
 		Description(`

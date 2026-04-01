@@ -1,6 +1,6 @@
 = cassandra
 :type: output
-:status: experimental
+:status: stable
 
 
 

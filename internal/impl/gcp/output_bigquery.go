@@ -145,6 +145,7 @@ func (g gcpBQClientURL) NewClient(ctx context.Context, conf gcpBigQueryOutputCon
 
 func gcpBigQueryConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
+		Stable().
 		Categories("GCP", "Services").
 		Version("3.55.0").
 		Summary(`Sends messages as new rows to a Google Cloud BigQuery table.`).

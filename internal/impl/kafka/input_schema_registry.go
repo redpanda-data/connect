@@ -47,6 +47,7 @@ const (
 
 func schemaRegistryInputSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
+		Stable().
 		Version("4.32.2").
 		Categories("Integration").
 		Summary(`Reads schemas from SchemaRegistry.`).
