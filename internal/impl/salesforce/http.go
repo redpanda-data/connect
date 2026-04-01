@@ -9,9 +9,7 @@
 package salesforce
 
 import (
-	"crypto/tls"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -36,10 +34,6 @@ func newSalesforceHTTPClient(orgURL string, timeout time.Duration, maxRetries in
 		BackoffMaxInterval:     30 * time.Second,
 		Transport:              httpclient.DefaultTransportConfig(),
 		MetricPrefix:           "salesforce_http",
-	}
-	if strings.HasPrefix(orgURL, "https://") {
-		cfg.TLSEnabled = true
-		cfg.TLSConf = &tls.Config{MinVersion: tls.VersionTLS12}
 	}
 	c, err := httpclient.NewClient(cfg, mgr)
 	if err != nil {
