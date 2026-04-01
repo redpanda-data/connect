@@ -370,6 +370,11 @@ func newSalesforceProcessor(conf *service.ParsedConfig, mgr *service.Resources) 
 		}
 	}
 
+	// No RetryConfig is passed, so the retry transport operates in adaptive
+	// 429-only mode: it retries on 429 (rate limit) and network errors only.
+	// 401 (expired token) is intentionally not retried here — it passes through
+	// to salesforcehttp.Client.withAuth(), which refreshes the OAuth2 token and
+	// retries the request once. The two layers handle disjoint status codes.
 	httpCfg := httpclient.Config{
 		BaseURL:                orgURL,
 		Timeout:                timeout,
