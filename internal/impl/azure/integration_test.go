@@ -256,7 +256,7 @@ input:
 		})
 		require.NoError(t, err)
 		w := &azureBlobStorageWriter{conf: bsoConfig{client: raceClient}}
-		require.NoError(t, w.uploadBlob(t.Context(), containerName, blobName, "APPEND", []byte("second")))
+		require.NoError(t, w.uploadBlob(t.Context(), containerName, blobName, "APPEND", []byte("second"), nil))
 
 		resp, err := seedClient.DownloadStream(t.Context(), containerName, blobName, nil)
 		require.NoError(t, err)
@@ -264,6 +264,55 @@ input:
 		content, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 		assert.Equal(t, "firstsecond", string(content))
+	})
+
+	t.Run("blob_storage_tags", func(t *testing.T) {
+		u4, err := uuid.NewV4()
+		require.NoError(t, err)
+		containerName := u4.String()
+
+		client, err := azblob.NewClientFromConnectionString(connString, nil)
+		require.NoError(t, err)
+		_, err = client.CreateContainer(t.Context(), containerName, nil)
+		require.NoError(t, err)
+
+		env := service.NewEnvironment()
+		outConf, err := bsoSpec().ParseYAML(fmt.Sprintf(`
+storage_connection_string: %s
+container: %s
+path: tagged-blob.txt
+blob_type: BLOCK
+public_access_level: PRIVATE
+tags:
+  Environment: production
+  Source: test-suite
+`, connString, containerName), env)
+		require.NoError(t, err)
+
+		conf, err := bsoConfigFromParsed(outConf)
+		require.NoError(t, err)
+
+		writer, err := newAzureBlobStorageWriter(conf, service.MockResources().Logger())
+		require.NoError(t, err)
+
+		require.NoError(t, writer.Connect(t.Context()))
+		t.Cleanup(func() { require.NoError(t, writer.Close(context.Background())) })
+
+		msg := service.NewMessage([]byte("hello world"))
+		require.NoError(t, writer.Write(t.Context(), msg))
+
+		resp, err := client.ServiceClient().NewContainerClient(containerName).NewBlobClient("tagged-blob.txt").GetTags(t.Context(), nil)
+		require.NoError(t, err)
+
+		tags := make(map[string]string)
+		for _, tag := range resp.BlobTagSet {
+			tags[*tag.Key] = *tag.Value
+		}
+
+		assert.Equal(t, map[string]string{
+			"Environment": "production",
+			"Source":      "test-suite",
+		}, tags)
 	})
 
 	t.Run("queue_storage", func(t *testing.T) {

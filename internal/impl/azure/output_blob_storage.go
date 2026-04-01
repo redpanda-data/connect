@@ -19,6 +19,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/streaming"
@@ -27,6 +28,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/appendblob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/bloberror"
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blockblob"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
@@ -35,14 +37,21 @@ const (
 	// Blob Storage Output Fields
 	bsoFieldContainer         = "container"
 	bsoFieldPath              = "path"
+	bsoFieldTags              = "tags"
 	bsoFieldBlobType          = "blob_type"
 	bsoFieldPublicAccessLevel = "public_access_level"
 )
+
+type bsoTagPair struct {
+	key   string
+	value *service.InterpolatedString
+}
 
 type bsoConfig struct {
 	client            *azblob.Client
 	Container         *service.InterpolatedString
 	Path              *service.InterpolatedString
+	Tags              []bsoTagPair
 	BlobType          *service.InterpolatedString
 	PublicAccessLevel *service.InterpolatedString
 }
@@ -62,6 +71,23 @@ func bsoConfigFromParsed(pConf *service.ParsedConfig) (conf bsoConfig, err error
 	if conf.Path, err = pConf.FieldInterpolatedString(bsoFieldPath); err != nil {
 		return
 	}
+
+	var tagMap map[string]*service.InterpolatedString
+	if tagMap, err = pConf.FieldInterpolatedStringMap(bsoFieldTags); err != nil {
+		return
+	}
+	if len(tagMap) > 10 {
+		err = fmt.Errorf("at most 10 blob index tags are permitted, got %d", len(tagMap))
+		return
+	}
+	conf.Tags = make([]bsoTagPair, 0, len(tagMap))
+	for k, v := range tagMap {
+		conf.Tags = append(conf.Tags, bsoTagPair{key: k, value: v})
+	}
+	sort.Slice(conf.Tags, func(i, j int) bool {
+		return conf.Tags[i].key < conf.Tags[j].key
+	})
+
 	if conf.BlobType, err = pConf.FieldInterpolatedString(bsoFieldBlobType); err != nil {
 		return
 	}
@@ -102,6 +128,14 @@ If the `+"`storage_connection_string`"+` does not contain the `+"`AccountName`"+
 				Example(`${!meta("kafka_key")}.json`).
 				Example(`${!json("doc.namespace")}/${!json("doc.id")}.json`).
 				Default(`${!counter()}-${!timestamp_unix_nano()}.txt`),
+			service.NewInterpolatedStringMapField(bsoFieldTags).
+				Description("Key/value pairs to store with the blob as https://learn.microsoft.com/en-us/azure/storage/blobs/storage-manage-find-blobs[blob index tags^]. A maximum of 10 tags are permitted, tag keys must be between 1 and 128 characters, and tag values must be between 0 and 256 characters. Keys and values are case-sensitive and only support string values. Not supported on storage accounts with hierarchical namespace (Data Lake Gen2).").
+				Default(map[string]any{}).
+				Example(map[string]any{
+					"Environment": "production",
+					"Source":      `${!meta("kafka_topic")}`,
+				}).
+				Advanced(),
 			service.NewInterpolatedStringEnumField(bsoFieldBlobType, "BLOCK", "APPEND").
 				Description("Block and Append blobs are made up of blocks, and each blob can support up to 50,000 blocks. The default value is `BLOCK`.").
 				ShortDescription("Block and Append blobs are made up of blocks, and each blob supports up to 50,000 blocks.").
@@ -150,7 +184,7 @@ func (*azureBlobStorageWriter) Connect(context.Context) error {
 	return nil
 }
 
-func (a *azureBlobStorageWriter) uploadBlob(ctx context.Context, containerName, blobName, blobType string, message []byte) error {
+func (a *azureBlobStorageWriter) uploadBlob(ctx context.Context, containerName, blobName, blobType string, message []byte, tags map[string]string) error {
 	containerClient := a.conf.client.ServiceClient().NewContainerClient(containerName)
 	var err error
 	if blobType == "APPEND" {
@@ -161,11 +195,15 @@ func (a *azureBlobStorageWriter) uploadBlob(ctx context.Context, containerName, 
 				// Another write can create the blob and append to it before this Create. Without If-None-Match,
 				// Create replaces that blob and its data is lost. With it, Create fails if the blob exists. Azurite
 				// returns BlobAlreadyExists (409). The REST docs give 412 for a failed If-None-Match on writes.
-				_, err := appendBlobClient.Create(ctx, &appendblob.CreateOptions{
+				createOpts := &appendblob.CreateOptions{
 					AccessConditions: &blob.AccessConditions{
 						ModifiedAccessConditions: &blob.ModifiedAccessConditions{IfNoneMatch: to.Ptr(azcore.ETagAny)},
 					},
-				})
+				}
+				if len(tags) > 0 {
+					createOpts.Tags = tags
+				}
+				_, err := appendBlobClient.Create(ctx, createOpts)
 				if err != nil && !isErrorCode(err, bloberror.BlobAlreadyExists) && !isErrorCode(err, bloberror.ConditionNotMet) {
 					return fmt.Errorf("creating append blob: %w", err)
 				}
@@ -179,8 +217,22 @@ func (a *azureBlobStorageWriter) uploadBlob(ctx context.Context, containerName, 
 				return fmt.Errorf("appending block to blob: %w", err)
 			}
 		}
+		// Tags must be set separately for append blobs since AppendBlock does not
+		// support tags. On creation they are set via CreateOptions, but when
+		// appending to an existing blob we need an explicit SetTags call to ensure
+		// tags reflect the latest configured values.
+		if len(tags) > 0 {
+			blobClient := containerClient.NewBlobClient(blobName)
+			if _, err = blobClient.SetTags(ctx, tags, nil); err != nil {
+				return fmt.Errorf("setting blob tags: %w", err)
+			}
+		}
 	} else {
-		_, err = containerClient.NewBlockBlobClient(blobName).UploadStream(ctx, bytes.NewReader(message), nil)
+		var uploadOpts *blockblob.UploadStreamOptions
+		if len(tags) > 0 {
+			uploadOpts = &blockblob.UploadStreamOptions{Tags: tags}
+		}
+		_, err = containerClient.NewBlockBlobClient(blobName).UploadStream(ctx, bytes.NewReader(message), uploadOpts)
 		if err != nil {
 			return fmt.Errorf("pushing block to blob: %w", err)
 		}
@@ -223,7 +275,19 @@ func (a *azureBlobStorageWriter) Write(ctx context.Context, msg *service.Message
 		return err
 	}
 
-	if err := a.uploadBlob(ctx, containerName, blobName, blobType, mBytes); err != nil {
+	var blobTags map[string]string
+	if len(a.conf.Tags) > 0 {
+		blobTags = make(map[string]string, len(a.conf.Tags))
+		for _, pair := range a.conf.Tags {
+			tagVal, err := pair.value.TryString(msg)
+			if err != nil {
+				return fmt.Errorf("tag %v interpolation: %w", pair.key, err)
+			}
+			blobTags[pair.key] = tagVal
+		}
+	}
+
+	if err := a.uploadBlob(ctx, containerName, blobName, blobType, mBytes, blobTags); err != nil {
 		if isErrorCode(err, bloberror.ContainerNotFound) {
 			var accessLevel string
 			if accessLevel, err = a.conf.PublicAccessLevel.TryString(msg); err != nil {
@@ -236,7 +300,7 @@ func (a *azureBlobStorageWriter) Write(ctx context.Context, msg *service.Message
 				}
 			}
 
-			if err := a.uploadBlob(ctx, containerName, blobName, blobType, mBytes); err != nil {
+			if err := a.uploadBlob(ctx, containerName, blobName, blobType, mBytes, blobTags); err != nil {
 				return fmt.Errorf("error retrying to upload blob: %s", err)
 			}
 		} else {
