@@ -35,8 +35,8 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
-// httpDoer abstracts HTTP request execution. *http.Client satisfies this interface.
-type httpDoer interface {
+// HTTPDoer abstracts HTTP request execution. *http.Client satisfies this interface.
+type HTTPDoer interface {
 	Do(req *http.Request) (*http.Response, error)
 }
 
@@ -44,7 +44,7 @@ type httpDoer interface {
 const salesforceAPIBasePath = "/services"
 
 // do executes req and returns the response body, returning *HTTPError for non-2xx responses.
-// 429 retry, metrics, logging, and tracing are handled by the underlying httpDoer transport chain.
+// 429 retry, metrics, logging, and tracing are handled by the underlying HTTPDoer transport chain.
 func (s *Client) do(req *http.Request) ([]byte, error) {
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
@@ -271,7 +271,7 @@ type Client struct {
 	bearerToken  atomic.Value
 	instanceURL  atomic.Value
 	tenantID     atomic.Value
-	httpClient   httpDoer
+	httpClient   HTTPDoer
 	log          *service.Logger
 
 	// tokenMu serialises concurrent token refresh calls so that a single 401 response
@@ -317,7 +317,7 @@ type ClientConfig struct {
 	ClientSecret   string
 	APIVersion     string
 	QueryBatchSize int
-	HTTPClient     httpDoer
+	HTTPClient     HTTPDoer
 	Logger         *service.Logger
 }
 
