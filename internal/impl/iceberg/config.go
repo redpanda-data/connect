@@ -104,6 +104,8 @@ Write streaming data to Apache Iceberg tables using the REST catalog API. This o
 
 This output is designed to work with REST catalog implementations like Apache Polaris, AWS Glue Data Catalog, and the Databricks Unity Catalog.
 
+Currently only version 2 of the Iceberg specification is supported. Any pre-existing version 1 tables will be upgraded to version 2 automatically.
+
 === Apache Polaris
 
 To use with https://polaris.apache.org[Apache Polaris^]:

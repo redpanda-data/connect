@@ -23,6 +23,11 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/asyncroutine"
 )
 
+// CurrentIcebergVersion is the version of iceberg we use when writing.
+// TODO(iceberg): When iceberg-go supports v3, add a config knob on moving to v3.
+// For now we assume everything works with at least v2
+const CurrentIcebergVersion = 2
+
 // CommitInput holds data files and the schema ID they were written with.
 type CommitInput struct {
 	Files    []iceberg.DataFile
@@ -105,6 +110,11 @@ func (c *committer) doCommit(ctx context.Context, inputs []CommitInput) ([]struc
 	for range c.cfg.MaxRetries {
 		attempt++
 		txn := c.table.NewTransaction()
+		if c.table.Metadata().Version() < CurrentIcebergVersion {
+			if err := txn.UpgradeFormatVersion(CurrentIcebergVersion); err != nil {
+				return nil, fmt.Errorf("upgrading version: %w", err)
+			}
+		}
 		props := iceberg.Properties{
 			table.ManifestMergeEnabledKey: strconv.FormatBool(c.cfg.ManifestMergeEnabled),
 		}
