@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 
 - oracledb_cdc: Added support for parsing complex Oracle connection configurations with override options and early connection validation. ([@josephwoodward](https://github.com/josephwoodward), [#4179](https://github.com/redpanda-data/connect/pull/4179))
 - text: Added string_split processor that splits message bytes by a configurable delimiter into an array with support for converting empty parts to null. ([@rockwotj](https://github.com/rockwotj), [#4187](https://github.com/redpanda-data/connect/pull/4187))
+- sql: Add ClickHouse Map type support for sql_insert ([@rickysaltzer](https://github.com/rickysaltzer), [#4178](https://github.com/redpanda-data/connect/pull/4178))
 
 ### Fixed
 
