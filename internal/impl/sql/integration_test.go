@@ -627,6 +627,105 @@ func testSuite(t *testing.T, driver, dsn string, createTableFn func(string) (str
 	}
 }
 
+func testClickhouseMapInsertOutput(t *testing.T, dsn string, db *sql.DB) {
+	t.Run("sql_insert_map_types", func(t *testing.T) {
+		tableName, err := gonanoid.Generate("abcdefghijklmnopqrstuvwxyz", 40)
+		require.NoError(t, err)
+
+		_, err = db.Exec(fmt.Sprintf(`create table %s (
+  foo String,
+  string_map Map(String, String),
+  int_map Map(String, Int64),
+  uint8_bool_map Map(UInt8, Bool),
+  nested_map Map(String, Map(String, UInt16))
+		) engine=Memory;`, tableName))
+		require.NoError(t, err)
+
+		outputConf := fmt.Sprintf(`
+sql_insert:
+  driver: clickhouse
+  dsn: %s
+  table: %s
+  columns: [ foo, string_map, int_map, uint8_bool_map, nested_map ]
+  args_mapping: |
+    root = [
+      this.foo,
+      {
+        "env": this.string_map.env,
+        "region": this.string_map.region,
+      },
+      {
+        "attempts": this.int_map.attempts.number().floor(),
+        "retries": this.int_map.retries.number().floor(),
+      },
+      this.uint8_bool_map,
+      this.nested_map,
+    ]
+`, dsn, tableName)
+
+		streamBuilder := service.NewStreamBuilder()
+		require.NoError(t, streamBuilder.SetLoggerYAML(`level: OFF`))
+		require.NoError(t, streamBuilder.AddOutputYAML(outputConf))
+
+		inFn, err := streamBuilder.AddBatchProducerFunc()
+		require.NoError(t, err)
+
+		stream, err := streamBuilder.Build()
+		require.NoError(t, err)
+
+		runErrChan := make(chan error, 1)
+		go func() {
+			runErrChan <- stream.Run(t.Context())
+		}()
+
+		batch := service.MessageBatch{service.NewMessage([]byte(`{
+  "foo": "doc-1",
+  "string_map": {
+    "env": "prod",
+    "region": "us-east-1"
+  },
+  "int_map": {
+    "attempts": 7,
+    "retries": 3
+  },
+  "uint8_bool_map": {
+    "1": true,
+    "2": false
+  },
+  "nested_map": {
+    "outer": {
+      "inner": 9
+    }
+  }
+}`))}
+
+		require.NoError(t, inFn(t.Context(), batch))
+		require.NoError(t, stream.StopWithin(15*time.Second))
+		require.NoError(t, <-runErrChan)
+
+		var (
+			foo, env, region  string
+			attempts, retries int64
+			one, two          bool
+			inner             uint16
+		)
+		err = db.QueryRow(fmt.Sprintf(
+			`select foo, string_map['env'], string_map['region'], int_map['attempts'], int_map['retries'], uint8_bool_map[1], uint8_bool_map[2], nested_map['outer']['inner'] from %s`,
+			tableName,
+		)).Scan(&foo, &env, &region, &attempts, &retries, &one, &two, &inner)
+		require.NoError(t, err)
+
+		assert.Equal(t, "doc-1", foo)
+		assert.Equal(t, "prod", env)
+		assert.Equal(t, "us-east-1", region)
+		assert.Equal(t, int64(7), attempts)
+		assert.Equal(t, int64(3), retries)
+		assert.True(t, one)
+		assert.False(t, two)
+		assert.Equal(t, uint16(9), inner)
+	})
+}
+
 func runClickhouseTest(t *testing.T, dsnScheme string) {
 	t.Parallel()
 
@@ -692,6 +791,7 @@ func runClickhouseTest(t *testing.T, dsnScheme string) {
 	}, 3*time.Minute, time.Second)
 
 	testSuite(t, "clickhouse", dsn, createTable)
+	testClickhouseMapInsertOutput(t, dsn, db)
 }
 
 func TestIntegrationClickhouse(t *testing.T) {
