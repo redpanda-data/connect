@@ -96,7 +96,7 @@ require (
 	github.com/generikvault/gvalstrings v0.0.0-20180926130504-471f38f0112a
 	github.com/getsentry/sentry-go v0.44.1
 	github.com/go-faker/faker/v4 v4.7.0
-	github.com/go-git/go-git/v5 v5.17.0
+	github.com/go-git/go-git/v5 v5.17.2
 	github.com/go-jose/go-jose/v4 v4.1.3
 	github.com/go-mysql-org/go-mysql v1.14.0
 	github.com/go-resty/resty/v2 v2.17.2
