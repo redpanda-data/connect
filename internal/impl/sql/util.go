@@ -155,7 +155,7 @@ func bloblValuesToClickHouseValues(v []any) []any {
 	return o
 }
 
-// newClickhouseArgsConverter builds an argsConverter that coerces Bloblang
+// newClickHouseInsertArgsConverter builds an argsConverter that coerces Bloblang
 // output values into the concrete Go types the ClickHouse driver expects.
 //
 // Bloblang produces generic types like map[string]any, but the ClickHouse
@@ -165,7 +165,7 @@ func bloblValuesToClickHouseValues(v []any) []any {
 //
 // At connect time we introspect the column scan types once, then use them on
 // every batch to normalize only the arguments that need it.
-func newClickhouseArgsConverter(ctx context.Context, db *sql.DB, table string, columns []string, logger *service.Logger) (argsConverter, error) {
+func newClickHouseInsertArgsConverter(ctx context.Context, db *sql.DB, table string, columns []string, logger *service.Logger) (argsConverter, error) {
 	scanTypes, err := clickhouseColumnScanTypes(ctx, db, table, columns)
 	if err != nil {
 		return nil, err
@@ -177,7 +177,7 @@ func newClickhouseArgsConverter(ctx context.Context, db *sql.DB, table string, c
 			if i >= len(scanTypes) {
 				continue
 			}
-			if normalized, ok := normalizeClickhouseValueToType(e, scanTypes[i]); ok {
+			if normalized, ok := normalizeValueToClickHouseType(e, scanTypes[i]); ok {
 				o[i] = normalized
 			} else if scanTypes[i] != nil && clickhouseNeedsContainerNormalization(scanTypes[i]) {
 				logger.Warnf("ClickHouse: failed to normalize column %q (value type %T, target %v); passing original value to driver", columns[i], e, scanTypes[i])
@@ -212,7 +212,7 @@ func clickhouseColumnScanTypes(ctx context.Context, db *sql.DB, table string, co
 	return scanTypes, nil
 }
 
-// normalizeClickhouseValueToType converts a generic value (typically
+// normalizeValueToClickHouseType converts a generic value (typically
 // map[string]any from Bloblang) into the concrete Go type the ClickHouse
 // driver expects. It works by JSON-round-tripping: marshal the value to JSON,
 // then unmarshal into a new instance of the target type. This lets encoding/json
@@ -220,7 +220,7 @@ func clickhouseColumnScanTypes(ctx context.Context, db *sql.DB, table string, co
 //
 // Returns (normalized, true) on success, or (nil, false) if the value doesn't
 // need normalization (e.g. scalar types) or can't be converted.
-func normalizeClickhouseValueToType(v any, target reflect.Type) (any, bool) {
+func normalizeValueToClickHouseType(v any, target reflect.Type) (any, bool) {
 	if target == nil {
 		return nil, false
 	}
@@ -230,7 +230,7 @@ func normalizeClickhouseValueToType(v any, target reflect.Type) (any, bool) {
 		if v == nil {
 			return nil, true
 		}
-		normalized, ok := normalizeClickhouseValueToType(v, target.Elem())
+		normalized, ok := normalizeValueToClickHouseType(v, target.Elem())
 		if !ok {
 			return nil, false
 		}
