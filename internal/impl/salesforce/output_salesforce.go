@@ -23,7 +23,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
 	"net/url"
 	"sort"
 	"strconv"
@@ -335,16 +334,19 @@ func newSalesforceSinkOutput(conf *service.ParsedConfig, mgr *service.Resources)
 		}
 	}
 
+	httpClient, err := newSalesforceHTTPClient(orgURL, timeout, maxRetries, mgr)
+	if err != nil {
+		return nil, err
+	}
+
 	sfClient, err := salesforcehttp.NewClient(salesforcehttp.ClientConfig{
 		OrgURL:         orgURL,
 		ClientID:       clientID,
 		ClientSecret:   clientSecret,
 		APIVersion:     apiVersion,
-		MaxRetries:     maxRetries,
 		QueryBatchSize: 2000,
-		HTTPClient:     &http.Client{Timeout: timeout},
+		HTTPClient:     httpClient,
 		Logger:         mgr.Logger(),
-		Metrics:        mgr.Metrics(),
 	})
 	if err != nil {
 		return nil, err
