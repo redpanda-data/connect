@@ -1,6 +1,6 @@
 = slack_post
 :type: output
-:status: experimental
+:status: stable
 
 
 

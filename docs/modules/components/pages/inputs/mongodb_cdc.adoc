@@ -1,6 +1,6 @@
 = mongodb_cdc
 :type: input
-:status: experimental
+:status: stable
 
 
 

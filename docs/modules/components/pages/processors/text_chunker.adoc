@@ -1,6 +1,6 @@
 = text_chunker
 :type: processor
-:status: experimental
+:status: stable
 :categories: ["AI"]
 
 

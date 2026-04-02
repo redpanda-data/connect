@@ -1,6 +1,6 @@
 = slack_users
 :type: input
-:status: experimental
+:status: stable
 
 
 

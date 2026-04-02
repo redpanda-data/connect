@@ -1,6 +1,6 @@
 = discord
 :type: input
-:status: experimental
+:status: stable
 :categories: ["Services","Social"]
 
 

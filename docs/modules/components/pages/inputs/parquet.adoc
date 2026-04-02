@@ -1,6 +1,6 @@
 = parquet
 :type: input
-:status: experimental
+:status: stable
 :categories: ["Local"]
 
 

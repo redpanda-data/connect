@@ -1,6 +1,6 @@
 = parquet_decode
 :type: processor
-:status: experimental
+:status: stable
 :categories: ["Parsing"]
 
 

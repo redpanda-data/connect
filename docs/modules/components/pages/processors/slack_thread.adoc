@@ -1,6 +1,6 @@
 = slack_thread
 :type: processor
-:status: experimental
+:status: stable
 
 
 

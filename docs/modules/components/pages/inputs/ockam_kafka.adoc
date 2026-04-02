@@ -1,6 +1,6 @@
 = ockam_kafka
 :type: input
-:status: experimental
+:status: stable
 :categories: ["Services"]
 
 

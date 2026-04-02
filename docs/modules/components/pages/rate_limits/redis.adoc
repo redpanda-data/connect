@@ -1,6 +1,6 @@
 = redis
 :type: rate_limit
-:status: experimental
+:status: stable
 
 
 

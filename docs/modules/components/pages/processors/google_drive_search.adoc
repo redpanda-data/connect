@@ -1,6 +1,6 @@
 = google_drive_search
 :type: processor
-:status: experimental
+:status: stable
 :categories: ["Unstructured"]
 
 

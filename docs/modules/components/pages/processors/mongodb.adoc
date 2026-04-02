@@ -1,6 +1,6 @@
 = mongodb
 :type: processor
-:status: experimental
+:status: stable
 :categories: ["Services"]
 
 

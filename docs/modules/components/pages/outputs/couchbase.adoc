@@ -1,6 +1,6 @@
 = couchbase
 :type: output
-:status: experimental
+:status: stable
 :categories: ["Integration"]
 
 

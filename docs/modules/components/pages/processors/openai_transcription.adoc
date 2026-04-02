@@ -1,6 +1,6 @@
 = openai_transcription
 :type: processor
-:status: experimental
+:status: stable
 :categories: ["AI"]
 
 

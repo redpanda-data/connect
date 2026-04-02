@@ -1,6 +1,6 @@
 = sql
 :type: cache
-:status: experimental
+:status: stable
 :categories: ["Services"]
 
 

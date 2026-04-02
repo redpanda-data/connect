@@ -1,6 +1,6 @@
 = command
 :type: processor
-:status: experimental
+:status: stable
 :categories: ["Integration"]
 
 

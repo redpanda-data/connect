@@ -1,6 +1,6 @@
 = salesforce
 :type: processor
-:status: experimental
+:status: stable
 
 
 

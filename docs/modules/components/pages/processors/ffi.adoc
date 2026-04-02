@@ -1,6 +1,6 @@
 = ffi
 :type: processor
-:status: experimental
+:status: stable
 
 
 

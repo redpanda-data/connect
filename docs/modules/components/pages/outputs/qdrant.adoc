@@ -1,6 +1,6 @@
 = qdrant
 :type: output
-:status: experimental
+:status: stable
 :categories: ["AI"]
 
 

@@ -1,6 +1,6 @@
 = mongodb
 :type: cache
-:status: experimental
+:status: stable
 
 
 

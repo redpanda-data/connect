@@ -1,6 +1,6 @@
 = redpanda_data_transform
 :type: processor
-:status: experimental
+:status: stable
 :categories: ["Utility"]
 
 

@@ -1,6 +1,6 @@
 = slack_reaction
 :type: output
-:status: experimental
+:status: stable
 
 
 

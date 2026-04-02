@@ -1,6 +1,6 @@
 = redpanda_migrator
 :type: input
-:status: experimental
+:status: stable
 :categories: ["Services"]
 
 

@@ -1,6 +1,6 @@
 = ollama_chat
 :type: processor
-:status: experimental
+:status: stable
 :categories: ["AI"]
 
 

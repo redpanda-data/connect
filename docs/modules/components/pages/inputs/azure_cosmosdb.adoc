@@ -1,6 +1,6 @@
 = azure_cosmosdb
 :type: input
-:status: experimental
+:status: stable
 :categories: ["Azure"]
 
 

@@ -1,6 +1,6 @@
 = google_drive_list_labels
 :type: processor
-:status: experimental
+:status: stable
 :categories: ["Unstructured"]
 
 

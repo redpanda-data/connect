@@ -1,6 +1,6 @@
 = nats_request_reply
 :type: processor
-:status: experimental
+:status: stable
 :categories: ["Services"]
 
 

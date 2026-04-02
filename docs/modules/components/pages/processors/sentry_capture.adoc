@@ -1,6 +1,6 @@
 = sentry_capture
 :type: processor
-:status: experimental
+:status: stable
 
 
 
