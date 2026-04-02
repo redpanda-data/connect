@@ -26,7 +26,6 @@ type vector struct {
 
 func init() {
 	vectorSpec := bloblang.NewPluginSpec().
-		Beta().
 		Category("SQL").
 		Description(`Converts an array of numbers into a vector type suitable for insertion into SQL databases with vector/embedding support. This is commonly used with PostgreSQL's pgvector extension for storing and querying machine learning embeddings, enabling similarity search and vector operations in your database.`).
 		Version("4.33.0").

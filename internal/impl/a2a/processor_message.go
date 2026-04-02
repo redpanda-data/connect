@@ -41,7 +41,7 @@ func init() {
 
 func processorConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Beta().
+		Stable().
 		Categories("AI").
 		Summary("Sends messages to an A2A (Agent-to-Agent) protocol agent and returns the response.").
 		Description(`

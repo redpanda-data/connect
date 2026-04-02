@@ -44,7 +44,7 @@ const (
 
 func sftpInputSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Beta().
+		Stable().
 		Categories("Network").
 		Version("3.39.0").
 		Summary(`Consumes files from an SFTP server.`).

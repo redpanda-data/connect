@@ -1,6 +1,6 @@
 = splunk_hec
 :type: output
-:status: beta
+:status: stable
 :categories: ["Services"]
 
 

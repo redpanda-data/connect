@@ -67,7 +67,7 @@ var AWSOptFn = notImportedAWSOptFn
 type TokenBuilder func(context.Context) error
 
 var mysqlStreamConfigSpec = service.NewConfigSpec().
-	Beta().
+	Stable().
 	Categories("Services").
 	Version("4.45.0").
 	Summary("Enables MySQL streaming for RedPanda Connect.").

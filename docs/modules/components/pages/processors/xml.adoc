@@ -1,6 +1,6 @@
 = xml
 :type: processor
-:status: beta
+:status: stable
 :categories: ["Parsing"]
 
 

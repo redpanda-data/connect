@@ -1,6 +1,6 @@
 = sftp
 :type: input
-:status: beta
+:status: stable
 :categories: ["Network"]
 
 

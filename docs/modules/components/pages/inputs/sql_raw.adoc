@@ -1,6 +1,6 @@
 = sql_raw
 :type: input
-:status: beta
+:status: stable
 :categories: ["Services"]
 
 

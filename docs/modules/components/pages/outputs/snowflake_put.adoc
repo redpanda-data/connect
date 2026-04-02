@@ -1,6 +1,6 @@
 = snowflake_put
 :type: output
-:status: beta
+:status: stable
 :categories: ["Services"]
 
 

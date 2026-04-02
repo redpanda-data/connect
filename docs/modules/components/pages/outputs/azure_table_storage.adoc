@@ -1,6 +1,6 @@
 = azure_table_storage
 :type: output
-:status: beta
+:status: stable
 :categories: ["Services","Azure"]
 
 

@@ -48,7 +48,7 @@ func init() {
 }
 
 var msSQLServerStreamConfigSpec = service.NewConfigSpec().
-	Beta().
+	Stable().
 	Categories("Services").
 	Version("0.0.1").
 	Summary("Enables Change Data Capture by consuming from Microsoft SQL Server's change tables.").

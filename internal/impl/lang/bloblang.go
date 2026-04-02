@@ -36,7 +36,6 @@ func init() {
 	// ./internal/bloblang/query/parsed_test.go
 
 	slugSpec := bloblang.NewPluginSpec().
-		Beta().
 		Category("String Manipulation").
 		Description(`Converts a string into a URL-friendly slug by replacing spaces with hyphens, removing special characters, and converting to lowercase. Supports multiple languages for proper transliteration of non-ASCII characters.`).
 		Version("4.2.0").
@@ -69,7 +68,6 @@ func init() {
 	}
 
 	unicodeSegmentsSpec := bloblang.NewPluginSpec().
-		Beta().
 		Category("String Manipulation").
 		Description(`Splits text into segments based on Unicode text segmentation rules. Returns an array of strings representing individual graphemes (visual characters), words (including punctuation and whitespace), or sentences. Handles complex Unicode correctly, including emoji with skin tone modifiers and zero-width joiners.`).
 		Example("Split text into sentences (preserves trailing spaces)",
@@ -122,7 +120,6 @@ func init() {
 	}
 
 	fakerSpec := bloblang.NewPluginSpec().
-		Beta().
 		Category("Fake Data Generation").
 		Description("Generates realistic fake data for testing and development purposes. Supports a wide variety of data types including personal information, network addresses, dates/times, financial data, and UUIDs. "+
 			"Useful for creating mock data, populating test databases, or anonymizing sensitive information.\n\n"+
@@ -319,7 +316,6 @@ func registerULID() error {
 	encodings := []string{"crockford", "hex"}
 	randSources := []string{"secure_random", "fast_random"}
 	spec := bloblang.NewPluginSpec().
-		Experimental().
 		Category("General").
 		Description("Generates a Universally Unique Lexicographically Sortable Identifier (ULID). ULIDs are 128-bit identifiers that are sortable by creation time, URL-safe, and case-insensitive. They consist of a 48-bit timestamp (millisecond precision) and 80 bits of randomness, making them ideal for distributed systems that need time-ordered unique IDs without coordination.").
 		Param(
