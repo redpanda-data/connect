@@ -1,0 +1,41 @@
+name: log
+type: output
+status: experimental
+summary: Behaves exactly like `log` processor but as an output.
+
+fields:
+  - name: level
+    type: string
+    default: INFO
+    description: |-
+       The log level to use.
+       Options: FATAL, ERROR, WARN, INFO, DEBUG, TRACE, ALL.
+
+  - name: fields_mapping
+    type: string
+    default: "root = this"
+    description: |-
+      An optional Bloblang mapping that can be used to specify extra fields to add to the log.
+      If log fields are also added with the fields field then those values will override matching keys from this mapping.
+
+  - name: message
+    type: string
+    default: ""
+    description: |-
+      The message to print. This field supports interpolation functions.
+
+mapping: |-
+  #!blobl
+  root.stdout = {}
+  root.processors = [
+    {
+      "log": {
+        "level": this.level,
+        "message": this.message,
+        "fields_mapping": this.fields_mapping
+      }
+    },
+    {
+      "mapping": "root = deleted()"
+    }
+  ]
