@@ -22,7 +22,7 @@
 component_type_dropdown::[]
 
 
-Writes messages to Salesforce, routing each Kafka topic to its own SObject configuration.
+Writes messages to Salesforce, routing each topic to its own SObject configuration.
 
 ```yml
 # Config fields, showing default values
@@ -196,7 +196,7 @@ Maximum number of batches to send concurrently. Increasing this improves realtim
 
 === `topic_mappings`
 
-Per-topic Salesforce write configuration. Each entry maps a Kafka topic to an SObject and write settings.
+Per-topic Salesforce write configuration. Each entry maps a topic to an SObject and write settings.
 
 
 *Type*: `array`
@@ -204,7 +204,7 @@ Per-topic Salesforce write configuration. Each entry maps a Kafka topic to an SO
 
 === `topic_mappings[].topic`
 
-Kafka topic name to match against the message's 'topic' field
+topic name to match against the message's 'topic' field
 
 
 *Type*: `string`
