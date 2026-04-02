@@ -1,6 +1,6 @@
 = ollama_moderation
 :type: processor
-:status: experimental
+:status: stable
 :categories: ["AI"]
 
 

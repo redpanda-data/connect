@@ -1,6 +1,6 @@
 = mongodb
 :type: input
-:status: experimental
+:status: stable
 :categories: ["Services"]
 
 

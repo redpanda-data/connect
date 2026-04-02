@@ -1,6 +1,6 @@
 = openai_image_generation
 :type: processor
-:status: experimental
+:status: stable
 :categories: ["AI"]
 
 

@@ -1,6 +1,6 @@
 = gcp_vertex_ai_embeddings
 :type: processor
-:status: experimental
+:status: stable
 :categories: ["AI"]
 
 

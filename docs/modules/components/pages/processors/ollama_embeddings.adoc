@@ -1,6 +1,6 @@
 = ollama_embeddings
 :type: processor
-:status: experimental
+:status: stable
 :categories: ["AI"]
 
 

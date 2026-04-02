@@ -1,6 +1,6 @@
 = gcp_cloudtrace
 :type: tracer
-:status: experimental
+:status: stable
 
 
 

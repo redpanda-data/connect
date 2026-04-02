@@ -1,6 +1,6 @@
 = openai_chat_completion
 :type: processor
-:status: experimental
+:status: stable
 :categories: ["AI"]
 
 

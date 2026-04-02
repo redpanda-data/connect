@@ -1,6 +1,6 @@
 = redpanda
 :type: tracer
-:status: experimental
+:status: stable
 
 
 

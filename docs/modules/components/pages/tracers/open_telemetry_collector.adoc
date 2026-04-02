@@ -1,6 +1,6 @@
 = open_telemetry_collector
 :type: tracer
-:status: experimental
+:status: stable
 
 
 

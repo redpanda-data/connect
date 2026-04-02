@@ -1,6 +1,6 @@
 = salesforce_sink
 :type: output
-:status: experimental
+:status: stable
 
 
 

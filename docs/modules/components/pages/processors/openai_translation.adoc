@@ -1,6 +1,6 @@
 = openai_translation
 :type: processor
-:status: experimental
+:status: stable
 :categories: ["AI"]
 
 

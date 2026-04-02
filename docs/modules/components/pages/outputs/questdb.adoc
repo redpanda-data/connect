@@ -1,6 +1,6 @@
 = questdb
 :type: output
-:status: experimental
+:status: stable
 :categories: ["Services"]
 
 

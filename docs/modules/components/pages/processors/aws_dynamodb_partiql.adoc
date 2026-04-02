@@ -1,6 +1,6 @@
 = aws_dynamodb_partiql
 :type: processor
-:status: experimental
+:status: stable
 :categories: ["Integration"]
 
 

@@ -1,6 +1,6 @@
 = azure_cosmosdb
 :type: processor
-:status: experimental
+:status: stable
 :categories: ["Azure"]
 
 

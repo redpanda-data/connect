@@ -1,6 +1,6 @@
 = couchbase
 :type: cache
-:status: experimental
+:status: stable
 
 
 

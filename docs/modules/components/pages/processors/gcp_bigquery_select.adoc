@@ -1,6 +1,6 @@
 = gcp_bigquery_select
 :type: processor
-:status: experimental
+:status: stable
 :categories: ["Integration"]
 
 
