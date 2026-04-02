@@ -3,7 +3,24 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## 4.86.0 - TBD
+## 4.86.0 - 2026-04-02
+
+### Added
+
+- oracledb_cdc: Added support for parsing complex Oracle connection configurations with override options and early connection validation. ([@josephwoodward](https://github.com/josephwoodward), [#4179](https://github.com/redpanda-data/connect/pull/4179))
+- text: Added string_split processor that splits message bytes by a configurable delimiter into an array with support for converting empty parts to null. ([@rockwotj](https://github.com/rockwotj), [#4187](https://github.com/redpanda-data/connect/pull/4187))
+- sql: Add ClickHouse Map type support for sql_insert ([@rickysaltzer](https://github.com/rickysaltzer), [#4178](https://github.com/redpanda-data/connect/pull/4178))
+
+### Fixed
+
+- aws: Fixed DynamoDB CDC shard discovery race condition that could miss writes between Connect() and async discovery, and added handling for TrimmedDataAccessException errors. ([@squiidz](https://github.com/squiidz), [#4175](https://github.com/redpanda-data/connect/pull/4175))
+- migrator: Fixed concurrent DFS race condition that could cause import mode to be restored while other walkers were still syncing by deferring all mode restoration to Close() and removing the refcount mechanism. ([@mmatczuk](https://github.com/mmatczuk), [#4174](https://github.com/redpanda-data/connect/pull/4174))
+- s3: Fixed AWS S3 client to properly respect CA certificates specified in the AWS_CA_BUNDLE environment variable. ([@ttreptow](https://github.com/ttreptow), [#4093](https://github.com/redpanda-data/connect/pull/4093))
+
+### Changed
+
+- aws_sqs: Reverted client-side 256 KB message and batch size limit enforcement for SQS output to restore prior behavior. ([@twmb](https://github.com/twmb), [#4193](https://github.com/redpanda-data/connect/pull/4193))
+- general: Promoted 50 Beta and Experimental connectors to Stable status across inputs, outputs, processors, caches, metrics, and Bloblang functions. ([@prakhargarg105](https://github.com/prakhargarg105), [#4205](https://github.com/redpanda-data/connect/pull/4205))
 
 ### Added
 
