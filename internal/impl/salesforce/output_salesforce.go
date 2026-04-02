@@ -12,7 +12,7 @@
 //
 // Messages are routed to the correct SObject configuration based on the "topic" field
 // set by the per-topic processor. Each topic_mapping entry defines the SObject, operation,
-// external ID field, and write mode for a given Kafka topic.
+// external ID field, and write mode for a given topic.
 
 package salesforce
 
@@ -72,7 +72,7 @@ type inFlightBulkJob struct {
 	errCh chan error // buffered(1); receives exactly one value when polling completes
 }
 
-// topicMapping holds the Salesforce write config for a single Kafka topic.
+// topicMapping holds the Salesforce write config for a single topic.
 type topicMapping struct {
 	sobject         string
 	operation       string
@@ -86,7 +86,7 @@ type salesforceSinkOutput struct {
 	log    *service.Logger
 	client *salesforcehttp.Client
 
-	// topicMappings maps Kafka topic name → Salesforce write config.
+	// topicMappings maps topic name → Salesforce write config.
 	topicMappings map[string]topicMapping
 
 	// writableFields caches per-SObject updateable field sets, loaded lazily on first write.
@@ -132,7 +132,7 @@ func init() {
 func newSalesforceSinkConfigSpec() *service.ConfigSpec {
 	topicMappingSpec := service.NewObjectListField(sfsFieldTopicMappings,
 		service.NewStringField(sfsTMFieldTopic).
-			Description("Kafka topic name to match against the message's 'topic' field"),
+			Description("topic name to match against the message's 'topic' field"),
 		service.NewStringField(sfsTMFieldSObject).
 			Description("Salesforce SObject API name (e.g., Account, Contact, MyObject__c)"),
 		service.NewStringField(sfsTMFieldOperation).
@@ -147,10 +147,10 @@ func newSalesforceSinkConfigSpec() *service.ConfigSpec {
 		service.NewBoolField(sfsTMFieldAllOrNone).
 			Description("Realtime only: roll back the entire batch if any record fails").
 			Default(false),
-	).Description("Per-topic Salesforce write configuration. Each entry maps a Kafka topic to an SObject and write settings.")
+	).Description("Per-topic Salesforce write configuration. Each entry maps a topic to an SObject and write settings.")
 
 	return service.NewConfigSpec().
-		Summary("Writes messages to Salesforce, routing each Kafka topic to its own SObject configuration.").
+		Summary("Writes messages to Salesforce, routing each topic to its own SObject configuration.").
 		Description(`Consumes batches of messages and writes them to Salesforce.
 
 Each message must have a ` + "`topic`" + ` field (set by the per-topic processor) and a ` + "`data`" + ` field
