@@ -112,7 +112,7 @@ func TestDo(t *testing.T) {
 	t.Run("2xx returns body", func(t *testing.T) {
 		t.Parallel()
 
-		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{"ok":true}`))
 		}))
@@ -139,7 +139,7 @@ func TestDo(t *testing.T) {
 	t.Run("non 2xx returns HTTP error", func(t *testing.T) {
 		t.Parallel()
 
-		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.Header().Set("X-Salesforce-Error", "session-expired")
 			w.WriteHeader(http.StatusNotFound)
 			_, _ = w.Write([]byte(`not found`))
@@ -172,7 +172,7 @@ func TestDo(t *testing.T) {
 	t.Run("5xx returns HTTP error", func(t *testing.T) {
 		t.Parallel()
 
-		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
 			_, _ = w.Write([]byte(`server error`))
 		}))
@@ -205,7 +205,7 @@ func TestWithAuth(t *testing.T) {
 	t.Run("success on first call", func(t *testing.T) {
 		t.Parallel()
 
-		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ts := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
 			t.Error("unexpected HTTP call — token is already set")
 		}))
 		defer ts.Close()
@@ -379,7 +379,7 @@ func TestWithAuth(t *testing.T) {
 	t.Run("non HTTP error not retried", func(t *testing.T) {
 		t.Parallel()
 
-		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ts := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
 			t.Error("unexpected HTTP call — non-HTTP errors should not trigger token refresh")
 		}))
 		defer ts.Close()
