@@ -75,9 +75,16 @@ func isNumberType(dataType string) bool {
 // schemaCache holds per-table schema entries and performs addition-only drift
 // detection: if an event references a column not in the cached schema, the
 // cache is refreshed from ALL_TAB_COLUMNS.
+//
+// In CDB mode (pdbName != ""), each cache-miss refresh switches a dedicated
+// *sql.Conn to the PDB context (ALTER SESSION SET CONTAINER) before running the
+// catalog query, then switches back. Avoids both CDB_* view privilege issues and
+// separate-connection login issues.
 type schemaCache struct {
 	mu      sync.Mutex
 	schemas map[string]*cachedSchema
+	db      *sql.DB
+	pdbName string // non-empty in CDB mode; triggers ALTER SESSION SET CONTAINER per refresh
 	log     *service.Logger
 }
 
@@ -88,24 +95,32 @@ type cachedSchema struct {
 	numericCols map[string]struct{}          // NUMBER columns that map to String (need json.Number coercion)
 }
 
-func newSchemaCache(log *service.Logger) *schemaCache {
+// newSchemaCache creates a schemaCache. db is used for on-demand cache-miss refreshes.
+// pdbName is non-empty when connected to CDB$ROOT and monitoring a specific PDB; the cache
+// will switch the session to that PDB for each catalog query.
+func newSchemaCache(db *sql.DB, pdbName string, log *service.Logger) *schemaCache {
 	return &schemaCache{
 		schemas: make(map[string]*cachedSchema),
+		db:      db,
+		pdbName: pdbName,
 		log:     log,
 	}
 }
 
-// fetchTableSchema queries ALL_TAB_COLUMNS for the given table and returns a
-// cachedSchema with the column metadata encoded as a schema.Common.
-func fetchTableSchema(ctx context.Context, db *sql.DB, table replication.UserTable) (*cachedSchema, error) {
-	const query = `SELECT COLUMN_NAME, DATA_TYPE, DATA_PRECISION, DATA_SCALE
+// fetchTableSchema queries ALL_TAB_COLUMNS for the given table.
+// The caller is responsible for ensuring the db/conn is in the correct container context.
+func fetchTableSchema(ctx context.Context, db interface {
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+}, table replication.UserTable,
+) (*cachedSchema, error) {
+	query := `SELECT COLUMN_NAME, DATA_TYPE, DATA_PRECISION, DATA_SCALE
 FROM ALL_TAB_COLUMNS
 WHERE OWNER = :1 AND TABLE_NAME = :2
 ORDER BY COLUMN_ID`
 
 	rows, err := db.QueryContext(ctx, query, table.Schema, table.Name)
 	if err != nil {
-		return nil, fmt.Errorf("querying ALL_TAB_COLUMNS for %s.%s: %w", table.Schema, table.Name, err)
+		return nil, fmt.Errorf("querying column metadata for %s.%s: %w", table.Schema, table.Name, err)
 	}
 	defer rows.Close()
 
@@ -176,7 +191,7 @@ type columnTypeInfo struct {
 	numericCols map[string]struct{}
 }
 
-func (sc *schemaCache) schemaForEvent(ctx context.Context, db *sql.DB, table replication.UserTable, eventKeys []string) (any, *columnTypeInfo, error) {
+func (sc *schemaCache) schemaForEvent(ctx context.Context, table replication.UserTable, eventKeys []string) (any, *columnTypeInfo, error) {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
 
@@ -196,7 +211,33 @@ func (sc *schemaCache) schemaForEvent(ctx context.Context, db *sql.DB, table rep
 		sc.log.Debugf("Schema drift detected for %s: refreshing after unknown column in event", tableKey)
 	}
 
-	fresh, err := fetchTableSchema(ctx, db, table)
+	var fresh *cachedSchema
+	var err error
+	if sc.pdbName != "" {
+		// CDB mode: get a dedicated connection and switch to the PDB container
+		// before querying ALL_TAB_COLUMNS.
+		conn, connErr := sc.db.Conn(ctx)
+		if connErr != nil {
+			if existing, exists := sc.schemas[tableKey]; exists {
+				sc.log.Warnf("Failed to get connection for schema refresh of %s, using cached version: %v", tableKey, connErr)
+				return existing.schema, &columnTypeInfo{existing.colTypes, existing.numericCols}, connErr
+			}
+			return nil, nil, connErr
+		}
+		defer conn.Close()
+		if _, execErr := conn.ExecContext(ctx, "ALTER SESSION SET CONTAINER = "+sc.pdbName); execErr != nil {
+			if existing, exists := sc.schemas[tableKey]; exists {
+				sc.log.Warnf("Failed to switch to PDB %s for schema refresh of %s, using cached version: %v", sc.pdbName, tableKey, execErr)
+				return existing.schema, &columnTypeInfo{existing.colTypes, existing.numericCols}, execErr
+			}
+			return nil, nil, execErr
+		}
+		fresh, err = fetchTableSchema(ctx, conn, table)
+		// Switch back to CDB$ROOT after the query (best-effort; connection returns to pool anyway)
+		_, _ = conn.ExecContext(ctx, "ALTER SESSION SET CONTAINER = CDB$ROOT")
+	} else {
+		fresh, err = fetchTableSchema(ctx, sc.db, table)
+	}
 	if err != nil {
 		if existing, exists := sc.schemas[tableKey]; exists {
 			sc.log.Warnf("Failed to refresh schema for %s, using cached version: %v", tableKey, err)

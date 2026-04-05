@@ -58,6 +58,7 @@ input:
     checkpoint_cache_table_name: RPCN.CDC_CHECKPOINT_CACHE
     checkpoint_cache_key: oracledb_cdc
     checkpoint_limit: 1024
+    pdb_name: "" # No default (optional)
     auto_replay_nacks: true
     batching:
       count: 0
@@ -95,6 +96,7 @@ input:
     checkpoint_cache_table_name: RPCN.CDC_CHECKPOINT_CACHE
     checkpoint_cache_key: oracledb_cdc
     checkpoint_limit: 1024
+    pdb_name: "" # No default (optional)
     auto_replay_nacks: true
     batching:
       count: 0
@@ -349,6 +351,14 @@ The maximum number of messages that can be processed at a given time. Increasing
 *Type*: `int`
 
 *Default*: `1024`
+
+=== `pdb_name`
+
+The name of the pluggable database (PDB) to monitor. When connecting to a CDB root, LogMiner output is scoped to this PDB via SRC_CON_NAME filtering and catalog queries use ALTER SESSION SET CONTAINER to switch context. Requires GRANT SET CONTAINER TO <user> CONTAINER=ALL.
+
+
+*Type*: `string`
+
 
 === `auto_replay_nacks`
 
