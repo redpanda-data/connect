@@ -27,18 +27,19 @@ import (
 )
 
 const (
-	fieldConnectionString          = "connection_string"
-	fieldStreamSnapshot            = "stream_snapshot"
-	fieldMaxParallelSnapshotTables = "max_parallel_snapshot_tables"
-	fieldSnapshotMaxBatchSize      = "snapshot_max_batch_size"
-	fieldStreamBackoffInterval     = "stream_backoff_interval"
-	fieldTablesExclude             = "exclude"
-	fieldTablesInclude             = "include"
-	fieldCheckpointLimit           = "checkpoint_limit"
-	fieldCheckpointCache           = "checkpoint_cache"
-	fieldCheckpointCacheKey        = "checkpoint_cache_key"
-	fieldCheckpointCacheTableName  = "checkpoint_cache_table_name"
-	fieldBatching                  = "batching"
+	fieldConnectionString                = "connection_string"
+	fieldStreamSnapshot                  = "stream_snapshot"
+	fieldMaxParallelSnapshotTables       = "max_parallel_snapshot_tables"
+	fieldSnapshotMaxBatchSize            = "snapshot_max_batch_size"
+	fieldStreamBackoffInterval           = "stream_backoff_interval"
+	fieldTablesExclude                   = "exclude"
+	fieldTablesInclude                   = "include"
+	fieldCheckpointLimit                 = "checkpoint_limit"
+	fieldCheckpointCache                 = "checkpoint_cache"
+	fieldCheckpointCacheKey              = "checkpoint_cache_key"
+	fieldCheckpointCacheTableName        = "checkpoint_cache_table_name"
+	fieldCheckpointCacheConnectionString = "checkpoint_cache_connection_string"
+	fieldBatching                        = "batching"
 
 	shutdownTimeout = 5 * time.Second
 )
@@ -103,6 +104,11 @@ When using the default Microsoft SQL Server based cache, the Connect user requir
 		Example("dbo.checkpoint_cache").
 		Optional(),
 	).
+	Field(service.NewStringField(fieldCheckpointCacheConnectionString).
+		Description("An optional connection string for a remote Microsoft SQL Server to use for the checkpoint cache. When set, the checkpoint cache table is created on this remote server instead of the source database. If `" + fieldCheckpointCache + "` is also set, that takes precedence.").
+		Example("sqlserver://username:password@remotehost/instance?param1=value&param2=value").
+		Optional(),
+	).
 	Field(service.NewStringField(fieldCheckpointCacheKey).
 		Description("The key to use to store the snapshot position in `" + fieldCheckpointCache + "`. An alternative key can be provided if multiple CDC inputs share the same cache.").
 		Default("microsoft_sql_server_cdc").
@@ -126,15 +132,16 @@ type asyncMessage struct {
 }
 
 type config struct {
-	connectionString      string
-	streamSnapshot        bool
-	streamBackoffInterval time.Duration
-	snapshotMaxBatchSize  int
-	snapshotMaxWorkers    int
-	tablesFilter          *confx.RegexpFilter
-	lsnCache              string
-	lsnCacheKey           string
-	cpCacheTableName      string
+	connectionString        string
+	streamSnapshot          bool
+	streamBackoffInterval   time.Duration
+	snapshotMaxBatchSize    int
+	snapshotMaxWorkers      int
+	tablesFilter            *confx.RegexpFilter
+	lsnCache                string
+	lsnCacheKey             string
+	cpCacheTableName        string
+	cpCacheConnectionString string
 }
 
 type sqlServerCDCInput struct {
@@ -211,6 +218,13 @@ func newMSSQLServerCDCInput(conf *service.ParsedConfig, resources *service.Resou
 		return nil, err
 	}
 
+	var cpCacheConnectionString string
+	if conf.Contains(fieldCheckpointCacheConnectionString) {
+		if cpCacheConnectionString, err = conf.FieldString(fieldCheckpointCacheConnectionString); err != nil {
+			return nil, err
+		}
+	}
+
 	// checkpointing
 	var checkpointLimit int
 	if checkpointLimit, err = conf.FieldInt(fieldCheckpointLimit); err != nil {
@@ -233,14 +247,15 @@ func newMSSQLServerCDCInput(conf *service.ParsedConfig, resources *service.Resou
 
 	i := sqlServerCDCInput{
 		cfg: &config{
-			connectionString:      connectionString,
-			streamSnapshot:        streamSnapshot,
-			streamBackoffInterval: streamBackoffInterval,
-			snapshotMaxWorkers:    snapshotMaxWorkers,
-			snapshotMaxBatchSize:  snapshotMaxBatchSize,
-			lsnCache:              lsnCache,
-			lsnCacheKey:           lsnCacheKey,
-			cpCacheTableName:      cpCacheTableName,
+			connectionString:        connectionString,
+			streamSnapshot:          streamSnapshot,
+			streamBackoffInterval:   streamBackoffInterval,
+			snapshotMaxWorkers:      snapshotMaxWorkers,
+			snapshotMaxBatchSize:    snapshotMaxBatchSize,
+			lsnCache:                lsnCache,
+			lsnCacheKey:             lsnCacheKey,
+			cpCacheTableName:        cpCacheTableName,
+			cpCacheConnectionString: cpCacheConnectionString,
 			tablesFilter: &confx.RegexpFilter{
 				Include: tableIncludes,
 				Exclude: tableExcludes,
@@ -279,8 +294,11 @@ func (i *sqlServerCDCInput) Connect(ctx context.Context) error {
 
 	// no cache specified so use default, custom sql cache
 	if i.cfg.lsnCache == "" {
-		// setup internal cache
-		cache, err := newCheckpointCache(ctx, i.cfg.connectionString, i.cfg.cpCacheTableName, i.log)
+		cacheConnStr := i.cfg.connectionString
+		if i.cfg.cpCacheConnectionString != "" {
+			cacheConnStr = i.cfg.cpCacheConnectionString
+		}
+		cache, err := newCheckpointCache(ctx, cacheConnStr, i.cfg.cpCacheTableName, i.log)
 		if err != nil {
 			return fmt.Errorf("initialising sql server based checkpoint cache: %s", err)
 		}

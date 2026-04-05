@@ -47,6 +47,7 @@ input:
     exclude: [] # No default (optional)
     checkpoint_cache: "" # No default (optional)
     checkpoint_cache_table_name: rpcn.CdcCheckpointCache
+    checkpoint_cache_connection_string: sqlserver://username:password@remotehost/instance?param1=value&param2=value # No default (optional)
     checkpoint_cache_key: microsoft_sql_server_cdc
     checkpoint_limit: 1024
     stream_backoff_interval: 5s
@@ -76,6 +77,7 @@ input:
     exclude: [] # No default (optional)
     checkpoint_cache: "" # No default (optional)
     checkpoint_cache_table_name: rpcn.CdcCheckpointCache
+    checkpoint_cache_connection_string: sqlserver://username:password@remotehost/instance?param1=value&param2=value # No default (optional)
     checkpoint_cache_key: microsoft_sql_server_cdc
     checkpoint_limit: 1024
     stream_backoff_interval: 5s
@@ -206,6 +208,20 @@ The multipart identifier for the checkpoint cache table name. If no `checkpoint_
 # Examples
 
 checkpoint_cache_table_name: dbo.checkpoint_cache
+```
+
+=== `checkpoint_cache_connection_string`
+
+An optional connection string for a remote Microsoft SQL Server to use for the checkpoint cache. When set, the checkpoint cache table is created on this remote server instead of the source database. If `checkpoint_cache` is also set, that takes precedence.
+
+
+*Type*: `string`
+
+
+```yml
+# Examples
+
+checkpoint_cache_connection_string: sqlserver://username:password@remotehost/instance?param1=value&param2=value
 ```
 
 === `checkpoint_cache_key`
