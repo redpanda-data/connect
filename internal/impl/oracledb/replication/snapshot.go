@@ -25,13 +25,14 @@ import (
 // Snapshot is responsible for creating snapshots of existing tables based on the Tables
 // configuration value.
 type Snapshot struct {
-	db                      *sql.DB
+	dbPool                  *sql.DB
 	tables                  []UserTable
 	publisher               ChangePublisher
 	log                     *service.Logger
 	snapshotStatusMetric    *service.MetricGauge
 	snapshotRowsTotalMetric *service.MetricCounter
 	lobEnabled              bool
+	pdbName                 string
 }
 
 // NewSnapshot creates a new instance of Snapshot capable of snapshotting provided tables.
@@ -42,6 +43,7 @@ func NewSnapshot(ctx context.Context,
 	tables []UserTable,
 	publisher ChangePublisher,
 	lobEnabled bool,
+	pdbName string,
 	logger *service.Logger,
 	metrics *service.Metrics,
 ) (*Snapshot, error) {
@@ -56,13 +58,14 @@ func NewSnapshot(ctx context.Context,
 	}
 
 	s := &Snapshot{
-		db:                      db,
+		dbPool:                  db,
 		tables:                  tables,
 		publisher:               publisher,
-		log:                     logger,
+		lobEnabled:              lobEnabled,
+		pdbName:                 pdbName,
 		snapshotStatusMetric:    metrics.NewGauge("oracledb_cdc_snapshot_status", "table"),
 		snapshotRowsTotalMetric: metrics.NewCounter("oracledb_cdc_snapshot_rows_total", "table"),
-		lobEnabled:              lobEnabled,
+		log:                     logger,
 	}
 	return s, nil
 }
@@ -76,7 +79,7 @@ func (s *Snapshot) Prepare(ctx context.Context) (SCN, error) {
 
 	var currentSCN SCN
 	sql := `SELECT CURRENT_SCN FROM V$DATABASE`
-	if err := s.db.QueryRowContext(ctx, sql).Scan(&currentSCN); err != nil {
+	if err := s.dbPool.QueryRowContext(ctx, sql).Scan(&currentSCN); err != nil {
 		return InvalidSCN, fmt.Errorf("getting current SCN for snapshot: %w", err)
 	}
 
@@ -120,13 +123,38 @@ func (s *Snapshot) snapshotTable(ctx context.Context, table UserTable, maxBatchS
 		l := s.log.With("src_table", tableName)
 		l.Infof("Launching snapshot of table '%s'", tableName)
 
-		// BeginTx opens/reuses a dedicated connection for the given table-based transaction
-		// Oracle drivers don't support TxOptions, so we use default and set properties explicitly
-		if tx, err = s.db.BeginTx(ctx, nil); err != nil {
-			return fmt.Errorf("snapshot transaction: %w", err)
+		switch {
+		case s.pdbName != "":
+			var conn *sql.Conn
+			if conn, err = s.dbPool.Conn(ctx); err != nil {
+				return fmt.Errorf("acquiring snapshot connection: %w", err)
+			}
+			defer func() {
+				if err := conn.Close(); err != nil {
+					// snapshot has completed at this point so logging the error is sufficient.
+					s.log.Errorf("Closing snapshot connection: %v", err)
+				}
+			}()
+
+			if _, err = conn.ExecContext(ctx, "ALTER SESSION SET CONTAINER = "+s.pdbName); err != nil {
+				return fmt.Errorf("switching session to PDB '%s' for snapshot: %w", s.pdbName, err)
+			}
+			defer func() {
+				if _, err := conn.ExecContext(context.Background(), "ALTER SESSION SET CONTAINER = CDB$ROOT"); err != nil {
+					// logging the error is sufficient here, connection will be closed in defer call above.
+					s.log.Errorf("Switching session back to root container: %v", err)
+				}
+			}()
+			if tx, err = conn.BeginTx(ctx, nil); err != nil {
+				return fmt.Errorf("beginning snapshot transaction: %w", err)
+			}
+		default:
+			// Non-CDB mode: use db.BeginTx directly — no *Conn needed.
+			if tx, err = s.dbPool.BeginTx(ctx, nil); err != nil {
+				return fmt.Errorf("beginning snapshot transaction: %w", err)
+			}
 		}
 
-		// Set transaction to read-only mode
 		// In Oracle, READ ONLY transactions automatically provide serializable isolation
 		if _, err = tx.ExecContext(ctx, "SET TRANSACTION READ ONLY"); err != nil {
 			_ = tx.Rollback()
@@ -134,12 +162,8 @@ func (s *Snapshot) snapshotTable(ctx context.Context, table UserTable, maxBatchS
 		}
 		defer func() {
 			if err != nil {
-				// sql package automatically rolls back transaction if context is cancelled
-				if !errors.Is(err, context.Canceled) {
-					if rbErr := tx.Rollback(); rbErr != nil {
-						l.Errorf("Failed to rollback snapshot transaction: %v", rbErr)
-					}
-					return
+				if rbErr := tx.Rollback(); rbErr != nil && !errors.Is(rbErr, sql.ErrTxDone) {
+					l.Errorf("Failed to rollback snapshot transaction: %v", rbErr)
 				}
 			}
 		}()
@@ -155,15 +179,18 @@ func (s *Snapshot) snapshotTable(ctx context.Context, table UserTable, maxBatchS
 			lastSeenPksValues[pk] = nil
 		}
 
-		var numRowsProcessed int
+		var (
+			numRowsProcessed int
+			batchCount       int
+		)
 		for {
 			var pksForQuery map[string]any
 			if numRowsProcessed > 0 {
 				pksForQuery = lastSeenPksValues
 			}
-			batchCount, err := s.processBatch(ctx, tx, table, tablePks, pksForQuery, lastSeenPksValues, maxBatchSize, tableName)
+			batchCount, err = s.processBatch(ctx, tx, table, tablePks, pksForQuery, lastSeenPksValues, maxBatchSize, tableName)
 			if err != nil {
-				return fmt.Errorf("prcessing snapshot batch: %w", err)
+				return fmt.Errorf("processing snapshot batch: %w", err)
 			}
 
 			numRowsProcessed += batchCount
@@ -257,20 +284,20 @@ func (s *Snapshot) processBatch(ctx context.Context, tx *sql.Tx, table UserTable
 }
 
 func getTablePrimaryKeys(ctx context.Context, tx *sql.Tx, table UserTable) ([]string, error) {
-	// Oracle data dictionary query for primary key columns
-	// Note: Oracle stores identifiers in uppercase by default unless created with quotes
+	// ALL_CONSTRAINTS/ALL_CONS_COLUMNS work in any container context after ALTER SESSION SET CONTAINER.
 	pkSQL := `
-		SELECT acc.column_name
-		FROM all_constraints ac
-		JOIN all_cons_columns acc
-			ON ac.constraint_name = acc.constraint_name
-			AND ac.owner = acc.owner
-		WHERE ac.constraint_type = 'P'
-			AND UPPER(ac.table_name) = UPPER(:1)
-			AND UPPER(ac.owner) = UPPER(:2)
-		ORDER BY acc.position`
+	SELECT acc.column_name
+	FROM all_constraints ac
+	JOIN all_cons_columns acc
+		ON ac.constraint_name = acc.constraint_name
+		AND ac.owner = acc.owner
+	WHERE ac.constraint_type = 'P'
+		AND UPPER(ac.table_name) = UPPER(:1)
+		AND UPPER(ac.owner) = UPPER(:2)
+	ORDER BY acc.position`
+	pkArgs := []any{table.Name, table.Schema}
 
-	rows, err := tx.QueryContext(ctx, pkSQL, table.Name, table.Schema)
+	rows, err := tx.QueryContext(ctx, pkSQL, pkArgs...)
 	if err != nil {
 		return nil, fmt.Errorf("get primary key: %w", err)
 	}
@@ -353,8 +380,8 @@ func querySnapshotTable(ctx context.Context, tx *sql.Tx, table UserTable, pk []s
 // Close safely closes all open connections opened for the snapshotting process.
 // It should be called after a non-recoverale error or once the snapshot process has completed.
 func (s *Snapshot) Close() error {
-	if s.db != nil {
-		if err := s.db.Close(); err != nil {
+	if s.dbPool != nil {
+		if err := s.dbPool.Close(); err != nil {
 			return fmt.Errorf("closing database connection: %w", err)
 		}
 	}
