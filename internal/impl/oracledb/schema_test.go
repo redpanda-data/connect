@@ -28,7 +28,7 @@ import (
 
 func testSchemaCache(t *testing.T) *schemaCache {
 	t.Helper()
-	return newSchemaCache(service.NewLoggerFromSlog(slog.Default()))
+	return newSchemaCache(service.NewLoggerFromSlog(slog.Default()), nil, "")
 }
 
 func parseSchema(t *testing.T, s any) schema.Common {
@@ -54,7 +54,7 @@ func childByName(t *testing.T, c schema.Common, name string) schema.Common {
 func seedCache(t *testing.T, sc *schemaCache, schemaName, tableName string, meta []replication.ColumnMeta) any {
 	t.Helper()
 	sc.seedFromColumnMeta(replication.UserTable{Schema: schemaName, Name: tableName}, meta)
-	s, _, err := sc.schemaForEvent(context.Background(), nil, replication.UserTable{Schema: schemaName, Name: tableName}, nil)
+	s, _, err := sc.schemaForEvent(context.Background(), replication.UserTable{Schema: schemaName, Name: tableName}, nil)
 	require.NoError(t, err)
 	return s
 }
@@ -183,7 +183,7 @@ func TestSchemaCacheHit(t *testing.T) {
 
 	// All known subsets are cache hits.
 	for _, keys := range [][]string{{"A", "B", "C"}, {"A", "B"}, {"A"}, {}, nil} {
-		got, _, err := sc.schemaForEvent(ctx, nil, tbl, keys)
+		got, _, err := sc.schemaForEvent(ctx, tbl, keys)
 		require.NoError(t, err)
 		assert.Equal(t, s, got, "expected cache hit for keys %v", keys)
 	}
@@ -201,7 +201,7 @@ func TestSchemaCacheSubsetKeysNoRefresh(t *testing.T) {
 
 	// [A, B] is a subset of [A, B, C] — should not trigger a re-fetch.
 	// Passing nil db proves no DB call is made (would panic on nil).
-	got, _, err := sc.schemaForEvent(context.Background(), nil, tbl, []string{"A", "B"})
+	got, _, err := sc.schemaForEvent(context.Background(), tbl, []string{"A", "B"})
 	require.NoError(t, err)
 	require.NotNil(t, got)
 }
@@ -213,7 +213,7 @@ func TestSchemaCacheEmptyKeysNoRefresh(t *testing.T) {
 	})
 
 	// Empty keys (DELETE event) — always a cache hit.
-	got, _, err := sc.schemaForEvent(context.Background(), nil, replication.UserTable{Schema: "S", Name: "T"}, nil)
+	got, _, err := sc.schemaForEvent(context.Background(), replication.UserTable{Schema: "S", Name: "T"}, nil)
 	require.NoError(t, err)
 	require.NotNil(t, got)
 }
@@ -253,7 +253,7 @@ func TestSchemaCacheSeedFromColumnMetaOverride(t *testing.T) {
 		{Name: "A", TypeName: "VARCHAR2"},
 		{Name: "B", TypeName: "NUMBER", Precision: 5, Scale: 0, HasDecimalSize: true},
 	})
-	s1, _, err := sc.schemaForEvent(context.Background(), nil, tbl, nil)
+	s1, _, err := sc.schemaForEvent(context.Background(), tbl, nil)
 	require.NoError(t, err)
 	c1 := parseSchema(t, s1)
 	require.Len(t, c1.Children, 2)
@@ -264,7 +264,7 @@ func TestSchemaCacheSeedFromColumnMetaOverride(t *testing.T) {
 		{Name: "B", TypeName: "NUMBER", Precision: 5, Scale: 0, HasDecimalSize: true},
 		{Name: "C", TypeName: "DATE"},
 	})
-	s2, _, err := sc.schemaForEvent(context.Background(), nil, tbl, nil)
+	s2, _, err := sc.schemaForEvent(context.Background(), tbl, nil)
 	require.NoError(t, err)
 	c2 := parseSchema(t, s2)
 	require.Len(t, c2.Children, 3)
@@ -445,7 +445,7 @@ func TestCoerceStreamingValuesColumnTypeInfoFromCache(t *testing.T) {
 		{Name: "SCORE", TypeName: "BINARY_FLOAT"},
 	})
 
-	_, typeInfo, err := sc.schemaForEvent(t.Context(), nil, tbl, nil)
+	_, typeInfo, err := sc.schemaForEvent(t.Context(), tbl, nil)
 	require.NoError(t, err)
 	require.NotNil(t, typeInfo)
 

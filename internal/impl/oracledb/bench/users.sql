@@ -1,6 +1,7 @@
 -- Oracle Database Benchmark - Users Data
--- Connection: oracle://system:YourPassword123@localhost:1521/XE
--- Prerequisites: Run create.sql first
+-- Connection (PDB direct): oracle://testdb:testdb123@localhost:1521/TESTPDB
+-- Connection (CDB mode):   oracle://c%23%23testdb:testdb123@localhost:1521/FREE
+-- Prerequisites: Run pluggable.sql first (or cdb_setup.sql for CDB mode)
 
 -- Enable output for debugging
 SET SERVEROUTPUT ON;

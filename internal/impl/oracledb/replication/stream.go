@@ -18,6 +18,13 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/confx"
 )
 
+// DBQuerier is satisfied by both *sql.DB and *sql.Conn, allowing catalog
+// queries to run on either a pool or a dedicated container-switched connection.
+type DBQuerier interface {
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}
+
 // ChangePublisher is responsible for handling and processing of a replication.MessageEvent.
 type ChangePublisher interface {
 	Publish(ctx context.Context, msg *MessageEvent) error
@@ -35,15 +42,19 @@ func (t *UserTable) FullName() string {
 	return fmt.Sprintf("%s.%s", t.Schema, t.Name)
 }
 
-// VerifyUserTables verifies underlying user tables based on supplied
-// include and exclude filters, validating change tracking is enabled.
-func VerifyUserTables(ctx context.Context, db *sql.DB, tableFilter *confx.RegexpFilter, log *service.Logger) ([]UserTable, error) {
-	sql := `
-	SELECT OWNER AS SchemeName, TABLE_NAME AS TableName
-	FROM DBA_TABLES
-	WHERE OWNER NOT IN ('SYS', 'SYSTEM', 'OUTLN', 'DBSNMP', 'APPQOSSYS', 'DBSFWUSER', 'GGSYS', 'ANONYMOUS', 'CTXSYS', 'DVSYS', 'DVF', 'GSMADMIN_INTERNAL', 'LBACSYS', 'MDSYS', 'OJVMSYS', 'OLAPSYS', 'ORDDATA', 'ORDSYS', 'WMSYS', 'XDB')
-	ORDER BY OWNER, TABLE_NAME`
-	rows, err := db.QueryContext(ctx, sql)
+// VerifyUserTables verifies underlying user tables based on supplied include and exclude filters,
+// validating supplemental logging is enabled. The caller is responsible for switching the session
+// to the correct container before calling (e.g. ALTER SESSION SET CONTAINER = <pdb>) when in
+// CDB mode; this function uses ALL_TABLES and ALL_LOG_GROUPS which work in any container context.
+func VerifyUserTables(ctx context.Context, db DBQuerier, tableFilter *confx.RegexpFilter, log *service.Logger) ([]UserTable, error) {
+	tableQuery := `
+		SELECT OWNER AS SchemeName, TABLE_NAME AS TableName
+		FROM ALL_TABLES
+		WHERE OWNER NOT IN ('SYS', 'SYSTEM', 'OUTLN', 'DBSNMP', 'APPQOSSYS', 'DBSFWUSER', 'GGSYS', 'ANONYMOUS', 'CTXSYS', 'DVSYS', 'DVF', 'GSMADMIN_INTERNAL', 'LBACSYS', 'MDSYS', 'OJVMSYS', 'OLAPSYS', 'ORDDATA', 'ORDSYS', 'WMSYS', 'XDB')
+		AND OWNER NOT LIKE 'C##%'
+		ORDER BY OWNER, TABLE_NAME`
+
+	rows, err := db.QueryContext(ctx, tableQuery)
 	if err != nil {
 		return nil, fmt.Errorf("listing all user tables from 'DBA_TABLES' for verification: %w", err)
 	}
@@ -70,7 +81,7 @@ func VerifyUserTables(ctx context.Context, db *sql.DB, tableFilter *confx.Regexp
 	// perform a simple check that the tables are tracked, we could verify what columns are tracked but a simple check feels sufficient.
 	for i, tbl := range userTables {
 		var logGroupsCnt int
-		if err = db.QueryRowContext(ctx, `SELECT COUNT(*) FROM ALL_LOG_GROUPS WHERE OWNER = :1 AND TABLE_NAME = :2`, tbl.Schema, tbl.Name).Scan(&logGroupsCnt); err != nil {
+		if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM ALL_LOG_GROUPS WHERE OWNER = :1 AND TABLE_NAME = :2`, tbl.Schema, tbl.Name).Scan(&logGroupsCnt); err != nil {
 			return nil, fmt.Errorf("querying log groups for table '%s': %w", tbl.FullName(), err)
 		}
 		if logGroupsCnt == 0 {

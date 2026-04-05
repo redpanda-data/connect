@@ -1,12 +1,21 @@
 version: '3'
 
-# Running order:
+# Running order (standard):
 # - task oracledb:up
 # - task oracledb:archivelog
 # - task rman:setup
 # - task sqlcl:create
 # - task sqlcl:data:users
 # - task sqlcl:data:products
+
+# Running order (pluggable database - CDB mode, connect via CDB root):
+# - task oracledb:up
+# - task oracledb:archivelog
+# - task rman:setup
+# - task pdb:create
+# - task pdb:setup
+# - task cdb:setup
+# - task sqlcl:pdb:data:users
 
 tasks:
   oracledb:up:
@@ -29,6 +38,33 @@ tasks:
   sqlcl:create:
     cmd: task sqlcl EXTRA_ARGS="@create.sql"
 
+  cdb:setup:
+    desc: Create C##TESTDB and C##RPCN common users for CDB-mode connector testing
+    cmd: docker exec -i oracledb sqlplus -s / as sysdba < cdb_setup.sql
+
+  pdb:create:
+    desc: Create and open the TESTPDB pluggable database (requires Docker, runs as SYSDBA)
+    cmd: docker exec -i oracledb sqlplus -s / as sysdba < pdb_create.sql
+
+  pdb:setup:
+    desc: Create users, enable supplemental logging, and create tables in TESTPDB
+    cmd: sqlcl pdbadmin/pdbadmin123@localhost:1521/TESTPDB @pluggable.sql
+
+  sqlcl:pdb:
+    cmd: sqlcl pdbadmin/pdbadmin123@localhost:1521/TESTPDB {{.EXTRA_ARGS}}
+
+  sqlcl:pdb:data:users:
+    desc: Insert test users data into TESTPDB
+    cmd: task sqlcl:pdb EXTRA_ARGS="@users.sql"
+
+  sqlcl:pdb:data:products:
+    desc: Insert test products data into TESTPDB
+    cmd: task sqlcl:pdb EXTRA_ARGS="@products.sql"
+
+  sqlcl:pdb:data:cart:
+    desc: Insert test cart data into TESTPDB
+    cmd: task sqlcl:pdb EXTRA_ARGS="@cart.sql"
+
   sqlcl:data:users:
     cmd: task sqlcl EXTRA_ARGS="@users.sql"
 
@@ -46,6 +82,8 @@ tasks:
     cmds:
       - docker exec oracledb mkdir -p /opt/oracle/oradata/recovery_area
       - docker exec -i oracledb sqlplus / as sysdba < archivelog_enable.sql
+      - docker exec oracledb lsnrctl start || true
+      - docker exec -i oracledb sqlplus -s / as sysdba < retention_setup.sql
 
   rman:setup:
     desc: Configure archive log retention for local CDC development (keeps logs available for LogMiner)

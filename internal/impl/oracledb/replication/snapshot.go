@@ -32,6 +32,7 @@ type Snapshot struct {
 	snapshotStatusMetric    *service.MetricGauge
 	snapshotRowsTotalMetric *service.MetricCounter
 	lobEnabled              bool
+	pdbName                 string
 }
 
 // NewSnapshot creates a new instance of Snapshot capable of snapshotting provided tables.
@@ -44,6 +45,7 @@ func NewSnapshot(ctx context.Context,
 	lobEnabled bool,
 	logger *service.Logger,
 	metrics *service.Metrics,
+	pdbName string,
 ) (*Snapshot, error) {
 	db, err := sql.Open("oracle", connectionString)
 	if err != nil {
@@ -63,6 +65,7 @@ func NewSnapshot(ctx context.Context,
 		snapshotStatusMetric:    metrics.NewGauge("oracledb_cdc_snapshot_status", "table"),
 		snapshotRowsTotalMetric: metrics.NewCounter("oracledb_cdc_snapshot_rows_total", "table"),
 		lobEnabled:              lobEnabled,
+		pdbName:                 pdbName,
 	}
 	return s, nil
 }
@@ -120,13 +123,26 @@ func (s *Snapshot) snapshotTable(ctx context.Context, table UserTable, maxBatchS
 		l := s.log.With("src_table", tableName)
 		l.Infof("Launching snapshot of table '%s'", tableName)
 
-		// BeginTx opens/reuses a dedicated connection for the given table-based transaction
-		// Oracle drivers don't support TxOptions, so we use default and set properties explicitly
-		if tx, err = s.db.BeginTx(ctx, nil); err != nil {
+		// Use a dedicated connection so container switching (CDB mode) is safe.
+		conn, err := s.db.Conn(ctx)
+		if err != nil {
+			return fmt.Errorf("acquiring snapshot connection: %w", err)
+		}
+		defer conn.Close()
+
+		// In CDB mode, switch to the PDB so table data and catalog views are PDB-scoped.
+		if s.pdbName != "" {
+			if _, err = conn.ExecContext(ctx, "ALTER SESSION SET CONTAINER = "+s.pdbName); err != nil {
+				return fmt.Errorf("switching to PDB %s for snapshot: %w", s.pdbName, err)
+			}
+			defer func() { _, _ = conn.ExecContext(ctx, "ALTER SESSION SET CONTAINER = CDB$ROOT") }()
+		}
+
+		// Begin READ ONLY transaction on the dedicated connection.
+		if tx, err = conn.BeginTx(ctx, nil); err != nil {
 			return fmt.Errorf("snapshot transaction: %w", err)
 		}
 
-		// Set transaction to read-only mode
 		// In Oracle, READ ONLY transactions automatically provide serializable isolation
 		if _, err = tx.ExecContext(ctx, "SET TRANSACTION READ ONLY"); err != nil {
 			_ = tx.Rollback()
@@ -257,20 +273,20 @@ func (s *Snapshot) processBatch(ctx context.Context, tx *sql.Tx, table UserTable
 }
 
 func getTablePrimaryKeys(ctx context.Context, tx *sql.Tx, table UserTable) ([]string, error) {
-	// Oracle data dictionary query for primary key columns
-	// Note: Oracle stores identifiers in uppercase by default unless created with quotes
+	// ALL_CONSTRAINTS/ALL_CONS_COLUMNS work in any container context after ALTER SESSION SET CONTAINER.
 	pkSQL := `
-		SELECT acc.column_name
-		FROM all_constraints ac
-		JOIN all_cons_columns acc
-			ON ac.constraint_name = acc.constraint_name
-			AND ac.owner = acc.owner
-		WHERE ac.constraint_type = 'P'
-			AND UPPER(ac.table_name) = UPPER(:1)
-			AND UPPER(ac.owner) = UPPER(:2)
-		ORDER BY acc.position`
+	SELECT acc.column_name
+	FROM all_constraints ac
+	JOIN all_cons_columns acc
+		ON ac.constraint_name = acc.constraint_name
+		AND ac.owner = acc.owner
+	WHERE ac.constraint_type = 'P'
+		AND UPPER(ac.table_name) = UPPER(:1)
+		AND UPPER(ac.owner) = UPPER(:2)
+	ORDER BY acc.position`
+	pkArgs := []any{table.Name, table.Schema}
 
-	rows, err := tx.QueryContext(ctx, pkSQL, table.Name, table.Schema)
+	rows, err := tx.QueryContext(ctx, pkSQL, pkArgs...)
 	if err != nil {
 		return nil, fmt.Errorf("get primary key: %w", err)
 	}

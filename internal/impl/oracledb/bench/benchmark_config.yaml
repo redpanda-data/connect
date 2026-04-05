@@ -3,7 +3,8 @@ http:
 
 input:
   oracledb_cdc:
-    connection_string: oracle://system:YourPassword123@localhost:1521/FREE
+    connection_string: oracle://c%23%23testdb:testdb123@localhost:1521/FREE
+    pdb_name: TESTPDB
     stream_snapshot: false
     snapshot_max_batch_size: 160000
     logminer:

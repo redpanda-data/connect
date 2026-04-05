@@ -1,19 +1,17 @@
--- Oracle Database Benchmark Setup Script
--- This script creates the user/schema, enables supplemental logging, and creates tables
--- Connection: oracle://system:YourPassword123@localhost:1521/XE
-
--- Enable creation of local users in CDB root (not recommended for production)
-ALTER SESSION SET "_ORACLE_SCRIPT"=TRUE;
-/
+-- Pluggable Database Schema Setup Script
+-- Creates users, enables supplemental logging, and creates tables within TESTPDB.
+-- Prerequisite: TESTPDB must already be open (run `task pdb:create` first).
+-- Run as: sqlcl system/YourPassword123@localhost:1521/TESTPDB @pluggable.sql
 
 -- ============================================================================
--- STAGE 1: Create User/Schema
+-- STAGE 1: Create users/schemas
 -- ============================================================================
 BEGIN
-    DBMS_OUTPUT.PUT_LINE('=== STAGE 1: Creating testdb user ===');
+    DBMS_OUTPUT.PUT_LINE('=== STAGE 1: Creating users in TESTPDB ===');
 END;
 /
 
+-- TESTDB: application schema
 DECLARE
     user_exists NUMBER;
 BEGIN
@@ -23,45 +21,15 @@ BEGIN
         EXECUTE IMMEDIATE 'CREATE USER testdb IDENTIFIED BY testdb123';
         EXECUTE IMMEDIATE 'GRANT CONNECT, RESOURCE, DBA TO testdb';
         EXECUTE IMMEDIATE 'GRANT UNLIMITED TABLESPACE TO testdb';
-        DBMS_OUTPUT.PUT_LINE('User testdb created successfully');
+        EXECUTE IMMEDIATE 'GRANT LOGMINING TO testdb';
+        DBMS_OUTPUT.PUT_LINE('User testdb created');
     ELSE
         DBMS_OUTPUT.PUT_LINE('User testdb already exists');
     END IF;
 END;
 /
 
--- ============================================================================
--- STAGE 2: Enable Supplemental Logging for CDC
--- ============================================================================
-BEGIN
-    DBMS_OUTPUT.PUT_LINE('=== STAGE 2: Enabling supplemental logging ===');
-END;
-/
-
--- Enable minimal supplemental logging at database level
-ALTER DATABASE ADD SUPPLEMENTAL LOG DATA;
-
--- Enable primary key and unique key supplemental logging
-ALTER DATABASE ADD SUPPLEMENTAL LOG DATA (PRIMARY KEY, UNIQUE) COLUMNS;
-
-BEGIN
-    DBMS_OUTPUT.PUT_LINE('Supplemental logging enabled');
-END;
-/
-
--- ============================================================================
--- STAGE 3: Create Tables and Enable Supplemental Logging
--- ============================================================================
-BEGIN
-    DBMS_OUTPUT.PUT_LINE('=== STAGE 3: Creating tables and enabling CDC ===');
-END;
-/
-
--- Switch to testdb user context
-ALTER SESSION SET CURRENT_SCHEMA = testdb;
-/
-
--- Create rpcn user if needed (Oracle uses users/schemas interchangeably)
+-- RPCN: checkpoint cache schema
 DECLARE
     user_exists NUMBER;
 BEGIN
@@ -78,18 +46,40 @@ BEGIN
 END;
 /
 
--- Create testdb.users table
+-- ============================================================================
+-- STAGE 2: Enable supplemental logging
+-- ============================================================================
 BEGIN
-    DBMS_OUTPUT.PUT_LINE('Creating table testdb.users...');
+    DBMS_OUTPUT.PUT_LINE('=== STAGE 2: Enabling supplemental logging in TESTPDB ===');
 END;
+/
+
+ALTER DATABASE ADD SUPPLEMENTAL LOG DATA;
+/
+
+ALTER DATABASE ADD SUPPLEMENTAL LOG DATA (PRIMARY KEY, UNIQUE) COLUMNS;
+/
+
+BEGIN
+    DBMS_OUTPUT.PUT_LINE('Supplemental logging enabled');
+END;
+/
+
+-- ============================================================================
+-- STAGE 3: Create tables
+-- ============================================================================
+BEGIN
+    DBMS_OUTPUT.PUT_LINE('=== STAGE 3: Creating tables ===');
+END;
+/
+
+ALTER SESSION SET CURRENT_SCHEMA = testdb;
 /
 
 DECLARE
     table_exists NUMBER;
 BEGIN
-    SELECT COUNT(*) INTO table_exists
-    FROM user_tables
-    WHERE table_name = 'USERS';
+    SELECT COUNT(*) INTO table_exists FROM user_tables WHERE table_name = 'USERS';
 
     IF table_exists = 0 THEN
         EXECUTE IMMEDIATE '
@@ -105,29 +95,18 @@ BEGIN
                 login_count NUMBER DEFAULT 0 NOT NULL,
                 balance NUMBER(10,2) DEFAULT 0.00 NOT NULL
             )';
-
-        -- Enable supplemental logging for this table
         EXECUTE IMMEDIATE 'ALTER TABLE testdb.users ADD SUPPLEMENTAL LOG DATA (ALL) COLUMNS';
-
-        DBMS_OUTPUT.PUT_LINE('Table testdb.users created and supplemental logging enabled');
+        DBMS_OUTPUT.PUT_LINE('Table testdb.users created');
     ELSE
         DBMS_OUTPUT.PUT_LINE('Table testdb.users already exists');
     END IF;
 END;
 /
 
--- Create testdb.products table
-BEGIN
-    DBMS_OUTPUT.PUT_LINE('Creating table testdb.products...');
-END;
-/
-
 DECLARE
     table_exists NUMBER;
 BEGIN
-    SELECT COUNT(*) INTO table_exists
-    FROM user_tables
-    WHERE table_name = 'PRODUCTS';
+    SELECT COUNT(*) INTO table_exists FROM user_tables WHERE table_name = 'PRODUCTS';
 
     IF table_exists = 0 THEN
         EXECUTE IMMEDIATE '
@@ -145,29 +124,18 @@ BEGIN
                 basket_count NUMBER DEFAULT 0 NOT NULL,
                 price NUMBER(10,2) DEFAULT 0.00 NOT NULL
             )';
-
-        -- Enable supplemental logging for this table
         EXECUTE IMMEDIATE 'ALTER TABLE testdb.products ADD SUPPLEMENTAL LOG DATA (ALL) COLUMNS';
-
-        DBMS_OUTPUT.PUT_LINE('Table testdb.products created and supplemental logging enabled');
+        DBMS_OUTPUT.PUT_LINE('Table testdb.products created');
     ELSE
         DBMS_OUTPUT.PUT_LINE('Table testdb.products already exists');
     END IF;
 END;
 /
 
--- Create testdb.cart table
-BEGIN
-    DBMS_OUTPUT.PUT_LINE('Creating table testdb.cart...');
-END;
-/
-
 DECLARE
     table_exists NUMBER;
 BEGIN
-    SELECT COUNT(*) INTO table_exists
-    FROM user_tables
-    WHERE table_name = 'CART';
+    SELECT COUNT(*) INTO table_exists FROM user_tables WHERE table_name = 'CART';
 
     IF table_exists = 0 THEN
         EXECUTE IMMEDIATE '
@@ -182,50 +150,19 @@ BEGIN
                 login_count NUMBER DEFAULT 0 NOT NULL,
                 balance NUMBER(10,2) DEFAULT 0.00 NOT NULL
             )';
-
-        -- Enable supplemental logging for this table
         EXECUTE IMMEDIATE 'ALTER TABLE testdb.cart ADD SUPPLEMENTAL LOG DATA (ALL) COLUMNS';
-
-        DBMS_OUTPUT.PUT_LINE('Table testdb.cart created and supplemental logging enabled');
+        DBMS_OUTPUT.PUT_LINE('Table testdb.cart created');
     ELSE
         DBMS_OUTPUT.PUT_LINE('Table testdb.cart already exists');
     END IF;
 END;
 /
 
--- Create testdb.cart2 table
 BEGIN
-    DBMS_OUTPUT.PUT_LINE('Creating table testdb.cart2...');
-END;
-/
-
-DECLARE
-    table_exists NUMBER;
-BEGIN
-    SELECT COUNT(*) INTO table_exists
-    FROM user_tables
-    WHERE table_name = 'CART2';
-
-    IF table_exists = 0 THEN
-        EXECUTE IMMEDIATE '
-            CREATE TABLE testdb.cart2 (
-                id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-                name NVARCHAR2(100) NOT NULL,
-                info NCLOB NOT NULL,
-                email NVARCHAR2(255) NOT NULL,
-                date_of_birth DATE,
-                created_at TIMESTAMP DEFAULT SYSTIMESTAMP NOT NULL,
-                is_active NUMBER(1) DEFAULT 1 NOT NULL,
-                login_count NUMBER DEFAULT 0 NOT NULL,
-                balance NUMBER(10,2) DEFAULT 0.00 NOT NULL
-            )';
-
-        -- Enable supplemental logging for this table
-        EXECUTE IMMEDIATE 'ALTER TABLE testdb.cart2 ADD SUPPLEMENTAL LOG DATA (ALL) COLUMNS';
-
-        DBMS_OUTPUT.PUT_LINE('Table testdb.cart2 created and supplemental logging enabled');
-    ELSE
-        DBMS_OUTPUT.PUT_LINE('Table testdb.cart2 already exists');
-    END IF;
+    DBMS_OUTPUT.PUT_LINE('');
+    DBMS_OUTPUT.PUT_LINE('=== TESTPDB setup complete ===');
+    DBMS_OUTPUT.PUT_LINE('Connection string : oracle://testdb:testdb123@localhost:1521/TESTPDB');
+    DBMS_OUTPUT.PUT_LINE('pdb_name config   : TESTPDB');
+    DBMS_OUTPUT.PUT_LINE('Tables            : TESTDB.USERS, TESTDB.PRODUCTS, TESTDB.CART');
 END;
 /

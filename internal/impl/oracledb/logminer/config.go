@@ -45,6 +45,7 @@ type Config struct {
 	MiningStrategy        MiningStrategy
 	MaxTransactionEvents  int
 	LOBEnabled            bool
+	PDBName               string
 }
 
 // NewDefaultConfig returns a Config with default values

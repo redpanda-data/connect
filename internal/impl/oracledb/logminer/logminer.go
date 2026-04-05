@@ -77,6 +77,10 @@ func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replicat
 		}
 		buf.WriteString(")))")
 	}
+	if cfg.PDBName != "" {
+		fmt.Fprintf(&buf, " AND SRC_CON_NAME = '%s'", strings.ReplaceAll(cfg.PDBName, "'", "''"))
+	}
+
 	logMinerQuery := fmt.Sprintf(`
 		SELECT
 			SCN,
@@ -128,7 +132,7 @@ func (lm *LogMiner) ReadChanges(ctx context.Context, startPos replication.SCN) e
 
 	// always find all lob columns on start up as redo logs don't include column data types.
 	// this also prevents inline lob rows being emitted as events.
-	if err := lm.loadLOBColumnTypes(ctx, conn); err != nil {
+	if err := lm.loadLOBColumnTypes(ctx); err != nil {
 		return fmt.Errorf("discovering LOB column types: %w", err)
 	}
 
@@ -424,13 +428,36 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 	return nil
 }
 
-func (lm *LogMiner) loadLOBColumnTypes(ctx context.Context, conn *sql.Conn) error {
+func (lm *LogMiner) loadLOBColumnTypes(ctx context.Context) error {
 	lm.lobColTypes = make(map[string]string)
 	if len(lm.tables) == 0 {
 		return nil
 	}
 
-	var qb strings.Builder
+	// ALL_TAB_COLUMNS must run in PDB context in CDB mode — the LogMiner conn is
+	// pinned to CDB$ROOT where PDB tables are not visible via ALL_TAB_COLUMNS.
+	// Use a separate connection and switch context if needed.
+	catalogConn, err := lm.db.Conn(ctx)
+	if err != nil {
+		return fmt.Errorf("acquiring connection for LOB column discovery: %w", err)
+	}
+	defer func() {
+		_ = catalogConn.Close()
+	}()
+
+	if lm.cfg.PDBName != "" {
+		if _, err := catalogConn.ExecContext(ctx, "ALTER SESSION SET CONTAINER = "+lm.cfg.PDBName); err != nil {
+			return fmt.Errorf("switching to PDB %s for LOB column discovery: %w", lm.cfg.PDBName, err)
+		}
+		defer func() {
+			_, _ = catalogConn.ExecContext(ctx, "ALTER SESSION SET CONTAINER = CDB$ROOT")
+		}()
+	}
+
+	var (
+		qb     strings.Builder
+		qbArgs []any
+	)
 	qb.WriteString(`SELECT OWNER, TABLE_NAME, COLUMN_NAME, DATA_TYPE FROM ALL_TAB_COLUMNS WHERE DATA_TYPE IN ('CLOB', 'BLOB', 'NCLOB') AND (`)
 	for i, t := range lm.tables {
 		if i > 0 {
@@ -442,7 +469,7 @@ func (lm *LogMiner) loadLOBColumnTypes(ctx context.Context, conn *sql.Conn) erro
 	}
 	qb.WriteString(")")
 
-	rows, err := conn.QueryContext(ctx, qb.String())
+	rows, err := catalogConn.QueryContext(ctx, qb.String(), qbArgs...)
 	if err != nil {
 		return fmt.Errorf("querying LOB column types: %w", err)
 	}
@@ -622,7 +649,7 @@ func (*LogFileCollector) GetLogs(ctx context.Context, conn *sql.Conn, startSCN, 
 			WHERE A.NAME IS NOT NULL
 			AND A.ARCHIVED = 'YES'
 			AND A.STATUS = 'A'
-			AND A.NEXT_CHANGE# >= :1
+			AND A.NEXT_CHANGE# > :1
 			AND A.FIRST_CHANGE# <= :2
 			AND A.DEST_ID IN (
 				SELECT DEST_ID
