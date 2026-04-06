@@ -48,8 +48,8 @@ tasks:
       - docker exec -i oracledb sqlplus / as sysdba < archivelog_enable.sql
 
   rman:setup:
-    desc: Configure RMAN archive log retention policy for local CDC development
-    cmd: docker exec -i oracledb rman target / < rman_setup.rman
+    desc: Configure archive log retention for local CDC development (keeps logs available for LogMiner)
+    cmd: docker exec -i oracledb sqlplus -s / as sysdba < retention_setup.sql
 
   debezium:up:
     desc: Start Debezium Server and Kafka
