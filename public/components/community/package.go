@@ -36,6 +36,7 @@ import (
 	_ "github.com/redpanda-data/connect/v4/public/components/cypher"
 	_ "github.com/redpanda-data/connect/v4/public/components/dgraph"
 	_ "github.com/redpanda-data/connect/v4/public/components/discord"
+	_ "github.com/redpanda-data/connect/v4/public/components/doris"
 	_ "github.com/redpanda-data/connect/v4/public/components/elasticsearch/v8"
 	_ "github.com/redpanda-data/connect/v4/public/components/elasticsearch/v9"
 	_ "github.com/redpanda-data/connect/v4/public/components/ffi"
