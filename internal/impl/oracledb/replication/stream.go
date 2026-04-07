@@ -45,7 +45,7 @@ func VerifyUserTables(ctx context.Context, db *sql.DB, tableFilter *confx.Regexp
 	ORDER BY OWNER, TABLE_NAME`
 	rows, err := db.QueryContext(ctx, sql)
 	if err != nil {
-		return nil, fmt.Errorf("fetching user tables from dba_tables for verification: %w", err)
+		return nil, fmt.Errorf("listing all user tables from 'DBA_TABLES' for verification: %w", err)
 	}
 	defer rows.Close()
 
@@ -53,14 +53,14 @@ func VerifyUserTables(ctx context.Context, db *sql.DB, tableFilter *confx.Regexp
 	for rows.Next() {
 		var ut UserTable
 		if err := rows.Scan(&ut.Schema, &ut.Name); err != nil {
-			return nil, fmt.Errorf("scanning dba_tables row for user tables: %w", err)
+			return nil, fmt.Errorf("scanning 'DBA_TABLES' row for user tables: %w", err)
 		}
 		if tableFilter.Matches(fmt.Sprintf("%s.%s", ut.Schema, ut.Name)) {
 			userTables = append(userTables, ut)
 		}
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterating through dba_tables for user tables: %w", err)
+		return nil, fmt.Errorf("iterating through 'DBA_TABLES' for user tables: %w", err)
 	}
 
 	if len(userTables) == 0 {

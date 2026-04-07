@@ -40,6 +40,8 @@ input:
   label: ""
   oracledb_cdc:
     connection_string: oracle://username:password@host:port/service_name # No default (required)
+    wallet_path: /opt/oracle/wallet # No default (optional)
+    wallet_password: "" # No default (optional)
     stream_snapshot: false
     max_parallel_snapshot_tables: 1
     snapshot_max_batch_size: 1000
@@ -75,6 +77,8 @@ input:
   label: ""
   oracledb_cdc:
     connection_string: oracle://username:password@host:port/service_name # No default (required)
+    wallet_path: /opt/oracle/wallet # No default (optional)
+    wallet_password: "" # No default (optional)
     stream_snapshot: false
     max_parallel_snapshot_tables: 1
     snapshot_max_batch_size: 1000
@@ -125,7 +129,7 @@ When using the default Oracle based cache, the Connect user requires permission 
 
 === `connection_string`
 
-The connection string of the Oracle database to connect to.
+The connection string of the Oracle database to connect to. Additional connection options can be supplied as URL query parameters, for example: `oracle://user:password@host:1522/service?WALLET=/opt/oracle/wallet&SSL=true`.
 
 
 *Type*: `string`
@@ -135,7 +139,36 @@ The connection string of the Oracle database to connect to.
 # Examples
 
 connection_string: oracle://username:password@host:port/service_name
+
+connection_string: oracle://user:password@host:1522/service?WALLET=/opt/oracle/wallet&SSL=true
 ```
+
+=== `wallet_path`
+
+Path to the Oracle Wallet directory. When set, SSL is enabled automatically. The directory must contain either `cwallet.sso` (auto-login, no password required) or `ewallet.p12` (requires `wallet_password`).
+
+
+*Type*: `string`
+
+
+```yml
+# Examples
+
+wallet_path: /opt/oracle/wallet
+```
+
+=== `wallet_password`
+
+Password for the `ewallet.p12` PKCS#12 wallet file. Only required when the wallet directory contains `ewallet.p12` rather than `cwallet.sso`.
+[CAUTION]
+====
+This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
+====
+
+
+
+*Type*: `string`
+
 
 === `stream_snapshot`
 
