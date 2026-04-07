@@ -14,6 +14,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 func TestBuildConnectionURL(t *testing.T) {
@@ -108,11 +110,32 @@ func TestBuildConnectionURL(t *testing.T) {
 			wantPath:  "/myservice",
 			wantQuery: url.Values{"SSL": {"true"}},
 		},
+		// wallet tests
+		{
+			name:      "wallet path injects WALLET and SSL params",
+			input:     "oracle://user:pass@localhost:1521/myservice",
+			overrides: map[string]string{"WALLET": "/opt/oracle/wallet", "SSL": "true"},
+			wantHost:  "localhost:1521",
+			wantUser:  "user",
+			wantPass:  "pass",
+			wantPath:  "/myservice",
+			wantQuery: url.Values{"WALLET": {"/opt/oracle/wallet"}, "SSL": {"true"}},
+		},
+		{
+			name:      "wallet path with password injects WALLET, WALLET PASSWORD and SSL params",
+			input:     "oracle://user:pass@localhost:1521/myservice",
+			overrides: map[string]string{"WALLET": "/opt/oracle/wallet", "WALLET PASSWORD": "s3cr3t", "SSL": "true"},
+			wantHost:  "localhost:1521",
+			wantUser:  "user",
+			wantPass:  "pass",
+			wantPath:  "/myservice",
+			wantQuery: url.Values{"WALLET": {"/opt/oracle/wallet"}, "WALLET PASSWORD": {"s3cr3t"}, "SSL": {"true"}},
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := buildConnectionString(tt.input, tt.overrides)
+			result, err := buildConnectionString(tt.input, tt.overrides, service.MockResources().Logger())
 			if tt.errContains != "" {
 				require.ErrorContains(t, err, tt.errContains)
 				return

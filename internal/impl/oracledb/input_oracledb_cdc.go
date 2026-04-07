@@ -30,6 +30,8 @@ import (
 
 const (
 	ociFieldConnectionString          = "connection_string"
+	ociFieldWalletPath                = "wallet_path"
+	ociFieldWalletPassword            = "wallet_password"
 	ociFieldStreamSnapshot            = "stream_snapshot"
 	ociFieldMaxParallelSnapshotTables = "max_parallel_snapshot_tables"
 	ociFieldSnapshotMaxBatchSize      = "snapshot_max_batch_size"
@@ -79,8 +81,19 @@ This input adds the following metadata fields to each message:
 When using the default Oracle based cache, the Connect user requires permission to create tables and stored procedures, and the ` + "rpcn" + `  schema must already exist. Refer to ` + "`" + ociFieldCheckpointCacheTableName + "`" + ` for more information.
 		`).
 	Field(service.NewStringField(ociFieldConnectionString).
-		Description("The connection string of the Oracle database to connect to.").
-		Example("oracle://username:password@host:port/service_name"),
+		Description("The connection string of the Oracle database to connect to. Additional connection options can be supplied as URL query parameters, for example: `oracle://user:password@host:1522/service?WALLET=/opt/oracle/wallet&SSL=true`.").
+		Example("oracle://username:password@host:port/service_name").
+		Example("oracle://user:password@host:1522/service?WALLET=/opt/oracle/wallet&SSL=true"),
+	).
+	Field(service.NewStringField(ociFieldWalletPath).
+		Description("Path to the Oracle Wallet directory. When set, SSL is enabled automatically. The directory must contain either `cwallet.sso` (auto-login, no password required) or `ewallet.p12` (requires `wallet_password`).").
+		Example("/opt/oracle/wallet").
+		Optional(),
+	).
+	Field(service.NewStringField(ociFieldWalletPassword).
+		Secret().
+		Description("Password for the `ewallet.p12` PKCS#12 wallet file. Only required when the wallet directory contains `ewallet.p12` rather than `cwallet.sso`.").
+		Optional(),
 	).
 	Field(service.NewBoolField(ociFieldStreamSnapshot).
 		Description("If set to true, the connector will query all the existing data as a part of snapshot process. Otherwise, it will start from the current System Change Number position.").
@@ -194,6 +207,8 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 		cpCache                      service.Cache
 		cpCacheTableName             string
 		lmCfg                        *logminer.Config
+
+		logger = resources.Logger()
 	)
 
 	if err := license.CheckRunningEnterprise(resources); err != nil {
@@ -262,12 +277,15 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 		return nil, err
 	}
 
-	connectionString, err = buildConnectionString(connectionString, nil)
-	if err != nil {
-		return nil, fmt.Errorf("building connection string: %w", err)
+	// connecting string flags
+	overrides := make(map[string]string)
+	if err := parseWalletConfig(conf, overrides); err != nil {
+		return nil, fmt.Errorf("parsing oracle wallet config: %w", err)
 	}
 
-	logger := resources.Logger()
+	if connectionString, err = buildConnectionString(connectionString, overrides, logger); err != nil {
+		return nil, fmt.Errorf("building connection string: %w", err)
+	}
 
 	o := oracleDBCDCInput{
 		cfg: Config{
