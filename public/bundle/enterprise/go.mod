@@ -8,6 +8,7 @@ require (
 	buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.11-20260209202127-80ab13bee0bf.1 // indirect
 	buf.build/gen/go/bufbuild/reflect/connectrpc/go v1.19.1-20240117202343-bf8f65e8876c.2 // indirect
 	buf.build/gen/go/bufbuild/reflect/protocolbuffers/go v1.36.11-20240117202343-bf8f65e8876c.1 // indirect
+	buf.build/go/hyperpb v0.1.3 // indirect
 	cel.dev/expr v0.25.1 // indirect
 	cloud.google.com/go/aiplatform v1.121.0 // indirect
 	cloud.google.com/go/bigquery v1.74.0 // indirect

@@ -22,6 +22,7 @@ require (
 	buf.build/gen/go/redpandadata/common/connectrpc/go v1.19.1-20260323171043-6e06f84ad823.2
 	buf.build/gen/go/redpandadata/common/protocolbuffers/go v1.36.11-20260323171043-6e06f84ad823.1
 	buf.build/gen/go/redpandadata/otel/protocolbuffers/go v1.36.11-20260323171043-3635d3966b23.1
+	buf.build/go/hyperpb v0.1.3
 	cloud.google.com/go/aiplatform v1.121.0
 	cloud.google.com/go/bigquery v1.74.0
 	cloud.google.com/go/pubsub v1.50.1
@@ -318,6 +319,7 @@ require (
 	github.com/tidwall/gjson v1.18.0 // indirect
 	github.com/tidwall/match v1.2.0 // indirect
 	github.com/tidwall/pretty v1.2.1 // indirect
+	github.com/timandy/routine v1.1.5 // indirect
 	github.com/twmb/murmur3 v1.1.8 // indirect
 	github.com/twpayne/go-geom v1.6.1 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
