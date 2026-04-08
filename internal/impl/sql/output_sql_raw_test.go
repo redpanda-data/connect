@@ -21,6 +21,7 @@ import (
 	"database/sql"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/Jeffail/shutdown"
 	"github.com/stretchr/testify/assert"
@@ -528,34 +529,47 @@ sql_raw:
 	assert.Empty(t, lints, "no lint warnings expected when catch-all is last")
 }
 
-func TestSQLRawOutputContextCanceledSkipsRollback(t *testing.T) {
-	db := openTestDB(t)
-	ctx := t.Context()
+func TestSQLRawOutputContextDoneSkipsRollback(t *testing.T) {
+	setup := func(t *testing.T) (*sqlRawOutput, service.MessageBatch) {
+		t.Helper()
+		db := openTestDB(t)
 
-	_, err := db.ExecContext(ctx, `CREATE TABLE test (id INTEGER PRIMARY KEY, name TEXT)`)
-	require.NoError(t, err)
+		_, err := db.ExecContext(t.Context(), `CREATE TABLE test (id INTEGER PRIMARY KEY, name TEXT)`)
+		require.NoError(t, err)
 
-	env := bloblang.NewEnvironment()
-	argsMapping, err := env.Parse(`root = [this.id, this.name]`)
-	require.NoError(t, err)
+		env := bloblang.NewEnvironment()
+		argsMapping, err := env.Parse(`root = [this.id, this.name]`)
+		require.NoError(t, err)
 
-	out := testOutput(db, []rawQueryStatement{
-		{static: "INSERT INTO test (id, name) VALUES (?, ?)", argsMapping: argsMapping},
-		{static: "SELECT 1", argsMapping: nil},
-	}, false)
+		out := testOutput(db, []rawQueryStatement{
+			{static: "INSERT INTO test (id, name) VALUES (?, ?)", argsMapping: argsMapping},
+			{static: "SELECT 1", argsMapping: nil},
+		}, false)
 
-	// Cancel the context before writing, so ExecContext returns
-	// context.Canceled immediately. The deferred rollback should be skipped
-	// because database/sql already rolls back when the context is canceled.
-	cancelCtx, cancel := context.WithCancel(ctx)
-	cancel()
+		batch := service.MessageBatch{service.NewMessage(nil)}
+		batch[0].SetStructured(map[string]any{"id": 1, "name": "alice"})
+		return out, batch
+	}
 
-	batch := service.MessageBatch{service.NewMessage(nil)}
-	batch[0].SetStructured(map[string]any{"id": 1, "name": "alice"})
+	t.Run("canceled", func(t *testing.T) {
+		out, batch := setup(t)
+		cancelCtx, cancel := context.WithCancel(t.Context())
+		cancel()
 
-	err = out.WriteBatch(cancelCtx, batch)
-	require.Error(t, err)
-	assert.ErrorIs(t, err, context.Canceled)
+		err := out.WriteBatch(cancelCtx, batch)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, context.Canceled)
+	})
+
+	t.Run("deadline_exceeded", func(t *testing.T) {
+		out, batch := setup(t)
+		deadlineCtx, cancel := context.WithDeadline(t.Context(), time.Now())
+		defer cancel()
+
+		err := out.WriteBatch(deadlineCtx, batch)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, context.DeadlineExceeded)
+	})
 }
 
 func TestSQLRawOutputEmptyShutdown(t *testing.T) {

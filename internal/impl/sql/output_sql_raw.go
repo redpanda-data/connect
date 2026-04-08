@@ -354,14 +354,12 @@ func (s *sqlRawOutput) WriteBatch(ctx context.Context, batch service.MessageBatc
 	if err != nil {
 		return fmt.Errorf("beginning transaction: %w", err)
 	}
-	// When the context is canceled, database/sql automatically rolls back the
-	// transaction, so a manual rollback would return sql.ErrTxDone. We skip
-	// the manual rollback in that case and let the original error propagate.
+	// When the context is done (canceled or deadline exceeded), database/sql
+	// automatically rolls back the transaction, so a manual rollback would
+	// return sql.ErrTxDone. We skip the manual rollback in that case and let
+	// the original error propagate.
 	defer func() {
-		if err == nil {
-			return
-		}
-		if errors.Is(err, context.Canceled) {
+		if err == nil || ctx.Err() != nil {
 			return
 		}
 		if rerr := tx.Rollback(); rerr != nil {
