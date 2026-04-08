@@ -17,6 +17,7 @@
 package sql
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"testing"
@@ -525,6 +526,36 @@ sql_raw:
 	lints, err := linter.LintOutputYAML([]byte(conf))
 	require.NoError(t, err)
 	assert.Empty(t, lints, "no lint warnings expected when catch-all is last")
+}
+
+func TestSQLRawOutputContextCanceledSkipsRollback(t *testing.T) {
+	db := openTestDB(t)
+	ctx := t.Context()
+
+	_, err := db.ExecContext(ctx, `CREATE TABLE test (id INTEGER PRIMARY KEY, name TEXT)`)
+	require.NoError(t, err)
+
+	env := bloblang.NewEnvironment()
+	argsMapping, err := env.Parse(`root = [this.id, this.name]`)
+	require.NoError(t, err)
+
+	out := testOutput(db, []rawQueryStatement{
+		{static: "INSERT INTO test (id, name) VALUES (?, ?)", argsMapping: argsMapping},
+		{static: "SELECT 1", argsMapping: nil},
+	}, false)
+
+	// Cancel the context before writing, so ExecContext returns
+	// context.Canceled immediately. The deferred rollback should be skipped
+	// because database/sql already rolls back when the context is canceled.
+	cancelCtx, cancel := context.WithCancel(ctx)
+	cancel()
+
+	batch := service.MessageBatch{service.NewMessage(nil)}
+	batch[0].SetStructured(map[string]any{"id": 1, "name": "alice"})
+
+	err = out.WriteBatch(cancelCtx, batch)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, context.Canceled)
 }
 
 func TestSQLRawOutputEmptyShutdown(t *testing.T) {

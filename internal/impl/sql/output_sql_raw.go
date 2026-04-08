@@ -210,7 +210,6 @@ func newSQLRawOutputFromConfig(conf *service.ParsedConfig, mgr *service.Resource
 	}
 
 	var queries []rawQueryStatement
-	var hasWhenConditions bool
 	for _, qc := range queriesConf {
 		var statement rawQueryStatement
 		if unsafeDyn {
@@ -235,7 +234,6 @@ func newSQLRawOutputFromConfig(conf *service.ParsedConfig, mgr *service.Resource
 			if statement.whenMapping, err = qc.FieldBloblang("when"); err != nil {
 				return nil, err
 			}
-			hasWhenConditions = true
 		}
 		queries = append(queries, statement)
 	}
@@ -252,14 +250,23 @@ func newSQLRawOutputFromConfig(conf *service.ParsedConfig, mgr *service.Resource
 		argsConverter = func(v []any) []any { return v }
 	}
 
-	return newSQLRawOutput(mgr.Logger(), driverStr, dsnStr, queries, hasWhenConditions, argsConverter, connSettings), nil
+	return newSQLRawOutput(mgr.Logger(), driverStr, dsnStr, queries, argsConverter, connSettings), nil
+}
+
+// hasWhenConditions reports whether any query has a when condition configured.
+func hasWhenConditions(queries []rawQueryStatement) bool {
+	for _, q := range queries {
+		if q.whenMapping != nil {
+			return true
+		}
+	}
+	return false
 }
 
 func newSQLRawOutput(
 	logger *service.Logger,
 	driverStr, dsnStr string,
 	queries []rawQueryStatement,
-	hasWhenConditions bool,
 	argsConverter argsConverter,
 	connSettings *connSettings,
 ) *sqlRawOutput {
@@ -269,7 +276,7 @@ func newSQLRawOutput(
 		driver:            driverStr,
 		dsn:               dsnStr,
 		queries:           queries,
-		hasWhenConditions: hasWhenConditions,
+		hasWhenConditions: hasWhenConditions(queries),
 		argsConverter:     argsConverter,
 		connSettings:      connSettings,
 	}
@@ -347,11 +354,18 @@ func (s *sqlRawOutput) WriteBatch(ctx context.Context, batch service.MessageBatc
 	if err != nil {
 		return fmt.Errorf("beginning transaction: %w", err)
 	}
+	// When the context is canceled, database/sql automatically rolls back the
+	// transaction, so a manual rollback would return sql.ErrTxDone. We skip
+	// the manual rollback in that case and let the original error propagate.
 	defer func() {
-		if err != nil && !errors.Is(err, context.Canceled) {
-			if rerr := tx.Rollback(); rerr != nil {
-				s.logger.Warnf("Failed to rollback transaction: %v", rerr)
-			}
+		if err == nil {
+			return
+		}
+		if errors.Is(err, context.Canceled) {
+			return
+		}
+		if rerr := tx.Rollback(); rerr != nil {
+			s.logger.Warnf("Failed to rollback transaction: %v", rerr)
 		}
 	}()
 
