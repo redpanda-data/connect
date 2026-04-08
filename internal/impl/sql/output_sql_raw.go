@@ -508,52 +508,52 @@ func (s *sqlRawOutput) partitionOrderedIndices(batch service.MessageBatch) []int
 }
 
 // execConditionalQuery evaluates when conditions and executes the first
-// matching query for message i.
+// matching query for the given message index.
 func (s *sqlRawOutput) execConditionalQuery(
 	ctx context.Context,
 	tx *sql.Tx,
 	batch service.MessageBatch,
-	i int,
+	msgIdx int,
 	argsExec []*service.MessageBatchBloblangExecutor,
 	dynQueries []*service.MessageBatchInterpolationExecutor,
 	whenExec []*service.MessageBatchBloblangExecutor,
 ) error {
-	for j, query := range s.queries {
-		if whenExec[j] != nil {
-			resMsg, err := whenExec[j].Query(i)
+	for queryIdx, query := range s.queries {
+		if whenExec[queryIdx] != nil {
+			resMsg, err := whenExec[queryIdx].Query(msgIdx)
 			if err != nil {
-				return fmt.Errorf("when condition evaluation failed for query %d: %w", j, err)
+				return fmt.Errorf("when condition evaluation failed for query %d: %w", queryIdx, err)
 			}
 			val, err := resMsg.AsStructured()
 			if err != nil {
-				return fmt.Errorf("when condition returned non-structured result for query %d: %w", j, err)
+				return fmt.Errorf("when condition returned non-structured result for query %d: %w", queryIdx, err)
 			}
 			b, ok := val.(bool)
 			if !ok {
-				return fmt.Errorf("when condition for query %d returned non-boolean value: %T", j, val)
+				return fmt.Errorf("when condition for query %d returned non-boolean value: %T", queryIdx, val)
 			}
 			if !b {
 				continue
 			}
 		}
-		return s.execQuery(ctx, tx, batch, i, j, query, argsExec, dynQueries)
+		return s.execQuery(ctx, tx, batch, msgIdx, queryIdx, query, argsExec, dynQueries)
 	}
-	// No query matched — this is not an error; the message is skipped.
+	s.logger.Debugf("No query matched for message at index %d, skipping", msgIdx)
 	return nil
 }
 
-// execAllQueries executes all configured queries for message i (the original
-// multi-statement transaction behavior).
+// execAllQueries executes all configured queries for the given message index
+// (the original multi-statement transaction behavior).
 func (s *sqlRawOutput) execAllQueries(
 	ctx context.Context,
 	tx *sql.Tx,
 	batch service.MessageBatch,
-	i int,
+	msgIdx int,
 	argsExec []*service.MessageBatchBloblangExecutor,
 	dynQueries []*service.MessageBatchInterpolationExecutor,
 ) error {
-	for j, query := range s.queries {
-		if err := s.execQuery(ctx, tx, batch, i, j, query, argsExec, dynQueries); err != nil {
+	for queryIdx, query := range s.queries {
+		if err := s.execQuery(ctx, tx, batch, msgIdx, queryIdx, query, argsExec, dynQueries); err != nil {
 			return err
 		}
 	}
