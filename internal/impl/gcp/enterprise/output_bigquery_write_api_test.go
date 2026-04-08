@@ -10,11 +10,15 @@ package enterprise
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"testing"
 	"time"
 
 	"cloud.google.com/go/bigquery"
 	"cloud.google.com/go/bigquery/storage/managedwriter/adapt"
+	"google.golang.org/grpc/codes"
+	grpcstatus "google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/descriptorpb"
@@ -41,6 +45,8 @@ table: my_table
 	assert.Equal(t, "my_dataset", cfg.DatasetID)
 	assert.Equal(t, "json", cfg.MessageFormat)
 	assert.Empty(t, cfg.CredentialsJSON)
+	assert.Empty(t, cfg.TargetPrincipal)
+	assert.Empty(t, cfg.Delegates)
 	assert.Empty(t, cfg.EndpointHTTP)
 	assert.Empty(t, cfg.EndpointGRPC)
 }
@@ -53,6 +59,9 @@ dataset: my_dataset
 table: my_table
 message_format: protobuf
 credentials_json: '{"type":"service_account"}'
+target_principal: "sa@project.iam.gserviceaccount.com"
+delegates:
+  - "delegate@project.iam.gserviceaccount.com"
 endpoint:
   http: http://localhost:9050
   grpc: localhost:9060
@@ -66,6 +75,8 @@ endpoint:
 	assert.Equal(t, "my_dataset", cfg.DatasetID)
 	assert.Equal(t, "protobuf", cfg.MessageFormat)
 	assert.Equal(t, `{"type":"service_account"}`, cfg.CredentialsJSON)
+	assert.Equal(t, "sa@project.iam.gserviceaccount.com", cfg.TargetPrincipal)
+	assert.Equal(t, []string{"delegate@project.iam.gserviceaccount.com"}, cfg.Delegates)
 	assert.Equal(t, "http://localhost:9050", cfg.EndpointHTTP)
 	assert.Equal(t, "localhost:9060", cfg.EndpointGRPC)
 }
@@ -278,4 +289,39 @@ func TestSweepIdleStreams(t *testing.T) {
 
 	assert.True(t, freshExists, "fresh stream should remain in cache")
 	assert.False(t, staleExists, "stale stream should have been evicted")
+}
+
+func TestClassifyGRPCError(t *testing.T) {
+	tests := []struct {
+		name     string
+		err      error
+		expected grpcErrorKind
+	}{
+		{"unavailable is transient", grpcstatus.Error(codes.Unavailable, "service unavailable"), grpcTransient},
+		{"resource exhausted is transient", grpcstatus.Error(codes.ResourceExhausted, "quota exceeded"), grpcTransient},
+		{"deadline exceeded is transient", grpcstatus.Error(codes.DeadlineExceeded, "timeout"), grpcTransient},
+		{"aborted is transient", grpcstatus.Error(codes.Aborted, "conflict"), grpcTransient},
+		{"internal is transient", grpcstatus.Error(codes.Internal, "internal error"), grpcTransient},
+		{"invalid argument is permanent", grpcstatus.Error(codes.InvalidArgument, "bad request"), grpcPermanent},
+		{"not found is permanent", grpcstatus.Error(codes.NotFound, "table not found"), grpcPermanent},
+		{"permission denied is permanent", grpcstatus.Error(codes.PermissionDenied, "forbidden"), grpcPermanent},
+		{"unauthenticated is permanent", grpcstatus.Error(codes.Unauthenticated, "bad creds"), grpcPermanent},
+		{"non-grpc error is transient", errors.New("random network error"), grpcTransient},
+		{"wrapped grpc error is classified", fmt.Errorf("appending rows: %w", grpcstatus.Error(codes.InvalidArgument, "bad")), grpcPermanent},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, classifyGRPCError(tc.err))
+		})
+	}
+}
+
+func TestMetricsInitialization(t *testing.T) {
+	m := newBQWAMetrics(service.MockResources().Metrics())
+	require.NotNil(t, m.rowsSent)
+	require.NotNil(t, m.rowsFailed)
+	require.NotNil(t, m.batchesSent)
+	require.NotNil(t, m.batchLatency)
+	require.NotNil(t, m.retries)
 }

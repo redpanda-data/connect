@@ -19,9 +19,12 @@ import (
 	"cloud.google.com/go/bigquery"
 	"cloud.google.com/go/bigquery/storage/managedwriter"
 	"cloud.google.com/go/bigquery/storage/managedwriter/adapt"
+	"google.golang.org/api/impersonate"
 	"google.golang.org/api/option"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	grpcstatus "google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protodesc"
@@ -44,6 +47,8 @@ const (
 	bqwaFieldEndpointHTTP    = "http"
 	bqwaFieldEndpointGRPC    = "grpc"
 	bqwaFieldBatching        = "batching"
+	bqwaFieldTargetPrincipal = "target_principal"
+	bqwaFieldDelegates       = "delegates"
 )
 
 func init() {
@@ -100,6 +105,14 @@ each batch; all messages in the same batch are written to that table.
 				Description("An optional JSON string containing GCP credentials. If empty, credentials are loaded from the environment.").
 				Secret().
 				Default(""),
+			service.NewStringField(bqwaFieldTargetPrincipal).
+				Description("Service account email to impersonate. When set, the output obtains tokens acting as this service account. Requires the caller to have roles/iam.serviceAccountTokenCreator on the target.").
+				Advanced().
+				Default(""),
+			service.NewStringListField(bqwaFieldDelegates).
+				Description("Optional delegation chain for chained service account impersonation. Each service account must be granted roles/iam.serviceAccountTokenCreator on the next in the chain.").
+				Advanced().
+				Default([]any{}),
 			service.NewObjectField(bqwaFieldEndpoint,
 				service.NewStringField(bqwaFieldEndpointHTTP).
 					Description("Override the BigQuery HTTP endpoint. Useful for local emulators.").
@@ -120,6 +133,8 @@ type bigQueryWriteAPIConfig struct {
 	DatasetID       string
 	MessageFormat   string
 	CredentialsJSON string
+	TargetPrincipal string
+	Delegates       []string
 	EndpointHTTP    string
 	EndpointGRPC    string
 }
@@ -138,6 +153,12 @@ func bigQueryWriteAPIConfigFromParsed(pConf *service.ParsedConfig) (conf bigQuer
 		return
 	}
 	if conf.CredentialsJSON, err = pConf.FieldString(bqwaFieldCredentialsJSON); err != nil {
+		return
+	}
+	if conf.TargetPrincipal, err = pConf.FieldString(bqwaFieldTargetPrincipal); err != nil {
+		return
+	}
+	if conf.Delegates, err = pConf.FieldStringList(bqwaFieldDelegates); err != nil {
 		return
 	}
 	epConf := pConf.Namespace(bqwaFieldEndpoint)
@@ -160,6 +181,64 @@ const (
 	streamSweepInterval = 1 * time.Minute
 )
 
+type bqwaMetrics struct {
+	rowsSent     *service.MetricCounter
+	rowsFailed   *service.MetricCounter
+	batchesSent  *service.MetricCounter
+	batchLatency *service.MetricTimer
+	retries      *service.MetricCounter
+}
+
+func newBQWAMetrics(m *service.Metrics) *bqwaMetrics {
+	return &bqwaMetrics{
+		rowsSent:     m.NewCounter("bigquery_write_api_rows_sent"),
+		rowsFailed:   m.NewCounter("bigquery_write_api_rows_failed"),
+		batchesSent:  m.NewCounter("bigquery_write_api_batches_sent"),
+		batchLatency: m.NewTimer("bigquery_write_api_batch_latency_ns"),
+		retries:      m.NewCounter("bigquery_write_api_retries"),
+	}
+}
+
+type grpcErrorKind int
+
+const (
+	grpcTransient grpcErrorKind = iota
+	grpcPermanent
+)
+
+// classifyGRPCError inspects a gRPC status code to determine if the error is
+// transient (worth retrying) or permanent (will never succeed).
+// Non-gRPC errors are treated as transient to be safe.
+func classifyGRPCError(err error) grpcErrorKind {
+	st, ok := grpcstatus.FromError(err)
+	if !ok {
+		// Try unwrapping, since errors are often wrapped with fmt.Errorf.
+		unwrapped := err
+		for unwrapped != nil {
+			if st, ok = grpcstatus.FromError(unwrapped); ok {
+				break
+			}
+			unwrapped = errors.Unwrap(unwrapped)
+		}
+		if !ok {
+			return grpcTransient
+		}
+	}
+
+	switch st.Code() {
+	case codes.InvalidArgument,
+		codes.NotFound,
+		codes.PermissionDenied,
+		codes.AlreadyExists,
+		codes.FailedPrecondition,
+		codes.Unimplemented,
+		codes.Unauthenticated:
+		return grpcPermanent
+	default:
+		return grpcTransient
+	}
+}
+
 type streamWithDescriptor struct {
 	stream     *managedwriter.ManagedStream
 	descriptor protoreflect.MessageDescriptor
@@ -170,6 +249,7 @@ type bigQueryWriteAPIOutput struct {
 	conf        bigQueryWriteAPIConfig
 	tableInterp *service.InterpolatedString
 	log         *service.Logger
+	metrics     *bqwaMetrics
 
 	connMu        sync.RWMutex
 	client        *bigquery.Client
@@ -200,6 +280,7 @@ func bigQueryWriteAPIOutputFromConfig(conf *service.ParsedConfig, mgr *service.R
 		conf:        cfg,
 		tableInterp: tableInterp,
 		log:         mgr.Logger(),
+		metrics:     newBQWAMetrics(mgr.Metrics()),
 		streams:     make(map[string]*streamWithDescriptor),
 	}, nil
 }
@@ -212,25 +293,14 @@ func (o *bigQueryWriteAPIOutput) Connect(ctx context.Context) error {
 		return nil
 	}
 
-	var (
-		bqOpts      []option.ClientOption
-		storageOpts []option.ClientOption
-	)
-
-	if o.conf.EndpointHTTP != "" {
-		bqOpts = append(bqOpts, option.WithoutAuthentication(), option.WithEndpoint(o.conf.EndpointHTTP))
-	} else if o.conf.CredentialsJSON != "" {
-		bqOpts = append(bqOpts, option.WithCredentialsJSON([]byte(o.conf.CredentialsJSON)))
+	bqOpts, err := o.buildAuthOpts(ctx, o.conf.EndpointHTTP, false)
+	if err != nil {
+		return err
 	}
 
-	if o.conf.EndpointGRPC != "" {
-		storageOpts = append(storageOpts,
-			option.WithoutAuthentication(),
-			option.WithEndpoint(o.conf.EndpointGRPC),
-			option.WithGRPCDialOption(grpc.WithTransportCredentials(insecure.NewCredentials())),
-		)
-	} else if o.conf.CredentialsJSON != "" {
-		storageOpts = append(storageOpts, option.WithCredentialsJSON([]byte(o.conf.CredentialsJSON)))
+	storageOpts, err := o.buildAuthOpts(ctx, o.conf.EndpointGRPC, true)
+	if err != nil {
+		return err
 	}
 
 	bqClient, err := bigquery.NewClient(ctx, o.conf.ProjectID, bqOpts...)
@@ -274,6 +344,8 @@ func (o *bigQueryWriteAPIOutput) WriteBatch(ctx context.Context, batch service.M
 		return service.ErrNotConnected
 	}
 
+	start := time.Now()
+
 	tableID, err := batch.TryInterpolatedString(0, o.tableInterp)
 	if err != nil {
 		return fmt.Errorf("interpolating table name: %w", err)
@@ -311,16 +383,28 @@ func (o *bigQueryWriteAPIOutput) WriteBatch(ctx context.Context, batch service.M
 	result, err := swd.stream.AppendRows(ctx, rows)
 	if err != nil {
 		o.evictStream(cacheKey)
+		if classifyGRPCError(err) == grpcPermanent {
+			return fmt.Errorf("permanent error appending rows (will not retry): %w", err)
+		}
+		o.metrics.retries.Incr(1)
 		return fmt.Errorf("appending rows: %w", err)
 	}
 
 	resp, err := result.FullResponse(ctx)
 	if err != nil {
 		o.evictStream(cacheKey)
+		if classifyGRPCError(err) == grpcPermanent {
+			return fmt.Errorf("permanent error waiting for append result (will not retry): %w", err)
+		}
+		o.metrics.retries.Incr(1)
 		return fmt.Errorf("waiting for append result: %w", err)
 	}
 
+	o.metrics.batchLatency.Timing(time.Since(start).Nanoseconds())
+
 	if rowErrs := resp.GetRowErrors(); len(rowErrs) > 0 {
+		o.metrics.rowsFailed.Incr(int64(len(rowErrs)))
+		o.metrics.rowsSent.Incr(int64(len(batch) - len(rowErrs)))
 		batchErr := service.NewBatchError(batch, errors.New("row errors from BigQuery"))
 		for _, re := range rowErrs {
 			idx := int(re.GetIndex())
@@ -331,6 +415,8 @@ func (o *bigQueryWriteAPIOutput) WriteBatch(ctx context.Context, batch service.M
 		return batchErr
 	}
 
+	o.metrics.batchesSent.Incr(1)
+	o.metrics.rowsSent.Incr(int64(len(batch)))
 	return nil
 }
 
@@ -374,6 +460,47 @@ func (o *bigQueryWriteAPIOutput) Close(_ context.Context) error {
 	}
 
 	return errors.Join(errs...)
+}
+
+// buildAuthOpts returns client options for authentication based on the config.
+// If an endpoint override is provided, authentication is skipped (emulator mode).
+func (o *bigQueryWriteAPIOutput) buildAuthOpts(ctx context.Context, endpointOverride string, isGRPC bool) ([]option.ClientOption, error) {
+	if endpointOverride != "" {
+		opts := []option.ClientOption{
+			option.WithoutAuthentication(),
+			option.WithEndpoint(endpointOverride),
+		}
+		if isGRPC {
+			opts = append(opts, option.WithGRPCDialOption(grpc.WithTransportCredentials(insecure.NewCredentials())))
+		}
+		return opts, nil
+	}
+
+	var opts []option.ClientOption
+
+	if o.conf.TargetPrincipal != "" {
+		var baseOpts []option.ClientOption
+		if o.conf.CredentialsJSON != "" {
+			baseOpts = append(baseOpts, option.WithCredentialsJSON([]byte(o.conf.CredentialsJSON)))
+		}
+
+		ts, err := impersonate.CredentialsTokenSource(ctx, impersonate.CredentialsConfig{
+			TargetPrincipal: o.conf.TargetPrincipal,
+			Scopes:          []string{bigquery.Scope},
+			Delegates:       o.conf.Delegates,
+		}, baseOpts...)
+		if err != nil {
+			return nil, fmt.Errorf("creating impersonated credentials for %q: %w", o.conf.TargetPrincipal, err)
+		}
+		opts = append(opts, option.WithTokenSource(ts))
+		return opts, nil
+	}
+
+	if o.conf.CredentialsJSON != "" {
+		opts = append(opts, option.WithCredentialsJSON([]byte(o.conf.CredentialsJSON)))
+	}
+
+	return opts, nil
 }
 
 func (o *bigQueryWriteAPIOutput) tableCacheKey(tableID string) string {
