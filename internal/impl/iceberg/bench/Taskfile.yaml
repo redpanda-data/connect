@@ -13,7 +13,8 @@ tasks:
     desc: Start MinIO and Iceberg REST catalog
     cmds:
       - docker compose -f docker-compose.yaml up -d
-      - sleep 5
+      - until curl -sf http://localhost:9000/minio/health/live > /dev/null; do sleep 1; done
+      - until curl -sf http://localhost:8181/v1/config > /dev/null; do sleep 1; done
 
   infra:down:
     desc: Stop and remove all containers and volumes
@@ -30,7 +31,8 @@ tasks:
     cmds:
       - docker compose -f docker-compose.yaml down -v
       - docker compose -f docker-compose.yaml up -d
-      - sleep 5
+      - until curl -sf http://localhost:9000/minio/health/live > /dev/null; do sleep 1; done
+      - until curl -sf http://localhost:8181/v1/config > /dev/null; do sleep 1; done
 
   # Parameterised benchmark — specify CORES, BATCH and COUNT freely
   # Usage: task bench CORES=4 BATCH=5000 COUNT=1000000
