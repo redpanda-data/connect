@@ -92,6 +92,8 @@ output:
 --
 ======
 
+When multiple queries are configured, all messages within a batch are executed in a single database transaction. Single-query configurations execute each message individually without a transaction, preserving per-message error granularity. When consuming from Kafka, messages are automatically ordered by partition within the transaction, allowing `max_in_flight` > 1 to parallelize across partitions while preserving consume order within each partition. Messages without `kafka_partition` metadata default to partition 0.
+
 == Examples
 
 [tabs]
@@ -144,6 +146,35 @@ output:
         args_mapping: |
           root = [ this.id, this.document.string() ]
 
+```
+
+--
+Conditional CDC Queries (PostgreSQL)::
++
+--
+
+Route messages to different SQL operations based on message metadata. Tombstone messages trigger a DELETE, while all other messages perform an upsert. All operations within a batch execute in a single transaction, ordered by Kafka partition.
+
+```yaml
+output:
+  sql_raw:
+    driver: postgres
+    dsn: postgres://localhost/postgres
+    max_in_flight: 8
+    batching:
+      count: 100
+      period: 100ms
+    queries:
+      - when: 'root = meta("kafka_tombstone_message") == "true"'
+        query: 'DELETE FROM users WHERE id = $1'
+        args_mapping: 'root = [this.id]'
+      - query: |
+          INSERT INTO users (id, name, updated_at)
+          VALUES ($1, $2, $3)
+          ON CONFLICT (id) DO UPDATE SET
+            name = EXCLUDED.name,
+            updated_at = EXCLUDED.updated_at
+        args_mapping: 'root = [this.id, this.name, this.updated_at]'
 ```
 
 --
@@ -300,7 +331,7 @@ args_mapping: root = [ meta("user.id") ]
 
 === `queries`
 
-A list of statements to run in addition to `query`. When specifying multiple statements, they are all executed within a transaction.
+A list of query statements. When a `when` condition is specified on entries, the first query whose condition evaluates to `true` (or that has no condition) is executed for each message. When no `when` conditions are present, all queries execute for each message within a transaction. When specifying multiple statements without conditions, they are all executed within a transaction.
 
 
 *Type*: `array`
@@ -343,9 +374,25 @@ args_mapping: root = [ this.cat.meow, this.doc.woofs[0] ]
 args_mapping: root = [ meta("user.id") ]
 ```
 
+=== `queries[].when`
+
+An optional xref:guides:bloblang/about.adoc[Bloblang mapping] that, when set, is evaluated for each message to determine whether this query should be executed. The mapping should return a boolean value. The first query in the list whose `when` condition evaluates to `true` (or that has no `when` condition) is the one that executes. This enables conditional query routing based on message content or metadata without requiring `unsafe_dynamic_query`.
+
+
+*Type*: `string`
+
+
+```yml
+# Examples
+
+when: root = meta("kafka_tombstone_message") == "true"
+
+when: root = this.operation == "delete"
+```
+
 === `max_in_flight`
 
-The maximum number of statements to execute in parallel.
+The maximum number of batches to be sending in parallel at any given time.
 
 
 *Type*: `int`

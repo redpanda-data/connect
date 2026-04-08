@@ -107,7 +107,7 @@ func NewSQLDeprecatedProcessorFromConfig(conf *service.ParsedConfig, mgr *servic
 		mgr.Logger(),
 		driverStr,
 		dsnStr,
-		[]rawQueryStatement{{queryStatic, queryDyn, argsMapping, onlyExec}},
+		[]rawQueryStatement{{static: queryStatic, dynamic: queryDyn, argsMapping: argsMapping, execOnly: onlyExec}},
 		func(v []any) []any { return v },
 		connSettings,
 	)
