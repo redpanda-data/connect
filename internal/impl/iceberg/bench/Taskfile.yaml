@@ -1,0 +1,77 @@
+version: "3"
+
+tasks:
+  infra:up:
+    desc: Start MinIO and Iceberg REST catalog
+    cmds:
+      - docker compose -f docker-compose.yaml up -d
+      - sleep 5
+
+  infra:down:
+    desc: Stop and remove all containers and volumes
+    cmds:
+      - docker compose -f docker-compose.yaml down -v
+
+  infra:logs:
+    desc: Show container logs
+    cmds:
+      - docker compose -f docker-compose.yaml logs -f
+
+  infra:reset:
+    desc: Wipe all data and restart infrastructure
+    cmds:
+      - docker compose -f docker-compose.yaml down -v
+      - docker compose -f docker-compose.yaml up -d
+      - sleep 5
+
+  # Parameterised benchmark — specify CORES, BATCH and COUNT freely
+  # Usage: task bench CORES=4 BATCH=5000 COUNT=1000000
+  bench:
+    desc: "Run write benchmark (e.g. task bench CORES=4 BATCH=5000 COUNT=1000000)"
+    vars:
+      CORES: '{{.CORES | default ""}}'
+      BATCH: '{{.BATCH | default "1000"}}'
+      COUNT: '{{.COUNT | default "0"}}'
+    cmds:
+      - |
+        AWS_EC2_METADATA_DISABLED=true \
+        AWS_ACCESS_KEY_ID=admin \
+        AWS_SECRET_ACCESS_KEY=password \
+        AWS_REGION=us-east-1 \
+        GOMAXPROCS={{.CORES}} go run ../../../../cmd/redpanda-connect/main.go run \
+          --set input.generate.count={{.COUNT}} \
+          --set output.iceberg.batching.count={{.BATCH}} \
+          --set output.iceberg.batching.period=5s \
+          ./benchmark_config.yaml
+
+  # Usage: task bench:mif BATCH=10000 MIF=8 CORES=4 COUNT=1000000
+  bench:mif:
+    desc: "Run benchmark with varying BATCH, max_in_flight, CORES and COUNT (e.g. task bench:mif BATCH=10000 MIF=8 CORES=4 COUNT=1000000)"
+    vars:
+      BATCH: '{{.BATCH | default "1000"}}'
+      MIF: '{{.MIF | default "4"}}'
+      CORES: '{{.CORES | default "4"}}'
+      COUNT: '{{.COUNT | default "1000000"}}'
+    cmds:
+      - |
+        AWS_EC2_METADATA_DISABLED=true \
+        AWS_ACCESS_KEY_ID=admin \
+        AWS_SECRET_ACCESS_KEY=password \
+        AWS_REGION=us-east-1 \
+        GOMAXPROCS={{.CORES}} go run ../../../../cmd/redpanda-connect/main.go run \
+          --set input.generate.count={{.COUNT}} \
+          --set output.iceberg.batching.count={{.BATCH}} \
+          --set output.iceberg.batching.period=5s \
+          --set output.iceberg.max_in_flight={{.MIF}} \
+          ./benchmark_config.yaml
+
+  bench:reset:
+    desc: Wipe all data, restart infrastructure, then run benchmark
+    vars:
+      CORES: '{{.CORES | default ""}}'
+      BATCH: '{{.BATCH | default "1000"}}'
+      COUNT: '{{.COUNT | default "0"}}'
+    cmds:
+      - task infra:reset
+      - task bench CORES={{.CORES}} BATCH={{.BATCH}} COUNT={{.COUNT}}
+
