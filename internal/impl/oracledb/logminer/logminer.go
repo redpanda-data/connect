@@ -14,6 +14,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"maps"
 	"math"
 	"strings"
 	"time"
@@ -720,12 +721,26 @@ func (lm *LogMiner) prepareLogsAndStartSession(ctx context.Context, conn *sql.Co
 }
 
 func toMessageEvent(dml *sqlredo.DMLEvent, scn uint64, checkpointSCN uint64) *replication.MessageEvent {
+	var data map[string]any
+	switch dml.Operation {
+	case sqlredo.OpDelete:
+		// column values are parsed into OldValues, not Data.
+		data = dml.OldValues
+	case sqlredo.OpUpdate:
+		// merge new values onto old value for a current view that includes the PK
+		data = make(map[string]any, len(dml.OldValues))
+		maps.Copy(data, dml.OldValues)
+		maps.Copy(data, dml.Data)
+	default:
+		data = dml.Data
+	}
+
 	m := &replication.MessageEvent{
 		SCN:           replication.SCN(scn),
 		CheckpointSCN: replication.SCN(checkpointSCN),
 		Schema:        dml.Schema,
 		Table:         dml.Table,
-		Data:          dml.Data,
+		Data:          data,
 		Timestamp:     dml.Timestamp,
 	}
 

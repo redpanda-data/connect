@@ -152,6 +152,30 @@ func TestParseLobWrite(t *testing.T) {
 			isBinary: true,
 			wantErr:  true,
 		},
+		{
+			// Oracle sometimes emits HEXTORAW() for CLOB/NCLOB data (e.g. zero-padded segments).
+			name:       "CLOB HEXTORAW fallback",
+			sql:        " buf_c := HEXTORAW('48656C6C6F');\n  dbms_lob.write(loc_c, 5, 1, buf_c);",
+			isBinary:   false,
+			wantData:   []byte("Hello"),
+			wantOffset: 1,
+			wantLength: 5,
+		},
+		{
+			// Zero-padded CLOB segment — the case that triggered the original warning.
+			name:       "CLOB HEXTORAW fallback with zero bytes",
+			sql:        " buf_b := HEXTORAW('000000000000');\n  dbms_lob.write(loc_c, 6, 1, buf_b);",
+			isBinary:   false,
+			wantData:   []byte{0, 0, 0, 0, 0, 0},
+			wantOffset: 1,
+			wantLength: 6,
+		},
+		{
+			name:     "CLOB with no string literal and no HEXTORAW",
+			sql:      " buf_c := SOMEFUNCTION('x');\n  dbms_lob.write(loc_c, 1, 1, buf_c);",
+			isBinary: false,
+			wantErr:  true,
+		},
 	}
 
 	for _, tc := range tests {

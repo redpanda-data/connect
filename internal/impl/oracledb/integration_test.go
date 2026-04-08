@@ -452,6 +452,10 @@ oracledb_cdc:
 	t.Run("Streaming insert changes...", func(t *testing.T) {
 		msgs := collectMessages(t, want)
 		mustAssertMetadata(t, "insert", msgs)
+
+		content, err := msgs[0].AsBytes()
+		assert.NoError(t, err)
+		assert.Equal(t, `{"ID":1,"VAL":1}`, string(content))
 	})
 
 	t.Run("Streaming update changes...", func(t *testing.T) {
@@ -461,6 +465,10 @@ oracledb_cdc:
 
 		msgs := collectMessages(t, want)
 		mustAssertMetadata(t, "update", msgs)
+
+		content, err := msgs[0].AsBytes()
+		assert.NoError(t, err)
+		assert.Equal(t, `{"ID":1,"VAL":2}`, string(content))
 	})
 
 	t.Run("Streaming delete changes...", func(t *testing.T) {
@@ -470,6 +478,10 @@ oracledb_cdc:
 
 		msgs := collectMessages(t, want)
 		mustAssertMetadata(t, "delete", msgs)
+
+		content, err := msgs[0].AsBytes()
+		assert.NoError(t, err)
+		assert.Equal(t, `{"ID":1,"VAL":2}`, string(content))
 	})
 
 	require.NoError(t, stream.StopWithin(time.Second*10))
