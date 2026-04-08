@@ -22,18 +22,18 @@ pipeline:
 output:
   iceberg:
     catalog:
-      url: http://localhost:8181
+      url: "${CATALOG_URL:http://localhost:8181}"
     namespace: bench
     table: events
     storage:
       aws_s3:
-        bucket: warehouse
-        region: us-east-1
-        endpoint: http://localhost:9000
+        bucket: "${MINIO_BUCKET:warehouse}"
+        region: "${MINIO_REGION:us-east-1}"
+        endpoint: "${MINIO_ENDPOINT:http://localhost:9000}"
         force_path_style_urls: true
         credentials:
-          id: admin
-          secret: password
+          id: "${MINIO_USER:admin}"
+          secret: "${MINIO_PASSWORD:password}"
     schema_evolution:
       enabled: true
     batching:

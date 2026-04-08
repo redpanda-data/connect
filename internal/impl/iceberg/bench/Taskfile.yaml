@@ -1,5 +1,13 @@
 version: "3"
 
+vars:
+  MINIO_USER: '{{.MINIO_USER | default "admin"}}'
+  MINIO_PASSWORD: '{{.MINIO_PASSWORD | default "password"}}'
+  MINIO_REGION: '{{.MINIO_REGION | default "us-east-1"}}'
+  CATALOG_URL: '{{.CATALOG_URL | default "http://localhost:8181"}}'
+  MINIO_ENDPOINT: '{{.MINIO_ENDPOINT | default "http://localhost:9000"}}'
+  MINIO_BUCKET: '{{.MINIO_BUCKET | default "warehouse"}}'
+
 tasks:
   infra:up:
     desc: Start MinIO and Iceberg REST catalog
@@ -35,13 +43,18 @@ tasks:
     cmds:
       - |
         AWS_EC2_METADATA_DISABLED=true \
-        AWS_ACCESS_KEY_ID=admin \
-        AWS_SECRET_ACCESS_KEY=password \
-        AWS_REGION=us-east-1 \
+        AWS_ACCESS_KEY_ID={{.MINIO_USER}} \
+        AWS_SECRET_ACCESS_KEY={{.MINIO_PASSWORD}} \
+        AWS_REGION={{.MINIO_REGION}} \
         GOMAXPROCS={{.CORES}} go run ../../../../cmd/redpanda-connect/main.go run \
           --set input.generate.count={{.COUNT}} \
           --set output.iceberg.batching.count={{.BATCH}} \
           --set output.iceberg.batching.period=5s \
+          --set output.iceberg.catalog.url={{.CATALOG_URL}} \
+          --set output.iceberg.storage.aws_s3.endpoint={{.MINIO_ENDPOINT}} \
+          --set output.iceberg.storage.aws_s3.bucket={{.MINIO_BUCKET}} \
+          --set output.iceberg.storage.aws_s3.credentials.id={{.MINIO_USER}} \
+          --set output.iceberg.storage.aws_s3.credentials.secret={{.MINIO_PASSWORD}} \
           ./benchmark_config.yaml
 
   # Usage: task bench:mif BATCH=10000 MIF=8 CORES=4 COUNT=1000000
@@ -55,14 +68,19 @@ tasks:
     cmds:
       - |
         AWS_EC2_METADATA_DISABLED=true \
-        AWS_ACCESS_KEY_ID=admin \
-        AWS_SECRET_ACCESS_KEY=password \
-        AWS_REGION=us-east-1 \
+        AWS_ACCESS_KEY_ID={{.MINIO_USER}} \
+        AWS_SECRET_ACCESS_KEY={{.MINIO_PASSWORD}} \
+        AWS_REGION={{.MINIO_REGION}} \
         GOMAXPROCS={{.CORES}} go run ../../../../cmd/redpanda-connect/main.go run \
           --set input.generate.count={{.COUNT}} \
           --set output.iceberg.batching.count={{.BATCH}} \
           --set output.iceberg.batching.period=5s \
           --set output.iceberg.max_in_flight={{.MIF}} \
+          --set output.iceberg.catalog.url={{.CATALOG_URL}} \
+          --set output.iceberg.storage.aws_s3.endpoint={{.MINIO_ENDPOINT}} \
+          --set output.iceberg.storage.aws_s3.bucket={{.MINIO_BUCKET}} \
+          --set output.iceberg.storage.aws_s3.credentials.id={{.MINIO_USER}} \
+          --set output.iceberg.storage.aws_s3.credentials.secret={{.MINIO_PASSWORD}} \
           ./benchmark_config.yaml
 
   bench:reset:
@@ -74,4 +92,3 @@ tasks:
     cmds:
       - task infra:reset
       - task bench CORES={{.CORES}} BATCH={{.BATCH}} COUNT={{.COUNT}}
-
