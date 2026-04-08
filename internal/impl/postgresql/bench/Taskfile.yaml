@@ -77,12 +77,12 @@ tasks:
       - go run ../../../../cmd/redpanda-connect/main.go run ./benchmark_config.yaml
 
   bench:run:cdc:
-    desc: Run CDC benchmark - start connector first, then insert data separately
+    desc: Run CDC benchmark (stream_snapshot=false) - start connector first, then insert data separately
     env:
       PG_DSN: '{{.PG_DSN}}'
     cmds:
       - task psql:drop-slot
-      - go run ../../../../cmd/redpanda-connect/main.go run ./benchmark_config.yaml
+      - go run ../../../../cmd/redpanda-connect/main.go run --set input.postgres_cdc.stream_snapshot=false ./benchmark_config.yaml
 
   bench:snapshot:users:
     desc: Drop slot, insert 150K large-payload users rows, then run snapshot benchmark
