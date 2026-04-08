@@ -18,10 +18,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 
 	"github.com/Azure/go-amqp"
+	"github.com/google/uuid"
 
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -101,6 +103,51 @@ This output benefits from sending multiple messages in flight in parallel for im
 				Advanced().
 				Example("amqp://localhost:5672/").
 				Example(`${! meta("target_address") }`),
+			service.NewInterpolatedStringField(messagePropsMsgID).
+				Description("Set the message-id property on outgoing AMQP messages. The value is auto-detected as UUID, uint64, or string. Purely numeric values are sent as uint64 on the wire. This field supports Bloblang interpolation.").
+				Optional().
+				Advanced().
+				Example(`${! uuid_v4() }`).
+				Example(`${! meta("amqp_message_id") }`),
+			service.NewInterpolatedStringField(messagePropsCorrelID).
+				Description("Set the correlation-id property on outgoing AMQP messages. The value is auto-detected as UUID, uint64, or string. Purely numeric values are sent as uint64 on the wire. This field supports Bloblang interpolation.").
+				Optional().
+				Advanced().
+				Example(`${! meta("amqp_correlation_id") }`),
+			service.NewInterpolatedStringField(messagePropsSubject).
+				Description("Set the subject property on outgoing AMQP messages. This field supports Bloblang interpolation.").
+				Optional().
+				Advanced(),
+			service.NewInterpolatedStringField(messagePropsReplyTo).
+				Description("Set the reply-to property on outgoing AMQP messages. This field supports Bloblang interpolation.").
+				Optional().
+				Advanced(),
+			service.NewInterpolatedStringField(messagePropsGroupID).
+				Description("Set the group-id property on outgoing AMQP messages. This field supports Bloblang interpolation.").
+				Optional().
+				Advanced(),
+			service.NewInterpolatedStringField(messagePropsGroupSeq).
+				Description("Set the group-sequence property on outgoing AMQP messages. Must be a valid uint32 value. This field supports Bloblang interpolation.").
+				Optional().
+				Advanced(),
+			service.NewInterpolatedStringField(messagePropsReplyToGrpID).
+				Description("Set the reply-to-group-id property on outgoing AMQP messages. This field supports Bloblang interpolation.").
+				Optional().
+				Advanced(),
+			service.NewInterpolatedStringField(messagePropsUserID).
+				Description("Set the user-id property on outgoing AMQP messages. This field supports Bloblang interpolation.").
+				Optional().
+				Advanced(),
+			service.NewInterpolatedStringField(messagePropsContentType).
+				Description("Set the content-type property on outgoing AMQP messages. This field supports Bloblang interpolation.").
+				Optional().
+				Advanced().
+				Example("application/json").
+				Example("text/plain; charset=utf-8"),
+			service.NewInterpolatedStringField(messagePropsContentEnc).
+				Description("Set the content-encoding property on outgoing AMQP messages. This field supports Bloblang interpolation.").
+				Optional().
+				Advanced(),
 		).LintRule(`
 root = if this.url.or("") == "" && this.urls.or([]).length() == 0 {
   "field 'urls' must be set"
@@ -141,6 +188,16 @@ type amqp1Writer struct {
 	senderOpts               *amqp.SenderOptions
 	persistent               bool
 	msgTo                    *service.InterpolatedString
+	msgMessageID             *service.InterpolatedString
+	msgCorrelationID         *service.InterpolatedString
+	msgSubject               *service.InterpolatedString
+	msgReplyTo               *service.InterpolatedString
+	msgGroupID               *service.InterpolatedString
+	msgGroupSequence         *service.InterpolatedString
+	msgReplyToGroupID        *service.InterpolatedString
+	msgUserID                *service.InterpolatedString
+	msgContentType           *service.InterpolatedString
+	msgContentEncoding       *service.InterpolatedString
 
 	log      *service.Logger
 	connLock sync.RWMutex
@@ -224,6 +281,28 @@ func amqp1WriterFromParsed(conf *service.ParsedConfig, mgr *service.Resources) (
 	if conf.Contains(messagePropsTo) {
 		if a.msgTo, err = conf.FieldInterpolatedString(messagePropsTo); err != nil {
 			return nil, err
+		}
+	}
+
+	for _, f := range []struct {
+		name   string
+		target **service.InterpolatedString
+	}{
+		{messagePropsMsgID, &a.msgMessageID},
+		{messagePropsCorrelID, &a.msgCorrelationID},
+		{messagePropsSubject, &a.msgSubject},
+		{messagePropsReplyTo, &a.msgReplyTo},
+		{messagePropsGroupID, &a.msgGroupID},
+		{messagePropsGroupSeq, &a.msgGroupSequence},
+		{messagePropsReplyToGrpID, &a.msgReplyToGroupID},
+		{messagePropsUserID, &a.msgUserID},
+		{messagePropsContentType, &a.msgContentType},
+		{messagePropsContentEnc, &a.msgContentEncoding},
+	} {
+		if conf.Contains(f.name) {
+			if *f.target, err = conf.FieldInterpolatedString(f.name); err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -331,14 +410,8 @@ func (a *amqp1Writer) Write(ctx context.Context, msg *service.Message) error {
 		m.Header = &amqp.MessageHeader{Durable: true}
 	}
 
-	if a.msgTo != nil {
-		msgToStr, err := a.msgTo.TryString(msg)
-		if err != nil {
-			return fmt.Errorf("interpolating message_properties_to: %w", err)
-		}
-		if msgToStr != "" {
-			m.Properties = &amqp.MessageProperties{To: &msgToStr}
-		}
+	if err := a.setMessageProperties(m, msg); err != nil {
+		return err
 	}
 
 	if a.applicationPropertiesMap != nil {
@@ -379,6 +452,106 @@ func (a *amqp1Writer) Write(ctx context.Context, msg *service.Message) error {
 		}
 	}
 	return err
+}
+
+func (a *amqp1Writer) setMessageProperties(m *amqp.Message, msg *service.Message) error {
+	if err := setInterpolatedStringProp(m, msg, a.msgTo, messagePropsTo, func(p *amqp.MessageProperties, v string) { p.To = &v }); err != nil {
+		return err
+	}
+	if err := setInterpolatedIDProp(m, msg, a.msgMessageID, messagePropsMsgID, func(p *amqp.MessageProperties, v any) { p.MessageID = v }); err != nil {
+		return err
+	}
+	if err := setInterpolatedIDProp(m, msg, a.msgCorrelationID, messagePropsCorrelID, func(p *amqp.MessageProperties, v any) { p.CorrelationID = v }); err != nil {
+		return err
+	}
+	if err := setInterpolatedStringProp(m, msg, a.msgSubject, messagePropsSubject, func(p *amqp.MessageProperties, v string) { p.Subject = &v }); err != nil {
+		return err
+	}
+	if err := setInterpolatedStringProp(m, msg, a.msgReplyTo, messagePropsReplyTo, func(p *amqp.MessageProperties, v string) { p.ReplyTo = &v }); err != nil {
+		return err
+	}
+	if err := setInterpolatedStringProp(m, msg, a.msgGroupID, messagePropsGroupID, func(p *amqp.MessageProperties, v string) { p.GroupID = &v }); err != nil {
+		return err
+	}
+	if err := setInterpolatedStringProp(m, msg, a.msgReplyToGroupID, messagePropsReplyToGrpID, func(p *amqp.MessageProperties, v string) { p.ReplyToGroupID = &v }); err != nil {
+		return err
+	}
+
+	if a.msgGroupSequence != nil {
+		v, err := a.msgGroupSequence.TryString(msg)
+		if err != nil {
+			return fmt.Errorf("interpolating %s: %w", messagePropsGroupSeq, err)
+		}
+		if v != "" {
+			n, err := strconv.ParseUint(v, 10, 32)
+			if err != nil {
+				return fmt.Errorf("parsing %s as uint32: %w", messagePropsGroupSeq, err)
+			}
+			if m.Properties == nil {
+				m.Properties = &amqp.MessageProperties{}
+			}
+			gs := uint32(n)
+			m.Properties.GroupSequence = &gs
+		}
+	}
+
+	if err := setInterpolatedStringProp(m, msg, a.msgUserID, messagePropsUserID, func(p *amqp.MessageProperties, v string) { p.UserID = []byte(v) }); err != nil {
+		return err
+	}
+	if err := setInterpolatedStringProp(m, msg, a.msgContentType, messagePropsContentType, func(p *amqp.MessageProperties, v string) { p.ContentType = &v }); err != nil {
+		return err
+	}
+	if err := setInterpolatedStringProp(m, msg, a.msgContentEncoding, messagePropsContentEnc, func(p *amqp.MessageProperties, v string) { p.ContentEncoding = &v }); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func setInterpolatedStringProp(m *amqp.Message, msg *service.Message, interp *service.InterpolatedString, fieldName string, set func(*amqp.MessageProperties, string)) error {
+	if interp == nil {
+		return nil
+	}
+	v, err := interp.TryString(msg)
+	if err != nil {
+		return fmt.Errorf("interpolating %s: %w", fieldName, err)
+	}
+	if v != "" {
+		if m.Properties == nil {
+			m.Properties = &amqp.MessageProperties{}
+		}
+		set(m.Properties, v)
+	}
+	return nil
+}
+
+func setInterpolatedIDProp(m *amqp.Message, msg *service.Message, interp *service.InterpolatedString, fieldName string, set func(*amqp.MessageProperties, any)) error {
+	if interp == nil {
+		return nil
+	}
+	v, err := interp.TryString(msg)
+	if err != nil {
+		return fmt.Errorf("interpolating %s: %w", fieldName, err)
+	}
+	if v != "" {
+		if m.Properties == nil {
+			m.Properties = &amqp.MessageProperties{}
+		}
+		set(m.Properties, parseAMQPID(v))
+	}
+	return nil
+}
+
+// parseAMQPID auto-detects the type of an AMQP message-id or correlation-id
+// value. It tries UUID format first, then uint64, and falls back to string.
+func parseAMQPID(s string) any {
+	if u, err := uuid.Parse(s); err == nil {
+		return amqp.UUID(u)
+	}
+	if n, err := strconv.ParseUint(s, 10, 64); err == nil {
+		return n
+	}
+	return s
 }
 
 func (a *amqp1Writer) Close(ctx context.Context) error {
