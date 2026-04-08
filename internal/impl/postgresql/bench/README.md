@@ -91,6 +91,14 @@ task psql:drop-slot   # drop bench_slot so the next run replays from the start
 
 Drop the replication slot before every benchmark run. Unused slots cause PostgreSQL to retain WAL segments indefinitely, which can fill up disk.
 
+## Teardown
+
+```bash
+task postgres:down    # stop and remove the postgres-bench container
+```
+
+All data is inside the container, so this is a full cleanup with no leftover files.
+
 ## Expected Output
 
 ```
