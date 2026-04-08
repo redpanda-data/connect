@@ -92,7 +92,7 @@ output:
 --
 ======
 
-All messages within a batch are executed in a single database transaction. When consuming from Kafka, messages are automatically ordered by partition within the transaction, allowing `max_in_flight` > 1 to parallelize across partitions while preserving consume order within each partition.
+When multiple queries are configured, all messages within a batch are executed in a single database transaction. Single-query configurations execute each message individually without a transaction, preserving per-message error granularity. When consuming from Kafka, messages are automatically ordered by partition within the transaction, allowing `max_in_flight` > 1 to parallelize across partitions while preserving consume order within each partition. Messages without `kafka_partition` metadata default to partition 0.
 
 == Examples
 
