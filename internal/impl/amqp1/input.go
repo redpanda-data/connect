@@ -261,9 +261,19 @@ func (a *amqp1Reader) ReadBatch(ctx context.Context) (service.MessageBatch, serv
 	}
 
 	if amqpMsg.Properties != nil {
+		amqpSetMetadata(part, "amqp_to", amqpMsg.Properties.To)
 		amqpSetMetadata(part, "amqp_content_type", amqpMsg.Properties.ContentType)
 		amqpSetMetadata(part, "amqp_content_encoding", amqpMsg.Properties.ContentEncoding)
 		amqpSetMetadata(part, "amqp_creation_time", amqpMsg.Properties.CreationTime)
+		amqpSetMetadata(part, "amqp_message_id", amqpMsg.Properties.MessageID)
+		amqpSetMetadata(part, "amqp_correlation_id", amqpMsg.Properties.CorrelationID)
+		amqpSetMetadata(part, "amqp_subject", amqpMsg.Properties.Subject)
+		amqpSetMetadata(part, "amqp_reply_to", amqpMsg.Properties.ReplyTo)
+		amqpSetMetadata(part, "amqp_group_id", amqpMsg.Properties.GroupID)
+		amqpSetMetadata(part, "amqp_group_sequence", amqpMsg.Properties.GroupSequence)
+		amqpSetMetadata(part, "amqp_reply_to_group_id", amqpMsg.Properties.ReplyToGroupID)
+		amqpSetMetadata(part, "amqp_user_id", amqpMsg.Properties.UserID)
+		amqpSetMetadata(part, "amqp_absolute_expiry_time", amqpMsg.Properties.AbsoluteExpiryTime)
 	}
 	if a.getHeader && amqpMsg.Header != nil {
 		amqpSetMetadata(part, "amqp_durable", amqpMsg.Header.Durable)
@@ -522,16 +532,30 @@ func amqpSetMetadata(p *service.Message, k string, v any) {
 		metaValue = strconv.Itoa(int(v))
 	case int64:
 		metaValue = strconv.Itoa(int(v))
+	case uint64:
+		metaValue = strconv.FormatUint(v, 10)
+	case amqp.UUID:
+		metaValue = v.String()
 	case nil:
 		metaValue = ""
 	case string:
 		metaValue = v
 	case *string:
-		metaValue = *v
+		if v != nil {
+			metaValue = *v
+		}
 	case []byte:
 		metaValue = string(v)
+	case *uint32:
+		if v != nil {
+			metaValue = strconv.FormatUint(uint64(*v), 10)
+		}
 	case time.Time:
 		metaValue = v.Format(time.RFC3339)
+	case *time.Time:
+		if v != nil {
+			metaValue = v.Format(time.RFC3339)
+		}
 	case time.Duration:
 		metaValue = v.String()
 	default:

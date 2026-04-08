@@ -75,6 +75,16 @@ output:
     persistent: false
     target_capabilities: [] # No default (optional)
     message_properties_to: amqp://localhost:5672/ # No default (optional)
+    message_properties_message_id: ${! uuid_v4() } # No default (optional)
+    message_properties_correlation_id: ${! meta("amqp_correlation_id") } # No default (optional)
+    message_properties_subject: "" # No default (optional)
+    message_properties_reply_to: "" # No default (optional)
+    message_properties_group_id: "" # No default (optional)
+    message_properties_group_sequence: "" # No default (optional)
+    message_properties_reply_to_group_id: "" # No default (optional)
+    message_properties_user_id: "" # No default (optional)
+    message_properties_content_type: application/json # No default (optional)
+    message_properties_content_encoding: "" # No default (optional)
 ```
 
 --
@@ -453,5 +463,117 @@ message_properties_to: amqp://localhost:5672/
 
 message_properties_to: ${! meta("target_address") }
 ```
+
+=== `message_properties_message_id`
+
+Set the message-id property on outgoing AMQP messages. The value is auto-detected as UUID, uint64, or string. Purely numeric values are sent as uint64 on the wire. This field supports Bloblang interpolation.
+This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
+
+
+*Type*: `string`
+
+
+```yml
+# Examples
+
+message_properties_message_id: ${! uuid_v4() }
+
+message_properties_message_id: ${! meta("amqp_message_id") }
+```
+
+=== `message_properties_correlation_id`
+
+Set the correlation-id property on outgoing AMQP messages. The value is auto-detected as UUID, uint64, or string. Purely numeric values are sent as uint64 on the wire. This field supports Bloblang interpolation.
+This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
+
+
+*Type*: `string`
+
+
+```yml
+# Examples
+
+message_properties_correlation_id: ${! meta("amqp_correlation_id") }
+```
+
+=== `message_properties_subject`
+
+Set the subject property on outgoing AMQP messages. This field supports Bloblang interpolation.
+This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
+
+
+*Type*: `string`
+
+
+=== `message_properties_reply_to`
+
+Set the reply-to property on outgoing AMQP messages. This field supports Bloblang interpolation.
+This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
+
+
+*Type*: `string`
+
+
+=== `message_properties_group_id`
+
+Set the group-id property on outgoing AMQP messages. This field supports Bloblang interpolation.
+This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
+
+
+*Type*: `string`
+
+
+=== `message_properties_group_sequence`
+
+Set the group-sequence property on outgoing AMQP messages. Must be a valid uint32 value. This field supports Bloblang interpolation.
+This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
+
+
+*Type*: `string`
+
+
+=== `message_properties_reply_to_group_id`
+
+Set the reply-to-group-id property on outgoing AMQP messages. This field supports Bloblang interpolation.
+This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
+
+
+*Type*: `string`
+
+
+=== `message_properties_user_id`
+
+Set the user-id property on outgoing AMQP messages. This field supports Bloblang interpolation.
+This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
+
+
+*Type*: `string`
+
+
+=== `message_properties_content_type`
+
+Set the content-type property on outgoing AMQP messages. This field supports Bloblang interpolation.
+This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
+
+
+*Type*: `string`
+
+
+```yml
+# Examples
+
+message_properties_content_type: application/json
+
+message_properties_content_type: text/plain; charset=utf-8
+```
+
+=== `message_properties_content_encoding`
+
+Set the content-encoding property on outgoing AMQP messages. This field supports Bloblang interpolation.
+This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
+
+
+*Type*: `string`
+
 
 
