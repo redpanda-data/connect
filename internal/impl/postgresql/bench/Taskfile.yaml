@@ -20,7 +20,7 @@ tasks:
           -p 5432:5432 \
           postgres:16 \
           -c wal_level=logical
-      - sleep 5
+      - until pg_isready -h localhost -p 5432; do sleep 1; done
 
   postgres:down:
     desc: Stop and remove PostgreSQL container
