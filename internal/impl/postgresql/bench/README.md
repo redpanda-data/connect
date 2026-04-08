@@ -40,12 +40,13 @@ task psql:data:cart      # 10M rows, small payloads
 
 ## Benchmark Tasks
 
-### Parameterised cart benchmark
+### Parameterised benchmarks
 
-The main benchmark task — runs the cart snapshot with configurable core count and batch size:
+Truncate, load the dataset, and run with configurable core count and batch size:
 
 ```bash
-task bench:cart CORES=4 BATCH=5000
+task bench:users CORES=2 BATCH=1000   # 150K large rows (~625 KB each) — I/O bound
+task bench:cart  CORES=4 BATCH=5000   # 10M small rows — CPU bound
 ```
 
 - `CORES` sets `GOMAXPROCS` (omit for unbounded)

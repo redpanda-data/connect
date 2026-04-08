@@ -149,7 +149,24 @@ tasks:
       - task psql:drop-slot
       - GOMAXPROCS=8 go run ../../../../cmd/redpanda-connect/main.go run ./benchmark_config.yaml
 
-  # Parameterised benchmark — specify CORES and BATCH freely
+  # Parameterised benchmarks — specify CORES and BATCH freely
+  # Usage: task bench:users CORES=2 BATCH=1000
+  bench:users:
+    desc: "Run users snapshot benchmark with given CORES and BATCH (e.g. task bench:users CORES=2 BATCH=1000)"
+    vars:
+      CORES: '{{.CORES | default ""}}'
+      BATCH: '{{.BATCH | default "1000"}}'
+    env:
+      PG_DSN: '{{.PG_DSN}}'
+    cmds:
+      - task psql:drop-slot
+      - psql {{.PG_DSN}} -c "TRUNCATE public.users, public.products, public.cart;"
+      - task psql:data:users
+      - |
+        GOMAXPROCS={{.CORES}} go run ../../../../cmd/redpanda-connect/main.go run \
+          --set input.postgres_cdc.batching.count={{.BATCH}} \
+          ./benchmark_config.yaml
+
   # Usage: task bench:cart CORES=4 BATCH=5000
   bench:cart:
     desc: "Run cart snapshot benchmark with given CORES and BATCH (e.g. task bench:cart CORES=4 BATCH=5000)"
