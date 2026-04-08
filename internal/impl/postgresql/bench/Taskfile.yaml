@@ -1,14 +1,22 @@
 version: "3"
 
+vars:
+  PG_DSN: '{{.PG_DSN | default "postgres://postgres:postgres@localhost:5432/testdb?sslmode=disable"}}'
+  # Strip ?sslmode=... for commands that don't accept query params (psql CLI ignores them, but
+  # be explicit so the default is obvious).  Override via: task <cmd> PG_DSN=postgres://...
+  PG_USER: '{{.PG_USER | default "postgres"}}'
+  PG_PASSWORD: '{{.PG_PASSWORD | default "postgres"}}'
+  PG_DB: '{{.PG_DB | default "testdb"}}'
+
 tasks:
   postgres:up:
     desc: Start PostgreSQL container with logical replication enabled
     cmds:
       - |
         docker run -d --name postgres-bench \
-          -e POSTGRES_USER=postgres \
-          -e POSTGRES_PASSWORD=postgres \
-          -e POSTGRES_DB=testdb \
+          -e POSTGRES_USER={{.PG_USER}} \
+          -e POSTGRES_PASSWORD={{.PG_PASSWORD}} \
+          -e POSTGRES_DB={{.PG_DB}} \
           -p 5432:5432 \
           postgres:16 \
           -c wal_level=logical
@@ -28,71 +36,81 @@ tasks:
   psql:
     desc: Open an interactive psql shell
     cmds:
-      - psql postgres://postgres:postgres@localhost:5432/testdb
+      - psql {{.PG_DSN}}
 
   psql:create:
     desc: Run create.sql to set up tables
     cmds:
-      - psql postgres://postgres:postgres@localhost:5432/testdb < create.sql
+      - psql {{.PG_DSN}} < create.sql
 
   psql:data:users:
     desc: Insert 150K users rows
     cmds:
-      - psql postgres://postgres:postgres@localhost:5432/testdb < users.sql
+      - psql {{.PG_DSN}} < users.sql
 
   psql:data:products:
     desc: Insert 150K products rows
     cmds:
-      - psql postgres://postgres:postgres@localhost:5432/testdb < products.sql
+      - psql {{.PG_DSN}} < products.sql
 
   psql:data:cart:
     desc: Insert 10M cart rows
     cmds:
-      - psql postgres://postgres:postgres@localhost:5432/testdb < cart.sql
+      - psql {{.PG_DSN}} < cart.sql
 
   psql:truncate:
     desc: Truncate all benchmark tables
     cmds:
-      - psql postgres://postgres:postgres@localhost:5432/testdb -c "TRUNCATE public.users, public.products, public.cart;"
+      - psql {{.PG_DSN}} -c "TRUNCATE public.users, public.products, public.cart;"
 
   psql:drop-slot:
     desc: Drop the bench_slot replication slot so benchmarks can be re-run
     cmds:
-      - psql postgres://postgres:postgres@localhost:5432/testdb -c "SELECT pg_drop_replication_slot('bench_slot') FROM pg_replication_slots WHERE slot_name = 'bench_slot';"
+      - psql {{.PG_DSN}} -c "SELECT pg_drop_replication_slot('bench_slot') FROM pg_replication_slots WHERE slot_name = 'bench_slot';"
 
   bench:run:
     desc: Run snapshot benchmark (stream_snapshot=true)
+    env:
+      PG_DSN: '{{.PG_DSN}}'
     cmds:
       - task psql:drop-slot
       - go run ../../../../cmd/redpanda-connect/main.go run ./benchmark_config.yaml
 
   bench:run:cdc:
     desc: Run CDC benchmark - start connector first, then insert data separately
+    env:
+      PG_DSN: '{{.PG_DSN}}'
     cmds:
       - task psql:drop-slot
       - go run ../../../../cmd/redpanda-connect/main.go run ./benchmark_config.yaml
 
   bench:snapshot:users:
     desc: Drop slot, insert 150K large-payload users rows, then run snapshot benchmark
+    env:
+      PG_DSN: '{{.PG_DSN}}'
     cmds:
       - task psql:drop-slot
-      - psql postgres://postgres:postgres@localhost:5432/testdb -c "TRUNCATE public.users, public.products, public.cart;"
+      - psql {{.PG_DSN}} -c "TRUNCATE public.users, public.products, public.cart;"
       - task psql:data:users
       - go run ../../../../cmd/redpanda-connect/main.go run ./benchmark_config.yaml
 
   bench:snapshot:cart:
     desc: Drop slot, insert 10M small cart rows, then run snapshot benchmark
+    env:
+      PG_DSN: '{{.PG_DSN}}'
     cmds:
       - task psql:drop-slot
-      - psql postgres://postgres:postgres@localhost:5432/testdb -c "TRUNCATE public.users, public.products, public.cart;"
+      - psql {{.PG_DSN}} -c "TRUNCATE public.users, public.products, public.cart;"
       - task psql:data:cart
       - go run ../../../../cmd/redpanda-connect/main.go run ./benchmark_config.yaml
 
   bench:snapshot:all:
     desc: Drop slot, insert all test data, then run snapshot benchmark
+    env:
+      PG_DSN: '{{.PG_DSN}}'
     cmds:
       - task psql:drop-slot
-      - psql postgres://postgres:postgres@localhost:5432/testdb -c "TRUNCATE public.users, public.products, public.cart;"
+      - psql {{.PG_DSN}} -c "TRUNCATE public.users, public.products, public.cart;"
       - task psql:data:users
       - task psql:data:products
       - task psql:data:cart
@@ -101,24 +119,32 @@ tasks:
   # CPU scaling benchmarks — vary GOMAXPROCS to measure per-core throughput
   bench:cores:1:
     desc: Run snapshot benchmark with GOMAXPROCS=1
+    env:
+      PG_DSN: '{{.PG_DSN}}'
     cmds:
       - task psql:drop-slot
       - GOMAXPROCS=1 go run ../../../../cmd/redpanda-connect/main.go run ./benchmark_config.yaml
 
   bench:cores:2:
     desc: Run snapshot benchmark with GOMAXPROCS=2
+    env:
+      PG_DSN: '{{.PG_DSN}}'
     cmds:
       - task psql:drop-slot
       - GOMAXPROCS=2 go run ../../../../cmd/redpanda-connect/main.go run ./benchmark_config.yaml
 
   bench:cores:4:
     desc: Run snapshot benchmark with GOMAXPROCS=4
+    env:
+      PG_DSN: '{{.PG_DSN}}'
     cmds:
       - task psql:drop-slot
       - GOMAXPROCS=4 go run ../../../../cmd/redpanda-connect/main.go run ./benchmark_config.yaml
 
   bench:cores:8:
     desc: Run snapshot benchmark with GOMAXPROCS=8
+    env:
+      PG_DSN: '{{.PG_DSN}}'
     cmds:
       - task psql:drop-slot
       - GOMAXPROCS=8 go run ../../../../cmd/redpanda-connect/main.go run ./benchmark_config.yaml
@@ -130,6 +156,8 @@ tasks:
     vars:
       CORES: '{{.CORES | default ""}}'
       BATCH: '{{.BATCH | default "1000"}}'
+    env:
+      PG_DSN: '{{.PG_DSN}}'
     cmds:
       - task psql:drop-slot
       - |

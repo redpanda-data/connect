@@ -3,7 +3,7 @@ http:
 
 input:
   postgres_cdc:
-    dsn: postgres://postgres:postgres@localhost:5432/testdb?sslmode=disable
+    dsn: ${PG_DSN:postgres://postgres:postgres@localhost:5432/testdb?sslmode=disable}
     stream_snapshot: true
     schema: public
     tables:
