@@ -1,16 +1,14 @@
--- PostgreSQL Benchmark - Products Data (150K rows, ~500KB per row)
+-- PostgreSQL Benchmark - Products Data (150K rows, large description blob for row-size parity with users)
 -- Prerequisites: Run create.sql first
 
-INSERT INTO public.products (name, surname, about, email, date_of_birth, join_date, created_at, is_active, login_count, balance)
+INSERT INTO public.products (name, description, category, price, stock, sku, created_at, is_available)
 SELECT
-    'product-' || n,
-    'surname-' || n,
-    repeat('This is about product ' || n || '. ', 25000),
-    'product' || n || '@example.com',
-    NOW() - (n % 10000 || ' days')::interval,
+    'Product ' || n,
+    repeat('Description for product ' || n || '. ', 25000),
+    (ARRAY['Electronics','Clothing','Books','Home & Garden','Sports','Toys','Food'])[1 + (n % 7)],
+    ((n % 99000) / 100.0 + 1.0)::decimal(10,2),
+    (n % 500),
+    'SKU-' || LPAD(n::text, 8, '0'),
     NOW(),
-    NOW(),
-    (n % 2 = 0),
-    n % 100,
-    ((n % 1000) + (n % 100) / 100.0)::decimal(10,2)
+    (n % 10 != 0)
 FROM generate_series(1, 150000) AS n;
