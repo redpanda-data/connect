@@ -54,7 +54,7 @@ Full snapshot of the `public.users` table: 150,000 rows, ~625 KB per row. Varyin
 | GOMAXPROCS  | batch=1000 | batch=5000 | batch=10000 |
 |-------------|------------|------------|-------------|
 | 1           |        883 |        843 |         N/A |
-| 2           |      1,166 |        N/A |         N/A |
+| 2           |      1,166 |      1,134 |       1,024 |
 | 4           |      1,145 |        N/A |         N/A |
 | 8           |      1,145 |        N/A |         N/A |
 
@@ -63,7 +63,7 @@ Full snapshot of the `public.users` table: 150,000 rows, ~625 KB per row. Varyin
 | GOMAXPROCS  | batch=1000 | batch=5000 | batch=10000 |
 |-------------|------------|------------|-------------|
 | 1           |        580 |        554 |         N/A |
-| 2           |        766 |        N/A |         N/A |
+| 2           |        766 |        745 |         673 |
 | 4           |        752 |        N/A |         N/A |
 | 8           |        752 |        N/A |         N/A |
 
