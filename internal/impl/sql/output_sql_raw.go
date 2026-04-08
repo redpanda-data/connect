@@ -380,8 +380,12 @@ func (s *sqlRawOutput) WriteBatch(ctx context.Context, batch service.MessageBatc
 		}
 	}
 
-	if err = tx.Commit(); err != nil {
-		return fmt.Errorf("committing transaction: %w", err)
+	// Clear err before commit so the deferred rollback does not fire on a
+	// commit failure — after a failed commit the transaction is already
+	// finalized and Rollback would return sql.ErrTxDone.
+	err = nil
+	if commitErr := tx.Commit(); commitErr != nil {
+		return fmt.Errorf("committing transaction: %w", commitErr)
 	}
 	return nil
 }
