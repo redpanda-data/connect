@@ -26,56 +26,66 @@ func NewHyperPbDecoder(
 	opts ProfilingOptions,
 ) ProtobufDecoder {
 	msgType := hyperpb.CompileMessageDescriptor(md)
-	parser := &hyperPbParser{}
-	parser.state.Store(&hyperPbParserState{
-		msgType: msgType,
-		profile: msgType.NewProfile(),
-	})
-	parser.pool.New = func() any {
-		return new(hyperpb.Shared)
-	}
-	parser.opts = opts
+	parser := &hyperPbParser{opts: opts}
+	parser.state.Store(newHyperPbParserState(msgType, msgType.NewProfile()))
 	return parser
 }
 
+// hyperPbParserState bundles a compiled MessageType, its active Profile, and
+// the Shared pool that goroutines use while this state is current.
+//
+// Keeping the pool inside the state means that when the state is atomically
+// replaced after a profile-guided recompile, the old pool travels with the old
+// state. Once every goroutine that loaded the old state has finished its call
+// (returning its Shared back to the old pool), the old state — together with
+// its pool and all its Shards — becomes unreachable and can be collected by
+// the GC as a unit.
 type hyperPbParserState struct {
 	msgType *hyperpb.MessageType
 	profile *hyperpb.Profile
+	pool    *sync.Pool
+}
+
+func newHyperPbParserState(msgType *hyperpb.MessageType, profile *hyperpb.Profile) *hyperPbParserState {
+	return &hyperPbParserState{
+		msgType: msgType,
+		profile: profile,
+		pool:    &sync.Pool{New: func() any { return new(hyperpb.Shared) }},
+	}
 }
 
 type hyperPbParser struct {
 	state atomic.Pointer[hyperPbParserState]
-	pool  sync.Pool
 	opts  ProfilingOptions
 	seen  atomic.Int64
 }
 
 var _ ProtobufDecoder = (*hyperPbParser)(nil)
 
-// WithDecoded implements ProtobufParser.
+// WithDecoded implements ProtobufDecoder.
 func (p *hyperPbParser) WithDecoded(buf []byte, cb func(msg proto.Message) error) error {
-	shared := p.pool.Get().(*hyperpb.Shared)
+	// Load state once so that the Shared obtained below is always returned to
+	// the same pool it came from, even if the state is swapped mid-call.
+	state := p.state.Load()
+	shared := state.pool.Get().(*hyperpb.Shared)
 	defer func() {
 		shared.Free()
-		p.pool.Put(shared)
+		state.pool.Put(shared)
 	}()
-	state := p.state.Load()
 	msg := shared.NewMessage(state.msgType)
 	if err := msg.Unmarshal(buf, hyperpb.WithRecordProfile(state.profile, p.opts.Rate)); err != nil {
 		return err
 	}
 	if state.profile != nil && p.seen.Add(1)%p.opts.RecompileInterval == 0 {
-		// Temporarily disable profiling while we recompile (to prevent races where we recompile multiple at once)
-		temp := &hyperPbParserState{msgType: state.msgType}
-		success := p.state.CompareAndSwap(state, temp)
-		if success {
-			// Do recompilation in the background as it can be slow
+		// Temporarily disable profiling while we recompile (to prevent races
+		// where multiple goroutines trigger simultaneous recompiles).
+		temp := newHyperPbParserState(state.msgType, nil)
+		if p.state.CompareAndSwap(state, temp) {
+			// Do recompilation in the background — it can be slow.
 			go func() {
 				recompiled := state.msgType.Recompile(state.profile)
-				p.state.Store(&hyperPbParserState{
-					msgType: recompiled,
-					profile: recompiled.NewProfile(),
-				})
+				next := newHyperPbParserState(recompiled, recompiled.NewProfile())
+				p.state.Store(next)
 			}()
 		}
 	}
