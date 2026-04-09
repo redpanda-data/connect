@@ -70,7 +70,7 @@ func outputSpec() *service.ConfigSpec {
 		Categories("Services").
 		Summary("Writes data to an Arc database via the msgpack ingestion endpoint.").
 		Description(`
-This output sends data to an https://arc.basekick.net[Arc^] columnar analytical database using its high-performance MessagePack ingestion endpoint.
+This output sends data to an https://github.com/Basekick-Labs/arc[Arc^] columnar analytical database using its high-performance MessagePack ingestion endpoint.
 
 Arc supports two payload formats:
 
