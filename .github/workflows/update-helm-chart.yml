@@ -1,0 +1,113 @@
+name: Update Helm Chart
+
+on:
+  release:
+    types: [released]
+  workflow_dispatch:
+
+concurrency:
+  group: update-helm-chart
+  cancel-in-progress: true
+
+jobs:
+  update-helm-chart:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          aws-region: ${{ vars.RP_AWS_CRED_REGION }}
+          role-to-assume: arn:aws:iam::${{ secrets.RP_AWS_CRED_ACCOUNT_ID }}:role/${{ vars.RP_AWS_CRED_BASE_ROLE_NAME }}${{ github.event.repository.name }}
+
+      - name: Get secrets from AWS Secrets Manager
+        uses: aws-actions/aws-secretsmanager-get-secrets@v3
+        with:
+          secret-ids: |
+            ,sdlc/prod/github/actions_bot_token
+          parse-json-secrets: true
+
+      - name: Get release version
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          EVENT_NAME: ${{ github.event_name }}
+          TAG_NAME: ${{ github.event.release.tag_name }}
+        run: |
+          if [ "$EVENT_NAME" = "release" ]; then
+            VERSION="$TAG_NAME"
+          else
+            VERSION=$(gh release view --json tagName -q '.tagName')
+          fi
+          echo "connect=${VERSION#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Clone helm-charts
+        run: |
+          git clone --depth 1 "https://x-access-token:${ACTIONS_BOT_TOKEN}@github.com/redpanda-data/helm-charts.git" helm-charts
+          cd helm-charts
+          git config user.name "vbotbuildovich"
+          git config user.email "62446873+vbotbuildovich@users.noreply.github.com"
+
+      - name: Update Chart.yaml
+        id: chart
+        working-directory: helm-charts
+        env:
+          CONNECT_VERSION: ${{ steps.version.outputs.connect }}
+        run: |
+          CHART="charts/connect/Chart.yaml"
+
+          CURRENT=$(yq '.version' "$CHART")
+          CHART_VERSION="${CURRENT%.*}.$((${CURRENT##*.} + 1))"
+
+          yq -i ".version = \"$CHART_VERSION\" | .appVersion = \"$CONNECT_VERSION\"" "$CHART"
+          sed -Ei "s|connect:[0-9]+\.[0-9]+\.[0-9]+|connect:${CONNECT_VERSION}|" "$CHART"
+
+          echo "chart_version=$CHART_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Update README.md
+        working-directory: helm-charts
+        env:
+          CONNECT_VERSION: ${{ steps.version.outputs.connect }}
+          CHART_VERSION: ${{ steps.chart.outputs.chart_version }}
+        run: |
+          sed -Ei \
+            -e "s|Version-[0-9]+\.[0-9]+\.[0-9]+|Version-${CHART_VERSION}|g" \
+            -e "s|Version: [0-9]+\.[0-9]+\.[0-9]+|Version: ${CHART_VERSION}|g" \
+            -e "s|AppVersion-[0-9]+\.[0-9]+\.[0-9]+|AppVersion-${CONNECT_VERSION}|g" \
+            -e "s|AppVersion: [0-9]+\.[0-9]+\.[0-9]+|AppVersion: ${CONNECT_VERSION}|g" \
+            charts/connect/README.md
+
+      - name: Create or update PR
+        working-directory: helm-charts
+        env:
+          GH_TOKEN: ${{ env.ACTIONS_BOT_TOKEN }}
+          CONNECT_VERSION: ${{ steps.version.outputs.connect }}
+          CHART_VERSION: ${{ steps.chart.outputs.chart_version }}
+        run: |
+          BRANCH="auto/bump-connect"
+
+          git checkout -B "$BRANCH"
+          git add charts/connect/
+          git commit -m "connect: bump version to $CONNECT_VERSION"
+          git push -f origin "$BRANCH"
+
+          printf 'Automated bump of Redpanda Connect to %s.\n\nUpdates:\n- `appVersion` → `%s`\n- Chart `version` → `%s`\n- ArtifactHub image tag → `connect:%s`\n' \
+            "$CONNECT_VERSION" "$CONNECT_VERSION" "$CHART_VERSION" "$CONNECT_VERSION" \
+            > "$RUNNER_TEMP/pr-body.md"
+
+          EXISTING_PR=$(gh pr list --head "$BRANCH" --json number -q '.[0].number')
+          if [ -n "$EXISTING_PR" ]; then
+            gh pr edit "$EXISTING_PR" \
+              --title "connect: bump version to $CONNECT_VERSION" \
+              --body-file "$RUNNER_TEMP/pr-body.md"
+          else
+            gh pr create \
+              --title "connect: bump version to $CONNECT_VERSION" \
+              --body-file "$RUNNER_TEMP/pr-body.md" \
+              --base main \
+              --head "$BRANCH"
+          fi
