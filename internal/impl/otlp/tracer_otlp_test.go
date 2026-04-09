@@ -19,7 +19,7 @@ import (
 )
 
 func TestConfigParsingAddresses(t *testing.T) {
-	pConf, err := oltpSpec().ParseYAML(`
+	pConf, err := otlpTracerSpec().ParseYAML(`
 http:
   - address: foo:123
   - address: foo:456
@@ -36,7 +36,7 @@ sampling:
 `, nil)
 	require.NoError(t, err)
 
-	cConf, err := oltpConfigFromParsed(pConf)
+	cConf, err := otlpTracerConfigFromParsed(pConf)
 	require.NoError(t, err)
 
 	assert.True(t, cConf.sampling.enabled)
@@ -60,7 +60,7 @@ sampling:
 }
 
 func TestConfigParsingDeprecated(t *testing.T) {
-	pConf, err := oltpSpec().ParseYAML(`
+	pConf, err := otlpTracerSpec().ParseYAML(`
 http:
   - url: foo:123
   - url: foo:456
@@ -77,7 +77,7 @@ sampling:
 `, nil)
 	require.NoError(t, err)
 
-	cConf, err := oltpConfigFromParsed(pConf)
+	cConf, err := otlpTracerConfigFromParsed(pConf)
 	require.NoError(t, err)
 
 	assert.True(t, cConf.sampling.enabled)
