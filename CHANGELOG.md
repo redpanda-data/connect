@@ -3,6 +3,25 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.87.0 - 2026-04-09
+
+### Added
+
+- amqp_1: AMQP 1.0 input now extracts all standard message properties as metadata, and output supports setting them via interpolated string config fields with UUID/uint64/string auto-detection. ([@mmatczuk](https://github.com/mmatczuk), [#4225](https://github.com/redpanda-data/connect/pull/4225))
+- general: Added cmd/tools/integration, a CLI tool for running integration tests package-by-package with caching, resume capability, and detailed failure output. ([@mmatczuk](https://github.com/mmatczuk), [#4198](https://github.com/redpanda-data/connect/pull/4198))
+- mssqlserver_cdc: Added support for remote checkpoint caching in MSSQL Server CDC input via new `checkpoint_cache_connection_string` configuration field. ([@josephwoodward](https://github.com/josephwoodward), [#4214](https://github.com/redpanda-data/connect/pull/4214))
+- oracledb_cdc: Added Oracle Wallet authentication support to oracledb_cdc input via `wallet_path` and `wallet_password` configuration fields. ([@josephwoodward](https://github.com/josephwoodward), [#4219](https://github.com/redpanda-data/connect/pull/4219))
+- sql: Added batching support to sql_raw output with per-message conditional query execution via new `when` field. ([@squiidz](https://github.com/squiidz), [#4200](https://github.com/redpanda-data/connect/pull/4200))
+
+### Fixed
+
+- oracledb_cdc: Fixed Oracle CDC LogMiner handling of zero-padded HEXTORAW values and corrected DELETE/UPDATE operations to include proper message content and primary keys. ([@josephwoodward](https://github.com/josephwoodward), [#4217](https://github.com/redpanda-data/connect/pull/4217))
+
+### Changed
+
+- avro: Replaced linkedin/goavro and hamba/avro libraries with twmb/avro across confluent, avro, and salesforce packages, simplifying type handling and enabling support for RFC 3339 timestamp strings in JSON input. ([@twmb](https://github.com/twmb), [#4195](https://github.com/redpanda-data/connect/pull/4195))
+- iceberg: Apache Iceberg table output now automatically upgrades v1 tables to v2 format during commit transactions. ([@rockwotj](https://github.com/rockwotj), [#4212](https://github.com/redpanda-data/connect/pull/4212))
+
 ## 4.86.0 - 2026-04-02
 
 ### Added
