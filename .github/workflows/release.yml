@@ -206,21 +206,16 @@ jobs:
           RELEASE_JSON=$(gh api repos/${{ github.repository }}/releases/tags/${{ github.ref_name }})
           RELEASE_URL=$(echo "$RELEASE_JSON" | jq -r '.html_url')
           AUTHOR=$(echo "$RELEASE_JSON" | jq -r '.author.login')
-          echo "html_url=$RELEASE_URL" >> "$GITHUB_OUTPUT"
-          echo "author=$AUTHOR" >> "$GITHUB_OUTPUT"
-          # Write multiline body to a file to avoid output truncation
-          echo "$RELEASE_JSON" | jq -r '.body' | tr -d '\r' > /tmp/release_body.md
-          # Convert markdown headers (### Foo) to Slack bold (*Foo*)
-          sed -i 's/^### \(.*\)$/*\1*/g' /tmp/release_body.md
-          # Convert markdown links [text](url) to Slack format <url|text>
-          sed -i -E 's/\[([^]]*)\]\(([^)]*)\)/<\2|\1>/g' /tmp/release_body.md
-          # Bold the component name before the colon on each list item (- foo: ... -> - *foo*: ...)
-          sed -i -E 's/^(- )([^:]+):/\1*\2*:/' /tmp/release_body.md
-          # Build Slack Block Kit payload as JSON to correctly handle newlines and special characters
+          echo "$RELEASE_JSON" | jq -r '.body' | tr -d '\r' > "$RUNNER_TEMP/release_body.md"
+          sed -i -E \
+            -e 's/^### (.*)$/*\1*/' \
+            -e 's/\[([^]]*)\]\(([^)]*)\)/<\2|\1>/g' \
+            -e 's/^(- )([^:]+):/\1*\2*:/' \
+            "$RUNNER_TEMP/release_body.md"
           VERSION="${{ github.ref_name }}"
           COMPARE_URL="${{ github.server_url }}/${{ github.repository }}/compare/${{ github.ref_name }}"
           jq -n \
-            --rawfile body /tmp/release_body.md \
+            --rawfile body "$RUNNER_TEMP/release_body.md" \
             --arg release_url "$RELEASE_URL" \
             --arg author "$AUTHOR" \
             --arg version "$VERSION" \
@@ -242,11 +237,11 @@ jobs:
                   {type: "button", text: {type: "plain_text", text: ":page_facing_up: Full Changelog", emoji: true}, url: $compare_url}
                 ]}
               ]
-            }' > /tmp/slack_payload.json
+            }' > "$RUNNER_TEMP/slack_payload.json"
 
       - name: Post changelog to Slack
         uses: slackapi/slack-github-action@v3.0.1
         with:
           webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
           webhook-type: incoming-webhook
-          payload-file-path: /tmp/slack_payload.json
+          payload-file-path: ${{ runner.temp }}/slack_payload.json
