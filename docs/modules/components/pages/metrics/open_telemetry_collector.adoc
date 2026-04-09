@@ -1,5 +1,5 @@
 = open_telemetry_collector
-:type: tracer
+:type: metrics
 :status: stable
 
 
@@ -16,13 +16,13 @@
      https://github.com/redpanda-data/connect/tree/main/cmd/tools/docs_gen/templates/plugin.adoc.tmpl
 ////
 
-// © 2026 Redpanda Data Inc.
+// © 2024 Redpanda Data Inc.
 
 
 component_type_dropdown::[]
 
 
-Send tracing events to an https://opentelemetry.io/docs/collector/[Open Telemetry collector^].
+Send metrics to an https://opentelemetry.io/docs/collector/[Open Telemetry collector^].
 
 
 [tabs]
@@ -33,14 +33,12 @@ Common::
 
 ```yml
 # Common config fields, showing default values
-tracer:
+metrics:
   open_telemetry_collector:
     service: benthos
     http: [] # No default (required)
     grpc: [] # No default (required)
-    sampling:
-      enabled: false
-      ratio: 0.85 # No default (optional)
+  mapping: ""
 ```
 
 --
@@ -50,15 +48,13 @@ Advanced::
 
 ```yml
 # All config fields, showing default values
-tracer:
+metrics:
   open_telemetry_collector:
     service: benthos
     http: [] # No default (required)
     grpc: [] # No default (required)
     tags: {}
-    sampling:
-      enabled: false
-      ratio: 0.85 # No default (optional)
+  mapping: ""
 ```
 
 --
@@ -68,7 +64,7 @@ tracer:
 
 === `service`
 
-The name of the service in traces.
+The name of the service in metrics.
 
 
 *Type*: `string`
@@ -145,39 +141,5 @@ A map of tags to add to all exported spans and metrics.
 *Type*: `object`
 
 *Default*: `{}`
-
-=== `sampling`
-
-Settings for trace sampling. Sampling is recommended for high-volume production workloads.
-
-
-*Type*: `object`
-
-Requires version 4.25.0 or newer
-
-=== `sampling.enabled`
-
-Whether to enable sampling.
-
-
-*Type*: `bool`
-
-*Default*: `false`
-
-=== `sampling.ratio`
-
-Sets the ratio of traces to sample.
-
-
-*Type*: `float`
-
-
-```yml
-# Examples
-
-ratio: 0.85
-
-ratio: 0.5
-```
 
 
