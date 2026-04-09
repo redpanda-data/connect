@@ -43,13 +43,13 @@ output:
     dataset: "" # No default (required)
     table: "" # No default (required)
     message_format: json
-    credentials_json: ""
     max_in_flight: 64
     batching:
       count: 0
       byte_size: 0
       period: ""
       check: ""
+    credentials_json: ""
 ```
 
 --
@@ -66,6 +66,13 @@ output:
     dataset: "" # No default (required)
     table: "" # No default (required)
     message_format: json
+    max_in_flight: 64
+    batching:
+      count: 0
+      byte_size: 0
+      period: ""
+      check: ""
+      processors: [] # No default (optional)
     credentials_json: ""
     target_principal: ""
     delegates: []
@@ -74,31 +81,23 @@ output:
     endpoint:
       http: ""
       grpc: ""
-    max_in_flight: 64
-    batching:
-      count: 0
-      byte_size: 0
-      period: ""
-      check: ""
-      processors: [] # No default (optional)
 ```
 
 --
 ======
 
-Writes messages to a BigQuery table using the Storage Write API, which provides
-higher throughput and lower latency than the legacy streaming API or load jobs.
+Writes messages to a BigQuery table using the Storage Write API.
+This provides higher throughput and lower latency than the legacy streaming API or load jobs.
 
-Messages can be formatted as JSON (default) or raw protobuf bytes. When using
-JSON format the component automatically fetches the table schema and converts
-each message to the corresponding proto representation.
+Messages can be formatted as JSON (default) or raw protobuf bytes.
+When using JSON format the component automatically fetches the table schema and converts each message to the corresponding proto representation.
 
 WARNING: The proto3 JSON mapping encodes int64 and uint64 values as strings.
-JSON messages with integer fields must use string values (e.g. `"age": "30"`
-not `"age": 30`), otherwise the write will fail with an unmarshalling error.
+JSON messages with integer fields must use string values (e.g. `"age": "30"` not `"age": 30`).
+Otherwise the write will fail with an unmarshalling error.
 
-When batching is enabled the table name is resolved from the first message in
-each batch; all messages in the same batch are written to that table.
+When batching is enabled the table name is resolved from the first message in each batch.
+All messages in the same batch are written to that table.
 
 
 == Fields
@@ -131,7 +130,7 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 
 === `message_format`
 
-The format of input messages. Use 'json' to have the component convert JSON to proto automatically, or 'protobuf' to supply raw proto-encoded bytes.
+The format of input messages. Use 'json' to have the component convert JSON to proto automatically. Use 'protobuf' to supply raw proto-encoded bytes.
 
 
 *Type*: `string`
@@ -142,82 +141,6 @@ Options:
 `json`
 , `protobuf`
 .
-
-=== `credentials_json`
-
-An optional JSON string containing GCP credentials. If empty, credentials are loaded from the environment.
-[CAUTION]
-====
-This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
-====
-
-
-
-*Type*: `string`
-
-*Default*: `""`
-
-=== `target_principal`
-
-Service account email to impersonate. When set, the output obtains tokens acting as this service account. Requires the caller to have roles/iam.serviceAccountTokenCreator on the target.
-
-
-*Type*: `string`
-
-*Default*: `""`
-
-=== `delegates`
-
-Optional delegation chain for chained service account impersonation. Each service account must be granted roles/iam.serviceAccountTokenCreator on the next in the chain.
-
-
-*Type*: `array`
-
-*Default*: `[]`
-
-=== `stream_idle_timeout`
-
-How long a cached stream can remain unused before being closed. Relevant when the table field uses interpolation to route to many tables.
-
-
-*Type*: `string`
-
-*Default*: `"5m"`
-
-=== `stream_sweep_interval`
-
-How often to check for idle streams to close.
-
-
-*Type*: `string`
-
-*Default*: `"1m"`
-
-=== `endpoint`
-
-Optional endpoint overrides for the BigQuery and Storage Write API clients.
-
-
-*Type*: `object`
-
-
-=== `endpoint.http`
-
-Override the BigQuery HTTP endpoint. Useful for local emulators.
-
-
-*Type*: `string`
-
-*Default*: `""`
-
-=== `endpoint.grpc`
-
-Override the BigQuery Storage gRPC endpoint. Useful for local emulators.
-
-
-*Type*: `string`
-
-*Default*: `""`
 
 === `max_in_flight`
 
@@ -329,5 +252,81 @@ processors:
   - archive:
       format: json_array
 ```
+
+=== `credentials_json`
+
+An optional JSON string containing GCP credentials. If empty, credentials are loaded from the environment.
+[CAUTION]
+====
+This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
+====
+
+
+
+*Type*: `string`
+
+*Default*: `""`
+
+=== `target_principal`
+
+Service account email to impersonate. When set, the output obtains tokens acting as this service account. Requires the caller to have roles/iam.serviceAccountTokenCreator on the target.
+
+
+*Type*: `string`
+
+*Default*: `""`
+
+=== `delegates`
+
+Optional delegation chain for chained service account impersonation. Each service account must be granted roles/iam.serviceAccountTokenCreator on the next in the chain.
+
+
+*Type*: `array`
+
+*Default*: `[]`
+
+=== `stream_idle_timeout`
+
+How long a cached stream can remain unused before being closed. Relevant when the table field uses interpolation to route to many tables.
+
+
+*Type*: `string`
+
+*Default*: `"5m"`
+
+=== `stream_sweep_interval`
+
+How often to check for idle streams to close.
+
+
+*Type*: `string`
+
+*Default*: `"1m"`
+
+=== `endpoint`
+
+Optional endpoint overrides for the BigQuery and Storage Write API clients.
+
+
+*Type*: `object`
+
+
+=== `endpoint.http`
+
+Override the BigQuery HTTP endpoint. Useful for local emulators.
+
+
+*Type*: `string`
+
+*Default*: `""`
+
+=== `endpoint.grpc`
+
+Override the BigQuery Storage gRPC endpoint. Useful for local emulators.
+
+
+*Type*: `string`
+
+*Default*: `""`
 
 

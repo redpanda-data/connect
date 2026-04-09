@@ -58,9 +58,6 @@ func init() {
 		func(conf *service.ParsedConfig, mgr *service.Resources) (
 			out service.BatchOutput, batchPolicy service.BatchPolicy, maxInFlight int, err error,
 		) {
-			if err = license.CheckRunningEnterprise(mgr); err != nil {
-				return
-			}
 			if maxInFlight, err = conf.FieldMaxInFlight(); err != nil {
 				return
 			}
@@ -78,45 +75,56 @@ func bigQueryWriteAPISpec() *service.ConfigSpec {
 		Categories("GCP", "Services").
 		Summary("Streams data into BigQuery using the Storage Write API.").
 		Description(`
-Writes messages to a BigQuery table using the Storage Write API, which provides
-higher throughput and lower latency than the legacy streaming API or load jobs.
+Writes messages to a BigQuery table using the Storage Write API.
+This provides higher throughput and lower latency than the legacy streaming API or load jobs.
 
-Messages can be formatted as JSON (default) or raw protobuf bytes. When using
-JSON format the component automatically fetches the table schema and converts
-each message to the corresponding proto representation.
+Messages can be formatted as JSON (default) or raw protobuf bytes.
+When using JSON format the component automatically fetches the table schema and converts each message to the corresponding proto representation.
 
 WARNING: The proto3 JSON mapping encodes int64 and uint64 values as strings.
-JSON messages with integer fields must use string values (e.g. `+"`"+`"age": "30"`+"`"+`
-not `+"`"+`"age": 30`+"`"+`), otherwise the write will fail with an unmarshalling error.
+JSON messages with integer fields must use string values (e.g. `+"`"+`"age": "30"`+"`"+` not `+"`"+`"age": 30`+"`"+`).
+Otherwise the write will fail with an unmarshalling error.
 
-When batching is enabled the table name is resolved from the first message in
-each batch; all messages in the same batch are written to that table.
+When batching is enabled the table name is resolved from the first message in each batch.
+All messages in the same batch are written to that table.
 `).
 		Fields(
 			service.NewStringField(bqwaFieldProject).
-				Description("The GCP project ID. If empty, the project is auto-detected from the environment.").
+				Description("The GCP project ID."+
+					" If empty, the project is auto-detected from the environment.").
 				Default(""),
 			service.NewStringField(bqwaFieldDataset).
 				Description("The BigQuery dataset ID."),
 			service.NewInterpolatedStringField(bqwaFieldTable).
-				Description("The BigQuery table ID. Supports interpolation functions. When batching, resolved from the first message in each batch."),
+				Description("The BigQuery table ID."+
+					" Supports interpolation functions."+
+					" When batching, resolved from the first message in each batch."),
 			service.NewStringEnumField(bqwaFieldMessageFormat, "json", "protobuf").
-				Description("The format of input messages. Use 'json' to have the component convert JSON to proto automatically, or 'protobuf' to supply raw proto-encoded bytes.").
+				Description("The format of input messages."+
+					" Use 'json' to have the component convert JSON to proto automatically."+
+					" Use 'protobuf' to supply raw proto-encoded bytes.").
 				Default("json"),
+			service.NewOutputMaxInFlightField().Default(64),
+			service.NewBatchPolicyField(bqwaFieldBatching),
 			service.NewStringField(bqwaFieldCredentialsJSON).
-				Description("An optional JSON string containing GCP credentials. If empty, credentials are loaded from the environment.").
+				Description("An optional JSON string containing GCP credentials."+
+					" If empty, credentials are loaded from the environment.").
 				Secret().
 				Default(""),
 			service.NewStringField(bqwaFieldTargetPrincipal).
-				Description("Service account email to impersonate. When set, the output obtains tokens acting as this service account. Requires the caller to have roles/iam.serviceAccountTokenCreator on the target.").
+				Description("Service account email to impersonate."+
+					" When set, the output obtains tokens acting as this service account."+
+					" Requires the caller to have roles/iam.serviceAccountTokenCreator on the target.").
 				Advanced().
 				Default(""),
 			service.NewStringListField(bqwaFieldDelegates).
-				Description("Optional delegation chain for chained service account impersonation. Each service account must be granted roles/iam.serviceAccountTokenCreator on the next in the chain.").
+				Description("Optional delegation chain for chained service account impersonation."+
+					" Each service account must be granted roles/iam.serviceAccountTokenCreator on the next in the chain.").
 				Advanced().
 				Default([]any{}),
 			service.NewStringField(bqwaFieldStreamIdleTimeout).
-				Description("How long a cached stream can remain unused before being closed. Relevant when the table field uses interpolation to route to many tables.").
+				Description("How long a cached stream can remain unused before being closed."+
+					" Relevant when the table field uses interpolation to route to many tables.").
 				Advanced().
 				Default("5m"),
 			service.NewStringField(bqwaFieldStreamSweepInterval).
@@ -125,16 +133,16 @@ each batch; all messages in the same batch are written to that table.
 				Default("1m"),
 			service.NewObjectField(bqwaFieldEndpoint,
 				service.NewStringField(bqwaFieldEndpointHTTP).
-					Description("Override the BigQuery HTTP endpoint. Useful for local emulators.").
+					Description("Override the BigQuery HTTP endpoint."+
+						" Useful for local emulators.").
 					Default(""),
 				service.NewStringField(bqwaFieldEndpointGRPC).
-					Description("Override the BigQuery Storage gRPC endpoint. Useful for local emulators.").
+					Description("Override the BigQuery Storage gRPC endpoint."+
+						" Useful for local emulators.").
 					Default(""),
 			).
 				Description("Optional endpoint overrides for the BigQuery and Storage Write API clients.").
 				Advanced(),
-			service.NewOutputMaxInFlightField().Default(64),
-			service.NewBatchPolicyField(bqwaFieldBatching),
 		)
 }
 
@@ -285,6 +293,9 @@ type bigQueryWriteAPIOutput struct {
 var _ service.BatchOutput = (*bigQueryWriteAPIOutput)(nil)
 
 func bigQueryWriteAPIOutputFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (*bigQueryWriteAPIOutput, error) {
+	if err := license.CheckRunningEnterprise(mgr); err != nil {
+		return nil, err
+	}
 	cfg, err := bigQueryWriteAPIConfigFromParsed(conf)
 	if err != nil {
 		return nil, err

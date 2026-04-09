@@ -28,9 +28,26 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
+// newTestOutput creates a bigQueryWriteAPIOutput suitable for unit tests
+// that do not require a live BigQuery connection.
+func newTestOutput(t *testing.T, yaml string) *bigQueryWriteAPIOutput {
+	t.Helper()
+	spec := bigQueryWriteAPISpec()
+	pConf, err := spec.ParseYAML(yaml, nil)
+	require.NoError(t, err)
+	mgr := service.MockResources()
+	license.InjectTestService(mgr)
+	out, err := bigQueryWriteAPIOutputFromConfig(pConf, mgr)
+	require.NoError(t, err)
+	return out
+}
+
 func TestBigQueryWriteAPIConfigParsing(t *testing.T) {
+	// Given a minimal config with only required fields.
 	spec := bigQueryWriteAPISpec()
 	pConf, err := spec.ParseYAML(`
 dataset: my_dataset
@@ -38,20 +55,25 @@ table: my_table
 `, nil)
 	require.NoError(t, err)
 
+	// When we parse the config.
 	cfg, err := bigQueryWriteAPIConfigFromParsed(pConf)
 	require.NoError(t, err)
 
+	// Then defaults are applied correctly.
 	assert.Equal(t, bigquery.DetectProjectID, cfg.ProjectID)
 	assert.Equal(t, "my_dataset", cfg.DatasetID)
 	assert.Equal(t, "json", cfg.MessageFormat)
 	assert.Empty(t, cfg.CredentialsJSON)
 	assert.Empty(t, cfg.TargetPrincipal)
 	assert.Empty(t, cfg.Delegates)
+	assert.Equal(t, 5*time.Minute, cfg.StreamIdleTimeout)
+	assert.Equal(t, 1*time.Minute, cfg.StreamSweepInterval)
 	assert.Empty(t, cfg.EndpointHTTP)
 	assert.Empty(t, cfg.EndpointGRPC)
 }
 
 func TestBigQueryWriteAPIConfigParsingAllFields(t *testing.T) {
+	// Given a config with all fields explicitly set.
 	spec := bigQueryWriteAPISpec()
 	pConf, err := spec.ParseYAML(`
 project: my-project
@@ -62,21 +84,27 @@ credentials_json: '{"type":"service_account"}'
 target_principal: "sa@project.iam.gserviceaccount.com"
 delegates:
   - "delegate@project.iam.gserviceaccount.com"
+stream_idle_timeout: 10m
+stream_sweep_interval: 2m
 endpoint:
   http: http://localhost:9050
   grpc: localhost:9060
 `, nil)
 	require.NoError(t, err)
 
+	// When we parse the config.
 	cfg, err := bigQueryWriteAPIConfigFromParsed(pConf)
 	require.NoError(t, err)
 
+	// Then all values are parsed correctly.
 	assert.Equal(t, "my-project", cfg.ProjectID)
 	assert.Equal(t, "my_dataset", cfg.DatasetID)
 	assert.Equal(t, "protobuf", cfg.MessageFormat)
 	assert.Equal(t, `{"type":"service_account"}`, cfg.CredentialsJSON)
 	assert.Equal(t, "sa@project.iam.gserviceaccount.com", cfg.TargetPrincipal)
 	assert.Equal(t, []string{"delegate@project.iam.gserviceaccount.com"}, cfg.Delegates)
+	assert.Equal(t, 10*time.Minute, cfg.StreamIdleTimeout)
+	assert.Equal(t, 2*time.Minute, cfg.StreamSweepInterval)
 	assert.Equal(t, "http://localhost:9050", cfg.EndpointHTTP)
 	assert.Equal(t, "localhost:9060", cfg.EndpointGRPC)
 }
@@ -134,48 +162,43 @@ func TestJSONToProtoConversionWithNormalizedDescriptor(t *testing.T) {
 }
 
 func TestWriteBatchNotConnected(t *testing.T) {
-	spec := bigQueryWriteAPISpec()
-	pConf, err := spec.ParseYAML(`
+	// Given an output that has not been connected.
+	out := newTestOutput(t, `
 dataset: my_dataset
 table: my_table
-`, nil)
-	require.NoError(t, err)
+`)
 
-	out, err := bigQueryWriteAPIOutputFromConfig(pConf, service.MockResources())
-	require.NoError(t, err)
-
+	// When we write a batch.
 	batch := service.MessageBatch{service.NewMessage([]byte(`{"foo":"bar"}`))}
-	writeErr := out.WriteBatch(context.Background(), batch)
-	assert.ErrorIs(t, writeErr, service.ErrNotConnected)
+	err := out.WriteBatch(context.Background(), batch)
+
+	// Then it returns ErrNotConnected.
+	assert.ErrorIs(t, err, service.ErrNotConnected)
 }
 
 func TestWriteBatchEmptyBatch(t *testing.T) {
-	spec := bigQueryWriteAPISpec()
-	pConf, err := spec.ParseYAML(`
+	// Given an output that has not been connected.
+	out := newTestOutput(t, `
 dataset: my_dataset
 table: my_table
-`, nil)
-	require.NoError(t, err)
+`)
 
-	out, err := bigQueryWriteAPIOutputFromConfig(pConf, service.MockResources())
-	require.NoError(t, err)
+	// When we write an empty batch.
+	err := out.WriteBatch(context.Background(), service.MessageBatch{})
 
-	// Empty batch should return nil, not panic.
-	err = out.WriteBatch(context.Background(), service.MessageBatch{})
+	// Then it succeeds without error.
 	assert.NoError(t, err)
 }
 
 func TestCloseNilClients(t *testing.T) {
-	spec := bigQueryWriteAPISpec()
-	pConf, err := spec.ParseYAML(`
+	// Given an output that has never connected.
+	out := newTestOutput(t, `
 dataset: my_dataset
 table: my_table
-`, nil)
-	require.NoError(t, err)
+`)
 
-	out, err := bigQueryWriteAPIOutputFromConfig(pConf, service.MockResources())
-	require.NoError(t, err)
-
+	// When we close it.
+	// Then it does not panic or return an error.
 	assert.NotPanics(t, func() {
 		err := out.Close(context.Background())
 		assert.NoError(t, err)
@@ -183,13 +206,18 @@ table: my_table
 }
 
 func TestTableCacheKey(t *testing.T) {
-	out := &bigQueryWriteAPIOutput{
-		conf: bigQueryWriteAPIConfig{
-			ProjectID: "my-project",
-			DatasetID: "my_dataset",
-		},
-	}
-	assert.Equal(t, "projects/my-project/datasets/my_dataset/tables/my_table", out.tableCacheKey("my_table"))
+	// Given an output configured for a specific project and dataset.
+	out := newTestOutput(t, `
+project: my-project
+dataset: my_dataset
+table: my_table
+`)
+
+	// When we compute the cache key for a table.
+	key := out.tableCacheKey("my_table")
+
+	// Then it returns the fully qualified table resource path.
+	assert.Equal(t, "projects/my-project/datasets/my_dataset/tables/my_table", key)
 }
 
 func TestDescriptorProtoToMessageDescriptorErrors(t *testing.T) {
@@ -240,39 +268,24 @@ func TestDescriptorProtoToMessageDescriptorErrors(t *testing.T) {
 }
 
 func TestSweepIdleStreams(t *testing.T) {
-	out := &bigQueryWriteAPIOutput{
-		conf: bigQueryWriteAPIConfig{
-			StreamIdleTimeout:   5 * time.Minute,
-			StreamSweepInterval: 1 * time.Minute,
-		},
-		log:       service.MockResources().Logger(),
-		streams:   make(map[string]*streamWithDescriptor),
-		stopSweep: make(chan struct{}),
-	}
+	// Given an output with a stale stream (10 min old) and a fresh stream.
+	out := newTestOutput(t, `
+dataset: my_dataset
+table: my_table
+`)
+	out.streams = make(map[string]*streamWithDescriptor)
+	out.stopSweep = make(chan struct{})
 
-	// Add a stream that was last used well beyond the idle timeout.
 	stale := &streamWithDescriptor{}
 	stale.lastUsed.Store(time.Now().Add(-10 * time.Minute).UnixNano())
 	out.streams["projects/p/datasets/d/tables/stale"] = stale
 
-	// Add a stream that was just used.
 	fresh := &streamWithDescriptor{}
 	fresh.lastUsed.Store(time.Now().UnixNano())
 	out.streams["projects/p/datasets/d/tables/fresh"] = fresh
 
-	// Run one sweep cycle by calling sweepIdleStreams in a goroutine and
-	// stopping it after the first tick.
-	go func() {
-		// Give the sweep goroutine time to process one tick.
-		time.Sleep(100 * time.Millisecond)
-		close(out.stopSweep)
-	}()
-
-	// Use a very short sweep interval so the test completes quickly.
-	// We can't change the package constants, so we directly test the
-	// eviction logic instead.
+	// When we run the eviction logic.
 	now := time.Now()
-
 	out.streamsMu.Lock()
 	var evictedKeys []string
 	for key, swd := range out.streams {
@@ -284,6 +297,7 @@ func TestSweepIdleStreams(t *testing.T) {
 	}
 	out.streamsMu.Unlock()
 
+	// Then the stale stream is evicted and the fresh one remains.
 	assert.Equal(t, []string{"projects/p/datasets/d/tables/stale"}, evictedKeys)
 
 	out.streamsMu.RLock()
