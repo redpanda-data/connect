@@ -38,17 +38,19 @@ import (
 )
 
 const (
-	bqwaFieldProject         = "project"
-	bqwaFieldDataset         = "dataset"
-	bqwaFieldTable           = "table"
-	bqwaFieldMessageFormat   = "message_format"
-	bqwaFieldCredentialsJSON = "credentials_json"
-	bqwaFieldEndpoint        = "endpoint"
-	bqwaFieldEndpointHTTP    = "http"
-	bqwaFieldEndpointGRPC    = "grpc"
-	bqwaFieldBatching        = "batching"
-	bqwaFieldTargetPrincipal = "target_principal"
-	bqwaFieldDelegates       = "delegates"
+	bqwaFieldProject             = "project"
+	bqwaFieldDataset             = "dataset"
+	bqwaFieldTable               = "table"
+	bqwaFieldMessageFormat       = "message_format"
+	bqwaFieldCredentialsJSON     = "credentials_json"
+	bqwaFieldEndpoint            = "endpoint"
+	bqwaFieldEndpointHTTP        = "http"
+	bqwaFieldEndpointGRPC        = "grpc"
+	bqwaFieldBatching            = "batching"
+	bqwaFieldTargetPrincipal     = "target_principal"
+	bqwaFieldDelegates           = "delegates"
+	bqwaFieldStreamIdleTimeout   = "stream_idle_timeout"
+	bqwaFieldStreamSweepInterval = "stream_sweep_interval"
 )
 
 func init() {
@@ -113,6 +115,14 @@ each batch; all messages in the same batch are written to that table.
 				Description("Optional delegation chain for chained service account impersonation. Each service account must be granted roles/iam.serviceAccountTokenCreator on the next in the chain.").
 				Advanced().
 				Default([]any{}),
+			service.NewStringField(bqwaFieldStreamIdleTimeout).
+				Description("How long a cached stream can remain unused before being closed. Relevant when the table field uses interpolation to route to many tables.").
+				Advanced().
+				Default("5m"),
+			service.NewStringField(bqwaFieldStreamSweepInterval).
+				Description("How often to check for idle streams to close.").
+				Advanced().
+				Default("1m"),
 			service.NewObjectField(bqwaFieldEndpoint,
 				service.NewStringField(bqwaFieldEndpointHTTP).
 					Description("Override the BigQuery HTTP endpoint. Useful for local emulators.").
@@ -129,14 +139,16 @@ each batch; all messages in the same batch are written to that table.
 }
 
 type bigQueryWriteAPIConfig struct {
-	ProjectID       string
-	DatasetID       string
-	MessageFormat   string
-	CredentialsJSON string
-	TargetPrincipal string
-	Delegates       []string
-	EndpointHTTP    string
-	EndpointGRPC    string
+	ProjectID           string
+	DatasetID           string
+	MessageFormat       string
+	CredentialsJSON     string
+	TargetPrincipal     string
+	Delegates           []string
+	StreamIdleTimeout   time.Duration
+	StreamSweepInterval time.Duration
+	EndpointHTTP        string
+	EndpointGRPC        string
 }
 
 func bigQueryWriteAPIConfigFromParsed(pConf *service.ParsedConfig) (conf bigQueryWriteAPIConfig, err error) {
@@ -161,6 +173,21 @@ func bigQueryWriteAPIConfigFromParsed(pConf *service.ParsedConfig) (conf bigQuer
 	if conf.Delegates, err = pConf.FieldStringList(bqwaFieldDelegates); err != nil {
 		return
 	}
+	var idleTimeoutStr, sweepIntervalStr string
+	if idleTimeoutStr, err = pConf.FieldString(bqwaFieldStreamIdleTimeout); err != nil {
+		return
+	}
+	if conf.StreamIdleTimeout, err = time.ParseDuration(idleTimeoutStr); err != nil {
+		err = fmt.Errorf("invalid %s: %w", bqwaFieldStreamIdleTimeout, err)
+		return
+	}
+	if sweepIntervalStr, err = pConf.FieldString(bqwaFieldStreamSweepInterval); err != nil {
+		return
+	}
+	if conf.StreamSweepInterval, err = time.ParseDuration(sweepIntervalStr); err != nil {
+		err = fmt.Errorf("invalid %s: %w", bqwaFieldStreamSweepInterval, err)
+		return
+	}
 	epConf := pConf.Namespace(bqwaFieldEndpoint)
 	if conf.EndpointHTTP, err = epConf.FieldString(bqwaFieldEndpointHTTP); err != nil {
 		return
@@ -170,16 +197,6 @@ func bigQueryWriteAPIConfigFromParsed(pConf *service.ParsedConfig) (conf bigQuer
 	}
 	return
 }
-
-const (
-	// streamIdleTimeout is how long a cached stream can remain unused before
-	// being eligible for eviction by the idle sweep.
-	streamIdleTimeout = 5 * time.Minute
-
-	// streamSweepInterval is how often the background goroutine checks for
-	// idle streams.
-	streamSweepInterval = 1 * time.Minute
-)
 
 type bqwaMetrics struct {
 	rowsSent     *service.MetricCounter
@@ -556,12 +573,12 @@ func (o *bigQueryWriteAPIOutput) evictStream(cacheKey string) {
 }
 
 // sweepIdleStreams periodically evicts streams that haven't been used within
-// streamIdleTimeout. This prevents unbounded growth of the stream cache when
+// the configured idle timeout. This prevents unbounded growth of the stream cache when
 // the table field uses interpolation and routes to many distinct tables.
 func (o *bigQueryWriteAPIOutput) sweepIdleStreams() {
 	defer o.sweepWg.Done()
 
-	ticker := time.NewTicker(streamSweepInterval)
+	ticker := time.NewTicker(o.conf.StreamSweepInterval)
 	defer ticker.Stop()
 
 	for {
@@ -581,7 +598,7 @@ func (o *bigQueryWriteAPIOutput) sweepIdleStreams() {
 		o.streamsMu.Lock()
 		for key, swd := range o.streams {
 			lastUsed := time.Unix(0, swd.lastUsed.Load())
-			if now.Sub(lastUsed) > streamIdleTimeout {
+			if now.Sub(lastUsed) > o.conf.StreamIdleTimeout {
 				toClose = append(toClose, evicted{key, swd})
 				delete(o.streams, key)
 			}

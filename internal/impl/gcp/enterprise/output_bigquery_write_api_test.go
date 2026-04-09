@@ -241,6 +241,10 @@ func TestDescriptorProtoToMessageDescriptorErrors(t *testing.T) {
 
 func TestSweepIdleStreams(t *testing.T) {
 	out := &bigQueryWriteAPIOutput{
+		conf: bigQueryWriteAPIConfig{
+			StreamIdleTimeout:   5 * time.Minute,
+			StreamSweepInterval: 1 * time.Minute,
+		},
 		log:       service.MockResources().Logger(),
 		streams:   make(map[string]*streamWithDescriptor),
 		stopSweep: make(chan struct{}),
@@ -273,7 +277,7 @@ func TestSweepIdleStreams(t *testing.T) {
 	var evictedKeys []string
 	for key, swd := range out.streams {
 		lastUsed := time.Unix(0, swd.lastUsed.Load())
-		if now.Sub(lastUsed) > streamIdleTimeout {
+		if now.Sub(lastUsed) > out.conf.StreamIdleTimeout {
 			evictedKeys = append(evictedKeys, key)
 			delete(out.streams, key)
 		}

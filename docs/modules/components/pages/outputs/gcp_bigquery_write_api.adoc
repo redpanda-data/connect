@@ -67,6 +67,10 @@ output:
     table: "" # No default (required)
     message_format: json
     credentials_json: ""
+    target_principal: ""
+    delegates: []
+    stream_idle_timeout: 5m
+    stream_sweep_interval: 1m
     endpoint:
       http: ""
       grpc: ""
@@ -152,6 +156,42 @@ This field contains sensitive information that usually shouldn't be added to a c
 *Type*: `string`
 
 *Default*: `""`
+
+=== `target_principal`
+
+Service account email to impersonate. When set, the output obtains tokens acting as this service account. Requires the caller to have roles/iam.serviceAccountTokenCreator on the target.
+
+
+*Type*: `string`
+
+*Default*: `""`
+
+=== `delegates`
+
+Optional delegation chain for chained service account impersonation. Each service account must be granted roles/iam.serviceAccountTokenCreator on the next in the chain.
+
+
+*Type*: `array`
+
+*Default*: `[]`
+
+=== `stream_idle_timeout`
+
+How long a cached stream can remain unused before being closed. Relevant when the table field uses interpolation to route to many tables.
+
+
+*Type*: `string`
+
+*Default*: `"5m"`
+
+=== `stream_sweep_interval`
+
+How often to check for idle streams to close.
+
+
+*Type*: `string`
+
+*Default*: `"1m"`
 
 === `endpoint`
 
