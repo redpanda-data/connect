@@ -66,9 +66,10 @@ func (db *TestDB) MustEnableCDC(ctx context.Context, fullTableName string) {
 	require.NoError(db.T, err)
 
 	// Wait for CDC table to be ready
+	captureInstance := schema + "_" + tableName
 	for {
 		var minLSN, maxLSN []byte
-		if err = db.QueryRowContext(ctx, "SELECT sys.fn_cdc_get_min_lsn(?)", fullTableName).Scan(&minLSN); err != nil {
+		if err = db.QueryRowContext(ctx, "SELECT sys.fn_cdc_get_min_lsn(?)", captureInstance).Scan(&minLSN); err != nil {
 			break
 		}
 		if err := db.QueryRowContext(ctx, "SELECT sys.fn_cdc_get_max_lsn()").Scan(&maxLSN); err != nil {
@@ -137,26 +138,32 @@ func (db *TestDB) CreateTableWithCDCEnabledIfNotExists(ctx context.Context, full
 		return err
 	}
 
-	enableSnapshot := `ALTER DATABASE testdb SET ALLOW_SNAPSHOT_ISOLATION ON;`
-	enableCDC := fmt.Sprintf(`
-		EXEC sys.sp_cdc_enable_table
-		@source_schema = '%s',
-		@source_name   = '%s',
-		@role_name     = NULL;`, schema, tableName)
 	q = fmt.Sprintf(`
 		IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = '%s' AND schema_id = SCHEMA_ID('%s'))
 		BEGIN
 			%s
-			%s
-			%s
-		END;`, tableName, schema, createTableQuery, enableCDC, enableSnapshot)
-	// Retry when SQL Server Agent is still starting — sp_cdc_enable_table
-	// internally calls sp_cdc_add_job which requires a running Agent.
+		END;`, tableName, schema, createTableQuery)
+	if _, err := db.Exec(q); err != nil {
+		return err
+	}
+
+	if _, err := db.Exec(`ALTER DATABASE testdb SET ALLOW_SNAPSHOT_ISOLATION ON;`); err != nil {
+		return err
+	}
+
+	enableCDC := fmt.Sprintf(`
+		IF NOT EXISTS (SELECT 1 FROM cdc.change_tables WHERE source_object_id = OBJECT_ID('%s.%s'))
+		BEGIN
+			EXEC sys.sp_cdc_enable_table
+			@source_schema = '%s',
+			@source_name   = '%s',
+			@role_name     = NULL;
+		END`, schema, tableName, schema, tableName)
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
 	deadline := time.Now().Add(2 * time.Minute)
 	for {
-		_, err := db.Exec(q)
+		_, err := db.Exec(enableCDC)
 		if err == nil {
 			break
 		}
@@ -171,10 +178,11 @@ func (db *TestDB) CreateTableWithCDCEnabledIfNotExists(ctx context.Context, full
 	}
 
 	// wait for CDC table to be ready, this avoids time.sleeps
+	captureInstance := schema + "_" + tableName
 	for {
 		var minLSN, maxLSN []byte
 		// table isn't ready yet
-		if err := db.QueryRowContext(ctx, "SELECT sys.fn_cdc_get_min_lsn(?)", fullTableName).Scan(&minLSN); err != nil {
+		if err := db.QueryRowContext(ctx, "SELECT sys.fn_cdc_get_min_lsn(?)", captureInstance).Scan(&minLSN); err != nil {
 			return err
 		}
 		// cdc agent still preparing
