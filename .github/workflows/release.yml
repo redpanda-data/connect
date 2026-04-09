@@ -204,53 +204,49 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           RELEASE_JSON=$(gh api repos/${{ github.repository }}/releases/tags/${{ github.ref_name }})
-          echo "html_url=$(echo "$RELEASE_JSON" | jq -r '.html_url')" >> "$GITHUB_OUTPUT"
-          echo "author=$(echo "$RELEASE_JSON" | jq -r '.author.login')" >> "$GITHUB_OUTPUT"
+          RELEASE_URL=$(echo "$RELEASE_JSON" | jq -r '.html_url')
+          AUTHOR=$(echo "$RELEASE_JSON" | jq -r '.author.login')
+          echo "html_url=$RELEASE_URL" >> "$GITHUB_OUTPUT"
+          echo "author=$AUTHOR" >> "$GITHUB_OUTPUT"
           # Write multiline body to a file to avoid output truncation
-          echo "$RELEASE_JSON" | jq -r '.body' > /tmp/release_body.md
+          echo "$RELEASE_JSON" | jq -r '.body' | tr -d '\r' > /tmp/release_body.md
           # Convert markdown headers (### Foo) to Slack bold (*Foo*)
           sed -i 's/^### \(.*\)$/*\1*/g' /tmp/release_body.md
-          echo "body<<EOF" >> "$GITHUB_OUTPUT"
-          cat /tmp/release_body.md >> "$GITHUB_OUTPUT"
-          echo "EOF" >> "$GITHUB_OUTPUT"
+          # Convert markdown links [text](url) to Slack format <url|text>
+          sed -i -E 's/\[([^]]*)\]\(([^)]*)\)/<\2|\1>/g' /tmp/release_body.md
+          # Bold the component name before the colon on each list item (- foo: ... -> - *foo*: ...)
+          sed -i -E 's/^(- )([^:]+):/\1*\2*:/' /tmp/release_body.md
+          # Build Slack Block Kit payload as JSON to correctly handle newlines and special characters
+          VERSION="${{ github.ref_name }}"
+          COMPARE_URL="${{ github.server_url }}/${{ github.repository }}/compare/${{ github.ref_name }}"
+          jq -n \
+            --rawfile body /tmp/release_body.md \
+            --arg release_url "$RELEASE_URL" \
+            --arg author "$AUTHOR" \
+            --arg version "$VERSION" \
+            --arg compare_url "$COMPARE_URL" \
+            '{
+              text: ("New Redpanda Connect release: " + $version),
+              unfurl_links: false,
+              unfurl_media: false,
+              blocks: [
+                {type: "header", text: {type: "plain_text", text: (":green_alert: Redpanda Connect " + $version), emoji: true}},
+                {type: "section", fields: [
+                  {type: "mrkdwn", text: ("*Release:*\n<" + $release_url + "|" + $version + ">")},
+                  {type: "mrkdwn", text: ("*Author:*\n" + $author)}
+                ]},
+                {type: "divider"},
+                {type: "section", text: {type: "mrkdwn", text: $body}},
+                {type: "actions", elements: [
+                  {type: "button", text: {type: "plain_text", text: ":github: View Release", emoji: true}, url: $release_url},
+                  {type: "button", text: {type: "plain_text", text: ":page_facing_up: Full Changelog", emoji: true}, url: $compare_url}
+                ]}
+              ]
+            }' > /tmp/slack_payload.json
 
       - name: Post changelog to Slack
         uses: slackapi/slack-github-action@v3.0.1
         with:
           webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
           webhook-type: incoming-webhook
-          payload: |
-            text: "New Redpanda Connect release: ${{ github.ref_name }}"
-            unfurl_links: false
-            unfurl_media: false
-            blocks:
-              - type: "header"
-                text:
-                  type: "plain_text"
-                  text: ":green_alert: Redpanda Connect ${{ github.ref_name }}"
-                  emoji: true
-              - type: "section"
-                fields:
-                  - type: "mrkdwn"
-                    text: "*Release:*\n<${{ steps.release.outputs.html_url }}|${{ github.ref_name }}>"
-                  - type: "mrkdwn"
-                    text: "*Author:*\n${{ steps.release.outputs.author }}"
-              - type: "divider"
-              - type: "section"
-                text:
-                  type: "mrkdwn"
-                  text: "${{ steps.release.outputs.body }}"
-              - type: "actions"
-                elements:
-                  - type: "button"
-                    text:
-                      type: "plain_text"
-                      text: ":github: View Release"
-                      emoji: true
-                    url: "${{ steps.release.outputs.html_url }}"
-                  - type: "button"
-                    text:
-                      type: "plain_text"
-                      text: ":page_facing_up: Full Changelog"
-                      emoji: true
-                    url: "${{ github.server_url }}/${{ github.repository }}/compare/${{ github.ref_name }}"
+          payload-file-path: /tmp/slack_payload.json
