@@ -245,6 +245,74 @@ jobs:
           gh api repos/redpanda-data/rp-connect-docs/dispatches -f event_type=generate-rpcn-docs
           gh api repos/redpanda-data/rp-connect-docs/dispatches -f event_type=test-cookbook-examples
 
+  update-helm-chart:
+    runs-on: ubuntu-latest
+    needs: goreleaser
+    if: github.event_name == 'push' && !contains(github.ref_name, '-')
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          aws-region: ${{ vars.RP_AWS_CRED_REGION }}
+          role-to-assume: arn:aws:iam::${{ secrets.RP_AWS_CRED_ACCOUNT_ID }}:role/${{ vars.RP_AWS_CRED_BASE_ROLE_NAME }}${{ github.event.repository.name }}
+      - uses: aws-actions/aws-secretsmanager-get-secrets@v3
+        with:
+          secret-ids: |
+            ,sdlc/prod/github/actions_bot_token
+          parse-json-secrets: true
+      - name: Update helm chart and create PR
+        env:
+          GH_TOKEN: ${{ env.ACTIONS_BOT_TOKEN }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          BRANCH="auto/bump-connect"
+
+          git clone --depth 1 "https://x-access-token:${ACTIONS_BOT_TOKEN}@github.com/redpanda-data/helm-charts.git" helm-charts
+          cd helm-charts
+
+          CHART="charts/connect/Chart.yaml"
+          CURRENT=$(yq '.version' "$CHART")
+          CHART_VERSION="${CURRENT%.*}.$((${CURRENT##*.} + 1))"
+
+          yq -i ".version = \"$CHART_VERSION\" | .appVersion = \"$VERSION\"" "$CHART"
+          sed -Ei "s|connect:[0-9]+\.[0-9]+\.[0-9]+|connect:${VERSION}|" "$CHART"
+
+          sed -Ei \
+            -e "s|Version-[0-9]+\.[0-9]+\.[0-9]+|Version-${CHART_VERSION}|g" \
+            -e "s|Version: [0-9]+\.[0-9]+\.[0-9]+|Version: ${CHART_VERSION}|g" \
+            -e "s|AppVersion-[0-9]+\.[0-9]+\.[0-9]+|AppVersion-${VERSION}|g" \
+            -e "s|AppVersion: [0-9]+\.[0-9]+\.[0-9]+|AppVersion: ${VERSION}|g" \
+            charts/connect/README.md
+
+          git config user.name "vbotbuildovich"
+          git config user.email "62446873+vbotbuildovich@users.noreply.github.com"
+          git checkout -B "$BRANCH"
+          git add charts/connect/
+          git commit -m "connect: bump version to $VERSION"
+          git push -f origin "$BRANCH"
+
+          BODY=$(printf 'Automated bump of Redpanda Connect to %s.\n\nUpdates:\n- `appVersion` → `%s`\n- Chart `version` → `%s`\n- ArtifactHub image tag → `connect:%s`\n' \
+            "$VERSION" "$VERSION" "$CHART_VERSION" "$VERSION")
+
+          EXISTING_PR=$(gh pr list --repo redpanda-data/helm-charts --head "$BRANCH" --json number,url -q '.[0]')
+          if [ -n "$EXISTING_PR" ]; then
+            PR_NUMBER=$(echo "$EXISTING_PR" | jq -r '.number')
+            PR_URL=$(echo "$EXISTING_PR" | jq -r '.url')
+            gh pr edit "$PR_NUMBER" --repo redpanda-data/helm-charts \
+              --title "connect: bump version to $VERSION" \
+              --body "$BODY"
+          else
+            PR_URL=$(gh pr create --repo redpanda-data/helm-charts \
+              --title "connect: bump version to $VERSION" \
+              --body "$BODY" \
+              --base main \
+              --head "$BRANCH")
+          fi
+
+          echo ":helm: Update Helm Chart PR: [${PR_URL##*/}](${PR_URL})" >> "$GITHUB_STEP_SUMMARY"
+
   notify-slack:
     runs-on: ubuntu-latest
     needs: goreleaser
