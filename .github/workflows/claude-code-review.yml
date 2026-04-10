@@ -20,7 +20,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
-          fetch-depth: ${{ github.event.pull_request.commits }}
+          fetch-depth: 1
           persist-credentials: false
 
       - name: Check for Claude config changes
