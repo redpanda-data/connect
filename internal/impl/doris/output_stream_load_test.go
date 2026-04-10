@@ -79,12 +79,11 @@ func TestClassifyDorisStreamLoadResponse(t *testing.T) {
 		ExistingJobStatus: dsExistingJobFinished,
 	}, []byte(`{"Status":"Label Already Exists","ExistingJobStatus":"FINISHED"}`)))
 
-	err := classifyDorisStreamLoadResponse(http.StatusOK, dorisStreamLoadResponse{
+	require.NoError(t, classifyDorisStreamLoadResponse(http.StatusOK, dorisStreamLoadResponse{
 		Status: dsStatusPublishTimeout,
-	}, []byte(`{"Status":"Publish Timeout"}`))
-	require.Error(t, err)
+	}, []byte(`{"Status":"Publish Timeout"}`)))
 
-	err = classifyDorisStreamLoadResponse(http.StatusOK, dorisStreamLoadResponse{
+	err := classifyDorisStreamLoadResponse(http.StatusOK, dorisStreamLoadResponse{
 		Status: dsStatusLabelExists,
 		Msg:    "There is no 100-continue header",
 	}, []byte(`{"status":"FAILED","msg":"There is no 100-continue header"}`))
@@ -214,6 +213,49 @@ func TestDorisStreamLoadOutputWriteBatchFailoverFE(t *testing.T) {
 	t.Log("Then: the sink fails over to the second FE and still reaches the BE")
 	assert.Equal(t, int32(1), feRequests.Load())
 	assert.Equal(t, int32(1), beRequests.Load())
+}
+
+func TestDorisStreamLoadOutputWriteBatchPublishTimeout(t *testing.T) {
+	t.Log("Given: a FE that redirects to a BE returning Publish Timeout after commit")
+
+	be := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, err := ioReadAll(r)
+		require.NoError(t, err)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"Label":"server_label","Status":"Publish Timeout","Message":"transaction commit successfully, BUT data will be visible later.","NumberTotalRows":2,"NumberLoadedRows":2,"NumberFilteredRows":0}`))
+	}))
+	defer be.Close()
+
+	fe := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, err := ioReadAll(r)
+		require.NoError(t, err)
+		w.Header().Set(dsHeaderLocation, be.URL)
+		w.WriteHeader(http.StatusTemporaryRedirect)
+	}))
+	defer fe.Close()
+
+	out, err := newDorisStreamLoadOutput(dorisStreamLoadConfig{
+		URL:             fe.URL,
+		Database:        "db",
+		Table:           "tbl",
+		Username:        "user",
+		Password:        "pass",
+		Format:          "json",
+		ReadJSONByLine:  true,
+		LabelPrefix:     "doris_test",
+		Timeout:         5 * time.Second,
+		ColumnSeparator: dsDefaultColumnSep,
+		LineDelimiter:   dsDefaultLineDelimiter,
+	}, service.MockResources())
+	require.NoError(t, err)
+
+	batch := service.MessageBatch{
+		service.NewMessage([]byte(`{"id":1}`)),
+		service.NewMessage([]byte(`{"id":2}`)),
+	}
+
+	err = out.WriteBatch(context.Background(), batch)
+	require.NoError(t, err)
 }
 
 func TestGetOrCreateLabelReusesMetadata(t *testing.T) {
@@ -443,6 +485,44 @@ func TestNewRequestSetsPromotedHeaders(t *testing.T) {
 	assert.Equal(t, "\\n", req.Header.Get(dsHeaderLineDelimiter))
 	assert.Equal(t, "custom-value", req.Header.Get("custom-header"))
 	assert.Equal(t, "100-continue", req.Header.Get("Expect"))
+}
+
+func TestNewRequestOmitsLabelForActiveGroupCommit(t *testing.T) {
+	out := &dorisStreamLoadOutput{
+		conf: dorisStreamLoadConfig{
+			Format:      "json",
+			GroupCommit: "sync_mode",
+			Timeout:     5 * time.Second,
+			Headers: map[string]string{
+				dsHeaderLabel: "user-supplied-label",
+			},
+		},
+	}
+
+	req, err := out.newRequest(context.Background(), "http://example.com", "generated-label", []byte(`{"id":1}`))
+	require.NoError(t, err)
+
+	assert.Empty(t, req.Header.Get(dsHeaderLabel))
+	assert.Equal(t, "sync_mode", req.Header.Get(dsHeaderGroupCommit))
+}
+
+func TestNewRequestOmitsLabelForGroupCommitFromHeaders(t *testing.T) {
+	out := &dorisStreamLoadOutput{
+		conf: dorisStreamLoadConfig{
+			Format:  "json",
+			Timeout: 5 * time.Second,
+			Headers: map[string]string{
+				"Group_Commit": "async_mode",
+				dsHeaderLabel:  "user-supplied-label",
+			},
+		},
+	}
+
+	req, err := out.newRequest(context.Background(), "http://example.com", "generated-label", []byte(`{"id":1}`))
+	require.NoError(t, err)
+
+	assert.Empty(t, req.Header.Get(dsHeaderLabel))
+	assert.Equal(t, "async_mode", req.Header.Get(dsHeaderGroupCommit))
 }
 
 func TestConfigValidationRejectsPartitionMix(t *testing.T) {
