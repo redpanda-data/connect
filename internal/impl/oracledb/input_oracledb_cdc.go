@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/Jeffail/checkpoint"
@@ -42,6 +43,7 @@ const (
 	ociFieldCheckpointCacheKey        = "checkpoint_cache_key"
 	ociFieldCheckpointCacheTableName  = "checkpoint_cache_table_name"
 	ociFieldBatching                  = "batching"
+	ociFieldPDBName                   = "pdb_name"
 
 	shutdownTimeout = 5 * time.Second
 
@@ -159,6 +161,10 @@ When using the default Oracle based cache, the Connect user requires permission 
 		Description("The maximum number of messages that can be processed at a given time. Increasing this limit enables parallel processing and batching at the output level. Any given System Change Number (SCN) will not be acknowledged unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.").
 		Default(1024),
 	).
+	Field(service.NewStringField(ociFieldPDBName).
+		Description("The name of the pluggable database (PDB) to monitor. When connecting to a CDB root, LogMiner output is scoped to this PDB via SRC_CON_NAME filtering and catalog queries use ALTER SESSION SET CONTAINER to switch context. Requires GRANT SET CONTAINER TO <user> CONTAINER=ALL.").
+		Optional(),
+	).
 	Field(service.NewAutoRetryNacksToggleField()).
 	Field(service.NewBatchPolicyField(ociFieldBatching))
 
@@ -177,6 +183,7 @@ type Config struct {
 	SCNCache             string
 	SCNCacheKey          string
 	CpCacheTableName     string
+	PDBName              string
 }
 
 type oracleDBCDCInput struct {
@@ -259,6 +266,20 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 		return nil, err
 	}
 
+	var pdbName string
+	if conf.Contains(ociFieldPDBName) {
+		if pdbName, err = conf.FieldString(ociFieldPDBName); err != nil {
+			return nil, err
+		}
+		if pdbName != "" && !validOracleIdentifier.MatchString(pdbName) {
+			return nil, fmt.Errorf("invalid pdb_name %q: must be a valid Oracle identifier (letters, digits, _ $ # — starting with a letter)", pdbName)
+		}
+		if pdbName != "" && cpCacheTableName == defaultCheckpointCache {
+			cpCacheTableName = "RPCN.CDC_CHECKPOINT_" + strings.ToUpper(pdbName)
+		}
+		lmCfg.PDBName = pdbName
+	}
+
 	// checkpointing
 	var checkpointLimit int
 	if checkpointLimit, err = conf.FieldInt(ociFieldCheckpointLimit); err != nil {
@@ -296,6 +317,7 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 			SCNCache:             scnCache,
 			SCNCacheKey:          scnCacheKey,
 			CpCacheTableName:     cpCacheTableName,
+			PDBName:              pdbName,
 			TablesFilter: &confx.RegexpFilter{
 				Include: tableIncludes,
 				Exclude: tableExcludes,
@@ -329,10 +351,12 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 	return conf.WrapBatchInputExtractTracingSpanMapping("oracledb_cdc", batchInput)
 }
 
-func (o *oracleDBCDCInput) Connect(ctx context.Context) (err error) {
+func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 	var (
 		userTables []replication.UserTable
 		cachedSCN  replication.SCN
+		err        error
+		isCDB      bool
 	)
 	if o.db != nil {
 		_ = o.db.Close()
@@ -343,7 +367,7 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (err error) {
 		return fmt.Errorf("connecting to oracle database: %w", err)
 	}
 	defer func() {
-		if err != nil {
+		if resErr != nil {
 			_ = o.db.Close()
 		}
 	}()
@@ -352,29 +376,76 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (err error) {
 		return fmt.Errorf("validating connection to oracle database: %w", err)
 	}
 
+	if isCDB, err = o.detectContainerContext(ctx); err != nil {
+		return fmt.Errorf("detecting current container context: %w", err)
+	}
+
+	// In CDB mode the auto-derived checkpoint table uses the common-user prefix C##RPCN.
+	// At parse time we don't yet know if we're in CDB mode, so fix up the name here.
+	cpCacheTable := o.cfg.CpCacheTableName
+	if isCDB {
+		cpCacheTable = cdbCheckpointTable(cpCacheTable)
+	}
+
 	// no cache specified so use default, internal oracle based cache
 	if o.cfg.SCNCache == "" && o.cpCache == nil {
-		c, err := newCheckpointCache(ctx, o.cfg.ConnectionString, o.cfg.CpCacheTableName, o.log)
+		c, err := newCheckpointCache(ctx, o.cfg.ConnectionString, cpCacheTable, o.log)
 		if err != nil {
 			return fmt.Errorf("initialising oracle based checkpoint cache: %w", err)
 		}
 		o.cpCache = c
 	}
 
-	if userTables, err = replication.VerifyUserTables(ctx, o.db, o.cfg.TablesFilter, o.log); err != nil {
-		return fmt.Errorf("verifying user defined tables: %w", err)
+	// For CDB mode, run VerifyUserTables on a dedicated connection switched to the PDB
+	// (ALTER SESSION SET CONTAINER + ALL_* views, no CDB_* view privileges needed).
+	if isCDB {
+		if err = func() error {
+			conn, err := o.db.Conn(ctx)
+			if err != nil {
+				return fmt.Errorf("getting connection for PDB '%s': %w", o.cfg.PDBName, err)
+			}
+			defer func() {
+				if err := conn.Close(); err != nil {
+					o.log.Errorf("Closing connection following table verification: %v", err)
+				}
+			}()
+
+			if _, err = conn.ExecContext(ctx, "ALTER SESSION SET CONTAINER = "+o.cfg.PDBName); err != nil {
+				return fmt.Errorf("switching session to PDB '%s' for user table verification: %w", o.cfg.PDBName, err)
+			}
+			defer func() {
+				if _, resetErr := conn.ExecContext(context.Background(), "ALTER SESSION SET CONTAINER = CDB$ROOT"); resetErr != nil {
+					o.log.Errorf("Failed to reset session to root container after user table verification: %v", resetErr)
+				}
+			}()
+
+			if userTables, err = replication.VerifyUserTables(ctx, conn, o.cfg.TablesFilter, o.log); err != nil {
+				return fmt.Errorf("verifying user defined tables: %w", err)
+			}
+			return nil
+		}(); err != nil {
+			return err
+		}
+	} else {
+		if userTables, err = replication.VerifyUserTables(ctx, o.db, o.cfg.TablesFilter, o.log); err != nil {
+			return fmt.Errorf("verifying user defined tables: %w", err)
+		}
 	}
 
-	// Pre-fetch schemas for all monitored tables. A fresh cache is created on
-	// every Connect() so reconnections always reflect the current catalog state.
-	schemas := newSchemaCache(o.log)
+	// Pre-fetch schemas for all monitored tables. A fresh cache is created on every Connect()
+	// so reconnections always reflect the current catalog state. The schemaCache handles its
+	// own container switching internally for CDB mode cache misses.
+	var pdbNameForCache string
+	if isCDB {
+		pdbNameForCache = o.cfg.PDBName
+	}
+	schemas := newSchemaCache(o.db, pdbNameForCache, o.log)
 	for _, t := range userTables {
-		if _, _, fetchErr := schemas.schemaForEvent(ctx, o.db, t, nil); fetchErr != nil {
-			o.log.Warnf("Failed to pre-fetch schema for %s.%s: %v", t.Schema, t.Name, fetchErr)
+		if _, _, err := schemas.schemaForEvent(ctx, t, nil); err != nil {
+			o.log.Warnf("Failed to pre-fetch schema for %s.%s: %v", t.Schema, t.Name, err)
 		}
 	}
 	o.publisher.schemas = schemas
-	o.publisher.db = o.db
 
 	if cachedSCN, err = o.getCachedSCN(ctx); err != nil {
 		if errors.Is(err, service.ErrKeyNotFound) {
@@ -407,7 +478,7 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (err error) {
 
 	// no cached SCN means we're not recovering from a restart
 	if o.cfg.StreamSnapshot && cachedSCN == replication.InvalidSCN {
-		if snapshotter, err = replication.NewSnapshot(ctx, o.cfg.ConnectionString, userTables, o.publisher, o.lmCfg.LOBEnabled, o.log, o.metrics); err != nil {
+		if snapshotter, err = replication.NewSnapshot(ctx, o.cfg.ConnectionString, userTables, o.publisher, o.lmCfg.LOBEnabled, pdbNameForCache, o.log, o.metrics); err != nil {
 			return fmt.Errorf("creating database snapshotter: %w", err)
 		}
 		defer func() {
@@ -438,10 +509,10 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (err error) {
 		// snapshot if no SCN exists then store checkpoint once complete
 		if snapshotter != nil {
 			if maxSCN, err = o.processSnapshot(softCtx, snapshotter); err != nil {
-				if o.stopSig.IsHardStopSignalled() {
-					o.log.Errorf("Shutting down snapshotting process: %s", err)
+				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+					o.log.Infof("Snapshotting stopped: %s", err)
 				} else {
-					o.log.Infof("Gracefully shutting down snapshotting process: %s", err)
+					o.log.Errorf("Snapshotting failed: %s", err)
 				}
 				o.stopSig.TriggerHasStopped()
 				return

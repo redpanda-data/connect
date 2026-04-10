@@ -77,6 +77,10 @@ func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replicat
 		}
 		buf.WriteString(")))")
 	}
+	if cfg.PDBName != "" {
+		fmt.Fprintf(&buf, " AND SRC_CON_NAME = '%s'", strings.ReplaceAll(cfg.PDBName, "'", "''"))
+	}
+
 	logMinerQuery := fmt.Sprintf(`
 		SELECT
 			SCN,
@@ -110,25 +114,29 @@ func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replicat
 	return lm
 }
 
-// ReadChanges streams the change events from the configured SQL Server change tables.
-func (lm *LogMiner) ReadChanges(ctx context.Context, startPos replication.SCN) error {
+// ReadChanges streams the change events from LogMiner via a mining cycle.
+func (lm *LogMiner) ReadChanges(ctx context.Context, startPos replication.SCN) (resErr error) {
 	// Acquire a dedicated connection so that all LogMiner session operations
 	// (NLS settings, ADD_LOGFILE, START_LOGMNR, V$LOGMNR_CONTENTS queries) execute
 	// on the same underlying Oracle session. Using lm.db directly risks different
 	// calls being routed to different pool connections, breaking session-scoped state.
 	conn, err := lm.db.Conn(ctx)
 	if err != nil {
-		return fmt.Errorf("acquiring dedicated LogMiner connection: %w", err)
+		return fmt.Errorf("acquiring dedicated logminer connection: %w", err)
 	}
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil && resErr == nil {
+			resErr = fmt.Errorf("closing connection: %w", err)
+		}
+	}()
 
 	if err := replication.ApplyNLSSettings(ctx, conn); err != nil {
-		return fmt.Errorf("applying NLS settings for LogMiner: %w", err)
+		return fmt.Errorf("applying NLS settings for logminer: %w", err)
 	}
 
 	// always find all lob columns on start up as redo logs don't include column data types.
 	// this also prevents inline lob rows being emitted as events.
-	if err := lm.loadLOBColumnTypes(ctx, conn); err != nil {
+	if err := lm.loadLOBColumnTypes(ctx); err != nil {
 		return fmt.Errorf("discovering LOB column types: %w", err)
 	}
 
@@ -139,7 +147,7 @@ func (lm *LogMiner) ReadChanges(ctx context.Context, startPos replication.SCN) e
 		if lm.sessionMgr.IsActive() {
 			if err := lm.sessionMgr.EndSession(ctx, conn); err != nil {
 				if ctx.Err() == nil && !errors.Is(err, context.Canceled) {
-					lm.log.Errorf("ending LogMiner session on exit: %v", err)
+					lm.log.Errorf("ending logminer session on exit: %v", err)
 				}
 			}
 		}
@@ -424,13 +432,41 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 	return nil
 }
 
-func (lm *LogMiner) loadLOBColumnTypes(ctx context.Context, conn *sql.Conn) error {
+func (lm *LogMiner) loadLOBColumnTypes(ctx context.Context) (resErr error) {
 	lm.lobColTypes = make(map[string]string)
 	if len(lm.tables) == 0 {
 		return nil
 	}
 
-	var qb strings.Builder
+	// ALL_TAB_COLUMNS must run in PDB context in CDB mode — the LogMiner conn is
+	// pinned to CDB$ROOT where PDB tables are not visible via ALL_TAB_COLUMNS.
+	// Use a separate connection and switch context if needed.
+	catalogConn, err := lm.db.Conn(ctx)
+	if err != nil {
+		return fmt.Errorf("acquiring connection for LOB column discovery: %w", err)
+	}
+	defer func() {
+		if err := catalogConn.Close(); err != nil && resErr == nil {
+			resErr = fmt.Errorf("closing catalog connection: %w", err)
+		}
+	}()
+
+	if lm.cfg.PDBName != "" {
+		// can't use parameterized queries here but we've validated on input.
+		if _, err := catalogConn.ExecContext(ctx, "ALTER SESSION SET CONTAINER = "+lm.cfg.PDBName); err != nil {
+			return fmt.Errorf("switching session to PDB %s for LOB column discovery: %w", lm.cfg.PDBName, err)
+		}
+		defer func() {
+			if _, err := catalogConn.ExecContext(context.Background(), "ALTER SESSION SET CONTAINER = CDB$ROOT"); err != nil && resErr == nil {
+				resErr = fmt.Errorf("switching session back to root container: %w", err)
+			}
+		}()
+	}
+
+	var (
+		qb     strings.Builder
+		qbArgs []any
+	)
 	qb.WriteString(`SELECT OWNER, TABLE_NAME, COLUMN_NAME, DATA_TYPE FROM ALL_TAB_COLUMNS WHERE DATA_TYPE IN ('CLOB', 'BLOB', 'NCLOB') AND (`)
 	for i, t := range lm.tables {
 		if i > 0 {
@@ -442,11 +478,15 @@ func (lm *LogMiner) loadLOBColumnTypes(ctx context.Context, conn *sql.Conn) erro
 	}
 	qb.WriteString(")")
 
-	rows, err := conn.QueryContext(ctx, qb.String())
+	rows, err := catalogConn.QueryContext(ctx, qb.String(), qbArgs...)
 	if err != nil {
 		return fmt.Errorf("querying LOB column types: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			lm.log.Errorf("closing rows: %v", err)
+		}
+	}()
 
 	for rows.Next() {
 		var owner, tableName, columnName, dataType string
@@ -457,6 +497,7 @@ func (lm *LogMiner) loadLOBColumnTypes(ctx context.Context, conn *sql.Conn) erro
 		k := fmt.Sprintf("%s.%s.%s", owner, tableName, columnName)
 		lm.lobColTypes[k] = dataType
 	}
+
 	return rows.Err()
 }
 
@@ -630,8 +671,7 @@ func (*LogFileCollector) GetLogs(ctx context.Context, conn *sql.Conn, startSCN, 
 				WHERE STATUS='VALID' AND TYPE='LOCAL' AND ROWNUM=1
 			)
 		)
-		ORDER BY SEQ
-	`
+		ORDER BY SEQ`
 
 	rows, err := conn.QueryContext(ctx, query, startSCN, endSCN)
 	if err != nil {

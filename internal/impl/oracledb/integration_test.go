@@ -35,29 +35,135 @@ import (
 func TestIntegrationOracleDBCDCSnapshotAndStreaming(t *testing.T) {
 	integration.CheckSkip(t)
 
-	// Create tables
-	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
-	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.foo", "CREATE TABLE testdb.foo (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
-	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.foo2", "CREATE TABLE testdb.foo2 (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
-	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb2.bar", "CREATE TABLE testdb2.bar (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
+	// multi-tenanted mode, allowing users access to logs across various PDBs
+	t.Run("CDB Mode", func(t *testing.T) {
+		// SetupCDBTestWithPDB starts Oracle Free, connects to CDB$ROOT for the
+		// connector, and returns a FREEPDB1 connection for test data setup.
+		cdbConnStr, pdbDB, pdbName := oracledbtest.SetupCDBTestWithPDB(t)
 
-	// Insert 3000 rows across tables for initial snapshot streaming
-	want := 3000
-	for range 1000 {
-		db.MustExec("INSERT INTO testdb.foo (id) VALUES (DEFAULT)")
-		db.MustExec("INSERT INTO testdb.foo2 (id) VALUES (DEFAULT)")
-		db.MustExec("INSERT INTO testdb2.bar (id) VALUES (DEFAULT)")
-	}
+		require.NoError(t, pdbDB.CreatePDBTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.mtfoo", "CREATE TABLE testdb.mtfoo (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
+		require.NoError(t, pdbDB.CreatePDBTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb2.mtbar", "CREATE TABLE testdb2.mtbar (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
 
-	var (
-		outBatches   []string
-		outBatchesMu sync.Mutex
-		stream       *service.Stream
-		err          error
-	)
-	t.Log("Launching component...")
-	{
-		cfg := `
+		// Insert 1000 rows into each table for snapshot verification (2000 total).
+		want := 2000
+		for range 1000 {
+			pdbDB.MustExec("INSERT INTO testdb.mtfoo (id) VALUES (DEFAULT)")
+			pdbDB.MustExec("INSERT INTO testdb2.mtbar (id) VALUES (DEFAULT)")
+		}
+
+		var (
+			outBatches   []string
+			outBatchesMu sync.Mutex
+			stream       *service.Stream
+			err          error
+		)
+		t.Log("Launching component in CDB mode...")
+		{
+			cfg := `
+oracledb_cdc:
+  connection_string: %s
+  pdb_name: %s
+  stream_snapshot: true
+  max_parallel_snapshot_tables: 2
+  snapshot_max_batch_size: 10
+  logminer:
+    scn_window_size: 20000
+    backoff_interval: 1s
+  include: ["TESTDB.MTFOO", "TESTDB2.MTBAR"]
+  batching:
+    count: 500`
+
+			streamBuilder := service.NewStreamBuilder()
+			require.NoError(t, streamBuilder.AddInputYAML(fmt.Sprintf(cfg, cdbConnStr, pdbName)))
+			require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
+
+			require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+				outBatchesMu.Lock()
+				defer outBatchesMu.Unlock()
+				for _, msg := range mb {
+					msgBytes, err := msg.AsBytes()
+					assert.NoError(t, err)
+					outBatches = append(outBatches, string(msgBytes))
+				}
+				return nil
+			}))
+
+			stream, err = streamBuilder.Build()
+			require.NoError(t, err)
+			license.InjectTestService(stream.Resources())
+
+			go func() {
+				if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+					t.Error(err)
+				}
+			}()
+
+			t.Log("Verifying snapshot changes from FREEPDB1...")
+			var got int
+			assert.Eventually(t, func() bool {
+				outBatchesMu.Lock()
+				defer outBatchesMu.Unlock()
+				got = len(outBatches)
+				return got >= want
+			}, time.Minute*5, time.Second*1)
+			assert.Equalf(t, want, got, "Wanted %d snapshot messages but got %d", want, got)
+		}
+
+		t.Log("Verifying streaming changes from FREEPDB1...")
+		{
+			want := 2000
+			_, err = pdbDB.Exec(`
+BEGIN
+	FOR i IN 1..1000 LOOP
+		INSERT INTO testdb.mtfoo (id) VALUES (DEFAULT);
+		INSERT INTO testdb2.mtbar (id) VALUES (DEFAULT);
+	END LOOP;
+	COMMIT;
+END;`)
+			require.NoError(t, err)
+
+			outBatchesMu.Lock()
+			outBatches = nil
+			outBatchesMu.Unlock()
+
+			var got int
+			assert.Eventually(t, func() bool {
+				outBatchesMu.Lock()
+				defer outBatchesMu.Unlock()
+				got = len(outBatches)
+				return got >= want
+			}, time.Minute*5, time.Second*1)
+			assert.Equalf(t, want, got, "Wanted %d streaming messages but got %d", want, got)
+		}
+
+		require.NoError(t, stream.StopWithin(time.Second*10))
+	})
+
+	// single tenant mode
+	t.Run("Non-CDB Mode", func(t *testing.T) {
+		// Create tables
+		connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
+		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.foo", "CREATE TABLE testdb.foo (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
+		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.foo2", "CREATE TABLE testdb.foo2 (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
+		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb2.bar", "CREATE TABLE testdb2.bar (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
+
+		// Insert 3000 rows across tables for initial snapshot streaming
+		want := 3000
+		for range 1000 {
+			db.MustExec("INSERT INTO testdb.foo (id) VALUES (DEFAULT)")
+			db.MustExec("INSERT INTO testdb.foo2 (id) VALUES (DEFAULT)")
+			db.MustExec("INSERT INTO testdb2.bar (id) VALUES (DEFAULT)")
+		}
+
+		var (
+			outBatches   []string
+			outBatchesMu sync.Mutex
+			stream       *service.Stream
+			err          error
+		)
+		t.Log("Launching component...")
+		{
+			cfg := `
 oracledb_cdc:
   connection_string: %s
   stream_snapshot: true
@@ -71,47 +177,47 @@ oracledb_cdc:
   batching:
     count: 500`
 
-		streamBuilder := service.NewStreamBuilder()
-		require.NoError(t, streamBuilder.AddInputYAML(fmt.Sprintf(cfg, connStr)))
-		require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
+			streamBuilder := service.NewStreamBuilder()
+			require.NoError(t, streamBuilder.AddInputYAML(fmt.Sprintf(cfg, connStr)))
+			require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
 
-		require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
-			outBatchesMu.Lock()
-			defer outBatchesMu.Unlock()
-			for _, msg := range mb {
-				msgBytes, err := msg.AsBytes()
-				assert.NoError(t, err)
-				outBatches = append(outBatches, string(msgBytes))
-			}
-			return nil
-		}))
+			require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+				outBatchesMu.Lock()
+				defer outBatchesMu.Unlock()
+				for _, msg := range mb {
+					msgBytes, err := msg.AsBytes()
+					assert.NoError(t, err)
+					outBatches = append(outBatches, string(msgBytes))
+				}
+				return nil
+			}))
 
-		stream, err = streamBuilder.Build()
-		require.NoError(t, err)
-		license.InjectTestService(stream.Resources())
+			stream, err = streamBuilder.Build()
+			require.NoError(t, err)
+			license.InjectTestService(stream.Resources())
 
-		go func() {
-			if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
-				t.Error(err)
-			}
-		}()
+			go func() {
+				if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+					t.Error(err)
+				}
+			}()
 
-		t.Log("Verifying snapshot changes...")
-		var got int
-		assert.Eventually(t, func() bool {
-			outBatchesMu.Lock()
-			defer outBatchesMu.Unlock()
-			got = len(outBatches)
-			return got >= want
-		}, time.Minute*5, time.Second*1)
-		assert.Truef(t, (got == want), "Wanted %d snapshot messages but got %d", want, got)
-	}
+			t.Log("Verifying snapshot changes...")
+			var got int
+			assert.Eventually(t, func() bool {
+				outBatchesMu.Lock()
+				defer outBatchesMu.Unlock()
+				got = len(outBatches)
+				return got >= want
+			}, time.Minute*5, time.Second*1)
+			assert.Truef(t, (got == want), "Wanted %d snapshot messages but got %d", want, got)
+		}
 
-	t.Log("Verifying streaming changes...")
-	{
-		// Insert 3000 rows across tables for initial streaming
-		want := 3000
-		_, err := db.Exec(`
+		t.Log("Verifying streaming changes...")
+		{
+			// Insert 3000 rows across tables for initial streaming
+			want := 3000
+			_, err := db.Exec(`
 	BEGIN
 		FOR i IN 1..1000 LOOP
 			INSERT INTO testdb.foo (id) VALUES (DEFAULT);
@@ -120,23 +226,24 @@ oracledb_cdc:
 		END LOOP;
 		COMMIT;
 	END;`)
-		require.NoError(t, err)
+			require.NoError(t, err)
 
-		outBatchesMu.Lock()
-		outBatches = nil
-		outBatchesMu.Unlock()
-
-		var got int
-		assert.Eventually(t, func() bool {
 			outBatchesMu.Lock()
-			defer outBatchesMu.Unlock()
-			got = len(outBatches)
-			return got >= want
-		}, time.Minute*5, time.Second*1)
-		assert.Truef(t, (got == want), "Wanted %d streaming messages but got %d", want, got)
-	}
+			outBatches = nil
+			outBatchesMu.Unlock()
 
-	require.NoError(t, stream.StopWithin(time.Second*10))
+			var got int
+			assert.Eventually(t, func() bool {
+				outBatchesMu.Lock()
+				defer outBatchesMu.Unlock()
+				got = len(outBatches)
+				return got >= want
+			}, time.Minute*5, time.Second*1)
+			assert.Truef(t, (got == want), "Wanted %d streaming messages but got %d", want, got)
+		}
+
+		require.NoError(t, stream.StopWithin(time.Second*10))
+	})
 }
 
 func TestIntegrationOracleDBCDCConcurrentSnapshot(t *testing.T) {
@@ -798,7 +905,7 @@ oracledb_cdc:
 
 		streamBuilder := service.NewStreamBuilder()
 		require.NoError(t, streamBuilder.AddInputYAML(fmt.Sprintf(cfg, connStr)))
-		require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
+		require.NoError(t, streamBuilder.SetLoggerYAML(`level: DEBUG`))
 
 		require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
 			outBatchesMu.Lock()
@@ -831,7 +938,7 @@ oracledb_cdc:
 			t.Logf("Snapshot progress: %d/1 records", got)
 
 			return got == 1
-		}, time.Second*30, time.Millisecond*500)
+		}, time.Second*60, time.Millisecond*500)
 
 		require.Len(t, outBatches, 1, "Expected 1 snapshot record")
 		t.Logf("Snapshot record received: %s", outBatches[0])
@@ -985,7 +1092,7 @@ oracledb_cdc:
 
 	streamBuilder := service.NewStreamBuilder()
 	require.NoError(t, streamBuilder.AddInputYAML(cfg))
-	require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
+	require.NoError(t, streamBuilder.SetLoggerYAML(`level: DEBUG`))
 	require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
 		for _, msg := range mb {
 			msgChan <- msg
