@@ -12,6 +12,7 @@
 package common
 
 import (
+	"fmt"
 	"sync"
 	"sync/atomic"
 
@@ -74,7 +75,7 @@ func (p *hyperPbParser) WithDecoded(buf []byte, cb func(msg proto.Message) error
 	}()
 	msg := shared.NewMessage(state.msgType)
 	if err := msg.Unmarshal(buf, hyperpb.WithRecordProfile(state.profile, p.opts.Rate)); err != nil {
-		return err
+		return fmt.Errorf("unmarshalling protobuf message: '%v': %w", state.msgType.Descriptor().FullName(), err)
 	}
 	if state.profile != nil && p.opts.RecompileInterval > 0 && p.seen.Add(1)%p.opts.RecompileInterval == 0 {
 		// Temporarily disable profiling while we recompile (to prevent races
