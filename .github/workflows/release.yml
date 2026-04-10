@@ -224,7 +224,7 @@ jobs:
 
           echo ":package: Update Bundles PR: [${PR_URL##*/}](${PR_URL})" >> "$GITHUB_STEP_SUMMARY"
 
-  update-docs:
+  update-downstream:
     runs-on: ubuntu-latest
     needs: goreleaser
     if: github.event_name == 'push' && !contains(github.ref_name, '-')
@@ -241,31 +241,13 @@ jobs:
           secret-ids: |
             ,sdlc/prod/github/actions_bot_token
           parse-json-secrets: true
-      - name: Trigger downstream doc updates
+      - name: Trigger docs updates
         env:
           GH_TOKEN: ${{ env.ACTIONS_BOT_TOKEN }}
         run: |
           gh api repos/redpanda-data/docs-ui/dispatches -f event_type=update-go-mod
           gh api repos/redpanda-data/rp-connect-docs/dispatches -f event_type=generate-rpcn-docs
           gh api repos/redpanda-data/rp-connect-docs/dispatches -f event_type=test-cookbook-examples
-
-  update-helm-chart:
-    runs-on: ubuntu-latest
-    needs: goreleaser
-    if: github.event_name == 'push' && !contains(github.ref_name, '-')
-    permissions:
-      id-token: write
-      contents: read
-    steps:
-      - uses: aws-actions/configure-aws-credentials@v6
-        with:
-          aws-region: ${{ vars.RP_AWS_CRED_REGION }}
-          role-to-assume: arn:aws:iam::${{ secrets.RP_AWS_CRED_ACCOUNT_ID }}:role/${{ vars.RP_AWS_CRED_BASE_ROLE_NAME }}${{ github.event.repository.name }}
-      - uses: aws-actions/aws-secretsmanager-get-secrets@v3
-        with:
-          secret-ids: |
-            ,sdlc/prod/github/actions_bot_token
-          parse-json-secrets: true
       - name: Update helm chart and create PR
         env:
           GH_TOKEN: ${{ env.ACTIONS_BOT_TOKEN }}
