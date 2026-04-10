@@ -40,8 +40,8 @@ func TestIntegrationBigQueryWriteAPI(t *testing.T) {
 		tableID   = "test_table"
 	)
 
-	// Start BigQuery emulator. Port 9050 = HTTP (BigQuery API),
-	// port 9060 = gRPC (Storage Write API).
+	// Given a BigQuery emulator with an empty table.
+	t.Log("Given a BigQuery emulator running with HTTP and gRPC ports")
 	ctr, err := testcontainers.Run(t.Context(),
 		"ghcr.io/goccy/bigquery-emulator:latest",
 		testcontainers.WithExposedPorts("9050/tcp", "9060/tcp"),
@@ -69,8 +69,7 @@ func TestIntegrationBigQueryWriteAPI(t *testing.T) {
 	httpEndpoint := fmt.Sprintf("http://localhost:%s", httpPort.Port())
 	grpcEndpoint := fmt.Sprintf("localhost:%s", grpcPort.Port())
 
-	// Create a table via the BigQuery HTTP API so the output has a schema to
-	// fetch when creating its managed stream.
+	t.Log("Given a table with name and age columns")
 	bqClient, err := bigquery.NewClient(t.Context(), projectID,
 		option.WithoutAuthentication(),
 		option.WithEndpoint(httpEndpoint),
@@ -87,7 +86,8 @@ func TestIntegrationBigQueryWriteAPI(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Build a stream that produces messages into the BigQuery output.
+	// When we build a stream with the BigQuery Write API output and send messages.
+	t.Log("When we send 3 JSON messages through the BigQuery Write API output")
 	sb := service.NewStreamBuilder()
 	require.NoError(t, sb.SetLoggerYAML(`level: DEBUG`))
 
@@ -118,8 +118,6 @@ gcp_bigquery_write_api:
 		require.NoError(t, stream.StopWithin(10*time.Second))
 	})
 
-	// Send test messages. int64 fields are encoded as strings per proto3
-	// JSON mapping.
 	for i, msg := range []string{
 		`{"name":"alice","age":"30"}`,
 		`{"name":"bob","age":"25"}`,
@@ -128,7 +126,8 @@ gcp_bigquery_write_api:
 		require.NoError(t, sendFn(t.Context(), service.NewMessage([]byte(msg))), "message %d", i)
 	}
 
-	// Verify the rows landed in BigQuery.
+	// Then all 3 rows land in the BigQuery table.
+	t.Log("Then all 3 rows are present in the BigQuery table")
 	assert.Eventually(t, func() bool {
 		it := bqClient.Dataset(datasetID).Table(tableID).Read(t.Context())
 		var count int
