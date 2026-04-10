@@ -141,6 +141,21 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CLOUDSMITH_API_KEY: ${{ env.CLOUDSMITH_API_KEY }}
 
+      - name: Upload rpk connect plugin to S3
+        if: ${{ github.event_name == 'push' && (matrix.variant == 'connect' || matrix.variant == 'connect-fips') }}
+        uses: ./.github/actions/upload_managed_plugin
+        with:
+          aws_region: "us-west-2"
+          aws_s3_bucket: "rpk-plugins-repo"
+          project_root_dir: ${{ github.workspace }}
+          artifacts_file: ${{ github.workspace }}/target/dist/artifacts.json
+          metadata_file: ${{ github.workspace }}/target/dist/metadata.json
+          plugin_name: ${{ matrix.variant }}
+          goos: ${{ matrix.variant == 'connect' && 'linux,darwin' || 'linux' }}
+          goarch: ${{ matrix.variant == 'connect' && 'amd64,arm64' || 'amd64' }}
+          repo_hostname: rpk-plugins.redpanda.com
+          dry_run: false
+
       - name: Disable checksums for Edge build
         if: ${{ github.event_name == 'schedule' }}
         run: |
