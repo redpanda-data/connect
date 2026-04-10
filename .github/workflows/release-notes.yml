@@ -116,10 +116,11 @@ jobs:
           EXISTING_PR=$(gh pr list --head "$BRANCH" --json number -q '.[0].number')
           if [ -n "$EXISTING_PR" ]; then
             echo "Updating existing PR #$EXISTING_PR"
+            gh pr edit "$EXISTING_PR" --body-file "$RUNNER_TEMP/changelog-entries.md"
           else
             gh pr create \
               --title "Update changelog for v$NEXT" \
-              --body "" \
+              --body-file "$RUNNER_TEMP/changelog-entries.md" \
               --base main \
               --head "$BRANCH"
           fi
