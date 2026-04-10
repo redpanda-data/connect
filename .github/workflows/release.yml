@@ -61,8 +61,8 @@ jobs:
         with:
           go-version-file: 'go.mod'
 
-      - name: Install cgo deps
-        run: sudo apt-get update && sudo apt-get install -y libzmq3-dev
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libzmq3-dev patchelf
 
       - name: Install Microsoft Go
         if: ${{ matrix.variant == 'connect-fips' }}
@@ -73,9 +73,6 @@ jobs:
           [[ -d "$RUNNER_TEMP/microsoft" ]] || install -d -m 0755 "$RUNNER_TEMP/microsoft"
           tar -C "$RUNNER_TEMP/microsoft" -xf "$RUNNER_TEMP/msgo.tgz"
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
-
-      - name: Install patchelf
-        run: sudo apt-get update && sudo apt-get install -y patchelf
 
       - name: Release Notes
         run: ./resources/scripts/release_notes.sh > ./release_notes.md
