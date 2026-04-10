@@ -241,16 +241,8 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 
 	// Query and process redoEvents from V$LOGMNR_CONTENTS
 	// The session is already active, just query it
-	redoEvents, err := lm.queryLogMinerContents(ctx, conn, lm.currentSCN, endSCN)
-	if err != nil {
+	if err := lm.queryLogMinerContents(ctx, conn, lm.currentSCN, endSCN, lm.processRedoEvent); err != nil {
 		return false, fmt.Errorf("querying logminer contents between %d and %d: %w", lm.currentSCN, endSCN, err)
-	}
-
-	// Process events and buffer transactions
-	for _, redoEvent := range redoEvents {
-		if err := lm.processRedoEvent(ctx, redoEvent); err != nil {
-			return false, fmt.Errorf("process redo event: %w", err)
-		}
 	}
 
 	lm.currentSCN = endSCN
@@ -528,22 +520,19 @@ func (lm *LogMiner) isLOBOnlyEvent(ev *sqlredo.DMLEvent) bool {
 	return true
 }
 
-func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, startSCN, endSCN uint64) ([]*sqlredo.RedoEvent, error) {
+func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, startSCN, endSCN uint64, processEvent func(context.Context, *sqlredo.RedoEvent) error) error {
 	if len(lm.tables) == 0 {
-		return nil, nil
+		return nil
 	}
 
 	// Use the pre-built query from initialization
 	rows, err := conn.QueryContext(ctx, lm.logMinerQuery, startSCN, endSCN)
 	if err != nil {
-		return nil, fmt.Errorf("querying logminer: %w", err)
+		return fmt.Errorf("querying logminer: %w", err)
 	}
 	defer rows.Close()
 
-	var (
-		events  []*sqlredo.RedoEvent
-		pending *sqlredo.RedoEvent // accumulates CSF continuation fragments
-	)
+	var pending *sqlredo.RedoEvent // accumulates CSF continuation fragments
 	for rows.Next() {
 		event := &sqlredo.RedoEvent{}
 		var (
@@ -552,7 +541,7 @@ func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, s
 			csf       int64         // Continuation SQL Flag: 1 = more SQL in next row, 0 = complete
 		)
 
-		err := rows.Scan(
+		if err := rows.Scan(
 			&event.SCN,
 			&event.SQLRedo,
 			&event.Operation,
@@ -562,9 +551,8 @@ func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, s
 			&xid,
 			&commitSCN,
 			&csf,
-		)
-		if err != nil {
-			return nil, err
+		); err != nil {
+			return err
 		}
 
 		// XID is Oracle's native transaction identifier (RAW(8) = 8 bytes)
@@ -580,7 +568,9 @@ func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, s
 			}
 			if csf == 0 {
 				// Final fragment — emit the accumulated event.
-				events = append(events, pending)
+				if err := processEvent(ctx, pending); err != nil {
+					return fmt.Errorf("processing redo event: %w", err)
+				}
 				pending = nil
 			}
 			// If csf == 1, continue accumulating.
@@ -593,20 +583,24 @@ func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, s
 			continue
 		}
 
-		events = append(events, event)
+		if err := processEvent(ctx, event); err != nil {
+			return fmt.Errorf("processing redo event: %w", err)
+		}
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return err
 	}
 
 	// Flush any incomplete pending event (shouldn't happen in practice).
 	if pending != nil {
 		lm.log.Warnf("Incomplete CSF SQL sequence at end of result set (scn=%d, op=%s, txn=%s)", pending.SCN, pending.Operation, pending.TransactionID)
-		events = append(events, pending)
+		if err := processEvent(ctx, pending); err != nil {
+			return fmt.Errorf("processing redo event: %w", err)
+		}
 	}
 
-	return events, nil
+	return nil
 }
 
 // LogFile represents a redo or archive log file
