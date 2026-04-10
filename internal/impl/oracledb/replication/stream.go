@@ -46,7 +46,12 @@ func (t *UserTable) FullName() string {
 // validating supplemental logging is enabled. The caller is responsible for switching the session
 // to the correct container before calling (e.g. ALTER SESSION SET CONTAINER = <pdb>) when in
 // CDB mode; this function uses ALL_TABLES and ALL_LOG_GROUPS which work in any container context.
-func VerifyUserTables(ctx context.Context, db DBQuerier, tableFilter *confx.RegexpFilter, log *service.Logger) ([]UserTable, error) {
+func VerifyUserTables(
+	ctx context.Context,
+	db DBQuerier,
+	tableFilter *confx.RegexpFilter,
+	log *service.Logger,
+) ([]UserTable, error) {
 	tableQuery := `
 		SELECT OWNER AS SchemeName, TABLE_NAME AS TableName
 		FROM ALL_TABLES

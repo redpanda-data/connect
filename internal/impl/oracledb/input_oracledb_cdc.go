@@ -57,11 +57,6 @@ const (
 	ociFieldLOBEnabled           = "lob_enabled"
 )
 
-// validOracleIdentifier matches a valid unquoted Oracle identifier: starts with a
-// letter, followed by letters, digits, _, $, or #. Used to validate pdb_name at
-// parse time before it reaches SQL construction sites.
-var validOracleIdentifier = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_$#]*$`)
-
 func init() {
 	service.MustRegisterBatchInput("oracledb_cdc", oracleDBStreamConfigSpec, newOracleDBCDCInput)
 }
@@ -361,6 +356,7 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 		userTables []replication.UserTable
 		cachedSCN  replication.SCN
 		err        error
+		isCDB      bool
 	)
 	if o.db != nil {
 		_ = o.db.Close()
@@ -371,7 +367,7 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 		return fmt.Errorf("connecting to oracle database: %w", err)
 	}
 	defer func() {
-		if err != nil {
+		if resErr != nil {
 			_ = o.db.Close()
 		}
 	}()
@@ -380,21 +376,8 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 		return fmt.Errorf("validating connection to oracle database: %w", err)
 	}
 
-	// isCDB tracks whether we're connected at the CDB root (vs. directly in the PDB).
-	// Used to decide whether ALTER SESSION SET CONTAINER is needed for catalog queries.
-	var isCDB bool
-	if o.cfg.PDBName != "" {
-		var conName string
-		if err = o.db.QueryRowContext(ctx, `SELECT SYS_CONTEXT('USERENV', 'CON_NAME') FROM DUAL`).Scan(&conName); err != nil {
-			return fmt.Errorf("detecting Oracle container context: %w", err)
-		}
-		o.log.Infof("Connected to Oracle container: %s", conName)
-		if strings.EqualFold(conName, "CDB$ROOT") {
-			isCDB = true
-			o.log.Infof("CDB-mode: will use ALTER SESSION SET CONTAINER = %s for catalog queries", o.cfg.PDBName)
-		} else {
-			o.log.Infof("PDB-mode: connected directly to container %s; pdb_name will be ignored for container switching", conName)
-		}
+	if isCDB, err = o.detectContainerContext(ctx); err != nil {
+		return fmt.Errorf("detecting current container context: %w", err)
 	}
 
 	// If pdb_name is set but we are not at CDB$ROOT (PDB-direct or non-CDB), clear it from
@@ -407,8 +390,8 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 	// In CDB mode the auto-derived checkpoint table uses the common-user prefix C##RPCN.
 	// At parse time we don't yet know if we're in CDB mode, so fix up the name here.
 	cpCacheTable := o.cfg.CpCacheTableName
-	if isCDB && strings.HasPrefix(cpCacheTable, "RPCN.CDC_CHECKPOINT_") {
-		cpCacheTable = "C##" + cpCacheTable
+	if isCDB {
+		cpCacheTable = cdbCheckpointTable(cpCacheTable)
 	}
 
 	// no cache specified so use default, internal oracle based cache
@@ -422,8 +405,7 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 
 	// For CDB mode, run VerifyUserTables on a dedicated connection switched to the PDB
 	// (ALTER SESSION SET CONTAINER + ALL_* views, no CDB_* view privileges needed).
-	switch {
-	case isCDB:
+	if isCDB {
 		if err = func() error {
 			conn, err := o.db.Conn(ctx)
 			if err != nil {
@@ -451,7 +433,7 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 		}(); err != nil {
 			return err
 		}
-	default:
+	} else {
 		if userTables, err = replication.VerifyUserTables(ctx, o.db, o.cfg.TablesFilter, o.log); err != nil {
 			return fmt.Errorf("verifying user defined tables: %w", err)
 		}

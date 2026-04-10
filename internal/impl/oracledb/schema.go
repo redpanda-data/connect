@@ -211,8 +211,10 @@ func (sc *schemaCache) schemaForEvent(ctx context.Context, table replication.Use
 		sc.log.Debugf("Schema drift detected for %s: refreshing after unknown column in event", tableKey)
 	}
 
-	var fresh *cachedSchema
-	var err error
+	var (
+		fresh *cachedSchema
+		err   error
+	)
 	if sc.pdbName != "" {
 		// CDB mode: get a dedicated connection and switch to the PDB container
 		// before querying ALL_TAB_COLUMNS.
@@ -232,12 +234,12 @@ func (sc *schemaCache) schemaForEvent(ctx context.Context, table replication.Use
 			}
 			return nil, nil, execErr
 		}
+		defer func() {
+			if _, resetErr := conn.ExecContext(context.Background(), "ALTER SESSION SET CONTAINER = CDB$ROOT"); resetErr != nil {
+				sc.log.Errorf("Failed to reset session back to CDB$ROOT after schema refresh: %v", resetErr)
+			}
+		}()
 		fresh, err = fetchTableSchema(ctx, conn, table)
-		// Must reset to CDB$ROOT before the connection returns to the pool — leaving it
-		// in PDB context would cause subsequent pool users to run in the wrong container.
-		if _, resetErr := conn.ExecContext(context.Background(), "ALTER SESSION SET CONTAINER = CDB$ROOT"); resetErr != nil {
-			return nil, nil, fmt.Errorf("switching session back to root container: %w", resetErr)
-		}
 	} else {
 		fresh, err = fetchTableSchema(ctx, sc.db, table)
 	}

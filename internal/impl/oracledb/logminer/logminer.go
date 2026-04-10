@@ -663,7 +663,7 @@ func (*LogFileCollector) GetLogs(ctx context.Context, conn *sql.Conn, startSCN, 
 			WHERE A.NAME IS NOT NULL
 			AND A.ARCHIVED = 'YES'
 			AND A.STATUS = 'A'
-			AND A.NEXT_CHANGE# > :1
+			AND A.NEXT_CHANGE# >= :1
 			AND A.FIRST_CHANGE# <= :2
 			AND A.DEST_ID IN (
 				SELECT DEST_ID
@@ -671,8 +671,7 @@ func (*LogFileCollector) GetLogs(ctx context.Context, conn *sql.Conn, startSCN, 
 				WHERE STATUS='VALID' AND TYPE='LOCAL' AND ROWNUM=1
 			)
 		)
-		ORDER BY SEQ
-	`
+		ORDER BY SEQ`
 
 	rows, err := conn.QueryContext(ctx, query, startSCN, endSCN)
 	if err != nil {
