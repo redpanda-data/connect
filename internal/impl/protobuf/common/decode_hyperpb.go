@@ -76,7 +76,7 @@ func (p *hyperPbParser) WithDecoded(buf []byte, cb func(msg proto.Message) error
 	if err := msg.Unmarshal(buf, hyperpb.WithRecordProfile(state.profile, p.opts.Rate)); err != nil {
 		return err
 	}
-	if state.profile != nil && p.seen.Add(1)%p.opts.RecompileInterval == 0 {
+	if state.profile != nil && p.opts.RecompileInterval > 0 && p.seen.Add(1)%p.opts.RecompileInterval == 0 {
 		// Temporarily disable profiling while we recompile (to prevent races
 		// where multiple goroutines trigger simultaneous recompiles).
 		temp := newHyperPbParserState(state.msgType, nil)
