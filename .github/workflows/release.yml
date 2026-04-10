@@ -189,12 +189,15 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+    outputs:
+      pr_url: ${{ steps.pr.outputs.url }}
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
         with:
           go-version-file: 'go.mod'
       - name: Update bundles and create PR
+        id: pr
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -222,6 +225,7 @@ jobs:
 
           gh pr merge --auto --rebase "${PR_URL}"
 
+          echo "url=${PR_URL}" >> "$GITHUB_OUTPUT"
           echo ":package: Update Bundles PR: [${PR_URL##*/}](${PR_URL})" >> "$GITHUB_STEP_SUMMARY"
 
   update-downstream:
@@ -231,6 +235,8 @@ jobs:
     permissions:
       id-token: write
       contents: read
+    outputs:
+      helm_pr_url: ${{ steps.helm.outputs.url }}
     steps:
       - uses: aws-actions/configure-aws-credentials@v6
         with:
@@ -249,6 +255,7 @@ jobs:
           gh api repos/redpanda-data/rp-connect-docs/dispatches -f event_type=generate-rpcn-docs
           gh api repos/redpanda-data/rp-connect-docs/dispatches -f event_type=test-cookbook-examples
       - name: Update helm chart and create PR
+        id: helm
         env:
           GH_TOKEN: ${{ env.ACTIONS_BOT_TOKEN }}
         run: |
@@ -297,12 +304,15 @@ jobs:
               --head "$BRANCH")
           fi
 
+          echo "url=${PR_URL}" >> "$GITHUB_OUTPUT"
           echo ":helm: Update Helm Chart PR: [${PR_URL##*/}](${PR_URL})" >> "$GITHUB_STEP_SUMMARY"
 
   notify-slack:
     runs-on: ubuntu-latest
-    needs: goreleaser
-    if: github.event_name == 'push'
+    needs: [goreleaser, update-bundles, update-downstream]
+    # always() is required because update-bundles/update-downstream may be skipped
+    # (pre-release/RC), and by default a skipped dependency skips this job too.
+    if: always() && github.event_name == 'push'
     permissions:
       contents: read
     steps:
@@ -311,41 +321,75 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          RELEASE_JSON=$(gh api repos/${{ github.repository }}/releases/tags/${{ github.ref_name }})
-          RELEASE_URL=$(echo "$RELEASE_JSON" | jq -r '.html_url')
-          AUTHOR=$(echo "$RELEASE_JSON" | jq -r '.author.login')
-          echo "$RELEASE_JSON" | jq -r '.body' | tr -d '\r' > "$RUNNER_TEMP/release_body.md"
-          sed -i -E \
-            -e 's/^### (.*)$/*\1*/' \
-            -e 's/\[([^]]*)\]\(([^)]*)\)/<\2|\1>/g' \
-            -e 's/^(- )([^:]+):/\1*\2*:/' \
-            "$RUNNER_TEMP/release_body.md"
+          # Build follow-up PR links and failure notices
+          LINKS=""
+          FAILURES=""
+          if [ -n "$BUNDLE_PR" ]; then
+            LINKS="${LINKS}:package: <${BUNDLE_PR}|Bundles PR>  "
+          fi
+          if [ -n "$HELM_PR" ]; then
+            LINKS="${LINKS}:helm: <${HELM_PR}|Helm Chart PR>  "
+          fi
+          if [ "$GORELEASER_RESULT" = "failure" ]; then
+            FAILURES="${FAILURES}:red_circle: goreleaser failed  "
+          fi
+          if [ "$BUNDLES_RESULT" = "failure" ]; then
+            FAILURES="${FAILURES}:red_circle: update-bundles failed  "
+          fi
+          if [ "$DOWNSTREAM_RESULT" = "failure" ]; then
+            FAILURES="${FAILURES}:red_circle: update-downstream failed  "
+          fi
+
+          HEADER_ICON=":green_alert:"
+          if [ -n "$FAILURES" ]; then
+            HEADER_ICON=":red_circle:"
+          fi
+
+          RELEASE_URL=""
+          BODY=""
+          if RELEASE_JSON=$(gh api repos/${{ github.repository }}/releases/tags/${{ github.ref_name }} 2>/dev/null); then
+            RELEASE_URL=$(echo "$RELEASE_JSON" | jq -r '.html_url')
+            echo "$RELEASE_JSON" | jq -r '.body' | tr -d '\r' > "$RUNNER_TEMP/release_body.md"
+            sed -i -E \
+              -e 's/^### (.*)$/*\1*/' \
+              -e 's/\[([^]]*)\]\(([^)]*)\)/<\2|\1>/g' \
+              -e 's/^(- )([^:]+):/\1*\2*:/' \
+              "$RUNNER_TEMP/release_body.md"
+            BODY=$(cat "$RUNNER_TEMP/release_body.md")
+          fi
+
           VERSION="${{ github.ref_name }}"
           COMPARE_URL="${{ github.server_url }}/${{ github.repository }}/compare/${{ github.ref_name }}"
+          STATUS="${FAILURES}${LINKS}"
           jq -n \
-            --rawfile body "$RUNNER_TEMP/release_body.md" \
+            --arg body "$BODY" \
             --arg release_url "$RELEASE_URL" \
-            --arg author "$AUTHOR" \
             --arg version "$VERSION" \
             --arg compare_url "$COMPARE_URL" \
+            --arg header_icon "$HEADER_ICON" \
+            --arg status "$STATUS" \
             '{
               text: ("New Redpanda Connect release: " + $version),
               unfurl_links: false,
               unfurl_media: false,
               blocks: [
-                {type: "header", text: {type: "plain_text", text: (":green_alert: Redpanda Connect " + $version), emoji: true}},
-                {type: "section", fields: [
-                  {type: "mrkdwn", text: ("*Release:*\n<" + $release_url + "|" + $version + ">")},
-                  {type: "mrkdwn", text: ("*Author:*\n" + $author)}
-                ]},
+                {type: "header", text: {type: "plain_text", text: ($header_icon + " Redpanda Connect " + $version), emoji: true}},
+                {type: "section", text: {type: "mrkdwn", text: ("*Release:* <" + $release_url + "|" + $version + ">")}},
                 {type: "divider"},
                 {type: "section", text: {type: "mrkdwn", text: $body}},
+                {type: "section", text: {type: "mrkdwn", text: $status}},
                 {type: "actions", elements: [
                   {type: "button", text: {type: "plain_text", text: ":github: View Release", emoji: true}, url: $release_url},
                   {type: "button", text: {type: "plain_text", text: ":page_facing_up: Full Changelog", emoji: true}, url: $compare_url}
                 ]}
               ]
             }' > "$RUNNER_TEMP/slack_payload.json"
+        env:
+          BUNDLE_PR: ${{ needs.update-bundles.outputs.pr_url }}
+          HELM_PR: ${{ needs.update-downstream.outputs.helm_pr_url }}
+          GORELEASER_RESULT: ${{ needs.goreleaser.result }}
+          BUNDLES_RESULT: ${{ needs.update-bundles.result }}
+          DOWNSTREAM_RESULT: ${{ needs.update-downstream.result }}
 
       - name: Post changelog to Slack
         uses: slackapi/slack-github-action@v3.0.1
