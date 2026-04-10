@@ -24,14 +24,6 @@ jobs:
       id-token: write
 
     steps:
-      - name: Check fork PR author
-        if: >
-          github.event_name == 'pull_request_target' &&
-          !contains(fromJSON('["ness-david-dedu"]'), github.event.pull_request.user.login)
-        run: |
-          echo "::error::Author ${{ github.event.pull_request.user.login }} is not in the allowed fork users list."
-          exit 1
-
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
@@ -80,7 +72,7 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           allowed_bots: ""
-          allowed_non_write_users: "*"
+          allowed_non_write_users: "ness-david-dedu"
           track_progress: false
           show_full_output: false
           claude_args: >
