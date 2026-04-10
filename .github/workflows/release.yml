@@ -77,13 +77,6 @@ jobs:
       - name: Release Notes
         run: ./resources/scripts/release_notes.sh > ./release_notes.md
 
-      - name: Write telemetry private key
-        env:
-          CONNECT_TELEMETRY_PRIV_KEY: ${{ secrets.TELEMETRY_PRIVATE_KEY }}
-        run: |
-          git update-index --skip-worktree ./internal/telemetry/key.pem
-          echo "$CONNECT_TELEMETRY_PRIV_KEY" > ./internal/telemetry/key.pem
-
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
@@ -125,7 +118,6 @@ jobs:
         env:
           CONNECT_TELEMETRY_PRIV_KEY: ${{ secrets.TELEMETRY_PRIVATE_KEY }}
         run: |
-          echo "Adding telemetry key"
           git update-index --skip-worktree ./internal/telemetry/key.pem
           echo "$CONNECT_TELEMETRY_PRIV_KEY" > ./internal/telemetry/key.pem
 
