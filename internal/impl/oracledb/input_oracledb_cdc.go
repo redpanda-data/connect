@@ -380,13 +380,6 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 		return fmt.Errorf("detecting current container context: %w", err)
 	}
 
-	// If pdb_name is set but we are not at CDB$ROOT (PDB-direct or non-CDB), clear it from
-	// the logminer config so that no ALTER SESSION SET CONTAINER calls are attempted downstream.
-	// On non-CDB databases (CDB=NO) those calls would fail with ORA-65090.
-	if !isCDB {
-		o.lmCfg.PDBName = ""
-	}
-
 	// In CDB mode the auto-derived checkpoint table uses the common-user prefix C##RPCN.
 	// At parse time we don't yet know if we're in CDB mode, so fix up the name here.
 	cpCacheTable := o.cfg.CpCacheTableName

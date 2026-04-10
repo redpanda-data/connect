@@ -21,10 +21,9 @@ import (
 var validOracleIdentifier = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_$#]*$`)
 
 // detectContainerContext queries Oracle to determine which container the connection
-// landed in. Returns true if connected to CDB$ROOT (CDB mode), false if connected
-// directly to a PDB or a non-CDB database. When false, pdb_name is cleared from the
-// logminer config to prevent ALTER SESSION SET CONTAINER calls that would fail with
-// ORA-65090 on non-CDB databases.
+// landed in. Returns true if connected to CDB$ROOT (CDB mode). If pdb_name is set
+// but the connection is not at CDB$ROOT, an error is returned — pdb_name requires
+// connecting via the CDB root service.
 func (o *oracleDBCDCInput) detectContainerContext(ctx context.Context) (bool, error) {
 	if o.cfg.PDBName == "" {
 		return false, nil
@@ -41,8 +40,7 @@ func (o *oracleDBCDCInput) detectContainerContext(ctx context.Context) (bool, er
 		return true, nil
 	}
 
-	o.log.Infof("PDB-mode: connected directly to container '%s'; pdb_name will be ignored for container switching", conName)
-	return false, nil
+	return false, fmt.Errorf("pdb_name is set but connected to container '%s' instead of CDB$ROOT; connect via the CDB root service or remove pdb_name", conName)
 }
 
 // cdbCheckpointTable returns the checkpoint cache table name to use in CDB mode.
