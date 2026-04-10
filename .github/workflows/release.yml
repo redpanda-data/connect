@@ -320,6 +320,11 @@ jobs:
         id: release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BUNDLE_PR: ${{ needs.update-bundles.outputs.pr_url }}
+          HELM_PR: ${{ needs.update-downstream.outputs.helm_pr_url }}
+          GORELEASER_RESULT: ${{ needs.goreleaser.result }}
+          BUNDLES_RESULT: ${{ needs.update-bundles.result }}
+          DOWNSTREAM_RESULT: ${{ needs.update-downstream.result }}
         run: |
           # Build follow-up PR links and failure notices
           LINKS=""
@@ -384,12 +389,6 @@ jobs:
                 ]}
               ]
             }' > "$RUNNER_TEMP/slack_payload.json"
-        env:
-          BUNDLE_PR: ${{ needs.update-bundles.outputs.pr_url }}
-          HELM_PR: ${{ needs.update-downstream.outputs.helm_pr_url }}
-          GORELEASER_RESULT: ${{ needs.goreleaser.result }}
-          BUNDLES_RESULT: ${{ needs.update-bundles.result }}
-          DOWNSTREAM_RESULT: ${{ needs.update-downstream.result }}
 
       - name: Post changelog to Slack
         uses: slackapi/slack-github-action@v3.0.1
