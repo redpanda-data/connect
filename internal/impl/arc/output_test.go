@@ -16,7 +16,10 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
-func TestArcOutput_ColumnarSingleMeasurement(t *testing.T) {
+// newTestServer creates an httptest.Server that captures the request body and
+// headers. The returned mutex must be held when reading captured values.
+func newTestServer(t *testing.T) (*httptest.Server, *[]byte, *http.Header, *sync.Mutex) {
+	t.Helper()
 	var mu sync.Mutex
 	var received []byte
 	var headers http.Header
@@ -25,12 +28,20 @@ func TestArcOutput_ColumnarSingleMeasurement(t *testing.T) {
 		mu.Lock()
 		defer mu.Unlock()
 		headers = r.Header.Clone()
-		var err error
-		received, err = io.ReadAll(r.Body)
-		require.NoError(t, err)
+		b, err := io.ReadAll(r.Body)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		received = b
 		w.WriteHeader(http.StatusNoContent)
 	}))
-	defer srv.Close()
+	t.Cleanup(srv.Close)
+	return srv, &received, &headers, &mu
+}
+
+func TestArcOutput_ColumnarSingleMeasurement(t *testing.T) {
+	srv, received, headers, mu := newTestServer(t)
 
 	conf, err := outputSpec().ParseYAML(`
 url: `+srv.URL+`
@@ -43,7 +54,6 @@ compression: none
 
 	out, err := newArcOutput(conf, service.MockResources())
 	require.NoError(t, err)
-
 	require.NoError(t, out.Connect(t.Context()))
 
 	batch := service.MessageBatch{
@@ -61,36 +71,31 @@ compression: none
 	assert.Empty(t, headers.Get("Content-Encoding"))
 
 	var payload map[string]any
-	require.NoError(t, msgpack.Unmarshal(received, &payload))
+	require.NoError(t, msgpack.Unmarshal(*received, &payload))
 
 	assert.Equal(t, "cpu", payload["m"])
 	columns, ok := payload["columns"].(map[string]any)
-	require.True(t, ok)
+	require.True(t, ok, "expected columns map")
 
-	hosts := columns["host"].([]any)
+	hosts, ok := columns["host"].([]any)
+	require.True(t, ok, "expected host column")
 	assert.Len(t, hosts, 2)
 	assert.Equal(t, "server01", hosts[0])
 	assert.Equal(t, "server02", hosts[1])
 
-	usages := columns["usage"].([]any)
+	usages, ok := columns["usage"].([]any)
+	require.True(t, ok, "expected usage column")
 	assert.Len(t, usages, 2)
 
-	times := columns["time"].([]any)
+	times, ok := columns["time"].([]any)
+	require.True(t, ok, "expected time column")
 	assert.Len(t, times, 2)
 
 	require.NoError(t, out.Close(t.Context()))
 }
 
 func TestArcOutput_ColumnarMultipleMeasurements(t *testing.T) {
-	var received []byte
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var err error
-		received, err = io.ReadAll(r.Body)
-		require.NoError(t, err)
-		w.WriteHeader(http.StatusNoContent)
-	}))
-	defer srv.Close()
+	srv, received, _, mu := newTestServer(t)
 
 	conf, err := outputSpec().ParseYAML(`
 url: `+srv.URL+`
@@ -113,34 +118,34 @@ compression: none
 
 	require.NoError(t, out.WriteBatch(t.Context(), batch))
 
+	mu.Lock()
+	defer mu.Unlock()
+
 	var payload map[string]any
-	require.NoError(t, msgpack.Unmarshal(received, &payload))
+	require.NoError(t, msgpack.Unmarshal(*received, &payload))
 
 	batchSlice, ok := payload["batch"].([]any)
-	require.True(t, ok)
+	require.True(t, ok, "expected batch array")
 	assert.Len(t, batchSlice, 2)
 
-	cpuRecord := batchSlice[0].(map[string]any)
+	cpuRecord, ok := batchSlice[0].(map[string]any)
+	require.True(t, ok)
 	assert.Equal(t, "cpu", cpuRecord["m"])
-	cpuCols := cpuRecord["columns"].(map[string]any)
-	assert.Len(t, cpuCols["value"].([]any), 2)
+	cpuCols, ok := cpuRecord["columns"].(map[string]any)
+	require.True(t, ok)
+	cpuValues, ok := cpuCols["value"].([]any)
+	require.True(t, ok)
+	assert.Len(t, cpuValues, 2)
 
-	memRecord := batchSlice[1].(map[string]any)
+	memRecord, ok := batchSlice[1].(map[string]any)
+	require.True(t, ok)
 	assert.Equal(t, "mem", memRecord["m"])
 
 	require.NoError(t, out.Close(t.Context()))
 }
 
 func TestArcOutput_RowFormat(t *testing.T) {
-	var received []byte
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var err error
-		received, err = io.ReadAll(r.Body)
-		require.NoError(t, err)
-		w.WriteHeader(http.StatusNoContent)
-	}))
-	defer srv.Close()
+	srv, received, _, mu := newTestServer(t)
 
 	conf, err := outputSpec().ParseYAML(`
 url: `+srv.URL+`
@@ -162,31 +167,30 @@ compression: none
 
 	require.NoError(t, out.WriteBatch(t.Context(), batch))
 
+	mu.Lock()
+	defer mu.Unlock()
+
 	var payload []any
-	require.NoError(t, msgpack.Unmarshal(received, &payload))
+	require.NoError(t, msgpack.Unmarshal(*received, &payload))
 	assert.Len(t, payload, 2)
 
-	row0 := payload[0].(map[string]any)
+	row0, ok := payload[0].(map[string]any)
+	require.True(t, ok)
 	assert.Equal(t, "cpu", row0["m"])
-	assert.NotNil(t, row0["t"])
-	fields := row0["fields"].(map[string]any)
+
+	ts, ok := row0["t"].(int64)
+	require.True(t, ok, "expected int64 timestamp")
+	assert.Greater(t, ts, int64(0))
+
+	fields, ok := row0["fields"].(map[string]any)
+	require.True(t, ok)
 	assert.Equal(t, "server01", fields["host"])
 
 	require.NoError(t, out.Close(t.Context()))
 }
 
 func TestArcOutput_ZstdCompression(t *testing.T) {
-	var received []byte
-	var contentEncoding string
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		contentEncoding = r.Header.Get("Content-Encoding")
-		var err error
-		received, err = io.ReadAll(r.Body)
-		require.NoError(t, err)
-		w.WriteHeader(http.StatusNoContent)
-	}))
-	defer srv.Close()
+	srv, received, headers, mu := newTestServer(t)
 
 	conf, err := outputSpec().ParseYAML(`
 url: `+srv.URL+`
@@ -207,13 +211,15 @@ compression: zstd
 
 	require.NoError(t, out.WriteBatch(t.Context(), batch))
 
-	assert.Equal(t, "zstd", contentEncoding)
+	mu.Lock()
+	defer mu.Unlock()
 
-	// Verify it's valid zstd
+	assert.Equal(t, "zstd", headers.Get("Content-Encoding"))
+
 	dec, err := zstd.NewReader(nil)
 	require.NoError(t, err)
 	defer dec.Close()
-	decompressed, err := dec.DecodeAll(received, nil)
+	decompressed, err := dec.DecodeAll(*received, nil)
 	require.NoError(t, err)
 
 	var payload map[string]any
@@ -224,17 +230,7 @@ compression: zstd
 }
 
 func TestArcOutput_GzipCompression(t *testing.T) {
-	var received []byte
-	var contentEncoding string
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		contentEncoding = r.Header.Get("Content-Encoding")
-		var err error
-		received, err = io.ReadAll(r.Body)
-		require.NoError(t, err)
-		w.WriteHeader(http.StatusNoContent)
-	}))
-	defer srv.Close()
+	srv, received, headers, mu := newTestServer(t)
 
 	conf, err := outputSpec().ParseYAML(`
 url: `+srv.URL+`
@@ -255,24 +251,19 @@ compression: gzip
 
 	require.NoError(t, out.WriteBatch(t.Context(), batch))
 
-	assert.Equal(t, "gzip", contentEncoding)
+	mu.Lock()
+	defer mu.Unlock()
 
-	// Verify it's valid gzip by checking magic bytes
-	require.True(t, len(received) >= 2)
-	assert.Equal(t, byte(0x1f), received[0])
-	assert.Equal(t, byte(0x8b), received[1])
+	assert.Equal(t, "gzip", headers.Get("Content-Encoding"))
+	require.True(t, len(*received) >= 2)
+	assert.Equal(t, byte(0x1f), (*received)[0])
+	assert.Equal(t, byte(0x8b), (*received)[1])
 
 	require.NoError(t, out.Close(t.Context()))
 }
 
 func TestArcOutput_BearerToken(t *testing.T) {
-	var authHeader string
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		authHeader = r.Header.Get("Authorization")
-		w.WriteHeader(http.StatusNoContent)
-	}))
-	defer srv.Close()
+	srv, _, headers, mu := newTestServer(t)
 
 	conf, err := outputSpec().ParseYAML(`
 url: `+srv.URL+`
@@ -293,7 +284,11 @@ compression: none
 	}
 
 	require.NoError(t, out.WriteBatch(t.Context(), batch))
-	assert.Equal(t, "Bearer my-secret-token", authHeader)
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	assert.Equal(t, "Bearer my-secret-token", headers.Get("Authorization"))
 
 	require.NoError(t, out.Close(t.Context()))
 }
@@ -331,9 +326,12 @@ compression: none
 }
 
 func TestArcOutput_EmptyBatch(t *testing.T) {
+	var mu sync.Mutex
 	called := false
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
 		called = true
+		mu.Unlock()
 		w.WriteHeader(http.StatusNoContent)
 	}))
 	defer srv.Close()
@@ -352,9 +350,96 @@ compression: none
 	require.NoError(t, out.Connect(t.Context()))
 
 	require.NoError(t, out.WriteBatch(t.Context(), service.MessageBatch{}))
+
+	mu.Lock()
+	defer mu.Unlock()
 	assert.False(t, called)
 
 	require.NoError(t, out.Close(t.Context()))
+}
+
+func TestArcOutput_TimeColumnCollision(t *testing.T) {
+	srv, received, _, mu := newTestServer(t)
+
+	conf, err := outputSpec().ParseYAML(`
+url: `+srv.URL+`
+database: default
+measurement: test
+format: columnar
+compression: none
+`, nil)
+	require.NoError(t, err)
+
+	out, err := newArcOutput(conf, service.MockResources())
+	require.NoError(t, err)
+	require.NoError(t, out.Connect(t.Context()))
+
+	// Messages with a "time" field should not cause duplicate column entries
+	batch := service.MessageBatch{
+		service.NewMessage([]byte(`{"time":1633024800000000,"value":10}`)),
+		service.NewMessage([]byte(`{"time":1633024801000000,"value":20}`)),
+	}
+
+	require.NoError(t, out.WriteBatch(t.Context(), batch))
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	var payload map[string]any
+	require.NoError(t, msgpack.Unmarshal(*received, &payload))
+
+	columns, ok := payload["columns"].(map[string]any)
+	require.True(t, ok)
+
+	times, ok := columns["time"].([]any)
+	require.True(t, ok)
+	values, ok := columns["value"].([]any)
+	require.True(t, ok)
+
+	// time and value columns must have the same length
+	assert.Len(t, times, 2, "time column should have exactly 2 entries, not duplicated")
+	assert.Len(t, values, 2)
+
+	require.NoError(t, out.Close(t.Context()))
+}
+
+func TestArcOutput_InvalidConfig(t *testing.T) {
+	tests := []struct {
+		name   string
+		config string
+		errMsg string
+	}{
+		{
+			name: "token with newline",
+			config: `
+url: http://localhost:8000
+token: "bad\ntoken"
+database: default
+measurement: test
+`,
+			errMsg: "token contains invalid characters",
+		},
+		{
+			name: "database with carriage return",
+			config: `
+url: http://localhost:8000
+database: "bad\rdb"
+measurement: test
+`,
+			errMsg: "database name contains invalid characters",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			conf, err := outputSpec().ParseYAML(tt.config, nil)
+			require.NoError(t, err)
+
+			_, err = newArcOutput(conf, service.MockResources())
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.errMsg)
+		})
+	}
 }
 
 func TestConvertTimestamp(t *testing.T) {

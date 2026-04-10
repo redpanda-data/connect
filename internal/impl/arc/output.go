@@ -74,7 +74,7 @@ This output sends data to an https://github.com/Basekick-Labs/arc[Arc^] columnar
 
 Arc supports two payload formats:
 
-- *columnar* (default): Transposes batched messages into column arrays. This is the recommended format, offering 25-35% faster ingestion.
+- *columnar* (default): Transposes batched messages into column arrays. This is the recommended format, offering significantly faster ingestion.
 - *row*: Sends each message as an individual row record with fields and optional tags.
 
 Data is encoded as MessagePack and optionally compressed with zstd (recommended) or gzip before being sent to the Arc endpoint.
@@ -215,7 +215,14 @@ func newArcOutput(conf *service.ParsedConfig, mgr *service.Resources) (*arcOutpu
 	}
 
 	// Set up HTTP client with optional TLS
-	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport := &http.Transport{
+		Proxy:                 http.ProxyFromEnvironment,
+		ForceAttemptHTTP2:     true,
+		MaxIdleConns:          100,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:  10 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+	}
 	tlsConf, tlsEnabled, err := conf.FieldTLSToggled(fieldTLS)
 	if err != nil {
 		return nil, err
@@ -312,7 +319,7 @@ func (o *arcOutput) buildColumnarPayload(batch service.MessageBatch) (any, error
 
 		rec.columns["time"] = append(rec.columns["time"], ts)
 		for k, v := range dataMap {
-			if k == o.timestampField {
+			if k == o.timestampField || (o.timestampField == "" && k == "time") {
 				continue
 			}
 			rec.columns[k] = append(rec.columns[k], v)
@@ -365,7 +372,7 @@ func (o *arcOutput) buildRowPayload(batch service.MessageBatch) (any, error) {
 		// Remove timestamp field from fields if present
 		fields := make(map[string]any, len(dataMap))
 		for k, v := range dataMap {
-			if k == o.timestampField {
+			if k == o.timestampField || (o.timestampField == "" && k == "time") {
 				continue
 			}
 			fields[k] = v
@@ -482,11 +489,9 @@ func (o *arcOutput) compress(data []byte) ([]byte, string, error) {
 		w.Reset(&buf)
 		if _, err := w.Write(data); err != nil {
 			w.Close()
-			zstdEncoderPool.Put(w)
 			return nil, "", err
 		}
 		if err := w.Close(); err != nil {
-			zstdEncoderPool.Put(w)
 			return nil, "", err
 		}
 		zstdEncoderPool.Put(w)
@@ -497,11 +502,9 @@ func (o *arcOutput) compress(data []byte) ([]byte, string, error) {
 		w.Reset(&buf)
 		if _, err := w.Write(data); err != nil {
 			w.Close()
-			gzipWriterPool.Put(w)
 			return nil, "", err
 		}
 		if err := w.Close(); err != nil {
-			gzipWriterPool.Put(w)
 			return nil, "", err
 		}
 		gzipWriterPool.Put(w)
