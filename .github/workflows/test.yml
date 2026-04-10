@@ -8,37 +8,27 @@ on:
 
 jobs:
   test:
-    if: ${{ github.repository == 'redpanda-data/connect' || github.event_name != 'schedule' }}
     runs-on: ubuntu-latest
     env:
       CGO_ENABLED: 0
     steps:
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup /usr/share/swift /usr/local/share/powershell
+          sudo docker image prune --all --force
 
       - name: Checkout code
         uses: actions/checkout@v6
-
       - name: Install Go
         uses: actions/setup-go@v6
         with:
           go-version-file: 'go.mod'
 
-      - name: Install dependencies for x_benthos_extra
-        run: |
-          sudo apt update -y
-          sudo apt install -y --no-install-recommends libzmq3-dev
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libzmq3-dev
 
       - name: Install Task
         uses: ./.github/actions/setup-task
-
-      - name: Free disk space
-        run: |
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /usr/local/lib/android
-          sudo rm -rf /opt/ghc
-          sudo rm -rf /usr/local/.ghcup
-          sudo rm -rf /usr/share/swift
-          sudo rm -rf /usr/local/share/powershell
-          sudo docker image prune --all --force
 
       - name: Deps
         run: task deps && git diff HEAD -- go.mod go.sum && git diff-index HEAD --exit-code
@@ -50,23 +40,19 @@ jobs:
         run: task test
 
   golangci-lint:
-    if: ${{ github.repository == 'redpanda-data/connect' || github.event_name != 'schedule' }}
     runs-on: ubuntu-latest
     env:
       CGO_ENABLED: 0
     steps:
-
       - name: Checkout code
         uses: actions/checkout@v6
-
       - name: Install Go
         uses: actions/setup-go@v6
         with:
           go-version-file: 'go.mod'
 
       - name: Set version env variables
-        run: |
-          cat .versions >> $GITHUB_ENV
+        run: cat .versions >> $GITHUB_ENV
 
       - name: Lint
         uses: golangci/golangci-lint-action@v9
@@ -77,10 +63,10 @@ jobs:
           skip-save-cache: true
 
   test-push-to-cloudsmith:
-    if: ${{ github.repository == 'redpanda-data/connect' || github.event_name != 'schedule' }}
     runs-on: ubuntu-latest
+    env:
+      CLOUDSMITH_API_KEY: thisisatest
     steps:
-
       - name: Checkout code
         uses: actions/checkout@v6
 
@@ -92,8 +78,6 @@ jobs:
           mv cloudsmith /usr/local/bin/
 
       - name: Test GA
-        env:
-          CLOUDSMITH_API_KEY: thisisatest
         run: |
           test $(./resources/scripts/push_pkg_to_cloudsmith.sh artifact.deb 0.0.0 \
             | grep "push deb redpanda/redpanda/" | wc -l) -eq 1
@@ -101,8 +85,6 @@ jobs:
             | grep "push deb redpanda/redpanda/" | wc -l) -eq 1
 
       - name: Test RC
-        env:
-          CLOUDSMITH_API_KEY: thisisatest
         run: |
           test $(./resources/scripts/push_pkg_to_cloudsmith.sh artifact.deb 0.0.0-rc1 \
             | grep "push deb redpanda/redpanda-unstable/" | wc -l) -eq 1
