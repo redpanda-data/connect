@@ -156,6 +156,7 @@ type dorisStreamLoadOutput struct {
 }
 
 type dorisStreamLoadResponse struct {
+	Label              string `json:"Label"`
 	Status             string `json:"Status"`
 	Message            string `json:"Message"`
 	Msg                string `json:"msg"`
@@ -670,7 +671,7 @@ func (d *dorisStreamLoadOutput) WriteBatch(ctx context.Context, batch service.Me
 		return nil
 	}
 
-	label := d.getOrCreateLabel(batch)
+	label := d.labelForBatch(batch)
 	body, err := d.encodeBatch(batch)
 	if err != nil {
 		return err
@@ -693,9 +694,21 @@ func (d *dorisStreamLoadOutput) WriteBatch(ctx context.Context, batch service.Me
 		return err
 	}
 
+	logLabel := label
+	if loadResp.Label != "" {
+		logLabel = loadResp.Label
+	}
+	if loadResp.Status == dsStatusPublishTimeout {
+		d.log.Warnf(
+			"Doris stream load committed but data may become visible later label=%s table=%s.%s status=%s loaded_rows=%d filtered_rows=%d total_rows=%d",
+			logLabel, d.conf.Database, d.conf.Table, loadResp.Status, loadResp.NumberLoadedRows, loadResp.NumberFilteredRows, loadResp.NumberTotalRows,
+		)
+		return nil
+	}
+
 	d.log.Infof(
 		"Doris stream load success label=%s table=%s.%s status=%s loaded_rows=%d filtered_rows=%d total_rows=%d",
-		label, d.conf.Database, d.conf.Table, loadResp.Status, loadResp.NumberLoadedRows, loadResp.NumberFilteredRows, loadResp.NumberTotalRows,
+		logLabel, d.conf.Database, d.conf.Table, loadResp.Status, loadResp.NumberLoadedRows, loadResp.NumberFilteredRows, loadResp.NumberTotalRows,
 	)
 	return nil
 }
@@ -838,7 +851,10 @@ func (d *dorisStreamLoadOutput) newRequest(ctx context.Context, targetURL, label
 	if body != nil {
 		req.Header.Set("Expect", "100-continue")
 	}
-	req.Header.Set(dsHeaderLabel, label)
+	req.Header.Del(dsHeaderLabel)
+	if !d.hasActiveGroupCommit() && label != "" {
+		req.Header.Set(dsHeaderLabel, label)
+	}
 	req.Header.Set(dsHeaderFormat, d.conf.Format)
 	req.Header.Set(dsHeaderTimeout, strconv.Itoa(int(d.conf.Timeout.Seconds())))
 	if len(d.conf.Columns) > 0 {
@@ -960,7 +976,7 @@ func classifyDorisStreamLoadResponse(httpStatus int, resp dorisStreamLoadRespons
 			resp.ExistingJobStatus, message, strings.TrimSpace(string(rawBody)),
 		)
 	case dsStatusPublishTimeout:
-		return fmt.Errorf("Doris stream load publish timeout: %s; raw response: %s", message, strings.TrimSpace(string(rawBody)))
+		return nil
 	case "":
 		return fmt.Errorf("Doris response missing Status: %s", strings.TrimSpace(string(rawBody)))
 	default:
@@ -997,6 +1013,32 @@ func (d *dorisStreamLoadOutput) getOrCreateLabel(batch service.MessageBatch) str
 		msg.MetaSetMut(dsMetaLabel, label)
 	}
 	return label
+}
+
+func (d *dorisStreamLoadOutput) labelForBatch(batch service.MessageBatch) string {
+	if d.hasActiveGroupCommit() {
+		return ""
+	}
+	return d.getOrCreateLabel(batch)
+}
+
+func (d *dorisStreamLoadOutput) hasActiveGroupCommit() bool {
+	mode := d.conf.GroupCommit
+	if mode == "" {
+		if headerMode, ok := headerValue(d.conf.Headers, dsHeaderGroupCommit); ok {
+			mode = headerMode
+		}
+	}
+	return mode != "" && !strings.EqualFold(mode, "off_mode")
+}
+
+func headerValue(headers map[string]string, name string) (string, bool) {
+	for k, v := range headers {
+		if strings.EqualFold(k, name) {
+			return v, true
+		}
+	}
+	return "", false
 }
 
 func dorisLabel(prefix string) string {
