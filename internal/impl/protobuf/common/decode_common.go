@@ -32,3 +32,10 @@ type ProfilingOptions struct {
 	Rate              float64
 	RecompileInterval int64
 }
+
+// DefaultProfilingOptions are the standard profiling settings used across all
+// hyperpb decoder call sites.
+var DefaultProfilingOptions = ProfilingOptions{
+	Rate:              0.01,
+	RecompileInterval: 100_000,
+}
