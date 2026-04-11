@@ -303,6 +303,64 @@ func TestConnectionTest(t *testing.T) {
 	assert.NoError(t, results[0].Err)
 }
 
+func TestConnectionTestFailsOnUnauthorizedFE(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte("unauthorized"))
+	}))
+	defer srv.Close()
+
+	out, err := newDorisStreamLoadOutput(dorisStreamLoadConfig{
+		URL:             srv.URL,
+		Database:        "db",
+		Table:           "tbl",
+		Username:        "user",
+		Password:        "",
+		QueryPort:       0,
+		Format:          "json",
+		ReadJSONByLine:  true,
+		LabelPrefix:     "doris_test",
+		Timeout:         5 * time.Second,
+		ColumnSeparator: dsDefaultColumnSep,
+		LineDelimiter:   dsDefaultLineDelimiter,
+	}, service.MockResources())
+	require.NoError(t, err)
+
+	results := out.ConnectionTest(context.Background())
+	require.Len(t, results, 1)
+	require.Error(t, results[0].Err)
+	assert.Contains(t, results[0].Err.Error(), "HTTP 401")
+}
+
+func TestConnectionTestFailsOnNotFoundFE(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte("missing"))
+	}))
+	defer srv.Close()
+
+	out, err := newDorisStreamLoadOutput(dorisStreamLoadConfig{
+		URL:             srv.URL,
+		Database:        "db",
+		Table:           "tbl",
+		Username:        "user",
+		Password:        "",
+		QueryPort:       0,
+		Format:          "json",
+		ReadJSONByLine:  true,
+		LabelPrefix:     "doris_test",
+		Timeout:         5 * time.Second,
+		ColumnSeparator: dsDefaultColumnSep,
+		LineDelimiter:   dsDefaultLineDelimiter,
+	}, service.MockResources())
+	require.NoError(t, err)
+
+	results := out.ConnectionTest(context.Background())
+	require.Len(t, results, 1)
+	require.Error(t, results[0].Err)
+	assert.Contains(t, results[0].Err.Error(), "HTTP 404")
+}
+
 func TestConnectionTestFailoverFE(t *testing.T) {
 	badFE := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
 	badURL := badFE.URL
