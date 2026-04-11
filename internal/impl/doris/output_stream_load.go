@@ -542,6 +542,9 @@ func newDorisStreamLoadOutput(conf dorisStreamLoadConfig, mgr *service.Resources
 		Retry:                  httpclient.DefaultRetryConfig(),
 		MetricPrefix:           "doris_stream_load_http",
 	}
+	// Doris requires the Expect header, but waiting for a 100-continue
+	// response adds avoidable latency on servers that don't emit it.
+	cfg.Transport.ExpectContinueTimeout = 0
 	cfg.AuthSigner = httpclient.BasicAuthSigner(conf.Username, conf.Password)
 
 	if strings.HasPrefix(conf.FEURLs[0], "https://") {
@@ -584,6 +587,16 @@ func (d *dorisStreamLoadOutput) ConnectionTest(ctx context.Context) service.Conn
 		resp, err := d.client.Do(req)
 		if err != nil {
 			lastErr = fmt.Errorf("connecting to Doris FE %s: %w", feURL, err)
+			continue
+		}
+		if resp.StatusCode >= http.StatusBadRequest {
+			body, readErr := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			if readErr != nil {
+				lastErr = fmt.Errorf("Doris FE %s returned HTTP %d and the body could not be read: %w", feURL, resp.StatusCode, readErr)
+			} else {
+				lastErr = fmt.Errorf("Doris FE %s returned HTTP %d: %s", feURL, resp.StatusCode, strings.TrimSpace(string(body)))
+			}
 			continue
 		}
 		resp.Body.Close()
