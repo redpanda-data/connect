@@ -438,3 +438,160 @@ func TestAvroSchemaExtractionLameUnions(t *testing.T) {
 		}, schema)
 	}
 }
+
+func TestHydrateAvroRefs(t *testing.T) {
+	parseRef := func(t *testing.T, s string) json.RawMessage {
+		t.Helper()
+		return json.RawMessage(s)
+	}
+
+	run := func(t *testing.T, root string, refs map[string]json.RawMessage) string {
+		t.Helper()
+		var node any
+		require.NoError(t, json.Unmarshal([]byte(root), &node))
+		hydrated, err := hydrateAvroRefs(node, refs, make(map[string]bool))
+		require.NoError(t, err)
+		out, err := json.Marshal(hydrated)
+		require.NoError(t, err)
+		return string(out)
+	}
+
+	t.Run("no references leaves tree untouched", func(t *testing.T) {
+		const schema = `{"type":"record","name":"R","fields":[{"name":"x","type":"int"}]}`
+		got := run(t, schema, nil)
+		assert.JSONEq(t, schema, got)
+	})
+
+	t.Run("union of reference names at root (legacy Confluent pattern)", func(t *testing.T) {
+		refs := map[string]json.RawMessage{
+			"com.example.Foo": parseRef(t, `{"type":"record","name":"Foo","namespace":"com.example","fields":[{"name":"x","type":"int"}]}`),
+			"com.example.Bar": parseRef(t, `{"type":"record","name":"Bar","namespace":"com.example","fields":[{"name":"y","type":"string"}]}`),
+		}
+		got := run(t, `["com.example.Foo","com.example.Bar"]`, refs)
+		assert.JSONEq(t, `[
+			{"type":"record","name":"Foo","namespace":"com.example","fields":[{"name":"x","type":"int"}]},
+			{"type":"record","name":"Bar","namespace":"com.example","fields":[{"name":"y","type":"string"}]}
+		]`, got)
+	})
+
+	t.Run("record field type is a reference", func(t *testing.T) {
+		refs := map[string]json.RawMessage{
+			"com.example.Inner": parseRef(t, `{"type":"record","name":"Inner","namespace":"com.example","fields":[{"name":"v","type":"long"}]}`),
+		}
+		got := run(t, `{"type":"record","name":"Outer","fields":[{"name":"inner","type":"com.example.Inner"}]}`, refs)
+		assert.JSONEq(t, `{
+			"type":"record","name":"Outer",
+			"fields":[{"name":"inner","type":{"type":"record","name":"Inner","namespace":"com.example","fields":[{"name":"v","type":"long"}]}}]
+		}`, got)
+	})
+
+	t.Run("array items is a reference", func(t *testing.T) {
+		refs := map[string]json.RawMessage{
+			"com.example.Item": parseRef(t, `{"type":"record","name":"Item","namespace":"com.example","fields":[{"name":"v","type":"int"}]}`),
+		}
+		got := run(t, `{"type":"array","items":"com.example.Item"}`, refs)
+		assert.JSONEq(t, `{"type":"array","items":{"type":"record","name":"Item","namespace":"com.example","fields":[{"name":"v","type":"int"}]}}`, got)
+	})
+
+	t.Run("map values is a reference", func(t *testing.T) {
+		refs := map[string]json.RawMessage{
+			"com.example.V": parseRef(t, `{"type":"record","name":"V","namespace":"com.example","fields":[{"name":"x","type":"int"}]}`),
+		}
+		got := run(t, `{"type":"map","values":"com.example.V"}`, refs)
+		assert.JSONEq(t, `{"type":"map","values":{"type":"record","name":"V","namespace":"com.example","fields":[{"name":"x","type":"int"}]}}`, got)
+	})
+
+	t.Run("union branch is a reference", func(t *testing.T) {
+		refs := map[string]json.RawMessage{
+			"com.example.Some": parseRef(t, `{"type":"record","name":"Some","namespace":"com.example","fields":[{"name":"v","type":"int"}]}`),
+		}
+		got := run(t, `{"type":"record","name":"R","fields":[{"name":"maybe","type":["null","com.example.Some"]}]}`, refs)
+		assert.JSONEq(t, `{
+			"type":"record","name":"R",
+			"fields":[{"name":"maybe","type":["null",{"type":"record","name":"Some","namespace":"com.example","fields":[{"name":"v","type":"int"}]}]}]
+		}`, got)
+	})
+
+	t.Run("transitive references are inlined", func(t *testing.T) {
+		refs := map[string]json.RawMessage{
+			"com.example.Foo": parseRef(t, `{"type":"record","name":"Foo","namespace":"com.example","fields":[{"name":"bar","type":"com.example.Bar"}]}`),
+			"com.example.Bar": parseRef(t, `{"type":"record","name":"Bar","namespace":"com.example","fields":[{"name":"v","type":"int"}]}`),
+		}
+		got := run(t, `{"type":"record","name":"Root","fields":[{"name":"foo","type":"com.example.Foo"}]}`, refs)
+		assert.JSONEq(t, `{
+			"type":"record","name":"Root",
+			"fields":[{"name":"foo","type":{
+				"type":"record","name":"Foo","namespace":"com.example",
+				"fields":[{"name":"bar","type":{
+					"type":"record","name":"Bar","namespace":"com.example",
+					"fields":[{"name":"v","type":"int"}]
+				}}]
+			}}]
+		}`, got)
+	})
+
+	t.Run("shared subgraph inlines once then uses name ref", func(t *testing.T) {
+		refs := map[string]json.RawMessage{
+			"com.example.Shared": parseRef(t, `{"type":"record","name":"Shared","namespace":"com.example","fields":[{"name":"v","type":"int"}]}`),
+		}
+		got := run(t, `{"type":"record","name":"R","fields":[
+			{"name":"a","type":"com.example.Shared"},
+			{"name":"b","type":"com.example.Shared"}
+		]}`, refs)
+		assert.JSONEq(t, `{
+			"type":"record","name":"R",
+			"fields":[
+				{"name":"a","type":{"type":"record","name":"Shared","namespace":"com.example","fields":[{"name":"v","type":"int"}]}},
+				{"name":"b","type":"com.example.Shared"}
+			]
+		}`, got)
+	})
+
+	t.Run("self-referential ref leaves inner self as name reference", func(t *testing.T) {
+		refs := map[string]json.RawMessage{
+			"com.example.Node": parseRef(t, `{"type":"record","name":"Node","namespace":"com.example","fields":[{"name":"value","type":"int"},{"name":"next","type":["null","com.example.Node"]}]}`),
+		}
+		got := run(t, `{"type":"record","name":"Root","fields":[{"name":"head","type":"com.example.Node"}]}`, refs)
+		assert.JSONEq(t, `{
+			"type":"record","name":"Root",
+			"fields":[{"name":"head","type":{
+				"type":"record","name":"Node","namespace":"com.example",
+				"fields":[
+					{"name":"value","type":"int"},
+					{"name":"next","type":["null","com.example.Node"]}
+				]
+			}}]
+		}`, got)
+	})
+
+	t.Run("enum symbols and record aliases matching ref names are not substituted", func(t *testing.T) {
+		refs := map[string]json.RawMessage{
+			"Foo": parseRef(t, `{"type":"record","name":"Foo","fields":[{"name":"v","type":"int"}]}`),
+		}
+		got := run(t, `{
+			"type":"record","name":"R","aliases":["Foo"],
+			"fields":[
+				{"name":"Foo","type":"int"},
+				{"name":"e","type":{"type":"enum","name":"E","symbols":["Foo","Bar"]}}
+			]
+		}`, refs)
+		assert.JSONEq(t, `{
+			"type":"record","name":"R","aliases":["Foo"],
+			"fields":[
+				{"name":"Foo","type":"int"},
+				{"name":"e","type":{"type":"enum","name":"E","symbols":["Foo","Bar"]}}
+			]
+		}`, got)
+	})
+
+	t.Run("primitive and logical types in field positions are untouched", func(t *testing.T) {
+		got := run(t, `{"type":"record","name":"R","fields":[
+			{"name":"a","type":"int"},
+			{"name":"b","type":{"type":"long","logicalType":"timestamp-micros"}}
+		]}`, nil)
+		assert.JSONEq(t, `{"type":"record","name":"R","fields":[
+			{"name":"a","type":"int"},
+			{"name":"b","type":{"type":"long","logicalType":"timestamp-micros"}}
+		]}`, got)
+	})
+}
