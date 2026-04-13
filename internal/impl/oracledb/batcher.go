@@ -12,6 +12,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"sync"
 	"time"
 
@@ -165,6 +166,12 @@ func (b *batchPublisher) Publish(ctx context.Context, m *replication.MessageEven
 	msg.MetaSet("operation", m.Operation.String())
 	if m.SCN.IsValid() {
 		msg.MetaSet("scn", m.SCN.String())
+	}
+	if !m.Timestamp.IsZero() {
+		// upcon connection go-ora automatically queries the server's timezone and stores
+		// it in conn.dbServerTimeZone so it can convert the redo log timestamp
+		// from database-local time to UTC
+		msg.MetaSet("source_ts_ms", strconv.FormatInt(m.Timestamp.UnixMilli(), 10))
 	}
 	if m.CheckpointSCN.IsValid() {
 		msg.MetaSet("checkpoint_scn", m.CheckpointSCN.String())
