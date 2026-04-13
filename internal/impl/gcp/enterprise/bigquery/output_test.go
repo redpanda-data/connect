@@ -9,7 +9,6 @@
 package bigquery
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"testing"
@@ -170,7 +169,7 @@ table: my_table
 
 	// When we write a batch.
 	batch := service.MessageBatch{service.NewMessage([]byte(`{"foo":"bar"}`))}
-	err := out.WriteBatch(context.Background(), batch)
+	err := out.WriteBatch(t.Context(), batch)
 
 	// Then it returns ErrNotConnected.
 	assert.ErrorIs(t, err, service.ErrNotConnected)
@@ -184,7 +183,7 @@ table: my_table
 `)
 
 	// When we write an empty batch.
-	err := out.WriteBatch(context.Background(), service.MessageBatch{})
+	err := out.WriteBatch(t.Context(), service.MessageBatch{})
 
 	// Then it succeeds without error.
 	assert.NoError(t, err)
@@ -200,7 +199,7 @@ table: my_table
 	// When we close it.
 	// Then it does not panic or return an error.
 	assert.NotPanics(t, func() {
-		err := out.Close(context.Background())
+		err := out.Close(t.Context())
 		assert.NoError(t, err)
 	})
 }

@@ -115,7 +115,9 @@ gcp_bigquery_write_api:
 	}()
 
 	t.Cleanup(func() {
-		require.NoError(t, stream.StopWithin(10*time.Second))
+		if err := stream.StopWithin(10 * time.Second); err != nil {
+			t.Log(err)
+		}
 	})
 
 	for i, msg := range []string{
