@@ -118,6 +118,7 @@ require (
 	github.com/microcosm-cc/bluemonday v1.0.27
 	github.com/microsoft/go-mssqldb v1.9.8
 	github.com/microsoft/gocosmos v1.1.1
+	github.com/moby/moby/api v1.54.1
 	github.com/modelcontextprotocol/go-sdk v1.4.1
 	github.com/nats-io/nats.go v1.50.0
 	github.com/nats-io/nkeys v0.4.15
@@ -158,13 +159,13 @@ require (
 	github.com/snowflakedb/gosnowflake v1.19.0
 	github.com/sourcegraph/conc v0.3.0
 	github.com/stretchr/testify v1.11.1
-	github.com/testcontainers/testcontainers-go/modules/azure v0.41.0
-	github.com/testcontainers/testcontainers-go/modules/cassandra v0.41.0
-	github.com/testcontainers/testcontainers-go/modules/couchbase v0.41.0
-	github.com/testcontainers/testcontainers-go/modules/mssql v0.41.0
-	github.com/testcontainers/testcontainers-go/modules/ollama v0.41.0
-	github.com/testcontainers/testcontainers-go/modules/qdrant v0.41.0
-	github.com/testcontainers/testcontainers-go/modules/redpanda v0.41.0
+	github.com/testcontainers/testcontainers-go/modules/azure v0.42.0
+	github.com/testcontainers/testcontainers-go/modules/cassandra v0.42.0
+	github.com/testcontainers/testcontainers-go/modules/couchbase v0.42.0
+	github.com/testcontainers/testcontainers-go/modules/mssql v0.42.0
+	github.com/testcontainers/testcontainers-go/modules/ollama v0.42.0
+	github.com/testcontainers/testcontainers-go/modules/qdrant v0.42.0
+	github.com/testcontainers/testcontainers-go/modules/redpanda v0.42.0
 	github.com/tetratelabs/wazero v1.11.0
 	github.com/tigerbeetle/tigerbeetle-go v0.16.78
 	github.com/timeplus-io/proton-go-driver/v2 v2.1.4
@@ -289,7 +290,6 @@ require (
 	github.com/mitchellh/copystructure v1.2.0 // indirect
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
 	github.com/moby/go-archive v0.2.0 // indirect
-	github.com/moby/moby/api v1.54.1 // indirect
 	github.com/moby/moby/client v0.4.0 // indirect
 	github.com/moby/sys/userns v0.1.0 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
@@ -426,7 +426,7 @@ require (
 	github.com/distribution/reference v0.6.0 // indirect
 	github.com/dlclark/regexp2 v1.11.5 // indirect
 	github.com/docker/docker v28.5.2+incompatible
-	github.com/docker/go-connections v0.6.0
+	github.com/docker/go-connections v0.6.0 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/dvsekhvalnov/jose2go v1.8.0 // indirect
 	github.com/eapache/go-resiliency v1.7.0 // indirect
@@ -529,7 +529,7 @@ require (
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
 	github.com/stretchr/objx v0.5.3 // indirect
 	github.com/testcontainers/testcontainers-go v0.42.0
-	github.com/testcontainers/testcontainers-go/modules/mongodb v0.41.0
+	github.com/testcontainers/testcontainers-go/modules/mongodb v0.42.0
 	github.com/tilinna/z85 v1.0.0 // indirect
 	github.com/tklauser/go-sysconf v0.3.16 // indirect
 	github.com/tklauser/numcpus v0.11.0 // indirect

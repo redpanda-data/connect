@@ -17,14 +17,15 @@ package redis
 import (
 	"context"
 	"fmt"
+	"net/netip"
 	"runtime"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/docker/docker/api/types/container"
-	"github.com/docker/go-connections/nat"
+	"github.com/moby/moby/api/types/container"
+	mobynet "github.com/moby/moby/api/types/network"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/network"
@@ -98,12 +99,12 @@ func TestIntegrationRedisClusterCache(t *testing.T) {
 		testcontainers.WithExposedPorts(exposedPorts...),
 		testcontainers.WithEnv(map[string]string{"IP": hostIP}),
 		testcontainers.WithHostConfigModifier(func(hc *container.HostConfig) {
-			hc.PortBindings = nat.PortMap{}
+			hc.PortBindings = mobynet.PortMap{}
 			for i := range 6 {
-				p1 := nat.Port(fmt.Sprintf("%d/tcp", 7000+i))
-				p2 := nat.Port(fmt.Sprintf("%d/tcp", 17000+i))
-				hc.PortBindings[p1] = []nat.PortBinding{{HostIP: "0.0.0.0", HostPort: fmt.Sprintf("%d", 7000+i)}}
-				hc.PortBindings[p2] = []nat.PortBinding{{HostIP: "0.0.0.0", HostPort: fmt.Sprintf("%d", 17000+i)}}
+				p1 := mobynet.MustParsePort(fmt.Sprintf("%d/tcp", 7000+i))
+				p2 := mobynet.MustParsePort(fmt.Sprintf("%d/tcp", 17000+i))
+				hc.PortBindings[p1] = []mobynet.PortBinding{{HostIP: netip.MustParseAddr("0.0.0.0"), HostPort: fmt.Sprintf("%d", 7000+i)}}
+				hc.PortBindings[p2] = []mobynet.PortBinding{{HostIP: netip.MustParseAddr("0.0.0.0"), HostPort: fmt.Sprintf("%d", 17000+i)}}
 			}
 		}),
 		testcontainers.WithWaitStrategy(
@@ -175,8 +176,8 @@ func TestIntegrationRedisFailoverCache(t *testing.T) {
 		network.WithNetwork([]string{"redis-master"}, rpNet),
 		testcontainers.WithExposedPorts("6379/tcp"),
 		testcontainers.WithHostConfigModifier(func(hc *container.HostConfig) {
-			hc.PortBindings = nat.PortMap{
-				"6379/tcp": []nat.PortBinding{{HostIP: "", HostPort: strconv.Itoa(masterPort)}},
+			hc.PortBindings = mobynet.PortMap{
+				mobynet.MustParsePort("6379/tcp"): []mobynet.PortBinding{{HostPort: strconv.Itoa(masterPort)}},
 			}
 		}),
 		testcontainers.WithEnv(map[string]string{"ALLOW_EMPTY_PASSWORD": "yes"}),
@@ -194,8 +195,8 @@ func TestIntegrationRedisFailoverCache(t *testing.T) {
 		network.WithNetwork([]string{"redis-failover"}, rpNet),
 		testcontainers.WithExposedPorts("26379/tcp"),
 		testcontainers.WithHostConfigModifier(func(hc *container.HostConfig) {
-			hc.PortBindings = nat.PortMap{
-				"26379/tcp": []nat.PortBinding{{HostIP: "", HostPort: strconv.Itoa(sentinelPort)}},
+			hc.PortBindings = mobynet.PortMap{
+				mobynet.MustParsePort("26379/tcp"): []mobynet.PortBinding{{HostPort: strconv.Itoa(sentinelPort)}},
 			}
 			// Allow sentinel to reach the master via host.docker.internal.
 			hc.ExtraHosts = []string{"host.docker.internal:host-gateway"}

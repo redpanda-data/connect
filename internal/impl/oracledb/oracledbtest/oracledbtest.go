@@ -18,7 +18,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/docker/go-connections/nat"
+	"github.com/moby/moby/api/types/network"
 	_ "github.com/sijms/go-ora/v2"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
@@ -387,7 +387,7 @@ type containerCfg struct {
 	dbConn  *sql.DB
 	host    string
 	connStr string
-	port    nat.Port
+	port    network.Port
 }
 
 func startContainer(t *testing.T, ctx context.Context) containerCfg {

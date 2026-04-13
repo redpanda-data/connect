@@ -79,9 +79,9 @@ func NewPartitionKey(spec iceberg.PartitionSpec, schema *iceberg.Schema, values 
 		}
 
 		// Get the source field type from the schema
-		sourceField, ok := schema.FindFieldByID(field.SourceID)
+		sourceField, ok := schema.FindFieldByID(field.SourceID())
 		if !ok {
-			return nil, fmt.Errorf("source field %d not found in schema for partition field %q", field.SourceID, field.Name)
+			return nil, fmt.Errorf("source field %d not found in schema for partition field %q", field.SourceID(), field.Name)
 		}
 
 		lit, err := parquetValueToLiteral(sourceField.Type, value)
@@ -374,7 +374,7 @@ func (p *partitionSpecParser) parseField(fieldID int) (iceberg.PartitionField, e
 	}
 
 	return iceberg.PartitionField{
-		SourceID:  sourceID,
+		SourceIDs: []int{sourceID},
 		FieldID:   fieldID,
 		Name:      name,
 		Transform: transform,

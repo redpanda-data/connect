@@ -25,7 +25,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/docker/docker/api/types/container"
+	"github.com/moby/moby/api/types/container"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/redpanda"
@@ -103,7 +103,7 @@ func startRedpandaCluster(t *testing.T, ctx context.Context, numBrokers int) red
 		host, err := ctr.Host(ctx)
 		require.NoError(t, err, "failed to get host for broker %d", i)
 
-		brokerAddrs[i] = fmt.Sprintf("%s:%d", host, mappedPort.Int())
+		brokerAddrs[i] = fmt.Sprintf("%s:%d", host, int(mappedPort.Num()))
 
 		cfg := fmt.Sprintf(`# Injected by testcontainers
 redpanda:
@@ -133,7 +133,7 @@ redpanda:
       name: internal
       port: 9093
   developer_mode: true
-`, i, i, host, mappedPort.Int(), i)
+`, i, i, host, int(mappedPort.Num()), i)
 
 		err = ctr.CopyToContainer(ctx, []byte(cfg), "/etc/redpanda/redpanda.yaml", 0o644)
 		require.NoError(t, err, "failed to copy config to broker %d", i)

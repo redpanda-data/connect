@@ -15,7 +15,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/docker/go-connections/nat"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
@@ -54,7 +53,7 @@ func TestIntegrationSplunk(t *testing.T) {
 		}),
 		testcontainers.WithWaitStrategyAndDeadline(startupTimeout,
 			wait.ForHTTP("/services/collector/health").
-				WithPort(nat.Port(containerOutputPort)).
+				WithPort(containerOutputPort).
 				WithTLS(true, &tls.Config{InsecureSkipVerify: true}). //nolint:gosec
 				WithResponseMatcher(func(body io.Reader) bool {
 					b, err := io.ReadAll(body)
@@ -69,11 +68,11 @@ func TestIntegrationSplunk(t *testing.T) {
 	testcontainers.CleanupContainer(t, ctr)
 	require.NoError(t, err)
 
-	inputPortM, err := ctr.MappedPort(t.Context(), nat.Port(containerInputPort))
+	inputPortM, err := ctr.MappedPort(t.Context(), containerInputPort)
 	require.NoError(t, err)
 	serviceInputPort := inputPortM.Port()
 
-	outputPortM, err := ctr.MappedPort(t.Context(), nat.Port(containerOutputPort))
+	outputPortM, err := ctr.MappedPort(t.Context(), containerOutputPort)
 	require.NoError(t, err)
 	serviceOutputPort := outputPortM.Port()
 

@@ -59,20 +59,20 @@ func TestIdentityTransform(t *testing.T) {
 	schema := makeTestSchema()
 
 	spec := iceberg.NewPartitionSpec(
-		iceberg.PartitionField{SourceID: 1, FieldID: 1000, Name: "bool_partition", Transform: iceberg.IdentityTransform{}},
-		iceberg.PartitionField{SourceID: 2, FieldID: 1001, Name: "int_partition", Transform: iceberg.IdentityTransform{}},
-		iceberg.PartitionField{SourceID: 3, FieldID: 1002, Name: "long_test_partition", Transform: iceberg.IdentityTransform{}},
-		iceberg.PartitionField{SourceID: 4, FieldID: 1003, Name: "fl_partition", Transform: iceberg.IdentityTransform{}},
-		iceberg.PartitionField{SourceID: 5, FieldID: 1004, Name: "d_partition", Transform: iceberg.IdentityTransform{}},
-		iceberg.PartitionField{SourceID: 6, FieldID: 1005, Name: "decimal_partition", Transform: iceberg.IdentityTransform{}},
-		iceberg.PartitionField{SourceID: 7, FieldID: 1006, Name: "date_identity", Transform: iceberg.IdentityTransform{}},
-		iceberg.PartitionField{SourceID: 8, FieldID: 1007, Name: "time_identity", Transform: iceberg.IdentityTransform{}},
-		iceberg.PartitionField{SourceID: 9, FieldID: 1008, Name: "timestamp_identity", Transform: iceberg.IdentityTransform{}},
-		iceberg.PartitionField{SourceID: 10, FieldID: 1009, Name: "timestamptz_identity", Transform: iceberg.IdentityTransform{}},
-		iceberg.PartitionField{SourceID: 11, FieldID: 1010, Name: "string_identity", Transform: iceberg.IdentityTransform{}},
-		iceberg.PartitionField{SourceID: 12, FieldID: 1011, Name: "uuid_identity", Transform: iceberg.IdentityTransform{}},
-		iceberg.PartitionField{SourceID: 13, FieldID: 1012, Name: "fixed_identity", Transform: iceberg.IdentityTransform{}},
-		iceberg.PartitionField{SourceID: 14, FieldID: 1013, Name: "binary_identity", Transform: iceberg.IdentityTransform{}},
+		iceberg.PartitionField{SourceIDs: []int{1}, FieldID: 1000, Name: "bool_partition", Transform: iceberg.IdentityTransform{}},
+		iceberg.PartitionField{SourceIDs: []int{2}, FieldID: 1001, Name: "int_partition", Transform: iceberg.IdentityTransform{}},
+		iceberg.PartitionField{SourceIDs: []int{3}, FieldID: 1002, Name: "long_test_partition", Transform: iceberg.IdentityTransform{}},
+		iceberg.PartitionField{SourceIDs: []int{4}, FieldID: 1003, Name: "fl_partition", Transform: iceberg.IdentityTransform{}},
+		iceberg.PartitionField{SourceIDs: []int{5}, FieldID: 1004, Name: "d_partition", Transform: iceberg.IdentityTransform{}},
+		iceberg.PartitionField{SourceIDs: []int{6}, FieldID: 1005, Name: "decimal_partition", Transform: iceberg.IdentityTransform{}},
+		iceberg.PartitionField{SourceIDs: []int{7}, FieldID: 1006, Name: "date_identity", Transform: iceberg.IdentityTransform{}},
+		iceberg.PartitionField{SourceIDs: []int{8}, FieldID: 1007, Name: "time_identity", Transform: iceberg.IdentityTransform{}},
+		iceberg.PartitionField{SourceIDs: []int{9}, FieldID: 1008, Name: "timestamp_identity", Transform: iceberg.IdentityTransform{}},
+		iceberg.PartitionField{SourceIDs: []int{10}, FieldID: 1009, Name: "timestamptz_identity", Transform: iceberg.IdentityTransform{}},
+		iceberg.PartitionField{SourceIDs: []int{11}, FieldID: 1010, Name: "string_identity", Transform: iceberg.IdentityTransform{}},
+		iceberg.PartitionField{SourceIDs: []int{12}, FieldID: 1011, Name: "uuid_identity", Transform: iceberg.IdentityTransform{}},
+		iceberg.PartitionField{SourceIDs: []int{13}, FieldID: 1012, Name: "fixed_identity", Transform: iceberg.IdentityTransform{}},
+		iceberg.PartitionField{SourceIDs: []int{14}, FieldID: 1013, Name: "binary_identity", Transform: iceberg.IdentityTransform{}},
 	)
 
 	// Create partition values matching the C++ test
@@ -124,15 +124,15 @@ func TestTimestampTransform(t *testing.T) {
 	schema := makeTestSchema()
 
 	spec := iceberg.NewPartitionSpec(
-		iceberg.PartitionField{SourceID: 9, FieldID: 1000, Name: "timestamp_no_ms", Transform: iceberg.IdentityTransform{}},
-		iceberg.PartitionField{SourceID: 9, FieldID: 1001, Name: "timestamp_ms", Transform: iceberg.IdentityTransform{}},
-		iceberg.PartitionField{SourceID: 9, FieldID: 1002, Name: "timestamp_us", Transform: iceberg.IdentityTransform{}},
-		iceberg.PartitionField{SourceID: 10, FieldID: 1003, Name: "timestamp_tz_no_ms", Transform: iceberg.IdentityTransform{}},
-		iceberg.PartitionField{SourceID: 10, FieldID: 1004, Name: "timestamp_tz_ms", Transform: iceberg.IdentityTransform{}},
-		iceberg.PartitionField{SourceID: 10, FieldID: 1005, Name: "timestamp_tz_us", Transform: iceberg.IdentityTransform{}},
-		iceberg.PartitionField{SourceID: 8, FieldID: 1006, Name: "time_s", Transform: iceberg.IdentityTransform{}},
-		iceberg.PartitionField{SourceID: 8, FieldID: 1007, Name: "time_ms", Transform: iceberg.IdentityTransform{}},
-		iceberg.PartitionField{SourceID: 8, FieldID: 1008, Name: "time_us", Transform: iceberg.IdentityTransform{}},
+		iceberg.PartitionField{SourceIDs: []int{9}, FieldID: 1000, Name: "timestamp_no_ms", Transform: iceberg.IdentityTransform{}},
+		iceberg.PartitionField{SourceIDs: []int{9}, FieldID: 1001, Name: "timestamp_ms", Transform: iceberg.IdentityTransform{}},
+		iceberg.PartitionField{SourceIDs: []int{9}, FieldID: 1002, Name: "timestamp_us", Transform: iceberg.IdentityTransform{}},
+		iceberg.PartitionField{SourceIDs: []int{10}, FieldID: 1003, Name: "timestamp_tz_no_ms", Transform: iceberg.IdentityTransform{}},
+		iceberg.PartitionField{SourceIDs: []int{10}, FieldID: 1004, Name: "timestamp_tz_ms", Transform: iceberg.IdentityTransform{}},
+		iceberg.PartitionField{SourceIDs: []int{10}, FieldID: 1005, Name: "timestamp_tz_us", Transform: iceberg.IdentityTransform{}},
+		iceberg.PartitionField{SourceIDs: []int{8}, FieldID: 1006, Name: "time_s", Transform: iceberg.IdentityTransform{}},
+		iceberg.PartitionField{SourceIDs: []int{8}, FieldID: 1007, Name: "time_ms", Transform: iceberg.IdentityTransform{}},
+		iceberg.PartitionField{SourceIDs: []int{8}, FieldID: 1008, Name: "time_us", Transform: iceberg.IdentityTransform{}},
 	)
 
 	values := []parquet.Value{
@@ -175,10 +175,10 @@ func TestTimeTransforms(t *testing.T) {
 	schema := makeTestSchema()
 
 	spec := iceberg.NewPartitionSpec(
-		iceberg.PartitionField{SourceID: 9, FieldID: 1000, Name: "year_transform", Transform: iceberg.YearTransform{}},
-		iceberg.PartitionField{SourceID: 9, FieldID: 1001, Name: "month_transform", Transform: iceberg.MonthTransform{}},
-		iceberg.PartitionField{SourceID: 9, FieldID: 1002, Name: "day_transform", Transform: iceberg.DayTransform{}},
-		iceberg.PartitionField{SourceID: 9, FieldID: 1003, Name: "hour_transform", Transform: iceberg.HourTransform{}},
+		iceberg.PartitionField{SourceIDs: []int{9}, FieldID: 1000, Name: "year_transform", Transform: iceberg.YearTransform{}},
+		iceberg.PartitionField{SourceIDs: []int{9}, FieldID: 1001, Name: "month_transform", Transform: iceberg.MonthTransform{}},
+		iceberg.PartitionField{SourceIDs: []int{9}, FieldID: 1002, Name: "day_transform", Transform: iceberg.DayTransform{}},
+		iceberg.PartitionField{SourceIDs: []int{9}, FieldID: 1003, Name: "hour_transform", Transform: iceberg.HourTransform{}},
 	)
 
 	// Raw timestamp value: 2025-02-24 11:30:00 UTC in microseconds since epoch
@@ -208,7 +208,7 @@ func TestVoidTransform(t *testing.T) {
 	schema := makeTestSchema()
 
 	spec := iceberg.NewPartitionSpec(
-		iceberg.PartitionField{SourceID: 2, FieldID: 1000, Name: "void_transform", Transform: iceberg.VoidTransform{}},
+		iceberg.PartitionField{SourceIDs: []int{2}, FieldID: 1000, Name: "void_transform", Transform: iceberg.VoidTransform{}},
 	)
 
 	// Void transform should return "null" regardless of input value
@@ -227,7 +227,7 @@ func TestBucketTransform(t *testing.T) {
 	schema := makeTestSchema()
 
 	spec := iceberg.NewPartitionSpec(
-		iceberg.PartitionField{SourceID: 2, FieldID: 1000, Name: "bucket_transform", Transform: iceberg.BucketTransform{NumBuckets: 16}},
+		iceberg.PartitionField{SourceIDs: []int{2}, FieldID: 1000, Name: "bucket_transform", Transform: iceberg.BucketTransform{NumBuckets: 16}},
 	)
 
 	// Raw int value - bucket transform will compute bucket number
@@ -251,8 +251,8 @@ func TestElementSizeLimiting(t *testing.T) {
 	schema := makeTestSchema()
 
 	spec := iceberg.NewPartitionSpec(
-		iceberg.PartitionField{SourceID: 11, FieldID: 1000, Name: "identity_string", Transform: iceberg.IdentityTransform{}},
-		iceberg.PartitionField{SourceID: 14, FieldID: 1001, Name: "identity_binary", Transform: iceberg.IdentityTransform{}},
+		iceberg.PartitionField{SourceIDs: []int{11}, FieldID: 1000, Name: "identity_string", Transform: iceberg.IdentityTransform{}},
+		iceberg.PartitionField{SourceIDs: []int{14}, FieldID: 1001, Name: "identity_binary", Transform: iceberg.IdentityTransform{}},
 	)
 
 	longString := "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Pellentesque ipsum magna, pellentesque quis nisl eu, congue aliquam id."
@@ -281,7 +281,7 @@ func TestPathSizeLimiting(t *testing.T) {
 	fields := make([]iceberg.PartitionField, 64)
 	for i := range 64 {
 		fields[i] = iceberg.PartitionField{
-			SourceID:  2,
+			SourceIDs: []int{2},
 			FieldID:   1000 + i,
 			Name:      fmt.Sprintf("identity_int_%d", i),
 			Transform: iceberg.IdentityTransform{},
@@ -310,8 +310,8 @@ func TestSpecValuesMismatch(t *testing.T) {
 	schema := makeTestSchema()
 
 	spec := iceberg.NewPartitionSpec(
-		iceberg.PartitionField{SourceID: 1, FieldID: 1000, Name: "bool_partition", Transform: iceberg.IdentityTransform{}},
-		iceberg.PartitionField{SourceID: 2, FieldID: 1001, Name: "int_partition", Transform: iceberg.IdentityTransform{}},
+		iceberg.PartitionField{SourceIDs: []int{1}, FieldID: 1000, Name: "bool_partition", Transform: iceberg.IdentityTransform{}},
+		iceberg.PartitionField{SourceIDs: []int{2}, FieldID: 1001, Name: "int_partition", Transform: iceberg.IdentityTransform{}},
 	)
 
 	// Only provide one value when two are expected
@@ -342,8 +342,8 @@ func TestNullValues(t *testing.T) {
 	schema := makeTestSchema()
 
 	spec := iceberg.NewPartitionSpec(
-		iceberg.PartitionField{SourceID: 2, FieldID: 1000, Name: "null_int", Transform: iceberg.IdentityTransform{}},
-		iceberg.PartitionField{SourceID: 11, FieldID: 1001, Name: "null_string", Transform: iceberg.IdentityTransform{}},
+		iceberg.PartitionField{SourceIDs: []int{2}, FieldID: 1000, Name: "null_int", Transform: iceberg.IdentityTransform{}},
+		iceberg.PartitionField{SourceIDs: []int{11}, FieldID: 1001, Name: "null_string", Transform: iceberg.IdentityTransform{}},
 	)
 
 	values := []parquet.Value{
@@ -361,8 +361,8 @@ func TestTruncateTransform(t *testing.T) {
 	schema := makeTestSchema()
 
 	spec := iceberg.NewPartitionSpec(
-		iceberg.PartitionField{SourceID: 2, FieldID: 1000, Name: "truncate_int", Transform: iceberg.TruncateTransform{Width: 10}},
-		iceberg.PartitionField{SourceID: 11, FieldID: 1001, Name: "truncate_string", Transform: iceberg.TruncateTransform{Width: 5}},
+		iceberg.PartitionField{SourceIDs: []int{2}, FieldID: 1000, Name: "truncate_int", Transform: iceberg.TruncateTransform{Width: 10}},
+		iceberg.PartitionField{SourceIDs: []int{11}, FieldID: 1001, Name: "truncate_string", Transform: iceberg.TruncateTransform{Width: 5}},
 	)
 
 	// Raw values - truncate transform will be applied
@@ -381,7 +381,7 @@ func TestURLEncoding(t *testing.T) {
 	schema := makeTestSchema()
 
 	spec := iceberg.NewPartitionSpec(
-		iceberg.PartitionField{SourceID: 11, FieldID: 1000, Name: "special/chars", Transform: iceberg.IdentityTransform{}},
+		iceberg.PartitionField{SourceIDs: []int{11}, FieldID: 1000, Name: "special/chars", Transform: iceberg.IdentityTransform{}},
 	)
 
 	values := []parquet.Value{
@@ -399,8 +399,8 @@ func TestNewPartitionKey(t *testing.T) {
 	schema := makeTestSchema()
 
 	spec := iceberg.NewPartitionSpec(
-		iceberg.PartitionField{SourceID: 1, FieldID: 1000, Name: "bool_partition", Transform: iceberg.IdentityTransform{}},
-		iceberg.PartitionField{SourceID: 2, FieldID: 1001, Name: "int_partition", Transform: iceberg.IdentityTransform{}},
+		iceberg.PartitionField{SourceIDs: []int{1}, FieldID: 1000, Name: "bool_partition", Transform: iceberg.IdentityTransform{}},
+		iceberg.PartitionField{SourceIDs: []int{2}, FieldID: 1001, Name: "int_partition", Transform: iceberg.IdentityTransform{}},
 	)
 
 	values := []parquet.Value{
@@ -423,7 +423,7 @@ func TestPartitionKeyWithNulls(t *testing.T) {
 	schema := makeTestSchema()
 
 	spec := iceberg.NewPartitionSpec(
-		iceberg.PartitionField{SourceID: 2, FieldID: 1000, Name: "int_partition", Transform: iceberg.IdentityTransform{}},
+		iceberg.PartitionField{SourceIDs: []int{2}, FieldID: 1000, Name: "int_partition", Transform: iceberg.IdentityTransform{}},
 	)
 
 	values := []parquet.Value{
@@ -506,11 +506,11 @@ func TestParsePartitionSpecMultipleFields(t *testing.T) {
 	require.Equal(t, 2, spec.NumFields())
 
 	assert.Equal(t, "test_int", spec.Field(0).Name)
-	assert.Equal(t, 2, spec.Field(0).SourceID) // test_int has ID 2
+	assert.Equal(t, 2, spec.Field(0).SourceID()) // test_int has ID 2
 	assert.IsType(t, iceberg.IdentityTransform{}, spec.Field(0).Transform)
 
 	assert.Equal(t, "test_string", spec.Field(1).Name)
-	assert.Equal(t, 11, spec.Field(1).SourceID) // test_string has ID 11
+	assert.Equal(t, 11, spec.Field(1).SourceID()) // test_string has ID 11
 	assert.IsType(t, iceberg.IdentityTransform{}, spec.Field(1).Transform)
 }
 
@@ -662,7 +662,7 @@ func TestParsePartitionSpecQuotedIdentifiers(t *testing.T) {
 
 			field := spec.Field(0)
 			assert.Equal(t, tc.expectName, field.Name)
-			assert.Equal(t, tc.sourceID, field.SourceID)
+			assert.Equal(t, tc.sourceID, field.SourceID())
 		})
 	}
 }
@@ -711,7 +711,7 @@ func TestParsePartitionSpecNestedFields(t *testing.T) {
 
 			field := spec.Field(0)
 			assert.Equal(t, tc.expectName, field.Name)
-			assert.Equal(t, tc.sourceID, field.SourceID)
+			assert.Equal(t, tc.sourceID, field.SourceID())
 		})
 	}
 }
@@ -728,13 +728,13 @@ func TestParsePartitionSpecComplexSpec(t *testing.T) {
 	// First field: hour transform with alias
 	f0 := spec.Field(0)
 	assert.Equal(t, "ts_hour", f0.Name)
-	assert.Equal(t, 9, f0.SourceID) // test_timestamp
+	assert.Equal(t, 9, f0.SourceID()) // test_timestamp
 	assert.IsType(t, iceberg.HourTransform{}, f0.Transform)
 
 	// Second field: bucket transform with alias
 	f1 := spec.Field(1)
 	assert.Equal(t, "int_bucket", f1.Name)
-	assert.Equal(t, 2, f1.SourceID) // test_int
+	assert.Equal(t, 2, f1.SourceID()) // test_int
 	bucket, ok := f1.Transform.(iceberg.BucketTransform)
 	require.True(t, ok)
 	assert.Equal(t, 16, bucket.NumBuckets)
@@ -742,7 +742,7 @@ func TestParsePartitionSpecComplexSpec(t *testing.T) {
 	// Third field: identity transform
 	f2 := spec.Field(2)
 	assert.Equal(t, "test_string", f2.Name)
-	assert.Equal(t, 11, f2.SourceID) // test_string
+	assert.Equal(t, 11, f2.SourceID()) // test_string
 	assert.IsType(t, iceberg.IdentityTransform{}, f2.Transform)
 }
 
