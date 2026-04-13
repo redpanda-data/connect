@@ -168,8 +168,8 @@ func TestConnectorIntegration(t *testing.T) {
 			iceberg.NestedField{ID: 4, Name: "ts", Type: iceberg.PrimitiveTypes.TimestampTz, Required: false},
 		)
 		partitionSpec := iceberg.NewPartitionSpec(
-			iceberg.PartitionField{SourceID: 2, FieldID: 1000, Name: "category", Transform: iceberg.IdentityTransform{}},
-			iceberg.PartitionField{SourceID: 4, FieldID: 1001, Name: "ts_day", Transform: iceberg.DayTransform{}},
+			iceberg.PartitionField{SourceIDs: []int{2}, FieldID: 1000, Name: "category", Transform: iceberg.IdentityTransform{}},
+			iceberg.PartitionField{SourceIDs: []int{4}, FieldID: 1001, Name: "ts_day", Transform: iceberg.DayTransform{}},
 		)
 		_, err := client.CreateTable(ctx, "partitioned_test", schema, catalog.WithPartitionSpec(&partitionSpec))
 		require.NoError(t, err)

@@ -22,13 +22,14 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/netip"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/docker/docker/api/types/container"
-	"github.com/docker/go-connections/nat"
+	"github.com/moby/moby/api/types/container"
+	mobynet "github.com/moby/moby/api/types/network"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/network"
@@ -405,8 +406,8 @@ func startConfluent(t *testing.T, connect bool) EmbeddedConfluentCluster {
 		network.WithNetwork([]string{"broker"}, rpNet),
 		testcontainers.WithExposedPorts("9092/tcp"),
 		testcontainers.WithHostConfigModifier(func(hc *container.HostConfig) {
-			hc.PortBindings = nat.PortMap{
-				"9092/tcp": []nat.PortBinding{{HostIP: "0.0.0.0", HostPort: strconv.Itoa(kafkaPort)}},
+			hc.PortBindings = mobynet.PortMap{
+				mobynet.MustParsePort("9092/tcp"): []mobynet.PortBinding{{HostIP: netip.MustParseAddr("0.0.0.0"), HostPort: strconv.Itoa(kafkaPort)}},
 			}
 		}),
 		testcontainers.WithEnv(map[string]string{
@@ -467,8 +468,8 @@ func startConfluent(t *testing.T, connect bool) EmbeddedConfluentCluster {
 		network.WithNetwork([]string{"schema-registry"}, rpNet),
 		testcontainers.WithExposedPorts("8081/tcp"),
 		testcontainers.WithHostConfigModifier(func(hc *container.HostConfig) {
-			hc.PortBindings = nat.PortMap{
-				"8081/tcp": []nat.PortBinding{{HostIP: "0.0.0.0", HostPort: strconv.Itoa(schemaRegistryPort)}},
+			hc.PortBindings = mobynet.PortMap{
+				mobynet.MustParsePort("8081/tcp"): []mobynet.PortBinding{{HostIP: netip.MustParseAddr("0.0.0.0"), HostPort: strconv.Itoa(schemaRegistryPort)}},
 			}
 		}),
 		testcontainers.WithEnv(map[string]string{
@@ -515,8 +516,8 @@ func startConfluent(t *testing.T, connect bool) EmbeddedConfluentCluster {
 			network.WithNetwork([]string{"connect"}, rpNet),
 			testcontainers.WithExposedPorts("8083/tcp"),
 			testcontainers.WithHostConfigModifier(func(hc *container.HostConfig) {
-				hc.PortBindings = nat.PortMap{
-					"8083/tcp": []nat.PortBinding{{HostIP: "0.0.0.0", HostPort: strconv.Itoa(connectPort)}},
+				hc.PortBindings = mobynet.PortMap{
+					mobynet.MustParsePort("8083/tcp"): []mobynet.PortBinding{{HostIP: netip.MustParseAddr("0.0.0.0"), HostPort: strconv.Itoa(connectPort)}},
 				}
 			}),
 			testcontainers.WithEnv(map[string]string{

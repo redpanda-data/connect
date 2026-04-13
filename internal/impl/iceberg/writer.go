@@ -176,7 +176,7 @@ func (w *writer) messagesToParquet(batch service.MessageBatch) ([]partitionFile,
 	partitionSourceIDs := make(map[int]int)
 	for i := 0; i < spec.NumFields(); i++ {
 		field := spec.Field(i)
-		partitionSourceIDs[field.SourceID] = i
+		partitionSourceIDs[field.SourceID()] = i
 	}
 	numPartitionFields := spec.NumFields()
 

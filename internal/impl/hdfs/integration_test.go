@@ -20,8 +20,8 @@ import (
 	"time"
 
 	"github.com/colinmarc/hdfs"
-	"github.com/docker/docker/api/types/container"
-	"github.com/docker/go-connections/nat"
+	"github.com/moby/moby/api/types/container"
+	mobynet "github.com/moby/moby/api/types/network"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
@@ -44,11 +44,11 @@ func TestIntegrationHDFS(t *testing.T) {
 		testcontainers.WithImagePlatform("linux/amd64"),
 		testcontainers.WithExposedPorts("9000/tcp", "50070/tcp", "50075/tcp", "50010/tcp"),
 		testcontainers.WithHostConfigModifier(func(hc *container.HostConfig) {
-			hc.PortBindings = nat.PortMap{
-				"9000/tcp":  {{HostIP: "", HostPort: "19000"}},
-				"50070/tcp": {{HostIP: "", HostPort: "19070"}},
-				"50075/tcp": {{HostIP: "", HostPort: "19075"}},
-				"50010/tcp": {{HostIP: "", HostPort: "19010"}},
+			hc.PortBindings = mobynet.PortMap{
+				mobynet.MustParsePort("9000/tcp"):  {{HostPort: "19000"}},
+				mobynet.MustParsePort("50070/tcp"): {{HostPort: "19070"}},
+				mobynet.MustParsePort("50075/tcp"): {{HostPort: "19075"}},
+				mobynet.MustParsePort("50010/tcp"): {{HostPort: "19010"}},
 			}
 		}),
 		testcontainers.WithWaitStrategy(
