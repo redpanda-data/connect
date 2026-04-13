@@ -78,6 +78,8 @@ Arc supports two payload formats:
 - *row*: Sends each message as an individual row record with fields and optional tags.
 
 Data is encoded as MessagePack and optionally compressed with zstd (recommended) or gzip before being sent to the Arc endpoint.
+
+NOTE: In columnar mode, all messages within a single batch must have the same set of fields. Arc validates that all column arrays have equal length and rejects batches with mismatched columns. Schema evolution across separate batches is fully supported. Use row format if messages within a batch have varying schemas.
 ` + service.OutputPerformanceDocs(true, true)).
 		Fields(
 			service.NewURLField(fieldURL).
@@ -486,28 +488,26 @@ func (o *arcOutput) compress(data []byte) ([]byte, string, error) {
 	case "zstd":
 		var buf bytes.Buffer
 		w := zstdEncoderPool.Get().(*zstd.Encoder)
+		defer zstdEncoderPool.Put(w)
 		w.Reset(&buf)
 		if _, err := w.Write(data); err != nil {
-			w.Close()
 			return nil, "", err
 		}
 		if err := w.Close(); err != nil {
 			return nil, "", err
 		}
-		zstdEncoderPool.Put(w)
 		return buf.Bytes(), "zstd", nil
 	case "gzip":
 		var buf bytes.Buffer
 		w := gzipWriterPool.Get().(*gzip.Writer)
+		defer gzipWriterPool.Put(w)
 		w.Reset(&buf)
 		if _, err := w.Write(data); err != nil {
-			w.Close()
 			return nil, "", err
 		}
 		if err := w.Close(); err != nil {
 			return nil, "", err
 		}
-		gzipWriterPool.Put(w)
 		return buf.Bytes(), "gzip", nil
 	}
 	return data, "", nil
