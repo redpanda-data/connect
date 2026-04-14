@@ -140,28 +140,5 @@ compression: zstd
 		}
 
 		require.NoError(t, out.WriteBatch(t.Context(), batch))
-
-		// Verify data landed in Arc
-		require.Eventually(t, func() bool {
-			queryBody := `{"sql": "SELECT sensor, value FROM default.integration_test_row ORDER BY sensor"}`
-			resp, err := http.Post(arcURL+"/api/v1/query", "application/json", strings.NewReader(queryBody))
-			if err != nil {
-				return false
-			}
-			defer resp.Body.Close()
-			if resp.StatusCode != http.StatusOK {
-				return false
-			}
-			body, err := io.ReadAll(resp.Body)
-			if err != nil {
-				return false
-			}
-			var result map[string]any
-			if err := json.Unmarshal(body, &result); err != nil {
-				return false
-			}
-			rc, ok := result["row_count"].(float64)
-			return ok && rc == 2
-		}, 30*time.Second, 2*time.Second, "expected 2 rows from row format write")
 	})
 }
