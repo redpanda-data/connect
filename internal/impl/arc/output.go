@@ -1,4 +1,4 @@
-// Copyright 2024 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,10 +32,11 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/httpclient"
 )
 
 const (
-	fieldURL            = "url"
 	fieldToken          = "token"
 	fieldDatabase       = "database"
 	fieldMeasurement    = "measurement"
@@ -44,7 +45,6 @@ const (
 	fieldTimestampUnit  = "timestamp_unit"
 	fieldTagsMapping    = "tags_mapping"
 	fieldCompression    = "compression"
-	fieldTLS            = "tls"
 	fieldBatching       = "batching"
 )
 
@@ -65,7 +65,7 @@ var (
 )
 
 func outputSpec() *service.ConfigSpec {
-	return service.NewConfigSpec().
+	spec := service.NewConfigSpec().
 		Version("4.88.0").
 		Categories("Services").
 		Summary("Writes data to an Arc database via the msgpack ingestion endpoint.").
@@ -80,47 +80,45 @@ Arc supports two payload formats:
 Data is encoded as MessagePack and optionally compressed with zstd (recommended) or gzip before being sent to the Arc endpoint.
 
 NOTE: In columnar mode, all messages within a single batch must have the same set of fields. Arc validates that all column arrays have equal length and rejects batches with mismatched columns. Schema evolution across separate batches is fully supported. Use row format if messages within a batch have varying schemas.
-` + service.OutputPerformanceDocs(true, true)).
-		Fields(
-			service.NewURLField(fieldURL).
-				Description("The base URL of the Arc instance.").
-				Example("http://localhost:8000").
-				Example("https://arc.example.com"),
-			service.NewStringField(fieldToken).
-				Secret().
-				Optional().
-				Description("Bearer token for authentication."),
-			service.NewStringField(fieldDatabase).
-				Default("default").
-				Description("The target database name."),
-			service.NewInterpolatedStringField(fieldMeasurement).
-				Description("The measurement (table) name. Supports interpolation functions.").
-				Example("cpu_metrics").
-				Example(`${!metadata("measurement")}`).
-				Example(`${!json("type")}`),
-			service.NewStringEnumField(fieldFormat, "columnar", "row").
-				Default("columnar").
-				Description("The payload format. `columnar` transposes batch messages into column arrays for best performance. `row` sends each message as an individual record."),
-			service.NewStringField(fieldTimestampField).
-				Default("").
-				Optional().
-				Advanced().
-				Description("The field name within each message containing the timestamp. If empty, the current time is used. Supports Unix timestamps and RFC3339 strings."),
-			service.NewStringEnumField(fieldTimestampUnit, "us", "ms", "s", "ns", "auto").
-				Default("auto").
-				Advanced().
-				Description("The unit of a numeric timestamp field. `auto` detects the unit based on magnitude. Ignored when `timestamp_field` is empty."),
-			service.NewBloblangField(fieldTagsMapping).
-				Optional().
-				Description("An optional Bloblang mapping to extract tags from each message. Only used in `row` format. The result must be a `map[string]string`.").
-				Example(`root = {"host": this.hostname, "region": this.region}`),
-			service.NewStringEnumField(fieldCompression, "zstd", "gzip", "none").
-				Default("zstd").
-				Description("Compression algorithm for the request body. `zstd` is recommended for best decompression performance in Arc."),
-			service.NewTLSToggledField(fieldTLS),
-			service.NewOutputMaxInFlightField(),
-			service.NewBatchPolicyField(fieldBatching),
-		)
+` + service.OutputPerformanceDocs(true, true))
+
+	spec = spec.Fields(httpclient.Fields("")...)
+
+	return spec.Fields(
+		service.NewStringField(fieldToken).
+			Secret().
+			Optional().
+			Description("Bearer token for authentication."),
+		service.NewStringField(fieldDatabase).
+			Default("default").
+			Description("The target database name."),
+		service.NewInterpolatedStringField(fieldMeasurement).
+			Description("The measurement (table) name. Supports interpolation functions.").
+			Example("cpu_metrics").
+			Example(`${!metadata("measurement")}`).
+			Example(`${!json("type")}`),
+		service.NewStringEnumField(fieldFormat, "columnar", "row").
+			Default("columnar").
+			Description("The payload format. `columnar` transposes batch messages into column arrays for best performance. `row` sends each message as an individual record."),
+		service.NewStringField(fieldTimestampField).
+			Default("").
+			Optional().
+			Advanced().
+			Description("The field name within each message containing the timestamp. If empty, the current time is used. Supports Unix timestamps and RFC3339 strings."),
+		service.NewStringEnumField(fieldTimestampUnit, "us", "ms", "s", "ns", "auto").
+			Default("auto").
+			Advanced().
+			Description("The unit of a numeric timestamp field. `auto` detects the unit based on magnitude. Ignored when `timestamp_field` is empty."),
+		service.NewBloblangField(fieldTagsMapping).
+			Optional().
+			Description("An optional Bloblang mapping to extract tags from each message. Only used in `row` format. The result must be a `map[string]string`.").
+			Example(`root = {"host": this.hostname, "region": this.region}`),
+		service.NewStringEnumField(fieldCompression, "zstd", "gzip", "none").
+			Default("zstd").
+			Description("Compression algorithm for the request body. `zstd` is recommended for best decompression performance in Arc."),
+		service.NewOutputMaxInFlightField(),
+		service.NewBatchPolicyField(fieldBatching),
+	)
 }
 
 func init() {
@@ -141,7 +139,6 @@ type arcOutput struct {
 	log *service.Logger
 
 	// Config
-	url            string
 	database       string
 	measurement    *service.InterpolatedString
 	format         string
@@ -149,9 +146,6 @@ type arcOutput struct {
 	timestampUnit  string
 	tagsMapping    *bloblang.Executor
 	compression    string
-
-	// Pre-computed headers
-	authHeader string
 
 	// Runtime
 	client   *http.Client
@@ -163,12 +157,12 @@ func newArcOutput(conf *service.ParsedConfig, mgr *service.Resources) (*arcOutpu
 		log: mgr.Logger(),
 	}
 
-	var err error
-	if o.url, err = conf.FieldString(fieldURL); err != nil {
+	httpCfg, err := httpclient.NewConfigFromParsed(conf)
+	if err != nil {
 		return nil, err
 	}
-	o.url = strings.TrimRight(o.url, "/")
-	o.endpoint = o.url + "/api/v1/write/msgpack"
+
+	o.endpoint = strings.TrimRight(httpCfg.BaseURL, "/") + "/api/v1/write/msgpack"
 
 	if conf.Contains(fieldToken) {
 		token, err := conf.FieldString(fieldToken)
@@ -179,7 +173,7 @@ func newArcOutput(conf *service.ParsedConfig, mgr *service.Resources) (*arcOutpu
 			return nil, errors.New("token contains invalid characters")
 		}
 		if token != "" {
-			o.authHeader = "Bearer " + token
+			httpCfg.AuthSigner = httpclient.BearerTokenSigner(token)
 		}
 	}
 
@@ -216,31 +210,10 @@ func newArcOutput(conf *service.ParsedConfig, mgr *service.Resources) (*arcOutpu
 		return nil, err
 	}
 
-	// Set up HTTP client with optional TLS
-	transport := &http.Transport{
-		Proxy:                 http.ProxyFromEnvironment,
-		ForceAttemptHTTP2:     true,
-		MaxIdleConns:          100,
-		IdleConnTimeout:       90 * time.Second,
-		TLSHandshakeTimeout:  10 * time.Second,
-		ExpectContinueTimeout: 1 * time.Second,
-	}
-	tlsConf, tlsEnabled, err := conf.FieldTLSToggled(fieldTLS)
-	if err != nil {
-		return nil, err
-	}
-	if tlsEnabled {
-		transport.TLSClientConfig = tlsConf
-	}
-	o.client = &http.Client{
-		Transport: transport,
-		Timeout:   30 * time.Second,
-		CheckRedirect: func(_ *http.Request, via []*http.Request) error {
-			if len(via) >= 5 {
-				return errors.New("too many redirects")
-			}
-			return nil
-		},
+	httpCfg.MetricPrefix = "arc_http"
+
+	if o.client, err = httpclient.NewClient(httpCfg, mgr); err != nil {
+		return nil, fmt.Errorf("create HTTP client: %w", err)
 	}
 
 	return o, nil
@@ -524,9 +497,6 @@ func (o *arcOutput) sendRequest(ctx context.Context, body []byte, contentEncodin
 		req.Header.Set("Content-Encoding", contentEncoding)
 	}
 	req.Header.Set("x-arc-database", o.database)
-	if o.authHeader != "" {
-		req.Header.Set("Authorization", o.authHeader)
-	}
 
 	resp, err := o.client.Do(req)
 	if err != nil {

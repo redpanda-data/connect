@@ -1,4 +1,4 @@
-// Copyright 2024 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -58,7 +58,7 @@ func TestArcOutput_ColumnarSingleMeasurement(t *testing.T) {
 	srv, received, headers, mu := newTestServer(t)
 
 	conf, err := outputSpec().ParseYAML(`
-url: `+srv.URL+`
+base_url: `+srv.URL+`
 database: testdb
 measurement: cpu
 format: columnar
@@ -112,7 +112,7 @@ func TestArcOutput_ColumnarMultipleMeasurements(t *testing.T) {
 	srv, received, _, mu := newTestServer(t)
 
 	conf, err := outputSpec().ParseYAML(`
-url: `+srv.URL+`
+base_url: `+srv.URL+`
 database: default
 measurement: ${!json("type")}
 format: columnar
@@ -162,7 +162,7 @@ func TestArcOutput_RowFormat(t *testing.T) {
 	srv, received, _, mu := newTestServer(t)
 
 	conf, err := outputSpec().ParseYAML(`
-url: `+srv.URL+`
+base_url: `+srv.URL+`
 database: default
 measurement: cpu
 format: row
@@ -207,7 +207,7 @@ func TestArcOutput_ZstdCompression(t *testing.T) {
 	srv, received, headers, mu := newTestServer(t)
 
 	conf, err := outputSpec().ParseYAML(`
-url: `+srv.URL+`
+base_url: `+srv.URL+`
 database: default
 measurement: test
 format: columnar
@@ -247,7 +247,7 @@ func TestArcOutput_GzipCompression(t *testing.T) {
 	srv, received, headers, mu := newTestServer(t)
 
 	conf, err := outputSpec().ParseYAML(`
-url: `+srv.URL+`
+base_url: `+srv.URL+`
 database: default
 measurement: test
 format: columnar
@@ -280,7 +280,7 @@ func TestArcOutput_BearerToken(t *testing.T) {
 	srv, _, headers, mu := newTestServer(t)
 
 	conf, err := outputSpec().ParseYAML(`
-url: `+srv.URL+`
+base_url: `+srv.URL+`
 token: my-secret-token
 database: default
 measurement: test
@@ -316,7 +316,7 @@ func TestArcOutput_ErrorResponse(t *testing.T) {
 	defer srv.Close()
 
 	conf, err := outputSpec().ParseYAML(`
-url: `+srv.URL+`
+base_url: `+srv.URL+`
 database: default
 measurement: test
 format: columnar
@@ -351,7 +351,7 @@ func TestArcOutput_EmptyBatch(t *testing.T) {
 	defer srv.Close()
 
 	conf, err := outputSpec().ParseYAML(`
-url: `+srv.URL+`
+base_url: `+srv.URL+`
 database: default
 measurement: test
 format: columnar
@@ -376,7 +376,7 @@ func TestArcOutput_TimeColumnCollision(t *testing.T) {
 	srv, received, _, mu := newTestServer(t)
 
 	conf, err := outputSpec().ParseYAML(`
-url: `+srv.URL+`
+base_url: `+srv.URL+`
 database: default
 measurement: test
 format: columnar
@@ -426,7 +426,7 @@ func TestArcOutput_InvalidConfig(t *testing.T) {
 		{
 			name: "token with newline",
 			config: `
-url: http://localhost:8000
+base_url: http://localhost:8000
 token: "bad\ntoken"
 database: default
 measurement: test
@@ -436,7 +436,7 @@ measurement: test
 		{
 			name: "database with carriage return",
 			config: `
-url: http://localhost:8000
+base_url: http://localhost:8000
 database: "bad\rdb"
 measurement: test
 `,

@@ -1,4 +1,4 @@
-// Copyright 2024 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -64,7 +64,7 @@ func TestIntegrationArc(t *testing.T) {
 
 	t.Run("columnar write and query", func(t *testing.T) {
 		conf, err := outputSpec().ParseYAML(fmt.Sprintf(`
-url: %s
+base_url: %s
 database: default
 measurement: integration_test
 format: columnar
@@ -121,7 +121,7 @@ compression: zstd
 
 	t.Run("row format write", func(t *testing.T) {
 		conf, err := outputSpec().ParseYAML(fmt.Sprintf(`
-url: %s
+base_url: %s
 database: default
 measurement: integration_test_row
 format: row
