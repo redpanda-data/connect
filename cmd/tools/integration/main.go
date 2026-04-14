@@ -16,7 +16,7 @@
 //
 // Usage:
 //
-//	go run ./cmd/tools/integration run [--output-dir dir] [--clean] [--debug] [--race] [--unit] [--cover-profile] [filter...]
+//	go run ./cmd/tools/integration run [--output-dir dir] [--clean] [--debug] [--race] [--unit] [--cover-profile] [--fix] [--fix-max-parallel N] [filter...]
 package main
 
 import (
@@ -37,6 +37,10 @@ func main() {
 		if err := cmdRun(os.Args[2:]); err != nil {
 			log.Fatal(err)
 		}
+	case "fix":
+		if err := cmdFix(os.Args[2:]); err != nil {
+			log.Fatal(err)
+		}
 	case "show":
 		if err := cmdShow(os.Args[2:]); err != nil {
 			log.Fatal(err)
@@ -51,16 +55,22 @@ func printUsage() {
 	log.Println("")
 	log.Println("Commands:")
 	log.Println("  run      Run integration tests package by package")
+	log.Println("  fix      Triage and fix failures from a test output file")
 	log.Println("  show     Show test output for a failure reference (file:line)")
 	log.Println("")
 	log.Println("Flags for run:")
-	log.Println("  --output-dir   Directory for test output (default: .integration/<timestamp>)")
-	log.Println("  --clean        Ignore cache, start a fresh run")
-	log.Println("  --debug        Enable debug logging to stderr")
-	log.Println("  --race           Enable race detector (requires CGO_ENABLED=1)")
-	log.Println("  --unit           Run all tests, not just integration tests")
-	log.Println("  --cover-profile  Generate coverage profile per package (.cov files)")
+	log.Println("  --output-dir        Directory for test output (default: .integration/<timestamp>)")
+	log.Println("  --clean             Ignore cache, start a fresh run")
+	log.Println("  --debug             Enable debug logging to stderr")
+	log.Println("  --race              Enable race detector (requires CGO_ENABLED=1)")
+	log.Println("  --unit              Run all tests, not just integration tests")
+	log.Println("  --cover-profile     Generate coverage profile per package (.cov files)")
+	log.Println("  --fix               Triage and fix failed packages using Claude agents")
+	log.Println("  --fix-max-parallel  Max parallel Claude agents (default: 2, requires --fix)")
 	log.Println("")
 	log.Println("Positional arguments are package filters (substring match).")
-	log.Println("Example: integration run kafka redis")
+	log.Println("")
+	log.Println("Examples:")
+	log.Println("  integration run kafka redis")
+	log.Println("  integration fix .integration/20260414205744/amqp1.txt")
 }

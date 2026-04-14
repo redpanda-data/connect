@@ -22,9 +22,19 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"os/exec"
 	"strings"
 	"time"
 )
+
+// resolveHEAD returns the SHA of the current HEAD commit.
+func resolveHEAD() (string, error) {
+	out, err := exec.Command("git", "rev-parse", "HEAD").Output()
+	if err != nil {
+		return "", fmt.Errorf("resolving HEAD: %w", err)
+	}
+	return strings.TrimSpace(string(out)), nil
+}
 
 // Action represents a test event action from `go test -json` output.
 type Action string
@@ -120,8 +130,12 @@ func pkgShort(pkg string) string {
 	return strings.TrimPrefix(pkg, "./internal/impl/")
 }
 
+func pkgSlug(pkg string) string {
+	return strings.ReplaceAll(pkgShort(pkg), "/", "-")
+}
+
 func pkgFilename(pkg string) string {
-	return strings.ReplaceAll(pkgShort(pkg), "/", "-") + ".txt"
+	return pkgSlug(pkg) + ".txt"
 }
 
 // countFileLines counts newlines in a file without loading it all into memory.

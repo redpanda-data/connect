@@ -9,6 +9,7 @@ release_notes.md
 .codemogger
 .idea
 .integration
+.integration-worktree
 .task
 .vscode
 .op
