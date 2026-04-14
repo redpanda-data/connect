@@ -134,6 +134,9 @@ func checkCache(outFile string) PackageCache {
 
 	lastAction := parseEvents(f, 0, EventCallbacks{
 		OnEvent: func(pe ParsedEvent) {
+			if pc.Package == "" && pe.Package != "" {
+				pc.Package = pe.Package
+			}
 			switch pe.Action {
 			case ActionRun:
 				hasRun = true

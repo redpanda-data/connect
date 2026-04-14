@@ -25,15 +25,20 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/redpanda-data/connect/v4/cmd/tools/integration/llmfix"
 )
 
 var runArgs struct {
-	outputDir    string
-	clean        bool
-	debug        bool
-	race         bool
-	unit         bool
-	coverProfile bool
+	outputDir      string
+	clean          bool
+	debug          bool
+	race           bool
+	unit           bool
+	coverProfile   bool
+	fix            bool
+	fixMaxParallel int
+	fixTimeout     time.Duration
 }
 
 func debugf(format string, args ...any) {
@@ -50,10 +55,18 @@ func cmdRun(args []string) error {
 	fset.BoolVar(&runArgs.race, "race", false, "enable race detector (sets CGO_ENABLED=1)")
 	fset.BoolVar(&runArgs.unit, "unit", false, "run all tests, not just integration tests")
 	fset.BoolVar(&runArgs.coverProfile, "cover-profile", false, "generate coverage profile per package")
+	fset.BoolVar(&runArgs.fix, "fix", false, "triage and fix failed packages using Claude agents")
+	fset.IntVar(&runArgs.fixMaxParallel, "fix-max-parallel", 4, "max parallel fix agents (requires --fix)")
+	fset.DurationVar(&runArgs.fixTimeout, "fix-timeout", 30*time.Minute, "timeout per fix agent run (requires --fix)")
 
-	if err := fset.Parse(args); err != nil {
+	// Go's flag package stops parsing at the first non-flag argument.
+	// Separate flags from positional filters so interspersed usage works:
+	//   run --fix --race amqp1 --debug
+	flags, filters := splitFlagsAndArgs(args)
+	if err := fset.Parse(flags); err != nil {
 		return err
 	}
+	filters = append(filters, fset.Args()...)
 
 	if runArgs.outputDir != "" && runArgs.clean {
 		return errors.New("--output-dir and --clean are mutually exclusive")
@@ -62,8 +75,6 @@ func cmdRun(args []string) error {
 	if runArgs.debug {
 		log.SetOutput(os.Stderr)
 	}
-
-	filters := fset.Args()
 
 	packages := filterPackages(allPackages, filters)
 	if len(packages) == 0 {
@@ -92,6 +103,52 @@ func cmdRun(args []string) error {
 	debugf("resolved run dir: %s", outputDir)
 
 	out := NewOutput(os.Stdout, filepath.Join(outputDir, "index.md"))
+
+	retrying := make(map[string]bool)
+	var mgr *llmfix.Manager
+	if runArgs.fix {
+		baseSHA, err := resolveHEAD()
+		if err != nil {
+			return fmt.Errorf("initializing fix manager: %w", err)
+		}
+		var mgrErr error
+		mgr, mgrErr = llmfix.NewManager(outputDir, baseSHA, runArgs.fixMaxParallel)
+		if mgrErr != nil {
+			return fmt.Errorf("initializing fix manager: %w", mgrErr)
+		}
+		defer mgr.Close()
+		for _, r := range mgr.RecoverWorktrees() {
+			if r.Err != nil {
+				out.Error(fmt.Sprintf("  recover %s: %v", r.Name, r.Err))
+			}
+			for _, c := range r.Commits {
+				out.Info(fmt.Sprintf("  recovered: %s", c))
+			}
+		}
+
+		// Retry fix agents that failed in the previous run.
+		if !runArgs.clean {
+			for slug, pkgPath := range mgr.PendingSlugs() {
+				outFile := filepath.Join(outputDir, slug+".txt")
+				cached := checkCache(outFile)
+				if cached.Overall() != ResultFail {
+					continue
+				}
+				testOutput := dumpTestOutput(outFile, cached.Tests)
+				if testOutput == "" {
+					continue
+				}
+				mgr.Dispatch(slug, llmfix.FixRequest{
+					PkgPath:    pkgPath,
+					TestOutput: testOutput,
+					Timeout:    runArgs.fixTimeout,
+				})
+				retrying[slug] = true
+				out.Info(fmt.Sprintf("  retrying fix for %s", pkgShort(pkgPath)))
+			}
+		}
+	}
+
 	total := len(packages)
 
 	headerLabel := "Integration Tests"
@@ -156,6 +213,16 @@ func cmdRun(args []string) error {
 		}
 		out.PackageResult(short, res.status, res.duration)
 
+		// Dispatch fix agent in background (skip if already retrying from previous run).
+		if runArgs.fix && res.status == ResultFail && !retrying[pkgSlug(pkg.Path)] {
+			mgr.Dispatch(pkgSlug(pkg.Path), llmfix.FixRequest{
+				PkgPath:    pkg.Path,
+				TestOutput: dumpTestOutput(res.outFile, res.tests),
+				Timeout:    runArgs.fixTimeout,
+			})
+			out.Info(fmt.Sprintf("  fixing %s → %s", short, filepath.Join(outputDir, "fix", "agents.log")))
+		}
+
 		dockerCleanup()
 	}
 
@@ -166,6 +233,10 @@ func cmdRun(args []string) error {
 	out.Info(sep)
 
 	if failed > 0 {
+		if runArgs.fix {
+			out.Info("Waiting for fix agents...")
+			mgr.Wait()
+		}
 		return errors.New("integration tests failed")
 	}
 	return nil
