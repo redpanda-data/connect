@@ -15,11 +15,12 @@
 package arc
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
 	"testing"
 	"time"
 
@@ -85,38 +86,7 @@ compression: zstd
 
 		require.NoError(t, out.WriteBatch(t.Context(), batch))
 
-		// Wait for Arc to flush the buffer to Parquet
-		// Arc buffers data in memory before flushing, so we need to wait
-		var rowCount float64
-		require.Eventually(t, func() bool {
-			queryBody := `{"sql": "SELECT vehicle_id, speed_kmh FROM default.integration_test ORDER BY vehicle_id"}`
-			resp, err := http.Post(arcURL+"/api/v1/query", "application/json", strings.NewReader(queryBody))
-			if err != nil {
-				return false
-			}
-			defer resp.Body.Close()
-
-			if resp.StatusCode != http.StatusOK {
-				return false
-			}
-
-			body, err := io.ReadAll(resp.Body)
-			if err != nil {
-				return false
-			}
-
-			var result map[string]any
-			if err := json.Unmarshal(body, &result); err != nil {
-				return false
-			}
-
-			rc, ok := result["row_count"].(float64)
-			if !ok {
-				return false
-			}
-			rowCount = rc
-			return rowCount == 3
-		}, 30*time.Second, 2*time.Second, "expected 3 rows, got %.0f", rowCount)
+		requireArcQueryRowCount(t, arcURL, "SELECT vehicle_id, speed_kmh FROM default.integration_test ORDER BY vehicle_id", 3)
 	})
 
 	t.Run("row format write", func(t *testing.T) {
@@ -140,5 +110,66 @@ compression: zstd
 		}
 
 		require.NoError(t, out.WriteBatch(t.Context(), batch))
+
+		requireArcQueryRowCount(t, arcURL, "SELECT sensor, value FROM default.integration_test_row ORDER BY sensor", 2)
 	})
+}
+
+func requireArcQueryRowCount(t *testing.T, arcURL, sql string, expectedRows int) map[string]any {
+	t.Helper()
+	var (
+		result   map[string]any
+		rowCount int
+		err      error
+	)
+
+	require.Eventually(t, func() bool {
+		result, rowCount, err = runArcQuery(t.Context(), arcURL, sql)
+		if err != nil {
+			return false
+		}
+		return rowCount == expectedRows
+	}, 30*time.Second, 2*time.Second, "expected %d rows, got %d (last err: %v)", expectedRows, rowCount, err)
+
+	return result
+}
+
+func runArcQuery(ctx context.Context, arcURL, sql string) (map[string]any, int, error) {
+	payload, err := json.Marshal(map[string]string{"sql": sql})
+	if err != nil {
+		return nil, 0, err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, arcURL+"/api/v1/query", bytes.NewReader(payload))
+	if err != nil {
+		return nil, 0, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, 0, fmt.Errorf("arc responded with %d: %s", resp.StatusCode, string(bytes.TrimSpace(body)))
+	}
+
+	var result map[string]any
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, 0, err
+	}
+
+	rc, ok := result["row_count"].(float64)
+	if !ok {
+		return nil, 0, fmt.Errorf("row_count missing from response: %s", string(body))
+	}
+
+	return result, int(rc), nil
 }
