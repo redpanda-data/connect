@@ -58,7 +58,8 @@ func (r *typeResolver) resolveTypeForAddColumn(
 	if r.schemaMetadataKey != "" {
 		if metaType, err := r.resolveFromSchemaMetadata(msg, field.FullPath()); err != nil {
 			return nil, fmt.Errorf("resolving type from schema metadata for field %v: %w", field.FullPath(), err)
-		} else {
+		} else if metaType != nil {
+			// If the metatype was not found then just stick with the default intered type
 			inferredType = metaType
 		}
 	}
@@ -96,7 +97,8 @@ func (r *typeResolver) resolveTypeForCreateTable(
 		path := icebergx.Path{{Kind: icebergx.PathField, Name: fieldName}}
 		if metaType, err := r.resolveFromSchemaMetadata(msg, path); err != nil {
 			return nil, fmt.Errorf("resolving type from schema metadata for field %q: %w", fieldName, err)
-		} else {
+		} else if metaType != nil {
+			// If the metatype was not found then just stick with the default intered type
 			inferredType = metaType
 		}
 	}
@@ -129,7 +131,7 @@ func (r *typeResolver) resolveFromSchemaMetadata(msg *service.Message, fieldPath
 
 	field, found := findCommonField(commonSchema, fieldPath)
 	if !found {
-		return nil, fmt.Errorf("field %s is missing in schema metadata", fieldPath.String())
+		return nil, nil
 	}
 
 	return commonTypeToIcebergType(field)
