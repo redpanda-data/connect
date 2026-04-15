@@ -76,6 +76,10 @@ type crdbChangefeedInput struct {
 	rows     pgx.Rows
 	dbMut    sync.Mutex
 
+	// queryCancel cancels the active changefeed query context, unblocking a
+	// blocking rows.Next() call in Read(). Protected by dbMut.
+	queryCancel context.CancelFunc
+
 	res     *service.Resources
 	logger  *service.Logger
 	shutSig *shutdown.Signaller
@@ -196,8 +200,29 @@ func (c *crdbChangefeedInput) Connect(ctx context.Context) (err error) {
 	}
 
 	c.logger.Debug(fmt.Sprintf("Running query '%s'", c.statement))
-	c.rows, err = c.pgPool.Query(ctx, c.statement)
+
+	queryCtx, queryCancel := c.shutSig.SoftStopCtx(context.Background())
+	c.queryCancel = queryCancel
+
+	c.rows, err = c.pgPool.Query(queryCtx, c.statement)
+	if err != nil {
+		queryCancel()
+		c.queryCancel = nil
+	}
 	return
+}
+
+// closeQueryLocked cancels the query context and closes the active rows.
+// Must be called with dbMut held.
+func (c *crdbChangefeedInput) closeQueryLocked() {
+	if c.queryCancel != nil {
+		c.queryCancel()
+		c.queryCancel = nil
+	}
+	if c.rows != nil {
+		c.rows.Close()
+		c.rows = nil
+	}
 }
 
 func (c *crdbChangefeedInput) closeConnection() {
@@ -210,15 +235,7 @@ func (c *crdbChangefeedInput) closeConnection() {
 	c.dbMut.Lock()
 	defer c.dbMut.Unlock()
 
-	if c.rows != nil {
-		err := c.rows.Err()
-		if err != nil {
-			c.logger.With("err", err).Warn("unexpected error from cockroachdb before closing")
-		}
-
-		c.rows.Close()
-		c.rows = nil
-	}
+	c.closeQueryLocked()
 	if c.pgPool != nil {
 		c.pgPool.Close()
 		c.pgPool = nil
@@ -227,20 +244,22 @@ func (c *crdbChangefeedInput) closeConnection() {
 
 func (c *crdbChangefeedInput) Read(ctx context.Context) (*service.Message, service.AckFunc, error) {
 	c.dbMut.Lock()
-	rows := c.rows
-	c.dbMut.Unlock()
+	defer c.dbMut.Unlock()
 
-	if rows == nil {
+	if c.rows == nil {
 		return nil, nil, service.ErrNotConnected
 	}
 
-	if !rows.Next() {
-		go c.closeConnection()
+	// rows.Next() blocks until the next changefeed event. The mutex is held to
+	// prevent closeConnection() from calling rows.Close() concurrently. On
+	// shutdown, SoftStopCtx cancels the query context which unblocks this call.
+	if !c.rows.Next() {
+		err := c.rows.Err()
+		c.closeQueryLocked()
+
 		if c.shutSig.IsSoftStopSignalled() {
 			return nil, nil, service.ErrNotConnected
 		}
-
-		err := rows.Err()
 		if err == nil {
 			err = service.ErrNotConnected
 		} else {
@@ -249,7 +268,7 @@ func (c *crdbChangefeedInput) Read(ctx context.Context) (*service.Message, servi
 		return nil, nil, err
 	}
 
-	values, err := rows.Values()
+	values, err := c.rows.Values()
 	if err != nil {
 		return nil, nil, fmt.Errorf("row values: %w", err)
 	}
