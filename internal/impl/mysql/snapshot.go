@@ -196,8 +196,12 @@ func (s *Snapshot) querySnapshotTable(ctx context.Context, table string, pk []st
 
 	var lastSeenPkVals []any
 	var placeholders []string
-	for _, pkCol := range *lastSeenPkVal {
-		lastSeenPkVals = append(lastSeenPkVals, pkCol)
+	for _, pkCol := range pk {
+		val, ok := (*lastSeenPkVal)[pkCol]
+		if !ok {
+			return nil, fmt.Errorf("primary key column '%s' not found in last seen values", pkCol)
+		}
+		lastSeenPkVals = append(lastSeenPkVals, val)
 		placeholders = append(placeholders, "?")
 	}
 
