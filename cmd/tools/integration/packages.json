@@ -31,7 +31,7 @@
   {"path": "./internal/impl/nats"},
   {"path": "./internal/impl/nsq"},
   {"path": "./internal/impl/opensearch"},
-  {"path": "./internal/impl/oracledb", "timeout": "10m"},
+  {"path": "./internal/impl/oracledb", "timeout": "30m"},
   {"path": "./internal/impl/postgresql"},
   {"path": "./internal/impl/pulsar", "timeout": "10m"},
   {"path": "./internal/impl/qdrant"},
