@@ -390,12 +390,10 @@ const (
 
 const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
-var seededRand = rand.New(rand.NewSource(time.Now().UnixNano()))
-
 func randomString(n int) string {
 	b := make([]byte, n)
 	for i := range b {
-		b[i] = letterBytes[seededRand.Intn(len(letterBytes))]
+		b[i] = letterBytes[rand.Intn(len(letterBytes))]
 	}
 	return string(b)
 }
