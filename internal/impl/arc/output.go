@@ -213,13 +213,13 @@ func newArcOutput(conf *service.ParsedConfig, mgr *service.Resources) (*arcOutpu
 	httpCfg.MetricPrefix = "arc_http"
 
 	if o.client, err = httpclient.NewClient(httpCfg, mgr); err != nil {
-		return nil, fmt.Errorf("create HTTP client: %w", err)
+		return nil, fmt.Errorf("creating HTTP client: %w", err)
 	}
 
 	return o, nil
 }
 
-func (o *arcOutput) Connect(_ context.Context) error {
+func (*arcOutput) Connect(_ context.Context) error {
 	return nil
 }
 
@@ -245,12 +245,12 @@ func (o *arcOutput) WriteBatch(ctx context.Context, batch service.MessageBatch) 
 
 	data, err := msgpack.Marshal(payload)
 	if err != nil {
-		return fmt.Errorf("msgpack encoding: %w", err)
+		return fmt.Errorf("encoding msgpack: %w", err)
 	}
 
 	compressed, encoding, err := o.compress(data)
 	if err != nil {
-		return fmt.Errorf("compression: %w", err)
+		return fmt.Errorf("compressing: %w", err)
 	}
 
 	return o.sendRequest(ctx, compressed, encoding)
@@ -270,7 +270,7 @@ func (o *arcOutput) buildColumnarPayload(batch service.MessageBatch) (any, error
 	for i, msg := range batch {
 		measName, err := measExec.TryString(i)
 		if err != nil {
-			return nil, fmt.Errorf("measurement interpolation: %w", err)
+			return nil, fmt.Errorf("interpolating measurement: %w", err)
 		}
 
 		data, err := msg.AsStructuredMut()
@@ -294,7 +294,7 @@ func (o *arcOutput) buildColumnarPayload(batch service.MessageBatch) (any, error
 
 		rec.columns["time"] = append(rec.columns["time"], ts)
 		for k, v := range dataMap {
-			if k == o.timestampField || (o.timestampField == "" && k == "time") {
+			if k == o.timestampField || k == "time" {
 				continue
 			}
 			rec.columns[k] = append(rec.columns[k], v)
@@ -329,7 +329,7 @@ func (o *arcOutput) buildRowPayload(batch service.MessageBatch) (any, error) {
 	for i, msg := range batch {
 		measName, err := measExec.TryString(i)
 		if err != nil {
-			return nil, fmt.Errorf("measurement interpolation: %w", err)
+			return nil, fmt.Errorf("interpolating measurement: %w", err)
 		}
 
 		data, err := msg.AsStructuredMut()
@@ -347,7 +347,7 @@ func (o *arcOutput) buildRowPayload(batch service.MessageBatch) (any, error) {
 		// Remove timestamp field from fields if present
 		fields := make(map[string]any, len(dataMap))
 		for k, v := range dataMap {
-			if k == o.timestampField || (o.timestampField == "" && k == "time") {
+			if k == o.timestampField || k == "time" {
 				continue
 			}
 			fields[k] = v
@@ -363,12 +363,12 @@ func (o *arcOutput) buildRowPayload(batch service.MessageBatch) (any, error) {
 		if tagsExec != nil {
 			tagMsg, err := tagsExec.Query(i)
 			if err != nil {
-				return nil, fmt.Errorf("tags mapping: %w", err)
+				return nil, fmt.Errorf("mapping tags: %w", err)
 			}
 			if tagMsg != nil {
 				tagResult, err := tagMsg.AsStructured()
 				if err != nil {
-					return nil, fmt.Errorf("tags mapping result: %w", err)
+					return nil, fmt.Errorf("reading tags mapping result: %w", err)
 				}
 				if tagMap, ok := tagResult.(map[string]any); ok {
 					tags := make(map[string]string, len(tagMap))

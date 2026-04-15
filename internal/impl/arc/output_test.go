@@ -269,7 +269,7 @@ compression: gzip
 	defer mu.Unlock()
 
 	assert.Equal(t, "gzip", headers.Get("Content-Encoding"))
-	require.True(t, len(*received) >= 2)
+	require.GreaterOrEqual(t, len(*received), 2)
 	assert.Equal(t, byte(0x1f), (*received)[0])
 	assert.Equal(t, byte(0x8b), (*received)[1])
 
@@ -308,7 +308,7 @@ compression: none
 }
 
 func TestArcOutput_ErrorResponse(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		_ = json.NewEncoder(w).Encode(map[string]string{"error": "invalid measurement name"})
@@ -342,7 +342,7 @@ compression: none
 func TestArcOutput_EmptyBatch(t *testing.T) {
 	var mu sync.Mutex
 	called := false
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		mu.Lock()
 		called = true
 		mu.Unlock()
