@@ -217,6 +217,10 @@ func (k *kafkaReader) connectExplicitTopics(ctx context.Context, config *sarama.
 	msgChan := make(chan asyncMessage)
 	ctx, doneFn := context.WithCancel(context.Background())
 
+	// Assign msgChan before spawning partition consumer goroutines to avoid a
+	// data race: goroutines read k.msgChan immediately upon starting.
+	k.msgChan = msgChan
+
 	for topic, partitions := range k.topicPartitions {
 		for _, partition := range partitions {
 			topic := topic
@@ -301,6 +305,5 @@ func (k *kafkaReader) connectExplicitTopics(ctx context.Context, config *sarama.
 	k.consumerCloseFn = doneFn
 	k.consumerDoneCtx = doneCtx
 	k.session = offsetTracker
-	k.msgChan = msgChan
 	return nil
 }
