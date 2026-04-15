@@ -211,6 +211,10 @@ func decodeTextColumnData(mi *pgtype.Map, data []byte, dataType uint32) (any, er
 			// never reaches this switch — it is handled by the string(data)
 			// fallback after the TypeForOID check.
 			return string(data), nil
+		case "tsvector":
+			// pgx decodes tsvector as pgtype.TSVector (a struct with Lexemes/Valid),
+			// but we want the raw PostgreSQL text representation as a string.
+			return string(data), nil
 		case "timestamp", "timestamptz":
 			// ±infinity timestamps cannot be represented as time.Time; return nil.
 			if ts, ok := val.(time.Time); ok {
