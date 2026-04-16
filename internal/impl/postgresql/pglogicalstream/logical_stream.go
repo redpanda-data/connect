@@ -812,6 +812,12 @@ func (s *Stream) Stop(ctx context.Context) error {
 	stopNowCtx, done := s.shutSig.HardStopCtx(ctx)
 	defer done()
 	wg.Go(func() error {
+		// Wait for streamMessages to finish using pgConn before closing it,
+		// otherwise we race on pgconn internal state (lock field, write buffer).
+		select {
+		case <-s.shutSig.HasStoppedChan():
+		case <-stopNowCtx.Done():
+		}
 		return s.pgConn.Close(stopNowCtx)
 	})
 	wg.Go(func() error {
