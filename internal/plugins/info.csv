@@ -4,6 +4,7 @@ amqp_0_9                  ,input     ,amqp_0_9                  ,0.0.0   ,certif
 amqp_0_9                  ,output    ,amqp_0_9                  ,0.0.0   ,certified  ,n          ,y     ,y
 amqp_1                    ,input     ,amqp_1                    ,0.0.0   ,community  ,n          ,n     ,n
 amqp_1                    ,output    ,amqp_1                    ,0.0.0   ,community  ,n          ,n     ,n
+arc                       ,output    ,arc                       ,4.88.0  ,community  ,n          ,y     ,y
 archive                   ,processor ,archive                   ,0.0.0   ,certified  ,n          ,y     ,y
 avro                      ,processor ,avro                      ,0.0.0   ,community  ,n          ,y     ,y
 avro                      ,scanner   ,avro                      ,0.0.0   ,community  ,n          ,y     ,y
