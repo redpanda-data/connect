@@ -75,7 +75,7 @@ dockers_v2:
       - "{{ if not .IsSnapshot }}{{ .Version }}{{ end }}"
       - "{{ if and (not .IsSnapshot) (eq .Prerelease ``) }}{{ .Major }}.{{.Minor}}{{ end }}"
       - "{{ if and (not .IsSnapshot) (eq .Prerelease ``) }}{{ .Major }}{{ end }}"
-      - "{{ if and (not .IsSnapshot) (eq .Prerelease ``) }}latest-cloud{{ end }}"
+      - "{{ if and (not .IsSnapshot) (eq .Prerelease ``) }}latest{{ end }}"
       - "{{ if or .IsSnapshot (ne .Prerelease ``) }}edge{{ end }}"
     platforms:
       - linux/amd64
