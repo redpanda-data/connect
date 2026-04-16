@@ -723,6 +723,7 @@ func (i *mysqlStreamInput) readMessages(ctx context.Context) error {
 							if err := i.setCachedBinlogPosition(ctx, *offset); err != nil {
 								return fmt.Errorf("persisting snapshot checkpoint: %w", err)
 							}
+							i.logger.Infof("Checkpointed binlog position following snapshot")
 						}
 					}
 				}
