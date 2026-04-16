@@ -708,7 +708,9 @@ oracledb_cdc:
 		require.NoError(t, stream.StopWithin(time.Second*10))
 	})
 
-	db.MustExec(`TRUNCATE TABLE RPCN.CDC_CHECKPOINT_CACHE`)
+	// The checkpoint cache table is created lazily during Connect(), so it may
+	// not exist if the first subtest failed before the stream was launched.
+	_, _ = db.Exec(`TRUNCATE TABLE RPCN.CDC_CHECKPOINT_CACHE`)
 
 	t.Run("lob_enabled=true", func(t *testing.T) {
 		for range snapshotRows {
