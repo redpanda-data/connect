@@ -716,6 +716,9 @@ func (m *mongoCDC) readSnapshotRange(
 			case m.readChan <- b:
 			case <-ctx.Done():
 				_ = b.ackFn(ctx, nil)
+			case <-m.shutsig.SoftStopChan():
+				_ = b.ackFn(ctx, nil)
+				return context.Canceled
 			}
 			mb = nil
 		}
@@ -937,6 +940,7 @@ func (m *mongoCDC) readFromStream(ctx context.Context, cp *checkpoint.Capped[bso
 			select {
 			case m.readChan <- mongoBatch{mb, ackFn}:
 			case <-ctx.Done():
+			case <-m.shutsig.SoftStopChan():
 			}
 			mb = nil
 		}
