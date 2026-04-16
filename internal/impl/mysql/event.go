@@ -30,6 +30,11 @@ const (
 	MessageOperationUpdate MessageOperation = "update"
 	// MessageOperationDelete represents delete statement in mysql binlog
 	MessageOperationDelete MessageOperation = "delete"
+
+	// messageOperationSnapshotComplete is an internal sentinel emitted after all
+	// snapshot rows have been sent so the checkpoint can advance once all snapshot batches
+	// are acknowledged
+	messageOperationSnapshotComplete MessageOperation = "snapshot_complete"
 )
 
 // MessageEvent represents a message from mysql cdc plugin
