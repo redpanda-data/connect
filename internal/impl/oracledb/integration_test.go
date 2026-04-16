@@ -806,7 +806,9 @@ oracledb_cdc:
 		}
 	})
 
-	require.NoError(t, stream.StopWithin(time.Second*10))
+	if stream != nil {
+		require.NoError(t, stream.StopWithin(time.Second*10))
+	}
 }
 
 func TestIntegrationOracleDBCDCSnapshotAndStreamingAllTypes(t *testing.T) {
