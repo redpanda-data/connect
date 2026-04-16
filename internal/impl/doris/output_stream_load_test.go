@@ -446,7 +446,7 @@ func TestConnectionTestReportsTableMissing(t *testing.T) {
 	}, service.MockResources())
 	require.NoError(t, err)
 	out.connectionCheckFn = func(_ context.Context, _ string, queryPort int) error {
-		return fmt.Errorf("Doris table db.missing_tbl was not found via query_port 127.0.0.1:%d", queryPort)
+		return fmt.Errorf("doris table db.missing_tbl was not found via query_port 127.0.0.1:%d", queryPort)
 	}
 
 	results := out.ConnectionTest(context.Background())

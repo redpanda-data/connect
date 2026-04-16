@@ -106,11 +106,13 @@ const (
 	dsHeaderTimeout         = "timeout"
 )
 
-var dsLabelSanitizer = regexp.MustCompile(`[^-_A-Za-z0-9:]`)
-var dsHeaderValueEscaper = strings.NewReplacer(
-	"\n", "\\n",
-	"\r", "\\r",
-	"\t", "\\t",
+var (
+	dsLabelSanitizer     = regexp.MustCompile(`[^-_A-Za-z0-9:]`)
+	dsHeaderValueEscaper = strings.NewReplacer(
+		"\n", "\\n",
+		"\r", "\\r",
+		"\t", "\\t",
+	)
 )
 
 type dorisStreamLoadConfig struct {
@@ -572,7 +574,7 @@ func newDorisStreamLoadOutput(conf dorisStreamLoadConfig, mgr *service.Resources
 	}, nil
 }
 
-func (d *dorisStreamLoadOutput) Connect(context.Context) error {
+func (_ *dorisStreamLoadOutput) Connect(context.Context) error {
 	return nil
 }
 
@@ -593,9 +595,9 @@ func (d *dorisStreamLoadOutput) ConnectionTest(ctx context.Context) service.Conn
 			body, readErr := io.ReadAll(resp.Body)
 			resp.Body.Close()
 			if readErr != nil {
-				lastErr = fmt.Errorf("Doris FE %s returned HTTP %d and the body could not be read: %w", feURL, resp.StatusCode, readErr)
+				lastErr = fmt.Errorf("doris FE %s returned HTTP %d and the body could not be read: %w", feURL, resp.StatusCode, readErr)
 			} else {
-				lastErr = fmt.Errorf("Doris FE %s returned HTTP %d: %s", feURL, resp.StatusCode, strings.TrimSpace(string(body)))
+				lastErr = fmt.Errorf("doris FE %s returned HTTP %d: %s", feURL, resp.StatusCode, strings.TrimSpace(string(body)))
 			}
 			continue
 		}
@@ -660,7 +662,7 @@ func (d *dorisStreamLoadOutput) connectionCheck(ctx context.Context, feURL strin
 		return fmt.Errorf("checking Doris database %s via %s:%d: %w", d.conf.Database, host, queryPort, err)
 	}
 	if dbCount == 0 {
-		return fmt.Errorf("Doris database %s was not found via query_port %s:%d", d.conf.Database, host, queryPort)
+		return fmt.Errorf("doris database %s was not found via query_port %s:%d", d.conf.Database, host, queryPort)
 	}
 
 	var tableCount int
@@ -673,7 +675,7 @@ func (d *dorisStreamLoadOutput) connectionCheck(ctx context.Context, feURL strin
 		return fmt.Errorf("checking Doris table %s.%s via %s:%d: %w", d.conf.Database, d.conf.Table, host, queryPort, err)
 	}
 	if tableCount == 0 {
-		return fmt.Errorf("Doris table %s.%s was not found via query_port %s:%d", d.conf.Database, d.conf.Table, host, queryPort)
+		return fmt.Errorf("doris table %s.%s was not found via query_port %s:%d", d.conf.Database, d.conf.Table, host, queryPort)
 	}
 
 	return nil
@@ -699,7 +701,7 @@ func (d *dorisStreamLoadOutput) WriteBatch(ctx context.Context, batch service.Me
 	loadResp, rawBody, err := parseDorisStreamLoadResponse(resp)
 	if err != nil {
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-			return fmt.Errorf("Doris returned HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(rawBody)))
+			return fmt.Errorf("doris returned HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(rawBody)))
 		}
 		return fmt.Errorf("parsing Doris response: %w", err)
 	}
@@ -726,7 +728,7 @@ func (d *dorisStreamLoadOutput) WriteBatch(ctx context.Context, batch service.Me
 	return nil
 }
 
-func (d *dorisStreamLoadOutput) Close(context.Context) error {
+func (_ *dorisStreamLoadOutput) Close(context.Context) error {
 	return nil
 }
 
@@ -818,7 +820,7 @@ func (d *dorisStreamLoadOutput) sendViaFE(ctx context.Context, label string, bod
 		location := feResp.Header.Get(dsHeaderLocation)
 		feResp.Body.Close()
 		if location == "" {
-			lastErr = fmt.Errorf("Doris FE %s redirect response missing Location header", feEndpoint.String())
+			lastErr = fmt.Errorf("doris FE %s redirect response missing Location header", feEndpoint.String())
 			continue
 		}
 
@@ -842,7 +844,7 @@ func (d *dorisStreamLoadOutput) sendViaFE(ctx context.Context, label string, bod
 	}
 
 	if lastErr == nil {
-		lastErr = errors.New("failed to send Doris Stream Load request")
+		lastErr = errors.New("sending doris stream load request failed")
 	}
 	return nil, lastErr
 }
@@ -931,7 +933,7 @@ func (d *dorisStreamLoadOutput) newRequest(ctx context.Context, targetURL, label
 	return req, nil
 }
 
-func (d *dorisStreamLoadOutput) resolveRedirectURL(feEndpoint *url.URL, location string) (string, error) {
+func (_ *dorisStreamLoadOutput) resolveRedirectURL(feEndpoint *url.URL, location string) (string, error) {
 	loc, err := url.Parse(location)
 	if err != nil {
 		return "", fmt.Errorf("parsing Doris redirect URL: %w", err)
@@ -972,7 +974,7 @@ func parseDorisStreamLoadResponse(resp *http.Response) (dorisStreamLoadResponse,
 
 func classifyDorisStreamLoadResponse(httpStatus int, resp dorisStreamLoadResponse, rawBody []byte) error {
 	if httpStatus < 200 || httpStatus >= 300 {
-		return fmt.Errorf("Doris returned HTTP %d: %s", httpStatus, strings.TrimSpace(string(rawBody)))
+		return fmt.Errorf("doris returned HTTP %d: %s", httpStatus, strings.TrimSpace(string(rawBody)))
 	}
 
 	message := resp.errorMessage()
@@ -985,15 +987,15 @@ func classifyDorisStreamLoadResponse(httpStatus int, resp dorisStreamLoadRespons
 			return nil
 		}
 		return fmt.Errorf(
-			"Doris label already exists and existing job is %q: %s; raw response: %s",
+			"doris label already exists and existing job is %q: %s; raw response: %s",
 			resp.ExistingJobStatus, message, strings.TrimSpace(string(rawBody)),
 		)
 	case dsStatusPublishTimeout:
 		return nil
 	case "":
-		return fmt.Errorf("Doris response missing Status: %s", strings.TrimSpace(string(rawBody)))
+		return fmt.Errorf("doris response missing Status: %s", strings.TrimSpace(string(rawBody)))
 	default:
-		return fmt.Errorf("Doris stream load failed with status %q: %s; raw response: %s", resp.Status, message, strings.TrimSpace(string(rawBody)))
+		return fmt.Errorf("doris stream load failed with status %q: %s; raw response: %s", resp.Status, message, strings.TrimSpace(string(rawBody)))
 	}
 }
 
@@ -1063,10 +1065,7 @@ func dorisLabel(prefix string) string {
 	stamp := strconv.FormatInt(time.Now().UnixMilli(), 10)
 	suffix := xid.New().String()
 
-	maxPrefixLen := 128 - len(stamp) - len(suffix) - 2
-	if maxPrefixLen < 1 {
-		maxPrefixLen = 1
-	}
+	maxPrefixLen := max(1, 128-len(stamp)-len(suffix)-2)
 	if len(prefix) > maxPrefixLen {
 		prefix = prefix[:maxPrefixLen]
 	}
