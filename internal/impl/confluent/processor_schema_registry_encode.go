@@ -303,12 +303,13 @@ func newSchemaRegistryEncoder(
 		return nil, err
 	}
 
+	shutSig := s.shutSig
 	go func() {
 		for {
 			select {
 			case <-time.After(schemaRefreshTicker):
 				s.refreshEncoders()
-			case <-s.shutSig.SoftStopChan():
+			case <-shutSig.SoftStopChan():
 				return
 			}
 		}
