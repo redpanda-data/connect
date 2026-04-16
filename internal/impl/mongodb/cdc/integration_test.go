@@ -58,15 +58,6 @@ func (s *streamHelper) RunAsync(t *testing.T) func() {
 	return wg.Wait
 }
 
-func (s *streamHelper) RunAsyncWithErrors(t *testing.T) func() {
-	stream := s.makeStream(t)
-	var wg sync.WaitGroup
-	wg.Go(func() {
-		require.Error(t, stream.Run(t.Context()))
-	})
-	return wg.Wait
-}
-
 func (s *streamHelper) Stop(t *testing.T) {
 	stream := s.getStream(t)
 	require.NoError(t, stream.Stop(t.Context()))
@@ -569,12 +560,7 @@ mongodb_cdc:
 	db.CreateCollection(t, "foo")
 	db.InsertOne(t, "foo", bson.M{"_id": 1, "data": "hello"})
 	output.NackAll()
-	// For some reason the stream's Run doesn't exit until the context is cancelled.
-	// I'm not sure why that doesn't work, but for this test we can just cancel and
-	// let the cancellation happen after the test is done.
-	//
-	// Ideally wait would return immediately after StopNow is called...
-	wait := stream.RunAsyncWithErrors(t)
+	wait := stream.RunAsync(t)
 	t.Cleanup(wait)
 	time.Sleep(time.Second)
 	stream.StopNow(t)
