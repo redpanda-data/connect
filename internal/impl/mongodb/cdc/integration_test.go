@@ -486,8 +486,9 @@ read_until:
       snapshot_auto_bucket_sharding: `+strconv.FormatBool(autoBuckets))
 
 		db.CreateCollection(t, "foo")
-		// Write a million messages
-		for batch := range 1_000 {
+		// Write 100k messages — enough to exercise parallel snapshot with 8 workers
+		// while keeping the total package runtime under the 5-minute go test timeout.
+		for batch := range 100 {
 			idRangeStart := batch * 1_000
 			batch := []any{}
 			for id := range 1_000 {
@@ -497,7 +498,7 @@ read_until:
 		}
 		stream.Run(t)
 		expected := map[any]bool{}
-		for i := range 1_000_000 {
+		for i := range 100_000 {
 			expected[strconv.Itoa(i+1)] = true
 		}
 		seen := map[any]bool{}
