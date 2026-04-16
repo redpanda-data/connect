@@ -39,10 +39,7 @@ func startRedpanda(t testing.TB) (brokerAddr, port string) {
 	brokerAddr, err = ctr.KafkaSeedBroker(t.Context())
 	require.NoError(t, err)
 
-	// Extract port from "host:port"
-	parts := strings.Split(brokerAddr, ":")
-	port = parts[len(parts)-1]
-
+	brokerAddr, port = brokerAddrPort(brokerAddr)
 	return brokerAddr, port
 }
 
@@ -75,8 +72,15 @@ func startRedpandaWithSASL(t testing.TB) (brokerAddr, port string) {
 	brokerAddr, err = ctr.KafkaSeedBroker(t.Context())
 	require.NoError(t, err)
 
-	parts := strings.Split(brokerAddr, ":")
-	port = parts[len(parts)-1]
-
+	brokerAddr, port = brokerAddrPort(brokerAddr)
 	return brokerAddr, port
+}
+
+// brokerAddrPort normalises a broker address returned by testcontainers,
+// replacing "localhost" with "127.0.0.1" to avoid DNS resolution failures
+// in environments where the system resolver cannot resolve "localhost".
+func brokerAddrPort(addr string) (brokerAddr, port string) {
+	addr = strings.Replace(addr, "localhost", "127.0.0.1", 1)
+	parts := strings.Split(addr, ":")
+	return addr, parts[len(parts)-1]
 }
