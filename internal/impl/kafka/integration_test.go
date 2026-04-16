@@ -207,19 +207,19 @@ input:
 			integration.StreamTestOptSleepAfterInput(time.Second*3),
 			integration.StreamTestOptVarSet("VAR4", ""),
 		)
+	})
 
-		t.Run("range of partitions", func(t *testing.T) {
-			suite.Run(
-				t, template,
-				integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
-					require.NoError(t, createKafkaTopic(ctx, brokerAddr, vars.ID, 4))
-				}),
-				integration.StreamTestOptPort(kafkaPortStr),
-				integration.StreamTestOptSleepAfterInput(time.Second*3),
-				integration.StreamTestOptVarSet("VAR1", ":0-3"),
-				integration.StreamTestOptVarSet("VAR4", ""),
-			)
-		})
+	t.Run("range of partitions", func(t *testing.T) {
+		suite.Run(
+			t, template,
+			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
+				require.NoError(t, createKafkaTopic(ctx, brokerAddr, vars.ID, 4))
+			}),
+			integration.StreamTestOptPort(kafkaPortStr),
+			integration.StreamTestOptSleepAfterInput(time.Second*3),
+			integration.StreamTestOptVarSet("VAR1", ":0-3"),
+			integration.StreamTestOptVarSet("VAR4", ""),
+		)
 	})
 
 	manualPartitionTemplate := `
