@@ -74,6 +74,8 @@ const (
 	OpSelectLobLocator Operation = 9
 	// OpLobWrite represents a LOB_WRITE operation (op 10)
 	OpLobWrite Operation = 10
+	// OpLobTrim represents a LOB_TRIM operation (op 11)
+	OpLobTrim Operation = 11
 )
 
 // String converts the operation type to a string equivalent.
@@ -95,6 +97,8 @@ func (op Operation) String() string {
 		return "select_lob_locator"
 	case OpLobWrite:
 		return "lob_write"
+	case OpLobTrim:
+		return "lob_trim"
 	default:
 		return fmt.Sprintf("unknown operation (%d)", int64(op))
 	}
@@ -140,6 +144,8 @@ func operationFromCode(code int64) Operation {
 		return OpSelectLobLocator
 	case 10:
 		return OpLobWrite
+	case 11:
+		return OpLobTrim
 	default:
 		return OpUnknown
 	}
