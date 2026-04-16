@@ -64,7 +64,7 @@ func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replicat
 	if len(userTables) > 0 {
 		opCodes := "6, 7, 36"
 		if cfg.LOBEnabled {
-			opCodes += ", 9, 10"
+			opCodes += ", 9, 10, 11"
 		}
 		buf.WriteString(" AND (OPERATION_CODE IN (" + opCodes + ")")
 		// DML carries the real table name — filter by configured tables.
@@ -274,17 +274,19 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 
 		lm.txnCache.AddEvent(redoEvent.TransactionID, redoEvent.SCN, &event)
 
-	case sqlredo.OpSelectLobLocator:
+	case sqlredo.OpSelectLobLocator, sqlredo.OpLobTrim:
 		if !lm.cfg.LOBEnabled {
 			return nil
 		}
 		if !redoEvent.SQLRedo.Valid || redoEvent.SQLRedo.String == "" {
-			lm.log.Warnf("Skipping SELECT_LOB_LOCATOR with no SQL_REDO (scn=%d, txn=%s)", redoEvent.SCN, redoEvent.TransactionID)
+			lm.log.Warnf("Skipping %s with no SQL_REDO (scn=%d, txn=%s)", redoEvent.Operation, redoEvent.SCN, redoEvent.TransactionID)
 			return nil
 		}
+		// LOB_TRIM SQL has the same SELECT "COL" INTO ... FROM "SCHEMA"."TABLE" WHERE ...
+		// structure as SELECT_LOB_LOCATOR, so the same parser works for both.
 		info, err := sqlredo.ParseSelectLobLocator(redoEvent.SQLRedo.String)
 		if err != nil {
-			lm.log.Warnf("Failed to parse SELECT_LOB_LOCATOR SQL (scn=%d, txn=%s): %v\nSQL: %.500s", redoEvent.SCN, redoEvent.TransactionID, err, redoEvent.SQLRedo.String)
+			lm.log.Warnf("Failed to parse %s SQL (scn=%d, txn=%s): %v\nSQL: %.500s", redoEvent.Operation, redoEvent.SCN, redoEvent.TransactionID, err, redoEvent.SQLRedo.String)
 			return nil
 		}
 		// Resolve LOB type from the schema cache populated at startup.
