@@ -29,6 +29,8 @@ import (
 	"github.com/redpanda-data/connect/v4/cmd/tools/integration/llmfix"
 )
 
+const fixPollInterval = 15 * time.Second
+
 var runArgs struct {
 	outputDir      string
 	clean          bool
@@ -39,6 +41,7 @@ var runArgs struct {
 	fix            bool
 	fixMaxParallel int
 	fixTimeout     time.Duration
+	loop           int
 }
 
 func debugf(format string, args ...any) {
@@ -58,11 +61,12 @@ func cmdRun(args []string) error {
 	fset.BoolVar(&runArgs.fix, "fix", false, "triage and fix failed packages using Claude agents")
 	fset.IntVar(&runArgs.fixMaxParallel, "fix-max-parallel", 4, "max parallel fix agents (requires --fix)")
 	fset.DurationVar(&runArgs.fixTimeout, "fix-timeout", 30*time.Minute, "timeout per fix agent run (requires --fix)")
+	fset.IntVar(&runArgs.loop, "loop", 0, "number of successful clean iterations required (0 = single run)")
 
 	// Go's flag package stops parsing at the first non-flag argument.
 	// Separate flags from positional filters so interspersed usage works:
 	//   run --fix --race amqp1 --debug
-	flags, filters := splitFlagsAndArgs(args)
+	flags, filters := splitFlagsAndArgs(fset, args)
 	if err := fset.Parse(flags); err != nil {
 		return err
 	}
@@ -81,40 +85,86 @@ func cmdRun(args []string) error {
 		return fmt.Errorf("no packages match filter: %v", filters)
 	}
 
-	// Determine output directory.
-	outputDir := ""
-	if runArgs.outputDir != "" {
-		outputDir = runArgs.outputDir
-		debugf("using provided output dir: %s", outputDir)
-	} else {
-		if !runArgs.clean {
-			outputDir = findLatestRunDir(".integration")
-			debugf("resuming run dir: %s", outputDir)
+	loopCount := runArgs.loop
+	if loopCount <= 0 {
+		loopCount = 1
+	}
+
+	outputDir := resolveOutputDir(runArgs.outputDir, runArgs.clean)
+	clean := runArgs.clean
+	for success := 0; success < loopCount; {
+		if runArgs.loop > 0 {
+			log.Printf("loop: starting iteration (success %d/%d)", success, runArgs.loop)
 		}
-		if outputDir == "" {
-			outputDir = resolveRunDir()
-			debugf("new run dir: %s", outputDir)
+
+		failed, err := runIteration(packages, outputDir, clean)
+		if err != nil {
+			return err
+		}
+
+		if failed > 0 {
+			if runArgs.loop <= 0 {
+				return errors.New("integration tests failed")
+			}
+			// Retry in same dir — agents may have applied fixes.
+			clean = false
+			continue
+		}
+
+		success++
+		if runArgs.loop > 0 {
+			log.Printf("loop: iteration succeeded (success %d/%d)", success, runArgs.loop)
+		}
+
+		if runArgs.outputDir != "" {
+			// Fixed output dir — can't iterate further, cache would make it a no-op.
+			break
+		}
+		// Fresh dir for next iteration.
+		outputDir = resolveRunDir()
+		clean = false
+	}
+	return nil
+}
+
+func resolveOutputDir(explicit string, clean bool) string {
+	if explicit != "" {
+		debugf("using provided output dir: %s", explicit)
+		return explicit
+	}
+	if !clean {
+		if dir := findLatestRunDir(".integration"); dir != "" {
+			debugf("resuming run dir: %s", dir)
+			return dir
 		}
 	}
+	dir := resolveRunDir()
+	debugf("new run dir: %s", dir)
+	return dir
+}
+
+// runIteration executes a single test run in the given output directory.
+// Returns the number of failed packages and any non-recoverable error.
+// When --fix is enabled, it always waits for agents to finish before returning.
+func runIteration(packages []TestPackage, outputDir string, clean bool) (int, error) {
 	if err := os.MkdirAll(outputDir, 0o755); err != nil {
-		return fmt.Errorf("creating run directory: %w", err)
+		return 0, fmt.Errorf("creating run directory: %w", err)
 	}
 
 	debugf("resolved run dir: %s", outputDir)
 
 	out := NewOutput(os.Stdout, filepath.Join(outputDir, "index.md"))
 
-	retrying := make(map[string]bool)
 	var mgr *llmfix.Manager
 	if runArgs.fix {
 		baseSHA, err := resolveHEAD()
 		if err != nil {
-			return fmt.Errorf("initializing fix manager: %w", err)
+			return 0, fmt.Errorf("initializing fix manager: %w", err)
 		}
 		var mgrErr error
 		mgr, mgrErr = llmfix.NewManager(outputDir, baseSHA, runArgs.fixMaxParallel)
 		if mgrErr != nil {
-			return fmt.Errorf("initializing fix manager: %w", mgrErr)
+			return 0, fmt.Errorf("initializing fix manager: %w", mgrErr)
 		}
 		defer mgr.Close()
 		for _, r := range mgr.RecoverWorktrees() {
@@ -122,29 +172,33 @@ func cmdRun(args []string) error {
 				out.Error(fmt.Sprintf("  recover %s: %v", r.Name, r.Err))
 			}
 			for _, c := range r.Commits {
-				out.Info(fmt.Sprintf("  recovered: %s", c))
+				out.Info("  recovered: " + c)
 			}
 		}
 
 		// Retry fix agents that failed in the previous run.
-		if !runArgs.clean {
-			for slug, pkgPath := range mgr.PendingSlugs() {
-				outFile := filepath.Join(outputDir, slug+".txt")
-				cached := checkCache(outFile)
-				if cached.Overall() != ResultFail {
-					continue
+		if !clean {
+			pending := mgr.PendingSlugs()
+			if len(pending) > 0 {
+				out.Info(fmt.Sprintf("Retrying %d failed fix agent(s)...", len(pending)))
+				for slug, pkgPath := range pending {
+					outFile := filepath.Join(outputDir, slug+".txt")
+					cached := checkCache(outFile)
+					if cached.Overall() != ResultFail {
+						continue
+					}
+					testOutput := dumpTestOutput(outFile, cached.Tests)
+					if testOutput == "" {
+						continue
+					}
+					mgr.Dispatch(slug, llmfix.FixRequest{
+						PkgPath:    pkgPath,
+						TestOutput: testOutput,
+						Timeout:    runArgs.fixTimeout,
+					})
+					out.Info("  " + pkgShort(pkgPath))
 				}
-				testOutput := dumpTestOutput(outFile, cached.Tests)
-				if testOutput == "" {
-					continue
-				}
-				mgr.Dispatch(slug, llmfix.FixRequest{
-					PkgPath:    pkgPath,
-					TestOutput: testOutput,
-					Timeout:    runArgs.fixTimeout,
-				})
-				retrying[slug] = true
-				out.Info(fmt.Sprintf("  retrying fix for %s", pkgShort(pkgPath)))
+				out.Blank()
 			}
 		}
 	}
@@ -163,67 +217,80 @@ func cmdRun(args []string) error {
 		passed  int
 		failed  int
 		skipped int
+		run     int
 	)
 
-	for i, pkg := range packages {
-		short := pkgShort(pkg.Path)
-		fname := pkgFilename(pkg.Path)
-		pkgOutFile := filepath.Join(outputDir, fname)
+	for len(packages) > 0 {
+		var pending []TestPackage
+		for _, pkg := range packages {
+			slug := pkgSlug(pkg.Path)
+			short := pkgShort(pkg.Path)
+			fname := pkgFilename(pkg.Path)
+			pkgOutFile := filepath.Join(outputDir, fname)
+			tag := strings.TrimSuffix(fname, ".txt")
 
-		tag := strings.TrimSuffix(fname, ".txt")
-		out.PackageHeader(tag, i+1, total, short)
-
-		// Check cache from current run directory.
-		var cached PackageCache
-		if !runArgs.clean {
-			debugf("checking cache for %s at %s", short, pkgOutFile)
-			cached = checkCache(pkgOutFile)
-		}
-
-		// Print cached items (subtests compacted into parent summaries).
-		for _, t := range compactCacheEntries(cached.Tests) {
-			switch t.Result {
-			case ResultPass:
-				out.TestPass(t.TestName, "", true)
-			case ResultSkip:
-				out.TestSkip(t.TestName, "", t.SkipReason, true)
-			case ResultFail:
-				out.TestFail(t.TestName, "", pkgOutFile, t.FailLine, true)
+			if mgr != nil && mgr.IsFixing(slug) {
+				pending = append(pending, pkg)
+				continue
 			}
+
+			run++
+			out.PackageHeader(tag, run, total, short)
+
+			var cached PackageCache
+			if !clean {
+				debugf("checking cache for %s at %s", short, pkgOutFile)
+				cached = checkCache(pkgOutFile)
+			}
+
+			for _, t := range compactCacheEntries(cached.Tests) {
+				switch t.Result {
+				case ResultPass:
+					out.TestPass(t.TestName, "", true)
+				case ResultSkip:
+					out.TestSkip(t.TestName, "", t.SkipReason, true)
+				case ResultFail:
+					out.TestFail(t.TestName, "", pkgOutFile, t.FailLine, true)
+				}
+			}
+
+			if cached.Complete && cached.Overall() == ResultPass {
+				debugf("found cached result for %s: complete", short)
+				out.Info("● " + short + " (cached)")
+				out.PackageDone()
+				passed++
+				continue
+			}
+
+			res := runPackageTest(pkg, short, pkgOutFile, cached, out)
+
+			switch res.status {
+			case ResultPass:
+				passed++
+			case ResultFail:
+				failed++
+			case ResultSkip:
+				skipped++
+			}
+			out.PackageResult(short, res.status, res.duration)
+
+			if runArgs.fix && res.status == ResultFail {
+				mgr.Dispatch(slug, llmfix.FixRequest{
+					PkgPath:    pkg.Path,
+					TestOutput: dumpTestOutput(res.outFile, res.tests),
+					Timeout:    runArgs.fixTimeout,
+				})
+				out.Info(fmt.Sprintf("  fixing %s → %s", short, filepath.Join(outputDir, "fix", "agents.log")))
+			}
+
+			dockerCleanup()
 		}
-
-		// If complete and all passed, close and move on.
-		if cached.Complete && cached.Overall() == ResultPass {
-			debugf("found cached result for %s: complete", short)
-			out.Info(fmt.Sprintf("● %s (cached)", short))
-			out.PackageDone()
-			passed++
-			continue
+		if len(pending) == 0 {
+			break
 		}
-
-		res := runPackageTest(pkg, short, pkgOutFile, cached, out)
-
-		switch res.status {
-		case ResultPass:
-			passed++
-		case ResultFail:
-			failed++
-		case ResultSkip:
-			skipped++
-		}
-		out.PackageResult(short, res.status, res.duration)
-
-		// Dispatch fix agent in background (skip if already retrying from previous run).
-		if runArgs.fix && res.status == ResultFail && !retrying[pkgSlug(pkg.Path)] {
-			mgr.Dispatch(pkgSlug(pkg.Path), llmfix.FixRequest{
-				PkgPath:    pkg.Path,
-				TestOutput: dumpTestOutput(res.outFile, res.tests),
-				Timeout:    runArgs.fixTimeout,
-			})
-			out.Info(fmt.Sprintf("  fixing %s → %s", short, filepath.Join(outputDir, "fix", "agents.log")))
-		}
-
-		dockerCleanup()
+		out.Info(fmt.Sprintf("Waiting for %d package(s) being fixed...", len(pending)))
+		time.Sleep(fixPollInterval)
+		packages = pending
 	}
 
 	// Final report.
@@ -232,14 +299,10 @@ func cmdRun(args []string) error {
 	out.Summary(passed, failed, skipped)
 	out.Info(sep)
 
-	if failed > 0 {
-		if runArgs.fix {
-			out.Info("Waiting for fix agents...")
-			mgr.Wait()
-		}
-		return errors.New("integration tests failed")
+	if mgr != nil {
+		mgr.Wait()
 	}
-	return nil
+	return failed, nil
 }
 
 type packageResult struct {

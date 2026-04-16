@@ -153,15 +153,16 @@ func (m *Manager) Dispatch(slug string, req FixRequest) {
 	// log.Logger is goroutine-safe; each Write call is a single syscall.
 	l := log.New(m.logFile, "["+slug+"] ", log.LstdFlags)
 
+	// Mark dispatched synchronously so IsFixing(slug) is true before Dispatch returns.
+	m.setAgentStatus(slug, agentStatus{
+		PkgPath: req.PkgPath,
+		Status:  statusDispatched,
+		Tag:     tag,
+	})
+
 	m.eg.Go(func() error {
 		start := time.Now()
 		l.Printf("starting fix pipeline")
-
-		m.setAgentStatus(slug, agentStatus{
-			PkgPath: req.PkgPath,
-			Status:  statusDispatched,
-			Tag:     tag,
-		})
 
 		err := m.runOperator(tag, req, l)
 
@@ -252,6 +253,14 @@ func (m *Manager) RecoverWorktrees() []Recovery {
 		results = append(results, r)
 	}
 	return results
+}
+
+// IsFixing reports whether a fix agent is currently running for the given slug.
+func (m *Manager) IsFixing(slug string) bool {
+	m.mu.Lock()
+	s, ok := m.statuses[slug]
+	m.mu.Unlock()
+	return ok && s.Status == statusDispatched
 }
 
 // Wait blocks until all dispatched fix agents complete.
