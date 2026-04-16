@@ -50,8 +50,7 @@ func TestIntegration_MicrosoftSQLServerCDC_SnapshotAndStreaming(t *testing.T) {
 			db.MustExec("INSERT INTO dbo.bar DEFAULT VALUES")
 		}
 
-		// wait for changes to propagate to change tables
-		time.Sleep(5 * time.Second)
+		db.WaitForCDCChanges(t.Context(), 1000, "test.foo", "dbo.foo", "dbo.bar")
 
 		var (
 			outBatches   []string
@@ -108,12 +107,16 @@ microsoft_sql_server_cdc:
 
 		t.Log("Verifying streaming changes...")
 		{
-			// insert 3000 more for streaming changes
-			for range 1000 {
+			// insert streaming changes (reduced count to avoid CDC agent timeout under emulation)
+			streamingRowsPerTable := 10
+			streamingWant := streamingRowsPerTable * 3
+			for range streamingRowsPerTable {
 				db.MustExec("INSERT INTO test.foo DEFAULT VALUES")
 				db.MustExec("INSERT INTO dbo.foo DEFAULT VALUES")
 				db.MustExec("INSERT INTO dbo.bar DEFAULT VALUES")
 			}
+
+			db.WaitForCDCChanges(t.Context(), 1000+streamingRowsPerTable, "test.foo", "dbo.foo", "dbo.bar")
 
 			outBatchesMu.Lock()
 			outBatches = nil
@@ -123,10 +126,10 @@ microsoft_sql_server_cdc:
 				defer outBatchesMu.Unlock()
 
 				got := len(outBatches)
-				if got > want {
-					t.Fatalf("Wanted %d streaming changes but got %d", want, got)
+				if got > streamingWant {
+					t.Fatalf("Wanted %d streaming changes but got %d", streamingWant, got)
 				}
-				return got == want
+				return got == streamingWant
 			}, time.Minute*5, time.Second*1)
 
 		}
@@ -151,8 +154,7 @@ microsoft_sql_server_cdc:
 			db.MustExec("INSERT INTO dbo.bar DEFAULT VALUES")
 		}
 
-		// wait for changes to propagate to change tables
-		time.Sleep(5 * time.Second)
+		db.WaitForCDCChanges(t.Context(), 1000, "test.foo", "dbo.foo", "dbo.bar")
 
 		var (
 			outBatches   []string
@@ -210,12 +212,16 @@ microsoft_sql_server_cdc:
 
 		t.Log("Verifying streaming changes...")
 		{
-			// insert 3000 more for streaming changes
-			for range 1000 {
+			// insert streaming changes (reduced count to avoid CDC agent timeout under emulation)
+			streamingRowsPerTable := 10
+			streamingWant := streamingRowsPerTable * 3
+			for range streamingRowsPerTable {
 				db.MustExec("INSERT INTO test.foo DEFAULT VALUES")
 				db.MustExec("INSERT INTO dbo.foo DEFAULT VALUES")
 				db.MustExec("INSERT INTO dbo.bar DEFAULT VALUES")
 			}
+
+			db.WaitForCDCChanges(t.Context(), 1000+streamingRowsPerTable, "test.foo", "dbo.foo", "dbo.bar")
 
 			outBatchesMu.Lock()
 			outBatches = nil
@@ -225,10 +231,10 @@ microsoft_sql_server_cdc:
 				defer outBatchesMu.Unlock()
 
 				got := len(outBatches)
-				if got > want {
-					t.Fatalf("Wanted %d streaming changes but got %d", want, got)
+				if got > streamingWant {
+					t.Fatalf("Wanted %d streaming changes but got %d", streamingWant, got)
 				}
-				return got == want
+				return got == streamingWant
 			}, time.Minute*5, time.Second*1)
 
 		}
@@ -253,8 +259,7 @@ microsoft_sql_server_cdc:
 			db.MustExec("INSERT INTO dbo.bar DEFAULT VALUES")
 		}
 
-		// wait for changes to propagate to change tables
-		time.Sleep(5 * time.Second)
+		db.WaitForCDCChanges(t.Context(), 1000, "test.foo", "dbo.foo", "dbo.bar")
 
 		var (
 			outBatches   []string
@@ -317,12 +322,16 @@ file:
 
 		t.Log("Verifying streaming changes...")
 		{
-			// insert 3000 more for streaming changes
-			for range 1000 {
+			// insert streaming changes (reduced count to avoid CDC agent timeout under emulation)
+			streamingRowsPerTable := 10
+			streamingWant := streamingRowsPerTable * 3
+			for range streamingRowsPerTable {
 				db.MustExec("INSERT INTO test.foo DEFAULT VALUES")
 				db.MustExec("INSERT INTO dbo.foo DEFAULT VALUES")
 				db.MustExec("INSERT INTO dbo.bar DEFAULT VALUES")
 			}
+
+			db.WaitForCDCChanges(t.Context(), 1000+streamingRowsPerTable, "test.foo", "dbo.foo", "dbo.bar")
 
 			outBatchesMu.Lock()
 			outBatches = nil
@@ -332,10 +341,10 @@ file:
 				defer outBatchesMu.Unlock()
 
 				got := len(outBatches)
-				if got > want {
-					t.Fatalf("Wanted %d streaming changes but got %d", want, got)
+				if got > streamingWant {
+					t.Fatalf("Wanted %d streaming changes but got %d", streamingWant, got)
 				}
-				return got == want
+				return got == streamingWant
 			}, time.Minute*5, time.Second*1)
 
 		}
