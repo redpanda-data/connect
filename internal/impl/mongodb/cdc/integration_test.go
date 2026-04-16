@@ -53,7 +53,10 @@ func (s *streamHelper) RunAsync(t *testing.T) func() {
 	stream := s.makeStream(t)
 	var wg sync.WaitGroup
 	wg.Go(func() {
-		require.NoError(t, stream.Run(t.Context()))
+		err := stream.Run(t.Context())
+		if err != nil && !errors.Is(err, context.Canceled) {
+			require.NoError(t, err)
+		}
 	})
 	return wg.Wait
 }
