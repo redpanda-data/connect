@@ -952,11 +952,15 @@ func (i *mysqlStreamInput) onMessage(e *canal.RowsEvent, initValue, incrementVal
 			}
 			message[col.Name] = v
 		}
-		i.rawMessageEvents <- MessageEvent{
+		select {
+		case i.rawMessageEvents <- MessageEvent{
 			Row:       message,
 			Operation: MessageOperation(e.Action),
 			Table:     e.Table.Name,
 			Position:  &position{Name: i.currentBinlogName, Pos: e.Header.LogPos},
+		}:
+		case <-i.shutSig.SoftStopChan():
+			return context.Canceled
 		}
 	}
 	return nil
