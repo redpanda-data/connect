@@ -917,7 +917,7 @@ func (m *mongoCDC) readFromStream(ctx context.Context, cp *checkpoint.Capped[bso
 				}
 				m.resumeTokenMu.Lock()
 				defer m.resumeTokenMu.Unlock()
-				m.resumeToken = stream.ResumeToken()
+				m.resumeToken = *resumeToken
 				if m.checkpointFlusher == nil {
 					return m.checkpoint.Store(ctx, m.resumeToken)
 				}
