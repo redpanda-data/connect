@@ -212,7 +212,7 @@ func runPackageTest(pkg TestPackage, short, outFile string, cached PackageCache,
 	skipRegex := completedTestSkipRegex(cached.Tests)
 	runRegex := "^Test.*Integration"
 	if runArgs.unit {
-		runRegex = ""
+		runRegex = "^Test"
 	}
 	timeout := pkg.TimeoutStr()
 
