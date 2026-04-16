@@ -387,6 +387,9 @@ mongodb_cdc:
 		db.UpdateOne(t, "foo", "1", bson.M{
 			"$set": bson.M{"foo": "hello!"},
 		})
+		// Sleep so the update_lookup post-image fetch completes before the
+		// delete removes the document, avoiding a null fullDocument race.
+		time.Sleep(500 * time.Millisecond)
 		db.DeleteByID(t, "foo", "1")
 		time.Sleep(3 * time.Second)
 		stream.StopWithin(t, 10*time.Second)
