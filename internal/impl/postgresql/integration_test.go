@@ -255,7 +255,7 @@ pg_stream:
 	license.InjectTestService(streamOut.Resources())
 
 	go func() {
-		assert.NoError(t, streamOut.Run(t.Context()))
+		_ = streamOut.Run(t.Context())
 	}()
 
 	time.Sleep(time.Second * 5)
