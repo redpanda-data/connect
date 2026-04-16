@@ -434,6 +434,14 @@ func (i *mysqlStreamInput) startMySQLSync(ctx context.Context, pos *position, sn
 		if err = snapshot.close(); err != nil {
 			return fmt.Errorf("unable to close snapshot: %w", err)
 		}
+		// Signal snapshot completion. readMessages will flush any partial batch
+		// and pre-resolve a checkpoint entry for startPos so the cache is
+		// updated once the last snapshot batch is acknowledged.
+		select {
+		case i.rawMessageEvents <- MessageEvent{Operation: messageOperationSnapshotComplete, Position: startPos}:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 		pos = startPos
 	} else if pos == nil {
 		coords, err := i.canal.GetMasterPos()
@@ -693,6 +701,35 @@ func (i *mysqlStreamInput) readMessages(ctx context.Context) error {
 				return fmt.Errorf("flushing periodic batch: %w", err)
 			}
 		case me := <-i.rawMessageEvents:
+			if me.Operation == messageOperationSnapshotComplete {
+				// Flush any remaining messages before post snapshot checkpoint
+				flushedBatch, err := i.batchPolicy.Flush(ctx)
+				if err != nil {
+					return fmt.Errorf("flushing snapshot completion batch: %w", err)
+				}
+				if err := i.flushBatch(ctx, i.cp, flushedBatch); err != nil {
+					return fmt.Errorf("flushing snapshot completion batch: %w", err)
+				}
+
+				if me.Position != nil {
+					resolveFn, err := i.cp.Track(ctx, me.Position, 1)
+					if err != nil {
+						return fmt.Errorf("tracking snapshot completion checkpoint: %w", err)
+					}
+
+					// No mutex needed: checkpoint.Capped is thread-safe and snapshot batches never write to the cache
+					if maxOffset := resolveFn(); maxOffset != nil {
+						if offset := *maxOffset; offset != nil {
+							if err := i.setCachedBinlogPosition(ctx, *offset); err != nil {
+								return fmt.Errorf("persisting snapshot checkpoint: %w", err)
+							}
+						}
+					}
+				}
+				nextTimedBatchChan = nil
+				continue
+			}
+
 			mb := service.NewMessage(nil)
 			mb.SetStructuredMut(me.Row)
 			mb.MetaSet("operation", string(me.Operation))
