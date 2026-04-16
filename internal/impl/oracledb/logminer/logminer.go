@@ -145,10 +145,8 @@ func (lm *LogMiner) ReadChanges(ctx context.Context, startPos replication.SCN) (
 
 	defer func() {
 		if lm.sessionMgr.IsActive() {
-			if err := lm.sessionMgr.EndSession(ctx, conn); err != nil {
-				if ctx.Err() == nil && !errors.Is(err, context.Canceled) {
-					lm.log.Errorf("ending logminer session on exit: %v", err)
-				}
+			if err := lm.sessionMgr.EndSession(context.Background(), conn); err != nil {
+				lm.log.Errorf("ending logminer session on exit: %v", err)
 			}
 		}
 	}()
