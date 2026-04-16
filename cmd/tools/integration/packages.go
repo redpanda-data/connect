@@ -26,6 +26,7 @@ const defaultTimeout = "5m"
 type TestPackage struct {
 	Path    string `json:"path"`
 	Timeout string `json:"timeout"`
+	Skip    string `json:"skip"`
 }
 
 // TimeoutStr returns the timeout for go test -timeout, defaulting to 5m.
@@ -40,10 +41,17 @@ func (tp TestPackage) TimeoutStr() string {
 var packagesJSON []byte
 
 // allPackages is the CI matrix package list, loaded from packages.json.
+// Entries with a "skip" field are excluded.
 var allPackages = func() []TestPackage {
-	var pkgs []TestPackage
-	if err := json.Unmarshal(packagesJSON, &pkgs); err != nil {
+	var raw []TestPackage
+	if err := json.Unmarshal(packagesJSON, &raw); err != nil {
 		log.Fatalf("failed to parse packages.json: %v", err)
+	}
+	var pkgs []TestPackage
+	for _, p := range raw {
+		if p.Skip == "" {
+			pkgs = append(pkgs, p)
+		}
 	}
 	return pkgs
 }()
