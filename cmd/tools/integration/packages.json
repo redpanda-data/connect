@@ -24,7 +24,7 @@
   {"path": "./internal/impl/memcached"},
   {"path": "./internal/impl/mssqlserver", "timeout": "10m"},
   {"path": "./internal/impl/mongodb"},
-  {"path": "./internal/impl/mongodb/cdc"},
+  {"path": "./internal/impl/mongodb/cdc", "timeout": "15m"},
   {"path": "./internal/impl/mqtt"},
   {"path": "./internal/impl/mysql"},
   {"path": "./internal/impl/nanomsg"},
