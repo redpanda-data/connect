@@ -91,6 +91,32 @@ end:
 	db.T.Logf("Change Data Capture enabled for table %q", fullTableName)
 }
 
+// WaitForCDCChanges waits until the CDC change table for each given source table
+// has at least minRows entries. Under x86 emulation on Apple Silicon the CDC
+// capture agent can be very slow, so tests must poll rather than sleep.
+func (db *TestDB) WaitForCDCChanges(ctx context.Context, minRows int, tables ...string) {
+	db.T.Helper()
+	for _, fullTableName := range tables {
+		table := strings.Split(fullTableName, ".")
+		if len(table) != 2 {
+			table = []string{"dbo", table[0]}
+		}
+		query := "SELECT COUNT(*) FROM [cdc].[" + table[0] + "_" + table[1] + "_CT]"
+		var lastCount int
+		if !assert.Eventually(db.T, func() bool {
+			if ctx.Err() != nil {
+				return false
+			}
+			if err := db.QueryRowContext(ctx, query).Scan(&lastCount); err != nil {
+				return false
+			}
+			return lastCount >= minRows
+		}, 5*time.Minute, time.Second) {
+			db.T.Fatalf("WaitForCDCChanges(%q): expected >= %d rows, got %d", fullTableName, minRows, lastCount)
+		}
+	}
+}
+
 // MustDisableCDC disables Change Data Capture on the specified table.
 // The fullTableName should be in format "schema.table" (e.g., "dbo.all_data_types").
 // If only a table name is provided, defaults to "dbo" schema.
