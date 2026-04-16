@@ -1304,6 +1304,15 @@ create table %s (
 func TestIntegrationCosmosDB(t *testing.T) {
 	integration.CheckSkip(t)
 
+	if raceDetectorEnabled {
+		// The gocosmos driver depends on gjrc v0.2.2 which has a data race in
+		// GjrcResponse.Body due to broken double-checked locking: the outer nil
+		// check reads a shared field without holding the mutex while a background
+		// goroutine (spawned by gjrc.buildResponse) writes it under the mutex.
+		// This is a third-party bug we cannot fix; skip until gjrc is patched.
+		t.Skip("skipping: gjrc v0.2.2 has a known data race in GjrcResponse.Body")
+	}
+
 	ctr, err := testcontainers.Run(t.Context(), "mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:latest",
 		testcontainers.WithImagePlatform("linux/amd64"),
 		testcontainers.WithExposedPorts("8081/tcp"),
