@@ -254,6 +254,14 @@ func (m *Manager) RecoverWorktrees() []Recovery {
 	return results
 }
 
+// IsFixing reports whether a fix agent is currently running for the given slug.
+func (m *Manager) IsFixing(slug string) bool {
+	m.mu.Lock()
+	s, ok := m.statuses[slug]
+	m.mu.Unlock()
+	return ok && s.Status == statusDispatched
+}
+
 // Wait blocks until all dispatched fix agents complete.
 func (m *Manager) Wait() {
 	m.log.Printf("waiting for fix agents to finish")
