@@ -442,6 +442,7 @@ microsoft_sql_server_cdc:
 		outBatchesMu sync.Mutex
 	)
 
+	rowsPerPhase := 100
 	t.Log("Launching component to stream initial data...")
 	{
 		require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
@@ -457,32 +458,33 @@ microsoft_sql_server_cdc:
 		require.NoError(t, err)
 		license.InjectTestService(stream.Resources())
 
-		// --- launch input and insert initial rows for consumption
-		for range 1000 {
+		// --- insert initial rows and wait for CDC to process them
+		for range rowsPerPhase {
 			db.MustExec("INSERT INTO test.foo DEFAULT VALUES")
 		}
+		db.WaitForCDCChanges(t.Context(), rowsPerPhase, "test.foo")
+
 		go func() {
 			if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
 				t.Error(err)
 			}
 		}()
 
-		time.Sleep(time.Second * 5)
-
 		assert.Eventually(t, func() bool {
 			outBatchesMu.Lock()
 			defer outBatchesMu.Unlock()
-			return len(outBatches) == 1000
+			return len(outBatches) == rowsPerPhase
 		}, time.Minute*5, time.Millisecond*100)
 		require.NoError(t, stream.StopWithin(time.Second*10))
 	}
 
 	t.Log("Relaunching component to resume from checkpoint...")
 	{
-		// --- now stopped, insert more rows
-		for range 1000 {
+		// --- now stopped, insert more rows and wait for CDC
+		for range rowsPerPhase {
 			db.MustExec("INSERT INTO test.foo DEFAULT VALUES")
 		}
+		db.WaitForCDCChanges(t.Context(), rowsPerPhase*2, "test.foo")
 
 		streamResume, err := streamBuilder.Build()
 		require.NoError(t, err)
@@ -491,13 +493,14 @@ microsoft_sql_server_cdc:
 			require.NoError(t, streamResume.Run(t.Context()))
 		}()
 
+		totalWant := rowsPerPhase * 2
 		assert.Eventually(t, func() bool {
 			outBatchesMu.Lock()
 			defer outBatchesMu.Unlock()
-			return len(outBatches) == 2000
+			return len(outBatches) == totalWant
 		}, time.Minute*5, time.Millisecond*100)
 
-		require.Contains(t, outBatches[len(outBatches)-1], "2000")
+		require.Contains(t, outBatches[len(outBatches)-1], fmt.Sprintf("%d", totalWant))
 		require.NoError(t, streamResume.StopWithin(time.Second*10))
 	}
 }
