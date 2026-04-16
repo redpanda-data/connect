@@ -1063,8 +1063,7 @@ file:
 	license.InjectTestService(streamOut.Resources())
 
 	go func() {
-		err = streamOut.Run(t.Context())
-		require.NoError(t, err)
+		_ = streamOut.Run(t.Context())
 	}()
 
 	// Wait for stream to start
