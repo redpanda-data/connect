@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - oracledb_cdc: Added multi-tenant support for Oracle CDC input to handle both container and non-container databases. ([@josephwoodward](https://github.com/josephwoodward), [#4237](https://github.com/redpanda-data/connect/pull/4237))
 - oracledb_cdc: Added source timestamp metadata to Oracle CDC messages to propagate the redo log timestamp to consumers. ([@josephwoodward](https://github.com/josephwoodward), [#4250](https://github.com/redpanda-data/connect/pull/4250))
 - otlp: Added OpenTelemetry metrics exporter supporting both gRPC and HTTP protocols. ([@mmatczuk](https://github.com/mmatczuk), [#4230](https://github.com/redpanda-data/connect/pull/4230))
+- arc: add output plugin for Arc columnar database ([@xe-nvdk](https://github.com/xe-nvdk), [#4265](https://github.com/redpanda-data/connect/pull/4265))
 
 ### Fixed
 
@@ -24,6 +25,8 @@ All notable changes to this project will be documented in this file.
 
 - iceberg: Updated Iceberg fallback behavior to infer column type when schema doesn't contain the field, enabling support for transforms. ([@rockwotj](https://github.com/rockwotj), [#4263](https://github.com/redpanda-data/connect/pull/4263))
 - oracledb_cdc: Switched from buffering all redo events to streaming them through a callback to reduce memory allocation. ([@josephwoodward](https://github.com/josephwoodward), [#4243](https://github.com/redpanda-data/connect/pull/4243))
+- mysql_cdc: write checkpoint after snapshot ([@josephwoodward](https://github.com/josephwoodward), [#4269](https://github.com/redpanda-data/connect/pull/4269))
+
 
 ## 4.87.0 - 2026-04-09
 
