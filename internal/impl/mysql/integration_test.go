@@ -199,8 +199,9 @@ file:
 			}
 
 			go func() {
-				err = streamOut.Run(t.Context())
-				require.NoError(t, err)
+				if err := streamOut.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+					t.Error(err)
+				}
 			}()
 
 			assert.Eventually(t, func() bool {
