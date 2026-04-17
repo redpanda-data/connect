@@ -315,8 +315,11 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 		}
 		state, exists := lm.lobStates[redoEvent.TransactionID]
 		if !exists || state.ActiveKey == nil {
-			lm.log.Warnf("Received LOB_WRITE without active LOB locator (scn=%d, txn=%s)", redoEvent.SCN, redoEvent.TransactionID)
-			return nil
+			if !lm.inferLOBLocator(redoEvent) {
+				lm.log.Warnf("Received LOB_WRITE without active LOB locator (scn=%d, txn=%s)", redoEvent.SCN, redoEvent.TransactionID)
+				return nil
+			}
+			state = lm.lobStates[redoEvent.TransactionID]
 		}
 		acc := state.Accumulators[*state.ActiveKey]
 		if acc == nil {
@@ -518,6 +521,84 @@ func (lm *LogMiner) isLOBOnlyEvent(ev *sqlredo.DMLEvent) bool {
 		}
 	}
 	return true
+}
+
+// inferLOBLocator attempts to create a LOB locator for a LOB_WRITE event that
+// arrived without a preceding SELECT_LOB_LOCATOR. This happens with BASICFILE
+// out-of-line LOBs where Oracle does not emit locator events in LogMiner.
+//
+// The method searches the transaction's buffered DML events for a LOB-init UPDATE
+// (one that sets only LOB columns) and finds columns with EMPTY_CLOB()/EMPTY_BLOB()
+// placeholders that don't yet have an accumulator. Returns true if a locator was
+// successfully created.
+func (lm *LogMiner) inferLOBLocator(event *sqlredo.RedoEvent) bool {
+	if !event.SchemaName.Valid || !event.TableName.Valid {
+		return false
+	}
+	schema := event.SchemaName.String
+	table := event.TableName.String
+	if schema == "" || table == "" {
+		return false
+	}
+
+	txn := lm.txnCache.GetTransaction(event.TransactionID)
+	if txn == nil {
+		return false
+	}
+
+	// Search backwards for the most recent LOB-init UPDATE for this table.
+	for i := len(txn.Events) - 1; i >= 0; i-- {
+		ev := txn.Events[i]
+		if ev.Schema != schema || ev.Table != table || ev.Operation != sqlredo.OpUpdate {
+			continue
+		}
+		if !lm.isLOBOnlyEvent(ev) {
+			continue
+		}
+
+		pkValues := ev.OldValues
+		pkString := sqlredo.FormatPKString(pkValues)
+
+		// Find a LOB column with an EMPTY_CLOB()/EMPTY_BLOB() placeholder
+		// (parsed as empty []byte) that doesn't already have an accumulator.
+		for col, val := range ev.Data {
+			if b, ok := val.([]byte); !ok || len(b) != 0 {
+				continue
+			}
+
+			key := sqlredo.LobKey{
+				Schema:   schema,
+				Table:    table,
+				Column:   col,
+				PKString: pkString,
+			}
+
+			// Defer state creation until we have a match to avoid leaking
+			// empty TxnLOBState entries when inference fails.
+			state := lm.getOrCreateLOBState(event.TransactionID)
+			if _, exists := state.Accumulators[key]; exists {
+				continue
+			}
+
+			colKey := strings.ToUpper(schema + "." + table + "." + col)
+			lobType := lm.lobColTypes[colKey]
+
+			state.Accumulators[key] = &sqlredo.LobAccumulator{
+				Schema:   schema,
+				Table:    table,
+				Column:   col,
+				PKValues: pkValues,
+				IsBinary: lobType == "BLOB",
+			}
+			state.ActiveKey = &key
+
+			lm.log.Debugf("Inferred LOB locator for %s.%s.%s from LOB-init UPDATE (txn=%s)",
+				schema, table, col, event.TransactionID)
+			return true
+		}
+	}
+
+	return false
 }
 
 func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, startSCN, endSCN uint64, processEvent func(context.Context, *sqlredo.RedoEvent) error) error {
