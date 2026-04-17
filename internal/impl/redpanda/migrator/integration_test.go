@@ -420,7 +420,9 @@ logger:
 		go func() {
 			ctx, cancel := context.WithTimeout(t.Context(), redpandaTestWaitTimeout)
 			defer cancel()
-			require.NoError(t, stream.Run(ctx))
+			if err := stream.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+				t.Errorf("stream.Run failed: %v", err)
+			}
 		}()
 
 		msg := <-msgCh
