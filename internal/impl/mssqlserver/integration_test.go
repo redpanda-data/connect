@@ -499,7 +499,9 @@ microsoft_sql_server_cdc:
 		require.NoError(t, err)
 		license.InjectTestService(streamResume.Resources())
 		go func() {
-			require.NoError(t, streamResume.Run(t.Context()))
+			if err := streamResume.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+				t.Error(err)
+			}
 		}()
 
 		totalWant := rowsPerPhase * 2
