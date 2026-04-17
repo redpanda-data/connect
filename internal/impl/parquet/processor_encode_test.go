@@ -332,7 +332,7 @@ func TestParquetEncodeProcessor(t *testing.T) {
 			expectedDataBytes, err := json.Marshal(test.input)
 			require.NoError(t, err)
 
-			reader, err := newParquetEncodeProcessor(nil, testPMSchema(), "", &parquet.Uncompressed)
+			reader, err := newParquetEncodeProcessor(nil, testPMSchema(), "", &parquet.Uncompressed, parquet.Nanosecond)
 			require.NoError(t, err)
 
 			readerResBatches, err := reader.ProcessBatch(t.Context(), service.MessageBatch{
@@ -379,7 +379,7 @@ func TestParquetEncodeProcessor(t *testing.T) {
 			inBatch = append(inBatch, service.NewMessage(dataBytes))
 		}
 
-		reader, err := newParquetEncodeProcessor(nil, testPMSchema(), "", &parquet.Uncompressed)
+		reader, err := newParquetEncodeProcessor(nil, testPMSchema(), "", &parquet.Uncompressed, parquet.Nanosecond)
 		require.NoError(t, err)
 
 		readerResBatches, err := reader.ProcessBatch(t.Context(), inBatch)
@@ -578,7 +578,7 @@ func TestParquetEncodeDynamicSchemaProcessor(t *testing.T) {
 
 	inBatch[0].MetaSetMut("foobar", commonSchema.ToAny())
 
-	reader, err := newParquetEncodeProcessor(nil, nil, "foobar", &parquet.Uncompressed)
+	reader, err := newParquetEncodeProcessor(nil, nil, "foobar", &parquet.Uncompressed, parquet.Nanosecond)
 	require.NoError(t, err)
 
 	readerResBatches, err := reader.ProcessBatch(t.Context(), inBatch)
@@ -638,13 +638,103 @@ func TestParquetEncodeDynamicSchemaAnyFieldError(t *testing.T) {
 	}
 	inBatch[0].MetaSetMut("schema", commonSchema.ToAny())
 
-	proc, err := newParquetEncodeProcessor(nil, nil, "schema", &parquet.Uncompressed)
+	proc, err := newParquetEncodeProcessor(nil, nil, "schema", &parquet.Uncompressed, parquet.Nanosecond)
 	require.NoError(t, err)
 
 	_, err = proc.ProcessBatch(t.Context(), inBatch)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "payload")
 	assert.Contains(t, err.Error(), "ANY")
+}
+
+func TestParquetEncodeTimestampUnit(t *testing.T) {
+	tests := []struct {
+		name           string
+		unitConfig     string
+		expectedUnit   parquet.TimeUnit
+		expectedSchema string
+	}{
+		{name: "default is nanosecond", unitConfig: "", expectedUnit: parquet.Nanosecond, expectedSchema: "unit=NANOS"},
+		{name: "microsecond", unitConfig: "default_timestamp_unit: MICROSECOND", expectedUnit: parquet.Microsecond, expectedSchema: "unit=MICROS"},
+		{name: "millisecond", unitConfig: "default_timestamp_unit: MILLISECOND", expectedUnit: parquet.Millisecond, expectedSchema: "unit=MILLIS"},
+		{name: "explicit nanosecond", unitConfig: "default_timestamp_unit: NANOSECOND", expectedUnit: parquet.Nanosecond, expectedSchema: "unit=NANOS"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			configYAML := fmt.Sprintf(`
+schema:
+  - { name: id, type: INT64 }
+  - { name: ts, type: TIMESTAMP }
+%s
+`, test.unitConfig)
+			encodeConf, err := parquetEncodeProcessorConfig().ParseYAML(configYAML, nil)
+			require.NoError(t, err)
+
+			encodeProc, err := newParquetEncodeProcessorFromConfig(encodeConf, nil)
+			require.NoError(t, err)
+			require.Equal(t, test.expectedUnit, encodeProc.timestampUnit)
+
+			batches, err := encodeProc.ProcessBatch(t.Context(), service.MessageBatch{
+				service.NewMessage([]byte(`{"id":1,"ts":"2026-04-17T12:00:00Z"}`)),
+			})
+			require.NoError(t, err)
+			require.Len(t, batches, 1)
+			require.Len(t, batches[0], 1)
+
+			pqBytes, err := batches[0][0].AsBytes()
+			require.NoError(t, err)
+
+			pqFile, err := parquet.OpenFile(bytes.NewReader(pqBytes), int64(len(pqBytes)))
+			require.NoError(t, err)
+			assert.Contains(t, pqFile.Schema().String(), test.expectedSchema)
+		})
+	}
+}
+
+func TestParquetEncodeTimestampUnitDynamicSchema(t *testing.T) {
+	encodeConf, err := parquetEncodeProcessorConfig().ParseYAML(`
+schema_metadata: benthos_schema
+default_timestamp_unit: MICROSECOND
+`, nil)
+	require.NoError(t, err)
+
+	encodeProc, err := newParquetEncodeProcessorFromConfig(encodeConf, nil)
+	require.NoError(t, err)
+
+	commonSchema := &schema.Common{
+		Type: schema.Object,
+		Children: []schema.Common{
+			{Name: "id", Type: schema.Int64},
+			{Name: "ts", Type: schema.Timestamp},
+		},
+	}
+
+	msg := service.NewMessage([]byte(`{"id":1,"ts":"2026-04-17T12:00:00Z"}`))
+	msg.MetaSetMut("benthos_schema", commonSchema.ToAny())
+
+	batches, err := encodeProc.ProcessBatch(t.Context(), service.MessageBatch{msg})
+	require.NoError(t, err)
+	require.Len(t, batches, 1)
+	require.Len(t, batches[0], 1)
+
+	pqBytes, err := batches[0][0].AsBytes()
+	require.NoError(t, err)
+
+	pqFile, err := parquet.OpenFile(bytes.NewReader(pqBytes), int64(len(pqBytes)))
+	require.NoError(t, err)
+	assert.Contains(t, pqFile.Schema().String(), "unit=MICROS")
+}
+
+func TestParquetEncodeTimestampUnitInvalid(t *testing.T) {
+	env := service.NewEnvironment()
+	err := env.NewStreamBuilder().AddProcessorYAML(`
+parquet_encode:
+  schema:
+    - { name: id, type: INT64 }
+  default_timestamp_unit: PICOSECOND
+`)
+	require.Error(t, err)
 }
 
 func TestParquetEncodeProcessorConfigLinting(t *testing.T) {

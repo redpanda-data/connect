@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+### Added
+
+- parquet_encode: Added `default_timestamp_unit` field (values `NANOSECOND`, `MICROSECOND`, `MILLISECOND`) controlling the precision of TIMESTAMP logical types. Default remains `NANOSECOND` for backwards compatibility. Use `MICROSECOND` when writing files for Apache Spark/Databricks, AWS Athena or DuckDB, which do not support `TIMESTAMP(NANOS)`. ([#3570](https://github.com/redpanda-data/connect/issues/3570))
+
 ## 4.88.0 - 2026-04-16
 
 ### Added
