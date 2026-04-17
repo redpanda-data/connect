@@ -19,7 +19,7 @@
   {"path": "./internal/impl/gcp/enterprise/changestreams/metadata"},
   {"path": "./internal/impl/hdfs"},
   {"path": "./internal/impl/influxdb"},
-  {"path": "./internal/impl/kafka"},
+  {"path": "./internal/impl/kafka", "timeout": "10m"},
   {"path": "./internal/impl/kafka/enterprise"},
   {"path": "./internal/impl/memcached"},
   {"path": "./internal/impl/mssqlserver", "timeout": "10m"},

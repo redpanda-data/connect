@@ -158,6 +158,7 @@ input:
     commit_period: "1s"
 `
 	t.Run("manual_partitioner", func(t *testing.T) {
+		t.Parallel()
 		partitionSuite.Run(
 			t, manualPartitionTemplate,
 			integration.StreamTestOptPreTest(func(t testing.TB, _ context.Context, vars *integration.StreamTestConfigVars) {
