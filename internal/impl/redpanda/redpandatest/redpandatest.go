@@ -15,6 +15,7 @@
 package redpandatest
 
 import (
+	"context"
 	"testing"
 
 	"github.com/testcontainers/testcontainers-go"
@@ -61,7 +62,25 @@ func StartSingleBrokerWithConfig(t *testing.T, cfg Config) (Endpoints, testconta
 		opts = append(opts, tcredpanda.WithAutoCreateTopics())
 	}
 
-	ctr, err := tcredpanda.Run(t.Context(), img, opts...)
+	// The Redpanda testcontainers module applies a fixed 60s readiness timeout
+	// per wait strategy. Under Docker pressure the broker can take longer to
+	// come up, so retry a few times before giving up.
+	const maxAttempts = 3
+	var (
+		ctr *tcredpanda.Container
+		err error
+	)
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		ctr, err = tcredpanda.Run(t.Context(), img, opts...)
+		if err == nil {
+			break
+		}
+		t.Logf("redpanda container start attempt %d/%d failed: %v", attempt, maxAttempts, err)
+		if ctr != nil {
+			_ = ctr.Terminate(context.Background())
+			ctr = nil
+		}
+	}
 	testcontainers.CleanupContainer(t, ctr)
 	if err != nil {
 		return Endpoints{}, ctr, err
