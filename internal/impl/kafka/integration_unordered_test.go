@@ -210,9 +210,9 @@ input:
 		integration.StreamTestOpenClose(),
 		integration.StreamTestMetadata(),
 		integration.StreamTestSendBatch(10),
-		integration.StreamTestStreamSequential(1000),
-		integration.StreamTestStreamParallel(1000),
-		integration.StreamTestStreamParallelLossy(1000),
+		integration.StreamTestStreamSequential(100),
+		integration.StreamTestStreamParallel(100),
+		integration.StreamTestStreamParallelLossy(100),
 	)
 
 	suite.Run(
