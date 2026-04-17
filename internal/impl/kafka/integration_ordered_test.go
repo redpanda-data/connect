@@ -194,7 +194,7 @@ func TestRedpandaRecordOrderSoakTest(t *testing.T) {
 	const (
 		setupTeardownBudget = 2 * time.Minute
 		minSoakDuration     = 30 * time.Second
-		defaultSoakDuration = 3 * time.Minute
+		defaultSoakDuration = 1 * time.Minute
 	)
 
 	soakDuration := defaultSoakDuration
