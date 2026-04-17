@@ -1124,7 +1124,9 @@ postgres_cdc:
 	require.NoError(t, err)
 	license.InjectTestService(streamOut.Resources())
 	go func() {
-		require.NoError(t, streamOut.Run(t.Context()))
+		if err := streamOut.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+			t.Error(err)
+		}
 	}()
 
 	// Wait for replication slot to be created
