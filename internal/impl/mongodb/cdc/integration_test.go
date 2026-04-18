@@ -335,7 +335,11 @@ func setup(t *testing.T, template string, opts ...setupOption) (*streamHelper, *
 		ApplyURI(uri).
 		SetDirect(true))
 	require.NoError(t, err)
-	require.NoError(t, mongoClient.Ping(t.Context(), nil))
+	// The replica set can take a moment after container readiness before it
+	// accepts client connections through the mapped port, so retry the ping.
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		assert.NoError(c, mongoClient.Ping(t.Context(), nil))
+	}, 60*time.Second, time.Second)
 	for _, opt := range opts {
 		require.NoError(t, opt(mongoClient))
 	}
