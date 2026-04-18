@@ -59,9 +59,9 @@ func TestIntegration_MicrosoftSQLServerCDC_CheckpointCache(t *testing.T) {
 		cache, err := newCheckpointCache(context.Background(), connStr, cacheTableToCreate, nil)
 		require.NoError(t, err)
 
-		// verify set
+		// verify set: LSN is a 10-byte varbinary value
 		var wanted replication.LSN
-		require.NoError(t, wanted.Scan([]byte("0x0000002d000004b00003")))
+		require.NoError(t, wanted.Scan([]byte{0x00, 0x00, 0x00, 0x2d, 0x00, 0x00, 0x04, 0xb0, 0x00, 0x03}))
 		require.NoError(t, cache.Set(t.Context(), "", wanted, nil))
 
 		// verify get
