@@ -527,10 +527,14 @@ func (lm *LogMiner) isLOBOnlyEvent(ev *sqlredo.DMLEvent) bool {
 // arrived without a preceding SELECT_LOB_LOCATOR. This happens with BASICFILE
 // out-of-line LOBs where Oracle does not emit locator events in LogMiner.
 //
-// The method searches the transaction's buffered DML events for a LOB-init UPDATE
-// (one that sets only LOB columns) and finds columns with EMPTY_CLOB()/EMPTY_BLOB()
-// placeholders that don't yet have an accumulator. Returns true if a locator was
-// successfully created.
+// The method searches the transaction's buffered DML events for either a
+// LOB-init UPDATE (inline-LOB path) or an INSERT (out-of-line LOB path) whose
+// Data carries a LOB column with an EMPTY_CLOB()/EMPTY_BLOB() placeholder that
+// doesn't yet have an accumulator. For INSERTs on BASICFILE columns with
+// DISABLE STORAGE IN ROW, Oracle emits NULL in SQL_REDO instead of an empty
+// placeholder; in that case the LOB column is absent from Data, so known LOB
+// columns for the table are also considered as inference candidates.
+// Returns true if a locator was successfully created.
 func (lm *LogMiner) inferLOBLocator(event *sqlredo.RedoEvent) bool {
 	if !event.SchemaName.Valid || !event.TableName.Valid {
 		return false
@@ -546,23 +550,55 @@ func (lm *LogMiner) inferLOBLocator(event *sqlredo.RedoEvent) bool {
 		return false
 	}
 
-	// Search backwards for the most recent LOB-init UPDATE for this table.
+	prefix := strings.ToUpper(schema + "." + table + ".")
+
+	// Search backwards for the most recent event that can carry a LOB-init
+	// placeholder for this table: LOB-only UPDATE (inline-LOB path) or INSERT
+	// (BASICFILE out-of-line LOB path, where no LOB-init UPDATE is emitted).
 	for i := len(txn.Events) - 1; i >= 0; i-- {
 		ev := txn.Events[i]
-		if ev.Schema != schema || ev.Table != table || ev.Operation != sqlredo.OpUpdate {
-			continue
-		}
-		if !lm.isLOBOnlyEvent(ev) {
+		if ev.Schema != schema || ev.Table != table {
 			continue
 		}
 
-		pkValues := ev.OldValues
+		var pkValues map[string]any
+		switch {
+		case ev.Operation == sqlredo.OpUpdate && lm.isLOBOnlyEvent(ev):
+			pkValues = ev.OldValues
+		case ev.Operation == sqlredo.OpInsert:
+			// Use the INSERT's non-LOB columns as the PK identifier so that
+			// MergeLOBsIntoDMLEvents can still match this INSERT after one of
+			// its LOB columns has been overwritten with the assembled value
+			// (important when an INSERT has multiple out-of-line LOBs).
+			pkValues = make(map[string]any, len(ev.Data))
+			for col, val := range ev.Data {
+				if _, isLOB := lm.lobColTypes[prefix+strings.ToUpper(col)]; isLOB {
+					continue
+				}
+				pkValues[col] = val
+			}
+		default:
+			continue
+		}
+
 		pkString := sqlredo.FormatPKString(pkValues)
 
-		// Find a LOB column with an EMPTY_CLOB()/EMPTY_BLOB() placeholder
-		// (parsed as empty []byte) that doesn't already have an accumulator.
-		for col, val := range ev.Data {
-			if b, ok := val.([]byte); !ok || len(b) != 0 {
+		// Candidate LOB columns are those with an EMPTY_CLOB()/EMPTY_BLOB()
+		// placeholder (parsed as empty []byte). For INSERTs, BASICFILE columns
+		// with DISABLE STORAGE IN ROW emit NULL in SQL_REDO instead — the column
+		// is absent from Data — so iterate every known LOB column for the table.
+		for k, lobType := range lm.lobColTypes {
+			if !strings.HasPrefix(k, prefix) {
+				continue
+			}
+			col := k[len(prefix):]
+			val, present := ev.Data[col]
+			switch {
+			case present:
+				if b, ok := val.([]byte); !ok || len(b) != 0 {
+					continue
+				}
+			case ev.Operation != sqlredo.OpInsert:
 				continue
 			}
 
@@ -580,9 +616,6 @@ func (lm *LogMiner) inferLOBLocator(event *sqlredo.RedoEvent) bool {
 				continue
 			}
 
-			colKey := strings.ToUpper(schema + "." + table + "." + col)
-			lobType := lm.lobColTypes[colKey]
-
 			state.Accumulators[key] = &sqlredo.LobAccumulator{
 				Schema:   schema,
 				Table:    table,
@@ -592,8 +625,8 @@ func (lm *LogMiner) inferLOBLocator(event *sqlredo.RedoEvent) bool {
 			}
 			state.ActiveKey = &key
 
-			lm.log.Debugf("Inferred LOB locator for %s.%s.%s from LOB-init UPDATE (txn=%s)",
-				schema, table, col, event.TransactionID)
+			lm.log.Debugf("Inferred LOB locator for %s.%s.%s from %s (txn=%s)",
+				schema, table, col, ev.Operation, event.TransactionID)
 			return true
 		}
 	}
