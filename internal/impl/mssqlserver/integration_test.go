@@ -562,11 +562,18 @@ microsoft_sql_server_cdc:
 	require.NoError(t, err)
 	license.InjectTestService(stream.Resources())
 
+	// Run the stream in a cleanup-synchronised goroutine so a t.Error from a
+	// late Run error can't fire after the test function has returned.
+	streamErr := make(chan error, 1)
 	go func() {
-		if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
-			t.Error(err)
-		}
+		streamErr <- stream.Run(t.Context())
 	}()
+	t.Cleanup(func() {
+		_ = stream.StopWithin(time.Second * 10)
+		if err := <-streamErr; err != nil && !errors.Is(err, context.Canceled) {
+			t.Errorf("stream.Run: %v", err)
+		}
+	})
 
 	assert.Eventually(t, func() bool {
 		outBatchesMu.Lock()
@@ -580,7 +587,6 @@ microsoft_sql_server_cdc:
 		want = append(want, fmt.Sprintf(`{"b":%d}`, i))
 	}
 	require.Equal(t, want, outBatches, "Order of output does not match expected")
-	require.NoError(t, stream.StopWithin(time.Second*10))
 }
 
 func TestIntegration_MicrosoftSQLServerCDC_SnapshotAndStreaming_AllTypes(t *testing.T) {
