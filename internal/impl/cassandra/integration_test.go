@@ -55,6 +55,10 @@ func TestIntegrationCassandra(t *testing.T) {
 		if session == nil {
 			conn := gocql.NewCluster(connHost)
 			conn.Consistency = gocql.All
+			// The Cassandra container advertises its internal Docker IP via
+			// system.peers, which is unreachable from the host. Skip the
+			// initial host lookup so gocql only uses the mapped contact point.
+			conn.DisableInitialHostLookup = true
 			var rerr error
 			if session, rerr = conn.CreateSession(); rerr != nil {
 				return false
@@ -74,6 +78,7 @@ output:
   cassandra:
     addresses:
       - localhost:$PORT
+    disable_initial_host_lookup: true
     query: 'INSERT INTO testspace.table$ID JSON ?'
     args_mapping: 'root = [ this ]'
 `
@@ -114,6 +119,7 @@ output:
   cassandra:
     addresses:
       - localhost:$PORT
+    disable_initial_host_lookup: true
     query: 'INSERT INTO testspace.table$ID (id, content, created_at, meows) VALUES (?, ?, ?, ?)'
     args_mapping: |
       root = [ this.id, this.content, now(), [ "first meow", "second meow" ] ]
