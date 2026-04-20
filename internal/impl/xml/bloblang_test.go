@@ -48,6 +48,23 @@ func TestParseXML(t *testing.T) {
 			args:   `true`,
 			exp:    map[string]any{"root": map[string]any{"bool": true, "number": map[string]any{"#text": float64(123), "-id": float64(99)}, "title": "This is a title"}},
 		},
+		{
+			name:   "preserve namespaces for issue 3928",
+			target: `<root xmlns:dc="http://my.namespace/dc"><dc:title>Hello</dc:title></root>`,
+			args:   `preserve_namespaces: true`,
+			exp: map[string]any{"root": map[string]any{
+				"-xmlns:dc": "http://my.namespace/dc",
+				"dc:title":  "Hello",
+			}},
+		},
+		{
+			name:   "preserve namespaces is opt-in",
+			target: `<root xmlns:dc="http://my.namespace/dc"><dc:title>Hello</dc:title></root>`,
+			exp: map[string]any{"root": map[string]any{
+				"-dc":   "http://my.namespace/dc",
+				"title": "Hello",
+			}},
+		},
 	}
 
 	for _, test := range testCases {
