@@ -1,75 +1,64 @@
-# Benchmarking Iceberg Output Component
+# Iceberg Benchmark
 
-Benchmark demonstrating write throughput of Redpanda's Iceberg output connector.
+Measures write throughput of the Redpanda Connect Iceberg output. Two benchmarks are available:
 
-Unlike the PostgreSQL CDC benchmark (which measures read throughput), this benchmark measures **write throughput** — how fast the connector can write generated messages to Iceberg tables backed by MinIO (S3-compatible) and an Apache Iceberg REST catalog.
+- **This folder** — Redpanda Connect only (generate → Iceberg), no Kafka
+- **[`kafka-connector/`](kafka-connector/)** — End-to-end comparison: Kafka → transform → Iceberg, benchmarked against Kafka Connect (Tabular Iceberg Sink)
+
+See [`docs/benchmark-results/iceberg.md`](../../../../docs/benchmark-results/iceberg.md) for results.
 
 ## Prerequisites
 
 - Docker with Compose
 
-## Setup
-
-Start MinIO and the Iceberg REST catalog:
+## Infrastructure
 
 ```bash
-task infra:up
+task infra:up     # start MinIO + Iceberg REST catalog
+task infra:down   # stop and remove all containers
+task infra:reset  # wipe data and restart
+task infra:logs   # follow container logs
 ```
 
-This starts:
-- **MinIO** on port 9000 (S3-compatible storage), console at http://localhost:9001 (admin/password)
-- **Iceberg REST catalog** on port 8181
+MinIO console: http://localhost:9001 (admin/password)
+Iceberg REST catalog: http://localhost:8181
 
-## Benchmark Tasks
+## Running
 
-### Parameterised benchmark
+### Generate → Iceberg (no Kafka)
 
 ```bash
 task bench CORES=4 BATCH=5000 COUNT=1000000
 ```
 
-- `CORES` sets `GOMAXPROCS` (omit for unbounded)
-- `BATCH` sets `batching.count` (defaults to 1000)
-- `COUNT` sets number of messages to generate (defaults to 0 = unlimited, run until CTRL+C)
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `CORES`   | unbounded | `GOMAXPROCS` |
+| `BATCH`   | 1000 | `batching.count` |
+| `COUNT`   | 0 (unlimited) | number of messages |
 
-### max_in_flight benchmark
-
-Fixed at `CORES=4`, varying `BATCH` and `MIF` (max_in_flight):
+### Varying max_in_flight
 
 ```bash
-task bench:mif BATCH=10000 MIF=32 COUNT=1000000
+task bench:mif CORES=4 BATCH=10000 MIF=32 COUNT=1000000
 ```
 
-- `BATCH` sets `batching.count` (defaults to 1000)
-- `MIF` sets `max_in_flight` (defaults to 4)
-- `CORES` sets `GOMAXPROCS` (defaults to 4)
-- `COUNT` sets number of messages to generate (defaults to 1000000)
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `MIF`     | 4 | `max_in_flight` |
 
-### Reset and run
-
-Wipes all data, restarts infrastructure, then runs the benchmark:
+### Clean run
 
 ```bash
 task bench:reset CORES=4 BATCH=5000 COUNT=1000000
 ```
 
-Use this between runs to ensure a clean state.
+Wipes all Iceberg data, restarts infrastructure, then runs the benchmark.
 
-## Data Management
-
-```bash
-task infra:reset   # wipe all data and restart infrastructure
-task infra:down    # stop and remove all containers and volumes
-task infra:logs    # follow container logs
-```
-
-## Expected Output
+## Output
 
 ```
 INFO rolling stats: 5000 msg/sec, 3.2 MB/sec    @service=redpanda-connect ...
-INFO rolling stats: 5000 msg/sec, 3.1 MB/sec    @service=redpanda-connect ...
 ```
 
-The benchmark processor is on the pipeline (before the output), so it measures the rate at which messages enter the Iceberg writer, including any batching overhead.
-
-See [`docs/benchmark-results/iceberg.md`](../../../../docs/benchmark-results/iceberg.md) for full results.
+Throughput is measured at the pipeline processor, before the Iceberg writer.

@@ -1,0 +1,26 @@
+# Produces COUNT synthetic events to the bench-events Kafka topic.
+# Usage: rpk connect run producer.yaml
+# Override count/brokers: rpk connect run producer.yaml \
+#   --set input.generate.count=5000000 \
+#   --set output.kafka_franz.seed_brokers[0]=localhost:9092
+
+input:
+  generate:
+    count: ${COUNT:1000000}
+    interval: ""
+    mapping: |
+      root.id       = count("events")
+      root.category = "cat_" + random_int(min: 1, max: 10).string()
+      root.value    = random_int(min: 1, max: 1000000).float64() / 100.0
+      root.ts       = now().ts_unix_micro()
+
+output:
+  kafka_franz:
+    seed_brokers:
+      - ${KAFKA_BOOTSTRAP:localhost:9092}
+    topic: bench-events
+    compression: snappy
+    batching:
+      count: 5000
+      byte_size: 4194304  # 4 MiB
+      period: 5s
