@@ -24,6 +24,13 @@ tasks:
     cmds:
       - go run ./cmd/tools/integration run {{.CLI_ARGS}}
 
+  integration:fix-loop:
+    desc: "Self-healing full test run: --fix --unit --race --clean --loop=10"
+    aliases:
+      - swiss-cheese
+    cmds:
+      - go run ./cmd/tools/integration run --fix --unit --race --clean --loop=10 {{.CLI_ARGS}}
+
   show:
     desc: "Show human-readable output for a test failure (e.g. task test:show -- .integration/20260331/mssql.txt:870)"
     cmds:
