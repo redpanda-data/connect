@@ -1,0 +1,46 @@
+http:
+  debug_endpoints: true
+
+input:
+  kafka_franz:
+    seed_brokers:
+      - ${KAFKA_BOOTSTRAP:localhost:9092}
+    topics:
+      - bench-events
+    consumer_group: rpcn-pg-sink-bench
+    batching:
+      count: 3000
+      period: 500ms
+
+pipeline:
+  processors:
+    - mapping: |
+        root.id       = this.payload.id
+        root.category = this.payload.category
+        root.value    = this.payload.value
+        root.ts       = this.payload.ts
+
+output:
+  processors:
+    - benchmark:
+        interval: 1s
+        count_bytes: false
+  sql_insert:
+    driver: postgres
+    dsn: ${PG_DSN:postgres://postgres:postgres@localhost:5432/benchdb?sslmode=disable}  # override via PG_DSN env var
+    table: bench_events
+    columns: [ id, category, value, ts ]
+    args_mapping: |
+      root = [ this.id, this.category, this.value, this.ts ]
+    max_in_flight: 16
+    batching:
+      count: 3000
+      period: 500ms
+
+logger:
+  level: WARN
+
+metrics:
+  prometheus:
+    add_process_metrics: true
+    add_go_metrics: true

@@ -1,10 +1,17 @@
-# Benchmarking PostgreSQL CDC Component
+# PostgreSQL Benchmark
 
-Benchmark demonstrating throughput of Redpanda's PostgreSQL CDC Connector.
+Two benchmark scenarios:
 
-## Prerequisites
+1. **CDC / Snapshot** — `postgres_cdc` input reading directly from PostgreSQL via logical replication
+2. **Kafka → PostgreSQL** — Redpanda Connect vs Kafka Connect (JDBC Sink) writing from Kafka into PostgreSQL
 
-Install `psql`:
+See [`docs/benchmark-results/postgres.md`](../../../../docs/benchmark-results/postgres.md) for full results.
+
+---
+
+## CDC / Snapshot Benchmarks
+
+### Prerequisites
 
 ```bash
 # macOS
@@ -14,96 +21,78 @@ brew install postgresql
 sudo apt install postgresql-client
 ```
 
-## Setup
-
-1. Start PostgreSQL container:
+### Setup
 
 ```bash
-task postgres:up
+task postgres:up      # start PostgreSQL 16 with wal_level=logical
+task psql:create      # create tables
 ```
 
-This starts a PostgreSQL 16 container with `wal_level=logical` enabled (required for CDC).
-
-2. Create tables:
+### Running
 
 ```bash
-task psql:create
+# Load a dataset and benchmark in one command
+task bench:cart  CORES=4 BATCH=5000   # 10M small rows (~600 B) — CPU bound
+task bench:users CORES=2 BATCH=1000   # 150K large rows (~625 KB) — I/O bound
 ```
 
-3. Insert test data:
+- `CORES` — sets `GOMAXPROCS` (omit for unbounded)
+- `BATCH` — sets `batching.count` (default 1000)
 
-```bash
-task psql:data:users     # 150K rows, ~625KB per row (large payload)
-task psql:data:products  # 150K rows, ~625KB per row (large payload)
-task psql:data:cart      # 10M rows, small payloads
-```
-
-## Benchmark Tasks
-
-### Parameterised benchmarks
-
-Truncate, load the dataset, and run with configurable core count and batch size:
-
-```bash
-task bench:users CORES=2 BATCH=1000   # 150K large rows (~625 KB each) — I/O bound
-task bench:cart  CORES=4 BATCH=5000   # 10M small rows — CPU bound
-```
-
-- `CORES` sets `GOMAXPROCS` (omit for unbounded)
-- `BATCH` sets `batching.count` (defaults to 1000)
-
-### Snapshot benchmarks
-
-```bash
-task bench:run                # run with current table data
-task bench:snapshot:users     # truncate + insert 150K large rows + run
-task bench:snapshot:cart      # truncate + insert 10M small rows + run
-task bench:snapshot:all       # truncate + insert all datasets + run
-```
-
-### CPU scaling (fixed batch=1000)
-
-```bash
-task bench:cores:1
-task bench:cores:2
-task bench:cores:4
-task bench:cores:8
-```
+Both tasks truncate, load the dataset, drop the replication slot, and run the benchmark.
 
 ### CDC mode
 
-Start the connector first (it creates the replication slot), then insert data in a second terminal while it is running:
-
 ```bash
-# terminal 1
+# terminal 1 — start connector (creates replication slot)
 task bench:run:cdc
 
-# terminal 2 — once the connector is up
+# terminal 2 — insert data while connector is running
 task psql:data:users
 ```
 
-## Data Management
+### Teardown
 
 ```bash
-task psql:truncate    # truncate all tables
-task psql:drop-slot   # drop bench_slot so the next run replays from the start
+task postgres:down    # stops and removes the container — no leftover files
 ```
 
-Drop the replication slot before every benchmark run. Unused slots cause PostgreSQL to retain WAL segments indefinitely, which can fill up disk.
+---
 
-## Teardown
+## Kafka → PostgreSQL Benchmarks
+
+Infrastructure is provided by the [`kafka-connector/`](./kafka-connector/) subfolder (Kafka + PostgreSQL + Kafka Connect in Docker).
+
+### Setup
 
 ```bash
-task postgres:down    # stop and remove the postgres-bench container
+cd kafka-connector
+task up
 ```
 
-All data is inside the container, so this is a full cleanup with no leftover files.
+### Load data once, run multiple times
 
-## Expected Output
+```bash
+# From bench/ (this folder):
 
+# Step 1 — produce 10M messages to Kafka (run once per comparison set)
+task bench:kafka:load COUNT=10000000
+
+# Step 2 — run Redpanda Connect benchmark (repeat with different params)
+task bench:kafka MAX_IN_FLIGHT=64
+task bench:kafka MAX_IN_FLIGHT=128 CORES=4
 ```
-INFO rolling stats: 1000 msg/sec, 625 MB/sec    @service=redpanda-connect bytes/sec=6.2527229e+08 label="" msg/sec=1000 path=root.output.processors.0
-INFO rolling stats: 2000 msg/sec, 1.3 GB/sec    @service=redpanda-connect bytes/sec=1.25054458e+09 label="" msg/sec=2000 path=root.output.processors.0
+
+### Run Kafka Connect benchmark
+
+```bash
+cd kafka-connector
+task bench:run COUNT=10000000
 ```
 
-Throughput with large rows (~625 KB each) is I/O bound — CPU core count has little effect. Use the cart dataset to stress CPU. See [`docs/benchmark-results/postgres.md`](../../../../docs/benchmark-results/postgres.md) for full results.
+### Teardown
+
+```bash
+cd kafka-connector
+task down
+```

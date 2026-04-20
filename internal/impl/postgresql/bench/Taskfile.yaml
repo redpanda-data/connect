@@ -2,13 +2,17 @@ version: "3"
 
 vars:
   PG_DSN: '{{.PG_DSN | default "postgres://postgres:postgres@localhost:5432/testdb?sslmode=disable"}}'
-  # Strip ?sslmode=... for commands that don't accept query params (psql CLI ignores them, but
-  # be explicit so the default is obvious).  Override via: task <cmd> PG_DSN=postgres://...
   PG_USER: '{{.PG_USER | default "postgres"}}'
   PG_PASSWORD: '{{.PG_PASSWORD | default "postgres"}}'
   PG_DB: '{{.PG_DB | default "testdb"}}'
+  # DSN for the Kafka→PostgreSQL benchmarks — uses benchdb (kafka-connector docker-compose),
+  # not the CDC testdb.
+  KAFKA_PG_DSN: '{{.KAFKA_PG_DSN | default "postgres://postgres:postgres@localhost:5432/benchdb?sslmode=disable"}}'
+  KAFKA_BOOTSTRAP: '{{.KAFKA_BOOTSTRAP | default "localhost:9092"}}'
 
 tasks:
+  # ── PostgreSQL container ──────────────────────────────────────────────────────
+
   postgres:up:
     desc: Start PostgreSQL container with logical replication enabled
     cmds:
@@ -28,15 +32,7 @@ tasks:
       - docker stop postgres-bench
       - docker rm postgres-bench
 
-  postgres:logs:
-    desc: Show PostgreSQL container logs
-    cmds:
-      - docker logs postgres-bench
-
-  psql:
-    desc: Open an interactive psql shell
-    cmds:
-      - psql {{.PG_DSN}}
+  # ── Data setup ───────────────────────────────────────────────────────────────
 
   psql:create:
     desc: Run create.sql to set up tables
@@ -44,7 +40,7 @@ tasks:
       - psql {{.PG_DSN}} < create.sql
 
   psql:data:users:
-    desc: Insert 150K users rows
+    desc: Insert 150K users rows (~625 KB each)
     cmds:
       - psql {{.PG_DSN}} < users.sql
 
@@ -54,7 +50,7 @@ tasks:
       - psql {{.PG_DSN}} < products.sql
 
   psql:data:cart:
-    desc: Insert 10M cart rows
+    desc: Insert 10M cart rows (~600 B each)
     cmds:
       - psql {{.PG_DSN}} < cart.sql
 
@@ -68,8 +64,10 @@ tasks:
     cmds:
       - psql {{.PG_DSN}} -c "SELECT pg_drop_replication_slot('bench_slot') FROM pg_replication_slots WHERE slot_name = 'bench_slot';"
 
+  # ── CDC / Snapshot benchmarks ────────────────────────────────────────────────
+
   bench:run:
-    desc: Run snapshot benchmark (stream_snapshot=true)
+    desc: Run snapshot benchmark with current table data
     env:
       PG_DSN: '{{.PG_DSN}}'
     cmds:
@@ -77,82 +75,15 @@ tasks:
       - go run ../../../../cmd/redpanda-connect/main.go run ./benchmark_config.yaml
 
   bench:run:cdc:
-    desc: Run CDC benchmark (stream_snapshot=false) - start connector first, then insert data separately
+    desc: Run CDC benchmark (stream_snapshot=false) — start first, then insert data in a second terminal
     env:
       PG_DSN: '{{.PG_DSN}}'
     cmds:
       - task psql:drop-slot
       - go run ../../../../cmd/redpanda-connect/main.go run --set input.postgres_cdc.stream_snapshot=false ./benchmark_config.yaml
 
-  bench:snapshot:users:
-    desc: Drop slot, insert 150K large-payload users rows, then run snapshot benchmark
-    env:
-      PG_DSN: '{{.PG_DSN}}'
-    cmds:
-      - task psql:drop-slot
-      - psql {{.PG_DSN}} -c "TRUNCATE public.users, public.products, public.cart;"
-      - task psql:data:users
-      - go run ../../../../cmd/redpanda-connect/main.go run ./benchmark_config.yaml
-
-  bench:snapshot:cart:
-    desc: Drop slot, insert 10M small cart rows, then run snapshot benchmark
-    env:
-      PG_DSN: '{{.PG_DSN}}'
-    cmds:
-      - task psql:drop-slot
-      - psql {{.PG_DSN}} -c "TRUNCATE public.users, public.products, public.cart;"
-      - task psql:data:cart
-      - go run ../../../../cmd/redpanda-connect/main.go run ./benchmark_config.yaml
-
-  bench:snapshot:all:
-    desc: Drop slot, insert all test data, then run snapshot benchmark
-    env:
-      PG_DSN: '{{.PG_DSN}}'
-    cmds:
-      - task psql:drop-slot
-      - psql {{.PG_DSN}} -c "TRUNCATE public.users, public.products, public.cart;"
-      - task psql:data:users
-      - task psql:data:products
-      - task psql:data:cart
-      - go run ../../../../cmd/redpanda-connect/main.go run ./benchmark_config.yaml
-
-  # CPU scaling benchmarks — vary GOMAXPROCS to measure per-core throughput
-  bench:cores:1:
-    desc: Run snapshot benchmark with GOMAXPROCS=1
-    env:
-      PG_DSN: '{{.PG_DSN}}'
-    cmds:
-      - task psql:drop-slot
-      - GOMAXPROCS=1 go run ../../../../cmd/redpanda-connect/main.go run ./benchmark_config.yaml
-
-  bench:cores:2:
-    desc: Run snapshot benchmark with GOMAXPROCS=2
-    env:
-      PG_DSN: '{{.PG_DSN}}'
-    cmds:
-      - task psql:drop-slot
-      - GOMAXPROCS=2 go run ../../../../cmd/redpanda-connect/main.go run ./benchmark_config.yaml
-
-  bench:cores:4:
-    desc: Run snapshot benchmark with GOMAXPROCS=4
-    env:
-      PG_DSN: '{{.PG_DSN}}'
-    cmds:
-      - task psql:drop-slot
-      - GOMAXPROCS=4 go run ../../../../cmd/redpanda-connect/main.go run ./benchmark_config.yaml
-
-  bench:cores:8:
-    desc: Run snapshot benchmark with GOMAXPROCS=8
-    env:
-      PG_DSN: '{{.PG_DSN}}'
-    cmds:
-      - task psql:drop-slot
-      - GOMAXPROCS=8 go run ../../../../cmd/redpanda-connect/main.go run ./benchmark_config.yaml
-
-  # Parameterised benchmarks — specify CORES and BATCH freely
-  # Usage: task bench:users CORES=2 BATCH=1000
   bench:users:
-    desc: "Run users snapshot benchmark with given CORES and BATCH (e.g. task bench:users CORES=2 BATCH=1000)"
+    desc: "Truncate, load 150K large users rows, run snapshot benchmark (e.g. task bench:users CORES=2 BATCH=1000)"
     vars:
       CORES: '{{.CORES | default ""}}'
       BATCH: '{{.BATCH | default "1000"}}'
@@ -167,9 +98,8 @@ tasks:
           --set input.postgres_cdc.batching.count={{.BATCH}} \
           ./benchmark_config.yaml
 
-  # Usage: task bench:cart CORES=4 BATCH=5000
   bench:cart:
-    desc: "Run cart snapshot benchmark with given CORES and BATCH (e.g. task bench:cart CORES=4 BATCH=5000)"
+    desc: "Truncate, load 10M small cart rows, run snapshot benchmark (e.g. task bench:cart CORES=4 BATCH=5000)"
     vars:
       CORES: '{{.CORES | default ""}}'
       BATCH: '{{.BATCH | default "1000"}}'
@@ -177,8 +107,115 @@ tasks:
       PG_DSN: '{{.PG_DSN}}'
     cmds:
       - task psql:drop-slot
+      - psql {{.PG_DSN}} -c "TRUNCATE public.users, public.products, public.cart;"
+      - task psql:data:cart
       - |
         {{if .CORES}}GOMAXPROCS={{.CORES}} {{end}}go run ../../../../cmd/redpanda-connect/main.go run \
           --set input.postgres_cdc.batching.count={{.BATCH}} \
           ./benchmark_config.yaml
 
+  # ── Kafka → PostgreSQL benchmarks (vs Kafka Connect JDBC Sink) ───────────────
+  # Infrastructure: task up/down from kafka-connector/
+
+  bench:kafka:load:
+    desc: "Recreate bench-events topic and produce COUNT events (e.g. task bench:kafka:load COUNT=10000000)"
+    vars:
+      COUNT: '{{.COUNT | default "1000000"}}'
+    cmds:
+      - |
+        set -e
+        docker exec pgkc-kafka kafka-topics --bootstrap-server localhost:29092 \
+          --delete --topic bench-events 2>/dev/null || true
+        until ! docker exec pgkc-kafka kafka-topics --bootstrap-server localhost:29092 \
+            --list 2>/dev/null | grep -q '^bench-events$'; do sleep 1; done
+        docker exec pgkc-kafka kafka-topics --bootstrap-server localhost:29092 \
+          --create --topic bench-events --partitions 16 --replication-factor 1
+        echo "topic recreated"
+        COUNT={{.COUNT}} KAFKA_BOOTSTRAP={{.KAFKA_BOOTSTRAP}} \
+        go run ../../../../cmd/redpanda-connect/main.go run ./kafka-connector/producer.yaml
+        echo "produced {{.COUNT}} messages"
+
+  bench:kafka:
+    desc: "Run Redpanda Connect Kafka→PostgreSQL benchmark (e.g. task bench:kafka MAX_IN_FLIGHT=64)"
+    vars:
+      INTERVAL: '{{.INTERVAL | default "5"}}'
+      MAX_IN_FLIGHT: '{{.MAX_IN_FLIGHT | default "64"}}'
+      THREADS: '{{.THREADS | default "1"}}'
+      CORES: '{{.CORES | default ""}}'
+    cmds:
+      - |
+        set -e
+        GROUP=rpcn-pg-sink-bench
+
+        pkill -f kafka_benchmark_config.yaml 2>/dev/null || true
+        sleep 1
+        psql {{.KAFKA_PG_DSN}} -c "TRUNCATE bench_events;"
+
+        {{if .CORES}}GOMAXPROCS={{.CORES}} {{end}}PG_DSN={{.KAFKA_PG_DSN}} KAFKA_BOOTSTRAP={{.KAFKA_BOOTSTRAP}} \
+        go run ../../../../cmd/redpanda-connect/main.go run \
+          --set output.sql_insert.max_in_flight={{.MAX_IN_FLIGHT}} \
+          --set pipeline.threads={{.THREADS}} \
+          ./kafka_benchmark_config.yaml &
+        RPCN_PID=$!
+
+        cleanup() { pkill -f kafka_benchmark_config.yaml 2>/dev/null || true; }
+        trap cleanup EXIT
+
+        get_lag() {
+          docker exec pgkc-kafka kafka-consumer-groups \
+            --bootstrap-server localhost:29092 \
+            --describe --group "$GROUP" 2>/dev/null \
+            | awk '/bench-events/ {
+                cur = ($4 == "-") ? 0 : $4
+                sum += $5 - cur
+              } END {print (NR == 0 ? -1 : sum)}'
+        }
+
+        START=""
+        INITIAL_LAG=""
+        PREV_LAG=""
+        PREV_TIME=""
+        INTERVAL={{.INTERVAL}}
+
+        printf "%-10s  %-14s  %s\n" "TIME" "LAG" "MSG/S"
+
+        while true; do
+          sleep "$INTERVAL"
+          LAG=$(get_lag)
+          NOW=$(date +%s)
+
+          if [ -z "$START" ]; then
+            if [ "$LAG" -gt 0 ] 2>/dev/null; then
+              START=$NOW
+              INITIAL_LAG=$LAG
+              PREV_LAG=$LAG
+              PREV_TIME=$NOW
+              printf "%-10s  %-14s  (timing started)\n" "$(date +%H:%M:%S)" "$LAG"
+            else
+              printf "%-10s  %-14s  (waiting for lag...)\n" "$(date +%H:%M:%S)" "$LAG"
+            fi
+            continue
+          fi
+
+          [ "$LAG" -eq -1 ] 2>/dev/null && LAG=0
+
+          DELTA_T=$((NOW - PREV_TIME))
+          DELTA_LAG=$((PREV_LAG - LAG))
+          RATE=$(( DELTA_T > 0 ? DELTA_LAG / DELTA_T : 0 ))
+
+          printf "%-10s  %-14s  %s msg/s\n" "$(date +%H:%M:%S)" "$LAG" "$RATE"
+
+          if [ "$LAG" -eq 0 ]; then
+            ELAPSED=$((NOW - START))
+            AVG=$(( INITIAL_LAG / (ELAPSED > 0 ? ELAPSED : 1) ))
+            echo "---"
+            echo "Total messages : $INITIAL_LAG"
+            echo "Elapsed        : ${ELAPSED}s"
+            echo "Avg throughput : ${AVG} msg/s"
+            pkill -f kafka_benchmark_config.yaml 2>/dev/null || true
+            break
+          fi
+
+          PREV_LAG=$LAG
+          PREV_TIME=$NOW
+        done
