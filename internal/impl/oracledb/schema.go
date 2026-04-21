@@ -20,6 +20,7 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/schema"
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/connect/v4/internal/impl/oracledb/logminer/sqlredo"
 	"github.com/redpanda-data/connect/v4/internal/impl/oracledb/replication"
 )
 
@@ -361,7 +362,7 @@ func coerceStreamingValues(data map[string]any, info *columnTypeInfo, log *servi
 			// VARCHAR2. Use numericCols to distinguish: only NUMBER-as-String
 			// columns get wrapped as json.Number to match snapshot behavior.
 			if _, isNumeric := info.numericCols[col]; isNumeric {
-				data[col] = json.Number(s)
+				data[col] = json.Number(sqlredo.NormalizeJSONNumber(s))
 			}
 		}
 	}

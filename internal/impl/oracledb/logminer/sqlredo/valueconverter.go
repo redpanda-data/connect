@@ -81,7 +81,7 @@ func (c *OracleValueConverter) ConvertValue(value any) any {
 		return n
 	}
 	if f, err := strconv.ParseFloat(str, 64); err == nil && !math.IsNaN(f) && !math.IsInf(f, 0) {
-		return json.Number(str)
+		return json.Number(NormalizeJSONNumber(str))
 	}
 
 	return value
@@ -204,6 +204,20 @@ func (*OracleValueConverter) convertLobValue(value string) any {
 		return []byte{}
 	}
 	return value
+}
+
+// NormalizeJSONNumber ensures a numeric string is valid JSON by adding a
+// leading zero when the value starts with a bare decimal point.
+// Oracle SQL_REDO can emit numbers like ".5" or "-.5" (no digit before the
+// decimal), which are not valid JSON. This converts them to "0.5" / "-0.5".
+func NormalizeJSONNumber(s string) string {
+	if strings.HasPrefix(s, ".") {
+		return "0" + s
+	}
+	if strings.HasPrefix(s, "-.") {
+		return "-0" + s[1:]
+	}
+	return s
 }
 
 // oracleFormatToGo converts Oracle date/timestamp format to Go format
