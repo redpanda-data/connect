@@ -282,6 +282,122 @@ file:
 	require.NoError(t, streamOut.StopWithin(time.Second*10))
 }
 
+// TestIntegrationMySQLParallelSnapshot verifies that enabling
+// snapshot_max_parallel_tables produces the same total set of snapshot rows
+// across multiple tables as the sequential path, and that the subsequent
+// binlog-stream handoff captures ongoing writes correctly. The parallel path
+// opens N REPEATABLE READ / CONSISTENT SNAPSHOT transactions under one
+// FLUSH TABLES WITH READ LOCK window, so all workers observe identical state.
+func TestIntegrationMySQLParallelSnapshot(t *testing.T) {
+	dsn, db := setupTestWithMySQLVersion(t, "8.0")
+
+	// Create 4 tables and pre-load each with 500 rows so a parallel snapshot
+	// has meaningful per-worker work and the distribution is observable.
+	tableNames := []string{"foo1", "foo2", "foo3", "foo4"}
+	const rowsPerTable = 500
+
+	for _, tbl := range tableNames {
+		db.Exec(fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s (a INT PRIMARY KEY)", tbl))
+		for i := range rowsPerTable {
+			db.Exec(fmt.Sprintf("INSERT INTO %s VALUES (?)", tbl), i)
+		}
+	}
+
+	template := fmt.Sprintf(`
+mysql_cdc:
+  dsn: %s
+  stream_snapshot: true
+  snapshot_max_batch_size: 100
+  snapshot_max_parallel_tables: 4
+  checkpoint_cache: parcache
+  tables:
+    - foo1
+    - foo2
+    - foo3
+    - foo4
+`, dsn)
+
+	cacheConf := fmt.Sprintf(`
+label: parcache
+file:
+  directory: %s`, t.TempDir())
+
+	streamOutBuilder := service.NewStreamBuilder()
+	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: DEBUG`))
+	require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
+	require.NoError(t, streamOutBuilder.AddInputYAML(template))
+
+	snapshotCounts := map[string]*atomic.Int64{}
+	cdcCounts := map[string]*atomic.Int64{}
+	for _, tbl := range tableNames {
+		snapshotCounts[tbl] = &atomic.Int64{}
+		cdcCounts[tbl] = &atomic.Int64{}
+	}
+	var totalMsgs atomic.Int64
+
+	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+		for _, msg := range mb {
+			op, _ := msg.MetaGet("operation")
+			tbl, _ := msg.MetaGet("table")
+			if c, ok := snapshotCounts[tbl]; ok && op == "read" {
+				c.Add(1)
+			}
+			if c, ok := cdcCounts[tbl]; ok && (op == "insert" || op == "update" || op == "delete") {
+				c.Add(1)
+			}
+			totalMsgs.Add(1)
+		}
+		return nil
+	}))
+
+	streamOut, err := streamOutBuilder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(streamOut.Resources())
+
+	go func() {
+		err = streamOut.Run(t.Context())
+		require.NoError(t, err)
+	}()
+
+	// Wait for the snapshot phase to complete for all tables.
+	assert.Eventually(t, func() bool {
+		for _, tbl := range tableNames {
+			if snapshotCounts[tbl].Load() < int64(rowsPerTable) {
+				return false
+			}
+		}
+		return true
+	}, time.Minute*2, time.Millisecond*100, "parallel snapshot should emit %d rows per table", rowsPerTable)
+
+	// Write additional rows post-snapshot and confirm the binlog-stream
+	// handoff picks them up — this validates that the single shared binlog
+	// position captured under the read-lock window is still a valid starting
+	// point for the binlog consumer.
+	const cdcRowsPerTable = 100
+	for _, tbl := range tableNames {
+		for i := rowsPerTable; i < rowsPerTable+cdcRowsPerTable; i++ {
+			db.Exec(fmt.Sprintf("INSERT INTO %s VALUES (?)", tbl), i)
+		}
+	}
+
+	assert.Eventually(t, func() bool {
+		for _, tbl := range tableNames {
+			if cdcCounts[tbl].Load() < int64(cdcRowsPerTable) {
+				return false
+			}
+		}
+		return true
+	}, time.Minute*2, time.Millisecond*100, "binlog stream should pick up post-snapshot inserts for each table")
+
+	// Sanity check: every snapshot row was emitted exactly once (no
+	// duplicates from overlapping per-worker transactions).
+	for _, tbl := range tableNames {
+		assert.Equal(t, int64(rowsPerTable), snapshotCounts[tbl].Load(), "exactly %d snapshot rows expected for %s", rowsPerTable, tbl)
+	}
+
+	require.NoError(t, streamOut.StopWithin(time.Second*10))
+}
+
 func TestIntegrationMySQLCDCWithCompositePrimaryKeys(t *testing.T) {
 	dsn, db := setupTestWithMySQLVersion(t, "8.0")
 	// Create table

@@ -36,17 +36,18 @@ import (
 )
 
 const (
-	fieldMySQLFlavor          = "flavor"
-	fieldMySQLDSN             = "dsn"
-	fieldMySQLTables          = "tables"
-	fieldStreamSnapshot       = "stream_snapshot"
-	fieldSnapshotMaxBatchSize = "snapshot_max_batch_size"
-	fieldMaxReconnectAttempts = "max_reconnect_attempts"
-	fieldBatching             = "batching"
-	fieldCheckpointKey        = "checkpoint_key"
-	fieldCheckpointCache      = "checkpoint_cache"
-	fieldCheckpointLimit      = "checkpoint_limit"
-	fieldAWSIAMAuth           = "aws"
+	fieldMySQLFlavor               = "flavor"
+	fieldMySQLDSN                  = "dsn"
+	fieldMySQLTables               = "tables"
+	fieldStreamSnapshot            = "stream_snapshot"
+	fieldSnapshotMaxBatchSize      = "snapshot_max_batch_size"
+	fieldSnapshotMaxParallelTables = "snapshot_max_parallel_tables"
+	fieldMaxReconnectAttempts      = "max_reconnect_attempts"
+	fieldBatching                  = "batching"
+	fieldCheckpointKey             = "checkpoint_key"
+	fieldCheckpointCache           = "checkpoint_cache"
+	fieldCheckpointLimit           = "checkpoint_limit"
+	fieldAWSIAMAuth                = "aws"
 	// FieldAWSIAMAuthEnabled enabled field.
 	FieldAWSIAMAuthEnabled = "enabled"
 
@@ -103,6 +104,10 @@ This input adds the following metadata fields to each message:
 		service.NewIntField(fieldSnapshotMaxBatchSize).
 			Description("The maximum number of rows to be streamed in a single batch when taking a snapshot.").
 			Default(1000),
+		service.NewIntField(fieldSnapshotMaxParallelTables).
+			Description("The maximum number of tables that may be snapshotted in parallel. When set to `1` (the default) tables are read sequentially using a single transaction, preserving the previous behaviour. When set higher, multiple `REPEATABLE READ` transactions are opened on separate connections under a single brief `FLUSH TABLES ... WITH READ LOCK` window so every worker observes an identical, globally-consistent snapshot at the same binlog position. A value greater than the number of configured `tables` is effectively capped at the table count. Must be at least `1`.").
+			Advanced().
+			Default(1),
 		service.NewIntField(fieldMaxReconnectAttempts).
 			Description("The maximum number of attempts the MySQL driver will try to re-establish a broken connection before Connect attempts reconnection. A zero or negative number means infinite retry attempts.").
 			Advanced().
@@ -180,10 +185,11 @@ type mysqlStreamInput struct {
 	tables         []string
 	streamSnapshot bool
 
-	batching                  service.BatchPolicy
-	batchPolicy               *service.Batcher
-	checkPointLimit           int
-	fieldSnapshotMaxBatchSize int
+	batching                       service.BatchPolicy
+	batchPolicy                    *service.Batcher
+	checkPointLimit                int
+	fieldSnapshotMaxBatchSize      int
+	fieldSnapshotMaxParallelTables int
 
 	logger *service.Logger
 	res    *service.Resources
@@ -277,6 +283,13 @@ func newMySQLStreamInput(conf *service.ParsedConfig, res *service.Resources) (s 
 
 	if i.fieldSnapshotMaxBatchSize, err = conf.FieldInt(fieldSnapshotMaxBatchSize); err != nil {
 		return nil, err
+	}
+
+	if i.fieldSnapshotMaxParallelTables, err = conf.FieldInt(fieldSnapshotMaxParallelTables); err != nil {
+		return nil, err
+	}
+	if i.fieldSnapshotMaxParallelTables < 1 {
+		return nil, fmt.Errorf("field '%s' must be at least 1, got %d", fieldSnapshotMaxParallelTables, i.fieldSnapshotMaxParallelTables)
 	}
 
 	if i.canalMaxConnAttempts, err = conf.FieldInt(fieldMaxReconnectAttempts); err != nil {
@@ -418,21 +431,15 @@ func (i *mysqlStreamInput) Connect(ctx context.Context) error {
 func (i *mysqlStreamInput) startMySQLSync(ctx context.Context, pos *position, snapshot *Snapshot) error {
 	// If we are given a snapshot, then we need to read it.
 	if snapshot != nil {
-		startPos, err := snapshot.prepareSnapshot(ctx, i.tables)
+		var startPos *position
+		var err error
+		if i.fieldSnapshotMaxParallelTables <= 1 {
+			startPos, err = i.runSequentialSnapshot(ctx, snapshot)
+		} else {
+			startPos, err = i.runParallelSnapshot(ctx, snapshot)
+		}
 		if err != nil {
-			_ = snapshot.close()
-			return fmt.Errorf("unable to prepare snapshot: %w", err)
-		}
-		if err = i.readSnapshot(ctx, snapshot); err != nil {
-			_ = snapshot.close()
-			return fmt.Errorf("failed reading snapshot: %w", err)
-		}
-		if err = snapshot.releaseSnapshot(ctx); err != nil {
-			_ = snapshot.close()
-			return fmt.Errorf("unable to release snapshot: %w", err)
-		}
-		if err = snapshot.close(); err != nil {
-			return fmt.Errorf("unable to close snapshot: %w", err)
+			return err
 		}
 		// Signal snapshot completion. readMessages will flush any partial batch
 		// and pre-resolve a checkpoint entry for startPos so the cache is
@@ -459,91 +466,159 @@ func (i *mysqlStreamInput) startMySQLSync(ctx context.Context, pos *position, sn
 	return nil
 }
 
+// runSequentialSnapshot executes the original single-transaction snapshot flow:
+// one FLUSH TABLES WITH READ LOCK window, one consistent-snapshot transaction,
+// tables read serially by a single goroutine. Preserves byte-identical
+// behaviour from before parallel-snapshot support was introduced.
+func (i *mysqlStreamInput) runSequentialSnapshot(ctx context.Context, snapshot *Snapshot) (*position, error) {
+	startPos, err := snapshot.prepareSnapshot(ctx, i.tables)
+	if err != nil {
+		_ = snapshot.close()
+		return nil, fmt.Errorf("unable to prepare snapshot: %w", err)
+	}
+	if err = i.readSnapshot(ctx, snapshot); err != nil {
+		_ = snapshot.close()
+		return nil, fmt.Errorf("failed reading snapshot: %w", err)
+	}
+	if err = snapshot.releaseSnapshot(ctx); err != nil {
+		_ = snapshot.close()
+		return nil, fmt.Errorf("unable to release snapshot: %w", err)
+	}
+	if err = snapshot.close(); err != nil {
+		return nil, fmt.Errorf("unable to close snapshot: %w", err)
+	}
+	return startPos, nil
+}
+
+// runParallelSnapshot opens fieldSnapshotMaxParallelTables consistent-snapshot
+// transactions under a single FLUSH TABLES WITH READ LOCK window and reads the
+// configured tables concurrently. All workers share one binlog position so the
+// downstream handoff to the binlog stream is unchanged from the sequential
+// path. The original snapshot argument is used only as a carrier for the
+// already-open *sql.DB; ownership of that db is transferred to the parallel
+// set (which closes it when done) so the caller must not reuse the original
+// Snapshot afterwards.
+func (i *mysqlStreamInput) runParallelSnapshot(ctx context.Context, snapshot *Snapshot) (*position, error) {
+	// Transfer db ownership to the parallel set before doing anything that
+	// might fail: if prepare fails, the set's close will release the db, and
+	// we want snapshot.close() to be a safe no-op in that case.
+	db := snapshot.db
+	snapshot.db = nil
+
+	set, startPos, err := prepareParallelSnapshotSet(ctx, i.logger, db, i.tables, i.fieldSnapshotMaxParallelTables)
+	if err != nil {
+		// prepareParallelSnapshotSet closed db on its own error paths.
+		return nil, fmt.Errorf("unable to prepare parallel snapshot: %w", err)
+	}
+	if err := i.readSnapshotParallel(ctx, set); err != nil {
+		_ = set.close()
+		return nil, fmt.Errorf("failed reading snapshot: %w", err)
+	}
+	if err := set.release(ctx); err != nil {
+		_ = set.close()
+		return nil, fmt.Errorf("unable to release parallel snapshot: %w", err)
+	}
+	if err := set.close(); err != nil {
+		return nil, fmt.Errorf("unable to close parallel snapshot: %w", err)
+	}
+	return startPos, nil
+}
+
 func (i *mysqlStreamInput) readSnapshot(ctx context.Context, snapshot *Snapshot) error {
-	// TODO(cdc): Process tables in parallel
 	for _, table := range i.tables {
-		// Pre-populate schema cache so snapshot messages carry schema metadata.
-		if tbl, err := i.canal.GetTable(i.mysqlConfig.DBName, table); err == nil {
-			if _, err := i.getTableSchema(tbl); err != nil {
-				i.logger.Warnf("Failed to pre-populate schema for table %s during snapshot: %v", table, err)
-			}
-		} else {
-			i.logger.Warnf("Failed to fetch schema for table %s during snapshot: %v", table, err)
-		}
-		tablePks, err := snapshot.getTablePrimaryKeys(ctx, table)
-		if err != nil {
+		if err := i.readSnapshotTable(ctx, snapshot, table); err != nil {
 			return err
 		}
-		i.logger.Tracef("primary keys for table %s: %v", table, tablePks)
-		lastSeenPksValues := map[string]any{}
-		for _, pk := range tablePks {
-			lastSeenPksValues[pk] = nil
+	}
+	return nil
+}
+
+// readSnapshotTable snapshots a single table by paging through its rows in
+// primary-key order using the REPEATABLE READ / CONSISTENT SNAPSHOT transaction
+// held by snapshot. Extracted so both the sequential (single-snapshot) and the
+// parallel (per-worker snapshot) paths share identical per-table semantics.
+func (i *mysqlStreamInput) readSnapshotTable(ctx context.Context, snapshot *Snapshot, table string) error {
+	// Pre-populate schema cache so snapshot messages carry schema metadata.
+	if tbl, err := i.canal.GetTable(i.mysqlConfig.DBName, table); err == nil {
+		if _, err := i.getTableSchema(tbl); err != nil {
+			i.logger.Warnf("Failed to pre-populate schema for table %s during snapshot: %v", table, err)
+		}
+	} else {
+		i.logger.Warnf("Failed to fetch schema for table %s during snapshot: %v", table, err)
+	}
+	tablePks, err := snapshot.getTablePrimaryKeys(ctx, table)
+	if err != nil {
+		return err
+	}
+	i.logger.Tracef("primary keys for table %s: %v", table, tablePks)
+	lastSeenPksValues := map[string]any{}
+	for _, pk := range tablePks {
+		lastSeenPksValues[pk] = nil
+	}
+
+	var numRowsProcessed int
+	for {
+		var batchRows *sql.Rows
+		if numRowsProcessed == 0 {
+			batchRows, err = snapshot.querySnapshotTable(ctx, table, tablePks, nil, i.fieldSnapshotMaxBatchSize)
+		} else {
+			batchRows, err = snapshot.querySnapshotTable(ctx, table, tablePks, &lastSeenPksValues, i.fieldSnapshotMaxBatchSize)
+		}
+		if err != nil {
+			return fmt.Errorf("executing snapshot table query: %s", err)
 		}
 
-		var numRowsProcessed int
-		for {
-			var batchRows *sql.Rows
-			if numRowsProcessed == 0 {
-				batchRows, err = snapshot.querySnapshotTable(ctx, table, tablePks, nil, i.fieldSnapshotMaxBatchSize)
-			} else {
-				batchRows, err = snapshot.querySnapshotTable(ctx, table, tablePks, &lastSeenPksValues, i.fieldSnapshotMaxBatchSize)
-			}
-			if err != nil {
-				return fmt.Errorf("executing snapshot table query: %s", err)
-			}
+		types, err := batchRows.ColumnTypes()
+		if err != nil {
+			return fmt.Errorf("fetching column types: %s", err)
+		}
 
-			types, err := batchRows.ColumnTypes()
-			if err != nil {
-				return fmt.Errorf("fetching column types: %s", err)
-			}
+		values, mappers := prepSnapshotScannerAndMappers(types)
 
-			values, mappers := prepSnapshotScannerAndMappers(types)
+		columns, err := batchRows.Columns()
+		if err != nil {
+			return fmt.Errorf("fetching columns: %s", err)
+		}
 
-			columns, err := batchRows.Columns()
-			if err != nil {
-				return fmt.Errorf("fetching columns: %s", err)
+		var batchRowsCount int
+		for batchRows.Next() {
+			numRowsProcessed++
+			batchRowsCount++
+
+			if err := batchRows.Scan(values...); err != nil {
+				return err
 			}
 
-			var batchRowsCount int
-			for batchRows.Next() {
-				numRowsProcessed++
-				batchRowsCount++
-
-				if err := batchRows.Scan(values...); err != nil {
+			row := map[string]any{}
+			for idx, value := range values {
+				v, err := mappers[idx](value)
+				if err != nil {
 					return err
 				}
-
-				row := map[string]any{}
-				for idx, value := range values {
-					v, err := mappers[idx](value)
-					if err != nil {
-						return err
-					}
-					row[columns[idx]] = v
-					if _, ok := lastSeenPksValues[columns[idx]]; ok {
-						lastSeenPksValues[columns[idx]] = value
-					}
-				}
-
-				select {
-				case i.rawMessageEvents <- MessageEvent{
-					Row:       row,
-					Operation: MessageOperationRead,
-					Table:     table,
-					Position:  nil,
-				}:
-				case <-ctx.Done():
-					return ctx.Err()
+				row[columns[idx]] = v
+				if _, ok := lastSeenPksValues[columns[idx]]; ok {
+					lastSeenPksValues[columns[idx]] = value
 				}
 			}
 
-			if err := batchRows.Err(); err != nil {
-				return fmt.Errorf("iterating snapshot table: %s", err)
+			select {
+			case i.rawMessageEvents <- MessageEvent{
+				Row:       row,
+				Operation: MessageOperationRead,
+				Table:     table,
+				Position:  nil,
+			}:
+			case <-ctx.Done():
+				return ctx.Err()
 			}
+		}
 
-			if batchRowsCount < i.fieldSnapshotMaxBatchSize {
-				break
-			}
+		if err := batchRows.Err(); err != nil {
+			return fmt.Errorf("iterating snapshot table: %s", err)
+		}
+
+		if batchRowsCount < i.fieldSnapshotMaxBatchSize {
+			break
 		}
 	}
 	return nil
