@@ -5,12 +5,15 @@ Benchmark demonstrating throughput of Redpanda's Oracle CDC Connector, with an o
 ## Prerequisites
 
 - Docker
-- [sqlcl](https://www.oracle.com/database/sqldeveloper/technologies/sqlcl/) (`brew install oracle-instantclient sqlcl`)
 - An Oracle container registry account — accept the terms at https://container-registry.oracle.com before pulling
 
 ## Redpanda Connect Benchmark
 
-### 1. Start Oracle
+Two modes are supported. **CDB mode** (preferred) connects via the CDB root and supports multi-tenant databases. **PDB mode** connects directly via the PDB service.
+
+### CDB mode (preferred)
+
+#### 1. Start Oracle
 
 ```bash
 task oracledb:up
@@ -18,40 +21,89 @@ task oracledb:up
 
 Wait for the database to be ready (check with `task oracledb:logs` — look for `DATABASE IS READY TO USE!`).
 
-### 2. Enable ARCHIVELOG mode (required for LogMiner)
+#### 2. Enable ARCHIVELOG mode (required for LogMiner)
 
 ```bash
 task oracledb:archivelog
-task rman:setup
 ```
 
-### 3. Create test tables
+#### 3. Create and configure the pluggable database
 
 ```bash
-task sqlcl:create
+task pdb:create
+task pdb:setup
+task cdb:setup
 ```
 
-### 4. Start Redpanda Connect
+#### 4. Start Redpanda Connect
+
+```bash
+task connect:run
+```
+
+#### 5. Generate test data
+
+In a separate terminal, run one or more of the following:
+
+```bash
+task sqlcl:pdb:data:users      # inserts rows into TESTPDB
+task sqlcl:pdb:data:products   # inserts rows into TESTPDB
+```
+
+Redpanda Connect will stream the CDC events via LogMiner as data is inserted.
+
+#### 6. Clear checkpoint cache between runs
+
+```bash
+task sqlcl:cdb:drop-cache
+```
+
+---
+
+### PDB mode
+
+#### 1. Start Oracle
+
+```bash
+task oracledb:up
+```
+
+Wait for the database to be ready (check with `task oracledb:logs` — look for `DATABASE IS READY TO USE!`).
+
+#### 2. Enable ARCHIVELOG mode (required for LogMiner)
+
+```bash
+task oracledb:archivelog
+```
+
+#### 3. Create and configure the pluggable database
+
+```bash
+task pdb:create
+task pdb:setup
+```
+
+#### 4. Start Redpanda Connect
 
 ```bash
 go run ../../../../cmd/redpanda-connect/main.go run ./benchmark_config.yaml
 ```
 
-### 5. Generate test data
+#### 5. Generate test data
 
 In a separate terminal, run one or more of the following:
 
 ```bash
-task sqlcl:data:users      # inserts rows into TESTDB.USERS
-task sqlcl:data:products   # inserts rows into TESTDB.PRODUCTS
+task sqlcl:pdb:data:users      # inserts rows into TESTPDB
+task sqlcl:pdb:data:products   # inserts rows into TESTPDB
 ```
 
 Redpanda Connect will stream the CDC events via LogMiner as data is inserted.
 
-### 6. Clear checkpoint cache between runs
+#### 6. Clear checkpoint cache between runs
 
 ```bash
-task sqlcl:drop-cache
+task sqlcl:pdb:drop-cache
 ```
 
 ## Recording Results

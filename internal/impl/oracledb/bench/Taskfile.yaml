@@ -1,12 +1,21 @@
 version: '3'
 
-# Running order:
+# Running order - Preferred (multiple PDB databases - CDB mode, connect via CDB root):
 # - task oracledb:up
 # - task oracledb:archivelog
-# - task rman:setup
-# - task sqlcl:create
-# - task sqlcl:data:users
-# - task sqlcl:data:products
+# - task pdb:create
+# - task pdb:setup
+# - task cdb:setup
+# - task sqlcl:pdb:data:users
+# - task connect:run
+
+# Running order (single PDB database - PDB mode, connect via PDB service):
+# - task oracledb:up
+# - task oracledb:archivelog
+# - task pdb:create
+# - task pdb:setup
+# - task sqlcl:pdb:data:users
+# - task connect:run
 
 tasks:
   oracledb:up:
@@ -23,34 +32,58 @@ tasks:
   oracledb:logs:
     cmd: docker logs -f oracledb
 
-  sqlcl:
-    cmd: sqlcl system/YourPassword123@localhost:1521/FREE {{.EXTRA_ARGS}}
-
-  sqlcl:create:
-    cmd: task sqlcl EXTRA_ARGS="@create.sql"
-
-  sqlcl:data:users:
-    cmd: task sqlcl EXTRA_ARGS="@users.sql"
-
-  sqlcl:data:products:
-    cmd: task sqlcl EXTRA_ARGS="@products.sql"
-
-  sqlcl:data:cart:
-    cmd: task sqlcl EXTRA_ARGS="@cart.sql"
-
-  sqlcl:drop-cache:
-    cmd: echo "DROP TABLE RPCN.CDC_CHECKPOINT_CACHE;" | sqlcl system/YourPassword123@localhost:1521/FREE
-
   oracledb:archivelog:
     desc: Enable ARCHIVELOG mode (required for LogMiner/CDC). Must be run after oracledb:up.
     cmds:
       - docker exec oracledb mkdir -p /opt/oracle/oradata/recovery_area
       - docker exec -i oracledb sqlplus / as sysdba < archivelog_enable.sql
+      - docker exec oracledb lsnrctl start || true
+      - task: rman:setup
 
   rman:setup:
     desc: Configure archive log retention for local CDC development (keeps logs available for LogMiner)
     cmd: docker exec -i oracledb sqlplus -s / as sysdba < retention_setup.sql
 
+  sqlcl:create:
+    cmd: docker exec -i oracledb sqlplus -s system/YourPassword123@FREE < create.sql
+
+  cdb:setup:
+    desc: Create C##TESTDB and C##RPCN common users for CDB-mode connector testing
+    cmd: docker exec -i oracledb sqlplus -s / as sysdba < cdb_setup.sql
+
+  pdb:create:
+    desc: Create and open the TESTPDB pluggable database (requires Docker, runs as SYSDBA)
+    cmd: docker exec -i oracledb sqlplus -s / as sysdba < pdb_create.sql
+
+  pdb:setup:
+    desc: Create users, enable supplemental logging, and create tables in TESTPDB
+    cmd: docker exec -i oracledb sqlplus -s pdbadmin/pdbadmin123@localhost:1521/TESTPDB < pluggable.sql
+
+  sqlcl:pdb:data:users:
+    desc: Insert test users data into TESTPDB
+    cmd: docker exec -i oracledb sqlplus -s testdb/testdb123@localhost:1521/TESTPDB < users.sql
+
+  sqlcl:pdb:data:products:
+    desc: Insert test products data into TESTPDB
+    cmd: docker exec -i oracledb sqlplus -s testdb/testdb123@localhost:1521/TESTPDB < products.sql
+
+  sqlcl:pdb:data:cart:
+    desc: Insert test cart data into TESTPDB
+    cmd: docker exec -i oracledb sqlplus -s testdb/testdb123@localhost:1521/TESTPDB < cart.sql
+
+  sqlcl:pdb:drop-cache:
+    desc: Drop the CDC checkpoint cache table from TESTPDB (PDB mode, connect via PDB service)
+    cmd: docker exec -i oracledb sqlplus -s rpcn/rpcn123@localhost:1521/TESTPDB <<< "DROP TABLE RPCN.CDC_CHECKPOINT_CACHE;"
+
+  sqlcl:cdb:drop-cache:
+    desc: Drop the CDC checkpoint cache table from CDB root (CDB mode, connect via CDB root)
+    cmd: docker exec -i oracledb sqlplus -s / as sysdba <<< "DROP TABLE C##RPCN.CDC_CHECKPOINT_TESTPDB;"
+
+  connect:run:
+    desc: Run Connect using the benchmark_config.yaml configuration
+    cmd: go run ../../../../cmd/redpanda-connect/main.go run ./benchmark_config.yaml
+
+  # Debezium Setup
   debezium:up:
     desc: Start Debezium Server and Kafka
     cmd: docker-compose -f docker-compose.debezium.yaml up -d
