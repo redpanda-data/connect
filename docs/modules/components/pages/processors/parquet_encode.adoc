@@ -225,6 +225,7 @@ The precision used when encoding TIMESTAMP logical types. The default `NANOSECON
 *Type*: `string`
 
 *Default*: `"NANOSECOND"`
+Requires version 4.89.0 or newer
 
 Options:
 `NANOSECOND`
