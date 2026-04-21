@@ -54,7 +54,8 @@ func parquetEncodeProcessorConfig() *service.ConfigSpec {
 			).
 				Description("The precision used when encoding TIMESTAMP logical types. The default `NANOSECOND` matches historical behaviour, but `TIMESTAMP(NANOS)` is not readable by Apache Spark (Databricks), AWS Athena or DuckDB; set this to `MICROSECOND` (or `MILLISECOND`) when writing Parquet files intended for consumption by those engines.").
 				Default("NANOSECOND").
-				Advanced(),
+				Advanced().
+				Version("4.89.0"),
 		).
 		Description(`
 This processor uses https://github.com/parquet-go/parquet-go[https://github.com/parquet-go/parquet-go^], which is itself experimental. Therefore changes could be made into how this processor functions outside of major version releases.
