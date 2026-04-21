@@ -56,6 +56,7 @@ parquet_encode:
   schema_metadata: ""
   default_compression: uncompressed
   default_encoding: DELTA_LENGTH_BYTE_ARRAY
+  default_timestamp_unit: NANOSECOND
 ```
 
 --
@@ -214,6 +215,22 @@ Requires version 4.11.0 or newer
 Options:
 `DELTA_LENGTH_BYTE_ARRAY`
 , `PLAIN`
+.
+
+=== `default_timestamp_unit`
+
+The precision used when encoding TIMESTAMP logical types. The default `NANOSECOND` matches historical behaviour, but `TIMESTAMP(NANOS)` is not readable by Apache Spark (Databricks), AWS Athena or DuckDB; set this to `MICROSECOND` (or `MILLISECOND`) when writing Parquet files intended for consumption by those engines.
+
+
+*Type*: `string`
+
+*Default*: `"NANOSECOND"`
+Requires version 4.89.0 or newer
+
+Options:
+`NANOSECOND`
+, `MICROSECOND`
+, `MILLISECOND`
 .
 
 

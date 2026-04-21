@@ -49,6 +49,13 @@ func parquetEncodeProcessorConfig() *service.ConfigSpec {
 				Default("DELTA_LENGTH_BYTE_ARRAY").
 				Advanced().
 				Version("4.11.0"),
+			service.NewStringEnumField("default_timestamp_unit",
+				"NANOSECOND", "MICROSECOND", "MILLISECOND",
+			).
+				Description("The precision used when encoding TIMESTAMP logical types. The default `NANOSECOND` matches historical behaviour, but `TIMESTAMP(NANOS)` is not readable by Apache Spark (Databricks), AWS Athena or DuckDB; set this to `MICROSECOND` (or `MILLISECOND`) when writing Parquet files intended for consumption by those engines.").
+				Default("NANOSECOND").
+				Advanced().
+				Version("4.89.0"),
 		).
 		Description(`
 This processor uses https://github.com/parquet-go/parquet-go[https://github.com/parquet-go/parquet-go^], which is itself experimental. Therefore changes could be made into how this processor functions outside of major version releases.
@@ -119,7 +126,19 @@ var plainEncodingFn encodingFn = func(n parquet.Node) parquet.Node {
 	return parquet.Encoded(n, &parquet.Plain)
 }
 
-func parquetGroupFromConfig(columnConfs []*service.ParsedConfig, encodingFn encodingFn) (parquet.Group, error) {
+func parseTimestampUnit(s string) (parquet.TimeUnit, error) {
+	switch s {
+	case "NANOSECOND":
+		return parquet.Nanosecond, nil
+	case "MICROSECOND":
+		return parquet.Microsecond, nil
+	case "MILLISECOND":
+		return parquet.Millisecond, nil
+	}
+	return nil, fmt.Errorf("unknown timestamp unit '%s' (expected NANOSECOND, MICROSECOND or MILLISECOND)", s)
+}
+
+func parquetGroupFromConfig(columnConfs []*service.ParsedConfig, encodingFn encodingFn, tsUnit parquet.TimeUnit) (parquet.Group, error) {
 	groupNode := parquet.Group{}
 
 	for _, colConf := range columnConfs {
@@ -131,7 +150,7 @@ func parquetGroupFromConfig(columnConfs []*service.ParsedConfig, encodingFn enco
 		}
 
 		if childColumns, _ := colConf.FieldAnyList("fields"); len(childColumns) > 0 {
-			if n, err = parquetGroupFromConfig(childColumns, encodingFn); err != nil {
+			if n, err = parquetGroupFromConfig(childColumns, encodingFn, tsUnit); err != nil {
 				return nil, err
 			}
 		} else {
@@ -155,8 +174,7 @@ func parquetGroupFromConfig(columnConfs []*service.ParsedConfig, encodingFn enco
 			case "UTF8":
 				n = parquet.String()
 			case "TIMESTAMP":
-				// TODO: add field to specify timestamp unit (https://github.com/redpanda-data/connect/issues/3570)
-				n = parquet.Timestamp(parquet.Nanosecond)
+				n = parquet.Timestamp(tsUnit)
 			case "BSON":
 				n = parquet.BSON()
 			case "ENUM":
@@ -193,6 +211,15 @@ func parquetGroupFromConfig(columnConfs []*service.ParsedConfig, encodingFn enco
 //------------------------------------------------------------------------------
 
 func newParquetEncodeProcessorFromConfig(conf *service.ParsedConfig, logger *service.Logger) (*parquetEncodeProcessor, error) {
+	tsUnitStr, err := conf.FieldString("default_timestamp_unit")
+	if err != nil {
+		return nil, err
+	}
+	tsUnit, err := parseTimestampUnit(tsUnitStr)
+	if err != nil {
+		return nil, err
+	}
+
 	var schema *parquet.Schema
 	if conf.Contains("schema") {
 		schemaConfs, err := conf.FieldObjectList("schema")
@@ -212,7 +239,7 @@ func newParquetEncodeProcessorFromConfig(conf *service.ParsedConfig, logger *ser
 			encoding = defaultEncodingFn
 		}
 
-		node, err := parquetGroupFromConfig(schemaConfs, encoding)
+		node, err := parquetGroupFromConfig(schemaConfs, encoding, tsUnit)
 		if err != nil {
 			return nil, err
 		}
@@ -250,7 +277,7 @@ func newParquetEncodeProcessorFromConfig(conf *service.ParsedConfig, logger *ser
 	default:
 		return nil, fmt.Errorf("default_compression type %v not recognised", compressStr)
 	}
-	return newParquetEncodeProcessor(logger, schema, schemaMeta, compressDefault)
+	return newParquetEncodeProcessor(logger, schema, schemaMeta, compressDefault, tsUnit)
 }
 
 type parquetEncodeProcessor struct {
@@ -258,14 +285,16 @@ type parquetEncodeProcessor struct {
 	schema          *parquet.Schema
 	schemaMeta      string
 	compressionType compress.Codec
+	timestampUnit   parquet.TimeUnit
 }
 
-func newParquetEncodeProcessor(logger *service.Logger, schema *parquet.Schema, schemaMeta string, compressionType compress.Codec) (*parquetEncodeProcessor, error) {
+func newParquetEncodeProcessor(logger *service.Logger, schema *parquet.Schema, schemaMeta string, compressionType compress.Codec, timestampUnit parquet.TimeUnit) (*parquetEncodeProcessor, error) {
 	s := &parquetEncodeProcessor{
 		logger:          logger,
 		schema:          schema,
 		schemaMeta:      schemaMeta,
 		compressionType: compressionType,
+		timestampUnit:   timestampUnit,
 	}
 	return s, nil
 }
@@ -305,7 +334,7 @@ func (s *parquetEncodeProcessor) ProcessBatch(_ context.Context, batch service.M
 		}
 
 		var err error
-		if schema, err = parquetSchemaFromCommon(metaAny); err != nil {
+		if schema, err = parquetSchemaFromCommon(metaAny, s.timestampUnit); err != nil {
 			return nil, err
 		}
 	}
@@ -348,7 +377,7 @@ func (*parquetEncodeProcessor) Close(context.Context) error {
 	return nil
 }
 
-func parquetNodeFromCommonField(field schema.Common) (parquet.Node, error) {
+func parquetNodeFromCommonField(field schema.Common, tsUnit parquet.TimeUnit) (parquet.Node, error) {
 	var n parquet.Node
 
 	switch field.Type {
@@ -365,8 +394,7 @@ func parquetNodeFromCommonField(field schema.Common) (parquet.Node, error) {
 	case schema.String:
 		n = parquet.String()
 	case schema.Timestamp:
-		// TODO: add field to specify timestamp unit (https://github.com/redpanda-data/connect/issues/3570)
-		n = parquet.Timestamp(parquet.Nanosecond)
+		n = parquet.Timestamp(tsUnit)
 	case schema.ByteArray:
 		n = parquet.Leaf(parquet.ByteArrayType)
 	case schema.Array:
@@ -375,7 +403,7 @@ func parquetNodeFromCommonField(field schema.Common) (parquet.Node, error) {
 		}
 
 		var err error
-		if n, err = parquetNodeFromCommonField(field.Children[0]); err != nil {
+		if n, err = parquetNodeFromCommonField(field.Children[0], tsUnit); err != nil {
 			return nil, err
 		}
 		n = parquet.Repeated(n)
@@ -386,7 +414,7 @@ func parquetNodeFromCommonField(field schema.Common) (parquet.Node, error) {
 		}
 
 		var err error
-		if n, err = parquetGroupFromCommonFields(field.Children); err != nil {
+		if n, err = parquetGroupFromCommonFields(field.Children, tsUnit); err != nil {
 			return nil, err
 		}
 
@@ -403,11 +431,11 @@ func parquetNodeFromCommonField(field schema.Common) (parquet.Node, error) {
 	return n, nil
 }
 
-func parquetGroupFromCommonFields(fields []schema.Common) (parquet.Group, error) {
+func parquetGroupFromCommonFields(fields []schema.Common, tsUnit parquet.TimeUnit) (parquet.Group, error) {
 	g := parquet.Group{}
 
 	for _, f := range fields {
-		n, err := parquetNodeFromCommonField(f)
+		n, err := parquetNodeFromCommonField(f, tsUnit)
 		if err != nil {
 			return nil, err
 		}
@@ -417,7 +445,7 @@ func parquetGroupFromCommonFields(fields []schema.Common) (parquet.Group, error)
 	return g, nil
 }
 
-func parquetSchemaFromCommon(a any) (*parquet.Schema, error) {
+func parquetSchemaFromCommon(a any, tsUnit parquet.TimeUnit) (*parquet.Schema, error) {
 	commonSchema, err := schema.ParseFromAny(a)
 	if err != nil {
 		return nil, err
@@ -431,7 +459,7 @@ func parquetSchemaFromCommon(a any) (*parquet.Schema, error) {
 		return nil, fmt.Errorf("source schema must have at least one field, got %v", len(commonSchema.Children))
 	}
 
-	groupNode, err := parquetGroupFromCommonFields(commonSchema.Children)
+	groupNode, err := parquetGroupFromCommonFields(commonSchema.Children, tsUnit)
 	if err != nil {
 		return nil, err
 	}
