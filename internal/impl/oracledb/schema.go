@@ -20,6 +20,7 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/schema"
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/connect/v4/internal/impl/oracledb/logminer/sqlredo"
 	"github.com/redpanda-data/connect/v4/internal/impl/oracledb/replication"
 )
 
@@ -301,20 +302,6 @@ func (sc *schemaCache) seedFromColumnMeta(table replication.UserTable, meta []re
 // Streaming value coercion
 // ---------------------------------------------------------------------------
 
-// normalizeJSONNumber ensures a numeric string is valid JSON by adding a
-// leading zero when the value starts with a bare decimal point.
-// Oracle can emit values like ".5" or "-.5" (no digit before the decimal),
-// which are not accepted by encoding/json as json.Number literals.
-func normalizeJSONNumber(s string) string {
-	if strings.HasPrefix(s, ".") {
-		return "0" + s
-	}
-	if strings.HasPrefix(s, "-.") {
-		return "-0" + s[1:]
-	}
-	return s
-}
-
 // coerceStreamingValues converts string values from LogMiner SQL_REDO parsing
 // to their proper Go types based on schema column metadata. This ensures type
 // consistency between snapshot (which returns native Go types via sql.Scan) and
@@ -375,9 +362,7 @@ func coerceStreamingValues(data map[string]any, info *columnTypeInfo, log *servi
 			// VARCHAR2. Use numericCols to distinguish: only NUMBER-as-String
 			// columns get wrapped as json.Number to match snapshot behavior.
 			if _, isNumeric := info.numericCols[col]; isNumeric {
-				// Oracle may produce values without a leading zero (e.g. ".5").
-				// Normalise to valid JSON before wrapping in json.Number.
-				data[col] = json.Number(normalizeJSONNumber(s))
+				data[col] = json.Number(sqlredo.NormalizeJSONNumber(s))
 			}
 		}
 	}
