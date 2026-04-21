@@ -211,6 +211,8 @@ project: my-project
 dataset: my_dataset
 table: my_table
 `)
+	// Simulate what Connect() does: resolve the project ID.
+	out.resolvedProjectID = "my-project"
 
 	// When we compute the cache key for a table.
 	key := out.tableCacheKey("my_table")

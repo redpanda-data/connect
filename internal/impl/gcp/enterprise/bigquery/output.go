@@ -122,12 +122,12 @@ All messages in the same batch are written to that table.
 					" Each service account must be granted roles/iam.serviceAccountTokenCreator on the next in the chain.").
 				Advanced().
 				Default([]any{}),
-			service.NewStringField(bqwaFieldStreamIdleTimeout).
+			service.NewDurationField(bqwaFieldStreamIdleTimeout).
 				Description("How long a cached stream can remain unused before being closed."+
 					" Relevant when the table field uses interpolation to route to many tables.").
 				Advanced().
 				Default("5m"),
-			service.NewStringField(bqwaFieldStreamSweepInterval).
+			service.NewDurationField(bqwaFieldStreamSweepInterval).
 				Description("How often to check for idle streams to close.").
 				Advanced().
 				Default("1m"),
@@ -181,19 +181,10 @@ func bigQueryWriteAPIConfigFromParsed(pConf *service.ParsedConfig) (conf bigQuer
 	if conf.Delegates, err = pConf.FieldStringList(bqwaFieldDelegates); err != nil {
 		return
 	}
-	var idleTimeoutStr, sweepIntervalStr string
-	if idleTimeoutStr, err = pConf.FieldString(bqwaFieldStreamIdleTimeout); err != nil {
+	if conf.StreamIdleTimeout, err = pConf.FieldDuration(bqwaFieldStreamIdleTimeout); err != nil {
 		return
 	}
-	if conf.StreamIdleTimeout, err = time.ParseDuration(idleTimeoutStr); err != nil {
-		err = fmt.Errorf("invalid %s: %w", bqwaFieldStreamIdleTimeout, err)
-		return
-	}
-	if sweepIntervalStr, err = pConf.FieldString(bqwaFieldStreamSweepInterval); err != nil {
-		return
-	}
-	if conf.StreamSweepInterval, err = time.ParseDuration(sweepIntervalStr); err != nil {
-		err = fmt.Errorf("invalid %s: %w", bqwaFieldStreamSweepInterval, err)
+	if conf.StreamSweepInterval, err = pConf.FieldDuration(bqwaFieldStreamSweepInterval); err != nil {
 		return
 	}
 	epConf := pConf.Namespace(bqwaFieldEndpoint)
@@ -276,9 +267,10 @@ type bigQueryWriteAPIOutput struct {
 	log         *service.Logger
 	metrics     *bqwaMetrics
 
-	connMu        sync.RWMutex
-	client        *bigquery.Client
-	storageClient *managedwriter.Client
+	connMu            sync.RWMutex
+	client            *bigquery.Client
+	storageClient     *managedwriter.Client
+	resolvedProjectID string
 
 	// Lock ordering: connMu must always be acquired before streamsMu to
 	// prevent deadlocks. Close() acquires connMu then streamsMu;
@@ -350,7 +342,7 @@ func (o *bigQueryWriteAPIOutput) Connect(ctx context.Context) error {
 		return fmt.Errorf("creating storage write client: %w", err)
 	}
 
-	o.conf.ProjectID = resolvedProject
+	o.resolvedProjectID = resolvedProject
 	o.client = bqClient
 	o.storageClient = storageClient
 	o.stopSweep = make(chan struct{})
@@ -412,7 +404,11 @@ func (o *bigQueryWriteAPIOutput) WriteBatch(ctx context.Context, batch service.M
 	if err != nil {
 		o.evictStream(cacheKey)
 		if classifyGRPCError(err) == grpcPermanent {
-			return fmt.Errorf("permanent error appending rows (will not retry): %w", err)
+			batchErr := service.NewBatchError(batch, fmt.Errorf("permanent error appending rows: %w", err))
+			for i := range batch {
+				batchErr = batchErr.Failed(i, err)
+			}
+			return batchErr
 		}
 		o.metrics.retries.Incr(1)
 		return fmt.Errorf("appending rows: %w", err)
@@ -422,7 +418,11 @@ func (o *bigQueryWriteAPIOutput) WriteBatch(ctx context.Context, batch service.M
 	if err != nil {
 		o.evictStream(cacheKey)
 		if classifyGRPCError(err) == grpcPermanent {
-			return fmt.Errorf("permanent error waiting for append result (will not retry): %w", err)
+			batchErr := service.NewBatchError(batch, fmt.Errorf("permanent error waiting for append result: %w", err))
+			for i := range batch {
+				batchErr = batchErr.Failed(i, err)
+			}
+			return batchErr
 		}
 		o.metrics.retries.Incr(1)
 		return fmt.Errorf("waiting for append result: %w", err)
@@ -494,6 +494,9 @@ func (o *bigQueryWriteAPIOutput) Close(_ context.Context) error {
 // If an endpoint override is provided, authentication is skipped (emulator mode).
 func (o *bigQueryWriteAPIOutput) buildAuthOpts(ctx context.Context, endpointOverride string, isGRPC bool) ([]option.ClientOption, error) {
 	if endpointOverride != "" {
+		if o.conf.TargetPrincipal != "" {
+			o.log.Warnf("endpoint override is set; ignoring target_principal %q", o.conf.TargetPrincipal)
+		}
 		opts := []option.ClientOption{
 			option.WithoutAuthentication(),
 			option.WithEndpoint(endpointOverride),
@@ -532,7 +535,7 @@ func (o *bigQueryWriteAPIOutput) buildAuthOpts(ctx context.Context, endpointOver
 }
 
 func (o *bigQueryWriteAPIOutput) tableCacheKey(tableID string) string {
-	return fmt.Sprintf("projects/%s/datasets/%s/tables/%s", o.conf.ProjectID, o.conf.DatasetID, tableID)
+	return fmt.Sprintf("projects/%s/datasets/%s/tables/%s", o.resolvedProjectID, o.conf.DatasetID, tableID)
 }
 
 func (o *bigQueryWriteAPIOutput) getOrCreateStream(ctx context.Context, tableID string) (*streamWithDescriptor, string, error) {
