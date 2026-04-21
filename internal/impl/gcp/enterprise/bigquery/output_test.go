@@ -269,10 +269,12 @@ func TestDescriptorProtoToMessageDescriptorErrors(t *testing.T) {
 }
 
 func TestSweepIdleStreams(t *testing.T) {
-	// Given an output with a stale stream (10 min old) and a fresh stream.
+	// Given an output with a short sweep interval and a stale stream.
 	out := newTestOutput(t, `
 dataset: my_dataset
 table: my_table
+stream_idle_timeout: 100ms
+stream_sweep_interval: 50ms
 `)
 	out.streams = make(map[string]*streamWithDescriptor)
 	out.stopSweep = make(chan struct{})
@@ -285,29 +287,25 @@ table: my_table
 	fresh.lastUsed.Store(time.Now().UnixNano())
 	out.streams["projects/p/datasets/d/tables/fresh"] = fresh
 
-	// When we run the eviction logic.
-	now := time.Now()
-	out.streamsMu.Lock()
-	var evictedKeys []string
-	for key, swd := range out.streams {
-		lastUsed := time.Unix(0, swd.lastUsed.Load())
-		if now.Sub(lastUsed) > out.conf.StreamIdleTimeout {
-			evictedKeys = append(evictedKeys, key)
-			delete(out.streams, key)
-		}
-	}
-	out.streamsMu.Unlock()
+	// When we run the actual sweep goroutine.
+	out.sweepWg.Add(1)
+	go out.sweepIdleStreams()
 
 	// Then the stale stream is evicted and the fresh one remains.
-	assert.Equal(t, []string{"projects/p/datasets/d/tables/stale"}, evictedKeys)
+	assert.Eventually(t, func() bool {
+		out.streamsMu.RLock()
+		defer out.streamsMu.RUnlock()
+		_, staleExists := out.streams["projects/p/datasets/d/tables/stale"]
+		return !staleExists
+	}, 2*time.Second, 25*time.Millisecond, "stale stream should have been evicted")
 
 	out.streamsMu.RLock()
 	_, freshExists := out.streams["projects/p/datasets/d/tables/fresh"]
-	_, staleExists := out.streams["projects/p/datasets/d/tables/stale"]
 	out.streamsMu.RUnlock()
-
 	assert.True(t, freshExists, "fresh stream should remain in cache")
-	assert.False(t, staleExists, "stale stream should have been evicted")
+
+	close(out.stopSweep)
+	out.sweepWg.Wait()
 }
 
 func TestClassifyGRPCError(t *testing.T) {

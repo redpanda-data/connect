@@ -42,15 +42,15 @@ const (
 	bqwaFieldDataset             = "dataset"
 	bqwaFieldTable               = "table"
 	bqwaFieldMessageFormat       = "message_format"
-	bqwaFieldCredentialsJSON     = "credentials_json"
-	bqwaFieldEndpoint            = "endpoint"
-	bqwaFieldEndpointHTTP        = "http"
-	bqwaFieldEndpointGRPC        = "grpc"
 	bqwaFieldBatching            = "batching"
+	bqwaFieldCredentialsJSON     = "credentials_json"
 	bqwaFieldTargetPrincipal     = "target_principal"
 	bqwaFieldDelegates           = "delegates"
 	bqwaFieldStreamIdleTimeout   = "stream_idle_timeout"
 	bqwaFieldStreamSweepInterval = "stream_sweep_interval"
+	bqwaFieldEndpoint            = "endpoint"
+	bqwaFieldEndpointHTTP        = "http"
+	bqwaFieldEndpointGRPC        = "grpc"
 )
 
 func init() {
@@ -621,7 +621,9 @@ func (o *bigQueryWriteAPIOutput) sweepIdleStreams() {
 
 		for _, e := range toClose {
 			o.log.Debugf("Closing idle BigQuery stream for %s", e.key)
-			go func() { _ = e.swd.stream.Close() }()
+			if e.swd.stream != nil {
+				go func() { _ = e.swd.stream.Close() }()
+			}
 		}
 	}
 }
