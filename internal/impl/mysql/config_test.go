@@ -71,6 +71,8 @@ func TestConfig_SnapshotMaxParallelTables_InvalidValuesRejected(t *testing.T) {
 	}{
 		{"zero", 0},
 		{"negative", -5},
+		{"above_upper_bound", maxSnapshotParallelTables + 1},
+		{"absurdly_large", 10000},
 	}
 
 	for _, tc := range tests {
@@ -90,7 +92,10 @@ snapshot_max_parallel_tables: %d
 			// the validation predicate that guards it).
 			got, err := conf.FieldInt(fieldSnapshotMaxParallelTables)
 			require.NoError(t, err)
-			assert.Less(t, got, 1, "configured value should violate the min>=1 rule enforced in newMySQLStreamInput")
+			assert.True(t,
+				got < 1 || got > maxSnapshotParallelTables,
+				"configured value should violate the [1, %d] range enforced in newMySQLStreamInput", maxSnapshotParallelTables,
+			)
 		})
 	}
 }

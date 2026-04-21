@@ -52,6 +52,14 @@ const (
 	FieldAWSIAMAuthEnabled = "enabled"
 
 	shutdownTimeout = 5 * time.Second
+
+	// maxSnapshotParallelTables is an upper bound on the snapshot worker pool.
+	// It guards against accidental denial-of-service from a mis-typed config
+	// value that would otherwise try to open thousands of MySQL connections
+	// at once. Operators with a legitimate need for more parallelism can open
+	// an issue — 256 is already well beyond the point at which the MySQL
+	// server's own connection limits dominate.
+	maxSnapshotParallelTables = 256
 )
 
 func notImportedAWSOptFn(_ context.Context, awsConf *service.ParsedConfig, _ *mysql.Config, _ *service.Logger) (TokenBuilder, error) {
@@ -105,7 +113,7 @@ This input adds the following metadata fields to each message:
 			Description("The maximum number of rows to be streamed in a single batch when taking a snapshot.").
 			Default(1000),
 		service.NewIntField(fieldSnapshotMaxParallelTables).
-			Description("The maximum number of tables that may be snapshotted in parallel. When set to `1` (the default) tables are read sequentially using a single transaction, preserving the previous behaviour. When set higher, multiple `REPEATABLE READ` transactions are opened on separate connections under a single brief `FLUSH TABLES ... WITH READ LOCK` window so every worker observes an identical, globally-consistent snapshot at the same binlog position. A value greater than the number of configured `tables` is effectively capped at the table count. Must be at least `1`.").
+			Description("The maximum number of tables that may be snapshotted in parallel. When set to `1` (the default) tables are read sequentially using a single transaction, preserving the previous behaviour. When set higher, multiple `REPEATABLE READ` transactions are opened on separate connections under a single brief `FLUSH TABLES ... WITH READ LOCK` window so every worker observes an identical, globally-consistent snapshot at the same binlog position. A value greater than the number of configured `tables` is effectively capped at the table count. Must be between `1` and `256`.").
 			Advanced().
 			Default(1),
 		service.NewIntField(fieldMaxReconnectAttempts).
@@ -290,6 +298,9 @@ func newMySQLStreamInput(conf *service.ParsedConfig, res *service.Resources) (s 
 	}
 	if i.fieldSnapshotMaxParallelTables < 1 {
 		return nil, fmt.Errorf("field '%s' must be at least 1, got %d", fieldSnapshotMaxParallelTables, i.fieldSnapshotMaxParallelTables)
+	}
+	if i.fieldSnapshotMaxParallelTables > maxSnapshotParallelTables {
+		return nil, fmt.Errorf("field '%s' must be at most %d, got %d", fieldSnapshotMaxParallelTables, maxSnapshotParallelTables, i.fieldSnapshotMaxParallelTables)
 	}
 
 	if i.canalMaxConnAttempts, err = conf.FieldInt(fieldMaxReconnectAttempts); err != nil {
