@@ -7,6 +7,7 @@ version: '3'
 # - task pdb:setup
 # - task cdb:setup
 # - task sqlcl:pdb:data:users
+# - task connect:run
 
 # Running order (single PDB database - PDB mode, connect via PDB service):
 # - task oracledb:up
@@ -14,6 +15,7 @@ version: '3'
 # - task pdb:create
 # - task pdb:setup
 # - task sqlcl:pdb:data:users
+# - task connect:run
 
 tasks:
   oracledb:up:
@@ -76,6 +78,10 @@ tasks:
   sqlcl:cdb:drop-cache:
     desc: Drop the CDC checkpoint cache table from CDB root (CDB mode, connect via CDB root)
     cmd: docker exec -i oracledb sqlplus -s / as sysdba <<< "DROP TABLE C##RPCN.CDC_CHECKPOINT_TESTPDB;"
+
+  connect:run:
+    desc: Run Connect using the benchmark_config.yaml configuration
+    cmd: go run ../../../../cmd/redpanda-connect/main.go run ./benchmark_config.yaml
 
   # Debezium Setup
   debezium:up:

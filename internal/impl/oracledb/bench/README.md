@@ -38,7 +38,7 @@ task cdb:setup
 #### 4. Start Redpanda Connect
 
 ```bash
-go run ../../../../cmd/redpanda-connect/main.go run ./benchmark_config.yaml
+task connect:run
 ```
 
 #### 5. Generate test data
