@@ -13,6 +13,7 @@ input:
     slot_name: bench_slot
     batching:
       count: 1000
+      period: 1s
 
 output:
   processors:
@@ -22,7 +23,7 @@ output:
   drop: {}
 
 logger:
-  level: DEBUG
+  level: WARN
 
 metrics:
   prometheus:
