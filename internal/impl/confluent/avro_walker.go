@@ -15,6 +15,7 @@
 package confluent
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/twmb/avro"
@@ -52,6 +53,19 @@ func preserveLogicalTypeOpts() []avro.SchemaOpt {
 					return nil, avro.ErrSkipCustomType
 				}
 				return avro.DurationFromBytes(b).String(), nil
+			},
+		},
+		// Decimal: raw type is []byte. Convert to json.Number for the
+		// SetStructuredMut path (json.Marshal can't handle *big.Rat).
+		avro.CustomType{
+			LogicalType: "decimal",
+			Decode: func(v any, node *avro.SchemaNode) (any, error) {
+				b, ok := v.([]byte)
+				if !ok {
+					return nil, avro.ErrSkipCustomType
+				}
+				r := avro.RatFromBytes(b, node.Scale)
+				return json.Number(r.FloatString(node.Scale)), nil
 			},
 		},
 	}
