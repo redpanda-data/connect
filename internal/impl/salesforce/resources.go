@@ -135,7 +135,9 @@ func (s *salesforceProcessor) dispatchWithCheckpoint(ctx context.Context) (servi
 	}
 
 	if done {
-		// All SObjects processed; mark snapshot as complete
+		// All SObjects processed; mark snapshot as complete. GetNextBatchParallel
+		// can return a non-empty batch alongside done=true when the last SObject's
+		// final page arrives in the same call, so forward batch to the caller.
 		state.SnapshotComplete = true
 		state.RestCursor = salesforcehttp.Cursor{}
 		if err := s.saveState(ctx, state); err != nil {
@@ -144,12 +146,10 @@ func (s *salesforceProcessor) dispatchWithCheckpoint(ctx context.Context) (servi
 
 		if s.cdcEnabled {
 			s.log.Info("REST snapshot complete, transitioning to CDC streaming")
-			return nil, nil
+		} else {
+			s.log.Info("All Salesforce records processed")
 		}
-
-		// CDC not enabled: stay idle, snapshot is done
-		s.log.Info("All Salesforce records processed")
-		return nil, nil
+		return batch, nil
 	}
 
 	// Persist checkpoint so we can resume from here on restart
