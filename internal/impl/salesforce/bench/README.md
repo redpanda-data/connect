@@ -47,12 +47,6 @@ task bench:clear-checkpoint
 
 Streams Account change events in real time via the Salesforce Pub/Sub API (gRPC), measuring event delivery throughput.
 
-### Prerequisites
-
-Enable Change Data Capture for Account in your Salesforce org:
-
-> Setup → Change Data Capture → select **Account** → Save
-
 ### Running
 
 In one terminal, generate a continuous stream of Account changes:
