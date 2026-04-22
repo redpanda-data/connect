@@ -166,10 +166,11 @@ type asyncMessage struct {
 type mysqlStreamInput struct {
 	canal.DummyEventHandler
 
-	mutex  sync.Mutex
-	flavor string
+	checkpointMu sync.Mutex
+	flavor       string
 	// canal stands for mysql binlog listener connection
 	canal                *canal.Canal
+	canalMu              sync.Mutex
 	canalMaxConnAttempts int
 	mysqlConfig          *mysql.Config
 	binLogCache          string
@@ -340,37 +341,7 @@ func (i *mysqlStreamInput) Connect(ctx context.Context) error {
 		}
 	}
 
-	canalConfig := canal.NewDefaultConfig()
-	canalConfig.Flavor = i.flavor
-	canalConfig.Addr = i.mysqlConfig.Addr
-	canalConfig.User = i.mysqlConfig.User
-	canalConfig.Password = i.mysqlConfig.Passwd
-	canalConfig.MaxReconnectAttempts = i.canalMaxConnAttempts
-	// resetting dump path since we are doing snapshot manually
-	// this is required since canal will try to prepare dumper on init stage
-	canalConfig.Dump.ExecutionPath = ""
-
-	// Parse and set additional parameters
-	canalConfig.Charset = i.mysqlConfig.Collation
-	if i.customTLSConfig != nil {
-		canalConfig.TLSConfig = i.customTLSConfig
-		i.logger.Debugf("Using custom TLS config with ServerName: '%s'", i.customTLSConfig.ServerName)
-	} else if i.mysqlConfig.TLS != nil {
-		canalConfig.TLSConfig = i.mysqlConfig.TLS
-		i.logger.Debugf("Using TLS config from DSN")
-	}
-	// Parse time values as time.Time values not strings
-	canalConfig.ParseTime = true
-	// canalConfig.Logger
-
-	for _, table := range i.tables {
-		canalConfig.IncludeTableRegex = append(
-			canalConfig.IncludeTableRegex,
-			"^"+regexp.QuoteMeta(i.mysqlConfig.DBName+"."+table)+"$",
-		)
-	}
-
-	c, err := canal.NewCanal(canalConfig)
+	c, err := i.newCanal()
 	if err != nil {
 		return err
 	}
@@ -399,7 +370,9 @@ func (i *mysqlStreamInput) Connect(ctx context.Context) error {
 		wg, ctx := errgroup.WithContext(ctx)
 		wg.Go(func() error {
 			<-ctx.Done()
+			i.canalMu.Lock()
 			i.canal.Close()
+			i.canalMu.Unlock()
 			return nil
 		})
 		wg.Go(func() error { return i.readMessages(ctx) })
@@ -412,6 +385,72 @@ func (i *mysqlStreamInput) Connect(ctx context.Context) error {
 		sig.TriggerHasStopped()
 	}()
 
+	return nil
+}
+
+func (i *mysqlStreamInput) newCanal() (*canal.Canal, error) {
+	canalConfig := canal.NewDefaultConfig()
+	canalConfig.Flavor = i.flavor
+	canalConfig.Addr = i.mysqlConfig.Addr
+	canalConfig.User = i.mysqlConfig.User
+	canalConfig.Password = i.mysqlConfig.Passwd
+	canalConfig.MaxReconnectAttempts = i.canalMaxConnAttempts
+	// resetting dump path since we are doing snapshot manually
+	// this is required since canal will try to prepare dumper on init stage
+	canalConfig.Dump.ExecutionPath = ""
+
+	// Parse and set additional parameters
+	canalConfig.Charset = i.mysqlConfig.Collation
+	if i.customTLSConfig != nil {
+		canalConfig.TLSConfig = i.customTLSConfig
+		if i.logger != nil {
+			i.logger.Debugf("Using custom TLS config with ServerName: '%s'", i.customTLSConfig.ServerName)
+		}
+	} else if i.mysqlConfig.TLS != nil {
+		canalConfig.TLSConfig = i.mysqlConfig.TLS
+		if i.logger != nil {
+			i.logger.Debugf("Using TLS config from DSN")
+		}
+	}
+	// Parse time values as time.Time values not strings
+	canalConfig.ParseTime = true
+
+	for _, table := range i.tables {
+		canalConfig.IncludeTableRegex = append(
+			canalConfig.IncludeTableRegex,
+			"^"+regexp.QuoteMeta(i.mysqlConfig.DBName+"."+table)+"$",
+		)
+	}
+
+	return canal.NewCanal(canalConfig)
+}
+
+// refreshIAMAuthToken requests a new IAM token and reconnects to MySQL now that we're
+// switching to streaming to remove the risk of an expired token.
+func (i *mysqlStreamInput) refreshIAMAuthToken(ctx context.Context) error {
+	if i.iamAuthEnabled && i.iamAuthTokenBuilder != nil {
+		i.logger.Debug("Refreshing IAM auth token before switching to streaming...")
+		if err := i.iamAuthTokenBuilder(ctx); err != nil {
+			return fmt.Errorf("refreshing IAM auth token before binlog sync: %w", err)
+		}
+
+		i.canalMu.Lock()
+		if ctx.Err() != nil {
+			i.canalMu.Unlock()
+			return ctx.Err()
+		}
+		oldCanal := i.canal
+		newCanal, err := i.newCanal()
+		if err != nil {
+			i.canalMu.Unlock()
+			return fmt.Errorf("recreating canal with refreshed IAM credentials: %w", err)
+		}
+		i.canal = newCanal
+		i.canalMu.Unlock()
+		if oldCanal != nil {
+			oldCanal.Close()
+		}
+	}
 	return nil
 }
 
@@ -443,6 +482,11 @@ func (i *mysqlStreamInput) startMySQLSync(ctx context.Context, pos *position, sn
 			return ctx.Err()
 		}
 		pos = startPos
+
+		// if using IAM policies, reauthenticate connection with fresh IAM token after snapshot phase
+		if err := i.refreshIAMAuthToken(ctx); err != nil {
+			return err
+		}
 	} else if pos == nil {
 		coords, err := i.canal.GetMasterPos()
 		if err != nil {
@@ -790,8 +834,8 @@ func (i *mysqlStreamInput) flushBatch(
 	msg := asyncMessage{
 		msg: batch,
 		ackFn: func(ctx context.Context, _ error) error {
-			i.mutex.Lock()
-			defer i.mutex.Unlock()
+			i.checkpointMu.Lock()
+			defer i.checkpointMu.Unlock()
 			maxOffset := resolveFn()
 			// Nothing to commit, this wasn't the latest message
 			if maxOffset == nil {
