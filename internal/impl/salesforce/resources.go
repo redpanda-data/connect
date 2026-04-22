@@ -199,14 +199,14 @@ func (s *salesforceProcessor) dispatchFilteredPaged(ctx context.Context, fetchPa
 // for permanent stream failures.
 func (s *salesforceProcessor) dispatchCDC(ctx context.Context, state ProcessorState) (service.MessageBatch, error) {
 	// Lazy-init gRPC client if nil
-	if s.grpcClient == nil {
+	if s.grpcSub == nil {
 		if err := s.initGRPCClient(ctx, state.CDCReplayID); err != nil {
 			return nil, fmt.Errorf("init CDC gRPC client: %w", err)
 		}
 	}
 
 	// Check for permanent stream errors (the client handles transient reconnection internally)
-	if err := s.grpcClient.StreamErr(); err != nil {
+	if err := s.grpcSub.StreamErr(); err != nil {
 		grpcErr, isGRPC := status.FromError(err)
 
 		// Handle stale replay_id (>72h)
@@ -214,6 +214,7 @@ func (s *salesforceProcessor) dispatchCDC(ctx context.Context, state ProcessorSt
 			s.log.Warn("CDC replay_id appears stale, falling back to configured preset")
 			_ = s.grpcClient.Close()
 			s.grpcClient = nil
+			s.grpcSub = nil
 			state.CDCReplayID = nil
 			if saveErr := s.saveState(ctx, state); saveErr != nil {
 				s.log.Errorf("clear stale replay_id: %v", saveErr)
@@ -225,7 +226,7 @@ func (s *salesforceProcessor) dispatchCDC(ctx context.Context, state ProcessorSt
 		return nil, fmt.Errorf("CDC stream permanent failure: %w", err)
 	}
 
-	events, latestReplayID, err := s.grpcClient.FetchBatch(int(s.cdcBatchSize))
+	events, latestReplayID, err := s.grpcSub.FetchBatch(int(s.cdcBatchSize))
 	if err != nil {
 		return nil, fmt.Errorf("CDC FetchBatch failed: %w", err)
 	}
@@ -251,7 +252,7 @@ func (s *salesforceProcessor) dispatchCDC(ctx context.Context, state ProcessorSt
 // dispatchPubSub handles standalone Pub/Sub streaming (Platform Events or arbitrary topics).
 func (s *salesforceProcessor) dispatchPubSub(ctx context.Context, state ProcessorState) (service.MessageBatch, error) {
 	// Lazy-init gRPC client if nil
-	if s.grpcClient == nil {
+	if s.grpcSub == nil {
 		replayID := state.PubSubReplayID
 		if err := s.initGRPCClient(ctx, replayID); err != nil {
 			return nil, fmt.Errorf("init Pub/Sub gRPC client: %w", err)
@@ -259,13 +260,14 @@ func (s *salesforceProcessor) dispatchPubSub(ctx context.Context, state Processo
 	}
 
 	// Check for permanent stream errors
-	if err := s.grpcClient.StreamErr(); err != nil {
+	if err := s.grpcSub.StreamErr(); err != nil {
 		grpcErr, isGRPC := status.FromError(err)
 
 		if isGRPC && grpcErr.Code() == codes.InvalidArgument {
 			s.log.Warn("Pub/Sub replay_id appears stale, falling back to configured preset")
 			_ = s.grpcClient.Close()
 			s.grpcClient = nil
+			s.grpcSub = nil
 			state.PubSubReplayID = nil
 			if saveErr := s.saveState(ctx, state); saveErr != nil {
 				s.log.Errorf("clear stale replay_id: %v", saveErr)
@@ -276,7 +278,7 @@ func (s *salesforceProcessor) dispatchPubSub(ctx context.Context, state Processo
 		return nil, fmt.Errorf("Pub/Sub stream permanent failure: %w", err)
 	}
 
-	events, latestReplayID, err := s.grpcClient.FetchBatch(int(s.cdcBatchSize))
+	events, latestReplayID, err := s.grpcSub.FetchBatch(int(s.cdcBatchSize))
 	if err != nil {
 		return nil, fmt.Errorf("Pub/Sub FetchBatch failed: %w", err)
 	}
@@ -300,11 +302,15 @@ func (s *salesforceProcessor) dispatchPubSub(ctx context.Context, state Processo
 	return batch, nil
 }
 
-// logDroppedEvents checks the gRPC client health and logs a warning if events have been
-// dropped since the last call. This surfaces buffer-full losses that would otherwise only
-// appear as a single warn log line buried in high-volume output.
+// logDroppedEvents checks the subscription health and logs a warning if events
+// have been dropped since the last call. This surfaces buffer-full losses that
+// would otherwise only appear as a single warn log line buried in high-volume
+// output.
 func (s *salesforceProcessor) logDroppedEvents() {
-	h := s.grpcClient.Health()
+	if s.grpcSub == nil {
+		return
+	}
+	h := s.grpcSub.Health()
 	if h.EventsDropped > s.lastSeenDropped {
 		s.log.Warnf("salesforce: %d event(s) dropped due to full buffer since last batch (total dropped: %d)", h.EventsDropped-s.lastSeenDropped, h.EventsDropped)
 		s.lastSeenDropped = h.EventsDropped
@@ -361,11 +367,6 @@ func (s *salesforceProcessor) initGRPCClient(ctx context.Context, replayID []byt
 		s.client.InstanceURL(),
 		s.client.TenantID(),
 		s.client.BearerToken(),
-		salesforcegrpc.SubscriptionConfig{
-			TopicName:  s.cdcTopicName,
-			BatchSize:  s.cdcBatchSize,
-			BufferSize: int(s.cdcBufferSize),
-		},
 		salesforcegrpc.Config{
 			BaseBackoff:  s.grpcReconnectBaseDelay,
 			MaxBackoff:   s.grpcReconnectMaxDelay,
@@ -392,12 +393,18 @@ func (s *salesforceProcessor) initGRPCClient(ctx context.Context, replayID []byt
 		replayPreset = salesforcegrpc.ReplayPreset_LATEST
 	}
 
-	if err := grpcClient.Connect(ctx, replayPreset, replayID); err != nil {
+	sub, err := grpcClient.Subscribe(ctx, salesforcegrpc.SubscriptionConfig{
+		TopicName:  s.cdcTopicName,
+		BatchSize:  s.cdcBatchSize,
+		BufferSize: int(s.cdcBufferSize),
+	}, replayPreset, replayID)
+	if err != nil {
 		_ = grpcClient.Close()
 		return err
 	}
 
 	s.grpcClient = grpcClient
+	s.grpcSub = sub
 	return nil
 }
 
