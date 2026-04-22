@@ -1,0 +1,47 @@
+# Produces COUNT synthetic events to the bench-events Kafka topic.
+# Messages use the Kafka Connect JSON schema envelope so the JDBC sink connector
+# can map fields to PostgreSQL columns without a Schema Registry.
+#
+# Usage:
+#   go run ../../../../../cmd/redpanda-connect/main.go run ./producer.yaml
+# Override count/brokers:
+#   COUNT=5000000 KAFKA_BOOTSTRAP=localhost:9092 \
+#   go run ../../../../../cmd/redpanda-connect/main.go run ./producer.yaml
+
+input:
+  generate:
+    count: ${COUNT:1000000}
+    interval: ""
+    mapping: |
+      # Kafka Connect JSON schema envelope — the JDBC sink reads the schema block
+      # to determine column types and maps payload fields to table columns.
+      root = {
+        "schema": {
+          "type": "struct",
+          "fields": [
+            {"type": "int64",   "optional": false, "field": "id"},
+            {"type": "string",  "optional": false, "field": "category"},
+            {"type": "double", "optional": false, "field": "value"},
+            {"type": "int64",   "optional": false, "field": "ts"}
+          ],
+          "optional": false,
+          "name": "bench_event"
+        },
+        "payload": {
+          "id":       count("events"),
+          "category": "cat_" + random_int(min: 1, max: 10).string(),
+          "value":    random_int(min: 1, max: 1000000).float64() / 100.0,
+          "ts":       now().ts_unix_micro()
+        }
+      }
+
+output:
+  kafka_franz:
+    seed_brokers:
+      - ${KAFKA_BOOTSTRAP:localhost:9092}
+    topic: bench-events
+    compression: snappy
+    batching:
+      count: 3000
+      byte_size: 4194304  # 4 MiB
+      period: 5s
