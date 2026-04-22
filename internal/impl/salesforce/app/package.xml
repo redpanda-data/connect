@@ -5,6 +5,10 @@
         <name>ConnectedApp</name>
     </types>
     <types>
+        <members>RPCN_Test__e</members>
+        <name>CustomObject</name>
+    </types>
+    <types>
         <members>ChangeEvents_AccountChangeEvent</members>
         <members>ChangeEvents_ContactChangeEvent</members>
         <name>PlatformEventChannelMember</name>

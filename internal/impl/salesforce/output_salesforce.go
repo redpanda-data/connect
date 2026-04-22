@@ -32,6 +32,7 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
+	"github.com/redpanda-data/connect/v4/internal/httpclient"
 	"github.com/redpanda-data/connect/v4/internal/impl/salesforce/salesforcehttp"
 	"github.com/redpanda-data/connect/v4/internal/license"
 )
@@ -334,7 +335,15 @@ func newSalesforceSinkOutput(conf *service.ParsedConfig, mgr *service.Resources)
 		}
 	}
 
-	httpClient, err := newSalesforceHTTPClient(orgURL, timeout, maxRetries, mgr)
+	httpClient, err := httpclient.NewClient(httpclient.Config{
+		BaseURL:                orgURL,
+		Timeout:                timeout,
+		BackoffMaxRetries:      maxRetries,
+		BackoffInitialInterval: 500 * time.Millisecond,
+		BackoffMaxInterval:     30 * time.Second,
+		Transport:              httpclient.DefaultTransportConfig(),
+		MetricPrefix:           "salesforce_http",
+	}, mgr)
 	if err != nil {
 		return nil, err
 	}

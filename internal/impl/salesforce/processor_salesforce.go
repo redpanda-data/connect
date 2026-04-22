@@ -22,6 +22,7 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
+	"github.com/redpanda-data/connect/v4/internal/httpclient"
 	"github.com/redpanda-data/connect/v4/internal/impl/salesforce/salesforcegrpc"
 	"github.com/redpanda-data/connect/v4/internal/impl/salesforce/salesforcehttp"
 	"github.com/redpanda-data/connect/v4/internal/license"
@@ -55,8 +56,9 @@ type salesforceProcessor struct {
 	// gRPC shutdown timeout
 	grpcShutdownTimeout time.Duration
 
-	// gRPC client for CDC/Pub/Sub streaming (lazy-initialized)
+	// gRPC client + subscription for CDC/Pub/Sub streaming (lazy-initialized).
 	grpcClient *salesforcegrpc.Client
+	grpcSub    *salesforcegrpc.Subscription
 
 	// lastSeenDropped tracks the EventsDropped value from the previous dispatch call
 	// so we can log a warning whenever new drops are detected.
@@ -368,7 +370,15 @@ func newSalesforceProcessor(conf *service.ParsedConfig, mgr *service.Resources) 
 		}
 	}
 
-	httpClient, err := newSalesforceHTTPClient(orgURL, timeout, maxRetries, mgr)
+	httpClient, err := httpclient.NewClient(httpclient.Config{
+		BaseURL:                orgURL,
+		Timeout:                timeout,
+		BackoffMaxRetries:      maxRetries,
+		BackoffInitialInterval: 500 * time.Millisecond,
+		BackoffMaxInterval:     30 * time.Second,
+		Transport:              httpclient.DefaultTransportConfig(),
+		MetricPrefix:           "salesforce_http",
+	}, mgr)
 	if err != nil {
 		return nil, err
 	}
@@ -463,27 +473,29 @@ func (s *salesforceProcessor) Close(ctx context.Context) error {
 	}
 
 	// Drain remaining events for final checkpoint
-	remaining := s.grpcClient.DrainBuffer()
-	if len(remaining) > 0 {
-		var latestReplayID []byte
-		for _, evt := range remaining {
-			if len(evt.ReplayID) > 0 {
-				latestReplayID = evt.ReplayID
-			}
-		}
-		if len(latestReplayID) > 0 {
-			state, err := s.loadState(ctx)
-			if err == nil {
-				if s.pubsubTopic != "" {
-					state.PubSubReplayID = latestReplayID
-					state.PubSubTopic = s.pubsubTopic
-				} else {
-					state.CDCReplayID = latestReplayID
+	if s.grpcSub != nil {
+		remaining := s.grpcSub.DrainBuffer()
+		if len(remaining) > 0 {
+			var latestReplayID []byte
+			for _, evt := range remaining {
+				if len(evt.ReplayID) > 0 {
+					latestReplayID = evt.ReplayID
 				}
-				if err := s.saveState(ctx, state); err != nil {
-					s.log.Errorf("Failed to save final checkpoint: %v", err)
-				} else {
-					s.log.Infof("Final checkpoint saved (%d drained events)", len(remaining))
+			}
+			if len(latestReplayID) > 0 {
+				state, err := s.loadState(ctx)
+				if err == nil {
+					if s.pubsubTopic != "" {
+						state.PubSubReplayID = latestReplayID
+						state.PubSubTopic = s.pubsubTopic
+					} else {
+						state.CDCReplayID = latestReplayID
+					}
+					if err := s.saveState(ctx, state); err != nil {
+						s.log.Errorf("Failed to save final checkpoint: %v", err)
+					} else {
+						s.log.Infof("Final checkpoint saved (%d drained events)", len(remaining))
+					}
 				}
 			}
 		}
@@ -491,6 +503,7 @@ func (s *salesforceProcessor) Close(ctx context.Context) error {
 
 	err := s.grpcClient.CloseWithTimeout(s.grpcShutdownTimeout)
 	s.grpcClient = nil
+	s.grpcSub = nil
 	return err
 }
 
