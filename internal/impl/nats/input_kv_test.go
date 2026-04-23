@@ -34,6 +34,7 @@ bucket: testbucket
 key: testkey
 ignore_deletes: true
 include_history: true
+updates_only: true
 meta_only: true
 max_reconnects: -1
 auth:
@@ -52,6 +53,7 @@ auth:
 		assert.Equal(t, "testkey", e.key)
 		assert.True(t, e.ignoreDeletes)
 		assert.True(t, e.includeHistory)
+		assert.True(t, e.updatesOnly)
 		assert.True(t, e.metaOnly)
 		assert.Equal(t, -1, *e.connDetails.maxReconnects)
 		assert.Equal(t, "test auth inline user name", e.connDetails.authConf.User)

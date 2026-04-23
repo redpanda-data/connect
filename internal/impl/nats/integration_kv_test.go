@@ -384,4 +384,56 @@ cache_resources:
 			assert.JSONEq(t, string(expected), string(msg))
 		})
 	})
+
+	t.Run("input", func(t *testing.T) {
+		t.Run("updates_only skips existing values", func(t *testing.T) {
+			u4, err := uuid.NewV4()
+			require.NoError(t, err)
+			js, err := jetstream.New(natsConn)
+			require.NoError(t, err)
+
+			bucket, err := js.CreateKeyValue(t.Context(), jetstream.KeyValueConfig{
+				Bucket: "bucket-" + u4.String(),
+			})
+			require.NoError(t, err)
+
+			_, err = bucket.PutString(t.Context(), "existing", "old_value")
+			require.NoError(t, err)
+
+			yaml := fmt.Sprintf(`
+        bucket: %s
+        updates_only: true
+        urls: [%s]`, bucket.Bucket(), fmt.Sprintf("tcp://localhost:%v", resource.GetPort("4222/tcp")))
+
+			spec := natsKVInputConfig()
+			parsed, err := spec.ParseYAML(yaml, nil)
+			require.NoError(t, err)
+
+			input, err := newKVReader(parsed, service.MockResources())
+			require.NoError(t, err)
+
+			err = input.Connect(t.Context())
+			require.NoError(t, err)
+			defer input.Close(t.Context())
+
+			ctx, cancel := context.WithTimeout(t.Context(), 200*time.Millisecond)
+			defer cancel()
+			_, _, err = input.Read(ctx)
+			require.ErrorIs(t, err, context.DeadlineExceeded)
+
+			_, err = bucket.PutString(t.Context(), "new_key", "new_value")
+			require.NoError(t, err)
+
+			msg, _, err := input.Read(t.Context())
+			require.NoError(t, err)
+
+			bytes, err := msg.AsBytes()
+			require.NoError(t, err)
+			assert.Equal(t, []byte("new_value"), bytes)
+
+			key, exists := msg.MetaGet("nats_kv_key")
+			require.True(t, exists)
+			assert.Equal(t, "new_key", key)
+		})
+	})
 }
