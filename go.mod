@@ -48,7 +48,7 @@ require (
 	github.com/PaesslerAG/gval v1.2.4
 	github.com/PaesslerAG/jsonpath v0.1.1
 	github.com/a2aproject/a2a-go v0.3.12
-	github.com/apache/iceberg-go v0.5.1-0.20260413191103-8587fd1d2516
+	github.com/apache/iceberg-go v0.5.1-0.20260423164746-a1d883edd53d
 	github.com/apache/pulsar-client-go v0.18.0
 	github.com/auth0/go-jwt-middleware/v2 v2.3.1
 	github.com/authzed/authzed-go v1.8.0
@@ -109,7 +109,6 @@ require (
 	github.com/google/go-cmp v0.7.0
 	github.com/googleapis/go-sql-spanner v1.24.1
 	github.com/gosimple/slug v1.15.0
-	github.com/hamba/avro/v2 v2.31.0
 	github.com/influxdata/influxdb1-client v0.0.0-20220302092344-a9ab5670611c
 	github.com/jackc/pgx/v5 v5.9.1
 	github.com/jhump/protoreflect v1.18.0
@@ -264,6 +263,7 @@ require (
 	github.com/google/jsonschema-go v0.4.2 // indirect
 	github.com/google/wire v0.7.0 // indirect
 	github.com/gookit/color v1.6.0 // indirect
+	github.com/hamba/avro/v2 v2.31.0 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
 	github.com/hashicorp/go-retryablehttp v0.7.8 // indirect
 	github.com/hashicorp/go-version v1.9.0 // indirect
