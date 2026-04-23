@@ -395,7 +395,7 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 						continue
 					}
 				}
-				msg := toMessageEvent(dmlEvent, redoEvent.SCN, safeCheckpointSCN)
+				msg := toMessageEvent(dmlEvent, redoEvent.SCN, safeCheckpointSCN, redoEvent.Timestamp)
 				if err := lm.publisher.Publish(ctx, msg); err != nil {
 					return fmt.Errorf("publishing event with SCN '%d': %w", redoEvent.SCN, err)
 				}
@@ -749,7 +749,7 @@ func (lm *LogMiner) prepareLogsAndStartSession(ctx context.Context, conn *sql.Co
 	return nil
 }
 
-func toMessageEvent(dml *sqlredo.DMLEvent, scn uint64, checkpointSCN uint64) *replication.MessageEvent {
+func toMessageEvent(dml *sqlredo.DMLEvent, scn uint64, checkpointSCN uint64, commitTimestamp time.Time) *replication.MessageEvent {
 	var data map[string]any
 	switch dml.Operation {
 	case sqlredo.OpDelete:
@@ -765,13 +765,14 @@ func toMessageEvent(dml *sqlredo.DMLEvent, scn uint64, checkpointSCN uint64) *re
 	}
 
 	m := &replication.MessageEvent{
-		SCN:           replication.SCN(scn),
-		CheckpointSCN: replication.SCN(checkpointSCN),
-		Schema:        dml.Schema,
-		Table:         dml.Table,
-		Data:          data,
-		Timestamp:     dml.Timestamp,
-		TransactionID: dml.TransactionID.String(),
+		SCN:             replication.SCN(scn),
+		CheckpointSCN:   replication.SCN(checkpointSCN),
+		Schema:          dml.Schema,
+		Table:           dml.Table,
+		Data:            data,
+		Timestamp:       dml.Timestamp,
+		TransactionID:   dml.TransactionID.String(),
+		CommitTimestamp: commitTimestamp,
 	}
 
 	switch dml.Operation {

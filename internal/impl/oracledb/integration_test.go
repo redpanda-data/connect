@@ -555,6 +555,15 @@ oracledb_cdc:
 			assert.Truef(t, tsTime.After(time.Now().Add(-5*time.Minute)), "message %d: source_ts_ms %d is too far in the past", i, tsMs)
 			assert.Truef(t, tsTime.Before(time.Now().Add(time.Minute)), "message %d: source_ts_ms %d is in the future", i, tsMs)
 
+			// assert commit_ts_ms metadata
+			tsStr, ok = msg.MetaGet("commit_ts_ms")
+			require.Truef(t, ok, "message %d missing 'commit_ts_ms' metadata", i)
+			tsMs, err = strconv.ParseInt(tsStr, 10, 64)
+			require.NoErrorf(t, err, "message %d: commit_ts_ms %q is not a valid int64", i, tsStr)
+			tsTime = time.UnixMilli(tsMs)
+			assert.Truef(t, tsTime.After(time.Now().Add(-5*time.Minute)), "message %d: commit_ts_ms %d is too far in the past", i, tsMs)
+			assert.Truef(t, tsTime.Before(time.Now().Add(time.Minute)), "message %d: commit_ts_ms %d is in the future", i, tsMs)
+
 			// assert transaction_id metadata
 			txID, ok := msg.MetaGet("transaction_id")
 			require.Truef(t, ok, "message %d missing 'transaction_id' metadata", i)
