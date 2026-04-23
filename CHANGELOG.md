@@ -3,6 +3,19 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.89.0 - 2026-04-23
+
+### Added
+
+- general: PostgreSQL CDC benchmarking suite added with Kafka Connect PostgreSQL benchmark infrastructure and configuration. ([@ness-david-dedu](https://github.com/ness-david-dedu), [#4216](https://github.com/redpanda-data/connect/pull/4216))
+- parquet_encode: Added configurable timestamp unit support (nanosecond, microsecond, millisecond) to make Parquet output readable by Apache Spark, Databricks, AWS Athena, and DuckDB. ([@ankit481](https://github.com/ankit481), [#4294](https://github.com/redpanda-data/connect/pull/4294))
+
+### Fixed
+
+- confluent: Avro schema reference resolution now handles arbitrary schema shapes and correctly inlines transitive references, fixing misleading errors and missing nested reference resolution. ([@twmb](https://github.com/twmb), [#4247](https://github.com/redpanda-data/connect/pull/4247))
+- mysql_cdc: IAM token refresh and canal recreation before streaming prevents connection failures when snapshots delay binlog streaming. ([@josephwoodward](https://github.com/josephwoodward), [#4295](https://github.com/redpanda-data/connect/pull/4295))
+- oracledb_cdc: Oracle numeric values with missing leading zeros (e.g., '.5') are now normalized to valid JSON format for proper CDC streaming. ([@josephwoodward](https://github.com/josephwoodward), [#4322](https://github.com/redpanda-data/connect/pull/4322))
+
 ## Unreleased
 
 ### Added
