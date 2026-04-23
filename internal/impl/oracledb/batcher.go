@@ -179,6 +179,9 @@ func (b *batchPublisher) Publish(ctx context.Context, m *replication.MessageEven
 	if m.CheckpointSCN.IsValid() {
 		msg.MetaSet("checkpoint_scn", m.CheckpointSCN.String())
 	}
+	if !m.CommitTimestamp.IsZero() {
+		msg.MetaSet("commit_ts_ms", strconv.FormatInt(m.CommitTimestamp.UnixMilli(), 10))
+	}
 
 	if schemaAny != nil {
 		msg.MetaSetImmut("schema", service.ImmutableAny{V: schemaAny})

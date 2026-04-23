@@ -117,13 +117,14 @@ type ColumnMeta struct {
 
 // MessageEvent represents a single change from Table's change table in the database.
 type MessageEvent struct {
-	SCN           SCN
-	CheckpointSCN SCN
-	Operation     OpType
-	Schema        string
-	Table         string
-	Data          any
-	Timestamp     time.Time
-	ColumnMeta    []ColumnMeta
-	TransactionID string
+	SCN             SCN
+	CheckpointSCN   SCN
+	Operation       OpType
+	Schema          string
+	Table           string
+	Data            any
+	Timestamp       time.Time
+	CommitTimestamp time.Time
+	ColumnMeta      []ColumnMeta
+	TransactionID   string
 }

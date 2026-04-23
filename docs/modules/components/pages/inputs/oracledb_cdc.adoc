@@ -122,6 +122,7 @@ This input adds the following metadata fields to each message:
 - scn: the System Change Number in Oracle.
 - transaction_id: The Oracle transaction ID in `USN.SLOT.SEQ` format, identifying the transaction that produced the change. Not present on snapshot (`read`) messages.
 - source_ts_ms: The timestamp of when Oracle wrote the change record into the redo log, expressed as milliseconds since the Unix epoch. This reflects the database server's wall-clock time at the moment the DML executed, not the transaction commit time.
+- commit_ts_ms: The timestamp of the transaction commit, expressed as milliseconds since the Unix epoch. Not present on snapshot (`read`) messages.
 - schema: The table schema, for use with schema-aware downstream processors such as `schema_registry_encode`. When new columns are detected in CDC events, the schema is automatically refreshed from the Oracle catalog. Dropped columns are reflected after a connector restart.
 
 == Permissions
