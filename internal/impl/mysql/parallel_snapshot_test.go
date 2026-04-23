@@ -30,7 +30,7 @@ func TestDistributeTablesToWorkers_CoversEveryTableExactlyOnce(t *testing.T) {
 			var mu sync.Mutex
 			var visited []string
 
-			err := distributeTablesToWorkers(t.Context(), tables, workers, func(_ context.Context, _ int, table string) error {
+			err := distributeWorkToWorkers(t.Context(), tables, workers, func(_ context.Context, _ int, table string) error {
 				mu.Lock()
 				visited = append(visited, table)
 				mu.Unlock()
@@ -52,7 +52,7 @@ func TestDistributeTablesToWorkers_WorkerCountCappedByTableCount(t *testing.T) {
 	var activeWorkers atomic.Int32
 	var maxActive atomic.Int32
 
-	err := distributeTablesToWorkers(t.Context(), tables, 16, func(_ context.Context, _ int, _ string) error {
+	err := distributeWorkToWorkers(t.Context(), tables, 16, func(_ context.Context, _ int, _ string) error {
 		n := activeWorkers.Add(1)
 		for {
 			cur := maxActive.Load()
@@ -75,7 +75,7 @@ func TestDistributeTablesToWorkers_SingleWorkerIsSequential(t *testing.T) {
 	var inFlight int
 	var maxInFlight int
 
-	err := distributeTablesToWorkers(t.Context(), tables, 1, func(_ context.Context, _ int, _ string) error {
+	err := distributeWorkToWorkers(t.Context(), tables, 1, func(_ context.Context, _ int, _ string) error {
 		mu.Lock()
 		inFlight++
 		if inFlight > maxInFlight {
@@ -101,7 +101,7 @@ func TestDistributeTablesToWorkers_ErrorPropagatesAndCancelsSiblings(t *testing.
 	sentinel := errors.New("boom")
 	var calls atomic.Int32
 
-	err := distributeTablesToWorkers(t.Context(), tables, 4, func(ctx context.Context, _ int, table string) error {
+	err := distributeWorkToWorkers(t.Context(), tables, 4, func(ctx context.Context, _ int, table string) error {
 		calls.Add(1)
 		if table == "t5" {
 			return sentinel
@@ -133,7 +133,7 @@ func TestDistributeTablesToWorkers_ContextCancellationPropagates(t *testing.T) {
 		cancel()
 	}()
 
-	err := distributeTablesToWorkers(ctx, tables, 4, func(ctx context.Context, _ int, _ string) error {
+	err := distributeWorkToWorkers(ctx, tables, 4, func(ctx context.Context, _ int, _ string) error {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -146,7 +146,7 @@ func TestDistributeTablesToWorkers_ContextCancellationPropagates(t *testing.T) {
 }
 
 func TestDistributeTablesToWorkers_ZeroWorkersRejected(t *testing.T) {
-	err := distributeTablesToWorkers(t.Context(), []string{"a"}, 0, func(context.Context, int, string) error {
+	err := distributeWorkToWorkers(t.Context(), []string{"a"}, 0, func(context.Context, int, string) error {
 		return nil
 	})
 	require.Error(t, err)
@@ -155,7 +155,7 @@ func TestDistributeTablesToWorkers_ZeroWorkersRejected(t *testing.T) {
 
 func TestDistributeTablesToWorkers_EmptyTablesIsNoop(t *testing.T) {
 	var called atomic.Bool
-	err := distributeTablesToWorkers(t.Context(), nil, 4, func(context.Context, int, string) error {
+	err := distributeWorkToWorkers(t.Context(), nil, 4, func(context.Context, int, string) error {
 		called.Store(true)
 		return nil
 	})
@@ -170,7 +170,7 @@ func TestDistributeTablesToWorkers_WorkerIdxWithinBounds(t *testing.T) {
 	var mu sync.Mutex
 	seenIdxs := map[int]struct{}{}
 
-	err := distributeTablesToWorkers(t.Context(), tables, workerCount, func(_ context.Context, idx int, _ string) error {
+	err := distributeWorkToWorkers(t.Context(), tables, workerCount, func(_ context.Context, idx int, _ string) error {
 		mu.Lock()
 		seenIdxs[idx] = struct{}{}
 		mu.Unlock()

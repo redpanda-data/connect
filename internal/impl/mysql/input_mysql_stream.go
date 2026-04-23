@@ -42,6 +42,7 @@ const (
 	fieldStreamSnapshot            = "stream_snapshot"
 	fieldSnapshotMaxBatchSize      = "snapshot_max_batch_size"
 	fieldSnapshotMaxParallelTables = "snapshot_max_parallel_tables"
+	fieldSnapshotChunksPerTable    = "snapshot_chunks_per_table"
 	fieldMaxReconnectAttempts      = "max_reconnect_attempts"
 	fieldBatching                  = "batching"
 	fieldCheckpointKey             = "checkpoint_key"
@@ -60,6 +61,14 @@ const (
 	// an issue — 256 is already well beyond the point at which the MySQL
 	// server's own connection limits dominate.
 	maxSnapshotParallelTables = 256
+
+	// maxSnapshotChunksPerTable caps chunks_per_table for the same reason as
+	// maxSnapshotParallelTables: a mis-typed value should fail fast at config
+	// parse time rather than produce thousands of MIN/MAX planning queries
+	// and slow down startup. The actual concurrency ceiling is still
+	// snapshot_max_parallel_tables — chunks above that just rebalance work
+	// across the fixed worker pool.
+	maxSnapshotChunksPerTable = 256
 )
 
 func notImportedAWSOptFn(_ context.Context, awsConf *service.ParsedConfig, _ *mysql.Config, _ *service.Logger) (TokenBuilder, error) {
@@ -113,7 +122,11 @@ This input adds the following metadata fields to each message:
 			Description("The maximum number of rows to be streamed in a single batch when taking a snapshot.").
 			Default(1000),
 		service.NewIntField(fieldSnapshotMaxParallelTables).
-			Description("The maximum number of tables that may be snapshotted in parallel. When set to `1` (the default) tables are read sequentially using a single transaction, preserving the previous behaviour. When set higher, multiple `REPEATABLE READ` transactions are opened on separate connections under a single brief `FLUSH TABLES ... WITH READ LOCK` window so every worker observes an identical, globally-consistent snapshot at the same binlog position. A value greater than the number of configured `tables` is effectively capped at the table count. Must be between `1` and `256`.").
+			Description("The maximum number of tables that may be snapshotted in parallel. When set to `1` (the default) tables are read sequentially using a single transaction, preserving the previous behaviour. When set higher, multiple `REPEATABLE READ` transactions are opened on separate connections under a single brief `FLUSH TABLES ... WITH READ LOCK` window so every worker observes an identical, globally-consistent snapshot at the same binlog position. Must be between `1` and `256`.").
+			Advanced().
+			Default(1),
+		service.NewIntField(fieldSnapshotChunksPerTable).
+			Description("The number of primary-key chunks each table is split into during the snapshot. When set to `1` (the default) each table is read as a single unit. When set higher, each table's first primary-key column is probed for `MIN` and `MAX` and the resulting integer range is split into N equal half-open chunks that are dispatched across the `"+fieldSnapshotMaxParallelTables+"` worker pool. This is how a single very large table is parallelised. Only tables whose first primary-key column is an integer type (`tinyint`, `smallint`, `mediumint`, `int`, `integer`, or `bigint`, signed or unsigned) are chunked; tables with non-numeric first PK columns fall back to a single whole-table read and log the reason. Composite primary keys are supported — chunking uses the leading column only, and per-chunk keyset pagination continues to respect the full PK ordering. Must be between `1` and `256`.").
 			Advanced().
 			Default(1),
 		service.NewIntField(fieldMaxReconnectAttempts).
@@ -198,6 +211,7 @@ type mysqlStreamInput struct {
 	checkPointLimit                int
 	fieldSnapshotMaxBatchSize      int
 	fieldSnapshotMaxParallelTables int
+	fieldSnapshotChunksPerTable    int
 
 	logger *service.Logger
 	res    *service.Resources
@@ -301,6 +315,16 @@ func newMySQLStreamInput(conf *service.ParsedConfig, res *service.Resources) (s 
 	}
 	if i.fieldSnapshotMaxParallelTables > maxSnapshotParallelTables {
 		return nil, fmt.Errorf("field '%s' must be at most %d, got %d", fieldSnapshotMaxParallelTables, maxSnapshotParallelTables, i.fieldSnapshotMaxParallelTables)
+	}
+
+	if i.fieldSnapshotChunksPerTable, err = conf.FieldInt(fieldSnapshotChunksPerTable); err != nil {
+		return nil, err
+	}
+	if i.fieldSnapshotChunksPerTable < 1 {
+		return nil, fmt.Errorf("field '%s' must be at least 1, got %d", fieldSnapshotChunksPerTable, i.fieldSnapshotChunksPerTable)
+	}
+	if i.fieldSnapshotChunksPerTable > maxSnapshotChunksPerTable {
+		return nil, fmt.Errorf("field '%s' must be at most %d, got %d", fieldSnapshotChunksPerTable, maxSnapshotChunksPerTable, i.fieldSnapshotChunksPerTable)
 	}
 
 	if i.canalMaxConnAttempts, err = conf.FieldInt(fieldMaxReconnectAttempts); err != nil {
@@ -444,7 +468,7 @@ func (i *mysqlStreamInput) startMySQLSync(ctx context.Context, pos *position, sn
 	if snapshot != nil {
 		var startPos *position
 		var err error
-		if i.fieldSnapshotMaxParallelTables <= 1 {
+		if i.fieldSnapshotMaxParallelTables <= 1 && i.fieldSnapshotChunksPerTable <= 1 {
 			startPos, err = i.runSequentialSnapshot(ctx, snapshot)
 		} else {
 			startPos, err = i.runParallelSnapshot(ctx, snapshot)
@@ -516,12 +540,33 @@ func (i *mysqlStreamInput) runParallelSnapshot(ctx context.Context, snapshot *Sn
 	db := snapshot.db
 	snapshot.db = nil
 
-	set, startPos, err := prepareParallelSnapshotSet(ctx, i.logger, db, i.tables, i.fieldSnapshotMaxParallelTables)
+	// Workers are capped by the plausible number of work units: at most
+	// chunks_per_table * len(tables), and never more than requested. Planning
+	// may emit fewer units (e.g. some tables fall back to whole-table reads)
+	// but the over-provisioning cost is bounded and connections held by idle
+	// workers are released when the snapshot completes.
+	workerCount := i.fieldSnapshotMaxParallelTables
+	if maxUnits := len(i.tables) * i.fieldSnapshotChunksPerTable; workerCount > maxUnits {
+		workerCount = maxUnits
+	}
+
+	set, startPos, err := prepareParallelSnapshotSet(ctx, i.logger, db, i.tables, workerCount)
 	if err != nil {
 		// prepareParallelSnapshotSet closed db on its own error paths.
 		return nil, fmt.Errorf("unable to prepare parallel snapshot: %w", err)
 	}
-	if err := i.readSnapshotParallel(ctx, set); err != nil {
+
+	// Plan work units using any worker's consistent-snapshot transaction.
+	// All workers observe identical state so MIN/MAX computed here apply
+	// uniformly to every worker's subsequent reads.
+	units, err := planSnapshotWork(ctx, set.workers[0], i.tables, i.fieldSnapshotChunksPerTable)
+	if err != nil {
+		_ = set.close()
+		return nil, fmt.Errorf("plan snapshot work: %w", err)
+	}
+	i.logger.Infof("Parallel snapshot planned: %d tables -> %d work units across %d workers", len(i.tables), len(units), len(set.workers))
+
+	if err := i.readSnapshotParallel(ctx, set, units); err != nil {
 		_ = set.close()
 		return nil, fmt.Errorf("failed reading snapshot: %w", err)
 	}
@@ -537,18 +582,22 @@ func (i *mysqlStreamInput) runParallelSnapshot(ctx context.Context, snapshot *Sn
 
 func (i *mysqlStreamInput) readSnapshot(ctx context.Context, snapshot *Snapshot) error {
 	for _, table := range i.tables {
-		if err := i.readSnapshotTable(ctx, snapshot, table); err != nil {
+		if err := i.readSnapshotWorkUnit(ctx, snapshot, snapshotWorkUnit{table: table}); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-// readSnapshotTable snapshots a single table by paging through its rows in
-// primary-key order using the REPEATABLE READ / CONSISTENT SNAPSHOT transaction
-// held by snapshot. Extracted so both the sequential (single-snapshot) and the
-// parallel (per-worker snapshot) paths share identical per-table semantics.
-func (i *mysqlStreamInput) readSnapshotTable(ctx context.Context, snapshot *Snapshot, table string) error {
+// readSnapshotWorkUnit snapshots one work unit — either a whole table or a
+// primary-key chunk of a table — by paging through its rows in primary-key
+// order using the REPEATABLE READ / CONSISTENT SNAPSHOT transaction held by
+// snapshot. When unit.bounds is nil the whole table is read; otherwise rows
+// are filtered by the chunk's [lowerIncl, upperExcl) range on the first PK
+// column. Both the sequential and the parallel paths use this same body so
+// per-table semantics are identical regardless of chunking configuration.
+func (i *mysqlStreamInput) readSnapshotWorkUnit(ctx context.Context, snapshot *Snapshot, unit snapshotWorkUnit) error {
+	table := unit.table
 	// Pre-populate schema cache so snapshot messages carry schema metadata.
 	if tbl, err := i.canal.GetTable(i.mysqlConfig.DBName, table); err == nil {
 		if _, err := i.getTableSchema(tbl); err != nil {
@@ -571,9 +620,9 @@ func (i *mysqlStreamInput) readSnapshotTable(ctx context.Context, snapshot *Snap
 	for {
 		var batchRows *sql.Rows
 		if numRowsProcessed == 0 {
-			batchRows, err = snapshot.querySnapshotTable(ctx, table, tablePks, nil, i.fieldSnapshotMaxBatchSize)
+			batchRows, err = snapshot.querySnapshotTable(ctx, table, tablePks, unit.bounds, nil, i.fieldSnapshotMaxBatchSize)
 		} else {
-			batchRows, err = snapshot.querySnapshotTable(ctx, table, tablePks, &lastSeenPksValues, i.fieldSnapshotMaxBatchSize)
+			batchRows, err = snapshot.querySnapshotTable(ctx, table, tablePks, unit.bounds, &lastSeenPksValues, i.fieldSnapshotMaxBatchSize)
 		}
 		if err != nil {
 			return fmt.Errorf("executing snapshot table query: %s", err)

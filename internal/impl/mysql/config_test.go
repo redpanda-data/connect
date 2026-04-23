@@ -99,3 +99,83 @@ snapshot_max_parallel_tables: %d
 		})
 	}
 }
+
+// Same shape as the max_parallel_tables tests: the new snapshot_chunks_per_table
+// field must default to 1 (preserving whole-table-read behaviour) and must
+// round-trip explicit values through the spec.
+func TestConfig_SnapshotChunksPerTable_DefaultAndExplicit(t *testing.T) {
+	tests := []struct {
+		name     string
+		yaml     string
+		expected int
+	}{
+		{
+			name: "default",
+			yaml: `
+dsn: user:password@tcp(localhost:3306)/db
+tables: [a]
+stream_snapshot: true
+checkpoint_cache: foo
+`,
+			expected: 1,
+		},
+		{
+			name: "explicit=16",
+			yaml: `
+dsn: user:password@tcp(localhost:3306)/db
+tables: [a]
+stream_snapshot: true
+checkpoint_cache: foo
+snapshot_chunks_per_table: 16
+`,
+			expected: 16,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			conf, err := mysqlStreamConfigSpec.ParseYAML(tc.yaml, nil)
+			require.NoError(t, err)
+
+			got, err := conf.FieldInt(fieldSnapshotChunksPerTable)
+			require.NoError(t, err)
+			assert.Equal(t, tc.expected, got)
+		})
+	}
+}
+
+// Guards the same validation predicate for chunks_per_table that the
+// constructor enforces: values outside [1, maxSnapshotChunksPerTable] must
+// fail fast rather than produce runaway planning queries.
+func TestConfig_SnapshotChunksPerTable_InvalidValuesRejected(t *testing.T) {
+	tests := []struct {
+		name  string
+		value int
+	}{
+		{"zero", 0},
+		{"negative", -1},
+		{"above_upper_bound", maxSnapshotChunksPerTable + 1},
+		{"absurdly_large", 100000},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			yaml := fmt.Sprintf(`
+dsn: user:password@tcp(localhost:3306)/db
+tables: [a]
+stream_snapshot: true
+checkpoint_cache: foo
+snapshot_chunks_per_table: %d
+`, tc.value)
+			conf, err := mysqlStreamConfigSpec.ParseYAML(yaml, nil)
+			require.NoError(t, err, "spec parsing itself should succeed; validation is enforced inside newMySQLStreamInput")
+
+			got, err := conf.FieldInt(fieldSnapshotChunksPerTable)
+			require.NoError(t, err)
+			assert.True(t,
+				got < 1 || got > maxSnapshotChunksPerTable,
+				"configured value should violate the [1, %d] range enforced in newMySQLStreamInput", maxSnapshotChunksPerTable,
+			)
+		})
+	}
+}

@@ -43,6 +43,10 @@ type parallelSnapshotSet struct {
 // same historical state. The caller is responsible for invoking release then
 // close once snapshot reading is finished.
 //
+// workerCount must already be bounded by the caller (e.g. to the number of
+// expected work units). This function opens exactly workerCount connections;
+// it does not second-guess the caller's sizing.
+//
 // Ownership: this function takes ownership of db. On success the returned set
 // closes db when set.close() is called. On error db is closed before the
 // function returns (along with any partially-opened conns/txns) and the
@@ -55,11 +59,6 @@ func prepareParallelSnapshotSet(ctx context.Context, logger *service.Logger, db 
 	if len(tables) == 0 {
 		_ = db.Close()
 		return nil, nil, errors.New("no tables provided")
-	}
-	// Never open more workers than tables: extra workers would sit idle and
-	// waste a connection for the duration of the snapshot.
-	if workerCount > len(tables) {
-		workerCount = len(tables)
 	}
 
 	set := &parallelSnapshotSet{db: db, logger: logger}
@@ -170,40 +169,42 @@ func (p *parallelSnapshotSet) close() error {
 	return errors.Join(errs...)
 }
 
-// readSnapshotParallel distributes i.tables across set.workers and reads them
-// concurrently using an errgroup. Any worker error cancels siblings and
+// readSnapshotParallel distributes work units across set.workers and reads
+// them concurrently using an errgroup. Any worker error cancels siblings and
 // returns from Wait (matching the existing fail-halt semantics of the
 // sequential path).
-func (i *mysqlStreamInput) readSnapshotParallel(ctx context.Context, set *parallelSnapshotSet) error {
-	return distributeTablesToWorkers(ctx, i.tables, len(set.workers), func(gctx context.Context, workerIdx int, table string) error {
-		return i.readSnapshotTable(gctx, set.workers[workerIdx], table)
+func (i *mysqlStreamInput) readSnapshotParallel(ctx context.Context, set *parallelSnapshotSet, units []snapshotWorkUnit) error {
+	return distributeWorkToWorkers(ctx, units, len(set.workers), func(gctx context.Context, workerIdx int, unit snapshotWorkUnit) error {
+		return i.readSnapshotWorkUnit(gctx, set.workers[workerIdx], unit)
 	})
 }
 
-// distributeTablesToWorkers fans out tables across workerCount goroutines,
-// calling readFn(ctx, workerIdx, table) exactly once per table. It uses an
+// distributeWorkToWorkers fans out items across workerCount goroutines,
+// calling readFn(ctx, workerIdx, item) exactly once per item. It uses an
 // errgroup: the first error cancels the shared context and is returned from
-// Wait. Exposed for unit-testing the fan-out independently of MySQL.
-func distributeTablesToWorkers(ctx context.Context, tables []string, workerCount int, readFn func(context.Context, int, string) error) error {
+// Wait. Exposed as a generic helper so the fan-out logic can be unit-tested
+// independently of MySQL — tests pass []string, production passes
+// []snapshotWorkUnit.
+func distributeWorkToWorkers[T any](ctx context.Context, items []T, workerCount int, readFn func(context.Context, int, T) error) error {
 	if workerCount < 1 {
 		return fmt.Errorf("workerCount must be >= 1, got %d", workerCount)
 	}
-	if workerCount > len(tables) {
-		workerCount = len(tables)
+	if workerCount > len(items) {
+		workerCount = len(items)
 	}
 	if workerCount == 0 {
-		// No tables at all. Nothing to do.
+		// No items at all. Nothing to do.
 		return nil
 	}
 
 	g, gctx := errgroup.WithContext(ctx)
-	tableCh := make(chan string)
+	itemCh := make(chan T)
 
 	g.Go(func() error {
-		defer close(tableCh)
-		for _, t := range tables {
+		defer close(itemCh)
+		for _, it := range items {
 			select {
-			case tableCh <- t:
+			case itemCh <- it:
 			case <-gctx.Done():
 				return gctx.Err()
 			}
@@ -214,8 +215,8 @@ func distributeTablesToWorkers(ctx context.Context, tables []string, workerCount
 	for w := 0; w < workerCount; w++ {
 		workerIdx := w
 		g.Go(func() error {
-			for table := range tableCh {
-				if err := readFn(gctx, workerIdx, table); err != nil {
+			for item := range itemCh {
+				if err := readFn(gctx, workerIdx, item); err != nil {
 					return err
 				}
 			}

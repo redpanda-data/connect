@@ -180,37 +180,42 @@ ORDER BY ORDINAL_POSITION
 	return pks, nil
 }
 
-func (s *Snapshot) querySnapshotTable(ctx context.Context, table string, pk []string, lastSeenPkVal *map[string]any, limit int) (*sql.Rows, error) {
+func (s *Snapshot) querySnapshotTable(ctx context.Context, table string, pk []string, bounds *chunkBounds, lastSeenPkVal *map[string]any, limit int) (*sql.Rows, error) {
 	snapshotQueryParts := []string{
 		"SELECT * FROM " + table,
 	}
 
-	if lastSeenPkVal == nil {
-		snapshotQueryParts = append(snapshotQueryParts, buildOrderByClause(pk))
+	var whereParts []string
+	var args []any
 
-		snapshotQueryParts = append(snapshotQueryParts, "LIMIT ?")
-		q := strings.Join(snapshotQueryParts, " ")
-		s.logger.Infof("Querying snapshot: %s", q)
-		return s.tx.QueryContext(ctx, strings.Join(snapshotQueryParts, " "), limit)
+	if chunkPred, chunkArgs := buildChunkPredicate(bounds); chunkPred != "" {
+		whereParts = append(whereParts, chunkPred)
+		args = append(args, chunkArgs...)
 	}
 
-	var lastSeenPkVals []any
-	var placeholders []string
-	for _, pkCol := range pk {
-		val, ok := (*lastSeenPkVal)[pkCol]
-		if !ok {
-			return nil, fmt.Errorf("primary key column '%s' not found in last seen values", pkCol)
+	if lastSeenPkVal != nil {
+		var placeholders []string
+		for _, pkCol := range pk {
+			val, ok := (*lastSeenPkVal)[pkCol]
+			if !ok {
+				return nil, fmt.Errorf("primary key column '%s' not found in last seen values", pkCol)
+			}
+			args = append(args, val)
+			placeholders = append(placeholders, "?")
 		}
-		lastSeenPkVals = append(lastSeenPkVals, val)
-		placeholders = append(placeholders, "?")
+		whereParts = append(whereParts, fmt.Sprintf("(%s) > (%s)", strings.Join(pk, ", "), strings.Join(placeholders, ", ")))
 	}
 
-	snapshotQueryParts = append(snapshotQueryParts, fmt.Sprintf("WHERE (%s) > (%s)", strings.Join(pk, ", "), strings.Join(placeholders, ", ")))
+	if len(whereParts) > 0 {
+		snapshotQueryParts = append(snapshotQueryParts, "WHERE "+strings.Join(whereParts, " AND "))
+	}
 	snapshotQueryParts = append(snapshotQueryParts, buildOrderByClause(pk))
-	snapshotQueryParts = append(snapshotQueryParts, fmt.Sprintf("LIMIT %d", limit))
+	snapshotQueryParts = append(snapshotQueryParts, "LIMIT ?")
+	args = append(args, limit)
+
 	q := strings.Join(snapshotQueryParts, " ")
 	s.logger.Infof("Querying snapshot: %s", q)
-	return s.tx.QueryContext(ctx, q, lastSeenPkVals...)
+	return s.tx.QueryContext(ctx, q, args...)
 }
 
 func buildOrderByClause(pk []string) string {
