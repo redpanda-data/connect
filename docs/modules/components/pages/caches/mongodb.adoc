@@ -44,6 +44,8 @@ mongodb:
   collection: "" # No default (required)
   key_field: "" # No default (required)
   value_field: "" # No default (required)
+  ttl_field: "" # No default (optional)
+  default_ttl: "" # No default (optional)
 ```
 
 --
@@ -63,6 +65,8 @@ mongodb:
   collection: "" # No default (required)
   key_field: "" # No default (required)
   value_field: "" # No default (required)
+  ttl_field: "" # No default (optional)
+  default_ttl: "" # No default (optional)
 ```
 
 --
@@ -143,6 +147,22 @@ The field in the document that is used as the key.
 === `value_field`
 
 The field in the document that is used as the value.
+
+
+*Type*: `string`
+
+
+=== `ttl_field`
+
+The field in the document that is used as the TTL. A TTL index on that field has to be manually added in MongoDB.
+
+
+*Type*: `string`
+
+
+=== `default_ttl`
+
+The default TTL of each item. After this period an item will be eligible for removal during the next MongoDB cleanup.
 
 
 *Type*: `string`
