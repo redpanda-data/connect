@@ -13,6 +13,7 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+	"sync"
 	"sync/atomic"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -28,6 +29,10 @@ type Report struct {
 
 // Monitor is a structure that allows monitoring the progress of snapshot ingestion and replication lag
 type Monitor struct {
+	// mu guards tableStat and snapshotProgress when tables are added at runtime
+	// via RegisterTable. Without it, concurrent map access from the discovery
+	// goroutine and the snapshot/streaming goroutines races.
+	mu sync.RWMutex
 	// tableStat contains numbers of rows for each table determined at the moment of the snapshot creation
 	// this is used to calculate snapshot ingestion progress
 	tableStat map[TableFQN]float64
@@ -81,12 +86,40 @@ func NewMonitor(
 
 // UpdateSnapshotProgressForTable updates the snapshot ingestion progress for a given table.
 func (m *Monitor) UpdateSnapshotProgressForTable(table TableFQN, read int) {
-	m.snapshotProgress[table].Add(int64(read))
+	m.mu.RLock()
+	progress, ok := m.snapshotProgress[table]
+	m.mu.RUnlock()
+	if !ok {
+		return
+	}
+	progress.Add(int64(read))
 }
 
 // MarkSnapshotComplete means that we finished snapshotting.
 func (m *Monitor) MarkSnapshotComplete(table TableFQN) {
-	m.snapshotProgress[table].Store(int64(m.tableStat[table]))
+	m.mu.RLock()
+	progress, ok := m.snapshotProgress[table]
+	total := m.tableStat[table]
+	m.mu.RUnlock()
+	if !ok {
+		return
+	}
+	progress.Store(int64(total))
+}
+
+// RegisterTable adds a table discovered at runtime to the monitor so that
+// snapshot progress and reltuples are tracked alongside the original tables.
+// Safe to call concurrently with Report and the snapshot progress updaters.
+func (m *Monitor) RegisterTable(ctx context.Context, table TableFQN) error {
+	m.mu.Lock()
+	if _, exists := m.snapshotProgress[table]; exists {
+		m.mu.Unlock()
+		return nil
+	}
+	m.snapshotProgress[table] = &atomic.Int64{}
+	m.tableStat[table] = 0
+	m.mu.Unlock()
+	return m.readTablesStat(ctx, []TableFQN{table})
 }
 
 // we need to read the tables stat to calculate the snapshot ingestion progress.
@@ -107,7 +140,9 @@ func (m *Monitor) readTablesStat(ctx context.Context, tables []TableFQN) error {
 			return fmt.Errorf("error counting rows in table %s: %w", table, err)
 		}
 
+		m.mu.Lock()
 		m.tableStat[table] = count
+		m.mu.Unlock()
 	}
 	return nil
 }
@@ -139,7 +174,8 @@ func (m *Monitor) readReplicationLag(ctx context.Context) {
 func (m *Monitor) Report() *Report {
 	// report the snapshot ingestion progress
 	// report the replication lag
-	progress := map[TableFQN]float64{}
+	m.mu.RLock()
+	progress := make(map[TableFQN]float64, len(m.snapshotProgress))
 	for table, read := range m.snapshotProgress {
 		total := m.tableStat[table]
 		if total <= 0 {
@@ -147,6 +183,7 @@ func (m *Monitor) Report() *Report {
 		}
 		progress[table] = float64(read.Load()) / total
 	}
+	m.mu.RUnlock()
 	return &Report{
 		WalLagInBytes: m.replicationLagInBytes.Load(),
 		TableProgress: progress,

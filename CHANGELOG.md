@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - parquet_encode: Added `default_timestamp_unit` field (values `NANOSECOND`, `MICROSECOND`, `MILLISECOND`) controlling the precision of TIMESTAMP logical types. Default remains `NANOSECOND` for backwards compatibility. Use `MICROSECOND` when writing files for Apache Spark/Databricks, AWS Athena or DuckDB, which do not support `TIMESTAMP(NANOS)`. ([#3570](https://github.com/redpanda-data/connect/issues/3570))
+- postgres_cdc: Added `auto_discover_tables` and `discovery_interval` fields to enable continuous mid-stream discovery of new tables. When enabled, newly-created tables in the configured schema are added to the publication, snapshotted, and included in CDC without restarting the replication slot. Per-table snapshot LSN watermarks deduplicate WAL events that overlap with the snapshot window.
 
 ## 4.88.0 - 2026-04-16
 

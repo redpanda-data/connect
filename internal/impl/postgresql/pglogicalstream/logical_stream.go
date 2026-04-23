@@ -45,9 +45,20 @@ type Stream struct {
 	messages              chan []StreamMessage
 	errors                chan error
 
-	includeTxnMarkers       bool
-	slotName                string
-	tables                  []TableFQN
+	includeTxnMarkers bool
+	slotName          string
+	schema            string
+	// tablesMu guards tables and tableWatermark, both of which are mutated by
+	// the discovery goroutine while the streaming goroutine reads them on the
+	// hot path of every WAL event.
+	tablesMu sync.RWMutex
+	tables   []TableFQN
+	// tableWatermark maps a fully-qualified table name (schema.table, both
+	// unquoted as they appear in StreamMessage) to the LSN at which the
+	// table's snapshot was anchored during discovery. WAL events for the
+	// table at or below this LSN are duplicates of snapshot rows and must
+	// be suppressed.
+	tableWatermark          map[string]LSN
 	snapshotBatchSize       int
 	decodingPluginArguments []string
 	logger                  *service.Logger
@@ -55,6 +66,7 @@ type Stream struct {
 	heartbeat               *heartbeat
 	maxSnapshotWorkers      int
 	unchangedToastValue     any
+	discoverer              *discoverer
 }
 
 // NewPgStream creates a new instance of the Stream struct.
@@ -113,8 +125,10 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		messages:              make(chan []StreamMessage),
 		errors:                make(chan error, 1),
 		slotName:              config.ReplicationSlotName,
+		schema:                schema,
 		snapshotBatchSize:     batchSize,
 		tables:                tables,
+		tableWatermark:        map[string]LSN{},
 		maxSnapshotWorkers:    config.MaxSnapshotWorkers,
 		logger:                config.Logger,
 		shutSig:               shutdown.NewSignaller(),
@@ -217,6 +231,9 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 				stream.errors <- fmt.Errorf("logical replication stream error: %w", err)
 			}
 		}()
+		if err := stream.maybeStartDiscoverer(ctx, config, pubName); err != nil {
+			return nil, err
+		}
 		cleanups = nil
 		return stream, nil
 	}
@@ -303,6 +320,12 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 			stream.errors <- fmt.Errorf("starting logical replication: %w", err)
 			return
 		}
+		// Start discovery now that the main slot is established and streaming
+		// is about to begin. Errors here are non-fatal: log and continue with
+		// CDC for the originally-configured tables.
+		if err := stream.maybeStartDiscoverer(ctx, config, pubName); err != nil {
+			stream.logger.Errorf("table discovery failed to start: %v", err)
+		}
 		if err := stream.streamMessages(startLSN); err != nil {
 			stream.errors <- fmt.Errorf("logical replication stream error: %w", err)
 		}
@@ -313,10 +336,83 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 	return stream, nil
 }
 
+// maybeStartDiscoverer starts the table discovery loop if AutoDiscoverTables
+// is enabled in the config. The discoverer is stored on the stream so that
+// Stop() can tear it down. No-op when discovery is disabled.
+func (s *Stream) maybeStartDiscoverer(ctx context.Context, config *Config, pubName string) error {
+	if !config.AutoDiscoverTables {
+		return nil
+	}
+	d, err := newDiscoverer(ctx, s, config, pubName)
+	if err != nil {
+		return fmt.Errorf("starting table discovery: %w", err)
+	}
+	s.discoverer = d
+	d.Start()
+	return nil
+}
+
 // GetProgress returns the progress of the stream.
 // including the % of snapshot messages processed and the WAL lag in bytes.
 func (s *Stream) GetProgress() *Report {
 	return s.monitor.Report()
+}
+
+// knownTableNames returns the set of table FQNs (as TableFQN.String()) that
+// the stream is currently tracking. Used by the discoverer to compute the
+// new-table delta on each tick.
+func (s *Stream) knownTableNames() map[string]struct{} {
+	s.tablesMu.RLock()
+	defer s.tablesMu.RUnlock()
+	out := make(map[string]struct{}, len(s.tables))
+	for _, t := range s.tables {
+		out[t.String()] = struct{}{}
+	}
+	return out
+}
+
+// installDiscoveredTable atomically records the snapshot watermark and adds
+// the table to the live set. Called by the discoverer after the per-table
+// snapshot has completed but before WAL events for the table can be emitted
+// downstream — until the watermark is set, processChange would let through
+// duplicate WAL events that overlap with the snapshot.
+func (s *Stream) installDiscoveredTable(table TableFQN, snapshotLSN LSN) {
+	key := watermarkKey(table)
+	s.tablesMu.Lock()
+	s.tableWatermark[key] = snapshotLSN
+	s.tables = append(s.tables, table)
+	s.tablesMu.Unlock()
+}
+
+// shouldSuppressForWatermark returns true if a WAL event at msgLSN for the
+// given (unquoted) schema/table is at or below the snapshot watermark and
+// should be suppressed because it is already represented in the snapshot.
+func (s *Stream) shouldSuppressForWatermark(schema, table string, msgLSN LSN) bool {
+	key := watermarkKeyFromUnquoted(schema, table)
+	s.tablesMu.RLock()
+	wm, ok := s.tableWatermark[key]
+	s.tablesMu.RUnlock()
+	return ok && msgLSN <= wm
+}
+
+// watermarkKey builds the lookup key used for tableWatermark from a TableFQN.
+// TableFQN holds quoted identifiers; we strip the quotes so it matches the
+// key shape used during streaming, where StreamMessage.Schema and .Table are
+// unquoted (they come from RelationMessage).
+func watermarkKey(table TableFQN) string {
+	schema, err := sanitize.UnquotePostgresIdentifier(table.Schema)
+	if err != nil {
+		schema = table.Schema
+	}
+	tbl, err := sanitize.UnquotePostgresIdentifier(table.Table)
+	if err != nil {
+		tbl = table.Table
+	}
+	return watermarkKeyFromUnquoted(schema, tbl)
+}
+
+func watermarkKeyFromUnquoted(schema, table string) string {
+	return schema + "." + table
 }
 
 func (s *Stream) startLr(ctx context.Context, lsnStart LSN) error {
@@ -527,6 +623,15 @@ func (s *Stream) processChange(ctx context.Context, msgLSN LSN, xld XLogData, re
 		case BeginOpType:
 			return changeResultNoMessage, nil
 		}
+	}
+
+	// Per-table snapshot watermark dedup. For tables added by the discoverer
+	// mid-stream, WAL events at or below the snapshot LSN are duplicates of
+	// rows already emitted via the snapshot scan. Suppress them but treat
+	// like a suppressed-commit so the LSN is still considered processed for
+	// ack progression — otherwise postgres would replay them indefinitely.
+	if s.shouldSuppressForWatermark(message.Schema, message.Table, msgLSN) {
+		return changeResultSuppressedCommitMessage, nil
 	}
 
 	// Attach the column schema for DML messages, building it once per relation and
@@ -820,6 +925,12 @@ func (s *Stream) Stop(ctx context.Context) error {
 	wg.Go(func() error {
 		if s.heartbeat != nil {
 			return s.heartbeat.Stop()
+		}
+		return nil
+	})
+	wg.Go(func() error {
+		if s.discoverer != nil {
+			return s.discoverer.Stop()
 		}
 		return nil
 	})

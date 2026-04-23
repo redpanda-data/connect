@@ -50,4 +50,13 @@ type Config struct {
 	UnchangedToastValue any
 	// The interval to send logical messages
 	HeartbeatInterval time.Duration
+	// AutoDiscoverTables enables periodic discovery of new tables in DBSchema.
+	// When true, newly-created tables are added to the publication and snapshotted
+	// mid-stream without requiring a pipeline restart. WAL events for the new
+	// table that overlap with the snapshot are deduplicated by per-table LSN
+	// watermark, so each row is emitted exactly once.
+	AutoDiscoverTables bool
+	// DiscoveryInterval is the polling interval for table discovery.
+	// Only used when AutoDiscoverTables is true.
+	DiscoveryInterval time.Duration
 }

@@ -43,6 +43,8 @@ const (
 	fieldMaxParallelSnapshotTables = "max_parallel_snapshot_tables"
 	fieldUnchangedToastValue       = "unchanged_toast_value"
 	fieldHeartbeatInterval         = "heartbeat_interval"
+	fieldAutoDiscoverTables        = "auto_discover_tables"
+	fieldDiscoveryInterval         = "discovery_interval"
 	fieldAWSIAMAuth                = "aws"
 	// FieldAWSIAMAuthEnabled enabled field.
 	FieldAWSIAMAuthEnabled = "enabled"
@@ -108,8 +110,18 @@ This input adds the following metadata fields to each message:
 			Examples("public", `"MyCaseSensitiveSchemaNeedingQuotes"`),
 		).
 		Field(service.NewStringListField(fieldTables).
-			Description("A list of table names to include in the logical replication. Each table should be specified as a separate item.").
+			Description("A list of table names to include in the logical replication. Each table should be specified as a separate item. May be empty when `"+fieldAutoDiscoverTables+"` is true.").
+			Default([]any{}).
 			Example([]string{"my_table_1", `"MyCaseSensitiveTableNeedingQuotes"`})).
+		Field(service.NewBoolField(fieldAutoDiscoverTables).
+			Description("When true, the input periodically polls `schema` for new tables. Each newly-discovered table is added to the publication, snapshotted mid-stream, and then included in ongoing CDC. The main replication slot is never restarted. Tables listed in `"+fieldTables+"` are still included; discovery is purely additive. Tables without a primary key are skipped (a warning is logged) because the snapshotter requires a primary key.").
+			Default(false).
+			Advanced()).
+		Field(service.NewDurationField(fieldDiscoveryInterval).
+			Description("How often to poll for newly-created tables. Only used when `"+fieldAutoDiscoverTables+"` is true.").
+			Default("60s").
+			Example("30s").
+			Advanced()).
 		Field(service.NewIntField(fieldCheckpointLimit).
 			Description("The maximum number of messages that can be processed at a given time. Increasing this limit enables parallel processing and batching at the output level. Any given LSN will not be acknowledged unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.").
 			Default(1024)).
@@ -208,6 +220,8 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		batching                  service.BatchPolicy
 		unchangedToastValue       any
 		heartbeatInterval         time.Duration
+		autoDiscoverTables        bool
+		discoveryInterval         time.Duration
 		iamAuthEnabled            bool
 		iamAuthTokenBuilder       TokenBuilder
 	)
@@ -284,6 +298,23 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		return nil, err
 	}
 
+	if autoDiscoverTables, err = conf.FieldBool(fieldAutoDiscoverTables); err != nil {
+		return nil, err
+	}
+
+	if discoveryInterval, err = conf.FieldDuration(fieldDiscoveryInterval); err != nil {
+		return nil, err
+	}
+
+	if autoDiscoverTables {
+		if schema == "" {
+			return nil, fmt.Errorf("`%s` requires `%s` to be set", fieldAutoDiscoverTables, fieldSchema)
+		}
+		if discoveryInterval <= 0 {
+			return nil, fmt.Errorf("`%s` must be greater than zero when `%s` is true", fieldDiscoveryInterval, fieldAutoDiscoverTables)
+		}
+	}
+
 	awsConf := conf.Namespace(fieldAWSIAMAuth)
 	iamAuthEnabled, _ = awsConf.FieldBool(FieldAWSIAMAuthEnabled)
 
@@ -333,6 +364,8 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 			Logger:                   logger,
 			UnchangedToastValue:      unchangedToastValue,
 			HeartbeatInterval:        heartbeatInterval,
+			AutoDiscoverTables:       autoDiscoverTables,
+			DiscoveryInterval:        discoveryInterval,
 		},
 		batching:        batching,
 		checkpointLimit: checkpointLimit,

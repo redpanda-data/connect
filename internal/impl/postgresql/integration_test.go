@@ -1423,3 +1423,138 @@ postgres_cdc:
 	}
 	assert.Equal(t, "STRING", byName["extra"], "new 'extra' column should have type STRING")
 }
+
+// TestIntegrationPostgresAutoDiscoverTables verifies that, with
+// auto_discover_tables enabled, a table created mid-stream is discovered,
+// snapshotted, and continues to receive CDC events without restarting the
+// pipeline. It also validates the per-table watermark dedup: WAL events that
+// overlap with the snapshot window are not emitted as duplicates.
+func TestIntegrationPostgresAutoDiscoverTables(t *testing.T) {
+	integration.CheckSkip(t)
+	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
+	require.NoError(t, err)
+
+	// Seed flights so initial snapshot has work to do, exercising the path
+	// where the originally-configured table is unaffected by discovery.
+	for i := range 5 {
+		f := GetFakeFlightRecord()
+		_, err = db.Exec(`INSERT INTO flights (name, created_at) VALUES ($1, $2);`,
+			f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
+		require.NoError(t, err)
+		_ = i
+	}
+
+	template := fmt.Sprintf(`
+postgres_cdc:
+    dsn: %s
+    slot_name: test_slot_auto_discover
+    stream_snapshot: true
+    snapshot_batch_size: 5
+    schema: public
+    tables:
+       - flights
+    auto_discover_tables: true
+    discovery_interval: 2s
+`, databaseURL)
+
+	type collected struct {
+		table     string
+		operation string
+	}
+	var (
+		mu       sync.Mutex
+		messages []collected
+	)
+
+	sb := service.NewStreamBuilder()
+	require.NoError(t, sb.SetLoggerYAML(`level: WARN`))
+	require.NoError(t, sb.AddInputYAML(template))
+	require.NoError(t, sb.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+		mu.Lock()
+		defer mu.Unlock()
+		for _, m := range mb {
+			tbl, _ := m.MetaGet("table")
+			op, _ := m.MetaGet("operation")
+			messages = append(messages, collected{table: tbl, operation: op})
+		}
+		return nil
+	}))
+
+	streamOut, err := sb.Build()
+	require.NoError(t, err)
+	license.InjectTestService(streamOut.Resources())
+
+	go func() { _ = streamOut.Run(t.Context()) }()
+	t.Cleanup(func() { _ = streamOut.StopWithin(time.Second * 10) })
+
+	// Wait for the initial snapshot of `flights` to land.
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+		mu.Lock()
+		defer mu.Unlock()
+		count := 0
+		for _, m := range messages {
+			if m.table == "flights" && m.operation == "read" {
+				count++
+			}
+		}
+		assert.GreaterOrEqual(c, count, 5, "initial snapshot reads for flights")
+	}, time.Second*30, time.Millisecond*100)
+
+	// Create a brand-new table after the stream is running. This must be
+	// picked up by the discoverer within ~1 discovery interval.
+	_, err = db.Exec(`CREATE TABLE auto_discovered_orders (id SERIAL PRIMARY KEY, sku TEXT)`)
+	require.NoError(t, err)
+
+	// Seed it before discovery, so its rows must come through the snapshot
+	// path (NOT the WAL path — these inserts happened before the table was
+	// in the publication and therefore are not in the WAL stream).
+	for i := range 4 {
+		_, err = db.Exec(`INSERT INTO auto_discovered_orders (sku) VALUES ($1)`, fmt.Sprintf("sku-%d", i))
+		require.NoError(t, err)
+	}
+
+	// After discovery completes (which adds the table to the publication and
+	// snapshots it), the four pre-discovery rows arrive as 'read' messages.
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+		mu.Lock()
+		defer mu.Unlock()
+		readCount := 0
+		for _, m := range messages {
+			if m.table == "auto_discovered_orders" && m.operation == "read" {
+				readCount++
+			}
+		}
+		assert.Equal(c, 4, readCount, "four snapshot reads for auto-discovered table")
+	}, time.Second*30, time.Millisecond*100)
+
+	// Now insert *post*-discovery. These come through the WAL stream as
+	// 'insert' operations. They must arrive exactly once — the watermark
+	// dedup should not eat them (their LSN > snapshot watermark).
+	for i := 4; i < 7; i++ {
+		_, err = db.Exec(`INSERT INTO auto_discovered_orders (sku) VALUES ($1)`, fmt.Sprintf("sku-%d", i))
+		require.NoError(t, err)
+	}
+
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+		mu.Lock()
+		defer mu.Unlock()
+		insertCount := 0
+		for _, m := range messages {
+			if m.table == "auto_discovered_orders" && m.operation == "insert" {
+				insertCount++
+			}
+		}
+		assert.Equal(c, 3, insertCount, "three CDC inserts for auto-discovered table after discovery")
+	}, time.Second*30, time.Millisecond*100)
+
+	// Sanity: no duplicate snapshot reads (would indicate dedup failure).
+	mu.Lock()
+	defer mu.Unlock()
+	readCount := 0
+	for _, m := range messages {
+		if m.table == "auto_discovered_orders" && m.operation == "read" {
+			readCount++
+		}
+	}
+	assert.Equal(t, 4, readCount, "snapshot reads must not duplicate")
+}
