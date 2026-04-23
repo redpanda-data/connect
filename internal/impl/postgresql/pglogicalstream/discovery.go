@@ -258,7 +258,7 @@ func (d *discoverer) snapshotTableAt(ctx context.Context, table TableFQN, snapsh
 		return fmt.Errorf("preparing snapshotter: %w", err)
 	}
 
-	pkColumns, err := d.stream.getPrimaryKeyColumn(ctx, table)
+	pkColumns, err := d.primaryKeyColumns(ctx, table)
 	if err != nil {
 		// Tables without a primary key cannot be snapshotted by the existing
 		// scanner. Roll back the publication change so streaming for T does
@@ -271,6 +271,47 @@ func (d *discoverer) snapshotTableAt(ctx context.Context, table TableFQN, snapsh
 		return fmt.Errorf("getting primary key for %s: %w", table, err)
 	}
 	return d.stream.scanTableRange(ctx, snap, table, nil, nil, pkColumns)
+}
+
+// primaryKeyColumns queries the primary key columns for a table using the
+// discovery SQL connection rather than the main replication connection, which
+// is concurrently in use by the streaming goroutine and would error with
+// "conn busy". Returns quoted identifiers to match the shape expected by
+// scanTableRange.
+func (d *discoverer) primaryKeyColumns(ctx context.Context, table TableFQN) ([]string, error) {
+	q, err := sanitize.SQLQuery(`
+        SELECT a.attname
+        FROM   pg_index i
+        JOIN   pg_attribute a ON a.attrelid = i.indrelid
+            AND a.attnum = ANY(i.indkey)
+        WHERE  i.indrelid = $1::regclass
+        AND    i.indisprimary
+        ORDER BY array_position(i.indkey, a.attnum)
+    `, table.String())
+	if err != nil {
+		return nil, fmt.Errorf("sanitizing PK query: %w", err)
+	}
+	rows, err := d.pollConn.QueryContext(ctx, q)
+	if err != nil {
+		return nil, fmt.Errorf("querying primary key: %w", err)
+	}
+	defer rows.Close()
+
+	var pkColumns []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, fmt.Errorf("scanning primary key column: %w", err)
+		}
+		pkColumns = append(pkColumns, sanitize.QuotePostgresIdentifier(name))
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(pkColumns) == 0 {
+		return nil, fmt.Errorf("no primary key found for table %s", table)
+	}
+	return pkColumns, nil
 }
 
 func (d *discoverer) alterPublicationDropTable(ctx context.Context, table TableFQN) error {
