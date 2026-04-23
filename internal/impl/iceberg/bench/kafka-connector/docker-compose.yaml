@@ -1,0 +1,169 @@
+services:
+  # ── Kafka (KRaft, no ZooKeeper) ──────────────────────────────────────────────
+  kafka:
+    image: confluentinc/cp-kafka:7.7.8
+    container_name: kc-kafka
+    cpus: 2
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,PLAINTEXT_HOST://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+
+  # ── MinIO (S3-compatible object storage) ─────────────────────────────────────
+  minio:
+    image: minio/minio:latest
+    container_name: kc-minio
+    ports:
+      - "19000:9000"
+      - "19001:9001"   # Console UI
+    environment:
+      MINIO_ROOT_USER: admin
+      MINIO_ROOT_PASSWORD: password
+      MINIO_REGION: us-east-1
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  # ── Create the 'warehouse' S3 bucket ─────────────────────────────────────────
+  minio-setup:
+    image: minio/mc:latest
+    container_name: kc-minio-setup
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: /bin/sh
+    command:
+      - -c
+      - |
+        mc alias set local http://minio:9000 admin password
+        mc mb local/warehouse --ignore-existing
+        echo "bucket ready"
+
+  # ── Iceberg REST catalog ──────────────────────────────────────────────────────
+  iceberg-rest:
+    image: apache/iceberg-rest-fixture
+    container_name: kc-iceberg-rest
+    ports:
+      - "18181:8181"
+    environment:
+      CATALOG_WAREHOUSE: s3://warehouse/
+      CATALOG_IO__IMPL: org.apache.iceberg.aws.s3.S3FileIO
+      CATALOG_S3_ENDPOINT: http://minio:9000
+      CATALOG_S3_PATH__STYLE__ACCESS: "true"
+      CATALOG_S3_ACCESS__KEY__ID: admin
+      CATALOG_S3_SECRET__ACCESS__KEY: password
+      AWS_REGION: us-east-1
+    depends_on:
+      minio-setup:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/localhost/8181' 2>/dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  # ── Kafka Connect + Iceberg sink plugin (built from Dockerfile) ───────────────
+  kafka-connect:
+    build: .
+    container_name: kc-connect
+    ports:
+      - "8083:8083"
+    environment:
+      CONNECT_BOOTSTRAP_SERVERS: kafka:29092
+      CONNECT_REST_PORT: 8083
+      CONNECT_GROUP_ID: iceberg-bench-group
+      CONNECT_CONFIG_STORAGE_TOPIC: _connect-configs
+      CONNECT_OFFSET_STORAGE_TOPIC: _connect-offsets
+      CONNECT_STATUS_STORAGE_TOPIC: _connect-status
+      CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_KEY_CONVERTER: org.apache.kafka.connect.storage.StringConverter
+      CONNECT_VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
+      CONNECT_REST_ADVERTISED_HOST_NAME: kafka-connect
+      CONNECT_PLUGIN_PATH: /usr/share/java,/usr/share/confluent-hub-components,/usr/local/share/java
+      # S3 credentials picked up by the Iceberg Java FileIO
+      AWS_ACCESS_KEY_ID: admin
+      AWS_SECRET_ACCESS_KEY: password
+      AWS_REGION: us-east-1
+    depends_on:
+      kafka:
+        condition: service_healthy
+      iceberg-rest:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8083/"]
+      interval: 10s
+      timeout: 10s
+      retries: 15
+
+  # ── Create bench-events topic and the Iceberg 'benchmark' namespace ───────────
+  setup:
+    image: confluentinc/cp-kafka:7.7.8
+    container_name: kc-setup
+    depends_on:
+      kafka:
+        condition: service_healthy
+      iceberg-rest:
+        condition: service_healthy
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        kafka-topics --bootstrap-server kafka:29092 \
+          --create --if-not-exists \
+          --topic bench-events \
+          --partitions 16 \
+          --replication-factor 1
+        kafka-topics --bootstrap-server kafka:29092 \
+          --create --if-not-exists \
+          --topic control-iceberg \
+          --partitions 1 \
+          --replication-factor 1 \
+          --config cleanup.policy=compact
+        echo "topics ready"
+        # Create the Iceberg namespace used by the connector
+        curl -sf -X POST http://iceberg-rest:8181/v1/namespaces \
+          -H "Content-Type: application/json" \
+          -d '{"namespace": ["benchmark"]}' || true
+        echo "namespace ready"
+        # Pre-create the benchmark.events table so the connector never hits a
+        # NoSuchTableException 404 (which the rest-fixture logs noisily as ERROR).
+        curl -sf -X POST http://iceberg-rest:8181/v1/namespaces/benchmark/tables \
+          -H "Content-Type: application/json" \
+          -d '{
+            "name": "events",
+            "schema": {
+              "type": "struct",
+              "schema-id": 0,
+              "fields": [
+                {"id": 1, "name": "id",       "required": false, "type": "long"},
+                {"id": 2, "name": "category", "required": false, "type": "string"},
+                {"id": 3, "name": "value",    "required": false, "type": "double"},
+                {"id": 4, "name": "ts",       "required": false, "type": "long"}
+              ]
+            }
+          }' || true
+        echo "table ready"

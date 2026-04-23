@@ -1,0 +1,54 @@
+http:
+  debug_endpoints: true
+
+input:
+  kafka:
+    addresses: ["${KAFKA_BOOTSTRAP:localhost:9092}"]
+    topics: ["bench-events"]
+    consumer_group: "rpcn-iceberg-bench"
+    checkpoint_limit: 10000
+
+pipeline:
+  processors:
+    - mapping: |
+        root.event_id      = this.id.string() + "-" + this.category
+        root.category      = this.category
+        root.value         = this.value
+        root.value_usd     = this.value / 100.0
+        root.value_tier    = if this.value < 1000.0 { "low" } else if this.value < 5000.0 { "mid" } else { "high" }
+        root.ts            = this.ts
+        root.ts_ms         = (this.ts / 1000).floor()
+        root.is_high_value = this.value > 8000.0
+    - benchmark:
+        interval: 1s
+        count_bytes: true
+
+output:
+  iceberg:
+    catalog:
+      url: "${CATALOG_URL:http://localhost:18181}"
+    namespace: benchmark
+    table: events
+    storage:
+      aws_s3:
+        bucket: "${MINIO_BUCKET:warehouse}"
+        region: "${MINIO_REGION:us-east-1}"
+        endpoint: "${MINIO_ENDPOINT:http://localhost:19000}"
+        force_path_style_urls: true
+        credentials:
+          id: "${MINIO_USER:admin}"
+          secret: "${MINIO_PASSWORD:password}"
+    schema_evolution:
+      enabled: true
+    batching:
+      count: 10000
+      period: 5s
+    max_in_flight: 32
+
+logger:
+  level: INFO
+
+metrics:
+  prometheus:
+    add_process_metrics: true
+    add_go_metrics: true
