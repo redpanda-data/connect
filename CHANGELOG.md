@@ -9,6 +9,8 @@ All notable changes to this project will be documented in this file.
 
 - general: PostgreSQL CDC benchmarking suite added with Kafka Connect PostgreSQL benchmark infrastructure and configuration. ([@ness-david-dedu](https://github.com/ness-david-dedu), [#4216](https://github.com/redpanda-data/connect/pull/4216))
 - parquet_encode: Added configurable timestamp unit support (nanosecond, microsecond, millisecond) to make Parquet output readable by Apache Spark, Databricks, AWS Athena, and DuckDB. ([@ankit481](https://github.com/ankit481), [#4294](https://github.com/redpanda-data/connect/pull/4294))
+- oracledb_cdc: Added `transaction_id` to message metadata. ([@josephwoodward](https://github.com/josephwoodward), [#4328](https://github.com/redpanda-data/connect/pull/4328))
+- oracledb_cdc: Added `commit_ts_ms` to message metadata. ([@josephwoodward](https://github.com/josephwoodward), [#4331](https://github.com/redpanda-data/connect/pull/4331))
 
 ### Fixed
 
