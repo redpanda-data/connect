@@ -9,7 +9,10 @@
 package shredder
 
 import (
+	"encoding/json"
 	"fmt"
+	"math"
+	"math/big"
 	"slices"
 
 	"github.com/apache/iceberg-go"
@@ -351,7 +354,7 @@ func convertLeafValue(value any, typ iceberg.Type) (parquet.Value, error) {
 		return parquet.NullValue(), nil
 	}
 
-	switch typ.(type) {
+	switch typ := typ.(type) {
 	case iceberg.BooleanType:
 		switch v := value.(type) {
 		case bool:
@@ -365,6 +368,9 @@ func convertLeafValue(value any, typ iceberg.Type) (parquet.Value, error) {
 		return parquet.Int32Value(int32(i)), err
 
 	case iceberg.Int64Type:
+		if v, ok := value.(uint64); ok && v > math.MaxInt64 {
+			return parquet.NullValue(), fmt.Errorf("uint64 value %d exceeds int64 range", v)
+		}
 		i, err := bloblang.ValueAsInt64(value)
 		return parquet.Int64Value(i), err
 
@@ -435,14 +441,7 @@ func convertLeafValue(value any, typ iceberg.Type) (parquet.Value, error) {
 		}
 
 	case iceberg.DecimalType:
-		// Decimal stored as fixed-length byte array.
-		switch v := value.(type) {
-		case []byte:
-			return parquet.FixedLenByteArrayValue(v), nil
-		default:
-			// TODO: Handle numeric types with proper decimal encoding.
-			return parquet.NullValue(), fmt.Errorf("cannot convert %T to decimal", value)
-		}
+		return convertToDecimal(value, typ)
 
 	case iceberg.FixedType:
 		// TODO: Validate length
@@ -456,4 +455,161 @@ func convertLeafValue(value any, typ iceberg.Type) (parquet.Value, error) {
 	default:
 		return parquet.NullValue(), fmt.Errorf("unsupported Iceberg type: %T", typ)
 	}
+}
+
+// convertToDecimal converts a Go value to a Parquet decimal value.
+// Decimal values are stored as big-endian two's complement byte arrays.
+func convertToDecimal(value any, dt iceberg.DecimalType) (parquet.Value, error) {
+	scale := dt.Scale()
+
+	var (
+		unscaled *big.Int
+		err      error
+	)
+
+	switch v := value.(type) {
+	case []byte:
+		expectedLen := icebergx.DecimalByteWidth(dt.Precision())
+		if len(v) != expectedLen {
+			return parquet.NullValue(), fmt.Errorf("decimal []byte length %d does not match expected %d for precision %d", len(v), expectedLen, dt.Precision())
+		}
+		return parquet.FixedLenByteArrayValue(v), nil
+	case float64:
+		if math.IsNaN(v) || math.IsInf(v, 0) {
+			return parquet.NullValue(), fmt.Errorf("cannot convert %v to decimal", v)
+		}
+		unscaled = floatToUnscaled(v, scale)
+	case float32:
+		if math.IsNaN(float64(v)) || math.IsInf(float64(v), 0) {
+			return parquet.NullValue(), fmt.Errorf("cannot convert %v to decimal", v)
+		}
+		unscaled = floatToUnscaled(float64(v), scale)
+	case int64:
+		unscaled = intToUnscaled(v, scale)
+	case int:
+		unscaled = intToUnscaled(int64(v), scale)
+	case int32:
+		unscaled = intToUnscaled(int64(v), scale)
+	case int16:
+		unscaled = intToUnscaled(int64(v), scale)
+	case int8:
+		unscaled = intToUnscaled(int64(v), scale)
+	case uint64:
+		unscaled = new(big.Int).Mul(new(big.Int).SetUint64(v), pow10(scale))
+	case uint32:
+		unscaled = intToUnscaled(int64(v), scale)
+	case uint16:
+		unscaled = intToUnscaled(int64(v), scale)
+	case uint8:
+		unscaled = intToUnscaled(int64(v), scale)
+	case uint:
+		unscaled = new(big.Int).Mul(new(big.Int).SetUint64(uint64(v)), pow10(scale))
+	case json.Number:
+		unscaled, err = jsonNumberToUnscaled(v, scale)
+		if err != nil {
+			return parquet.NullValue(), err
+		}
+	case string:
+		unscaled, err = stringToUnscaled(v, scale)
+		if err != nil {
+			return parquet.NullValue(), err
+		}
+	default:
+		return parquet.NullValue(), fmt.Errorf("cannot convert %T to decimal", value)
+	}
+
+	// Validate that the unscaled value fits within the declared precision.
+	// An out-of-range value would produce a valid Parquet file but violate the
+	// Iceberg schema contract, causing downstream query failures or wrong results.
+	maxUnscaled := pow10(dt.Precision())
+	if unscaled.CmpAbs(maxUnscaled) >= 0 {
+		return parquet.NullValue(), fmt.Errorf("value %v exceeds decimal(%d, %d) precision", value, dt.Precision(), dt.Scale())
+	}
+
+	b := encodeDecimalBytes(unscaled, dt.Precision())
+	return parquet.FixedLenByteArrayValue(b), nil
+}
+
+// floatToUnscaled converts a float64 to an unscaled big.Int by multiplying by 10^scale.
+// Precision is capped at 128 bits which exceeds float64's 53-bit mantissa (~15.9 decimal
+// digits), so no additional precision loss occurs beyond what the float64 input already has.
+func floatToUnscaled(f float64, scale int) *big.Int {
+	bf := new(big.Float).SetPrec(128).SetFloat64(f)
+	scaleFactor := new(big.Float).SetPrec(128).SetInt(pow10(scale))
+	bf.Mul(bf, scaleFactor)
+	if f < 0 {
+		bf.Sub(bf, new(big.Float).SetFloat64(0.5))
+	} else {
+		bf.Add(bf, new(big.Float).SetFloat64(0.5))
+	}
+	result, _ := bf.Int(nil)
+	return result
+}
+
+func intToUnscaled(i int64, scale int) *big.Int {
+	return new(big.Int).Mul(big.NewInt(i), pow10(scale))
+}
+
+func jsonNumberToUnscaled(n json.Number, scale int) (*big.Int, error) {
+	if i, err := n.Int64(); err == nil {
+		return intToUnscaled(i, scale), nil
+	}
+	// Fall back to string parsing instead of Float64() to avoid the 53-bit
+	// mantissa precision loss on large integers or high-precision decimals.
+	return stringToUnscaled(n.String(), scale)
+}
+
+func stringToUnscaled(s string, scale int) (*big.Int, error) {
+	bf, _, err := new(big.Float).SetPrec(256).Parse(s, 10)
+	if err != nil {
+		return nil, fmt.Errorf("cannot parse %q as decimal: %w", s, err)
+	}
+	scaleFactor := new(big.Float).SetPrec(256).SetInt(pow10(scale))
+	bf.Mul(bf, scaleFactor)
+	if bf.Sign() < 0 {
+		bf.Sub(bf, new(big.Float).SetFloat64(0.5))
+	} else {
+		bf.Add(bf, new(big.Float).SetFloat64(0.5))
+	}
+	result, _ := bf.Int(nil)
+	return result, nil
+}
+
+// pow10Cache holds precomputed powers of 10 for scales 0–18, covering all
+// common decimal scales without repeated big.Int exponentiation.
+var pow10Cache [19]*big.Int
+
+func init() {
+	pow10Cache[0] = big.NewInt(1)
+	for i := 1; i < len(pow10Cache); i++ {
+		pow10Cache[i] = new(big.Int).Mul(pow10Cache[i-1], big.NewInt(10))
+	}
+}
+
+func pow10(n int) *big.Int {
+	if n >= 0 && n < len(pow10Cache) {
+		return new(big.Int).Set(pow10Cache[n])
+	}
+	return new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(n)), nil)
+}
+
+func encodeDecimalBytes(unscaled *big.Int, precision int) []byte {
+	numBytes := icebergx.DecimalByteWidth(precision)
+
+	if unscaled.Sign() >= 0 {
+		b := unscaled.Bytes()
+		result := make([]byte, numBytes)
+		copy(result[numBytes-len(b):], b)
+		return result
+	}
+
+	modulus := new(big.Int).Lsh(big.NewInt(1), uint(numBytes*8))
+	tc := new(big.Int).Add(modulus, unscaled)
+	b := tc.Bytes()
+	result := make([]byte, numBytes)
+	for i := range result {
+		result[i] = 0xFF
+	}
+	copy(result[numBytes-len(b):], b)
+	return result
 }

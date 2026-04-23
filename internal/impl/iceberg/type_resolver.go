@@ -59,7 +59,7 @@ func (r *typeResolver) resolveTypeForAddColumn(
 		if metaType, err := r.resolveFromSchemaMetadata(msg, field.FullPath()); err != nil {
 			return nil, fmt.Errorf("resolving type from schema metadata for field %v: %w", field.FullPath(), err)
 		} else if metaType != nil {
-			// If the metatype was not found then just stick with the default intered type
+			// If the metatype was not found then just stick with the default inferred type
 			inferredType = metaType
 		}
 	}
@@ -98,7 +98,7 @@ func (r *typeResolver) resolveTypeForCreateTable(
 		if metaType, err := r.resolveFromSchemaMetadata(msg, path); err != nil {
 			return nil, fmt.Errorf("resolving type from schema metadata for field %q: %w", fieldName, err)
 		} else if metaType != nil {
-			// If the metatype was not found then just stick with the default intered type
+			// If the metatype was not found then just stick with the default inferred type
 			inferredType = metaType
 		}
 	}
@@ -121,7 +121,10 @@ func (r *typeResolver) resolveTypeForCreateTable(
 func (r *typeResolver) resolveFromSchemaMetadata(msg *service.Message, fieldPath icebergx.Path) (iceberg.Type, error) {
 	metaAny, exists := msg.MetaGetMut(r.schemaMetadataKey)
 	if !exists {
-		return nil, errors.New("missing schema metadata in message")
+		if r.logger != nil {
+			r.logger.Warnf("Schema metadata key %q not found on message, falling back to type inference", r.schemaMetadataKey)
+		}
+		return nil, nil
 	}
 
 	commonSchema, err := schema.ParseFromAny(metaAny)
