@@ -186,6 +186,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: goreleaser
     if: github.event_name == 'push' && !contains(github.ref_name, '-rc')
+    concurrency:
+      group: release-update-bundles-${{ github.ref }}
+      cancel-in-progress: false
     permissions:
       contents: write
       pull-requests: write
