@@ -1,0 +1,25 @@
+{
+  "name": "mysql-jdbc-sink-bench",
+  "config": {
+    "connector.class": "io.confluent.connect.jdbc.JdbcSinkConnector",
+    "tasks.max": "16",
+    "topics": "bench-events",
+
+    "connection.url": "jdbc:mysql://mysql:3306/benchdb",
+    "connection.user": "root",
+    "connection.password": "password",
+
+    "insert.mode": "insert",
+    "pk.mode": "none",
+    "auto.create": "false",
+    "table.name.format": "bench_events",
+
+    "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "value.converter.schemas.enable": "true",
+
+    "batch.size": "10000",
+    "consumer.override.fetch.min.bytes": "1048576",
+    "consumer.override.fetch.max.wait.ms": "500",
+    "consumer.override.max.poll.records": "5000"
+  }
+}
