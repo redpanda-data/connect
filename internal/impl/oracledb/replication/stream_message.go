@@ -125,4 +125,5 @@ type MessageEvent struct {
 	Data          any
 	Timestamp     time.Time
 	ColumnMeta    []ColumnMeta
+	TransactionID string
 }

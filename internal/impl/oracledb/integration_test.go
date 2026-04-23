@@ -530,19 +530,23 @@ oracledb_cdc:
 		t.Helper()
 		results := make(map[string][]*service.Message)
 		for i, msg := range msgs {
+			// assert database_schema metadata
 			schema, ok := msg.MetaGet("database_schema")
 			require.Truef(t, ok, "message %d missing 'database_schema' metadata", i)
 
+			// assert table_name metadata
 			table, ok := msg.MetaGet("table_name")
 			require.Truef(t, ok, "message %d missing 'table_name' metadata", i)
 
 			key := fmt.Sprintf("%s.%s", schema, table)
 			results[key] = append(results[key], msg)
 
+			// assert operation metadata
 			op, ok := msg.MetaGet("operation")
 			require.Truef(t, ok, "message %d missing 'operation' metadata", i)
 			assert.Equalf(t, operation, op, "message %d: expected operation '%s', got %q", i, operation, op)
 
+			// assert source_ts_ms metadata
 			tsStr, ok := msg.MetaGet("source_ts_ms")
 			require.Truef(t, ok, "message %d missing 'source_ts_ms' metadata", i)
 			tsMs, err := strconv.ParseInt(tsStr, 10, 64)
@@ -550,6 +554,11 @@ oracledb_cdc:
 			tsTime := time.UnixMilli(tsMs)
 			assert.Truef(t, tsTime.After(time.Now().Add(-5*time.Minute)), "message %d: source_ts_ms %d is too far in the past", i, tsMs)
 			assert.Truef(t, tsTime.Before(time.Now().Add(time.Minute)), "message %d: source_ts_ms %d is in the future", i, tsMs)
+
+			// assert transaction_id metadata
+			txID, ok := msg.MetaGet("transaction_id")
+			require.Truef(t, ok, "message %d missing 'transaction_id' metadata", i)
+			assert.Regexpf(t, `^\d+\.\d+\.\d+$`, txID, "message %d: transaction_id %q not in USN.SLOT.SEQ format", i, txID)
 		}
 
 		for _, expectedKey := range []string{"TESTDB.FOO", "TESTDB.FOO2", "TESTDB2.BAR"} {
