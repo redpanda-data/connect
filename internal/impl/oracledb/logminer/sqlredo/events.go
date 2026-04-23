@@ -10,11 +10,47 @@ package sqlredo
 
 import (
 	"database/sql"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"strconv"
 	"time"
 )
+
+// TransactionID uniquely identifies an Oracle transaction. It is derived from
+// Oracle's native XID (RAW(8)) and formatted as "USN.SLOT.SEQ" — the three
+// little-endian components of the XID: undo segment number (uint16), slot
+// (uint16), and sequence number (uint32).
+type TransactionID string
+
+// Scan implements sql.Scanner, decoding Oracle's RAW(8) XID bytes directly
+// into the "USN.SLOT.SEQ" string representation.
+func (txID *TransactionID) Scan(src any) error {
+	if src == nil {
+		return errors.New("cannot scan nil into TransactionID")
+	}
+
+	switch v := src.(type) {
+	case []byte:
+		// V$LOGMNR_CONTENTS.XID is RAW(8) https://docs.oracle.com/en/database/oracle/oracle-database/21/refrn/V-LOGMNR_CONTENTS.html
+		if len(v) != 8 {
+			return fmt.Errorf("V$LOGMNR_CONTENTS.XID expected to be 8 bytes but was %d", len(v))
+		}
+
+		usn := binary.LittleEndian.Uint16(v[0:2])
+		slot := binary.LittleEndian.Uint16(v[2:4])
+		seq := binary.LittleEndian.Uint32(v[4:8])
+		*txID = TransactionID(fmt.Sprintf("%d.%d.%d", usn, slot, seq))
+	default:
+		return fmt.Errorf("cannot scan %T to transaction id", src)
+	}
+	return nil
+}
+
+// String returns the TransactionID in its "USN.SLOT.SEQ" string form.
+func (txID TransactionID) String() string {
+	return string(txID)
+}
 
 // Operation represents a LogMiner operation type
 type Operation int64
@@ -118,8 +154,9 @@ type DMLEvent struct {
 	Data      map[string]any
 	// OldValues holds the WHERE-clause column values for UPDATE and DELETE events.
 	// For LOB-init UPDATE events these are used to identify the source row for PK matching.
-	OldValues map[string]any
-	Timestamp time.Time
+	OldValues     map[string]any
+	Timestamp     time.Time
+	TransactionID TransactionID
 }
 
 // RedoEvent represents a redo log row from V$LOGMNR_CONTENTS
@@ -131,5 +168,5 @@ type RedoEvent struct {
 	TableName     sql.NullString
 	SchemaName    sql.NullString
 	Timestamp     time.Time
-	TransactionID string
+	TransactionID TransactionID
 }

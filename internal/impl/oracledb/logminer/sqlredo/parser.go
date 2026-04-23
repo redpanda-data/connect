@@ -44,8 +44,9 @@ func (p Parser) RedoEventToDMLEvent(redoEvent *RedoEvent) (DMLEvent, error) {
 	}
 
 	event := DMLEvent{
-		Operation: redoEvent.Operation,
-		Timestamp: redoEvent.Timestamp,
+		Operation:     redoEvent.Operation,
+		Timestamp:     redoEvent.Timestamp,
+		TransactionID: redoEvent.TransactionID,
 	}
 
 	if redoEvent.SchemaName.Valid {

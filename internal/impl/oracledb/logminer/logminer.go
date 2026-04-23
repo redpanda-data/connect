@@ -11,7 +11,6 @@ package logminer
 import (
 	"context"
 	"database/sql"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"maps"
@@ -52,7 +51,7 @@ type LogMiner struct {
 	lobColTypes map[string]string
 	// lob types are split between redo log lines, we use lobStates to track them
 	// until we have all data to merge into published INSERT or UPDATE event.
-	lobStates map[string]*sqlredo.TxnLOBState
+	lobStates map[sqlredo.TransactionID]*sqlredo.TxnLOBState
 }
 
 // NewMiner creates a new instance of LogMiner responsible for paging through change events based on the tables param.
@@ -109,7 +108,7 @@ func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replicat
 		sessionMgr:    NewSessionManager(cfg, logger),
 		txnCache:      NewInMemoryCache(cfg.MaxTransactionEvents, metrics, logger),
 		dmlParser:     sqlredo.NewParser(),
-		lobStates:     make(map[string]*sqlredo.TxnLOBState),
+		lobStates:     make(map[sqlredo.TransactionID]*sqlredo.TxnLOBState),
 	}
 	return lm
 }
@@ -493,7 +492,7 @@ func (lm *LogMiner) loadLOBColumnTypes(ctx context.Context) (resErr error) {
 	return rows.Err()
 }
 
-func (lm *LogMiner) getOrCreateLOBState(txnID string) *sqlredo.TxnLOBState {
+func (lm *LogMiner) getOrCreateLOBState(txnID sqlredo.TransactionID) *sqlredo.TxnLOBState {
 	if state, ok := lm.lobStates[txnID]; ok {
 		return state
 	}
@@ -536,7 +535,6 @@ func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, s
 	for rows.Next() {
 		event := &sqlredo.RedoEvent{}
 		var (
-			xid       []byte        // Oracle RAW type comes as []byte in Go
 			commitSCN sql.NullInt64 // COMMIT_SCN can be NULL for uncommitted transactions
 			csf       int64         // Continuation SQL Flag: 1 = more SQL in next row, 0 = complete
 		)
@@ -548,15 +546,12 @@ func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, s
 			&event.TableName,
 			&event.SchemaName,
 			&event.Timestamp,
-			&xid,
+			&event.TransactionID,
 			&commitSCN,
 			&csf,
 		); err != nil {
 			return err
 		}
-
-		// XID is Oracle's native transaction identifier (RAW(8) = 8 bytes)
-		event.TransactionID = hex.EncodeToString(xid)
 
 		// CSF (Continuation SQL Flag): Oracle splits long SQL across multiple rows.
 		// Rows with CSF=1 are continuation fragments; CSF=0 is the final (or only) row.
@@ -776,6 +771,7 @@ func toMessageEvent(dml *sqlredo.DMLEvent, scn uint64, checkpointSCN uint64) *re
 		Table:         dml.Table,
 		Data:          data,
 		Timestamp:     dml.Timestamp,
+		TransactionID: dml.TransactionID.String(),
 	}
 
 	switch dml.Operation {
