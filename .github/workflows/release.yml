@@ -219,9 +219,7 @@ jobs:
 
           PR_URL=$(gh pr create \
             --title "chore: update bundle dependencies for ${{ github.ref_name }}" \
-            --body "Automated bundle dependency update for release ${{ github.ref_name }}." \
-            --label "dependencies" \
-            --label "automated")
+            --body "Automated bundle dependency update for release ${{ github.ref_name }}.")
 
           gh pr merge --auto --rebase "${PR_URL}"
 
