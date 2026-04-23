@@ -75,3 +75,31 @@ task bench:run TASKS=16
 - Peak throughput at batch=3000: **42,553 msg/sec** at 16 tasks. Increasing to batch=10000 yields marginal improvement (**43,859 msg/sec**) — batch size is not the bottleneck.
 - Task scaling diminishes quickly: 4→8 tasks ~1.7×, 8→16 tasks ~1.4×.
 - MySQL CDC is roughly **4.5× faster** than Kafka Connect JDBC Sink at peak (191K vs 43K msg/sec), with a fraction of the infrastructure.
+
+---
+
+## Redpanda Connect — Kafka → MySQL
+
+Redpanda Connect consuming from a Kafka topic (`kafka_franz` input) and writing to MySQL (`sql_insert` output).
+Same Kafka broker as above (`cpus: 3`), 16 partitions. Varying `GOMAXPROCS` and `batching.count`.
+
+See [`internal/impl/mysql/bench/redpanda-connector/`](../../internal/impl/mysql/bench/redpanda-connector/) for configs and run instructions.
+
+```bash
+task bench:load COUNT=10000000
+task bench:run CORES=1 BATCH=10000
+task bench:run CORES=4 BATCH=10000
+# ...
+```
+
+### msg/sec (writes to MySQL)
+
+| GOMAXPROCS | batch=10000 |
+|------------|-------------|
+| 4          |      64,102 |
+| 8          |      60,975 |
+
+**Observations:**
+- Throughput plateaus at 4→8 cores (~60-64K msg/sec) — MySQL write throughput is the bottleneck, not CPU.
+- Redpanda Connect is **~1.5× faster** than Kafka Connect JDBC Sink at peak (64K vs 43K msg/sec) using fewer resources (4 cores vs 16 tasks).
+- Compared to MySQL CDC (191K msg/sec), the Kafka→MySQL write path is ~3× slower — the extra hop through Kafka and MySQL insert overhead both contribute.
