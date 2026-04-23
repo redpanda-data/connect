@@ -78,6 +78,27 @@ task bench:run TASKS=16
 
 ---
 
+## Debezium Kafka Source Connector Comparison
+
+Debezium MySQL source connector reading the same 10,000,000-row `cart` snapshot into a Kafka topic.
+Varying `max.batch.size`, `max.queue.size`, and `max.poll.records`.
+
+See [`internal/impl/mysql/bench/kafka-source/`](../../internal/impl/mysql/bench/kafka-source/) for configs and run instructions.
+
+### msg/sec
+
+| fetch.size | batch.size | queue.size | elapsed | msg/sec |
+|------------|------------|------------|---------|---------|
+| 1,000      | 1,000      | 4,000      | 841s    |  11,890 |
+| 5,000      | 5,000      | 20,000     | 747s    |  13,386 |
+| 10,000     | 10,000     | 40,000     | 781s    |  12,804 |
+
+**Observations:**
+- Peak throughput: **13,386 msg/sec** at fetch=5000/batch=5000/queue=20000.
+- Increasing to fetch=10000 gives no further gain (12,804 msg/sec) — throughput plateaus around 13K msg/sec regardless of fetch/batch size.
+
+---
+
 ## Redpanda Connect — Kafka → MySQL
 
 Redpanda Connect consuming from a Kafka topic (`kafka_franz` input) and writing to MySQL (`sql_insert` output).
