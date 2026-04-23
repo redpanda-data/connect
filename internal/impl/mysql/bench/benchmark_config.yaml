@@ -1,0 +1,35 @@
+http:
+  debug_endpoints: true
+
+cache_resources:
+  - label: checkpoint
+    file:
+      directory: ${CHECKPOINT_DIR:/tmp/mysql_bench_checkpoint}
+
+input:
+  mysql_cdc:
+    dsn: ${MYSQL_DSN:root:password@tcp(localhost:3306)/testdb}
+    tables:
+      - users
+      - products
+      - cart
+    checkpoint_cache: checkpoint
+    stream_snapshot: true
+    batching:
+      count: 1000
+      period: 1s
+
+output:
+  processors:
+    - benchmark:
+        interval: 1s
+        count_bytes: true
+  drop: {}
+
+logger:
+  level: INFO
+
+metrics:
+  prometheus:
+    add_process_metrics: true
+    add_go_metrics: true
