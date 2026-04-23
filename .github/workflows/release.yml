@@ -212,10 +212,10 @@ jobs:
           BRANCH="update-bundles-${{ github.ref_name }}"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git checkout -b "${BRANCH}"
+          git checkout -B "${BRANCH}"
           git add -A
           git commit -m "chore: update bundle dependencies for ${{ github.ref_name }}"
-          git push origin "${BRANCH}"
+          git push --force-with-lease origin "HEAD:refs/heads/${BRANCH}"
 
           PR_URL=$(gh pr create \
             --title "chore: update bundle dependencies for ${{ github.ref_name }}" \
