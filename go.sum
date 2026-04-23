@@ -343,8 +343,8 @@ github.com/apache/arrow/go/v12 v12.0.1 h1:JsR2+hzYYjgSUkBSaahpqCetqZMr76djX80fF/
 github.com/apache/arrow/go/v12 v12.0.1/go.mod h1:weuTY7JvTG/HDPtMQxEUp7pU73vkLWMLpY67QwZ/WWw=
 github.com/apache/arrow/go/v15 v15.0.2 h1:60IliRbiyTWCWjERBCkO1W4Qun9svcYoZrSLcyOsMLE=
 github.com/apache/arrow/go/v15 v15.0.2/go.mod h1:DGXsR3ajT524njufqf95822i+KTh+yea1jass9YXgjA=
-github.com/apache/iceberg-go v0.5.1-0.20260413191103-8587fd1d2516 h1:fbnzDRI3c+yxHlZxkktBC3dZnHAWBqFsoibGheSBNxo=
-github.com/apache/iceberg-go v0.5.1-0.20260413191103-8587fd1d2516/go.mod h1:XI6F/iGSAE/XLpVVeq79fr9esWKXE7apLZdY+aMy1gA=
+github.com/apache/iceberg-go v0.5.1-0.20260423164746-a1d883edd53d h1:ODY0YUkHs4MsROnoegqfAHjudYb+pcx3WD3cnVNf8K0=
+github.com/apache/iceberg-go v0.5.1-0.20260423164746-a1d883edd53d/go.mod h1:bVN7fytnzGqC+LXlPdq1wHOkbKWj5U8LARZQ51igrIg=
 github.com/apache/pulsar-client-go v0.18.0 h1:YsySoOds7WCXkRcOKHb85gk/v1Jndp+2oCkkRQEowUA=
 github.com/apache/pulsar-client-go v0.18.0/go.mod h1:GKmTD1u5YLuhUnoVTNGdhdGNAYhoglWNWgwLJZTljAw=
 github.com/apache/thrift v0.0.0-20181112125854-24918abba929/go.mod h1:cp2SuWMxlEZw2r+iP2GNCdIi4C1qmUzdZFSVb+bacwQ=
