@@ -28,7 +28,17 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
-const salesforcePubSubEndpoint = "api.pubsub.salesforce.com:443"
+const (
+	salesforcePubSubEndpoint = "api.pubsub.salesforce.com:443"
+
+	// subscribeSettleDelay is how long after a successful subscribe Send we
+	// wait before signalling readiness. Salesforce acknowledges the stream
+	// immediately at the gRPC layer, but routing the subscription internally
+	// takes additional time; events published in that window are dropped when
+	// using ReplayPreset_LATEST. Empirically 3s is sufficient on the Pub/Sub
+	// API; 5s provides safety margin without meaningfully slowing startup.
+	subscribeSettleDelay = 5 * time.Second
+)
 
 // Config holds optional configuration for a gRPC Pub/Sub client.
 type Config struct {
@@ -63,6 +73,7 @@ type Client struct {
 	eventBuffer  chan *PubSubEvent
 	cancel       context.CancelFunc
 	done         chan struct{}
+	ready        chan struct{}
 	streamErr    error
 	state        StreamState
 
@@ -127,6 +138,7 @@ func NewClient(
 		config:        sub,
 		eventBuffer:   make(chan *PubSubEvent, sub.BufferSize),
 		done:          make(chan struct{}),
+		ready:         make(chan struct{}),
 		schemaCache:   NewSchemaCache(pubsubClient, bearerToken, instanceURL, tenantID),
 		state:         StreamStateDisconnected,
 		baseBackoff:   baseBackoff,
@@ -197,6 +209,11 @@ func (c *Client) connectLocked(ctx context.Context) error {
 
 	c.log.Infof("Pub/Sub subscription started on topic %s (preset=%v)", c.config.TopicName, fetchReq.ReplayPreset)
 	c.state = StreamStateConnected
+
+	// Subscription is established once the server accepts the initial
+	// FetchRequest. Salesforce does not send a response until an event arrives,
+	// so waiting for the first Recv would block indefinitely on idle topics.
+	c.markReadyLocked()
 
 	c.done = make(chan struct{})
 	go c.receiveLoop(ctx)
@@ -548,6 +565,62 @@ func (c *Client) StreamErr() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.streamErr
+}
+
+// Events returns the buffered channel of decoded Pub/Sub events. The channel is
+// owned by the client and closed via Close; callers should not close it.
+func (c *Client) Events() <-chan *PubSubEvent {
+	return c.eventBuffer
+}
+
+// WaitReady blocks until the subscription is considered established (see
+// subscribeSettleDelay) or ctx is cancelled.
+func (c *Client) WaitReady(ctx context.Context) error {
+	c.mu.Lock()
+	ch := c.ready
+	c.mu.Unlock()
+	if ch == nil {
+		return errors.New("client not connected")
+	}
+	select {
+	case <-ch:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// markReadyLocked schedules the ready channel to be closed after the subscribe
+// settle delay. Caller must hold c.mu.
+//
+// Salesforce's Pub/Sub API accepts the initial FetchRequest quickly but takes
+// additional wall-time to route the subscription server-side. Events published
+// during that window are silently dropped when using ReplayPreset_LATEST.
+// Delaying readiness by subscribeSettleDelay avoids this race.
+func (c *Client) markReadyLocked() {
+	if c.ready == nil {
+		return
+	}
+	select {
+	case <-c.ready:
+		return // already scheduled or closed
+	default:
+	}
+	ch := c.ready
+	go func() {
+		timer := time.NewTimer(subscribeSettleDelay)
+		defer timer.Stop()
+		select {
+		case <-timer.C:
+		case <-c.done:
+			return
+		}
+		select {
+		case <-ch:
+		default:
+			close(ch)
+		}
+	}()
 }
 
 // Health returns a point-in-time snapshot of the subscription's health.
