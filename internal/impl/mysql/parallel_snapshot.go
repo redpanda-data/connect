@@ -14,8 +14,9 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/redpanda-data/benthos/v4/public/service"
 	"golang.org/x/sync/errgroup"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 // parallelSnapshotSet owns the shared *sql.DB and a pool of per-worker
@@ -73,7 +74,7 @@ func prepareParallelSnapshotSet(ctx context.Context, logger *service.Logger, db 
 		return nil
 	}
 
-	for idx := 0; idx < workerCount; idx++ {
+	for idx := range workerCount {
 		conn, err := db.Conn(ctx)
 		if err != nil {
 			return failWith(fmt.Errorf("open snapshot connection %d: %w", idx, err), unlockTables())
