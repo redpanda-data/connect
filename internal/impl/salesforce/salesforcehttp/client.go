@@ -1029,6 +1029,13 @@ func (s *Client) APIVersion() string { return s.apiVersion }
 // OrgURL returns the base URL of the Salesforce org.
 func (s *Client) OrgURL() string { return s.orgURL }
 
+// SObjectPath returns the REST API path (without org URL) for a single sObject,
+// e.g. "/services/data/v65.0/sobjects/Account".
+func (s *Client) SObjectPath(name string) string {
+	p, _ := url.JoinPath("/services/data", s.apiVersion, "sobjects", name)
+	return p
+}
+
 // PostJSON sends an authenticated POST request with a JSON body to the given relative path.
 func (s *Client) PostJSON(ctx context.Context, path string, body []byte) ([]byte, error) {
 	u, err := url.Parse(s.orgURL + path)
