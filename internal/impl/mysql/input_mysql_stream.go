@@ -492,21 +492,15 @@ func (i *mysqlStreamInput) refreshIAMAuthToken(ctx context.Context) error {
 func (i *mysqlStreamInput) startMySQLSync(ctx context.Context, pos *position, snapshot *Snapshot) error {
 	// If we are given a snapshot, then we need to read it.
 	if snapshot != nil {
-		startPos, err := snapshot.prepareSnapshot(ctx, i.tables)
+		var startPos *position
+		var err error
+		if i.fieldSnapshotMaxParallelTables <= 1 && i.fieldSnapshotChunksPerTable <= 1 {
+			startPos, err = i.runSequentialSnapshot(ctx, snapshot)
+		} else {
+			startPos, err = i.runParallelSnapshot(ctx, snapshot)
+		}
 		if err != nil {
-			_ = snapshot.close()
-			return fmt.Errorf("unable to prepare snapshot: %w", err)
-		}
-		if err = i.readSnapshot(ctx, snapshot); err != nil {
-			_ = snapshot.close()
-			return fmt.Errorf("failed reading snapshot: %w", err)
-		}
-		if err = snapshot.releaseSnapshot(ctx); err != nil {
-			_ = snapshot.close()
-			return fmt.Errorf("unable to release snapshot: %w", err)
-		}
-		if err = snapshot.close(); err != nil {
-			return fmt.Errorf("unable to close snapshot: %w", err)
+			return err
 		}
 		// Signal snapshot completion. readMessages will flush any partial batch
 		// and pre-resolve a checkpoint entry for startPos so the cache is
@@ -539,93 +533,155 @@ func (i *mysqlStreamInput) startMySQLSync(ctx context.Context, pos *position, sn
 }
 
 func (i *mysqlStreamInput) readSnapshot(ctx context.Context, snapshot *Snapshot) error {
-	// TODO(cdc): Process tables in parallel
 	for _, table := range i.tables {
-		// Pre-populate schema cache so snapshot messages carry schema metadata.
-		if tbl, err := i.canal.GetTable(i.mysqlConfig.DBName, table); err == nil {
-			if _, err := i.getTableSchema(tbl); err != nil {
-				i.logger.Warnf("Failed to pre-populate schema for table %s during snapshot: %v", table, err)
-			}
-		} else {
-			i.logger.Warnf("Failed to fetch schema for table %s during snapshot: %v", table, err)
-		}
-		tablePks, err := snapshot.getTablePrimaryKeys(ctx, table)
-		if err != nil {
+		if err := i.readSnapshotWorkUnit(ctx, snapshot, snapshotWorkUnit{table: table}); err != nil {
 			return err
-		}
-		i.logger.Tracef("primary keys for table %s: %v", table, tablePks)
-		lastSeenPksValues := map[string]any{}
-		for _, pk := range tablePks {
-			lastSeenPksValues[pk] = nil
-		}
-
-		var numRowsProcessed int
-		for {
-			var batchRows *sql.Rows
-			if numRowsProcessed == 0 {
-				batchRows, err = snapshot.querySnapshotTable(ctx, table, tablePks, nil, nil, i.fieldSnapshotMaxBatchSize)
-			} else {
-				batchRows, err = snapshot.querySnapshotTable(ctx, table, tablePks, nil, &lastSeenPksValues, i.fieldSnapshotMaxBatchSize)
-			}
-			if err != nil {
-				return fmt.Errorf("executing snapshot table query: %s", err)
-			}
-
-			types, err := batchRows.ColumnTypes()
-			if err != nil {
-				return fmt.Errorf("fetching column types: %s", err)
-			}
-
-			values, mappers := prepSnapshotScannerAndMappers(types)
-
-			columns, err := batchRows.Columns()
-			if err != nil {
-				return fmt.Errorf("fetching columns: %s", err)
-			}
-
-			var batchRowsCount int
-			for batchRows.Next() {
-				numRowsProcessed++
-				batchRowsCount++
-
-				if err := batchRows.Scan(values...); err != nil {
-					return err
-				}
-
-				row := map[string]any{}
-				for idx, value := range values {
-					v, err := mappers[idx](value)
-					if err != nil {
-						return err
-					}
-					row[columns[idx]] = v
-					if _, ok := lastSeenPksValues[columns[idx]]; ok {
-						lastSeenPksValues[columns[idx]] = value
-					}
-				}
-
-				select {
-				case i.rawMessageEvents <- MessageEvent{
-					Row:       row,
-					Operation: MessageOperationRead,
-					Table:     table,
-					Position:  nil,
-				}:
-				case <-ctx.Done():
-					return ctx.Err()
-				}
-			}
-
-			if err := batchRows.Err(); err != nil {
-				return fmt.Errorf("iterating snapshot table: %s", err)
-			}
-
-			if batchRowsCount < i.fieldSnapshotMaxBatchSize {
-				break
-			}
 		}
 	}
 	return nil
+}
+
+func (i *mysqlStreamInput) readSnapshotWorkUnit(ctx context.Context, snapshot *Snapshot, unit snapshotWorkUnit) error {
+	table := unit.table
+	if tbl, err := i.canal.GetTable(i.mysqlConfig.DBName, table); err == nil {
+		if _, err := i.getTableSchema(tbl); err != nil {
+			i.logger.Warnf("Failed to pre-populate schema for table %s during snapshot: %v", table, err)
+		}
+	} else {
+		i.logger.Warnf("Failed to fetch schema for table %s during snapshot: %v", table, err)
+	}
+
+	tablePks, err := snapshot.getTablePrimaryKeys(ctx, table)
+	if err != nil {
+		return err
+	}
+	i.logger.Tracef("primary keys for table %s: %v", table, tablePks)
+
+	lastSeenPksValues := map[string]any{}
+	for _, pk := range tablePks {
+		lastSeenPksValues[pk] = nil
+	}
+
+	var numRowsProcessed int
+	for {
+		var batchRows *sql.Rows
+		if numRowsProcessed == 0 {
+			batchRows, err = snapshot.querySnapshotTable(ctx, table, tablePks, unit.bounds, nil, i.fieldSnapshotMaxBatchSize)
+		} else {
+			batchRows, err = snapshot.querySnapshotTable(ctx, table, tablePks, unit.bounds, &lastSeenPksValues, i.fieldSnapshotMaxBatchSize)
+		}
+		if err != nil {
+			return fmt.Errorf("executing snapshot table query: %s", err)
+		}
+
+		types, err := batchRows.ColumnTypes()
+		if err != nil {
+			return fmt.Errorf("fetching column types: %s", err)
+		}
+		values, mappers := prepSnapshotScannerAndMappers(types)
+		columns, err := batchRows.Columns()
+		if err != nil {
+			return fmt.Errorf("fetching columns: %s", err)
+		}
+
+		var batchRowsCount int
+		for batchRows.Next() {
+			numRowsProcessed++
+			batchRowsCount++
+			if err := batchRows.Scan(values...); err != nil {
+				return err
+			}
+			row := map[string]any{}
+			for idx, value := range values {
+				v, err := mappers[idx](value)
+				if err != nil {
+					return err
+				}
+				row[columns[idx]] = v
+				if _, ok := lastSeenPksValues[columns[idx]]; ok {
+					lastSeenPksValues[columns[idx]] = value
+				}
+			}
+			select {
+			case i.rawMessageEvents <- MessageEvent{
+				Row:       row,
+				Operation: MessageOperationRead,
+				Table:     table,
+				Position:  nil,
+			}:
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+		if err := batchRows.Err(); err != nil {
+			return fmt.Errorf("iterating snapshot table: %s", err)
+		}
+		if batchRowsCount < i.fieldSnapshotMaxBatchSize {
+			break
+		}
+	}
+	return nil
+}
+
+func (i *mysqlStreamInput) runSequentialSnapshot(ctx context.Context, snapshot *Snapshot) (*position, error) {
+	startPos, err := snapshot.prepareSnapshot(ctx, i.tables)
+	if err != nil {
+		_ = snapshot.close()
+		return nil, fmt.Errorf("unable to prepare snapshot: %w", err)
+	}
+	if err = i.readSnapshot(ctx, snapshot); err != nil {
+		_ = snapshot.close()
+		return nil, fmt.Errorf("failed reading snapshot: %w", err)
+	}
+	if err = snapshot.releaseSnapshot(ctx); err != nil {
+		_ = snapshot.close()
+		return nil, fmt.Errorf("unable to release snapshot: %w", err)
+	}
+	if err = snapshot.close(); err != nil {
+		return nil, fmt.Errorf("unable to close snapshot: %w", err)
+	}
+	return startPos, nil
+}
+
+func (i *mysqlStreamInput) runParallelSnapshot(ctx context.Context, snapshot *Snapshot) (*position, error) {
+	// Transfer db ownership to the parallel set before any failure path:
+	// prepareParallelSnapshotSet will close db on error, and we want
+	// snapshot.close() to be a safe no-op afterwards.
+	db := snapshot.db
+	snapshot.db = nil
+
+	workerCount := i.fieldSnapshotMaxParallelTables
+	if maxUnits := len(i.tables) * i.fieldSnapshotChunksPerTable; workerCount > maxUnits {
+		workerCount = maxUnits
+	}
+
+	set, startPos, err := prepareParallelSnapshotSet(ctx, i.logger, db, i.tables, workerCount)
+	if err != nil {
+		return nil, fmt.Errorf("unable to prepare parallel snapshot: %w", err)
+	}
+
+	units, err := planSnapshotWork(ctx, set.workers[0], i.tables, i.fieldSnapshotChunksPerTable)
+	if err != nil {
+		_ = set.close()
+		return nil, fmt.Errorf("plan snapshot work: %w", err)
+	}
+	i.logger.Infof("Parallel snapshot planned: %d tables -> %d work units across %d workers", len(i.tables), len(units), len(set.workers))
+
+	if err := distributeWorkToWorkers(ctx, units, len(set.workers), func(ctx context.Context, workerIdx int, unit snapshotWorkUnit) error {
+		return i.readSnapshotWorkUnit(ctx, set.workers[workerIdx], unit)
+	}); err != nil {
+		_ = set.close()
+		return nil, fmt.Errorf("failed reading snapshot: %w", err)
+	}
+
+	if err := set.release(ctx); err != nil {
+		_ = set.close()
+		return nil, fmt.Errorf("unable to release parallel snapshot: %w", err)
+	}
+	if err := set.close(); err != nil {
+		return nil, fmt.Errorf("unable to close parallel snapshot: %w", err)
+	}
+	return startPos, nil
 }
 
 func snapshotValueMapper[T any](v any) (any, error) {
