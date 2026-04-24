@@ -189,8 +189,10 @@ func walkForHashFields(msg *service.Message, fields map[string]any) error {
 	return nil
 }
 
-func (r *redisHashWriter) buildMessage(msg *service.Message) (string, map[string]any, error) {
-	key, err := r.key.TryString(msg)
+func (r *redisHashWriter) buildMessage(batch service.MessageBatch, i int) (string, map[string]any, error) {
+	msg := batch[i]
+
+	key, err := batch.TryInterpolatedString(i, r.key)
 	if err != nil {
 		return "", nil, fmt.Errorf("key interpolation error: %w", err)
 	}
@@ -205,14 +207,17 @@ func (r *redisHashWriter) buildMessage(msg *service.Message) (string, map[string
 	}
 	if r.walkJSON {
 		if err := walkForHashFields(msg, fields); err != nil {
-			return "", nil, fmt.Errorf("HSET error: failed to walk JSON object: %v", err)
+			return "", nil, fmt.Errorf("HSET error: failed to walk JSON object: %w", err)
 		}
 	}
 	for k, v := range r.fields {
-		if fields[k], err = v.TryString(msg); err != nil {
-			return "", nil, fmt.Errorf("field %v interpolation error: %w", k, err)
+		val, err := batch.TryInterpolatedString(i, v)
+		if err != nil {
+			return "", nil, fmt.Errorf("field %w interpolation error: %w", k, err)
 		}
+		fields[k] = val
 	}
+
 	return key, fields, nil
 }
 
@@ -226,9 +231,9 @@ func (r *redisHashWriter) WriteBatch(ctx context.Context, batch service.MessageB
 	}
 
 	if len(batch) == 1 {
-		key, fields, err := r.buildMessage(batch[0])
+		key, fields, err := r.buildMessage(batch, 0)
 		if err != nil {
-			err = fmt.Errorf("failed to create message: %v", err)
+			err = fmt.Errorf("failed to create message: %w", err)
 			return err
 		}
 		if err := client.HSet(ctx, key, fields).Err(); err != nil {
@@ -242,9 +247,9 @@ func (r *redisHashWriter) WriteBatch(ctx context.Context, batch service.MessageB
 	pipe := client.Pipeline()
 
 	for i := range batch {
-		key, fields, err := r.buildMessage(batch[i])
+		key, fields, err := r.buildMessage(batch, i)
 		if err != nil {
-			err = fmt.Errorf("failed to create message: %v", err)
+			err = fmt.Errorf("failed to create message: %w", err)
 			return err
 		}
 		_ = pipe.HSet(ctx, key, fields)
