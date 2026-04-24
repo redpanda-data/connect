@@ -313,7 +313,7 @@ jobs:
     needs: [goreleaser, update-bundles, update-downstream]
     # always() is required because update-bundles/update-downstream may be skipped
     # (pre-release/RC), and by default a skipped dependency skips this job too.
-    if: always() && github.event_name == 'push' && !contains(github.ref_name, '-rc')
+    if: always() && github.event_name == 'push' && endsWith(github.ref_name, '.0') && !contains(github.ref_name, '-rc')
     permissions:
       contents: read
     steps:
