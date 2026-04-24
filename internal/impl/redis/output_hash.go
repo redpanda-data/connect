@@ -81,7 +81,7 @@ Where latter stages will overwrite matching field names of a former stage.`+serv
 				Description("A map of key/value pairs to set as hash fields.").
 				Default(map[string]any{}),
 			service.NewOutputMaxInFlightField(),
-			service.NewBatchPolicyField(loFieldBatching),
+			service.NewBatchPolicyField(hoFieldBatching),
 		)
 }
 
