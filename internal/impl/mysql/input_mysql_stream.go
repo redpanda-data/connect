@@ -563,9 +563,9 @@ func (i *mysqlStreamInput) readSnapshot(ctx context.Context, snapshot *Snapshot)
 		for {
 			var batchRows *sql.Rows
 			if numRowsProcessed == 0 {
-				batchRows, err = snapshot.querySnapshotTable(ctx, table, tablePks, nil, i.fieldSnapshotMaxBatchSize)
+				batchRows, err = snapshot.querySnapshotTable(ctx, table, tablePks, nil, nil, i.fieldSnapshotMaxBatchSize)
 			} else {
-				batchRows, err = snapshot.querySnapshotTable(ctx, table, tablePks, &lastSeenPksValues, i.fieldSnapshotMaxBatchSize)
+				batchRows, err = snapshot.querySnapshotTable(ctx, table, tablePks, nil, &lastSeenPksValues, i.fieldSnapshotMaxBatchSize)
 			}
 			if err != nil {
 				return fmt.Errorf("executing snapshot table query: %s", err)
