@@ -1407,3 +1407,116 @@ func TestIntegrationMySQLCDCRepeatedConnectionDrops(t *testing.T) {
 		})
 	}
 }
+
+func TestIntegrationMySQLChunkedSnapshot(t *testing.T) {
+	dsn, db := setupTestWithMySQLVersion(t, "8.0")
+
+	db.Exec(`CREATE TABLE chunked_snap (a INT PRIMARY KEY)`)
+	for i := 1; i <= 200; i++ {
+		db.Exec("INSERT INTO chunked_snap VALUES (?)", i)
+	}
+
+	inputYAML := fmt.Sprintf(`
+mysql_cdc:
+  dsn: %s
+  stream_snapshot: true
+  snapshot_max_batch_size: 50
+  snapshot_max_parallel_tables: 2
+  snapshot_chunks_per_table: 4
+  checkpoint_cache: foocache
+  tables:
+    - chunked_snap
+`, dsn)
+
+	cacheConf := fmt.Sprintf(`
+label: foocache
+file:
+  directory: %s`, t.TempDir())
+
+	collector := &idCollector{}
+	streamOutBuilder := service.NewStreamBuilder()
+	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: INFO`))
+	require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
+	require.NoError(t, streamOutBuilder.AddInputYAML(inputYAML))
+	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+		for _, msg := range mb {
+			data, err := msg.AsStructured()
+			if err != nil {
+				return fmt.Errorf("AsStructured: %w", err)
+			}
+			m, ok := data.(map[string]any)
+			if !ok {
+				return fmt.Errorf("unexpected type %T", data)
+			}
+			id, err := bloblang.ValueAsInt64(m["a"])
+			if err != nil {
+				return fmt.Errorf("ValueAsInt64: %w", err)
+			}
+			collector.add(id)
+		}
+		return nil
+	}))
+
+	streamOut, err := streamOutBuilder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(streamOut.Resources())
+
+	go func() {
+		if err := streamOut.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+			t.Error(err)
+		}
+	}()
+
+	collector.waitFor(t, 200, 2*time.Minute)
+	collector.assertAll(t, 200)
+	require.NoError(t, streamOut.StopWithin(10*time.Second))
+}
+
+func TestIntegrationMySQLChunkedSnapshotNonNumericPKFallback(t *testing.T) {
+	dsn, db := setupTestWithMySQLVersion(t, "8.0")
+
+	db.Exec(`CREATE TABLE varchar_snap (id VARCHAR(36) PRIMARY KEY, val INT)`)
+	for i := 1; i <= 50; i++ {
+		db.Exec("INSERT INTO varchar_snap VALUES (?, ?)", fmt.Sprintf("key-%d", i), i)
+	}
+
+	inputYAML := fmt.Sprintf(`
+mysql_cdc:
+  dsn: %s
+  stream_snapshot: true
+  snapshot_chunks_per_table: 4
+  checkpoint_cache: foocache
+  tables:
+    - varchar_snap
+`, dsn)
+
+	cacheConf := fmt.Sprintf(`
+label: foocache
+file:
+  directory: %s`, t.TempDir())
+
+	var count atomic.Int64
+	streamOutBuilder := service.NewStreamBuilder()
+	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: INFO`))
+	require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
+	require.NoError(t, streamOutBuilder.AddInputYAML(inputYAML))
+	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+		count.Add(int64(len(mb)))
+		return nil
+	}))
+
+	streamOut, err := streamOutBuilder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(streamOut.Resources())
+
+	go func() {
+		if err := streamOut.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+			t.Error(err)
+		}
+	}()
+
+	assert.Eventually(t, func() bool {
+		return count.Load() >= 50
+	}, 2*time.Minute, 100*time.Millisecond, "expected 50 rows from non-numeric PK table")
+	require.NoError(t, streamOut.StopWithin(10*time.Second))
+}
