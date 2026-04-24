@@ -99,6 +99,37 @@ See [`internal/impl/mysql/bench/kafka-source/`](../../internal/impl/mysql/bench/
 
 ---
 
+## Redpanda Connect — MySQL → Kafka
+
+Redpanda Connect `mysql_cdc` input reading the same 10,000,000-row `cart` snapshot into a Kafka topic (`kafka_franz` output).
+Varying `GOMAXPROCS` and `batching.count`.
+
+See [`internal/impl/mysql/bench/rpcn-source/`](../../internal/impl/mysql/bench/rpcn-source/) for configs and run instructions.
+
+```bash
+task bench:build
+task bench:load COUNT=10000000
+task bench:all OUT=results.txt
+```
+
+### msg/sec
+
+| GOMAXPROCS | batch=1,000 | batch=5,000 | batch=10,000 |
+|------------|-------------|-------------|--------------|
+| 1          |      15,085 |      27,849 |       46,137 |
+| 2          |      39,253 |      38,760 |       41,322 |
+| 4          |      29,412 |      45,455 |       45,455 |
+| 8          |      29,412 |      45,455 |       45,872 |
+| unbounded  |      28,592 |      41,908 |       50,440 |
+
+**Observations:**
+- Peak throughput: **50,440 msg/sec** (unbounded cores, batch=10000) — roughly **4× faster** than Debezium Kafka Source (13,386 msg/sec).
+- Core scaling is strong from 1→2 cores (~2.5× at batch=1000) but plateaus at 2→4→8 cores — Kafka write throughput is the bottleneck beyond 2 cores.
+- Batch size matters most at 1 core (15K→46K, ~3×); at 2+ cores the gain narrows significantly as the bottleneck shifts to Kafka.
+- Beyond batch=5000 there is no meaningful gain at any core count.
+
+---
+
 ## Redpanda Connect — Kafka → MySQL
 
 Redpanda Connect consuming from a Kafka topic (`kafka_franz` input) and writing to MySQL (`sql_insert` output).

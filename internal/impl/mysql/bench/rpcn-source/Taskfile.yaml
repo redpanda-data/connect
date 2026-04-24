@@ -1,0 +1,165 @@
+version: "3"
+
+silent: true
+
+tasks:
+  up:
+    desc: Start MySQL and Kafka
+    cmds:
+      - docker compose up -d
+      - until docker exec rpcns-mysql mysql -u root -ppassword -e "SELECT 1" > /dev/null 2>&1; do sleep 2; done
+      - until docker exec rpcns-kafka kafka-broker-api-versions --bootstrap-server localhost:9092 > /dev/null 2>&1; do sleep 2; done
+      - echo "Ready"
+
+  down:
+    desc: Stop and remove all containers and volumes
+    cmds:
+      - docker compose down -v --remove-orphans
+
+  bench:build:
+    desc: Build the redpanda-connect binary for benchmarking
+    cmds:
+      - go build -o /tmp/rpcns-bench ../../../../../cmd/redpanda-connect/
+      - echo "Binary built at /tmp/rpcns-bench"
+
+  bench:load:
+    desc: "Create table and load COUNT cart rows (e.g. task bench:load COUNT=10000000)"
+    vars:
+      COUNT: '{{.COUNT | default "10000000"}}'
+    cmds:
+      - docker exec rpcns-mysql mysql -u root -ppassword benchdb -e "TRUNCATE TABLE cart;" 2>/dev/null || true
+      - docker exec -i rpcns-mysql mysql -u root -ppassword benchdb < setup.sql
+      - docker exec rpcns-mysql mysql -u root -ppassword benchdb -e "CALL _bench_insert_cart({{.COUNT}});"
+      - docker exec rpcns-mysql mysql -u root -ppassword benchdb -e "DROP PROCEDURE IF EXISTS _bench_insert_cart;"
+
+  bench:run:
+    desc: "Run Redpanda Connect snapshot benchmark (e.g. task bench:run CORES=4 BATCH=1000)"
+    vars:
+      BATCH: '{{.BATCH | default "1000"}}'
+      CORES: '{{.CORES | default ""}}'
+      INTERVAL: '{{.INTERVAL | default "5"}}'
+    cmds:
+      - |
+        BATCH={{.BATCH}}
+        CORES="{{.CORES}}"
+        INTERVAL={{.INTERVAL}}
+        TOPIC="rpcns-bench-cart-${BATCH}"
+        CHECKPOINT_DIR="/tmp/rpcns_bench_checkpoint_${BATCH}"
+
+        if [ -n "$CORES" ]; then
+          echo "cores=$CORES  batch=$BATCH"
+        else
+          echo "cores=unbounded  batch=$BATCH"
+        fi
+
+        get_expected() {
+          docker exec rpcns-mysql mysql -u root -ppassword benchdb \
+            -sN -e "SELECT COUNT(*) FROM cart;" 2>/dev/null
+        }
+
+        get_kafka_count() {
+          timeout 5 docker exec rpcns-kafka kafka-get-offsets \
+            --bootstrap-server localhost:29092 \
+            --topic "$TOPIC" 2>/dev/null \
+            | awk -F: '{sum += $3} END {print sum+0}'
+        }
+
+        # Delete topic and wait up to 30s for it to be gone
+        timeout 10 docker exec rpcns-kafka kafka-topics --bootstrap-server localhost:29092 \
+          --delete --topic "$TOPIC" > /dev/null 2>&1 || true
+        ATTEMPTS=0
+        until [ $ATTEMPTS -ge 30 ] || \
+          ! timeout 5 docker exec rpcns-kafka kafka-topics --bootstrap-server localhost:29092 \
+            --list 2>/dev/null | grep -qF "$TOPIC"; do
+          sleep 1
+          ATTEMPTS=$((ATTEMPTS + 1))
+        done
+
+        rm -rf "$CHECKPOINT_DIR" && mkdir -p "$CHECKPOINT_DIR"
+
+        EXPECTED=$(get_expected)
+        echo "MySQL cart rows: $EXPECTED"
+
+        # Start pre-built binary in background (run bench:build first)
+        CHECKPOINT_DIR="$CHECKPOINT_DIR" BATCH_SIZE="$BATCH" KAFKA_TOPIC="$TOPIC" GOMAXPROCS="$CORES" \
+          /tmp/rpcns-bench run ./benchmark_config.yaml > /tmp/rpcns_bench.log 2>&1 &
+        RPCN_PID=$!
+
+        START=$(date +%s)
+        PREV_COUNT=0
+        PREV_TIME=$START
+        ZEROS=0
+        STARTED=0
+        START_TIMEOUT=12  # 12 polls × 5s = 60s max wait before first message
+
+        printf "%-10s  %-14s  %s\n" "TIME" "IN KAFKA" "MSG/S"
+
+        while true; do
+          sleep "$INTERVAL"
+          COUNT=$(get_kafka_count)
+          COUNT=${COUNT:-0}
+          NOW=$(date +%s)
+
+          DELTA_T=$((NOW - PREV_TIME))
+          DELTA_COUNT=$((COUNT - PREV_COUNT))
+          RATE=0
+          [ "$DELTA_T" -gt 0 ] && RATE=$((DELTA_COUNT / DELTA_T))
+
+          printf "%-10s  %-14s  %s msg/s\n" "$(date +%H:%M:%S)" "$COUNT" "$RATE"
+
+          if [ "$COUNT" -gt 0 ]; then
+            STARTED=1
+          fi
+
+          if [ "$STARTED" -eq 0 ]; then
+            ZEROS=$((ZEROS + 1))
+            if [ "$ZEROS" -ge "$START_TIMEOUT" ]; then
+              echo "ERROR: no messages produced within $((START_TIMEOUT * INTERVAL))s"
+              kill $RPCN_PID 2>/dev/null || true
+              break
+            fi
+          elif [ "$DELTA_COUNT" -eq 0 ]; then
+            ZEROS=$((ZEROS + 1))
+          else
+            ZEROS=0
+          fi
+
+          if [ "$STARTED" -eq 1 ] && [ "$ZEROS" -ge 3 ]; then
+            ELAPSED=$((NOW - START))
+            AVG=$(awk "BEGIN { printf \"%.0f\", $COUNT / ($ELAPSED > 0 ? $ELAPSED : 1) }")
+            kill $RPCN_PID 2>/dev/null || true
+            echo "---"
+            if [ -n "$CORES" ]; then echo "cores=$CORES  batch=$BATCH"; else echo "cores=unbounded  batch=$BATCH"; fi
+            echo "Total messages : $COUNT / $EXPECTED"
+            echo "Elapsed        : ${ELAPSED}s"
+            echo "Avg throughput : ${AVG} msg/s"
+            [ "$COUNT" -lt "$EXPECTED" ] && echo "WARNING: snapshot incomplete"
+            break
+          fi
+
+          PREV_COUNT=$COUNT
+          PREV_TIME=$NOW
+        done
+
+  bench:all:
+    desc: "Run all cores × batch combinations (e.g. task bench:all OUT=results.txt)"
+    vars:
+      OUT: '{{.OUT | default ""}}'
+    cmds:
+      - |
+        for cores in 1 2 4 8; do
+          for batch in 1000 5000 10000; do
+            CORES_ARG=""
+            [ -n "$cores" ] && CORES_ARG="CORES=$cores"
+            if [ -n "{{.OUT}}" ]; then
+              task bench:run $CORES_ARG BATCH=$batch 2>&1 | tee -a {{.OUT}}
+            else
+              task bench:run $CORES_ARG BATCH=$batch
+            fi
+          done
+        done
+
+  logs:
+    desc: Tail the last Redpanda Connect run log
+    cmds:
+      - tail -f /tmp/rpcns_bench.log
