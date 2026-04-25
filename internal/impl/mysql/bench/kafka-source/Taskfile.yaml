@@ -11,7 +11,34 @@ tasks:
   up:
     desc: Build and start MySQL, Kafka, and Kafka Connect with Debezium
     cmds:
-      - docker compose up -d --build
+      # Build the Kafka Connect image first, then start MySQL and Kafka only.
+      # Kafka Connect must not be running when we create the internal topics —
+      # if it starts first it auto-creates them with cleanup.policy=delete, which
+      # causes it to immediately crash with a ConfigException on restart.
+      - docker compose build kafka-connect
+      - docker compose up -d mysql kafka
+      - until docker exec myks-mysql mysqladmin ping -u root -ppassword --silent > /dev/null 2>&1; do sleep 2; done
+      - until docker exec myks-kafka kafka-broker-api-versions --bootstrap-server localhost:9092 > /dev/null 2>&1; do sleep 2; done
+      # (Re)create the Kafka Connect internal topics with cleanup.policy=compact.
+      # Always delete-and-recreate so a stale partition count never stalls the worker.
+      # _connect-configs must have exactly 1 partition (Kafka Connect requirement).
+      - |
+        for topic in _connect-configs _connect-offsets _connect-status; do
+          docker exec myks-kafka kafka-topics --bootstrap-server localhost:29092 \
+            --delete --topic "$topic" > /dev/null 2>&1 || true
+        done
+        sleep 2
+        docker exec myks-kafka kafka-topics --bootstrap-server localhost:29092 \
+          --create --topic _connect-configs \
+          --partitions 1 --replication-factor 1 \
+          --config cleanup.policy=compact > /dev/null
+        for topic in _connect-offsets _connect-status; do
+          docker exec myks-kafka kafka-topics --bootstrap-server localhost:29092 \
+            --create --topic "$topic" \
+            --partitions 25 --replication-factor 1 \
+            --config cleanup.policy=compact > /dev/null
+        done
+      - docker compose up -d kafka-connect
       - until curl -sf {{.CONNECT_URL}}/ > /dev/null 2>&1; do sleep 3; done
       - echo "Kafka Connect ready at {{.CONNECT_URL}}"
 
@@ -29,6 +56,12 @@ tasks:
       - docker exec -i myks-mysql mysql -u root -ppassword benchdb < setup.sql
       - docker exec myks-mysql mysql -u root -ppassword benchdb -e "CALL _bench_insert_cart({{.COUNT}});"
       - docker exec myks-mysql mysql -u root -ppassword benchdb -e "DROP PROCEDURE IF EXISTS _bench_insert_cart;"
+
+  bench:load:cdc:
+    desc: "Truncate cart and prepare insert procedure without loading data (for CDC benchmark)"
+    cmds:
+      - docker exec myks-mysql mysql -u root -ppassword benchdb -e "TRUNCATE TABLE cart;" 2>/dev/null || true
+      - docker exec -i myks-mysql mysql -u root -ppassword benchdb < setup.sql
 
   connector:status:
     desc: Show connector and task status
@@ -152,6 +185,212 @@ tasks:
 
           PREV_COUNT=$COUNT
           PREV_TIME=$NOW
+        done
+
+  bench:run:cdc:
+    desc: "Run Debezium CDC benchmark — connector starts first, then rows are inserted (e.g. task bench:run:cdc COUNT=1000000 BATCH_SIZE=2048)"
+    vars:
+      COUNT: '{{.COUNT | default "1000000"}}'
+      BATCH_SIZE: '{{.BATCH_SIZE | default "2048"}}'
+      INTERVAL: '{{.INTERVAL | default "5"}}'
+    cmds:
+      - |
+        COUNT={{.COUNT}}
+        BATCH_SIZE={{.BATCH_SIZE}}
+        QUEUE_SIZE=$(( BATCH_SIZE * 4 ))
+        INTERVAL={{.INTERVAL}}
+        CONNECTOR="mysql-debezium-cdc-bench-${BATCH_SIZE}"
+        TOPIC="cdc-bench-${BATCH_SIZE}.benchdb.cart"
+        SERVER_ID=$(( 334455 + RANDOM % 10000 ))
+
+        echo "batch=$BATCH_SIZE  queue=$QUEUE_SIZE  count=$COUNT"
+
+        get_kafka_count() {
+          timeout 5 docker exec myks-kafka kafka-get-offsets \
+            --bootstrap-server localhost:29092 \
+            --topic "$TOPIC" 2>/dev/null \
+            | awk -F: '{sum += $3} END {print sum+0}'
+        }
+
+        # Clean reset via API: STOP → delete connector offsets → delete connector.
+        # Never delete _connect-configs/_connect-offsets/_connect-status — those are
+        # Kafka Connect worker-internal topics; deleting them breaks the worker.
+        STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+          "{{.CONNECT_URL}}/connectors/$CONNECTOR/status")
+        if [ "$STATUS_CODE" = "200" ]; then
+          curl -s -X PUT "{{.CONNECT_URL}}/connectors/$CONNECTOR/stop" > /dev/null 2>&1 || true
+          ATTEMPTS=0
+          until [ $ATTEMPTS -ge 15 ] || \
+            curl -s "{{.CONNECT_URL}}/connectors/$CONNECTOR/status" 2>/dev/null | \
+            jq -e '.connector.state == "STOPPED"' > /dev/null 2>&1; do
+            sleep 1
+            ATTEMPTS=$((ATTEMPTS + 1))
+          done
+          curl -s -X DELETE "{{.CONNECT_URL}}/connectors/$CONNECTOR/offsets" > /dev/null 2>&1 || true
+          curl -s -X DELETE "{{.CONNECT_URL}}/connectors/$CONNECTOR" > /dev/null 2>&1 || true
+          ATTEMPTS=0
+          until [ $ATTEMPTS -ge 15 ] || \
+            ! curl -s "{{.CONNECT_URL}}/connectors/$CONNECTOR" 2>/dev/null | grep -q '"name"'; do
+            sleep 1
+            ATTEMPTS=$((ATTEMPTS + 1))
+          done
+        fi
+
+        # Delete only the data topic and schema history — never touch worker topics
+        for t in "$TOPIC" "cdc-bench-${BATCH_SIZE}-schema-history"; do
+          docker exec myks-kafka kafka-topics --bootstrap-server localhost:29092 \
+            --delete --topic "$t" > /dev/null 2>&1 || true
+        done
+        ATTEMPTS=0
+        until [ $ATTEMPTS -ge 30 ] || \
+          ! timeout 5 docker exec myks-kafka kafka-topics --bootstrap-server localhost:29092 \
+            --list 2>/dev/null | grep -qF "$TOPIC"; do
+          sleep 1
+          ATTEMPTS=$((ATTEMPTS + 1))
+        done
+
+        # Flush to a fresh binlog file so the connector starts exactly here
+        docker exec myks-mysql mysql -u root -ppassword -e "FLUSH BINARY LOGS;" 2>/dev/null
+        MASTER_STATUS=$(docker exec myks-mysql mysql -u root -ppassword -sN \
+          -e "SHOW MASTER STATUS;" 2>/dev/null)
+        BINLOG_FILE=$(echo "$MASTER_STATUS" | awk '{print $1}')
+        BINLOG_POS=$(echo "$MASTER_STATUS" | awk '{print $2}')
+        echo "CDC start: ${BINLOG_FILE} @ ${BINLOG_POS}"
+
+        # Register connector — snapshot.mode=schema_only: capture schema then stream from current position
+        HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+          -X POST "{{.CONNECT_URL}}/connectors" \
+          -H "Content-Type: application/json" \
+          -d "{
+            \"name\": \"$CONNECTOR\",
+            \"config\": {
+              \"connector.class\": \"io.debezium.connector.mysql.MySqlConnector\",
+              \"database.hostname\": \"mysql\",
+              \"database.port\": \"3306\",
+              \"database.user\": \"root\",
+              \"database.password\": \"password\",
+              \"database.server.id\": \"$SERVER_ID\",
+              \"topic.prefix\": \"cdc-bench-${BATCH_SIZE}\",
+              \"table.include.list\": \"benchdb.cart\",
+              \"schema.history.internal.kafka.bootstrap.servers\": \"kafka:29092\",
+              \"schema.history.internal.kafka.topic\": \"cdc-bench-${BATCH_SIZE}-schema-history\",
+              \"snapshot.mode\": \"schema_only\",
+              \"max.batch.size\": \"$BATCH_SIZE\",
+              \"max.queue.size\": \"$QUEUE_SIZE\",
+              \"key.converter\": \"org.apache.kafka.connect.json.JsonConverter\",
+              \"key.converter.schemas.enable\": \"false\",
+              \"value.converter\": \"org.apache.kafka.connect.json.JsonConverter\",
+              \"value.converter.schemas.enable\": \"false\"
+            }
+          }")
+
+        if [ "$HTTP_CODE" != "201" ]; then
+          echo "ERROR: failed to register connector (HTTP $HTTP_CODE)"
+          exit 1
+        fi
+
+        # Wait for connector task RUNNING — .connector.state can show RUNNING with empty tasks list
+        echo "Waiting for connector..."
+        ATTEMPTS=0
+        until [ $ATTEMPTS -ge 60 ] || \
+          curl -s "{{.CONNECT_URL}}/connectors/$CONNECTOR/status" 2>/dev/null | \
+          jq -e '(.tasks | length) > 0 and .tasks[0].state == "RUNNING"' > /dev/null 2>&1; do
+          sleep 1
+          ATTEMPTS=$((ATTEMPTS + 1))
+        done
+
+        if [ $ATTEMPTS -ge 60 ]; then
+          echo "ERROR: connector failed to reach RUNNING state"
+          curl -s "{{.CONNECT_URL}}/connectors/$CONNECTOR/status" | jq .
+          exit 1
+        fi
+
+        # Insert rows and start timer
+        echo "Inserting $COUNT rows..."
+        START=$(date +%s)
+        docker exec myks-mysql mysql -u root -ppassword benchdb \
+          -e "CALL _bench_insert_cart($COUNT);" 2>/dev/null &
+        INSERT_PID=$!
+
+        PREV_COUNT=0
+        PREV_TIME=$START
+        ZEROS=0
+        STARTED=0
+        START_TIMEOUT=24
+        CDC_IDLE_THRESHOLD=3
+
+        printf "%-10s  %-14s  %s\n" "TIME" "IN KAFKA" "MSG/S"
+
+        while true; do
+          sleep "$INTERVAL"
+          KAFKA_COUNT=$(get_kafka_count)
+          KAFKA_COUNT=${KAFKA_COUNT:-0}
+          NOW=$(date +%s)
+
+          DELTA_T=$((NOW - PREV_TIME))
+          DELTA_COUNT=$((KAFKA_COUNT - PREV_COUNT))
+          RATE=0
+          [ "$DELTA_T" -gt 0 ] && RATE=$((DELTA_COUNT / DELTA_T))
+
+          printf "%-10s  %-14s  %s msg/s\n" "$(date +%H:%M:%S)" "$KAFKA_COUNT" "$RATE"
+
+          if [ "$KAFKA_COUNT" -gt 0 ]; then
+            STARTED=1
+          fi
+
+          if [ "$STARTED" -eq 0 ]; then
+            ZEROS=$((ZEROS + 1))
+            if [ "$ZEROS" -ge "$START_TIMEOUT" ]; then
+              echo "ERROR: no messages produced within $((START_TIMEOUT * INTERVAL))s"
+              curl -s "{{.CONNECT_URL}}/connectors/$CONNECTOR/status" | jq .
+              break
+            fi
+          elif [ "$DELTA_COUNT" -eq 0 ]; then
+            ZEROS=$((ZEROS + 1))
+          else
+            ZEROS=0
+          fi
+
+          if [ "$KAFKA_COUNT" -ge "$COUNT" ]; then
+            ELAPSED=$((NOW - START))
+            AVG=$(awk "BEGIN { printf \"%.0f\", $COUNT / ($ELAPSED > 0 ? $ELAPSED : 1) }")
+            wait $INSERT_PID 2>/dev/null || true
+            echo "---"
+            echo "batch=$BATCH_SIZE  queue=$QUEUE_SIZE"
+            echo "Total messages : $KAFKA_COUNT / $COUNT"
+            echo "Elapsed        : ${ELAPSED}s"
+            echo "Avg throughput : ${AVG} msg/s"
+            break
+          elif [ "$STARTED" -eq 1 ] && [ "$ZEROS" -ge "$CDC_IDLE_THRESHOLD" ]; then
+            ELAPSED=$((NOW - START))
+            AVG=$(awk "BEGIN { printf \"%.0f\", $KAFKA_COUNT / ($ELAPSED > 0 ? $ELAPSED : 1) }")
+            wait $INSERT_PID 2>/dev/null || true
+            echo "---"
+            echo "batch=$BATCH_SIZE  queue=$QUEUE_SIZE"
+            echo "Total messages : $KAFKA_COUNT / $COUNT"
+            echo "Elapsed        : ${ELAPSED}s"
+            echo "Avg throughput : ${AVG} msg/s"
+            [ "$KAFKA_COUNT" -lt "$COUNT" ] && echo "WARNING: incomplete — insert may still be running"
+            break
+          fi
+
+          PREV_COUNT=$KAFKA_COUNT
+          PREV_TIME=$NOW
+        done
+
+  bench:all:cdc:
+    desc: "Run all batch size combinations for CDC (e.g. task bench:all:cdc COUNT=1000000 OUT=results.txt)"
+    vars:
+      COUNT: '{{.COUNT | default "1000000"}}'
+      OUT: '{{.OUT | default ""}}'
+    cmds:
+      - |
+        for size in 1000 5000 10000; do
+          if [ -n "{{.OUT}}" ]; then
+            task bench:run:cdc COUNT={{.COUNT}} BATCH_SIZE=$size 2>&1 | tee -a {{.OUT}}
+          else
+            task bench:run:cdc COUNT={{.COUNT}} BATCH_SIZE=$size
+          fi
         done
 
   bench:all:

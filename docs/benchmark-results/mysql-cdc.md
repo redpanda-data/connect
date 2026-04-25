@@ -155,3 +155,20 @@ task bench:run CORES=4 BATCH=10000
 - Throughput plateaus at 4→8 cores (~60-64K msg/sec) — MySQL write throughput is the bottleneck, not CPU.
 - Redpanda Connect is **~1.5× faster** than Kafka Connect JDBC Sink at peak (64K vs 43K msg/sec) using fewer resources (4 cores vs 16 tasks).
 - Compared to MySQL CDC (191K msg/sec), the Kafka→MySQL write path is ~3× slower — the extra hop through Kafka and MySQL insert overhead both contribute.
+
+---
+
+## Kafka Connect CDC (Debezium Source — Change Events)
+
+Debezium MySQL source connector streaming CDC change events (inserts) for 10,000,000 rows into a Kafka topic.
+Varying `max.batch.size` and `max.queue.size`.
+
+See [`internal/impl/mysql/bench/kafka-source/`](../../internal/impl/mysql/bench/kafka-source/) for configs and run instructions.
+
+### msg/sec
+
+| batch.size | queue.size | elapsed | msg/sec |
+|------------|------------|---------|---------|
+|  1,000     |  4,000     | ~549s   |  18,227 |
+|  5,000     | 20,000     | 392s    |  25,510 |
+| 10,000     | 40,000     | 427s    |  23,419 |
