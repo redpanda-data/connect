@@ -2,13 +2,15 @@
 
 **Environment:** Intel Core i7-10850H @ 2.70GHz, 32 GB RAM, WSL2 (Linux 6.6.87.2), x86_64
 
-See [`internal/impl/mysql/bench/`](../../internal/impl/mysql/bench/) for configs and run instructions.
-
 ---
 
-## CDC / Snapshot — Small Rows (cart table)
+## Redpanda Connect — Pure MySQL Read Throughput (no Kafka)
 
-Full snapshot of `cart`: 10,000,000 rows × ~600 B. Varying `GOMAXPROCS` and `batching.count`.
+Redpanda Connect `mysql_cdc` input reading a full snapshot of `cart` (10,000,000 rows × ~600 B) and dropping all output immediately.
+No Kafka, no sink — this measures the raw MySQL read ceiling.
+Varying `GOMAXPROCS` and `batching.count`.
+
+See [`internal/impl/mysql/bench/`](../../internal/impl/mysql/bench/) for configs and run instructions.
 
 ```bash
 task bench:load:cart COUNT=10000000
@@ -45,7 +47,7 @@ task bench:run CORES=2 BATCH=1000
 
 ## Kafka Connect JDBC Sink Comparison
 
-Same 10,000,000 rows written from Kafka to MySQL via Confluent JDBC Sink connector.
+10,000,000 rows written from Kafka to MySQL via Confluent JDBC Sink connector.
 Schema/payload JSON envelope, 16 partitions.
 
 See [`internal/impl/mysql/bench/mysql-write/jdbc-sink/`](../../internal/impl/mysql/bench/mysql-write/jdbc-sink/) for configs and run instructions.
@@ -80,7 +82,7 @@ task bench:run TASKS=16
 
 ## Debezium Kafka Source Connector Comparison
 
-Debezium MySQL source connector reading the same 10,000,000-row `cart` snapshot into a Kafka topic.
+Debezium MySQL source connector reading 10,000,000-row `cart` snapshot into a Kafka topic.
 Varying `max.batch.size`, `max.queue.size`, and `max.poll.records`.
 
 See [`internal/impl/mysql/bench/mysql-read/debezium/`](../../internal/impl/mysql/bench/mysql-read/debezium/) for configs and run instructions.
@@ -101,7 +103,7 @@ See [`internal/impl/mysql/bench/mysql-read/debezium/`](../../internal/impl/mysql
 
 ## Redpanda Connect — MySQL → Kafka
 
-Redpanda Connect `mysql_cdc` input reading the same 10,000,000-row `cart` snapshot into a Kafka topic (`kafka_franz` output).
+Redpanda Connect `mysql_cdc` input reading 10,000,000-row `cart` snapshot into a Kafka topic (`kafka_franz` output).
 Varying `GOMAXPROCS` and `batching.count`.
 
 See [`internal/impl/mysql/bench/mysql-read/rpcn/`](../../internal/impl/mysql/bench/mysql-read/rpcn/) for configs and run instructions.

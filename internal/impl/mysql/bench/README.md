@@ -1,6 +1,26 @@
-# MySQL CDC Benchmark
+# MySQL Benchmark Suite
 
-Benchmark for `mysql_cdc` input — measures snapshot throughput reading from MySQL via binlog streaming.
+This folder benchmarks MySQL throughput across two directions and multiple tools.
+
+## What each folder measures
+
+| Folder | Direction | Tool | Redpanda Connect equivalent |
+|---|---|---|---|
+| `mysql-read/debezium/` | MySQL → Kafka | Debezium source connector | `mysql_cdc` input |
+| `mysql-read/rpcn/` | MySQL → Kafka | Redpanda Connect | `mysql_cdc` input |
+| `mysql-write/jdbc-sink/` | Kafka → MySQL | Confluent JDBC Sink connector | `sql_insert` output |
+| `mysql-write/rpcn/` | Kafka → MySQL | Redpanda Connect | `sql_insert` output |
+
+## What this folder measures
+
+This root benchmark measures **pure `mysql_cdc` read throughput** — no Kafka involved.
+The output is dropped immediately, so the number reflects the MySQL read ceiling with no downstream bottleneck.
+This is what produced the **191K msg/sec peak** in the snapshot results.
+
+Key differences from the subfolders:
+- **No Kafka** — output is `drop`, not a real destination
+- **Three tables** (`users`, `products`, `cart`) — subfolders use only `cart`
+- **Throughput measured via Prometheus metrics** on the debug endpoint — subfolders measure Kafka offsets externally
 
 See [`docs/benchmark-results/mysql-cdc.md`](../../../../docs/benchmark-results/mysql-cdc.md) for full results.
 
