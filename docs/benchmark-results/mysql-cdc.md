@@ -48,7 +48,7 @@ task bench:run CORES=2 BATCH=1000
 Same 10,000,000 rows written from Kafka to MySQL via Confluent JDBC Sink connector.
 Schema/payload JSON envelope, 16 partitions.
 
-See [`internal/impl/mysql/bench/kafka-connector/`](../../internal/impl/mysql/bench/kafka-connector/) for configs and run instructions.
+See [`internal/impl/mysql/bench/mysql-write/jdbc-sink/`](../../internal/impl/mysql/bench/mysql-write/jdbc-sink/) for configs and run instructions.
 
 ```bash
 task bench:load COUNT=10000000
@@ -83,7 +83,7 @@ task bench:run TASKS=16
 Debezium MySQL source connector reading the same 10,000,000-row `cart` snapshot into a Kafka topic.
 Varying `max.batch.size`, `max.queue.size`, and `max.poll.records`.
 
-See [`internal/impl/mysql/bench/kafka-source/`](../../internal/impl/mysql/bench/kafka-source/) for configs and run instructions.
+See [`internal/impl/mysql/bench/mysql-read/debezium/`](../../internal/impl/mysql/bench/mysql-read/debezium/) for configs and run instructions.
 
 ### msg/sec
 
@@ -104,7 +104,7 @@ See [`internal/impl/mysql/bench/kafka-source/`](../../internal/impl/mysql/bench/
 Redpanda Connect `mysql_cdc` input reading the same 10,000,000-row `cart` snapshot into a Kafka topic (`kafka_franz` output).
 Varying `GOMAXPROCS` and `batching.count`.
 
-See [`internal/impl/mysql/bench/rpcn-source/`](../../internal/impl/mysql/bench/rpcn-source/) for configs and run instructions.
+See [`internal/impl/mysql/bench/mysql-read/rpcn/`](../../internal/impl/mysql/bench/mysql-read/rpcn/) for configs and run instructions.
 
 ```bash
 task bench:build
@@ -135,7 +135,7 @@ task bench:all OUT=results.txt
 Redpanda Connect consuming from a Kafka topic (`kafka_franz` input) and writing to MySQL (`sql_insert` output).
 Same Kafka broker as above (`cpus: 3`), 16 partitions. Varying `GOMAXPROCS` and `batching.count`.
 
-See [`internal/impl/mysql/bench/redpanda-connector/`](../../internal/impl/mysql/bench/redpanda-connector/) for configs and run instructions.
+See [`internal/impl/mysql/bench/mysql-write/rpcn/`](../../internal/impl/mysql/bench/mysql-write/rpcn/) for configs and run instructions.
 
 ```bash
 task bench:load COUNT=10000000
@@ -163,7 +163,7 @@ task bench:run CORES=4 BATCH=10000
 Debezium MySQL source connector streaming CDC change events (inserts) for 10,000,000 rows into a Kafka topic.
 Varying `max.batch.size` and `max.queue.size`.
 
-See [`internal/impl/mysql/bench/kafka-source/`](../../internal/impl/mysql/bench/kafka-source/) for configs and run instructions.
+See [`internal/impl/mysql/bench/mysql-read/debezium/`](../../internal/impl/mysql/bench/mysql-read/debezium/) for configs and run instructions.
 
 ### msg/sec
 
@@ -185,7 +185,7 @@ See [`internal/impl/mysql/bench/kafka-source/`](../../internal/impl/mysql/bench/
 Redpanda Connect `mysql_cdc` input streaming CDC change events (inserts) for 10,000,000 rows into a Kafka topic (`kafka_franz` output).
 Varying `GOMAXPROCS` and `batching.count`.
 
-See [`internal/impl/mysql/bench/rpcn-source/`](../../internal/impl/mysql/bench/rpcn-source/) for configs and run instructions.
+See [`internal/impl/mysql/bench/mysql-read/rpcn/`](../../internal/impl/mysql/bench/mysql-read/rpcn/) for configs and run instructions.
 
 ```bash
 task bench:build

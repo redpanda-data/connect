@@ -32,7 +32,7 @@ tasks:
       - docker exec myrpc-kafka kafka-topics --bootstrap-server localhost:29092 --delete --topic bench-events
       - until ! docker exec myrpc-kafka kafka-topics --bootstrap-server localhost:29092 --list 2>/dev/null | grep -q '^bench-events$'; do sleep 1; done
       - docker exec myrpc-kafka kafka-topics --bootstrap-server localhost:29092 --create --topic bench-events --partitions 16 --replication-factor 1
-      - go run ../../../../../cmd/redpanda-connect/main.go run ./producer.yaml
+      - go run ../../../../../../cmd/redpanda-connect/main.go run ./producer.yaml
 
   bench:run:
     desc: "Run benchmark (e.g. task bench:run CORES=4 BATCH=10000)"
@@ -74,7 +74,7 @@ tasks:
         echo "Topic contains $TOTAL messages"
 
         # Start Redpanda Connect in background — time from here
-        go run ../../../../../cmd/redpanda-connect/main.go run ./benchmark_config.yaml \
+        go run ../../../../../../cmd/redpanda-connect/main.go run ./benchmark_config.yaml \
           2>&1 | grep --line-buffered -v "Querying snapshot" &
         RPC_PID=$!
 

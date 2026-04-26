@@ -129,7 +129,7 @@ tasks:
       - docker exec mykc-kafka kafka-topics --bootstrap-server localhost:29092 --delete --topic bench-events
       - until ! docker exec mykc-kafka kafka-topics --bootstrap-server localhost:29092 --list 2>/dev/null | grep -q '^bench-events$'; do sleep 1; done
       - docker exec mykc-kafka kafka-topics --bootstrap-server localhost:29092 --create --topic bench-events --partitions 16 --replication-factor 1
-      - go run ../../../../../cmd/redpanda-connect/main.go run ./producer.yaml
+      - go run ../../../../../../cmd/redpanda-connect/main.go run ./producer.yaml
 
   bench:run:
     desc: "Run JDBC sink benchmark against pre-loaded Kafka topic (e.g. task bench:run TASKS=16)"

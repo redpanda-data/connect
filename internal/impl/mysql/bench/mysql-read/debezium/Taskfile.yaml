@@ -381,7 +381,7 @@ tasks:
   rpcn:build:
     desc: Build the redpanda-connect binary for benchmarking
     cmds:
-      - go build -o /tmp/myks-rpcn-bench ../../../../../cmd/redpanda-connect/
+      - go build -o /tmp/myks-rpcn-bench ../../../../../../cmd/redpanda-connect/
       - echo "Binary built at /tmp/myks-rpcn-bench"
 
   bench:run:rpcn:cdc:

@@ -3,10 +3,10 @@
 # can map fields to MySQL columns without a Schema Registry.
 #
 # Usage:
-#   go run ../../../../../cmd/redpanda-connect/main.go run ./producer.yaml
+#   go run ../../../../../../cmd/redpanda-connect/main.go run ./producer.yaml
 # Override count/brokers:
 #   COUNT=5000000 KAFKA_BOOTSTRAP=localhost:9092 \
-#   go run ../../../../../cmd/redpanda-connect/main.go run ./producer.yaml
+#   go run ../../../../../../cmd/redpanda-connect/main.go run ./producer.yaml
 
 input:
   generate:

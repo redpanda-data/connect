@@ -1,7 +1,7 @@
 # Produces COUNT synthetic events to the bench-events Kafka topic.
 #
 # Usage:
-#   COUNT=10000000 go run ../../../../../cmd/redpanda-connect/main.go run ./producer.yaml
+#   COUNT=10000000 go run ../../../../../../cmd/redpanda-connect/main.go run ./producer.yaml
 
 input:
   generate:

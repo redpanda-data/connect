@@ -19,7 +19,7 @@ tasks:
   bench:build:
     desc: Build the redpanda-connect binary for benchmarking
     cmds:
-      - go build -o /tmp/rpcns-bench ../../../../../cmd/redpanda-connect/
+      - go build -o /tmp/rpcns-bench ../../../../../../cmd/redpanda-connect/
       - echo "Binary built at /tmp/rpcns-bench"
 
   bench:load:
