@@ -52,6 +52,9 @@ tasks:
           echo "cores=unbounded  batch=$BATCH"
         fi
 
+        # Kill any leftover connector from a previous run
+        pkill -9 -f "/tmp/rpcns-bench run" 2>/dev/null || true
+
         get_expected() {
           docker exec rpcns-mysql mysql -u root -ppassword benchdb \
             -sN -e "SELECT COUNT(*) FROM cart;" 2>/dev/null
@@ -115,7 +118,7 @@ tasks:
             ZEROS=$((ZEROS + 1))
             if [ "$ZEROS" -ge "$START_TIMEOUT" ]; then
               echo "ERROR: no messages produced within $((START_TIMEOUT * INTERVAL))s"
-              kill $RPCN_PID 2>/dev/null || true
+              kill -9 $RPCN_PID 2>/dev/null || true
               break
             fi
           elif [ "$DELTA_COUNT" -eq 0 ]; then
@@ -127,7 +130,7 @@ tasks:
           if [ "$STARTED" -eq 1 ] && [ "$ZEROS" -ge 3 ]; then
             ELAPSED=$((NOW - START))
             AVG=$(awk "BEGIN { printf \"%.0f\", $COUNT / ($ELAPSED > 0 ? $ELAPSED : 1) }")
-            kill $RPCN_PID 2>/dev/null || true
+            kill -9 $RPCN_PID 2>/dev/null || true
             echo "---"
             if [ -n "$CORES" ]; then echo "cores=$CORES  batch=$BATCH"; else echo "cores=unbounded  batch=$BATCH"; fi
             echo "Total messages : $COUNT / $EXPECTED"
@@ -138,6 +141,146 @@ tasks:
           fi
 
           PREV_COUNT=$COUNT
+          PREV_TIME=$NOW
+        done
+
+  bench:load:cdc:
+    desc: "Truncate cart and prepare insert procedure without loading data (e.g. task bench:load:cdc)"
+    cmds:
+      - docker exec rpcns-mysql mysql -u root -ppassword benchdb -e "TRUNCATE TABLE cart;" 2>/dev/null || true
+      - docker exec -i rpcns-mysql mysql -u root -ppassword benchdb < setup.sql
+
+  bench:run:cdc:
+    desc: "Run CDC benchmark — connector starts first, then rows are inserted (e.g. task bench:run:cdc CORES=4 BATCH=5000 COUNT=1000000)"
+    vars:
+      BATCH: '{{.BATCH | default "5000"}}'
+      CORES: '{{.CORES | default "4"}}'
+      COUNT: '{{.COUNT | default "1000000"}}'
+      INTERVAL: '{{.INTERVAL | default "5"}}'
+    cmds:
+      - |
+        BATCH={{.BATCH}}
+        CORES={{.CORES}}
+        COUNT={{.COUNT}}
+        INTERVAL={{.INTERVAL}}
+        TOPIC="rpcns-bench-cart-cdc-${BATCH}"
+        CHECKPOINT_DIR="/tmp/rpcns_bench_checkpoint_cdc_${BATCH}"
+
+        echo "cores=$CORES  batch=$BATCH  count=$COUNT"
+
+        # Kill any leftover connector from a previous run
+        pkill -9 -f "/tmp/rpcns-bench run" 2>/dev/null || true
+
+        get_kafka_count() {
+          timeout 5 docker exec rpcns-kafka kafka-get-offsets \
+            --bootstrap-server localhost:29092 \
+            --topic "$TOPIC" 2>/dev/null \
+            | awk -F: '{sum += $3} END {print sum+0}'
+        }
+
+        # Reset topic and wait until fully gone so old messages don't inflate the count
+        docker exec rpcns-kafka kafka-topics --bootstrap-server localhost:29092 \
+          --delete --topic "$TOPIC" > /dev/null 2>&1 || true
+        ATTEMPTS=0
+        until [ $ATTEMPTS -ge 30 ] || \
+          ! timeout 5 docker exec rpcns-kafka kafka-topics --bootstrap-server localhost:29092 \
+            --list 2>/dev/null | grep -qF "$TOPIC"; do
+          sleep 1
+          ATTEMPTS=$((ATTEMPTS + 1))
+        done
+        rm -rf "$CHECKPOINT_DIR" && mkdir -p "$CHECKPOINT_DIR"
+
+        # Rotate to a fresh binlog file and pre-seed the checkpoint so the
+        # connector always starts from exactly this position, regardless of
+        # any historical binlog data or stale canal state in /tmp.
+        docker exec rpcns-mysql mysql -u root -ppassword -e "FLUSH BINARY LOGS;" 2>/dev/null
+        MASTER_STATUS=$(docker exec rpcns-mysql mysql -u root -ppassword -sN \
+          -e "SHOW MASTER STATUS;" 2>/dev/null)
+        BINLOG_FILE=$(echo "$MASTER_STATUS" | awk '{print $1}')
+        BINLOG_POS=$(echo "$MASTER_STATUS" | awk '{print $2}')
+        BINLOG_POS_HEX=$(awk "BEGIN { printf \"%08X\", $BINLOG_POS }")
+        printf "%s@%s" "$BINLOG_FILE" "$BINLOG_POS_HEX" > "${CHECKPOINT_DIR}/mysql_binlog_position"
+        echo "CDC start: ${BINLOG_FILE} @ ${BINLOG_POS}"
+
+        # Start connector in CDC mode (no snapshot)
+        CHECKPOINT_DIR="$CHECKPOINT_DIR" BATCH_SIZE="$BATCH" KAFKA_TOPIC="$TOPIC" \
+          GOMAXPROCS="$CORES" STREAM_SNAPSHOT=false \
+          /tmp/rpcns-bench run ./benchmark_config.yaml > /tmp/rpcns_bench_cdc.log 2>&1 &
+        RPCN_PID=$!
+
+        # Wait for connector to establish its binlog connection
+        sleep 3
+
+        # Insert rows and start timer
+        echo "Inserting $COUNT rows..."
+        START=$(date +%s)
+        docker exec rpcns-mysql mysql -u root -ppassword benchdb \
+          -e "CALL _bench_insert_cart($COUNT);" 2>/dev/null &
+        INSERT_PID=$!
+
+        PREV_COUNT=0
+        PREV_TIME=$START
+        ZEROS=0
+        STARTED=0
+        START_TIMEOUT=24
+        CDC_IDLE_THRESHOLD=3
+
+        printf "%-10s  %-14s  %s\n" "TIME" "IN KAFKA" "MSG/S"
+
+        while true; do
+          sleep "$INTERVAL"
+          KAFKA_COUNT=$(get_kafka_count)
+          KAFKA_COUNT=${KAFKA_COUNT:-0}
+          NOW=$(date +%s)
+
+          DELTA_T=$((NOW - PREV_TIME))
+          DELTA_COUNT=$((KAFKA_COUNT - PREV_COUNT))
+          RATE=0
+          [ "$DELTA_T" -gt 0 ] && RATE=$((DELTA_COUNT / DELTA_T))
+
+          printf "%-10s  %-14s  %s msg/s\n" "$(date +%H:%M:%S)" "$KAFKA_COUNT" "$RATE"
+
+          if [ "$KAFKA_COUNT" -gt 0 ]; then
+            STARTED=1
+          fi
+
+          if [ "$STARTED" -eq 0 ]; then
+            ZEROS=$((ZEROS + 1))
+            if [ "$ZEROS" -ge "$START_TIMEOUT" ]; then
+              echo "ERROR: no messages produced within $((START_TIMEOUT * INTERVAL))s"
+              kill -9 $RPCN_PID $INSERT_PID 2>/dev/null || true
+              break
+            fi
+          elif [ "$DELTA_COUNT" -eq 0 ]; then
+            ZEROS=$((ZEROS + 1))
+          else
+            ZEROS=0
+          fi
+
+          if [ "$KAFKA_COUNT" -ge "$COUNT" ]; then
+            ELAPSED=$((NOW - START))
+            AVG=$(awk "BEGIN { printf \"%.0f\", $COUNT / ($ELAPSED > 0 ? $ELAPSED : 1) }")
+            kill -9 $RPCN_PID $INSERT_PID 2>/dev/null || true
+            echo "---"
+            echo "cores=$CORES  batch=$BATCH"
+            echo "Total messages : $KAFKA_COUNT / $COUNT"
+            echo "Elapsed        : ${ELAPSED}s"
+            echo "Avg throughput : ${AVG} msg/s"
+            break
+          elif [ "$STARTED" -eq 1 ] && [ "$ZEROS" -ge "$CDC_IDLE_THRESHOLD" ]; then
+            ELAPSED=$((NOW - START))
+            AVG=$(awk "BEGIN { printf \"%.0f\", $KAFKA_COUNT / ($ELAPSED > 0 ? $ELAPSED : 1) }")
+            kill -9 $RPCN_PID $INSERT_PID 2>/dev/null || true
+            echo "---"
+            echo "cores=$CORES  batch=$BATCH"
+            echo "Total messages : $KAFKA_COUNT / $COUNT"
+            echo "Elapsed        : ${ELAPSED}s"
+            echo "Avg throughput : ${AVG} msg/s"
+            [ "$KAFKA_COUNT" -lt "$COUNT" ] && echo "WARNING: incomplete — insert may still be running"
+            break
+          fi
+
+          PREV_COUNT=$KAFKA_COUNT
           PREV_TIME=$NOW
         done
 
@@ -159,7 +302,29 @@ tasks:
           done
         done
 
+  bench:all:cdc:
+    desc: "Run all cores × batch combinations for CDC (e.g. task bench:all:cdc COUNT=1000000 OUT=results.txt)"
+    vars:
+      COUNT: '{{.COUNT | default "1000000"}}'
+      OUT: '{{.OUT | default ""}}'
+    cmds:
+      - |
+        for cores in 1 2 4 8; do
+          for batch in 1000 5000 10000; do
+            if [ -n "{{.OUT}}" ]; then
+              task bench:run:cdc CORES=$cores BATCH=$batch COUNT={{.COUNT}} 2>&1 | tee -a {{.OUT}}
+            else
+              task bench:run:cdc CORES=$cores BATCH=$batch COUNT={{.COUNT}}
+            fi
+          done
+        done
+
   logs:
     desc: Tail the last Redpanda Connect run log
     cmds:
       - tail -f /tmp/rpcns_bench.log
+
+  logs:cdc:
+    desc: Tail the last Redpanda Connect CDC run log
+    cmds:
+      - tail -f /tmp/rpcns_bench_cdc.log

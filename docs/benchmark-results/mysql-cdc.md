@@ -172,3 +172,38 @@ See [`internal/impl/mysql/bench/kafka-source/`](../../internal/impl/mysql/bench/
 |  1,000     |  4,000     | ~549s   |  18,227 |
 |  5,000     | 20,000     | 392s    |  25,510 |
 | 10,000     | 40,000     | 427s    |  23,419 |
+
+**Observations:**
+- Peak throughput: **25,510 msg/sec** at batch=5000/queue=20000.
+- Increasing to batch=10000 gives no further gain (23,419 msg/sec) — throughput plateaus around 25K msg/sec regardless of batch size.
+- Batch size has diminishing returns beyond 5000; the bottleneck is Debezium's internal processing, not fetch/queue sizing.
+
+---
+
+## Redpanda Connect CDC — MySQL → Kafka
+
+Redpanda Connect `mysql_cdc` input streaming CDC change events (inserts) for 10,000,000 rows into a Kafka topic (`kafka_franz` output).
+Varying `GOMAXPROCS` and `batching.count`.
+
+See [`internal/impl/mysql/bench/rpcn-source/`](../../internal/impl/mysql/bench/rpcn-source/) for configs and run instructions.
+
+```bash
+task bench:build
+task bench:load:cdc
+task bench:all:cdc COUNT=10000000 OUT=cdc_results.txt
+```
+
+### msg/sec
+
+| GOMAXPROCS | batch=1,000 | batch=5,000 | batch=10,000 |
+|------------|-------------|-------------|--------------|
+| 1          |      17,361 |      19,920 |       19,920 |
+| 2          |      18,939 |      15,873 |       15,974 |
+| 4          |      15,873 |      15,873 |       15,823 |
+| 8          |      16,077 |      15,773 |       16,287 |
+
+**Observations:**
+- Peak throughput: **19,920 msg/sec** at 1 core, batch=5000/10000.
+- Adding more cores provides no benefit — throughput is flat across 1→8 cores (~15–19K msg/sec). The bottleneck is the single-threaded CDC reader, not CPU or Kafka write parallelism.
+- Batch size has minimal impact beyond 5000; the gain from 1000→5000 at 1 core (~15%) disappears entirely at 2+ cores.
+- **Debezium CDC is ~1.3× faster** (~25K vs ~20K msg/sec) — the only benchmark where Redpanda Connect does not win. All other workloads (snapshot read, Kafka→MySQL write) favor Redpanda Connect.

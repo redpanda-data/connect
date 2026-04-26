@@ -1,7 +1,7 @@
 cache_resources:
   - label: checkpoint
     file:
-      directory: ${CHECKPOINT_DIR:/tmp/rpcns_bench_checkpoint}
+      directory: ${CHECKPOINT_DIR:/tmp/myks_rpcn_bench_checkpoint}
 
 input:
   mysql_cdc:
@@ -9,16 +9,16 @@ input:
     tables:
       - cart
     checkpoint_cache: checkpoint
-    stream_snapshot: ${STREAM_SNAPSHOT:true}
+    stream_snapshot: false
     batching:
-      count: ${BATCH_SIZE:1000}
+      count: ${BATCH_SIZE:5000}
       period: 1s
 
 output:
   kafka_franz:
     seed_brokers:
       - localhost:9092
-    topic: ${KAFKA_TOPIC:rpcns-bench-cart}
+    topic: ${KAFKA_TOPIC:rpcn-cdc-bench-cart}
 
 logger:
   level: WARN

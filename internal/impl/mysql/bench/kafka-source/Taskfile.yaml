@@ -378,6 +378,158 @@ tasks:
           PREV_TIME=$NOW
         done
 
+  rpcn:build:
+    desc: Build the redpanda-connect binary for benchmarking
+    cmds:
+      - go build -o /tmp/myks-rpcn-bench ../../../../../cmd/redpanda-connect/
+      - echo "Binary built at /tmp/myks-rpcn-bench"
+
+  bench:run:rpcn:cdc:
+    desc: "Run Redpanda Connect CDC benchmark — connector starts first, then rows are inserted (e.g. task bench:run:rpcn:cdc COUNT=1000000 BATCH_SIZE=5000)"
+    vars:
+      COUNT: '{{.COUNT | default "1000000"}}'
+      BATCH_SIZE: '{{.BATCH_SIZE | default "5000"}}'
+      INTERVAL: '{{.INTERVAL | default "5"}}'
+    cmds:
+      - |
+        COUNT={{.COUNT}}
+        BATCH_SIZE={{.BATCH_SIZE}}
+        INTERVAL={{.INTERVAL}}
+        TOPIC="rpcn-cdc-bench-${BATCH_SIZE}"
+        CHECKPOINT_DIR="/tmp/myks_rpcn_bench_checkpoint_${BATCH_SIZE}"
+
+        echo "batch=$BATCH_SIZE  count=$COUNT"
+
+        get_kafka_count() {
+          timeout 5 docker exec myks-kafka kafka-get-offsets \
+            --bootstrap-server localhost:29092 \
+            --topic "$TOPIC" 2>/dev/null \
+            | awk -F: '{sum += $3} END {print sum+0}'
+        }
+
+        # Reset topic and checkpoint
+        docker exec myks-kafka kafka-topics --bootstrap-server localhost:29092 \
+          --delete --topic "$TOPIC" > /dev/null 2>&1 || true
+        ATTEMPTS=0
+        until [ $ATTEMPTS -ge 30 ] || \
+          ! timeout 5 docker exec myks-kafka kafka-topics --bootstrap-server localhost:29092 \
+            --list 2>/dev/null | grep -qF "$TOPIC"; do
+          sleep 1
+          ATTEMPTS=$((ATTEMPTS + 1))
+        done
+        rm -rf "$CHECKPOINT_DIR" && mkdir -p "$CHECKPOINT_DIR"
+
+        # Pre-seed checkpoint at current binlog position
+        docker exec myks-mysql mysql -u root -ppassword -e "FLUSH BINARY LOGS;" 2>/dev/null
+        MASTER_STATUS=$(docker exec myks-mysql mysql -u root -ppassword -sN \
+          -e "SHOW MASTER STATUS;" 2>/dev/null)
+        BINLOG_FILE=$(echo "$MASTER_STATUS" | awk '{print $1}')
+        BINLOG_POS=$(echo "$MASTER_STATUS" | awk '{print $2}')
+        BINLOG_POS_HEX=$(awk "BEGIN { printf \"%08X\", $BINLOG_POS }")
+        printf "%s@%s" "$BINLOG_FILE" "$BINLOG_POS_HEX" > "${CHECKPOINT_DIR}/mysql_binlog_position"
+        echo "CDC start: ${BINLOG_FILE} @ ${BINLOG_POS}"
+
+        # Start Redpanda Connect in CDC mode
+        CHECKPOINT_DIR="$CHECKPOINT_DIR" BATCH_SIZE="$BATCH_SIZE" KAFKA_TOPIC="$TOPIC" \
+          /tmp/myks-rpcn-bench run ./rpcn_benchmark_config.yaml > /tmp/myks_rpcn_bench_cdc.log 2>&1 &
+        RPCN_PID=$!
+
+        # Wait for connector to establish its binlog connection
+        sleep 3
+
+        # Insert rows and start timer
+        echo "Inserting $COUNT rows..."
+        START=$(date +%s)
+        docker exec myks-mysql mysql -u root -ppassword benchdb \
+          -e "CALL _bench_insert_cart($COUNT);" 2>/dev/null &
+        INSERT_PID=$!
+
+        PREV_COUNT=0
+        PREV_TIME=$START
+        ZEROS=0
+        STARTED=0
+        START_TIMEOUT=24
+        CDC_IDLE_THRESHOLD=3
+
+        printf "%-10s  %-14s  %s\n" "TIME" "IN KAFKA" "MSG/S"
+
+        while true; do
+          sleep "$INTERVAL"
+          KAFKA_COUNT=$(get_kafka_count)
+          KAFKA_COUNT=${KAFKA_COUNT:-0}
+          NOW=$(date +%s)
+
+          DELTA_T=$((NOW - PREV_TIME))
+          DELTA_COUNT=$((KAFKA_COUNT - PREV_COUNT))
+          RATE=0
+          [ "$DELTA_T" -gt 0 ] && RATE=$((DELTA_COUNT / DELTA_T))
+
+          printf "%-10s  %-14s  %s msg/s\n" "$(date +%H:%M:%S)" "$KAFKA_COUNT" "$RATE"
+
+          if [ "$KAFKA_COUNT" -gt 0 ]; then
+            STARTED=1
+          fi
+
+          if [ "$STARTED" -eq 0 ]; then
+            ZEROS=$((ZEROS + 1))
+            if [ "$ZEROS" -ge "$START_TIMEOUT" ]; then
+              echo "ERROR: no messages produced within $((START_TIMEOUT * INTERVAL))s"
+              kill -9 $RPCN_PID $INSERT_PID 2>/dev/null || true
+              break
+            fi
+          elif [ "$DELTA_COUNT" -eq 0 ]; then
+            ZEROS=$((ZEROS + 1))
+          else
+            ZEROS=0
+          fi
+
+          if [ "$KAFKA_COUNT" -ge "$COUNT" ]; then
+            ELAPSED=$((NOW - START))
+            AVG=$(awk "BEGIN { printf \"%.0f\", $COUNT / ($ELAPSED > 0 ? $ELAPSED : 1) }")
+            kill -9 $RPCN_PID $INSERT_PID 2>/dev/null || true
+            echo "---"
+            echo "batch=$BATCH_SIZE"
+            echo "Total messages : $KAFKA_COUNT / $COUNT"
+            echo "Elapsed        : ${ELAPSED}s"
+            echo "Avg throughput : ${AVG} msg/s"
+            break
+          elif [ "$STARTED" -eq 1 ] && [ "$ZEROS" -ge "$CDC_IDLE_THRESHOLD" ]; then
+            ELAPSED=$((NOW - START))
+            AVG=$(awk "BEGIN { printf \"%.0f\", $KAFKA_COUNT / ($ELAPSED > 0 ? $ELAPSED : 1) }")
+            kill -9 $RPCN_PID $INSERT_PID 2>/dev/null || true
+            echo "---"
+            echo "batch=$BATCH_SIZE"
+            echo "Total messages : $KAFKA_COUNT / $COUNT"
+            echo "Elapsed        : ${ELAPSED}s"
+            echo "Avg throughput : ${AVG} msg/s"
+            [ "$KAFKA_COUNT" -lt "$COUNT" ] && echo "WARNING: incomplete — insert may still be running"
+            break
+          fi
+
+          PREV_COUNT=$KAFKA_COUNT
+          PREV_TIME=$NOW
+        done
+
+  bench:all:rpcn:cdc:
+    desc: "Run all batch sizes for Redpanda Connect CDC (e.g. task bench:all:rpcn:cdc COUNT=1000000 OUT=results.txt)"
+    vars:
+      COUNT: '{{.COUNT | default "1000000"}}'
+      OUT: '{{.OUT | default ""}}'
+    cmds:
+      - |
+        for size in 1000 5000 10000; do
+          if [ -n "{{.OUT}}" ]; then
+            task bench:run:rpcn:cdc COUNT={{.COUNT}} BATCH_SIZE=$size 2>&1 | tee -a {{.OUT}}
+          else
+            task bench:run:rpcn:cdc COUNT={{.COUNT}} BATCH_SIZE=$size
+          fi
+        done
+
+  rpcn:logs:
+    desc: Tail the last Redpanda Connect CDC run log
+    cmds:
+      - tail -f /tmp/myks_rpcn_bench_cdc.log
+
   bench:all:cdc:
     desc: "Run all batch size combinations for CDC (e.g. task bench:all:cdc COUNT=1000000 OUT=results.txt)"
     vars:
