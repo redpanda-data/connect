@@ -56,7 +56,7 @@ func (r *typeResolver) resolveTypeForAddColumn(
 
 	// Stage 2: schema_metadata override
 	if r.schemaMetadataKey != "" {
-		if metaType, err := r.resolveFromSchemaMetadata(msg, field.FullPath()); err != nil {
+		if metaType, err := r.resolveFromSchemaMetadata(msg, field.FullPath(), newTypeInferrer()); err != nil {
 			return nil, fmt.Errorf("resolving type from schema metadata for field %v: %w", field.FullPath(), err)
 		} else if metaType != nil {
 			// If the metatype was not found then just stick with the default inferred type
@@ -78,8 +78,8 @@ func (r *typeResolver) resolveTypeForAddColumn(
 
 // resolveTypeForCreateTable resolves the Iceberg type for a field during initial table creation.
 // ti is a shared field ID allocator so that nested struct field IDs are unique across the entire
-// schema. Note: if stage 2 or 3 overrides replace a nested struct type, the IDs allocated during
-// inference are consumed but unused, leaving harmless gaps in the field ID sequence.
+// schema, including IDs assigned by the schema_metadata override path. If stage 2 or 3 overrides
+// replace a nested struct, IDs allocated during stage 1 inference become harmless gaps.
 func (r *typeResolver) resolveTypeForCreateTable(
 	fieldName string,
 	value any,
@@ -96,10 +96,10 @@ func (r *typeResolver) resolveTypeForCreateTable(
 		return nil, nil // nil value, skip
 	}
 
-	// Stage 2: schema_metadata override
+	// Stage 2: schema_metadata override (uses shared ti so override structs share the ID space)
 	if r.schemaMetadataKey != "" {
 		path := icebergx.Path{{Kind: icebergx.PathField, Name: fieldName}}
-		if metaType, err := r.resolveFromSchemaMetadata(msg, path); err != nil {
+		if metaType, err := r.resolveFromSchemaMetadata(msg, path, ti); err != nil {
 			return nil, fmt.Errorf("resolving type from schema metadata for field %q: %w", fieldName, err)
 		} else if metaType != nil {
 			// If the metatype was not found then just stick with the default inferred type
@@ -121,8 +121,10 @@ func (r *typeResolver) resolveTypeForCreateTable(
 }
 
 // resolveFromSchemaMetadata looks up the type for a field path in the schema.Common
-// structure found in message metadata.
-func (r *typeResolver) resolveFromSchemaMetadata(msg *service.Message, fieldPath icebergx.Path) (iceberg.Type, error) {
+// structure found in message metadata. ti is the field ID allocator used when the
+// resolved type is a struct or list; pass the schema's shared allocator to keep IDs
+// unique across the whole schema, or a fresh one when the result is single-column.
+func (r *typeResolver) resolveFromSchemaMetadata(msg *service.Message, fieldPath icebergx.Path, ti *typeInferrer) (iceberg.Type, error) {
 	metaAny, exists := msg.MetaGetMut(r.schemaMetadataKey)
 	if !exists {
 		if r.logger != nil {
@@ -141,7 +143,7 @@ func (r *typeResolver) resolveFromSchemaMetadata(msg *service.Message, fieldPath
 		return nil, nil
 	}
 
-	return commonTypeToIcebergType(field)
+	return commonTypeToIcebergType(field, ti)
 }
 
 // findCommonField walks a schema.Common tree to find the field at the given path.
@@ -181,9 +183,9 @@ func findCommonField(root schema.Common, path icebergx.Path) (*schema.Common, bo
 	return current, true
 }
 
-// commonTypeToIcebergType converts a schema.Common to an iceberg.Type.
-func commonTypeToIcebergType(c *schema.Common) (iceberg.Type, error) {
-	ti := newTypeInferrer()
+// commonTypeToIcebergType converts a schema.Common to an iceberg.Type using ti to
+// allocate field IDs for any nested struct/list elements it produces.
+func commonTypeToIcebergType(c *schema.Common, ti *typeInferrer) (iceberg.Type, error) {
 	return commonTypeToIcebergTypeRec(c, ti)
 }
 
