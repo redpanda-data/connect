@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(bin/golangci-lint run *)",
+      "Bash(goimports -w internal/impl/mysql/parallel_snapshot.go)",
+      "Bash(goimports -w /Users/joseph.woodward/code/connect/internal/impl/mysql/parallel_snapshot.go)",
+      "Bash(gofumpt *)"
+    ]
+  }
+}

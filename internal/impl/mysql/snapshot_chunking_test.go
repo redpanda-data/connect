@@ -9,11 +9,8 @@
 package mysql
 
 import (
-	"context"
 	"fmt"
 	"math"
-	"sync"
-	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -125,30 +122,4 @@ func TestBuildChunkPredicate_AllNilBoundsReturnsEmpty(t *testing.T) {
 	frag, args := buildChunkPredicate(&chunkBounds{firstPKCol: "id"})
 	assert.Empty(t, frag)
 	assert.Nil(t, args)
-}
-
-func TestDistributeWorkToWorkers_WorksWithSnapshotWorkUnit(t *testing.T) {
-	units := []snapshotWorkUnit{
-		{table: "a"},
-		{table: "b", bounds: &chunkBounds{firstPKCol: "id", upperExcl: int64(100)}},
-		{table: "b", bounds: &chunkBounds{firstPKCol: "id", lowerIncl: int64(100)}},
-	}
-	var mu sync.Mutex
-	var visited []snapshotWorkUnit
-	var workerIdxMax atomic.Int32
-	err := distributeWorkToWorkers(t.Context(), units, 2, func(_ context.Context, idx int, u snapshotWorkUnit) error {
-		mu.Lock()
-		visited = append(visited, u)
-		mu.Unlock()
-		for {
-			cur := workerIdxMax.Load()
-			if int32(idx) <= cur || workerIdxMax.CompareAndSwap(cur, int32(idx)) {
-				break
-			}
-		}
-		return nil
-	})
-	require.NoError(t, err)
-	assert.Len(t, visited, len(units))
-	assert.LessOrEqual(t, int(workerIdxMax.Load()), 1)
 }

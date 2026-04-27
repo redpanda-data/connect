@@ -1421,7 +1421,6 @@ mysql_cdc:
   dsn: %s
   stream_snapshot: true
   snapshot_max_batch_size: 50
-  snapshot_max_parallel_tables: 2
   snapshot_chunks_per_table: 4
   checkpoint_cache: foocache
   tables:
