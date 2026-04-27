@@ -222,7 +222,7 @@ func TestTypeResolverResolveTypeForAddColumn(t *testing.T) {
 		field = NewUnknownFieldError(nil, "count", 42)
 		got, err = r.resolveTypeForAddColumn(field, msg, "ns", "tbl")
 		require.NoError(t, err)
-		assert.Equal(t, "double", got.Type())
+		assert.Equal(t, "long", got.Type())
 	})
 
 	t.Run("schema_metadata override", func(t *testing.T) {
@@ -301,23 +301,35 @@ func TestTypeResolverResolveTypeForAddColumn(t *testing.T) {
 	})
 
 	t.Run("mapping receives inferred_type", func(t *testing.T) {
-		exec := mustParseBloblang(t, `root = if this.inferred_type == "double" { "long" } else { this.inferred_type }`)
+		exec := mustParseBloblang(t, `root = if this.inferred_type == "long" { "decimal(10, 2)" } else { this.inferred_type }`)
 		r := newTypeResolver("", exec, nil)
 
 		msg := service.NewMessage(nil)
 		msg.SetStructuredMut(map[string]any{"count": 42, "name": "test"})
 
-		// Numeric → inferred as "double" → mapping converts to "long"
+		// Numeric → inferred as "long" → mapping converts to "decimal(10, 2)"
 		field := NewUnknownFieldError(nil, "count", 42)
 		got, err := r.resolveTypeForAddColumn(field, msg, "ns", "tbl")
 		require.NoError(t, err)
-		assert.Equal(t, "long", got.Type())
+		assert.Equal(t, "decimal(10, 2)", got.Type())
 
 		// String → inferred as "string" → mapping passes through
 		field = NewUnknownFieldError(nil, "name", "test")
 		got, err = r.resolveTypeForAddColumn(field, msg, "ns", "tbl")
 		require.NoError(t, err)
 		assert.Equal(t, "string", got.Type())
+	})
+
+	t.Run("schema_metadata configured but missing on message", func(t *testing.T) {
+		r := newTypeResolver("test_schema", nil, nil)
+
+		msg := service.NewMessage(nil)
+		msg.SetStructuredMut(map[string]any{"count": 42})
+
+		field := NewUnknownFieldError(nil, "count", 42)
+		got, err := r.resolveTypeForAddColumn(field, msg, "ns", "tbl")
+		require.NoError(t, err, "should not error when schema_metadata is missing from message")
+		assert.Equal(t, "long", got.Type(), "should fall back to inference")
 	})
 }
 
@@ -372,5 +384,16 @@ func TestTypeResolverResolveTypeForCreateTable(t *testing.T) {
 		got, err := r.resolveTypeForCreateTable("count", 42, msg, "ns", "tbl")
 		require.NoError(t, err)
 		assert.Equal(t, "long", got.Type())
+	})
+
+	t.Run("schema_metadata configured but missing on message", func(t *testing.T) {
+		r := newTypeResolver("test_schema", nil, nil)
+
+		msg := service.NewMessage(nil)
+		msg.SetStructuredMut(map[string]any{"count": 42})
+
+		got, err := r.resolveTypeForCreateTable("count", 42, msg, "ns", "tbl")
+		require.NoError(t, err, "should not error when schema_metadata is missing from message")
+		assert.Equal(t, "long", got.Type(), "should fall back to inference")
 	})
 }

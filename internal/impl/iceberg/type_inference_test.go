@@ -9,6 +9,7 @@
 package iceberg
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -39,19 +40,72 @@ func TestInferIcebergType(t *testing.T) {
 			value:    true,
 			wantType: "boolean",
 		},
+		// Integer types → int or long
 		{
 			name:     "int",
 			value:    42,
-			wantType: "double",
+			wantType: "long",
+		},
+		{
+			name:     "int8",
+			value:    int8(42),
+			wantType: "int",
+		},
+		{
+			name:     "int16",
+			value:    int16(42),
+			wantType: "int",
+		},
+		{
+			name:     "int32",
+			value:    int32(42),
+			wantType: "int",
 		},
 		{
 			name:     "int64",
 			value:    int64(42),
-			wantType: "double",
+			wantType: "long",
+		},
+		{
+			name:     "uint8",
+			value:    uint8(42),
+			wantType: "int",
+		},
+		{
+			name:     "uint16",
+			value:    uint16(42),
+			wantType: "int",
+		},
+		{
+			name:     "uint32",
+			value:    uint32(42),
+			wantType: "long",
+		},
+		{
+			name:     "uint64",
+			value:    uint64(42),
+			wantType: "long",
+		},
+		// Float types → float or double
+		{
+			name:     "float32",
+			value:    float32(3.14),
+			wantType: "float",
 		},
 		{
 			name:     "float64",
 			value:    3.14,
+			wantType: "double",
+		},
+		// json.Number → always double to avoid silent truncation during schema evolution
+		{
+			name:     "json.Number integer",
+			value:    json.Number("42"),
+			wantType: "double",
+		},
+		{
+			name:     "json.Number float",
+			value:    json.Number("3.14"),
 			wantType: "double",
 		},
 		{
@@ -108,9 +162,9 @@ func TestInferIcebergTypeForAddColumn(t *testing.T) {
 		assert.Equal(t, "string", typ.Type())
 	})
 
-	t.Run("non-nil uses InferIcebergType", func(t *testing.T) {
+	t.Run("non-nil int uses long", func(t *testing.T) {
 		typ, err := InferIcebergTypeForAddColumn(42)
 		require.NoError(t, err)
-		assert.Equal(t, "double", typ.Type())
+		assert.Equal(t, "long", typ.Type())
 	})
 }

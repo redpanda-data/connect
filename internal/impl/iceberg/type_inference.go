@@ -35,11 +35,15 @@ func (ti *typeInferrer) allocateFieldID() int {
 }
 
 // InferIcebergType infers an Iceberg type from a Go value.
-// This uses a simple strategy where:
+// This uses the following strategy:
 //   - nil → nil (caller should skip)
 //   - string → StringType
 //   - bool → BooleanType
-//   - all numeric types → Float64Type (double)
+//   - int8, int16, int32, uint8, uint16 → Int32Type
+//   - int, int64, uint, uint32, uint64 → Int64Type
+//   - float32 → Float32Type
+//   - float64 → Float64Type
+//   - json.Number → Float64Type
 //   - time.Time → TimestampTzType
 //   - []byte → BinaryType
 //   - []any → ListType (recursive)
@@ -65,34 +69,44 @@ func (ti *typeInferrer) inferType(value any) (iceberg.Type, error) {
 	case bool:
 		return iceberg.BooleanType{}, nil
 
-	// All numeric types map to double (Float64Type) for simplicity
-	case int:
-		return iceberg.Float64Type{}, nil
+	// Small integer types → Int32Type (Iceberg "int")
 	case int8:
-		return iceberg.Float64Type{}, nil
+		return iceberg.Int32Type{}, nil
 	case int16:
-		return iceberg.Float64Type{}, nil
+		return iceberg.Int32Type{}, nil
 	case int32:
-		return iceberg.Float64Type{}, nil
-	case int64:
-		return iceberg.Float64Type{}, nil
-	case uint:
-		return iceberg.Float64Type{}, nil
+		return iceberg.Int32Type{}, nil
 	case uint8:
-		return iceberg.Float64Type{}, nil
+		return iceberg.Int32Type{}, nil
 	case uint16:
-		return iceberg.Float64Type{}, nil
+		return iceberg.Int32Type{}, nil
+
+	// Large integer types → Int64Type (Iceberg "long")
+	case int:
+		return iceberg.Int64Type{}, nil
+	case int64:
+		return iceberg.Int64Type{}, nil
+	case uint:
+		return iceberg.Int64Type{}, nil
 	case uint32:
-		return iceberg.Float64Type{}, nil
+		return iceberg.Int64Type{}, nil
 	case uint64:
-		return iceberg.Float64Type{}, nil
+		// Iceberg has no unsigned 64-bit type. Values above math.MaxInt64
+		// will be rejected at shred time with an overflow error.
+		return iceberg.Int64Type{}, nil
+
+	// Float types → preserve precision
 	case float32:
-		return iceberg.Float64Type{}, nil
+		return iceberg.Float32Type{}, nil
 	case float64:
 		return iceberg.Float64Type{}, nil
 
 	case json.Number:
-		// JSON numbers are treated as double
+		// Default to Float64Type (double) for json.Number to avoid silent truncation
+		// during schema evolution. If the first value seen is integer-parseable and we
+		// infer Int64, subsequent fractional values like "100.5" are silently coerced
+		// to int64 (e.g. 100) with no error. Users who want integer columns for
+		// json.Number fields should use schema_metadata or new_column_type_mapping.
 		return iceberg.Float64Type{}, nil
 
 	case time.Time:
