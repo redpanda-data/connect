@@ -77,11 +77,17 @@ tracer:
       tcp_user_timeout: 0s
     partitioner: "" # No default (optional)
     idempotent_write: true
+    acks: all
     compression: "" # No default (optional)
     allow_auto_topic_creation: true
     timeout: 10s
     max_message_bytes: 1MiB
     broker_write_max_bytes: 100MiB
+    max_buffered_records: 10000
+    max_buffered_bytes: "0"
+    max_in_flight_requests: 1
+    record_retries: 0
+    record_delivery_timeout: 0s
     topic: otel-traces
     format: json
     schema_registry:
@@ -677,6 +683,27 @@ Enable the idempotent write producer option. When enabled, the producer initiali
 
 *Default*: `true`
 
+=== `acks`
+
+The number of acknowledgements the leader broker must receive from ISR brokers before responding to the produce request. When `idempotent_write` is enabled this must be set to `all`.
+
+
+*Type*: `string`
+
+*Default*: `"all"`
+
+|===
+| Option | Summary
+
+| `all`
+| Wait for all in-sync replicas to acknowledge (acks=-1). Required when idempotent_write is enabled.
+| `leader`
+| Wait for the leader broker to acknowledge (acks=1). Messages are lost if the leader fails before replication.
+| `none`
+| Do not wait for any acknowledgement (acks=0). Highest throughput but messages may be lost.
+
+|===
+
 === `compression`
 
 Optionally set an explicit compression type. The default preference is to use snappy when the broker supports it, and fall back to none if not.
@@ -744,6 +771,59 @@ broker_write_max_bytes: 128MB
 
 broker_write_max_bytes: 50mib
 ```
+
+=== `max_buffered_records`
+
+The maximum number of records the client will buffer in memory before blocking. When this limit is reached, `Produce()` calls will block until buffered records are delivered and space frees up. Increase this value for high-throughput pipelines to avoid back-pressure stalls.
+
+
+*Type*: `int`
+
+*Default*: `10000`
+
+=== `max_buffered_bytes`
+
+The maximum number of bytes the client will buffer in memory before blocking. When this limit is reached, `Produce()` calls will block until buffered records are delivered. Set to `0` to disable the byte-level limit (only `max_buffered_records` applies). This limit is checked after `max_buffered_records`.
+
+
+*Type*: `string`
+
+*Default*: `"0"`
+
+```yml
+# Examples
+
+max_buffered_bytes: 256MB
+
+max_buffered_bytes: 50mib
+```
+
+=== `max_in_flight_requests`
+
+The maximum number of produce requests in flight per broker connection. When `idempotent_write` is enabled, this is capped at 5 by the Kafka protocol (and at 1 for Kafka < v1.0.0). When `idempotent_write` is disabled, higher values improve throughput by pipelining requests but may cause out-of-order delivery.
+
+
+*Type*: `int`
+
+*Default*: `1`
+
+=== `record_retries`
+
+The maximum number of times a record produce is retried on failure before the record is failed. When a record fails, all records buffered in the same partition are also failed to preserve gapless ordering. Set to `0` for unlimited retries (the default). With `idempotent_write` enabled, retries are only enforced when safe to do so without creating invalid sequence numbers.
+
+
+*Type*: `int`
+
+*Default*: `0`
+
+=== `record_delivery_timeout`
+
+The maximum time a record can sit in the producer buffer before it is failed, roughly equivalent to Kafka's `delivery.timeout.ms`. This is evaluated before writing a request or after a produce response. When a record times out, all records in the same partition are also failed. Set to `0s` for no timeout (the default). With `idempotent_write` enabled, timeouts are only enforced when safe to do so without creating invalid sequence numbers.
+
+
+*Type*: `string`
+
+*Default*: `"0s"`
 
 === `topic`
 
