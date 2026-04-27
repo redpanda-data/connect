@@ -82,7 +82,7 @@ Data is encoded as MessagePack and optionally compressed with zstd (recommended)
 NOTE: In columnar mode, all messages within a single batch must have the same set of fields. Arc validates that all column arrays have equal length and rejects batches with mismatched columns. Schema evolution across separate batches is fully supported. Use row format if messages within a batch have varying schemas.
 ` + service.OutputPerformanceDocs(true, true))
 
-	spec = spec.Fields(httpclient.Fields("")...)
+	spec = spec.Fields(httpclient.FieldsWithBaseURL("")...)
 
 	return spec.Fields(
 		service.NewStringField(aoFieldToken).
