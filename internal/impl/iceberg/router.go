@@ -381,7 +381,7 @@ func (r *Router) buildSchemaWithResolver(record map[string]any, msg *service.Mes
 			continue // nil value, skip
 		}
 		fields = append(fields, iceberg.NestedField{
-			ID:       ti.allocateFieldID(), // Uses shared allocator — nested struct IDs are already assigned by ti
+			ID:       ti.allocateFieldID(), // For primitives this is the only allocation; for nested structs, inner IDs were already assigned by ti
 			Name:     name,
 			Type:     fieldType,
 			Required: false,

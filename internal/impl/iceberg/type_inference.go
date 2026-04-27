@@ -56,13 +56,6 @@ func InferIcebergType(value any) (iceberg.Type, error) {
 	return ti.inferType(value)
 }
 
-// inferIcebergTypeWith infers an Iceberg type using a shared typeInferrer so that
-// field IDs are unique across the entire schema. This must be used when building
-// a schema with multiple fields to avoid field ID collisions in nested structs.
-func inferIcebergTypeWith(ti *typeInferrer, value any) (iceberg.Type, error) {
-	return ti.inferType(value)
-}
-
 // inferType is the internal recursive implementation.
 func (ti *typeInferrer) inferType(value any) (iceberg.Type, error) {
 	if value == nil {

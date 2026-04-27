@@ -100,7 +100,6 @@ func TestNumericPrecisionIntegration(t *testing.T) {
 	})
 
 	t.Run("NestedStructs", func(t *testing.T) {
-		// Auto-create table with nested structs — mirrors Christan's Transfer schema.
 		const ns = "nested_ns"
 		const tbl = "nested_table"
 
