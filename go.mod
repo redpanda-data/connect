@@ -110,7 +110,7 @@ require (
 	github.com/googleapis/go-sql-spanner v1.24.1
 	github.com/gosimple/slug v1.15.0
 	github.com/influxdata/influxdb1-client v0.0.0-20220302092344-a9ab5670611c
-	github.com/jackc/pgx/v5 v5.9.1
+	github.com/jackc/pgx/v5 v5.9.2
 	github.com/jhump/protoreflect v1.18.0
 	github.com/lib/pq v1.12.0
 	github.com/matoous/go-nanoid/v2 v2.1.0
