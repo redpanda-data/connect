@@ -77,14 +77,25 @@ func (r *typeResolver) resolveTypeForAddColumn(
 }
 
 // resolveTypeForCreateTable resolves the Iceberg type for a field during initial table creation.
+// If ti is non-nil, it is used as a shared field ID allocator so that nested struct field IDs
+// are unique across the entire schema. If nil, a fresh allocator is created per field.
 func (r *typeResolver) resolveTypeForCreateTable(
 	fieldName string,
 	value any,
 	msg *service.Message,
 	namespace, table string,
+	ti *typeInferrer,
 ) (iceberg.Type, error) {
 	// Stage 1: Default inference
-	inferredType, err := InferIcebergType(value)
+	var (
+		inferredType iceberg.Type
+		err          error
+	)
+	if ti != nil {
+		inferredType, err = inferIcebergTypeWith(ti, value)
+	} else {
+		inferredType, err = InferIcebergType(value)
+	}
 	if err != nil {
 		return nil, err
 	}

@@ -373,7 +373,7 @@ func (r *Router) buildSchemaWithResolver(record map[string]any, msg *service.Mes
 	fields := make([]iceberg.NestedField, 0, len(record))
 
 	for name, value := range record {
-		fieldType, err := r.resolver.resolveTypeForCreateTable(name, value, msg, key.namespace, key.table)
+		fieldType, err := r.resolver.resolveTypeForCreateTable(name, value, msg, key.namespace, key.table, ti)
 		if err != nil {
 			return nil, fmt.Errorf("resolving type for field %q: %w", name, err)
 		}
@@ -381,7 +381,7 @@ func (r *Router) buildSchemaWithResolver(record map[string]any, msg *service.Mes
 			continue // nil value, skip
 		}
 		fields = append(fields, iceberg.NestedField{
-			ID:       ti.allocateFieldID(),
+			ID:       ti.allocateFieldID(), // Uses shared allocator — nested struct IDs are already assigned by ti
 			Name:     name,
 			Type:     fieldType,
 			Required: false,

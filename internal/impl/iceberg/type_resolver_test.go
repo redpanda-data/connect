@@ -340,7 +340,7 @@ func TestTypeResolverResolveTypeForCreateTable(t *testing.T) {
 		msg := service.NewMessage(nil)
 		msg.SetStructuredMut(map[string]any{"name": "hello"})
 
-		got, err := r.resolveTypeForCreateTable("name", "hello", msg, "ns", "tbl")
+		got, err := r.resolveTypeForCreateTable("name", "hello", msg, "ns", "tbl", nil)
 		require.NoError(t, err)
 		assert.Equal(t, "string", got.Type())
 	})
@@ -351,7 +351,7 @@ func TestTypeResolverResolveTypeForCreateTable(t *testing.T) {
 		msg := service.NewMessage(nil)
 		msg.SetStructuredMut(map[string]any{})
 
-		got, err := r.resolveTypeForCreateTable("name", nil, msg, "ns", "tbl")
+		got, err := r.resolveTypeForCreateTable("name", nil, msg, "ns", "tbl", nil)
 		require.NoError(t, err)
 		assert.Nil(t, got)
 	})
@@ -369,7 +369,7 @@ func TestTypeResolverResolveTypeForCreateTable(t *testing.T) {
 		msg.SetStructuredMut(map[string]any{"count": 42})
 		msg.MetaSetMut("test_schema", commonSchema.ToAny())
 
-		got, err := r.resolveTypeForCreateTable("count", 42, msg, "ns", "tbl")
+		got, err := r.resolveTypeForCreateTable("count", 42, msg, "ns", "tbl", nil)
 		require.NoError(t, err)
 		assert.Equal(t, "long", got.Type())
 	})
@@ -381,7 +381,7 @@ func TestTypeResolverResolveTypeForCreateTable(t *testing.T) {
 		msg := service.NewMessage(nil)
 		msg.SetStructuredMut(map[string]any{"count": 42})
 
-		got, err := r.resolveTypeForCreateTable("count", 42, msg, "ns", "tbl")
+		got, err := r.resolveTypeForCreateTable("count", 42, msg, "ns", "tbl", nil)
 		require.NoError(t, err)
 		assert.Equal(t, "long", got.Type())
 	})
@@ -392,7 +392,7 @@ func TestTypeResolverResolveTypeForCreateTable(t *testing.T) {
 		msg := service.NewMessage(nil)
 		msg.SetStructuredMut(map[string]any{"count": 42})
 
-		got, err := r.resolveTypeForCreateTable("count", 42, msg, "ns", "tbl")
+		got, err := r.resolveTypeForCreateTable("count", 42, msg, "ns", "tbl", nil)
 		require.NoError(t, err, "should not error when schema_metadata is missing from message")
 		assert.Equal(t, "long", got.Type(), "should fall back to inference")
 	})
