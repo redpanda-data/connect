@@ -24,8 +24,6 @@ import (
 )
 
 const (
-	// cache updates a single row so we use a fixed key
-	defaultCacheKey = "max_scn"
 	// defaultCheckpointCache can be configured by the user
 	defaultCheckpointCache = "RPCN.CDC_CHECKPOINT_CACHE"
 	// defaultStoredProcName schema is inferred from the provided checkpoint cache config
@@ -63,6 +61,7 @@ func newCheckpointCache(
 	ctx context.Context,
 	connStr string,
 	cacheTableName string,
+	cacheKey string,
 	log *service.Logger,
 ) (*checkpointCache, error) {
 	var (
@@ -83,7 +82,7 @@ func newCheckpointCache(
 		return nil, fmt.Errorf("connecting to oracle database for caching checkpoints: %w", err)
 	}
 
-	if created, err := createCacheTable(ctx, db, cacheTable); err != nil {
+	if created, err := createCacheTable(ctx, db, cacheTable, cacheKey, log); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("creating checkpoint cache table '%s': %w", cacheTable.String(), err)
 	} else if created {
@@ -121,15 +120,15 @@ func newCheckpointCache(
 	return c, nil
 }
 
-// Get a cache item, we only do this at start up, key can be ignored as we only ever store one entry
-func (c *checkpointCache) Get(ctx context.Context, _ string) ([]byte, error) {
+// Get a cache item, we only do this at start up
+func (c *checkpointCache) Get(ctx context.Context, key string) ([]byte, error) {
 	if c.db == nil {
 		return nil, fmt.Errorf("checkpoint cache not initialised for get operation: %w", service.ErrNotConnected)
 	}
 
 	var val []byte
 	q := "SELECT cache_val FROM %s WHERE cache_key = :1"
-	if err := c.db.QueryRowContext(ctx, fmt.Sprintf(q, c.cacheTableName.String()), defaultCacheKey).Scan(&val); err != nil {
+	if err := c.db.QueryRowContext(ctx, fmt.Sprintf(q, c.cacheTableName.String()), key).Scan(&val); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, service.ErrKeyNotFound
 		}
@@ -145,13 +144,13 @@ func (c *checkpointCache) Get(ctx context.Context, _ string) ([]byte, error) {
 }
 
 // Set a cache item, specifying an optional TTL. It is okay for caches to
-// ignore the ttl parameter if it isn't possible to implement. Key can be ignored as we only ever store one entry
-func (c *checkpointCache) Set(ctx context.Context, _ string, value []byte, _ *time.Duration) error {
+// ignore the ttl parameter if it isn't possible to implement.
+func (c *checkpointCache) Set(ctx context.Context, key string, value []byte, _ *time.Duration) error {
 	if c.cacheSetStmt == nil {
 		return errors.New("prepared statement for cache set not initialised")
 	}
 	// go-ora driver handles []byte parameters as RAW type
-	if _, err := c.cacheSetStmt.ExecContext(ctx, defaultCacheKey, value); err != nil {
+	if _, err := c.cacheSetStmt.ExecContext(ctx, key, value); err != nil {
 		return fmt.Errorf("writing to checkpoint cache: %w", err)
 	}
 	return nil
@@ -168,7 +167,40 @@ func (c *checkpointCache) Close(ctx context.Context) error {
 	return nil
 }
 
-func createCacheTable(ctx context.Context, db *sql.DB, tbl cacheTable) (bool, error) {
+// migrateCacheTable is a temporary migration function to migrate existing customers' cache. After a while this, along with the test can
+// be deleted once we're happy customers are on later versions.
+func migrateCacheTable(ctx context.Context, db *sql.DB, tbl cacheTable, cacheKey string, log *service.Logger) error {
+	var charLen int
+	colQuery := `SELECT CHAR_LENGTH FROM all_tab_columns WHERE owner = :1 AND table_name = :2 AND column_name = 'CACHE_KEY'`
+	if err := db.QueryRowContext(ctx, colQuery, strings.ToUpper(tbl.schema), strings.ToUpper(tbl.name)).Scan(&charLen); err != nil {
+		return fmt.Errorf("checking cache_key column size: %w", err)
+	}
+
+	if charLen < 128 {
+		// Step 1 - Migrate existing tables that were created with the old VARCHAR2(10) column size.
+		log.Infof("Checkpoint Migration: Found checkpoint cache table '%s', updating cache_key schema to VARCHAR2(128)", tbl.String())
+		alterQuery := fmt.Sprintf(`ALTER TABLE %s MODIFY (cache_key VARCHAR2(128))`, tbl.String())
+		if _, err := db.ExecContext(ctx, alterQuery); err != nil {
+			return fmt.Errorf("migrating cache_key column to VARCHAR2(128): %w", err)
+		}
+
+		// Step 2 - Migrate cache key to configured value.
+		updateQuery := fmt.Sprintf(`UPDATE %s SET cache_key = :1 WHERE cache_key = 'max_scn'`, tbl.String())
+		result, err := db.ExecContext(ctx, updateQuery, cacheKey)
+		if err != nil {
+			return fmt.Errorf("migrating cache key from 'max_scn' to '%s': %w", cacheKey, err)
+		}
+		if rows, _ := result.RowsAffected(); rows > 0 {
+			log.Infof("Checkpoint Migration: Updated cache key from 'max_scn' to '%s' in '%s'", cacheKey, tbl.String())
+		}
+
+		log.Info("Checkpoint Migration: Checkpoint cache table migration applied")
+	}
+
+	return nil
+}
+
+func createCacheTable(ctx context.Context, db *sql.DB, tbl cacheTable, cacheKey string, log *service.Logger) (bool, error) {
 	// Check if table exists
 	var count int
 	checkQuery := `SELECT COUNT(*) FROM all_tables WHERE owner = :1 AND table_name = :2`
@@ -177,15 +209,18 @@ func createCacheTable(ctx context.Context, db *sql.DB, tbl cacheTable) (bool, er
 	}
 
 	if count > 0 {
-		return false, nil // Table already exists
+		if err := migrateCacheTable(ctx, db, tbl, cacheKey, log); err != nil {
+			return false, fmt.Errorf("applying migration to cache table: %w", err)
+		}
+		// migration applied
+		return false, nil
 	}
 
 	// Create table if it doesn't exist
-	// cache_key length is based on default (fixed) cache key
 	// cache_val stores binary data as RAW (8 bytes for SCN uint64)
 	createQuery := fmt.Sprintf(`
 		CREATE TABLE %s (
-			cache_key VARCHAR2(10) NOT NULL PRIMARY KEY,
+			cache_key VARCHAR2(128) NOT NULL PRIMARY KEY,
 			cache_val RAW(8)
 		)`, tbl.String())
 

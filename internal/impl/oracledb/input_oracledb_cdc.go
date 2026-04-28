@@ -254,14 +254,12 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 
 	// cache
 	// if no cache component is specified then we fall back to default SQL based version
+	if scnCacheKey, err = conf.FieldString(ociFieldCheckpointCacheKey); err != nil {
+		return nil, err
+	}
 	if conf.Contains(ociFieldCheckpointCache) {
 		if scnCache, err = conf.FieldString(ociFieldCheckpointCache); err != nil {
 			return nil, err
-		}
-		if conf.Resources().HasCache(scnCache) {
-			if scnCacheKey, err = conf.FieldString(ociFieldCheckpointCacheKey); err != nil {
-				return nil, err
-			}
 		}
 	}
 
@@ -392,7 +390,7 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 
 	// no cache specified so use default, internal oracle based cache
 	if o.cfg.SCNCache == "" && o.cpCache == nil {
-		c, err := newCheckpointCache(ctx, o.cfg.ConnectionString, cpCacheTable, o.log)
+		c, err := newCheckpointCache(ctx, o.cfg.ConnectionString, cpCacheTable, o.cfg.SCNCacheKey, o.log)
 		if err != nil {
 			return fmt.Errorf("initialising oracle based checkpoint cache: %w", err)
 		}
