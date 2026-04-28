@@ -42,8 +42,15 @@ func init() {
 				`{"doc":"<root><title>This is a title</title><number id=\"99\">123</number><bool>True</bool></root>"}`,
 				`{"doc":{"root":{"bool":true,"number":{"#text":123,"-id":99},"title":"This is a title"}}}`,
 			}).
+			Example("Parse XML preserving namespace prefixes so the original document is reconstructable", `root.doc = this.doc.parse_xml(preserve_namespaces: true)`, [2]string{
+				`{"doc":"<root xmlns:dc=\"http://my.namespace/dc\"><dc:title>Hello</dc:title></root>"}`,
+				`{"doc":{"root":{"-xmlns:dc":"http://my.namespace/dc","dc:title":"Hello"}}}`,
+			}).
 			Param(bloblang.NewBoolParam("cast").
 				Description("Whether to automatically cast numeric and boolean string values to their proper types. When false, all values remain as strings.").
+				Optional().Default(false)).
+			Param(bloblang.NewBoolParam("preserve_namespaces").
+				Description("Whether to preserve XML namespace prefixes on element and attribute keys, and retain xmlns declarations as attributes. When disabled, namespace prefixes are stripped.").
 				Optional().Default(false)),
 		func(args *bloblang.ParsedParams) (bloblang.Method, error) {
 			castOpt, err := args.GetOptionalBool("cast")
@@ -54,8 +61,24 @@ func init() {
 			if castOpt != nil {
 				cast = *castOpt
 			}
+			preserveOpt, err := args.GetOptionalBool("preserve_namespaces")
+			if err != nil {
+				return nil, err
+			}
+			preserveNS := false
+			if preserveOpt != nil {
+				preserveNS = *preserveOpt
+			}
 			return bloblang.BytesMethod(func(xmlBytes []byte) (any, error) {
-				xmlObj, err := ToMap(xmlBytes, cast)
+				var (
+					xmlObj map[string]any
+					err    error
+				)
+				if preserveNS {
+					xmlObj, err = ToMapPreserveNS(xmlBytes, cast)
+				} else {
+					xmlObj, err = ToMap(xmlBytes, cast)
+				}
 				if err != nil {
 					return nil, fmt.Errorf("parsing value as XML: %w", err)
 				}
