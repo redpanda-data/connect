@@ -1,0 +1,31 @@
+{
+  "name": "s3-sink-bench",
+  "config": {
+    "connector.class": "io.confluent.connect.s3.S3SinkConnector",
+    "tasks.max": "16",
+    "topics": "bench-events",
+
+    "s3.region": "us-east-1",
+    "s3.bucket.name": "bench-events",
+    "store.url": "http://localstack:4566",
+    "s3.part.size": "5242880",
+    "s3.path.style.access.enabled": "true",
+
+    "flush.size": "10000",
+    "rotate.interval.ms": "60000",
+    "rotate.schedule.interval.ms": "-1",
+
+    "storage.class": "io.confluent.connect.s3.storage.S3Storage",
+    "format.class": "io.confluent.connect.s3.format.json.JsonFormat",
+
+    "key.converter": "org.apache.kafka.connect.storage.StringConverter",
+    "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "value.converter.schemas.enable": "false",
+
+    "schema.compatibility": "NONE",
+
+    "consumer.override.fetch.min.bytes": "1048576",
+    "consumer.override.fetch.max.wait.ms": "500",
+    "consumer.override.max.poll.records": "5000"
+  }
+}
