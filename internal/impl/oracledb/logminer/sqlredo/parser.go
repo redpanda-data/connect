@@ -129,9 +129,7 @@ func extractInsertValues(stmt *sqlparser.Insert, converter *OracleValueConverter
 		for i, val := range row {
 			if i < len(columns) {
 				valStr := sqlparser.String(val)
-				if parsedVal := processValue(valStr, converter); parsedVal != nil {
-					result[columns[i]] = parsedVal
-				}
+				result[columns[i]] = processValue(valStr, converter)
 			}
 		}
 	}
@@ -147,9 +145,7 @@ func extractUpdateSetValues(stmt *sqlparser.Update, converter *OracleValueConver
 	for _, expr := range stmt.Exprs {
 		colName := sqlparser.String(expr.Name)
 		valStr := sqlparser.String(expr.Expr)
-		if parsedVal := processValue(valStr, converter); parsedVal != nil {
-			result[colName] = parsedVal
-		}
+		result[colName] = processValue(valStr, converter)
 	}
 
 	return result
@@ -202,8 +198,10 @@ func extractWhereConditions(expr sqlparser.Expr, result map[string]any, converte
 func processValue(valStr string, converter *OracleValueConverter) any {
 	valStr = strings.TrimSpace(valStr)
 
-	// Handle NULL - return nil to exclude from map
-	if valStr == "NULL" || valStr == "Unsupported Type" {
+	// Handle NULL - return nil to exclude from map.
+	// vitess-sqlparser serialises NullVal as lowercase "null", so check both.
+	// if valStr == "NULL" || valStr == "Unsupported Type" {
+	if valStr == "NULL" || valStr == "null" || valStr == "Unsupported Type" {
 		return nil
 	}
 
