@@ -96,7 +96,7 @@ func TestParseTest(t *testing.T) {
 			name: "INSERT with NULL value includes column as nil",
 			sql:  `insert into "MYAPP"."SAMPLES" ("ID","SPEC_CH_ID","SPEC_CKC_ID") values ('1',NULL,NULL)`,
 			wantNewValues: map[string]any{
-				"ID":         "1",
+				"ID":          "1",
 				"SPEC_CH_ID":  nil,
 				"SPEC_CKC_ID": nil,
 			},
