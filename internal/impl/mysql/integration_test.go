@@ -1407,3 +1407,78 @@ func TestIntegrationMySQLCDCRepeatedConnectionDrops(t *testing.T) {
 		})
 	}
 }
+
+func TestIntegrationMySQLCDCConcurrentSnapshot(t *testing.T) {
+	dsn, db := setupTestWithMySQLVersion(t, "8.0")
+
+	db.Exec(`CREATE TABLE IF NOT EXISTS snap_foo (id INT AUTO_INCREMENT PRIMARY KEY)`)
+	db.Exec(`CREATE TABLE IF NOT EXISTS snap_bar (id INT AUTO_INCREMENT PRIMARY KEY)`)
+	db.Exec(`CREATE TABLE IF NOT EXISTS snap_baz (id INT AUTO_INCREMENT PRIMARY KEY)`)
+
+	want := 3000
+	for range 1000 {
+		db.Exec("INSERT INTO snap_foo (id) VALUES (DEFAULT)")
+		db.Exec("INSERT INTO snap_bar (id) VALUES (DEFAULT)")
+		db.Exec("INSERT INTO snap_baz (id) VALUES (DEFAULT)")
+	}
+
+	template := fmt.Sprintf(`
+mysql_cdc:
+  dsn: %s
+  stream_snapshot: true
+  snapshot_max_batch_size: 10
+  max_parallel_snapshot_tables: 3
+  checkpoint_cache: foocache
+  tables:
+    - snap_foo
+    - snap_bar
+    - snap_baz
+`, dsn)
+
+	cacheConf := fmt.Sprintf(`
+label: foocache
+file:
+  directory: %s`, t.TempDir())
+
+	streamOutBuilder := service.NewStreamBuilder()
+	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: DEBUG`))
+	require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
+	require.NoError(t, streamOutBuilder.AddInputYAML(template))
+
+	var (
+		outBatches   []string
+		outBatchesMu sync.Mutex
+	)
+
+	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+		msgBytes, err := mb[0].AsBytes()
+		require.NoError(t, err)
+		outBatchesMu.Lock()
+		outBatches = append(outBatches, string(msgBytes))
+		outBatchesMu.Unlock()
+		return nil
+	}))
+
+	streamOut, err := streamOutBuilder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(streamOut.Resources())
+
+	go func() {
+		if err := streamOut.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+			t.Error(err)
+		}
+	}()
+
+	assert.Eventually(t, func() bool {
+		outBatchesMu.Lock()
+		defer outBatchesMu.Unlock()
+
+		got := len(outBatches)
+		if got > want {
+			t.Fatalf("Wanted %d snapshot messages but got %d", want, got)
+		}
+		return got == want
+	}, time.Minute*5, time.Second*1)
+
+	require.NoError(t, streamOut.StopWithin(10*time.Second))
+}
