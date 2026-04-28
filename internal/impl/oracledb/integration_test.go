@@ -589,7 +589,7 @@ oracledb_cdc:
 
 		content, err := msgs[0].AsBytes()
 		assert.NoError(t, err)
-		assert.Equal(t, `{"ID":1,"VAL":1}`, string(content))
+		assert.Equal(t, `{"ID":"1","VAL":"1"}`, string(content))
 	})
 
 	t.Run("Streaming update changes...", func(t *testing.T) {
@@ -602,7 +602,7 @@ oracledb_cdc:
 
 		content, err := msgs[0].AsBytes()
 		assert.NoError(t, err)
-		assert.Equal(t, `{"ID":1,"VAL":2}`, string(content))
+		assert.Equal(t, `{"ID":"1","VAL":"2"}`, string(content))
 	})
 
 	t.Run("Streaming delete changes...", func(t *testing.T) {
@@ -615,7 +615,7 @@ oracledb_cdc:
 
 		content, err := msgs[0].AsBytes()
 		assert.NoError(t, err)
-		assert.Equal(t, `{"ID":1,"VAL":2}`, string(content))
+		assert.Equal(t, `{"ID":"1","VAL":"2"}`, string(content))
 	})
 
 	require.NoError(t, stream.StopWithin(time.Second*10))
