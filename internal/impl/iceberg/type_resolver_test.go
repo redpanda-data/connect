@@ -107,7 +107,7 @@ func TestCommonTypeToIcebergType(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := commonTypeToIcebergType(&tt.common)
+			got, err := commonTypeToIcebergType(&tt.common, newTypeInferrer())
 			if tt.wantErr {
 				require.Error(t, err)
 				return
@@ -340,7 +340,7 @@ func TestTypeResolverResolveTypeForCreateTable(t *testing.T) {
 		msg := service.NewMessage(nil)
 		msg.SetStructuredMut(map[string]any{"name": "hello"})
 
-		got, err := r.resolveTypeForCreateTable("name", "hello", msg, "ns", "tbl")
+		got, err := r.resolveTypeForCreateTable("name", "hello", msg, "ns", "tbl", newTypeInferrer())
 		require.NoError(t, err)
 		assert.Equal(t, "string", got.Type())
 	})
@@ -351,7 +351,7 @@ func TestTypeResolverResolveTypeForCreateTable(t *testing.T) {
 		msg := service.NewMessage(nil)
 		msg.SetStructuredMut(map[string]any{})
 
-		got, err := r.resolveTypeForCreateTable("name", nil, msg, "ns", "tbl")
+		got, err := r.resolveTypeForCreateTable("name", nil, msg, "ns", "tbl", newTypeInferrer())
 		require.NoError(t, err)
 		assert.Nil(t, got)
 	})
@@ -369,7 +369,7 @@ func TestTypeResolverResolveTypeForCreateTable(t *testing.T) {
 		msg.SetStructuredMut(map[string]any{"count": 42})
 		msg.MetaSetMut("test_schema", commonSchema.ToAny())
 
-		got, err := r.resolveTypeForCreateTable("count", 42, msg, "ns", "tbl")
+		got, err := r.resolveTypeForCreateTable("count", 42, msg, "ns", "tbl", newTypeInferrer())
 		require.NoError(t, err)
 		assert.Equal(t, "long", got.Type())
 	})
@@ -381,7 +381,7 @@ func TestTypeResolverResolveTypeForCreateTable(t *testing.T) {
 		msg := service.NewMessage(nil)
 		msg.SetStructuredMut(map[string]any{"count": 42})
 
-		got, err := r.resolveTypeForCreateTable("count", 42, msg, "ns", "tbl")
+		got, err := r.resolveTypeForCreateTable("count", 42, msg, "ns", "tbl", newTypeInferrer())
 		require.NoError(t, err)
 		assert.Equal(t, "long", got.Type())
 	})
@@ -392,8 +392,114 @@ func TestTypeResolverResolveTypeForCreateTable(t *testing.T) {
 		msg := service.NewMessage(nil)
 		msg.SetStructuredMut(map[string]any{"count": 42})
 
-		got, err := r.resolveTypeForCreateTable("count", 42, msg, "ns", "tbl")
+		got, err := r.resolveTypeForCreateTable("count", 42, msg, "ns", "tbl", newTypeInferrer())
 		require.NoError(t, err, "should not error when schema_metadata is missing from message")
 		assert.Equal(t, "long", got.Type(), "should fall back to inference")
+	})
+
+	t.Run("shared allocator produces unique field IDs across nested structs", func(t *testing.T) {
+		r := newTypeResolver("", nil, nil)
+		ti := newTypeInferrer()
+
+		record := map[string]any{
+			"id": int64(1),
+			"source": map[string]any{
+				"account_id": "ACC-123",
+				"bank_code":  "SWIFT-XYZ",
+			},
+			"destination": map[string]any{
+				"account_id": "ACC-456",
+				"bank_code":  "SWIFT-ABC",
+			},
+		}
+
+		msg := service.NewMessage(nil)
+		msg.SetStructuredMut(record)
+
+		// Build fields the same way buildSchemaWithResolver does.
+		var allIDs []int
+		for name, value := range record {
+			fieldType, err := r.resolveTypeForCreateTable(name, value, msg, "ns", "tbl", ti)
+			require.NoError(t, err)
+			if fieldType == nil {
+				continue
+			}
+			topID := ti.allocateFieldID()
+			allIDs = append(allIDs, topID)
+
+			// Collect nested field IDs from struct types.
+			if st, ok := fieldType.(*iceberg.StructType); ok {
+				for _, f := range st.FieldList {
+					allIDs = append(allIDs, f.ID)
+				}
+			}
+		}
+
+		// Every ID must be unique — this is the regression test for the collision bug.
+		seen := make(map[int]bool, len(allIDs))
+		for _, id := range allIDs {
+			assert.False(t, seen[id], "duplicate field ID %d — nested struct IDs collide with top-level", id)
+			seen[id] = true
+		}
+		assert.GreaterOrEqual(t, len(allIDs), 7, "expected at least 7 fields (1 primitive + 2 structs with 2 fields each)")
+	})
+
+	t.Run("schema_metadata override shares allocator with stage 1", func(t *testing.T) {
+		// Two top-level fields are both objects described in schema_metadata. Without
+		// threading the shared `ti` through the override path, each metadata-resolved
+		// struct would re-start IDs at 1, colliding with each other and with stage-1
+		// inferred fields.
+		commonRoot := schema.Common{
+			Type: schema.Object,
+			Children: []schema.Common{
+				{Name: "source", Type: schema.Object, Children: []schema.Common{
+					{Name: "account_id", Type: schema.String},
+					{Name: "bank_code", Type: schema.String},
+				}},
+				{Name: "destination", Type: schema.Object, Children: []schema.Common{
+					{Name: "account_id", Type: schema.String},
+					{Name: "bank_code", Type: schema.String},
+				}},
+			},
+		}
+
+		r := newTypeResolver("test_schema", nil, nil)
+		ti := newTypeInferrer()
+
+		record := map[string]any{
+			"source": map[string]any{
+				"account_id": "ACC-123",
+				"bank_code":  "SWIFT-XYZ",
+			},
+			"destination": map[string]any{
+				"account_id": "ACC-456",
+				"bank_code":  "SWIFT-ABC",
+			},
+		}
+		msg := service.NewMessage(nil)
+		msg.SetStructuredMut(record)
+		msg.MetaSetMut("test_schema", commonRoot.ToAny())
+
+		var allIDs []int
+		for name, value := range record {
+			fieldType, err := r.resolveTypeForCreateTable(name, value, msg, "ns", "tbl", ti)
+			require.NoError(t, err)
+			require.NotNil(t, fieldType)
+			topID := ti.allocateFieldID()
+			allIDs = append(allIDs, topID)
+
+			st, ok := fieldType.(*iceberg.StructType)
+			require.True(t, ok, "expected metadata override to return StructType")
+			for _, f := range st.FieldList {
+				allIDs = append(allIDs, f.ID)
+			}
+		}
+
+		seen := make(map[int]bool, len(allIDs))
+		for _, id := range allIDs {
+			assert.False(t, seen[id], "duplicate field ID %d — metadata-override path is not sharing ti", id)
+			seen[id] = true
+		}
+		assert.Len(t, allIDs, 6, "expected 2 top-level + 4 nested IDs")
 	})
 }
