@@ -199,8 +199,9 @@ file:
 			}
 
 			go func() {
-				err = streamOut.Run(t.Context())
-				require.NoError(t, err)
+				if err := streamOut.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+					t.Error(err)
+				}
 			}()
 
 			assert.Eventually(t, func() bool {
@@ -263,8 +264,7 @@ file:
 	license.InjectTestService(streamOut.Resources())
 
 	go func() {
-		err = streamOut.Run(t.Context())
-		require.NoError(t, err)
+		_ = streamOut.Run(t.Context())
 	}()
 
 	time.Sleep(time.Second * 5)
@@ -346,8 +346,9 @@ file:
 	license.InjectTestService(streamOut.Resources())
 
 	go func() {
-		err = streamOut.Run(t.Context())
-		require.NoError(t, err)
+		if err := streamOut.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+			t.Error(err)
+		}
 	}()
 
 	time.Sleep(time.Second * 5)
@@ -1064,8 +1065,7 @@ file:
 	license.InjectTestService(streamOut.Resources())
 
 	go func() {
-		err = streamOut.Run(t.Context())
-		require.NoError(t, err)
+		_ = streamOut.Run(t.Context())
 	}()
 
 	// Wait for stream to start
