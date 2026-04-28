@@ -522,8 +522,7 @@ func (m *Migrator) onInputConnected(ctx context.Context, fr *kafka.FranzReaderOr
 	m.src = fr.Client
 	m.srcAdm = kadm.NewClient(fr.Client)
 	m.srcClusterID = []byte(metadata.Cluster)
-	m.groups.src = fr.Client
-	m.groups.srcAdm = m.srcAdm
+	m.groups.setSource(fr.Client, m.srcAdm)
 	m.mu.Unlock()
 
 	return nil
@@ -553,11 +552,9 @@ func (m *Migrator) onOutputConnected(_ context.Context, fw franzWriter) error {
 	}
 
 	m.mu.Lock()
-	m.groups.offsetHeader = m.offsetHeader
 	m.dstAdm = dstAdm
 	m.dstClusterID = []byte(metadata.Cluster)
-	m.groups.dst = clientInfo.Client
-	m.groups.dstAdm = dstAdm
+	m.groups.setDestination(clientInfo.Client, dstAdm, m.offsetHeader)
 	m.mu.Unlock()
 
 	// Start a periodic topic sync loop to handle empty topics that would

@@ -192,14 +192,18 @@ type GroupOffset struct {
 //   - Runs in one-shot or continuous sync modes
 //   - Provides metrics and caching for performance
 type groupsMigrator struct {
-	conf         GroupsMigratorConfig
+	conf    GroupsMigratorConfig
+	metrics *groupsMetrics
+	log     *service.Logger
+
+	// mu protects the fields below which are written during connection
+	// (onInputConnected / onOutputConnected) and read from SyncLoop.
+	mu           sync.RWMutex
 	offsetHeader string
 	src          *kgo.Client
 	srcAdm       *kadm.Client
 	dst          *kgo.Client
 	dstAdm       *kadm.Client
-	metrics      *groupsMetrics
-	log          *service.Logger
 
 	topicIDs    map[string]kadm.TopicID
 	dstTopicIDs map[string]kadm.TopicID
@@ -636,7 +640,24 @@ func (m *groupsMigrator) Sync(ctx context.Context, getTopics func() []TopicMappi
 	return nil
 }
 
+func (m *groupsMigrator) setSource(src *kgo.Client, srcAdm *kadm.Client) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.src = src
+	m.srcAdm = srcAdm
+}
+
+func (m *groupsMigrator) setDestination(dst *kgo.Client, dstAdm *kadm.Client, offsetHeader string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.dst = dst
+	m.dstAdm = dstAdm
+	m.offsetHeader = offsetHeader
+}
+
 func (m *groupsMigrator) enabled() bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	return m.conf.Enabled && (m.srcAdm != nil || m.dstAdm != nil)
 }
 
