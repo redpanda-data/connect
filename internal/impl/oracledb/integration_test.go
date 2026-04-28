@@ -692,7 +692,7 @@ oracledb_cdc:
 
 			require.Truef(t, (got == snapshotRows), "Wanted %d snapshot messages but got %d", snapshotRows, got)
 			require.JSONEq(t, `{
-		"ID": 1,
+		"ID": "1",
 		"VARCHARCOL": "snapshot",
 		"INLINELOB": null,
 		"OUTOFLINELOB": null
@@ -716,7 +716,7 @@ oracledb_cdc:
 
 			require.Truef(t, (got == streamingRows), "Wanted %d streaming messages but got %d", streamingRows, got)
 			require.JSONEq(t, `{
-		"ID": 51,
+		"ID": "51",
 		"VARCHARCOL": "streaming",
 		"INLINELOB": "",
 		"OUTOFLINELOB": ""
@@ -772,7 +772,7 @@ oracledb_cdc:
 
 			require.Truef(t, (got == snapshotRows), "Wanted %d snapshot messages but got %d", snapshotRows, got)
 			require.JSONEq(t, `{
-		"ID": 1,
+		"ID": "1",
 		"VARCHARCOL": "snapshot",
 		"INLINELOB": "`+inline+`",
 		"OUTOFLINELOB": "`+outofline+`"
@@ -796,7 +796,7 @@ oracledb_cdc:
 
 			require.Truef(t, (got == streamingRows), "Wanted %d streaming messages but got %d", streamingRows, got)
 			require.JSONEq(t, `{
-		"ID": 51,
+		"ID": "51",
 		"VARCHARCOL": "streaming",
 		"INLINELOB": "`+inline+`",
 		"OUTOFLINELOB": "`+outofline+`"
