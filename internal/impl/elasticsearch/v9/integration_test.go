@@ -14,7 +14,9 @@
 package elasticsearch
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -78,7 +80,9 @@ elasticsearch_v9:
 	require.NoError(t, err)
 
 	go func() {
-		require.NoError(t, stream.Run(ctx))
+		if err := stream.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+			t.Error(err)
+		}
 	}()
 	defer func() {
 		err := stream.StopWithin(time.Second * 3)
