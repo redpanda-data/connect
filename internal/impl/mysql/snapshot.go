@@ -21,11 +21,11 @@ import (
 // Snapshot represents a structure that prepares a transaction
 // and creates mysql consistent snapshot inside the transaction
 type Snapshot struct {
-	db *sql.DB
-	tx *sql.Tx
-
-	lockConn     *sql.Conn
-	snapshotConn *sql.Conn
+	db       *sql.DB
+	lockConn *sql.Conn
+	// tableTxs holds one consistent-snapshot transaction per table, established
+	// inside the FLUSH TABLES WITH READ LOCK window so all readers see identical data.
+	tableTxs map[string]*sql.Tx
 
 	logger *service.Logger
 }
@@ -44,44 +44,26 @@ func (s *Snapshot) prepareSnapshot(ctx context.Context, tables []string) (*posit
 	}
 
 	var err error
-	// Create a separate connection for table locks
 	s.lockConn, err = s.db.Conn(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("create lock connection: %v", err)
 	}
 
-	// Create another connection for the snapshot
-	s.snapshotConn, err = s.db.Conn(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("create snapshot connection: %v", err)
-	}
-
-	// Start a consistent snapshot transaction
-	s.tx, err = s.snapshotConn.BeginTx(ctx, &sql.TxOptions{
-		ReadOnly:  true,
-		Isolation: sql.LevelRepeatableRead,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("start transaction: %v", err)
-	}
-
 	/*
-		FLUSH TABLES WITH READ LOCK is executed after CONSISTENT SNAPSHOT to:
-		1. Force MySQL to flush all data from memory to disk
-		2. Prevent any writes to tables while we read the binlog position
+		FLUSH TABLES WITH READ LOCK prevents any writes to tables while we:
+		  1. Establish consistent-snapshot transactions on all worker connections
+		  2. Read the binlog position
 
-		This lock MUST be released quickly to avoid blocking other connections. Only use it
-		to capture the binlog coordinates, then release immediately with UNLOCK TABLES.
+		The lock MUST be released quickly to avoid blocking other connections.
 
 		See https://dev.mysql.com/doc/refman/8.4/en/flush.html#flush-tables
 	*/
 	lockQuery := buildFlushAndLockTablesQuery(tables)
 	s.logger.Infof("Acquiring table-level read locks with: %s", lockQuery)
 	if _, err := s.lockConn.ExecContext(ctx, lockQuery); err != nil {
-		return nil, errors.Join(
-			fmt.Errorf("acquire table-level read locks: %w", err),
-			s.tx.Rollback())
+		return nil, fmt.Errorf("acquire table-level read locks: %w", err)
 	}
+
 	unlockTables := func() error {
 		if _, err := s.lockConn.ExecContext(ctx, "UNLOCK TABLES"); err != nil {
 			return fmt.Errorf("release table-level read locks: %w", err)
@@ -89,43 +71,57 @@ func (s *Snapshot) prepareSnapshot(ctx context.Context, tables []string) (*posit
 		return nil
 	}
 
-	/*
-		START TRANSACTION WITH CONSISTENT SNAPSHOT ensures a consistent view of database state
-		when reading historical data during CDC initialization. Without it, concurrent writes
-		could create inconsistencies between binlog position and table snapshots, potentially
-		missing or duplicating events. The snapshot prevents other transactions from modifying
-		the data being read, maintaining referential integrity across tables while capturing
-		the initial state.
+	// Open one dedicated connection per table and establish a consistent snapshot
+	// on each while the read lock is still held. This guarantees all parallel
+	// readers see the exact same database state.
+	s.tableTxs = make(map[string]*sql.Tx, len(tables))
+	for _, table := range tables {
+		conn, connErr := s.db.Conn(ctx)
+		if connErr != nil {
+			return nil, errors.Join(
+				fmt.Errorf("create snapshot connection for table %s: %w", table, connErr),
+				unlockTables())
+		}
 
-		It's important that we do this AFTER we acquire the READ LOCK and flushing the tables,
-		otherwise other writes could sneak in between our transaction snapshot and acquiring the
-		lock.
-	*/
+		/*
+			START TRANSACTION WITH CONSISTENT SNAPSHOT ensures a consistent view of
+			database state for all parallel readers. We do this AFTER acquiring the
+			read lock so no writes can sneak in between the snapshot and the lock.
 
-	// NOTE: this is a little sneaky because we're actually implicitly closing the transaction
-	// started with `BeginTx` above and replacing it with this one. We have to do this because
-	// the `database/sql` driver we're using does not support this WITH CONSISTENT SNAPSHOT.
-	if _, err := s.tx.ExecContext(ctx, "START TRANSACTION WITH CONSISTENT SNAPSHOT"); err != nil {
-		return nil, errors.Join(
-			fmt.Errorf("start consistent snapshot: %w", err),
-			unlockTables(),
-			s.tx.Rollback())
+			NOTE: BeginTx is called first to obtain a *sql.Tx handle, then
+			START TRANSACTION WITH CONSISTENT SNAPSHOT is executed on it, which
+			implicitly replaces the transaction with a consistent-snapshot one.
+			The go-sql-driver/mysql driver does not expose this directly via TxOptions.
+		*/
+		tx, txErr := conn.BeginTx(ctx, &sql.TxOptions{
+			ReadOnly:  true,
+			Isolation: sql.LevelRepeatableRead,
+		})
+		if txErr != nil {
+			return nil, errors.Join(
+				fmt.Errorf("start transaction for table %s: %w", table, txErr),
+				unlockTables())
+		}
+		if _, txErr = tx.ExecContext(ctx, "START TRANSACTION WITH CONSISTENT SNAPSHOT"); txErr != nil {
+			return nil, errors.Join(
+				fmt.Errorf("start consistent snapshot for table %s: %w", table, txErr),
+				tx.Rollback(),
+				unlockTables())
+		}
+		s.tableTxs[table] = tx
 	}
 
-	// Get binary log position (while tables are locked)
+	// Capture the binlog position while the read lock is still held.
 	pos, err := s.getCurrentBinlogPosition(ctx)
 	if err != nil {
 		return nil, errors.Join(
 			fmt.Errorf("get binlog position: %w", err),
-			unlockTables(),
-			s.tx.Rollback())
+			unlockTables())
 	}
 
-	// Release the table locks immediately after getting the binlog position
-	if _, err := s.lockConn.ExecContext(ctx, "UNLOCK TABLES"); err != nil {
-		return nil, errors.Join(
-			fmt.Errorf("release table-level read locks: %w", err),
-			s.tx.Rollback())
+	// Release the table locks immediately after capturing the binlog position.
+	if err := unlockTables(); err != nil {
+		return nil, err
 	}
 
 	return &pos, nil
@@ -144,7 +140,7 @@ func buildFlushAndLockTablesQuery(tables []string) string {
 	return sb.String()
 }
 
-func (s *Snapshot) getTablePrimaryKeys(ctx context.Context, table string) ([]string, error) {
+func (*Snapshot) getTablePrimaryKeys(ctx context.Context, tx *sql.Tx, table string) ([]string, error) {
 	pkSql := `
 SELECT COLUMN_NAME
 FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
@@ -152,8 +148,7 @@ WHERE TABLE_NAME = '%s' AND CONSTRAINT_NAME = 'PRIMARY' AND TABLE_SCHEMA = DATAB
 ORDER BY ORDINAL_POSITION
 `
 
-	// Get primary key columns for the table
-	rows, err := s.tx.QueryContext(ctx, fmt.Sprintf(pkSql, table))
+	rows, err := tx.QueryContext(ctx, fmt.Sprintf(pkSql, table))
 	if err != nil {
 		return nil, fmt.Errorf("get primary key: %v", err)
 	}
@@ -180,18 +175,17 @@ ORDER BY ORDINAL_POSITION
 	return pks, nil
 }
 
-func (s *Snapshot) querySnapshotTable(ctx context.Context, table string, pk []string, lastSeenPkVal *map[string]any, limit int) (*sql.Rows, error) {
+func (s *Snapshot) querySnapshotTable(ctx context.Context, tx *sql.Tx, table string, pk []string, lastSeenPkVal *map[string]any, limit int) (*sql.Rows, error) {
 	snapshotQueryParts := []string{
 		"SELECT * FROM " + table,
 	}
 
 	if lastSeenPkVal == nil {
 		snapshotQueryParts = append(snapshotQueryParts, buildOrderByClause(pk))
-
 		snapshotQueryParts = append(snapshotQueryParts, "LIMIT ?")
 		q := strings.Join(snapshotQueryParts, " ")
-		s.logger.Infof("Querying snapshot: %s", q)
-		return s.tx.QueryContext(ctx, strings.Join(snapshotQueryParts, " "), limit)
+		s.logger.Debugf("Querying snapshot: %s", q)
+		return tx.QueryContext(ctx, q, limit)
 	}
 
 	var lastSeenPkVals []any
@@ -209,8 +203,8 @@ func (s *Snapshot) querySnapshotTable(ctx context.Context, table string, pk []st
 	snapshotQueryParts = append(snapshotQueryParts, buildOrderByClause(pk))
 	snapshotQueryParts = append(snapshotQueryParts, fmt.Sprintf("LIMIT %d", limit))
 	q := strings.Join(snapshotQueryParts, " ")
-	s.logger.Infof("Querying snapshot: %s", q)
-	return s.tx.QueryContext(ctx, q, lastSeenPkVals...)
+	s.logger.Debugf("Querying snapshot: %s", q)
+	return tx.QueryContext(ctx, q, lastSeenPkVals...)
 }
 
 func buildOrderByClause(pk []string) string {
@@ -237,8 +231,8 @@ func (s *Snapshot) getCurrentBinlogPosition(ctx context.Context) (position, erro
 	}
 
 	// "SHOW BINARY LOG STATUS" replaces "SHOW MASTER STATUS" IN MySQL 8.4+
-	if err := scanRow(s.snapshotConn.QueryRowContext(ctx, "SHOW BINARY LOG STATUS")); err != nil {
-		if err = scanRow(s.snapshotConn.QueryRowContext(ctx, "SHOW MASTER STATUS")); err != nil {
+	if err := scanRow(s.lockConn.QueryRowContext(ctx, "SHOW BINARY LOG STATUS")); err != nil {
+		if err = scanRow(s.lockConn.QueryRowContext(ctx, "SHOW MASTER STATUS")); err != nil {
 			return position{}, err
 		}
 	}
@@ -250,33 +244,29 @@ func (s *Snapshot) getCurrentBinlogPosition(ctx context.Context) (position, erro
 }
 
 func (s *Snapshot) releaseSnapshot(_ context.Context) error {
-	if s.tx != nil {
-		if err := s.tx.Commit(); err != nil {
-			return fmt.Errorf("commit transaction: %v", err)
+	var errs []error
+	for table, tx := range s.tableTxs {
+		if err := tx.Commit(); err != nil {
+			errs = append(errs, fmt.Errorf("commit transaction for table %s: %w", table, err))
 		}
 	}
-
-	// reset transaction
-	s.tx = nil
-	return nil
+	s.tableTxs = nil
+	return errors.Join(errs...)
 }
 
 func (s *Snapshot) close() error {
 	var errs []error
 
-	if s.tx != nil {
-		if err := s.tx.Rollback(); err != nil {
+	for _, tx := range s.tableTxs {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
 			errs = append(errs, fmt.Errorf("rollback transaction: %w", err))
 		}
-		s.tx = nil
 	}
+	s.tableTxs = nil
 
-	for _, conn := range []*sql.Conn{s.lockConn, s.snapshotConn} {
-		if conn == nil {
-			continue
-		}
-		if err := conn.Close(); err != nil {
-			errs = append(errs, fmt.Errorf("close connection: %w", err))
+	if s.lockConn != nil {
+		if err := s.lockConn.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("close lock connection: %w", err))
 		}
 	}
 
