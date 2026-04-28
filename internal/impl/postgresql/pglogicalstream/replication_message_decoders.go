@@ -15,6 +15,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
+
+	"github.com/redpanda-data/connect/v4/internal/sqlutil"
 )
 
 // ----------------------------------------------------------------------------
@@ -74,7 +76,7 @@ func toStreamMessage(logicalMsg Message, relations map[uint32]*RelationMessage, 
 			case 'u': // unchanged toast
 				values[colName] = unchangedToastValue
 			case 't': // text
-				val, err := decodeTextColumnData(typeMap, col.Data, rel.Columns[idx].DataType)
+				val, err := decodeTextColumnData(typeMap, col.Data, rel.Columns[idx].DataType, rel.Columns[idx].TypeModifier)
 				if err != nil {
 					return nil, fmt.Errorf("unable to decode column data: %w", err)
 				}
@@ -111,7 +113,7 @@ func toStreamMessage(logicalMsg Message, relations map[uint32]*RelationMessage, 
 					case 'u': // unchanged toast
 						values[colName] = unchangedToastValue
 					case 't':
-						val, err := decodeTextColumnData(typeMap, col.Data, rel.Columns[idx].DataType)
+						val, err := decodeTextColumnData(typeMap, col.Data, rel.Columns[idx].DataType, rel.Columns[idx].TypeModifier)
 						if err != nil {
 							return nil, fmt.Errorf("unable to decode column data: %w", err)
 						}
@@ -121,7 +123,7 @@ func toStreamMessage(logicalMsg Message, relations map[uint32]*RelationMessage, 
 					}
 				}
 			case 't': // text
-				val, err := decodeTextColumnData(typeMap, col.Data, rel.Columns[idx].DataType)
+				val, err := decodeTextColumnData(typeMap, col.Data, rel.Columns[idx].DataType, rel.Columns[idx].TypeModifier)
 				if err != nil {
 					return nil, fmt.Errorf("unable to decode column data: %w", err)
 				}
@@ -148,7 +150,7 @@ func toStreamMessage(logicalMsg Message, relations map[uint32]*RelationMessage, 
 			case 'u': // unchanged toast
 				values[colName] = unchangedToastValue
 			case 't': // text
-				val, err := decodeTextColumnData(typeMap, col.Data, rel.Columns[idx].DataType)
+				val, err := decodeTextColumnData(typeMap, col.Data, rel.Columns[idx].DataType, rel.Columns[idx].TypeModifier)
 				if err != nil {
 					return nil, fmt.Errorf("unable to decode column data: %w", err)
 				}
@@ -169,7 +171,7 @@ func toStreamMessage(logicalMsg Message, relations map[uint32]*RelationMessage, 
 	return message, nil
 }
 
-func decodeTextColumnData(mi *pgtype.Map, data []byte, dataType uint32) (any, error) {
+func decodeTextColumnData(mi *pgtype.Map, data []byte, dataType uint32, typeModifier int32) (any, error) {
 	if data == nil {
 		return nil, nil
 	}
@@ -195,9 +197,22 @@ func decodeTextColumnData(mi *pgtype.Map, data []byte, dataType uint32) (any, er
 			}
 			return val, nil
 		case "numeric":
-			// Return the raw PostgreSQL text representation as a string,
-			// avoiding the pgtype.Numeric struct that doesn't match schema.
-			return string(data), nil
+			// NUMERIC values are emitted as canonical decimal strings to
+			// match the schema.Decimal/BigDecimal value contract. When
+			// atttypmod carries precision/scale, pad to the declared scale;
+			// otherwise normalise the natural-scale form via BigDecimal.
+			if precision, scale, ok := pgNumericModFromAtttypmod(typeModifier); ok {
+				canonical, err := sqlutil.CanonicaliseDecimal(string(data), precision, scale)
+				if err != nil {
+					return nil, fmt.Errorf("normalising numeric value: %w", err)
+				}
+				return canonical, nil
+			}
+			canonical, err := sqlutil.CanonicaliseBigDecimal(string(data))
+			if err != nil {
+				return nil, fmt.Errorf("normalising numeric value: %w", err)
+			}
+			return canonical, nil
 		case "date":
 			// ±infinity dates cannot be represented as time.Time; return nil.
 			if ts, ok := val.(time.Time); ok {

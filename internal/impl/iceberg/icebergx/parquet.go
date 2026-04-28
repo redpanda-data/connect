@@ -13,11 +13,12 @@ package icebergx
 import (
 	"fmt"
 	"iter"
-	"math"
 	"strings"
 
 	"github.com/apache/iceberg-go"
 	"github.com/parquet-go/parquet-go"
+
+	"github.com/redpanda-data/connect/v4/internal/impl/parquet/parquetdecimal"
 )
 
 // BuildParquetSchema builds a parquet schema from an iceberg schema and returns
@@ -192,10 +193,9 @@ func icebergTypeToParquet(t iceberg.Type) (parquet.Node, error) {
 }
 
 // DecimalByteWidth returns the minimum number of bytes needed to store a
-// two's complement integer with the given decimal precision. This matches
-// the formula used by parquet-go and the iceberg-go requiredLength table:
-//
-//	ceil((log10(2) + precision) / log10(256))
+// two's complement integer with the given decimal precision. Thin alias
+// over [parquetdecimal.ByteWidth] for backwards compatibility within the
+// iceberg packages; new callers should use parquetdecimal directly.
 func DecimalByteWidth(precision int) int {
-	return int(math.Ceil((math.Log10(2) + float64(precision)) / math.Log10(256)))
+	return parquetdecimal.ByteWidth(precision)
 }

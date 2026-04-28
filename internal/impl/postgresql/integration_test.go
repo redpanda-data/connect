@@ -1345,7 +1345,7 @@ postgres_cdc:
 		assert.Equal(t, "INT64", byName["col_bigint"], "BIGINT column")
 		assert.Equal(t, "FLOAT32", byName["col_float4"], "REAL column")
 		assert.Equal(t, "FLOAT64", byName["col_float8"], "DOUBLE PRECISION column")
-		assert.Equal(t, "STRING", byName["col_numeric"], "NUMERIC column")
+		assert.Equal(t, "DECIMAL", byName["col_numeric"], "NUMERIC column")
 		assert.Equal(t, "STRING", byName["col_text"], "TEXT column")
 		assert.Equal(t, "STRING", byName["col_varchar"], "VARCHAR column")
 		assert.Equal(t, "STRING", byName["col_char"], "CHAR column")

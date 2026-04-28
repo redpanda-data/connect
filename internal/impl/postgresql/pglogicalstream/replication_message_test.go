@@ -14,6 +14,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
@@ -833,4 +835,27 @@ func (s *logicalDecodingMessageSuite) Test() {
 	s.True(ok)
 
 	s.Equal(expected, logicalDecodingMsg)
+}
+
+func TestDecodeTextColumnDataNumericDecimal(t *testing.T) {
+	mp := pgtype.NewMap()
+	// numeric(18,4) — atttypmod packs (precision << 16) | scale plus VARHDRSZ.
+	atttypmod := int32(((18 << 16) | 4) + 4)
+	got, err := decodeTextColumnData(mp, []byte("1.5"), pgtype.NumericOID, atttypmod)
+	require.NoError(t, err)
+	assert.Equal(t, "1.5000", got, "value canonicalised at the declared scale")
+}
+
+func TestDecodeTextColumnDataNumericBigDecimal(t *testing.T) {
+	mp := pgtype.NewMap()
+	got, err := decodeTextColumnData(mp, []byte("12345.67890"), pgtype.NumericOID, -1)
+	require.NoError(t, err)
+	assert.Equal(t, "12345.67890", got, "unparameterised numeric canonicalises as BigDecimal at natural scale")
+}
+
+func TestDecodeTextColumnDataNullPassesThrough(t *testing.T) {
+	mp := pgtype.NewMap()
+	got, err := decodeTextColumnData(mp, nil, pgtype.NumericOID, -1)
+	require.NoError(t, err)
+	assert.Nil(t, got)
 }

@@ -103,6 +103,19 @@ func TestCommonTypeToIcebergType(t *testing.T) {
 			Type:     schema.Array,
 			Children: []schema.Common{{Type: schema.String}},
 		}, "list", false},
+		{"Decimal precision/scale", schema.Common{
+			Name:    "amount",
+			Type:    schema.Decimal,
+			Logical: &schema.LogicalParams{Decimal: &schema.DecimalParams{Precision: 18, Scale: 4}},
+		}, "decimal(18, 4)", false},
+		{"Decimal missing logical params", schema.Common{
+			Name: "amount",
+			Type: schema.Decimal,
+		}, "", true},
+		{"BigDecimal rejected", schema.Common{
+			Name: "amount",
+			Type: schema.BigDecimal,
+		}, "", true},
 	}
 
 	for _, tt := range tests {

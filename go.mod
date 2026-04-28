@@ -4,6 +4,10 @@ go 1.26.2
 
 replace github.com/99designs/keyring => github.com/Jeffail/keyring v1.2.3
 
+// TEMPORARY: replace benthos with local checkout while decimal common-type adoption is in flight.
+// Flip back to a tagged version once benthos releases with both Decimal and BigDecimal types.
+replace github.com/redpanda-data/benthos/v4 => /Users/ash/src/ai/benthos-schema-decimal-types
+
 ignore (
 	./bin
 	./config

@@ -15,8 +15,32 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/schema"
 )
 
+// mssqlColumnToCommon converts a *sql.ColumnType into a schema.Common entry.
+// DECIMAL and NUMERIC columns become schema.Decimal with precision/scale
+// from sql.ColumnType.DecimalSize(); MONEY and SMALLMONEY remain as
+// schema.String for backwards compatibility (their fixed (19,4) / (10,4)
+// shapes can be obtained via explicit CAST upstream).
+func mssqlColumnToCommon(name string, ct *sql.ColumnType) schema.Common {
+	typeName := strings.ToUpper(ct.DatabaseTypeName())
+	if typeName == "DECIMAL" || typeName == "NUMERIC" {
+		precision, scale, hasSize := ct.DecimalSize()
+		if hasSize {
+			if c, err := schema.NewDecimal(name, int32(precision), int32(scale), true); err == nil {
+				return c
+			}
+		}
+		return schema.Common{Name: name, Type: schema.String, Optional: true}
+	}
+	return schema.Common{
+		Name:     name,
+		Type:     mssqlTypeNameToCommonType(typeName),
+		Optional: true,
+	}
+}
+
 // mssqlTypeNameToCommonType maps an MSSQL DatabaseTypeName() string to a
-// schema.CommonType. The comparison is case-insensitive.
+// schema.CommonType for column types whose mapping doesn't depend on
+// precision/scale. Use mssqlColumnToCommon for the full conversion.
 func mssqlTypeNameToCommonType(typeName string) schema.CommonType {
 	switch strings.ToUpper(typeName) {
 	case "TINYINT", "SMALLINT", "INT", "BIGINT":
@@ -25,8 +49,15 @@ func mssqlTypeNameToCommonType(typeName string) schema.CommonType {
 		return schema.Float64
 	case "REAL":
 		return schema.Float32
-	case "DECIMAL", "NUMERIC", "MONEY", "SMALLMONEY":
-		// Arbitrary precision — preserve as string to avoid data loss.
+	case "DECIMAL", "NUMERIC":
+		// DECIMAL/NUMERIC should go through mssqlColumnToCommon to pick up
+		// precision/scale; falling back to String here means precision was
+		// unavailable.
+		return schema.String
+	case "MONEY", "SMALLMONEY":
+		// Fixed (19,4) and (10,4) decimals — kept as String for backwards
+		// compatibility. Users who want typed decimals should CAST to
+		// DECIMAL upstream.
 		return schema.String
 	case "BIT":
 		return schema.Boolean
@@ -53,11 +84,7 @@ func mssqlTypeNameToCommonType(typeName string) schema.CommonType {
 func columnTypesToSchema(tableName string, colNames []string, colTypes []*sql.ColumnType) any {
 	children := make([]schema.Common, len(colTypes))
 	for i, ct := range colTypes {
-		children[i] = schema.Common{
-			Name:     colNames[i],
-			Type:     mssqlTypeNameToCommonType(ct.DatabaseTypeName()),
-			Optional: true,
-		}
+		children[i] = mssqlColumnToCommon(colNames[i], ct)
 	}
 	c := schema.Common{
 		Name:     tableName,

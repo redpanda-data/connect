@@ -86,15 +86,15 @@ func TestRelationMessageToSchema(t *testing.T) {
 		Namespace:    "public",
 		RelationName: "orders",
 		Columns: []*RelationMessageColumn{
-			{Name: "is_active", DataType: 16},    // bool
-			{Name: "quantity", DataType: 23},     // int4
-			{Name: "user_id", DataType: 20},      // int8
-			{Name: "price", DataType: 700},       // float4
-			{Name: "discount", DataType: 701},    // float8
-			{Name: "description", DataType: 25},  // text
-			{Name: "payload", DataType: 17},      // bytea
-			{Name: "created_at", DataType: 1114}, // timestamp
-			{Name: "amount", DataType: 1700},     // numeric -> string
+			{Name: "is_active", DataType: 16},                  // bool
+			{Name: "quantity", DataType: 23},                   // int4
+			{Name: "user_id", DataType: 20},                    // int8
+			{Name: "price", DataType: 700},                     // float4
+			{Name: "discount", DataType: 701},                  // float8
+			{Name: "description", DataType: 25},                // text
+			{Name: "payload", DataType: 17},                    // bytea
+			{Name: "created_at", DataType: 1114},               // timestamp
+			{Name: "amount", DataType: 1700, TypeModifier: -1}, // numeric (no precision) -> BigDecimal
 		},
 	}
 
@@ -122,7 +122,55 @@ func TestRelationMessageToSchema(t *testing.T) {
 	assert.Equal(t, bschema.String, childByName["description"].Type)
 	assert.Equal(t, bschema.ByteArray, childByName["payload"].Type)
 	assert.Equal(t, bschema.Timestamp, childByName["created_at"].Type)
-	assert.Equal(t, bschema.String, childByName["amount"].Type)
+	assert.Equal(t, bschema.BigDecimal, childByName["amount"].Type)
+}
+
+func TestPgNumericModFromAtttypmod(t *testing.T) {
+	cases := []struct {
+		name      string
+		atttypmod int32
+		precision int32
+		scale     int32
+		ok        bool
+	}{
+		{name: "postgres no-modifier sentinel", atttypmod: -1, ok: false},
+		{name: "go zero value defensive", atttypmod: 0, ok: false},
+		{name: "atttypmod 1 below VARHDRSZ", atttypmod: 1, ok: false},
+		{name: "decimal(18,4)", atttypmod: ((18 << 16) | 4) + 4, precision: 18, scale: 4, ok: true},
+		{name: "decimal(1,0) boundary", atttypmod: ((1 << 16) | 0) + 4, precision: 1, scale: 0, ok: true},
+		{name: "decimal(38,38) max", atttypmod: ((38 << 16) | 38) + 4, precision: 38, scale: 38, ok: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p, s, ok := pgNumericModFromAtttypmod(tc.atttypmod)
+			assert.Equal(t, tc.ok, ok)
+			if tc.ok {
+				assert.Equal(t, tc.precision, p, "precision")
+				assert.Equal(t, tc.scale, s, "scale")
+			}
+		})
+	}
+}
+
+func TestRelationMessageToSchemaDecimalWithModifier(t *testing.T) {
+	typeMap := pgtype.NewMap()
+	atttypmod := int32(((18 << 16) | 4) + 4)
+	rel := &RelationMessage{
+		RelationName: "tx",
+		Columns: []*RelationMessageColumn{
+			{Name: "amount", DataType: 1700, TypeModifier: atttypmod}, // numeric(18,4)
+		},
+	}
+	result := relationMessageToSchema(rel, typeMap)
+	parsed, err := bschema.ParseFromAny(result)
+	require.NoError(t, err)
+	require.Len(t, parsed.Children, 1)
+	amount := parsed.Children[0]
+	assert.Equal(t, bschema.Decimal, amount.Type)
+	require.NotNil(t, amount.Logical)
+	require.NotNil(t, amount.Logical.Decimal)
+	assert.Equal(t, int32(18), amount.Logical.Decimal.Precision)
+	assert.Equal(t, int32(4), amount.Logical.Decimal.Scale)
 
 	// All columns are optional
 	for _, child := range parsed.Children {

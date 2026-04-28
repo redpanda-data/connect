@@ -13,14 +13,15 @@ import (
 	"container/heap"
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+
 	"github.com/redpanda-data/connect/v4/internal/confx"
+	"github.com/redpanda-data/connect/v4/internal/sqlutil"
 )
 
 type heapItem struct{ iter *changeTableRowIter }
@@ -269,11 +270,36 @@ func mapScannedValue(val any, colType *sql.ColumnType) any {
 		return nil
 	}
 
-	switch colType.DatabaseTypeName() {
-	// Decimals come as []byte from the driver, convert to json.Number to preserve precision
+	typeName := colType.DatabaseTypeName()
+	switch typeName {
 	case "DECIMAL", "NUMERIC":
+		// Decimals come as []byte from the driver. When precision/scale is
+		// known, normalise to the canonical decimal string contract for
+		// schema.Decimal columns. Without precision info, fall back to the
+		// raw text — same shape as the column's String mapping.
+		b, ok := val.([]byte)
+		if !ok {
+			return val
+		}
+		precision, scale, hasSize := colType.DecimalSize()
+		if !hasSize {
+			return string(b)
+		}
+		canonical, err := sqlutil.CanonicaliseDecimalBytes(b, int32(precision), int32(scale))
+		if err != nil {
+			return string(b)
+		}
+		return canonical
+	case "MONEY", "SMALLMONEY":
+		// MONEY/SMALLMONEY remain String-typed (see schema.go) so the
+		// emitted wire form is a quoted canonical decimal string, matching
+		// the schema's String declaration.
 		if b, ok := val.([]byte); ok {
-			return json.Number(string(b))
+			canonical, err := sqlutil.CanonicaliseBigDecimalBytes(b)
+			if err != nil {
+				return string(b)
+			}
+			return canonical
 		}
 	}
 

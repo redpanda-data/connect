@@ -782,3 +782,102 @@ parquet_encode:
 		})
 	}
 }
+
+// TestParquetEncodeDecimalSmoke exercises the metadata-driven encoding path
+// for Decimal columns covering all three precision buckets (Int32, Int64,
+// FixedLenByteArray) plus negative values, padding, and BigDecimal
+// rejection.
+func TestParquetEncodeDecimalSmoke(t *testing.T) {
+	commonSchema := &schema.Common{
+		Type: schema.Object,
+		Children: []schema.Common{
+			{
+				Name:    "small",
+				Type:    schema.Decimal,
+				Logical: &schema.LogicalParams{Decimal: &schema.DecimalParams{Precision: 9, Scale: 2}},
+			},
+			{
+				Name:    "medium",
+				Type:    schema.Decimal,
+				Logical: &schema.LogicalParams{Decimal: &schema.DecimalParams{Precision: 18, Scale: 4}},
+			},
+			{
+				Name:    "large",
+				Type:    schema.Decimal,
+				Logical: &schema.LogicalParams{Decimal: &schema.DecimalParams{Precision: 38, Scale: 8}},
+			},
+		},
+	}
+
+	row := map[string]any{
+		"small":  "1234567.89",
+		"medium": "-12345678901234.5678",
+		"large":  "1.50000000",
+	}
+	rowBytes, err := json.Marshal(row)
+	require.NoError(t, err)
+
+	msg := service.NewMessage(rowBytes)
+	msg.MetaSetMut("schema_meta", commonSchema.ToAny())
+
+	proc, err := newParquetEncodeProcessor(nil, nil, "schema_meta", &parquet.Uncompressed, parquet.Nanosecond)
+	require.NoError(t, err)
+
+	out, err := proc.ProcessBatch(t.Context(), service.MessageBatch{msg})
+	require.NoError(t, err)
+	require.Len(t, out, 1)
+	require.Len(t, out[0], 1)
+
+	encoded, err := out[0][0].AsBytes()
+	require.NoError(t, err)
+
+	pf, err := parquet.OpenFile(bytes.NewReader(encoded), int64(len(encoded)))
+	require.NoError(t, err)
+
+	// Confirm each column carries a decimal logical type with the declared
+	// precision and scale, and that the physical type matches the bucket.
+	cols := pf.Schema().Columns()
+	require.Len(t, cols, 3)
+	for _, want := range []struct {
+		name      string
+		precision int32
+		scale     int32
+		kind      parquet.Kind
+	}{
+		{"small", 9, 2, parquet.Int32},
+		{"medium", 18, 4, parquet.Int64},
+		{"large", 38, 8, parquet.FixedLenByteArray},
+	} {
+		t.Run(want.name, func(t *testing.T) {
+			node, err := pf.Schema().Lookup(want.name)
+			require.True(t, err)
+			lt := node.Node.Type().LogicalType()
+			require.NotNil(t, lt)
+			require.NotNil(t, lt.Decimal)
+			assert.Equal(t, want.precision, lt.Decimal.Precision, "precision")
+			assert.Equal(t, want.scale, lt.Decimal.Scale, "scale")
+			assert.Equal(t, want.kind, node.Node.Type().Kind(), "physical kind")
+		})
+	}
+}
+
+// TestParquetEncodeBigDecimalRejected confirms that BigDecimal columns
+// produce a clear error rather than silently dropping precision.
+func TestParquetEncodeBigDecimalRejected(t *testing.T) {
+	commonSchema := &schema.Common{
+		Type: schema.Object,
+		Children: []schema.Common{
+			{Name: "amount", Type: schema.BigDecimal},
+		},
+	}
+
+	msg := service.NewMessage([]byte(`{"amount":"1.5"}`))
+	msg.MetaSetMut("schema_meta", commonSchema.ToAny())
+
+	proc, err := newParquetEncodeProcessor(nil, nil, "schema_meta", &parquet.Uncompressed, parquet.Nanosecond)
+	require.NoError(t, err)
+
+	_, err = proc.ProcessBatch(t.Context(), service.MessageBatch{msg})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "BigDecimal")
+}

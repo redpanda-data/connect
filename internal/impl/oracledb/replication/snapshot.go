@@ -20,6 +20,8 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/sqlutil"
 )
 
 // Snapshot is responsible for creating snapshots of existing tables based on the Tables
@@ -427,15 +429,27 @@ func prepSnapshotScannerAndMappers(cols []*sql.ColumnType) (values []any, mapper
 			// Oracle NUMBER type can represent both integers and decimals.
 			// For integer-width columns (scale=0, precision<=18), scan as int64
 			// to match the streaming path's ParseInt behavior.
-			// For all others, scan as json.Number to preserve arbitrary precision.
+			// Decimals with declared (p, s) emit canonical decimal strings;
+			// arbitrary-precision NUMBER falls back to BigDecimal canonical
+			// strings.
 			precision, scale, ok := col.DecimalSize()
-			if ok && scale == 0 && precision > 0 && precision <= MaxInt64DecimalPrecision {
+			switch {
+			case ok && scale == 0 && precision > 0 && precision <= MaxInt64DecimalPrecision:
 				val = new(sql.Null[int64])
 				mapper = snapshotValueMapper[int64]
-			} else {
+			case ok:
+				if scale < 0 {
+					scale = 0
+				}
+				p, s := int32(precision), int32(scale)
 				val = new(sql.NullString)
-				mapper = stringMapping(func(s string) (any, error) {
-					return json.Number(s), nil
+				mapper = stringMapping(func(text string) (any, error) {
+					return sqlutil.CanonicaliseDecimal(text, p, s)
+				})
+			default:
+				val = new(sql.NullString)
+				mapper = stringMapping(func(text string) (any, error) {
+					return sqlutil.CanonicaliseBigDecimal(text)
 				})
 			}
 		case "BINARY_FLOAT", "IBFloat", "BFloat", "BINARY_DOUBLE", "IBDouble", "BDouble":

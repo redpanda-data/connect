@@ -22,6 +22,8 @@ import (
 	"github.com/twmb/avro"
 	franz_sr "github.com/twmb/franz-go/pkg/sr"
 
+	bschema "github.com/redpanda-data/benthos/v4/public/schema"
+
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
 
@@ -213,12 +215,21 @@ func (s *schemaRegistryDecoder) getAvroDecoder(ctx context.Context, aschema fran
 		return nil, err
 	}
 
-	var commonSchema any
+	var (
+		commonSchema     any
+		commonSchemaRoot bschema.Common
+		hasCommonSchema  bool
+	)
 	if s.cfg.avro.storeSchemaMeta != "" {
-		if commonSchema, err = ecsAvroFromBytes(ecsAvroConfig{
+		c, parseErr := ecsAvroParseFromBytes(ecsAvroConfig{
 			rawUnion: s.cfg.avro.rawUnions,
-		}, []byte(schemaSpec)); err != nil {
-			s.logger.With("error", err).Error("Failed to extract common schema for meta storage")
+		}, []byte(schemaSpec))
+		if parseErr != nil {
+			s.logger.With("error", parseErr).Error("Failed to extract common schema for meta storage")
+		} else {
+			commonSchema = c.ToAny()
+			commonSchemaRoot = c
+			hasCommonSchema = true
 		}
 	}
 
@@ -239,6 +250,10 @@ func (s *schemaRegistryDecoder) getAvroDecoder(ctx context.Context, aschema fran
 		var native any
 		if _, err := schema.Decode(b, &native, decodeOpts...); err != nil {
 			return err
+		}
+
+		if hasCommonSchema {
+			native = normaliseAvroDecimals(native, commonSchemaRoot)
 		}
 
 		if s.cfg.avro.preserveLogicalTypes {

@@ -33,6 +33,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/license"
+	"github.com/redpanda-data/connect/v4/internal/sqlutil"
 )
 
 const (
@@ -663,9 +664,13 @@ func prepSnapshotScannerAndMappers(cols []*sql.ColumnType) (values []any, mapper
 				return s.Int64, nil
 			}
 		case "DECIMAL", "NUMERIC":
+			precision, scale, hasSize := col.DecimalSize()
 			val = new(sql.NullString)
 			mapper = stringMapping(func(s string) (any, error) {
-				return s, nil
+				if !hasSize {
+					return s, nil
+				}
+				return sqlutil.CanonicaliseDecimal(s, int32(precision), int32(scale))
 			})
 		case "FLOAT":
 			val = new(sql.Null[float32])
@@ -1055,7 +1060,15 @@ func mapMessageColumn(v any, col schema.TableColumn) (any, error) {
 		if !ok {
 			return nil, fmt.Errorf("expected string value for decimal column got: %T", v)
 		}
-		return s, nil
+		precision, scale, parsed := parseMySQLDecimal(col.RawType)
+		if !parsed {
+			return s, nil
+		}
+		canonical, err := sqlutil.CanonicaliseDecimal(s, precision, scale)
+		if err != nil {
+			return nil, fmt.Errorf("normalising decimal column %q: %w", col.Name, err)
+		}
+		return canonical, nil
 	case schema.TYPE_SET:
 		bitset, ok := v.(int64)
 		if !ok {
