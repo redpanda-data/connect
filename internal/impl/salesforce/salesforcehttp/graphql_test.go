@@ -36,6 +36,18 @@ func TestInjectGraphQLCursor(t *testing.T) {
 			want:   `{ Account(first: 10, after: "abc123") { edges { node { Id } } } }`,
 		},
 		{
+			name:   "inject into existing (first: $var) args",
+			query:  `{ Account(first: $first) { edges { node { Id } } } }`,
+			cursor: "abc123",
+			want:   `{ Account(first: $first, after: "abc123") { edges { node { Id } } } }`,
+		},
+		{
+			name:   "inject into (where: ..., first: $first, orderBy: ...) args",
+			query:  `{ Account(where: { Name: { like: $name } }, first: $first, orderBy: { CreatedDate: { order: ASC } }) { edges } }`,
+			cursor: "page2",
+			want:   `{ Account(where: { Name: { like: $name } }, first: $first, after: "page2", orderBy: { CreatedDate: { order: ASC } }) { edges } }`,
+		},
+		{
 			name:   "inject before PascalCase object when no args present",
 			query:  `{ Account { edges { node { Id } } } }`,
 			cursor: "xyz789",

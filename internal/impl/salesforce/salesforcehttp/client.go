@@ -367,13 +367,21 @@ func (s *Client) RefreshToken(ctx context.Context) error {
 
 // GraphQL sends a GraphQL query to Salesforce and returns the raw response body.
 func (s *Client) GraphQL(ctx context.Context, query string) ([]byte, error) {
+	return s.GraphQLWithVariables(ctx, query, nil)
+}
+
+// GraphQLWithVariables sends a GraphQL query with variables to Salesforce and
+// returns the raw response body. When variables is nil or empty, the request
+// body omits the variables field.
+func (s *Client) GraphQLWithVariables(ctx context.Context, query string, variables map[string]any) ([]byte, error) {
 	apiUrl, err := url.Parse(s.orgURL + salesforceAPIBasePath + "/data/" + s.apiVersion + "/graphql")
 	if err != nil {
 		return nil, fmt.Errorf("invalid GraphQL URL: %w", err)
 	}
 
-	payload := map[string]string{
-		"query": query,
+	payload := map[string]any{"query": query}
+	if len(variables) > 0 {
+		payload["variables"] = variables
 	}
 
 	bodyBytes, err := json.Marshal(payload)
@@ -422,13 +430,21 @@ func (s *Client) RestQueryPage(ctx context.Context, soql, nextURL string) (servi
 // Returns (batch, nextCursor, error) where nextCursor is empty when there are no more pages.
 // The query must include pageInfo { hasNextPage endCursor } in the selection set.
 func (s *Client) GraphQLQueryPage(ctx context.Context, query, cursor string) (service.MessageBatch, string, error) {
+	return s.GraphQLQueryPageWithVariables(ctx, query, nil, cursor)
+}
+
+// GraphQLQueryPageWithVariables is like GraphQLQueryPage but forwards a
+// variables map alongside the query. Pagination still works by injecting after:
+// "cursor" into the query string itself; the variables map passes through
+// unchanged on every page.
+func (s *Client) GraphQLQueryPageWithVariables(ctx context.Context, query string, variables map[string]any, cursor string) (service.MessageBatch, string, error) {
 	q := injectGraphQLCursor(query, cursor)
 	if cursor != "" && q == query {
 		s.log.Warn("GraphQL cursor injection failed: query unchanged, cannot paginate further")
 		return nil, "", nil
 	}
 
-	raw, err := s.GraphQL(ctx, q)
+	raw, err := s.GraphQLWithVariables(ctx, q, variables)
 	if err != nil {
 		return nil, "", err
 	}
@@ -467,8 +483,10 @@ func (s *Client) GraphQLQueryPage(ctx context.Context, query, cursor string) (se
 }
 
 var (
-	// reGraphQLFirstParam matches existing (first: N) argument.
-	reGraphQLFirstParam = regexp.MustCompile(`\(first:\s*\d+`)
+	// reGraphQLFirstParam matches a `first: N` or `first: $var` argument, whether
+	// it is the first argument in the parens or follows a comma. The leading
+	// "(" or ", " is captured in $0 so the replacement preserves it.
+	reGraphQLFirstParam = regexp.MustCompile(`(?:\(|,\s*)first:\s*(?:\d+|\$\w+)`)
 	// reGraphQLPascalObject matches the first PascalCase object name followed by {
 	// (i.e. Salesforce SObject names like FlowOrchestration, Account, etc.)
 	reGraphQLPascalObject = regexp.MustCompile(`\b([A-Z][a-zA-Z0-9_]*)\s*\{`)
