@@ -243,7 +243,6 @@ retry                     ,output    ,retry                     ,0.0.0   ,certif
 retry                     ,processor ,retry                     ,4.27.0  ,certified  ,n          ,y     ,y
 ristretto                 ,cache     ,Ristretto                 ,0.0.0   ,community  ,n          ,y     ,y
 salesforce                ,input     ,Salesforce                ,0.0.0   ,enterprise ,n          ,y     ,y
-salesforce                ,processor ,Salesforce                ,4.0.0   ,enterprise ,n          ,n     ,n
 salesforce_cdc            ,input     ,Salesforce                ,0.0.0   ,enterprise ,n          ,y     ,y
 salesforce_graphql        ,input     ,Salesforce                ,0.0.0   ,enterprise ,n          ,y     ,y
 salesforce_sink           ,output    ,Salesforce                ,4.0.0   ,enterprise ,n          ,y     ,y
