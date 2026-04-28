@@ -852,7 +852,8 @@ func TestIntegrationOracleDBCDCSnapshotAndStreamingAllTypes(t *testing.T) {
 		-- xml_col           XMLTYPE,
 		json_col          CLOB,                         -- JSON stored as CLOB
 		noleadingzero_col NUMBER,                       -- observe Oracle's non-leading zero decimal handling (0.15 -> .15)
-		nullable_num      NUMBER(11,0)                  -- nullable number to verify NULL handling
+		nullable_num      NUMBER(11,0),                 -- nullable number to verify NULL handling
+		nonnullable_num   NUMBER(11,0) NOT NULL         -- NOT NULL
 	) LOB(oolvarcharmax_col) STORE AS BASICFILE (DISABLE STORAGE IN ROW NOCACHE LOGGING)`
 	err := db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.all_data_types", q)
 	require.NoError(t, err)
@@ -868,7 +869,7 @@ func TestIntegrationOracleDBCDCSnapshotAndStreamingAllTypes(t *testing.T) {
 		time_col, datetimeoffset_col, char_col, varchar_col,
 		nchar_col, nvarchar_col, binary_col, varbinary_col,
 		varcharmax_col, oolvarcharmax_col, nvarcharmax_col, varbinarymax_col,
-		bit_col, json_col, noleadingzero_col, nullable_num
+		bit_col, json_col, noleadingzero_col, nullable_num, nonnullable_num
 	) VALUES (
 		:1, :2, :3, :4,
 		:5, :6, :7, :8,
@@ -876,7 +877,7 @@ func TestIntegrationOracleDBCDCSnapshotAndStreamingAllTypes(t *testing.T) {
 		:13, :14, :15, :16,
 		:17, :18, :19, :20,
 		:21, :22, :23, :24,
-		:25, :26, :27, :28
+		:25, :26, :27, :28, :29
 	)`
 
 	t.Log("Inserting min values for testing snapshot data...")
@@ -911,6 +912,7 @@ func TestIntegrationOracleDBCDCSnapshotAndStreamingAllTypes(t *testing.T) {
 			nil,          // json (clob)
 			"0.15",       // noleadingzero_col
 			nil,          // nullable_num (NULL to verify NULL handling)
+			0,            // nonnullable_num
 		)
 	}
 
@@ -1008,6 +1010,7 @@ oracledb_cdc:
 			`{"max": true}`,      // json (clob)
 			"0.15",               // noleadingzero_col
 			nil,                  // nullable_num (NULL to verify NULL handling when streaming)
+			0,                    // nonnullable_num
 		)
 
 		minWant := 2
@@ -1055,6 +1058,7 @@ oracledb_cdc:
 		"NCHAR_COL": "АААААААААА",
 		"NUMERIC_COL": -999999999999999.99999,
 		"NULLABLE_NUM": null,
+		"NONNULLABLE_NUM": 0,
 		"NVARCHAR_COL": null,
 		"NVARCHARMAX_COL": null,
 		"REAL_COL": -3.4e+37,
@@ -1090,6 +1094,7 @@ oracledb_cdc:
 		"NCHAR_COL": "ZZZZZZZZZZ",
 		"NUMERIC_COL": 999999999999999.99999,
 		"NULLABLE_NUM": null,
+		"NONNULLABLE_NUM": 0,
 		"NVARCHAR_COL": "Max nvarchar value",
 		"NVARCHARMAX_COL": "Max nvarchar(max)",
 		"REAL_COL": 3.3999999e+37,
