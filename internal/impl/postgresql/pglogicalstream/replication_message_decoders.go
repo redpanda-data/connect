@@ -201,14 +201,22 @@ func decodeTextColumnData(mi *pgtype.Map, data []byte, dataType uint32, typeModi
 			// match the schema.Decimal/BigDecimal value contract. When
 			// atttypmod carries precision/scale, pad to the declared scale;
 			// otherwise normalise the natural-scale form via BigDecimal.
+			// PostgreSQL also allows the special values NaN, Infinity, and
+			// -Infinity as valid NUMERIC values; pass these through as-is
+			// since they have no canonical decimal representation.
+			text := string(data)
+			switch text {
+			case "NaN", "Infinity", "-Infinity":
+				return text, nil
+			}
 			if precision, scale, ok := pgNumericModFromAtttypmod(typeModifier); ok {
-				canonical, err := sqlutil.CanonicaliseDecimal(string(data), precision, scale)
+				canonical, err := sqlutil.CanonicaliseDecimal(text, precision, scale)
 				if err != nil {
 					return nil, fmt.Errorf("normalising numeric value: %w", err)
 				}
 				return canonical, nil
 			}
-			canonical, err := sqlutil.CanonicaliseBigDecimal(string(data))
+			canonical, err := sqlutil.CanonicaliseBigDecimal(text)
 			if err != nil {
 				return nil, fmt.Errorf("normalising numeric value: %w", err)
 			}
