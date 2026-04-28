@@ -87,6 +87,26 @@ func TestEcsAvroFromBytesDecimalOptionalUnion(t *testing.T) {
 	assert.Equal(t, "amount", amount.Name, "outer field name should be preserved")
 }
 
+func TestEcsAvroFromBytesDecimalScaleDefaultsToZero(t *testing.T) {
+	// Per the Avro spec, scale is optional and defaults to 0 when omitted.
+	spec := []byte(`{
+		"type": "record",
+		"name": "Tx",
+		"fields": [
+			{"name": "amount", "type": {"type": "bytes", "logicalType": "decimal", "precision": 9}}
+		]
+	}`)
+	c, err := ecsAvroParseFromBytes(ecsAvroConfig{}, spec)
+	require.NoError(t, err)
+	require.Len(t, c.Children, 1)
+	amount := c.Children[0]
+	assert.Equal(t, schema.Decimal, amount.Type)
+	require.NotNil(t, amount.Logical)
+	require.NotNil(t, amount.Logical.Decimal)
+	assert.Equal(t, int32(9), amount.Logical.Decimal.Precision)
+	assert.Equal(t, int32(0), amount.Logical.Decimal.Scale, "scale should default to 0 when absent")
+}
+
 func TestEcsAvroFromBytesDecimalOutOfBoundsRejected(t *testing.T) {
 	spec := []byte(`{
 		"type": "record",

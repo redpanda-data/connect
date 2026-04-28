@@ -4,7 +4,7 @@
 // License (the "License"); you may not use this file except in compliance with
 // the License. You may obtain a copy of the License at
 //
-// https://github.com/redpanda-data/connect/v4/blob/main/licenses/rcl.md
+// https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
 package sqlutil
 
@@ -32,6 +32,8 @@ func TestCanonicaliseDecimal(t *testing.T) {
 		{name: "zero", input: "0", precision: 5, scale: 2, want: "0.00"},
 		{name: "leading plus accepted via fallback", input: "+1.5", precision: 18, scale: 4, want: "1.5000"},
 		{name: "scientific notation accepted via fallback", input: "1.5e2", precision: 5, scale: 0, want: "150"},
+		{name: "rejects values that lose precision at the declared scale", input: "1.56789", precision: 10, scale: 2, wantErr: true},
+		{name: "rejects scientific notation that exceeds scale", input: "1.5e-5", precision: 10, scale: 2, wantErr: true},
 		{name: "boundary precision 38 scale 0", input: "12345678901234567890123456789012345678", precision: 38, scale: 0, want: "12345678901234567890123456789012345678"},
 		{name: "exceeds precision returns error", input: "12345.6789", precision: 5, scale: 2, wantErr: true},
 		{name: "malformed input returns error", input: "not-a-number", precision: 5, scale: 2, wantErr: true},

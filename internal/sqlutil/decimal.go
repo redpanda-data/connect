@@ -4,7 +4,7 @@
 // License (the "License"); you may not use this file except in compliance with
 // the License. You may obtain a copy of the License at
 //
-// https://github.com/redpanda-data/connect/v4/blob/main/licenses/rcl.md
+// https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
 // Package sqlutil contains helpers shared between the SQL-source CDC inputs
 // (Postgres, MySQL, MSSQL, Oracle) for adopting benthos's common-schema
@@ -30,12 +30,11 @@ import (
 //
 // Inputs in canonical form already (the common case for MySQL DECIMAL) take
 // a fast path via schema.ParseDecimal. Inputs in extended forms — leading
-// +, scientific notation, missing trailing zeros — fall back to a big.Float
-// parse, which is exact within the configured precision when the magnitude
-// fits in 256 bits (covers all decimals up to precision 38).
-//
-// The result is validated against the column's precision; values exceeding
-// it produce an error.
+// +, scientific notation, missing trailing zeros — fall back to a big.Rat
+// parse, which is exact for any decimal value the input can represent.
+// Values whose magnitude exceeds the column's precision, or whose
+// fractional component cannot be represented exactly at the declared scale,
+// are rejected rather than silently rounded.
 func CanonicaliseDecimal(text string, precision, scale int32) (string, error) {
 	params := schema.DecimalParams{Precision: precision, Scale: scale}
 
@@ -45,20 +44,20 @@ func CanonicaliseDecimal(text string, precision, scale int32) (string, error) {
 		return params.Format(unscaled)
 	}
 
-	// Slower path: permit extended forms (scientific notation, leading +,
-	// fewer fractional digits than scale, etc.).
-	bf, _, err := new(big.Float).SetPrec(256).Parse(text, 10)
-	if err != nil {
-		return "", fmt.Errorf("parsing decimal %q: %w", text, err)
+	// Slower path: accept extended forms (leading +, scientific notation,
+	// values shorter or longer than declared scale) via big.Rat. Rationals
+	// represent any decimal exactly, so the scale-fit check below is a
+	// genuine "did this value lose precision" test rather than a
+	// floating-point rounding question.
+	rat, ok := new(big.Rat).SetString(text)
+	if !ok {
+		return "", fmt.Errorf("parsing decimal %q: invalid format", text)
 	}
-	scaleFactor := new(big.Float).SetPrec(256).SetInt(pow10(scale))
-	bf.Mul(bf, scaleFactor)
-	if bf.Sign() < 0 {
-		bf.Sub(bf, new(big.Float).SetFloat64(0.5))
-	} else {
-		bf.Add(bf, new(big.Float).SetFloat64(0.5))
+	scaled := new(big.Rat).Mul(rat, new(big.Rat).SetInt(pow10(scale)))
+	if !scaled.IsInt() {
+		return "", fmt.Errorf("decimal %q has more fractional digits than the column's scale %d", text, scale)
 	}
-	unscaled, _ := bf.Int(nil)
+	unscaled := scaled.Num()
 
 	out, err := params.Format(unscaled)
 	if err != nil {

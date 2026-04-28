@@ -271,9 +271,14 @@ func ecsAvroFromAnyMap(cfg ecsAvroConfig, as map[string]any) (schema.Common, err
 		if err != nil {
 			return schema.Common{}, fmt.Errorf("decimal precision: %w", err)
 		}
-		s, err := avroSpecInt32(as["scale"])
-		if err != nil {
-			return schema.Common{}, fmt.Errorf("decimal scale: %w", err)
+		// Per the Avro spec scale is optional and defaults to 0 when absent;
+		// only an unparseable scale value (wrong type, non-integer) is an error.
+		var s int32
+		if _, present := as["scale"]; present {
+			s, err = avroSpecInt32(as["scale"])
+			if err != nil {
+				return schema.Common{}, fmt.Errorf("decimal scale: %w", err)
+			}
 		}
 		c.Type = schema.Decimal
 		c.Logical = &schema.LogicalParams{
