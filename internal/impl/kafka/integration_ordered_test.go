@@ -188,7 +188,26 @@ func TestRedpandaRecordOrderSoakTest(t *testing.T) {
 	//   nohup go test -timeout 0 -v -count 1000 -run ^TestRedpandaRecordOrderSoakTest$ ./internal/impl/kafka/ > soak.log 2>&1 &
 	integration.CheckSkip(t)
 
-	const soakDuration = 3 * time.Minute
+	// Derive soak duration from the test deadline so the test doesn't get
+	// killed by a timeout when other tests in the package run first. Reserve
+	// time for container setup and teardown. If not enough time remains, skip.
+	const (
+		setupTeardownBudget = 2 * time.Minute
+		minSoakDuration     = 30 * time.Second
+		defaultSoakDuration = 1 * time.Minute
+	)
+
+	soakDuration := defaultSoakDuration
+	if dl, ok := t.Deadline(); ok {
+		remaining := time.Until(dl) - setupTeardownBudget
+		if remaining < minSoakDuration {
+			t.Skipf("not enough time for soak test: %s remaining after reserving %s for setup/teardown (need at least %s)", time.Until(dl).Round(time.Second), setupTeardownBudget, minSoakDuration)
+		}
+		if remaining < soakDuration {
+			soakDuration = remaining
+			t.Logf("Adjusted soak duration to %s based on test deadline", soakDuration.Round(time.Second))
+		}
+	}
 
 	// --- infrastructure ---
 

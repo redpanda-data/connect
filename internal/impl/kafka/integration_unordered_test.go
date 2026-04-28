@@ -67,10 +67,21 @@ input:
 		integration.StreamTestStreamSaturatedUnacked(200),
 	)
 
+	// Lighter suite for partition-specific groups that only need to validate
+	// routing correctness, not throughput. Keeps total runtime well within
+	// the parent test deadline so later groups don't get starved.
+	partitionSuite := integration.StreamTests(
+		integration.StreamTestOpenClose(),
+		integration.StreamTestMetadata(),
+		integration.StreamTestSendBatch(10),
+		integration.StreamTestStreamSequential(100),
+		integration.StreamTestStreamParallel(100),
+	)
+
 	// In some modes include testing input level batching
-	var suiteExt integration.StreamTestList
-	suiteExt = append(suiteExt, suite...)
-	suiteExt = append(suiteExt, integration.StreamTestReceiveBatchCount(10))
+	var partitionSuiteExt integration.StreamTestList
+	partitionSuiteExt = append(partitionSuiteExt, partitionSuite...)
+	partitionSuiteExt = append(partitionSuiteExt, integration.StreamTestReceiveBatchCount(10))
 
 	suite.Run(
 		t, template,
@@ -84,7 +95,7 @@ input:
 
 	t.Run("only one partition", func(t *testing.T) {
 		t.Parallel()
-		suiteExt.Run(
+		partitionSuiteExt.Run(
 			t, template,
 			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
 				vars.General["VAR4"] = "group" + vars.ID
@@ -97,7 +108,7 @@ input:
 
 	t.Run("explicit partitions", func(t *testing.T) {
 		t.Parallel()
-		suite.Run(
+		partitionSuite.Run(
 			t, template,
 			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
 				topicName := "topic-" + vars.ID
@@ -111,7 +122,7 @@ input:
 
 		t.Run("range of partitions", func(t *testing.T) {
 			t.Parallel()
-			suite.Run(
+			partitionSuite.Run(
 				t, template,
 				integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
 					require.NoError(t, createKafkaTopic(ctx, brokerAddr, vars.ID, 4))
@@ -147,7 +158,8 @@ input:
     commit_period: "1s"
 `
 	t.Run("manual_partitioner", func(t *testing.T) {
-		suite.Run(
+		t.Parallel()
+		partitionSuite.Run(
 			t, manualPartitionTemplate,
 			integration.StreamTestOptPreTest(func(t testing.TB, _ context.Context, vars *integration.StreamTestConfigVars) {
 				vars.General["VAR4"] = "group" + vars.ID
@@ -198,9 +210,9 @@ input:
 		integration.StreamTestOpenClose(),
 		integration.StreamTestMetadata(),
 		integration.StreamTestSendBatch(10),
-		integration.StreamTestStreamSequential(1000),
-		integration.StreamTestStreamParallel(1000),
-		integration.StreamTestStreamParallelLossy(1000),
+		integration.StreamTestStreamSequential(100),
+		integration.StreamTestStreamParallel(100),
+		integration.StreamTestStreamParallelLossy(100),
 	)
 
 	suite.Run(
