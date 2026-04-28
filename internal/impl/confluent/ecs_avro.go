@@ -16,6 +16,7 @@ package confluent
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 
@@ -35,7 +36,7 @@ func avroSpecInt32(v any) (int32, error) {
 		}
 		return int32(n), nil
 	case nil:
-		return 0, fmt.Errorf("missing")
+		return 0, errors.New("missing")
 	default:
 		return 0, fmt.Errorf("unexpected type %T", v)
 	}
@@ -45,18 +46,10 @@ type ecsAvroConfig struct {
 	rawUnion bool // Whether unions are going to be serialized as raw JSON
 }
 
-// Extract common schema from avro bytes.
-func ecsAvroFromBytes(cfg ecsAvroConfig, specBytes []byte) (any, error) {
-	c, err := ecsAvroParseFromBytes(cfg, specBytes)
-	if err != nil {
-		return nil, err
-	}
-	return c.ToAny(), nil
-}
-
-// ecsAvroParseFromBytes parses an Avro JSON spec into a schema.Common. This
-// is the shape needed by the decoder when normalising decimal values
-// alongside the metadata copy returned by ecsAvroFromBytes.
+// ecsAvroParseFromBytes parses an Avro JSON spec into a schema.Common. The
+// schema-registry decoder uses the parsed form directly so it can walk
+// decimal field paths during value normalisation; callers that just want
+// the metadata copy can call ToAny() on the result.
 func ecsAvroParseFromBytes(cfg ecsAvroConfig, specBytes []byte) (schema.Common, error) {
 	var as any
 	if err := json.Unmarshal(specBytes, &as); err != nil {

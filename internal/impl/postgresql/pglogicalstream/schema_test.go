@@ -137,7 +137,7 @@ func TestPgNumericModFromAtttypmod(t *testing.T) {
 		{name: "go zero value defensive", atttypmod: 0, ok: false},
 		{name: "atttypmod 1 below VARHDRSZ", atttypmod: 1, ok: false},
 		{name: "decimal(18,4)", atttypmod: ((18 << 16) | 4) + 4, precision: 18, scale: 4, ok: true},
-		{name: "decimal(1,0) boundary", atttypmod: ((1 << 16) | 0) + 4, precision: 1, scale: 0, ok: true},
+		{name: "decimal(1,0) boundary", atttypmod: (1 << 16) + 4, precision: 1, scale: 0, ok: true},
 		{name: "decimal(38,38) max", atttypmod: ((38 << 16) | 38) + 4, precision: 38, scale: 38, ok: true},
 	}
 	for _, tc := range cases {
