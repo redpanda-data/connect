@@ -1,6 +1,7 @@
-= salesforce_sink
-:type: output
+= salesforce_graphql
+:type: input
 :status: stable
+:categories: ["Services"]
 
 
 
@@ -22,7 +23,7 @@
 component_type_dropdown::[]
 
 
-Writes messages to Salesforce, routing each topic to its own SObject configuration.
+Executes a Salesforce GraphQL (UIAPI) query once and emits a message for each record.
 
 
 [tabs]
@@ -33,19 +34,16 @@ Common::
 
 ```yml
 # Common config fields, showing default values
-output:
+input:
   label: ""
-  salesforce_sink:
+  salesforce_graphql:
     org_url: https://acme.my.salesforce.com # No default (required)
     client_id: "" # No default (required)
     client_secret: "" # No default (required)
     api_version: v65.0
-    bulk_batch_size: 1000
-    max_concurrent_bulk_jobs: 10
-    bulk_poll_interval: 5s
-    batch_period: 5s
-    max_in_flight: 1
-    topic_mappings: [] # No default (required)
+    query: query Accounts { uiapi { query { Account { edges { node { Id { value } Name { value } } } pageInfo { hasNextPage endCursor } } } } } # No default (required)
+    variables: 'root = {"first": 100}' # No default (optional)
+    auto_replay_nacks: true
 ```
 
 --
@@ -55,19 +53,16 @@ Advanced::
 
 ```yml
 # All config fields, showing default values
-output:
+input:
   label: ""
-  salesforce_sink:
+  salesforce_graphql:
     org_url: https://acme.my.salesforce.com # No default (required)
     client_id: "" # No default (required)
     client_secret: "" # No default (required)
     api_version: v65.0
-    bulk_batch_size: 1000
-    max_concurrent_bulk_jobs: 10
-    bulk_poll_interval: 5s
-    batch_period: 5s
-    max_in_flight: 1
-    topic_mappings: [] # No default (required)
+    query: query Accounts { uiapi { query { Account { edges { node { Id { value } Name { value } } } pageInfo { hasNextPage endCursor } } } } } # No default (required)
+    variables: 'root = {"first": 100}' # No default (optional)
+    auto_replay_nacks: true
     http:
       timeout: 5s
       tls:
@@ -123,53 +118,74 @@ output:
 --
 ======
 
-Consumes batches of messages and writes them to Salesforce.
+Executes a GraphQL query against the Salesforce UIAPI (`POST /services/data/{api_version}/graphql`), walks the response tree, and emits one message per record. When records are exhausted the input shuts down, letting the pipeline terminate gracefully (or the next input in a xref:components:inputs/sequence.adoc[sequence] to take over).
 
-Each message must have a `topic` field (set by the per-topic processor) and a `data` field
-containing the Salesforce record fields. The `topic` is used to look up the correct
-`topic_mappings` entry which defines the SObject, operation, and write mode.
+== When to use this input
 
-**Realtime mode** uses the sObject Collections REST API (synchronous, up to 200 records/call).
-**Bulk mode** uses the Bulk API 2.0 (asynchronous, polls until complete).
+Use `salesforce_graphql` for:
+
+- Cross-object queries in a single request (parent + children + grandchildren).
+- Response shapes that already match your downstream schema.
+- Queries benefiting from GraphQL's field-level selection and nesting.
+- Adopting Salesforce's UIAPI / future-forward query surface.
+
+Use a different Salesforce input instead if:
+
+- You only need single-object SELECTs — use xref:components:inputs/salesforce.adoc[`salesforce`] (simpler, no GraphQL schema knowledge needed).
+- You need continuous change events — use xref:components:inputs/salesforce_cdc.adoc[`salesforce_cdc`].
+
+== Pagination
+
+When the query selects an `edges`/`pageInfo` connection, the input transparently paginates by injecting `after: "<cursor>"` into the query string between requests. The query must include `pageInfo { hasNextPage endCursor }` for pagination to terminate cleanly. Responses without an `edges` array are emitted as a single message and the input completes.
+
+== Metadata
+
+This input adds no Salesforce-specific metadata. GraphQL response shapes vary by query, so record identity and context travel in the message body.
+
+== Authentication
+
+Uses the Salesforce OAuth 2.0 Client Credentials flow. Create a Connected App in Salesforce, enable OAuth settings and the Client Credentials Flow, grant the `api` OAuth scope, then supply the Consumer Key as `client_id` and Consumer Secret as `client_secret`. The Connected App must have access to the target UIAPI objects.
+
+
+== Examples
+
+[tabs]
+======
+Account snapshot via GraphQL::
++
+--
+
+Fetch the first 500 Accounts with a nested UIAPI query:
 
 ```yaml
 input:
-  broker:
-    inputs:
-      - kafka_franz:
-          seed_brokers: [localhost:9092]
-          topics: [salesforce-account]
-          consumer_group: sf-sink-account
-        processors:
-          - mapping: |
-              root.topic = @kafka_topic
-              root.data = this
-      - kafka_franz:
-          seed_brokers: [localhost:9092]
-          topics: [salesforce-contact]
-          consumer_group: sf-sink-contact
-        processors:
-          - mapping: |
-              root.topic = @kafka_topic
-              root.data = this
-
-output:
-  salesforce_sink:
-    org_url: "${SALESFORCE_ORG_URL}"
-    client_id: "${SALESFORCE_CLIENT_ID}"
-    client_secret: "${SALESFORCE_CLIENT_SECRET}"
-    topic_mappings:
-      - topic: salesforce-account
-        sobject: Account
-        operation: upsert
-        external_id_field: External_Id__c
-        mode: realtime
-      - topic: salesforce-contact
-        sobject: Contact
-        operation: upsert
-        external_id_field: External_Id__c
-        mode: bulk
+  salesforce_graphql:
+    org_url: https://acme.my.salesforce.com
+    client_id: ${SALESFORCE_CLIENT_ID}
+    client_secret: ${SALESFORCE_CLIENT_SECRET}
+    query: |
+      query Accounts($limit: Int) {
+        uiapi {
+          query {
+            Account(first: $limit) {
+              edges {
+                node {
+                  Id { value }
+                  Name { value }
+                  LastModifiedDate { value }
+                }
+              }
+              pageInfo { hasNextPage endCursor }
+            }
+          }
+        }
+      }
+    variables: |
+      root = {"limit": 500}
 ```
+
+--
+======
 
 == Fields
 
@@ -227,110 +243,46 @@ api_version: v65.0
 api_version: v62.0
 ```
 
-=== `bulk_batch_size`
+=== `query`
 
-Number of records per bulk job. Also controls the output batch size.
-
-
-*Type*: `int`
-
-*Default*: `1000`
-
-=== `max_concurrent_bulk_jobs`
-
-Maximum number of bulk jobs polling concurrently in the background. Each in-flight job buffers its CSV payload in memory; lower this value if memory usage is a concern.
-
-
-*Type*: `int`
-
-*Default*: `10`
-
-=== `bulk_poll_interval`
-
-How often to poll Salesforce for bulk job completion status.
-
-
-*Type*: `string`
-
-*Default*: `"5s"`
-
-=== `batch_period`
-
-Maximum period to wait before flushing an incomplete batch.
-
-
-*Type*: `string`
-
-*Default*: `"5s"`
-
-=== `max_in_flight`
-
-Maximum number of batches to send concurrently. Increasing this improves realtime write throughput.
-
-
-*Type*: `int`
-
-*Default*: `1`
-
-=== `topic_mappings`
-
-Per-topic Salesforce write configuration. Each entry maps a topic to an SObject and write settings.
-
-
-*Type*: `array`
-
-
-=== `topic_mappings[].topic`
-
-topic name to match against the message's 'topic' field
+The GraphQL query document as a single string. Must target the Salesforce UIAPI schema (`uiapi.query.*` or `uiapi.mutation.*`). Typically follows the UIAPI convention of nested `edges { node { field { value } } }`. Variables are referenced with `$name` and supplied via the `variables` field. For automatic pagination, include `pageInfo { hasNextPage endCursor }` in the relevant connection.
 
 
 *Type*: `string`
 
 
-=== `topic_mappings[].sobject`
+```yml
+# Examples
 
-Salesforce SObject API name (e.g., Account, Contact, MyObject__c)
+query: query Accounts { uiapi { query { Account { edges { node { Id { value } Name { value } } } pageInfo { hasNextPage endCursor } } } } }
 
+query: 'query Accounts($first: Int) { uiapi { query { Account(first: $first) { edges { node { Id { value } Name { value } } } pageInfo { hasNextPage endCursor } } } } }'
+```
 
-*Type*: `string`
+=== `variables`
 
-
-=== `topic_mappings[].operation`
-
-Write operation: insert, update, upsert, or delete
-
-
-*Type*: `string`
-
-*Default*: `"upsert"`
-
-=== `topic_mappings[].external_id_field`
-
-External ID field name, required for upsert
+Optional xref:guides:bloblang/about.adoc[Bloblang mapping] whose result must be an object whose keys are GraphQL variable names referenced by `query`. Values pass through as JSON in the request body's `variables` field. The mapping is evaluated once at startup with no message context — use `env()`, `now()`, `cache()`, or static literals.
 
 
 *Type*: `string`
 
-*Default*: `""`
 
-=== `topic_mappings[].mode`
+```yml
+# Examples
 
-Write mode: realtime (sObject Collections API) or bulk (Bulk API 2.0)
+variables: 'root = {"first": 100}'
 
+variables: 'root = {"since": now().ts_format("2006-01-02T15:04:05Z"), "limit": 500}'
+```
 
-*Type*: `string`
+=== `auto_replay_nacks`
 
-*Default*: `"realtime"`
-
-=== `topic_mappings[].all_or_none`
-
-Realtime only: roll back the entire batch if any record fails
+Whether messages that are rejected (nacked) at the output level should be automatically replayed indefinitely, eventually resulting in back pressure if the cause of the rejections is persistent. If set to `false` these messages will instead be deleted. Disabling auto replays can greatly improve memory efficiency of high throughput streams as the original shape of the data can be discarded immediately upon consumption and mutation.
 
 
 *Type*: `bool`
 
-*Default*: `false`
+*Default*: `true`
 
 === `http`
 
