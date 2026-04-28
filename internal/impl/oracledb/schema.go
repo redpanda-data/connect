@@ -20,8 +20,9 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/schema"
 	"github.com/redpanda-data/benthos/v4/public/service"
-	"github.com/redpanda-data/connect/v4/internal/impl/oracledb/logminer/sqlredo"
+
 	"github.com/redpanda-data/connect/v4/internal/impl/oracledb/replication"
+	"github.com/redpanda-data/connect/v4/internal/sqlutil"
 )
 
 // oracleTypeToCommonType maps an Oracle DATA_TYPE string to a schema.CommonType.
@@ -45,18 +46,37 @@ func oracleTypeToCommonType(dataType string) schema.CommonType {
 	}
 }
 
-// oracleNumberToCommonType maps a NUMBER column to the most specific CommonType
-// based on precision and scale. When scale is zero and precision fits in int64
-// (<=18 digits), returns Int64. Otherwise returns String to preserve arbitrary
-// precision without data loss.
-func oracleNumberToCommonType(precision, scale int64, hasDecimalInfo bool) schema.CommonType {
+// oracleNumberToCommon builds a schema.Common entry for a NUMBER column.
+// The mapping picks the most specific representation:
+//   - !hasDecimalInfo: BigDecimal — Oracle's "floating decimal" with no
+//     declared precision/scale.
+//   - scale > precision (driver sentinel for undeclared scale, e.g. go-ora's
+//     (38, 255) for bare NUMBER): BigDecimal.
+//   - scale == 0 && 0 < precision <= 18: Int64 (existing optimisation —
+//     scale-0 NUMBER fits losslessly in int64).
+//   - scale < 0: rounded to Decimal(precision, 0) since Avro/Parquet/Iceberg
+//     can't represent negative scale.
+//   - otherwise: Decimal(precision, scale).
+func oracleNumberToCommon(name string, precision, scale int64, hasDecimalInfo bool) schema.Common {
 	if !hasDecimalInfo {
-		return schema.String
+		return schema.NewBigDecimal(name, true)
+	}
+	if scale < 0 {
+		scale = 0
+	}
+	// Treat scale-greater-than-precision as undeclared (driver sentinel).
+	if scale > precision {
+		return schema.NewBigDecimal(name, true)
 	}
 	if scale == 0 && precision > 0 && precision <= replication.MaxInt64DecimalPrecision {
-		return schema.Int64
+		return schema.Common{Name: name, Type: schema.Int64, Optional: true}
 	}
-	return schema.String
+	if c, err := schema.NewDecimal(name, int32(precision), int32(scale), true); err == nil {
+		return c
+	}
+	// Precision out of bounds for the bounded Decimal type — fall back to
+	// BigDecimal so the source remains lossless.
+	return schema.NewBigDecimal(name, true)
 }
 
 // isNumberType reports whether dataType is one of Oracle's numeric type names
@@ -90,10 +110,9 @@ type schemaCache struct {
 }
 
 type cachedSchema struct {
-	schema      any                          // serialised schema.Common returned by ToAny()
-	keys        map[string]struct{}          // column names for O(1) membership checks
-	colTypes    map[string]schema.CommonType // column name → CommonType for value coercion
-	numericCols map[string]struct{}          // NUMBER columns that map to String (need json.Number coercion)
+	schema   any                      // serialised schema.Common returned by ToAny()
+	keys     map[string]struct{}      // column names for O(1) membership checks
+	colTypes map[string]schema.Common // column name → Common for value coercion (carries decimal precision/scale)
 }
 
 // newSchemaCache creates a schemaCache. db is used for on-demand cache-miss refreshes.
@@ -126,10 +145,9 @@ ORDER BY COLUMN_ID`
 	defer rows.Close()
 
 	var (
-		children    []schema.Common
-		keySet      = make(map[string]struct{})
-		colTypes    = make(map[string]schema.CommonType)
-		numericCols = make(map[string]struct{})
+		children []schema.Common
+		keySet   = make(map[string]struct{})
+		colTypes = make(map[string]schema.Common)
 	)
 	for rows.Next() {
 		var (
@@ -142,24 +160,20 @@ ORDER BY COLUMN_ID`
 			return nil, fmt.Errorf("scanning column metadata: %w", err)
 		}
 
-		var ct schema.CommonType
-		isNum := isNumberType(dataType)
-		if isNum {
-			ct = oracleNumberToCommonType(precision.Int64, scale.Int64, precision.Valid && scale.Valid)
+		var common schema.Common
+		if isNumberType(dataType) {
+			common = oracleNumberToCommon(colName, precision.Int64, scale.Int64, precision.Valid && scale.Valid)
 		} else {
-			ct = oracleTypeToCommonType(dataType)
+			common = schema.Common{
+				Name:     colName,
+				Type:     oracleTypeToCommonType(dataType),
+				Optional: true,
+			}
 		}
 
-		children = append(children, schema.Common{
-			Name:     colName,
-			Type:     ct,
-			Optional: true,
-		})
+		children = append(children, common)
 		keySet[colName] = struct{}{}
-		colTypes[colName] = ct
-		if isNum && ct == schema.String {
-			numericCols[colName] = struct{}{}
-		}
+		colTypes[colName] = common
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterating column metadata: %w", err)
@@ -174,7 +188,7 @@ ORDER BY COLUMN_ID`
 		Optional: false,
 		Children: children,
 	}
-	return &cachedSchema{schema: c.ToAny(), keys: keySet, colTypes: colTypes, numericCols: numericCols}, nil
+	return &cachedSchema{schema: c.ToAny(), keys: keySet, colTypes: colTypes}, nil
 }
 
 // schemaForEvent returns the schema for the given table, refreshing the cache
@@ -188,8 +202,7 @@ ORDER BY COLUMN_ID`
 // catalog query during drift will stall all concurrent Publish() calls.
 // columnTypeInfo holds the type metadata needed for streaming value coercion.
 type columnTypeInfo struct {
-	colTypes    map[string]schema.CommonType
-	numericCols map[string]struct{}
+	colTypes map[string]schema.Common
 }
 
 func (sc *schemaCache) schemaForEvent(ctx context.Context, table replication.UserTable, eventKeys []string) (any, *columnTypeInfo, error) {
@@ -207,7 +220,7 @@ func (sc *schemaCache) schemaForEvent(ctx context.Context, table replication.Use
 			}
 		}
 		if allKnown {
-			return cached.schema, &columnTypeInfo{cached.colTypes, cached.numericCols}, nil
+			return cached.schema, &columnTypeInfo{cached.colTypes}, nil
 		}
 		sc.log.Debugf("Schema drift detected for %s: refreshing after unknown column in event", tableKey)
 	}
@@ -223,7 +236,7 @@ func (sc *schemaCache) schemaForEvent(ctx context.Context, table replication.Use
 		if connErr != nil {
 			if existing, exists := sc.schemas[tableKey]; exists {
 				sc.log.Warnf("Failed to get connection for schema refresh of %s, using cached version: %v", tableKey, connErr)
-				return existing.schema, &columnTypeInfo{existing.colTypes, existing.numericCols}, connErr
+				return existing.schema, &columnTypeInfo{existing.colTypes}, connErr
 			}
 			return nil, nil, connErr
 		}
@@ -231,7 +244,7 @@ func (sc *schemaCache) schemaForEvent(ctx context.Context, table replication.Use
 		if _, execErr := conn.ExecContext(ctx, "ALTER SESSION SET CONTAINER = "+sc.pdbName); execErr != nil {
 			if existing, exists := sc.schemas[tableKey]; exists {
 				sc.log.Warnf("Failed to switch to PDB %s for schema refresh of %s, using cached version: %v", sc.pdbName, tableKey, execErr)
-				return existing.schema, &columnTypeInfo{existing.colTypes, existing.numericCols}, execErr
+				return existing.schema, &columnTypeInfo{existing.colTypes}, execErr
 			}
 			return nil, nil, execErr
 		}
@@ -247,13 +260,13 @@ func (sc *schemaCache) schemaForEvent(ctx context.Context, table replication.Use
 	if err != nil {
 		if existing, exists := sc.schemas[tableKey]; exists {
 			sc.log.Warnf("Failed to refresh schema for %s, using cached version: %v", tableKey, err)
-			return existing.schema, &columnTypeInfo{existing.colTypes, existing.numericCols}, err
+			return existing.schema, &columnTypeInfo{existing.colTypes}, err
 		}
 		return nil, nil, err
 	}
 
 	sc.schemas[tableKey] = fresh
-	return fresh.schema, &columnTypeInfo{fresh.colTypes, fresh.numericCols}, nil
+	return fresh.schema, &columnTypeInfo{fresh.colTypes}, nil
 }
 
 // seedFromColumnMeta populates the cache from column metadata collected during
@@ -267,26 +280,21 @@ func (sc *schemaCache) seedFromColumnMeta(table replication.UserTable, meta []re
 
 	children := make([]schema.Common, 0, len(meta))
 	keySet := make(map[string]struct{}, len(meta))
-	colTypes := make(map[string]schema.CommonType, len(meta))
-	numericCols := make(map[string]struct{})
+	colTypes := make(map[string]schema.Common, len(meta))
 	for _, m := range meta {
-		var ct schema.CommonType
-		isNum := isNumberType(m.TypeName)
-		if isNum {
-			ct = oracleNumberToCommonType(m.Precision, m.Scale, m.HasDecimalSize)
+		var common schema.Common
+		if isNumberType(m.TypeName) {
+			common = oracleNumberToCommon(m.Name, m.Precision, m.Scale, m.HasDecimalSize)
 		} else {
-			ct = oracleTypeToCommonType(m.TypeName)
+			common = schema.Common{
+				Name:     m.Name,
+				Type:     oracleTypeToCommonType(m.TypeName),
+				Optional: true,
+			}
 		}
-		children = append(children, schema.Common{
-			Name:     m.Name,
-			Type:     ct,
-			Optional: true,
-		})
+		children = append(children, common)
 		keySet[m.Name] = struct{}{}
-		colTypes[m.Name] = ct
-		if isNum && ct == schema.String {
-			numericCols[m.Name] = struct{}{}
-		}
+		colTypes[m.Name] = common
 	}
 
 	c := schema.Common{
@@ -295,7 +303,7 @@ func (sc *schemaCache) seedFromColumnMeta(table replication.UserTable, meta []re
 		Optional: false,
 		Children: children,
 	}
-	sc.schemas[tableKey] = &cachedSchema{schema: c.ToAny(), keys: keySet, colTypes: colTypes, numericCols: numericCols}
+	sc.schemas[tableKey] = &cachedSchema{schema: c.ToAny(), keys: keySet, colTypes: colTypes}
 }
 
 // ---------------------------------------------------------------------------
@@ -307,9 +315,10 @@ func (sc *schemaCache) seedFromColumnMeta(table replication.UserTable, meta []re
 // consistency between snapshot (which returns native Go types via sql.Scan) and
 // streaming (which returns strings because LogMiner quotes all INSERT values).
 //
-// Only unambiguously numeric types are coerced: Int64, Float32, Float64.
-// Columns mapped to schema.String (including NUMBER with fractional scale) are
-// left as-is because we cannot distinguish them from VARCHAR2 using CommonType alone.
+// Numeric types are coerced as follows: Int64 becomes int64, Float32/Float64
+// become float64, Decimal/BigDecimal become canonical decimal strings.
+// Columns mapped to schema.String are left as-is since they're indistinguishable
+// from VARCHAR2 once they reach this layer.
 //
 // The data map is mutated in place. On parse failure, the original string value
 // is preserved and a warning is logged.
@@ -318,7 +327,7 @@ func coerceStreamingValues(data map[string]any, info *columnTypeInfo, log *servi
 		return
 	}
 	for col, val := range data {
-		ct, known := info.colTypes[col]
+		c, known := info.colTypes[col]
 		if !known {
 			continue
 		}
@@ -327,7 +336,7 @@ func coerceStreamingValues(data map[string]any, info *columnTypeInfo, log *servi
 		// literals (e.g. BINARY_FLOAT/BINARY_DOUBLE). These need to be
 		// converted to float64 to match the snapshot path.
 		if jn, ok := val.(json.Number); ok {
-			switch ct {
+			switch c.Type {
 			case schema.Float32, schema.Float64:
 				if f, err := jn.Float64(); err == nil {
 					data[col] = f
@@ -335,6 +344,20 @@ func coerceStreamingValues(data map[string]any, info *columnTypeInfo, log *servi
 			case schema.Int64:
 				if n, err := jn.Int64(); err == nil {
 					data[col] = n
+				}
+			case schema.Decimal:
+				if c.Logical != nil && c.Logical.Decimal != nil {
+					if canonical, err := sqlutil.CanonicaliseDecimal(jn.String(), c.Logical.Decimal.Precision, c.Logical.Decimal.Scale); err == nil {
+						data[col] = canonical
+					} else {
+						log.Warnf("coerce %s: cannot canonicalise decimal %q: %v", col, jn.String(), err)
+					}
+				}
+			case schema.BigDecimal:
+				if canonical, err := sqlutil.CanonicaliseBigDecimal(jn.String()); err == nil {
+					data[col] = canonical
+				} else {
+					log.Warnf("coerce %s: cannot canonicalise big decimal %q: %v", col, jn.String(), err)
 				}
 			}
 			continue
@@ -344,7 +367,7 @@ func coerceStreamingValues(data map[string]any, info *columnTypeInfo, log *servi
 		if !ok {
 			continue // already typed (nil, int64, time.Time, etc.)
 		}
-		switch ct {
+		switch c.Type {
 		case schema.Int64:
 			if n, err := strconv.ParseInt(s, 10, 64); err == nil {
 				data[col] = n
@@ -357,12 +380,19 @@ func coerceStreamingValues(data map[string]any, info *columnTypeInfo, log *servi
 			} else if err != nil {
 				log.Warnf("coerce %s: cannot parse %q as float64: %v", col, s, err)
 			}
-		case schema.String:
-			// NUMBER columns with fractional scale map to schema.String, same as
-			// VARCHAR2. Use numericCols to distinguish: only NUMBER-as-String
-			// columns get wrapped as json.Number to match snapshot behavior.
-			if _, isNumeric := info.numericCols[col]; isNumeric {
-				data[col] = json.Number(sqlredo.NormalizeJSONNumber(s))
+		case schema.Decimal:
+			if c.Logical != nil && c.Logical.Decimal != nil {
+				if canonical, err := sqlutil.CanonicaliseDecimal(s, c.Logical.Decimal.Precision, c.Logical.Decimal.Scale); err == nil {
+					data[col] = canonical
+				} else {
+					log.Warnf("coerce %s: cannot canonicalise decimal %q: %v", col, s, err)
+				}
+			}
+		case schema.BigDecimal:
+			if canonical, err := sqlutil.CanonicaliseBigDecimal(s); err == nil {
+				data[col] = canonical
+			} else {
+				log.Warnf("coerce %s: cannot canonicalise big decimal %q: %v", col, s, err)
 			}
 		}
 	}

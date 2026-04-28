@@ -207,6 +207,13 @@ func commonTypeToIcebergTypeRec(c *schema.Common, ti *typeInferrer) (iceberg.Typ
 		return iceberg.BinaryType{}, nil
 	case schema.Timestamp:
 		return iceberg.TimestampTzType{}, nil
+	case schema.Decimal:
+		if c.Logical == nil || c.Logical.Decimal == nil {
+			return nil, fmt.Errorf("decimal field %q is missing precision/scale", c.Name)
+		}
+		return iceberg.DecimalTypeOf(int(c.Logical.Decimal.Precision), int(c.Logical.Decimal.Scale)), nil
+	case schema.BigDecimal:
+		return nil, fmt.Errorf("field %q is BigDecimal which has no fixed precision/scale; cast or coerce upstream before iceberg", c.Name)
 	case schema.Object:
 		return commonObjectToIcebergStruct(c, ti)
 	case schema.Array:

@@ -59,7 +59,7 @@ func TestBsonTypeStringToCommon(t *testing.T) {
 		{"date", schema.Timestamp},
 		{"timestamp", schema.Timestamp},
 		{"objectId", schema.String},
-		{"decimal", schema.String},
+		{"decimal", schema.BigDecimal},
 		{"object", schema.Object},
 		{"array", schema.Array},
 		{"", schema.Any},
@@ -241,7 +241,7 @@ func TestInferSchemaFromDocumentTypes(t *testing.T) {
 		"binary_field":  schema.ByteArray,
 		"bool_field":    schema.Boolean,
 		"date_field":    schema.Timestamp,
-		"dec_field":     schema.String,
+		"dec_field":     schema.BigDecimal,
 		"float64_field": schema.Float64,
 		"int32_field":   schema.Int32,
 		"int64_field":   schema.Int64,
@@ -353,4 +353,93 @@ func TestSchemaFromJSONSchemaFieldOrdering(t *testing.T) {
 func TestSortedMapKeys(t *testing.T) {
 	m := bson.M{"z": 1, "a": 2, "m": 3}
 	assert.Equal(t, []string{"a", "m", "z"}, sortedMapKeys(m))
+}
+
+func decimal128FromString(t *testing.T, s string) bson.Decimal128 {
+	t.Helper()
+	d, err := bson.ParseDecimal128(s)
+	require.NoError(t, err)
+	return d
+}
+
+func TestNormaliseDecimal128TopLevel(t *testing.T) {
+	d := decimal128FromString(t, "1.5")
+	got := normaliseDecimal128(d)
+	assert.Equal(t, "1.5", got)
+}
+
+func TestNormaliseDecimal128InsideMap(t *testing.T) {
+	doc := bson.M{
+		"amount": decimal128FromString(t, "12345.6789"),
+		"name":   "alice",
+		"count":  int64(7),
+	}
+	got := normaliseDecimal128(doc)
+	m := got.(bson.M)
+	assert.Equal(t, "12345.6789", m["amount"])
+	assert.Equal(t, "alice", m["name"])
+	assert.Equal(t, int64(7), m["count"])
+}
+
+func TestNormaliseDecimal128InsideArray(t *testing.T) {
+	arr := bson.A{
+		decimal128FromString(t, "1"),
+		decimal128FromString(t, "-2.5"),
+		"plain string",
+	}
+	got := normaliseDecimal128(arr)
+	out := got.(bson.A)
+	assert.Equal(t, "1", out[0])
+	assert.Equal(t, "-2.5", out[1])
+	assert.Equal(t, "plain string", out[2])
+}
+
+func TestNormaliseDecimal128InsideD(t *testing.T) {
+	d := bson.D{
+		{Key: "amount", Value: decimal128FromString(t, "100.00")},
+		{Key: "name", Value: "bob"},
+	}
+	got := normaliseDecimal128(d)
+	out := got.(bson.D)
+	assert.Equal(t, "amount", out[0].Key)
+	assert.Equal(t, "100.00", out[0].Value)
+	assert.Equal(t, "name", out[1].Key)
+	assert.Equal(t, "bob", out[1].Value)
+}
+
+func TestNormaliseDecimal128Nested(t *testing.T) {
+	doc := bson.M{
+		"profile": bson.M{
+			"balance": decimal128FromString(t, "999.99"),
+			"history": bson.A{
+				bson.M{"value": decimal128FromString(t, "10")},
+				bson.M{"value": decimal128FromString(t, "-5.5")},
+			},
+		},
+	}
+	got := normaliseDecimal128(doc).(bson.M)
+	profile := got["profile"].(bson.M)
+	assert.Equal(t, "999.99", profile["balance"])
+	hist := profile["history"].(bson.A)
+	assert.Equal(t, "10", hist[0].(bson.M)["value"])
+	assert.Equal(t, "-5.5", hist[1].(bson.M)["value"])
+}
+
+func TestNormaliseDecimal128PassesThroughNonDecimal(t *testing.T) {
+	// Strings, ints, nils, etc. unchanged.
+	for _, v := range []any{"hello", int32(42), int64(99), float64(3.14), nil, true, []byte{1, 2, 3}} {
+		assert.Equal(t, v, normaliseDecimal128(v))
+	}
+}
+
+func TestNormaliseDecimal128ScientificNotationCanonicalised(t *testing.T) {
+	// Decimal128's String() can emit scientific notation for extreme magnitudes;
+	// the walker normalises via ParseBigDecimal/FormatBigDecimal.
+	d := decimal128FromString(t, "1.5e10")
+	got := normaliseDecimal128(d)
+	out, ok := got.(string)
+	require.True(t, ok, "decimal128 must be replaced with a string")
+	// Must not contain 'e' or 'E' — canonical form has no scientific notation.
+	assert.NotContains(t, out, "e")
+	assert.NotContains(t, out, "E")
 }

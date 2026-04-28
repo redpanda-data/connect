@@ -25,6 +25,8 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/schema"
 	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/impl/parquet/parquetdecimal"
 )
 
 func parquetEncodeProcessorConfig() *service.ConfigSpec {
@@ -395,6 +397,21 @@ func parquetNodeFromCommonField(field schema.Common, tsUnit parquet.TimeUnit) (p
 		n = parquet.String()
 	case schema.Timestamp:
 		n = parquet.Timestamp(tsUnit)
+	case schema.Decimal:
+		if field.Logical == nil || field.Logical.Decimal == nil {
+			return nil, fmt.Errorf("decimal field %q missing precision/scale", field.Name)
+		}
+		p, s := int(field.Logical.Decimal.Precision), int(field.Logical.Decimal.Scale)
+		switch {
+		case p <= 9:
+			n = parquet.Decimal(s, p, parquet.Int32Type)
+		case p <= 18:
+			n = parquet.Decimal(s, p, parquet.Int64Type)
+		default:
+			n = parquet.Decimal(s, p, parquet.FixedLenByteArrayType(parquetdecimal.ByteWidth(p)))
+		}
+	case schema.BigDecimal:
+		return nil, fmt.Errorf("field %q is BigDecimal which has no fixed precision/scale; cast or coerce upstream before parquet_encode", field.Name)
 	case schema.ByteArray:
 		n = parquet.Leaf(parquet.ByteArrayType)
 	case schema.Array:

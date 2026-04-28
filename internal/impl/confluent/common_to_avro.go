@@ -76,6 +76,18 @@ func commonToAvroInner(c schema.Common, recordName, namespace string, isRoot boo
 			"type":        "long",
 			"logicalType": "timestamp-millis",
 		}, nil
+	case schema.Decimal:
+		if c.Logical == nil || c.Logical.Decimal == nil {
+			return nil, fmt.Errorf("decimal field %q missing precision/scale", c.Name)
+		}
+		return map[string]any{
+			"type":        "bytes",
+			"logicalType": "decimal",
+			"precision":   c.Logical.Decimal.Precision,
+			"scale":       c.Logical.Decimal.Scale,
+		}, nil
+	case schema.BigDecimal:
+		return nil, fmt.Errorf("field %q is BigDecimal which has no fixed precision/scale; cast or coerce upstream before schema_registry_encode (avro)", c.Name)
 	case schema.Array:
 		return commonToAvroArray(c)
 	case schema.Map:

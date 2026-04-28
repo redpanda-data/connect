@@ -941,6 +941,9 @@ func (m *mongoCDC) readFromStream(ctx context.Context, cp *checkpoint.Capped[bso
 func (m *mongoCDC) newMongoDBCDCMessage(doc any, operationType, collectionName string, opTime bson.Timestamp, keyOnly bool) (msg *service.Message, err error) {
 	var b []byte
 	if doc != nil {
+		// Replace Decimal128 values with canonical decimal strings so the
+		// emitted body matches the schema.BigDecimal value contract.
+		doc = normaliseDecimal128(doc)
 		b, err = bson.MarshalExtJSON(doc, m.marshalCanonical, false)
 		if err != nil {
 			return nil, fmt.Errorf("error marshalling bson to json: %w", err)

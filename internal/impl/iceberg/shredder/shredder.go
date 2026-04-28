@@ -20,7 +20,10 @@ import (
 	"github.com/parquet-go/parquet-go"
 
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
+	"github.com/redpanda-data/benthos/v4/public/schema"
+
 	"github.com/redpanda-data/connect/v4/internal/impl/iceberg/icebergx"
+	"github.com/redpanda-data/connect/v4/internal/impl/parquet/parquetdecimal"
 )
 
 // RequiredFieldNullError is returned when a required field has a null or missing value.
@@ -469,7 +472,7 @@ func convertToDecimal(value any, dt iceberg.DecimalType) (parquet.Value, error) 
 
 	switch v := value.(type) {
 	case []byte:
-		expectedLen := icebergx.DecimalByteWidth(dt.Precision())
+		expectedLen := parquetdecimal.ByteWidth(dt.Precision())
 		if len(v) != expectedLen {
 			return parquet.NullValue(), fmt.Errorf("decimal []byte length %d does not match expected %d for precision %d", len(v), expectedLen, dt.Precision())
 		}
@@ -495,7 +498,7 @@ func convertToDecimal(value any, dt iceberg.DecimalType) (parquet.Value, error) 
 	case int8:
 		unscaled = intToUnscaled(int64(v), scale)
 	case uint64:
-		unscaled = new(big.Int).Mul(new(big.Int).SetUint64(v), pow10(scale))
+		unscaled = new(big.Int).Mul(new(big.Int).SetUint64(v), parquetdecimal.Pow10(scale))
 	case uint32:
 		unscaled = intToUnscaled(int64(v), scale)
 	case uint16:
@@ -503,15 +506,20 @@ func convertToDecimal(value any, dt iceberg.DecimalType) (parquet.Value, error) 
 	case uint8:
 		unscaled = intToUnscaled(int64(v), scale)
 	case uint:
-		unscaled = new(big.Int).Mul(new(big.Int).SetUint64(uint64(v)), pow10(scale))
+		unscaled = new(big.Int).Mul(new(big.Int).SetUint64(uint64(v)), parquetdecimal.Pow10(scale))
 	case json.Number:
 		unscaled, err = jsonNumberToUnscaled(v, scale)
 		if err != nil {
 			return parquet.NullValue(), err
 		}
 	case string:
-		unscaled, err = stringToUnscaled(v, scale)
-		if err != nil {
+		// Canonical decimal strings (the value contract for schema.Decimal
+		// fields) are parsed exactly via schema.ParseDecimal. Fall back to
+		// the big.Float path for non-canonical inputs (scientific notation,
+		// leading +, etc.) that legacy callers may still produce.
+		if n, perr := schema.ParseDecimal(v, int32(scale)); perr == nil {
+			unscaled = n
+		} else if unscaled, err = stringToUnscaled(v, scale); err != nil {
 			return parquet.NullValue(), err
 		}
 	default:
@@ -521,12 +529,12 @@ func convertToDecimal(value any, dt iceberg.DecimalType) (parquet.Value, error) 
 	// Validate that the unscaled value fits within the declared precision.
 	// An out-of-range value would produce a valid Parquet file but violate the
 	// Iceberg schema contract, causing downstream query failures or wrong results.
-	maxUnscaled := pow10(dt.Precision())
+	maxUnscaled := parquetdecimal.Pow10(dt.Precision())
 	if unscaled.CmpAbs(maxUnscaled) >= 0 {
 		return parquet.NullValue(), fmt.Errorf("value %v exceeds decimal(%d, %d) precision", value, dt.Precision(), dt.Scale())
 	}
 
-	b := encodeDecimalBytes(unscaled, dt.Precision())
+	b := parquetdecimal.EncodeBytes(unscaled, dt.Precision())
 	return parquet.FixedLenByteArrayValue(b), nil
 }
 
@@ -535,7 +543,7 @@ func convertToDecimal(value any, dt iceberg.DecimalType) (parquet.Value, error) 
 // digits), so no additional precision loss occurs beyond what the float64 input already has.
 func floatToUnscaled(f float64, scale int) *big.Int {
 	bf := new(big.Float).SetPrec(128).SetFloat64(f)
-	scaleFactor := new(big.Float).SetPrec(128).SetInt(pow10(scale))
+	scaleFactor := new(big.Float).SetPrec(128).SetInt(parquetdecimal.Pow10(scale))
 	bf.Mul(bf, scaleFactor)
 	if f < 0 {
 		bf.Sub(bf, new(big.Float).SetFloat64(0.5))
@@ -547,7 +555,7 @@ func floatToUnscaled(f float64, scale int) *big.Int {
 }
 
 func intToUnscaled(i int64, scale int) *big.Int {
-	return new(big.Int).Mul(big.NewInt(i), pow10(scale))
+	return new(big.Int).Mul(big.NewInt(i), parquetdecimal.Pow10(scale))
 }
 
 func jsonNumberToUnscaled(n json.Number, scale int) (*big.Int, error) {
@@ -564,7 +572,7 @@ func stringToUnscaled(s string, scale int) (*big.Int, error) {
 	if err != nil {
 		return nil, fmt.Errorf("cannot parse %q as decimal: %w", s, err)
 	}
-	scaleFactor := new(big.Float).SetPrec(256).SetInt(pow10(scale))
+	scaleFactor := new(big.Float).SetPrec(256).SetInt(parquetdecimal.Pow10(scale))
 	bf.Mul(bf, scaleFactor)
 	if bf.Sign() < 0 {
 		bf.Sub(bf, new(big.Float).SetFloat64(0.5))
@@ -573,43 +581,4 @@ func stringToUnscaled(s string, scale int) (*big.Int, error) {
 	}
 	result, _ := bf.Int(nil)
 	return result, nil
-}
-
-// pow10Cache holds precomputed powers of 10 for scales 0–18, covering all
-// common decimal scales without repeated big.Int exponentiation.
-var pow10Cache [19]*big.Int
-
-func init() {
-	pow10Cache[0] = big.NewInt(1)
-	for i := 1; i < len(pow10Cache); i++ {
-		pow10Cache[i] = new(big.Int).Mul(pow10Cache[i-1], big.NewInt(10))
-	}
-}
-
-func pow10(n int) *big.Int {
-	if n >= 0 && n < len(pow10Cache) {
-		return new(big.Int).Set(pow10Cache[n])
-	}
-	return new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(n)), nil)
-}
-
-func encodeDecimalBytes(unscaled *big.Int, precision int) []byte {
-	numBytes := icebergx.DecimalByteWidth(precision)
-
-	if unscaled.Sign() >= 0 {
-		b := unscaled.Bytes()
-		result := make([]byte, numBytes)
-		copy(result[numBytes-len(b):], b)
-		return result
-	}
-
-	modulus := new(big.Int).Lsh(big.NewInt(1), uint(numBytes*8))
-	tc := new(big.Int).Add(modulus, unscaled)
-	b := tc.Bytes()
-	result := make([]byte, numBytes)
-	for i := range result {
-		result[i] = 0xFF
-	}
-	copy(result[numBytes-len(b):], b)
-	return result
 }

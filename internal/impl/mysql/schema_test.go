@@ -246,8 +246,20 @@ func TestMysqlColumnToCommon(t *testing.T) {
 				Type:    gomysqlschema.TYPE_DECIMAL,
 				RawType: "decimal(10,2)",
 			},
-			expectedType: schema.String,
+			expectedType: schema.Decimal,
 			expectedName: "balance",
+			hasChildren:  false,
+		},
+		{
+			name: "unsigned decimal column",
+			col: gomysqlschema.TableColumn{
+				Name:       "price",
+				Type:       gomysqlschema.TYPE_DECIMAL,
+				RawType:    "decimal(10,2) unsigned",
+				IsUnsigned: true,
+			},
+			expectedType: schema.Decimal,
+			expectedName: "price",
 			hasChildren:  false,
 		},
 		{
@@ -557,4 +569,51 @@ func TestOnTableChanged(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestParseMySQLDecimal(t *testing.T) {
+	cases := []struct {
+		raw       string
+		precision int32
+		scale     int32
+		ok        bool
+	}{
+		{raw: "decimal(18,4)", precision: 18, scale: 4, ok: true},
+		{raw: "DECIMAL(10,2)", precision: 10, scale: 2, ok: true},
+		{raw: "numeric(5,0)", precision: 5, scale: 0, ok: true},
+		{raw: "decimal(7)", precision: 7, scale: 0, ok: true},
+		{raw: "decimal", precision: 10, scale: 0, ok: true},
+		{raw: "  decimal(18, 4) ", precision: 18, scale: 4, ok: true},
+		{raw: "decimal(10,2) unsigned", precision: 10, scale: 2, ok: true},
+		{raw: "decimal unsigned", precision: 10, scale: 0, ok: true},
+		{raw: "varchar(20)", ok: false},
+		{raw: "decimal(", ok: false},
+		{raw: "", ok: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.raw, func(t *testing.T) {
+			p, s, ok := parseMySQLDecimal(tc.raw)
+			assert.Equal(t, tc.ok, ok)
+			if tc.ok {
+				assert.Equal(t, tc.precision, p, "precision")
+				assert.Equal(t, tc.scale, s, "scale")
+			}
+		})
+	}
+}
+
+func TestMysqlColumnToCommonDecimalCarriesLogical(t *testing.T) {
+	col := gomysqlschema.TableColumn{
+		Name:    "balance",
+		Type:    gomysqlschema.TYPE_DECIMAL,
+		RawType: "decimal(18,4)",
+	}
+	got, err := mysqlColumnToCommon(col)
+	require.NoError(t, err)
+	assert.Equal(t, schema.Decimal, got.Type)
+	require.NotNil(t, got.Logical)
+	require.NotNil(t, got.Logical.Decimal)
+	assert.Equal(t, int32(18), got.Logical.Decimal.Precision)
+	assert.Equal(t, int32(4), got.Logical.Decimal.Scale)
+	assert.True(t, got.Optional)
 }

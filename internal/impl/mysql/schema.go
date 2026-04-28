@@ -11,12 +11,45 @@ package mysql
 import (
 	"errors"
 	"fmt"
+	"regexp"
+	"strconv"
 	"strings"
 
 	gomysqlschema "github.com/go-mysql-org/go-mysql/schema"
 
 	"github.com/redpanda-data/benthos/v4/public/schema"
 )
+
+// mysqlDecimalRegex parses the precision/scale out of MySQL's DECIMAL/NUMERIC
+// raw column type. Matches "decimal(p,s)", "decimal(p)" and "decimal" (with
+// any case), with an optional trailing "unsigned" qualifier. MySQL aliases
+// NUMERIC to DECIMAL.
+var mysqlDecimalRegex = regexp.MustCompile(`(?i)^\s*(?:decimal|numeric)\s*(?:\(\s*(\d+)\s*(?:,\s*(\d+)\s*)?\))?\s*(?:unsigned)?\s*$`)
+
+// parseMySQLDecimal returns (precision, scale) for a MySQL DECIMAL/NUMERIC
+// column. Defaults match MySQL's: bare "decimal" -> (10, 0); "decimal(p)" ->
+// (p, 0); "decimal(p, s)" -> (p, s).
+func parseMySQLDecimal(rawType string) (precision, scale int32, ok bool) {
+	m := mysqlDecimalRegex.FindStringSubmatch(rawType)
+	if m == nil {
+		return 0, 0, false
+	}
+	if m[1] == "" {
+		return 10, 0, true
+	}
+	p, err := strconv.ParseInt(m[1], 10, 32)
+	if err != nil {
+		return 0, 0, false
+	}
+	if m[2] == "" {
+		return int32(p), 0, true
+	}
+	s, err := strconv.ParseInt(m[2], 10, 32)
+	if err != nil {
+		return 0, 0, false
+	}
+	return int32(p), int32(s), true
+}
 
 // mysqlTableToCommonSchema converts a MySQL table schema to benthos common schema format.
 func mysqlTableToCommonSchema(table *gomysqlschema.Table) (*schema.Common, error) {
@@ -66,8 +99,15 @@ func mysqlColumnToCommon(col gomysqlschema.TableColumn) (schema.Common, error) {
 			commonType = schema.Float32
 		}
 	case gomysqlschema.TYPE_DECIMAL:
-		// Decimals are represented as strings in the message data
-		commonType = schema.String
+		precision, scale, ok := parseMySQLDecimal(col.RawType)
+		if !ok {
+			return schema.Common{}, fmt.Errorf("unable to parse precision/scale from MySQL column %s raw type %q", col.Name, col.RawType)
+		}
+		decCol, err := schema.NewDecimal(col.Name, precision, scale, true)
+		if err != nil {
+			return schema.Common{}, fmt.Errorf("MySQL column %s: %w", col.Name, err)
+		}
+		return decCol, nil
 	case gomysqlschema.TYPE_STRING:
 		commonType = schema.String
 	case gomysqlschema.TYPE_DATETIME, gomysqlschema.TYPE_TIMESTAMP:

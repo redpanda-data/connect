@@ -589,7 +589,7 @@ oracledb_cdc:
 
 		content, err := msgs[0].AsBytes()
 		assert.NoError(t, err)
-		assert.Equal(t, `{"ID":1,"VAL":1}`, string(content))
+		assert.Equal(t, `{"ID":"1","VAL":"1"}`, string(content))
 	})
 
 	t.Run("Streaming update changes...", func(t *testing.T) {
@@ -602,7 +602,7 @@ oracledb_cdc:
 
 		content, err := msgs[0].AsBytes()
 		assert.NoError(t, err)
-		assert.Equal(t, `{"ID":1,"VAL":2}`, string(content))
+		assert.Equal(t, `{"ID":"1","VAL":"2"}`, string(content))
 	})
 
 	t.Run("Streaming delete changes...", func(t *testing.T) {
@@ -615,7 +615,7 @@ oracledb_cdc:
 
 		content, err := msgs[0].AsBytes()
 		assert.NoError(t, err)
-		assert.Equal(t, `{"ID":1,"VAL":2}`, string(content))
+		assert.Equal(t, `{"ID":"1","VAL":"2"}`, string(content))
 	})
 
 	require.NoError(t, stream.StopWithin(time.Second*10))
@@ -692,7 +692,7 @@ oracledb_cdc:
 
 			require.Truef(t, (got == snapshotRows), "Wanted %d snapshot messages but got %d", snapshotRows, got)
 			require.JSONEq(t, `{
-		"ID": 1,
+		"ID": "1",
 		"VARCHARCOL": "snapshot",
 		"INLINELOB": null,
 		"OUTOFLINELOB": null
@@ -716,7 +716,7 @@ oracledb_cdc:
 
 			require.Truef(t, (got == streamingRows), "Wanted %d streaming messages but got %d", streamingRows, got)
 			require.JSONEq(t, `{
-		"ID": 51,
+		"ID": "51",
 		"VARCHARCOL": "streaming",
 		"INLINELOB": "",
 		"OUTOFLINELOB": ""
@@ -772,7 +772,7 @@ oracledb_cdc:
 
 			require.Truef(t, (got == snapshotRows), "Wanted %d snapshot messages but got %d", snapshotRows, got)
 			require.JSONEq(t, `{
-		"ID": 1,
+		"ID": "1",
 		"VARCHARCOL": "snapshot",
 		"INLINELOB": "`+inline+`",
 		"OUTOFLINELOB": "`+outofline+`"
@@ -796,7 +796,7 @@ oracledb_cdc:
 
 			require.Truef(t, (got == streamingRows), "Wanted %d streaming messages but got %d", streamingRows, got)
 			require.JSONEq(t, `{
-		"ID": 51,
+		"ID": "51",
 		"VARCHARCOL": "streaming",
 		"INLINELOB": "`+inline+`",
 		"OUTOFLINELOB": "`+outofline+`"
@@ -1040,10 +1040,12 @@ oracledb_cdc:
 
 	t.Log("Verifying values from snapshot...")
 	{
-		// assert min values from snapshot.
-		// NULL columns are included as JSON null in snapshot rows.
+		// assert min values from snapshot. NUMBER columns with declared
+		// (p, s) emit canonical decimal strings; bare NUMBER emits a
+		// natural-scale BigDecimal; NUMBER(p>18, 0) emits Decimal(p, 0).
+		// NULL columns appear as JSON null.
 		require.JSONEq(t, `{
-		"BIGINT_COL": -9223372036854775808,
+		"BIGINT_COL": "-9223372036854775808",
 		"BINARY_COL": "AAAAAAAAAAAAAAAAAAAAAA==",
 		"BIT_COL": 0,
 		"CHAR_COL": "AAAAAAAAAA",
@@ -1051,12 +1053,12 @@ oracledb_cdc:
 		"DATETIME2_COL": "0001-01-01T00:00:00Z",
 		"DATETIME_COL": "1753-01-01T00:00:00Z",
 		"DATETIMEOFFSET_COL": "0001-01-01T00:00:00-14:00",
-		"DECIMAL_COL": -9999999999999999999999999999.9999999999,
+		"DECIMAL_COL": "-9999999999999999999999999999.9999999999",
 		"FLOAT_COL": -1.79e+100,
 		"INT_COL": -2147483648,
 		"JSON_COL": null,
 		"NCHAR_COL": "АААААААААА",
-		"NUMERIC_COL": -999999999999999.99999,
+		"NUMERIC_COL": "-999999999999999.99999",
 		"NULLABLE_NUM": null,
 		"NONNULLABLE_NUM": 0,
 		"NVARCHAR_COL": null,
@@ -1071,7 +1073,7 @@ oracledb_cdc:
 		"VARCHAR_COL": null,
 		"OOLVARCHARMAX_COL": null,
 		"VARCHARMAX_COL": null,
-		"NOLEADINGZERO_COL": 0.15
+		"NOLEADINGZERO_COL": "0.15"
 		}`, outBatches[0], "Failed to assert min result from snapshot")
 	}
 
@@ -1079,7 +1081,7 @@ oracledb_cdc:
 	{
 		// assert max values from streaming.
 		require.JSONEq(t, `{
-		"BIGINT_COL": 9223372036854775807,
+		"BIGINT_COL": "9223372036854775807",
 		"BINARY_COL": "AAAAAAAAAAAAAAAAAAAAAA==",
 		"BIT_COL": 1,
 		"CHAR_COL": "ZZZZZZZZZZ",
@@ -1087,12 +1089,12 @@ oracledb_cdc:
 		"DATETIME2_COL": "9999-12-31T23:59:59.9999999Z",
 		"DATETIME_COL": "9999-12-31T23:59:59.997Z",
 		"DATETIMEOFFSET_COL": "9999-12-31T23:59:59.9999999+14:00",
-		"DECIMAL_COL": 9999999999999999999999999999.9999999999,
+		"DECIMAL_COL": "9999999999999999999999999999.9999999999",
 		"FLOAT_COL": 1.79e+100,
 		"INT_COL": 2147483647,
 		"JSON_COL": "{\"max\": true}",
 		"NCHAR_COL": "ZZZZZZZZZZ",
-		"NUMERIC_COL": 999999999999999.99999,
+		"NUMERIC_COL": "999999999999999.99999",
 		"NULLABLE_NUM": null,
 		"NONNULLABLE_NUM": 0,
 		"NVARCHAR_COL": "Max nvarchar value",
@@ -1107,7 +1109,7 @@ oracledb_cdc:
 		"VARCHAR_COL": "Max varchar value",
 		"OOLVARCHARMAX_COL": "`+largeClob+`",
 		"VARCHARMAX_COL": "Max varchar(max)",
-		"NOLEADINGZERO_COL": 0.15
+		"NOLEADINGZERO_COL": "0.15"
 		}`, outBatches[1], "Failed to assert max result from streaming")
 	}
 }
@@ -1728,7 +1730,7 @@ oracledb_cdc:
 	expectedTypes := map[string]schema.CommonType{
 		"INT_COL":     schema.Int64,
 		"BIGINT_COL":  schema.Int64,
-		"DECIMAL_COL": schema.String,
+		"DECIMAL_COL": schema.Decimal,
 		"FLOAT_COL":   schema.Float32,
 		"DOUBLE_COL":  schema.Float64,
 		"DATE_COL":    schema.Timestamp,

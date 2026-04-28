@@ -22,6 +22,11 @@ import (
 
 	"github.com/gofrs/uuid/v5"
 	"github.com/parquet-go/parquet-go"
+	"github.com/parquet-go/parquet-go/format"
+
+	"github.com/redpanda-data/benthos/v4/public/schema"
+
+	"github.com/redpanda-data/connect/v4/internal/impl/parquet/parquetdecimal"
 )
 
 type schemaVisitor interface {
@@ -113,9 +118,37 @@ func (encodingCoercionVisitor) visitLeaf(value any, schemaNode parquet.Node) (an
 		default:
 			return value, nil
 		}
+	} else if logicalType.Decimal != nil {
+		return coerceDecimalForEncode(value, schemaNode, logicalType.Decimal)
 	}
 
 	return value, nil
+}
+
+// coerceDecimalForEncode converts a canonical decimal string (the value
+// contract for schema.Decimal fields) into the parquet physical form
+// matching the column's declared precision: int32 for p<=9, int64 for p<=18,
+// fixed-length bytes for p<=38.
+func coerceDecimalForEncode(value any, schemaNode parquet.Node, dt *format.DecimalType) (any, error) {
+	s, ok := value.(string)
+	if !ok {
+		// Already in a physical form; trust the caller.
+		return value, nil
+	}
+	unscaled, err := schema.ParseDecimal(s, dt.Scale)
+	if err != nil {
+		return nil, fmt.Errorf("parsing decimal %q at scale %d: %w", s, dt.Scale, err)
+	}
+	switch schemaNode.Type().Kind() {
+	case parquet.Int32:
+		return int32(unscaled.Int64()), nil
+	case parquet.Int64:
+		return unscaled.Int64(), nil
+	case parquet.FixedLenByteArray:
+		return parquetdecimal.EncodeBytes(unscaled, int(dt.Precision)), nil
+	default:
+		return nil, fmt.Errorf("unsupported parquet physical type for decimal: %v", schemaNode.Type().Kind())
+	}
 }
 
 type decodingCoercionVisitor struct {

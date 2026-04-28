@@ -121,20 +121,21 @@ func TestOracleNumberToCommonType(t *testing.T) {
 		precision int64
 		scale     int64
 		hasInfo   bool
-		want      schema.CommonType
+		wantType  schema.CommonType
 	}{
 		{"integer precision 10", 10, 0, true, schema.Int64},
 		{"integer precision 18 boundary", 18, 0, true, schema.Int64},
-		{"precision 19 exceeds int64", 19, 0, true, schema.String},
-		{"precision 38 max oracle", 38, 0, true, schema.String},
-		{"fractional scale 2", 10, 2, true, schema.String},
-		{"bare NUMBER no info", 0, 0, false, schema.String},
-		{"NUMBER(0) edge case", 0, 0, true, schema.String},
+		{"precision 19 exceeds int64", 19, 0, true, schema.Decimal},
+		{"precision 38 max oracle", 38, 0, true, schema.Decimal},
+		{"fractional scale 2", 10, 2, true, schema.Decimal},
+		{"bare NUMBER no info", 0, 0, false, schema.BigDecimal},
+		{"NUMBER(0) edge case maps to BigDecimal", 0, 0, true, schema.BigDecimal},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, oracleNumberToCommonType(tt.precision, tt.scale, tt.hasInfo))
+			c := oracleNumberToCommon("col", tt.precision, tt.scale, tt.hasInfo)
+			assert.Equal(t, tt.wantType, c.Type)
 		})
 	}
 }
@@ -240,7 +241,11 @@ func TestSchemaCacheSeedFromColumnMeta(t *testing.T) {
 	assert.True(t, age.Optional)
 
 	balance := childByName(t, c, "BALANCE")
-	assert.Equal(t, schema.String, balance.Type)
+	assert.Equal(t, schema.Decimal, balance.Type)
+	require.NotNil(t, balance.Logical)
+	require.NotNil(t, balance.Logical.Decimal)
+	assert.Equal(t, int32(18), balance.Logical.Decimal.Precision)
+	assert.Equal(t, int32(2), balance.Logical.Decimal.Scale)
 	assert.True(t, balance.Optional)
 }
 
@@ -340,73 +345,88 @@ func TestCoerceStreamingValues(t *testing.T) {
 		{
 			name: "int64 coercion",
 			data: map[string]any{"age": "42"},
-			info: &columnTypeInfo{colTypes: map[string]schema.CommonType{"age": schema.Int64}},
+			info: &columnTypeInfo{colTypes: map[string]schema.Common{"age": {Type: schema.Int64}}},
 			want: map[string]any{"age": int64(42)},
 		},
 		{
 			name: "float64 coercion",
 			data: map[string]any{"price": "3.14"},
-			info: &columnTypeInfo{colTypes: map[string]schema.CommonType{"price": schema.Float64}},
+			info: &columnTypeInfo{colTypes: map[string]schema.Common{"price": {Type: schema.Float64}}},
 			want: map[string]any{"price": float64(3.14)},
 		},
 		{
 			name: "float32 produces float64",
 			data: map[string]any{"ratio": "1.5"},
-			info: &columnTypeInfo{colTypes: map[string]schema.CommonType{"ratio": schema.Float32}},
+			info: &columnTypeInfo{colTypes: map[string]schema.Common{"ratio": {Type: schema.Float32}}},
 			want: map[string]any{"ratio": float64(1.5)},
 		},
 		{
 			name: "json.Number float coerced to float64",
 			data: map[string]any{"score": json.Number("1.5")},
-			info: &columnTypeInfo{colTypes: map[string]schema.CommonType{"score": schema.Float64}},
+			info: &columnTypeInfo{colTypes: map[string]schema.Common{"score": {Type: schema.Float64}}},
 			want: map[string]any{"score": float64(1.5)},
 		},
 		{
 			name: "json.Number float32 coerced to float64",
 			data: map[string]any{"ratio": json.Number("3.14")},
-			info: &columnTypeInfo{colTypes: map[string]schema.CommonType{"ratio": schema.Float32}},
+			info: &columnTypeInfo{colTypes: map[string]schema.Common{"ratio": {Type: schema.Float32}}},
 			want: map[string]any{"ratio": float64(3.14)},
 		},
 		{
 			name: "json.Number int coerced to int64",
 			data: map[string]any{"id": json.Number("42")},
-			info: &columnTypeInfo{colTypes: map[string]schema.CommonType{"id": schema.Int64}},
+			info: &columnTypeInfo{colTypes: map[string]schema.Common{"id": {Type: schema.Int64}}},
 			want: map[string]any{"id": int64(42)},
 		},
 		{
-			name: "numeric string NUMBER column to json.Number",
+			name: "decimal string canonicalised at declared scale",
+			data: map[string]any{"amount": "12345.6789"},
+			info: &columnTypeInfo{
+				colTypes: map[string]schema.Common{
+					"amount": {
+						Type: schema.Decimal,
+						Logical: &schema.LogicalParams{
+							Decimal: &schema.DecimalParams{Precision: 10, Scale: 5},
+						},
+					},
+				},
+			},
+			want: map[string]any{"amount": "12345.67890"},
+		},
+		{
+			name: "big decimal string canonicalised at natural scale",
 			data: map[string]any{"amount": "12345.67890"},
 			info: &columnTypeInfo{
-				colTypes:    map[string]schema.CommonType{"amount": schema.String},
-				numericCols: map[string]struct{}{"amount": {}},
+				colTypes: map[string]schema.Common{
+					"amount": {Type: schema.BigDecimal},
+				},
 			},
-			want: map[string]any{"amount": json.Number("12345.67890")},
+			want: map[string]any{"amount": "12345.67890"},
 		},
 		{
 			name: "varchar2 string not coerced",
 			data: map[string]any{"name": "hello"},
 			info: &columnTypeInfo{
-				colTypes:    map[string]schema.CommonType{"name": schema.String},
-				numericCols: map[string]struct{}{},
+				colTypes: map[string]schema.Common{"name": {Type: schema.String}},
 			},
 			want: map[string]any{"name": "hello"},
 		},
 		{
 			name: "already typed int64 left alone",
 			data: map[string]any{"id": int64(42)},
-			info: &columnTypeInfo{colTypes: map[string]schema.CommonType{"id": schema.Int64}},
+			info: &columnTypeInfo{colTypes: map[string]schema.Common{"id": {Type: schema.Int64}}},
 			want: map[string]any{"id": int64(42)},
 		},
 		{
 			name: "nil value stays nil",
 			data: map[string]any{"col": nil},
-			info: &columnTypeInfo{colTypes: map[string]schema.CommonType{"col": schema.Int64}},
+			info: &columnTypeInfo{colTypes: map[string]schema.Common{"col": {Type: schema.Int64}}},
 			want: map[string]any{"col": nil},
 		},
 		{
 			name: "unknown column unchanged",
 			data: map[string]any{"mystery": "value"},
-			info: &columnTypeInfo{colTypes: map[string]schema.CommonType{}},
+			info: &columnTypeInfo{colTypes: map[string]schema.Common{}},
 			want: map[string]any{"mystery": "value"},
 		},
 		{
@@ -418,7 +438,7 @@ func TestCoerceStreamingValues(t *testing.T) {
 		{
 			name: "invalid int64 string preserved",
 			data: map[string]any{"count": "not-a-number"},
-			info: &columnTypeInfo{colTypes: map[string]schema.CommonType{"count": schema.Int64}},
+			info: &columnTypeInfo{colTypes: map[string]schema.Common{"count": {Type: schema.Int64}}},
 			want: map[string]any{"count": "not-a-number"},
 		},
 	}
@@ -450,17 +470,17 @@ func TestCoerceStreamingValuesColumnTypeInfoFromCache(t *testing.T) {
 	require.NotNil(t, typeInfo)
 
 	// ID: NUMBER(10,0) → Int64
-	assert.Equal(t, schema.Int64, typeInfo.colTypes["ID"])
-	// AMOUNT: NUMBER(20,5) → String + numericCols
-	assert.Equal(t, schema.String, typeInfo.colTypes["AMOUNT"])
-	_, isNumeric := typeInfo.numericCols["AMOUNT"]
-	assert.True(t, isNumeric, "AMOUNT should be in numericCols")
-	// NAME: VARCHAR2 → String but NOT in numericCols
-	assert.Equal(t, schema.String, typeInfo.colTypes["NAME"])
-	_, nameNumeric := typeInfo.numericCols["NAME"]
-	assert.False(t, nameNumeric, "NAME should not be in numericCols")
+	assert.Equal(t, schema.Int64, typeInfo.colTypes["ID"].Type)
+	// AMOUNT: NUMBER(20,5) → Decimal(20,5)
+	assert.Equal(t, schema.Decimal, typeInfo.colTypes["AMOUNT"].Type)
+	require.NotNil(t, typeInfo.colTypes["AMOUNT"].Logical)
+	require.NotNil(t, typeInfo.colTypes["AMOUNT"].Logical.Decimal)
+	assert.Equal(t, int32(20), typeInfo.colTypes["AMOUNT"].Logical.Decimal.Precision)
+	assert.Equal(t, int32(5), typeInfo.colTypes["AMOUNT"].Logical.Decimal.Scale)
+	// NAME: VARCHAR2 → String
+	assert.Equal(t, schema.String, typeInfo.colTypes["NAME"].Type)
 	// SCORE: BINARY_FLOAT → Float32
-	assert.Equal(t, schema.Float32, typeInfo.colTypes["SCORE"])
+	assert.Equal(t, schema.Float32, typeInfo.colTypes["SCORE"].Type)
 
 	// Verify coercion works with this typeInfo
 	data := map[string]any{
@@ -472,7 +492,7 @@ func TestCoerceStreamingValuesColumnTypeInfoFromCache(t *testing.T) {
 	coerceStreamingValues(data, typeInfo, log)
 
 	assert.Equal(t, int64(42), data["ID"])
-	assert.Equal(t, json.Number("12345.67890"), data["AMOUNT"])
+	assert.Equal(t, "12345.67890", data["AMOUNT"])
 	assert.Equal(t, "hello", data["NAME"])
 	assert.Equal(t, float64(1.5), data["SCORE"])
 }
