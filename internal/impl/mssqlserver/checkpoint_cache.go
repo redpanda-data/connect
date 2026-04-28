@@ -160,14 +160,16 @@ func (c *checkpointCache) Close(ctx context.Context) error {
 }
 
 func createCacheTable(ctx context.Context, db *sql.DB, tbl cacheTable) (bool, error) {
-	// cache_key length is based on default (fixed) cache key
+	// LSNs are varbinary(10); storing them as varchar would trigger an implicit
+	// binary-to-hex-string conversion by the driver and corrupt the value on
+	// read-back.
 	q := `
 	DECLARE @created BIT = 0;
 	IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE schema_id = SCHEMA_ID('%s') AND name = '%s')
 	BEGIN
 		CREATE TABLE %s (
 			cache_key varchar(7) NOT NULL PRIMARY KEY,
-			cache_val varchar(100)
+			cache_val varbinary(10)
 		);
 		SET @created = 1;
 	END;
@@ -186,7 +188,7 @@ func createUpsertStoredProc(ctx context.Context, db *sql.DB, cacheTable cacheTab
 	q := `
 	CREATE OR ALTER PROCEDURE %s
 		@Key varchar(7),
-		@Value varchar(100)
+		@Value varbinary(10)
 	AS
 	BEGIN
 		SET NOCOUNT ON;

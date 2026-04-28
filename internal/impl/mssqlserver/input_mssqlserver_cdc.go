@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"sync"
 	"time"
 
 	"github.com/Jeffail/checkpoint"
@@ -152,6 +153,7 @@ type sqlServerCDCInput struct {
 	publisher *batchPublisher
 	metrics   *service.Metrics
 
+	connMu  sync.Mutex
 	stopSig *shutdown.Signaller
 	log     *service.Logger
 	cpCache service.Cache
@@ -283,6 +285,18 @@ func newMSSQLServerCDCInput(conf *service.ParsedConfig, resources *service.Resou
 }
 
 func (i *sqlServerCDCInput) Connect(ctx context.Context) error {
+	i.connMu.Lock()
+	defer i.connMu.Unlock()
+
+	// If the background goroutine from a previous Connect is still running,
+	// skip reconnection. HasStoppedChan is closed initially (constructor) and
+	// when the goroutine exits, so a blocking default means "still active".
+	select {
+	case <-i.stopSig.HasStoppedChan():
+	default:
+		return nil
+	}
+
 	var (
 		err        error
 		userTables []replication.UserDefinedTable
