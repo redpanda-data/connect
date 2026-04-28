@@ -251,6 +251,18 @@ func TestMysqlColumnToCommon(t *testing.T) {
 			hasChildren:  false,
 		},
 		{
+			name: "unsigned decimal column",
+			col: gomysqlschema.TableColumn{
+				Name:       "price",
+				Type:       gomysqlschema.TYPE_DECIMAL,
+				RawType:    "decimal(10,2) unsigned",
+				IsUnsigned: true,
+			},
+			expectedType: schema.Decimal,
+			expectedName: "price",
+			hasChildren:  false,
+		},
+		{
 			name: "string column",
 			col: gomysqlschema.TableColumn{
 				Name:    "name",
@@ -572,6 +584,8 @@ func TestParseMySQLDecimal(t *testing.T) {
 		{raw: "decimal(7)", precision: 7, scale: 0, ok: true},
 		{raw: "decimal", precision: 10, scale: 0, ok: true},
 		{raw: "  decimal(18, 4) ", precision: 18, scale: 4, ok: true},
+		{raw: "decimal(10,2) unsigned", precision: 10, scale: 2, ok: true},
+		{raw: "decimal unsigned", precision: 10, scale: 0, ok: true},
 		{raw: "varchar(20)", ok: false},
 		{raw: "decimal(", ok: false},
 		{raw: "", ok: false},

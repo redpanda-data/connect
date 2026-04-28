@@ -22,8 +22,9 @@ import (
 
 // mysqlDecimalRegex parses the precision/scale out of MySQL's DECIMAL/NUMERIC
 // raw column type. Matches "decimal(p,s)", "decimal(p)" and "decimal" (with
-// any case). MySQL aliases NUMERIC to DECIMAL.
-var mysqlDecimalRegex = regexp.MustCompile(`(?i)^\s*(?:decimal|numeric)\s*(?:\(\s*(\d+)\s*(?:,\s*(\d+)\s*)?\))?\s*$`)
+// any case), with an optional trailing "unsigned" qualifier. MySQL aliases
+// NUMERIC to DECIMAL.
+var mysqlDecimalRegex = regexp.MustCompile(`(?i)^\s*(?:decimal|numeric)\s*(?:\(\s*(\d+)\s*(?:,\s*(\d+)\s*)?\))?\s*(?:unsigned)?\s*$`)
 
 // parseMySQLDecimal returns (precision, scale) for a MySQL DECIMAL/NUMERIC
 // column. Defaults match MySQL's: bare "decimal" -> (10, 0); "decimal(p)" ->
