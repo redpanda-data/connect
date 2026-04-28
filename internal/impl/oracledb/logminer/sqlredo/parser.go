@@ -198,9 +198,7 @@ func extractWhereConditions(expr sqlparser.Expr, result map[string]any, converte
 func processValue(valStr string, converter *OracleValueConverter) any {
 	valStr = strings.TrimSpace(valStr)
 
-	// Handle NULL - return nil to exclude from map.
 	// vitess-sqlparser serialises NullVal as lowercase "null", so check both.
-	// if valStr == "NULL" || valStr == "Unsupported Type" {
 	if valStr == "NULL" || valStr == "null" || valStr == "Unsupported Type" {
 		return nil
 	}
