@@ -63,7 +63,7 @@ func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replicat
 	if len(userTables) > 0 {
 		opCodes := "6, 7, 36"
 		if cfg.LOBEnabled {
-			opCodes += ", 9, 10"
+			opCodes += ", 9, 10, 11"
 		}
 		buf.WriteString(" AND (OPERATION_CODE IN (" + opCodes + ")")
 		// DML carries the real table name — filter by configured tables.
@@ -144,10 +144,8 @@ func (lm *LogMiner) ReadChanges(ctx context.Context, startPos replication.SCN) (
 
 	defer func() {
 		if lm.sessionMgr.IsActive() {
-			if err := lm.sessionMgr.EndSession(ctx, conn); err != nil {
-				if ctx.Err() == nil && !errors.Is(err, context.Canceled) {
-					lm.log.Errorf("ending logminer session on exit: %v", err)
-				}
+			if err := lm.sessionMgr.EndSession(context.Background(), conn); err != nil {
+				lm.log.Errorf("ending logminer session on exit: %v", err)
 			}
 		}
 	}()
@@ -273,17 +271,19 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 
 		lm.txnCache.AddEvent(redoEvent.TransactionID, redoEvent.SCN, &event)
 
-	case sqlredo.OpSelectLobLocator:
+	case sqlredo.OpSelectLobLocator, sqlredo.OpLobTrim:
 		if !lm.cfg.LOBEnabled {
 			return nil
 		}
 		if !redoEvent.SQLRedo.Valid || redoEvent.SQLRedo.String == "" {
-			lm.log.Warnf("Skipping SELECT_LOB_LOCATOR with no SQL_REDO (scn=%d, txn=%s)", redoEvent.SCN, redoEvent.TransactionID)
+			lm.log.Warnf("Skipping %s with no SQL_REDO (scn=%d, txn=%s)", redoEvent.Operation, redoEvent.SCN, redoEvent.TransactionID)
 			return nil
 		}
+		// LOB_TRIM SQL has the same SELECT "COL" INTO ... FROM "SCHEMA"."TABLE" WHERE ...
+		// structure as SELECT_LOB_LOCATOR, so the same parser works for both.
 		info, err := sqlredo.ParseSelectLobLocator(redoEvent.SQLRedo.String)
 		if err != nil {
-			lm.log.Warnf("Failed to parse SELECT_LOB_LOCATOR SQL (scn=%d, txn=%s): %v\nSQL: %.500s", redoEvent.SCN, redoEvent.TransactionID, err, redoEvent.SQLRedo.String)
+			lm.log.Warnf("Failed to parse %s SQL (scn=%d, txn=%s): %v\nSQL: %.500s", redoEvent.Operation, redoEvent.SCN, redoEvent.TransactionID, err, redoEvent.SQLRedo.String)
 			return nil
 		}
 		// Resolve LOB type from the schema cache populated at startup.
@@ -314,8 +314,11 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 		}
 		state, exists := lm.lobStates[redoEvent.TransactionID]
 		if !exists || state.ActiveKey == nil {
-			lm.log.Warnf("Received LOB_WRITE without active LOB locator (scn=%d, txn=%s)", redoEvent.SCN, redoEvent.TransactionID)
-			return nil
+			if !lm.inferLOBLocator(redoEvent) {
+				lm.log.Warnf("Received LOB_WRITE without active LOB locator (scn=%d, txn=%s)", redoEvent.SCN, redoEvent.TransactionID)
+				return nil
+			}
+			state = lm.lobStates[redoEvent.TransactionID]
 		}
 		acc := state.Accumulators[*state.ActiveKey]
 		if acc == nil {
@@ -517,6 +520,117 @@ func (lm *LogMiner) isLOBOnlyEvent(ev *sqlredo.DMLEvent) bool {
 		}
 	}
 	return true
+}
+
+// inferLOBLocator attempts to create a LOB locator for a LOB_WRITE event that
+// arrived without a preceding SELECT_LOB_LOCATOR. This happens with BASICFILE
+// out-of-line LOBs where Oracle does not emit locator events in LogMiner.
+//
+// The method searches the transaction's buffered DML events for either a
+// LOB-init UPDATE (inline-LOB path) or an INSERT (out-of-line LOB path) whose
+// Data carries a LOB column with an EMPTY_CLOB()/EMPTY_BLOB() placeholder that
+// doesn't yet have an accumulator. For INSERTs on BASICFILE columns with
+// DISABLE STORAGE IN ROW, Oracle emits NULL in SQL_REDO instead of an empty
+// placeholder; in that case the LOB column is absent from Data, so known LOB
+// columns for the table are also considered as inference candidates.
+// Returns true if a locator was successfully created.
+func (lm *LogMiner) inferLOBLocator(event *sqlredo.RedoEvent) bool {
+	if !event.SchemaName.Valid || !event.TableName.Valid {
+		return false
+	}
+	schema := event.SchemaName.String
+	table := event.TableName.String
+	if schema == "" || table == "" {
+		return false
+	}
+
+	txn := lm.txnCache.GetTransaction(event.TransactionID)
+	if txn == nil {
+		return false
+	}
+
+	prefix := strings.ToUpper(schema + "." + table + ".")
+
+	// Search backwards for the most recent event that can carry a LOB-init
+	// placeholder for this table: LOB-only UPDATE (inline-LOB path) or INSERT
+	// (BASICFILE out-of-line LOB path, where no LOB-init UPDATE is emitted).
+	for i := len(txn.Events) - 1; i >= 0; i-- {
+		ev := txn.Events[i]
+		if ev.Schema != schema || ev.Table != table {
+			continue
+		}
+
+		var pkValues map[string]any
+		switch {
+		case ev.Operation == sqlredo.OpUpdate && lm.isLOBOnlyEvent(ev):
+			pkValues = ev.OldValues
+		case ev.Operation == sqlredo.OpInsert:
+			// Use the INSERT's non-LOB columns as the PK identifier so that
+			// MergeLOBsIntoDMLEvents can still match this INSERT after one of
+			// its LOB columns has been overwritten with the assembled value
+			// (important when an INSERT has multiple out-of-line LOBs).
+			pkValues = make(map[string]any, len(ev.Data))
+			for col, val := range ev.Data {
+				if _, isLOB := lm.lobColTypes[prefix+strings.ToUpper(col)]; isLOB {
+					continue
+				}
+				pkValues[col] = val
+			}
+		default:
+			continue
+		}
+
+		pkString := sqlredo.FormatPKString(pkValues)
+
+		// Candidate LOB columns are those with an EMPTY_CLOB()/EMPTY_BLOB()
+		// placeholder (parsed as empty []byte). For INSERTs, BASICFILE columns
+		// with DISABLE STORAGE IN ROW emit NULL in SQL_REDO instead — the column
+		// is absent from Data — so iterate every known LOB column for the table.
+		for k, lobType := range lm.lobColTypes {
+			if !strings.HasPrefix(k, prefix) {
+				continue
+			}
+			col := k[len(prefix):]
+			val, present := ev.Data[col]
+			switch {
+			case present:
+				if b, ok := val.([]byte); !ok || len(b) != 0 {
+					continue
+				}
+			case ev.Operation != sqlredo.OpInsert:
+				continue
+			}
+
+			key := sqlredo.LobKey{
+				Schema:   schema,
+				Table:    table,
+				Column:   col,
+				PKString: pkString,
+			}
+
+			// Defer state creation until we have a match to avoid leaking
+			// empty TxnLOBState entries when inference fails.
+			state := lm.getOrCreateLOBState(event.TransactionID)
+			if _, exists := state.Accumulators[key]; exists {
+				continue
+			}
+
+			state.Accumulators[key] = &sqlredo.LobAccumulator{
+				Schema:   schema,
+				Table:    table,
+				Column:   col,
+				PKValues: pkValues,
+				IsBinary: lobType == "BLOB",
+			}
+			state.ActiveKey = &key
+
+			lm.log.Debugf("Inferred LOB locator for %s.%s.%s from %s (txn=%s)",
+				schema, table, col, ev.Operation, event.TransactionID)
+			return true
+		}
+	}
+
+	return false
 }
 
 func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, startSCN, endSCN uint64, processEvent func(context.Context, *sqlredo.RedoEvent) error) error {

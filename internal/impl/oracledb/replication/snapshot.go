@@ -145,12 +145,19 @@ func (s *Snapshot) snapshotTable(ctx context.Context, table UserTable, maxBatchS
 					s.log.Errorf("Switching session back to root container: %v", err)
 				}
 			}()
-			if tx, err = conn.BeginTx(ctx, nil); err != nil {
+			// Use context.Background() to prevent database/sql from spawning an
+			// awaitDone goroutine that races with our explicit Rollback below.
+			// The go-ora v2 driver has an unsynchronized field in Session that
+			// causes a data race between BreakConnection (from awaitDone) and
+			// IsBreak (from our Rollback). Transaction lifetime is managed
+			// manually via the defer and explicit Rollback at the end.
+			if tx, err = conn.BeginTx(context.Background(), nil); err != nil {
 				return fmt.Errorf("beginning snapshot transaction: %w", err)
 			}
 		default:
 			// Non-CDB mode: use db.BeginTx directly — no *Conn needed.
-			if tx, err = s.dbPool.BeginTx(ctx, nil); err != nil {
+			// See CDB path comment above for why context.Background() is used.
+			if tx, err = s.dbPool.BeginTx(context.Background(), nil); err != nil {
 				return fmt.Errorf("beginning snapshot transaction: %w", err)
 			}
 		}
