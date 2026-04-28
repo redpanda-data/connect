@@ -500,6 +500,6 @@ func TestTypeResolverResolveTypeForCreateTable(t *testing.T) {
 			assert.False(t, seen[id], "duplicate field ID %d — metadata-override path is not sharing ti", id)
 			seen[id] = true
 		}
-		assert.Equal(t, 6, len(allIDs), "expected 2 top-level + 4 nested IDs")
+		assert.Len(t, allIDs, 6, "expected 2 top-level + 4 nested IDs")
 	})
 }
