@@ -33,6 +33,8 @@ type Config struct {
 	Nightly bool
 	// AutoCreateTopics enables automatic topic creation.
 	AutoCreateTopics bool
+	// ExtraOpts are additional testcontainers options applied after the default ones.
+	ExtraOpts []testcontainers.ContainerCustomizer
 }
 
 // DefaultConfig returns the default configuration for starting a Redpanda broker.
@@ -60,6 +62,7 @@ func StartSingleBrokerWithConfig(t *testing.T, cfg Config) (Endpoints, testconta
 	if cfg.AutoCreateTopics {
 		opts = append(opts, tcredpanda.WithAutoCreateTopics())
 	}
+	opts = append(opts, cfg.ExtraOpts...)
 
 	ctr, err := tcredpanda.Run(t.Context(), img, opts...)
 	testcontainers.CleanupContainer(t, ctr)
