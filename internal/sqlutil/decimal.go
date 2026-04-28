@@ -60,7 +60,11 @@ func CanonicaliseDecimal(text string, precision, scale int32) (string, error) {
 	}
 	unscaled, _ := bf.Int(nil)
 
-	return params.Format(unscaled)
+	out, err := params.Format(unscaled)
+	if err != nil {
+		return "", fmt.Errorf("canonicalising decimal text %q at (%d, %d): %w", text, precision, scale, err)
+	}
+	return out, nil
 }
 
 // CanonicaliseDecimalBytes is the []byte-input convenience over

@@ -429,27 +429,37 @@ func prepSnapshotScannerAndMappers(cols []*sql.ColumnType) (values []any, mapper
 			// Oracle NUMBER type can represent both integers and decimals.
 			// For integer-width columns (scale=0, precision<=18), scan as int64
 			// to match the streaming path's ParseInt behavior.
-			// Decimals with declared (p, s) emit canonical decimal strings;
-			// arbitrary-precision NUMBER falls back to BigDecimal canonical
-			// strings.
+			// Decimals with a declared (p, s) — that is, scale within the
+			// precision and within the bounded Decimal type — emit canonical
+			// decimal strings; everything else (undeclared NUMBER, the
+			// go-ora "any scale" sentinel where DecimalSize reports
+			// scale > precision, or precision exceeding the Decimal cap)
+			// falls back to BigDecimal so the source remains lossless.
 			precision, scale, ok := col.DecimalSize()
+			colName := col.Name()
+			withinDecimal := ok && precision > 0 && scale >= 0 && scale <= precision && precision <= 38
 			switch {
-			case ok && scale == 0 && precision > 0 && precision <= MaxInt64DecimalPrecision:
+			case withinDecimal && scale == 0 && precision <= MaxInt64DecimalPrecision:
 				val = new(sql.Null[int64])
 				mapper = snapshotValueMapper[int64]
-			case ok:
-				if scale < 0 {
-					scale = 0
-				}
+			case withinDecimal:
 				p, s := int32(precision), int32(scale)
 				val = new(sql.NullString)
 				mapper = stringMapping(func(text string) (any, error) {
-					return sqlutil.CanonicaliseDecimal(text, p, s)
+					out, err := sqlutil.CanonicaliseDecimal(text, p, s)
+					if err != nil {
+						return nil, fmt.Errorf("column %s: %w", colName, err)
+					}
+					return out, nil
 				})
 			default:
 				val = new(sql.NullString)
 				mapper = stringMapping(func(text string) (any, error) {
-					return sqlutil.CanonicaliseBigDecimal(text)
+					out, err := sqlutil.CanonicaliseBigDecimal(text)
+					if err != nil {
+						return nil, fmt.Errorf("column %s: %w", colName, err)
+					}
+					return out, nil
 				})
 			}
 		case "BINARY_FLOAT", "IBFloat", "BFloat", "BINARY_DOUBLE", "IBDouble", "BDouble":

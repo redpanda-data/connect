@@ -143,11 +143,19 @@ func newChangeTableRowIter(
 		}
 	}
 
-	// pre-allocate slice of pointers for sql.Scan operations
+	// Pre-allocate scan targets. For DECIMAL/NUMERIC and MONEY/SMALLMONEY
+	// columns we scan into a string-shaped target so the driver hands back
+	// the lossless text representation; everything else scans into a bare
+	// any and lets the driver pick its native Go type.
 	vals := make([]any, len(cols))
 	for i := range vals {
-		var v any
-		vals[i] = &v
+		switch strings.ToUpper(colTypes[i].DatabaseTypeName()) {
+		case "DECIMAL", "NUMERIC", "MONEY", "SMALLMONEY":
+			vals[i] = new(sql.NullString)
+		default:
+			var v any
+			vals[i] = &v
+		}
 	}
 
 	iter := &changeTableRowIter{
@@ -204,7 +212,7 @@ func (ct *changeTableRowIter) Close() error {
 // mapValsToChange maps the values from vals to the dst out parameter.
 func (ct *changeTableRowIter) mapValsToChange(vals []any, dst *change) error {
 	for i, c := range ct.cols {
-		v := *(vals[i].(*any))
+		v := unwrapScanTarget(vals[i])
 		switch c {
 		case "__$start_lsn":
 			if b, ok := v.([]byte); ok {
@@ -261,6 +269,24 @@ func (ct *changeTableRowIter) mapValsToChange(vals []any, dst *change) error {
 		}
 	}
 	return nil
+}
+
+// unwrapScanTarget pulls the underlying value out of a slot pre-allocated by
+// the streaming iterator. DECIMAL/NUMERIC/MONEY/SMALLMONEY columns scan into
+// *sql.NullString to keep the driver from coercing to a lossy float64;
+// everything else scans into *any.
+func unwrapScanTarget(slot any) any {
+	switch s := slot.(type) {
+	case *sql.NullString:
+		if !s.Valid {
+			return nil
+		}
+		return []byte(s.String)
+	case *any:
+		return *s
+	default:
+		return slot
+	}
 }
 
 // mapScannedValue takes an already-scanned value and column type, and converts it

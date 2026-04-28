@@ -50,17 +50,23 @@ func oracleTypeToCommonType(dataType string) schema.CommonType {
 // The mapping picks the most specific representation:
 //   - !hasDecimalInfo: BigDecimal — Oracle's "floating decimal" with no
 //     declared precision/scale.
-//   - scale > 0 || (scale==0 && precision > 18): Decimal(precision, scale).
+//   - scale > precision (driver sentinel for undeclared scale, e.g. go-ora's
+//     (38, 255) for bare NUMBER): BigDecimal.
 //   - scale == 0 && 0 < precision <= 18: Int64 (existing optimisation —
 //     scale-0 NUMBER fits losslessly in int64).
 //   - scale < 0: rounded to Decimal(precision, 0) since Avro/Parquet/Iceberg
 //     can't represent negative scale.
+//   - otherwise: Decimal(precision, scale).
 func oracleNumberToCommon(name string, precision, scale int64, hasDecimalInfo bool) schema.Common {
 	if !hasDecimalInfo {
 		return schema.NewBigDecimal(name, true)
 	}
 	if scale < 0 {
 		scale = 0
+	}
+	// Treat scale-greater-than-precision as undeclared (driver sentinel).
+	if scale > precision {
+		return schema.NewBigDecimal(name, true)
 	}
 	if scale == 0 && precision > 0 && precision <= replication.MaxInt64DecimalPrecision {
 		return schema.Common{Name: name, Type: schema.Int64, Optional: true}

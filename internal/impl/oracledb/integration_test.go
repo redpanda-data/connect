@@ -1109,7 +1109,7 @@ oracledb_cdc:
 		"VARCHAR_COL": "Max varchar value",
 		"OOLVARCHARMAX_COL": "`+largeClob+`",
 		"VARCHARMAX_COL": "Max varchar(max)",
-		"NOLEADINGZERO_COL": 0.15
+		"NOLEADINGZERO_COL": "0.15"
 		}`, outBatches[1], "Failed to assert max result from streaming")
 	}
 }
