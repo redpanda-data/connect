@@ -9,9 +9,13 @@
 package shredder
 
 import (
+	"encoding/json"
+	"math"
+	"math/big"
 	"testing"
 
 	"github.com/apache/iceberg-go"
+	"github.com/parquet-go/parquet-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -1028,4 +1032,167 @@ func filterByFieldID(values []ShreddedValue, fieldID int) []ShreddedValue {
 		}
 	}
 	return result
+}
+
+func TestConvertLeafValueDecimal(t *testing.T) {
+	dt := iceberg.DecimalTypeOf(10, 2)
+
+	tests := []struct {
+		name    string
+		value   any
+		wantErr bool
+	}{
+		{"[]byte passthrough", []byte{0x00, 0x00, 0x00, 0x30, 0x39}, false},
+		{"float64", float64(123.45), false},
+		{"int64", int64(123), false},
+		{"int", 123, false},
+		{"json.Number integer", json.Number("123"), false},
+		{"json.Number float", json.Number("123.45"), false},
+		{"string decimal", "123.45", false},
+		{"string integer", "123", false},
+		{"bool unsupported", true, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := convertLeafValue(tt.value, dt)
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			assert.False(t, result.IsNull())
+		})
+	}
+}
+
+func TestConvertLeafValueDecimalPrecision(t *testing.T) {
+	dt := iceberg.DecimalTypeOf(10, 2)
+
+	result, err := convertLeafValue(float64(123.45), dt)
+	require.NoError(t, err)
+
+	b := result.ByteArray()
+	assert.NotEmpty(t, b)
+
+	unscaled := new(big.Int).SetBytes(b)
+	if len(b) > 0 && b[0]&0x80 != 0 {
+		unscaled.Sub(unscaled, new(big.Int).Lsh(big.NewInt(1), uint(len(b)*8)))
+	}
+	assert.Equal(t, int64(12345), unscaled.Int64())
+}
+
+func TestConvertLeafValueDecimalNegative(t *testing.T) {
+	dt := iceberg.DecimalTypeOf(10, 2)
+
+	result, err := convertLeafValue(float64(-123.45), dt)
+	require.NoError(t, err)
+
+	b := result.ByteArray()
+	assert.NotEmpty(t, b)
+
+	unscaled := new(big.Int).SetBytes(b)
+	if len(b) > 0 && b[0]&0x80 != 0 {
+		unscaled.Sub(unscaled, new(big.Int).Lsh(big.NewInt(1), uint(len(b)*8)))
+	}
+	assert.Equal(t, int64(-12345), unscaled.Int64())
+}
+
+func TestConvertLeafValueDecimalExactValues(t *testing.T) {
+	dt := iceberg.DecimalTypeOf(10, 2)
+
+	decodeUnscaled := func(t *testing.T, result parquet.Value) int64 {
+		t.Helper()
+		b := result.ByteArray()
+		require.NotEmpty(t, b)
+		v := new(big.Int).SetBytes(b)
+		if len(b) > 0 && b[0]&0x80 != 0 {
+			v.Sub(v, new(big.Int).Lsh(big.NewInt(1), uint(len(b)*8)))
+		}
+		return v.Int64()
+	}
+
+	tests := []struct {
+		name         string
+		value        any
+		wantUnscaled int64
+	}{
+		{"zero float64", float64(0.0), 0},
+		{"zero int64", int64(0), 0},
+		{"zero string", "0", 0},
+		{"zero string with decimals", "0.00", 0},
+		{"int64 scaled", int64(123), 12300},
+		{"int scaled", 123, 12300},
+		{"json.Number integer", json.Number("123"), 12300},
+		{"json.Number float", json.Number("123.45"), 12345},
+		{"string integer", "123", 12300},
+		{"string float", "123.45", 12345},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := convertLeafValue(tt.value, dt)
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantUnscaled, decodeUnscaled(t, result))
+		})
+	}
+}
+
+func TestConvertLeafValueDecimalOverflow(t *testing.T) {
+	// decimal(5, 2) can hold values up to 999.99 (unscaled 99999)
+	dt := iceberg.DecimalTypeOf(5, 2)
+
+	// 999.99 should succeed
+	_, err := convertLeafValue(float64(999.99), dt)
+	require.NoError(t, err)
+
+	// 1000.00 exceeds precision — unscaled 100000 >= 10^5
+	_, err = convertLeafValue(float64(1000.00), dt)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "exceeds decimal(5, 2) precision")
+
+	// Large negative should also fail
+	_, err = convertLeafValue(float64(-1000.00), dt)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "exceeds decimal(5, 2) precision")
+}
+
+func TestConvertLeafValueDecimalStringError(t *testing.T) {
+	dt := iceberg.DecimalTypeOf(10, 2)
+
+	_, err := convertLeafValue("not_a_number", dt)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot parse")
+}
+
+func TestConvertLeafValueDecimalNaNInf(t *testing.T) {
+	dt := iceberg.DecimalTypeOf(10, 2)
+
+	_, err := convertLeafValue(math.NaN(), dt)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot convert")
+
+	_, err = convertLeafValue(math.Inf(1), dt)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot convert")
+
+	_, err = convertLeafValue(math.Inf(-1), dt)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot convert")
+
+	_, err = convertLeafValue(float32(math.NaN()), dt)
+	require.Error(t, err)
+
+	_, err = convertLeafValue(float32(math.Inf(1)), dt)
+	require.Error(t, err)
+}
+
+func TestConvertLeafValueUint64Overflow(t *testing.T) {
+	_, err := convertLeafValue(uint64(math.MaxInt64+1), iceberg.Int64Type{})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "exceeds int64 range")
+
+	// Value within range should succeed
+	_, err = convertLeafValue(uint64(math.MaxInt64), iceberg.Int64Type{})
+	require.NoError(t, err)
 }

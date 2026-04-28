@@ -19,8 +19,8 @@ import (
 
 	"github.com/apache/iceberg-go"
 	"github.com/google/uuid"
-	"github.com/hamba/avro/v2"
 	"github.com/parquet-go/parquet-go/format"
+	"github.com/twmb/avro/atype"
 )
 
 // ParquetStats contains statistics extracted from a parquet file footer
@@ -298,25 +298,25 @@ func goValueToLiteral(val any, iceType iceberg.Type) (iceberg.Literal, error) {
 	}
 }
 
-// PartitionFieldMaps returns avro logical types and fixed sizes for partition fields.
+// PartitionFieldMaps returns logical type strings and fixed sizes for partition fields.
 // These are needed for the DataFileBuilder to properly serialize partition data.
-func PartitionFieldMaps(spec iceberg.PartitionSpec, schema *iceberg.Schema) (map[int]avro.LogicalType, map[int]int) {
-	logicalTypes := make(map[int]avro.LogicalType)
+func PartitionFieldMaps(spec iceberg.PartitionSpec, schema *iceberg.Schema) (map[int]string, map[int]int) {
+	logicalTypes := make(map[int]string)
 	fixedSizes := make(map[int]int)
 
 	partType := spec.PartitionType(schema)
 	for _, field := range partType.FieldList {
 		switch t := field.Type.(type) {
 		case iceberg.DateType:
-			logicalTypes[field.ID] = avro.Date
+			logicalTypes[field.ID] = atype.Date
 		case iceberg.TimeType:
-			logicalTypes[field.ID] = avro.TimeMicros
+			logicalTypes[field.ID] = atype.TimeMicros
 		case iceberg.TimestampType, iceberg.TimestampTzType:
-			logicalTypes[field.ID] = avro.TimestampMicros
+			logicalTypes[field.ID] = atype.TimestampMicros
 		case iceberg.UUIDType:
-			logicalTypes[field.ID] = avro.UUID
+			logicalTypes[field.ID] = atype.UUID
 		case iceberg.DecimalType:
-			logicalTypes[field.ID] = avro.Decimal
+			logicalTypes[field.ID] = atype.Decimal
 			fixedSizes[field.ID] = t.Scale()
 		}
 	}

@@ -13,6 +13,7 @@ package icebergx
 import (
 	"fmt"
 	"iter"
+	"math"
 	"strings"
 
 	"github.com/apache/iceberg-go"
@@ -148,6 +149,8 @@ func icebergTypeToParquet(t iceberg.Type) (parquet.Node, error) {
 		return parquet.Timestamp(parquet.Microsecond), nil
 	case iceberg.UUIDType:
 		return parquet.UUID(), nil
+	case iceberg.DecimalType:
+		return parquet.Decimal(t.Scale(), t.Precision(), parquet.FixedLenByteArrayType(DecimalByteWidth(t.Precision()))), nil
 	case *iceberg.StructType:
 		group := make(parquet.Group, len(t.Fields()))
 		for _, f := range t.Fields() {
@@ -186,4 +189,13 @@ func icebergTypeToParquet(t iceberg.Type) (parquet.Node, error) {
 	default:
 		return nil, fmt.Errorf("unsupported iceberg type: %T", t)
 	}
+}
+
+// DecimalByteWidth returns the minimum number of bytes needed to store a
+// two's complement integer with the given decimal precision. This matches
+// the formula used by parquet-go and the iceberg-go requiredLength table:
+//
+//	ceil((log10(2) + precision) / log10(256))
+func DecimalByteWidth(precision int) int {
+	return int(math.Ceil((math.Log10(2) + float64(precision)) / math.Log10(256)))
 }

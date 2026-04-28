@@ -851,7 +851,9 @@ func TestIntegrationOracleDBCDCSnapshotAndStreamingAllTypes(t *testing.T) {
 		bit_col           NUMBER(1),                    -- Boolean-like (0,1,NULL)
 		-- xml_col           XMLTYPE,
 		json_col          CLOB,                         -- JSON stored as CLOB
-		noleadingzero_col NUMBER                        -- observe Oracle's non-leading zero decimal handling (0.15 -> .15)
+		noleadingzero_col NUMBER,                       -- observe Oracle's non-leading zero decimal handling (0.15 -> .15)
+		nullable_num      NUMBER(11,0),                 -- nullable number to verify NULL handling
+		nonnullable_num   NUMBER(11,0) NOT NULL         -- NOT NULL
 	) LOB(oolvarcharmax_col) STORE AS BASICFILE (DISABLE STORAGE IN ROW NOCACHE LOGGING)`
 	err := db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.all_data_types", q)
 	require.NoError(t, err)
@@ -867,7 +869,7 @@ func TestIntegrationOracleDBCDCSnapshotAndStreamingAllTypes(t *testing.T) {
 		time_col, datetimeoffset_col, char_col, varchar_col,
 		nchar_col, nvarchar_col, binary_col, varbinary_col,
 		varcharmax_col, oolvarcharmax_col, nvarcharmax_col, varbinarymax_col,
-		bit_col, json_col, noleadingzero_col
+		bit_col, json_col, noleadingzero_col, nullable_num, nonnullable_num
 	) VALUES (
 		:1, :2, :3, :4,
 		:5, :6, :7, :8,
@@ -875,7 +877,7 @@ func TestIntegrationOracleDBCDCSnapshotAndStreamingAllTypes(t *testing.T) {
 		:13, :14, :15, :16,
 		:17, :18, :19, :20,
 		:21, :22, :23, :24,
-		:25, :26, :27
+		:25, :26, :27, :28, :29
 	)`
 
 	t.Log("Inserting min values for testing snapshot data...")
@@ -909,6 +911,8 @@ func TestIntegrationOracleDBCDCSnapshotAndStreamingAllTypes(t *testing.T) {
 			0,            // bit (number)
 			nil,          // json (clob)
 			"0.15",       // noleadingzero_col
+			nil,          // nullable_num (NULL to verify NULL handling)
+			0,            // nonnullable_num
 		)
 	}
 
@@ -1005,6 +1009,8 @@ oracledb_cdc:
 			1,                    // bit max (number)
 			`{"max": true}`,      // json (clob)
 			"0.15",               // noleadingzero_col
+			nil,                  // nullable_num (NULL to verify NULL handling when streaming)
+			0,                    // nonnullable_num
 		)
 
 		minWant := 2
@@ -1034,7 +1040,8 @@ oracledb_cdc:
 
 	t.Log("Verifying values from snapshot...")
 	{
-		// assert min - uppercase column names from Oracle, NUMBER types as float64
+		// assert min values from snapshot.
+		// NULL columns are included as JSON null in snapshot rows.
 		require.JSONEq(t, `{
 		"BIGINT_COL": -9223372036854775808,
 		"BINARY_COL": "AAAAAAAAAAAAAAAAAAAAAA==",
@@ -1050,6 +1057,8 @@ oracledb_cdc:
 		"JSON_COL": null,
 		"NCHAR_COL": "АААААААААА",
 		"NUMERIC_COL": -999999999999999.99999,
+		"NULLABLE_NUM": null,
+		"NONNULLABLE_NUM": 0,
 		"NVARCHAR_COL": null,
 		"NVARCHARMAX_COL": null,
 		"REAL_COL": -3.4e+37,
@@ -1068,7 +1077,7 @@ oracledb_cdc:
 
 	t.Log("Verifying values from streaming...")
 	{
-		// assert max - uppercase column names from Oracle
+		// assert max values from streaming.
 		require.JSONEq(t, `{
 		"BIGINT_COL": 9223372036854775807,
 		"BINARY_COL": "AAAAAAAAAAAAAAAAAAAAAA==",
@@ -1084,6 +1093,8 @@ oracledb_cdc:
 		"JSON_COL": "{\"max\": true}",
 		"NCHAR_COL": "ZZZZZZZZZZ",
 		"NUMERIC_COL": 999999999999999.99999,
+		"NULLABLE_NUM": null,
+		"NONNULLABLE_NUM": 0,
 		"NVARCHAR_COL": "Max nvarchar value",
 		"NVARCHARMAX_COL": "Max nvarchar(max)",
 		"REAL_COL": 3.3999999e+37,
