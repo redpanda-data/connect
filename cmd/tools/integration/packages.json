@@ -39,6 +39,7 @@
   {"path": "./internal/impl/redis"},
   {"path": "./internal/impl/redpanda/migrator"},
   {"path": "./internal/impl/sftp"},
+  {"path": "./internal/impl/salesforce"},
   {"path": "./internal/impl/snowflake"},
   {"path": "./internal/impl/snowflake/streaming", "timeout": "20m"},
   {"path": "./internal/impl/splunk"},
