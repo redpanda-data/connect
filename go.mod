@@ -4,10 +4,6 @@ go 1.26.2
 
 replace github.com/99designs/keyring => github.com/Jeffail/keyring v1.2.3
 
-// TEMPORARY: replace benthos with local checkout while decimal common-type adoption is in flight.
-// Flip back to a tagged version once benthos releases with both Decimal and BigDecimal types.
-replace github.com/redpanda-data/benthos/v4 => /Users/ash/src/ai/benthos-schema-decimal-types
-
 ignore (
 	./bin
 	./config
@@ -148,7 +144,7 @@ require (
 	github.com/rabbitmq/amqp091-go v1.10.0
 	github.com/rcrowley/go-metrics v0.0.0-20250401214520-65e299d6c5c9
 	github.com/redis/go-redis/v9 v9.18.0
-	github.com/redpanda-data/benthos/v4 v4.71.0
+	github.com/redpanda-data/benthos/v4 v4.71.1-0.20260428154615-ddb2b041e022
 	github.com/redpanda-data/common-go/authz v0.2.1-0.20260319205134-242ab3c168b8
 	github.com/redpanda-data/common-go/license v0.0.0-20260318014216-2bbd72bde0a0
 	github.com/redpanda-data/common-go/redpanda-otel-exporter v0.4.0
