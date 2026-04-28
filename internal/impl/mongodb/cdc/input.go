@@ -716,6 +716,9 @@ func (m *mongoCDC) readSnapshotRange(
 			case m.readChan <- b:
 			case <-ctx.Done():
 				_ = b.ackFn(ctx, nil)
+			case <-m.shutsig.SoftStopChan():
+				_ = b.ackFn(ctx, nil)
+				return context.Canceled
 			}
 			mb = nil
 		}
@@ -875,6 +878,17 @@ func (m *mongoCDC) readFromStream(ctx context.Context, cp *checkpoint.Capped[bso
 			if !afterOk {
 				return fmt.Errorf("%s event did not have fullDocument", opType)
 			}
+			if afterDoc == nil {
+				// In update_lookup mode, fullDocument is null when the document
+				// is deleted before the post-update lookup completes. Fall back
+				// to documentKey so we still emit the event.
+				if opType == "update" {
+					doc = data["documentKey"]
+					keyOnly = true
+					break
+				}
+				return fmt.Errorf("%s event had null fullDocument", opType)
+			}
 			doc = afterDoc
 		case "delete":
 			doc = data["fullDocumentBeforeChange"]
@@ -917,7 +931,7 @@ func (m *mongoCDC) readFromStream(ctx context.Context, cp *checkpoint.Capped[bso
 				}
 				m.resumeTokenMu.Lock()
 				defer m.resumeTokenMu.Unlock()
-				m.resumeToken = stream.ResumeToken()
+				m.resumeToken = *resumeToken
 				if m.checkpointFlusher == nil {
 					return m.checkpoint.Store(ctx, m.resumeToken)
 				}
@@ -926,6 +940,7 @@ func (m *mongoCDC) readFromStream(ctx context.Context, cp *checkpoint.Capped[bso
 			select {
 			case m.readChan <- mongoBatch{mb, ackFn}:
 			case <-ctx.Done():
+			case <-m.shutsig.SoftStopChan():
 			}
 			mb = nil
 		}
