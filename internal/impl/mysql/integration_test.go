@@ -1469,16 +1469,14 @@ file:
 		}
 	}()
 
+	var got int
 	assert.Eventually(t, func() bool {
 		outBatchesMu.Lock()
 		defer outBatchesMu.Unlock()
-
-		got := len(outBatches)
-		if got > want {
-			t.Fatalf("Wanted %d snapshot messages but got %d", want, got)
-		}
-		return got == want
+		got = len(outBatches)
+		return got >= want
 	}, time.Minute*5, time.Second*1)
+	assert.Equalf(t, want, got, "Wanted %d snapshot messages but got %d", want, got)
 
 	require.NoError(t, streamOut.StopWithin(10*time.Second))
 }
