@@ -85,6 +85,11 @@ func newIcebergOutputFromConfig(conf *service.ParsedConfig, mgr *service.Resourc
 		return nil, fmt.Errorf("parsing table name: %w", err)
 	}
 
+	caseSensitive, err := conf.FieldBool(ioFieldCaseSensitiveColumns)
+	if err != nil {
+		return nil, fmt.Errorf("parsing %s: %w", ioFieldCaseSensitiveColumns, err)
+	}
+
 	// Parse schema evolution config
 	schemaEvoCfg, err := parseSchemaEvolutionConfig(conf)
 	if err != nil {
@@ -98,7 +103,7 @@ func newIcebergOutputFromConfig(conf *service.ParsedConfig, mgr *service.Resourc
 	}
 
 	// Create router
-	rtr := NewRouter(catalogCfg, namespaceStr, tableStr, schemaEvoCfg, commitCfg, mgr.Logger())
+	rtr := NewRouter(catalogCfg, namespaceStr, tableStr, caseSensitive, schemaEvoCfg, commitCfg, mgr.Logger())
 
 	return &icebergOutput{
 		router: rtr,

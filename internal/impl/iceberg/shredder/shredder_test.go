@@ -59,7 +59,7 @@ func TestShredSimpleRecord(t *testing.T) {
 		"name": "alice",
 	}
 
-	shredder := NewRecordShredder(schema)
+	shredder := NewRecordShredder(schema, true)
 	sink := &testSink{}
 	err := shredder.Shred(record, sink)
 	require.NoError(t, err)
@@ -89,7 +89,7 @@ func TestShredNullOptionalField(t *testing.T) {
 		"name": nil, // null value
 	}
 
-	shredder := NewRecordShredder(schema)
+	shredder := NewRecordShredder(schema, true)
 	sink := &testSink{}
 	err := shredder.Shred(record, sink)
 	require.NoError(t, err)
@@ -125,7 +125,7 @@ func TestShredList(t *testing.T) {
 		"tags": []any{"a", "b", "c"},
 	}
 
-	shredder := NewRecordShredder(schema)
+	shredder := NewRecordShredder(schema, true)
 	sink := &testSink{}
 	err := shredder.Shred(record, sink)
 	require.NoError(t, err)
@@ -168,7 +168,7 @@ func TestShredEmptyList(t *testing.T) {
 		"tags": []any{},
 	}
 
-	shredder := NewRecordShredder(schema)
+	shredder := NewRecordShredder(schema, true)
 	sink := &testSink{}
 	err := shredder.Shred(record, sink)
 	require.NoError(t, err)
@@ -204,7 +204,7 @@ func TestShredNestedStruct(t *testing.T) {
 		},
 	}
 
-	shredder := NewRecordShredder(schema)
+	shredder := NewRecordShredder(schema, true)
 	sink := &testSink{}
 	err := shredder.Shred(record, sink)
 	require.NoError(t, err)
@@ -242,7 +242,7 @@ func TestShredNullNestedStruct(t *testing.T) {
 		"user": nil,
 	}
 
-	shredder := NewRecordShredder(schema)
+	shredder := NewRecordShredder(schema, true)
 	sink := &testSink{}
 	err := shredder.Shred(record, sink)
 	require.NoError(t, err)
@@ -282,7 +282,7 @@ func TestShredMap(t *testing.T) {
 		},
 	}
 
-	shredder := NewRecordShredder(schema)
+	shredder := NewRecordShredder(schema, true)
 	sink := &testSink{}
 	err := shredder.Shred(record, sink)
 	require.NoError(t, err)
@@ -328,7 +328,7 @@ func TestShredListOfStructs(t *testing.T) {
 		},
 	}
 
-	shredder := NewRecordShredder(schema)
+	shredder := NewRecordShredder(schema, true)
 	sink := &testSink{}
 	err := shredder.Shred(record, sink)
 	require.NoError(t, err)
@@ -366,7 +366,7 @@ func TestShredMissingRequiredField(t *testing.T) {
 		"name": "alice",
 	}
 
-	shredder := NewRecordShredder(schema)
+	shredder := NewRecordShredder(schema, true)
 	sink := &testSink{}
 	err := shredder.Shred(record, sink)
 	require.Error(t, err)
@@ -384,7 +384,7 @@ func TestShredNullRequiredField(t *testing.T) {
 		"id": nil,
 	}
 
-	shredder := NewRecordShredder(schema)
+	shredder := NewRecordShredder(schema, true)
 	sink := &testSink{}
 	err := shredder.Shred(record, sink)
 	require.Error(t, err)
@@ -402,7 +402,7 @@ func TestShredNewFieldDetection(t *testing.T) {
 		"newField": "surprise",
 	}
 
-	shredder := NewRecordShredder(schema)
+	shredder := NewRecordShredder(schema, true)
 	sink := &testSink{}
 	err := shredder.Shred(record, sink)
 	require.NoError(t, err)
@@ -436,7 +436,7 @@ func TestShredNestedNewField(t *testing.T) {
 		},
 	}
 
-	shredder := NewRecordShredder(schema)
+	shredder := NewRecordShredder(schema, true)
 	sink := &testSink{}
 	err := shredder.Shred(record, sink)
 	require.NoError(t, err)
@@ -478,7 +478,7 @@ func TestShredNewFieldInList(t *testing.T) {
 		},
 	}
 
-	shredder := NewRecordShredder(schema)
+	shredder := NewRecordShredder(schema, true)
 	sink := &testSink{}
 	err := shredder.Shred(record, sink)
 	require.NoError(t, err)
@@ -516,7 +516,7 @@ func TestListOfStrings(t *testing.T) {
 		"values": []any{"a", "b", "c"},
 	}
 
-	shredder := NewRecordShredder(schema)
+	shredder := NewRecordShredder(schema, true)
 	sink := &testSink{}
 	err := shredder.Shred(record, sink)
 	require.NoError(t, err)
@@ -608,7 +608,7 @@ func TestDefinitionLevels(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			shredder := NewRecordShredder(schema)
+			shredder := NewRecordShredder(schema, true)
 			sink := &testSink{}
 			err := shredder.Shred(tc.record, sink)
 			require.NoError(t, err)
@@ -655,7 +655,7 @@ func TestRepetitionLevels(t *testing.T) {
 		},
 	}
 
-	shredder := NewRecordShredder(schema)
+	shredder := NewRecordShredder(schema, true)
 	sink := &testSink{}
 	err := shredder.Shred(record1, sink)
 	require.NoError(t, err)
@@ -726,7 +726,7 @@ func TestAddressBookExample(t *testing.T) {
 		},
 	}
 
-	shredder := NewRecordShredder(schema)
+	shredder := NewRecordShredder(schema, true)
 	sink := &testSink{}
 	err := shredder.Shred(record1, sink)
 	require.NoError(t, err)
@@ -811,7 +811,7 @@ func TestAddressBookNoContacts(t *testing.T) {
 		"contacts":          []any{},
 	}
 
-	shredder := NewRecordShredder(schema)
+	shredder := NewRecordShredder(schema, true)
 	sink := &testSink{}
 	err := shredder.Shred(record, sink)
 	require.NoError(t, err)
@@ -896,7 +896,7 @@ func TestRequiredGroupWrappedInOptionalGroup(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			shredder := NewRecordShredder(schema)
+			shredder := NewRecordShredder(schema, true)
 			sink := &testSink{}
 			err := shredder.Shred(tc.record, sink)
 			require.NoError(t, err)
@@ -969,7 +969,7 @@ func TestRequiredValuesNotNullValidation(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			shredder := NewRecordShredder(schema)
+			shredder := NewRecordShredder(schema, true)
 			sink := &testSink{}
 			err := shredder.Shred(tc.record, sink)
 			require.Error(t, err)
@@ -1005,7 +1005,7 @@ func TestLogicalMap(t *testing.T) {
 		},
 	}
 
-	shredder := NewRecordShredder(schema)
+	shredder := NewRecordShredder(schema, true)
 	sink := &testSink{}
 	err := shredder.Shred(record, sink)
 	require.NoError(t, err)
@@ -1195,4 +1195,149 @@ func TestConvertLeafValueUint64Overflow(t *testing.T) {
 	// Value within range should succeed
 	_, err = convertLeafValue(uint64(math.MaxInt64), iceberg.Int64Type{})
 	require.NoError(t, err)
+}
+
+// TestShredCaseInsensitiveTopLevel covers the case where the iceberg schema is
+// lowercase (the iceberg convention) but a message arrives with upper-case keys
+// — for example because some upstream system emitted them or the customer's
+// application uses upper-case identifiers. Iceberg field matching is
+// case-insensitive by convention, so the shredder must route the upper-case
+// message values into the lowercase schema columns rather than declaring them
+// unknown and triggering schema evolution.
+func TestShredCaseInsensitiveTopLevel(t *testing.T) {
+	schema := iceberg.NewSchema(1,
+		iceberg.NestedField{ID: 1, Name: "id", Type: iceberg.PrimitiveTypes.Int64, Required: true},
+		iceberg.NestedField{ID: 2, Name: "name", Type: iceberg.PrimitiveTypes.String, Required: false},
+	)
+
+	record := map[string]any{
+		"ID":   int64(42),
+		"NAME": "alice",
+	}
+
+	shredder := NewRecordShredder(schema, false)
+	sink := &testSink{}
+	err := shredder.Shred(record, sink)
+	require.NoError(t, err)
+	require.Len(t, sink.values, 2)
+	assert.Empty(t, sink.newFields, "case-only mismatches must not be reported as new fields")
+
+	assert.Equal(t, 1, sink.values[0].FieldID)
+	assert.Equal(t, int64(42), sink.values[0].Value.Int64())
+	assert.Equal(t, 2, sink.values[1].FieldID)
+	assert.Equal(t, "alice", string(sink.values[1].Value.ByteArray()))
+}
+
+// TestShredCaseInsensitiveMixedCase verifies matching works for arbitrary
+// case differences — not just full uppercase vs full lowercase.
+func TestShredCaseInsensitiveMixedCase(t *testing.T) {
+	schema := iceberg.NewSchema(1,
+		iceberg.NestedField{ID: 1, Name: "user_id", Type: iceberg.PrimitiveTypes.Int64, Required: false},
+	)
+
+	record := map[string]any{"User_Id": int64(7)}
+
+	shredder := NewRecordShredder(schema, false)
+	sink := &testSink{}
+	err := shredder.Shred(record, sink)
+	require.NoError(t, err)
+	require.Len(t, sink.values, 1)
+	assert.Empty(t, sink.newFields)
+	assert.Equal(t, int64(7), sink.values[0].Value.Int64())
+}
+
+// TestShredCaseInsensitiveNestedStruct verifies the case-insensitive lookup
+// works at every nesting depth, not only at the root.
+func TestShredCaseInsensitiveNestedStruct(t *testing.T) {
+	schema := iceberg.NewSchema(1,
+		iceberg.NestedField{
+			ID:   1,
+			Name: "user",
+			Type: &iceberg.StructType{
+				FieldList: []iceberg.NestedField{
+					{ID: 2, Name: "name", Type: iceberg.PrimitiveTypes.String, Required: false},
+					{ID: 3, Name: "age", Type: iceberg.PrimitiveTypes.Int32, Required: false},
+				},
+			},
+			Required: false,
+		},
+	)
+
+	record := map[string]any{
+		"USER": map[string]any{
+			"Name": "bob",
+			"AGE":  int32(30),
+		},
+	}
+
+	shredder := NewRecordShredder(schema, false)
+	sink := &testSink{}
+	err := shredder.Shred(record, sink)
+	require.NoError(t, err)
+	require.Len(t, sink.values, 2)
+	assert.Empty(t, sink.newFields)
+	assert.Equal(t, "bob", string(sink.values[0].Value.ByteArray()))
+	assert.Equal(t, int32(30), sink.values[1].Value.Int32())
+}
+
+// TestShredAmbiguousCase verifies that when a message contains two keys that
+// differ only in case and both map to the same schema field, the shredder
+// errors rather than silently picking one. This protects against data loss
+// (the unselected key would be discarded) and aligns with iceberg's
+// case-insensitive uniqueness conventions.
+func TestShredAmbiguousCase(t *testing.T) {
+	schema := iceberg.NewSchema(1,
+		iceberg.NestedField{ID: 1, Name: "id", Type: iceberg.PrimitiveTypes.Int64, Required: false},
+	)
+
+	record := map[string]any{
+		"id": int64(1),
+		"ID": int64(2),
+	}
+
+	shredder := NewRecordShredder(schema, false)
+	sink := &testSink{}
+	err := shredder.Shred(record, sink)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "ambiguous")
+}
+
+// TestShredCaseSensitivePreservesNewFieldDetection verifies that the
+// historical case-sensitive behavior is preserved when the flag is true: a
+// message keyed "ID" against a schema field "id" still misses and is reported
+// as a new field. This guards the backward-compatible default.
+func TestShredCaseSensitivePreservesNewFieldDetection(t *testing.T) {
+	schema := iceberg.NewSchema(1,
+		iceberg.NestedField{ID: 1, Name: "id", Type: iceberg.PrimitiveTypes.Int64, Required: false},
+	)
+
+	record := map[string]any{"ID": int64(42)}
+
+	shredder := NewRecordShredder(schema, true)
+	sink := &testSink{}
+	err := shredder.Shred(record, sink)
+	require.NoError(t, err)
+	require.Len(t, sink.newFields, 1)
+	assert.Equal(t, "ID", sink.newFields[0].name)
+}
+
+// TestShredNewFieldStillDetectedWhenTrulyUnknown ensures the case-insensitive
+// match doesn't suppress legitimate new-field detection. A key that has no
+// case-insensitive match in the schema is still reported as a new field.
+func TestShredNewFieldStillDetectedWhenTrulyUnknown(t *testing.T) {
+	schema := iceberg.NewSchema(1,
+		iceberg.NestedField{ID: 1, Name: "id", Type: iceberg.PrimitiveTypes.Int64, Required: false},
+	)
+
+	record := map[string]any{
+		"ID":    int64(1),
+		"EMAIL": "x@y.z",
+	}
+
+	shredder := NewRecordShredder(schema, false)
+	sink := &testSink{}
+	err := shredder.Shred(record, sink)
+	require.NoError(t, err)
+	require.Len(t, sink.newFields, 1)
+	assert.Equal(t, "EMAIL", sink.newFields[0].name)
 }

@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/apache/iceberg-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -166,5 +167,60 @@ func TestInferIcebergTypeForAddColumn(t *testing.T) {
 		typ, err := InferIcebergTypeForAddColumn(42)
 		require.NoError(t, err)
 		assert.Equal(t, "long", typ.Type())
+	})
+}
+
+// TestInferStructTypeRejectsCaseOnlyDuplicates covers the recursive fix: when
+// case-insensitive matching is enabled, a struct value containing two keys
+// that fold to the same lowercase string must be rejected at inference rather
+// than producing an iceberg struct that would later collide with itself.
+//
+// This applies to both top-level table creation and to nested struct
+// inference for new columns added via schema evolution. Without this guard,
+// a record like {"user": {"id": 1, "ID": 2}} would create a `user` struct
+// containing both `id` and `ID`, which is invalid under iceberg's
+// case-insensitive uniqueness convention.
+func TestInferStructTypeRejectsCaseOnlyDuplicates(t *testing.T) {
+	t.Run("case-insensitive flat struct rejects dup", func(t *testing.T) {
+		ti := newTypeInferrer(false)
+		_, err := ti.inferType(map[string]any{"id": 1, "ID": 2})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "ambiguous struct fields")
+	})
+
+	t.Run("case-insensitive nested struct rejects dup", func(t *testing.T) {
+		ti := newTypeInferrer(false)
+		_, err := ti.inferType(map[string]any{
+			"user": map[string]any{"id": 1, "ID": 2},
+		})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "ambiguous struct fields")
+	})
+
+	t.Run("case-insensitive struct in list element rejects dup", func(t *testing.T) {
+		ti := newTypeInferrer(false)
+		_, err := ti.inferType(map[string]any{
+			"items": []any{map[string]any{"sku": "x", "SKU": "y"}},
+		})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "ambiguous struct fields")
+	})
+
+	t.Run("case-sensitive mode admits both fields", func(t *testing.T) {
+		ti := newTypeInferrer(true)
+		typ, err := ti.inferType(map[string]any{"id": 1, "ID": 2})
+		require.NoError(t, err)
+		st, ok := typ.(*iceberg.StructType)
+		require.True(t, ok)
+		assert.Len(t, st.FieldList, 2)
+	})
+
+	t.Run("case-insensitive distinct names accepted", func(t *testing.T) {
+		ti := newTypeInferrer(false)
+		typ, err := ti.inferType(map[string]any{"id": 1, "name": "x"})
+		require.NoError(t, err)
+		st, ok := typ.(*iceberg.StructType)
+		require.True(t, ok)
+		assert.Len(t, st.FieldList, 2)
 	})
 }

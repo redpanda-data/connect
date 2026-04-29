@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"path"
 	"slices"
+	"strings"
 
 	"github.com/apache/iceberg-go"
 	icebergio "github.com/apache/iceberg-go/io"
@@ -29,19 +30,22 @@ import (
 
 // writer handles writing batches of messages to a single Iceberg table.
 type writer struct {
-	table     *table.Table
-	committer *committer
-	logger    *service.Logger
+	table         *table.Table
+	committer     *committer
+	caseSensitive bool
+	logger        *service.Logger
 }
 
 // NewWriter creates a new writer for a specific table.
 // The table and committer should use separate table references since they
 // operate in different goroutines and the table object is mutable.
-func NewWriter(tbl *table.Table, comm *committer, logger *service.Logger) *writer {
+// caseSensitive controls how message keys are matched against the schema.
+func NewWriter(tbl *table.Table, comm *committer, caseSensitive bool, logger *service.Logger) *writer {
 	return &writer{
-		table:     tbl,
-		committer: comm,
-		logger:    logger,
+		table:         tbl,
+		committer:     comm,
+		caseSensitive: caseSensitive,
+		logger:        logger,
 	}
 }
 
@@ -181,11 +185,11 @@ func (w *writer) messagesToParquet(batch service.MessageBatch) ([]partitionFile,
 	numPartitionFields := spec.NumFields()
 
 	// Create shredder for the schema
-	rs := shredder.NewRecordShredder(schema)
+	rs := shredder.NewRecordShredder(schema, w.caseSensitive)
 
 	// For unpartitioned tables, use a single writer
 	if spec.IsUnpartitioned() {
-		sink := newParquetSink(pqSchema, fieldToCol)
+		sink := newParquetSink(pqSchema, fieldToCol, w.caseSensitive)
 
 		for _, msg := range batch {
 			structured, err := msg.AsStructured()
@@ -229,7 +233,7 @@ func (w *writer) messagesToParquet(batch service.MessageBatch) ([]partitionFile,
 	var partitions []*partitionEntry
 
 	// Create a buffering sink to capture values and partition key
-	bufferSink := newBufferingSink(partitionSourceIDs, numPartitionFields)
+	bufferSink := newBufferingSink(partitionSourceIDs, numPartitionFields, w.caseSensitive)
 
 	for _, msg := range batch {
 		structured, err := msg.AsStructured()
@@ -264,7 +268,7 @@ func (w *writer) messagesToParquet(batch service.MessageBatch) ([]partitionFile,
 		} else {
 			entry = &partitionEntry{
 				key:  partitionKey,
-				sink: newParquetSink(pqSchema, fieldToCol),
+				sink: newParquetSink(pqSchema, fieldToCol, w.caseSensitive),
 			}
 			// Insert at sorted position
 			partitions = slices.Insert(partitions, idx, entry)
@@ -308,17 +312,18 @@ type parquetColumn struct {
 
 // parquetSink implements shredder.Sink and writes values directly to column writers.
 type parquetSink struct {
-	buffer   *bytes.Buffer
-	writer   *parquet.GenericWriter[any]
-	columns  map[int]*parquetColumn // field ID -> column state
-	rowCount int
+	buffer        *bytes.Buffer
+	writer        *parquet.GenericWriter[any]
+	columns       map[int]*parquetColumn // field ID -> column state
+	rowCount      int
+	caseSensitive bool
 
 	// newFields collects unknown fields discovered during shredding for schema evolution.
 	newFields  []*UnknownFieldError
 	seenFields map[string]struct{} // dedup by full path
 }
 
-func newParquetSink(pqSchema *parquet.Schema, fieldToCol map[int]int) *parquetSink {
+func newParquetSink(pqSchema *parquet.Schema, fieldToCol map[int]int, caseSensitive bool) *parquetSink {
 	buf := bytes.NewBuffer(nil)
 	pw := parquet.NewGenericWriter[any](buf, pqSchema)
 	colWriters := pw.ColumnWriters()
@@ -332,10 +337,11 @@ func newParquetSink(pqSchema *parquet.Schema, fieldToCol map[int]int) *parquetSi
 		}
 	}
 	return &parquetSink{
-		buffer:    buf,
-		writer:    pw,
-		columns:   columns,
-		newFields: nil, // allocated lazily
+		buffer:        buf,
+		writer:        pw,
+		columns:       columns,
+		caseSensitive: caseSensitive,
+		newFields:     nil, // allocated lazily
 	}
 }
 
@@ -354,7 +360,7 @@ func (s *parquetSink) EmitValue(sv shredder.ShreddedValue) error {
 
 func (s *parquetSink) OnNewField(parentPath icebergx.Path, name string, value any) {
 	fe := NewUnknownFieldError(parentPath, name, value)
-	key := fe.FullPath().String()
+	key := dedupKey(fe.FullPath().String(), s.caseSensitive)
 	if _, ok := s.seenFields[key]; ok {
 		return
 	}
@@ -399,17 +405,19 @@ type bufferingSink struct {
 	values             []shredder.ShreddedValue // buffered values in emission order
 	partitionSourceIDs map[int]int              // sourceFieldID -> partition field index
 	partitionValues    []parquet.Value          // captured partition values
+	caseSensitive      bool
 
 	// newFields collects unknown fields discovered during shredding for schema evolution.
 	newFields  []*UnknownFieldError
 	seenFields map[string]struct{} // dedup by full path
 }
 
-func newBufferingSink(partitionSourceIDs map[int]int, numPartitionFields int) *bufferingSink {
+func newBufferingSink(partitionSourceIDs map[int]int, numPartitionFields int, caseSensitive bool) *bufferingSink {
 	return &bufferingSink{
 		values:             make([]shredder.ShreddedValue, 0, 64),
 		partitionSourceIDs: partitionSourceIDs,
 		partitionValues:    make([]parquet.Value, numPartitionFields),
+		caseSensitive:      caseSensitive,
 		newFields:          nil, // allocated lazily
 	}
 }
@@ -436,7 +444,7 @@ func (s *bufferingSink) EmitValue(sv shredder.ShreddedValue) error {
 
 func (s *bufferingSink) OnNewField(parentPath icebergx.Path, name string, value any) {
 	fe := NewUnknownFieldError(parentPath, name, value)
-	key := fe.FullPath().String()
+	key := dedupKey(fe.FullPath().String(), s.caseSensitive)
 	if _, ok := s.seenFields[key]; ok {
 		return
 	}
@@ -445,6 +453,17 @@ func (s *bufferingSink) OnNewField(parentPath icebergx.Path, name string, value 
 	}
 	s.seenFields[key] = struct{}{}
 	s.newFields = append(s.newFields, fe)
+}
+
+// dedupKey returns the key used to dedup new-field errors across messages in
+// a batch. In case-insensitive mode it folds to lowercase so two messages
+// reporting new fields differing only in case (e.g. "FOO" and "foo") collapse
+// to a single schema-evolution attempt instead of racing each other.
+func dedupKey(path string, caseSensitive bool) string {
+	if caseSensitive {
+		return path
+	}
+	return strings.ToLower(path)
 }
 
 // newFieldErrors returns the collected new field errors.
