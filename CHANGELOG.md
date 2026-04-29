@@ -3,36 +3,21 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## 4.89.0 - 2026-04-23
-
-### Added
-
-- general: PostgreSQL CDC benchmarking suite added with Kafka Connect PostgreSQL benchmark infrastructure and configuration. ([@ness-david-dedu](https://github.com/ness-david-dedu), [#4216](https://github.com/redpanda-data/connect/pull/4216))
-- parquet_encode: Added configurable timestamp unit support (nanosecond, microsecond, millisecond) to make Parquet output readable by Apache Spark, Databricks, AWS Athena, and DuckDB. ([@ankit481](https://github.com/ankit481), [#4294](https://github.com/redpanda-data/connect/pull/4294))
-- oracledb_cdc: Added `transaction_id` to message metadata. ([@josephwoodward](https://github.com/josephwoodward), [#4328](https://github.com/redpanda-data/connect/pull/4328))
-- oracledb_cdc: Added `commit_ts_ms` to message metadata. ([@josephwoodward](https://github.com/josephwoodward), [#4331](https://github.com/redpanda-data/connect/pull/4331))
+## 4.89.2 - 2026-04-28
 
 ### Fixed
 
-- confluent: Avro schema reference resolution now handles arbitrary schema shapes and correctly inlines transitive references, fixing misleading errors and missing nested reference resolution. ([@twmb](https://github.com/twmb), [#4247](https://github.com/redpanda-data/connect/pull/4247))
-- mysql_cdc: IAM token refresh and canal recreation before streaming prevents connection failures when snapshots delay binlog streaming. ([@josephwoodward](https://github.com/josephwoodward), [#4295](https://github.com/redpanda-data/connect/pull/4295))
-- oracledb_cdc: Oracle numeric values with missing leading zeros (e.g., '.5') are now normalized to valid JSON format for proper CDC streaming. ([@josephwoodward](https://github.com/josephwoodward), [#4322](https://github.com/redpanda-data/connect/pull/4322))
-
-## Unreleased
-
-### Added
-
-- parquet_encode: Added `default_timestamp_unit` field (values `NANOSECOND`, `MICROSECOND`, `MILLISECOND`) controlling the precision of TIMESTAMP logical types. Default remains `NANOSECOND` for backwards compatibility. Use `MICROSECOND` when writing files for Apache Spark/Databricks, AWS Athena or DuckDB, which do not support `TIMESTAMP(NANOS)`. ([#3570](https://github.com/redpanda-data/connect/issues/3570))
-- iceberg, parquet_encode, schema_registry_encode: Added support for the new `Decimal` and `BigDecimal` benthos common-schema types in metadata-driven encoding. Iceberg / Parquet / Avro encoders emit native fixed-precision decimal types for `Decimal`; JSON Schema emits a regex-validated string. `BigDecimal` is rejected by the bounded-format encoders with a clear error and accepted by JSON Schema as a permissive string pattern. ([@Jeffail](https://github.com/Jeffail))
-- schema_registry_decode: When `store_schema_metadata` is set, Avro decimal logical-type values are now normalised to canonical decimal strings to match the schema metadata's value contract. ([@Jeffail](https://github.com/Jeffail))
+- oracledb_cdc: Ensure LogMiner nullable numbers are consistent with snapshotting. ([@josephwoodward](https://github.com/josephwoodward), [#4354](https://github.com/redpanda-data/connect/pull/4354))
 
 ### Changed
 
-- postgresql: NUMERIC and DECIMAL columns now emit `Decimal(p, s)` schema metadata when precision/scale is declared, or `BigDecimal` for unparameterised `numeric` columns. Values are emitted as canonical decimal strings (right-padded to the declared scale for `Decimal`). Previously these columns surfaced as `String` with the raw Postgres text. ([@Jeffail](https://github.com/Jeffail))
-- mysql_cdc: DECIMAL and NUMERIC columns now emit `Decimal(p, s)` schema metadata parsed from the column's raw type, and values are normalised to canonical decimal strings. Previously these columns surfaced as `String` with the driver's native form. ([@Jeffail](https://github.com/Jeffail))
-- microsoft_sql_server_cdc: DECIMAL and NUMERIC columns now emit `Decimal(p, s)` schema metadata sourced from `sql.ColumnType.DecimalSize()`, and values are normalised to canonical decimal strings. MONEY and SMALLMONEY remain typed as `String`, but their wire form is now a quoted canonical decimal string instead of a raw `json.Number`. Previously DECIMAL/NUMERIC were `json.Number` typed as `String`. ([@Jeffail](https://github.com/Jeffail))
-- oracledb_cdc: NUMBER columns with declared precision and scale > 0 now emit `Decimal(p, s)` schema metadata; NUMBER without `DATA_PRECISION` emits `BigDecimal`. Decimal values flow through as canonical decimal strings; integer-width NUMBER (precision ≤ 18, scale 0) continues to emit `int64`. The previous `json.Number` wrapping for NUMBER-as-String columns is gone. ([@Jeffail](https://github.com/Jeffail))
-- mongodb_cdc: `bson.Decimal128` and `bsonType: "decimal"` validator fields now emit `BigDecimal` schema metadata. Decimal values in document bodies are emitted as canonical decimal strings instead of the previous `{"$numberDecimal": "..."}` ExtJSON wrapper. ([@Jeffail](https://github.com/Jeffail))
+- schema: Adopt Decimal and BigDecimal common types across sources and converters. ([@jeffail](https://github.com/jeffail), [#4358](https://github.com/redpanda-data/connect/pull/4358))
+
+## 4.89.1 - 2026-04-24
+
+### Fixed
+
+- iceberg: Updated  `iceberg-go` dependency that includes fix to seed UpdateSchema id counter from metadata LastColumnID. ([@josephwoodward](https://github.com/josephwoodward), [#4343](https://github.com/redpanda-data/connect/pull/4343))
 
 ## 4.88.0 - 2026-04-16
 
