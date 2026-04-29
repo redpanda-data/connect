@@ -113,7 +113,8 @@ This input adds the following metadata fields to each message:
 			Description("If set to true, the connector will query all the existing data as a part of snapshot process. Otherwise, it will start from the current binlog position."),
 		service.NewIntField(fieldMaxParallelSnapshotTables).
 			Description("Specifies the number of tables that will be snapshotted in parallel.").
-			Default(1),
+			Default(1).
+			LintRule(`root = if this < 1 { [ "`+fieldMaxParallelSnapshotTables+` must be at least 1" ] }`),
 		service.NewAutoRetryNacksToggleField(),
 		service.NewIntField(fieldCheckpointLimit).
 			Description("The maximum number of messages that can be processed at a given time. Increasing this limit enables parallel processing and batching at the output level. Any given BinLog Position will not be acknowledged unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.").
