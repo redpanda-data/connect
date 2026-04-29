@@ -295,6 +295,41 @@ See [`internal/impl/aws/s3/bench/write/redpanda-connect/`](../../internal/impl/a
 
 ---
 
+## Kafka Connect S3 Source — Read Throughput
+
+**Architecture:** LocalStack S3 (pre-seeded via S3 Sink) → Kafka Connect S3 Source (`io.confluent.connect.s3.source.S3SourceConnector`) → `bench-events` (16 partitions, Kafka KRaft)
+
+**Dataset:** 3,000,000 synthetic JSON records (~100 bytes each)
+
+**Seeder:** Confluent S3 Sink connector with `flush.size=5000`, `fetch_min=1MB`; seeded once before source connector runs.
+
+**Measurement:** elapsed = time from source connector registration to `bench-events` end offset increasing by COUNT; timing includes connector startup and S3 file discovery.
+
+See [`internal/impl/aws/s3/bench/read/kafka-connect/`](../../internal/impl/aws/s3/bench/read/kafka-connect/) for the full benchmark harness.
+
+### Results
+
+| TASKS | FLUSH | ELAPSED(s) | MSG/S |
+|-------|-------|------------|--------|
+| 1     | 5000  | 49         | 61224  |
+| 1     | 10000 | 50         | 60000  |
+| 1     | 50000 | 66         | 45454  |
+| 2     | 5000  | 41         | 73170  |
+| 2     | 10000 | 42         | 71428  |
+| 2     | 50000 | 51         | 58823  |
+| 4     | 5000  | 42         | 71428  |
+| 4     | 10000 | 42         | 71428  |
+| 4     | 50000 | 50         | 60000  |
+| 8     | 5000  | 42         | 71428  |
+| 8     | 10000 | 41         | 73170  |
+| 8     | 50000 | 57         | 52631  |
+
+### Observations
+
+- **Initial result: ~61k msg/s with 1 task.** This matches Redpanda Connect's write ceiling, suggesting LocalStack's per-`GET` request overhead is the dominant bottleneck at low task counts — symmetric with the write-side behaviour.
+
+---
+
 ## Redpanda Connect vs Kafka Connect — Comparison
 
 | Metric | Redpanda Connect | Kafka Connect |
