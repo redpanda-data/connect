@@ -245,6 +245,56 @@ See [`internal/impl/aws/s3/bench/redpanda-connect/`](../../internal/impl/aws/s3/
 
 ---
 
+## Redpanda Connect S3 Sink — Multi-Instance Write Throughput
+
+**Architecture:** Redpanda Connect producer → `bench-events` (16 partitions, Kafka KRaft) → N × Redpanda Connect pipeline instances (`kafka_franz` input → `aws_s3` output) → LocalStack S3
+
+**Dataset:** 3,000,000 synthetic JSON records (~100 bytes each), snappy-compressed in Kafka
+
+**Pipeline:** multiple separate processes sharing the same consumer group; `archive: lines` batching; `http.enabled: false`; pre-built binary
+
+**Measurement:** elapsed = time from pipeline start to consumer group lag reaching 0; timing includes Kafka consumer startup, rebalance, and final partial-file flush via `batching.period=10s`
+
+**Fixed parameter:** `fetch_min=1MB`
+
+See [`internal/impl/aws/s3/bench/redpanda-connect/`](../../internal/impl/aws/s3/bench/redpanda-connect/) for the full benchmark harness.
+
+### Full Parameter Matrix (12 combinations)
+
+| INSTANCES | FLUSH | FETCH_MIN | ELAPSED(s) | MSG/S |
+|-----------|-------|-----------|------------|-------|
+| 1         | 5000  | 1MB       | 49         | 61224 |
+| 1         | 10000 | 1MB       | 50         | 60000 |
+| 1         | 50000 | 1MB       | 66         | 45454 |
+| 2         | 5000  | 1MB       | 41         | 73170 |
+| 2         | 10000 | 1MB       | 42         | 71428 |
+| 2         | 50000 | 1MB       | 51         | 58823 |
+| 4         | 5000  | 1MB       | 42         | 71428 |
+| 4         | 10000 | 1MB       | 42         | 71428 |
+| 4         | 50000 | 1MB       | 50         | 60000 |
+| 8         | 5000  | 1MB       | 42         | 71428 |
+| 8         | 10000 | 1MB       | 41         | 73170 |
+| 8         | 50000 | 1MB       | 57         | 52631 |
+
+### Best Configurations
+
+| INSTANCES | FLUSH | FETCH_MIN | MSG/S |
+|-----------|-------|-----------|-------|
+| 2         | 5000  | 1MB       | 73170 |
+| 8         | 10000 | 1MB       | 73170 |
+
+### Observations
+
+- **Multiple instances break the single-process ceiling.** Going from 1 to 2 instances improves throughput from ~60k to ~73k msg/s (~20% gain). Each instance owns a distinct subset of partitions and writes to S3 independently, enabling genuine parallel `PUT` requests against LocalStack.
+
+- **Scaling beyond 2 instances yields no additional gain.** 4 and 8 instances perform identically to 2 (~71–73k msg/s). With 16 partitions and 2 instances, each instance handles 8 partitions — the LocalStack S3 write bottleneck is hit before partition fan-out provides further benefit.
+
+- **Smaller flush sizes outperform larger ones**, consistent with the single-process results. `flush.size=50000` causes the last partial batch to wait for `batching.period=10s`, adding ~9–16s of dead time. `flush.size=5000` and `flush.size=10000` avoid this and land in the 41–42s band.
+
+- **Peak throughput: ~73k msg/s** — a 20% improvement over the single-process ~61k ceiling, but still well below Kafka Connect's peak of 250k msg/s. Multiple instances add parallel S3 writers, but the per-instance overhead of the Go pipeline and LocalStack's serial request handling together keep the ceiling far lower than Kafka Connect's multi-task JVM model.
+
+---
+
 ## Redpanda Connect vs Kafka Connect — Comparison
 
 | Metric | Redpanda Connect | Kafka Connect |

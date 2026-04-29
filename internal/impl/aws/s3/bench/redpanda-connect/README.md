@@ -7,19 +7,19 @@ See [`docs/benchmark-results/aws-s3.md`](../../../../../docs/benchmark-results/a
 ## Architecture
 
 ```
-Redpanda Connect producer → bench-events (16 partitions) → Redpanda Connect pipeline → LocalStack S3
+Redpanda Connect producer → bench-events (16 partitions) → N pipeline instances → LocalStack S3
 ```
 
 - **Kafka** — KRaft broker, no ZooKeeper (`confluentinc/cp-kafka:7.7.8`)
 - **LocalStack** — local S3 endpoint (`bench-events` bucket)
-- **Pipeline** — runs on host via `go run`; reads from Kafka with `kafka_franz`, writes batched JSON to S3 with `aws_s3`
+- **Pipeline** — pre-built Go binary; N instances share the same consumer group, so Kafka distributes the 16 partitions across them (equivalent to Kafka Connect `tasks.max`)
 - **Message format** — plain JSON, `archive: lines` batching (one file per flush)
 
 ## Prerequisites
 
 - Docker
 - `task` (Taskfile runner)
-- `go` (to run producer and pipeline)
+- `go` (to build producer and pipeline)
 
 ## Quickstart
 
@@ -33,22 +33,22 @@ task down
 
 All parameters are configurable as Taskfile vars:
 
-| Var | Default | Pipeline field | Description |
-|---|---|---|---|
-| `THREADS` | `1` | `pipeline.threads` | Parallel output goroutines |
-| `FLUSH_SIZE` | `10000` | `batching.count` | Records per S3 object |
-| `FLUSH_PERIOD` | `10s` | `batching.period` | Time-based flush (equivalent to `rotate.schedule.interval.ms`) |
-| `FETCH_MIN_BYTES` | `1048576` | `fetch_min_bytes` | Min bytes before broker responds (1 MiB) |
+| Var | Default | Description |
+|---|---|---|
+| `INSTANCES` | `1` | Number of pipeline processes (Kafka distributes partitions across them) |
+| `FLUSH_SIZE` | `10000` | Records per S3 object (`batching.count`) |
+| `FLUSH_PERIOD` | `10s` | Time-based flush (`batching.period`) |
+| `FETCH_MIN_BYTES` | `1048576` | Min bytes before broker responds (1 MiB) |
 
 Pass any of them to `bench:run`:
 
 ```bash
-task bench:run COUNT=3000000 FLUSH_SIZE=50000 THREADS=4
+task bench:run COUNT=3000000 FLUSH_SIZE=50000 INSTANCES=4
 ```
 
 ## Matrix Benchmark
 
-Loads data once and runs every combination of `THREADS × FLUSH_SIZE × FETCH_MIN_BYTES`:
+Loads data once and runs every combination of `INSTANCES × FLUSH_SIZE × FETCH_MIN_BYTES`:
 
 ```bash
 task bench:matrix COUNT=3000000
@@ -58,14 +58,14 @@ Default lists (24 combinations):
 
 | Var | Default values |
 |---|---|
-| `THREADS_LIST` | `1 2 4 8` |
+| `INSTANCES_LIST` | `1 2 4 8` |
 | `FLUSH_LIST` | `5000 10000 50000` |
 | `FETCH_MIN_LIST` | `1048576 4194304` |
 
 Override any list to narrow the sweep:
 
 ```bash
-task bench:matrix COUNT=3000000 THREADS_LIST="1 4" FLUSH_LIST="10000 50000"
+task bench:matrix COUNT=3000000 INSTANCES_LIST="1 2 4" FLUSH_LIST="10000 50000"
 ```
 
 Each combination gets a unique consumer group (`rpc-rpc-bench-NNN`) starting from offset 0, so data is loaded once and all combinations read the same messages.
@@ -74,12 +74,12 @@ Each combination gets a unique consumer group (`rpc-rpc-bench-NNN`) starting fro
 
 | Parameter | Redpanda Connect | Kafka Connect equivalent |
 |---|---|---|
-| `THREADS` | `pipeline.threads` | `tasks.max` |
+| `INSTANCES` | N pipeline processes, same consumer group | `tasks.max` |
 | `FLUSH_SIZE` | `batching.count` | `flush.size` |
 | `FLUSH_PERIOD` | `batching.period` | `rotate.schedule.interval.ms` |
 | `FETCH_MIN_BYTES` | `fetch_min_bytes` | `consumer.override.fetch.min.bytes` |
 
-Key architectural difference: Redpanda Connect runs as a single process on the host, handling all 16 partitions through the `kafka_franz` consumer (which uses one goroutine per partition internally). Kafka Connect runs as N separate JVM tasks each owning a partition subset.
+Key architectural difference: each Redpanda Connect instance is a single Go process. Kafka distributes the 16 topic partitions evenly across all instances sharing the consumer group. Kafka Connect runs as N separate JVM tasks each owning a partition subset.
 
 ## Tasks Reference
 
@@ -89,8 +89,8 @@ Key architectural difference: Redpanda Connect runs as a single process on the h
 | `task down` | Stop and remove all containers and volumes |
 | `task bench:run COUNT=N [params]` | Full single run: reset, load, measure, stop |
 | `task bench:matrix COUNT=N [lists]` | Sweep all combinations, print table |
-| `task pipeline:start [params]` | Start pipeline in background |
-| `task pipeline:stop` | Stop background pipeline |
+| `task pipeline:start [params]` | Start pipeline instance(s) in background |
+| `task pipeline:stop` | Stop all background pipeline instances |
 | `task pipeline:logs` | Tail pipeline log (`/tmp/rpc-bench.log`) |
 | `task topic:reset` | Delete and recreate `bench-events` topic |
 | `task data:load COUNT=N` | Produce N events to bench-events |
