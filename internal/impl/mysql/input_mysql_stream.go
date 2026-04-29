@@ -467,12 +467,12 @@ func (i *mysqlStreamInput) refreshIAMAuthToken(ctx context.Context) error {
 func (i *mysqlStreamInput) startMySQLSync(ctx context.Context, pos *position, snapshot *Snapshot) error {
 	// If we are given a snapshot, then we need to read it.
 	if snapshot != nil {
-		startPos, err := snapshot.prepareSnapshot(ctx, i.tables)
+		startPos, err := snapshot.prepareSnapshot(ctx, i.tables, i.snapshotMaxWorkers)
 		if err != nil {
 			_ = snapshot.close()
 			return fmt.Errorf("unable to prepare snapshot: %w", err)
 		}
-		if err = i.readSnapshot(ctx, snapshot, i.snapshotMaxWorkers); err != nil {
+		if err = i.readSnapshot(ctx, snapshot); err != nil {
 			_ = snapshot.close()
 			return fmt.Errorf("failed reading snapshot: %w", err)
 		}
@@ -513,105 +513,112 @@ func (i *mysqlStreamInput) startMySQLSync(ctx context.Context, pos *position, sn
 	return nil
 }
 
-func (i *mysqlStreamInput) readSnapshot(ctx context.Context, snapshot *Snapshot, maxWorkers int) error {
-	wg, wgCtx := errgroup.WithContext(ctx)
-	wg.SetLimit(maxWorkers)
-
+func (i *mysqlStreamInput) readSnapshot(ctx context.Context, snapshot *Snapshot) error {
+	tableQueue := make(chan string, len(i.tables))
 	for _, table := range i.tables {
-		tx, ok := snapshot.tableTxs[table]
-		if !ok {
-			return fmt.Errorf("no snapshot transaction found for table %s", table)
-		}
+		tableQueue <- table
+	}
+	close(tableQueue)
 
+	wg, wgCtx := errgroup.WithContext(ctx)
+	for _, tx := range snapshot.workerTxs {
 		wg.Go(func() error {
-			// Pre-populate schema cache so snapshot messages carry schema metadata.
-			if tbl, err := i.canal.GetTable(i.mysqlConfig.DBName, table); err == nil {
-				if _, err := i.getTableSchema(tbl); err != nil {
-					i.logger.Warnf("Failed to pre-populate schema for table %s during snapshot: %v", table, err)
-				}
-			} else {
-				i.logger.Warnf("Failed to fetch schema for table %s during snapshot: %v", table, err)
-			}
-
-			tablePks, err := snapshot.getTablePrimaryKeys(wgCtx, tx, table)
-			if err != nil {
-				return err
-			}
-			i.logger.Tracef("primary keys for table %s: %v", table, tablePks)
-			lastSeenPksValues := map[string]any{}
-			for _, pk := range tablePks {
-				lastSeenPksValues[pk] = nil
-			}
-
-			var numRowsProcessed int
-			for {
-				var batchRows *sql.Rows
-				if numRowsProcessed == 0 {
-					batchRows, err = snapshot.querySnapshotTable(wgCtx, tx, table, tablePks, nil, i.fieldSnapshotMaxBatchSize)
-				} else {
-					batchRows, err = snapshot.querySnapshotTable(wgCtx, tx, table, tablePks, &lastSeenPksValues, i.fieldSnapshotMaxBatchSize)
-				}
-				if err != nil {
-					return fmt.Errorf("executing snapshot table query: %s", err)
-				}
-
-				colTypes, err := batchRows.ColumnTypes()
-				if err != nil {
-					return fmt.Errorf("fetching column types: %s", err)
-				}
-
-				values, mappers := prepSnapshotScannerAndMappers(colTypes)
-				columns, err := batchRows.Columns()
-				if err != nil {
-					return fmt.Errorf("fetching columns: %s", err)
-				}
-
-				var batchRowsCount int
-				for batchRows.Next() {
-					numRowsProcessed++
-					batchRowsCount++
-
-					if err := batchRows.Scan(values...); err != nil {
-						return err
-					}
-
-					row := map[string]any{}
-					for idx, value := range values {
-						v, err := mappers[idx](value)
-						if err != nil {
-							return err
-						}
-						row[columns[idx]] = v
-						if _, ok := lastSeenPksValues[columns[idx]]; ok {
-							lastSeenPksValues[columns[idx]] = value
-						}
-					}
-
-					select {
-					case i.rawMessageEvents <- MessageEvent{
-						Row:       row,
-						Operation: MessageOperationRead,
-						Table:     table,
-						Position:  nil,
-					}:
-					case <-wgCtx.Done():
-						return wgCtx.Err()
-					}
-				}
-
-				if err := batchRows.Err(); err != nil {
-					return fmt.Errorf("iterating snapshot table: %s", err)
-				}
-
-				if batchRowsCount < i.fieldSnapshotMaxBatchSize {
-					break
+			for table := range tableQueue {
+				if err := i.snapshotTable(wgCtx, snapshot, tx, table); err != nil {
+					return err
 				}
 			}
 			return nil
 		})
 	}
-
 	return wg.Wait()
+}
+
+func (i *mysqlStreamInput) snapshotTable(ctx context.Context, snapshot *Snapshot, tx *sql.Tx, table string) error {
+	// Pre-populate schema cache so snapshot messages carry schema metadata.
+	if tbl, err := i.canal.GetTable(i.mysqlConfig.DBName, table); err == nil {
+		if _, err := i.getTableSchema(tbl); err != nil {
+			i.logger.Warnf("Failed to pre-populate schema for table %s during snapshot: %v", table, err)
+		}
+	} else {
+		i.logger.Warnf("Failed to fetch schema for table %s during snapshot: %v", table, err)
+	}
+
+	tablePks, err := snapshot.getTablePrimaryKeys(ctx, tx, table)
+	if err != nil {
+		return err
+	}
+	i.logger.Tracef("primary keys for table %s: %v", table, tablePks)
+	lastSeenPksValues := map[string]any{}
+	for _, pk := range tablePks {
+		lastSeenPksValues[pk] = nil
+	}
+
+	var numRowsProcessed int
+	for {
+		var batchRows *sql.Rows
+		if numRowsProcessed == 0 {
+			batchRows, err = snapshot.querySnapshotTable(ctx, tx, table, tablePks, nil, i.fieldSnapshotMaxBatchSize)
+		} else {
+			batchRows, err = snapshot.querySnapshotTable(ctx, tx, table, tablePks, &lastSeenPksValues, i.fieldSnapshotMaxBatchSize)
+		}
+		if err != nil {
+			return fmt.Errorf("executing snapshot table query: %s", err)
+		}
+
+		colTypes, err := batchRows.ColumnTypes()
+		if err != nil {
+			return fmt.Errorf("fetching column types: %s", err)
+		}
+
+		values, mappers := prepSnapshotScannerAndMappers(colTypes)
+		columns, err := batchRows.Columns()
+		if err != nil {
+			return fmt.Errorf("fetching columns: %s", err)
+		}
+
+		var batchRowsCount int
+		for batchRows.Next() {
+			numRowsProcessed++
+			batchRowsCount++
+
+			if err := batchRows.Scan(values...); err != nil {
+				return err
+			}
+
+			row := map[string]any{}
+			for idx, value := range values {
+				v, err := mappers[idx](value)
+				if err != nil {
+					return err
+				}
+				row[columns[idx]] = v
+				if _, ok := lastSeenPksValues[columns[idx]]; ok {
+					lastSeenPksValues[columns[idx]] = value
+				}
+			}
+
+			select {
+			case i.rawMessageEvents <- MessageEvent{
+				Row:       row,
+				Operation: MessageOperationRead,
+				Table:     table,
+				Position:  nil,
+			}:
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+
+		if err := batchRows.Err(); err != nil {
+			return fmt.Errorf("iterating snapshot table: %s", err)
+		}
+
+		if batchRowsCount < i.fieldSnapshotMaxBatchSize {
+			break
+		}
+	}
+	return nil
 }
 
 func snapshotValueMapper[T any](v any) (any, error) {

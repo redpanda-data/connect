@@ -23,9 +23,10 @@ import (
 type Snapshot struct {
 	db       *sql.DB
 	lockConn *sql.Conn
-	// tableTxs holds one consistent-snapshot transaction per table, established
+	// workerTxs holds one consistent-snapshot transaction per worker, established
 	// inside the FLUSH TABLES WITH READ LOCK window so all readers see identical data.
-	tableTxs map[string]*sql.Tx
+	// Workers pull tables from a queue and reuse their transaction across multiple tables.
+	workerTxs []*sql.Tx
 
 	logger *service.Logger
 }
@@ -38,7 +39,7 @@ func NewSnapshot(logger *service.Logger, db *sql.DB) *Snapshot {
 	}
 }
 
-func (s *Snapshot) prepareSnapshot(ctx context.Context, tables []string) (*position, error) {
+func (s *Snapshot) prepareSnapshot(ctx context.Context, tables []string, maxWorkers int) (*position, error) {
 	if len(tables) == 0 {
 		return nil, errors.New("no tables provided")
 	}
@@ -71,35 +72,33 @@ func (s *Snapshot) prepareSnapshot(ctx context.Context, tables []string) (*posit
 		return nil
 	}
 
-	// Open one transaction per table and establish a consistent snapshot on each
-	// while the read lock is still held. This guarantees all parallel readers see
-	// the exact same database state.
-	s.tableTxs = make(map[string]*sql.Tx, len(tables))
-	for _, table := range tables {
-		/*
-			START TRANSACTION WITH CONSISTENT SNAPSHOT ensures a consistent view of
-			database state for all parallel readers. We do this AFTER acquiring the
-			read lock so no writes can sneak in between the snapshot and the lock.
-
-			NOTE: BeginTx is called first to obtain a *sql.Tx handle, then
-			START TRANSACTION WITH CONSISTENT SNAPSHOT is executed on it, which
-			implicitly replaces the transaction with a consistent-snapshot one.
-			The go-sql-driver/mysql driver does not expose this directly via TxOptions.
-		*/
+	// Open one transaction per worker (up to min(maxWorkers, len(tables))) while
+	// the read lock is still held. This guarantees all workers see the exact same
+	// database state. Workers pull tables from a queue and reuse their transaction
+	// across multiple tables — START TRANSACTION WITH CONSISTENT SNAPSHOT
+	// establishes a read view of the entire database, not a single table, so a
+	// single transaction can safely read multiple tables at the same snapshot point.
+	//
+	// NOTE: BeginTx is called first to obtain a *sql.Tx handle, then
+	// START TRANSACTION WITH CONSISTENT SNAPSHOT is executed on it, which
+	// implicitly replaces the transaction with a consistent-snapshot one.
+	// The go-sql-driver/mysql driver does not expose this directly via TxOptions.
+	numWorkers := min(maxWorkers, len(tables))
+	s.workerTxs = make([]*sql.Tx, 0, numWorkers)
+	for range numWorkers {
 		tx, txErr := s.db.BeginTx(ctx, &sql.TxOptions{
 			ReadOnly:  true,
 			Isolation: sql.LevelRepeatableRead,
 		})
 		if txErr != nil {
 			return nil, errors.Join(
-				fmt.Errorf("start transaction for table %s: %w", table, txErr),
+				fmt.Errorf("start worker transaction: %w", txErr),
 				unlockTables())
 		}
-		// Store before ExecContext so close() rolls back on failure.
-		s.tableTxs[table] = tx
+		s.workerTxs = append(s.workerTxs, tx)
 		if _, txErr = tx.ExecContext(ctx, "START TRANSACTION WITH CONSISTENT SNAPSHOT"); txErr != nil {
 			return nil, errors.Join(
-				fmt.Errorf("start consistent snapshot for table %s: %w", table, txErr),
+				fmt.Errorf("start consistent snapshot for worker: %w", txErr),
 				unlockTables())
 		}
 	}
@@ -238,24 +237,24 @@ func (s *Snapshot) getCurrentBinlogPosition(ctx context.Context) (position, erro
 
 func (s *Snapshot) releaseSnapshot(_ context.Context) error {
 	var errs []error
-	for table, tx := range s.tableTxs {
+	for idx, tx := range s.workerTxs {
 		if err := tx.Commit(); err != nil {
-			errs = append(errs, fmt.Errorf("commit transaction for table %s: %w", table, err))
+			errs = append(errs, fmt.Errorf("commit transaction for worker %d: %w", idx, err))
 		}
 	}
-	s.tableTxs = nil
+	s.workerTxs = nil
 	return errors.Join(errs...)
 }
 
 func (s *Snapshot) close() error {
 	var errs []error
 
-	for _, tx := range s.tableTxs {
+	for _, tx := range s.workerTxs {
 		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
 			errs = append(errs, fmt.Errorf("rollback transaction: %w", err))
 		}
 	}
-	s.tableTxs = nil
+	s.workerTxs = nil
 
 	if s.lockConn != nil {
 		if err := s.lockConn.Close(); err != nil {
