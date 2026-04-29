@@ -55,6 +55,40 @@ func TestBufferingSinkNewFieldDedup(t *testing.T) {
 	})
 }
 
+// TestSchemaEvolutionColumnNameNormalization verifies that when
+// case_sensitive_columns=false, new column names are normalised to lowercase
+// before being stored in the UnknownFieldError that drives AddColumn. Without
+// this, a message keyed "EMAIL" would add an uppercase column to an otherwise
+// lowercase schema, violating iceberg's recommended convention.
+func TestSchemaEvolutionColumnNameNormalization(t *testing.T) {
+	t.Run("buffering sink normalises to lowercase", func(t *testing.T) {
+		sink := newBufferingSink(nil, 0, false)
+		sink.OnNewField(icebergx.Path{}, "EMAIL", "a@x.z")
+
+		errs := sink.newFieldErrors()
+		require.Len(t, errs, 1)
+		assert.Equal(t, "email", errs[0].FieldName())
+	})
+
+	t.Run("parquet sink normalises to lowercase", func(t *testing.T) {
+		sink := &parquetSink{caseSensitive: false}
+		sink.OnNewField(icebergx.Path{}, "EMAIL", "a@x.z")
+
+		errs := sink.newFieldErrors()
+		require.Len(t, errs, 1)
+		assert.Equal(t, "email", errs[0].FieldName())
+	})
+
+	t.Run("case-sensitive mode preserves original capitalisation", func(t *testing.T) {
+		sink := newBufferingSink(nil, 0, true)
+		sink.OnNewField(icebergx.Path{}, "EMAIL", "a@x.z")
+
+		errs := sink.newFieldErrors()
+		require.Len(t, errs, 1)
+		assert.Equal(t, "EMAIL", errs[0].FieldName())
+	})
+}
+
 // TestParquetSinkNewFieldDedup mirrors TestBufferingSinkNewFieldDedup for the
 // non-buffering parquet sink, which is used for unpartitioned writes.
 func TestParquetSinkNewFieldDedup(t *testing.T) {
