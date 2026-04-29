@@ -32,6 +32,7 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
+	"github.com/redpanda-data/connect/v4/internal/httpclient"
 	"github.com/redpanda-data/connect/v4/internal/impl/salesforce/salesforcehttp"
 	"github.com/redpanda-data/connect/v4/internal/license"
 )
@@ -46,12 +47,6 @@ const (
 )
 
 const (
-	sfsFieldOrgURL                = "org_url"
-	sfsFieldClientID              = "client_id"
-	sfsFieldClientSecret          = "client_secret"
-	sfsFieldRESTAPIVersion        = "restapi_version"
-	sfsFieldRequestTimeout        = "request_timeout"
-	sfsFieldMaxRetries            = "max_retries"
 	sfsFieldBulkBatchSize         = "bulk_batch_size"
 	sfsFieldMaxConcurrentBulkJobs = "max_concurrent_bulk_jobs"
 	sfsFieldBulkPollInterval      = "bulk_poll_interval"
@@ -149,7 +144,7 @@ func newSalesforceSinkConfigSpec() *service.ConfigSpec {
 			Default(false),
 	).Description("Per-topic Salesforce write configuration. Each entry maps a topic to an SObject and write settings.")
 
-	return service.NewConfigSpec().
+	spec := service.NewConfigSpec().
 		Summary("Writes messages to Salesforce, routing each topic to its own SObject configuration.").
 		Description(`Consumes batches of messages and writes them to Salesforce.
 
@@ -197,23 +192,9 @@ output:
         operation: upsert
         external_id_field: External_Id__c
         mode: bulk
-` + "```").
-		Field(service.NewStringField(sfsFieldOrgURL).
-			Description("Salesforce instance base URL (e.g., https://your-domain.salesforce.com)")).
-		Field(service.NewStringField(sfsFieldClientID).
-			Description("Client ID for the Salesforce Connected App")).
-		Field(service.NewStringField(sfsFieldClientSecret).
-			Description("Client Secret for the Salesforce Connected App").
-			Secret()).
-		Field(service.NewStringField(sfsFieldRESTAPIVersion).
-			Description("Salesforce REST API version to use (e.g., v65.0)").
-			Default("v65.0")).
-		Field(service.NewDurationField(sfsFieldRequestTimeout).
-			Description("HTTP request timeout").
-			Default("30s")).
-		Field(service.NewIntField(sfsFieldMaxRetries).
-			Description("Maximum number of retries on 429 Too Many Requests").
-			Default(10)).
+` + "```")
+
+	spec = spec.Fields(authFieldSpecs()...).
 		Field(service.NewIntField(sfsFieldBulkBatchSize).
 			Description("Number of records per bulk job. Also controls the output batch size.").
 			Default(defaultBulkBatchSize)).
@@ -229,7 +210,10 @@ output:
 		Field(service.NewIntField(sfsFieldMaxInFlight).
 			Description("Maximum number of batches to send concurrently. Increasing this improves realtime write throughput.").
 			Default(1)).
-		Field(topicMappingSpec)
+		Field(topicMappingSpec).
+		Field(httpFieldSpec())
+
+	return spec
 }
 
 func newSalesforceSinkOutput(conf *service.ParsedConfig, mgr *service.Resources) (*salesforceSinkOutput, error) {
@@ -237,35 +221,15 @@ func newSalesforceSinkOutput(conf *service.ParsedConfig, mgr *service.Resources)
 		return nil, err
 	}
 
-	orgURL, err := conf.FieldString(sfsFieldOrgURL)
+	auth, err := NewAuthConfigFromParsed(conf)
 	if err != nil {
 		return nil, err
 	}
-	if _, err := url.ParseRequestURI(orgURL); err != nil {
+	if _, err := url.ParseRequestURI(auth.OrgURL); err != nil {
 		return nil, errors.New("org_url is not a valid URL")
 	}
 
-	clientID, err := conf.FieldString(sfsFieldClientID)
-	if err != nil {
-		return nil, err
-	}
-
-	clientSecret, err := conf.FieldString(sfsFieldClientSecret)
-	if err != nil {
-		return nil, err
-	}
-
-	apiVersion, err := conf.FieldString(sfsFieldRESTAPIVersion)
-	if err != nil {
-		return nil, err
-	}
-
-	timeout, err := conf.FieldDuration(sfsFieldRequestTimeout)
-	if err != nil {
-		return nil, err
-	}
-
-	maxRetries, err := conf.FieldInt(sfsFieldMaxRetries)
+	httpConf, err := newHTTPConfigFromParsed(auth.OrgURL, conf)
 	if err != nil {
 		return nil, err
 	}
@@ -334,16 +298,16 @@ func newSalesforceSinkOutput(conf *service.ParsedConfig, mgr *service.Resources)
 		}
 	}
 
-	httpClient, err := newSalesforceHTTPClient(orgURL, timeout, maxRetries, mgr)
+	httpClient, err := httpclient.NewClient(httpConf, mgr)
 	if err != nil {
 		return nil, err
 	}
 
 	sfClient, err := salesforcehttp.NewClient(salesforcehttp.ClientConfig{
-		OrgURL:         orgURL,
-		ClientID:       clientID,
-		ClientSecret:   clientSecret,
-		APIVersion:     apiVersion,
+		OrgURL:         auth.OrgURL,
+		ClientID:       auth.ClientID,
+		ClientSecret:   auth.ClientSecret,
+		APIVersion:     auth.APIVersion,
 		QueryBatchSize: 2000,
 		HTTPClient:     httpClient,
 		Logger:         mgr.Logger(),

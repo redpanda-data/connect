@@ -26,7 +26,7 @@ import (
 
 // configSpec builds a ConfigSpec from Fields() for use in tests.
 func configSpec() *service.ConfigSpec {
-	return service.NewConfigSpec().Fields(Fields("")...)
+	return service.NewConfigSpec().Fields(FieldsWithBaseURL("")...)
 }
 
 func parseTestYAML(t *testing.T, yaml string) *service.ParsedConfig {

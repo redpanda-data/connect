@@ -1,6 +1,7 @@
-= salesforce_sink
-:type: output
+= salesforce_cdc
+:type: input
 :status: stable
+:categories: ["Services"]
 
 
 
@@ -22,7 +23,7 @@
 component_type_dropdown::[]
 
 
-Writes messages to Salesforce, routing each topic to its own SObject configuration.
+Streams Salesforce Change Data Capture (CDC) and Platform Events from the Pub/Sub gRPC API, optionally preceded by a REST snapshot of the configured sObjects.
 
 
 [tabs]
@@ -33,19 +34,28 @@ Common::
 
 ```yml
 # Common config fields, showing default values
-output:
+input:
   label: ""
-  salesforce_sink:
+  salesforce_cdc:
     org_url: https://acme.my.salesforce.com # No default (required)
     client_id: "" # No default (required)
     client_secret: "" # No default (required)
     api_version: v65.0
-    bulk_batch_size: 1000
-    max_concurrent_bulk_jobs: 10
-    bulk_poll_interval: 5s
-    batch_period: 5s
-    max_in_flight: 1
-    topic_mappings: [] # No default (required)
+    topics: [] # No default (required)
+    stream_snapshot: true
+    replay_preset: latest
+    snapshot_max_batch_size: 2000
+    stream_batch_size: 100
+    max_parallel_snapshot_objects: 1
+    checkpoint_cache: persistent_cache # No default (required)
+    checkpoint_cache_key: salesforce_cdc
+    checkpoint_limit: 1024
+    auto_replay_nacks: true
+    batching:
+      count: 0
+      byte_size: 0
+      period: ""
+      check: ""
 ```
 
 --
@@ -55,19 +65,29 @@ Advanced::
 
 ```yml
 # All config fields, showing default values
-output:
+input:
   label: ""
-  salesforce_sink:
+  salesforce_cdc:
     org_url: https://acme.my.salesforce.com # No default (required)
     client_id: "" # No default (required)
     client_secret: "" # No default (required)
     api_version: v65.0
-    bulk_batch_size: 1000
-    max_concurrent_bulk_jobs: 10
-    bulk_poll_interval: 5s
-    batch_period: 5s
-    max_in_flight: 1
-    topic_mappings: [] # No default (required)
+    topics: [] # No default (required)
+    stream_snapshot: true
+    replay_preset: latest
+    snapshot_max_batch_size: 2000
+    stream_batch_size: 100
+    max_parallel_snapshot_objects: 1
+    checkpoint_cache: persistent_cache # No default (required)
+    checkpoint_cache_key: salesforce_cdc
+    checkpoint_limit: 1024
+    auto_replay_nacks: true
+    grpc:
+      reconnect_base_delay: 500ms
+      reconnect_max_delay: 30s
+      reconnect_max_attempts: 0
+      shutdown_timeout: 10s
+      buffer_size: 1000
     http:
       timeout: 5s
       tls:
@@ -118,58 +138,155 @@ output:
           write_byte_timeout: 0s
       access_log_level: ""
       access_log_body_limit: 0
+    batching:
+      count: 0
+      byte_size: 0
+      period: ""
+      check: ""
+      processors: [] # No default (optional)
 ```
 
 --
 ======
 
-Consumes batches of messages and writes them to Salesforce.
+Subscribes to one or more Salesforce Pub/Sub topics in parallel and emits a message per event. Topics may be:
 
-Each message must have a `topic` field (set by the per-topic processor) and a `data` field
-containing the Salesforce record fields. The `topic` is used to look up the correct
-`topic_mappings` entry which defines the SObject, operation, and write mode.
+- `/data/<sObject>ChangeEvent` — per-sObject CDC channel.
+- `/data/ChangeEvents` — CDC firehose (every CDC-enabled sObject).
+- `/event/<EventName>__e` — custom Platform Event.
+- `/event/<StandardEventName>` — standard Platform Event (e.g. `LoginEventStream`).
+- A bare sObject name (e.g. `Account`) is shorthand for `/data/AccountChangeEvent`.
 
-**Realtime mode** uses the sObject Collections REST API (synchronous, up to 200 records/call).
-**Bulk mode** uses the Bulk API 2.0 (asynchronous, polls until complete).
+Optionally runs a REST snapshot for the CDC sObjects before opening the streaming subscriptions, so the pipeline sees the current state plus continuous changes. Per-topic replay state persists in a cache resource so each subscription resumes across restarts independently.
+
+== When to use this input
+
+Use `salesforce_cdc` for:
+
+- Continuous ingestion with both historical state (snapshot) and live changes (CDC).
+- Real-time custom or standard Platform Events.
+- Mixed CDC + Platform Event pipelines under a single component.
+
+Use a different Salesforce input instead if:
+
+- You only need a one-off extract or periodic SOQL query — use xref:components:inputs/salesforce.adoc[`salesforce`].
+- You need a GraphQL query (cross-object in one request) — use xref:components:inputs/salesforce_graphql.adoc[`salesforce_graphql`].
+
+== Metadata
+
+Every emitted message has:
+
+- `topic`: The full Pub/Sub topic path (e.g. "/event/Order__e").
+- `replay_id`: The Pub/Sub replay ID in hex (streaming events only).
+
+CDC events also carry:
+
+- `operation`: "read" for snapshot rows; "create", "update", "delete", or "undelete" for CDC events.
+- `sobject`: The sObject API name (e.g. "Account").
+- `record_ids`: Comma-separated record IDs affected by the event (when present).
+
+Platform Events also carry:
+
+- `event_uuid`: The Salesforce `EventUuid` extracted from the payload (the canonical dedup key), when present.
+
+== Authentication
+
+Uses the Salesforce OAuth 2.0 Client Credentials flow. Create a Connected App in Salesforce, enable OAuth settings and the Client Credentials Flow, ensure Change Data Capture is enabled for the target sObjects (Setup → Change Data Capture), then supply the Consumer Key as `client_id` and Consumer Secret as `client_secret`.
+
+== Prerequisites
+
+Each `/data/...` topic requires Change Data Capture to be enabled for the corresponding sObject (Setup → Change Data Capture). Each `/event/...` topic requires the corresponding Platform Event to exist in Salesforce; standard events may require Event Monitoring licenses or specific permissions.
+
+
+== Examples
+
+[tabs]
+======
+Snapshot + CDC for core objects::
++
+--
+
+Snapshot Accounts, Contacts, and Opportunities, then stream their CDC events:
 
 ```yaml
 input:
-  broker:
-    inputs:
-      - kafka_franz:
-          seed_brokers: [localhost:9092]
-          topics: [salesforce-account]
-          consumer_group: sf-sink-account
-        processors:
-          - mapping: |
-              root.topic = @kafka_topic
-              root.data = this
-      - kafka_franz:
-          seed_brokers: [localhost:9092]
-          topics: [salesforce-contact]
-          consumer_group: sf-sink-contact
-        processors:
-          - mapping: |
-              root.topic = @kafka_topic
-              root.data = this
+  salesforce_cdc:
+    org_url: https://acme.my.salesforce.com
+    client_id: ${SALESFORCE_CLIENT_ID}
+    client_secret: ${SALESFORCE_CLIENT_SECRET}
+    topics: [ Account, Contact, Opportunity ]
+    stream_snapshot: true
+    replay_preset: latest
+    checkpoint_cache: persistent_cache
 
-output:
-  salesforce_sink:
-    org_url: "${SALESFORCE_ORG_URL}"
-    client_id: "${SALESFORCE_CLIENT_ID}"
-    client_secret: "${SALESFORCE_CLIENT_SECRET}"
-    topic_mappings:
-      - topic: salesforce-account
-        sobject: Account
-        operation: upsert
-        external_id_field: External_Id__c
-        mode: realtime
-      - topic: salesforce-contact
-        sobject: Contact
-        operation: upsert
-        external_id_field: External_Id__c
-        mode: bulk
+cache_resources:
+  - label: persistent_cache
+    redis:
+      url: redis://localhost:6379
 ```
+
+--
+CDC firehose without snapshot::
++
+--
+
+Subscribe to every CDC-enabled sObject via the firehose, no historical snapshot:
+
+```yaml
+input:
+  salesforce_cdc:
+    org_url: https://acme.my.salesforce.com
+    client_id: ${SALESFORCE_CLIENT_ID}
+    client_secret: ${SALESFORCE_CLIENT_SECRET}
+    topics: [ /data/ChangeEvents ]
+    stream_snapshot: false
+    replay_preset: latest
+    checkpoint_cache: persistent_cache
+```
+
+--
+Mixed CDC + Platform Events::
++
+--
+
+Combine Account CDC with a custom Platform Event in one pipeline:
+
+```yaml
+input:
+  salesforce_cdc:
+    org_url: https://acme.my.salesforce.com
+    client_id: ${SALESFORCE_CLIENT_ID}
+    client_secret: ${SALESFORCE_CLIENT_SECRET}
+    topics:
+      - Account
+      - /event/Order_Created__e
+    stream_snapshot: true
+    replay_preset: latest
+    checkpoint_cache: persistent_cache
+```
+
+--
+Platform Events only::
++
+--
+
+Stream a custom event and a standard login stream — snapshot is skipped automatically:
+
+```yaml
+input:
+  salesforce_cdc:
+    org_url: https://acme.my.salesforce.com
+    client_id: ${SALESFORCE_CLIENT_ID}
+    client_secret: ${SALESFORCE_CLIENT_SECRET}
+    topics:
+      - /event/Order__e
+      - /event/LoginEventStream
+    replay_preset: latest
+    checkpoint_cache: persistent_cache
+```
+
+--
+======
 
 == Fields
 
@@ -227,110 +344,196 @@ api_version: v65.0
 api_version: v62.0
 ```
 
-=== `bulk_batch_size`
+=== `topics`
 
-Number of records per bulk job. Also controls the output batch size.
-
-
-*Type*: `int`
-
-*Default*: `1000`
-
-=== `max_concurrent_bulk_jobs`
-
-Maximum number of bulk jobs polling concurrently in the background. Each in-flight job buffers its CSV payload in memory; lower this value if memory usage is a concern.
+Pub/Sub topics to subscribe to. Each entry is one of: a bare sObject name (`Account` → `/data/AccountChangeEvent`), an explicit CDC channel (`/data/AccountChangeEvent`), the CDC firehose (`/data/ChangeEvents`), or a Platform Event topic (`/event/Order__e`, `/event/LoginEventStream`). Each topic gets its own gRPC subscription with an independent replay cursor.
 
 
-*Type*: `int`
+*Type*: `array`
 
-*Default*: `10`
 
-=== `bulk_poll_interval`
+```yml
+# Examples
 
-How often to poll Salesforce for bulk job completion status.
+topics:
+  - Account
+  - Contact
+
+topics:
+  - /data/ChangeEvents
+
+topics:
+  - Account
+  - /event/Order__e
+
+topics:
+  - Opportunity
+  - MyCustom__c
+  - /event/Sync_Requested__e
+```
+
+=== `stream_snapshot`
+
+When true (default), paginate a full REST snapshot of every CDC sObject in `topics` before opening any streaming subscription. When false, skip the snapshot and start streaming immediately. Platform Event topics (`/event/...`) are always skipped — they have no REST equivalent.
+
+
+*Type*: `bool`
+
+*Default*: `true`
+
+=== `replay_preset`
+
+Initial replay position used per topic only on first run (when no checkpoint exists in the cache); ignored once a topic's replay ID has been written.
+
+- `latest`: Start from new events only; any changes between prior run and Connect are skipped.
+- `earliest`: Replay from the retention start (24h standard, 72h with enhanced retention). Use to recover missed events after outages.
 
 
 *Type*: `string`
 
-*Default*: `"5s"`
+*Default*: `"latest"`
 
-=== `batch_period`
+Options:
+`latest`
+, `earliest`
+.
 
-Maximum period to wait before flushing an incomplete batch.
+=== `snapshot_max_batch_size`
+
+Page size for the REST snapshot query — records per `/query` response. Must be between 200 and 2000 per Salesforce REST API limits. Larger pages reduce HTTP round trips; smaller pages reduce peak memory per fetch.
 
 
-*Type*: `string`
+*Type*: `int`
 
-*Default*: `"5s"`
+*Default*: `2000`
 
-=== `max_in_flight`
+```yml
+# Examples
 
-Maximum number of batches to send concurrently. Increasing this improves realtime write throughput.
+snapshot_max_batch_size: 2000
+
+snapshot_max_batch_size: 500
+```
+
+=== `stream_batch_size`
+
+Number of events requested per gRPC `Fetch` call, per topic. Higher values improve throughput at the cost of peak batch memory; lower values give steadier latency under load.
+
+
+*Type*: `int`
+
+*Default*: `100`
+
+```yml
+# Examples
+
+stream_batch_size: 100
+
+stream_batch_size: 500
+```
+
+=== `max_parallel_snapshot_objects`
+
+Number of sObjects snapshotted concurrently during the REST snapshot phase. Each in-flight snapshot consumes one HTTP connection and Salesforce API call quota. Default 1 serializes the work — raise when snapshotting many sObjects and your API limits permit.
 
 
 *Type*: `int`
 
 *Default*: `1`
 
-=== `topic_mappings`
+=== `checkpoint_cache`
 
-Per-topic Salesforce write configuration. Each entry maps a topic to an SObject and write settings.
-
-
-*Type*: `array`
-
-
-=== `topic_mappings[].topic`
-
-topic name to match against the message's 'topic' field
+Name of the cache resource used to persist snapshot cursor and per-topic replay IDs across restarts. The cache must be declared under the top-level `cache_resources` block. Choose a durable cache (Redis, Postgres, DynamoDB) for production; in-memory caches lose checkpoints on restart.
 
 
 *Type*: `string`
 
 
-=== `topic_mappings[].sobject`
+```yml
+# Examples
 
-Salesforce SObject API name (e.g., Account, Contact, MyObject__c)
+checkpoint_cache: persistent_cache
+```
 
+=== `checkpoint_cache_key`
 
-*Type*: `string`
-
-
-=== `topic_mappings[].operation`
-
-Write operation: insert, update, upsert, or delete
+Key inside the checkpoint cache where this input's state is stored. Change when running multiple `salesforce_cdc` inputs against the same cache resource to avoid collisions.
 
 
 *Type*: `string`
 
-*Default*: `"upsert"`
+*Default*: `"salesforce_cdc"`
 
-=== `topic_mappings[].external_id_field`
+=== `checkpoint_limit`
 
-External ID field name, required for upsert
-
-
-*Type*: `string`
-
-*Default*: `""`
-
-=== `topic_mappings[].mode`
-
-Write mode: realtime (sObject Collections API) or bulk (Bulk API 2.0)
+Maximum number of unacknowledged batches in flight (per topic) before that topic pauses reading. Prevents unbounded memory growth when downstream components stall. Higher values increase throughput in steady state; lower values bound memory under backpressure.
 
 
-*Type*: `string`
+*Type*: `int`
 
-*Default*: `"realtime"`
+*Default*: `1024`
 
-=== `topic_mappings[].all_or_none`
+=== `auto_replay_nacks`
 
-Realtime only: roll back the entire batch if any record fails
+Whether messages that are rejected (nacked) at the output level should be automatically replayed indefinitely, eventually resulting in back pressure if the cause of the rejections is persistent. If set to `false` these messages will instead be deleted. Disabling auto replays can greatly improve memory efficiency of high throughput streams as the original shape of the data can be discarded immediately upon consumption and mutation.
 
 
 *Type*: `bool`
 
-*Default*: `false`
+*Default*: `true`
+
+=== `grpc`
+
+gRPC transport tuning for the Pub/Sub API connection.
+
+
+*Type*: `object`
+
+
+=== `grpc.reconnect_base_delay`
+
+Base delay for gRPC reconnection backoff.
+
+
+*Type*: `string`
+
+*Default*: `"500ms"`
+
+=== `grpc.reconnect_max_delay`
+
+Maximum delay for gRPC reconnection backoff.
+
+
+*Type*: `string`
+
+*Default*: `"30s"`
+
+=== `grpc.reconnect_max_attempts`
+
+Maximum number of gRPC reconnection attempts. 0 means unlimited.
+
+
+*Type*: `int`
+
+*Default*: `0`
+
+=== `grpc.shutdown_timeout`
+
+Timeout for graceful gRPC client shutdown.
+
+
+*Type*: `string`
+
+*Default*: `"10s"`
+
+=== `grpc.buffer_size`
+
+Size of the internal gRPC event receive buffer.
+
+
+*Type*: `int`
+
+*Default*: `1000`
 
 === `http`
 
@@ -881,5 +1084,107 @@ Maximum bytes of request/response body to include in logs. 0 to skip body loggin
 *Type*: `int`
 
 *Default*: `0`
+
+=== `batching`
+
+Allows you to configure a xref:configuration:batching.adoc[batching policy].
+
+
+*Type*: `object`
+
+
+```yml
+# Examples
+
+batching:
+  byte_size: 5000
+  count: 0
+  period: 1s
+
+batching:
+  count: 10
+  period: 1s
+
+batching:
+  check: this.contains("END BATCH")
+  count: 0
+  period: 1m
+```
+
+=== `batching.count`
+
+A number of messages at which the batch should be flushed. If `0` disables count based batching.
+
+
+*Type*: `int`
+
+*Default*: `0`
+
+=== `batching.byte_size`
+
+An amount of bytes at which the batch should be flushed. If `0` disables size based batching.
+
+
+*Type*: `int`
+
+*Default*: `0`
+
+=== `batching.period`
+
+A period in which an incomplete batch should be flushed regardless of its size.
+
+
+*Type*: `string`
+
+*Default*: `""`
+
+```yml
+# Examples
+
+period: 1s
+
+period: 1m
+
+period: 500ms
+```
+
+=== `batching.check`
+
+A xref:guides:bloblang/about.adoc[Bloblang query] that should return a boolean value indicating whether a message should end a batch.
+
+
+*Type*: `string`
+
+*Default*: `""`
+
+```yml
+# Examples
+
+check: this.type == "end_of_transaction"
+```
+
+=== `batching.processors`
+
+A list of xref:components:processors/about.adoc[processors] to apply to a batch as it is flushed. This allows you to aggregate and archive the batch however you see fit. Please note that all resulting messages are flushed as a single batch, therefore splitting the batch into smaller batches using these processors is a no-op.
+
+
+*Type*: `array`
+
+
+```yml
+# Examples
+
+processors:
+  - archive:
+      format: concatenate
+
+processors:
+  - archive:
+      format: lines
+
+processors:
+  - archive:
+      format: json_array
+```
 
 

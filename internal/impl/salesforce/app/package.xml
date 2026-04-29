@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Package xmlns="http://soap.sforce.com/2006/04/metadata">
+    <types>
+        <members>RedpandaConnect</members>
+        <name>ConnectedApp</name>
+    </types>
+    <types>
+        <members>RPCN_Test__e</members>
+        <name>CustomObject</name>
+    </types>
+    <types>
+        <members>ChangeEvents_AccountChangeEvent</members>
+        <members>ChangeEvents_ContactChangeEvent</members>
+        <name>PlatformEventChannelMember</name>
+    </types>
+    <version>65.0</version>
+</Package>
