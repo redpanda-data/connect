@@ -2,7 +2,7 @@
 
 **Environment:** Intel Core i7-10850H @ 2.70GHz, 32 GB RAM, WSL2 (Linux 6.6.87.2), x86_64
 
-See [`internal/impl/aws/s3/bench/`](../../internal/impl/aws/s3/bench/) for configs and run instructions.
+See [`internal/impl/aws/s3/bench/`](../../internal/impl/aws/s3/bench/) for configs and run instructions. Read benchmarks are under [`bench/read/`](../../internal/impl/aws/s3/bench/read/), write benchmarks under [`bench/write/`](../../internal/impl/aws/s3/bench/write/).
 
 ---
 
@@ -75,7 +75,7 @@ See [`internal/impl/aws/s3/bench/`](../../internal/impl/aws/s3/bench/) for confi
 
 **Measurement:** elapsed = time from connector registration to consumer group lag reaching 0; timing excludes nothing (includes task startup, rebalance, and final partial-file flush via `rotate.schedule.interval.ms=10s`)
 
-See [`internal/impl/aws/s3/bench/kafka-connect/`](../../internal/impl/aws/s3/bench/kafka-connect/) for the full benchmark harness.
+See [`internal/impl/aws/s3/bench/write/kafka-connect/`](../../internal/impl/aws/s3/bench/write/kafka-connect/) for the full benchmark harness.
 
 ### Full Parameter Matrix (72 combinations)
 
@@ -191,7 +191,7 @@ See [`internal/impl/aws/s3/bench/kafka-connect/`](../../internal/impl/aws/s3/ben
 
 **Measurement:** elapsed = time from pipeline registration to consumer group lag reaching 0; timing includes Kafka consumer startup, rebalance, and final partial-file flush via `batching.period=10s`
 
-See [`internal/impl/aws/s3/bench/redpanda-connect/`](../../internal/impl/aws/s3/bench/redpanda-connect/) for the full benchmark harness.
+See [`internal/impl/aws/s3/bench/write/redpanda-connect/`](../../internal/impl/aws/s3/bench/write/redpanda-connect/) for the full benchmark harness.
 
 ### Full Parameter Matrix (24 combinations)
 
@@ -257,7 +257,7 @@ See [`internal/impl/aws/s3/bench/redpanda-connect/`](../../internal/impl/aws/s3/
 
 **Fixed parameter:** `fetch_min=1MB`
 
-See [`internal/impl/aws/s3/bench/redpanda-connect/`](../../internal/impl/aws/s3/bench/redpanda-connect/) for the full benchmark harness.
+See [`internal/impl/aws/s3/bench/write/redpanda-connect/`](../../internal/impl/aws/s3/bench/write/redpanda-connect/) for the full benchmark harness.
 
 ### Full Parameter Matrix (12 combinations)
 

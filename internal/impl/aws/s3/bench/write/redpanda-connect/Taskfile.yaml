@@ -47,7 +47,7 @@ tasks:
   pipeline:build:
     desc: Compile the pipeline binary (cached after first build)
     cmds:
-      - go build -o {{.PIPELINE_BIN}} ../../../../../../cmd/redpanda-connect/
+      - go build -o {{.PIPELINE_BIN}} ../../../../../../../cmd/redpanda-connect/
       - echo "pipeline binary ready at {{.PIPELINE_BIN}}"
 
   pipeline:start:
@@ -107,7 +107,7 @@ tasks:
       COUNT: '{{.COUNT}}'
       KAFKA_BOOTSTRAP: '{{.KAFKA_BOOTSTRAP}}'
     cmds:
-      - go run ../../../../../../cmd/redpanda-connect/main.go run ./producer.yaml
+      - go run ../../../../../../../cmd/redpanda-connect/main.go run ./producer.yaml
 
   # ── Observation ───────────────────────────────────────────────────────────────
 

@@ -133,7 +133,7 @@ tasks:
       COUNT: '{{.COUNT}}'
       KAFKA_BOOTSTRAP: '{{.KAFKA_BOOTSTRAP}}'
     cmds:
-      - go run ../../../../../../cmd/redpanda-connect/main.go run ./producer.yaml
+      - go run ../../../../../../../cmd/redpanda-connect/main.go run ./producer.yaml
 
   # ── Observation ───────────────────────────────────────────────────────────────
 

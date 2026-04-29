@@ -25,7 +25,7 @@ tasks:
       - task: seed
       - echo "GOMAXPROCS={{.CORES | default "max"}}  COUNT={{.COUNT}}  SIZE={{.SIZE}}"
       - |
-        {{if .CORES}}GOMAXPROCS={{.CORES}} {{end}}go run ../../../../../cmd/redpanda-connect/main.go run ./benchmark_config.yaml 2>&1 | grep "total stats"
+        {{if .CORES}}GOMAXPROCS={{.CORES}} {{end}}go run ../../../../../../../cmd/redpanda-connect/main.go run ./benchmark_config.yaml 2>&1 | grep "total stats"
 
   bench:all:
     desc: "Run benchmark across 1,2,4,8 cores (e.g. task bench:all COUNT=100000 SIZE=102400)"
