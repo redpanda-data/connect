@@ -46,6 +46,7 @@ input:
     checkpoint_key: mysql_binlog_position
     snapshot_max_batch_size: 1000
     stream_snapshot: false # No default (required)
+    max_parallel_snapshot_tables: 1
     auto_replay_nacks: true
     checkpoint_limit: 1024
     batching:
@@ -73,6 +74,7 @@ input:
     snapshot_max_batch_size: 1000
     max_reconnect_attempts: 10
     stream_snapshot: false # No default (required)
+    max_parallel_snapshot_tables: 1
     auto_replay_nacks: true
     checkpoint_limit: 1024
     tls:
@@ -205,6 +207,15 @@ If set to true, the connector will query all the existing data as a part of snap
 
 *Type*: `bool`
 
+
+=== `max_parallel_snapshot_tables`
+
+Specifies the number of tables that will be snapshotted in parallel.
+
+
+*Type*: `int`
+
+*Default*: `1`
 
 === `auto_replay_nacks`
 
