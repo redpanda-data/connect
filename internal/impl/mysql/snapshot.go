@@ -71,18 +71,11 @@ func (s *Snapshot) prepareSnapshot(ctx context.Context, tables []string) (*posit
 		return nil
 	}
 
-	// Open one dedicated connection per table and establish a consistent snapshot
-	// on each while the read lock is still held. This guarantees all parallel
-	// readers see the exact same database state.
+	// Open one transaction per table and establish a consistent snapshot on each
+	// while the read lock is still held. This guarantees all parallel readers see
+	// the exact same database state.
 	s.tableTxs = make(map[string]*sql.Tx, len(tables))
 	for _, table := range tables {
-		conn, connErr := s.db.Conn(ctx)
-		if connErr != nil {
-			return nil, errors.Join(
-				fmt.Errorf("create snapshot connection for table %s: %w", table, connErr),
-				unlockTables())
-		}
-
 		/*
 			START TRANSACTION WITH CONSISTENT SNAPSHOT ensures a consistent view of
 			database state for all parallel readers. We do this AFTER acquiring the
@@ -93,7 +86,7 @@ func (s *Snapshot) prepareSnapshot(ctx context.Context, tables []string) (*posit
 			implicitly replaces the transaction with a consistent-snapshot one.
 			The go-sql-driver/mysql driver does not expose this directly via TxOptions.
 		*/
-		tx, txErr := conn.BeginTx(ctx, &sql.TxOptions{
+		tx, txErr := s.db.BeginTx(ctx, &sql.TxOptions{
 			ReadOnly:  true,
 			Isolation: sql.LevelRepeatableRead,
 		})
@@ -102,13 +95,13 @@ func (s *Snapshot) prepareSnapshot(ctx context.Context, tables []string) (*posit
 				fmt.Errorf("start transaction for table %s: %w", table, txErr),
 				unlockTables())
 		}
+		// Store before ExecContext so close() rolls back on failure.
+		s.tableTxs[table] = tx
 		if _, txErr = tx.ExecContext(ctx, "START TRANSACTION WITH CONSISTENT SNAPSHOT"); txErr != nil {
 			return nil, errors.Join(
 				fmt.Errorf("start consistent snapshot for table %s: %w", table, txErr),
-				tx.Rollback(),
 				unlockTables())
 		}
-		s.tableTxs[table] = tx
 	}
 
 	// Capture the binlog position while the read lock is still held.
