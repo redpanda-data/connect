@@ -119,6 +119,7 @@ output:
       tls_skip_verify: false
     namespace: analytics.events # No default (required)
     table: user_events # No default (required)
+    case_sensitive_columns: true
     storage:
       aws_s3:
         bucket: my-iceberg-data # No default (required)
@@ -551,6 +552,15 @@ table: user_events
 
 table: events_${!meta("topic")}
 ```
+
+=== `case_sensitive_columns`
+
+Controls how message field names are matched against table column names, and how column references in the partition spec are resolved. When `true` (the default), names must match exactly. When `false`, matching is case-insensitive — set this when your downstream catalog or query engine treats column names as case-insensitive (the iceberg specification's recommended convention) so that, for example, a message keyed `"COLUMN"` lands in an existing `column` rather than triggering schema evolution. Ambiguous case-only duplicates in the input are rejected.
+
+
+*Type*: `bool`
+
+*Default*: `true`
 
 === `storage`
 
