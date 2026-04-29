@@ -1,0 +1,217 @@
+version: "3"
+
+silent: true
+
+vars:
+  KAFKA_BOOTSTRAP: '{{.KAFKA_BOOTSTRAP | default "localhost:9092"}}'
+  CONNECT_URL: '{{.CONNECT_URL | default "http://localhost:8083"}}'
+  CONNECTOR_NAME: mysql-jdbc-sink-bench
+  CONSUMER_GROUP: connect-mysql-jdbc-sink-bench
+
+tasks:
+  up:
+    desc: Build and start all infrastructure (Kafka, MySQL, Kafka Connect), wait until ready
+    cmds:
+      - docker compose up -d --build
+      - until curl -sf {{.CONNECT_URL}}/ > /dev/null 2>&1; do sleep 3; done
+      - echo "Kafka Connect ready at {{.CONNECT_URL}}"
+
+  down:
+    desc: Stop and remove all containers and volumes
+    cmds:
+      - docker compose down -v --remove-orphans
+
+  connector:create:
+    desc: "Register the JDBC sink connector (e.g. task connector:create TASKS=16)"
+    vars:
+      TASKS: '{{.TASKS | default "16"}}'
+    cmds:
+      - |
+        curl -sf -X POST {{.CONNECT_URL}}/connectors \
+          -H "Content-Type: application/json" \
+          -d "$(jq '.config["tasks.max"] = "{{.TASKS}}"' connector.json)" | jq '.name'
+
+  connector:status:
+    desc: Show connector and task status
+    cmds:
+      - curl -sf {{.CONNECT_URL}}/connectors/{{.CONNECTOR_NAME}}/status | jq .
+
+  connector:delete:
+    desc: Delete the JDBC sink connector (without stopping infrastructure)
+    cmds:
+      - curl -s -X DELETE {{.CONNECT_URL}}/connectors/{{.CONNECTOR_NAME}} || true
+
+  bench:mysql-count:
+    desc: Count rows written to bench_events table in MySQL
+    cmds:
+      - docker exec mykc-mysql mysql -u root -ppassword benchdb -e "SELECT COUNT(*) AS rows_written FROM bench_events;"
+
+  bench:measure:
+    desc: "Poll MySQL row count until topic is fully consumed (e.g. task bench:measure INTERVAL=5)"
+    vars:
+      INTERVAL: '{{.INTERVAL | default "5"}}'
+    cmds:
+      - |
+        INTERVAL={{.INTERVAL}}
+
+        get_total() {
+          docker exec mykc-kafka kafka-get-offsets \
+            --bootstrap-server localhost:29092 \
+            --topic bench-events 2>/dev/null \
+            | awk -F: '{sum += $3} END {print sum+0}'
+        }
+
+        get_count() {
+          docker exec mykc-mysql mysql -u root -ppassword benchdb \
+            -sN -e "SELECT COUNT(*) FROM bench_events;" 2>/dev/null
+        }
+
+        TOTAL=$(get_total)
+        echo "Topic contains $TOTAL messages"
+
+        START=""
+        PREV_COUNT=0
+        PREV_TIME=""
+
+        printf "%-10s  %-14s  %s\n" "TIME" "WRITTEN" "MSG/S"
+
+        while true; do
+          sleep "$INTERVAL"
+          COUNT=$(get_count)
+          COUNT=${COUNT:-0}
+          NOW=$(date +%s)
+
+          if [ -z "$START" ]; then
+            if [ "$COUNT" -gt 0 ] 2>/dev/null; then
+              START=$NOW
+              PREV_COUNT=$COUNT
+              PREV_TIME=$NOW
+              printf "%-10s  %-14s  (timing started)\n" "$(date +%H:%M:%S)" "$COUNT"
+            else
+              printf "%-10s  %-14s  (waiting...)\n" "$(date +%H:%M:%S)" "$COUNT"
+            fi
+            continue
+          fi
+
+          DELTA_T=$((NOW - PREV_TIME))
+          DELTA_COUNT=$((COUNT - PREV_COUNT))
+          if [ "$DELTA_T" -gt 0 ]; then
+            RATE=$((DELTA_COUNT / DELTA_T))
+          else
+            RATE=0
+          fi
+
+          printf "%-10s  %-14s  %s msg/s\n" "$(date +%H:%M:%S)" "$COUNT" "$RATE"
+
+          if [ "$COUNT" -ge "$TOTAL" ]; then
+            ELAPSED=$((NOW - START))
+            AVG=$(( TOTAL / (ELAPSED > 0 ? ELAPSED : 1) ))
+            echo "---"
+            echo "Total messages : $TOTAL"
+            echo "Elapsed        : ${ELAPSED}s"
+            echo "Avg throughput : ${AVG} msg/s"
+            break
+          fi
+
+          PREV_COUNT=$COUNT
+          PREV_TIME=$NOW
+        done
+
+  bench:load:
+    desc: "Produce COUNT events to Kafka (e.g. task bench:load COUNT=10000000)"
+    vars:
+      COUNT: '{{.COUNT | default "1000000"}}'
+    env:
+      COUNT: '{{.COUNT}}'
+      KAFKA_BOOTSTRAP: '{{.KAFKA_BOOTSTRAP}}'
+    cmds:
+      - docker exec mykc-mysql mysql -u root -ppassword benchdb -e "TRUNCATE bench_events;"
+      - docker exec mykc-kafka kafka-topics --bootstrap-server localhost:29092 --delete --topic bench-events
+      - until ! docker exec mykc-kafka kafka-topics --bootstrap-server localhost:29092 --list 2>/dev/null | grep -q '^bench-events$'; do sleep 1; done
+      - docker exec mykc-kafka kafka-topics --bootstrap-server localhost:29092 --create --topic bench-events --partitions 16 --replication-factor 1
+      - go run ../../../../../../cmd/redpanda-connect/main.go run ./producer.yaml
+
+  bench:run:
+    desc: "Run JDBC sink benchmark against pre-loaded Kafka topic (e.g. task bench:run TASKS=16)"
+    vars:
+      TASKS: '{{.TASKS | default "16"}}'
+      INTERVAL: '{{.INTERVAL | default "5"}}'
+    cmds:
+      - |
+        TASKS={{.TASKS}}
+        INTERVAL={{.INTERVAL}}
+
+        get_total() {
+          docker exec mykc-kafka kafka-get-offsets \
+            --bootstrap-server localhost:29092 \
+            --topic bench-events 2>/dev/null \
+            | awk -F: '{sum += $3} END {print sum+0}'
+        }
+
+        get_count() {
+          docker exec mykc-mysql mysql -u root -ppassword benchdb \
+            -sN -e "SELECT COUNT(*) FROM bench_events;" 2>/dev/null
+        }
+
+        # Delete old connector and reset MySQL so count starts at 0
+        curl -s -X DELETE {{.CONNECT_URL}}/connectors/{{.CONNECTOR_NAME}} > /dev/null || true
+        sleep 2
+        docker exec mykc-mysql mysql -u root -ppassword benchdb -e "TRUNCATE bench_events;" 2>/dev/null
+        # Reset consumer group offsets to earliest so the connector re-reads the full topic
+        docker exec mykc-kafka kafka-consumer-groups \
+          --bootstrap-server localhost:29092 \
+          --group {{.CONSUMER_GROUP}} \
+          --reset-offsets --to-earliest \
+          --topic bench-events \
+          --execute > /dev/null 2>&1 || true
+
+        TOTAL=$(get_total)
+        echo "Topic contains $TOTAL messages"
+
+        # Create connector — start timing from here
+        curl -sf -X POST {{.CONNECT_URL}}/connectors \
+          -H "Content-Type: application/json" \
+          -d "$(jq ".config[\"tasks.max\"] = \"$TASKS\"" connector.json)" | jq -r '.name'
+
+        START=$(date +%s)
+        PREV_COUNT=0
+        PREV_TIME=$START
+
+        printf "%-10s  %-14s  %s\n" "TIME" "WRITTEN" "MSG/S"
+
+        while true; do
+          sleep "$INTERVAL"
+          COUNT=$(get_count)
+          COUNT=${COUNT:-0}
+          NOW=$(date +%s)
+
+          DELTA_T=$((NOW - PREV_TIME))
+          DELTA_COUNT=$((COUNT - PREV_COUNT))
+          RATE=0
+          [ "$DELTA_T" -gt 0 ] && RATE=$((DELTA_COUNT / DELTA_T))
+
+          printf "%-10s  %-14s  %s msg/s\n" "$(date +%H:%M:%S)" "$COUNT" "$RATE"
+
+          if [ "$COUNT" -ge "$TOTAL" ]; then
+            ELAPSED=$((NOW - START))
+            AVG=$(( TOTAL / (ELAPSED > 0 ? ELAPSED : 1) ))
+            echo "---"
+            echo "Total messages : $TOTAL"
+            echo "Elapsed        : ${ELAPSED}s"
+            echo "Avg throughput : ${AVG} msg/s"
+            break
+          fi
+
+          PREV_COUNT=$COUNT
+          PREV_TIME=$NOW
+        done
+
+  logs:connect:
+    desc: Follow Kafka Connect worker logs
+    cmds:
+      - docker compose logs -f kafka-connect
+
+  logs:mysql:
+    desc: Follow MySQL logs
+    cmds:
+      - docker compose logs -f mysql

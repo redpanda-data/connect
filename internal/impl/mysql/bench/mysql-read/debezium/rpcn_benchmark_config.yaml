@@ -1,0 +1,24 @@
+cache_resources:
+  - label: checkpoint
+    file:
+      directory: ${CHECKPOINT_DIR:/tmp/myks_rpcn_bench_checkpoint}
+
+input:
+  mysql_cdc:
+    dsn: root:password@tcp(localhost:3306)/benchdb
+    tables:
+      - cart
+    checkpoint_cache: checkpoint
+    stream_snapshot: false
+    batching:
+      count: ${BATCH_SIZE:5000}
+      period: 1s
+
+output:
+  kafka_franz:
+    seed_brokers:
+      - localhost:9092
+    topic: ${KAFKA_TOPIC:rpcn-cdc-bench-cart}
+
+logger:
+  level: WARN

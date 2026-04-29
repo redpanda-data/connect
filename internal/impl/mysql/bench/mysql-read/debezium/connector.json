@@ -1,0 +1,25 @@
+{
+  "name": "mysql-debezium-source-bench",
+  "config": {
+    "connector.class": "io.debezium.connector.mysql.MySqlConnector",
+    "tasks.max": "1",
+
+    "database.hostname": "mysql",
+    "database.port": "3306",
+    "database.user": "root",
+    "database.password": "password",
+    "database.server.id": "223344",
+
+    "topic.prefix": "bench",
+    "database.include.list": "benchdb",
+    "table.include.list": "benchdb.cart",
+
+    "snapshot.mode": "initial",
+    "snapshot.fetch.size": "2000",
+    "max.batch.size": "2048",
+    "max.queue.size": "8192",
+
+    "schema.history.internal.kafka.bootstrap.servers": "kafka:29092",
+    "schema.history.internal.kafka.topic": "bench-schema-history"
+  }
+}

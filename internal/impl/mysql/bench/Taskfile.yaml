@@ -1,0 +1,106 @@
+version: "3"
+
+vars:
+  MYSQL_DSN: '{{.MYSQL_DSN | default "root:password@tcp(localhost:3306)/testdb"}}'
+  MYSQL_USER: '{{.MYSQL_USER | default "root"}}'
+  MYSQL_PASSWORD: '{{.MYSQL_PASSWORD | default "password"}}'
+  MYSQL_DB: '{{.MYSQL_DB | default "testdb"}}'
+  CHECKPOINT_DIR: '{{.CHECKPOINT_DIR | default "/tmp/mysql_bench_checkpoint"}}'
+
+tasks:
+  # ── MySQL container ───────────────────────────────────────────────────────────
+
+  up:
+    desc: Start MySQL 8.0 container with binlog enabled
+    cmds:
+      - |
+        docker run -d --name mysql-bench \
+          -e MYSQL_ROOT_PASSWORD={{.MYSQL_PASSWORD}} \
+          -e MYSQL_DATABASE={{.MYSQL_DB}} \
+          -p 3306:3306 \
+          mysql:8.0 \
+          --server-id=1 \
+          --log-bin=mysql-bin \
+          --binlog-format=ROW \
+          --binlog-row-image=FULL \
+          --gtid-mode=ON \
+          --enforce-gtid-consistency=ON
+      - until docker exec mysql-bench mysqladmin -u {{.MYSQL_USER}} -p{{.MYSQL_PASSWORD}} ping --silent 2>/dev/null; do sleep 1; done
+
+  down:
+    desc: Stop and remove MySQL container
+    cmds:
+      - docker stop mysql-bench
+      - docker rm mysql-bench
+
+  # ── Data setup ───────────────────────────────────────────────────────────────
+
+  mysql:create:
+    desc: Run create.sql to set up tables
+    cmds:
+      - docker exec -i mysql-bench mysql -u {{.MYSQL_USER}} -p{{.MYSQL_PASSWORD}} {{.MYSQL_DB}} < create.sql
+
+  mysql:data:cart:
+    desc: "Insert cart rows (~600 B each) — COUNT default 10000000 (e.g. task mysql:data:cart COUNT=1000000)"
+    vars:
+      COUNT: '{{.COUNT | default "10000000"}}'
+    cmds:
+      - docker exec -i mysql-bench mysql -u {{.MYSQL_USER}} -p{{.MYSQL_PASSWORD}} {{.MYSQL_DB}} < cart.sql
+      - docker exec mysql-bench mysql -u {{.MYSQL_USER}} -p{{.MYSQL_PASSWORD}} {{.MYSQL_DB}} -e "CALL _bench_insert_cart({{.COUNT}});"
+      - docker exec mysql-bench mysql -u {{.MYSQL_USER}} -p{{.MYSQL_PASSWORD}} {{.MYSQL_DB}} -e "DROP PROCEDURE IF EXISTS _bench_insert_cart;"
+
+  mysql:truncate:
+    desc: Truncate all benchmark tables
+    cmds:
+      - docker exec mysql-bench mysql -u {{.MYSQL_USER}} -p{{.MYSQL_PASSWORD}} {{.MYSQL_DB}} -e "TRUNCATE users; TRUNCATE products; TRUNCATE cart;"
+
+  mysql:reset-checkpoint:
+    desc: Clear checkpoint directory so benchmarks start a fresh snapshot
+    cmds:
+      - rm -rf {{.CHECKPOINT_DIR}}
+      - mkdir -p {{.CHECKPOINT_DIR}}
+
+  # ── Benchmarks ───────────────────────────────────────────────────────────────
+
+  bench:load:cart:
+    desc: "Truncate all tables and load cart rows (e.g. task bench:load:cart COUNT=10000000)"
+    vars:
+      COUNT: '{{.COUNT | default "10000000"}}'
+    cmds:
+      - task mysql:truncate
+      - task mysql:data:cart COUNT={{.COUNT}}
+
+  bench:run:
+    desc: "Run snapshot benchmark against current table data (e.g. task bench:run CORES=4 BATCH=5000)"
+    vars:
+      CORES: '{{.CORES | default ""}}'
+      BATCH: '{{.BATCH | default "1000"}}'
+    env:
+      MYSQL_DSN: '{{.MYSQL_DSN}}'
+      CHECKPOINT_DIR: '{{.CHECKPOINT_DIR}}'
+    cmds:
+      - task mysql:reset-checkpoint
+      - |
+        {{if .CORES}}GOMAXPROCS={{.CORES}} {{end}}go run ../../../../cmd/redpanda-connect/main.go run \
+          --set input.mysql_cdc.batching.count={{.BATCH}} \
+          ./benchmark_config.yaml 2>&1 | grep --line-buffered -v "Querying snapshot" | \
+        while IFS= read -r line; do
+          echo "$line"
+          if echo "$line" | grep -q "rolling stats: 0 msg"; then
+            ZEROS=$((ZEROS + 1))
+            if [ "$ZEROS" -ge 3 ]; then
+              pkill -f benchmark_config.yaml 2>/dev/null || true
+            fi
+          elif echo "$line" | grep -q "rolling stats:"; then
+            ZEROS=0
+          fi
+        done
+
+  bench:run:cdc:
+    desc: Run CDC benchmark (stream_snapshot=false) — start first, then insert data in a second terminal
+    env:
+      MYSQL_DSN: '{{.MYSQL_DSN}}'
+      CHECKPOINT_DIR: '{{.CHECKPOINT_DIR}}'
+    cmds:
+      - task mysql:reset-checkpoint
+      - go run ../../../../cmd/redpanda-connect/main.go run --set input.mysql_cdc.stream_snapshot=false ./benchmark_config.yaml
