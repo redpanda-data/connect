@@ -359,6 +359,9 @@ func (s *parquetSink) EmitValue(sv shredder.ShreddedValue) error {
 }
 
 func (s *parquetSink) OnNewField(parentPath icebergx.Path, name string, value any) {
+	if !s.caseSensitive {
+		name = strings.ToLower(name)
+	}
 	fe := NewUnknownFieldError(parentPath, name, value)
 	key := dedupKey(fe.FullPath().String(), s.caseSensitive)
 	if _, ok := s.seenFields[key]; ok {
@@ -443,6 +446,9 @@ func (s *bufferingSink) EmitValue(sv shredder.ShreddedValue) error {
 }
 
 func (s *bufferingSink) OnNewField(parentPath icebergx.Path, name string, value any) {
+	if !s.caseSensitive {
+		name = strings.ToLower(name)
+	}
 	fe := NewUnknownFieldError(parentPath, name, value)
 	key := dedupKey(fe.FullPath().String(), s.caseSensitive)
 	if _, ok := s.seenFields[key]; ok {
