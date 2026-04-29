@@ -1408,21 +1408,23 @@ func TestIntegrationMySQLCDCRepeatedConnectionDrops(t *testing.T) {
 	}
 }
 
-func TestIntegrationMySQLCDCConcurrentSnapshot(t *testing.T) {
+func TestIntegrationMySQLCDCParallelSnapshot(t *testing.T) {
 	dsn, db := setupTestWithMySQLVersion(t, "8.0")
 
 	db.Exec(`CREATE TABLE IF NOT EXISTS snap_foo (id INT AUTO_INCREMENT PRIMARY KEY)`)
 	db.Exec(`CREATE TABLE IF NOT EXISTS snap_bar (id INT AUTO_INCREMENT PRIMARY KEY)`)
 	db.Exec(`CREATE TABLE IF NOT EXISTS snap_baz (id INT AUTO_INCREMENT PRIMARY KEY)`)
 
-	want := 3000
-	for range 1000 {
+	t.Log("Inserting snapshot records")
+	want := 30000
+	for range 10000 {
 		db.Exec("INSERT INTO snap_foo (id) VALUES (DEFAULT)")
 		db.Exec("INSERT INTO snap_bar (id) VALUES (DEFAULT)")
 		db.Exec("INSERT INTO snap_baz (id) VALUES (DEFAULT)")
 	}
 
-	template := fmt.Sprintf(`
+	t.Run("parralel snapshot", func(t *testing.T) {
+		template := fmt.Sprintf(`
 mysql_cdc:
   dsn: %s
   stream_snapshot: true
@@ -1435,48 +1437,109 @@ mysql_cdc:
     - snap_baz
 `, dsn)
 
-	cacheConf := fmt.Sprintf(`
+		cacheConf := fmt.Sprintf(`
 label: foocache
 file:
   directory: %s`, t.TempDir())
 
-	streamOutBuilder := service.NewStreamBuilder()
-	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: DEBUG`))
-	require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
-	require.NoError(t, streamOutBuilder.AddInputYAML(template))
+		streamOutBuilder := service.NewStreamBuilder()
+		require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: INFO`))
+		require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
+		require.NoError(t, streamOutBuilder.AddInputYAML(template))
 
-	var (
-		outBatches   []string
-		outBatchesMu sync.Mutex
-	)
+		var (
+			outBatches   []string
+			outBatchesMu sync.Mutex
+		)
 
-	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
-		msgBytes, err := mb[0].AsBytes()
+		require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+			msgBytes, err := mb[0].AsBytes()
+			require.NoError(t, err)
+			outBatchesMu.Lock()
+			outBatches = append(outBatches, string(msgBytes))
+			outBatchesMu.Unlock()
+			return nil
+		}))
+
+		streamOut, err := streamOutBuilder.Build()
 		require.NoError(t, err)
-		outBatchesMu.Lock()
-		outBatches = append(outBatches, string(msgBytes))
-		outBatchesMu.Unlock()
-		return nil
-	}))
+		license.InjectTestService(streamOut.Resources())
 
-	streamOut, err := streamOutBuilder.Build()
-	require.NoError(t, err)
-	license.InjectTestService(streamOut.Resources())
+		go func() {
+			if err := streamOut.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+				t.Error(err)
+			}
+		}()
 
-	go func() {
-		if err := streamOut.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
-			t.Error(err)
-		}
-	}()
+		var got int
+		assert.Eventually(t, func() bool {
+			outBatchesMu.Lock()
+			defer outBatchesMu.Unlock()
+			got = len(outBatches)
+			return got >= want
+		}, time.Minute*5, time.Second*1)
+		assert.Equalf(t, want, got, "Wanted %d snapshot messages but got %d", want, got)
 
-	var got int
-	assert.Eventually(t, func() bool {
-		outBatchesMu.Lock()
-		defer outBatchesMu.Unlock()
-		got = len(outBatches)
-		return got >= want
-	}, time.Minute*5, time.Second*1)
-	assert.Equalf(t, want, got, "Wanted %d snapshot messages but got %d", want, got)
+		require.NoError(t, streamOut.StopWithin(10*time.Second))
+	})
 
-	require.NoError(t, streamOut.StopWithin(10*time.Second))
+	t.Run("sequential snapshot", func(t *testing.T) {
+		template := fmt.Sprintf(`
+mysql_cdc:
+  dsn: %s
+  stream_snapshot: true
+  snapshot_max_batch_size: 10
+  max_parallel_snapshot_tables: 1
+  checkpoint_cache: foocache
+  tables:
+    - snap_foo
+    - snap_bar
+    - snap_baz
+`, dsn)
+
+		cacheConf := fmt.Sprintf(`
+label: foocache
+file:
+  directory: %s`, t.TempDir())
+
+		streamOutBuilder := service.NewStreamBuilder()
+		require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: INFO`))
+		require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
+		require.NoError(t, streamOutBuilder.AddInputYAML(template))
+
+		var (
+			outBatches   []string
+			outBatchesMu sync.Mutex
+		)
+
+		require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+			msgBytes, err := mb[0].AsBytes()
+			require.NoError(t, err)
+			outBatchesMu.Lock()
+			outBatches = append(outBatches, string(msgBytes))
+			outBatchesMu.Unlock()
+			return nil
+		}))
+
+		streamOut, err := streamOutBuilder.Build()
+		require.NoError(t, err)
+		license.InjectTestService(streamOut.Resources())
+
+		go func() {
+			if err := streamOut.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+				t.Error(err)
+			}
+		}()
+
+		var got int
+		assert.Eventually(t, func() bool {
+			outBatchesMu.Lock()
+			defer outBatchesMu.Unlock()
+			got = len(outBatches)
+			return got >= want
+		}, time.Minute*5, time.Second*1)
+		assert.Equalf(t, want, got, "Wanted %d snapshot messages but got %d", want, got)
+
+		require.NoError(t, streamOut.StopWithin(10*time.Second))
+	})
 }
