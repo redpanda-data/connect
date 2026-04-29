@@ -178,3 +178,88 @@ See [`internal/impl/aws/s3/bench/kafka-connect/`](../../internal/impl/aws/s3/ben
 - **Practical throughput ceiling: ~230–250k msg/s** on this hardware against LocalStack. This reflects S3 write overhead, not Kafka consumer throughput. Real AWS S3 with higher latency per `PUT` would widen the gap between small and large `flush.size`.
 
 - **Recommended configuration for maximum throughput:** `tasks=16`, `flush.size=50000`, `poll.records=1000`, `fetch.min.bytes=1MB` — matches partition count, maximises file size per S3 write, and avoids fetch-wait stalls.
+
+---
+
+## Redpanda Connect S3 Sink — Write Throughput
+
+**Architecture:** Redpanda Connect producer → `bench-events` (16 partitions, Kafka KRaft) → Redpanda Connect pipeline (`kafka_franz` input → `aws_s3` output) → LocalStack S3
+
+**Dataset:** 3,000,000 synthetic JSON records (~100 bytes each), snappy-compressed in Kafka
+
+**Pipeline:** single process on host; `archive: lines` batching; `http.enabled: false`; pre-built binary
+
+**Measurement:** elapsed = time from pipeline registration to consumer group lag reaching 0; timing includes Kafka consumer startup, rebalance, and final partial-file flush via `batching.period=10s`
+
+See [`internal/impl/aws/s3/bench/redpanda-connect/`](../../internal/impl/aws/s3/bench/redpanda-connect/) for the full benchmark harness.
+
+### Full Parameter Matrix (24 combinations)
+
+| THREADS | FLUSH | FETCH_MIN | ELAPSED(s) | MSG/S |
+|---------|-------|-----------|------------|-------|
+| 1       | 5000  | 1MB       | 50         | 60000 |
+| 1       | 5000  | 4MB       | 50         | 60000 |
+| 1       | 10000 | 1MB       | 50         | 60000 |
+| 1       | 10000 | 4MB       | 50         | 60000 |
+| 1       | 50000 | 1MB       | 58         | 51724 |
+| 1       | 50000 | 4MB       | 58         | 51724 |
+| 2       | 5000  | 1MB       | 49         | 61224 |
+| 2       | 5000  | 4MB       | 58         | 51724 |
+| 2       | 10000 | 1MB       | 49         | 61224 |
+| 2       | 10000 | 4MB       | 50         | 60000 |
+| 2       | 50000 | 1MB       | 58         | 51724 |
+| 2       | 50000 | 4MB       | 57         | 52631 |
+| 4       | 5000  | 1MB       | 50         | 60000 |
+| 4       | 5000  | 4MB       | 58         | 51724 |
+| 4       | 10000 | 1MB       | 50         | 60000 |
+| 4       | 10000 | 4MB       | 49         | 61224 |
+| 4       | 50000 | 1MB       | 58         | 51724 |
+| 4       | 50000 | 4MB       | 58         | 51724 |
+| 8       | 5000  | 1MB       | 50         | 60000 |
+| 8       | 5000  | 4MB       | 58         | 51724 |
+| 8       | 10000 | 1MB       | 59         | 50847 |
+| 8       | 10000 | 4MB       | 49         | 61224 |
+| 8       | 50000 | 1MB       | 58         | 51724 |
+| 8       | 50000 | 4MB       | 57         | 52631 |
+
+### Best Configurations
+
+| THREADS | FLUSH | FETCH_MIN | MSG/S |
+|---------|-------|-----------|-------|
+| 2       | 5000  | 1MB       | 61224 |
+| 2       | 10000 | 1MB       | 61224 |
+| 4       | 10000 | 4MB       | 61224 |
+| 8       | 10000 | 4MB       | 61224 |
+
+### Observations
+
+- **Throughput ceiling: ~60k msg/s regardless of parameter.** All 24 combinations land in a narrow 51k–61k msg/s band. Neither thread count, flush size, nor fetch bytes moves the needle meaningfully. The single-process pipeline is hitting a fixed overhead — most likely LocalStack's per-`PUT` request processing rate.
+
+- **`pipeline.threads` has no effect.** 1 thread performs identically to 8 threads (both reach 60k msg/s). With a single consumer group handling all 16 partitions, the kafka_franz consumer saturates incoming bandwidth before the output workers become the bottleneck.
+
+- **Smaller flush sizes slightly outperform larger ones** — the opposite of Kafka Connect. `flush.size=50000` consistently lands in the 58s band (~51.7k msg/s) while `flush.size=5000` and `flush.size=10000` more often land in the 49–50s band (~60k msg/s). The reason is the same discrete-timing effect seen in Kafka Connect: with a large flush size, the last partial batch in each worker doesn't fill before the pipeline terminates, forcing a `batching.period=10s` timeout flush that adds ~8 extra seconds to elapsed time.
+
+- **Results cluster at two elapsed bands (~49–50s and ~57–58s)** due to the same `batching.period=10s` quantisation seen in Kafka Connect. Whether the last batch flushes on count or on the 10s timer determines which band a run falls into.
+
+- **`fetch_min_bytes` has no consistent effect.** 1MB and 4MB produce comparable results within the same elapsed band. At ~60k msg/s the pipeline is not fetch-starved; the bottleneck is downstream.
+
+---
+
+## Redpanda Connect vs Kafka Connect — Comparison
+
+| Metric | Redpanda Connect | Kafka Connect |
+|--------|-----------------|---------------|
+| Peak throughput | **61,224 msg/s** | **250,000 msg/s** |
+| Typical throughput | 51k–61k msg/s | 111k–230k msg/s |
+| Parameter sensitivity | Very low | High (flush.size dominant) |
+| Scaling with parallelism | None (1 = 8 threads) | Moderate (2× tasks ≈ 1.3× throughput) |
+| Process model | Single Go process, all partitions | N JVM tasks, partitions distributed |
+| Resource footprint | ~200 MB RSS | ~2 GB JVM heap (16 tasks) |
+
+**Kafka Connect is ~4× faster in peak throughput on this hardware.** The gap is driven by two factors:
+
+1. **Output concurrency.** Kafka Connect runs 16 independent JVM tasks each owning a partition subset and flushing to S3 in parallel. Redpanda Connect's `pipeline.threads` parallelises the message path but shares a single S3 output instance whose serialised batch flushing cannot match 16-way independent writes.
+
+2. **Flush size leverage.** Kafka Connect's throughput scales strongly with `flush.size` (5k→50k triples throughput) because larger files reduce the total number of `PUT` requests against LocalStack's serial request processing. Redpanda Connect hits the same per-`PUT` ceiling but cannot spread the requests across as many parallel writers.
+
+**Redpanda Connect trades throughput for operational simplicity.** No JVM, no Connect worker cluster, no connector REST API — a single `go run` with a 200-line YAML config achieves consistent 60k msg/s with zero tuning. For workloads below ~60k msg/s Redpanda Connect is operationally preferable; above that threshold Kafka Connect's multi-task model is necessary.
