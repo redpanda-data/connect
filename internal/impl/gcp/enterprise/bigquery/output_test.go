@@ -15,7 +15,9 @@ import (
 	"time"
 
 	"cloud.google.com/go/bigquery"
+	"cloud.google.com/go/bigquery/storage/apiv1/storagepb"
 	"cloud.google.com/go/bigquery/storage/managedwriter/adapt"
+	"google.golang.org/api/googleapi"
 	"google.golang.org/grpc/codes"
 	grpcstatus "google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -133,6 +135,16 @@ stream_sweep_interval: 0s
 `,
 			errMsg: bqwaFieldStreamSweepInterval,
 		},
+		{
+			name: "delegates without target_principal",
+			yaml: `
+dataset: my_dataset
+table: my_table
+delegates:
+  - "delegate@project.iam.gserviceaccount.com"
+`,
+			errMsg: bqwaFieldDelegates,
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			pConf, err := spec.ParseYAML(tc.yaml, nil)
@@ -241,17 +253,16 @@ table: my_table
 }
 
 func TestTableCacheKey(t *testing.T) {
-	// Given an output configured for a specific project and dataset.
+	// Given an output configured for a specific dataset.
 	out := newTestOutput(t, `
 project: my-project
 dataset: my_dataset
 table: my_table
 `)
-	// Simulate what Connect() does: resolve the project ID.
-	out.resolvedProjectID = "my-project"
 
-	// When we compute the cache key for a table.
-	key := out.tableCacheKey("my_table")
+	// When we compute the cache key for a table (callers pass the resolved
+	// projectID they captured under connMu).
+	key := out.tableCacheKey("my-project", "my_table")
 
 	// Then it returns the fully qualified table resource path.
 	assert.Equal(t, "projects/my-project/datasets/my_dataset/tables/my_table", key)
@@ -326,6 +337,11 @@ stream_sweep_interval: 50ms
 	// When we run the actual sweep goroutine.
 	out.sweepWg.Add(1)
 	go out.sweepIdleStreams(out.stopSweep)
+	// Stop the sweeper via t.Cleanup so an early require failure can't leak it.
+	t.Cleanup(func() {
+		close(out.stopSweep)
+		out.sweepWg.Wait()
+	})
 
 	// Then the stale stream is evicted and the fresh one remains.
 	assert.Eventually(t, func() bool {
@@ -339,9 +355,6 @@ stream_sweep_interval: 50ms
 	_, freshExists := out.streams["projects/p/datasets/d/tables/fresh"]
 	out.streamsMu.RUnlock()
 	assert.True(t, freshExists, "fresh stream should remain in cache")
-
-	close(out.stopSweep)
-	out.sweepWg.Wait()
 }
 
 func TestClassifyGRPCError(t *testing.T) {
@@ -370,6 +383,27 @@ func TestClassifyGRPCError(t *testing.T) {
 	}
 }
 
+func TestClassifyGRPCErrorSchemaMismatch(t *testing.T) {
+	st, err := grpcstatus.New(codes.InvalidArgument, "schema mismatch").
+		WithDetails(&storagepb.StorageError{
+			Code:         storagepb.StorageError_SCHEMA_MISMATCH_EXTRA_FIELDS,
+			ErrorMessage: "extra fields found",
+		})
+	require.NoError(t, err)
+	assert.Equal(t, grpcSchemaMismatch, classifyGRPCError(st.Err()))
+}
+
+func TestClassifyGRPCErrorSchemaMismatchWrapped(t *testing.T) {
+	st, err := grpcstatus.New(codes.InvalidArgument, "schema mismatch").
+		WithDetails(&storagepb.StorageError{
+			Code:         storagepb.StorageError_SCHEMA_MISMATCH_EXTRA_FIELDS,
+			ErrorMessage: "extra fields found",
+		})
+	require.NoError(t, err)
+	wrapped := fmt.Errorf("appending rows: %w", st.Err())
+	assert.Equal(t, grpcSchemaMismatch, classifyGRPCError(wrapped))
+}
+
 func TestMetricsInitialization(t *testing.T) {
 	m := newBQWAMetrics(service.MockResources().Metrics())
 	require.NotNil(t, m.rowsSent)
@@ -377,4 +411,107 @@ func TestMetricsInitialization(t *testing.T) {
 	require.NotNil(t, m.batchesSent)
 	require.NotNil(t, m.batchLatency)
 	require.NotNil(t, m.retries)
+	require.NotNil(t, m.schemaEvolutions)
+	require.NotNil(t, m.schemaEvolutionFailures)
+}
+
+func TestBuildAuthOpts(t *testing.T) {
+	// Covers the easy paths through buildAuthOpts that don't talk to GCP.
+	// The target_principal branch hits impersonate.CredentialsTokenSource,
+	// which makes a real network call, so it's deliberately left to
+	// integration coverage.
+	tests := []struct {
+		name        string
+		yaml        string
+		isGRPC      bool
+		endpoint    string
+		expectMin   int  // expected minimum number of options returned
+		expectGRPC  bool // expects the insecure-credentials gRPC dial option
+		expectAuth  bool // expects authentication to be enabled (no WithoutAuthentication)
+		expectError bool
+	}{
+		{
+			name: "endpoint override disables auth (HTTP)",
+			yaml: `
+dataset: my_dataset
+table: my_table
+endpoint:
+  http: http://localhost:9050
+`,
+			endpoint:   "http://localhost:9050",
+			isGRPC:     false,
+			expectMin:  2, // WithoutAuthentication + WithEndpoint
+			expectAuth: false,
+		},
+		{
+			name: "endpoint override disables auth and adds insecure gRPC dial opt",
+			yaml: `
+dataset: my_dataset
+table: my_table
+endpoint:
+  grpc: localhost:9060
+`,
+			endpoint:   "localhost:9060",
+			isGRPC:     true,
+			expectMin:  3, // WithoutAuthentication + WithEndpoint + WithGRPCDialOption
+			expectAuth: false,
+			expectGRPC: true,
+		},
+		{
+			name: "credentials_json only",
+			yaml: `
+dataset: my_dataset
+table: my_table
+credentials_json: '{"type":"service_account"}'
+`,
+			expectMin:  1, // WithCredentialsJSON
+			expectAuth: true,
+		},
+		{
+			name: "no auth config",
+			yaml: `
+dataset: my_dataset
+table: my_table
+`,
+			expectMin:  0,
+			expectAuth: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			out := newTestOutput(t, tc.yaml)
+			opts, err := out.buildAuthOpts(t.Context(), tc.endpoint, tc.isGRPC)
+			if tc.expectError {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			assert.GreaterOrEqual(t, len(opts), tc.expectMin)
+		})
+	}
+}
+
+func TestIsPermanentBQError(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{"nil", nil, false},
+		{"plain", errors.New("network blip"), false},
+		{"grpc unavailable", grpcstatus.Error(codes.Unavailable, "x"), false},
+		{"grpc invalid argument", grpcstatus.Error(codes.InvalidArgument, "x"), true},
+		{"http 404", &googleapi.Error{Code: 404}, true},
+		{"http 403", &googleapi.Error{Code: 403}, true},
+		{"http 408", &googleapi.Error{Code: 408}, false},
+		{"http 429", &googleapi.Error{Code: 429}, false},
+		{"http 500", &googleapi.Error{Code: 500}, false},
+		{"wrapped http 404", fmt.Errorf("resolve: %w", &googleapi.Error{Code: 404}), true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, isPermanentBQError(tc.err))
+		})
+	}
 }
