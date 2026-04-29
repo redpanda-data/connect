@@ -21,8 +21,9 @@ import (
 // Snapshot represents a structure that prepares a transaction
 // and creates mysql consistent snapshot inside the transaction
 type Snapshot struct {
-	db       *sql.DB
-	lockConn *sql.Conn
+	db          *sql.DB
+	lockConn    *sql.Conn
+	workerConns []*sql.Conn
 	// workerTxs holds one consistent-snapshot transaction per worker, established
 	// inside the FLUSH TABLES WITH READ LOCK window so all readers see identical data.
 	// Workers pull tables from a queue and reuse their transaction across multiple tables.
@@ -84,9 +85,17 @@ func (s *Snapshot) prepareSnapshot(ctx context.Context, tables []string, maxWork
 	// implicitly replaces the transaction with a consistent-snapshot one.
 	// The go-sql-driver/mysql driver does not expose this directly via TxOptions.
 	numWorkers := min(maxWorkers, len(tables))
+	s.workerConns = make([]*sql.Conn, 0, numWorkers)
 	s.workerTxs = make([]*sql.Tx, 0, numWorkers)
 	for range numWorkers {
-		tx, txErr := s.db.BeginTx(ctx, &sql.TxOptions{
+		conn, connErr := s.db.Conn(ctx)
+		if connErr != nil {
+			return nil, errors.Join(
+				fmt.Errorf("open worker connection: %w", connErr),
+				unlockTables())
+		}
+		s.workerConns = append(s.workerConns, conn)
+		tx, txErr := conn.BeginTx(ctx, &sql.TxOptions{
 			ReadOnly:  true,
 			Isolation: sql.LevelRepeatableRead,
 		})
@@ -243,6 +252,14 @@ func (s *Snapshot) releaseSnapshot(_ context.Context) error {
 		}
 	}
 	s.workerTxs = nil
+	for idx, conn := range s.workerConns {
+		if conn != nil {
+			if err := conn.Close(); err != nil {
+				errs = append(errs, fmt.Errorf("close worker connection %d: %w", idx, err))
+			}
+		}
+	}
+	s.workerConns = nil
 	return errors.Join(errs...)
 }
 
@@ -255,6 +272,14 @@ func (s *Snapshot) close() error {
 		}
 	}
 	s.workerTxs = nil
+	for idx, conn := range s.workerConns {
+		if conn != nil {
+			if err := conn.Close(); err != nil {
+				errs = append(errs, fmt.Errorf("close worker connection %d: %w", idx, err))
+			}
+		}
+	}
+	s.workerConns = nil
 
 	if s.lockConn != nil {
 		if err := s.lockConn.Close(); err != nil {
