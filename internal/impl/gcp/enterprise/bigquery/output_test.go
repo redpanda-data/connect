@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"cloud.google.com/go/bigquery"
+	"cloud.google.com/go/bigquery/storage/apiv1/storagepb"
 	"cloud.google.com/go/bigquery/storage/managedwriter/adapt"
 	"google.golang.org/grpc/codes"
 	grpcstatus "google.golang.org/grpc/status"
@@ -122,7 +123,7 @@ func TestJSONToProtoConversion(t *testing.T) {
 	msgDesc := descriptor.(protoreflect.MessageDescriptor)
 
 	// BigQuery INTEGER maps to INT64 in proto; protojson expects string for int64.
-	protoBytes, err := jsonToProtoBytes([]byte(`{"name":"alice","age":"30"}`), msgDesc)
+	protoBytes, err := jsonToProtoBytes([]byte(`{"name":"alice","age":"30"}`), msgDesc, nil)
 	require.NoError(t, err)
 	assert.NotEmpty(t, protoBytes)
 
@@ -151,7 +152,7 @@ func TestJSONToProtoConversionWithNormalizedDescriptor(t *testing.T) {
 	require.NoError(t, err)
 
 	// JSON-to-proto with normalized descriptor should produce valid bytes.
-	protoBytes, err := jsonToProtoBytes([]byte(`{"name":"alice","age":"30"}`), normalizedMsgDesc)
+	protoBytes, err := jsonToProtoBytes([]byte(`{"name":"alice","age":"30"}`), normalizedMsgDesc, nil)
 	require.NoError(t, err)
 	assert.NotEmpty(t, protoBytes)
 
@@ -334,6 +335,58 @@ func TestClassifyGRPCError(t *testing.T) {
 	}
 }
 
+func TestClassifyGRPCErrorSchemaMismatch(t *testing.T) {
+	st, err := grpcstatus.New(codes.InvalidArgument, "schema mismatch").
+		WithDetails(&storagepb.StorageError{
+			Code:         storagepb.StorageError_SCHEMA_MISMATCH_EXTRA_FIELDS,
+			ErrorMessage: "extra fields found",
+		})
+	require.NoError(t, err)
+	assert.Equal(t, grpcSchemaMismatch, classifyGRPCError(st.Err()))
+}
+
+func TestClassifyGRPCErrorSchemaMismatchWrapped(t *testing.T) {
+	st, err := grpcstatus.New(codes.InvalidArgument, "schema mismatch").
+		WithDetails(&storagepb.StorageError{
+			Code:         storagepb.StorageError_SCHEMA_MISMATCH_EXTRA_FIELDS,
+			ErrorMessage: "extra fields found",
+		})
+	require.NoError(t, err)
+	wrapped := fmt.Errorf("appending rows: %w", st.Err())
+	assert.Equal(t, grpcSchemaMismatch, classifyGRPCError(wrapped))
+}
+
+func TestJSONToProtoBytesWithFieldMapping(t *testing.T) {
+	bqSchema := bigquery.Schema{
+		{Name: "user_name", Type: bigquery.StringFieldType},
+		{Name: "user_age", Type: bigquery.IntegerFieldType},
+	}
+	tableSchema, err := adapt.BQSchemaToStorageTableSchema(bqSchema)
+	require.NoError(t, err)
+
+	descriptor, err := adapt.StorageSchemaToProto2Descriptor(tableSchema, "root")
+	require.NoError(t, err)
+	msgDesc := descriptor.(protoreflect.MessageDescriptor)
+
+	// Mapping simulates fields that were renamed during sanitization.
+	mapping := map[string]string{
+		"user-name": "user_name",
+		"user-age":  "user_age",
+	}
+
+	// Input JSON uses original (unsanitized) field names.
+	protoBytes, err := jsonToProtoBytes(
+		[]byte(`{"user-name":"alice","user-age":"30"}`),
+		msgDesc, mapping,
+	)
+	require.NoError(t, err)
+	assert.NotEmpty(t, protoBytes)
+
+	// Verify round-trip.
+	msg := dynamicpb.NewMessage(msgDesc)
+	require.NoError(t, proto.Unmarshal(protoBytes, msg))
+}
+
 func TestMetricsInitialization(t *testing.T) {
 	m := newBQWAMetrics(service.MockResources().Metrics())
 	require.NotNil(t, m.rowsSent)
@@ -341,4 +394,5 @@ func TestMetricsInitialization(t *testing.T) {
 	require.NotNil(t, m.batchesSent)
 	require.NotNil(t, m.batchLatency)
 	require.NotNil(t, m.retries)
+	require.NotNil(t, m.schemaEvolutions)
 }
