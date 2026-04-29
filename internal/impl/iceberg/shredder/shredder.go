@@ -14,6 +14,7 @@ import (
 	"math"
 	"math/big"
 	"slices"
+	"strings"
 
 	"github.com/apache/iceberg-go"
 	"github.com/gofrs/uuid/v5"
@@ -73,12 +74,22 @@ type Sink interface {
 // and definition levels that allow perfect reconstruction.
 type RecordShredder struct {
 	schema *iceberg.Schema
+	// caseSensitive controls how input record keys are matched against schema
+	// field names. When true (the historical default) names are matched
+	// exactly; when false, matching is case-insensitive — which aligns with
+	// iceberg's recommended convention and with engines like Spark and Trino
+	// in their default configurations.
+	caseSensitive bool
 }
 
 // NewRecordShredder creates a new shredder for the given schema.
-func NewRecordShredder(schema *iceberg.Schema) *RecordShredder {
+// If caseSensitive is true, input keys must match schema field names exactly;
+// if false, matching is case-insensitive (and ambiguous case-only duplicates
+// in the input cause an error).
+func NewRecordShredder(schema *iceberg.Schema, caseSensitive bool) *RecordShredder {
 	return &RecordShredder{
-		schema: schema,
+		schema:        schema,
+		caseSensitive: caseSensitive,
 	}
 }
 
@@ -98,13 +109,40 @@ func (rs *RecordShredder) shredStruct(
 	repLevel, defLevel, maxRepLevel int,
 	sink Sink,
 ) error {
-	// Build set of known field names for new field detection.
-	knownFields := make(map[string]struct{}, len(fields))
+	// Build an index of input keys by their match-key (the original key in
+	// case-sensitive mode, or its lowercase form in case-insensitive mode).
+	// In case-insensitive mode, multiple input keys may collide on the same
+	// match-key — we detect that as ambiguity rather than silently picking
+	// one. In case-sensitive mode, collisions are impossible because Go map
+	// keys are themselves case-sensitive.
+	keysByLookup := make(map[string][]string, len(value))
+	for k := range value {
+		mk := rs.matchKey(k)
+		keysByLookup[mk] = append(keysByLookup[mk], k)
+	}
 
-	// Process schema fields.
+	// Track which input keys matched a schema field; remaining keys are
+	// candidates for new-field detection.
+	matched := make(map[string]struct{}, len(fields))
+
 	for _, field := range fields {
-		knownFields[field.Name] = struct{}{}
-		fieldValue, exists := value[field.Name]
+		candidates := keysByLookup[rs.matchKey(field.Name)]
+		// If the input contains multiple keys that all map to the same schema
+		// field (only possible in case-insensitive mode), we cannot pick one
+		// without silently dropping data — refuse rather than guess.
+		if len(candidates) > 1 {
+			return fmt.Errorf("ambiguous case for field %q: input has %d keys differing only in case: %v", field.Name, len(candidates), candidates)
+		}
+
+		var (
+			fieldValue any
+			exists     bool
+		)
+		if len(candidates) == 1 {
+			fieldValue = value[candidates[0]]
+			exists = true
+			matched[candidates[0]] = struct{}{}
+		}
 
 		// Validate required fields.
 		if field.Required && (!exists || fieldValue == nil) {
@@ -117,7 +155,8 @@ func (rs *RecordShredder) shredStruct(
 			fieldDefLevel++ // Optional field adds to max def level.
 		}
 
-		// Build path for this field.
+		// Build path for this field using the schema's casing so downstream
+		// consumers see canonical names regardless of the input's casing.
 		fieldPath := append(path, icebergx.PathSegment{Kind: icebergx.PathField, Name: field.Name})
 
 		if !exists || fieldValue == nil {
@@ -136,12 +175,22 @@ func (rs *RecordShredder) shredStruct(
 
 	// Detect unknown fields in input.
 	for key, val := range value {
-		if _, known := knownFields[key]; !known {
+		if _, ok := matched[key]; !ok {
 			sink.OnNewField(slices.Clone(path), key, val)
 		}
 	}
 
 	return nil
+}
+
+// matchKey returns the lookup key used to compare an input record key against
+// a schema field name. In case-sensitive mode it is the identity; in
+// case-insensitive mode it folds to lowercase.
+func (rs *RecordShredder) matchKey(s string) string {
+	if rs.caseSensitive {
+		return s
+	}
+	return strings.ToLower(s)
 }
 
 // shredValue processes a value according to its schema type.

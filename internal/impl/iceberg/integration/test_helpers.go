@@ -89,13 +89,23 @@ func (infra *testInfrastructure) NewCatalogClient(t *testing.T, namespace string
 type RouterOption func(*routerOpts)
 
 type routerOpts struct {
-	schemaEvoCfg icebergimpl.SchemaEvolutionConfig
+	caseSensitive bool
+	schemaEvoCfg  icebergimpl.SchemaEvolutionConfig
 }
 
 // WithSchemaEvolution enables schema evolution on the test router.
 func WithSchemaEvolution(cfg icebergimpl.SchemaEvolutionConfig) RouterOption {
 	return func(o *routerOpts) {
 		o.schemaEvoCfg = cfg
+	}
+}
+
+// WithCaseSensitive sets the case sensitivity behavior on the test router.
+// The default (when this option is not used) is case-sensitive matching, to
+// preserve the released production default.
+func WithCaseSensitive(caseSensitive bool) RouterOption {
+	return func(o *routerOpts) {
+		o.caseSensitive = caseSensitive
 	}
 }
 
@@ -110,7 +120,8 @@ func (infra *testInfrastructure) NewRouter(
 	t.Helper()
 
 	o := routerOpts{
-		schemaEvoCfg: icebergimpl.SchemaEvolutionConfig{Enabled: false},
+		caseSensitive: true,
+		schemaEvoCfg:  icebergimpl.SchemaEvolutionConfig{Enabled: false},
 	}
 	for _, opt := range opts {
 		opt(&o)
@@ -127,7 +138,7 @@ func (infra *testInfrastructure) NewRouter(
 		MaxSnapshotAge:       24 * time.Hour,
 		MaxRetries:           3,
 	}
-	router := icebergimpl.NewRouter(infra.CatalogConfig(), namespaceStr, tableStr, o.schemaEvoCfg, commitCfg, logger)
+	router := icebergimpl.NewRouter(infra.CatalogConfig(), namespaceStr, tableStr, o.caseSensitive, o.schemaEvoCfg, commitCfg, logger)
 	t.Cleanup(func() { router.Close() })
 	return router
 }

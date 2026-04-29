@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+### Added
+
+- iceberg: Added a `case_sensitive_columns` field to the `iceberg` output. When `false`, column-name matching follows iceberg's recommended case-insensitive convention end-to-end (shredding, schema evolution, partition specs, `schema_metadata`). Defaults to `true` for backwards compatibility. (@Jeffail)
+
 ## 4.89.2 - 2026-04-28
 
 ### Fixed

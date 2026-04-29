@@ -460,7 +460,7 @@ func TestParsePartitionSpecEmpty(t *testing.T) {
 
 	for _, input := range testCases {
 		t.Run(fmt.Sprintf("input=%q", input), func(t *testing.T) {
-			spec, err := ParsePartitionSpec(input, schema)
+			spec, err := ParsePartitionSpec(input, schema, true)
 			require.NoError(t, err, "input: %q", input)
 			assert.Equal(t, 0, spec.NumFields(), "expected empty spec for input: %q", input)
 		})
@@ -486,7 +486,7 @@ func TestParsePartitionSpecIdentity(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(fmt.Sprintf("input=%q", tc.input), func(t *testing.T) {
-			spec, err := ParsePartitionSpec(tc.input, schema)
+			spec, err := ParsePartitionSpec(tc.input, schema, true)
 			require.NoError(t, err, "input: %q", tc.input)
 			require.Equal(t, 1, spec.NumFields())
 
@@ -501,7 +501,7 @@ func TestParsePartitionSpecIdentity(t *testing.T) {
 func TestParsePartitionSpecMultipleFields(t *testing.T) {
 	schema := makeTestSchema()
 
-	spec, err := ParsePartitionSpec("(test_int, test_string)", schema)
+	spec, err := ParsePartitionSpec("(test_int, test_string)", schema, true)
 	require.NoError(t, err)
 	require.Equal(t, 2, spec.NumFields())
 
@@ -535,7 +535,7 @@ func TestParsePartitionSpecTimeTransforms(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(fmt.Sprintf("input=%q", tc.input), func(t *testing.T) {
-			spec, err := ParsePartitionSpec(tc.input, schema)
+			spec, err := ParsePartitionSpec(tc.input, schema, true)
 			require.NoError(t, err)
 			require.Equal(t, 1, spec.NumFields())
 
@@ -563,7 +563,7 @@ func TestParsePartitionSpecBucketTransform(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(fmt.Sprintf("input=%q", tc.input), func(t *testing.T) {
-			spec, err := ParsePartitionSpec(tc.input, schema)
+			spec, err := ParsePartitionSpec(tc.input, schema, true)
 			require.NoError(t, err)
 			require.Equal(t, 1, spec.NumFields())
 
@@ -593,7 +593,7 @@ func TestParsePartitionSpecTruncateTransform(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(fmt.Sprintf("input=%q", tc.input), func(t *testing.T) {
-			spec, err := ParsePartitionSpec(tc.input, schema)
+			spec, err := ParsePartitionSpec(tc.input, schema, true)
 			require.NoError(t, err)
 			require.Equal(t, 1, spec.NumFields())
 
@@ -623,7 +623,7 @@ func TestParsePartitionSpecWithAlias(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(fmt.Sprintf("input=%q", tc.input), func(t *testing.T) {
-			spec, err := ParsePartitionSpec(tc.input, schema)
+			spec, err := ParsePartitionSpec(tc.input, schema, true)
 			require.NoError(t, err)
 			require.GreaterOrEqual(t, spec.NumFields(), 1)
 
@@ -656,7 +656,7 @@ func TestParsePartitionSpecQuotedIdentifiers(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(fmt.Sprintf("input=%q", tc.input), func(t *testing.T) {
-			spec, err := ParsePartitionSpec(tc.input, schema)
+			spec, err := ParsePartitionSpec(tc.input, schema, true)
 			require.NoError(t, err)
 			require.Equal(t, 1, spec.NumFields())
 
@@ -705,7 +705,7 @@ func TestParsePartitionSpecNestedFields(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(fmt.Sprintf("input=%q", tc.input), func(t *testing.T) {
-			spec, err := ParsePartitionSpec(tc.input, schema)
+			spec, err := ParsePartitionSpec(tc.input, schema, true)
 			require.NoError(t, err)
 			require.Equal(t, 1, spec.NumFields())
 
@@ -721,7 +721,7 @@ func TestParsePartitionSpecComplexSpec(t *testing.T) {
 	schema := makeTestSchema()
 
 	input := "(hour(test_timestamp) as ts_hour, bucket(16, test_int) as int_bucket, test_string)"
-	spec, err := ParsePartitionSpec(input, schema)
+	spec, err := ParsePartitionSpec(input, schema, true)
 	require.NoError(t, err)
 	require.Equal(t, 3, spec.NumFields())
 
@@ -770,7 +770,7 @@ func TestParsePartitionSpecErrors(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(fmt.Sprintf("input=%q", tc.input), func(t *testing.T) {
-			_, err := ParsePartitionSpec(tc.input, schema)
+			_, err := ParsePartitionSpec(tc.input, schema, true)
 			require.Error(t, err)
 			assert.Contains(t, strings.ToLower(err.Error()), strings.ToLower(tc.errContains),
 				"error should contain %q, got: %v", tc.errContains, err)
@@ -800,12 +800,53 @@ func TestParsePartitionSpecCaseInsensitiveTransforms(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(fmt.Sprintf("input=%q", tc.input), func(t *testing.T) {
-			spec, err := ParsePartitionSpec(tc.input, schema)
+			spec, err := ParsePartitionSpec(tc.input, schema, true)
 			require.NoError(t, err)
 			require.Equal(t, 1, spec.NumFields())
 			assert.Equal(t, tc.transformType, spec.Field(0).Transform)
 		})
 	}
+}
+
+// TestParsePartitionSpecCaseInsensitiveColumns covers the column-resolution
+// half of case sensitivity (transform names were already case-insensitive).
+// When caseSensitive=false, partition specs may reference columns using any
+// casing the user prefers; when caseSensitive=true, the historical strict
+// matching is preserved.
+func TestParsePartitionSpecCaseInsensitiveColumns(t *testing.T) {
+	schema := iceberg.NewSchema(0,
+		iceberg.NestedField{ID: 1, Name: "ts", Type: iceberg.PrimitiveTypes.Timestamp, Required: true},
+		iceberg.NestedField{ID: 2, Name: "user", Type: &iceberg.StructType{
+			FieldList: []iceberg.NestedField{
+				{ID: 3, Name: "id", Type: iceberg.PrimitiveTypes.Int64, Required: true},
+			},
+		}, Required: true},
+	)
+
+	t.Run("uppercase column name resolves case-insensitive", func(t *testing.T) {
+		spec, err := ParsePartitionSpec("(year(TS))", schema, false)
+		require.NoError(t, err)
+		require.Equal(t, 1, spec.NumFields())
+		assert.Equal(t, 1, spec.Field(0).SourceID())
+	})
+
+	t.Run("nested mixed-case column resolves case-insensitive", func(t *testing.T) {
+		spec, err := ParsePartitionSpec("(USER.Id)", schema, false)
+		require.NoError(t, err)
+		require.Equal(t, 1, spec.NumFields())
+		assert.Equal(t, 3, spec.Field(0).SourceID())
+	})
+
+	t.Run("uppercase column name fails case-sensitive", func(t *testing.T) {
+		_, err := ParsePartitionSpec("(year(TS))", schema, true)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "field not found")
+	})
+
+	t.Run("nested case mismatch fails case-sensitive", func(t *testing.T) {
+		_, err := ParsePartitionSpec("(USER.Id)", schema, true)
+		require.Error(t, err)
+	})
 }
 
 // TestParsePartitionSpecWhitespaceHandling tests various whitespace scenarios.
@@ -824,7 +865,7 @@ func TestParsePartitionSpecWhitespaceHandling(t *testing.T) {
 
 	for _, input := range testCases {
 		t.Run(fmt.Sprintf("input=%q", input), func(t *testing.T) {
-			spec, err := ParsePartitionSpec(input, schema)
+			spec, err := ParsePartitionSpec(input, schema, true)
 			require.NoError(t, err)
 			require.GreaterOrEqual(t, spec.NumFields(), 1)
 		})

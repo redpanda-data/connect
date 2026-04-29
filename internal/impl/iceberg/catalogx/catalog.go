@@ -171,20 +171,24 @@ func (c *Client) CreateTable(ctx context.Context, tableName string, schema *iceb
 	return tbl, nil
 }
 
-// UpdateSchema applies schema changes to the table using a transaction.
-// The callback function receives an UpdateSchema instance that can be used to add, delete,
-// rename, or update columns. The transaction is automatically committed after the callback.
+// UpdateSchema applies schema changes to the table using a transaction. The
+// callback receives an UpdateSchema instance for adding, deleting, renaming, or
+// updating columns. The transaction is automatically committed after the
+// callback. The caseSensitive flag controls how column references inside the
+// callback (e.g. to UpdateColumn) are matched against the existing schema, and
+// whether the underlying iceberg-go transaction treats added column names as
+// case-sensitive duplicates of existing columns.
 //
 // Example usage:
 //
-//	err := client.UpdateSchema(ctx, tbl, func(us *table.UpdateSchema) {
+//	err := client.UpdateSchema(ctx, tbl, true, func(us *table.UpdateSchema) {
 //	    us.AddColumn([]string{"email"}, iceberg.StringType{}, "Email address", false, nil)
 //	    us.AddColumn([]string{"age"}, iceberg.Int32Type{}, "", false, nil)
 //	})
-func (c *Client) UpdateSchema(ctx context.Context, tbl *table.Table, fn func(*table.UpdateSchema), opts ...table.UpdateSchemaOption) (*table.Table, error) {
+func (c *Client) UpdateSchema(ctx context.Context, tbl *table.Table, caseSensitive bool, fn func(*table.UpdateSchema), opts ...table.UpdateSchemaOption) (*table.Table, error) {
 	txn := tbl.NewTransaction()
 	updateSchema := txn.UpdateSchema(
-		true,  // caseSensitive
+		caseSensitive,
 		false, // allowIncompatibleChanges
 		opts...,
 	)
