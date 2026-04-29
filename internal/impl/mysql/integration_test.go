@@ -1423,7 +1423,7 @@ func TestIntegrationMySQLCDCParallelSnapshot(t *testing.T) {
 		db.Exec("INSERT INTO snap_baz (id) VALUES (DEFAULT)")
 	}
 
-	t.Run("parralel snapshot", func(t *testing.T) {
+	t.Run("parallel snapshot", func(t *testing.T) {
 		template := fmt.Sprintf(`
 mysql_cdc:
   dsn: %s
