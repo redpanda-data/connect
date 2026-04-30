@@ -293,6 +293,16 @@ func goValueToLiteral(val any, iceType iceberg.Type) (iceberg.Literal, error) {
 			return nil, fmt.Errorf("fixed type requires %d bytes, got %d", t.Len(), len(b))
 		}
 		return iceberg.NewLiteral(b[:t.Len()]), nil
+	case iceberg.DecimalType:
+		// Parquet stores decimals as big-endian two's complement (FIXED_LEN_BYTE_ARRAY).
+		// iceberg.DecimalLiteral.UnmarshalBinary expects the same encoding.
+		b := val.([]byte)
+		var lit iceberg.DecimalLiteral
+		if err := lit.UnmarshalBinary(b); err != nil {
+			return nil, fmt.Errorf("decoding decimal value: %w", err)
+		}
+		lit.Scale = t.Scale()
+		return lit, nil
 	default:
 		return nil, fmt.Errorf("unsupported iceberg type: %v", iceType)
 	}
