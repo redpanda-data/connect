@@ -2,7 +2,7 @@ module github.com/redpanda-data/connect/public/bundle/free/v4
 
 go 1.26.2
 
-require github.com/redpanda-data/connect/v4 v4.89.2
+require github.com/redpanda-data/connect/v4 v4.89.3
 
 require (
 	buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.11-20260209202127-80ab13bee0bf.1 // indirect
