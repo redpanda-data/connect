@@ -12,6 +12,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
+	"slices"
 	"strings"
 	"sync"
 
@@ -388,7 +390,15 @@ func (r *Router) buildSchemaWithResolver(record map[string]any, msg *service.Mes
 	ti := newTypeInferrer(r.caseSensitive)
 	fields := make([]iceberg.NestedField, 0, len(record))
 
-	for name, value := range record {
+	orderedNames := r.resolver.topLevelFieldOrder(msg)
+	if orderedNames == nil {
+		orderedNames = slices.Sorted(maps.Keys(record))
+	}
+	for _, name := range orderedNames {
+		value, exists := record[name]
+		if !exists {
+			continue
+		}
 		fieldType, err := r.resolver.resolveTypeForCreateTable(name, value, msg, key.namespace, key.table, ti)
 		if err != nil {
 			return nil, fmt.Errorf("resolving type for field %q: %w", name, err)
