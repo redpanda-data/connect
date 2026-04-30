@@ -200,7 +200,7 @@ func (s *Snapshot) querySnapshotTable(ctx context.Context, tx *sql.Tx, table str
 		placeholders = append(placeholders, "?")
 	}
 
-	snapshotQueryParts = append(snapshotQueryParts, fmt.Sprintf("WHERE (%s) > (%s)", strings.Join(pk, ", "), strings.Join(placeholders, ", ")))
+	snapshotQueryParts = append(snapshotQueryParts, fmt.Sprintf("WHERE (%s) > (%s)", strings.Join(quoteIdentifiers(pk), ", "), strings.Join(placeholders, ", ")))
 	snapshotQueryParts = append(snapshotQueryParts, buildOrderByClause(pk))
 	snapshotQueryParts = append(snapshotQueryParts, fmt.Sprintf("LIMIT %d", limit))
 	q := strings.Join(snapshotQueryParts, " ")
@@ -209,11 +209,15 @@ func (s *Snapshot) querySnapshotTable(ctx context.Context, tx *sql.Tx, table str
 }
 
 func buildOrderByClause(pk []string) string {
-	if len(pk) == 1 {
-		return "ORDER BY " + pk[0]
-	}
+	return "ORDER BY " + strings.Join(quoteIdentifiers(pk), ", ")
+}
 
-	return "ORDER BY " + strings.Join(pk, ", ")
+func quoteIdentifiers(names []string) []string {
+	quoted := make([]string, len(names))
+	for i, n := range names {
+		quoted[i] = "`" + strings.ReplaceAll(n, "`", "``") + "`"
+	}
+	return quoted
 }
 
 func (s *Snapshot) getCurrentBinlogPosition(ctx context.Context) (position, error) {
