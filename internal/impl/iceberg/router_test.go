@@ -12,10 +12,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/redpanda-data/benthos/v4/public/schema"
-	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/redpanda-data/benthos/v4/public/schema"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 // TestFindCaseOnlyDuplicate covers the create-time guard that prevents an
@@ -88,4 +89,155 @@ func TestBuildSchemaWithResolverPreservesColumnOrder(t *testing.T) {
 	assert.Equal(t, "zebra", fields[0].Name)
 	assert.Equal(t, "alpha", fields[1].Name)
 	assert.Equal(t, "mango", fields[2].Name)
+}
+
+// TestBuildSchemaWithResolverAppendsRecordOnlyFields verifies that record fields
+// not declared in the schema metadata are still included in the iceberg schema.
+// Without this, an enriched record with extra keys would silently lose columns
+// the moment metadata-driven ordering kicks in.
+func TestBuildSchemaWithResolverAppendsRecordOnlyFields(t *testing.T) {
+	router := &Router{
+		caseSensitive: true,
+		resolver:      newTypeResolver("schema_key", nil, true, nil),
+	}
+
+	schemaMeta := schema.Common{
+		Type: schema.Object,
+		Children: []schema.Common{
+			{Name: "zebra", Type: schema.String},
+			{Name: "alpha", Type: schema.String},
+		},
+	}
+
+	msg := service.NewMessage(nil)
+	msg.MetaSetMut("schema_key", schemaMeta.ToAny())
+
+	record := map[string]any{
+		"zebra":  "z",
+		"alpha":  "a",
+		"extra2": "e2",
+		"extra1": "e1",
+	}
+
+	icebergSchema, err := router.buildSchemaWithResolver(record, msg, tableKey{namespace: "ns", table: "t"})
+	require.NoError(t, err)
+
+	fields := icebergSchema.Fields()
+	require.Len(t, fields, 4)
+	// Metadata order first.
+	assert.Equal(t, "zebra", fields[0].Name)
+	assert.Equal(t, "alpha", fields[1].Name)
+	// Record-only keys appended in sorted order for determinism.
+	assert.Equal(t, "extra1", fields[2].Name)
+	assert.Equal(t, "extra2", fields[3].Name)
+}
+
+// TestBuildSchemaWithResolverCaseInsensitiveOrdering verifies that when
+// caseSensitive is false, schema metadata field names match record keys with
+// case folding, and the iceberg column name preserves the record's original
+// casing. Without case-folded matching, lowercase canonical metadata against
+// mixed-case record keys would drop every column.
+func TestBuildSchemaWithResolverCaseInsensitiveOrdering(t *testing.T) {
+	router := &Router{
+		caseSensitive: false,
+		resolver:      newTypeResolver("schema_key", nil, false, nil),
+	}
+
+	schemaMeta := schema.Common{
+		Type: schema.Object,
+		Children: []schema.Common{
+			{Name: "zebra", Type: schema.String},
+			{Name: "alpha", Type: schema.String},
+		},
+	}
+
+	msg := service.NewMessage(nil)
+	msg.MetaSetMut("schema_key", schemaMeta.ToAny())
+
+	record := map[string]any{
+		"Zebra": "z",
+		"ALPHA": "a",
+	}
+
+	icebergSchema, err := router.buildSchemaWithResolver(record, msg, tableKey{namespace: "ns", table: "t"})
+	require.NoError(t, err)
+
+	fields := icebergSchema.Fields()
+	require.Len(t, fields, 2)
+	assert.Equal(t, "Zebra", fields[0].Name)
+	assert.Equal(t, "ALPHA", fields[1].Name)
+}
+
+// TestBuildSchemaWithResolverCaseInsensitiveWithRecordOnlyFields combines
+// case-insensitive metadata-driven ordering with record-only leftover fields
+// to exercise the full merge path: lowercase canonical metadata, mixed-case
+// record keys, plus extras absent from metadata that should appear sorted at
+// the end with their original casing preserved.
+func TestBuildSchemaWithResolverCaseInsensitiveWithRecordOnlyFields(t *testing.T) {
+	router := &Router{
+		caseSensitive: false,
+		resolver:      newTypeResolver("schema_key", nil, false, nil),
+	}
+
+	schemaMeta := schema.Common{
+		Type: schema.Object,
+		Children: []schema.Common{
+			{Name: "alpha", Type: schema.String},
+			{Name: "beta", Type: schema.String},
+		},
+	}
+
+	msg := service.NewMessage(nil)
+	msg.MetaSetMut("schema_key", schemaMeta.ToAny())
+
+	record := map[string]any{
+		"Alpha": "a", // case-folded match for metadata "alpha"
+		"BETA":  "b", // case-folded match for metadata "beta"
+		"gamma": "g", // record-only
+		"Delta": "d", // record-only
+	}
+
+	icebergSchema, err := router.buildSchemaWithResolver(record, msg, tableKey{namespace: "ns", table: "t"})
+	require.NoError(t, err)
+
+	fields := icebergSchema.Fields()
+	require.Len(t, fields, 4)
+	// Metadata-ordered first, with the record's original casing preserved.
+	assert.Equal(t, "Alpha", fields[0].Name)
+	assert.Equal(t, "BETA", fields[1].Name)
+	// Record-only keys appended in bytewise sorted order ("Delta" precedes
+	// "gamma" because uppercase 'D' < lowercase 'g').
+	assert.Equal(t, "Delta", fields[2].Name)
+	assert.Equal(t, "gamma", fields[3].Name)
+}
+
+// TestBuildSchemaWithResolverRejectsCaseOnlyDuplicateMetadata verifies that
+// metadata declaring two top-level children differing only in case is rejected
+// at create time when case-insensitive matching is in effect, mirroring the
+// same guard applied to nested struct metadata. Without this, the override
+// path would silently dedupe and admit one child arbitrarily.
+func TestBuildSchemaWithResolverRejectsCaseOnlyDuplicateMetadata(t *testing.T) {
+	router := &Router{
+		caseSensitive: false,
+		resolver:      newTypeResolver("schema_key", nil, false, nil),
+	}
+
+	schemaMeta := schema.Common{
+		Type: schema.Object,
+		Children: []schema.Common{
+			{Name: "alpha", Type: schema.String},
+			{Name: "ALPHA", Type: schema.String},
+		},
+	}
+
+	msg := service.NewMessage(nil)
+	msg.MetaSetMut("schema_key", schemaMeta.ToAny())
+
+	record := map[string]any{
+		"alpha": "a",
+	}
+
+	_, err := router.buildSchemaWithResolver(record, msg, tableKey{namespace: "ns", table: "t"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "differ only in case")
 }

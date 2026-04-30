@@ -60,13 +60,15 @@ func (r *typeResolver) resolveTypeForAddColumn(
 	}
 
 	// Stage 2: schema_metadata override
-	if r.schemaMetadataKey != "" {
-		if metaType, err := r.resolveFromSchemaMetadata(msg, field.FullPath(), newTypeInferrer(r.caseSensitive)); err != nil {
-			return nil, fmt.Errorf("resolving type from schema metadata for field %v: %w", field.FullPath(), err)
-		} else if metaType != nil {
-			// If the metatype was not found then just stick with the default inferred type
-			inferredType = metaType
-		}
+	common, err := r.parseSchemaMetadata(msg)
+	if err != nil {
+		return nil, fmt.Errorf("resolving type from schema metadata for field %v: %w", field.FullPath(), err)
+	}
+	if metaType, err := r.resolveFromCommon(common, field.FullPath(), newTypeInferrer(r.caseSensitive)); err != nil {
+		return nil, fmt.Errorf("resolving type from schema metadata for field %v: %w", field.FullPath(), err)
+	} else if metaType != nil {
+		// If the metatype was not found then just stick with the default inferred type
+		inferredType = metaType
 	}
 
 	// Stage 3: Bloblang mapping override (only for primitive/leaf types)
@@ -85,10 +87,14 @@ func (r *typeResolver) resolveTypeForAddColumn(
 // ti is a shared field ID allocator so that nested struct field IDs are unique across the entire
 // schema, including IDs assigned by the schema_metadata override path. If stage 2 or 3 overrides
 // replace a nested struct, IDs allocated during stage 1 inference become harmless gaps.
+//
+// common is the pre-parsed schema metadata for the message, or nil when no metadata is present.
+// Parsing once at the call site avoids re-parsing per field across a wide schema.
 func (r *typeResolver) resolveTypeForCreateTable(
 	fieldName string,
 	value any,
 	msg *service.Message,
+	common *schema.Common,
 	namespace, table string,
 	ti *typeInferrer,
 ) (iceberg.Type, error) {
@@ -102,14 +108,12 @@ func (r *typeResolver) resolveTypeForCreateTable(
 	}
 
 	// Stage 2: schema_metadata override (uses shared ti so override structs share the ID space)
-	if r.schemaMetadataKey != "" {
-		path := icebergx.Path{{Kind: icebergx.PathField, Name: fieldName}}
-		if metaType, err := r.resolveFromSchemaMetadata(msg, path, ti); err != nil {
-			return nil, fmt.Errorf("resolving type from schema metadata for field %q: %w", fieldName, err)
-		} else if metaType != nil {
-			// If the metatype was not found then just stick with the default inferred type
-			inferredType = metaType
-		}
+	path := icebergx.Path{{Kind: icebergx.PathField, Name: fieldName}}
+	if metaType, err := r.resolveFromCommon(common, path, ti); err != nil {
+		return nil, fmt.Errorf("resolving type from schema metadata for field %q: %w", fieldName, err)
+	} else if metaType != nil {
+		// If the metatype was not found then just stick with the default inferred type
+		inferredType = metaType
 	}
 
 	// Stage 3: Bloblang mapping override (only for primitive/leaf types)
@@ -125,11 +129,15 @@ func (r *typeResolver) resolveTypeForCreateTable(
 	return inferredType, nil
 }
 
-// resolveFromSchemaMetadata looks up the type for a field path in the schema.Common
-// structure found in message metadata. ti is the field ID allocator used when the
-// resolved type is a struct or list; pass the schema's shared allocator to keep IDs
-// unique across the whole schema, or a fresh one when the result is single-column.
-func (r *typeResolver) resolveFromSchemaMetadata(msg *service.Message, fieldPath icebergx.Path, ti *typeInferrer) (iceberg.Type, error) {
+// parseSchemaMetadata reads the schema.Common from message metadata. Returns
+// (nil, nil) when no metadata key is configured or the key is absent on the
+// message — in both cases callers should fall back to default type inference.
+// A parse error is surfaced so a malformed schema is rejected loudly rather
+// than silently degrading to inference.
+func (r *typeResolver) parseSchemaMetadata(msg *service.Message) (*schema.Common, error) {
+	if r.schemaMetadataKey == "" {
+		return nil, nil
+	}
 	metaAny, exists := msg.MetaGetMut(r.schemaMetadataKey)
 	if !exists {
 		if r.logger != nil {
@@ -137,17 +145,25 @@ func (r *typeResolver) resolveFromSchemaMetadata(msg *service.Message, fieldPath
 		}
 		return nil, nil
 	}
-
-	commonSchema, err := schema.ParseFromAny(metaAny)
+	c, err := schema.ParseFromAny(metaAny)
 	if err != nil {
 		return nil, fmt.Errorf("parsing schema metadata: %w", err)
 	}
+	return &c, nil
+}
 
-	field, found := findCommonField(commonSchema, fieldPath, r.caseSensitive)
+// resolveFromCommon looks up the type for a field path in a pre-parsed schema.Common.
+// ti is the field ID allocator used when the resolved type is a struct or list; pass
+// the schema's shared allocator to keep IDs unique across the whole schema, or a
+// fresh one when the result is single-column.
+func (r *typeResolver) resolveFromCommon(common *schema.Common, fieldPath icebergx.Path, ti *typeInferrer) (iceberg.Type, error) {
+	if common == nil {
+		return nil, nil
+	}
+	field, found := findCommonField(*common, fieldPath, r.caseSensitive)
 	if !found {
 		return nil, nil
 	}
-
 	return commonTypeToIcebergType(field, ti)
 }
 
@@ -399,26 +415,29 @@ func parseIcebergTypeString(s string) (iceberg.Type, error) {
 	return nil, fmt.Errorf("unrecognized iceberg type: %q", s)
 }
 
-// topLevelFieldOrder returns the top-level field names from the schema metadata
-// in the order they appear there, or nil if no schema metadata is present.
-func (r *typeResolver) topLevelFieldOrder(msg *service.Message) []string {
-	if r.schemaMetadataKey == "" {
-		return nil
+// topLevelFieldOrder returns the top-level field names from the pre-parsed
+// schema metadata in the order they appear there, or nil if common is absent
+// or is not a top-level object. When case-insensitive matching is in effect,
+// metadata that declares two top-level children differing only in case is
+// rejected — mirroring the same guard that commonObjectToIcebergStruct
+// applies to nested struct metadata.
+func (r *typeResolver) topLevelFieldOrder(common *schema.Common) ([]string, error) {
+	if common == nil || common.Type != schema.Object {
+		return nil, nil
 	}
-	raw, exists := msg.MetaGetMut(r.schemaMetadataKey)
-	if !exists {
-		return nil
+	if !r.caseSensitive {
+		seen := make(map[string]string, len(common.Children))
+		for _, child := range common.Children {
+			lower := strings.ToLower(child.Name)
+			if existing, ok := seen[lower]; ok {
+				return nil, fmt.Errorf("ambiguous top-level fields in schema metadata: %q and %q differ only in case", existing, child.Name)
+			}
+			seen[lower] = child.Name
+		}
 	}
-	c, err := schema.ParseFromAny(raw)
-	if err != nil {
-		return nil
-	}
-	if c.Type != schema.Object {
-		return nil
-	}
-	names := make([]string, 0, len(c.Children))
-	for _, child := range c.Children {
+	names := make([]string, 0, len(common.Children))
+	for _, child := range common.Children {
 		names = append(names, child.Name)
 	}
-	return names
+	return names, nil
 }

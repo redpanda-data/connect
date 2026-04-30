@@ -421,7 +421,7 @@ func TestTypeResolverResolveTypeForCreateTable(t *testing.T) {
 		msg := service.NewMessage(nil)
 		msg.SetStructuredMut(map[string]any{"name": "hello"})
 
-		got, err := r.resolveTypeForCreateTable("name", "hello", msg, "ns", "tbl", newTypeInferrer(true))
+		got, err := r.resolveTypeForCreateTable("name", "hello", msg, nil, "ns", "tbl", newTypeInferrer(true))
 		require.NoError(t, err)
 		assert.Equal(t, "string", got.Type())
 	})
@@ -432,7 +432,7 @@ func TestTypeResolverResolveTypeForCreateTable(t *testing.T) {
 		msg := service.NewMessage(nil)
 		msg.SetStructuredMut(map[string]any{})
 
-		got, err := r.resolveTypeForCreateTable("name", nil, msg, "ns", "tbl", newTypeInferrer(true))
+		got, err := r.resolveTypeForCreateTable("name", nil, msg, nil, "ns", "tbl", newTypeInferrer(true))
 		require.NoError(t, err)
 		assert.Nil(t, got)
 	})
@@ -450,7 +450,9 @@ func TestTypeResolverResolveTypeForCreateTable(t *testing.T) {
 		msg.SetStructuredMut(map[string]any{"count": 42})
 		msg.MetaSetMut("test_schema", commonSchema.ToAny())
 
-		got, err := r.resolveTypeForCreateTable("count", 42, msg, "ns", "tbl", newTypeInferrer(true))
+		common, err := r.parseSchemaMetadata(msg)
+		require.NoError(t, err)
+		got, err := r.resolveTypeForCreateTable("count", 42, msg, common, "ns", "tbl", newTypeInferrer(true))
 		require.NoError(t, err)
 		assert.Equal(t, "long", got.Type())
 	})
@@ -462,7 +464,7 @@ func TestTypeResolverResolveTypeForCreateTable(t *testing.T) {
 		msg := service.NewMessage(nil)
 		msg.SetStructuredMut(map[string]any{"count": 42})
 
-		got, err := r.resolveTypeForCreateTable("count", 42, msg, "ns", "tbl", newTypeInferrer(true))
+		got, err := r.resolveTypeForCreateTable("count", 42, msg, nil, "ns", "tbl", newTypeInferrer(true))
 		require.NoError(t, err)
 		assert.Equal(t, "long", got.Type())
 	})
@@ -473,7 +475,9 @@ func TestTypeResolverResolveTypeForCreateTable(t *testing.T) {
 		msg := service.NewMessage(nil)
 		msg.SetStructuredMut(map[string]any{"count": 42})
 
-		got, err := r.resolveTypeForCreateTable("count", 42, msg, "ns", "tbl", newTypeInferrer(true))
+		common, err := r.parseSchemaMetadata(msg)
+		require.NoError(t, err)
+		got, err := r.resolveTypeForCreateTable("count", 42, msg, common, "ns", "tbl", newTypeInferrer(true))
 		require.NoError(t, err, "should not error when schema_metadata is missing from message")
 		assert.Equal(t, "long", got.Type(), "should fall back to inference")
 	})
@@ -500,7 +504,7 @@ func TestTypeResolverResolveTypeForCreateTable(t *testing.T) {
 		// Build fields the same way buildSchemaWithResolver does.
 		var allIDs []int
 		for name, value := range record {
-			fieldType, err := r.resolveTypeForCreateTable(name, value, msg, "ns", "tbl", ti)
+			fieldType, err := r.resolveTypeForCreateTable(name, value, msg, nil, "ns", "tbl", ti)
 			require.NoError(t, err)
 			if fieldType == nil {
 				continue
@@ -561,9 +565,12 @@ func TestTypeResolverResolveTypeForCreateTable(t *testing.T) {
 		msg.SetStructuredMut(record)
 		msg.MetaSetMut("test_schema", commonRoot.ToAny())
 
+		common, err := r.parseSchemaMetadata(msg)
+		require.NoError(t, err)
+
 		var allIDs []int
 		for name, value := range record {
-			fieldType, err := r.resolveTypeForCreateTable(name, value, msg, "ns", "tbl", ti)
+			fieldType, err := r.resolveTypeForCreateTable(name, value, msg, common, "ns", "tbl", ti)
 			require.NoError(t, err)
 			require.NotNil(t, fieldType)
 			topID := ti.allocateFieldID()
