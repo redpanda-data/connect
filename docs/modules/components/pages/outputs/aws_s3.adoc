@@ -387,7 +387,7 @@ The object canned ACL value.
 
 *Type*: `string`
 
-*Default*: `"private"`
+*Default*: `""`
 
 Options:
 `private`
