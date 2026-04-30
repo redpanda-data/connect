@@ -31,13 +31,15 @@ import (
 type typeResolver struct {
 	schemaMetadataKey    string
 	newColumnTypeMapping *bloblang.Executor
+	caseSensitive        bool
 	logger               *service.Logger
 }
 
-func newTypeResolver(schemaMetadataKey string, newColumnTypeMapping *bloblang.Executor, logger *service.Logger) *typeResolver {
+func newTypeResolver(schemaMetadataKey string, newColumnTypeMapping *bloblang.Executor, caseSensitive bool, logger *service.Logger) *typeResolver {
 	return &typeResolver{
 		schemaMetadataKey:    schemaMetadataKey,
 		newColumnTypeMapping: newColumnTypeMapping,
+		caseSensitive:        caseSensitive,
 		logger:               logger,
 	}
 }
@@ -48,15 +50,18 @@ func (r *typeResolver) resolveTypeForAddColumn(
 	msg *service.Message,
 	namespace, table string,
 ) (iceberg.Type, error) {
-	// Stage 1: Default inference
-	inferredType, err := InferIcebergTypeForAddColumn(field.Value())
+	// Stage 1: Default inference. Use the resolver's case sensitivity so that
+	// new struct columns whose value carries case-only-duplicate keys are
+	// rejected at the inference step rather than producing an iceberg struct
+	// that would later collide with itself.
+	inferredType, err := inferIcebergTypeForAddColumn(field.Value(), r.caseSensitive)
 	if err != nil {
 		return nil, fmt.Errorf("inferring type for field %q: %w", field.FieldName(), err)
 	}
 
 	// Stage 2: schema_metadata override
 	if r.schemaMetadataKey != "" {
-		if metaType, err := r.resolveFromSchemaMetadata(msg, field.FullPath(), newTypeInferrer()); err != nil {
+		if metaType, err := r.resolveFromSchemaMetadata(msg, field.FullPath(), newTypeInferrer(r.caseSensitive)); err != nil {
 			return nil, fmt.Errorf("resolving type from schema metadata for field %v: %w", field.FullPath(), err)
 		} else if metaType != nil {
 			// If the metatype was not found then just stick with the default inferred type
@@ -138,7 +143,7 @@ func (r *typeResolver) resolveFromSchemaMetadata(msg *service.Message, fieldPath
 		return nil, fmt.Errorf("parsing schema metadata: %w", err)
 	}
 
-	field, found := findCommonField(commonSchema, fieldPath)
+	field, found := findCommonField(commonSchema, fieldPath, r.caseSensitive)
 	if !found {
 		return nil, nil
 	}
@@ -146,8 +151,11 @@ func (r *typeResolver) resolveFromSchemaMetadata(msg *service.Message, fieldPath
 	return commonTypeToIcebergType(field, ti)
 }
 
-// findCommonField walks a schema.Common tree to find the field at the given path.
-func findCommonField(root schema.Common, path icebergx.Path) (*schema.Common, bool) {
+// findCommonField walks a schema.Common tree to find the field at the given
+// path. When caseSensitive is false, name comparisons fold case so a metadata
+// schema authored with iceberg-canonical (typically lowercase) names still
+// matches paths derived from arbitrarily-cased input keys.
+func findCommonField(root schema.Common, path icebergx.Path, caseSensitive bool) (*schema.Common, bool) {
 	names := make([]string, 0, len(path))
 	for _, seg := range path {
 		if seg.Kind == icebergx.PathField {
@@ -156,6 +164,13 @@ func findCommonField(root schema.Common, path icebergx.Path) (*schema.Common, bo
 	}
 	if len(names) == 0 {
 		return nil, false
+	}
+
+	nameMatch := func(a, b string) bool {
+		if caseSensitive {
+			return a == b
+		}
+		return strings.EqualFold(a, b)
 	}
 
 	current := &root
@@ -170,7 +185,7 @@ func findCommonField(root schema.Common, path icebergx.Path) (*schema.Common, bo
 
 		found := false
 		for i := range children {
-			if children[i].Name == name {
+			if nameMatch(children[i].Name, name) {
 				current = &children[i]
 				found = true
 				break
@@ -226,6 +241,21 @@ func commonTypeToIcebergTypeRec(c *schema.Common, ti *typeInferrer) (iceberg.Typ
 }
 
 func commonObjectToIcebergStruct(c *schema.Common, ti *typeInferrer) (*iceberg.StructType, error) {
+	// Mirror the auto-inference path: when case-insensitive matching is in
+	// effect, refuse a metadata-supplied struct that contains two children
+	// differing only in case rather than producing an iceberg struct that
+	// would collide with itself under iceberg's case-folded uniqueness.
+	if !ti.caseSensitive {
+		seen := make(map[string]string, len(c.Children))
+		for _, child := range c.Children {
+			lower := strings.ToLower(child.Name)
+			if existing, ok := seen[lower]; ok {
+				return nil, fmt.Errorf("ambiguous struct fields in schema metadata for %q: %q and %q differ only in case", c.Name, existing, child.Name)
+			}
+			seen[lower] = child.Name
+		}
+	}
+
 	fields := make([]iceberg.NestedField, 0, len(c.Children))
 	for _, child := range c.Children {
 		childType, err := commonTypeToIcebergTypeRec(&child, ti)

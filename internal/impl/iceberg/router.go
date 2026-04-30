@@ -63,35 +63,41 @@ type tableEntry struct {
 
 // Router routes message batches to per-table writers.
 type Router struct {
-	catalogCfg   catalogx.Config
-	namespaceStr *service.InterpolatedString
-	tableStr     *service.InterpolatedString
-	schemaEvoCfg SchemaEvolutionConfig
-	commitCfg    CommitConfig
-	resolver     *typeResolver
+	catalogCfg    catalogx.Config
+	namespaceStr  *service.InterpolatedString
+	tableStr      *service.InterpolatedString
+	caseSensitive bool
+	schemaEvoCfg  SchemaEvolutionConfig
+	commitCfg     CommitConfig
+	resolver      *typeResolver
 
 	entries sync.Map // tableKey -> *tableEntry
 
 	logger *service.Logger
 }
 
-// NewRouter creates a new router.
+// NewRouter creates a new router. caseSensitive controls how message keys are
+// matched against schema field names and how column references are resolved
+// during schema evolution and partition spec parsing. When false, names are
+// compared case-insensitively, matching iceberg's recommended convention.
 func NewRouter(
 	catalogCfg catalogx.Config,
 	namespaceStr *service.InterpolatedString,
 	tableStr *service.InterpolatedString,
+	caseSensitive bool,
 	schemaEvoCfg SchemaEvolutionConfig,
 	commitCfg CommitConfig,
 	logger *service.Logger,
 ) *Router {
 	return &Router{
-		catalogCfg:   catalogCfg,
-		namespaceStr: namespaceStr,
-		tableStr:     tableStr,
-		schemaEvoCfg: schemaEvoCfg,
-		commitCfg:    commitCfg,
-		resolver:     newTypeResolver(schemaEvoCfg.SchemaMetadata, schemaEvoCfg.NewColumnTypeMapping, logger),
-		logger:       logger,
+		catalogCfg:    catalogCfg,
+		namespaceStr:  namespaceStr,
+		tableStr:      tableStr,
+		caseSensitive: caseSensitive,
+		schemaEvoCfg:  schemaEvoCfg,
+		commitCfg:     commitCfg,
+		resolver:      newTypeResolver(schemaEvoCfg.SchemaMetadata, schemaEvoCfg.NewColumnTypeMapping, caseSensitive, logger),
+		logger:        logger,
 	}
 }
 
@@ -331,7 +337,7 @@ func (r *Router) createTable(ctx context.Context, key tableKey, batch service.Me
 			return fmt.Errorf("interpolating partition spec: %w", err)
 		}
 		if specStr != "" {
-			spec, err := icebergx.ParsePartitionSpec(specStr, schema)
+			spec, err := icebergx.ParsePartitionSpec(specStr, schema, r.caseSensitive)
 			if err != nil {
 				return fmt.Errorf("parsing partition spec %q: %w", specStr, err)
 			}
@@ -369,7 +375,17 @@ func (r *Router) createTable(ctx context.Context, key tableKey, batch service.Me
 
 // buildSchemaWithResolver builds a schema using the type resolver for type resolution.
 func (r *Router) buildSchemaWithResolver(record map[string]any, msg *service.Message, key tableKey) (*iceberg.Schema, error) {
-	ti := newTypeInferrer()
+	// In case-insensitive mode, two record keys differing only in case would
+	// collapse to a single iceberg column under spec rules — admitting both
+	// would either be silently rejected by the catalog or, worse, accepted
+	// and then conflict on every subsequent write. Refuse at create time.
+	if !r.caseSensitive {
+		if dupA, dupB, ok := findCaseOnlyDuplicate(record); ok {
+			return nil, fmt.Errorf("ambiguous columns at table creation: %q and %q differ only in case", dupA, dupB)
+		}
+	}
+
+	ti := newTypeInferrer(r.caseSensitive)
 	fields := make([]iceberg.NestedField, 0, len(record))
 
 	for name, value := range record {
@@ -389,6 +405,21 @@ func (r *Router) buildSchemaWithResolver(record map[string]any, msg *service.Mes
 	}
 
 	return iceberg.NewSchema(0, fields...), nil
+}
+
+// findCaseOnlyDuplicate returns the first pair of map keys that fold to the
+// same lowercase string, if any. Used by case-insensitive table creation to
+// reject input that would collapse to a single iceberg column.
+func findCaseOnlyDuplicate(record map[string]any) (string, string, bool) {
+	seen := make(map[string]string, len(record))
+	for name := range record {
+		lower := strings.ToLower(name)
+		if existing, ok := seen[lower]; ok {
+			return existing, name, true
+		}
+		seen[lower] = name
+	}
+	return "", "", false
 }
 
 // evolveSchema adds new columns to the table.
@@ -414,7 +445,7 @@ func (r *Router) evolveSchema(ctx context.Context, key tableKey, schemaErr *Batc
 
 	// Update schema with new columns
 	added := 0
-	_, err = client.UpdateSchema(ctx, tbl, func(us *table.UpdateSchema) {
+	_, err = client.UpdateSchema(ctx, tbl, r.caseSensitive, func(us *table.UpdateSchema) {
 		for _, fields := range groups {
 			for _, field := range fields {
 				// Resolve type using the three-stage pipeline
@@ -478,7 +509,7 @@ func (r *Router) makeColumnOptional(ctx context.Context, key tableKey, reqNullEr
 	colPath = append(colPath, reqNullErr.Field.Name)
 
 	// Update schema to make the column optional
-	_, err = client.UpdateSchema(ctx, tbl, func(us *table.UpdateSchema) {
+	_, err = client.UpdateSchema(ctx, tbl, r.caseSensitive, func(us *table.UpdateSchema) {
 		us.UpdateColumn(colPath, table.ColumnUpdate{
 			Required: iceberg.Optional[bool]{Val: false, Valid: true},
 		})
@@ -547,7 +578,7 @@ func (r *Router) createWriter(ctx context.Context, key tableKey) (*writer, error
 	}
 
 	// Create writer with its own table reference and the committer
-	w := NewWriter(writerTbl, comm, r.logger)
+	w := NewWriter(writerTbl, comm, r.caseSensitive, r.logger)
 	r.logger.Debugf("Created writer for table %s.%s", key.namespace, key.table)
 
 	return w, nil

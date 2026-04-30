@@ -17,14 +17,18 @@ import (
 )
 
 // typeInferrer holds state for inferring Iceberg types from Go values.
-// It tracks field IDs for nested structures to ensure unique IDs across the schema.
+// It tracks field IDs for nested structures to ensure unique IDs across the
+// schema. When caseSensitive is false, the inferrer rejects struct values
+// that contain two keys differing only in case so they don't materialise as
+// duplicate iceberg fields.
 type typeInferrer struct {
-	nextFieldID int
+	nextFieldID   int
+	caseSensitive bool
 }
 
 // newTypeInferrer creates a new type inferrer starting with field ID 1.
-func newTypeInferrer() *typeInferrer {
-	return &typeInferrer{nextFieldID: 1}
+func newTypeInferrer(caseSensitive bool) *typeInferrer {
+	return &typeInferrer{nextFieldID: 1, caseSensitive: caseSensitive}
 }
 
 // allocateFieldID returns the next available field ID and increments the counter.
@@ -51,8 +55,12 @@ func (ti *typeInferrer) allocateFieldID() int {
 //
 // Returns nil if the value is nil (the caller should skip this field).
 // Returns an error for unsupported types.
+//
+// This entry point uses case-sensitive struct construction. Callers that need
+// iceberg's case-insensitive convention should construct a typeInferrer
+// directly with caseSensitive=false.
 func InferIcebergType(value any) (iceberg.Type, error) {
-	ti := newTypeInferrer()
+	ti := newTypeInferrer(true)
 	return ti.inferType(value)
 }
 
@@ -157,6 +165,16 @@ func (ti *typeInferrer) inferStructType(m map[string]any) (*iceberg.StructType, 
 		return &iceberg.StructType{FieldList: []iceberg.NestedField{}}, nil
 	}
 
+	// In case-insensitive mode two keys differing only in case would each
+	// materialise as a struct field; subsequent reads or schema updates would
+	// then collide. Refuse here so the failure surfaces at the source rather
+	// than as a confusing iceberg-side error later.
+	if !ti.caseSensitive {
+		if a, b, ok := findCaseOnlyDuplicate(m); ok {
+			return nil, fmt.Errorf("ambiguous struct fields: %q and %q differ only in case", a, b)
+		}
+	}
+
 	fields := make([]iceberg.NestedField, 0, len(m))
 	for name, value := range m {
 		fieldType, err := ti.inferType(value)
@@ -180,10 +198,21 @@ func (ti *typeInferrer) inferStructType(m map[string]any) (*iceberg.StructType, 
 
 // InferIcebergTypeForAddColumn infers the type for a new column to be added via schema evolution.
 // This is similar to InferIcebergType but handles the special case where we need
-// to add a column at a specific path in the schema.
+// to add a column at a specific path in the schema. Uses case-sensitive struct
+// construction; internal callers that need the case-insensitive variant should
+// use inferIcebergTypeForAddColumn.
 func InferIcebergTypeForAddColumn(value any) (iceberg.Type, error) {
+	return inferIcebergTypeForAddColumn(value, true)
+}
+
+// inferIcebergTypeForAddColumn is the case-sensitivity-aware internal variant
+// used by the type resolver so that nested struct values with case-only
+// duplicate keys are rejected when iceberg's case-insensitive convention is
+// in effect.
+func inferIcebergTypeForAddColumn(value any, caseSensitive bool) (iceberg.Type, error) {
 	if value == nil {
 		return iceberg.StringType{}, nil // Default to string for nil
 	}
-	return InferIcebergType(value)
+	ti := newTypeInferrer(caseSensitive)
+	return ti.inferType(value)
 }

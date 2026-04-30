@@ -230,6 +230,8 @@ func formatLiteralValue(transform iceberg.Transform, lit iceberg.Literal) string
 }
 
 // ParsePartitionSpec parses a Spark-like DDL expression string into an iceberg PartitionSpec.
+// caseSensitive controls whether column references in the spec are matched
+// against schema field names case-sensitively or case-insensitively.
 //
 // Supported syntax:
 //   - Optional parentheses: "(field1, field2)" or "field1, field2"
@@ -241,20 +243,22 @@ func formatLiteralValue(transform iceberg.Transform, lit iceberg.Literal) string
 //   - Nested column names: "foo.bar.baz"
 //
 // See: https://github.com/redpanda-data/redpanda/blob/dev/src/v/datalake/partition_spec_parser.cc
-func ParsePartitionSpec(input string, schema *iceberg.Schema) (iceberg.PartitionSpec, error) {
+func ParsePartitionSpec(input string, schema *iceberg.Schema, caseSensitive bool) (iceberg.PartitionSpec, error) {
 	p := &partitionSpecParser{
-		input:  input,
-		pos:    0,
-		schema: schema,
+		input:         input,
+		pos:           0,
+		schema:        schema,
+		caseSensitive: caseSensitive,
 	}
 	return p.parse()
 }
 
 // partitionSpecParser implements a recursive descent parser for partition specs.
 type partitionSpecParser struct {
-	input  string
-	pos    int
-	schema *iceberg.Schema
+	input         string
+	pos           int
+	schema        *iceberg.Schema
+	caseSensitive bool
 }
 
 // parse is the main entry point.
@@ -656,7 +660,15 @@ func (p *partitionSpecParser) resolveColumnRef(colRef string) (int, error) {
 
 	// Handle dotted path
 	parts := splitColumnRef(colRef)
-	field, ok := p.schema.FindFieldByName(parts[0])
+	var (
+		field iceberg.NestedField
+		ok    bool
+	)
+	if p.caseSensitive {
+		field, ok = p.schema.FindFieldByName(parts[0])
+	} else {
+		field, ok = p.schema.FindFieldByNameCaseInsensitive(parts[0])
+	}
 	if !ok {
 		return 0, fmt.Errorf("field not found: %s", parts[0])
 	}
@@ -672,7 +684,7 @@ func (p *partitionSpecParser) resolveColumnRef(colRef string) (int, error) {
 
 		found := false
 		for _, f := range st.FieldList {
-			if f.Name == parts[i] {
+			if p.namesEqual(f.Name, parts[i]) {
 				field = f
 				fieldID = f.ID
 				found = true
@@ -738,6 +750,15 @@ func (p *partitionSpecParser) matchKeyword(keyword string) bool {
 
 func (p *partitionSpecParser) errorf(format string, args ...any) error {
 	return fmt.Errorf("col %d: "+format, append([]any{p.pos + 1}, args...)...)
+}
+
+// namesEqual compares two field names according to the parser's case
+// sensitivity setting.
+func (p *partitionSpecParser) namesEqual(a, b string) bool {
+	if p.caseSensitive {
+		return a == b
+	}
+	return strings.EqualFold(a, b)
 }
 
 func isWhitespace(ch byte) bool {

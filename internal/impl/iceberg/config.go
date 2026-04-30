@@ -33,8 +33,9 @@ const (
 	ioFieldCatalogTLSSkipVer  = "tls_skip_verify"
 
 	// Table fields
-	ioFieldNamespace = "namespace"
-	ioFieldTable     = "table"
+	ioFieldNamespace            = "namespace"
+	ioFieldTable                = "table"
+	ioFieldCaseSensitiveColumns = "case_sensitive_columns"
 
 	// Storage fields - common
 	ioFieldStorage = "storage"
@@ -207,6 +208,11 @@ array:list
 				Description("The Iceberg table name. Supports interpolation functions for dynamic table names.").
 				Example("user_events").
 				Example(`events_${!meta("topic")}`),
+
+			service.NewBoolField(ioFieldCaseSensitiveColumns).
+				Description("Controls how message field names are matched against table column names, and how column references in the partition spec are resolved. When `true` (the default), names must match exactly. When `false`, matching is case-insensitive — set this when your downstream catalog or query engine treats column names as case-insensitive (the iceberg specification's recommended convention) so that, for example, a message keyed `\"COLUMN\"` lands in an existing `column` rather than triggering schema evolution. Ambiguous case-only duplicates in the input are rejected.").
+				Default(true).
+				Advanced(),
 
 			// Storage configuration - one of s3, gcs, or azure must be specified
 			service.NewObjectField(ioFieldStorage,
