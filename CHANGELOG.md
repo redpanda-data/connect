@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.90.0 - 2026-04-30
+
+### Added
+
+- mysql_cdc: MySQL CDC connector now supports parallel snapshots to improve initial data capture performance when replicating large tables. ([@josephwoodward](https://github.com/josephwoodward), [#4363](https://github.com/redpanda-data/connect/pull/4363))
+
 ## 4.89.3 - 2026-04-30
 
 ### Fixed
