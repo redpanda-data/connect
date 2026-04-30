@@ -1,0 +1,525 @@
+version: "3"
+
+silent: true
+
+vars:
+  KAFKA_BOOTSTRAP: '{{.KAFKA_BOOTSTRAP | default "localhost:9092"}}'
+  CONNECT_URL:     '{{.CONNECT_URL     | default "http://localhost:8083"}}'
+  S3_ENDPOINT:     '{{.S3_ENDPOINT     | default "http://localhost:4566"}}'
+  CONNECTOR_NAME:  '{{.CONNECTOR_NAME  | default "s3-sink-bench"}}'
+  CONSUMER_GROUP:  connect-s3-sink-bench
+
+  # ── Connector parameters (used by connector:create and bench:run) ─────────────
+  TASKS_MAX:          '{{.TASKS_MAX          | default "16"}}'
+  FLUSH_SIZE:         '{{.FLUSH_SIZE         | default "10000"}}'
+  POLL_RECORDS:       '{{.POLL_RECORDS       | default "5000"}}'
+  FETCH_MIN_BYTES:    '{{.FETCH_MIN_BYTES    | default "1048576"}}'
+  PART_SIZE:          '{{.PART_SIZE          | default "5242880"}}'
+  # rotate.schedule.interval.ms: periodically flush whatever is buffered, regardless of
+  # flush.size. Works with DefaultPartitioner (unlike rotate.interval.ms which requires
+  # TimeBasedPartitioner). Ensures the final partial batch is committed so lag reaches 0.
+  ROTATE_SCHEDULE_MS: '{{.ROTATE_SCHEDULE_MS | default "10000"}}'
+
+  # ── Matrix sweep lists (space-separated values to try for each parameter) ─────
+  TASKS_LIST:      '{{.TASKS_LIST      | default "4 8 16"}}'
+  FLUSH_LIST:      '{{.FLUSH_LIST      | default "1000 10000 50000"}}'
+  POLL_LIST:       '{{.POLL_LIST       | default "1000 5000 10000"}}'
+  FETCH_MIN_LIST:  '{{.FETCH_MIN_LIST  | default "1048576 4194304"}}'
+  MATRIX_INTERVAL: '{{.MATRIX_INTERVAL | default "5"}}'
+
+tasks:
+  # ── Infrastructure ────────────────────────────────────────────────────────────
+
+  up:
+    desc: Build and start all infrastructure (Kafka, LocalStack, Kafka Connect), wait until ready
+    cmds:
+      - docker compose up -d --build
+      - until curl -sf {{.CONNECT_URL}}/ > /dev/null 2>&1; do sleep 3; done
+      - echo "Kafka Connect ready at {{.CONNECT_URL}}"
+
+  down:
+    desc: Stop and remove all containers and volumes
+    cmds:
+      - docker compose down -v --remove-orphans
+
+  # ── Connector management ──────────────────────────────────────────────────────
+
+  connector:create:
+    desc: |
+      Register the S3 sink connector with configurable parameters.
+      e.g. task connector:create TASKS_MAX=8 FLUSH_SIZE=5000 POLL_RECORDS=10000 FETCH_MIN_BYTES=4194304
+    cmds:
+      - |
+        jq -n \
+          --arg name    "{{.CONNECTOR_NAME}}" \
+          --arg tasks   "{{.TASKS_MAX}}" \
+          --arg flush   "{{.FLUSH_SIZE}}" \
+          --arg poll    "{{.POLL_RECORDS}}" \
+          --arg fetch   "{{.FETCH_MIN_BYTES}}" \
+          --arg part    "{{.PART_SIZE}}" \
+          --arg rotate  "{{.ROTATE_SCHEDULE_MS}}" \
+          '{
+            name: $name,
+            config: {
+              "connector.class":                     "io.confluent.connect.s3.S3SinkConnector",
+              "tasks.max":                           $tasks,
+              "topics":                              "bench-events",
+              "s3.region":                           "us-east-1",
+              "s3.bucket.name":                      "bench-events",
+              "store.url":                           "http://localstack:4566",
+              "s3.part.size":                        $part,
+              "flush.size":                          $flush,
+              "rotate.interval.ms":                  "-1",
+              "rotate.schedule.interval.ms":         $rotate,
+              "timezone":                            "UTC",
+              "storage.class":                       "io.confluent.connect.s3.storage.S3Storage",
+              "format.class":                        "io.confluent.connect.s3.format.json.JsonFormat",
+              "key.converter":                       "org.apache.kafka.connect.storage.StringConverter",
+              "value.converter":                     "org.apache.kafka.connect.json.JsonConverter",
+              "value.converter.schemas.enable":      "false",
+              "schema.compatibility":                "NONE",
+              "consumer.override.fetch.min.bytes":   $fetch,
+              "consumer.override.fetch.max.wait.ms": "500",
+              "consumer.override.max.poll.records":  $poll
+            }
+          }' > /tmp/connector-cfg.json
+        RESP=$(curl -s -X POST {{.CONNECT_URL}}/connectors \
+          -H "Content-Type: application/json" --data-binary @/tmp/connector-cfg.json)
+        rm -f /tmp/connector-cfg.json
+        echo "$RESP" | jq -r 'if .error_code then "ERROR \(.error_code): \(.message)" else "registered: \(.name)" end'
+        echo "$RESP" | jq -e '.error_code' > /dev/null 2>&1 && exit 1 || true
+
+  connector:status:
+    desc: Show connector and task status
+    cmds:
+      - curl -s {{.CONNECT_URL}}/connectors/{{.CONNECTOR_NAME}}/status | jq .
+
+  connector:tasks:
+    desc: Show status of all connectors and their tasks (useful for debugging failures)
+    cmds:
+      - |
+        for name in $(curl -s {{.CONNECT_URL}}/connectors | jq -r '.[]'); do
+          echo "── $name ──"
+          curl -s {{.CONNECT_URL}}/connectors/$name/status | jq -r '
+            "  connector: \(.connector.state) \(if .connector.trace then "– \(.connector.trace | split("\n")[0])" else "" end)",
+            (if .tasks | length > 0 then
+              .tasks[] | "  task \(.id): \(.state) \(if .trace then "– \(.trace | split("\n")[0])" else "" end)"
+            else
+              "  (no tasks started)"
+            end)
+          '
+        done
+
+  connector:delete:
+    desc: Delete the S3 sink connector (keeps infrastructure running)
+    cmds:
+      - curl -s -X DELETE {{.CONNECT_URL}}/connectors/{{.CONNECTOR_NAME}} || true
+
+  # ── Data loading ──────────────────────────────────────────────────────────────
+
+  topic:reset:
+    desc: Delete and recreate the bench-events Kafka topic (clears all accumulated messages)
+    cmds:
+      - docker exec s3kc-kafka kafka-topics --bootstrap-server localhost:29092 --delete --topic bench-events 2>/dev/null || true
+      - sleep 2
+      - docker exec s3kc-kafka kafka-topics --bootstrap-server localhost:29092 --create --if-not-exists --topic bench-events --partitions 16 --replication-factor 1
+      - echo "topic reset"
+
+  data:load:
+    desc: "Produce events to bench-events topic (e.g. task data:load COUNT=5000000)"
+    vars:
+      COUNT: '{{.COUNT | default "1000000"}}'
+    env:
+      COUNT: '{{.COUNT}}'
+      KAFKA_BOOTSTRAP: '{{.KAFKA_BOOTSTRAP}}'
+    cmds:
+      - go run ../../../../../../../cmd/redpanda-connect/main.go run ./producer.yaml
+
+  # ── Observation ───────────────────────────────────────────────────────────────
+
+  bench:lag:
+    desc: Show current consumer lag for the S3 sink connector group
+    cmds:
+      - docker exec s3kc-kafka kafka-consumer-groups --bootstrap-server localhost:29092 --describe --group {{.CONSUMER_GROUP}}
+
+  bench:offsets:
+    desc: Show end offsets (total messages) for bench-events
+    cmds:
+      - docker exec s3kc-kafka kafka-get-offsets --bootstrap-server localhost:29092 --topic bench-events
+
+  bench:s3-count:
+    desc: Count objects written to the bench-events S3 bucket
+    cmds:
+      - docker exec s3kc-localstack awslocal s3 ls s3://bench-events --recursive | wc -l
+
+  bench:measure:
+    desc: "Poll lag and print msg/s until topic is drained (e.g. task bench:measure TOTAL=1000000 INTERVAL=5)"
+    vars:
+      TOTAL:    '{{.TOTAL    | default "1000000"}}'
+      INTERVAL: '{{.INTERVAL | default "5"}}'
+      GROUP:    '{{.GROUP    | default "connect-s3-sink-bench"}}'
+    cmds:
+      - |
+        GROUP={{.GROUP}}
+        INTERVAL={{.INTERVAL}}
+        TOTAL={{.TOTAL}}
+
+        get_lag() {
+          docker exec s3kc-kafka kafka-consumer-groups \
+            --bootstrap-server localhost:29092 \
+            --describe --group "$1" 2>/dev/null \
+            | awk '/bench-events/ {
+                cur = ($4 == "-") ? 0 : $4
+                sum += $5 - cur
+              } END {print (NR == 0 ? -1 : sum)}'
+        }
+
+        # Three phases:
+        #   0 – waiting for consumer group to appear (lag == -1 or 0)
+        #   1 – group appeared; waiting for first commit (lag starts decreasing)
+        #   2 – timing active (measures from first commit to zero lag)
+        # APPEAR_TIME is set in phase 0→1 so that a batch-flush (lag jumps straight
+        # to 0 without an intermediate decrease) still gets an accurate elapsed time.
+        PHASE=0 INITIAL_LAG="" PREV_LAG="" START="" PREV_TIME="" APPEAR_TIME=""
+        printf "%-10s  %-14s  %s\n" "TIME" "LAG" "MSG/S"
+
+        while true; do
+          sleep "$INTERVAL"
+          LAG=$(get_lag "$GROUP")
+          NOW=$(date +%s)
+
+          if [ "$PHASE" -eq 0 ]; then
+            if [ "${LAG:--1}" -gt 0 ] 2>/dev/null; then
+              INITIAL_LAG=$LAG; PREV_LAG=$LAG; APPEAR_TIME=$NOW; PHASE=1
+              printf "%-10s  %-14s  (starting up...)\n" "$(date +%H:%M:%S)" "$LAG"
+            else
+              printf "%-10s  %-14s  (waiting for group...)\n" "$(date +%H:%M:%S)" "${LAG:--}"
+            fi
+            continue
+          fi
+
+          if [ "$PHASE" -eq 1 ]; then
+            if [ "$LAG" -eq 0 ]; then
+              # Batch flush: all messages committed at once — time from group appearance
+              ELAPSED=$((NOW - APPEAR_TIME))
+              AVG=$(( INITIAL_LAG / (ELAPSED > 0 ? ELAPSED : 1) ))
+              printf "%-10s  %-14s  (batch flush)\n" "$(date +%H:%M:%S)" "$LAG"
+              echo "---"
+              echo "Total messages : $INITIAL_LAG"
+              echo "Elapsed        : ${ELAPSED}s"
+              echo "Avg throughput : ${AVG} msg/s"
+              break
+            elif [ "$LAG" -lt "$INITIAL_LAG" ]; then
+              START=$NOW; PREV_LAG=$LAG; PREV_TIME=$NOW; PHASE=2
+              printf "%-10s  %-14s  (timing started)\n" "$(date +%H:%M:%S)" "$LAG"
+            else
+              printf "%-10s  %-14s  (waiting for first commit...)\n" "$(date +%H:%M:%S)" "$LAG"
+            fi
+            continue
+          fi
+
+          [ "${LAG:--1}" -lt 0 ] && LAG=0
+          DELTA_T=$((NOW - PREV_TIME))
+          DELTA_LAG=$((PREV_LAG - LAG))
+          RATE=0
+          [ "$DELTA_T" -gt 0 ] && RATE=$((DELTA_LAG / DELTA_T))
+          printf "%-10s  %-14s  %s msg/s\n" "$(date +%H:%M:%S)" "$LAG" "$RATE"
+
+          if [ "$LAG" -eq 0 ]; then
+            ELAPSED=$((NOW - START))
+            AVG=$(( INITIAL_LAG / (ELAPSED > 0 ? ELAPSED : 1) ))
+            echo "---"
+            echo "Total messages : $INITIAL_LAG"
+            echo "Elapsed        : ${ELAPSED}s"
+            echo "Avg throughput : ${AVG} msg/s"
+            break
+          fi
+
+          PREV_LAG=$LAG; PREV_TIME=$NOW
+        done
+
+  # ── Single parameterised run ──────────────────────────────────────────────────
+
+  bench:run:
+    desc: |
+      Single parameterised benchmark run: delete connector, load fresh data, create connector, measure.
+      e.g. task bench:run COUNT=1000000 TASKS_MAX=8 FLUSH_SIZE=5000 POLL_RECORDS=10000
+    vars:
+      COUNT: '{{.COUNT | default "1000000"}}'
+    cmds:
+      - task: connector:delete
+      - sleep 2
+      - docker exec s3kc-localstack awslocal s3 rm s3://bench-events --recursive || true
+      - task: topic:reset
+      - task: data:load
+        vars: { COUNT: '{{.COUNT}}' }
+      - |
+        # Create connector and start timer immediately — don't wait for first poll.
+        # INITIAL_LAG is COUNT (known), START is connector registration time.
+        jq -n \
+          --arg name    "{{.CONNECTOR_NAME}}" \
+          --arg tasks   "{{.TASKS_MAX}}" \
+          --arg flush   "{{.FLUSH_SIZE}}" \
+          --arg poll    "{{.POLL_RECORDS}}" \
+          --arg fetch   "{{.FETCH_MIN_BYTES}}" \
+          --arg part    "{{.PART_SIZE}}" \
+          --arg rotate  "{{.ROTATE_SCHEDULE_MS}}" \
+          '{
+            name: $name,
+            config: {
+              "connector.class":                     "io.confluent.connect.s3.S3SinkConnector",
+              "tasks.max":                           $tasks,
+              "topics":                              "bench-events",
+              "s3.region":                           "us-east-1",
+              "s3.bucket.name":                      "bench-events",
+              "store.url":                           "http://localstack:4566",
+              "s3.part.size":                        $part,
+              "flush.size":                          $flush,
+              "rotate.interval.ms":                  "-1",
+              "rotate.schedule.interval.ms":         $rotate,
+              "timezone":                            "UTC",
+              "storage.class":                       "io.confluent.connect.s3.storage.S3Storage",
+              "format.class":                        "io.confluent.connect.s3.format.json.JsonFormat",
+              "key.converter":                       "org.apache.kafka.connect.storage.StringConverter",
+              "value.converter":                     "org.apache.kafka.connect.json.JsonConverter",
+              "value.converter.schemas.enable":      "false",
+              "schema.compatibility":                "NONE",
+              "consumer.override.fetch.min.bytes":   $fetch,
+              "consumer.override.fetch.max.wait.ms": "500",
+              "consumer.override.max.poll.records":  $poll
+            }
+          }' > /tmp/connector-cfg.json
+        RESP=$(curl -s -X POST {{.CONNECT_URL}}/connectors \
+          -H "Content-Type: application/json" --data-binary @/tmp/connector-cfg.json)
+        rm -f /tmp/connector-cfg.json
+        if echo "$RESP" | jq -e '.error_code' > /dev/null 2>&1; then
+          echo "ERROR: $(echo "$RESP" | jq -r '.message')"; exit 1
+        fi
+        echo "registered: $(echo "$RESP" | jq -r '.name')"
+
+        START=$(date +%s)
+        INITIAL_LAG={{.COUNT}}
+        GROUP="connect-{{.CONNECTOR_NAME}}"
+        INTERVAL={{.MATRIX_INTERVAL}}
+        PREV_LAG=$INITIAL_LAG
+        PREV_TIME=$START
+
+        get_lag() {
+          docker exec s3kc-kafka kafka-consumer-groups \
+            --bootstrap-server localhost:29092 \
+            --describe --group "$1" 2>/dev/null \
+            | awk '/bench-events/ {
+                cur = ($4 == "-") ? 0 : $4
+                sum += $5 - cur
+              } END {print (NR == 0 ? -1 : sum)}'
+        }
+
+        printf "%-10s  %-14s  %s\n" "TIME" "LAG" "MSG/S"
+        printf "%-10s  %-14s  (registered)\n" "$(date +%H:%M:%S)" "$INITIAL_LAG"
+
+        while true; do
+          sleep "$INTERVAL"
+          LAG=$(get_lag "$GROUP")
+          NOW=$(date +%s)
+
+          if [ "${LAG:--1}" -lt 0 ] 2>/dev/null; then
+            printf "%-10s  %-14s  (warming up...)\n" "$(date +%H:%M:%S)" "-"
+            continue
+          fi
+
+          [ "$LAG" -lt 0 ] && LAG=0
+          DELTA_T=$((NOW - PREV_TIME))
+          DELTA_LAG=$((PREV_LAG - LAG))
+          RATE=0
+          [ "$DELTA_T" -gt 0 ] && RATE=$((DELTA_LAG / DELTA_T))
+          printf "%-10s  %-14s  %s msg/s\n" "$(date +%H:%M:%S)" "$LAG" "$RATE"
+
+          if [ "$LAG" -eq 0 ]; then
+            ELAPSED=$((NOW - START))
+            AVG=$(( INITIAL_LAG / (ELAPSED > 0 ? ELAPSED : 1) ))
+            echo "---"
+            echo "Total messages : $INITIAL_LAG"
+            echo "Elapsed        : ${ELAPSED}s"
+            echo "Avg throughput : ${AVG} msg/s"
+            break
+          fi
+
+          PREV_LAG=$LAG; PREV_TIME=$NOW
+        done
+
+  # ── Matrix sweep ──────────────────────────────────────────────────────────────
+
+  bench:matrix:
+    desc: |
+      Sweep all parameter combinations and print a comparison table.
+      Loads COUNT messages once, then runs every combination with a unique connector
+      (each gets its own consumer group reading from offset 0).
+      Override lists:  TASKS_LIST="4 16" FLUSH_LIST="1000 50000" POLL_LIST="5000"
+      e.g. task bench:matrix COUNT=1000000
+    vars:
+      COUNT: '{{.COUNT | default "1000000"}}'
+    cmds:
+      - task: connector:delete
+      - sleep 1
+      - docker exec s3kc-localstack awslocal s3 rm s3://bench-events --recursive || true
+      - task: topic:reset
+      - task: data:load
+        vars: { COUNT: '{{.COUNT}}' }
+      - |
+        TASKS_LIST="{{.TASKS_LIST}}"
+        FLUSH_LIST="{{.FLUSH_LIST}}"
+        POLL_LIST="{{.POLL_LIST}}"
+        FETCH_MIN_LIST="{{.FETCH_MIN_LIST}}"
+        CONNECT_URL="{{.CONNECT_URL}}"
+        TOTAL="{{.COUNT}}"
+        INTERVAL="{{.MATRIX_INTERVAL}}"
+        ROTATE_SCHEDULE_MS="{{.ROTATE_SCHEDULE_MS}}"
+
+        # Warn if COUNT is smaller than the largest flush.size.
+        # The connector only writes a file when flush.size records accumulate OR
+        # rotate.schedule.interval.ms fires. Small COUNT still works (the schedule
+        # flushes the remainder) but throughput numbers won't reflect pure flush-driven
+        # performance. Recommend COUNT >> max(FLUSH_LIST) for realistic results.
+        MAX_FLUSH=0
+        for f in $FLUSH_LIST; do [ "$f" -gt "$MAX_FLUSH" ] && MAX_FLUSH=$f; done
+        if [ "$TOTAL" -lt "$MAX_FLUSH" ]; then
+          echo "WARNING: COUNT=$TOTAL is less than max FLUSH_SIZE=$MAX_FLUSH."
+          echo "         Results will be dominated by rotate.schedule.interval.ms ($ROTATE_SCHEDULE_MS ms)."
+          echo "         For throughput benchmarks use COUNT >> $MAX_FLUSH (e.g. COUNT=1000000)."
+          echo ""
+        fi
+
+        get_lag() {
+          docker exec s3kc-kafka kafka-consumer-groups \
+            --bootstrap-server localhost:29092 \
+            --describe --group "$1" 2>/dev/null \
+            | awk '/bench-events/ {
+                cur = ($4 == "-") ? 0 : $4
+                sum += $5 - cur
+              } END {print (NR == 0 ? -1 : sum)}'
+        }
+
+        RESULTS_FILE=$(mktemp)
+        printf "%-8s %-10s %-8s %-12s %-12s %s\n" \
+          "TASKS" "FLUSH" "POLL" "FETCH_MIN" "ELAPSED(s)" "MSG/S" > "$RESULTS_FILE"
+
+        RUN=0
+        for tasks in $TASKS_LIST; do
+          for flush in $FLUSH_LIST; do
+            for poll in $POLL_LIST; do
+              for fetch_min in $FETCH_MIN_LIST; do
+                RUN=$((RUN + 1))
+                NAME="s3-bench-$(printf '%03d' $RUN)"
+                GROUP="connect-${NAME}"
+                FETCH_LABEL="${fetch_min}"
+                [ "$fetch_min" -ge 1048576 ] && FETCH_LABEL="$((fetch_min / 1048576))MB"
+
+                printf "\n=== run %d: tasks=%-3s flush=%-6s poll=%-6s fetch_min=%s ===\n" \
+                  "$RUN" "$tasks" "$flush" "$poll" "$FETCH_LABEL"
+
+                # Register connector with this combination
+                jq -n \
+                  --arg name   "$NAME" \
+                  --arg tasks  "$tasks" \
+                  --arg flush  "$flush" \
+                  --arg poll   "$poll" \
+                  --arg fetch  "$fetch_min" \
+                  --arg rotate "$ROTATE_SCHEDULE_MS" \
+                  '{
+                    name: $name,
+                    config: {
+                      "connector.class":                     "io.confluent.connect.s3.S3SinkConnector",
+                      "tasks.max":                           $tasks,
+                      "topics":                              "bench-events",
+                      "s3.region":                           "us-east-1",
+                      "s3.bucket.name":                      "bench-events",
+                      "store.url":                           "http://localstack:4566",
+                      "s3.part.size":                        "5242880",
+                      "flush.size":                          $flush,
+                      "rotate.interval.ms":                  "-1",
+                      "rotate.schedule.interval.ms":         $rotate,
+                      "timezone":                            "UTC",
+                      "storage.class":                       "io.confluent.connect.s3.storage.S3Storage",
+                      "format.class":                        "io.confluent.connect.s3.format.json.JsonFormat",
+                      "key.converter":                       "org.apache.kafka.connect.storage.StringConverter",
+                      "value.converter":                     "org.apache.kafka.connect.json.JsonConverter",
+                      "value.converter.schemas.enable":      "false",
+                      "schema.compatibility":                "NONE",
+                      "consumer.override.fetch.min.bytes":   $fetch,
+                      "consumer.override.fetch.max.wait.ms": "500",
+                      "consumer.override.max.poll.records":  $poll
+                    }
+                  }' > /tmp/connector-cfg.json
+                RESP=$(curl -s -X POST "$CONNECT_URL/connectors" \
+                  -H "Content-Type: application/json" --data-binary @/tmp/connector-cfg.json)
+                rm -f /tmp/connector-cfg.json
+                if echo "$RESP" | jq -e '.error_code' > /dev/null 2>&1; then
+                  echo "  ERROR: $(echo "$RESP" | jq -r '.message')"
+                  continue
+                fi
+                echo "  connector registered: $(echo "$RESP" | jq -r '.name')"
+
+                # Timer starts at connector registration; INITIAL_LAG=TOTAL (known).
+                COMBO_START=$(date +%s)
+                INITIAL_LAG=$TOTAL
+                PREV_LAG=$TOTAL
+                PREV_TIME=$COMBO_START
+                printf "  %-10s  %-14s  %s\n" "TIME" "LAG" "MSG/S"
+                printf "  %-10s  %-14s  (registered)\n" "$(date +%H:%M:%S)" "$INITIAL_LAG"
+
+                while true; do
+                  sleep "$INTERVAL"
+                  LAG=$(get_lag "$GROUP")
+                  NOW=$(date +%s)
+
+                  if [ "${LAG:--1}" -lt 0 ] 2>/dev/null; then
+                    printf "  %-10s  %-14s  (warming up...)\n" "$(date +%H:%M:%S)" "-"
+                    continue
+                  fi
+
+                  [ "$LAG" -lt 0 ] && LAG=0
+                  DELTA_T=$((NOW - PREV_TIME))
+                  DELTA_LAG=$((PREV_LAG - LAG))
+                  RATE=0
+                  [ "$DELTA_T" -gt 0 ] && RATE=$((DELTA_LAG / DELTA_T))
+                  printf "  %-10s  %-14s  %s msg/s\n" "$(date +%H:%M:%S)" "$LAG" "$RATE"
+
+                  if [ "$LAG" -eq 0 ]; then
+                    ELAPSED=$((NOW - COMBO_START))
+                    AVG=$(( INITIAL_LAG / (ELAPSED > 0 ? ELAPSED : 1) ))
+                    printf "  → %ds, %s msg/s\n" "$ELAPSED" "$AVG"
+                    printf "%-8s %-10s %-8s %-12s %-12s %s\n" \
+                      "$tasks" "$flush" "$poll" "$FETCH_LABEL" "$ELAPSED" "$AVG" \
+                      >> "$RESULTS_FILE"
+                    break
+                  fi
+
+                  PREV_LAG=$LAG; PREV_TIME=$NOW
+                done
+
+                # Clean up connector (leaves consumer group offsets intact as history)
+                curl -s -X DELETE "$CONNECT_URL/connectors/$NAME" > /dev/null
+                sleep 2
+              done
+            done
+          done
+        done
+
+        echo ""
+        echo "════════════════════════════════════════════════════════════════"
+        echo " Matrix Results ($RUN combinations, COUNT=$TOTAL)"
+        echo "════════════════════════════════════════════════════════════════"
+        cat "$RESULTS_FILE"
+        rm -f "$RESULTS_FILE"
+
+  # ── Logs ──────────────────────────────────────────────────────────────────────
+
+  logs:connect:
+    desc: Follow Kafka Connect worker logs
+    cmds:
+      - docker compose logs -f kafka-connect
+
+  logs:localstack:
+    desc: Follow LocalStack logs
+    cmds:
+      - docker compose logs -f localstack

@@ -1,0 +1,382 @@
+version: "3"
+
+silent: true
+
+vars:
+  KAFKA_BOOTSTRAP: '{{.KAFKA_BOOTSTRAP | default "localhost:9092"}}'
+  CONNECT_URL:     '{{.CONNECT_URL     | default "http://localhost:8083"}}'
+  S3_ENDPOINT:     '{{.S3_ENDPOINT     | default "http://localhost:4566"}}'
+  CONNECTOR_NAME:  '{{.CONNECTOR_NAME  | default "s3-source-bench"}}'
+  SEEDER_NAME:     s3-source-seeder
+
+  # Source connector parameters
+  TASKS_MAX: '{{.TASKS_MAX | default "4"}}'
+
+  # Seeder sink parameters (fixed — fast population, not benchmarked)
+  SEEDER_TASKS:     16
+  SEEDER_FLUSH:     10000
+  SEEDER_ROTATE_MS: 5000
+
+  # Matrix sweep
+  TASKS_LIST:      '{{.TASKS_LIST      | default "1 2 4 8 16"}}'
+  MATRIX_INTERVAL: '{{.MATRIX_INTERVAL | default "5"}}'
+
+tasks:
+  # ── Infrastructure ────────────────────────────────────────────────────────────
+
+  up:
+    desc: Build and start all infrastructure (Kafka, LocalStack, Kafka Connect), wait until ready
+    cmds:
+      - docker compose up -d --build
+      - until curl -sf {{.CONNECT_URL}}/ > /dev/null 2>&1; do sleep 3; done
+      - echo "Kafka Connect ready at {{.CONNECT_URL}}"
+
+  down:
+    desc: Stop and remove all containers and volumes
+    cmds:
+      - docker compose down -v --remove-orphans
+
+  # ── Seeding ───────────────────────────────────────────────────────────────────
+
+  topic:reset:
+    desc: Delete and recreate the bench-events Kafka topic
+    cmds:
+      - docker exec s3kcr-kafka kafka-topics --bootstrap-server localhost:29092 --delete --topic bench-events 2>/dev/null || true
+      - sleep 2
+      - docker exec s3kcr-kafka kafka-topics --bootstrap-server localhost:29092 --create --if-not-exists --topic bench-events --partitions 16 --replication-factor 1
+      - echo "topic reset"
+
+  data:seed:
+    desc: |
+      Populate S3 with COUNT messages via the S3 Sink connector.
+      Resets bench-events topic, produces data, sinks to S3, waits for lag=0, removes seeder.
+      e.g. task data:seed COUNT=1000000
+    vars:
+      COUNT: '{{.COUNT | default "1000000"}}'
+    cmds:
+      - curl -s -X DELETE {{.CONNECT_URL}}/connectors/{{.SEEDER_NAME}} > /dev/null || true
+      - sleep 1
+      - docker exec s3kcr-localstack awslocal s3 rm s3://bench-events --recursive || true
+      - task: topic:reset
+      - |
+        COUNT={{.COUNT}}
+        KAFKA_BOOTSTRAP={{.KAFKA_BOOTSTRAP}}
+        go run ../../../../../../../cmd/redpanda-connect/main.go run ./producer.yaml
+      - |
+        # Register S3 Sink connector to write all messages to S3
+        jq -n \
+          --arg name   "{{.SEEDER_NAME}}" \
+          --arg tasks  "{{.SEEDER_TASKS}}" \
+          --arg flush  "{{.SEEDER_FLUSH}}" \
+          --arg rotate "{{.SEEDER_ROTATE_MS}}" \
+          '{
+            name: $name,
+            config: {
+              "connector.class":                     "io.confluent.connect.s3.S3SinkConnector",
+              "tasks.max":                           $tasks,
+              "topics":                              "bench-events",
+              "s3.region":                           "us-east-1",
+              "s3.bucket.name":                      "bench-events",
+              "store.url":                           "http://localstack:4566",
+              "s3.part.size":                        "5242880",
+              "flush.size":                          $flush,
+              "rotate.interval.ms":                  "-1",
+              "rotate.schedule.interval.ms":         $rotate,
+              "timezone":                            "UTC",
+              "storage.class":                       "io.confluent.connect.s3.storage.S3Storage",
+              "format.class":                        "io.confluent.connect.s3.format.json.JsonFormat",
+              "key.converter":                       "org.apache.kafka.connect.storage.StringConverter",
+              "value.converter":                     "org.apache.kafka.connect.json.JsonConverter",
+              "value.converter.schemas.enable":      "false",
+              "schema.compatibility":                "NONE",
+              "s3.path.style.access.enabled":        "true"
+            }
+          }' > /tmp/seeder-cfg.json
+        RESP=$(curl -s -X POST {{.CONNECT_URL}}/connectors \
+          -H "Content-Type: application/json" --data-binary @/tmp/seeder-cfg.json)
+        rm -f /tmp/seeder-cfg.json
+        if echo "$RESP" | jq -e '.error_code' > /dev/null 2>&1; then
+          echo "ERROR: $(echo "$RESP" | jq -r '.message')"; exit 1
+        fi
+        echo "seeder registered: $(echo "$RESP" | jq -r '.name')"
+
+        COUNT={{.COUNT}}
+        GROUP="connect-{{.SEEDER_NAME}}"
+        INTERVAL={{.MATRIX_INTERVAL}}
+
+        get_lag() {
+          docker exec s3kcr-kafka kafka-consumer-groups \
+            --bootstrap-server localhost:29092 \
+            --describe --group "$1" 2>/dev/null \
+            | awk '/bench-events/ {
+                cur = ($4 == "-") ? 0 : $4
+                sum += $5 - cur
+              } END {print (NR == 0 ? -1 : sum)}'
+        }
+
+        echo "Waiting for seeder to drain $COUNT messages to S3..."
+        START=$(date +%s)
+        while true; do
+          sleep "$INTERVAL"
+          LAG=$(get_lag "$GROUP")
+          [ "${LAG:--1}" -lt 0 ] 2>/dev/null && echo "  (warming up...)" && continue
+          [ "$LAG" -lt 0 ] && LAG=0
+          echo "  lag: $LAG"
+          if [ "$LAG" -eq 0 ]; then
+            ELAPSED=$(( $(date +%s) - START ))
+            echo "Seeded $COUNT messages to S3 in ${ELAPSED}s"
+            break
+          fi
+        done
+
+        # Wait for rotate.schedule.interval.ms to fire so all buffered records are flushed to S3
+        # before we delete the connector (lag=0 only means Kafka consumer is drained, not S3 written)
+        sleep $(({{.SEEDER_ROTATE_MS}} / 1000 + 3))
+        curl -s -X DELETE {{.CONNECT_URL}}/connectors/{{.SEEDER_NAME}} > /dev/null
+        echo "seeder removed — S3 populated"
+
+  # ── Connector management ──────────────────────────────────────────────────────
+
+  connector:status:
+    desc: Show connector and task status
+    cmds:
+      - curl -s {{.CONNECT_URL}}/connectors/{{.CONNECTOR_NAME}}/status | jq .
+
+  connector:tasks:
+    desc: Show status of all connectors and their tasks
+    cmds:
+      - |
+        for name in $(curl -s {{.CONNECT_URL}}/connectors | jq -r '.[]'); do
+          echo "── $name ──"
+          curl -s {{.CONNECT_URL}}/connectors/$name/status | jq -r '
+            "  connector: \(.connector.state) \(if .connector.trace then "– \(.connector.trace | split("\n")[0])" else "" end)",
+            (if .tasks | length > 0 then
+              .tasks[] | "  task \(.id): \(.state) \(if .trace then "– \(.trace | split("\n")[0])" else "" end)"
+            else
+              "  (no tasks started)"
+            end)
+          '
+        done
+
+  # ── Observation ───────────────────────────────────────────────────────────────
+
+  bench:s3-count:
+    desc: Count objects in the S3 bench-events bucket
+    cmds:
+      - docker exec s3kcr-localstack awslocal s3 ls s3://bench-events --recursive | wc -l
+
+  bench:offsets:
+    desc: Show current end offsets for bench-events
+    cmds:
+      - docker exec s3kcr-kafka kafka-get-offsets --bootstrap-server localhost:29092 --topic bench-events
+
+  # ── Single parameterised run ──────────────────────────────────────────────────
+
+  bench:run:
+    desc: |
+      Full benchmark run: seed S3, start source connector, measure until COUNT messages produced to Kafka.
+      e.g. task bench:run COUNT=1000000 TASKS_MAX=4
+    vars:
+      COUNT: '{{.COUNT | default "1000000"}}'
+    cmds:
+      - task: data:seed
+        vars: { COUNT: '{{.COUNT}}' }
+      - curl -s -X DELETE {{.CONNECT_URL}}/connectors/{{.CONNECTOR_NAME}} > /dev/null || true
+      - sleep 1
+      - |
+        get_end_offset() {
+          docker exec s3kcr-kafka kafka-get-offsets \
+            --bootstrap-server localhost:29092 \
+            --topic bench-events 2>/dev/null \
+            | awk -F: '{sum += $NF} END {print sum+0}'
+        }
+
+        BASE=$(get_end_offset bench-events)
+        TARGET=$((BASE + {{.COUNT}}))
+        echo "Base offset: $BASE  Target: $TARGET"
+
+        jq -n \
+          --arg name  "{{.CONNECTOR_NAME}}" \
+          --arg tasks "{{.TASKS_MAX}}" \
+          '{
+            name: $name,
+            config: {
+              "connector.class":                    "io.confluent.connect.s3.source.S3SourceConnector",
+              "confluent.topic.bootstrap.servers":        "kafka:29092",
+              "confluent.topic.replication.factor":       "1",
+              "tasks.max":                      $tasks,
+              "s3.region":                      "us-east-1",
+              "s3.bucket.name":                 "bench-events",
+              "store.url":                      "http://localstack:4566",
+              "storage.class":                  "io.confluent.connect.s3.storage.S3Storage",
+              "format.class":                   "io.confluent.connect.s3.format.json.JsonFormat",
+              "key.converter":                  "org.apache.kafka.connect.storage.StringConverter",
+              "value.converter":                "org.apache.kafka.connect.json.JsonConverter",
+              "value.converter.schemas.enable": "false",
+              "s3.path.style.access.enabled":   "true",
+              "topics.dir":                     "topics",
+              "topics":                         "bench-events"
+            }
+          }' > /tmp/source-cfg.json
+        RESP=$(curl -s -X POST {{.CONNECT_URL}}/connectors \
+          -H "Content-Type: application/json" --data-binary @/tmp/source-cfg.json)
+        rm -f /tmp/source-cfg.json
+        if echo "$RESP" | jq -e '.error_code' > /dev/null 2>&1; then
+          echo "ERROR: $(echo "$RESP" | jq -r '.message')"; exit 1
+        fi
+        echo "registered: $(echo "$RESP" | jq -r '.name')"
+
+        START=$(date +%s)
+        INTERVAL={{.MATRIX_INTERVAL}}
+        PREV_OFF=$BASE
+        PREV_TIME=$START
+
+        printf "%-10s  %-14s  %s\n" "TIME" "OFFSET" "MSG/S"
+        printf "%-10s  %-14s  (registered)\n" "$(date +%H:%M:%S)" "$BASE"
+
+        while true; do
+          sleep "$INTERVAL"
+          NOW=$(date +%s)
+          OFF=$(get_end_offset bench-events)
+          DELTA_T=$((NOW - PREV_TIME))
+          DELTA_OFF=$((OFF - PREV_OFF))
+          RATE=0
+          [ "$DELTA_T" -gt 0 ] && RATE=$((DELTA_OFF / DELTA_T))
+          printf "%-10s  %-14s  %s msg/s\n" "$(date +%H:%M:%S)" "$OFF" "$RATE"
+
+          if [ "$OFF" -ge "$TARGET" ]; then
+            ELAPSED=$((NOW - START))
+            AVG=$(( {{.COUNT}} / (ELAPSED > 0 ? ELAPSED : 1) ))
+            echo "---"
+            echo "Total messages : {{.COUNT}}"
+            echo "Elapsed        : ${ELAPSED}s"
+            echo "Avg throughput : ${AVG} msg/s"
+            curl -s -X DELETE {{.CONNECT_URL}}/connectors/{{.CONNECTOR_NAME}} > /dev/null
+            break
+          fi
+
+          PREV_OFF=$OFF; PREV_TIME=$NOW
+        done
+
+  # ── Matrix sweep ──────────────────────────────────────────────────────────────
+
+  bench:matrix:
+    desc: |
+      Seed S3 once, then sweep tasks.max values and print a comparison table.
+      Each combination uses a unique connector name so offsets always start from S3 beginning.
+      e.g. task bench:matrix COUNT=1000000 TASKS_LIST="1 2 4 8 16"
+    vars:
+      COUNT: '{{.COUNT | default "1000000"}}'
+    cmds:
+      - task: data:seed
+        vars: { COUNT: '{{.COUNT}}' }
+      - |
+        TASKS_LIST="{{.TASKS_LIST}}"
+        CONNECT_URL="{{.CONNECT_URL}}"
+        TOTAL={{.COUNT}}
+        INTERVAL={{.MATRIX_INTERVAL}}
+
+        get_end_offset() {
+          docker exec s3kcr-kafka kafka-get-offsets \
+            --bootstrap-server localhost:29092 \
+            --topic bench-events 2>/dev/null \
+            | awk -F: '{sum += $NF} END {print sum+0}'
+        }
+
+        RESULTS_FILE=$(mktemp)
+        printf "%-8s %-12s %s\n" "TASKS" "ELAPSED(s)" "MSG/S" > "$RESULTS_FILE"
+
+        RUN=0
+        for tasks in $TASKS_LIST; do
+          RUN=$((RUN + 1))
+          NAME="s3-src-$(printf '%03d' $RUN)"
+
+          printf "\n=== run %d: tasks=%s ===\n" "$RUN" "$tasks"
+
+          # Each new connector name has no stored offsets → reads all S3 files from scratch.
+          # bench-events end offset grows by TOTAL with each run; BASE tracks the current floor.
+          BASE=$(get_end_offset bench-events)
+          TARGET=$((BASE + TOTAL))
+          echo "  base offset: $BASE  target: $TARGET"
+
+          jq -n \
+            --arg name  "$NAME" \
+            --arg tasks "$tasks" \
+            '{
+              name: $name,
+              config: {
+                "connector.class":                    "io.confluent.connect.s3.source.S3SourceConnector",
+              "confluent.topic.bootstrap.servers":        "kafka:29092",
+              "confluent.topic.replication.factor":       "1",
+                "tasks.max":                      $tasks,
+                "s3.region":                      "us-east-1",
+                "s3.bucket.name":                 "bench-events",
+                "store.url":                      "http://localstack:4566",
+                "storage.class":                  "io.confluent.connect.s3.storage.S3Storage",
+                "format.class":                   "io.confluent.connect.s3.format.json.JsonFormat",
+                "key.converter":                  "org.apache.kafka.connect.storage.StringConverter",
+                "value.converter":                "org.apache.kafka.connect.json.JsonConverter",
+                "value.converter.schemas.enable": "false",
+                "s3.path.style.access.enabled":   "true",
+                "topics.dir":                     "topics",
+                "topics":                         "bench-events"
+              }
+            }' > /tmp/src-cfg.json
+          RESP=$(curl -s -X POST "$CONNECT_URL/connectors" \
+            -H "Content-Type: application/json" --data-binary @/tmp/src-cfg.json)
+          rm -f /tmp/src-cfg.json
+          if echo "$RESP" | jq -e '.error_code' > /dev/null 2>&1; then
+            echo "  ERROR: $(echo "$RESP" | jq -r '.message')"
+            continue
+          fi
+          echo "  connector registered: $(echo "$RESP" | jq -r '.name')"
+
+          COMBO_START=$(date +%s)
+          PREV_OFF=$BASE
+          PREV_TIME=$COMBO_START
+          printf "  %-10s  %-14s  %s\n" "TIME" "OFFSET" "MSG/S"
+          printf "  %-10s  %-14s  (registered)\n" "$(date +%H:%M:%S)" "$BASE"
+
+          while true; do
+            sleep "$INTERVAL"
+            NOW=$(date +%s)
+            OFF=$(get_end_offset bench-events)
+            DELTA_T=$((NOW - PREV_TIME))
+            DELTA_OFF=$((OFF - PREV_OFF))
+            RATE=0
+            [ "$DELTA_T" -gt 0 ] && RATE=$((DELTA_OFF / DELTA_T))
+            printf "  %-10s  %-14s  %s msg/s\n" "$(date +%H:%M:%S)" "$OFF" "$RATE"
+
+            if [ "$OFF" -ge "$TARGET" ]; then
+              ELAPSED=$((NOW - COMBO_START))
+              AVG=$(( TOTAL / (ELAPSED > 0 ? ELAPSED : 1) ))
+              printf "  → %ds, %s msg/s\n" "$ELAPSED" "$AVG"
+              printf "%-8s %-12s %s\n" "$tasks" "$ELAPSED" "$AVG" >> "$RESULTS_FILE"
+              break
+            fi
+
+            PREV_OFF=$OFF; PREV_TIME=$NOW
+          done
+
+          curl -s -X DELETE "$CONNECT_URL/connectors/$NAME" > /dev/null
+          sleep 2
+        done
+
+        echo ""
+        echo "════════════════════════════════════════════════════════════════"
+        echo " Matrix Results ($RUN combinations, COUNT=$TOTAL)"
+        echo "════════════════════════════════════════════════════════════════"
+        cat "$RESULTS_FILE"
+        rm -f "$RESULTS_FILE"
+
+  # ── Logs ──────────────────────────────────────────────────────────────────────
+
+  logs:connect:
+    desc: Follow Kafka Connect worker logs
+    cmds:
+      - docker compose logs -f kafka-connect
+
+  logs:localstack:
+    desc: Follow LocalStack logs
+    cmds:
+      - docker compose logs -f localstack
