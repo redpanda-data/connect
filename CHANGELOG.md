@@ -3,7 +3,11 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## Unreleased
+## 4.89.3 - 2026-04-30
+
+### Fixed
+
+- iceberg: fix decimal min/max stats extraction for parquet files ([@josephwoodward](https://github.com/josephwoodward), [#4368](https://github.com/redpanda-data/connect/pull/4368))
 
 ### Added
 
