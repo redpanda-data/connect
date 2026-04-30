@@ -573,12 +573,14 @@ func (i *mysqlStreamInput) snapshotTable(ctx context.Context, snapshot *Snapshot
 
 		colTypes, err := batchRows.ColumnTypes()
 		if err != nil {
+			_ = batchRows.Close()
 			return fmt.Errorf("fetching column types: %s", err)
 		}
 
 		values, mappers := prepSnapshotScannerAndMappers(colTypes)
 		columns, err := batchRows.Columns()
 		if err != nil {
+			_ = batchRows.Close()
 			return fmt.Errorf("fetching columns: %s", err)
 		}
 
@@ -588,6 +590,7 @@ func (i *mysqlStreamInput) snapshotTable(ctx context.Context, snapshot *Snapshot
 			batchRowsCount++
 
 			if err := batchRows.Scan(values...); err != nil {
+				_ = batchRows.Close()
 				return err
 			}
 
@@ -595,6 +598,7 @@ func (i *mysqlStreamInput) snapshotTable(ctx context.Context, snapshot *Snapshot
 			for idx, value := range values {
 				v, err := mappers[idx](value)
 				if err != nil {
+					_ = batchRows.Close()
 					return err
 				}
 				row[columns[idx]] = v
@@ -611,13 +615,16 @@ func (i *mysqlStreamInput) snapshotTable(ctx context.Context, snapshot *Snapshot
 				Position:  nil,
 			}:
 			case <-ctx.Done():
+				_ = batchRows.Close()
 				return ctx.Err()
 			}
 		}
 
 		if err := batchRows.Err(); err != nil {
+			_ = batchRows.Close()
 			return fmt.Errorf("iterating snapshot table: %s", err)
 		}
+		_ = batchRows.Close()
 
 		i.snapshotRowsProcessedTotal.Incr(int64(batchRowsCount), table)
 
