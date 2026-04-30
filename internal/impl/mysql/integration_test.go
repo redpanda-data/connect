@@ -1455,6 +1455,9 @@ file:
 		require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
 			msgBytes, err := mb[0].AsBytes()
 			require.NoError(t, err)
+			op, _ := mb[0].MetaGet("operation")
+			assert.Equal(t, "read", op, "expected snapshot message operation to be 'read'")
+
 			outBatchesMu.Lock()
 			outBatches = append(outBatches, string(msgBytes))
 			outBatchesMu.Unlock()
@@ -1515,6 +1518,9 @@ file:
 		require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
 			msgBytes, err := mb[0].AsBytes()
 			require.NoError(t, err)
+			op, _ := mb[0].MetaGet("operation")
+			assert.Equal(t, "read", op, "expected snapshot message operation to be 'read'")
+
 			outBatchesMu.Lock()
 			outBatches = append(outBatches, string(msgBytes))
 			outBatchesMu.Unlock()
