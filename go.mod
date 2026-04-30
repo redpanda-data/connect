@@ -24,7 +24,7 @@ require (
 	buf.build/gen/go/redpandadata/otel/protocolbuffers/go v1.36.11-20260323171043-3635d3966b23.1
 	buf.build/go/hyperpb v0.1.3
 	cloud.google.com/go/aiplatform v1.121.0
-	cloud.google.com/go/bigquery v1.74.0
+	cloud.google.com/go/bigquery v1.75.0
 	cloud.google.com/go/pubsub v1.50.1
 	cloud.google.com/go/spanner v1.88.0
 	cloud.google.com/go/storage v1.62.1

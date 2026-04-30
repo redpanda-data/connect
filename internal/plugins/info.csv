@@ -88,6 +88,7 @@ gateway                   ,input     ,gateway                   ,4.51.0  ,enterp
 gcp_bigquery              ,output    ,GCP BigQuery              ,3.55.0  ,certified  ,n          ,y     ,y
 gcp_bigquery_select       ,input     ,GCP BigQuery              ,3.63.0  ,certified  ,n          ,y     ,y
 gcp_bigquery_select       ,processor ,GCP BigQuery              ,3.64.0  ,certified  ,n          ,y     ,y
+gcp_bigquery_write_api    ,output    ,GCP BigQuery              ,4.90.0  ,enterprise ,n          ,y     ,y
 gcp_cloud_storage         ,cache     ,GCP Cloud Storage         ,0.0.0   ,certified  ,n          ,y     ,y
 gcp_cloud_storage         ,input     ,GCP Cloud Storage         ,3.43.0  ,certified  ,n          ,y     ,y
 gcp_cloud_storage         ,output    ,GCP Cloud Storage         ,3.43.0  ,certified  ,n          ,y     ,y
