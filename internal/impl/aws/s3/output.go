@@ -313,7 +313,7 @@ output:
 					}
 				})...).
 				Description("The object canned ACL value.").
-				Default(string(types.ObjectCannedACLPrivate)).
+				Default("").
 				Advanced(),
 			service.NewBatchPolicyField(s3oFieldBatching),
 		).
@@ -473,7 +473,6 @@ func (a *amazonS3Writer) WriteBatch(wctx context.Context, msg service.MessageBat
 			WebsiteRedirectLocation: websiteRedirectLocation,
 			StorageClass:            tmtypes.StorageClass(storageClass),
 			Metadata:                metadata,
-			ACL:                     tmtypes.ObjectCannedACL(a.conf.ObjectCannedACL),
 		}
 
 		// Prepare tags, escaping keys and values to ensure they're valid query string parameters.
@@ -496,6 +495,10 @@ func (a *amazonS3Writer) WriteBatch(wctx context.Context, msg service.MessageBat
 
 		if a.conf.ChecksumAlgorithm != "" {
 			uploadInput.ChecksumAlgorithm = tmtypes.ChecksumAlgorithm(a.conf.ChecksumAlgorithm)
+		}
+
+		if a.conf.ObjectCannedACL != "" {
+			uploadInput.ACL = tmtypes.ObjectCannedACL(a.conf.ObjectCannedACL)
 		}
 
 		// NOTE: This overrides the ServerSideEncryption set above. We need this to preserve
