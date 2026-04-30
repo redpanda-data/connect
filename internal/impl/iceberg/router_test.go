@@ -12,7 +12,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/redpanda-data/benthos/v4/public/schema"
+	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // TestFindCaseOnlyDuplicate covers the create-time guard that prevents an
@@ -46,4 +49,43 @@ func TestFindCaseOnlyDuplicate(t *testing.T) {
 		_, _, ok := findCaseOnlyDuplicate(map[string]any{})
 		assert.False(t, ok)
 	})
+}
+
+// TestBuildSchemaWithResolverPreservesColumnOrder verifies that columns in the
+// resulting Iceberg schema appear in the order defined by the schema registry
+// metadata, not in Go map iteration order.
+func TestBuildSchemaWithResolverPreservesColumnOrder(t *testing.T) {
+	router := &Router{
+		caseSensitive: true,
+		resolver:      newTypeResolver("schema_key", nil, true, nil),
+	}
+
+	// Build a schema.Common with fields in a specific order that differs from
+	// alphabetical to make the test deterministic and meaningful.
+	schemaMeta := schema.Common{
+		Type: schema.Object,
+		Children: []schema.Common{
+			{Name: "zebra", Type: schema.String},
+			{Name: "alpha", Type: schema.String},
+			{Name: "mango", Type: schema.String},
+		},
+	}
+
+	msg := service.NewMessage(nil)
+	msg.MetaSetMut("schema_key", schemaMeta.ToAny())
+
+	record := map[string]any{
+		"zebra": "z-value",
+		"alpha": "a-value",
+		"mango": "m-value",
+	}
+
+	icebergSchema, err := router.buildSchemaWithResolver(record, msg, tableKey{namespace: "ns", table: "t"})
+	require.NoError(t, err)
+
+	fields := icebergSchema.Fields()
+	require.Len(t, fields, 3)
+	assert.Equal(t, "zebra", fields[0].Name)
+	assert.Equal(t, "alpha", fields[1].Name)
+	assert.Equal(t, "mango", fields[2].Name)
 }

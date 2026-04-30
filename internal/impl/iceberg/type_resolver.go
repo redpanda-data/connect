@@ -398,3 +398,27 @@ func parseIcebergTypeString(s string) (iceberg.Type, error) {
 
 	return nil, fmt.Errorf("unrecognized iceberg type: %q", s)
 }
+
+// topLevelFieldOrder returns the top-level field names from the schema metadata
+// in the order they appear there, or nil if no schema metadata is present.
+func (r *typeResolver) topLevelFieldOrder(msg *service.Message) []string {
+	if r.schemaMetadataKey == "" {
+		return nil
+	}
+	raw, exists := msg.MetaGetMut(r.schemaMetadataKey)
+	if !exists {
+		return nil
+	}
+	c, err := schema.ParseFromAny(raw)
+	if err != nil {
+		return nil
+	}
+	if c.Type != schema.Object {
+		return nil
+	}
+	names := make([]string, 0, len(c.Children))
+	for _, child := range c.Children {
+		names = append(names, child.Name)
+	}
+	return names
+}
