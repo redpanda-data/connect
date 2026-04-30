@@ -603,7 +603,7 @@ func (i *mysqlStreamInput) snapshotTable(ctx context.Context, snapshot *Snapshot
 				}
 				row[columns[idx]] = v
 				if _, ok := lastSeenPksValues[columns[idx]]; ok {
-					lastSeenPksValues[columns[idx]] = value
+					lastSeenPksValues[columns[idx]] = v
 				}
 			}
 
