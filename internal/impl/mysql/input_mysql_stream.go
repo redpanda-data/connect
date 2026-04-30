@@ -193,8 +193,9 @@ type mysqlStreamInput struct {
 	checkPointLimit           int
 	fieldSnapshotMaxBatchSize int
 
-	logger *service.Logger
-	res    *service.Resources
+	logger                     *service.Logger
+	res                        *service.Resources
+	snapshotRowsProcessedTotal *service.MetricCounter
 
 	rawMessageEvents chan MessageEvent
 	msgChan          chan asyncMessage
@@ -329,6 +330,8 @@ func newMySQLStreamInput(conf *service.ParsedConfig, res *service.Resources) (s 
 	} else if batching.IsNoop() {
 		batching.Count = 1
 	}
+
+	i.snapshotRowsProcessedTotal = res.Metrics().NewCounter("mysql_snapshot_rows_processed_total", "table")
 
 	r, err := service.AutoRetryNacksBatchedToggled(conf, &i)
 	if err != nil {
@@ -536,6 +539,7 @@ func (i *mysqlStreamInput) readSnapshot(ctx context.Context, snapshot *Snapshot)
 }
 
 func (i *mysqlStreamInput) snapshotTable(ctx context.Context, snapshot *Snapshot, tx *sql.Tx, table string) error {
+	i.logger.Infof("Starting snapshot of table '%s'", table)
 	// Pre-populate schema cache so snapshot messages carry schema metadata.
 	if tbl, err := i.canal.GetTable(i.mysqlConfig.DBName, table); err == nil {
 		if _, err := i.getTableSchema(tbl); err != nil {
@@ -615,10 +619,13 @@ func (i *mysqlStreamInput) snapshotTable(ctx context.Context, snapshot *Snapshot
 			return fmt.Errorf("iterating snapshot table: %s", err)
 		}
 
+		i.snapshotRowsProcessedTotal.Incr(int64(batchRowsCount), table)
+
 		if batchRowsCount < i.fieldSnapshotMaxBatchSize {
 			break
 		}
 	}
+	i.logger.Infof("Finished snapshot of table '%s' (%d rows)", table, numRowsProcessed)
 	return nil
 }
 
