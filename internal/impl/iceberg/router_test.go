@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/schema"
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
@@ -134,9 +135,9 @@ func TestBuildSchemaWithResolverAppendsRecordOnlyFields(t *testing.T) {
 
 // TestBuildSchemaWithResolverCaseInsensitiveOrdering verifies that when
 // caseSensitive is false, schema metadata field names match record keys with
-// case folding, and the iceberg column name preserves the record's original
-// casing. Without case-folded matching, lowercase canonical metadata against
-// mixed-case record keys would drop every column.
+// case folding, and the metadata's casing is what lands in the iceberg column.
+// This keeps top-level naming consistent with how nested struct fields supplied
+// via metadata are named — metadata is the source of truth for column names.
 func TestBuildSchemaWithResolverCaseInsensitiveOrdering(t *testing.T) {
 	router := &Router{
 		caseSensitive: false,
@@ -164,15 +165,15 @@ func TestBuildSchemaWithResolverCaseInsensitiveOrdering(t *testing.T) {
 
 	fields := icebergSchema.Fields()
 	require.Len(t, fields, 2)
-	assert.Equal(t, "Zebra", fields[0].Name)
-	assert.Equal(t, "ALPHA", fields[1].Name)
+	assert.Equal(t, "zebra", fields[0].Name)
+	assert.Equal(t, "alpha", fields[1].Name)
 }
 
 // TestBuildSchemaWithResolverCaseInsensitiveWithRecordOnlyFields combines
 // case-insensitive metadata-driven ordering with record-only leftover fields
 // to exercise the full merge path: lowercase canonical metadata, mixed-case
-// record keys, plus extras absent from metadata that should appear sorted at
-// the end with their original casing preserved.
+// record keys, plus extras absent from metadata. Metadata-matched fields land
+// in the table with the metadata's casing; record-only fields keep their own.
 func TestBuildSchemaWithResolverCaseInsensitiveWithRecordOnlyFields(t *testing.T) {
 	router := &Router{
 		caseSensitive: false,
@@ -202,9 +203,9 @@ func TestBuildSchemaWithResolverCaseInsensitiveWithRecordOnlyFields(t *testing.T
 
 	fields := icebergSchema.Fields()
 	require.Len(t, fields, 4)
-	// Metadata-ordered first, with the record's original casing preserved.
-	assert.Equal(t, "Alpha", fields[0].Name)
-	assert.Equal(t, "BETA", fields[1].Name)
+	// Metadata-ordered first, named in the metadata's casing.
+	assert.Equal(t, "alpha", fields[0].Name)
+	assert.Equal(t, "beta", fields[1].Name)
 	// Record-only keys appended in bytewise sorted order ("Delta" precedes
 	// "gamma" because uppercase 'D' < lowercase 'g').
 	assert.Equal(t, "Delta", fields[2].Name)
@@ -240,4 +241,87 @@ func TestBuildSchemaWithResolverRejectsCaseOnlyDuplicateMetadata(t *testing.T) {
 	_, err := router.buildSchemaWithResolver(record, msg, tableKey{namespace: "ns", table: "t"})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "differ only in case")
+}
+
+// TestBuildSchemaWithResolverTypeOverrideAcrossCaseMismatch verifies that a
+// metadata-supplied type override still flows through when the metadata's
+// field name differs in casing from the record's key. Without this, the
+// metadata path lookup could silently miss and quietly fall back to type
+// inference — and tests that use String-on-String would never notice because
+// inference and metadata would agree.
+func TestBuildSchemaWithResolverTypeOverrideAcrossCaseMismatch(t *testing.T) {
+	router := &Router{
+		caseSensitive: false,
+		resolver:      newTypeResolver("schema_key", nil, false, nil),
+	}
+
+	// Metadata declares Customer_ID as int32. The record carries customer_id
+	// as a Go int, which would otherwise be inferred as int64. If the override
+	// reaches the resolver, the column should be int32.
+	schemaMeta := schema.Common{
+		Type: schema.Object,
+		Children: []schema.Common{
+			{Name: "Customer_ID", Type: schema.Int32},
+		},
+	}
+
+	msg := service.NewMessage(nil)
+	msg.MetaSetMut("schema_key", schemaMeta.ToAny())
+
+	record := map[string]any{
+		"customer_id": 42,
+	}
+
+	icebergSchema, err := router.buildSchemaWithResolver(record, msg, tableKey{namespace: "ns", table: "t"})
+	require.NoError(t, err)
+
+	fields := icebergSchema.Fields()
+	require.Len(t, fields, 1)
+	assert.Equal(t, "Customer_ID", fields[0].Name, "metadata casing should win")
+	assert.Equal(t, "int", fields[0].Type.Type(), "metadata-supplied int32 type should be applied, not inferred int64")
+}
+
+// TestBuildSchemaWithResolverNewColumnTypeMappingSeesMetadataCasing verifies
+// that when the bloblang new_column_type_mapping runs against a column where
+// the metadata's casing differs from the record's key, the mapping receives
+// the metadata's casing as `name` and `path`. This pins down the user-visible
+// behaviour of the metadata-wins-everywhere rule for the Bloblang surface.
+func TestBuildSchemaWithResolverNewColumnTypeMappingSeesMetadataCasing(t *testing.T) {
+	// The mapping returns "long" only when invoked with the metadata casing.
+	// Any other observed name produces "string", which would surface as a
+	// type mismatch in the assertion below.
+	exec, err := bloblang.Parse(`root = if this.name == "Customer_ID" && this.path == "Customer_ID" { "long" } else { "string" }`)
+	require.NoError(t, err)
+
+	router := &Router{
+		caseSensitive: false,
+		resolver:      newTypeResolver("schema_key", exec, false, nil),
+	}
+
+	// Metadata is intentionally omitted for this column so type inference
+	// reaches Stage 3 (the bloblang mapping). The metadata still carries the
+	// canonical name so the casing-rename path is exercised.
+	schemaMeta := schema.Common{
+		Type: schema.Object,
+		Children: []schema.Common{
+			{Name: "Customer_ID", Type: schema.String}, // metadata says String, mapping overrides to long
+		},
+	}
+
+	msg := service.NewMessage(nil)
+	msg.SetStructuredMut(map[string]any{"customer_id": "anything"})
+	msg.MetaSetMut("schema_key", schemaMeta.ToAny())
+
+	record := map[string]any{
+		"customer_id": "anything",
+	}
+
+	icebergSchema, err := router.buildSchemaWithResolver(record, msg, tableKey{namespace: "ns", table: "t"})
+	require.NoError(t, err)
+
+	fields := icebergSchema.Fields()
+	require.Len(t, fields, 1)
+	assert.Equal(t, "Customer_ID", fields[0].Name)
+	assert.Equal(t, "long", fields[0].Type.Type(),
+		"mapping returns long only when name+path match metadata casing; any other casing means the rename path is broken")
 }

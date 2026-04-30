@@ -320,7 +320,7 @@ array:list
 					Example("s3://my-iceberg-bucket/").
 					Optional(),
 				service.NewStringField(ioFieldSchemaEvolutionSchemaMetadata).
-					Description("The name of a message metadata field containing a schema definition. When set, the schema is used to determine column types during schema evolution and table creation instead of inferring types from values. The schema must be in the standard common schema format (the same format used by the `parquet_encode` processor's `schema_metadata` field). For batches of messages, the first message's schema is used.").
+					Description("The name of a message metadata field containing a schema definition. When set, the schema is used to determine column types during schema evolution and table creation instead of inferring types from values. The schema must be in the standard common schema format (the same format used by the `parquet_encode` processor's `schema_metadata` field). For batches of messages, the first message's schema is used. Record presence drives schema shape: fields declared in the schema metadata that are absent from the record are not added to the table, while the metadata controls column ordering, naming, and types for fields that are present. In case-insensitive mode, top-level column names use the metadata's casing — record keys are matched by case-folding and the metadata's name is what lands in the table.").
 					Default("").
 					Optional().
 					Advanced(),

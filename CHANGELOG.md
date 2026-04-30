@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - iceberg: fix decimal min/max stats extraction for parquet files ([@josephwoodward](https://github.com/josephwoodward), [#4368](https://github.com/redpanda-data/connect/pull/4368))
+- iceberg: Preserve schema-registry column order when auto-creating tables. Build-time ordering now follows `schema_metadata` when present and falls back to sorted record keys otherwise, replacing Go's randomised map iteration. In case-insensitive mode, top-level column names use the metadata's casing — record keys are matched by case-folding and the metadata's name lands in the table, mirroring how nested struct fields supplied via metadata are named. ([@josephwoodward](https://github.com/josephwoodward), [#4373](https://github.com/redpanda-data/connect/pull/4373))
 
 ### Added
 
