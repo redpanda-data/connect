@@ -282,6 +282,307 @@ file:
 	require.NoError(t, streamOut.StopWithin(time.Second*10))
 }
 
+// TestIntegrationMySQLParallelSnapshot verifies that enabling
+// snapshot_max_parallel_tables produces the same total set of snapshot rows
+// across multiple tables as the sequential path, and that the subsequent
+// binlog-stream handoff captures ongoing writes correctly. The parallel path
+// opens N REPEATABLE READ / CONSISTENT SNAPSHOT transactions under one
+// FLUSH TABLES WITH READ LOCK window, so all workers observe identical state.
+func TestIntegrationMySQLParallelSnapshot(t *testing.T) {
+	dsn, db := setupTestWithMySQLVersion(t, "8.0")
+
+	// Create 4 tables and pre-load each with 500 rows so a parallel snapshot
+	// has meaningful per-worker work and the distribution is observable.
+	tableNames := []string{"foo1", "foo2", "foo3", "foo4"}
+	const rowsPerTable = 500
+
+	for _, tbl := range tableNames {
+		db.Exec(fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s (a INT PRIMARY KEY)", tbl))
+		for i := range rowsPerTable {
+			db.Exec(fmt.Sprintf("INSERT INTO %s VALUES (?)", tbl), i)
+		}
+	}
+
+	template := fmt.Sprintf(`
+mysql_cdc:
+  dsn: %s
+  stream_snapshot: true
+  snapshot_max_batch_size: 100
+  snapshot_max_parallel_tables: 4
+  checkpoint_cache: parcache
+  tables:
+    - foo1
+    - foo2
+    - foo3
+    - foo4
+`, dsn)
+
+	cacheConf := fmt.Sprintf(`
+label: parcache
+file:
+  directory: %s`, t.TempDir())
+
+	streamOutBuilder := service.NewStreamBuilder()
+	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: DEBUG`))
+	require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
+	require.NoError(t, streamOutBuilder.AddInputYAML(template))
+
+	snapshotCounts := map[string]*atomic.Int64{}
+	cdcCounts := map[string]*atomic.Int64{}
+	for _, tbl := range tableNames {
+		snapshotCounts[tbl] = &atomic.Int64{}
+		cdcCounts[tbl] = &atomic.Int64{}
+	}
+	var totalMsgs atomic.Int64
+
+	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+		for _, msg := range mb {
+			op, _ := msg.MetaGet("operation")
+			tbl, _ := msg.MetaGet("table")
+			if c, ok := snapshotCounts[tbl]; ok && op == "read" {
+				c.Add(1)
+			}
+			if c, ok := cdcCounts[tbl]; ok && (op == "insert" || op == "update" || op == "delete") {
+				c.Add(1)
+			}
+			totalMsgs.Add(1)
+		}
+		return nil
+	}))
+
+	streamOut, err := streamOutBuilder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(streamOut.Resources())
+
+	go func() {
+		err = streamOut.Run(t.Context())
+		require.NoError(t, err)
+	}()
+
+	// Wait for the snapshot phase to complete for all tables.
+	assert.Eventually(t, func() bool {
+		for _, tbl := range tableNames {
+			if snapshotCounts[tbl].Load() < int64(rowsPerTable) {
+				return false
+			}
+		}
+		return true
+	}, time.Minute*2, time.Millisecond*100, "parallel snapshot should emit %d rows per table", rowsPerTable)
+
+	// Write additional rows post-snapshot and confirm the binlog-stream
+	// handoff picks them up — this validates that the single shared binlog
+	// position captured under the read-lock window is still a valid starting
+	// point for the binlog consumer.
+	const cdcRowsPerTable = 100
+	for _, tbl := range tableNames {
+		for i := rowsPerTable; i < rowsPerTable+cdcRowsPerTable; i++ {
+			db.Exec(fmt.Sprintf("INSERT INTO %s VALUES (?)", tbl), i)
+		}
+	}
+
+	assert.Eventually(t, func() bool {
+		for _, tbl := range tableNames {
+			if cdcCounts[tbl].Load() < int64(cdcRowsPerTable) {
+				return false
+			}
+		}
+		return true
+	}, time.Minute*2, time.Millisecond*100, "binlog stream should pick up post-snapshot inserts for each table")
+
+	// Sanity check: every snapshot row was emitted exactly once (no
+	// duplicates from overlapping per-worker transactions).
+	for _, tbl := range tableNames {
+		assert.Equal(t, int64(rowsPerTable), snapshotCounts[tbl].Load(), "exactly %d snapshot rows expected for %s", rowsPerTable, tbl)
+	}
+
+	require.NoError(t, streamOut.StopWithin(time.Second*10))
+}
+
+// TestIntegrationMySQLChunkedSnapshot exercises intra-table chunking with
+// both a single-column integer PK and a composite (int, int) PK. The
+// chunked path should still emit every row exactly once under the shared
+// consistent-snapshot window, and the binlog-stream handoff should still
+// pick up post-snapshot writes correctly.
+func TestIntegrationMySQLChunkedSnapshot(t *testing.T) {
+	dsn, db := setupTestWithMySQLVersion(t, "8.0")
+
+	// single_pk: single INT PK. composite_pk: (tenant_id, id) — chunking
+	// uses the first column only, so we spread rows across tenant ids so
+	// each chunk gets non-empty work.
+	const rowsPerTable = 2000
+	db.Exec("CREATE TABLE single_pk (id INT PRIMARY KEY, payload VARCHAR(32))")
+	db.Exec("CREATE TABLE composite_pk (tenant_id INT, id INT, payload VARCHAR(32), PRIMARY KEY (tenant_id, id))")
+
+	for i := range rowsPerTable {
+		db.Exec("INSERT INTO single_pk VALUES (?, ?)", i, fmt.Sprintf("row-%d", i))
+		// tenant_id spans [0, 40) and id spans [0, 50) so chunking on
+		// tenant_id produces meaningful range partitions.
+		db.Exec("INSERT INTO composite_pk VALUES (?, ?, ?)", i%40, i/40, fmt.Sprintf("row-%d", i))
+	}
+
+	template := fmt.Sprintf(`
+mysql_cdc:
+  dsn: %s
+  stream_snapshot: true
+  snapshot_max_batch_size: 200
+  snapshot_max_parallel_tables: 4
+  snapshot_chunks_per_table: 8
+  checkpoint_cache: chunkcache
+  tables:
+    - single_pk
+    - composite_pk
+`, dsn)
+
+	cacheConf := fmt.Sprintf(`
+label: chunkcache
+file:
+  directory: %s`, t.TempDir())
+
+	streamOutBuilder := service.NewStreamBuilder()
+	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: DEBUG`))
+	require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
+	require.NoError(t, streamOutBuilder.AddInputYAML(template))
+
+	snapshotCounts := map[string]*atomic.Int64{
+		"single_pk":    {},
+		"composite_pk": {},
+	}
+	cdcCounts := map[string]*atomic.Int64{
+		"single_pk":    {},
+		"composite_pk": {},
+	}
+
+	// Track the pk values we observe during snapshot so we can detect
+	// duplicates from overlapping chunk ranges — the most likely correctness
+	// regression if the range predicates get subtly wrong.
+	seenSingle := sync.Map{}
+	seenComposite := sync.Map{}
+	var duplicateCount atomic.Int64
+
+	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+		for _, msg := range mb {
+			op, _ := msg.MetaGet("operation")
+			tbl, _ := msg.MetaGet("table")
+			c, ok := snapshotCounts[tbl]
+			if !ok {
+				continue
+			}
+			if op == "read" {
+				c.Add(1)
+				body, err := msg.AsStructured()
+				if err != nil {
+					return err
+				}
+				row, _ := body.(map[string]any)
+				switch tbl {
+				case "single_pk":
+					id := fmt.Sprintf("%v", row["id"])
+					if _, loaded := seenSingle.LoadOrStore(id, struct{}{}); loaded {
+						duplicateCount.Add(1)
+					}
+				case "composite_pk":
+					key := fmt.Sprintf("%v/%v", row["tenant_id"], row["id"])
+					if _, loaded := seenComposite.LoadOrStore(key, struct{}{}); loaded {
+						duplicateCount.Add(1)
+					}
+				}
+			}
+			if op == "insert" || op == "update" || op == "delete" {
+				cdcCounts[tbl].Add(1)
+			}
+		}
+		return nil
+	}))
+
+	streamOut, err := streamOutBuilder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(streamOut.Resources())
+
+	go func() {
+		err = streamOut.Run(t.Context())
+		require.NoError(t, err)
+	}()
+
+	assert.Eventually(t, func() bool {
+		return snapshotCounts["single_pk"].Load() >= rowsPerTable &&
+			snapshotCounts["composite_pk"].Load() >= rowsPerTable
+	}, time.Minute*2, time.Millisecond*100, "chunked snapshot should emit %d rows per table", rowsPerTable)
+
+	// Every row appeared exactly once and no chunk produced duplicates.
+	assert.Equal(t, int64(rowsPerTable), snapshotCounts["single_pk"].Load())
+	assert.Equal(t, int64(rowsPerTable), snapshotCounts["composite_pk"].Load())
+	assert.Zero(t, duplicateCount.Load(), "chunk ranges must not overlap")
+
+	// Binlog handoff still works after the chunked snapshot.
+	const cdcRows = 50
+	for i := rowsPerTable; i < rowsPerTable+cdcRows; i++ {
+		db.Exec("INSERT INTO single_pk VALUES (?, ?)", i, "cdc")
+		db.Exec("INSERT INTO composite_pk VALUES (?, ?, ?)", i%40, 1000+i, "cdc")
+	}
+	assert.Eventually(t, func() bool {
+		return cdcCounts["single_pk"].Load() >= cdcRows && cdcCounts["composite_pk"].Load() >= cdcRows
+	}, time.Minute*2, time.Millisecond*100, "binlog stream should pick up post-snapshot inserts")
+
+	require.NoError(t, streamOut.StopWithin(time.Second*10))
+}
+
+// TestIntegrationMySQLChunkedSnapshotNonNumericPKFallback confirms that a
+// table whose first PK column is non-numeric (here, VARCHAR) is not chunked
+// — it falls back to a single whole-table read and the snapshot completes
+// without error.
+func TestIntegrationMySQLChunkedSnapshotNonNumericPKFallback(t *testing.T) {
+	dsn, db := setupTestWithMySQLVersion(t, "8.0")
+
+	const rowsPerTable = 300
+	db.Exec("CREATE TABLE string_pk (id VARCHAR(64) PRIMARY KEY, payload VARCHAR(32))")
+	for i := range rowsPerTable {
+		db.Exec("INSERT INTO string_pk VALUES (?, ?)", fmt.Sprintf("key-%04d", i), "p")
+	}
+
+	template := fmt.Sprintf(`
+mysql_cdc:
+  dsn: %s
+  stream_snapshot: true
+  snapshot_max_batch_size: 100
+  snapshot_max_parallel_tables: 2
+  snapshot_chunks_per_table: 8
+  checkpoint_cache: fbcache
+  tables:
+    - string_pk
+`, dsn)
+	cacheConf := fmt.Sprintf("label: fbcache\nfile:\n  directory: %s", t.TempDir())
+
+	streamOutBuilder := service.NewStreamBuilder()
+	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: DEBUG`))
+	require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
+	require.NoError(t, streamOutBuilder.AddInputYAML(template))
+
+	var snapCount atomic.Int64
+	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+		for _, msg := range mb {
+			if op, _ := msg.MetaGet("operation"); op == "read" {
+				snapCount.Add(1)
+			}
+		}
+		return nil
+	}))
+
+	streamOut, err := streamOutBuilder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(streamOut.Resources())
+
+	go func() {
+		err = streamOut.Run(t.Context())
+		require.NoError(t, err)
+	}()
+
+	assert.Eventually(t, func() bool {
+		return snapCount.Load() >= rowsPerTable
+	}, time.Minute, time.Millisecond*100, "fallback whole-table read should still emit all %d rows", rowsPerTable)
+
+	require.NoError(t, streamOut.StopWithin(time.Second*10))
+}
+
 func TestIntegrationMySQLCDCWithCompositePrimaryKeys(t *testing.T) {
 	dsn, db := setupTestWithMySQLVersion(t, "8.0")
 	// Create table
