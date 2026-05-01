@@ -67,3 +67,20 @@ func TestAllPluginsInInfoCSV(t *testing.T) {
 		check(name, plugins.TypeTracer)
 	})
 }
+
+// TestPluginCloudEnablement requires each plugin to either be enabled in the
+// cloud distribution or to document why it is not, via the
+// cloud_unsupported_reason column in internal/plugins/info.csv.
+func TestPluginCloudEnablement(t *testing.T) {
+	for key, info := range plugins.BaseInfo {
+		if info.Cloud {
+			if info.CloudUnsupportedReason != "" {
+				t.Errorf("plugin %q is cloud-enabled but has cloud_unsupported_reason %q set; clear that column", key, info.CloudUnsupportedReason)
+			}
+			continue
+		}
+		if info.CloudUnsupportedReason == "" {
+			t.Errorf("plugin %q is not cloud-enabled and is missing a cloud_unsupported_reason in internal/plugins/info.csv; either enable it for cloud or document why it cannot be", key)
+		}
+	}
+}
