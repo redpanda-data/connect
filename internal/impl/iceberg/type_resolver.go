@@ -103,17 +103,18 @@ func (r *typeResolver) resolveTypeForCreateTable(
 	if err != nil {
 		return nil, err
 	}
-	if inferredType == nil {
-		return nil, nil // nil value, skip
-	}
 
 	// Stage 2: schema_metadata override (uses shared ti so override structs share the ID space)
 	path := icebergx.Path{{Kind: icebergx.PathField, Name: fieldName}}
 	if metaType, err := r.resolveFromCommon(common, path, ti); err != nil {
 		return nil, fmt.Errorf("resolving type from schema metadata for field %q: %w", fieldName, err)
 	} else if metaType != nil {
-		// If the metatype was not found then just stick with the default inferred type
+		// Metadata takes precedence over runtime inference. This also ensures
+		// metadata-declared columns are created even when the observed value is nil.
 		inferredType = metaType
+	}
+	if inferredType == nil {
+		return nil, nil // nil value with no metadata type, skip
 	}
 
 	// Stage 3: Bloblang mapping override (only for primitive/leaf types)

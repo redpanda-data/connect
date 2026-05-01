@@ -325,3 +325,37 @@ func TestBuildSchemaWithResolverNewColumnTypeMappingSeesMetadataCasing(t *testin
 	assert.Equal(t, "long", fields[0].Type.Type(),
 		"mapping returns long only when name+path match metadata casing; any other casing means the rename path is broken")
 }
+
+// TestBuildSchemaWithResolverUsesMetadataTypeForNilValue verifies that
+// table-creation type resolution still applies schema metadata when the
+// observed record value is nil. Without this, nil values would be skipped
+// before metadata lookup and columns would appear later only after a non-nil
+// value is seen.
+func TestBuildSchemaWithResolverUsesMetadataTypeForNilValue(t *testing.T) {
+	router := &Router{
+		caseSensitive: true,
+		resolver:      newTypeResolver("schema_key", nil, true, nil),
+	}
+
+	schemaMeta := schema.Common{
+		Type: schema.Object,
+		Children: []schema.Common{
+			{Name: "count", Type: schema.Int32},
+		},
+	}
+
+	msg := service.NewMessage(nil)
+	msg.MetaSetMut("schema_key", schemaMeta.ToAny())
+
+	record := map[string]any{
+		"count": nil,
+	}
+
+	icebergSchema, err := router.buildSchemaWithResolver(record, msg, tableKey{namespace: "ns", table: "t"})
+	require.NoError(t, err)
+
+	fields := icebergSchema.Fields()
+	require.Len(t, fields, 1)
+	assert.Equal(t, "count", fields[0].Name)
+	assert.Equal(t, "int", fields[0].Type.Type())
+}
