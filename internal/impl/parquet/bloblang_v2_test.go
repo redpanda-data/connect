@@ -24,6 +24,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/redpanda-data/benthos/v4/public/bloblangv2"
+
+	"github.com/redpanda-data/connect/v4/internal/bloblang/migratortest"
 )
 
 func TestParquetParseBloblangV2AsStrings(t *testing.T) {
@@ -72,4 +74,31 @@ func TestParquetParseBloblangV2InvalidInput(t *testing.T) {
 
 	_, err = exec.Query([]byte(`hello world lol`))
 	require.Error(t, err)
+}
+
+func TestParquetEquivalenceV1V2(t *testing.T) {
+	buf := bytes.NewBuffer(nil)
+
+	pWtr := parquet.NewGenericWriter[any](buf, parquet.NewSchema("test", parquet.Group{
+		"ID": parquet.Int(64),
+		"D":  parquet.String(),
+	}))
+	type obj map[string]any
+	_, err := pWtr.Write([]any{
+		obj{"ID": 1, "D": "first"},
+		obj{"ID": 2, "D": "second"},
+	})
+	require.NoError(t, err)
+	require.NoError(t, pWtr.Close())
+
+	encoded := buf.Bytes()
+
+	migratortest.AssertEquivalent(t,
+		`root = this.parse_parquet(byte_array_as_string: true)`,
+		encoded,
+		[]any{
+			map[string]any{"ID": int64(1), "D": "first"},
+			map[string]any{"ID": int64(2), "D": "second"},
+		},
+	)
 }

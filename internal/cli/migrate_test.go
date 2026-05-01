@@ -11,6 +11,7 @@ package cli
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"flag"
 	"os"
 	"path/filepath"
@@ -20,6 +21,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/urfave/cli/v2"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
 
 	// Side-effect imports so V2 plugin counterparts are registered when the
 	// migrate fixture exercises a callsite for each.
@@ -302,6 +305,308 @@ func TestMigrateV5AllPluginsFixture(t *testing.T) {
 	// And the wrapping processor type must have switched.
 	assert.Contains(t, body, "bloblang_v2:")
 	assert.NotContains(t, body, "bloblang: |")
+}
+
+// TestMigrateV5MigratedYAMLLints asserts the rewritten YAML emitted by the
+// migrator passes service.NewStreamConfigLinter without any error-severity
+// lint findings — guards against the migrator producing structurally broken
+// output (missing fields, wrong types, etc.).
+func TestMigrateV5MigratedYAMLLints(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "stream.yaml")
+	require.NoError(t, os.WriteFile(src, []byte(msgpackFixture), 0o644))
+
+	ctx := newCommandContext(t, map[string]string{
+		"report": "text",
+	}, src)
+
+	var stdout, stderr bytes.Buffer
+	failed, err := runMigrateV5With(ctx, &stdout, &stderr)
+	require.NoError(t, err)
+	require.False(t, failed, "stderr=%s", stderr.String())
+
+	body, err := os.ReadFile(filepath.Join(dir, "stream.v5.yaml"))
+	require.NoError(t, err)
+
+	schema := service.GlobalEnvironment().CoreConfigSchema("", "")
+	lints, err := schema.NewStreamConfigLinter().
+		SetSkipEnvVarCheck(true).
+		LintYAML(body)
+	require.NoError(t, err)
+
+	// Filter out LintDeprecated since the V1 `bloblang` rule rewrite to
+	// `bloblang_v2` is intentional and might still surface deprecation hints
+	// elsewhere unrelated to migration correctness.
+	for _, l := range lints {
+		if l.Type == service.LintDeprecated {
+			continue
+		}
+		t.Errorf("unexpected lint at line %d col %d (type=%v): %s\nbody=%s",
+			l.Line, l.Column, l.Type, l.What, body)
+	}
+}
+
+// TestMigrateV5MigratedYAMLBuildsStream asserts the rewritten YAML feeds
+// cleanly through service.NewStreamBuilder.SetYAML and that the embedded
+// bloblang_v2 mapping parses against the V2 environment with the connect
+// V2 plugins applied.
+func TestMigrateV5MigratedYAMLBuildsStream(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "stream.yaml")
+	require.NoError(t, os.WriteFile(src, []byte(msgpackFixture), 0o644))
+
+	ctx := newCommandContext(t, map[string]string{
+		"report": "text",
+	}, src)
+
+	var stdout, stderr bytes.Buffer
+	failed, err := runMigrateV5With(ctx, &stdout, &stderr)
+	require.NoError(t, err)
+	require.False(t, failed, "stderr=%s", stderr.String())
+
+	body, err := os.ReadFile(filepath.Join(dir, "stream.v5.yaml"))
+	require.NoError(t, err)
+
+	builder := service.NewStreamBuilder()
+	require.NoError(t, builder.SetYAML(string(body)))
+	_, err = builder.Build()
+	require.NoErrorf(t, err, "stream build failed for migrated body:\n%s", body)
+}
+
+// TestMigrateV5MinCoverageGate confirms that supplying --min-coverage with a
+// fixture that fails to migrate any of its bloblang plugins surfaces a
+// CoverageError-driven failure in --check mode.
+func TestMigrateV5MinCoverageGate(t *testing.T) {
+	// Use a config whose bloblang body references a plugin the migrator can't
+	// translate (a fictional V1 plugin with no registered rule). The default
+	// translator's RuleMethodDoesNotExist hook will record an unsupported
+	// outcome for the bloblang body's content, but the wrapping `bloblang`
+	// processor itself is still rewritten — so coverage stays at 1.0 from the
+	// outer rule's perspective. Pin a coverage gate above 1.0 to force a trip.
+	dir := t.TempDir()
+	src := filepath.Join(dir, "stream.yaml")
+	require.NoError(t, os.WriteFile(src, []byte(msgpackFixture), 0o644))
+
+	ctx := newCommandContext(t, map[string]string{
+		"check":        "true",
+		"min-coverage": "1.5",
+		"report":       "text",
+	}, src)
+
+	var stdout, stderr bytes.Buffer
+	failed, err := runMigrateV5With(ctx, &stdout, &stderr)
+	require.NoError(t, err)
+	require.True(t, failed, "expected --min-coverage gate to fail; stdout=%s", stdout.String())
+}
+
+func TestMigrateV5InPlaceNoBackup(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "stream.yaml")
+	require.NoError(t, os.WriteFile(src, []byte(msgpackFixture), 0o644))
+
+	ctx := newCommandContext(t, map[string]string{
+		"in-place":  "true",
+		"no-backup": "true",
+		"report":    "text",
+	}, src)
+
+	var stdout, stderr bytes.Buffer
+	failed, err := runMigrateV5With(ctx, &stdout, &stderr)
+	require.NoError(t, err)
+	require.False(t, failed, "stderr=%s", stderr.String())
+
+	if _, err := os.Stat(src + ".bak"); err == nil {
+		t.Fatalf("--no-backup should have suppressed the .bak file")
+	}
+	rewritten, err := os.ReadFile(src)
+	require.NoError(t, err)
+	assert.Contains(t, string(rewritten), "bloblang_v2:")
+}
+
+func TestMigrateV5VerboseFlag(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "stream.yaml")
+	require.NoError(t, os.WriteFile(src, []byte(msgpackFixture), 0o644))
+
+	ctx := newCommandContext(t, map[string]string{
+		"verbose": "true",
+		"check":   "true",
+		"report":  "text",
+	}, src)
+
+	var stdout, stderr bytes.Buffer
+	failed, err := runMigrateV5With(ctx, &stdout, &stderr)
+	require.NoError(t, err)
+	require.False(t, failed, "stderr=%s", stderr.String())
+
+	// --verbose should at minimum print the matched component line.
+	assert.Contains(t, stdout.String(), "rewritten")
+}
+
+func TestMigrateV5GlobExpansion(t *testing.T) {
+	dir := t.TempDir()
+	a := filepath.Join(dir, "a.yaml")
+	b := filepath.Join(dir, "b.yaml")
+	require.NoError(t, os.WriteFile(a, []byte(msgpackFixture), 0o644))
+	require.NoError(t, os.WriteFile(b, []byte(msgpackFixture), 0o644))
+
+	ctx := newCommandContext(t, map[string]string{
+		"report": "text",
+	}, filepath.Join(dir, "*.yaml"))
+
+	var stdout, stderr bytes.Buffer
+	failed, err := runMigrateV5With(ctx, &stdout, &stderr)
+	require.NoError(t, err)
+	require.False(t, failed, "stderr=%s", stderr.String())
+
+	for _, suffix := range []string{"a.v5.yaml", "b.v5.yaml"} {
+		body, err := os.ReadFile(filepath.Join(dir, suffix))
+		require.NoErrorf(t, err, "missing %s", suffix)
+		assert.Contains(t, string(body), "bloblang_v2:")
+	}
+}
+
+func TestMigrateV5CustomSuffix(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "stream.yaml")
+	require.NoError(t, os.WriteFile(src, []byte(msgpackFixture), 0o644))
+
+	ctx := newCommandContext(t, map[string]string{
+		"suffix": ".migrated",
+		"report": "text",
+	}, src)
+
+	var stdout, stderr bytes.Buffer
+	failed, err := runMigrateV5With(ctx, &stdout, &stderr)
+	require.NoError(t, err)
+	require.False(t, failed, "stderr=%s", stderr.String())
+
+	body, err := os.ReadFile(filepath.Join(dir, "stream.migrated.yaml"))
+	require.NoError(t, err)
+	assert.Contains(t, string(body), "bloblang_v2:")
+}
+
+func TestMigrateV5MissingFile(t *testing.T) {
+	ctx := newCommandContext(t, map[string]string{
+		"report": "text",
+	}, "/no/such/path/stream.yaml")
+
+	var stdout, stderr bytes.Buffer
+	failed, err := runMigrateV5With(ctx, &stdout, &stderr)
+	require.NoError(t, err)
+	require.True(t, failed, "expected missing file to surface as failed")
+	assert.Contains(t, stderr.String(), "/no/such/path/stream.yaml")
+}
+
+func TestMigrateV5MalformedYAMLReportsFailure(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "stream.yaml")
+	require.NoError(t, os.WriteFile(src, []byte("not: [valid"), 0o644))
+
+	ctx := newCommandContext(t, map[string]string{
+		"report": "text",
+	}, src)
+
+	var stdout, stderr bytes.Buffer
+	failed, err := runMigrateV5With(ctx, &stdout, &stderr)
+	require.NoError(t, err) // per-file errors don't abort the whole run
+	require.True(t, failed, "expected malformed YAML to surface failure")
+	assert.Contains(t, stderr.String(), src)
+}
+
+func TestMigrateV5RejectsUnknownReportFormat(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "stream.yaml")
+	require.NoError(t, os.WriteFile(src, []byte(msgpackFixture), 0o644))
+
+	ctx := newCommandContext(t, map[string]string{
+		"report": "yaml",
+	}, src)
+
+	var stdout, stderr bytes.Buffer
+	_, err := runMigrateV5With(ctx, &stdout, &stderr)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "report")
+}
+
+func TestMigrateV5JSONReportShape(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "stream.yaml")
+	require.NoError(t, os.WriteFile(src, []byte(msgpackFixture), 0o644))
+
+	ctx := newCommandContext(t, map[string]string{
+		"check":  "true",
+		"report": "json",
+	}, src)
+
+	var stdout, stderr bytes.Buffer
+	_, err := runMigrateV5With(ctx, &stdout, &stderr)
+	require.NoError(t, err)
+
+	type changeRecord struct {
+		Outcome  any `json:"Outcome"`
+		Severity any `json:"Severity"`
+		Path     any `json:"Path"`
+		NewName  any `json:"NewName"`
+	}
+	type reportPayload struct {
+		File   string `json:"file"`
+		Report struct {
+			OutputYAML string         `json:"OutputYAML"`
+			Changes    []changeRecord `json:"Changes"`
+			Coverage   struct {
+				Matched     int     `json:"Matched"`
+				Rewritten   int     `json:"Rewritten"`
+				Skipped     int     `json:"Skipped"`
+				Unsupported int     `json:"Unsupported"`
+				Ratio       float64 `json:"Ratio"`
+			} `json:"Coverage"`
+		} `json:"report"`
+	}
+
+	var got reportPayload
+	require.NoError(t, json.NewDecoder(&stdout).Decode(&got))
+
+	assert.Equal(t, src, got.File)
+	assert.Equal(t, 1, got.Report.Coverage.Rewritten)
+	assert.Equal(t, 0, got.Report.Coverage.Unsupported)
+	assert.InDelta(t, 1.0, got.Report.Coverage.Ratio, 1e-9)
+	require.NotEmpty(t, got.Report.Changes)
+	assert.NotEmpty(t, got.Report.OutputYAML)
+}
+
+// TestMigrateV5ResourceFile asserts the CLI migrates a benthos resources file
+// (top-level processor_resources containing bloblang) the same way it migrates
+// a full stream config. The walker on the benthos side already handles both
+// cases; this is a connect-side smoke test that the CLI plumbing surfaces it.
+func TestMigrateV5ResourceFile(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "resources.yaml")
+	const fixture = `
+processor_resources:
+  - label: my_resource
+    bloblang: |
+      root = this.format_msgpack().parse_msgpack()
+`
+	require.NoError(t, os.WriteFile(src, []byte(fixture), 0o644))
+
+	ctx := newCommandContext(t, map[string]string{
+		"report": "text",
+	}, src)
+
+	var stdout, stderr bytes.Buffer
+	failed, err := runMigrateV5With(ctx, &stdout, &stderr)
+	require.NoError(t, err)
+	require.False(t, failed, "stderr=%s", stderr.String())
+
+	body, err := os.ReadFile(filepath.Join(dir, "resources.v5.yaml"))
+	require.NoError(t, err)
+
+	str := string(body)
+	assert.Contains(t, str, "bloblang_v2:")
+	assert.Contains(t, str, "label: my_resource", "label should survive the rewrite")
+	assert.Contains(t, str, "format_msgpack")
+	assert.Contains(t, str, "parse_msgpack")
 }
 
 func TestSiblingPath(t *testing.T) {

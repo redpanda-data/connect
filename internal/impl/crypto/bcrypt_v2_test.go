@@ -20,6 +20,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/redpanda-data/benthos/v4/public/bloblangv2"
+
+	"github.com/redpanda-data/connect/v4/internal/bloblang/migratortest"
 )
 
 func TestBloblangCompareBCryptV2(t *testing.T) {
@@ -53,4 +55,27 @@ func TestBloblangCompareBCryptV2(t *testing.T) {
 			require.Equal(t, testCase.expected, res)
 		})
 	}
+}
+
+func TestCompareBCryptEquivalenceV1V2(t *testing.T) {
+	secret := "$2y$10$Dtnt5NNzVtMCOZONT705tOcS8It6krJX8bEjnDJnwxiFKsz1C.3Ay"
+
+	t.Run("matching", func(t *testing.T) {
+		migratortest.AssertEquivalentFn(t,
+			`root = this.user_input.compare_bcrypt(this.hashed_secret)`,
+			func() any {
+				return map[string]any{"hashed_secret": secret, "user_input": "there-are-many-blobs-in-the-sea"}
+			},
+			true,
+		)
+	})
+	t.Run("mismatch", func(t *testing.T) {
+		migratortest.AssertEquivalentFn(t,
+			`root = this.user_input.compare_bcrypt(this.hashed_secret)`,
+			func() any {
+				return map[string]any{"hashed_secret": secret, "user_input": "no-thanks"}
+			},
+			false,
+		)
+	})
 }

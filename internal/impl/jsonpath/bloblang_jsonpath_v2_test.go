@@ -21,6 +21,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/redpanda-data/benthos/v4/public/bloblangv2"
+
+	"github.com/redpanda-data/connect/v4/internal/bloblang/migratortest"
 )
 
 func TestJSONPathBloblangV2(t *testing.T) {
@@ -44,4 +46,17 @@ func TestJSONPathBloblangV2(t *testing.T) {
 func TestJSONPathBloblangV2InvalidExpression(t *testing.T) {
 	_, err := bloblangv2.Parse(`output = input.json_path("$..[")`)
 	require.Error(t, err)
+}
+
+func TestJSONPathEquivalenceV1V2(t *testing.T) {
+	migratortest.AssertEquivalentFn(t,
+		`root.all_names = this.json_path("$..name")`,
+		func() any {
+			return map[string]any{
+				"name": "alice",
+				"foo":  map[string]any{"name": "bob"},
+			}
+		},
+		map[string]any{"all_names": []any{"alice", "bob"}},
+	)
 }

@@ -22,6 +22,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/redpanda-data/benthos/v4/public/bloblangv2"
+
+	"github.com/redpanda-data/connect/v4/internal/bloblang/migratortest"
 )
 
 func TestParseXMLV2(t *testing.T) {
@@ -72,4 +74,60 @@ func TestFormatXMLV2(t *testing.T) {
 	got, ok := res.([]byte)
 	require.True(t, ok)
 	assert.Equal(t, `<foo><bar>baz</bar></foo>`, string(got))
+}
+
+func TestFormatXMLV2DefaultIndent(t *testing.T) {
+	exec, err := bloblangv2.Parse(`output = input.format_xml()`)
+	require.NoError(t, err)
+
+	res, err := exec.Query(map[string]any{"foo": map[string]any{"bar": map[string]any{"baz": "foo bar baz"}}})
+	require.NoError(t, err)
+
+	got, ok := res.([]byte)
+	require.True(t, ok)
+	assert.Equal(t, "<foo>\n    <bar>\n        <baz>foo bar baz</baz>\n    </bar>\n</foo>", string(got))
+}
+
+func TestFormatXMLV2CustomRootTag(t *testing.T) {
+	exec, err := bloblangv2.Parse(`output = input.format_xml(root_tag: "wrapper", indent: "")`)
+	require.NoError(t, err)
+
+	res, err := exec.Query(map[string]any{"foo": "bar"})
+	require.NoError(t, err)
+
+	got, ok := res.([]byte)
+	require.True(t, ok)
+	assert.Contains(t, string(got), `<wrapper>`)
+	assert.Contains(t, string(got), `<foo>bar</foo>`)
+}
+
+func TestXMLEquivalenceV1V2(t *testing.T) {
+	t.Run("parse_xml without cast", func(t *testing.T) {
+		migratortest.AssertEquivalent(t,
+			`root = this.parse_xml()`,
+			`<root><title>This is a title</title><content>This is some content</content></root>`,
+			map[string]any{"root": map[string]any{"content": "This is some content", "title": "This is a title"}},
+		)
+	})
+	t.Run("parse_xml with cast", func(t *testing.T) {
+		migratortest.AssertEquivalent(t,
+			`root = this.parse_xml(cast: true)`,
+			`<root><title>x</title><number id="99">123</number><bool>True</bool></root>`,
+			map[string]any{"root": map[string]any{"bool": true, "number": map[string]any{"#text": float64(123), "-id": float64(99)}, "title": "x"}},
+		)
+	})
+	t.Run("parse_xml from bytes", func(t *testing.T) {
+		migratortest.AssertEquivalent(t,
+			`root = this.parse_xml()`,
+			[]byte(`<root><title>x</title></root>`),
+			map[string]any{"root": map[string]any{"title": "x"}},
+		)
+	})
+	t.Run("format_xml no_indent", func(t *testing.T) {
+		migratortest.AssertEquivalent(t,
+			`root = this.format_xml(no_indent: true)`,
+			map[string]any{"foo": map[string]any{"bar": "baz"}},
+			[]byte(`<foo><bar>baz</bar></foo>`),
+		)
+	})
 }

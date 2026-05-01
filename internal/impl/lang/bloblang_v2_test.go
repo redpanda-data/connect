@@ -22,6 +22,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/redpanda-data/benthos/v4/public/bloblangv2"
+
+	"github.com/redpanda-data/connect/v4/internal/bloblang/migratortest"
 )
 
 func TestFakeFunctionV2Invalid(t *testing.T) {
@@ -128,4 +130,54 @@ func TestSnowflakeIDV2(t *testing.T) {
 	res, err := e.Query(nil)
 	require.NoError(t, err)
 	assert.NotEmpty(t, res)
+}
+
+func TestSnowflakeIDV2WithCustomNode(t *testing.T) {
+	e, err := bloblangv2.Parse(`output = snowflake_id(42)`)
+	require.NoError(t, err)
+	res, err := e.Query(nil)
+	require.NoError(t, err)
+	assert.NotEmpty(t, res)
+}
+
+func TestSlugV2Languages(t *testing.T) {
+	cases := []struct {
+		name, mapping, input, want string
+	}{
+		{"default English", `output = input.slug()`, "Hello World!", "hello-world"},
+		{"explicit English", `output = input.slug("en")`, "Hello World!", "hello-world"},
+		{"French transliteration", `output = input.slug("fr")`, "Café & Restaurant", "cafe-et-restaurant"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			e, err := bloblangv2.Parse(tc.mapping)
+			require.NoError(t, err)
+			res, err := e.Query(tc.input)
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, res)
+		})
+	}
+}
+
+func TestLangEquivalenceV1V2(t *testing.T) {
+	t.Run("slug English", func(t *testing.T) {
+		migratortest.AssertEquivalent(t, `root = this.slug()`, "Hello World!", "hello-world")
+	})
+	t.Run("slug French", func(t *testing.T) {
+		migratortest.AssertEquivalent(t, `root = this.slug("fr")`, "Café & Restaurant", "cafe-et-restaurant")
+	})
+	t.Run("unicode_segments words", func(t *testing.T) {
+		migratortest.AssertEquivalent(t,
+			`root = this.unicode_segments("word")`,
+			"what's up?",
+			[]any{"what's", " ", "up", "?"},
+		)
+	})
+	t.Run("slug from bytes", func(t *testing.T) {
+		migratortest.AssertEquivalent(t,
+			`root = this.slug()`,
+			[]byte("Hello World!"),
+			"hello-world",
+		)
+	})
 }

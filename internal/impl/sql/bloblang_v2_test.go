@@ -21,6 +21,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/redpanda-data/benthos/v4/public/bloblangv2"
+
+	"github.com/redpanda-data/connect/v4/internal/bloblang/migratortest"
 )
 
 func TestVectorBloblangV2(t *testing.T) {
@@ -50,4 +52,12 @@ func TestVectorBloblangV2RejectsNonArrayReceiver(t *testing.T) {
 
 	_, err = exec.Query("not an array")
 	require.Error(t, err)
+}
+
+func TestVectorEquivalenceV1V2(t *testing.T) {
+	migratortest.AssertEquivalent(t,
+		`root = this.vector()`,
+		[]any{1, 2.5, 3},
+		vector{value: []float32{1, 2.5, 3}},
+	)
 }

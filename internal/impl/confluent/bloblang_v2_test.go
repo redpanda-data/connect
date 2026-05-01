@@ -22,6 +22,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/redpanda-data/benthos/v4/public/bloblangv2"
+
+	"github.com/redpanda-data/connect/v4/internal/bloblang/migratortest"
 )
 
 func TestWithSchemaRegistryHeaderV2(t *testing.T) {
@@ -74,6 +76,14 @@ func TestWithSchemaRegistryHeaderV2(t *testing.T) {
 			assert.Equal(t, test.expectedText, string(resultBytes[5:]))
 		})
 	}
+}
+
+func TestWithSchemaRegistryHeaderEquivalenceV1V2(t *testing.T) {
+	migratortest.AssertEquivalent(t,
+		`root = with_schema_registry_header(123, "hello")`,
+		nil,
+		append([]byte{0x00, 0x00, 0x00, 0x00, 0x7B}, []byte("hello")...),
+	)
 }
 
 func TestWithSchemaRegistryHeaderV2Errors(t *testing.T) {

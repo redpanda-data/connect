@@ -21,6 +21,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/redpanda-data/benthos/v4/public/bloblangv2"
+
+	"github.com/redpanda-data/connect/v4/internal/bloblang/migratortest"
 )
 
 func TestStripHTMLBloblangV2NoArgs(t *testing.T) {
@@ -64,4 +66,28 @@ func TestStripHTMLBloblangV2RejectsNonStringReceiver(t *testing.T) {
 
 	_, err = e.Query(42)
 	require.Error(t, err)
+}
+
+func TestStripHTMLEquivalenceV1V2(t *testing.T) {
+	t.Run("no args", func(t *testing.T) {
+		migratortest.AssertEquivalent(t,
+			`root = this.strip_html()`,
+			`<div>meow</div>`,
+			"meow",
+		)
+	})
+	t.Run("preserve list", func(t *testing.T) {
+		migratortest.AssertEquivalent(t,
+			`root = this.strip_html(["strong","h1"])`,
+			"<div>\n  <h1>meow</h1>\n  <p>hello world this is <strong>some</strong> text.\n</div>",
+			"\n  <h1>meow</h1>\n  hello world this is <strong>some</strong> text.\n",
+		)
+	})
+	t.Run("bytes receiver", func(t *testing.T) {
+		migratortest.AssertEquivalent(t,
+			`root = this.strip_html()`,
+			[]byte(`<div>meow</div>`),
+			"meow",
+		)
+	})
 }

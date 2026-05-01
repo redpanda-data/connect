@@ -20,6 +20,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/redpanda-data/benthos/v4/public/bloblangv2"
+
+	"github.com/redpanda-data/connect/v4/internal/bloblang/migratortest"
 )
 
 func TestBloblangCompareArgon2V2(t *testing.T) {
@@ -72,4 +74,38 @@ func TestBloblangCompareArgon2V2InvalidHash(t *testing.T) {
 
 	_, err = exe.Query(map[string]any{"hashed_secret": "", "user_input": "some-fancy-secret"})
 	require.Error(t, err)
+}
+
+func TestCompareArgon2EquivalenceV1V2(t *testing.T) {
+	secret := "$argon2id$v=19$m=4096,t=3,p=1$c2FsdHktbWNzYWx0ZmFjZQ$XTu19IC4rYL/ERsDZr2HOZe9bcMx88ARJ/VVfT2Lb3U"
+
+	t.Run("matching", func(t *testing.T) {
+		migratortest.AssertEquivalentFn(t,
+			`root = this.user_input.compare_argon2(this.hashed_secret)`,
+			func() any {
+				return map[string]any{"hashed_secret": secret, "user_input": "some-fancy-secret"}
+			},
+			true,
+		)
+	})
+	t.Run("mismatch", func(t *testing.T) {
+		migratortest.AssertEquivalentFn(t,
+			`root = this.user_input.compare_argon2(this.hashed_secret)`,
+			func() any {
+				return map[string]any{"hashed_secret": secret, "user_input": "a-blobs-tale"}
+			},
+			false,
+		)
+	})
+	t.Run("bytes receiver", func(t *testing.T) {
+		// The receiver path uses lenient string-or-bytes coercion in V2; ensure
+		// V1 accepts bytes too (V1 used the lenient StringMethod helper).
+		migratortest.AssertEquivalentFn(t,
+			`root = this.user_input.compare_argon2(this.hashed_secret)`,
+			func() any {
+				return map[string]any{"hashed_secret": secret, "user_input": []byte("some-fancy-secret")}
+			},
+			true,
+		)
+	})
 }

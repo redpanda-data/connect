@@ -21,6 +21,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/redpanda-data/benthos/v4/public/bloblangv2"
+
+	"github.com/redpanda-data/connect/v4/internal/bloblang/migratortest"
 )
 
 func TestGeoIPCityV2(t *testing.T) {
@@ -82,4 +84,28 @@ func TestGeoIPCityV2(t *testing.T) {
 			assert.Equal(t, test.exp, res)
 		})
 	}
+}
+
+func TestGeoIPEquivalenceV1V2(t *testing.T) {
+	t.Run("city", func(t *testing.T) {
+		migratortest.AssertEquivalent(t,
+			`root = "81.2.69.192".geoip_city("./testdata/GeoIP2-City-Test.mmdb").City.Names.en`,
+			nil,
+			"London",
+		)
+	})
+	t.Run("country", func(t *testing.T) {
+		migratortest.AssertEquivalent(t,
+			`root = "2001:220::80".geoip_country("./testdata/GeoIP2-Country-Test.mmdb").Country.Names.en`,
+			nil,
+			"South Korea",
+		)
+	})
+	t.Run("isp", func(t *testing.T) {
+		migratortest.AssertEquivalent(t,
+			`root = "12.87.120.0".geoip_isp("./testdata/GeoIP2-ISP-Test.mmdb").ISP`,
+			nil,
+			"AT&T Services",
+		)
+	})
 }
