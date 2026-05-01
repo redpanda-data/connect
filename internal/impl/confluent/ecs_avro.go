@@ -244,6 +244,10 @@ func ecsAvroFromAnyMap(cfg ecsAvroConfig, as map[string]any) (schema.Common, err
 				return c, err
 			}
 		}
+		// Return early: the union hydrators fully populate c. The bottom
+		// switch must not read fields/values/items from as, which is the outer
+		// field object, not the resolved inner type.
+		return c, nil
 	case string:
 		c.Type = ecsAvroTypeToCommon(t)
 	case map[string]any:
@@ -318,7 +322,9 @@ func ecsAvroFromAnyMap(cfg ecsAvroConfig, as map[string]any) (schema.Common, err
 	case schema.Object:
 		fields, exists := as["fields"].([]any)
 		if !exists {
-			return schema.Common{}, fmt.Errorf("expected `fields` field of type array, got %T", as["fields"])
+			// nil/absent fields: back-reference or schema with "fields":null.
+			// Return an opaque record rather than failing schema extraction.
+			return c, nil
 		}
 
 		for i, f := range fields {

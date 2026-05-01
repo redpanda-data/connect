@@ -232,3 +232,64 @@ func TestDidConvertDecimal(t *testing.T) {
 	assert.False(t, didConvertDecimal(rat, rat))
 	assert.False(t, didConvertDecimal(map[string]any{}, map[string]any{}))
 }
+
+// TestEcsAvroRawUnionNestedRecord is a regression test for the rawUnion=true
+// fallthrough bug: ecsAvroHydrateRawUnion sets *c to the inner record type
+// (c.Type=Object) via ecsAvroIsUnionJustOptionalObject, then the bottom
+// switch c.Type case was entered and tried to read as["fields"] from the outer
+// field object rather than the inner record.
+func TestEcsAvroRawUnionNestedRecord(t *testing.T) {
+	spec := []byte(`{
+		"type": "record",
+		"name": "Transfer",
+		"fields": [
+			{"name": "ref", "type": "string"},
+			{
+				"name": "party",
+				"type": ["null", {
+					"type": "record",
+					"name": "Party",
+					"fields": [{"name": "id", "type": "string"}]
+				}]
+			}
+		]
+	}`)
+	c, err := ecsAvroParseFromBytes(ecsAvroConfig{rawUnion: true}, spec)
+	require.NoError(t, err)
+	require.Equal(t, schema.Object, c.Type)
+	require.Len(t, c.Children, 2)
+	assert.Equal(t, "ref", c.Children[0].Name)
+	assert.Equal(t, schema.String, c.Children[0].Type)
+	party := c.Children[1]
+	assert.Equal(t, "party", party.Name)
+	assert.Equal(t, schema.Object, party.Type)
+	assert.True(t, party.Optional)
+	require.Len(t, party.Children, 1)
+	assert.Equal(t, "id", party.Children[0].Name)
+	assert.Equal(t, schema.String, party.Children[0].Type)
+}
+
+// TestEcsAvroRecordWithNilFields is a regression test for schemas where a
+// field's type is a record object without a "fields" key (e.g. back-reference
+// form {"type":"record","name":"Party"} or "fields":null from some generators).
+// ecsAvroFromAnyMap must return an opaque Object rather than failing, so that
+// schema metadata extraction succeeds for the rest of the record's fields.
+func TestEcsAvroRecordWithNilFields(t *testing.T) {
+	spec := []byte(`{
+		"type": "record",
+		"name": "Transfer",
+		"fields": [
+			{"name": "ref", "type": "string"},
+			{"name": "party", "type": {"type": "record", "name": "Party"}}
+		]
+	}`)
+	c, err := ecsAvroParseFromBytes(ecsAvroConfig{}, spec)
+	require.NoError(t, err)
+	require.Equal(t, schema.Object, c.Type)
+	require.Len(t, c.Children, 2)
+	assert.Equal(t, "ref", c.Children[0].Name)
+	party := c.Children[1]
+	assert.Equal(t, "party", party.Name)
+	assert.Equal(t, schema.Object, party.Type)
+	assert.Empty(t, party.Children)
+}
