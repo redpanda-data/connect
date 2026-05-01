@@ -320,11 +320,16 @@ func ecsAvroFromAnyMap(cfg ecsAvroConfig, as map[string]any) (schema.Common, err
 		}
 
 	case schema.Object:
-		fields, exists := as["fields"].([]any)
-		if !exists {
-			// nil/absent fields: back-reference or schema with "fields":null.
-			// Return an opaque record rather than failing schema extraction.
+		raw, present := as["fields"]
+		if !present || raw == nil {
+			// Some generators emit records without a fields key (or with
+			// fields:null). Return an opaque record rather than failing
+			// the entire schema extraction.
 			return c, nil
+		}
+		fields, ok := raw.([]any)
+		if !ok {
+			return schema.Common{}, fmt.Errorf("expected `fields` field of type array, got %T", raw)
 		}
 
 		for i, f := range fields {
