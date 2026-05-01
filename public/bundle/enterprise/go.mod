@@ -2,7 +2,7 @@ module github.com/redpanda-data/connect/public/bundle/enterprise/v4
 
 go 1.26.2
 
-require github.com/redpanda-data/connect/v4 v4.89.3
+require github.com/redpanda-data/connect/v4 v4.90.0
 
 require (
 	buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.11-20260209202127-80ab13bee0bf.1 // indirect
@@ -11,7 +11,7 @@ require (
 	buf.build/go/hyperpb v0.1.3 // indirect
 	cel.dev/expr v0.25.1 // indirect
 	cloud.google.com/go/aiplatform v1.121.0 // indirect
-	cloud.google.com/go/bigquery v1.74.0 // indirect
+	cloud.google.com/go/bigquery v1.75.0 // indirect
 	cloud.google.com/go/longrunning v0.9.0 // indirect
 	cloud.google.com/go/monitoring v1.24.3 // indirect
 	cloud.google.com/go/pubsub v1.50.1 // indirect
@@ -175,7 +175,7 @@ require (
 	github.com/rabbitmq/amqp091-go v1.10.0 // indirect
 	github.com/rcrowley/go-metrics v0.0.0-20250401214520-65e299d6c5c9 // indirect
 	github.com/redis/go-redis/v9 v9.18.0 // indirect
-	github.com/redpanda-data/benthos/v4 v4.71.1-0.20260428154615-ddb2b041e022 // indirect
+	github.com/redpanda-data/benthos/v4 v4.72.0 // indirect
 	github.com/redpanda-data/common-go/redpanda-otel-exporter v0.4.0 // indirect
 	github.com/rs/zerolog v1.34.0 // indirect
 	github.com/samber/lo v1.51.0 // indirect
