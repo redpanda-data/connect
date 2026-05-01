@@ -359,3 +359,70 @@ func TestBuildSchemaWithResolverUsesMetadataTypeForNilValue(t *testing.T) {
 	assert.Equal(t, "count", fields[0].Name)
 	assert.Equal(t, "int", fields[0].Type.Type())
 }
+
+// TestBuildSchemaWithResolverUsesMetadataTypeForAbsentField verifies that a
+// field declared in schema metadata but entirely absent from the record (not
+// even present as nil) is still created as an Iceberg column using the metadata
+// type.
+func TestBuildSchemaWithResolverUsesMetadataTypeForAbsentField(t *testing.T) {
+	router := &Router{
+		caseSensitive: true,
+		resolver:      newTypeResolver("schema_key", nil, true, nil),
+	}
+
+	schemaMeta := schema.Common{
+		Type: schema.Object,
+		Children: []schema.Common{
+			{Name: "count", Type: schema.Int32},
+		},
+	}
+
+	msg := service.NewMessage(nil)
+	msg.MetaSetMut("schema_key", schemaMeta.ToAny())
+
+	record := map[string]any{} // "count" is entirely absent
+
+	icebergSchema, err := router.buildSchemaWithResolver(record, msg, tableKey{namespace: "ns", table: "t"})
+	require.NoError(t, err)
+
+	fields := icebergSchema.Fields()
+	require.Len(t, fields, 1)
+	assert.Equal(t, "count", fields[0].Name)
+	assert.Equal(t, "int", fields[0].Type.Type())
+}
+
+// TestBuildSchemaWithResolverMetadataOnlyFieldOrdering verifies that
+// metadata-only fields (absent from the record) appear first in the schema in
+// metadata declaration order, followed by record-only fields in sorted order.
+func TestBuildSchemaWithResolverMetadataOnlyFieldOrdering(t *testing.T) {
+	router := &Router{
+		caseSensitive: true,
+		resolver:      newTypeResolver("schema_key", nil, true, nil),
+	}
+
+	schemaMeta := schema.Common{
+		Type: schema.Object,
+		Children: []schema.Common{
+			{Name: "b", Type: schema.Int32},
+			{Name: "a", Type: schema.String},
+		},
+	}
+
+	msg := service.NewMessage(nil)
+	msg.MetaSetMut("schema_key", schemaMeta.ToAny())
+
+	// "extra" is in the record but not in metadata; "b" and "a" are in metadata
+	// but absent from the record.
+	record := map[string]any{
+		"extra": "hello",
+	}
+
+	icebergSchema, err := router.buildSchemaWithResolver(record, msg, tableKey{namespace: "ns", table: "t"})
+	require.NoError(t, err)
+
+	fields := icebergSchema.Fields()
+	require.Len(t, fields, 3)
+	assert.Equal(t, "b", fields[0].Name) // metadata order first
+	assert.Equal(t, "a", fields[1].Name)
+	assert.Equal(t, "extra", fields[2].Name) // record-only field last
+}

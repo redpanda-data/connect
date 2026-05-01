@@ -416,6 +416,9 @@ func (r *Router) buildSchemaWithResolver(record map[string]any, msg *service.Mes
 	for _, metaName := range orderedMetaNames {
 		recordKey, ok := matchRecordKey(record, metaName, r.caseSensitive)
 		if !ok {
+			// Field declared in schema metadata but absent from this record.
+			// Include it so resolveTypeForCreateTable can apply the metadata type.
+			finalOrder = append(finalOrder, orderedField{emitName: metaName, metadataOnly: true})
 			continue
 		}
 		if _, seen := used[recordKey]; seen {
@@ -432,7 +435,10 @@ func (r *Router) buildSchemaWithResolver(record map[string]any, msg *service.Mes
 	}
 
 	for _, f := range finalOrder {
-		value := record[f.recordKey]
+		var value any
+		if !f.metadataOnly {
+			value = record[f.recordKey]
+		}
 		fieldType, err := r.resolver.resolveTypeForCreateTable(f.emitName, value, msg, common, key.namespace, key.table, ti)
 		if err != nil {
 			return nil, fmt.Errorf("resolving type for field %q: %w", f.emitName, err)
@@ -455,10 +461,13 @@ func (r *Router) buildSchemaWithResolver(record map[string]any, msg *service.Mes
 // name that should land on the iceberg column. They differ in case-insensitive
 // mode when a metadata field matches a record key with different casing — the
 // metadata casing wins for the column, the record casing is needed to find the
-// value.
+// value. When metadataOnly is true the field was declared in schema metadata but
+// is absent from the record; value is treated as nil and the column type comes
+// entirely from the metadata.
 type orderedField struct {
-	recordKey string
-	emitName  string
+	recordKey    string
+	emitName     string
+	metadataOnly bool
 }
 
 // matchRecordKey returns the actual key from record matching name, preserving
