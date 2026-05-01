@@ -1,0 +1,85 @@
+// Copyright 2026 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package maxmind
+
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/redpanda-data/benthos/v4/public/bloblangv2"
+)
+
+func TestGeoIPCityV2(t *testing.T) {
+	testCases := []struct {
+		name  string
+		input string
+		exp   any
+	}{
+		{
+			name:  "geoip city",
+			input: `output = "81.2.69.192".geoip_city("./testdata/GeoIP2-City-Test.mmdb").City.Names.en`,
+			exp:   "London",
+		},
+		{
+			name:  "geoip country",
+			input: `output = "2001:220::80".geoip_country("./testdata/GeoIP2-Country-Test.mmdb").Country.Names.en`,
+			exp:   "South Korea",
+		},
+		{
+			name:  "geoip ASN",
+			input: `output = "214.0.0.0".geoip_asn("./testdata/GeoLite2-ASN-Test.mmdb").AutonomousSystemOrganization`,
+			exp:   "DoD Network Information Center",
+		},
+		{
+			name:  "geoip enterprise",
+			input: `output = "149.101.100.0".geoip_enterprise("./testdata/GeoIP2-Enterprise-Test.mmdb").Traits.ISP`,
+			exp:   "Verizon Wireless",
+		},
+		{
+			name:  "geoip anonymous IP",
+			input: `output = "81.2.69.0".geoip_anonymous_ip("./testdata/GeoIP2-Anonymous-IP-Test.mmdb").IsTorExitNode`,
+			exp:   true,
+		},
+		{
+			name:  "geoip connection type",
+			input: `output = "207.179.48.0".geoip_connection_type("./testdata/GeoIP2-Connection-Type-Test.mmdb").ConnectionType`,
+			exp:   "Cellular",
+		},
+		{
+			name:  "geoip domain",
+			input: `output = "89.95.192.0".geoip_domain("./testdata/GeoIP2-Domain-Test.mmdb").Domain`,
+			exp:   "bbox.fr",
+		},
+		{
+			name:  "geoip ISP",
+			input: `output = "12.87.120.0".geoip_isp("./testdata/GeoIP2-ISP-Test.mmdb").ISP`,
+			exp:   "AT&T Services",
+		},
+	}
+
+	for _, test := range testCases {
+		t.Run(test.name, func(t *testing.T) {
+			exec, err := bloblangv2.Parse(test.input)
+			require.NoError(t, err)
+
+			res, err := exec.Query(nil)
+			require.NoError(t, err)
+
+			assert.Equal(t, test.exp, res)
+		})
+	}
+}

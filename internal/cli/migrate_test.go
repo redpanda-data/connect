@@ -21,9 +21,19 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/urfave/cli/v2"
 
-	// Side-effect import so the V2 msgpack plugins are registered against the
-	// global environment when the linter parses the migrated bloblang body.
+	// Side-effect imports so V2 plugin counterparts are registered when the
+	// migrate fixture exercises a callsite for each.
+	_ "github.com/redpanda-data/connect/v4/internal/impl/changelog"
+	_ "github.com/redpanda-data/connect/v4/internal/impl/confluent"
+	_ "github.com/redpanda-data/connect/v4/internal/impl/crypto"
+	_ "github.com/redpanda-data/connect/v4/internal/impl/html"
+	_ "github.com/redpanda-data/connect/v4/internal/impl/jsonpath"
+	_ "github.com/redpanda-data/connect/v4/internal/impl/lang"
+	_ "github.com/redpanda-data/connect/v4/internal/impl/maxmind"
 	_ "github.com/redpanda-data/connect/v4/internal/impl/msgpack"
+	_ "github.com/redpanda-data/connect/v4/internal/impl/parquet"
+	_ "github.com/redpanda-data/connect/v4/internal/impl/sql"
+	_ "github.com/redpanda-data/connect/v4/internal/impl/xml"
 )
 
 const msgpackFixture = `
@@ -162,6 +172,136 @@ func TestMigrateV5RejectsCheckPlusInPlace(t *testing.T) {
 	_, err := runMigrateV5With(ctx, &stdout, &stderr)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "mutually exclusive")
+}
+
+// allPluginsFixture is a stream config whose bloblang processor body invokes
+// one callsite for every connect-registered Bloblang V1 plugin (43 in total).
+// The migrator must rewrite each callsite to its V2 equivalent in place; the
+// surrounding YAML should remain otherwise unchanged.
+const allPluginsFixture = `
+input:
+  generate:
+    mapping: 'root = {}'
+
+pipeline:
+  processors:
+    - bloblang: |
+        # methods
+        root.a01 = this.payload.parse_msgpack()
+        root.a02 = this.format_msgpack()
+        root.a03 = this.parse_parquet()
+        root.a04 = this.embeddings.vector()
+        root.a05 = this.json_path("$..name")
+        root.a06 = this.html.strip_html()
+        root.a07 = this.html.strip_html(["strong"])
+        root.a08 = this.doc.parse_xml()
+        root.a09 = this.format_xml()
+        root.a10 = this.before.diff(this.after)
+        root.a11 = this.input.patch(this.changelog)
+        root.a12 = this.title.slug()
+        root.a13 = this.text.unicode_segments("word")
+        root.a14 = this.user.compare_argon2("$argon2id$v=19$m=4096,t=3,p=1$c2FsdHktbWNzYWx0ZmFjZQ$RMUMwgtS32/mbszd+ke4o4Ej1jFpYiUqY6MHWa69X7Y")
+        root.a15 = this.user.compare_bcrypt("$2y$10$Dtnt5NNzVtMCOZONT705tOcS8It6krJX8bEjnDJnwxiFKsz1C.3Ay")
+        # jwt parse (9)
+        root.a16 = this.token.parse_jwt_hs256("dont-tell-anyone")
+        root.a17 = this.token.parse_jwt_hs384("dont-tell-anyone")
+        root.a18 = this.token.parse_jwt_hs512("dont-tell-anyone")
+        root.a19 = this.token.parse_jwt_rs256("dummy-rsa")
+        root.a20 = this.token.parse_jwt_rs384("dummy-rsa")
+        root.a21 = this.token.parse_jwt_rs512("dummy-rsa")
+        root.a22 = this.token.parse_jwt_es256("dummy-ecdsa")
+        root.a23 = this.token.parse_jwt_es384("dummy-ecdsa")
+        root.a24 = this.token.parse_jwt_es512("dummy-ecdsa")
+        # jwt sign (9)
+        root.a25 = this.claims.sign_jwt_hs256("dont-tell-anyone")
+        root.a26 = this.claims.sign_jwt_hs384("dont-tell-anyone")
+        root.a27 = this.claims.sign_jwt_hs512("dont-tell-anyone")
+        root.a28 = this.claims.sign_jwt_rs256("dummy-rsa")
+        root.a29 = this.claims.sign_jwt_rs384("dummy-rsa")
+        root.a30 = this.claims.sign_jwt_rs512("dummy-rsa")
+        root.a31 = this.claims.sign_jwt_es256("dummy-ecdsa")
+        root.a32 = this.claims.sign_jwt_es384("dummy-ecdsa")
+        root.a33 = this.claims.sign_jwt_es512("dummy-ecdsa")
+        # geoip (8)
+        root.a34 = this.ip.geoip_city("/path/to/city.mmdb")
+        root.a35 = this.ip.geoip_country("/path/to/country.mmdb")
+        root.a36 = this.ip.geoip_asn("/path/to/asn.mmdb")
+        root.a37 = this.ip.geoip_enterprise("/path/to/enterprise.mmdb")
+        root.a38 = this.ip.geoip_anonymous_ip("/path/to/anon.mmdb")
+        root.a39 = this.ip.geoip_connection_type("/path/to/conn.mmdb")
+        root.a40 = this.ip.geoip_domain("/path/to/domain.mmdb")
+        root.a41 = this.ip.geoip_isp("/path/to/isp.mmdb")
+        # functions
+        root.a42 = with_schema_registry_header(123, "x")
+        root.a43 = fake("email")
+        root.a44 = snowflake_id()
+        root.a45 = ulid()
+
+output:
+  drop: {}
+`
+
+// TestMigrateV5AllPluginsFixture exercises one callsite for every Bloblang
+// plugin shipped by connect. The migrator should rewrite the embedded body
+// successfully and leave coverage at 1.0 with zero unsupported.
+func TestMigrateV5AllPluginsFixture(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "stream.yaml")
+	require.NoError(t, os.WriteFile(src, []byte(allPluginsFixture), 0o644))
+
+	ctx := newCommandContext(t, map[string]string{
+		"check":  "true",
+		"report": "json",
+	}, src)
+
+	var stdout, stderr bytes.Buffer
+	failed, err := runMigrateV5With(ctx, &stdout, &stderr)
+	require.NoError(t, err)
+	require.False(t, failed, "stderr=%s\nstdout=%s", stderr.String(), stdout.String())
+
+	report := stdout.String()
+	assert.Contains(t, report, `"Rewritten":1`)
+	assert.Contains(t, report, `"Unsupported":0`)
+
+	// Now run again without --check so the rewritten file is produced; assert
+	// every connect plugin shows up under its V2 name in the output.
+	ctx = newCommandContext(t, map[string]string{
+		"report": "text",
+	}, src)
+	stdout.Reset()
+	stderr.Reset()
+	failed, err = runMigrateV5With(ctx, &stdout, &stderr)
+	require.NoError(t, err)
+	require.False(t, failed, "stderr=%s", stderr.String())
+
+	rewritten, err := os.ReadFile(filepath.Join(dir, "stream.v5.yaml"))
+	require.NoError(t, err)
+	body := string(rewritten)
+
+	for _, name := range []string{
+		"parse_msgpack", "format_msgpack",
+		"parse_parquet", "vector", "json_path",
+		"strip_html", "parse_xml", "format_xml",
+		"diff", "patch",
+		"compare_argon2", "compare_bcrypt",
+		"slug", "unicode_segments",
+		"parse_jwt_hs256", "parse_jwt_hs384", "parse_jwt_hs512",
+		"parse_jwt_rs256", "parse_jwt_rs384", "parse_jwt_rs512",
+		"parse_jwt_es256", "parse_jwt_es384", "parse_jwt_es512",
+		"sign_jwt_hs256", "sign_jwt_hs384", "sign_jwt_hs512",
+		"sign_jwt_rs256", "sign_jwt_rs384", "sign_jwt_rs512",
+		"sign_jwt_es256", "sign_jwt_es384", "sign_jwt_es512",
+		"geoip_city", "geoip_country", "geoip_asn", "geoip_enterprise",
+		"geoip_anonymous_ip", "geoip_connection_type", "geoip_domain", "geoip_isp",
+		"with_schema_registry_header",
+		"fake", "snowflake_id", "ulid",
+	} {
+		assert.Containsf(t, body, name, "rewritten config missing plugin %q", name)
+	}
+
+	// And the wrapping processor type must have switched.
+	assert.Contains(t, body, "bloblang_v2:")
+	assert.NotContains(t, body, "bloblang: |")
 }
 
 func TestSiblingPath(t *testing.T) {

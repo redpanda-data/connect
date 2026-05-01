@@ -40,11 +40,77 @@ var methodPlugins = []string{
 	// internal/impl/msgpack
 	"parse_msgpack",
 	"format_msgpack",
+
+	// internal/impl/parquet
+	"parse_parquet",
+
+	// internal/impl/sql
+	"vector",
+
+	// internal/impl/jsonpath
+	"json_path",
+
+	// internal/impl/html
+	"strip_html",
+
+	// internal/impl/xml
+	"parse_xml",
+	"format_xml",
+
+	// internal/impl/changelog
+	"diff",
+	"patch",
+
+	// internal/impl/crypto
+	"compare_argon2",
+	"compare_bcrypt",
+
+	// internal/impl/lang
+	"slug",
+	"unicode_segments",
+
+	// internal/impl/crypto (jwt parse + sign)
+	"parse_jwt_hs256",
+	"parse_jwt_hs384",
+	"parse_jwt_hs512",
+	"parse_jwt_rs256",
+	"parse_jwt_rs384",
+	"parse_jwt_rs512",
+	"parse_jwt_es256",
+	"parse_jwt_es384",
+	"parse_jwt_es512",
+	"sign_jwt_hs256",
+	"sign_jwt_hs384",
+	"sign_jwt_hs512",
+	"sign_jwt_rs256",
+	"sign_jwt_rs384",
+	"sign_jwt_rs512",
+	"sign_jwt_es256",
+	"sign_jwt_es384",
+	"sign_jwt_es512",
+
+	// internal/impl/maxmind
+	"geoip_city",
+	"geoip_country",
+	"geoip_asn",
+	"geoip_enterprise",
+	"geoip_anonymous_ip",
+	"geoip_connection_type",
+	"geoip_domain",
+	"geoip_isp",
 }
 
 // functionPlugins is the list of every connect-registered V1 Bloblang function
 // plugin.
-var functionPlugins = []string{}
+var functionPlugins = []string{
+	// internal/impl/confluent
+	"with_schema_registry_header",
+
+	// internal/impl/lang
+	"fake",
+	"snowflake_id",
+	"ulid",
+}
 
 // passThroughMethodRule returns a rule that rewrites a V1 method call into a
 // V2 method call of the same name with arguments translated recursively. Used
