@@ -41,7 +41,8 @@ type bqEmulator struct {
 }
 
 // startEmulator launches a BigQuery emulator container and returns connection details.
-func startEmulator(t *testing.T, projectID, datasetID string) *bqEmulator {
+// Accepts testing.TB so it works for both tests and benchmarks.
+func startEmulator(t testing.TB, projectID, datasetID string) *bqEmulator {
 	t.Helper()
 
 	t.Log("Given a BigQuery emulator running with HTTP and gRPC ports")
