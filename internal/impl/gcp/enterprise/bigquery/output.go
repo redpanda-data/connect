@@ -784,7 +784,12 @@ func (o *bigQueryWriteAPIOutput) createStream(ctx context.Context, client *bigqu
 		return nil, err
 	}
 
-	ms, err := storageClient.NewManagedStream(ctx,
+	// Detach from the per-batch ctx: the cached stream outlives this WriteBatch
+	// and is reused by every subsequent batch routing to the same table. If the
+	// stream were bound to this ctx, cancellation of the first batch (per-message
+	// deadline, source shutdown, ack timeout) would block all later AppendRows
+	// against the cached stream until the idle sweeper evicted it.
+	ms, err := storageClient.NewManagedStream(context.WithoutCancel(ctx),
 		managedwriter.WithDestinationTable(cacheKey),
 		managedwriter.WithType(managedwriter.DefaultStream),
 		managedwriter.WithSchemaDescriptor(rs.descriptorProto),
