@@ -96,7 +96,7 @@ pipeline:
 			Description("Maximum number of results to return per page when calling JIRA API").
 			Default(50))
 
-	spec.Fields(httpclient.Fields("")...)
+	spec.Fields(httpclient.FieldsWithBaseURL("")...)
 
 	return spec
 }

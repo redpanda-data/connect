@@ -174,21 +174,26 @@ type Config struct {
 	MetricPrefix string
 }
 
-// Fields returns the YAML configuration field specs for the HTTP client.
+// FieldsWithBaseURL returns the YAML configuration field specs for the HTTP client.
 // Auth is not included — products configure auth programmatically via
 // Config.AuthSigner (see BasicAuthSigner, BearerTokenSigner).
 //
 // If baseURL is non-empty it is used as the default value for the base_url
 // field; otherwise the field is required (no default).
-func Fields(baseURL string) []*service.ConfigField {
+func FieldsWithBaseURL(baseURL string) []*service.ConfigField {
 	baseURLField := service.NewStringField(cFieldBaseURL).
 		Description("Base URL of the target service (e.g., https://api.example.com). TLS is enabled automatically for https URLs.")
 	if baseURL != "" {
 		baseURLField = baseURLField.Default(baseURL)
 	}
-	fields := []*service.ConfigField{
-		baseURLField,
+	return append([]*service.ConfigField{baseURLField}, Fields()...)
+}
 
+// Fields returns the YAML configuration field specs for the HTTP client.
+// Auth is not included — products configure auth programmatically via
+// Config.AuthSigner (see BasicAuthSigner, BearerTokenSigner).
+func Fields() []*service.ConfigField {
+	fields := []*service.ConfigField{
 		service.NewDurationField(cFieldTimeout).
 			Description("HTTP request timeout.").
 			Default("5s"),
@@ -328,17 +333,40 @@ func httpTransportFieldSpec() *service.ConfigField {
 		Advanced()
 }
 
-// NewConfigFromParsed parses a Config from a benthos parsed config.
+// NewConfigFromParsed parses a Config from a benthos parsed config that
+// includes the base_url field (paired with FieldsWithBaseURL).
 func NewConfigFromParsed(pConf *service.ParsedConfig) (Config, error) {
-	var cfg Config
-	var err error
-
-	if cfg.BaseURL, err = pConf.FieldString(cFieldBaseURL); err != nil {
+	baseURL, err := pConf.FieldString(cFieldBaseURL)
+	if err != nil {
+		return Config{}, err
+	}
+	if _, err := url.ParseRequestURI(baseURL); err != nil {
+		return Config{}, fmt.Errorf("base_url is not a valid URL: %w", err)
+	}
+	cfg, err := newConfigFromParsedNoBaseURL(pConf)
+	if err != nil {
 		return cfg, err
 	}
-	if _, err := url.ParseRequestURI(cfg.BaseURL); err != nil {
-		return cfg, fmt.Errorf("base_url is not a valid URL: %w", err)
+	cfg.BaseURL = baseURL
+	if !cfg.TLSEnabled && strings.HasPrefix(cfg.BaseURL, "https://") {
+		cfg.TLSEnabled = true
+		if cfg.TLSConf == nil {
+			cfg.TLSConf = &tls.Config{MinVersion: tls.VersionTLS12}
+		}
 	}
+	return cfg, nil
+}
+
+// NewConfigFromParsedNoBaseURL parses a Config from a benthos parsed config
+// that does NOT include the base_url field (paired with Fields). The caller
+// must populate Config.BaseURL itself.
+func NewConfigFromParsedNoBaseURL(pConf *service.ParsedConfig) (Config, error) {
+	return newConfigFromParsedNoBaseURL(pConf)
+}
+
+func newConfigFromParsedNoBaseURL(pConf *service.ParsedConfig) (Config, error) {
+	var cfg Config
+	var err error
 
 	if cfg.Timeout, err = pConf.FieldDuration(cFieldTimeout); err != nil {
 		return cfg, err
@@ -346,14 +374,6 @@ func NewConfigFromParsed(pConf *service.ParsedConfig) (Config, error) {
 
 	if cfg.TLSConf, cfg.TLSEnabled, err = pConf.FieldTLSToggled(cFieldTLS); err != nil {
 		return cfg, err
-	}
-
-	// Auto-enable TLS for https URLs when not explicitly configured.
-	if !cfg.TLSEnabled && strings.HasPrefix(cfg.BaseURL, "https://") {
-		cfg.TLSEnabled = true
-		if cfg.TLSConf == nil {
-			cfg.TLSConf = &tls.Config{MinVersion: tls.VersionTLS12}
-		}
 	}
 
 	if cfg.ProxyURL, err = pConf.FieldString(cFieldProxyURL); err != nil {

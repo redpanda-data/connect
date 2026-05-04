@@ -95,3 +95,33 @@ func DecodeAvroPayload(schema *avro.Schema, payload []byte) (map[string]any, err
 	}
 	return result, nil
 }
+
+// UnwrapAvroString returns the string value from an Avro union-encoded value.
+// `avro.TaggedUnions()` represents a string member of a union as
+// `{"string": "..."}`; non-union string fields decode directly to a string.
+// Returns "" / false for missing or non-string values.
+func UnwrapAvroString(v any) (string, bool) {
+	switch x := v.(type) {
+	case string:
+		return x, true
+	case map[string]any:
+		s, ok := x["string"].(string)
+		return s, ok
+	}
+	return "", false
+}
+
+// UnwrapAvroArray returns the slice value from an Avro union-encoded value.
+// Tagged unions wrap arrays as `{"array": [...]}`; non-union array fields
+// decode directly to `[]any`. Returns nil / false for missing or non-array
+// values.
+func UnwrapAvroArray(v any) ([]any, bool) {
+	switch x := v.(type) {
+	case []any:
+		return x, true
+	case map[string]any:
+		arr, ok := x["array"].([]any)
+		return arr, ok
+	}
+	return nil, false
+}

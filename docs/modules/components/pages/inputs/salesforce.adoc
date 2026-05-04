@@ -1,6 +1,7 @@
-= salesforce_sink
-:type: output
+= salesforce
+:type: input
 :status: stable
+:categories: ["Services"]
 
 
 
@@ -22,7 +23,7 @@
 component_type_dropdown::[]
 
 
-Writes messages to Salesforce, routing each topic to its own SObject configuration.
+Executes a Salesforce SOQL query once and emits a message for each record.
 
 
 [tabs]
@@ -33,19 +34,18 @@ Common::
 
 ```yml
 # Common config fields, showing default values
-output:
+input:
   label: ""
-  salesforce_sink:
+  salesforce:
     org_url: https://acme.my.salesforce.com # No default (required)
     client_id: "" # No default (required)
     client_secret: "" # No default (required)
     api_version: v65.0
-    bulk_batch_size: 1000
-    max_concurrent_bulk_jobs: 10
-    bulk_poll_interval: 5s
-    batch_period: 5s
-    max_in_flight: 1
-    topic_mappings: [] # No default (required)
+    object: Account # No default (required)
+    columns: [] # No default (required)
+    where: LastModifiedDate > ? # No default (optional)
+    args_mapping: root = [ (now() - "1h").ts_format("2006-01-02T15:04:05Z") ] # No default (optional)
+    auto_replay_nacks: true
 ```
 
 --
@@ -55,19 +55,20 @@ Advanced::
 
 ```yml
 # All config fields, showing default values
-output:
+input:
   label: ""
-  salesforce_sink:
+  salesforce:
     org_url: https://acme.my.salesforce.com # No default (required)
     client_id: "" # No default (required)
     client_secret: "" # No default (required)
     api_version: v65.0
-    bulk_batch_size: 1000
-    max_concurrent_bulk_jobs: 10
-    bulk_poll_interval: 5s
-    batch_period: 5s
-    max_in_flight: 1
-    topic_mappings: [] # No default (required)
+    object: Account # No default (required)
+    columns: [] # No default (required)
+    where: LastModifiedDate > ? # No default (optional)
+    args_mapping: root = [ (now() - "1h").ts_format("2006-01-02T15:04:05Z") ] # No default (optional)
+    prefix: "" # No default (optional)
+    suffix: ORDER BY LastModifiedDate DESC # No default (optional)
+    auto_replay_nacks: true
     http:
       timeout: 5s
       tls:
@@ -123,53 +124,58 @@ output:
 --
 ======
 
-Consumes batches of messages and writes them to Salesforce.
+Runs a SOQL query against the Salesforce REST API, paginates through all result pages, and emits one message per record. When results are exhausted the input shuts down, letting the pipeline terminate gracefully (or the next input in a xref:components:inputs/sequence.adoc[sequence] to take over).
 
-Each message must have a `topic` field (set by the per-topic processor) and a `data` field
-containing the Salesforce record fields. The `topic` is used to look up the correct
-`topic_mappings` entry which defines the SObject, operation, and write mode.
+== When to use this input
 
-**Realtime mode** uses the sObject Collections REST API (synchronous, up to 200 records/call).
-**Bulk mode** uses the Bulk API 2.0 (asynchronous, polls until complete).
+Use `salesforce` for:
+
+- One-shot extracts (e.g. dump all Accounts into a warehouse).
+- Periodic full-table refreshes via a scheduled pipeline or xref:components:inputs/sequence.adoc[sequence].
+- Backfills and ad-hoc queries.
+- Warming up a downstream pipeline before switching to CDC.
+
+Use a different Salesforce input instead if:
+
+- You need continuous change events — use xref:components:inputs/salesforce_cdc.adoc[`salesforce_cdc`].
+- You need a GraphQL query (cross-object in one request) — use xref:components:inputs/salesforce_graphql.adoc[`salesforce_graphql`].
+
+== Metadata
+
+This input adds the following metadata fields to each message:
+
+- `sobject`: The sObject API name (e.g. "Account").
+
+== Authentication
+
+Uses the Salesforce OAuth 2.0 Client Credentials flow. Create a Connected App in Salesforce, enable OAuth settings and the Client Credentials Flow, then supply the Consumer Key as `client_id` and Consumer Secret as `client_secret`.
+
+
+== Examples
+
+[tabs]
+======
+Recent Account Changes::
++
+--
+
+Query Accounts modified in the last hour and emit one message per record:
 
 ```yaml
 input:
-  broker:
-    inputs:
-      - kafka_franz:
-          seed_brokers: [localhost:9092]
-          topics: [salesforce-account]
-          consumer_group: sf-sink-account
-        processors:
-          - mapping: |
-              root.topic = @kafka_topic
-              root.data = this
-      - kafka_franz:
-          seed_brokers: [localhost:9092]
-          topics: [salesforce-contact]
-          consumer_group: sf-sink-contact
-        processors:
-          - mapping: |
-              root.topic = @kafka_topic
-              root.data = this
-
-output:
-  salesforce_sink:
-    org_url: "${SALESFORCE_ORG_URL}"
-    client_id: "${SALESFORCE_CLIENT_ID}"
-    client_secret: "${SALESFORCE_CLIENT_SECRET}"
-    topic_mappings:
-      - topic: salesforce-account
-        sobject: Account
-        operation: upsert
-        external_id_field: External_Id__c
-        mode: realtime
-      - topic: salesforce-contact
-        sobject: Contact
-        operation: upsert
-        external_id_field: External_Id__c
-        mode: bulk
+  salesforce:
+    org_url: https://acme.my.salesforce.com
+    client_id: ${SALESFORCE_CLIENT_ID}
+    client_secret: ${SALESFORCE_CLIENT_SECRET}
+    object: Account
+    columns: [ Id, Name, LastModifiedDate ]
+    where: LastModifiedDate > ?
+    args_mapping: |
+      root = [ (now() - "1h").ts_format("2006-01-02T15:04:05Z") ]
 ```
+
+--
+======
 
 == Fields
 
@@ -227,110 +233,118 @@ api_version: v65.0
 api_version: v62.0
 ```
 
-=== `bulk_batch_size`
+=== `object`
 
-Number of records per bulk job. Also controls the output batch size.
-
-
-*Type*: `int`
-
-*Default*: `1000`
-
-=== `max_concurrent_bulk_jobs`
-
-Maximum number of bulk jobs polling concurrently in the background. Each in-flight job buffers its CSV payload in memory; lower this value if memory usage is a concern.
-
-
-*Type*: `int`
-
-*Default*: `10`
-
-=== `bulk_poll_interval`
-
-How often to poll Salesforce for bulk job completion status.
+The sObject API name to SELECT from. Case-sensitive; uses the API name, not the display label. Standard objects use the noun (`Account`, `Opportunity`); custom objects end with `__c`; Big Objects end with `__b`; External Objects end with `__x`. Confirm the exact API name in Setup → Object Manager.
 
 
 *Type*: `string`
 
-*Default*: `"5s"`
 
-=== `batch_period`
+```yml
+# Examples
 
-Maximum period to wait before flushing an incomplete batch.
+object: Account
 
+object: Contact
 
-*Type*: `string`
+object: MyCustom__c
+```
 
-*Default*: `"5s"`
+=== `columns`
 
-=== `max_in_flight`
-
-Maximum number of batches to send concurrently. Increasing this improves realtime write throughput.
-
-
-*Type*: `int`
-
-*Default*: `1`
-
-=== `topic_mappings`
-
-Per-topic Salesforce write configuration. Each entry maps a topic to an SObject and write settings.
+Ordered list of field API names to retrieve. SOQL does not accept `*` — every field must be listed explicitly. Standard fields use their documented names; custom fields end with `__c`. Relationship fields traverse parents via dot notation (`Account.Name`, `Owner.Manager.Email`) up to 5 levels deep. Requesting a non-existent or non-queryable field fails at Connect time with a SOQL compile error.
 
 
 *Type*: `array`
 
 
-=== `topic_mappings[].topic`
+```yml
+# Examples
 
-topic name to match against the message's 'topic' field
+columns:
+  - Id
+  - Name
+  - LastModifiedDate
+
+columns:
+  - Id
+  - Account.Name
+  - Owner.Email
+
+columns:
+  - Id
+  - MyCustom__c
+```
+
+=== `where`
+
+Optional SOQL WHERE body, without the `WHERE` keyword. `?` placeholders are substituted client-side from `args_mapping` with SOQL literal escaping (quoted strings, ISO-8601 datetimes). Supports the full WHERE grammar: `AND`/`OR`/`NOT`, `LIKE`, `IN`, date literals (`TODAY`, `LAST_N_DAYS:7`), subqueries. Date/datetime comparisons require ISO-8601 with explicit timezone.
+
+
+*Type*: `string`
+
+
+```yml
+# Examples
+
+where: LastModifiedDate > ?
+
+where: Status__c = ? AND CreatedDate > ?
+
+where: OwnerId IN (?, ?)
+```
+
+=== `args_mapping`
+
+Optional xref:guides:bloblang/about.adoc[Bloblang mapping] whose result must be an array of values matching the count of `?` placeholders in `where`. Values are SOQL-escaped: strings become quoted literals, timestamps become ISO-8601, booleans and numbers pass through. The mapping is evaluated once at startup with no message context — use `now()`, `env()`, or `cache()`.
 
 
 *Type*: `string`
 
 
-=== `topic_mappings[].sobject`
+```yml
+# Examples
 
-Salesforce SObject API name (e.g., Account, Contact, MyObject__c)
+args_mapping: root = [ (now() - "1h").ts_format("2006-01-02T15:04:05Z") ]
+
+args_mapping: root = [ "Active", (now() - "24h").ts_format("2006-01-02T15:04:05Z") ]
+```
+
+=== `prefix`
+
+Optional SOQL fragment inserted before the SELECT keyword. Rarely needed — provided for forward compatibility with future SOQL extensions or Bulk API framing.
+
+
+*Type*: `string`
+
+
+=== `suffix`
+
+Optional SOQL fragment appended after the WHERE clause. Typical uses: `ORDER BY` for deterministic pagination, `LIMIT` to cap result size, `FOR REFERENCE` / `FOR VIEW` to mark records for Chatter tracking.
 
 
 *Type*: `string`
 
 
-=== `topic_mappings[].operation`
+```yml
+# Examples
 
-Write operation: insert, update, upsert, or delete
+suffix: ORDER BY LastModifiedDate DESC
 
+suffix: ORDER BY Id LIMIT 1000
 
-*Type*: `string`
+suffix: ORDER BY CreatedDate DESC LIMIT 10000
+```
 
-*Default*: `"upsert"`
+=== `auto_replay_nacks`
 
-=== `topic_mappings[].external_id_field`
-
-External ID field name, required for upsert
-
-
-*Type*: `string`
-
-*Default*: `""`
-
-=== `topic_mappings[].mode`
-
-Write mode: realtime (sObject Collections API) or bulk (Bulk API 2.0)
-
-
-*Type*: `string`
-
-*Default*: `"realtime"`
-
-=== `topic_mappings[].all_or_none`
-
-Realtime only: roll back the entire batch if any record fails
+Whether messages that are rejected (nacked) at the output level should be automatically replayed indefinitely, eventually resulting in back pressure if the cause of the rejections is persistent. If set to `false` these messages will instead be deleted. Disabling auto replays can greatly improve memory efficiency of high throughput streams as the original shape of the data can be discarded immediately upon consumption and mutation.
 
 
 *Type*: `bool`
 
-*Default*: `false`
+*Default*: `true`
 
 === `http`
 
