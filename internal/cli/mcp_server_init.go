@@ -9,12 +9,13 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 
-	"github.com/urfave/cli/v2"
+	"github.com/urfave/cli/v3"
 )
 
 func mcpServerInitCli() *cli.Command {
@@ -29,7 +30,7 @@ func mcpServerInitCli() *cli.Command {
 
 Files that already exist will not be overwritten.
   `[1:],
-		Action: func(c *cli.Context) error {
+		Action: func(_ context.Context, c *cli.Command) error {
 			repositoryDir := "."
 			if c.Args().Len() > 0 {
 				if c.Args().Len() > 1 {

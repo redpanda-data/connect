@@ -9,9 +9,10 @@
 package cli
 
 import (
+	"context"
 	"errors"
 
-	"github.com/urfave/cli/v2"
+	"github.com/urfave/cli/v3"
 
 	"github.com/redpanda-data/connect/v4/internal/rpcplugin"
 )
@@ -42,7 +43,7 @@ Generates a project on the local filesystem that can be used as a starting point
 building a custom component for Redpanda Connect. It will overwrite all files in the specified
 directory (or the current directory if none is specified).
   `[1:],
-		Action: func(c *cli.Context) error {
+		Action: func(_ context.Context, c *cli.Command) error {
 			dir := "."
 			if c.Args().Len() > 0 {
 				if c.Args().Len() > 1 {
@@ -56,8 +57,8 @@ directory (or the current directory if none is specified).
 		},
 	}
 	return &cli.Command{
-		Name:        "plugin",
-		Usage:       "Plugin management commands",
-		Subcommands: []*cli.Command{cmd},
+		Name:     "plugin",
+		Usage:    "Plugin management commands",
+		Commands: []*cli.Command{cmd},
 	}
 }

@@ -15,7 +15,7 @@ import (
 	"os"
 	"regexp"
 
-	"github.com/urfave/cli/v2"
+	"github.com/urfave/cli/v3"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/common-go/authz"
@@ -50,7 +50,7 @@ func mcpServerCli(rpMgr *enterprise.GlobalRedpandaManager) *cli.Command {
 		Name:  "mcp-server",
 		Usage: "Execute an MCP server against a suite of Redpanda Connect resources.",
 		Flags: flags,
-		Subcommands: []*cli.Command{
+		Commands: []*cli.Command{
 			mcpServerInitCli(),
 			customLintCli(),
 		},
@@ -60,7 +60,7 @@ Each resource will be exposed as a tool that AI can interact with:
   {{.BinaryName}} mcp-server ./repo
 
   `[1:],
-		Action: func(c *cli.Context) error {
+		Action: func(ctx context.Context, c *cli.Command) error {
 			if err := applyEnvFileFlag(c); err != nil {
 				return err
 			}
@@ -105,13 +105,13 @@ Each resource will be exposed as a tool that AI can interact with:
 
 			logger := slog.New(newTeeLogger(fallbackLogger.Handler(), rpMgr.SlogHandler()))
 
-			secretLookupFn, err := parseSecretsFlag(logger, c)
+			secretLookupFn, err := parseSecretsFlag(ctx, logger, c)
 			if err != nil {
 				return err
 			}
 
 			// Parse and resolve cloud auth flags
-			authzResourceName, authzPolicyFile, authzPolicyEndpoint, err := parseCloudAuthFlags(c.Context, c, secretLookupFn)
+			authzResourceName, authzPolicyFile, authzPolicyEndpoint, err := parseCloudAuthFlags(ctx, c, secretLookupFn)
 			if err != nil {
 				return err
 			}

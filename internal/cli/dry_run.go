@@ -18,7 +18,7 @@ import (
 	"strings"
 
 	"github.com/rs/xid"
-	"github.com/urfave/cli/v2"
+	"github.com/urfave/cli/v3"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/impl/kafka/enterprise"
@@ -55,7 +55,7 @@ func dryRunCli(schema *service.ConfigSchema) *cli.Command {
 Exits with a status code 1 if any connection errors are detected in a directory:
 
   {{.BinaryName}} dry-run ./foo.yaml`[1:],
-		Action: func(c *cli.Context) error {
+		Action: func(ctx context.Context, c *cli.Command) error {
 			if err := applyEnvFileFlag(c); err != nil {
 				return err
 			}
@@ -73,7 +73,7 @@ Exits with a status code 1 if any connection errors are detected in a directory:
 			applyLicenseFlag(c, &r.licenseConfig)
 
 			var err error
-			if r.secretLookupFn, err = parseSecretsFlag(r.logger, c); err != nil {
+			if r.secretLookupFn, err = parseSecretsFlag(ctx, r.logger, c); err != nil {
 				return err
 			}
 
@@ -84,11 +84,11 @@ Exits with a status code 1 if any connection errors are detected in a directory:
 
 			for _, target := range targets {
 				if isDirectory(target) {
-					if err := r.dryRunDirectory(c, target); err != nil {
+					if err := r.dryRunDirectory(ctx, target); err != nil {
 						return err
 					}
 				} else {
-					if err := r.dryRunFile(c, target); err != nil {
+					if err := r.dryRunFile(ctx, target); err != nil {
 						return err
 					}
 				}
@@ -172,7 +172,7 @@ type dryRunner struct {
 	runLogger      *dryRunResultLogger
 }
 
-func (d *dryRunner) dryRunFile(c *cli.Context, filePath string) error {
+func (d *dryRunner) dryRunFile(ctx context.Context, filePath string) error {
 	fileContents, err := os.ReadFile(filePath)
 	if err != nil {
 		return err
@@ -214,9 +214,9 @@ func (d *dryRunner) dryRunFile(c *cli.Context, filePath string) error {
 		return err
 	}
 
-	connTestResults := rpMgr.ConnectionTest(c.Context)
+	connTestResults := rpMgr.ConnectionTest(ctx)
 
-	if tmpTestResults, err := strm.ConnectionTest(c.Context); err != nil {
+	if tmpTestResults, err := strm.ConnectionTest(ctx); err != nil {
 		return err
 	} else {
 		connTestResults = append(connTestResults, tmpTestResults...)
@@ -226,7 +226,7 @@ func (d *dryRunner) dryRunFile(c *cli.Context, filePath string) error {
 	return nil
 }
 
-func (d *dryRunner) dryRunDirectory(c *cli.Context, repositoryDir string) error {
+func (d *dryRunner) dryRunDirectory(ctx context.Context, repositoryDir string) error {
 	resBuilder := d.schema.Environment().NewResourceBuilder()
 
 	repoScanner := repository.NewScanner(os.DirFS(repositoryDir))
@@ -273,10 +273,10 @@ func (d *dryRunner) dryRunDirectory(c *cli.Context, repositoryDir string) error 
 	}
 
 	defer func() {
-		_ = closeFn(c.Context)
+		_ = closeFn(ctx)
 	}()
 
-	results, err := resources.ConnectionTest(c.Context)
+	results, err := resources.ConnectionTest(ctx)
 	if err != nil {
 		return err
 	}

@@ -17,7 +17,7 @@ import (
 	"strings"
 
 	"github.com/rs/xid"
-	"github.com/urfave/cli/v2"
+	"github.com/urfave/cli/v3"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/common-go/authz"
@@ -182,13 +182,13 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 				redpandaFlags(),
 			),
 
-			func(c *cli.Context) error {
+			func(ctx context.Context, c *cli.Command) error {
 				applyLicenseFlag(c, &licenseConfig)
 				chrootPath = c.String("chroot")
 				chrootPassthrough = c.StringSlice("chroot-passthrough")
 				disableTelemetry = c.Bool("disable-telemetry")
 
-				if secretLookupFn, err = parseSecretsFlag(slog.New(rpLogger), c); err != nil {
+				if secretLookupFn, err = parseSecretsFlag(ctx, slog.New(rpLogger), c); err != nil {
 					return err
 				}
 
@@ -205,7 +205,7 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 				}
 
 				// Parse and resolve cloud auth flags
-				if authzResourceName, authzPolicyFile, authzPolicyEndpoint, err = parseCloudAuthFlags(c.Context, c, secretLookupFn); err != nil {
+				if authzResourceName, authzPolicyFile, authzPolicyEndpoint, err = parseCloudAuthFlags(ctx, c, secretLookupFn); err != nil {
 					return err
 				}
 

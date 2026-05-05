@@ -9,13 +9,14 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
 	"os"
 
 	"github.com/fatih/color"
-	"github.com/urfave/cli/v2"
+	"github.com/urfave/cli/v3"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/mcp/repository"
@@ -64,7 +65,7 @@ Exits with a status code 1 if any linting errors are detected in a directory:
 
   {{.BinaryName}} mcp-server lint . 
   {{.BinaryName}} mcp-server lint ./foo`[1:],
-		Action: func(c *cli.Context) error {
+		Action: func(ctx context.Context, c *cli.Command) error {
 			if err := applyEnvFileFlag(c); err != nil {
 				return err
 			}
@@ -77,17 +78,17 @@ Exits with a status code 1 if any linting errors are detected in a directory:
 				repositoryDir = c.Args().First()
 			}
 
-			return directoryMode(c, repositoryDir)
+			return directoryMode(ctx, c, repositoryDir)
 		},
 	}
 }
 
-func directoryMode(c *cli.Context, repositoryDir string) error {
+func directoryMode(ctx context.Context, c *cli.Command, repositoryDir string) error {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
 		Level: slog.LevelError,
 	}))
 
-	secretLookupFn, err := parseSecretsFlag(logger, c)
+	secretLookupFn, err := parseSecretsFlag(ctx, logger, c)
 	if err != nil {
 		return err
 	}

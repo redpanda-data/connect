@@ -12,7 +12,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/urfave/cli/v2"
+	"github.com/urfave/cli/v3"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
@@ -24,11 +24,11 @@ const (
 var envFileFlag = &cli.StringSliceFlag{
 	Name:    "env-file",
 	Aliases: []string{"e"},
-	Value:   cli.NewStringSlice(),
+	Value:   []string{},
 	Usage:   "import environment variables from a dotenv file",
 }
 
-func applyEnvFileFlag(c *cli.Context) error {
+func applyEnvFileFlag(c *cli.Command) error {
 	dotEnvPaths, err := service.Globs(service.OSFS(), c.StringSlice(cfEnvFile)...)
 	if err != nil {
 		return fmt.Errorf("resolving env file glob pattern: %w", err)

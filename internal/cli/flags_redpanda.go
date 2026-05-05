@@ -18,7 +18,7 @@ import (
 	"strings"
 
 	"github.com/twmb/franz-go/pkg/sasl/scram"
-	"github.com/urfave/cli/v2"
+	"github.com/urfave/cli/v3"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/securetls"
@@ -51,12 +51,12 @@ const (
 var secretsFlag = &cli.StringSliceFlag{
 	Name:  "secrets",
 	Usage: "Attempt to load secrets from a provided URN. If more than one entry is specified they will be attempted in order until a value is found. Environment variable lookups are specified with the URN `env:`, which by default is the only entry. In order to disable all secret lookups specify a single entry of `none:`.",
-	Value: cli.NewStringSlice("env:"),
+	Value: []string{"env:"},
 }
 
-func parseSecretsFlag(logger *slog.Logger, c *cli.Context) (func(context.Context, string) (string, bool), error) {
+func parseSecretsFlag(ctx context.Context, logger *slog.Logger, c *cli.Command) (func(context.Context, string) (string, bool), error) {
 	if secretsURNs := c.StringSlice("secrets"); len(secretsURNs) > 0 {
-		return secrets.ParseLookupURNs(c.Context, logger, secretsURNs...)
+		return secrets.ParseLookupURNs(ctx, logger, secretsURNs...)
 	}
 	return func(_ context.Context, _ string) (string, bool) {
 		return "", false
@@ -75,7 +75,7 @@ func defaultLicenseConfig() license.Config {
 	}
 }
 
-func applyLicenseFlag(c *cli.Context, conf *license.Config) {
+func applyLicenseFlag(c *cli.Command, conf *license.Config) {
 	if inline := c.String("redpanda-license"); inline != "" {
 		conf.License = inline
 	}
@@ -119,7 +119,7 @@ func redpandaFlags() []cli.Flag {
 		&cli.StringSliceFlag{
 			Name:   rfBrokers,
 			Hidden: true,
-			Value:  cli.NewStringSlice(),
+			Value:  []string{},
 		},
 		&cli.BoolFlag{
 			Name:   rfTLSEnabled,
@@ -181,7 +181,7 @@ func redpandaFlags() []cli.Flag {
 			Hidden: true,
 			Value:  "",
 		},
-		&cli.PathFlag{
+		&cli.StringFlag{
 			Name:   rfCloudAuthzPolicyFile,
 			Usage:  "Authorization policy file for enforcing permissions",
 			Hidden: true,
@@ -196,7 +196,7 @@ func redpandaFlags() []cli.Flag {
 	}
 }
 
-func parseRedpandaFlags(c *cli.Context) (pipelineID, logsTopic, statusTopic string, connDetails *kafka.FranzConnectionDetails, err error) {
+func parseRedpandaFlags(c *cli.Command) (pipelineID, logsTopic, statusTopic string, connDetails *kafka.FranzConnectionDetails, err error) {
 	pipelineID = c.String(rfPipelineID)
 	logsTopic = c.String(rfLogsTopic)
 	statusTopic = c.String(rfStatusTopic)
@@ -297,13 +297,13 @@ func resolveSecret(ctx context.Context, value string, lookupFn secrets.LookupFn)
 // parseCloudAuthFlags parses the OAuth2/cloud authentication CLI flags,
 // resolves any secret references, and initializes the global service account configuration.
 // Returns the authz resource name, policy file, and policy endpoint (if specified).
-func parseCloudAuthFlags(ctx context.Context, c *cli.Context, secretLookupFn secrets.LookupFn) (authzResourceName, authzPolicyFile, authzPolicyEndpoint string, err error) {
+func parseCloudAuthFlags(ctx context.Context, c *cli.Command, secretLookupFn secrets.LookupFn) (authzResourceName, authzPolicyFile, authzPolicyEndpoint string, err error) {
 	tokenURL := resolveSecret(ctx, c.String(rfCloudTokenURL), secretLookupFn)
 	clientID := resolveSecret(ctx, c.String(rfCloudClientID), secretLookupFn)
 	clientSecret := resolveSecret(ctx, c.String(rfCloudClientSecret), secretLookupFn)
 	audience := resolveSecret(ctx, c.String(rfCloudAudience), secretLookupFn)
 	authzResourceName = resolveSecret(ctx, c.String(rfCloudAuthzResourceName), secretLookupFn)
-	authzPolicyFile = resolveSecret(ctx, c.Path(rfCloudAuthzPolicyFile), secretLookupFn)
+	authzPolicyFile = resolveSecret(ctx, c.String(rfCloudAuthzPolicyFile), secretLookupFn)
 	authzPolicyEndpoint = resolveSecret(ctx, c.String(rfCloudAuthzPolicyEndpoint), secretLookupFn)
 
 	// Initialize global service account config if credentials are provided

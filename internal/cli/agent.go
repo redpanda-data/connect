@@ -9,12 +9,13 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"log/slog"
 	"os"
 	"path/filepath"
 
-	"github.com/urfave/cli/v2"
+	"github.com/urfave/cli/v3"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
@@ -34,7 +35,7 @@ func agentCli(rpMgr *enterprise.GlobalRedpandaManager) *cli.Command {
 	return &cli.Command{
 		Name:  "agent",
 		Usage: "Redpanda Connect commands.",
-		Subcommands: []*cli.Command{
+		Commands: []*cli.Command{
 			{
 				Name:  "init",
 				Usage: "Initialize a Redpanda Connect agent",
@@ -48,7 +49,7 @@ Initialize a template for building a Redpanda Connect agent.
   {{.BinaryName}} agent init ./repo
   
   `[1:],
-				Action: func(c *cli.Context) error {
+				Action: func(_ context.Context, c *cli.Command) error {
 					repositoryDir := "."
 					if c.Args().Len() > 0 {
 						if c.Args().Len() > 1 {
@@ -82,7 +83,7 @@ Each resource in the mcp subdirectory will create tools that can be used, then t
   {{.BinaryName}} agent run ./repo
   
   `[1:],
-				Action: func(c *cli.Context) error {
+				Action: func(ctx context.Context, c *cli.Command) error {
 					repositoryDir := "."
 					if c.Args().Len() > 0 {
 						if c.Args().Len() > 1 {
@@ -103,7 +104,7 @@ Each resource in the mcp subdirectory will create tools that can be used, then t
 					// TODO: rpMgr.Init...
 					logger := slog.New(newTeeLogger(fallbackLogger.Handler(), rpMgr.SlogHandler()))
 
-					secretLookupFn, err := parseSecretsFlag(logger, c)
+					secretLookupFn, err := parseSecretsFlag(ctx, logger, c)
 					if err != nil {
 						return err
 					}
