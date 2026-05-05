@@ -35,6 +35,11 @@ const (
 	// snapshot rows have been sent so the checkpoint can advance once all snapshot batches
 	// are acknowledged
 	messageOperationSnapshotComplete MessageOperation = "snapshot_complete"
+
+	// messageOperationXID is an internal sentinel emitted when a transaction commits
+	// so readMessages can advance the checkpoint to a transaction boundary, ensuring
+	// we never resume mid-transaction (which would miss the TABLE_MAP_EVENT).
+	messageOperationXID MessageOperation = "xid"
 )
 
 // MessageEvent represents a message from mysql cdc plugin

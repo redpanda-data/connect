@@ -777,6 +777,11 @@ func prepSnapshotScannerAndMappers(cols []*sql.ColumnType) (values []any, mapper
 
 func (i *mysqlStreamInput) readMessages(ctx context.Context) error {
 	var nextTimedBatchChan <-chan time.Time
+	// latestXIDPos tracks the most recently committed transaction boundary.
+	// Checkpoints only advance to XID positions so that on restart canal.RunFrom
+	// always resumes at the start of a new transaction, ensuring TABLE_MAP_EVENTs
+	// are received before any row events.
+	var latestXIDPos *position
 	for {
 		select {
 		case <-ctx.Done():
@@ -788,17 +793,22 @@ func (i *mysqlStreamInput) readMessages(ctx context.Context) error {
 				return fmt.Errorf("timed flush batch error: %w", err)
 			}
 
-			if err := i.flushBatch(ctx, i.cp, flushedBatch); err != nil {
+			if err := i.flushBatch(ctx, i.cp, flushedBatch, latestXIDPos); err != nil {
 				return fmt.Errorf("flushing periodic batch: %w", err)
 			}
 		case me := <-i.rawMessageEvents:
+			if me.Operation == messageOperationXID {
+				latestXIDPos = me.Position
+				continue
+			}
+
 			if me.Operation == messageOperationSnapshotComplete {
 				// Flush any remaining messages before post snapshot checkpoint
 				flushedBatch, err := i.batchPolicy.Flush(ctx)
 				if err != nil {
 					return fmt.Errorf("flushing snapshot completion batch: %w", err)
 				}
-				if err := i.flushBatch(ctx, i.cp, flushedBatch); err != nil {
+				if err := i.flushBatch(ctx, i.cp, flushedBatch, latestXIDPos); err != nil {
 					return fmt.Errorf("flushing snapshot completion batch: %w", err)
 				}
 
@@ -841,7 +851,7 @@ func (i *mysqlStreamInput) readMessages(ctx context.Context) error {
 				if err != nil {
 					return fmt.Errorf("flush batch error: %w", err)
 				}
-				if err := i.flushBatch(ctx, i.cp, flushedBatch); err != nil {
+				if err := i.flushBatch(ctx, i.cp, flushedBatch, latestXIDPos); err != nil {
 					return fmt.Errorf("flushing batch: %w", err)
 				}
 			} else {
@@ -858,23 +868,13 @@ func (i *mysqlStreamInput) flushBatch(
 	ctx context.Context,
 	checkpointer *checkpoint.Capped[*position],
 	batch service.MessageBatch,
+	checkpointPos *position,
 ) error {
 	if len(batch) == 0 {
 		return nil
 	}
 
-	lastMsg := batch[len(batch)-1]
-	strPosition, ok := lastMsg.MetaGet("binlog_position")
-	var binLogPos *position
-	if ok {
-		pos, err := parseBinlogPosition(strPosition)
-		if err != nil {
-			return err
-		}
-		binLogPos = &pos
-	}
-
-	resolveFn, err := checkpointer.Track(ctx, binLogPos, int64(len(batch)))
+	resolveFn, err := checkpointer.Track(ctx, checkpointPos, int64(len(batch)))
 	if err != nil {
 		return fmt.Errorf("tracking checkpoint for batch: %w", err)
 	}
@@ -984,6 +984,15 @@ func (i *mysqlStreamInput) setCachedBinlogPosition(ctx context.Context, binLogPo
 
 func (i *mysqlStreamInput) OnRotate(_ *replication.EventHeader, re *replication.RotateEvent) error {
 	i.currentBinlogName = string(re.NextLogName)
+	return nil
+}
+
+func (i *mysqlStreamInput) OnXID(_ *replication.EventHeader, nextPos gomysql.Position) error {
+	select {
+	case i.rawMessageEvents <- MessageEvent{Operation: messageOperationXID, Position: &nextPos}:
+	case <-i.shutSig.SoftStopChan():
+		return context.Canceled
+	}
 	return nil
 }
 

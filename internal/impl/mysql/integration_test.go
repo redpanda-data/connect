@@ -207,7 +207,7 @@ file:
 			assert.Eventually(t, func() bool {
 				outBatchMut.Lock()
 				defer outBatchMut.Unlock()
-				return len(outBatches) == 1000
+				return len(outBatches) >= 1000
 			}, time.Minute*5, time.Millisecond*100)
 
 			require.NoError(t, streamOut.StopWithin(time.Second*10))
