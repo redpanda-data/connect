@@ -130,7 +130,7 @@ func TestIntegrationCacheStandardized(t *testing.T) {
 cache_resources:
   - label: testcache
     redpanda:
-      seed_brokers: ["localhost:$PORT"]
+      seed_brokers: ["127.0.0.1:$PORT"]
       topic: "topic-$ID"
 `
 	t.Run("single partition", func(t *testing.T) {

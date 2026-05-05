@@ -37,7 +37,7 @@ func TestIntegrationUnordered(t *testing.T) {
 	template := `
 output:
   redpanda:
-    seed_brokers: [ localhost:$PORT ]
+    seed_brokers: [ 127.0.0.1:$PORT ]
     topic: topic-$ID
     max_in_flight: $MAX_IN_FLIGHT
     timeout: "5s"
@@ -46,7 +46,7 @@ output:
 
 input:
   redpanda:
-    seed_brokers: [ localhost:$PORT ]
+    seed_brokers: [ 127.0.0.1:$PORT ]
     topics: [ topic-$ID$VAR1 ]
     consumer_group: "$VAR4"
     commit_period: "1s"
@@ -138,7 +138,7 @@ input:
 	manualPartitionTemplate := `
 output:
   redpanda:
-    seed_brokers: [ localhost:$PORT ]
+    seed_brokers: [ 127.0.0.1:$PORT ]
     topic: topic-$ID
     max_in_flight: $MAX_IN_FLIGHT
     timeout: "5s"
@@ -149,7 +149,7 @@ output:
 
 input:
   redpanda:
-    seed_brokers: [ localhost:$PORT ]
+    seed_brokers: [ 127.0.0.1:$PORT ]
     topics: [ topic-$ID$VAR1 ]
     consumer_group: "$VAR4"
     unordered_processing:
@@ -183,7 +183,7 @@ func TestIntegrationUnorderedSasl(t *testing.T) {
 	template := `
 output:
   redpanda:
-    seed_brokers: [ localhost:$PORT ]
+    seed_brokers: [ 127.0.0.1:$PORT ]
     topic: topic-$ID
     max_in_flight: $MAX_IN_FLIGHT
     metadata:
@@ -195,7 +195,7 @@ output:
 
 input:
   redpanda:
-    seed_brokers: [ localhost:$PORT ]
+    seed_brokers: [ 127.0.0.1:$PORT ]
     topics: [ topic-$ID$VAR1 ]
     consumer_group: "$VAR4"
     sasl:
@@ -240,7 +240,7 @@ func BenchmarkIntegrationUnordered(b *testing.B) {
 		template := `
 output:
   redpanda:
-    seed_brokers: [ localhost:$PORT ]
+    seed_brokers: [ 127.0.0.1:$PORT ]
     topic: topic-$ID
     max_in_flight: 128
     timeout: "5s"
@@ -249,7 +249,7 @@ output:
 
 input:
   redpanda:
-    seed_brokers: [ localhost:$PORT ]
+    seed_brokers: [ 127.0.0.1:$PORT ]
     topics: [ topic-$ID ]
     consumer_group: "$VAR3"
     checkpoint_limit: 100

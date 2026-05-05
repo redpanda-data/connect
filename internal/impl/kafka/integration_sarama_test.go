@@ -55,7 +55,7 @@ func TestIntegrationSaramaCheckpointOneLockUp(t *testing.T) {
 	inBuilder := service.NewStreamBuilder()
 	require.NoError(t, inBuilder.AddOutputYAML(fmt.Sprintf(`
 kafka:
-  addresses: [ "localhost:%v" ]
+  addresses: [ "127.0.0.1:%v" ]
   topic: topic-wcotesttopic
   max_in_flight: 1
 `, kafkaPortStr)))
@@ -75,7 +75,7 @@ kafka:
 
 	outBuilderConf := fmt.Sprintf(`
 kafka:
-  addresses: [ "localhost:%v" ]
+  addresses: [ "127.0.0.1:%v" ]
   topics: [ topic-wcotesttopic ]
   consumer_group: wcotestgroup
   checkpoint_limit: 1
@@ -170,7 +170,7 @@ func TestIntegrationSaramaRedpanda(t *testing.T) {
 	template := `
 output:
   kafka:
-    addresses: [ localhost:$PORT ]
+    addresses: [ 127.0.0.1:$PORT ]
     topic: topic-$ID
     max_in_flight: $MAX_IN_FLIGHT
     retry_as_batch: $VAR3
@@ -181,7 +181,7 @@ output:
 
 input:
   kafka:
-    addresses: [ localhost:$PORT ]
+    addresses: [ 127.0.0.1:$PORT ]
     topics: [ topic-$ID$VAR1 ]
     consumer_group: "$VAR4"
     checkpoint_limit: $VAR2
@@ -338,7 +338,7 @@ input:
 	templateManualPartitioner := `
 output:
   kafka:
-    addresses: [ localhost:$PORT ]
+    addresses: [ 127.0.0.1:$PORT ]
     topic: topic-$ID
     max_in_flight: $MAX_IN_FLIGHT
     retry_as_batch: $VAR3
@@ -351,7 +351,7 @@ output:
 
 input:
   kafka:
-    addresses: [ localhost:$PORT ]
+    addresses: [ 127.0.0.1:$PORT ]
     topics: [ topic-$ID$VAR1 ]
     consumer_group: "$VAR4"
     checkpoint_limit: $VAR2
@@ -388,13 +388,13 @@ func TestIntegrationSaramaOutputFixedTimestamp(t *testing.T) {
 	template := `
 output:
   kafka:
-    addresses: [ localhost:$PORT ]
+    addresses: [ 127.0.0.1:$PORT ]
     topic: topic-$ID
     timestamp_ms: 1000000000000
 
 input:
   kafka:
-    addresses: [ localhost:$PORT ]
+    addresses: [ 127.0.0.1:$PORT ]
     topics: [ topic-$ID ]
     consumer_group: "blobfish"
   processors:
