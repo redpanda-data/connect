@@ -13,6 +13,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -56,6 +58,12 @@ func migrateV5Cli() *cli.Command {
 Rewrites every Bloblang mapping (bloblang/mapping/mutation processors and
 in-line bloblang plugin callsites) inside the supplied stream configs to the
 V2 plugin equivalents shipped under the same names.
+
+Bloblang V1 import statements ("import \"./helpers.blobl\"") are followed: the
+referenced files are translated to V2 alongside the YAML and emitted at the
+same suffix-derived sibling paths (e.g. "./helpers.v5.blobl" for the default
+"--suffix=.v5"), with the in-source import statement rewritten to point at
+the new file.
 
 By default a sibling file is written next to each input ({input}.v5.yaml).
 Use --in-place to overwrite the input (a .bak backup is written unless
@@ -131,15 +139,6 @@ func runMigrateV5With(c *cli.Context, stdout, stderr io.Writer) (bool, error) {
 
 	cfgMig := configmig.New()
 
-	opts := configmig.Options{
-		BloblangMigrator: bloblMig,
-		BloblangOptions: bloblmig.Options{
-			Verbose: c.Bool("verbose"),
-		},
-		MinCoverage: c.Float64("min-coverage"),
-		Verbose:     c.Bool("verbose"),
-	}
-
 	args := c.Args().Slice()
 	if len(args) == 0 {
 		return false, errors.New("at least one config path is required")
@@ -152,9 +151,32 @@ func runMigrateV5With(c *cli.Context, stdout, stderr io.Writer) (bool, error) {
 		return false, errors.New("no files matched the supplied paths")
 	}
 
+	// Memo of imports already written across the run, keyed by canonical key.
+	// Two YAMLs that share a `.blobl` import would otherwise produce identical
+	// writes; the memo avoids the redundant work and the redundant report.
+	importsWritten := map[string]struct{}{}
+
 	var failed bool
 	for _, target := range targets {
-		ok, err := migrateOneFile(c, cfgMig, opts, target, reportFmt, stdout, stderr)
+		opts := configmig.Options{
+			BloblangMigrator: bloblMig,
+			BloblangOptions: bloblmig.Options{
+				Verbose:      c.Bool("verbose"),
+				FileResolver: bloblangImportResolver(filepath.Dir(target)),
+			},
+			MinCoverage: c.Float64("min-coverage"),
+			Verbose:     c.Bool("verbose"),
+		}
+		// V2ImportPathRewriter is shared between two callers: the bloblang
+		// migrator (rewriting in-source path strings) and the per-file write
+		// loop below (deriving on-disk output paths from canonical keys).
+		// Pure-lexical suffix splicing satisfies both since canonical keys are
+		// just absolute paths and V1 imports are written as relative strings.
+		opts.BloblangOptions.V2ImportPathRewriter = importPathRewriter(c)
+		opts.BloblangFileResolver = opts.BloblangOptions.FileResolver
+		opts.BloblangV2ImportPathRewriter = opts.BloblangOptions.V2ImportPathRewriter
+
+		ok, err := migrateOneFile(c, cfgMig, opts, target, reportFmt, stdout, stderr, importsWritten)
 		if err != nil {
 			fmt.Fprintf(stderr, "%v: %v\n", target, red(err.Error()))
 			failed = true
@@ -168,10 +190,69 @@ func runMigrateV5With(c *cli.Context, stdout, stderr io.Writer) (bool, error) {
 	return failed, nil
 }
 
+// bloblangImportResolver returns a FileResolver suitable for migrate v5. The
+// closure is rooted at yamlDir for top-level imports (parentKey empty) and
+// follows transitive imports relative to the parent file's directory. Read
+// errors that aren't simple "missing file" cases are surfaced via slog so the
+// user can distinguish a typoed path from a permissions problem.
+func bloblangImportResolver(yamlDir string) bloblmig.FileResolver {
+	return func(parentKey, importPath string) (string, string, bool) {
+		base := yamlDir
+		if parentKey != "" {
+			base = filepath.Dir(parentKey)
+		}
+		var resolved string
+		if filepath.IsAbs(importPath) {
+			resolved = importPath
+		} else {
+			resolved = filepath.Join(base, importPath)
+		}
+		abs, err := filepath.Abs(resolved)
+		if err != nil {
+			slog.Warn("failed to resolve bloblang import path",
+				"import", importPath, "err", err)
+			return "", "", false
+		}
+		body, err := os.ReadFile(abs)
+		if err != nil {
+			if !errors.Is(err, fs.ErrNotExist) {
+				// Distinguish unreadable from missing — missing imports flow
+				// through the migrator as an Unsupported change at the import
+				// site (and surface in the per-file report); read errors that
+				// aren't ENOENT (permissions, dangling symlinks, etc.) are
+				// otherwise silent.
+				slog.Warn("failed to read bloblang import",
+					"import", importPath, "resolved", abs, "err", err)
+			}
+			return "", "", false
+		}
+		return abs, string(body), true
+	}
+}
+
+// importPathRewriter returns the V2ImportPathRewriter for the run. In
+// --in-place mode the rewrite is the identity function so V2-translated
+// content overwrites the V1 file at the same path; otherwise the configured
+// suffix is spliced before the extension (mirroring the YAML output layout).
+func importPathRewriter(c *cli.Context) bloblmig.V2ImportPathRewriter {
+	if c.Bool("in-place") {
+		return func(p string) string { return p }
+	}
+	suffix := c.String("suffix")
+	return func(p string) string {
+		return siblingPath(p, suffix)
+	}
+}
+
 // migrateOneFile reads, migrates, and (per CLI flags) writes a single config
 // file. Returns ok=false when --check found problems or the migration produced
 // any OutcomeUnsupported change.
-func migrateOneFile(c *cli.Context, mig *configmig.Migrator, opts configmig.Options, path, reportFmt string, stdout, stderr io.Writer) (bool, error) {
+//
+// importsWritten is a memo shared across all targets in the run: when two
+// YAMLs share a `.blobl` import, the closure is written once and skipped on
+// subsequent encounters. Caller passes the same map for every invocation in a
+// single migrate v5 run.
+func migrateOneFile(c *cli.Context, mig *configmig.Migrator, opts configmig.Options, path, reportFmt string, stdout, stderr io.Writer, importsWritten map[string]struct{}) (bool, error) {
 	src, err := os.ReadFile(path)
 	if err != nil {
 		return false, fmt.Errorf("read: %w", err)
@@ -194,6 +275,16 @@ func migrateOneFile(c *cli.Context, mig *configmig.Migrator, opts configmig.Opti
 
 	switch {
 	case c.Bool("check"):
+		// --check mode: walk the import closure but write nothing. Surface
+		// what *would* be written so the user can audit the rewrite plan.
+		for canonicalKey := range rep.BloblangV2Files {
+			if _, seen := importsWritten[canonicalKey]; seen {
+				continue
+			}
+			importsWritten[canonicalKey] = struct{}{}
+			outPath := opts.BloblangV2ImportPathRewriter(canonicalKey)
+			fmt.Fprintf(stdout, "  would migrate import: %s -> %s\n", canonicalKey, outPath)
+		}
 		return !hasUnsupported, nil
 	case c.Bool("in-place"):
 		if !c.Bool("no-backup") {
@@ -211,7 +302,45 @@ func migrateOneFile(c *cli.Context, mig *configmig.Migrator, opts configmig.Opti
 		}
 	}
 
+	if err := writeImportClosure(c, opts, rep, importsWritten); err != nil {
+		return false, err
+	}
+
 	return !hasUnsupported, nil
+}
+
+// writeImportClosure persists every Bloblang import the migrator pulled into
+// its translation closure. In --in-place mode each canonical key is
+// overwritten in place (with an optional .bak backup of the V1 content);
+// otherwise each file lands at its rewritten sibling path.
+//
+// Already-written canonical keys are skipped via importsWritten so a `.blobl`
+// shared between two YAMLs only produces one set of disk writes per run.
+func writeImportClosure(c *cli.Context, opts configmig.Options, rep *configmig.Report, importsWritten map[string]struct{}) error {
+	for canonicalKey, v2Source := range rep.BloblangV2Files {
+		if _, seen := importsWritten[canonicalKey]; seen {
+			continue
+		}
+		importsWritten[canonicalKey] = struct{}{}
+
+		outPath := opts.BloblangV2ImportPathRewriter(canonicalKey)
+		if c.Bool("in-place") && !c.Bool("no-backup") {
+			// Back up the V1 content alongside the file we're about to
+			// overwrite. Re-read from disk because the migrator returned the
+			// V2 content; the V1 source still lives at canonicalKey.
+			v1Body, err := os.ReadFile(canonicalKey)
+			if err != nil {
+				return fmt.Errorf("read import for backup %s: %w", canonicalKey, err)
+			}
+			if err := os.WriteFile(canonicalKey+".bak", v1Body, 0o644); err != nil {
+				return fmt.Errorf("write import backup %s.bak: %w", canonicalKey, err)
+			}
+		}
+		if err := os.WriteFile(outPath, []byte(v2Source), 0o644); err != nil {
+			return fmt.Errorf("write migrated import %s: %w", outPath, err)
+		}
+	}
+	return nil
 }
 
 // siblingPath returns the destination file path for a non-in-place migration.
