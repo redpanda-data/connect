@@ -162,6 +162,9 @@ func (k *kafkaReader) connectExplicitTopics(ctx context.Context, config *sarama.
 			if client != nil {
 				client.Close()
 			}
+			// Reset k.msgChan so a subsequent Connect retry doesn't observe
+			// a stale, orphaned channel and short-circuit as already-connected.
+			k.msgChan = nil
 		}
 	}()
 
