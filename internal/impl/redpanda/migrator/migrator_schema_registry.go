@@ -156,8 +156,7 @@ func schemaRegistryMigratorFields() []*service.ConfigField {
 				"When false (default), unknown schema IDs are passed through unchanged, " +
 				"allowing migration of topics with mixed message formats. " +
 				"Note: messages with 0-byte prefixes (e.g., protobuf) cannot be distinguished from schema registry headers and may fail when strict is enabled.").
-			Default(false).
-			LintRule(`root = if this && !this.schema_registry.translate_ids { "strict is only relevant when translate_ids is true" }`),
+			Default(false),
 		service.NewIntField(srFieldMaxParallelHTTPRequest).
 			Description("Maximum number of parallel HTTP requests to the schema registry. Controls concurrency when syncing multiple schemas.").
 			Default(10).

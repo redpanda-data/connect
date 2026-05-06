@@ -305,6 +305,9 @@ root = [
   },
   if this.timestamp_ms.or("") != "" {
     "timestamp_ms field is not supported by migrator, setting it could break consumer group migration"
+  },
+  if this.schema_registry.strict.or(false) && !this.schema_registry.translate_ids.or(false) {
+    "strict is only relevant when translate_ids is true"
   }
 ]
 `)
