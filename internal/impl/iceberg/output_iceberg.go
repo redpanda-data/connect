@@ -110,14 +110,17 @@ func newIcebergOutputFromConfig(conf *service.ParsedConfig, mgr *service.Resourc
 		if err != nil {
 			return nil, fmt.Errorf("parsing %s: %w", ioFieldParquetStringEncoding, err)
 		}
-		if strEnc == "plain" {
+		switch strEnc {
+		case "plain":
 			writerOpts = append(writerOpts, parquet.DefaultEncodingFor(parquet.ByteArray, &parquet.Plain))
+		case "delta_length_byte_array":
+			// default - noop
+		default:
+			return nil, fmt.Errorf("unsupported %s value: %q, please consider raising an issue to request support for feature gap.", ioFieldParquetStringEncoding, strEnc)
 		}
 	}
 
-	// Create router
 	rtr := NewRouter(catalogCfg, namespaceStr, tableStr, caseSensitive, schemaEvoCfg, commitCfg, writerOpts, mgr.Logger())
-
 	return &icebergOutput{
 		router: rtr,
 		logger: mgr.Logger(),
