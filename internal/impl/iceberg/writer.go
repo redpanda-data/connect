@@ -23,6 +23,7 @@ import (
 	"github.com/parquet-go/parquet-go"
 	"github.com/parquet-go/parquet-go/format"
 
+	"github.com/redpanda-data/benthos/v4/public/schema"
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/impl/iceberg/icebergx"
 	"github.com/redpanda-data/connect/v4/internal/impl/iceberg/shredder"
@@ -34,6 +35,7 @@ type writer struct {
 	committer     *committer
 	caseSensitive bool
 	writerOpts    []parquet.WriterOption
+	resolver      *typeResolver
 	logger        *service.Logger
 }
 
@@ -41,12 +43,15 @@ type writer struct {
 // The table and committer should use separate table references since they
 // operate in different goroutines and the table object is mutable.
 // caseSensitive controls how message keys are matched against the schema.
-func NewWriter(tbl *table.Table, comm *committer, caseSensitive bool, writerOpts []parquet.WriterOption, logger *service.Logger) *writer {
+// resolver supplies optional per-message schema metadata used by the shredder
+// to interpret numeric inputs into time-typed columns; pass nil to disable.
+func NewWriter(tbl *table.Table, comm *committer, caseSensitive bool, writerOpts []parquet.WriterOption, resolver *typeResolver, logger *service.Logger) *writer {
 	return &writer{
 		table:         tbl,
 		committer:     comm,
 		caseSensitive: caseSensitive,
 		writerOpts:    writerOpts,
+		resolver:      resolver,
 		logger:        logger,
 	}
 }
@@ -186,8 +191,31 @@ func (w *writer) messagesToParquet(batch service.MessageBatch) ([]partitionFile,
 	}
 	numPartitionFields := spec.NumFields()
 
-	// Create shredder for the schema
+	// Create shredder for the schema. When schema metadata is configured
+	// and the first message in the batch carries it, use it to inform the
+	// shredder's numeric-to-temporal conversion. Schema metadata is the
+	// authoritative source for "this BIGINT-shaped value is actually
+	// timestamp-millis" and prevents the year-50000 silent corruption
+	// that bloblang.ValueAsTimestamp's seconds-default would otherwise
+	// produce.
+	//
+	// We sample the schema metadata from batch[0] only and apply it to
+	// every message in the batch. Connect's iceberg router groups by
+	// (namespace, table) before reaching this method, so messages in a
+	// batch share a destination table and — in every supported upstream
+	// (schema-registry decode, parquet decode, single-source streams) —
+	// a single schema. If a future upstream genuinely interleaves
+	// different schema metadata into one batch, this assumption breaks
+	// silently for messages 1..N; in that case the writer must be
+	// extended to per-message metadata lookup with a small cache.
 	rs := shredder.NewRecordShredder(schema, w.caseSensitive)
+	if w.resolver != nil && len(batch) > 0 {
+		if common, err := w.resolver.parseSchemaMetadata(batch[0]); err != nil {
+			w.logger.Warnf("parsing schema metadata for shredder: %v (falling back to schema-agnostic conversion)", err)
+		} else if common != nil {
+			rs.SetFieldSchemaMetadata(buildShredderFieldCommons(schema, common, w.caseSensitive))
+		}
+	}
 
 	// For unpartitioned tables, use a single writer
 	if spec.IsUnpartitioned() {
@@ -303,6 +331,95 @@ func (w *writer) messagesToParquet(batch service.MessageBatch) ([]partitionFile,
 // Close closes the writer and its committer.
 func (w *writer) Close() {
 	w.committer.Close()
+}
+
+// buildShredderFieldCommons walks an iceberg schema and the parallel
+// schema.Common metadata that produced it, returning a fieldID → *schema.Common
+// map keyed by the iceberg field IDs of every leaf column. The shredder
+// consults this to interpret numeric inputs into time-typed columns using
+// the unit/AdjustToUTC semantics declared by the upstream schema.
+//
+// Only leaf-level entries are emitted; struct/list/map containers are
+// recursed into. Field matching uses the same case-sensitivity rule as
+// shredding so the lookup behaves consistently with how values are routed.
+// Fields present in the iceberg schema but absent from the metadata are
+// skipped — those columns either pre-date the metadata or were added by
+// schema evolution from a different source.
+func buildShredderFieldCommons(s *iceberg.Schema, root *schema.Common, caseSensitive bool) map[int]*schema.Common {
+	if root == nil {
+		return nil
+	}
+	out := make(map[int]*schema.Common)
+	visitIcebergSchemaFields(s.AsStruct().FieldList, root, caseSensitive, out)
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func visitIcebergSchemaFields(fields []iceberg.NestedField, parent *schema.Common, caseSensitive bool, out map[int]*schema.Common) {
+	if parent == nil || parent.Type != schema.Object {
+		return
+	}
+	for _, f := range fields {
+		child := lookupCommonChild(parent, f.Name, caseSensitive)
+		if child == nil {
+			continue
+		}
+		recordOrRecurseIcebergField(f.ID, f.Type, child, caseSensitive, out)
+	}
+}
+
+// recordOrRecurseIcebergField is the leaf-vs-recurse decision for a single
+// iceberg type/common pair. Leaves are registered in out; container types
+// (struct, list, map) are recursed into so their leaf descendants pick up
+// metadata too.
+//
+// When the iceberg-side container shape and the common-side type don't
+// agree (e.g. iceberg has ListType but the common says Object), we skip
+// rather than blindly consume children of the wrong shape. The shredder
+// then falls back to the historical schema-agnostic conversion for those
+// fields, which is the safe loss-of-precision rather than misinterpreting.
+func recordOrRecurseIcebergField(fieldID int, typ iceberg.Type, common *schema.Common, caseSensitive bool, out map[int]*schema.Common) {
+	switch t := typ.(type) {
+	case *iceberg.StructType:
+		if common.Type != schema.Object {
+			return
+		}
+		visitIcebergSchemaFields(t.FieldList, common, caseSensitive, out)
+	case *iceberg.ListType:
+		// A schema.Common array carries the element schema as its single
+		// child; skip if the shape doesn't match.
+		if common.Type != schema.Array || len(common.Children) != 1 {
+			return
+		}
+		recordOrRecurseIcebergField(t.ElementID, t.Element, &common.Children[0], caseSensitive, out)
+	case *iceberg.MapType:
+		// schema.Common maps are encoded as type Map with a single child
+		// representing the value schema. Keys are always primitives in
+		// our model, so they don't need metadata. Recurse into the value.
+		if common.Type != schema.Map || len(common.Children) != 1 {
+			return
+		}
+		recordOrRecurseIcebergField(t.ValueID, t.ValueType, &common.Children[0], caseSensitive, out)
+	default:
+		// Leaf — register the metadata so the shredder can consult it.
+		out[fieldID] = common
+	}
+}
+
+func lookupCommonChild(parent *schema.Common, name string, caseSensitive bool) *schema.Common {
+	for i := range parent.Children {
+		ch := &parent.Children[i]
+		if caseSensitive {
+			if ch.Name == name {
+				return ch
+			}
+		} else if strings.EqualFold(ch.Name, name) {
+			return ch
+		}
+	}
+	return nil
 }
 
 // parquetColumn holds state for writing to a single parquet column.

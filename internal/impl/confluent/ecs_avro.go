@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"strings"
 
 	"github.com/redpanda-data/benthos/v4/public/schema"
 )
@@ -124,6 +125,133 @@ func ecsAvroIsUnionJustOptionalObject(cfg ecsAvroConfig, types []any) (schema.Co
 		return schema.Common{}, false
 	}
 	return c, true
+}
+
+// applyAvroLogicalType reads the optional "logicalType" annotation from an
+// Avro schema node and refines c (whose Type was already set from the base
+// primitive) with the matching schema.Common type and Logical parameters.
+//
+// Returns (true, nil) when a logical type was recognised and fully populated
+// c; the caller should treat c as final and skip the container-handling
+// switch in [ecsAvroFromAnyMap]. Returns (false, nil) when no logicalType is
+// present or it isn't recognised — per the Avro 1.10 spec, readers must
+// silently fall back to the base type for unknown logical types. Returns an
+// error only for malformed annotations on a known logical type (e.g. a
+// decimal missing precision, a primitive mismatch we want to flag).
+func applyAvroLogicalType(c *schema.Common, as map[string]any) (bool, error) {
+	logical, ok := as["logicalType"].(string)
+	if !ok {
+		return false, nil
+	}
+
+	switch logical {
+	case "decimal":
+		// Per the Avro spec, decimal sits on top of bytes or fixed only.
+		// Other base primitives are malformed — fall back to the base
+		// type and ignore the annotation, matching how we treat every
+		// other primitive/logical-type mismatch below. Note that
+		// ecsAvroTypeToCommon maps `fixed` to schema.Any (it's not in
+		// the named primitive set), so we allow Any through too.
+		if c.Type != schema.ByteArray && c.Type != schema.Any {
+			return false, nil
+		}
+		p, err := avroSpecInt32(as["precision"])
+		if err != nil {
+			return false, fmt.Errorf("decimal precision: %w", err)
+		}
+		// Per the Avro spec scale is optional and defaults to 0 when absent;
+		// only an unparseable scale value (wrong type, non-integer) is an error.
+		var s int32
+		if _, present := as["scale"]; present {
+			s, err = avroSpecInt32(as["scale"])
+			if err != nil {
+				return false, fmt.Errorf("decimal scale: %w", err)
+			}
+		}
+		c.Type = schema.Decimal
+		c.Logical = &schema.LogicalParams{
+			Decimal: &schema.DecimalParams{Precision: p, Scale: s},
+		}
+		if err := c.Validate(); err != nil {
+			return false, fmt.Errorf("decimal field: %w", err)
+		}
+		return true, nil
+
+	case "uuid":
+		// Avro UUID logical type sits on top of `string`. If the base
+		// primitive doesn't match, treat as unknown and fall back per spec.
+		if c.Type != schema.String {
+			return false, nil
+		}
+		c.Type = schema.UUID
+		return true, nil
+
+	case "date":
+		if c.Type != schema.Int32 {
+			return false, nil
+		}
+		c.Type = schema.Date
+		return true, nil
+
+	case "time-millis":
+		if c.Type != schema.Int32 {
+			return false, nil
+		}
+		c.Type = schema.TimeOfDay
+		c.Logical = &schema.LogicalParams{
+			TimeOfDay: &schema.TimeOfDayParams{Unit: schema.TimeUnitMillis},
+		}
+		return true, nil
+
+	case "time-micros":
+		if c.Type != schema.Int64 {
+			return false, nil
+		}
+		c.Type = schema.TimeOfDay
+		c.Logical = &schema.LogicalParams{
+			TimeOfDay: &schema.TimeOfDayParams{Unit: schema.TimeUnitMicros},
+		}
+		return true, nil
+
+	case "timestamp-millis", "timestamp-micros", "timestamp-nanos",
+		"local-timestamp-millis", "local-timestamp-micros", "local-timestamp-nanos":
+		// All six timestamp logical types use long as their base primitive.
+		if c.Type != schema.Int64 {
+			return false, nil
+		}
+		unit := avroLogicalTimestampUnit(logical)
+		adjust := !strings.HasPrefix(logical, "local-")
+		c.Type = schema.Timestamp
+		c.Logical = &schema.LogicalParams{
+			Timestamp: &schema.TimestampParams{Unit: unit, AdjustToUTC: adjust},
+		}
+		return true, nil
+
+	default:
+		// Unknown logicalType. Per Avro 1.10 spec readers must ignore.
+		return false, nil
+	}
+}
+
+// avroLogicalTimestampUnit maps the suffix of an Avro timestamp logical-type
+// name to the corresponding [schema.TimeUnit]. Both `timestamp-*` and
+// `local-timestamp-*` variants share the suffix → unit mapping.
+//
+// The caller in [applyAvroLogicalType] has already filtered to one of the
+// six supported timestamp logical-type names, so the default branch is
+// unreachable. We panic rather than return an invalid TimeUnit(0)
+// sentinel that would propagate a malformed Logical past Validate().
+func avroLogicalTimestampUnit(logical string) schema.TimeUnit {
+	switch {
+	case strings.HasSuffix(logical, "-millis"):
+		return schema.TimeUnitMillis
+	case strings.HasSuffix(logical, "-micros"):
+		return schema.TimeUnitMicros
+	case strings.HasSuffix(logical, "-nanos"):
+		return schema.TimeUnitNanos
+	default:
+		panic(fmt.Sprintf("unreachable: avroLogicalTimestampUnit called with non-timestamp logical type %q", logical))
+	}
 }
 
 func ecsAvroTypeToCommon(t string) schema.CommonType {
@@ -270,27 +398,9 @@ func ecsAvroFromAnyMap(cfg ecsAvroConfig, as map[string]any) (schema.Common, err
 		return schema.Common{}, fmt.Errorf("expected `type` field of type string or array, got %T", t)
 	}
 
-	if logical, ok := as["logicalType"].(string); ok && logical == "decimal" {
-		p, err := avroSpecInt32(as["precision"])
-		if err != nil {
-			return schema.Common{}, fmt.Errorf("decimal precision: %w", err)
-		}
-		// Per the Avro spec scale is optional and defaults to 0 when absent;
-		// only an unparseable scale value (wrong type, non-integer) is an error.
-		var s int32
-		if _, present := as["scale"]; present {
-			s, err = avroSpecInt32(as["scale"])
-			if err != nil {
-				return schema.Common{}, fmt.Errorf("decimal scale: %w", err)
-			}
-		}
-		c.Type = schema.Decimal
-		c.Logical = &schema.LogicalParams{
-			Decimal: &schema.DecimalParams{Precision: p, Scale: s},
-		}
-		if err := c.Validate(); err != nil {
-			return schema.Common{}, fmt.Errorf("decimal field: %w", err)
-		}
+	if applied, err := applyAvroLogicalType(&c, as); err != nil {
+		return schema.Common{}, err
+	} else if applied {
 		return c, nil
 	}
 

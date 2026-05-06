@@ -238,7 +238,45 @@ func commonTypeToIcebergTypeRec(c *schema.Common, ti *typeInferrer) (iceberg.Typ
 	case schema.ByteArray:
 		return iceberg.BinaryType{}, nil
 	case schema.Timestamp:
-		return iceberg.TimestampTzType{}, nil
+		// Pick an Iceberg variant per the schema's declared unit/UTC-adjust.
+		// Legacy Timestamps (nil Logical) fall through to the millis/UTC
+		// default via EffectiveTimestamp(), preserving today's behavior of
+		// "always TimestampTzType". Schemas that explicitly say nanos use
+		// the V3 *NsType variants (catalog must support spec V3 to read
+		// these — that's surfaced as a write-time error from iceberg-go,
+		// not silently downcast here).
+		p := c.EffectiveTimestamp()
+		switch {
+		case p.Unit == schema.TimeUnitNanos && p.AdjustToUTC:
+			return iceberg.TimestampTzNsType{}, nil
+		case p.Unit == schema.TimeUnitNanos:
+			return iceberg.TimestampNsType{}, nil
+		case p.AdjustToUTC:
+			return iceberg.TimestampTzType{}, nil
+		default:
+			return iceberg.TimestampType{}, nil
+		}
+	case schema.Date:
+		return iceberg.DateType{}, nil
+	case schema.TimeOfDay:
+		// Iceberg's TIME is microseconds since midnight, no timezone. Reject
+		// shapes Iceberg can't faithfully represent rather than silently
+		// downcast — see sink-design-guidance.md.
+		if c.Logical == nil || c.Logical.TimeOfDay == nil {
+			return nil, fmt.Errorf("time-of-day field %q missing Logical.TimeOfDay parameters", c.Name)
+		}
+		p := c.Logical.TimeOfDay
+		if p.AdjustToUTC {
+			return nil, fmt.Errorf("time-of-day field %q has AdjustToUTC=true; Iceberg has no time-with-tz column type, downcast or restructure upstream", c.Name)
+		}
+		switch p.Unit {
+		case schema.TimeUnitMillis, schema.TimeUnitMicros:
+			return iceberg.TimeType{}, nil
+		default:
+			return nil, fmt.Errorf("time-of-day field %q has unit %v; Iceberg supports only MILLIS and MICROS for TIME columns", c.Name, p.Unit)
+		}
+	case schema.UUID:
+		return iceberg.UUIDType{}, nil
 	case schema.Decimal:
 		if c.Logical == nil || c.Logical.Decimal == nil {
 			return nil, fmt.Errorf("decimal field %q is missing precision/scale", c.Name)
