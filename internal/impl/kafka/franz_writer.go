@@ -520,7 +520,9 @@ func (w *batchWriter) writeBatch(details *FranzSharedClientInfo) error {
 	if len(records) != len(w.batch) {
 		return fmt.Errorf("record count mismatch: got %d records for %d messages", len(records), len(w.batch))
 	}
-	var errs []error
+	// Per-record errors, indexed by batch position so each Produce callback
+	// writes to its own slot — no shared appends, no data race.
+	recordErrs := make([]error, len(w.batch))
 	var wg sync.WaitGroup
 	for i := range records {
 		r := &records[i]
@@ -536,19 +538,37 @@ func (w *batchWriter) writeBatch(details *FranzSharedClientInfo) error {
 		}
 		if w.DecorateRecord != nil {
 			if err := w.DecorateRecord(r); err != nil {
-				errs = append(errs, fmt.Errorf("decorate record: %w", err))
+				recordErrs[i] = fmt.Errorf("decorate record: %w", err)
 				continue
 			}
 		}
 
 		wg.Add(1)
+		idx := i
 		details.Client.Produce(w.ctx, r, func(_ *kgo.Record, err error) {
-			errs = append(errs, err)
+			recordErrs[idx] = err
 			wg.Done()
 		})
 	}
 	wg.Wait()
-	return errors.Join(slices.Compact(errs)...)
+
+	var firstErr error
+	for _, e := range recordErrs {
+		if e != nil {
+			firstErr = e
+			break
+		}
+	}
+	if firstErr == nil {
+		return nil
+	}
+	batchErr := service.NewBatchError(w.batch, firstErr)
+	for i, e := range recordErrs {
+		if e != nil {
+			batchErr.Failed(i, e)
+		}
+	}
+	return batchErr
 }
 
 // Close calls into the provided yield client func.
