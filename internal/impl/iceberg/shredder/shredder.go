@@ -80,6 +80,13 @@ type RecordShredder struct {
 	// iceberg's recommended convention and with engines like Spark and Trino
 	// in their default configurations.
 	caseSensitive bool
+	// fieldCommons optionally maps an iceberg field ID to the upstream
+	// schema.Common describing the same field. When present, the leaf
+	// value-conversion step uses Logical params (timestamp unit,
+	// AdjustToUTC, time-of-day unit) to interpret numeric inputs into
+	// typed columns instead of guessing. nil entries fall back to the
+	// pre-schema-metadata behavior — see [convertLeafValue].
+	fieldCommons map[int]*schema.Common
 }
 
 // NewRecordShredder creates a new shredder for the given schema.
@@ -91,6 +98,21 @@ func NewRecordShredder(schema *iceberg.Schema, caseSensitive bool) *RecordShredd
 		schema:        schema,
 		caseSensitive: caseSensitive,
 	}
+}
+
+// SetFieldSchemaMetadata supplies a field-ID → schema.Common map that the
+// leaf value converter consults when it sees a numeric input destined for a
+// time-typed Iceberg column (TIMESTAMP, TIMESTAMPTZ, TIMESTAMP_NS,
+// TIMESTAMP_TZ_NS, DATE, TIME). Without this map, the converter accepts
+// time.Time / time.Duration / int64 directly but cannot disambiguate the
+// unit of a bare numeric millis vs. micros vs. seconds — and historically
+// defaulted to interpreting numbers as Unix seconds. Supplying this map
+// lets the connector tell the shredder "this column was sourced from an
+// Avro timestamp-millis", which the converter then honours.
+//
+// Passing nil clears any previously-set metadata.
+func (rs *RecordShredder) SetFieldSchemaMetadata(byID map[int]*schema.Common) {
+	rs.fieldCommons = byID
 }
 
 // Shred converts a nested record into a sequence of shredded values.
@@ -219,7 +241,7 @@ func (rs *RecordShredder) shredValue(
 
 	default:
 		// Leaf/primitive type.
-		pqVal, err := convertLeafValue(value, typ)
+		pqVal, err := convertLeafValue(value, typ, rs.commonForField(fieldID))
 		if err != nil {
 			return err
 		}
@@ -331,8 +353,9 @@ func (rs *RecordShredder) shredMap(
 		}
 		first = false
 
-		// Shred the key.
-		keyVal, err := convertLeafValue(k, mapType.KeyType)
+		// Shred the key. Map keys are always leaf primitives, never time
+		// types, so the schema-metadata lookup never fires for them.
+		keyVal, err := convertLeafValue(k, mapType.KeyType, nil)
 		if err != nil {
 			return fmt.Errorf("map key: %w", err)
 		}
@@ -399,9 +422,15 @@ func (rs *RecordShredder) shredNull(
 	}
 }
 
-// convertLeafValue converts a Go value to a parquet.Value based on the Iceberg type.
-// This is a stub - full implementation would handle all type conversions.
-func convertLeafValue(value any, typ iceberg.Type) (parquet.Value, error) {
+// convertLeafValue converts a Go value to a parquet.Value based on the
+// Iceberg type. common is the upstream schema.Common describing the same
+// column (or nil); when present it carries logical params consulted by the
+// time/date arms to interpret numeric inputs using the declared unit
+// instead of guessing. Without metadata, the converter accepts time.Time /
+// time.Duration directly and treats bare numerics as already-in-the-target
+// unit (microseconds for time, seconds for timestamp via bloblang
+// ValueAsTimestamp's default — preserves the pre-PR behavior).
+func convertLeafValue(value any, typ iceberg.Type, common *schema.Common) (parquet.Value, error) {
 	if value == nil {
 		return parquet.NullValue(), nil
 	}
@@ -443,36 +472,25 @@ func convertLeafValue(value any, typ iceberg.Type) (parquet.Value, error) {
 		return parquet.ByteArrayValue(v), err
 
 	case iceberg.DateType:
-		// Date is days since epoch as int32.
-		// TODO: Handle time.Time conversion.
-		switch v := value.(type) {
-		case int32:
-			return parquet.Int32Value(v), nil
-		case int:
-			return parquet.Int32Value(int32(v)), nil
-		case float64:
-			return parquet.Int32Value(int32(v)), nil
-		default:
-			return parquet.NullValue(), fmt.Errorf("cannot convert %T to date", value)
-		}
+		return convertDate(value)
 
 	case iceberg.TimeType:
-		// Time is microseconds since midnight as int64.
-		switch v := value.(type) {
-		case int64:
-			return parquet.Int64Value(v), nil
-		case int:
-			return parquet.Int64Value(int64(v)), nil
-		case float64:
-			return parquet.Int64Value(int64(v)), nil
-		default:
-			return parquet.NullValue(), fmt.Errorf("cannot convert %T to time", value)
-		}
+		// Iceberg TIME is microseconds since midnight. Accept time.Duration
+		// directly (the twmb/avro decode of time-millis/time-micros), and
+		// fall back to numeric input interpreted via the schema-declared
+		// unit when available.
+		return convertTime(value, common)
 
 	case iceberg.TimestampType, iceberg.TimestampTzType:
-		// Timestamp is microseconds since epoch as int64.
-		v, err := bloblang.ValueAsTimestamp(value)
-		return parquet.Int64Value(v.UnixMicro()), err
+		// Iceberg TIMESTAMP / TIMESTAMPTZ are microseconds since epoch.
+		// time.Time inputs are unambiguous and used directly. For numeric
+		// inputs, prefer the schema's declared unit so that millis stays
+		// millis (instead of being interpreted as seconds and landing in
+		// year 56755).
+		return convertTimestamp(value, common, false)
+
+	case iceberg.TimestampNsType, iceberg.TimestampTzNsType:
+		return convertTimestamp(value, common, true)
 
 	case iceberg.UUIDType:
 		switch v := value.(type) {

@@ -3,6 +3,23 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+### Fixed
+
+- **BREAKING:** schema_registry_decode (avro): Avro logical types — `timestamp-{millis,micros,nanos}`, `local-timestamp-{millis,micros,nanos}`, `date`, `time-{millis,micros}`, and `uuid` — are now preserved end-to-end in the schema metadata produced by the schema-registry decoder. Previously only `decimal` was honoured; every other logical type silently degraded to its base primitive (`long`, `int`, or `string`). Downstream sinks that consume `schema_metadata` (notably `iceberg`) now create the correct column type. ([#4399](https://github.com/redpanda-data/connect/issues/4399))
+
+  Pipeline values flow through unchanged in both `preserve_logical_types=false` (default — values stay numeric) and `preserve_logical_types=true` (values stay rich Go time types). Bloblang behaviour and JSON-output bytes are unaffected.
+
+  **What this changes for existing pipelines:**
+  - **iceberg with existing tables that have BIGINT / INT / STRING columns from this bug**: the connector now wants to create or evolve those columns to TIMESTAMP / TIMESTAMPTZ / DATE / TIME / UUID. Iceberg disallows BIGINT → TIMESTAMP schema evolution, so the first write after upgrade will fail loudly. Drop and re-create the table, or use Iceberg-native column-rename + add-new-column tooling to migrate before upgrading.
+  - **Pipelines whose own code reads the `schema_metadata` bytes via `meta()`** and pattern-matches the historical INT64 shape: schemas now contain `TIMESTAMP` / `DATE` / `TIME_OF_DAY` / `UUID` along with new `unit` and `adjust_to_utc` fields. Update the pattern.
+  - **iceberg shredder** is now schema-aware for numeric inputs: a numeric millisecond value declared by the schema as `timestamp-millis` is correctly interpreted as milliseconds rather than as Unix seconds. This closes a previously-silent corruption case where an int64 millis input into a TIMESTAMPTZ column would land ~50,000 years in the future.
+
+### Changed
+
+- iceberg: `NewWriter` now takes a `*typeResolver` argument so the writer can use schema metadata to interpret numeric inputs into time-typed columns at shredding time. Internal API change only.
+
 ## 4.90.0 - 2026-04-30
 
 ### Added

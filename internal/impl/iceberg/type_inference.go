@@ -120,6 +120,12 @@ func (ti *typeInferrer) inferType(value any) (iceberg.Type, error) {
 	case time.Time:
 		return iceberg.TimestampTzType{}, nil
 
+	case time.Duration:
+		// time.Duration is the natural Go representation for time-of-day
+		// values produced by twmb/avro decoding `time-millis`/`time-micros`.
+		// Iceberg TIME stores microseconds since midnight, no timezone.
+		return iceberg.TimeType{}, nil
+
 	case []byte:
 		return iceberg.BinaryType{}, nil
 
