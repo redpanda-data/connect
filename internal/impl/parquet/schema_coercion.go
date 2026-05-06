@@ -81,25 +81,29 @@ func (encodingCoercionVisitor) visitLeaf(value any, schemaNode parquet.Node) (an
 		return value, nil
 	}
 	if logicalType.Timestamp != nil {
+		var ts time.Time
 		switch v := value.(type) {
 		case string:
-			ts, err := time.Parse(time.RFC3339, v)
+			var err error
+			ts, err = time.Parse(time.RFC3339, v)
 			if err != nil {
 				return nil, fmt.Errorf("parsing string RFC3339 timestamp: %w", err)
 			}
-			unit := logicalType.Timestamp.Unit
-			switch {
-			case unit.Millis != nil:
-				return ts.UnixMilli(), nil
-			case unit.Micros != nil:
-				return ts.UnixMicro(), nil
-			case unit.Nanos != nil:
-				return ts.UnixNano(), nil
-			default:
-				return nil, errors.New("unreachable branch while processing parquet timestamp")
-			}
+		case time.Time:
+			ts = v
 		default:
-			return nil, errors.New("TIMESTAMP values must be RFC3339-formatted strings")
+			return nil, errors.New("TIMESTAMP values must be RFC3339-formatted strings or time.Time")
+		}
+		unit := logicalType.Timestamp.Unit
+		switch {
+		case unit.Millis != nil:
+			return ts.UnixMilli(), nil
+		case unit.Micros != nil:
+			return ts.UnixMicro(), nil
+		case unit.Nanos != nil:
+			return ts.UnixNano(), nil
+		default:
+			return nil, errors.New("unreachable branch while processing parquet timestamp")
 		}
 	} else if logicalType.Json != nil {
 		jsonBytes, err := json.Marshal(value)
