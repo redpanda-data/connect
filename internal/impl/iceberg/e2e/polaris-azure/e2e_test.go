@@ -192,7 +192,7 @@ func newRouter(t *testing.T, catalogCfg catalogx.Config, namespace, table string
 	schemaEvoCfg := icebergimpl.SchemaEvolutionConfig{
 		Enabled: schemaEvo,
 	}
-	router := icebergimpl.NewRouter(catalogCfg, namespaceStr, tableStr, true, schemaEvoCfg, commitCfg, logger)
+	router := icebergimpl.NewRouter(catalogCfg, namespaceStr, tableStr, true, schemaEvoCfg, commitCfg, nil, logger)
 	t.Cleanup(func() { router.Close() })
 	return router
 }

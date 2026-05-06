@@ -20,6 +20,7 @@ import (
 	"github.com/apache/iceberg-go"
 	"github.com/apache/iceberg-go/catalog"
 	"github.com/apache/iceberg-go/table"
+	"github.com/parquet-go/parquet-go"
 
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -71,6 +72,7 @@ type Router struct {
 	caseSensitive bool
 	schemaEvoCfg  SchemaEvolutionConfig
 	commitCfg     CommitConfig
+	writerOpts    []parquet.WriterOption
 	resolver      *typeResolver
 
 	entries sync.Map // tableKey -> *tableEntry
@@ -89,6 +91,7 @@ func NewRouter(
 	caseSensitive bool,
 	schemaEvoCfg SchemaEvolutionConfig,
 	commitCfg CommitConfig,
+	writerOpts []parquet.WriterOption,
 	logger *service.Logger,
 ) *Router {
 	return &Router{
@@ -98,6 +101,7 @@ func NewRouter(
 		caseSensitive: caseSensitive,
 		schemaEvoCfg:  schemaEvoCfg,
 		commitCfg:     commitCfg,
+		writerOpts:    writerOpts,
 		resolver:      newTypeResolver(schemaEvoCfg.SchemaMetadata, schemaEvoCfg.NewColumnTypeMapping, caseSensitive, logger),
 		logger:        logger,
 	}
@@ -660,7 +664,7 @@ func (r *Router) createWriter(ctx context.Context, key tableKey) (*writer, error
 	}
 
 	// Create writer with its own table reference and the committer
-	w := NewWriter(writerTbl, comm, r.caseSensitive, r.logger)
+	w := NewWriter(writerTbl, comm, r.caseSensitive, r.writerOpts, r.logger)
 	r.logger.Debugf("Created writer for table %s.%s", key.namespace, key.table)
 
 	return w, nil

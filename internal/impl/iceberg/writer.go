@@ -33,6 +33,7 @@ type writer struct {
 	table         *table.Table
 	committer     *committer
 	caseSensitive bool
+	writerOpts    []parquet.WriterOption
 	logger        *service.Logger
 }
 
@@ -40,11 +41,12 @@ type writer struct {
 // The table and committer should use separate table references since they
 // operate in different goroutines and the table object is mutable.
 // caseSensitive controls how message keys are matched against the schema.
-func NewWriter(tbl *table.Table, comm *committer, caseSensitive bool, logger *service.Logger) *writer {
+func NewWriter(tbl *table.Table, comm *committer, caseSensitive bool, writerOpts []parquet.WriterOption, logger *service.Logger) *writer {
 	return &writer{
 		table:         tbl,
 		committer:     comm,
 		caseSensitive: caseSensitive,
+		writerOpts:    writerOpts,
 		logger:        logger,
 	}
 }
@@ -189,7 +191,7 @@ func (w *writer) messagesToParquet(batch service.MessageBatch) ([]partitionFile,
 
 	// For unpartitioned tables, use a single writer
 	if spec.IsUnpartitioned() {
-		sink := newParquetSink(pqSchema, fieldToCol, w.caseSensitive)
+		sink := newParquetSink(pqSchema, fieldToCol, w.caseSensitive, w.writerOpts...)
 
 		for _, msg := range batch {
 			structured, err := msg.AsStructured()
@@ -268,7 +270,7 @@ func (w *writer) messagesToParquet(batch service.MessageBatch) ([]partitionFile,
 		} else {
 			entry = &partitionEntry{
 				key:  partitionKey,
-				sink: newParquetSink(pqSchema, fieldToCol, w.caseSensitive),
+				sink: newParquetSink(pqSchema, fieldToCol, w.caseSensitive, w.writerOpts...),
 			}
 			// Insert at sorted position
 			partitions = slices.Insert(partitions, idx, entry)
@@ -323,9 +325,12 @@ type parquetSink struct {
 	seenFields map[string]struct{} // dedup by full path
 }
 
-func newParquetSink(pqSchema *parquet.Schema, fieldToCol map[int]int, caseSensitive bool) *parquetSink {
+func newParquetSink(pqSchema *parquet.Schema, fieldToCol map[int]int, caseSensitive bool, writerOpts ...parquet.WriterOption) *parquetSink {
 	buf := bytes.NewBuffer(nil)
-	pw := parquet.NewGenericWriter[any](buf, pqSchema)
+	allOpts := make([]parquet.WriterOption, 0, 1+len(writerOpts))
+	allOpts = append(allOpts, pqSchema)
+	allOpts = append(allOpts, writerOpts...)
+	pw := parquet.NewGenericWriter[any](buf, allOpts...)
 	colWriters := pw.ColumnWriters()
 
 	columns := make(map[int]*parquetColumn, len(fieldToCol))

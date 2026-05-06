@@ -138,7 +138,7 @@ func (infra *testInfrastructure) NewRouter(
 		MaxSnapshotAge:       24 * time.Hour,
 		MaxRetries:           3,
 	}
-	router := icebergimpl.NewRouter(infra.CatalogConfig(), namespaceStr, tableStr, o.caseSensitive, o.schemaEvoCfg, commitCfg, logger)
+	router := icebergimpl.NewRouter(infra.CatalogConfig(), namespaceStr, tableStr, o.caseSensitive, o.schemaEvoCfg, commitCfg, nil, logger)
 	t.Cleanup(func() { router.Close() })
 	return router
 }

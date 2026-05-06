@@ -17,6 +17,7 @@ import (
 	"github.com/apache/iceberg-go"
 	"github.com/apache/iceberg-go/io"
 	_ "github.com/apache/iceberg-go/io/gocloud"
+	"github.com/parquet-go/parquet-go"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
@@ -102,8 +103,20 @@ func newIcebergOutputFromConfig(conf *service.ParsedConfig, mgr *service.Resourc
 		return nil, fmt.Errorf("parsing commit config: %w", err)
 	}
 
+	// Parse parquet config
+	var writerOpts []parquet.WriterOption
+	if conf.Contains(ioFieldParquet) {
+		strEnc, err := conf.FieldString(ioFieldParquet, ioFieldParquetStringEncoding)
+		if err != nil {
+			return nil, fmt.Errorf("parsing %s: %w", ioFieldParquetStringEncoding, err)
+		}
+		if strEnc == "plain" {
+			writerOpts = append(writerOpts, parquet.DefaultEncodingFor(parquet.ByteArray, &parquet.Plain))
+		}
+	}
+
 	// Create router
-	rtr := NewRouter(catalogCfg, namespaceStr, tableStr, caseSensitive, schemaEvoCfg, commitCfg, mgr.Logger())
+	rtr := NewRouter(catalogCfg, namespaceStr, tableStr, caseSensitive, schemaEvoCfg, commitCfg, writerOpts, mgr.Logger())
 
 	return &icebergOutput{
 		router: rtr,

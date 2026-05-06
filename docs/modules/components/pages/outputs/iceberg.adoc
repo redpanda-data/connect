@@ -153,6 +153,8 @@ output:
       manifest_merge_enabled: true
       max_snapshot_age: 24h
       max_retries: 3
+    parquet:
+      string_encoding: delta_length_byte_array
     batching:
       count: 0
       byte_size: 0
@@ -924,6 +926,28 @@ Maximum number of times to retry a failed transaction commit.
 *Type*: `int`
 
 *Default*: `3`
+
+=== `parquet`
+
+Parquet writer configuration.
+
+
+*Type*: `object`
+
+
+=== `parquet.string_encoding`
+
+The encoding to use for string and binary columns. Use `plain` for compatibility with readers that do not support `DELTA_LENGTH_BYTE_ARRAY` encoding, such as AWS Redshift Spectrum.
+
+
+*Type*: `string`
+
+*Default*: `"delta_length_byte_array"`
+
+Options:
+`plain`
+, `delta_length_byte_array`
+.
 
 === `batching`
 

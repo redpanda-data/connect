@@ -85,6 +85,10 @@ const (
 	// Performance fields
 	ioFieldBatching    = "batching"
 	ioFieldMaxInFlight = "max_in_flight"
+
+	// Parquet writer fields
+	ioFieldParquet               = "parquet"
+	ioFieldParquetStringEncoding = "string_encoding"
 )
 
 // icebergOutputConfig returns the configuration spec for the Iceberg output.
@@ -344,6 +348,15 @@ array:list
 					Description("Maximum number of times to retry a failed transaction commit.").
 					Default(3),
 			).Description("Commit behavior configuration.").
+				Advanced().
+				Optional(),
+
+			// Parquet writer configuration
+			service.NewObjectField(ioFieldParquet,
+				service.NewStringEnumField(ioFieldParquetStringEncoding, "plain", "delta_length_byte_array").
+					Description("The encoding to use for string and binary columns. Use `plain` for compatibility with readers that do not support `DELTA_LENGTH_BYTE_ARRAY` encoding, such as AWS Redshift Spectrum.").
+					Default("delta_length_byte_array"),
+			).Description("Parquet writer configuration.").
 				Advanced().
 				Optional(),
 
