@@ -116,7 +116,7 @@ func newIcebergOutputFromConfig(conf *service.ParsedConfig, mgr *service.Resourc
 		case "delta_length_byte_array":
 			// default - noop
 		default:
-			return nil, fmt.Errorf("unsupported %s value: %q, please consider raising an issue to request support for feature gap.", ioFieldParquetStringEncoding, strEnc)
+			return nil, fmt.Errorf("unsupported %s value: %q, please consider raising an issue to request support for feature gap", ioFieldParquetStringEncoding, strEnc)
 		}
 	}
 
