@@ -293,3 +293,153 @@ func TestEcsAvroRecordWithNilFields(t *testing.T) {
 	assert.Equal(t, schema.Object, party.Type)
 	assert.Empty(t, party.Children)
 }
+
+// TestEcsAvroLogicalTypeDispatcher exercises the full dispatcher in
+// applyAvroLogicalType for every Avro logical type the connector now
+// preserves. Each case drives the original-issue-#4399 path: the schema's
+// logicalType annotation is honoured rather than dropped.
+func TestEcsAvroLogicalTypeDispatcher(t *testing.T) {
+	type expect struct {
+		ctype       schema.CommonType
+		hasLogical  bool
+		unit        schema.TimeUnit
+		adjustToUTC bool
+	}
+	cases := []struct {
+		name   string
+		field  string // raw JSON for the field's "type" entry
+		expect expect
+	}{
+		{
+			name:   "timestamp-millis",
+			field:  `{"type":"long","logicalType":"timestamp-millis"}`,
+			expect: expect{ctype: schema.Timestamp, hasLogical: true, unit: schema.TimeUnitMillis, adjustToUTC: true},
+		},
+		{
+			name:   "timestamp-micros",
+			field:  `{"type":"long","logicalType":"timestamp-micros"}`,
+			expect: expect{ctype: schema.Timestamp, hasLogical: true, unit: schema.TimeUnitMicros, adjustToUTC: true},
+		},
+		{
+			name:   "timestamp-nanos",
+			field:  `{"type":"long","logicalType":"timestamp-nanos"}`,
+			expect: expect{ctype: schema.Timestamp, hasLogical: true, unit: schema.TimeUnitNanos, adjustToUTC: true},
+		},
+		{
+			name:   "local-timestamp-millis",
+			field:  `{"type":"long","logicalType":"local-timestamp-millis"}`,
+			expect: expect{ctype: schema.Timestamp, hasLogical: true, unit: schema.TimeUnitMillis, adjustToUTC: false},
+		},
+		{
+			name:   "local-timestamp-micros",
+			field:  `{"type":"long","logicalType":"local-timestamp-micros"}`,
+			expect: expect{ctype: schema.Timestamp, hasLogical: true, unit: schema.TimeUnitMicros, adjustToUTC: false},
+		},
+		{
+			name:   "date",
+			field:  `{"type":"int","logicalType":"date"}`,
+			expect: expect{ctype: schema.Date},
+		},
+		{
+			name:   "time-millis",
+			field:  `{"type":"int","logicalType":"time-millis"}`,
+			expect: expect{ctype: schema.TimeOfDay, hasLogical: true, unit: schema.TimeUnitMillis},
+		},
+		{
+			name:   "time-micros",
+			field:  `{"type":"long","logicalType":"time-micros"}`,
+			expect: expect{ctype: schema.TimeOfDay, hasLogical: true, unit: schema.TimeUnitMicros},
+		},
+		{
+			name:   "uuid",
+			field:  `{"type":"string","logicalType":"uuid"}`,
+			expect: expect{ctype: schema.UUID},
+		},
+		{
+			name: "unknown logicalType falls back to base primitive",
+			// Per Avro 1.10 spec readers must ignore unknown logicalType
+			// values. The base primitive (long) survives.
+			field:  `{"type":"long","logicalType":"frobnicate-millis"}`,
+			expect: expect{ctype: schema.Int64},
+		},
+		{
+			name: "logicalType on mismatched primitive falls back",
+			// timestamp-millis declared on `string` is malformed; reader
+			// silently uses the base primitive instead of failing the schema.
+			field:  `{"type":"string","logicalType":"timestamp-millis"}`,
+			expect: expect{ctype: schema.String},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			spec := []byte(`{
+				"type": "record",
+				"name": "Row",
+				"fields": [
+					{"name": "field", "type": ` + tc.field + `}
+				]
+			}`)
+			c, err := ecsAvroParseFromBytes(ecsAvroConfig{}, spec)
+			require.NoError(t, err)
+			require.Len(t, c.Children, 1)
+			f := c.Children[0]
+			assert.Equal(t, tc.expect.ctype, f.Type, "type mapping")
+			if tc.expect.hasLogical {
+				require.NotNil(t, f.Logical, "Logical should be populated")
+				switch tc.expect.ctype {
+				case schema.Timestamp:
+					require.NotNil(t, f.Logical.Timestamp)
+					assert.Equal(t, tc.expect.unit, f.Logical.Timestamp.Unit)
+					assert.Equal(t, tc.expect.adjustToUTC, f.Logical.Timestamp.AdjustToUTC)
+				case schema.TimeOfDay:
+					require.NotNil(t, f.Logical.TimeOfDay)
+					assert.Equal(t, tc.expect.unit, f.Logical.TimeOfDay.Unit)
+				}
+			}
+		})
+	}
+}
+
+// TestEcsAvroDecimalOnWrongPrimitiveFallsBack verifies that a `decimal`
+// logical-type annotation on something other than `bytes` or `fixed` is
+// silently dropped per the spec, rather than producing a malformed
+// schema.Decimal whose precision/scale claims to govern an int64 value.
+func TestEcsAvroDecimalOnWrongPrimitiveFallsBack(t *testing.T) {
+	spec := []byte(`{
+		"type":"record","name":"Row",
+		"fields":[
+			{"name":"amount","type":{"type":"long","logicalType":"decimal","precision":18,"scale":4}}
+		]
+	}`)
+	c, err := ecsAvroParseFromBytes(ecsAvroConfig{}, spec)
+	require.NoError(t, err)
+	require.Len(t, c.Children, 1)
+	amount := c.Children[0]
+	assert.Equal(t, schema.Int64, amount.Type, "decimal on long should fall back to base type")
+	assert.Nil(t, amount.Logical, "no Logical params should be set when annotation falls back")
+}
+
+// TestEcsAvroLogicalTypeOptionalUnion verifies that the [null, {logical}]
+// idiom under rawUnion=true unwraps to an Optional node with the logical
+// type fully preserved. This is the shape the original issue #4399 reported.
+func TestEcsAvroLogicalTypeOptionalUnion(t *testing.T) {
+	spec := []byte(`{
+		"type": "record",
+		"name": "Row",
+		"fields": [
+			{"name": "event_time", "type": ["null", {"type": "long", "logicalType": "timestamp-millis"}]}
+		]
+	}`)
+	c, err := ecsAvroParseFromBytes(ecsAvroConfig{rawUnion: true}, spec)
+	require.NoError(t, err)
+	require.Len(t, c.Children, 1)
+	f := c.Children[0]
+	assert.Equal(t, "event_time", f.Name)
+	assert.Equal(t, schema.Timestamp, f.Type)
+	assert.True(t, f.Optional, "[null, timestamp-millis] should produce Optional Timestamp")
+	require.NotNil(t, f.Logical)
+	require.NotNil(t, f.Logical.Timestamp)
+	assert.Equal(t, schema.TimeUnitMillis, f.Logical.Timestamp.Unit)
+	assert.True(t, f.Logical.Timestamp.AdjustToUTC)
+}

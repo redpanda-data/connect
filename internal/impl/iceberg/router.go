@@ -663,8 +663,10 @@ func (r *Router) createWriter(ctx context.Context, key tableKey) (*writer, error
 		return nil, fmt.Errorf("creating committer: %w", err)
 	}
 
-	// Create writer with its own table reference and the committer
-	w := NewWriter(writerTbl, comm, r.caseSensitive, r.writerOpts, r.logger)
+	// Create writer with its own table reference and the committer.
+	// The resolver is passed so the writer can use schema metadata to
+	// interpret numeric inputs into time-typed columns at shredding time.
+	w := NewWriter(writerTbl, comm, r.caseSensitive, r.writerOpts, r.resolver, r.logger)
 	r.logger.Debugf("Created writer for table %s.%s", key.namespace, key.table)
 
 	return w, nil

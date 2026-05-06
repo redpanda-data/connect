@@ -116,6 +116,44 @@ func TestCommonTypeToIcebergType(t *testing.T) {
 			Name: "amount",
 			Type: schema.BigDecimal,
 		}, "", true},
+		// Logical-type cases the original issue #4399 stopped at INT/BIGINT —
+		// these now produce the right Iceberg column types.
+		{"Timestamp millis UTC default (legacy nil Logical)", schema.Common{Type: schema.Timestamp}, "timestamptz", false},
+		{"Timestamp micros UTC", schema.Common{
+			Type:    schema.Timestamp,
+			Logical: &schema.LogicalParams{Timestamp: &schema.TimestampParams{Unit: schema.TimeUnitMicros, AdjustToUTC: true}},
+		}, "timestamptz", false},
+		{"Timestamp local micros (no tz)", schema.Common{
+			Type:    schema.Timestamp,
+			Logical: &schema.LogicalParams{Timestamp: &schema.TimestampParams{Unit: schema.TimeUnitMicros, AdjustToUTC: false}},
+		}, "timestamp", false},
+		{"Timestamp nanos UTC (V3)", schema.Common{
+			Type:    schema.Timestamp,
+			Logical: &schema.LogicalParams{Timestamp: &schema.TimestampParams{Unit: schema.TimeUnitNanos, AdjustToUTC: true}},
+		}, "timestamptz_ns", false},
+		{"Timestamp local nanos (V3)", schema.Common{
+			Type:    schema.Timestamp,
+			Logical: &schema.LogicalParams{Timestamp: &schema.TimestampParams{Unit: schema.TimeUnitNanos, AdjustToUTC: false}},
+		}, "timestamp_ns", false},
+		{"Date", schema.Common{Type: schema.Date}, "date", false},
+		{"TimeOfDay millis (no tz)", schema.Common{
+			Type:    schema.TimeOfDay,
+			Logical: &schema.LogicalParams{TimeOfDay: &schema.TimeOfDayParams{Unit: schema.TimeUnitMillis}},
+		}, "time", false},
+		{"TimeOfDay micros (no tz)", schema.Common{
+			Type:    schema.TimeOfDay,
+			Logical: &schema.LogicalParams{TimeOfDay: &schema.TimeOfDayParams{Unit: schema.TimeUnitMicros}},
+		}, "time", false},
+		{"TimeOfDay AdjustToUTC rejected (Iceberg has no time-with-tz)", schema.Common{
+			Type:    schema.TimeOfDay,
+			Logical: &schema.LogicalParams{TimeOfDay: &schema.TimeOfDayParams{Unit: schema.TimeUnitMicros, AdjustToUTC: true}},
+		}, "", true},
+		{"TimeOfDay missing Logical rejected", schema.Common{Type: schema.TimeOfDay}, "", true},
+		{"TimeOfDay nanos rejected (Iceberg TIME is micros)", schema.Common{
+			Type:    schema.TimeOfDay,
+			Logical: &schema.LogicalParams{TimeOfDay: &schema.TimeOfDayParams{Unit: schema.TimeUnitNanos}},
+		}, "", true},
+		{"UUID", schema.Common{Type: schema.UUID}, "uuid", false},
 	}
 
 	for _, tt := range tests {
