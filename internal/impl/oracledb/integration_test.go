@@ -593,7 +593,7 @@ oracledb_cdc:
 		require.NoError(t, json.Unmarshal(content, &row))
 		assert.Len(t, row, 2)
 		assert.Contains(t, row, "ID")
-		assert.EqualValues(t, 1, row["VAL"])
+		assert.EqualValues(t, "1", row["VAL"])
 	})
 
 	t.Run("Streaming update changes...", func(t *testing.T) {
@@ -610,7 +610,7 @@ oracledb_cdc:
 		require.NoError(t, json.Unmarshal(content, &row))
 		assert.Len(t, row, 2)
 		assert.Contains(t, row, "ID")
-		assert.EqualValues(t, 2, row["VAL"])
+		assert.EqualValues(t, "2", row["VAL"])
 	})
 
 	t.Run("Streaming delete changes...", func(t *testing.T) {
@@ -627,7 +627,7 @@ oracledb_cdc:
 		require.NoError(t, json.Unmarshal(content, &row))
 		assert.Len(t, row, 2)
 		assert.Contains(t, row, "ID")
-		assert.EqualValues(t, 2, row["VAL"])
+		assert.EqualValues(t, "2", row["VAL"])
 	})
 
 	require.NoError(t, stream.StopWithin(time.Second*10))
