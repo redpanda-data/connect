@@ -9,6 +9,7 @@
 package shredder
 
 import (
+	"math"
 	"testing"
 	"time"
 
@@ -96,7 +97,7 @@ func TestConvertTimestampSchemaAware(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			pq, err := convertLeafValue(tc.value, tc.typ, tc.common)
+			pq, err := convertLeafValue(tc.value, tc.typ, tc.common, false)
 			if !tc.wantOK {
 				require.Error(t, err)
 				return
@@ -139,7 +140,7 @@ func TestConvertDateSchemaAware(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			pq, err := convertLeafValue(tc.value, iceberg.DateType{}, nil)
+			pq, err := convertLeafValue(tc.value, iceberg.DateType{}, nil, false)
 			if tc.wantErr {
 				require.Error(t, err)
 				return
@@ -191,7 +192,7 @@ func TestConvertTimeOfDaySchemaAware(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			pq, err := convertLeafValue(tc.value, iceberg.TimeType{}, tc.common)
+			pq, err := convertLeafValue(tc.value, iceberg.TimeType{}, tc.common, false)
 			require.NoError(t, err)
 			assert.Equal(t, tc.want, pq.Int64())
 		})
@@ -218,7 +219,7 @@ func TestConvertDatePreEpoch(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			pq, err := convertLeafValue(tc.t, iceberg.DateType{}, nil)
+			pq, err := convertLeafValue(tc.t, iceberg.DateType{}, nil, false)
 			require.NoError(t, err)
 			assert.Equal(t, tc.want, pq.Int32())
 		})
@@ -233,7 +234,7 @@ func TestConvertTimeUsesValueLocation(t *testing.T) {
 	est, err := time.LoadLocation("America/New_York")
 	require.NoError(t, err)
 	v := time.Date(2024, 1, 15, 14, 30, 0, 0, est)
-	pq, err := convertLeafValue(v, iceberg.TimeType{}, nil)
+	pq, err := convertLeafValue(v, iceberg.TimeType{}, nil, false)
 	require.NoError(t, err)
 	want := int64(14*3600+30*60) * 1_000_000
 	assert.Equal(t, want, pq.Int64())
@@ -249,7 +250,7 @@ func TestConvertTimestampLegacyNilLogical(t *testing.T) {
 	const wantMicros = epochMillis * 1000
 
 	common := &schema.Common{Type: schema.Timestamp} // nil Logical
-	pq, err := convertLeafValue(epochMillis, iceberg.TimestampTzType{}, common)
+	pq, err := convertLeafValue(epochMillis, iceberg.TimestampTzType{}, common, false)
 	require.NoError(t, err)
 	assert.Equal(t, wantMicros, pq.Int64())
 }
@@ -264,6 +265,153 @@ func TestScaleTimestampNumericPanicsOnInvalid(t *testing.T) {
 		}
 	}()
 	scaleTimestampNumeric(123, schema.TimeUnit(99), false)
+}
+
+// TestTemporalRejectsNaNInf locks in a defense-in-depth guard against
+// silent corruption: a NaN or ±Inf float reaching a time-typed column
+// must fail loudly rather than be cast to implementation-defined
+// int32/int64 garbage (typically 0, i.e. year 1970).
+func TestTemporalRejectsNaNInf(t *testing.T) {
+	cases := []struct {
+		name string
+		typ  iceberg.Type
+		val  any
+	}{
+		{"date NaN", iceberg.DateType{}, math.NaN()},
+		{"date +Inf", iceberg.DateType{}, math.Inf(1)},
+		{"date -Inf", iceberg.DateType{}, math.Inf(-1)},
+		{"time NaN", iceberg.TimeType{}, math.NaN()},
+		{"time +Inf", iceberg.TimeType{}, math.Inf(1)},
+		{"timestamp NaN", iceberg.TimestampTzType{}, math.NaN()},
+		{"timestamp +Inf", iceberg.TimestampTzType{}, math.Inf(1)},
+		{"timestamp -Inf", iceberg.TimestampTzType{}, math.Inf(-1)},
+		{"timestamp_ns NaN", iceberg.TimestampNsType{}, math.NaN()},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := convertLeafValue(tc.val, tc.typ, nil, false)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "cannot convert")
+		})
+	}
+}
+
+// TestNumericInt64FiltersNaNInf verifies the helper returns (0, false)
+// for non-finite floats so callers can route them to explicit error paths
+// instead of letting the int64 cast produce garbage.
+func TestNumericInt64FiltersNaNInf(t *testing.T) {
+	for _, v := range []any{math.NaN(), math.Inf(1), math.Inf(-1), float32(math.NaN()), float32(math.Inf(1))} {
+		_, ok := numericInt64(v)
+		assert.False(t, ok, "%v should not extract as int64", v)
+	}
+}
+
+// TestStrictTemporalModeRejectsNumericWithoutMetadata exercises the
+// require_schema_metadata=true path: numeric inputs into time-typed
+// columns must fail loudly when no schema.Common has been registered for
+// the field.
+func TestStrictTemporalModeRejectsNumericWithoutMetadata(t *testing.T) {
+	cases := []struct {
+		name string
+		typ  iceberg.Type
+		val  any
+	}{
+		{"date numeric strict", iceberg.DateType{}, int64(19737)},
+		{"time numeric strict", iceberg.TimeType{}, int64(123456)},
+		{"timestamp numeric strict", iceberg.TimestampTzType{}, int64(1_730_000_000_000)},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := convertLeafValue(tc.val, tc.typ, nil, true)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "require_schema_metadata=true")
+		})
+	}
+}
+
+// TestStrictTemporalModeRejectsWrongTypeMetadata verifies that strict
+// mode is not satisfied by *any* schema.Common — the registered Type
+// must match the iceberg-side column type. Otherwise a hand-crafted
+// metadata mismatch (e.g. claiming a column is `string` while iceberg
+// actually has it as DATE) would silently pass the strict check and
+// the value-converter would interpret the numeric using the wrong
+// shape.
+func TestStrictTemporalModeRejectsWrongTypeMetadata(t *testing.T) {
+	cases := []struct {
+		name   string
+		typ    iceberg.Type
+		val    any
+		common *schema.Common
+	}{
+		{
+			name:   "DATE column with String-typed metadata",
+			typ:    iceberg.DateType{},
+			val:    int64(19737),
+			common: &schema.Common{Type: schema.String},
+		},
+		{
+			name:   "DATE column with Int64-typed metadata",
+			typ:    iceberg.DateType{},
+			val:    int64(19737),
+			common: &schema.Common{Type: schema.Int64},
+		},
+		{
+			name: "TIME column with Timestamp-typed metadata",
+			typ:  iceberg.TimeType{},
+			val:  int64(8 * 3600 * 1_000_000),
+			common: &schema.Common{
+				Type:    schema.Timestamp,
+				Logical: &schema.LogicalParams{Timestamp: &schema.TimestampParams{Unit: schema.TimeUnitMillis, AdjustToUTC: true}},
+			},
+		},
+		{
+			name:   "TIMESTAMPTZ column with Date-typed metadata",
+			typ:    iceberg.TimestampTzType{},
+			val:    int64(1_730_000_000_000),
+			common: &schema.Common{Type: schema.Date},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := convertLeafValue(tc.val, tc.typ, tc.common, true)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "require_schema_metadata=true")
+		})
+	}
+}
+
+// TestStrictTemporalModeAcceptsTimeTypeNatives confirms that strict mode
+// has no effect when the input is already an unambiguous Go time type.
+func TestStrictTemporalModeAcceptsTimeTypeNatives(t *testing.T) {
+	const epochMillis = int64(1_730_000_000_000)
+	t.Run("time.Time into TIMESTAMPTZ without metadata", func(t *testing.T) {
+		v := time.UnixMilli(epochMillis).UTC()
+		pq, err := convertLeafValue(v, iceberg.TimestampTzType{}, nil, true)
+		require.NoError(t, err)
+		assert.Equal(t, epochMillis*1000, pq.Int64())
+	})
+	t.Run("time.Duration into TIME without metadata", func(t *testing.T) {
+		d := 8*time.Hour + 30*time.Minute
+		pq, err := convertLeafValue(d, iceberg.TimeType{}, nil, true)
+		require.NoError(t, err)
+		assert.Equal(t, int64(8*3600+30*60)*1_000_000, pq.Int64())
+	})
+	t.Run("time.Time into DATE without metadata", func(t *testing.T) {
+		v := time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC)
+		pq, err := convertLeafValue(v, iceberg.DateType{}, nil, true)
+		require.NoError(t, err)
+		assert.Equal(t, int32(19737), pq.Int32())
+	})
+}
+
+// TestStrictTemporalModeAcceptsNumericWithMetadata confirms that strict
+// mode is inert once schema metadata is registered for the field.
+func TestStrictTemporalModeAcceptsNumericWithMetadata(t *testing.T) {
+	const epochMillis = int64(1_730_000_000_000)
+	common := tsCommon(schema.TimeUnitMillis, true)
+	pq, err := convertLeafValue(epochMillis, iceberg.TimestampTzType{}, common, true)
+	require.NoError(t, err)
+	assert.Equal(t, epochMillis*1000, pq.Int64())
 }
 
 func tsCommon(u schema.TimeUnit, utc bool) *schema.Common {
