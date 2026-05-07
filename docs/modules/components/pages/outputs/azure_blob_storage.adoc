@@ -64,6 +64,7 @@ output:
     storage_sas_token: ""
     container: messages-${!timestamp("2006")} # No default (required)
     path: ${!counter()}-${!timestamp_unix_nano()}.txt
+    tags: {}
     blob_type: BLOCK
     public_access_level: PRIVATE
     max_in_flight: 64
@@ -163,6 +164,24 @@ path: ${!counter()}-${!timestamp_unix_nano()}.json
 path: ${!meta("kafka_key")}.json
 
 path: ${!json("doc.namespace")}/${!json("doc.id")}.json
+```
+
+=== `tags`
+
+Key/value pairs to store with the blob as https://learn.microsoft.com/en-us/azure/storage/blobs/storage-manage-find-blobs[blob index tags^]. A maximum of 10 tags are permitted, tag keys must be between 1 and 128 characters, and tag values must be between 0 and 256 characters. Keys and values are case-sensitive and only support string values. Not supported on storage accounts with hierarchical namespace (Data Lake Gen2).
+This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
+
+
+*Type*: `object`
+
+*Default*: `{}`
+
+```yml
+# Examples
+
+tags:
+  Environment: production
+  Source: ${!meta("kafka_topic")}
 ```
 
 === `blob_type`
