@@ -31,12 +31,13 @@ import (
 
 // writer handles writing batches of messages to a single Iceberg table.
 type writer struct {
-	table         *table.Table
-	committer     *committer
-	caseSensitive bool
-	writerOpts    []parquet.WriterOption
-	resolver      *typeResolver
-	logger        *service.Logger
+	table                 *table.Table
+	committer             *committer
+	caseSensitive         bool
+	writerOpts            []parquet.WriterOption
+	resolver              *typeResolver
+	requireSchemaMetadata bool
+	logger                *service.Logger
 }
 
 // NewWriter creates a new writer for a specific table.
@@ -45,14 +46,17 @@ type writer struct {
 // caseSensitive controls how message keys are matched against the schema.
 // resolver supplies optional per-message schema metadata used by the shredder
 // to interpret numeric inputs into time-typed columns; pass nil to disable.
-func NewWriter(tbl *table.Table, comm *committer, caseSensitive bool, writerOpts []parquet.WriterOption, resolver *typeResolver, logger *service.Logger) *writer {
+// requireSchemaMetadata enables shredder strict mode — see
+// [shredder.RecordShredder.SetStrictTemporalMode].
+func NewWriter(tbl *table.Table, comm *committer, caseSensitive bool, writerOpts []parquet.WriterOption, resolver *typeResolver, requireSchemaMetadata bool, logger *service.Logger) *writer {
 	return &writer{
-		table:         tbl,
-		committer:     comm,
-		caseSensitive: caseSensitive,
-		writerOpts:    writerOpts,
-		resolver:      resolver,
-		logger:        logger,
+		table:                 tbl,
+		committer:             comm,
+		caseSensitive:         caseSensitive,
+		writerOpts:            writerOpts,
+		resolver:              resolver,
+		requireSchemaMetadata: requireSchemaMetadata,
+		logger:                logger,
 	}
 }
 
@@ -209,6 +213,9 @@ func (w *writer) messagesToParquet(batch service.MessageBatch) ([]partitionFile,
 	// silently for messages 1..N; in that case the writer must be
 	// extended to per-message metadata lookup with a small cache.
 	rs := shredder.NewRecordShredder(schema, w.caseSensitive)
+	if w.requireSchemaMetadata {
+		rs.SetStrictTemporalMode(true)
+	}
 	if w.resolver != nil && len(batch) > 0 {
 		if common, err := w.resolver.parseSchemaMetadata(batch[0]); err != nil {
 			w.logger.Warnf("parsing schema metadata for shredder: %v (falling back to schema-agnostic conversion)", err)

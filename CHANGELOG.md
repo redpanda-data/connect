@@ -16,6 +16,10 @@ All notable changes to this project will be documented in this file.
   - **Pipelines whose own code reads the `schema_metadata` bytes via `meta()`** and pattern-matches the historical INT64 shape: schemas now contain `TIMESTAMP` / `DATE` / `TIME_OF_DAY` / `UUID` along with new `unit` and `adjust_to_utc` fields. Update the pattern.
   - **iceberg shredder** is now schema-aware for numeric inputs: a numeric millisecond value declared by the schema as `timestamp-millis` is correctly interpreted as milliseconds rather than as Unix seconds. This closes a previously-silent corruption case where an int64 millis input into a TIMESTAMPTZ column would land ~50,000 years in the future.
 
+### Added
+
+- iceberg: `schema_evolution.require_schema_metadata` (default `false`). When enabled along with `schema_evolution.schema_metadata`, numeric values shredded into a `timestamp`, `timestamptz`, `date`, or `time` column without registered schema metadata are rejected loudly instead of falling through to the bloblang Unix-seconds default. Use this when you cannot guarantee the upstream attaches schema metadata and prefer a hard error to silently corrupting dates by ~50,000 years. No effect on time-typed columns receiving native `time.Time` / `time.Duration` Go values.
+
 ### Changed
 
 - iceberg: `NewWriter` now takes a `*typeResolver` argument so the writer can use schema metadata to interpret numeric inputs into time-typed columns at shredding time. Internal API change only.
