@@ -395,6 +395,7 @@ func TestEcsAvroLogicalTypeDispatcher(t *testing.T) {
 				case schema.TimeOfDay:
 					require.NotNil(t, f.Logical.TimeOfDay)
 					assert.Equal(t, tc.expect.unit, f.Logical.TimeOfDay.Unit)
+					assert.Equal(t, tc.expect.adjustToUTC, f.Logical.TimeOfDay.AdjustToUTC)
 				}
 			}
 		})

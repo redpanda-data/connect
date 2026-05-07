@@ -87,6 +87,13 @@ type RecordShredder struct {
 	// typed columns instead of guessing. nil entries fall back to the
 	// pre-schema-metadata behavior — see [convertLeafValue].
 	fieldCommons map[int]*schema.Common
+	// strictTemporal causes [convertLeafValue] to refuse numeric inputs
+	// into time-typed columns when no schema metadata has been
+	// registered for that column. When false (the default), the value
+	// converter falls back to [bloblang.ValueAsTimestamp]'s seconds
+	// default — convenient but silently wrong if the upstream produced
+	// a different unit. When true, the writer fails the batch loudly.
+	strictTemporal bool
 }
 
 // NewRecordShredder creates a new shredder for the given schema.
@@ -98,6 +105,22 @@ func NewRecordShredder(schema *iceberg.Schema, caseSensitive bool) *RecordShredd
 		schema:        schema,
 		caseSensitive: caseSensitive,
 	}
+}
+
+// SetStrictTemporalMode toggles whether numeric inputs into time-typed
+// columns require registered schema metadata. With strict mode on, a bare
+// int64 / float64 value reaching a TIMESTAMP / TIMESTAMPTZ / DATE / TIME
+// column with no [schema.Common] in the field map is rejected with a
+// per-field error rather than guessed-as-Unix-seconds.
+//
+// Strict mode has no effect on time.Time / time.Duration values, which
+// carry their own unit unambiguously, and no effect on non-time columns.
+//
+// Defaults to off (back-compat). Operators that cannot guarantee schema
+// metadata flows end-to-end can flip this on to fail loudly instead of
+// silently corrupting dates by ~50,000 years.
+func (rs *RecordShredder) SetStrictTemporalMode(on bool) {
+	rs.strictTemporal = on
 }
 
 // SetFieldSchemaMetadata supplies a field-ID → schema.Common map that the
@@ -241,7 +264,7 @@ func (rs *RecordShredder) shredValue(
 
 	default:
 		// Leaf/primitive type.
-		pqVal, err := convertLeafValue(value, typ, rs.commonForField(fieldID))
+		pqVal, err := convertLeafValue(value, typ, rs.commonForField(fieldID), rs.strictTemporal)
 		if err != nil {
 			return err
 		}
@@ -355,7 +378,7 @@ func (rs *RecordShredder) shredMap(
 
 		// Shred the key. Map keys are always leaf primitives, never time
 		// types, so the schema-metadata lookup never fires for them.
-		keyVal, err := convertLeafValue(k, mapType.KeyType, nil)
+		keyVal, err := convertLeafValue(k, mapType.KeyType, nil, false)
 		if err != nil {
 			return fmt.Errorf("map key: %w", err)
 		}
@@ -430,7 +453,7 @@ func (rs *RecordShredder) shredNull(
 // time.Duration directly and treats bare numerics as already-in-the-target
 // unit (microseconds for time, seconds for timestamp via bloblang
 // ValueAsTimestamp's default — preserves the pre-PR behavior).
-func convertLeafValue(value any, typ iceberg.Type, common *schema.Common) (parquet.Value, error) {
+func convertLeafValue(value any, typ iceberg.Type, common *schema.Common, strictTemporal bool) (parquet.Value, error) {
 	if value == nil {
 		return parquet.NullValue(), nil
 	}
@@ -472,14 +495,14 @@ func convertLeafValue(value any, typ iceberg.Type, common *schema.Common) (parqu
 		return parquet.ByteArrayValue(v), err
 
 	case iceberg.DateType:
-		return convertDate(value)
+		return convertDate(value, common, strictTemporal)
 
 	case iceberg.TimeType:
 		// Iceberg TIME is microseconds since midnight. Accept time.Duration
 		// directly (the twmb/avro decode of time-millis/time-micros), and
 		// fall back to numeric input interpreted via the schema-declared
 		// unit when available.
-		return convertTime(value, common)
+		return convertTime(value, common, strictTemporal)
 
 	case iceberg.TimestampType, iceberg.TimestampTzType:
 		// Iceberg TIMESTAMP / TIMESTAMPTZ are microseconds since epoch.
@@ -487,10 +510,10 @@ func convertLeafValue(value any, typ iceberg.Type, common *schema.Common) (parqu
 		// inputs, prefer the schema's declared unit so that millis stays
 		// millis (instead of being interpreted as seconds and landing in
 		// year 56755).
-		return convertTimestamp(value, common, false)
+		return convertTimestamp(value, common, false, strictTemporal)
 
 	case iceberg.TimestampNsType, iceberg.TimestampTzNsType:
-		return convertTimestamp(value, common, true)
+		return convertTimestamp(value, common, true, strictTemporal)
 
 	case iceberg.UUIDType:
 		switch v := value.(type) {

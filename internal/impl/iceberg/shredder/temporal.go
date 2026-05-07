@@ -9,6 +9,7 @@
 package shredder
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"time"
@@ -33,7 +34,12 @@ func (rs *RecordShredder) commonForField(fieldID int) *schema.Common {
 // Iceberg DATE column (int32 days since the unix epoch). Accepts time.Time
 // (UTC midnight idiom from twmb/avro `date` decode), or a numeric value
 // already expressing days since epoch.
-func convertDate(value any) (parquet.Value, error) {
+//
+// strictTemporal causes numeric inputs without registered schema metadata
+// to be rejected — the column is DATE (days since epoch) but a bare
+// numeric could be days, milliseconds, or seconds depending on upstream;
+// strict mode forces the operator to attach metadata or convert upstream.
+func convertDate(value any, common *schema.Common, strictTemporal bool) (parquet.Value, error) {
 	switch v := value.(type) {
 	case time.Time:
 		// Iceberg / Avro DATE is days since 1970-01-01, including negative
@@ -46,19 +52,30 @@ func convertDate(value any) (parquet.Value, error) {
 			days--
 		}
 		return parquet.Int32Value(int32(days)), nil
-	case int32:
-		return parquet.Int32Value(v), nil
-	case int:
-		return parquet.Int32Value(int32(v)), nil
-	case int64:
-		return parquet.Int32Value(int32(v)), nil
-	case float64:
-		// NaN and ±Inf cast to int32 as implementation-defined garbage;
-		// silent corruption (year 1970) is worse than a hard error.
-		if math.IsNaN(v) || math.IsInf(v, 0) {
-			return parquet.NullValue(), fmt.Errorf("cannot convert %v to date", v)
+	case int32, int, int64, float64:
+		// In strict mode, a numeric value into a DATE column must come
+		// with metadata whose Type is also Date — anything else either
+		// has no shape information at all or has the wrong shape, both
+		// of which the operator asked us to fail on.
+		if strictTemporal && (common == nil || common.Type != schema.Date) {
+			return parquet.NullValue(), errors.New("date column received numeric value without matching schema.Common (Type=Date); require_schema_metadata=true demands a Date metadata entry to disambiguate the unit")
 		}
-		return parquet.Int32Value(int32(v)), nil
+		switch v := v.(type) {
+		case int32:
+			return parquet.Int32Value(v), nil
+		case int:
+			return parquet.Int32Value(int32(v)), nil
+		case int64:
+			return parquet.Int32Value(int32(v)), nil
+		case float64:
+			// NaN and ±Inf cast to int32 as implementation-defined garbage;
+			// silent corruption (year 1970) is worse than a hard error.
+			if math.IsNaN(v) || math.IsInf(v, 0) {
+				return parquet.NullValue(), fmt.Errorf("cannot convert %v to date", v)
+			}
+			return parquet.Int32Value(int32(v)), nil
+		}
+		return parquet.NullValue(), fmt.Errorf("cannot convert %T to date", value)
 	default:
 		return parquet.NullValue(), fmt.Errorf("cannot convert %T to date", value)
 	}
@@ -77,7 +94,7 @@ func convertDate(value any) (parquet.Value, error) {
 // (matching Java's LocalTime, Postgres TIME, and Iceberg TIME): a
 // time.Time of 14:30 EST yields 14:30 in the column, not 19:30 UTC.
 // If the upstream wants UTC-shifted, it should v.UTC() before passing in.
-func convertTime(value any, common *schema.Common) (parquet.Value, error) {
+func convertTime(value any, common *schema.Common, strictTemporal bool) (parquet.Value, error) {
 	switch v := value.(type) {
 	case time.Duration:
 		return parquet.Int64Value(v.Microseconds()), nil
@@ -87,19 +104,31 @@ func convertTime(value any, common *schema.Common) (parquet.Value, error) {
 			time.Duration(v.Second())*time.Second +
 			time.Duration(v.Nanosecond())*time.Nanosecond
 		return parquet.Int64Value(dur.Microseconds()), nil
-	case int64:
-		return parquet.Int64Value(numericToTimeMicros(v, common)), nil
-	case int32:
-		// Avro time-millis is int32; accept it directly as well.
-		return parquet.Int64Value(numericToTimeMicros(int64(v), common)), nil
-	case int:
-		return parquet.Int64Value(numericToTimeMicros(int64(v), common)), nil
-	case float64:
-		// NaN/±Inf cast is implementation-defined; reject explicitly.
-		if math.IsNaN(v) || math.IsInf(v, 0) {
-			return parquet.NullValue(), fmt.Errorf("cannot convert %v to time", v)
+	case int64, int32, int, float64:
+		// In strict mode, a numeric value into a TIME column must come
+		// with TimeOfDay-typed metadata that names the unit. Anything
+		// else (no metadata, wrong-typed metadata, or a TimeOfDay common
+		// missing its Logical params) means the unit is undeclared and
+		// the operator asked us to fail rather than guess.
+		if strictTemporal && (common == nil || common.Type != schema.TimeOfDay || common.Logical == nil || common.Logical.TimeOfDay == nil) {
+			return parquet.NullValue(), errors.New("time column received numeric value without matching schema.Common (Type=TimeOfDay with Logical.TimeOfDay); require_schema_metadata=true demands a TimeOfDay metadata entry with declared unit")
 		}
-		return parquet.Int64Value(numericToTimeMicros(int64(v), common)), nil
+		switch v := v.(type) {
+		case int64:
+			return parquet.Int64Value(numericToTimeMicros(v, common)), nil
+		case int32:
+			// Avro time-millis is int32; accept it directly as well.
+			return parquet.Int64Value(numericToTimeMicros(int64(v), common)), nil
+		case int:
+			return parquet.Int64Value(numericToTimeMicros(int64(v), common)), nil
+		case float64:
+			// NaN/±Inf cast is implementation-defined; reject explicitly.
+			if math.IsNaN(v) || math.IsInf(v, 0) {
+				return parquet.NullValue(), fmt.Errorf("cannot convert %v to time", v)
+			}
+			return parquet.Int64Value(numericToTimeMicros(int64(v), common)), nil
+		}
+		return parquet.NullValue(), fmt.Errorf("cannot convert %T to time", value)
 	default:
 		return parquet.NullValue(), fmt.Errorf("cannot convert %T to time", value)
 	}
@@ -147,7 +176,7 @@ func numericToTimeMicros(n int64, common *schema.Common) int64 {
 // bloblang.ValueAsTimestamp — which preserves the pre-PR behavior for
 // callers that genuinely store unix-seconds in a numeric column without
 // any schema annotation.
-func convertTimestamp(value any, common *schema.Common, nanos bool) (parquet.Value, error) {
+func convertTimestamp(value any, common *schema.Common, nanos, strictTemporal bool) (parquet.Value, error) {
 	if v, ok := value.(time.Time); ok {
 		if nanos {
 			return parquet.Int64Value(v.UnixNano()), nil
@@ -180,6 +209,14 @@ func convertTimestamp(value any, common *schema.Common, nanos bool) (parquet.Val
 		p := common.EffectiveTimestamp()
 		out := scaleTimestampNumeric(n, p.Unit, nanos)
 		return parquet.Int64Value(out), nil
+	}
+
+	// Strict mode: refuse the bloblang fallback for numeric values when
+	// the operator has asked us to fail loudly on missing metadata.
+	if strictTemporal {
+		if _, ok := numericInt64(value); ok {
+			return parquet.NullValue(), errors.New("timestamp column received numeric value with no Timestamp schema metadata; require_schema_metadata=true demands a schema.Common with Type=Timestamp to disambiguate the unit")
+		}
 	}
 
 	// No applicable schema metadata: keep the historical bloblang path.
