@@ -55,7 +55,8 @@ type LogMiner struct {
 }
 
 // NewMiner creates a new instance of LogMiner responsible for paging through change events based on the tables param.
-func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replication.ChangePublisher, cfg *Config, metrics *service.Metrics, logger *service.Logger) *LogMiner {
+// txnCache sets the transaction buffer implementation; pass nil to use the default in-memory cache.
+func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replication.ChangePublisher, cfg *Config, txnCache TransactionCache, metrics *service.Metrics, logger *service.Logger) *LogMiner {
 	// Build table filter condition once
 	// Transaction control operations (6=START, 7=COMMIT, 36=ROLLBACK) don't have table info
 	// and must pass unfiltered. DML (1=INSERT, 2=DELETE, 3=UPDATE) and LOB operations
@@ -108,9 +109,12 @@ func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replicat
 		logMinerQuery: logMinerQuery,
 		logCollector:  NewLogFileCollector(),
 		sessionMgr:    NewSessionManager(cfg, logger),
-		txnCache:      NewInMemoryCache(cfg.MaxTransactionEvents, metrics, logger),
+		txnCache:      txnCache,
 		dmlParser:     sqlredo.NewParser(),
 		lobStates:     make(map[sqlredo.TransactionID]*sqlredo.TxnLOBState),
+	}
+	if lm.txnCache == nil {
+		lm.txnCache = NewInMemoryCache(cfg.MaxTransactionEvents, metrics, logger)
 	}
 	return lm
 }
@@ -413,9 +417,10 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 
 			// InMemory cache specific behaviour
 			if cache, ok := lm.txnCache.(*InMemoryCache); ok {
-				// Compute the safe checkpoint SCN. If other transactions are still
-				// open, we must not advance the checkpoint past their start SCN - 1,
-				// otherwise a restart with in-memory cache would miss their already-seen DML events.
+				// Due to the lack of durability of the in-memory transaction buffer, we need to ensure we only checkpoint at the
+				// lowest watermark in the buffer. Given we only flush the buffer on commit, we need to ensure we don't lose data by
+				// checkpointing a flushed transaction whilst a concurrent transaction is still open (meaning in the case of a restart we'd resume
+				// half way through the open transaction, missing its initial events).
 				if lowestOpenSCN := cache.LowWatermarkSCN(redoEvent.TransactionID); lowestOpenSCN != math.MaxUint64 && lowestOpenSCN > 0 {
 					// We subtract 1 because the query resumes from the point before (i.e. SCN > checkpoint)
 					if lowestOpenSCN-1 < safeCheckpointSCN {
