@@ -149,6 +149,7 @@ output:
       table_location: s3://my-iceberg-bucket/ # No default (optional)
       schema_metadata: ""
       new_column_type_mapping: "" # No default (optional)
+      require_schema_metadata: false
     commit:
       manifest_merge_enabled: true
       max_snapshot_age: 24h
@@ -891,6 +892,15 @@ An optional Bloblang mapping to customize column types during schema evolution. 
 
 *Type*: `string`
 
+
+=== `schema_evolution.require_schema_metadata`
+
+When `true`, writing a numeric value into a `timestamp`, `timestamptz`, `date`, or `time` column without `schema_metadata` registered for that column is a hard error. The default `false` permits a fallback path that interprets bare numeric timestamps as Unix seconds and bare numeric times as already-microseconds — convenient, but silently wrong if upstream produced milliseconds. Enable this when you cannot guarantee the upstream attaches schema metadata and want to fail loudly rather than corrupt dates by ~50,000 years. No effect on time-typed columns receiving `time.Time`/`time.Duration` Go values, which carry their own unit unambiguously, and no effect on non-time columns. Requires `schema_metadata` to be set.
+
+
+*Type*: `bool`
+
+*Default*: `false`
 
 === `commit`
 
