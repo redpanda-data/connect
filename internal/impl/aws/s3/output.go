@@ -155,7 +155,7 @@ func s3oConfigFromParsed(pConf *service.ParsedConfig) (conf s3oConfig, err error
 		return
 	}
 
-	if slices.Contains(types.ObjectCannedACL("").Values(), types.ObjectCannedACL(objectCannedACL)) {
+	if objectCannedACL == "" || slices.Contains(types.ObjectCannedACL("").Values(), types.ObjectCannedACL(objectCannedACL)) {
 		conf.ObjectCannedACL = types.ObjectCannedACL(objectCannedACL)
 	} else {
 		err = fmt.Errorf("invalid object canned ACL value: %v", objectCannedACL)
