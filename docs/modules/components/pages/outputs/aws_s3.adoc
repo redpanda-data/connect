@@ -382,7 +382,7 @@ The maximum period to wait on an upload before abandoning it and reattempting.
 
 === `object_canned_acl`
 
-The object canned ACL value.
+The object canned ACL value. Leave empty to omit the ACL from upload requests, which is required for buckets that have ACLs disabled (the AWS default since 2023).
 
 
 *Type*: `string`
@@ -390,7 +390,8 @@ The object canned ACL value.
 *Default*: `""`
 
 Options:
-`private`
+``
+, `private`
 , `public-read`
 , `public-read-write`
 , `authenticated-read`
