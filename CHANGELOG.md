@@ -3,6 +3,13 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.91.0 - 2026-05-08
+
+### Fixed
+
+- aws_s3: Fixed object_canned_acl field to properly accept empty string value in schema validation and runtime, allowing uploads to buckets with ACLs disabled. ([@josephwoodward](https://github.com/josephwoodward), [#4413](https://github.com/redpanda-data/connect/pull/4413))
+- iceberg: Fixed Iceberg v2 manifest list writer to accept v1 manifest files from tables upgraded from v1 to v2, resolving commit failures on upgraded tables. ([@Jeffail](https://github.com/Jeffail), [#4404](https://github.com/redpanda-data/connect/pull/4404))
+
 ## 4.90.0 - 2026-04-30
 
 ### Added
