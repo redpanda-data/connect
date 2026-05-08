@@ -6,6 +6,8 @@
 
 Redpanda Connect is a stream processor that moves data between a wide range of [sources][inputs] and [sinks][outputs], with support for [hydration, enrichment, transformation, and filtering][processors] along the way.
 
+That includes a rich set of change-data-capture (CDC) connectors — for Postgres, MySQL, MongoDB, Oracle, MSSQL, and more — so database changes can flow through your pipelines as first-class events.
+
 It uses [Bloblang][bloblang-about] for mapping, runs as a single static binary or container image, and is easy to operate and monitor.
 
 ## Highlights
@@ -13,6 +15,7 @@ It uses [Bloblang][bloblang-about] for mapping, runs as a single static binary o
 - **Declarative pipelines** — a stream topology fits in a single YAML file.
 - **At-least-once delivery by default** — in-process transactions, no disk state required.
 - **A large connector catalog** — cloud services, message brokers, databases, HTTP, and more.
+- **First-class CDC** — change-data-capture connectors for Postgres, MySQL, MongoDB, Oracle, and MSSQL.
 - **Bloblang** — a mapping language designed for stream data.
 - **Cloud-friendly** — stateless and horizontally scalable, with metrics and tracing built in.
 
