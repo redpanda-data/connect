@@ -176,7 +176,7 @@ func dorisStreamLoadSpec() *service.ConfigSpec {
 		Categories("Services").
 		Version("4.86.0").
 		Summary("Writes batches of messages into Apache Doris using Stream Load.").
-		Description(`Each output batch is encoded into a single Doris Stream Load request. The sink first contacts FE and follows the Stream Load redirect to BE before uploading the batch body. The batch is only acknowledged when Doris reports success.`).
+		Description(dorisStreamLoadDescription()).
 		Field(service.NewStringField(dsFieldURL).
 			Description("Backward-compatible single Doris FE HTTP URL, for example http://fe_host:8030. When fe_urls is provided it takes precedence.").
 			Example("http://127.0.0.1:8030").
@@ -345,8 +345,7 @@ if this.max_filter_ratio < 0 || this.max_filter_ratio > 1 {
 if this.group_commit != "" && this.group_commit != "sync_mode" && this.group_commit != "async_mode" && this.group_commit != "off_mode" {
   root = root.append("group_commit must be one of sync_mode, async_mode, off_mode")
 }
-`).
-		Description(service.OutputPerformanceDocs(true, true))
+`)
 }
 
 func init() {
@@ -368,6 +367,10 @@ func init() {
 			return
 		},
 	)
+}
+
+func dorisStreamLoadDescription() string {
+	return `Each output batch is encoded into a single Doris Stream Load request. The sink first contacts FE and follows the Stream Load redirect to BE before uploading the batch body. The batch is only acknowledged when Doris reports success.` + service.OutputPerformanceDocs(true, true)
 }
 
 func dorisStreamLoadConfigFromParsed(conf *service.ParsedConfig) (c dorisStreamLoadConfig, err error) {
@@ -549,7 +552,7 @@ func newDorisStreamLoadOutput(conf dorisStreamLoadConfig, mgr *service.Resources
 	cfg.Transport.ExpectContinueTimeout = 0
 	cfg.AuthSigner = httpclient.BasicAuthSigner(conf.Username, conf.Password)
 
-	if strings.HasPrefix(conf.FEURLs[0], "https://") {
+	if dorisFEURLsRequireTLS(conf.FEURLs) {
 		cfg.TLSEnabled = true
 	}
 
@@ -824,7 +827,7 @@ func (d *dorisStreamLoadOutput) sendViaFE(ctx context.Context, label string, bod
 			continue
 		}
 
-		targetURL, err := d.resolveRedirectURL(feEndpoint, location)
+		targetURL, err := resolveRedirectURL(feEndpoint, location)
 		if err != nil {
 			lastErr = err
 			continue
@@ -933,7 +936,7 @@ func (d *dorisStreamLoadOutput) newRequest(ctx context.Context, targetURL, label
 	return req, nil
 }
 
-func (_ *dorisStreamLoadOutput) resolveRedirectURL(feEndpoint *url.URL, location string) (string, error) {
+func resolveRedirectURL(feEndpoint *url.URL, location string) (string, error) {
 	loc, err := url.Parse(location)
 	if err != nil {
 		return "", fmt.Errorf("parsing Doris redirect URL: %w", err)
@@ -942,6 +945,15 @@ func (_ *dorisStreamLoadOutput) resolveRedirectURL(feEndpoint *url.URL, location
 		return loc.String(), nil
 	}
 	return feEndpoint.ResolveReference(loc).String(), nil
+}
+
+func dorisFEURLsRequireTLS(feURLs []string) bool {
+	for _, feURL := range feURLs {
+		if strings.HasPrefix(feURL, "https://") {
+			return true
+		}
+	}
+	return false
 }
 
 func streamLoadURLs(baseURLs []string, database, table string) ([]*url.URL, error) {

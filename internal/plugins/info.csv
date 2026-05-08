@@ -69,9 +69,9 @@ cypher                    ,output    ,cypher                    ,4.37.0  ,commun
 decompress                ,processor ,decompress                ,0.0.0   ,certified  ,n          ,y     ,y
 decompress                ,scanner   ,decompress                ,0.0.0   ,certified  ,n          ,y     ,y
 dedupe                    ,processor ,dedupe                    ,0.0.0   ,certified  ,n          ,y     ,y
-doris_stream_load         ,output    ,doris_stream_load         ,0.0.0   ,community  ,n          ,n     ,n
 discord                   ,input     ,discord                   ,0.0.0   ,community  ,n          ,n     ,n
 discord                   ,output    ,discord                   ,0.0.0   ,community  ,n          ,n     ,n
+doris_stream_load         ,output    ,doris_stream_load         ,0.0.0   ,community  ,n          ,n     ,n
 drop                      ,output    ,drop                      ,0.0.0   ,certified  ,n          ,y     ,y
 drop_on                   ,output    ,drop_on                   ,0.0.0   ,certified  ,n          ,y     ,y
 dynamic                   ,input     ,dynamic                   ,0.0.0   ,community  ,n          ,n     ,n

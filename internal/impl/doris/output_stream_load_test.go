@@ -20,6 +20,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -89,6 +91,13 @@ func TestClassifyDorisStreamLoadResponse(t *testing.T) {
 	}, []byte(`{"status":"FAILED","msg":"There is no 100-continue header"}`))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "There is no 100-continue header")
+}
+
+func TestDorisStreamLoadDescriptionIncludesBehaviorAndPerformanceDocs(t *testing.T) {
+	desc := dorisStreamLoadDescription()
+	assert.Contains(t, desc, "follows the Stream Load redirect to BE")
+	assert.Contains(t, desc, "only acknowledged when Doris reports success")
+	assert.True(t, strings.HasSuffix(desc, service.OutputPerformanceDocs(true, true)))
 }
 
 func TestDorisStreamLoadOutputWriteBatchRedirect(t *testing.T) {
@@ -496,6 +505,11 @@ func TestConnectionTestFailoverFEWithQueryPortCheck(t *testing.T) {
 	assert.Equal(t, int32(1), checks.Load())
 }
 
+func TestDorisFEURLsRequireTLSChecksAllEndpoints(t *testing.T) {
+	assert.False(t, dorisFEURLsRequireTLS([]string{"http://fe1:8030", "http://fe2:8030"}))
+	assert.True(t, dorisFEURLsRequireTLS([]string{"http://fe1:8030", "https://fe2:8030"}))
+}
+
 func TestNewRequestSetsPromotedHeaders(t *testing.T) {
 	maxFilter := 0.25
 	skipLines := 2
@@ -581,6 +595,19 @@ func TestNewRequestOmitsLabelForGroupCommitFromHeaders(t *testing.T) {
 
 	assert.Empty(t, req.Header.Get(dsHeaderLabel))
 	assert.Equal(t, "async_mode", req.Header.Get(dsHeaderGroupCommit))
+}
+
+func TestResolveRedirectURL(t *testing.T) {
+	feEndpoint, err := url.Parse("http://fe:8030/api/db/tbl/_stream_load")
+	require.NoError(t, err)
+
+	absolute, err := resolveRedirectURL(feEndpoint, "http://be:8040/api/db/tbl/_stream_load")
+	require.NoError(t, err)
+	assert.Equal(t, "http://be:8040/api/db/tbl/_stream_load", absolute)
+
+	relative, err := resolveRedirectURL(feEndpoint, "../be_stream_load")
+	require.NoError(t, err)
+	assert.Equal(t, "http://fe:8030/api/db/be_stream_load", relative)
 }
 
 func TestConfigValidationRejectsPartitionMix(t *testing.T) {
