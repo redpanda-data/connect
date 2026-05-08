@@ -1,4 +1,4 @@
-// Copyright 2024 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -306,13 +306,19 @@ output:
 				Default("5s"),
 			service.NewStringEnumField(s3oFieldObjectCannedACL,
 				slices.Collect(func(yield func(string) bool) {
+					// Empty string means "do not set an ACL on the upload",
+					// which is the default since buckets created after 2023
+					// have ACLs disabled by default.
+					if !yield("") {
+						return
+					}
 					for _, v := range types.ObjectCannedACL("").Values() {
 						if !yield(string(v)) {
 							return
 						}
 					}
 				})...).
-				Description("The object canned ACL value.").
+				Description("The object canned ACL value. Leave empty to omit the ACL from upload requests, which is required for buckets that have ACLs disabled (the AWS default since 2023).").
 				Default("").
 				Advanced(),
 			service.NewBatchPolicyField(s3oFieldBatching),
