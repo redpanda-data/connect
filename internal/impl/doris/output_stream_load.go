@@ -577,7 +577,7 @@ func newDorisStreamLoadOutput(conf dorisStreamLoadConfig, mgr *service.Resources
 	}, nil
 }
 
-func (_ *dorisStreamLoadOutput) Connect(context.Context) error {
+func (*dorisStreamLoadOutput) Connect(context.Context) error {
 	return nil
 }
 
@@ -731,7 +731,7 @@ func (d *dorisStreamLoadOutput) WriteBatch(ctx context.Context, batch service.Me
 	return nil
 }
 
-func (_ *dorisStreamLoadOutput) Close(context.Context) error {
+func (*dorisStreamLoadOutput) Close(context.Context) error {
 	return nil
 }
 
