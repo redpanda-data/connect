@@ -21,17 +21,21 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          CURRENT=$(gh release view --json tagName -q '.tagName' | sed 's/^v//')
+          LAST_MINOR=$(gh release list --limit 100 --exclude-pre-releases --exclude-drafts \
+            --json tagName -q '.[].tagName' | grep -E '^v[0-9]+\.[0-9]+\.0$' | head -1)
+          CURRENT=$(echo "$LAST_MINOR" | sed 's/^v//')
           MINOR=$(echo "$CURRENT" | cut -d. -f2)
           NEXT="4.$((MINOR + 1)).0"
+          echo "last_minor=$LAST_MINOR" >> "$GITHUB_OUTPUT"
           echo "next=$NEXT" >> "$GITHUB_OUTPUT"
+          echo "**Last minor:** $LAST_MINOR" >> "$GITHUB_STEP_SUMMARY"
           echo "**Next version:** $NEXT" >> "$GITHUB_STEP_SUMMARY"
 
       - name: List merged PRs
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh api "repos/${{ github.repository }}/compare/$(gh release view --json tagName -q '.tagName')...${{ github.ref_name }}" --jq '.commits[].sha' |
+          gh api "repos/${{ github.repository }}/compare/${{ steps.version.outputs.last_minor }}...${{ github.ref_name }}" --jq '.commits[].sha' |
           xargs -P8 -I{} gh api "repos/${{ github.repository }}/commits/{}/pulls" --jq '.[].number' |
           sort -u |
           xargs -I{} gh pr view {} --json number,author,commits,comments |
