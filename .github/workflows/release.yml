@@ -1,13 +1,12 @@
 name: Release
 
 on:
-  pull_request:
-#  push:
-#    tags:
-#      - 'v*'
-#  schedule:
-#    - cron: '0 2 * * *' # run at 2 AM UTC
-#  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+  schedule:
+    - cron: '0 2 * * *' # run at 2 AM UTC
+  workflow_dispatch:
 
 jobs:
   goreleaser:
@@ -20,11 +19,11 @@ jobs:
       fail-fast: false
       matrix:
         variant:
-#          - connect-ai
-#          - connect-cgo
-#          - connect-cloud
+          - connect-ai
+          - connect-cgo
+          - connect-cloud
           - connect-fips
-#          - connect-lambda
+          - connect-lambda
           - connect
 
     steps:
@@ -46,7 +45,6 @@ jobs:
             ,sdlc/prod/github/dockerhub
             ,sdlc/prod/github/rpm_signing_key
           parse-json-secrets: true
-
 
       - name: Configure AWS credentials for access to Amazon ECR Public
         uses: aws-actions/configure-aws-credentials@v6
@@ -77,8 +75,6 @@ jobs:
           tar -C "$RUNNER_TEMP/microsoft" -xf "$RUNNER_TEMP/msgo.tgz"
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
 
-
-
       - name: Release Notes
         run: ./resources/scripts/release_notes.sh > ./release_notes.md
 
@@ -87,15 +83,18 @@ jobs:
           python-version: '3.12'
 
       - name: Authenticate to GCP
+        if: ${{ github.event_name == 'push' }}
         uses: google-github-actions/auth@v3
         with:
           workload_identity_provider: projects/606234194099/locations/global/workloadIdentityPools/rp-cicd/providers/gh-connect
           service_account: gh-connect@devprod-cicd-infra.iam.gserviceaccount.com
 
       - name: Set up gcloud CLI
+        if: ${{ github.event_name == 'push' }}
         uses: google-github-actions/setup-gcloud@v3
 
       - name: Exclude GCP credentials from git state
+        if: ${{ github.event_name == 'push' }}
         run: echo 'gha-creds-*.json' >> .git/info/exclude
 
       - name: Install cloudsmith CLI (for publishing Linux packages)
@@ -130,14 +129,11 @@ jobs:
           printf '%s\n' "$RPM_SIGNING_KEY_PRIVATE" > "$tmpkey"
           echo "RPM_KEY_FILE_PRIVATE=$tmpkey" >> "$GITHUB_ENV"
 
-      - name: Create local tag for test build
-        run: git tag v0.0.0-rc.test${{ github.run_number }}
-
       - name: GoReleaser Release
-        if: ${{ github.event_name == 'pull_request' }}
+        if: ${{ github.event_name == 'push' }}
         uses: goreleaser/goreleaser-action@v7
         with:
-          args: release --timeout 120m --config ./.goreleaser/${{ matrix.variant }}.yaml
+          args: release --release-notes=./release_notes.md --timeout 120m --config ./.goreleaser/${{ matrix.variant }}.yaml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CLOUDSMITH_API_KEY: ${{ env.CLOUDSMITH_API_KEY }}
@@ -184,44 +180,6 @@ jobs:
         uses: goreleaser/goreleaser-action@v7
         with:
           args: release --timeout 120m --snapshot --skip publish --config ./.goreleaser/${{ matrix.variant }}.yaml
-
-      - name: Verify RPM signature in GCP AR
-        if: ${{ github.event_name == 'pull_request' && (matrix.variant == 'connect' || matrix.variant == 'connect-fips') }}
-        run: |
-          sudo apt-get install -y rpm
-          VERSION="0.0.0-rc.test${{ github.run_number }}"
-          SEARCH_TERM=$(printf '%s' "$VERSION" | tr '-' '~')
-          GA_PATTERN='^[0-9]+\.[0-9]+\.[0-9]+$'
-          if [[ "$VERSION" =~ $GA_PATTERN ]]; then
-            REPO="redpanda-yum"
-          else
-            REPO="redpanda-unstable-yum"
-          fi
-          if [[ "${{ matrix.variant }}" == "connect-fips" ]]; then
-            PKG_NAME="redpanda-connect-fips"
-          else
-            PKG_NAME="redpanda-connect"
-          fi
-          RPM_FILE=$(gcloud artifacts files list \
-            --repository="$REPO" --location=us-central1 \
-            --project=production-devprod \
-            --filter="name~${SEARCH_TERM} AND name~x86_64" \
-            --format="value(name)" | grep "${PKG_NAME}-" | grep -v "${PKG_NAME}-fips" | head -1)
-          [[ -n "$RPM_FILE" ]] || { echo "WARNING: no RPM found for ${PKG_NAME} ${SEARCH_TERM} in ${REPO} — skipping verification"; exit 0; }
-          mkdir -p /tmp/rpms
-          gcloud artifacts files download \
-            --repository="$REPO" --location=us-central1 \
-            --project=production-devprod --destination=/tmp/rpms/ "$RPM_FILE"
-          RPM=$(find /tmp/rpms -name "*.rpm" | head -1)
-          [[ -n "$RPM" ]] || { echo "ERROR: no .rpm file found in /tmp/rpms"; exit 1; }
-          tmpdb=$(mktemp -d)
-          pubkey=$(mktemp)
-          trap 'rm -rf "$tmpdb" "$pubkey"' EXIT
-          printf '%s\n' "$RPM_SIGNING_KEY_PUBLIC" > "$pubkey"
-          rpm --dbpath "$tmpdb" --import "$pubkey"
-          rpm --dbpath "$tmpdb" --checksig "$RPM"
-          echo "RPM signature verification passed for: $(basename "$RPM")"
-
 
       - name: Scan docker images for vulnerabilities
         if: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && (matrix.variant == 'connect' || matrix.variant == 'connect-cloud') }}
