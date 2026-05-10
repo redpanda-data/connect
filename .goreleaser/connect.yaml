@@ -62,6 +62,9 @@ nfpms:
     formats:
       - deb
       - rpm
+    rpm:
+      signature:
+        key_file: "{{ .Env.RPM_KEY_FILE_PRIVATE }}"
 
 dockers_v2:
   - id: connect
