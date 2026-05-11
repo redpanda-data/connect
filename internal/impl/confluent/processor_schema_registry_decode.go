@@ -225,6 +225,13 @@ type schemaRegistryDecoder struct {
 	requestMut sync.Mutex
 	shutSig    *shutdown.Signaller
 
+	// DEBUG-4399: track which schema_ids we've already announced via the
+	// per-message log so we don't flood high-volume pipelines. First message
+	// of each ID is logged; subsequent messages with the same ID are silent
+	// at message level (the decoder build itself is already logged once).
+	loggedIDsMut sync.Mutex
+	loggedIDs    map[int]bool
+
 	mgr    *service.Resources
 	logger *service.Logger
 }
@@ -357,6 +364,19 @@ func (s *schemaRegistryDecoder) Process(_ context.Context, msg *service.Message)
 		return nil, err
 	}
 
+	// DEBUG-4399: log the FIRST message we see for each unique schema_id so we
+	// know which IDs the runtime stream actually references, without flooding
+	// the log on high-volume pipelines.
+	s.loggedIDsMut.Lock()
+	if s.loggedIDs == nil {
+		s.loggedIDs = map[int]bool{}
+	}
+	if !s.loggedIDs[id] {
+		s.loggedIDs[id] = true
+		s.logger.Infof("DEBUG-4399: first message for schema_id=%d (subsequent messages with this id will be silent)", id)
+	}
+	s.loggedIDsMut.Unlock()
+
 	decoder, err := s.getDecoder(id)
 	if err != nil {
 		return nil, err
@@ -428,8 +448,12 @@ func (s *schemaRegistryDecoder) getDecoder(id int) (schemaDecoder, error) {
 	s.cacheMut.RUnlock()
 	if ok {
 		atomic.StoreInt64(&c.lastUsedUnixSeconds, time.Now().Unix())
+		// DEBUG-4399: cache hit. We're reusing a decoder built earlier in
+		// this process. If the schema in the registry was updated after the
+		// decoder was first built, the cache will still serve the old one.
 		return c.decoder, nil
 	}
+	s.logger.Infof("DEBUG-4399: decoder cache miss for schema_id=%d — will fetch from registry", id)
 
 	s.requestMut.Lock()
 	defer s.requestMut.Unlock()
@@ -460,7 +484,7 @@ func (s *schemaRegistryDecoder) getDecoder(id int) (schemaDecoder, error) {
 	case franz_sr.TypeJSON:
 		decoder, err = s.getJSONDecoder(ctx, resPayload)
 	default:
-		decoder, err = s.getAvroDecoder(ctx, resPayload)
+		decoder, err = s.getAvroDecoder(ctx, id, resPayload)
 	}
 	if err != nil {
 		return nil, err

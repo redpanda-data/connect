@@ -9,6 +9,7 @@
 package iceberg
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
@@ -137,6 +138,9 @@ func (r *typeResolver) resolveTypeForCreateTable(
 // than silently degrading to inference.
 func (r *typeResolver) parseSchemaMetadata(msg *service.Message) (*schema.Common, error) {
 	if r.schemaMetadataKey == "" {
+		if r.logger != nil {
+			r.logger.Infof("DEBUG-4399: iceberg.parseSchemaMetadata: schema_metadata_key is empty (schema_evolution.schema_metadata not set in config) — falling back to type inference")
+		}
 		return nil, nil
 	}
 	metaAny, exists := msg.MetaGetMut(r.schemaMetadataKey)
@@ -146,9 +150,27 @@ func (r *typeResolver) parseSchemaMetadata(msg *service.Message) (*schema.Common
 		}
 		return nil, nil
 	}
+	// DEBUG-4399: dump the raw meta value AND its Go type so we can see
+	// whether the decoder's commonSchema map made it intact, or whether
+	// something (a bloblang processor, a re-encoding step) reshaped it.
+	if r.logger != nil {
+		if b, jerr := json.MarshalIndent(metaAny, "", "  "); jerr == nil {
+			r.logger.Infof("DEBUG-4399: iceberg.parseSchemaMetadata: read meta key %q (Go type=%T):\n%s", r.schemaMetadataKey, metaAny, string(b))
+		} else {
+			r.logger.Infof("DEBUG-4399: iceberg.parseSchemaMetadata: read meta key %q (Go type=%T, marshal err=%v): %v", r.schemaMetadataKey, metaAny, jerr, metaAny)
+		}
+	}
 	c, err := schema.ParseFromAny(metaAny)
 	if err != nil {
+		if r.logger != nil {
+			r.logger.Infof("DEBUG-4399: iceberg.parseSchemaMetadata: ParseFromAny failed: %v", err)
+		}
 		return nil, fmt.Errorf("parsing schema metadata: %w", err)
+	}
+	if r.logger != nil {
+		if b, jerr := json.MarshalIndent(c.ToAny(), "", "  "); jerr == nil {
+			r.logger.Infof("DEBUG-4399: iceberg.parseSchemaMetadata: ParseFromAny succeeded; common schema iceberg will use:\n%s", string(b))
+		}
 	}
 	return &c, nil
 }

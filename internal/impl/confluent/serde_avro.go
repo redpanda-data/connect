@@ -193,10 +193,30 @@ func (*schemaRegistryEncoder) newAvroEncoder(avroJSON string) (schemaEncoder, er
 	}, nil
 }
 
-func (s *schemaRegistryDecoder) getAvroDecoder(ctx context.Context, aschema franz_sr.Schema) (schemaDecoder, error) {
+func (s *schemaRegistryDecoder) getAvroDecoder(ctx context.Context, schemaID int, aschema franz_sr.Schema) (schemaDecoder, error) {
+	// DEBUG-4399: dump raw registry response BEFORE any transformation so we
+	// can compare against the schema the user expects to be in their registry.
+	s.logger.Infof("DEBUG-4399: building avro decoder for schema_id=%d, refs=%d, raw_avro_text_len=%d, raw_avro_text=%s",
+		schemaID, len(aschema.References), len(aschema.Schema), aschema.Schema)
+	if s.cfg.avro.mapping != nil {
+		s.logger.Infof("DEBUG-4399: schema_registry_decode has an avro.mapping bloblang configured for id=%d (it WILL transform the schema text)", schemaID)
+	} else {
+		s.logger.Infof("DEBUG-4399: no avro.mapping bloblang configured for id=%d (schema text passes through unchanged)", schemaID)
+	}
+
 	schemaSpec, err := resolveAvroReferences(ctx, s.client, s.cfg.avro.mapping, aschema)
 	if err != nil {
 		return nil, err
+	}
+
+	// DEBUG-4399: dump the schema text after resolveAvroReferences. If this
+	// differs from the raw text above, the difference came from mapping or
+	// reference hydration.
+	if schemaSpec != aschema.Schema {
+		s.logger.Infof("DEBUG-4399: resolveAvroReferences modified schema text for id=%d (len before=%d, after=%d). After: %s",
+			schemaID, len(aschema.Schema), len(schemaSpec), schemaSpec)
+	} else {
+		s.logger.Infof("DEBUG-4399: resolveAvroReferences returned schema text unchanged for id=%d", schemaID)
 	}
 
 	// Build parse options for preserve_logical_types: register custom
@@ -215,6 +235,9 @@ func (s *schemaRegistryDecoder) getAvroDecoder(ctx context.Context, aschema fran
 		return nil, err
 	}
 
+	s.logger.Infof("DEBUG-4399: avro.Parse succeeded for id=%d, preserve_logical_types=%v, raw_unions=%v, store_schema_metadata=%q",
+		schemaID, s.cfg.avro.preserveLogicalTypes, s.cfg.avro.rawUnions, s.cfg.avro.storeSchemaMeta)
+
 	var (
 		commonSchema     any
 		commonSchemaRoot bschema.Common
@@ -230,6 +253,15 @@ func (s *schemaRegistryDecoder) getAvroDecoder(ctx context.Context, aschema fran
 			commonSchema = c.ToAny()
 			commonSchemaRoot = c
 			hasCommonSchema = true
+			// DEBUG-4399: dump the common schema we produced so we can see
+			// whether logical types survived our parser. If this output
+			// contains "TIMESTAMP" for timestamp-millis fields, our parser
+			// is fine; if it contains "INT64", logical types were stripped.
+			if b, jerr := json.MarshalIndent(commonSchema, "", "  "); jerr == nil {
+				s.logger.Infof("DEBUG-4399: common schema produced from id=%d:\n%s", schemaID, string(b))
+			} else {
+				s.logger.Infof("DEBUG-4399: common schema produced from id=%d (marshal error: %v): %v", schemaID, jerr, commonSchema)
+			}
 		}
 	}
 
@@ -275,6 +307,10 @@ func (s *schemaRegistryDecoder) getAvroDecoder(ctx context.Context, aschema fran
 			m.MetaSetImmut(s.cfg.avro.storeSchemaMeta, service.ImmutableAny{V: commonSchema})
 		}
 		return nil
+	}
+	// DEBUG-4399: note that the decoder is wired to set meta key %q
+	if commonSchema != nil {
+		s.logger.Infof("DEBUG-4399: decoder for id=%d will set meta key %q to the common schema (above) on every decoded message", schemaID, s.cfg.avro.storeSchemaMeta)
 	}
 
 	return decoder, nil

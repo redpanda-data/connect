@@ -217,10 +217,29 @@ func (w *writer) messagesToParquet(batch service.MessageBatch) ([]partitionFile,
 		rs.SetStrictTemporalMode(true)
 	}
 	if w.resolver != nil && len(batch) > 0 {
+		// DEBUG-4399: log the iceberg-table-side schema we're shredding into.
+		// This is what was stored in the catalog at table-creation time.
+		// If a timestamp-shaped field appears here as bigint, the table was
+		// created with a wrong type — the fix only applies to NEW tables.
+		w.logger.Infof("DEBUG-4399: iceberg writer.messagesToParquet for batch of %d msg(s); iceberg-table schema:", len(batch))
+		for _, f := range schema.Fields() {
+			w.logger.Infof("DEBUG-4399:   field id=%d name=%q type=%v required=%v", f.ID, f.Name, f.Type, f.Required)
+		}
 		if common, err := w.resolver.parseSchemaMetadata(batch[0]); err != nil {
 			w.logger.Warnf("parsing schema metadata for shredder: %v (falling back to schema-agnostic conversion)", err)
 		} else if common != nil {
-			rs.SetFieldSchemaMetadata(buildShredderFieldCommons(schema, common, w.caseSensitive))
+			fc := buildShredderFieldCommons(schema, common, w.caseSensitive)
+			rs.SetFieldSchemaMetadata(fc)
+			// DEBUG-4399: log the per-field-ID common-schema map the shredder
+			// will consult for numeric→temporal conversion. Missing entries
+			// here for a TIMESTAMP column mean the shredder won't get a
+			// unit hint and will fall back to schema-agnostic conversion.
+			w.logger.Infof("DEBUG-4399: shredder field commons map (size=%d):", len(fc))
+			for fid, c := range fc {
+				w.logger.Infof("DEBUG-4399:   field_id=%d name=%q type=%v logical=%+v optional=%v", fid, c.Name, c.Type, c.Logical, c.Optional)
+			}
+		} else {
+			w.logger.Infof("DEBUG-4399: parseSchemaMetadata returned nil common (no schema metadata key configured, or meta absent on first msg) — shredder uses schema-agnostic conversion")
 		}
 	}
 

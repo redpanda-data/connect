@@ -443,6 +443,10 @@ func (r *Router) buildSchemaWithResolver(record map[string]any, msg *service.Mes
 		finalOrder = append(finalOrder, orderedField{recordKey: k, emitName: k})
 	}
 
+	// DEBUG-4399: log every field resolution decision during table creation.
+	// This shows for each column whether it came from the metadata path (with
+	// a logical-type override) or inferred from the record's runtime types.
+	r.logger.Infof("DEBUG-4399: buildSchemaWithResolver for %s.%s; common-schema metadata available=%v; finalOrder=%d fields", key.namespace, key.table, common != nil, len(finalOrder))
 	for _, f := range finalOrder {
 		var value any
 		if !f.metadataOnly {
@@ -453,8 +457,10 @@ func (r *Router) buildSchemaWithResolver(record map[string]any, msg *service.Mes
 			return nil, fmt.Errorf("resolving type for field %q: %w", f.emitName, err)
 		}
 		if fieldType == nil {
+			r.logger.Infof("DEBUG-4399:   field %q (record_key=%q, value_type=%T) → SKIPPED (nil resolved type)", f.emitName, f.recordKey, value)
 			continue // nil value, skip
 		}
+		r.logger.Infof("DEBUG-4399:   field %q (record_key=%q, value_type=%T) → iceberg type %v", f.emitName, f.recordKey, value, fieldType)
 		fields = append(fields, iceberg.NestedField{
 			ID:       ti.allocateFieldID(), // For primitives this is the only allocation; for nested structs, inner IDs were already assigned by ti
 			Name:     f.emitName,
