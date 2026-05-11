@@ -270,28 +270,76 @@ func ecsAvroFromAnyMap(cfg ecsAvroConfig, as map[string]any) (schema.Common, err
 		return schema.Common{}, fmt.Errorf("expected `type` field of type string or array, got %T", t)
 	}
 
-	if logical, ok := as["logicalType"].(string); ok && logical == "decimal" {
-		p, err := avroSpecInt32(as["precision"])
-		if err != nil {
-			return schema.Common{}, fmt.Errorf("decimal precision: %w", err)
-		}
-		// Per the Avro spec scale is optional and defaults to 0 when absent;
-		// only an unparseable scale value (wrong type, non-integer) is an error.
-		var s int32
-		if _, present := as["scale"]; present {
-			s, err = avroSpecInt32(as["scale"])
+	if logical, ok := as["logicalType"].(string); ok {
+		switch logical {
+		case "decimal":
+			p, err := avroSpecInt32(as["precision"])
 			if err != nil {
-				return schema.Common{}, fmt.Errorf("decimal scale: %w", err)
+				return schema.Common{}, fmt.Errorf("decimal precision: %w", err)
 			}
+			// Per the Avro spec scale is optional and defaults to 0 when absent;
+			// only an unparseable scale value (wrong type, non-integer) is an error.
+			var s int32
+			if _, present := as["scale"]; present {
+				s, err = avroSpecInt32(as["scale"])
+				if err != nil {
+					return schema.Common{}, fmt.Errorf("decimal scale: %w", err)
+				}
+			}
+			c.Type = schema.Decimal
+			c.Logical = &schema.LogicalParams{
+				Decimal: &schema.DecimalParams{Precision: p, Scale: s},
+			}
+			if err := c.Validate(); err != nil {
+				return schema.Common{}, fmt.Errorf("decimal field: %w", err)
+			}
+			return c, nil
+		case "timestamp-millis":
+			c.Type = schema.Timestamp
+			c.Logical = &schema.LogicalParams{
+				Timestamp: &schema.TimestampParams{Unit: schema.TimeUnitMillis, AdjustToUTC: true},
+			}
+			return c, nil
+		case "timestamp-micros":
+			c.Type = schema.Timestamp
+			c.Logical = &schema.LogicalParams{
+				Timestamp: &schema.TimestampParams{Unit: schema.TimeUnitMicros, AdjustToUTC: true},
+			}
+			return c, nil
+		case "local-timestamp-millis":
+			c.Type = schema.Timestamp
+			c.Logical = &schema.LogicalParams{
+				Timestamp: &schema.TimestampParams{Unit: schema.TimeUnitMillis, AdjustToUTC: false},
+			}
+			return c, nil
+		case "local-timestamp-micros":
+			c.Type = schema.Timestamp
+			c.Logical = &schema.LogicalParams{
+				Timestamp: &schema.TimestampParams{Unit: schema.TimeUnitMicros, AdjustToUTC: false},
+			}
+			return c, nil
+		case "date":
+			c.Type = schema.Date
+			return c, nil
+		case "time-millis":
+			c.Type = schema.TimeOfDay
+			c.Logical = &schema.LogicalParams{
+				TimeOfDay: &schema.TimeOfDayParams{Unit: schema.TimeUnitMillis, AdjustToUTC: false},
+			}
+			return c, nil
+		case "time-micros":
+			c.Type = schema.TimeOfDay
+			c.Logical = &schema.LogicalParams{
+				TimeOfDay: &schema.TimeOfDayParams{Unit: schema.TimeUnitMicros, AdjustToUTC: false},
+			}
+			return c, nil
+		case "uuid":
+			c.Type = schema.UUID
+			return c, nil
 		}
-		c.Type = schema.Decimal
-		c.Logical = &schema.LogicalParams{
-			Decimal: &schema.DecimalParams{Precision: p, Scale: s},
-		}
-		if err := c.Validate(); err != nil {
-			return schema.Common{}, fmt.Errorf("decimal field: %w", err)
-		}
-		return c, nil
+		// Unknown logicalType: per the Avro spec, ignore unrecognised
+		// logical-type annotations and fall back to the underlying
+		// primitive type already set above.
 	}
 
 	switch c.Type {

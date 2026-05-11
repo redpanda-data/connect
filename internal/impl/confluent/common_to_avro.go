@@ -72,9 +72,51 @@ func commonToAvroInner(c schema.Common, recordName, namespace string, isRoot boo
 	case schema.Any:
 		return "bytes", nil
 	case schema.Timestamp:
+		params := c.EffectiveTimestamp()
+		var logicalType string
+		switch {
+		case params.AdjustToUTC && params.Unit == schema.TimeUnitMillis:
+			logicalType = "timestamp-millis"
+		case params.AdjustToUTC && params.Unit == schema.TimeUnitMicros:
+			logicalType = "timestamp-micros"
+		case !params.AdjustToUTC && params.Unit == schema.TimeUnitMillis:
+			logicalType = "local-timestamp-millis"
+		case !params.AdjustToUTC && params.Unit == schema.TimeUnitMicros:
+			logicalType = "local-timestamp-micros"
+		default:
+			return nil, fmt.Errorf("timestamp field %q has unsupported unit %v (only millis and micros are representable in Avro)", c.Name, params.Unit)
+		}
 		return map[string]any{
 			"type":        "long",
-			"logicalType": "timestamp-millis",
+			"logicalType": logicalType,
+		}, nil
+	case schema.Date:
+		return map[string]any{
+			"type":        "int",
+			"logicalType": "date",
+		}, nil
+	case schema.TimeOfDay:
+		if c.Logical == nil || c.Logical.TimeOfDay == nil {
+			return nil, fmt.Errorf("time-of-day field %q missing LogicalParams.TimeOfDay", c.Name)
+		}
+		switch c.Logical.TimeOfDay.Unit {
+		case schema.TimeUnitMillis:
+			return map[string]any{
+				"type":        "int",
+				"logicalType": "time-millis",
+			}, nil
+		case schema.TimeUnitMicros:
+			return map[string]any{
+				"type":        "long",
+				"logicalType": "time-micros",
+			}, nil
+		default:
+			return nil, fmt.Errorf("time-of-day field %q has unsupported unit %v (only millis and micros are representable in Avro)", c.Name, c.Logical.TimeOfDay.Unit)
+		}
+	case schema.UUID:
+		return map[string]any{
+			"type":        "string",
+			"logicalType": "uuid",
 		}, nil
 	case schema.Decimal:
 		if c.Logical == nil || c.Logical.Decimal == nil {

@@ -90,6 +90,26 @@ func TestCommonTypeToIcebergType(t *testing.T) {
 		{"String", schema.Common{Type: schema.String}, "string", false},
 		{"ByteArray", schema.Common{Type: schema.ByteArray}, "binary", false},
 		{"Timestamp", schema.Common{Type: schema.Timestamp}, "timestamptz", false},
+		{"Timestamp UTC", schema.Common{
+			Type: schema.Timestamp,
+			Logical: &schema.LogicalParams{
+				Timestamp: &schema.TimestampParams{Unit: schema.TimeUnitMillis, AdjustToUTC: true},
+			},
+		}, "timestamptz", false},
+		{"Timestamp local", schema.Common{
+			Type: schema.Timestamp,
+			Logical: &schema.LogicalParams{
+				Timestamp: &schema.TimestampParams{Unit: schema.TimeUnitMillis, AdjustToUTC: false},
+			},
+		}, "timestamp", false},
+		{"Date", schema.Common{Type: schema.Date}, "date", false},
+		{"TimeOfDay", schema.Common{
+			Type: schema.TimeOfDay,
+			Logical: &schema.LogicalParams{
+				TimeOfDay: &schema.TimeOfDayParams{Unit: schema.TimeUnitMicros, AdjustToUTC: false},
+			},
+		}, "time", false},
+		{"UUID", schema.Common{Type: schema.UUID}, "uuid", false},
 		{"Any fallback", schema.Common{Type: schema.Any}, "string", false},
 		{"Null fallback", schema.Common{Type: schema.Null}, "string", false},
 		{"Object", schema.Common{

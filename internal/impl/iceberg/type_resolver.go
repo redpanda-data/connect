@@ -238,7 +238,20 @@ func commonTypeToIcebergTypeRec(c *schema.Common, ti *typeInferrer) (iceberg.Typ
 	case schema.ByteArray:
 		return iceberg.BinaryType{}, nil
 	case schema.Timestamp:
-		return iceberg.TimestampTzType{}, nil
+		// Iceberg's timestamptz models a UTC instant; timestamp models a
+		// local civil datetime without a timezone. Map AdjustToUTC
+		// accordingly. EffectiveTimestamp supplies the {Millis, UTC=true}
+		// default for legacy schemas that carry no LogicalParams.
+		if c.EffectiveTimestamp().AdjustToUTC {
+			return iceberg.TimestampTzType{}, nil
+		}
+		return iceberg.TimestampType{}, nil
+	case schema.Date:
+		return iceberg.DateType{}, nil
+	case schema.TimeOfDay:
+		return iceberg.TimeType{}, nil
+	case schema.UUID:
+		return iceberg.UUIDType{}, nil
 	case schema.Decimal:
 		if c.Logical == nil || c.Logical.Decimal == nil {
 			return nil, fmt.Errorf("decimal field %q is missing precision/scale", c.Name)
