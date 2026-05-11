@@ -84,7 +84,7 @@ func (s *Snapshot) prepareSnapshot(ctx context.Context, tables []string, maxWork
 	// START TRANSACTION WITH CONSISTENT SNAPSHOT is executed on it, which
 	// implicitly replaces the transaction with a consistent-snapshot one.
 	// The go-sql-driver/mysql driver does not expose this directly via TxOptions.
-	numWorkers := min(maxWorkers, len(tables))
+	numWorkers := maxWorkers
 	s.workerConns = make([]*sql.Conn, 0, numWorkers)
 	s.workerTxs = make([]*sql.Tx, 0, numWorkers)
 	for range numWorkers {

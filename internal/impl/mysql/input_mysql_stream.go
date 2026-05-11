@@ -482,7 +482,11 @@ func (i *mysqlStreamInput) refreshIAMAuthToken(ctx context.Context) error {
 func (i *mysqlStreamInput) startMySQLSync(ctx context.Context, pos *position, snapshot *Snapshot) error {
 	// If we are given a snapshot, then we need to read it.
 	if snapshot != nil {
-		startPos, err := snapshot.prepareSnapshot(ctx, i.tables, i.snapshotMaxWorkers)
+		// Open enough worker connections to cover all chunks across all tables,
+		// capped at snapshotMaxWorkers. Using tables*chunks rather than len(tables)
+		// allows parallel reads within a single table when chunks_per_table > 1.
+		effectiveWorkers := min(i.snapshotMaxWorkers, len(i.tables)*i.snapshotChunksPerTable)
+		startPos, err := snapshot.prepareSnapshot(ctx, i.tables, effectiveWorkers)
 		if err != nil {
 			_ = snapshot.close()
 			return fmt.Errorf("unable to prepare snapshot: %w", err)
