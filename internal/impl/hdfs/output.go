@@ -20,14 +20,12 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/colinmarc/hdfs"
+	"github.com/colinmarc/hdfs/v2"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 const (
-	oFieldHosts     = "hosts"
-	oFieldUser      = "user"
 	oFieldDirectory = "directory"
 	oFieldPath      = "path"
 	oFieldBatching  = "batching"
@@ -40,12 +38,10 @@ func outputSpec() *service.ConfigSpec {
 		Summary(`Sends message parts as files to a HDFS directory.`).
 		Description(`Each file is written with the path specified with the 'path' field, in order to have a different path for each object you should use function interpolations described xref:configuration:interpolation.adoc#bloblang-queries[here].`+service.OutputPerformanceDocs(true, false)).
 		Fields(
-			service.NewStringListField(oFieldHosts).
-				Description("A list of target host addresses to connect to.").
-				Example("localhost:9000"),
-			service.NewStringField(oFieldUser).
-				Description("A user ID to connect as.").
-				Default(""),
+			hdfsCommonFields()...,
+		).
+		Fields(hdfsAuthField()).
+		Fields(
 			service.NewInterpolatedStringField(oFieldDirectory).
 				Description("A directory to store message files within. If the directory does not exist it will be created."),
 			service.NewInterpolatedStringField(oFieldPath).
@@ -64,10 +60,7 @@ func init() {
 				log: mgr.Logger(),
 			}
 			out = w
-			if w.hosts, err = conf.FieldStringList(oFieldHosts); err != nil {
-				return
-			}
-			if w.user, err = conf.FieldString(oFieldUser); err != nil {
+			if w.hdfsConf, err = hdfsConfigFromParsed(conf); err != nil {
 				return
 			}
 			if w.directory, err = conf.FieldInterpolatedString(oFieldDirectory); err != nil {
@@ -87,8 +80,7 @@ func init() {
 }
 
 type hdfsWriter struct {
-	hosts     []string
-	user      string
+	hdfsConf  hdfsConfig
 	directory *service.InterpolatedString
 	path      *service.InterpolatedString
 
@@ -101,10 +93,11 @@ func (h *hdfsWriter) Connect(context.Context) error {
 		return nil
 	}
 
-	client, err := hdfs.NewClient(hdfs.ClientOptions{
-		Addresses: h.hosts,
-		User:      h.user,
-	})
+	opts, err := h.hdfsConf.clientOptions()
+	if err != nil {
+		return err
+	}
+	client, err := hdfs.NewClient(opts)
 	if err != nil {
 		return err
 	}
