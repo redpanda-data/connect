@@ -1,4 +1,4 @@
-// Copyright 2024 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -372,9 +372,23 @@ func ecsAvroFromAnyMap(cfg ecsAvroConfig, as map[string]any) (schema.Common, err
 				return c, err
 			}
 		}
-		// Return early: the union hydrators fully populate c. The bottom
-		// switch must not read fields/values/items from as, which is the outer
-		// field object, not the resolved inner type.
+		// The union hydrators fully populate c (including any nested
+		// children and logical params), so the bottom switch must not run -
+		// it would try to read fields/values/items from `as`, which is the
+		// outer field object, not the resolved inner type.
+		//
+		// Before returning, apply any `logicalType` annotation that sits as
+		// a sibling of `type` on the field-level object. This is the
+		// Java/JDBC Avro idiom, where a nullable timestamp field is written
+		// as `{"type": ["null", "long"], "logicalType": "timestamp-millis"}`
+		// rather than nesting the annotation inside the union element. The
+		// value-side decoder honours both shapes, so we must too - otherwise
+		// the resulting Common reports the base primitive and consumers
+		// (e.g. the iceberg output) end up with a column type that mismatches
+		// the decoded values.
+		if _, err := applyAvroLogicalType(&c, as); err != nil {
+			return c, err
+		}
 		return c, nil
 	case string:
 		c.Type = ecsAvroTypeToCommon(t)
