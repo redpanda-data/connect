@@ -121,7 +121,13 @@ func (c *committer) doCommit(ctx context.Context, inputs []CommitInput) ([]struc
 		if c.cfg.MaxSnapshotAge > 0 {
 			props[table.MaxSnapshotAgeMsKey] = strconv.FormatInt(c.cfg.MaxSnapshotAge.Milliseconds(), 10)
 		}
-		if err := txn.AddDataFiles(ctx, allFiles, props, table.WithoutAutoNameMapping()); err != nil {
+		// WithoutDuplicateCheck: writer.Write stamps each path with a fresh uuid,
+		// so the default O(snapshot) manifest scan iceberg-go runs to detect path
+		// collisions is wasted work on the commit hot path (T6692).
+		if err := txn.AddDataFiles(ctx, allFiles, props,
+			table.WithoutAutoNameMapping(),
+			table.WithoutDuplicateCheck(),
+		); err != nil {
 			return nil, fmt.Errorf("adding files: %w", err)
 		}
 		tbl, err := txn.Commit(ctx)
