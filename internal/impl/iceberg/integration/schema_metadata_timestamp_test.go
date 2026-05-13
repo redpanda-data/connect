@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/apache/iceberg-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -136,4 +137,97 @@ func TestIntegrationSchemaMetadataDrivesTimestampColumn(t *testing.T) {
 				"timestamp must round-trip as %s; a year ~55,000 result means the int64 millis was treated as seconds via the fallback path", expectedTimestampDate)
 		})
 	}
+}
+
+// TestIntegrationCoerceTemporalIntoExistingBigintColumn pins down the
+// rolling-upgrade behaviour for operators whose iceberg table was created
+// with BIGINT columns under the pre-fix metadata bug. After the fix,
+// schema_registry_decode emits time.Time values together with @schema
+// metadata that declares Type=Timestamp(Millis). The iceberg shredder must
+// coerce the time.Time into the wire-equivalent int64 millis on the way in
+// — preserving the existing column shape — so the upgrade does not require
+// dropping every affected table.
+//
+// The test pre-creates the table with the legacy column shape (id: STRING,
+// ts: BIGINT), then sends a message whose body holds a time.Time and whose
+// metadata says Timestamp(Millis). The post-write state must be:
+//   - The BIGINT column is unchanged (no auto-evolution to TIMESTAMP).
+//   - The stored value is the wire-equivalent millisecond integer.
+//
+// Operators who want the native TIMESTAMP shape can subsequently drop and
+// recreate the table; the auto-create path then lands a TIMESTAMP column
+// directly (covered by the test above).
+func TestIntegrationCoerceTemporalIntoExistingBigintColumn(t *testing.T) {
+	integration.CheckSkip(t)
+
+	ctx := context.Background()
+	infra := setupTestInfra(t, ctx)
+
+	const namespace = "coerce_existing_bigint"
+	const tableName = "events_existing_bigint"
+	infra.CreateNamespace(t, namespace)
+
+	// Pre-create the table with the legacy column shape an affected
+	// operator would have today: ts is BIGINT, not a timestamp type.
+	client := infra.NewCatalogClient(t, namespace)
+	_, err := client.CreateTable(ctx, tableName, iceberg.NewSchemaWithIdentifiers(
+		1, nil,
+		iceberg.NestedField{ID: 1, Name: "id", Type: iceberg.StringType{}, Required: false},
+		iceberg.NestedField{ID: 2, Name: "ts", Type: iceberg.Int64Type{}, Required: false},
+	))
+	require.NoError(t, err)
+
+	// Same metadata as the auto-create test: Timestamp(Millis,UTC).
+	commonSchema := schema.Common{
+		Type: schema.Object, Name: "Event",
+		Children: []schema.Common{
+			{Name: "id", Type: schema.String},
+			{
+				Name: "ts", Optional: true, Type: schema.Timestamp,
+				Logical: &schema.LogicalParams{
+					Timestamp: &schema.TimestampParams{
+						Unit: schema.TimeUnitMillis, AdjustToUTC: true,
+					},
+				},
+			},
+		},
+	}
+	schemaMeta := commonSchema.ToAny()
+
+	const tsMillis = int64(1700000000000)
+	msg := service.NewMessage(nil)
+	msg.SetStructured(map[string]any{
+		"id": "evt-1",
+		"ts": time.UnixMilli(tsMillis).UTC(),
+	})
+	msg.MetaSetMut("schema", schemaMeta)
+
+	router := infra.NewRouter(t, namespace, tableName,
+		WithSchemaEvolution(icebergimpl.SchemaEvolutionConfig{
+			Enabled:        true,
+			SchemaMetadata: "schema",
+		}))
+	produceMessages(t, ctx, router, service.MessageBatch{msg})
+
+	cols := querySQL[ColumnInfo](t, ctx, infra,
+		fmt.Sprintf(`DESCRIBE iceberg_cat."%s"."%s";`, namespace, tableName))
+	require.Len(t, cols, 2)
+	typeOf := map[string]string{}
+	for _, c := range cols {
+		typeOf[c.ColumnName] = c.ColumnType
+	}
+	assert.Equal(t, "VARCHAR", typeOf["id"])
+	assert.Equal(t, "BIGINT", typeOf["ts"],
+		"existing BIGINT column must remain BIGINT — schema evolution does not auto-promote BIGINT to TIMESTAMP")
+
+	type row struct {
+		ID string `json:"id"`
+		TS int64  `json:"ts"`
+	}
+	rows := querySQL[row](t, ctx, infra,
+		fmt.Sprintf(`SELECT id, ts FROM iceberg_cat."%s"."%s";`, namespace, tableName))
+	require.Len(t, rows, 1)
+	assert.Equal(t, "evt-1", rows[0].ID)
+	assert.Equal(t, tsMillis, rows[0].TS,
+		"time.Time value must be coerced to its wire-equivalent millisecond integer when the existing column is BIGINT")
 }

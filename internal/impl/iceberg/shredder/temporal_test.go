@@ -414,6 +414,90 @@ func TestStrictTemporalModeAcceptsNumericWithMetadata(t *testing.T) {
 	assert.Equal(t, epochMillis*1000, pq.Int64())
 }
 
+// TestCoerceTemporalIntoNumericColumn covers the rolling-upgrade case where
+// an existing iceberg table has BIGINT / INT columns (from the pre-fix
+// metadata bug for #4399) but the upgraded upstream now emits time.Time /
+// time.Duration values together with correct schema.Common metadata.
+//
+// Without this path the shredder hands the temporal value to
+// bloblang.ValueAsInt64 and fails with "expected number value, got
+// timestamp" — the exact symptom that surfaced this work. The conversion
+// must honour the schema's declared unit so the integer that lands in the
+// column matches what the operator's pre-fix pipeline had been storing.
+func TestCoerceTemporalIntoNumericColumn(t *testing.T) {
+	const tsMillis = int64(1_700_000_000_000) // 2023-11-14 22:13:20 UTC
+
+	t.Run("time.Time into Int64 with Timestamp(Millis)", func(t *testing.T) {
+		v := time.UnixMilli(tsMillis).UTC()
+		pq, err := convertLeafValue(v, iceberg.Int64Type{}, tsCommon(schema.TimeUnitMillis, true), false)
+		require.NoError(t, err)
+		assert.Equal(t, tsMillis, pq.Int64())
+	})
+
+	t.Run("time.Time into Int64 with Timestamp(Micros)", func(t *testing.T) {
+		v := time.UnixMilli(tsMillis).UTC()
+		pq, err := convertLeafValue(v, iceberg.Int64Type{}, tsCommon(schema.TimeUnitMicros, true), false)
+		require.NoError(t, err)
+		assert.Equal(t, tsMillis*1000, pq.Int64())
+	})
+
+	t.Run("time.Time into Int64 with Timestamp(Nanos)", func(t *testing.T) {
+		v := time.UnixMilli(tsMillis).UTC()
+		pq, err := convertLeafValue(v, iceberg.Int64Type{}, tsCommon(schema.TimeUnitNanos, true), false)
+		require.NoError(t, err)
+		assert.Equal(t, tsMillis*1_000_000, pq.Int64())
+	})
+
+	t.Run("time.Time into Int32 with Date", func(t *testing.T) {
+		v := time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC)
+		pq, err := convertLeafValue(v, iceberg.Int32Type{}, &schema.Common{Type: schema.Date}, false)
+		require.NoError(t, err)
+		assert.Equal(t, int32(19737), pq.Int32())
+	})
+
+	t.Run("time.Duration into Int64 with TimeOfDay(Millis)", func(t *testing.T) {
+		d := 8*time.Hour + 30*time.Minute
+		pq, err := convertLeafValue(d, iceberg.Int64Type{}, todCommon(schema.TimeUnitMillis), false)
+		require.NoError(t, err)
+		assert.Equal(t, int64(8*3600+30*60)*1000, pq.Int64())
+	})
+
+	t.Run("time.Duration into Int32 with TimeOfDay(Millis)", func(t *testing.T) {
+		d := 8*time.Hour + 30*time.Minute
+		pq, err := convertLeafValue(d, iceberg.Int32Type{}, todCommon(schema.TimeUnitMillis), false)
+		require.NoError(t, err)
+		assert.Equal(t, int32(8*3600+30*60)*1000, pq.Int32())
+	})
+
+	// Non-temporal values into numeric columns continue to flow through the
+	// existing bloblang.ValueAsInt64 path unchanged — coerce is opt-in via
+	// the temporal-value-type predicate.
+	t.Run("plain int64 into Int64 with Timestamp metadata is unchanged", func(t *testing.T) {
+		pq, err := convertLeafValue(tsMillis, iceberg.Int64Type{}, tsCommon(schema.TimeUnitMillis, true), false)
+		require.NoError(t, err)
+		assert.Equal(t, tsMillis, pq.Int64())
+	})
+
+	t.Run("string into Int64 with Timestamp metadata still errors", func(t *testing.T) {
+		_, err := convertLeafValue("not a number", iceberg.Int64Type{}, tsCommon(schema.TimeUnitMillis, true), false)
+		require.Error(t, err)
+	})
+
+	// Metadata-mismatched cases fall through to bloblang, which fails loudly
+	// rather than silently misinterpreting the value.
+	t.Run("time.Time into Int64 without metadata falls through to bloblang and errors", func(t *testing.T) {
+		v := time.UnixMilli(tsMillis).UTC()
+		_, err := convertLeafValue(v, iceberg.Int64Type{}, nil, false)
+		require.Error(t, err)
+	})
+
+	t.Run("time.Duration into Int64 with Timestamp metadata (mismatch) falls through and errors", func(t *testing.T) {
+		d := 8 * time.Hour
+		_, err := convertLeafValue(d, iceberg.Int64Type{}, tsCommon(schema.TimeUnitMillis, true), false)
+		require.Error(t, err)
+	})
+}
+
 func tsCommon(u schema.TimeUnit, utc bool) *schema.Common {
 	return &schema.Common{
 		Type:    schema.Timestamp,

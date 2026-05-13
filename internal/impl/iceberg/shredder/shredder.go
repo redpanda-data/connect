@@ -468,10 +468,26 @@ func convertLeafValue(value any, typ iceberg.Type, common *schema.Common, strict
 		}
 
 	case iceberg.Int32Type:
+		// Coerce-to-existing-column-type: when the iceberg column is INT
+		// but the upstream schema declares a temporal logical type (Date,
+		// TimeOfDay) the upstream value will be time.Time / time.Duration.
+		// Honour the schema's unit and emit the wire-equivalent integer.
+		if n, ok := coerceTemporalToNumeric(value, common); ok {
+			return parquet.Int32Value(int32(n)), nil
+		}
 		i, err := bloblang.ValueAsInt64(value)
 		return parquet.Int32Value(int32(i)), err
 
 	case iceberg.Int64Type:
+		// Coerce-to-existing-column-type: see the Int32Type arm above. For
+		// BIGINT columns this is the load-bearing case — it is what lets a
+		// rolling upgrade of schema_registry_decode (which now emits
+		// time.Time for timestamp-millis with preserve_logical_types=true)
+		// keep writing to a pre-existing BIGINT column that pre-dates the
+		// metadata fix.
+		if n, ok := coerceTemporalToNumeric(value, common); ok {
+			return parquet.Int64Value(n), nil
+		}
 		if v, ok := value.(uint64); ok && v > math.MaxInt64 {
 			return parquet.NullValue(), fmt.Errorf("uint64 value %d exceeds int64 range", v)
 		}
