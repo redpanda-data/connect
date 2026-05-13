@@ -472,7 +472,12 @@ func convertLeafValue(value any, typ iceberg.Type, common *schema.Common, strict
 		// but the upstream schema declares a temporal logical type (Date,
 		// TimeOfDay) the upstream value will be time.Time / time.Duration.
 		// Honour the schema's unit and emit the wire-equivalent integer.
+		// Strict mode (require_schema_metadata=true) disables this bridge
+		// and refuses the type disagreement loudly instead.
 		if n, ok := coerceTemporalToNumeric(value, common); ok {
+			if strictTemporal {
+				return parquet.NullValue(), fmt.Errorf("int column received %T while schema metadata declares type %v; require_schema_metadata=true demands the existing column type match the schema metadata — recreate the table to migrate", value, common.Type)
+			}
 			return parquet.Int32Value(int32(n)), nil
 		}
 		i, err := bloblang.ValueAsInt64(value)
@@ -486,6 +491,9 @@ func convertLeafValue(value any, typ iceberg.Type, common *schema.Common, strict
 		// keep writing to a pre-existing BIGINT column that pre-dates the
 		// metadata fix.
 		if n, ok := coerceTemporalToNumeric(value, common); ok {
+			if strictTemporal {
+				return parquet.NullValue(), fmt.Errorf("bigint column received %T while schema metadata declares type %v; require_schema_metadata=true demands the existing column type match the schema metadata — recreate the table to migrate", value, common.Type)
+			}
 			return parquet.Int64Value(n), nil
 		}
 		if v, ok := value.(uint64); ok && v > math.MaxInt64 {

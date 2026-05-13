@@ -380,7 +380,7 @@ func TestEcsAvroLogicalTypeDispatcher(t *testing.T) {
 					{"name": "field", "type": ` + tc.field + `}
 				]
 			}`)
-			c, err := ecsAvroParseFromBytes(ecsAvroConfig{}, spec)
+			c, err := ecsAvroParseFromBytes(ecsAvroConfig{preserveLogicalTypes: true}, spec)
 			require.NoError(t, err)
 			require.Len(t, c.Children, 1)
 			f := c.Children[0]
@@ -432,7 +432,7 @@ func TestEcsAvroLogicalTypeOptionalUnion(t *testing.T) {
 			{"name": "event_time", "type": ["null", {"type": "long", "logicalType": "timestamp-millis"}]}
 		]
 	}`)
-	c, err := ecsAvroParseFromBytes(ecsAvroConfig{rawUnion: true}, spec)
+	c, err := ecsAvroParseFromBytes(ecsAvroConfig{rawUnion: true, preserveLogicalTypes: true}, spec)
 	require.NoError(t, err)
 	require.Len(t, c.Children, 1)
 	f := c.Children[0]
