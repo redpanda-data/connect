@@ -63,6 +63,9 @@ nfpms:
     formats:
       - deb
       - rpm
+    rpm:
+      signature:
+        key_file: "{{ .Env.RPM_KEY_FILE_PRIVATE }}"
 
 publishers:
   # Gets run once per artifact (deb or rpm)

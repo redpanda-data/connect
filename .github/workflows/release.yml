@@ -43,6 +43,7 @@ jobs:
           secret-ids: |
             ,sdlc/prod/github/cloudsmith
             ,sdlc/prod/github/dockerhub
+            ,sdlc/prod/github/rpm_signing_key
           parse-json-secrets: true
 
       - name: Configure AWS credentials for access to Amazon ECR Public
@@ -120,6 +121,13 @@ jobs:
         run: |
           git update-index --skip-worktree ./internal/telemetry/key.pem
           echo "$CONNECT_TELEMETRY_PRIV_KEY" > ./internal/telemetry/key.pem
+
+      - name: Write RPM signing key to temp file for goreleaser
+        if: ${{ matrix.variant == 'connect' || matrix.variant == 'connect-fips' }}
+        run: |
+          tmpkey=$(mktemp --suffix=.asc)
+          printf '%s\n' "$RPM_SIGNING_KEY_PRIVATE" > "$tmpkey"
+          echo "RPM_KEY_FILE_PRIVATE=$tmpkey" >> "$GITHUB_ENV"
 
       - name: GoReleaser Release
         if: ${{ github.event_name == 'push' }}
