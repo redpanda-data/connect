@@ -176,25 +176,24 @@ func migrateCacheTable(ctx context.Context, db *sql.DB, tbl cacheTable, cacheKey
 		return fmt.Errorf("checking cache_key column size: %w", err)
 	}
 
+	// Step 1: Widen the cache_key column.
 	if charLen < 128 {
-		// Step 1 - Migrate existing tables that were created with the old VARCHAR2(10) column size.
 		log.Infof("Checkpoint Migration: Found checkpoint cache table '%s', updating cache_key schema to VARCHAR2(128)", tbl.String())
 		alterQuery := fmt.Sprintf(`ALTER TABLE %s MODIFY (cache_key VARCHAR2(128))`, tbl.String())
 		if _, err := db.ExecContext(ctx, alterQuery); err != nil {
 			return fmt.Errorf("migrating cache_key column to VARCHAR2(128): %w", err)
 		}
+	}
 
-		// Step 2 - Migrate cache key to configured value.
-		updateQuery := fmt.Sprintf(`UPDATE %s SET cache_key = :1 WHERE cache_key = 'max_scn'`, tbl.String())
-		result, err := db.ExecContext(ctx, updateQuery, cacheKey)
-		if err != nil {
-			return fmt.Errorf("migrating cache key from 'max_scn' to '%s': %w", cacheKey, err)
-		}
-		if rows, _ := result.RowsAffected(); rows > 0 {
-			log.Infof("Checkpoint Migration: Updated cache key from 'max_scn' to '%s' in '%s'", cacheKey, tbl.String())
-		}
-
-		log.Info("Checkpoint Migration: Checkpoint cache table migration applied")
+	// Step 2: Rename any legacy 'max_scn' row to the configured cache key.
+	updateQuery := fmt.Sprintf(`UPDATE %s SET cache_key = :1 WHERE cache_key = 'max_scn'`, tbl.String())
+	result, err := db.ExecContext(ctx, updateQuery, cacheKey)
+	if err != nil {
+		return fmt.Errorf("migrating cache key from 'max_scn' to '%s': %w", cacheKey, err)
+	}
+	if rows, _ := result.RowsAffected(); rows > 0 {
+		log.Infof("Checkpoint Migration: Updated cache key from 'max_scn' to '%s' in '%s'", cacheKey, tbl.String())
+		log.Info("Checkpoint Migration: Checkpoint cache table migration complete")
 	}
 
 	return nil
