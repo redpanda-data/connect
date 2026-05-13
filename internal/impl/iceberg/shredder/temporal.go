@@ -271,6 +271,72 @@ func scaleTimestampNumeric(n int64, unit schema.TimeUnit, nanos bool) int64 {
 	}
 }
 
+// coerceTemporalToNumeric handles the rolling-upgrade case where the iceberg
+// table holds a numeric column (BIGINT / INT) that pre-dates the metadata
+// fix for issue #4399, but the upgraded upstream now emits a temporal Go
+// value (`time.Time` for Timestamp / Date, `time.Duration` for TimeOfDay)
+// together with correct schema.Common metadata.
+//
+// Without this conversion the shredder's Int64Type / Int32Type arms would
+// hand the temporal value to bloblang.ValueAsInt64, which fails with
+// "expected number value, got timestamp" — the exact shape of the customer
+// regression that surfaced this work.
+//
+// Returns (0, false) when no coercion applies (value is not temporal, common
+// is absent, or the common's declared type doesn't match the value's Go
+// type). Callers fall back to their existing numeric coercion path in that
+// case.
+//
+// The conversion is unit-aware: a `time.Time` against a Timestamp(Millis)
+// common produces UnixMilli, Micros produces UnixMicro, etc. — preserving
+// the wire-equivalent representation the operator's pre-fix pipeline had
+// been storing in the same column.
+func coerceTemporalToNumeric(value any, common *schema.Common) (int64, bool) {
+	if common == nil {
+		return 0, false
+	}
+	switch v := value.(type) {
+	case time.Time:
+		switch common.Type {
+		case schema.Timestamp:
+			p := common.EffectiveTimestamp()
+			switch p.Unit {
+			case schema.TimeUnitSeconds:
+				return v.Unix(), true
+			case schema.TimeUnitMillis:
+				return v.UnixMilli(), true
+			case schema.TimeUnitMicros:
+				return v.UnixMicro(), true
+			case schema.TimeUnitNanos:
+				return v.UnixNano(), true
+			}
+		case schema.Date:
+			// Days since epoch, floored toward negative infinity to match
+			// convertDate's pre-epoch handling.
+			secs := v.UTC().Unix()
+			days := secs / 86400
+			if secs < 0 && secs%86400 != 0 {
+				days--
+			}
+			return days, true
+		}
+	case time.Duration:
+		if common.Type == schema.TimeOfDay && common.Logical != nil && common.Logical.TimeOfDay != nil {
+			switch common.Logical.TimeOfDay.Unit {
+			case schema.TimeUnitSeconds:
+				return int64(v / time.Second), true
+			case schema.TimeUnitMillis:
+				return v.Milliseconds(), true
+			case schema.TimeUnitMicros:
+				return v.Microseconds(), true
+			case schema.TimeUnitNanos:
+				return v.Nanoseconds(), true
+			}
+		}
+	}
+	return 0, false
+}
+
 // numericInt64 extracts an int64 from an arbitrary numeric Go value. Returns
 // (0, false) for non-numeric inputs and for NaN/±Inf floats — so callers
 // can either error explicitly on those cases or fall through to a more

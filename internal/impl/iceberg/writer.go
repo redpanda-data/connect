@@ -1,4 +1,4 @@
-// Copyright 2025 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed as a Redpanda Enterprise file under the Redpanda Community
 // License (the "License"); you may not use this file except in compliance with
@@ -13,6 +13,7 @@ import (
 	"context"
 	"fmt"
 	"path"
+	"reflect"
 	"slices"
 	"strings"
 
@@ -38,6 +39,13 @@ type writer struct {
 	resolver              *typeResolver
 	requireSchemaMetadata bool
 	logger                *service.Logger
+
+	// coerceLoggedFieldIDs tracks the iceberg field IDs we have already
+	// logged a coerce-on-write notice for, so that a long-running writer
+	// emits the divergence between schema metadata and existing column
+	// type once per column rather than per batch. Single-goroutine access
+	// per writer instance so no synchronisation is needed.
+	coerceLoggedFieldIDs map[int]struct{}
 }
 
 // NewWriter creates a new writer for a specific table.
@@ -57,6 +65,7 @@ func NewWriter(tbl *table.Table, comm *committer, caseSensitive bool, writerOpts
 		resolver:              resolver,
 		requireSchemaMetadata: requireSchemaMetadata,
 		logger:                logger,
+		coerceLoggedFieldIDs:  map[int]struct{}{},
 	}
 }
 
@@ -220,7 +229,9 @@ func (w *writer) messagesToParquet(batch service.MessageBatch) ([]partitionFile,
 		if common, err := w.resolver.parseSchemaMetadata(batch[0]); err != nil {
 			w.logger.Warnf("parsing schema metadata for shredder: %v (falling back to schema-agnostic conversion)", err)
 		} else if common != nil {
-			rs.SetFieldSchemaMetadata(buildShredderFieldCommons(schema, common, w.caseSensitive))
+			fieldCommons := buildShredderFieldCommons(schema, common, w.caseSensitive)
+			w.logCoerceDecisions(schema, fieldCommons)
+			rs.SetFieldSchemaMetadata(fieldCommons)
 		}
 	}
 
@@ -338,6 +349,89 @@ func (w *writer) messagesToParquet(batch service.MessageBatch) ([]partitionFile,
 // Close closes the writer and its committer.
 func (w *writer) Close() {
 	w.committer.Close()
+}
+
+// logCoerceDecisions inspects the resolved fieldID → schema.Common map
+// against the live iceberg schema and emits one INFO-level log per field
+// whose declared upstream type would have produced a different iceberg
+// column type than the one the table currently holds.
+//
+// The intended audience is operators rolling out the #4399 metadata fix
+// over existing tables whose columns were created under the pre-fix
+// (degraded) metadata shape: the log surface tells them which columns the
+// shredder is silently coerce-converting on write, so they can choose to
+// rebuild the affected tables when they want native temporal columns.
+//
+// Per-field dedup is via w.coerceLoggedFieldIDs so a long-running writer
+// emits each notice once, not per-batch.
+func (w *writer) logCoerceDecisions(s *iceberg.Schema, fieldCommons map[int]*schema.Common) {
+	if w.logger == nil || len(fieldCommons) == 0 {
+		return
+	}
+	icebergTypeByID := map[int]iceberg.Type{}
+	collectLeafIcebergTypes(s.AsStruct().FieldList, icebergTypeByID)
+
+	for fieldID, common := range fieldCommons {
+		if _, already := w.coerceLoggedFieldIDs[fieldID]; already {
+			continue
+		}
+		existingType, ok := icebergTypeByID[fieldID]
+		if !ok {
+			continue
+		}
+		// The type inferrer is used by commonTypeToIcebergType only for
+		// nested struct/list ID allocation, which we don't care about
+		// when comparing leaf primitives — a throwaway inferrer is fine.
+		impliedType, err := commonTypeToIcebergType(common, newTypeInferrer(w.caseSensitive))
+		if err != nil || impliedType == nil {
+			continue
+		}
+		if reflect.DeepEqual(existingType, impliedType) {
+			continue
+		}
+		fieldName := lookupFieldName(s, fieldID)
+		w.logger.Infof(
+			"iceberg: coercing field %q on write: existing column type %s does not match the type implied by schema metadata (%s). "+
+				"Values will be written using the existing column type. Recreate the table to migrate to %s.",
+			fieldName, existingType.String(), impliedType.String(), impliedType.String(),
+		)
+		w.coerceLoggedFieldIDs[fieldID] = struct{}{}
+	}
+}
+
+// collectLeafIcebergTypes recursively walks the iceberg schema, populating
+// out with fieldID → leaf type for every primitive-typed field.
+func collectLeafIcebergTypes(fields []iceberg.NestedField, out map[int]iceberg.Type) {
+	for _, f := range fields {
+		switch t := f.Type.(type) {
+		case *iceberg.StructType:
+			collectLeafIcebergTypes(t.FieldList, out)
+		case *iceberg.ListType:
+			// Lists wrap a single element; treat the element as a leaf
+			// candidate for completeness, even though primitive-element
+			// lists are the common case.
+			out[t.ElementID] = t.Element
+			if st, ok := t.Element.(*iceberg.StructType); ok {
+				collectLeafIcebergTypes(st.FieldList, out)
+			}
+		case *iceberg.MapType:
+			out[t.ValueID] = t.ValueType
+			if st, ok := t.ValueType.(*iceberg.StructType); ok {
+				collectLeafIcebergTypes(st.FieldList, out)
+			}
+		default:
+			out[f.ID] = f.Type
+		}
+	}
+}
+
+// lookupFieldName returns the human-readable name for an iceberg fieldID,
+// or a synthesized "field_<id>" if the schema doesn't expose it directly.
+func lookupFieldName(s *iceberg.Schema, fieldID int) string {
+	if name, ok := s.FindColumnName(fieldID); ok {
+		return name
+	}
+	return fmt.Sprintf("field_%d", fieldID)
 }
 
 // buildShredderFieldCommons walks an iceberg schema and the parallel
