@@ -210,7 +210,7 @@ func FranzProducerLimitsOptsFromConfig(conf *service.ParsedConfig) ([]kgo.Opt, e
 	var maxBufferedBytes uint64
 	maxBufferedBytes, err = humanize.ParseBytes(maxBufferedBytesStr)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse max_buffered_bytes: %w", err)
+		return nil, fmt.Errorf("parsing max_buffered_bytes: %w", err)
 	}
 	if maxBufferedBytes > uint64(math.MaxInt) {
 		return nil, fmt.Errorf("invalid max_buffered_bytes, must not exceed %v", math.MaxInt)
