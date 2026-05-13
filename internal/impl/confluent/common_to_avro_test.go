@@ -384,7 +384,7 @@ func TestCommonToAvroDecodeEncodeRoundTrip(t *testing.T) {
 				"type":"record","name":"Row",
 				"fields":[{"name":"f","type":` + tc.fieldType + `}]
 			}`)
-			c, err := ecsAvroParseFromBytes(ecsAvroConfig{}, spec)
+			c, err := ecsAvroParseFromBytes(ecsAvroConfig{preserveLogicalTypes: true}, spec)
 			require.NoError(t, err)
 			require.Len(t, c.Children, 1)
 

@@ -498,6 +498,50 @@ func TestCoerceTemporalIntoNumericColumn(t *testing.T) {
 	})
 }
 
+// TestCoerceTemporalRejectedInStrictMode confirms that the temporal->numeric
+// coerce path is disabled when require_schema_metadata=true. In strict mode
+// a type disagreement between the existing column and the schema metadata
+// is a hard error rather than a silent conversion — the operator has
+// explicitly asked us not to bridge across stale tables.
+func TestCoerceTemporalRejectedInStrictMode(t *testing.T) {
+	const tsMillis = int64(1_700_000_000_000)
+
+	t.Run("time.Time into Int64 with Timestamp(Millis) errors", func(t *testing.T) {
+		v := time.UnixMilli(tsMillis).UTC()
+		_, err := convertLeafValue(v, iceberg.Int64Type{}, tsCommon(schema.TimeUnitMillis, true), true)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "require_schema_metadata=true")
+	})
+
+	t.Run("time.Time into Int32 with Date errors", func(t *testing.T) {
+		v := time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC)
+		_, err := convertLeafValue(v, iceberg.Int32Type{}, &schema.Common{Type: schema.Date}, true)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "require_schema_metadata=true")
+	})
+
+	t.Run("time.Duration into Int64 with TimeOfDay errors", func(t *testing.T) {
+		d := 8*time.Hour + 30*time.Minute
+		_, err := convertLeafValue(d, iceberg.Int64Type{}, todCommon(schema.TimeUnitMillis), true)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "require_schema_metadata=true")
+	})
+
+	// Strict mode is inert when the value/column types already agree — it
+	// only rejects coerce situations, not the happy path.
+	t.Run("plain int64 into Int64 with Timestamp metadata still succeeds in strict", func(t *testing.T) {
+		pq, err := convertLeafValue(tsMillis, iceberg.Int64Type{}, tsCommon(schema.TimeUnitMillis, true), true)
+		require.NoError(t, err)
+		assert.Equal(t, tsMillis, pq.Int64())
+	})
+
+	t.Run("plain int64 into Int64 without metadata still succeeds in strict", func(t *testing.T) {
+		pq, err := convertLeafValue(tsMillis, iceberg.Int64Type{}, nil, true)
+		require.NoError(t, err)
+		assert.Equal(t, tsMillis, pq.Int64())
+	})
+}
+
 func tsCommon(u schema.TimeUnit, utc bool) *schema.Common {
 	return &schema.Common{
 		Type:    schema.Timestamp,

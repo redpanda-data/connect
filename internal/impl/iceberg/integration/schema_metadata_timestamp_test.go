@@ -231,3 +231,67 @@ func TestIntegrationCoerceTemporalIntoExistingBigintColumn(t *testing.T) {
 	assert.Equal(t, tsMillis, rows[0].TS,
 		"time.Time value must be coerced to its wire-equivalent millisecond integer when the existing column is BIGINT")
 }
+
+// TestIntegrationStrictModeRejectsCoerceOnExistingBigintColumn confirms the
+// strict-mode escape hatch: when require_schema_metadata=true, the
+// coerce-on-write bridge is disabled and a type disagreement between the
+// existing column and the schema metadata becomes a hard write error
+// instead of a silent conversion. Operators who want loud failure on
+// schema drift (e.g. so they can rebuild affected tables) opt in via this
+// flag.
+func TestIntegrationStrictModeRejectsCoerceOnExistingBigintColumn(t *testing.T) {
+	integration.CheckSkip(t)
+
+	ctx := context.Background()
+	infra := setupTestInfra(t, ctx)
+
+	const namespace = "coerce_strict_reject"
+	const tableName = "events_strict_bigint"
+	infra.CreateNamespace(t, namespace)
+
+	// Same pre-existing-BIGINT setup as the previous test.
+	client := infra.NewCatalogClient(t, namespace)
+	_, err := client.CreateTable(ctx, tableName, iceberg.NewSchemaWithIdentifiers(
+		1, nil,
+		iceberg.NestedField{ID: 1, Name: "id", Type: iceberg.StringType{}, Required: false},
+		iceberg.NestedField{ID: 2, Name: "ts", Type: iceberg.Int64Type{}, Required: false},
+	))
+	require.NoError(t, err)
+
+	commonSchema := schema.Common{
+		Type: schema.Object, Name: "Event",
+		Children: []schema.Common{
+			{Name: "id", Type: schema.String},
+			{
+				Name: "ts", Optional: true, Type: schema.Timestamp,
+				Logical: &schema.LogicalParams{
+					Timestamp: &schema.TimestampParams{
+						Unit: schema.TimeUnitMillis, AdjustToUTC: true,
+					},
+				},
+			},
+		},
+	}
+	schemaMeta := commonSchema.ToAny()
+
+	const tsMillis = int64(1700000000000)
+	msg := service.NewMessage(nil)
+	msg.SetStructured(map[string]any{
+		"id": "evt-1",
+		"ts": time.UnixMilli(tsMillis).UTC(),
+	})
+	msg.MetaSetMut("schema", schemaMeta)
+
+	// Strict mode on.
+	router := infra.NewRouter(t, namespace, tableName,
+		WithSchemaEvolution(icebergimpl.SchemaEvolutionConfig{
+			Enabled:               true,
+			SchemaMetadata:        "schema",
+			RequireSchemaMetadata: true,
+		}))
+
+	err = router.Route(ctx, service.MessageBatch{msg})
+	require.Error(t, err, "strict mode must reject the coerce situation rather than silently converting")
+	assert.Contains(t, err.Error(), "require_schema_metadata=true",
+		"the error must name the strict-mode flag so the operator knows which knob is rejecting the write")
+}

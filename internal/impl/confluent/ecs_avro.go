@@ -45,6 +45,23 @@ func avroSpecInt32(v any) (int32, error) {
 
 type ecsAvroConfig struct {
 	rawUnion bool // Whether unions are going to be serialized as raw JSON
+
+	// preserveLogicalTypes controls whether Avro logical-type annotations
+	// (timestamp-{millis,micros,nanos}, local-timestamp-*, date,
+	// time-{millis,micros}, uuid) are promoted to their semantic
+	// schema.Common type in the parsed metadata. When false the metadata
+	// keeps the base primitive (Int64/Int32/String) — matching the value
+	// side under the same flag, where twmb/avro returns raw long/int/
+	// string for these types unless preserve_logical_types asks for the
+	// richer Go time/uuid values.
+	//
+	// The decimal logical type is intentionally excluded from this gate:
+	// it pre-dates the preserve_logical_types contract and is load-bearing
+	// for the value-side normaliseAvroDecimals path, which keys off
+	// schema.Common.Type == Decimal. Treating decimal as always-on keeps
+	// existing pipelines that rely on schema metadata for decimal values
+	// (without enabling preserve_logical_types) working unchanged.
+	preserveLogicalTypes bool
 }
 
 // ecsAvroParseFromBytes parses an Avro JSON spec into a schema.Common. The
@@ -138,9 +155,20 @@ func ecsAvroIsUnionJustOptionalObject(cfg ecsAvroConfig, types []any) (schema.Co
 // silently fall back to the base type for unknown logical types. Returns an
 // error only for malformed annotations on a known logical type (e.g. a
 // decimal missing precision, a primitive mismatch we want to flag).
-func applyAvroLogicalType(c *schema.Common, as map[string]any) (bool, error) {
+func applyAvroLogicalType(cfg ecsAvroConfig, c *schema.Common, as map[string]any) (bool, error) {
 	logical, ok := as["logicalType"].(string)
 	if !ok {
+		return false, nil
+	}
+
+	// Gate non-decimal logical types on preserve_logical_types so that the
+	// schema metadata stays coherent with the value side. With
+	// preserve_logical_types=false the value side emits raw long/int/string
+	// for timestamps/dates/times/uuids; surfacing TIMESTAMP/DATE/TIME_OF_DAY/
+	// UUID in metadata under that flag would re-introduce the metadata-vs-
+	// value divergence #4399 was meant to close. Decimal is exempt — see
+	// the field comment on ecsAvroConfig.preserveLogicalTypes.
+	if !cfg.preserveLogicalTypes && logical != "decimal" {
 		return false, nil
 	}
 
@@ -386,7 +414,7 @@ func ecsAvroFromAnyMap(cfg ecsAvroConfig, as map[string]any) (schema.Common, err
 		// the resulting Common reports the base primitive and consumers
 		// (e.g. the iceberg output) end up with a column type that mismatches
 		// the decoded values.
-		if _, err := applyAvroLogicalType(&c, as); err != nil {
+		if _, err := applyAvroLogicalType(cfg, &c, as); err != nil {
 			return c, err
 		}
 		return c, nil
@@ -412,7 +440,7 @@ func ecsAvroFromAnyMap(cfg ecsAvroConfig, as map[string]any) (schema.Common, err
 		return schema.Common{}, fmt.Errorf("expected `type` field of type string or array, got %T", t)
 	}
 
-	if applied, err := applyAvroLogicalType(&c, as); err != nil {
+	if applied, err := applyAvroLogicalType(cfg, &c, as); err != nil {
 		return schema.Common{}, err
 	} else if applied {
 		return c, nil

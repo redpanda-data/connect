@@ -1,4 +1,16 @@
 // Copyright 2026 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 package confluent
 
@@ -122,6 +134,90 @@ func TestEcsAvroFieldLevelLogicalType(t *testing.T) {
 	}
 }
 
+// TestEcsAvroFieldLevelLogicalType_LegacyShapeWithoutFlag verifies that when
+// preserve_logical_types is false, the metadata parser keeps the base
+// primitive — preserving the pre-#4399 shape byte-for-byte and avoiding any
+// observable change for pipelines that have not opted into logical-type
+// preservation. Decimal stays preserved because it pre-dates the flag and
+// is load-bearing for normaliseAvroDecimals.
+func TestEcsAvroFieldLevelLogicalType_LegacyShapeWithoutFlag(t *testing.T) {
+	type expect struct {
+		typ       schema.CommonType
+		decimal   bool // expect Decimal type with precision/scale
+		precision int32
+		scale     int32
+	}
+
+	cases := []struct {
+		name     string
+		baseType string
+		logical  string
+		want     expect
+	}{
+		{name: "timestamp-millis", baseType: "long", logical: "timestamp-millis", want: expect{typ: schema.Int64}},
+		{name: "timestamp-micros", baseType: "long", logical: "timestamp-micros", want: expect{typ: schema.Int64}},
+		{name: "local-timestamp-millis", baseType: "long", logical: "local-timestamp-millis", want: expect{typ: schema.Int64}},
+		{name: "date", baseType: "int", logical: "date", want: expect{typ: schema.Int32}},
+		{name: "time-millis", baseType: "int", logical: "time-millis", want: expect{typ: schema.Int32}},
+		{name: "time-micros", baseType: "long", logical: "time-micros", want: expect{typ: schema.Int64}},
+		{name: "uuid", baseType: "string", logical: "uuid", want: expect{typ: schema.String}},
+		// Decimal is intentionally still preserved (always-on) — see the
+		// preserveLogicalTypes field comment on ecsAvroConfig.
+		{name: "decimal", baseType: "bytes", logical: "decimal", want: expect{typ: schema.Decimal, decimal: true, precision: 38, scale: 2}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Run("nested-in-type", func(t *testing.T) {
+				inner := fmt.Sprintf(`{"type":"%s","logicalType":"%s"`, tc.baseType, tc.logical)
+				if tc.want.decimal {
+					inner += fmt.Sprintf(`,"precision":%d,"scale":%d`, tc.want.precision, tc.want.scale)
+				}
+				inner += "}"
+				spec := fmt.Appendf(nil, `{
+					"type": "record", "name": "Row",
+					"fields": [{"name": "v", "type": ["null", %s]}]
+				}`, inner)
+				c, err := ecsAvroParseFromBytes(ecsAvroConfig{rawUnion: true /* preserveLogicalTypes: false */}, spec)
+				require.NoError(t, err)
+				f := c.Children[0]
+				assert.Equal(t, tc.want.typ, f.Type)
+				assert.True(t, f.Optional)
+				if tc.want.decimal {
+					require.NotNil(t, f.Logical)
+					require.NotNil(t, f.Logical.Decimal)
+					assert.Equal(t, tc.want.precision, f.Logical.Decimal.Precision)
+					assert.Equal(t, tc.want.scale, f.Logical.Decimal.Scale)
+				} else {
+					assert.Nil(t, f.Logical, "Logical params should not be populated under preserveLogicalTypes=false")
+				}
+			})
+
+			t.Run("sibling-of-type", func(t *testing.T) {
+				extras := ""
+				if tc.want.decimal {
+					extras = fmt.Sprintf(`,"precision":%d,"scale":%d`, tc.want.precision, tc.want.scale)
+				}
+				spec := fmt.Appendf(nil, `{
+					"type": "record", "name": "Row",
+					"fields": [{"name": "v", "type": ["null", "%s"], "logicalType": "%s"%s}]
+				}`, tc.baseType, tc.logical, extras)
+				c, err := ecsAvroParseFromBytes(ecsAvroConfig{rawUnion: true /* preserveLogicalTypes: false */}, spec)
+				require.NoError(t, err)
+				f := c.Children[0]
+				assert.Equal(t, tc.want.typ, f.Type)
+				assert.True(t, f.Optional)
+				if tc.want.decimal {
+					require.NotNil(t, f.Logical)
+					require.NotNil(t, f.Logical.Decimal)
+				} else {
+					assert.Nil(t, f.Logical, "Logical params should not be populated under preserveLogicalTypes=false")
+				}
+			})
+		})
+	}
+}
+
 // TestEcsAvroEncoderDecoderRoundTrip verifies that the schema we emit via
 // commonToAvroNode is correctly parsed back by ecsAvroParseFromBytes — i.e.
 // the encoder and decoder agree on at least one canonical wire form.
@@ -150,7 +246,7 @@ func TestEcsAvroEncoderDecoderRoundTrip(t *testing.T) {
 	require.NoError(t, err)
 	t.Logf("encoder emitted: %s", string(avroJSON))
 
-	roundTripped, err := ecsAvroParseFromBytes(ecsAvroConfig{rawUnion: true}, avroJSON)
+	roundTripped, err := ecsAvroParseFromBytes(ecsAvroConfig{rawUnion: true, preserveLogicalTypes: true}, avroJSON)
 	require.NoError(t, err)
 
 	require.Len(t, roundTripped.Children, 2)
@@ -183,7 +279,7 @@ func assertLogicalField(t *testing.T, spec []byte, want struct {
 },
 ) {
 	t.Helper()
-	c, err := ecsAvroParseFromBytes(ecsAvroConfig{rawUnion: true}, spec)
+	c, err := ecsAvroParseFromBytes(ecsAvroConfig{rawUnion: true, preserveLogicalTypes: true}, spec)
 	require.NoError(t, err)
 	require.Len(t, c.Children, 1)
 	f := c.Children[0]

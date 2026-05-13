@@ -390,11 +390,18 @@ func (w *writer) logCoerceDecisions(s *iceberg.Schema, fieldCommons map[int]*sch
 			continue
 		}
 		fieldName := lookupFieldName(s, fieldID)
-		w.logger.Infof(
-			"iceberg: coercing field %q on write: existing column type %s does not match the type implied by schema metadata (%s). "+
-				"Values will be written using the existing column type. Recreate the table to migrate to %s.",
-			fieldName, existingType.String(), impliedType.String(), impliedType.String(),
-		)
+		if w.requireSchemaMetadata {
+			w.logger.Infof(
+				"iceberg: field %q has existing column type %s but schema metadata declares %s; require_schema_metadata=true will reject writes for this column. Recreate the table to migrate to %s.",
+				fieldName, existingType.String(), impliedType.String(), impliedType.String(),
+			)
+		} else {
+			w.logger.Infof(
+				"iceberg: coercing field %q on write: existing column type %s does not match the type implied by schema metadata (%s). "+
+					"Values will be written using the existing column type. Recreate the table to migrate to %s.",
+				fieldName, existingType.String(), impliedType.String(), impliedType.String(),
+			)
+		}
 		w.coerceLoggedFieldIDs[fieldID] = struct{}{}
 	}
 }
