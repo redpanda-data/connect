@@ -118,6 +118,30 @@ func TestDiffMissingColumns(t *testing.T) {
 	assert.False(t, missing[0].Required)
 }
 
+func TestDiffMissingColumnsCaseInsensitive(t *testing.T) {
+	// BigQuery column names are case-insensitive; a proto field "UserID" must
+	// match an existing BQ column "userid" so we don't request a duplicate
+	// ADD COLUMN and have BigQuery reject the evolution.
+	dp := &descriptorpb.DescriptorProto{
+		Name: new("TestMessage"),
+		Field: []*descriptorpb.FieldDescriptorProto{
+			{Name: new("UserID"), Number: new(int32(1)), Type: descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum(), Label: descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum()},
+			{Name: new("Email"), Number: new(int32(2)), Type: descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum(), Label: descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum()},
+		},
+	}
+	md, err := descriptorProtoToMessageDescriptor(dp)
+	require.NoError(t, err)
+
+	existing := bigquery.Schema{
+		{Name: "userid", Type: bigquery.StringFieldType},
+		{Name: "EMAIL", Type: bigquery.StringFieldType},
+	}
+
+	missing, err := diffMissingColumns(md, existing)
+	require.NoError(t, err)
+	assert.Empty(t, missing, "case-insensitive match should leave nothing missing")
+}
+
 func TestDiffMissingColumnsNoMissing(t *testing.T) {
 	dp := &descriptorpb.DescriptorProto{
 		Name: new("TestMessage"),

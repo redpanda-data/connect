@@ -533,15 +533,14 @@ func (o *bigQueryWriteAPIOutput) handleWriteError(
 ) error {
 	switch classifyGRPCError(err) {
 	case grpcSchemaMismatch:
-		evolved, evolveErr := o.evolver.Evolve(ctx, client, o.conf.DatasetID, tableID, descriptor)
-		if evolveErr != nil {
+		// Evolve returns (true, nil) for every outcome that warrants a retry —
+		// columns we added, columns another writer added, or columns already
+		// present when we read metadata. Any (false, ...) result carries a
+		// non-nil error.
+		if _, evolveErr := o.evolver.Evolve(ctx, client, o.conf.DatasetID, tableID, descriptor); evolveErr != nil {
 			o.metrics.schemaEvolutionFailures.Incr(1)
 			o.log.Warnf("Schema evolution failed for table %q: %v", tableID, evolveErr)
 			return permanentBatchError(batch, fmt.Errorf("schema evolution failed for table %q: %w", tableID, evolveErr))
-		}
-		if !evolved {
-			// Descriptor matches the table — mismatch is not caused by extra fields.
-			return permanentBatchError(batch, fmt.Errorf("permanent schema mismatch (no new columns to evolve): %w", err))
 		}
 		o.metrics.schemaEvolutions.Incr(1)
 		o.resolver.Evict(tableID)
