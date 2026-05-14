@@ -372,3 +372,122 @@ func TestUpstreamTwmbHonoursSiblingFormLogicalType(t *testing.T) {
 		})
 	}
 }
+
+// TestEcsAvroKafkaConnectTypes asserts that with translate_kafka_connect_types
+// enabled, the metadata parser maps Debezium `connect.name` annotations
+// to the same schema.Common shape the value side would produce (via
+// kafkaConnectTypeOpt in avro_walker.go). This is the direct analogue of
+// the field-level logicalType fix for the Debezium-CDC pipeline shape.
+//
+// Without translate_kafka_connect_types the parser stays agnostic — the
+// connect.name annotation is ignored and the base primitive flows
+// through, matching what the value side does in the same mode.
+func TestEcsAvroKafkaConnectTypes(t *testing.T) {
+	type want struct {
+		typ       schema.CommonType
+		unit      schema.TimeUnit
+		adjustUTC bool
+	}
+
+	cases := []struct {
+		name        string
+		baseType    string
+		connectName string
+		want        want
+	}{
+		{name: "Date", baseType: "int", connectName: "io.debezium.time.Date", want: want{typ: schema.Date}},
+		{name: "Year", baseType: "int", connectName: "io.debezium.time.Year", want: want{typ: schema.Date}},
+		{name: "Timestamp", baseType: "long", connectName: "io.debezium.time.Timestamp", want: want{typ: schema.Timestamp, unit: schema.TimeUnitMillis, adjustUTC: true}},
+		{name: "Time", baseType: "long", connectName: "io.debezium.time.Time", want: want{typ: schema.Timestamp, unit: schema.TimeUnitMillis, adjustUTC: true}},
+		{name: "MicroTimestamp", baseType: "long", connectName: "io.debezium.time.MicroTimestamp", want: want{typ: schema.Timestamp, unit: schema.TimeUnitMicros, adjustUTC: true}},
+		{name: "MicroTime", baseType: "long", connectName: "io.debezium.time.MicroTime", want: want{typ: schema.Timestamp, unit: schema.TimeUnitMicros, adjustUTC: true}},
+		{name: "NanoTimestamp", baseType: "long", connectName: "io.debezium.time.NanoTimestamp", want: want{typ: schema.Timestamp, unit: schema.TimeUnitNanos, adjustUTC: true}},
+		{name: "NanoTime", baseType: "long", connectName: "io.debezium.time.NanoTime", want: want{typ: schema.Timestamp, unit: schema.TimeUnitNanos, adjustUTC: true}},
+		{name: "ZonedTimestamp", baseType: "string", connectName: "io.debezium.time.ZonedTimestamp", want: want{typ: schema.Timestamp, unit: schema.TimeUnitMillis, adjustUTC: true}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Debezium emits the annotation nested inside the union's
+			// type object — this is the on-wire shape we need to recognise.
+			spec := fmt.Appendf(nil, `{
+				"type":"record","name":"R",
+				"fields":[{"name":"v","type":["null",{"type":"%s","connect.name":"%s","connect.version":1}]}]
+			}`, tc.baseType, tc.connectName)
+
+			t.Run("translate-on", func(t *testing.T) {
+				c, err := ecsAvroParseFromBytes(ecsAvroConfig{
+					rawUnion:                   true,
+					translateKafkaConnectTypes: true,
+				}, spec)
+				require.NoError(t, err)
+				require.Len(t, c.Children, 1)
+				f := c.Children[0]
+				assert.Equal(t, tc.want.typ, f.Type, "translate-on must promote connect.name to the matching schema.Common type")
+				assert.True(t, f.Optional)
+				if tc.want.typ == schema.Timestamp {
+					require.NotNil(t, f.Logical)
+					require.NotNil(t, f.Logical.Timestamp)
+					assert.Equal(t, tc.want.unit, f.Logical.Timestamp.Unit)
+					assert.Equal(t, tc.want.adjustUTC, f.Logical.Timestamp.AdjustToUTC)
+				}
+			})
+
+			t.Run("translate-off", func(t *testing.T) {
+				c, err := ecsAvroParseFromBytes(ecsAvroConfig{
+					rawUnion: true,
+				}, spec)
+				require.NoError(t, err)
+				f := c.Children[0]
+				// With translate off, the parser stays agnostic: the
+				// base primitive flows through, matching the value side
+				// (which leaves the long/int/string untouched without
+				// translate_kafka_connect_types).
+				var wantBase schema.CommonType
+				switch tc.baseType {
+				case "int":
+					wantBase = schema.Int32
+				case "long":
+					wantBase = schema.Int64
+				case "string":
+					wantBase = schema.String
+				}
+				assert.Equal(t, wantBase, f.Type, "translate-off must leave the connect.name annotation untouched")
+				assert.Nil(t, f.Logical, "no Logical params when translate is off")
+			})
+		})
+	}
+}
+
+// TestEcsAvroDurationLogicalType pins coverage for the Avro `duration`
+// logical type. The value side (preserveLogicalTypeOpts in
+// avro_walker.go) decodes the 12-byte fixed payload to an ISO 8601
+// string; the metadata side maps to schema.String so an iceberg sink
+// auto-creates a VARCHAR column rather than the BINARY column the raw
+// fixed-base would imply. Without preserve_logical_types the value
+// side leaves the bytes untranslated and the metadata side
+// correspondingly stays at ByteArray — the consistent default.
+func TestEcsAvroDurationLogicalType(t *testing.T) {
+	spec := []byte(`{"type":"record","name":"R","fields":[
+		{"name":"d","type":{"type":"fixed","name":"Duration","size":12,"logicalType":"duration"}}
+	]}`)
+
+	t.Run("preserve-on", func(t *testing.T) {
+		c, err := ecsAvroParseFromBytes(ecsAvroConfig{preserveLogicalTypes: true}, spec)
+		require.NoError(t, err)
+		require.Len(t, c.Children, 1)
+		assert.Equal(t, schema.String, c.Children[0].Type,
+			"duration metadata should resolve to String to match the value side's ISO 8601 output")
+	})
+
+	t.Run("preserve-off", func(t *testing.T) {
+		c, err := ecsAvroParseFromBytes(ecsAvroConfig{}, spec)
+		require.NoError(t, err)
+		require.Len(t, c.Children, 1)
+		// Fixed maps to Any in ecsAvroTypeToCommon (it's not a named
+		// primitive). The exact base type matters less than the
+		// invariant: when preserve is off, metadata stays untranslated.
+		assert.NotEqual(t, schema.String, c.Children[0].Type,
+			"without preserve_logical_types the duration metadata must not be promoted")
+	})
+}

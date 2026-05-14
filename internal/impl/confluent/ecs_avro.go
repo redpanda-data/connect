@@ -62,6 +62,18 @@ type ecsAvroConfig struct {
 	// existing pipelines that rely on schema metadata for decimal values
 	// (without enabling preserve_logical_types) working unchanged.
 	preserveLogicalTypes bool
+
+	// translateKafkaConnectTypes mirrors the schema_registry_decode
+	// processor's flag of the same name. When true, the metadata parser
+	// also recognises Kafka Connect / Debezium `connect.name`
+	// annotations and maps them to their corresponding schema.Common
+	// types (Date, Timestamp(Unit), etc.), keeping the metadata side in
+	// lock-step with the value side (kafkaConnectTypeOpt in
+	// avro_walker.go). Without this, a Debezium-sourced pipeline using
+	// `translate_kafka_connect_types: true` produces time.Time values
+	// but the metadata still claims Int64 — the exact mismatch fixed
+	// for sibling-form Avro by [applyAvroLogicalType].
+	translateKafkaConnectTypes bool
 }
 
 // ecsAvroParseFromBytes parses an Avro JSON spec into a schema.Common. The
@@ -241,6 +253,19 @@ func applyAvroLogicalType(cfg ecsAvroConfig, c *schema.Common, as map[string]any
 		}
 		return true, nil
 
+	case "duration":
+		// Avro `duration` logical type sits on top of `fixed` (12 bytes).
+		// Our value side (preserveLogicalTypeOpts in avro_walker.go)
+		// decodes it to an ISO 8601 duration string. schema.Common has
+		// no dedicated Duration type, so we map metadata to schema.String
+		// — matching what the value side produces and giving iceberg a
+		// VARCHAR column the operator can query as text.
+		if c.Type != schema.ByteArray && c.Type != schema.Any {
+			return false, nil
+		}
+		c.Type = schema.String
+		return true, nil
+
 	case "timestamp-millis", "timestamp-micros", "timestamp-nanos",
 		"local-timestamp-millis", "local-timestamp-micros", "local-timestamp-nanos":
 		// All six timestamp logical types use long as their base primitive.
@@ -279,6 +304,126 @@ func avroLogicalTimestampUnit(logical string) schema.TimeUnit {
 		return schema.TimeUnitNanos
 	default:
 		panic(fmt.Sprintf("unreachable: avroLogicalTimestampUnit called with non-timestamp logical type %q", logical))
+	}
+}
+
+// applyKafkaConnectType reads the optional "connect.name" annotation
+// from an Avro schema node (the Kafka Connect / Debezium convention for
+// expressing extended semantic types alongside the Avro base primitive)
+// and refines c with the matching schema.Common type and Logical params.
+//
+// This mirrors [kafkaConnectTypeOpt] in avro_walker.go which handles the
+// same annotations on the value side: with translate_kafka_connect_types
+// enabled the value becomes a time.Time for the temporal entries. Without
+// the matching metadata-side mapping the @schema would still claim the
+// raw base primitive (Int64/Int32/String) and downstream sinks (notably
+// iceberg) would create columns of the wrong type — the same value-vs-
+// metadata mismatch [applyAvroLogicalType] fixes for sibling-form
+// logicalType. So we gate this on translateKafkaConnectTypes and apply
+// it from the same call sites.
+//
+// Year is mapped to Date rather than a dedicated type: the value side
+// returns time.Time at January 1 of the year, which round-trips through
+// an iceberg DATE column as days-since-epoch without losing the year
+// component (and DATE columns are widely supported by query engines).
+//
+// Time and Timestamp both map to schema.Timestamp despite Time being
+// semantically a time-of-day. The value side returns time.Time for
+// both (kafkaConnectTypeOpt's case "io.debezium.time.Timestamp",
+// "io.debezium.time.Time"), so the metadata side matches that shape to
+// keep the value/metadata contract symmetrical. Operators who need a
+// distinct TIME column for time-of-day fields can override via
+// new_column_type_mapping.
+//
+// Returns (false, nil) when the annotation is absent, when it isn't
+// recognised (per the Avro convention of silently ignoring unknown
+// properties), or when translateKafkaConnectTypes is disabled.
+func applyKafkaConnectType(cfg ecsAvroConfig, c *schema.Common, as map[string]any) (bool, error) {
+	if !cfg.translateKafkaConnectTypes {
+		return false, nil
+	}
+	name, ok := as["connect.name"].(string)
+	if !ok || name == "" {
+		return false, nil
+	}
+
+	switch name {
+	case "io.debezium.time.Date":
+		// Wire is int32 days-since-epoch; map straight to Date.
+		if c.Type != schema.Int32 {
+			return false, nil
+		}
+		c.Type = schema.Date
+		return true, nil
+
+	case "io.debezium.time.Year":
+		// Wire is int32 year. The value side returns time.Time at
+		// Jan 1 of the year; mapping to Date keeps that representation
+		// faithful end-to-end (days-since-epoch is well-defined for
+		// any Jan 1 value).
+		if c.Type != schema.Int32 {
+			return false, nil
+		}
+		c.Type = schema.Date
+		return true, nil
+
+	case "io.debezium.time.Timestamp", "io.debezium.time.Time":
+		// Both wire as int64 milliseconds. See the doc comment for
+		// the rationale on conflating Time with Timestamp.
+		if c.Type != schema.Int64 {
+			return false, nil
+		}
+		c.Type = schema.Timestamp
+		c.Logical = &schema.LogicalParams{
+			Timestamp: &schema.TimestampParams{
+				Unit: schema.TimeUnitMillis, AdjustToUTC: true,
+			},
+		}
+		return true, nil
+
+	case "io.debezium.time.MicroTimestamp", "io.debezium.time.MicroTime":
+		if c.Type != schema.Int64 {
+			return false, nil
+		}
+		c.Type = schema.Timestamp
+		c.Logical = &schema.LogicalParams{
+			Timestamp: &schema.TimestampParams{
+				Unit: schema.TimeUnitMicros, AdjustToUTC: true,
+			},
+		}
+		return true, nil
+
+	case "io.debezium.time.NanoTimestamp", "io.debezium.time.NanoTime":
+		if c.Type != schema.Int64 {
+			return false, nil
+		}
+		c.Type = schema.Timestamp
+		c.Logical = &schema.LogicalParams{
+			Timestamp: &schema.TimestampParams{
+				Unit: schema.TimeUnitNanos, AdjustToUTC: true,
+			},
+		}
+		return true, nil
+
+	case "io.debezium.time.ZonedTimestamp":
+		// Wire is string (RFC3339). The value side parses it to a
+		// time.Time and the AdjustToUTC=true semantics match the
+		// time-zone-aware nature of the type.
+		if c.Type != schema.String {
+			return false, nil
+		}
+		c.Type = schema.Timestamp
+		c.Logical = &schema.LogicalParams{
+			Timestamp: &schema.TimestampParams{
+				Unit: schema.TimeUnitMillis, AdjustToUTC: true,
+			},
+		}
+		return true, nil
+
+	default:
+		// Unknown connect.name. Per Avro convention readers must
+		// silently ignore unrecognised annotations.
+		return false, nil
 	}
 }
 
@@ -417,6 +562,9 @@ func ecsAvroFromAnyMap(cfg ecsAvroConfig, as map[string]any) (schema.Common, err
 		if _, err := applyAvroLogicalType(cfg, &c, as); err != nil {
 			return c, err
 		}
+		if _, err := applyKafkaConnectType(cfg, &c, as); err != nil {
+			return c, err
+		}
 		return c, nil
 	case string:
 		c.Type = ecsAvroTypeToCommon(t)
@@ -441,6 +589,12 @@ func ecsAvroFromAnyMap(cfg ecsAvroConfig, as map[string]any) (schema.Common, err
 	}
 
 	if applied, err := applyAvroLogicalType(cfg, &c, as); err != nil {
+		return schema.Common{}, err
+	} else if applied {
+		return c, nil
+	}
+
+	if applied, err := applyKafkaConnectType(cfg, &c, as); err != nil {
 		return schema.Common{}, err
 	} else if applied {
 		return c, nil

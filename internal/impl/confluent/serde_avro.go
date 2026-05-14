@@ -223,8 +223,9 @@ func (s *schemaRegistryDecoder) getAvroDecoder(ctx context.Context, aschema fran
 	)
 	if s.cfg.avro.storeSchemaMeta != "" {
 		c, parseErr := ecsAvroParseFromBytes(ecsAvroConfig{
-			rawUnion:             s.cfg.avro.rawUnions,
-			preserveLogicalTypes: s.cfg.avro.preserveLogicalTypes,
+			rawUnion:                   s.cfg.avro.rawUnions,
+			preserveLogicalTypes:       s.cfg.avro.preserveLogicalTypes,
+			translateKafkaConnectTypes: s.cfg.avro.translateKafkaConnectTypes,
 		}, []byte(schemaSpec))
 		if parseErr != nil {
 			s.logger.With("error", parseErr).Error("Failed to extract common schema for meta storage")
