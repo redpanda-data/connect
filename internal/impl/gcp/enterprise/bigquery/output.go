@@ -12,13 +12,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"cloud.google.com/go/bigquery"
+	"cloud.google.com/go/bigquery/storage/apiv1/storagepb"
 	"cloud.google.com/go/bigquery/storage/managedwriter"
-	"cloud.google.com/go/bigquery/storage/managedwriter/adapt"
+	"google.golang.org/api/googleapi"
 	"google.golang.org/api/impersonate"
 	"google.golang.org/api/option"
 	"google.golang.org/grpc"
@@ -49,8 +51,8 @@ const (
 	bqwaFieldStreamIdleTimeout   = "stream_idle_timeout"
 	bqwaFieldStreamSweepInterval = "stream_sweep_interval"
 	bqwaFieldEndpoint            = "endpoint"
-	bqwaFieldEndpointHTTP        = "http"
-	bqwaFieldEndpointGRPC        = "grpc"
+	bqwaepFieldHTTP              = "http"
+	bqwaepFieldGRPC              = "grpc"
 )
 
 func init() {
@@ -81,12 +83,14 @@ This provides higher throughput and lower latency than the legacy streaming API 
 Messages can be formatted as JSON (default) or raw protobuf bytes.
 When using JSON format the component automatically fetches the table schema and converts each message to the corresponding proto representation.
 
-WARNING: The proto3 JSON mapping encodes int64 and uint64 values as strings.
-JSON messages with integer fields must use string values (e.g. `+"`"+`"age": "30"`+"`"+` not `+"`"+`"age": 30`+"`"+`).
-Otherwise the write will fail with an unmarshalling error.
+WARNING: protojson encodes int64 and uint64 values as strings, bytes as base64-encoded strings, and timestamps as RFC 3339 strings.
+JSON messages must follow these conventions (e.g. `+"`"+`"age": "30"`+"`"+`, `+"`"+`"data": "aGVsbG8="`+"`"+`, `+"`"+`"created_at": "2026-01-02T15:04:05Z"`+"`"+`); otherwise the write will fail with an unmarshalling error.
 
 When batching is enabled the table name is resolved from the first message in each batch.
 All messages in the same batch are written to that table.
+
+The interpolated table name is sanitized for BigQuery: dots, hyphens, slashes and whitespace are replaced with underscores, non-ASCII-alphanumeric characters are stripped, leading digits are prefixed with `+"`_`"+`, and the result is truncated to 1024 characters.
+A name that sanitizes to the empty string is rejected as a permanent error.
 `).
 		Fields(
 			service.NewStringField(bqwaFieldProject).
@@ -104,7 +108,7 @@ All messages in the same batch are written to that table.
 					" Use 'json' to have the component convert JSON to proto automatically."+
 					" Use 'protobuf' to supply raw proto-encoded bytes.").
 				Default("json"),
-			service.NewOutputMaxInFlightField().Default(64),
+			service.NewOutputMaxInFlightField().Default(4),
 			service.NewBatchPolicyField(bqwaFieldBatching),
 			service.NewStringField(bqwaFieldCredentialsJSON).
 				Description("An optional JSON string containing GCP credentials."+
@@ -132,11 +136,11 @@ All messages in the same batch are written to that table.
 				Advanced().
 				Default("1m"),
 			service.NewObjectField(bqwaFieldEndpoint,
-				service.NewStringField(bqwaFieldEndpointHTTP).
+				service.NewStringField(bqwaepFieldHTTP).
 					Description("Override the BigQuery HTTP endpoint."+
 						" Useful for local emulators.").
 					Default(""),
-				service.NewStringField(bqwaFieldEndpointGRPC).
+				service.NewStringField(bqwaepFieldGRPC).
 					Description("Override the BigQuery Storage gRPC endpoint."+
 						" Useful for local emulators.").
 					Default(""),
@@ -181,6 +185,10 @@ func bigQueryWriteAPIConfigFromParsed(pConf *service.ParsedConfig) (conf bigQuer
 	if conf.Delegates, err = pConf.FieldStringList(bqwaFieldDelegates); err != nil {
 		return
 	}
+	if len(conf.Delegates) > 0 && conf.TargetPrincipal == "" {
+		err = fmt.Errorf("%s requires %s to be set", bqwaFieldDelegates, bqwaFieldTargetPrincipal)
+		return
+	}
 	if conf.StreamIdleTimeout, err = pConf.FieldDuration(bqwaFieldStreamIdleTimeout); err != nil {
 		return
 	}
@@ -196,30 +204,34 @@ func bigQueryWriteAPIConfigFromParsed(pConf *service.ParsedConfig) (conf bigQuer
 		return
 	}
 	epConf := pConf.Namespace(bqwaFieldEndpoint)
-	if conf.EndpointHTTP, err = epConf.FieldString(bqwaFieldEndpointHTTP); err != nil {
+	if conf.EndpointHTTP, err = epConf.FieldString(bqwaepFieldHTTP); err != nil {
 		return
 	}
-	if conf.EndpointGRPC, err = epConf.FieldString(bqwaFieldEndpointGRPC); err != nil {
+	if conf.EndpointGRPC, err = epConf.FieldString(bqwaepFieldGRPC); err != nil {
 		return
 	}
 	return
 }
 
 type bqwaMetrics struct {
-	rowsSent     *service.MetricCounter
-	rowsFailed   *service.MetricCounter
-	batchesSent  *service.MetricCounter
-	batchLatency *service.MetricTimer
-	retries      *service.MetricCounter
+	rowsSent                *service.MetricCounter
+	rowsFailed              *service.MetricCounter
+	batchesSent             *service.MetricCounter
+	batchLatency            *service.MetricTimer
+	retries                 *service.MetricCounter
+	schemaEvolutions        *service.MetricCounter
+	schemaEvolutionFailures *service.MetricCounter
 }
 
 func newBQWAMetrics(m *service.Metrics) *bqwaMetrics {
 	return &bqwaMetrics{
-		rowsSent:     m.NewCounter("bigquery_write_api_rows_sent_total"),
-		rowsFailed:   m.NewCounter("bigquery_write_api_rows_failed_total"),
-		batchesSent:  m.NewCounter("bigquery_write_api_batches_sent_total"),
-		batchLatency: m.NewTimer("bigquery_write_api_batch_latency_ns"),
-		retries:      m.NewCounter("bigquery_write_api_retries_total"),
+		rowsSent:                m.NewCounter("bigquery_write_api_rows_sent_total"),
+		rowsFailed:              m.NewCounter("bigquery_write_api_rows_failed_total"),
+		batchesSent:             m.NewCounter("bigquery_write_api_batches_sent_total"),
+		batchLatency:            m.NewTimer("bigquery_write_api_batch_latency_ns"),
+		retries:                 m.NewCounter("bigquery_write_api_retries_total"),
+		schemaEvolutions:        m.NewCounter("bigquery_write_api_schema_evolutions_total"),
+		schemaEvolutionFailures: m.NewCounter("bigquery_write_api_schema_evolution_failures_total"),
 	}
 }
 
@@ -228,24 +240,41 @@ type grpcErrorKind int
 const (
 	grpcTransient grpcErrorKind = iota
 	grpcPermanent
+	grpcSchemaMismatch
 )
+
+// extractGRPCStatus extracts a gRPC status from an error, unwrapping
+// fmt.Errorf chains if necessary.
+func extractGRPCStatus(err error) (*grpcstatus.Status, bool) {
+	st, ok := grpcstatus.FromError(err)
+	if ok {
+		return st, true
+	}
+	unwrapped := err
+	for unwrapped != nil {
+		if st, ok = grpcstatus.FromError(unwrapped); ok {
+			return st, true
+		}
+		unwrapped = errors.Unwrap(unwrapped)
+	}
+	return nil, false
+}
 
 // classifyGRPCError inspects a gRPC status code to determine if the error is
 // transient (worth retrying) or permanent (will never succeed).
 // Non-gRPC errors are treated as transient to be safe.
 func classifyGRPCError(err error) grpcErrorKind {
-	st, ok := grpcstatus.FromError(err)
+	st, ok := extractGRPCStatus(err)
 	if !ok {
-		// Try unwrapping, since errors are often wrapped with fmt.Errorf.
-		unwrapped := err
-		for unwrapped != nil {
-			if st, ok = grpcstatus.FromError(unwrapped); ok {
-				break
+		return grpcTransient
+	}
+
+	// Check for BigQuery Storage-specific error details.
+	for _, detail := range st.Details() {
+		if storageErr, ok := detail.(*storagepb.StorageError); ok {
+			if storageErr.GetCode() == storagepb.StorageError_SCHEMA_MISMATCH_EXTRA_FIELDS {
+				return grpcSchemaMismatch
 			}
-			unwrapped = errors.Unwrap(unwrapped)
-		}
-		if !ok {
-			return grpcTransient
 		}
 	}
 
@@ -269,11 +298,30 @@ type streamWithDescriptor struct {
 	lastUsed   atomic.Int64 // UnixNano timestamp, safe for concurrent access
 }
 
+// isPermanentBQError reports whether an error from the BigQuery REST or Storage
+// Write APIs should be treated as permanent (no retry). 4xx HTTP status codes
+// are permanent except for 408 (timeout) and 429 (throttling); all gRPC errors
+// classified as permanent by classifyGRPCError are also permanent.
+func isPermanentBQError(err error) bool {
+	if classifyGRPCError(err) == grpcPermanent {
+		return true
+	}
+	var apiErr *googleapi.Error
+	if errors.As(err, &apiErr) {
+		return apiErr.Code >= 400 && apiErr.Code < 500 &&
+			apiErr.Code != http.StatusRequestTimeout &&
+			apiErr.Code != http.StatusTooManyRequests
+	}
+	return false
+}
+
 type bigQueryWriteAPIOutput struct {
 	conf        bigQueryWriteAPIConfig
 	tableInterp *service.InterpolatedString
 	log         *service.Logger
 	metrics     *bqwaMetrics
+	resolver    *schemaResolver
+	evolver     *schemaEvolver
 
 	connMu            sync.RWMutex
 	client            *bigquery.Client
@@ -288,6 +336,11 @@ type bigQueryWriteAPIOutput struct {
 	streams   map[string]*streamWithDescriptor
 	stopSweep chan struct{}
 	sweepWg   sync.WaitGroup
+
+	// closeWg tracks background ManagedStream.Close goroutines spawned by
+	// evictStream and the sweep loop, so Close can wait for them to finish
+	// before tearing down the underlying clients.
+	closeWg sync.WaitGroup
 }
 
 var _ service.BatchOutput = (*bigQueryWriteAPIOutput)(nil)
@@ -304,12 +357,15 @@ func bigQueryWriteAPIOutputFromConfig(conf *service.ParsedConfig, mgr *service.R
 	if err != nil {
 		return nil, err
 	}
+
 	return &bigQueryWriteAPIOutput{
 		conf:        cfg,
 		tableInterp: tableInterp,
 		log:         mgr.Logger(),
 		metrics:     newBQWAMetrics(mgr.Metrics()),
 		streams:     make(map[string]*streamWithDescriptor),
+		resolver:    &schemaResolver{log: mgr.Logger()},
+		evolver:     &schemaEvolver{log: mgr.Logger()},
 	}, nil
 }
 
@@ -364,8 +420,11 @@ func (o *bigQueryWriteAPIOutput) WriteBatch(ctx context.Context, batch service.M
 		return nil
 	}
 
+	// Snapshot client + resolvedProjectID together under one RLock so a
+	// concurrent Connect-after-Close (which rewrites both) cannot tear them.
 	o.connMu.RLock()
 	client := o.client
+	projectID := o.resolvedProjectID
 	o.connMu.RUnlock()
 
 	if client == nil {
@@ -374,13 +433,21 @@ func (o *bigQueryWriteAPIOutput) WriteBatch(ctx context.Context, batch service.M
 
 	start := time.Now()
 
-	tableID, err := batch.TryInterpolatedString(0, o.tableInterp)
+	rawTableID, err := batch.TryInterpolatedString(0, o.tableInterp)
 	if err != nil {
 		return fmt.Errorf("interpolating table name: %w", err)
 	}
+	tableID := sanitizeTableName(rawTableID)
+	if tableID == "" {
+		// Permanent: the interpolation result has no usable characters.
+		return permanentBatchError(batch, fmt.Errorf("interpolated table name %q is empty after sanitization", rawTableID))
+	}
 
-	swd, cacheKey, err := o.getOrCreateStream(ctx, tableID)
+	swd, cacheKey, err := o.getOrCreateStream(ctx, client, projectID, tableID)
 	if err != nil {
+		if isPermanentBQError(err) {
+			return permanentBatchError(batch, fmt.Errorf("getting stream for table %q: %w", tableID, err))
+		}
 		return fmt.Errorf("getting stream for table %q: %w", tableID, err)
 	}
 
@@ -411,32 +478,22 @@ func (o *bigQueryWriteAPIOutput) WriteBatch(ctx context.Context, batch service.M
 	result, err := swd.stream.AppendRows(ctx, rows)
 	if err != nil {
 		o.evictStream(cacheKey)
-		if classifyGRPCError(err) == grpcPermanent {
-			batchErr := service.NewBatchError(batch, fmt.Errorf("permanent error appending rows: %w", err))
-			for i := range batch {
-				batchErr = batchErr.Failed(i, err)
-			}
-			return batchErr
-		}
-		o.metrics.retries.Incr(1)
-		return fmt.Errorf("appending rows: %w", err)
+		return o.handleWriteError(ctx, client, err, batch, tableID, swd.descriptor, "appending rows")
 	}
 
 	resp, err := result.FullResponse(ctx)
 	if err != nil {
 		o.evictStream(cacheKey)
-		if classifyGRPCError(err) == grpcPermanent {
-			batchErr := service.NewBatchError(batch, fmt.Errorf("permanent error waiting for append result: %w", err))
-			for i := range batch {
-				batchErr = batchErr.Failed(i, err)
-			}
-			return batchErr
-		}
-		o.metrics.retries.Incr(1)
-		return fmt.Errorf("waiting for append result: %w", err)
+		return o.handleWriteError(ctx, client, err, batch, tableID, swd.descriptor, "waiting for append result")
 	}
 
 	o.metrics.batchLatency.Timing(time.Since(start).Nanoseconds())
+
+	if resp.GetUpdatedSchema() != nil {
+		o.log.Infof("BigQuery reported schema update for table %q, evicting cached stream", tableID)
+		o.evictStream(cacheKey)
+		o.resolver.Evict(tableID)
+	}
 
 	if rowErrs := resp.GetRowErrors(); len(rowErrs) > 0 {
 		o.metrics.rowsFailed.Incr(int64(len(rowErrs)))
@@ -456,7 +513,49 @@ func (o *bigQueryWriteAPIOutput) WriteBatch(ctx context.Context, batch service.M
 	return nil
 }
 
-func (o *bigQueryWriteAPIOutput) Close(_ context.Context) error {
+// permanentBatchError builds a service.BatchError that fails every message in
+// the batch with the same root cause. Use this for errors that benthos must
+// not retry.
+func permanentBatchError(batch service.MessageBatch, err error) error {
+	batchErr := service.NewBatchError(batch, err)
+	for i := range batch {
+		batchErr = batchErr.Failed(i, err)
+	}
+	return batchErr
+}
+
+// handleWriteError classifies a gRPC error from an append or response and
+// returns the appropriate error for benthos: a BatchError (permanent, no retry)
+// or a plain error (transient, retry).
+func (o *bigQueryWriteAPIOutput) handleWriteError(
+	ctx context.Context, client *bigquery.Client, err error, batch service.MessageBatch,
+	tableID string, descriptor protoreflect.MessageDescriptor, phase string,
+) error {
+	switch classifyGRPCError(err) {
+	case grpcSchemaMismatch:
+		evolved, evolveErr := o.evolver.Evolve(ctx, client, o.conf.DatasetID, tableID, descriptor)
+		if evolveErr != nil {
+			o.metrics.schemaEvolutionFailures.Incr(1)
+			o.log.Warnf("Schema evolution failed for table %q: %v", tableID, evolveErr)
+			return permanentBatchError(batch, fmt.Errorf("schema evolution failed for table %q: %w", tableID, evolveErr))
+		}
+		if !evolved {
+			// Descriptor matches the table — mismatch is not caused by extra fields.
+			return permanentBatchError(batch, fmt.Errorf("permanent schema mismatch (no new columns to evolve): %w", err))
+		}
+		o.metrics.schemaEvolutions.Incr(1)
+		o.resolver.Evict(tableID)
+		o.metrics.retries.Incr(1)
+		return fmt.Errorf("schema mismatch (evolution attempted): %w", err)
+	case grpcPermanent:
+		return permanentBatchError(batch, fmt.Errorf("permanent error %s: %w", phase, err))
+	default:
+		o.metrics.retries.Incr(1)
+		return fmt.Errorf("%s: %w", phase, err)
+	}
+}
+
+func (o *bigQueryWriteAPIOutput) Close(ctx context.Context) error {
 	o.connMu.Lock()
 	defer o.connMu.Unlock()
 
@@ -469,11 +568,19 @@ func (o *bigQueryWriteAPIOutput) Close(_ context.Context) error {
 	// so it does not access shared state after shutdown.
 	o.sweepWg.Wait()
 
+	// Wait for any in-flight async stream closes (from evictStream or
+	// sweepIdleStreams) so they don't race with client shutdown.
+	o.closeWg.Wait()
+
 	o.streamsMu.Lock()
 	streams := o.streams
 	o.streams = make(map[string]*streamWithDescriptor)
 	o.streamsMu.Unlock()
 
+	// Close every stream and client unconditionally: the underlying gRPC
+	// teardowns are non-blocking and skipping them leaks connections and
+	// goroutines. ctx.Err() is appended afterwards so a caller-side deadline
+	// is still surfaced, but it never gates the cleanup itself.
 	var errs []error
 	for _, swd := range streams {
 		if err := swd.stream.Close(); err != nil {
@@ -495,6 +602,17 @@ func (o *bigQueryWriteAPIOutput) Close(_ context.Context) error {
 		o.client = nil
 	}
 
+	if err := ctx.Err(); err != nil {
+		errs = append(errs, err)
+	}
+
+	// Drop the resolver's schema cache so a subsequent Connect doesn't reuse
+	// state tied to the now-closed client.
+	o.resolver.cache.Range(func(k, _ any) bool {
+		o.resolver.cache.Delete(k)
+		return true
+	})
+
 	return errors.Join(errs...)
 }
 
@@ -502,6 +620,7 @@ func (o *bigQueryWriteAPIOutput) Close(_ context.Context) error {
 // If an endpoint override is provided, authentication is skipped (emulator mode).
 func (o *bigQueryWriteAPIOutput) buildAuthOpts(ctx context.Context, endpointOverride string, isGRPC bool) ([]option.ClientOption, error) {
 	if endpointOverride != "" {
+		o.log.Warnf("endpoint override %q is set; authentication is disabled — do not use this against production BigQuery", endpointOverride)
 		if o.conf.TargetPrincipal != "" {
 			o.log.Warnf("endpoint override is set; ignoring target_principal %q", o.conf.TargetPrincipal)
 		}
@@ -523,7 +642,11 @@ func (o *bigQueryWriteAPIOutput) buildAuthOpts(ctx context.Context, endpointOver
 			baseOpts = append(baseOpts, option.WithCredentialsJSON([]byte(o.conf.CredentialsJSON)))
 		}
 
-		ts, err := impersonate.CredentialsTokenSource(ctx, impersonate.CredentialsConfig{
+		// Detach from ctx: the token source outlives Connect (it refreshes
+		// tokens on demand for the lifetime of the client). If we passed
+		// Connect's ctx and that ctx was later cancelled, every refresh
+		// would fail.
+		ts, err := impersonate.CredentialsTokenSource(context.WithoutCancel(ctx), impersonate.CredentialsConfig{
 			TargetPrincipal: o.conf.TargetPrincipal,
 			Scopes:          []string{bigquery.Scope},
 			Delegates:       o.conf.Delegates,
@@ -542,12 +665,25 @@ func (o *bigQueryWriteAPIOutput) buildAuthOpts(ctx context.Context, endpointOver
 	return opts, nil
 }
 
-func (o *bigQueryWriteAPIOutput) tableCacheKey(tableID string) string {
-	return fmt.Sprintf("projects/%s/datasets/%s/tables/%s", o.resolvedProjectID, o.conf.DatasetID, tableID)
+// tableCacheKey builds the BigQuery resource path for the given table. The
+// projectID argument is captured by callers under connMu.RLock and passed
+// through, so this function must not read o.resolvedProjectID directly.
+func (o *bigQueryWriteAPIOutput) tableCacheKey(projectID, tableID string) string {
+	return fmt.Sprintf("projects/%s/datasets/%s/tables/%s", projectID, o.conf.DatasetID, tableID)
 }
 
-func (o *bigQueryWriteAPIOutput) getOrCreateStream(ctx context.Context, tableID string) (*streamWithDescriptor, string, error) {
-	cacheKey := o.tableCacheKey(tableID)
+// closeStreamAsync schedules a stream close on a background goroutine tracked
+// by closeWg, so Close() can wait for it to finish before tearing down the
+// underlying clients.
+func (o *bigQueryWriteAPIOutput) closeStreamAsync(s *managedwriter.ManagedStream) {
+	if s == nil {
+		return
+	}
+	o.closeWg.Go(func() { _ = s.Close() })
+}
+
+func (o *bigQueryWriteAPIOutput) getOrCreateStream(ctx context.Context, client *bigquery.Client, projectID, tableID string) (*streamWithDescriptor, string, error) {
+	cacheKey := o.tableCacheKey(projectID, tableID)
 
 	now := time.Now()
 
@@ -561,7 +697,7 @@ func (o *bigQueryWriteAPIOutput) getOrCreateStream(ctx context.Context, tableID 
 	o.streamsMu.RUnlock()
 
 	// Slow path: create stream without holding the lock (network I/O).
-	swd, err := o.createStream(ctx, cacheKey, tableID)
+	swd, err := o.createStream(ctx, client, cacheKey, tableID)
 	if err != nil {
 		return nil, cacheKey, err
 	}
@@ -570,7 +706,7 @@ func (o *bigQueryWriteAPIOutput) getOrCreateStream(ctx context.Context, tableID 
 	o.streamsMu.Lock()
 	if cached, exists := o.streams[cacheKey]; exists {
 		o.streamsMu.Unlock()
-		go func() { _ = swd.stream.Close() }()
+		o.closeStreamAsync(swd.stream)
 		return cached, cacheKey, nil
 	}
 	swd.lastUsed.Store(now.UnixNano())
@@ -579,10 +715,10 @@ func (o *bigQueryWriteAPIOutput) getOrCreateStream(ctx context.Context, tableID 
 	return swd, cacheKey, nil
 }
 
-// evictStream removes a stream from the cache and closes it asynchronously.
-// Concurrent WriteBatch goroutines that already hold a reference to the evicted
-// stream will see errors from the closed stream and retry, which will create a
-// fresh stream via getOrCreateStream.
+// evictStream removes a stream from the cache and closes it on a tracked
+// background goroutine. Concurrent WriteBatch goroutines that already hold a
+// reference to the evicted stream will see errors from the closed stream and
+// retry, which will create a fresh stream via getOrCreateStream.
 func (o *bigQueryWriteAPIOutput) evictStream(cacheKey string) {
 	o.streamsMu.Lock()
 	swd, exists := o.streams[cacheKey]
@@ -590,7 +726,7 @@ func (o *bigQueryWriteAPIOutput) evictStream(cacheKey string) {
 	o.streamsMu.Unlock()
 
 	if exists {
-		go func() { _ = swd.stream.Close() }()
+		o.closeStreamAsync(swd.stream)
 	}
 }
 
@@ -629,54 +765,12 @@ func (o *bigQueryWriteAPIOutput) sweepIdleStreams(stop <-chan struct{}) {
 
 		for _, e := range toClose {
 			o.log.Debugf("Closing idle BigQuery stream for %s", e.key)
-			if e.swd.stream != nil {
-				go func() { _ = e.swd.stream.Close() }()
-			}
+			o.closeStreamAsync(e.swd.stream)
 		}
 	}
 }
 
-func (o *bigQueryWriteAPIOutput) createStream(ctx context.Context, cacheKey, tableID string) (*streamWithDescriptor, error) {
-	o.connMu.RLock()
-	client := o.client
-	o.connMu.RUnlock()
-
-	if client == nil {
-		return nil, service.ErrNotConnected
-	}
-
-	tableMeta, err := client.Dataset(o.conf.DatasetID).Table(tableID).Metadata(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("fetching metadata for table %q: %w", tableID, err)
-	}
-
-	tableSchema, err := adapt.BQSchemaToStorageTableSchema(tableMeta.Schema)
-	if err != nil {
-		return nil, fmt.Errorf("converting BQ schema to storage schema: %w", err)
-	}
-
-	descriptor, err := adapt.StorageSchemaToProto2Descriptor(tableSchema, "root")
-	if err != nil {
-		return nil, fmt.Errorf("converting storage schema to proto descriptor: %w", err)
-	}
-
-	messageDescriptor, ok := descriptor.(protoreflect.MessageDescriptor)
-	if !ok {
-		return nil, errors.New("schema descriptor is not a MessageDescriptor")
-	}
-
-	normalizedDescriptor, err := adapt.NormalizeDescriptor(messageDescriptor)
-	if err != nil {
-		return nil, fmt.Errorf("normalizing proto descriptor: %w", err)
-	}
-
-	// Convert the normalized DescriptorProto back to a protoreflect.MessageDescriptor
-	// so that jsonToProtoBytes uses the same schema the stream was configured with.
-	normalizedMsgDesc, err := descriptorProtoToMessageDescriptor(normalizedDescriptor)
-	if err != nil {
-		return nil, fmt.Errorf("resolving normalized descriptor: %w", err)
-	}
-
+func (o *bigQueryWriteAPIOutput) createStream(ctx context.Context, client *bigquery.Client, cacheKey, tableID string) (*streamWithDescriptor, error) {
 	o.connMu.RLock()
 	storageClient := o.storageClient
 	o.connMu.RUnlock()
@@ -685,18 +779,28 @@ func (o *bigQueryWriteAPIOutput) createStream(ctx context.Context, cacheKey, tab
 		return nil, service.ErrNotConnected
 	}
 
-	stream, err := storageClient.NewManagedStream(ctx,
+	rs, err := o.resolver.Resolve(ctx, client, o.conf.DatasetID, tableID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Detach from the per-batch ctx: the cached stream outlives this WriteBatch
+	// and is reused by every subsequent batch routing to the same table. If the
+	// stream were bound to this ctx, cancellation of the first batch (per-message
+	// deadline, source shutdown, ack timeout) would block all later AppendRows
+	// against the cached stream until the idle sweeper evicted it.
+	ms, err := storageClient.NewManagedStream(context.WithoutCancel(ctx),
 		managedwriter.WithDestinationTable(cacheKey),
 		managedwriter.WithType(managedwriter.DefaultStream),
-		managedwriter.WithSchemaDescriptor(normalizedDescriptor),
+		managedwriter.WithSchemaDescriptor(rs.descriptorProto),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("creating managed stream for %q: %w", cacheKey, err)
 	}
 
 	return &streamWithDescriptor{
-		stream:     stream,
-		descriptor: normalizedMsgDesc,
+		stream:     ms,
+		descriptor: rs.messageDescriptor,
 	}, nil
 }
 

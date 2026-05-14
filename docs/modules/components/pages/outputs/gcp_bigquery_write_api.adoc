@@ -43,7 +43,7 @@ output:
     dataset: "" # No default (required)
     table: "" # No default (required)
     message_format: json
-    max_in_flight: 64
+    max_in_flight: 4
     batching:
       count: 0
       byte_size: 0
@@ -66,7 +66,7 @@ output:
     dataset: "" # No default (required)
     table: "" # No default (required)
     message_format: json
-    max_in_flight: 64
+    max_in_flight: 4
     batching:
       count: 0
       byte_size: 0
@@ -92,12 +92,14 @@ This provides higher throughput and lower latency than the legacy streaming API 
 Messages can be formatted as JSON (default) or raw protobuf bytes.
 When using JSON format the component automatically fetches the table schema and converts each message to the corresponding proto representation.
 
-WARNING: The proto3 JSON mapping encodes int64 and uint64 values as strings.
-JSON messages with integer fields must use string values (e.g. `"age": "30"` not `"age": 30`).
-Otherwise the write will fail with an unmarshalling error.
+WARNING: protojson encodes int64 and uint64 values as strings, bytes as base64-encoded strings, and timestamps as RFC 3339 strings.
+JSON messages must follow these conventions (e.g. `"age": "30"`, `"data": "aGVsbG8="`, `"created_at": "2026-01-02T15:04:05Z"`); otherwise the write will fail with an unmarshalling error.
 
 When batching is enabled the table name is resolved from the first message in each batch.
 All messages in the same batch are written to that table.
+
+The interpolated table name is sanitized for BigQuery: dots, hyphens, slashes and whitespace are replaced with underscores, non-ASCII-alphanumeric characters are stripped, leading digits are prefixed with `_`, and the result is truncated to 1024 characters.
+A name that sanitizes to the empty string is rejected as a permanent error.
 
 
 == Fields
@@ -149,7 +151,7 @@ The maximum number of messages to have in flight at a given time. Increase this 
 
 *Type*: `int`
 
-*Default*: `64`
+*Default*: `4`
 
 === `batching`
 
