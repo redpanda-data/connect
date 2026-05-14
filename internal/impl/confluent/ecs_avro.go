@@ -192,6 +192,19 @@ func applyAvroLogicalType(cfg ecsAvroConfig, c *schema.Common, as map[string]any
 		// other primitive/logical-type mismatch below. Note that
 		// ecsAvroTypeToCommon maps `fixed` to schema.Any (it's not in
 		// the named primitive set), so we allow Any through too.
+		//
+		// Caveat: promotion is one-way. After this branch fires the
+		// resulting schema.Common is just `Decimal(P,S)` — the fact that
+		// the Avro source was `fixed[N]` rather than `bytes` is gone.
+		// Every downstream consumer of schema.Common (iceberg, parquet,
+		// JSON Schema, value-side normaliseAvroDecimals) treats decimal
+		// purely by precision/scale and picks its own physical encoding,
+		// so this is lossless for them. The single leak is
+		// common_to_avro.go's re-emit path, which will always produce a
+		// `bytes`-backed decimal even when the source schema was
+		// fixed-backed — semantically equivalent but a different Avro
+		// schema shape, which can matter for Schema Registry
+		// compatibility checks that compare by equality.
 		if c.Type != schema.ByteArray && c.Type != schema.Any {
 			return false, nil
 		}
