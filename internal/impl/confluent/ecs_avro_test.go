@@ -467,6 +467,55 @@ func TestEcsAvroRawUnionNullableRecordNested(t *testing.T) {
 	assert.Equal(t, "code", inner.Children[0].Name)
 }
 
+// TestEcsAvroLameUnionNameResolution covers the same CON-468 bug class in
+// the lame-union (rawUnion=false) path that the schema_registry_decode
+// processor takes by default. The lame envelope wraps each branch in a
+// tagged Object so the wire shape stays the same, but the inner Common
+// must still expand previously-defined named-type references rather than
+// collapsing them to schema.Any.
+func TestEcsAvroLameUnionNameResolution(t *testing.T) {
+	spec := []byte(`{
+		"type": "record",
+		"name": "Transfer",
+		"fields": [
+			{
+				"name": "primary_fee",
+				"type": {
+					"type": "record",
+					"name": "Fee",
+					"fields": [{"name": "amount", "type": "long"}]
+				}
+			},
+			{"name": "secondary_fee", "type": ["null", "Fee"]}
+		]
+	}`)
+	c, err := ecsAvroParseFromBytes(ecsAvroConfig{}, spec)
+	require.NoError(t, err)
+
+	secondary := c.Children[1]
+	assert.Equal(t, "secondary_fee", secondary.Name)
+	assert.Equal(t, schema.Union, secondary.Type)
+	require.Len(t, secondary.Children, 2)
+
+	// One child is the null branch (Common.Type=Null, Name="").
+	// The other is the tagged-Object envelope wrapping the resolved Fee.
+	var feeEnvelope schema.Common
+	for _, ch := range secondary.Children {
+		if ch.Type == schema.Object {
+			feeEnvelope = ch
+			break
+		}
+	}
+	require.Equal(t, schema.Object, feeEnvelope.Type, "Fee branch should be tagged-Object envelope")
+	require.Len(t, feeEnvelope.Children, 1)
+	feeInner := feeEnvelope.Children[0]
+	assert.Equal(t, "Fee", feeInner.Name)
+	assert.Equal(t, schema.Object, feeInner.Type, "name reference to Fee should resolve to its record structure, not schema.Any")
+	require.Len(t, feeInner.Children, 1)
+	assert.Equal(t, "amount", feeInner.Children[0].Name)
+	assert.Equal(t, schema.Int64, feeInner.Children[0].Type)
+}
+
 // TestEcsAvroRecordWithNilFields is a regression test for schemas where a
 // field's type is a record object without a "fields" key (e.g. back-reference
 // form {"type":"record","name":"Party"} or "fields":null from some generators).
