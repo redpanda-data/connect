@@ -534,19 +534,14 @@ func ecsAvroHydrateRawUnion(cfg ecsAvroConfig, c *schema.Common, types []any) er
 func ecsAvroHydrateLameUnion(cfg ecsAvroConfig, c *schema.Common, types []any) error {
 	c.Type = schema.Union
 	for i, uObj := range types {
-		var childT schema.Common
-
-		switch ut := uObj.(type) {
-		case string:
-			childT = schema.Common{
-				Name: ut,
-				Type: ecsAvroTypeToCommon(ut),
-			}
-		case map[string]any:
-			var err error
-			if childT, err = ecsAvroFromAnyMap(cfg, ut); err != nil {
-				return fmt.Errorf("union `%v` child '%v': %w", c.Name, i, err)
-			}
+		childT, ok := ecsAvroResolveTypeRef(cfg, uObj)
+		if !ok {
+			return fmt.Errorf("union `%v` child '%v': could not resolve type %T", c.Name, i, uObj)
+		}
+		if s, isStr := uObj.(string); isStr {
+			// Lame-union children keep the type-name as the Common.Name so
+			// the tagged-JSON envelope key matches the Avro wire form.
+			childT.Name = s
 		}
 
 		if childT.Type == schema.Null {
