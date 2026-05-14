@@ -28,6 +28,10 @@ import (
 // decoder path:
 //   - time-millis/time-micros: time.Duration → time.Time (time-of-day)
 //   - duration: avro.Duration → ISO 8601 duration string
+//   - decimal: raw []byte → json.Number for the SetStructuredMut path
+//     (Go's json.Marshal cannot natively format *big.Rat as a JSON
+//     number — it emits "33/100"-style fractional strings — so we
+//     pre-convert to json.Number for downstream bloblang/SQL use).
 func preserveLogicalTypeOpts() []avro.SchemaOpt {
 	return []avro.SchemaOpt{
 		avro.NewCustomType[time.Time, int32](
@@ -55,8 +59,6 @@ func preserveLogicalTypeOpts() []avro.SchemaOpt {
 				return avro.DurationFromBytes(b).String(), nil
 			},
 		},
-		// Decimal: raw type is []byte. Convert to json.Number for the
-		// SetStructuredMut path (json.Marshal can't handle *big.Rat).
 		avro.CustomType{
 			LogicalType: "decimal",
 			Decode: func(v any, node *avro.SchemaNode) (any, error) {

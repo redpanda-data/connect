@@ -6,9 +6,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/twmb/avro"
 
 	"github.com/redpanda-data/benthos/v4/public/schema"
 )
@@ -210,4 +212,67 @@ func assertLogicalField(t *testing.T, spec []byte, want struct {
 func mustJSON(v any) string {
 	b, _ := json.MarshalIndent(v, "", "  ")
 	return string(b)
+}
+
+// TestUpstreamTwmbHonoursSiblingFormLogicalType is a regression guard
+// for the upstream twmb/avro dependency. After the bump that landed our
+// own field-level logicalType fix upstream (twmb/avro PR #38), the
+// value-side decoder now produces time.Time for sibling-form schemas
+// natively — previously it returned int64 because the parser silently
+// dropped the field-level annotation.
+//
+// If twmb ever regresses on this, the shredder's metadata-driven
+// numeric scaling path in iceberg/shredder/temporal.go would become
+// load-bearing again. Pinning the upstream behaviour here makes any
+// such regression surface immediately, in the package that depends on
+// it, rather than as a customer report.
+func TestUpstreamTwmbHonoursSiblingFormLogicalType(t *testing.T) {
+	cases := []struct {
+		name   string
+		schema string
+	}{
+		{
+			"primitive timestamp-millis",
+			`{"type":"record","name":"R","fields":[
+				{"name":"ts","type":"long","logicalType":"timestamp-millis"}
+			]}`,
+		},
+		{
+			"union timestamp-millis (null first)",
+			`{"type":"record","name":"R","fields":[
+				{"name":"ts","type":["null","long"],"logicalType":"timestamp-millis"}
+			]}`,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s, err := avro.Parse(tc.schema)
+			require.NoError(t, err)
+
+			// Encode a value via the binary-shape side schema to avoid
+			// requiring time.Time on the encode path; this is the same
+			// trick our integration test uses, and what a Java/JDBC
+			// producer would do — write raw long bytes on the wire and
+			// rely on the schema's logicalType for interpretation.
+			bin := avro.MustParse(`{"type":"record","name":"R","fields":[
+				{"name":"ts","type":["null","long"]}
+			]}`)
+			tsMillis := int64(1700000000000)
+			payload, err := bin.Encode(&struct {
+				TS *int64 `avro:"ts"`
+			}{TS: &tsMillis})
+			require.NoError(t, err)
+
+			var native any
+			_, err = s.Decode(payload, &native)
+			require.NoError(t, err)
+
+			row, ok := native.(map[string]any)
+			require.True(t, ok, "expected map, got %T", native)
+			_, isTime := row["ts"].(time.Time)
+			assert.True(t, isTime,
+				"upstream twmb must decode sibling-form timestamp-millis as time.Time; got %T (regression in twmb/avro PR #38)", row["ts"])
+		})
+	}
 }
