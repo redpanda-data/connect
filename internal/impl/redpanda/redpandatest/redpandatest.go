@@ -34,6 +34,8 @@ type Config struct {
 	Nightly bool
 	// AutoCreateTopics enables automatic topic creation.
 	AutoCreateTopics bool
+	// ExtraOpts are additional testcontainers options applied after the default ones.
+	ExtraOpts []testcontainers.ContainerCustomizer
 }
 
 // DefaultConfig returns the default configuration for starting a Redpanda broker.
@@ -61,6 +63,7 @@ func StartSingleBrokerWithConfig(t *testing.T, cfg Config) (Endpoints, testconta
 	if cfg.AutoCreateTopics {
 		opts = append(opts, tcredpanda.WithAutoCreateTopics())
 	}
+	opts = append(opts, cfg.ExtraOpts...)
 
 	// The Redpanda testcontainers module applies a fixed 60s readiness timeout
 	// per wait strategy. Under Docker pressure the broker can take longer to
