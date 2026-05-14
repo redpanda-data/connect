@@ -1,4 +1,4 @@
-// Copyright 2024 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/gofrs/uuid/v5"
@@ -152,6 +153,12 @@ func coerceTimestampForEncode(value any, ts *format.TimestampType) (any, error) 
 	case int:
 		return int64(v), nil
 	case float64:
+		// int64(NaN) / int64(±Inf) is implementation-defined garbage —
+		// reject explicitly so silent corruption (year 1970 or worse)
+		// cannot reach the column. Mirrors the iceberg shredder's guard.
+		if math.IsNaN(v) || math.IsInf(v, 0) {
+			return nil, fmt.Errorf("cannot convert %v to TIMESTAMP", v)
+		}
 		return int64(v), nil
 	default:
 		return nil, fmt.Errorf("TIMESTAMP values must be time.Time, RFC3339 string, or numeric; got %T", value)
@@ -172,14 +179,17 @@ func coerceDateForEncode(value any) (any, error) {
 		}
 		return int32(days), nil
 	case string:
-		t, err := time.Parse(time.RFC3339, v)
-		if err != nil {
-			// Fall back to bare-date form (YYYY-MM-DD) before giving up.
-			if t2, err2 := time.Parse("2006-01-02", v); err2 == nil {
-				t = t2
-			} else {
-				return nil, fmt.Errorf("parsing DATE string %q: %w", v, err)
+		t, errRFC := time.Parse(time.RFC3339, v)
+		if errRFC != nil {
+			t2, errDate := time.Parse("2006-01-02", v)
+			if errDate != nil {
+				// Surface both attempts — a malformed bare date like
+				// "2024-13-99" would otherwise yield only the RFC3339
+				// error, which misleadingly suggests the user must add
+				// a time component.
+				return nil, fmt.Errorf("parsing DATE string %q: tried RFC3339 (%v) and YYYY-MM-DD (%v)", v, errRFC, errDate)
 			}
+			t = t2
 		}
 		return int32(t.UTC().Unix() / 86400), nil
 	case int32:
@@ -189,6 +199,11 @@ func coerceDateForEncode(value any) (any, error) {
 	case int:
 		return int32(v), nil
 	case float64:
+		// int32(NaN) / int32(±Inf) is implementation-defined garbage —
+		// reject explicitly so silent corruption cannot reach the column.
+		if math.IsNaN(v) || math.IsInf(v, 0) {
+			return nil, fmt.Errorf("cannot convert %v to DATE", v)
+		}
 		return int32(v), nil
 	default:
 		return nil, fmt.Errorf("DATE values must be time.Time, date string, or numeric days-since-epoch; got %T", value)
@@ -236,6 +251,11 @@ func coerceTimeForEncode(value any, tt *format.TimeType) (any, error) {
 	case int:
 		return wrap(int64(v)), nil
 	case float64:
+		// int64(NaN) / int64(±Inf) is implementation-defined garbage —
+		// reject explicitly so silent corruption cannot reach the column.
+		if math.IsNaN(v) || math.IsInf(v, 0) {
+			return nil, fmt.Errorf("cannot convert %v to TIME", v)
+		}
 		return wrap(int64(v)), nil
 	default:
 		return nil, fmt.Errorf("TIME values must be time.Duration, time.Time, or numeric; got %T", value)

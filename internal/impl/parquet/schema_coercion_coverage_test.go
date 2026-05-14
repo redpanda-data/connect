@@ -15,6 +15,7 @@
 package parquet
 
 import (
+	"math"
 	"strings"
 	"testing"
 	"time"
@@ -161,4 +162,43 @@ func TestEncodingCoercionVisitor_Temporal(t *testing.T) {
 			strings.Contains(err.Error(), "time.Time") || strings.Contains(err.Error(), "RFC3339") || strings.Contains(err.Error(), "numeric"),
 			"error message should name an accepted type, got %q", err.Error())
 	})
+}
+
+// TestEncodingCoercionVisitor_RejectsNaNInf locks in defense-in-depth
+// against silent corruption: a NaN or ±Inf float reaching a time-typed
+// column must error, not int64-cast to implementation-defined garbage.
+// Mirrors the iceberg shredder's TestTemporalRejectsNaNInf so the guard
+// is symmetric across the two sinks.
+func TestEncodingCoercionVisitor_RejectsNaNInf(t *testing.T) {
+	visitor := encodingCoercionVisitor{}
+	for _, tc := range []struct {
+		name string
+		node parquet.Node
+	}{
+		{"TIMESTAMP(millis)", parquet.Timestamp(parquet.Millisecond)},
+		{"TIMESTAMP(micros)", parquet.Timestamp(parquet.Microsecond)},
+		{"TIMESTAMP(nanos)", parquet.Timestamp(parquet.Nanosecond)},
+		{"DATE", parquet.Date()},
+		{"TIME(millis)", parquet.Time(parquet.Millisecond)},
+		{"TIME(micros)", parquet.Time(parquet.Microsecond)},
+	} {
+		for _, v := range []float64{math.NaN(), math.Inf(1), math.Inf(-1)} {
+			t.Run(tc.name, func(t *testing.T) {
+				_, err := visitor.visitLeaf(v, tc.node)
+				require.Errorf(t, err, "must reject %v into %s, not silently cast", v, tc.name)
+			})
+		}
+	}
+}
+
+// TestCoerceDateForEncode_StringErrorSurfacesBothAttempts verifies that
+// when a string fails both the RFC3339 and YYYY-MM-DD parses, the error
+// surfaces both attempts rather than only the RFC3339 one — which would
+// mislead a user who passed a clearly date-shaped (but invalid) string.
+func TestCoerceDateForEncode_StringErrorSurfacesBothAttempts(t *testing.T) {
+	_, err := coerceDateForEncode("2024-13-99")
+	require.Error(t, err)
+	msg := err.Error()
+	assert.Contains(t, msg, "RFC3339", "error should mention the RFC3339 attempt")
+	assert.Contains(t, msg, "YYYY-MM-DD", "error should mention the bare-date attempt")
 }
