@@ -48,7 +48,7 @@ func TestIntegrationMigrateCheckpointCache(t *testing.T) {
 		defaultCacheKeyOld = "max_scn"
 		defaultCacheKeyNew = "oracledb_cdc"
 	)
-	t.Log("Pre-creating checkpoint cache table in to simulate an existing deployment...")
+	t.Log("Pre-creating checkpoint cache table to simulate an existing deployment...")
 	{
 		cacheTableName = fmt.Sprintf("C##RPCN.CDC_CHECKPOINT_%s", strings.ToUpper(pdbName))
 		_, err = cdbDB.ExecContext(t.Context(), fmt.Sprintf(`

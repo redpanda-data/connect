@@ -29,6 +29,8 @@ const (
 	// defaultStoredProcName schema is inferred from the provided checkpoint cache config
 	// the stored procedure name cannot be configured by the user
 	defaultStoredProcName = "CDC_CHECKPOINT_CACHE_UPDATE"
+	// checkpointCacheKeyLimit specifies the maximum length of the checkpoint cache key
+	checkpointCacheKeyLimit = 128
 )
 
 // allowedTableIdentifiers is used for validating cache table names
@@ -72,6 +74,10 @@ func newCheckpointCache(
 	)
 	if connStr == "" {
 		return nil, errors.New("no connection string provided")
+	}
+
+	if err = validateCacheKey(cacheKey); err != nil {
+		return nil, fmt.Errorf("invalid checkpoint cache key: %w", err)
 	}
 
 	if cacheTable, err = validateCacheTableName(cacheTableName); err != nil {
@@ -177,7 +183,7 @@ func migrateCacheTable(ctx context.Context, db *sql.DB, tbl cacheTable, cacheKey
 	}
 
 	// Step 1: Widen the cache_key column.
-	if charLen < 128 {
+	if charLen < checkpointCacheKeyLimit {
 		log.Infof("Checkpoint Migration: Found checkpoint cache table '%s', updating cache_key schema to VARCHAR2(128)", tbl.String())
 		alterQuery := fmt.Sprintf(`ALTER TABLE %s MODIFY (cache_key VARCHAR2(128))`, tbl.String())
 		if _, err := db.ExecContext(ctx, alterQuery); err != nil {
@@ -314,4 +320,15 @@ func validateCacheTableName(input string) (cacheTable, error) {
 		return cacheTable{}, errInvalidIdentifiedInTableName
 	}
 	return ct, nil
+}
+
+func validateCacheKey(key string) error {
+	if key == "" {
+		return errors.New("checkpoint cache key must not be empty")
+	}
+	// len() gives byte count, which matches Oracle's default byte-semantic VARCHAR2(128) column.
+	if len(key) > checkpointCacheKeyLimit {
+		return fmt.Errorf("checkpoint cache key must not exceed %d characters", checkpointCacheKeyLimit)
+	}
+	return nil
 }
