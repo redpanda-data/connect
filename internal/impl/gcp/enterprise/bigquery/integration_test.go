@@ -231,6 +231,11 @@ func TestIntegrationSchemaEvolution(t *testing.T) {
 	assert.Contains(t, colNames, "email")
 	assert.Contains(t, colNames, "name")
 	assert.Contains(t, colNames, "age")
+
+	t.Log("When Evolve is called again with the same descriptor (simulating a concurrent batch arriving after another writer already evolved the table)")
+	evolved, err = evolver.Evolve(t.Context(), emu.bqClient, datasetID, tableID, md)
+	require.NoError(t, err)
+	assert.True(t, evolved, "missing==0 must signal retry, not a permanent failure, so concurrent batches are not dropped to DLQ")
 }
 
 func TestIntegrationTableNameSanitization(t *testing.T) {

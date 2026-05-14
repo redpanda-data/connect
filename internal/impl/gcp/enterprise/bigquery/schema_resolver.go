@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	bq "cloud.google.com/go/bigquery"
 	"cloud.google.com/go/bigquery/storage/managedwriter/adapt"
@@ -38,9 +39,21 @@ type schemaResolver struct {
 	log   *service.Logger
 }
 
+// resolveTimeout bounds a single BQ Metadata fetch inside the singleflight so
+// a wedged backend cannot pin the singleflight slot indefinitely. Five seconds
+// is enough for a healthy GetTable round-trip including TLS+token refresh;
+// callers fall back to retry via the benthos pipeline.
+const resolveTimeout = 5 * time.Second
+
 // Resolve returns a resolved schema for the given table by fetching the
 // table metadata from BigQuery. Results are cached per table ID, and concurrent
 // cache misses for the same table are coalesced into a single BQ call.
+//
+// The fetch runs under a context detached from the caller — singleflight runs
+// the function once for the *first* caller, and if that caller's per-batch ctx
+// cancelled mid-fetch every concurrent waiter would receive the cancellation
+// error too. Detaching ensures one slow batch cannot poison resolution for
+// every other batch routing to the same table.
 func (r *schemaResolver) Resolve(ctx context.Context, client *bq.Client, datasetID, tableID string) (*resolvedSchema, error) {
 	if cached, ok := r.cache.Load(tableID); ok {
 		return cached.(*resolvedSchema), nil
@@ -56,7 +69,9 @@ func (r *schemaResolver) Resolve(ctx context.Context, client *bq.Client, dataset
 		if cached, ok := r.cache.Load(tableID); ok {
 			return cached.(*resolvedSchema), nil
 		}
-		rs, err := resolveFromBQTable(ctx, client, datasetID, tableID)
+		fetchCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), resolveTimeout)
+		defer cancel()
+		rs, err := resolveFromBQTable(fetchCtx, client, datasetID, tableID)
 		if err != nil {
 			return nil, err
 		}
