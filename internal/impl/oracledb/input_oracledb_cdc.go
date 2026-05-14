@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -150,7 +151,7 @@ When using the default Oracle based cache, the Connect user requires permission 
 		Optional(),
 	).
 	Field(service.NewStringField(ociFieldCheckpointCacheTableName).
-		Description("The identifier for the checkpoint cache table name. If no `" + ociFieldCheckpointCache + "` field is specified, this input will automatically create a table and stored procedure under the `rpcn` schema to act as a checkpoint cache. This table stores the latest processed System Change Number (SCN) that has been successfully delivered, allowing Redpanda Connect to resume from that point upon restart rather than reconsume the entire redo log.").
+		Description("The identifier for the checkpoint cache table name. If no `" + ociFieldCheckpointCache + "` field is specified, this input will automatically create a table and stored procedure under the `rpcn` schema to act as a checkpoint cache. This table stores the latest processed System Change Number (SCN) that has been successfully delivered, allowing Redpanda Connect to resume from that point upon restart rather than reconsume the entire redo log. When `" + ociFieldPDBName + "` is set and this field is left at its default value, the table name is automatically derived per PDB (e.g. `RPCN.CDC_CHECKPOINT_MYPDB`) to avoid SCN collisions between pipelines monitoring different PDBs. Set this field explicitly to opt out of that auto-derivation.").
 		Default(defaultCheckpointCache).
 		Example("RPCN.CHECKPOINT_CACHE").
 		Optional(),
@@ -158,6 +159,7 @@ When using the default Oracle based cache, the Connect user requires permission 
 	Field(service.NewStringField(ociFieldCheckpointCacheKey).
 		Description("The key to use to store the snapshot position in `" + ociFieldCheckpointCache + "`. An alternative key can be provided if multiple CDC inputs share the same cache.").
 		Default("oracledb_cdc").
+		LintRule(`root = if this == "" { [ "must not be empty" ] } else if this.length() > ` + strconv.Itoa(checkpointCacheKeyLimit) + ` { [ "must not exceed ` + strconv.Itoa(checkpointCacheKeyLimit) + ` characters" ] }`).
 		Optional(),
 	).
 	Field(service.NewIntField(ociFieldCheckpointLimit).
@@ -254,14 +256,12 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 
 	// cache
 	// if no cache component is specified then we fall back to default SQL based version
+	if scnCacheKey, err = conf.FieldString(ociFieldCheckpointCacheKey); err != nil {
+		return nil, err
+	}
 	if conf.Contains(ociFieldCheckpointCache) {
 		if scnCache, err = conf.FieldString(ociFieldCheckpointCache); err != nil {
 			return nil, err
-		}
-		if conf.Resources().HasCache(scnCache) {
-			if scnCacheKey, err = conf.FieldString(ociFieldCheckpointCacheKey); err != nil {
-				return nil, err
-			}
 		}
 	}
 
@@ -392,7 +392,7 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 
 	// no cache specified so use default, internal oracle based cache
 	if o.cfg.SCNCache == "" && o.cpCache == nil {
-		c, err := newCheckpointCache(ctx, o.cfg.ConnectionString, cpCacheTable, o.log)
+		c, err := newCheckpointCache(ctx, o.cfg.ConnectionString, cpCacheTable, o.cfg.SCNCacheKey, o.log)
 		if err != nil {
 			return fmt.Errorf("initialising oracle based checkpoint cache: %w", err)
 		}
