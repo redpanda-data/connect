@@ -269,6 +269,204 @@ func TestEcsAvroRawUnionNestedRecord(t *testing.T) {
 	assert.Equal(t, schema.String, party.Children[0].Type)
 }
 
+// TestEcsAvroRawUnionNullableRecordByName is the CON-468 regression for
+// nullable record unions where the non-null branch is a string name
+// reference to a previously-defined record (rather than an inline
+// definition). The Avro JSON spec requires named types to be defined once
+// then referenced by name, so any non-trivial customer schema with reused
+// records will exercise this path.
+func TestEcsAvroRawUnionNullableRecordByName(t *testing.T) {
+	spec := []byte(`{
+		"type": "record",
+		"name": "Transfer",
+		"fields": [
+			{
+				"name": "primary_fee",
+				"type": {
+					"type": "record",
+					"name": "Fee",
+					"fields": [
+						{"name": "amount", "type": "long"},
+						{"name": "currency", "type": "string"}
+					]
+				}
+			},
+			{"name": "secondary_fee", "type": ["null", "Fee"], "default": null}
+		]
+	}`)
+	c, err := ecsAvroParseFromBytes(ecsAvroConfig{rawUnion: true}, spec)
+	require.NoError(t, err)
+	require.Equal(t, schema.Object, c.Type)
+	require.Len(t, c.Children, 2)
+
+	primary := c.Children[0]
+	assert.Equal(t, "primary_fee", primary.Name)
+	require.Equal(t, schema.Object, primary.Type)
+	require.Len(t, primary.Children, 2)
+
+	secondary := c.Children[1]
+	assert.Equal(t, "secondary_fee", secondary.Name)
+	require.Equal(t, schema.Object, secondary.Type, "name reference to Fee should resolve to the same record structure, not VARCHAR")
+	assert.True(t, secondary.Optional)
+	require.Len(t, secondary.Children, 2)
+	assert.Equal(t, "amount", secondary.Children[0].Name)
+	assert.Equal(t, schema.Int64, secondary.Children[0].Type)
+	assert.Equal(t, "currency", secondary.Children[1].Name)
+	assert.Equal(t, schema.String, secondary.Children[1].Type)
+}
+
+// TestEcsAvroRawUnionNullableOrderIndependence covers CON-468 acceptance
+// criterion 2: the [<type>, "null"] ordering (null second) must resolve
+// identically to ["null", <type>] (null first), across inline objects,
+// primitives, and name references.
+func TestEcsAvroRawUnionNullableOrderIndependence(t *testing.T) {
+	t.Run("inline record, null second", func(t *testing.T) {
+		spec := []byte(`{
+			"type": "record",
+			"name": "Transfer",
+			"fields": [{
+				"name": "fee",
+				"type": [{
+					"type": "record",
+					"name": "Fee",
+					"fields": [{"name": "amount", "type": "long"}]
+				}, "null"]
+			}]
+		}`)
+		c, err := ecsAvroParseFromBytes(ecsAvroConfig{rawUnion: true}, spec)
+		require.NoError(t, err)
+		fee := c.Children[0]
+		assert.Equal(t, schema.Object, fee.Type)
+		assert.True(t, fee.Optional)
+		require.Len(t, fee.Children, 1)
+		assert.Equal(t, "amount", fee.Children[0].Name)
+	})
+
+	t.Run("primitive, null second", func(t *testing.T) {
+		spec := []byte(`{
+			"type": "record",
+			"name": "Transfer",
+			"fields": [{"name": "ref", "type": ["string", "null"]}]
+		}`)
+		c, err := ecsAvroParseFromBytes(ecsAvroConfig{rawUnion: true}, spec)
+		require.NoError(t, err)
+		ref := c.Children[0]
+		assert.Equal(t, schema.String, ref.Type)
+		assert.True(t, ref.Optional)
+	})
+
+	t.Run("name reference, null second", func(t *testing.T) {
+		spec := []byte(`{
+			"type": "record",
+			"name": "Transfer",
+			"fields": [
+				{
+					"name": "primary_fee",
+					"type": {
+						"type": "record",
+						"name": "Fee",
+						"fields": [{"name": "amount", "type": "long"}]
+					}
+				},
+				{"name": "secondary_fee", "type": ["Fee", "null"]}
+			]
+		}`)
+		c, err := ecsAvroParseFromBytes(ecsAvroConfig{rawUnion: true}, spec)
+		require.NoError(t, err)
+		secondary := c.Children[1]
+		assert.Equal(t, schema.Object, secondary.Type)
+		assert.True(t, secondary.Optional)
+		require.Len(t, secondary.Children, 1)
+		assert.Equal(t, "amount", secondary.Children[0].Name)
+	})
+}
+
+// TestEcsAvroRawUnionNullableRecordNamespaced verifies that namespaced
+// record names can be referenced either by short name (Fee) or by fully-
+// qualified name (com.example.Fee), matching the Avro spec's name
+// resolution rules.
+func TestEcsAvroRawUnionNullableRecordNamespaced(t *testing.T) {
+	spec := []byte(`{
+		"type": "record",
+		"name": "Transfer",
+		"namespace": "com.example",
+		"fields": [
+			{
+				"name": "primary_fee",
+				"type": {
+					"type": "record",
+					"name": "Fee",
+					"namespace": "com.example",
+					"fields": [{"name": "amount", "type": "long"}]
+				}
+			},
+			{"name": "by_short_name", "type": ["null", "Fee"]},
+			{"name": "by_full_name", "type": ["null", "com.example.Fee"]}
+		]
+	}`)
+	c, err := ecsAvroParseFromBytes(ecsAvroConfig{rawUnion: true}, spec)
+	require.NoError(t, err)
+	require.Len(t, c.Children, 3)
+
+	short := c.Children[1]
+	assert.Equal(t, "by_short_name", short.Name)
+	assert.Equal(t, schema.Object, short.Type)
+	require.Len(t, short.Children, 1)
+
+	full := c.Children[2]
+	assert.Equal(t, "by_full_name", full.Name)
+	assert.Equal(t, schema.Object, full.Type)
+	require.Len(t, full.Children, 1)
+}
+
+// TestEcsAvroRawUnionNullableRecordNested covers CON-468 acceptance
+// criterion 2's "record-with-nested-record" case: a nullable record union
+// whose record contains its own nullable record union, both as inline
+// definitions and as name references at the inner level.
+func TestEcsAvroRawUnionNullableRecordNested(t *testing.T) {
+	spec := []byte(`{
+		"type": "record",
+		"name": "Transfer",
+		"fields": [
+			{
+				"name": "inner_template",
+				"type": {
+					"type": "record",
+					"name": "Inner",
+					"fields": [{"name": "code", "type": "string"}]
+				}
+			},
+			{
+				"name": "outer",
+				"type": ["null", {
+					"type": "record",
+					"name": "Outer",
+					"fields": [
+						{"name": "label", "type": "string"},
+						{"name": "inner", "type": ["null", "Inner"]}
+					]
+				}]
+			}
+		]
+	}`)
+	c, err := ecsAvroParseFromBytes(ecsAvroConfig{rawUnion: true}, spec)
+	require.NoError(t, err)
+	require.Len(t, c.Children, 2)
+
+	outer := c.Children[1]
+	assert.Equal(t, "outer", outer.Name)
+	assert.Equal(t, schema.Object, outer.Type)
+	assert.True(t, outer.Optional)
+	require.Len(t, outer.Children, 2)
+
+	inner := outer.Children[1]
+	assert.Equal(t, "inner", inner.Name)
+	assert.Equal(t, schema.Object, inner.Type, "nested name reference must resolve, not collapse to VARCHAR")
+	assert.True(t, inner.Optional)
+	require.Len(t, inner.Children, 1)
+	assert.Equal(t, "code", inner.Children[0].Name)
+}
+
 // TestEcsAvroRecordWithNilFields is a regression test for schemas where a
 // field's type is a record object without a "fields" key (e.g. back-reference
 // form {"type":"record","name":"Party"} or "fields":null from some generators).

@@ -74,6 +74,16 @@ type ecsAvroConfig struct {
 	// but the metadata still claims Int64 — the exact mismatch fixed
 	// for sibling-form Avro by [applyAvroLogicalType].
 	translateKafkaConnectTypes bool
+
+	// names accumulates resolved record/enum/fixed definitions during a
+	// single parse so that string-form references (e.g. "Fee" in
+	// ["null", "Fee"]) can be expanded to their full Common shape. The
+	// map is lazily allocated by ecsAvroParseFromBytes and shared by
+	// reference through recursive ecsAvroFromAnyMap calls; mutations from
+	// sub-trees propagate to later siblings as the Avro spec requires
+	// (named types are lexically scoped from the schema root, and a name
+	// must be defined before it is referenced).
+	names map[string]schema.Common
 }
 
 // ecsAvroParseFromBytes parses an Avro JSON spec into a schema.Common. The
@@ -81,6 +91,9 @@ type ecsAvroConfig struct {
 // decimal field paths during value normalisation; callers that just want
 // the metadata copy can call ToAny() on the result.
 func ecsAvroParseFromBytes(cfg ecsAvroConfig, specBytes []byte) (schema.Common, error) {
+	if cfg.names == nil {
+		cfg.names = map[string]schema.Common{}
+	}
 	var as any
 	if err := json.Unmarshal(specBytes, &as); err != nil {
 		return schema.Common{}, err
@@ -109,51 +122,75 @@ func ecsAvroParseFromBytes(cfg ecsAvroConfig, specBytes []byte) (schema.Common, 
 	return schema.Common{}, fmt.Errorf("expected either an array or object at root of schema, got %T", as)
 }
 
-// If the union is actually just a verbose way of defining an optional field
-// then we return the real type and true. E.g. if we see:
+// ecsAvroResolveOptionalUnion checks whether a 2-element union is just a
+// nullable wrapper (one branch is "null") and returns the resolved non-null
+// branch as a Common with Optional=true.
 //
-// `"type": [ "null", "string" ]`
+// Handles both orderings ([null, X] and [X, null]) and resolves the non-null
+// branch in three forms:
 //
-// Then we return string and true.
-func ecsAvroIsUnionJustOptional(types []any) (schema.CommonType, bool) {
+//   - a primitive type name string (e.g. "string"),
+//   - a previously-defined named-type reference string (e.g. "Fee"),
+//     resolved via cfg.names per the Avro lexical-scope rule,
+//   - an inline type definition object (e.g. {"type":"record",...}).
+//
+// Returns (Common{}, false) when the union doesn't fit this shape (length
+// != 2, no "null" branch, two non-null branches, or an inline object that
+// fails to parse).
+func ecsAvroResolveOptionalUnion(cfg ecsAvroConfig, types []any) (schema.Common, bool) {
 	if len(types) != 2 {
-		return schema.CommonType(-1), false
+		return schema.Common{}, false
 	}
-
-	firstTypeStr, ok := types[0].(string)
-	if !ok || firstTypeStr != "null" {
-		return schema.CommonType(-1), false
+	var other any
+	for _, t := range types {
+		if s, ok := t.(string); ok && s == "null" {
+			continue
+		}
+		if other != nil {
+			// Two non-null branches — not a nullable wrapper.
+			return schema.Common{}, false
+		}
+		other = t
 	}
-
-	secondTypeStr, ok := types[1].(string)
+	if other == nil {
+		return schema.Common{}, false
+	}
+	inner, ok := ecsAvroResolveTypeRef(cfg, other)
 	if !ok {
-		return schema.CommonType(-1), false
+		return schema.Common{}, false
 	}
-
-	return ecsAvroTypeToCommon(secondTypeStr), true
+	inner.Optional = true
+	return inner, true
 }
 
-// ecsAvroIsUnionJustOptionalObject mirrors ecsAvroIsUnionJustOptional but
-// for the [null, {object}] shape — Avro's idiom for a nullable named or
-// logically-typed field. Returns the resolved Common (with any
-// LogicalParams populated) and true on match.
-func ecsAvroIsUnionJustOptionalObject(cfg ecsAvroConfig, types []any) (schema.Common, bool) {
-	if len(types) != 2 {
-		return schema.Common{}, false
+// ecsAvroResolveTypeRef resolves a single Avro type reference — the value
+// of a "type" field, or one branch of a union — to a Common. The reference
+// may be a primitive type name string, a previously-defined named-type
+// reference string (resolved via cfg.names), or an inline type definition
+// object.
+//
+// Returns (Common{}, false) only when an inline object fails to parse.
+// Unknown string names fall back to schema.Any so that downstream sinks
+// see a sensible (if structureless) column rather than a parse error.
+func ecsAvroResolveTypeRef(cfg ecsAvroConfig, ref any) (schema.Common, bool) {
+	switch b := ref.(type) {
+	case string:
+		// Try the names map first so a name reference takes priority over
+		// the schema.Any fallback in ecsAvroTypeToCommon. Primitive names
+		// are never registered in the map, so primitives reach the
+		// fallback unchanged.
+		if resolved, ok := cfg.names[b]; ok {
+			return resolved, true
+		}
+		return schema.Common{Type: ecsAvroTypeToCommon(b)}, true
+	case map[string]any:
+		inner, err := ecsAvroFromAnyMap(cfg, b)
+		if err != nil {
+			return schema.Common{}, false
+		}
+		return inner, true
 	}
-	firstStr, ok := types[0].(string)
-	if !ok || firstStr != "null" {
-		return schema.Common{}, false
-	}
-	secondMap, ok := types[1].(map[string]any)
-	if !ok {
-		return schema.Common{}, false
-	}
-	c, err := ecsAvroFromAnyMap(cfg, secondMap)
-	if err != nil {
-		return schema.Common{}, false
-	}
-	return c, true
+	return schema.Common{}, false
 }
 
 // applyAvroLogicalType reads the optional "logicalType" annotation from an
@@ -471,38 +508,25 @@ func ecsAvroTypeToCommon(t string) schema.CommonType {
 }
 
 func ecsAvroHydrateRawUnion(cfg ecsAvroConfig, c *schema.Common, types []any) error {
-	// [null, primitive-name] → Optional <primitive>.
-	if t, optional := ecsAvroIsUnionJustOptional(types); optional {
-		c.Type, c.Optional = t, true
-		return nil
-	}
-	// [null, {object}] → Optional <object>, propagating logical params and
-	// nested children. This catches the common Avro idiom for nullable
-	// decimal/timestamp/etc. logical types.
-	if inner, ok := ecsAvroIsUnionJustOptionalObject(cfg, types); ok {
+	// [null, X] or [X, null] → Optional X. ecsAvroResolveOptionalUnion
+	// handles primitive names, named-type references, and inline objects
+	// in either ordering.
+	if inner, ok := ecsAvroResolveOptionalUnion(cfg, types); ok {
 		name := c.Name
 		*c = inner
 		if name != "" {
 			c.Name = name
 		}
-		c.Optional = true
 		return nil
 	}
 
 	c.Type = schema.Union
 	for i, uObj := range types {
-		switch ut := uObj.(type) {
-		case string:
-			c.Children = append(c.Children, schema.Common{
-				Type: ecsAvroTypeToCommon(ut),
-			})
-		case map[string]any:
-			tmpC, err := ecsAvroFromAnyMap(cfg, ut)
-			if err != nil {
-				return fmt.Errorf("union `%v` child '%v': %w", c.Name, i, err)
-			}
-			c.Children = append(c.Children, tmpC)
+		child, ok := ecsAvroResolveTypeRef(cfg, uObj)
+		if !ok {
+			return fmt.Errorf("union `%v` child '%v': could not resolve type %T", c.Name, i, uObj)
 		}
+		c.Children = append(c.Children, child)
 	}
 	return nil
 }
@@ -544,6 +568,42 @@ func ecsAvroHydrateLameUnion(cfg ecsAvroConfig, c *schema.Common, types []any) e
 }
 
 func ecsAvroFromAnyMap(cfg ecsAvroConfig, as map[string]any) (schema.Common, error) {
+	c, err := ecsAvroFromAnyMapImpl(cfg, as)
+	if err == nil {
+		ecsAvroRegisterNamedType(cfg, as, c)
+	}
+	return c, err
+}
+
+// ecsAvroRegisterNamedType records a resolved record/enum/fixed Common in
+// cfg.names so that later string-form references (e.g. "Fee" instead of an
+// inline record definition) can be expanded. Avro's lexical-scope rule
+// requires the name to appear before any reference, so a single forward-only
+// pass through the schema is sufficient. Recursive types — where a record's
+// own children reference it by name before its definition completes — are
+// not supported by this approach; the registered entry must not be mutated
+// after registration to avoid surprising aliasing with later look-ups.
+func ecsAvroRegisterNamedType(cfg ecsAvroConfig, as map[string]any, c schema.Common) {
+	if cfg.names == nil {
+		return
+	}
+	typeName, _ := as["type"].(string)
+	switch typeName {
+	case "record", "enum", "fixed":
+	default:
+		return
+	}
+	name, _ := as["name"].(string)
+	if name == "" {
+		return
+	}
+	cfg.names[name] = c
+	if ns, _ := as["namespace"].(string); ns != "" {
+		cfg.names[ns+"."+name] = c
+	}
+}
+
+func ecsAvroFromAnyMapImpl(cfg ecsAvroConfig, as map[string]any) (schema.Common, error) {
 	var c schema.Common
 	c.Name, _ = as["name"].(string)
 
@@ -580,6 +640,16 @@ func ecsAvroFromAnyMap(cfg ecsAvroConfig, as map[string]any) (schema.Common, err
 		}
 		return c, nil
 	case string:
+		// String form may be a primitive type name OR a name reference to
+		// a previously-defined record/enum/fixed in lexical scope.
+		if resolved, ok := cfg.names[t]; ok {
+			fieldName := c.Name
+			c = resolved
+			if fieldName != "" {
+				c.Name = fieldName
+			}
+			return c, nil
+		}
 		c.Type = ecsAvroTypeToCommon(t)
 	case map[string]any:
 		// The type field is an object (e.g. {"type":"map","values":"long"}).
