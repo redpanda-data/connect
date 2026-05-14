@@ -54,13 +54,15 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 	}
 
 	var (
-		licenseConfig       = defaultLicenseConfig()
-		chrootPath          string
-		chrootPassthrough   []string
-		disableTelemetry    bool
-		authzResourceName   string
-		authzPolicyFile     string
-		authzPolicyEndpoint string
+		licenseConfig           = defaultLicenseConfig()
+		chrootPath              string
+		chrootPassthrough       []string
+		disableTelemetry        bool
+		telemetryDeploymentType string
+		telemetryTenantID       string
+		authzResourceName       string
+		authzPolicyFile         string
+		authzPolicyEndpoint     string
 	)
 
 	flags := []cli.Flag{
@@ -156,7 +158,7 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 
 			// Kick off telemetry exporter
 			if !disableTelemetry {
-				telemetry.ActivateExporter(instanceID, version, fbLogger, schema, pConf)
+				telemetry.ActivateExporter(instanceID, version, telemetryDeploymentType, telemetryTenantID, fbLogger, schema, pConf)
 			}
 			return rpMgr.InitFromParsedConfig(pConf.Namespace("redpanda"))
 		}),
@@ -174,6 +176,14 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 						Name:  "disable-telemetry",
 						Usage: "Disable anonymous telemetry from being emitted by this Connect instance.",
 					},
+					&cli.StringFlag{
+						Name:  "telemetry-deployment-type",
+						Usage: "Tags telemetry payloads with the deployment type. Expected values: self-hosted, byoc, serverless. When unset the field is omitted from the payload.",
+					},
+					&cli.StringFlag{
+						Name:  "telemetry-tenant-id",
+						Usage: "Tags telemetry payloads with an opaque tenant identifier (typically the Redpanda Cloud organization ID for cloud-managed deployments). When unset the field is omitted from the payload.",
+					},
 					&cli.StringSliceFlag{
 						Name:  "rpc-plugins",
 						Usage: "Plugins to load over the RPC interface. This flag should point to manifest files containing the plugin definitions. Globs are also supported.",
@@ -187,6 +197,8 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 				chrootPath = c.String("chroot")
 				chrootPassthrough = c.StringSlice("chroot-passthrough")
 				disableTelemetry = c.Bool("disable-telemetry")
+				telemetryDeploymentType = c.String("telemetry-deployment-type")
+				telemetryTenantID = c.String("telemetry-tenant-id")
 
 				if secretLookupFn, err = parseSecretsFlag(slog.New(rpLogger), c); err != nil {
 					return err
