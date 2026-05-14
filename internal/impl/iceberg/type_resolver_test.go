@@ -169,6 +169,57 @@ func TestCommonTypeToIcebergType(t *testing.T) {
 	}
 }
 
+// TestCommonTypeToIcebergType_MapAndUnion closes the coverage gap the
+// common-schema-audit skill flagged: Map and Union previously fell into
+// the type switch's `default` arm with a generic "unsupported" error.
+// Map now maps to MapType<String, Value>; Union still errors but with a
+// remediation-pointer message rather than the generic one.
+func TestCommonTypeToIcebergType_MapAndUnion(t *testing.T) {
+	t.Run("Map of String->Int64", func(t *testing.T) {
+		root := schema.Common{
+			Type:     schema.Map,
+			Children: []schema.Common{{Type: schema.Int64}},
+		}
+		got, err := commonTypeToIcebergType(&root, newTypeInferrer(true))
+		require.NoError(t, err)
+		mt, ok := got.(*iceberg.MapType)
+		require.True(t, ok, "want *iceberg.MapType, got %T", got)
+		assert.Equal(t, "string", mt.KeyType.Type())
+		assert.Equal(t, "long", mt.ValueType.Type())
+	})
+
+	t.Run("Map of String->Timestamp", func(t *testing.T) {
+		root := schema.Common{
+			Type: schema.Map,
+			Children: []schema.Common{
+				{Type: schema.Timestamp, Logical: &schema.LogicalParams{
+					Timestamp: &schema.TimestampParams{Unit: schema.TimeUnitMillis, AdjustToUTC: true},
+				}},
+			},
+		}
+		got, err := commonTypeToIcebergType(&root, newTypeInferrer(true))
+		require.NoError(t, err)
+		mt, ok := got.(*iceberg.MapType)
+		require.True(t, ok)
+		assert.Equal(t, "timestamptz", mt.ValueType.Type())
+	})
+
+	t.Run("Map with wrong child arity errors clearly", func(t *testing.T) {
+		root := schema.Common{Type: schema.Map}
+		_, err := commonTypeToIcebergType(&root, newTypeInferrer(true))
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "exactly one value-type child")
+	})
+
+	t.Run("Union refused loudly", func(t *testing.T) {
+		root := schema.Common{Name: "u", Type: schema.Union}
+		_, err := commonTypeToIcebergType(&root, newTypeInferrer(true))
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "Union")
+		assert.Contains(t, err.Error(), "flatten", "error must point at the upstream remediation")
+	})
+}
+
 func TestFindCommonField(t *testing.T) {
 	root := schema.Common{
 		Type: schema.Object,

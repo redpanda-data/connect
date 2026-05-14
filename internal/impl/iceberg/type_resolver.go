@@ -288,6 +288,13 @@ func commonTypeToIcebergTypeRec(c *schema.Common, ti *typeInferrer) (iceberg.Typ
 		return commonObjectToIcebergStruct(c, ti)
 	case schema.Array:
 		return commonArrayToIcebergList(c, ti)
+	case schema.Map:
+		return commonMapToIcebergMap(c, ti)
+	case schema.Union:
+		// Iceberg has no native union type. Surface the constraint
+		// loudly with a remediation pointer rather than the generic
+		// "unsupported" error — same pattern as parquet_encode.
+		return nil, fmt.Errorf("field %q is Union which iceberg cannot express; flatten to a single branch upstream (typically by projecting to the non-null variant) before iceberg", c.Name)
 	case schema.Any, schema.Null:
 		return iceberg.StringType{}, nil
 	default:
@@ -339,6 +346,26 @@ func commonArrayToIcebergList(c *schema.Common, ti *typeInferrer) (*iceberg.List
 		ElementID:       ti.allocateFieldID(),
 		Element:         elemType,
 		ElementRequired: false,
+	}, nil
+}
+
+// commonMapToIcebergMap converts a schema.Common Map (which always keys on
+// string by convention, with the single child describing the value type)
+// to an iceberg.MapType. Mirrors the Avro / parquet conventions.
+func commonMapToIcebergMap(c *schema.Common, ti *typeInferrer) (*iceberg.MapType, error) {
+	if len(c.Children) != 1 {
+		return nil, fmt.Errorf("map type must have exactly one value-type child, got %d", len(c.Children))
+	}
+	valType, err := commonTypeToIcebergTypeRec(&c.Children[0], ti)
+	if err != nil {
+		return nil, fmt.Errorf("map value: %w", err)
+	}
+	return &iceberg.MapType{
+		KeyID:         ti.allocateFieldID(),
+		KeyType:       iceberg.StringType{},
+		ValueID:       ti.allocateFieldID(),
+		ValueType:     valType,
+		ValueRequired: false,
 	}, nil
 }
 
