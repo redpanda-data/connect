@@ -81,26 +81,11 @@ func (encodingCoercionVisitor) visitLeaf(value any, schemaNode parquet.Node) (an
 		return value, nil
 	}
 	if logicalType.Timestamp != nil {
-		switch v := value.(type) {
-		case string:
-			ts, err := time.Parse(time.RFC3339, v)
-			if err != nil {
-				return nil, fmt.Errorf("parsing string RFC3339 timestamp: %w", err)
-			}
-			unit := logicalType.Timestamp.Unit
-			switch {
-			case unit.Millis != nil:
-				return ts.UnixMilli(), nil
-			case unit.Micros != nil:
-				return ts.UnixMicro(), nil
-			case unit.Nanos != nil:
-				return ts.UnixNano(), nil
-			default:
-				return nil, errors.New("unreachable branch while processing parquet timestamp")
-			}
-		default:
-			return nil, errors.New("TIMESTAMP values must be RFC3339-formatted strings")
-		}
+		return coerceTimestampForEncode(value, logicalType.Timestamp)
+	} else if logicalType.Date != nil {
+		return coerceDateForEncode(value)
+	} else if logicalType.Time != nil {
+		return coerceTimeForEncode(value, logicalType.Time)
 	} else if logicalType.Json != nil {
 		jsonBytes, err := json.Marshal(value)
 		if err != nil {
@@ -123,6 +108,138 @@ func (encodingCoercionVisitor) visitLeaf(value any, schemaNode parquet.Node) (an
 	}
 
 	return value, nil
+}
+
+// coerceTimestampForEncode converts a value into the parquet physical
+// representation for a TIMESTAMP-typed column (int64 in the column's
+// declared unit). Accepts:
+//
+//   - time.Time — produced by the value-side decoder when
+//     preserve_logical_types is enabled. Scaled to the column's unit
+//     via UnixMilli/UnixMicro/UnixNano.
+//   - numeric (int64 / int32 / int / float64) — assumed to be already
+//     in the column's declared unit. This matches the column-honouring
+//     path the iceberg shredder uses for numeric inputs into time-typed
+//     columns; the schema's Unit is the authoritative source of truth.
+//   - RFC3339 string — historical path for callers that pre-format
+//     timestamps as ISO 8601 strings. Parsed via time.Parse then scaled.
+func coerceTimestampForEncode(value any, ts *format.TimestampType) (any, error) {
+	scale := func(t time.Time) (int64, error) {
+		switch unit := ts.Unit; {
+		case unit.Millis != nil:
+			return t.UnixMilli(), nil
+		case unit.Micros != nil:
+			return t.UnixMicro(), nil
+		case unit.Nanos != nil:
+			return t.UnixNano(), nil
+		default:
+			return 0, errors.New("unreachable branch while processing parquet timestamp")
+		}
+	}
+	switch v := value.(type) {
+	case time.Time:
+		return scale(v)
+	case string:
+		t, err := time.Parse(time.RFC3339, v)
+		if err != nil {
+			return nil, fmt.Errorf("parsing string RFC3339 timestamp: %w", err)
+		}
+		return scale(t)
+	case int64:
+		return v, nil
+	case int32:
+		return int64(v), nil
+	case int:
+		return int64(v), nil
+	case float64:
+		return int64(v), nil
+	default:
+		return nil, fmt.Errorf("TIMESTAMP values must be time.Time, RFC3339 string, or numeric; got %T", value)
+	}
+}
+
+// coerceDateForEncode converts a value into the parquet physical
+// representation for a DATE column (int32 days-since-epoch). Accepts
+// time.Time (UTC-floored to midnight), numeric (assumed already
+// days-since-epoch), and ISO 8601 date strings.
+func coerceDateForEncode(value any) (any, error) {
+	switch v := value.(type) {
+	case time.Time:
+		secs := v.UTC().Unix()
+		days := secs / 86400
+		if secs < 0 && secs%86400 != 0 {
+			days--
+		}
+		return int32(days), nil
+	case string:
+		t, err := time.Parse(time.RFC3339, v)
+		if err != nil {
+			// Fall back to bare-date form (YYYY-MM-DD) before giving up.
+			if t2, err2 := time.Parse("2006-01-02", v); err2 == nil {
+				t = t2
+			} else {
+				return nil, fmt.Errorf("parsing DATE string %q: %w", v, err)
+			}
+		}
+		return int32(t.UTC().Unix() / 86400), nil
+	case int32:
+		return v, nil
+	case int64:
+		return int32(v), nil
+	case int:
+		return int32(v), nil
+	case float64:
+		return int32(v), nil
+	default:
+		return nil, fmt.Errorf("DATE values must be time.Time, date string, or numeric days-since-epoch; got %T", value)
+	}
+}
+
+// coerceTimeForEncode converts a value into the parquet physical
+// representation for a TIME column (int32 millis for millis unit, int64
+// otherwise). Accepts time.Duration, time.Time (wall-clock portion),
+// and numeric inputs assumed to already be in the column's declared
+// unit.
+func coerceTimeForEncode(value any, tt *format.TimeType) (any, error) {
+	isMillis := tt.Unit.Millis != nil
+	durationToUnit := func(d time.Duration) int64 {
+		switch unit := tt.Unit; {
+		case unit.Millis != nil:
+			return d.Milliseconds()
+		case unit.Micros != nil:
+			return d.Microseconds()
+		case unit.Nanos != nil:
+			return d.Nanoseconds()
+		default:
+			return int64(d)
+		}
+	}
+	wrap := func(n int64) any {
+		if isMillis {
+			return int32(n)
+		}
+		return n
+	}
+	switch v := value.(type) {
+	case time.Duration:
+		return wrap(durationToUnit(v)), nil
+	case time.Time:
+		d := time.Duration(v.Hour())*time.Hour +
+			time.Duration(v.Minute())*time.Minute +
+			time.Duration(v.Second())*time.Second +
+			time.Duration(v.Nanosecond())*time.Nanosecond
+		return wrap(durationToUnit(d)), nil
+	case int64:
+		return wrap(v), nil
+	case int32:
+		return wrap(int64(v)), nil
+	case int:
+		return wrap(int64(v)), nil
+	case float64:
+		return wrap(int64(v)), nil
+	default:
+		return nil, fmt.Errorf("TIME values must be time.Duration, time.Time, or numeric; got %T", value)
+	}
 }
 
 // coerceDecimalForEncode converts a canonical decimal string (the value
