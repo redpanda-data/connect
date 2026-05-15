@@ -114,19 +114,26 @@ func NewTxnLOBState() *TxnLOBState {
 
 // MergeLOBsIntoDMLEvents matches each LOB accumulator to its corresponding DML
 // event (by schema, table, and PK values) and overwrites the LOB column value
-// with the assembled data.
+// with the assembled data. It returns any accumulators whose data could not be
+// merged — the caller should synthesize DML events for these (see logminer.go).
 //
 // For small LOBs stored inline, Oracle emits both the original INSERT (with empty
 // LOB placeholders) and a subsequent LOB-initialisation UPDATE (with only LOB columns).
 // To ensure the LOB values land on the INSERT rather than the UPDATE, this function
 // first searches forward for an INSERT event with a matching PK, then falls back to
 // the most-recent matching DML event of any type.
-func MergeLOBsIntoDMLEvents(state *TxnLOBState, events []*DMLEvent, log *service.Logger) {
+//
+// Oracle SecureFile out-of-row LOBs may emit only SELECT_LOB_LOCATOR + LOB_WRITE +
+// LOB_TRIM with no DML UPDATE. In that case all three passes find nothing and the
+// accumulator is returned as unmerged so the caller can synthesize a synthetic UPDATE.
+func MergeLOBsIntoDMLEvents(state *TxnLOBState, events []*DMLEvent, log *service.Logger) []*LobAccumulator {
 	logDebugf := func(msg string, args ...any) {
 		if log != nil {
 			log.Debugf(msg, args...)
 		}
 	}
+
+	var unmerged []*LobAccumulator
 
 	for _, acc := range state.Accumulators {
 		assembled := acc.Assemble()
@@ -137,8 +144,8 @@ func MergeLOBsIntoDMLEvents(state *TxnLOBState, events []*DMLEvent, log *service
 
 		merged := false
 
-		// Prefer merging into an INSERT so that Oracle's internal LOB-initialisation
-		// UPDATE (which only carries LOB columns) does not shadow the original INSERT.
+		// Pass 1: prefer an INSERT event with matching PK so that Oracle's
+		// LOB-initialisation UPDATE does not shadow the original INSERT.
 		for i := range events {
 			ev := events[i]
 			if ev.Operation != OpInsert {
@@ -159,13 +166,15 @@ func MergeLOBsIntoDMLEvents(state *TxnLOBState, events []*DMLEvent, log *service
 			continue
 		}
 
-		// Fall back to the most-recent matching DML event of any operation type.
+		// Pass 2: fall back to the most-recent DML event of any type with a matching PK.
+		// For LOB-only UPDATE events the SET clause contains only LOB columns, so
+		// PK columns are not in ev.Data — they are in ev.OldValues (WHERE clause).
 		for i := len(events) - 1; i >= 0; i-- {
 			ev := events[i]
 			if ev.Schema != acc.Schema || ev.Table != acc.Table {
 				continue
 			}
-			if pkMatches(ev.Data, acc.PKValues) {
+			if pkMatches(ev.Data, acc.PKValues) || pkMatches(ev.OldValues, acc.PKValues) {
 				ev.Data[acc.Column] = assembled
 				merged = true
 				logDebugf("LOB merge: set %s.%s.%s (pks=%v, fragments=%d)", acc.Schema, acc.Table, acc.Column, acc.PKValues, len(acc.Fragments))
@@ -173,10 +182,31 @@ func MergeLOBsIntoDMLEvents(state *TxnLOBState, events []*DMLEvent, log *service
 			}
 		}
 
+		if merged {
+			continue
+		}
+
+		// Pass 3: schema/table-only fallback. Oracle SecureFile LOB-init UPDATEs
+		// sometimes carry only ROWID in their WHERE clause (no PK columns), making
+		// PK matching impossible. If there is exactly one candidate event for this
+		// table, merge unconditionally; otherwise take the most recent one.
+		for i := len(events) - 1; i >= 0; i-- {
+			ev := events[i]
+			if ev.Schema == acc.Schema && ev.Table == acc.Table {
+				ev.Data[acc.Column] = assembled
+				merged = true
+				logDebugf("LOB merge: set %s.%s.%s via schema/table fallback (fragments=%d)", acc.Schema, acc.Table, acc.Column, len(acc.Fragments))
+				break
+			}
+		}
+
 		if !merged {
-			logDebugf("LOB merge: no matching DML event found for %s.%s.%s (pks=%v)", acc.Schema, acc.Table, acc.Column, acc.PKValues)
+			logDebugf("LOB merge: no matching DML event for %s.%s.%s (pks=%v) — will synthesize UPDATE", acc.Schema, acc.Table, acc.Column, acc.PKValues)
+			unmerged = append(unmerged, acc)
 		}
 	}
+
+	return unmerged
 }
 
 // MergeInlineLOBValues merges LOB column values from an inline-LOB-only UPDATE into the

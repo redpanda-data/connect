@@ -271,19 +271,17 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 
 		lm.txnCache.AddEvent(redoEvent.TransactionID, redoEvent.SCN, &event)
 
-	case sqlredo.OpSelectLobLocator, sqlredo.OpLobTrim:
+	case sqlredo.OpSelectLobLocator:
 		if !lm.cfg.LOBEnabled {
 			return nil
 		}
 		if !redoEvent.SQLRedo.Valid || redoEvent.SQLRedo.String == "" {
-			lm.log.Warnf("Skipping %s with no SQL_REDO (scn=%d, txn=%s)", redoEvent.Operation, redoEvent.SCN, redoEvent.TransactionID)
+			lm.log.Warnf("Skipping SELECT_LOB_LOCATOR with no SQL_REDO (scn=%d, txn=%s)", redoEvent.SCN, redoEvent.TransactionID)
 			return nil
 		}
-		// LOB_TRIM SQL has the same SELECT "COL" INTO ... FROM "SCHEMA"."TABLE" WHERE ...
-		// structure as SELECT_LOB_LOCATOR, so the same parser works for both.
 		info, err := sqlredo.ParseSelectLobLocator(redoEvent.SQLRedo.String)
 		if err != nil {
-			lm.log.Warnf("Failed to parse %s SQL (scn=%d, txn=%s): %v\nSQL: %.500s", redoEvent.Operation, redoEvent.SCN, redoEvent.TransactionID, err, redoEvent.SQLRedo.String)
+			lm.log.Warnf("Failed to parse SELECT_LOB_LOCATOR SQL (scn=%d, txn=%s): %v\nSQL: %.500s", redoEvent.SCN, redoEvent.TransactionID, err, redoEvent.SQLRedo.String)
 			return nil
 		}
 		// Resolve LOB type from the schema cache populated at startup.
@@ -307,6 +305,70 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 			}
 		}
 		state.ActiveKey = &key
+
+	case sqlredo.OpLobTrim:
+		if !lm.cfg.LOBEnabled {
+			return nil
+		}
+		// LOB_TRIM (op 11) comes in two forms depending on Oracle LOB type:
+		//
+		// Form A — SELECT "COL" INTO ... FROM "SCHEMA"."TABLE" WHERE ...
+		//   Emitted for certain LOB types (e.g. out-of-line SecureFile) without a preceding
+		//   SELECT_LOB_LOCATOR. In this case LOB_TRIM itself must establish the accumulator.
+		//
+		// Form B — dbms_lob.trim(loc_b, N)
+		//   Emitted when a SELECT_LOB_LOCATOR has already established the active key.
+		//   No schema/table/column info is present; we just clear accumulated fragments so
+		//   subsequent LOB_WRITE calls start with a clean slate.
+		//
+		//   When N=0 this is the standard "clear before full rewrite" pattern and clearing
+		//   fragments is correct. When N>0, Oracle means "keep the first N bytes/chars" of
+		//   the pre-existing LOB — data we do not hold in the accumulator. The assembled
+		//   value will be incomplete in that case (missing the preserved prefix).
+		if redoEvent.SQLRedo.Valid && redoEvent.SQLRedo.String != "" {
+			if info, err := sqlredo.ParseSelectLobLocator(redoEvent.SQLRedo.String); err == nil {
+				// Form A: establish (or reset) the accumulator for this LOB column.
+				colKey := fmt.Sprintf("%s.%s.%s", info.Schema, info.Table, info.Column)
+				lobType := lm.lobColTypes[strings.ToUpper(colKey)]
+				state := lm.getOrCreateLOBState(redoEvent.TransactionID)
+				key := sqlredo.LobKey{
+					Schema:   info.Schema,
+					Table:    info.Table,
+					Column:   info.Column,
+					PKString: sqlredo.FormatPKString(info.PKValues),
+				}
+				state.Accumulators[key] = &sqlredo.LobAccumulator{
+					Schema:   info.Schema,
+					Table:    info.Table,
+					Column:   info.Column,
+					PKValues: info.PKValues,
+					IsBinary: lobType == "BLOB",
+				}
+				state.ActiveKey = &key
+				return nil
+			}
+		}
+		// Form B: LOB_TRIM carries no schema/table/column info — the active key was
+		// already established by SELECT_LOB_LOCATOR. Oracle may emit LOB_TRIM before
+		// LOB_WRITE (BASICFILE "clear then write") or after (SecureFile "write then
+		// finalize"). In both cases the accumulator should be left untouched:
+		//   - Before LOB_WRITE: accumulator is empty anyway, so there is nothing to clear.
+		//   - After LOB_WRITE:  fragments are already accumulated; clearing them would
+		//     destroy the data before commit.
+		state, exists := lm.lobStates[redoEvent.TransactionID]
+		if !exists || state.ActiveKey == nil {
+			return nil
+		}
+		if redoEvent.SQLRedo.Valid && redoEvent.SQLRedo.String != "" {
+			if trimLen, err := sqlredo.ParseLobTrim(redoEvent.SQLRedo.String); err == nil && trimLen > 0 {
+				// N>0 with no prior LOB_WRITEs would indicate a genuine partial truncation
+				// where the existing prefix is preserved. We cannot reconstruct that prefix
+				// from redo alone, so warn but still emit what was written.
+				if acc := state.Accumulators[*state.ActiveKey]; acc != nil && len(acc.Fragments) == 0 {
+					lm.log.Warnf("LOB_TRIM to non-zero length %d with no prior LOB_WRITE (scn=%d, txn=%s): assembled value may be incomplete", trimLen, redoEvent.SCN, redoEvent.TransactionID)
+				}
+			}
+		}
 
 	case sqlredo.OpLobWrite:
 		if !lm.cfg.LOBEnabled {
@@ -358,7 +420,28 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 			if lm.cfg.LOBEnabled {
 				// Merge any accumulated LOB data into DML events before publishing.
 				if state, ok := lm.lobStates[redoEvent.TransactionID]; ok {
-					sqlredo.MergeLOBsIntoDMLEvents(state, txn.Events, lm.log)
+					unmerged := sqlredo.MergeLOBsIntoDMLEvents(state, txn.Events, lm.log)
+					// Synthesize UPDATE events for LOB accumulators that had no matching DML
+					// event. This handles Oracle SecureFile out-of-row LOBs where Oracle does
+					// not emit a DML UPDATE in LogMiner — only SELECT_LOB_LOCATOR + LOB_WRITE
+					// + LOB_TRIM operations are recorded.
+					for _, acc := range unmerged {
+						assembled := acc.Assemble()
+						if assembled == nil {
+							continue
+						}
+						synthetic := &sqlredo.DMLEvent{
+							Operation:     sqlredo.OpUpdate,
+							Schema:        acc.Schema,
+							Table:         acc.Table,
+							Data:          map[string]any{acc.Column: assembled},
+							OldValues:     acc.PKValues,
+							TransactionID: redoEvent.TransactionID,
+							Timestamp:     redoEvent.Timestamp,
+						}
+						txn.Events = append(txn.Events, synthetic)
+						lm.log.Debugf("LOB merge: synthesized UPDATE for %s.%s.%s (pks=%v, fragments=%d)", acc.Schema, acc.Table, acc.Column, acc.PKValues, len(acc.Fragments))
+					}
 				}
 			}
 
