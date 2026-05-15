@@ -40,19 +40,21 @@ import (
 )
 
 const (
-	bqwaFieldProject             = "project"
-	bqwaFieldDataset             = "dataset"
-	bqwaFieldTable               = "table"
-	bqwaFieldMessageFormat       = "message_format"
-	bqwaFieldBatching            = "batching"
-	bqwaFieldCredentialsJSON     = "credentials_json"
-	bqwaFieldTargetPrincipal     = "target_principal"
-	bqwaFieldDelegates           = "delegates"
-	bqwaFieldStreamIdleTimeout   = "stream_idle_timeout"
-	bqwaFieldStreamSweepInterval = "stream_sweep_interval"
-	bqwaFieldEndpoint            = "endpoint"
-	bqwaepFieldHTTP              = "http"
-	bqwaepFieldGRPC              = "grpc"
+	bqwaFieldProject                = "project"
+	bqwaFieldDataset                = "dataset"
+	bqwaFieldTable                  = "table"
+	bqwaFieldMessageFormat          = "message_format"
+	bqwaFieldBatching               = "batching"
+	bqwaFieldCredentialsJSON        = "credentials_json"
+	bqwaFieldTargetPrincipal        = "target_principal"
+	bqwaFieldDelegates              = "delegates"
+	bqwaFieldStreamIdleTimeout      = "stream_idle_timeout"
+	bqwaFieldStreamSweepInterval    = "stream_sweep_interval"
+	bqwaFieldSchemaResolveTimeout   = "schema_resolve_timeout"
+	bqwaFieldSchemaEvolutionTimeout = "schema_evolution_timeout"
+	bqwaFieldEndpoint               = "endpoint"
+	bqwaepFieldHTTP                 = "http"
+	bqwaepFieldGRPC                 = "grpc"
 )
 
 func init() {
@@ -135,6 +137,18 @@ A name that sanitizes to the empty string is rejected as a permanent error.
 				Description("How often to check for idle streams to close.").
 				Advanced().
 				Default("1m"),
+			service.NewDurationField(bqwaFieldSchemaResolveTimeout).
+				Description("How long a single BigQuery table-metadata fetch can run before being aborted."+
+					" Coalesced concurrent resolves share one fetch, so this bounds the time a wedged backend"+
+					" can stall every batch routing to the same table.").
+				Advanced().
+				Default("5s"),
+			service.NewDurationField(bqwaFieldSchemaEvolutionTimeout).
+				Description("Total time budget for a single schema evolution attempt (Metadata + Update"+
+					" across all CAS retries on HTTP 412). Bounds how long the WriteBatch retry loop can be"+
+					" starved by a wedged backend.").
+				Advanced().
+				Default("30s"),
 			service.NewObjectField(bqwaFieldEndpoint,
 				service.NewStringField(bqwaepFieldHTTP).
 					Description("Override the BigQuery HTTP endpoint."+
@@ -151,16 +165,18 @@ A name that sanitizes to the empty string is rejected as a permanent error.
 }
 
 type bigQueryWriteAPIConfig struct {
-	ProjectID           string
-	DatasetID           string
-	MessageFormat       string
-	CredentialsJSON     string
-	TargetPrincipal     string
-	Delegates           []string
-	StreamIdleTimeout   time.Duration
-	StreamSweepInterval time.Duration
-	EndpointHTTP        string
-	EndpointGRPC        string
+	ProjectID              string
+	DatasetID              string
+	MessageFormat          string
+	CredentialsJSON        string
+	TargetPrincipal        string
+	Delegates              []string
+	StreamIdleTimeout      time.Duration
+	StreamSweepInterval    time.Duration
+	SchemaResolveTimeout   time.Duration
+	SchemaEvolutionTimeout time.Duration
+	EndpointHTTP           string
+	EndpointGRPC           string
 }
 
 func bigQueryWriteAPIConfigFromParsed(pConf *service.ParsedConfig) (conf bigQueryWriteAPIConfig, err error) {
@@ -201,6 +217,20 @@ func bigQueryWriteAPIConfigFromParsed(pConf *service.ParsedConfig) (conf bigQuer
 	}
 	if conf.StreamSweepInterval <= 0 {
 		err = fmt.Errorf("%s must be greater than zero", bqwaFieldStreamSweepInterval)
+		return
+	}
+	if conf.SchemaResolveTimeout, err = pConf.FieldDuration(bqwaFieldSchemaResolveTimeout); err != nil {
+		return
+	}
+	if conf.SchemaResolveTimeout <= 0 {
+		err = fmt.Errorf("%s must be greater than zero", bqwaFieldSchemaResolveTimeout)
+		return
+	}
+	if conf.SchemaEvolutionTimeout, err = pConf.FieldDuration(bqwaFieldSchemaEvolutionTimeout); err != nil {
+		return
+	}
+	if conf.SchemaEvolutionTimeout <= 0 {
+		err = fmt.Errorf("%s must be greater than zero", bqwaFieldSchemaEvolutionTimeout)
 		return
 	}
 	epConf := pConf.Namespace(bqwaFieldEndpoint)
@@ -358,8 +388,8 @@ func bigQueryWriteAPIOutputFromConfig(conf *service.ParsedConfig, mgr *service.R
 		log:         mgr.Logger(),
 		metrics:     newBQWAMetrics(mgr.Metrics()),
 		streams:     make(map[string]*streamWithDescriptor),
-		resolver:    &schemaResolver{log: mgr.Logger()},
-		evolver:     &schemaEvolver{log: mgr.Logger()},
+		resolver:    &schemaResolver{log: mgr.Logger(), resolveTimeout: cfg.SchemaResolveTimeout},
+		evolver:     &schemaEvolver{log: mgr.Logger(), evolveTimeout: cfg.SchemaEvolutionTimeout},
 	}, nil
 }
 

@@ -132,17 +132,15 @@ func diffMissingColumns(md protoreflect.MessageDescriptor, existing bigquery.Sch
 
 type schemaEvolver struct {
 	log *service.Logger
+	// evolveTimeout bounds the total time Evolve will spend in BQ calls
+	// (Metadata + Update across all CAS attempts). Set from the
+	// schema_evolution_timeout config field.
+	evolveTimeout time.Duration
 }
 
 // maxEvolveAttempts caps the CAS-on-412 retry loop so a pathologically busy
 // table can't keep us spinning forever.
 const maxEvolveAttempts = 5
-
-// evolveTimeout bounds the total time Evolve will spend in BQ calls (Metadata
-// + Update across all CAS attempts). Set high enough to cover several round
-// trips under contention, but low enough that a wedged backend cannot starve
-// the WriteBatch retry loop indefinitely.
-const evolveTimeout = 30 * time.Second
 
 // Evolve compares the message descriptor against the current BQ table schema
 // and adds any missing columns under optimistic-locking via the table ETag.
@@ -162,7 +160,7 @@ const evolveTimeout = 30 * time.Second
 // never get the new column. The detached context still has a bounded timeout
 // (evolveTimeout) so we cannot hang on a wedged BQ.
 func (e *schemaEvolver) Evolve(ctx context.Context, client *bigquery.Client, datasetID, tableID string, md protoreflect.MessageDescriptor) (bool, error) {
-	bqCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), evolveTimeout)
+	bqCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), e.evolveTimeout)
 	defer cancel()
 
 	for range maxEvolveAttempts {

@@ -69,6 +69,8 @@ table: my_table
 	assert.Empty(t, cfg.Delegates)
 	assert.Equal(t, 5*time.Minute, cfg.StreamIdleTimeout)
 	assert.Equal(t, 1*time.Minute, cfg.StreamSweepInterval)
+	assert.Equal(t, 5*time.Second, cfg.SchemaResolveTimeout)
+	assert.Equal(t, 30*time.Second, cfg.SchemaEvolutionTimeout)
 	assert.Empty(t, cfg.EndpointHTTP)
 	assert.Empty(t, cfg.EndpointGRPC)
 }
@@ -87,6 +89,8 @@ delegates:
   - "delegate@project.iam.gserviceaccount.com"
 stream_idle_timeout: 10m
 stream_sweep_interval: 2m
+schema_resolve_timeout: 7s
+schema_evolution_timeout: 45s
 endpoint:
   http: http://localhost:9050
   grpc: localhost:9060
@@ -106,6 +110,8 @@ endpoint:
 	assert.Equal(t, []string{"delegate@project.iam.gserviceaccount.com"}, cfg.Delegates)
 	assert.Equal(t, 10*time.Minute, cfg.StreamIdleTimeout)
 	assert.Equal(t, 2*time.Minute, cfg.StreamSweepInterval)
+	assert.Equal(t, 7*time.Second, cfg.SchemaResolveTimeout)
+	assert.Equal(t, 45*time.Second, cfg.SchemaEvolutionTimeout)
 	assert.Equal(t, "http://localhost:9050", cfg.EndpointHTTP)
 	assert.Equal(t, "localhost:9060", cfg.EndpointGRPC)
 }
@@ -134,6 +140,24 @@ table: my_table
 stream_sweep_interval: 0s
 `,
 			errMsg: bqwaFieldStreamSweepInterval,
+		},
+		{
+			name: "zero schema_resolve_timeout",
+			yaml: `
+dataset: my_dataset
+table: my_table
+schema_resolve_timeout: 0s
+`,
+			errMsg: bqwaFieldSchemaResolveTimeout,
+		},
+		{
+			name: "zero schema_evolution_timeout",
+			yaml: `
+dataset: my_dataset
+table: my_table
+schema_evolution_timeout: 0s
+`,
+			errMsg: bqwaFieldSchemaEvolutionTimeout,
 		},
 		{
 			name: "delegates without target_principal",
