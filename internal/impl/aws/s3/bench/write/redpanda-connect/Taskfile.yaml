@@ -1,0 +1,259 @@
+version: "3"
+
+silent: true
+
+vars:
+  KAFKA_BOOTSTRAP: '{{.KAFKA_BOOTSTRAP | default "localhost:9092"}}'
+  S3_ENDPOINT:     '{{.S3_ENDPOINT     | default "http://localhost:4566"}}'
+  CONSUMER_GROUP:  '{{.CONSUMER_GROUP  | default "rpc-s3-bench"}}'
+
+  # ── Pipeline parameters ───────────────────────────────────────────────────────
+  INSTANCES:       '{{.INSTANCES       | default "1"}}'
+  FLUSH_SIZE:      '{{.FLUSH_SIZE      | default "10000"}}'
+  FLUSH_PERIOD:    '{{.FLUSH_PERIOD    | default "10s"}}'
+  FETCH_MIN_BYTES: '{{.FETCH_MIN_BYTES | default "1048576"}}'
+
+  # ── Matrix sweep lists ────────────────────────────────────────────────────────
+  INSTANCES_LIST:  '{{.INSTANCES_LIST  | default "1 2 4 8"}}'
+  FLUSH_LIST:      '{{.FLUSH_LIST      | default "5000 10000 50000"}}'
+  FETCH_MIN_LIST:  '{{.FETCH_MIN_LIST  | default "1048576 4194304"}}'
+  MATRIX_INTERVAL: '{{.MATRIX_INTERVAL | default "7"}}'
+
+  # Pre-built pipeline binary (avoids go run wrapper process)
+  PIPELINE_BIN: /tmp/rpc-bench-pipeline
+
+  # PID file for the background pipeline process(es) — one PID per line
+  PID_FILE: /tmp/rpc-bench.pid
+  LOG_FILE: /tmp/rpc-bench.log
+
+tasks:
+  # ── Infrastructure ────────────────────────────────────────────────────────────
+
+  up:
+    desc: Start Kafka and LocalStack, wait until ready
+    cmds:
+      - docker compose up -d
+      - until curl -sf http://localhost:4566/_localstack/health > /dev/null 2>&1; do sleep 3; done
+      - until docker exec s3rpc-kafka kafka-broker-api-versions --bootstrap-server localhost:9092 > /dev/null 2>&1; do sleep 3; done
+      - echo "Infrastructure ready"
+
+  down:
+    desc: Stop and remove all containers and volumes
+    cmds:
+      - docker compose down -v --remove-orphans
+
+  # ── Pipeline lifecycle ────────────────────────────────────────────────────────
+
+  pipeline:build:
+    desc: Compile the pipeline binary (cached after first build)
+    cmds:
+      - go build -o {{.PIPELINE_BIN}} ../../../../../../../cmd/redpanda-connect/
+      - echo "pipeline binary ready at {{.PIPELINE_BIN}}"
+
+  pipeline:start:
+    desc: |
+      Start N Redpanda Connect pipeline instances as background processes (same consumer group).
+      e.g. task pipeline:start FLUSH_SIZE=50000 INSTANCES=4
+    deps: [pipeline:build]
+    cmds:
+      - |
+        rm -f {{.PID_FILE}}
+        for i in $(seq 1 {{.INSTANCES}}); do
+          CONSUMER_GROUP={{.CONSUMER_GROUP}} \
+          FLUSH_SIZE={{.FLUSH_SIZE}} \
+          FLUSH_PERIOD={{.FLUSH_PERIOD}} \
+          FETCH_MIN_BYTES={{.FETCH_MIN_BYTES}} \
+          KAFKA_BOOTSTRAP={{.KAFKA_BOOTSTRAP}} \
+          S3_ENDPOINT={{.S3_ENDPOINT}} \
+            {{.PIPELINE_BIN}} run ./pipeline.yaml \
+            >> {{.LOG_FILE}} 2>&1 &
+          echo $! >> {{.PID_FILE}}
+        done
+        echo "started {{.INSTANCES}} instance(s) (PIDs: $(tr '\n' ' ' < {{.PID_FILE}}))"
+
+  pipeline:stop:
+    desc: Stop all background pipeline instances
+    cmds:
+      - |
+        if [ -f {{.PID_FILE}} ]; then
+          while IFS= read -r pid; do
+            kill -9 "$pid" 2>/dev/null || true
+            wait "$pid" 2>/dev/null || true
+          done < {{.PID_FILE}}
+          rm -f {{.PID_FILE}}
+          echo "pipeline stopped"
+        fi
+
+  pipeline:logs:
+    desc: Tail the pipeline log
+    cmds:
+      - tail -f {{.LOG_FILE}}
+
+  # ── Data management ───────────────────────────────────────────────────────────
+
+  topic:reset:
+    desc: Delete and recreate bench-events topic (clears all messages)
+    cmds:
+      - docker exec s3rpc-kafka kafka-topics --bootstrap-server localhost:29092 --delete --topic bench-events 2>/dev/null || true
+      - sleep 2
+      - docker exec s3rpc-kafka kafka-topics --bootstrap-server localhost:29092 --create --if-not-exists --topic bench-events --partitions 16 --replication-factor 1
+      - echo "topic reset"
+
+  data:load:
+    desc: "Produce events to bench-events topic (e.g. task data:load COUNT=5000000)"
+    vars:
+      COUNT: '{{.COUNT | default "1000000"}}'
+    env:
+      COUNT: '{{.COUNT}}'
+      KAFKA_BOOTSTRAP: '{{.KAFKA_BOOTSTRAP}}'
+    cmds:
+      - go run ../../../../../../../cmd/redpanda-connect/main.go run ./producer.yaml
+
+  # ── Observation ───────────────────────────────────────────────────────────────
+
+  bench:lag:
+    desc: Show current consumer group lag
+    cmds:
+      - docker exec s3rpc-kafka kafka-consumer-groups --bootstrap-server localhost:29092 --describe --group {{.CONSUMER_GROUP}}
+
+  bench:offsets:
+    desc: Show end offsets for bench-events
+    cmds:
+      - docker exec s3rpc-kafka kafka-get-offsets --bootstrap-server localhost:29092 --topic bench-events
+
+  bench:s3-count:
+    desc: Count objects written to the S3 bench-events bucket
+    cmds:
+      - docker exec s3rpc-localstack awslocal s3 ls s3://bench-events --recursive | wc -l
+
+  # ── Single parameterised run ──────────────────────────────────────────────────
+
+  bench:run:
+    desc: Full benchmark run
+    vars:
+      COUNT: '{{.COUNT | default "1000000"}}'
+    cmds:
+      - task: pipeline:stop
+      - task: pipeline:build
+      - docker exec s3rpc-localstack awslocal s3 rm s3://bench-events --recursive || true
+      - task: topic:reset
+      - task: data:load
+        vars: { COUNT: '{{.COUNT}}' }
+
+      - |
+        set -e
+
+        INSTANCES={{.INSTANCES}}
+        FLUSH_SIZE={{.FLUSH_SIZE}}
+        FLUSH_PERIOD={{.FLUSH_PERIOD}}
+        FETCH_MIN_BYTES={{.FETCH_MIN_BYTES}}
+        KAFKA_BOOTSTRAP={{.KAFKA_BOOTSTRAP}}
+        S3_ENDPOINT={{.S3_ENDPOINT}}
+        CONSUMER_GROUP={{.CONSUMER_GROUP}}
+        INTERVAL={{.MATRIX_INTERVAL}}
+        PIPELINE_BIN={{.PIPELINE_BIN}}
+
+        get_lag() {
+          docker exec s3rpc-kafka kafka-consumer-groups \
+            --bootstrap-server localhost:29092 \
+            --describe --group "$1" 2>/dev/null \
+            | awk '/bench-events/ {
+                cur = ($4 == "-") ? 0 : $4
+                sum += $5 - cur
+              } END {print (NR == 0 ? -1 : sum)}'
+        }
+
+        # start pipelines
+        for i in $(seq 1 "$INSTANCES"); do
+          CONSUMER_GROUP=$CONSUMER_GROUP \
+          FLUSH_SIZE=$FLUSH_SIZE \
+          FLUSH_PERIOD=$FLUSH_PERIOD \
+          FETCH_MIN_BYTES=$FETCH_MIN_BYTES \
+          KAFKA_BOOTSTRAP=$KAFKA_BOOTSTRAP \
+          S3_ENDPOINT=$S3_ENDPOINT \
+            "$PIPELINE_BIN" run ./pipeline.yaml \
+            >> {{.LOG_FILE}} 2>&1 &
+        done
+
+        echo "started $INSTANCES instance(s)"
+
+        START=$(date +%s)
+        INITIAL_LAG={{.COUNT}}
+
+        while true; do
+          sleep "$INTERVAL"
+
+          LAG=$(get_lag "$CONSUMER_GROUP")
+
+          if [ "${LAG:--1}" -lt 0 ] 2>/dev/null; then
+            continue
+          fi
+
+          if [ "$LAG" -lt 0 ]; then
+            LAG=0
+          fi
+
+          if [ "$LAG" -eq 0 ]; then
+            NOW=$(date +%s)
+            ELAPSED=$((NOW - START))
+
+            if [ "$ELAPSED" -gt 0 ]; then
+              AVG=$((INITIAL_LAG / ELAPSED))
+            else
+              AVG=$INITIAL_LAG
+            fi
+
+            echo "---"
+            echo "Total messages : $INITIAL_LAG"
+            echo "Elapsed        : ${ELAPSED}s"
+            echo "Avg throughput : ${AVG} msg/s"
+
+            # kill children
+            pkill -P $$ 2>/dev/null || true
+            kill -9 0 2>/dev/null || true
+
+            exit 0
+          fi
+        done
+
+
+
+  # ── Logs ──────────────────────────────────────────────────────────────────────
+
+  logs:connect:
+    desc: Tail the Redpanda Connect pipeline log
+    cmds:
+      - tail -f {{.LOG_FILE}}
+
+  logs:localstack:
+    desc: Follow LocalStack logs
+    cmds:
+      - docker compose logs -f localstack
+
+
+  bench:matrix:
+    desc: Sweep via bench:run
+    vars:
+      COUNT: '{{.COUNT | default "1000000"}}'
+    cmds:
+      - |
+        INSTANCES_LIST="{{.INSTANCES_LIST}}"
+        FLUSH_LIST="{{.FLUSH_LIST}}"
+        FETCH_MIN_LIST="{{.FETCH_MIN_LIST}}"
+
+        for instances in $INSTANCES_LIST; do
+          for flush in $FLUSH_LIST; do
+            for fetch_min in $FETCH_MIN_LIST; do
+
+              echo ""
+              echo "=== instances=$instances flush=$flush fetch_min=$fetch_min ==="
+
+              task bench:run \
+                COUNT={{.COUNT}} \
+                INSTANCES=$instances \
+                FLUSH_SIZE=$flush \
+                FETCH_MIN_BYTES=$fetch_min
+
+            done
+          done
+        done

@@ -1,0 +1,28 @@
+http:
+  debug_endpoints: true
+
+input:
+  aws_s3:
+    bucket: bench-objects
+    force_path_style_urls: true
+    endpoint: http://localhost:4566
+    region: us-east-1
+    credentials:
+      id: xxxxx
+      secret: xxxxx
+      token: xxxxx
+
+output:
+  processors:
+    - benchmark:
+        interval: 1s
+        count_bytes: true
+  drop: {}
+
+logger:
+  level: INFO
+
+metrics:
+  prometheus:
+    add_process_metrics: true
+    add_go_metrics: true
