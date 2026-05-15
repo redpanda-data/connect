@@ -8,10 +8,15 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - kafka: Exposed Franz Kafka producer configuration options including acks, max_buffered_records, max_buffered_bytes, max_in_flight_requests, record_retries, and record_delivery_timeout for greater control over message delivery behavior. ([@dyurchanka](https://github.com/dyurchanka), [#4028](https://github.com/redpanda-data/connect/pull/4028))
+- telemetry: Add deployment-type and tenant-id to call-home payload ([@prakhargarg105](https://github.com/prakhargarg105), [#4426](https://github.com/redpanda-data/connect/pull/4426))
 
 ### Fixed
 
 - iceberg: Improved Iceberg commit performance by skipping the redundant duplicate-path check on AddDataFiles operations, which was causing multiplicative slowdowns on busy tables. ([@Jeffail](https://github.com/Jeffail), [#4421](https://github.com/redpanda-data/connect/pull/4421))
+
+### Changed
+
+- oracledb_cdc: Extend checkpoint cache to support multiple callers ([@josephwoodward](https://github.com/josephwoodward), [#4417](https://github.com/redpanda-data/connect/pull/4417))
 
 ## 4.91.0 - 2026-05-08
 
