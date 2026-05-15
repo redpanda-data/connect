@@ -231,7 +231,7 @@ func newBQWAMetrics(m *service.Metrics) *bqwaMetrics {
 		batchLatency:            m.NewTimer("bigquery_write_api_batch_latency_ns"),
 		retries:                 m.NewCounter("bigquery_write_api_retries_total"),
 		schemaEvolutions:        m.NewCounter("bigquery_write_api_schema_evolutions_total"),
-		schemaEvolutionFailures: m.NewCounter("bigquery_write_api_schema_evolution_failures_total"),
+		schemaEvolutionFailures: m.NewCounter("bigquery_write_api_schema_evolutions_failures_total"),
 	}
 }
 
@@ -607,10 +607,7 @@ func (o *bigQueryWriteAPIOutput) Close(ctx context.Context) error {
 
 	// Drop the resolver's schema cache so a subsequent Connect doesn't reuse
 	// state tied to the now-closed client.
-	o.resolver.cache.Range(func(k, _ any) bool {
-		o.resolver.cache.Delete(k)
-		return true
-	})
+	o.resolver.cache.Clear()
 
 	return errors.Join(errs...)
 }
