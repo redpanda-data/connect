@@ -215,7 +215,7 @@ func TestIntegrationSchemaEvolution(t *testing.T) {
 	md := bqSchemaToMessageDescriptor(t, expandedSchema)
 
 	t.Log("When we call Evolve with a descriptor that has an extra email column")
-	evolver := &schemaEvolver{log: service.MockResources().Logger()}
+	evolver := &schemaEvolver{log: service.MockResources().Logger(), evolveTimeout: 30 * time.Second}
 	evolved, err := evolver.Evolve(t.Context(), emu.bqClient, datasetID, tableID, md)
 	require.NoError(t, err)
 	assert.True(t, evolved, "expected columns to be added")

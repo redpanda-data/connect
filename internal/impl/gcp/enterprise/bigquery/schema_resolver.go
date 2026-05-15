@@ -37,13 +37,11 @@ type schemaResolver struct {
 	cache sync.Map // key: string -> *resolvedSchema
 	sf    singleflight.Group
 	log   *service.Logger
+	// resolveTimeout bounds a single BQ Metadata fetch inside the singleflight
+	// so a wedged backend cannot pin the singleflight slot indefinitely. Set
+	// from the schema_resolve_timeout config field.
+	resolveTimeout time.Duration
 }
-
-// resolveTimeout bounds a single BQ Metadata fetch inside the singleflight so
-// a wedged backend cannot pin the singleflight slot indefinitely. Five seconds
-// is enough for a healthy GetTable round-trip including TLS+token refresh;
-// callers fall back to retry via the benthos pipeline.
-const resolveTimeout = 5 * time.Second
 
 // Resolve returns a resolved schema for the given table by fetching the
 // table metadata from BigQuery. Results are cached per table ID, and concurrent
@@ -69,7 +67,7 @@ func (r *schemaResolver) Resolve(ctx context.Context, client *bq.Client, dataset
 		if cached, ok := r.cache.Load(tableID); ok {
 			return cached.(*resolvedSchema), nil
 		}
-		fetchCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), resolveTimeout)
+		fetchCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), r.resolveTimeout)
 		defer cancel()
 		rs, err := resolveFromBQTable(fetchCtx, client, datasetID, tableID)
 		if err != nil {
