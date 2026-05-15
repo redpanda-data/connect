@@ -235,84 +235,78 @@ func newBQWAMetrics(m *service.Metrics) *bqwaMetrics {
 	}
 }
 
-type grpcErrorKind int
+type bqErrorKind int
 
 const (
-	grpcTransient grpcErrorKind = iota
-	grpcPermanent
-	grpcSchemaMismatch
+	bqErrorTransient bqErrorKind = iota
+	bqErrorPermanent
+	bqErrorSchemaMismatch
 )
 
-// extractGRPCStatus extracts a gRPC status from an error, unwrapping
-// fmt.Errorf chains if necessary.
-func extractGRPCStatus(err error) (*grpcstatus.Status, bool) {
-	st, ok := grpcstatus.FromError(err)
-	if ok {
-		return st, true
-	}
-	unwrapped := err
-	for unwrapped != nil {
-		if st, ok = grpcstatus.FromError(unwrapped); ok {
-			return st, true
-		}
-		unwrapped = errors.Unwrap(unwrapped)
-	}
-	return nil, false
+// bqError wraps an error from the BigQuery REST or Storage Write APIs together
+// with its retryability classification. Callers query intent via IsRetryable /
+// IsPermanent / IsSchemaMismatch rather than re-inspecting the underlying
+// gRPC status or googleapi.Error.
+//
+// SCHEMA_MISMATCH_EXTRA_FIELDS is kept distinct from generic permanent errors
+// because it can be resolved by adding the missing columns and retrying; every
+// other permanent classification routes straight to the DLQ.
+type bqError struct {
+	kind bqErrorKind
+	err  error
 }
 
-// classifyGRPCError inspects a gRPC status code to determine if the error is
-// transient (worth retrying) or permanent (will never succeed).
-// Non-gRPC errors are treated as transient to be safe.
-func classifyGRPCError(err error) grpcErrorKind {
-	st, ok := extractGRPCStatus(err)
-	if !ok {
-		return grpcTransient
-	}
+func (e bqError) Error() string { return e.err.Error() }
+func (e bqError) Unwrap() error { return e.err }
 
-	// Check for BigQuery Storage-specific error details.
-	for _, detail := range st.Details() {
-		if storageErr, ok := detail.(*storagepb.StorageError); ok {
-			if storageErr.GetCode() == storagepb.StorageError_SCHEMA_MISMATCH_EXTRA_FIELDS {
-				return grpcSchemaMismatch
+func (e bqError) IsRetryable() bool      { return e.kind == bqErrorTransient }
+func (e bqError) IsPermanent() bool      { return e.kind == bqErrorPermanent }
+func (e bqError) IsSchemaMismatch() bool { return e.kind == bqErrorSchemaMismatch }
+
+// classifyBQError inspects err and returns a bqError carrying its retry
+// classification. gRPC permanent codes (InvalidArgument, NotFound,
+// PermissionDenied, AlreadyExists, FailedPrecondition, Unimplemented,
+// Unauthenticated) and REST 4xx codes (except 408 timeout and 429 throttling)
+// are treated as permanent; SCHEMA_MISMATCH_EXTRA_FIELDS surfaces separately;
+// everything else falls back to transient so the benthos retry loop gets a
+// chance.
+func classifyBQError(err error) bqError {
+	if st, ok := grpcstatus.FromError(err); ok {
+		for _, detail := range st.Details() {
+			if storageErr, ok := detail.(*storagepb.StorageError); ok {
+				if storageErr.GetCode() == storagepb.StorageError_SCHEMA_MISMATCH_EXTRA_FIELDS {
+					return bqError{kind: bqErrorSchemaMismatch, err: err}
+				}
 			}
 		}
+		switch st.Code() {
+		case codes.InvalidArgument,
+			codes.NotFound,
+			codes.PermissionDenied,
+			codes.AlreadyExists,
+			codes.FailedPrecondition,
+			codes.Unimplemented,
+			codes.Unauthenticated:
+			return bqError{kind: bqErrorPermanent, err: err}
+		}
+		return bqError{kind: bqErrorTransient, err: err}
 	}
 
-	switch st.Code() {
-	case codes.InvalidArgument,
-		codes.NotFound,
-		codes.PermissionDenied,
-		codes.AlreadyExists,
-		codes.FailedPrecondition,
-		codes.Unimplemented,
-		codes.Unauthenticated:
-		return grpcPermanent
-	default:
-		return grpcTransient
+	var apiErr *googleapi.Error
+	if errors.As(err, &apiErr) &&
+		apiErr.Code >= 400 && apiErr.Code < 500 &&
+		apiErr.Code != http.StatusRequestTimeout &&
+		apiErr.Code != http.StatusTooManyRequests {
+		return bqError{kind: bqErrorPermanent, err: err}
 	}
+
+	return bqError{kind: bqErrorTransient, err: err}
 }
 
 type streamWithDescriptor struct {
 	stream     *managedwriter.ManagedStream
 	descriptor protoreflect.MessageDescriptor
 	lastUsed   atomic.Int64 // UnixNano timestamp, safe for concurrent access
-}
-
-// isPermanentBQError reports whether an error from the BigQuery REST or Storage
-// Write APIs should be treated as permanent (no retry). 4xx HTTP status codes
-// are permanent except for 408 (timeout) and 429 (throttling); all gRPC errors
-// classified as permanent by classifyGRPCError are also permanent.
-func isPermanentBQError(err error) bool {
-	if classifyGRPCError(err) == grpcPermanent {
-		return true
-	}
-	var apiErr *googleapi.Error
-	if errors.As(err, &apiErr) {
-		return apiErr.Code >= 400 && apiErr.Code < 500 &&
-			apiErr.Code != http.StatusRequestTimeout &&
-			apiErr.Code != http.StatusTooManyRequests
-	}
-	return false
 }
 
 type bigQueryWriteAPIOutput struct {
@@ -445,7 +439,7 @@ func (o *bigQueryWriteAPIOutput) WriteBatch(ctx context.Context, batch service.M
 
 	swd, cacheKey, err := o.getOrCreateStream(ctx, client, projectID, tableID)
 	if err != nil {
-		if isPermanentBQError(err) {
+		if classifyBQError(err).IsPermanent() {
 			return permanentBatchError(batch, fmt.Errorf("getting stream for table %q: %w", tableID, err))
 		}
 		return fmt.Errorf("getting stream for table %q: %w", tableID, err)
@@ -531,8 +525,9 @@ func (o *bigQueryWriteAPIOutput) handleWriteError(
 	ctx context.Context, client *bigquery.Client, err error, batch service.MessageBatch,
 	tableID string, descriptor protoreflect.MessageDescriptor, phase string,
 ) error {
-	switch classifyGRPCError(err) {
-	case grpcSchemaMismatch:
+	bqErr := classifyBQError(err)
+	switch {
+	case bqErr.IsSchemaMismatch():
 		// Evolve returns (true, nil) for every outcome that warrants a retry —
 		// columns we added, columns another writer added, or columns already
 		// present when we read metadata. Any (false, ...) result carries a
@@ -546,7 +541,7 @@ func (o *bigQueryWriteAPIOutput) handleWriteError(
 		o.resolver.Evict(tableID)
 		o.metrics.retries.Incr(1)
 		return fmt.Errorf("schema mismatch (evolution attempted): %w", err)
-	case grpcPermanent:
+	case bqErr.IsPermanent():
 		return permanentBatchError(batch, fmt.Errorf("permanent error %s: %w", phase, err))
 	default:
 		o.metrics.retries.Incr(1)

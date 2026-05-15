@@ -357,43 +357,53 @@ stream_sweep_interval: 50ms
 	assert.True(t, freshExists, "fresh stream should remain in cache")
 }
 
-func TestClassifyGRPCError(t *testing.T) {
+func TestClassifyBQError(t *testing.T) {
 	tests := []struct {
 		name     string
 		err      error
-		expected grpcErrorKind
+		expected bqErrorKind
 	}{
-		{"unavailable is transient", grpcstatus.Error(codes.Unavailable, "service unavailable"), grpcTransient},
-		{"resource exhausted is transient", grpcstatus.Error(codes.ResourceExhausted, "quota exceeded"), grpcTransient},
-		{"deadline exceeded is transient", grpcstatus.Error(codes.DeadlineExceeded, "timeout"), grpcTransient},
-		{"aborted is transient", grpcstatus.Error(codes.Aborted, "conflict"), grpcTransient},
-		{"internal is transient", grpcstatus.Error(codes.Internal, "internal error"), grpcTransient},
-		{"invalid argument is permanent", grpcstatus.Error(codes.InvalidArgument, "bad request"), grpcPermanent},
-		{"not found is permanent", grpcstatus.Error(codes.NotFound, "table not found"), grpcPermanent},
-		{"permission denied is permanent", grpcstatus.Error(codes.PermissionDenied, "forbidden"), grpcPermanent},
-		{"unauthenticated is permanent", grpcstatus.Error(codes.Unauthenticated, "bad creds"), grpcPermanent},
-		{"non-grpc error is transient", errors.New("random network error"), grpcTransient},
-		{"wrapped grpc error is classified", fmt.Errorf("appending rows: %w", grpcstatus.Error(codes.InvalidArgument, "bad")), grpcPermanent},
+		{"unavailable is transient", grpcstatus.Error(codes.Unavailable, "service unavailable"), bqErrorTransient},
+		{"resource exhausted is transient", grpcstatus.Error(codes.ResourceExhausted, "quota exceeded"), bqErrorTransient},
+		{"deadline exceeded is transient", grpcstatus.Error(codes.DeadlineExceeded, "timeout"), bqErrorTransient},
+		{"aborted is transient", grpcstatus.Error(codes.Aborted, "conflict"), bqErrorTransient},
+		{"internal is transient", grpcstatus.Error(codes.Internal, "internal error"), bqErrorTransient},
+		{"invalid argument is permanent", grpcstatus.Error(codes.InvalidArgument, "bad request"), bqErrorPermanent},
+		{"not found is permanent", grpcstatus.Error(codes.NotFound, "table not found"), bqErrorPermanent},
+		{"permission denied is permanent", grpcstatus.Error(codes.PermissionDenied, "forbidden"), bqErrorPermanent},
+		{"unauthenticated is permanent", grpcstatus.Error(codes.Unauthenticated, "bad creds"), bqErrorPermanent},
+		{"nil is transient", nil, bqErrorTransient},
+		{"non-grpc error is transient", errors.New("random network error"), bqErrorTransient},
+		{"wrapped grpc error is classified", fmt.Errorf("appending rows: %w", grpcstatus.Error(codes.InvalidArgument, "bad")), bqErrorPermanent},
+		{"http 404 is permanent", &googleapi.Error{Code: 404}, bqErrorPermanent},
+		{"http 403 is permanent", &googleapi.Error{Code: 403}, bqErrorPermanent},
+		{"http 408 is transient", &googleapi.Error{Code: 408}, bqErrorTransient},
+		{"http 429 is transient", &googleapi.Error{Code: 429}, bqErrorTransient},
+		{"http 500 is transient", &googleapi.Error{Code: 500}, bqErrorTransient},
+		{"wrapped http 404 is permanent", fmt.Errorf("resolve: %w", &googleapi.Error{Code: 404}), bqErrorPermanent},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			assert.Equal(t, tc.expected, classifyGRPCError(tc.err))
+			assert.Equal(t, tc.expected, classifyBQError(tc.err).kind)
 		})
 	}
 }
 
-func TestClassifyGRPCErrorSchemaMismatch(t *testing.T) {
+func TestClassifyBQErrorSchemaMismatch(t *testing.T) {
 	st, err := grpcstatus.New(codes.InvalidArgument, "schema mismatch").
 		WithDetails(&storagepb.StorageError{
 			Code:         storagepb.StorageError_SCHEMA_MISMATCH_EXTRA_FIELDS,
 			ErrorMessage: "extra fields found",
 		})
 	require.NoError(t, err)
-	assert.Equal(t, grpcSchemaMismatch, classifyGRPCError(st.Err()))
+	bqErr := classifyBQError(st.Err())
+	assert.True(t, bqErr.IsSchemaMismatch())
+	assert.False(t, bqErr.IsPermanent())
+	assert.False(t, bqErr.IsRetryable())
 }
 
-func TestClassifyGRPCErrorSchemaMismatchWrapped(t *testing.T) {
+func TestClassifyBQErrorSchemaMismatchWrapped(t *testing.T) {
 	st, err := grpcstatus.New(codes.InvalidArgument, "schema mismatch").
 		WithDetails(&storagepb.StorageError{
 			Code:         storagepb.StorageError_SCHEMA_MISMATCH_EXTRA_FIELDS,
@@ -401,7 +411,16 @@ func TestClassifyGRPCErrorSchemaMismatchWrapped(t *testing.T) {
 		})
 	require.NoError(t, err)
 	wrapped := fmt.Errorf("appending rows: %w", st.Err())
-	assert.Equal(t, grpcSchemaMismatch, classifyGRPCError(wrapped))
+	bqErr := classifyBQError(wrapped)
+	assert.True(t, bqErr.IsSchemaMismatch())
+}
+
+func TestBQErrorUnwrap(t *testing.T) {
+	// bqError preserves the underlying error for errors.Is/As callers.
+	inner := grpcstatus.Error(codes.InvalidArgument, "bad")
+	bqErr := classifyBQError(inner)
+	assert.Equal(t, inner, bqErr.Unwrap())
+	assert.Equal(t, inner.Error(), bqErr.Error())
 }
 
 func TestMetricsInitialization(t *testing.T) {
@@ -488,30 +507,6 @@ table: my_table
 			}
 			require.NoError(t, err)
 			assert.GreaterOrEqual(t, len(opts), tc.expectMin)
-		})
-	}
-}
-
-func TestIsPermanentBQError(t *testing.T) {
-	tests := []struct {
-		name string
-		err  error
-		want bool
-	}{
-		{"nil", nil, false},
-		{"plain", errors.New("network blip"), false},
-		{"grpc unavailable", grpcstatus.Error(codes.Unavailable, "x"), false},
-		{"grpc invalid argument", grpcstatus.Error(codes.InvalidArgument, "x"), true},
-		{"http 404", &googleapi.Error{Code: 404}, true},
-		{"http 403", &googleapi.Error{Code: 403}, true},
-		{"http 408", &googleapi.Error{Code: 408}, false},
-		{"http 429", &googleapi.Error{Code: 429}, false},
-		{"http 500", &googleapi.Error{Code: 500}, false},
-		{"wrapped http 404", fmt.Errorf("resolve: %w", &googleapi.Error{Code: 404}), true},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			assert.Equal(t, tc.want, isPermanentBQError(tc.err))
 		})
 	}
 }
