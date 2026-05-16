@@ -25,7 +25,7 @@ require (
 	buf.build/go/hyperpb v0.1.3
 	cloud.google.com/go/aiplatform v1.121.0
 	cloud.google.com/go/bigquery v1.75.0
-	cloud.google.com/go/pubsub v1.50.1
+	cloud.google.com/go/pubsub/v2 v2.4.0
 	cloud.google.com/go/spanner v1.88.0
 	cloud.google.com/go/storage v1.62.1
 	connectrpc.com/connect v1.19.1
@@ -218,7 +218,6 @@ require (
 	cel.dev/expr v0.25.1 // indirect
 	cloud.google.com/go/longrunning v0.9.0 // indirect
 	cloud.google.com/go/monitoring v1.24.3 // indirect
-	cloud.google.com/go/pubsub/v2 v2.4.0 // indirect
 	cloud.google.com/go/secretmanager v1.16.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/keyvault/azsecrets v0.12.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/keyvault/internal v0.7.1 // indirect
@@ -358,7 +357,7 @@ require (
 	cloud.google.com/go/auth v0.20.0
 	cloud.google.com/go/auth/oauth2adapt v0.2.8 // indirect
 	cloud.google.com/go/compute/metadata v0.9.0 // indirect
-	cloud.google.com/go/iam v1.7.0 // indirect
+	cloud.google.com/go/iam v1.7.0
 	cloud.google.com/go/trace v1.11.7 // indirect
 	cuelang.org/go v0.16.1 // indirect
 	dario.cat/mergo v1.0.2 // indirect
