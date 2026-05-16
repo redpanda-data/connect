@@ -422,7 +422,6 @@ The MySQL endpoint as `host:port` (for example `mydb.abc123.us-east-1.rds.amazon
 
 *Default*: `""`
 
-
 === `aws.id`
 
 The ID of credentials to use.
