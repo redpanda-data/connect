@@ -202,3 +202,38 @@ func TestCoerceDateForEncode_StringErrorSurfacesBothAttempts(t *testing.T) {
 	assert.Contains(t, msg, "RFC3339", "error should mention the RFC3339 attempt")
 	assert.Contains(t, msg, "YYYY-MM-DD", "error should mention the bare-date attempt")
 }
+
+// TestCoerceDateForEncode_FloorsTowardNegativeInfinity pins down the
+// pre-epoch rounding contract: a time.Time and an RFC3339 string at the
+// same instant must produce the same days-since-epoch, and a pre-epoch
+// wall clock with a non-midnight component must round down (1969-12-31)
+// rather than truncate toward zero (1970-01-01).
+//
+// Go's integer division truncates, which silently mapped pre-epoch
+// RFC3339 strings to the wrong day before the floor adjustment landed.
+// The bare-date YYYY-MM-DD form happens to land on midnight UTC, so its
+// Unix() is a multiple of 86400 and truncate/floor agree — but it is
+// included here to confirm the shared helper hasn't perturbed it.
+func TestCoerceDateForEncode_FloorsTowardNegativeInfinity(t *testing.T) {
+	tests := []struct {
+		name     string
+		value    any
+		wantDays int32
+	}{
+		{"time.Time pre-epoch non-midnight", time.Date(1969, 12, 31, 23, 59, 59, 0, time.UTC), -1},
+		{"RFC3339 pre-epoch non-midnight", "1969-12-31T23:59:59Z", -1},
+		{"RFC3339 pre-epoch midnight", "1969-12-31T00:00:00Z", -1},
+		{"bare date pre-epoch", "1969-12-31", -1},
+		{"time.Time epoch", time.Unix(0, 0).UTC(), 0},
+		{"RFC3339 epoch", "1970-01-01T00:00:00Z", 0},
+		{"RFC3339 post-epoch non-midnight", "1970-01-01T12:34:56Z", 0},
+		{"bare date post-epoch", "2024-03-14", 19796},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := coerceDateForEncode(tt.value)
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantDays, got, "days-since-epoch must be floor-rounded, not truncated")
+		})
+	}
+}

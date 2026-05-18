@@ -172,12 +172,7 @@ func coerceTimestampForEncode(value any, ts *format.TimestampType) (any, error) 
 func coerceDateForEncode(value any) (any, error) {
 	switch v := value.(type) {
 	case time.Time:
-		secs := v.UTC().Unix()
-		days := secs / 86400
-		if secs < 0 && secs%86400 != 0 {
-			days--
-		}
-		return int32(days), nil
+		return int32(unixDaysFloor(v)), nil
 	case string:
 		t, errRFC := time.Parse(time.RFC3339, v)
 		if errRFC != nil {
@@ -191,7 +186,7 @@ func coerceDateForEncode(value any) (any, error) {
 			}
 			t = t2
 		}
-		return int32(t.UTC().Unix() / 86400), nil
+		return int32(unixDaysFloor(t)), nil
 	case int32:
 		return v, nil
 	case int64:
@@ -208,6 +203,20 @@ func coerceDateForEncode(value any) (any, error) {
 	default:
 		return nil, fmt.Errorf("DATE values must be time.Time, date string, or numeric days-since-epoch; got %T", value)
 	}
+}
+
+// unixDaysFloor returns days-since-epoch for t with floor-toward-negative-
+// infinity rounding. Go's integer division truncates toward zero, which
+// would map a pre-epoch wall-clock like 1969-12-31T23:59:59Z (Unix = -1) to
+// day 0 (1970-01-01) instead of the correct day -1 (1969-12-31). Times at
+// or after the epoch are unaffected.
+func unixDaysFloor(t time.Time) int64 {
+	secs := t.UTC().Unix()
+	days := secs / 86400
+	if secs < 0 && secs%86400 != 0 {
+		days--
+	}
+	return days
 }
 
 // coerceTimeForEncode converts a value into the parquet physical
