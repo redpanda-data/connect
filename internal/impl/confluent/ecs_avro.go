@@ -75,15 +75,19 @@ type ecsAvroConfig struct {
 	// for sibling-form Avro by [applyAvroLogicalType].
 	translateKafkaConnectTypes bool
 
-	// names accumulates resolved record/enum/fixed definitions during a
-	// single parse so that string-form references (e.g. "Fee" in
-	// ["null", "Fee"]) can be expanded to their full Common shape. The
-	// map is lazily allocated by ecsAvroParseFromBytes and shared by
-	// reference through recursive ecsAvroFromAnyMap calls; mutations from
-	// sub-trees propagate to later siblings as the Avro spec requires
-	// (named types are lexically scoped from the schema root, and a name
-	// must be defined before it is referenced).
+	// names is the lexical-scope registry of resolved record/enum/fixed
+	// definitions, keyed by Avro fullname (and short name for
+	// convenience). Stored values must be treated as immutable — every
+	// retrieval clones via cloneCommon so callers can mutate freely
+	// without corrupting later look-ups.
 	names map[string]schema.Common
+
+	// namespace is the enclosing Avro namespace, threaded through the
+	// recursion by value. It is updated when entering a named-type
+	// declaration that introduces a new namespace, per the Avro spec's
+	// inheritance rule (a name with no dots and no `namespace` field
+	// inherits the most tightly enclosing namespace).
+	namespace string
 }
 
 // ecsAvroParseFromBytes parses an Avro JSON spec into a schema.Common. The
@@ -134,12 +138,14 @@ func ecsAvroParseFromBytes(cfg ecsAvroConfig, specBytes []byte) (schema.Common, 
 //     resolved via cfg.names per the Avro lexical-scope rule,
 //   - an inline type definition object (e.g. {"type":"record",...}).
 //
-// Returns (Common{}, false) when the union doesn't fit this shape (length
-// != 2, no "null" branch, two non-null branches, or an inline object that
-// fails to parse).
-func ecsAvroResolveOptionalUnion(cfg ecsAvroConfig, types []any) (schema.Common, bool) {
+// The matched bool reports whether the union has the [null, X] / [X, null]
+// shape; the error is non-nil only when the shape matched but resolving the
+// non-null branch failed (e.g. a malformed inline decimal). Callers must
+// surface the error rather than falling through to the general-union path —
+// the fall-through would also fail, with a less informative message.
+func ecsAvroResolveOptionalUnion(cfg ecsAvroConfig, types []any) (resolved schema.Common, matched bool, err error) {
 	if len(types) != 2 {
-		return schema.Common{}, false
+		return schema.Common{}, false, nil
 	}
 	var other any
 	for _, t := range types {
@@ -148,19 +154,19 @@ func ecsAvroResolveOptionalUnion(cfg ecsAvroConfig, types []any) (schema.Common,
 		}
 		if other != nil {
 			// Two non-null branches — not a nullable wrapper.
-			return schema.Common{}, false
+			return schema.Common{}, false, nil
 		}
 		other = t
 	}
 	if other == nil {
-		return schema.Common{}, false
+		return schema.Common{}, false, nil
 	}
-	inner, ok := ecsAvroResolveTypeRef(cfg, other)
-	if !ok {
-		return schema.Common{}, false
+	inner, err := ecsAvroResolveTypeRef(cfg, other)
+	if err != nil {
+		return schema.Common{}, true, err
 	}
 	inner.Optional = true
-	return inner, true
+	return inner, true, nil
 }
 
 // ecsAvroResolveTypeRef resolves a single Avro type reference — the value
@@ -169,28 +175,26 @@ func ecsAvroResolveOptionalUnion(cfg ecsAvroConfig, types []any) (schema.Common,
 // reference string (resolved via cfg.names), or an inline type definition
 // object.
 //
-// Returns (Common{}, false) only when an inline object fails to parse.
-// Unknown string names fall back to schema.Any so that downstream sinks
-// see a sensible (if structureless) column rather than a parse error.
-func ecsAvroResolveTypeRef(cfg ecsAvroConfig, ref any) (schema.Common, bool) {
+// Unknown string names fall back to schema.Any so downstream sinks see a
+// sensible (if structureless) column. An error is returned only when an
+// inline object fails to parse (the wrapped cause flows back to the caller)
+// or when ref is neither a string nor a map (a malformed Avro JSON shape
+// the upstream parser couldn't reject).
+func ecsAvroResolveTypeRef(cfg ecsAvroConfig, ref any) (schema.Common, error) {
 	switch b := ref.(type) {
 	case string:
 		// Try the names map first so a name reference takes priority over
 		// the schema.Any fallback in ecsAvroTypeToCommon. Primitive names
 		// are never registered in the map, so primitives reach the
 		// fallback unchanged.
-		if resolved, ok := cfg.names[b]; ok {
-			return resolved, true
+		if resolved, ok := ecsAvroLookupName(cfg, b); ok {
+			return resolved, nil
 		}
-		return schema.Common{Type: ecsAvroTypeToCommon(b)}, true
+		return schema.Common{Type: ecsAvroTypeToCommon(b)}, nil
 	case map[string]any:
-		inner, err := ecsAvroFromAnyMap(cfg, b)
-		if err != nil {
-			return schema.Common{}, false
-		}
-		return inner, true
+		return ecsAvroFromAnyMap(cfg, b)
 	}
-	return schema.Common{}, false
+	return schema.Common{}, fmt.Errorf("expected type reference to be a string or object, got %T", ref)
 }
 
 // applyAvroLogicalType reads the optional "logicalType" annotation from an
@@ -477,6 +481,56 @@ func applyKafkaConnectType(cfg ecsAvroConfig, c *schema.Common, as map[string]an
 	}
 }
 
+// ecsAvroLookupName resolves a string reference to a previously-registered
+// named type, applying Avro's name-resolution rules: a reference that
+// contains a dot is treated as a fullname; an unqualified reference is
+// looked up first against the enclosing namespace, then against the bare
+// name as a fallback for root-scope references.
+//
+// The returned Common is cloned so callers can mutate it freely without
+// corrupting the registered entry.
+func ecsAvroLookupName(cfg ecsAvroConfig, ref string) (schema.Common, bool) {
+	if !strings.ContainsRune(ref, '.') && cfg.namespace != "" {
+		if resolved, ok := cfg.names[cfg.namespace+"."+ref]; ok {
+			return cloneCommon(resolved), true
+		}
+	}
+	if resolved, ok := cfg.names[ref]; ok {
+		return cloneCommon(resolved), true
+	}
+	return schema.Common{}, false
+}
+
+// cloneCommon deep-copies a schema.Common, allocating fresh slice and
+// pointer storage for Children and Logical so the result aliases nothing
+// with the source.
+func cloneCommon(c schema.Common) schema.Common {
+	if c.Children != nil {
+		children := make([]schema.Common, len(c.Children))
+		for i := range c.Children {
+			children[i] = cloneCommon(c.Children[i])
+		}
+		c.Children = children
+	}
+	if c.Logical != nil {
+		l := *c.Logical
+		if l.Decimal != nil {
+			d := *l.Decimal
+			l.Decimal = &d
+		}
+		if l.Timestamp != nil {
+			ts := *l.Timestamp
+			l.Timestamp = &ts
+		}
+		if l.TimeOfDay != nil {
+			tod := *l.TimeOfDay
+			l.TimeOfDay = &tod
+		}
+		c.Logical = &l
+	}
+	return c
+}
+
 func ecsAvroTypeToCommon(t string) schema.CommonType {
 	switch t {
 	case "record":
@@ -511,7 +565,10 @@ func ecsAvroHydrateRawUnion(cfg ecsAvroConfig, c *schema.Common, types []any) er
 	// [null, X] or [X, null] → Optional X. ecsAvroResolveOptionalUnion
 	// handles primitive names, named-type references, and inline objects
 	// in either ordering.
-	if inner, ok := ecsAvroResolveOptionalUnion(cfg, types); ok {
+	if inner, matched, err := ecsAvroResolveOptionalUnion(cfg, types); matched {
+		if err != nil {
+			return fmt.Errorf("union `%v`: %w", c.Name, err)
+		}
 		name := c.Name
 		*c = inner
 		if name != "" {
@@ -522,9 +579,9 @@ func ecsAvroHydrateRawUnion(cfg ecsAvroConfig, c *schema.Common, types []any) er
 
 	c.Type = schema.Union
 	for i, uObj := range types {
-		child, ok := ecsAvroResolveTypeRef(cfg, uObj)
-		if !ok {
-			return fmt.Errorf("union `%v` child '%v': could not resolve type %T", c.Name, i, uObj)
+		child, err := ecsAvroResolveTypeRef(cfg, uObj)
+		if err != nil {
+			return fmt.Errorf("union `%v` child '%v': %w", c.Name, i, err)
 		}
 		c.Children = append(c.Children, child)
 	}
@@ -534,9 +591,9 @@ func ecsAvroHydrateRawUnion(cfg ecsAvroConfig, c *schema.Common, types []any) er
 func ecsAvroHydrateLameUnion(cfg ecsAvroConfig, c *schema.Common, types []any) error {
 	c.Type = schema.Union
 	for i, uObj := range types {
-		childT, ok := ecsAvroResolveTypeRef(cfg, uObj)
-		if !ok {
-			return fmt.Errorf("union `%v` child '%v': could not resolve type %T", c.Name, i, uObj)
+		childT, err := ecsAvroResolveTypeRef(cfg, uObj)
+		if err != nil {
+			return fmt.Errorf("union `%v` child '%v': %w", c.Name, i, err)
 		}
 		if s, isStr := uObj.(string); isStr {
 			// Lame-union children keep the type-name as the Common.Name so
@@ -563,39 +620,84 @@ func ecsAvroHydrateLameUnion(cfg ecsAvroConfig, c *schema.Common, types []any) e
 }
 
 func ecsAvroFromAnyMap(cfg ecsAvroConfig, as map[string]any) (schema.Common, error) {
+	// Pre-register a structural placeholder before walking children so a
+	// self-reference (e.g. a linked-list record with a `next` field of its
+	// own type) resolves to a one-level stub rather than collapsing to
+	// schema.Any. The placeholder is overwritten with the fully-resolved
+	// Common once the walk completes. Mutual recursion across distinct
+	// records is still not supported — the second record's placeholder
+	// does not exist while the first is being walked.
+	typeName, _ := as["type"].(string)
+	fullname, shortName, childNamespace := ecsAvroAssignFullname(cfg.namespace, typeName, as)
+	if fullname != "" {
+		placeholder := ecsAvroPlaceholder(typeName, shortName)
+		cfg.names[fullname] = placeholder
+		if shortName != "" && shortName != fullname {
+			cfg.names[shortName] = placeholder
+		}
+		// Inheritable namespace propagates into the child walk; sibling
+		// scopes are unaffected because cfg is passed by value.
+		cfg.namespace = childNamespace
+	}
+
 	c, err := ecsAvroFromAnyMapImpl(cfg, as)
-	if err == nil {
-		ecsAvroRegisterNamedType(cfg, as, c)
+	if err == nil && fullname != "" {
+		cfg.names[fullname] = c
+		if shortName != "" && shortName != fullname {
+			cfg.names[shortName] = c
+		}
 	}
 	return c, err
 }
 
-// ecsAvroRegisterNamedType records a resolved record/enum/fixed Common in
-// cfg.names so that later string-form references (e.g. "Fee" instead of an
-// inline record definition) can be expanded. Avro's lexical-scope rule
-// requires the name to appear before any reference, so a single forward-only
-// pass through the schema is sufficient. Recursive types — where a record's
-// own children reference it by name before its definition completes — are
-// not supported by this approach; the registered entry must not be mutated
-// after registration to avoid surprising aliasing with later look-ups.
-func ecsAvroRegisterNamedType(cfg ecsAvroConfig, as map[string]any, c schema.Common) {
-	if cfg.names == nil {
-		return
-	}
-	typeName, _ := as["type"].(string)
+// ecsAvroAssignFullname computes the Avro fullname of a named-type
+// declaration ([record, enum, fixed]) from its declaration map and the
+// enclosing namespace, alongside the short name and the namespace that
+// should be threaded into the child walk. Returns empty fullname when the
+// node is not a named-type declaration or lacks a `name` field.
+//
+// Per the Avro spec (`Names` section):
+//  1. If `name` contains a dot, it IS the fullname and any `namespace`
+//     field is ignored.
+//  2. Else if `namespace` is set, the fullname is `namespace.name`.
+//  3. Else the fullname inherits the enclosing namespace.
+func ecsAvroAssignFullname(enclosing, typeName string, as map[string]any) (fullname, shortName, childNamespace string) {
 	switch typeName {
 	case "record", "enum", "fixed":
 	default:
-		return
+		return "", "", enclosing
 	}
 	name, _ := as["name"].(string)
 	if name == "" {
-		return
+		return "", "", enclosing
 	}
-	cfg.names[name] = c
+	if idx := strings.LastIndex(name, "."); idx >= 0 {
+		return name, name[idx+1:], name[:idx]
+	}
 	if ns, _ := as["namespace"].(string); ns != "" {
-		cfg.names[ns+"."+name] = c
+		return ns + "." + name, name, ns
 	}
+	if enclosing != "" {
+		return enclosing + "." + name, name, enclosing
+	}
+	return name, name, ""
+}
+
+// ecsAvroPlaceholder returns the structural stub that stands in for a
+// self-referencing named type while its definition is being walked. The
+// placeholder uses the short name (matching what ecsAvroFromAnyMapImpl
+// would set) and the closest leaf type so downstream sinks see a coherent
+// shape rather than schema.Any.
+func ecsAvroPlaceholder(typeName, shortName string) schema.Common {
+	switch typeName {
+	case "record":
+		return schema.Common{Name: shortName, Type: schema.Object}
+	case "enum":
+		return schema.Common{Name: shortName, Type: schema.String}
+	case "fixed":
+		return schema.Common{Name: shortName, Type: schema.ByteArray}
+	}
+	return schema.Common{Name: shortName}
 }
 
 func ecsAvroFromAnyMapImpl(cfg ecsAvroConfig, as map[string]any) (schema.Common, error) {
@@ -637,7 +739,7 @@ func ecsAvroFromAnyMapImpl(cfg ecsAvroConfig, as map[string]any) (schema.Common,
 	case string:
 		// String form may be a primitive type name OR a name reference to
 		// a previously-defined record/enum/fixed in lexical scope.
-		if resolved, ok := cfg.names[t]; ok {
+		if resolved, ok := ecsAvroLookupName(cfg, t); ok {
 			fieldName := c.Name
 			c = resolved
 			if fieldName != "" {
