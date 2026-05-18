@@ -24,6 +24,16 @@ tasks:
     cmds:
       - go run ./cmd/tools/integration run {{.CLI_ARGS}}
 
+  integration:verify:
+    desc: Check all integration test packages are registered in packages.json
+    cmds:
+      - go run ./cmd/tools/integration_test_registry verify || (echo "Run 'task test:integration:generate' to update packages.json" && exit 1)
+
+  integration:generate:
+    desc: Generate/update packages.json from integration test packages in the repo
+    cmds:
+      - go run ./cmd/tools/integration_test_registry generate
+
   show:
     desc: "Show human-readable output for a test failure (e.g. task test:show -- .integration/20260331/mssql.txt:870)"
     cmds:
