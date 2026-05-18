@@ -145,7 +145,7 @@ func (r *redisPubSubReader) Read(ctx context.Context) (*service.Message, service
 	}
 
 	select {
-	case rMsg, open := <-pubsub.Channel():
+	case rMsg, open := <-pubsub.Channel(redis.WithChannelSize(2000)):
 		if !open {
 			_ = r.disconnect()
 			return nil, nil, service.ErrEndOfInput

@@ -9,15 +9,15 @@
 package splunk
 
 import (
-	"fmt"
+	"crypto/tls"
 	"io"
-	"net/http"
+	"runtime"
 	"testing"
 	"time"
 
-	"github.com/ory/dockertest/v3"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/wait"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
@@ -29,68 +29,52 @@ import (
 
 func TestIntegrationSplunk(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
-
-	pool, err := dockertest.NewPool("")
-	require.NoError(t, err)
-
-	// A generous amount of time is required for this container to be up and running, since it uses Ansible to deploy
-	// all sorts of stuff inside it on startup before finally launching various services...
-	pool.MaxWait = 10 * time.Minute
-	if deadline, ok := t.Deadline(); ok {
-		pool.MaxWait = time.Until(deadline) - 100*time.Millisecond
+	if runtime.GOOS == "darwin" {
+		t.Skip("CON-376: Splunk image is x86-only; Rosetta startup exceeds testcontainers 60s deadline")
 	}
 
 	dummySplunkPassword := "blobfishAreC00l!"
 	containerInputPort := "8089/tcp"
 	containerOutputPort := "8088/tcp"
-	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
-		Repository: "splunk/splunk",
-		Tag:        "9.1.1", // TODO: Update this after https://github.com/splunk/docker-splunk/issues/668 is fixed
-		Env: []string{
-			"SPLUNK_START_ARGS=--accept-license",
-			"SPLUNK_PASSWORD=" + dummySplunkPassword,
-			"SPLUNK_HEC_TOKEN=" + dummySplunkPassword,
-		},
-		ExposedPorts: []string{
-			containerInputPort,
-			containerOutputPort,
-		},
-	})
+
+	// Splunk uses Ansible internally on startup and takes a long time.
+	startupTimeout := 10 * time.Minute
+	if deadline, ok := t.Deadline(); ok {
+		startupTimeout = time.Until(deadline) - 100*time.Millisecond
+	}
+
+	ctr, err := testcontainers.Run(t.Context(), "splunk/splunk:9.3.3",
+		testcontainers.WithImagePlatform("linux/amd64"),
+		testcontainers.WithExposedPorts(containerInputPort, containerOutputPort),
+		testcontainers.WithEnv(map[string]string{
+			"SPLUNK_START_ARGS": "--accept-license",
+			"SPLUNK_PASSWORD":   dummySplunkPassword,
+			"SPLUNK_HEC_TOKEN":  dummySplunkPassword,
+		}),
+		testcontainers.WithWaitStrategyAndDeadline(startupTimeout,
+			wait.ForHTTP("/services/collector/health").
+				WithPort(containerOutputPort).
+				WithTLS(true, &tls.Config{InsecureSkipVerify: true}). //nolint:gosec
+				WithResponseMatcher(func(body io.Reader) bool {
+					b, err := io.ReadAll(body)
+					if err != nil {
+						return false
+					}
+					return string(b) == `{"text":"HEC is healthy","code":17}`
+				}).
+				WithPollInterval(2*time.Second),
+		),
+	)
+	testcontainers.CleanupContainer(t, ctr)
 	require.NoError(t, err)
-	t.Cleanup(func() {
-		assert.NoError(t, pool.Purge(resource))
-	})
 
-	_ = resource.Expire(900)
+	inputPortM, err := ctr.MappedPort(t.Context(), containerInputPort)
+	require.NoError(t, err)
+	serviceInputPort := inputPortM.Port()
 
-	serviceInputPort := resource.GetPort(containerInputPort)
-	serviceOutputPort := resource.GetPort(containerOutputPort)
-
-	err = pool.Retry(func() error {
-		tr := http.DefaultTransport.(*http.Transport).Clone()
-		tr.TLSClientConfig.InsecureSkipVerify = true
-		client := http.Client{Transport: tr}
-		resp, err := client.Get("https://127.0.0.1:" + serviceOutputPort + "//services/collector/health")
-		if err != nil {
-			return err
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode != http.StatusOK {
-			return fmt.Errorf("failed healthcheck with status: %d", resp.StatusCode)
-		}
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return err
-		}
-		if string(body) != `{"text":"HEC is healthy","code":17}` {
-			return fmt.Errorf("healthcheck returned invalid response: %s", body)
-		}
-
-		return nil
-	})
-	require.NoError(t, err, "Failed to start Splunk emulator")
+	outputPortM, err := ctr.MappedPort(t.Context(), containerOutputPort)
+	require.NoError(t, err)
+	serviceOutputPort := outputPortM.Port()
 
 	t.Run("splunk_hec output -> input roundtrip", func(t *testing.T) {
 		template := `

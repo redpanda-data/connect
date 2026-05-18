@@ -1,0 +1,25 @@
+{
+  "name": "pg-jdbc-sink-bench",
+  "config": {
+    "connector.class": "io.confluent.connect.jdbc.JdbcSinkConnector",
+    "tasks.max": "16",
+    "topics": "bench-events",
+
+    "connection.url": "jdbc:postgresql://postgres:5432/benchdb",
+    "connection.user": "postgres",
+    "connection.password": "postgres",
+
+    "insert.mode": "insert",
+    "pk.mode": "none",
+    "auto.create": "false",
+    "table.name.format": "bench_events",
+
+    "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "value.converter.schemas.enable": "true",
+
+    "batch.size": "3000",
+    "consumer.override.fetch.min.bytes": "1048576",
+    "consumer.override.fetch.max.wait.ms": "500",
+    "consumer.override.max.poll.records": "5000"
+  }
+}

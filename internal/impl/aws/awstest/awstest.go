@@ -18,7 +18,6 @@ package awstest
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"testing"
 	"time"
 
@@ -29,54 +28,28 @@ import (
 	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	sqstypes "github.com/aws/aws-sdk-go-v2/service/sqs/types"
-	"github.com/ory/dockertest/v3"
-	"github.com/ory/dockertest/v3/docker"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/redpanda-data/benthos/v4/public/service/integration"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/wait"
 )
 
 // GetLocalStack starts a LocalStack container and returns the service port.
 func GetLocalStack(t testing.TB) (port string) {
-	portInt, err := integration.GetFreePort()
+	ctr, err := testcontainers.Run(t.Context(), "localstack/localstack:3",
+		testcontainers.WithExposedPorts("4566/tcp"),
+		testcontainers.WithWaitStrategy(
+			wait.ForHTTP("/_localstack/health").
+				WithPort("4566/tcp").
+				WithStartupTimeout(2*time.Minute),
+		),
+	)
+	testcontainers.CleanupContainer(t, ctr)
 	require.NoError(t, err)
 
-	port = strconv.Itoa(portInt)
-
-	pool, err := dockertest.NewPool("")
+	mappedPort, err := ctr.MappedPort(t.Context(), "4566/tcp")
 	require.NoError(t, err)
 
-	pool.MaxWait = time.Minute
-
-	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
-		Repository:   "localstack/localstack",
-		ExposedPorts: []string{port + "/tcp"},
-		PortBindings: map[docker.Port][]docker.PortBinding{
-			docker.Port(port + "/tcp"): {
-				docker.PortBinding{HostIP: "", HostPort: port + "/tcp"},
-			},
-		},
-		Env: []string{
-			fmt.Sprintf("GATEWAY_LISTEN=0.0.0.0:%v", port),
-		},
-	})
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		assert.NoError(t, pool.Purge(resource))
-	})
-
-	_ = resource.Expire(900)
-
-	require.NoError(t, pool.Retry(func() (err error) {
-		defer func() {
-			if err != nil {
-				t.Logf("localstack probe error: %v", err)
-			}
-		}()
-		return CreateBucket(t.Context(), port, "test-bucket")
-	}))
-	return
+	return mappedPort.Port()
 }
 
 // CreateBucket creates an S3 bucket on a LocalStack instance.

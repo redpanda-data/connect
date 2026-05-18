@@ -20,9 +20,9 @@ import (
 	"time"
 
 	"cloud.google.com/go/storage"
-	"github.com/ory/dockertest/v3"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/wait"
 	"google.golang.org/api/iterator"
 
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
@@ -46,49 +46,35 @@ func createGCPCloudStorageBucket(var1, id string) error {
 func TestIntegrationGCP(t *testing.T) {
 	integration.CheckSkip(t)
 
-	pool, err := dockertest.NewPool("")
+	ctr, err := testcontainers.Run(t.Context(), "fsouza/fake-gcs-server:latest",
+		testcontainers.WithExposedPorts("4443/tcp"),
+		testcontainers.WithCmd("-scheme", "http", "-public-host", "localhost"),
+		testcontainers.WithWaitStrategy(
+			wait.ForListeningPort("4443/tcp").WithStartupTimeout(time.Minute),
+		),
+	)
+	testcontainers.CleanupContainer(t, ctr)
 	require.NoError(t, err)
 
-	pool.MaxWait = 30 * time.Second
-	if deadline, ok := t.Deadline(); ok {
-		pool.MaxWait = time.Until(deadline) - 100*time.Millisecond
-	}
-
-	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
-		Repository:   "fsouza/fake-gcs-server",
-		Tag:          "latest",
-		ExposedPorts: []string{"4443/tcp"},
-		Cmd:          []string{"-scheme", "http", "-public-host", "localhost"},
-	})
+	mp, err := ctr.MappedPort(t.Context(), "4443/tcp")
 	require.NoError(t, err)
-	t.Cleanup(func() {
-		assert.NoError(t, pool.Purge(resource))
-	})
 
-	_ = resource.Expire(900)
-
-	t.Setenv("STORAGE_EMULATOR_HOST", "localhost:"+resource.GetPort("4443/tcp")) //nolint: tenv // this test runs in parallel
+	t.Setenv("STORAGE_EMULATOR_HOST", "localhost:"+mp.Port()) //nolint: tenv // this test runs in parallel
 
 	// Wait for fake-gcs-server to properly start up
-	err = pool.Retry(func() error {
+	require.Eventually(t, func() bool {
 		ctx, cancelFunc := context.WithTimeout(t.Context(), 5*time.Second)
 		defer cancelFunc()
 
 		client, eerr := storage.NewClient(ctx)
-
 		if eerr != nil {
-			return eerr
+			return false
 		}
 		defer client.Close()
 		buckets := client.Buckets(ctx, "")
 		_, eerr = buckets.Next()
-		if eerr != iterator.Done {
-			return eerr
-		}
-
-		return nil
-	})
-	require.NoError(t, err, "Failed to start fake-gcs-server")
+		return eerr == iterator.Done
+	}, time.Minute, time.Second, "Failed to start fake-gcs-server")
 
 	dummyBucketPrefix := "jotunheim"
 	dummyPathPrefix := "kvenn"

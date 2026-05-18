@@ -12,6 +12,11 @@ tasks:
         fi
     silent: true
 
+  prune:
+    desc: Prune unused Docker images and build cache
+    cmds:
+      - docker system prune -af --volumes
+
   redpanda-connect:
     desc: Build main Docker image using goreleaser for local development
     aliases:

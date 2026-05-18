@@ -22,9 +22,10 @@ import (
 	"time"
 
 	"github.com/gocql/gocql"
-	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go"
+	tccassandra "github.com/testcontainers/testcontainers-go/modules/cassandra"
 
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 )
@@ -32,17 +33,16 @@ import (
 func TestIntegrationCassandra(t *testing.T) {
 	integration.CheckSkip(t)
 
-	t.Parallel()
-
-	pool, err := dockertest.NewPool("")
+	ctr, err := tccassandra.Run(t.Context(), "cassandra:latest")
+	testcontainers.CleanupContainer(t, ctr)
 	require.NoError(t, err)
 
-	pool.MaxWait = time.Minute * 3
-	resource, err := pool.Run("cassandra", "latest", nil)
+	connHost, err := ctr.ConnectionHost(t.Context())
 	require.NoError(t, err)
-	t.Cleanup(func() {
-		assert.NoError(t, pool.Purge(resource))
-	})
+
+	mappedPort, err := ctr.MappedPort(t.Context(), "9042/tcp")
+	require.NoError(t, err)
+	port := mappedPort.Port()
 
 	var session *gocql.Session
 	t.Cleanup(func() {
@@ -51,14 +51,17 @@ func TestIntegrationCassandra(t *testing.T) {
 		}
 	})
 
-	_ = resource.Expire(900)
-	require.NoError(t, pool.Retry(func() error {
+	require.Eventually(t, func() bool {
 		if session == nil {
-			conn := gocql.NewCluster(fmt.Sprintf("localhost:%v", resource.GetPort("9042/tcp")))
+			conn := gocql.NewCluster(connHost)
 			conn.Consistency = gocql.All
+			// The Cassandra container advertises its internal Docker IP via
+			// system.peers, which is unreachable from the host. Skip the
+			// initial host lookup so gocql only uses the mapped contact point.
+			conn.DisableInitialHostLookup = true
 			var rerr error
 			if session, rerr = conn.CreateSession(); rerr != nil {
-				return rerr
+				return false
 			}
 		}
 		_ = session.Query(
@@ -66,8 +69,8 @@ func TestIntegrationCassandra(t *testing.T) {
 		).Exec()
 		return session.Query(
 			"CREATE TABLE testspace.testtable (id int primary key, content text, created_at timestamp);",
-		).Exec()
-	}))
+		).Exec() == nil
+	}, 3*time.Minute, 5*time.Second)
 
 	t.Run("with JSON", func(t *testing.T) {
 		template := `
@@ -75,6 +78,7 @@ output:
   cassandra:
     addresses:
       - localhost:$PORT
+    disable_initial_host_lookup: true
     query: 'INSERT INTO testspace.table$ID JSON ?'
     args_mapping: 'root = [ this ]'
 `
@@ -94,7 +98,7 @@ output:
 		)
 		suite.Run(
 			t, template,
-			integration.StreamTestOptPort(resource.GetPort("9042/tcp")),
+			integration.StreamTestOptPort(port),
 			integration.StreamTestOptSleepAfterInput(time.Second*10),
 			integration.StreamTestOptSleepAfterOutput(time.Second*10),
 			integration.StreamTestOptPreTest(func(t testing.TB, _ context.Context, vars *integration.StreamTestConfigVars) {
@@ -115,6 +119,7 @@ output:
   cassandra:
     addresses:
       - localhost:$PORT
+    disable_initial_host_lookup: true
     query: 'INSERT INTO testspace.table$ID (id, content, created_at, meows) VALUES (?, ?, ?, ?)'
     args_mapping: |
       root = [ this.id, this.content, now(), [ "first meow", "second meow" ] ]
@@ -141,7 +146,7 @@ output:
 		)
 		suite.Run(
 			t, template,
-			integration.StreamTestOptPort(resource.GetPort("9042/tcp")),
+			integration.StreamTestOptPort(port),
 			integration.StreamTestOptSleepAfterInput(time.Second*10),
 			integration.StreamTestOptSleepAfterOutput(time.Second*10),
 			integration.StreamTestOptPreTest(func(t testing.TB, _ context.Context, vars *integration.StreamTestConfigVars) {

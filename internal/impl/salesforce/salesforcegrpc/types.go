@@ -64,6 +64,10 @@ type PubSubEvent struct {
 
 	// RawPayload is the full decoded Avro payload as a map.
 	RawPayload map[string]any
+
+	// EventUUID is the canonical Salesforce EventUuid extracted from the
+	// payload. Only populated for Platform Events (Type == EventTypePlatform).
+	EventUUID string
 }
 
 // CDCEvent is a backward-compatible alias for PubSubEvent.

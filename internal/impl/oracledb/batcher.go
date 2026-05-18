@@ -10,9 +10,9 @@ package oracledb
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"sync"
 	"time"
 
@@ -33,7 +33,6 @@ type batchPublisher struct {
 	msgChan    chan asyncMessage
 	cacheSCN   func(ctx context.Context, scn replication.SCN) error
 	schemas    *schemaCache
-	db         *sql.DB
 
 	log     *service.Logger
 	shutSig *shutdown.Signaller
@@ -140,7 +139,7 @@ func (b *batchPublisher) Publish(ctx context.Context, m *replication.MessageEven
 			b.schemas.seedFromColumnMeta(table, m.ColumnMeta)
 		}
 		eventKeys := mapKeys(m.Data)
-		s, typeInfo, sErr := b.schemas.schemaForEvent(ctx, b.db, table, eventKeys)
+		s, typeInfo, sErr := b.schemas.schemaForEvent(ctx, table, eventKeys)
 		if sErr != nil {
 			b.log.Warnf("Failed to refresh schema for %s.%s: %v", m.Schema, m.Table, sErr)
 		}
@@ -165,11 +164,23 @@ func (b *batchPublisher) Publish(ctx context.Context, m *replication.MessageEven
 	msg.MetaSet("database_schema", m.Schema)
 	msg.MetaSet("table_name", m.Table)
 	msg.MetaSet("operation", m.Operation.String())
+	if m.TransactionID != "" {
+		msg.MetaSet("transaction_id", m.TransactionID)
+	}
 	if m.SCN.IsValid() {
 		msg.MetaSet("scn", m.SCN.String())
 	}
+	if !m.Timestamp.IsZero() {
+		// upcon connection go-ora automatically queries the server's timezone and stores
+		// it in conn.dbServerTimeZone so it can convert the redo log timestamp
+		// from database-local time to UTC
+		msg.MetaSet("source_ts_ms", strconv.FormatInt(m.Timestamp.UnixMilli(), 10))
+	}
 	if m.CheckpointSCN.IsValid() {
 		msg.MetaSet("checkpoint_scn", m.CheckpointSCN.String())
+	}
+	if !m.CommitTimestamp.IsZero() {
+		msg.MetaSet("commit_ts_ms", strconv.FormatInt(m.CommitTimestamp.UnixMilli(), 10))
 	}
 
 	if schemaAny != nil {

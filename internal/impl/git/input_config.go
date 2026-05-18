@@ -47,7 +47,7 @@ This input adds the following metadata fields to each message:
 You can access these metadata fields using function interpolation.`
 
 	return service.NewConfigSpec().
-		Beta().
+		Stable().
 		Categories("Services").
 		Version("4.51.0").
 		Summary(`A Git input that clones (or pulls) a repository and reads the repository contents.`).

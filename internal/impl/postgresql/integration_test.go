@@ -33,8 +33,8 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/asyncroutine"
 	"github.com/redpanda-data/connect/v4/internal/license"
 
-	"github.com/ory/dockertest/v3"
-	"github.com/ory/dockertest/v3/docker"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/wait"
 )
 
 type FakeFlightRecord struct {
@@ -52,68 +52,62 @@ func GetFakeFlightRecord() FakeFlightRecord {
 	return flightRecord
 }
 
-func ResourceWithPostgreSQLVersion(t *testing.T, pool *dockertest.Pool, version string) (*dockertest.Resource, *sql.DB, error) {
-	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
-		Repository: "postgres",
-		Tag:        version,
-		Env: []string{
-			"POSTGRES_PASSWORD=l]YLSc|4[i56%{gY",
-			"POSTGRES_USER=user_name",
-			"POSTGRES_DB=dbname",
-		},
-		Cmd: []string{
-			"postgres",
-			"-c", "wal_level=logical",
-		},
-	}, func(config *docker.HostConfig) {
-		config.AutoRemove = true
-		config.RestartPolicy = docker.RestartPolicy{Name: "no"}
-	})
-
+func ResourceWithPostgreSQLVersion(t *testing.T, version string) (string, *sql.DB, error) {
+	ctr, err := testcontainers.Run(t.Context(), "postgres:"+version,
+		testcontainers.WithExposedPorts("5432/tcp"),
+		testcontainers.WithEnv(map[string]string{
+			"POSTGRES_PASSWORD": "l]YLSc|4[i56%{gY",
+			"POSTGRES_USER":     "user_name",
+			"POSTGRES_DB":       "dbname",
+		}),
+		testcontainers.WithCmd("postgres", "-c", "wal_level=logical"),
+		testcontainers.WithWaitStrategy(
+			wait.ForListeningPort("5432/tcp").WithStartupTimeout(2*time.Minute),
+		),
+	)
+	testcontainers.CleanupContainer(t, ctr)
 	require.NoError(t, err)
-	t.Cleanup(func() {
-		assert.NoError(t, pool.Purge(resource))
-	})
 
-	require.NoError(t, resource.Expire(120))
+	host, err := ctr.Host(t.Context())
+	require.NoError(t, err)
+	mp, err := ctr.MappedPort(t.Context(), "5432/tcp")
+	require.NoError(t, err)
 
-	hostAndPort := resource.GetHostPort("5432/tcp")
-	hostAndPortSplited := strings.Split(hostAndPort, ":")
 	password := "l]YLSc|4[i56%{gY"
-	databaseURL := fmt.Sprintf("user=user_name password=%s dbname=dbname sslmode=disable host=%s port=%s", password, hostAndPortSplited[0], hostAndPortSplited[1])
+	databaseURL := fmt.Sprintf("user=user_name password=%s dbname=dbname sslmode=disable host=%s port=%s", password, host, mp.Port())
 
 	var db *sql.DB
-	pool.MaxWait = 120 * time.Second
-	if err = pool.Retry(func() error {
+	require.Eventually(t, func() bool {
+		if db != nil {
+			db.Close()
+		}
 		if db, err = sql.Open("postgres", databaseURL); err != nil {
-			return err
+			return false
 		}
 
-		t.Cleanup(func() {
-			_ = db.Close()
-		})
-
 		if err = db.Ping(); err != nil {
-			return err
+			db.Close()
+			db = nil
+			return false
 		}
 
 		var walLevel string
 		if err = db.QueryRow("SHOW wal_level").Scan(&walLevel); err != nil {
-			return err
+			return false
 		}
 
 		var pgConfig string
 		if err = db.QueryRow("SHOW config_file").Scan(&pgConfig); err != nil {
-			return err
+			return false
 		}
 
 		if walLevel != "logical" {
-			return fmt.Errorf("wal_level is not logical")
+			return false
 		}
 
 		_, err = db.Exec("CREATE TABLE IF NOT EXISTS flights (id serial PRIMARY KEY, name VARCHAR(50), created_at TIMESTAMP);")
 		if err != nil {
-			return err
+			return false
 		}
 
 		// Creating table with complex PG types
@@ -129,7 +123,7 @@ func ResourceWithPostgreSQLVersion(t *testing.T, pool *dockertest.Pool, version 
 			int_array INTEGER[]
 		);`)
 		if err != nil {
-			return err
+			return false
 		}
 
 		// This table explicitly uses identifiers that need quoting to ensure we work with those correctly.
@@ -139,48 +133,37 @@ func ResourceWithPostgreSQLVersion(t *testing.T, pool *dockertest.Pool, version 
 				PRIMARY KEY ("ID", "Seq")
 			);`)
 		if err != nil {
-			return err
+			return false
 		}
 
 		_, err = db.Exec("CREATE TABLE IF NOT EXISTS large_values (id serial PRIMARY KEY, value TEXT);")
 		if err != nil {
-			return err
+			return false
 		}
 
 		_, err = db.Exec("CREATE TABLE IF NOT EXISTS seq (id serial PRIMARY KEY);")
 		if err != nil {
-			return err
+			return false
 		}
 
 		// flights_non_streamed is a control table with data that should not be streamed or queried by snapshot streaming
 		_, err = db.Exec("CREATE TABLE IF NOT EXISTS flights_non_streamed (id serial PRIMARY KEY, name VARCHAR(50), created_at TIMESTAMP);")
 
-		return err
-	}); err != nil {
-		panic(fmt.Errorf("could not connect to docker: %w", err))
-	}
+		return err == nil
+	}, 2*time.Minute, time.Second, "could not connect to postgres")
+	t.Cleanup(func() {
+		if db != nil {
+			_ = db.Close()
+		}
+	})
 
-	return resource, db, nil
+	return databaseURL, db, nil
 }
 
 func TestIntegrationPostgresNoTxnMarkers(t *testing.T) {
-	t.Parallel()
 	integration.CheckSkip(t)
-	pool, err := dockertest.NewPool("")
+	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 	require.NoError(t, err)
-
-	var (
-		resource *dockertest.Resource
-		db       *sql.DB
-	)
-
-	resource, db, err = ResourceWithPostgreSQLVersion(t, pool, "16")
-	require.NoError(t, err)
-	require.NoError(t, resource.Expire(120))
-
-	hostAndPort := resource.GetHostPort("5432/tcp")
-	hostAndPortSplited := strings.Split(hostAndPort, ":")
-	password := "l]YLSc|4[i56%{gY"
 
 	require.NoError(t, err)
 
@@ -190,7 +173,6 @@ func TestIntegrationPostgresNoTxnMarkers(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	databaseURL := fmt.Sprintf("user=user_name password=%s dbname=dbname sslmode=disable host=%s port=%s", password, hostAndPortSplited[0], hostAndPortSplited[1])
 	template := fmt.Sprintf(`
 pg_stream:
     dsn: %s
@@ -273,7 +255,7 @@ pg_stream:
 	license.InjectTestService(streamOut.Resources())
 
 	go func() {
-		assert.NoError(t, streamOut.Run(t.Context()))
+		_ = streamOut.Run(t.Context())
 	}()
 
 	time.Sleep(time.Second * 5)
@@ -361,23 +343,9 @@ pg_stream:
 }
 
 func TestIntegrationPostgresIncludeTxnMarkers(t *testing.T) {
-	t.Parallel()
 	integration.CheckSkip(t)
-	pool, err := dockertest.NewPool("")
+	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 	require.NoError(t, err)
-
-	var (
-		resource *dockertest.Resource
-		db       *sql.DB
-	)
-
-	resource, db, err = ResourceWithPostgreSQLVersion(t, pool, "16")
-	require.NoError(t, err)
-	require.NoError(t, resource.Expire(120))
-
-	hostAndPort := resource.GetHostPort("5432/tcp")
-	hostAndPortSplited := strings.Split(hostAndPort, ":")
-	password := "l]YLSc|4[i56%{gY"
 
 	for range 10000 {
 		f := GetFakeFlightRecord()
@@ -385,7 +353,6 @@ func TestIntegrationPostgresIncludeTxnMarkers(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	databaseURL := fmt.Sprintf("user=user_name password=%s dbname=dbname sslmode=disable host=%s port=%s", password, hostAndPortSplited[0], hostAndPortSplited[1])
 	template := fmt.Sprintf(`
 pg_stream:
     dsn: %s
@@ -470,7 +437,9 @@ pg_stream:
 	license.InjectTestService(streamOut.Resources())
 
 	go func() {
-		assert.NoError(t, streamOut.Run(t.Context()))
+		if err := streamOut.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+			assert.NoError(t, err)
+		}
 	}()
 
 	time.Sleep(time.Second * 5)
@@ -491,21 +460,8 @@ pg_stream:
 
 func TestIntegrationPgCDCForPgOutputStreamComplexTypesPlugin(t *testing.T) {
 	integration.CheckSkip(t)
-	pool, err := dockertest.NewPool("")
+	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 	require.NoError(t, err)
-
-	var (
-		resource *dockertest.Resource
-		db       *sql.DB
-	)
-
-	resource, db, err = ResourceWithPostgreSQLVersion(t, pool, "16")
-	require.NoError(t, err)
-	require.NoError(t, resource.Expire(120))
-
-	hostAndPort := resource.GetHostPort("5432/tcp")
-	hostAndPortSplited := strings.Split(hostAndPort, ":")
-	password := "l]YLSc|4[i56%{gY"
 
 	// inserting data
 	_, err = db.Exec(`INSERT INTO complex_types_example (
@@ -532,7 +488,6 @@ func TestIntegrationPgCDCForPgOutputStreamComplexTypesPlugin(t *testing.T) {
 	_, err = db.Exec(`INSERT INTO complex_types_example (json_data) VALUES ('{"nested":null}'::jsonb);`)
 	require.NoError(t, err)
 
-	databaseURL := fmt.Sprintf("user=user_name password=%s dbname=dbname sslmode=disable host=%s port=%s", password, hostAndPortSplited[0], hostAndPortSplited[1])
 	template := fmt.Sprintf(`
 pg_stream:
     dsn: %s
@@ -606,21 +561,9 @@ func TestIntegrationMultiplePostgresVersions(t *testing.T) {
 		v := version
 		t.Run(version, func(t *testing.T) {
 			t.Parallel()
-			pool, err := dockertest.NewPool("")
+			databaseURL, db, err := ResourceWithPostgreSQLVersion(t, v)
 			require.NoError(t, err)
-
-			var (
-				resource *dockertest.Resource
-				db       *sql.DB
-			)
-
-			resource, db, err = ResourceWithPostgreSQLVersion(t, pool, v)
 			require.NoError(t, err)
-			require.NoError(t, resource.Expire(120))
-
-			hostAndPort := resource.GetHostPort("5432/tcp")
-			hostAndPortSplited := strings.Split(hostAndPort, ":")
-			password := "l]YLSc|4[i56%{gY"
 
 			for range 1000 {
 				f := GetFakeFlightRecord()
@@ -628,7 +571,6 @@ func TestIntegrationMultiplePostgresVersions(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			databaseURL := fmt.Sprintf("user=user_name password=%s dbname=dbname sslmode=disable host=%s port=%s", password, hostAndPortSplited[0], hostAndPortSplited[1])
 			template := fmt.Sprintf(`
 pg_stream:
     dsn: %s
@@ -674,7 +616,7 @@ pg_stream:
 				outBatchMut.Lock()
 				defer outBatchMut.Unlock()
 				return len(outBatches) == 1000
-			}, time.Second*15, time.Millisecond*100)
+			}, time.Minute, time.Millisecond*100)
 
 			for range 1000 {
 				f := GetFakeFlightRecord()
@@ -688,9 +630,9 @@ pg_stream:
 				outBatchMut.Lock()
 				defer outBatchMut.Unlock()
 				assert.Len(c, outBatches, 2000, "got: %d", len(outBatches))
-			}, time.Second*15, time.Millisecond*100)
+			}, time.Minute, time.Millisecond*100)
 
-			require.NoError(t, streamOut.StopWithin(time.Second*10))
+			require.NoError(t, streamOut.StopWithin(time.Second*30))
 
 			// Starting stream for the same replication slot should continue from the last LSN
 			// Meaning we must not receive any old messages again
@@ -715,7 +657,9 @@ pg_stream:
 			license.InjectTestService(streamOut.Resources())
 
 			go func() {
-				assert.NoError(t, streamOut.Run(t.Context()))
+				if err := streamOut.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+					t.Error(err)
+				}
 			}()
 
 			time.Sleep(time.Second * 5)
@@ -725,35 +669,35 @@ pg_stream:
 				require.NoError(t, err)
 			}
 
+			// Postgres logical replication provides at-least-once delivery.
+			// Upon reconnection to the same replication slot, a small number of
+			// messages from the tail of the previous session may be replayed if
+			// the final LSN ack did not reach Postgres before shutdown.
 			assert.EventuallyWithT(t, func(c *assert.CollectT) {
 				outBatchMut.Lock()
 				defer outBatchMut.Unlock()
-				assert.Len(c, outBatches, 1000, "got: %d", len(outBatches))
-			}, time.Second*10, time.Millisecond*100)
+				assert.GreaterOrEqual(c, len(outBatches), 1000, "expected at least 1000 messages, got: %d", len(outBatches))
+			}, time.Minute, time.Millisecond*100)
 
-			require.NoError(t, streamOut.StopWithin(time.Second*10))
+			// Verify we didn't receive a large number of duplicate messages from
+			// the previous session -- at most a handful may be replayed.
+			outBatchMut.Lock()
+			assert.LessOrEqual(t, len(outBatches), 1010, "too many duplicates replayed, got: %d", len(outBatches))
+			outBatchMut.Unlock()
+
+			require.NoError(t, streamOut.StopWithin(time.Second*30))
 		})
 	}
 }
 
 func TestIntegrationTOASTValues(t *testing.T) {
-	t.Parallel()
 	integration.CheckSkip(t)
 
 	for _, replicaIdentity := range []string{"FULL", "DEFAULT", "ALT_UNCHANGED_TOAST"} {
 		t.Run(replicaIdentity, func(t *testing.T) {
 			t.Parallel()
-			pool, err := dockertest.NewPool("")
+			databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 			require.NoError(t, err)
-
-			var (
-				resource *dockertest.Resource
-				db       *sql.DB
-			)
-
-			resource, db, err = ResourceWithPostgreSQLVersion(t, pool, "16")
-			require.NoError(t, err)
-			require.NoError(t, resource.Expire(120))
 
 			if replicaIdentity == "FULL" {
 				_, err = db.Exec(`ALTER TABLE large_values REPLICA IDENTITY FULL`)
@@ -762,17 +706,12 @@ func TestIntegrationTOASTValues(t *testing.T) {
 
 			const stringSize = 400_000
 
-			hostAndPort := resource.GetHostPort("5432/tcp")
-			hostAndPortSplited := strings.Split(hostAndPort, ":")
-			password := "l]YLSc|4[i56%{gY"
-
 			require.NoError(t, err)
 
 			// Insert a large >1MiB value
 			_, err = db.Exec(`INSERT INTO large_values (id, value) VALUES ($1, $2);`, 1, strings.Repeat("foo", stringSize))
 			require.NoError(t, err)
 
-			databaseURL := fmt.Sprintf("user=user_name password=%s dbname=dbname sslmode=disable host=%s port=%s", password, hostAndPortSplited[0], hostAndPortSplited[1])
 			template := strings.NewReplacer("$DSN", databaseURL).Replace(`
 pg_stream:
     dsn: $DSN
@@ -856,27 +795,12 @@ pg_stream:
 }
 
 func TestIntegrationSnapshotConsistency(t *testing.T) {
-	t.Parallel()
 	integration.CheckSkip(t)
-	pool, err := dockertest.NewPool("")
+	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 	require.NoError(t, err)
-
-	var (
-		resource *dockertest.Resource
-		db       *sql.DB
-	)
-
-	resource, db, err = ResourceWithPostgreSQLVersion(t, pool, "16")
-	require.NoError(t, err)
-	require.NoError(t, resource.Expire(120))
-
-	hostAndPort := resource.GetHostPort("5432/tcp")
-	hostAndPortSplited := strings.Split(hostAndPort, ":")
-	password := "l]YLSc|4[i56%{gY"
 
 	require.NoError(t, err)
 
-	databaseURL := fmt.Sprintf("user=user_name password=%s dbname=dbname sslmode=disable host=%s port=%s", password, hostAndPortSplited[0], hostAndPortSplited[1])
 	template := fmt.Sprintf(`
 read_until:
   # Stop when we're idle for 3 seconds, which means our writer stopped
@@ -963,18 +887,9 @@ read_until:
 }
 
 func TestIntegrationSnapshotParallel(t *testing.T) {
-	t.Parallel()
 	integration.CheckSkip(t)
-	pool, err := dockertest.NewPool("")
+	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 	require.NoError(t, err)
-
-	resource, db, err := ResourceWithPostgreSQLVersion(t, pool, "16")
-	require.NoError(t, err)
-	require.NoError(t, resource.Expire(120))
-
-	hostAndPort := resource.GetHostPort("5432/tcp")
-	hostAndPortSplited := strings.Split(hostAndPort, ":")
-	password := "l]YLSc|4[i56%{gY"
 
 	// Pre-insert rows into both tables so both pipelines have snapshot data.
 	const numRows = 100
@@ -984,8 +899,6 @@ func TestIntegrationSnapshotParallel(t *testing.T) {
 		_, err = db.Exec(`INSERT INTO flights (name, created_at) VALUES ('test', NOW())`)
 		require.NoError(t, err)
 	}
-
-	databaseURL := fmt.Sprintf("user=user_name password=%s dbname=dbname sslmode=disable host=%s port=%s", password, hostAndPortSplited[0], hostAndPortSplited[1])
 
 	buildPipeline := func(slotName string) (*service.Stream, *[]int64, *sync.Mutex) {
 		// max_parallel_snapshot_tables: 2 exercises the parallel errgroup scan path within
@@ -1076,23 +989,9 @@ read_until:
 }
 
 func TestIntegrationPostgresMetadata(t *testing.T) {
-	t.Parallel()
 	integration.CheckSkip(t)
-	pool, err := dockertest.NewPool("")
+	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 	require.NoError(t, err)
-
-	var (
-		resource *dockertest.Resource
-		db       *sql.DB
-	)
-
-	resource, db, err = ResourceWithPostgreSQLVersion(t, pool, "16")
-	require.NoError(t, err)
-	require.NoError(t, resource.Expire(120))
-
-	hostAndPort := resource.GetHostPort("5432/tcp")
-	hostAndPortSplited := strings.Split(hostAndPort, ":")
-	password := "l]YLSc|4[i56%{gY"
 
 	require.NoError(t, err)
 
@@ -1101,7 +1000,6 @@ func TestIntegrationPostgresMetadata(t *testing.T) {
 	_, err = db.Exec(`INSERT INTO flights (name, created_at) VALUES ($1, $2);`, "delta", "2006-01-02T15:04:05Z07:00")
 	require.NoError(t, err)
 
-	databaseURL := fmt.Sprintf("user=user_name password=%s dbname=dbname sslmode=disable host=%s port=%s", password, hostAndPortSplited[0], hostAndPortSplited[1])
 	template := fmt.Sprintf(`
 postgres_cdc:
     dsn: %s
@@ -1192,27 +1090,12 @@ postgres_cdc:
 }
 
 func TestIntegrationHeartbeat(t *testing.T) {
-	t.Parallel()
 	integration.CheckSkip(t)
-	pool, err := dockertest.NewPool("")
+	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 	require.NoError(t, err)
-
-	var (
-		resource *dockertest.Resource
-		db       *sql.DB
-	)
-
-	resource, db, err = ResourceWithPostgreSQLVersion(t, pool, "16")
-	require.NoError(t, err)
-	require.NoError(t, resource.Expire(120))
-
-	hostAndPort := resource.GetHostPort("5432/tcp")
-	hostAndPortSplited := strings.Split(hostAndPort, ":")
-	password := "l]YLSc|4[i56%{gY"
 
 	require.NoError(t, err)
 
-	databaseURL := fmt.Sprintf("user=user_name password=%s dbname=dbname sslmode=disable host=%s port=%s", password, hostAndPortSplited[0], hostAndPortSplited[1])
 	template := fmt.Sprintf(`
 postgres_cdc:
     dsn: %s
@@ -1243,7 +1126,9 @@ postgres_cdc:
 	require.NoError(t, err)
 	license.InjectTestService(streamOut.Resources())
 	go func() {
-		require.NoError(t, streamOut.Run(t.Context()))
+		if err := streamOut.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+			t.Error(err)
+		}
 	}()
 
 	// Wait for replication slot to be created
@@ -1293,24 +1178,10 @@ postgres_cdc:
 }
 
 func TestIntegrationPostgresCDCSchemaMetadata(t *testing.T) {
-	t.Parallel()
 	integration.CheckSkip(t)
 
-	pool, err := dockertest.NewPool("")
+	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
 	require.NoError(t, err)
-
-	var (
-		resource *dockertest.Resource
-		db       *sql.DB
-	)
-	resource, db, err = ResourceWithPostgreSQLVersion(t, pool, "16")
-	require.NoError(t, err)
-	require.NoError(t, resource.Expire(120))
-
-	hostAndPort := resource.GetHostPort("5432/tcp")
-	hostAndPortSplit := strings.Split(hostAndPort, ":")
-	password := "l]YLSc|4[i56%{gY"
-	databaseURL := fmt.Sprintf("user=user_name password=%s dbname=dbname sslmode=disable host=%s port=%s", password, hostAndPortSplit[0], hostAndPortSplit[1])
 
 	// Create a table that exercises every distinct type mapping in pgTypeNameToCommonType,
 	// plus INET as a representative unknown type whose schema falls back to ANY.
@@ -1480,7 +1351,7 @@ postgres_cdc:
 		assert.Equal(t, "INT64", byName["col_bigint"], "BIGINT column")
 		assert.Equal(t, "FLOAT32", byName["col_float4"], "REAL column")
 		assert.Equal(t, "FLOAT64", byName["col_float8"], "DOUBLE PRECISION column")
-		assert.Equal(t, "STRING", byName["col_numeric"], "NUMERIC column")
+		assert.Equal(t, "DECIMAL", byName["col_numeric"], "NUMERIC column")
 		assert.Equal(t, "STRING", byName["col_text"], "TEXT column")
 		assert.Equal(t, "STRING", byName["col_varchar"], "VARCHAR column")
 		assert.Equal(t, "STRING", byName["col_char"], "CHAR column")

@@ -1,0 +1,49 @@
+http:
+  debug_endpoints: true
+
+input:
+  generate:
+    count: 0
+    interval: ""
+    mapping: |
+      root.id = counter()
+      root.user_id = (counter() % 10000) + 1
+      root.event_type = ["click", "view", "purchase", "scroll", "hover"].index(counter() % 5)
+      root.value = (counter() % 1000) + random_int(max: 100)
+      root.info = "event info for record " + counter().string()
+      root.ts = now()
+
+pipeline:
+  processors:
+    - benchmark:
+        interval: 1s
+        count_bytes: true
+
+output:
+  iceberg:
+    catalog:
+      url: "${CATALOG_URL:http://localhost:8181}"
+    namespace: bench
+    table: events
+    storage:
+      aws_s3:
+        bucket: "${MINIO_BUCKET:warehouse}"
+        region: "${MINIO_REGION:us-east-1}"
+        endpoint: "${MINIO_ENDPOINT:http://localhost:9000}"
+        force_path_style_urls: true
+        credentials:
+          id: "${MINIO_USER:admin}"
+          secret: "${MINIO_PASSWORD:password}"
+    schema_evolution:
+      enabled: true
+    batching:
+      count: 1000
+      period: 5s
+
+logger:
+  level: INFO
+
+metrics:
+  prometheus:
+    add_process_metrics: true
+    add_go_metrics: true

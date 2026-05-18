@@ -1,6 +1,6 @@
 = open_telemetry_collector
 :type: tracer
-:status: experimental
+:status: stable
 
 
 
@@ -16,7 +16,7 @@
      https://github.com/redpanda-data/connect/tree/main/cmd/tools/docs_gen/templates/plugin.adoc.tmpl
 ////
 
-// © 2024 Redpanda Data Inc.
+// © 2026 Redpanda Data Inc.
 
 
 component_type_dropdown::[]
@@ -85,7 +85,7 @@ A list of http collectors.
 
 === `http[].address`
 
-The endpoint of a collector to send tracing events to.
+The endpoint of a collector to send events to.
 
 
 *Type*: `string`
@@ -116,7 +116,7 @@ A list of grpc collectors.
 
 === `grpc[].address`
 
-The endpoint of a collector to send tracing events to.
+The endpoint of a collector to send events to.
 
 
 *Type*: `string`
@@ -139,7 +139,7 @@ Connect to the collector with client transport security
 
 === `tags`
 
-A map of tags to add to all tracing spans.
+A map of tags to add to all exported spans and metrics.
 
 
 *Type*: `object`

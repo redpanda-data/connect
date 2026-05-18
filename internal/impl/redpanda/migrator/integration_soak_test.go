@@ -20,13 +20,11 @@ import (
 	"errors"
 	"flag"
 	"math/rand"
-	"os"
 	"strconv"
 	"testing"
 	"text/template"
 	"time"
 
-	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/twmb/franz-go/pkg/kgo"
@@ -57,10 +55,7 @@ var (
 //
 // You can run resources/docker/profiling containers to get Metrics.
 func TestIntegrationMigratorSoak(t *testing.T) {
-	integration.CheckSkip(t)
-	if os.Getenv("CI") != "" {
-		t.Skip("Skipping soak test in CI")
-	}
+	integration.CheckSkipExact(t)
 
 	ctx := t.Context()
 
@@ -75,12 +70,8 @@ func TestIntegrationMigratorSoak(t *testing.T) {
 		t.Log("<< Done waiting")
 	}
 
-	pool, err := dockertest.NewPool("")
-	require.NoError(t, err)
-	pool.MaxWait = time.Minute
-
 	t.Log("Given: Confluent CP cluster")
-	src := startConfluentInPool(t, pool, true)
+	src := startConfluent(t, true)
 
 	t.Log("And: datagen connectors producing data")
 	{
@@ -110,8 +101,7 @@ func TestIntegrationMigratorSoak(t *testing.T) {
 	t.Log("And: Redpanda destination cluster")
 	var dst EmbeddedRedpandaCluster
 	{
-		ep, _, err := redpandatest.StartSingleBrokerWithConfig(t, pool, redpandatest.Config{
-			ExposeBroker:     true,
+		ep, _, err := redpandatest.StartSingleBrokerWithConfig(t, redpandatest.Config{
 			AutoCreateTopics: false,
 		})
 		require.NoError(t, err)

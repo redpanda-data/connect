@@ -26,7 +26,7 @@ class Metadata(BaseModel):
     version: str
 
 class ArtifactExtra(BaseModel):
-    id: str | None = Field(alias='ID')
+    id: str | None = Field(default=None, alias='ID')
 
 # Partial schema of goreleaser artifacts.json
 class Artifact(BaseModel):

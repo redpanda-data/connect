@@ -11,6 +11,7 @@ package cdc
 import (
 	"context"
 	"fmt"
+	"math/big"
 	"slices"
 	"time"
 
@@ -201,6 +202,12 @@ func resolveBsonType(fieldSchema bson.M) (string, bool) {
 
 // bsonTypeStringToCommon maps a $jsonSchema bsonType string to a
 // schema.CommonType.
+//
+// MongoDB Decimal128 has per-value precision/scale, not a column-level
+// declaration, so it maps to BigDecimal — an arbitrary-precision decimal
+// transported as a canonical decimal string. Downstream converters that
+// need a fixed (p, s) (Avro/Parquet/Iceberg) reject BigDecimal explicitly;
+// JSON Schema accepts it as a permissive string pattern.
 func bsonTypeStringToCommon(bsonType string) schema.CommonType {
 	switch bsonType {
 	case "bool":
@@ -222,7 +229,7 @@ func bsonTypeStringToCommon(bsonType string) schema.CommonType {
 	case "objectId":
 		return schema.String
 	case "decimal":
-		return schema.String
+		return schema.BigDecimal
 	case "object":
 		return schema.Object
 	case "array":
@@ -326,7 +333,7 @@ func inferType(val any) schema.CommonType {
 	case bson.ObjectID:
 		return schema.String
 	case bson.Decimal128:
-		return schema.String
+		return schema.BigDecimal
 	case bson.M:
 		return schema.Object
 	case bson.D:
@@ -352,4 +359,61 @@ func sortedMapKeys(m bson.M) []string {
 	}
 	slices.Sort(keys)
 	return keys
+}
+
+// normaliseDecimal128 walks a BSON document and replaces every
+// bson.Decimal128 value with its canonical decimal string, so that the
+// final JSON-marshalled body matches the schema.BigDecimal value contract
+// (a plain JSON string, not the {"$numberDecimal": "..."} ExtJSON wrapper).
+//
+// The walk mutates bson.M and bson.A values in place. bson.D is rebuilt
+// element-wise because its values aren't directly addressable through the
+// keyed-pair shape.
+func normaliseDecimal128(value any) any {
+	switch v := value.(type) {
+	case bson.Decimal128:
+		canonical, err := canonicaliseDecimal128(v)
+		if err != nil {
+			return v
+		}
+		return canonical
+	case bson.M:
+		for k, child := range v {
+			v[k] = normaliseDecimal128(child)
+		}
+		return v
+	case bson.D:
+		for i, elem := range v {
+			v[i].Value = normaliseDecimal128(elem.Value)
+		}
+		return v
+	case bson.A:
+		for i, child := range v {
+			v[i] = normaliseDecimal128(child)
+		}
+		return v
+	default:
+		return value
+	}
+}
+
+// canonicaliseDecimal128 converts a bson.Decimal128 to a canonical decimal
+// string. Uses BigInt() to get the unscaled significand and exponent
+// directly, sidestepping the driver's String() output which can emit
+// scientific notation for extreme magnitudes.
+//
+// Decimal128 represents value = significand × 10^exponent. For
+// non-negative exponents the value is an integer (the unscaled int times
+// 10^exponent at scale 0). For negative exponents the magnitude of the
+// exponent is the scale.
+func canonicaliseDecimal128(d bson.Decimal128) (string, error) {
+	unscaled, exp, err := d.BigInt()
+	if err != nil {
+		return "", err
+	}
+	if exp >= 0 {
+		shifted := new(big.Int).Mul(unscaled, new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(exp)), nil))
+		return schema.FormatBigDecimal(shifted, 0)
+	}
+	return schema.FormatBigDecimal(unscaled, int32(-exp))
 }

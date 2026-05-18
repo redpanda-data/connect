@@ -12,6 +12,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -21,10 +22,10 @@ import (
 	"time"
 
 	_ "github.com/lib/pq"
-	"github.com/ory/dockertest/v3"
-	"github.com/ory/dockertest/v3/docker"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/wait"
 
 	_ "github.com/redpanda-data/benthos/v4/public/components/io"
 	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
@@ -88,7 +89,9 @@ DNS.1 = localhost
 	return certs, func() {}
 }
 
-func resourceWithPostgreSQLVersionSSL(t *testing.T, pool *dockertest.Pool, version string, certs sslTestCerts, clientAuth string) (*dockertest.Resource, *sql.DB) {
+func resourceWithPostgreSQLVersionSSL(t *testing.T, version string, certs sslTestCerts, clientAuth string) (testcontainers.Container, *sql.DB) {
+	t.Helper()
+
 	pgHbaContent := `
 local   all             all                                     trust
 host    all             all             127.0.0.1/32            trust
@@ -100,72 +103,106 @@ hostssl all all all cert clientcert=%s
 `, clientAuth)
 	}
 
-	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
-		Repository: "postgres",
-		Tag:        version,
-		Env: []string{
-			"POSTGRES_PASSWORD=l]YLSc|4[i56_@{gY",
-			"POSTGRES_USER=testuser",
-			"POSTGRES_DB=dbname",
-		},
-		Cmd: []string{
+	ctr, err := testcontainers.Run(t.Context(), "postgres:"+version,
+		testcontainers.WithExposedPorts("5432/tcp"),
+		testcontainers.WithEnv(map[string]string{
+			"POSTGRES_PASSWORD": "l]YLSc|4[i56_@{gY",
+			"POSTGRES_USER":     "testuser",
+			"POSTGRES_DB":       "dbname",
+		}),
+		// Override entrypoint to chown SSL cert files before starting postgres.
+		// WithFiles copies files as root; postgres requires the key to be owned
+		// by the postgres user. The wrapper chowns the files and then delegates
+		// to the original entrypoint.
+		testcontainers.WithEntrypoint(
+			"bash", "-c",
+			`chown postgres:postgres /var/lib/postgresql/server.crt /var/lib/postgresql/server.key /var/lib/postgresql/ca.crt && chmod 600 /var/lib/postgresql/server.key && exec docker-entrypoint.sh "$@"`,
+			"--",
+		),
+		testcontainers.WithCmd(
 			"postgres",
 			"-c", "wal_level=logical",
 			"-c", "ssl=on",
 			"-c", "ssl_cert_file=/var/lib/postgresql/server.crt",
 			"-c", "ssl_key_file=/var/lib/postgresql/server.key",
 			"-c", "ssl_ca_file=/var/lib/postgresql/ca.crt",
-		},
-		Mounts: []string{
-			fmt.Sprintf("%s:/var/lib/postgresql/server.crt", certs.serverCert),
-			fmt.Sprintf("%s:/var/lib/postgresql/server.key", certs.serverKey),
-			fmt.Sprintf("%s:/var/lib/postgresql/ca.crt", certs.caCert),
-		},
-	}, func(config *docker.HostConfig) {
-		config.AutoRemove = true
-		config.RestartPolicy = docker.RestartPolicy{Name: "no"}
-	})
+		),
+		testcontainers.WithFiles(
+			testcontainers.ContainerFile{
+				HostFilePath:      certs.serverCert,
+				ContainerFilePath: "/var/lib/postgresql/server.crt",
+				FileMode:          0o644,
+			},
+			testcontainers.ContainerFile{
+				HostFilePath:      certs.serverKey,
+				ContainerFilePath: "/var/lib/postgresql/server.key",
+				FileMode:          0o600,
+			},
+			testcontainers.ContainerFile{
+				HostFilePath:      certs.caCert,
+				ContainerFilePath: "/var/lib/postgresql/ca.crt",
+				FileMode:          0o644,
+			},
+		),
+		testcontainers.WithWaitStrategy(
+			wait.ForListeningPort("5432/tcp").WithStartupTimeout(2*time.Minute),
+		),
+	)
+	testcontainers.CleanupContainer(t, ctr)
 	require.NoError(t, err)
 
-	t.Cleanup(func() {
-		assert.NoError(t, pool.Purge(resource))
-	})
-
-	// Overwrite pg_hba.conf to enforce SSL
-	for range 10 {
-		time.Sleep(1 * time.Second)
-		_, err = resource.Exec([]string{"bash", "-c", fmt.Sprintf("echo '%s' > /var/lib/postgresql/data/pg_hba.conf", pgHbaContent)}, dockertest.ExecOptions{})
-		if err != nil {
-			continue
+	// Overwrite pg_hba.conf to enforce SSL and reload PostgreSQL config.
+	require.Eventually(t, func() bool {
+		exitCode, out, err := ctr.Exec(t.Context(), []string{
+			"bash", "-c",
+			fmt.Sprintf("echo '%s' > /var/lib/postgresql/data/pg_hba.conf", pgHbaContent),
+		})
+		_, _ = io.Copy(io.Discard, out)
+		if err != nil || exitCode != 0 {
+			return false
 		}
-		_, err = resource.Exec([]string{"pg_ctl", "reload"}, dockertest.ExecOptions{})
-		if err != nil {
-			continue
-		}
-	}
-	require.NoError(t, err, "Exhausted all retires updating container configuration")
+		exitCode, out, err = ctr.Exec(t.Context(), []string{
+			"su", "postgres", "-c",
+			"pg_ctl reload -D /var/lib/postgresql/data",
+		})
+		_, _ = io.Copy(io.Discard, out)
+		return err == nil && exitCode == 0
+	}, 30*time.Second, time.Second, "exhausted retries updating container configuration")
 
-	hostAndPort := resource.GetHostPort("5432/tcp")
-	dsn := fmt.Sprintf("user=testuser password='l]YLSc|4[i56_@{gY' dbname=dbname sslmode=disable host=%s port=%s", strings.Split(hostAndPort, ":")[0], strings.Split(hostAndPort, ":")[1])
+	host, err := ctr.Host(t.Context())
+	require.NoError(t, err)
+	mp, err := ctr.MappedPort(t.Context(), "5432/tcp")
+	require.NoError(t, err)
+
+	dsn := fmt.Sprintf(
+		"user=testuser password='l]YLSc|4[i56_@{gY' dbname=dbname sslmode=disable host=%s port=%s",
+		host, mp.Port(),
+	)
 
 	var db *sql.DB
-	require.NoError(t, pool.Retry(func() error {
-		var err error
-		db, err = sql.Open("postgres", dsn)
-		if err != nil {
-			return err
+	require.Eventually(t, func() bool {
+		if db != nil {
+			db.Close()
 		}
-		return db.Ping()
-	}))
+		var dbErr error
+		db, dbErr = sql.Open("postgres", dsn)
+		if dbErr != nil {
+			return false
+		}
+		if db.Ping() != nil {
+			db.Close()
+			db = nil
+			return false
+		}
+		return true
+	}, time.Minute, time.Second)
 
-	t.Cleanup(func() {
-		_ = db.Close()
-	})
+	t.Cleanup(func() { _ = db.Close() })
 
 	_, err = db.Exec("CREATE TABLE IF NOT EXISTS test_table (id serial PRIMARY KEY, content VARCHAR(50));")
 	require.NoError(t, err)
 
-	return resource, db
+	return ctr, db
 }
 
 func TestIntegrationSSLVerifyFull(t *testing.T) {
@@ -175,19 +212,17 @@ func TestIntegrationSSLVerifyFull(t *testing.T) {
 		t.Skip("Skipping test in CI")
 	}
 
-	t.Parallel()
 	integration.CheckSkip(t)
 
 	certs, cleanup := generateCerts(t)
 	defer cleanup()
 
-	pool, err := dockertest.NewPool("")
+	ctr, db := resourceWithPostgreSQLVersionSSL(t, "16", certs, "1")
+
+	host, err := ctr.Host(t.Context())
 	require.NoError(t, err)
-
-	resource, db := resourceWithPostgreSQLVersionSSL(t, pool, "16", certs, "1")
-	require.NoError(t, resource.Expire(120))
-
-	hostAndPort := resource.GetHostPort("5432/tcp")
+	mp, err := ctr.MappedPort(t.Context(), "5432/tcp")
+	require.NoError(t, err)
 
 	caCertContent, err := os.ReadFile(certs.caCert)
 	require.NoError(t, err)
@@ -213,8 +248,8 @@ postgres_cdc:
           key: |
 %s
 `,
-		strings.Split(hostAndPort, ":")[0],
-		strings.Split(hostAndPort, ":")[1],
+		host,
+		mp.Port(),
 		indent(string(caCertContent), 8),
 		indent(string(clientCertContent), 12),
 		indent(string(clientKeyContent), 12),

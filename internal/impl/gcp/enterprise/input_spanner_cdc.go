@@ -122,7 +122,7 @@ func spannerCDCInputConfigFromParsed(pConf *service.ParsedConfig) (conf spannerC
 
 func spannerCDCInputSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Beta().
+		Stable().
 		Version("4.56.0").
 		Categories("Services", "GCP").
 		Summary("Creates an input that consumes from a spanner change stream.").

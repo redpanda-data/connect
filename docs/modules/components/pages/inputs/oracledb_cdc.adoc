@@ -1,6 +1,6 @@
 = oracledb_cdc
 :type: input
-:status: experimental
+:status: stable
 :categories: ["Services"]
 
 
@@ -17,7 +17,7 @@
      https://github.com/redpanda-data/connect/tree/main/cmd/tools/docs_gen/templates/plugin.adoc.tmpl
 ////
 
-// © 2024 Redpanda Data Inc.
+// © 2026 Redpanda Data Inc.
 
 
 component_type_dropdown::[]
@@ -40,6 +40,8 @@ input:
   label: ""
   oracledb_cdc:
     connection_string: oracle://username:password@host:port/service_name # No default (required)
+    wallet_path: /opt/oracle/wallet # No default (optional)
+    wallet_password: "" # No default (optional)
     stream_snapshot: false
     max_parallel_snapshot_tables: 1
     snapshot_max_batch_size: 1000
@@ -56,6 +58,7 @@ input:
     checkpoint_cache_table_name: RPCN.CDC_CHECKPOINT_CACHE
     checkpoint_cache_key: oracledb_cdc
     checkpoint_limit: 1024
+    pdb_name: "" # No default (optional)
     auto_replay_nacks: true
     batching:
       count: 0
@@ -75,6 +78,8 @@ input:
   label: ""
   oracledb_cdc:
     connection_string: oracle://username:password@host:port/service_name # No default (required)
+    wallet_path: /opt/oracle/wallet # No default (optional)
+    wallet_password: "" # No default (optional)
     stream_snapshot: false
     max_parallel_snapshot_tables: 1
     snapshot_max_batch_size: 1000
@@ -91,6 +96,7 @@ input:
     checkpoint_cache_table_name: RPCN.CDC_CHECKPOINT_CACHE
     checkpoint_cache_key: oracledb_cdc
     checkpoint_limit: 1024
+    pdb_name: "" # No default (optional)
     auto_replay_nacks: true
     batching:
       count: 0
@@ -114,6 +120,9 @@ This input adds the following metadata fields to each message:
 - table_name: Name of the table that the message originated from.
 - operation: Type of operation that generated the message: "read", "delete", "insert", or "update". "read" is from messages that are read in the initial snapshot phase.
 - scn: the System Change Number in Oracle.
+- transaction_id: The Oracle transaction ID in `USN.SLOT.SEQ` format, identifying the transaction that produced the change. Not present on snapshot (`read`) messages.
+- source_ts_ms: The timestamp of when Oracle wrote the change record into the redo log, expressed as milliseconds since the Unix epoch. This reflects the database server's wall-clock time at the moment the DML executed, not the transaction commit time.
+- commit_ts_ms: The timestamp of the transaction commit, expressed as milliseconds since the Unix epoch. Not present on snapshot (`read`) messages.
 - schema: The table schema, for use with schema-aware downstream processors such as `schema_registry_encode`. When new columns are detected in CDC events, the schema is automatically refreshed from the Oracle catalog. Dropped columns are reflected after a connector restart.
 
 == Permissions
@@ -125,7 +134,7 @@ When using the default Oracle based cache, the Connect user requires permission 
 
 === `connection_string`
 
-The connection string of the Oracle database to connect to.
+The connection string of the Oracle database to connect to. Additional connection options can be supplied as URL query parameters, for example: `oracle://user:password@host:1522/service?WALLET=/opt/oracle/wallet&SSL=true`.
 
 
 *Type*: `string`
@@ -135,7 +144,36 @@ The connection string of the Oracle database to connect to.
 # Examples
 
 connection_string: oracle://username:password@host:port/service_name
+
+connection_string: oracle://user:password@host:1522/service?WALLET=/opt/oracle/wallet&SSL=true
 ```
+
+=== `wallet_path`
+
+Path to the Oracle Wallet directory. When set, SSL is enabled automatically. The directory must contain either `cwallet.sso` (auto-login, no password required) or `ewallet.p12` (requires `wallet_password`).
+
+
+*Type*: `string`
+
+
+```yml
+# Examples
+
+wallet_path: /opt/oracle/wallet
+```
+
+=== `wallet_password`
+
+Password for the `ewallet.p12` PKCS#12 wallet file. Only required when the wallet directory contains `ewallet.p12` rather than `cwallet.sso`.
+[CAUTION]
+====
+This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
+====
+
+
+
+*Type*: `string`
+
 
 === `stream_snapshot`
 
@@ -286,7 +324,7 @@ A https://www.docs.redpanda.com/redpanda-connect/components/caches/about[cache r
 
 === `checkpoint_cache_table_name`
 
-The identifier for the checkpoint cache table name. If no `checkpoint_cache` field is specified, this input will automatically create a table and stored procedure under the `rpcn` schema to act as a checkpoint cache. This table stores the latest processed System Change Number (SCN) that has been successfully delivered, allowing Redpanda Connect to resume from that point upon restart rather than reconsume the entire redo log.
+The identifier for the checkpoint cache table name. If no `checkpoint_cache` field is specified, this input will automatically create a table and stored procedure under the `rpcn` schema to act as a checkpoint cache. This table stores the latest processed System Change Number (SCN) that has been successfully delivered, allowing Redpanda Connect to resume from that point upon restart rather than reconsume the entire redo log. When `pdb_name` is set and this field is left at its default value, the table name is automatically derived per PDB (e.g. `RPCN.CDC_CHECKPOINT_MYPDB`) to avoid SCN collisions between pipelines monitoring different PDBs. Set this field explicitly to opt out of that auto-derivation.
 
 
 *Type*: `string`
@@ -316,6 +354,14 @@ The maximum number of messages that can be processed at a given time. Increasing
 *Type*: `int`
 
 *Default*: `1024`
+
+=== `pdb_name`
+
+The name of the pluggable database (PDB) to monitor. When connecting to a CDB root, LogMiner output is scoped to this PDB via SRC_CON_NAME filtering and catalog queries use ALTER SESSION SET CONTAINER to switch context. Requires GRANT SET CONTAINER TO <user> CONTAINER=ALL.
+
+
+*Type*: `string`
+
 
 === `auto_replay_nacks`
 

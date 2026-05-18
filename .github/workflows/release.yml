@@ -43,6 +43,7 @@ jobs:
           secret-ids: |
             ,sdlc/prod/github/cloudsmith
             ,sdlc/prod/github/dockerhub
+            ,sdlc/prod/github/rpm_signing_key
           parse-json-secrets: true
 
       - name: Configure AWS credentials for access to Amazon ECR Public
@@ -61,8 +62,8 @@ jobs:
         with:
           go-version-file: 'go.mod'
 
-      - name: Install cgo deps
-        run: sudo apt-get update && sudo apt-get install -y libzmq3-dev
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libzmq3-dev patchelf
 
       - name: Install Microsoft Go
         if: ${{ matrix.variant == 'connect-fips' }}
@@ -74,18 +75,8 @@ jobs:
           tar -C "$RUNNER_TEMP/microsoft" -xf "$RUNNER_TEMP/msgo.tgz"
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
 
-      - name: Install patchelf
-        run: sudo apt-get update && sudo apt-get install -y patchelf
-
       - name: Release Notes
         run: ./resources/scripts/release_notes.sh > ./release_notes.md
-
-      - name: Write telemetry private key
-        env:
-          CONNECT_TELEMETRY_PRIV_KEY: ${{ secrets.TELEMETRY_PRIVATE_KEY }}
-        run: |
-          git update-index --skip-worktree ./internal/telemetry/key.pem
-          echo "$CONNECT_TELEMETRY_PRIV_KEY" > ./internal/telemetry/key.pem
 
       - uses: actions/setup-python@v6
         with:
@@ -128,9 +119,15 @@ jobs:
         env:
           CONNECT_TELEMETRY_PRIV_KEY: ${{ secrets.TELEMETRY_PRIVATE_KEY }}
         run: |
-          echo "Adding telemetry key"
           git update-index --skip-worktree ./internal/telemetry/key.pem
           echo "$CONNECT_TELEMETRY_PRIV_KEY" > ./internal/telemetry/key.pem
+
+      - name: Write RPM signing key to temp file for goreleaser
+        if: ${{ matrix.variant == 'connect' || matrix.variant == 'connect-fips' }}
+        run: |
+          tmpkey=$(mktemp --suffix=.asc)
+          printf '%s\n' "$RPM_SIGNING_KEY_PRIVATE" > "$tmpkey"
+          echo "RPM_KEY_FILE_PRIVATE=$tmpkey" >> "$GITHUB_ENV"
 
       - name: GoReleaser Release
         if: ${{ github.event_name == 'push' }}
@@ -140,6 +137,21 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CLOUDSMITH_API_KEY: ${{ env.CLOUDSMITH_API_KEY }}
+
+      - name: Upload rpk connect plugin to S3
+        if: ${{ github.event_name == 'push' && (matrix.variant == 'connect' || matrix.variant == 'connect-fips') }}
+        uses: ./.github/actions/upload_managed_plugin
+        with:
+          aws_region: "us-west-2"
+          aws_s3_bucket: "rpk-plugins-repo"
+          project_root_dir: ${{ github.workspace }}
+          artifacts_file: ${{ github.workspace }}/target/dist/artifacts.json
+          metadata_file: ${{ github.workspace }}/target/dist/metadata.json
+          plugin_name: ${{ matrix.variant }}
+          goos: ${{ matrix.variant == 'connect' && 'linux,darwin' || 'linux' }}
+          goarch: ${{ matrix.variant == 'connect' && 'amd64,arm64' || 'amd64' }}
+          repo_hostname: rpk-plugins.redpanda.com
+          dry_run: false
 
       - name: Disable checksums for Edge build
         if: ${{ github.event_name == 'schedule' }}
@@ -178,23 +190,138 @@ jobs:
           ignore-unfixed: true
           exit-code: 1
 
-  trigger-docs:
+  update-bundles:
+    runs-on: ubuntu-latest
+    needs: goreleaser
+    if: github.event_name == 'push' && !contains(github.ref_name, '-rc')
+    concurrency:
+      group: release-update-bundles-${{ github.ref }}
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      pull-requests: write
+    outputs:
+      pr_url: ${{ steps.pr.outputs.url }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: 'go.mod'
+      - name: Update bundles and create PR
+        id: pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ./resources/scripts/update_bundles.sh
+
+          if git diff --quiet; then
+            echo "No bundle changes detected"
+            echo ":package: No bundle changes detected for ${{ github.ref_name }}." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          BRANCH="update-bundles-${{ github.ref_name }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -B "${BRANCH}"
+          git add -A
+          git commit -m "chore: update bundle dependencies for ${{ github.ref_name }}"
+          git push --force-with-lease origin "HEAD:refs/heads/${BRANCH}"
+
+          PR_URL=$(gh pr create \
+            --title "chore: update bundle dependencies for ${{ github.ref_name }}" \
+            --body "Automated bundle dependency update for release ${{ github.ref_name }}.")
+
+          gh pr merge --auto --rebase "${PR_URL}"
+
+          echo "url=${PR_URL}" >> "$GITHUB_OUTPUT"
+          echo ":package: Update Bundles PR: [${PR_URL##*/}](${PR_URL})" >> "$GITHUB_STEP_SUMMARY"
+
+  update-downstream:
     runs-on: ubuntu-latest
     needs: goreleaser
     if: github.event_name == 'push' && !contains(github.ref_name, '-')
     permissions:
-      actions: write
+      id-token: write
       contents: read
+    outputs:
+      helm_pr_url: ${{ steps.helm.outputs.url }}
     steps:
-      - name: Trigger update-docs workflow
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          aws-region: ${{ vars.RP_AWS_CRED_REGION }}
+          role-to-assume: arn:aws:iam::${{ secrets.RP_AWS_CRED_ACCOUNT_ID }}:role/${{ vars.RP_AWS_CRED_BASE_ROLE_NAME }}${{ github.event.repository.name }}
+      - uses: aws-actions/aws-secretsmanager-get-secrets@v3
+        with:
+          secret-ids: |
+            ,sdlc/prod/github/actions_bot_token
+          parse-json-secrets: true
+      - name: Trigger docs updates
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh workflow run update-docs.yml --repo ${{ github.repository }} --ref main
+          GH_TOKEN: ${{ env.ACTIONS_BOT_TOKEN }}
+        run: |
+          gh api repos/redpanda-data/docs-ui/dispatches -f event_type=update-go-mod
+          gh api repos/redpanda-data/rp-connect-docs/dispatches -f event_type=generate-rpcn-docs
+          gh api repos/redpanda-data/rp-connect-docs/dispatches -f event_type=test-cookbook-examples
+      - name: Update helm chart and create PR
+        id: helm
+        env:
+          GH_TOKEN: ${{ env.ACTIONS_BOT_TOKEN }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          BRANCH="auto/bump-connect"
+
+          git clone --depth 1 "https://x-access-token:${ACTIONS_BOT_TOKEN}@github.com/redpanda-data/helm-charts.git" helm-charts
+          cd helm-charts
+
+          CHART="charts/connect/Chart.yaml"
+          CURRENT=$(yq '.version' "$CHART")
+          CHART_VERSION="${CURRENT%.*}.$((${CURRENT##*.} + 1))"
+
+          yq -i ".version = \"$CHART_VERSION\" | .appVersion = \"$VERSION\"" "$CHART"
+          sed -Ei "s|connect:[0-9]+\.[0-9]+\.[0-9]+|connect:${VERSION}|" "$CHART"
+
+          sed -Ei \
+            -e "s|Version-[0-9]+\.[0-9]+\.[0-9]+|Version-${CHART_VERSION}|g" \
+            -e "s|Version: [0-9]+\.[0-9]+\.[0-9]+|Version: ${CHART_VERSION}|g" \
+            -e "s|AppVersion-[0-9]+\.[0-9]+\.[0-9]+|AppVersion-${VERSION}|g" \
+            -e "s|AppVersion: [0-9]+\.[0-9]+\.[0-9]+|AppVersion: ${VERSION}|g" \
+            charts/connect/README.md
+
+          git config user.name "vbotbuildovich"
+          git config user.email "62446873+vbotbuildovich@users.noreply.github.com"
+          git checkout -B "$BRANCH"
+          git add charts/connect/
+          git commit -m "connect: bump version to $VERSION"
+          git push -f origin "$BRANCH"
+
+          BODY=$(printf 'Automated bump of Redpanda Connect to %s.\n\nUpdates:\n- `appVersion` → `%s`\n- Chart `version` → `%s`\n- ArtifactHub image tag → `connect:%s`\n' \
+            "$VERSION" "$VERSION" "$CHART_VERSION" "$VERSION")
+
+          EXISTING_PR=$(gh pr list --repo redpanda-data/helm-charts --head "$BRANCH" --json number,url -q '.[0]')
+          if [ -n "$EXISTING_PR" ]; then
+            PR_NUMBER=$(echo "$EXISTING_PR" | jq -r '.number')
+            PR_URL=$(echo "$EXISTING_PR" | jq -r '.url')
+            gh pr edit "$PR_NUMBER" --repo redpanda-data/helm-charts \
+              --title "connect: bump version to $VERSION" \
+              --body "$BODY"
+          else
+            PR_URL=$(gh pr create --repo redpanda-data/helm-charts \
+              --title "connect: bump version to $VERSION" \
+              --body "$BODY" \
+              --base main \
+              --head "$BRANCH")
+          fi
+
+          echo "url=${PR_URL}" >> "$GITHUB_OUTPUT"
+          echo ":helm: Update Helm Chart PR: [${PR_URL##*/}](${PR_URL})" >> "$GITHUB_STEP_SUMMARY"
 
   notify-slack:
     runs-on: ubuntu-latest
-    needs: goreleaser
-    if: github.event_name == 'push'
+    needs: [goreleaser, update-bundles, update-downstream]
+    # always() is required because update-bundles/update-downstream may be skipped
+    # (pre-release/RC), and by default a skipped dependency skips this job too.
+    if: always() && github.event_name == 'push' && endsWith(github.ref_name, '.0') && !contains(github.ref_name, '-rc')
     permissions:
       contents: read
     steps:
@@ -202,55 +329,79 @@ jobs:
         id: release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BUNDLE_PR: ${{ needs.update-bundles.outputs.pr_url }}
+          HELM_PR: ${{ needs.update-downstream.outputs.helm_pr_url }}
+          GORELEASER_RESULT: ${{ needs.goreleaser.result }}
+          BUNDLES_RESULT: ${{ needs.update-bundles.result }}
+          DOWNSTREAM_RESULT: ${{ needs.update-downstream.result }}
         run: |
-          RELEASE_JSON=$(gh api repos/${{ github.repository }}/releases/tags/${{ github.ref_name }})
-          echo "html_url=$(echo "$RELEASE_JSON" | jq -r '.html_url')" >> "$GITHUB_OUTPUT"
-          echo "author=$(echo "$RELEASE_JSON" | jq -r '.author.login')" >> "$GITHUB_OUTPUT"
-          # Write multiline body to a file to avoid output truncation
-          echo "$RELEASE_JSON" | jq -r '.body' > /tmp/release_body.md
-          # Convert markdown headers (### Foo) to Slack bold (*Foo*)
-          sed -i 's/^### \(.*\)$/*\1*/g' /tmp/release_body.md
-          echo "body<<EOF" >> "$GITHUB_OUTPUT"
-          cat /tmp/release_body.md >> "$GITHUB_OUTPUT"
-          echo "EOF" >> "$GITHUB_OUTPUT"
+          # Build follow-up PR links and failure notices
+          LINKS=""
+          FAILURES=""
+          if [ -n "$BUNDLE_PR" ]; then
+            LINKS="${LINKS}:package: <${BUNDLE_PR}|Bundles PR>  "
+          fi
+          if [ -n "$HELM_PR" ]; then
+            LINKS="${LINKS}:helm: <${HELM_PR}|Helm Chart PR>  "
+          fi
+          if [ "$GORELEASER_RESULT" = "failure" ]; then
+            FAILURES="${FAILURES}:red_circle: goreleaser failed  "
+          fi
+          if [ "$BUNDLES_RESULT" = "failure" ]; then
+            FAILURES="${FAILURES}:red_circle: update-bundles failed  "
+          fi
+          if [ "$DOWNSTREAM_RESULT" = "failure" ]; then
+            FAILURES="${FAILURES}:red_circle: update-downstream failed  "
+          fi
+
+          HEADER_ICON=":green_alert:"
+          if [ -n "$FAILURES" ]; then
+            HEADER_ICON=":red_circle:"
+          fi
+
+          RELEASE_URL=""
+          BODY=""
+          if RELEASE_JSON=$(gh api repos/${{ github.repository }}/releases/tags/${{ github.ref_name }} 2>/dev/null); then
+            RELEASE_URL=$(echo "$RELEASE_JSON" | jq -r '.html_url')
+            echo "$RELEASE_JSON" | jq -r '.body' | tr -d '\r' > "$RUNNER_TEMP/release_body.md"
+            sed -i -E \
+              -e 's/^### (.*)$/*\1*/' \
+              -e 's/\[([^]]*)\]\(([^)]*)\)/<\2|\1>/g' \
+              -e 's/^(- )([^:]+):/\1*\2*:/' \
+              "$RUNNER_TEMP/release_body.md"
+            BODY=$(cat "$RUNNER_TEMP/release_body.md")
+          fi
+
+          VERSION="${{ github.ref_name }}"
+          COMPARE_URL="${{ github.server_url }}/${{ github.repository }}/compare/${{ github.ref_name }}"
+          STATUS="${FAILURES}${LINKS}"
+          jq -n \
+            --arg body "$BODY" \
+            --arg release_url "$RELEASE_URL" \
+            --arg version "$VERSION" \
+            --arg compare_url "$COMPARE_URL" \
+            --arg header_icon "$HEADER_ICON" \
+            --arg status "$STATUS" \
+            '{
+              text: ("New Redpanda Connect release: " + $version),
+              unfurl_links: false,
+              unfurl_media: false,
+              blocks: [
+                {type: "header", text: {type: "plain_text", text: ($header_icon + " Redpanda Connect " + $version), emoji: true}},
+                {type: "section", text: {type: "mrkdwn", text: ("*Release:* <" + $release_url + "|" + $version + ">")}},
+                {type: "divider"},
+                {type: "section", text: {type: "mrkdwn", text: $body}},
+                {type: "section", text: {type: "mrkdwn", text: $status}},
+                {type: "actions", elements: [
+                  {type: "button", text: {type: "plain_text", text: ":github: View Release", emoji: true}, url: $release_url},
+                  {type: "button", text: {type: "plain_text", text: ":page_facing_up: Full Changelog", emoji: true}, url: $compare_url}
+                ]}
+              ]
+            }' > "$RUNNER_TEMP/slack_payload.json"
 
       - name: Post changelog to Slack
-        uses: slackapi/slack-github-action@v2.1.1
+        uses: slackapi/slack-github-action@v3.0.1
         with:
           webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
           webhook-type: incoming-webhook
-          payload: |
-            text: "New Redpanda Connect release: ${{ github.ref_name }}"
-            unfurl_links: false
-            unfurl_media: false
-            blocks:
-              - type: "header"
-                text:
-                  type: "plain_text"
-                  text: ":green_alert: Redpanda Connect ${{ github.ref_name }}"
-                  emoji: true
-              - type: "section"
-                fields:
-                  - type: "mrkdwn"
-                    text: "*Release:*\n<${{ steps.release.outputs.html_url }}|${{ github.ref_name }}>"
-                  - type: "mrkdwn"
-                    text: "*Author:*\n${{ steps.release.outputs.author }}"
-              - type: "divider"
-              - type: "section"
-                text:
-                  type: "mrkdwn"
-                  text: "${{ steps.release.outputs.body }}"
-              - type: "actions"
-                elements:
-                  - type: "button"
-                    text:
-                      type: "plain_text"
-                      text: ":github: View Release"
-                      emoji: true
-                    url: "${{ steps.release.outputs.html_url }}"
-                  - type: "button"
-                    text:
-                      type: "plain_text"
-                      text: ":page_facing_up: Full Changelog"
-                      emoji: true
-                    url: "${{ github.server_url }}/${{ github.repository }}/compare/${{ github.ref_name }}"
+          payload-file-path: ${{ runner.temp }}/slack_payload.json

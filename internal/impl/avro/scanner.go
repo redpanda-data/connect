@@ -15,12 +15,14 @@
 package avro
 
 import (
-	"bufio"
 	"context"
+	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 
-	"github.com/linkedin/goavro/v2"
+	"github.com/twmb/avro"
+	"github.com/twmb/avro/ocf"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
@@ -47,13 +49,13 @@ For example, the union schema ` + "`[\"null\",\"string\",\"Foo\"]`, where `Foo`"
 - the string ` + "`\"a\"` as `{\"string\": \"a\"}`" + `; and
 - a ` + "`Foo` instance as `{\"Foo\": {...}}`, where `{...}` indicates the JSON encoding of a `Foo`" + ` instance.
 
-However, it is possible to instead create documents in https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodecForStandardJSONFull[standard/raw JSON format^] by setting the field ` + "<<avro_raw_json,`avro_raw_json`>> to `true`" + `.
+However, it is possible to instead create documents in standard/raw JSON format by setting the field ` + "<<avro_raw_json,`avro_raw_json`>> to `true`" + `.
 
 This scanner also emits the canonical Avro schema as ` + "`@avro_schema`" + ` metadata, along with the schema's fingerprint available via ` + "`@avro_schema_fingerprint`" + `.
 `).
 		Fields(
 			service.NewBoolField(sFieldRawJSON).
-				Description("Whether messages should be decoded into normal JSON (\"json that meets the expectations of regular internet json\") rather than https://avro.apache.org/docs/current/specification/_print/#json-encoding[Avro JSON^]. If `true` the schema returned from the subject should be decoded as https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodecForStandardJSONFull[standard json^] instead of as https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodec[avro json^]. There is a https://github.com/linkedin/goavro/blob/5ec5a5ee7ec82e16e6e2b438d610e1cab2588393/union.go#L224-L249[comment in goavro^], the https://github.com/linkedin/goavro[underlining library used for avro serialization^], that explains in more detail the difference between the standard json and avro json.").
+				Description("Whether messages should be decoded into normal JSON rather than https://avro.apache.org/docs/current/specification/_print/#json-encoding[Avro JSON^]. When true, union values are unwrapped (bare values instead of {\"type\": value} wrappers).").
 				Advanced().
 				Default(false),
 		)
@@ -79,24 +81,22 @@ type avroScannerCreator struct {
 }
 
 func (c *avroScannerCreator) Create(rdr io.ReadCloser, aFn service.AckFunc, _ *service.ScannerSourceDetails) (service.BatchScanner, error) {
-	br := bufio.NewReader(rdr)
-	ocf, err := goavro.NewOCFReader(br)
+	reader, err := ocf.NewReader(rdr)
 	if err != nil {
 		return nil, err
 	}
 
-	ocfCodec := ocf.Codec()
-	ocfSchema := ocfCodec.Schema()
-	if c.rawJSON {
-		if ocfCodec, err = goavro.NewCodecForStandardJSONFull(ocfSchema); err != nil {
-			return nil, err
-		}
-	}
+	schema := reader.Schema()
+	canonical := string(schema.Canonical())
+	fp := binary.BigEndian.Uint64(schema.Fingerprint(avro.NewRabin()))
 
 	return service.AutoAggregateBatchScannerAcks(&avroScanner{
 		r:         rdr,
-		ocf:       ocf,
-		avroCodec: ocfCodec,
+		reader:    reader,
+		schema:    schema,
+		rawJSON:   c.rawJSON,
+		canonical: canonical,
+		fp:        fp,
 	}, aFn), nil
 }
 
@@ -106,8 +106,11 @@ func (*avroScannerCreator) Close(context.Context) error {
 
 type avroScanner struct {
 	r         io.ReadCloser
-	ocf       *goavro.OCFReader
-	avroCodec *goavro.Codec
+	reader    *ocf.Reader
+	schema    *avro.Schema
+	rawJSON   bool
+	canonical string
+	fp        uint64
 }
 
 func (c *avroScanner) NextBatch(context.Context) (service.MessageBatch, error) {
@@ -115,26 +118,28 @@ func (c *avroScanner) NextBatch(context.Context) (service.MessageBatch, error) {
 		return nil, io.EOF
 	}
 
-	if !c.ocf.Scan() {
-		err := c.ocf.Err()
-		if err != nil {
-			return nil, fmt.Errorf("scanning OCF file: %s", err)
+	var native any
+	if err := c.reader.Decode(&native); err != nil {
+		if err == io.EOF {
+			return nil, io.EOF
 		}
-		return nil, io.EOF
-	}
-
-	datum, err := c.ocf.Read()
-	if err != nil {
 		return nil, fmt.Errorf("reading OCF datum: %s", err)
 	}
 
-	jb, err := c.avroCodec.TextualFromNative(nil, datum)
-	if err != nil {
-		return nil, fmt.Errorf("decoding OCF datum to JSON: %s", err)
+	var jb []byte
+	var err error
+	if c.rawJSON {
+		jb, err = c.schema.EncodeJSON(native, avro.LinkedinFloats())
+	} else {
+		jb, err = c.schema.EncodeJSON(native, avro.TaggedUnions(), avro.TagLogicalTypes(), avro.LinkedinFloats())
 	}
+	if err != nil {
+		return nil, fmt.Errorf("encoding OCF datum to JSON: %s", err)
+	}
+
 	msg := service.NewMessage(jb)
-	msg.MetaSetMut("avro_schema", c.avroCodec.CanonicalSchema())
-	msg.MetaSetMut("avro_schema_fingerprint", c.avroCodec.Rabin)
+	msg.MetaSetMut("avro_schema", c.canonical)
+	msg.MetaSetMut("avro_schema_fingerprint", c.fp)
 	return service.MessageBatch{msg}, nil
 }
 
@@ -142,5 +147,7 @@ func (c *avroScanner) Close(context.Context) error {
 	if c.r == nil {
 		return nil
 	}
-	return c.r.Close()
+	readerErr := c.reader.Close() // closes codec only, not the underlying reader
+	rErr := c.r.Close()
+	return errors.Join(readerErr, rErr)
 }

@@ -14,6 +14,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
@@ -833,4 +835,57 @@ func (s *logicalDecodingMessageSuite) Test() {
 	s.True(ok)
 
 	s.Equal(expected, logicalDecodingMsg)
+}
+
+func TestDecodeTextColumnDataNumericDecimal(t *testing.T) {
+	mp := pgtype.NewMap()
+	// numeric(18,4) — atttypmod packs (precision << 16) | scale plus VARHDRSZ.
+	atttypmod := int32(((18 << 16) | 4) + 4)
+	got, err := decodeTextColumnData(mp, []byte("1.5"), pgtype.NumericOID, atttypmod)
+	require.NoError(t, err)
+	assert.Equal(t, "1.5000", got, "value canonicalised at the declared scale")
+}
+
+func TestDecodeTextColumnDataNumericBigDecimal(t *testing.T) {
+	mp := pgtype.NewMap()
+	got, err := decodeTextColumnData(mp, []byte("12345.67890"), pgtype.NumericOID, -1)
+	require.NoError(t, err)
+	assert.Equal(t, "12345.67890", got, "unparameterised numeric canonicalises as BigDecimal at natural scale")
+}
+
+func TestDecodeTextColumnDataNullPassesThrough(t *testing.T) {
+	mp := pgtype.NewMap()
+	got, err := decodeTextColumnData(mp, nil, pgtype.NumericOID, -1)
+	require.NoError(t, err)
+	assert.Nil(t, got)
+}
+
+func TestDecodeTextColumnDataNumericSpecialValues(t *testing.T) {
+	// PostgreSQL allows NaN, Infinity and -Infinity as valid NUMERIC values.
+	// They must pass through as their raw string representation rather than
+	// causing a row-level decode error.
+	mp := pgtype.NewMap()
+	// atttypmod for numeric(10,2)
+	atttypmod := int32(((10 << 16) | 2) + 4)
+
+	tests := []struct {
+		name    string
+		data    []byte
+		typmod  int32
+		wantVal string
+	}{
+		{name: "NaN unparameterised", data: []byte("NaN"), typmod: -1, wantVal: "NaN"},
+		{name: "Infinity unparameterised", data: []byte("Infinity"), typmod: -1, wantVal: "Infinity"},
+		{name: "-Infinity unparameterised", data: []byte("-Infinity"), typmod: -1, wantVal: "-Infinity"},
+		{name: "NaN with precision/scale", data: []byte("NaN"), typmod: atttypmod, wantVal: "NaN"},
+		{name: "Infinity with precision/scale", data: []byte("Infinity"), typmod: atttypmod, wantVal: "Infinity"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := decodeTextColumnData(mp, tt.data, pgtype.NumericOID, tt.typmod)
+			require.NoError(t, err, "special NUMERIC value %q must not cause a decode error", tt.data)
+			assert.Equal(t, tt.wantVal, got)
+		})
+	}
 }

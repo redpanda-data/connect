@@ -17,6 +17,8 @@ import (
 
 	"github.com/apache/iceberg-go"
 	"github.com/parquet-go/parquet-go"
+
+	"github.com/redpanda-data/connect/v4/internal/impl/parquet/parquetdecimal"
 )
 
 // BuildParquetSchema builds a parquet schema from an iceberg schema and returns
@@ -148,6 +150,8 @@ func icebergTypeToParquet(t iceberg.Type) (parquet.Node, error) {
 		return parquet.Timestamp(parquet.Microsecond), nil
 	case iceberg.UUIDType:
 		return parquet.UUID(), nil
+	case iceberg.DecimalType:
+		return parquet.Decimal(t.Scale(), t.Precision(), parquet.FixedLenByteArrayType(DecimalByteWidth(t.Precision()))), nil
 	case *iceberg.StructType:
 		group := make(parquet.Group, len(t.Fields()))
 		for _, f := range t.Fields() {
@@ -186,4 +190,12 @@ func icebergTypeToParquet(t iceberg.Type) (parquet.Node, error) {
 	default:
 		return nil, fmt.Errorf("unsupported iceberg type: %T", t)
 	}
+}
+
+// DecimalByteWidth returns the minimum number of bytes needed to store a
+// two's complement integer with the given decimal precision. Thin alias
+// over [parquetdecimal.ByteWidth] for backwards compatibility within the
+// iceberg packages; new callers should use parquetdecimal directly.
+func DecimalByteWidth(precision int) int {
+	return parquetdecimal.ByteWidth(precision)
 }

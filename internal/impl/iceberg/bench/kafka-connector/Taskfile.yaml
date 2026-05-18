@@ -1,0 +1,205 @@
+version: "3"
+
+silent: true
+
+vars:
+  KAFKA_BOOTSTRAP: '{{.KAFKA_BOOTSTRAP | default "localhost:9092"}}'
+  CONNECT_URL: '{{.CONNECT_URL | default "http://localhost:8083"}}'
+  ICEBERG_REST_URL: '{{.ICEBERG_REST_URL | default "http://localhost:18181"}}'
+
+tasks:
+  up:
+    desc: Build and start all infrastructure, wait for Kafka Connect to be ready
+    cmds:
+      - docker compose up -d --build
+      - until curl -sf {{.CONNECT_URL}}/ > /dev/null 2>&1; do sleep 3; done
+      - echo "Kafka Connect ready at {{.CONNECT_URL}}"
+
+  down:
+    desc: Stop and remove all containers and volumes
+    cmds:
+      - docker compose down -v --remove-orphans
+
+  connector:create:
+    desc: Register the Iceberg sink connector
+    cmds:
+      - |
+        curl -sf -X POST {{.CONNECT_URL}}/connectors \
+          -H "Content-Type: application/json" \
+          -d @connector.json | jq '.name'
+
+  connector:status:
+    desc: Show connector and task status
+    cmds:
+      - curl -sf {{.CONNECT_URL}}/connectors/iceberg-sink-bench/status | jq .
+
+  connector:delete:
+    desc: Delete the Iceberg sink connector (without stopping infrastructure)
+    cmds:
+      - curl -s -X DELETE {{.CONNECT_URL}}/connectors/iceberg-sink-bench || true
+
+  data:load:
+    desc: "Load COUNT events to Kafka (e.g. task data:load COUNT=10000000)"
+    vars:
+      COUNT: '{{.COUNT | default "1000000"}}'
+    env:
+      COUNT: '{{.COUNT}}'
+      KAFKA_BOOTSTRAP: '{{.KAFKA_BOOTSTRAP}}'
+    cmds:
+      - go run ../../../../../cmd/redpanda-connect/main.go run ./producer.yaml
+
+  bench:run:
+    desc: "Sink bench-events via Kafka Connect into Iceberg (run after bench:load)"
+    cmds:
+      - task connector:delete
+      - |
+        docker exec kc-kafka kafka-consumer-groups \
+          --bootstrap-server localhost:29092 \
+          --group connect-iceberg-sink-bench \
+          --topic bench-events \
+          --reset-offsets --to-earliest --execute 2>/dev/null || true
+      - task control-topic:reset
+      - task connector:create
+      - |
+        GROUP=connect-iceberg-sink-bench
+        INTERVAL=10
+
+        TOTAL=$(docker exec kc-kafka kafka-get-offsets \
+          --bootstrap-server localhost:29092 \
+          --topic bench-events 2>/dev/null \
+          | awk -F: '{sum += $3} END {print sum}')
+        echo "bench-events has $TOTAL messages"
+
+        get_lag() {
+          docker exec kc-kafka kafka-consumer-groups \
+            --bootstrap-server localhost:29092 \
+            --describe --group "$GROUP" 2>/dev/null \
+            | awk '/bench-events/ { cur = ($4 == "-") ? 0 : $4; sum += $5 - cur } END {print (NR == 0 ? -1 : sum)}'
+        }
+
+        START=""
+        PREV_LAG=""
+        PREV_TIME=""
+        printf "%-10s  %-14s  %s\n" "TIME" "LAG" "MSG/S"
+
+        while true; do
+          sleep "$INTERVAL"
+          LAG=$(get_lag)
+          NOW=$(date +%s)
+          if [ -z "$START" ]; then
+            if [ "$LAG" -gt 0 ] 2>/dev/null; then
+              START=$NOW; PREV_LAG=$LAG; PREV_TIME=$NOW
+              printf "%-10s  %-14s  (timing started)\n" "$(date +%H:%M:%S)" "$LAG"
+            else
+              printf "%-10s  %-14s  (waiting for lag...)\n" "$(date +%H:%M:%S)" "$LAG"
+            fi
+            continue
+          fi
+          DELTA_T=$((NOW - PREV_TIME))
+          DELTA_LAG=$((PREV_LAG - LAG))
+          RATE=$(( DELTA_T > 0 ? DELTA_LAG / DELTA_T : 0 ))
+          printf "%-10s  %-14s  %s msg/s\n" "$(date +%H:%M:%S)" "$LAG" "$RATE"
+          if [ "$LAG" -eq 0 ]; then
+            ELAPSED=$((NOW - START))
+            AVG=$(( TOTAL / (ELAPSED > 0 ? ELAPSED : 1) ))
+            echo "---"
+            echo "Total messages : $TOTAL"
+            echo "Elapsed        : ${ELAPSED}s"
+            echo "Avg throughput : ${AVG} msg/s"
+            break
+          fi
+          PREV_LAG=$LAG
+          PREV_TIME=$NOW
+        done
+
+  bench:lag:
+    desc: Show current consumer lag for the Iceberg sink connector group
+    cmds:
+      - docker exec kc-kafka kafka-consumer-groups --bootstrap-server localhost:29092 --describe --group connect-iceberg-sink-bench
+
+  bench:offsets:
+    desc: Show end offsets for bench-events
+    cmds:
+      - docker exec kc-kafka kafka-get-offsets --bootstrap-server localhost:29092 --topic bench-events
+
+  control-topic:reset:
+    desc: Delete and recreate the control-iceberg topic to clear stale coordinator state
+    cmds:
+      - docker exec kc-kafka kafka-topics --bootstrap-server localhost:29092 --delete --topic control-iceberg 2>/dev/null || true
+      - |
+        until ! docker exec kc-kafka kafka-topics --bootstrap-server localhost:29092 \
+            --list 2>/dev/null | grep -q '^control-iceberg$'; do
+          sleep 1
+        done
+      - |
+        docker exec kc-kafka kafka-topics --bootstrap-server localhost:29092 \
+          --create --topic control-iceberg \
+          --partitions 1 \
+          --replication-factor 1 \
+          --config cleanup.policy=compact
+
+  bench-topic:recreate:
+    desc: Delete and recreate bench-events topic for a clean slate
+    cmds:
+      - docker exec kc-kafka kafka-topics --bootstrap-server localhost:29092 --delete --topic bench-events 2>/dev/null || true
+      - |
+        until ! docker exec kc-kafka kafka-topics --bootstrap-server localhost:29092 \
+            --list 2>/dev/null | grep -q '^bench-events$'; do
+          sleep 1
+        done
+      - |
+        docker exec kc-kafka kafka-topics --bootstrap-server localhost:29092 \
+          --create --topic bench-events \
+          --partitions 16 \
+          --replication-factor 1
+
+  data:reset:
+    desc: Drop and recreate the benchmark.events Iceberg table (clears all data)
+    cmds:
+      - task connector:delete
+      - task control-topic:reset
+      - curl -sf -X DELETE {{.ICEBERG_REST_URL}}/v1/namespaces/benchmark/tables/events || true
+      - |
+        curl -sf -X POST {{.ICEBERG_REST_URL}}/v1/namespaces/benchmark/tables \
+          -H "Content-Type: application/json" \
+          -d '{
+            "name": "events",
+            "schema": {
+              "type": "struct",
+              "schema-id": 0,
+              "fields": [
+                {"id": 1, "name": "id",       "required": false, "type": "long"},
+                {"id": 2, "name": "category", "required": false, "type": "string"},
+                {"id": 3, "name": "value",    "required": false, "type": "double"},
+                {"id": 4, "name": "ts",       "required": false, "type": "long"}
+              ]
+            }
+          }' | jq .name
+
+  data:stats:
+    desc: Show Iceberg table snapshot stats (row count, file size)
+    cmds:
+      - |
+        curl -s {{.ICEBERG_REST_URL}}/v1/namespaces/benchmark/tables/events \
+          | jq '
+            if .metadata.snapshots == null or (.metadata.snapshots | length) == 0
+            then "no snapshots yet"
+            else {
+              snapshots:     (.metadata.snapshots | length),
+              metadata_logs: (.metadata["metadata-log"] | length),
+              total_records: .metadata.snapshots[-1].summary["total-records"],
+              total_size:    .metadata.snapshots[-1].summary["total-files-size"],
+              added_records: .metadata.snapshots[-1].summary["added-records"],
+              added_size:    .metadata.snapshots[-1].summary["added-files-size"]
+            }
+            end'
+
+  logs:connect:
+    desc: Follow Kafka Connect worker logs
+    cmds:
+      - docker compose logs -f kafka-connect
+
+  logs:setup:
+    desc: Show setup container output
+    cmds:
+      - docker compose logs setup

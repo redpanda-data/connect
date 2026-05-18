@@ -1,0 +1,9 @@
+{"Action":"start-run","Package":"./internal/impl/test"}
+{"Action":"run","Test":"TestIntegrationFoo"}
+{"Action":"output","Test":"TestIntegrationFoo","Output":"    integration_test.go:42: some error\n"}
+{"Action":"fail","Test":"TestIntegrationFoo","Elapsed":1}
+{"Action":"end-run"}
+{"Action":"start-run","Package":"./internal/impl/test"}
+{"Action":"run","Test":"TestIntegrationFoo"}
+{"Action":"pass","Test":"TestIntegrationFoo","Elapsed":1.5}
+{"Action":"end-run"}

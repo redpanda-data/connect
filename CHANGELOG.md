@@ -3,7 +3,128 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## 4.86.0 - TBD
+## 4.92.0 - 2026-05-14
+
+### Added
+
+- kafka: Exposed Franz Kafka producer configuration options including acks, max_buffered_records, max_buffered_bytes, max_in_flight_requests, record_retries, and record_delivery_timeout for greater control over message delivery behavior. ([@dyurchanka](https://github.com/dyurchanka), [#4028](https://github.com/redpanda-data/connect/pull/4028))
+- telemetry: Add deployment-type and tenant-id to call-home payload ([@prakhargarg105](https://github.com/prakhargarg105), [#4426](https://github.com/redpanda-data/connect/pull/4426))
+
+### Fixed
+
+- iceberg: Improved Iceberg commit performance by skipping the redundant duplicate-path check on AddDataFiles operations, which was causing multiplicative slowdowns on busy tables. ([@Jeffail](https://github.com/Jeffail), [#4421](https://github.com/redpanda-data/connect/pull/4421))
+
+### Changed
+
+- oracledb_cdc: Extend checkpoint cache to support multiple callers ([@josephwoodward](https://github.com/josephwoodward), [#4417](https://github.com/redpanda-data/connect/pull/4417))
+
+## 4.91.0 - 2026-05-08
+
+### Fixed
+
+- aws_s3: Fixed object_canned_acl field to properly accept empty string value in schema validation and runtime, allowing uploads to buckets with ACLs disabled. ([@josephwoodward](https://github.com/josephwoodward), [#4413](https://github.com/redpanda-data/connect/pull/4413))
+- iceberg: Fixed Iceberg v2 manifest list writer to accept v1 manifest files from tables upgraded from v1 to v2, resolving commit failures on upgraded tables. ([@Jeffail](https://github.com/Jeffail), [#4404](https://github.com/redpanda-data/connect/pull/4404))
+
+## 4.90.0 - 2026-04-30
+
+### Added
+
+- mysql_cdc: MySQL CDC connector now supports parallel snapshots to improve initial data capture performance when replicating large tables. ([@josephwoodward](https://github.com/josephwoodward), [#4363](https://github.com/redpanda-data/connect/pull/4363))
+- bigquery: Added storage write API connector. ([@squiidz](https://github.com/squiidz), [#4220](https://github.com/redpanda-data/connect/pull/4220))
+
+### Fixed
+
+- iceberg: Fix schema column ordering  ([@josephwoodward](https://github.com/josephwoodward), [#4373](https://github.com/redpanda-data/connect/pull/4373))
+
+## 4.89.3 - 2026-04-30
+
+### Fixed
+
+- iceberg: fix decimal min/max stats extraction for parquet files ([@josephwoodward](https://github.com/josephwoodward), [#4368](https://github.com/redpanda-data/connect/pull/4368))
+- iceberg: Preserve schema-registry column order when auto-creating tables. Build-time ordering now follows `schema_metadata` when present and falls back to sorted record keys otherwise, replacing Go's randomised map iteration. In case-insensitive mode, top-level column names use the metadata's casing — record keys are matched by case-folding and the metadata's name lands in the table, mirroring how nested struct fields supplied via metadata are named. ([@josephwoodward](https://github.com/josephwoodward), [#4373](https://github.com/redpanda-data/connect/pull/4373))
+
+### Added
+
+- iceberg: Added a `case_sensitive_columns` field to the `iceberg` output. When `false`, column-name matching follows iceberg's recommended case-insensitive convention end-to-end (shredding, schema evolution, partition specs, `schema_metadata`). Defaults to `true` for backwards compatibility. (@Jeffail)
+
+## 4.89.2 - 2026-04-28
+
+### Fixed
+
+- oracledb_cdc: Ensure LogMiner nullable numbers are consistent with snapshotting. ([@josephwoodward](https://github.com/josephwoodward), [#4354](https://github.com/redpanda-data/connect/pull/4354))
+
+### Changed
+
+- schema: Adopt Decimal and BigDecimal common types across sources and converters. ([@jeffail](https://github.com/jeffail), [#4358](https://github.com/redpanda-data/connect/pull/4358))
+
+## 4.89.1 - 2026-04-24
+
+### Fixed
+
+- iceberg: Updated  `iceberg-go` dependency that includes fix to seed UpdateSchema id counter from metadata LastColumnID. ([@josephwoodward](https://github.com/josephwoodward), [#4343](https://github.com/redpanda-data/connect/pull/4343))
+
+## 4.88.0 - 2026-04-16
+
+### Added
+
+- mysql_cdc: Added integration tests validating MySQL CDC connection drop and reconnection scenarios with zero data loss. ([@mmatczuk](https://github.com/mmatczuk), [#4241](https://github.com/redpanda-data/connect/pull/4241))
+- oracledb_cdc: Added multi-tenant support for Oracle CDC input to handle both container and non-container databases. ([@josephwoodward](https://github.com/josephwoodward), [#4237](https://github.com/redpanda-data/connect/pull/4237))
+- oracledb_cdc: Added source timestamp metadata to Oracle CDC messages to propagate the redo log timestamp to consumers. ([@josephwoodward](https://github.com/josephwoodward), [#4250](https://github.com/redpanda-data/connect/pull/4250))
+- otlp: Added OpenTelemetry metrics exporter supporting both gRPC and HTTP protocols. ([@mmatczuk](https://github.com/mmatczuk), [#4230](https://github.com/redpanda-data/connect/pull/4230))
+- arc: add output plugin for Arc columnar database ([@xe-nvdk](https://github.com/xe-nvdk), [#4265](https://github.com/redpanda-data/connect/pull/4265))
+
+### Fixed
+
+- amqp1: Fixed data race in randomString by replacing non-goroutine-safe package-level rand with thread-safe top-level rand.Intn. ([@mmatczuk](https://github.com/mmatczuk), [#4260](https://github.com/redpanda-data/connect/pull/4260))
+- general: Fixed Docker latest tag for connect image from incorrect latest-cloud to latest. ([@mmatczuk](https://github.com/mmatczuk), [#4267](https://github.com/redpanda-data/connect/pull/4267))
+- mysql_cdc: Fixed snapshot column order consistency by using deterministic primary key slice iteration instead of non-deterministic map iteration. ([@josephwoodward](https://github.com/josephwoodward), [#4262](https://github.com/redpanda-data/connect/pull/4262))
+- postgresql: Fixed handling of tsvector type in PostgreSQL replication decoder to return raw PostgreSQL text representation. ([@mmatczuk](https://github.com/mmatczuk), [#4261](https://github.com/redpanda-data/connect/pull/4261))
+- protobuf: Fixed memory leak in hyperpb parser caused by pool holding unused messages and added profile-guided optimization support. ([@mmatczuk](https://github.com/mmatczuk), [#4240](https://github.com/redpanda-data/connect/pull/4240))
+
+### Changed
+
+- iceberg: Updated Iceberg fallback behavior to infer column type when schema doesn't contain the field, enabling support for transforms. ([@rockwotj](https://github.com/rockwotj), [#4263](https://github.com/redpanda-data/connect/pull/4263))
+- oracledb_cdc: Switched from buffering all redo events to streaming them through a callback to reduce memory allocation. ([@josephwoodward](https://github.com/josephwoodward), [#4243](https://github.com/redpanda-data/connect/pull/4243))
+- mysql_cdc: write checkpoint after snapshot ([@josephwoodward](https://github.com/josephwoodward), [#4269](https://github.com/redpanda-data/connect/pull/4269))
+
+
+## 4.87.0 - 2026-04-09
+
+### Added
+
+- amqp_1: AMQP 1.0 input now extracts all standard message properties as metadata, and output supports setting them via interpolated string config fields with UUID/uint64/string auto-detection. ([@mmatczuk](https://github.com/mmatczuk), [#4225](https://github.com/redpanda-data/connect/pull/4225))
+- general: Added cmd/tools/integration, a CLI tool for running integration tests package-by-package with caching, resume capability, and detailed failure output. ([@mmatczuk](https://github.com/mmatczuk), [#4198](https://github.com/redpanda-data/connect/pull/4198))
+- mssqlserver_cdc: Added support for remote checkpoint caching in MSSQL Server CDC input via new `checkpoint_cache_connection_string` configuration field. ([@josephwoodward](https://github.com/josephwoodward), [#4214](https://github.com/redpanda-data/connect/pull/4214))
+- oracledb_cdc: Added Oracle Wallet authentication support to oracledb_cdc input via `wallet_path` and `wallet_password` configuration fields. ([@josephwoodward](https://github.com/josephwoodward), [#4219](https://github.com/redpanda-data/connect/pull/4219))
+- sql: Added batching support to sql_raw output with per-message conditional query execution via new `when` field. ([@squiidz](https://github.com/squiidz), [#4200](https://github.com/redpanda-data/connect/pull/4200))
+
+### Fixed
+
+- oracledb_cdc: Fixed Oracle CDC LogMiner handling of zero-padded HEXTORAW values and corrected DELETE/UPDATE operations to include proper message content and primary keys. ([@josephwoodward](https://github.com/josephwoodward), [#4217](https://github.com/redpanda-data/connect/pull/4217))
+
+### Changed
+
+- avro: Replaced linkedin/goavro and hamba/avro libraries with twmb/avro across confluent, avro, and salesforce packages, simplifying type handling and enabling support for RFC 3339 timestamp strings in JSON input. ([@twmb](https://github.com/twmb), [#4195](https://github.com/redpanda-data/connect/pull/4195))
+- iceberg: Apache Iceberg table output now automatically upgrades v1 tables to v2 format during commit transactions. ([@rockwotj](https://github.com/rockwotj), [#4212](https://github.com/redpanda-data/connect/pull/4212))
+
+## 4.86.0 - 2026-04-02
+
+### Added
+
+- oracledb_cdc: Added support for parsing complex Oracle connection configurations with override options and early connection validation. ([@josephwoodward](https://github.com/josephwoodward), [#4179](https://github.com/redpanda-data/connect/pull/4179))
+- text: Added string_split processor that splits message bytes by a configurable delimiter into an array with support for converting empty parts to null. ([@rockwotj](https://github.com/rockwotj), [#4187](https://github.com/redpanda-data/connect/pull/4187))
+- sql: Add ClickHouse Map type support for sql_insert ([@rickysaltzer](https://github.com/rickysaltzer), [#4178](https://github.com/redpanda-data/connect/pull/4178))
+
+### Fixed
+
+- aws: Fixed DynamoDB CDC shard discovery race condition that could miss writes between Connect() and async discovery, and added handling for TrimmedDataAccessException errors. ([@squiidz](https://github.com/squiidz), [#4175](https://github.com/redpanda-data/connect/pull/4175))
+- migrator: Fixed concurrent DFS race condition that could cause import mode to be restored while other walkers were still syncing by deferring all mode restoration to Close() and removing the refcount mechanism. ([@mmatczuk](https://github.com/mmatczuk), [#4174](https://github.com/redpanda-data/connect/pull/4174))
+- s3: Fixed AWS S3 client to properly respect CA certificates specified in the AWS_CA_BUNDLE environment variable. ([@ttreptow](https://github.com/ttreptow), [#4093](https://github.com/redpanda-data/connect/pull/4093))
+
+### Changed
+
+- aws_sqs: Reverted client-side 256 KB message and batch size limit enforcement for SQS output to restore prior behavior. ([@twmb](https://github.com/twmb), [#4193](https://github.com/redpanda-data/connect/pull/4193))
+- general: Promoted 50 Beta and Experimental connectors to Stable status across inputs, outputs, processors, caches, metrics, and Bloblang functions. ([@prakhargarg105](https://github.com/prakhargarg105), [#4205](https://github.com/redpanda-data/connect/pull/4205))
 
 ### Added
 

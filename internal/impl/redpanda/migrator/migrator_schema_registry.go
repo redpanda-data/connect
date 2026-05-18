@@ -156,8 +156,7 @@ func schemaRegistryMigratorFields() []*service.ConfigField {
 				"When false (default), unknown schema IDs are passed through unchanged, " +
 				"allowing migration of topics with mixed message formats. " +
 				"Note: messages with 0-byte prefixes (e.g., protobuf) cannot be distinguished from schema registry headers and may fail when strict is enabled.").
-			Default(false).
-			LintRule(`root = if this && !this.schema_registry.translate_ids { "strict is only relevant when translate_ids is true" }`),
+			Default(false),
 		service.NewIntField(srFieldMaxParallelHTTPRequest).
 			Description("Maximum number of parallel HTTP requests to the schema registry. Controls concurrency when syncing multiple schemas.").
 			Default(10).
@@ -947,8 +946,9 @@ type importModeManager struct {
 	*schemaRegistryMigrator
 	active bool
 
-	mu       sync.RWMutex
-	prevMode map[string]sr.Mode // destination subject -> previous mode (or noMode if not set)
+	mu         sync.RWMutex
+	prevMode   map[string]sr.Mode // destination subject -> previous mode (or noMode if not set)
+	callbackMu sync.Mutex         // serializes TestingOnSetSubjectMode calls from concurrent goroutines
 }
 
 func (m *schemaRegistryMigrator) newImportModeManager(ctx context.Context) (*importModeManager, error) {
@@ -1125,7 +1125,9 @@ func (c *importModeManager) setSubjectMode(ctx context.Context, subject string, 
 	}
 
 	if c.conf.TestingOnSetSubjectMode != nil {
+		c.callbackMu.Lock()
 		c.conf.TestingOnSetSubjectMode(subject, mode)
+		c.callbackMu.Unlock()
 	}
 
 	return nil

@@ -1,6 +1,6 @@
 = gcp_cloud_storage
 :type: output
-:status: beta
+:status: stable
 :categories: ["Services","GCP"]
 
 
@@ -17,7 +17,7 @@
      https://github.com/redpanda-data/connect/tree/main/cmd/tools/docs_gen/templates/plugin.adoc.tmpl
 ////
 
-// © 2024 Redpanda Data Inc.
+// © 2026 Redpanda Data Inc.
 
 
 component_type_dropdown::[]

@@ -162,6 +162,9 @@ func (k *kafkaReader) connectExplicitTopics(ctx context.Context, config *sarama.
 			if client != nil {
 				client.Close()
 			}
+			// Reset k.msgChan so a subsequent Connect retry doesn't observe
+			// a stale, orphaned channel and short-circuit as already-connected.
+			k.msgChan = nil
 		}
 	}()
 
@@ -216,6 +219,10 @@ func (k *kafkaReader) connectExplicitTopics(ctx context.Context, config *sarama.
 	consumerWG := sync.WaitGroup{}
 	msgChan := make(chan asyncMessage)
 	ctx, doneFn := context.WithCancel(context.Background())
+
+	// Assign msgChan before spawning partition consumer goroutines to avoid a
+	// data race: goroutines read k.msgChan immediately upon starting.
+	k.msgChan = msgChan
 
 	for topic, partitions := range k.topicPartitions {
 		for _, partition := range partitions {
@@ -301,6 +308,5 @@ func (k *kafkaReader) connectExplicitTopics(ctx context.Context, config *sarama.
 	k.consumerCloseFn = doneFn
 	k.consumerDoneCtx = doneCtx
 	k.session = offsetTracker
-	k.msgChan = msgChan
 	return nil
 }

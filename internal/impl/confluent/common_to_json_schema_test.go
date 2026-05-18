@@ -16,6 +16,7 @@ package confluent
 
 import (
 	"encoding/json"
+	"regexp"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -131,4 +132,79 @@ func TestCommonToJSONSchemaUnion(t *testing.T) {
 	require.Len(t, oneOf, 2)
 	assert.Equal(t, "string", oneOf[0].(map[string]any)["type"])
 	assert.Equal(t, "integer", oneOf[1].(map[string]any)["type"])
+}
+
+func TestCommonToJSONSchemaDecimal(t *testing.T) {
+	cases := []struct {
+		name      string
+		precision int32
+		scale     int32
+		matches   []string
+		rejects   []string
+	}{
+		{
+			name:      "scale 0 integer-only",
+			precision: 5,
+			scale:     0,
+			matches:   []string{"0", "1", "12345", "-12345"},
+			rejects:   []string{"123456", "1.5", "01", "+1", "1e2", ""},
+		},
+		{
+			name:      "scale 4 mixed",
+			precision: 18,
+			scale:     4,
+			matches:   []string{"0.0000", "1.5000", "-12345.6789", "12345678901234.5678"},
+			rejects:   []string{"1.5", "1.50000", "1", "01.5000", "+1.5000", "1.5e2", ""},
+		},
+		{
+			name:      "scale equals precision fractional only",
+			precision: 4,
+			scale:     4,
+			matches:   []string{"0.0000", "0.1234", "-0.9999"},
+			rejects:   []string{"1.0000", "0.123", "0.12345", "1"},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			c := schema.Common{
+				Name:    "amount",
+				Type:    schema.Decimal,
+				Logical: &schema.LogicalParams{Decimal: &schema.DecimalParams{Precision: tc.precision, Scale: tc.scale}},
+			}
+			got := jsonSchemaUnmarshal(t, c)
+			assert.Equal(t, "string", got["type"])
+			pattern, ok := got["pattern"].(string)
+			require.True(t, ok, "pattern field must be a string")
+
+			re := regexp.MustCompile(pattern)
+			for _, ok := range tc.matches {
+				assert.True(t, re.MatchString(ok), "pattern %q should match %q", pattern, ok)
+			}
+			for _, bad := range tc.rejects {
+				assert.False(t, re.MatchString(bad), "pattern %q should NOT match %q", pattern, bad)
+			}
+		})
+	}
+}
+
+func TestCommonToJSONSchemaDecimalMissingLogical(t *testing.T) {
+	_, err := commonToJSONSchema(schema.Common{Name: "amount", Type: schema.Decimal})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "missing precision/scale")
+}
+
+func TestCommonToJSONSchemaBigDecimal(t *testing.T) {
+	c := schema.Common{Name: "amount", Type: schema.BigDecimal}
+	got := jsonSchemaUnmarshal(t, c)
+	assert.Equal(t, "string", got["type"])
+	pattern, ok := got["pattern"].(string)
+	require.True(t, ok)
+	re := regexp.MustCompile(pattern)
+	for _, s := range []string{"0", "1.5", "-1.5", "12345.67890", "1"} {
+		assert.True(t, re.MatchString(s), "permissive pattern should match %q", s)
+	}
+	for _, s := range []string{"1.5e2", "+1.5", "01", "", "1.2.3"} {
+		assert.False(t, re.MatchString(s), "permissive pattern should NOT match %q", s)
+	}
 }

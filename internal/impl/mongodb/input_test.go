@@ -19,8 +19,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/wait"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
@@ -58,32 +59,27 @@ query: |
 func TestInputIntegration(t *testing.T) {
 	integration.CheckSkip(t)
 
-	pool, err := dockertest.NewPool("")
-	if err != nil {
-		t.Skipf("Could not connect to docker: %s", err)
-	}
-
-	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
-		Repository: "mongo",
-		Tag:        "latest",
-		Env: []string{
-			"MONGO_INITDB_ROOT_USERNAME=mongoadmin",
-			"MONGO_INITDB_ROOT_PASSWORD=secret",
-		},
-		ExposedPorts: []string{"27017/tcp"},
-	})
+	ctr, err := testcontainers.Run(t.Context(), "mongo:latest",
+		testcontainers.WithExposedPorts("27017/tcp"),
+		testcontainers.WithEnv(map[string]string{
+			"MONGO_INITDB_ROOT_USERNAME": "mongoadmin",
+			"MONGO_INITDB_ROOT_PASSWORD": "secret",
+		}),
+		testcontainers.WithWaitStrategy(
+			wait.ForListeningPort("27017/tcp").WithStartupTimeout(time.Minute),
+		),
+	)
+	testcontainers.CleanupContainer(t, ctr)
 	require.NoError(t, err)
 
-	t.Cleanup(func() {
-		assert.NoError(t, pool.Purge(resource))
-	})
+	mp, err := ctr.MappedPort(t.Context(), "27017/tcp")
+	require.NoError(t, err)
 
 	var mongoClient *mongo.Client
-	require.NoError(t, err)
 
 	dbName := "TestDB"
 	collName := "TestCollection"
-	require.NoError(t, pool.Retry(func() error {
+	require.Eventually(t, func() bool {
 		if mongoClient, err = mongo.Connect(options.Client().
 			SetConnectTimeout(10 * time.Second).
 			SetTimeout(30 * time.Second).
@@ -92,15 +88,15 @@ func TestInputIntegration(t *testing.T) {
 				Username: "mongoadmin",
 				Password: "secret",
 			}).
-			ApplyURI("mongodb://localhost:" + resource.GetPort("27017/tcp"))); err != nil {
-			return err
+			ApplyURI("mongodb://localhost:" + mp.Port())); err != nil {
+			return false
 		}
 		if err := mongoClient.Database(dbName).CreateCollection(t.Context(), collName); err != nil {
 			_ = mongoClient.Disconnect(t.Context())
-			return err
+			return false
 		}
-		return nil
-	}))
+		return true
+	}, time.Minute, time.Second)
 
 	coll := mongoClient.Database(dbName).Collection(collName)
 	sampleData := []any{
@@ -222,7 +218,7 @@ batchSize: 2
 		},
 	}
 
-	port := resource.GetPort("27017/tcp")
+	port := mp.Port()
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			testInput(t, port, tc.query, tc.placeholderConf, tc.jsonMarshalMode)

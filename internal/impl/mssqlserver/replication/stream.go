@@ -13,14 +13,15 @@ import (
 	"container/heap"
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+
 	"github.com/redpanda-data/connect/v4/internal/confx"
+	"github.com/redpanda-data/connect/v4/internal/sqlutil"
 )
 
 type heapItem struct{ iter *changeTableRowIter }
@@ -142,11 +143,19 @@ func newChangeTableRowIter(
 		}
 	}
 
-	// pre-allocate slice of pointers for sql.Scan operations
+	// Pre-allocate scan targets. For DECIMAL/NUMERIC and MONEY/SMALLMONEY
+	// columns we scan into a string-shaped target so the driver hands back
+	// the lossless text representation; everything else scans into a bare
+	// any and lets the driver pick its native Go type.
 	vals := make([]any, len(cols))
 	for i := range vals {
-		var v any
-		vals[i] = &v
+		switch strings.ToUpper(colTypes[i].DatabaseTypeName()) {
+		case "DECIMAL", "NUMERIC", "MONEY", "SMALLMONEY":
+			vals[i] = new(sql.NullString)
+		default:
+			var v any
+			vals[i] = &v
+		}
 	}
 
 	iter := &changeTableRowIter{
@@ -203,7 +212,7 @@ func (ct *changeTableRowIter) Close() error {
 // mapValsToChange maps the values from vals to the dst out parameter.
 func (ct *changeTableRowIter) mapValsToChange(vals []any, dst *change) error {
 	for i, c := range ct.cols {
-		v := *(vals[i].(*any))
+		v := unwrapScanTarget(vals[i])
 		switch c {
 		case "__$start_lsn":
 			if b, ok := v.([]byte); ok {
@@ -262,6 +271,24 @@ func (ct *changeTableRowIter) mapValsToChange(vals []any, dst *change) error {
 	return nil
 }
 
+// unwrapScanTarget pulls the underlying value out of a slot pre-allocated by
+// the streaming iterator. DECIMAL/NUMERIC/MONEY/SMALLMONEY columns scan into
+// *sql.NullString to keep the driver from coercing to a lossy float64;
+// everything else scans into *any.
+func unwrapScanTarget(slot any) any {
+	switch s := slot.(type) {
+	case *sql.NullString:
+		if !s.Valid {
+			return nil
+		}
+		return []byte(s.String)
+	case *any:
+		return *s
+	default:
+		return slot
+	}
+}
+
 // mapScannedValue takes an already-scanned value and column type, and converts it
 // to the appropriate Go type for JSON marshaling.
 func mapScannedValue(val any, colType *sql.ColumnType) any {
@@ -269,11 +296,36 @@ func mapScannedValue(val any, colType *sql.ColumnType) any {
 		return nil
 	}
 
-	switch colType.DatabaseTypeName() {
-	// Decimals come as []byte from the driver, convert to json.Number to preserve precision
+	typeName := colType.DatabaseTypeName()
+	switch typeName {
 	case "DECIMAL", "NUMERIC":
+		// Decimals come as []byte from the driver. When precision/scale is
+		// known, normalise to the canonical decimal string contract for
+		// schema.Decimal columns. Without precision info, fall back to the
+		// raw text — same shape as the column's String mapping.
+		b, ok := val.([]byte)
+		if !ok {
+			return val
+		}
+		precision, scale, hasSize := colType.DecimalSize()
+		if !hasSize {
+			return string(b)
+		}
+		canonical, err := sqlutil.CanonicaliseDecimalBytes(b, int32(precision), int32(scale))
+		if err != nil {
+			return string(b)
+		}
+		return canonical
+	case "MONEY", "SMALLMONEY":
+		// MONEY/SMALLMONEY remain String-typed (see schema.go) so the
+		// emitted wire form is a quoted canonical decimal string, matching
+		// the schema's String declaration.
 		if b, ok := val.([]byte); ok {
-			return json.Number(string(b))
+			canonical, err := sqlutil.CanonicaliseBigDecimalBytes(b)
+			if err != nil {
+				return string(b)
+			}
+			return canonical
 		}
 	}
 

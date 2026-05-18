@@ -17,7 +17,7 @@
      https://github.com/redpanda-data/connect/tree/main/cmd/tools/docs_gen/templates/plugin.adoc.tmpl
 ////
 
-// © 2024 Redpanda Data Inc.
+// © 2026 Redpanda Data Inc.
 
 
 component_type_dropdown::[]
@@ -119,6 +119,7 @@ output:
       tls_skip_verify: false
     namespace: analytics.events # No default (required)
     table: user_events # No default (required)
+    case_sensitive_columns: true
     storage:
       aws_s3:
         bucket: my-iceberg-data # No default (required)
@@ -152,6 +153,8 @@ output:
       manifest_merge_enabled: true
       max_snapshot_age: 24h
       max_retries: 3
+    parquet:
+      string_encoding: delta_length_byte_array
     batching:
       count: 0
       byte_size: 0
@@ -173,6 +176,8 @@ Write streaming data to Apache Iceberg tables using the REST catalog API. This o
 * Transaction retry logic for concurrent writes
 
 This output is designed to work with REST catalog implementations like Apache Polaris, AWS Glue Data Catalog, and the Databricks Unity Catalog.
+
+Currently only version 2 of the Iceberg specification is supported. Any pre-existing version 1 tables will be upgraded to version 2 automatically.
 
 === Apache Polaris
 
@@ -550,6 +555,15 @@ table: user_events
 table: events_${!meta("topic")}
 ```
 
+=== `case_sensitive_columns`
+
+Controls how message field names are matched against table column names, and how column references in the partition spec are resolved. When `true` (the default), names must match exactly. When `false`, matching is case-insensitive — set this when your downstream catalog or query engine treats column names as case-insensitive (the iceberg specification's recommended convention) so that, for example, a message keyed `"COLUMN"` lands in an existing `column` rather than triggering schema evolution. Ambiguous case-only duplicates in the input are rejected.
+
+
+*Type*: `bool`
+
+*Default*: `true`
+
 === `storage`
 
 Storage backend configuration for data files. Exactly one of `aws_s3`, `gcp_cloud_storage`, or `azure_blob_storage` must be specified.
@@ -863,7 +877,7 @@ table_location: s3://my-iceberg-bucket/
 
 === `schema_evolution.schema_metadata`
 
-The name of a message metadata field containing a schema definition. When set, the schema is used to determine column types during schema evolution and table creation instead of inferring types from values. The schema must be in the standard common schema format (the same format used by the `parquet_encode` processor's `schema_metadata` field). For batches of messages, the first message's schema is used.
+The name of a message metadata field containing a schema definition. When set, the schema is used to determine column types during schema evolution and table creation instead of inferring types from values. The schema must be in the standard common schema format (the same format used by the `parquet_encode` processor's `schema_metadata` field). For batches of messages, the first message's schema is used. Record presence drives schema shape: fields declared in the schema metadata that are absent from the record are not added to the table, while the metadata controls column ordering, naming, and types for fields that are present. In case-insensitive mode, top-level column names use the metadata's casing — record keys are matched by case-folding and the metadata's name is what lands in the table.
 
 
 *Type*: `string`
@@ -912,6 +926,28 @@ Maximum number of times to retry a failed transaction commit.
 *Type*: `int`
 
 *Default*: `3`
+
+=== `parquet`
+
+Parquet writer configuration.
+
+
+*Type*: `object`
+
+
+=== `parquet.string_encoding`
+
+The encoding to use for string and binary columns. Use `plain` for compatibility with readers that do not support `DELTA_LENGTH_BYTE_ARRAY` encoding, such as AWS Redshift Spectrum.
+
+
+*Type*: `string`
+
+*Default*: `"delta_length_byte_array"`
+
+Options:
+`plain`
+, `delta_length_byte_array`
+.
 
 === `batching`
 

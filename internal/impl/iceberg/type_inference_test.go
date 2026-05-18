@@ -9,9 +9,11 @@
 package iceberg
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
+	"github.com/apache/iceberg-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -39,19 +41,72 @@ func TestInferIcebergType(t *testing.T) {
 			value:    true,
 			wantType: "boolean",
 		},
+		// Integer types → int or long
 		{
 			name:     "int",
 			value:    42,
-			wantType: "double",
+			wantType: "long",
+		},
+		{
+			name:     "int8",
+			value:    int8(42),
+			wantType: "int",
+		},
+		{
+			name:     "int16",
+			value:    int16(42),
+			wantType: "int",
+		},
+		{
+			name:     "int32",
+			value:    int32(42),
+			wantType: "int",
 		},
 		{
 			name:     "int64",
 			value:    int64(42),
-			wantType: "double",
+			wantType: "long",
+		},
+		{
+			name:     "uint8",
+			value:    uint8(42),
+			wantType: "int",
+		},
+		{
+			name:     "uint16",
+			value:    uint16(42),
+			wantType: "int",
+		},
+		{
+			name:     "uint32",
+			value:    uint32(42),
+			wantType: "long",
+		},
+		{
+			name:     "uint64",
+			value:    uint64(42),
+			wantType: "long",
+		},
+		// Float types → float or double
+		{
+			name:     "float32",
+			value:    float32(3.14),
+			wantType: "float",
 		},
 		{
 			name:     "float64",
 			value:    3.14,
+			wantType: "double",
+		},
+		// json.Number → always double to avoid silent truncation during schema evolution
+		{
+			name:     "json.Number integer",
+			value:    json.Number("42"),
+			wantType: "double",
+		},
+		{
+			name:     "json.Number float",
+			value:    json.Number("3.14"),
 			wantType: "double",
 		},
 		{
@@ -108,9 +163,64 @@ func TestInferIcebergTypeForAddColumn(t *testing.T) {
 		assert.Equal(t, "string", typ.Type())
 	})
 
-	t.Run("non-nil uses InferIcebergType", func(t *testing.T) {
+	t.Run("non-nil int uses long", func(t *testing.T) {
 		typ, err := InferIcebergTypeForAddColumn(42)
 		require.NoError(t, err)
-		assert.Equal(t, "double", typ.Type())
+		assert.Equal(t, "long", typ.Type())
+	})
+}
+
+// TestInferStructTypeRejectsCaseOnlyDuplicates covers the recursive fix: when
+// case-insensitive matching is enabled, a struct value containing two keys
+// that fold to the same lowercase string must be rejected at inference rather
+// than producing an iceberg struct that would later collide with itself.
+//
+// This applies to both top-level table creation and to nested struct
+// inference for new columns added via schema evolution. Without this guard,
+// a record like {"user": {"id": 1, "ID": 2}} would create a `user` struct
+// containing both `id` and `ID`, which is invalid under iceberg's
+// case-insensitive uniqueness convention.
+func TestInferStructTypeRejectsCaseOnlyDuplicates(t *testing.T) {
+	t.Run("case-insensitive flat struct rejects dup", func(t *testing.T) {
+		ti := newTypeInferrer(false)
+		_, err := ti.inferType(map[string]any{"id": 1, "ID": 2})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "ambiguous struct fields")
+	})
+
+	t.Run("case-insensitive nested struct rejects dup", func(t *testing.T) {
+		ti := newTypeInferrer(false)
+		_, err := ti.inferType(map[string]any{
+			"user": map[string]any{"id": 1, "ID": 2},
+		})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "ambiguous struct fields")
+	})
+
+	t.Run("case-insensitive struct in list element rejects dup", func(t *testing.T) {
+		ti := newTypeInferrer(false)
+		_, err := ti.inferType(map[string]any{
+			"items": []any{map[string]any{"sku": "x", "SKU": "y"}},
+		})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "ambiguous struct fields")
+	})
+
+	t.Run("case-sensitive mode admits both fields", func(t *testing.T) {
+		ti := newTypeInferrer(true)
+		typ, err := ti.inferType(map[string]any{"id": 1, "ID": 2})
+		require.NoError(t, err)
+		st, ok := typ.(*iceberg.StructType)
+		require.True(t, ok)
+		assert.Len(t, st.FieldList, 2)
+	})
+
+	t.Run("case-insensitive distinct names accepted", func(t *testing.T) {
+		ti := newTypeInferrer(false)
+		typ, err := ti.inferType(map[string]any{"id": 1, "name": "x"})
+		require.NoError(t, err)
+		st, ok := typ.(*iceberg.StructType)
+		require.True(t, ok)
+		assert.Len(t, st.FieldList, 2)
 	})
 }

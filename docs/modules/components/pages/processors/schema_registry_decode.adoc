@@ -1,6 +1,6 @@
 = schema_registry_decode
 :type: processor
-:status: beta
+:status: stable
 :categories: ["Parsing","Integration"]
 
 
@@ -17,7 +17,7 @@
      https://github.com/redpanda-data/connect/tree/main/cmd/tools/docs_gen/templates/plugin.adoc.tmpl
 ////
 
-// © 2024 Redpanda Data Inc.
+// © 2026 Redpanda Data Inc.
 
 
 component_type_dropdown::[]
@@ -134,7 +134,7 @@ For example, the union schema `["null","string","Foo"]`, where `Foo` is a record
 - the string `"a"` as `{"string": "a"}`; and
 - a `Foo` instance as `{"Foo": {...}}`, where `{...}` indicates the JSON encoding of a `Foo` instance.
 
-However, it is possible to instead create documents in https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodecForStandardJSONFull[standard/raw JSON format^] by setting the field <<avro_raw_json, `avro_raw_json`>> to `true`.
+However, it is possible to instead create documents in standard/raw JSON format by setting the field <<avro_raw_json, `avro_raw_json`>> to `true`.
 
 == Protobuf format
 

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomObject xmlns="http://soap.sforce.com/2006/04/metadata">
+    <deploymentStatus>Deployed</deploymentStatus>
+    <description>Test Platform Event used by Redpanda Connect salesforce_platform_events integration tests.</description>
+    <eventType>HighVolume</eventType>
+    <fields>
+        <fullName>Message__c</fullName>
+        <label>Message</label>
+        <length>255</length>
+        <required>false</required>
+        <type>Text</type>
+    </fields>
+    <label>RPCN Test</label>
+    <pluralLabel>RPCN Tests</pluralLabel>
+    <publishBehavior>PublishAfterCommit</publishBehavior>
+</CustomObject>

@@ -17,7 +17,7 @@
      https://github.com/redpanda-data/connect/tree/main/cmd/tools/docs_gen/templates/plugin.adoc.tmpl
 ////
 
-// © 2024 Redpanda Data Inc.
+// © 2026 Redpanda Data Inc.
 
 
 component_type_dropdown::[]
@@ -81,7 +81,7 @@ output:
     force_path_style_urls: false
     max_in_flight: 64
     timeout: 5s
-    object_canned_acl: private
+    object_canned_acl: ""
     batching:
       count: 0
       byte_size: 0
@@ -382,15 +382,16 @@ The maximum period to wait on an upload before abandoning it and reattempting.
 
 === `object_canned_acl`
 
-The object canned ACL value.
+The object canned ACL value. Leave empty to omit the ACL from upload requests, which is required for buckets that have ACLs disabled (the AWS default since 2023).
 
 
 *Type*: `string`
 
-*Default*: `"private"`
+*Default*: `""`
 
 Options:
-`private`
+``
+, `private`
 , `public-read`
 , `public-read-write`
 , `authenticated-read`

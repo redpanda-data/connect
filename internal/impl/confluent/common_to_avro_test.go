@@ -158,6 +158,48 @@ func TestCommonToAvroUnion(t *testing.T) {
 	assert.Equal(t, []any{"string", "int", "null"}, got)
 }
 
+func TestCommonToAvroDecimal(t *testing.T) {
+	c := schema.Common{
+		Name:    "amount",
+		Type:    schema.Decimal,
+		Logical: &schema.LogicalParams{Decimal: &schema.DecimalParams{Precision: 18, Scale: 4}},
+	}
+	got := avroUnmarshal(t, c, "", "").(map[string]any)
+	assert.Equal(t, "bytes", got["type"])
+	assert.Equal(t, "decimal", got["logicalType"])
+	// JSON numbers come back as float64; both fields are present.
+	assert.Equal(t, float64(18), got["precision"])
+	assert.Equal(t, float64(4), got["scale"])
+}
+
+func TestCommonToAvroDecimalOptionalUnion(t *testing.T) {
+	c := schema.Common{
+		Name:     "amount",
+		Type:     schema.Decimal,
+		Optional: true,
+		Logical:  &schema.LogicalParams{Decimal: &schema.DecimalParams{Precision: 9, Scale: 2}},
+	}
+	got := avroUnmarshal(t, c, "", "").([]any)
+	require.Len(t, got, 2)
+	assert.Equal(t, "null", got[0])
+	inner := got[1].(map[string]any)
+	assert.Equal(t, "decimal", inner["logicalType"])
+	assert.Equal(t, float64(9), inner["precision"])
+	assert.Equal(t, float64(2), inner["scale"])
+}
+
+func TestCommonToAvroDecimalMissingLogical(t *testing.T) {
+	_, err := commonToAvroSchema(schema.Common{Name: "amount", Type: schema.Decimal}, "", "")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "missing precision/scale")
+}
+
+func TestCommonToAvroBigDecimalRejected(t *testing.T) {
+	_, err := commonToAvroSchema(schema.Common{Name: "amount", Type: schema.BigDecimal}, "", "")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "BigDecimal")
+}
+
 func TestSanitizeAvroName(t *testing.T) {
 	tests := []struct {
 		input, want string

@@ -20,6 +20,8 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"golang.org/x/sync/errgroup"
+
+	"github.com/redpanda-data/connect/v4/internal/sqlutil"
 )
 
 // Snapshot is responsible for creating snapshots of existing tables based on the Tables configuration value.
@@ -358,9 +360,18 @@ func prepSnapshotScannerAndMappers(cols []*sql.ColumnType) (values []any, mapper
 				return int(s.Int64), nil
 			}
 		case "DECIMAL", "NUMERIC":
+			precision, scale, hasSize := col.DecimalSize()
 			val = new(sql.NullString)
 			mapper = stringMapping(func(s string) (any, error) {
-				return json.Number(s), nil
+				if !hasSize {
+					return s, nil
+				}
+				return sqlutil.CanonicaliseDecimal(s, int32(precision), int32(scale))
+			})
+		case "MONEY", "SMALLMONEY":
+			val = new(sql.NullString)
+			mapper = stringMapping(func(s string) (any, error) {
+				return sqlutil.CanonicaliseBigDecimal(s)
 			})
 		case "FLOAT", "DOUBLE":
 			val = new(sql.Null[float64])

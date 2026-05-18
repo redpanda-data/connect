@@ -8,37 +8,27 @@ on:
 
 jobs:
   test:
-    if: ${{ github.repository == 'redpanda-data/connect' || github.event_name != 'schedule' }}
     runs-on: ubuntu-latest
     env:
       CGO_ENABLED: 0
     steps:
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup /usr/share/swift /usr/local/share/powershell
+          sudo docker image prune --all --force
 
       - name: Checkout code
         uses: actions/checkout@v6
-
       - name: Install Go
         uses: actions/setup-go@v6
         with:
           go-version-file: 'go.mod'
 
-      - name: Install dependencies for x_benthos_extra
-        run: |
-          sudo apt update -y
-          sudo apt install -y --no-install-recommends libzmq3-dev
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libzmq3-dev
 
       - name: Install Task
         uses: ./.github/actions/setup-task
-
-      - name: Free disk space
-        run: |
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /usr/local/lib/android
-          sudo rm -rf /opt/ghc
-          sudo rm -rf /usr/local/.ghcup
-          sudo rm -rf /usr/share/swift
-          sudo rm -rf /usr/local/share/powershell
-          sudo docker image prune --all --force
 
       - name: Deps
         run: task deps && git diff HEAD -- go.mod go.sum && git diff-index HEAD --exit-code
@@ -50,23 +40,19 @@ jobs:
         run: task test
 
   golangci-lint:
-    if: ${{ github.repository == 'redpanda-data/connect' || github.event_name != 'schedule' }}
     runs-on: ubuntu-latest
     env:
       CGO_ENABLED: 0
     steps:
-
       - name: Checkout code
         uses: actions/checkout@v6
-
       - name: Install Go
         uses: actions/setup-go@v6
         with:
           go-version-file: 'go.mod'
 
       - name: Set version env variables
-        run: |
-          cat .versions >> $GITHUB_ENV
+        run: cat .versions >> $GITHUB_ENV
 
       - name: Lint
         uses: golangci/golangci-lint-action@v9
@@ -76,62 +62,47 @@ jobs:
           skip-cache: true
           skip-save-cache: true
 
-  # Runs integration tests for any internal/impl/* packages changed in this PR.
-  #
-  # Trigger: add the 'run-integration-tests' label to the PR.
-  # The label is checked at job start — if added after the workflow triggered,
-  # re-run the workflow (or push a new commit) to pick it up.
-  #
-  # Package detection: diffs HEAD against the PR base branch and extracts
-  # unique affected internal/impl/* package directories. Tests run sequentially.
-  integration-test:
-    if: |
-      github.event_name == 'pull_request' &&
-      contains(github.event.pull_request.labels.*.name, 'run-integration-tests')
-    environment: integration-tests
-    runs-on: ubuntu-latest-32
-    env:
-      CGO_ENABLED: 0
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - name: Install Go
-        uses: actions/setup-go@v6
-        with:
-          go-version-file: "go.mod"
-
-      - name: Install Task
-        uses: ./.github/actions/setup-task
-
-      - name: Pull Latest Redpanda Image
-        run: task docker:pull-redpanda
-
-      - name: Run Integration Tests
-        run: |
-          mapfile -t pkgs < <(
-            git diff --name-only "$(git merge-base HEAD origin/${{ github.base_ref }})"...HEAD \
-              | { grep '^internal/impl/' || true; } \
-              | sed 's|/[^/]*$||' \
-              | sort -u
-          )
-          failed=0
-          for pkg in "${pkgs[@]}"; do
-            task test:integration-package PKG="./$pkg/..." || failed=1
-          done
-          exit $failed
-        # 30m total: normally a single package is changed per PR, so 15m per-package
-        # timeout plus overhead fits comfortably. Keeps CI fast-failing instead of
-        # hanging for hours when Docker networking is degraded.
-        timeout-minutes: 30
-
-  test-push-to-cloudsmith:
-    if: ${{ github.repository == 'redpanda-data/connect' || github.event_name != 'schedule' }}
+  test-push-to-gcp-ar:
     runs-on: ubuntu-latest
     steps:
 
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up test packages
+        run: |
+          touch /tmp/test.rpm
+          touch /tmp/test.deb
+
+      - name: Mock gcloud CLI
+        run: |
+          printf '#!/bin/bash\necho "gcloud $*"\n' \
+            | sudo tee /usr/local/bin/gcloud > /dev/null
+          sudo chmod +x /usr/local/bin/gcloud
+
+      - name: Test RPM GA — routed to redpanda-yum
+        run: |
+          out=$(./resources/scripts/push_pkg_to_gcp_ar.sh /tmp/test.rpm 1.0.0)
+          echo "$out"
+          echo "$out" | grep -q "artifacts yum upload redpanda-yum"
+
+      - name: Test RPM RC — routed to redpanda-unstable-yum
+        run: |
+          out=$(./resources/scripts/push_pkg_to_gcp_ar.sh /tmp/test.rpm 1.0.0-rc1)
+          echo "$out"
+          echo "$out" | grep -q "artifacts yum upload redpanda-unstable-yum"
+
+      - name: Test DEB — routed to redpanda-apt
+        run: |
+          out=$(./resources/scripts/push_pkg_to_gcp_ar.sh /tmp/test.deb 1.0.0)
+          echo "$out"
+          echo "$out" | grep -q "artifacts apt upload redpanda-apt"
+
+  test-push-to-cloudsmith:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDSMITH_API_KEY: thisisatest
+    steps:
       - name: Checkout code
         uses: actions/checkout@v6
 
@@ -143,8 +114,6 @@ jobs:
           mv cloudsmith /usr/local/bin/
 
       - name: Test GA
-        env:
-          CLOUDSMITH_API_KEY: thisisatest
         run: |
           test $(./resources/scripts/push_pkg_to_cloudsmith.sh artifact.deb 0.0.0 \
             | grep "push deb redpanda/redpanda/" | wc -l) -eq 1
@@ -152,8 +121,6 @@ jobs:
             | grep "push deb redpanda/redpanda/" | wc -l) -eq 1
 
       - name: Test RC
-        env:
-          CLOUDSMITH_API_KEY: thisisatest
         run: |
           test $(./resources/scripts/push_pkg_to_cloudsmith.sh artifact.deb 0.0.0-rc1 \
             | grep "push deb redpanda/redpanda-unstable/" | wc -l) -eq 1

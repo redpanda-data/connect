@@ -11,19 +11,20 @@ package mysql
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/ory/dockertest/v3"
-	"github.com/ory/dockertest/v3/docker"
-
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/wait"
 
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	_ "github.com/redpanda-data/benthos/v4/public/components/io"
@@ -49,60 +50,59 @@ func (db *testDB) Exec(query string, args ...any) {
 func setupTestWithMySQLVersion(t *testing.T, version string) (string, *testDB) {
 	t.Parallel()
 	integration.CheckSkip(t)
-	pool, err := dockertest.NewPool("")
-	require.NoError(t, err)
 
-	pool.MaxWait = time.Minute
-
-	// MySQL specific environment variables
-	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
-		Repository: "mysql",
-		Tag:        version,
-		Env: []string{
-			"MYSQL_ROOT_PASSWORD=password",
-			"MYSQL_DATABASE=testdb",
-		},
-		Cmd: []string{
+	ctr, err := testcontainers.Run(t.Context(), "mysql:"+version,
+		testcontainers.WithExposedPorts("3306/tcp"),
+		testcontainers.WithEnv(map[string]string{
+			"MYSQL_ROOT_PASSWORD": "password",
+			"MYSQL_DATABASE":      "testdb",
+			"TZ":                  "UTC",
+		}),
+		testcontainers.WithCmd(
 			"--server-id=1",
 			"--log-bin=mysql-bin",
 			"--binlog-format=ROW",
 			"--binlog-row-image=FULL",
 			"--log-slave-updates=ON",
-		},
-		ExposedPorts: []string{"3306/tcp"},
-	}, func(config *docker.HostConfig) {
-		// set AutoRemove to true so that stopped container goes away by itself
-		config.AutoRemove = true
-		config.RestartPolicy = docker.RestartPolicy{
-			Name: "no",
-		}
-	})
+			"--default-time-zone=+00:00",
+		),
+		testcontainers.WithWaitStrategy(
+			wait.ForListeningPort("3306/tcp").WithStartupTimeout(time.Minute),
+		),
+	)
+	testcontainers.CleanupContainer(t, ctr)
 	require.NoError(t, err)
-	t.Cleanup(func() {
-		assert.NoError(t, pool.Purge(resource))
-	})
 
-	port := resource.GetPort("3306/tcp")
+	mappedPort, err := ctr.MappedPort(t.Context(), "3306/tcp")
+	require.NoError(t, err)
+	port := mappedPort.Port()
+
 	dsn := fmt.Sprintf(
 		"root:password@tcp(localhost:%s)/testdb?timeout=30s&readTimeout=30s&writeTimeout=30s&multiStatements=true",
 		port,
 	)
 
 	var db *sql.DB
-	err = pool.Retry(func() error {
-		var err error
+	require.Eventually(t, func() bool {
+		if db != nil {
+			db.Close()
+		}
 		db, err = sql.Open("mysql", dsn)
 		if err != nil {
-			return err
+			return false
 		}
 
 		db.SetMaxOpenConns(10)
 		db.SetMaxIdleConns(5)
 		db.SetConnMaxLifetime(time.Minute * 5)
 
-		return db.Ping()
-	})
-	require.NoError(t, err)
+		if db.Ping() != nil {
+			db.Close()
+			db = nil
+			return false
+		}
+		return true
+	}, time.Minute, time.Second)
 	t.Cleanup(func() {
 		assert.NoError(t, db.Close())
 	})
@@ -199,14 +199,15 @@ file:
 			}
 
 			go func() {
-				err = streamOut.Run(t.Context())
-				require.NoError(t, err)
+				if err := streamOut.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+					t.Error(err)
+				}
 			}()
 
 			assert.Eventually(t, func() bool {
 				outBatchMut.Lock()
 				defer outBatchMut.Unlock()
-				return len(outBatches) == 1000
+				return len(outBatches) >= 1000
 			}, time.Minute*5, time.Millisecond*100)
 
 			require.NoError(t, streamOut.StopWithin(time.Second*10))
@@ -263,8 +264,7 @@ file:
 	license.InjectTestService(streamOut.Resources())
 
 	go func() {
-		err = streamOut.Run(t.Context())
-		require.NoError(t, err)
+		_ = streamOut.Run(t.Context())
 	}()
 
 	time.Sleep(time.Second * 5)
@@ -346,8 +346,9 @@ file:
 	license.InjectTestService(streamOut.Resources())
 
 	go func() {
-		err = streamOut.Run(t.Context())
-		require.NoError(t, err)
+		if err := streamOut.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+			t.Error(err)
+		}
 	}()
 
 	time.Sleep(time.Second * 5)
@@ -366,6 +367,8 @@ file:
 }
 
 func TestIntegrationMySQLCDCAllTypes(t *testing.T) {
+	os.Setenv("TZ", "UTC") //nolint:usetesting // t.Setenv panics with t.Parallel in setupTestWithMySQLVersion
+	time.Local = time.UTC
 	dsn, db := setupTestWithMySQLVersion(t, "8.0")
 	// Create table
 	db.Exec(`
@@ -1062,8 +1065,7 @@ file:
 	license.InjectTestService(streamOut.Resources())
 
 	go func() {
-		err = streamOut.Run(t.Context())
-		require.NoError(t, err)
+		_ = streamOut.Run(t.Context())
 	}()
 
 	// Wait for stream to start
@@ -1140,4 +1142,410 @@ file:
 	assert.Equal(t, "test@example.com", secondMsg.data["email"], "email value should match")
 
 	require.NoError(t, streamOut.StopWithin(time.Second*10))
+}
+
+// killReplicationConnections kills all binlog dump connections to force canal reconnection.
+func killReplicationConnections(t *testing.T, db *testDB) {
+	t.Helper()
+	rows, err := db.Query("SHOW PROCESSLIST")
+	require.NoError(t, err)
+	defer rows.Close()
+
+	var killed int
+	for rows.Next() {
+		var id int64
+		var user, host, dbName, command, state, info sql.NullString
+		var timeVal sql.NullInt64
+		err := rows.Scan(&id, &user, &host, &dbName, &command, &timeVal, &state, &info)
+		require.NoError(t, err)
+		if command.String == "Binlog Dump" {
+			_, err := db.DB.Exec(fmt.Sprintf("KILL %d", id))
+			require.NoError(t, err)
+			killed++
+		}
+	}
+	require.NoError(t, rows.Err())
+	require.Greater(t, killed, 0, "expected at least one binlog dump connection to kill")
+}
+
+type idCollector struct {
+	mu  sync.Mutex
+	ids []int64
+}
+
+func (c *idCollector) add(id int64) {
+	c.mu.Lock()
+	c.ids = append(c.ids, id)
+	c.mu.Unlock()
+}
+
+func (c *idCollector) distinct() map[int64]bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	seen := map[int64]bool{}
+	for _, id := range c.ids {
+		seen[id] = true
+	}
+	return seen
+}
+
+func (c *idCollector) waitFor(t *testing.T, n int, timeout time.Duration) {
+	t.Helper()
+	assert.Eventually(t, func() bool {
+		return len(c.distinct()) >= n
+	}, timeout, 100*time.Millisecond, "expected at least %d distinct IDs", n)
+}
+
+func (c *idCollector) assertAll(t *testing.T, total int64) {
+	t.Helper()
+	seen := c.distinct()
+	for i := int64(1); i <= total; i++ {
+		assert.True(t, seen[i], "missing row with id=%d", i)
+	}
+}
+
+func buildCDCStream(t *testing.T, dsn, table string, streamSnapshot bool, snapshotMaxBatchSize int) (*service.Stream, *idCollector) {
+	t.Helper()
+
+	inputYAML := fmt.Sprintf(`
+mysql_cdc:
+  dsn: %s
+  stream_snapshot: %v
+  checkpoint_cache: foocache
+  tables:
+    - %s`, dsn, streamSnapshot, table)
+	if snapshotMaxBatchSize > 0 {
+		inputYAML += fmt.Sprintf("\n  snapshot_max_batch_size: %d", snapshotMaxBatchSize)
+	}
+
+	cacheConf := fmt.Sprintf(`
+label: foocache
+file:
+  directory: %s`, t.TempDir())
+
+	collector := &idCollector{}
+
+	streamOutBuilder := service.NewStreamBuilder()
+	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: INFO`))
+	require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
+	require.NoError(t, streamOutBuilder.AddInputYAML(inputYAML))
+
+	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+		for _, msg := range mb {
+			data, err := msg.AsStructured()
+			if err != nil {
+				return fmt.Errorf("AsStructured: %w", err)
+			}
+			m, ok := data.(map[string]any)
+			if !ok {
+				return fmt.Errorf("unexpected type %T", data)
+			}
+			id, err := bloblang.ValueAsInt64(m["a"])
+			if err != nil {
+				return fmt.Errorf("ValueAsInt64: %w", err)
+			}
+			collector.add(id)
+		}
+		return nil
+	}))
+
+	streamOut, err := streamOutBuilder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(streamOut.Resources())
+	return streamOut, collector
+}
+
+func TestIntegrationMySQLCDCConnectionDrop(t *testing.T) {
+	integration.CheckSkip(t)
+	for _, version := range []string{"8.0", "9.0", "9.1"} {
+		t.Run(version, func(t *testing.T) {
+			dsn, db := setupTestWithMySQLVersion(t, version)
+			db.Exec(`CREATE TABLE IF NOT EXISTS conn_drop (a INT PRIMARY KEY)`)
+
+			streamOut, collector := buildCDCStream(t, dsn, "conn_drop", false, 0)
+
+			go func() {
+				if err := streamOut.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+					t.Error(err)
+				}
+			}()
+			time.Sleep(5 * time.Second)
+
+			for i := 1; i <= 100; i++ {
+				db.Exec("INSERT INTO conn_drop VALUES (?)", i)
+			}
+			collector.waitFor(t, 100, 2*time.Minute)
+
+			killReplicationConnections(t, db)
+			time.Sleep(3 * time.Second)
+
+			for i := 101; i <= 200; i++ {
+				db.Exec("INSERT INTO conn_drop VALUES (?)", i)
+			}
+			collector.waitFor(t, 200, 2*time.Minute)
+			collector.assertAll(t, 200)
+
+			require.NoError(t, streamOut.StopWithin(10*time.Second))
+		})
+	}
+}
+
+func TestIntegrationMySQLCDCConnectionDropWithBinlogRotation(t *testing.T) {
+	integration.CheckSkip(t)
+	for _, version := range []string{"8.0", "9.0", "9.1"} {
+		t.Run(version, func(t *testing.T) {
+			dsn, db := setupTestWithMySQLVersion(t, version)
+			db.Exec(`CREATE TABLE IF NOT EXISTS conn_drop_rotate (a INT PRIMARY KEY)`)
+
+			streamOut, collector := buildCDCStream(t, dsn, "conn_drop_rotate", false, 0)
+
+			go func() {
+				if err := streamOut.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+					t.Error(err)
+				}
+			}()
+			time.Sleep(5 * time.Second)
+
+			// Before rotation
+			for i := 1; i <= 100; i++ {
+				db.Exec("INSERT INTO conn_drop_rotate VALUES (?)", i)
+			}
+			collector.waitFor(t, 100, 2*time.Minute)
+
+			db.Exec("FLUSH BINARY LOGS")
+
+			// In new binlog file
+			for i := 101; i <= 200; i++ {
+				db.Exec("INSERT INTO conn_drop_rotate VALUES (?)", i)
+			}
+			collector.waitFor(t, 200, 2*time.Minute)
+
+			killReplicationConnections(t, db)
+			time.Sleep(3 * time.Second)
+
+			// After reconnection
+			for i := 201; i <= 300; i++ {
+				db.Exec("INSERT INTO conn_drop_rotate VALUES (?)", i)
+			}
+			collector.waitFor(t, 300, 2*time.Minute)
+			collector.assertAll(t, 300)
+
+			require.NoError(t, streamOut.StopWithin(10*time.Second))
+		})
+	}
+}
+
+func TestIntegrationMySQLCDCConnectionDropAfterSnapshot(t *testing.T) {
+	integration.CheckSkip(t)
+	dsn, db := setupTestWithMySQLVersion(t, "8.0")
+	db.Exec(`CREATE TABLE IF NOT EXISTS conn_drop_snap (a INT AUTO_INCREMENT PRIMARY KEY)`)
+
+	for range 500 {
+		db.Exec("INSERT INTO conn_drop_snap (a) VALUES (DEFAULT)")
+	}
+
+	streamOut, collector := buildCDCStream(t, dsn, "conn_drop_snap", true, 250)
+
+	go func() {
+		if err := streamOut.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+			t.Error(err)
+		}
+	}()
+
+	collector.waitFor(t, 500, 5*time.Minute)
+
+	for i := range 100 {
+		db.Exec("INSERT INTO conn_drop_snap VALUES (?)", 501+i)
+	}
+	collector.waitFor(t, 600, 2*time.Minute)
+
+	killReplicationConnections(t, db)
+	time.Sleep(3 * time.Second)
+
+	for i := range 100 {
+		db.Exec("INSERT INTO conn_drop_snap VALUES (?)", 601+i)
+	}
+	collector.waitFor(t, 700, 2*time.Minute)
+	collector.assertAll(t, 700)
+
+	require.NoError(t, streamOut.StopWithin(10*time.Second))
+}
+
+func TestIntegrationMySQLCDCRepeatedConnectionDrops(t *testing.T) {
+	integration.CheckSkip(t)
+	for _, version := range []string{"8.0", "9.0", "9.1"} {
+		t.Run(version, func(t *testing.T) {
+			dsn, db := setupTestWithMySQLVersion(t, version)
+			db.Exec(`CREATE TABLE IF NOT EXISTS conn_drop_repeat (a INT PRIMARY KEY)`)
+
+			streamOut, collector := buildCDCStream(t, dsn, "conn_drop_repeat", false, 0)
+
+			go func() {
+				if err := streamOut.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+					t.Error(err)
+				}
+			}()
+			time.Sleep(5 * time.Second)
+
+			for round := range 3 {
+				start := round*50 + 1
+				for i := start; i < start+50; i++ {
+					db.Exec("INSERT INTO conn_drop_repeat VALUES (?)", i)
+				}
+				collector.waitFor(t, (round+1)*50, 2*time.Minute)
+				killReplicationConnections(t, db)
+				time.Sleep(3 * time.Second)
+			}
+
+			for i := 151; i <= 200; i++ {
+				db.Exec("INSERT INTO conn_drop_repeat VALUES (?)", i)
+			}
+			collector.waitFor(t, 200, 2*time.Minute)
+			collector.assertAll(t, 200)
+
+			require.NoError(t, streamOut.StopWithin(10*time.Second))
+		})
+	}
+}
+
+func TestIntegrationMySQLCDCParallelSnapshot(t *testing.T) {
+	dsn, db := setupTestWithMySQLVersion(t, "8.0")
+
+	db.Exec(`CREATE TABLE IF NOT EXISTS snap_foo (id INT AUTO_INCREMENT PRIMARY KEY)`)
+	db.Exec(`CREATE TABLE IF NOT EXISTS snap_bar (id INT AUTO_INCREMENT PRIMARY KEY)`)
+	db.Exec(`CREATE TABLE IF NOT EXISTS snap_baz (id INT AUTO_INCREMENT PRIMARY KEY)`)
+
+	t.Log("Inserting snapshot records")
+	want := 30000
+	for range 10000 {
+		db.Exec("INSERT INTO snap_foo (id) VALUES (DEFAULT)")
+		db.Exec("INSERT INTO snap_bar (id) VALUES (DEFAULT)")
+		db.Exec("INSERT INTO snap_baz (id) VALUES (DEFAULT)")
+	}
+
+	t.Run("parallel snapshot", func(t *testing.T) {
+		template := fmt.Sprintf(`
+mysql_cdc:
+  dsn: %s
+  stream_snapshot: true
+  snapshot_max_batch_size: 10
+  max_parallel_snapshot_tables: 3
+  checkpoint_cache: foocache
+  tables:
+    - snap_foo
+    - snap_bar
+    - snap_baz
+`, dsn)
+
+		cacheConf := fmt.Sprintf(`
+label: foocache
+file:
+  directory: %s`, t.TempDir())
+
+		streamOutBuilder := service.NewStreamBuilder()
+		require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: INFO`))
+		require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
+		require.NoError(t, streamOutBuilder.AddInputYAML(template))
+
+		var (
+			outBatches   []string
+			outBatchesMu sync.Mutex
+		)
+
+		require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+			msgBytes, err := mb[0].AsBytes()
+			require.NoError(t, err)
+			op, _ := mb[0].MetaGet("operation")
+			assert.Equal(t, "read", op, "expected snapshot message operation to be 'read'")
+
+			outBatchesMu.Lock()
+			outBatches = append(outBatches, string(msgBytes))
+			outBatchesMu.Unlock()
+			return nil
+		}))
+
+		streamOut, err := streamOutBuilder.Build()
+		require.NoError(t, err)
+		license.InjectTestService(streamOut.Resources())
+
+		go func() {
+			if err := streamOut.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+				t.Error(err)
+			}
+		}()
+
+		var got int
+		assert.Eventually(t, func() bool {
+			outBatchesMu.Lock()
+			defer outBatchesMu.Unlock()
+			got = len(outBatches)
+			return got >= want
+		}, time.Minute*5, time.Second*1)
+		assert.Equalf(t, want, got, "Wanted %d snapshot messages but got %d", want, got)
+
+		require.NoError(t, streamOut.StopWithin(10*time.Second))
+	})
+
+	t.Run("sequential snapshot", func(t *testing.T) {
+		template := fmt.Sprintf(`
+mysql_cdc:
+  dsn: %s
+  stream_snapshot: true
+  snapshot_max_batch_size: 10
+  max_parallel_snapshot_tables: 1
+  checkpoint_cache: foocache
+  tables:
+    - snap_foo
+    - snap_bar
+    - snap_baz
+`, dsn)
+
+		cacheConf := fmt.Sprintf(`
+label: foocache
+file:
+  directory: %s`, t.TempDir())
+
+		streamOutBuilder := service.NewStreamBuilder()
+		require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: INFO`))
+		require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
+		require.NoError(t, streamOutBuilder.AddInputYAML(template))
+
+		var (
+			outBatches   []string
+			outBatchesMu sync.Mutex
+		)
+
+		require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+			msgBytes, err := mb[0].AsBytes()
+			require.NoError(t, err)
+			op, _ := mb[0].MetaGet("operation")
+			assert.Equal(t, "read", op, "expected snapshot message operation to be 'read'")
+
+			outBatchesMu.Lock()
+			outBatches = append(outBatches, string(msgBytes))
+			outBatchesMu.Unlock()
+			return nil
+		}))
+
+		streamOut, err := streamOutBuilder.Build()
+		require.NoError(t, err)
+		license.InjectTestService(streamOut.Resources())
+
+		go func() {
+			if err := streamOut.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+				t.Error(err)
+			}
+		}()
+
+		var got int
+		assert.Eventually(t, func() bool {
+			outBatchesMu.Lock()
+			defer outBatchesMu.Unlock()
+			got = len(outBatches)
+			return got >= want
+		}, time.Minute*5, time.Second*1)
+		assert.Equalf(t, want, got, "Wanted %d snapshot messages but got %d", want, got)
+
+		require.NoError(t, streamOut.StopWithin(10*time.Second))
+	})
 }

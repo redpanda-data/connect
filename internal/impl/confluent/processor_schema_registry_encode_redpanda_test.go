@@ -25,7 +25,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -43,11 +42,7 @@ func startRedpanda(t *testing.T) redpandatest.Endpoints {
 	t.Helper()
 	integration.CheckSkip(t)
 
-	pool, err := dockertest.NewPool("")
-	require.NoError(t, err)
-	pool.MaxWait = time.Minute
-
-	endpoints, _, err := redpandatest.StartSingleBroker(t, pool)
+	endpoints, _, err := redpandatest.StartSingleBroker(t)
 	require.NoError(t, err)
 	return endpoints
 }

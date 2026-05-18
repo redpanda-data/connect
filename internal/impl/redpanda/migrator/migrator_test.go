@@ -186,6 +186,45 @@ output:
 `,
 			lintErr: "timestamp_ms field is not supported by migrator",
 		},
+		{
+			name: "strict_without_translate_ids",
+			conf: `
+input:
+  redpanda_migrator:
+    seed_brokers: ["source:9092"]
+    topics: ["orders"]
+    consumer_group: "migration"
+
+output:
+  redpanda_migrator:
+    seed_brokers: ["destination:9092"]
+    topic: ${! metadata("kafka_topic") }
+    schema_registry:
+      url: "http://destination-registry:8081"
+      strict: true
+`,
+			lintErr: "strict is only relevant when translate_ids is true",
+		},
+		{
+			name: "strict_with_translate_ids",
+			conf: `
+input:
+  redpanda_migrator:
+    seed_brokers: ["source:9092"]
+    topics: ["orders"]
+    consumer_group: "migration"
+
+output:
+  redpanda_migrator:
+    seed_brokers: ["destination:9092"]
+    topic: ${! metadata("kafka_topic") }
+    schema_registry:
+      url: "http://destination-registry:8081"
+      translate_ids: true
+      strict: true
+`,
+			lintErr: "",
+		},
 	}
 
 	for _, test := range tests {

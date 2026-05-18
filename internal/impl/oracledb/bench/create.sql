@@ -1,7 +1,3 @@
--- Oracle Database Benchmark Setup Script
--- This script creates the user/schema, enables supplemental logging, and creates tables
--- Connection: oracle://system:YourPassword123@localhost:1521/XE
-
 -- Enable creation of local users in CDB root (not recommended for production)
 ALTER SESSION SET "_ORACLE_SCRIPT"=TRUE;
 /
@@ -23,8 +19,6 @@ BEGIN
         EXECUTE IMMEDIATE 'CREATE USER testdb IDENTIFIED BY testdb123';
         EXECUTE IMMEDIATE 'GRANT CONNECT, RESOURCE, DBA TO testdb';
         EXECUTE IMMEDIATE 'GRANT UNLIMITED TABLESPACE TO testdb';
-        EXECUTE IMMEDIATE 'ALTER SYSTEM SET ARCHIVE_LAG_TARGET = 60 SCOPE=BOTH';
-        EXECUTE IMMEDIATE 'ALTER SYSTEM SET LOG_ARCHIVE_RETENTION_HOURS = 24;';
         DBMS_OUTPUT.PUT_LINE('User testdb created successfully');
     ELSE
         DBMS_OUTPUT.PUT_LINE('User testdb already exists');

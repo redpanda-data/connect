@@ -1,0 +1,26 @@
+input:
+  kafka_franz:
+    seed_brokers:
+      - ${KAFKA_BOOTSTRAP:localhost:9092}
+    topics: [bench-events]
+    consumer_group: rpc-bench-group
+    batching:
+      count: ${BATCH:10000}
+      period: 1s
+
+pipeline:
+  processors:
+    - benchmark:
+        interval: 1s
+        count_bytes: true
+
+output:
+  sql_insert:
+    driver: mysql
+    dsn: ${MYSQL_DSN:root:password@tcp(localhost:3306)/benchdb}
+    table: bench_events
+    columns: [id, category, value, ts]
+    args_mapping: root = [this.id, this.category, this.value, this.ts]
+
+logger:
+  level: INFO

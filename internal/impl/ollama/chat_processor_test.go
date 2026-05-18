@@ -38,6 +38,10 @@ func createCompletionProcessorForTest(t *testing.T, addr string) *ollamaCompleti
 			// use smallest model possible to make it cheaper
 			model:  "tinyllama",
 			client: NewClient(url, http.DefaultClient),
+			opts: map[string]any{
+				"seed":        42,
+				"temperature": 0,
+			},
 		},
 		userPrompt:   nil,
 		systemPrompt: nil,

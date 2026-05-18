@@ -168,12 +168,9 @@ func TestSchemaRegistryEncodeAvro(t *testing.T) {
 			output: "\x00\x00\x00\x00\x03\x06foo\x00\x00",
 		},
 		{
-			// Behavioral change: the structured normalizer validates required
-			// fields eagerly, producing a clearer error than goavro's
-			// NativeFromTextual ("cannot decode textual union...").
 			name:        "message doesnt match schema",
 			input:       `{"Address":{"my.namespace.com.address":"not this","Name":"foo"}}`,
-			errContains: `required field "Name" is missing`,
+			errContains: `missing key`,
 		},
 	}
 
@@ -252,11 +249,9 @@ func TestSchemaRegistryEncodeAvroRawJSON(t *testing.T) {
 			output: "\x00\x00\x00\x00\x03\x06foo\x00\x00",
 		},
 		{
-			// Behavioral change: normalizer reports union branch mismatch
-			// instead of goavro's "could not decode any json data in input".
 			name:        "message doesnt match schema",
 			input:       `{"Address":{"City":"foo","State":30},"Name":"foo","MaybeHobby":null}`,
-			errContains: "no union branch matched",
+			errContains: "cannot use json.Number with Avro type string",
 		},
 	}
 
@@ -333,13 +328,12 @@ func TestSchemaRegistryEncodeAvroLogicalTypes(t *testing.T) {
 			output: "", // verified via round-trip below
 		},
 		{
-			// Behavioral change: wrong union key ("long.time-millis" instead
-			// of "int.time-millis") is passed through to goavro, which
-			// reports "no member schema types support datum" instead of
-			// NativeFromTextual's "cannot determine codec".
+			// Wrong union key ("long.time-millis" instead of "int.time-millis")
+			// is rejected by twmb/avro — the map value doesn't match any
+			// union branch type.
 			name:        "message doesnt match schema",
 			input:       `{"int_time_millis":{"long.time-millis":35245000},"long_time_micros":{"long.time-micros":20192000000000},"long_timestamp_micros":{"long.timestamp-micros":62135596800000000},"pos_0_33333333":{"bytes.decimal":"!"}}`,
-			errContains: "no member schema types support datum",
+			errContains: "int_time_millis",
 		},
 	}
 
@@ -416,22 +410,18 @@ func TestSchemaRegistryEncodeAvroRawJSONLogicalTypes(t *testing.T) {
 			output: "\x00\x00\x00\x00\x04\x02\x90\xaf\xce!\x02\x80\x80揪\x97\t\x02\x80\x80\xde\xf2\xdf\xff\xdf\xdc\x01\x02\x02!",
 		},
 		{
-			// Behavioral change: in rawJSON mode, pre-wrapped union values
-			// like {"int.time-millis": 35245000} don't match any branch
-			// because normalizeAvroUnion tries to match the map against
-			// branch types directly. Previously goavro rejected these with
-			// "could not decode any json data in input".
-			name:        "message doesnt match schema codec",
-			input:       `{"int_time_millis":{"int.time-millis":35245000},"long_time_micros":{"long.time-micros":20192000000000},"long_timestamp_micros":{"long.timestamp-micros":62135596800000000},"pos_0_33333333":{"bytes.decimal":"!"}}`,
-			errContains: "no union branch matched",
+			// Tagged union maps are accepted by Encode — the branch
+			// name is matched and the inner value is unwrapped.
+			name:   "message with tagged unions",
+			input:  `{"int_time_millis":{"int.time-millis":35245000},"long_time_micros":{"long.time-micros":20192000000000},"long_timestamp_micros":{"long.timestamp-micros":62135596800000000},"pos_0_33333333":{"bytes.decimal":"!"}}`,
+			output: "\x00\x00\x00\x00\x04\x02\x90\xaf\xce!\x02\x80\x80揪\x97\t\x02\x80\x80\xde\xf2\xdf\xff\xdf\xdc\x01\x02\x02!",
 		},
 		{
-			// Behavioral change: string value for a time-millis field
-			// doesn't match the duration branch. Previously goavro rejected
-			// with "could not decode any json data in input".
+			// String value for a time-millis union field doesn't match the
+			// int branch.
 			name:        "message doesnt match schema",
 			input:       `{"int_time_millis":"35245000","long_time_micros":20192000000000,"long_timestamp_micros":62135596800000000,"pos_0_33333333":"!"}`,
-			errContains: "no union branch matched",
+			errContains: "cannot use string with Avro type int",
 		},
 	}
 
@@ -1826,7 +1816,7 @@ avro:
 	assert.Equal(t, "binary-data", dm["blob"])
 
 	// Verify timestamp values, not just non-nil.
-	// goavro raw_json decodes timestamp-millis as epoch millis in JSON.
+	// raw_json decodes timestamp-millis as epoch millis in JSON.
 	tsVal, ok := dm["ts"].(float64)
 	require.True(t, ok, "ts should be a number, got %T", dm["ts"])
 	expectedTsMillis, _ := time.Parse(time.RFC3339Nano, "2026-03-19T10:05:09.934345Z")

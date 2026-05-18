@@ -17,7 +17,6 @@ package kinesis
 import (
 	"bytes"
 	"fmt"
-	"strconv"
 	"testing"
 	"time"
 
@@ -26,9 +25,10 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/kinesis"
 	"github.com/aws/aws-sdk-go-v2/service/kinesis/types"
-	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/wait"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
@@ -42,34 +42,20 @@ func TestKinesisIntegration(t *testing.T) {
 		t.Skip("Skipping integration test in short mode")
 	}
 
-	pool, err := dockertest.NewPool("")
-	if err != nil {
-		t.Skipf("Could not connect to docker: %s", err)
-	}
-	pool.MaxWait = time.Second * 30
+	ctr, err := testcontainers.Run(t.Context(), "vsouza/kinesis-local:latest",
+		testcontainers.WithExposedPorts("4567/tcp"),
+		testcontainers.WithCmd("--createStreamMs=5"),
+		testcontainers.WithWaitStrategy(
+			wait.ForListeningPort("4567/tcp").WithStartupTimeout(30*time.Second),
+		),
+	)
+	testcontainers.CleanupContainer(t, ctr)
+	require.NoError(t, err)
 
-	// start mysql container with binlog enabled
-	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
-		Repository: "vsouza/kinesis-local",
-		Cmd: []string{
-			"--createStreamMs=5",
-		},
-	})
-	if err != nil {
-		t.Fatalf("Could not start resource: %v", err)
-	}
-	defer func() {
-		if err := pool.Purge(resource); err != nil {
-			t.Logf("Failed to clean up docker resource: %v", err)
-		}
-	}()
+	mp, err := ctr.MappedPort(t.Context(), "4567/tcp")
+	require.NoError(t, err)
 
-	port, err := strconv.ParseInt(resource.GetPort("4567/tcp"), 10, 64)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	endpoint := fmt.Sprintf("http://localhost:%d", port)
+	endpoint := fmt.Sprintf("http://localhost:%s", mp.Port())
 
 	pConf, err := koOutputSpec().ParseYAML(fmt.Sprintf(`
 stream: foo
@@ -92,15 +78,13 @@ credentials:
 
 	// bootstrap kinesis
 	client := kinesis.NewFromConfig(conf)
-	if err := pool.Retry(func() error {
+	require.Eventually(t, func() bool {
 		_, err := client.CreateStream(t.Context(), &kinesis.CreateStreamInput{
 			ShardCount: aws.Int32(1),
 			StreamName: aws.String("foo"),
 		})
-		return err
-	}); err != nil {
-		t.Fatalf("Could not connect to docker resource: %s", err)
-	}
+		return err == nil
+	}, 30*time.Second, time.Second)
 
 	koConf, err := koConfigFromParsed(pConf)
 	require.NoError(t, err)

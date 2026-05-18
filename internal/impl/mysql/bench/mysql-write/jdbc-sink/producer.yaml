@@ -1,0 +1,45 @@
+# Produces COUNT synthetic events to the bench-events Kafka topic.
+# Messages use the Kafka Connect JSON schema envelope so the JDBC sink connector
+# can map fields to MySQL columns without a Schema Registry.
+#
+# Usage:
+#   go run ../../../../../../cmd/redpanda-connect/main.go run ./producer.yaml
+# Override count/brokers:
+#   COUNT=5000000 KAFKA_BOOTSTRAP=localhost:9092 \
+#   go run ../../../../../../cmd/redpanda-connect/main.go run ./producer.yaml
+
+input:
+  generate:
+    count: ${COUNT:1000000}
+    interval: ""
+    mapping: |
+      root = {
+        "schema": {
+          "type": "struct",
+          "fields": [
+            {"field": "id",       "type": "int64",   "optional": false},
+            {"field": "category", "type": "string",  "optional": true},
+            {"field": "value",    "type": "double",  "optional": true},
+            {"field": "ts",       "type": "int64",   "optional": true}
+          ],
+          "optional": false,
+          "name": "bench_events"
+        },
+        "payload": {
+          "id":       count("events"),
+          "category": "cat_" + random_int(min: 1, max: 10).string(),
+          "value":    random_int(min: 1, max: 1000000).float64() / 100.0,
+          "ts":       now().ts_unix_micro()
+        }
+      }
+
+output:
+  kafka_franz:
+    seed_brokers:
+      - ${KAFKA_BOOTSTRAP:localhost:9092}
+    topic: bench-events
+    compression: snappy
+    batching:
+      count: 3000
+      byte_size: 4194304  # 4 MiB
+      period: 5s

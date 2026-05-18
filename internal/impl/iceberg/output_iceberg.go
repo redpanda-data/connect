@@ -17,6 +17,7 @@ import (
 	"github.com/apache/iceberg-go"
 	"github.com/apache/iceberg-go/io"
 	_ "github.com/apache/iceberg-go/io/gocloud"
+	"github.com/parquet-go/parquet-go"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
@@ -85,6 +86,11 @@ func newIcebergOutputFromConfig(conf *service.ParsedConfig, mgr *service.Resourc
 		return nil, fmt.Errorf("parsing table name: %w", err)
 	}
 
+	caseSensitive, err := conf.FieldBool(ioFieldCaseSensitiveColumns)
+	if err != nil {
+		return nil, fmt.Errorf("parsing %s: %w", ioFieldCaseSensitiveColumns, err)
+	}
+
 	// Parse schema evolution config
 	schemaEvoCfg, err := parseSchemaEvolutionConfig(conf)
 	if err != nil {
@@ -97,9 +103,24 @@ func newIcebergOutputFromConfig(conf *service.ParsedConfig, mgr *service.Resourc
 		return nil, fmt.Errorf("parsing commit config: %w", err)
 	}
 
-	// Create router
-	rtr := NewRouter(catalogCfg, namespaceStr, tableStr, schemaEvoCfg, commitCfg, mgr.Logger())
+	// Parse parquet config
+	var writerOpts []parquet.WriterOption
+	if conf.Contains(ioFieldParquet) {
+		strEnc, err := conf.FieldString(ioFieldParquet, ioFieldParquetStringEncoding)
+		if err != nil {
+			return nil, fmt.Errorf("parsing %s: %w", ioFieldParquetStringEncoding, err)
+		}
+		switch strEnc {
+		case "plain":
+			writerOpts = append(writerOpts, parquet.DefaultEncodingFor(parquet.ByteArray, &parquet.Plain))
+		case "delta_length_byte_array":
+			// default - noop
+		default:
+			return nil, fmt.Errorf("unsupported %s value: %q, please consider raising an issue to request support for feature gap", ioFieldParquetStringEncoding, strEnc)
+		}
+	}
 
+	rtr := NewRouter(catalogCfg, namespaceStr, tableStr, caseSensitive, schemaEvoCfg, commitCfg, writerOpts, mgr.Logger())
 	return &icebergOutput{
 		router: rtr,
 		logger: mgr.Logger(),

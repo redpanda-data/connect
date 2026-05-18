@@ -40,7 +40,6 @@ import (
 
 func TestIntegrationCloudWatch(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	servicePort := awstest.GetLocalStack(t)
 	cloudWatchLogsIntegrationSuite(t, servicePort)

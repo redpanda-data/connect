@@ -162,12 +162,18 @@ func startMigratorAndWaitForMessages(t *testing.T, src, dst EmbeddedRedpandaClus
 		done <- struct{}{}
 		return nil
 	})
-	for range numMessages {
+	for i := range numMessages {
+		// The first message needs a longer timeout because the consumer group
+		// join/balance protocol takes several seconds to complete.
+		timeout := redpandaTestOpTimeout
+		if i == 0 {
+			timeout = redpandaTestWaitTimeout
+		}
 		select {
 		case <-done:
 			continue
-		case <-time.After(redpandaTestOpTimeout):
-			t.Fatal("Timed out waiting for messages")
+		case <-time.After(timeout):
+			t.Fatalf("Timed out waiting for message %d/%d", i+1, numMessages)
 		}
 	}
 }
@@ -414,7 +420,9 @@ logger:
 		go func() {
 			ctx, cancel := context.WithTimeout(t.Context(), redpandaTestWaitTimeout)
 			defer cancel()
-			require.NoError(t, stream.Run(ctx))
+			if err := stream.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+				t.Errorf("stream.Run failed: %v", err)
+			}
 		}()
 
 		msg := <-msgCh
@@ -515,7 +523,7 @@ func TestIntegrationRealMigratorConfluentToServerless(t *testing.T) {
 	topics := []string{"foo", "bar"}
 
 	t.Log("Given: Confluent server with Schema Registry as source")
-	src := startConfluent(t)
+	src := startConfluent(t, false)
 	ctx := t.Context()
 
 	t.Log("And: Topics and ACLs initialized on source")

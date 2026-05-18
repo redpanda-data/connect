@@ -1,0 +1,114 @@
+version: "3"
+
+silent: true
+
+vars:
+  KAFKA_BOOTSTRAP: '{{.KAFKA_BOOTSTRAP | default "localhost:9092"}}'
+  MYSQL_DSN: '{{.MYSQL_DSN | default "root:password@tcp(localhost:3306)/benchdb"}}'
+  CONSUMER_GROUP: rpc-bench-group
+
+tasks:
+  up:
+    desc: Start Kafka and MySQL, wait until ready
+    cmds:
+      - docker compose up -d
+      - until docker exec myrpc-kafka kafka-broker-api-versions --bootstrap-server localhost:9092 > /dev/null 2>&1; do sleep 3; done
+      - echo "Infrastructure ready"
+
+  down:
+    desc: Stop and remove all containers and volumes
+    cmds:
+      - docker compose down -v --remove-orphans
+
+  bench:load:
+    desc: "Produce COUNT events to Kafka (e.g. task bench:load COUNT=10000000)"
+    vars:
+      COUNT: '{{.COUNT | default "1000000"}}'
+    env:
+      COUNT: '{{.COUNT}}'
+      KAFKA_BOOTSTRAP: '{{.KAFKA_BOOTSTRAP}}'
+    cmds:
+      - docker exec myrpc-mysql mysql -u root -ppassword benchdb -e "TRUNCATE bench_events;" 2>/dev/null
+      - docker exec myrpc-kafka kafka-topics --bootstrap-server localhost:29092 --delete --topic bench-events
+      - until ! docker exec myrpc-kafka kafka-topics --bootstrap-server localhost:29092 --list 2>/dev/null | grep -q '^bench-events$'; do sleep 1; done
+      - docker exec myrpc-kafka kafka-topics --bootstrap-server localhost:29092 --create --topic bench-events --partitions 16 --replication-factor 1
+      - go run ../../../../../../cmd/redpanda-connect/main.go run ./producer.yaml
+
+  bench:run:
+    desc: "Run benchmark (e.g. task bench:run CORES=4 BATCH=10000)"
+    vars:
+      CORES: '{{.CORES | default "1"}}'
+      BATCH: '{{.BATCH | default "10000"}}'
+      INTERVAL: '{{.INTERVAL | default "5"}}'
+    env:
+      GOMAXPROCS: '{{.CORES}}'
+      BATCH: '{{.BATCH}}'
+      KAFKA_BOOTSTRAP: '{{.KAFKA_BOOTSTRAP}}'
+      MYSQL_DSN: '{{.MYSQL_DSN}}'
+    cmds:
+      - |
+        INTERVAL={{.INTERVAL}}
+
+        get_total() {
+          docker exec myrpc-kafka kafka-get-offsets \
+            --bootstrap-server localhost:29092 \
+            --topic bench-events 2>/dev/null \
+            | awk -F: '{sum += $3} END {print sum+0}'
+        }
+
+        get_count() {
+          docker exec myrpc-mysql mysql -u root -ppassword benchdb \
+            -sN -e "SELECT COUNT(*) FROM bench_events;" 2>/dev/null
+        }
+
+        # Reset MySQL and consumer group offsets
+        docker exec myrpc-mysql mysql -u root -ppassword benchdb -e "TRUNCATE bench_events;" 2>/dev/null
+        docker exec myrpc-kafka kafka-consumer-groups \
+          --bootstrap-server localhost:29092 \
+          --group {{.CONSUMER_GROUP}} \
+          --reset-offsets --to-earliest \
+          --topic bench-events \
+          --execute > /dev/null 2>&1 || true
+
+        TOTAL=$(get_total)
+        echo "Topic contains $TOTAL messages"
+
+        # Start Redpanda Connect in background — time from here
+        go run ../../../../../../cmd/redpanda-connect/main.go run ./benchmark_config.yaml \
+          2>&1 | grep --line-buffered -v "Querying snapshot" &
+        RPC_PID=$!
+
+        START=$(date +%s)
+        PREV_COUNT=0
+        PREV_TIME=$START
+
+        printf "%-10s  %-14s  %s\n" "TIME" "WRITTEN" "MSG/S"
+
+        while true; do
+          sleep "$INTERVAL"
+          COUNT=$(get_count)
+          COUNT=${COUNT:-0}
+          NOW=$(date +%s)
+
+          DELTA_T=$((NOW - PREV_TIME))
+          DELTA_COUNT=$((COUNT - PREV_COUNT))
+          RATE=0
+          [ "$DELTA_T" -gt 0 ] && RATE=$((DELTA_COUNT / DELTA_T))
+
+          printf "%-10s  %-14s  %s msg/s\n" "$(date +%H:%M:%S)" "$COUNT" "$RATE"
+
+          if [ "$COUNT" -ge "$TOTAL" ]; then
+            pkill -f "benchmark_config.yaml" 2>/dev/null || true
+            wait "$RPC_PID" 2>/dev/null || true
+            ELAPSED=$((NOW - START))
+            AVG=$(( TOTAL / (ELAPSED > 0 ? ELAPSED : 1) ))
+            echo "---"
+            echo "Total messages : $TOTAL"
+            echo "Elapsed        : ${ELAPSED}s"
+            echo "Avg throughput : ${AVG} msg/s"
+            break
+          fi
+
+          PREV_COUNT=$COUNT
+          PREV_TIME=$NOW
+        done

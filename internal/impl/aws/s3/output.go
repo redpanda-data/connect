@@ -1,4 +1,4 @@
-// Copyright 2024 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -155,7 +155,7 @@ func s3oConfigFromParsed(pConf *service.ParsedConfig) (conf s3oConfig, err error
 		return
 	}
 
-	if slices.Contains(types.ObjectCannedACL("").Values(), types.ObjectCannedACL(objectCannedACL)) {
+	if objectCannedACL == "" || slices.Contains(types.ObjectCannedACL("").Values(), types.ObjectCannedACL(objectCannedACL)) {
 		conf.ObjectCannedACL = types.ObjectCannedACL(objectCannedACL)
 	} else {
 		err = fmt.Errorf("invalid object canned ACL value: %v", objectCannedACL)
@@ -306,14 +306,20 @@ output:
 				Default("5s"),
 			service.NewStringEnumField(s3oFieldObjectCannedACL,
 				slices.Collect(func(yield func(string) bool) {
+					// Empty string means "do not set an ACL on the upload",
+					// which is the default since buckets created after 2023
+					// have ACLs disabled by default.
+					if !yield("") {
+						return
+					}
 					for _, v := range types.ObjectCannedACL("").Values() {
 						if !yield(string(v)) {
 							return
 						}
 					}
 				})...).
-				Description("The object canned ACL value.").
-				Default(string(types.ObjectCannedACLPrivate)).
+				Description("The object canned ACL value. Leave empty to omit the ACL from upload requests, which is required for buckets that have ACLs disabled (the AWS default since 2023).").
+				Default("").
 				Advanced(),
 			service.NewBatchPolicyField(s3oFieldBatching),
 		).
@@ -473,7 +479,6 @@ func (a *amazonS3Writer) WriteBatch(wctx context.Context, msg service.MessageBat
 			WebsiteRedirectLocation: websiteRedirectLocation,
 			StorageClass:            tmtypes.StorageClass(storageClass),
 			Metadata:                metadata,
-			ACL:                     tmtypes.ObjectCannedACL(a.conf.ObjectCannedACL),
 		}
 
 		// Prepare tags, escaping keys and values to ensure they're valid query string parameters.
@@ -496,6 +501,10 @@ func (a *amazonS3Writer) WriteBatch(wctx context.Context, msg service.MessageBat
 
 		if a.conf.ChecksumAlgorithm != "" {
 			uploadInput.ChecksumAlgorithm = tmtypes.ChecksumAlgorithm(a.conf.ChecksumAlgorithm)
+		}
+
+		if a.conf.ObjectCannedACL != "" {
+			uploadInput.ACL = tmtypes.ObjectCannedACL(a.conf.ObjectCannedACL)
 		}
 
 		// NOTE: This overrides the ServerSideEncryption set above. We need this to preserve

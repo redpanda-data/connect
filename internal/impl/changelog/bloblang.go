@@ -28,7 +28,6 @@ import (
 
 func init() {
 	diffSpec := bloblang.NewPluginSpec().
-		Beta().
 		Category("Object & Array Manipulation").
 		Description(`Compares the current value with another value and returns a detailed changelog describing all differences. The changelog contains operations (create, update, delete) with their paths and values, enabling you to track changes between data versions, implement audit logs, or synchronize data between systems.`).
 		Version("4.25.0").
@@ -96,7 +95,6 @@ func init() {
 	}
 
 	patchSpec := bloblang.NewPluginSpec().
-		Beta().
 		Category("Object & Array Manipulation").
 		Description(`Applies a changelog (created by the diff method) to the current value, transforming it according to the specified operations. This enables you to synchronize data, replay changes, or implement event sourcing patterns by applying recorded changes to reconstruct state.`).
 		Version("4.25.0").

@@ -416,30 +416,27 @@ All new integration tests use testcontainers-go.
 
 ### Module-Specific Helpers (Preferred)
 
-Use a module when one exists (redpanda, mongodb, postgres, mysql, etc.):
+Use a module when one exists (redpanda, localstack, minio, nats, etc.):
 
 ```go
 import (
-    "github.com/testcontainers/testcontainers-go/modules/redpanda"
+    "github.com/testcontainers/testcontainers-go"
+    tcredpanda "github.com/testcontainers/testcontainers-go/modules/redpanda"
 )
 
-container, err := redpanda.Run(t.Context(), "docker.redpanda.com/redpandadata/redpanda:latest")
+ctr, err := tcredpanda.Run(t.Context(), "docker.redpanda.com/redpandadata/redpanda:latest")
+testcontainers.CleanupContainer(t, ctr)
 require.NoError(t, err)
-t.Cleanup(func() {
-    if err := container.Terminate(context.Background()); err != nil {
-        t.Logf("failed to terminate container: %v", err)
-    }
-})
 
-brokerAddr, err := container.KafkaSeedBroker(t.Context())
+brokerAddr, err := ctr.KafkaSeedBroker(t.Context())
 require.NoError(t, err)
-srURL, err := container.SchemaRegistryAddress(t.Context())
+srURL, err := ctr.SchemaRegistryAddress(t.Context())
 require.NoError(t, err)
 ```
 
-### Generic Container
+### Generic Container (testcontainers.Run)
 
-When no module exists, use `GenericContainer` with a wait strategy:
+When no module exists, use `testcontainers.Run` with functional options:
 
 ```go
 import (
@@ -447,32 +444,47 @@ import (
     "github.com/testcontainers/testcontainers-go/wait"
 )
 
-container, err := testcontainers.GenericContainer(t.Context(), testcontainers.GenericContainerRequest{
-    ContainerRequest: testcontainers.ContainerRequest{
-        Image:        "mongo:7",
-        ExposedPorts: []string{"27017/tcp"},
-        Env:          map[string]string{"MONGO_INITDB_ROOT_USERNAME": "root", "MONGO_INITDB_ROOT_PASSWORD": "secret"},
-        WaitingFor:   wait.ForLog("Waiting for connections"),
-    },
-    Started: true,
-})
-require.NoError(t, err)
-t.Cleanup(func() {
-    if err := container.Terminate(context.Background()); err != nil {
-        t.Logf("failed to terminate container: %v", err)
-    }
-})
-
-endpoint, err := container.Endpoint(t.Context(), "")
+ctr, err := testcontainers.Run(t.Context(), "mongo:7",
+    testcontainers.WithExposedPorts("27017/tcp"),
+    testcontainers.WithEnv(map[string]string{
+        "MONGO_INITDB_ROOT_USERNAME": "root",
+        "MONGO_INITDB_ROOT_PASSWORD": "secret",
+    }),
+    testcontainers.WithWaitStrategy(
+        wait.ForLog("Waiting for connections").WithStartupTimeout(60*time.Second),
+    ),
+)
+testcontainers.CleanupContainer(t, ctr)
 require.NoError(t, err)
 
-mappedPort, err := container.MappedPort(t.Context(), "27017/tcp")
+mappedPort, err := ctr.MappedPort(t.Context(), "27017/tcp")
+require.NoError(t, err)
+host, err := ctr.Host(t.Context())
 require.NoError(t, err)
 ```
 
-Common wait strategies: `wait.ForLog("ready")`, `wait.ForHTTP("/health").WithPort("8080/tcp")`, `wait.ForListeningPort("5432/tcp")`, `wait.ForExposedPort()`.
+### Key patterns
 
-Cleanup must use `context.Background()`, not `t.Context()`. During cleanup `t.Context()` is already canceled.
+**Cleanup:** Always call `testcontainers.CleanupContainer(t, ctr)` immediately after `Run`/module `Run`, before `require.NoError`. This registers cleanup via `t.Cleanup` internally. Never use manual `Terminate` calls.
+
+**Functional options for `testcontainers.Run`:**
+- `WithExposedPorts("5432/tcp")` — ports to expose
+- `WithEnv(map[string]string{...})` — environment variables
+- `WithCmd("arg1", "arg2")` — container command
+- `WithEntrypoint("sh")` — override entrypoint
+- `WithWaitStrategy(wait.ForListeningPort(...))` — readiness check
+- `WithHostConfigModifier(func(hc *container.HostConfig) { ... })` — Docker host config (security opts, port bindings, volume mounts)
+
+**Wait strategies:** `wait.ForListeningPort("5432/tcp")`, `wait.ForLog("ready")`, `wait.ForHTTP("/health").WithPort("8080/tcp")`. Always chain `.WithStartupTimeout(...)`.
+
+**Port/host access:** Use `ctr.MappedPort(ctx, "5432/tcp")` returning `nat.Port`, then `.Port()` for the string. Use `ctr.Host(ctx)` for the host.
+
+**Readiness retries beyond wait strategy:** When you need to retry application-level checks after the container is up (e.g., creating a topic, pinging a database), use `require.Eventually`:
+```go
+require.Eventually(t, func() bool {
+    return client.Ping(t.Context()) == nil
+}, 30*time.Second, time.Second)
+```
 
 ## Test Helper Packages
 

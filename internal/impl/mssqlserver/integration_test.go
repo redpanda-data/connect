@@ -37,7 +37,7 @@ func TestIntegration_MicrosoftSQLServerCDC_SnapshotAndStreaming(t *testing.T) {
 		t.Parallel()
 
 		// Create tables
-		connStr, db := mssqlservertest.SetupTestWithMicrosoftSQLServerVersion(t, "2022-latest")
+		connStr, db := mssqlservertest.SetupTestWithMicrosoftSQLServerVersion(t)
 		require.NoError(t, db.CreateTableWithCDCEnabledIfNotExists(t.Context(), "test.foo", "CREATE TABLE test.foo (id INT IDENTITY(1,1) PRIMARY KEY);"))
 		require.NoError(t, db.CreateTableWithCDCEnabledIfNotExists(t.Context(), "dbo.foo", "CREATE TABLE dbo.foo (id INT IDENTITY(1,1) PRIMARY KEY);"))
 		require.NoError(t, db.CreateTableWithCDCEnabledIfNotExists(t.Context(), "dbo.bar", "CREATE TABLE dbo.bar (id INT IDENTITY(1,1) PRIMARY KEY);"))
@@ -50,8 +50,7 @@ func TestIntegration_MicrosoftSQLServerCDC_SnapshotAndStreaming(t *testing.T) {
 			db.MustExec("INSERT INTO dbo.bar DEFAULT VALUES")
 		}
 
-		// wait for changes to propagate to change tables
-		time.Sleep(5 * time.Second)
+		db.WaitForCDCChanges(t.Context(), 1000, "test.foo", "dbo.foo", "dbo.bar")
 
 		var (
 			outBatches   []string
@@ -88,8 +87,9 @@ microsoft_sql_server_cdc:
 			license.InjectTestService(stream.Resources())
 
 			go func() {
-				err = stream.Run(t.Context())
-				require.NoError(t, err)
+				if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+					t.Error(err)
+				}
 			}()
 
 			t.Log("Verifying snapshot changes...")
@@ -107,23 +107,29 @@ microsoft_sql_server_cdc:
 
 		t.Log("Verifying streaming changes...")
 		{
-			// insert 3000 more for streaming changes
-			for range 1000 {
+			// insert streaming changes (reduced count to avoid CDC agent timeout under emulation)
+			streamingRowsPerTable := 10
+			streamingWant := streamingRowsPerTable * 3
+			for range streamingRowsPerTable {
 				db.MustExec("INSERT INTO test.foo DEFAULT VALUES")
 				db.MustExec("INSERT INTO dbo.foo DEFAULT VALUES")
 				db.MustExec("INSERT INTO dbo.bar DEFAULT VALUES")
 			}
 
+			db.WaitForCDCChanges(t.Context(), 1000+streamingRowsPerTable, "test.foo", "dbo.foo", "dbo.bar")
+
+			outBatchesMu.Lock()
 			outBatches = nil
+			outBatchesMu.Unlock()
 			assert.Eventually(t, func() bool {
 				outBatchesMu.Lock()
 				defer outBatchesMu.Unlock()
 
 				got := len(outBatches)
-				if got > want {
-					t.Fatalf("Wanted %d streaming changes but got %d", want, got)
+				if got > streamingWant {
+					t.Fatalf("Wanted %d streaming changes but got %d", streamingWant, got)
 				}
-				return got == want
+				return got == streamingWant
 			}, time.Minute*5, time.Second*1)
 
 		}
@@ -131,11 +137,11 @@ microsoft_sql_server_cdc:
 		require.NoError(t, stream.StopWithin(time.Second*10))
 	})
 
-	t.Run("With Cache Component", func(t *testing.T) {
+	t.Run("With Remote Default SQL Server Cache", func(t *testing.T) {
 		t.Parallel()
 
 		// Create tables
-		connStr, db := mssqlservertest.SetupTestWithMicrosoftSQLServerVersion(t, "2022-latest")
+		connStr, db := mssqlservertest.SetupTestWithMicrosoftSQLServerVersion(t)
 		require.NoError(t, db.CreateTableWithCDCEnabledIfNotExists(t.Context(), "test.foo", "CREATE TABLE test.foo (id INT IDENTITY(1,1) PRIMARY KEY);"))
 		require.NoError(t, db.CreateTableWithCDCEnabledIfNotExists(t.Context(), "dbo.foo", "CREATE TABLE dbo.foo (id INT IDENTITY(1,1) PRIMARY KEY);"))
 		require.NoError(t, db.CreateTableWithCDCEnabledIfNotExists(t.Context(), "dbo.bar", "CREATE TABLE dbo.bar (id INT IDENTITY(1,1) PRIMARY KEY);"))
@@ -148,8 +154,112 @@ microsoft_sql_server_cdc:
 			db.MustExec("INSERT INTO dbo.bar DEFAULT VALUES")
 		}
 
-		// wait for changes to propagate to change tables
-		time.Sleep(5 * time.Second)
+		db.WaitForCDCChanges(t.Context(), 1000, "test.foo", "dbo.foo", "dbo.bar")
+
+		var (
+			outBatches   []string
+			outBatchesMu sync.Mutex
+			stream       *service.Stream
+			err          error
+		)
+		t.Log("Launching component...")
+		{
+			cfg := `
+microsoft_sql_server_cdc:
+  connection_string: %s
+  stream_snapshot: true
+  checkpoint_cache: ""
+  checkpoint_cache_connection_string: %s
+  snapshot_max_batch_size: 10
+  include: ["test.foo", "dbo.foo", "dbo.bar"]
+  exclude: ["dbo.doesnotexist"]`
+
+			streamBuilder := service.NewStreamBuilder()
+			require.NoError(t, streamBuilder.AddInputYAML(fmt.Sprintf(cfg, connStr, connStr)))
+			require.NoError(t, streamBuilder.SetLoggerYAML(`level: DEBUG`))
+
+			require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+				msgBytes, err := mb[0].AsBytes()
+				require.NoError(t, err)
+				outBatchesMu.Lock()
+				outBatches = append(outBatches, string(msgBytes))
+				outBatchesMu.Unlock()
+				return nil
+			}))
+
+			stream, err = streamBuilder.Build()
+			require.NoError(t, err)
+			license.InjectTestService(stream.Resources())
+
+			go func() {
+				if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+					t.Error(err)
+				}
+			}()
+
+			t.Log("Verifying snapshot changes...")
+			assert.Eventually(t, func() bool {
+				outBatchesMu.Lock()
+				defer outBatchesMu.Unlock()
+
+				got := len(outBatches)
+				if got > want {
+					t.Fatalf("Wanted %d snapshot messages but got %d", want, got)
+				}
+				return got == want
+			}, time.Minute*5, time.Second*1)
+		}
+
+		t.Log("Verifying streaming changes...")
+		{
+			// insert streaming changes (reduced count to avoid CDC agent timeout under emulation)
+			streamingRowsPerTable := 10
+			streamingWant := streamingRowsPerTable * 3
+			for range streamingRowsPerTable {
+				db.MustExec("INSERT INTO test.foo DEFAULT VALUES")
+				db.MustExec("INSERT INTO dbo.foo DEFAULT VALUES")
+				db.MustExec("INSERT INTO dbo.bar DEFAULT VALUES")
+			}
+
+			db.WaitForCDCChanges(t.Context(), 1000+streamingRowsPerTable, "test.foo", "dbo.foo", "dbo.bar")
+
+			outBatchesMu.Lock()
+			outBatches = nil
+			outBatchesMu.Unlock()
+			assert.Eventually(t, func() bool {
+				outBatchesMu.Lock()
+				defer outBatchesMu.Unlock()
+
+				got := len(outBatches)
+				if got > streamingWant {
+					t.Fatalf("Wanted %d streaming changes but got %d", streamingWant, got)
+				}
+				return got == streamingWant
+			}, time.Minute*5, time.Second*1)
+
+		}
+
+		require.NoError(t, stream.StopWithin(time.Second*10))
+	})
+
+	t.Run("With Cache Component", func(t *testing.T) {
+		t.Parallel()
+
+		// Create tables
+		connStr, db := mssqlservertest.SetupTestWithMicrosoftSQLServerVersion(t)
+		require.NoError(t, db.CreateTableWithCDCEnabledIfNotExists(t.Context(), "test.foo", "CREATE TABLE test.foo (id INT IDENTITY(1,1) PRIMARY KEY);"))
+		require.NoError(t, db.CreateTableWithCDCEnabledIfNotExists(t.Context(), "dbo.foo", "CREATE TABLE dbo.foo (id INT IDENTITY(1,1) PRIMARY KEY);"))
+		require.NoError(t, db.CreateTableWithCDCEnabledIfNotExists(t.Context(), "dbo.bar", "CREATE TABLE dbo.bar (id INT IDENTITY(1,1) PRIMARY KEY);"))
+
+		// Insert 3000 rows across tables for initial snapshot streaming
+		want := 3000
+		for range 1000 {
+			db.MustExec("INSERT INTO test.foo DEFAULT VALUES")
+			db.MustExec("INSERT INTO dbo.foo DEFAULT VALUES")
+			db.MustExec("INSERT INTO dbo.bar DEFAULT VALUES")
+		}
+
+		db.WaitForCDCChanges(t.Context(), 1000, "test.foo", "dbo.foo", "dbo.bar")
 
 		var (
 			outBatches   []string
@@ -192,8 +302,9 @@ file:
 			license.InjectTestService(stream.Resources())
 
 			go func() {
-				err = stream.Run(t.Context())
-				require.NoError(t, err)
+				if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+					t.Error(err)
+				}
 			}()
 
 			t.Log("Verifying snapshot changes...")
@@ -211,23 +322,29 @@ file:
 
 		t.Log("Verifying streaming changes...")
 		{
-			// insert 3000 more for streaming changes
-			for range 1000 {
+			// insert streaming changes (reduced count to avoid CDC agent timeout under emulation)
+			streamingRowsPerTable := 10
+			streamingWant := streamingRowsPerTable * 3
+			for range streamingRowsPerTable {
 				db.MustExec("INSERT INTO test.foo DEFAULT VALUES")
 				db.MustExec("INSERT INTO dbo.foo DEFAULT VALUES")
 				db.MustExec("INSERT INTO dbo.bar DEFAULT VALUES")
 			}
 
+			db.WaitForCDCChanges(t.Context(), 1000+streamingRowsPerTable, "test.foo", "dbo.foo", "dbo.bar")
+
+			outBatchesMu.Lock()
 			outBatches = nil
+			outBatchesMu.Unlock()
 			assert.Eventually(t, func() bool {
 				outBatchesMu.Lock()
 				defer outBatchesMu.Unlock()
 
 				got := len(outBatches)
-				if got > want {
-					t.Fatalf("Wanted %d streaming changes but got %d", want, got)
+				if got > streamingWant {
+					t.Fatalf("Wanted %d streaming changes but got %d", streamingWant, got)
 				}
-				return got == want
+				return got == streamingWant
 			}, time.Minute*5, time.Second*1)
 
 		}
@@ -238,10 +355,9 @@ file:
 
 func TestIntegration_MicrosoftSQLServerCDC_ConcurrentSnapshot(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	// Create tables
-	connStr, db := mssqlservertest.SetupTestWithMicrosoftSQLServerVersion(t, "2022-latest")
+	connStr, db := mssqlservertest.SetupTestWithMicrosoftSQLServerVersion(t)
 	require.NoError(t, db.CreateTableWithCDCEnabledIfNotExists(t.Context(), "test.foo", "CREATE TABLE test.foo (id INT IDENTITY(1,1) PRIMARY KEY);"))
 	require.NoError(t, db.CreateTableWithCDCEnabledIfNotExists(t.Context(), "dbo.foo", "CREATE TABLE dbo.foo (id INT IDENTITY(1,1) PRIMARY KEY);"))
 	require.NoError(t, db.CreateTableWithCDCEnabledIfNotExists(t.Context(), "dbo.bar", "CREATE TABLE dbo.bar (id INT IDENTITY(1,1) PRIMARY KEY);"))
@@ -292,8 +408,9 @@ microsoft_sql_server_cdc:
 		license.InjectTestService(stream.Resources())
 
 		go func() {
-			err = stream.Run(t.Context())
-			require.NoError(t, err)
+			if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+				t.Error(err)
+			}
 		}()
 
 		t.Log("Verifying snapshot changes...")
@@ -314,10 +431,9 @@ microsoft_sql_server_cdc:
 
 func TestIntegration_MicrosoftSQLServerCDC_ResumesFromCheckpoint(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	// Create table
-	connStr, db := mssqlservertest.SetupTestWithMicrosoftSQLServerVersion(t, "2022-latest")
+	connStr, db := mssqlservertest.SetupTestWithMicrosoftSQLServerVersion(t)
 	require.NoError(t, db.CreateTableWithCDCEnabledIfNotExists(t.Context(), "test.foo", "CREATE TABLE test.foo (id INT IDENTITY(1,1) PRIMARY KEY);"))
 
 	cfg := `
@@ -335,6 +451,7 @@ microsoft_sql_server_cdc:
 		outBatchesMu sync.Mutex
 	)
 
+	rowsPerPhase := 100
 	t.Log("Launching component to stream initial data...")
 	{
 		require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
@@ -350,55 +467,60 @@ microsoft_sql_server_cdc:
 		require.NoError(t, err)
 		license.InjectTestService(stream.Resources())
 
-		// --- launch input and insert initial rows for consumption
-		for range 1000 {
+		// --- insert initial rows and wait for CDC to process them
+		for range rowsPerPhase {
 			db.MustExec("INSERT INTO test.foo DEFAULT VALUES")
 		}
-		go func() {
-			require.NoError(t, stream.Run(t.Context()))
-		}()
+		db.WaitForCDCChanges(t.Context(), rowsPerPhase, "test.foo")
 
-		time.Sleep(time.Second * 5)
+		go func() {
+			if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+				t.Error(err)
+			}
+		}()
 
 		assert.Eventually(t, func() bool {
 			outBatchesMu.Lock()
 			defer outBatchesMu.Unlock()
-			return len(outBatches) == 1000
+			return len(outBatches) == rowsPerPhase
 		}, time.Minute*5, time.Millisecond*100)
 		require.NoError(t, stream.StopWithin(time.Second*10))
 	}
 
 	t.Log("Relaunching component to resume from checkpoint...")
 	{
-		// --- now stopped, insert more rows
-		for range 1000 {
+		// --- now stopped, insert more rows and wait for CDC
+		for range rowsPerPhase {
 			db.MustExec("INSERT INTO test.foo DEFAULT VALUES")
 		}
+		db.WaitForCDCChanges(t.Context(), rowsPerPhase*2, "test.foo")
 
 		streamResume, err := streamBuilder.Build()
 		require.NoError(t, err)
 		license.InjectTestService(streamResume.Resources())
 		go func() {
-			require.NoError(t, streamResume.Run(t.Context()))
+			if err := streamResume.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+				t.Error(err)
+			}
 		}()
 
+		totalWant := rowsPerPhase * 2
 		assert.Eventually(t, func() bool {
 			outBatchesMu.Lock()
 			defer outBatchesMu.Unlock()
-			return len(outBatches) == 2000
+			return len(outBatches) == totalWant
 		}, time.Minute*5, time.Millisecond*100)
 
-		require.Contains(t, outBatches[len(outBatches)-1], "2000")
+		require.Contains(t, outBatches[len(outBatches)-1], fmt.Sprintf("%d", totalWant))
 		require.NoError(t, streamResume.StopWithin(time.Second*10))
 	}
 }
 
 func TestIntegration_MicrosoftSQLServerCDC_OrderingOfIterator(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	// Create table
-	connStr, db := mssqlservertest.SetupTestWithMicrosoftSQLServerVersion(t, "2022-latest")
+	connStr, db := mssqlservertest.SetupTestWithMicrosoftSQLServerVersion(t)
 	require.NoError(t, db.CreateTableWithCDCEnabledIfNotExists(t.Context(), "dbo.foo", `CREATE TABLE dbo.foo (a INT PRIMARY KEY);`))
 	require.NoError(t, db.CreateTableWithCDCEnabledIfNotExists(t.Context(), "boo.bar", `CREATE TABLE boo.bar (b INT PRIMARY KEY);`))
 
@@ -440,10 +562,18 @@ microsoft_sql_server_cdc:
 	require.NoError(t, err)
 	license.InjectTestService(stream.Resources())
 
+	// Run the stream in a cleanup-synchronised goroutine so a t.Error from a
+	// late Run error can't fire after the test function has returned.
+	streamErr := make(chan error, 1)
 	go func() {
-		err = stream.Run(t.Context())
-		require.NoError(t, err)
+		streamErr <- stream.Run(t.Context())
 	}()
+	t.Cleanup(func() {
+		_ = stream.StopWithin(time.Second * 10)
+		if err := <-streamErr; err != nil && !errors.Is(err, context.Canceled) {
+			t.Errorf("stream.Run: %v", err)
+		}
+	})
 
 	assert.Eventually(t, func() bool {
 		outBatchesMu.Lock()
@@ -457,14 +587,12 @@ microsoft_sql_server_cdc:
 		want = append(want, fmt.Sprintf(`{"b":%d}`, i))
 	}
 	require.Equal(t, want, outBatches, "Order of output does not match expected")
-	require.NoError(t, stream.StopWithin(time.Second*10))
 }
 
 func TestIntegration_MicrosoftSQLServerCDC_SnapshotAndStreaming_AllTypes(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
-	connStr, db := mssqlservertest.SetupTestWithMicrosoftSQLServerVersion(t, "2022-latest")
+	connStr, db := mssqlservertest.SetupTestWithMicrosoftSQLServerVersion(t)
 	q := `
 	CREATE TABLE dbo.all_data_types (
 		-- Numeric Data Types
@@ -594,8 +722,9 @@ microsoft_sql_server_cdc:
 		license.InjectTestService(stream.Resources())
 
 		go func() {
-			err = stream.Run(t.Context())
-			require.NoError(t, err)
+			if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+				t.Error(err)
+			}
 		}()
 
 		// Wait for snapshot to complete (should have 1 batch with min values)
@@ -658,12 +787,12 @@ microsoft_sql_server_cdc:
 		"datetime2_col": "0001-01-01T00:00:00Z",
 		"datetime_col": "1753-01-01T00:00:00Z",
 		"datetimeoffset_col": "0001-01-01T00:00:00-14:00",
-		"decimal_col": -9999999999999999999999999999.9999999999,
+		"decimal_col": "-9999999999999999999999999999.9999999999",
 		"float_col": -1.79e+308,
 		"int_col": -2147483648,
 		"json_col": "{}",
 		"nchar_col": "АААААААААА",
-		"numeric_col": -999999999999999.99999,
+		"numeric_col": "-999999999999999.99999",
 		"nvarchar_col": "",
 		"nvarcharmax_col": "",
 		"real_col": "-3.3999999521443642e+38",
@@ -688,12 +817,12 @@ microsoft_sql_server_cdc:
 		"datetime2_col": "9999-12-31T23:59:59.9999999Z",
 		"datetime_col": "9999-12-31T23:59:59.997Z",
 		"datetimeoffset_col": "9999-12-31T23:59:59.9999999+14:00",
-		"decimal_col": 9999999999999999999999999999.9999999999,
+		"decimal_col": "9999999999999999999999999999.9999999999",
 		"float_col": 1.79e+308,
 		"int_col": 2147483647,
 		"json_col": "{\"max\": true}",
 		"nchar_col": "ZZZZZZZZZZ",
-		"numeric_col": 999999999999999.99999,
+		"numeric_col": "999999999999999.99999",
 		"nvarchar_col": "Max nvarchar value",
 		"nvarcharmax_col": "Max nvarchar(max)",
 		"real_col": 3.3999999521443642e+38,
@@ -712,9 +841,8 @@ microsoft_sql_server_cdc:
 
 func TestIntegration_MicrosoftSQLServerCDC_SchemaMetadata(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
-	connStr, db := mssqlservertest.SetupTestWithMicrosoftSQLServerVersion(t, "2022-latest")
+	connStr, db := mssqlservertest.SetupTestWithMicrosoftSQLServerVersion(t)
 	require.NoError(t, db.CreateTableWithCDCEnabledIfNotExists(t.Context(), "dbo.schema_meta_test", `
 		CREATE TABLE dbo.schema_meta_test (
 			id      INT          PRIMARY KEY,

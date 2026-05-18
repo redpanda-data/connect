@@ -31,7 +31,6 @@ import (
 
 func TestCatalogxIntegration(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	ctx := context.Background()
 	infra := setupTestInfra(t, ctx)
@@ -150,7 +149,7 @@ func TestCatalogxIntegration(t *testing.T) {
 		tbl, err := client.CreateTable(ctx, tableName, initialSchema)
 		require.NoError(t, err)
 
-		_, err = client.UpdateSchema(ctx, tbl, func(us *table.UpdateSchema) {
+		_, err = client.UpdateSchema(ctx, tbl, true, func(us *table.UpdateSchema) {
 			us.AddColumn([]string{"col2"}, iceberg.StringType{}, "", false, nil)
 		})
 		require.NoError(t, err)

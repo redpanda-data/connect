@@ -1,0 +1,7 @@
+{"Action":"start-run","Package":"./internal/impl/splunk"}
+{"Action":"run","Test":"TestIntegrationSplunk"}
+{"Action":"output","Test":"TestIntegrationSplunk","Output":"--- SKIP: TestIntegrationSplunk (0.00s)\n"}
+{"Action":"output","Test":"TestIntegrationSplunk","Output":"    integration_test.go:33: CON-376: Splunk image is x86-only, skipping on arm64\n"}
+{"Action":"skip","Test":"TestIntegrationSplunk","Elapsed":0}
+{"Action":"pass","Elapsed":0.456}
+{"Action":"end-run"}

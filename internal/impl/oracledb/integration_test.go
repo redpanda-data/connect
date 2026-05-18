@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -34,31 +35,136 @@ import (
 
 func TestIntegrationOracleDBCDCSnapshotAndStreaming(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
-	// Create tables
-	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t, "latest")
-	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.foo", "CREATE TABLE testdb.foo (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
-	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.foo2", "CREATE TABLE testdb.foo2 (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
-	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb2.bar", "CREATE TABLE testdb2.bar (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
+	// multi-tenanted mode, allowing users access to logs across various PDBs
+	t.Run("CDB Mode", func(t *testing.T) {
+		// SetupCDBTestWithPDB starts Oracle Free, connects to CDB$ROOT for the
+		// connector, and returns a FREEPDB1 connection for test data setup.
+		cdbConnStr, pdbDB, pdbName := oracledbtest.SetupCDBTestWithPDB(t)
 
-	// Insert 3000 rows across tables for initial snapshot streaming
-	want := 3000
-	for range 1000 {
-		db.MustExec("INSERT INTO testdb.foo (id) VALUES (DEFAULT)")
-		db.MustExec("INSERT INTO testdb.foo2 (id) VALUES (DEFAULT)")
-		db.MustExec("INSERT INTO testdb2.bar (id) VALUES (DEFAULT)")
-	}
+		require.NoError(t, pdbDB.CreatePDBTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.mtfoo", "CREATE TABLE testdb.mtfoo (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
+		require.NoError(t, pdbDB.CreatePDBTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb2.mtbar", "CREATE TABLE testdb2.mtbar (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
 
-	var (
-		outBatches   []string
-		outBatchesMu sync.Mutex
-		stream       *service.Stream
-		err          error
-	)
-	t.Log("Launching component...")
-	{
-		cfg := `
+		// Insert 1000 rows into each table for snapshot verification (2000 total).
+		want := 2000
+		for range 1000 {
+			pdbDB.MustExec("INSERT INTO testdb.mtfoo (id) VALUES (DEFAULT)")
+			pdbDB.MustExec("INSERT INTO testdb2.mtbar (id) VALUES (DEFAULT)")
+		}
+
+		var (
+			outBatches   []string
+			outBatchesMu sync.Mutex
+			stream       *service.Stream
+			err          error
+		)
+		t.Log("Launching component in CDB mode...")
+		{
+			cfg := `
+oracledb_cdc:
+  connection_string: %s
+  pdb_name: %s
+  stream_snapshot: true
+  max_parallel_snapshot_tables: 2
+  snapshot_max_batch_size: 10
+  logminer:
+    scn_window_size: 20000
+    backoff_interval: 1s
+  include: ["TESTDB.MTFOO", "TESTDB2.MTBAR"]
+  batching:
+    count: 500`
+
+			streamBuilder := service.NewStreamBuilder()
+			require.NoError(t, streamBuilder.AddInputYAML(fmt.Sprintf(cfg, cdbConnStr, pdbName)))
+			require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
+
+			require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+				outBatchesMu.Lock()
+				defer outBatchesMu.Unlock()
+				for _, msg := range mb {
+					msgBytes, err := msg.AsBytes()
+					assert.NoError(t, err)
+					outBatches = append(outBatches, string(msgBytes))
+				}
+				return nil
+			}))
+
+			stream, err = streamBuilder.Build()
+			require.NoError(t, err)
+			license.InjectTestService(stream.Resources())
+
+			go func() {
+				if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+					t.Error(err)
+				}
+			}()
+
+			t.Log("Verifying snapshot changes from FREEPDB1...")
+			var got int
+			assert.Eventually(t, func() bool {
+				outBatchesMu.Lock()
+				defer outBatchesMu.Unlock()
+				got = len(outBatches)
+				return got >= want
+			}, time.Minute*5, time.Second*1)
+			assert.Equalf(t, want, got, "Wanted %d snapshot messages but got %d", want, got)
+		}
+
+		t.Log("Verifying streaming changes from FREEPDB1...")
+		{
+			want := 2000
+			_, err = pdbDB.Exec(`
+BEGIN
+	FOR i IN 1..1000 LOOP
+		INSERT INTO testdb.mtfoo (id) VALUES (DEFAULT);
+		INSERT INTO testdb2.mtbar (id) VALUES (DEFAULT);
+	END LOOP;
+	COMMIT;
+END;`)
+			require.NoError(t, err)
+
+			outBatchesMu.Lock()
+			outBatches = nil
+			outBatchesMu.Unlock()
+
+			var got int
+			assert.Eventually(t, func() bool {
+				outBatchesMu.Lock()
+				defer outBatchesMu.Unlock()
+				got = len(outBatches)
+				return got >= want
+			}, time.Minute*5, time.Second*1)
+			assert.Equalf(t, want, got, "Wanted %d streaming messages but got %d", want, got)
+		}
+
+		require.NoError(t, stream.StopWithin(time.Second*10))
+	})
+
+	// single tenant mode
+	t.Run("Non-CDB Mode", func(t *testing.T) {
+		// Create tables
+		connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
+		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.foo", "CREATE TABLE testdb.foo (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
+		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.foo2", "CREATE TABLE testdb.foo2 (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
+		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb2.bar", "CREATE TABLE testdb2.bar (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
+
+		// Insert 3000 rows across tables for initial snapshot streaming
+		want := 3000
+		for range 1000 {
+			db.MustExec("INSERT INTO testdb.foo (id) VALUES (DEFAULT)")
+			db.MustExec("INSERT INTO testdb.foo2 (id) VALUES (DEFAULT)")
+			db.MustExec("INSERT INTO testdb2.bar (id) VALUES (DEFAULT)")
+		}
+
+		var (
+			outBatches   []string
+			outBatchesMu sync.Mutex
+			stream       *service.Stream
+			err          error
+		)
+		t.Log("Launching component...")
+		{
+			cfg := `
 oracledb_cdc:
   connection_string: %s
   stream_snapshot: true
@@ -72,47 +178,47 @@ oracledb_cdc:
   batching:
     count: 500`
 
-		streamBuilder := service.NewStreamBuilder()
-		require.NoError(t, streamBuilder.AddInputYAML(fmt.Sprintf(cfg, connStr)))
-		require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
+			streamBuilder := service.NewStreamBuilder()
+			require.NoError(t, streamBuilder.AddInputYAML(fmt.Sprintf(cfg, connStr)))
+			require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
 
-		require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
-			outBatchesMu.Lock()
-			defer outBatchesMu.Unlock()
-			for _, msg := range mb {
-				msgBytes, err := msg.AsBytes()
-				assert.NoError(t, err)
-				outBatches = append(outBatches, string(msgBytes))
-			}
-			return nil
-		}))
+			require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+				outBatchesMu.Lock()
+				defer outBatchesMu.Unlock()
+				for _, msg := range mb {
+					msgBytes, err := msg.AsBytes()
+					assert.NoError(t, err)
+					outBatches = append(outBatches, string(msgBytes))
+				}
+				return nil
+			}))
 
-		stream, err = streamBuilder.Build()
-		require.NoError(t, err)
-		license.InjectTestService(stream.Resources())
+			stream, err = streamBuilder.Build()
+			require.NoError(t, err)
+			license.InjectTestService(stream.Resources())
 
-		go func() {
-			if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
-				t.Error(err)
-			}
-		}()
+			go func() {
+				if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+					t.Error(err)
+				}
+			}()
 
-		t.Log("Verifying snapshot changes...")
-		var got int
-		assert.Eventually(t, func() bool {
-			outBatchesMu.Lock()
-			defer outBatchesMu.Unlock()
-			got = len(outBatches)
-			return got >= want
-		}, time.Minute*5, time.Second*1)
-		assert.Truef(t, (got == want), "Wanted %d snapshot messages but got %d", want, got)
-	}
+			t.Log("Verifying snapshot changes...")
+			var got int
+			assert.Eventually(t, func() bool {
+				outBatchesMu.Lock()
+				defer outBatchesMu.Unlock()
+				got = len(outBatches)
+				return got >= want
+			}, time.Minute*5, time.Second*1)
+			assert.Truef(t, (got == want), "Wanted %d snapshot messages but got %d", want, got)
+		}
 
-	t.Log("Verifying streaming changes...")
-	{
-		// Insert 3000 rows across tables for initial streaming
-		want := 3000
-		_, err := db.Exec(`
+		t.Log("Verifying streaming changes...")
+		{
+			// Insert 3000 rows across tables for initial streaming
+			want := 3000
+			_, err := db.Exec(`
 	BEGIN
 		FOR i IN 1..1000 LOOP
 			INSERT INTO testdb.foo (id) VALUES (DEFAULT);
@@ -121,31 +227,31 @@ oracledb_cdc:
 		END LOOP;
 		COMMIT;
 	END;`)
-		require.NoError(t, err)
+			require.NoError(t, err)
 
-		outBatchesMu.Lock()
-		outBatches = nil
-		outBatchesMu.Unlock()
-
-		var got int
-		assert.Eventually(t, func() bool {
 			outBatchesMu.Lock()
-			defer outBatchesMu.Unlock()
-			got = len(outBatches)
-			return got >= want
-		}, time.Minute*5, time.Second*1)
-		assert.Truef(t, (got == want), "Wanted %d streaming messages but got %d", want, got)
-	}
+			outBatches = nil
+			outBatchesMu.Unlock()
 
-	require.NoError(t, stream.StopWithin(time.Second*10))
+			var got int
+			assert.Eventually(t, func() bool {
+				outBatchesMu.Lock()
+				defer outBatchesMu.Unlock()
+				got = len(outBatches)
+				return got >= want
+			}, time.Minute*5, time.Second*1)
+			assert.Truef(t, (got == want), "Wanted %d streaming messages but got %d", want, got)
+		}
+
+		require.NoError(t, stream.StopWithin(time.Second*10))
+	})
 }
 
 func TestIntegrationOracleDBCDCConcurrentSnapshot(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	// Create tables
-	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t, "latest")
+	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
 	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.foo", "CREATE TABLE testdb.foo (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
 	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.foo2", "CREATE TABLE testdb.foo2 (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
 	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb2.bar", "CREATE TABLE testdb2.bar (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
@@ -222,10 +328,9 @@ oracledb_cdc:
 
 func TestIntegrationOracleDBCDCResumesFromCheckpoint(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	// Create table
-	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t, "latest")
+	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
 	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.foo", "CREATE TABLE testdb.foo (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
 
 	var (
@@ -349,10 +454,9 @@ oracledb_cdc:
 
 func TestIntegrationOracleDBCDCStreaming(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	// Create tables
-	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t, "latest")
+	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
 	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.foo", "CREATE TABLE testdb.foo (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, val NUMBER)"))
 	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.foo2", "CREATE TABLE testdb.foo2 (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, val NUMBER)"))
 	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb2.bar", "CREATE TABLE testdb2.bar (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, val NUMBER)"))
@@ -426,18 +530,44 @@ oracledb_cdc:
 		t.Helper()
 		results := make(map[string][]*service.Message)
 		for i, msg := range msgs {
+			// assert database_schema metadata
 			schema, ok := msg.MetaGet("database_schema")
 			require.Truef(t, ok, "message %d missing 'database_schema' metadata", i)
 
+			// assert table_name metadata
 			table, ok := msg.MetaGet("table_name")
 			require.Truef(t, ok, "message %d missing 'table_name' metadata", i)
 
 			key := fmt.Sprintf("%s.%s", schema, table)
 			results[key] = append(results[key], msg)
 
+			// assert operation metadata
 			op, ok := msg.MetaGet("operation")
 			require.Truef(t, ok, "message %d missing 'operation' metadata", i)
 			assert.Equalf(t, operation, op, "message %d: expected operation '%s', got %q", i, operation, op)
+
+			// assert source_ts_ms metadata
+			tsStr, ok := msg.MetaGet("source_ts_ms")
+			require.Truef(t, ok, "message %d missing 'source_ts_ms' metadata", i)
+			tsMs, err := strconv.ParseInt(tsStr, 10, 64)
+			require.NoErrorf(t, err, "message %d: source_ts_ms %q is not a valid int64", i, tsStr)
+			tsTime := time.UnixMilli(tsMs)
+			assert.Truef(t, tsTime.After(time.Now().Add(-5*time.Minute)), "message %d: source_ts_ms %d is too far in the past", i, tsMs)
+			assert.Truef(t, tsTime.Before(time.Now().Add(time.Minute)), "message %d: source_ts_ms %d is in the future", i, tsMs)
+
+			// assert commit_ts_ms metadata
+			tsStr, ok = msg.MetaGet("commit_ts_ms")
+			require.Truef(t, ok, "message %d missing 'commit_ts_ms' metadata", i)
+			tsMs, err = strconv.ParseInt(tsStr, 10, 64)
+			require.NoErrorf(t, err, "message %d: commit_ts_ms %q is not a valid int64", i, tsStr)
+			tsTime = time.UnixMilli(tsMs)
+			assert.Truef(t, tsTime.After(time.Now().Add(-5*time.Minute)), "message %d: commit_ts_ms %d is too far in the past", i, tsMs)
+			assert.Truef(t, tsTime.Before(time.Now().Add(time.Minute)), "message %d: commit_ts_ms %d is in the future", i, tsMs)
+
+			// assert transaction_id metadata
+			txID, ok := msg.MetaGet("transaction_id")
+			require.Truef(t, ok, "message %d missing 'transaction_id' metadata", i)
+			assert.Regexpf(t, `^\d+\.\d+\.\d+$`, txID, "message %d: transaction_id %q not in USN.SLOT.SEQ format", i, txID)
 		}
 
 		for _, expectedKey := range []string{"TESTDB.FOO", "TESTDB.FOO2", "TESTDB2.BAR"} {
@@ -456,6 +586,14 @@ oracledb_cdc:
 	t.Run("Streaming insert changes...", func(t *testing.T) {
 		msgs := collectMessages(t, want)
 		mustAssertMetadata(t, "insert", msgs)
+
+		content, err := msgs[0].AsBytes()
+		assert.NoError(t, err)
+		var row map[string]any
+		require.NoError(t, json.Unmarshal(content, &row))
+		assert.Len(t, row, 2)
+		assert.Contains(t, row, "ID")
+		assert.EqualValues(t, "1", row["VAL"])
 	})
 
 	t.Run("Streaming update changes...", func(t *testing.T) {
@@ -465,6 +603,14 @@ oracledb_cdc:
 
 		msgs := collectMessages(t, want)
 		mustAssertMetadata(t, "update", msgs)
+
+		content, err := msgs[0].AsBytes()
+		assert.NoError(t, err)
+		var row map[string]any
+		require.NoError(t, json.Unmarshal(content, &row))
+		assert.Len(t, row, 2)
+		assert.Contains(t, row, "ID")
+		assert.EqualValues(t, "2", row["VAL"])
 	})
 
 	t.Run("Streaming delete changes...", func(t *testing.T) {
@@ -474,6 +620,14 @@ oracledb_cdc:
 
 		msgs := collectMessages(t, want)
 		mustAssertMetadata(t, "delete", msgs)
+
+		content, err := msgs[0].AsBytes()
+		assert.NoError(t, err)
+		var row map[string]any
+		require.NoError(t, json.Unmarshal(content, &row))
+		assert.Len(t, row, 2)
+		assert.Contains(t, row, "ID")
+		assert.EqualValues(t, "2", row["VAL"])
 	})
 
 	require.NoError(t, stream.StopWithin(time.Second*10))
@@ -481,9 +635,8 @@ oracledb_cdc:
 
 func TestIntegrationOracleDBCDCLargeObjectColumnsToggle(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
-	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t, "latest")
+	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
 
 	sql := `CREATE TABLE testdb.lobdisabled (id NUMBER GENERATED ALWAYS AS IDENTITY (NOCACHE) PRIMARY KEY,varcharcol VARCHAR2(255),inlinelob NCLOB,outoflinelob NCLOB)`
 	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.lobdisabled", sql))
@@ -551,7 +704,7 @@ oracledb_cdc:
 
 			require.Truef(t, (got == snapshotRows), "Wanted %d snapshot messages but got %d", snapshotRows, got)
 			require.JSONEq(t, `{
-		"ID": 1,
+		"ID": "1",
 		"VARCHARCOL": "snapshot",
 		"INLINELOB": null,
 		"OUTOFLINELOB": null
@@ -575,7 +728,7 @@ oracledb_cdc:
 
 			require.Truef(t, (got == streamingRows), "Wanted %d streaming messages but got %d", streamingRows, got)
 			require.JSONEq(t, `{
-		"ID": 51,
+		"ID": "51",
 		"VARCHARCOL": "streaming",
 		"INLINELOB": "",
 		"OUTOFLINELOB": ""
@@ -585,7 +738,9 @@ oracledb_cdc:
 		require.NoError(t, stream.StopWithin(time.Second*10))
 	})
 
-	db.MustExec(`TRUNCATE TABLE RPCN.CDC_CHECKPOINT_CACHE`)
+	// The checkpoint cache table is created lazily during Connect(), so it may
+	// not exist if the first subtest failed before the stream was launched.
+	_, _ = db.Exec(`TRUNCATE TABLE RPCN.CDC_CHECKPOINT_CACHE`)
 
 	t.Run("lob_enabled=true", func(t *testing.T) {
 		for range snapshotRows {
@@ -631,7 +786,7 @@ oracledb_cdc:
 
 			require.Truef(t, (got == snapshotRows), "Wanted %d snapshot messages but got %d", snapshotRows, got)
 			require.JSONEq(t, `{
-		"ID": 1,
+		"ID": "1",
 		"VARCHARCOL": "snapshot",
 		"INLINELOB": "`+inline+`",
 		"OUTOFLINELOB": "`+outofline+`"
@@ -655,7 +810,7 @@ oracledb_cdc:
 
 			require.Truef(t, (got == streamingRows), "Wanted %d streaming messages but got %d", streamingRows, got)
 			require.JSONEq(t, `{
-		"ID": 51,
+		"ID": "51",
 		"VARCHARCOL": "streaming",
 		"INLINELOB": "`+inline+`",
 		"OUTOFLINELOB": "`+outofline+`"
@@ -663,13 +818,15 @@ oracledb_cdc:
 		}
 	})
 
-	require.NoError(t, stream.StopWithin(time.Second*10))
+	if stream != nil {
+		require.NoError(t, stream.StopWithin(time.Second*10))
+	}
 }
 
 func TestIntegrationOracleDBCDCSnapshotAndStreamingAllTypes(t *testing.T) {
 	integration.CheckSkip(t)
 
-	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t, "latest")
+	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
 	q := `
 	CREATE TABLE testdb.all_data_types (
 		-- Numeric Data Types
@@ -709,7 +866,10 @@ func TestIntegrationOracleDBCDCSnapshotAndStreamingAllTypes(t *testing.T) {
 		-- Other Data Types
 		bit_col           NUMBER(1),                    -- Boolean-like (0,1,NULL)
 		-- xml_col           XMLTYPE,
-		json_col          CLOB                          -- JSON stored as CLOB
+		json_col          CLOB,                         -- JSON stored as CLOB
+		noleadingzero_col NUMBER,                       -- observe Oracle's non-leading zero decimal handling (0.15 -> .15)
+		nullable_num      NUMBER(11,0),                 -- nullable number to verify NULL handling
+		nonnullable_num   NUMBER(11,0) NOT NULL         -- NOT NULL
 	) LOB(oolvarcharmax_col) STORE AS BASICFILE (DISABLE STORAGE IN ROW NOCACHE LOGGING)`
 	err := db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.all_data_types", q)
 	require.NoError(t, err)
@@ -725,7 +885,7 @@ func TestIntegrationOracleDBCDCSnapshotAndStreamingAllTypes(t *testing.T) {
 		time_col, datetimeoffset_col, char_col, varchar_col,
 		nchar_col, nvarchar_col, binary_col, varbinary_col,
 		varcharmax_col, oolvarcharmax_col, nvarcharmax_col, varbinarymax_col,
-		bit_col, json_col
+		bit_col, json_col, noleadingzero_col, nullable_num, nonnullable_num
 	) VALUES (
 		:1, :2, :3, :4,
 		:5, :6, :7, :8,
@@ -733,7 +893,7 @@ func TestIntegrationOracleDBCDCSnapshotAndStreamingAllTypes(t *testing.T) {
 		:13, :14, :15, :16,
 		:17, :18, :19, :20,
 		:21, :22, :23, :24,
-		:25, :26
+		:25, :26, :27, :28, :29
 	)`
 
 	t.Log("Inserting min values for testing snapshot data...")
@@ -766,6 +926,9 @@ func TestIntegrationOracleDBCDCSnapshotAndStreamingAllTypes(t *testing.T) {
 			nil,          // blob (varbinarymax_col)
 			0,            // bit (number)
 			nil,          // json (clob)
+			"0.15",       // noleadingzero_col
+			nil,          // nullable_num (NULL to verify NULL handling)
+			0,            // nonnullable_num
 		)
 	}
 
@@ -791,7 +954,7 @@ oracledb_cdc:
 
 		streamBuilder := service.NewStreamBuilder()
 		require.NoError(t, streamBuilder.AddInputYAML(fmt.Sprintf(cfg, connStr)))
-		require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
+		require.NoError(t, streamBuilder.SetLoggerYAML(`level: DEBUG`))
 
 		require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
 			outBatchesMu.Lock()
@@ -824,7 +987,7 @@ oracledb_cdc:
 			t.Logf("Snapshot progress: %d/1 records", got)
 
 			return got == 1
-		}, time.Second*30, time.Millisecond*500)
+		}, time.Second*60, time.Millisecond*500)
 
 		require.Len(t, outBatches, 1, "Expected 1 snapshot record")
 		t.Logf("Snapshot record received: %s", outBatches[0])
@@ -861,6 +1024,9 @@ oracledb_cdc:
 			make([]byte, 255),    // blob (varbinarymax_col)
 			1,                    // bit max (number)
 			`{"max": true}`,      // json (clob)
+			"0.15",               // noleadingzero_col
+			nil,                  // nullable_num (NULL to verify NULL handling when streaming)
+			0,                    // nonnullable_num
 		)
 
 		minWant := 2
@@ -890,9 +1056,12 @@ oracledb_cdc:
 
 	t.Log("Verifying values from snapshot...")
 	{
-		// assert min - uppercase column names from Oracle, NUMBER types as float64
+		// assert min values from snapshot. NUMBER columns with declared
+		// (p, s) emit canonical decimal strings; bare NUMBER emits a
+		// natural-scale BigDecimal; NUMBER(p>18, 0) emits Decimal(p, 0).
+		// NULL columns appear as JSON null.
 		require.JSONEq(t, `{
-		"BIGINT_COL": -9223372036854775808,
+		"BIGINT_COL": "-9223372036854775808",
 		"BINARY_COL": "AAAAAAAAAAAAAAAAAAAAAA==",
 		"BIT_COL": 0,
 		"CHAR_COL": "AAAAAAAAAA",
@@ -900,12 +1069,14 @@ oracledb_cdc:
 		"DATETIME2_COL": "0001-01-01T00:00:00Z",
 		"DATETIME_COL": "1753-01-01T00:00:00Z",
 		"DATETIMEOFFSET_COL": "0001-01-01T00:00:00-14:00",
-		"DECIMAL_COL": -9999999999999999999999999999.9999999999,
+		"DECIMAL_COL": "-9999999999999999999999999999.9999999999",
 		"FLOAT_COL": -1.79e+100,
 		"INT_COL": -2147483648,
 		"JSON_COL": null,
 		"NCHAR_COL": "АААААААААА",
-		"NUMERIC_COL": -999999999999999.99999,
+		"NUMERIC_COL": "-999999999999999.99999",
+		"NULLABLE_NUM": null,
+		"NONNULLABLE_NUM": 0,
 		"NVARCHAR_COL": null,
 		"NVARCHARMAX_COL": null,
 		"REAL_COL": -3.4e+37,
@@ -917,15 +1088,16 @@ oracledb_cdc:
 		"VARBINARYMAX_COL": null,
 		"VARCHAR_COL": null,
 		"OOLVARCHARMAX_COL": null,
-		"VARCHARMAX_COL": null
+		"VARCHARMAX_COL": null,
+		"NOLEADINGZERO_COL": "0.15"
 		}`, outBatches[0], "Failed to assert min result from snapshot")
 	}
 
 	t.Log("Verifying values from streaming...")
 	{
-		// assert max - uppercase column names from Oracle
+		// assert max values from streaming.
 		require.JSONEq(t, `{
-		"BIGINT_COL": 9223372036854775807,
+		"BIGINT_COL": "9223372036854775807",
 		"BINARY_COL": "AAAAAAAAAAAAAAAAAAAAAA==",
 		"BIT_COL": 1,
 		"CHAR_COL": "ZZZZZZZZZZ",
@@ -933,12 +1105,14 @@ oracledb_cdc:
 		"DATETIME2_COL": "9999-12-31T23:59:59.9999999Z",
 		"DATETIME_COL": "9999-12-31T23:59:59.997Z",
 		"DATETIMEOFFSET_COL": "9999-12-31T23:59:59.9999999+14:00",
-		"DECIMAL_COL": 9999999999999999999999999999.9999999999,
+		"DECIMAL_COL": "9999999999999999999999999999.9999999999",
 		"FLOAT_COL": 1.79e+100,
 		"INT_COL": 2147483647,
 		"JSON_COL": "{\"max\": true}",
 		"NCHAR_COL": "ZZZZZZZZZZ",
-		"NUMERIC_COL": 999999999999999.99999,
+		"NUMERIC_COL": "999999999999999.99999",
+		"NULLABLE_NUM": null,
+		"NONNULLABLE_NUM": 0,
 		"NVARCHAR_COL": "Max nvarchar value",
 		"NVARCHARMAX_COL": "Max nvarchar(max)",
 		"REAL_COL": 3.3999999e+37,
@@ -950,7 +1124,8 @@ oracledb_cdc:
 		"VARBINARYMAX_COL": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
 		"VARCHAR_COL": "Max varchar value",
 		"OOLVARCHARMAX_COL": "`+largeClob+`",
-		"VARCHARMAX_COL": "Max varchar(max)"
+		"VARCHARMAX_COL": "Max varchar(max)",
+		"NOLEADINGZERO_COL": "0.15"
 		}`, outBatches[1], "Failed to assert max result from streaming")
 	}
 }
@@ -958,7 +1133,7 @@ oracledb_cdc:
 func TestIntegrationOracleDBCDCSnapshotSchema(t *testing.T) {
 	integration.CheckSkip(t)
 
-	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t, "latest")
+	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
 	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.schema_snap",
 		"CREATE TABLE testdb.schema_snap (id NUMBER(10) PRIMARY KEY, name VARCHAR2(100), created_at DATE, data RAW(16), score BINARY_FLOAT)"))
 
@@ -978,7 +1153,7 @@ oracledb_cdc:
 
 	streamBuilder := service.NewStreamBuilder()
 	require.NoError(t, streamBuilder.AddInputYAML(cfg))
-	require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
+	require.NoError(t, streamBuilder.SetLoggerYAML(`level: DEBUG`))
 	require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
 		for _, msg := range mb {
 			msgChan <- msg
@@ -1042,9 +1217,8 @@ oracledb_cdc:
 
 func TestIntegrationOracleDBCDCStreamingInsertSchema(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
-	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t, "latest")
+	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
 	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.schema_ins",
 		"CREATE TABLE testdb.schema_ins (id NUMBER(10) PRIMARY KEY, val VARCHAR2(50))"))
 
@@ -1107,7 +1281,7 @@ oracledb_cdc:
 func TestIntegrationOracleDBCDCStreamingUpdateSchema(t *testing.T) {
 	integration.CheckSkip(t)
 
-	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t, "latest")
+	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
 	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.schema_upd",
 		"CREATE TABLE testdb.schema_upd (id NUMBER(10) PRIMARY KEY, a VARCHAR2(50), b VARCHAR2(50), c VARCHAR2(50))"))
 
@@ -1174,7 +1348,7 @@ oracledb_cdc:
 func TestIntegrationOracleDBCDCStreamingDeleteSchema(t *testing.T) {
 	integration.CheckSkip(t)
 
-	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t, "latest")
+	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
 	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.schema_del",
 		"CREATE TABLE testdb.schema_del (id NUMBER(10) PRIMARY KEY, val VARCHAR2(50))"))
 
@@ -1237,9 +1411,8 @@ oracledb_cdc:
 
 func TestIntegrationOracleDBCDCSchemaConsistentAcrossPhases(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
-	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t, "latest")
+	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
 	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.schema_phases",
 		"CREATE TABLE testdb.schema_phases (id NUMBER(10) PRIMARY KEY, val VARCHAR2(50))"))
 
@@ -1320,7 +1493,7 @@ oracledb_cdc:
 func TestIntegrationOracleDBCDCSchemaColumnAdded(t *testing.T) {
 	integration.CheckSkip(t)
 
-	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t, "latest")
+	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
 	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.schema_drift",
 		"CREATE TABLE testdb.schema_drift (id NUMBER(10) PRIMARY KEY, name VARCHAR2(100))"))
 
@@ -1391,7 +1564,7 @@ oracledb_cdc:
 func TestIntegrationOracleDBCDCMultiTableSchema(t *testing.T) {
 	integration.CheckSkip(t)
 
-	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t, "latest")
+	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
 	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.schema_t1",
 		"CREATE TABLE testdb.schema_t1 (id NUMBER(10) PRIMARY KEY, val VARCHAR2(50))"))
 	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.schema_t2",
@@ -1462,7 +1635,7 @@ oracledb_cdc:
 func TestIntegrationOracleDBCDCSchemaDataTypeConsistency(t *testing.T) {
 	integration.CheckSkip(t)
 
-	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t, "latest")
+	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
 	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.schema_types",
 		`CREATE TABLE testdb.schema_types (
 			int_col       NUMBER(10)      PRIMARY KEY,
@@ -1573,7 +1746,7 @@ oracledb_cdc:
 	expectedTypes := map[string]schema.CommonType{
 		"INT_COL":     schema.Int64,
 		"BIGINT_COL":  schema.Int64,
-		"DECIMAL_COL": schema.String,
+		"DECIMAL_COL": schema.Decimal,
 		"FLOAT_COL":   schema.Float32,
 		"DOUBLE_COL":  schema.Float64,
 		"DATE_COL":    schema.Timestamp,

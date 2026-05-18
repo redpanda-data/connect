@@ -20,6 +20,11 @@ import (
 
 // pgTypeNameToCommonType maps a PostgreSQL type name to a bschema.CommonType.
 // The typeName argument is case-insensitive.
+//
+// NUMERIC and DECIMAL deliberately fall through to a String fallback here —
+// callers with access to precision/scale (atttypmod or sql.ColumnType.DecimalSize)
+// should issue a Decimal/BigDecimal common via pgNumericToCommon directly,
+// bypassing this helper for those types.
 func pgTypeNameToCommonType(typeName string) bschema.CommonType {
 	switch strings.ToLower(typeName) {
 	case "bool", "boolean":
@@ -55,6 +60,43 @@ func pgTypeNameToCommonType(typeName string) bschema.CommonType {
 	}
 }
 
+// isPgNumericType reports whether typeName is Postgres NUMERIC/DECIMAL,
+// which is the only type that requires precision/scale-aware mapping in
+// this driver.
+func isPgNumericType(typeName string) bool {
+	switch strings.ToLower(typeName) {
+	case "numeric", "decimal":
+		return true
+	}
+	return false
+}
+
+// pgNumericModFromAtttypmod decodes Postgres' atttypmod for NUMERIC/DECIMAL.
+// Returns precision, scale, and ok=true when the modifier is present.
+// Postgres uses -1 for "no modifier" and encodes NUMERIC's modifier as
+// ((precision << 16) | scale) + VARHDRSZ where VARHDRSZ = 4. atttypmod
+// values less than VARHDRSZ are treated as missing (covers the Postgres
+// sentinel and Go zero-value defensively).
+func pgNumericModFromAtttypmod(atttypmod int32) (precision, scale int32, ok bool) {
+	if atttypmod < 4 {
+		return 0, 0, false
+	}
+	mod := atttypmod - 4
+	return (mod >> 16) & 0xFFFF, mod & 0xFFFF, true
+}
+
+// pgNumericToCommon builds a Decimal common when precision/scale is known,
+// or BigDecimal otherwise. Returns the Decimal/BigDecimal Common with
+// Optional set to the provided flag.
+func pgNumericToCommon(name string, precision, scale int32, hasMod, optional bool) bschema.Common {
+	if hasMod {
+		if c, err := bschema.NewDecimal(name, precision, scale, optional); err == nil {
+			return c
+		}
+	}
+	return bschema.NewBigDecimal(name, optional)
+}
+
 // pgOIDToTypeName maps PostgreSQL type OIDs that pgtype.NewMap() does not register
 // by default to their type names, so they can be resolved by pgTypeNameToCommonType.
 var pgOIDToTypeName = map[uint32]string{
@@ -71,6 +113,11 @@ func relationMessageToSchema(rel *RelationMessage, typeMap *pgtype.Map) any {
 			typeName = dt.Name
 		} else if name, ok := pgOIDToTypeName[col.DataType]; ok {
 			typeName = name
+		}
+		if isPgNumericType(typeName) {
+			p, s, ok := pgNumericModFromAtttypmod(col.TypeModifier)
+			children[i] = pgNumericToCommon(col.Name, p, s, ok, true)
+			continue
 		}
 		children[i] = bschema.Common{
 			Name:     col.Name,
@@ -105,9 +152,15 @@ func resolveTypeName(name string) string {
 func columnTypesToSchema(tableName string, columnNames []string, columnTypes []*sql.ColumnType) any {
 	children := make([]bschema.Common, len(columnTypes))
 	for i, ct := range columnTypes {
+		typeName := resolveTypeName(ct.DatabaseTypeName())
+		if isPgNumericType(typeName) {
+			precision, scale, hasSize := ct.DecimalSize()
+			children[i] = pgNumericToCommon(columnNames[i], int32(precision), int32(scale), hasSize, true)
+			continue
+		}
 		children[i] = bschema.Common{
 			Name:     columnNames[i],
-			Type:     pgTypeNameToCommonType(resolveTypeName(ct.DatabaseTypeName())),
+			Type:     pgTypeNameToCommonType(typeName),
 			Optional: true,
 		}
 	}

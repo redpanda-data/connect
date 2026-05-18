@@ -33,20 +33,22 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/license"
+	"github.com/redpanda-data/connect/v4/internal/sqlutil"
 )
 
 const (
-	fieldMySQLFlavor          = "flavor"
-	fieldMySQLDSN             = "dsn"
-	fieldMySQLTables          = "tables"
-	fieldStreamSnapshot       = "stream_snapshot"
-	fieldSnapshotMaxBatchSize = "snapshot_max_batch_size"
-	fieldMaxReconnectAttempts = "max_reconnect_attempts"
-	fieldBatching             = "batching"
-	fieldCheckpointKey        = "checkpoint_key"
-	fieldCheckpointCache      = "checkpoint_cache"
-	fieldCheckpointLimit      = "checkpoint_limit"
-	fieldAWSIAMAuth           = "aws"
+	fieldMySQLFlavor               = "flavor"
+	fieldMySQLDSN                  = "dsn"
+	fieldMySQLTables               = "tables"
+	fieldStreamSnapshot            = "stream_snapshot"
+	fieldMaxParallelSnapshotTables = "max_parallel_snapshot_tables"
+	fieldSnapshotMaxBatchSize      = "snapshot_max_batch_size"
+	fieldMaxReconnectAttempts      = "max_reconnect_attempts"
+	fieldBatching                  = "batching"
+	fieldCheckpointKey             = "checkpoint_key"
+	fieldCheckpointCache           = "checkpoint_cache"
+	fieldCheckpointLimit           = "checkpoint_limit"
+	fieldAWSIAMAuth                = "aws"
 	// FieldAWSIAMAuthEnabled enabled field.
 	FieldAWSIAMAuthEnabled = "enabled"
 
@@ -67,7 +69,7 @@ var AWSOptFn = notImportedAWSOptFn
 type TokenBuilder func(context.Context) error
 
 var mysqlStreamConfigSpec = service.NewConfigSpec().
-	Beta().
+	Stable().
 	Categories("Services").
 	Version("4.45.0").
 	Summary("Enables MySQL streaming for RedPanda Connect.").
@@ -109,6 +111,10 @@ This input adds the following metadata fields to each message:
 			Default(10),
 		service.NewBoolField(fieldStreamSnapshot).
 			Description("If set to true, the connector will query all the existing data as a part of snapshot process. Otherwise, it will start from the current binlog position."),
+		service.NewIntField(fieldMaxParallelSnapshotTables).
+			Description("Specifies the number of tables that will be snapshotted in parallel.").
+			Default(1).
+			LintRule(`root = if this < 1 { [ "`+fieldMaxParallelSnapshotTables+` must be at least 1" ] }`),
 		service.NewAutoRetryNacksToggleField(),
 		service.NewIntField(fieldCheckpointLimit).
 			Description("The maximum number of messages that can be processed at a given time. Increasing this limit enables parallel processing and batching at the output level. Any given BinLog Position will not be acknowledged unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.").
@@ -166,27 +172,30 @@ type asyncMessage struct {
 type mysqlStreamInput struct {
 	canal.DummyEventHandler
 
-	mutex  sync.Mutex
-	flavor string
+	checkpointMu sync.Mutex
+	flavor       string
 	// canal stands for mysql binlog listener connection
 	canal                *canal.Canal
+	canalMu              sync.Mutex
 	canalMaxConnAttempts int
 	mysqlConfig          *mysql.Config
 	binLogCache          string
 	binLogCacheKey       string
 	currentBinlogName    string
 
-	dsn            string
-	tables         []string
-	streamSnapshot bool
+	dsn                string
+	tables             []string
+	streamSnapshot     bool
+	snapshotMaxWorkers int
 
 	batching                  service.BatchPolicy
 	batchPolicy               *service.Batcher
 	checkPointLimit           int
 	fieldSnapshotMaxBatchSize int
 
-	logger *service.Logger
-	res    *service.Resources
+	logger                     *service.Logger
+	res                        *service.Resources
+	snapshotRowsProcessedTotal *service.MetricCounter
 
 	rawMessageEvents chan MessageEvent
 	msgChan          chan asyncMessage
@@ -275,6 +284,10 @@ func newMySQLStreamInput(conf *service.ParsedConfig, res *service.Resources) (s 
 		return nil, err
 	}
 
+	if i.snapshotMaxWorkers, err = conf.FieldInt(fieldMaxParallelSnapshotTables); err != nil {
+		return nil, err
+	}
+
 	if i.fieldSnapshotMaxBatchSize, err = conf.FieldInt(fieldSnapshotMaxBatchSize); err != nil {
 		return nil, err
 	}
@@ -318,6 +331,8 @@ func newMySQLStreamInput(conf *service.ParsedConfig, res *service.Resources) (s 
 		batching.Count = 1
 	}
 
+	i.snapshotRowsProcessedTotal = res.Metrics().NewCounter("mysql_snapshot_rows_processed_total", "table")
+
 	r, err := service.AutoRetryNacksBatchedToggled(conf, &i)
 	if err != nil {
 		return nil, err
@@ -340,37 +355,7 @@ func (i *mysqlStreamInput) Connect(ctx context.Context) error {
 		}
 	}
 
-	canalConfig := canal.NewDefaultConfig()
-	canalConfig.Flavor = i.flavor
-	canalConfig.Addr = i.mysqlConfig.Addr
-	canalConfig.User = i.mysqlConfig.User
-	canalConfig.Password = i.mysqlConfig.Passwd
-	canalConfig.MaxReconnectAttempts = i.canalMaxConnAttempts
-	// resetting dump path since we are doing snapshot manually
-	// this is required since canal will try to prepare dumper on init stage
-	canalConfig.Dump.ExecutionPath = ""
-
-	// Parse and set additional parameters
-	canalConfig.Charset = i.mysqlConfig.Collation
-	if i.customTLSConfig != nil {
-		canalConfig.TLSConfig = i.customTLSConfig
-		i.logger.Debugf("Using custom TLS config with ServerName: '%s'", i.customTLSConfig.ServerName)
-	} else if i.mysqlConfig.TLS != nil {
-		canalConfig.TLSConfig = i.mysqlConfig.TLS
-		i.logger.Debugf("Using TLS config from DSN")
-	}
-	// Parse time values as time.Time values not strings
-	canalConfig.ParseTime = true
-	// canalConfig.Logger
-
-	for _, table := range i.tables {
-		canalConfig.IncludeTableRegex = append(
-			canalConfig.IncludeTableRegex,
-			"^"+regexp.QuoteMeta(i.mysqlConfig.DBName+"."+table)+"$",
-		)
-	}
-
-	c, err := canal.NewCanal(canalConfig)
+	c, err := i.newCanal()
 	if err != nil {
 		return err
 	}
@@ -399,7 +384,9 @@ func (i *mysqlStreamInput) Connect(ctx context.Context) error {
 		wg, ctx := errgroup.WithContext(ctx)
 		wg.Go(func() error {
 			<-ctx.Done()
+			i.canalMu.Lock()
 			i.canal.Close()
+			i.canalMu.Unlock()
 			return nil
 		})
 		wg.Go(func() error { return i.readMessages(ctx) })
@@ -415,10 +402,76 @@ func (i *mysqlStreamInput) Connect(ctx context.Context) error {
 	return nil
 }
 
+func (i *mysqlStreamInput) newCanal() (*canal.Canal, error) {
+	canalConfig := canal.NewDefaultConfig()
+	canalConfig.Flavor = i.flavor
+	canalConfig.Addr = i.mysqlConfig.Addr
+	canalConfig.User = i.mysqlConfig.User
+	canalConfig.Password = i.mysqlConfig.Passwd
+	canalConfig.MaxReconnectAttempts = i.canalMaxConnAttempts
+	// resetting dump path since we are doing snapshot manually
+	// this is required since canal will try to prepare dumper on init stage
+	canalConfig.Dump.ExecutionPath = ""
+
+	// Parse and set additional parameters
+	canalConfig.Charset = i.mysqlConfig.Collation
+	if i.customTLSConfig != nil {
+		canalConfig.TLSConfig = i.customTLSConfig
+		if i.logger != nil {
+			i.logger.Debugf("Using custom TLS config with ServerName: '%s'", i.customTLSConfig.ServerName)
+		}
+	} else if i.mysqlConfig.TLS != nil {
+		canalConfig.TLSConfig = i.mysqlConfig.TLS
+		if i.logger != nil {
+			i.logger.Debugf("Using TLS config from DSN")
+		}
+	}
+	// Parse time values as time.Time values not strings
+	canalConfig.ParseTime = true
+
+	for _, table := range i.tables {
+		canalConfig.IncludeTableRegex = append(
+			canalConfig.IncludeTableRegex,
+			"^"+regexp.QuoteMeta(i.mysqlConfig.DBName+"."+table)+"$",
+		)
+	}
+
+	return canal.NewCanal(canalConfig)
+}
+
+// refreshIAMAuthToken requests a new IAM token and reconnects to MySQL now that we're
+// switching to streaming to remove the risk of an expired token.
+func (i *mysqlStreamInput) refreshIAMAuthToken(ctx context.Context) error {
+	if i.iamAuthEnabled && i.iamAuthTokenBuilder != nil {
+		i.logger.Debug("Refreshing IAM auth token before switching to streaming...")
+		if err := i.iamAuthTokenBuilder(ctx); err != nil {
+			return fmt.Errorf("refreshing IAM auth token before binlog sync: %w", err)
+		}
+
+		i.canalMu.Lock()
+		if ctx.Err() != nil {
+			i.canalMu.Unlock()
+			return ctx.Err()
+		}
+		oldCanal := i.canal
+		newCanal, err := i.newCanal()
+		if err != nil {
+			i.canalMu.Unlock()
+			return fmt.Errorf("recreating canal with refreshed IAM credentials: %w", err)
+		}
+		i.canal = newCanal
+		i.canalMu.Unlock()
+		if oldCanal != nil {
+			oldCanal.Close()
+		}
+	}
+	return nil
+}
+
 func (i *mysqlStreamInput) startMySQLSync(ctx context.Context, pos *position, snapshot *Snapshot) error {
 	// If we are given a snapshot, then we need to read it.
 	if snapshot != nil {
-		startPos, err := snapshot.prepareSnapshot(ctx, i.tables)
+		startPos, err := snapshot.prepareSnapshot(ctx, i.tables, i.snapshotMaxWorkers)
 		if err != nil {
 			_ = snapshot.close()
 			return fmt.Errorf("unable to prepare snapshot: %w", err)
@@ -434,7 +487,20 @@ func (i *mysqlStreamInput) startMySQLSync(ctx context.Context, pos *position, sn
 		if err = snapshot.close(); err != nil {
 			return fmt.Errorf("unable to close snapshot: %w", err)
 		}
+		// Signal snapshot completion. readMessages will flush any partial batch
+		// and pre-resolve a checkpoint entry for startPos so the cache is
+		// updated once the last snapshot batch is acknowledged.
+		select {
+		case i.rawMessageEvents <- MessageEvent{Operation: messageOperationSnapshotComplete, Position: startPos}:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 		pos = startPos
+
+		// if using IAM policies, reauthenticate connection with fresh IAM token after snapshot phase
+		if err := i.refreshIAMAuthToken(ctx); err != nil {
+			return err
+		}
 	} else if pos == nil {
 		coords, err := i.canal.GetMasterPos()
 		if err != nil {
@@ -452,92 +518,121 @@ func (i *mysqlStreamInput) startMySQLSync(ctx context.Context, pos *position, sn
 }
 
 func (i *mysqlStreamInput) readSnapshot(ctx context.Context, snapshot *Snapshot) error {
-	// TODO(cdc): Process tables in parallel
+	tableQueue := make(chan string, len(i.tables))
 	for _, table := range i.tables {
-		// Pre-populate schema cache so snapshot messages carry schema metadata.
-		if tbl, err := i.canal.GetTable(i.mysqlConfig.DBName, table); err == nil {
-			if _, err := i.getTableSchema(tbl); err != nil {
-				i.logger.Warnf("Failed to pre-populate schema for table %s during snapshot: %v", table, err)
-			}
-		} else {
-			i.logger.Warnf("Failed to fetch schema for table %s during snapshot: %v", table, err)
-		}
-		tablePks, err := snapshot.getTablePrimaryKeys(ctx, table)
-		if err != nil {
-			return err
-		}
-		i.logger.Tracef("primary keys for table %s: %v", table, tablePks)
-		lastSeenPksValues := map[string]any{}
-		for _, pk := range tablePks {
-			lastSeenPksValues[pk] = nil
-		}
+		tableQueue <- table
+	}
+	close(tableQueue)
 
-		var numRowsProcessed int
-		for {
-			var batchRows *sql.Rows
-			if numRowsProcessed == 0 {
-				batchRows, err = snapshot.querySnapshotTable(ctx, table, tablePks, nil, i.fieldSnapshotMaxBatchSize)
-			} else {
-				batchRows, err = snapshot.querySnapshotTable(ctx, table, tablePks, &lastSeenPksValues, i.fieldSnapshotMaxBatchSize)
-			}
-			if err != nil {
-				return fmt.Errorf("executing snapshot table query: %s", err)
-			}
-
-			types, err := batchRows.ColumnTypes()
-			if err != nil {
-				return fmt.Errorf("fetching column types: %s", err)
-			}
-
-			values, mappers := prepSnapshotScannerAndMappers(types)
-
-			columns, err := batchRows.Columns()
-			if err != nil {
-				return fmt.Errorf("fetching columns: %s", err)
-			}
-
-			var batchRowsCount int
-			for batchRows.Next() {
-				numRowsProcessed++
-				batchRowsCount++
-
-				if err := batchRows.Scan(values...); err != nil {
+	wg, wgCtx := errgroup.WithContext(ctx)
+	for _, tx := range snapshot.workerTxs {
+		wg.Go(func() error {
+			for table := range tableQueue {
+				if err := i.snapshotTable(wgCtx, snapshot, tx, table); err != nil {
 					return err
 				}
+			}
+			return nil
+		})
+	}
+	return wg.Wait()
+}
 
-				row := map[string]any{}
-				for idx, value := range values {
-					v, err := mappers[idx](value)
-					if err != nil {
-						return err
-					}
-					row[columns[idx]] = v
-					if _, ok := lastSeenPksValues[columns[idx]]; ok {
-						lastSeenPksValues[columns[idx]] = value
-					}
+func (i *mysqlStreamInput) snapshotTable(ctx context.Context, snapshot *Snapshot, tx *sql.Tx, table string) error {
+	i.logger.Infof("Starting snapshot of table '%s'", table)
+	// Pre-populate schema cache so snapshot messages carry schema metadata.
+	if tbl, err := i.canal.GetTable(i.mysqlConfig.DBName, table); err == nil {
+		if _, err := i.getTableSchema(tbl); err != nil {
+			i.logger.Warnf("Failed to pre-populate schema for table %s during snapshot: %v", table, err)
+		}
+	} else {
+		i.logger.Warnf("Failed to fetch schema for table %s during snapshot: %v", table, err)
+	}
+
+	tablePks, err := snapshot.getTablePrimaryKeys(ctx, tx, table)
+	if err != nil {
+		return err
+	}
+	i.logger.Tracef("primary keys for table %s: %v", table, tablePks)
+	lastSeenPksValues := map[string]any{}
+	for _, pk := range tablePks {
+		lastSeenPksValues[pk] = nil
+	}
+
+	var numRowsProcessed int
+	for {
+		var batchRows *sql.Rows
+		if numRowsProcessed == 0 {
+			batchRows, err = snapshot.querySnapshotTable(ctx, tx, table, tablePks, nil, i.fieldSnapshotMaxBatchSize)
+		} else {
+			batchRows, err = snapshot.querySnapshotTable(ctx, tx, table, tablePks, &lastSeenPksValues, i.fieldSnapshotMaxBatchSize)
+		}
+		if err != nil {
+			return fmt.Errorf("executing snapshot table query: %s", err)
+		}
+
+		colTypes, err := batchRows.ColumnTypes()
+		if err != nil {
+			_ = batchRows.Close()
+			return fmt.Errorf("fetching column types: %s", err)
+		}
+
+		values, mappers := prepSnapshotScannerAndMappers(colTypes)
+		columns, err := batchRows.Columns()
+		if err != nil {
+			_ = batchRows.Close()
+			return fmt.Errorf("fetching columns: %s", err)
+		}
+
+		var batchRowsCount int
+		for batchRows.Next() {
+			numRowsProcessed++
+			batchRowsCount++
+
+			if err := batchRows.Scan(values...); err != nil {
+				_ = batchRows.Close()
+				return err
+			}
+
+			row := map[string]any{}
+			for idx, value := range values {
+				v, err := mappers[idx](value)
+				if err != nil {
+					_ = batchRows.Close()
+					return err
 				}
-
-				select {
-				case i.rawMessageEvents <- MessageEvent{
-					Row:       row,
-					Operation: MessageOperationRead,
-					Table:     table,
-					Position:  nil,
-				}:
-				case <-ctx.Done():
-					return ctx.Err()
+				row[columns[idx]] = v
+				if _, ok := lastSeenPksValues[columns[idx]]; ok {
+					lastSeenPksValues[columns[idx]] = v
 				}
 			}
 
-			if err := batchRows.Err(); err != nil {
-				return fmt.Errorf("iterating snapshot table: %s", err)
-			}
-
-			if batchRowsCount < i.fieldSnapshotMaxBatchSize {
-				break
+			select {
+			case i.rawMessageEvents <- MessageEvent{
+				Row:       row,
+				Operation: MessageOperationRead,
+				Table:     table,
+				Position:  nil,
+			}:
+			case <-ctx.Done():
+				_ = batchRows.Close()
+				return ctx.Err()
 			}
 		}
+
+		if err := batchRows.Err(); err != nil {
+			_ = batchRows.Close()
+			return fmt.Errorf("iterating snapshot table: %s", err)
+		}
+		_ = batchRows.Close()
+
+		i.snapshotRowsProcessedTotal.Incr(int64(batchRowsCount), table)
+
+		if batchRowsCount < i.fieldSnapshotMaxBatchSize {
+			break
+		}
 	}
+	i.logger.Infof("Finished snapshot of table '%s' (%d rows)", table, numRowsProcessed)
 	return nil
 }
 
@@ -611,9 +706,13 @@ func prepSnapshotScannerAndMappers(cols []*sql.ColumnType) (values []any, mapper
 				return s.Int64, nil
 			}
 		case "DECIMAL", "NUMERIC":
+			precision, scale, hasSize := col.DecimalSize()
 			val = new(sql.NullString)
 			mapper = stringMapping(func(s string) (any, error) {
-				return s, nil
+				if !hasSize {
+					return s, nil
+				}
+				return sqlutil.CanonicaliseDecimal(s, int32(precision), int32(scale))
 			})
 		case "FLOAT":
 			val = new(sql.Null[float32])
@@ -678,6 +777,11 @@ func prepSnapshotScannerAndMappers(cols []*sql.ColumnType) (values []any, mapper
 
 func (i *mysqlStreamInput) readMessages(ctx context.Context) error {
 	var nextTimedBatchChan <-chan time.Time
+	// latestXIDPos tracks the most recently committed transaction boundary.
+	// Checkpoints only advance to XID positions so that on restart canal.RunFrom
+	// always resumes at the start of a new transaction, ensuring TABLE_MAP_EVENTs
+	// are received before any row events.
+	var latestXIDPos *position
 	for {
 		select {
 		case <-ctx.Done():
@@ -689,10 +793,45 @@ func (i *mysqlStreamInput) readMessages(ctx context.Context) error {
 				return fmt.Errorf("timed flush batch error: %w", err)
 			}
 
-			if err := i.flushBatch(ctx, i.cp, flushedBatch); err != nil {
+			if err := i.flushBatch(ctx, i.cp, flushedBatch, latestXIDPos); err != nil {
 				return fmt.Errorf("flushing periodic batch: %w", err)
 			}
 		case me := <-i.rawMessageEvents:
+			if me.Operation == messageOperationXID {
+				latestXIDPos = me.Position
+				continue
+			}
+
+			if me.Operation == messageOperationSnapshotComplete {
+				// Flush any remaining messages before post snapshot checkpoint
+				flushedBatch, err := i.batchPolicy.Flush(ctx)
+				if err != nil {
+					return fmt.Errorf("flushing snapshot completion batch: %w", err)
+				}
+				if err := i.flushBatch(ctx, i.cp, flushedBatch, latestXIDPos); err != nil {
+					return fmt.Errorf("flushing snapshot completion batch: %w", err)
+				}
+
+				if me.Position != nil {
+					resolveFn, err := i.cp.Track(ctx, me.Position, 1)
+					if err != nil {
+						return fmt.Errorf("tracking snapshot completion checkpoint: %w", err)
+					}
+
+					// No mutex needed: checkpoint.Capped is thread-safe and snapshot batches never write to the cache
+					if maxOffset := resolveFn(); maxOffset != nil {
+						if offset := *maxOffset; offset != nil {
+							if err := i.setCachedBinlogPosition(ctx, *offset); err != nil {
+								return fmt.Errorf("persisting snapshot checkpoint: %w", err)
+							}
+							i.logger.Infof("Checkpointed binlog position following snapshot")
+						}
+					}
+				}
+				nextTimedBatchChan = nil
+				continue
+			}
+
 			mb := service.NewMessage(nil)
 			mb.SetStructuredMut(me.Row)
 			mb.MetaSet("operation", string(me.Operation))
@@ -712,7 +851,7 @@ func (i *mysqlStreamInput) readMessages(ctx context.Context) error {
 				if err != nil {
 					return fmt.Errorf("flush batch error: %w", err)
 				}
-				if err := i.flushBatch(ctx, i.cp, flushedBatch); err != nil {
+				if err := i.flushBatch(ctx, i.cp, flushedBatch, latestXIDPos); err != nil {
 					return fmt.Errorf("flushing batch: %w", err)
 				}
 			} else {
@@ -729,31 +868,21 @@ func (i *mysqlStreamInput) flushBatch(
 	ctx context.Context,
 	checkpointer *checkpoint.Capped[*position],
 	batch service.MessageBatch,
+	checkpointPos *position,
 ) error {
 	if len(batch) == 0 {
 		return nil
 	}
 
-	lastMsg := batch[len(batch)-1]
-	strPosition, ok := lastMsg.MetaGet("binlog_position")
-	var binLogPos *position
-	if ok {
-		pos, err := parseBinlogPosition(strPosition)
-		if err != nil {
-			return err
-		}
-		binLogPos = &pos
-	}
-
-	resolveFn, err := checkpointer.Track(ctx, binLogPos, int64(len(batch)))
+	resolveFn, err := checkpointer.Track(ctx, checkpointPos, int64(len(batch)))
 	if err != nil {
 		return fmt.Errorf("tracking checkpoint for batch: %w", err)
 	}
 	msg := asyncMessage{
 		msg: batch,
 		ackFn: func(ctx context.Context, _ error) error {
-			i.mutex.Lock()
-			defer i.mutex.Unlock()
+			i.checkpointMu.Lock()
+			defer i.checkpointMu.Unlock()
 			maxOffset := resolveFn()
 			// Nothing to commit, this wasn't the latest message
 			if maxOffset == nil {
@@ -858,6 +987,15 @@ func (i *mysqlStreamInput) OnRotate(_ *replication.EventHeader, re *replication.
 	return nil
 }
 
+func (i *mysqlStreamInput) OnXID(_ *replication.EventHeader, nextPos gomysql.Position) error {
+	select {
+	case i.rawMessageEvents <- MessageEvent{Operation: messageOperationXID, Position: &nextPos}:
+	case <-i.shutSig.SoftStopChan():
+		return context.Canceled
+	}
+	return nil
+}
+
 // OnTableChanged is called when a table is created, altered, renamed, or dropped.
 // We invalidate the cached schema so it will be re-extracted on the next row event.
 func (i *mysqlStreamInput) OnTableChanged(_ *replication.EventHeader, schema, table string) error {
@@ -914,11 +1052,15 @@ func (i *mysqlStreamInput) onMessage(e *canal.RowsEvent, initValue, incrementVal
 			}
 			message[col.Name] = v
 		}
-		i.rawMessageEvents <- MessageEvent{
+		select {
+		case i.rawMessageEvents <- MessageEvent{
 			Row:       message,
 			Operation: MessageOperation(e.Action),
 			Table:     e.Table.Name,
 			Position:  &position{Name: i.currentBinlogName, Pos: e.Header.LogPos},
+		}:
+		case <-i.shutSig.SoftStopChan():
+			return context.Canceled
 		}
 	}
 	return nil
@@ -973,7 +1115,15 @@ func mapMessageColumn(v any, col schema.TableColumn) (any, error) {
 		if !ok {
 			return nil, fmt.Errorf("expected string value for decimal column got: %T", v)
 		}
-		return s, nil
+		precision, scale, parsed := parseMySQLDecimal(col.RawType)
+		if !parsed {
+			return s, nil
+		}
+		canonical, err := sqlutil.CanonicaliseDecimal(s, precision, scale)
+		if err != nil {
+			return nil, fmt.Errorf("normalising decimal column %q: %w", col.Name, err)
+		}
+		return canonical, nil
 	case schema.TYPE_SET:
 		bitset, ok := v.(int64)
 		if !ok {

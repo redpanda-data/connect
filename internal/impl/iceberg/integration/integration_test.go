@@ -22,7 +22,6 @@ import (
 
 func TestIntegrationIcebergRESTWithMinIO(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	ctx := context.Background()
 	infra := setupTestInfra(t, ctx)

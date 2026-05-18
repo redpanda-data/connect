@@ -1,0 +1,31 @@
+http:
+  debug_endpoints: true
+
+input:
+  postgres_cdc:
+    dsn: ${PG_DSN:postgres://postgres:postgres@localhost:5432/testdb?sslmode=disable}
+    stream_snapshot: true
+    schema: public
+    tables:
+      - users
+      - products
+      - cart
+    slot_name: bench_slot
+    batching:
+      count: 1000
+      period: 1s
+
+output:
+  processors:
+    - benchmark:
+        interval: 1s
+        count_bytes: true
+  drop: {}
+
+logger:
+  level: WARN
+
+metrics:
+  prometheus:
+    add_process_metrics: true
+    add_go_metrics: true

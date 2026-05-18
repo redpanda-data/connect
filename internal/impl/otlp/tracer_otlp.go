@@ -10,16 +10,11 @@ package otlp
 
 import (
 	"context"
-	"errors"
-	"time"
 
-	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
-	semconv "go.opentelemetry.io/otel/semconv/v1.7.0"
 
-	"go.opentelemetry.io/otel/sdk/resource"
 	tracesdk "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace"
 
@@ -27,43 +22,17 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/tracing"
 )
 
-func oltpSpec() *service.ConfigSpec {
+func otlpTracerSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Summary("Send tracing events to an https://opentelemetry.io/docs/collector/[Open Telemetry collector^].").
 		Fields(
-			service.NewStringField("service").
+			service.NewStringField(otFieldService).
 				Default("benthos").
 				Description("The name of the service in traces."),
-			service.NewObjectListField("http",
-				service.NewStringField("address").
-					Description("The endpoint of a collector to send tracing events to.").
-					Optional().
-					Example("localhost:4318"),
-				service.NewStringField("url").
-					Description("The URL of a collector to send tracing events to.").
-					Deprecated().
-					Default("localhost:4318"),
-				service.NewBoolField("secure").
-					Description("Connect to the collector over HTTPS").
-					Default(false),
-			).Description("A list of http collectors."),
-			service.NewObjectListField("grpc",
-				service.NewURLField("address").
-					Description("The endpoint of a collector to send tracing events to.").
-					Optional().
-					Example("localhost:4317"),
-				service.NewURLField("url").
-					Description("The URL of a collector to send tracing events to.").
-					Deprecated().
-					Default("localhost:4317"),
-				service.NewBoolField("secure").
-					Description("Connect to the collector with client transport security").
-					Default(false),
-			).Description("A list of grpc collectors."),
-			service.NewStringMapField("tags").
-				Description("A map of tags to add to all tracing spans.").
-				Default(map[string]any{}).
-				Advanced(),
+		).
+		Fields(collectorListFields()...).
+		Fields(
+			tagsField(),
 			service.NewObjectField("sampling",
 				service.NewBoolField("enabled").
 					Description("Whether to enable sampling.").
@@ -79,19 +48,14 @@ func oltpSpec() *service.ConfigSpec {
 
 func init() {
 	service.MustRegisterOtelTracerProvider(
-		"open_telemetry_collector", oltpSpec(),
+		"open_telemetry_collector", otlpTracerSpec(),
 		func(conf *service.ParsedConfig) (trace.TracerProvider, error) {
-			c, err := oltpConfigFromParsed(conf)
+			c, err := otlpTracerConfigFromParsed(conf)
 			if err != nil {
 				return nil, err
 			}
-			return newOtlp(c)
+			return newOtlpTracer(c)
 		})
-}
-
-type collector struct {
-	address string
-	secure  bool
 }
 
 type sampleConfig struct {
@@ -99,7 +63,7 @@ type sampleConfig struct {
 	ratio   float64
 }
 
-type otlp struct {
+type otlpTracer struct {
 	serviceName   string
 	engineVersion string
 	grpc          []collector
@@ -108,23 +72,23 @@ type otlp struct {
 	sampling      sampleConfig
 }
 
-func oltpConfigFromParsed(conf *service.ParsedConfig) (*otlp, error) {
-	serviceName, err := conf.FieldString("service")
+func otlpTracerConfigFromParsed(conf *service.ParsedConfig) (*otlpTracer, error) {
+	serviceName, err := conf.FieldString(otFieldService)
 	if err != nil {
 		return nil, err
 	}
 
-	http, err := collectors(conf, "http")
+	http, err := parseCollectors(conf, otFieldHTTP)
 	if err != nil {
 		return nil, err
 	}
 
-	grpc, err := collectors(conf, "grpc")
+	grpc, err := parseCollectors(conf, otFieldGRPC)
 	if err != nil {
 		return nil, err
 	}
 
-	tags, err := conf.FieldStringMap("tags")
+	tags, err := conf.FieldStringMap(otFieldTags)
 	if err != nil {
 		return nil, err
 	}
@@ -134,7 +98,7 @@ func oltpConfigFromParsed(conf *service.ParsedConfig) (*otlp, error) {
 		return nil, err
 	}
 
-	return &otlp{
+	return &otlpTracer{
 		serviceName:   serviceName,
 		engineVersion: conf.EngineVersion(),
 		grpc:          grpc,
@@ -142,33 +106,6 @@ func oltpConfigFromParsed(conf *service.ParsedConfig) (*otlp, error) {
 		tags:          tags,
 		sampling:      sampling,
 	}, nil
-}
-
-func collectors(conf *service.ParsedConfig, name string) ([]collector, error) {
-	list, err := conf.FieldObjectList(name)
-	if err != nil {
-		return nil, err
-	}
-	collectors := make([]collector, 0, len(list))
-	for _, pc := range list {
-		u, _ := pc.FieldString("address")
-		if u == "" {
-			if u, _ = pc.FieldString("url"); u == "" {
-				return nil, errors.New("an address must be specified")
-			}
-		}
-
-		secure, err := pc.FieldBool("secure")
-		if err != nil {
-			return nil, err
-		}
-
-		collectors = append(collectors, collector{
-			address: u,
-			secure:  secure,
-		})
-	}
-	return collectors, nil
 }
 
 func sampleConfigFromParsed(conf *service.ParsedConfig) (sampleConfig, error) {
@@ -193,7 +130,7 @@ func sampleConfigFromParsed(conf *service.ParsedConfig) (sampleConfig, error) {
 
 //------------------------------------------------------------------------------
 
-func newOtlp(config *otlp) (trace.TracerProvider, error) {
+func newOtlpTracer(config *otlpTracer) (trace.TracerProvider, error) {
 	ctx := context.TODO()
 	var opts []tracesdk.TracerProviderOption
 
@@ -210,33 +147,18 @@ func newOtlp(config *otlp) (trace.TracerProvider, error) {
 	if err != nil {
 		return nil, err
 	}
-	var attrs []attribute.KeyValue
-
-	for k, v := range config.tags {
-		attrs = append(attrs, attribute.String(k, v))
-	}
-
-	if _, ok := config.tags[string(semconv.ServiceNameKey)]; !ok {
-		attrs = append(attrs, semconv.ServiceNameKey.String(config.serviceName))
-
-		// Only set the default service version tag if the user doesn't provide
-		// a custom service name tag.
-		if _, ok := config.tags[string(semconv.ServiceVersionKey)]; !ok {
-			attrs = append(attrs, semconv.ServiceVersionKey.String(config.engineVersion))
-		}
-	}
 
 	opts = append(
 		opts,
 		tracesdk.WithIDGenerator(tracing.NewIDGenerator()),
-		tracesdk.WithResource(resource.NewWithAttributes(semconv.SchemaURL, attrs...)),
+		tracesdk.WithResource(newResource(config.tags, config.serviceName, config.engineVersion)),
 	)
 
 	return tracesdk.NewTracerProvider(opts...), nil
 }
 
 func addGrpcCollectors(ctx context.Context, collectors []collector, opts []tracesdk.TracerProviderOption) ([]tracesdk.TracerProviderOption, error) {
-	ctx, cancel := context.WithTimeout(ctx, time.Second*30)
+	ctx, cancel := context.WithTimeout(ctx, otExporterTimeout)
 	defer cancel()
 
 	for _, c := range collectors {
@@ -258,7 +180,7 @@ func addGrpcCollectors(ctx context.Context, collectors []collector, opts []trace
 }
 
 func addHTTPCollectors(ctx context.Context, collectors []collector, opts []tracesdk.TracerProviderOption) ([]tracesdk.TracerProviderOption, error) {
-	ctx, cancel := context.WithTimeout(ctx, time.Second*30)
+	ctx, cancel := context.WithTimeout(ctx, otExporterTimeout)
 	defer cancel()
 
 	for _, c := range collectors {

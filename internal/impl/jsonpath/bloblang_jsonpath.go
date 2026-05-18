@@ -31,7 +31,6 @@ var jsonPathLanguage = gval.Full(jsonpath.Language(), gvalstrings.SingleQuoted()
 func init() {
 	if err := bloblang.RegisterMethodV2("json_path",
 		bloblang.NewPluginSpec().
-			Experimental().
 			Category("Object & Array Manipulation").
 			Description("Executes the given JSONPath expression on an object or array and returns the result. The JSONPath expression syntax can be found at https://goessner.net/articles/JsonPath/. For more complex logic, you can use Gval expressions (https://github.com/PaesslerAG/gval).").
 			Example("", `root.all_names = this.json_path("$..name")`, [2]string{

@@ -39,13 +39,23 @@ const (
 	creditField           = "credit"
 
 	// Output
-	targetAddrField  = "target_address"
-	appPropsMapField = "application_properties_map"
-	metaFilterField  = "metadata"
-	contentTypeField = "content_type"
-	persistentField  = "persistent"
-	targetCapsField  = "target_capabilities"
-	messagePropsTo   = "message_properties_to"
+	targetAddrField          = "target_address"
+	appPropsMapField         = "application_properties_map"
+	metaFilterField          = "metadata"
+	contentTypeField         = "content_type"
+	persistentField          = "persistent"
+	targetCapsField          = "target_capabilities"
+	messagePropsTo           = "message_properties_to"
+	messagePropsMsgID        = "message_properties_message_id"
+	messagePropsCorrelID     = "message_properties_correlation_id"
+	messagePropsSubject      = "message_properties_subject"
+	messagePropsReplyTo      = "message_properties_reply_to"
+	messagePropsGroupID      = "message_properties_group_id"
+	messagePropsGroupSeq     = "message_properties_group_sequence"
+	messagePropsReplyToGrpID = "message_properties_reply_to_group_id"
+	messagePropsUserID       = "message_properties_user_id"
+	messagePropsContentType  = "message_properties_content_type"
+	messagePropsContentEnc   = "message_properties_content_encoding"
 )
 
 // ErrSASLMechanismNotSupported is returned if a SASL mechanism was not recognised.

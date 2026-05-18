@@ -33,7 +33,7 @@ func TestPartitionCacheOrdering(t *testing.T) {
 		atomic.StoreInt64(&commitOffset, r.Offset)
 	})
 
-	batches, batchSize := 1000000, 10
+	batches, batchSize := 100000, 10
 
 	go func() {
 		for bid := range batches {

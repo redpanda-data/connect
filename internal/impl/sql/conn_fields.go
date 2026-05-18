@@ -147,6 +147,7 @@ type rawQueryStatement struct {
 	dynamic *service.InterpolatedString
 
 	argsMapping *bloblang.Executor // optional
+	whenMapping *bloblang.Executor // optional, conditional execution
 	execOnly    bool
 }
 
@@ -174,6 +175,14 @@ func rawQueryArgsMappingField() *service.ConfigField {
 		Description("An optional xref:guides:bloblang/about.adoc[Bloblang mapping] which should evaluate to an array of values matching in size to the number of placeholder arguments in the field `query`.").
 		Example("root = [ this.cat.meow, this.doc.woofs[0] ]").
 		Example(`root = [ meta("user.id") ]`).
+		Optional()
+}
+
+func rawQueryWhenField() *service.ConfigField {
+	return service.NewBloblangField("when").
+		Description("An optional xref:guides:bloblang/about.adoc[Bloblang mapping] that, when set, is evaluated for each message to determine whether this query should be executed. The mapping should return a boolean value. The first query in the list whose `when` condition evaluates to `true` (or that has no `when` condition) is the one that executes. This enables conditional query routing based on message content or metadata without requiring `unsafe_dynamic_query`.").
+		Example(`root = meta("kafka_tombstone_message") == "true"`).
+		Example(`root = this.operation == "delete"`).
 		Optional()
 }
 

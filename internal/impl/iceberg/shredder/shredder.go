@@ -9,15 +9,22 @@
 package shredder
 
 import (
+	"encoding/json"
 	"fmt"
+	"math"
+	"math/big"
 	"slices"
+	"strings"
 
 	"github.com/apache/iceberg-go"
 	"github.com/gofrs/uuid/v5"
 	"github.com/parquet-go/parquet-go"
 
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
+	"github.com/redpanda-data/benthos/v4/public/schema"
+
 	"github.com/redpanda-data/connect/v4/internal/impl/iceberg/icebergx"
+	"github.com/redpanda-data/connect/v4/internal/impl/parquet/parquetdecimal"
 )
 
 // RequiredFieldNullError is returned when a required field has a null or missing value.
@@ -67,12 +74,22 @@ type Sink interface {
 // and definition levels that allow perfect reconstruction.
 type RecordShredder struct {
 	schema *iceberg.Schema
+	// caseSensitive controls how input record keys are matched against schema
+	// field names. When true (the historical default) names are matched
+	// exactly; when false, matching is case-insensitive — which aligns with
+	// iceberg's recommended convention and with engines like Spark and Trino
+	// in their default configurations.
+	caseSensitive bool
 }
 
 // NewRecordShredder creates a new shredder for the given schema.
-func NewRecordShredder(schema *iceberg.Schema) *RecordShredder {
+// If caseSensitive is true, input keys must match schema field names exactly;
+// if false, matching is case-insensitive (and ambiguous case-only duplicates
+// in the input cause an error).
+func NewRecordShredder(schema *iceberg.Schema, caseSensitive bool) *RecordShredder {
 	return &RecordShredder{
-		schema: schema,
+		schema:        schema,
+		caseSensitive: caseSensitive,
 	}
 }
 
@@ -92,13 +109,40 @@ func (rs *RecordShredder) shredStruct(
 	repLevel, defLevel, maxRepLevel int,
 	sink Sink,
 ) error {
-	// Build set of known field names for new field detection.
-	knownFields := make(map[string]struct{}, len(fields))
+	// Build an index of input keys by their match-key (the original key in
+	// case-sensitive mode, or its lowercase form in case-insensitive mode).
+	// In case-insensitive mode, multiple input keys may collide on the same
+	// match-key — we detect that as ambiguity rather than silently picking
+	// one. In case-sensitive mode, collisions are impossible because Go map
+	// keys are themselves case-sensitive.
+	keysByLookup := make(map[string][]string, len(value))
+	for k := range value {
+		mk := rs.matchKey(k)
+		keysByLookup[mk] = append(keysByLookup[mk], k)
+	}
 
-	// Process schema fields.
+	// Track which input keys matched a schema field; remaining keys are
+	// candidates for new-field detection.
+	matched := make(map[string]struct{}, len(fields))
+
 	for _, field := range fields {
-		knownFields[field.Name] = struct{}{}
-		fieldValue, exists := value[field.Name]
+		candidates := keysByLookup[rs.matchKey(field.Name)]
+		// If the input contains multiple keys that all map to the same schema
+		// field (only possible in case-insensitive mode), we cannot pick one
+		// without silently dropping data — refuse rather than guess.
+		if len(candidates) > 1 {
+			return fmt.Errorf("ambiguous case for field %q: input has %d keys differing only in case: %v", field.Name, len(candidates), candidates)
+		}
+
+		var (
+			fieldValue any
+			exists     bool
+		)
+		if len(candidates) == 1 {
+			fieldValue = value[candidates[0]]
+			exists = true
+			matched[candidates[0]] = struct{}{}
+		}
 
 		// Validate required fields.
 		if field.Required && (!exists || fieldValue == nil) {
@@ -111,7 +155,8 @@ func (rs *RecordShredder) shredStruct(
 			fieldDefLevel++ // Optional field adds to max def level.
 		}
 
-		// Build path for this field.
+		// Build path for this field using the schema's casing so downstream
+		// consumers see canonical names regardless of the input's casing.
 		fieldPath := append(path, icebergx.PathSegment{Kind: icebergx.PathField, Name: field.Name})
 
 		if !exists || fieldValue == nil {
@@ -130,12 +175,22 @@ func (rs *RecordShredder) shredStruct(
 
 	// Detect unknown fields in input.
 	for key, val := range value {
-		if _, known := knownFields[key]; !known {
+		if _, ok := matched[key]; !ok {
 			sink.OnNewField(slices.Clone(path), key, val)
 		}
 	}
 
 	return nil
+}
+
+// matchKey returns the lookup key used to compare an input record key against
+// a schema field name. In case-sensitive mode it is the identity; in
+// case-insensitive mode it folds to lowercase.
+func (rs *RecordShredder) matchKey(s string) string {
+	if rs.caseSensitive {
+		return s
+	}
+	return strings.ToLower(s)
 }
 
 // shredValue processes a value according to its schema type.
@@ -351,7 +406,7 @@ func convertLeafValue(value any, typ iceberg.Type) (parquet.Value, error) {
 		return parquet.NullValue(), nil
 	}
 
-	switch typ.(type) {
+	switch typ := typ.(type) {
 	case iceberg.BooleanType:
 		switch v := value.(type) {
 		case bool:
@@ -365,6 +420,9 @@ func convertLeafValue(value any, typ iceberg.Type) (parquet.Value, error) {
 		return parquet.Int32Value(int32(i)), err
 
 	case iceberg.Int64Type:
+		if v, ok := value.(uint64); ok && v > math.MaxInt64 {
+			return parquet.NullValue(), fmt.Errorf("uint64 value %d exceeds int64 range", v)
+		}
 		i, err := bloblang.ValueAsInt64(value)
 		return parquet.Int64Value(i), err
 
@@ -435,14 +493,7 @@ func convertLeafValue(value any, typ iceberg.Type) (parquet.Value, error) {
 		}
 
 	case iceberg.DecimalType:
-		// Decimal stored as fixed-length byte array.
-		switch v := value.(type) {
-		case []byte:
-			return parquet.FixedLenByteArrayValue(v), nil
-		default:
-			// TODO: Handle numeric types with proper decimal encoding.
-			return parquet.NullValue(), fmt.Errorf("cannot convert %T to decimal", value)
-		}
+		return convertToDecimal(value, typ)
 
 	case iceberg.FixedType:
 		// TODO: Validate length
@@ -456,4 +507,127 @@ func convertLeafValue(value any, typ iceberg.Type) (parquet.Value, error) {
 	default:
 		return parquet.NullValue(), fmt.Errorf("unsupported Iceberg type: %T", typ)
 	}
+}
+
+// convertToDecimal converts a Go value to a Parquet decimal value.
+// Decimal values are stored as big-endian two's complement byte arrays.
+func convertToDecimal(value any, dt iceberg.DecimalType) (parquet.Value, error) {
+	scale := dt.Scale()
+
+	var (
+		unscaled *big.Int
+		err      error
+	)
+
+	switch v := value.(type) {
+	case []byte:
+		expectedLen := parquetdecimal.ByteWidth(dt.Precision())
+		if len(v) != expectedLen {
+			return parquet.NullValue(), fmt.Errorf("decimal []byte length %d does not match expected %d for precision %d", len(v), expectedLen, dt.Precision())
+		}
+		return parquet.FixedLenByteArrayValue(v), nil
+	case float64:
+		if math.IsNaN(v) || math.IsInf(v, 0) {
+			return parquet.NullValue(), fmt.Errorf("cannot convert %v to decimal", v)
+		}
+		unscaled = floatToUnscaled(v, scale)
+	case float32:
+		if math.IsNaN(float64(v)) || math.IsInf(float64(v), 0) {
+			return parquet.NullValue(), fmt.Errorf("cannot convert %v to decimal", v)
+		}
+		unscaled = floatToUnscaled(float64(v), scale)
+	case int64:
+		unscaled = intToUnscaled(v, scale)
+	case int:
+		unscaled = intToUnscaled(int64(v), scale)
+	case int32:
+		unscaled = intToUnscaled(int64(v), scale)
+	case int16:
+		unscaled = intToUnscaled(int64(v), scale)
+	case int8:
+		unscaled = intToUnscaled(int64(v), scale)
+	case uint64:
+		unscaled = new(big.Int).Mul(new(big.Int).SetUint64(v), parquetdecimal.Pow10(scale))
+	case uint32:
+		unscaled = intToUnscaled(int64(v), scale)
+	case uint16:
+		unscaled = intToUnscaled(int64(v), scale)
+	case uint8:
+		unscaled = intToUnscaled(int64(v), scale)
+	case uint:
+		unscaled = new(big.Int).Mul(new(big.Int).SetUint64(uint64(v)), parquetdecimal.Pow10(scale))
+	case json.Number:
+		unscaled, err = jsonNumberToUnscaled(v, scale)
+		if err != nil {
+			return parquet.NullValue(), err
+		}
+	case string:
+		// Canonical decimal strings (the value contract for schema.Decimal
+		// fields) are parsed exactly via schema.ParseDecimal. Fall back to
+		// the big.Float path for non-canonical inputs (scientific notation,
+		// leading +, etc.) that legacy callers may still produce.
+		if n, perr := schema.ParseDecimal(v, int32(scale)); perr == nil {
+			unscaled = n
+		} else if unscaled, err = stringToUnscaled(v, scale); err != nil {
+			return parquet.NullValue(), err
+		}
+	default:
+		return parquet.NullValue(), fmt.Errorf("cannot convert %T to decimal", value)
+	}
+
+	// Validate that the unscaled value fits within the declared precision.
+	// An out-of-range value would produce a valid Parquet file but violate the
+	// Iceberg schema contract, causing downstream query failures or wrong results.
+	maxUnscaled := parquetdecimal.Pow10(dt.Precision())
+	if unscaled.CmpAbs(maxUnscaled) >= 0 {
+		return parquet.NullValue(), fmt.Errorf("value %v exceeds decimal(%d, %d) precision", value, dt.Precision(), dt.Scale())
+	}
+
+	b := parquetdecimal.EncodeBytes(unscaled, dt.Precision())
+	return parquet.FixedLenByteArrayValue(b), nil
+}
+
+// floatToUnscaled converts a float64 to an unscaled big.Int by multiplying by 10^scale.
+// Precision is capped at 128 bits which exceeds float64's 53-bit mantissa (~15.9 decimal
+// digits), so no additional precision loss occurs beyond what the float64 input already has.
+func floatToUnscaled(f float64, scale int) *big.Int {
+	bf := new(big.Float).SetPrec(128).SetFloat64(f)
+	scaleFactor := new(big.Float).SetPrec(128).SetInt(parquetdecimal.Pow10(scale))
+	bf.Mul(bf, scaleFactor)
+	if f < 0 {
+		bf.Sub(bf, new(big.Float).SetFloat64(0.5))
+	} else {
+		bf.Add(bf, new(big.Float).SetFloat64(0.5))
+	}
+	result, _ := bf.Int(nil)
+	return result
+}
+
+func intToUnscaled(i int64, scale int) *big.Int {
+	return new(big.Int).Mul(big.NewInt(i), parquetdecimal.Pow10(scale))
+}
+
+func jsonNumberToUnscaled(n json.Number, scale int) (*big.Int, error) {
+	if i, err := n.Int64(); err == nil {
+		return intToUnscaled(i, scale), nil
+	}
+	// Fall back to string parsing instead of Float64() to avoid the 53-bit
+	// mantissa precision loss on large integers or high-precision decimals.
+	return stringToUnscaled(n.String(), scale)
+}
+
+func stringToUnscaled(s string, scale int) (*big.Int, error) {
+	bf, _, err := new(big.Float).SetPrec(256).Parse(s, 10)
+	if err != nil {
+		return nil, fmt.Errorf("cannot parse %q as decimal: %w", s, err)
+	}
+	scaleFactor := new(big.Float).SetPrec(256).SetInt(parquetdecimal.Pow10(scale))
+	bf.Mul(bf, scaleFactor)
+	if bf.Sign() < 0 {
+		bf.Sub(bf, new(big.Float).SetFloat64(0.5))
+	} else {
+		bf.Add(bf, new(big.Float).SetFloat64(0.5))
+	}
+	result, _ := bf.Int(nil)
+	return result, nil
 }

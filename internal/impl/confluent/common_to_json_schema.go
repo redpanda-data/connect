@@ -59,6 +59,19 @@ func commonToJSONSchemaNode(c schema.Common) (map[string]any, error) {
 		return commonToJSONSchemaUnion(c)
 	case schema.Timestamp:
 		return map[string]any{"type": "string", "format": "date-time"}, nil
+	case schema.Decimal:
+		if c.Logical == nil || c.Logical.Decimal == nil {
+			return nil, fmt.Errorf("decimal field %q missing precision/scale", c.Name)
+		}
+		return map[string]any{
+			"type":    "string",
+			"pattern": decimalPattern(c.Logical.Decimal.Precision, c.Logical.Decimal.Scale),
+		}, nil
+	case schema.BigDecimal:
+		return map[string]any{
+			"type":    "string",
+			"pattern": `^-?(0|[1-9][0-9]*)(\.[0-9]+)?$`,
+		}, nil
 	case schema.Any:
 		return map[string]any{}, nil
 	default:
@@ -127,4 +140,22 @@ func commonToJSONSchemaUnion(c schema.Common) (map[string]any, error) {
 		oneOf = append(oneOf, childMap)
 	}
 	return map[string]any{"oneOf": oneOf}, nil
+}
+
+// decimalPattern returns a JSON Schema regex matching the canonical decimal
+// string form for Decimal(p, s). The pattern enforces no leading zeros (except
+// a single 0 before the decimal point), no scientific notation, optional
+// leading minus, and exactly s fractional digits when s > 0.
+func decimalPattern(precision, scale int32) string {
+	m := precision - scale
+	switch {
+	case scale == 0:
+		// Integer-only: up to precision digits.
+		return fmt.Sprintf(`^-?(0|[1-9][0-9]{0,%d})$`, m-1)
+	case m == 0:
+		// Fractional-only (e.g. Decimal(4,4)): integer part can only be 0.
+		return fmt.Sprintf(`^-?0\.[0-9]{%d}$`, scale)
+	default:
+		return fmt.Sprintf(`^-?(0|[1-9][0-9]{0,%d})\.[0-9]{%d}$`, m-1, scale)
+	}
 }

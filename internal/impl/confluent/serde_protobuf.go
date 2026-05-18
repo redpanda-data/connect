@@ -85,7 +85,7 @@ func (s *schemaRegistryDecoder) getProtobufDecoder(
 		defer mu.Unlock()
 		if msgDesc.FullName() != cachedMessageName {
 			cachedMessageName = msgDesc.FullName()
-			cachedDecoder = common.NewDynamicPbDecoder(msgDesc)
+			cachedDecoder = common.NewHyperPbDecoder(msgDesc, common.DefaultProfilingOptions)
 		}
 		return cachedDecoder
 	}

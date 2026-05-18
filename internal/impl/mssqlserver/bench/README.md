@@ -52,3 +52,7 @@ INFO rolling stats: 102000 msg/sec, 136 MB/sec     @service=redpanda-connect byt
 INFO rolling stats: 104000 msg/sec, 139 MB/sec     @service=redpanda-connect bytes/sec=1.39214558e+08 label="" msg/sec=104000 path=root.output.processors.0
 INFO rolling stats: 102000 msg/sec, 136 MB/sec     @service=redpanda-connect bytes/sec=1.36537106e+08 label="" msg/sec=102000 path=root.output.processors.0
 ```
+
+## Recording Results
+
+After running the benchmark, record your results in [`docs/benchmark-results/mssqlserver-cdc.md`](../../../../docs/benchmark-results/mssqlserver-cdc.md). Append a new dated section with environment details, dataset, throughput numbers, and observations. See [`docs/benchmarking.md`](../../../../docs/benchmarking.md) for the full guide.

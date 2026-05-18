@@ -47,7 +47,7 @@ const (
 
 func outputSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Beta().
+		Stable().
 		Version("4.30.0").
 		Categories("Services").
 		Summary(`Publishes messages to a Splunk HTTP Endpoint Collector (HEC).`).

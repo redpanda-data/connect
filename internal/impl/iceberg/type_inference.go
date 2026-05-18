@@ -17,14 +17,18 @@ import (
 )
 
 // typeInferrer holds state for inferring Iceberg types from Go values.
-// It tracks field IDs for nested structures to ensure unique IDs across the schema.
+// It tracks field IDs for nested structures to ensure unique IDs across the
+// schema. When caseSensitive is false, the inferrer rejects struct values
+// that contain two keys differing only in case so they don't materialise as
+// duplicate iceberg fields.
 type typeInferrer struct {
-	nextFieldID int
+	nextFieldID   int
+	caseSensitive bool
 }
 
 // newTypeInferrer creates a new type inferrer starting with field ID 1.
-func newTypeInferrer() *typeInferrer {
-	return &typeInferrer{nextFieldID: 1}
+func newTypeInferrer(caseSensitive bool) *typeInferrer {
+	return &typeInferrer{nextFieldID: 1, caseSensitive: caseSensitive}
 }
 
 // allocateFieldID returns the next available field ID and increments the counter.
@@ -35,11 +39,15 @@ func (ti *typeInferrer) allocateFieldID() int {
 }
 
 // InferIcebergType infers an Iceberg type from a Go value.
-// This uses a simple strategy where:
+// This uses the following strategy:
 //   - nil → nil (caller should skip)
 //   - string → StringType
 //   - bool → BooleanType
-//   - all numeric types → Float64Type (double)
+//   - int8, int16, int32, uint8, uint16 → Int32Type
+//   - int, int64, uint, uint32, uint64 → Int64Type
+//   - float32 → Float32Type
+//   - float64 → Float64Type
+//   - json.Number → Float64Type
 //   - time.Time → TimestampTzType
 //   - []byte → BinaryType
 //   - []any → ListType (recursive)
@@ -47,8 +55,12 @@ func (ti *typeInferrer) allocateFieldID() int {
 //
 // Returns nil if the value is nil (the caller should skip this field).
 // Returns an error for unsupported types.
+//
+// This entry point uses case-sensitive struct construction. Callers that need
+// iceberg's case-insensitive convention should construct a typeInferrer
+// directly with caseSensitive=false.
 func InferIcebergType(value any) (iceberg.Type, error) {
-	ti := newTypeInferrer()
+	ti := newTypeInferrer(true)
 	return ti.inferType(value)
 }
 
@@ -65,34 +77,44 @@ func (ti *typeInferrer) inferType(value any) (iceberg.Type, error) {
 	case bool:
 		return iceberg.BooleanType{}, nil
 
-	// All numeric types map to double (Float64Type) for simplicity
-	case int:
-		return iceberg.Float64Type{}, nil
+	// Small integer types → Int32Type (Iceberg "int")
 	case int8:
-		return iceberg.Float64Type{}, nil
+		return iceberg.Int32Type{}, nil
 	case int16:
-		return iceberg.Float64Type{}, nil
+		return iceberg.Int32Type{}, nil
 	case int32:
-		return iceberg.Float64Type{}, nil
-	case int64:
-		return iceberg.Float64Type{}, nil
-	case uint:
-		return iceberg.Float64Type{}, nil
+		return iceberg.Int32Type{}, nil
 	case uint8:
-		return iceberg.Float64Type{}, nil
+		return iceberg.Int32Type{}, nil
 	case uint16:
-		return iceberg.Float64Type{}, nil
+		return iceberg.Int32Type{}, nil
+
+	// Large integer types → Int64Type (Iceberg "long")
+	case int:
+		return iceberg.Int64Type{}, nil
+	case int64:
+		return iceberg.Int64Type{}, nil
+	case uint:
+		return iceberg.Int64Type{}, nil
 	case uint32:
-		return iceberg.Float64Type{}, nil
+		return iceberg.Int64Type{}, nil
 	case uint64:
-		return iceberg.Float64Type{}, nil
+		// Iceberg has no unsigned 64-bit type. Values above math.MaxInt64
+		// will be rejected at shred time with an overflow error.
+		return iceberg.Int64Type{}, nil
+
+	// Float types → preserve precision
 	case float32:
-		return iceberg.Float64Type{}, nil
+		return iceberg.Float32Type{}, nil
 	case float64:
 		return iceberg.Float64Type{}, nil
 
 	case json.Number:
-		// JSON numbers are treated as double
+		// Default to Float64Type (double) for json.Number to avoid silent truncation
+		// during schema evolution. If the first value seen is integer-parseable and we
+		// infer Int64, subsequent fractional values like "100.5" are silently coerced
+		// to int64 (e.g. 100) with no error. Users who want integer columns for
+		// json.Number fields should use schema_metadata or new_column_type_mapping.
 		return iceberg.Float64Type{}, nil
 
 	case time.Time:
@@ -143,6 +165,16 @@ func (ti *typeInferrer) inferStructType(m map[string]any) (*iceberg.StructType, 
 		return &iceberg.StructType{FieldList: []iceberg.NestedField{}}, nil
 	}
 
+	// In case-insensitive mode two keys differing only in case would each
+	// materialise as a struct field; subsequent reads or schema updates would
+	// then collide. Refuse here so the failure surfaces at the source rather
+	// than as a confusing iceberg-side error later.
+	if !ti.caseSensitive {
+		if a, b, ok := findCaseOnlyDuplicate(m); ok {
+			return nil, fmt.Errorf("ambiguous struct fields: %q and %q differ only in case", a, b)
+		}
+	}
+
 	fields := make([]iceberg.NestedField, 0, len(m))
 	for name, value := range m {
 		fieldType, err := ti.inferType(value)
@@ -166,10 +198,21 @@ func (ti *typeInferrer) inferStructType(m map[string]any) (*iceberg.StructType, 
 
 // InferIcebergTypeForAddColumn infers the type for a new column to be added via schema evolution.
 // This is similar to InferIcebergType but handles the special case where we need
-// to add a column at a specific path in the schema.
+// to add a column at a specific path in the schema. Uses case-sensitive struct
+// construction; internal callers that need the case-insensitive variant should
+// use inferIcebergTypeForAddColumn.
 func InferIcebergTypeForAddColumn(value any) (iceberg.Type, error) {
+	return inferIcebergTypeForAddColumn(value, true)
+}
+
+// inferIcebergTypeForAddColumn is the case-sensitivity-aware internal variant
+// used by the type resolver so that nested struct values with case-only
+// duplicate keys are rejected when iceberg's case-insensitive convention is
+// in effect.
+func inferIcebergTypeForAddColumn(value any, caseSensitive bool) (iceberg.Type, error) {
 	if value == nil {
 		return iceberg.StringType{}, nil // Default to string for nil
 	}
-	return InferIcebergType(value)
+	ti := newTypeInferrer(caseSensitive)
+	return ti.inferType(value)
 }

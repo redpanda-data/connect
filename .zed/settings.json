@@ -1,0 +1,16 @@
+{
+	"lsp": {
+		"yaml-language-server": {
+			"settings": {
+				"yaml": {
+					"schemaStore": {
+						"enable": true,
+					},
+					"schemas": {
+						"config/.schema.json": ["config/*.yaml", "config/*.yml"],
+					},
+				},
+			},
+		},
+	},
+}

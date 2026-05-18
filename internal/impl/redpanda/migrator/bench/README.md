@@ -43,3 +43,7 @@ For long-running profiling, enable streaming mode by editing `docker-compose.yml
    ```
 
 Streaming mode generates continuous data at 100MB/s, allowing extended profiling sessions.
+
+## Recording Results
+
+After running the benchmark, record your results in [`docs/benchmark-results/redpanda-migrator.md`](../../../../docs/benchmark-results/redpanda-migrator.md). Append a new dated section with environment details, dataset, throughput numbers, and observations. See [`docs/benchmarking.md`](../../../../docs/benchmarking.md) for the full guide.

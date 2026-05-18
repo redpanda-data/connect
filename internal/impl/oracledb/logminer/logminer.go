@@ -11,9 +11,9 @@ package logminer
 import (
 	"context"
 	"database/sql"
-	"encoding/hex"
 	"errors"
 	"fmt"
+	"maps"
 	"math"
 	"strings"
 	"time"
@@ -51,7 +51,7 @@ type LogMiner struct {
 	lobColTypes map[string]string
 	// lob types are split between redo log lines, we use lobStates to track them
 	// until we have all data to merge into published INSERT or UPDATE event.
-	lobStates map[string]*sqlredo.TxnLOBState
+	lobStates map[sqlredo.TransactionID]*sqlredo.TxnLOBState
 }
 
 // NewMiner creates a new instance of LogMiner responsible for paging through change events based on the tables param.
@@ -63,7 +63,7 @@ func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replicat
 	if len(userTables) > 0 {
 		opCodes := "6, 7, 36"
 		if cfg.LOBEnabled {
-			opCodes += ", 9, 10"
+			opCodes += ", 9, 10, 11"
 		}
 		buf.WriteString(" AND (OPERATION_CODE IN (" + opCodes + ")")
 		// DML carries the real table name — filter by configured tables.
@@ -76,6 +76,10 @@ func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replicat
 		}
 		buf.WriteString(")))")
 	}
+	if cfg.PDBName != "" {
+		fmt.Fprintf(&buf, " AND SRC_CON_NAME = '%s'", strings.ReplaceAll(cfg.PDBName, "'", "''"))
+	}
+
 	logMinerQuery := fmt.Sprintf(`
 		SELECT
 			SCN,
@@ -104,30 +108,34 @@ func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replicat
 		sessionMgr:    NewSessionManager(cfg, logger),
 		txnCache:      NewInMemoryCache(cfg.MaxTransactionEvents, metrics, logger),
 		dmlParser:     sqlredo.NewParser(),
-		lobStates:     make(map[string]*sqlredo.TxnLOBState),
+		lobStates:     make(map[sqlredo.TransactionID]*sqlredo.TxnLOBState),
 	}
 	return lm
 }
 
-// ReadChanges streams the change events from the configured SQL Server change tables.
-func (lm *LogMiner) ReadChanges(ctx context.Context, startPos replication.SCN) error {
+// ReadChanges streams the change events from LogMiner via a mining cycle.
+func (lm *LogMiner) ReadChanges(ctx context.Context, startPos replication.SCN) (resErr error) {
 	// Acquire a dedicated connection so that all LogMiner session operations
 	// (NLS settings, ADD_LOGFILE, START_LOGMNR, V$LOGMNR_CONTENTS queries) execute
 	// on the same underlying Oracle session. Using lm.db directly risks different
 	// calls being routed to different pool connections, breaking session-scoped state.
 	conn, err := lm.db.Conn(ctx)
 	if err != nil {
-		return fmt.Errorf("acquiring dedicated LogMiner connection: %w", err)
+		return fmt.Errorf("acquiring dedicated logminer connection: %w", err)
 	}
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil && resErr == nil {
+			resErr = fmt.Errorf("closing connection: %w", err)
+		}
+	}()
 
 	if err := replication.ApplyNLSSettings(ctx, conn); err != nil {
-		return fmt.Errorf("applying NLS settings for LogMiner: %w", err)
+		return fmt.Errorf("applying NLS settings for logminer: %w", err)
 	}
 
 	// always find all lob columns on start up as redo logs don't include column data types.
 	// this also prevents inline lob rows being emitted as events.
-	if err := lm.loadLOBColumnTypes(ctx, conn); err != nil {
+	if err := lm.loadLOBColumnTypes(ctx); err != nil {
 		return fmt.Errorf("discovering LOB column types: %w", err)
 	}
 
@@ -136,10 +144,8 @@ func (lm *LogMiner) ReadChanges(ctx context.Context, startPos replication.SCN) e
 
 	defer func() {
 		if lm.sessionMgr.IsActive() {
-			if err := lm.sessionMgr.EndSession(ctx, conn); err != nil {
-				if ctx.Err() == nil && !errors.Is(err, context.Canceled) {
-					lm.log.Errorf("ending LogMiner session on exit: %v", err)
-				}
+			if err := lm.sessionMgr.EndSession(context.Background(), conn); err != nil {
+				lm.log.Errorf("ending logminer session on exit: %v", err)
 			}
 		}
 	}()
@@ -232,16 +238,8 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 
 	// Query and process redoEvents from V$LOGMNR_CONTENTS
 	// The session is already active, just query it
-	redoEvents, err := lm.queryLogMinerContents(ctx, conn, lm.currentSCN, endSCN)
-	if err != nil {
+	if err := lm.queryLogMinerContents(ctx, conn, lm.currentSCN, endSCN, lm.processRedoEvent); err != nil {
 		return false, fmt.Errorf("querying logminer contents between %d and %d: %w", lm.currentSCN, endSCN, err)
-	}
-
-	// Process events and buffer transactions
-	for _, redoEvent := range redoEvents {
-		if err := lm.processRedoEvent(ctx, redoEvent); err != nil {
-			return false, fmt.Errorf("process redo event: %w", err)
-		}
 	}
 
 	lm.currentSCN = endSCN
@@ -273,17 +271,19 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 
 		lm.txnCache.AddEvent(redoEvent.TransactionID, redoEvent.SCN, &event)
 
-	case sqlredo.OpSelectLobLocator:
+	case sqlredo.OpSelectLobLocator, sqlredo.OpLobTrim:
 		if !lm.cfg.LOBEnabled {
 			return nil
 		}
 		if !redoEvent.SQLRedo.Valid || redoEvent.SQLRedo.String == "" {
-			lm.log.Warnf("Skipping SELECT_LOB_LOCATOR with no SQL_REDO (scn=%d, txn=%s)", redoEvent.SCN, redoEvent.TransactionID)
+			lm.log.Warnf("Skipping %s with no SQL_REDO (scn=%d, txn=%s)", redoEvent.Operation, redoEvent.SCN, redoEvent.TransactionID)
 			return nil
 		}
+		// LOB_TRIM SQL has the same SELECT "COL" INTO ... FROM "SCHEMA"."TABLE" WHERE ...
+		// structure as SELECT_LOB_LOCATOR, so the same parser works for both.
 		info, err := sqlredo.ParseSelectLobLocator(redoEvent.SQLRedo.String)
 		if err != nil {
-			lm.log.Warnf("Failed to parse SELECT_LOB_LOCATOR SQL (scn=%d, txn=%s): %v\nSQL: %.500s", redoEvent.SCN, redoEvent.TransactionID, err, redoEvent.SQLRedo.String)
+			lm.log.Warnf("Failed to parse %s SQL (scn=%d, txn=%s): %v\nSQL: %.500s", redoEvent.Operation, redoEvent.SCN, redoEvent.TransactionID, err, redoEvent.SQLRedo.String)
 			return nil
 		}
 		// Resolve LOB type from the schema cache populated at startup.
@@ -314,8 +314,11 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 		}
 		state, exists := lm.lobStates[redoEvent.TransactionID]
 		if !exists || state.ActiveKey == nil {
-			lm.log.Warnf("Received LOB_WRITE without active LOB locator (scn=%d, txn=%s)", redoEvent.SCN, redoEvent.TransactionID)
-			return nil
+			if !lm.inferLOBLocator(redoEvent) {
+				lm.log.Warnf("Received LOB_WRITE without active LOB locator (scn=%d, txn=%s)", redoEvent.SCN, redoEvent.TransactionID)
+				return nil
+			}
+			state = lm.lobStates[redoEvent.TransactionID]
 		}
 		acc := state.Accumulators[*state.ActiveKey]
 		if acc == nil {
@@ -395,7 +398,7 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 						continue
 					}
 				}
-				msg := toMessageEvent(dmlEvent, redoEvent.SCN, safeCheckpointSCN)
+				msg := toMessageEvent(dmlEvent, redoEvent.SCN, safeCheckpointSCN, redoEvent.Timestamp)
 				if err := lm.publisher.Publish(ctx, msg); err != nil {
 					return fmt.Errorf("publishing event with SCN '%d': %w", redoEvent.SCN, err)
 				}
@@ -423,13 +426,41 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 	return nil
 }
 
-func (lm *LogMiner) loadLOBColumnTypes(ctx context.Context, conn *sql.Conn) error {
+func (lm *LogMiner) loadLOBColumnTypes(ctx context.Context) (resErr error) {
 	lm.lobColTypes = make(map[string]string)
 	if len(lm.tables) == 0 {
 		return nil
 	}
 
-	var qb strings.Builder
+	// ALL_TAB_COLUMNS must run in PDB context in CDB mode — the LogMiner conn is
+	// pinned to CDB$ROOT where PDB tables are not visible via ALL_TAB_COLUMNS.
+	// Use a separate connection and switch context if needed.
+	catalogConn, err := lm.db.Conn(ctx)
+	if err != nil {
+		return fmt.Errorf("acquiring connection for LOB column discovery: %w", err)
+	}
+	defer func() {
+		if err := catalogConn.Close(); err != nil && resErr == nil {
+			resErr = fmt.Errorf("closing catalog connection: %w", err)
+		}
+	}()
+
+	if lm.cfg.PDBName != "" {
+		// can't use parameterized queries here but we've validated on input.
+		if _, err := catalogConn.ExecContext(ctx, "ALTER SESSION SET CONTAINER = "+lm.cfg.PDBName); err != nil {
+			return fmt.Errorf("switching session to PDB %s for LOB column discovery: %w", lm.cfg.PDBName, err)
+		}
+		defer func() {
+			if _, err := catalogConn.ExecContext(context.Background(), "ALTER SESSION SET CONTAINER = CDB$ROOT"); err != nil && resErr == nil {
+				resErr = fmt.Errorf("switching session back to root container: %w", err)
+			}
+		}()
+	}
+
+	var (
+		qb     strings.Builder
+		qbArgs []any
+	)
 	qb.WriteString(`SELECT OWNER, TABLE_NAME, COLUMN_NAME, DATA_TYPE FROM ALL_TAB_COLUMNS WHERE DATA_TYPE IN ('CLOB', 'BLOB', 'NCLOB') AND (`)
 	for i, t := range lm.tables {
 		if i > 0 {
@@ -441,11 +472,15 @@ func (lm *LogMiner) loadLOBColumnTypes(ctx context.Context, conn *sql.Conn) erro
 	}
 	qb.WriteString(")")
 
-	rows, err := conn.QueryContext(ctx, qb.String())
+	rows, err := catalogConn.QueryContext(ctx, qb.String(), qbArgs...)
 	if err != nil {
 		return fmt.Errorf("querying LOB column types: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			lm.log.Errorf("closing rows: %v", err)
+		}
+	}()
 
 	for rows.Next() {
 		var owner, tableName, columnName, dataType string
@@ -456,10 +491,11 @@ func (lm *LogMiner) loadLOBColumnTypes(ctx context.Context, conn *sql.Conn) erro
 		k := fmt.Sprintf("%s.%s.%s", owner, tableName, columnName)
 		lm.lobColTypes[k] = dataType
 	}
+
 	return rows.Err()
 }
 
-func (lm *LogMiner) getOrCreateLOBState(txnID string) *sqlredo.TxnLOBState {
+func (lm *LogMiner) getOrCreateLOBState(txnID sqlredo.TransactionID) *sqlredo.TxnLOBState {
 	if state, ok := lm.lobStates[txnID]; ok {
 		return state
 	}
@@ -486,47 +522,150 @@ func (lm *LogMiner) isLOBOnlyEvent(ev *sqlredo.DMLEvent) bool {
 	return true
 }
 
-func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, startSCN, endSCN uint64) ([]*sqlredo.RedoEvent, error) {
+// inferLOBLocator attempts to create a LOB locator for a LOB_WRITE event that
+// arrived without a preceding SELECT_LOB_LOCATOR. This happens with BASICFILE
+// out-of-line LOBs where Oracle does not emit locator events in LogMiner.
+//
+// The method searches the transaction's buffered DML events for either a
+// LOB-init UPDATE (inline-LOB path) or an INSERT (out-of-line LOB path) whose
+// Data carries a LOB column with an EMPTY_CLOB()/EMPTY_BLOB() placeholder that
+// doesn't yet have an accumulator. For INSERTs on BASICFILE columns with
+// DISABLE STORAGE IN ROW, Oracle emits NULL in SQL_REDO instead of an empty
+// placeholder; in that case the LOB column is absent from Data, so known LOB
+// columns for the table are also considered as inference candidates.
+// Returns true if a locator was successfully created.
+func (lm *LogMiner) inferLOBLocator(event *sqlredo.RedoEvent) bool {
+	if !event.SchemaName.Valid || !event.TableName.Valid {
+		return false
+	}
+	schema := event.SchemaName.String
+	table := event.TableName.String
+	if schema == "" || table == "" {
+		return false
+	}
+
+	txn := lm.txnCache.GetTransaction(event.TransactionID)
+	if txn == nil {
+		return false
+	}
+
+	prefix := strings.ToUpper(schema + "." + table + ".")
+
+	// Search backwards for the most recent event that can carry a LOB-init
+	// placeholder for this table: LOB-only UPDATE (inline-LOB path) or INSERT
+	// (BASICFILE out-of-line LOB path, where no LOB-init UPDATE is emitted).
+	for i := len(txn.Events) - 1; i >= 0; i-- {
+		ev := txn.Events[i]
+		if ev.Schema != schema || ev.Table != table {
+			continue
+		}
+
+		var pkValues map[string]any
+		switch {
+		case ev.Operation == sqlredo.OpUpdate && lm.isLOBOnlyEvent(ev):
+			pkValues = ev.OldValues
+		case ev.Operation == sqlredo.OpInsert:
+			// Use the INSERT's non-LOB columns as the PK identifier so that
+			// MergeLOBsIntoDMLEvents can still match this INSERT after one of
+			// its LOB columns has been overwritten with the assembled value
+			// (important when an INSERT has multiple out-of-line LOBs).
+			pkValues = make(map[string]any, len(ev.Data))
+			for col, val := range ev.Data {
+				if _, isLOB := lm.lobColTypes[prefix+strings.ToUpper(col)]; isLOB {
+					continue
+				}
+				pkValues[col] = val
+			}
+		default:
+			continue
+		}
+
+		pkString := sqlredo.FormatPKString(pkValues)
+
+		// Candidate LOB columns are those with an EMPTY_CLOB()/EMPTY_BLOB()
+		// placeholder (parsed as empty []byte). For INSERTs, BASICFILE columns
+		// with DISABLE STORAGE IN ROW emit NULL in SQL_REDO instead — the column
+		// is absent from Data — so iterate every known LOB column for the table.
+		for k, lobType := range lm.lobColTypes {
+			if !strings.HasPrefix(k, prefix) {
+				continue
+			}
+			col := k[len(prefix):]
+			val, present := ev.Data[col]
+			switch {
+			case present:
+				if b, ok := val.([]byte); !ok || len(b) != 0 {
+					continue
+				}
+			case ev.Operation != sqlredo.OpInsert:
+				continue
+			}
+
+			key := sqlredo.LobKey{
+				Schema:   schema,
+				Table:    table,
+				Column:   col,
+				PKString: pkString,
+			}
+
+			// Defer state creation until we have a match to avoid leaking
+			// empty TxnLOBState entries when inference fails.
+			state := lm.getOrCreateLOBState(event.TransactionID)
+			if _, exists := state.Accumulators[key]; exists {
+				continue
+			}
+
+			state.Accumulators[key] = &sqlredo.LobAccumulator{
+				Schema:   schema,
+				Table:    table,
+				Column:   col,
+				PKValues: pkValues,
+				IsBinary: lobType == "BLOB",
+			}
+			state.ActiveKey = &key
+
+			lm.log.Debugf("Inferred LOB locator for %s.%s.%s from %s (txn=%s)",
+				schema, table, col, ev.Operation, event.TransactionID)
+			return true
+		}
+	}
+
+	return false
+}
+
+func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, startSCN, endSCN uint64, processEvent func(context.Context, *sqlredo.RedoEvent) error) error {
 	if len(lm.tables) == 0 {
-		return nil, nil
+		return nil
 	}
 
 	// Use the pre-built query from initialization
 	rows, err := conn.QueryContext(ctx, lm.logMinerQuery, startSCN, endSCN)
 	if err != nil {
-		return nil, fmt.Errorf("querying logminer: %w", err)
+		return fmt.Errorf("querying logminer: %w", err)
 	}
 	defer rows.Close()
 
-	var (
-		events  []*sqlredo.RedoEvent
-		pending *sqlredo.RedoEvent // accumulates CSF continuation fragments
-	)
+	var pending *sqlredo.RedoEvent // accumulates CSF continuation fragments
 	for rows.Next() {
 		event := &sqlredo.RedoEvent{}
 		var (
-			xid       []byte        // Oracle RAW type comes as []byte in Go
 			commitSCN sql.NullInt64 // COMMIT_SCN can be NULL for uncommitted transactions
 			csf       int64         // Continuation SQL Flag: 1 = more SQL in next row, 0 = complete
 		)
 
-		err := rows.Scan(
+		if err := rows.Scan(
 			&event.SCN,
 			&event.SQLRedo,
 			&event.Operation,
 			&event.TableName,
 			&event.SchemaName,
 			&event.Timestamp,
-			&xid,
+			&event.TransactionID,
 			&commitSCN,
 			&csf,
-		)
-		if err != nil {
-			return nil, err
+		); err != nil {
+			return err
 		}
-
-		// XID is Oracle's native transaction identifier (RAW(8) = 8 bytes)
-		event.TransactionID = hex.EncodeToString(xid)
 
 		// CSF (Continuation SQL Flag): Oracle splits long SQL across multiple rows.
 		// Rows with CSF=1 are continuation fragments; CSF=0 is the final (or only) row.
@@ -538,7 +677,9 @@ func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, s
 			}
 			if csf == 0 {
 				// Final fragment — emit the accumulated event.
-				events = append(events, pending)
+				if err := processEvent(ctx, pending); err != nil {
+					return fmt.Errorf("processing redo event: %w", err)
+				}
 				pending = nil
 			}
 			// If csf == 1, continue accumulating.
@@ -551,20 +692,24 @@ func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, s
 			continue
 		}
 
-		events = append(events, event)
+		if err := processEvent(ctx, event); err != nil {
+			return fmt.Errorf("processing redo event: %w", err)
+		}
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return err
 	}
 
 	// Flush any incomplete pending event (shouldn't happen in practice).
 	if pending != nil {
 		lm.log.Warnf("Incomplete CSF SQL sequence at end of result set (scn=%d, op=%s, txn=%s)", pending.SCN, pending.Operation, pending.TransactionID)
-		events = append(events, pending)
+		if err := processEvent(ctx, pending); err != nil {
+			return fmt.Errorf("processing redo event: %w", err)
+		}
 	}
 
-	return events, nil
+	return nil
 }
 
 // LogFile represents a redo or archive log file
@@ -629,8 +774,7 @@ func (*LogFileCollector) GetLogs(ctx context.Context, conn *sql.Conn, startSCN, 
 				WHERE STATUS='VALID' AND TYPE='LOCAL' AND ROWNUM=1
 			)
 		)
-		ORDER BY SEQ
-	`
+		ORDER BY SEQ`
 
 	rows, err := conn.QueryContext(ctx, query, startSCN, endSCN)
 	if err != nil {
@@ -719,14 +863,30 @@ func (lm *LogMiner) prepareLogsAndStartSession(ctx context.Context, conn *sql.Co
 	return nil
 }
 
-func toMessageEvent(dml *sqlredo.DMLEvent, scn uint64, checkpointSCN uint64) *replication.MessageEvent {
+func toMessageEvent(dml *sqlredo.DMLEvent, scn uint64, checkpointSCN uint64, commitTimestamp time.Time) *replication.MessageEvent {
+	var data map[string]any
+	switch dml.Operation {
+	case sqlredo.OpDelete:
+		// column values are parsed into OldValues, not Data.
+		data = dml.OldValues
+	case sqlredo.OpUpdate:
+		// merge new values onto old value for a current view that includes the PK
+		data = make(map[string]any, len(dml.OldValues))
+		maps.Copy(data, dml.OldValues)
+		maps.Copy(data, dml.Data)
+	default:
+		data = dml.Data
+	}
+
 	m := &replication.MessageEvent{
-		SCN:           replication.SCN(scn),
-		CheckpointSCN: replication.SCN(checkpointSCN),
-		Schema:        dml.Schema,
-		Table:         dml.Table,
-		Data:          dml.Data,
-		Timestamp:     dml.Timestamp,
+		SCN:             replication.SCN(scn),
+		CheckpointSCN:   replication.SCN(checkpointSCN),
+		Schema:          dml.Schema,
+		Table:           dml.Table,
+		Data:            data,
+		Timestamp:       dml.Timestamp,
+		TransactionID:   dml.TransactionID.String(),
+		CommitTimestamp: commitTimestamp,
 	}
 
 	switch dml.Operation {

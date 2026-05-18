@@ -14,6 +14,7 @@ import (
 	// Only import a subset of components for execution.
 	_ "github.com/redpanda-data/connect/v4/public/components/a2a"
 	_ "github.com/redpanda-data/connect/v4/public/components/amqp09"
+	_ "github.com/redpanda-data/connect/v4/public/components/arc"
 	_ "github.com/redpanda-data/connect/v4/public/components/avro"
 	_ "github.com/redpanda-data/connect/v4/public/components/aws"
 	_ "github.com/redpanda-data/connect/v4/public/components/azure"
@@ -57,6 +58,7 @@ import (
 	_ "github.com/redpanda-data/connect/v4/public/components/questdb"
 	_ "github.com/redpanda-data/connect/v4/public/components/redis"
 	_ "github.com/redpanda-data/connect/v4/public/components/redpanda"
+	_ "github.com/redpanda-data/connect/v4/public/components/salesforce"
 	_ "github.com/redpanda-data/connect/v4/public/components/sftp"
 	_ "github.com/redpanda-data/connect/v4/public/components/slack"
 	_ "github.com/redpanda-data/connect/v4/public/components/snowflake"

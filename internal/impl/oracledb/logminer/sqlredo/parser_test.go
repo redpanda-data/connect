@@ -92,6 +92,15 @@ func TestParseTest(t *testing.T) {
 				"NAME": "Alice",
 			},
 		},
+		{
+			name: "INSERT with NULL value includes column as nil",
+			sql:  `insert into "MYAPP"."SAMPLES" ("ID","SPEC_CH_ID","SPEC_CKC_ID") values ('1',NULL,NULL)`,
+			wantNewValues: map[string]any{
+				"ID":          "1",
+				"SPEC_CH_ID":  nil,
+				"SPEC_CKC_ID": nil,
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -168,6 +177,15 @@ func TestExtractValuesWithConverter(t *testing.T) {
 			wantNewValues: map[string]any{
 				"ID": int64(1),
 				"TS": time.Date(2020, 1, 15, 0, 0, 0, 0, time.UTC),
+			},
+		},
+		{
+			name: "INSERT with NULL numeric columns includes them as nil",
+			sql:  `insert into "SPACE"."T_EXT_SAMPLES" ("SAMPLE_ID","SPEC_CH_ID","SPEC_CKC_ID") values (2100318824,NULL,NULL)`,
+			wantNewValues: map[string]any{
+				"SAMPLE_ID":   int64(2100318824),
+				"SPEC_CH_ID":  nil,
+				"SPEC_CKC_ID": nil,
 			},
 		},
 	}

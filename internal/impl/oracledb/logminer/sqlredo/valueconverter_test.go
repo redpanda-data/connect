@@ -311,6 +311,16 @@ func TestConvertValue(t *testing.T) {
 			wantValue: json.Number("45.67"),
 		},
 		{
+			name:      "bare decimal without leading zero normalised to json.Number",
+			input:     ".5",
+			wantValue: json.Number("0.5"),
+		},
+		{
+			name:      "bare negative decimal without leading zero normalised to json.Number",
+			input:     "-.5",
+			wantValue: json.Number("-0.5"),
+		},
+		{
 			name:      "bare scientific notation converts to json.Number",
 			input:     "1.79E+100",
 			wantValue: json.Number("1.79E+100"),
@@ -352,6 +362,29 @@ func TestConvertValue(t *testing.T) {
 			result := converter.ConvertValue(tt.input)
 			assert.IsType(t, tt.wantValue, result)
 			assert.Equal(t, tt.wantValue, result)
+		})
+	}
+}
+
+func TestConvertValueJSONMarshalRoundtrip(t *testing.T) {
+	// Ensure that all json.Number values produced by ConvertValue are valid JSON
+	// and can be round-tripped through json.Marshal without error.
+	converter := NewOracleValueConverter(time.UTC)
+
+	inputs := []string{
+		".5", "-.5", ".123456", "-.999",
+		"45.67", "-45.67", "0.5", "1.79E+100", "3.3999999E+037",
+		"9223372036854775808",
+	}
+	for _, input := range inputs {
+		t.Run(input, func(t *testing.T) {
+			result := converter.ConvertValue(input)
+			jn, ok := result.(json.Number)
+			if !ok {
+				return // not a json.Number, skip
+			}
+			_, err := json.Marshal(jn)
+			assert.NoErrorf(t, err, "json.Marshal(json.Number(%q)) should not fail", string(jn))
 		})
 	}
 }

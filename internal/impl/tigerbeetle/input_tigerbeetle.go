@@ -100,7 +100,7 @@ func configSpec() *service.ConfigSpec {
 	}
 
 	return service.NewConfigSpec().
-		Beta().
+		Stable().
 		Categories("Services").
 		Version("0.0.1").
 		Summary("Enables TigerBeetle CDC streaming for Redpanda Connect.").

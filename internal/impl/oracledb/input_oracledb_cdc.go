@@ -14,6 +14,8 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Jeffail/checkpoint"
@@ -30,6 +32,8 @@ import (
 
 const (
 	ociFieldConnectionString          = "connection_string"
+	ociFieldWalletPath                = "wallet_path"
+	ociFieldWalletPassword            = "wallet_password"
 	ociFieldStreamSnapshot            = "stream_snapshot"
 	ociFieldMaxParallelSnapshotTables = "max_parallel_snapshot_tables"
 	ociFieldSnapshotMaxBatchSize      = "snapshot_max_batch_size"
@@ -40,6 +44,7 @@ const (
 	ociFieldCheckpointCacheKey        = "checkpoint_cache_key"
 	ociFieldCheckpointCacheTableName  = "checkpoint_cache_table_name"
 	ociFieldBatching                  = "batching"
+	ociFieldPDBName                   = "pdb_name"
 
 	shutdownTimeout = 5 * time.Second
 
@@ -72,6 +77,9 @@ This input adds the following metadata fields to each message:
 - table_name: Name of the table that the message originated from.
 - operation: Type of operation that generated the message: "read", "delete", "insert", or "update". "read" is from messages that are read in the initial snapshot phase.
 - scn: the System Change Number in Oracle.
+- transaction_id: The Oracle transaction ID in ` + "`USN.SLOT.SEQ`" + ` format, identifying the transaction that produced the change. Not present on snapshot (` + "`read`" + `) messages.
+- source_ts_ms: The timestamp of when Oracle wrote the change record into the redo log, expressed as milliseconds since the Unix epoch. This reflects the database server's wall-clock time at the moment the DML executed, not the transaction commit time.
+- commit_ts_ms: The timestamp of the transaction commit, expressed as milliseconds since the Unix epoch. Not present on snapshot (` + "`read`" + `) messages.
 - schema: The table schema, for use with schema-aware downstream processors such as ` + "`schema_registry_encode`" + `. When new columns are detected in CDC events, the schema is automatically refreshed from the Oracle catalog. Dropped columns are reflected after a connector restart.
 
 == Permissions
@@ -79,8 +87,19 @@ This input adds the following metadata fields to each message:
 When using the default Oracle based cache, the Connect user requires permission to create tables and stored procedures, and the ` + "rpcn" + `  schema must already exist. Refer to ` + "`" + ociFieldCheckpointCacheTableName + "`" + ` for more information.
 		`).
 	Field(service.NewStringField(ociFieldConnectionString).
-		Description("The connection string of the Oracle database to connect to.").
-		Example("oracle://username:password@host:port/service_name"),
+		Description("The connection string of the Oracle database to connect to. Additional connection options can be supplied as URL query parameters, for example: `oracle://user:password@host:1522/service?WALLET=/opt/oracle/wallet&SSL=true`.").
+		Example("oracle://username:password@host:port/service_name").
+		Example("oracle://user:password@host:1522/service?WALLET=/opt/oracle/wallet&SSL=true"),
+	).
+	Field(service.NewStringField(ociFieldWalletPath).
+		Description("Path to the Oracle Wallet directory. When set, SSL is enabled automatically. The directory must contain either `cwallet.sso` (auto-login, no password required) or `ewallet.p12` (requires `wallet_password`).").
+		Example("/opt/oracle/wallet").
+		Optional(),
+	).
+	Field(service.NewStringField(ociFieldWalletPassword).
+		Secret().
+		Description("Password for the `ewallet.p12` PKCS#12 wallet file. Only required when the wallet directory contains `ewallet.p12` rather than `cwallet.sso`.").
+		Optional(),
 	).
 	Field(service.NewBoolField(ociFieldStreamSnapshot).
 		Description("If set to true, the connector will query all the existing data as a part of snapshot process. Otherwise, it will start from the current System Change Number position.").
@@ -132,7 +151,7 @@ When using the default Oracle based cache, the Connect user requires permission 
 		Optional(),
 	).
 	Field(service.NewStringField(ociFieldCheckpointCacheTableName).
-		Description("The identifier for the checkpoint cache table name. If no `" + ociFieldCheckpointCache + "` field is specified, this input will automatically create a table and stored procedure under the `rpcn` schema to act as a checkpoint cache. This table stores the latest processed System Change Number (SCN) that has been successfully delivered, allowing Redpanda Connect to resume from that point upon restart rather than reconsume the entire redo log.").
+		Description("The identifier for the checkpoint cache table name. If no `" + ociFieldCheckpointCache + "` field is specified, this input will automatically create a table and stored procedure under the `rpcn` schema to act as a checkpoint cache. This table stores the latest processed System Change Number (SCN) that has been successfully delivered, allowing Redpanda Connect to resume from that point upon restart rather than reconsume the entire redo log. When `" + ociFieldPDBName + "` is set and this field is left at its default value, the table name is automatically derived per PDB (e.g. `RPCN.CDC_CHECKPOINT_MYPDB`) to avoid SCN collisions between pipelines monitoring different PDBs. Set this field explicitly to opt out of that auto-derivation.").
 		Default(defaultCheckpointCache).
 		Example("RPCN.CHECKPOINT_CACHE").
 		Optional(),
@@ -140,11 +159,16 @@ When using the default Oracle based cache, the Connect user requires permission 
 	Field(service.NewStringField(ociFieldCheckpointCacheKey).
 		Description("The key to use to store the snapshot position in `" + ociFieldCheckpointCache + "`. An alternative key can be provided if multiple CDC inputs share the same cache.").
 		Default("oracledb_cdc").
+		LintRule(`root = if this == "" { [ "must not be empty" ] } else if this.length() > ` + strconv.Itoa(checkpointCacheKeyLimit) + ` { [ "must not exceed ` + strconv.Itoa(checkpointCacheKeyLimit) + ` characters" ] }`).
 		Optional(),
 	).
 	Field(service.NewIntField(ociFieldCheckpointLimit).
 		Description("The maximum number of messages that can be processed at a given time. Increasing this limit enables parallel processing and batching at the output level. Any given System Change Number (SCN) will not be acknowledged unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.").
 		Default(1024),
+	).
+	Field(service.NewStringField(ociFieldPDBName).
+		Description("The name of the pluggable database (PDB) to monitor. When connecting to a CDB root, LogMiner output is scoped to this PDB via SRC_CON_NAME filtering and catalog queries use ALTER SESSION SET CONTAINER to switch context. Requires GRANT SET CONTAINER TO <user> CONTAINER=ALL.").
+		Optional(),
 	).
 	Field(service.NewAutoRetryNacksToggleField()).
 	Field(service.NewBatchPolicyField(ociFieldBatching))
@@ -164,6 +188,7 @@ type Config struct {
 	SCNCache             string
 	SCNCacheKey          string
 	CpCacheTableName     string
+	PDBName              string
 }
 
 type oracleDBCDCInput struct {
@@ -194,6 +219,8 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 		cpCache                      service.Cache
 		cpCacheTableName             string
 		lmCfg                        *logminer.Config
+
+		logger = resources.Logger()
 	)
 
 	if err := license.CheckRunningEnterprise(resources); err != nil {
@@ -229,19 +256,31 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 
 	// cache
 	// if no cache component is specified then we fall back to default SQL based version
+	if scnCacheKey, err = conf.FieldString(ociFieldCheckpointCacheKey); err != nil {
+		return nil, err
+	}
 	if conf.Contains(ociFieldCheckpointCache) {
 		if scnCache, err = conf.FieldString(ociFieldCheckpointCache); err != nil {
 			return nil, err
-		}
-		if conf.Resources().HasCache(scnCache) {
-			if scnCacheKey, err = conf.FieldString(ociFieldCheckpointCacheKey); err != nil {
-				return nil, err
-			}
 		}
 	}
 
 	if cpCacheTableName, err = conf.FieldString(ociFieldCheckpointCacheTableName); err != nil {
 		return nil, err
+	}
+
+	var pdbName string
+	if conf.Contains(ociFieldPDBName) {
+		if pdbName, err = conf.FieldString(ociFieldPDBName); err != nil {
+			return nil, err
+		}
+		if pdbName != "" && !validOracleIdentifier.MatchString(pdbName) {
+			return nil, fmt.Errorf("invalid pdb_name %q: must be a valid Oracle identifier (letters, digits, _ $ # — starting with a letter)", pdbName)
+		}
+		if pdbName != "" && cpCacheTableName == defaultCheckpointCache {
+			cpCacheTableName = "RPCN.CDC_CHECKPOINT_" + strings.ToUpper(pdbName)
+		}
+		lmCfg.PDBName = pdbName
 	}
 
 	// checkpointing
@@ -262,12 +301,15 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 		return nil, err
 	}
 
-	connectionString, err = buildConnectionString(connectionString, nil)
-	if err != nil {
-		return nil, fmt.Errorf("building connection string: %w", err)
+	// connecting string flags
+	overrides := make(map[string]string)
+	if err := parseWalletConfig(conf, overrides); err != nil {
+		return nil, fmt.Errorf("parsing oracle wallet config: %w", err)
 	}
 
-	logger := resources.Logger()
+	if connectionString, err = buildConnectionString(connectionString, overrides, logger); err != nil {
+		return nil, fmt.Errorf("building connection string: %w", err)
+	}
 
 	o := oracleDBCDCInput{
 		cfg: Config{
@@ -278,6 +320,7 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 			SCNCache:             scnCache,
 			SCNCacheKey:          scnCacheKey,
 			CpCacheTableName:     cpCacheTableName,
+			PDBName:              pdbName,
 			TablesFilter: &confx.RegexpFilter{
 				Include: tableIncludes,
 				Exclude: tableExcludes,
@@ -311,10 +354,12 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 	return conf.WrapBatchInputExtractTracingSpanMapping("oracledb_cdc", batchInput)
 }
 
-func (o *oracleDBCDCInput) Connect(ctx context.Context) (err error) {
+func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 	var (
 		userTables []replication.UserTable
 		cachedSCN  replication.SCN
+		err        error
+		isCDB      bool
 	)
 	if o.db != nil {
 		_ = o.db.Close()
@@ -325,7 +370,7 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (err error) {
 		return fmt.Errorf("connecting to oracle database: %w", err)
 	}
 	defer func() {
-		if err != nil {
+		if resErr != nil {
 			_ = o.db.Close()
 		}
 	}()
@@ -334,29 +379,76 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (err error) {
 		return fmt.Errorf("validating connection to oracle database: %w", err)
 	}
 
+	if isCDB, err = o.detectContainerContext(ctx); err != nil {
+		return fmt.Errorf("detecting current container context: %w", err)
+	}
+
+	// In CDB mode the auto-derived checkpoint table uses the common-user prefix C##RPCN.
+	// At parse time we don't yet know if we're in CDB mode, so fix up the name here.
+	cpCacheTable := o.cfg.CpCacheTableName
+	if isCDB {
+		cpCacheTable = cdbCheckpointTable(cpCacheTable)
+	}
+
 	// no cache specified so use default, internal oracle based cache
 	if o.cfg.SCNCache == "" && o.cpCache == nil {
-		c, err := newCheckpointCache(ctx, o.cfg.ConnectionString, o.cfg.CpCacheTableName, o.log)
+		c, err := newCheckpointCache(ctx, o.cfg.ConnectionString, cpCacheTable, o.cfg.SCNCacheKey, o.log)
 		if err != nil {
 			return fmt.Errorf("initialising oracle based checkpoint cache: %w", err)
 		}
 		o.cpCache = c
 	}
 
-	if userTables, err = replication.VerifyUserTables(ctx, o.db, o.cfg.TablesFilter, o.log); err != nil {
-		return fmt.Errorf("verifying user defined tables: %w", err)
+	// For CDB mode, run VerifyUserTables on a dedicated connection switched to the PDB
+	// (ALTER SESSION SET CONTAINER + ALL_* views, no CDB_* view privileges needed).
+	if isCDB {
+		if err = func() error {
+			conn, err := o.db.Conn(ctx)
+			if err != nil {
+				return fmt.Errorf("getting connection for PDB '%s': %w", o.cfg.PDBName, err)
+			}
+			defer func() {
+				if err := conn.Close(); err != nil {
+					o.log.Errorf("Closing connection following table verification: %v", err)
+				}
+			}()
+
+			if _, err = conn.ExecContext(ctx, "ALTER SESSION SET CONTAINER = "+o.cfg.PDBName); err != nil {
+				return fmt.Errorf("switching session to PDB '%s' for user table verification: %w", o.cfg.PDBName, err)
+			}
+			defer func() {
+				if _, resetErr := conn.ExecContext(context.Background(), "ALTER SESSION SET CONTAINER = CDB$ROOT"); resetErr != nil {
+					o.log.Errorf("Failed to reset session to root container after user table verification: %v", resetErr)
+				}
+			}()
+
+			if userTables, err = replication.VerifyUserTables(ctx, conn, o.cfg.TablesFilter, o.log); err != nil {
+				return fmt.Errorf("verifying user defined tables: %w", err)
+			}
+			return nil
+		}(); err != nil {
+			return err
+		}
+	} else {
+		if userTables, err = replication.VerifyUserTables(ctx, o.db, o.cfg.TablesFilter, o.log); err != nil {
+			return fmt.Errorf("verifying user defined tables: %w", err)
+		}
 	}
 
-	// Pre-fetch schemas for all monitored tables. A fresh cache is created on
-	// every Connect() so reconnections always reflect the current catalog state.
-	schemas := newSchemaCache(o.log)
+	// Pre-fetch schemas for all monitored tables. A fresh cache is created on every Connect()
+	// so reconnections always reflect the current catalog state. The schemaCache handles its
+	// own container switching internally for CDB mode cache misses.
+	var pdbNameForCache string
+	if isCDB {
+		pdbNameForCache = o.cfg.PDBName
+	}
+	schemas := newSchemaCache(o.db, pdbNameForCache, o.log)
 	for _, t := range userTables {
-		if _, _, fetchErr := schemas.schemaForEvent(ctx, o.db, t, nil); fetchErr != nil {
-			o.log.Warnf("Failed to pre-fetch schema for %s.%s: %v", t.Schema, t.Name, fetchErr)
+		if _, _, err := schemas.schemaForEvent(ctx, t, nil); err != nil {
+			o.log.Warnf("Failed to pre-fetch schema for %s.%s: %v", t.Schema, t.Name, err)
 		}
 	}
 	o.publisher.schemas = schemas
-	o.publisher.db = o.db
 
 	if cachedSCN, err = o.getCachedSCN(ctx); err != nil {
 		if errors.Is(err, service.ErrKeyNotFound) {
@@ -389,7 +481,7 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (err error) {
 
 	// no cached SCN means we're not recovering from a restart
 	if o.cfg.StreamSnapshot && cachedSCN == replication.InvalidSCN {
-		if snapshotter, err = replication.NewSnapshot(ctx, o.cfg.ConnectionString, userTables, o.publisher, o.lmCfg.LOBEnabled, o.log, o.metrics); err != nil {
+		if snapshotter, err = replication.NewSnapshot(ctx, o.cfg.ConnectionString, userTables, o.publisher, o.lmCfg.LOBEnabled, pdbNameForCache, o.log, o.metrics); err != nil {
 			return fmt.Errorf("creating database snapshotter: %w", err)
 		}
 		defer func() {
@@ -420,10 +512,10 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (err error) {
 		// snapshot if no SCN exists then store checkpoint once complete
 		if snapshotter != nil {
 			if maxSCN, err = o.processSnapshot(softCtx, snapshotter); err != nil {
-				if o.stopSig.IsHardStopSignalled() {
-					o.log.Errorf("Shutting down snapshotting process: %s", err)
+				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+					o.log.Infof("Snapshotting stopped: %s", err)
 				} else {
-					o.log.Infof("Gracefully shutting down snapshotting process: %s", err)
+					o.log.Errorf("Snapshotting failed: %s", err)
 				}
 				o.stopSig.TriggerHasStopped()
 				return

@@ -15,16 +15,12 @@
 package beanstalkd
 
 import (
-	"bufio"
-	"fmt"
-	"net"
-	"strings"
 	"testing"
 	"time"
 
-	"github.com/ory/dockertest/v3"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/wait"
 
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 )
@@ -40,128 +36,75 @@ input:
     address: 127.0.0.1:$PORT
 `
 
-func waitForBeanstalkd(pool *dockertest.Pool, resource *dockertest.Resource) error {
-	return pool.Retry(func() error {
-		conn, err := net.DialTimeout("tcp", "127.0.0.1:"+resource.GetPort("11300/tcp"), time.Second)
-		if err != nil {
-			return err
-		}
-		defer conn.Close()
-		_ = conn.SetDeadline(time.Now().Add(time.Second))
-		if _, err = fmt.Fprintf(conn, "use default\r\n"); err != nil {
-			return err
-		}
-		resp, err := bufio.NewReader(conn).ReadString('\n')
-		if err != nil {
-			return err
-		}
-		if !strings.HasPrefix(resp, "USING") {
-			return fmt.Errorf("unexpected response: %s", resp)
-		}
-		return nil
-	})
+func startBeanstalkd(t testing.TB) string {
+	t.Helper()
+
+	ctr, err := testcontainers.Run(t.Context(), "websmurf/beanstalkd:1.12-alpine-3.14",
+		testcontainers.WithExposedPorts("11300/tcp"),
+		testcontainers.WithWaitStrategy(
+			wait.ForListeningPort("11300/tcp").WithStartupTimeout(30*time.Second),
+		),
+	)
+	testcontainers.CleanupContainer(t, ctr)
+	require.NoError(t, err)
+
+	mappedPort, err := ctr.MappedPort(t.Context(), "11300/tcp")
+	require.NoError(t, err)
+	return mappedPort.Port()
 }
 
 func TestIntegrationBeanstalkdOpenClose(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
-	pool, err := dockertest.NewPool("")
-	require.NoError(t, err)
-
-	pool.MaxWait = time.Second * 30
-	resource, err := pool.Run("websmurf/beanstalkd", "1.12-alpine-3.14", nil)
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		assert.NoError(t, pool.Purge(resource))
-	})
-
-	_ = resource.Expire(900)
-	require.NoError(t, waitForBeanstalkd(pool, resource))
+	port := startBeanstalkd(t)
 
 	suite := integration.StreamTests(
 		integration.StreamTestOpenClose(),
 	)
 	suite.Run(
 		t, template,
-		integration.StreamTestOptPort(resource.GetPort("11300/tcp")),
+		integration.StreamTestOptPort(port),
 	)
 }
 
 func TestIntegrationBeanstalkdSendBatch(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
-	pool, err := dockertest.NewPool("")
-	require.NoError(t, err)
-
-	pool.MaxWait = time.Second * 30
-	resource, err := pool.Run("websmurf/beanstalkd", "1.12-alpine-3.14", nil)
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		assert.NoError(t, pool.Purge(resource))
-	})
-
-	_ = resource.Expire(900)
-	require.NoError(t, waitForBeanstalkd(pool, resource))
+	port := startBeanstalkd(t)
 
 	suite := integration.StreamTests(
 		integration.StreamTestSendBatch(10),
 	)
 	suite.Run(
 		t, template,
-		integration.StreamTestOptPort(resource.GetPort("11300/tcp")),
+		integration.StreamTestOptPort(port),
 	)
 }
 
 func TestIntegrationBeanstalkdStreamSequential(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
-	pool, err := dockertest.NewPool("")
-	require.NoError(t, err)
-
-	pool.MaxWait = time.Second * 30
-	resource, err := pool.Run("websmurf/beanstalkd", "1.12-alpine-3.14", nil)
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		assert.NoError(t, pool.Purge(resource))
-	})
-
-	_ = resource.Expire(900)
-	require.NoError(t, waitForBeanstalkd(pool, resource))
+	port := startBeanstalkd(t)
 
 	suite := integration.StreamTests(
 		integration.StreamTestStreamSequential(100),
 	)
 	suite.Run(
 		t, template,
-		integration.StreamTestOptPort(resource.GetPort("11300/tcp")),
+		integration.StreamTestOptPort(port),
 	)
 }
 
 func TestIntegrationBeanstalkdStreamParallel(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
-	pool, err := dockertest.NewPool("")
-	require.NoError(t, err)
-
-	pool.MaxWait = time.Second * 30
-	resource, err := pool.Run("websmurf/beanstalkd", "1.12-alpine-3.14", nil)
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		assert.NoError(t, pool.Purge(resource))
-	})
-
-	_ = resource.Expire(900)
-	require.NoError(t, waitForBeanstalkd(pool, resource))
+	port := startBeanstalkd(t)
 
 	suite := integration.StreamTests(
 		integration.StreamTestStreamParallel(100),
 	)
 	suite.Run(
 		t, template,
-		integration.StreamTestOptPort(resource.GetPort("11300/tcp")),
+		integration.StreamTestOptPort(port),
 	)
 }

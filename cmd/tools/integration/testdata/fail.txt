@@ -1,0 +1,10 @@
+{"Action":"start-run","Package":"./internal/impl/redis"}
+{"Action":"run","Test":"TestIntegrationRedisCache"}
+{"Action":"run","Test":"TestIntegrationRedisCache/can_get_and_set"}
+{"Action":"run","Test":"TestIntegrationRedisCache/can_delete_keys"}
+{"Action":"pass","Test":"TestIntegrationRedisCache/can_get_and_set","Elapsed":0.05}
+{"Action":"output","Test":"TestIntegrationRedisCache/can_delete_keys","Output":"    redis_test.go:45: expected key to be deleted\n"}
+{"Action":"fail","Test":"TestIntegrationRedisCache/can_delete_keys","Elapsed":0.1}
+{"Action":"fail","Test":"TestIntegrationRedisCache","Elapsed":0.15}
+{"Action":"fail","Elapsed":1.234}
+{"Action":"end-run"}

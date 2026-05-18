@@ -12,7 +12,7 @@
 //
 // Messages are routed to the correct SObject configuration based on the "topic" field
 // set by the per-topic processor. Each topic_mapping entry defines the SObject, operation,
-// external ID field, and write mode for a given Kafka topic.
+// external ID field, and write mode for a given topic.
 
 package salesforce
 
@@ -23,7 +23,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
 	"net/url"
 	"sort"
 	"strconv"
@@ -33,6 +32,7 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
+	"github.com/redpanda-data/connect/v4/internal/httpclient"
 	"github.com/redpanda-data/connect/v4/internal/impl/salesforce/salesforcehttp"
 	"github.com/redpanda-data/connect/v4/internal/license"
 )
@@ -47,12 +47,6 @@ const (
 )
 
 const (
-	sfsFieldOrgURL                = "org_url"
-	sfsFieldClientID              = "client_id"
-	sfsFieldClientSecret          = "client_secret"
-	sfsFieldRESTAPIVersion        = "restapi_version"
-	sfsFieldRequestTimeout        = "request_timeout"
-	sfsFieldMaxRetries            = "max_retries"
 	sfsFieldBulkBatchSize         = "bulk_batch_size"
 	sfsFieldMaxConcurrentBulkJobs = "max_concurrent_bulk_jobs"
 	sfsFieldBulkPollInterval      = "bulk_poll_interval"
@@ -73,7 +67,7 @@ type inFlightBulkJob struct {
 	errCh chan error // buffered(1); receives exactly one value when polling completes
 }
 
-// topicMapping holds the Salesforce write config for a single Kafka topic.
+// topicMapping holds the Salesforce write config for a single topic.
 type topicMapping struct {
 	sobject         string
 	operation       string
@@ -87,7 +81,7 @@ type salesforceSinkOutput struct {
 	log    *service.Logger
 	client *salesforcehttp.Client
 
-	// topicMappings maps Kafka topic name → Salesforce write config.
+	// topicMappings maps topic name → Salesforce write config.
 	topicMappings map[string]topicMapping
 
 	// writableFields caches per-SObject updateable field sets, loaded lazily on first write.
@@ -133,7 +127,7 @@ func init() {
 func newSalesforceSinkConfigSpec() *service.ConfigSpec {
 	topicMappingSpec := service.NewObjectListField(sfsFieldTopicMappings,
 		service.NewStringField(sfsTMFieldTopic).
-			Description("Kafka topic name to match against the message's 'topic' field"),
+			Description("topic name to match against the message's 'topic' field"),
 		service.NewStringField(sfsTMFieldSObject).
 			Description("Salesforce SObject API name (e.g., Account, Contact, MyObject__c)"),
 		service.NewStringField(sfsTMFieldOperation).
@@ -148,10 +142,10 @@ func newSalesforceSinkConfigSpec() *service.ConfigSpec {
 		service.NewBoolField(sfsTMFieldAllOrNone).
 			Description("Realtime only: roll back the entire batch if any record fails").
 			Default(false),
-	).Description("Per-topic Salesforce write configuration. Each entry maps a Kafka topic to an SObject and write settings.")
+	).Description("Per-topic Salesforce write configuration. Each entry maps a topic to an SObject and write settings.")
 
-	return service.NewConfigSpec().
-		Summary("Writes messages to Salesforce, routing each Kafka topic to its own SObject configuration.").
+	spec := service.NewConfigSpec().
+		Summary("Writes messages to Salesforce, routing each topic to its own SObject configuration.").
 		Description(`Consumes batches of messages and writes them to Salesforce.
 
 Each message must have a ` + "`topic`" + ` field (set by the per-topic processor) and a ` + "`data`" + ` field
@@ -198,23 +192,9 @@ output:
         operation: upsert
         external_id_field: External_Id__c
         mode: bulk
-` + "```").
-		Field(service.NewStringField(sfsFieldOrgURL).
-			Description("Salesforce instance base URL (e.g., https://your-domain.salesforce.com)")).
-		Field(service.NewStringField(sfsFieldClientID).
-			Description("Client ID for the Salesforce Connected App")).
-		Field(service.NewStringField(sfsFieldClientSecret).
-			Description("Client Secret for the Salesforce Connected App").
-			Secret()).
-		Field(service.NewStringField(sfsFieldRESTAPIVersion).
-			Description("Salesforce REST API version to use (e.g., v65.0)").
-			Default("v65.0")).
-		Field(service.NewDurationField(sfsFieldRequestTimeout).
-			Description("HTTP request timeout").
-			Default("30s")).
-		Field(service.NewIntField(sfsFieldMaxRetries).
-			Description("Maximum number of retries on 429 Too Many Requests").
-			Default(10)).
+` + "```")
+
+	spec = spec.Fields(authFieldSpecs()...).
 		Field(service.NewIntField(sfsFieldBulkBatchSize).
 			Description("Number of records per bulk job. Also controls the output batch size.").
 			Default(defaultBulkBatchSize)).
@@ -230,7 +210,10 @@ output:
 		Field(service.NewIntField(sfsFieldMaxInFlight).
 			Description("Maximum number of batches to send concurrently. Increasing this improves realtime write throughput.").
 			Default(1)).
-		Field(topicMappingSpec)
+		Field(topicMappingSpec).
+		Field(httpFieldSpec())
+
+	return spec
 }
 
 func newSalesforceSinkOutput(conf *service.ParsedConfig, mgr *service.Resources) (*salesforceSinkOutput, error) {
@@ -238,35 +221,15 @@ func newSalesforceSinkOutput(conf *service.ParsedConfig, mgr *service.Resources)
 		return nil, err
 	}
 
-	orgURL, err := conf.FieldString(sfsFieldOrgURL)
+	auth, err := NewAuthConfigFromParsed(conf)
 	if err != nil {
 		return nil, err
 	}
-	if _, err := url.ParseRequestURI(orgURL); err != nil {
+	if _, err := url.ParseRequestURI(auth.OrgURL); err != nil {
 		return nil, errors.New("org_url is not a valid URL")
 	}
 
-	clientID, err := conf.FieldString(sfsFieldClientID)
-	if err != nil {
-		return nil, err
-	}
-
-	clientSecret, err := conf.FieldString(sfsFieldClientSecret)
-	if err != nil {
-		return nil, err
-	}
-
-	apiVersion, err := conf.FieldString(sfsFieldRESTAPIVersion)
-	if err != nil {
-		return nil, err
-	}
-
-	timeout, err := conf.FieldDuration(sfsFieldRequestTimeout)
-	if err != nil {
-		return nil, err
-	}
-
-	maxRetries, err := conf.FieldInt(sfsFieldMaxRetries)
+	httpConf, err := newHTTPConfigFromParsed(auth.OrgURL, conf)
 	if err != nil {
 		return nil, err
 	}
@@ -335,16 +298,19 @@ func newSalesforceSinkOutput(conf *service.ParsedConfig, mgr *service.Resources)
 		}
 	}
 
+	httpClient, err := httpclient.NewClient(httpConf, mgr)
+	if err != nil {
+		return nil, err
+	}
+
 	sfClient, err := salesforcehttp.NewClient(salesforcehttp.ClientConfig{
-		OrgURL:         orgURL,
-		ClientID:       clientID,
-		ClientSecret:   clientSecret,
-		APIVersion:     apiVersion,
-		MaxRetries:     maxRetries,
+		OrgURL:         auth.OrgURL,
+		ClientID:       auth.ClientID,
+		ClientSecret:   auth.ClientSecret,
+		APIVersion:     auth.APIVersion,
 		QueryBatchSize: 2000,
-		HTTPClient:     &http.Client{Timeout: timeout},
+		HTTPClient:     httpClient,
 		Logger:         mgr.Logger(),
-		Metrics:        mgr.Metrics(),
 	})
 	if err != nil {
 		return nil, err
