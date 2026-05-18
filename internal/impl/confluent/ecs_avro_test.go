@@ -516,6 +516,212 @@ func TestEcsAvroLameUnionNameResolution(t *testing.T) {
 	assert.Equal(t, schema.Int64, feeInner.Children[0].Type)
 }
 
+// TestEcsAvroUnionInlineErrorPropagation pins down the %w-wrapping
+// contract through the union resolvers. A malformed inline decimal sitting
+// inside a nullable union must surface its root-cause error (the precision
+// parse failure), not collapse to a generic "could not resolve type
+// map[string]interface{}". Covers both the optional-union fast path and the
+// general union fall-through, and both raw- and lame-union flavours.
+func TestEcsAvroUnionInlineErrorPropagation(t *testing.T) {
+	tests := []struct {
+		name    string
+		cfg     ecsAvroConfig
+		spec    string
+		wantMsg string
+	}{
+		{
+			name: "raw union, nullable shape, malformed decimal precision",
+			cfg:  ecsAvroConfig{rawUnion: true},
+			spec: `{
+				"type": "record",
+				"name": "Tx",
+				"fields": [{
+					"name": "amount",
+					"type": ["null", {"type": "bytes", "logicalType": "decimal", "precision": "not-a-number", "scale": 2}]
+				}]
+			}`,
+			wantMsg: "decimal precision",
+		},
+		{
+			name: "raw union, three-branch shape, malformed decimal scale",
+			cfg:  ecsAvroConfig{rawUnion: true},
+			spec: `{
+				"type": "record",
+				"name": "Tx",
+				"fields": [{
+					"name": "amount",
+					"type": ["null", "string", {"type": "bytes", "logicalType": "decimal", "precision": 9, "scale": "nope"}]
+				}]
+			}`,
+			wantMsg: "decimal scale",
+		},
+		{
+			name: "lame union, nullable shape, malformed decimal precision",
+			cfg:  ecsAvroConfig{},
+			spec: `{
+				"type": "record",
+				"name": "Tx",
+				"fields": [{
+					"name": "amount",
+					"type": ["null", {"type": "bytes", "logicalType": "decimal", "precision": "not-a-number", "scale": 2}]
+				}]
+			}`,
+			wantMsg: "decimal precision",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := ecsAvroParseFromBytes(tt.cfg, []byte(tt.spec))
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.wantMsg, "inner error context must propagate via %%w wrapping, got %q", err.Error())
+			assert.NotContains(t, err.Error(), "could not resolve type", "must not collapse to the type-stringifier fallback when an inner error exists")
+		})
+	}
+}
+
+// TestEcsAvroNamespaceInheritance verifies that named types defined inside
+// a namespaced record inherit the enclosing namespace when they omit their
+// own `namespace` field, per the Avro spec's name-resolution rules. Both
+// short-name and fully-qualified references to the inherited fullname must
+// resolve, including across deeply nested scopes.
+func TestEcsAvroNamespaceInheritance(t *testing.T) {
+	spec := []byte(`{
+		"type": "record",
+		"name": "Transfer",
+		"namespace": "com.example",
+		"fields": [
+			{
+				"name": "primary_fee",
+				"type": {
+					"type": "record",
+					"name": "Fee",
+					"fields": [{"name": "amount", "type": "long"}]
+				}
+			},
+			{"name": "by_short_name", "type": ["null", "Fee"]},
+			{"name": "by_inherited_full_name", "type": ["null", "com.example.Fee"]}
+		]
+	}`)
+	c, err := ecsAvroParseFromBytes(ecsAvroConfig{rawUnion: true}, spec)
+	require.NoError(t, err)
+	require.Len(t, c.Children, 3)
+
+	short := c.Children[1]
+	assert.Equal(t, "by_short_name", short.Name)
+	assert.Equal(t, schema.Object, short.Type, "unqualified Fee should resolve via inherited com.example namespace")
+	require.Len(t, short.Children, 1)
+	assert.Equal(t, "amount", short.Children[0].Name)
+
+	full := c.Children[2]
+	assert.Equal(t, "by_inherited_full_name", full.Name)
+	assert.Equal(t, schema.Object, full.Type, "Fee implicitly belongs to com.example and must be reachable by FQN")
+	require.Len(t, full.Children, 1)
+}
+
+// TestEcsAvroNameWithEmbeddedDot exercises the third form of Avro's named-
+// type spelling: the `name` field itself contains a dot, in which case the
+// dot-bearing value IS the fullname and any sibling `namespace` field is
+// ignored. References must resolve under the embedded fullname.
+func TestEcsAvroNameWithEmbeddedDot(t *testing.T) {
+	spec := []byte(`{
+		"type": "record",
+		"name": "Transfer",
+		"namespace": "ignored.outer",
+		"fields": [
+			{
+				"name": "primary_fee",
+				"type": {
+					"type": "record",
+					"name": "com.example.Fee",
+					"namespace": "this.is.ignored",
+					"fields": [{"name": "amount", "type": "long"}]
+				}
+			},
+			{"name": "by_fqn", "type": ["null", "com.example.Fee"]}
+		]
+	}`)
+	c, err := ecsAvroParseFromBytes(ecsAvroConfig{rawUnion: true}, spec)
+	require.NoError(t, err)
+	require.Len(t, c.Children, 2)
+
+	fqn := c.Children[1]
+	assert.Equal(t, "by_fqn", fqn.Name)
+	assert.Equal(t, schema.Object, fqn.Type)
+	require.Len(t, fqn.Children, 1)
+}
+
+// TestEcsAvroSelfReferentialRecord verifies that a record whose own field
+// references it by name (e.g. a linked-list `next` pointer) resolves to a
+// structural stub — a one-level Object carrying the record's short name —
+// rather than collapsing to schema.Any (VARCHAR downstream).
+//
+// True recursive resolution is out of scope: schema.Common is a value type
+// with no back-reference machinery, so the self-reference is necessarily a
+// stub. The fix exists so downstream sinks see "this is some kind of
+// record" rather than an opaque blob.
+func TestEcsAvroSelfReferentialRecord(t *testing.T) {
+	spec := []byte(`{
+		"type": "record",
+		"name": "Node",
+		"fields": [
+			{"name": "value", "type": "long"},
+			{"name": "next", "type": ["null", "Node"]}
+		]
+	}`)
+	c, err := ecsAvroParseFromBytes(ecsAvroConfig{rawUnion: true}, spec)
+	require.NoError(t, err)
+	require.Equal(t, schema.Object, c.Type)
+	require.Len(t, c.Children, 2)
+	assert.Equal(t, "value", c.Children[0].Name)
+	assert.Equal(t, schema.Int64, c.Children[0].Type)
+
+	next := c.Children[1]
+	assert.Equal(t, "next", next.Name)
+	assert.Equal(t, schema.Object, next.Type, "self-reference should resolve to Object stub, not schema.Any")
+	assert.True(t, next.Optional)
+	assert.Empty(t, next.Children, "self-reference is a one-level stub — recursive resolution is out of scope")
+}
+
+// TestEcsAvroNamesMapIsolation verifies the clone-on-retrieval contract for
+// the names map: mutating a resolved Common (e.g. appending to its Children)
+// must not propagate to subsequent lookups of the same named type. Without
+// the clone, the second `secondary_fee` resolution would see the mutated
+// shape of the first.
+func TestEcsAvroNamesMapIsolation(t *testing.T) {
+	spec := []byte(`{
+		"type": "record",
+		"name": "Transfer",
+		"fields": [
+			{
+				"name": "primary_fee",
+				"type": {
+					"type": "record",
+					"name": "Fee",
+					"fields": [{"name": "amount", "type": "long"}]
+				}
+			},
+			{"name": "first_ref", "type": "Fee"},
+			{"name": "second_ref", "type": "Fee"}
+		]
+	}`)
+	c, err := ecsAvroParseFromBytes(ecsAvroConfig{}, spec)
+	require.NoError(t, err)
+	require.Len(t, c.Children, 3)
+
+	first := c.Children[1]
+	require.Equal(t, schema.Object, first.Type)
+	require.Len(t, first.Children, 1)
+	// Mutate the first resolved copy. If the names map were aliased, the
+	// next retrieval would see a record with two children.
+	first.Children = append(first.Children, schema.Common{Name: "poison", Type: schema.String})
+	assert.Len(t, first.Children, 2)
+
+	second := c.Children[2]
+	require.Equal(t, schema.Object, second.Type)
+	assert.Len(t, second.Children, 1, "later retrieval of Fee must not see mutations applied to earlier resolutions")
+}
+
 // TestEcsAvroRecordWithNilFields is a regression test for schemas where a
 // field's type is a record object without a "fields" key (e.g. back-reference
 // form {"type":"record","name":"Party"} or "fields":null from some generators).
