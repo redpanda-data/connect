@@ -26,6 +26,7 @@ const defaultTimeout = "5m"
 type TestPackage struct {
 	Path    string `json:"path"`
 	Timeout string `json:"timeout"`
+	Skip    bool   `json:"skip,omitempty"`
 }
 
 // TimeoutStr returns the timeout for go test -timeout, defaulting to 5m.
