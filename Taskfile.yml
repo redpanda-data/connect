@@ -55,6 +55,11 @@ tasks:
     cmds:
       - "{{.TOOLS_BIN_DIR}}/golangci-lint run --fix cmd/... internal/... public/..."
 
+  check:integration-registry:
+    desc: Check all integration test packages are registered in packages.json
+    cmds:
+      - go run ./cmd/tools/check_integration_registry
+
   test:
     desc: Run unit, template and ffi tests
     deps:
