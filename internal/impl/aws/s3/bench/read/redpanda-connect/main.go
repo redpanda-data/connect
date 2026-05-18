@@ -137,9 +137,7 @@ func seedBucket(ctx context.Context, client *s3.Client, total, objSize, numWorke
 	errCh := make(chan error, 1)
 
 	for range numWorkers {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			for n := range jobs {
 				if err := uploadObject(ctx, client, n, objSize); err != nil {
 					select {
@@ -154,7 +152,7 @@ func seedBucket(ctx context.Context, client *s3.Client, total, objSize, numWorke
 					fmt.Printf("Progress: %d/%d objects (%.0f obj/sec)\n", done, total, float64(done)/elapsed)
 				}
 			}
-		}()
+		})
 	}
 
 	for i := range total {
@@ -196,10 +194,7 @@ func uploadObject(ctx context.Context, client *s3.Client, n, size int) error {
 func makeObjectBody(n, size int) []byte {
 	prefix := fmt.Sprintf(`{"id":"obj-%d","created_at":"%s","data":"`, n, time.Now().UTC().Format(time.RFC3339))
 	suffix := `"}`
-	pad := size - len(prefix) - len(suffix)
-	if pad < 0 {
-		pad = 0
-	}
+	pad := max(size-len(prefix)-len(suffix), 0)
 	return []byte(prefix + strings.Repeat("x", pad) + suffix)
 }
 
