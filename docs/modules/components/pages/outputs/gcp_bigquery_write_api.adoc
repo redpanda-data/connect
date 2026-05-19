@@ -78,6 +78,7 @@ output:
     delegates: []
     stream_idle_timeout: 5m
     stream_sweep_interval: 1m
+    max_cached_streams: 1024
     schema_resolve_timeout: 5s
     schema_evolution_timeout: 30s
     endpoint:
@@ -306,6 +307,15 @@ How often to check for idle streams to close.
 *Type*: `string`
 
 *Default*: `"1m"`
+
+=== `max_cached_streams`
+
+Soft cap on the number of cached streams. When the cache exceeds this size, the least-recently-used stream is evicted. Set to 0 for unlimited (rely on idle-timeout sweeping only). Relevant when the table field uses interpolation to route to many tables.
+
+
+*Type*: `int`
+
+*Default*: `1024`
 
 === `schema_resolve_timeout`
 

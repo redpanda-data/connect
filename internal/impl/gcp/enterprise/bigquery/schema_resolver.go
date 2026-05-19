@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	bq "cloud.google.com/go/bigquery"
@@ -41,6 +42,11 @@ type schemaResolver struct {
 	// so a wedged backend cannot pin the singleflight slot indefinitely. Set
 	// from the schema_resolve_timeout config field.
 	resolveTimeout time.Duration
+	// generation increments on every Evict so an in-flight singleflight whose
+	// fetch started before the eviction can detect it raced with a writer and
+	// refuse to store its now-stale result. atomic to avoid taking a lock on
+	// the cache-miss path.
+	generation atomic.Int64
 }
 
 // Resolve returns a resolved schema for the given table by fetching the
@@ -52,6 +58,12 @@ type schemaResolver struct {
 // cancelled mid-fetch every concurrent waiter would receive the cancellation
 // error too. Detaching ensures one slow batch cannot poison resolution for
 // every other batch routing to the same table.
+//
+// Evict-during-flight protection: the in-flight fetch reads the generation
+// counter before starting and compares it before storing. If Evict bumped the
+// counter in between (e.g. after a schema evolution invalidated the cached
+// descriptor), the result is discarded so the next Resolve sees a clean miss
+// rather than a re-stored stale schema.
 func (r *schemaResolver) Resolve(ctx context.Context, client *bq.Client, datasetID, tableID string) (*resolvedSchema, error) {
 	if cached, ok := r.cache.Load(tableID); ok {
 		return cached.(*resolvedSchema), nil
@@ -67,13 +79,21 @@ func (r *schemaResolver) Resolve(ctx context.Context, client *bq.Client, dataset
 		if cached, ok := r.cache.Load(tableID); ok {
 			return cached.(*resolvedSchema), nil
 		}
+		genBefore := r.generation.Load()
 		fetchCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), r.resolveTimeout)
 		defer cancel()
 		rs, err := resolveFromBQTable(fetchCtx, client, datasetID, tableID)
 		if err != nil {
 			return nil, err
 		}
-		r.cache.Store(tableID, rs)
+		// Only store if no Evict raced with this fetch. A bumped generation
+		// means the cached descriptor we were about to write is already
+		// known-stale (typically: schema evolved during this resolve), so we
+		// return the value to satisfy current waiters but skip the cache so
+		// the next Resolve re-fetches with the post-evolution schema.
+		if r.generation.Load() == genBefore {
+			r.cache.Store(tableID, rs)
+		}
 		return rs, nil
 	})
 	if err != nil {
@@ -83,8 +103,11 @@ func (r *schemaResolver) Resolve(ctx context.Context, client *bq.Client, dataset
 }
 
 // Evict removes the cached schema for a table, forcing re-resolution on the
-// next call to Resolve.
+// next call to Resolve. Bumps the generation counter so an in-flight Resolve
+// for the same table detects it raced with the eviction and refuses to write
+// its now-stale result back to the cache.
 func (r *schemaResolver) Evict(tableID string) {
+	r.generation.Add(1)
 	r.cache.Delete(tableID)
 }
 

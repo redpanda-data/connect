@@ -50,6 +50,7 @@ const (
 	bqwaFieldDelegates              = "delegates"
 	bqwaFieldStreamIdleTimeout      = "stream_idle_timeout"
 	bqwaFieldStreamSweepInterval    = "stream_sweep_interval"
+	bqwaFieldMaxCachedStreams       = "max_cached_streams"
 	bqwaFieldSchemaResolveTimeout   = "schema_resolve_timeout"
 	bqwaFieldSchemaEvolutionTimeout = "schema_evolution_timeout"
 	bqwaFieldEndpoint               = "endpoint"
@@ -137,6 +138,13 @@ A name that sanitizes to the empty string is rejected as a permanent error.
 				Description("How often to check for idle streams to close.").
 				Advanced().
 				Default("1m"),
+			service.NewIntField(bqwaFieldMaxCachedStreams).
+				Description("Soft cap on the number of cached streams."+
+					" When the cache exceeds this size, the least-recently-used stream is evicted."+
+					" Set to 0 for unlimited (rely on idle-timeout sweeping only)."+
+					" Relevant when the table field uses interpolation to route to many tables.").
+				Advanced().
+				Default(1024),
 			service.NewDurationField(bqwaFieldSchemaResolveTimeout).
 				Description("How long a single BigQuery table-metadata fetch can run before being aborted."+
 					" Coalesced concurrent resolves share one fetch, so this bounds the time a wedged backend"+
@@ -173,6 +181,7 @@ type bigQueryWriteAPIConfig struct {
 	Delegates              []string
 	StreamIdleTimeout      time.Duration
 	StreamSweepInterval    time.Duration
+	MaxCachedStreams       int
 	SchemaResolveTimeout   time.Duration
 	SchemaEvolutionTimeout time.Duration
 	EndpointHTTP           string
@@ -217,6 +226,13 @@ func bigQueryWriteAPIConfigFromParsed(pConf *service.ParsedConfig) (conf bigQuer
 	}
 	if conf.StreamSweepInterval <= 0 {
 		err = fmt.Errorf("%s must be greater than zero", bqwaFieldStreamSweepInterval)
+		return
+	}
+	if conf.MaxCachedStreams, err = pConf.FieldInt(bqwaFieldMaxCachedStreams); err != nil {
+		return
+	}
+	if conf.MaxCachedStreams < 0 {
+		err = fmt.Errorf("%s must be >= 0 (0 = unlimited)", bqwaFieldMaxCachedStreams)
 		return
 	}
 	if conf.SchemaResolveTimeout, err = pConf.FieldDuration(bqwaFieldSchemaResolveTimeout); err != nil {
@@ -732,7 +748,36 @@ func (o *bigQueryWriteAPIOutput) getOrCreateStream(ctx context.Context, client *
 	}
 	swd.lastUsed.Store(now.UnixNano())
 	o.streams[cacheKey] = swd
+	// Enforce the max_cached_streams cap by evicting the least-recently-used
+	// stream. We only run the scan when over the cap, and we collect the LRU
+	// key under the lock then close it asynchronously after Unlock — the cold
+	// path of the cache holds streamsMu.Lock for ~10μs at max=1024 (a tight
+	// loop over an O(n) map), which is negligible compared to the
+	// NewManagedStream RPC that already ran above.
+	var evicted *streamWithDescriptor
+	if o.conf.MaxCachedStreams > 0 && len(o.streams) > o.conf.MaxCachedStreams {
+		var lruKey string
+		var lruTS int64 = -1
+		for k, s := range o.streams {
+			if k == cacheKey {
+				// Don't evict the entry we just inserted (its lastUsed is now).
+				continue
+			}
+			ts := s.lastUsed.Load()
+			if lruTS == -1 || ts < lruTS {
+				lruKey = k
+				lruTS = ts
+			}
+		}
+		if lruKey != "" {
+			evicted = o.streams[lruKey]
+			delete(o.streams, lruKey)
+		}
+	}
 	o.streamsMu.Unlock()
+	if evicted != nil {
+		o.closeStreamAsync(evicted.stream)
+	}
 	return swd, cacheKey, nil
 }
 

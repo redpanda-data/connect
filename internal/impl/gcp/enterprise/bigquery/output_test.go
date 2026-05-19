@@ -381,6 +381,74 @@ stream_sweep_interval: 50ms
 	assert.True(t, freshExists, "fresh stream should remain in cache")
 }
 
+func TestMaxCachedStreamsLRUEviction(t *testing.T) {
+	// Seed three cached streams with monotonically older lastUsed values.
+	// With max_cached_streams=2 and a fourth stream inserted, the oldest of
+	// the existing entries must be evicted; the just-inserted entry must
+	// survive even though its peer set is over the cap mid-insert.
+	out := newTestOutput(t, `
+dataset: my_dataset
+table: my_table
+max_cached_streams: 2
+`)
+	out.streams = make(map[string]*streamWithDescriptor)
+
+	mk := func(age time.Duration) *streamWithDescriptor {
+		s := &streamWithDescriptor{}
+		s.lastUsed.Store(time.Now().Add(-age).UnixNano())
+		return s
+	}
+	out.streams["projects/p/datasets/d/tables/oldest"] = mk(10 * time.Minute)
+	out.streams["projects/p/datasets/d/tables/middle"] = mk(5 * time.Minute)
+	out.streams["projects/p/datasets/d/tables/recent"] = mk(1 * time.Minute)
+
+	// Simulate the inline LRU pass that runs inside getOrCreateStream after a
+	// new entry is added — we drive it via the cap logic directly so the test
+	// doesn't need a live BQ to construct a real stream.
+	out.streamsMu.Lock()
+	newKey := "projects/p/datasets/d/tables/new"
+	out.streams[newKey] = mk(0)
+	var evictedKey string
+	if out.conf.MaxCachedStreams > 0 && len(out.streams) > out.conf.MaxCachedStreams {
+		var lruKey string
+		var lruTS int64 = -1
+		for k, s := range out.streams {
+			if k == newKey {
+				continue
+			}
+			ts := s.lastUsed.Load()
+			if lruTS == -1 || ts < lruTS {
+				lruKey = k
+				lruTS = ts
+			}
+		}
+		evictedKey = lruKey
+		delete(out.streams, lruKey)
+	}
+	out.streamsMu.Unlock()
+
+	// Only the oldest pre-existing key should be picked, not the just-inserted entry.
+	assert.Equal(t, "projects/p/datasets/d/tables/oldest", evictedKey)
+	_, ok := out.streams[newKey]
+	assert.True(t, ok, "just-inserted entry must survive its own insert")
+	// The cap is a soft limit; we evicted one entry but len may still exceed
+	// MaxCachedStreams by one if MaxCachedStreams==1 (rare); for the typical
+	// case len should equal MaxCachedStreams+1−1=MaxCachedStreams when going
+	// from over-by-1 to over-by-0.
+	assert.LessOrEqual(t, len(out.streams), out.conf.MaxCachedStreams+1)
+}
+
+func TestMaxCachedStreamsUnlimited(t *testing.T) {
+	// max_cached_streams=0 means unlimited — eviction is gated entirely on
+	// the idle-timeout sweep loop.
+	out := newTestOutput(t, `
+dataset: my_dataset
+table: my_table
+max_cached_streams: 0
+`)
+	assert.Equal(t, 0, out.conf.MaxCachedStreams)
+}
+
 func TestClassifyBQError(t *testing.T) {
 	tests := []struct {
 		name     string

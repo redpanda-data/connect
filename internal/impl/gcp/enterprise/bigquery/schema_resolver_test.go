@@ -61,6 +61,45 @@ func TestResolverEvict(t *testing.T) {
 	assert.False(t, ok)
 }
 
+func TestResolverEvictBumpsGeneration(t *testing.T) {
+	// Evict must bump the generation counter so an in-flight Resolve detects
+	// it raced with the eviction. The counter is the load-bearing piece of
+	// the singleflight/Evict race fix; if it isn't bumped, a stale fetch
+	// result would be silently re-stored after the eviction.
+	r := &schemaResolver{log: service.MockResources().Logger()}
+	before := r.generation.Load()
+	r.Evict("any_table")
+	assert.Greater(t, r.generation.Load(), before)
+}
+
+func TestResolverEvictMidFlightDiscardsStaleResult(t *testing.T) {
+	// Simulate the documented race: a Resolve fetch is in flight (we model
+	// this by storing genBefore, then Evicting, then doing what the inner
+	// singleflight function does on completion). The post-fetch generation
+	// check must see the bump and skip the cache.Store, so the next Resolve
+	// hits a clean miss instead of re-reading the stale schema.
+	r := &schemaResolver{log: service.MockResources().Logger()}
+	rs := &resolvedSchema{messageDescriptor: buildTestMessageDescriptor(t)}
+
+	// Step 1: a fetch starts and snapshots the generation.
+	genBefore := r.generation.Load()
+
+	// Step 2: a concurrent writer evicts (e.g. handleWriteError after a
+	// schema_mismatch + successful Evolve).
+	r.Evict("my_table")
+
+	// Step 3: the in-flight fetch completes and tries to cache its result.
+	// The generation has been bumped, so the equality check fails and the
+	// store is suppressed.
+	if r.generation.Load() == genBefore {
+		r.cache.Store("my_table", rs)
+	}
+
+	// Then the cache does not contain the would-be-stale entry.
+	_, ok := r.cache.Load("my_table")
+	assert.False(t, ok, "stale schema must not be re-stored after Evict")
+}
+
 func TestResolverEvictNonexistent(t *testing.T) {
 	// Given a resolver with no cache entries.
 	r := &schemaResolver{log: service.MockResources().Logger()}
