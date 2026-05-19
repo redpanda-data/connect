@@ -1,0 +1,46 @@
+version: '3'
+
+vars:
+  RUNNER: 'go run ./benchmarking/aws/runner'
+
+tasks:
+  aws:bench:
+    desc: "Run a scenario end-to-end (provision → sweep → render → teardown)"
+    dir: '.'
+    cmds:
+      - |
+        if [ -z "{{.scenario}}" ]; then
+          echo "usage: task aws:bench -- scenario=<path>"
+          exit 2
+        fi
+        cd ../.. && {{.RUNNER}} bench \
+          --scenario=benchmarking/aws/scenarios/{{.scenario}}.yaml \
+          --repo-root=.
+
+  aws:validate:
+    desc: "Validate a scenario YAML + terraform plan (no AWS spend)"
+    cmds:
+      - |
+        if [ -z "{{.scenario}}" ]; then
+          echo "usage: task aws:validate -- scenario=<path>"
+          exit 2
+        fi
+        cd ../.. && {{.RUNNER}} validate \
+          --scenario=benchmarking/aws/scenarios/{{.scenario}}.yaml
+
+  aws:down:
+    desc: "Tear down infra for a scenario (when bench was run with keep=true)"
+    cmds:
+      - |
+        if [ -z "{{.scenario}}" ]; then
+          echo "usage: task aws:down -- scenario=<path>"
+          exit 2
+        fi
+        cd ../.. && {{.RUNNER}} down \
+          --scenario=benchmarking/aws/scenarios/{{.scenario}}.yaml \
+          --repo-root=.
+
+  aws:cost-check:
+    desc: "Estimated hourly cost of currently running stacks"
+    cmds:
+      - cd ../.. && {{.RUNNER}} cost-check
