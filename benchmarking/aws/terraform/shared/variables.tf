@@ -6,13 +6,13 @@ variable "region" {
 variable "runner_instance_type" {
   description = "EC2 instance type for the Connect benchmark host."
   type        = string
-  default     = "c7i.4xlarge"
+  default     = "c8g.4xlarge"
 }
 
 variable "load_gen_instance_type" {
   description = "EC2 instance type for the load generator."
   type        = string
-  default     = "c7i.large"
+  default     = "c8g.large"
 }
 
 variable "bench_session_id" {

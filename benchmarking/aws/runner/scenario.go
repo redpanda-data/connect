@@ -23,6 +23,7 @@ const (
 // instanceTypeVCPU maps known EC2 instance types to their vCPU counts.
 // Extend this table when new types are referenced by scenarios.
 var instanceTypeVCPU = map[string]int{
+	// c7i (Intel x86_64) — kept for backward compatibility with existing fixtures
 	"c7i.large":    2,
 	"c7i.xlarge":   4,
 	"c7i.2xlarge":  8,
@@ -30,6 +31,14 @@ var instanceTypeVCPU = map[string]int{
 	"c7i.8xlarge":  32,
 	"c7i.12xlarge": 48,
 	"c7i.16xlarge": 64,
+	// c8g (Graviton arm64) — matches arm64 AMI and arm64 Go build target
+	"c8g.large":    2,
+	"c8g.xlarge":   4,
+	"c8g.2xlarge":  8,
+	"c8g.4xlarge":  16,
+	"c8g.8xlarge":  32,
+	"c8g.12xlarge": 48,
+	"c8g.16xlarge": 64,
 }
 
 type Scenario struct {
