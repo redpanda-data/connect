@@ -33,5 +33,7 @@ variable "master_username" {
 }
 variable "parameters" {
   type    = map(string)
-  default = { wal_level = "logical", max_wal_senders = "20" }
+  # rds.logical_replication=1 is the RDS-specific knob that makes RDS set
+  # wal_level=logical for us (wal_level itself isn't user-settable on RDS).
+  default = { "rds.logical_replication" = "1", max_wal_senders = "20" }
 }
