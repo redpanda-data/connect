@@ -16,7 +16,7 @@ infra:
       wal_level: logical
       max_wal_senders: "20"
   runner:
-    instance_type: c7i.4xlarge
+    instance_type: c8g.4xlarge
 
 dataset:
   initial_rows: 75000000
