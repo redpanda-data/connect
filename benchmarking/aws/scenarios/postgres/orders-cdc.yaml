@@ -13,7 +13,7 @@ infra:
     storage_gb: 400
     iops: 12000
     parameters:
-      wal_level: logical
+      rds.logical_replication: "1"
       max_wal_senders: "20"
   runner:
     instance_type: c8g.4xlarge
