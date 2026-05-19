@@ -318,13 +318,13 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 		//
 		// Form B — dbms_lob.trim(loc_b, N)
 		//   Emitted when a SELECT_LOB_LOCATOR has already established the active key.
-		//   No schema/table/column info is present; we just clear accumulated fragments so
-		//   subsequent LOB_WRITE calls start with a clean slate.
+		//   No schema/table/column info is present. The accumulator is left untouched
+		//   regardless of N — see the inline comment below for the rationale.
 		//
-		//   When N=0 this is the standard "clear before full rewrite" pattern and clearing
-		//   fragments is correct. When N>0, Oracle means "keep the first N bytes/chars" of
-		//   the pre-existing LOB — data we do not hold in the accumulator. The assembled
-		//   value will be incomplete in that case (missing the preserved prefix).
+		//   When N>0 and no fragments have been accumulated, a warning is emitted because
+		//   Oracle intends to keep the first N bytes/chars of the pre-existing LOB, which
+		//   we do not hold. In the common SecureFile full-rewrite path LOB_WRITE(s) precede
+		//   LOB_TRIM and the assembled length equals N, so no data is lost in practice.
 		if redoEvent.SQLRedo.Valid && redoEvent.SQLRedo.String != "" {
 			if info, err := sqlredo.ParseSelectLobLocator(redoEvent.SQLRedo.String); err == nil {
 				// Form A: establish (or reset) the accumulator for this LOB column.
@@ -361,9 +361,14 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 		}
 		if redoEvent.SQLRedo.Valid && redoEvent.SQLRedo.String != "" {
 			if trimLen, err := sqlredo.ParseLobTrim(redoEvent.SQLRedo.String); err == nil && trimLen > 0 {
-				// N>0 with no prior LOB_WRITEs would indicate a genuine partial truncation
-				// where the existing prefix is preserved. We cannot reconstruct that prefix
-				// from redo alone, so warn but still emit what was written.
+				// Warn only for the blatant case: N>0 with no fragments at all, meaning
+				// the existing LOB prefix is preserved but we have nothing to emit.
+				// Two adjacent cases (N < total written bytes, or N > total written bytes
+				// with M>0) also produce an assembled value that does not exactly match N,
+				// but Assemble() is not truncated to N here. This is an intentional
+				// tradeoff: SecureFile full-rewrite UPDATEs (the common path) always write
+				// all bytes then trim to the exact final length, so assembled==N in
+				// practice. Partial-update patterns are not supported by this path.
 				if acc := state.Accumulators[*state.ActiveKey]; acc != nil && len(acc.Fragments) == 0 {
 					lm.log.Warnf("LOB_TRIM to non-zero length %d with no prior LOB_WRITE (scn=%d, txn=%s): assembled value may be incomplete", trimLen, redoEvent.SCN, redoEvent.TransactionID)
 				}
@@ -425,6 +430,17 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 					// event. This handles Oracle SecureFile out-of-row LOBs where Oracle does
 					// not emit a DML UPDATE in LogMiner — only SELECT_LOB_LOCATOR + LOB_WRITE
 					// + LOB_TRIM operations are recorded.
+					//
+					// The synthesized event is intentionally sparse: Data contains only the
+					// LOB column(s) and OldValues contains only the PK columns extracted from
+					// the SELECT_LOB_LOCATOR WHERE clause. Other row columns are not available
+					// from redo alone. Carrying over values from a prior event in the same
+					// transaction is not possible here: MergeLOBsIntoDMLEvents merges into any
+					// matching INSERT (Pass 1) or PK-bearing UPDATE (Pass 2) before returning
+					// an accumulator as unmerged, so by definition no full-row DML event for
+					// this row exists in the transaction. Downstream consumers should treat a
+					// sparse UPDATE (OldValues containing only PK columns) as a LOB-column-only
+					// change with no information about other columns.
 					for _, acc := range unmerged {
 						assembled := acc.Assemble()
 						if assembled == nil {
