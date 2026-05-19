@@ -45,6 +45,11 @@ func TestSummarise_BasicPercentiles(t *testing.T) {
 	require.Equal(t, 100.0, sum.PeakMBPerSec)
 }
 
+func TestSummarise_EmptyInput(t *testing.T) {
+	require.Equal(t, Summary{}, Summarise(nil))
+	require.Equal(t, Summary{}, Summarise([]Sample{}))
+}
+
 func TestParseRollingStatsStream(t *testing.T) {
 	in := strings.NewReader(`INFO startup
 INFO rolling stats: 100 msg/sec, 1 MB/sec
@@ -56,4 +61,7 @@ INFO rolling stats: 300 msg/sec, 3 MB/sec
 	require.NoError(t, err)
 	require.Len(t, samples, 3)
 	require.Equal(t, 3.0, samples[2].MBPerSec)
+	require.Equal(t, 0, samples[0].T)
+	require.Equal(t, 1, samples[1].T)
+	require.Equal(t, 2, samples[2].T)
 }
