@@ -19,6 +19,9 @@ import (
 	"syscall"
 	"time"
 
+	awsconfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"gopkg.in/yaml.v3"
 )
 
@@ -382,10 +385,6 @@ func buildConnect(repoRoot string) (string, error) {
 	return out, nil
 }
 
-// The next four are placeholders that the staging task (Task 12) implements
-// once the shared stack outputs the runner/load-gen instance IDs and the
-// artefact bucket. They are declared here so the bench flow compiles in
-// isolation.
 func renderPipelineConfig(s *Scenario, outs map[string]string) (string, error) {
 	cfg := map[string]any{
 		"http":  map[string]any{"debug_endpoints": true},
@@ -426,13 +425,90 @@ func substitutePlaceholders(in string, outs map[string]string) string {
 	return in
 }
 
-func stageArtefacts(_ context.Context, _ benchOpts, _ map[string]string, _, _ string) error {
-	// Implemented in Task 12.
-	return nil
+func stageArtefacts(ctx context.Context, opts benchOpts, outs map[string]string, binPath, cfgPath string) error {
+	cfg, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(opts.region))
+	if err != nil {
+		return err
+	}
+	uploader := manager.NewUploader(s3.NewFromConfig(cfg))
+	bucket := outs["results_bucket"]
+	for _, item := range []struct{ key, path string }{
+		{"stage/redpanda-connect", binPath},
+		{"stage/config.yaml", cfgPath},
+	} {
+		f, err := os.Open(item.path)
+		if err != nil {
+			return err
+		}
+		_, err = uploader.Upload(ctx, &s3.PutObjectInput{
+			Bucket: &bucket,
+			Key:    &item.key,
+			Body:   f,
+		})
+		f.Close()
+		if err != nil {
+			return fmt.Errorf("upload %s: %w", item.path, err)
+		}
+	}
+	ssmExec, err := NewSSMExecutor(ctx, opts.region)
+	if err != nil {
+		return err
+	}
+	script := fmt.Sprintf(`
+set -euo pipefail
+aws s3 cp s3://%s/stage/redpanda-connect /opt/bench/redpanda-connect
+aws s3 cp s3://%s/stage/config.yaml /opt/bench/config.yaml
+chmod +x /opt/bench/redpanda-connect
+`, bucket, bucket)
+	return ssmExec.Run(ctx, outs["runner_instance_id"], script, streamingOnLine(os.Stdout, "stage"))
 }
-func runSeeder(_ context.Context, _ benchOpts, _ *Scenario, _ map[string]string) error {
-	// Implemented in Task 12.
-	return nil
+func runSeeder(ctx context.Context, opts benchOpts, s *Scenario, outs map[string]string) error {
+	if s.Dataset.Seeder == "" {
+		return nil
+	}
+	dist := filepath.Join(opts.repoRoot, "benchmarking/aws/seeders/dist")
+	_ = os.MkdirAll(dist, 0o755)
+	binOut := filepath.Join(dist, s.Dataset.Seeder)
+	cmd := exec.Command("go", "build", "-o", binOut, "./benchmarking/aws/seeders/"+s.Dataset.Seeder)
+	cmd.Dir = opts.repoRoot
+	cmd.Env = append(os.Environ(), "GOOS=linux", "GOARCH=arm64", "CGO_ENABLED=0")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("build seeder: %w", err)
+	}
+	cfg, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(opts.region))
+	if err != nil {
+		return err
+	}
+	uploader := manager.NewUploader(s3.NewFromConfig(cfg))
+	bucket := outs["results_bucket"]
+	f, err := os.Open(binOut)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	key := "stage/" + s.Dataset.Seeder
+	if _, err := uploader.Upload(ctx, &s3.PutObjectInput{
+		Bucket: &bucket, Key: &key, Body: f,
+	}); err != nil {
+		return err
+	}
+	ssmExec, err := NewSSMExecutor(ctx, opts.region)
+	if err != nil {
+		return err
+	}
+	script := fmt.Sprintf(`
+set -euo pipefail
+aws s3 cp s3://%s/%s /opt/bench/%s
+chmod +x /opt/bench/%s
+POSTGRES_DSN=%q /opt/bench/%s seed \
+  --tables=%s --rows=%d --row-size=%d
+`,
+		bucket, key, s.Dataset.Seeder, s.Dataset.Seeder,
+		outs["postgres_dsn"], s.Dataset.Seeder,
+		strings.Join(s.Dataset.Tables, ","), s.Dataset.InitialRows, s.Dataset.RowSizeBytes)
+	return ssmExec.Run(ctx, outs["load_gen_instance_id"], script, streamingOnLine(os.Stdout, "seed"))
 }
 func combineReset(steps []ResetStep, outs map[string]string) string {
 	var sb strings.Builder
@@ -450,7 +526,16 @@ func renderWorkloadScript(s *Scenario, outs map[string]string) string {
 	if s.Workload == nil {
 		return ""
 	}
-	// Postgres-orders workload: drive inserts at the configured rate.
-	// Implemented in Task 12.
-	return ""
+	totalSec := int((s.Workload.Warmup + s.Workload.Duration).Seconds())
+	return fmt.Sprintf(`
+set -euo pipefail
+POSTGRES_DSN=%q /opt/bench/cdc-rows workload \
+  --tables=%s --row-size=%d \
+  --rate=%d --duration=%ds
+`,
+		outs["postgres_dsn"],
+		strings.Join(s.Dataset.Tables, ","),
+		s.Dataset.RowSizeBytes,
+		s.Workload.WriteRatePerSec,
+		totalSec)
 }
