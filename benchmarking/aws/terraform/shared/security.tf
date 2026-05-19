@@ -1,6 +1,6 @@
 resource "aws_security_group" "runner" {
   name        = "${local.name_prefix}-runner"
-  description = "Runner EC2 — egress for SSM + source connections"
+  description = "Runner EC2 - egress for SSM + source connections"
   vpc_id      = aws_vpc.main.id
 
   egress {
@@ -13,7 +13,7 @@ resource "aws_security_group" "runner" {
 
 resource "aws_security_group" "load_gen" {
   name        = "${local.name_prefix}-load-gen"
-  description = "Load-gen EC2 — egress for SSM + source writes"
+  description = "Load-gen EC2 - egress for SSM + source writes"
   vpc_id      = aws_vpc.main.id
 
   egress {
