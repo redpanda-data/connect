@@ -80,6 +80,22 @@ type LobWriteInfo struct {
 	Length int64
 }
 
+var reLobTrimLength = regexp.MustCompile(`(?i)dbms_lob\.trim\s*\([^,]+,\s*(\d+)\s*\)`)
+
+// ParseLobTrim extracts the new length N from a dbms_lob.trim(locator, N) call
+// emitted by Oracle LogMiner for LOB_TRIM (op 11) entries.
+func ParseLobTrim(sql string) (int64, error) {
+	m := reLobTrimLength.FindStringSubmatch(sql)
+	if m == nil {
+		return 0, errors.New("could not find dbms_lob.trim() call in LOB_TRIM SQL")
+	}
+	n, err := strconv.ParseInt(m[1], 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("parsing LOB_TRIM length: %w", err)
+	}
+	return n, nil
+}
+
 var (
 	// Extracts length (1) and offset (2) from dbms_lob.write.
 	reLobWriteParams = regexp.MustCompile(`(?i)dbms_lob\.write\s*\([^,]+,\s*(\d+)\s*,\s*(\d+)\s*,`)

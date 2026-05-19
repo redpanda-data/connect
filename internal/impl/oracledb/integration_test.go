@@ -1809,3 +1809,243 @@ oracledb_cdc:
 
 	require.NoError(t, stream.StopWithin(10*time.Second))
 }
+
+func TestIntegrationOracleDBCDCLOB(t *testing.T) {
+	integration.CheckSkip(t)
+
+	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
+
+	t.Run("LOB_TRIM handling for SecureFile LOB updates", func(t *testing.T) {
+		// Use default storage (SecureFile on Oracle Free 23c) so that Oracle emits
+		// the SELECT_LOB_LOCATOR → LOB_WRITE(s) → LOB_TRIM(N) sequence on UPDATE.
+		// The LOB_TRIM finalisation step must not discard already-accumulated fragments.
+		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.lobtrim",
+			`CREATE TABLE testdb.lobtrim (
+			id      NUMBER GENERATED ALWAYS AS IDENTITY (NOCACHE) PRIMARY KEY,
+			clobcol CLOB
+		)`))
+
+		var batch oracledbtest.Batch
+
+		cfg := fmt.Sprintf(`
+oracledb_cdc:
+  connection_string: %s
+  stream_snapshot: false
+  logminer:
+    lob_enabled: true
+    scn_window_size: 20000
+    backoff_interval: 1s
+  include: ["TESTDB.LOBTRIM"]`, connStr)
+
+		streamBuilder := service.NewStreamBuilder()
+		require.NoError(t, streamBuilder.AddInputYAML(cfg))
+		require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
+		require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+			batch.Lock()
+			defer batch.Unlock()
+			for _, msg := range mb {
+				msgBytes, err := msg.AsBytes()
+				assert.NoError(t, err)
+				batch.Msgs = append(batch.Msgs, string(msgBytes))
+			}
+			return nil
+		}))
+
+		stream, err := streamBuilder.Build()
+		require.NoError(t, err)
+		license.InjectTestService(stream.Resources())
+
+		go func() {
+			if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+				t.Error(err)
+			}
+		}()
+
+		t.Log("Inserting initial LOB row and waiting CDC event")
+		{
+			initialClob := strings.Repeat("A", 5000)
+			db.MustExec("INSERT INTO testdb.lobtrim (clobcol) VALUES (:1)", initialClob)
+
+			assert.Eventually(t, func() bool {
+				return batch.Count() >= 1
+			}, time.Minute*2, time.Millisecond*500, "timed out waiting for INSERT CDC event")
+		}
+
+		t.Log("Updating LOB row and waiting for CDC event")
+		{
+			// UPDATE the row — Oracle emits SELECT_LOB_LOCATOR → LOB_WRITE(s) → LOB_TRIM.
+			// The assembled CLOB value should equal the new content, not the old value.
+			updatedClob := strings.Repeat("B", 5000)
+			db.MustExec("UPDATE testdb.lobtrim SET clobcol = :1 WHERE id = 1", updatedClob)
+
+			assert.Eventually(t, func() bool {
+				for _, msg := range batch.Clone() {
+					var row map[string]any
+					if err := json.Unmarshal([]byte(msg), &row); err != nil {
+						continue
+					}
+					if v, ok := row["CLOBCOL"].(string); ok && v == updatedClob {
+						return true
+					}
+				}
+				return false
+			}, time.Minute*2, time.Millisecond*500, "expected a CDC event carrying the updated CLOB value after LOB_TRIM handling")
+		}
+		require.NoError(t, stream.StopWithin(time.Second*10))
+	})
+
+	t.Run("LOB_TRIM handling for BASICFILE LOB updates", func(t *testing.T) {
+		// BASICFILE storage emits LOB_TRIM(0) → LOB_WRITE(s) on UPDATE (clear-then-write),
+		// whereas SecureFile emits LOB_WRITE(s) → LOB_TRIM(N). The LOB_TRIM(0) must not
+		// discard the fragments written after it, and the assembled value should appear in
+		// the UPDATE CDC event merged via MergeLOBsIntoDMLEvents.
+		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.lobtrimbasic",
+			`CREATE TABLE testdb.lobtrimbasic (
+			id      NUMBER GENERATED ALWAYS AS IDENTITY (NOCACHE) PRIMARY KEY,
+			clobcol CLOB
+		) LOB(clobcol) STORE AS BASICFILE`))
+
+		var batch oracledbtest.Batch
+
+		cfg := fmt.Sprintf(`
+oracledb_cdc:
+  connection_string: %s
+  stream_snapshot: false
+  logminer:
+    lob_enabled: true
+    scn_window_size: 20000
+    backoff_interval: 1s
+  include: ["TESTDB.LOBTRIMBASIC"]`, connStr)
+
+		streamBuilder := service.NewStreamBuilder()
+		require.NoError(t, streamBuilder.AddInputYAML(cfg))
+		require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
+		require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+			batch.Lock()
+			defer batch.Unlock()
+			for _, msg := range mb {
+				msgBytes, err := msg.AsBytes()
+				assert.NoError(t, err)
+				batch.Msgs = append(batch.Msgs, string(msgBytes))
+			}
+			return nil
+		}))
+
+		stream, err := streamBuilder.Build()
+		require.NoError(t, err)
+		license.InjectTestService(stream.Resources())
+
+		go func() {
+			if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+				t.Error(err)
+			}
+		}()
+
+		t.Log("Inserting initial LOB row and waiting CDC event")
+		{
+			initialClob := strings.Repeat("A", 5000)
+			db.MustExec("INSERT INTO testdb.lobtrimbasic (clobcol) VALUES (:1)", initialClob)
+
+			assert.Eventually(t, func() bool {
+				return batch.Count() >= 1
+			}, time.Minute*2, time.Millisecond*500, "timed out waiting for INSERT CDC event")
+		}
+
+		t.Log("Updating LOB row and waiting for CDC event")
+		{
+			updatedClob := strings.Repeat("B", 5000)
+			db.MustExec("UPDATE testdb.lobtrimbasic SET clobcol = :1 WHERE id = 1", updatedClob)
+
+			assert.Eventually(t, func() bool {
+				for _, msg := range batch.Clone() {
+					var row map[string]any
+					if err := json.Unmarshal([]byte(msg), &row); err != nil {
+						continue
+					}
+					if v, ok := row["CLOBCOL"].(string); ok && v == updatedClob {
+						return true
+					}
+				}
+				return false
+			}, time.Minute*2, time.Millisecond*500, "expected a CDC event carrying the updated CLOB value after BASICFILE LOB_TRIM handling")
+		}
+		require.NoError(t, stream.StopWithin(time.Second*10))
+	})
+
+	t.Run("LOB_TRIM handling for BASICFILE out-of-row LOB updates", func(t *testing.T) {
+		// BASICFILE with DISABLE STORAGE IN ROW stores the LOB out-of-row and does not
+		// emit SELECT_LOB_LOCATOR. The inferLOBLocator path must create the accumulator
+		// from an existing DML event, and the assembled value must appear in the UPDATE.
+		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.lobtrimbasicoor",
+			`CREATE TABLE testdb.lobtrimbasicoor (
+			id      NUMBER GENERATED ALWAYS AS IDENTITY (NOCACHE) PRIMARY KEY,
+			clobcol CLOB
+		) LOB(clobcol) STORE AS BASICFILE (DISABLE STORAGE IN ROW NOCACHE)`))
+
+		var batch oracledbtest.Batch
+
+		cfg := fmt.Sprintf(`
+oracledb_cdc:
+  connection_string: %s
+  stream_snapshot: false
+  logminer:
+    lob_enabled: true
+    scn_window_size: 20000
+    backoff_interval: 1s
+  include: ["TESTDB.LOBTRIMBASICOOR"]`, connStr)
+
+		streamBuilder := service.NewStreamBuilder()
+		require.NoError(t, streamBuilder.AddInputYAML(cfg))
+		require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
+		require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+			batch.Lock()
+			defer batch.Unlock()
+			for _, msg := range mb {
+				msgBytes, err := msg.AsBytes()
+				assert.NoError(t, err)
+				batch.Msgs = append(batch.Msgs, string(msgBytes))
+			}
+			return nil
+		}))
+
+		stream, err := streamBuilder.Build()
+		require.NoError(t, err)
+		license.InjectTestService(stream.Resources())
+
+		go func() {
+			if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+				t.Error(err)
+			}
+		}()
+
+		t.Log("Inserting initial LOB row and waiting CDC event")
+		{
+			initialClob := strings.Repeat("A", 5000)
+			db.MustExec("INSERT INTO testdb.lobtrimbasicoor (clobcol) VALUES (:1)", initialClob)
+
+			assert.Eventually(t, func() bool {
+				return batch.Count() >= 1
+			}, time.Minute*2, time.Millisecond*500, "timed out waiting for INSERT CDC event")
+		}
+
+		t.Log("Updating LOB row and waiting for CDC event")
+		{
+			updatedClob := strings.Repeat("B", 5000)
+			db.MustExec("UPDATE testdb.lobtrimbasicoor SET clobcol = :1 WHERE id = 1", updatedClob)
+
+			assert.Eventually(t, func() bool {
+				for _, msg := range batch.Clone() {
+					var row map[string]any
+					if err := json.Unmarshal([]byte(msg), &row); err != nil {
+						continue
+					}
+					if v, ok := row["CLOBCOL"].(string); ok && v == updatedClob {
+						return true
+					}
+				}
+				return false
+			}, time.Minute*2, time.Millisecond*500, "expected a CDC event carrying the updated CLOB value after BASICFILE out-of-row LOB_TRIM handling")
+		}
+		require.NoError(t, stream.StopWithin(time.Second*10))
+	})
+}
