@@ -43,3 +43,35 @@ func TestVCPUForInstanceType_Known(t *testing.T) {
 	require.Equal(t, 2, vcpuForInstanceType("c7i.large"))
 	require.Equal(t, 0, vcpuForInstanceType("not-a-real-type"))
 }
+
+func TestLoadScenario_BoundedRejectsMissingExpectedPeak(t *testing.T) {
+	_, err := LoadScenario("testdata/bounded-missing-expected-peak.yaml")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "expected_peak_mb_s")
+}
+
+func TestLoadScenario_BoundedAcceptsValid(t *testing.T) {
+	s, err := LoadScenario("testdata/bounded-valid.yaml")
+	require.NoError(t, err)
+	require.Equal(t, "postgres-snapshot-large", s.Name)
+	require.Nil(t, s.Workload)
+	require.Equal(t, 100, s.Dataset.ExpectedPeakMBSec)
+}
+
+func TestLoadScenario_BoundedRejectsTooSmallDataset(t *testing.T) {
+	_, err := LoadScenario("testdata/bounded-too-small.yaml")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "below minimum 15m")
+}
+
+func TestLoadScenario_RejectsNonAscendingCPUPoints(t *testing.T) {
+	_, err := LoadScenario("testdata/invalid-non-ascending-cpu.yaml")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "strictly ascending")
+}
+
+func TestLoadScenario_RejectsNonPositiveCPUPoints(t *testing.T) {
+	_, err := LoadScenario("testdata/invalid-non-positive-cpu.yaml")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "must all be positive")
+}

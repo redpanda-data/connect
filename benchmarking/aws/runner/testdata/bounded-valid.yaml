@@ -1,0 +1,32 @@
+name: postgres-snapshot-large
+description: Full snapshot of a large table with no ongoing workload.
+connector: postgres_cdc
+stack: postgres
+infra:
+  source:
+    instance_class: db.r6g.2xlarge
+    storage_gb: 400
+    iops: 12000
+  runner:
+    instance_type: c7i.4xlarge
+dataset:
+  initial_rows: 100000000
+  row_size_bytes: 1000
+  tables: [orders]
+  seeder: cdc-rows
+  expected_peak_mb_s: 100
+pipeline:
+  input:
+    postgres_cdc:
+      dsn: ${POSTGRES_DSN}
+      stream_snapshot: true
+      schema: public
+      tables: [orders]
+      slot_name: bench_slot
+      batching:
+        count: 5000
+        period: 1s
+matrix:
+  cpu_points: [1, 2, 4, 8]
+reset:
+  - sql: "SELECT pg_drop_replication_slot('bench_slot') FROM pg_replication_slots WHERE slot_name='bench_slot'"
