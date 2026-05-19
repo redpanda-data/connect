@@ -132,7 +132,7 @@ func renderBenchScript(a benchScriptArgs) string {
 		`set -euo pipefail`,
 		fmt.Sprintf(`echo "starting bench: %d vCPU, %d GiB, warmup %ds, window %ds"`,
 			a.VCPU, a.MemLimitGiB, a.WarmupSec, a.DurationSec),
-		fmt.Sprintf(`taskset -c 2-%d chrt --fifo 50 env GOMAXPROCS=%d GOMEMLIMIT=%dGiB %s run %s &`,
+		fmt.Sprintf(`taskset -c 2-%d chrt --fifo 50 env GOMAXPROCS=%d GOMEMLIMIT=%dGiB REDPANDA_LICENSE_FILEPATH=/opt/bench/license.jwt %s run %s &`,
 			cpusetHi, a.VCPU, a.MemLimitGiB, a.BinaryPath, a.ConfigPath),
 		`PID=$!`,
 		fmt.Sprintf(`sleep %d`, a.WarmupSec+a.DurationSec),
