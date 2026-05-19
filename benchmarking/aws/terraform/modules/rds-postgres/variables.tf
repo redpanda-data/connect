@@ -21,7 +21,7 @@ variable "iops" {
 }
 variable "engine_version" {
   type    = string
-  default = "16.4"
+  default = "16.14"
 }
 variable "db_name" {
   type    = string
