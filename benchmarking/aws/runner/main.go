@@ -67,6 +67,7 @@ type benchOpts struct {
 	keepOnFail   bool
 	region       string
 	repoRoot     string
+	licenseFile  string
 }
 
 func benchCmd(args []string) error {
@@ -76,6 +77,9 @@ func benchCmd(args []string) error {
 	keepOnFail := fs.Bool("keep-on-fail", false, "keep infra if the bench errors")
 	region := fs.String("region", "us-east-2", "AWS region")
 	repoRoot := fs.String("repo-root", ".", "path to the connect repo root")
+	licenseFile := fs.String("license-file", os.Getenv("REDPANDA_LICENSE_FILEPATH"),
+		"path to a Redpanda Enterprise license file (defaults to $REDPANDA_LICENSE_FILEPATH). "+
+			"Required for enterprise connectors like postgres_cdc.")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -89,6 +93,7 @@ func benchCmd(args []string) error {
 		keepOnFail:   *keepOnFail,
 		region:       *region,
 		repoRoot:     *repoRoot,
+		licenseFile:  *licenseFile,
 	}
 	return runBench(opts)
 }
@@ -97,6 +102,12 @@ func runBench(opts benchOpts) (errOut error) {
 	s, err := LoadScenario(opts.scenarioPath)
 	if err != nil {
 		return err
+	}
+	if opts.licenseFile == "" {
+		return fmt.Errorf("--license-file is required (or set REDPANDA_LICENSE_FILEPATH); enterprise connectors won't start without one")
+	}
+	if _, err := os.Stat(opts.licenseFile); err != nil {
+		return fmt.Errorf("license file %q: %w", opts.licenseFile, err)
 	}
 	fmt.Printf("[1/7] loaded scenario %s\n", s.Name)
 
@@ -449,6 +460,7 @@ func stageArtefacts(ctx context.Context, opts benchOpts, outs map[string]string,
 	for _, item := range []struct{ key, path string }{
 		{"stage/redpanda-connect", binPath},
 		{"stage/config.yaml", cfgPath},
+		{"stage/license.jwt", opts.licenseFile},
 	} {
 		f, err := os.Open(item.path)
 		if err != nil {
@@ -472,8 +484,10 @@ func stageArtefacts(ctx context.Context, opts benchOpts, outs map[string]string,
 set -euo pipefail
 aws s3 cp s3://%s/stage/redpanda-connect /opt/bench/redpanda-connect
 aws s3 cp s3://%s/stage/config.yaml /opt/bench/config.yaml
+aws s3 cp s3://%s/stage/license.jwt /opt/bench/license.jwt
 chmod +x /opt/bench/redpanda-connect
-`, bucket, bucket)
+chmod 0600 /opt/bench/license.jwt
+`, bucket, bucket, bucket)
 	return ssmExec.Run(ctx, outs["runner_instance_id"], script, streamingOnLine(os.Stdout, "stage"))
 }
 func runSeeder(ctx context.Context, opts benchOpts, s *Scenario, outs map[string]string) error {
