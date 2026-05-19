@@ -16,6 +16,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "results" {
   rule {
     id     = "expire-raw-json"
     status = "Enabled"
+    filter {}
     expiration { days = 180 }
   }
 }

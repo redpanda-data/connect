@@ -131,12 +131,10 @@ func runBench(opts benchOpts) (errOut error) {
 		"runner_instance_type": s.Infra.Runner.InstanceType,
 		"bench_session_id":     newSessionID(),
 	}
-	if err := tfShared.Apply(sharedVars); err != nil {
-		return fmt.Errorf("terraform apply shared: %w", err)
-	}
 	stackVars := translateInfraSource(s.Infra.Source, opts.region)
-	fmt.Println("[2/7] terraform apply (shared + stack) complete")
 
+	// Register destroy BEFORE any apply, so a partial apply still gets torn
+	// down. terraform destroy is idempotent against a no-op state.
 	defer func() {
 		if opts.keep {
 			fmt.Println("[7/7] keep=true: skipping teardown")
@@ -150,6 +148,11 @@ func runBench(opts benchOpts) (errOut error) {
 		_ = tfStack.Destroy(stackVars)
 		_ = tfShared.Destroy(sharedVars)
 	}()
+
+	if err := tfShared.Apply(sharedVars); err != nil {
+		return fmt.Errorf("terraform apply shared: %w", err)
+	}
+	fmt.Println("[2/7] terraform apply (shared + stack) complete")
 
 	if err := tfStack.Apply(stackVars); err != nil {
 		return fmt.Errorf("terraform apply %s: %w", s.Stack, err)
