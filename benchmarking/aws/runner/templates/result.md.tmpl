@@ -1,0 +1,24 @@
+## AWS — {{.ScenarioShort}} — {{.Date}}
+
+**Scenario:** {{.Description}}
+
+**Git SHA:** [`{{.GitShortSHA}}`](https://github.com/redpanda-data/connect/commit/{{.GitSHA}})
+
+**Infra:** Runner `{{.Infra.RunnerInstanceType}}`; source `{{.Infra.SourceInstanceClass}}` ({{.Infra.SourceStorageGB}} GB) in `{{.Infra.Region}}`.
+
+**Dataset:** {{.WorkloadLine}}
+
+### Throughput
+
+| GOMAXPROCS | MB/sec (p50) | MB/sec (p5) | MB/sec (p95) | msg/sec (p50) |
+|------------|--------------|-------------|--------------|---------------|
+{{- range .Rows }}
+| {{printf "%-10d" .VCPU}} | {{.MedianMB}} | {{.P5MB}} | {{.P95MB}} | {{printf "%13s" .MedianMsgFC}} |
+{{- end }}
+{{ if .Anomalies }}
+{{ range .Anomalies }}
+> ⚠ At {{.VCPU}} vCPU: {{.DurationSec}}s dip to {{printf "%.2f" .MinRatio}}× median MB/sec from t={{.StartT}}s — investigate before publishing.
+{{ end }}
+{{ end }}
+
+Raw samples + Prometheus snapshots: [`{{.JSONPath}}`]({{.JSONPath}})
