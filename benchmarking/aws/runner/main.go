@@ -9,6 +9,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -346,7 +347,7 @@ func translateInfraSource(src map[string]any, region string) map[string]string {
 		case float64:
 			out[k] = fmt.Sprintf("%v", val)
 		case map[string]any:
-			b, _ := yaml.Marshal(val)
+			b, _ := json.Marshal(val)
 			out[k] = string(b)
 		default:
 			out[k] = fmt.Sprintf("%v", val)
