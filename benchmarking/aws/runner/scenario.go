@@ -20,6 +20,18 @@ const (
 	defaultGoMemPerVCPU = 2 // GiB
 )
 
+// instanceTypeVCPU maps known EC2 instance types to their vCPU counts.
+// Extend this table when new types are referenced by scenarios.
+var instanceTypeVCPU = map[string]int{
+	"c7i.large":    2,
+	"c7i.xlarge":   4,
+	"c7i.2xlarge":  8,
+	"c7i.4xlarge":  16,
+	"c7i.8xlarge":  32,
+	"c7i.12xlarge": 48,
+	"c7i.16xlarge": 64,
+}
+
 type Scenario struct {
 	Name        string         `yaml:"name"`
 	Description string         `yaml:"description"`
@@ -98,6 +110,9 @@ func (s *Scenario) Validate() error {
 	if len(s.Matrix.CPUPoints) == 0 {
 		return fmt.Errorf("matrix.cpu_points must contain at least one value")
 	}
+	if s.Matrix.CPUPoints[0] < 1 {
+		return fmt.Errorf("matrix.cpu_points must all be positive: %v", s.Matrix.CPUPoints)
+	}
 	for i := 1; i < len(s.Matrix.CPUPoints); i++ {
 		if s.Matrix.CPUPoints[i] <= s.Matrix.CPUPoints[i-1] {
 			return fmt.Errorf("matrix.cpu_points must be strictly ascending: %v", s.Matrix.CPUPoints)
@@ -138,16 +153,7 @@ func (s *Scenario) Validate() error {
 }
 
 // vcpuForInstanceType returns the vCPU count for known instance types or 0 if
-// unknown. Extend this table when new types are referenced by scenarios.
+// unknown. Extend instanceTypeVCPU when new types are referenced by scenarios.
 func vcpuForInstanceType(it string) int {
-	table := map[string]int{
-		"c7i.large":    2,
-		"c7i.xlarge":   4,
-		"c7i.2xlarge":  8,
-		"c7i.4xlarge":  16,
-		"c7i.8xlarge":  32,
-		"c7i.12xlarge": 48,
-		"c7i.16xlarge": 64,
-	}
-	return table[it]
+	return instanceTypeVCPU[it]
 }
