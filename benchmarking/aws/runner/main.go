@@ -103,14 +103,20 @@ func runBench(opts benchOpts) (errOut error) {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
+	// BackendFile must be absolute: `terraform -chdir=<stack>` changes the
+	// working directory before resolving the -backend-config path.
+	backendAbs, err := filepath.Abs(filepath.Join(opts.repoRoot, "benchmarking/aws/terraform/backend.hcl"))
+	if err != nil {
+		return fmt.Errorf("resolve backend.hcl: %w", err)
+	}
 	tfShared := &Terraform{
 		Dir:         SharedDir(opts.repoRoot),
-		BackendFile: filepath.Join(opts.repoRoot, "benchmarking/aws/terraform/backend.hcl"),
+		BackendFile: backendAbs,
 		StateKey:    "shared",
 	}
 	tfStack := &Terraform{
 		Dir:         StackDir(opts.repoRoot, s.Stack),
-		BackendFile: filepath.Join(opts.repoRoot, "benchmarking/aws/terraform/backend.hcl"),
+		BackendFile: backendAbs,
 		StateKey:    s.Stack,
 	}
 
@@ -305,14 +311,18 @@ func downCmd(args []string) error {
 	if err != nil {
 		return err
 	}
+	backendAbs, err := filepath.Abs(filepath.Join(*repoRoot, "benchmarking/aws/terraform/backend.hcl"))
+	if err != nil {
+		return fmt.Errorf("resolve backend.hcl: %w", err)
+	}
 	stack := &Terraform{
 		Dir:         StackDir(*repoRoot, s.Stack),
-		BackendFile: filepath.Join(*repoRoot, "benchmarking/aws/terraform/backend.hcl"),
+		BackendFile: backendAbs,
 		StateKey:    s.Stack,
 	}
 	shared := &Terraform{
 		Dir:         SharedDir(*repoRoot),
-		BackendFile: filepath.Join(*repoRoot, "benchmarking/aws/terraform/backend.hcl"),
+		BackendFile: backendAbs,
 		StateKey:    "shared",
 	}
 	_ = stack.Init()
