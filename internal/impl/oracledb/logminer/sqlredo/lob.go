@@ -132,6 +132,11 @@ func MergeLOBsIntoDMLEvents(state *TxnLOBState, events []*DMLEvent, log *service
 			log.Debugf(msg, args...)
 		}
 	}
+	logWarnf := func(msg string, args ...any) {
+		if log != nil {
+			log.Warnf(msg, args...)
+		}
+	}
 
 	var unmerged []*LobAccumulator
 
@@ -188,16 +193,25 @@ func MergeLOBsIntoDMLEvents(state *TxnLOBState, events []*DMLEvent, log *service
 
 		// Pass 3: schema/table-only fallback. Oracle SecureFile LOB-init UPDATEs
 		// sometimes carry only ROWID in their WHERE clause (no PK columns), making
-		// PK matching impossible. If there is exactly one candidate event for this
-		// table, merge unconditionally; otherwise take the most recent one.
-		for i := len(events) - 1; i >= 0; i-- {
+		// PK matching impossible. Only merge when exactly one candidate event exists
+		// for this table; if multiple exist, rows cannot be distinguished and the
+		// accumulator is left unmerged so the caller synthesizes a separate UPDATE.
+		var candidates []*DMLEvent
+		for i := range events {
 			ev := events[i]
 			if ev.Schema == acc.Schema && ev.Table == acc.Table {
-				ev.Data[acc.Column] = assembled
-				merged = true
-				logDebugf("LOB merge: set %s.%s.%s via schema/table fallback (fragments=%d)", acc.Schema, acc.Table, acc.Column, len(acc.Fragments))
-				break
+				candidates = append(candidates, ev)
 			}
+		}
+		switch len(candidates) {
+		case 1:
+			candidates[0].Data[acc.Column] = assembled
+			merged = true
+			logDebugf("LOB merge: set %s.%s.%s via schema/table fallback (fragments=%d)", acc.Schema, acc.Table, acc.Column, len(acc.Fragments))
+		case 0:
+			// no candidates — fall through to unmerged
+		default:
+			logWarnf("LOB merge: %s.%s.%s has %d candidate events with no PK in WHERE clause — cannot distinguish rows; will synthesize UPDATE", acc.Schema, acc.Table, acc.Column, len(candidates))
 		}
 
 		if !merged {
