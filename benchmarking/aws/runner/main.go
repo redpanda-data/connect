@@ -525,10 +525,17 @@ POSTGRES_DSN=%q /opt/bench/%s seed \
 	return ssmExec.Run(ctx, outs["load_gen_instance_id"], script, streamingOnLine(os.Stdout, "seed"))
 }
 func combineReset(steps []ResetStep, outs map[string]string) string {
+	if len(steps) == 0 {
+		return ""
+	}
 	var sb strings.Builder
+	sb.WriteString("set -euo pipefail\n")
+	dsn := outs["postgres_dsn"]
 	for _, st := range steps {
 		if st.SQL != "" {
-			sb.WriteString(fmt.Sprintf("PGPASSWORD=$POSTGRES_PASSWORD psql \"$POSTGRES_DSN\" -c %q\n", st.SQL))
+			// Substitute the DSN directly: the SSM environment doesn't carry
+			// POSTGRES_DSN as a shell variable.
+			sb.WriteString(fmt.Sprintf("psql %q -v ON_ERROR_STOP=1 -c %q\n", dsn, st.SQL))
 		}
 		if st.Bash != "" {
 			sb.WriteString(substitutePlaceholders(st.Bash, outs) + "\n")
