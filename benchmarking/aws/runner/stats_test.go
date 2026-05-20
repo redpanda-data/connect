@@ -33,6 +33,31 @@ func TestParseRollingStatsLine_Float(t *testing.T) {
 	require.InDelta(t, 204.7, s.MBPerSec, 0.01)
 }
 
+// The benchmark processor emits bytes/sec via humanize.Bytes, which uses
+// SI suffixes (B, kB, MB, GB). All units must be parsed and normalized to
+// MB/sec so percentiles across a sweep are computed in the same unit.
+func TestParseRollingStatsLine_BytesUnit(t *testing.T) {
+	s, ok := ParseRollingStatsLine(`INFO rolling stats: 5 msg/sec, 500 B/sec`)
+	require.True(t, ok)
+	require.Equal(t, 5.0, s.MsgPerSec)
+	require.InDelta(t, 0.0005, s.MBPerSec, 1e-9) // 500 B = 0.0005 MB
+}
+
+func TestParseRollingStatsLine_KilobytesUnit(t *testing.T) {
+	// humanize.Bytes uses lowercase k: "204 kB/sec".
+	s, ok := ParseRollingStatsLine(`INFO rolling stats: 250 msg/sec, 204 kB/sec`)
+	require.True(t, ok)
+	require.Equal(t, 250.0, s.MsgPerSec)
+	require.InDelta(t, 0.204, s.MBPerSec, 1e-9) // 204 kB = 0.204 MB
+}
+
+func TestParseRollingStatsLine_GigabytesUnit(t *testing.T) {
+	s, ok := ParseRollingStatsLine(`INFO rolling stats: 2000000 msg/sec, 1.5 GB/sec`)
+	require.True(t, ok)
+	require.Equal(t, 2000000.0, s.MsgPerSec)
+	require.InDelta(t, 1500.0, s.MBPerSec, 1e-9) // 1.5 GB = 1500 MB
+}
+
 func TestSummarise_BasicPercentiles(t *testing.T) {
 	samples := make([]Sample, 100)
 	for i := 0; i < 100; i++ {
