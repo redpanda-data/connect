@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"strconv"
 	"time"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -262,7 +263,9 @@ func encodeVal(v any) typedVal {
 	case string:
 		return typedVal{T: typeString, V: val}
 	case int64:
-		return typedVal{T: typeInt64, V: val}
+		// Store as string to avoid float64 precision loss during JSON round-trip:
+		// values above 2^53 cannot be represented exactly as float64.
+		return typedVal{T: typeInt64, V: strconv.FormatInt(val, 10)}
 	case json.Number:
 		return typedVal{T: typeNumber, V: string(val)}
 	case []byte:
@@ -288,14 +291,11 @@ func decodeVal(tv typedVal) (any, error) {
 		}
 		return s, nil
 	case typeInt64:
-		// JSON unmarshals numbers into float64 when the target is interface{}.
-		switch n := tv.V.(type) {
-		case float64:
-			return int64(n), nil
-		case json.Number:
-			return n.Int64()
+		s, ok := tv.V.(string)
+		if !ok {
+			return nil, fmt.Errorf("expected string for int64, got %T", tv.V)
 		}
-		return nil, fmt.Errorf("unexpected type for int64: %T", tv.V)
+		return strconv.ParseInt(s, 10, 64)
 	case typeNumber:
 		s, ok := tv.V.(string)
 		if !ok {
