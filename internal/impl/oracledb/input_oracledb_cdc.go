@@ -504,12 +504,8 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 
 	if o.lmCfg != nil {
 		var txnCache logminer.TransactionCache
-		if o.lmCfg.TransactionCacheName != "" {
-			if err := o.res.AccessCache(ctx, o.lmCfg.TransactionCacheName, func(c service.Cache) {
-				txnCache = logminer.NewConnectCacheResource(c, o.lmCfg.MaxTransactionEvents, o.lmCfg.TransactionCacheKey, o.metrics, o.log)
-			}); err != nil {
-				return fmt.Errorf("accessing transaction cache resource: %w", err)
-			}
+		if o.lmCfg.TransactionCacheConfig.CacheName != "" {
+			txnCache = logminer.NewConnectCacheResource(o.res, o.lmCfg.TransactionCacheConfig, o.metrics, o.log)
 		}
 		streaming = logminer.NewMiner(o.db, userTables, o.publisher, o.lmCfg, txnCache, o.metrics, o.log)
 	} else {
@@ -746,10 +742,13 @@ func parseLogMinerConfig(conf *service.ParsedConfig) (*logminer.Config, error) {
 		}
 		// support cache_resources for buffering logminer transactions
 		if lmConf.Contains(ociFieldTransactionCache) {
-			if cfg.TransactionCacheName, err = lmConf.FieldString(ociFieldTransactionCache); err != nil {
+			if cfg.TransactionCacheConfig.CacheName, err = lmConf.FieldString(ociFieldTransactionCache); err != nil {
 				return nil, err
 			}
-			if cfg.TransactionCacheKey, err = lmConf.FieldString(ociFieldTransactionCacheKey); err != nil {
+			if cfg.TransactionCacheConfig.CacheKey, err = lmConf.FieldString(ociFieldTransactionCacheKey); err != nil {
+				return nil, err
+			}
+			if cfg.TransactionCacheConfig.MaxEvents, err = lmConf.FieldInt(ociFieldMaxTransactionEvents); err != nil {
 				return nil, err
 			}
 		}
