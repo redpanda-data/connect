@@ -23,3 +23,9 @@ test_output.txt
 *.jwt
 rpcn_license
 rpcn.license
+
+# Local Claude Code harness state
+.claude/
+
+# Stray binaries that go-run sometimes drops at the repo root
+/runner
