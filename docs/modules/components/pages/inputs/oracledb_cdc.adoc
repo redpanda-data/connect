@@ -52,6 +52,8 @@ input:
       strategy: online_catalog
       max_transaction_events: 0
       lob_enabled: true
+      transaction_cache: "" # No default (optional)
+      transaction_cache_key: oracledb_cdc
     include: [] # No default (required)
     exclude: [] # No default (optional)
     checkpoint_cache: "" # No default (optional)
@@ -90,6 +92,8 @@ input:
       strategy: online_catalog
       max_transaction_events: 0
       lob_enabled: true
+      transaction_cache: "" # No default (optional)
+      transaction_cache_key: oracledb_cdc
     include: [] # No default (required)
     exclude: [] # No default (optional)
     checkpoint_cache: "" # No default (optional)
@@ -285,6 +289,23 @@ When enabled, large object (CLOB, BLOB) columns are included in both snapshot an
 *Type*: `bool`
 
 *Default*: `true`
+
+=== `logminer.transaction_cache`
+
+A https://www.docs.redpanda.com/redpanda-connect/components/caches/about[cache resource^] to use for buffering in-flight transactions. When set, DML events are serialized and stored in the named cache rather than held in memory, reducing connector memory usage for workloads with large or long-running transactions. If not set, an in-memory buffer is used.
+
+
+*Type*: `string`
+
+
+=== `logminer.transaction_cache_key`
+
+The key prefix used when storing transactions in `transaction_cache`. An alternative prefix must be set if multiple `oracledb_cdc` inputs share the same cache resource, since Oracle transaction IDs (USN.SLOT.SEQ) are only unique within a single Oracle instance and would otherwise collide.
+
+
+*Type*: `string`
+
+*Default*: `"oracledb_cdc"`
 
 === `include`
 

@@ -745,7 +745,7 @@ func parseLogMinerConfig(conf *service.ParsedConfig) (*logminer.Config, error) {
 			return nil, err
 		}
 		// support cache_resources for buffering logminer transactions
-		if conf.Contains(ociFieldTransactionCache) {
+		if lmConf.Contains(ociFieldTransactionCache) {
 			if cfg.TransactionCacheName, err = lmConf.FieldString(ociFieldTransactionCache); err != nil {
 				return nil, err
 			}
