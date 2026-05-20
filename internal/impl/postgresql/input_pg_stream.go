@@ -156,7 +156,8 @@ This connector uses the naming pattern ` + "`pglog_stream_<replication_slot_name
 				Description("The AWS region where the PostgreSQL instance is located. If no region is specified then the environment default will be used.").
 				Optional(),
 			service.NewStringField("endpoint").
-				Description("The PostgreSQL endpoint hostname (e.g., mydb.abc123.us-east-1.rds.amazonaws.com)."),
+				Description("The PostgreSQL endpoint as `host:port` (for example `mydb.abc123.us-east-1.rds.amazonaws.com:5432`). The AWS IAM token signer requires the port; if it is omitted the port from the DSN is used, falling back to `5432`. When this field is empty the address from the DSN is used.").
+				Default(""),
 			service.NewStringField("id").
 				Description("The ID of credentials to use.").
 				Optional().Advanced(),
