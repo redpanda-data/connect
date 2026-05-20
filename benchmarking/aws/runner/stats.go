@@ -32,21 +32,35 @@ type Summary struct {
 	PeakMsgPerSec   float64 `json:"peak_msg_s"`
 }
 
-var rollingStatsRe = regexp.MustCompile(`rolling stats:\s+([0-9.]+)\s+msg/sec,\s+([0-9.]+)\s+MB/sec`)
+// The benchmark processor emits bytes/sec via humanize.Bytes (SI base-10):
+// "B", "kB" (lowercase k), "MB", "GB", "TB". All are normalised to MB/sec so
+// summary statistics are unit-consistent across a sweep — without this, a
+// low-throughput sweep point logs "500 kB/sec" and the regex previously
+// dropped the sample entirely.
+var rollingStatsRe = regexp.MustCompile(`rolling stats:\s+([0-9.]+)\s+msg/sec,\s+([0-9.]+)\s+(B|kB|MB|GB|TB)/sec`)
+
+var bytesUnitToMB = map[string]float64{
+	"B":  1.0 / 1_000_000,
+	"kB": 1.0 / 1_000,
+	"MB": 1,
+	"GB": 1_000,
+	"TB": 1_000_000,
+}
 
 // ParseRollingStatsLine extracts msg/sec and MB/sec from one log line.
 // Returns ok=false if the line is not a rolling-stats line.
 func ParseRollingStatsLine(line string) (Sample, bool) {
 	m := rollingStatsRe.FindStringSubmatch(line)
-	if len(m) != 3 {
+	if len(m) != 4 {
 		return Sample{}, false
 	}
 	msg, err1 := strconv.ParseFloat(m[1], 64)
-	mb, err2 := strconv.ParseFloat(m[2], 64)
-	if err1 != nil || err2 != nil {
+	raw, err2 := strconv.ParseFloat(m[2], 64)
+	mult, ok := bytesUnitToMB[m[3]]
+	if err1 != nil || err2 != nil || !ok {
 		return Sample{}, false
 	}
-	return Sample{MsgPerSec: msg, MBPerSec: mb}, true
+	return Sample{MsgPerSec: msg, MBPerSec: raw * mult}, true
 }
 
 // ParseRollingStatsStream reads a Connect stdout stream and returns every
