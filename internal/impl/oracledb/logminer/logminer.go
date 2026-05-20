@@ -415,17 +415,13 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 		if txn := lm.txnCache.GetTransaction(redoEvent.TransactionID); txn != nil {
 			safeCheckpointSCN := redoEvent.SCN
 
-			// InMemory cache specific behaviour
-			if cache, ok := lm.txnCache.(*InMemoryCache); ok {
-				// Due to the lack of durability of the in-memory transaction buffer, we need to ensure we only checkpoint at the
-				// lowest watermark in the buffer. Given we only flush the buffer on commit, we need to ensure we don't lose data by
-				// checkpointing a flushed transaction whilst a concurrent transaction is still open (meaning in the case of a restart we'd resume
-				// half way through the open transaction, missing its initial events).
-				if lowestOpenSCN := cache.LowWatermarkSCN(redoEvent.TransactionID); lowestOpenSCN != math.MaxUint64 && lowestOpenSCN > 0 {
-					// We subtract 1 because the query resumes from the point before (i.e. SCN > checkpoint)
-					if lowestOpenSCN-1 < safeCheckpointSCN {
-						safeCheckpointSCN = lowestOpenSCN - 1
-					}
+			// If other transactions are still open, we must not advance the
+			// checkpoint past their start SCN - 1. Doing so would cause their
+			// already-seen DML events to be skipped on restart (the query resumes
+			// from SCN > checkpoint). We subtract 1 because the query is exclusive.
+			if lowestOpenSCN := lm.txnCache.LowWatermarkSCN(redoEvent.TransactionID); lowestOpenSCN != math.MaxUint64 && lowestOpenSCN > 0 {
+				if lowestOpenSCN-1 < safeCheckpointSCN {
+					safeCheckpointSCN = lowestOpenSCN - 1
 				}
 			}
 

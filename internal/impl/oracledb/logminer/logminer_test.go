@@ -94,6 +94,86 @@ func TestProcessRedoEventWithInMemoryCache(t *testing.T) {
 	})
 }
 
+func TestProcessRedoEventWithConnectCacheResource(t *testing.T) {
+	newCacheResource := func(t *testing.T) *ConnectCacheResource {
+		t.Helper()
+		res := service.MockResources(service.MockResourcesOptAddCache("txn_cache"))
+		var svcCache service.Cache
+		require.NoError(t, res.AccessCache(t.Context(), "txn_cache", func(c service.Cache) {
+			svcCache = c
+		}))
+		return NewConnectCacheResource(svcCache, 0, res.Metrics(), service.NewLoggerFromSlog(slog.Default()))
+	}
+
+	t.Run("single transaction commit", func(t *testing.T) {
+		cache := newCacheResource(t)
+		pub := &publisherStub{}
+		lm := newLogMiner(pub, cache)
+
+		const (
+			txAStart  = uint64(900)
+			txACommit = uint64(1000)
+		)
+
+		cache.StartTransaction("txA", txAStart)
+		cache.AddEvent("txA", txAStart, &sqlredo.DMLEvent{Operation: sqlredo.OpInsert, Table: "T"})
+
+		err := lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+			SCN:           txACommit,
+			Operation:     sqlredo.OpCommit,
+			TransactionID: "txA",
+		})
+
+		require.NoError(t, err)
+		require.Len(t, pub.messages, 1)
+		assert.Equal(t, replication.SCN(txACommit), pub.messages[0].CheckpointSCN)
+	})
+
+	// When transaction A commits while transaction B is still open, the checkpoint
+	// must not advance past B's start SCN - 1. Without the startSCNs side-index on
+	// ConnectCacheResource, the type assertion in processRedoEvent fails and the
+	// checkpoint advances to A's commit SCN — skipping B's events on restart.
+	t.Run("concurrent transactions checkpoint held back to lowest open SCN", func(t *testing.T) {
+		cache := newCacheResource(t)
+		pub := &publisherStub{}
+		lm := newLogMiner(pub, cache)
+
+		const (
+			txAStart  = uint64(900)
+			txBStart  = uint64(910)
+			txACommit = uint64(1000)
+			txBCommit = uint64(1050)
+		)
+
+		cache.StartTransaction("txA", txAStart)
+		cache.AddEvent("txA", txAStart, &sqlredo.DMLEvent{Operation: sqlredo.OpInsert, Table: "T"})
+		cache.StartTransaction("txB", txBStart)
+		cache.AddEvent("txB", txBStart, &sqlredo.DMLEvent{Operation: sqlredo.OpInsert, Table: "T"})
+
+		err := lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+			SCN:           txACommit,
+			Operation:     sqlredo.OpCommit,
+			TransactionID: "txA",
+		})
+		require.NoError(t, err)
+		require.Len(t, pub.messages, 1, "A's commit must publish its events")
+
+		msg := "while B is open, CheckpointSCN must be held back to B.startSCN-1 to avoid skipping transaction B on restart"
+		assert.Equal(t, replication.SCN(txBStart-1), pub.messages[0].CheckpointSCN, msg)
+
+		err = lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+			SCN:           txBCommit,
+			Operation:     sqlredo.OpCommit,
+			TransactionID: "txB",
+		})
+		require.NoError(t, err)
+		require.Len(t, pub.messages, 2, "B's commit must publish its events")
+
+		msg = "with no remaining open transactions, CheckpointSCN must equal B's commit SCN"
+		assert.Equal(t, replication.SCN(txBCommit), pub.messages[1].CheckpointSCN, msg)
+	})
+}
+
 func newLogMiner(pub replication.ChangePublisher, cache TransactionCache) *LogMiner {
 	return &LogMiner{
 		publisher: pub,

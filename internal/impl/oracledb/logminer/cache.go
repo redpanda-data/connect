@@ -24,6 +24,12 @@ type TransactionCache interface {
 	GetTransaction(txnID sqlredo.TransactionID) *Transaction
 	CommitTransaction(txnID sqlredo.TransactionID)
 	RollbackTransaction(txnID sqlredo.TransactionID)
+	// LowWatermarkSCN returns the lowest start SCN among all currently open
+	// (uncommitted) transactions, excluding excludeTxnID. Returns math.MaxUint64
+	// if no other open transactions exist. Used to compute a safe checkpoint SCN
+	// on commit: advancing the checkpoint past an open transaction's start SCN
+	// would cause its already-seen DML events to be missed on restart.
+	LowWatermarkSCN(excludeTxnID sqlredo.TransactionID) uint64
 }
 
 // Transaction buffers events until commit

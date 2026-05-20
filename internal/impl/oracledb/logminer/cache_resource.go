@@ -13,6 +13,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -24,8 +25,8 @@ import (
 // memory. Use when large or long-running transactions would otherwise exhaust
 // connector memory.
 //
-// The discarded-transaction set is kept in-memory; it is intentionally ephemeral
-// and will be reconstructed on restart as oversized transactions are discarded again.
+// The discarded-transaction set and the startSCNs index are kept in-memory;
+// both are intentionally ephemeral and will be reconstructed on restart.
 type ConnectCacheResource struct {
 	cache              service.Cache
 	maxEvents          int
@@ -33,6 +34,13 @@ type ConnectCacheResource struct {
 	log                *service.Logger
 	transactionsMetric *service.MetricGauge
 	eventsMetric       *service.MetricGauge
+	// startSCNs tracks the start SCN of each open transaction. It is used by
+	// LowWatermarkSCN to compute a safe checkpoint on commit without scanning
+	// the external cache. Bounded by the number of concurrent open transactions.
+	// Whilst strictly not needed for durable caches like Redis, it saves a little overhead
+	// and is easier to apply to all caches than making them cache specific (given users can
+	// configure in-memory cache as part of a cache_resource).
+	startSCNs map[sqlredo.TransactionID]uint64
 }
 
 // NewConnectCacheResource creates a ConnectCacheResource backed by cache.
@@ -41,6 +49,7 @@ func NewConnectCacheResource(cache service.Cache, maxEvents int, metrics *servic
 		cache:              cache,
 		maxEvents:          maxEvents,
 		discarded:          make(map[sqlredo.TransactionID]struct{}),
+		startSCNs:          make(map[sqlredo.TransactionID]uint64),
 		log:                log,
 		transactionsMetric: metrics.NewGauge("oracledb_cdc_transactions_active"),
 		eventsMetric:       metrics.NewGauge("oracledb_cdc_transactions_events_inflight"),
@@ -70,6 +79,7 @@ func (c *ConnectCacheResource) StartTransaction(txnID sqlredo.TransactionID, scn
 		c.log.Errorf("Failed to store transaction %s in cache: %v", txnID, err)
 		return
 	}
+	c.startSCNs[txnID] = scn
 	c.transactionsMetric.Incr(1)
 }
 
@@ -89,6 +99,7 @@ func (c *ConnectCacheResource) AddEvent(txnID sqlredo.TransactionID, scn uint64,
 			SCN:    scn,
 			Events: []*sqlredo.DMLEvent{event},
 		}
+		c.startSCNs[txnID] = scn
 		c.transactionsMetric.Incr(1)
 	} else {
 		txn.Events = append(txn.Events, event)
@@ -101,6 +112,7 @@ func (c *ConnectCacheResource) AddEvent(txnID sqlredo.TransactionID, scn uint64,
 		if err := c.cache.Delete(context.Background(), toCacheKey(txnID)); err != nil {
 			c.log.Errorf("Failed to delete oversized transaction %s from cache: %v", txnID, err)
 		}
+		delete(c.startSCNs, txnID)
 		c.transactionsMetric.Decr(1)
 		c.discarded[txnID] = struct{}{}
 		return
@@ -133,6 +145,7 @@ func (c *ConnectCacheResource) GetTransaction(txnID sqlredo.TransactionID) *Tran
 // CommitTransaction removes the committed transaction from the cache.
 func (c *ConnectCacheResource) CommitTransaction(txnID sqlredo.TransactionID) {
 	delete(c.discarded, txnID)
+	delete(c.startSCNs, txnID)
 	txn := c.GetTransaction(txnID)
 	if txn == nil {
 		return
@@ -148,6 +161,7 @@ func (c *ConnectCacheResource) CommitTransaction(txnID sqlredo.TransactionID) {
 // discarding all buffered events.
 func (c *ConnectCacheResource) RollbackTransaction(txnID sqlredo.TransactionID) {
 	delete(c.discarded, txnID)
+	delete(c.startSCNs, txnID)
 	txn := c.GetTransaction(txnID)
 	if txn == nil {
 		return
@@ -157,6 +171,19 @@ func (c *ConnectCacheResource) RollbackTransaction(txnID sqlredo.TransactionID) 
 		c.log.Errorf("Failed to delete rolled-back transaction %s from cache: %v", txnID, err)
 	}
 	c.transactionsMetric.Decr(1)
+}
+
+// LowWatermarkSCN returns the lowest start SCN among all currently open
+// (uncommitted) transactions, excluding excludeTxnID. Returns math.MaxUint64
+// if no other open transactions exist.
+func (c *ConnectCacheResource) LowWatermarkSCN(excludeTxnID sqlredo.TransactionID) uint64 {
+	lowestOpenSCN := uint64(math.MaxUint64)
+	for id, scn := range c.startSCNs {
+		if id != excludeTxnID {
+			lowestOpenSCN = min(lowestOpenSCN, scn)
+		}
+	}
+	return lowestOpenSCN
 }
 
 func toCacheKey(txnID sqlredo.TransactionID) string {
