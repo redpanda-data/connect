@@ -34,8 +34,7 @@ pipeline:
     postgres_cdc:
       dsn: ${POSTGRES_DSN}
       tls:
-        enabled: true
-        skip_cert_verify: true   # RDS-internal CA isn't in the runner image
+        skip_cert_verify: true   # RDS-internal CA isn't in the runner image; postgres_cdc uses NewTLSField (no `enabled` toggle)
       stream_snapshot: false
       schema: public
       tables: [orders]
