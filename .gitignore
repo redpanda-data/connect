@@ -17,3 +17,9 @@ __pycache__
 *.test.exe
 compile_out.txt
 test_output.txt
+
+# Redpanda licenses — credentials, never commit
+*.license
+*.jwt
+rpcn_license
+rpcn.license
