@@ -67,6 +67,7 @@ csv                       ,input     ,csv                       ,certified  ,n  
 csv                       ,scanner   ,csv                       ,certified  ,n          ,y     ,y              ,
 cyborgdb                  ,output    ,cyborgdb                  ,community  ,n          ,y     ,y              ,
 cypher                    ,output    ,cypher                    ,community  ,n          ,n     ,n              ,not yet certified for cloud
+db2_cdc                   ,input     ,db2_cdc                   ,enterprise ,n          ,n     ,n              ,requires IBM libdb2.so / libdb2.dylib / db2cli.dll or equivalent on system where this connector runs
 decompress                ,processor ,decompress                ,certified  ,n          ,y     ,y              ,
 decompress                ,scanner   ,decompress                ,certified  ,n          ,y     ,y              ,
 dedupe                    ,processor ,dedupe                    ,certified  ,n          ,y     ,y              ,
