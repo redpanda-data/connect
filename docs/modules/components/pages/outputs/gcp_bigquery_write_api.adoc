@@ -66,6 +66,15 @@ output:
     dataset: "" # No default (required)
     table: "" # No default (required)
     message_format: json
+    write_mode: default_stream
+    auto_create_table: false
+    schema: []
+    time_partitioning:
+      type: "" # No default (optional)
+      field: ""
+      expiration: 0s
+      require_filter: false
+    clustering: []
     max_in_flight: 4
     batching:
       count: 0
@@ -103,6 +112,21 @@ All messages in the same batch are written to that table.
 
 The interpolated table name is sanitized for BigQuery: dots, hyphens, slashes and whitespace are replaced with underscores, non-ASCII-alphanumeric characters are stripped, leading digits are prefixed with `_`, and the result is truncated to 1024 characters.
 A name that sanitizes to the empty string is rejected as a permanent error.
+
+== Write modes
+
+The `write_mode` field selects between two write paths:
+
+- `default_stream` (default): the multiplexed default stream. Lowest latency, at-least-once semantics.
+- `pending_stream`: a fresh pending stream is allocated per batch; rows are written with sequential offsets, the stream is finalized, then atomically committed. Provides exactly-once semantics within a single committed batch.
+
+== Auto-create
+
+When `auto_create_table` is true, the output creates missing tables on the fly using the configured `schema`, `time_partitioning`, and `clustering`. `AlreadyExists` errors from concurrent creators are treated as success. When the table name is interpolated, every auto-created table receives the same configuration.
+
+== Exactly-once caveat
+
+The exactly-once guarantee of `pending_stream` is "exactly-once within a stream". If a BatchCommitWriteStreams RPC succeeds but its response is lost to a network failure, benthos retries the batch through a new pending stream and the data lands twice. This is a fundamental limitation of the BigQuery Storage Write API exactly-once contract and applies to every implementation.
 
 
 == Fields
@@ -146,6 +170,130 @@ Options:
 `json`
 , `protobuf`
 .
+
+=== `write_mode`
+
+How the output writes to BigQuery. `default_stream` uses the multiplexed default stream (at-least-once, lowest latency). `pending_stream` allocates a per-batch pending stream that commits atomically, providing exactly-once semantics within a single committed batch.
+
+
+*Type*: `string`
+
+*Default*: `"default_stream"`
+
+Options:
+`default_stream`
+, `pending_stream`
+.
+
+=== `auto_create_table`
+
+If true and the target table does not exist, the output creates it using the configured `schema`, `time_partitioning`, and `clustering`. AlreadyExists errors from concurrent creators are treated as success. When the table name is interpolated, every auto-created table receives the same schema and partition/clustering settings.
+
+
+*Type*: `bool`
+
+*Default*: `false`
+
+=== `schema`
+
+Column definitions used by `auto_create_table`. Required when `auto_create_table` is true.
+
+
+*Type*: `array`
+
+*Default*: `[]`
+
+=== `schema[].name`
+
+Column name.
+
+
+*Type*: `string`
+
+
+=== `schema[].type`
+
+BigQuery column type (STRING, BYTES, INTEGER/INT64, FLOAT/FLOAT64, NUMERIC, BIGNUMERIC, BOOLEAN/BOOL, TIMESTAMP, DATE, TIME, DATETIME, GEOGRAPHY, JSON, RECORD).
+
+
+*Type*: `string`
+
+
+=== `schema[].mode`
+
+Column mode: NULLABLE (default), REQUIRED, or REPEATED.
+
+
+*Type*: `string`
+
+*Default*: `"NULLABLE"`
+
+=== `schema[].fields`
+
+For RECORD columns, the list of nested fields. Same shape as the top-level schema list.
+
+
+*Type*: `array`
+
+
+=== `time_partitioning`
+
+Optional time-partitioning settings applied during `auto_create_table`. Setting `type` is the trigger — when omitted, the block is treated as absent.
+
+
+*Type*: `object`
+
+
+=== `time_partitioning.type`
+
+Partitioning granularity.
+
+
+*Type*: `string`
+
+
+Options:
+`DAY`
+, `HOUR`
+, `MONTH`
+, `YEAR`
+.
+
+=== `time_partitioning.field`
+
+Column to partition on. Must be of type DATE, TIMESTAMP, or DATETIME. If empty, the table uses ingestion-time partitioning (`_PARTITIONTIME`).
+
+
+*Type*: `string`
+
+*Default*: `""`
+
+=== `time_partitioning.expiration`
+
+Optional partition expiration. Zero means no expiration.
+
+
+*Type*: `string`
+
+*Default*: `"0s"`
+
+=== `time_partitioning.require_filter`
+
+If true, queries against the table must filter on the partition column.
+
+
+*Type*: `bool`
+
+*Default*: `false`
+
+=== `clustering`
+
+Optional clustering columns (up to 4) applied during `auto_create_table`. All names must appear in `schema`.
+
+
+*Type*: `array`
+
+*Default*: `[]`
 
 === `max_in_flight`
 

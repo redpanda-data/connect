@@ -12,6 +12,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -19,6 +20,7 @@ import (
 	bq "cloud.google.com/go/bigquery"
 	"cloud.google.com/go/bigquery/storage/managedwriter/adapt"
 	"golang.org/x/sync/singleflight"
+	"google.golang.org/api/googleapi"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/descriptorpb"
 
@@ -47,6 +49,9 @@ type schemaResolver struct {
 	// refuse to store its now-stale result. atomic to avoid taking a lock on
 	// the cache-miss path.
 	generation atomic.Int64
+	// creator is non-nil when auto_create_table is enabled. On a 404 from
+	// Metadata, Resolve calls creator.Ensure then retries the fetch.
+	creator *tableCreator
 }
 
 // Resolve returns a resolved schema for the given table by fetching the
@@ -82,7 +87,7 @@ func (r *schemaResolver) Resolve(ctx context.Context, client *bq.Client, dataset
 		genBefore := r.generation.Load()
 		fetchCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), r.resolveTimeout)
 		defer cancel()
-		rs, err := resolveFromBQTable(fetchCtx, client, datasetID, tableID)
+		rs, err := resolveFromBQTable(fetchCtx, client, r.creator, datasetID, tableID)
 		if err != nil {
 			return nil, err
 		}
@@ -111,10 +116,21 @@ func (r *schemaResolver) Evict(tableID string) {
 	r.cache.Delete(tableID)
 }
 
-func resolveFromBQTable(ctx context.Context, client *bq.Client, datasetID, tableID string) (*resolvedSchema, error) {
+func resolveFromBQTable(ctx context.Context, client *bq.Client, creator *tableCreator, datasetID, tableID string) (*resolvedSchema, error) {
 	meta, err := client.Dataset(datasetID).Table(tableID).Metadata(ctx)
 	if err != nil {
-		return nil, err
+		// 404 + auto_create_table → create the table and retry. Any other
+		// error short-circuits.
+		var apiErr *googleapi.Error
+		if creator != nil && errors.As(err, &apiErr) && apiErr.Code == http.StatusNotFound {
+			if cerr := creator.Ensure(ctx, client, datasetID, tableID); cerr != nil {
+				return nil, fmt.Errorf("auto-create on 404: %w", cerr)
+			}
+			meta, err = client.Dataset(datasetID).Table(tableID).Metadata(ctx)
+		}
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	tableSchema, err := adapt.BQSchemaToStorageTableSchema(meta.Schema)

@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -51,6 +52,19 @@ const (
 	bqwaFieldStreamIdleTimeout      = "stream_idle_timeout"
 	bqwaFieldStreamSweepInterval    = "stream_sweep_interval"
 	bqwaFieldMaxCachedStreams       = "max_cached_streams"
+	bqwaFieldWriteMode              = "write_mode"
+	bqwaFieldAutoCreateTable        = "auto_create_table"
+	bqwaFieldSchema                 = "schema"
+	bqwaSchemaFieldName             = "name"
+	bqwaSchemaFieldType             = "type"
+	bqwaSchemaFieldMode             = "mode"
+	bqwaSchemaFieldFields           = "fields"
+	bqwaFieldTimePartitioning       = "time_partitioning"
+	bqwaFieldClustering             = "clustering"
+	bqwatpFieldType                 = "type"
+	bqwatpFieldField                = "field"
+	bqwatpFieldExpiration           = "expiration"
+	bqwatpFieldRequireFilter        = "require_filter"
 	bqwaFieldSchemaResolveTimeout   = "schema_resolve_timeout"
 	bqwaFieldSchemaEvolutionTimeout = "schema_evolution_timeout"
 	bqwaFieldEndpoint               = "endpoint"
@@ -94,6 +108,21 @@ All messages in the same batch are written to that table.
 
 The interpolated table name is sanitized for BigQuery: dots, hyphens, slashes and whitespace are replaced with underscores, non-ASCII-alphanumeric characters are stripped, leading digits are prefixed with `+"`_`"+`, and the result is truncated to 1024 characters.
 A name that sanitizes to the empty string is rejected as a permanent error.
+
+== Write modes
+
+The `+"`write_mode`"+` field selects between two write paths:
+
+- `+"`default_stream`"+` (default): the multiplexed default stream. Lowest latency, at-least-once semantics.
+- `+"`pending_stream`"+`: a fresh pending stream is allocated per batch; rows are written with sequential offsets, the stream is finalized, then atomically committed. Provides exactly-once semantics within a single committed batch.
+
+== Auto-create
+
+When `+"`auto_create_table`"+` is true, the output creates missing tables on the fly using the configured `+"`schema`"+`, `+"`time_partitioning`"+`, and `+"`clustering`"+`. `+"`AlreadyExists`"+` errors from concurrent creators are treated as success. When the table name is interpolated, every auto-created table receives the same configuration.
+
+== Exactly-once caveat
+
+The exactly-once guarantee of `+"`pending_stream`"+` is "exactly-once within a stream". If a BatchCommitWriteStreams RPC succeeds but its response is lost to a network failure, benthos retries the batch through a new pending stream and the data lands twice. This is a fundamental limitation of the BigQuery Storage Write API exactly-once contract and applies to every implementation.
 `).
 		Fields(
 			service.NewStringField(bqwaFieldProject).
@@ -111,6 +140,62 @@ A name that sanitizes to the empty string is rejected as a permanent error.
 					" Use 'json' to have the component convert JSON to proto automatically."+
 					" Use 'protobuf' to supply raw proto-encoded bytes.").
 				Default("json"),
+			service.NewStringEnumField(bqwaFieldWriteMode, "default_stream", "pending_stream").
+				Description("How the output writes to BigQuery."+
+					" `default_stream` uses the multiplexed default stream (at-least-once, lowest latency)."+
+					" `pending_stream` allocates a per-batch pending stream that commits atomically,"+
+					" providing exactly-once semantics within a single committed batch.").
+				Default("default_stream").
+				Advanced(),
+			service.NewBoolField(bqwaFieldAutoCreateTable).
+				Description("If true and the target table does not exist, the output creates it using the configured `schema`, `time_partitioning`, and `clustering`."+
+					" AlreadyExists errors from concurrent creators are treated as success."+
+					" When the table name is interpolated, every auto-created table receives the same schema and partition/clustering settings.").
+				Default(false).
+				Advanced(),
+			service.NewObjectListField(bqwaFieldSchema,
+				service.NewStringField(bqwaSchemaFieldName).
+					Description("Column name."),
+				service.NewStringField(bqwaSchemaFieldType).
+					Description("BigQuery column type (STRING, BYTES, INTEGER/INT64, FLOAT/FLOAT64, NUMERIC, BIGNUMERIC, BOOLEAN/BOOL, TIMESTAMP, DATE, TIME, DATETIME, GEOGRAPHY, JSON, RECORD)."),
+				service.NewStringField(bqwaSchemaFieldMode).
+					Description("Column mode: NULLABLE (default), REQUIRED, or REPEATED.").
+					Default("NULLABLE"),
+				service.NewAnyListField(bqwaSchemaFieldFields).
+					Description("For RECORD columns, the list of nested fields. Same shape as the top-level schema list.").
+					Optional(),
+			).
+				Description("Column definitions used by `auto_create_table`. Required when `auto_create_table` is true.").
+				Default([]any{}).
+				Advanced(),
+			service.NewObjectField(bqwaFieldTimePartitioning,
+				// `type` has no default — absence is the sentinel for "block
+				// not configured". Benthos still fills in defaults for child
+				// fields of an Optional ObjectField, so the parent Contains()
+				// check is unreliable here.
+				service.NewStringEnumField(bqwatpFieldType, "DAY", "HOUR", "MONTH", "YEAR").
+					Description("Partitioning granularity.").
+					Optional(),
+				service.NewStringField(bqwatpFieldField).
+					Description("Column to partition on. Must be of type DATE, TIMESTAMP, or DATETIME."+
+						" If empty, the table uses ingestion-time partitioning (`_PARTITIONTIME`).").
+					Default(""),
+				service.NewDurationField(bqwatpFieldExpiration).
+					Description("Optional partition expiration. Zero means no expiration.").
+					Default("0s"),
+				service.NewBoolField(bqwatpFieldRequireFilter).
+					Description("If true, queries against the table must filter on the partition column.").
+					Default(false),
+			).
+				Description("Optional time-partitioning settings applied during `auto_create_table`."+
+					" Setting `type` is the trigger — when omitted, the block is treated as absent.").
+				Advanced().
+				Optional(),
+			service.NewStringListField(bqwaFieldClustering).
+				Description("Optional clustering columns (up to 4) applied during `auto_create_table`."+
+					" All names must appear in `schema`.").
+				Default([]any{}).
+				Advanced(),
 			service.NewOutputMaxInFlightField().Default(4),
 			service.NewBatchPolicyField(bqwaFieldBatching),
 			service.NewStringField(bqwaFieldCredentialsJSON).
@@ -172,10 +257,34 @@ A name that sanitizes to the empty string is rejected as a permanent error.
 		)
 }
 
+// bqSchemaField mirrors the YAML representation of a single column in the
+// schema config used by auto_create_table. It is converted to a
+// bigquery.FieldSchema in table_creator.go.
+type bqSchemaField struct {
+	Name   string
+	Type   string // canonical BigQuery type (aliases normalised)
+	Mode   string // NULLABLE / REQUIRED / REPEATED
+	Fields []bqSchemaField
+}
+
+// bqTimePartitioningConfig mirrors the YAML time_partitioning block. Type=""
+// means the user did not configure partitioning at all (block absent).
+type bqTimePartitioningConfig struct {
+	Type          string
+	Field         string
+	Expiration    time.Duration
+	RequireFilter bool
+}
+
 type bigQueryWriteAPIConfig struct {
 	ProjectID              string
 	DatasetID              string
 	MessageFormat          string
+	WriteMode              string
+	AutoCreateTable        bool
+	Schema                 []bqSchemaField
+	TimePartitioning       bqTimePartitioningConfig
+	Clustering             []string
 	CredentialsJSON        string
 	TargetPrincipal        string
 	Delegates              []string
@@ -186,6 +295,119 @@ type bigQueryWriteAPIConfig struct {
 	SchemaEvolutionTimeout time.Duration
 	EndpointHTTP           string
 	EndpointGRPC           string
+}
+
+// validBQFieldTypes is the set of column types accepted by auto-create. Aliases
+// (INT64↔INTEGER, FLOAT64↔FLOAT, BOOL↔BOOLEAN) are normalised to BigQuery's
+// canonical names so the parsed config is stable.
+var validBQFieldTypes = map[string]string{
+	"STRING":     "STRING",
+	"BYTES":      "BYTES",
+	"INTEGER":    "INTEGER",
+	"INT64":      "INTEGER",
+	"FLOAT":      "FLOAT",
+	"FLOAT64":    "FLOAT",
+	"NUMERIC":    "NUMERIC",
+	"BIGNUMERIC": "BIGNUMERIC",
+	"BOOLEAN":    "BOOLEAN",
+	"BOOL":       "BOOLEAN",
+	"TIMESTAMP":  "TIMESTAMP",
+	"DATE":       "DATE",
+	"TIME":       "TIME",
+	"DATETIME":   "DATETIME",
+	"GEOGRAPHY":  "GEOGRAPHY",
+	"JSON":       "JSON",
+	"RECORD":     "RECORD",
+}
+
+var validBQFieldModes = map[string]struct{}{
+	"NULLABLE": {},
+	"REQUIRED": {},
+	"REPEATED": {},
+}
+
+// validateSchemaReferences checks that time_partitioning.field and clustering
+// columns reference columns declared in the schema, and that the partition
+// field has a partition-eligible type. The checks only fire when columns are
+// actually configured (clustering empty / partition field empty is a no-op).
+func validateSchemaReferences(conf bigQueryWriteAPIConfig) error {
+	if conf.TimePartitioning.Field == "" && len(conf.Clustering) == 0 {
+		return nil
+	}
+	cols := make(map[string]string, len(conf.Schema))
+	for _, f := range conf.Schema {
+		cols[f.Name] = f.Type
+	}
+	if conf.TimePartitioning.Field != "" {
+		t, ok := cols[conf.TimePartitioning.Field]
+		if !ok {
+			return fmt.Errorf("%s.%s %q is not in %s",
+				bqwaFieldTimePartitioning, bqwatpFieldField, conf.TimePartitioning.Field, bqwaFieldSchema)
+		}
+		switch t {
+		case "DATE", "TIMESTAMP", "DATETIME":
+		default:
+			return fmt.Errorf("%s.%s %q has type %s; must be DATE/TIMESTAMP/DATETIME",
+				bqwaFieldTimePartitioning, bqwatpFieldField, conf.TimePartitioning.Field, t)
+		}
+	}
+	for _, c := range conf.Clustering {
+		if _, ok := cols[c]; !ok {
+			return fmt.Errorf("%s column %q is not in %s", bqwaFieldClustering, c, bqwaFieldSchema)
+		}
+	}
+	return nil
+}
+
+// parseSchemaFields walks a list of ParsedConfig children (top-level schema list
+// or a RECORD's nested fields) into validated bqSchemaField values.
+func parseSchemaFields(confs []*service.ParsedConfig) ([]bqSchemaField, error) {
+	out := make([]bqSchemaField, 0, len(confs))
+	for i, c := range confs {
+		name, err := c.FieldString(bqwaSchemaFieldName)
+		if err != nil {
+			return nil, fmt.Errorf("schema[%d]: %w", i, err)
+		}
+		if name == "" {
+			return nil, fmt.Errorf("schema[%d]: %s is required", i, bqwaSchemaFieldName)
+		}
+		rawType, err := c.FieldString(bqwaSchemaFieldType)
+		if err != nil {
+			return nil, fmt.Errorf("schema[%d] %q: %w", i, name, err)
+		}
+		canonical, ok := validBQFieldTypes[strings.ToUpper(rawType)]
+		if !ok {
+			return nil, fmt.Errorf("schema[%d] %q: unsupported type %q", i, name, rawType)
+		}
+		// FieldString returns an error for missing keys when the child config
+		// came from a NewAnyListField (no defaults applied for nested levels).
+		mode := "NULLABLE"
+		if c.Contains(bqwaSchemaFieldMode) {
+			rawMode, err := c.FieldString(bqwaSchemaFieldMode)
+			if err != nil {
+				return nil, fmt.Errorf("schema[%d] %q: %w", i, name, err)
+			}
+			if rawMode != "" {
+				mode = strings.ToUpper(rawMode)
+			}
+		}
+		if _, ok := validBQFieldModes[mode]; !ok {
+			return nil, fmt.Errorf("schema[%d] %q: invalid mode %q", i, name, mode)
+		}
+		fld := bqSchemaField{Name: name, Type: canonical, Mode: mode}
+		if canonical == "RECORD" {
+			childConfs, _ := c.FieldAnyList(bqwaSchemaFieldFields)
+			if len(childConfs) == 0 {
+				return nil, fmt.Errorf("schema[%d] %q: RECORD requires at least one nested field", i, name)
+			}
+			fld.Fields, err = parseSchemaFields(childConfs)
+			if err != nil {
+				return nil, fmt.Errorf("schema[%d] %q: %w", i, name, err)
+			}
+		}
+		out = append(out, fld)
+	}
+	return out, nil
 }
 
 func bigQueryWriteAPIConfigFromParsed(pConf *service.ParsedConfig) (conf bigQueryWriteAPIConfig, err error) {
@@ -199,6 +421,49 @@ func bigQueryWriteAPIConfigFromParsed(pConf *service.ParsedConfig) (conf bigQuer
 		return
 	}
 	if conf.MessageFormat, err = pConf.FieldString(bqwaFieldMessageFormat); err != nil {
+		return
+	}
+	if conf.WriteMode, err = pConf.FieldString(bqwaFieldWriteMode); err != nil {
+		return
+	}
+	if conf.AutoCreateTable, err = pConf.FieldBool(bqwaFieldAutoCreateTable); err != nil {
+		return
+	}
+	schemaConfs, err := pConf.FieldObjectList(bqwaFieldSchema)
+	if err != nil {
+		return
+	}
+	if conf.Schema, err = parseSchemaFields(schemaConfs); err != nil {
+		return
+	}
+	if conf.AutoCreateTable && len(conf.Schema) == 0 {
+		err = fmt.Errorf("%s requires %s to be non-empty", bqwaFieldAutoCreateTable, bqwaFieldSchema)
+		return
+	}
+	// time_partitioning.type has no default, so a missing type — either via an
+	// absent block or a block without `type:` — leaves Type empty and the
+	// other subfields are ignored. Type set is the explicit opt-in.
+	tp := pConf.Namespace(bqwaFieldTimePartitioning)
+	if typ, terr := tp.FieldString(bqwatpFieldType); terr == nil && typ != "" {
+		conf.TimePartitioning.Type = typ
+		if conf.TimePartitioning.Field, err = tp.FieldString(bqwatpFieldField); err != nil {
+			return
+		}
+		if conf.TimePartitioning.Expiration, err = tp.FieldDuration(bqwatpFieldExpiration); err != nil {
+			return
+		}
+		if conf.TimePartitioning.RequireFilter, err = tp.FieldBool(bqwatpFieldRequireFilter); err != nil {
+			return
+		}
+	}
+	if conf.Clustering, err = pConf.FieldStringList(bqwaFieldClustering); err != nil {
+		return
+	}
+	if len(conf.Clustering) > 4 {
+		err = fmt.Errorf("%s accepts at most 4 columns, got %d", bqwaFieldClustering, len(conf.Clustering))
+		return
+	}
+	if err = validateSchemaReferences(conf); err != nil {
 		return
 	}
 	if conf.CredentialsJSON, err = pConf.FieldString(bqwaFieldCredentialsJSON); err != nil {
@@ -267,6 +532,13 @@ type bqwaMetrics struct {
 	retries                 *service.MetricCounter
 	schemaEvolutions        *service.MetricCounter
 	schemaEvolutionFailures *service.MetricCounter
+	// cachedStreams reflects the current size of the default-stream cache so
+	// operators can tell whether max_cached_streams is sized correctly.
+	cachedStreams *service.MetricGauge
+	// streamsEvicted counts every cache eviction (idle-sweep + LRU + on-error).
+	// A spike here without a corresponding writer-error spike usually indicates
+	// max_cached_streams is too low for the table fan-out.
+	streamsEvicted *service.MetricCounter
 }
 
 func newBQWAMetrics(m *service.Metrics) *bqwaMetrics {
@@ -278,6 +550,8 @@ func newBQWAMetrics(m *service.Metrics) *bqwaMetrics {
 		retries:                 m.NewCounter("bigquery_write_api_retries_total"),
 		schemaEvolutions:        m.NewCounter("bigquery_write_api_schema_evolutions_total"),
 		schemaEvolutionFailures: m.NewCounter("bigquery_write_api_schema_evolutions_failures_total"),
+		cachedStreams:           m.NewGauge("bigquery_write_api_streams_cached"),
+		streamsEvicted:          m.NewCounter("bigquery_write_api_streams_evicted_total"),
 	}
 }
 
@@ -350,9 +624,10 @@ func classifyBQError(err error) bqError {
 }
 
 type streamWithDescriptor struct {
-	stream     *managedwriter.ManagedStream
-	descriptor protoreflect.MessageDescriptor
-	lastUsed   atomic.Int64 // UnixNano timestamp, safe for concurrent access
+	stream          *managedwriter.ManagedStream
+	descriptor      protoreflect.MessageDescriptor
+	descriptorProto *descriptorpb.DescriptorProto // needed by pendingStreamWriter (write_mode=pending_stream)
+	lastUsed        atomic.Int64                  // UnixNano timestamp, safe for concurrent access
 }
 
 type bigQueryWriteAPIOutput struct {
@@ -367,6 +642,11 @@ type bigQueryWriteAPIOutput struct {
 	client            *bigquery.Client
 	storageClient     *managedwriter.Client
 	resolvedProjectID string
+	// pending is non-nil while connected when write_mode=pending_stream.
+	// It wraps storageClient and runs the per-batch Create/Append/Finalize/Commit
+	// lifecycle. Nil-checked rather than gated on conf, so a pending-mode write
+	// against a disconnected output cleanly returns ErrNotConnected.
+	pending *pendingStreamWriter
 
 	// Lock ordering: connMu must always be acquired before streamsMu to
 	// prevent deadlocks. Close() acquires connMu then streamsMu;
@@ -398,14 +678,23 @@ func bigQueryWriteAPIOutputFromConfig(conf *service.ParsedConfig, mgr *service.R
 		return nil, err
 	}
 
+	creator, err := newTableCreator(cfg, mgr.Logger())
+	if err != nil {
+		return nil, err
+	}
+
 	return &bigQueryWriteAPIOutput{
 		conf:        cfg,
 		tableInterp: tableInterp,
 		log:         mgr.Logger(),
 		metrics:     newBQWAMetrics(mgr.Metrics()),
 		streams:     make(map[string]*streamWithDescriptor),
-		resolver:    &schemaResolver{log: mgr.Logger(), resolveTimeout: cfg.SchemaResolveTimeout},
-		evolver:     &schemaEvolver{log: mgr.Logger(), evolveTimeout: cfg.SchemaEvolutionTimeout},
+		resolver: &schemaResolver{
+			log:            mgr.Logger(),
+			resolveTimeout: cfg.SchemaResolveTimeout,
+			creator:        creator,
+		},
+		evolver: &schemaEvolver{log: mgr.Logger(), evolveTimeout: cfg.SchemaEvolutionTimeout},
 	}, nil
 }
 
@@ -449,6 +738,7 @@ func (o *bigQueryWriteAPIOutput) Connect(ctx context.Context) error {
 	o.resolvedProjectID = resolvedProject
 	o.client = bqClient
 	o.storageClient = storageClient
+	o.pending = &pendingStreamWriter{storage: storageClient}
 	o.stopSweep = make(chan struct{})
 	o.sweepWg.Add(1)
 	go o.sweepIdleStreams(o.stopSweep)
@@ -460,12 +750,25 @@ func (o *bigQueryWriteAPIOutput) WriteBatch(ctx context.Context, batch service.M
 		return nil
 	}
 
-	// Snapshot client + resolvedProjectID together under one RLock so a
-	// concurrent Connect-after-Close (which rewrites both) cannot tear them.
+	// Snapshot client, resolvedProjectID, and pending together under one
+	// RLock so a concurrent Connect-after-Close (which rewrites all three)
+	// cannot tear them apart. In pending-stream mode we also call Begin()
+	// while holding the lock so the inflight counter is incremented before
+	// Close can acquire its write lock; this closes the race where Close
+	// would observe inflight=0 between the WriteBatch lock release and the
+	// pending.Write entry.
 	o.connMu.RLock()
 	client := o.client
 	projectID := o.resolvedProjectID
+	pending := o.pending
+	var pendingDone func()
+	if o.conf.WriteMode == "pending_stream" && pending != nil {
+		pendingDone = pending.Begin()
+	}
 	o.connMu.RUnlock()
+	if pendingDone != nil {
+		defer pendingDone()
+	}
 
 	if client == nil {
 		return service.ErrNotConnected
@@ -513,6 +816,29 @@ func (o *bigQueryWriteAPIOutput) WriteBatch(ctx context.Context, batch service.M
 			return fmt.Errorf("unsupported message format: %s", o.conf.MessageFormat)
 		}
 		rows = append(rows, protoBytes)
+	}
+
+	// Pending-stream mode bypasses the cached default-stream and runs a fresh
+	// Create/Append/Finalize/Commit lifecycle per batch. Schema-mismatch and
+	// permanent errors flow through handleWriteError just like the default
+	// path so evolution + DLQ semantics stay consistent.
+	if o.conf.WriteMode == "pending_stream" {
+		if pending == nil {
+			return service.ErrNotConnected
+		}
+		parent := o.tableCacheKey(projectID, tableID)
+		if err := pending.Write(ctx, parent, swd.descriptorProto, rows); err != nil {
+			// Evict the cached stream so a fresh descriptor is fetched on retry
+			// — matches the default-stream branch below. The cached swd is only
+			// consulted for its descriptor in pending mode, but a schema-mismatch
+			// error means that descriptor is stale.
+			o.evictStream(cacheKey)
+			return o.handleWriteError(ctx, client, err, batch, tableID, swd.descriptor, "pending stream write")
+		}
+		o.metrics.batchLatency.Timing(time.Since(start).Nanoseconds())
+		o.metrics.batchesSent.Incr(1)
+		o.metrics.rowsSent.Incr(int64(len(batch)))
+		return nil
 	}
 
 	result, err := swd.stream.AppendRows(ctx, rows)
@@ -612,6 +938,14 @@ func (o *bigQueryWriteAPIOutput) Close(ctx context.Context) error {
 	// sweepIdleStreams) so they don't race with client shutdown.
 	o.closeWg.Wait()
 
+	// Wait for in-flight pending-stream Writes so they finish their
+	// Finalize/BatchCommit calls before the underlying storage client is torn
+	// down. Without this an in-flight pending Write would observe a closed
+	// gRPC connection mid-commit and surface a permanent batch error.
+	if o.pending != nil {
+		o.pending.Wait()
+	}
+
 	o.streamsMu.Lock()
 	streams := o.streams
 	o.streams = make(map[string]*streamWithDescriptor)
@@ -634,6 +968,7 @@ func (o *bigQueryWriteAPIOutput) Close(ctx context.Context) error {
 		}
 		o.storageClient = nil
 	}
+	o.pending = nil
 
 	if o.client != nil {
 		if err := o.client.Close(); err != nil {
@@ -774,8 +1109,11 @@ func (o *bigQueryWriteAPIOutput) getOrCreateStream(ctx context.Context, client *
 			delete(o.streams, lruKey)
 		}
 	}
+	size := int64(len(o.streams))
 	o.streamsMu.Unlock()
+	o.metrics.cachedStreams.Set(size)
 	if evicted != nil {
+		o.metrics.streamsEvicted.Incr(1)
 		o.closeStreamAsync(evicted.stream)
 	}
 	return swd, cacheKey, nil
@@ -789,9 +1127,12 @@ func (o *bigQueryWriteAPIOutput) evictStream(cacheKey string) {
 	o.streamsMu.Lock()
 	swd, exists := o.streams[cacheKey]
 	delete(o.streams, cacheKey)
+	size := int64(len(o.streams))
 	o.streamsMu.Unlock()
 
+	o.metrics.cachedStreams.Set(size)
 	if exists {
+		o.metrics.streamsEvicted.Incr(1)
 		o.closeStreamAsync(swd.stream)
 	}
 }
@@ -827,8 +1168,13 @@ func (o *bigQueryWriteAPIOutput) sweepIdleStreams(stop <-chan struct{}) {
 				delete(o.streams, key)
 			}
 		}
+		size := int64(len(o.streams))
 		o.streamsMu.Unlock()
 
+		if len(toClose) > 0 {
+			o.metrics.cachedStreams.Set(size)
+			o.metrics.streamsEvicted.Incr(int64(len(toClose)))
+		}
 		for _, e := range toClose {
 			o.log.Debugf("Closing idle BigQuery stream for %s", e.key)
 			o.closeStreamAsync(e.swd.stream)
@@ -865,8 +1211,9 @@ func (o *bigQueryWriteAPIOutput) createStream(ctx context.Context, client *bigqu
 	}
 
 	return &streamWithDescriptor{
-		stream:     ms,
-		descriptor: rs.messageDescriptor,
+		stream:          ms,
+		descriptor:      rs.messageDescriptor,
+		descriptorProto: rs.descriptorProto,
 	}, nil
 }
 

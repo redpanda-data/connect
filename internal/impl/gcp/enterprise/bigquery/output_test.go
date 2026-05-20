@@ -11,6 +11,7 @@ package bigquery
 import (
 	"errors"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -64,6 +65,8 @@ table: my_table
 	assert.Equal(t, bigquery.DetectProjectID, cfg.ProjectID)
 	assert.Equal(t, "my_dataset", cfg.DatasetID)
 	assert.Equal(t, "json", cfg.MessageFormat)
+	assert.Equal(t, "default_stream", cfg.WriteMode)
+	assert.False(t, cfg.AutoCreateTable)
 	assert.Empty(t, cfg.CredentialsJSON)
 	assert.Empty(t, cfg.TargetPrincipal)
 	assert.Empty(t, cfg.Delegates)
@@ -83,6 +86,10 @@ project: my-project
 dataset: my_dataset
 table: my_table
 message_format: protobuf
+write_mode: pending_stream
+auto_create_table: true
+schema:
+  - { name: id, type: STRING, mode: REQUIRED }
 credentials_json: '{"type":"service_account"}'
 target_principal: "sa@project.iam.gserviceaccount.com"
 delegates:
@@ -105,6 +112,8 @@ endpoint:
 	assert.Equal(t, "my-project", cfg.ProjectID)
 	assert.Equal(t, "my_dataset", cfg.DatasetID)
 	assert.Equal(t, "protobuf", cfg.MessageFormat)
+	assert.Equal(t, "pending_stream", cfg.WriteMode)
+	assert.True(t, cfg.AutoCreateTable)
 	assert.Equal(t, `{"type":"service_account"}`, cfg.CredentialsJSON)
 	assert.Equal(t, "sa@project.iam.gserviceaccount.com", cfg.TargetPrincipal)
 	assert.Equal(t, []string{"delegate@project.iam.gserviceaccount.com"}, cfg.Delegates)
@@ -168,6 +177,213 @@ delegates:
   - "delegate@project.iam.gserviceaccount.com"
 `,
 			errMsg: bqwaFieldDelegates,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			pConf, err := spec.ParseYAML(tc.yaml, nil)
+			require.NoError(t, err)
+			_, err = bigQueryWriteAPIConfigFromParsed(pConf)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tc.errMsg)
+		})
+	}
+}
+
+func TestSchemaParsing(t *testing.T) {
+	spec := bigQueryWriteAPISpec()
+	pConf, err := spec.ParseYAML(`
+dataset: my_dataset
+table: my_table
+auto_create_table: true
+schema:
+  - { name: id, type: STRING, mode: REQUIRED }
+  - { name: tags, type: STRING, mode: REPEATED }
+  - { name: age, type: INT64 }
+  - name: address
+    type: RECORD
+    fields:
+      - { name: line1, type: STRING }
+      - { name: city, type: STRING, mode: REQUIRED }
+`, nil)
+	require.NoError(t, err)
+
+	cfg, err := bigQueryWriteAPIConfigFromParsed(pConf)
+	require.NoError(t, err)
+	require.Len(t, cfg.Schema, 4)
+	assert.Equal(t, "id", cfg.Schema[0].Name)
+	assert.Equal(t, "STRING", cfg.Schema[0].Type)
+	assert.Equal(t, "REQUIRED", cfg.Schema[0].Mode)
+	assert.Equal(t, "REPEATED", cfg.Schema[1].Mode)
+	// INT64 alias normalises to INTEGER.
+	assert.Equal(t, "INTEGER", cfg.Schema[2].Type)
+	assert.Equal(t, "NULLABLE", cfg.Schema[2].Mode)
+	assert.Equal(t, "RECORD", cfg.Schema[3].Type)
+	require.Len(t, cfg.Schema[3].Fields, 2)
+	assert.Equal(t, "line1", cfg.Schema[3].Fields[0].Name)
+	assert.Equal(t, "city", cfg.Schema[3].Fields[1].Name)
+	assert.Equal(t, "REQUIRED", cfg.Schema[3].Fields[1].Mode)
+}
+
+func TestSchemaValidation(t *testing.T) {
+	spec := bigQueryWriteAPISpec()
+	for _, tc := range []struct {
+		name   string
+		yaml   string
+		errMsg string
+	}{
+		{
+			name: "auto_create_table without schema",
+			yaml: `
+dataset: my_dataset
+table: my_table
+auto_create_table: true
+`,
+			errMsg: bqwaFieldSchema,
+		},
+		{
+			name: "invalid column type",
+			yaml: `
+dataset: my_dataset
+table: my_table
+auto_create_table: true
+schema:
+  - { name: id, type: NOTATYPE }
+`,
+			errMsg: "NOTATYPE",
+		},
+		{
+			name: "invalid mode",
+			yaml: `
+dataset: my_dataset
+table: my_table
+auto_create_table: true
+schema:
+  - { name: id, type: STRING, mode: WEIRD }
+`,
+			errMsg: "WEIRD",
+		},
+		{
+			name: "record without fields",
+			yaml: `
+dataset: my_dataset
+table: my_table
+auto_create_table: true
+schema:
+  - { name: addr, type: RECORD }
+`,
+			errMsg: "RECORD",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			pConf, err := spec.ParseYAML(tc.yaml, nil)
+			require.NoError(t, err)
+			_, err = bigQueryWriteAPIConfigFromParsed(pConf)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tc.errMsg)
+		})
+	}
+}
+
+func TestPartitioningClusteringParsing(t *testing.T) {
+	spec := bigQueryWriteAPISpec()
+	pConf, err := spec.ParseYAML(`
+dataset: my_dataset
+table: my_table
+auto_create_table: true
+schema:
+  - { name: id, type: STRING }
+  - { name: created_at, type: TIMESTAMP }
+  - { name: user_id, type: STRING }
+time_partitioning:
+  type: HOUR
+  field: created_at
+  expiration: 24h
+  require_filter: true
+clustering:
+  - user_id
+  - id
+`, nil)
+	require.NoError(t, err)
+
+	cfg, err := bigQueryWriteAPIConfigFromParsed(pConf)
+	require.NoError(t, err)
+	assert.Equal(t, "HOUR", cfg.TimePartitioning.Type)
+	assert.Equal(t, "created_at", cfg.TimePartitioning.Field)
+	assert.Equal(t, 24*time.Hour, cfg.TimePartitioning.Expiration)
+	assert.True(t, cfg.TimePartitioning.RequireFilter)
+	assert.Equal(t, []string{"user_id", "id"}, cfg.Clustering)
+}
+
+func TestPartitioningClusteringDefaults(t *testing.T) {
+	// Absent partition block leaves Type empty (sentinel for "not configured").
+	spec := bigQueryWriteAPISpec()
+	pConf, err := spec.ParseYAML(`
+dataset: my_dataset
+table: my_table
+`, nil)
+	require.NoError(t, err)
+	cfg, err := bigQueryWriteAPIConfigFromParsed(pConf)
+	require.NoError(t, err)
+	assert.Empty(t, cfg.TimePartitioning.Type)
+	assert.Empty(t, cfg.TimePartitioning.Field)
+	assert.Empty(t, cfg.Clustering)
+}
+
+func TestPartitioningClusteringValidation(t *testing.T) {
+	spec := bigQueryWriteAPISpec()
+	for _, tc := range []struct {
+		name   string
+		yaml   string
+		errMsg string
+	}{
+		{
+			name: "partition field not in schema",
+			yaml: `
+dataset: my_dataset
+table: my_table
+auto_create_table: true
+schema: [{ name: id, type: STRING }]
+time_partitioning: { type: DAY, field: missing_col }
+`,
+			errMsg: "missing_col",
+		},
+		{
+			name: "partition field wrong type",
+			yaml: `
+dataset: my_dataset
+table: my_table
+auto_create_table: true
+schema: [{ name: id, type: STRING }]
+time_partitioning: { type: DAY, field: id }
+`,
+			errMsg: "DATE/TIMESTAMP/DATETIME",
+		},
+		{
+			name: "clustering column not in schema",
+			yaml: `
+dataset: my_dataset
+table: my_table
+auto_create_table: true
+schema: [{ name: id, type: STRING }]
+clustering: [missing_col]
+`,
+			errMsg: "missing_col",
+		},
+		{
+			name: "too many clustering columns",
+			yaml: `
+dataset: my_dataset
+table: my_table
+auto_create_table: true
+schema:
+  - { name: a, type: STRING }
+  - { name: b, type: STRING }
+  - { name: c, type: STRING }
+  - { name: d, type: STRING }
+  - { name: e, type: STRING }
+clustering: [a, b, c, d, e]
+`,
+			errMsg: "at most 4",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -337,6 +553,93 @@ func TestDescriptorProtoToMessageDescriptorErrors(t *testing.T) {
 		assert.Nil(t, md)
 		assert.Contains(t, err.Error(), "creating file descriptor from normalized proto")
 	})
+}
+
+// TestStreamCacheConcurrentStress exercises the stream cache from many
+// goroutines doing reads (fast path), inserts (with LRU eviction), and
+// targeted evictions. The point isn't to assert final cache contents — Go's
+// race detector and the lock invariants are what we're stressing.
+func TestStreamCacheConcurrentStress(t *testing.T) {
+	out := newTestOutput(t, `
+dataset: my_dataset
+table: my_table
+max_cached_streams: 16
+`)
+	out.streams = make(map[string]*streamWithDescriptor)
+
+	// Seed enough entries to make the LRU scan non-trivial.
+	for i := range 8 {
+		k := fmt.Sprintf("projects/p/datasets/d/tables/seed%d", i)
+		swd := &streamWithDescriptor{}
+		swd.lastUsed.Store(time.Now().Add(time.Duration(-i) * time.Second).UnixNano())
+		out.streams[k] = swd
+	}
+
+	const (
+		goroutines   = 16
+		opsPerWorker = 500
+	)
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+	for g := range goroutines {
+		go func(id int) {
+			defer wg.Done()
+			for i := range opsPerWorker {
+				key := fmt.Sprintf("projects/p/datasets/d/tables/t%d", (id*opsPerWorker+i)%24)
+				switch i % 4 {
+				case 0:
+					// Fast-path read with lastUsed update.
+					out.streamsMu.RLock()
+					if cached, exists := out.streams[key]; exists {
+						cached.lastUsed.Store(time.Now().UnixNano())
+					}
+					out.streamsMu.RUnlock()
+				case 1:
+					// Insert path mimicking getOrCreateStream's tail.
+					out.streamsMu.Lock()
+					if _, exists := out.streams[key]; !exists {
+						newSwd := &streamWithDescriptor{}
+						newSwd.lastUsed.Store(time.Now().UnixNano())
+						out.streams[key] = newSwd
+						// Drive the LRU pass under contention.
+						if len(out.streams) > out.conf.MaxCachedStreams {
+							var lruKey string
+							var lruTS int64 = -1
+							for k, s := range out.streams {
+								if k == key {
+									continue
+								}
+								ts := s.lastUsed.Load()
+								if lruTS == -1 || ts < lruTS {
+									lruKey = k
+									lruTS = ts
+								}
+							}
+							if lruKey != "" {
+								delete(out.streams, lruKey)
+							}
+						}
+					}
+					out.streamsMu.Unlock()
+				case 2:
+					out.evictStream(key)
+				case 3:
+					out.streamsMu.RLock()
+					_ = len(out.streams)
+					out.streamsMu.RUnlock()
+				}
+			}
+		}(g)
+	}
+	wg.Wait()
+
+	// The cap is a soft limit but should be honoured under the contention
+	// pattern above (each insert evicts at most one extra entry).
+	out.streamsMu.RLock()
+	size := len(out.streams)
+	out.streamsMu.RUnlock()
+	assert.LessOrEqual(t, size, out.conf.MaxCachedStreams+1,
+		"cache should stay within ~MaxCachedStreams under concurrent insert/evict")
 }
 
 func TestSweepIdleStreams(t *testing.T) {
@@ -524,6 +827,8 @@ func TestMetricsInitialization(t *testing.T) {
 	require.NotNil(t, m.retries)
 	require.NotNil(t, m.schemaEvolutions)
 	require.NotNil(t, m.schemaEvolutionFailures)
+	require.NotNil(t, m.cachedStreams)
+	require.NotNil(t, m.streamsEvicted)
 }
 
 func TestBuildAuthOpts(t *testing.T) {
