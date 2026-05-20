@@ -27,6 +27,9 @@ var (
 	DefaultMaxTransactionEvents = 0
 	// DefaultLOBEnabled controls whether LOB column processing is enabled.
 	DefaultLOBEnabled = true
+	// DefaultTransactionCacheKey is the default prefix used for the transaction buffer cache key.
+	// Only relevant when configuring a (potentially shared) cache_resource transaction buffer.
+	DefaultTransactionCacheKey = "oracledb_cdc"
 )
 
 // MiningStrategy defines how LogMiner accesses dictionary information
@@ -46,6 +49,8 @@ type Config struct {
 	MaxTransactionEvents  int
 	LOBEnabled            bool
 	PDBName               string
+	TransactionCacheName  string
+	TransactionCacheKey   string
 }
 
 // NewDefaultConfig returns a Config with default values

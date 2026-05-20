@@ -102,7 +102,7 @@ func TestProcessRedoEventWithConnectCacheResource(t *testing.T) {
 		require.NoError(t, res.AccessCache(t.Context(), "txn_cache", func(c service.Cache) {
 			svcCache = c
 		}))
-		return NewConnectCacheResource(svcCache, 0, res.Metrics(), service.NewLoggerFromSlog(slog.Default()))
+		return NewConnectCacheResource(svcCache, 0, "oracledb_cdc", res.Metrics(), service.NewLoggerFromSlog(slog.Default()))
 	}
 
 	t.Run("single transaction commit", func(t *testing.T) {

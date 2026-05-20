@@ -29,6 +29,7 @@ import (
 // both are intentionally ephemeral and will be reconstructed on restart.
 type ConnectCacheResource struct {
 	cache              service.Cache
+	keyPrefix          string
 	maxEvents          int
 	discarded          map[sqlredo.TransactionID]struct{}
 	log                *service.Logger
@@ -44,9 +45,13 @@ type ConnectCacheResource struct {
 }
 
 // NewConnectCacheResource creates a ConnectCacheResource backed by cache.
-func NewConnectCacheResource(cache service.Cache, maxEvents int, metrics *service.Metrics, log *service.Logger) *ConnectCacheResource {
+// keyPrefix is prepended to every cache key so that multiple oracledb_cdc
+// inputs can share one cache resource without colliding — Oracle transaction
+// IDs (USN.SLOT.SEQ) are only unique within a single Oracle instance.
+func NewConnectCacheResource(cache service.Cache, maxEvents int, keyPrefix string, metrics *service.Metrics, log *service.Logger) *ConnectCacheResource {
 	return &ConnectCacheResource{
 		cache:              cache,
+		keyPrefix:          keyPrefix,
 		maxEvents:          maxEvents,
 		discarded:          make(map[sqlredo.TransactionID]struct{}),
 		startSCNs:          make(map[sqlredo.TransactionID]uint64),
@@ -75,7 +80,7 @@ func (c *ConnectCacheResource) StartTransaction(txnID sqlredo.TransactionID, scn
 		c.log.Errorf("Failed to serialize transaction %s: %v", txnID, err)
 		return
 	}
-	if err := c.cache.Set(context.Background(), toCacheKey(txnID), data, nil); err != nil {
+	if err := c.cache.Set(context.Background(), c.toCacheKey(txnID), data, nil); err != nil {
 		c.log.Errorf("Failed to store transaction %s in cache: %v", txnID, err)
 		return
 	}
@@ -109,7 +114,7 @@ func (c *ConnectCacheResource) AddEvent(txnID sqlredo.TransactionID, scn uint64,
 	if c.maxEvents > 0 && len(txn.Events) > c.maxEvents {
 		c.log.Warnf("Transaction %s exceeded max event buffer of %d events, discarding", txnID, c.maxEvents)
 		c.eventsMetric.Decr(int64(len(txn.Events)))
-		if err := c.cache.Delete(context.Background(), toCacheKey(txnID)); err != nil {
+		if err := c.cache.Delete(context.Background(), c.toCacheKey(txnID)); err != nil {
 			c.log.Errorf("Failed to delete oversized transaction %s from cache: %v", txnID, err)
 		}
 		delete(c.startSCNs, txnID)
@@ -123,14 +128,14 @@ func (c *ConnectCacheResource) AddEvent(txnID sqlredo.TransactionID, scn uint64,
 		c.log.Errorf("Failed to serialize transaction %s: %v", txnID, err)
 		return
 	}
-	if err := c.cache.Set(context.Background(), toCacheKey(txnID), data, nil); err != nil {
+	if err := c.cache.Set(context.Background(), c.toCacheKey(txnID), data, nil); err != nil {
 		c.log.Errorf("Failed to update transaction %s in cache: %v", txnID, err)
 	}
 }
 
 // GetTransaction retrieves the transaction with the given ID. Returns nil if not found.
 func (c *ConnectCacheResource) GetTransaction(txnID sqlredo.TransactionID) *Transaction {
-	data, err := c.cache.Get(context.Background(), toCacheKey(txnID))
+	data, err := c.cache.Get(context.Background(), c.toCacheKey(txnID))
 	if err != nil {
 		return nil
 	}
@@ -151,7 +156,7 @@ func (c *ConnectCacheResource) CommitTransaction(txnID sqlredo.TransactionID) {
 		return
 	}
 	c.eventsMetric.Decr(int64(len(txn.Events)))
-	if err := c.cache.Delete(context.Background(), toCacheKey(txnID)); err != nil {
+	if err := c.cache.Delete(context.Background(), c.toCacheKey(txnID)); err != nil {
 		c.log.Errorf("Failed to delete committed transaction %s from cache: %v", txnID, err)
 	}
 	c.transactionsMetric.Decr(1)
@@ -167,7 +172,7 @@ func (c *ConnectCacheResource) RollbackTransaction(txnID sqlredo.TransactionID) 
 		return
 	}
 	c.eventsMetric.Decr(int64(len(txn.Events)))
-	if err := c.cache.Delete(context.Background(), toCacheKey(txnID)); err != nil {
+	if err := c.cache.Delete(context.Background(), c.toCacheKey(txnID)); err != nil {
 		c.log.Errorf("Failed to delete rolled-back transaction %s from cache: %v", txnID, err)
 	}
 	c.transactionsMetric.Decr(1)
@@ -186,8 +191,8 @@ func (c *ConnectCacheResource) LowWatermarkSCN(excludeTxnID sqlredo.TransactionI
 	return lowestOpenSCN
 }
 
-func toCacheKey(txnID sqlredo.TransactionID) string {
-	return "txn:" + string(txnID)
+func (c *ConnectCacheResource) toCacheKey(txnID sqlredo.TransactionID) string {
+	return c.keyPrefix + ":txn:" + string(txnID)
 }
 
 // ---------------------------------------------------------------------------

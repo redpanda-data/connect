@@ -57,6 +57,7 @@ const (
 	ociFieldMaxTransactionEvents = "max_transaction_events"
 	ociFieldLOBEnabled           = "lob_enabled"
 	ociFieldTransactionCache     = "transaction_cache"
+	ociFieldTransactionCacheKey  = "transaction_cache_key"
 )
 
 func init() {
@@ -139,6 +140,10 @@ When using the default Oracle based cache, the Connect user requires permission 
 		service.NewStringField(ociFieldTransactionCache).
 			Description("A https://www.docs.redpanda.com/redpanda-connect/components/caches/about[cache resource^] to use for buffering in-flight transactions. When set, DML events are serialized and stored in the named cache rather than held in memory, reducing connector memory usage for workloads with large or long-running transactions. If not set, an in-memory buffer is used.").
 			Optional(),
+		service.NewStringField(ociFieldTransactionCacheKey).
+			Description("The key prefix used when storing transactions in `"+ociFieldTransactionCache+"`. An alternative prefix must be set if multiple `oracledb_cdc` inputs share the same cache resource, since Oracle transaction IDs (USN.SLOT.SEQ) are only unique within a single Oracle instance and would otherwise collide.").
+			Default(logminer.DefaultTransactionCacheKey).
+			Optional(),
 	).Description("LogMiner configuration settings."),
 	).
 	Field(service.NewStringListField(ociFieldTablesInclude).
@@ -193,7 +198,6 @@ type Config struct {
 	SCNCacheKey          string
 	CpCacheTableName     string
 	PDBName              string
-	TransactionCacheName string
 }
 
 type oracleDBCDCInput struct {
@@ -224,7 +228,6 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 		cpCache                      service.Cache
 		cpCacheTableName             string
 		lmCfg                        *logminer.Config
-		transactionCacheName         string
 
 		logger = resources.Logger()
 	)
@@ -246,14 +249,6 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 	}
 	if lmCfg, err = parseLogMinerConfig(conf); err != nil {
 		return nil, err
-	}
-	if conf.Contains(ociFieldLogMiner) {
-		lmConf := conf.Namespace(ociFieldLogMiner)
-		if lmConf.Contains(ociFieldTransactionCache) {
-			if transactionCacheName, err = lmConf.FieldString(ociFieldTransactionCache); err != nil {
-				return nil, err
-			}
-		}
 	}
 
 	// tables
@@ -335,7 +330,6 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 			SCNCacheKey:          scnCacheKey,
 			CpCacheTableName:     cpCacheTableName,
 			PDBName:              pdbName,
-			TransactionCacheName: transactionCacheName,
 			TablesFilter: &confx.RegexpFilter{
 				Include: tableIncludes,
 				Exclude: tableExcludes,
@@ -510,9 +504,9 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 
 	if o.lmCfg != nil {
 		var txnCache logminer.TransactionCache
-		if o.cfg.TransactionCacheName != "" {
-			if err := o.res.AccessCache(ctx, o.cfg.TransactionCacheName, func(c service.Cache) {
-				txnCache = logminer.NewConnectCacheResource(c, o.lmCfg.MaxTransactionEvents, o.metrics, o.log)
+		if o.lmCfg.TransactionCacheName != "" {
+			if err := o.res.AccessCache(ctx, o.lmCfg.TransactionCacheName, func(c service.Cache) {
+				txnCache = logminer.NewConnectCacheResource(c, o.lmCfg.MaxTransactionEvents, o.lmCfg.TransactionCacheKey, o.metrics, o.log)
 			}); err != nil {
 				return fmt.Errorf("accessing transaction cache resource: %w", err)
 			}
@@ -749,6 +743,15 @@ func parseLogMinerConfig(conf *service.ParsedConfig) (*logminer.Config, error) {
 		}
 		if cfg.LOBEnabled, err = lmConf.FieldBool(ociFieldLOBEnabled); err != nil {
 			return nil, err
+		}
+		// support cache_resources for buffering logminer transactions
+		if conf.Contains(ociFieldTransactionCache) {
+			if cfg.TransactionCacheName, err = lmConf.FieldString(ociFieldTransactionCache); err != nil {
+				return nil, err
+			}
+			if cfg.TransactionCacheKey, err = lmConf.FieldString(ociFieldTransactionCacheKey); err != nil {
+				return nil, err
+			}
 		}
 	}
 
