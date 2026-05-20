@@ -1,0 +1,367 @@
+// Copyright 2026 Redpanda Data, Inc.
+//
+// Licensed as a Redpanda Enterprise file under the Redpanda Community
+// License (the "License"); you may not use this file except in compliance with
+// the License. You may obtain a copy of the License at
+//
+// https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
+
+package saphana
+
+import (
+	"context"
+	"database/sql"
+	"encoding/json"
+	"fmt"
+	"sync"
+	"time"
+
+	_ "github.com/SAP/go-hdb/driver"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/license"
+)
+
+const (
+	shFieldDSN                    = "dsn"
+	shFieldSchemaName             = "schema_name"
+	shFieldTable                  = "table"
+	shFieldMode                   = "mode"
+	shFieldQuery                  = "query"
+	shFieldIncrementingColumn     = "incrementing_column"
+	shFieldIncrementingInitialVal = "incrementing_initial_value"
+	shFieldPollInterval           = "poll_interval"
+
+	shModeBulk         = "bulk"
+	shModeIncrementing = "incrementing"
+	shModeQuery        = "query"
+)
+
+var sapHANAInputConfigSpec = service.NewConfigSpec().
+	Categories("Services").
+	Version("4.92.0").
+	Summary("Reads rows from a SAP HANA table.").
+	Description(`Reads rows from a SAP HANA table. Supports three modes:
+
+- ` + "`bulk`" + `: reads all rows once then the input terminates (use with xref:components:inputs/sequence.adoc[sequence] for periodic re-reads).
+- ` + "`incrementing`" + `: polls for rows where ` + "`incrementing_column`" + ` exceeds the last seen value, emitting only net-new rows.
+- ` + "`query`" + `: executes a user-supplied SQL statement and emits one message per result row.
+
+== Metadata
+
+Every message produced by this input carries the following metadata fields:
+
+- ` + "`sap_hana_schema`" + `: The HANA schema name.
+- ` + "`sap_hana_table`" + `: The HANA table name.
+- ` + "`schema`" + `: Avro-compatible schema derived from ` + "`SYS.TABLE_COLUMNS`" + `, suitable for use with ` + "`schema_registry_encode`" + `. Column additions are detected automatically without a pipeline restart. Only present when ` + "`schema_name`" + ` is configured.
+`).
+	Field(service.NewStringField(shFieldDSN).
+		Description("SAP HANA connection DSN.").
+		Example("hdb://user:password@host:39017"),
+	).
+	Field(service.NewStringField(shFieldSchemaName).
+		Description("Database schema for the table. When set, an Avro-compatible `schema` metadata field is attached to every message using data from `SYS.TABLE_COLUMNS`.").
+		Optional(),
+	).
+	Field(service.NewStringField(shFieldTable).
+		Description("Table to read from. Required when `mode` is `bulk` or `incrementing`.").
+		Optional(),
+	).
+	Field(service.NewStringEnumField(shFieldMode, shModeBulk, shModeIncrementing, shModeQuery).
+		Description("Operation mode.").
+		Default(shModeBulk),
+	).
+	Field(service.NewStringField(shFieldQuery).
+		Description("Custom SQL statement to execute. Only used when `mode` is `query`.").
+		Optional(),
+	).
+	Field(service.NewStringField(shFieldIncrementingColumn).
+		Description("Column to use as the high-water mark for `incrementing` mode. Must be monotonically increasing (e.g. an auto-increment ID or a timestamp column).").
+		Optional(),
+	).
+	Field(service.NewStringField(shFieldIncrementingInitialVal).
+		Description("Initial high-water mark value. When empty, all existing rows are emitted on the first run.").
+		Default(""),
+	).
+	Field(service.NewDurationField(shFieldPollInterval).
+		Description("How long to wait between polls in `incrementing` mode.").
+		Default("5s").
+		Example("1s").
+		Example("30s"),
+	)
+
+func init() {
+	service.MustRegisterInput("sap_hana", sapHANAInputConfigSpec,
+		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
+			i, err := newSAPHANAInput(conf, mgr)
+			if err != nil {
+				return nil, err
+			}
+			return service.AutoRetryNacksToggled(conf, i)
+		})
+}
+
+type sapHANAInput struct {
+	dsn             string
+	schemaName      string
+	tableName       string
+	mode            string
+	customQuery     string
+	incrementingCol string
+	hwm             string
+	pollInterval    time.Duration
+
+	db      *sql.DB
+	rows    *sql.Rows
+	dbMut   sync.Mutex
+	schemas *schemaCache
+	log     *service.Logger
+
+	stopChan chan struct{}
+	stopOnce sync.Once
+}
+
+func newSAPHANAInput(conf *service.ParsedConfig, mgr *service.Resources) (*sapHANAInput, error) {
+	if err := license.CheckRunningEnterprise(mgr); err != nil {
+		return nil, err
+	}
+
+	s := &sapHANAInput{
+		log:      mgr.Logger(),
+		stopChan: make(chan struct{}),
+	}
+
+	var err error
+	if s.dsn, err = conf.FieldString(shFieldDSN); err != nil {
+		return nil, err
+	}
+	if conf.Contains(shFieldSchemaName) {
+		if s.schemaName, err = conf.FieldString(shFieldSchemaName); err != nil {
+			return nil, err
+		}
+	}
+	if conf.Contains(shFieldTable) {
+		if s.tableName, err = conf.FieldString(shFieldTable); err != nil {
+			return nil, err
+		}
+	}
+	if s.mode, err = conf.FieldString(shFieldMode); err != nil {
+		return nil, err
+	}
+	if conf.Contains(shFieldQuery) {
+		if s.customQuery, err = conf.FieldString(shFieldQuery); err != nil {
+			return nil, err
+		}
+	}
+	if conf.Contains(shFieldIncrementingColumn) {
+		if s.incrementingCol, err = conf.FieldString(shFieldIncrementingColumn); err != nil {
+			return nil, err
+		}
+	}
+	if s.hwm, err = conf.FieldString(shFieldIncrementingInitialVal); err != nil {
+		return nil, err
+	}
+	if s.pollInterval, err = conf.FieldDuration(shFieldPollInterval); err != nil {
+		return nil, err
+	}
+
+	switch s.mode {
+	case shModeBulk, shModeIncrementing:
+		if s.tableName == "" {
+			return nil, fmt.Errorf("field %q is required when mode is %q", shFieldTable, s.mode)
+		}
+	case shModeQuery:
+		if s.customQuery == "" {
+			return nil, fmt.Errorf("field %q is required when mode is %q", shFieldQuery, s.mode)
+		}
+	}
+	if s.mode == shModeIncrementing && s.incrementingCol == "" {
+		return nil, fmt.Errorf("field %q is required when mode is %q", shFieldIncrementingColumn, shModeIncrementing)
+	}
+
+	return s, nil
+}
+
+func (s *sapHANAInput) Connect(ctx context.Context) error {
+	s.dbMut.Lock()
+	defer s.dbMut.Unlock()
+
+	if s.db != nil {
+		return nil
+	}
+
+	db, err := sql.Open("hdb", s.dsn)
+	if err != nil {
+		return fmt.Errorf("opening SAP HANA connection: %w", err)
+	}
+	if err := db.PingContext(ctx); err != nil {
+		_ = db.Close()
+		return fmt.Errorf("pinging SAP HANA: %w", err)
+	}
+
+	s.db = db
+	s.schemas = newSchemaCache(db, s.log)
+	s.log.Debug("Connected to SAP HANA.")
+	return nil
+}
+
+// tableRef returns a quoted table reference: "SCHEMA"."TABLE" or just "TABLE".
+func (s *sapHANAInput) tableRef() string {
+	if s.schemaName != "" {
+		return `"` + s.schemaName + `"."` + s.tableName + `"`
+	}
+	return `"` + s.tableName + `"`
+}
+
+// openRows executes the query for the current mode and returns the result set.
+func (s *sapHANAInput) openRows(ctx context.Context) (*sql.Rows, error) {
+	switch s.mode {
+	case shModeBulk:
+		q := `SELECT * FROM ` + s.tableRef()
+		return s.db.QueryContext(ctx, q)
+
+	case shModeIncrementing:
+		if s.hwm == "" {
+			q := `SELECT * FROM ` + s.tableRef() +
+				` ORDER BY "` + s.incrementingCol + `"`
+			return s.db.QueryContext(ctx, q)
+		}
+		q := `SELECT * FROM ` + s.tableRef() +
+			` WHERE "` + s.incrementingCol + `" > ? ORDER BY "` + s.incrementingCol + `"`
+		return s.db.QueryContext(ctx, q, s.hwm)
+
+	case shModeQuery:
+		return s.db.QueryContext(ctx, s.customQuery)
+
+	default:
+		return nil, fmt.Errorf("unknown mode %q", s.mode)
+	}
+}
+
+func (s *sapHANAInput) Read(ctx context.Context) (*service.Message, service.AckFunc, error) {
+	s.dbMut.Lock()
+	defer s.dbMut.Unlock()
+
+	if s.db == nil {
+		return nil, nil, service.ErrNotConnected
+	}
+
+	noop := func(context.Context, error) error { return nil }
+
+	for {
+		if s.rows != nil {
+			if s.rows.Next() {
+				msg, err := s.scanRow(ctx, s.rows)
+				if err != nil {
+					_ = s.rows.Close()
+					s.rows = nil
+					return nil, nil, err
+				}
+				return msg, noop, nil
+			}
+			if err := s.rows.Err(); err != nil {
+				_ = s.rows.Close()
+				s.rows = nil
+				return nil, nil, fmt.Errorf("iterating rows: %w", err)
+			}
+			_ = s.rows.Close()
+			s.rows = nil
+		}
+
+		switch s.mode {
+		case shModeBulk, shModeQuery:
+			return nil, nil, service.ErrEndOfInput
+
+		case shModeIncrementing:
+			// Release the lock while waiting so Close() can proceed.
+			s.dbMut.Unlock()
+			var timerFired bool
+			select {
+			case <-ctx.Done():
+				s.dbMut.Lock()
+				return nil, nil, ctx.Err()
+			case <-s.stopChan:
+				s.dbMut.Lock()
+				return nil, nil, service.ErrEndOfInput
+			case <-time.After(s.pollInterval):
+				timerFired = true
+			}
+			s.dbMut.Lock()
+			if !timerFired {
+				return nil, nil, service.ErrEndOfInput
+			}
+		}
+
+		rows, err := s.openRows(ctx)
+		if err != nil {
+			return nil, nil, fmt.Errorf("executing query: %w", err)
+		}
+		s.rows = rows
+	}
+}
+
+// scanRow reads the current row into a message and attaches metadata.
+func (s *sapHANAInput) scanRow(ctx context.Context, rows *sql.Rows) (*service.Message, error) {
+	colNames, err := rows.Columns()
+	if err != nil {
+		return nil, fmt.Errorf("getting column names: %w", err)
+	}
+
+	values := make([]any, len(colNames))
+	ptrs := make([]any, len(colNames))
+	for i := range values {
+		ptrs[i] = &values[i]
+	}
+	if err := rows.Scan(ptrs...); err != nil {
+		return nil, fmt.Errorf("scanning columns: %w", err)
+	}
+
+	rowMap := make(map[string]any, len(colNames))
+	for i, name := range colNames {
+		rowMap[name] = values[i]
+	}
+
+	// Update in-memory HWM after a successful scan.
+	if s.mode == shModeIncrementing && s.incrementingCol != "" {
+		if v, ok := rowMap[s.incrementingCol]; ok && v != nil {
+			s.hwm = fmt.Sprintf("%v", v)
+		}
+	}
+
+	b, err := json.Marshal(rowMap)
+	if err != nil {
+		return nil, fmt.Errorf("marshalling row: %w", err)
+	}
+
+	msg := service.NewMessage(b)
+
+	if s.mode != shModeQuery {
+		schemaVal, _ := s.schemas.schemaForEvent(ctx, s.schemaName, s.tableName, colNames)
+		if schemaVal != nil {
+			msg.MetaSetMut("schema", schemaVal)
+		}
+		msg.MetaSetMut("sap_hana_schema", s.schemaName)
+		msg.MetaSetMut("sap_hana_table", s.tableName)
+	}
+
+	return msg, nil
+}
+
+func (s *sapHANAInput) Close(ctx context.Context) error {
+	s.stopOnce.Do(func() { close(s.stopChan) })
+
+	s.dbMut.Lock()
+	defer s.dbMut.Unlock()
+
+	if s.rows != nil {
+		_ = s.rows.Close()
+		s.rows = nil
+	}
+	if s.db != nil {
+		err := s.db.Close()
+		s.db = nil
+		return err
+	}
+	return nil
+}
