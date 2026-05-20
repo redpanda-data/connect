@@ -106,8 +106,12 @@ func runBench(opts benchOpts) (errOut error) {
 	if opts.licenseFile == "" {
 		return fmt.Errorf("--license-file is required (or set REDPANDA_LICENSE_FILEPATH); enterprise connectors won't start without one")
 	}
-	if _, err := os.Stat(opts.licenseFile); err != nil {
+	// Actually open the file (not just stat) so macOS TCC / sandbox / permissions
+	// failures surface before we provision any AWS infrastructure.
+	if f, err := os.Open(opts.licenseFile); err != nil {
 		return fmt.Errorf("license file %q: %w", opts.licenseFile, err)
+	} else {
+		f.Close()
 	}
 	fmt.Printf("[1/7] loaded scenario %s\n", s.Name)
 
