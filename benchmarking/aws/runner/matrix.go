@@ -108,6 +108,14 @@ func (m *MatrixRunner) Run(
 		})
 		fmt.Printf("  -> median %.0f MB/s (p5 %.0f, p95 %.0f, peak %.0f), %d anomalies\n",
 			summary.MedianMBPerSec, summary.P5MBPerSec, summary.P95MBPerSec, summary.PeakMBPerSec, len(anomalies))
+
+		// Early-abort: if the first sweep point captured no samples (Connect
+		// failed to start or the connector errored out for the whole window),
+		// the remaining points will almost certainly fail the same way. Bail
+		// out and let the destroy defer reclaim the infra.
+		if n == cpuPoints[0] && len(samples) == 0 {
+			return out, fmt.Errorf("first sweep point at %d vCPU captured 0 samples — aborting (check the [bench] log lines above for the underlying Connect error)", n)
+		}
 	}
 	return out, nil
 }
