@@ -141,10 +141,11 @@ func runBench(opts benchOpts) (errOut error) {
 	if err := tfStack.Init(); err != nil {
 		return fmt.Errorf("terraform init %s: %w", s.Stack, err)
 	}
+	sessionID := newSessionID()
 	sharedVars := map[string]string{
 		"region":               opts.region,
 		"runner_instance_type": s.Infra.Runner.InstanceType,
-		"bench_session_id":     newSessionID(),
+		"bench_session_id":     sessionID,
 	}
 	stackVars := translateInfraSource(s.Infra.Source, opts.region)
 
@@ -209,12 +210,19 @@ func runBench(opts benchOpts) (errOut error) {
 	if err != nil {
 		return err
 	}
+	logFetcher, err := NewS3LogFetcher(ctx, opts.region)
+	if err != nil {
+		return err
+	}
 	mr := &MatrixRunner{
 		SSM:             ssmExec,
+		LogFetcher:      logFetcher,
 		RunnerInstance:  sharedOuts["runner_instance_id"],
 		LoadGenInstance: sharedOuts["load_gen_instance_id"],
 		ConfigPath:      "/opt/bench/config.yaml",
 		BinaryPath:      "/opt/bench/redpanda-connect",
+		Bucket:          sharedOuts["results_bucket"],
+		SessionID:       sessionID,
 	}
 	reset := combineReset(s.Reset, sharedOuts)
 	workload := renderWorkloadScript(s, sharedOuts)

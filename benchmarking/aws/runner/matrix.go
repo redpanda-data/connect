@@ -6,6 +6,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -21,10 +22,13 @@ var stdout io.Writer = os.Stdout
 // MatrixRunner orchestrates the CPU sweep against the runner EC2.
 type MatrixRunner struct {
 	SSM             SSMExecutor
+	LogFetcher      LogFetcher
 	RunnerInstance  string
 	LoadGenInstance string
 	ConfigPath      string // path on the runner host to benchmark_config.yaml
 	BinaryPath      string // path on the runner host to redpanda-connect
+	Bucket          string // S3 bucket where per-point Connect logs are uploaded
+	SessionID       string // run-scoped key prefix: runs/<SessionID>/sweep-<vcpu>.log
 }
 
 // SweepPoint is the per-point measurement.
@@ -73,30 +77,25 @@ func (m *MatrixRunner) Run(
 			DurationSec: int(duration.Seconds()),
 			ConfigPath:  m.ConfigPath,
 			BinaryPath:  m.BinaryPath,
+			Bucket:      m.Bucket,
+			SessionID:   m.SessionID,
 		})
-
-		var samples []Sample
-		t := 0
-		onLine := func(line string) {
-			s, ok := ParseRollingStatsLine(line)
-			if !ok {
-				fmt.Fprintln(stdout, "[bench] "+line)
-				return
-			}
-			elapsed := time.Duration(t) * time.Second
-			t++
-			if elapsed < warmup {
-				return // discard warmup
-			}
-			s.T = int(elapsed.Seconds() - warmup.Seconds())
-			samples = append(samples, s)
-		}
-		if err := m.SSM.Run(ctx, m.RunnerInstance, script, onLine); err != nil {
+		// The bench script now writes Connect's stdout/stderr to /tmp/bench-N.log
+		// and uploads it to S3 after termination. SSM stdout only carries the
+		// script's own status echos and a per-minute heartbeat (well under the
+		// ~24KB SSM content cap), so streaming every line is safe.
+		if err := m.SSM.Run(ctx, m.RunnerInstance, script, streamingOnLine(stdout, "bench")); err != nil {
 			cancelWorkload()
 			return nil, fmt.Errorf("bench at %d vCPU: %w", n, err)
 		}
 		cancelWorkload()
 		<-workloadDone
+
+		raw, err := m.fetchLog(ctx, n)
+		if err != nil {
+			return nil, fmt.Errorf("fetch log at %d vCPU: %w", n, err)
+		}
+		samples := parseAndTrim(raw, warmup)
 
 		summary := Summarise(samples)
 		anomalies := DetectAnomalies(samples, summary.MedianMBPerSec)
@@ -106,18 +105,55 @@ func (m *MatrixRunner) Run(
 			Summary:   summary,
 			Anomalies: anomalies,
 		})
-		fmt.Printf("  -> median %.0f MB/s (p5 %.0f, p95 %.0f, peak %.0f), %d anomalies\n",
-			summary.MedianMBPerSec, summary.P5MBPerSec, summary.P95MBPerSec, summary.PeakMBPerSec, len(anomalies))
+		fmt.Printf("  -> %d samples; median %.2f MB/s (p5 %.2f, p95 %.2f, peak %.2f), %d anomalies\n",
+			len(samples), summary.MedianMBPerSec, summary.P5MBPerSec, summary.P95MBPerSec, summary.PeakMBPerSec, len(anomalies))
 
 		// Early-abort: if the first sweep point captured no samples (Connect
 		// failed to start or the connector errored out for the whole window),
 		// the remaining points will almost certainly fail the same way. Bail
-		// out and let the destroy defer reclaim the infra.
+		// out, dump the tail of the log so the operator can see the failure,
+		// and let the destroy defer reclaim the infra.
 		if n == cpuPoints[0] && len(samples) == 0 {
-			return out, fmt.Errorf("first sweep point at %d vCPU captured 0 samples — aborting (check the [bench] log lines above for the underlying Connect error)", n)
+			const tailMax = 4 * 1024
+			tail := raw
+			if len(raw) > tailMax {
+				tail = raw[len(raw)-tailMax:]
+			}
+			fmt.Fprintf(stdout, "[bench] connect log tail (last %d bytes):\n%s\n", len(tail), tail)
+			return out, fmt.Errorf("first sweep point at %d vCPU captured 0 samples — see log tail above", n)
 		}
 	}
 	return out, nil
+}
+
+// fetchLog downloads the per-point Connect log uploaded by the bench script.
+func (m *MatrixRunner) fetchLog(ctx context.Context, vcpu int) ([]byte, error) {
+	if m.LogFetcher == nil {
+		return nil, fmt.Errorf("LogFetcher not configured")
+	}
+	key := fmt.Sprintf("runs/%s/sweep-%d.log", m.SessionID, vcpu)
+	body, err := m.LogFetcher.Fetch(ctx, m.Bucket, key)
+	if err != nil {
+		return nil, err
+	}
+	defer body.Close()
+	return io.ReadAll(body)
+}
+
+// parseAndTrim parses the Connect log and discards the leading warmup samples,
+// reindexing T so the first kept sample is T=0.
+func parseAndTrim(raw []byte, warmup time.Duration) []Sample {
+	all, _ := ParseRollingStatsStream(bytes.NewReader(raw))
+	drop := int(warmup.Seconds())
+	if drop >= len(all) {
+		return nil
+	}
+	kept := make([]Sample, len(all)-drop)
+	for i, s := range all[drop:] {
+		s.T = i
+		kept[i] = s
+	}
+	return kept
 }
 
 type benchScriptArgs struct {
@@ -127,25 +163,53 @@ type benchScriptArgs struct {
 	DurationSec int
 	ConfigPath  string
 	BinaryPath  string
+	Bucket      string
+	SessionID   string
 }
 
 // renderBenchScript produces the shell script executed on the runner EC2 for
-// one sweep point. The script pins Connect to the measured cores, runs it for
-// warmup+duration seconds, then SIGTERMs cleanly so the benchmark processor
-// flushes its final rolling-stats line.
+// one sweep point. The script pins Connect to the measured cores, redirects
+// Connect's stdout/stderr to /tmp/bench-N.log (SSM stdout is capped at ~24KB
+// so streaming Connect's ~200KB of rolling-stats lines through it loses
+// samples), runs for warmup+duration seconds, then SIGTERMs cleanly so the
+// benchmark processor flushes its final rolling-stats line. After Connect
+// exits the log is uploaded to s3://Bucket/runs/SessionID/sweep-N.log for the
+// orchestrator to fetch and parse.
 func renderBenchScript(a benchScriptArgs) string {
 	// Cores 0,1 reserved → measured set starts at core 2.
 	cpusetHi := 1 + a.VCPU // inclusive
+	totalSec := a.WarmupSec + a.DurationSec
 	return strings.Join([]string{
 		`set -euo pipefail`,
 		fmt.Sprintf(`echo "starting bench: %d vCPU, %d GiB, warmup %ds, window %ds"`,
 			a.VCPU, a.MemLimitGiB, a.WarmupSec, a.DurationSec),
-		fmt.Sprintf(`taskset -c 2-%d chrt --fifo 50 env GOMAXPROCS=%d GOMEMLIMIT=%dGiB REDPANDA_LICENSE_FILEPATH=/opt/bench/license.jwt %s run %s &`,
+		fmt.Sprintf(`LOG=/tmp/bench-%d.log`, a.VCPU),
+		`: > "$LOG"`,
+		fmt.Sprintf(`taskset -c 2-%d chrt --fifo 50 env GOMAXPROCS=%d GOMEMLIMIT=%dGiB REDPANDA_LICENSE_FILEPATH=/opt/bench/license.jwt %s run %s >"$LOG" 2>&1 &`,
 			cpusetHi, a.VCPU, a.MemLimitGiB, a.BinaryPath, a.ConfigPath),
 		`PID=$!`,
-		fmt.Sprintf(`sleep %d`, a.WarmupSec+a.DurationSec),
-		`kill -TERM $PID || true`,
-		`wait $PID 2>/dev/null || true`,
+		// Heartbeat: every 60s, echo the latest rolling-stats line so the
+		// operator can see throughput live. Bounded output (~17 lines per
+		// sweep point) keeps SSM stdout under its content cap.
+		`(
+  while kill -0 "$PID" 2>/dev/null; do
+    sleep 60
+    LATEST="$(grep -F 'rolling stats' "$LOG" 2>/dev/null | tail -n 1 || true)"
+    if [ -n "$LATEST" ]; then
+      echo "[heartbeat] $LATEST"
+    else
+      echo "[heartbeat] connect running, no samples yet"
+    fi
+  done
+) &`,
+		`HEARTBEAT=$!`,
+		fmt.Sprintf(`sleep %d`, totalSec),
+		`kill -TERM "$PID" 2>/dev/null || true`,
+		`wait "$PID" 2>/dev/null || true`,
+		`kill "$HEARTBEAT" 2>/dev/null || true`,
 		`echo "bench point complete"`,
+		fmt.Sprintf(`aws s3 cp "$LOG" "s3://%s/runs/%s/sweep-%d.log" >/dev/null`,
+			a.Bucket, a.SessionID, a.VCPU),
+		`echo "log uploaded"`,
 	}, "\n")
 }
