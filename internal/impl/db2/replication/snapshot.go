@@ -305,14 +305,14 @@ func (s *Snapshotter) snapshotTable(ctx context.Context, tx *sql.Tx, schema, tab
 
 	lastKeyValues := make([]any, len(pks)) // allocated once; reused across batch iterations
 	var hasLastKey bool
-	var isStringColCache []bool // nil on first batch; populated from ColumnTypes() and reused
+	var colKindCache []db2ColumnKind // nil on first batch; populated from ColumnTypes() and reused
 
 	for {
 		var batchKeyArg []any
 		if hasLastKey {
 			batchKeyArg = lastKeyValues
 		}
-		batchRows, err := s.fetchBatch(ctx, tx, queryNoBounds, queryWithBounds, columns, batchKeyArg, &isStringColCache)
+		batchRows, err := s.fetchBatch(ctx, tx, queryNoBounds, queryWithBounds, columns, batchKeyArg, &colKindCache)
 		if err != nil {
 			return fmt.Errorf("fetching batch: %w", err)
 		}
@@ -429,9 +429,9 @@ func (*Snapshotter) getTableColumns(ctx context.Context, tx *sql.Tx, schema, tab
 // fetchBatch fetches one page of rows using keyset pagination.
 // queryNoBounds and queryWithBounds must be pre-computed by the caller (snapshotTable)
 // so this hot-path function avoids per-batch string allocation.
-// isStringColCache is a write-through pointer: nil on the first call, populated after the
+// colKindCache is a write-through pointer: nil on the first call, populated after the
 // first call and reused on all subsequent calls so SQLDescribeCol is only invoked once per table.
-func (s *Snapshotter) fetchBatch(ctx context.Context, tx *sql.Tx, queryNoBounds, queryWithBounds string, columns []string, lastKeyValues []any, isStringColCache *[]bool) ([]map[string]any, error) {
+func (s *Snapshotter) fetchBatch(ctx context.Context, tx *sql.Tx, queryNoBounds, queryWithBounds string, columns []string, lastKeyValues []any, colKindCache *[]db2ColumnKind) ([]map[string]any, error) {
 	var query string
 	var args []any
 	if len(lastKeyValues) > 0 {
@@ -447,20 +447,19 @@ func (s *Snapshotter) fetchBatch(ctx context.Context, tx *sql.Tx, queryNoBounds,
 	}
 	defer rows.Close()
 
-	// isStringCol: computed once on the first batch via SQLDescribeCol and cached for
+	// colKinds: computed once on the first batch via SQLDescribeCol and cached for
 	// all subsequent pages of the same table (column schema is stable across pages).
-	isStringCol := *isStringColCache
-	if isStringCol == nil {
+	colKinds := *colKindCache
+	if colKinds == nil {
 		columnTypes, err := rows.ColumnTypes()
 		if err != nil {
 			return nil, fmt.Errorf("getting column types: %w", err)
 		}
-		isStringCol = make([]bool, len(columnTypes))
+		colKinds = make([]db2ColumnKind, len(columnTypes))
 		for i, ct := range columnTypes {
-			t := strings.ToUpper(ct.DatabaseTypeName())
-			isStringCol[i] = strings.Contains(t, "CHAR") || strings.Contains(t, "CLOB") || strings.Contains(t, "TEXT")
+			colKinds[i] = columnKind(ct.DatabaseTypeName())
 		}
-		*isStringColCache = isStringCol
+		*colKindCache = colKinds
 	}
 
 	result := make([]map[string]any, 0, s.config.BatchSize)
@@ -482,7 +481,7 @@ func (s *Snapshotter) fetchBatch(ctx context.Context, tx *sql.Tx, queryNoBounds,
 
 		rowMap := make(map[string]any, len(columns))
 		for i, col := range columns {
-			rowMap[col] = convertDB2Value(scanDest[i], isStringCol[i])
+			rowMap[col] = convertDB2Value(scanDest[i], colKinds[i])
 		}
 
 		result = append(result, rowMap)
@@ -492,17 +491,17 @@ func (s *Snapshotter) fetchBatch(ctx context.Context, tx *sql.Tx, queryNoBounds,
 }
 
 // convertDB2Value converts a DB2 driver value to a JSON-serializable Go type.
-// isStringCol must be pre-computed from the column's DatabaseTypeName() before the row loop.
-func convertDB2Value(value any, isStringCol bool) any {
+// kind must be pre-computed from the column's DatabaseTypeName() before the row loop.
+func convertDB2Value(value any, kind db2ColumnKind) any {
 	if value == nil {
 		return nil
 	}
 
 	if b, ok := value.([]byte); ok {
-		if isStringCol {
+		if kind == db2ColumnKindText {
 			return string(b)
 		}
-		// Binary types: return raw bytes (JSON-marshalled as base64).
+		// Binary / unknown types: return raw bytes (JSON-marshalled as base64).
 		return b
 	}
 

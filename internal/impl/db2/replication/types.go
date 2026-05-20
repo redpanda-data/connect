@@ -637,3 +637,38 @@ func formatTimestamp(t time.Time) string {
 func QuoteDB2Identifier(s string) string {
 	return `"` + strings.ReplaceAll(s, `"`, `""`) + `"`
 }
+
+// db2ColumnKind classifies a DB2 column's data family for value conversion.
+// Using a typed constant rather than a plain bool lets callers be explicit
+// about which family they are handling and makes the match exhaustive if a
+// new kind is ever added.
+type db2ColumnKind uint8
+
+const (
+	db2ColumnKindOther  db2ColumnKind = iota // numerics, date/time, boolean, …
+	db2ColumnKindText                        // CHAR, VARCHAR, GRAPHIC, CLOB, TEXT, …
+	db2ColumnKindBinary                      // BINARY, VARBINARY, BLOB
+)
+
+// columnKind maps a DB2 column type name (sql.ColumnType.DatabaseTypeName) to
+// its conversion family.
+//
+// Covered families:
+//   - db2ColumnKindText:   CHAR, VARCHAR, LONG VARCHAR, NCHAR, NVARCHAR,
+//     CLOB, NCLOB, DBCLOB, GRAPHIC, VARGRAPHIC, LONG VARGRAPHIC, TEXT
+//   - db2ColumnKindBinary: BINARY, VARBINARY, BLOB
+//   - db2ColumnKindOther:  INTEGER, BIGINT, DECIMAL, DATE, TIMESTAMP, …
+func columnKind(typeName string) db2ColumnKind {
+	t := strings.ToUpper(typeName)
+	switch {
+	case strings.Contains(t, "CHAR") ||
+		strings.Contains(t, "CLOB") ||
+		strings.Contains(t, "TEXT") ||
+		strings.Contains(t, "GRAPHIC"):
+		return db2ColumnKindText
+	case strings.Contains(t, "BINARY") || strings.Contains(t, "BLOB"):
+		return db2ColumnKindBinary
+	default:
+		return db2ColumnKindOther
+	}
+}

@@ -614,3 +614,58 @@ func TestCSNSQLHexFullRawBytes(t *testing.T) {
 	csn := NewCSNFromBytes(raw10)
 	assert.Equal(t, "00000000000003E80000", csn.SQLHex(10))
 }
+
+func TestColumnKind(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		typeName string
+		want     db2ColumnKind
+	}{
+		// Text — single-byte character types
+		{"CHAR", db2ColumnKindText},
+		{"VARCHAR", db2ColumnKindText},
+		{"LONG VARCHAR", db2ColumnKindText},
+		{"NCHAR", db2ColumnKindText},
+		{"NVARCHAR", db2ColumnKindText},
+		// Text — character large objects
+		{"CLOB", db2ColumnKindText},
+		{"NCLOB", db2ColumnKindText},
+		{"DBCLOB", db2ColumnKindText},
+		// Text — double-byte character strings (GRAPHIC family)
+		{"GRAPHIC", db2ColumnKindText},
+		{"VARGRAPHIC", db2ColumnKindText},
+		{"LONG VARGRAPHIC", db2ColumnKindText},
+		// Text — compatibility type
+		{"TEXT", db2ColumnKindText},
+		// Binary
+		{"BINARY", db2ColumnKindBinary},
+		{"VARBINARY", db2ColumnKindBinary},
+		{"BLOB", db2ColumnKindBinary},
+		// Other — numeric and date/time types
+		{"INTEGER", db2ColumnKindOther},
+		{"BIGINT", db2ColumnKindOther},
+		{"SMALLINT", db2ColumnKindOther},
+		{"DECIMAL", db2ColumnKindOther},
+		{"FLOAT", db2ColumnKindOther},
+		{"DOUBLE", db2ColumnKindOther},
+		{"DATE", db2ColumnKindOther},
+		{"TIME", db2ColumnKindOther},
+		{"TIMESTAMP", db2ColumnKindOther},
+		{"BOOLEAN", db2ColumnKindOther},
+		// Case-insensitive
+		{"varchar", db2ColumnKindText},
+		{"Vargraphic", db2ColumnKindText},
+		{"clob", db2ColumnKindText},
+		{"blob", db2ColumnKindBinary},
+		// Empty string — unknown type
+		{"", db2ColumnKindOther},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.typeName, func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, tc.want, columnKind(tc.typeName))
+		})
+	}
+}

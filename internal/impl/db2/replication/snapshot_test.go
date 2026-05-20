@@ -10,7 +10,6 @@ package replication
 
 import (
 	"context"
-	"database/sql"
 	"database/sql/driver"
 	"fmt"
 	"strings"
@@ -57,21 +56,17 @@ func TestConvertDB2Value(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, colTypes, 3)
 
-	// Compute isStringCol for each column type (VARCHAR→true, BLOB→false, INTEGER→false).
-	isStringCol := func(ct *sql.ColumnType) bool {
-		t := strings.ToUpper(ct.DatabaseTypeName())
-		return strings.Contains(t, "CHAR") || strings.Contains(t, "CLOB") || strings.Contains(t, "TEXT")
-	}
-	// []byte with VARCHAR → string
-	assert.Equal(t, "Alice", convertDB2Value([]byte("Alice"), isStringCol(colTypes[0])))
-	// []byte with BLOB → raw bytes
-	assert.Equal(t, []byte{0xDE, 0xAD}, convertDB2Value([]byte{0xDE, 0xAD}, isStringCol(colTypes[1])))
-	// int64 passes through unchanged
-	assert.Equal(t, int64(42), convertDB2Value(int64(42), isStringCol(colTypes[2])))
-	// nil returns nil regardless of column type
-	assert.Nil(t, convertDB2Value(nil, isStringCol(colTypes[0])))
-	// []byte with CHAR type → string (isStringCol=true directly)
-	assert.Equal(t, "abc", convertDB2Value([]byte("abc"), true))
+	// Derive column kind for each column type (VARCHAR→Text, BLOB→Binary, INTEGER→Other).
+	// []byte with VARCHAR kind → string
+	assert.Equal(t, "Alice", convertDB2Value([]byte("Alice"), columnKind(colTypes[0].DatabaseTypeName())))
+	// []byte with BLOB kind → raw bytes
+	assert.Equal(t, []byte{0xDE, 0xAD}, convertDB2Value([]byte{0xDE, 0xAD}, columnKind(colTypes[1].DatabaseTypeName())))
+	// int64 passes through unchanged regardless of kind
+	assert.Equal(t, int64(42), convertDB2Value(int64(42), columnKind(colTypes[2].DatabaseTypeName())))
+	// nil returns nil regardless of kind
+	assert.Nil(t, convertDB2Value(nil, columnKind(colTypes[0].DatabaseTypeName())))
+	// []byte with explicit Text kind → string
+	assert.Equal(t, "abc", convertDB2Value([]byte("abc"), db2ColumnKindText))
 }
 
 func TestSnapshotConfigAsncdcSchema(t *testing.T) {
@@ -364,8 +359,8 @@ func TestFetchBatch(t *testing.T) {
 			placeholders := strings.TrimSuffix(strings.Repeat("?, ", len(tc.pks)), ", ")
 			qWithBounds := base + fmt.Sprintf(" WHERE (%s) > (%s)", orderBy, placeholders) + suffix
 
-			var isStringColCache []bool
-			result, err := s.fetchBatch(context.Background(), tx, qNoBounds, qWithBounds, tc.columns, tc.lastKeyValues, &isStringColCache)
+			var colKindCache []db2ColumnKind
+			result, err := s.fetchBatch(context.Background(), tx, qNoBounds, qWithBounds, tc.columns, tc.lastKeyValues, &colKindCache)
 			require.NoError(t, err)
 			assert.Len(t, result, tc.wantCount)
 
