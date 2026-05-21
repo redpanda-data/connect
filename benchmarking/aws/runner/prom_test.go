@@ -116,7 +116,7 @@ go_memstats_heap_inuse_bytes 1.0485e+07
 	require.True(t, ok)
 	require.Equal(t, 50, pp.Goroutines)
 	require.InDelta(t, 10.485, pp.HeapInUseMB, 0.001) // 1.0485e+07 B / 1e6 = 10.485 MB
-	require.Equal(t, 0.0, pp.CPUSeconds)        // missing — zero is OK
+	require.Equal(t, 0.0, pp.CPUSeconds)              // missing — zero is OK
 	require.Equal(t, uint64(0), pp.GCPauseTotalNS)
 }
 
