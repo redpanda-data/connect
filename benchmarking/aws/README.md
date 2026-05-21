@@ -18,7 +18,8 @@ The design lives at [`docs/superpowers/specs/2026-05-19-aws-benchmarking-framewo
 8. [Known limitations](#known-limitations)
 9. [Troubleshooting](#troubleshooting)
 10. [Cost](#cost)
-11. [File reference](#file-reference)
+11. [Orphan cleanup](#orphan-cleanup)
+12. [File reference](#file-reference)
 
 ---
 
@@ -486,9 +487,6 @@ The orchestrator's Go program calls SSM and S3 over the duration of the bench (~
 sudo sntp -sS time.apple.com
 ```
 
-### Orphan-cleanup Lambda not built yet
-
-The spec describes an EventBridge-triggered Lambda that destroys stacks tagged `bench-session-id` older than 24h. **That Lambda is not yet implemented** in this foundation. If a bench fails in an unrecoverable way and the deferred destroy doesn't fire, you'll need to clean up manually (see [Troubleshooting](#troubleshooting)). All resources still carry the tag, so `aws resourcegroupstaggingapi` queries will find them.
 
 ### Other connectors
 
@@ -609,6 +607,54 @@ aws-vault exec bench -- aws ce get-cost-and-usage \
   --granularity DAILY --metrics UnblendedCost \
   --filter '{"Tags":{"Key":"Project","Values":["redpanda-connect-bench"]}}'
 ```
+
+---
+
+## Orphan cleanup
+
+A Lambda runs every 15 minutes in the shared stack. It finds resources tagged
+`Project=redpanda-connect-bench` whose creation time is older than 3 hours
+and destroys them via direct AWS API calls in dependency order (RDS → EC2 →
+S3 → IAM → VPC family). It publishes an SNS notification only when something
+was actually destroyed.
+
+This is a safety net: if the runner is SIGKILLed, your laptop loses creds
+mid-run, or `terraform destroy` errors out, the Lambda mops up within a 3-hour
+window. A normal ~90-min bench finishes well inside the TTL and is never
+touched.
+
+### Override the TTL (rare)
+
+For a deliberately long-running scenario:
+
+```sh
+aws lambda update-function-configuration \
+  --function-name redpanda-connect-bench-orphan-cleanup \
+  --environment Variables="{BENCH_ORPHAN_TTL_HOURS=6,BENCH_ORPHAN_SNS_TOPIC_ARN=$(terraform -chdir=terraform/shared output -raw orphan_cleanup_sns_topic_arn)}"
+```
+
+Reset to default by removing the override (or passing `3`). The Lambda re-reads its env vars on every cold start, so the new TTL takes effect on the next scheduled run.
+
+### Subscribe to SNS notifications (optional)
+
+```sh
+aws sns subscribe \
+  --topic-arn $(terraform -chdir=terraform/shared output -raw orphan_cleanup_sns_topic_arn) \
+  --protocol email \
+  --notification-endpoint your.email@redpanda.com
+```
+
+The Lambda only publishes when at least one resource was destroyed; no spam on no-op runs.
+
+### Building the Lambda
+
+The Lambda zip is built locally and shipped via terraform's `filebase64sha256`. After modifying `benchmarking/aws/cleanup-lambda/*.go`, rebuild before applying:
+
+```sh
+make -C benchmarking/aws/cleanup-lambda zip
+```
+
+The next `terraform apply` will detect the changed source hash and update the function.
 
 ---
 
