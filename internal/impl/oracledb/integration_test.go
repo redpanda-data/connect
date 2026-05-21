@@ -2048,4 +2048,73 @@ oracledb_cdc:
 		}
 		require.NoError(t, stream.StopWithin(time.Second*10))
 	})
+
+	t.Run("Filtering excludes unmonitored tables", func(t *testing.T) {
+		// Two tables with out-of-line LOB columns. DISABLE STORAGE IN ROW forces Oracle to
+		// emit SELECT_LOB_LOCATOR / LOB_WRITE op codes (9/10/11) on every insert — exactly
+		// the operation class that was previously unfiltered by the LogMiner SQL query, allowing
+		// LOB writes to unmonitored tables to leak into the output.
+		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.lobfilter_included",
+			`CREATE TABLE testdb.lobfilter_included (id NUMBER GENERATED ALWAYS AS IDENTITY (NOCACHE) PRIMARY KEY, data NCLOB) LOB(data) STORE AS BASICFILE (DISABLE STORAGE IN ROW)`))
+		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.lobfilter_excluded",
+			`CREATE TABLE testdb.lobfilter_excluded (id NUMBER GENERATED ALWAYS AS IDENTITY (NOCACHE) PRIMARY KEY, data NCLOB) LOB(data) STORE AS BASICFILE (DISABLE STORAGE IN ROW)`))
+
+		var batch oracledbtest.Batch
+
+		// Only lobfilter_included is in the include list; lobfilter_excluded must produce no output.
+		cfg := fmt.Sprintf(`
+oracledb_cdc:
+  connection_string: %s
+  stream_snapshot: false
+  logminer:
+    lob_enabled: true
+    scn_window_size: 20000
+    backoff_interval: 1s
+  include: ["TESTDB.LOBFILTER_INCLUDED"]`, connStr)
+
+		streamBuilder := service.NewStreamBuilder()
+		require.NoError(t, streamBuilder.AddInputYAML(cfg))
+		require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
+		require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+			batch.Lock()
+			defer batch.Unlock()
+			for _, msg := range mb {
+				msgBytes, err := msg.AsBytes()
+				assert.NoError(t, err)
+				batch.Msgs = append(batch.Msgs, string(msgBytes))
+			}
+			return nil
+		}))
+
+		stream, err := streamBuilder.Build()
+		require.NoError(t, err)
+		license.InjectTestService(stream.Resources())
+
+		go func() {
+			if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+				t.Error(err)
+			}
+		}()
+
+		// Allow LogMiner to start up and reach the current SCN before producing data.
+		time.Sleep(10 * time.Second)
+
+		lobVal := strings.Repeat("X", 5000)
+		for range 5 {
+			db.MustExec("INSERT INTO testdb.lobfilter_included (data) VALUES (:1)", lobVal)
+			db.MustExec("INSERT INTO testdb.lobfilter_excluded (data) VALUES (:1)", lobVal)
+		}
+
+		// Exactly 5 messages must arrive — those from lobfilter_included only.
+		assert.Eventually(t, func() bool {
+			return batch.Count() == 5
+		}, time.Minute*2, time.Millisecond*500, "timed out waiting for 5 messages from included table")
+
+		// No messages from lobfilter_excluded should leak through.
+		assert.Never(t, func() bool {
+			return batch.Count() > 5
+		}, time.Second*3, time.Millisecond*200, "received unexpected messages from excluded table")
+
+		require.NoError(t, stream.StopWithin(time.Second*10))
+	})
 }

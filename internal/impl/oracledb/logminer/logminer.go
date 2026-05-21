@@ -57,17 +57,19 @@ type LogMiner struct {
 // NewMiner creates a new instance of LogMiner responsible for paging through change events based on the tables param.
 func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replication.ChangePublisher, cfg *Config, metrics *service.Metrics, logger *service.Logger) *LogMiner {
 	// Build table filter condition once
-	// Only filter DML operations (1=INSERT, 2=DELETE, 3=UPDATE) by table
 	// Transaction control operations (6=START, 7=COMMIT, 36=ROLLBACK) don't have table info
+	// and must pass unfiltered. DML (1=INSERT, 2=DELETE, 3=UPDATE) and LOB operations
+	// (9=SELECT_LOB_LOCATOR, 10=LOB_WRITE, 11=LOB_TRIM) all carry SEG_OWNER/TABLE_NAME
+	// and must be restricted to configured tables to avoid capturing Oracle internal tables.
 	var buf strings.Builder
 	if len(userTables) > 0 {
-		opCodes := "6, 7, 36"
+		buf.WriteString(" AND (OPERATION_CODE IN (6, 7, 36)")
+		// DML and LOB operations carry the real table name — filter by configured tables.
+		dmlCodes := "1, 2, 3"
 		if cfg.LOBEnabled {
-			opCodes += ", 9, 10, 11"
+			dmlCodes += ", 9, 10, 11"
 		}
-		buf.WriteString(" AND (OPERATION_CODE IN (" + opCodes + ")")
-		// DML carries the real table name — filter by configured tables.
-		buf.WriteString(" OR (OPERATION_CODE IN (1, 2, 3) AND (") // Filter DML by table
+		buf.WriteString(" OR (OPERATION_CODE IN (" + dmlCodes + ") AND (") // Filter DML/LOB by table
 		for i, t := range userTables {
 			if i > 0 {
 				buf.WriteString(" OR ")
