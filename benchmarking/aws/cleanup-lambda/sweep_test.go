@@ -7,9 +7,11 @@ package main
 
 import (
 	"context"
+	"testing"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/stretchr/testify/require"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
@@ -167,3 +169,35 @@ func (f *FakeAWS) Publish(_ context.Context, in *sns.PublishInput) (*sns.Publish
 
 // Sanity-compile check.
 var _ cleanupAPI = (*FakeAWS)(nil)
+
+func TestParseARN_KnownServices(t *testing.T) {
+	cases := []struct {
+		arn string
+		svc string
+		id  string
+	}{
+		{"arn:aws:ec2:us-east-2:605419575229:instance/i-abc123", "ec2", "i-abc123"},
+		{"arn:aws:rds:us-east-2:605419575229:db:rpcn-bench-pg-pg", "rds", "rpcn-bench-pg-pg"},
+		{"arn:aws:s3:::rpcn-bench-results-20260520xyz", "s3", "rpcn-bench-results-20260520xyz"},
+		{"arn:aws:iam::605419575229:role/rpcn-bench-host", "iam", "role/rpcn-bench-host"},
+	}
+	for _, c := range cases {
+		svc, id, ok := parseARN(c.arn)
+		require.True(t, ok, "parse %q", c.arn)
+		require.Equal(t, c.svc, svc)
+		require.Equal(t, c.id, id)
+	}
+}
+
+func TestParseARN_Malformed(t *testing.T) {
+	_, _, ok := parseARN("not-an-arn")
+	require.False(t, ok)
+}
+
+func TestOlderThanTTL(t *testing.T) {
+	now := time.Date(2026, 5, 21, 12, 0, 0, 0, time.UTC)
+	older := now.Add(-4 * time.Hour)
+	require.True(t, olderThanTTL(older, now, 3*time.Hour))
+	younger := now.Add(-1 * time.Hour)
+	require.False(t, olderThanTTL(younger, now, 3*time.Hour))
+}
