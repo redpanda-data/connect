@@ -119,3 +119,30 @@ go_memstats_heap_inuse_bytes 1.0485e+07
 	require.Equal(t, 0.0, pp.CPUSeconds)        // missing — zero is OK
 	require.Equal(t, uint64(0), pp.GCPauseTotalNS)
 }
+
+func TestParsePromStream_EndToEnd(t *testing.T) {
+	raw := `noise
+###timestamp=1000
+go_goroutines 10
+###timestamp=1010
+go_goroutines 12
+###timestamp=1020
+###scrape_error
+###timestamp=1030
+go_goroutines 14
+`
+	pts, err := ParsePromStream(strings.NewReader(raw))
+	require.NoError(t, err)
+	require.Len(t, pts, 3) // error frame is dropped
+	require.Equal(t, 0, pts[0].T)
+	require.Equal(t, 10, pts[1].T) // 1010 - 1000
+	require.Equal(t, 30, pts[2].T) // 1030 - 1000 (gap kept; the error frame's UnixTime is discarded with its data)
+	require.Equal(t, 10, pts[0].Goroutines)
+	require.Equal(t, 14, pts[2].Goroutines)
+}
+
+func TestParsePromStream_EmptyReader(t *testing.T) {
+	pts, err := ParsePromStream(strings.NewReader(""))
+	require.NoError(t, err)
+	require.Empty(t, pts)
+}
