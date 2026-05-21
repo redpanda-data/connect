@@ -173,7 +173,7 @@ type benchScriptArgs struct {
 // so streaming Connect's ~200KB of rolling-stats lines through it loses
 // samples), runs for warmup+duration seconds, then SIGTERMs cleanly so the
 // benchmark processor flushes its final rolling-stats line. After Connect
-// exits the log is uploaded to s3://Bucket/runs/SessionID/sweep-N.log for the
+// exits the log and the Prometheus snapshot are both uploaded to S3 for the
 // orchestrator to fetch and parse.
 func renderBenchScript(a benchScriptArgs) string {
 	// Cores 0,1 reserved → measured set starts at core 2.
@@ -184,7 +184,9 @@ func renderBenchScript(a benchScriptArgs) string {
 		fmt.Sprintf(`echo "starting bench: %d vCPU, %d GiB, warmup %ds, window %ds"`,
 			a.VCPU, a.MemLimitGiB, a.WarmupSec, a.DurationSec),
 		fmt.Sprintf(`LOG=/tmp/bench-%d.log`, a.VCPU),
+		fmt.Sprintf(`PROM=/tmp/prom-%d.txt`, a.VCPU),
 		`: > "$LOG"`,
+		`: > "$PROM"`,
 		fmt.Sprintf(`taskset -c 2-%d chrt --fifo 50 env GOMAXPROCS=%d GOMEMLIMIT=%dGiB REDPANDA_LICENSE_FILEPATH=/opt/bench/license.jwt %s run %s >"$LOG" 2>&1 &`,
 			cpusetHi, a.VCPU, a.MemLimitGiB, a.BinaryPath, a.ConfigPath),
 		`PID=$!`,
@@ -203,12 +205,28 @@ func renderBenchScript(a benchScriptArgs) string {
   done
 ) &`,
 		`HEARTBEAT=$!`,
+		// Prom scraper — every 10s while Connect is alive, append a framed
+		// /metrics snapshot to /tmp/prom-N.txt. ~17min × 6 scrapes/min ≈
+		// 100 frames × ~50KB ≈ 5MB per point. Uploaded post-mortem.
+		`(
+  while kill -0 "$PID" 2>/dev/null; do
+    {
+      echo "###timestamp=$(date +%s)"
+      curl -s --max-time 5 http://localhost:4195/metrics || echo "###scrape_error"
+    } >> "$PROM"
+    sleep 10
+  done
+) &`,
+		`PROM_SCRAPER=$!`,
 		fmt.Sprintf(`sleep %d`, totalSec),
 		`kill -TERM "$PID" 2>/dev/null || true`,
 		`wait "$PID" 2>/dev/null || true`,
 		`kill "$HEARTBEAT" 2>/dev/null || true`,
+		`kill "$PROM_SCRAPER" 2>/dev/null || true`,
 		`echo "bench point complete"`,
 		fmt.Sprintf(`aws s3 cp "$LOG" "s3://%s/runs/%s/sweep-%d.log" >/dev/null`,
+			a.Bucket, a.SessionID, a.VCPU),
+		fmt.Sprintf(`aws s3 cp "$PROM" "s3://%s/runs/%s/prom-%d.txt" >/dev/null`,
 			a.Bucket, a.SessionID, a.VCPU),
 		`echo "log uploaded"`,
 	}, "\n")
