@@ -16,3 +16,4 @@ seeders/dist/
 runner/runner
 cleanup-lambda/bootstrap
 cleanup-lambda/bootstrap.zip
+cleanup-lambda/cleanup-lambda
