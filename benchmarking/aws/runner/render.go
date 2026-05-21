@@ -48,6 +48,7 @@ type PointResult struct {
 	Summary      Summary            `json:"summary"`
 	Anomalies    []Anomaly          `json:"anomalies,omitempty"`
 	PromSnapshot map[string]float64 `json:"prom_snapshot,omitempty"`
+	Prom         []PromPoint        `json:"prom,omitempty"`
 }
 
 // WriteResultJSON writes the result to <dir>/<connector>/<scenario>/<timestamp>.json.
