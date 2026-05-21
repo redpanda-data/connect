@@ -23,6 +23,19 @@ Last updated: 2026-03-16
 **Oracle CDC** has two operating modes. Snapshot mode (bulk reading existing data) processes ~140,000 messages per second. Streaming mode (real-time changes via Oracle's LogMiner) processes 50,000–90,000 messages per second. The streaming throughput is limited by Oracle's LogMiner subsystem itself, not by Redpanda Connect — competing products (e.g. Debezium) show similar numbers on the same workload.
 
 <!-- bench:aws:start - auto-generated, do not edit by hand -->
+<!-- Copyright 2025 Redpanda Data, Inc. -->
+## AWS Bench Results
+
+Last refreshed: 2026-05-21
+
+| Connector / Scenario  | Peak MB/s | At vCPU | Median (best vCPU) | Last Run    |
+|-----------------------|-----------|---------|--------------------|-------------|
+| postgres / orders-cdc |       102 |       4 |                 99 | 2026-05-21  |
+
+Each row is the **latest** run of that scenario. Raw samples + Prometheus snapshots live under `results/<connector>/<scenario>/`.
+
+To regenerate without running a bench: `task aws:summary`
+
 <!-- bench:aws:end -->
 
 ## Test Conditions

@@ -44,3 +44,8 @@ tasks:
     desc: "Show AWS Cost Explorer spend for the bench project (today/7d/MTD)"
     cmds:
       - cd ../.. && {{.RUNNER}} cost-check
+
+  aws:summary:
+    desc: "Regenerate the auto-managed AWS section in docs/benchmark-results/SUMMARY.md"
+    cmds:
+      - cd ../.. && {{.RUNNER}} summary --repo-root=.

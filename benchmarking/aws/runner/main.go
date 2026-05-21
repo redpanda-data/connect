@@ -40,6 +40,8 @@ func main() {
 		exitOnErr(downCmd(os.Args[2:]))
 	case "cost-check":
 		exitOnErr(costCheckCmd(os.Args[2:]))
+	case "summary":
+		exitOnErr(summaryCmd(os.Args[2:]))
 	default:
 		usage()
 		os.Exit(2)
@@ -58,7 +60,8 @@ func usage() {
   runner bench --scenario=<path> [--keep] [--keep-on-fail]
   runner validate --scenario=<path>
   runner down --scenario=<path>
-  runner cost-check`)
+  runner cost-check
+  runner summary [--repo-root=<path>]`)
 }
 
 type benchOpts struct {
@@ -384,6 +387,21 @@ func costCheckCmd(args []string) error {
 		return err
 	}
 	Print(os.Stdout, report)
+	return nil
+}
+
+func summaryCmd(args []string) error {
+	fs := flag.NewFlagSet("summary", flag.ExitOnError)
+	repoRoot := fs.String("repo-root", ".", "path to the connect repo root")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	summaryPath := filepath.Join(*repoRoot, "docs/benchmark-results/SUMMARY.md")
+	resultsDir := filepath.Join(*repoRoot, "benchmarking/aws/results")
+	if err := RefreshSummary(summaryPath, resultsDir, time.Now()); err != nil {
+		return err
+	}
+	fmt.Printf("refreshed %s\n", summaryPath)
 	return nil
 }
 
