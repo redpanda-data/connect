@@ -258,7 +258,7 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 	switch redoEvent.Operation {
 	case sqlredo.OpStart:
 		// Transaction started
-		lm.txnCache.StartTransaction(redoEvent.TransactionID, redoEvent.SCN)
+		lm.txnCache.StartTransaction(ctx, redoEvent.TransactionID, redoEvent.SCN)
 
 	case sqlredo.OpInsert, sqlredo.OpUpdate, sqlredo.OpDelete:
 		// SQL_REDO should always be present for DML operations. If not, it's likely a temporary
@@ -275,7 +275,7 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 			return fmt.Errorf("parsing sql redo event into dml event: %w", err)
 		}
 
-		lm.txnCache.AddEvent(redoEvent.TransactionID, redoEvent.SCN, &event)
+		lm.txnCache.AddEvent(ctx, redoEvent.TransactionID, redoEvent.SCN, &event)
 
 	case sqlredo.OpSelectLobLocator:
 		if !lm.cfg.LOBEnabled {
@@ -387,7 +387,7 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 		}
 		state, exists := lm.lobStates[redoEvent.TransactionID]
 		if !exists || state.ActiveKey == nil {
-			if !lm.inferLOBLocator(redoEvent) {
+			if !lm.inferLOBLocator(ctx, redoEvent) {
 				lm.log.Warnf("Received LOB_WRITE without active LOB locator (scn=%d, txn=%s)", redoEvent.SCN, redoEvent.TransactionID)
 				return nil
 			}
@@ -412,7 +412,7 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 
 	case sqlredo.OpCommit:
 		// Flush all buffered events for given transaction ID
-		if txn := lm.txnCache.GetTransaction(redoEvent.TransactionID); txn != nil {
+		if txn := lm.txnCache.GetTransaction(ctx, redoEvent.TransactionID); txn != nil {
 			safeCheckpointSCN := redoEvent.SCN
 
 			// If other transactions are still open, we must not advance the
@@ -506,7 +506,7 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 				}
 			}
 
-			lm.txnCache.CommitTransaction(redoEvent.TransactionID)
+			lm.txnCache.CommitTransaction(ctx, redoEvent.TransactionID)
 		}
 
 		// Always clean up lobStates on commit, including for transactions discarded by
@@ -522,7 +522,7 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 		if lm.cfg.LOBEnabled {
 			delete(lm.lobStates, redoEvent.TransactionID)
 		}
-		lm.txnCache.RollbackTransaction(redoEvent.TransactionID)
+		lm.txnCache.RollbackTransaction(ctx, redoEvent.TransactionID)
 	}
 
 	return nil
@@ -636,7 +636,7 @@ func (lm *LogMiner) isLOBOnlyEvent(ev *sqlredo.DMLEvent) bool {
 // placeholder; in that case the LOB column is absent from Data, so known LOB
 // columns for the table are also considered as inference candidates.
 // Returns true if a locator was successfully created.
-func (lm *LogMiner) inferLOBLocator(event *sqlredo.RedoEvent) bool {
+func (lm *LogMiner) inferLOBLocator(ctx context.Context, event *sqlredo.RedoEvent) bool {
 	if !event.SchemaName.Valid || !event.TableName.Valid {
 		return false
 	}
@@ -646,7 +646,7 @@ func (lm *LogMiner) inferLOBLocator(event *sqlredo.RedoEvent) bool {
 		return false
 	}
 
-	txn := lm.txnCache.GetTransaction(event.TransactionID)
+	txn := lm.txnCache.GetTransaction(ctx, event.TransactionID)
 	if txn == nil {
 		return false
 	}

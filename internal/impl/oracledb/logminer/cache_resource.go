@@ -70,11 +70,11 @@ func NewConnectCacheResource(resources *service.Resources, cfg TransactionCacheC
 
 // StartTransaction initializes a new transaction in the cache. If the transaction
 // already exists its accumulated events are left untouched.
-func (c *ConnectCacheResource) StartTransaction(txnID sqlredo.TransactionID, scn uint64) {
+func (c *ConnectCacheResource) StartTransaction(ctx context.Context, txnID sqlredo.TransactionID, scn uint64) {
 	if _, discarded := c.discarded[txnID]; discarded {
 		return
 	}
-	if existing := c.GetTransaction(txnID); existing != nil {
+	if existing := c.GetTransaction(ctx, txnID); existing != nil {
 		return
 	}
 	txn := &Transaction{
@@ -88,8 +88,8 @@ func (c *ConnectCacheResource) StartTransaction(txnID sqlredo.TransactionID, scn
 		return
 	}
 	var setErr error
-	if err := c.resources.AccessCache(context.Background(), c.cacheName, func(cache service.Cache) {
-		setErr = cache.Set(context.Background(), c.toCacheKey(txnID), data, nil)
+	if err := c.resources.AccessCache(ctx, c.cacheName, func(cache service.Cache) {
+		setErr = cache.Set(ctx, c.toCacheKey(txnID), data, nil)
 	}); err != nil {
 		c.log.Errorf("Failed to access cache for transaction %s: %v", txnID, err)
 		return
@@ -105,12 +105,12 @@ func (c *ConnectCacheResource) StartTransaction(txnID sqlredo.TransactionID, scn
 // AddEvent appends a DML event to the named transaction's buffer. Each call
 // incurs a cache Get followed by a cache Set (read-modify-write). This is safe
 // because LogMiner processes events on a single goroutine.
-func (c *ConnectCacheResource) AddEvent(txnID sqlredo.TransactionID, scn uint64, event *sqlredo.DMLEvent) {
+func (c *ConnectCacheResource) AddEvent(ctx context.Context, txnID sqlredo.TransactionID, scn uint64, event *sqlredo.DMLEvent) {
 	if _, discarded := c.discarded[txnID]; discarded {
 		return
 	}
 
-	txn := c.GetTransaction(txnID)
+	txn := c.GetTransaction(ctx, txnID)
 	if txn == nil {
 		c.log.Warnf("Transaction %s not found for event, creating...", txnID)
 		txn = &Transaction{
@@ -128,8 +128,8 @@ func (c *ConnectCacheResource) AddEvent(txnID sqlredo.TransactionID, scn uint64,
 	if c.maxEvents > 0 && len(txn.Events) > c.maxEvents {
 		c.log.Warnf("Transaction %s exceeded max event buffer of %d events, discarding", txnID, c.maxEvents)
 		c.eventsMetric.Decr(int64(len(txn.Events)))
-		if err := c.resources.AccessCache(context.Background(), c.cacheName, func(cache service.Cache) {
-			if err := cache.Delete(context.Background(), c.toCacheKey(txnID)); err != nil {
+		if err := c.resources.AccessCache(ctx, c.cacheName, func(cache service.Cache) {
+			if err := cache.Delete(ctx, c.toCacheKey(txnID)); err != nil {
 				c.log.Errorf("Failed to delete oversized transaction %s from cache: %v", txnID, err)
 			}
 		}); err != nil {
@@ -146,8 +146,8 @@ func (c *ConnectCacheResource) AddEvent(txnID sqlredo.TransactionID, scn uint64,
 		c.log.Errorf("Failed to serialize transaction %s: %v", txnID, err)
 		return
 	}
-	if err := c.resources.AccessCache(context.Background(), c.cacheName, func(cache service.Cache) {
-		if err := cache.Set(context.Background(), c.toCacheKey(txnID), data, nil); err != nil {
+	if err := c.resources.AccessCache(ctx, c.cacheName, func(cache service.Cache) {
+		if err := cache.Set(ctx, c.toCacheKey(txnID), data, nil); err != nil {
 			c.log.Errorf("Failed to update transaction %s in cache: %v", txnID, err)
 		}
 	}); err != nil {
@@ -156,12 +156,12 @@ func (c *ConnectCacheResource) AddEvent(txnID sqlredo.TransactionID, scn uint64,
 }
 
 // GetTransaction retrieves the transaction with the given ID. Returns nil if not found.
-func (c *ConnectCacheResource) GetTransaction(txnID sqlredo.TransactionID) *Transaction {
+func (c *ConnectCacheResource) GetTransaction(ctx context.Context, txnID sqlredo.TransactionID) *Transaction {
 	var txn *Transaction
 	var getErr error
-	if err := c.resources.AccessCache(context.Background(), c.cacheName, func(cache service.Cache) {
+	if err := c.resources.AccessCache(ctx, c.cacheName, func(cache service.Cache) {
 		var data []byte
-		data, getErr = cache.Get(context.Background(), c.toCacheKey(txnID))
+		data, getErr = cache.Get(ctx, c.toCacheKey(txnID))
 		if getErr != nil {
 			return
 		}
@@ -179,16 +179,16 @@ func (c *ConnectCacheResource) GetTransaction(txnID sqlredo.TransactionID) *Tran
 }
 
 // CommitTransaction removes the committed transaction from the cache.
-func (c *ConnectCacheResource) CommitTransaction(txnID sqlredo.TransactionID) {
+func (c *ConnectCacheResource) CommitTransaction(ctx context.Context, txnID sqlredo.TransactionID) {
 	delete(c.discarded, txnID)
 	delete(c.startSCNs, txnID)
-	txn := c.GetTransaction(txnID)
+	txn := c.GetTransaction(ctx, txnID)
 	if txn == nil {
 		return
 	}
 	c.eventsMetric.Decr(int64(len(txn.Events)))
-	if err := c.resources.AccessCache(context.Background(), c.cacheName, func(cache service.Cache) {
-		if err := cache.Delete(context.Background(), c.toCacheKey(txnID)); err != nil {
+	if err := c.resources.AccessCache(ctx, c.cacheName, func(cache service.Cache) {
+		if err := cache.Delete(ctx, c.toCacheKey(txnID)); err != nil {
 			c.log.Errorf("Failed to delete committed transaction %s from cache: %v", txnID, err)
 		}
 	}); err != nil {
@@ -199,16 +199,16 @@ func (c *ConnectCacheResource) CommitTransaction(txnID sqlredo.TransactionID) {
 
 // RollbackTransaction removes the rolled-back transaction from the cache,
 // discarding all buffered events.
-func (c *ConnectCacheResource) RollbackTransaction(txnID sqlredo.TransactionID) {
+func (c *ConnectCacheResource) RollbackTransaction(ctx context.Context, txnID sqlredo.TransactionID) {
 	delete(c.discarded, txnID)
 	delete(c.startSCNs, txnID)
-	txn := c.GetTransaction(txnID)
+	txn := c.GetTransaction(ctx, txnID)
 	if txn == nil {
 		return
 	}
 	c.eventsMetric.Decr(int64(len(txn.Events)))
-	if err := c.resources.AccessCache(context.Background(), c.cacheName, func(cache service.Cache) {
-		if err := cache.Delete(context.Background(), c.toCacheKey(txnID)); err != nil {
+	if err := c.resources.AccessCache(ctx, c.cacheName, func(cache service.Cache) {
+		if err := cache.Delete(ctx, c.toCacheKey(txnID)); err != nil {
 			c.log.Errorf("Failed to delete rolled-back transaction %s from cache: %v", txnID, err)
 		}
 	}); err != nil {
