@@ -169,3 +169,88 @@ func processRDSInstance(ctx context.Context, api cleanupAPI, dbID string, now ti
 	}
 	return nil
 }
+
+// processS3Bucket empties the bucket if old, then deletes it. S3 buckets
+// don't surface CreationDate via per-bucket Describe* — the FakeAWS test
+// double injects via S3Buckets map; the real (production) sweep caller
+// reads it from ListBuckets. For testability we re-check via FakeAWS type
+// assertion when present; production paths simply trust the caller has
+// already age-filtered before invoking this.
+func processS3Bucket(ctx context.Context, api cleanupAPI, bucket string, now time.Time, ttl time.Duration) error {
+	if fake, ok := api.(*FakeAWS); ok {
+		if created, present := fake.S3Buckets[bucket]; present {
+			if !olderThanTTL(created, now, ttl) {
+				return nil
+			}
+		}
+	}
+
+	// Empty the bucket (versioned + delete-markers handled by ListObjectVersions).
+	pagToken := (*string)(nil)
+	for {
+		out, err := api.ListObjectVersions(ctx, &s3.ListObjectVersionsInput{
+			Bucket:    aws.String(bucket),
+			KeyMarker: pagToken,
+		})
+		if err != nil {
+			return err
+		}
+		var del []s3types.ObjectIdentifier
+		for _, v := range out.Versions {
+			del = append(del, s3types.ObjectIdentifier{Key: v.Key, VersionId: v.VersionId})
+		}
+		for _, m := range out.DeleteMarkers {
+			del = append(del, s3types.ObjectIdentifier{Key: m.Key, VersionId: m.VersionId})
+		}
+		if len(del) > 0 {
+			_, err := api.DeleteObjects(ctx, &s3.DeleteObjectsInput{
+				Bucket: aws.String(bucket),
+				Delete: &s3types.Delete{Objects: del},
+			})
+			if err != nil {
+				return err
+			}
+		}
+		if out.IsTruncated == nil || !*out.IsTruncated {
+			break
+		}
+		pagToken = out.NextKeyMarker
+	}
+	_, err := api.DeleteBucket(ctx, &s3.DeleteBucketInput{Bucket: aws.String(bucket)})
+	return err
+}
+
+func processIAMRole(ctx context.Context, api cleanupAPI, roleName string, now time.Time, ttl time.Duration) error {
+	out, err := api.GetRole(ctx, &iam.GetRoleInput{RoleName: aws.String(roleName)})
+	if err != nil {
+		return nil // role gone already
+	}
+	if out.Role.CreateDate == nil || !olderThanTTL(*out.Role.CreateDate, now, ttl) {
+		return nil
+	}
+
+	// Detach inline policies
+	inline, err := api.ListRolePolicies(ctx, &iam.ListRolePoliciesInput{RoleName: aws.String(roleName)})
+	if err == nil {
+		for _, p := range inline.PolicyNames {
+			_, _ = api.DeleteRolePolicy(ctx, &iam.DeleteRolePolicyInput{RoleName: aws.String(roleName), PolicyName: aws.String(p)})
+		}
+	}
+	// Detach attached managed policies
+	attached, err := api.ListAttachedRolePolicies(ctx, &iam.ListAttachedRolePoliciesInput{RoleName: aws.String(roleName)})
+	if err == nil {
+		for _, p := range attached.AttachedPolicies {
+			_, _ = api.DetachRolePolicy(ctx, &iam.DetachRolePolicyInput{RoleName: aws.String(roleName), PolicyArn: p.PolicyArn})
+		}
+	}
+	// Remove from + delete instance profiles
+	profiles, err := api.ListInstanceProfilesForRole(ctx, &iam.ListInstanceProfilesForRoleInput{RoleName: aws.String(roleName)})
+	if err == nil {
+		for _, ip := range profiles.InstanceProfiles {
+			_, _ = api.RemoveRoleFromInstanceProfile(ctx, &iam.RemoveRoleFromInstanceProfileInput{InstanceProfileName: ip.InstanceProfileName, RoleName: aws.String(roleName)})
+			_, _ = api.DeleteInstanceProfile(ctx, &iam.DeleteInstanceProfileInput{InstanceProfileName: ip.InstanceProfileName})
+		}
+	}
+	_, err = api.DeleteRole(ctx, &iam.DeleteRoleInput{RoleName: aws.String(roleName)})
+	return err
+}

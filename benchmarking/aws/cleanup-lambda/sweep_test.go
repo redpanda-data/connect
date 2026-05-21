@@ -231,3 +231,24 @@ func TestProcessRDSInstance_OldGetsDeleted(t *testing.T) {
 	require.NoError(t, processRDSInstance(context.Background(), api, "young-db", now, 3*time.Hour))
 	require.Equal(t, []string{"old-db"}, api.DeletedDBs)
 }
+
+func TestProcessS3Bucket_OldEmptyAndDeleted(t *testing.T) {
+	now := time.Date(2026, 5, 21, 12, 0, 0, 0, time.UTC)
+	old := now.Add(-4 * time.Hour)
+
+	api := &FakeAWS{
+		S3Buckets: map[string]time.Time{"rpcn-bench-results-old": old},
+	}
+	require.NoError(t, processS3Bucket(context.Background(), api, "rpcn-bench-results-old", now, 3*time.Hour))
+	require.Equal(t, []string{"rpcn-bench-results-old"}, api.DeletedBuckets)
+}
+
+func TestProcessIAMRole_OldGetsDeleted(t *testing.T) {
+	now := time.Date(2026, 5, 21, 12, 0, 0, 0, time.UTC)
+	old := now.Add(-4 * time.Hour)
+	api := &FakeAWS{
+		IAMRoles: map[string]time.Time{"rpcn-bench-host-old": old},
+	}
+	require.NoError(t, processIAMRole(context.Background(), api, "rpcn-bench-host-old", now, 3*time.Hour))
+	require.Equal(t, []string{"rpcn-bench-host-old"}, api.DeletedRoles)
+}
