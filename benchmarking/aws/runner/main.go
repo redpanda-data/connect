@@ -362,8 +362,22 @@ func downCmd(args []string) error {
 	})
 }
 
-func costCheckCmd(_ []string) error {
-	fmt.Println("cost-check not implemented in foundation plan — see future iterations")
+func costCheckCmd(args []string) error {
+	fs := flag.NewFlagSet("cost-check", flag.ExitOnError)
+	region := fs.String("region", "us-east-2", "AWS region (informational; CE is global)")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	ctx := context.Background()
+	ce, err := NewAWSCostExplorer(ctx)
+	if err != nil {
+		return fmt.Errorf("init cost explorer: %w", err)
+	}
+	report, err := SummariseCosts(ctx, ce, *region, time.Now())
+	if err != nil {
+		return err
+	}
+	Print(os.Stdout, report)
 	return nil
 }
 
