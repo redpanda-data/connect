@@ -6,11 +6,14 @@
 package main
 
 import (
+	_ "embed"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
+	"text/template"
 )
 
 // summaryRow is one line in the auto-rendered table.
@@ -67,6 +70,21 @@ func walkResults(root string) ([]summaryRow, error) {
 	}
 	sort.Slice(rows, func(i, j int) bool { return rows[i].ConnectorScenario < rows[j].ConnectorScenario })
 	return rows, nil
+}
+
+//go:embed templates/summary-section.md.tmpl
+var summaryTmplSrc string
+
+var summaryTmpl = template.Must(template.New("summary").Parse(summaryTmplSrc))
+
+// renderSection writes the rendered table to w. The leading comment marker
+// is NOT emitted here — RefreshSummary owns the markers because it has to
+// match them exactly against existing file content.
+func renderSection(w io.Writer, rows []summaryRow, lastRefreshed string) error {
+	return summaryTmpl.Execute(w, struct {
+		Rows          []summaryRow
+		LastRefreshed string
+	}{Rows: rows, LastRefreshed: lastRefreshed})
 }
 
 // derivedRow loads one Result JSON and returns the summary row for it.
