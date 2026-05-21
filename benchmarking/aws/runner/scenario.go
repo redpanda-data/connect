@@ -88,6 +88,47 @@ type ResetStep struct {
 	Bash string `yaml:"bash,omitempty"`
 }
 
+// engineSpec captures the per-engine wiring needed to render seed/reset/workload
+// scripts. Adding a new engine means adding a new entry in engineSpecs; no
+// switch-statement edits anywhere else.
+type engineSpec struct {
+	// DSNOutputKey is the terraform output key holding the connection string.
+	DSNOutputKey string
+	// DSNEnvVar is the env var name to set in seed/workload scripts.
+	DSNEnvVar string
+	// For reset commands, the CLI tool may or may not accept a DSN URL. When
+	// the engine's CLI does (e.g. psql), we leave the Reset*OutputKey fields
+	// empty and the reset builder uses the DSN form. When it does not (e.g.
+	// mysql, which wants discrete -h/-P/-u/-p flags), the Reset*OutputKey
+	// fields point at terraform outputs and the reset builder uses those.
+	ResetHostOutputKey string
+	ResetPortOutputKey string
+	ResetUserOutputKey string
+	ResetPassOutputKey string
+	ResetDBOutputKey   string
+}
+
+var engineSpecs = map[string]engineSpec{
+	"postgres_cdc": {
+		DSNOutputKey: "postgres_dsn",
+		DSNEnvVar:    "POSTGRES_DSN",
+	},
+	"mysql_cdc": {
+		DSNOutputKey:       "mysql_dsn",
+		DSNEnvVar:          "MYSQL_DSN",
+		ResetHostOutputKey: "mysql_host",
+		ResetPortOutputKey: "mysql_port",
+		ResetUserOutputKey: "mysql_user",
+		ResetPassOutputKey: "mysql_password",
+		ResetDBOutputKey:   "mysql_db",
+	},
+}
+
+func engineSpecFor(connector string) (engineSpec, bool) {
+	es, ok := engineSpecs[connector]
+	return es, ok
+}
+
 func LoadScenario(path string) (*Scenario, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
@@ -112,6 +153,9 @@ func (s *Scenario) Validate() error {
 	}
 	if s.Connector == "" {
 		return fmt.Errorf("connector is required")
+	}
+	if _, ok := engineSpecFor(s.Connector); !ok {
+		return fmt.Errorf("connector %q has no engineSpec entry; add one to engineSpecs in scenario.go", s.Connector)
 	}
 	if s.Stack == "" {
 		return fmt.Errorf("stack is required")
