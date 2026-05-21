@@ -97,3 +97,29 @@ Kafka Connect is **~1.39× faster** on this workload. Its JDBC sink tasks amorti
 - Increasing `max_in_flight` beyond 64 causes PostgreSQL connection contention and hurts performance.
 - Adding GOMAXPROCS cores degrades throughput — the bottleneck is PostgreSQL write throughput, not CPU.
 - Capping Kafka CPU below 2 cores throttles fetch throughput and becomes the new bottleneck.
+
+
+## AWS — orders-cdc — 2026-05-21
+
+**Scenario:** Stream changes from a 75M-row orders table under sustained heavy writes (target 80K writes/sec ≈ 96 MB/s).
+
+**Git SHA:** [`deb26d3ad`](https://github.com/redpanda-data/connect/commit/deb26d3ade1275c44696d2c8cad954ea4d5d2cec)
+
+**Infra:** Runner `c8g.4xlarge`; source `db.r6g.2xlarge` (400 GB) in `us-east-2`.
+
+**Dataset:** 75,000,000 rows × 1200 B = ~83 GB
+
+### Throughput
+
+| GOMAXPROCS | MB/sec (p50) | MB/sec (p5) | MB/sec (p95) | msg/sec (p50) |
+|------------|--------------|-------------|--------------|---------------|
+| 1          |           76 |          51 |           76 |        60,000 |
+| 2          |           95 |          57 |           95 |        75,000 |
+| 4          |           99 |          57 |          102 |        77,855 |
+
+**Observations:**
+- **1 vCPU is CPU-bound at ~76 MB/s** — the postgres_cdc read ceiling with 5K-message batches over 1.2KB rows.
+- **2–4 vCPU is producer-bound at ~95–99 MB/s** — Connect has spare CPU at 2 vCPU and above; the load-gen + RDS write path caps at the 80K writes/sec ≈ 96 MB/s the workload was asked to push. A higher workload rate is required to expose Connect's multi-vCPU ceiling.
+- **8 vCPU is omitted** — by sweep point 4 the `orders` table had grown to ~305M rows (3 × 17 min × ~75K writes/sec during the earlier points), and per-insert latency on the b-tree index stretched enough that the producer effectively stopped emitting. Connect spent the 8-vCPU window reading 0 msg/sec. A scenario revision should either truncate the table between sweep points or provision larger RDS storage so this doesn't reappear.
+
+Raw samples + Prometheus snapshots: [`results/postgres/orders-cdc/2026-05-21T01-35-18Z.json`](results/postgres/orders-cdc/2026-05-21T01-35-18Z.json)
