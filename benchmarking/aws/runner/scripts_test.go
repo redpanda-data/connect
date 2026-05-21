@@ -1,0 +1,178 @@
+// Copyright 2025 Redpanda Data, Inc.
+//
+// Use of this software is governed by the Business Source License included
+// in the licenses/BSL.md file.
+
+package main
+
+import (
+	"strings"
+	"testing"
+	"time"
+)
+
+// --- renderSeedScript ---
+
+func TestRenderSeedScript_Postgres(t *testing.T) {
+	s := &Scenario{
+		Connector: "postgres_cdc",
+		Dataset:   DatasetSpec{Tables: []string{"orders"}, RowSizeBytes: 1200, Seeder: "cdc-rows", InitialRows: 1000},
+	}
+	outs := map[string]string{"postgres_dsn": "postgres://u:p@host:5432/db", "results_bucket": "bucket"}
+	script, err := renderSeedScript(s, outs, "stage/cdc-rows")
+	if err != nil {
+		t.Fatalf("renderSeedScript: %v", err)
+	}
+	if !strings.Contains(script, "POSTGRES_DSN=") {
+		t.Errorf("postgres seed script must set POSTGRES_DSN; got:\n%s", script)
+	}
+	if !strings.Contains(script, "/opt/bench/cdc-rows seed") {
+		t.Errorf("postgres seed script must invoke /opt/bench/cdc-rows seed; got:\n%s", script)
+	}
+}
+
+func TestRenderSeedScript_MySQL(t *testing.T) {
+	s := &Scenario{
+		Connector: "mysql_cdc",
+		Dataset:   DatasetSpec{Tables: []string{"orders"}, RowSizeBytes: 1200, Seeder: "cdc-rows-mysql", InitialRows: 0},
+	}
+	outs := map[string]string{"mysql_dsn": "u:p@tcp(h:3306)/db", "results_bucket": "bucket"}
+	script, err := renderSeedScript(s, outs, "stage/cdc-rows-mysql")
+	if err != nil {
+		t.Fatalf("renderSeedScript: %v", err)
+	}
+	if !strings.Contains(script, "MYSQL_DSN=") {
+		t.Errorf("mysql seed script must set MYSQL_DSN; got:\n%s", script)
+	}
+	if strings.Contains(script, "POSTGRES_DSN=") {
+		t.Errorf("mysql seed script must not leak POSTGRES_DSN; got:\n%s", script)
+	}
+	if !strings.Contains(script, "/opt/bench/cdc-rows-mysql seed") {
+		t.Errorf("mysql seed script must invoke /opt/bench/cdc-rows-mysql seed; got:\n%s", script)
+	}
+}
+
+func TestRenderSeedScript_UnknownConnector(t *testing.T) {
+	s := &Scenario{Connector: "unknown_connector", Dataset: DatasetSpec{Seeder: "x"}}
+	_, err := renderSeedScript(s, map[string]string{}, "stage/x")
+	if err == nil {
+		t.Fatal("expected error for unknown connector")
+	}
+}
+
+// --- combineReset ---
+
+func TestCombineReset_Postgres_DSNForm(t *testing.T) {
+	steps := []ResetStep{{SQL: "SELECT 1"}}
+	outs := map[string]string{"postgres_dsn": "postgres://u:p@host:5432/db"}
+	got, err := combineReset("postgres_cdc", steps, outs)
+	if err != nil {
+		t.Fatalf("combineReset: %v", err)
+	}
+	if !strings.Contains(got, "psql ") {
+		t.Errorf("postgres reset must use psql; got:\n%s", got)
+	}
+	if !strings.Contains(got, "SELECT 1") {
+		t.Errorf("reset must include SQL; got:\n%s", got)
+	}
+}
+
+func TestCombineReset_MySQL_HostPortForm(t *testing.T) {
+	steps := []ResetStep{{SQL: "TRUNCATE TABLE orders"}}
+	outs := map[string]string{
+		"mysql_host":     "rpcn-bench-my.xyz.rds.amazonaws.com",
+		"mysql_port":     "3306",
+		"mysql_user":     "bench",
+		"mysql_password": "s3cret",
+		"mysql_db":       "benchdb",
+	}
+	got, err := combineReset("mysql_cdc", steps, outs)
+	if err != nil {
+		t.Fatalf("combineReset: %v", err)
+	}
+	if !strings.Contains(got, "mysql ") {
+		t.Errorf("mysql reset must invoke mysql CLI; got:\n%s", got)
+	}
+	if !strings.Contains(got, "-h \"rpcn-bench-my.xyz.rds.amazonaws.com\"") {
+		t.Errorf("mysql reset must pass -h flag; got:\n%s", got)
+	}
+	if !strings.Contains(got, "TRUNCATE TABLE orders") {
+		t.Errorf("reset must include SQL; got:\n%s", got)
+	}
+	if strings.Contains(got, "psql") {
+		t.Errorf("mysql reset must not contain psql; got:\n%s", got)
+	}
+}
+
+func TestCombineReset_EmptySteps(t *testing.T) {
+	got, err := combineReset("postgres_cdc", nil, map[string]string{})
+	if err != nil {
+		t.Fatalf("combineReset: %v", err)
+	}
+	if got != "" {
+		t.Errorf("empty reset should produce empty string, got %q", got)
+	}
+}
+
+func TestCombineReset_BashStepPasses(t *testing.T) {
+	steps := []ResetStep{{Bash: "echo ${POSTGRES_DSN}"}}
+	outs := map[string]string{"postgres_dsn": "postgres://u:p@host:5432/db"}
+	got, err := combineReset("postgres_cdc", steps, outs)
+	if err != nil {
+		t.Fatalf("combineReset: %v", err)
+	}
+	if !strings.Contains(got, "postgres://u:p@host:5432/db") {
+		t.Errorf("bash step must have placeholders substituted; got:\n%s", got)
+	}
+}
+
+// --- renderWorkloadScript ---
+
+func TestRenderWorkloadScript_Postgres(t *testing.T) {
+	s := &Scenario{
+		Connector: "postgres_cdc",
+		Dataset:   DatasetSpec{Tables: []string{"orders"}, RowSizeBytes: 1200, Seeder: "cdc-rows"},
+		Workload:  &WorkloadSpec{Warmup: 2 * time.Minute, Duration: 15 * time.Minute, WriteRatePerSec: 80000},
+	}
+	outs := map[string]string{"postgres_dsn": "postgres://u:p@host:5432/db"}
+	got, err := renderWorkloadScript(s, outs)
+	if err != nil {
+		t.Fatalf("renderWorkloadScript: %v", err)
+	}
+	if !strings.Contains(got, "POSTGRES_DSN=") {
+		t.Errorf("postgres workload must set POSTGRES_DSN; got:\n%s", got)
+	}
+	if !strings.Contains(got, "/opt/bench/cdc-rows workload") {
+		t.Errorf("postgres workload must invoke cdc-rows; got:\n%s", got)
+	}
+}
+
+func TestRenderWorkloadScript_MySQL(t *testing.T) {
+	s := &Scenario{
+		Connector: "mysql_cdc",
+		Dataset:   DatasetSpec{Tables: []string{"orders"}, RowSizeBytes: 1200, Seeder: "cdc-rows-mysql"},
+		Workload:  &WorkloadSpec{Warmup: 2 * time.Minute, Duration: 15 * time.Minute, WriteRatePerSec: 80000},
+	}
+	outs := map[string]string{"mysql_dsn": "u:p@tcp(h:3306)/db"}
+	got, err := renderWorkloadScript(s, outs)
+	if err != nil {
+		t.Fatalf("renderWorkloadScript: %v", err)
+	}
+	if !strings.Contains(got, "MYSQL_DSN=") {
+		t.Errorf("mysql workload must set MYSQL_DSN; got:\n%s", got)
+	}
+	if !strings.Contains(got, "/opt/bench/cdc-rows-mysql workload") {
+		t.Errorf("mysql workload must invoke cdc-rows-mysql, not the hardcoded cdc-rows; got:\n%s", got)
+	}
+}
+
+func TestRenderWorkloadScript_NilWorkload(t *testing.T) {
+	s := &Scenario{Connector: "postgres_cdc", Workload: nil}
+	got, err := renderWorkloadScript(s, map[string]string{})
+	if err != nil {
+		t.Fatalf("renderWorkloadScript: %v", err)
+	}
+	if got != "" {
+		t.Errorf("nil workload should produce empty string, got %q", got)
+	}
+}

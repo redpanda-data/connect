@@ -227,8 +227,14 @@ func runBench(opts benchOpts) (errOut error) {
 		Bucket:          sharedOuts["results_bucket"],
 		SessionID:       sessionID,
 	}
-	reset := combineReset(s.Reset, sharedOuts)
-	workload := renderWorkloadScript(s, sharedOuts)
+	reset, err := combineReset(s.Connector, s.Reset, sharedOuts)
+	if err != nil {
+		return err
+	}
+	workload, err := renderWorkloadScript(s, sharedOuts)
+	if err != nil {
+		return err
+	}
 	warmup := time.Duration(0)
 	duration := time.Duration(0)
 	if s.Workload != nil {
@@ -577,51 +583,9 @@ func runSeeder(ctx context.Context, opts benchOpts, s *Scenario, outs map[string
 	if err != nil {
 		return err
 	}
-	script := fmt.Sprintf(`
-set -euo pipefail
-aws s3 cp s3://%s/%s /opt/bench/%s
-chmod +x /opt/bench/%s
-POSTGRES_DSN=%q /opt/bench/%s seed \
-  --tables=%s --rows=%d --row-size=%d
-`,
-		bucket, key, s.Dataset.Seeder, s.Dataset.Seeder,
-		outs["postgres_dsn"], s.Dataset.Seeder,
-		strings.Join(s.Dataset.Tables, ","), s.Dataset.InitialRows, s.Dataset.RowSizeBytes)
+	script, err := renderSeedScript(s, outs, key)
+	if err != nil {
+		return err
+	}
 	return ssmExec.Run(ctx, outs["load_gen_instance_id"], script, streamingOnLine(os.Stdout, "seed"))
-}
-func combineReset(steps []ResetStep, outs map[string]string) string {
-	if len(steps) == 0 {
-		return ""
-	}
-	var sb strings.Builder
-	sb.WriteString("set -euo pipefail\n")
-	dsn := outs["postgres_dsn"]
-	for _, st := range steps {
-		if st.SQL != "" {
-			// Substitute the DSN directly: the SSM environment doesn't carry
-			// POSTGRES_DSN as a shell variable.
-			sb.WriteString(fmt.Sprintf("psql %q -v ON_ERROR_STOP=1 -c %q\n", dsn, st.SQL))
-		}
-		if st.Bash != "" {
-			sb.WriteString(substitutePlaceholders(st.Bash, outs) + "\n")
-		}
-	}
-	return sb.String()
-}
-func renderWorkloadScript(s *Scenario, outs map[string]string) string {
-	if s.Workload == nil {
-		return ""
-	}
-	totalSec := int((s.Workload.Warmup + s.Workload.Duration).Seconds())
-	return fmt.Sprintf(`
-set -euo pipefail
-POSTGRES_DSN=%q /opt/bench/cdc-rows workload \
-  --tables=%s --row-size=%d \
-  --rate=%d --duration=%ds
-`,
-		outs["postgres_dsn"],
-		strings.Join(s.Dataset.Tables, ","),
-		s.Dataset.RowSizeBytes,
-		s.Workload.WriteRatePerSec,
-		totalSec)
 }
