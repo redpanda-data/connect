@@ -123,3 +123,24 @@ func parseSnapshots(r io.Reader) []promSnapshot {
 	}
 	return snaps
 }
+
+// ParsePromStream consumes a per-point prom dump and returns the curated
+// time series with T reindexed to seconds since the first successful
+// snapshot.
+func ParsePromStream(r io.Reader) ([]PromPoint, error) {
+	snaps := parseSnapshots(r)
+	var pts []PromPoint
+	var t0 int64
+	for _, s := range snaps {
+		pp, ok := extractPromPoint(s)
+		if !ok {
+			continue
+		}
+		if len(pts) == 0 {
+			t0 = s.UnixTime
+		}
+		pp.T = int(s.UnixTime - t0)
+		pts = append(pts, pp)
+	}
+	return pts, nil
+}
