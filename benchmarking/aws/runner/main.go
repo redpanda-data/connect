@@ -267,6 +267,7 @@ func runBench(opts benchOpts) (errOut error) {
 			Samples:   p.Samples,
 			Summary:   p.Summary,
 			Anomalies: p.Anomalies,
+			Prom:      p.Prom,
 		})
 	}
 	resultsDir := filepath.Join(opts.repoRoot, "benchmarking/aws/results")

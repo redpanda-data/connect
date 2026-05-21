@@ -133,6 +133,70 @@ func TestMatrixRunner_WarmupTrimsAndReindexes(t *testing.T) {
 	require.Equal(t, []int{0, 1, 2}, []int{points[0].Samples[0].T, points[0].Samples[1].T, points[0].Samples[2].T})
 }
 
+func TestMatrixRunner_FetchesPromAlongsideLog(t *testing.T) {
+	const sessionID = "bench-test"
+	const bucket = "results-bucket"
+
+	logFor := func(vcpu int) string { return makeLog(180, float64(50+vcpu)) }
+	prom := `###timestamp=1000
+go_goroutines 10
+go_memstats_heap_inuse_bytes 1.0485e+08
+###timestamp=1010
+go_goroutines 12
+go_memstats_heap_inuse_bytes 1.1e+08
+`
+	fetcher := &FakeLogFetcher{
+		Contents: map[string]string{
+			fmt.Sprintf("runs/%s/sweep-1.log", sessionID): logFor(1),
+			fmt.Sprintf("runs/%s/prom-1.txt", sessionID):  prom,
+		},
+	}
+	ssm := &FakeSSM{Transcripts: map[string][]string{"i-runner": nil}}
+
+	prev := stdout
+	stdout = &bytes.Buffer{}
+	defer func() { stdout = prev }()
+
+	mr := &MatrixRunner{
+		SSM:            ssm,
+		LogFetcher:     fetcher,
+		RunnerInstance: "i-runner",
+		Bucket:         bucket,
+		SessionID:      sessionID,
+	}
+	points, err := mr.Run(context.Background(), []int{1}, 1, 60*time.Second, 120*time.Second, "", "")
+	require.NoError(t, err)
+	require.Len(t, points, 1)
+	require.Len(t, points[0].Prom, 2)
+	require.Equal(t, 10, points[0].Prom[0].Goroutines)
+	require.Equal(t, 0, points[0].Prom[0].T)
+	require.Equal(t, 10, points[0].Prom[1].T)
+}
+
+func TestMatrixRunner_MissingPromIsNonFatal(t *testing.T) {
+	const sessionID = "bench-test"
+	logFor := func(vcpu int) string { return makeLog(180, 50) }
+	fetcher := &FakeLogFetcher{
+		Contents: map[string]string{
+			fmt.Sprintf("runs/%s/sweep-1.log", sessionID): logFor(1),
+			// no prom-1.txt
+		},
+		Errs: map[string]error{
+			fmt.Sprintf("runs/%s/prom-1.txt", sessionID): fmt.Errorf("not found"),
+		},
+	}
+	ssm := &FakeSSM{Transcripts: map[string][]string{"i-runner": nil}}
+	prev := stdout
+	stdout = &bytes.Buffer{}
+	defer func() { stdout = prev }()
+
+	mr := &MatrixRunner{SSM: ssm, LogFetcher: fetcher, RunnerInstance: "i-runner", Bucket: "b", SessionID: sessionID}
+	points, err := mr.Run(context.Background(), []int{1}, 1, 60*time.Second, 120*time.Second, "", "")
+	require.NoError(t, err, "missing prom dump must not fail the sweep point")
+	require.Len(t, points, 1)
+	require.Empty(t, points[0].Prom, "Prom stays nil/empty when fetch failed")
+}
+
 func TestRenderBenchScript_EmbedsBucketAndSession(t *testing.T) {
 	got := renderBenchScript(benchScriptArgs{
 		VCPU: 4, MemLimitGiB: 4, WarmupSec: 60, DurationSec: 300,
