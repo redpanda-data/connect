@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/costexplorer"
 	cetypes "github.com/aws/aws-sdk-go-v2/service/costexplorer/types"
 )
@@ -177,4 +178,23 @@ func padding(n int) string {
 		b[i] = ' '
 	}
 	return string(b)
+}
+
+type awsCostExplorer struct {
+	client *costexplorer.Client
+}
+
+// NewAWSCostExplorer builds a CostExplorer backed by the AWS SDK. Cost
+// Explorer is a global service exposed only in us-east-1, regardless of
+// where the project's resources live.
+func NewAWSCostExplorer(ctx context.Context) (CostExplorer, error) {
+	cfg, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion("us-east-1"))
+	if err != nil {
+		return nil, err
+	}
+	return &awsCostExplorer{client: costexplorer.NewFromConfig(cfg)}, nil
+}
+
+func (a *awsCostExplorer) GetCostAndUsage(ctx context.Context, in *costexplorer.GetCostAndUsageInput) (*costexplorer.GetCostAndUsageOutput, error) {
+	return a.client.GetCostAndUsage(ctx, in)
 }
