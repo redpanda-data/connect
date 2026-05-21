@@ -18,7 +18,7 @@ type PromPoint struct {
 	T              int     `json:"t"`
 	Goroutines     int     `json:"goroutines"`
 	HeapInUseMB    float64 `json:"heap_in_use_mb"`
-	BytesTotal     float64 `json:"bytes_total"`       // benchmark_bytes_total
+	BytesTotal     float64 `json:"bytes_total"` // benchmark_bytes_total
 	CPUSeconds     float64 `json:"cpu_seconds"`
 	GCPauseTotalNS uint64  `json:"gc_pause_total_ns"` // monotonic; per-interval delta = scrape[i] - scrape[i-1]
 }
