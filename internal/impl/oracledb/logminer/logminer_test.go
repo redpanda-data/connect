@@ -127,9 +127,8 @@ func TestProcessRedoEventWithConnectCacheResource(t *testing.T) {
 	})
 
 	// When transaction A commits while transaction B is still open, the checkpoint
-	// must not advance past B's start SCN - 1. Without the startSCNs side-index on
-	// ConnectCacheResource, the type assertion in processRedoEvent fails and the
-	// checkpoint advances to A's commit SCN — skipping B's events on restart.
+	// must not advance past B's start SCN - 1, otherwise a restart would skip
+	// B's already-seen DML events.
 	t.Run("concurrent transactions checkpoint held back to lowest open SCN", func(t *testing.T) {
 		cache := newCacheResource(t)
 		pub := &publisherStub{}
