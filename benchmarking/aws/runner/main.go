@@ -484,6 +484,12 @@ func renderPipelineConfig(s *Scenario, outs map[string]string) (string, error) {
 			"prometheus": map[string]any{"add_process_metrics": true, "add_go_metrics": true},
 		},
 	}
+	// Connectors that require a persistent checkpoint (e.g. mysql_cdc) declare
+	// cache_resources in the scenario's pipeline block. Thread them through
+	// to the Connect config root when present.
+	if cr, ok := s.Pipeline["cache_resources"]; ok {
+		cfg["cache_resources"] = cr
+	}
 	raw, err := yaml.Marshal(cfg)
 	if err != nil {
 		return "", err
