@@ -75,7 +75,7 @@ func (c *ConnectCacheResource) StartTransaction(ctx context.Context, txnID sqlre
 	if _, discarded := c.discarded[txnID]; discarded {
 		return
 	}
-	existing, err := c.GetTransaction(ctx, txnID)
+	existing, err := c.readMeta(ctx, txnID)
 	if err != nil {
 		c.log.Errorf("Failed to check for existing transaction %s: %v", txnID, err)
 		return
@@ -83,133 +83,156 @@ func (c *ConnectCacheResource) StartTransaction(ctx context.Context, txnID sqlre
 	if existing != nil {
 		return
 	}
-	txn := &Transaction{
-		ID:     txnID,
-		SCN:    scn,
-		Events: []*sqlredo.DMLEvent{},
-	}
-	data, err := marshalTransaction(txn)
+	meta := &serializedTransactionMeta{ID: txnID, SCN: scn, EventCount: 0}
+	data, err := marshalMeta(meta)
 	if err != nil {
-		c.log.Errorf("Failed to serialize transaction %s: %v", txnID, err)
+		c.log.Errorf("Failed to serialize transaction meta %s: %v", txnID, err)
 		return
 	}
 	var setErr error
 	if err := c.resources.AccessCache(ctx, c.cacheName, func(cache service.Cache) {
-		setErr = cache.Set(ctx, c.toCacheKey(txnID), data, nil)
+		setErr = cache.Set(ctx, c.toMetaKey(txnID), data, nil)
 	}); err != nil {
 		c.log.Errorf("Failed to access cache for transaction %s: %v", txnID, err)
 		return
 	}
 	if setErr != nil {
-		c.log.Errorf("Failed to store transaction %s in cache: %v", txnID, setErr)
+		c.log.Errorf("Failed to store transaction meta %s in cache: %v", txnID, setErr)
 		return
 	}
 	c.transactionsMetric.Incr(1)
 }
 
-// AddEvent appends a DML event to the named transaction's buffer. Each call
-// incurs a cache Get followed by a cache Set (read-modify-write). This is safe
-// because LogMiner processes events on a single goroutine.
+// AddEvent writes a DML event to its own cache key and updates the transaction
+// metadata counter. Each call is O(1): one constant-size event key write plus
+// one constant-size metadata key update, regardless of how many events the
+// transaction has already accumulated.
 func (c *ConnectCacheResource) AddEvent(ctx context.Context, txnID sqlredo.TransactionID, scn uint64, event *sqlredo.DMLEvent) {
 	if _, discarded := c.discarded[txnID]; discarded {
 		return
 	}
 
-	txn, err := c.GetTransaction(ctx, txnID)
+	meta, err := c.readMeta(ctx, txnID)
 	if err != nil {
-		c.log.Errorf("Failed to get transaction %s, skipping event to avoid discarding buffered events: %v", txnID, err)
+		c.log.Errorf("Failed to read transaction meta %s, skipping event to avoid discarding buffered events: %v", txnID, err)
 		return
 	}
-	if txn == nil {
+
+	if meta == nil {
 		c.log.Warnf("Transaction %s not found for event, creating...", txnID)
-		txn = &Transaction{
-			ID:     txnID,
-			SCN:    scn,
-			Events: []*sqlredo.DMLEvent{event},
-		}
+		meta = &serializedTransactionMeta{ID: txnID, SCN: scn, EventCount: 0}
 		c.startSCNs[txnID] = scn
 		c.transactionsMetric.Incr(1)
-	} else {
-		if len(txn.Events) == 0 {
-			c.startSCNs[txnID] = txn.SCN
-		}
-		txn.Events = append(txn.Events, event)
+	} else if meta.EventCount == 0 {
+		c.startSCNs[txnID] = meta.SCN
 	}
+
+	evData, err := marshalEvent(event)
+	if err != nil {
+		c.log.Errorf("Failed to serialize event for transaction %s: %v", txnID, err)
+		return
+	}
+	var setErr error
+	if err := c.resources.AccessCache(ctx, c.cacheName, func(cache service.Cache) {
+		setErr = cache.Set(ctx, c.toEventKey(txnID, meta.EventCount), evData, nil)
+	}); err != nil {
+		c.log.Errorf("Failed to access cache for event %d of transaction %s: %v", meta.EventCount, txnID, err)
+		return
+	}
+	if setErr != nil {
+		c.log.Errorf("Failed to write event %d for transaction %s: %v", meta.EventCount, txnID, setErr)
+		return
+	}
+
+	meta.EventCount++
 	c.eventsMetric.Incr(1)
 
-	if c.maxEvents > 0 && len(txn.Events) > c.maxEvents {
+	if c.maxEvents > 0 && meta.EventCount > c.maxEvents {
 		c.log.Warnf("Transaction %s exceeded max event buffer of %d events, discarding", txnID, c.maxEvents)
-		c.eventsMetric.Decr(int64(len(txn.Events)))
-		if err := c.resources.AccessCache(ctx, c.cacheName, func(cache service.Cache) {
-			if err := cache.Delete(ctx, c.toCacheKey(txnID)); err != nil {
-				c.log.Errorf("Failed to delete oversized transaction %s from cache: %v", txnID, err)
-			}
-		}); err != nil {
-			c.log.Errorf("Failed to access cache for transaction %s: %v", txnID, err)
-		}
+		c.eventsMetric.Decr(int64(meta.EventCount))
+		c.deleteTransactionKeys(ctx, txnID, meta.EventCount)
 		delete(c.startSCNs, txnID)
 		c.transactionsMetric.Decr(1)
 		c.discarded[txnID] = struct{}{}
 		return
 	}
 
-	data, err := marshalTransaction(txn)
+	metaData, err := marshalMeta(meta)
 	if err != nil {
-		c.log.Errorf("Failed to serialize transaction %s: %v", txnID, err)
+		c.log.Errorf("Failed to serialize updated meta for transaction %s: %v", txnID, err)
 		return
 	}
 	if err := c.resources.AccessCache(ctx, c.cacheName, func(cache service.Cache) {
-		if err := cache.Set(ctx, c.toCacheKey(txnID), data, nil); err != nil {
-			c.log.Errorf("Failed to update transaction %s in cache: %v", txnID, err)
+		if err := cache.Set(ctx, c.toMetaKey(txnID), metaData, nil); err != nil {
+			c.log.Errorf("Failed to update meta for transaction %s: %v", txnID, err)
 		}
 	}); err != nil {
-		c.log.Errorf("Failed to access cache for transaction %s: %v", txnID, err)
+		c.log.Errorf("Failed to access cache to update meta for transaction %s: %v", txnID, err)
 	}
 }
 
-// GetTransaction retrieves the transaction with the given ID.
-// Returns (nil, nil) if the key is not found.
+// GetTransaction retrieves the transaction with the given ID by reading the
+// metadata key for the event count and then fetching each event key in order.
+// Returns (nil, nil) if the transaction is not found.
 // Returns (nil, err) on a cache backend error or unmarshal failure.
 func (c *ConnectCacheResource) GetTransaction(ctx context.Context, txnID sqlredo.TransactionID) (*Transaction, error) {
-	var (
-		txn    *Transaction
-		getErr error
-	)
+	meta, err := c.readMeta(ctx, txnID)
+	if err != nil {
+		return nil, fmt.Errorf("reading transaction meta %s: %w", txnID, err)
+	}
+	if meta == nil {
+		return nil, nil
+	}
+
+	events := make([]*sqlredo.DMLEvent, meta.EventCount)
+	var readErr error
 	if err := c.resources.AccessCache(ctx, c.cacheName, func(cache service.Cache) {
-		var data []byte
-		data, getErr = cache.Get(ctx, c.toCacheKey(txnID))
-		if getErr != nil {
-			return
+		for i := range meta.EventCount {
+			data, err := cache.Get(ctx, c.toEventKey(txnID, i))
+			if err != nil {
+				if errors.Is(err, service.ErrKeyNotFound) {
+					readErr = fmt.Errorf("event %d of transaction %s not found (cache eviction?)", i, txnID)
+				} else {
+					readErr = fmt.Errorf("reading event %d of transaction %s: %w", i, txnID, err)
+				}
+				return
+			}
+			ev, err := unmarshalEvent(data)
+			if err != nil {
+				readErr = fmt.Errorf("deserializing event %d of transaction %s: %w", i, txnID, err)
+				return
+			}
+			events[i] = ev
 		}
-		txn, getErr = unmarshalTransaction(data)
 	}); err != nil {
 		return nil, err
 	}
-	if getErr != nil {
-		if errors.Is(getErr, service.ErrKeyNotFound) {
-			return nil, nil
-		}
-		return nil, getErr
+	if readErr != nil {
+		return nil, readErr
 	}
-	return txn, nil
+
+	return &Transaction{ID: meta.ID, SCN: meta.SCN, Events: events}, nil
 }
 
 // CommitTransaction removes the committed transaction from the cache.
 func (c *ConnectCacheResource) CommitTransaction(ctx context.Context, txnID sqlredo.TransactionID) {
 	delete(c.discarded, txnID)
 	delete(c.startSCNs, txnID)
-	txn, err := c.GetTransaction(ctx, txnID)
+
+	meta, err := c.readMeta(ctx, txnID)
 	if err != nil {
-		c.log.Errorf("Failed to get transaction %s during commit, event metrics may be inaccurate: %v", txnID, err)
-	} else if txn == nil {
+		c.log.Errorf("Failed to read meta for committing transaction %s, event metrics may be inaccurate: %v", txnID, err)
+	} else if meta == nil {
 		return
 	} else {
-		c.eventsMetric.Decr(int64(len(txn.Events)))
+		c.eventsMetric.Decr(int64(meta.EventCount))
+		c.deleteTransactionKeys(ctx, txnID, meta.EventCount)
+		c.transactionsMetric.Decr(1)
+		return
 	}
+	// Error path: try to clean up the meta key as best-effort even if we couldn't read it.
 	if err := c.resources.AccessCache(ctx, c.cacheName, func(cache service.Cache) {
-		if err := cache.Delete(ctx, c.toCacheKey(txnID)); err != nil {
-			c.log.Errorf("Failed to delete committed transaction %s from cache: %v", txnID, err)
-		}
+		_ = cache.Delete(ctx, c.toMetaKey(txnID))
 	}); err != nil {
 		c.log.Errorf("Failed to access cache for transaction %s: %v", txnID, err)
 	}
@@ -221,18 +244,21 @@ func (c *ConnectCacheResource) CommitTransaction(ctx context.Context, txnID sqlr
 func (c *ConnectCacheResource) RollbackTransaction(ctx context.Context, txnID sqlredo.TransactionID) {
 	delete(c.discarded, txnID)
 	delete(c.startSCNs, txnID)
-	txn, err := c.GetTransaction(ctx, txnID)
+
+	meta, err := c.readMeta(ctx, txnID)
 	if err != nil {
-		c.log.Errorf("Failed to get transaction %s during rollback, event metrics may be inaccurate: %v", txnID, err)
-	} else if txn == nil {
+		c.log.Errorf("Failed to read meta for rolling back transaction %s, event metrics may be inaccurate: %v", txnID, err)
+	} else if meta == nil {
 		return
 	} else {
-		c.eventsMetric.Decr(int64(len(txn.Events)))
+		c.eventsMetric.Decr(int64(meta.EventCount))
+		c.deleteTransactionKeys(ctx, txnID, meta.EventCount)
+		c.transactionsMetric.Decr(1)
+		return
 	}
+	// Error path: try to clean up the meta key as best-effort even if we couldn't read it.
 	if err := c.resources.AccessCache(ctx, c.cacheName, func(cache service.Cache) {
-		if err := cache.Delete(ctx, c.toCacheKey(txnID)); err != nil {
-			c.log.Errorf("Failed to delete rolled-back transaction %s from cache: %v", txnID, err)
-		}
+		_ = cache.Delete(ctx, c.toMetaKey(txnID))
 	}); err != nil {
 		c.log.Errorf("Failed to access cache for transaction %s: %v", txnID, err)
 	}
@@ -252,8 +278,55 @@ func (c *ConnectCacheResource) LowWatermarkSCN(excludeTxnID sqlredo.TransactionI
 	return lowestOpenSCN
 }
 
-func (c *ConnectCacheResource) toCacheKey(txnID sqlredo.TransactionID) string {
-	return c.keyPrefix + ":txn:" + string(txnID)
+func (c *ConnectCacheResource) toMetaKey(txnID sqlredo.TransactionID) string {
+	return c.keyPrefix + ":meta:" + string(txnID)
+}
+
+func (c *ConnectCacheResource) toEventKey(txnID sqlredo.TransactionID, seqno int) string {
+	return c.keyPrefix + ":evt:" + string(txnID) + ":" + strconv.Itoa(seqno)
+}
+
+// readMeta fetches and deserializes the metadata key for txnID.
+// Returns (nil, nil) if the key does not exist.
+func (c *ConnectCacheResource) readMeta(ctx context.Context, txnID sqlredo.TransactionID) (*serializedTransactionMeta, error) {
+	var (
+		meta   *serializedTransactionMeta
+		getErr error
+	)
+	if err := c.resources.AccessCache(ctx, c.cacheName, func(cache service.Cache) {
+		data, err := cache.Get(ctx, c.toMetaKey(txnID))
+		if err != nil {
+			getErr = err
+			return
+		}
+		meta, getErr = unmarshalMeta(data)
+	}); err != nil {
+		return nil, err
+	}
+	if getErr != nil {
+		if errors.Is(getErr, service.ErrKeyNotFound) {
+			return nil, nil
+		}
+		return nil, getErr
+	}
+	return meta, nil
+}
+
+// deleteTransactionKeys deletes all event keys (0..eventCount-1) plus the
+// metadata key for txnID in a single AccessCache call.
+func (c *ConnectCacheResource) deleteTransactionKeys(ctx context.Context, txnID sqlredo.TransactionID, eventCount int) {
+	if err := c.resources.AccessCache(ctx, c.cacheName, func(cache service.Cache) {
+		for i := range eventCount {
+			if err := cache.Delete(ctx, c.toEventKey(txnID, i)); err != nil && !errors.Is(err, service.ErrKeyNotFound) {
+				c.log.Errorf("Failed to delete event key %d for transaction %s: %v", i, txnID, err)
+			}
+		}
+		if err := cache.Delete(ctx, c.toMetaKey(txnID)); err != nil && !errors.Is(err, service.ErrKeyNotFound) {
+			c.log.Errorf("Failed to delete meta key for transaction %s: %v", txnID, err)
+		}
+	}); err != nil {
+		c.log.Errorf("Failed to access cache to delete transaction %s keys: %v", txnID, err)
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -380,62 +453,59 @@ type serializedDMLEvent struct {
 	TransactionID sqlredo.TransactionID `json:"txn_id"`
 }
 
-type serializedTransaction struct {
-	ID     sqlredo.TransactionID `json:"id"`
-	SCN    uint64                `json:"scn"`
-	Events []serializedDMLEvent  `json:"events"`
+type serializedTransactionMeta struct {
+	ID         sqlredo.TransactionID `json:"id"`
+	SCN        uint64                `json:"scn"`
+	EventCount int                   `json:"count"`
 }
 
-func marshalTransaction(txn *Transaction) ([]byte, error) {
-	st := serializedTransaction{
-		ID:     txn.ID,
-		SCN:    txn.SCN,
-		Events: make([]serializedDMLEvent, len(txn.Events)),
-	}
-	for i, ev := range txn.Events {
-		st.Events[i] = serializedDMLEvent{
-			Operation:     ev.Operation,
-			Schema:        ev.Schema,
-			Table:         ev.Table,
-			SQLRedo:       ev.SQLRedo,
-			Data:          encodeMap(ev.Data),
-			OldValues:     encodeMap(ev.OldValues),
-			Timestamp:     ev.Timestamp,
-			TransactionID: ev.TransactionID,
-		}
-	}
-	return json.Marshal(st)
+func marshalMeta(meta *serializedTransactionMeta) ([]byte, error) {
+	return json.Marshal(meta)
 }
 
-func unmarshalTransaction(data []byte) (*Transaction, error) {
-	var st serializedTransaction
-	if err := json.Unmarshal(data, &st); err != nil {
+func unmarshalMeta(data []byte) (*serializedTransactionMeta, error) {
+	var m serializedTransactionMeta
+	if err := json.Unmarshal(data, &m); err != nil {
 		return nil, err
 	}
-	txn := &Transaction{
-		ID:     st.ID,
-		SCN:    st.SCN,
-		Events: make([]*sqlredo.DMLEvent, len(st.Events)),
+	return &m, nil
+}
+
+func marshalEvent(ev *sqlredo.DMLEvent) ([]byte, error) {
+	se := serializedDMLEvent{
+		Operation:     ev.Operation,
+		Schema:        ev.Schema,
+		Table:         ev.Table,
+		SQLRedo:       ev.SQLRedo,
+		Data:          encodeMap(ev.Data),
+		OldValues:     encodeMap(ev.OldValues),
+		Timestamp:     ev.Timestamp,
+		TransactionID: ev.TransactionID,
 	}
-	for i, se := range st.Events {
-		dataMap, err := decodeMap(se.Data)
-		if err != nil {
-			return nil, fmt.Errorf("event %d data: %w", i, err)
-		}
-		oldMap, err := decodeMap(se.OldValues)
-		if err != nil {
-			return nil, fmt.Errorf("event %d old_values: %w", i, err)
-		}
-		txn.Events[i] = &sqlredo.DMLEvent{
-			Operation:     se.Operation,
-			Schema:        se.Schema,
-			Table:         se.Table,
-			SQLRedo:       se.SQLRedo,
-			Data:          dataMap,
-			OldValues:     oldMap,
-			Timestamp:     se.Timestamp,
-			TransactionID: se.TransactionID,
-		}
+	return json.Marshal(se)
+}
+
+func unmarshalEvent(data []byte) (*sqlredo.DMLEvent, error) {
+	var se serializedDMLEvent
+	if err := json.Unmarshal(data, &se); err != nil {
+		return nil, err
 	}
-	return txn, nil
+	dataMap, err := decodeMap(se.Data)
+	if err != nil {
+		return nil, fmt.Errorf("event data: %w", err)
+	}
+	oldMap, err := decodeMap(se.OldValues)
+	if err != nil {
+		return nil, fmt.Errorf("event old_values: %w", err)
+	}
+	return &sqlredo.DMLEvent{
+		Operation:     se.Operation,
+		Schema:        se.Schema,
+		Table:         se.Table,
+		SQLRedo:       se.SQLRedo,
+		Data:          dataMap,
+		OldValues:     oldMap,
+		Timestamp:     se.Timestamp,
+		TransactionID: se.TransactionID,
+	}, nil
 }
