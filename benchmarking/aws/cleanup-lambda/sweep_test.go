@@ -201,3 +201,33 @@ func TestOlderThanTTL(t *testing.T) {
 	younger := now.Add(-1 * time.Hour)
 	require.False(t, olderThanTTL(younger, now, 3*time.Hour))
 }
+
+func TestProcessEC2Instance_OldGetsTerminated(t *testing.T) {
+	now := time.Date(2026, 5, 21, 12, 0, 0, 0, time.UTC)
+	old := now.Add(-4 * time.Hour)
+	young := now.Add(-30 * time.Minute)
+	api := &FakeAWS{
+		EC2Instances: map[string]ec2types.Instance{
+			"i-old":   {InstanceId: aws.String("i-old"), LaunchTime: &old},
+			"i-young": {InstanceId: aws.String("i-young"), LaunchTime: &young},
+		},
+	}
+	require.NoError(t, processEC2Instance(context.Background(), api, "i-old", now, 3*time.Hour))
+	require.NoError(t, processEC2Instance(context.Background(), api, "i-young", now, 3*time.Hour))
+	require.Equal(t, []string{"i-old"}, api.Terminated)
+}
+
+func TestProcessRDSInstance_OldGetsDeleted(t *testing.T) {
+	now := time.Date(2026, 5, 21, 12, 0, 0, 0, time.UTC)
+	old := now.Add(-4 * time.Hour)
+	young := now.Add(-30 * time.Minute)
+	api := &FakeAWS{
+		DBInstances: map[string]rdstypes.DBInstance{
+			"old-db":   {DBInstanceIdentifier: aws.String("old-db"), InstanceCreateTime: &old},
+			"young-db": {DBInstanceIdentifier: aws.String("young-db"), InstanceCreateTime: &young},
+		},
+	}
+	require.NoError(t, processRDSInstance(context.Background(), api, "old-db", now, 3*time.Hour))
+	require.NoError(t, processRDSInstance(context.Background(), api, "young-db", now, 3*time.Hour))
+	require.Equal(t, []string{"old-db"}, api.DeletedDBs)
+}

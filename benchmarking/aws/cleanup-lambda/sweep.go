@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
@@ -125,4 +126,46 @@ func parseARN(arn string) (service, resourceID string, ok bool) {
 
 func olderThanTTL(t, now time.Time, ttl time.Duration) bool {
 	return now.Sub(t) > ttl
+}
+
+func processEC2Instance(ctx context.Context, api cleanupAPI, instanceID string, now time.Time, ttl time.Duration) error {
+	out, err := api.DescribeInstances(ctx, &ec2.DescribeInstancesInput{InstanceIds: []string{instanceID}})
+	if err != nil {
+		return err
+	}
+	for _, r := range out.Reservations {
+		for _, inst := range r.Instances {
+			if inst.LaunchTime == nil {
+				continue
+			}
+			if !olderThanTTL(*inst.LaunchTime, now, ttl) {
+				return nil
+			}
+			_, err := api.TerminateInstances(ctx, &ec2.TerminateInstancesInput{InstanceIds: []string{instanceID}})
+			return err
+		}
+	}
+	return nil
+}
+
+func processRDSInstance(ctx context.Context, api cleanupAPI, dbID string, now time.Time, ttl time.Duration) error {
+	out, err := api.DescribeDBInstances(ctx, &rds.DescribeDBInstancesInput{DBInstanceIdentifier: aws.String(dbID)})
+	if err != nil {
+		return err
+	}
+	for _, db := range out.DBInstances {
+		if db.InstanceCreateTime == nil {
+			continue
+		}
+		if !olderThanTTL(*db.InstanceCreateTime, now, ttl) {
+			return nil
+		}
+		_, err := api.DeleteDBInstance(ctx, &rds.DeleteDBInstanceInput{
+			DBInstanceIdentifier:   aws.String(dbID),
+			SkipFinalSnapshot:      aws.Bool(true),
+			DeleteAutomatedBackups: aws.Bool(true),
+		})
+		return err
+	}
+	return nil
 }
