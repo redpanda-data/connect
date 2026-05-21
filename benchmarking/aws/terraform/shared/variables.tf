@@ -24,3 +24,9 @@ variable "vpc_cidr" {
   type    = string
   default = "10.42.0.0/16"
 }
+
+variable "orphan_ttl_hours" {
+  description = "How long a tagged bench resource can live before the cleanup Lambda destroys it."
+  type        = number
+  default     = 3
+}

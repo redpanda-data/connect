@@ -25,5 +25,5 @@ resource "aws_security_group" "load_gen" {
 }
 
 # Stacks reference these to allow ingress to their RDS / MSK / etc.
-output "runner_sg_id"   { value = aws_security_group.runner.id }
+output "runner_sg_id" { value = aws_security_group.runner.id }
 output "load_gen_sg_id" { value = aws_security_group.load_gen.id }
