@@ -189,7 +189,12 @@ aws-vault exec bench -- task aws:bench scenario=postgres/orders-cdc keep-on-fail
 
 # Validate the YAML + the rendered config without spending money
 task aws:validate scenario=postgres/orders-cdc
+
+# Regenerate the AWS Bench Results section in SUMMARY.md
+task aws:summary
 ```
+
+The "AWS Bench Results" section in `docs/benchmark-results/SUMMARY.md` is auto-refreshed at the end of every `task aws:bench`. If you hand-edit the file or want to manually regen after adding results, use `task aws:summary`. This walks `benchmarking/aws/results/<connector>/<scenario>/*.json`, picks the latest run per scenario, and rewrites the section between the `<!-- bench:aws:start -->` / `<!-- bench:aws:end -->` markers.
 
 ### What a healthy run looks like
 
@@ -221,7 +226,8 @@ Destroy complete! Resources: 5 destroyed.
 Destroy complete! Resources: 20 destroyed.
 
 ✓ done — JSON: benchmarking/aws/results/postgres/orders-cdc/<timestamp>.json
-           md: docs/benchmark-results/postgres.md
+           md: docs/benchmark-results/postgres.md (appended)
+           summary: docs/benchmark-results/SUMMARY.md (regenerated)
 ```
 
 The whole thing usually finishes in ~90 min.
