@@ -6,6 +6,7 @@
 package main
 
 import (
+	"os"
 	"strings"
 	"testing"
 
@@ -68,4 +69,53 @@ go_goroutines 1
 func TestParseSnapshots_Empty(t *testing.T) {
 	snaps := parseSnapshots(strings.NewReader(""))
 	require.Empty(t, snaps)
+}
+
+func TestExtractPromPoint_FromRealFixture(t *testing.T) {
+	raw, err := os.ReadFile("testdata/prom-sample.txt")
+	require.NoError(t, err)
+	body := string(raw)
+
+	pp, ok := extractPromPoint(promSnapshot{UnixTime: 1747856130, Body: body})
+	require.True(t, ok)
+	require.Greater(t, pp.Goroutines, 0)
+	require.Greater(t, pp.HeapInUseMB, 0.0)
+	require.GreaterOrEqual(t, pp.BytesTotal, 0.0)
+	require.GreaterOrEqual(t, pp.CPUSeconds, 0.0)
+	require.GreaterOrEqual(t, pp.GCPauseTotalNS, uint64(0))
+}
+
+func TestExtractPromPoint_SyntheticAllMetrics(t *testing.T) {
+	body := `# HELP go_goroutines blah
+# TYPE go_goroutines gauge
+go_goroutines 312
+go_memstats_heap_inuse_bytes 1.04857e+08
+go_memstats_gc_pause_total_ns 4.2e+07
+process_cpu_seconds_total 87.4
+benchmark_bytes_total 4.12e+09
+`
+	pp, ok := extractPromPoint(promSnapshot{UnixTime: 100, Body: body})
+	require.True(t, ok)
+	require.Equal(t, 312, pp.Goroutines)
+	require.InDelta(t, 104.857, pp.HeapInUseMB, 0.01) // 1.04857e+08 B / 1e6 = 104.857 MB
+	require.InDelta(t, 4.12e+09, pp.BytesTotal, 1.0)
+	require.InDelta(t, 87.4, pp.CPUSeconds, 0.01)
+	require.Equal(t, uint64(42000000), pp.GCPauseTotalNS)
+}
+
+func TestExtractPromPoint_ErrorSnapshotSkipped(t *testing.T) {
+	_, ok := extractPromPoint(promSnapshot{UnixTime: 100, Errored: true, Body: ""})
+	require.False(t, ok)
+}
+
+func TestExtractPromPoint_PartialMetricsOK(t *testing.T) {
+	body := `go_goroutines 50
+go_memstats_heap_inuse_bytes 1.0485e+07
+`
+	pp, ok := extractPromPoint(promSnapshot{UnixTime: 1, Body: body})
+	require.True(t, ok)
+	require.Equal(t, 50, pp.Goroutines)
+	require.InDelta(t, 10.485, pp.HeapInUseMB, 0.001) // 1.0485e+07 B / 1e6 = 10.485 MB
+	require.Equal(t, 0.0, pp.CPUSeconds)        // missing — zero is OK
+	require.Equal(t, uint64(0), pp.GCPauseTotalNS)
 }

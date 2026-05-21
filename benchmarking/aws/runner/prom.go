@@ -32,6 +32,65 @@ type promSnapshot struct {
 	Errored  bool // true when the scraper logged ###scrape_error inside the snapshot
 }
 
+// extractPromPoint pulls the curated metrics out of a single snapshot
+// body. Returns ok=false if the snapshot was an error frame.
+//
+// Hand-rolled rather than depending on prometheus/common/expfmt: the
+// curated subset is five unlabeled metrics, and avoiding the dependency
+// keeps the runner binary small and the build graph simple.
+func extractPromPoint(s promSnapshot) (PromPoint, bool) {
+	if s.Errored {
+		return PromPoint{}, false
+	}
+	pp := PromPoint{}
+	scanner := bufio.NewScanner(strings.NewReader(s.Body))
+	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		name, valueStr, ok := splitMetricLine(line)
+		if !ok {
+			continue
+		}
+		switch name {
+		case "go_goroutines":
+			n, _ := strconv.ParseFloat(valueStr, 64)
+			pp.Goroutines = int(n)
+		case "go_memstats_heap_inuse_bytes":
+			n, _ := strconv.ParseFloat(valueStr, 64)
+			pp.HeapInUseMB = n / 1_000_000 // base-10 to match the rest of the runner
+		case "go_memstats_gc_pause_total_ns":
+			n, _ := strconv.ParseFloat(valueStr, 64)
+			pp.GCPauseTotalNS = uint64(n)
+		case "process_cpu_seconds_total":
+			n, _ := strconv.ParseFloat(valueStr, 64)
+			pp.CPUSeconds = n
+		case "benchmark_bytes_total":
+			n, _ := strconv.ParseFloat(valueStr, 64)
+			pp.BytesTotal = n
+		}
+	}
+	return pp, true
+}
+
+// splitMetricLine splits a line like `go_goroutines 312` or
+// `go_memstats_heap_inuse_bytes 1.04857e+08`. Labels (curly-brace forms)
+// are intentionally NOT supported — the curated subset uses unlabeled
+// metrics only.
+func splitMetricLine(line string) (name, value string, ok bool) {
+	// Skip lines with labels: `metric{label="x"} value`.
+	if strings.ContainsRune(line, '{') {
+		return "", "", false
+	}
+	i := strings.IndexRune(line, ' ')
+	if i <= 0 || i == len(line)-1 {
+		return "", "", false
+	}
+	return line[:i], strings.TrimSpace(line[i+1:]), true
+}
+
 // parseSnapshots splits a /tmp/prom-N.txt dump on ###timestamp= markers.
 // Anything before the first marker is ignored; an empty trailing frame
 // (scraper killed mid-write) is kept with Body == "".
