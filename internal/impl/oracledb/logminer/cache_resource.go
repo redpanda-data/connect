@@ -171,8 +171,10 @@ func (c *ConnectCacheResource) AddEvent(ctx context.Context, txnID sqlredo.Trans
 // Returns (nil, nil) if the key is not found.
 // Returns (nil, err) on a cache backend error or unmarshal failure.
 func (c *ConnectCacheResource) GetTransaction(ctx context.Context, txnID sqlredo.TransactionID) (*Transaction, error) {
-	var txn *Transaction
-	var getErr error
+	var (
+		txn    *Transaction
+		getErr error
+	)
 	if err := c.resources.AccessCache(ctx, c.cacheName, func(cache service.Cache) {
 		var data []byte
 		data, getErr = cache.Get(ctx, c.toCacheKey(txnID))
