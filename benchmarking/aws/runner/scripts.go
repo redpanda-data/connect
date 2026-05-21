@@ -10,6 +10,13 @@ import (
 	"strings"
 )
 
+// Trust boundary: scenario YAML and terraform outputs are operator-controlled.
+// Renderers below quote values with %q (Go double-quoted string), which is NOT
+// shell-safe — bash still expands $, ` and \ inside "...". This is intentional
+// because (a) the RDS modules generate passwords with special=false (alphanumeric
+// only), and (b) reset SQL is hand-authored. If you ever feed user input into
+// these renderers, switch to a real shell-quoter.
+
 // renderSeedScript renders the shell script that runs on the load-gen host to
 // pre-seed the source database. The seeder is expected to be staged at
 // /opt/bench/<seeder> by the time this runs.
