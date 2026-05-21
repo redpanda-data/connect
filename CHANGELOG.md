@@ -3,6 +3,14 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.93.0 - 2026-05-21
+
+### Fixed
+
+- oracledb_cdc: Fixed LOB_TRIM handling to correctly finalize LOB values in SecureFile storage variant and improved LOB merge logic to prevent silent row collisions when multiple LOB-only updates occur in the same transaction. ([@josephwoodward](https://github.com/josephwoodward), [#4430](https://github.com/redpanda-data/connect/pull/4430))
+- redpanda_migrator: Fixed a data race in groupsMigrator where admin client references were read without synchronization, preventing concurrent updates from being properly coordinated. ([@mmatczuk](https://github.com/mmatczuk), [#4312](https://github.com/redpanda-data/connect/pull/4312))
+- oracledb_cdc: Exclude rare LogMiner meta events for unmonitored tables when LOB is enabled. ([@josephwoodward](https://github.com/josephwoodward), [#4447](https://github.com/redpanda-data/connect/pull/4447))
+
 ## 4.92.0 - 2026-05-14
 
 ### Added
