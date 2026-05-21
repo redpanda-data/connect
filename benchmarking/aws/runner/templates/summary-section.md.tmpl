@@ -1,0 +1,17 @@
+<!-- Copyright 2025 Redpanda Data, Inc. -->
+## AWS Bench Results
+
+Last refreshed: {{.LastRefreshed}}
+
+| Connector / Scenario  | Peak MB/s | At vCPU | Median (best vCPU) | Last Run    |
+|-----------------------|-----------|---------|--------------------|-------------|
+{{- if not .Rows }}
+| *(no AWS runs yet)*   |        —  |       — |                 — | —           |
+{{- end }}
+{{- range .Rows }}
+| {{ printf "%-21s" .ConnectorScenario }} | {{ if eq .PeakMBPerSec 0.0 }}     —    {{ else }}{{ printf "%9.0f" .PeakMBPerSec }}{{ end }} | {{ if eq .BestVCPU 0 }}    —  {{ else }}{{ printf "%7d" .BestVCPU }}{{ end }} | {{ if eq .PeakMBPerSec 0.0 }}              —    {{ else }}{{ printf "%18.0f" .MedianAtBestMB }}{{ end }} | {{ printf "%-11s" .LastRunDate }} |
+{{- end }}
+
+Each row is the **latest** run of that scenario. Raw samples + Prometheus snapshots live under `results/<connector>/<scenario>/`.
+
+To regenerate without running a bench: `task aws:summary`

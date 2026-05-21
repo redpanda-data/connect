@@ -6,6 +6,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -109,4 +110,35 @@ func TestWalkResults_AllZeroPeaks(t *testing.T) {
 	require.Len(t, rows, 1)
 	require.Equal(t, 0.0, rows[0].PeakMBPerSec)
 	require.Equal(t, 0, rows[0].BestVCPU) // 0 sentinel
+}
+
+func TestRenderSection_OneRow(t *testing.T) {
+	rows := []summaryRow{
+		{ConnectorScenario: "postgres / orders-cdc", PeakMBPerSec: 102, BestVCPU: 4, MedianAtBestMB: 99, LastRunDate: "2026-05-21"},
+	}
+	var buf bytes.Buffer
+	require.NoError(t, renderSection(&buf, rows, "2026-05-21"))
+	out := buf.String()
+	require.Contains(t, out, "## AWS Bench Results")
+	require.Contains(t, out, "Last refreshed: 2026-05-21")
+	require.Contains(t, out, "postgres / orders-cdc")
+	require.Contains(t, out, "102")
+	require.Contains(t, out, "2026-05-21")
+}
+
+func TestRenderSection_EmptyRows(t *testing.T) {
+	var buf bytes.Buffer
+	require.NoError(t, renderSection(&buf, nil, "2026-05-21"))
+	require.Contains(t, buf.String(), "*(no AWS runs yet)*")
+}
+
+func TestRenderSection_ZeroPeakShowsDash(t *testing.T) {
+	rows := []summaryRow{
+		{ConnectorScenario: "postgres / broken", PeakMBPerSec: 0, BestVCPU: 0, LastRunDate: "2026-05-21"},
+	}
+	var buf bytes.Buffer
+	require.NoError(t, renderSection(&buf, rows, "2026-05-21"))
+	out := buf.String()
+	require.Contains(t, out, "postgres / broken")
+	require.Contains(t, out, "—")
 }
