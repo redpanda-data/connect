@@ -20,6 +20,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/resourcegroupstaggingapi"
 	rgtatypes "github.com/aws/aws-sdk-go-v2/service/resourcegroupstaggingapi/types"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/aws/aws-sdk-go-v2/service/sns"
 	"github.com/stretchr/testify/require"
 )
@@ -120,6 +121,15 @@ func (f *FakeAWS) DescribeDBParameterGroups(_ context.Context, _ *rds.DescribeDB
 func (f *FakeAWS) DeleteDBParameterGroup(_ context.Context, _ *rds.DeleteDBParameterGroupInput) (*rds.DeleteDBParameterGroupOutput, error) {
 	return &rds.DeleteDBParameterGroupOutput{}, nil
 }
+func (f *FakeAWS) ListBuckets(_ context.Context, _ *s3.ListBucketsInput) (*s3.ListBucketsOutput, error) {
+	out := &s3.ListBucketsOutput{}
+	for name, created := range f.S3Buckets {
+		t := created
+		n := name
+		out.Buckets = append(out.Buckets, s3types.Bucket{Name: &n, CreationDate: &t})
+	}
+	return out, nil
+}
 func (f *FakeAWS) ListObjectVersions(_ context.Context, _ *s3.ListObjectVersionsInput) (*s3.ListObjectVersionsOutput, error) {
 	return &s3.ListObjectVersionsOutput{}, nil
 }
@@ -167,16 +177,8 @@ func (f *FakeAWS) Publish(_ context.Context, in *sns.PublishInput) (*sns.Publish
 	return &sns.PublishOutput{}, nil
 }
 
-// BucketCreatedAt implements s3AgeProvider so processS3Bucket can TTL-filter
-// without a real S3 API call during tests.
-func (f *FakeAWS) BucketCreatedAt(name string) (time.Time, bool) {
-	t, ok := f.S3Buckets[name]
-	return t, ok
-}
-
 // Sanity-compile check.
 var _ cleanupAPI = (*FakeAWS)(nil)
-var _ s3AgeProvider = (*FakeAWS)(nil)
 
 func TestParseARN_KnownServices(t *testing.T) {
 	cases := []struct {
@@ -247,8 +249,22 @@ func TestProcessS3Bucket_OldEmptyAndDeleted(t *testing.T) {
 	api := &FakeAWS{
 		S3Buckets: map[string]time.Time{"rpcn-bench-results-old": old},
 	}
-	require.NoError(t, processS3Bucket(context.Background(), api, "rpcn-bench-results-old", now, 3*time.Hour))
+	require.NoError(t, processS3Bucket(context.Background(), api, "rpcn-bench-results-old", old, now, 3*time.Hour))
 	require.Equal(t, []string{"rpcn-bench-results-old"}, api.DeletedBuckets)
+}
+
+// TestProcessS3Bucket_YoungNotDeleted is a regression test for the bug where
+// production skipped the TTL check (no s3AgeProvider type assertion match)
+// and unconditionally deleted any tagged S3 bucket.
+func TestProcessS3Bucket_YoungNotDeleted(t *testing.T) {
+	now := time.Date(2026, 5, 21, 12, 0, 0, 0, time.UTC)
+	young := now.Add(-30 * time.Minute)
+
+	api := &FakeAWS{
+		S3Buckets: map[string]time.Time{"rpcn-bench-results-young": young},
+	}
+	require.NoError(t, processS3Bucket(context.Background(), api, "rpcn-bench-results-young", young, now, 3*time.Hour))
+	require.Empty(t, api.DeletedBuckets, "young bucket must NOT be deleted")
 }
 
 func TestProcessIAMRole_OldGetsDeleted(t *testing.T) {

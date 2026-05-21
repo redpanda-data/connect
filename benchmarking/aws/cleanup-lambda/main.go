@@ -111,6 +111,9 @@ func (a *awsCleanup) DescribeDBParameterGroups(ctx context.Context, in *rds.Desc
 func (a *awsCleanup) DeleteDBParameterGroup(ctx context.Context, in *rds.DeleteDBParameterGroupInput) (*rds.DeleteDBParameterGroupOutput, error) {
 	return a.rds.DeleteDBParameterGroup(ctx, in)
 }
+func (a *awsCleanup) ListBuckets(ctx context.Context, in *s3.ListBucketsInput) (*s3.ListBucketsOutput, error) {
+	return a.s3.ListBuckets(ctx, in)
+}
 func (a *awsCleanup) ListObjectVersions(ctx context.Context, in *s3.ListObjectVersionsInput) (*s3.ListObjectVersionsOutput, error) {
 	return a.s3.ListObjectVersions(ctx, in)
 }
