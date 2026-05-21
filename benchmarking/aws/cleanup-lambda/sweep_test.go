@@ -167,8 +167,16 @@ func (f *FakeAWS) Publish(_ context.Context, in *sns.PublishInput) (*sns.Publish
 	return &sns.PublishOutput{}, nil
 }
 
+// BucketCreatedAt implements s3AgeProvider so processS3Bucket can TTL-filter
+// without a real S3 API call during tests.
+func (f *FakeAWS) BucketCreatedAt(name string) (time.Time, bool) {
+	t, ok := f.S3Buckets[name]
+	return t, ok
+}
+
 // Sanity-compile check.
 var _ cleanupAPI = (*FakeAWS)(nil)
+var _ s3AgeProvider = (*FakeAWS)(nil)
 
 func TestParseARN_KnownServices(t *testing.T) {
 	cases := []struct {

@@ -25,6 +25,14 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sns"
 )
 
+// s3AgeProvider is an optional extension of cleanupAPI. Implementors can
+// report a bucket's creation time so that processS3Bucket can TTL-filter
+// without a real S3 API call. FakeAWS (in tests) implements this; the
+// production awsCleanup does not.
+type s3AgeProvider interface {
+	BucketCreatedAt(name string) (time.Time, bool)
+}
+
 // cleanupAPI is the narrow slice of AWS the Lambda needs. Tests fake this.
 type cleanupAPI interface {
 	// Discovery
@@ -166,8 +174,8 @@ func processRDSInstance(ctx context.Context, api cleanupAPI, dbID string, now ti
 // assertion when present; production paths simply trust the caller has
 // already age-filtered before invoking this.
 func processS3Bucket(ctx context.Context, api cleanupAPI, bucket string, now time.Time, ttl time.Duration) error {
-	if fake, ok := api.(*FakeAWS); ok {
-		if created, present := fake.S3Buckets[bucket]; present {
+	if ap, ok := api.(s3AgeProvider); ok {
+		if created, present := ap.BucketCreatedAt(bucket); present {
 			if !olderThanTTL(created, now, ttl) {
 				return nil
 			}
@@ -273,8 +281,8 @@ func Sweep(ctx context.Context, api cleanupAPI, now time.Time, ttl time.Duration
 				isOld = true
 			}
 		case "s3":
-			if fake, ok := api.(*FakeAWS); ok {
-				if created, hit := fake.S3Buckets[id]; hit && olderThanTTL(created, now, ttl) {
+			if ap, ok := api.(s3AgeProvider); ok {
+				if created, hit := ap.BucketCreatedAt(id); hit && olderThanTTL(created, now, ttl) {
 					isOld = true
 				}
 			} else {
