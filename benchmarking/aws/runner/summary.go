@@ -6,6 +6,7 @@
 package main
 
 import (
+	"bytes"
 	_ "embed"
 	"encoding/json"
 	"fmt"
@@ -13,7 +14,9 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"text/template"
+	"time"
 )
 
 // summaryRow is one line in the auto-rendered table.
@@ -110,4 +113,65 @@ func derivedRow(connector, scenario, jsonPath string) (summaryRow, error) {
 		}
 	}
 	return row, nil
+}
+
+const (
+	SummaryMarkerStart = "<!-- bench:aws:start - auto-generated, do not edit by hand -->"
+	SummaryMarkerEnd   = "<!-- bench:aws:end -->"
+)
+
+// RefreshSummary walks resultsRoot, derives the latest-per-scenario rows,
+// renders the section, and writes it between the markers in summaryPath.
+// If markers are missing, the section is appended to the end of the file
+// and a one-line warning is written to os.Stderr.
+//
+// The write is atomic: tmp file + rename, mirroring WriteResultJSON.
+func RefreshSummary(summaryPath, resultsRoot string, now time.Time) error {
+	rows, err := walkResults(resultsRoot)
+	if err != nil {
+		return fmt.Errorf("walk results: %w", err)
+	}
+
+	var section bytes.Buffer
+	section.WriteString(SummaryMarkerStart)
+	section.WriteByte('\n')
+	if err := renderSection(&section, rows, now.UTC().Format("2006-01-02")); err != nil {
+		return fmt.Errorf("render section: %w", err)
+	}
+	section.WriteByte('\n')
+	section.WriteString(SummaryMarkerEnd)
+
+	existing, err := os.ReadFile(summaryPath)
+	if err != nil {
+		return fmt.Errorf("read %s: %w", summaryPath, err)
+	}
+
+	var next []byte
+	startIdx := bytes.Index(existing, []byte(SummaryMarkerStart))
+	endIdx := bytes.Index(existing, []byte(SummaryMarkerEnd))
+	switch {
+	case startIdx >= 0 && endIdx > startIdx:
+		endTotal := endIdx + len(SummaryMarkerEnd)
+		next = append(next, existing[:startIdx]...)
+		next = append(next, section.Bytes()...)
+		next = append(next, existing[endTotal:]...)
+	default:
+		fmt.Fprintln(os.Stderr, "warning: bench:aws markers not found in "+summaryPath+"; appending section to end of file")
+		next = append(next, existing...)
+		if !strings.HasSuffix(string(existing), "\n") {
+			next = append(next, '\n')
+		}
+		next = append(next, '\n')
+		next = append(next, section.Bytes()...)
+		next = append(next, '\n')
+	}
+
+	tmp := summaryPath + ".tmp"
+	if err := os.WriteFile(tmp, next, 0o644); err != nil {
+		return fmt.Errorf("write tmp: %w", err)
+	}
+	if err := os.Rename(tmp, summaryPath); err != nil {
+		return fmt.Errorf("rename tmp: %w", err)
+	}
+	return nil
 }

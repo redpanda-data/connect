@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -141,4 +142,66 @@ func TestRenderSection_ZeroPeakShowsDash(t *testing.T) {
 	out := buf.String()
 	require.Contains(t, out, "postgres / broken")
 	require.Contains(t, out, "—")
+}
+
+const markerStart = "<!-- bench:aws:start - auto-generated, do not edit by hand -->"
+const markerEnd = "<!-- bench:aws:end -->"
+
+func writeSummaryFile(t *testing.T, contents string) string {
+	t.Helper()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "SUMMARY.md")
+	require.NoError(t, os.WriteFile(path, []byte(contents), 0o644))
+	return path
+}
+
+func TestRefreshSummary_PreservesContentOutsideMarkers(t *testing.T) {
+	resultsRoot := t.TempDir()
+	writeResult(t, resultsRoot, "postgres", "orders-cdc", "2026-05-21T00-00-00Z", &Result{
+		Scenario:   "postgres/orders-cdc",
+		FinishedAt: time.Date(2026, 5, 21, 0, 0, 0, 0, time.UTC),
+		Points:     []PointResult{{VCPU: 4, Summary: Summary{PeakMBPerSec: 102, MedianMBPerSec: 99}}},
+	})
+
+	above := "# Some Doc\n\nFirst paragraph.\n\n"
+	below := "\nSecond paragraph after the section.\n"
+	contents := above + markerStart + "\n" + markerEnd + below
+	summaryPath := writeSummaryFile(t, contents)
+
+	require.NoError(t, RefreshSummary(summaryPath, resultsRoot, time.Date(2026, 5, 21, 0, 0, 0, 0, time.UTC)))
+
+	raw, err := os.ReadFile(summaryPath)
+	require.NoError(t, err)
+	out := string(raw)
+	require.True(t, strings.HasPrefix(out, above), "preserve content above markers")
+	require.True(t, strings.HasSuffix(out, below), "preserve content below markers")
+	require.Contains(t, out, markerStart)
+	require.Contains(t, out, markerEnd)
+	require.Contains(t, out, "## AWS Bench Results")
+	require.Contains(t, out, "postgres / orders-cdc")
+}
+
+func TestRefreshSummary_MissingMarkersAppends(t *testing.T) {
+	resultsRoot := t.TempDir()
+	contents := "# Some Doc\n\nNo markers here.\n"
+	summaryPath := writeSummaryFile(t, contents)
+
+	require.NoError(t, RefreshSummary(summaryPath, resultsRoot, time.Date(2026, 5, 21, 0, 0, 0, 0, time.UTC)))
+
+	raw, err := os.ReadFile(summaryPath)
+	require.NoError(t, err)
+	out := string(raw)
+	require.True(t, strings.HasPrefix(out, contents), "preserve original content")
+	require.Contains(t, out, markerStart)
+	require.Contains(t, out, markerEnd)
+}
+
+func TestRefreshSummary_AtomicTmpRename(t *testing.T) {
+	resultsRoot := t.TempDir()
+	contents := markerStart + "\n" + markerEnd
+	summaryPath := writeSummaryFile(t, contents)
+	require.NoError(t, RefreshSummary(summaryPath, resultsRoot, time.Date(2026, 5, 21, 0, 0, 0, 0, time.UTC)))
+
+	_, err := os.Stat(summaryPath + ".tmp")
+	require.True(t, os.IsNotExist(err), "tmp file should be gone after rename")
 }
