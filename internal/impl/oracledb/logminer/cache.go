@@ -22,7 +22,7 @@ import (
 type TransactionCache interface {
 	StartTransaction(ctx context.Context, txnID sqlredo.TransactionID, scn uint64)
 	AddEvent(ctx context.Context, txnID sqlredo.TransactionID, scn uint64, event *sqlredo.DMLEvent)
-	GetTransaction(ctx context.Context, txnID sqlredo.TransactionID) *Transaction
+	GetTransaction(ctx context.Context, txnID sqlredo.TransactionID) (*Transaction, error)
 	CommitTransaction(ctx context.Context, txnID sqlredo.TransactionID)
 	RollbackTransaction(ctx context.Context, txnID sqlredo.TransactionID)
 	// LowWatermarkSCN returns the lowest start SCN among all currently open
@@ -117,9 +117,9 @@ func (tc *InMemoryCache) AddEvent(_ context.Context, txnID sqlredo.TransactionID
 }
 
 // GetTransaction retrieves the transaction with the given ID from the cache.
-// Returns nil if the transaction doesn't exist.
-func (tc *InMemoryCache) GetTransaction(_ context.Context, txnID sqlredo.TransactionID) *Transaction {
-	return tc.transactions[txnID]
+// Returns (nil, nil) if the transaction doesn't exist.
+func (tc *InMemoryCache) GetTransaction(_ context.Context, txnID sqlredo.TransactionID) (*Transaction, error) {
+	return tc.transactions[txnID], nil
 }
 
 // CommitTransaction removes the committed transaction from the cache.

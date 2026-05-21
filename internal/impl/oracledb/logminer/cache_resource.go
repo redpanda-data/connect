@@ -12,6 +12,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"strconv"
@@ -74,7 +75,12 @@ func (c *ConnectCacheResource) StartTransaction(ctx context.Context, txnID sqlre
 	if _, discarded := c.discarded[txnID]; discarded {
 		return
 	}
-	if existing := c.GetTransaction(ctx, txnID); existing != nil {
+	existing, err := c.GetTransaction(ctx, txnID)
+	if err != nil {
+		c.log.Errorf("Failed to check for existing transaction %s: %v", txnID, err)
+		return
+	}
+	if existing != nil {
 		return
 	}
 	txn := &Transaction{
@@ -109,7 +115,11 @@ func (c *ConnectCacheResource) AddEvent(ctx context.Context, txnID sqlredo.Trans
 		return
 	}
 
-	txn := c.GetTransaction(ctx, txnID)
+	txn, err := c.GetTransaction(ctx, txnID)
+	if err != nil {
+		c.log.Errorf("Failed to get transaction %s, skipping event to avoid discarding buffered events: %v", txnID, err)
+		return
+	}
 	if txn == nil {
 		c.log.Warnf("Transaction %s not found for event, creating...", txnID)
 		txn = &Transaction{
@@ -157,8 +167,10 @@ func (c *ConnectCacheResource) AddEvent(ctx context.Context, txnID sqlredo.Trans
 	}
 }
 
-// GetTransaction retrieves the transaction with the given ID. Returns nil if not found.
-func (c *ConnectCacheResource) GetTransaction(ctx context.Context, txnID sqlredo.TransactionID) *Transaction {
+// GetTransaction retrieves the transaction with the given ID.
+// Returns (nil, nil) if the key is not found.
+// Returns (nil, err) on a cache backend error or unmarshal failure.
+func (c *ConnectCacheResource) GetTransaction(ctx context.Context, txnID sqlredo.TransactionID) (*Transaction, error) {
 	var txn *Transaction
 	var getErr error
 	if err := c.resources.AccessCache(ctx, c.cacheName, func(cache service.Cache) {
@@ -169,26 +181,29 @@ func (c *ConnectCacheResource) GetTransaction(ctx context.Context, txnID sqlredo
 		}
 		txn, getErr = unmarshalTransaction(data)
 	}); err != nil {
-		return nil
+		return nil, err
 	}
 	if getErr != nil {
-		if getErr != service.ErrKeyNotFound {
-			c.log.Errorf("Failed to get transaction %s from cache: %v", txnID, getErr)
+		if errors.Is(getErr, service.ErrKeyNotFound) {
+			return nil, nil
 		}
-		return nil
+		return nil, getErr
 	}
-	return txn
+	return txn, nil
 }
 
 // CommitTransaction removes the committed transaction from the cache.
 func (c *ConnectCacheResource) CommitTransaction(ctx context.Context, txnID sqlredo.TransactionID) {
 	delete(c.discarded, txnID)
 	delete(c.startSCNs, txnID)
-	txn := c.GetTransaction(ctx, txnID)
-	if txn == nil {
+	txn, err := c.GetTransaction(ctx, txnID)
+	if err != nil {
+		c.log.Errorf("Failed to get transaction %s during commit, event metrics may be inaccurate: %v", txnID, err)
+	} else if txn == nil {
 		return
+	} else {
+		c.eventsMetric.Decr(int64(len(txn.Events)))
 	}
-	c.eventsMetric.Decr(int64(len(txn.Events)))
 	if err := c.resources.AccessCache(ctx, c.cacheName, func(cache service.Cache) {
 		if err := cache.Delete(ctx, c.toCacheKey(txnID)); err != nil {
 			c.log.Errorf("Failed to delete committed transaction %s from cache: %v", txnID, err)
@@ -204,11 +219,14 @@ func (c *ConnectCacheResource) CommitTransaction(ctx context.Context, txnID sqlr
 func (c *ConnectCacheResource) RollbackTransaction(ctx context.Context, txnID sqlredo.TransactionID) {
 	delete(c.discarded, txnID)
 	delete(c.startSCNs, txnID)
-	txn := c.GetTransaction(ctx, txnID)
-	if txn == nil {
+	txn, err := c.GetTransaction(ctx, txnID)
+	if err != nil {
+		c.log.Errorf("Failed to get transaction %s during rollback, event metrics may be inaccurate: %v", txnID, err)
+	} else if txn == nil {
 		return
+	} else {
+		c.eventsMetric.Decr(int64(len(txn.Events)))
 	}
-	c.eventsMetric.Decr(int64(len(txn.Events)))
 	if err := c.resources.AccessCache(ctx, c.cacheName, func(cache service.Cache) {
 		if err := cache.Delete(ctx, c.toCacheKey(txnID)); err != nil {
 			c.log.Errorf("Failed to delete rolled-back transaction %s from cache: %v", txnID, err)

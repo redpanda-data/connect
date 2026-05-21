@@ -412,7 +412,11 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 
 	case sqlredo.OpCommit:
 		// Flush all buffered events for given transaction ID
-		if txn := lm.txnCache.GetTransaction(ctx, redoEvent.TransactionID); txn != nil {
+		txn, err := lm.txnCache.GetTransaction(ctx, redoEvent.TransactionID)
+		if err != nil {
+			return fmt.Errorf("fetching transaction %s on commit: %w", redoEvent.TransactionID, err)
+		}
+		if txn != nil {
 			safeCheckpointSCN := redoEvent.SCN
 
 			// If other transactions are still open, we must not advance the
@@ -646,7 +650,11 @@ func (lm *LogMiner) inferLOBLocator(ctx context.Context, event *sqlredo.RedoEven
 		return false
 	}
 
-	txn := lm.txnCache.GetTransaction(ctx, event.TransactionID)
+	txn, err := lm.txnCache.GetTransaction(ctx, event.TransactionID)
+	if err != nil {
+		lm.log.Errorf("Failed to get transaction %s for LOB locator inference: %v", event.TransactionID, err)
+		return false
+	}
 	if txn == nil {
 		return false
 	}
