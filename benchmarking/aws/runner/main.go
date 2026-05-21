@@ -275,7 +275,13 @@ func runBench(opts benchOpts) (errOut error) {
 	if err := AppendMarkdown(mdPath, result, strings.TrimSpace(s.Description)); err != nil {
 		return err
 	}
-	fmt.Printf("\n✓ done — JSON: %s\n           md: %s\n", jsonPath, mdPath)
+	summaryPath := filepath.Join(opts.repoRoot, "docs/benchmark-results/SUMMARY.md")
+	if err := RefreshSummary(summaryPath, resultsDir, time.Now()); err != nil {
+		// Non-fatal: a bench run that produced a valid result should not fail
+		// because the project-level summary couldn't be rewritten.
+		fmt.Fprintf(os.Stderr, "warning: refresh SUMMARY.md: %v\n", err)
+	}
+	fmt.Printf("\n✓ done — JSON: %s\n           md: %s\n           summary: %s\n", jsonPath, mdPath, summaryPath)
 	return nil
 }
 
