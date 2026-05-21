@@ -10,9 +10,9 @@ provider "aws" {
   region = var.region
   default_tags {
     tags = {
-      Project          = "redpanda-connect-bench"
+      Project            = "redpanda-connect-bench"
       "bench-session-id" = var.bench_session_id
-      ManagedBy        = "terraform"
+      ManagedBy          = "terraform"
     }
   }
 }
