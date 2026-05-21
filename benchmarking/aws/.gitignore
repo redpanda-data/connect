@@ -11,3 +11,8 @@ terraform.tfstate.*
 # Built binaries staged for upload
 runner/dist/
 seeders/dist/
+
+# Stray local builds (e.g. accidental `go build` without -o)
+runner/runner
+cleanup-lambda/bootstrap
+cleanup-lambda/bootstrap.zip
