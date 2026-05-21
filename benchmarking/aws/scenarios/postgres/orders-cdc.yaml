@@ -1,8 +1,8 @@
 name: postgres-orders-cdc
 description: |
-  Stream changes from a 75M-row orders table at 5K writes/sec sustained.
-  Mirrors a mid-size e-commerce CDC pipeline (Postgres → drop, measuring
-  read ceiling).
+  Stream changes from a 75M-row orders table under sustained heavy writes
+  (target 80K writes/sec ≈ 96 MB/s) so the postgres_cdc input — not the
+  producer — is the bottleneck, and the CPU sweep can find its ceiling.
 
 connector: postgres_cdc
 stack: postgres
@@ -25,7 +25,7 @@ dataset:
   seeder: cdc-rows
 
 workload:
-  write_rate_per_sec: 5000
+  write_rate_per_sec: 80000
   duration: 15m
   warmup: 2m
 

@@ -110,35 +110,69 @@ func bulkInsert(ctx context.Context, pool *pgxpool.Pool, table string, rows int6
 }
 
 func workload(ctx context.Context, tables []string, rowSize, rate int, dur time.Duration) error {
-	pool, err := pgxpool.New(ctx, os.Getenv("POSTGRES_DSN"))
+	// A single goroutine driving large per-tick batches caps around 30-40K
+	// inserts/sec on c8g.large because statement parsing + one network RTT
+	// per tick eats the budget. Spread across workers, each with a smaller
+	// batch, so the scenario's write_rate_per_sec is actually achievable.
+	const workers = 8
+	cfg, err := pgxpool.ParseConfig(os.Getenv("POSTGRES_DSN"))
+	if err != nil {
+		return err
+	}
+	cfg.MaxConns = int32(workers)
+	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
 		return err
 	}
 	defer pool.Close()
-	payload := randomPayload(rowSize)
+
+	perWorkerPer100ms := rate / workers / 10
+	if perWorkerPer100ms < 1 {
+		perWorkerPer100ms = 1
+	}
 	deadline := time.Now().Add(dur)
-	ticker := time.NewTicker(100 * time.Millisecond)
-	defer ticker.Stop()
-	per100ms := rate / 10
-	tIdx := 0
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-ticker.C:
-			if time.Now().After(deadline) {
-				return nil
-			}
-			table := tables[tIdx%len(tables)]
-			tIdx++
-			batch := strings.Repeat("(NOW(),$1),", per100ms)
+	var wg sync.WaitGroup
+	errCh := make(chan error, workers)
+	for w := 0; w < workers; w++ {
+		wg.Add(1)
+		workerIdx := w
+		go func() {
+			defer wg.Done()
+			payload := randomPayload(rowSize)
+			batch := strings.Repeat("(NOW(),$1),", perWorkerPer100ms)
 			batch = strings.TrimSuffix(batch, ",")
-			stmt := fmt.Sprintf("INSERT INTO %s (created_at, payload) VALUES %s", table, batch)
-			if _, err := pool.Exec(ctx, stmt, payload); err != nil {
-				return err
+			ticker := time.NewTicker(100 * time.Millisecond)
+			defer ticker.Stop()
+			tIdx := workerIdx
+			for {
+				select {
+				case <-ctx.Done():
+					errCh <- ctx.Err()
+					return
+				case <-ticker.C:
+					if time.Now().After(deadline) {
+						errCh <- nil
+						return
+					}
+					table := tables[tIdx%len(tables)]
+					tIdx++
+					stmt := fmt.Sprintf("INSERT INTO %s (created_at, payload) VALUES %s", table, batch)
+					if _, err := pool.Exec(ctx, stmt, payload); err != nil {
+						errCh <- err
+						return
+					}
+				}
 			}
+		}()
+	}
+	wg.Wait()
+	close(errCh)
+	for err := range errCh {
+		if err != nil && err != context.Canceled && err != context.DeadlineExceeded {
+			return err
 		}
 	}
+	return nil
 }
 
 func randomPayload(size int) string {
