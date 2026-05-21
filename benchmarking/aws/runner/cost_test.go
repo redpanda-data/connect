@@ -6,6 +6,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"testing"
 	"time"
@@ -121,3 +122,45 @@ var errBoom = errBoomImpl("boom")
 type errBoomImpl string
 
 func (e errBoomImpl) Error() string { return string(e) }
+
+func TestPrint_DeterministicLayout(t *testing.T) {
+	report := CostReport{
+		Region:       "us-east-2",
+		Today:        0.00,
+		Last7Days:    18.42,
+		MonthToDate:  42.91,
+		CurrencyCode: "USD",
+		ByUsageType: []UsageTypeCost{
+			{UsageType: "EC2 (c8g.4xlarge)", Cost: 9.20},
+			{UsageType: "RDS (db.r6g.2xlarge)", Cost: 7.10},
+			{UsageType: "EBS (gp3 + snapshots)", Cost: 1.45},
+			{UsageType: "Data Transfer", Cost: 0.42},
+			{UsageType: "Other", Cost: 0.25},
+		},
+	}
+	var buf bytes.Buffer
+	Print(&buf, report)
+	want := `AWS spend — Project=redpanda-connect-bench (us-east-2)
+Note: AWS Cost Explorer lags ~24-48h; today's spend will be partial.
+
+  today         $0.00
+  last 7 days   $18.42
+  month-to-date $42.91
+
+By usage type (last 7 days):
+  EC2 (c8g.4xlarge)     $9.20
+  RDS (db.r6g.2xlarge)  $7.10
+  EBS (gp3 + snapshots) $1.45
+  Data Transfer         $0.42
+  Other                 $0.25
+`
+	require.Equal(t, want, buf.String())
+}
+
+func TestPrint_EmptyBreakdown(t *testing.T) {
+	var buf bytes.Buffer
+	Print(&buf, CostReport{Region: "us-east-2", CurrencyCode: "USD"})
+	out := buf.String()
+	require.Contains(t, out, "today         $0.00")
+	require.NotContains(t, out, "By usage type") // skip section when nothing to show
+}

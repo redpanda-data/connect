@@ -8,6 +8,8 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
+	"sort"
 	"strconv"
 	"time"
 
@@ -130,4 +132,49 @@ func SummariseCosts(ctx context.Context, ce CostExplorer, region string, now tim
 	}
 
 	return report, nil
+}
+
+// Print writes a human-readable cost report to w. Layout is column-aligned
+// and the snapshot test asserts byte-exact output, so changes here must
+// update the test.
+func Print(w io.Writer, r CostReport) {
+	fmt.Fprintf(w, "AWS spend — Project=redpanda-connect-bench (%s)\n", r.Region)
+	fmt.Fprintln(w, "Note: AWS Cost Explorer lags ~24-48h; today's spend will be partial.")
+	fmt.Fprintln(w)
+	fmt.Fprintf(w, "  today         $%.2f\n", r.Today)
+	fmt.Fprintf(w, "  last 7 days   $%.2f\n", r.Last7Days)
+	fmt.Fprintf(w, "  month-to-date $%.2f\n", r.MonthToDate)
+
+	if len(r.ByUsageType) == 0 {
+		return
+	}
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "By usage type (last 7 days):")
+
+	// Sort breakdown by cost descending for readability.
+	sorted := append([]UsageTypeCost(nil), r.ByUsageType...)
+	sort.SliceStable(sorted, func(i, j int) bool { return sorted[i].Cost > sorted[j].Cost })
+
+	// Pad usage-type names so the $ column aligns.
+	maxName := 0
+	for _, u := range sorted {
+		if len(u.UsageType) > maxName {
+			maxName = len(u.UsageType)
+		}
+	}
+	for _, u := range sorted {
+		pad := maxName - len(u.UsageType)
+		fmt.Fprintf(w, "  %s%s $%.2f\n", u.UsageType, padding(pad), u.Cost)
+	}
+}
+
+func padding(n int) string {
+	if n <= 0 {
+		return ""
+	}
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = ' '
+	}
+	return string(b)
 }
