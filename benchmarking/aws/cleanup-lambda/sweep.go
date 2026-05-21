@@ -7,6 +7,7 @@ package main
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
@@ -82,3 +83,46 @@ var (
 	_ = rgtatypes.ResourceTagMapping{}
 	_ = time.Time{}
 )
+
+// parseARN extracts the service code (ec2/rds/s3/iam/...) and the resource
+// identifier from an ARN. Resource identifier shapes vary by service:
+//
+//	ec2 instance:        i-XXX (the part after instance/)
+//	rds db instance:     the DBInstanceIdentifier (after `db:`)
+//	s3 bucket:           the bucket name
+//	iam role/profile:    role/<name> or instance-profile/<name>
+func parseARN(arn string) (service, resourceID string, ok bool) {
+	parts := strings.SplitN(arn, ":", 6)
+	if len(parts) < 6 || parts[0] != "arn" {
+		return "", "", false
+	}
+	service = parts[2]
+	tail := parts[5]
+	switch service {
+	case "ec2":
+		// "instance/i-abc" -> "i-abc"; "vpc/vpc-abc" -> "vpc-abc"
+		i := strings.LastIndex(tail, "/")
+		if i >= 0 {
+			return service, tail[i+1:], true
+		}
+		return service, tail, true
+	case "rds":
+		// "db:rpcn-bench-pg-pg" / "subgrp:rpcn-..."
+		i := strings.LastIndex(tail, ":")
+		if i >= 0 {
+			return service, tail[i+1:], true
+		}
+		return service, tail, true
+	case "s3":
+		return service, tail, true
+	case "iam":
+		// keep the role/ prefix so callers know the type
+		return service, tail, true
+	default:
+		return service, tail, true
+	}
+}
+
+func olderThanTTL(t, now time.Time, ttl time.Duration) bool {
+	return now.Sub(t) > ttl
+}
