@@ -585,7 +585,17 @@ Rough estimate for a single-scenario run (us-east-2):
 
 **~$2–3 per run.** Re-running with `keep=true` (skip provision/teardown) cuts that roughly in half. Failed runs that get part-way through still incur most of the cost because RDS provision is the long pole.
 
-Tag-based audit:
+### Checking spend
+
+```bash
+aws-vault exec AWSAdministratorAccess-605419575229 -- task aws:cost-check
+```
+
+Prints today's spend, last 7 days, and month-to-date totals filtered on `Project=redpanda-connect-bench`, plus a per-usage-type breakdown. Cost Explorer lags 24–48 hours, so a bench you just ran won't show until tomorrow.
+
+### Manual tag-based audit (alternative)
+
+If you need raw numbers without aws-vault overhead:
 
 ```bash
 aws-vault exec bench -- aws ce get-cost-and-usage \
@@ -653,6 +663,5 @@ This is a foundation. Concrete follow-ups:
 4. **Add remaining connectors**: mysql, sqlserver, dynamodb, s3, iceberg. Each is ~1 module + 1 stack + 1–2 scenarios + maybe a seeder code path.
 5. **Add Prometheus snapshot capture** at the end of each sweep point — the JSON schema already has `prom_snapshot` (currently empty).
 6. **`SUMMARY.md` auto-refresh** — programmatically pick the best AWS run per connector for the at-a-glance table.
-7. **`cost-check` implementation** — currently stubbed.
 
 Each can ship as its own focused PR using the same framework, no rework needed.
