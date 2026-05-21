@@ -252,3 +252,53 @@ func TestProcessIAMRole_OldGetsDeleted(t *testing.T) {
 	require.NoError(t, processIAMRole(context.Background(), api, "rpcn-bench-host-old", now, 3*time.Hour))
 	require.Equal(t, []string{"rpcn-bench-host-old"}, api.DeletedRoles)
 }
+
+func TestSweep_MixedFreshAndStale(t *testing.T) {
+	now := time.Date(2026, 5, 21, 12, 0, 0, 0, time.UTC)
+	old := now.Add(-4 * time.Hour)
+	young := now.Add(-30 * time.Minute)
+	api := &FakeAWS{
+		TaggedResources: []rgtatypes.ResourceTagMapping{
+			{ResourceARN: aws.String("arn:aws:ec2:us-east-2:1:instance/i-old")},
+			{ResourceARN: aws.String("arn:aws:ec2:us-east-2:1:instance/i-young")},
+			{ResourceARN: aws.String("arn:aws:rds:us-east-2:1:db:old-db")},
+			{ResourceARN: aws.String("arn:aws:s3:::rpcn-bench-results-old")},
+			{ResourceARN: aws.String("arn:aws:iam::1:role/rpcn-bench-host-old")},
+		},
+		EC2Instances: map[string]ec2types.Instance{
+			"i-old":   {InstanceId: aws.String("i-old"), LaunchTime: &old},
+			"i-young": {InstanceId: aws.String("i-young"), LaunchTime: &young},
+		},
+		DBInstances: map[string]rdstypes.DBInstance{
+			"old-db": {DBInstanceIdentifier: aws.String("old-db"), InstanceCreateTime: &old},
+		},
+		S3Buckets: map[string]time.Time{"rpcn-bench-results-old": old},
+		IAMRoles:  map[string]time.Time{"rpcn-bench-host-old": old},
+	}
+
+	report, err := Sweep(context.Background(), api, now, 3*time.Hour, "arn:sns:topic")
+	require.NoError(t, err)
+	require.Equal(t, []string{"i-old"}, api.Terminated)
+	require.Equal(t, []string{"old-db"}, api.DeletedDBs)
+	require.Equal(t, []string{"rpcn-bench-results-old"}, api.DeletedBuckets)
+	require.Equal(t, []string{"rpcn-bench-host-old"}, api.DeletedRoles)
+	require.NotEmpty(t, api.SNSMessages, "publish when something was destroyed")
+	require.Equal(t, 4, report.DestroyedCount)
+	require.Equal(t, 0, report.Errors)
+}
+
+func TestSweep_NothingStaleNoPublish(t *testing.T) {
+	now := time.Date(2026, 5, 21, 12, 0, 0, 0, time.UTC)
+	young := now.Add(-30 * time.Minute)
+	api := &FakeAWS{
+		TaggedResources: []rgtatypes.ResourceTagMapping{
+			{ResourceARN: aws.String("arn:aws:ec2:us-east-2:1:instance/i-young")},
+		},
+		EC2Instances: map[string]ec2types.Instance{"i-young": {InstanceId: aws.String("i-young"), LaunchTime: &young}},
+	}
+	report, err := Sweep(context.Background(), api, now, 3*time.Hour, "arn:sns:topic")
+	require.NoError(t, err)
+	require.Empty(t, api.Terminated)
+	require.Empty(t, api.SNSMessages, "no publish on no-op runs")
+	require.Equal(t, 0, report.DestroyedCount)
+}
