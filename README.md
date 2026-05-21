@@ -21,24 +21,34 @@ It uses [Bloblang][bloblang-about] for mapping, runs as a single static binary o
 
 ## Example
 
+Stream Postgres changes into Apache Iceberg tables on S3, one Iceberg table per source table:
+
 ```yaml
 input:
-  gcp_pubsub:
-    project: foo
-    subscription: bar
-
-pipeline:
-  processors:
-    - mapping: |
-        root.message = this
-        root.meta.link_count = this.links.length()
-        root.user.age = this.user.age.number()
+  postgres_cdc:
+    dsn: postgres://user:pass@db.example.com:5432/app?sslmode=require
+    schema: public
+    tables: [ orders, customers ]
+    stream_snapshot: true
 
 output:
-  redis_streams:
-    url: tcp://TODO:6379
-    stream: baz
-    max_in_flight: 20
+  iceberg:
+    catalog:
+      url: https://glue.us-east-1.amazonaws.com/iceberg
+      warehouse: "123456789012"
+      auth:
+        aws_sigv4:
+          region: us-east-1
+          service: glue
+    namespace: cdc
+    table: ${! meta("table") }
+    storage:
+      aws_s3:
+        bucket: my-iceberg-warehouse
+        region: us-east-1
+    schema_evolution:
+      enabled: true
+      table_location: s3://my-iceberg-warehouse/cdc/
 ```
 
 ## Quickstart
