@@ -8,6 +8,7 @@ locals {
     package_update: true
     packages:
       - postgresql15
+      - mariadb1011
       - jq
     write_files:
       - path: /opt/bench/.gitkeep
