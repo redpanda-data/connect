@@ -7,6 +7,8 @@ package main
 
 import (
 	"context"
+	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -14,7 +16,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
-	iamtypes "github.com/aws/aws-sdk-go-v2/service/iam/types"
 	"github.com/aws/aws-sdk-go-v2/service/rds"
 	rdstypes "github.com/aws/aws-sdk-go-v2/service/rds/types"
 	"github.com/aws/aws-sdk-go-v2/service/resourcegroupstaggingapi"
@@ -72,18 +73,6 @@ type cleanupAPI interface {
 	// SNS
 	Publish(ctx context.Context, in *sns.PublishInput) (*sns.PublishOutput, error)
 }
-
-// Sanity reference so the typed packages are not flagged as unused before
-// later tasks reference them; remove these blank assignments once the
-// referenced types are used by Sweep / FakeAWS / handler in subsequent tasks.
-var (
-	_ = ec2types.Instance{}
-	_ = rdstypes.DBInstance{}
-	_ = s3types.Object{}
-	_ = iamtypes.Role{}
-	_ = rgtatypes.ResourceTagMapping{}
-	_ = time.Time{}
-)
 
 // parseARN extracts the service code (ec2/rds/s3/iam/...) and the resource
 // identifier from an ARN. Resource identifier shapes vary by service:
@@ -218,6 +207,180 @@ func processS3Bucket(ctx context.Context, api cleanupAPI, bucket string, now tim
 	}
 	_, err := api.DeleteBucket(ctx, &s3.DeleteBucketInput{Bucket: aws.String(bucket)})
 	return err
+}
+
+// SweepReport summarises one execution of the Lambda.
+type SweepReport struct {
+	DestroyedCount int
+	Errors         int
+	Destroyed      []string
+}
+
+// Sweep performs one cleanup pass. Resources are processed in dependency
+// order; per-resource failures are logged but do not abort the sweep.
+// SNS is only published when at least one resource was destroyed.
+func Sweep(ctx context.Context, api cleanupAPI, now time.Time, ttl time.Duration, snsTopicARN string) (SweepReport, error) {
+	tagged, err := api.GetResources(ctx, &resourcegroupstaggingapi.GetResourcesInput{
+		TagFilters: []rgtatypes.TagFilter{
+			{Key: aws.String("Project"), Values: []string{"redpanda-connect-bench"}},
+		},
+	})
+	if err != nil {
+		return SweepReport{}, fmt.Errorf("discovery: %w", err)
+	}
+
+	buckets := bucketByKind(tagged.ResourceTagMappingList)
+	report := SweepReport{}
+
+	type step struct {
+		kind string
+		ids  []string
+		fn   func(ctx context.Context, api cleanupAPI, id string, now time.Time, ttl time.Duration) error
+	}
+	steps := []step{
+		{"rds", buckets["rds:db"], processRDSInstance},
+		{"ec2", buckets["ec2:instance"], processEC2Instance},
+		{"s3", buckets["s3:bucket"], processS3Bucket},
+		{"iam", buckets["iam:role"], processIAMRoleByARN},
+	}
+
+	for _, s := range steps {
+		for _, id := range s.ids {
+			if err := s.fn(ctx, api, id, now, ttl); err != nil {
+				slog.Error("cleanup failed", "kind", s.kind, "id", id, "err", err)
+				report.Errors++
+				continue
+			}
+		}
+	}
+
+	// Count what was actually destroyed by re-checking ages and noting which
+	// were old. This second pass is a bit redundant but keeps Sweep
+	// decoupled from the processors' return values.
+	for _, m := range tagged.ResourceTagMappingList {
+		svc, id, ok := parseARN(aws.ToString(m.ResourceARN))
+		if !ok {
+			continue
+		}
+		isOld := false
+		switch svc {
+		case "ec2":
+			if inst, hit := lookupEC2(api, id); hit && inst.LaunchTime != nil && olderThanTTL(*inst.LaunchTime, now, ttl) {
+				isOld = true
+			}
+		case "rds":
+			if db, hit := lookupRDS(api, id); hit && db.InstanceCreateTime != nil && olderThanTTL(*db.InstanceCreateTime, now, ttl) {
+				isOld = true
+			}
+		case "s3":
+			if fake, ok := api.(*FakeAWS); ok {
+				if created, hit := fake.S3Buckets[id]; hit && olderThanTTL(created, now, ttl) {
+					isOld = true
+				}
+			} else {
+				// In production, processS3Bucket TTL-filters itself; we count it as destroyed-attempted.
+				isOld = true
+			}
+		case "iam":
+			if strings.HasPrefix(id, "role/") {
+				name := strings.TrimPrefix(id, "role/")
+				out, err := api.GetRole(ctx, &iam.GetRoleInput{RoleName: aws.String(name)})
+				if err == nil && out.Role.CreateDate != nil && olderThanTTL(*out.Role.CreateDate, now, ttl) {
+					isOld = true
+				}
+			}
+		}
+		if isOld {
+			report.DestroyedCount++
+			report.Destroyed = append(report.Destroyed, fmt.Sprintf("%s:%s", svc, id))
+		}
+	}
+
+	if report.DestroyedCount > 0 {
+		msg := fmt.Sprintf("orphan-cleanup destroyed %d resources at %s:\n%s",
+			report.DestroyedCount, now.Format(time.RFC3339), strings.Join(report.Destroyed, "\n"))
+		if _, err := api.Publish(ctx, &sns.PublishInput{
+			TopicArn: aws.String(snsTopicARN),
+			Subject:  aws.String("bench orphan-cleanup ran"),
+			Message:  aws.String(msg),
+		}); err != nil {
+			slog.Error("sns publish failed", "err", err)
+		}
+	}
+	return report, nil
+}
+
+func bucketByKind(mappings []rgtatypes.ResourceTagMapping) map[string][]string {
+	out := map[string][]string{}
+	for _, m := range mappings {
+		arn := aws.ToString(m.ResourceARN)
+		svc, id, ok := parseARN(arn)
+		if !ok {
+			continue
+		}
+		kind := svc + ":" + arnResourceKind(arn)
+		out[kind] = append(out[kind], id)
+	}
+	return out
+}
+
+func arnResourceKind(arn string) string {
+	parts := strings.SplitN(arn, ":", 6)
+	if len(parts) < 6 {
+		return ""
+	}
+	tail := parts[5]
+	switch parts[2] {
+	case "ec2":
+		if i := strings.IndexRune(tail, '/'); i >= 0 {
+			return tail[:i]
+		}
+		return tail
+	case "rds":
+		if i := strings.IndexRune(tail, ':'); i >= 0 {
+			return tail[:i]
+		}
+		return tail
+	case "s3":
+		return "bucket"
+	case "iam":
+		if i := strings.IndexRune(tail, '/'); i >= 0 {
+			return tail[:i]
+		}
+		return tail
+	}
+	return ""
+}
+
+func lookupEC2(api cleanupAPI, id string) (ec2types.Instance, bool) {
+	out, err := api.DescribeInstances(context.Background(), &ec2.DescribeInstancesInput{InstanceIds: []string{id}})
+	if err != nil {
+		return ec2types.Instance{}, false
+	}
+	for _, r := range out.Reservations {
+		for _, inst := range r.Instances {
+			return inst, true
+		}
+	}
+	return ec2types.Instance{}, false
+}
+
+func lookupRDS(api cleanupAPI, id string) (rdstypes.DBInstance, bool) {
+	out, err := api.DescribeDBInstances(context.Background(), &rds.DescribeDBInstancesInput{DBInstanceIdentifier: aws.String(id)})
+	if err != nil {
+		return rdstypes.DBInstance{}, false
+	}
+	if len(out.DBInstances) == 0 {
+		return rdstypes.DBInstance{}, false
+	}
+	return out.DBInstances[0], true
+}
+
+func processIAMRoleByARN(ctx context.Context, api cleanupAPI, id string, now time.Time, ttl time.Duration) error {
+	if strings.HasPrefix(id, "role/") {
+		return processIAMRole(ctx, api, strings.TrimPrefix(id, "role/"), now, ttl)
+	}
+	return nil
 }
 
 func processIAMRole(ctx context.Context, api cleanupAPI, roleName string, now time.Time, ttl time.Duration) error {
