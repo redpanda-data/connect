@@ -1,8 +1,9 @@
 name: mysql-orders-cdc
 description: |
-  Stream changes from a high-write MySQL orders table (target 80K writes/sec
-  ≈ 96 MB/s) so the mysql_cdc input — not the producer — is the bottleneck.
-  TRUNCATE between sweep points keeps the table size bounded (no Trap 3).
+  Stream changes from a high-write MySQL orders table (target 150K writes/sec
+  ≈ 180 MB/s) so the mysql_cdc input — not the producer — is the bottleneck
+  across the whole CPU sweep. TRUNCATE between sweep points keeps the table
+  size bounded (no Trap 3).
 
 connector: mysql_cdc
 stack: mysql
@@ -26,7 +27,7 @@ dataset:
   seeder: cdc-rows-mysql
 
 workload:
-  write_rate_per_sec: 80000
+  write_rate_per_sec: 150000
   duration: 15m
   warmup: 2m
 

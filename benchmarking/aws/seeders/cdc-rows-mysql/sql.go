@@ -125,10 +125,10 @@ func bulkInsert(ctx context.Context, db *sql.DB, table string, rows int64, rowSi
 }
 
 func workload(ctx context.Context, tables []string, rowSize, rate int, dur time.Duration) error {
-	// 8 workers, each writing rate/8/10 rows per 100ms tick. Mirrors the
-	// postgres seeder's parallelism so the producer can match the scenario's
-	// write_rate_per_sec at 80K+ writes/sec.
-	const workers = 8
+	// 16 workers, each writing rate/16/10 rows per 100ms tick. Mirrors the
+	// postgres seeder's parallelism. 16 handles 150K writes/sec comfortably
+	// (each worker ~9.4K/sec, well under the per-worker round-trip ceiling).
+	const workers = 16
 	db, err := openDB(workers)
 	if err != nil {
 		return err
