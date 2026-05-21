@@ -140,9 +140,13 @@ func TestRenderBenchScript_EmbedsBucketAndSession(t *testing.T) {
 		Bucket: "my-bucket", SessionID: "sess-1",
 	})
 	require.Contains(t, got, "/tmp/bench-4.log")
+	require.Contains(t, got, "/tmp/prom-4.txt")
 	require.Contains(t, got, `s3://my-bucket/runs/sess-1/sweep-4.log`)
+	require.Contains(t, got, `s3://my-bucket/runs/sess-1/prom-4.txt`)
 	require.Contains(t, got, "taskset -c 2-5") // cores 2..(1+VCPU)
 	require.Contains(t, got, "sleep 360")      // warmup+duration
 	require.Contains(t, got, "GOMEMLIMIT=4GiB")
 	require.Contains(t, got, "[heartbeat]")
+	require.Contains(t, got, "###timestamp=")
+	require.Contains(t, got, "###scrape_error")
 }
