@@ -25,14 +25,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sns"
 )
 
-// s3AgeProvider is an optional extension of cleanupAPI. Implementors can
-// report a bucket's creation time so that processS3Bucket can TTL-filter
-// without a real S3 API call. FakeAWS (in tests) implements this; the
-// production awsCleanup does not.
-type s3AgeProvider interface {
-	BucketCreatedAt(name string) (time.Time, bool)
-}
-
 // cleanupAPI is the narrow slice of AWS the Lambda needs. Tests fake this.
 type cleanupAPI interface {
 	// Discovery
@@ -63,6 +55,7 @@ type cleanupAPI interface {
 	DeleteDBParameterGroup(ctx context.Context, in *rds.DeleteDBParameterGroupInput) (*rds.DeleteDBParameterGroupOutput, error)
 
 	// S3
+	ListBuckets(ctx context.Context, in *s3.ListBucketsInput) (*s3.ListBucketsOutput, error)
 	ListObjectVersions(ctx context.Context, in *s3.ListObjectVersionsInput) (*s3.ListObjectVersionsOutput, error)
 	DeleteObjects(ctx context.Context, in *s3.DeleteObjectsInput) (*s3.DeleteObjectsOutput, error)
 	DeleteBucket(ctx context.Context, in *s3.DeleteBucketInput) (*s3.DeleteBucketOutput, error)
@@ -167,19 +160,11 @@ func processRDSInstance(ctx context.Context, api cleanupAPI, dbID string, now ti
 	return nil
 }
 
-// processS3Bucket empties the bucket if old, then deletes it. S3 buckets
-// don't surface CreationDate via per-bucket Describe* — the FakeAWS test
-// double injects via S3Buckets map; the real (production) sweep caller
-// reads it from ListBuckets. For testability we re-check via FakeAWS type
-// assertion when present; production paths simply trust the caller has
-// already age-filtered before invoking this.
-func processS3Bucket(ctx context.Context, api cleanupAPI, bucket string, now time.Time, ttl time.Duration) error {
-	if ap, ok := api.(s3AgeProvider); ok {
-		if created, present := ap.BucketCreatedAt(bucket); present {
-			if !olderThanTTL(created, now, ttl) {
-				return nil
-			}
-		}
+// processS3Bucket empties and deletes bucket if creationTime is older than
+// ttl. The caller is responsible for fetching creationTime via ListBuckets.
+func processS3Bucket(ctx context.Context, api cleanupAPI, bucket string, creationTime, now time.Time, ttl time.Duration) error {
+	if !olderThanTTL(creationTime, now, ttl) {
+		return nil
 	}
 
 	// Empty the bucket (versioned + delete-markers handled by ListObjectVersions).
@@ -240,25 +225,45 @@ func Sweep(ctx context.Context, api cleanupAPI, now time.Time, ttl time.Duration
 	buckets := bucketByKind(tagged.ResourceTagMappingList)
 	report := SweepReport{}
 
-	type step struct {
-		kind string
-		ids  []string
-		fn   func(ctx context.Context, api cleanupAPI, id string, now time.Time, ttl time.Duration) error
+	for _, id := range buckets["rds:db"] {
+		if err := processRDSInstance(ctx, api, id, now, ttl); err != nil {
+			slog.Error("cleanup failed", "kind", "rds", "id", id, "err", err)
+			report.Errors++
+		}
 	}
-	steps := []step{
-		{"rds", buckets["rds:db"], processRDSInstance},
-		{"ec2", buckets["ec2:instance"], processEC2Instance},
-		{"s3", buckets["s3:bucket"], processS3Bucket},
-		{"iam", buckets["iam:role"], processIAMRoleByARN},
+	for _, id := range buckets["ec2:instance"] {
+		if err := processEC2Instance(ctx, api, id, now, ttl); err != nil {
+			slog.Error("cleanup failed", "kind", "ec2", "id", id, "err", err)
+			report.Errors++
+		}
 	}
 
-	for _, s := range steps {
-		for _, id := range s.ids {
-			if err := s.fn(ctx, api, id, now, ttl); err != nil {
-				slog.Error("cleanup failed", "kind", s.kind, "id", id, "err", err)
-				report.Errors++
-				continue
+	// S3: fetch creation times once via ListBuckets, then TTL-filter per bucket.
+	bucketAges := map[string]time.Time{}
+	if lbOut, err := api.ListBuckets(ctx, &s3.ListBucketsInput{}); err == nil {
+		for _, b := range lbOut.Buckets {
+			if b.Name != nil && b.CreationDate != nil {
+				bucketAges[*b.Name] = *b.CreationDate
 			}
+		}
+	} else {
+		slog.Error("list buckets failed; skipping S3 cleanup this run", "err", err)
+	}
+	for _, id := range buckets["s3:bucket"] {
+		created, ok := bucketAges[id]
+		if !ok {
+			continue // bucket disappeared between discovery and ListBuckets
+		}
+		if err := processS3Bucket(ctx, api, id, created, now, ttl); err != nil {
+			slog.Error("cleanup failed", "kind", "s3", "id", id, "err", err)
+			report.Errors++
+		}
+	}
+
+	for _, id := range buckets["iam:role"] {
+		if err := processIAMRoleByARN(ctx, api, id, now, ttl); err != nil {
+			slog.Error("cleanup failed", "kind", "iam", "id", id, "err", err)
+			report.Errors++
 		}
 	}
 
@@ -281,12 +286,7 @@ func Sweep(ctx context.Context, api cleanupAPI, now time.Time, ttl time.Duration
 				isOld = true
 			}
 		case "s3":
-			if ap, ok := api.(s3AgeProvider); ok {
-				if created, hit := ap.BucketCreatedAt(id); hit && olderThanTTL(created, now, ttl) {
-					isOld = true
-				}
-			} else {
-				// In production, processS3Bucket TTL-filters itself; we count it as destroyed-attempted.
+			if created, hit := bucketAges[id]; hit && olderThanTTL(created, now, ttl) {
 				isOld = true
 			}
 		case "iam":
