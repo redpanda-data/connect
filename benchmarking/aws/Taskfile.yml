@@ -41,6 +41,6 @@ tasks:
           --repo-root=.
 
   aws:cost-check:
-    desc: "Estimated hourly cost of currently running stacks"
+    desc: "Show AWS Cost Explorer spend for the bench project (today/7d/MTD)"
     cmds:
       - cd ../.. && {{.RUNNER}} cost-check
