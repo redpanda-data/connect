@@ -30,6 +30,7 @@ Last refreshed: 2026-05-21
 
 | Connector / Scenario  | Peak MB/s | At vCPU | Median (best vCPU) | Last Run    |
 |-----------------------|-----------|---------|--------------------|-------------|
+| mysql / orders-cdc    |       121 |       1 |                102 | 2026-05-21  |
 | postgres / orders-cdc |       102 |       4 |                 99 | 2026-05-21  |
 
 Each row is the **latest** run of that scenario. Raw samples + Prometheus snapshots live under `results/<connector>/<scenario>/`.
