@@ -6,6 +6,7 @@
 package main
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -74,4 +75,62 @@ func TestLoadScenario_RejectsNonPositiveCPUPoints(t *testing.T) {
 	_, err := LoadScenario("testdata/invalid-non-positive-cpu.yaml")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "must all be positive")
+}
+
+func TestEngineSpecFor_Postgres(t *testing.T) {
+	es, ok := engineSpecFor("postgres_cdc")
+	if !ok {
+		t.Fatalf("postgres_cdc should be registered")
+	}
+	if es.DSNOutputKey != "postgres_dsn" {
+		t.Errorf("DSNOutputKey = %q, want postgres_dsn", es.DSNOutputKey)
+	}
+	if es.DSNEnvVar != "POSTGRES_DSN" {
+		t.Errorf("DSNEnvVar = %q, want POSTGRES_DSN", es.DSNEnvVar)
+	}
+	if es.ResetHostOutputKey != "" {
+		t.Errorf("postgres should use DSN-style reset, not host/port; got ResetHostOutputKey=%q", es.ResetHostOutputKey)
+	}
+}
+
+func TestEngineSpecFor_MySQL(t *testing.T) {
+	es, ok := engineSpecFor("mysql_cdc")
+	if !ok {
+		t.Fatalf("mysql_cdc should be registered")
+	}
+	if es.DSNOutputKey != "mysql_dsn" {
+		t.Errorf("DSNOutputKey = %q, want mysql_dsn", es.DSNOutputKey)
+	}
+	if es.DSNEnvVar != "MYSQL_DSN" {
+		t.Errorf("DSNEnvVar = %q, want MYSQL_DSN", es.DSNEnvVar)
+	}
+	if es.ResetHostOutputKey != "mysql_host" {
+		t.Errorf("ResetHostOutputKey = %q, want mysql_host", es.ResetHostOutputKey)
+	}
+	if es.ResetPortOutputKey != "mysql_port" || es.ResetUserOutputKey != "mysql_user" ||
+		es.ResetPassOutputKey != "mysql_password" || es.ResetDBOutputKey != "mysql_db" {
+		t.Errorf("mysql reset output keys incomplete: %+v", es)
+	}
+}
+
+func TestEngineSpecFor_Unknown(t *testing.T) {
+	if _, ok := engineSpecFor("kafka_franz_in_disguise"); ok {
+		t.Error("unknown connector should not resolve")
+	}
+}
+
+func TestValidate_RejectsUnknownConnector(t *testing.T) {
+	s := &Scenario{
+		Name: "bad", Connector: "kafka_franz_in_disguise", Stack: "kafka",
+		Infra:    InfraSpec{Runner: RunnerSpec{InstanceType: "c8g.4xlarge"}},
+		Matrix:   MatrixSpec{CPUPoints: []int{1, 2}},
+		Workload: &WorkloadSpec{Warmup: 2 * time.Minute, Duration: 15 * time.Minute, WriteRatePerSec: 1000},
+	}
+	err := s.Validate()
+	if err == nil {
+		t.Fatal("expected unknown-connector error")
+	}
+	if !strings.Contains(err.Error(), "kafka_franz_in_disguise") {
+		t.Errorf("error should name the unknown connector; got: %v", err)
+	}
 }
