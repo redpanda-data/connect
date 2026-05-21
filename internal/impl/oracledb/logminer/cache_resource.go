@@ -98,7 +98,6 @@ func (c *ConnectCacheResource) StartTransaction(ctx context.Context, txnID sqlre
 		c.log.Errorf("Failed to store transaction %s in cache: %v", txnID, setErr)
 		return
 	}
-	c.startSCNs[txnID] = scn
 	c.transactionsMetric.Incr(1)
 }
 
@@ -121,6 +120,9 @@ func (c *ConnectCacheResource) AddEvent(ctx context.Context, txnID sqlredo.Trans
 		c.startSCNs[txnID] = scn
 		c.transactionsMetric.Incr(1)
 	} else {
+		if len(txn.Events) == 0 {
+			c.startSCNs[txnID] = txn.SCN
+		}
 		txn.Events = append(txn.Events, event)
 	}
 	c.eventsMetric.Incr(1)

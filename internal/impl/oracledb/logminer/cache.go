@@ -137,7 +137,6 @@ func (tc *InMemoryCache) CommitTransaction(_ context.Context, txnID sqlredo.Tran
 
 // LowWatermarkSCN returns the lowest start SCN among all currently open
 // (uncommitted) transactions. Returns math.MaxUint64 if no open transactions.
-// This behaviour is specific to in-memory caches and not part of the cache interface.
 func (tc *InMemoryCache) LowWatermarkSCN(excludeTxnID sqlredo.TransactionID) uint64 {
 	lowestOpenSCN := uint64(math.MaxUint64)
 	for id, txn := range tc.transactions {
