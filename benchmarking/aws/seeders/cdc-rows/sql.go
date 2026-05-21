@@ -114,7 +114,9 @@ func workload(ctx context.Context, tables []string, rowSize, rate int, dur time.
 	// inserts/sec on c8g.large because statement parsing + one network RTT
 	// per tick eats the budget. Spread across workers, each with a smaller
 	// batch, so the scenario's write_rate_per_sec is actually achievable.
-	const workers = 8
+	// 16 workers handles 150K writes/sec comfortably (each worker ~9.4K/sec,
+	// well under the per-worker ceiling).
+	const workers = 16
 	cfg, err := pgxpool.ParseConfig(os.Getenv("POSTGRES_DSN"))
 	if err != nil {
 		return err

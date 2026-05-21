@@ -67,4 +67,10 @@ resource "aws_db_instance" "this" {
   # binlog to be retained long enough for the connector to read it. 1 day is
   # the minimum that keeps binlog around between writes and reads.
   backup_retention_period = 1
+  # Pin the backup window to off-hours UTC. Without this, RDS picks a random
+  # daily slot; the 2026-05-21 smoke saw the 8 vCPU sweep point degrade from
+  # ~100 MB/s to ~60 MB/s mid-window because a backup overlapped (gp3
+  # throughput is shared between user writes and snapshot copy). 06:00-08:00
+  # UTC is well before US-Pacific working hours when benches typically run.
+  backup_window = "06:00-08:00"
 }
