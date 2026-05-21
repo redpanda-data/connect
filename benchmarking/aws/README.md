@@ -418,12 +418,35 @@ Validates the scenario YAML, instance-type vCPU math, duration minimums, and bou
 
 A new connector is a small PR with:
 
-1. **Terraform module** under `terraform/modules/<source-type>/` if the source isn't already supported. Reuse existing modules (`rds-postgres`, etc.) when possible.
+1. **Terraform module** under `terraform/modules/<source-type>/` if the source isn't already supported. Reuse existing modules (`rds-postgres`, `rds-mysql`, etc.) when possible.
 2. **Terraform stack** under `terraform/stacks/<connector>/` composing `shared/` and the source module. Use `terraform_remote_state` to read shared outputs (VPC, SG IDs).
-3. **Seeder** under `seeders/<name>/` if needed. The `cdc-rows` seeder handles SQL CDC for postgres / mysql / sqlserver plus DynamoDB.
+3. **Seeder** under `seeders/<name>/` if the SQL flavor differs from what's already shipped (`cdc-rows` for postgres, `cdc-rows-mysql` for mysql).
 4. **Scenarios** under `scenarios/<connector>/`.
+5. **Engine spec entry** in `runner/scenario.go` — add a one-line map entry under `engineSpecs` keyed by connector name, naming the terraform output keys the runner should read (DSN, host/port/user/pass/db for the reset CLI). The seed/reset/workload script renderers in `runner/scripts.go` pick this up automatically.
 
-No changes to `runner/` are required — the runner is connector-agnostic.
+---
+
+## MySQL (`mysql_cdc`)
+
+**Scenario:** `mysql/orders-cdc` — 80K writes/sec sustained workload, 4-point vCPU sweep, TRUNCATE between points.
+
+**Run:**
+
+```
+cd benchmarking/aws && \
+  unset AWS_PROFILE && \
+  aws-vault exec AWSAdministratorAccess-605419575229 -- \
+    env REDPANDA_LICENSE_FILEPATH=/path/to/rpcn.license \
+    task aws:bench scenario=mysql/orders-cdc
+```
+
+**RDS-MySQL gotchas:**
+
+- `backup_retention_period = 1` is required. RDS purges binlog immediately if backups are off; `mysql_cdc` then has nothing to read. The `rds-mysql` module hardcodes this — do NOT set it to 0.
+- `binlog_format=ROW`, `binlog_row_image=FULL`, `binlog_checksum=NONE` are pre-set in the module's parameter group. Override via `var.parameters` if needed.
+- `mysql_cdc`'s `tls:` block uses `service.NewTLSField` — there is NO `enabled:` toggle (same gotcha as `postgres_cdc`). Always include `tls: { skip_cert_verify: true }` for RDS.
+- The reset CLI uses `mysql` (provided by `mariadb1011` in the runner's user-data). If a future AL2023 image drops that package, `terraform/shared/runner.tf` needs an update.
+- `cache_resources` lives at the Connect-config root, not under `input:` — `mysql_cdc` needs a `checkpoint_cache` resource (the scenario uses an in-memory cache so Connect restart between points resets the binlog position automatically).
 
 ---
 
