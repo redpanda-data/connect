@@ -37,6 +37,7 @@ type SweepPoint struct {
 	Samples   []Sample
 	Summary   Summary
 	Anomalies []Anomaly
+	Prom      []PromPoint
 }
 
 // Run executes the full sweep. resetScript runs on the runner host between
@@ -96,6 +97,7 @@ func (m *MatrixRunner) Run(
 			return nil, fmt.Errorf("fetch log at %d vCPU: %w", n, err)
 		}
 		samples := parseAndTrim(raw, warmup)
+		promPts := m.fetchProm(ctx, n)
 
 		summary := Summarise(samples)
 		anomalies := DetectAnomalies(samples, summary.MedianMBPerSec)
@@ -104,6 +106,7 @@ func (m *MatrixRunner) Run(
 			Samples:   samples,
 			Summary:   summary,
 			Anomalies: anomalies,
+			Prom:      promPts,
 		})
 		fmt.Printf("  -> %d samples; median %.2f MB/s (p5 %.2f, p95 %.2f, peak %.2f), %d anomalies\n",
 			len(samples), summary.MedianMBPerSec, summary.P5MBPerSec, summary.P95MBPerSec, summary.PeakMBPerSec, len(anomalies))
@@ -138,6 +141,28 @@ func (m *MatrixRunner) fetchLog(ctx context.Context, vcpu int) ([]byte, error) {
 	}
 	defer body.Close()
 	return io.ReadAll(body)
+}
+
+// fetchProm downloads the per-point Prometheus dump uploaded by the bench
+// script. Failure is non-fatal — the sweep point is still useful without
+// goroutine/heap context.
+func (m *MatrixRunner) fetchProm(ctx context.Context, vcpu int) []PromPoint {
+	if m.LogFetcher == nil {
+		return nil
+	}
+	key := fmt.Sprintf("runs/%s/prom-%d.txt", m.SessionID, vcpu)
+	body, err := m.LogFetcher.Fetch(ctx, m.Bucket, key)
+	if err != nil {
+		fmt.Fprintf(stdout, "[bench] fetch prom (non-fatal): %v\n", err)
+		return nil
+	}
+	defer body.Close()
+	pts, err := ParsePromStream(body)
+	if err != nil {
+		fmt.Fprintf(stdout, "[bench] parse prom (non-fatal): %v\n", err)
+		return nil
+	}
+	return pts
 }
 
 // parseAndTrim parses the Connect log and discards the leading warmup samples,
