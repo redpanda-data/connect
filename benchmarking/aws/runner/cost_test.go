@@ -16,6 +16,27 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// FakeCostExplorer returns canned CE responses for tests, keyed by call
+// order. Tests construct an instance with the responses they want and the
+// fake serves them in sequence.
+type FakeCostExplorer struct {
+	Responses []*costexplorer.GetCostAndUsageOutput
+	Errs      []error
+	calls     int
+}
+
+func (f *FakeCostExplorer) GetCostAndUsage(_ context.Context, _ *costexplorer.GetCostAndUsageInput) (*costexplorer.GetCostAndUsageOutput, error) {
+	i := f.calls
+	f.calls++
+	if i < len(f.Errs) && f.Errs[i] != nil {
+		return nil, f.Errs[i]
+	}
+	if i < len(f.Responses) {
+		return f.Responses[i], nil
+	}
+	return &costexplorer.GetCostAndUsageOutput{}, nil
+}
+
 // helpers
 func amount(s string) cetypes.MetricValue {
 	return cetypes.MetricValue{Amount: aws.String(s), Unit: aws.String("USD")}

@@ -39,27 +39,6 @@ type UsageTypeCost struct {
 	Cost      float64
 }
 
-// FakeCostExplorer returns canned CE responses for tests, keyed by call
-// order. Tests construct an instance with the responses they want and the
-// fake serves them in sequence.
-type FakeCostExplorer struct {
-	Responses []*costexplorer.GetCostAndUsageOutput
-	Errs      []error
-	calls     int
-}
-
-func (f *FakeCostExplorer) GetCostAndUsage(_ context.Context, _ *costexplorer.GetCostAndUsageInput) (*costexplorer.GetCostAndUsageOutput, error) {
-	i := f.calls
-	f.calls++
-	if i < len(f.Errs) && f.Errs[i] != nil {
-		return nil, f.Errs[i]
-	}
-	if i < len(f.Responses) {
-		return f.Responses[i], nil
-	}
-	return &costexplorer.GetCostAndUsageOutput{}, nil
-}
-
 // today returns YYYY-MM-DD for the given t in UTC.
 func today(t time.Time) string { return t.UTC().Format("2006-01-02") }
 
@@ -121,7 +100,7 @@ func SummariseCosts(ctx context.Context, ce CostExplorer, region string, now tim
 	// 2. Per-usage-type breakdown for the last 7 days.
 	breakdown, err := ce.GetCostAndUsage(ctx, &costexplorer.GetCostAndUsageInput{
 		TimePeriod: &cetypes.DateInterval{
-			Start: aws.String(sevenDaysAgo),
+			Start: aws.String(daysAgo(now, 6)),
 			End:   aws.String(daysAgo(now, -1)),
 		},
 		Granularity: cetypes.GranularityMonthly, // single bucket — we sum manually
