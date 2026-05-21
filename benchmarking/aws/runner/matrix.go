@@ -100,7 +100,7 @@ func (m *MatrixRunner) Run(
 		promPts := m.fetchProm(ctx, n)
 
 		summary := Summarise(samples)
-		anomalies := DetectAnomalies(samples, summary.MedianMBPerSec)
+		anomalies := DetectAnomaliesWithProm(samples, summary.MedianMBPerSec, promPts)
 		out = append(out, SweepPoint{
 			VCPU:      n,
 			Samples:   samples,

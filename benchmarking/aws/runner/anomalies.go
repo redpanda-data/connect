@@ -16,6 +16,11 @@ type Anomaly struct {
 	DurationSec int     `json:"duration_s"`
 	MinRatio    float64 `json:"min_ratio"`
 	Note        string  `json:"note"`
+
+	// Prom context (populated when prom data is available; zero otherwise).
+	GoroutinesAtStart  int     `json:"goroutines_at_start,omitempty"`
+	HeapInUseMBAtStart float64 `json:"heap_in_use_mb_at_start,omitempty"`
+	GCPauseDeltaNS     uint64  `json:"gc_pause_delta_ns,omitempty"`
 }
 
 // DetectAnomalies scans the sample stream for spans of >= 60 contiguous seconds
@@ -52,4 +57,42 @@ func DetectAnomalies(samples []Sample, reference float64) []Anomaly {
 		}
 	}
 	return out
+}
+
+// DetectAnomaliesWithProm wraps DetectAnomalies and annotates each anomaly
+// with the prom-curated context at the anomaly's start, plus the GC pause
+// delta over the 10s window preceding the start. When prom is empty, the
+// returned anomalies match DetectAnomalies exactly.
+func DetectAnomaliesWithProm(samples []Sample, reference float64, prom []PromPoint) []Anomaly {
+	base := DetectAnomalies(samples, reference)
+	if len(prom) == 0 {
+		return base
+	}
+	for i := range base {
+		atStart, ok := promNearestAtOrBefore(prom, base[i].StartT)
+		if !ok {
+			continue
+		}
+		base[i].GoroutinesAtStart = atStart.Goroutines
+		base[i].HeapInUseMBAtStart = atStart.HeapInUseMB
+		prev, hadPrev := promNearestAtOrBefore(prom, base[i].StartT-10)
+		if hadPrev && atStart.GCPauseTotalNS >= prev.GCPauseTotalNS {
+			base[i].GCPauseDeltaNS = atStart.GCPauseTotalNS - prev.GCPauseTotalNS
+		}
+	}
+	return base
+}
+
+func promNearestAtOrBefore(prom []PromPoint, t int) (PromPoint, bool) {
+	var best PromPoint
+	found := false
+	for _, p := range prom {
+		if p.T <= t {
+			best = p
+			found = true
+		} else {
+			break // prom is in T order
+		}
+	}
+	return best, found
 }
