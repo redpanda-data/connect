@@ -6,6 +6,7 @@
 package main
 
 import (
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -132,5 +133,58 @@ func TestValidate_RejectsUnknownConnector(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "kafka_franz_in_disguise") {
 		t.Errorf("error should name the unknown connector; got: %v", err)
+	}
+}
+
+func TestRenderPipelineConfig_PassesCacheResourcesThrough(t *testing.T) {
+	s := &Scenario{
+		Pipeline: map[string]any{
+			"input": map[string]any{
+				"mysql_cdc": map[string]any{"dsn": "${MYSQL_DSN}"},
+			},
+			"cache_resources": []any{
+				map[string]any{"label": "bench_checkpoint", "memory": map[string]any{}},
+			},
+		},
+	}
+	outs := map[string]string{"mysql_dsn": "u:p@tcp(h:3306)/db"}
+	path, err := renderPipelineConfig(s, outs)
+	if err != nil {
+		t.Fatalf("renderPipelineConfig: %v", err)
+	}
+	defer os.Remove(path)
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(body)
+	if !strings.Contains(got, "cache_resources:") {
+		t.Errorf("rendered config missing cache_resources block; got:\n%s", got)
+	}
+	if !strings.Contains(got, "bench_checkpoint") {
+		t.Errorf("cache_resources label not threaded through; got:\n%s", got)
+	}
+	if !strings.Contains(got, "u:p@tcp(h:3306)/db") {
+		t.Errorf("MYSQL_DSN placeholder not substituted; got:\n%s", got)
+	}
+}
+
+func TestRenderPipelineConfig_OmitsCacheResourcesWhenAbsent(t *testing.T) {
+	s := &Scenario{
+		Pipeline: map[string]any{
+			"input": map[string]any{
+				"postgres_cdc": map[string]any{"dsn": "${POSTGRES_DSN}"},
+			},
+		},
+	}
+	outs := map[string]string{"postgres_dsn": "postgres://u:p@h:5432/db"}
+	path, err := renderPipelineConfig(s, outs)
+	if err != nil {
+		t.Fatalf("renderPipelineConfig: %v", err)
+	}
+	defer os.Remove(path)
+	body, _ := os.ReadFile(path)
+	if strings.Contains(string(body), "cache_resources:") {
+		t.Errorf("postgres scenario without cache_resources should not have a cache_resources key in rendered config; got:\n%s", body)
 	}
 }
