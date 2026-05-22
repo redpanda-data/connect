@@ -700,15 +700,12 @@ runcmd:
   - curl -sSL https://repo1.maven.org/maven2/io/debezium/debezium-connector-postgres/2.7.3.Final/debezium-connector-postgres-2.7.3.Final-plugin.tar.gz | tar -xz -C /opt/kafka-connect/plugins/
   - curl -sSL https://repo1.maven.org/maven2/io/debezium/debezium-connector-mysql/2.7.3.Final/debezium-connector-mysql-2.7.3.Final-plugin.tar.gz | tar -xz -C /opt/kafka-connect/plugins/
 
-  # Iceberg KC sink.
-  - mkdir -p /opt/kafka-connect/plugins/iceberg-kafka-connect
-  - curl -sSL https://repo1.maven.org/maven2/org/apache/iceberg/iceberg-kafka-connect-runtime/1.7.1/iceberg-kafka-connect-runtime-1.7.1.tar.gz | tar -xz -C /opt/kafka-connect/plugins/iceberg-kafka-connect
-
-  # Aiven JDBC sink + JDBC drivers (postgres + mariadb).
-  - curl -sSL -o /tmp/aiven-jdbc.zip https://github.com/aiven/aiven-kafka-connect-jdbc/releases/download/v6.10.0/aiven-kafka-connect-jdbc-6.10.0.zip
+  # Aiven JDBC sink + JDBC drivers (postgres + mariadb). Repo was renamed in 2024;
+  # archive unpacks to jdbc-connector-for-apache-kafka-6.10.0/, not the old aiven-* name.
+  - curl -sSL -o /tmp/aiven-jdbc.zip https://github.com/Aiven-Open/jdbc-connector-for-apache-kafka/releases/download/v6.10.0/jdbc-connector-for-apache-kafka-6.10.0.zip
   - unzip -q /tmp/aiven-jdbc.zip -d /opt/kafka-connect/plugins/
-  - curl -sSL -o /opt/kafka-connect/plugins/aiven-kafka-connect-jdbc-6.10.0/postgresql.jar https://jdbc.postgresql.org/download/postgresql-42.7.4.jar
-  - curl -sSL -o /opt/kafka-connect/plugins/aiven-kafka-connect-jdbc-6.10.0/mariadb.jar https://dlm.mariadb.com/3927489/Connectors/java/connector-java-3.4.1/mariadb-java-client-3.4.1.jar
+  - curl -sSL -o /opt/kafka-connect/plugins/jdbc-connector-for-apache-kafka-6.10.0/postgresql.jar https://jdbc.postgresql.org/download/postgresql-42.7.4.jar
+  - curl -sSL -o /opt/kafka-connect/plugins/jdbc-connector-for-apache-kafka-6.10.0/mariadb.jar https://repo1.maven.org/maven2/org/mariadb/jdbc/mariadb-java-client/3.4.1/mariadb-java-client-3.4.1.jar
   - rm -f /tmp/aiven-jdbc.zip
 
   # Enable + start the worker. systemd retries on failure if Redpanda isn't yet
@@ -1061,7 +1058,7 @@ Add to `benchmarking/aws/README.md` (at the end of the file, before any trailing
 ```markdown
 ## Kafka Connect comparison infra (Plan 1, 2026-05-22)
 
-The shared stack now provisions a 3-broker Redpanda cluster (`im4gn.2xlarge`, NVMe instance store, static IPs in the private subnets) reachable from both `runner` and `load-gen` security groups. Topic/data paths in /var/lib/redpanda/data; admin + Prometheus on `:9644`; Kafka API on `:9092`. The runner EC2 cloud-init now also installs OpenJDK 21, the Apache Kafka 3.8 tarball, Debezium 2.7.3 (Postgres + MySQL), the Iceberg KC sink 1.7.1, and the Aiven JDBC sink 6.10.0 to `/opt/kafka-connect/plugins/`. A `kafka-connect.service` systemd unit runs the worker in single-worker distributed mode bound to `bootstrap.servers=<redpanda brokers>` on `:8083`.
+The shared stack now provisions a 3-broker Redpanda cluster (`im4gn.2xlarge`, NVMe instance store, static IPs in the private subnets) reachable from both `runner` and `load-gen` security groups. Topic/data paths in /var/lib/redpanda/data; admin + Prometheus on `:9644`; Kafka API on `:9092`. The runner EC2 cloud-init now also installs OpenJDK 21, the Apache Kafka 3.8 tarball, Debezium 2.7.3 (Postgres + MySQL), and the Aiven JDBC sink 6.10.0 (Iceberg + Confluent S3 sinks land in Plan 4) to `/opt/kafka-connect/plugins/`. A `kafka-connect.service` systemd unit runs the worker in single-worker distributed mode bound to `bootstrap.servers=<redpanda brokers>` on `:8083`.
 
 For each sweep point, the bench script scrapes `http://<broker0>:9644/public_metrics` every 10s and uploads the framed dump to `s3://<results>/runs/<session>/redpanda-<vcpu>.txt` alongside the existing `prom-<vcpu>.txt`. **No bench numbers change in Plan 1** — Connect's pipeline still writes to `drop`. The broker scrape is captured for Plans 2/3 to use.
 
@@ -1171,7 +1168,6 @@ Expected output should contain:
 io.debezium.connector.mysql.MySqlConnector
 io.debezium.connector.postgresql.PostgresConnector
 io.aiven.connect.jdbc.JdbcSinkConnector
-org.apache.iceberg.connect.IcebergSinkConnector
 ```
 
 - [ ] **Step 4: Verify Redpanda metrics endpoint is reachable**
@@ -1221,6 +1217,6 @@ If steps 2-6 FAIL: do NOT proceed to Plan 2. Fix the failure root cause (likely 
 - [ ] `go test ./benchmarking/aws/runner/...` is green
 - [ ] `go build ./benchmarking/aws/runner/...` succeeds
 - [ ] Smoke bench (task 12) produces a result row in `docs/benchmark-results/postgres.md` consistent with pre-Plan-1 numbers
-- [ ] `curl localhost:8083/connector-plugins` on the runner lists Debezium PG, Debezium MySQL, Iceberg sink, Aiven JDBC sink
+- [ ] `curl localhost:8083/connector-plugins` on the runner lists Debezium PG, Debezium MySQL, Aiven JDBC sink
 - [ ] `curl http://<broker0>:9644/public_metrics` on the runner returns Prometheus text-format
 - [ ] `s3://<results>/runs/<sess>/redpanda-1.txt` exists and is non-empty after smoke run

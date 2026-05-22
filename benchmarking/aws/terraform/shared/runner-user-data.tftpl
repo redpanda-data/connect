@@ -56,15 +56,12 @@ runcmd:
   - curl -sSL https://repo1.maven.org/maven2/io/debezium/debezium-connector-postgres/2.7.3.Final/debezium-connector-postgres-2.7.3.Final-plugin.tar.gz | tar -xz -C /opt/kafka-connect/plugins/
   - curl -sSL https://repo1.maven.org/maven2/io/debezium/debezium-connector-mysql/2.7.3.Final/debezium-connector-mysql-2.7.3.Final-plugin.tar.gz | tar -xz -C /opt/kafka-connect/plugins/
 
-  # Iceberg KC sink.
-  - mkdir -p /opt/kafka-connect/plugins/iceberg-kafka-connect
-  - curl -sSL https://repo1.maven.org/maven2/org/apache/iceberg/iceberg-kafka-connect-runtime/1.7.1/iceberg-kafka-connect-runtime-1.7.1.tar.gz | tar -xz -C /opt/kafka-connect/plugins/iceberg-kafka-connect
-
-  # Aiven JDBC sink + JDBC drivers (postgres + mariadb).
-  - curl -sSL -o /tmp/aiven-jdbc.zip https://github.com/aiven/aiven-kafka-connect-jdbc/releases/download/v6.10.0/aiven-kafka-connect-jdbc-6.10.0.zip
+  # Aiven JDBC sink + JDBC drivers (postgres + mariadb). Repo was renamed in 2024;
+  # archive unpacks to jdbc-connector-for-apache-kafka-6.10.0/, not the old aiven-* name.
+  - curl -sSL -o /tmp/aiven-jdbc.zip https://github.com/Aiven-Open/jdbc-connector-for-apache-kafka/releases/download/v6.10.0/jdbc-connector-for-apache-kafka-6.10.0.zip
   - unzip -q /tmp/aiven-jdbc.zip -d /opt/kafka-connect/plugins/
-  - curl -sSL -o /opt/kafka-connect/plugins/aiven-kafka-connect-jdbc-6.10.0/postgresql.jar https://jdbc.postgresql.org/download/postgresql-42.7.4.jar
-  - curl -sSL -o /opt/kafka-connect/plugins/aiven-kafka-connect-jdbc-6.10.0/mariadb.jar https://dlm.mariadb.com/3927489/Connectors/java/connector-java-3.4.1/mariadb-java-client-3.4.1.jar
+  - curl -sSL -o /opt/kafka-connect/plugins/jdbc-connector-for-apache-kafka-6.10.0/postgresql.jar https://jdbc.postgresql.org/download/postgresql-42.7.4.jar
+  - curl -sSL -o /opt/kafka-connect/plugins/jdbc-connector-for-apache-kafka-6.10.0/mariadb.jar https://repo1.maven.org/maven2/org/mariadb/jdbc/mariadb-java-client/3.4.1/mariadb-java-client-3.4.1.jar
   - rm -f /tmp/aiven-jdbc.zip
 
   # Enable + start the worker. systemd retries on failure if Redpanda isn't yet
