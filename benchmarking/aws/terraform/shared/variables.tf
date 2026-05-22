@@ -30,3 +30,15 @@ variable "orphan_ttl_hours" {
   type        = number
   default     = 3
 }
+
+variable "redpanda_instance_type" {
+  description = "EC2 instance type per Redpanda broker."
+  type        = string
+  default     = "im4gn.2xlarge"
+}
+
+variable "redpanda_broker_ips" {
+  description = "Static private IPs for Redpanda brokers (must fall inside the private subnets' CIDRs)."
+  type        = list(string)
+  default     = ["10.42.10.10", "10.42.11.10", "10.42.10.11"]
+}
