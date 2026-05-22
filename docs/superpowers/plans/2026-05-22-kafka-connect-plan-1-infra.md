@@ -367,15 +367,15 @@ cd benchmarking/aws/terraform/modules/redpanda
 terraform console <<'EOF'
 templatefile("./user-data.tftpl", {
   node_id          = 0,
-  self_ip          = "10.0.10.10",
-  seed_servers     = "10.0.10.10:33145,10.0.10.11:33145,10.0.10.12:33145",
-  advertised_kafka = "10.0.10.10:9092",
-  advertised_rpc   = "10.0.10.10:33145",
+  self_ip          = "10.42.10.10",
+  seed_servers     = "10.42.10.10:33145,10.42.10.11:33145,10.0.10.12:33145",
+  advertised_kafka = "10.42.10.10:9092",
+  advertised_rpc   = "10.42.10.10:33145",
 })
 EOF
 ```
 
-Expected: prints the rendered YAML cloud-init, with three `- host: { address: "10.0.10.10", port: 33145 }` (etc.) entries under `seed_servers:`.
+Expected: prints the rendered YAML cloud-init, with three `- host: { address: "10.42.10.10", port: 33145 }` (etc.) entries under `seed_servers:`.
 
 - [ ] **Step 4: Commit**
 
@@ -450,11 +450,11 @@ variable "redpanda_instance_type" {
 variable "redpanda_broker_ips" {
   description = "Static private IPs for Redpanda brokers (must fall inside the private subnets' CIDRs)."
   type        = list(string)
-  default     = ["10.0.10.10", "10.0.11.10", "10.0.10.11"]
+  default     = ["10.42.10.10", "10.42.11.10", "10.42.10.11"]
 }
 ```
 
-(The default IPs assume the existing VPC CIDR `10.0.0.0/16` with private subnets at `10.0.10.0/24` and `10.0.11.0/24` — confirmed by `cidrsubnet(var.vpc_cidr, 8, 10 + count.index)` in `vpc.tf`. Brokers 0 and 2 land in the first private subnet; broker 1 in the second.)
+(The default IPs reflect the existing VPC CIDR `10.42.0.0/16` with private subnets at `10.42.10.0/24` and `10.42.11.0/24` — derived from `cidrsubnet(var.vpc_cidr, 8, 10 + count.index)` in `vpc.tf` against `var.vpc_cidr = "10.42.0.0/16"` (see `terraform/shared/variables.tf`). Brokers 0 and 2 land in the first private subnet; broker 1 in the second.)
 
 - [ ] **Step 2: Create `redpanda.tf`**
 
@@ -617,7 +617,7 @@ Run:
 ```bash
 cd benchmarking/aws/terraform/shared
 terraform console <<'EOF'
-templatefile("./runner-user-data.tftpl", { redpanda_brokers = "10.0.10.10:9092,10.0.11.10:9092,10.0.10.11:9092" })
+templatefile("./runner-user-data.tftpl", { redpanda_brokers = "10.42.10.10:9092,10.42.11.10:9092,10.42.10.11:9092" })
 EOF
 ```
 
@@ -735,11 +735,11 @@ Run:
 ```bash
 cd benchmarking/aws/terraform/shared
 terraform console <<'EOF'
-templatefile("./runner-user-data.tftpl", { redpanda_brokers = "10.0.10.10:9092,10.0.11.10:9092,10.0.10.11:9092" })
+templatefile("./runner-user-data.tftpl", { redpanda_brokers = "10.42.10.10:9092,10.42.11.10:9092,10.42.10.11:9092" })
 EOF
 ```
 
-Expected: rendered YAML containing `bootstrap.servers=10.0.10.10:9092,10.0.11.10:9092,10.0.10.11:9092` and the full KC install runcmd.
+Expected: rendered YAML containing `bootstrap.servers=10.42.10.10:9092,10.42.11.10:9092,10.42.10.11:9092` and the full KC install runcmd.
 
 - [ ] **Step 4: Commit**
 
@@ -770,7 +770,7 @@ type MatrixRunner struct {
 	BinaryPath      string
 	Bucket          string
 	SessionID       string
-	// RedpandaMetricsEndpoint is the host:port pair (e.g. "10.0.10.10:9644") the
+	// RedpandaMetricsEndpoint is the host:port pair (e.g. "10.42.10.10:9644") the
 	// per-point scraper curls every 10s. Empty disables the scraper (Plan 1
 	// safety net for environments without Redpanda yet).
 	RedpandaMetricsEndpoint string
@@ -877,12 +877,12 @@ func TestRenderBenchScript_RedpandaScraperWhenEndpointSet(t *testing.T) {
 		BinaryPath:              "/opt/bench/rpcn",
 		Bucket:                  "results-bucket",
 		SessionID:               "sess-abc",
-		RedpandaMetricsEndpoint: "10.0.10.10:9644",
+		RedpandaMetricsEndpoint: "10.42.10.10:9644",
 	})
 	if !strings.Contains(out, "RP=/tmp/redpanda-4.txt") {
 		t.Errorf("expected RP path line for vcpu 4; got:\n%s", out)
 	}
-	if !strings.Contains(out, "curl -s --max-time 5 http://10.0.10.10:9644/public_metrics") {
+	if !strings.Contains(out, "curl -s --max-time 5 http://10.42.10.10:9644/public_metrics") {
 		t.Errorf("expected redpanda scraper curl; got:\n%s", out)
 	}
 	if !strings.Contains(out, "RP_SCRAPER=$!") {
@@ -1180,7 +1180,7 @@ From the runner SSM session:
 
 ```bash
 $ BROKERS=$(curl -s http://169.254.169.254/latest/user-data | grep bootstrap.servers || true)
-$ curl -s http://10.0.10.10:9644/public_metrics | head -10
+$ curl -s http://10.42.10.10:9644/public_metrics | head -10
 ```
 
 Expected: ≥10 lines of Prometheus text-format metrics, with `# HELP` and `# TYPE` directives present.
