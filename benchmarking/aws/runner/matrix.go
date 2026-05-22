@@ -210,7 +210,7 @@ func renderBenchScript(a benchScriptArgs) string {
 	// Cores 0,1 reserved → measured set starts at core 2.
 	cpusetHi := 1 + a.VCPU // inclusive
 	totalSec := a.WarmupSec + a.DurationSec
-	return strings.Join([]string{
+	lines := []string{
 		`set -euo pipefail`,
 		fmt.Sprintf(`echo "starting bench: %d vCPU, %d GiB, warmup %ds, window %ds"`,
 			a.VCPU, a.MemLimitGiB, a.WarmupSec, a.DurationSec),
@@ -249,16 +249,46 @@ func renderBenchScript(a benchScriptArgs) string {
   done
 ) &`,
 		`PROM_SCRAPER=$!`,
+	}
+	if a.RedpandaMetricsEndpoint != "" {
+		lines = append(lines,
+			fmt.Sprintf(`RP=/tmp/redpanda-%d.txt`, a.VCPU),
+			`: > "$RP"`,
+			fmt.Sprintf(`(
+  while kill -0 "$PID" 2>/dev/null; do
+    {
+      echo "###timestamp=$(date +%%s)"
+      curl -s --max-time 5 http://%s/public_metrics || echo "###scrape_error"
+    } >> "$RP"
+    sleep 10
+  done
+) &`, a.RedpandaMetricsEndpoint),
+			`RP_SCRAPER=$!`,
+		)
+	}
+	lines = append(lines,
 		fmt.Sprintf(`sleep %d`, totalSec),
 		`kill -TERM "$PID" 2>/dev/null || true`,
 		`wait "$PID" 2>/dev/null || true`,
 		`kill "$HEARTBEAT" 2>/dev/null || true`,
 		`kill "$PROM_SCRAPER" 2>/dev/null || true`,
+	)
+	if a.RedpandaMetricsEndpoint != "" {
+		lines = append(lines, `kill "$RP_SCRAPER" 2>/dev/null || true`)
+	}
+	lines = append(lines,
 		`echo "bench point complete"`,
 		fmt.Sprintf(`aws s3 cp "$LOG" "s3://%s/runs/%s/sweep-%d.log" >/dev/null`,
 			a.Bucket, a.SessionID, a.VCPU),
 		fmt.Sprintf(`aws s3 cp "$PROM" "s3://%s/runs/%s/prom-%d.txt" >/dev/null`,
 			a.Bucket, a.SessionID, a.VCPU),
-		`echo "log uploaded"`,
-	}, "\n")
+	)
+	if a.RedpandaMetricsEndpoint != "" {
+		lines = append(lines,
+			fmt.Sprintf(`aws s3 cp "$RP" "s3://%s/runs/%s/redpanda-%d.txt" >/dev/null`,
+				a.Bucket, a.SessionID, a.VCPU),
+		)
+	}
+	lines = append(lines, `echo "log uploaded"`)
+	return strings.Join(lines, "\n")
 }
