@@ -4,9 +4,70 @@ packages:
   - postgresql15
   - mariadb1011
   - jq
+  - unzip
+  - tar
+  - java-21-amazon-corretto-headless
 write_files:
   - path: /opt/bench/.gitkeep
     content: ""
+  - path: /opt/kafka-connect/worker.properties
+    permissions: '0644'
+    content: |
+      bootstrap.servers=${redpanda_brokers}
+      group.id=kc-bench-workers
+      key.converter=org.apache.kafka.connect.json.JsonConverter
+      value.converter=org.apache.kafka.connect.json.JsonConverter
+      key.converter.schemas.enable=false
+      value.converter.schemas.enable=false
+      offset.storage.topic=_kc_offsets
+      config.storage.topic=_kc_configs
+      status.storage.topic=_kc_status
+      offset.storage.replication.factor=3
+      config.storage.replication.factor=3
+      status.storage.replication.factor=3
+      plugin.path=/opt/kafka-connect/plugins
+      rest.port=8083
+  - path: /etc/systemd/system/kafka-connect.service
+    permissions: '0644'
+    content: |
+      [Unit]
+      Description=Kafka Connect (single-worker distributed)
+      After=network-online.target
+      Wants=network-online.target
+
+      [Service]
+      Type=simple
+      Environment=KAFKA_HEAP_OPTS=-Xmx2G
+      ExecStart=/opt/kafka/bin/connect-distributed.sh /opt/kafka-connect/worker.properties
+      Restart=on-failure
+      User=root
+
+      [Install]
+      WantedBy=multi-user.target
 runcmd:
   - mkdir -p /opt/bench
   - chmod 0755 /opt/bench
+  - mkdir -p /opt/kafka /opt/kafka-connect/plugins
+
+  # Apache Kafka tarball (we only need its libs + connect-distributed.sh).
+  - curl -sSL https://archive.apache.org/dist/kafka/3.8.0/kafka_2.13-3.8.0.tgz | tar -xz --strip-components=1 -C /opt/kafka
+
+  # Debezium connectors.
+  - curl -sSL https://repo1.maven.org/maven2/io/debezium/debezium-connector-postgres/2.7.3.Final/debezium-connector-postgres-2.7.3.Final-plugin.tar.gz | tar -xz -C /opt/kafka-connect/plugins/
+  - curl -sSL https://repo1.maven.org/maven2/io/debezium/debezium-connector-mysql/2.7.3.Final/debezium-connector-mysql-2.7.3.Final-plugin.tar.gz | tar -xz -C /opt/kafka-connect/plugins/
+
+  # Iceberg KC sink.
+  - mkdir -p /opt/kafka-connect/plugins/iceberg-kafka-connect
+  - curl -sSL https://repo1.maven.org/maven2/org/apache/iceberg/iceberg-kafka-connect-runtime/1.7.1/iceberg-kafka-connect-runtime-1.7.1.tar.gz | tar -xz -C /opt/kafka-connect/plugins/iceberg-kafka-connect
+
+  # Aiven JDBC sink + JDBC drivers (postgres + mariadb).
+  - curl -sSL -o /tmp/aiven-jdbc.zip https://github.com/aiven/aiven-kafka-connect-jdbc/releases/download/v6.10.0/aiven-kafka-connect-jdbc-6.10.0.zip
+  - unzip -q /tmp/aiven-jdbc.zip -d /opt/kafka-connect/plugins/
+  - curl -sSL -o /opt/kafka-connect/plugins/aiven-kafka-connect-jdbc-6.10.0/postgresql.jar https://jdbc.postgresql.org/download/postgresql-42.7.4.jar
+  - curl -sSL -o /opt/kafka-connect/plugins/aiven-kafka-connect-jdbc-6.10.0/mariadb.jar https://dlm.mariadb.com/3927489/Connectors/java/connector-java-3.4.1/mariadb-java-client-3.4.1.jar
+  - rm -f /tmp/aiven-jdbc.zip
+
+  # Enable + start the worker. systemd retries on failure if Redpanda isn't yet
+  # reachable (which is fine — the bench start waits for the runner anyway).
+  - systemctl daemon-reload
+  - systemctl enable --now kafka-connect.service
