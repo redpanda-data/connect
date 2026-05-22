@@ -29,6 +29,10 @@ type MatrixRunner struct {
 	BinaryPath      string // path on the runner host to redpanda-connect
 	Bucket          string // S3 bucket where per-point Connect logs are uploaded
 	SessionID       string // run-scoped key prefix: runs/<SessionID>/sweep-<vcpu>.log
+	// RedpandaMetricsEndpoint is the host:port pair (e.g. "10.42.10.10:9644") the
+	// per-point scraper curls every 10s. Empty disables the scraper (Plan 1
+	// safety net for environments without Redpanda yet).
+	RedpandaMetricsEndpoint string
 }
 
 // SweepPoint is the per-point measurement.
@@ -72,14 +76,15 @@ func (m *MatrixRunner) Run(
 		}
 
 		script := renderBenchScript(benchScriptArgs{
-			VCPU:        n,
-			MemLimitGiB: memLimitPerVCPU * n,
-			WarmupSec:   int(warmup.Seconds()),
-			DurationSec: int(duration.Seconds()),
-			ConfigPath:  m.ConfigPath,
-			BinaryPath:  m.BinaryPath,
-			Bucket:      m.Bucket,
-			SessionID:   m.SessionID,
+			VCPU:                    n,
+			MemLimitGiB:             memLimitPerVCPU * n,
+			WarmupSec:               int(warmup.Seconds()),
+			DurationSec:             int(duration.Seconds()),
+			ConfigPath:              m.ConfigPath,
+			BinaryPath:              m.BinaryPath,
+			Bucket:                  m.Bucket,
+			SessionID:               m.SessionID,
+			RedpandaMetricsEndpoint: m.RedpandaMetricsEndpoint,
 		})
 		// The bench script now writes Connect's stdout/stderr to /tmp/bench-N.log
 		// and uploads it to S3 after termination. SSM stdout only carries the
@@ -182,14 +187,15 @@ func parseAndTrim(raw []byte, warmup time.Duration) []Sample {
 }
 
 type benchScriptArgs struct {
-	VCPU        int
-	MemLimitGiB int
-	WarmupSec   int
-	DurationSec int
-	ConfigPath  string
-	BinaryPath  string
-	Bucket      string
-	SessionID   string
+	VCPU                    int
+	MemLimitGiB             int
+	WarmupSec               int
+	DurationSec             int
+	ConfigPath              string
+	BinaryPath              string
+	Bucket                  string
+	SessionID               string
+	RedpandaMetricsEndpoint string
 }
 
 // renderBenchScript produces the shell script executed on the runner EC2 for
