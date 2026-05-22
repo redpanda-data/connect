@@ -18,7 +18,28 @@ version: '3'
 # - task connect:run
 
 tasks:
+  setup:cdb:
+    desc: Full CDB setup (preferred multi-PDB mode)
+    cmds:
+      - task: oracledb:up
+      - cmd: echo "Waiting for OracleDB..." && sleep 10
+      - task: oracledb:archivelog
+      - cmd: echo "Configuring archive log" && sleep 5
+      - task: pdb:create
+      - task: pdb:setup
+      - task: cdb:setup
+      - cmd: echo "Inserting test data, please hold..."
+      - task: sqlcl:pdb:data:users
+
   oracledb:up:
+    cmds:
+      - docker run -d
+          --name oracledb
+          -p 1521:1521
+          -e ORACLE_PWD=YourPassword123
+          container-registry.oracle.com/database/free:latest-lite
+
+  bench:setup:
     cmds:
       - docker run -d
           --name oracledb
