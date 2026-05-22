@@ -740,3 +740,18 @@ This is a foundation. Concrete follow-ups:
 6. **`SUMMARY.md` auto-refresh** — programmatically pick the best AWS run per connector for the at-a-glance table.
 
 Each can ship as its own focused PR using the same framework, no rework needed.
+
+## Kafka Connect comparison infra (Plan 1, 2026-05-22)
+
+The shared stack now provisions a 3-broker Redpanda cluster (`im4gn.2xlarge`, NVMe instance store, static IPs in the private subnets) reachable from both `runner` and `load-gen` security groups. Topic/data paths in /var/lib/redpanda/data; admin + Prometheus on `:9644`; Kafka API on `:9092`. The runner EC2 cloud-init now also installs OpenJDK 21, the Apache Kafka 3.8 tarball, Debezium 2.7.3 (Postgres + MySQL), and the Aiven JDBC sink 6.10.0 (Iceberg + Confluent S3 sinks land in Plan 4) to `/opt/kafka-connect/plugins/`. A `kafka-connect.service` systemd unit runs the worker in single-worker distributed mode bound to `bootstrap.servers=<redpanda brokers>` on `:8083`.
+
+For each sweep point, the bench script scrapes `http://<broker0>:9644/public_metrics` every 10s and uploads the framed dump to `s3://<results>/runs/<session>/redpanda-<vcpu>.txt` alongside the existing `prom-<vcpu>.txt`. **No bench numbers change in Plan 1** — Connect's pipeline still writes to `drop`. The broker scrape is captured for Plans 2/3 to use.
+
+Acceptance smoke test (one-time, manual; see Plan 1 task 12):
+
+```
+# After `task aws:bench --validate-only` succeeds:
+aws ssm start-session --target <runner-id>
+$ curl -s localhost:8083/connector-plugins | jq '.[] | .class' | sort -u
+$ curl -s http://<broker0>:9644/public_metrics | head -5
+```
