@@ -1,5 +1,12 @@
 version: '3'
 
+# Running Order
+#
+# task bench:setup
+# task bench:run
+# task bench:clear
+# task bench:teardown
+
 # Running order - Preferred (multiple PDB databases - CDB mode, connect via CDB root):
 # - task oracledb:up
 # - task oracledb:archivelog
@@ -18,7 +25,8 @@ version: '3'
 # - task connect:run
 
 tasks:
-  setup:cdb:
+
+  bench:setup:
     desc: Full CDB setup (preferred multi-PDB mode)
     cmds:
       - task: oracledb:up
@@ -31,15 +39,23 @@ tasks:
       - cmd: echo "Inserting test data, please hold..."
       - task: sqlcl:pdb:data:users
 
-  oracledb:up:
+  bench:teardown:
+    desc: Teardown benchmark
     cmds:
-      - docker run -d
-          --name oracledb
-          -p 1521:1521
-          -e ORACLE_PWD=YourPassword123
-          container-registry.oracle.com/database/free:latest-lite
+      - task: oracledb:down
 
-  bench:setup:
+  bench:clear:
+    desc: Clear benchmark in preparation for a new run
+    cmds:
+      - task: sqlcl:cdb:drop-cache
+      - cmd: rm ./benchmark_results.json
+
+  bench:run:
+    desc: Run benchmark
+    cmds:
+      - task: connect:run
+
+  oracledb:up:
     cmds:
       - docker run -d
           --name oracledb

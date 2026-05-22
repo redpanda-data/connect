@@ -28,7 +28,7 @@ output:
         interval: 1s
         count_bytes: true
   file:
-    path: "./results.json"
+    path: "./benchmark_results.json"
     codec: lines
   # stdout: {}
   # drop: {}
