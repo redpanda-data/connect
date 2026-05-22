@@ -66,18 +66,23 @@ func (c *ConnectCacheResource) StartTransaction(ctx context.Context, txnID sqlre
 	if _, discarded := c.discarded[txnID]; discarded {
 		return nil
 	}
-	existing, err := c.readMeta(ctx, txnID)
-	if err != nil {
+
+	var (
+		existing *serializedTransactionMetadata
+		err      error
+	)
+	if existing, err = c.readMetadata(ctx, txnID); err != nil {
 		return fmt.Errorf("checking for existing transaction %s: %w", txnID, err)
-	}
-	if existing != nil {
+	} else if existing != nil {
 		return nil
 	}
-	meta := &serializedTransactionMeta{ID: txnID, SCN: scn, EventCount: 0}
-	data, err := marshalMeta(meta)
+
+	metaData := &serializedTransactionMetadata{ID: txnID, SCN: scn, EventCount: 0}
+	data, err := json.Marshal(metaData)
 	if err != nil {
-		return fmt.Errorf("serializing transaction meta %s: %w", txnID, err)
+		return fmt.Errorf("serializing transaction metadata %s: %w", txnID, err)
 	}
+
 	var setErr error
 	if err := c.resources.AccessCache(ctx, c.cacheName, func(cache service.Cache) {
 		setErr = cache.Set(ctx, c.toMetaKey(txnID), data, nil)
@@ -85,7 +90,7 @@ func (c *ConnectCacheResource) StartTransaction(ctx context.Context, txnID sqlre
 		return fmt.Errorf("accessing cache for transaction %s: %w", txnID, err)
 	}
 	if setErr != nil {
-		return fmt.Errorf("storing transaction meta %s: %w", txnID, setErr)
+		return fmt.Errorf("storing transaction metadata %s: %w", txnID, setErr)
 	}
 	c.transactionsMetric.Incr(1)
 	return nil
@@ -100,18 +105,21 @@ func (c *ConnectCacheResource) AddEvent(ctx context.Context, txnID sqlredo.Trans
 		return nil
 	}
 
-	meta, err := c.readMeta(ctx, txnID)
-	if err != nil {
-		return fmt.Errorf("reading transaction meta %s: %w", txnID, err)
+	var (
+		m   *serializedTransactionMetadata
+		err error
+	)
+	if m, err = c.readMetadata(ctx, txnID); err != nil {
+		return fmt.Errorf("reading transaction metadata %s: %w", txnID, err)
 	}
 
-	if meta == nil {
+	if m == nil {
 		c.log.Warnf("Transaction %s not found for event, creating...", txnID)
-		meta = &serializedTransactionMeta{ID: txnID, SCN: scn, EventCount: 0}
+		m = &serializedTransactionMetadata{ID: txnID, SCN: scn, EventCount: 0}
 		c.startSCNs[txnID] = scn
 		c.transactionsMetric.Incr(1)
-	} else if meta.EventCount == 0 {
-		c.startSCNs[txnID] = meta.SCN
+	} else if m.EventCount == 0 {
+		c.startSCNs[txnID] = m.SCN
 	}
 
 	evData, err := marshalEvent(event)
@@ -120,39 +128,40 @@ func (c *ConnectCacheResource) AddEvent(ctx context.Context, txnID sqlredo.Trans
 	}
 	var setErr error
 	if err := c.resources.AccessCache(ctx, c.cacheName, func(cache service.Cache) {
-		setErr = cache.Set(ctx, c.toEventKey(txnID, meta.EventCount), evData, nil)
+		setErr = cache.Set(ctx, c.toEventKey(txnID, m.EventCount), evData, nil)
 	}); err != nil {
-		return fmt.Errorf("accessing cache for event %d of transaction %s: %w", meta.EventCount, txnID, err)
+		return fmt.Errorf("accessing cache for event %d of transaction %s: %w", m.EventCount, txnID, err)
 	}
 	if setErr != nil {
-		return fmt.Errorf("writing event %d for transaction %s: %w", meta.EventCount, txnID, setErr)
+		return fmt.Errorf("writing event %d for transaction %s: %w", m.EventCount, txnID, setErr)
 	}
 
-	meta.EventCount++
+	m.EventCount++
 	c.eventsMetric.Incr(1)
 
-	if c.maxEvents > 0 && meta.EventCount > c.maxEvents {
+	if c.maxEvents > 0 && m.EventCount > c.maxEvents {
 		c.log.Warnf("Transaction %s exceeded max event buffer of %d events, discarding", txnID, c.maxEvents)
-		c.eventsMetric.Decr(int64(meta.EventCount))
-		c.deleteTransactionKeys(ctx, txnID, meta.EventCount)
+		c.eventsMetric.Decr(int64(m.EventCount))
+		c.deleteTransactionKeys(ctx, txnID, m.EventCount)
 		delete(c.startSCNs, txnID)
 		c.transactionsMetric.Decr(1)
 		c.discarded[txnID] = struct{}{}
 		return nil
 	}
 
-	metaData, err := marshalMeta(meta)
+	metaData, err := json.Marshal(m)
 	if err != nil {
-		return fmt.Errorf("serializing updated meta for transaction %s: %w", txnID, err)
+		return fmt.Errorf("serializing updated metadata for transaction %s: %w", txnID, err)
 	}
+
 	var updateErr error
 	if err := c.resources.AccessCache(ctx, c.cacheName, func(cache service.Cache) {
 		updateErr = cache.Set(ctx, c.toMetaKey(txnID), metaData, nil)
 	}); err != nil {
-		return fmt.Errorf("accessing cache to update meta for transaction %s: %w", txnID, err)
+		return fmt.Errorf("accessing cache to update metadata for transaction %s: %w", txnID, err)
 	}
 	if updateErr != nil {
-		return fmt.Errorf("updating meta for transaction %s: %w", txnID, updateErr)
+		return fmt.Errorf("updating metadata for transaction %s: %w", txnID, updateErr)
 	}
 	return nil
 }
@@ -162,18 +171,21 @@ func (c *ConnectCacheResource) AddEvent(ctx context.Context, txnID sqlredo.Trans
 // Returns (nil, nil) if the transaction is not found.
 // Returns (nil, err) on a cache backend error or unmarshal failure.
 func (c *ConnectCacheResource) GetTransaction(ctx context.Context, txnID sqlredo.TransactionID) (*Transaction, error) {
-	meta, err := c.readMeta(ctx, txnID)
-	if err != nil {
-		return nil, fmt.Errorf("reading transaction meta %s: %w", txnID, err)
+	var (
+		m   *serializedTransactionMetadata
+		err error
+	)
+	if m, err = c.readMetadata(ctx, txnID); err != nil {
+		return nil, fmt.Errorf("reading transaction metadata %s: %w", txnID, err)
 	}
-	if meta == nil {
+	if m == nil {
 		return nil, nil
 	}
 
-	events := make([]*sqlredo.DMLEvent, meta.EventCount)
+	events := make([]*sqlredo.DMLEvent, m.EventCount)
 	var readErr error
 	if err := c.resources.AccessCache(ctx, c.cacheName, func(cache service.Cache) {
-		for i := range meta.EventCount {
+		for i := range m.EventCount {
 			data, err := cache.Get(ctx, c.toEventKey(txnID, i))
 			if err != nil {
 				if errors.Is(err, service.ErrKeyNotFound) {
@@ -197,7 +209,7 @@ func (c *ConnectCacheResource) GetTransaction(ctx context.Context, txnID sqlredo
 		return nil, readErr
 	}
 
-	return &Transaction{ID: meta.ID, SCN: meta.SCN, Events: events}, nil
+	return &Transaction{ID: m.ID, SCN: m.SCN, Events: events}, nil
 }
 
 // CommitTransaction removes the committed transaction from the cache.
@@ -205,16 +217,19 @@ func (c *ConnectCacheResource) CommitTransaction(ctx context.Context, txnID sqlr
 	delete(c.discarded, txnID)
 	delete(c.startSCNs, txnID)
 
-	meta, err := c.readMeta(ctx, txnID)
-	if err != nil {
-		return fmt.Errorf("reading meta for committing transaction %s: %w", txnID, err)
-	}
-	if meta == nil {
+	var (
+		m   *serializedTransactionMetadata
+		err error
+	)
+	if m, err = c.readMetadata(ctx, txnID); err != nil {
+		return fmt.Errorf("reading metadata for committing transaction %s: %w", txnID, err)
+	} else if m == nil {
 		return nil
 	}
-	c.eventsMetric.Decr(int64(meta.EventCount))
-	c.deleteTransactionKeys(ctx, txnID, meta.EventCount)
+	c.eventsMetric.Decr(int64(m.EventCount))
+	c.deleteTransactionKeys(ctx, txnID, m.EventCount)
 	c.transactionsMetric.Decr(1)
+
 	return nil
 }
 
@@ -224,16 +239,19 @@ func (c *ConnectCacheResource) RollbackTransaction(ctx context.Context, txnID sq
 	delete(c.discarded, txnID)
 	delete(c.startSCNs, txnID)
 
-	meta, err := c.readMeta(ctx, txnID)
-	if err != nil {
-		return fmt.Errorf("reading meta for rolling back transaction %s: %w", txnID, err)
-	}
-	if meta == nil {
+	var (
+		meta *serializedTransactionMetadata
+		err  error
+	)
+	if meta, err = c.readMetadata(ctx, txnID); err != nil {
+		return fmt.Errorf("reading metadata for rolling back transaction %s: %w", txnID, err)
+	} else if meta == nil {
 		return nil
 	}
 	c.eventsMetric.Decr(int64(meta.EventCount))
 	c.deleteTransactionKeys(ctx, txnID, meta.EventCount)
 	c.transactionsMetric.Decr(1)
+
 	return nil
 }
 
@@ -258,11 +276,11 @@ func (c *ConnectCacheResource) toEventKey(txnID sqlredo.TransactionID, seqno int
 	return c.keyPrefix + ":evt:" + string(txnID) + ":" + strconv.Itoa(seqno)
 }
 
-// readMeta fetches and deserializes the metadata key for txnID.
+// readMetadata fetches and deserializes the metadata key for txnID.
 // Returns (nil, nil) if the key does not exist.
-func (c *ConnectCacheResource) readMeta(ctx context.Context, txnID sqlredo.TransactionID) (*serializedTransactionMeta, error) {
+func (c *ConnectCacheResource) readMetadata(ctx context.Context, txnID sqlredo.TransactionID) (*serializedTransactionMetadata, error) {
 	var (
-		meta   *serializedTransactionMeta
+		meta   *serializedTransactionMetadata
 		getErr error
 	)
 	if err := c.resources.AccessCache(ctx, c.cacheName, func(cache service.Cache) {
@@ -271,7 +289,7 @@ func (c *ConnectCacheResource) readMeta(ctx context.Context, txnID sqlredo.Trans
 			getErr = err
 			return
 		}
-		meta, getErr = unmarshalMeta(data)
+		meta, getErr = unmarshalMetadata(data)
 	}); err != nil {
 		return nil, err
 	}
@@ -294,22 +312,15 @@ func (c *ConnectCacheResource) deleteTransactionKeys(ctx context.Context, txnID 
 			}
 		}
 		if err := cache.Delete(ctx, c.toMetaKey(txnID)); err != nil && !errors.Is(err, service.ErrKeyNotFound) {
-			c.log.Errorf("Failed to delete meta key for transaction %s: %v", txnID, err)
+			c.log.Errorf("Failed to delete metadata key for transaction %s: %v", txnID, err)
 		}
 	}); err != nil {
 		c.log.Errorf("Failed to access cache to delete transaction %s keys: %v", txnID, err)
 	}
 }
 
-// ---------------------------------------------------------------------------
-// Serialization
-//
-// DMLEvent.Data and OldValues hold map[string]any whose concrete types include
-// time.Time, []byte, int64, json.Number, string, and nil — none of which
-// survive a plain encoding/json round-trip through interface{} unchanged.
-// Each value is wrapped in a typedVal envelope that carries a type tag so the
-// original Go type is restored on decode.
-// ---------------------------------------------------------------------------
+// Serialise DLMEvent.Data and OldValues to ensure the types survive
+// plain encoding/json roundtrip by wrapping them in a typedVal.
 
 const (
 	typeString = "s"
@@ -348,39 +359,38 @@ func encodeVal(v any) typedVal {
 }
 
 func decodeVal(tv typedVal) (any, error) {
+	var (
+		val string
+		ok  bool
+	)
 	switch tv.T {
 	case typeNull:
 		return nil, nil
 	case typeString:
-		s, ok := tv.V.(string)
-		if !ok {
+		if val, ok = tv.V.(string); !ok {
 			return nil, fmt.Errorf("expected string, got %T", tv.V)
 		}
-		return s, nil
+		return val, nil
 	case typeInt64:
-		s, ok := tv.V.(string)
-		if !ok {
+		if val, ok = tv.V.(string); !ok {
 			return nil, fmt.Errorf("expected string for int64, got %T", tv.V)
 		}
-		return strconv.ParseInt(s, 10, 64)
+		return strconv.ParseInt(val, 10, 64)
 	case typeNumber:
-		s, ok := tv.V.(string)
-		if !ok {
+		if val, ok = tv.V.(string); !ok {
 			return nil, fmt.Errorf("expected string for json.Number, got %T", tv.V)
 		}
-		return json.Number(s), nil
+		return json.Number(val), nil
 	case typeBytes:
-		s, ok := tv.V.(string)
-		if !ok {
+		if val, ok = tv.V.(string); !ok {
 			return nil, fmt.Errorf("expected string for bytes, got %T", tv.V)
 		}
-		return base64.StdEncoding.DecodeString(s)
+		return base64.StdEncoding.DecodeString(val)
 	case typeTime:
-		s, ok := tv.V.(string)
-		if !ok {
+		if val, ok = tv.V.(string); !ok {
 			return nil, fmt.Errorf("expected string for time, got %T", tv.V)
 		}
-		return time.Parse(time.RFC3339Nano, s)
+		return time.Parse(time.RFC3339Nano, val)
 	default:
 		return nil, fmt.Errorf("unknown type tag %q", tv.T)
 	}
@@ -425,18 +435,14 @@ type serializedDMLEvent struct {
 	TransactionID sqlredo.TransactionID `json:"txn_id"`
 }
 
-type serializedTransactionMeta struct {
+type serializedTransactionMetadata struct {
 	ID         sqlredo.TransactionID `json:"id"`
 	SCN        uint64                `json:"scn"`
 	EventCount int                   `json:"count"`
 }
 
-func marshalMeta(meta *serializedTransactionMeta) ([]byte, error) {
-	return json.Marshal(meta)
-}
-
-func unmarshalMeta(data []byte) (*serializedTransactionMeta, error) {
-	var m serializedTransactionMeta
+func unmarshalMetadata(data []byte) (*serializedTransactionMetadata, error) {
+	var m serializedTransactionMetadata
 	if err := json.Unmarshal(data, &m); err != nil {
 		return nil, err
 	}
