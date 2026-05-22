@@ -23,11 +23,21 @@ variable "vpc_id" {
 variable "subnet_ids" {
   description = "Private subnet IDs for broker placement (length must >= cluster_size)."
   type        = list(string)
+
+  validation {
+    condition     = length(var.subnet_ids) > 0
+    error_message = "subnet_ids must contain at least one subnet for broker placement."
+  }
 }
 
 variable "broker_ips" {
   description = "Static private IPs for brokers, one per broker. Must be within the matching subnet."
   type        = list(string)
+
+  validation {
+    condition     = length(var.broker_ips) >= var.cluster_size
+    error_message = "broker_ips must have at least cluster_size entries (one static IP per broker)."
+  }
 }
 
 variable "iam_instance_profile" {
