@@ -89,7 +89,7 @@ func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replicat
 			OPERATION_CODE,
 			TABLE_NAME,
 			SEG_OWNER,
-			TIMESTAMP,
+			COMMIT_TIMESTAMP,
 			XID,
 			COMMIT_SCN,
 			CSF
@@ -449,13 +449,13 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 							continue
 						}
 						synthetic := &sqlredo.DMLEvent{
-							Operation:     sqlredo.OpUpdate,
-							Schema:        acc.Schema,
-							Table:         acc.Table,
-							Data:          map[string]any{acc.Column: assembled},
-							OldValues:     acc.PKValues,
-							TransactionID: redoEvent.TransactionID,
-							Timestamp:     redoEvent.Timestamp,
+							Operation:       sqlredo.OpUpdate,
+							Schema:          acc.Schema,
+							Table:           acc.Table,
+							Data:            map[string]any{acc.Column: assembled},
+							OldValues:       acc.PKValues,
+							TransactionID:   redoEvent.TransactionID,
+							CommitTimestamp: redoEvent.CommitTimestamp.Time,
 						}
 						txn.Events = append(txn.Events, synthetic)
 						lm.log.Debugf("LOB merge: synthesized UPDATE for %s.%s.%s (pks=%v, fragments=%d)", acc.Schema, acc.Table, acc.Column, acc.PKValues, len(acc.Fragments))
@@ -499,7 +499,7 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 						continue
 					}
 				}
-				msg := toMessageEvent(dmlEvent, redoEvent.SCN, safeCheckpointSCN, redoEvent.Timestamp)
+				msg := toMessageEvent(dmlEvent, redoEvent.SCN, safeCheckpointSCN, redoEvent.CommitTimestamp.Time)
 				if err := lm.publisher.Publish(ctx, msg); err != nil {
 					return fmt.Errorf("publishing event with SCN '%d': %w", redoEvent.SCN, err)
 				}
@@ -760,7 +760,7 @@ func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, s
 			&event.Operation,
 			&event.TableName,
 			&event.SchemaName,
-			&event.Timestamp,
+			&event.CommitTimestamp,
 			&event.TransactionID,
 			&commitSCN,
 			&csf,
@@ -985,7 +985,7 @@ func toMessageEvent(dml *sqlredo.DMLEvent, scn uint64, checkpointSCN uint64, com
 		Schema:          dml.Schema,
 		Table:           dml.Table,
 		Data:            data,
-		Timestamp:       dml.Timestamp,
+		Timestamp:       dml.CommitTimestamp,
 		TransactionID:   dml.TransactionID.String(),
 		CommitTimestamp: commitTimestamp,
 	}

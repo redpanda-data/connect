@@ -160,19 +160,19 @@ type DMLEvent struct {
 	Data      map[string]any
 	// OldValues holds the WHERE-clause column values for UPDATE and DELETE events.
 	// For LOB-init UPDATE events these are used to identify the source row for PK matching.
-	OldValues     map[string]any
-	Timestamp     time.Time
-	TransactionID TransactionID
+	OldValues       map[string]any
+	CommitTimestamp time.Time
+	TransactionID   TransactionID
 }
 
 // RedoEvent represents a redo log row from V$LOGMNR_CONTENTS
 type RedoEvent struct {
-	SCN           uint64
-	SQLRedo       sql.NullString
-	Data          map[string]any
-	Operation     Operation
-	TableName     sql.NullString
-	SchemaName    sql.NullString
-	Timestamp     time.Time
-	TransactionID TransactionID
+	SCN             uint64
+	SQLRedo         sql.NullString
+	Data            map[string]any
+	Operation       Operation
+	TableName       sql.NullString
+	SchemaName      sql.NullString
+	CommitTimestamp sql.NullTime
+	TransactionID   TransactionID
 }
