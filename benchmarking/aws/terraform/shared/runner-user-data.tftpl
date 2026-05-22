@@ -1,0 +1,12 @@
+#cloud-config
+package_update: true
+packages:
+  - postgresql15
+  - mariadb1011
+  - jq
+write_files:
+  - path: /opt/bench/.gitkeep
+    content: ""
+runcmd:
+  - mkdir -p /opt/bench
+  - chmod 0755 /opt/bench

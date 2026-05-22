@@ -3,20 +3,9 @@ data "aws_ssm_parameter" "al2023_arm64_ami" {
 }
 
 locals {
-  cloud_init = <<-EOT
-    #cloud-config
-    package_update: true
-    packages:
-      - postgresql15
-      - mariadb1011
-      - jq
-    write_files:
-      - path: /opt/bench/.gitkeep
-        content: ""
-    runcmd:
-      - mkdir -p /opt/bench
-      - chmod 0755 /opt/bench
-  EOT
+  cloud_init = templatefile("${path.module}/runner-user-data.tftpl", {
+    redpanda_brokers = module.redpanda.broker_endpoints
+  })
 }
 
 resource "aws_instance" "runner" {
