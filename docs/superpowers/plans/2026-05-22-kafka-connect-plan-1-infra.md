@@ -368,7 +368,7 @@ terraform console <<'EOF'
 templatefile("./user-data.tftpl", {
   node_id          = 0,
   self_ip          = "10.42.10.10",
-  seed_servers     = "10.42.10.10:33145,10.42.10.11:33145,10.0.10.12:33145",
+  seed_servers     = "10.42.10.10:33145,10.42.11.10:33145,10.42.10.11:33145",
   advertised_kafka = "10.42.10.10:9092",
   advertised_rpc   = "10.42.10.10:33145",
 })
