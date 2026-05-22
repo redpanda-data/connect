@@ -54,10 +54,12 @@ Six pieces of new or modified machinery:
 | 5 | Broker-side Prometheus scraper for Redpanda topic byte-rate | `benchmarking/aws/runner/promRedpanda.go` (new) |
 | 6 | Reporting: per-engine tables, head-to-head delta, SUMMARY.md cross-engine section | `templates/result.md.tmpl`, `templates/summary-section.md.tmpl`, `render.go`, `summary.go` |
 
-Connect's pipeline output changes from `drop` to `kafka_franz` writing to a
-per-engine, per-session topic. KC writes to its own per-engine topic. Both
-topics live on the shared Redpanda cluster. Broker-side scraper attributes
-throughput by topic.
+Connect's pipeline output changes from `drop` to `redpanda` (the Redpanda
+Connect first-party output, franz-go-backed) writing to a per-engine,
+per-session topic. KC writes to its own per-engine topic. Both topics live
+on the shared Redpanda cluster. Broker-side scraper attributes throughput
+by topic. Cluster connection details (`seed_brokers`, TLS, SASL) live in a
+top-level `redpanda:` config block, not on the output itself.
 
 ## Infra changes
 
@@ -108,22 +110,26 @@ OS, matching how Connect's memory limit works today.
 Today's `renderPipelineConfig` in `main.go` wires `output: drop`. New shape:
 
 ```yaml
+redpanda:
+  seed_brokers: ["${REDPANDA_BROKERS}"]
+
 output:
   processors:
     - benchmark: { interval: 1s, count_bytes: true }
-  kafka_franz:
-    seed_brokers: ["${REDPANDA_BROKERS}"]
+  redpanda:
     topic: bench_${SESSION_ID}_${CONNECTOR}_connect
 ```
 
-`REDPANDA_BROKERS` is a new TF output from the shared stack. The `benchmark`
-processor stays: its bytes/sec rolling line is kept as a cross-check on the
-broker-side number. If broker-side and `benchmark_bytes_total` diverge by
-> 5%, anomaly detection flags it (probably indicates kafka client batching
-or a misconfigured topic).
+`REDPANDA_BROKERS` is a new TF output from the shared stack. The top-level
+`redpanda:` block owns connection details so both inputs and outputs can
+share them — important for Plan 4's sink scenarios, where the same block
+configures the input side too. The `benchmark` processor stays: its bytes/sec
+rolling line is kept as a cross-check on the broker-side number. If broker-side
+and `benchmark_bytes_total` diverge by > 5%, anomaly detection flags it
+(probably indicates kafka client batching or a misconfigured topic).
 
-For sink scenarios the renderer inverts: `pipeline.input` becomes a `kafka_franz`
-consumer of the input topic, and the connector under test sits in
+For sink scenarios the renderer inverts: `pipeline.input` becomes a `redpanda`
+input consuming from the input topic, and the connector under test sits in
 `pipeline.output`. The renderer picks the shape from the registry's `Direction`.
 
 ## Registry and config rendering
@@ -315,7 +321,7 @@ Acceptance: `task aws:bench` produces the same row as before; manual
 - `kcconnectors.go` + registry (`postgres_cdc`, `mysql_cdc` initially)
 - `renderKCConfig` function + per-scenario override merge
 - Engine-inner sweep loop + `--engines` flag
-- Connect's pipeline output changes from `drop` to `kafka_franz`
+- Connect's pipeline output changes from `drop` to `redpanda` (with the top-level `redpanda:` block for connection details)
 - Per-engine topic naming + reset extensions (rpk topic delete, KC connector DELETE)
 
 Acceptance: postgres and mysql scenarios produce side-by-side numbers for
@@ -334,7 +340,7 @@ the cross-engine section after a bench.
 
 ### Plan 4 — Sink support, Iceberg pilot
 
-- Pipeline-shape flip in renderer (sink scenarios use `input: kafka_franz`,
+- Pipeline-shape flip in renderer (sink scenarios use `input: redpanda`,
   output is the connector under test)
 - Load-gen `kafka-produce` mode
 - Broker-side consume-direction metric
