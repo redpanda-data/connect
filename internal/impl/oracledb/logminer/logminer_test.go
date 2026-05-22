@@ -32,8 +32,8 @@ func TestProcessRedoEventWithInMemoryCache(t *testing.T) {
 			txACommit = uint64(1000)
 		)
 
-		cache.StartTransaction(t.Context(), "txA", txAStart)
-		cache.AddEvent(t.Context(), "txA", txAStart, &sqlredo.DMLEvent{Operation: sqlredo.OpInsert, Table: "T"})
+		require.NoError(t, cache.StartTransaction(t.Context(), "txA", txAStart))
+		require.NoError(t, cache.AddEvent(t.Context(), "txA", txAStart, &sqlredo.DMLEvent{Operation: sqlredo.OpInsert, Table: "T"}))
 
 		err := lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
 			SCN:           txACommit,
@@ -63,10 +63,10 @@ func TestProcessRedoEventWithInMemoryCache(t *testing.T) {
 		)
 
 		// Seed both transactions. B remains open when A commits.
-		cache.StartTransaction(t.Context(), "txA", txAStart)
-		cache.AddEvent(t.Context(), "txA", txAStart, &sqlredo.DMLEvent{Operation: sqlredo.OpInsert, Table: "T"})
-		cache.StartTransaction(t.Context(), "txB", txBStart)
-		cache.AddEvent(t.Context(), "txB", txBStart, &sqlredo.DMLEvent{Operation: sqlredo.OpInsert, Table: "T"})
+		require.NoError(t, cache.StartTransaction(t.Context(), "txA", txAStart))
+		require.NoError(t, cache.AddEvent(t.Context(), "txA", txAStart, &sqlredo.DMLEvent{Operation: sqlredo.OpInsert, Table: "T"}))
+		require.NoError(t, cache.StartTransaction(t.Context(), "txB", txBStart))
+		require.NoError(t, cache.AddEvent(t.Context(), "txB", txBStart, &sqlredo.DMLEvent{Operation: sqlredo.OpInsert, Table: "T"}))
 
 		// Commit tranaction A, transaction B still open.
 		err := lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
@@ -112,8 +112,8 @@ func TestProcessRedoEventWithConnectCacheResource(t *testing.T) {
 			txACommit = uint64(1000)
 		)
 
-		cache.StartTransaction(t.Context(), "txA", txAStart)
-		cache.AddEvent(t.Context(), "txA", txAStart, &sqlredo.DMLEvent{Operation: sqlredo.OpInsert, Table: "T"})
+		require.NoError(t, cache.StartTransaction(t.Context(), "txA", txAStart))
+		require.NoError(t, cache.AddEvent(t.Context(), "txA", txAStart, &sqlredo.DMLEvent{Operation: sqlredo.OpInsert, Table: "T"}))
 
 		err := lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
 			SCN:           txACommit,
@@ -141,10 +141,10 @@ func TestProcessRedoEventWithConnectCacheResource(t *testing.T) {
 			txBCommit = uint64(1050)
 		)
 
-		cache.StartTransaction(t.Context(), "txA", txAStart)
-		cache.AddEvent(t.Context(), "txA", txAStart, &sqlredo.DMLEvent{Operation: sqlredo.OpInsert, Table: "T"})
-		cache.StartTransaction(t.Context(), "txB", txBStart)
-		cache.AddEvent(t.Context(), "txB", txBStart, &sqlredo.DMLEvent{Operation: sqlredo.OpInsert, Table: "T"})
+		require.NoError(t, cache.StartTransaction(t.Context(), "txA", txAStart))
+		require.NoError(t, cache.AddEvent(t.Context(), "txA", txAStart, &sqlredo.DMLEvent{Operation: sqlredo.OpInsert, Table: "T"}))
+		require.NoError(t, cache.StartTransaction(t.Context(), "txB", txBStart))
+		require.NoError(t, cache.AddEvent(t.Context(), "txB", txBStart, &sqlredo.DMLEvent{Operation: sqlredo.OpInsert, Table: "T"}))
 
 		err := lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
 			SCN:           txACommit,
@@ -183,10 +183,10 @@ func TestProcessRedoEventWithConnectCacheResource(t *testing.T) {
 			txACommit = uint64(1000)
 		)
 
-		cache.StartTransaction(t.Context(), "txA", txAStart)
-		cache.AddEvent(t.Context(), "txA", txAStart, &sqlredo.DMLEvent{Operation: sqlredo.OpInsert, Table: "T"})
+		require.NoError(t, cache.StartTransaction(t.Context(), "txA", txAStart))
+		require.NoError(t, cache.AddEvent(t.Context(), "txA", txAStart, &sqlredo.DMLEvent{Operation: sqlredo.OpInsert, Table: "T"}))
 		// txB is started but never receives any DML events
-		cache.StartTransaction(t.Context(), "txB", txBStart)
+		require.NoError(t, cache.StartTransaction(t.Context(), "txB", txBStart))
 
 		err := lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
 			SCN:           txACommit,

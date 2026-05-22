@@ -26,13 +26,6 @@ import (
 // resource, serializing in-flight transactions as JSON to offload the buffer
 // from process memory. Use when large or long-running transactions would
 // otherwise exhaust connector memory.
-//
-// resources.AccessCache is called per-operation so that the lookup goes
-// through *service.Resources each time, matching the codebase convention for
-// cache resources.
-//
-// The discarded-transaction set and the startSCNs index are kept in-memory;
-// both are intentionally ephemeral and will be reconstructed on restart.
 type ConnectCacheResource struct {
 	resources          *service.Resources
 	cacheName          string
@@ -52,9 +45,7 @@ type ConnectCacheResource struct {
 }
 
 // NewConnectCacheResource creates a ConnectCacheResource backed by the named
-// cache resource. keyPrefix is prepended to every cache key so that multiple
-// oracledb_cdc inputs can share one cache resource without colliding — Oracle
-// transaction IDs (USN.SLOT.SEQ) are only unique within a single Oracle instance.
+// cache resource.
 func NewConnectCacheResource(resources *service.Resources, cfg TransactionCacheConfig, metrics *service.Metrics, log *service.Logger) *ConnectCacheResource {
 	return &ConnectCacheResource{
 		resources:          resources,
@@ -71,51 +62,47 @@ func NewConnectCacheResource(resources *service.Resources, cfg TransactionCacheC
 
 // StartTransaction initializes a new transaction in the cache. If the transaction
 // already exists its accumulated events are left untouched.
-func (c *ConnectCacheResource) StartTransaction(ctx context.Context, txnID sqlredo.TransactionID, scn uint64) {
+func (c *ConnectCacheResource) StartTransaction(ctx context.Context, txnID sqlredo.TransactionID, scn uint64) error {
 	if _, discarded := c.discarded[txnID]; discarded {
-		return
+		return nil
 	}
 	existing, err := c.readMeta(ctx, txnID)
 	if err != nil {
-		c.log.Errorf("Failed to check for existing transaction %s: %v", txnID, err)
-		return
+		return fmt.Errorf("checking for existing transaction %s: %w", txnID, err)
 	}
 	if existing != nil {
-		return
+		return nil
 	}
 	meta := &serializedTransactionMeta{ID: txnID, SCN: scn, EventCount: 0}
 	data, err := marshalMeta(meta)
 	if err != nil {
-		c.log.Errorf("Failed to serialize transaction meta %s: %v", txnID, err)
-		return
+		return fmt.Errorf("serializing transaction meta %s: %w", txnID, err)
 	}
 	var setErr error
 	if err := c.resources.AccessCache(ctx, c.cacheName, func(cache service.Cache) {
 		setErr = cache.Set(ctx, c.toMetaKey(txnID), data, nil)
 	}); err != nil {
-		c.log.Errorf("Failed to access cache for transaction %s: %v", txnID, err)
-		return
+		return fmt.Errorf("accessing cache for transaction %s: %w", txnID, err)
 	}
 	if setErr != nil {
-		c.log.Errorf("Failed to store transaction meta %s in cache: %v", txnID, setErr)
-		return
+		return fmt.Errorf("storing transaction meta %s: %w", txnID, setErr)
 	}
 	c.transactionsMetric.Incr(1)
+	return nil
 }
 
 // AddEvent writes a DML event to its own cache key and updates the transaction
 // metadata counter. Each call is O(1): one constant-size event key write plus
 // one constant-size metadata key update, regardless of how many events the
 // transaction has already accumulated.
-func (c *ConnectCacheResource) AddEvent(ctx context.Context, txnID sqlredo.TransactionID, scn uint64, event *sqlredo.DMLEvent) {
+func (c *ConnectCacheResource) AddEvent(ctx context.Context, txnID sqlredo.TransactionID, scn uint64, event *sqlredo.DMLEvent) error {
 	if _, discarded := c.discarded[txnID]; discarded {
-		return
+		return nil
 	}
 
 	meta, err := c.readMeta(ctx, txnID)
 	if err != nil {
-		c.log.Errorf("Failed to read transaction meta %s, skipping event to avoid discarding buffered events: %v", txnID, err)
-		return
+		return fmt.Errorf("reading transaction meta %s: %w", txnID, err)
 	}
 
 	if meta == nil {
@@ -129,19 +116,16 @@ func (c *ConnectCacheResource) AddEvent(ctx context.Context, txnID sqlredo.Trans
 
 	evData, err := marshalEvent(event)
 	if err != nil {
-		c.log.Errorf("Failed to serialize event for transaction %s: %v", txnID, err)
-		return
+		return fmt.Errorf("serializing event for transaction %s: %w", txnID, err)
 	}
 	var setErr error
 	if err := c.resources.AccessCache(ctx, c.cacheName, func(cache service.Cache) {
 		setErr = cache.Set(ctx, c.toEventKey(txnID, meta.EventCount), evData, nil)
 	}); err != nil {
-		c.log.Errorf("Failed to access cache for event %d of transaction %s: %v", meta.EventCount, txnID, err)
-		return
+		return fmt.Errorf("accessing cache for event %d of transaction %s: %w", meta.EventCount, txnID, err)
 	}
 	if setErr != nil {
-		c.log.Errorf("Failed to write event %d for transaction %s: %v", meta.EventCount, txnID, setErr)
-		return
+		return fmt.Errorf("writing event %d for transaction %s: %w", meta.EventCount, txnID, setErr)
 	}
 
 	meta.EventCount++
@@ -154,21 +138,23 @@ func (c *ConnectCacheResource) AddEvent(ctx context.Context, txnID sqlredo.Trans
 		delete(c.startSCNs, txnID)
 		c.transactionsMetric.Decr(1)
 		c.discarded[txnID] = struct{}{}
-		return
+		return nil
 	}
 
 	metaData, err := marshalMeta(meta)
 	if err != nil {
-		c.log.Errorf("Failed to serialize updated meta for transaction %s: %v", txnID, err)
-		return
+		return fmt.Errorf("serializing updated meta for transaction %s: %w", txnID, err)
 	}
+	var updateErr error
 	if err := c.resources.AccessCache(ctx, c.cacheName, func(cache service.Cache) {
-		if err := cache.Set(ctx, c.toMetaKey(txnID), metaData, nil); err != nil {
-			c.log.Errorf("Failed to update meta for transaction %s: %v", txnID, err)
-		}
+		updateErr = cache.Set(ctx, c.toMetaKey(txnID), metaData, nil)
 	}); err != nil {
-		c.log.Errorf("Failed to access cache to update meta for transaction %s: %v", txnID, err)
+		return fmt.Errorf("accessing cache to update meta for transaction %s: %w", txnID, err)
 	}
+	if updateErr != nil {
+		return fmt.Errorf("updating meta for transaction %s: %w", txnID, updateErr)
+	}
+	return nil
 }
 
 // GetTransaction retrieves the transaction with the given ID by reading the
@@ -215,54 +201,40 @@ func (c *ConnectCacheResource) GetTransaction(ctx context.Context, txnID sqlredo
 }
 
 // CommitTransaction removes the committed transaction from the cache.
-func (c *ConnectCacheResource) CommitTransaction(ctx context.Context, txnID sqlredo.TransactionID) {
+func (c *ConnectCacheResource) CommitTransaction(ctx context.Context, txnID sqlredo.TransactionID) error {
 	delete(c.discarded, txnID)
 	delete(c.startSCNs, txnID)
 
 	meta, err := c.readMeta(ctx, txnID)
 	if err != nil {
-		c.log.Errorf("Failed to read meta for committing transaction %s, event metrics may be inaccurate: %v", txnID, err)
-	} else if meta == nil {
-		return
-	} else {
-		c.eventsMetric.Decr(int64(meta.EventCount))
-		c.deleteTransactionKeys(ctx, txnID, meta.EventCount)
-		c.transactionsMetric.Decr(1)
-		return
+		return fmt.Errorf("reading meta for committing transaction %s: %w", txnID, err)
 	}
-	// Error path: try to clean up the meta key as best-effort even if we couldn't read it.
-	if err := c.resources.AccessCache(ctx, c.cacheName, func(cache service.Cache) {
-		_ = cache.Delete(ctx, c.toMetaKey(txnID))
-	}); err != nil {
-		c.log.Errorf("Failed to access cache for transaction %s: %v", txnID, err)
+	if meta == nil {
+		return nil
 	}
+	c.eventsMetric.Decr(int64(meta.EventCount))
+	c.deleteTransactionKeys(ctx, txnID, meta.EventCount)
 	c.transactionsMetric.Decr(1)
+	return nil
 }
 
 // RollbackTransaction removes the rolled-back transaction from the cache,
 // discarding all buffered events.
-func (c *ConnectCacheResource) RollbackTransaction(ctx context.Context, txnID sqlredo.TransactionID) {
+func (c *ConnectCacheResource) RollbackTransaction(ctx context.Context, txnID sqlredo.TransactionID) error {
 	delete(c.discarded, txnID)
 	delete(c.startSCNs, txnID)
 
 	meta, err := c.readMeta(ctx, txnID)
 	if err != nil {
-		c.log.Errorf("Failed to read meta for rolling back transaction %s, event metrics may be inaccurate: %v", txnID, err)
-	} else if meta == nil {
-		return
-	} else {
-		c.eventsMetric.Decr(int64(meta.EventCount))
-		c.deleteTransactionKeys(ctx, txnID, meta.EventCount)
-		c.transactionsMetric.Decr(1)
-		return
+		return fmt.Errorf("reading meta for rolling back transaction %s: %w", txnID, err)
 	}
-	// Error path: try to clean up the meta key as best-effort even if we couldn't read it.
-	if err := c.resources.AccessCache(ctx, c.cacheName, func(cache service.Cache) {
-		_ = cache.Delete(ctx, c.toMetaKey(txnID))
-	}); err != nil {
-		c.log.Errorf("Failed to access cache for transaction %s: %v", txnID, err)
+	if meta == nil {
+		return nil
 	}
+	c.eventsMetric.Decr(int64(meta.EventCount))
+	c.deleteTransactionKeys(ctx, txnID, meta.EventCount)
 	c.transactionsMetric.Decr(1)
+	return nil
 }
 
 // LowWatermarkSCN returns the lowest start SCN among all currently open

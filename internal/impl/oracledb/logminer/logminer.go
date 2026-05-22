@@ -258,7 +258,9 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 	switch redoEvent.Operation {
 	case sqlredo.OpStart:
 		// Transaction started
-		lm.txnCache.StartTransaction(ctx, redoEvent.TransactionID, redoEvent.SCN)
+		if err := lm.txnCache.StartTransaction(ctx, redoEvent.TransactionID, redoEvent.SCN); err != nil {
+			return fmt.Errorf("starting transaction %s: %w", redoEvent.TransactionID, err)
+		}
 
 	case sqlredo.OpInsert, sqlredo.OpUpdate, sqlredo.OpDelete:
 		// SQL_REDO should always be present for DML operations. If not, it's likely a temporary
@@ -275,7 +277,9 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 			return fmt.Errorf("parsing sql redo event into dml event: %w", err)
 		}
 
-		lm.txnCache.AddEvent(ctx, redoEvent.TransactionID, redoEvent.SCN, &event)
+		if err := lm.txnCache.AddEvent(ctx, redoEvent.TransactionID, redoEvent.SCN, &event); err != nil {
+			return fmt.Errorf("adding event to transaction %s: %w", redoEvent.TransactionID, err)
+		}
 
 	case sqlredo.OpSelectLobLocator:
 		if !lm.cfg.LOBEnabled {
@@ -510,7 +514,9 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 				}
 			}
 
-			lm.txnCache.CommitTransaction(ctx, redoEvent.TransactionID)
+			if err := lm.txnCache.CommitTransaction(ctx, redoEvent.TransactionID); err != nil {
+				return fmt.Errorf("committing transaction %s: %w", redoEvent.TransactionID, err)
+			}
 		}
 
 		// Always clean up lobStates on commit, including for transactions discarded by
@@ -526,7 +532,9 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 		if lm.cfg.LOBEnabled {
 			delete(lm.lobStates, redoEvent.TransactionID)
 		}
-		lm.txnCache.RollbackTransaction(ctx, redoEvent.TransactionID)
+		if err := lm.txnCache.RollbackTransaction(ctx, redoEvent.TransactionID); err != nil {
+			return fmt.Errorf("rolling back transaction %s: %w", redoEvent.TransactionID, err)
+		}
 	}
 
 	return nil
