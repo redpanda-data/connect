@@ -214,3 +214,52 @@ func TestRenderBenchScript_EmbedsBucketAndSession(t *testing.T) {
 	require.Contains(t, got, "###timestamp=")
 	require.Contains(t, got, "###scrape_error")
 }
+
+func TestRenderBenchScript_RedpandaScraperWhenEndpointSet(t *testing.T) {
+	out := renderBenchScript(benchScriptArgs{
+		VCPU:                    4,
+		MemLimitGiB:             4,
+		WarmupSec:               60,
+		DurationSec:             900,
+		ConfigPath:              "/tmp/cfg.yaml",
+		BinaryPath:              "/opt/bench/rpcn",
+		Bucket:                  "results-bucket",
+		SessionID:               "sess-abc",
+		RedpandaMetricsEndpoint: "10.42.10.10:9644",
+	})
+	if !strings.Contains(out, "RP=/tmp/redpanda-4.txt") {
+		t.Errorf("expected RP path line for vcpu 4; got:\n%s", out)
+	}
+	if !strings.Contains(out, "curl -s --max-time 5 http://10.42.10.10:9644/public_metrics") {
+		t.Errorf("expected redpanda scraper curl; got:\n%s", out)
+	}
+	if !strings.Contains(out, "RP_SCRAPER=$!") {
+		t.Errorf("expected RP_SCRAPER pid capture; got:\n%s", out)
+	}
+	if !strings.Contains(out, `kill "$RP_SCRAPER" 2>/dev/null || true`) {
+		t.Errorf("expected RP_SCRAPER kill on shutdown; got:\n%s", out)
+	}
+	if !strings.Contains(out, `aws s3 cp "$RP" "s3://results-bucket/runs/sess-abc/redpanda-4.txt"`) {
+		t.Errorf("expected redpanda upload; got:\n%s", out)
+	}
+}
+
+func TestRenderBenchScript_RedpandaScraperOmittedWhenEmpty(t *testing.T) {
+	out := renderBenchScript(benchScriptArgs{
+		VCPU:                    1,
+		MemLimitGiB:             1,
+		WarmupSec:               60,
+		DurationSec:             900,
+		ConfigPath:              "/tmp/cfg.yaml",
+		BinaryPath:              "/opt/bench/rpcn",
+		Bucket:                  "results-bucket",
+		SessionID:               "sess-abc",
+		RedpandaMetricsEndpoint: "",
+	})
+	if strings.Contains(out, "/public_metrics") {
+		t.Errorf("expected no redpanda scraper when endpoint is empty; got:\n%s", out)
+	}
+	if strings.Contains(out, "redpanda-1.txt") {
+		t.Errorf("expected no redpanda upload when endpoint is empty; got:\n%s", out)
+	}
+}
