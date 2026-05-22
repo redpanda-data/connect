@@ -201,10 +201,10 @@ require (
 	go.opentelemetry.io/otel/trace v1.43.0
 	go.starlark.net v0.0.0-20260210143700-b62fd896b91b
 	go.uber.org/multierr v1.11.0
-	golang.org/x/crypto v0.50.0
-	golang.org/x/net v0.53.0
+	golang.org/x/crypto v0.51.0
+	golang.org/x/net v0.55.0
 	golang.org/x/sync v0.20.0
-	golang.org/x/text v0.36.0
+	golang.org/x/text v0.37.0
 	google.golang.org/api v0.276.0
 	google.golang.org/protobuf v1.36.11
 	modernc.org/sqlite v1.49.1
@@ -552,7 +552,7 @@ require (
 	golang.org/x/mod v0.35.0 // indirect
 	golang.org/x/oauth2 v0.36.0
 	golang.org/x/sys v0.45.0
-	golang.org/x/term v0.42.0 // indirect
+	golang.org/x/term v0.43.0 // indirect
 	golang.org/x/time v0.15.0
 	golang.org/x/tools v0.44.0 // indirect
 	golang.org/x/xerrors v0.0.0-20240903120638-7835f813f4da // indirect
