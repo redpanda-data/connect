@@ -1,4 +1,50 @@
 #cloud-config
-# Replaced in task 4.
+package_update: true
 runcmd:
-  - echo "node_id=${node_id} self_ip=${self_ip} seeds=${seed_servers}"
+  # Format and mount the NVMe instance store (im4gn family exposes 1× /dev/nvme1n1).
+  - mkfs.xfs -f /dev/nvme1n1
+  - mkdir -p /var/lib/redpanda/data
+  - mount /dev/nvme1n1 /var/lib/redpanda/data
+  - echo "/dev/nvme1n1 /var/lib/redpanda/data xfs defaults,noatime 0 0" >> /etc/fstab
+
+  # Install Redpanda from the official rpm setup script.
+  - curl -sSL https://packages.redpanda.com/public/redpanda/setup.rpm.sh | bash
+  - dnf install -y redpanda
+
+  # Ensure the redpanda user owns the data dir.
+  - chown -R redpanda:redpanda /var/lib/redpanda/data
+
+  # Write the broker config. Static IPs let us seed deterministically.
+  - |
+    cat > /etc/redpanda/redpanda.yaml <<'RP'
+    redpanda:
+      data_directory: /var/lib/redpanda/data
+      node_id: ${node_id}
+      empty_seed_starts_cluster: false
+      seed_servers:
+%{ for ip in split(",", seed_servers) ~}
+        - host: { address: "${split(":", ip)[0]}", port: 33145 }
+%{ endfor ~}
+      rpc_server:
+        address: ${self_ip}
+        port: 33145
+      kafka_api:
+        - address: ${self_ip}
+          port: 9092
+      admin:
+        - address: 0.0.0.0
+          port: 9644
+      advertised_kafka_api:
+        - address: ${split(":", advertised_kafka)[0]}
+          port: 9092
+      advertised_rpc_api:
+        address: ${split(":", advertised_rpc)[0]}
+        port: 33145
+    pandaproxy: {}
+    schema_registry: {}
+    RP
+  - chown redpanda:redpanda /etc/redpanda/redpanda.yaml
+
+  # Enable + start.
+  - systemctl daemon-reload
+  - systemctl enable --now redpanda
