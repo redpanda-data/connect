@@ -11,6 +11,7 @@ package bigquery
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -123,6 +124,215 @@ endpoint:
 	assert.Equal(t, 45*time.Second, cfg.SchemaEvolutionTimeout)
 	assert.Equal(t, "http://localhost:9050", cfg.EndpointHTTP)
 	assert.Equal(t, "localhost:9060", cfg.EndpointGRPC)
+}
+
+func TestBigQueryWriteAPIConfigParsingWriteModeUpsert(t *testing.T) {
+	spec := bigQueryWriteAPISpec()
+	for _, mode := range []string{"upsert", "upsert_delete"} {
+		t.Run(mode, func(t *testing.T) {
+			yaml := fmt.Sprintf(`
+dataset: my_dataset
+table: my_table
+write_mode: %s
+change_type: ${! metadata("operation") }
+`, mode)
+			pConf, err := spec.ParseYAML(yaml, nil)
+			require.NoError(t, err)
+			cfg, err := bigQueryWriteAPIConfigFromParsed(pConf)
+			require.NoError(t, err)
+			assert.Equal(t, mode, cfg.WriteMode)
+		})
+	}
+}
+
+func TestBigQueryWriteAPIConfigChangeType(t *testing.T) {
+	spec := bigQueryWriteAPISpec()
+
+	t.Run("change_type parsed for upsert mode", func(t *testing.T) {
+		pConf, err := spec.ParseYAML(`
+dataset: my_dataset
+table: my_table
+write_mode: upsert
+change_type: ${! metadata("operation") }
+`, nil)
+		require.NoError(t, err)
+		cfg, err := bigQueryWriteAPIConfigFromParsed(pConf)
+		require.NoError(t, err)
+		require.NotNil(t, cfg.ChangeType)
+	})
+
+	t.Run("change_type required when upsert", func(t *testing.T) {
+		pConf, err := spec.ParseYAML(`
+dataset: my_dataset
+table: my_table
+write_mode: upsert
+`, nil)
+		require.NoError(t, err)
+		_, err = bigQueryWriteAPIConfigFromParsed(pConf)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "change_type")
+	})
+
+	t.Run("change_type not required when default_stream", func(t *testing.T) {
+		pConf, err := spec.ParseYAML(`
+dataset: my_dataset
+table: my_table
+`, nil)
+		require.NoError(t, err)
+		cfg, err := bigQueryWriteAPIConfigFromParsed(pConf)
+		require.NoError(t, err)
+		assert.Nil(t, cfg.ChangeType)
+	})
+}
+
+func TestBigQueryWriteAPIConfigChangeSequenceNumber(t *testing.T) {
+	spec := bigQueryWriteAPISpec()
+	pConf, err := spec.ParseYAML(`
+dataset: my_dataset
+table: my_table
+write_mode: upsert
+change_type: ${! metadata("operation") }
+change_sequence_number: ${! metadata("scn") }
+`, nil)
+	require.NoError(t, err)
+	cfg, err := bigQueryWriteAPIConfigFromParsed(pConf)
+	require.NoError(t, err)
+	require.NotNil(t, cfg.ChangeSequenceNumber)
+}
+
+func TestBigQueryWriteAPIConfigPrimaryKeys(t *testing.T) {
+	spec := bigQueryWriteAPISpec()
+
+	t.Run("primary_keys parsed", func(t *testing.T) {
+		pConf, err := spec.ParseYAML(`
+dataset: my_dataset
+table: my_table
+write_mode: upsert
+change_type: ${! metadata("operation") }
+primary_keys: [id, tenant_id]
+`, nil)
+		require.NoError(t, err)
+		cfg, err := bigQueryWriteAPIConfigFromParsed(pConf)
+		require.NoError(t, err)
+		assert.Equal(t, []string{"id", "tenant_id"}, cfg.PrimaryKeys)
+	})
+
+	t.Run("max 16 columns", func(t *testing.T) {
+		keys := make([]string, 17)
+		for i := range keys {
+			keys[i] = fmt.Sprintf("c%d", i)
+		}
+		pConf, err := spec.ParseYAML(fmt.Sprintf(`
+dataset: my_dataset
+table: my_table
+write_mode: upsert
+change_type: ${! metadata("operation") }
+primary_keys: [%s]
+`, strings.Join(keys, ", ")), nil)
+		require.NoError(t, err)
+		_, err = bigQueryWriteAPIConfigFromParsed(pConf)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "16")
+	})
+
+	t.Run("required when auto_create_table and CDC mode", func(t *testing.T) {
+		pConf, err := spec.ParseYAML(`
+dataset: my_dataset
+table: my_table
+write_mode: upsert
+change_type: ${! metadata("operation") }
+auto_create_table: true
+schema:
+  - { name: id, type: STRING, mode: REQUIRED }
+`, nil)
+		require.NoError(t, err)
+		_, err = bigQueryWriteAPIConfigFromParsed(pConf)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "primary_keys")
+	})
+
+	t.Run("PK column must exist in schema when both set", func(t *testing.T) {
+		pConf, err := spec.ParseYAML(`
+dataset: my_dataset
+table: my_table
+write_mode: upsert
+change_type: ${! metadata("operation") }
+auto_create_table: true
+schema:
+  - { name: id, type: STRING, mode: REQUIRED }
+primary_keys: [unknown_col]
+`, nil)
+		require.NoError(t, err)
+		_, err = bigQueryWriteAPIConfigFromParsed(pConf)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "unknown_col")
+	})
+
+	t.Run("PK column must be REQUIRED when both set", func(t *testing.T) {
+		pConf, err := spec.ParseYAML(`
+dataset: my_dataset
+table: my_table
+write_mode: upsert
+change_type: ${! metadata("operation") }
+auto_create_table: true
+schema:
+  - { name: id, type: STRING, mode: NULLABLE }
+primary_keys: [id]
+`, nil)
+		require.NoError(t, err)
+		_, err = bigQueryWriteAPIConfigFromParsed(pConf)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "REQUIRED")
+	})
+}
+
+func TestBigQueryWriteAPIConfigCDCIncompatibilities(t *testing.T) {
+	spec := bigQueryWriteAPISpec()
+	cases := []struct {
+		name   string
+		yaml   string
+		errMsg string
+	}{
+		{
+			name: "pending_stream rejects change_type",
+			yaml: `
+dataset: my_dataset
+table: my_table
+write_mode: pending_stream
+change_type: ${! metadata("operation") }
+`,
+			errMsg: "change_type",
+		},
+		{
+			name: "default_stream rejects change_sequence_number",
+			yaml: `
+dataset: my_dataset
+table: my_table
+change_sequence_number: ${! metadata("scn") }
+`,
+			errMsg: "change_sequence_number",
+		},
+		{
+			name: "upsert rejects message_format: protobuf",
+			yaml: `
+dataset: my_dataset
+table: my_table
+write_mode: upsert
+change_type: ${! metadata("operation") }
+message_format: protobuf
+`,
+			errMsg: "message_format",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			pConf, err := spec.ParseYAML(tc.yaml, nil)
+			require.NoError(t, err)
+			_, err = bigQueryWriteAPIConfigFromParsed(pConf)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tc.errMsg)
+		})
+	}
 }
 
 func TestBigQueryWriteAPIConfigParsingRejectsNonPositiveDurations(t *testing.T) {

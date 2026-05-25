@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"cloud.google.com/go/bigquery"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -165,6 +166,29 @@ func TestResolverConcurrentStress(t *testing.T) {
 	// any access path is unsafe. The build/test passes when atomic + lock
 	// invariants hold.
 	assert.GreaterOrEqual(t, r.generation.Load(), int64(0))
+}
+
+func TestExtractPrimaryKeysFromMetadata(t *testing.T) {
+	t.Run("returns columns in declared order", func(t *testing.T) {
+		meta := &bigquery.TableMetadata{
+			TableConstraints: &bigquery.TableConstraints{
+				PrimaryKey: &bigquery.PrimaryKey{Columns: []string{"tenant_id", "id"}},
+			},
+		}
+		pks := extractPrimaryKeysFromMetadata(meta)
+		assert.Equal(t, []string{"tenant_id", "id"}, pks)
+	})
+
+	t.Run("returns nil when no constraints", func(t *testing.T) {
+		assert.Nil(t, extractPrimaryKeysFromMetadata(&bigquery.TableMetadata{}))
+		assert.Nil(t, extractPrimaryKeysFromMetadata(&bigquery.TableMetadata{
+			TableConstraints: &bigquery.TableConstraints{},
+		}))
+	})
+
+	t.Run("returns nil on nil metadata", func(t *testing.T) {
+		assert.Nil(t, extractPrimaryKeysFromMetadata(nil))
+	})
 }
 
 // buildTestMessageDescriptor creates a simple (name STRING, age INT64)
