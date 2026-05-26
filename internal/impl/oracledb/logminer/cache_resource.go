@@ -74,6 +74,9 @@ func (c *ConnectCacheResource) StartTransaction(ctx context.Context, txnID sqlre
 	if existing, err = c.readMetadata(ctx, txnID); err != nil {
 		return fmt.Errorf("checking for existing transaction %s: %w", txnID, err)
 	} else if existing != nil {
+		if _, tracked := c.startSCNs[txnID]; !tracked && existing.EventCount > 0 {
+			c.startSCNs[txnID] = existing.SCN
+		}
 		return nil
 	}
 
@@ -118,8 +121,10 @@ func (c *ConnectCacheResource) AddEvent(ctx context.Context, txnID sqlredo.Trans
 		m = &serializedTransactionMetadata{ID: txnID, SCN: scn, EventCount: 0}
 		c.startSCNs[txnID] = scn
 		c.transactionsMetric.Incr(1)
-	} else if m.EventCount == 0 {
-		c.startSCNs[txnID] = m.SCN
+	} else {
+		if _, exists := c.startSCNs[txnID]; !exists {
+			c.startSCNs[txnID] = m.SCN
+		}
 	}
 
 	evData, err := marshalEvent(event)

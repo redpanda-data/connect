@@ -92,6 +92,37 @@ func TestProcessRedoEventWithInMemoryCache(t *testing.T) {
 		msg = "with no remaining open transactions, CheckpointSCN must equal B's commit SCN"
 		assert.Equal(t, replication.SCN(txBCommit), pub.messages[1].CheckpointSCN, msg)
 	})
+
+	// A transaction that receives OpStart but no DML events (e.g. a read-only
+	// or DDL transaction on an unsubscribed table) must not hold back the
+	// checkpoint watermark — it has nothing to replay on restart.
+	t.Run("open transaction with no events does not hold back checkpoint", func(t *testing.T) {
+		cache := NewInMemoryCache(0, service.MockResources().Metrics(), service.NewLoggerFromSlog(slog.Default()))
+		pub := &publisherStub{}
+		lm := newLogMiner(pub, cache)
+
+		const (
+			txAStart  = uint64(900)
+			txBStart  = uint64(910) // starts but never gets DML events
+			txACommit = uint64(1000)
+		)
+
+		require.NoError(t, cache.StartTransaction(t.Context(), "txA", txAStart))
+		require.NoError(t, cache.AddEvent(t.Context(), "txA", txAStart, &sqlredo.DMLEvent{Operation: sqlredo.OpInsert, Table: "T"}))
+		// txB is started but never receives any DML events
+		require.NoError(t, cache.StartTransaction(t.Context(), "txB", txBStart))
+
+		err := lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+			SCN:           txACommit,
+			Operation:     sqlredo.OpCommit,
+			TransactionID: "txA",
+		})
+		require.NoError(t, err)
+		require.Len(t, pub.messages, 1, "A's commit must publish its events")
+
+		msg := "txB has no DML events so it must not hold back the checkpoint"
+		assert.Equal(t, replication.SCN(txACommit), pub.messages[0].CheckpointSCN, msg)
+	})
 }
 
 func TestProcessRedoEventWithConnectCacheResource(t *testing.T) {
