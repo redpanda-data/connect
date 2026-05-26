@@ -128,7 +128,6 @@ require (
 	github.com/oauth2-proxy/mockoidc v0.0.0-20240214162133-caebfff84d25
 	github.com/oklog/ulid/v2 v2.1.1
 	github.com/opensearch-project/opensearch-go/v3 v3.1.0
-	github.com/ory/dockertest/v3 v3.12.0
 	github.com/oschwald/geoip2-golang v1.13.0
 	github.com/parquet-go/parquet-go v0.29.0
 	github.com/pebbe/zmq4 v1.4.0
@@ -229,7 +228,6 @@ require (
 	github.com/GoogleCloudPlatform/grpc-gcp-go/grpcgcp v1.6.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.31.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/metric v0.55.0 // indirect
-	github.com/Nvveen/Gotty v0.0.0-20120604004816-cd527374f1e5 // indirect
 	github.com/ProtonMail/go-crypto v1.4.1 // indirect
 	github.com/RoaringBitmap/roaring/v2 v2.15.0 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
@@ -246,7 +244,6 @@ require (
 	github.com/cncf/xds/go v0.0.0-20260202195803-dba9d589def2 // indirect
 	github.com/containerd/console v1.0.5 // indirect
 	github.com/containerd/containerd v1.7.12 // indirect
-	github.com/containerd/continuity v0.4.5 // indirect
 	github.com/containerd/errdefs v1.0.0 // indirect
 	github.com/containerd/errdefs/pkg v0.3.0 // indirect
 	github.com/containerd/platforms v1.0.0-rc.4 // indirect
@@ -254,7 +251,6 @@ require (
 	github.com/creasty/defaults v1.8.0 // indirect
 	github.com/cyphar/filepath-securejoin v0.6.1 // indirect
 	github.com/dnephin/pflag v1.0.7 // indirect
-	github.com/docker/cli v29.4.0+incompatible // indirect
 	github.com/emirpasic/gods v1.18.1 // indirect
 	github.com/envoyproxy/go-control-plane/envoy v1.37.0 // indirect
 	github.com/envoyproxy/protoc-gen-validate v1.3.3 // indirect
@@ -300,7 +296,6 @@ require (
 	github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee // indirect
 	github.com/mschoch/smat v0.2.0 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
-	github.com/opencontainers/runc v1.3.1 // indirect
 	github.com/parquet-go/bitpack v1.0.0 // indirect
 	github.com/parquet-go/jsonlite v1.5.0 // indirect
 	github.com/petermattis/goid v0.0.0-20260226131333-17d1149c6ac6 // indirect

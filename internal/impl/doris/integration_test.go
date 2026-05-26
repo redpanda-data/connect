@@ -26,10 +26,12 @@ import (
 	"time"
 
 	mysqlDriver "github.com/go-sql-driver/mysql"
-	"github.com/ory/dockertest/v3"
-	"github.com/ory/dockertest/v3/docker"
+	"github.com/moby/moby/api/types/container"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/network"
+	"github.com/testcontainers/testcontainers-go/wait"
 
 	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -45,65 +47,67 @@ func TestIntegrationDorisStreamLoadOutput(t *testing.T) {
 	}
 
 	ctx := t.Context()
-	pool, err := dockertest.NewPool("")
+
+	dockerNet, err := network.New(ctx)
 	require.NoError(t, err)
-	if err := pool.Client.Ping(); err != nil {
-		t.Skipf("Skipping Doris Docker integration test because Docker is unavailable: %v", err)
-	}
-	pool.MaxWait = 5 * time.Minute
+	t.Cleanup(func() { _ = dockerNet.Remove(context.Background()) })
 
-	network, feIP, beIP := createDorisIntegrationNetwork(t, pool)
-	t.Cleanup(func() {
-		assert.NoError(t, pool.RemoveNetwork(network))
-	})
-
-	feName := fmt.Sprintf("doris-it-fe-%d", time.Now().UnixNano())
-	fe, err := pool.RunWithOptions(&dockertest.RunOptions{
-		Name:         feName,
-		Hostname:     feName,
-		Repository:   "apache/doris",
-		Tag:          "fe-" + dorisIntegrationVersion,
-		Networks:     []*dockertest.Network{network},
-		ExposedPorts: []string{"8030/tcp", "9010/tcp", "9030/tcp"},
-		Env: []string{
-			"FE_SERVERS=fe1:" + feIP + ":9010",
-			"FE_ID=1",
-		},
-	}, noRestartAutoRemove)
+	// Set a stable hostname so the FE can reference itself in FE_SERVERS using
+	// Docker's internal DNS rather than a pre-allocated IP.
+	fe, err := testcontainers.Run(ctx, "apache/doris:fe-"+dorisIntegrationVersion,
+		testcontainers.WithConfigModifier(func(c *container.Config) {
+			c.Hostname = "doris-fe"
+		}),
+		network.WithNetwork([]string{"doris-fe"}, dockerNet),
+		testcontainers.WithExposedPorts("8030/tcp", "9010/tcp", "9030/tcp"),
+		testcontainers.WithEnv(map[string]string{
+			"FE_SERVERS": "fe1:doris-fe:9010",
+			"FE_ID":      "1",
+		}),
+		testcontainers.WithWaitStrategy(
+			wait.ForListeningPort("9030/tcp").WithStartupTimeout(5*time.Minute),
+		),
+	)
+	testcontainers.CleanupContainer(t, fe)
 	require.NoError(t, err)
-	t.Cleanup(func() {
-		assert.NoError(t, pool.Purge(fe))
-	})
-	require.Equal(t, feIP, fe.GetIPInNetwork(network))
 
-	beName := fmt.Sprintf("doris-it-be-%d", time.Now().UnixNano())
-	be, err := pool.RunWithOptions(&dockertest.RunOptions{
-		Name:         beName,
-		Hostname:     beName,
-		Repository:   "apache/doris",
-		Tag:          "be-" + dorisIntegrationVersion,
-		Networks:     []*dockertest.Network{network},
-		ExposedPorts: []string{"8040/tcp", "9050/tcp"},
-		Env: []string{
-			"FE_SERVERS=fe1:" + feIP + ":9010",
-			"BE_ADDR=" + beIP + ":9050",
-		},
-	}, noRestartAutoRemove)
+	// Get the FE's internal Docker network IP so the BE can connect to it.
+	feIP := dorisContainerNetworkIP(t, ctx, fe, dockerNet.Name)
+
+	// BE_ADDR is intentionally omitted: the BE image auto-detects its own
+	// Docker network IP, which is exactly what stream-load redirects will use.
+	be, err := testcontainers.Run(ctx, "apache/doris:be-"+dorisIntegrationVersion,
+		network.WithNetwork([]string{"doris-be"}, dockerNet),
+		testcontainers.WithExposedPorts("8040/tcp", "9050/tcp"),
+		testcontainers.WithEnv(map[string]string{
+			"FE_SERVERS": "fe1:" + feIP + ":9010",
+		}),
+		testcontainers.WithWaitStrategy(
+			wait.ForListeningPort("9050/tcp").WithStartupTimeout(5*time.Minute),
+		),
+	)
+	testcontainers.CleanupContainer(t, be)
 	require.NoError(t, err)
-	t.Cleanup(func() {
-		assert.NoError(t, pool.Purge(be))
-	})
-	require.Equal(t, beIP, be.GetIPInNetwork(network))
 
-	queryPort := fe.GetPort("9030/tcp")
-	db := openDorisIntegrationDB(t, pool, queryPort)
+	// Inspect the BE's Docker-internal IP: used for ALTER SYSTEM ADD BACKEND
+	// and as the redirect target for stream-load requests (routable from the
+	// host on Linux via Docker bridge networking).
+	beIP := dorisContainerNetworkIP(t, ctx, be, dockerNet.Name)
+
+	queryPort, err := fe.MappedPort(ctx, "9030/tcp")
+	require.NoError(t, err)
+
+	db := openDorisIntegrationDB(t, queryPort.Port())
 	t.Cleanup(func() {
 		assert.NoError(t, db.Close())
 	})
 
 	t.Log("Given a Doris FE and BE started from the official Docker images")
-	waitForDorisBackend(t, pool, db, beIP)
+	waitForDorisBackend(t, db, beIP)
 	createDorisStreamLoadTable(t, db)
+
+	feHTTPPort, err := fe.MappedPort(ctx, "8030/tcp")
+	require.NoError(t, err)
 
 	streamBuilder := service.NewStreamBuilder()
 	require.NoError(t, streamBuilder.AddOutputYAML(fmt.Sprintf(`
@@ -119,7 +123,7 @@ doris_stream_load:
   columns: [id, name, created_at]
   batching:
     count: 2
-`, fe.GetPort("8030/tcp"), queryPort)))
+`, feHTTPPort.Port(), queryPort.Port())))
 
 	sendBatch, err := streamBuilder.AddBatchProducerFunc()
 	require.NoError(t, err)
@@ -155,9 +159,18 @@ doris_stream_load:
 	}, time.Minute, time.Second)
 }
 
-func noRestartAutoRemove(config *docker.HostConfig) {
-	config.AutoRemove = true
-	config.RestartPolicy = docker.RestartPolicy{Name: "no"}
+// dorisContainerNetworkIP returns the container's IP address on the named
+// Docker network by inspecting Docker's container state directly. ContainerIP
+// only covers the default bridge; user-defined network IPs are in Networks map.
+func dorisContainerNetworkIP(t *testing.T, ctx context.Context, ctr *testcontainers.DockerContainer, networkName string) string {
+	t.Helper()
+	inspect, err := ctr.Inspect(ctx)
+	require.NoError(t, err)
+	netInfo, ok := inspect.NetworkSettings.Networks[networkName]
+	require.True(t, ok, "container not found on network %q", networkName)
+	ip := netInfo.IPAddress.String()
+	require.NotEmpty(t, ip, "container has no IP on network %q", networkName)
+	return ip
 }
 
 func ignoreContextCanceled(err error) error {
@@ -167,30 +180,7 @@ func ignoreContextCanceled(err error) error {
 	return err
 }
 
-func createDorisIntegrationNetwork(t *testing.T, pool *dockertest.Pool) (*dockertest.Network, string, string) {
-	t.Helper()
-
-	var lastErr error
-	for i := range 128 {
-		thirdOctet := 50 + int((time.Now().UnixNano()+int64(i))%150)
-		subnet := fmt.Sprintf("168.%d.0.0/24", thirdOctet)
-		network, err := pool.CreateNetwork(fmt.Sprintf("doris-it-%d-%d", time.Now().UnixNano(), i), func(config *docker.CreateNetworkOptions) {
-			config.Driver = "bridge"
-			config.IPAM = &docker.IPAMOptions{
-				Driver: "default",
-				Config: []docker.IPAMConfig{{Subnet: subnet}},
-			}
-		})
-		if err == nil {
-			return network, fmt.Sprintf("168.%d.0.2", thirdOctet), fmt.Sprintf("168.%d.0.3", thirdOctet)
-		}
-		lastErr = err
-	}
-	require.NoError(t, lastErr)
-	return nil, "", ""
-}
-
-func openDorisIntegrationDB(t *testing.T, pool *dockertest.Pool, queryPort string) *sql.DB {
+func openDorisIntegrationDB(t *testing.T, queryPort string) *sql.DB {
 	t.Helper()
 
 	cfg := mysqlDriver.NewConfig()
@@ -204,19 +194,23 @@ func openDorisIntegrationDB(t *testing.T, pool *dockertest.Pool, queryPort strin
 
 	db, err := sql.Open("mysql", cfg.FormatDSN())
 	require.NoError(t, err)
-	require.NoError(t, pool.Retry(db.Ping))
+	require.Eventually(t, func() bool {
+		return db.Ping() == nil
+	}, 5*time.Minute, time.Second, "Doris FE MySQL port never became ready")
 	return db
 }
 
-func waitForDorisBackend(t *testing.T, pool *dockertest.Pool, db *sql.DB, beIP string) {
+func waitForDorisBackend(t *testing.T, db *sql.DB, beIP string) {
 	t.Helper()
 
-	require.NoError(t, pool.Retry(func() error {
-		if _, err := db.Exec(fmt.Sprintf(`ALTER SYSTEM ADD BACKEND "%s:9050"`, beIP)); err != nil && !strings.Contains(strings.ToLower(err.Error()), "already") {
-			return fmt.Errorf("adding doris backend: %w", err)
+	require.Eventually(t, func() bool {
+		if _, err := db.Exec(fmt.Sprintf(`ALTER SYSTEM ADD BACKEND "%s:9050"`, beIP)); err != nil {
+			if !strings.Contains(strings.ToLower(err.Error()), "already") {
+				return false
+			}
 		}
-		return waitForAliveDorisBackend(db)
-	}))
+		return waitForAliveDorisBackend(db) == nil
+	}, 5*time.Minute, time.Second, "Doris BE never became alive")
 }
 
 func waitForAliveDorisBackend(db *sql.DB) error {
