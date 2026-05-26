@@ -25,7 +25,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/moby/moby/api/types/container"
 	mysqlDriver "github.com/go-sql-driver/mysql"
 	"github.com/moby/moby/api/types/container"
 	"github.com/stretchr/testify/assert"
