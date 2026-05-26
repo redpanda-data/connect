@@ -55,7 +55,8 @@ type LogMiner struct {
 }
 
 // NewMiner creates a new instance of LogMiner responsible for paging through change events based on the tables param.
-func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replication.ChangePublisher, cfg *Config, metrics *service.Metrics, logger *service.Logger) *LogMiner {
+// txnCache sets the transaction buffer implementation; pass nil to use the default in-memory cache.
+func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replication.ChangePublisher, cfg *Config, txnCache TransactionCache, metrics *service.Metrics, logger *service.Logger) *LogMiner {
 	// Build table filter condition once
 	// Transaction control operations (6=START, 7=COMMIT, 36=ROLLBACK) don't have table info
 	// and must pass unfiltered. DML (1=INSERT, 2=DELETE, 3=UPDATE) and LOB operations
@@ -108,9 +109,12 @@ func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replicat
 		logMinerQuery: logMinerQuery,
 		logCollector:  NewLogFileCollector(),
 		sessionMgr:    NewSessionManager(cfg, logger),
-		txnCache:      NewInMemoryCache(cfg.MaxTransactionEvents, metrics, logger),
+		txnCache:      txnCache,
 		dmlParser:     sqlredo.NewParser(),
 		lobStates:     make(map[sqlredo.TransactionID]*sqlredo.TxnLOBState),
+	}
+	if lm.txnCache == nil {
+		lm.txnCache = NewInMemoryCache(cfg.MaxTransactionEvents, metrics, logger)
 	}
 	return lm
 }
@@ -254,7 +258,9 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 	switch redoEvent.Operation {
 	case sqlredo.OpStart:
 		// Transaction started
-		lm.txnCache.StartTransaction(redoEvent.TransactionID, redoEvent.SCN)
+		if err := lm.txnCache.StartTransaction(ctx, redoEvent.TransactionID, redoEvent.SCN); err != nil {
+			return fmt.Errorf("starting transaction %s: %w", redoEvent.TransactionID, err)
+		}
 
 	case sqlredo.OpInsert, sqlredo.OpUpdate, sqlredo.OpDelete:
 		// SQL_REDO should always be present for DML operations. If not, it's likely a temporary
@@ -271,7 +277,9 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 			return fmt.Errorf("parsing sql redo event into dml event: %w", err)
 		}
 
-		lm.txnCache.AddEvent(redoEvent.TransactionID, redoEvent.SCN, &event)
+		if err := lm.txnCache.AddEvent(ctx, redoEvent.TransactionID, redoEvent.SCN, &event); err != nil {
+			return fmt.Errorf("adding event to transaction %s: %w", redoEvent.TransactionID, err)
+		}
 
 	case sqlredo.OpSelectLobLocator:
 		if !lm.cfg.LOBEnabled {
@@ -383,7 +391,7 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 		}
 		state, exists := lm.lobStates[redoEvent.TransactionID]
 		if !exists || state.ActiveKey == nil {
-			if !lm.inferLOBLocator(redoEvent) {
+			if !lm.inferLOBLocator(ctx, redoEvent) {
 				lm.log.Warnf("Received LOB_WRITE without active LOB locator (scn=%d, txn=%s)", redoEvent.SCN, redoEvent.TransactionID)
 				return nil
 			}
@@ -408,19 +416,20 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 
 	case sqlredo.OpCommit:
 		// Flush all buffered events for given transaction ID
-		if txn := lm.txnCache.GetTransaction(redoEvent.TransactionID); txn != nil {
+		txn, err := lm.txnCache.GetTransaction(ctx, redoEvent.TransactionID)
+		if err != nil {
+			return fmt.Errorf("fetching transaction %s on commit: %w", redoEvent.TransactionID, err)
+		}
+		if txn != nil {
 			safeCheckpointSCN := redoEvent.SCN
 
-			// InMemory cache specific behaviour
-			if cache, ok := lm.txnCache.(*InMemoryCache); ok {
-				// Compute the safe checkpoint SCN. If other transactions are still
-				// open, we must not advance the checkpoint past their start SCN - 1,
-				// otherwise a restart with in-memory cache would miss their already-seen DML events.
-				if lowestOpenSCN := cache.LowWatermarkSCN(redoEvent.TransactionID); lowestOpenSCN != math.MaxUint64 && lowestOpenSCN > 0 {
-					// We subtract 1 because the query resumes from the point before (i.e. SCN > checkpoint)
-					if lowestOpenSCN-1 < safeCheckpointSCN {
-						safeCheckpointSCN = lowestOpenSCN - 1
-					}
+			// If other transactions are still open, we must not advance the
+			// checkpoint past their start SCN - 1. Doing so would cause their
+			// already-seen DML events to be skipped on restart (the query resumes
+			// from SCN > checkpoint). We subtract 1 because the query is exclusive.
+			if lowestOpenSCN := lm.txnCache.LowWatermarkSCN(redoEvent.TransactionID); lowestOpenSCN != math.MaxUint64 && lowestOpenSCN > 0 {
+				if lowestOpenSCN-1 < safeCheckpointSCN {
+					safeCheckpointSCN = lowestOpenSCN - 1
 				}
 			}
 
@@ -505,7 +514,9 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 				}
 			}
 
-			lm.txnCache.CommitTransaction(redoEvent.TransactionID)
+			if err := lm.txnCache.CommitTransaction(ctx, redoEvent.TransactionID); err != nil {
+				return fmt.Errorf("committing transaction %s: %w", redoEvent.TransactionID, err)
+			}
 		}
 
 		// Always clean up lobStates on commit, including for transactions discarded by
@@ -521,7 +532,9 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 		if lm.cfg.LOBEnabled {
 			delete(lm.lobStates, redoEvent.TransactionID)
 		}
-		lm.txnCache.RollbackTransaction(redoEvent.TransactionID)
+		if err := lm.txnCache.RollbackTransaction(ctx, redoEvent.TransactionID); err != nil {
+			return fmt.Errorf("rolling back transaction %s: %w", redoEvent.TransactionID, err)
+		}
 	}
 
 	return nil
@@ -635,7 +648,7 @@ func (lm *LogMiner) isLOBOnlyEvent(ev *sqlredo.DMLEvent) bool {
 // placeholder; in that case the LOB column is absent from Data, so known LOB
 // columns for the table are also considered as inference candidates.
 // Returns true if a locator was successfully created.
-func (lm *LogMiner) inferLOBLocator(event *sqlredo.RedoEvent) bool {
+func (lm *LogMiner) inferLOBLocator(ctx context.Context, event *sqlredo.RedoEvent) bool {
 	if !event.SchemaName.Valid || !event.TableName.Valid {
 		return false
 	}
@@ -645,7 +658,11 @@ func (lm *LogMiner) inferLOBLocator(event *sqlredo.RedoEvent) bool {
 		return false
 	}
 
-	txn := lm.txnCache.GetTransaction(event.TransactionID)
+	txn, err := lm.txnCache.GetTransaction(ctx, event.TransactionID)
+	if err != nil {
+		lm.log.Errorf("Failed to get transaction %s for LOB locator inference: %v", event.TransactionID, err)
+		return false
+	}
 	if txn == nil {
 		return false
 	}

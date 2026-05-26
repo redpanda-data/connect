@@ -454,67 +454,18 @@ oracledb_cdc:
 
 func TestIntegrationOracleDBCDCStreaming(t *testing.T) {
 	integration.CheckSkip(t)
-
-	// Create tables
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
-	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.foo", "CREATE TABLE testdb.foo (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, val NUMBER)"))
-	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.foo2", "CREATE TABLE testdb.foo2 (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, val NUMBER)"))
-	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb2.bar", "CREATE TABLE testdb2.bar (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, val NUMBER)"))
 
 	var (
-		err     error
-		stream  *service.Stream
-		msgChan = make(chan *service.Message, 1)
+		err    error
+		stream *service.Stream
 	)
 
-	cfg := `
-oracledb_cdc:
-  connection_string: %s
-  stream_snapshot: false
-  logminer:
-    scn_window_size: 20000
-    backoff_interval: 1s
-  include: ["TESTDB.FOO", "TESTDB.FOO2", "TESTDB2.BAR"]
-  exclude: ["TESTDB.DOESNOTEXIST"]
-  batching:
-    count: 500`
-
-	t.Log("Launching component...")
-	{
-		streamBuilder := service.NewStreamBuilder()
-		require.NoError(t, streamBuilder.AddInputYAML(fmt.Sprintf(cfg, connStr)))
-		require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
-
-		require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
-			for _, msg := range mb {
-				msgChan <- msg
-			}
-			return nil
-		}))
-
-		stream, err = streamBuilder.Build()
-		require.NoError(t, err)
-		license.InjectTestService(stream.Resources())
-
-		go func() {
-			if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
-				t.Error(err)
-			}
-		}()
-		go func() {
-			<-t.Context().Done()
-			close(msgChan)
-		}()
-	}
-
-	// wait for component to start
-	time.Sleep(10 * time.Second)
-
 	// collectMessages reads messages from channel ready for assertion
-	collectMessages := func(t *testing.T, want int) []*service.Message {
+	collectMessages := func(t *testing.T, c chan *service.Message, want int) []*service.Message {
 		t.Helper()
 		msgs := make([]*service.Message, 0, want)
-		for msg := range msgChan {
+		for msg := range c {
 			msgs = append(msgs, msg)
 			if len(msgs) == want {
 				break
@@ -525,7 +476,6 @@ oracledb_cdc:
 		return msgs
 	}
 
-	// mustAssertMetadata ensures correct metadata exists in messages
 	mustAssertMetadata := func(t *testing.T, operation string, msgs []*service.Message) {
 		t.Helper()
 		results := make(map[string][]*service.Message)
@@ -575,62 +525,228 @@ oracledb_cdc:
 		}
 	}
 
-	// insert initial test data
-	want := 3000
-	for range 1000 {
-		db.MustExec("INSERT INTO testdb.foo (val) VALUES (1)")
-		db.MustExec("INSERT INTO testdb.foo2 (val) VALUES (1)")
-		db.MustExec("INSERT INTO testdb2.bar (val) VALUES (1)")
-	}
+	t.Run("With internal transaction buffer", func(t *testing.T) {
+		msgChan := make(chan *service.Message, 1)
 
-	t.Run("Streaming insert changes...", func(t *testing.T) {
-		msgs := collectMessages(t, want)
-		mustAssertMetadata(t, "insert", msgs)
+		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.foo", "CREATE TABLE testdb.foo (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, val NUMBER)"))
+		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.foo2", "CREATE TABLE testdb.foo2 (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, val NUMBER)"))
+		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb2.bar", "CREATE TABLE testdb2.bar (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, val NUMBER)"))
 
-		content, err := msgs[0].AsBytes()
-		assert.NoError(t, err)
-		var row map[string]any
-		require.NoError(t, json.Unmarshal(content, &row))
-		assert.Len(t, row, 2)
-		assert.Contains(t, row, "ID")
-		assert.EqualValues(t, "1", row["VAL"])
+		cfg := `
+oracledb_cdc:
+  connection_string: %s
+  stream_snapshot: false
+  logminer:
+    scn_window_size: 20000
+    backoff_interval: 1s
+  include: ["TESTDB.FOO", "TESTDB.FOO2", "TESTDB2.BAR"]
+  exclude: ["TESTDB.DOESNOTEXIST"]
+  batching:
+    count: 500`
+
+		t.Log("Launching component...")
+		{
+			streamBuilder := service.NewStreamBuilder()
+			require.NoError(t, streamBuilder.AddInputYAML(fmt.Sprintf(cfg, connStr)))
+			require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
+
+			require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+				for _, msg := range mb {
+					msgChan <- msg
+				}
+				return nil
+			}))
+
+			stream, err = streamBuilder.Build()
+			require.NoError(t, err)
+			license.InjectTestService(stream.Resources())
+
+			go func() {
+				if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+					t.Error(err)
+				}
+			}()
+			go func() {
+				<-t.Context().Done()
+				close(msgChan)
+			}()
+		}
+
+		// wait for component to start
+		time.Sleep(10 * time.Second)
+
+		// insert initial test data
+		want := 3000
+		for range 1000 {
+			db.MustExec("INSERT INTO testdb.foo (val) VALUES (1)")
+			db.MustExec("INSERT INTO testdb.foo2 (val) VALUES (1)")
+			db.MustExec("INSERT INTO testdb2.bar (val) VALUES (1)")
+		}
+
+		t.Run("Streaming insert changes...", func(t *testing.T) {
+			msgs := collectMessages(t, msgChan, want)
+			mustAssertMetadata(t, "insert", msgs)
+
+			content, err := msgs[0].AsBytes()
+			assert.NoError(t, err)
+			var row map[string]any
+			require.NoError(t, json.Unmarshal(content, &row))
+			assert.Len(t, row, 2)
+			assert.Contains(t, row, "ID")
+			assert.EqualValues(t, "1", row["VAL"])
+		})
+
+		t.Run("Streaming update changes...", func(t *testing.T) {
+			db.MustExec("UPDATE testdb.foo SET val = 2")
+			db.MustExec("UPDATE testdb.foo2 SET val = 2")
+			db.MustExec("UPDATE testdb2.bar SET val = 2")
+
+			msgs := collectMessages(t, msgChan, want)
+			mustAssertMetadata(t, "update", msgs)
+
+			content, err := msgs[0].AsBytes()
+			assert.NoError(t, err)
+			var row map[string]any
+			require.NoError(t, json.Unmarshal(content, &row))
+			assert.Len(t, row, 2)
+			assert.Contains(t, row, "ID")
+			assert.EqualValues(t, "2", row["VAL"])
+		})
+
+		t.Run("Streaming delete changes...", func(t *testing.T) {
+			db.MustExec("DELETE FROM testdb.foo")
+			db.MustExec("DELETE FROM testdb.foo2")
+			db.MustExec("DELETE FROM testdb2.bar")
+
+			msgs := collectMessages(t, msgChan, want)
+			mustAssertMetadata(t, "delete", msgs)
+
+			content, err := msgs[0].AsBytes()
+			assert.NoError(t, err)
+			var row map[string]any
+			require.NoError(t, json.Unmarshal(content, &row))
+			assert.Len(t, row, 2)
+			assert.Contains(t, row, "ID")
+			assert.EqualValues(t, "2", row["VAL"])
+		})
+
+		require.NoError(t, stream.StopWithin(time.Second*10))
 	})
 
-	t.Run("Streaming update changes...", func(t *testing.T) {
-		db.MustExec("UPDATE testdb.foo SET val = 2")
-		db.MustExec("UPDATE testdb.foo2 SET val = 2")
-		db.MustExec("UPDATE testdb2.bar SET val = 2")
+	t.Run("With cache_resource transaction buffer", func(t *testing.T) {
+		msgChan := make(chan *service.Message, 1)
 
-		msgs := collectMessages(t, want)
-		mustAssertMetadata(t, "update", msgs)
+		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.foo", "CREATE TABLE testdb.foo (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, val NUMBER)"))
+		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.foo2", "CREATE TABLE testdb.foo2 (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, val NUMBER)"))
+		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb2.bar", "CREATE TABLE testdb2.bar (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, val NUMBER)"))
 
-		content, err := msgs[0].AsBytes()
-		assert.NoError(t, err)
-		var row map[string]any
-		require.NoError(t, json.Unmarshal(content, &row))
-		assert.Len(t, row, 2)
-		assert.Contains(t, row, "ID")
-		assert.EqualValues(t, "2", row["VAL"])
+		cfg := `
+oracledb_cdc:
+  connection_string: %s
+  stream_snapshot: false
+  logminer:
+    scn_window_size: 20000
+    backoff_interval: 1s
+    transaction_cache: "foocache"
+  include: ["TESTDB.FOO", "TESTDB.FOO2", "TESTDB2.BAR"]
+  exclude: ["TESTDB.DOESNOTEXIST"]
+  batching:
+    count: 500`
+
+		cacheConf := fmt.Sprintf(`
+label: foocache
+file:
+  directory: %s`, t.TempDir())
+
+		t.Log("Launching component...")
+		{
+			streamBuilder := service.NewStreamBuilder()
+			require.NoError(t, streamBuilder.AddInputYAML(fmt.Sprintf(cfg, connStr)))
+			require.NoError(t, streamBuilder.AddCacheYAML(cacheConf))
+			require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
+
+			require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+				for _, msg := range mb {
+					msgChan <- msg
+				}
+				return nil
+			}))
+
+			stream, err = streamBuilder.Build()
+			require.NoError(t, err)
+			license.InjectTestService(stream.Resources())
+
+			go func() {
+				if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+					t.Error(err)
+				}
+			}()
+			go func() {
+				<-t.Context().Done()
+				close(msgChan)
+			}()
+		}
+
+		// wait for component to start
+		time.Sleep(10 * time.Second)
+
+		// insert initial test data
+		want := 3000
+		for range 1000 {
+			db.MustExec("INSERT INTO testdb.foo (val) VALUES (1)")
+			db.MustExec("INSERT INTO testdb.foo2 (val) VALUES (1)")
+			db.MustExec("INSERT INTO testdb2.bar (val) VALUES (1)")
+		}
+
+		t.Run("Streaming insert changes...", func(t *testing.T) {
+			msgs := collectMessages(t, msgChan, want)
+			mustAssertMetadata(t, "insert", msgs)
+
+			content, err := msgs[0].AsBytes()
+			assert.NoError(t, err)
+			var row map[string]any
+			require.NoError(t, json.Unmarshal(content, &row))
+			assert.Len(t, row, 2)
+			assert.Contains(t, row, "ID")
+			assert.EqualValues(t, "1", row["VAL"])
+		})
+
+		t.Run("Streaming update changes...", func(t *testing.T) {
+			db.MustExec("UPDATE testdb.foo SET val = 2")
+			db.MustExec("UPDATE testdb.foo2 SET val = 2")
+			db.MustExec("UPDATE testdb2.bar SET val = 2")
+
+			msgs := collectMessages(t, msgChan, want)
+			mustAssertMetadata(t, "update", msgs)
+
+			content, err := msgs[0].AsBytes()
+			assert.NoError(t, err)
+			var row map[string]any
+			require.NoError(t, json.Unmarshal(content, &row))
+			assert.Len(t, row, 2)
+			assert.Contains(t, row, "ID")
+			assert.EqualValues(t, "2", row["VAL"])
+		})
+
+		t.Run("Streaming delete changes...", func(t *testing.T) {
+			db.MustExec("DELETE FROM testdb.foo")
+			db.MustExec("DELETE FROM testdb.foo2")
+			db.MustExec("DELETE FROM testdb2.bar")
+
+			msgs := collectMessages(t, msgChan, want)
+			mustAssertMetadata(t, "delete", msgs)
+
+			content, err := msgs[0].AsBytes()
+			assert.NoError(t, err)
+			var row map[string]any
+			require.NoError(t, json.Unmarshal(content, &row))
+			assert.Len(t, row, 2)
+			assert.Contains(t, row, "ID")
+			assert.EqualValues(t, "2", row["VAL"])
+		})
+
+		require.NoError(t, stream.StopWithin(time.Second*10))
 	})
-
-	t.Run("Streaming delete changes...", func(t *testing.T) {
-		db.MustExec("DELETE FROM testdb.foo")
-		db.MustExec("DELETE FROM testdb.foo2")
-		db.MustExec("DELETE FROM testdb2.bar")
-
-		msgs := collectMessages(t, want)
-		mustAssertMetadata(t, "delete", msgs)
-
-		content, err := msgs[0].AsBytes()
-		assert.NoError(t, err)
-		var row map[string]any
-		require.NoError(t, json.Unmarshal(content, &row))
-		assert.Len(t, row, 2)
-		assert.Contains(t, row, "ID")
-		assert.EqualValues(t, "2", row["VAL"])
-	})
-
-	require.NoError(t, stream.StopWithin(time.Second*10))
 }
 
 func TestIntegrationOracleDBCDCLargeObjectColumnsToggle(t *testing.T) {
