@@ -516,6 +516,68 @@ func TestEcsAvroLameUnionNameResolution(t *testing.T) {
 	assert.Equal(t, schema.Int64, feeInner.Children[0].Type)
 }
 
+// TestEcsAvroRawUnionAnnotatedInlinePrimitive verifies that the
+// optional-union collapse handles the [{primitive-with-annotations}, null]
+// shape — the form Kafka Connect / Debezium emit for nullable string fields,
+// where the non-null branch is an inline object carrying `connect.default`
+// (or similar extension properties) alongside `type: "string"`. The
+// resolver should ignore the unknown annotations (per Avro spec) and
+// collapse the union to Optional STRING the same way it collapses
+// `["null", "string"]`.
+//
+// Both branch orderings are covered: null-second is the shape the bug
+// report came in with, null-first is the canonical Avro spelling.
+func TestEcsAvroRawUnionAnnotatedInlinePrimitive(t *testing.T) {
+	tests := []struct {
+		name string
+		spec string
+	}{
+		{
+			name: "null second",
+			spec: `{
+				"type": "record",
+				"name": "Rec",
+				"fields": [{
+					"name": "category",
+					"type": [
+						{"type": "string", "connect.default": ""},
+						"null"
+					],
+					"default": ""
+				}]
+			}`,
+		},
+		{
+			name: "null first",
+			spec: `{
+				"type": "record",
+				"name": "Rec",
+				"fields": [{
+					"name": "category",
+					"type": [
+						"null",
+						{"type": "string", "connect.default": ""}
+					],
+					"default": null
+				}]
+			}`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c, err := ecsAvroParseFromBytes(ecsAvroConfig{rawUnion: true}, []byte(tt.spec))
+			require.NoError(t, err)
+			require.Equal(t, schema.Object, c.Type)
+			require.Len(t, c.Children, 1)
+			category := c.Children[0]
+			assert.Equal(t, "category", category.Name, "outer field name must be preserved across the union collapse")
+			assert.Equal(t, schema.String, category.Type, "annotated inline primitive should collapse to STRING, not stay a Union")
+			assert.True(t, category.Optional, "the null branch must drive Optional=true")
+			assert.Empty(t, category.Children, "collapsed primitive has no children")
+		})
+	}
+}
+
 // TestEcsAvroUnionInlineErrorPropagation pins down the %w-wrapping
 // contract through the union resolvers. A malformed inline decimal sitting
 // inside a nullable union must surface its root-cause error (the precision
