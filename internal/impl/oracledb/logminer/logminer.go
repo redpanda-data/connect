@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"maps"
 	"math"
+	"slices"
 	"strings"
 	"time"
 
@@ -713,22 +714,24 @@ func (lm *LogMiner) inferLOBLocator(ctx context.Context, event *sqlredo.RedoEven
 
 		pkString := sqlredo.FormatPKString(pkValues)
 
-		// Candidate LOB columns are those with an EMPTY_CLOB()/EMPTY_BLOB()
-		// placeholder (parsed as empty []byte). For INSERTs, BASICFILE columns
-		// with DISABLE STORAGE IN ROW emit NULL in SQL_REDO instead — the column
-		// is absent from Data — so iterate every known LOB column for the table.
-		for k, lobType := range lm.lobColTypes {
+		// Candidate LOB columns are those absent from Data or present as nil.
+		// BASICFILE out-of-row LOBs may appear as NULL or be omitted entirely
+		// from INSERT SQL_REDO. Columns with a non-nil value — including []byte{}
+		// from EMPTY_CLOB()/EMPTY_BLOB() — are inline LOBs whose LOB_WRITEs
+		// arrive after the INSERT, not before, so they are never candidates here.
+		// Iterate in sorted key order for deterministic column assignment.
+		for _, k := range slices.Sorted(maps.Keys(lm.lobColTypes)) {
 			if !strings.HasPrefix(k, prefix) {
 				continue
 			}
+			lobType := lm.lobColTypes[k]
 			col := k[len(prefix):]
 			val, present := ev.Data[col]
 			switch {
-			case present:
-				if b, ok := val.([]byte); !ok || len(b) != 0 {
-					continue
-				}
-			case ev.Operation != sqlredo.OpInsert:
+			case present && val != nil:
+				// Column has a non-nil value (including []byte{} inline LOB placeholders).
+				continue
+			case !present && ev.Operation != sqlredo.OpInsert:
 				continue
 			}
 
