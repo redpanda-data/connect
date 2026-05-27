@@ -56,6 +56,8 @@ const (
 	ociFieldMiningStrategy       = "strategy"
 	ociFieldMaxTransactionEvents = "max_transaction_events"
 	ociFieldLOBEnabled           = "lob_enabled"
+	ociFieldTransactionCache     = "transaction_cache"
+	ociFieldTransactionCacheKey  = "transaction_cache_key"
 )
 
 func init() {
@@ -135,6 +137,17 @@ When using the default Oracle based cache, the Connect user requires permission 
 		service.NewBoolField(ociFieldLOBEnabled).
 			Description("When enabled, large object (CLOB, BLOB) columns are included in both snapshot and streaming change events. When disabled, these columns are still present but contain no values. Enabling this option introduces additional performance overhead and increases memory requirements.").
 			Default(logminer.DefaultLOBEnabled),
+		service.NewStringField(ociFieldTransactionCache).
+			Description(`A https://www.docs.redpanda.com/redpanda-connect/components/caches/about[cache resource^] to use for buffering in-flight transactions. When set, DML events are serialized and stored in the named cache rather than held in memory, reducing connector memory usage for workloads with large or long-running transactions. If not set, an in-memory buffer is used.
+
+Each in-flight transaction is stored as N+1 cache entries: one metadata key holding the transaction ID, start SCN, and event count; and one event key per DML event. A transaction with 1000 events occupies 1001 cache entries. Each AddEvent call writes exactly two keys regardless of how many events the transaction has already accumulated.
+
+This cache is designed for low-latency stores with cheap per-operation cost. Redis and Memcached are the recommended backends. The built-in `+"`memory:{}`"+` cache works but provides no durability across restarts. High-latency or per-request-cost stores such as S3 or DynamoDB are not recommended - a transaction with 1000 events generates approximately 3000 cache operations across its lifetime, and because LogMiner processes events on a single goroutine, per-call latency directly reduces throughput. A backend that causes timeouts or errors will also cause the mining cycle to restart from an earlier checkpoint SCN, which can result in duplicate event delivery.`).
+			Optional(),
+		service.NewStringField(ociFieldTransactionCacheKey).
+			Description("The key prefix used when storing transactions in `"+ociFieldTransactionCache+"`. An alternative prefix must be set if multiple `oracledb_cdc` inputs share the same cache resource, since Oracle transaction IDs (USN.SLOT.SEQ) are only unique within a single Oracle instance and would otherwise collide.").
+			Default(logminer.DefaultTransactionCacheKey).
+			Optional(),
 	).Description("LogMiner configuration settings."),
 	).
 	Field(service.NewStringListField(ociFieldTablesInclude).
@@ -494,7 +507,11 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 	}
 
 	if o.lmCfg != nil {
-		streaming = logminer.NewMiner(o.db, userTables, o.publisher, o.lmCfg, o.metrics, o.log)
+		var txnCache logminer.TransactionCache
+		if o.lmCfg.TransactionCacheConfig.CacheName != "" {
+			txnCache = logminer.NewConnectCacheResource(o.res, o.lmCfg.TransactionCacheConfig, o.metrics, o.log)
+		}
+		streaming = logminer.NewMiner(o.db, userTables, o.publisher, o.lmCfg, txnCache, o.metrics, o.log)
 	} else {
 		return errors.New("logminer configuration required for streaming")
 	}
@@ -726,6 +743,18 @@ func parseLogMinerConfig(conf *service.ParsedConfig) (*logminer.Config, error) {
 		}
 		if cfg.LOBEnabled, err = lmConf.FieldBool(ociFieldLOBEnabled); err != nil {
 			return nil, err
+		}
+		// support cache_resources for buffering logminer transactions
+		if lmConf.Contains(ociFieldTransactionCache) {
+			if cfg.TransactionCacheConfig.CacheName, err = lmConf.FieldString(ociFieldTransactionCache); err != nil {
+				return nil, err
+			}
+			if cfg.TransactionCacheConfig.CacheKey, err = lmConf.FieldString(ociFieldTransactionCacheKey); err != nil {
+				return nil, err
+			}
+			if cfg.TransactionCacheConfig.MaxEvents, err = lmConf.FieldInt(ociFieldMaxTransactionEvents); err != nil {
+				return nil, err
+			}
 		}
 	}
 
