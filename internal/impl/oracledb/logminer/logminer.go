@@ -422,7 +422,7 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 		// not as HEXTORAW. Only BLOB uses binary/hex encoding.
 		writeInfo, err := sqlredo.ParseLobWrite(redoEvent.SQLRedo.String, acc.IsBinary)
 		if err != nil {
-			return fmt.Errorf("parsing LOB_WRITE SQL (scn=%d, txn=%s): %v\nSQL: %.500s", redoEvent.SCN, redoEvent.TransactionID, err, redoEvent.SQLRedo.String)
+			return fmt.Errorf("parsing LOB_WRITE SQL (scn=%d, txn=%s): %w\nSQL: %.500s", redoEvent.SCN, redoEvent.TransactionID, err, redoEvent.SQLRedo.String)
 		}
 		acc.AddFragment(writeInfo.Offset, writeInfo.Data)
 
@@ -793,7 +793,7 @@ func (lm *LogMiner) drainPendingLOBWrites(ctx context.Context, txnID sqlredo.Tra
 		}
 		writeInfo, err := sqlredo.ParseLobWrite(event.SQLRedo.String, acc.IsBinary)
 		if err != nil {
-			return fmt.Errorf("parsing buffered LOB_WRITE SQL (scn=%d, txn=%s): %v\nSQL: %.500s", event.SCN, txnID, err, event.SQLRedo.String)
+			return fmt.Errorf("parsing buffered LOB_WRITE SQL (scn=%d, txn=%s): %w\nSQL: %.500s", event.SCN, txnID, err, event.SQLRedo.String)
 		}
 		acc.AddFragment(writeInfo.Offset, writeInfo.Data)
 		lm.log.Debugf("Drained buffered LOB_WRITE for %s.%s.%s (txn=%s)", acc.Schema, acc.Table, acc.Column, txnID)
