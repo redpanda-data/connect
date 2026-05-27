@@ -11,5 +11,8 @@ output:
       - localhost:9092
     topic: ${KAFKA_TOPIC:rpcns-hana-bench-orders}
 
+http:
+  address: "0.0.0.0:0"
+
 logger:
   level: WARN
