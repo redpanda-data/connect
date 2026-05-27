@@ -19,7 +19,6 @@ import (
 	_ "github.com/SAP/go-hdb/driver"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
-
 	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
@@ -89,7 +88,8 @@ Every message produced by this input carries the following metadata fields:
 		Default("5s").
 		Example("1s").
 		Example("30s"),
-	)
+	).
+	Field(service.NewAutoRetryNacksToggleField())
 
 func init() {
 	service.MustRegisterInput("sap_hana", sapHANAInputConfigSpec,
@@ -250,54 +250,61 @@ func (s *sapHANAInput) Read(ctx context.Context) (*service.Message, service.AckF
 	noop := func(context.Context, error) error { return nil }
 
 	for {
-		if s.rows != nil {
-			if s.rows.Next() {
-				msg, err := s.scanRow(ctx, s.rows)
+		if s.rows == nil {
+			switch s.mode {
+			case shModeBulk, shModeQuery:
+				rows, err := s.openRows(ctx)
 				if err != nil {
-					_ = s.rows.Close()
-					s.rows = nil
-					return nil, nil, err
+					return nil, nil, fmt.Errorf("executing query: %w", err)
 				}
-				return msg, noop, nil
+				s.rows = rows
+
+			case shModeIncrementing:
+				// Release the lock while waiting so Close() can proceed.
+				s.dbMut.Unlock()
+				var timerFired bool
+				select {
+				case <-ctx.Done():
+					s.dbMut.Lock()
+					return nil, nil, ctx.Err()
+				case <-s.stopChan:
+					s.dbMut.Lock()
+					return nil, nil, service.ErrEndOfInput
+				case <-time.After(s.pollInterval):
+					timerFired = true
+				}
+				s.dbMut.Lock()
+				if !timerFired {
+					return nil, nil, service.ErrEndOfInput
+				}
+				rows, err := s.openRows(ctx)
+				if err != nil {
+					return nil, nil, fmt.Errorf("executing query: %w", err)
+				}
+				s.rows = rows
 			}
-			if err := s.rows.Err(); err != nil {
+		}
+
+		if s.rows.Next() {
+			msg, err := s.scanRow(ctx, s.rows)
+			if err != nil {
 				_ = s.rows.Close()
 				s.rows = nil
-				return nil, nil, fmt.Errorf("iterating rows: %w", err)
+				return nil, nil, err
 			}
+			return msg, noop, nil
+		}
+		if err := s.rows.Err(); err != nil {
 			_ = s.rows.Close()
 			s.rows = nil
+			return nil, nil, fmt.Errorf("iterating rows: %w", err)
 		}
+		_ = s.rows.Close()
+		s.rows = nil
 
-		switch s.mode {
-		case shModeBulk, shModeQuery:
+		if s.mode == shModeBulk || s.mode == shModeQuery {
 			return nil, nil, service.ErrEndOfInput
-
-		case shModeIncrementing:
-			// Release the lock while waiting so Close() can proceed.
-			s.dbMut.Unlock()
-			var timerFired bool
-			select {
-			case <-ctx.Done():
-				s.dbMut.Lock()
-				return nil, nil, ctx.Err()
-			case <-s.stopChan:
-				s.dbMut.Lock()
-				return nil, nil, service.ErrEndOfInput
-			case <-time.After(s.pollInterval):
-				timerFired = true
-			}
-			s.dbMut.Lock()
-			if !timerFired {
-				return nil, nil, service.ErrEndOfInput
-			}
 		}
-
-		rows, err := s.openRows(ctx)
-		if err != nil {
-			return nil, nil, fmt.Errorf("executing query: %w", err)
-		}
-		s.rows = rows
 	}
 }
 

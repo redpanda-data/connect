@@ -246,6 +246,7 @@ salesforce                ,input     ,Salesforce                ,4.92.0  ,enterp
 salesforce_cdc            ,input     ,Salesforce                ,4.92.0  ,enterprise ,n          ,y     ,y
 salesforce_graphql        ,input     ,Salesforce                ,4.92.0  ,enterprise ,n          ,y     ,y
 salesforce_sink           ,output    ,Salesforce                ,4.85.0  ,enterprise ,n          ,y     ,y
+sap_hana                  ,input     ,sap_hana                  ,4.92.0  ,enterprise ,n          ,n     ,n
 schema_registry           ,input     ,schema_registry           ,4.33.0  ,certified  ,n          ,y     ,y
 schema_registry           ,output    ,schema_registry           ,4.33.0  ,certified  ,n          ,y     ,y
 schema_registry_decode    ,processor ,schema_registry_decode    ,0.0.0   ,certified  ,n          ,y     ,y
