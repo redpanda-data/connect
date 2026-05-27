@@ -1,4 +1,4 @@
-// Copyright 2025 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -259,12 +259,33 @@ func (i *input) Close(ctx context.Context, _ *runtimepb.BatchInputCloseRequest) 
 }
 
 // Ack implements runtimepb.BatchInputServiceServer.
-func (i *input) Ack(ctx context.Context, _ *runtimepb.BatchInputAckRequest) (*runtimepb.BatchInputAckResponse, error) {
+//
+// The host calls Ack with the batch_id it received from ReadBatch.
+// We look up the ack callback the batch was returned with, invoke it
+// with the (possibly nil) error from the request, and remove the
+// stored callback. A missing batch_id is reported as an error rather
+// than silently swallowed so plugin bugs surface fast.
+func (i *input) Ack(ctx context.Context, req *runtimepb.BatchInputAckRequest) (*runtimepb.BatchInputAckResponse, error) {
 	if i.component == nil {
 		return &runtimepb.BatchInputAckResponse{Error: runtimepb.ErrorToProto(service.ErrNotConnected)}, nil
 	}
-	err := i.component.Close(ctx)
-	return &runtimepb.BatchInputAckResponse{Error: runtimepb.ErrorToProto(err)}, nil
+	v, ok := i.acks.LoadAndDelete(req.GetBatchId())
+	if !ok {
+		return &runtimepb.BatchInputAckResponse{
+			Error: runtimepb.ErrorToProto(fmt.Errorf("unknown batch id %d", req.GetBatchId())),
+		}, nil
+	}
+	ackFn, ok := v.(service.AckFunc)
+	if !ok {
+		return &runtimepb.BatchInputAckResponse{
+			Error: runtimepb.ErrorToProto(fmt.Errorf("stored ack for batch %d has unexpected type %T", req.GetBatchId(), v)),
+		}, nil
+	}
+	ackErr := runtimepb.ProtoToError(req.GetError())
+	if err := ackFn(ctx, ackErr); err != nil {
+		return &runtimepb.BatchInputAckResponse{Error: runtimepb.ErrorToProto(err)}, nil
+	}
+	return &runtimepb.BatchInputAckResponse{}, nil
 }
 
 // ReadBatch implements runtimepb.BatchInputServiceServer.

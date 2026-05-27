@@ -1,0 +1,277 @@
+// Copyright 2026 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package redpanda.runtime.v2;
+
+option go_package = "github.com/redpanda-data/connect/v4/internal/rpcplugin/v1/runtimepb";
+
+import "redpanda/runtime/v1alpha1/message.proto";
+import "redpanda/runtime/v1alpha1/output.proto";
+
+// PluginRuntime is the wire protocol between a Redpanda Connect host and a
+// plugin subprocess. One plugin binary registers multiple components (any
+// mix of inputs / processors / outputs); the host multiplexes instances of
+// those components onto the single gRPC connection.
+//
+// Lifecycle:
+//   1. Plugin subprocess connects back to the host's pre-created socket.
+//   2. Host calls Handshake to negotiate protocol version + capabilities.
+//   3. Host calls ListComponents to enumerate registered components and
+//      their config specs.
+//   4. For every component reference in the user's pipeline YAML, host
+//      calls OpenInstance and receives an instance_id used on every
+//      subsequent lifecycle call.
+//   5. ProcessBatch (processors), ReadBatch+Ack (inputs), SendBatch
+//      (outputs) all carry instance_id.
+//   6. CloseInstance shuts a single instance down; subprocess exits when
+//      the host's gRPC connection is closed.
+//
+// PoC scope: only the Handshake / ListComponents / OpenInstance /
+// CloseInstance / ProcessBatch surface is implemented. Input + Output
+// lifecycle methods are listed here for design completeness but ship in
+// follow-up phases.
+service PluginRuntime {
+  // Handshake is the first call the host makes. The plugin advertises its
+  // SDK metadata and selects a protocol version compatible with the host's
+  // supported set.
+  rpc Handshake(HandshakeRequest) returns (HandshakeResponse);
+
+  // ListComponents returns every component the plugin's Environment has
+  // registered, including the serialised ConfigSpec for each one.
+  rpc ListComponents(ListComponentsRequest) returns (ListComponentsResponse);
+
+  // OpenInstance creates a new component instance bound to a parsed user
+  // config. Returns an instance_id used on every subsequent lifecycle call
+  // targeting that instance.
+  rpc OpenInstance(OpenInstanceRequest) returns (OpenInstanceResponse);
+
+  // CloseInstance shuts down a previously-opened instance.
+  rpc CloseInstance(CloseInstanceRequest) returns (CloseInstanceResponse);
+
+  // ProcessBatch dispatches a message batch to the processor instance.
+  rpc ProcessBatch(InstanceProcessRequest) returns (InstanceProcessResponse);
+
+  // ----------------------------------------------------------------------
+  // Input + Output lifecycle methods (declared for design completeness;
+  // not implemented in the PoC).
+  // ----------------------------------------------------------------------
+
+  // Connect establishes the upstream/downstream connection for an input
+  // or output instance.
+  rpc Connect(InstanceConnectRequest) returns (InstanceConnectResponse);
+
+  // ReadBatch reads the next batch from an input instance.
+  rpc ReadBatch(InstanceReadRequest) returns (InstanceReadResponse);
+
+  // Ack acknowledges or nacks a previously-read batch on an input
+  // instance.
+  rpc Ack(InstanceAckRequest) returns (InstanceAckResponse);
+
+  // SendBatch dispatches a message batch to an output instance.
+  rpc SendBatch(InstanceSendRequest) returns (InstanceSendResponse);
+}
+
+// ----------------------------------------------------------------------
+// Handshake
+// ----------------------------------------------------------------------
+
+message HandshakeRequest {
+  // Protocol versions the host can speak, highest preference first. The
+  // plugin selects the highest version it also supports.
+  repeated uint32 supported_protocol_versions = 1;
+  // Human-readable host version, propagated to plugin logs for debugging.
+  string host_version = 2;
+}
+
+message HandshakeResponse {
+  // Selected protocol version. Must be one of the host's
+  // supported_protocol_versions, otherwise the host should treat the
+  // handshake as failed.
+  uint32 selected_protocol_version = 1;
+  // SDK identity for debugging / log correlation.
+  string sdk_name = 2;     // e.g. "rpcn-go" / "rpcn-python"
+  string sdk_version = 3;  // semver
+  string language = 4;     // "go" / "python" / "rust" / ...
+  // Forward-compatible feature flags. Additions that don't break the wire
+  // are opt-in via capability strings rather than a protocol bump.
+  repeated string capabilities = 5;
+  // Populated if the plugin can't agree to any of the host's versions.
+  redpanda.runtime.v1alpha1.Error error = 6;
+}
+
+// ----------------------------------------------------------------------
+// Component discovery
+// ----------------------------------------------------------------------
+
+enum ComponentKind {
+  COMPONENT_KIND_UNSPECIFIED = 0;
+  COMPONENT_KIND_INPUT = 1;
+  COMPONENT_KIND_PROCESSOR = 2;
+  COMPONENT_KIND_OUTPUT = 3;
+}
+
+message ListComponentsRequest {}
+
+message ListComponentsResponse {
+  repeated ComponentDescriptor components = 1;
+}
+
+message ComponentDescriptor {
+  string name = 1;
+  ComponentKind kind = 2;
+  ConfigSpec spec = 3;
+}
+
+// ConfigSpec is the serialised form of a *service.ConfigSpec built by the
+// plugin author via the SDK's mirror builder (rpcn.NewConfigSpec / ...).
+// The host reconstructs a real *service.ConfigSpec from this descriptor
+// via a local helper; the result is functionally indistinguishable from
+// a spec built in-tree.
+message ConfigSpec {
+  string summary = 1;
+  string description = 2;
+  string version = 3;
+  repeated string categories = 4;
+  // Top-level fields. For PoC purposes the entire user config is a flat
+  // record of these; nested objects use ConfigField.children.
+  repeated ConfigField fields = 5;
+}
+
+message ConfigField {
+  string name = 1;
+  string description = 2;
+  // Scalar value type when kind == FIELD_KIND_SCALAR. Element type for
+  // list/map kinds. For object kind, leave unset and use children.
+  FieldType type = 3;
+  FieldKind kind = 4;
+  // JSON-encoded default value. Decoded on the host side per `type`.
+  // Absent means "no default" (the field is required unless optional).
+  string default_json = 5;
+  bool optional = 6;
+  bool advanced = 7;
+  bool deprecated = 8;
+  // Children of an object-kind field. Empty for scalar/list/map.
+  repeated ConfigField children = 9;
+}
+
+enum FieldType {
+  FIELD_TYPE_UNSPECIFIED = 0;
+  FIELD_TYPE_STRING = 1;
+  FIELD_TYPE_INT = 2;
+  FIELD_TYPE_FLOAT = 3;
+  FIELD_TYPE_BOOL = 4;
+  // Object indicates a nested record; ConfigField.children carries the
+  // child fields.
+  FIELD_TYPE_OBJECT = 5;
+}
+
+enum FieldKind {
+  FIELD_KIND_UNSPECIFIED = 0;
+  FIELD_KIND_SCALAR = 1;
+  FIELD_KIND_LIST = 2;
+  FIELD_KIND_MAP = 3;
+}
+
+// ----------------------------------------------------------------------
+// Instance management
+// ----------------------------------------------------------------------
+
+message OpenInstanceRequest {
+  // Name of the component to instantiate. Must match a component returned
+  // by ListComponents.
+  string component_name = 1;
+  // Parsed user config as a runtime Value tree. Same shape benthos uses
+  // internally for ParsedConfig.
+  redpanda.runtime.v1alpha1.Value config = 2;
+}
+
+message OpenInstanceResponse {
+  // Stable identifier for the instance. The host uses it on every
+  // subsequent lifecycle call targeting the instance.
+  uint64 instance_id = 1;
+
+  // For outputs only: maximum concurrent SendBatch calls.
+  int32 max_in_flight = 2;
+  // For outputs only: batch policy.
+  redpanda.runtime.v1alpha1.BatchPolicy batch_policy = 3;
+  // For inputs only: opt into auto-replay-nacks behaviour.
+  bool auto_replay_nacks = 4;
+
+  redpanda.runtime.v1alpha1.Error error = 5;
+}
+
+message CloseInstanceRequest {
+  uint64 instance_id = 1;
+}
+
+message CloseInstanceResponse {
+  redpanda.runtime.v1alpha1.Error error = 1;
+}
+
+// ----------------------------------------------------------------------
+// Per-instance lifecycle
+// ----------------------------------------------------------------------
+
+message InstanceConnectRequest {
+  uint64 instance_id = 1;
+}
+
+message InstanceConnectResponse {
+  redpanda.runtime.v1alpha1.Error error = 1;
+}
+
+message InstanceReadRequest {
+  uint64 instance_id = 1;
+}
+
+message InstanceReadResponse {
+  // Opaque batch id used to correlate Ack calls back to this read.
+  uint64 batch_id = 1;
+  redpanda.runtime.v1alpha1.MessageBatch batch = 2;
+  redpanda.runtime.v1alpha1.Error error = 3;
+}
+
+message InstanceAckRequest {
+  uint64 instance_id = 1;
+  uint64 batch_id = 2;
+  // If present, this is a nack request.
+  redpanda.runtime.v1alpha1.Error error = 3;
+}
+
+message InstanceAckResponse {
+  redpanda.runtime.v1alpha1.Error error = 1;
+}
+
+message InstanceProcessRequest {
+  uint64 instance_id = 1;
+  redpanda.runtime.v1alpha1.MessageBatch batch = 2;
+}
+
+message InstanceProcessResponse {
+  // Zero or more output batches. Empty list means the entire input batch
+  // was filtered.
+  repeated redpanda.runtime.v1alpha1.MessageBatch batches = 1;
+  redpanda.runtime.v1alpha1.Error error = 2;
+}
+
+message InstanceSendRequest {
+  uint64 instance_id = 1;
+  redpanda.runtime.v1alpha1.MessageBatch batch = 2;
+}
+
+message InstanceSendResponse {
+  redpanda.runtime.v1alpha1.Error error = 1;
+}

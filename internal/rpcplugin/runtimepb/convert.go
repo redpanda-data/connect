@@ -27,7 +27,7 @@ import (
 
 // MessageBatchToProto converts a service.MessageBatch into proto form.
 func MessageBatchToProto(batch service.MessageBatch) (*MessageBatch, error) {
-	out := new(MessageBatch)
+	out := &MessageBatch{Messages: make([]*Message, 0, len(batch))}
 	for _, msg := range batch {
 		proto, err := MessageToProto(msg)
 		if err != nil {
@@ -58,14 +58,26 @@ func MessageToProto(msg *service.Message) (*Message, error) {
 		}
 		out.Payload = &Message_Structured{val}
 	}
-	out.Metadata = &StructValue{Fields: map[string]*Value{}}
+	// Allocate metadata lazily — the no-metadata path is the common
+	// case and we don't want to pay 2 allocs (StructValue + map) plus
+	// wire bytes for an empty container.
+	var metaFields map[string]*Value
 	err := msg.MetaWalkMut(func(k string, v any) error {
 		val, err := AnyToProto(v)
-		out.Metadata.Fields[k] = val
-		return err
+		if err != nil {
+			return err
+		}
+		if metaFields == nil {
+			metaFields = make(map[string]*Value, 4)
+		}
+		metaFields[k] = val
+		return nil
 	})
 	if err != nil {
 		return nil, fmt.Errorf("converting metadata: %w", err)
+	}
+	if metaFields != nil {
+		out.Metadata = &StructValue{Fields: metaFields}
 	}
 	return out, nil
 }
@@ -131,8 +143,9 @@ func AnyToProto(a any) (*Value, error) {
 
 // ProtoToMessageBatch converts a service.MessageBatch from proto form.
 func ProtoToMessageBatch(proto *MessageBatch) (service.MessageBatch, error) {
-	var batch service.MessageBatch
-	for _, msgProto := range proto.GetMessages() {
+	msgs := proto.GetMessages()
+	batch := make(service.MessageBatch, 0, len(msgs))
+	for _, msgProto := range msgs {
 		msg, err := ProtoToMessage(msgProto)
 		if err != nil {
 			return nil, err
