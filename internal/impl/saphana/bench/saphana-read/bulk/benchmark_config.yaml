@@ -1,0 +1,15 @@
+input:
+  sap_hana:
+    dsn: ${HANA_DSN}
+    mode: bulk
+    schema_name: ${HANA_SCHEMA}
+    table: ${HANA_TABLE:BENCH_ORDERS}
+
+output:
+  kafka_franz:
+    seed_brokers:
+      - localhost:9092
+    topic: ${KAFKA_TOPIC:rpcns-hana-bench-orders}
+
+logger:
+  level: WARN
