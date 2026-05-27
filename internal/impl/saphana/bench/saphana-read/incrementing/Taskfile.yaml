@@ -1,0 +1,266 @@
+version: "3"
+
+silent: true
+
+tasks:
+  up:
+    desc: Start Kafka
+    cmds:
+      - docker compose up -d
+      - until docker exec rpcns-hana-kafka kafka-broker-api-versions --bootstrap-server localhost:9092 > /dev/null 2>&1; do sleep 2; done
+      - echo "Kafka ready"
+
+  down:
+    desc: Stop and remove containers and volumes
+    cmds:
+      - docker compose down -v --remove-orphans
+
+  bench:build:
+    desc: Build the redpanda-connect and loader binaries
+    cmds:
+      - go build -o /tmp/rpcns-hana-inc-bench ../../../../../../cmd/redpanda-connect/
+      - go build -o /tmp/rpcns-hana-inc-bench-load ./load/
+      - echo "Binaries built"
+
+  bench:setup:
+    desc: Create empty BENCH_ORDERS_INC table (drop + recreate)
+    cmds:
+      - |
+        if [ -z "$HANA_DSN" ]; then echo "HANA_DSN env var required"; exit 1; fi
+        if [ -z "$HANA_SCHEMA" ]; then echo "HANA_SCHEMA env var required"; exit 1; fi
+        HANA_DSN="$HANA_DSN" HANA_SCHEMA="$HANA_SCHEMA" /tmp/rpcns-hana-inc-bench-load -setup-only
+
+  bench:run:
+    desc: "Run incrementing benchmark — connector starts first, then rows inserted (e.g. task bench:run COUNT=100000 CORES=4)"
+    vars:
+      COUNT: '{{.COUNT | default "100000"}}'
+      CORES: '{{.CORES | default ""}}'
+      POLL: '{{.POLL | default "1s"}}'
+      INTERVAL: '{{.INTERVAL | default "2"}}'
+    cmds:
+      - |
+        if [ -z "$HANA_DSN" ]; then echo "HANA_DSN env var required"; exit 1; fi
+        if [ -z "$HANA_SCHEMA" ]; then echo "HANA_SCHEMA env var required"; exit 1; fi
+        COUNT={{.COUNT}}
+        CORES="{{.CORES}}"
+        INTERVAL={{.INTERVAL}}
+        TOPIC="rpcns-hana-bench-orders-inc"
+
+        pkill -9 -f "/tmp/rpcns-hana-inc-bench run" 2>/dev/null || true
+
+        get_kafka_count() {
+          timeout 5 docker exec rpcns-hana-kafka kafka-get-offsets \
+            --bootstrap-server localhost:29092 \
+            --topic "$TOPIC" 2>/dev/null \
+            | awk -F: '{sum += $3} END {print sum+0}'
+        }
+
+        # Reset topic
+        timeout 10 docker exec rpcns-hana-kafka kafka-topics --bootstrap-server localhost:29092 \
+          --delete --topic "$TOPIC" > /dev/null 2>&1 || true
+        ATTEMPTS=0
+        until [ $ATTEMPTS -ge 30 ] || \
+          ! timeout 5 docker exec rpcns-hana-kafka kafka-topics --bootstrap-server localhost:29092 \
+            --list 2>/dev/null | grep -qF "$TOPIC"; do
+          sleep 1
+          ATTEMPTS=$((ATTEMPTS + 1))
+        done
+
+        # Reset table to empty (setup-only: drop + create)
+        HANA_DSN="$HANA_DSN" HANA_SCHEMA="$HANA_SCHEMA" /tmp/rpcns-hana-inc-bench-load -setup-only > /dev/null
+
+        if [ -n "$CORES" ]; then echo "cores=$CORES  count=$COUNT  poll={{.POLL}}"; else echo "cores=unbounded  count=$COUNT  poll={{.POLL}}"; fi
+
+        # Start connector (polls empty table, establishes HWM=0)
+        HANA_DSN="$HANA_DSN" HANA_TABLE="BENCH_ORDERS_INC" HANA_SCHEMA="$HANA_SCHEMA" KAFKA_TOPIC="$TOPIC" \
+          POLL_INTERVAL="{{.POLL}}" GOMAXPROCS="$CORES" \
+          REDPANDA_LICENSE="$REDPANDA_LICENSE" REDPANDA_LICENSE_FILEPATH="$REDPANDA_LICENSE_FILEPATH" \
+          /tmp/rpcns-hana-inc-bench run ./benchmark_config.yaml > /tmp/rpcns_hana_inc_bench.log 2>&1 &
+        RPCN_PID=$!
+
+        # Wait for connector to connect and complete first poll
+        sleep 3
+
+        # Insert rows — connector will pick them up incrementally
+        START=$(date +%s)
+        HANA_DSN="$HANA_DSN" HANA_SCHEMA="$HANA_SCHEMA" \
+          /tmp/rpcns-hana-inc-bench-load -count "$COUNT" > /tmp/rpcns_hana_inc_load.log 2>&1 &
+        LOAD_PID=$!
+
+        PREV_COUNT=0
+        PREV_TIME=$START
+        ZEROS=0
+        STARTED=0
+        START_TIMEOUT=24
+
+        printf "%-10s  %-14s  %s\n" "TIME" "IN KAFKA" "MSG/S"
+
+        while true; do
+          sleep "$INTERVAL"
+          KAFKA_COUNT=$(get_kafka_count)
+          KAFKA_COUNT=${KAFKA_COUNT:-0}
+          NOW=$(date +%s)
+
+          DELTA_T=$((NOW - PREV_TIME))
+          DELTA_COUNT=$((KAFKA_COUNT - PREV_COUNT))
+          RATE=0
+          [ "$DELTA_T" -gt 0 ] && RATE=$((DELTA_COUNT / DELTA_T))
+          printf "%-10s  %-14s  %s msg/s\n" "$(date +%H:%M:%S)" "$KAFKA_COUNT" "$RATE"
+
+          [ "$KAFKA_COUNT" -gt 0 ] && STARTED=1
+
+          if [ "$STARTED" -eq 0 ]; then
+            ZEROS=$((ZEROS + 1))
+            if [ "$ZEROS" -ge "$START_TIMEOUT" ]; then
+              echo "ERROR: no messages within $((START_TIMEOUT * INTERVAL))s"
+              kill -9 $RPCN_PID $LOAD_PID 2>/dev/null || true
+              exit 1
+            fi
+          elif [ "$DELTA_COUNT" -eq 0 ]; then
+            ZEROS=$((ZEROS + 1))
+          else
+            ZEROS=0
+          fi
+
+          if [ "$KAFKA_COUNT" -ge "$COUNT" ]; then
+            ELAPSED=$((NOW - START))
+            AVG=$(awk "BEGIN { printf \"%.0f\", $COUNT / ($ELAPSED > 0 ? $ELAPSED : 1) }")
+            kill -9 $RPCN_PID $LOAD_PID 2>/dev/null || true
+            echo "---"
+            if [ -n "$CORES" ]; then echo "cores=$CORES  poll={{.POLL}}"; else echo "cores=unbounded  poll={{.POLL}}"; fi
+            echo "Total messages : $KAFKA_COUNT / $COUNT"
+            echo "Elapsed        : ${ELAPSED}s"
+            echo "Avg throughput : ${AVG} msg/s"
+            break
+          elif [ "$STARTED" -eq 1 ] && [ "$ZEROS" -ge 3 ]; then
+            ELAPSED=$((NOW - START))
+            AVG=$(awk "BEGIN { printf \"%.0f\", ${KAFKA_COUNT:-0} / ($ELAPSED > 0 ? $ELAPSED : 1) }")
+            kill -9 $RPCN_PID $LOAD_PID 2>/dev/null || true
+            echo "---"
+            if [ -n "$CORES" ]; then echo "cores=$CORES  poll={{.POLL}}"; else echo "cores=unbounded  poll={{.POLL}}"; fi
+            echo "Total messages : $KAFKA_COUNT / $COUNT"
+            echo "Elapsed        : ${ELAPSED}s"
+            echo "Avg throughput : ${AVG} msg/s"
+            [ "$KAFKA_COUNT" -lt "$COUNT" ] && echo "WARNING: incomplete"
+            break
+          fi
+
+          PREV_COUNT=$KAFKA_COUNT
+          PREV_TIME=$NOW
+        done
+
+  bench:all:
+    desc: "Run all cores × poll-interval combinations (e.g. task bench:all COUNT=100000 OUT=results.txt)"
+    vars:
+      COUNT: '{{.COUNT | default "100000"}}'
+      OUT: '{{.OUT | default ""}}'
+    cmds:
+      - |
+        for cores in 1 2 4 8; do
+          for poll in 100ms 500ms 1s; do
+            if [ -n "{{.OUT}}" ]; then
+              task bench:run CORES=$cores COUNT={{.COUNT}} POLL=$poll 2>&1 | tee -a {{.OUT}}
+            else
+              task bench:run CORES=$cores COUNT={{.COUNT}} POLL=$poll
+            fi
+          done
+        done
+
+  bench:test:skip-existing:
+    desc: Verify connector skips pre-existing rows when HWM is set to current max ID
+    cmds:
+      - |
+        if [ -z "$HANA_DSN" ]; then echo "HANA_DSN env var required"; exit 1; fi
+        if [ -z "$HANA_SCHEMA" ]; then echo "HANA_SCHEMA env var required"; exit 1; fi
+        TOPIC="rpcns-hana-bench-orders-inc-skip-test"
+        PRELOAD=1000
+        NEW_ROWS=100
+        PASS=true
+
+        pkill -9 -f "/tmp/rpcns-hana-inc-bench run" 2>/dev/null || true
+
+        get_kafka_count() {
+          timeout 5 docker exec rpcns-hana-kafka kafka-get-offsets \
+            --bootstrap-server localhost:29092 \
+            --topic "$TOPIC" 2>/dev/null \
+            | awk -F: '{sum += $3} END {print sum+0}'
+        }
+
+        # Reset topic
+        timeout 10 docker exec rpcns-hana-kafka kafka-topics --bootstrap-server localhost:29092 \
+          --delete --topic "$TOPIC" > /dev/null 2>&1 || true
+        ATTEMPTS=0
+        until [ $ATTEMPTS -ge 30 ] || \
+          ! timeout 5 docker exec rpcns-hana-kafka kafka-topics --bootstrap-server localhost:29092 \
+            --list 2>/dev/null | grep -qF "$TOPIC"; do
+          sleep 1
+          ATTEMPTS=$((ATTEMPTS + 1))
+        done
+
+        # Create empty table then pre-load rows
+        echo "Pre-loading $PRELOAD rows..."
+        HANA_DSN="$HANA_DSN" HANA_SCHEMA="$HANA_SCHEMA" \
+          /tmp/rpcns-hana-inc-bench-load -setup-only
+        HANA_DSN="$HANA_DSN" HANA_SCHEMA="$HANA_SCHEMA" \
+          /tmp/rpcns-hana-inc-bench-load -count "$PRELOAD"
+
+        # Capture max ID — connector will start from here, skipping all pre-loaded rows
+        MAX=$(HANA_DSN="$HANA_DSN" HANA_SCHEMA="$HANA_SCHEMA" \
+          /tmp/rpcns-hana-inc-bench-load -max-id)
+        echo "Max ID after pre-load: $MAX (connector will start from here)"
+
+        # Start connector with HWM_INITIAL=MAX
+        HANA_DSN="$HANA_DSN" HANA_TABLE="BENCH_ORDERS_INC" HANA_SCHEMA="$HANA_SCHEMA" KAFKA_TOPIC="$TOPIC" \
+          HWM_INITIAL="$MAX" POLL_INTERVAL="1s" \
+          REDPANDA_LICENSE="$REDPANDA_LICENSE" REDPANDA_LICENSE_FILEPATH="$REDPANDA_LICENSE_FILEPATH" \
+          /tmp/rpcns-hana-inc-bench run ./benchmark_config.yaml > /tmp/rpcns_hana_inc_skip_test.log 2>&1 &
+        RPCN_PID=$!
+
+        # Wait for connector to establish and complete first poll
+        sleep 5
+
+        COUNT=$(get_kafka_count)
+        echo ""
+        if [ "${COUNT:-0}" -eq 0 ]; then
+          echo "PASS: 0 messages produced for $PRELOAD pre-existing rows (HWM correctly applied)"
+        else
+          echo "FAIL: $COUNT messages produced — connector read pre-existing rows"
+          PASS=false
+        fi
+
+        # Now insert new rows — connector must pick these up
+        echo "Inserting $NEW_ROWS new rows..."
+        HANA_DSN="$HANA_DSN" HANA_SCHEMA="$HANA_SCHEMA" \
+          /tmp/rpcns-hana-inc-bench-load -count "$NEW_ROWS"
+
+        # Wait for connector to pick up new rows (up to 15s)
+        DEADLINE=15
+        ELAPSED=0
+        while [ "$ELAPSED" -lt "$DEADLINE" ]; do
+          sleep 2
+          ELAPSED=$((ELAPSED + 2))
+          COUNT=$(get_kafka_count)
+          [ "${COUNT:-0}" -ge "$NEW_ROWS" ] && break
+        done
+
+        COUNT=$(get_kafka_count)
+        if [ "${COUNT:-0}" -ge "$NEW_ROWS" ]; then
+          echo "PASS: $COUNT / $NEW_ROWS new rows picked up by connector"
+        else
+          echo "FAIL: only $COUNT / $NEW_ROWS new rows appeared in Kafka"
+          PASS=false
+        fi
+
+        kill -9 $RPCN_PID 2>/dev/null || true
+        echo "---"
+        [ "$PASS" = "true" ] && echo "ALL TESTS PASSED" || echo "SOME TESTS FAILED"
+
+  logs:
+    desc: Tail the last connector run log
+    cmds:
+      - tail -f /tmp/rpcns_hana_inc_bench.log
+
+  logs:load:
+    desc: Tail the last loader run log
+    cmds:
+      - tail -f /tmp/rpcns_hana_inc_load.log
