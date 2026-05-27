@@ -9,6 +9,7 @@ Benchmarks SAP HANA `sap_hana` input throughput across different modes.
 | `saphana-read/bulk/` | `bulk` | Read all rows once, one message per row → Kafka |
 | `saphana-read/incrementing/` | `incrementing` | Poll for net-new rows using HWM column, connector stays running → Kafka |
 | `saphana-read/query/` | `query` | Execute user-supplied SQL, one message per result row → Kafka |
+| `saphana-write/` | `sql_insert` | Kafka → `sql_insert` driver:hana → HANA table |
 
 ## Prerequisites
 

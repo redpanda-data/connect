@@ -1,0 +1,22 @@
+input:
+  kafka_franz:
+    seed_brokers:
+      - ${KAFKA_BOOTSTRAP:localhost:9092}
+    topics: [hana-bench-writes]
+    consumer_group: hana-bench-write-group
+
+output:
+  sql_insert:
+    driver: hana
+    dsn: ${HANA_DSN}
+    table: ${HANA_TABLE}
+    columns: [ID, CATEGORY, VALUE, TS]
+    args_mapping: |
+      root = [this.id, this.category, this.value, this.ts.ts_parse("2006-01-02T15:04:05.999999999Z07:00")]
+    max_in_flight: ${MAX_IN_FLIGHT:10}
+
+http:
+  address: "0.0.0.0:0"
+
+logger:
+  level: WARN
