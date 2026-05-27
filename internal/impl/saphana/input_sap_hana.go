@@ -32,20 +32,28 @@ const (
 	shFieldIncrementingInitialVal = "incrementing_initial_value"
 	shFieldPollInterval           = "poll_interval"
 
-	shModeBulk         = "bulk"
-	shModeIncrementing = "incrementing"
-	shModeQuery        = "query"
+	shFieldTimestampColumn    = "timestamp_column"
+	shFieldTimestampInitialVal = "timestamp_initial_value"
+	shFieldTimestampDelay     = "timestamp_delay"
+
+	shModeBulk                 = "bulk"
+	shModeIncrementing          = "incrementing"
+	shModeQuery                = "query"
+	shModeTimestamp             = "timestamp"
+	shModeTimestampIncrementing = "timestamp+incrementing"
 )
 
 var sapHANAInputConfigSpec = service.NewConfigSpec().
 	Categories("Services").
 	Version("4.92.0").
 	Summary("Reads rows from a SAP HANA table.").
-	Description(`Reads rows from a SAP HANA table. Supports three modes:
+	Description(`Reads rows from a SAP HANA table. Supports five modes:
 
 - ` + "`bulk`" + `: reads all rows once then the input terminates (use with xref:components:inputs/sequence.adoc[sequence] for periodic re-reads).
 - ` + "`incrementing`" + `: polls for rows where ` + "`incrementing_column`" + ` exceeds the last seen value, emitting only net-new rows.
 - ` + "`query`" + `: executes a user-supplied SQL statement and emits one message per result row.
+- ` + "`timestamp`" + `: polls for rows where ` + "`timestamp_column`" + ` falls within ` + "`(last_hwm, NOW()-timestamp_delay]`" + `, advancing the HWM after each batch. The delay absorbs DB clock skew.
+- ` + "`timestamp+incrementing`" + `: like ` + "`timestamp`" + ` but breaks ties within the same timestamp using ` + "`incrementing_column`" + `, preventing duplicate or missed rows when multiple rows share an identical timestamp.
 
 == Metadata
 
@@ -67,7 +75,7 @@ Every message produced by this input carries the following metadata fields:
 		Description("Table to read from. Required when `mode` is `bulk` or `incrementing`.").
 		Optional(),
 	).
-	Field(service.NewStringEnumField(shFieldMode, shModeBulk, shModeIncrementing, shModeQuery).
+	Field(service.NewStringEnumField(shFieldMode, shModeBulk, shModeIncrementing, shModeQuery, shModeTimestamp, shModeTimestampIncrementing).
 		Description("Operation mode.").
 		Default(shModeBulk),
 	).
@@ -84,9 +92,23 @@ Every message produced by this input carries the following metadata fields:
 		Default(""),
 	).
 	Field(service.NewDurationField(shFieldPollInterval).
-		Description("How long to wait between polls in `incrementing` mode.").
+		Description("How long to wait between polls in `incrementing`, `timestamp`, and `timestamp+incrementing` modes.").
 		Default("5s").
 		Example("1s").
+		Example("30s"),
+	).
+	Field(service.NewStringField(shFieldTimestampColumn).
+		Description("Column to use as the high-water mark for `timestamp` and `timestamp+incrementing` modes. Must be a TIMESTAMP or LONGDATE column.").
+		Optional(),
+	).
+	Field(service.NewStringField(shFieldTimestampInitialVal).
+		Description("Initial high-water mark in RFC3339 format (e.g. `2024-01-01T00:00:00Z`). When empty, all existing rows are emitted on the first run.").
+		Default(""),
+	).
+	Field(service.NewDurationField(shFieldTimestampDelay).
+		Description("Clock-skew buffer for timestamp modes. The upper bound for each poll is `NOW()-timestamp_delay`, ensuring recently inserted rows are not missed due to clock differences.").
+		Default("5s").
+		Example("0s").
 		Example("30s"),
 	).
 	Field(service.NewAutoRetryNacksToggleField())
@@ -111,6 +133,11 @@ type sapHANAInput struct {
 	incrementingCol string
 	hwm             string
 	pollInterval    time.Duration
+
+	timestampCol   string
+	timestampHWM   time.Time
+	tsQueryUpper   time.Time
+	timestampDelay time.Duration
 
 	db      *sql.DB
 	rows    *sql.Rows
@@ -165,9 +192,26 @@ func newSAPHANAInput(conf *service.ParsedConfig, mgr *service.Resources) (*sapHA
 	if s.pollInterval, err = conf.FieldDuration(shFieldPollInterval); err != nil {
 		return nil, err
 	}
+	if conf.Contains(shFieldTimestampColumn) {
+		if s.timestampCol, err = conf.FieldString(shFieldTimestampColumn); err != nil {
+			return nil, err
+		}
+	}
+	var tsInitStr string
+	if tsInitStr, err = conf.FieldString(shFieldTimestampInitialVal); err != nil {
+		return nil, err
+	}
+	if tsInitStr != "" {
+		if s.timestampHWM, err = time.Parse(time.RFC3339, tsInitStr); err != nil {
+			return nil, fmt.Errorf("parsing %s: %w", shFieldTimestampInitialVal, err)
+		}
+	}
+	if s.timestampDelay, err = conf.FieldDuration(shFieldTimestampDelay); err != nil {
+		return nil, err
+	}
 
 	switch s.mode {
-	case shModeBulk, shModeIncrementing:
+	case shModeBulk, shModeIncrementing, shModeTimestamp, shModeTimestampIncrementing:
 		if s.tableName == "" {
 			return nil, fmt.Errorf("field %q is required when mode is %q", shFieldTable, s.mode)
 		}
@@ -178,6 +222,12 @@ func newSAPHANAInput(conf *service.ParsedConfig, mgr *service.Resources) (*sapHA
 	}
 	if s.mode == shModeIncrementing && s.incrementingCol == "" {
 		return nil, fmt.Errorf("field %q is required when mode is %q", shFieldIncrementingColumn, shModeIncrementing)
+	}
+	if (s.mode == shModeTimestamp || s.mode == shModeTimestampIncrementing) && s.timestampCol == "" {
+		return nil, fmt.Errorf("field %q is required when mode is %q", shFieldTimestampColumn, s.mode)
+	}
+	if s.mode == shModeTimestampIncrementing && s.incrementingCol == "" {
+		return nil, fmt.Errorf("field %q is required when mode is %q", shFieldIncrementingColumn, shModeTimestampIncrementing)
 	}
 
 	return s, nil
@@ -234,6 +284,31 @@ func (s *sapHANAInput) openRows(ctx context.Context) (*sql.Rows, error) {
 	case shModeQuery:
 		return s.db.QueryContext(ctx, s.customQuery)
 
+	case shModeTimestamp:
+		s.tsQueryUpper = time.Now().Add(-s.timestampDelay)
+		if s.timestampHWM.IsZero() {
+			q := `SELECT * FROM ` + s.tableRef() +
+				` WHERE "` + s.timestampCol + `" <= ? ORDER BY "` + s.timestampCol + `"`
+			return s.db.QueryContext(ctx, q, s.tsQueryUpper)
+		}
+		q := `SELECT * FROM ` + s.tableRef() +
+			` WHERE "` + s.timestampCol + `" > ? AND "` + s.timestampCol + `" <= ? ORDER BY "` + s.timestampCol + `"`
+		return s.db.QueryContext(ctx, q, s.timestampHWM, s.tsQueryUpper)
+
+	case shModeTimestampIncrementing:
+		s.tsQueryUpper = time.Now().Add(-s.timestampDelay)
+		if s.timestampHWM.IsZero() {
+			q := `SELECT * FROM ` + s.tableRef() +
+				` WHERE "` + s.timestampCol + `" <= ?` +
+				` ORDER BY "` + s.timestampCol + `", "` + s.incrementingCol + `"`
+			return s.db.QueryContext(ctx, q, s.tsQueryUpper)
+		}
+		q := `SELECT * FROM ` + s.tableRef() +
+			` WHERE ("` + s.timestampCol + `" > ? OR ("` + s.timestampCol + `" = ? AND "` + s.incrementingCol + `" > ?))` +
+			` AND "` + s.timestampCol + `" <= ?` +
+			` ORDER BY "` + s.timestampCol + `", "` + s.incrementingCol + `"`
+		return s.db.QueryContext(ctx, q, s.timestampHWM, s.timestampHWM, s.hwm, s.tsQueryUpper)
+
 	default:
 		return nil, fmt.Errorf("unknown mode %q", s.mode)
 	}
@@ -259,7 +334,7 @@ func (s *sapHANAInput) Read(ctx context.Context) (*service.Message, service.AckF
 				}
 				s.rows = rows
 
-			case shModeIncrementing:
+			case shModeIncrementing, shModeTimestamp, shModeTimestampIncrementing:
 				// Release the lock while waiting so Close() can proceed.
 				s.dbMut.Unlock()
 				var timerFired bool
@@ -302,6 +377,9 @@ func (s *sapHANAInput) Read(ctx context.Context) (*service.Message, service.AckF
 		_ = s.rows.Close()
 		s.rows = nil
 
+		if s.mode == shModeTimestamp || s.mode == shModeTimestampIncrementing {
+			s.timestampHWM = s.tsQueryUpper
+		}
 		if s.mode == shModeBulk || s.mode == shModeQuery {
 			return nil, nil, service.ErrEndOfInput
 		}
@@ -329,8 +407,7 @@ func (s *sapHANAInput) scanRow(ctx context.Context, rows *sql.Rows) (*service.Me
 		rowMap[name] = values[i]
 	}
 
-	// Update in-memory HWM after a successful scan.
-	if s.mode == shModeIncrementing && s.incrementingCol != "" {
+	if (s.mode == shModeIncrementing || s.mode == shModeTimestampIncrementing) && s.incrementingCol != "" {
 		if v, ok := rowMap[s.incrementingCol]; ok && v != nil {
 			s.hwm = fmt.Sprintf("%v", v)
 		}
