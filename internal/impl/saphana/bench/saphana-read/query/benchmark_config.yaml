@@ -1,0 +1,17 @@
+input:
+  sap_hana:
+    dsn: ${HANA_DSN}
+    mode: query
+    query: ${HANA_QUERY}
+
+output:
+  kafka_franz:
+    seed_brokers:
+      - localhost:9092
+    topic: ${KAFKA_TOPIC:rpcns-hana-bench-query}
+
+http:
+  address: "0.0.0.0:0"
+
+logger:
+  level: WARN

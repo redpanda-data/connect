@@ -1,0 +1,114 @@
+version: "3"
+
+silent: true
+
+tasks:
+  bench:build:
+    desc: Build the redpanda-connect and loader binaries
+    cmds:
+      - go build -o /tmp/rpcns-hana-query-bench ../../../../../../cmd/redpanda-connect/
+      - go build -o /tmp/rpcns-hana-query-bench-load ./load/
+      - echo "Binaries built"
+
+  bench:load:
+    desc: "Create BENCH_ORDERS_QUERY table and load COUNT rows (e.g. task bench:load COUNT=1000000)"
+    vars:
+      COUNT: '{{.COUNT | default "1000000"}}'
+    cmds:
+      - |
+        if [ -z "$HANA_DSN" ]; then echo "HANA_DSN env var required"; exit 1; fi
+        if [ -z "$HANA_SCHEMA" ]; then echo "HANA_SCHEMA env var required"; exit 1; fi
+        HANA_DSN="$HANA_DSN" HANA_SCHEMA="$HANA_SCHEMA" /tmp/rpcns-hana-query-bench-load -count {{.COUNT}}
+
+  bench:run:
+    desc: "Run query benchmark (e.g. task bench:run CORES=4 QUERY='SELECT * FROM ...')"
+    vars:
+      CORES: '{{.CORES | default ""}}'
+      INTERVAL: '{{.INTERVAL | default "2"}}'
+    cmds:
+      - |
+        if [ -z "$HANA_DSN" ]; then echo "HANA_DSN env var required"; exit 1; fi
+        if [ -z "$HANA_SCHEMA" ]; then echo "HANA_SCHEMA env var required"; exit 1; fi
+        if [ -z "$HANA_QUERY" ]; then
+          HANA_QUERY="SELECT * FROM \"${HANA_SCHEMA}\".\"BENCH_ORDERS_QUERY\""
+        fi
+        CORES="{{.CORES}}"
+        INTERVAL={{.INTERVAL}}
+        TOPIC="rpcns-hana-bench-query"
+
+        pkill -9 -f "/tmp/rpcns-hana-query-bench run" 2>/dev/null || true
+
+        get_kafka_count() {
+          timeout 5 docker exec rpcns-hana-kafka kafka-get-offsets \
+            --bootstrap-server localhost:29092 \
+            --topic "$TOPIC" 2>/dev/null \
+            | awk -F: '{sum += $3} END {print sum+0}'
+        }
+
+        timeout 10 docker exec rpcns-hana-kafka kafka-topics --bootstrap-server localhost:29092 \
+          --delete --topic "$TOPIC" > /dev/null 2>&1 || true
+        ATTEMPTS=0
+        until [ $ATTEMPTS -ge 30 ] || \
+          ! timeout 5 docker exec rpcns-hana-kafka kafka-topics --bootstrap-server localhost:29092 \
+            --list 2>/dev/null | grep -qF "$TOPIC"; do
+          sleep 1
+          ATTEMPTS=$((ATTEMPTS + 1))
+        done
+
+        if [ -n "$CORES" ]; then echo "cores=$CORES"; else echo "cores=unbounded"; fi
+        echo "query=$HANA_QUERY"
+
+        START=$(date +%s)
+        PREV_COUNT=0
+        PREV_TIME=$START
+
+        HANA_DSN="$HANA_DSN" HANA_QUERY="$HANA_QUERY" KAFKA_TOPIC="$TOPIC" GOMAXPROCS="$CORES" \
+          REDPANDA_LICENSE="$REDPANDA_LICENSE" REDPANDA_LICENSE_FILEPATH="$REDPANDA_LICENSE_FILEPATH" \
+          /tmp/rpcns-hana-query-bench run ./benchmark_config.yaml > /tmp/rpcns_hana_query_bench.log 2>&1 &
+        RPCN_PID=$!
+
+        printf "%-10s  %-14s  %s\n" "TIME" "IN KAFKA" "MSG/S"
+
+        while kill -0 $RPCN_PID 2>/dev/null; do
+          sleep "$INTERVAL"
+          COUNT=$(get_kafka_count)
+          COUNT=${COUNT:-0}
+          NOW=$(date +%s)
+          DELTA_T=$((NOW - PREV_TIME))
+          DELTA_COUNT=$((COUNT - PREV_COUNT))
+          RATE=0
+          [ "$DELTA_T" -gt 0 ] && RATE=$((DELTA_COUNT / DELTA_T))
+          printf "%-10s  %-14s  %s msg/s\n" "$(date +%H:%M:%S)" "$COUNT" "$RATE"
+          PREV_COUNT=$COUNT
+          PREV_TIME=$NOW
+        done
+
+        wait $RPCN_PID
+        END=$(date +%s)
+        ELAPSED=$((END - START))
+        FINAL=$(get_kafka_count)
+        AVG=$(awk "BEGIN { printf \"%.0f\", ${FINAL:-0} / ($ELAPSED > 0 ? $ELAPSED : 1) }")
+        echo "---"
+        if [ -n "$CORES" ]; then echo "cores=$CORES"; else echo "cores=unbounded"; fi
+        echo "Total messages : $FINAL"
+        echo "Elapsed        : ${ELAPSED}s"
+        echo "Avg throughput : ${AVG} msg/s"
+
+  bench:all:
+    desc: "Run all cores combinations (e.g. task bench:all OUT=results.txt)"
+    vars:
+      OUT: '{{.OUT | default ""}}'
+    cmds:
+      - |
+        for cores in 1 2 4 8; do
+          if [ -n "{{.OUT}}" ]; then
+            task bench:run CORES=$cores 2>&1 | tee -a {{.OUT}}
+          else
+            task bench:run CORES=$cores
+          fi
+        done
+
+  logs:
+    desc: Tail the last benchmark run log
+    cmds:
+      - tail -f /tmp/rpcns_hana_query_bench.log
