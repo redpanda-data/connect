@@ -116,7 +116,9 @@ func (m *MatrixRunner) Run(
 				})
 			default:
 				cancelWorkload()
-				<-workloadDone
+				if werr := <-workloadDone; werr != nil && werr != context.Canceled {
+					fmt.Fprintf(stdout, "[bench] workload exited with error: %v\n", werr)
+				}
 				return nil, fmt.Errorf("unknown engine %q at vcpu %d", engine, n)
 			}
 
@@ -127,11 +129,15 @@ func (m *MatrixRunner) Run(
 			// streaming every line is safe.
 			if err := m.SSM.Run(ctx, m.RunnerInstance, script, streamingOnLine(stdout, fmt.Sprintf("bench-%s", engine))); err != nil {
 				cancelWorkload()
-				<-workloadDone
+				if werr := <-workloadDone; werr != nil && werr != context.Canceled {
+					fmt.Fprintf(stdout, "[bench] workload exited with error: %v\n", werr)
+				}
 				return nil, fmt.Errorf("bench at %d vCPU (%s): %w", n, engine, err)
 			}
 			cancelWorkload()
-			<-workloadDone
+			if werr := <-workloadDone; werr != nil && werr != context.Canceled {
+				fmt.Fprintf(stdout, "[bench] workload exited with error: %v\n", werr)
+			}
 
 			// Per-engine fetch + parse. KC's broker-side metrics are scraped on
 			// the runner and uploaded to S3 (Plan 3 parses them); the Plan 2
