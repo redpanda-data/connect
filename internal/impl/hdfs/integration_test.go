@@ -19,7 +19,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/colinmarc/hdfs"
+	"github.com/colinmarc/hdfs/v2"
 	"github.com/moby/moby/api/types/container"
 	mobynet "github.com/moby/moby/api/types/network"
 	"github.com/stretchr/testify/require"
