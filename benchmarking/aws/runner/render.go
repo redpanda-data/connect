@@ -44,6 +44,7 @@ type ResultDataset struct {
 
 type PointResult struct {
 	VCPU      int         `json:"vcpu"`
+	Engine    string      `json:"engine"`
 	Samples   []Sample    `json:"samples"`
 	Summary   Summary     `json:"summary"`
 	Anomalies []Anomaly   `json:"anomalies,omitempty"`

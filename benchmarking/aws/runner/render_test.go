@@ -31,7 +31,8 @@ func sampleResult() *Result {
 		Dataset: ResultDataset{Rows: 75_000_000, RowSizeBytes: 1200, TotalBytes: 90_000_000_000},
 		Points: []PointResult{
 			{
-				VCPU: 1,
+				VCPU:    1,
+				Engine:  "connect",
 				Samples: []Sample{{T: 0, MBPerSec: 153, MsgPerSec: 127344}},
 				Summary: Summary{MedianMBPerSec: 153, P5MBPerSec: 144, P95MBPerSec: 161, PeakMBPerSec: 167,
 					MedianMsgPerSec: 127344, P5MsgPerSec: 119800, P95MsgPerSec: 134000, PeakMsgPerSec: 138200},

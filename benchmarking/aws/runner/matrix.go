@@ -38,6 +38,7 @@ type MatrixRunner struct {
 // SweepPoint is the per-point measurement.
 type SweepPoint struct {
 	VCPU      int
+	Engine    string
 	Samples   []Sample
 	Summary   Summary
 	Anomalies []Anomaly
