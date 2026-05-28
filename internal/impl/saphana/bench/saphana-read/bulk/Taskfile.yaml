@@ -26,14 +26,16 @@ tasks:
       - echo "Binaries built"
 
   bench:load:
-    desc: "Create BENCH_ORDERS table and load COUNT rows (e.g. task bench:load COUNT=1000000)"
+    desc: "Create BENCH_ORDERS table and load COUNT rows (e.g. task bench:load COUNT=1000000 WORKERS=20)"
     vars:
       COUNT: '{{.COUNT | default "1000000"}}'
+      WORKERS: '{{.WORKERS | default "20"}}'
+      BATCH: '{{.BATCH | default "500"}}'
     cmds:
       - |
         if [ -z "$HANA_DSN" ]; then echo "HANA_DSN env var required"; exit 1; fi
         if [ -z "$HANA_SCHEMA" ]; then echo "HANA_SCHEMA env var required"; exit 1; fi
-        HANA_DSN="$HANA_DSN" HANA_SCHEMA="$HANA_SCHEMA" /tmp/rpcns-hana-bench-load -count {{.COUNT}}
+        HANA_DSN="$HANA_DSN" HANA_SCHEMA="$HANA_SCHEMA" /tmp/rpcns-hana-bench-load -count {{.COUNT}} -workers {{.WORKERS}} -batch {{.BATCH}}
 
   bench:run:
     desc: "Run bulk read benchmark (e.g. task bench:run CORES=4)"
