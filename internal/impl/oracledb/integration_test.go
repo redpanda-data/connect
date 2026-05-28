@@ -1251,6 +1251,36 @@ oracledb_cdc:
 	}
 }
 
+// TestIntegrationOracleDBGoOraColumnTypesForNumber logs the exact values
+// go-ora returns from DatabaseTypeName() and DecimalSize() for NUMBER columns
+// with various precision/scale declarations. This proves what the driver
+// reports so we can verify our schema classification is correct.
+func TestIntegrationOracleDBGoOraColumnTypesForNumber(t *testing.T) {
+	integration.CheckSkip(t)
+
+	_, db := oracledbtest.SetupTestWithOracleDBVersion(t)
+	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.col_types",
+		`CREATE TABLE testdb.col_types (
+			id              NUMBER(5,0)   PRIMARY KEY,
+			bare_number     NUMBER,
+			number_p38_s10  NUMBER(38,10),
+			number_p10_s0   NUMBER(10,0)
+		)`))
+
+	rows, err := db.QueryContext(t.Context(), "SELECT * FROM testdb.col_types WHERE 1=0")
+	require.NoError(t, err)
+	defer rows.Close()
+
+	types, err := rows.ColumnTypes()
+	require.NoError(t, err)
+
+	for _, ct := range types {
+		precision, scale, ok := ct.DecimalSize()
+		t.Logf("column=%-20s DatabaseTypeName=%-10s DecimalSize=(precision=%d, scale=%d, ok=%v) ScanType=%v",
+			ct.Name(), ct.DatabaseTypeName(), precision, scale, ok, ct.ScanType())
+	}
+}
+
 // TestIntegrationOracleDBCDCStreamingStructuredTypes verifies that streaming
 // messages produced by the batcher preserve correct Go types when
 // AsStructuredMut is called. Bare NUMBER (no precision) maps to BigDecimal and
@@ -1903,6 +1933,7 @@ func TestIntegrationOracleDBCDCSchemaDataTypeConsistency(t *testing.T) {
 			int_col       NUMBER(10)      PRIMARY KEY,
 			bigint_col    NUMBER(18),
 			decimal_col   NUMBER(20, 5),
+			bare_num_col  NUMBER,
 			float_col     BINARY_FLOAT,
 			double_col    BINARY_DOUBLE,
 			date_col      DATE,
@@ -1919,7 +1950,7 @@ func TestIntegrationOracleDBCDCSchemaDataTypeConsistency(t *testing.T) {
 
 	// Insert row for snapshot
 	db.MustExecContext(t.Context(), `INSERT INTO testdb.schema_types VALUES (
-		1, 999999999999999999, 12345.67890,
+		1, 999999999999999999, 12345.67890, 42,
 		1.5, 2.5,
 		TO_DATE('2020-06-15','YYYY-MM-DD'),
 		TO_TIMESTAMP('2020-06-15 10:30:00','YYYY-MM-DD HH24:MI:SS'),
@@ -1983,7 +2014,7 @@ oracledb_cdc:
 	// Insert same row via DML for streaming
 	t.Log("Inserting streaming row...")
 	db.MustExecContext(t.Context(), `INSERT INTO testdb.schema_types VALUES (
-		2, 999999999999999999, 12345.67890,
+		2, 999999999999999999, 12345.67890, 42,
 		1.5, 2.5,
 		TO_DATE('2020-06-15','YYYY-MM-DD'),
 		TO_TIMESTAMP('2020-06-15 10:30:00','YYYY-MM-DD HH24:MI:SS'),
@@ -2006,18 +2037,19 @@ oracledb_cdc:
 
 	// Define expected CommonType per column
 	expectedTypes := map[string]schema.CommonType{
-		"INT_COL":     schema.Int64,
-		"BIGINT_COL":  schema.Int64,
-		"DECIMAL_COL": schema.Decimal,
-		"FLOAT_COL":   schema.Float32,
-		"DOUBLE_COL":  schema.Float64,
-		"DATE_COL":    schema.Timestamp,
-		"TS_COL":      schema.Timestamp,
-		"TSTZ_COL":    schema.Timestamp,
-		"CHAR_COL":    schema.String,
-		"VARCHAR_COL": schema.String,
-		"RAW_COL":     schema.ByteArray,
-		"BIT_COL":     schema.Int64,
+		"INT_COL":      schema.Int64,
+		"BIGINT_COL":   schema.Int64,
+		"DECIMAL_COL":  schema.Decimal,
+		"BARE_NUM_COL": schema.BigDecimal,
+		"FLOAT_COL":    schema.Float32,
+		"DOUBLE_COL":   schema.Float64,
+		"DATE_COL":     schema.Timestamp,
+		"TS_COL":       schema.Timestamp,
+		"TSTZ_COL":     schema.Timestamp,
+		"CHAR_COL":     schema.String,
+		"VARCHAR_COL":  schema.String,
+		"RAW_COL":      schema.ByteArray,
+		"BIT_COL":      schema.Int64,
 	}
 
 	// Verify schema metadata for both phases
@@ -2036,6 +2068,16 @@ oracledb_cdc:
 	// Verify fingerprints match across phases
 	assert.Equal(t, oracledbtest.ExtractFingerprint(t, snapshotMsg), oracledbtest.ExtractFingerprint(t, streamingMsg),
 		"schema fingerprints should be identical across snapshot and streaming")
+
+	// Bare NUMBER (BigDecimal) must arrive as a canonical decimal string in both
+	// phases — not int64 or json.Number — so Avro decimal(bytes) encoding works.
+	for phase, msg := range map[string]*service.Message{"snapshot": snapshotMsg, "streaming": streamingMsg} {
+		structured, sErr := msg.AsStructuredMut()
+		require.NoError(t, sErr, "%s: AsStructuredMut", phase)
+		m := structured.(map[string]any)
+		t.Logf("%s: BARE_NUM_COL type=%T value=%v", phase, m["BARE_NUM_COL"], m["BARE_NUM_COL"])
+		assert.IsType(t, "", m["BARE_NUM_COL"], "%s: bare NUMBER must arrive as string", phase)
+	}
 
 	// Verify data value types are consistent across phases.
 	// With streaming value coercion, both snapshot and streaming should produce
