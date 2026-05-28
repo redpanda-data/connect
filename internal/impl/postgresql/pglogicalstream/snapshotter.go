@@ -68,12 +68,14 @@ func (s *snapshotter) openTxn(ctx context.Context, _ int) (*sql.Tx, error) {
 	if err != nil {
 		return nil, fmt.Errorf("unable to start reader txn: %w", err)
 	}
-	sq, err := sanitize.SQLQuery("SET TRANSACTION SNAPSHOT $1", s.snapshotName)
-	if err != nil {
-		return nil, err
-	}
-	if _, err := tx.ExecContext(ctx, sq); err != nil {
-		return nil, fmt.Errorf("unable to set txn snapshot to %s: %w", s.snapshotName, err)
+	if s.snapshotName != "" {
+		sq, err := sanitize.SQLQuery("SET TRANSACTION SNAPSHOT $1", s.snapshotName)
+		if err != nil {
+			return nil, err
+		}
+		if _, err := tx.ExecContext(ctx, sq); err != nil {
+			return nil, fmt.Errorf("unable to set txn snapshot to %s: %w", s.snapshotName, err)
+		}
 	}
 	// Oh postgres, pg hackers will tell you the statistics/analyzer just aren't tuned right or up to date,
 	// and they are probably right, but this is the easiest way to tell postgres that we actually want to

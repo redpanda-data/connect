@@ -81,12 +81,16 @@ func NewMonitor(
 
 // UpdateSnapshotProgressForTable updates the snapshot ingestion progress for a given table.
 func (m *Monitor) UpdateSnapshotProgressForTable(table TableFQN, read int) {
-	m.snapshotProgress[table].Add(int64(read))
+	if p := m.snapshotProgress[table]; p != nil {
+		p.Add(int64(read))
+	}
 }
 
 // MarkSnapshotComplete means that we finished snapshotting.
 func (m *Monitor) MarkSnapshotComplete(table TableFQN) {
-	m.snapshotProgress[table].Store(int64(m.tableStat[table]))
+	if p := m.snapshotProgress[table]; p != nil {
+		p.Store(int64(m.tableStat[table]))
+	}
 }
 
 // we need to read the tables stat to calculate the snapshot ingestion progress.
