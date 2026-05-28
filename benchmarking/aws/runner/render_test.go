@@ -99,6 +99,32 @@ func TestAppendMarkdown_DualEngineWithDelta(t *testing.T) {
 	require.NotContains(t, s, "+0%", "connect row should not have a delta value")
 }
 
+func TestAppendMarkdown_PointOrderingIsRobust(t *testing.T) {
+	// Build the same dual-engine result two ways: interleaved
+	// [connect, kc] versus reverse-engine order [kc, connect] within
+	// the same vCPU. The grouping logic should produce identical
+	// markdown output.
+	r1 := sampleDualEngineResult()
+	r2 := sampleDualEngineResult()
+	// Swap order in r2: [kc, connect] instead of [connect, kc].
+	r2.Points = []PointResult{r2.Points[1], r2.Points[0]}
+
+	dir := t.TempDir()
+	target1 := filepath.Join(dir, "r1.md")
+	target2 := filepath.Join(dir, "r2.md")
+	require.NoError(t, os.WriteFile(target1, []byte{}, 0o644))
+	require.NoError(t, os.WriteFile(target2, []byte{}, 0o644))
+	require.NoError(t, AppendMarkdown(target1, r1, "desc"))
+	require.NoError(t, AppendMarkdown(target2, r2, "desc"))
+
+	b1, err := os.ReadFile(target1)
+	require.NoError(t, err)
+	b2, err := os.ReadFile(target2)
+	require.NoError(t, err)
+	require.Equal(t, string(b1), string(b2),
+		"markdown output should be invariant to point ordering within a vCPU group")
+}
+
 func TestAppendMarkdown(t *testing.T) {
 	dir := t.TempDir()
 	target := filepath.Join(dir, "postgres.md")
