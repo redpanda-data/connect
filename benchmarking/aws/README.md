@@ -755,3 +755,30 @@ aws ssm start-session --target <runner-id>
 $ curl -s localhost:8083/connector-plugins | jq '.[] | .class' | sort -u
 $ curl -s http://<broker0>:9644/public_metrics | head -5
 ```
+
+## Side-by-side: Connect vs Kafka Connect (Plan 2, 2026-05-22)
+
+Each sweep point now runs Connect AND Kafka Connect sequentially at the same vCPU/memory budget against the same workload. Output is two `PointResult` rows per vCPU — one per engine — in the result JSON.
+
+**Run both engines (default):**
+
+```sh
+task aws:bench SCENARIO=benchmarking/aws/scenarios/postgres/orders-cdc.yaml
+```
+
+**Run only Connect (single-engine regression):**
+
+```sh
+go run ./benchmarking/aws/runner bench --scenario=... --engines=connect
+```
+
+**How each engine is invoked:**
+
+- **Connect** runs as today: pinned via `taskset` + `chrt --fifo 50` + `GOMEMLIMIT=<N>GiB`, with `output: redpanda` writing to topic `bench_<session>_<connector>_connect`. The top-level `redpanda:` block in the pipeline config carries the broker list.
+- **Kafka Connect** stops the cloud-init-started worker, then spawns the JVM directly under `taskset + chrt -Xmx<N>g` so the JVM gets the same CPU/mem budget. The Debezium connector is submitted via `curl PUT /connectors/<name>/config`. After warmup + window, the connector is `DELETE`'d, the JVM is SIGTERM'd, the systemd unit is restarted for the next sweep point.
+
+**Why each engine writes to a separate topic:** broker-side throughput metrics attribute cleanly to one engine via the topic label.
+
+**Reset between engines** (and between sweep points): SQL reset (engine-aware; the existing logic from `scripts.go`), idempotent `DELETE /connectors/bench_<connector>`, and `kafka-topics.sh --delete` for both engines' topics.
+
+**Known limitation:** Plan 2 captures KC's per-sweep-point log to S3 but doesn't parse it. The canonical KC throughput number comes from the broker-side metric introduced in Plan 1 (uploaded to S3 as `redpanda-<vcpu>.txt`), and that's what Plan 3 will surface in reporting. Until Plan 3 lands, the KC `PointResult.Summary` is the zero value (`MedianMBPerSec: 0`) — the data is in S3 but not yet rendered into the markdown.
