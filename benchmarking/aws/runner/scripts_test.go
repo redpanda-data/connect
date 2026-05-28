@@ -126,6 +126,56 @@ func TestCombineReset_BashStepPasses(t *testing.T) {
 	}
 }
 
+func TestCombineReset_AppendsKCAndTopicCleanup_Postgres(t *testing.T) {
+	outs := map[string]string{
+		"postgres_dsn":              "postgres://user:pw@host/db",
+		"bench_session_id":          "sess-abc",
+		"redpanda_broker_endpoints": "10.42.10.10:9092",
+	}
+	steps := []ResetStep{
+		{SQL: "SELECT 1"},
+	}
+	out, err := combineReset("postgres_cdc", steps, outs)
+	if err != nil {
+		t.Fatalf("combineReset: %v", err)
+	}
+	// Existing SQL still present.
+	if !strings.Contains(out, "SELECT 1") {
+		t.Errorf("expected original SQL to remain; got:\n%s", out)
+	}
+	// KC connector idempotent delete.
+	if !strings.Contains(out, "curl") || !strings.Contains(out, "X DELETE") {
+		t.Errorf("expected idempotent KC connector DELETE; got:\n%s", out)
+	}
+	// Topic deletes for both engines via kafka-topics.sh.
+	if !strings.Contains(out, "kafka-topics.sh") {
+		t.Errorf("expected kafka-topics.sh delete; got:\n%s", out)
+	}
+	if !strings.Contains(out, "bench_sess-abc_postgres_cdc_connect") {
+		t.Errorf("expected Connect topic delete; got:\n%s", out)
+	}
+	if !strings.Contains(out, "bench_sess-abc_postgres_cdc_kc") {
+		t.Errorf("expected KC topic delete; got:\n%s", out)
+	}
+}
+
+func TestCombineReset_NoOpWhenSessionIDMissing(t *testing.T) {
+	// If bench_session_id is somehow unset, the reset should skip the
+	// topic/connector cleanup steps rather than emit malformed commands.
+	outs := map[string]string{
+		"postgres_dsn":              "postgres://user:pw@host/db",
+		"redpanda_broker_endpoints": "10.42.10.10:9092",
+	}
+	steps := []ResetStep{{SQL: "SELECT 1"}}
+	out, err := combineReset("postgres_cdc", steps, outs)
+	if err != nil {
+		t.Fatalf("combineReset: %v", err)
+	}
+	if strings.Contains(out, "kafka-topics.sh") {
+		t.Errorf("topic delete should be skipped when session id is empty; got:\n%s", out)
+	}
+}
+
 // --- renderWorkloadScript ---
 
 func TestRenderWorkloadScript_Postgres(t *testing.T) {

@@ -75,6 +75,30 @@ func combineReset(connector string, steps []ResetStep, outs map[string]string) (
 			sb.WriteString(substitutePlaceholders(st.Bash, outs) + "\n")
 		}
 	}
+	// Engine-aware cleanup: between sweep points each engine's per-session
+	// output topic and the KC REST connector must be torn down so the next
+	// point starts from a clean baseline. Gated on session+brokers because
+	// pre-Plan-2 callers (and unit tests) may not populate them.
+	sessionID := outs["bench_session_id"]
+	brokers := outs["redpanda_broker_endpoints"]
+	if sessionID != "" && brokers != "" {
+		// Idempotent KC connector delete (404 is fine; the worker may not
+		// have a connector currently, or this may be the very first sweep
+		// point).
+		sb.WriteString(fmt.Sprintf(
+			`curl -fsS -X DELETE "http://localhost:8083/connectors/bench_%s" || true`+"\n",
+			connector,
+		))
+		// Delete both engines' topics. Errors are non-fatal — the topic
+		// might not exist yet on the first sweep point.
+		for _, engine := range []string{"connect", "kc"} {
+			topic := fmt.Sprintf("bench_%s_%s_%s", sessionID, connector, engine)
+			sb.WriteString(fmt.Sprintf(
+				`/opt/kafka/bin/kafka-topics.sh --bootstrap-server %q --delete --topic %q 2>/dev/null || true`+"\n",
+				brokers, topic,
+			))
+		}
+	}
 	return sb.String(), nil
 }
 
