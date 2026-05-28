@@ -54,7 +54,13 @@ func renderKCBenchScript(a kcBenchScriptArgs) string {
 		`sleep 2`,
 		// Spawn the JVM directly. Equivalent to the systemd unit's ExecStart
 		// but with vCPU + heap pinned for this sweep point.
-		fmt.Sprintf(`taskset -c 2-%d chrt --fifo 50 env KAFKA_HEAP_OPTS=-Xmx%dg /opt/kafka/bin/connect-distributed.sh /opt/kafka-connect/worker.properties >"$KC_LOG" 2>&1 &`,
+		//
+		// NOTE: Connect's bench script uses `chrt --fifo 50` for jitter
+		// reduction, but it deadlocks the JVM under single-core taskset
+		// (verified on 2026-05-28): JVM internal threads stall under
+		// SCHED_FIFO when all bound to one core. Plan 3 will revisit
+		// scheduler parity between the two engines.
+		fmt.Sprintf(`taskset -c 2-%d env KAFKA_HEAP_OPTS=-Xmx%dg /opt/kafka/bin/connect-distributed.sh /opt/kafka-connect/worker.properties >"$KC_LOG" 2>&1 &`,
 			cpusetHi, a.MemLimitGiB),
 		`PID=$!`,
 		// Wait until the REST API answers. KC + Debezium plugins is heavy; on a
