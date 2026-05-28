@@ -49,9 +49,12 @@ matrix:
   cpu_points: [1, 2, 4, 8]
 
 reset:
-  # Drop the replication slot AND truncate the table between sweep points.
-  # Both are needed: the slot drop frees up postgres_cdc's binlog cursor so
-  # the next point starts at current WAL position; the TRUNCATE keeps the
-  # table size bounded (no Trap 3 like bucket-1 hit).
+  # Drop both engines' replication slots AND truncate the table between
+  # sweep points. Slot drops free the WAL cursor so the next point starts
+  # at current position; the TRUNCATE keeps table size bounded (no Trap 3
+  # like bucket-1 hit). kc_bench_slot is what the Debezium registry entry
+  # in kcconnectors.go pins, so it must be dropped explicitly even when
+  # Connect is the only engine being swept.
   - sql: "SELECT pg_drop_replication_slot('bench_slot') FROM pg_replication_slots WHERE slot_name='bench_slot'"
+  - sql: "SELECT pg_drop_replication_slot('kc_bench_slot') FROM pg_replication_slots WHERE slot_name='kc_bench_slot'"
   - sql: "TRUNCATE TABLE orders"
