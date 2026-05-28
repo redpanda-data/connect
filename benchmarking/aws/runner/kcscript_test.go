@@ -24,8 +24,8 @@ func TestRenderKCBenchScript_PinsCoresAndHeap(t *testing.T) {
 	if !strings.Contains(script, "taskset -c 2-5") {
 		t.Errorf("expected core mask 2-5 for vcpu=4; got:\n%s", script)
 	}
-	if !strings.Contains(script, "-Xmx4g") {
-		t.Errorf("expected -Xmx4g heap; got:\n%s", script)
+	if !strings.Contains(script, "-Xmx3g") {
+		t.Errorf("expected -Xmx3g heap (floor(0.75*4)=3); got:\n%s", script)
 	}
 	if !strings.Contains(script, "systemctl stop kafka-connect") {
 		t.Errorf("expected stop of systemd-launched worker before our taskset-pinned spawn; got:\n%s", script)
@@ -73,5 +73,22 @@ func TestRenderKCBenchScript_SubmitsConnectorViaCurl(t *testing.T) {
 	}
 	if !strings.Contains(script, "PUT") {
 		t.Errorf("expected PUT method; got:\n%s", script)
+	}
+}
+
+func TestRenderKCBenchScript_HeapFloor(t *testing.T) {
+	// MemLimitGiB=1 → 1*3/4 = 0 → floor at 1.
+	script := renderKCBenchScript(kcBenchScriptArgs{
+		VCPU:                1,
+		MemLimitGiB:         1,
+		WarmupSec:           60,
+		DurationSec:         600,
+		ConnectorName:       "bench_pg",
+		ConnectorConfigJSON: `{}`,
+		Bucket:              "results-bucket",
+		SessionID:           "sess-x",
+	})
+	if !strings.Contains(script, "-Xmx1g") {
+		t.Errorf("expected -Xmx1g when MemLimitGiB=1 (3/4 floors to 1); got:\n%s", script)
 	}
 }

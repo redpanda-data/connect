@@ -35,6 +35,15 @@ type kcBenchScriptArgs struct {
 func renderKCBenchScript(a kcBenchScriptArgs) string {
 	cpusetHi := 1 + a.VCPU
 	totalSec := a.WarmupSec + a.DurationSec
+	// KC's -Xmx caps heap only; JVM overhead (Metaspace, code cache,
+	// direct buffers, native code) typically adds ~25-33% on top. Set
+	// heap to floor(0.75 * memLimit) so the total RSS budget matches
+	// Connect's GOMEMLIMIT. Floor 1 GiB — too aggressive a discount
+	// makes the JVM thrash on smaller budgets.
+	kcHeapGiB := a.MemLimitGiB * 3 / 4
+	if kcHeapGiB < 1 {
+		kcHeapGiB = 1
+	}
 	// Escape single quotes inside the JSON body for the heredoc.
 	cfgJSON := strings.ReplaceAll(a.ConnectorConfigJSON, "'", `'"'"'`)
 
@@ -61,7 +70,7 @@ func renderKCBenchScript(a kcBenchScriptArgs) string {
 		// SCHED_FIFO when all bound to one core. Plan 3 will revisit
 		// scheduler parity between the two engines.
 		fmt.Sprintf(`taskset -c 2-%d env KAFKA_HEAP_OPTS=-Xmx%dg /opt/kafka/bin/connect-distributed.sh /opt/kafka-connect/worker.properties >"$KC_LOG" 2>&1 &`,
-			cpusetHi, a.MemLimitGiB),
+			cpusetHi, kcHeapGiB),
 		`PID=$!`,
 		// Wait until the REST API answers. KC + Debezium plugins is heavy; on a
 		// small runner the JVM can take 90-150s before /connectors responds.
