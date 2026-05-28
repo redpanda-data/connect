@@ -71,3 +71,49 @@ redpanda_kafka_request_bytes_total{redpanda_request="produce",topic="bench_sess1
 		t.Errorf("bench topic missing; got %v", got)
 	}
 }
+
+func TestBrokerMetrics_TopicSeries_DeltasOverFrames(t *testing.T) {
+	const body = `###timestamp=1000
+redpanda_kafka_request_bytes_total{redpanda_request="produce",topic="t1"} 0
+###timestamp=1010
+redpanda_kafka_request_bytes_total{redpanda_request="produce",topic="t1"} 10485760
+###timestamp=1020
+redpanda_kafka_request_bytes_total{redpanda_request="produce",topic="t1"} 20971520
+`
+	series, err := ParseTopicSeries(strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("ParseTopicSeries: %v", err)
+	}
+	t1 := series["t1"]
+	if t1 == nil {
+		t.Fatal("topic t1 missing from series map")
+	}
+	// 3 frames → 2 deltas. Each delta covers a 10s interval at
+	// 10 MiB / 10s = 1 MiB/s.
+	if len(t1) != 2 {
+		t.Fatalf("expected 2 series points (one per inter-frame delta); got %d", len(t1))
+	}
+	if want := 1.0; t1[0].MBPerSec < want-0.01 || t1[0].MBPerSec > want+0.01 {
+		t.Errorf("first delta MB/s = %f, want ~%f", t1[0].MBPerSec, want)
+	}
+	if t1[0].T != 10 {
+		t.Errorf("first sample T = %d, want 10 (seconds since first frame)", t1[0].T)
+	}
+}
+
+func TestBrokerMetrics_TopicSeries_HandlesCounterReset(t *testing.T) {
+	// If a counter goes BACKWARDS between frames (broker restart) the
+	// delta is non-meaningful — skip rather than report a negative rate.
+	const body = `###timestamp=1000
+redpanda_kafka_request_bytes_total{redpanda_request="produce",topic="t1"} 1000000
+###timestamp=1010
+redpanda_kafka_request_bytes_total{redpanda_request="produce",topic="t1"} 500
+`
+	series, err := ParseTopicSeries(strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("ParseTopicSeries: %v", err)
+	}
+	if len(series["t1"]) != 0 {
+		t.Errorf("reset-detected delta should be skipped; got %+v", series["t1"])
+	}
+}
