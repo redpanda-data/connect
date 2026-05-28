@@ -781,4 +781,30 @@ go run ./benchmarking/aws/runner bench --scenario=... --engines=connect
 
 **Reset between engines** (and between sweep points): SQL reset (engine-aware; the existing logic from `scripts.go`), idempotent `DELETE /connectors/bench_<connector>`, and `kafka-topics.sh --delete` for both engines' topics.
 
+## Reporting + cross-engine anomalies (Plan 3, 2026-05-22)
+
+KC's throughput now comes from broker-side metrics (Plan 1 captures
+`redpanda-<vcpu>.txt` once per sweep point; Plan 3 parses it). The
+markdown report writes one row per `(vcpu, engine)` and a Δ column
+showing the per-engine gap; the SUMMARY.md row shows both engines'
+medians at the best Connect vCPU. Scenarios where the two engines
+diverge by more than 2× at any vCPU get a "Cross-engine divergence"
+section listing the offending vCPUs.
+
+**Scheduler/memory fairness fixes:**
+
+- Connect no longer runs under `chrt --fifo 50`. The KC side dropped
+  it in Plan 2 (it deadlocked the JVM under single-core taskset);
+  Plan 3 drops it from Connect too so both engines run under
+  SCHED_OTHER. **Numbers from Plan 1/2 are NOT comparable to Plan 3+
+  numbers because of this scheduler change.**
+- KC's `-Xmx` is set to `0.75 × memLimitGiB` (floor 1 GiB) so JVM
+  overhead (Metaspace, code cache, direct buffers) fits inside the
+  memory budget the way Connect's `GOMEMLIMIT` already does. Equal-
+  budget runs now have equal-RSS engines.
+
+**Result-JSON shape change:** `PointResult` gains `broker_series`
+(per-engine attributed throughput from Redpanda's metrics). `Result`
+gains `cross_engine_anomalies` (per-vCPU divergence flags).
+
 **Known limitation:** Plan 2 captures KC's per-sweep-point log to S3 but doesn't parse it. The canonical KC throughput number comes from the broker-side metric introduced in Plan 1 (uploaded to S3 as `redpanda-<vcpu>.txt`), and that's what Plan 3 will surface in reporting. Until Plan 3 lands, the KC `PointResult.Summary` is the zero value (`MedianMBPerSec: 0`) — the data is in S3 but not yet rendered into the markdown.
