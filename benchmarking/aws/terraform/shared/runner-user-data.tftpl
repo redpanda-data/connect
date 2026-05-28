@@ -6,10 +6,13 @@ packages:
   - jq
   - unzip
   - tar
+%{ if install_kc ~}
   - java-21-amazon-corretto-headless
+%{ endif ~}
 write_files:
   - path: /opt/bench/.gitkeep
     content: ""
+%{ if install_kc ~}
   - path: /opt/kafka-connect/worker.properties
     permissions: '0644'
     content: |
@@ -44,9 +47,11 @@ write_files:
 
       [Install]
       WantedBy=multi-user.target
+%{ endif ~}
 runcmd:
   - mkdir -p /opt/bench
   - chmod 0755 /opt/bench
+%{ if install_kc ~}
   - mkdir -p /opt/kafka /opt/kafka-connect/plugins
 
   # Apache Kafka tarball (we only need its libs + connect-distributed.sh).
@@ -68,3 +73,4 @@ runcmd:
   # reachable (which is fine — the bench start waits for the runner anyway).
   - systemctl daemon-reload
   - systemctl enable --now kafka-connect.service
+%{ endif ~}
