@@ -125,6 +125,38 @@ func TestAppendMarkdown_PointOrderingIsRobust(t *testing.T) {
 		"markdown output should be invariant to point ordering within a vCPU group")
 }
 
+func TestAppendMarkdown_RendersCrossEngineDivergence(t *testing.T) {
+	r := sampleDualEngineResult()
+	r.CrossEngineAnomalies = []CrossEngineAnomaly{{
+		VCPU: 4, FasterEngine: "connect", SlowerEngine: "kafka_connect",
+		Ratio: 3.2, FasterMBPerS: 128, SlowerMBPerS: 40,
+	}}
+	dir := t.TempDir()
+	target := filepath.Join(dir, "r.md")
+	require.NoError(t, os.WriteFile(target, []byte{}, 0o644))
+	require.NoError(t, AppendMarkdown(target, r, "desc"))
+
+	body, err := os.ReadFile(target)
+	require.NoError(t, err)
+	s := string(body)
+	require.Contains(t, s, "Cross-engine divergence")
+	require.Contains(t, s, "3.20x")
+	require.Contains(t, s, "connect")
+	require.Contains(t, s, "kafka_connect")
+}
+
+func TestAppendMarkdown_NoDivergenceSection_WhenEmpty(t *testing.T) {
+	r := sampleDualEngineResult()
+	// No CrossEngineAnomalies set — section should not appear.
+	dir := t.TempDir()
+	target := filepath.Join(dir, "r.md")
+	require.NoError(t, os.WriteFile(target, []byte{}, 0o644))
+	require.NoError(t, AppendMarkdown(target, r, "desc"))
+	body, _ := os.ReadFile(target)
+	require.NotContains(t, string(body), "Cross-engine divergence",
+		"section should be absent when CrossEngineAnomalies is empty")
+}
+
 func TestAppendMarkdown(t *testing.T) {
 	dir := t.TempDir()
 	target := filepath.Join(dir, "postgres.md")

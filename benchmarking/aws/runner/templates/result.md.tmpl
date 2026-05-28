@@ -20,5 +20,13 @@
 > ⚠ At {{.VCPU}} vCPU: {{.DurationSec}}s dip to {{printf "%.2f" .MinRatio}}× median MB/sec from t={{.StartT}}s — investigate before publishing.
 {{ end }}
 {{ end }}
+{{ if .CrossEngineAnomalies }}
+### Cross-engine divergence
 
+| vCPU | faster        | slower        | ratio  | faster MB/s | slower MB/s |
+|------|---------------|---------------|--------|-------------|-------------|
+{{- range .CrossEngineAnomalies }}
+| {{printf "%-4d" .VCPU}} | {{printf "%-13s" .FasterEngine}} | {{printf "%-13s" .SlowerEngine}} | {{printf "%.2fx" .Ratio}} | {{printf "%11.0f" .FasterMBPerS}} | {{printf "%11.0f" .SlowerMBPerS}} |
+{{- end }}
+{{ end }}
 Raw samples + Prometheus snapshots: [`{{.JSONPath}}`]({{.JSONPath}})
