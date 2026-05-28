@@ -33,7 +33,36 @@ type kcConnectorSpec struct {
 
 // kcConnectorSpecs is the registry of KC counterparts keyed by the Redpanda
 // Connect connector name (the same key used in engineSpecs).
-var kcConnectorSpecs = map[string]kcConnectorSpec{}
+var kcConnectorSpecs = map[string]kcConnectorSpec{
+	"postgres_cdc": {
+		Class:     "io.debezium.connector.postgresql.PostgresConnector",
+		Direction: kcSource,
+		// PropsTemplate is rendered via Go text/template. The render
+		// inputs are documented next to renderKCConfig (Task 8). The
+		// JSON shape here is what Debezium 2.7.x expects from the KC
+		// REST PUT /connectors/<name>/config endpoint.
+		PropsTemplate: `{
+  "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+  "tasks.max": "1",
+  "database.hostname": "{{.Host}}",
+  "database.port": "{{.Port}}",
+  "database.user": "{{.User}}",
+  "database.password": "{{.Password}}",
+  "database.dbname": "{{.Database}}",
+  "topic.prefix": "{{.TopicPrefix}}",
+  "table.include.list": "{{.SchemaTables}}",
+  "plugin.name": "pgoutput",
+  "slot.name": "kc_bench_slot",
+  "publication.autocreate.mode": "filtered",
+  "snapshot.mode": "never",
+  "key.converter": "org.apache.kafka.connect.json.JsonConverter",
+  "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+  "key.converter.schemas.enable": "false",
+  "value.converter.schemas.enable": "false"
+}`,
+		RequiredPlugins: []string{"debezium-connector-postgres*"},
+	},
+}
 
 func kcConnectorSpecFor(connector string) (kcConnectorSpec, bool) {
 	es, ok := kcConnectorSpecs[connector]
