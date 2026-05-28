@@ -72,3 +72,96 @@ func TestKCConnectorSpecFor_MySQLCDC(t *testing.T) {
 		t.Errorf("template should interpolate host; got:\n%s", es.PropsTemplate)
 	}
 }
+
+func TestRenderKCConfig_PostgresBasic(t *testing.T) {
+	s := &Scenario{
+		Connector: "postgres_cdc",
+		Pipeline: map[string]any{
+			"input": map[string]any{
+				"postgres_cdc": map[string]any{
+					"tables": []any{"orders"},
+					"schema": "public",
+				},
+			},
+		},
+	}
+	inputs := kcRenderInputs{
+		Host:             "rds.example.com",
+		Port:             "5432",
+		User:             "bench",
+		Password:         "s3cret",
+		Database:         "benchdb",
+		Tables:           []string{"orders"},
+		SchemaTables:     "public.orders",
+		TopicPrefix:      "bench_sess123_postgres_cdc_kc",
+		BootstrapServers: "10.42.10.10:9092",
+	}
+	cfg, err := renderKCConfig(s, inputs)
+	if err != nil {
+		t.Fatalf("renderKCConfig: %v", err)
+	}
+	if cfg["database.hostname"] != "rds.example.com" {
+		t.Errorf("hostname = %v, want rds.example.com", cfg["database.hostname"])
+	}
+	if cfg["database.port"] != "5432" {
+		t.Errorf("port = %v, want 5432", cfg["database.port"])
+	}
+	if cfg["table.include.list"] != "public.orders" {
+		t.Errorf("table.include.list = %v, want public.orders", cfg["table.include.list"])
+	}
+	if cfg["topic.prefix"] != "bench_sess123_postgres_cdc_kc" {
+		t.Errorf("topic.prefix = %v", cfg["topic.prefix"])
+	}
+	if cfg["snapshot.mode"] != "never" {
+		t.Errorf("snapshot.mode should default to never; got %v", cfg["snapshot.mode"])
+	}
+}
+
+func TestRenderKCConfig_ScenarioOverride(t *testing.T) {
+	s := &Scenario{
+		Connector: "postgres_cdc",
+		Pipeline: map[string]any{
+			"input": map[string]any{
+				"postgres_cdc": map[string]any{
+					"tables": []any{"orders"},
+					"schema": "public",
+				},
+			},
+		},
+		KafkaConnect: map[string]any{
+			"config": map[string]any{
+				"snapshot.mode":         "initial",
+				"decimal.handling.mode": "string",
+			},
+		},
+	}
+	inputs := kcRenderInputs{
+		Host: "rds.example.com", Port: "5432",
+		User: "bench", Password: "s3cret", Database: "benchdb",
+		Tables: []string{"orders"}, SchemaTables: "public.orders",
+		TopicPrefix:      "bench_sess123_postgres_cdc_kc",
+		BootstrapServers: "10.42.10.10:9092",
+	}
+	cfg, err := renderKCConfig(s, inputs)
+	if err != nil {
+		t.Fatalf("renderKCConfig: %v", err)
+	}
+	if cfg["snapshot.mode"] != "initial" {
+		t.Errorf("override should win; got snapshot.mode = %v", cfg["snapshot.mode"])
+	}
+	if cfg["decimal.handling.mode"] != "string" {
+		t.Errorf("override should win; got decimal.handling.mode = %v", cfg["decimal.handling.mode"])
+	}
+	// Non-overridden fields preserved from the registry template:
+	if cfg["database.hostname"] != "rds.example.com" {
+		t.Errorf("base template field should survive override; got %v", cfg["database.hostname"])
+	}
+}
+
+func TestRenderKCConfig_UnknownConnector(t *testing.T) {
+	s := &Scenario{Connector: "does_not_exist"}
+	_, err := renderKCConfig(s, kcRenderInputs{})
+	if err == nil {
+		t.Error("expected error for unknown connector")
+	}
+}
