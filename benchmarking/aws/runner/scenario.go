@@ -52,6 +52,11 @@ type Scenario struct {
 	Pipeline    map[string]any `yaml:"pipeline"`
 	Matrix      MatrixSpec     `yaml:"matrix"`
 	Reset       []ResetStep    `yaml:"reset"`
+	// KafkaConnect is an optional override map applied on top of the
+	// kcConnectorSpec registry entry's PropsTemplate at render time. The
+	// fields here are shallow-merged into the resulting KC connector config
+	// JSON. Use this to tune e.g. snapshot.mode without editing the registry.
+	KafkaConnect map[string]any `yaml:"kafka_connect,omitempty"`
 }
 
 type InfraSpec struct {
