@@ -53,3 +53,22 @@ func TestKCConnectorSpecFor_PostgresCDC(t *testing.T) {
 		t.Error("RequiredPlugins should list at least debezium-connector-postgres glob")
 	}
 }
+
+func TestKCConnectorSpecFor_MySQLCDC(t *testing.T) {
+	es, ok := kcConnectorSpecFor("mysql_cdc")
+	if !ok {
+		t.Fatal("mysql_cdc should be registered")
+	}
+	if es.Class != "io.debezium.connector.mysql.MySqlConnector" {
+		t.Errorf("Class = %q, want Debezium MySQL class", es.Class)
+	}
+	if es.Direction != kcSource {
+		t.Errorf("Direction should be kcSource")
+	}
+	if !strings.Contains(es.PropsTemplate, "database.server.id") {
+		t.Errorf("MySQL Debezium config must include server.id; got:\n%s", es.PropsTemplate)
+	}
+	if !strings.Contains(es.PropsTemplate, "{{.Host}}") {
+		t.Errorf("template should interpolate host; got:\n%s", es.PropsTemplate)
+	}
+}

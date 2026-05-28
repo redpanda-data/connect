@@ -62,6 +62,30 @@ var kcConnectorSpecs = map[string]kcConnectorSpec{
 }`,
 		RequiredPlugins: []string{"debezium-connector-postgres*"},
 	},
+	"mysql_cdc": {
+		Class:     "io.debezium.connector.mysql.MySqlConnector",
+		Direction: kcSource,
+		PropsTemplate: `{
+  "connector.class": "io.debezium.connector.mysql.MySqlConnector",
+  "tasks.max": "1",
+  "database.hostname": "{{.Host}}",
+  "database.port": "{{.Port}}",
+  "database.user": "{{.User}}",
+  "database.password": "{{.Password}}",
+  "database.server.id": "184054",
+  "database.include.list": "{{.Database}}",
+  "table.include.list": "{{.SchemaTables}}",
+  "topic.prefix": "{{.TopicPrefix}}",
+  "schema.history.internal.kafka.bootstrap.servers": "{{.BootstrapServers}}",
+  "schema.history.internal.kafka.topic": "_kc_schema_history_{{.TopicPrefix}}",
+  "snapshot.mode": "never",
+  "key.converter": "org.apache.kafka.connect.json.JsonConverter",
+  "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+  "key.converter.schemas.enable": "false",
+  "value.converter.schemas.enable": "false"
+}`,
+		RequiredPlugins: []string{"debezium-connector-mysql*"},
+	},
 }
 
 func kcConnectorSpecFor(connector string) (kcConnectorSpec, bool) {
