@@ -2,7 +2,7 @@ module github.com/redpanda-data/connect/public/bundle/free/v4
 
 go 1.26.3
 
-require github.com/redpanda-data/connect/v4 v4.93.0
+require github.com/redpanda-data/connect/v4 v4.94.0
 
 require (
 	buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.11-20260209202127-80ab13bee0bf.1 // indirect
@@ -221,12 +221,12 @@ require (
 	go.uber.org/multierr v1.11.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.4 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
-	golang.org/x/crypto v0.50.0 // indirect
+	golang.org/x/crypto v0.52.0 // indirect
 	golang.org/x/exp v0.0.0-20260410095643-746e56fc9e2f // indirect
-	golang.org/x/net v0.53.0 // indirect
+	golang.org/x/net v0.55.0 // indirect
 	golang.org/x/sync v0.20.0 // indirect
 	golang.org/x/telemetry v0.0.0-20260409153401-be6f6cb8b1fa // indirect
-	golang.org/x/text v0.36.0 // indirect
+	golang.org/x/text v0.37.0 // indirect
 	google.golang.org/api v0.276.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
@@ -270,7 +270,7 @@ require (
 	github.com/andybalholm/brotli v1.2.1 // indirect
 	github.com/apache/arrow/go/arrow v0.0.0-20211112161151-bc219186db40 // indirect
 	github.com/apache/arrow/go/v15 v15.0.2 // indirect
-	github.com/apache/thrift v0.22.0 // indirect
+	github.com/apache/thrift v0.23.0 // indirect
 	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
 	github.com/ardielle/ardielle-go v1.5.2 // indirect
 	github.com/auth0/go-jwt-middleware/v2 v2.3.1 // indirect
@@ -417,7 +417,7 @@ require (
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
 	github.com/tilinna/z85 v1.0.0 // indirect
 	github.com/timandy/routine v1.1.5 // indirect
-	github.com/twmb/avro v1.7.2 // indirect
+	github.com/twmb/avro v1.7.3-0.20260513193503-1e5c2a3fc070 // indirect
 	github.com/twmb/go-cache v1.3.0 // indirect
 	github.com/twpayne/go-geom v1.6.1 // indirect
 	github.com/urfave/cli/v2 v2.27.7 // indirect
@@ -442,7 +442,7 @@ require (
 	golang.org/x/mod v0.35.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/sys v0.45.0 // indirect
-	golang.org/x/term v0.42.0 // indirect
+	golang.org/x/term v0.43.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
 	golang.org/x/tools v0.44.0 // indirect
 	golang.org/x/xerrors v0.0.0-20240903120638-7835f813f4da // indirect
