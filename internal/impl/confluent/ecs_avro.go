@@ -76,11 +76,23 @@ type ecsAvroConfig struct {
 	translateKafkaConnectTypes bool
 
 	// names is the lexical-scope registry of resolved record/enum/fixed
-	// definitions, keyed by Avro fullname (and short name for
-	// convenience). Stored values must be treated as immutable — every
-	// retrieval clones via cloneCommon so callers can mutate freely
-	// without corrupting later look-ups.
+	// definitions, keyed by Avro fullname plus an unambiguous short-name
+	// shortcut for each declaration. Stored values must be treated as
+	// immutable — every retrieval clones via cloneCommon so callers can
+	// mutate freely without corrupting later look-ups.
 	names map[string]schema.Common
+
+	// nameOwners tracks the fullname that owns each key in [names]. A
+	// fullname-key is its own owner ("Fee" → "Fee" for a root-scope Fee,
+	// "com.a.Fee" → "com.a.Fee" for a namespaced Fee). A short-name key
+	// inherits its owning declaration's fullname ("Fee" → "com.a.Fee").
+	// When a second declaration tries to claim a short-name key that a
+	// different fullname already owns the entry is marked ambiguous —
+	// owner becomes "" and the [names] entry is deleted — so unqualified
+	// references fall through to schema.Any instead of silently binding
+	// to whichever fullname registered last. A canonical fullname binding
+	// (key equals owner) always wins over a colliding short-name claim.
+	nameOwners map[string]string
 
 	// namespace is the enclosing Avro namespace, threaded through the
 	// recursion by value. It is updated when entering a named-type
@@ -97,6 +109,9 @@ type ecsAvroConfig struct {
 func ecsAvroParseFromBytes(cfg ecsAvroConfig, specBytes []byte) (schema.Common, error) {
 	if cfg.names == nil {
 		cfg.names = map[string]schema.Common{}
+	}
+	if cfg.nameOwners == nil {
+		cfg.nameOwners = map[string]string{}
 	}
 	var as any
 	if err := json.Unmarshal(specBytes, &as); err != nil {
@@ -631,9 +646,9 @@ func ecsAvroFromAnyMap(cfg ecsAvroConfig, as map[string]any) (schema.Common, err
 	fullname, shortName, childNamespace := ecsAvroAssignFullname(cfg.namespace, typeName, as)
 	if fullname != "" {
 		placeholder := ecsAvroPlaceholder(typeName, shortName)
-		cfg.names[fullname] = placeholder
-		if shortName != "" && shortName != fullname {
-			cfg.names[shortName] = placeholder
+		putName(cfg, fullname, fullname, placeholder)
+		if shortName != fullname {
+			putName(cfg, shortName, fullname, placeholder)
 		}
 		// Inheritable namespace propagates into the child walk; sibling
 		// scopes are unaffected because cfg is passed by value.
@@ -642,12 +657,54 @@ func ecsAvroFromAnyMap(cfg ecsAvroConfig, as map[string]any) (schema.Common, err
 
 	c, err := ecsAvroFromAnyMapImpl(cfg, as)
 	if err == nil && fullname != "" {
-		cfg.names[fullname] = c
-		if shortName != "" && shortName != fullname {
-			cfg.names[shortName] = c
+		putName(cfg, fullname, fullname, c)
+		if shortName != fullname {
+			putName(cfg, shortName, fullname, c)
 		}
 	}
 	return c, err
+}
+
+// putName registers a resolved Common under one lookup key in cfg.names,
+// arbitrating short-name collisions across namespaces. A fullname-as-key
+// call (`key == owner`) is canonical and always wins. Two short-name
+// claims from different fullnames mark the key as ambiguous (`nameOwners`
+// becomes "" and the [names] entry is deleted), so unqualified references
+// fall through to schema.Any instead of silently binding to whichever
+// fullname registered last. A short-name claim that collides with an
+// existing canonical fullname binding for the same key is dropped — the
+// fullname keeps the slot.
+func putName(cfg ecsAvroConfig, key, owner string, c schema.Common) {
+	if key == "" {
+		return
+	}
+	existing, seen := cfg.nameOwners[key]
+	if !seen {
+		cfg.nameOwners[key] = owner
+		cfg.names[key] = c
+		return
+	}
+	if existing == "" {
+		return // already ambiguous
+	}
+	if existing == owner {
+		cfg.names[key] = c // same owner; placeholder→final replacement
+		return
+	}
+	if key == owner {
+		// This call is the canonical fullname registration — take the slot
+		// over from whoever was using it as a short-name shortcut.
+		cfg.nameOwners[key] = owner
+		cfg.names[key] = c
+		return
+	}
+	if key == existing {
+		// Existing owner's fullname matches the key — canonical, leave it.
+		return
+	}
+	// Both claims are short-name shortcuts from different fullnames.
+	cfg.nameOwners[key] = ""
+	delete(cfg.names, key)
 }
 
 // ecsAvroAssignFullname computes the Avro fullname of a named-type

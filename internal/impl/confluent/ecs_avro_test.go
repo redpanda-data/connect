@@ -516,6 +516,141 @@ func TestEcsAvroLameUnionNameResolution(t *testing.T) {
 	assert.Equal(t, schema.Int64, feeInner.Children[0].Type)
 }
 
+// TestEcsAvroSharedShortNameAcrossNamespaces pins down the collision-
+// detection contract: when two records in different namespaces share the
+// same short name, the bare-name shortcut in cfg.names must drop out so
+// unqualified references fall through to schema.Any instead of silently
+// binding to whichever record registered last.
+//
+// Fully-qualified references continue to resolve through the fullname
+// keys, which are unique by construction. References from inside one of
+// the two colliding namespaces also resolve through the
+// enclosing-namespace prefix, never relying on the bare-name shortcut.
+func TestEcsAvroSharedShortNameAcrossNamespaces(t *testing.T) {
+	spec := []byte(`{
+		"type": "record",
+		"name": "Container",
+		"fields": [
+			{
+				"name": "from_a",
+				"type": {
+					"type": "record",
+					"name": "com.a.Fee",
+					"fields": [{"name": "amount_a", "type": "long"}]
+				}
+			},
+			{
+				"name": "from_b",
+				"type": {
+					"type": "record",
+					"name": "com.b.Fee",
+					"fields": [{"name": "amount_b", "type": "string"}]
+				}
+			},
+			{"name": "by_qualified_a", "type": "com.a.Fee"},
+			{"name": "by_qualified_b", "type": "com.b.Fee"},
+			{"name": "by_bare_name", "type": "Fee"}
+		]
+	}`)
+	c, err := ecsAvroParseFromBytes(ecsAvroConfig{rawUnion: true}, spec)
+	require.NoError(t, err)
+	require.Len(t, c.Children, 5)
+
+	byQualA := c.Children[2]
+	require.Equal(t, schema.Object, byQualA.Type, "fully-qualified com.a.Fee must resolve")
+	require.Len(t, byQualA.Children, 1)
+	assert.Equal(t, "amount_a", byQualA.Children[0].Name)
+
+	byQualB := c.Children[3]
+	require.Equal(t, schema.Object, byQualB.Type, "fully-qualified com.b.Fee must resolve")
+	require.Len(t, byQualB.Children, 1)
+	assert.Equal(t, "amount_b", byQualB.Children[0].Name)
+
+	byBare := c.Children[4]
+	assert.Equal(t, schema.Any, byBare.Type, "ambiguous short name must not silently bind to whichever namespaced type registered last")
+	assert.Empty(t, byBare.Children)
+}
+
+// TestEcsAvroRootShortNameWinsOverNamespacedCollision verifies that a
+// canonical fullname binding (a record whose fullname equals the colliding
+// short name) preserves its slot when a namespaced record tries to claim
+// the same bare-name shortcut. The fullname binding is unique per type
+// and takes priority regardless of registration order.
+func TestEcsAvroRootShortNameWinsOverNamespacedCollision(t *testing.T) {
+	t.Run("root declared first", func(t *testing.T) {
+		spec := []byte(`{
+			"type": "record",
+			"name": "Container",
+			"fields": [
+				{
+					"name": "root_fee",
+					"type": {
+						"type": "record",
+						"name": "Fee",
+						"fields": [{"name": "root_amount", "type": "long"}]
+					}
+				},
+				{
+					"name": "ns_fee",
+					"type": {
+						"type": "record",
+						"name": "com.a.Fee",
+						"fields": [{"name": "ns_amount", "type": "string"}]
+					}
+				},
+				{"name": "by_bare", "type": "Fee"},
+				{"name": "by_qualified", "type": "com.a.Fee"}
+			]
+		}`)
+		c, err := ecsAvroParseFromBytes(ecsAvroConfig{rawUnion: true}, spec)
+		require.NoError(t, err)
+		require.Len(t, c.Children, 4)
+		byBare := c.Children[2]
+		require.Equal(t, schema.Object, byBare.Type, "bare Fee must resolve to the canonical root-scope Fee, not the namespaced shortcut")
+		require.Len(t, byBare.Children, 1)
+		assert.Equal(t, "root_amount", byBare.Children[0].Name)
+		byQualified := c.Children[3]
+		require.Equal(t, schema.Object, byQualified.Type)
+		assert.Equal(t, "ns_amount", byQualified.Children[0].Name)
+	})
+
+	t.Run("namespaced declared first", func(t *testing.T) {
+		spec := []byte(`{
+			"type": "record",
+			"name": "Container",
+			"fields": [
+				{
+					"name": "ns_fee",
+					"type": {
+						"type": "record",
+						"name": "com.a.Fee",
+						"fields": [{"name": "ns_amount", "type": "string"}]
+					}
+				},
+				{
+					"name": "root_fee",
+					"type": {
+						"type": "record",
+						"name": "Fee",
+						"fields": [{"name": "root_amount", "type": "long"}]
+					}
+				},
+				{"name": "by_bare", "type": "Fee"},
+				{"name": "by_qualified", "type": "com.a.Fee"}
+			]
+		}`)
+		c, err := ecsAvroParseFromBytes(ecsAvroConfig{rawUnion: true}, spec)
+		require.NoError(t, err)
+		require.Len(t, c.Children, 4)
+		byBare := c.Children[2]
+		require.Equal(t, schema.Object, byBare.Type, "canonical fullname must win regardless of registration order")
+		require.Len(t, byBare.Children, 1)
+		assert.Equal(t, "root_amount", byBare.Children[0].Name)
+		byQualified := c.Children[3]
+		assert.Equal(t, "ns_amount", byQualified.Children[0].Name)
+	})
+}
+
 // TestEcsAvroRawUnionAnnotatedInlinePrimitive verifies that the
 // optional-union collapse handles the [{primitive-with-annotations}, null]
 // shape — the form Kafka Connect / Debezium emit for nullable string fields,
