@@ -53,7 +53,20 @@ func GetFakeFlightRecord() FakeFlightRecord {
 	return flightRecord
 }
 
-func ResourceWithPostgreSQLVersion(t *testing.T, version string) (string, *sql.DB, error) {
+// TestDB wraps sql.DB with testing utilities for database integration tests.
+type TestDB struct {
+	*sql.DB
+
+	T *testing.T
+}
+
+// MustExec executes a SQL query and fails the test if an error occurs.
+func (db *TestDB) MustExec(query string, args ...any) {
+	_, err := db.Exec(query, args...)
+	require.NoError(db.T, err)
+}
+
+func ResourceWithPostgreSQLVersion(t *testing.T, version string) (string, *TestDB, error) {
 	ctr, err := testcontainers.Run(t.Context(), "postgres:"+version,
 		testcontainers.WithExposedPorts("5432/tcp"),
 		testcontainers.WithEnv(map[string]string{
@@ -158,7 +171,8 @@ func ResourceWithPostgreSQLVersion(t *testing.T, version string) (string, *sql.D
 		}
 	})
 
-	return databaseURL, db, nil
+	testDB := &TestDB{db, t}
+	return databaseURL, testDB, nil
 }
 
 func TestIntegrationPostgresNoTxnMarkers(t *testing.T) {
