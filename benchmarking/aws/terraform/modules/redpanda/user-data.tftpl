@@ -7,8 +7,11 @@ runcmd:
   - mount /dev/nvme1n1 /var/lib/redpanda/data
   - echo "/dev/nvme1n1 /var/lib/redpanda/data xfs defaults,noatime 0 0" >> /etc/fstab
 
-  # Install Redpanda from the official rpm setup script.
-  - curl -sSL https://packages.redpanda.com/public/redpanda/setup.rpm.sh | bash
+  # Install Redpanda from the Cloudsmith-backed dl.redpanda.com host.
+  # NOTE: the legacy "packages.redpanda.com" hostname no longer resolves;
+  # Redpanda migrated their package distribution to Cloudsmith and the
+  # public dl.redpanda.com CNAME is the supported install path.
+  - curl --retry 5 --retry-delay 3 --retry-all-errors -sSL https://dl.redpanda.com/public/redpanda/setup.rpm.sh | bash
   - dnf install -y redpanda
 
   # Ensure the redpanda user owns the data dir.
