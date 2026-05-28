@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -71,6 +72,7 @@ type benchOpts struct {
 	region       string
 	repoRoot     string
 	licenseFile  string
+	engines      []string
 }
 
 func benchCmd(args []string) error {
@@ -83,11 +85,18 @@ func benchCmd(args []string) error {
 	licenseFile := fs.String("license-file", os.Getenv("REDPANDA_LICENSE_FILEPATH"),
 		"path to a Redpanda Enterprise license file (defaults to $REDPANDA_LICENSE_FILEPATH). "+
 			"Required for enterprise connectors like postgres_cdc.")
+	engines := fs.String("engines", "connect,kafka_connect",
+		"Comma-separated engines to sweep at each vCPU point. Default runs both Connect and Kafka Connect side-by-side.")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if *scenario == "" {
 		return fmt.Errorf("--scenario is required")
+	}
+
+	engineList := strings.Split(*engines, ",")
+	for i, e := range engineList {
+		engineList[i] = strings.TrimSpace(e)
 	}
 
 	opts := benchOpts{
@@ -97,6 +106,7 @@ func benchCmd(args []string) error {
 		region:       *region,
 		repoRoot:     *repoRoot,
 		licenseFile:  *licenseFile,
+		engines:      engineList,
 	}
 	return runBench(opts)
 }
@@ -217,6 +227,36 @@ func runBench(opts benchOpts) (errOut error) {
 	if err != nil {
 		return err
 	}
+
+	var kcConnectorName, kcConfigJSON string
+	needsKC := false
+	for _, e := range opts.engines {
+		if e == "kafka_connect" {
+			needsKC = true
+			break
+		}
+	}
+	if needsKC {
+		es, ok := engineSpecFor(s.Connector)
+		if !ok {
+			return fmt.Errorf("no engineSpec for %q", s.Connector)
+		}
+		in, err := buildKCRenderInputs(s, es, sharedOuts, sessionID)
+		if err != nil {
+			return fmt.Errorf("build KC render inputs: %w", err)
+		}
+		cfg, err := renderKCConfig(s, in)
+		if err != nil {
+			return fmt.Errorf("render KC config: %w", err)
+		}
+		raw, err := json.Marshal(cfg)
+		if err != nil {
+			return err
+		}
+		kcConnectorName = fmt.Sprintf("bench_%s", s.Connector)
+		kcConfigJSON = string(raw)
+	}
+
 	mr := &MatrixRunner{
 		SSM:                     ssmExec,
 		LogFetcher:              logFetcher,
@@ -227,6 +267,9 @@ func runBench(opts benchOpts) (errOut error) {
 		Bucket:                  sharedOuts["results_bucket"],
 		SessionID:               sessionID,
 		RedpandaMetricsEndpoint: sharedOuts["redpanda_metrics_endpoint"],
+		Engines:                 opts.engines,
+		KCConnectorName:         kcConnectorName,
+		KCConnectorConfigJSON:   kcConfigJSON,
 	}
 	reset, err := combineReset(s.Connector, s.Reset, sharedOuts)
 	if err != nil {
@@ -515,6 +558,92 @@ func renderPipelineConfig(s *Scenario, outs map[string]string) (string, error) {
 		return "", err
 	}
 	return tmp.Name(), nil
+}
+
+// buildKCRenderInputs gathers the values needed to render a Kafka Connect
+// connector config from a scenario and the terraform outputs. Postgres engines
+// expose a DSN URL output; MySQL exposes discrete host/port/user/pass/db
+// outputs — we handle both via engineSpec metadata.
+func buildKCRenderInputs(s *Scenario, es engineSpec, outs map[string]string, sessionID string) (kcRenderInputs, error) {
+	in := kcRenderInputs{
+		TopicPrefix:      fmt.Sprintf("bench_%s_%s_kc", sessionID, s.Connector),
+		BootstrapServers: outs["redpanda_broker_endpoints"],
+	}
+	// Tables come from the scenario's pipeline.input map.
+	if inputMap, ok := s.Pipeline["input"].(map[string]any); ok {
+		for _, v := range inputMap {
+			if connMap, ok := v.(map[string]any); ok {
+				if tbls, ok := connMap["tables"].([]any); ok {
+					for _, t := range tbls {
+						if ts, ok := t.(string); ok {
+							in.Tables = append(in.Tables, ts)
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Connection parts.
+	if es.ResetHostOutputKey != "" {
+		// MySQL-style: discrete TF outputs.
+		in.Host = outs[es.ResetHostOutputKey]
+		in.Port = outs[es.ResetPortOutputKey]
+		in.User = outs[es.ResetUserOutputKey]
+		in.Password = outs[es.ResetPassOutputKey]
+		in.Database = outs[es.ResetDBOutputKey]
+	} else {
+		// Postgres-style: parse DSN URL.
+		dsn := outs[es.DSNOutputKey]
+		u, err := url.Parse(dsn)
+		if err != nil {
+			return in, fmt.Errorf("parse DSN %q: %w", dsn, err)
+		}
+		in.Host = u.Hostname()
+		in.Port = u.Port()
+		if in.Port == "" {
+			in.Port = "5432"
+		}
+		if u.User != nil {
+			in.User = u.User.Username()
+			pw, _ := u.User.Password()
+			in.Password = pw
+		}
+		in.Database = strings.TrimPrefix(u.Path, "/")
+	}
+
+	// SchemaTables formatting depends on engine. Must come AFTER in.Database is
+	// populated, since the mysql_cdc branch uses it as the schema prefix.
+	switch s.Connector {
+	case "postgres_cdc":
+		schema := "public"
+		if inputMap, ok := s.Pipeline["input"].(map[string]any); ok {
+			if pgMap, ok := inputMap["postgres_cdc"].(map[string]any); ok {
+				if sc, ok := pgMap["schema"].(string); ok {
+					schema = sc
+				}
+			}
+		}
+		var sb strings.Builder
+		for i, t := range in.Tables {
+			if i > 0 {
+				sb.WriteString(",")
+			}
+			sb.WriteString(schema + "." + t)
+		}
+		in.SchemaTables = sb.String()
+	case "mysql_cdc":
+		var sb strings.Builder
+		for i, t := range in.Tables {
+			if i > 0 {
+				sb.WriteString(",")
+			}
+			sb.WriteString(in.Database + "." + t)
+		}
+		in.SchemaTables = sb.String()
+	}
+
+	return in, nil
 }
 
 func substitutePlaceholders(in string, outs map[string]string) string {
