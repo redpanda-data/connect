@@ -263,3 +263,94 @@ func TestRenderBenchScript_RedpandaScraperOmittedWhenEmpty(t *testing.T) {
 		t.Errorf("expected no redpanda upload when endpoint is empty; got:\n%s", out)
 	}
 }
+
+func TestMatrixRun_EngineInnerLoop_BothEngines(t *testing.T) {
+	const sessionID = "sess"
+	// Seed connect logs for both vCPUs. KC engine doesn't fetch.
+	logFor := func(vcpu int) string { return makeLog(180, float64(50+vcpu)) }
+	fetcher := &FakeLogFetcher{
+		Contents: map[string]string{
+			fmt.Sprintf("runs/%s/sweep-1.log", sessionID): logFor(1),
+			fmt.Sprintf("runs/%s/sweep-2.log", sessionID): logFor(2),
+		},
+		// Prom is fetched non-fatally — return an error so we don't need to seed it.
+		Errs: map[string]error{
+			fmt.Sprintf("runs/%s/prom-1.txt", sessionID): fmt.Errorf("not found"),
+			fmt.Sprintf("runs/%s/prom-2.txt", sessionID): fmt.Errorf("not found"),
+		},
+	}
+	ssm := &FakeSSM{Transcripts: map[string][]string{"i-runner": nil}}
+	prev := stdout
+	stdout = &bytes.Buffer{}
+	defer func() { stdout = prev }()
+
+	mr := &MatrixRunner{
+		SSM:                   ssm,
+		LogFetcher:            fetcher,
+		RunnerInstance:        "i-runner",
+		Bucket:                "b",
+		SessionID:             sessionID,
+		Engines:               []string{"connect", "kafka_connect"},
+		KCConnectorName:       "bench_pg",
+		KCConnectorConfigJSON: `{"connector.class":"x"}`,
+	}
+	points, err := mr.Run(context.Background(), []int{1, 2}, 1, 60*time.Second, 120*time.Second, "", "")
+	require.NoError(t, err)
+	require.Len(t, points, 4, "expected 4 sweep points (2 vcpu × 2 engines)")
+
+	wantOrder := []struct {
+		vcpu   int
+		engine string
+	}{
+		{1, "connect"},
+		{1, "kafka_connect"},
+		{2, "connect"},
+		{2, "kafka_connect"},
+	}
+	for i, w := range wantOrder {
+		require.Equal(t, w.vcpu, points[i].VCPU, "points[%d].VCPU", i)
+		require.Equal(t, w.engine, points[i].Engine, "points[%d].Engine", i)
+	}
+
+	// Connect points have samples; KC points are empty (Plan 2 doesn't parse KC logs).
+	require.NotEmpty(t, points[0].Samples, "connect at vcpu 1 should have samples")
+	require.Empty(t, points[1].Samples, "kc at vcpu 1 should have no samples in Plan 2")
+	require.NotEmpty(t, points[2].Samples, "connect at vcpu 2 should have samples")
+	require.Empty(t, points[3].Samples, "kc at vcpu 2 should have no samples in Plan 2")
+}
+
+func TestMatrixRun_EngineInnerLoop_ConnectOnly(t *testing.T) {
+	const sessionID = "sess"
+	logFor := func(vcpu int) string { return makeLog(180, float64(50+vcpu)) }
+	fetcher := &FakeLogFetcher{
+		Contents: map[string]string{
+			fmt.Sprintf("runs/%s/sweep-1.log", sessionID): logFor(1),
+			fmt.Sprintf("runs/%s/sweep-2.log", sessionID): logFor(2),
+			fmt.Sprintf("runs/%s/sweep-4.log", sessionID): logFor(4),
+		},
+		Errs: map[string]error{
+			fmt.Sprintf("runs/%s/prom-1.txt", sessionID): fmt.Errorf("not found"),
+			fmt.Sprintf("runs/%s/prom-2.txt", sessionID): fmt.Errorf("not found"),
+			fmt.Sprintf("runs/%s/prom-4.txt", sessionID): fmt.Errorf("not found"),
+		},
+	}
+	ssm := &FakeSSM{Transcripts: map[string][]string{"i-runner": nil}}
+	prev := stdout
+	stdout = &bytes.Buffer{}
+	defer func() { stdout = prev }()
+
+	mr := &MatrixRunner{
+		SSM:            ssm,
+		LogFetcher:     fetcher,
+		RunnerInstance: "i-runner",
+		Bucket:         "b",
+		SessionID:      sessionID,
+		Engines:        []string{"connect"},
+	}
+	points, err := mr.Run(context.Background(), []int{1, 2, 4}, 1, 60*time.Second, 120*time.Second, "", "")
+	require.NoError(t, err)
+	require.Len(t, points, 3, "expected 3 sweep points (connect-only)")
+	for _, p := range points {
+		require.Equal(t, "connect", p.Engine)
+	}
+}

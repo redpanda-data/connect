@@ -33,6 +33,14 @@ type MatrixRunner struct {
 	// per-point scraper curls every 10s. Empty disables the scraper (Plan 1
 	// safety net for environments without Redpanda yet).
 	RedpandaMetricsEndpoint string
+	// Engines lists the engines to sweep at each vCPU point, in order.
+	// Default ["connect"] preserves the pre-Plan-2 behavior.
+	Engines []string
+	// KCConnectorName is the name to submit the KC connector under.
+	// Empty when Engines does not include "kafka_connect".
+	KCConnectorName string
+	// KCConnectorConfigJSON is the rendered JSON config posted to KC's REST API.
+	KCConnectorConfigJSON string
 }
 
 // SweepPoint is the per-point measurement.
@@ -56,80 +64,121 @@ func (m *MatrixRunner) Run(
 	resetScript string,
 	workloadScript string,
 ) ([]SweepPoint, error) {
-	out := make([]SweepPoint, 0, len(cpuPoints))
+	engines := m.Engines
+	if len(engines) == 0 {
+		engines = []string{"connect"}
+	}
+	out := make([]SweepPoint, 0, len(cpuPoints)*len(engines))
 	for _, n := range cpuPoints {
-		fmt.Printf("=== sweep point: %d vCPU (warmup %s, window %s) ===\n", n, warmup, duration)
+		for _, engine := range engines {
+			fmt.Printf("=== sweep point: %d vCPU, engine=%s (warmup %s, window %s) ===\n", n, engine, warmup, duration)
 
-		if resetScript != "" {
-			if err := m.SSM.Run(ctx, m.RunnerInstance, resetScript, streamingOnLine(stdout, "reset")); err != nil {
-				return nil, fmt.Errorf("reset at %d vCPU: %w", n, err)
+			if resetScript != "" {
+				if err := m.SSM.Run(ctx, m.RunnerInstance, resetScript, streamingOnLine(stdout, "reset")); err != nil {
+					return nil, fmt.Errorf("reset at %d vCPU (%s): %w", n, engine, err)
+				}
 			}
-		}
 
-		workloadCtx, cancelWorkload := context.WithCancel(ctx)
-		workloadDone := make(chan error, 1)
-		if workloadScript != "" {
-			go func() {
-				workloadDone <- m.SSM.Run(workloadCtx, m.LoadGenInstance, workloadScript, streamingOnLine(stdout, "load"))
-			}()
-		} else {
-			close(workloadDone)
-		}
+			workloadCtx, cancelWorkload := context.WithCancel(ctx)
+			workloadDone := make(chan error, 1)
+			if workloadScript != "" {
+				go func() {
+					workloadDone <- m.SSM.Run(workloadCtx, m.LoadGenInstance, workloadScript, streamingOnLine(stdout, "load"))
+				}()
+			} else {
+				close(workloadDone)
+			}
 
-		script := renderBenchScript(benchScriptArgs{
-			VCPU:                    n,
-			MemLimitGiB:             memLimitPerVCPU * n,
-			WarmupSec:               int(warmup.Seconds()),
-			DurationSec:             int(duration.Seconds()),
-			ConfigPath:              m.ConfigPath,
-			BinaryPath:              m.BinaryPath,
-			Bucket:                  m.Bucket,
-			SessionID:               m.SessionID,
-			RedpandaMetricsEndpoint: m.RedpandaMetricsEndpoint,
-		})
-		// The bench script now writes Connect's stdout/stderr to /tmp/bench-N.log
-		// and uploads it to S3 after termination. SSM stdout only carries the
-		// script's own status echos and a per-minute heartbeat (well under the
-		// ~24KB SSM content cap), so streaming every line is safe.
-		if err := m.SSM.Run(ctx, m.RunnerInstance, script, streamingOnLine(stdout, "bench")); err != nil {
+			var script string
+			switch engine {
+			case "connect":
+				script = renderBenchScript(benchScriptArgs{
+					VCPU:                    n,
+					MemLimitGiB:             memLimitPerVCPU * n,
+					WarmupSec:               int(warmup.Seconds()),
+					DurationSec:             int(duration.Seconds()),
+					ConfigPath:              m.ConfigPath,
+					BinaryPath:              m.BinaryPath,
+					Bucket:                  m.Bucket,
+					SessionID:               m.SessionID,
+					RedpandaMetricsEndpoint: m.RedpandaMetricsEndpoint,
+				})
+			case "kafka_connect":
+				script = renderKCBenchScript(kcBenchScriptArgs{
+					VCPU:                n,
+					MemLimitGiB:         memLimitPerVCPU * n,
+					WarmupSec:           int(warmup.Seconds()),
+					DurationSec:         int(duration.Seconds()),
+					ConnectorName:       m.KCConnectorName,
+					ConnectorConfigJSON: m.KCConnectorConfigJSON,
+					Bucket:              m.Bucket,
+					SessionID:           m.SessionID,
+				})
+			default:
+				cancelWorkload()
+				<-workloadDone
+				return nil, fmt.Errorf("unknown engine %q at vcpu %d", engine, n)
+			}
+
+			// The bench script writes the engine's stdout/stderr to a per-engine
+			// log file on the runner host and uploads it to S3 after termination.
+			// SSM stdout only carries the script's own status echos and a
+			// per-minute heartbeat (well under the ~24KB SSM content cap), so
+			// streaming every line is safe.
+			if err := m.SSM.Run(ctx, m.RunnerInstance, script, streamingOnLine(stdout, fmt.Sprintf("bench-%s", engine))); err != nil {
+				cancelWorkload()
+				<-workloadDone
+				return nil, fmt.Errorf("bench at %d vCPU (%s): %w", n, engine, err)
+			}
 			cancelWorkload()
-			return nil, fmt.Errorf("bench at %d vCPU: %w", n, err)
-		}
-		cancelWorkload()
-		<-workloadDone
+			<-workloadDone
 
-		raw, err := m.fetchLog(ctx, n)
-		if err != nil {
-			return nil, fmt.Errorf("fetch log at %d vCPU: %w", n, err)
-		}
-		samples := parseAndTrim(raw, warmup)
-		promPts := m.fetchProm(ctx, n)
-
-		summary := Summarise(samples)
-		anomalies := DetectAnomaliesWithProm(samples, summary.MedianMBPerSec, promPts)
-		out = append(out, SweepPoint{
-			VCPU:      n,
-			Samples:   samples,
-			Summary:   summary,
-			Anomalies: anomalies,
-			Prom:      promPts,
-		})
-		fmt.Printf("  -> %d samples; median %.2f MB/s (p5 %.2f, p95 %.2f, peak %.2f), %d anomalies\n",
-			len(samples), summary.MedianMBPerSec, summary.P5MBPerSec, summary.P95MBPerSec, summary.PeakMBPerSec, len(anomalies))
-
-		// Early-abort: if the first sweep point captured no samples (Connect
-		// failed to start or the connector errored out for the whole window),
-		// the remaining points will almost certainly fail the same way. Bail
-		// out, dump the tail of the log so the operator can see the failure,
-		// and let the destroy defer reclaim the infra.
-		if n == cpuPoints[0] && len(samples) == 0 {
-			const tailMax = 4 * 1024
-			tail := raw
-			if len(raw) > tailMax {
-				tail = raw[len(raw)-tailMax:]
+			// Per-engine fetch + parse. KC's broker-side metrics are scraped on
+			// the runner and uploaded to S3 (Plan 3 parses them); the Plan 2
+			// orchestrator does not read the KC log here.
+			var samples []Sample
+			var rawLog []byte
+			if engine == "connect" {
+				raw, err := m.fetchLog(ctx, n)
+				if err != nil {
+					return nil, fmt.Errorf("fetch log at %d vCPU (%s): %w", n, engine, err)
+				}
+				rawLog = raw
+				samples = parseAndTrim(raw, warmup)
 			}
-			fmt.Fprintf(stdout, "[bench] connect log tail (last %d bytes):\n%s\n", len(tail), tail)
-			return out, fmt.Errorf("first sweep point at %d vCPU captured 0 samples — see log tail above", n)
+			promPts := m.fetchProm(ctx, n)
+
+			summary := Summarise(samples)
+			anomalies := DetectAnomaliesWithProm(samples, summary.MedianMBPerSec, promPts)
+			out = append(out, SweepPoint{
+				VCPU:      n,
+				Engine:    engine,
+				Samples:   samples,
+				Summary:   summary,
+				Anomalies: anomalies,
+				Prom:      promPts,
+			})
+			fmt.Printf("  -> %d samples; median %.2f MB/s (p5 %.2f, p95 %.2f, peak %.2f), %d anomalies\n",
+				len(samples), summary.MedianMBPerSec, summary.P5MBPerSec, summary.P95MBPerSec, summary.PeakMBPerSec, len(anomalies))
+
+			// Early-abort: if the first Connect sweep point captured no samples
+			// (Connect failed to start or the connector errored out for the
+			// whole window), the remaining points will almost certainly fail
+			// the same way. Bail out, dump the tail of the log so the operator
+			// can see the failure, and let the destroy defer reclaim the infra.
+			//
+			// Guarded by engine == "connect" because KC samples are intentionally
+			// empty in Plan 2 (its log isn't parsed here) and would otherwise
+			// always trigger early-abort.
+			if engine == "connect" && n == cpuPoints[0] && len(samples) == 0 {
+				const tailMax = 4 * 1024
+				tail := rawLog
+				if len(rawLog) > tailMax {
+					tail = rawLog[len(rawLog)-tailMax:]
+				}
+				fmt.Fprintf(stdout, "[bench] connect log tail (last %d bytes):\n%s\n", len(tail), tail)
+				return out, fmt.Errorf("first sweep point at %d vCPU captured 0 samples — see log tail above", n)
+			}
 		}
 	}
 	return out, nil
