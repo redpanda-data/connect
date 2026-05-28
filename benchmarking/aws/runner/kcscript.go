@@ -44,6 +44,11 @@ func renderKCBenchScript(a kcBenchScriptArgs) string {
 			a.VCPU, a.MemLimitGiB, a.WarmupSec, a.DurationSec),
 		fmt.Sprintf(`KC_LOG=/tmp/kc-%d.log`, a.VCPU),
 		`: > "$KC_LOG"`,
+		// Always upload kc-N.log to S3 even when the script aborts under set -e,
+		// so operators can debug a startup failure post-mortem (the JVM log is
+		// the only place that records connect-distributed.sh's actual error).
+		fmt.Sprintf(`trap 'rc=$?; aws s3 cp "$KC_LOG" "s3://%s/runs/%s/kc-%d.log" --only-show-errors 2>/dev/null || true; exit $rc' EXIT`,
+			a.Bucket, a.SessionID, a.VCPU),
 		// Stop the cloud-init-launched worker so we can spawn under taskset.
 		`sudo systemctl stop kafka-connect || true`,
 		`sleep 2`,
@@ -52,9 +57,11 @@ func renderKCBenchScript(a kcBenchScriptArgs) string {
 		fmt.Sprintf(`taskset -c 2-%d chrt --fifo 50 env KAFKA_HEAP_OPTS=-Xmx%dg /opt/kafka/bin/connect-distributed.sh /opt/kafka-connect/worker.properties >"$KC_LOG" 2>&1 &`,
 			cpusetHi, a.MemLimitGiB),
 		`PID=$!`,
-		// Wait until the REST API answers.
-		`for i in $(seq 1 60); do
-  if curl -fsS http://localhost:8083/ >/dev/null 2>&1; then break; fi
+		// Wait until the REST API answers. KC + Debezium plugins is heavy; on a
+		// small runner the JVM can take 90-150s before /connectors responds.
+		`for i in $(seq 1 180); do
+  if curl -fsS http://localhost:8083/ >/dev/null 2>&1; then echo "[kc] worker REST API up after ${i}s"; break; fi
+  if ! kill -0 "$PID" 2>/dev/null; then echo "[kc] JVM died before REST API came up; see kc-log on S3"; exit 1; fi
   sleep 1
 done`,
 		// Submit the connector. Body comes from the heredoc below.
