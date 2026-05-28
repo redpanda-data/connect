@@ -205,6 +205,61 @@ func TestRefreshSummary_AtomicTmpRename(t *testing.T) {
 	require.True(t, os.IsNotExist(err), "tmp file should be gone after rename")
 }
 
+func TestRefreshSummary_FlagsDivergentScenarios(t *testing.T) {
+	dir := t.TempDir()
+	resultsRoot := filepath.Join(dir, "results")
+	require.NoError(t, os.MkdirAll(filepath.Join(resultsRoot, "postgres_cdc", "orders-cdc"), 0o755))
+	raw, _ := json.MarshalIndent(&Result{
+		Scenario:   "postgres/orders-cdc",
+		StartedAt:  time.Date(2026, 5, 19, 14, 2, 11, 0, time.UTC),
+		FinishedAt: time.Date(2026, 5, 19, 15, 33, 48, 0, time.UTC),
+		Points: []PointResult{
+			{VCPU: 1, Engine: "connect", Summary: Summary{MedianMBPerSec: 100}},
+			{VCPU: 1, Engine: "kafka_connect", Summary: Summary{MedianMBPerSec: 30}},
+		},
+		CrossEngineAnomalies: []CrossEngineAnomaly{{
+			VCPU: 1, FasterEngine: "connect", SlowerEngine: "kafka_connect", Ratio: 3.33,
+		}},
+	}, "", "  ")
+	resultPath := filepath.Join(resultsRoot, "postgres_cdc", "orders-cdc", "2026-05-19T14-02-11Z.json")
+	require.NoError(t, os.WriteFile(resultPath, raw, 0o644))
+
+	summaryPath := filepath.Join(dir, "SUMMARY.md")
+	require.NoError(t, os.WriteFile(summaryPath, []byte(SummaryMarkerStart+"\n"+SummaryMarkerEnd+"\n"), 0o644))
+
+	require.NoError(t, RefreshSummary(summaryPath, resultsRoot, time.Date(2026, 5, 28, 0, 0, 0, 0, time.UTC)))
+
+	body, _ := os.ReadFile(summaryPath)
+	s := string(body)
+	require.Contains(t, s, "postgres_cdc / orders-cdc ⚠",
+		"divergent scenario should be marked with ⚠; full body:\n"+s)
+}
+
+func TestRefreshSummary_DoesNotFlagWhenNoDivergence(t *testing.T) {
+	dir := t.TempDir()
+	resultsRoot := filepath.Join(dir, "results")
+	require.NoError(t, os.MkdirAll(filepath.Join(resultsRoot, "postgres_cdc", "orders-cdc"), 0o755))
+	raw, _ := json.MarshalIndent(&Result{
+		Scenario:   "postgres/orders-cdc",
+		FinishedAt: time.Date(2026, 5, 19, 15, 33, 48, 0, time.UTC),
+		Points: []PointResult{
+			{VCPU: 1, Engine: "connect", Summary: Summary{MedianMBPerSec: 100}},
+			{VCPU: 1, Engine: "kafka_connect", Summary: Summary{MedianMBPerSec: 95}},
+		},
+		// CrossEngineAnomalies is nil (no divergence above threshold).
+	}, "", "  ")
+	resultPath := filepath.Join(resultsRoot, "postgres_cdc", "orders-cdc", "2026-05-19T14-02-11Z.json")
+	require.NoError(t, os.WriteFile(resultPath, raw, 0o644))
+
+	summaryPath := filepath.Join(dir, "SUMMARY.md")
+	require.NoError(t, os.WriteFile(summaryPath, []byte(SummaryMarkerStart+"\n"+SummaryMarkerEnd+"\n"), 0o644))
+	require.NoError(t, RefreshSummary(summaryPath, resultsRoot, time.Date(2026, 5, 28, 0, 0, 0, 0, time.UTC)))
+
+	body, _ := os.ReadFile(summaryPath)
+	s := string(body)
+	require.NotContains(t, s, "⚠", "non-divergent scenario should not have ⚠ marker")
+}
+
 func TestRefreshSummary_DualEngineRow(t *testing.T) {
 	dir := t.TempDir()
 	resultsRoot := filepath.Join(dir, "results")
