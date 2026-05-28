@@ -46,10 +46,12 @@ const (
 	fieldMaxParallelSnapshotTables = "max_parallel_snapshot_tables"
 	fieldUnchangedToastValue       = "unchanged_toast_value"
 	fieldHeartbeatInterval         = "heartbeat_interval"
+	fieldSignalTableName           = "signal_table_name"
 	fieldAWSIAMAuth                = "aws"
 	// FieldAWSIAMAuthEnabled enabled field.
 	FieldAWSIAMAuthEnabled = "enabled"
-	shutdownTimeout        = 5 * time.Second
+
+	shutdownTimeout = 5 * time.Second
 )
 
 func notImportedAWSOptFn(_ context.Context, awsConf *service.ParsedConfig, _ *pgconn.Config, _ *service.Logger) (TokenBuilder, error) {
@@ -193,7 +195,54 @@ This connector uses the naming pattern ` + "`pglog_stream_<replication_slot_name
 		).
 			Description("AWS IAM authentication configuration for PostgreSQL instances. When enabled, IAM credentials are used to generate temporary authentication tokens instead of a static password.").
 			Advanced().
-			Optional()).
+			Optional(),
+		).
+		Field(service.NewStringField(fieldSignalTableName).
+			Description(`The name of the table used to send control signals to the connector, excluding the schema. The table must
+exist in the schema configured via the ` + "`schema`" + ` field and must have exactly these columns:
+
+- **id** — any type representable as a string (e.g. ` + "`SERIAL`" + `, ` + "`BIGSERIAL`" + `, ` + "`UUID`" + `, ` + "`VARCHAR`" + `)
+- **type** — ` + "`VARCHAR`" + ` — the signal type (see supported signals below)
+- **data** — ` + "`TEXT`" + ` — a JSON object containing signal parameters
+
+Create the table with:
+
+` + "```sql" + `
+CREATE TABLE <schema>.<signal_table_name> (
+    id   SERIAL PRIMARY KEY,
+    type VARCHAR(32),
+    data TEXT
+);
+` + "```" + `
+
+Signal rows are published as regular output messages (` + "`operation=insert`" + `, ` + "`table=<signal_table_name>`" + `).
+To exclude them from downstream processing, filter on the ` + "`table`" + ` metadata field using a
+` + "`mapping`" + ` processor:
+
+` + "```yaml" + `
+pipeline:
+  processors:
+    - mapping: |
+        root = if @table == "rpcn_signal_table" { deleted() } else { this }
+` + "```" + `
+
+**Supported signals**
+
+**` + "`execute-snapshot`" + `** — triggers a re-snapshot of one or more tables without dropping the
+replication slot. The ` + "`data`" + ` column must contain a JSON object with a
+` + "`data-collections`" + ` key listing the fully-qualified tables (` + "`schema.table`" + `) to snapshot.
+` + "`data-collections`" + ` must be non-empty; a signal with an empty or absent ` + "`data-collections`" + `
+is ignored and streaming continues uninterrupted.
+
+` + "```sql" + `
+INSERT INTO dbo.rpcn_signal_table (type, data)
+VALUES ('execute-snapshot', '{"data-collections": ["dbo.events", "dbo.products"]}');
+` + "```").
+			Example("rpcn_signal_table").
+			Default("").
+			Advanced().
+			Version("4.103.0"),
+		).
 		Field(service.NewAutoRetryNacksToggleField()).
 		Field(service.NewBatchPolicyField(fieldBatching))
 }
@@ -217,6 +266,7 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		heartbeatInterval         time.Duration
 		iamAuthEnabled            bool
 		iamAuthTokenBuilder       TokenBuilder
+		signalTableName           string
 	)
 
 	if err := license.CheckRunningEnterprise(mgr); err != nil {
@@ -291,6 +341,10 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		return nil, err
 	}
 
+	if signalTableName, err = conf.FieldString(fieldSignalTableName); err != nil {
+		return nil, err
+	}
+
 	awsConf := conf.Namespace(fieldAWSIAMAuth)
 	iamAuthEnabled, _ = awsConf.FieldBool(FieldAWSIAMAuthEnabled)
 
@@ -342,6 +396,7 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 			Logger:                   logger,
 			UnchangedToastValue:      unchangedToastValue,
 			HeartbeatInterval:        heartbeatInterval,
+			SignalTableName:          signalTableName,
 		},
 		batching:        batching,
 		checkpointLimit: checkpointLimit,
@@ -352,9 +407,13 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		snapshotMetrics: snapshotMetrics,
 		replicationLag:  replicationLag,
 		stopSig:         shutdown.NewSignaller(),
+		streamSnapshot:  streamSnapshot,
 
 		iamAuthEnabled: iamAuthEnabled,
 	}
+
+	// Initialise signaller eagerly so IsPending() is safe to call before the first Connect().
+	i.controlSig = NewControlSignaller(schema, signalTableName, logger)
 
 	// Has stopped is how we notify that we're not connected. This will get reset at connection time.
 	i.stopSig.TriggerHasStopped()
@@ -397,6 +456,7 @@ type pgStreamInput struct {
 
 	snapshotMetrics *service.MetricGauge
 	replicationLag  *service.MetricGauge
+	controlSig      *postgresSignaller
 	stopSig         *shutdown.Signaller
 
 	// snapshotAckWG tracks in-flight snapshot batches: incremented when a
@@ -405,8 +465,8 @@ type pgStreamInput struct {
 	// replication slot is not promoted before snapshot rows are durable.
 	snapshotAckWG sync.WaitGroup
 
-	// IAM authentication fields
 	iamAuthEnabled bool
+	streamSnapshot bool
 }
 
 func (p *pgStreamInput) Connect(ctx context.Context) error {
@@ -417,9 +477,29 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 		}
 	}
 
+	// determine if we have a pending signal and handle it
+	pending, signal := p.controlSig.IsPending()
+	if pending && signal.IsSnapshot() {
+		p.logger.Infof("%q signal pending, triggering re-snapshot", signal.Type)
+
+		p.streamConfig.StreamOldData = true
+		p.streamConfig.ForceSnapshot = true
+		defer func() { p.streamConfig.ForceSnapshot = false }()
+
+		p.streamConfig.SnapshotTables = tableNamesFromSchema(signal.DataCollections, p.streamConfig.DBSchema)
+		defer func() { p.streamConfig.SnapshotTables = nil }()
+	} else {
+		p.streamConfig.StreamOldData = p.streamSnapshot
+	}
+
 	pgStream, err := pglogicalstream.NewPgStream(ctx, p.streamConfig)
 	if err != nil {
 		return fmt.Errorf("unable to create replication stream: %w", err)
+	}
+	if pending {
+		// signal has already been acked, re-shapshot is a best effort
+		// as we don't want to get in a snapshot loop.
+		p.controlSig.Reset()
 	}
 	batcher, err := p.batching.NewBatcher(p.mgr)
 	if err != nil {
@@ -432,6 +512,7 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 }
 
 func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher *service.Batcher) {
+	p.logger.Debug("Launched processing stream")
 	monitorLoop := asyncroutine.NewPeriodic(p.streamConfig.WalMonitorInterval, func() {
 		// Periodically collect stats
 		report := pgStream.GetProgress()
@@ -510,11 +591,17 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 				break
 			}
 			var (
-				flush bool
-				mb    []byte
-				err   error
+				flush         bool
+				mb            []byte
+				signalHandled bool
 			)
 			for _, msg := range batch {
+				sig, err := p.controlSig.Listen(ctx, msg)
+				if err != nil {
+					p.logger.Errorf("failed to detect control signal in change event, skipping message: %s", err)
+					continue
+				}
+
 				if mb, err = json.Marshal(msg.Data); err != nil {
 					p.logger.Errorf("failure to marshal message: %s", err)
 					break
@@ -534,9 +621,57 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 				if msg.BeforeData != nil {
 					batchMsg.MetaSetImmut("before", service.ImmutableAny{V: msg.BeforeData})
 				}
-				if batcher.Add(batchMsg) {
-					flush = true
+
+				if sig == nil {
+					if batcher.Add(batchMsg) {
+						flush = true
+					}
+					continue
 				}
+
+				// Signal detected: flush what preceded it normally, then flush
+				// the signal itself with a normal ack, so its LSN is durably
+				// confirmed to Postgres before we restart - it will never be
+				// redelivered, so there's no redelivery loop to guard against.
+				p.logger.Infof("snapshot signal received (lsn=%s), pausing stream to re-run snapshot", sig.LSN)
+				if precedingBatch, ferr := batcher.Flush(ctx); ferr == nil {
+					if ferr := p.flushBatch(ctx, pgStream, cp, precedingBatch); ferr != nil {
+						p.logger.Debugf("failed to flush batch preceding signal: %s", ferr)
+					}
+				}
+
+				batcher.Add(batchMsg)
+				signalBatch, ferr := batcher.Flush(ctx)
+				if ferr != nil {
+					p.logger.Warnf("failed to flush signal message, signal will be retried on redelivery: %s", ferr)
+					continue
+				}
+				if ferr := p.flushBatch(ctx, pgStream, cp, signalBatch); ferr != nil {
+					p.logger.Warnf("failed to flush signal message, signal will be retried on redelivery: %s", ferr)
+					continue
+				}
+
+				// Wait for the ack above to actually be recorded (not just
+				// downstream delivery) before tearing down, so the stream's
+				// graceful-shutdown flush sends the signal's LSN to Postgres
+				// rather than a stale, earlier one.
+				const waitInterval = 100 * time.Millisecond
+				if werr := awaitCheckpointLSN(ctx, cp, sig.LSN, waitInterval); werr != nil {
+					p.logger.Warnf("gave up waiting to acknowledge signal LSN, streaming continues uninterrupted: %s", werr)
+					continue
+				}
+
+				// Store so Connect re-runs the snapshot on reconnect.
+				p.controlSig.StoreSignal(sig)
+				p.stopSig.TriggerSoftStop()
+				signalHandled = true
+				// Abandon the rest of this batch: already acked up to and
+				// including the signal, so nothing here is lost - it
+				// redelivers once replication resumes after the snapshot.
+				break
+			}
+			if signalHandled {
+				break
 			}
 			if flush {
 				nextTimedBatchChan = nil
