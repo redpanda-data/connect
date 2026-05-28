@@ -68,6 +68,62 @@ func extractTopicProduceBytes(body string) (map[string]float64, error) {
 	return out, scanner.Err()
 }
 
+// TopicPoint is one inter-frame throughput sample for a single topic.
+type TopicPoint struct {
+	T           int     `json:"t"` // seconds since first frame
+	MBPerSec    float64 `json:"mb_per_sec"`
+	IntervalSec int     `json:"-"` // for debugging; not serialized
+}
+
+// ParseTopicSeries reads a full redpanda-<vcpu>.txt dump and returns a
+// per-topic throughput series. Each topic's series has one point per
+// inter-frame delta (so N frames produce N-1 points). T is measured in
+// seconds since the FIRST frame's timestamp, matching the Sample.T
+// convention used elsewhere in the runner.
+//
+// Counter resets (current < previous) are filtered out — that situation
+// almost always indicates a broker restart and the delta would be a
+// large negative value if computed naively.
+func ParseTopicSeries(r io.Reader) (map[string][]TopicPoint, error) {
+	frames, err := parseBrokerFrames(r)
+	if err != nil {
+		return nil, err
+	}
+	if len(frames) == 0 {
+		return map[string][]TopicPoint{}, nil
+	}
+	baseT := frames[0].UnixTime
+	prevBytes := map[string]float64{}
+	out := map[string][]TopicPoint{}
+	for i, f := range frames {
+		if f.Errored {
+			continue
+		}
+		bytesByTopic, err := extractTopicProduceBytes(f.Body)
+		if err != nil {
+			return nil, fmt.Errorf("frame %d at t=%d: %w", i, f.UnixTime, err)
+		}
+		for topic, cur := range bytesByTopic {
+			prev, hadPrev := prevBytes[topic]
+			prevBytes[topic] = cur
+			if !hadPrev || i == 0 {
+				continue
+			}
+			deltaBytes := cur - prev
+			interval := int(f.UnixTime - frames[i-1].UnixTime)
+			if interval <= 0 || deltaBytes < 0 {
+				continue // counter reset or out-of-order frame; skip
+			}
+			out[topic] = append(out[topic], TopicPoint{
+				T:           int(f.UnixTime - baseT),
+				MBPerSec:    deltaBytes / float64(interval) / (1 << 20),
+				IntervalSec: interval,
+			})
+		}
+	}
+	return out, nil
+}
+
 // splitLabeledMetric parses a single metric line of the form
 //
 //	name{k1="v1",k2="v2",...} value
