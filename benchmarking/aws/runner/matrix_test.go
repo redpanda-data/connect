@@ -319,6 +319,68 @@ func TestMatrixRun_EngineInnerLoop_BothEngines(t *testing.T) {
 	require.Empty(t, points[3].Samples, "kc at vcpu 2 should have no samples in Plan 2")
 }
 
+func TestMatrixRun_PopulatesBrokerSeriesForBothEngines(t *testing.T) {
+	const sessionID = "sess1"
+	const connector = "postgres_cdc"
+
+	// Three frames covering a 20s window: bytes rise on both topics so
+	// both engines get non-empty BrokerSeries.
+	const rpDump = `###timestamp=1000
+redpanda_kafka_request_bytes_total{redpanda_request="produce",topic="bench_sess1_postgres_cdc_connect"} 0
+redpanda_kafka_request_bytes_total{redpanda_request="produce",topic="bench_sess1_postgres_cdc_kc.public.orders"} 0
+###timestamp=1010
+redpanda_kafka_request_bytes_total{redpanda_request="produce",topic="bench_sess1_postgres_cdc_connect"} 524288000
+redpanda_kafka_request_bytes_total{redpanda_request="produce",topic="bench_sess1_postgres_cdc_kc.public.orders"} 314572800
+###timestamp=1020
+redpanda_kafka_request_bytes_total{redpanda_request="produce",topic="bench_sess1_postgres_cdc_connect"} 1048576000
+redpanda_kafka_request_bytes_total{redpanda_request="produce",topic="bench_sess1_postgres_cdc_kc.public.orders"} 629145600
+`
+
+	connectLog := makeLog(180, 50)
+	fetcher := &FakeLogFetcher{
+		Contents: map[string]string{
+			fmt.Sprintf("runs/%s/sweep-1.log", sessionID):    connectLog,
+			fmt.Sprintf("runs/%s/redpanda-1.txt", sessionID): rpDump,
+		},
+		Errs: map[string]error{
+			fmt.Sprintf("runs/%s/prom-1.txt", sessionID): fmt.Errorf("not found"),
+		},
+	}
+	ssm := &FakeSSM{Transcripts: map[string][]string{"i-runner": nil}}
+	prev := stdout
+	stdout = &bytes.Buffer{}
+	defer func() { stdout = prev }()
+
+	mr := &MatrixRunner{
+		SSM:                   ssm,
+		LogFetcher:            fetcher,
+		RunnerInstance:        "i-runner",
+		Bucket:                "b",
+		SessionID:             sessionID,
+		ScenarioConnector:     connector,
+		Engines:               []string{"connect", "kafka_connect"},
+		KCConnectorName:       "bench_postgres_cdc",
+		KCConnectorConfigJSON: `{"connector.class":"x"}`,
+	}
+	points, err := mr.Run(context.Background(), []int{1}, 1, 60*time.Second, 120*time.Second, "", "")
+	require.NoError(t, err)
+	require.Len(t, points, 2)
+
+	connectPt := points[0]
+	require.Equal(t, "connect", connectPt.Engine)
+	require.NotEmpty(t, connectPt.BrokerSeries, "connect BrokerSeries must be populated from redpanda-1.txt")
+	// Connect produced 500 MiB in 10s → 50 MiB/s.
+	require.InDelta(t, 50.0, connectPt.BrokerSeries[0].MBPerSec, 0.1)
+
+	kcPt := points[1]
+	require.Equal(t, "kafka_connect", kcPt.Engine)
+	require.NotEmpty(t, kcPt.BrokerSeries, "kc BrokerSeries must be populated")
+	// KC produced 300 MiB in 10s → 30 MiB/s.
+	require.InDelta(t, 30.0, kcPt.BrokerSeries[0].MBPerSec, 0.1)
+	// KC's Summary should now have non-zero median (derived from broker bytes).
+	require.Greater(t, kcPt.Summary.MedianMBPerSec, 0.0, "KC Summary should be derived from broker bytes")
+}
+
 func TestMatrixRun_EngineInnerLoop_ConnectOnly(t *testing.T) {
 	const sessionID = "sess"
 	logFor := func(vcpu int) string { return makeLog(180, float64(50+vcpu)) }
