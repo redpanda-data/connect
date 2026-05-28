@@ -188,3 +188,94 @@ func TestRenderPipelineConfig_OmitsCacheResourcesWhenAbsent(t *testing.T) {
 		t.Errorf("postgres scenario without cache_resources should not have a cache_resources key in rendered config; got:\n%s", body)
 	}
 }
+
+func TestLoadScenario_KafkaConnectOverride(t *testing.T) {
+	const yamlBody = `
+name: test
+connector: postgres_cdc
+stack: postgres
+infra:
+  source: {}
+  runner:
+    instance_type: c8g.4xlarge
+dataset:
+  initial_rows: 0
+  row_size_bytes: 1200
+  tables: [orders]
+  seeder: cdc-rows
+workload:
+  write_rate_per_sec: 150000
+  duration: 15m
+  warmup: 2m
+pipeline:
+  input:
+    postgres_cdc:
+      dsn: ${POSTGRES_DSN}
+matrix:
+  cpu_points: [1]
+reset: []
+kafka_connect:
+  config:
+    snapshot.mode: never
+    decimal.handling.mode: string
+`
+	tmp, _ := os.CreateTemp("", "scen-*.yaml")
+	t.Cleanup(func() { os.Remove(tmp.Name()) })
+	tmp.WriteString(yamlBody)
+	tmp.Close()
+
+	s, err := LoadScenario(tmp.Name())
+	if err != nil {
+		t.Fatalf("LoadScenario: %v", err)
+	}
+	if s.KafkaConnect == nil {
+		t.Fatalf("KafkaConnect field should be populated")
+	}
+	cfg, ok := s.KafkaConnect["config"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected kafka_connect.config map; got %T", s.KafkaConnect["config"])
+	}
+	if cfg["snapshot.mode"] != "never" {
+		t.Errorf("snapshot.mode = %v, want never", cfg["snapshot.mode"])
+	}
+}
+
+func TestLoadScenario_KafkaConnectOptional(t *testing.T) {
+	const yamlBody = `
+name: test
+connector: postgres_cdc
+stack: postgres
+infra:
+  source: {}
+  runner:
+    instance_type: c8g.4xlarge
+dataset:
+  initial_rows: 0
+  row_size_bytes: 1200
+  tables: [orders]
+  seeder: cdc-rows
+workload:
+  write_rate_per_sec: 150000
+  duration: 15m
+  warmup: 2m
+pipeline:
+  input:
+    postgres_cdc:
+      dsn: ${POSTGRES_DSN}
+matrix:
+  cpu_points: [1]
+reset: []
+`
+	tmp, _ := os.CreateTemp("", "scen-*.yaml")
+	t.Cleanup(func() { os.Remove(tmp.Name()) })
+	tmp.WriteString(yamlBody)
+	tmp.Close()
+
+	s, err := LoadScenario(tmp.Name())
+	if err != nil {
+		t.Fatalf("LoadScenario: %v", err)
+	}
+	if s.KafkaConnect != nil {
+		t.Errorf("KafkaConnect should be nil when omitted; got %v", s.KafkaConnect)
+	}
+}
