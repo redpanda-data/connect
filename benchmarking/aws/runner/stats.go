@@ -105,6 +105,28 @@ func Summarise(samples []Sample) Summary {
 	}
 }
 
+// SummariseTopicPoints derives a Summary from a broker-side TopicPoint
+// stream. Mirrors Summarise(samples) — median, p5, p95, peak — but
+// works against the per-engine broker series for engines that don't
+// emit a rolling-stats log we can parse. The Msg* fields stay zero
+// because broker bytes don't give us message count without an
+// additional metric.
+func SummariseTopicPoints(pts []TopicPoint) Summary {
+	if len(pts) == 0 {
+		return Summary{}
+	}
+	mb := make([]float64, len(pts))
+	for i, p := range pts {
+		mb[i] = p.MBPerSec
+	}
+	return Summary{
+		MedianMBPerSec: percentile(mb, 50),
+		P5MBPerSec:     percentile(mb, 5),
+		P95MBPerSec:    percentile(mb, 95),
+		PeakMBPerSec:   peak(mb),
+	}
+}
+
 // percentile uses linear interpolation (Hazen / Type-5 method):
 // rank = p/100 * n - 0.5, interpolated between adjacent sorted values.
 func percentile(values []float64, p float64) float64 {

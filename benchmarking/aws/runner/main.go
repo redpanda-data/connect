@@ -274,6 +274,7 @@ func runBench(opts benchOpts) (errOut error) {
 		Engines:                 opts.engines,
 		KCConnectorName:         kcConnectorName,
 		KCConnectorConfigJSON:   kcConfigJSON,
+		ScenarioConnector:       s.Connector,
 	}
 	reset, err := combineReset(s.Connector, s.Reset, sharedOuts)
 	if err != nil {

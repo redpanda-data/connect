@@ -41,6 +41,16 @@ type MatrixRunner struct {
 	KCConnectorName string
 	// KCConnectorConfigJSON is the rendered JSON config posted to KC's REST API.
 	KCConnectorConfigJSON string
+	// ScenarioConnector is the connector name from the scenario YAML
+	// (e.g. "postgres_cdc"). Passed through from runBench so the
+	// broker-side attribution helper can identify per-engine topics.
+	ScenarioConnector string
+	// cachedBrokerByEngine holds the engine-attributed broker series for
+	// the CURRENT vCPU iteration. Set lazily on the first engine of each
+	// vCPU; read by subsequent engines so we don't re-fetch the same
+	// redpanda-N.txt twice. Reset to nil at the start of each new vCPU
+	// (see Run loop).
+	cachedBrokerByEngine map[string][]TopicPoint
 }
 
 // SweepPoint is the per-point measurement.
@@ -71,6 +81,7 @@ func (m *MatrixRunner) Run(
 	}
 	out := make([]SweepPoint, 0, len(cpuPoints)*len(engines))
 	for _, n := range cpuPoints {
+		m.cachedBrokerByEngine = nil
 		for _, engine := range engines {
 			fmt.Printf("=== sweep point: %d vCPU, engine=%s (warmup %s, window %s) ===\n", n, engine, warmup, duration)
 
@@ -155,15 +166,30 @@ func (m *MatrixRunner) Run(
 			}
 			promPts := m.fetchProm(ctx, n)
 
-			summary := Summarise(samples)
+			// Broker-side: fetch once per vCPU (covers both engines via topic
+			// label) and cache for the second engine pass.
+			if m.cachedBrokerByEngine == nil {
+				m.cachedBrokerByEngine = m.fetchBrokerSeries(ctx, n)
+			}
+			brokerSeries := m.cachedBrokerByEngine[engine]
+
+			var summary Summary
+			if engine == "kafka_connect" {
+				// KC has no rolling-stats log we can parse; derive Summary
+				// from broker-side bytes attributed to this engine.
+				summary = SummariseTopicPoints(brokerSeries)
+			} else {
+				summary = Summarise(samples)
+			}
 			anomalies := DetectAnomaliesWithProm(samples, summary.MedianMBPerSec, promPts)
 			out = append(out, SweepPoint{
-				VCPU:      n,
-				Engine:    engine,
-				Samples:   samples,
-				Summary:   summary,
-				Anomalies: anomalies,
-				Prom:      promPts,
+				VCPU:         n,
+				Engine:       engine,
+				Samples:      samples,
+				Summary:      summary,
+				Anomalies:    anomalies,
+				Prom:         promPts,
+				BrokerSeries: brokerSeries,
 			})
 			fmt.Printf("  -> %d samples; median %.2f MB/s (p5 %.2f, p95 %.2f, peak %.2f), %d anomalies\n",
 				len(samples), summary.MedianMBPerSec, summary.P5MBPerSec, summary.P95MBPerSec, summary.PeakMBPerSec, len(anomalies))
@@ -225,6 +251,37 @@ func (m *MatrixRunner) fetchProm(ctx context.Context, vcpu int) []PromPoint {
 		return nil
 	}
 	return pts
+}
+
+// fetchBrokerSeries downloads the per-vCPU broker-metrics dump and
+// splits it into per-engine series. Non-fatal: a missing or unparseable
+// file logs a warning and returns nil, just like fetchProm.
+func (m *MatrixRunner) fetchBrokerSeries(ctx context.Context, vcpu int) map[string][]TopicPoint {
+	if m.LogFetcher == nil {
+		return nil
+	}
+	key := fmt.Sprintf("runs/%s/redpanda-%d.txt", m.SessionID, vcpu)
+	body, err := m.LogFetcher.Fetch(ctx, m.Bucket, key)
+	if err != nil {
+		fmt.Fprintf(stdout, "[bench] fetch broker metrics (non-fatal): %v\n", err)
+		return nil
+	}
+	defer body.Close()
+	series, err := ParseTopicSeries(body)
+	if err != nil {
+		fmt.Fprintf(stdout, "[bench] parse broker metrics (non-fatal): %v\n", err)
+		return nil
+	}
+	if m.ScenarioConnector == "" {
+		fmt.Fprintf(stdout, "[bench] no ScenarioConnector configured; broker attribution skipped\n")
+		return nil
+	}
+	byEngine, err := AttributeByEngine(series, m.SessionID, m.ScenarioConnector)
+	if err != nil {
+		fmt.Fprintf(stdout, "[bench] attribute broker metrics (non-fatal): %v\n", err)
+		return nil
+	}
+	return byEngine
 }
 
 // parseAndTrim parses the Connect log and discards the leading warmup samples,
