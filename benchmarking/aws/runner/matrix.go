@@ -30,8 +30,8 @@ type MatrixRunner struct {
 	Bucket          string // S3 bucket where per-point Connect logs are uploaded
 	SessionID       string // run-scoped key prefix: runs/<SessionID>/sweep-<vcpu>.log
 	// RedpandaMetricsEndpoint is the host:port pair (e.g. "10.42.10.10:9644") the
-	// per-point scraper curls every 10s. Empty disables the scraper (Plan 1
-	// safety net for environments without Redpanda yet).
+	// per-point scraper curls every 10s. Empty disables the scraper, so callers
+	// without a Redpanda cluster (e.g. an early-stack bring-up) won't fail.
 	RedpandaMetricsEndpoint string
 	// Engines lists the engines to sweep at each vCPU point, in order.
 	// Default ["connect"] preserves the pre-Plan-2 behavior.

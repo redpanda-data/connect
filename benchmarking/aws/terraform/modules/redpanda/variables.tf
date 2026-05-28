@@ -21,7 +21,7 @@ variable "vpc_id" {
 }
 
 variable "subnet_ids" {
-  description = "Private subnet IDs for broker placement (length must >= cluster_size)."
+  description = "Private subnet IDs for broker placement (length must be >= cluster_size)."
   type        = list(string)
 
   validation {
