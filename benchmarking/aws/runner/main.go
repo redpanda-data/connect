@@ -470,8 +470,15 @@ func buildConnect(repoRoot string) (string, error) {
 }
 
 func renderPipelineConfig(s *Scenario, outs map[string]string) (string, error) {
+	// Per-engine output topic so broker-side metrics attribute cleanly.
+	// SessionID is substituted by substitutePlaceholders below.
+	topic := fmt.Sprintf("bench_${BENCH_SESSION_ID}_%s_connect", s.Connector)
+
 	cfg := map[string]any{
-		"http":  map[string]any{"debug_endpoints": true},
+		"http": map[string]any{"debug_endpoints": true},
+		"redpanda": map[string]any{
+			"seed_brokers": []string{"${REDPANDA_BROKER_ENDPOINTS}"},
+		},
 		"input": s.Pipeline["input"],
 		"output": map[string]any{
 			"processors": []any{
@@ -479,7 +486,9 @@ func renderPipelineConfig(s *Scenario, outs map[string]string) (string, error) {
 					"benchmark": map[string]any{"interval": "1s", "count_bytes": true},
 				},
 			},
-			"drop": map[string]any{},
+			"redpanda": map[string]any{
+				"topic": topic,
+			},
 		},
 		"logger": map[string]any{"level": "INFO"},
 		"metrics": map[string]any{
