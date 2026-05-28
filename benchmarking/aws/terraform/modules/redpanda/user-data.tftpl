@@ -1,24 +1,29 @@
 #cloud-config
 package_update: true
 runcmd:
-  # Format and mount the NVMe instance store (im4gn family exposes 1× /dev/nvme1n1).
-  - mkfs.xfs -f /dev/nvme1n1
-  - mkdir -p /var/lib/redpanda/data
-  - mount /dev/nvme1n1 /var/lib/redpanda/data
-  - echo "/dev/nvme1n1 /var/lib/redpanda/data xfs defaults,noatime 0 0" >> /etc/fstab
-
-  # Install Redpanda from the Cloudsmith-backed dl.redpanda.com host.
-  # NOTE: the legacy "packages.redpanda.com" hostname no longer resolves;
-  # Redpanda migrated their package distribution to Cloudsmith and the
-  # public dl.redpanda.com CNAME is the supported install path.
-  - curl --retry 5 --retry-delay 3 --retry-all-errors -sSL https://dl.redpanda.com/public/redpanda/setup.rpm.sh | bash
-  - dnf install -y redpanda
-
-  # Ensure the redpanda user owns the data dir.
-  - chown -R redpanda:redpanda /var/lib/redpanda/data
-
-  # Write the broker config. Static IPs let us seed deterministically.
+  # Run the whole broker setup under `set -euo pipefail` so any single step
+  # that fails (mkfs, dnf install, systemctl start) aborts cloud-init with a
+  # non-zero exit status — much louder than the default runcmd behavior of
+  # logging the failure and continuing.
   - |
+    set -euo pipefail
+    # Format and mount the NVMe instance store (im4gn family exposes 1× /dev/nvme1n1).
+    mkfs.xfs -f /dev/nvme1n1
+    mkdir -p /var/lib/redpanda/data
+    mount /dev/nvme1n1 /var/lib/redpanda/data
+    echo "/dev/nvme1n1 /var/lib/redpanda/data xfs defaults,noatime 0 0" >> /etc/fstab
+
+    # Install Redpanda from the Cloudsmith-backed dl.redpanda.com host.
+    # NOTE: the legacy "packages.redpanda.com" hostname no longer resolves;
+    # Redpanda migrated their package distribution to Cloudsmith and the
+    # public dl.redpanda.com CNAME is the supported install path.
+    curl --retry 5 --retry-delay 3 --retry-all-errors -sSL https://dl.redpanda.com/public/redpanda/setup.rpm.sh | bash
+    dnf install -y redpanda
+
+    # Ensure the redpanda user owns the data dir.
+    chown -R redpanda:redpanda /var/lib/redpanda/data
+
+    # Write the broker config. Static IPs let us seed deterministically.
     cat > /etc/redpanda/redpanda.yaml <<'RP'
     redpanda:
       data_directory: /var/lib/redpanda/data
@@ -47,8 +52,8 @@ runcmd:
     # (Connect via the redpanda output, KC via worker.properties). Leaving them
     # disabled saves a handful of MB of broker memory per node.
     RP
-  - chown redpanda:redpanda /etc/redpanda/redpanda.yaml
+    chown redpanda:redpanda /etc/redpanda/redpanda.yaml
 
-  # Enable + start.
-  - systemctl daemon-reload
-  - systemctl enable --now redpanda
+    # Enable + start.
+    systemctl daemon-reload
+    systemctl enable --now redpanda
