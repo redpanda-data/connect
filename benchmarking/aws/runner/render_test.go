@@ -71,5 +71,13 @@ func TestAppendMarkdown(t *testing.T) {
 	require.Contains(t, s, "## AWS — orders-cdc — 2026-05-19")
 	require.Contains(t, s, "c7i.4xlarge")
 	require.Contains(t, s, "db.r6g.2xlarge")
-	require.Contains(t, s, "| 1          |          153 |         144 |          161 |       127,344 |")
+	// New header columns:
+	require.Contains(t, s, "engine")
+	require.Contains(t, s, "broker MB/s")
+	// The engine label appears in the row:
+	require.Contains(t, s, "connect")
+	// The vCPU row still renders the median:
+	require.Contains(t, s, "153")
+	// msg/sec (p50) — formatted with thousands separator:
+	require.Contains(t, s, "127,344")
 }

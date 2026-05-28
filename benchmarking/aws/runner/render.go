@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"text/template"
 	"time"
@@ -98,11 +99,13 @@ type markdownView struct {
 }
 
 type markdownRow struct {
-	VCPU        int
-	MedianMB    string
-	P5MB        string
-	P95MB       string
-	MedianMsgFC string
+	VCPU           int
+	Engine         string
+	MedianMB       string
+	BrokerMedianMB string
+	P5MB           string
+	P95MB          string
+	MedianMsgFC    string
 }
 
 type anomalyView struct {
@@ -123,12 +126,23 @@ func AppendMarkdown(target string, r *Result, description string) error {
 	rows := make([]markdownRow, len(r.Points))
 	var anomalies []anomalyView
 	for i, p := range r.Points {
+		var brokerMedian float64
+		if len(p.BrokerSeries) > 0 {
+			rates := make([]float64, len(p.BrokerSeries))
+			for j, b := range p.BrokerSeries {
+				rates[j] = b.MBPerSec
+			}
+			sort.Float64s(rates)
+			brokerMedian = rates[len(rates)/2]
+		}
 		rows[i] = markdownRow{
-			VCPU:        p.VCPU,
-			MedianMB:    fmt.Sprintf("%12.0f", p.Summary.MedianMBPerSec),
-			P5MB:        fmt.Sprintf("%11.0f", p.Summary.P5MBPerSec),
-			P95MB:       fmt.Sprintf("%12.0f", p.Summary.P95MBPerSec),
-			MedianMsgFC: formatThousands(int64(p.Summary.MedianMsgPerSec)),
+			VCPU:           p.VCPU,
+			Engine:         p.Engine,
+			MedianMB:       fmt.Sprintf("%12.0f", p.Summary.MedianMBPerSec),
+			BrokerMedianMB: fmt.Sprintf("%12.0f", brokerMedian),
+			P5MB:           fmt.Sprintf("%11.0f", p.Summary.P5MBPerSec),
+			P95MB:          fmt.Sprintf("%12.0f", p.Summary.P95MBPerSec),
+			MedianMsgFC:    formatThousands(int64(p.Summary.MedianMsgPerSec)),
 		}
 		for _, a := range p.Anomalies {
 			anomalies = append(anomalies, anomalyView{
