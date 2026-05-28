@@ -3,6 +3,26 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.94.0 - 2026-05-28
+
+### Added
+
+- iceberg: Iceberg connector now auto-creates correctly-typed columns for temporal and UUID fields from Avro schemas and includes schema-aware numeric scaling for time-typed columns. ([@Jeffail](https://github.com/Jeffail), [#4427](https://github.com/redpanda-data/connect/pull/4427))
+- iceberg: Added require_schema_metadata strict temporal mode option to reject numeric inputs into time-typed columns when schema metadata is absent, preventing silent corruption on schema drift. ([@Jeffail](https://github.com/Jeffail), [#4427](https://github.com/redpanda-data/connect/pull/4427))
+- oracledb_cdc: Added optional external cache-backed transaction buffer to reduce in-process memory pressure for large long-running LogMiner transactions. ([@josephwoodward](https://github.com/josephwoodward), [#4409](https://github.com/redpanda-data/connect/pull/4409))
+
+### Fixed
+
+- confluent: Fixed decimal value serialization in Avro to match spec-compliant form when using default mode. ([@Jeffail](https://github.com/Jeffail), [#4427](https://github.com/redpanda-data/connect/pull/4427))
+- general: Bumped golang.org/x/net dependency to address CVE-2024-79571. ([@josephwoodward](https://github.com/josephwoodward), [#4452](https://github.com/redpanda-data/connect/pull/4452))
+
+### Changed
+
+- confluent: Schema registry Avro decoder now honors all Avro logical types (timestamp, date, time, UUID) end-to-end and maps them correctly in Iceberg columns, with configurable preservation via preserve_logical_types flag. ([@Jeffail](https://github.com/Jeffail), [#4427](https://github.com/redpanda-data/connect/pull/4427))
+- confluent: Schema registry decoder now honors Kafka Connect and Debezium temporal annotations in schema metadata, enabling correct column type selection in downstream sinks like Iceberg. ([@Jeffail](https://github.com/Jeffail), [#4427](https://github.com/redpanda-data/connect/pull/4427))
+- general: Updated README example to showcase CDC to Iceberg-on-S3 lakehouse pipeline with AWS Glue catalog and dynamic routing instead of generic pubsub example. ([@prakhargarg105](https://github.com/prakhargarg105), [#4445](https://github.com/redpanda-data/connect/pull/4445))
+- parquet: Parquet encoder now handles Date, TimeOfDay, and UUID types from schema metadata and coerces temporal values to numeric columns for rolling upgrades against existing tables. ([@Jeffail](https://github.com/Jeffail), [#4427](https://github.com/redpanda-data/connect/pull/4427))
+
 ## 4.93.0 - 2026-05-21
 
 ### Fixed
