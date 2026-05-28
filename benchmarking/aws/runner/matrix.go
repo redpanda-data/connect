@@ -45,12 +45,13 @@ type MatrixRunner struct {
 
 // SweepPoint is the per-point measurement.
 type SweepPoint struct {
-	VCPU      int
-	Engine    string
-	Samples   []Sample
-	Summary   Summary
-	Anomalies []Anomaly
-	Prom      []PromPoint
+	VCPU         int
+	Engine       string
+	Samples      []Sample
+	Summary      Summary
+	Anomalies    []Anomaly
+	Prom         []PromPoint
+	BrokerSeries []TopicPoint
 }
 
 // Run executes the full sweep. resetScript runs on the runner host between

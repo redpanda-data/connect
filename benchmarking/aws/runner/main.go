@@ -317,12 +317,13 @@ func runBench(opts benchOpts) (errOut error) {
 	}
 	for _, p := range points {
 		result.Points = append(result.Points, PointResult{
-			VCPU:      p.VCPU,
-			Engine:    p.Engine,
-			Samples:   p.Samples,
-			Summary:   p.Summary,
-			Anomalies: p.Anomalies,
-			Prom:      p.Prom,
+			VCPU:         p.VCPU,
+			Engine:       p.Engine,
+			Samples:      p.Samples,
+			Summary:      p.Summary,
+			Anomalies:    p.Anomalies,
+			Prom:         p.Prom,
+			BrokerSeries: p.BrokerSeries,
 		})
 	}
 	resultsDir := filepath.Join(opts.repoRoot, "benchmarking/aws/results")

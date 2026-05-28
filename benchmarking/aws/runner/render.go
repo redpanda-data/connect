@@ -49,6 +49,12 @@ type PointResult struct {
 	Summary   Summary     `json:"summary"`
 	Anomalies []Anomaly   `json:"anomalies,omitempty"`
 	Prom      []PromPoint `json:"prom,omitempty"`
+
+	// BrokerSeries is the broker-side throughput attributed to this engine
+	// at this vCPU point. For Connect, it's a cross-check against the
+	// rolling-stats-derived Summary. For KC (which has no rolling-stats
+	// line to parse), Summary is derived from this series — see Task 6.
+	BrokerSeries []TopicPoint `json:"broker_series,omitempty"`
 }
 
 // WriteResultJSON writes the result to <dir>/<connector>/<scenario>/<timestamp>.json.
