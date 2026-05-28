@@ -17,11 +17,11 @@ import (
 
 func sampleResult() *Result {
 	return &Result{
-		Scenario:      "postgres/orders-cdc",
-		ScenarioHash:  "sha256:abc123",
-		GitSHA:        "e491c80fc",
-		StartedAt:     time.Date(2026, 5, 19, 14, 2, 11, 0, time.UTC),
-		FinishedAt:    time.Date(2026, 5, 19, 15, 33, 48, 0, time.UTC),
+		Scenario:     "postgres/orders-cdc",
+		ScenarioHash: "sha256:abc123",
+		GitSHA:       "e491c80fc",
+		StartedAt:    time.Date(2026, 5, 19, 14, 2, 11, 0, time.UTC),
+		FinishedAt:   time.Date(2026, 5, 19, 15, 33, 48, 0, time.UTC),
 		Infra: ResultInfra{
 			RunnerInstanceType:  "c7i.4xlarge",
 			SourceInstanceClass: "db.r6g.2xlarge",
