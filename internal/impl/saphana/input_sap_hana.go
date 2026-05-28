@@ -328,6 +328,11 @@ func (s *sapHANAInput) Read(ctx context.Context) (*service.Message, service.AckF
 		if s.rows == nil {
 			switch s.mode {
 			case shModeBulk, shModeQuery:
+				// Pre-warm schema cache before opening rows so the schema
+				// query doesn't compete with the main query for a HANA connection.
+				if s.schemaName != "" && s.mode != shModeQuery {
+					_, _ = s.schemas.schemaForEvent(ctx, s.schemaName, s.tableName, nil)
+				}
 				rows, err := s.openRows(ctx)
 				if err != nil {
 					return nil, nil, fmt.Errorf("executing query: %w", err)
@@ -351,6 +356,10 @@ func (s *sapHANAInput) Read(ctx context.Context) (*service.Message, service.AckF
 				s.dbMut.Lock()
 				if !timerFired {
 					return nil, nil, service.ErrEndOfInput
+				}
+				// Pre-warm schema cache before opening rows (same reason as bulk mode).
+				if s.schemaName != "" {
+					_, _ = s.schemas.schemaForEvent(ctx, s.schemaName, s.tableName, nil)
 				}
 				rows, err := s.openRows(ctx)
 				if err != nil {
