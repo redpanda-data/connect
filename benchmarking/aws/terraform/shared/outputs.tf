@@ -8,4 +8,4 @@ output "orphan_cleanup_sns_topic_arn" { value = aws_sns_topic.orphan_cleanup.arn
 
 output "redpanda_broker_endpoints" { value = module.redpanda.broker_endpoints }
 output "redpanda_metrics_endpoint" { value = module.redpanda.metrics_endpoint }
-output "redpanda_broker_sg_id"     { value = module.redpanda.broker_sg_id }
+output "redpanda_broker_sg_id" { value = module.redpanda.broker_sg_id }
