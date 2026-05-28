@@ -28,6 +28,12 @@ type Result struct {
 	Infra        ResultInfra   `json:"infra"`
 	Dataset      ResultDataset `json:"dataset"`
 	Points       []PointResult `json:"points"`
+
+	// CrossEngineAnomalies flags vCPU points where Connect and KC
+	// diverged by more than a configured ratio. Populated by runBench
+	// after both engines' points are gathered; empty for single-engine
+	// runs.
+	CrossEngineAnomalies []CrossEngineAnomaly `json:"cross_engine_anomalies,omitempty"`
 }
 
 type ResultInfra struct {
@@ -85,17 +91,18 @@ func WriteResultJSON(dir string, r *Result) (string, error) {
 var resultMarkdownTmpl string
 
 type markdownView struct {
-	ScenarioShort string
-	Date          string
-	Description   string
-	GitSHA        string
-	GitShortSHA   string
-	Infra         ResultInfra
-	Dataset       ResultDataset
-	WorkloadLine  string
-	Rows          []markdownRow
-	Anomalies     []anomalyView
-	JSONPath      string
+	ScenarioShort        string
+	Date                 string
+	Description          string
+	GitSHA               string
+	GitShortSHA          string
+	Infra                ResultInfra
+	Dataset              ResultDataset
+	WorkloadLine         string
+	Rows                 []markdownRow
+	Anomalies            []anomalyView
+	CrossEngineAnomalies []CrossEngineAnomaly // populated for dual-engine runs
+	JSONPath             string
 }
 
 type markdownRow struct {
@@ -199,17 +206,18 @@ func AppendMarkdown(target string, r *Result, description string) error {
 	}
 
 	view := markdownView{
-		ScenarioShort: parts[1],
-		Date:          r.StartedAt.UTC().Format("2006-01-02"),
-		Description:   description,
-		GitSHA:        r.GitSHA,
-		GitShortSHA:   gitShort,
-		Infra:         r.Infra,
-		Dataset:       r.Dataset,
-		WorkloadLine:  workload,
-		Rows:          rows,
-		Anomalies:     anomalies,
-		JSONPath:      fmt.Sprintf("results/%s/%s/%s.json", parts[0], parts[1], r.StartedAt.UTC().Format("2006-01-02T15-04-05Z")),
+		ScenarioShort:        parts[1],
+		Date:                 r.StartedAt.UTC().Format("2006-01-02"),
+		Description:          description,
+		GitSHA:               r.GitSHA,
+		GitShortSHA:          gitShort,
+		Infra:                r.Infra,
+		Dataset:              r.Dataset,
+		WorkloadLine:         workload,
+		Rows:                 rows,
+		Anomalies:            anomalies,
+		CrossEngineAnomalies: r.CrossEngineAnomalies,
+		JSONPath:             fmt.Sprintf("results/%s/%s/%s.json", parts[0], parts[1], r.StartedAt.UTC().Format("2006-01-02T15-04-05Z")),
 	}
 
 	t, err := template.New("result").Parse(resultMarkdownTmpl)

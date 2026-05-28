@@ -327,6 +327,16 @@ func runBench(opts benchOpts) (errOut error) {
 			BrokerSeries: p.BrokerSeries,
 		})
 	}
+	var connectPts, kcPts []PointResult
+	for _, p := range result.Points {
+		switch p.Engine {
+		case "connect":
+			connectPts = append(connectPts, p)
+		case "kafka_connect":
+			kcPts = append(kcPts, p)
+		}
+	}
+	result.CrossEngineAnomalies = DetectCrossEngineAnomalies(connectPts, kcPts, 2.0)
 	resultsDir := filepath.Join(opts.repoRoot, "benchmarking/aws/results")
 	jsonPath, err := WriteResultJSON(resultsDir, result)
 	if err != nil {
