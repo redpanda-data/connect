@@ -49,3 +49,10 @@ tasks:
     desc: "Regenerate the auto-managed AWS section in docs/benchmark-results/SUMMARY.md"
     cmds:
       - cd ../.. && {{.RUNNER}} summary --repo-root=.
+
+  aws:tf-clean:
+    desc: "Remove .terraform/ caches under benchmarking/aws/terraform/ (use when a backend or provider config change confuses init)"
+    cmds:
+      - find terraform -type d -name '.terraform' -exec rm -rf {} +
+      - find terraform -type f -name '.terraform.lock.hcl' -delete
+      - echo "terraform caches cleaned; next aws:bench will re-init"
