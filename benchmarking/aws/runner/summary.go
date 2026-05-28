@@ -22,11 +22,12 @@ import (
 // summaryRow is one line in the auto-rendered table.
 type summaryRow struct {
 	ConnectorScenario string  // "postgres / orders-cdc"
-	PeakMBPerSec      float64 // 0 if every point was zero
-	BestVCPU          int     // 0 sentinel when peak is 0
-	MedianAtBestMB    float64
-	LastRunDate       string // YYYY-MM-DD
-	ResultJSONPath    string // relative to repo root, for footnote linking
+	BestVCPU          int     // 0 sentinel when no points
+	ConnectMedianMB   float64 // Connect's median at BestVCPU
+	KCMedianMB        float64 // KC's median at the same vCPU; 0 if KC didn't run
+	GapStr            string  // "+28 MB/s (+39%)" — Connect minus KC; blank when KC absent
+	LastRunDate       string  // YYYY-MM-DD
+	ResultJSONPath    string  // relative to repo root, for footnote linking
 }
 
 // walkResults discovers every <root>/<connector>/<scenario>/*.json result
@@ -105,11 +106,41 @@ func derivedRow(connector, scenario, jsonPath string) (summaryRow, error) {
 		LastRunDate:       r.FinishedAt.UTC().Format("2006-01-02"),
 		ResultJSONPath:    jsonPath,
 	}
+
+	// Split by engine, pick the best Connect point, find the matching KC
+	// point at the same vCPU. The KC point may not exist (single-engine run
+	// or KC never made it to that vCPU).
+	var connectPts, kcPts []PointResult
 	for _, p := range r.Points {
-		if p.Summary.PeakMBPerSec > row.PeakMBPerSec {
-			row.PeakMBPerSec = p.Summary.PeakMBPerSec
-			row.BestVCPU = p.VCPU
-			row.MedianAtBestMB = p.Summary.MedianMBPerSec
+		switch p.Engine {
+		case "connect", "": // empty-engine results pre-date Plan 2 — treat as connect
+			connectPts = append(connectPts, p)
+		case "kafka_connect":
+			kcPts = append(kcPts, p)
+		}
+	}
+	var bestConnect PointResult
+	for _, p := range connectPts {
+		if p.Summary.MedianMBPerSec > bestConnect.Summary.MedianMBPerSec {
+			bestConnect = p
+		}
+	}
+	row.BestVCPU = bestConnect.VCPU
+	row.ConnectMedianMB = bestConnect.Summary.MedianMBPerSec
+
+	var matchingKC PointResult
+	for _, p := range kcPts {
+		if p.VCPU == bestConnect.VCPU {
+			matchingKC = p
+			break
+		}
+	}
+	if matchingKC.Engine != "" {
+		row.KCMedianMB = matchingKC.Summary.MedianMBPerSec
+		if bestConnect.Summary.MedianMBPerSec > 0 {
+			diff := bestConnect.Summary.MedianMBPerSec - matchingKC.Summary.MedianMBPerSec
+			pct := 100.0 * diff / bestConnect.Summary.MedianMBPerSec
+			row.GapStr = fmt.Sprintf("%+.0f MB/s (%+.0f%%)", diff, pct)
 		}
 	}
 	return row, nil
