@@ -4,12 +4,16 @@ input:
     mode: bulk
     schema_name: ${HANA_SCHEMA}
     table: ${HANA_TABLE:BENCH_ORDERS}
+    fetch_size: 10000
 
 output:
   kafka_franz:
     seed_brokers:
       - localhost:9092
     topic: ${KAFKA_TOPIC:rpcns-hana-bench-orders}
+    batching:
+      count: 1000
+      period: 500ms
 
 http:
   address: "0.0.0.0:0"

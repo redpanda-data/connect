@@ -56,7 +56,7 @@ func main() {
 		`QUANTITY INTEGER,` +
 		`PRICE DECIMAL(10,2),` +
 		`STATUS NVARCHAR(20),` +
-		`NOTES NVARCHAR(5000),` +
+		`NOTES NVARCHAR(200),` +
 		`CREATED_AT TIMESTAMP` +
 		`)`
 	if _, err := db.ExecContext(ctx, createSQL); err != nil {
