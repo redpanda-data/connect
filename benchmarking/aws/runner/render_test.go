@@ -56,6 +56,49 @@ func TestWriteResultJSON(t *testing.T) {
 	require.Equal(t, r.Points[0].Summary.MedianMBPerSec, got.Points[0].Summary.MedianMBPerSec)
 }
 
+func sampleDualEngineResult() *Result {
+	r := sampleResult()
+	r.Points = []PointResult{
+		{
+			VCPU:   1,
+			Engine: "connect",
+			Summary: Summary{MedianMBPerSec: 100, P5MBPerSec: 90, P95MBPerSec: 110, PeakMBPerSec: 115,
+				MedianMsgPerSec: 80000},
+		},
+		{
+			VCPU:    1,
+			Engine:  "kafka_connect",
+			Summary: Summary{MedianMBPerSec: 72, P5MBPerSec: 65, P95MBPerSec: 78, PeakMBPerSec: 80},
+			BrokerSeries: []TopicPoint{
+				{T: 10, MBPerSec: 70}, {T: 20, MBPerSec: 72}, {T: 30, MBPerSec: 74},
+			},
+		},
+	}
+	return r
+}
+
+func TestAppendMarkdown_DualEngineWithDelta(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "postgres.md")
+	require.NoError(t, os.WriteFile(target, []byte("# Postgres\n"), 0o644))
+
+	r := sampleDualEngineResult()
+	require.NoError(t, AppendMarkdown(target, r, "desc"))
+
+	out, err := os.ReadFile(target)
+	require.NoError(t, err)
+	s := string(out)
+	// Both engines appear:
+	require.Contains(t, s, "connect")
+	require.Contains(t, s, "kafka_connect")
+	// Delta column header:
+	require.Contains(t, s, "Δ vs Connect")
+	// KC's delta: (72 - 100) / 100 = -28%
+	require.Contains(t, s, "-28%", "expected KC -28%% delta vs Connect; full markdown:\n"+s)
+	// Connect row's delta column is blank — no "+0%" / "-0%" anywhere.
+	require.NotContains(t, s, "+0%", "connect row should not have a delta value")
+}
+
 func TestAppendMarkdown(t *testing.T) {
 	dir := t.TempDir()
 	target := filepath.Join(dir, "postgres.md")
