@@ -89,15 +89,28 @@ func combineReset(connector string, steps []ResetStep, outs map[string]string) (
 			`curl -fsS -X DELETE "http://localhost:8083/connectors/bench_%s" || true`+"\n",
 			connector,
 		))
-		// Delete both engines' topics. Errors are non-fatal — the topic
-		// might not exist yet on the first sweep point.
-		for _, engine := range []string{"connect", "kc"} {
-			topic := fmt.Sprintf("bench_%s_%s_%s", sessionID, connector, engine)
-			sb.WriteString(fmt.Sprintf(
-				`/opt/kafka/bin/kafka-topics.sh --bootstrap-server %q --delete --topic %q 2>/dev/null || true`+"\n",
-				brokers, topic,
-			))
-		}
+		// Delete both engines' output topics. Errors are non-fatal — topics
+		// may not exist yet on the first sweep point. Naming is asymmetric:
+		//
+		//  - Connect writes to a single topic named bench_<sess>_<conn>_connect
+		//    (output.redpanda.topic in the rendered pipeline config).
+		//  - KC's Debezium writes to a topic-per-table named
+		//    <topic.prefix>.<schema>.<table> where topic.prefix is
+		//    bench_<sess>_<conn>_kc — so we have to enumerate matching topics
+		//    against the broker rather than delete a single fixed name.
+		connectTopic := fmt.Sprintf("bench_%s_%s_connect", sessionID, connector)
+		sb.WriteString(fmt.Sprintf(
+			`/opt/kafka/bin/kafka-topics.sh --bootstrap-server %q --delete --topic %q 2>/dev/null || true`+"\n",
+			brokers, connectTopic,
+		))
+		kcPrefix := fmt.Sprintf("bench_%s_%s_kc", sessionID, connector)
+		sb.WriteString(fmt.Sprintf(
+			`/opt/kafka/bin/kafka-topics.sh --bootstrap-server %q --list 2>/dev/null `+
+				`| grep -E '^%s([.]|$)' `+
+				`| xargs -r -I {} /opt/kafka/bin/kafka-topics.sh --bootstrap-server %q --delete --topic {} 2>/dev/null `+
+				`|| true`+"\n",
+			brokers, kcPrefix, brokers,
+		))
 	}
 	return sb.String(), nil
 }

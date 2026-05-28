@@ -157,6 +157,11 @@ func TestCombineReset_AppendsKCAndTopicCleanup_Postgres(t *testing.T) {
 	if !strings.Contains(out, "bench_sess-abc_postgres_cdc_kc") {
 		t.Errorf("expected KC topic delete; got:\n%s", out)
 	}
+	// KC delete should enumerate via --list | grep | xargs because Debezium
+	// emits <prefix>.<schema>.<table> topics, not a single bare-prefix topic.
+	if !strings.Contains(out, "--list") || !strings.Contains(out, "xargs") {
+		t.Errorf("KC topic delete should enumerate matching topics with --list | xargs; got:\n%s", out)
+	}
 }
 
 func TestCombineReset_NoOpWhenSessionIDMissing(t *testing.T) {
