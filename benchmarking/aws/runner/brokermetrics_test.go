@@ -117,3 +117,55 @@ redpanda_kafka_request_bytes_total{redpanda_request="produce",topic="t1"} 500
 		t.Errorf("reset-detected delta should be skipped; got %+v", series["t1"])
 	}
 }
+
+func TestBrokerMetrics_AttributeByEngine_Postgres(t *testing.T) {
+	series := map[string][]TopicPoint{
+		"bench_sess1_postgres_cdc_connect": {
+			{T: 10, MBPerSec: 50}, {T: 20, MBPerSec: 52},
+		},
+		"bench_sess1_postgres_cdc_kc.public.orders": {
+			{T: 10, MBPerSec: 30}, {T: 20, MBPerSec: 31},
+		},
+		"bench_sess1_postgres_cdc_kc.public.shipments": {
+			{T: 10, MBPerSec: 7}, {T: 20, MBPerSec: 8},
+		},
+		"some_unrelated_topic": {
+			{T: 10, MBPerSec: 999},
+		},
+	}
+	got, err := AttributeByEngine(series, "sess1", "postgres_cdc")
+	if err != nil {
+		t.Fatalf("AttributeByEngine: %v", err)
+	}
+	if len(got["connect"]) != 2 {
+		t.Errorf("connect should have 2 points; got %d", len(got["connect"]))
+	}
+	if got["connect"][0].MBPerSec != 50 {
+		t.Errorf("connect t=10 = %f, want 50", got["connect"][0].MBPerSec)
+	}
+	// KC has TWO topics (orders + shipments). At T=10 the engine total
+	// is 30 + 7 = 37. At T=20 it's 31 + 8 = 39.
+	if len(got["kafka_connect"]) != 2 {
+		t.Errorf("kafka_connect should have 2 points; got %d", len(got["kafka_connect"]))
+	}
+	if got["kafka_connect"][0].MBPerSec != 37 {
+		t.Errorf("kc T=10 sum = %f, want 37", got["kafka_connect"][0].MBPerSec)
+	}
+	if got["kafka_connect"][1].MBPerSec != 39 {
+		t.Errorf("kc T=20 sum = %f, want 39", got["kafka_connect"][1].MBPerSec)
+	}
+}
+
+func TestBrokerMetrics_AttributeByEngine_UnrelatedTopicsIgnored(t *testing.T) {
+	series := map[string][]TopicPoint{
+		"unrelated":                   {{T: 10, MBPerSec: 999}},
+		"bench_other_session_connect": {{T: 10, MBPerSec: 100}},
+	}
+	got, err := AttributeByEngine(series, "sess1", "postgres_cdc")
+	if err != nil {
+		t.Fatalf("AttributeByEngine: %v", err)
+	}
+	if len(got["connect"]) != 0 || len(got["kafka_connect"]) != 0 {
+		t.Errorf("unrelated topics leaked into attribution; got %+v", got)
+	}
+}

@@ -9,6 +9,7 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -122,6 +123,60 @@ func ParseTopicSeries(r io.Reader) (map[string][]TopicPoint, error) {
 		}
 	}
 	return out, nil
+}
+
+// AttributeByEngine groups per-topic series into per-engine series for a
+// given bench session. The mapping rules mirror the topic-naming
+// conventions baked into Plan 2:
+//
+//	Connect → exactly one topic:  bench_<session>_<connector>_connect
+//	KC      → many topics:        bench_<session>_<connector>_kc.<schema>.<table>
+//	                              (Debezium prepends topic.prefix to a
+//	                              per-table topic)
+//
+// KC's per-table series are summed point-wise on matching T values; if
+// the per-topic series have ragged T values, missing values count as
+// zero. (In practice all Plan 2 KC topics scrape at the same cadence,
+// so the merge is straightforward.)
+func AttributeByEngine(series map[string][]TopicPoint, sessionID, connector string) (map[string][]TopicPoint, error) {
+	connectTopic := fmt.Sprintf("bench_%s_%s_connect", sessionID, connector)
+	kcPrefix := fmt.Sprintf("bench_%s_%s_kc", sessionID, connector)
+	out := map[string][]TopicPoint{
+		"connect":       nil,
+		"kafka_connect": nil,
+	}
+	if pts := series[connectTopic]; pts != nil {
+		out["connect"] = pts
+	}
+	var kcTopics []string
+	for t := range series {
+		if t == kcPrefix || strings.HasPrefix(t, kcPrefix+".") {
+			kcTopics = append(kcTopics, t)
+		}
+	}
+	if len(kcTopics) > 0 {
+		out["kafka_connect"] = mergeTopicSeries(series, kcTopics)
+	}
+	return out, nil
+}
+
+func mergeTopicSeries(series map[string][]TopicPoint, topics []string) []TopicPoint {
+	byT := map[int]float64{}
+	for _, t := range topics {
+		for _, p := range series[t] {
+			byT[p.T] += p.MBPerSec
+		}
+	}
+	ts := make([]int, 0, len(byT))
+	for t := range byT {
+		ts = append(ts, t)
+	}
+	sort.Ints(ts)
+	out := make([]TopicPoint, len(ts))
+	for i, t := range ts {
+		out[i] = TopicPoint{T: t, MBPerSec: byT[t]}
+	}
+	return out
 }
 
 // splitLabeledMetric parses a single metric line of the form
