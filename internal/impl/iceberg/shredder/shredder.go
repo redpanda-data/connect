@@ -87,13 +87,20 @@ type RecordShredder struct {
 	// typed columns instead of guessing. nil entries fall back to the
 	// pre-schema-metadata behavior — see [convertLeafValue].
 	fieldCommons map[int]*schema.Common
-	// strictTemporal causes [convertLeafValue] to refuse numeric inputs
-	// into time-typed columns when no schema metadata has been
-	// registered for that column. When false (the default), the value
-	// converter falls back to [bloblang.ValueAsTimestamp]'s seconds
-	// default — convenient but silently wrong if the upstream produced
-	// a different unit. When true, the writer fails the batch loudly.
-	strictTemporal bool
+	// StrictTemporalMode causes [convertLeafValue] to refuse numeric
+	// inputs into time-typed columns (TIMESTAMP / TIMESTAMPTZ / DATE /
+	// TIME) when no schema metadata has been registered for that
+	// column. When false (the default), the value converter falls back
+	// to [bloblang.ValueAsTimestamp]'s seconds default — convenient but
+	// silently wrong if the upstream produced a different unit. When
+	// true, the writer fails the batch loudly.
+	//
+	// No effect on time.Time / time.Duration values, which carry their
+	// own unit unambiguously, and no effect on non-time columns. Set
+	// directly on the shredder after construction; operators that
+	// cannot guarantee schema metadata flows end-to-end flip this on to
+	// fail loudly instead of silently corrupting dates by ~50,000 years.
+	StrictTemporalMode bool
 }
 
 // NewRecordShredder creates a new shredder for the given schema.
@@ -105,22 +112,6 @@ func NewRecordShredder(schema *iceberg.Schema, caseSensitive bool) *RecordShredd
 		schema:        schema,
 		caseSensitive: caseSensitive,
 	}
-}
-
-// SetStrictTemporalMode toggles whether numeric inputs into time-typed
-// columns require registered schema metadata. With strict mode on, a bare
-// int64 / float64 value reaching a TIMESTAMP / TIMESTAMPTZ / DATE / TIME
-// column with no [schema.Common] in the field map is rejected with a
-// per-field error rather than guessed-as-Unix-seconds.
-//
-// Strict mode has no effect on time.Time / time.Duration values, which
-// carry their own unit unambiguously, and no effect on non-time columns.
-//
-// Defaults to off (back-compat). Operators that cannot guarantee schema
-// metadata flows end-to-end can flip this on to fail loudly instead of
-// silently corrupting dates by ~50,000 years.
-func (rs *RecordShredder) SetStrictTemporalMode(on bool) {
-	rs.strictTemporal = on
 }
 
 // SetFieldSchemaMetadata supplies a field-ID → schema.Common map that the
@@ -264,7 +255,7 @@ func (rs *RecordShredder) shredValue(
 
 	default:
 		// Leaf/primitive type.
-		pqVal, err := convertLeafValue(value, typ, rs.commonForField(fieldID), rs.strictTemporal)
+		pqVal, err := convertLeafValue(value, typ, rs.commonForField(fieldID), rs.StrictTemporalMode)
 		if err != nil {
 			return err
 		}
@@ -477,6 +468,14 @@ func convertLeafValue(value any, typ iceberg.Type, common *schema.Common, strict
 		if n, ok := coerceTemporalToNumeric(value, common); ok {
 			if strictTemporal {
 				return parquet.NullValue(), fmt.Errorf("int column received %T while schema metadata declares type %v; require_schema_metadata=true demands the existing column type match the schema metadata — recreate the table to migrate", value, common.Type)
+			}
+			// A Timestamp common's UnixMilli/Micros/Nanos far exceeds the
+			// int32 range, but the Int32Type arm is intended for Date /
+			// TimeOfDay coercions whose values do fit. Reject the
+			// schema/column mismatch loudly rather than silently
+			// truncating into a garbage year.
+			if n > math.MaxInt32 || n < math.MinInt32 {
+				return parquet.NullValue(), fmt.Errorf("int column received %T with schema metadata type %v; coerced value %d overflows int32 — the column should be BIGINT or the schema metadata is wrong", value, common.Type, n)
 			}
 			return parquet.Int32Value(int32(n)), nil
 		}

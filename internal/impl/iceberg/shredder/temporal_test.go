@@ -498,6 +498,50 @@ func TestCoerceTemporalIntoNumericColumn(t *testing.T) {
 	})
 }
 
+// TestCoerceTemporalInt32OverflowGuard covers the schema/column mismatch
+// where a TIMESTAMP schema common reaches an Int32 column — coerceTemporal-
+// ToNumeric returns a UnixMilli value (~10^12) that vastly exceeds int32
+// range. The Int32 arm is intended for Date / TimeOfDay coercions whose
+// values fit in int32; a Timestamp value silently truncating into a garbage
+// year is the failure mode this guard exists to prevent.
+//
+// The complementary Int64 arm has no bounds problem (Timestamp values fit
+// comfortably in int64) and is verified separately by
+// TestCoerceTemporalIntoNumericColumn.
+func TestCoerceTemporalInt32OverflowGuard(t *testing.T) {
+	const tsMillis = int64(1_700_000_000_000) // 2023-11-14, ~10^12, well beyond int32
+
+	t.Run("Timestamp(Millis) into Int32 errors with overflow message", func(t *testing.T) {
+		v := time.UnixMilli(tsMillis).UTC()
+		_, err := convertLeafValue(v, iceberg.Int32Type{}, tsCommon(schema.TimeUnitMillis, true), false)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "overflows int32", "must reject the schema/column mismatch loudly, not truncate to a garbage year")
+	})
+
+	t.Run("Timestamp(Micros) into Int32 errors with overflow message", func(t *testing.T) {
+		v := time.UnixMilli(tsMillis).UTC()
+		_, err := convertLeafValue(v, iceberg.Int32Type{}, tsCommon(schema.TimeUnitMicros, true), false)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "overflows int32")
+	})
+
+	// Sanity check: the in-range coercions the Int32 arm was designed for
+	// still succeed.
+	t.Run("Date into Int32 still succeeds", func(t *testing.T) {
+		v := time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC)
+		pq, err := convertLeafValue(v, iceberg.Int32Type{}, &schema.Common{Type: schema.Date}, false)
+		require.NoError(t, err)
+		assert.Equal(t, int32(19737), pq.Int32())
+	})
+
+	t.Run("TimeOfDay into Int32 still succeeds", func(t *testing.T) {
+		d := 8*time.Hour + 30*time.Minute
+		pq, err := convertLeafValue(d, iceberg.Int32Type{}, todCommon(schema.TimeUnitMillis), false)
+		require.NoError(t, err)
+		assert.Equal(t, int32(8*3600+30*60)*1000, pq.Int32())
+	})
+}
+
 // TestCoerceTemporalRejectedInStrictMode confirms that the temporal->numeric
 // coerce path is disabled when require_schema_metadata=true. In strict mode
 // a type disagreement between the existing column and the schema metadata
