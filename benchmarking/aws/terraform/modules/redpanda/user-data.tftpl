@@ -43,8 +43,9 @@ runcmd:
       advertised_rpc_api:
         address: ${split(":", advertised_rpc)[0]}
         port: 33145
-    pandaproxy: {}
-    schema_registry: {}
+    # pandaproxy + schema_registry omitted — the bench only uses the Kafka API
+    # (Connect via the redpanda output, KC via worker.properties). Leaving them
+    # disabled saves a handful of MB of broker memory per node.
     RP
   - chown redpanda:redpanda /etc/redpanda/redpanda.yaml
 
