@@ -40,6 +40,18 @@ type Config struct {
 	BatchSize int
 	// If true, include BEGIN and COMMIT messages in the stream
 	IncludeTxnMarkers bool
+	// SignalTableName is the name of the signal table. Rows inserted into this
+	// table are treated as control signals rather than data, and the table is
+	// excluded from snapshot scans.
+	SignalTableName string
+	// SnapshotTables overrides DBTables for snapshot scans when non-empty.
+	// The publication always tracks DBTables regardless of this field.
+	SnapshotTables []string
+	// ForceSnapshot forces a snapshot to run even when the replication slot already exists.
+	// When true and the slot exists, a snapshot is taken against current DB state using a
+	// REPEATABLE READ transaction rather than an EXPORT_SNAPSHOT. Used for signal-triggered
+	// re-snapshots that do not need to drop and recreate the slot.
+	ForceSnapshot bool
 
 	Logger *service.Logger
 

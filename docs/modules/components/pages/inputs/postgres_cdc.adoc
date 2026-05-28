@@ -99,6 +99,7 @@ input:
       role: "" # No default (optional)
       role_external_id: "" # No default (optional)
       roles: [] # No default (optional)
+    signal_table_name: ""
     auto_replay_nacks: true
     batching:
       count: 0
@@ -560,6 +561,61 @@ Optional external ID for the role assumption.
 *Type*: `string`
 
 *Default*: `""`
+
+=== `signal_table_name`
+
+The name of the table used to send control signals to the connector, excluding the schema. The table must
+exist in the schema configured via the `schema` field and must have exactly these columns:
+
+- **id** — any type representable as a string (e.g. `SERIAL`, `BIGSERIAL`, `UUID`, `VARCHAR`)
+- **type** — `VARCHAR` — the signal type (see supported signals below)
+- **data** — `TEXT` — a JSON object containing signal parameters
+
+Create the table with:
+
+```sql
+CREATE TABLE <schema>.<signal_table_name> (
+    id   SERIAL PRIMARY KEY,
+    type VARCHAR(32),
+    data TEXT
+);
+```
+
+Signal rows are published as regular output messages (`operation=insert`, `table=<signal_table_name>`).
+To exclude them from downstream processing, filter on the `table` metadata field using a
+`mapping` processor:
+
+```yaml
+pipeline:
+  processors:
+    - mapping: |
+        root = if @table == "rpcn_signal_table" { deleted() } else { this }
+```
+
+**Supported signals**
+
+**`execute-snapshot`** — triggers a re-snapshot of one or more tables without dropping the
+replication slot. The `data` column must contain a JSON object with a
+`data-collections` key listing the fully-qualified tables (`schema.table`) to snapshot.
+`data-collections` must be non-empty; a signal with an empty or absent `data-collections`
+is ignored and streaming continues uninterrupted.
+
+```sql
+INSERT INTO dbo.rpcn_signal_table (type, data)
+VALUES ('execute-snapshot', '{"data-collections": ["dbo.events", "dbo.products"]}');
+```
+
+
+*Type*: `string`
+
+*Default*: `""`
+Requires version 4.102.0 or newer
+
+```yml
+# Examples
+
+signal_table_name: rpcn_signal_table
+```
 
 === `auto_replay_nacks`
 
