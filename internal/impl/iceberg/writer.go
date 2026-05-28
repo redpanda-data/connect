@@ -55,7 +55,7 @@ type writer struct {
 // resolver supplies optional per-message schema metadata used by the shredder
 // to interpret numeric inputs into time-typed columns; pass nil to disable.
 // requireSchemaMetadata enables shredder strict mode — see
-// [shredder.RecordShredder.SetStrictTemporalMode].
+// [shredder.RecordShredder.StrictTemporalMode].
 func NewWriter(tbl *table.Table, comm *committer, caseSensitive bool, writerOpts []parquet.WriterOption, resolver *typeResolver, requireSchemaMetadata bool, logger *service.Logger) *writer {
 	return &writer{
 		table:                 tbl,
@@ -222,9 +222,7 @@ func (w *writer) messagesToParquet(batch service.MessageBatch) ([]partitionFile,
 	// silently for messages 1..N; in that case the writer must be
 	// extended to per-message metadata lookup with a small cache.
 	rs := shredder.NewRecordShredder(schema, w.caseSensitive)
-	if w.requireSchemaMetadata {
-		rs.SetStrictTemporalMode(true)
-	}
+	rs.StrictTemporalMode = w.requireSchemaMetadata
 	if w.resolver != nil && len(batch) > 0 {
 		if common, err := w.resolver.parseSchemaMetadata(batch[0]); err != nil {
 			w.logger.Warnf("parsing schema metadata for shredder: %v (falling back to schema-agnostic conversion)", err)
