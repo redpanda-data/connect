@@ -10,10 +10,10 @@
 
 ### Throughput
 
-| GOMAXPROCS | engine        | MB/sec (p50) | broker MB/s | MB/sec (p5) | MB/sec (p95) | msg/sec (p50) |
-|------------|---------------|--------------|-------------|-------------|--------------|---------------|
+| GOMAXPROCS | engine        | MB/sec (p50) | broker MB/s | MB/sec (p5) | MB/sec (p95) | msg/sec (p50) | Δ vs Connect       |
+|------------|---------------|--------------|-------------|-------------|--------------|---------------|--------------------|
 {{- range .Rows }}
-| {{printf "%-10d" .VCPU}} | {{printf "%-13s" .Engine}} | {{.MedianMB}} | {{.BrokerMedianMB}} | {{.P5MB}} | {{.P95MB}} | {{printf "%13s" .MedianMsgFC}} |
+| {{printf "%-10d" .VCPU}} | {{printf "%-13s" .Engine}} | {{.MedianMB}} | {{.BrokerMedianMB}} | {{.P5MB}} | {{.P95MB}} | {{printf "%13s" .MedianMsgFC}} | {{printf "%-18s" .DeltaVsConnect}} |
 {{- end }}
 {{ if .Anomalies }}
 {{ range .Anomalies }}

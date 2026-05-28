@@ -106,6 +106,7 @@ type markdownRow struct {
 	P5MB           string
 	P95MB          string
 	MedianMsgFC    string
+	DeltaVsConnect string // blank for connect rows; "+3 MB/s (+10%)" or similar for KC rows
 }
 
 type anomalyView struct {
@@ -123,31 +124,66 @@ func AppendMarkdown(target string, r *Result, description string) error {
 		return fmt.Errorf("scenario %q is not connector/scenario", r.Scenario)
 	}
 
-	rows := make([]markdownRow, len(r.Points))
+	// First pass: group points by vCPU and capture iteration order.
+	type vGroup struct {
+		vcpu     int
+		byEngine map[string]PointResult
+	}
+	groups := map[int]*vGroup{}
+	var order []int
+	for _, p := range r.Points {
+		g, ok := groups[p.VCPU]
+		if !ok {
+			g = &vGroup{vcpu: p.VCPU, byEngine: map[string]PointResult{}}
+			groups[p.VCPU] = g
+			order = append(order, p.VCPU)
+		}
+		g.byEngine[p.Engine] = p
+	}
+
+	// Second pass: emit one row per (vcpu, engine) — connect first, then kafka_connect.
+	// For KC rows, compute the delta column from the matching Connect row.
+	var rows []markdownRow
 	var anomalies []anomalyView
-	for i, p := range r.Points {
-		var brokerMedian float64
-		if len(p.BrokerSeries) > 0 {
-			rates := make([]float64, len(p.BrokerSeries))
-			for j, b := range p.BrokerSeries {
-				rates[j] = b.MBPerSec
+	for _, vcpu := range order {
+		g := groups[vcpu]
+		for _, engine := range []string{"connect", "kafka_connect"} {
+			p, ok := g.byEngine[engine]
+			if !ok {
+				continue
 			}
-			sort.Float64s(rates)
-			brokerMedian = rates[len(rates)/2]
-		}
-		rows[i] = markdownRow{
-			VCPU:           p.VCPU,
-			Engine:         p.Engine,
-			MedianMB:       fmt.Sprintf("%12.0f", p.Summary.MedianMBPerSec),
-			BrokerMedianMB: fmt.Sprintf("%12.0f", brokerMedian),
-			P5MB:           fmt.Sprintf("%11.0f", p.Summary.P5MBPerSec),
-			P95MB:          fmt.Sprintf("%12.0f", p.Summary.P95MBPerSec),
-			MedianMsgFC:    formatThousands(int64(p.Summary.MedianMsgPerSec)),
-		}
-		for _, a := range p.Anomalies {
-			anomalies = append(anomalies, anomalyView{
-				VCPU: p.VCPU, DurationSec: a.DurationSec, MinRatio: a.MinRatio, StartT: a.StartT,
+			var brokerMedian float64
+			if len(p.BrokerSeries) > 0 {
+				rates := make([]float64, len(p.BrokerSeries))
+				for j, b := range p.BrokerSeries {
+					rates[j] = b.MBPerSec
+				}
+				sort.Float64s(rates)
+				brokerMedian = rates[len(rates)/2]
+			}
+			deltaStr := ""
+			if engine == "kafka_connect" {
+				if connectPt, hasConnect := g.byEngine["connect"]; hasConnect && connectPt.Summary.MedianMBPerSec > 0 {
+					diff := p.Summary.MedianMBPerSec - connectPt.Summary.MedianMBPerSec
+					pct := 100.0 * diff / connectPt.Summary.MedianMBPerSec
+					deltaStr = fmt.Sprintf("%+.0f MB/s (%+.0f%%)", diff, pct)
+				}
+			}
+			rows = append(rows, markdownRow{
+				VCPU:           p.VCPU,
+				Engine:         p.Engine,
+				MedianMB:       fmt.Sprintf("%12.0f", p.Summary.MedianMBPerSec),
+				BrokerMedianMB: fmt.Sprintf("%12.0f", brokerMedian),
+				P5MB:           fmt.Sprintf("%11.0f", p.Summary.P5MBPerSec),
+				P95MB:          fmt.Sprintf("%12.0f", p.Summary.P95MBPerSec),
+				MedianMsgFC:    formatThousands(int64(p.Summary.MedianMsgPerSec)),
+				DeltaVsConnect: deltaStr,
 			})
+			for _, a := range p.Anomalies {
+				anomalies = append(anomalies, anomalyView{
+					VCPU: p.VCPU, DurationSec: a.DurationSec, MinRatio: a.MinRatio, StartT: a.StartT,
+				})
+			}
 		}
 	}
 
