@@ -36,6 +36,8 @@ const decodingPlugin = "pgoutput"
 type Stream struct {
 	pgConn *pgconn.PgConn
 
+	config  *Config
+	schema  string
 	shutSig *shutdown.Signaller
 
 	ackedLSNMu sync.Mutex
@@ -46,15 +48,19 @@ type Stream struct {
 	messages              chan []StreamMessage
 	errors                chan error
 
-	// snapshotAcked is closed (once) by the input layer via
-	// MarkSnapshotAcknowledged once every snapshot message has been acknowledged
-	// downstream, unblocking promotion of the replication slot.
-	snapshotAcked     chan struct{}
-	snapshotAckedOnce sync.Once
+	// snapshotAcked is the completion signal for the snapshot round in
+	// flight, if any. beginSnapshotAck creates it before that round's
+	// sentinel is sent; MarkSnapshotAcknowledged closes it once acked
+	// downstream. A fresh channel per round lets RunForcedSnapshot run
+	// repeatedly over the Stream's life.
+	snapshotAckMu sync.Mutex
+	snapshotAcked chan struct{}
+
+	// walPause tracks WAL forwarding pause state - see PauseWALStreaming.
+	walPause walPause
 
 	includeTxnMarkers       bool
 	slotName                string
-	tables                  []TableFQN
 	snapshotBatchSize       int
 	decodingPluginArguments []string
 	logger                  *service.Logger
@@ -111,18 +117,19 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		}
 		tables = append(tables, TableFQN{Schema: schema, Table: normalized})
 	}
+
 	batchSize := 1000
 	if config.BatchSize > 0 {
 		batchSize = config.BatchSize
 	}
 	stream := &Stream{
 		pgConn:                dbConn,
+		config:                config,
+		schema:                schema,
 		messages:              make(chan []StreamMessage),
 		errors:                make(chan error, 1),
-		snapshotAcked:         make(chan struct{}),
 		slotName:              config.ReplicationSlotName,
 		snapshotBatchSize:     batchSize,
-		tables:                tables,
 		maxSnapshotWorkers:    config.MaxSnapshotWorkers,
 		logger:                config.Logger,
 		shutSig:               shutdown.NewSignaller(),
@@ -176,9 +183,18 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 
 	stream.decodingPluginArguments = pluginArguments
 
+	tablesForPublication := tables
+	if config.SignalTableName != "" {
+		normalizedSignalTable, err := sanitize.NormalizePostgresIdentifier(config.SignalTableName)
+		if err != nil {
+			return nil, fmt.Errorf("invalid signal table name %q: %w", config.SignalTableName, err)
+		}
+		tablesForPublication = append(slices.Clone(tables), TableFQN{Schema: schema, Table: normalizedSignalTable})
+	}
+
 	pubName := "pglog_stream_" + config.ReplicationSlotName
-	stream.logger.Infof("Creating publication %s for tables: %s", pubName, tables)
-	if err = CreatePublication(ctx, stream.pgConn, pubName, tables); err != nil {
+	stream.logger.Infof("Creating publication %s for tables: %s", pubName, tablesForPublication)
+	if err = CreatePublication(ctx, stream.pgConn, pubName, tablesForPublication); err != nil {
 		return nil, err
 	}
 	cleanups = append(cleanups, func() {
@@ -264,7 +280,7 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		defer done()
 		var startLSN LSN
 		if snapshotter != nil {
-			if err = stream.processSnapshot(ctx, snapshotter); err != nil {
+			if err = stream.processSnapshot(ctx, tables, snapshotter); err != nil {
 				stream.errors <- fmt.Errorf("processing snapshot: %w", err)
 				return
 			}
@@ -278,13 +294,14 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 			// slot. This guarantees a crash during the handoff re-runs the
 			// snapshot on restart instead of losing the un-acked rows: the
 			// permanent slot is only created past this barrier.
+			acked := stream.beginSnapshotAck()
 			select {
 			case stream.messages <- []StreamMessage{{Operation: SnapshotCompleteOpType}}:
 			case <-ctx.Done():
 				return
 			}
 			select {
-			case <-stream.snapshotAcked:
+			case <-acked:
 			case <-ctx.Done():
 				return
 			}
@@ -449,6 +466,9 @@ func (s *Stream) streamMessages(currentLSN LSN) error {
 	ctx, done := s.shutSig.SoftStopCtx(context.Background())
 	defer done()
 	for !s.shutSig.IsSoftStopSignalled() {
+		if err := s.waitIfWALPaused(ctx); err != nil {
+			return err
+		}
 		if committed, err := commitLSN(time.Now().After(nextStandbyMessageDeadline)); err != nil {
 			return err
 		} else if committed {
@@ -497,7 +517,7 @@ func (s *Stream) streamMessages(currentLSN LSN) error {
 				return fmt.Errorf("parsing XLogData: %w", err)
 			}
 			msgLSN := xld.WALStart + LSN(len(xld.WALData))
-			result, err := s.processChange(ctx, msgLSN, xld, relations, typeMap, schemaCache, &currentTxnCommitTime)
+			result, message, err := s.processChange(msgLSN, xld, relations, typeMap, schemaCache, &currentTxnCommitTime)
 			if err != nil {
 				return fmt.Errorf("decoding postgres changes failed: %w", err)
 			}
@@ -510,6 +530,13 @@ func (s *Stream) streamMessages(currentLSN LSN) error {
 			case changeResultEmittedMessage:
 				lastEmittedLSN = msgLSN
 				lastEmittedCommitLSN = msgLSN
+			}
+			if message != nil {
+				select {
+				case s.messages <- []StreamMessage{*message}:
+				case <-ctx.Done():
+					return ctx.Err()
+				}
 			}
 		default:
 			return fmt.Errorf("unknown message type: %c", msg.Data[0])
@@ -527,11 +554,13 @@ const (
 	changeResultEmittedMessage          processChangeResult = 2
 )
 
-// Handle handles the pgoutput output.
-func (s *Stream) processChange(ctx context.Context, msgLSN LSN, xld XLogData, relations map[uint32]*RelationMessage, typeMap *pgtype.Map, schemaCache map[uint32]any, currentTxnCommitTime *time.Time) (processChangeResult, error) {
+// processChange decodes a single WAL change and returns the StreamMessage to
+// emit for it, if any. Does not send to s.messages itself - the caller does
+// that.
+func (s *Stream) processChange(msgLSN LSN, xld XLogData, relations map[uint32]*RelationMessage, typeMap *pgtype.Map, schemaCache map[uint32]any, currentTxnCommitTime *time.Time) (processChangeResult, *StreamMessage, error) {
 	logicalMsg, err := Parse(xld.WALData)
 	if err != nil {
-		return changeResultNoMessage, err
+		return changeResultNoMessage, nil, err
 	}
 
 	// Invalidate the schema cache when a RelationMessage arrives — PostgreSQL sends one
@@ -551,23 +580,23 @@ func (s *Stream) processChange(ctx context.Context, msgLSN LSN, xld XLogData, re
 	// parse changes inside the transaction
 	message, err := toStreamMessage(logicalMsg, relations, typeMap, s.unchangedToastValue)
 	if err != nil {
-		return changeResultNoMessage, err
+		return changeResultNoMessage, nil, err
 	}
 	if message == nil {
 		// In the case of heartbeats we can treat that the same as suppressed commit messages and advance the LSN that way.
 		// this is only needed for low frequency tables to continue to progress the LSN.
 		if logicalMsg, ok := logicalMsg.(*LogicalDecodingMessage); ok && logicalMsg.Prefix == "redpanda_connect_"+s.slotName {
-			return changeResultSuppressedCommitMessage, nil
+			return changeResultSuppressedCommitMessage, nil, nil
 		}
-		return changeResultNoMessage, nil
+		return changeResultNoMessage, nil, nil
 	}
 
 	if !s.includeTxnMarkers {
 		switch message.Operation {
 		case CommitOpType:
-			return changeResultSuppressedCommitMessage, nil
+			return changeResultSuppressedCommitMessage, nil, nil
 		case BeginOpType:
-			return changeResultNoMessage, nil
+			return changeResultNoMessage, nil, nil
 		}
 	}
 
@@ -596,15 +625,10 @@ func (s *Stream) processChange(ctx context.Context, msgLSN LSN, xld XLogData, re
 	message.CommitTime = *currentTxnCommitTime
 	lsn := msgLSN.String()
 	message.LSN = &lsn
-	select {
-	case s.messages <- []StreamMessage{*message}:
-		return changeResultEmittedMessage, nil
-	case <-ctx.Done():
-		return changeResultNoMessage, ctx.Err()
-	}
+	return changeResultEmittedMessage, message, nil
 }
 
-func (s *Stream) processSnapshot(ctx context.Context, snapshotter *snapshotter) error {
+func (s *Stream) processSnapshot(ctx context.Context, tables []TableFQN, snapshotter *snapshotter) error {
 	if err := snapshotter.Prepare(ctx); err != nil {
 		return fmt.Errorf("unable to prepare snapshot: %w", err)
 	}
@@ -616,10 +640,10 @@ func (s *Stream) processSnapshot(ctx context.Context, snapshotter *snapshotter) 
 
 	snapshotTasks := []func(context.Context) error{}
 
-	for _, table := range s.tables {
+	for _, table := range tables {
 		s.logger.Infof("Planning snapshot scan for table: %v", table)
 		planStartTime := time.Now()
-		primaryKeyColumns, err := s.getPrimaryKeyColumn(ctx, table)
+		primaryKeyColumns, err := s.getPrimaryKeyColumn(ctx, snapshotter, table)
 		if err != nil {
 			return fmt.Errorf("getting primary key column for table %v: %w", table, err)
 		}
@@ -808,11 +832,174 @@ func (s *Stream) Messages() chan []StreamMessage {
 	return s.messages
 }
 
-// MarkSnapshotAcknowledged is called by the input layer once every snapshot
-// message has been acknowledged downstream, unblocking promotion of the
-// replication slot. Safe to call multiple times.
+// beginSnapshotAck creates and registers the completion signal for a new
+// snapshot round, returning it for the caller to wait on. Must be called
+// before that round's completion sentinel is sent, so MarkSnapshotAcknowledged
+// has something to close once the input layer confirms delivery.
+func (s *Stream) beginSnapshotAck() <-chan struct{} {
+	s.snapshotAckMu.Lock()
+	defer s.snapshotAckMu.Unlock()
+	ch := make(chan struct{})
+	s.snapshotAcked = ch
+	return ch
+}
+
+// MarkSnapshotAcknowledged is called by the input layer once every message
+// from the most recently started snapshot round has been acknowledged
+// downstream, unblocking whatever is waiting on that round's completion.
+// Safe to call even when no round is currently pending.
 func (s *Stream) MarkSnapshotAcknowledged() {
-	s.snapshotAckedOnce.Do(func() { close(s.snapshotAcked) })
+	s.snapshotAckMu.Lock()
+	ch := s.snapshotAcked
+	s.snapshotAcked = nil
+	s.snapshotAckMu.Unlock()
+	if ch != nil {
+		close(ch)
+	}
+}
+
+// walPause guards whether WAL forwarding is paused and the satellite
+// keepalive goroutine running for the duration - see PauseWALStreaming.
+type walPause struct {
+	sync.Mutex
+	ch     chan struct{}
+	cancel context.CancelFunc
+	done   chan struct{}
+}
+
+// begin records a new pause's cancel (stops the satellite goroutine) and
+// done (closed once it exits).
+func (p *walPause) begin(cancel context.CancelFunc, done chan struct{}) {
+	p.Lock()
+	defer p.Unlock()
+	p.ch = make(chan struct{})
+	p.cancel = cancel
+	p.done = done
+}
+
+// end clears the pause and returns what begin recorded.
+func (p *walPause) end() (ch chan struct{}, cancel context.CancelFunc, done chan struct{}) {
+	p.Lock()
+	defer p.Unlock()
+	ch, cancel, done = p.ch, p.cancel, p.done
+	p.ch, p.cancel, p.done = nil, nil, nil
+	return
+}
+
+// waitChan returns the channel to wait on if currently paused, or nil if not.
+func (p *walPause) waitChan() chan struct{} {
+	p.Lock()
+	defer p.Unlock()
+	return p.ch
+}
+
+// PauseStreaming holds back forwarding of new WAL messages until
+// ResumeWALStreaming is called: streamMessages stops receiving from Postgres
+// entirely. A satellite goroutine sends standby status updates in the
+// meantime, so Postgres doesn't hit wal_sender_timeout. Call synchronously
+// before handing a signal off to run its re-snapshot.
+func (s *Stream) PauseStreaming() {
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	s.walPause.begin(cancel, done)
+	go func() {
+		defer close(done)
+		ticker := time.NewTicker(s.standbyMessageTimeout)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				if err := s.commitAckedLSN(ctx, s.getAckedLSN()); err != nil {
+					s.logger.Warnf("failed to send keepalive while WAL forwarding is paused: %s", err)
+				}
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+}
+
+// ResumeStreaming releases a pause started by PauseWALStreaming, waiting
+// for the satellite keepalive goroutine to exit first so it never writes to
+// pgConn concurrently with streamMessages resuming.
+func (s *Stream) ResumeStreaming() {
+	ch, cancel, done := s.walPause.end()
+	if cancel != nil {
+		cancel()
+	}
+	if done != nil {
+		<-done
+	}
+	if ch != nil {
+		close(ch)
+	}
+}
+
+// waitIfWALPaused blocks until any pause started by PauseWALStreaming
+// resumes, or ctx is done. Returns immediately if nothing is paused.
+func (s *Stream) waitIfWALPaused(ctx context.Context) error {
+	ch := s.walPause.waitChan()
+	if ch == nil {
+		return nil
+	}
+	select {
+	case <-ch:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// RunSnapshot re-scans the given tables (by bare name, resolved against
+// this stream's configured schema) against current DB state on a separate
+// connection, without restarting replication. Rows are emitted on Messages()
+// like ordinary WAL changes, terminated by the SnapshotCompleteOpType
+// sentinel.
+//
+// Callers must call PauseWALStreaming themselves before handing off to this
+// method (see its doc for why) - this method resumes it via defer.
+//
+// Callers must keep draining Messages() from a different goroutine while
+// this call is in flight, or it deadlocks: scanned rows and the completion
+// sentinel are sent on that same unbuffered channel.
+//
+// Callers must serialize calls to this method: only one round's completion
+// can be tracked at a time (see snapshotAcked).
+func (s *Stream) RunSnapshot(ctx context.Context, tableNames []string) error {
+	defer s.ResumeStreaming()
+
+	tables := make([]TableFQN, 0, len(tableNames))
+	for _, table := range tableNames {
+		normalized, err := sanitize.NormalizePostgresIdentifier(table)
+		if err != nil {
+			return fmt.Errorf("invalid snapshot table name %q: %w", table, err)
+		}
+		tables = append(tables, TableFQN{Schema: s.schema, Table: normalized})
+	}
+
+	snapshotter, err := newSnapshotter(s.config, s.config.DBRawDSN, s.logger, "", s.config.MaxSnapshotWorkers)
+	if err != nil {
+		return fmt.Errorf("creating snapshotter for re-snapshot: %w", err)
+	}
+	if err := s.processSnapshot(ctx, tables, snapshotter); err != nil {
+		return fmt.Errorf("processing snapshot: %w", err)
+	}
+	for _, table := range tables {
+		s.monitor.MarkSnapshotComplete(table)
+	}
+
+	acked := s.beginSnapshotAck()
+	select {
+	case s.messages <- []StreamMessage{{Operation: SnapshotCompleteOpType}}:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	select {
+	case <-acked:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	return nil
 }
 
 // Errors is a channel that can be used to see if and error has occurred internally and the stream should be restarted.
@@ -820,7 +1007,10 @@ func (s *Stream) Errors() chan error {
 	return s.errors
 }
 
-func (s *Stream) getPrimaryKeyColumn(ctx context.Context, table TableFQN) ([]string, error) {
+// getPrimaryKeyColumn queries through snapshotter's own connection pool, not
+// s.pgConn: RunForcedSnapshot runs alongside an active streamMessages loop
+// that also uses s.pgConn, so this can't safely share it.
+func (*Stream) getPrimaryKeyColumn(ctx context.Context, snapshotter *snapshotter, table TableFQN) ([]string, error) {
 	/// Query to get all primary key columns in their correct order
 	q, err := sanitize.SQLQuery(`
         SELECT a.attname
@@ -835,21 +1025,26 @@ func (s *Stream) getPrimaryKeyColumn(ctx context.Context, table TableFQN) ([]str
 		return nil, fmt.Errorf("sanitizing query: %w", err)
 	}
 
-	reader := s.pgConn.Exec(ctx, q)
-	data, err := reader.ReadAll()
+	rows, err := snapshotter.connPool.QueryContext(ctx, q)
 	if err != nil {
 		return nil, fmt.Errorf("reading query results: %w", err)
 	}
+	defer rows.Close()
 
-	if len(data) == 0 || len(data[0].Rows) == 0 {
-		return nil, fmt.Errorf("no primary key found for table %s", table)
-	}
-
-	// Extract all primary key column names
-	pkColumns := make([]string, len(data[0].Rows))
-	for i, row := range data[0].Rows {
+	var pkColumns []string
+	for rows.Next() {
+		var col string
+		if err := rows.Scan(&col); err != nil {
+			return nil, fmt.Errorf("scanning primary key column: %w", err)
+		}
 		// Postgres gives us back normalized identifiers here - we need to quote them.
-		pkColumns[i] = sanitize.QuotePostgresIdentifier(string(row[0]))
+		pkColumns = append(pkColumns, sanitize.QuotePostgresIdentifier(col))
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("reading query results: %w", err)
+	}
+	if len(pkColumns) == 0 {
+		return nil, fmt.Errorf("no primary key found for table %s", table)
 	}
 
 	return pkColumns, nil

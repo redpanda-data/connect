@@ -40,6 +40,9 @@ type Config struct {
 	BatchSize int
 	// If true, include BEGIN and COMMIT messages in the stream
 	IncludeTxnMarkers bool
+	// Signal table is treated as control signals rather than data so along with being
+	// excluded from snapshot scans, is appended to list of DBTables.
+	SignalTableName string
 
 	Logger *service.Logger
 
@@ -50,4 +53,9 @@ type Config struct {
 	UnchangedToastValue any
 	// The interval to send logical messages
 	HeartbeatInterval time.Duration
+}
+
+// SignallingEnabled checks to see if signalling is enabled.
+func (c *Config) SignallingEnabled() bool {
+	return c.SignalTableName != ""
 }
