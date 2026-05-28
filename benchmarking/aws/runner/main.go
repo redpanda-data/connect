@@ -198,6 +198,10 @@ func runBench(opts benchOpts) (errOut error) {
 	for k, v := range stackOuts {
 		sharedOuts[k] = v
 	}
+	// The runner-provided session ID is a Terraform input, not output — inject
+	// it here so per-engine renderers (renderPipelineConfig, buildKCRenderInputs,
+	// combineReset) can read it via outs["bench_session_id"].
+	sharedOuts["bench_session_id"] = sessionID
 
 	binPath, err := buildConnect(opts.repoRoot)
 	if err != nil {
