@@ -1130,21 +1130,21 @@ oracledb_cdc:
 			time.Date(2079, 6, 6, 23, 59, 0, 0, time.UTC),                               // smalldatetime max (timestamp)
 			time.Date(1, 1, 1, 23, 59, 59, 999999900, time.UTC),                         // time max (stored as timestamp)
 			time.Date(9999, 12, 31, 23, 59, 59, 999999900, time.FixedZone("", 14*3600)), // timestamp with time zone max
-			"ZZZZZZZZZZ",         // char(10)
-			"Max varchar value",  // varchar2(255)
-			"ZZZZZZZZZZ",         // nchar(10)
-			"Max nvarchar value", // nvarchar2(255)
-			make([]byte, 16),     // raw(16) filled with zeros
-			make([]byte, 255),    // raw(255) max
-			"Max varchar(max)",   // clob (varcharmax_col)
-			largeClob,            // clob (oolvarcharmax_col)
-			"Max nvarchar(max)",  // nclob (nvarcharmax_col)
-			make([]byte, 255),    // blob (varbinarymax_col)
-			1,                    // bit max (number)
-			`{"max": true}`,      // json (clob)
-			"0.15",               // noleadingzero_col
-			nil,                  // nullable_num (NULL to verify NULL handling when streaming)
-			0,                    // nonnullable_num
+			"ZZZZZZZZZZ",                             // char(10)
+			"Max varchar value",                      // varchar2(255)
+			"ZZZZZZZZZZ",                             // nchar(10)
+			"Max nvarchar value",                     // nvarchar2(255)
+			make([]byte, 16),                         // raw(16) filled with zeros
+			make([]byte, 255),                        // raw(255) max
+			"Max varchar(max)",                       // clob (varcharmax_col)
+			largeClob,                                // clob (oolvarcharmax_col)
+			"Max nvarchar(max)",                      // nclob (nvarcharmax_col)
+			make([]byte, 255),                        // blob (varbinarymax_col)
+			1,                                        // bit max (number)
+			`{"max": true}`,                          // json (clob)
+			"0.15",                                   // noleadingzero_col
+			nil,                                      // nullable_num (NULL to verify NULL handling when streaming)
+			0,                                        // nonnullable_num
 			"99999999999999999999999999999999999999", // number_col max
 		)
 
@@ -1249,6 +1249,147 @@ oracledb_cdc:
 		"NUMBER_COL": "99999999999999999999999999999999999999"
 		}`, outBatches[1], "Failed to assert max result from streaming")
 	}
+}
+
+// TestIntegrationOracleDBCDCStreamingStructuredTypes verifies that streaming
+// messages produced by the batcher preserve correct Go types when
+// AsStructuredMut is called. Bare NUMBER (no precision) maps to BigDecimal and
+// must arrive as a canonical decimal string — not int64 or json.Number.
+func TestIntegrationOracleDBCDCStructuredTypesStreaming(t *testing.T) {
+	integration.CheckSkip(t)
+
+	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
+	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.stream_types",
+		"CREATE TABLE testdb.stream_types (id NUMBER(5,0) PRIMARY KEY, version NUMBER, name VARCHAR2(50))"))
+
+	msgChan := make(chan *service.Message, 10)
+	cfg := fmt.Sprintf(`
+oracledb_cdc:
+  connection_string: %s
+  stream_snapshot: false
+  logminer:
+    scn_window_size: 20000
+    backoff_interval: 1s
+  include: ["TESTDB.STREAM_TYPES"]`, connStr)
+
+	streamBuilder := service.NewStreamBuilder()
+	require.NoError(t, streamBuilder.AddInputYAML(cfg))
+	require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
+	require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+		for _, msg := range mb {
+			msgChan <- msg
+		}
+		return nil
+	}))
+
+	stream, err := streamBuilder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(stream.Resources())
+	go func() {
+		if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+			t.Error(err)
+		}
+	}()
+	go func() { <-t.Context().Done(); close(msgChan) }()
+
+	// Wait for LogMiner to start before inserting so the row lands in the redo log.
+	time.Sleep(10 * time.Second)
+	db.MustExec("INSERT INTO testdb.stream_types VALUES (1, 42, 'hello')")
+
+	var msgs []*service.Message
+	for msg := range msgChan {
+		msgs = append(msgs, msg)
+		if len(msgs) == 1 {
+			break
+		}
+	}
+	require.Len(t, msgs, 1)
+
+	structured, err := msgs[0].AsStructuredMut()
+	require.NoError(t, err)
+
+	m, ok := structured.(map[string]any)
+	require.True(t, ok)
+
+	// Bare NUMBER (no precision) maps to BigDecimal and must arrive as a
+	// canonical decimal string, not int64 or json.Number. coerceStreamingValues
+	// must convert the int64 produced by LogMiner's ParseInt path to a string.
+	t.Logf("VERSION type=%T value=%v", m["VERSION"], m["VERSION"])
+	assert.IsType(t, "", m["VERSION"],
+		"bare NUMBER streaming value must arrive as string, not int64 or json.Number")
+	assert.Equal(t, "hello", m["NAME"])
+
+	require.NoError(t, stream.StopWithin(10*time.Second))
+}
+
+// TestIntegrationOracleDBCDCSnapshotStructuredTypes verifies that snapshot
+// messages produced by the batcher preserve original Go types when
+// AsStructuredMut is called. Without msg.SetStructuredMut(m.Data) in
+// batcher.go, AsStructuredMut re-parses the JSON bytes with UseNumber and
+// turns int64 into json.Number, breaking downstream Avro encoding.
+func TestIntegrationOracleDBCDCStructuredTypesSnapshot(t *testing.T) {
+	integration.CheckSkip(t)
+
+	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
+	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.struct_types",
+		"CREATE TABLE testdb.struct_types (id NUMBER(5,0) PRIMARY KEY, name VARCHAR2(50))"))
+
+	db.MustExec("INSERT INTO testdb.struct_types VALUES (42, 'hello')")
+
+	msgChan := make(chan *service.Message, 10)
+	cfg := fmt.Sprintf(`
+oracledb_cdc:
+  connection_string: %s
+  stream_snapshot: true
+  snapshot_max_batch_size: 10
+  logminer:
+    scn_window_size: 20000
+    backoff_interval: 1s
+  include: ["TESTDB.STRUCT_TYPES"]`, connStr)
+
+	streamBuilder := service.NewStreamBuilder()
+	require.NoError(t, streamBuilder.AddInputYAML(cfg))
+	require.NoError(t, streamBuilder.SetLoggerYAML(`level: DEBUG`))
+	require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+		for _, msg := range mb {
+			msgChan <- msg
+		}
+		return nil
+	}))
+
+	stream, err := streamBuilder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(stream.Resources())
+	go func() {
+		if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+			t.Error(err)
+		}
+	}()
+	go func() { <-t.Context().Done(); close(msgChan) }()
+
+	var msgs []*service.Message
+	for msg := range msgChan {
+		msgs = append(msgs, msg)
+		if len(msgs) == 1 {
+			break
+		}
+	}
+	require.Len(t, msgs, 1)
+
+	structured, err := msgs[0].AsStructuredMut()
+	require.NoError(t, err)
+
+	m, ok := structured.(map[string]any)
+	require.True(t, ok)
+
+	// NUMBER(5,0) maps to int64 — must not be demoted to json.Number by the
+	// JSON round-trip in the batcher.
+	t.Logf("ID type=%T value=%v", m["ID"], m["ID"])
+	assert.Equal(t, int64(42), m["ID"],
+		"NUMBER(5,0) snapshot value must arrive as int64, not json.Number")
+	assert.Equal(t, "hello", m["NAME"])
+
+	require.NoError(t, stream.StopWithin(10*time.Second))
 }
 
 func TestIntegrationOracleDBCDCSnapshotSchema(t *testing.T) {
