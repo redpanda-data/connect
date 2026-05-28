@@ -38,7 +38,7 @@ variable "redpanda_instance_type" {
 }
 
 variable "redpanda_broker_ips" {
-  description = "Static private IPs for Redpanda brokers (must fall inside the private subnets' CIDRs)."
+  description = "Static private IPs for Redpanda brokers (must fall inside the public subnets' CIDRs — brokers run in public subnets for outbound install access; the broker SG still gates inbound)."
   type        = list(string)
-  default     = ["10.42.10.10", "10.42.11.10", "10.42.10.11"]
+  default     = ["10.42.0.10", "10.42.1.10", "10.42.0.11"]
 }
