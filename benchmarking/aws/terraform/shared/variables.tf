@@ -16,8 +16,9 @@ variable "load_gen_instance_type" {
 }
 
 variable "bench_session_id" {
-  description = "Tag applied to every resource for orphan cleanup."
+  description = "Tag applied to every resource for orphan cleanup. Empty string default lets `runner down` destroy without re-passing the original session id; the tag value doesn't matter during destroy."
   type        = string
+  default     = ""
 }
 
 variable "vpc_cidr" {
