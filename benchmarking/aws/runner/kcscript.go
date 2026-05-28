@@ -74,8 +74,18 @@ done`,
 		fmt.Sprintf(`cat > /tmp/kc-cfg-%d.json <<'KCCFG'
 %s
 KCCFG`, a.VCPU, cfgJSON),
-		fmt.Sprintf(`curl -fsS -X PUT -H 'Content-Type: application/json' --data-binary @/tmp/kc-cfg-%d.json http://localhost:8083/connectors/%s/config`,
-			a.VCPU, a.ConnectorName),
+		// Capture both response body and HTTP status code so we can print
+		// the worker's error message when the connector rejects validation
+		// (e.g. missing plugin, bad DSN, slot collision). curl --fail
+		// suppresses the body which makes 4xx/5xx invisible to the operator.
+		fmt.Sprintf(`HTTP_CODE=$(curl -sS -o /tmp/kc-submit-resp.json -w '%%{http_code}' -X PUT -H 'Content-Type: application/json' --data-binary @/tmp/kc-cfg-%d.json http://localhost:8083/connectors/%s/config)
+if [ "$HTTP_CODE" != "200" ] && [ "$HTTP_CODE" != "201" ]; then
+  echo "[kc] connector submit failed with HTTP $HTTP_CODE; worker response:"
+  cat /tmp/kc-submit-resp.json
+  echo
+  exit 1
+fi
+echo "[kc] connector submitted (HTTP $HTTP_CODE)"`, a.VCPU, a.ConnectorName),
 		// Wait for RUNNING status (up to 60s).
 		fmt.Sprintf(`for i in $(seq 1 60); do
   STATE=$(curl -fsS http://localhost:8083/connectors/%s/status | jq -r '.tasks[0].state // "unknown"' 2>/dev/null || echo "unknown")
