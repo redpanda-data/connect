@@ -143,6 +143,14 @@ func derivedRow(connector, scenario, jsonPath string) (summaryRow, error) {
 			row.GapStr = fmt.Sprintf("%+.0f MB/s (%+.0f%%)", diff, pct)
 		}
 	}
+
+	// Plan 3: append a ⚠ marker if the latest result flagged cross-engine
+	// divergence. The marker bubbles up so a reader scanning the SUMMARY
+	// table sees at a glance which scenarios diverged.
+	if len(r.CrossEngineAnomalies) > 0 {
+		row.ConnectorScenario += " ⚠"
+	}
+
 	return row, nil
 }
 
