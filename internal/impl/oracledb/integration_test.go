@@ -985,7 +985,8 @@ func TestIntegrationOracleDBCDCSnapshotAndStreamingAllTypes(t *testing.T) {
 		json_col          CLOB,                         -- JSON stored as CLOB
 		noleadingzero_col NUMBER,                       -- observe Oracle's non-leading zero decimal handling (0.15 -> .15)
 		nullable_num      NUMBER(11,0),                 -- nullable number to verify NULL handling
-		nonnullable_num   NUMBER(11,0) NOT NULL         -- NOT NULL
+		nonnullable_num   NUMBER(11,0) NOT NULL,        -- NOT NULL
+		number_col        NUMBER                         -- bare NUMBER, no precision/scale
 	) LOB(oolvarcharmax_col) STORE AS BASICFILE (DISABLE STORAGE IN ROW NOCACHE LOGGING)`
 	err := db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.all_data_types", q)
 	require.NoError(t, err)
@@ -1001,7 +1002,7 @@ func TestIntegrationOracleDBCDCSnapshotAndStreamingAllTypes(t *testing.T) {
 		time_col, datetimeoffset_col, char_col, varchar_col,
 		nchar_col, nvarchar_col, binary_col, varbinary_col,
 		varcharmax_col, oolvarcharmax_col, nvarcharmax_col, varbinarymax_col,
-		bit_col, json_col, noleadingzero_col, nullable_num, nonnullable_num
+		bit_col, json_col, noleadingzero_col, nullable_num, nonnullable_num, number_col
 	) VALUES (
 		:1, :2, :3, :4,
 		:5, :6, :7, :8,
@@ -1009,7 +1010,7 @@ func TestIntegrationOracleDBCDCSnapshotAndStreamingAllTypes(t *testing.T) {
 		:13, :14, :15, :16,
 		:17, :18, :19, :20,
 		:21, :22, :23, :24,
-		:25, :26, :27, :28, :29
+		:25, :26, :27, :28, :29, :30
 	)`
 
 	t.Log("Inserting min values for testing snapshot data...")
@@ -1045,6 +1046,7 @@ func TestIntegrationOracleDBCDCSnapshotAndStreamingAllTypes(t *testing.T) {
 			"0.15",       // noleadingzero_col
 			nil,          // nullable_num (NULL to verify NULL handling)
 			0,            // nonnullable_num
+			"-99999999999999999999999999999999999999", // number_col min
 		)
 	}
 
@@ -1143,6 +1145,7 @@ oracledb_cdc:
 			"0.15",               // noleadingzero_col
 			nil,                  // nullable_num (NULL to verify NULL handling when streaming)
 			0,                    // nonnullable_num
+			"99999999999999999999999999999999999999", // number_col max
 		)
 
 		minWant := 2
@@ -1205,7 +1208,8 @@ oracledb_cdc:
 		"VARCHAR_COL": null,
 		"OOLVARCHARMAX_COL": null,
 		"VARCHARMAX_COL": null,
-		"NOLEADINGZERO_COL": "0.15"
+		"NOLEADINGZERO_COL": "0.15",
+		"NUMBER_COL": "-99999999999999999999999999999999999999"
 		}`, outBatches[0], "Failed to assert min result from snapshot")
 	}
 
@@ -1241,7 +1245,8 @@ oracledb_cdc:
 		"VARCHAR_COL": "Max varchar value",
 		"OOLVARCHARMAX_COL": "`+largeClob+`",
 		"VARCHARMAX_COL": "Max varchar(max)",
-		"NOLEADINGZERO_COL": "0.15"
+		"NOLEADINGZERO_COL": "0.15",
+		"NUMBER_COL": "99999999999999999999999999999999999999"
 		}`, outBatches[1], "Failed to assert max result from streaming")
 	}
 }
