@@ -1281,6 +1281,8 @@ func TestIntegrationOracleDBGoOraColumnTypesForNumber(t *testing.T) {
 	}
 }
 
+// Test verifies precesionless NUMBER type comes out of Oracle component as a string.
+// TestIntegrationOracleDBCDCSnapshotSchema verifies schema type is schema.BigDecimal
 func TestIntegrationOracleDBCDCPrecisionlessNumber(t *testing.T) {
 	integration.CheckSkip(t)
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
@@ -1436,10 +1438,10 @@ func TestIntegrationOracleDBCDCSnapshotSchema(t *testing.T) {
 
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
 	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.schema_snap",
-		"CREATE TABLE testdb.schema_snap (id NUMBER(10) PRIMARY KEY, name VARCHAR2(100), created_at DATE, data RAW(16), score BINARY_FLOAT)"))
+		"CREATE TABLE testdb.schema_snap (id NUMBER(10) PRIMARY KEY, name VARCHAR2(100), created_at DATE, data RAW(16), score BINARY_FLOAT, version NUMBER)"))
 
-	db.MustExec("INSERT INTO testdb.schema_snap VALUES (1, 'Alice', SYSDATE, HEXTORAW('DEADBEEF'), 1.5)")
-	db.MustExec("INSERT INTO testdb.schema_snap VALUES (2, 'Bob', SYSDATE, HEXTORAW('CAFEBABE'), 2.5)")
+	db.MustExec("INSERT INTO testdb.schema_snap VALUES (1, 'Alice', SYSDATE, HEXTORAW('DEADBEEF'), 1.5, 42)")
+	db.MustExec("INSERT INTO testdb.schema_snap VALUES (2, 'Bob', SYSDATE, HEXTORAW('CAFEBABE'), 2.5, 42)")
 
 	msgChan := make(chan *service.Message, 10)
 	cfg := fmt.Sprintf(`
@@ -1486,7 +1488,7 @@ oracledb_cdc:
 		s := oracledbtest.ExtractSchema(t, msg)
 		assert.Equal(t, "SCHEMA_SNAP", s.Name, "msg %d", i)
 		assert.Equal(t, schema.Object, s.Type, "msg %d", i)
-		require.Len(t, s.Children, 5, "msg %d: expected 5 columns", i)
+		require.Len(t, s.Children, 6, "msg %d: expected 5 columns", i)
 
 		id := oracledbtest.ChildByName(t, s, "ID")
 		assert.Equal(t, schema.Int64, id.Type, "NUMBER(10) with scale=0 should be Int64")
@@ -1503,6 +1505,9 @@ oracledb_cdc:
 
 		score := oracledbtest.ChildByName(t, s, "SCORE")
 		assert.Equal(t, schema.Float32, score.Type)
+
+		version := oracledbtest.ChildByName(t, s, "VERSION")
+		assert.Equal(t, schema.BigDecimal, version.Type)
 
 		fp := oracledbtest.ExtractFingerprint(t, msg)
 		assert.NotEmpty(t, fp, "msg %d: fingerprint should be present", i)
