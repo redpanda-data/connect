@@ -27,9 +27,9 @@ variable "vpc_cidr" {
 }
 
 variable "orphan_ttl_hours" {
-  description = "How long a tagged bench resource can live before the cleanup Lambda destroys it."
+  description = "How long a tagged bench resource can live before the cleanup Lambda destroys it. Bumped to 4 because the postgres 4-vCPU sweep with both engines takes ~2.5-3 hours and was tripping the TTL mid-bench on long runs (2026-05-29)."
   type        = number
-  default     = 3
+  default     = 4
 }
 
 variable "redpanda_instance_type" {
