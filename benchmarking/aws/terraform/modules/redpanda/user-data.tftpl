@@ -29,6 +29,12 @@ runcmd:
       data_directory: /var/lib/redpanda/data
       node_id: ${node_id}
       empty_seed_starts_cluster: false
+      # Redpanda defaults this to false — opposite of Apache Kafka. Without
+      # it, the bench engines silently fail (Connect's redpanda output and
+      # KC's Debezium both write to topics they expect the broker to create).
+      # Plan 3 smoke (2026-05-29) caught this when broker_series was empty
+      # and Debezium logs showed UNKNOWN_TOPIC_OR_PARTITION for every write.
+      auto_create_topics_enabled: true
       seed_servers:
 %{ for ip in split(",", seed_servers) ~}
         - host: { address: "${split(":", ip)[0]}", port: 33145 }
