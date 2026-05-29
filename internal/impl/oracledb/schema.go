@@ -23,7 +23,7 @@ import (
 )
 
 // oracleTypeToCommonType maps an Oracle DATA_TYPE string to a schema.CommonType.
-// For NUMBER columns, callers should use oracleNumberToCommonType which
+// For NUMBER columns, callers should use replication.NumberToCommon which
 // considers precision and scale for a more specific mapping.
 func oracleTypeToCommonType(dataType string) schema.CommonType {
 	switch strings.ToUpper(dataType) {
@@ -41,13 +41,6 @@ func oracleTypeToCommonType(dataType string) schema.CommonType {
 	default:
 		return schema.String
 	}
-}
-
-// oracleNumberToCommon builds a schema.Common entry for a NUMBER column. It
-// delegates to replication.NumberToCommon so the streaming schema cache and the
-// snapshot value mapper derive identical types from the same precision/scale.
-func oracleNumberToCommon(name string, precision, scale int64, hasDecimalInfo bool) schema.Common {
-	return replication.NumberToCommon(name, precision, scale, hasDecimalInfo)
 }
 
 // isNumberType reports whether dataType is one of Oracle's numeric type names
@@ -133,7 +126,7 @@ ORDER BY COLUMN_ID`
 
 		var common schema.Common
 		if isNumberType(dataType) {
-			common = oracleNumberToCommon(colName, precision.Int64, scale.Int64, precision.Valid && scale.Valid)
+			common = replication.NumberToCommon(colName, precision.Int64, scale.Int64, precision.Valid && scale.Valid)
 		} else {
 			common = schema.Common{
 				Name:     colName,
@@ -255,7 +248,7 @@ func (sc *schemaCache) seedFromColumnMeta(table replication.UserTable, meta []re
 	for _, m := range meta {
 		var common schema.Common
 		if isNumberType(m.TypeName) {
-			common = oracleNumberToCommon(m.Name, m.Precision, m.Scale, m.HasDecimalSize)
+			common = replication.NumberToCommon(m.Name, m.Precision, m.Scale, m.HasDecimalSize)
 		} else {
 			common = schema.Common{
 				Name:     m.Name,

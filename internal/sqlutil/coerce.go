@@ -18,16 +18,16 @@ import (
 )
 
 // CoerceToCommon converts a raw value — as produced by a SQL driver scan or a
-// CDC redo-log parse — into the canonical Go representation for the given
-// common-schema column. It is the single coercion point shared by the SQL-CDC
-// snapshot (sql.Scan) and streaming (redo parse) paths so that both yield
-// identical value types for the same column.
+// CDC change-event parse — into the canonical Go representation for the given
+// common-schema column. It is the shared coercion point for the SQL-CDC
+// sources so that differently-typed inputs for the same column converge on a
+// single representation.
 //
 // Numeric inputs are accepted as any Go numeric type (int64, float64,
-// json.Number, or a numeric string), which matters because the two paths
-// surface numbers differently: snapshot scans produce typed Go values while
-// redo parsing produces int64 / json.Number / quoted strings. The output is
-// keyed solely on the column's common type:
+// json.Number, or a numeric string), which matters because sources surface
+// numbers differently: a driver scan yields typed Go values, while a
+// change-event parser may yield int64, json.Number, or quoted strings. The
+// output is keyed solely on the column's common type:
 //
 //   - Int64               → int64
 //   - Float32 / Float64   → float64
