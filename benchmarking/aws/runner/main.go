@@ -262,19 +262,20 @@ func runBench(opts benchOpts) (errOut error) {
 	}
 
 	mr := &MatrixRunner{
-		SSM:                     ssmExec,
-		LogFetcher:              logFetcher,
-		RunnerInstance:          sharedOuts["runner_instance_id"],
-		LoadGenInstance:         sharedOuts["load_gen_instance_id"],
-		ConfigPath:              "/opt/bench/config.yaml",
-		BinaryPath:              "/opt/bench/redpanda-connect",
-		Bucket:                  sharedOuts["results_bucket"],
-		SessionID:               sessionID,
-		RedpandaMetricsEndpoint: sharedOuts["redpanda_metrics_endpoint"],
-		Engines:                 opts.engines,
-		KCConnectorName:         kcConnectorName,
-		KCConnectorConfigJSON:   kcConfigJSON,
-		ScenarioConnector:       s.Connector,
+		SSM:                      ssmExec,
+		LogFetcher:               logFetcher,
+		RunnerInstance:           sharedOuts["runner_instance_id"],
+		LoadGenInstance:          sharedOuts["load_gen_instance_id"],
+		ConfigPath:               "/opt/bench/config.yaml",
+		BinaryPath:               "/opt/bench/redpanda-connect",
+		Bucket:                   sharedOuts["results_bucket"],
+		SessionID:                sessionID,
+		RedpandaMetricsEndpoint:  sharedOuts["redpanda_metrics_endpoint"],
+		RedpandaMetricsEndpoints: sharedOuts["redpanda_metrics_endpoints"],
+		Engines:                  opts.engines,
+		KCConnectorName:          kcConnectorName,
+		KCConnectorConfigJSON:    kcConfigJSON,
+		ScenarioConnector:        s.Connector,
 	}
 	reset, err := combineReset(s.Connector, s.Reset, sharedOuts)
 	if err != nil {

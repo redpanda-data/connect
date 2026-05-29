@@ -77,6 +77,10 @@ func TestRenderKCBenchScript_SubmitsConnectorViaCurl(t *testing.T) {
 }
 
 func TestRenderKCBenchScript_ScrapesBrokerMetrics(t *testing.T) {
+	// Back-compat path: only the singular field is set. The scraper
+	// loop must still wrap that single endpoint in the IFS-split shell
+	// construct so the script shape is the same as the multi-broker
+	// case (one less branch to maintain at runtime).
 	script := renderKCBenchScript(kcBenchScriptArgs{
 		VCPU:                    1,
 		MemLimitGiB:             2,
@@ -96,6 +100,64 @@ func TestRenderKCBenchScript_ScrapesBrokerMetrics(t *testing.T) {
 	}
 	if !strings.Contains(script, "10.42.0.10:9644") {
 		t.Errorf("expected broker endpoint in script; got:\n%s", script)
+	}
+	if !strings.Contains(script, "IFS=,") {
+		t.Errorf("expected IFS=, multi-endpoint split even with one endpoint; got:\n%s", script)
+	}
+}
+
+func TestRenderKCBenchScript_ScrapesAllBrokers(t *testing.T) {
+	// Plan 3 fix: Redpanda's per-topic byte counter is per-broker, so
+	// the scraper must iterate over ALL brokers each interval. The
+	// scenario from the 2026-05-29 postgres bench was: KC's Debezium
+	// topic was led by broker 1 or 2, but we only scraped broker 0 —
+	// the topic showed 0 bytes despite Debezium having written 2.9M
+	// records. This test asserts the script visits all three brokers.
+	endpoints := "10.42.0.10:9644,10.42.1.10:9644,10.42.0.11:9644"
+	script := renderKCBenchScript(kcBenchScriptArgs{
+		VCPU:                     1,
+		MemLimitGiB:              2,
+		WarmupSec:                60,
+		DurationSec:              600,
+		ConnectorName:            "bench_pg",
+		ConnectorConfigJSON:      `{}`,
+		Bucket:                   "results-bucket",
+		SessionID:                "sess-abc",
+		RedpandaMetricsEndpoints: endpoints,
+	})
+	if !strings.Contains(script, "IFS=,") {
+		t.Errorf("expected IFS=, splitter for multi-endpoint scrape; got:\n%s", script)
+	}
+	for _, ep := range []string{"10.42.0.10:9644", "10.42.1.10:9644", "10.42.0.11:9644"} {
+		if !strings.Contains(script, ep) {
+			t.Errorf("expected endpoint %q in script; got:\n%s", ep, script)
+		}
+	}
+	// Per-engine upload filename for KC.
+	if !strings.Contains(script, "redpanda-1-kc.txt") {
+		t.Errorf("expected per-engine upload filename; got:\n%s", script)
+	}
+}
+
+func TestRenderKCBenchScript_PluralEndpointsTakePrecedence(t *testing.T) {
+	// If both the legacy singular and the new plural fields are set
+	// (transition period), the plural wins so we get the cluster-wide
+	// scrape behavior. The legacy endpoint must NOT be the only one
+	// emitted to the script.
+	script := renderKCBenchScript(kcBenchScriptArgs{
+		VCPU:                     1,
+		MemLimitGiB:              2,
+		WarmupSec:                60,
+		DurationSec:              600,
+		ConnectorName:            "bench_pg",
+		ConnectorConfigJSON:      `{}`,
+		Bucket:                   "results-bucket",
+		SessionID:                "sess-abc",
+		RedpandaMetricsEndpoint:  "10.42.0.10:9644",
+		RedpandaMetricsEndpoints: "10.42.0.10:9644,10.42.1.10:9644,10.42.0.11:9644",
+	})
+	if !strings.Contains(script, "10.42.1.10:9644") || !strings.Contains(script, "10.42.0.11:9644") {
+		t.Errorf("plural endpoints must override singular; got:\n%s", script)
 	}
 }
 

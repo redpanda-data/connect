@@ -216,6 +216,9 @@ func TestRenderBenchScript_EmbedsBucketAndSession(t *testing.T) {
 }
 
 func TestRenderBenchScript_RedpandaScraperWhenEndpointSet(t *testing.T) {
+	// Back-compat path: only the legacy singular field is set. The
+	// scraper still wraps it in the IFS-split shell construct (single-
+	// element list) so the script shape matches the multi-broker case.
 	out := renderBenchScript(benchScriptArgs{
 		VCPU:                    4,
 		MemLimitGiB:             4,
@@ -227,11 +230,14 @@ func TestRenderBenchScript_RedpandaScraperWhenEndpointSet(t *testing.T) {
 		SessionID:               "sess-abc",
 		RedpandaMetricsEndpoint: "10.42.10.10:9644",
 	})
-	if !strings.Contains(out, "RP=/tmp/redpanda-4.txt") {
+	if !strings.Contains(out, "RP=/tmp/redpanda-4-connect.txt") {
 		t.Errorf("expected RP path line for vcpu 4; got:\n%s", out)
 	}
-	if !strings.Contains(out, "curl -s --max-time 5 http://10.42.10.10:9644/public_metrics") {
-		t.Errorf("expected redpanda scraper curl; got:\n%s", out)
+	if !strings.Contains(out, "10.42.10.10:9644") {
+		t.Errorf("expected redpanda endpoint embedded in script; got:\n%s", out)
+	}
+	if !strings.Contains(out, "IFS=,") {
+		t.Errorf("expected IFS=, multi-endpoint split even with one endpoint; got:\n%s", out)
 	}
 	if !strings.Contains(out, "RP_SCRAPER=$!") {
 		t.Errorf("expected RP_SCRAPER pid capture; got:\n%s", out)
@@ -241,6 +247,55 @@ func TestRenderBenchScript_RedpandaScraperWhenEndpointSet(t *testing.T) {
 	}
 	if !strings.Contains(out, `aws s3 cp "$RP" "s3://results-bucket/runs/sess-abc/redpanda-4-connect.txt"`) {
 		t.Errorf("expected redpanda upload to per-engine filename; got:\n%s", out)
+	}
+}
+
+func TestRenderBenchScript_RedpandaScrapesAllBrokers(t *testing.T) {
+	// Plan 3 fix: Redpanda's per-topic byte counter is per-broker, so
+	// the scraper iterates over ALL brokers each interval. A topic
+	// whose partition leader landed on broker 1 or 2 would be silently
+	// absent from broker 0's scrape (verified live on the 2026-05-29
+	// postgres real bench — KC's Debezium topic had 0 attribution
+	// despite 2.9M records written).
+	endpoints := "10.42.10.10:9644,10.42.11.10:9644,10.42.12.10:9644"
+	out := renderBenchScript(benchScriptArgs{
+		VCPU:                     4,
+		MemLimitGiB:              4,
+		WarmupSec:                60,
+		DurationSec:              900,
+		ConfigPath:               "/tmp/cfg.yaml",
+		BinaryPath:               "/opt/bench/rpcn",
+		Bucket:                   "results-bucket",
+		SessionID:                "sess-abc",
+		RedpandaMetricsEndpoints: endpoints,
+	})
+	if !strings.Contains(out, "IFS=,") {
+		t.Errorf("expected IFS=, multi-endpoint split; got:\n%s", out)
+	}
+	for _, ep := range []string{"10.42.10.10:9644", "10.42.11.10:9644", "10.42.12.10:9644"} {
+		if !strings.Contains(out, ep) {
+			t.Errorf("expected endpoint %q in script; got:\n%s", ep, out)
+		}
+	}
+}
+
+func TestRenderBenchScript_PluralEndpointsTakePrecedence(t *testing.T) {
+	// When both legacy and new fields are set (transition window),
+	// the plural wins so we get cluster-wide scrape coverage.
+	out := renderBenchScript(benchScriptArgs{
+		VCPU:                     1,
+		MemLimitGiB:              1,
+		WarmupSec:                60,
+		DurationSec:              60,
+		ConfigPath:               "/tmp/cfg.yaml",
+		BinaryPath:               "/opt/bench/rpcn",
+		Bucket:                   "results-bucket",
+		SessionID:                "sess-abc",
+		RedpandaMetricsEndpoint:  "10.42.10.10:9644",
+		RedpandaMetricsEndpoints: "10.42.10.10:9644,10.42.11.10:9644,10.42.12.10:9644",
+	})
+	if !strings.Contains(out, "10.42.11.10:9644") || !strings.Contains(out, "10.42.12.10:9644") {
+		t.Errorf("plural endpoints must override singular; got:\n%s", out)
 	}
 }
 
@@ -359,15 +414,16 @@ redpanda_kafka_request_bytes_total{redpanda_request="produce",redpanda_topic="be
 	defer func() { stdout = prev }()
 
 	mr := &MatrixRunner{
-		SSM:                   ssm,
-		LogFetcher:            fetcher,
-		RunnerInstance:        "i-runner",
-		Bucket:                "b",
-		SessionID:             sessionID,
-		ScenarioConnector:     connector,
-		Engines:               []string{"connect", "kafka_connect"},
-		KCConnectorName:       "bench_postgres_cdc",
-		KCConnectorConfigJSON: `{"connector.class":"x"}`,
+		SSM:                      ssm,
+		LogFetcher:               fetcher,
+		RunnerInstance:           "i-runner",
+		Bucket:                   "b",
+		SessionID:                sessionID,
+		ScenarioConnector:        connector,
+		Engines:                  []string{"connect", "kafka_connect"},
+		KCConnectorName:          "bench_postgres_cdc",
+		KCConnectorConfigJSON:    `{"connector.class":"x"}`,
+		RedpandaMetricsEndpoints: "10.42.0.10:9644,10.42.1.10:9644,10.42.0.11:9644",
 	}
 	points, err := mr.Run(context.Background(), []int{1}, 1, 60*time.Second, 120*time.Second, "", "")
 	require.NoError(t, err)

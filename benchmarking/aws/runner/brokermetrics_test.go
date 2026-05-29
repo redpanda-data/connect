@@ -56,6 +56,27 @@ redpanda_kafka_request_bytes_total{redpanda_namespace="kafka",redpanda_request="
 	}
 }
 
+func TestBrokerMetrics_SumsAcrossBrokers(t *testing.T) {
+	// Simulates a single frame where all 3 brokers reported their bytes
+	// for the same topic. Broker 0 leads partition 0 (1 MiB), broker 1
+	// leads partition 1 (2 MiB), broker 2 leads partition 2 (3 MiB).
+	// Total cluster produce bytes for the topic = 6 MiB. The scraper
+	// concatenates each broker's /public_metrics output into one frame
+	// body, so the same topic line appears three times.
+	const body = `redpanda_kafka_request_bytes_total{redpanda_namespace="kafka",redpanda_request="produce",redpanda_topic="t1"} 1048576
+redpanda_kafka_request_bytes_total{redpanda_namespace="kafka",redpanda_request="produce",redpanda_topic="t1"} 2097152
+redpanda_kafka_request_bytes_total{redpanda_namespace="kafka",redpanda_request="produce",redpanda_topic="t1"} 3145728
+`
+	bytesByTopic, err := extractTopicProduceBytes(body)
+	if err != nil {
+		t.Fatalf("extractTopicProduceBytes: %v", err)
+	}
+	want := 1048576.0 + 2097152.0 + 3145728.0
+	if got := bytesByTopic["t1"]; got != want {
+		t.Errorf("multi-broker sum = %v, want %v", got, want)
+	}
+}
+
 func TestBrokerMetrics_ExtractTopicBytes_IgnoresInternal(t *testing.T) {
 	const body = `redpanda_kafka_request_bytes_total{redpanda_request="produce",redpanda_topic="_kc_configs"} 4096
 redpanda_kafka_request_bytes_total{redpanda_request="produce",redpanda_topic="bench_sess1_postgres_cdc_connect"} 1000
