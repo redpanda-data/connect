@@ -157,3 +157,26 @@ Raw samples + Prometheus snapshots: [`results/postgres/orders-cdc/2026-05-22T00-
 - **Connect was massively underutilized at all vCPU counts**: 74% / 57% / 39% / 21% of one core per vcpu (i.e. only 21% busy at 8 vCPU). Sub-100 MB heap, 30–36 goroutines, no anomalies. Whatever the real per-vCPU ceiling is, this scenario didn't get close.
 - **For finding the real `postgres_cdc` per-vCPU CDC ceiling** the bottleneck must move off the producer: either bigger RDS instance class (`db.r6g.4xlarge`+), multi-table workload to split the WAL hotspot, or RDS Aurora. The single-table-on-2xlarge setup that worked well at 80K writes/sec doesn't survive 150K.
 - **Mysql delivers ~50% more producer throughput on identical RDS** (~75K msg/sec sustained vs Postgres's ~50K) — see `mysql.md` 2026-05-22 run. Binlog (sequential append, no MVCC bloat) is a more permissive write workload than Postgres WAL for this kind of bench.
+
+
+## AWS — orders-cdc-plan2-smoke — 2026-05-29
+
+**Scenario:** Plan 2 smoke test — single vCPU, two engines (Connect + Kafka Connect)
+sequentially. Verifies the engine-inner loop, KC REST submission, reset
+extensions, and per-engine S3 artefacts. Not for publishable numbers.
+
+**Git SHA:** [`79794a84c`](https://github.com/redpanda-data/connect/commit/79794a84c86349e68c2861b44ecac755550aad35)
+
+**Infra:** Runner `c8g.xlarge`; source `db.r6g.large` (400 GB) in `us-east-2`.
+
+**Dataset:** 
+
+### Throughput
+
+| GOMAXPROCS | engine        | MB/sec (p50) | broker MB/s | MB/sec (p5) | MB/sec (p95) | msg/sec (p50) | Δ vs Connect       |
+|------------|---------------|--------------|-------------|-------------|--------------|---------------|--------------------|
+| 1          | connect       |           25 |            0 |          19 |           32 |        20,000 |                    |
+| 1          | kafka_connect |           31 |           31 |          19 |           32 |             0 | +6 MB/s (+25%)     |
+
+
+Raw samples + Prometheus snapshots: [`results/postgres/orders-cdc-plan2-smoke/2026-05-29T15-09-15Z.json`](results/postgres/orders-cdc-plan2-smoke/2026-05-29T15-09-15Z.json)
