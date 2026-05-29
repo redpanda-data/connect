@@ -45,12 +45,6 @@ type MatrixRunner struct {
 	// (e.g. "postgres_cdc"). Passed through from runBench so the
 	// broker-side attribution helper can identify per-engine topics.
 	ScenarioConnector string
-	// cachedBrokerByEngine holds the engine-attributed broker series for
-	// the CURRENT vCPU iteration. Set lazily on the first engine of each
-	// vCPU; read by subsequent engines so we don't re-fetch the same
-	// redpanda-N.txt twice. Reset to nil at the start of each new vCPU
-	// (see Run loop).
-	cachedBrokerByEngine map[string][]TopicPoint
 }
 
 // SweepPoint is the per-point measurement.
@@ -81,7 +75,6 @@ func (m *MatrixRunner) Run(
 	}
 	out := make([]SweepPoint, 0, len(cpuPoints)*len(engines))
 	for _, n := range cpuPoints {
-		m.cachedBrokerByEngine = nil
 		for _, engine := range engines {
 			fmt.Printf("=== sweep point: %d vCPU, engine=%s (warmup %s, window %s) ===\n", n, engine, warmup, duration)
 
@@ -117,14 +110,15 @@ func (m *MatrixRunner) Run(
 				})
 			case "kafka_connect":
 				script = renderKCBenchScript(kcBenchScriptArgs{
-					VCPU:                n,
-					MemLimitGiB:         memLimitPerVCPU * n,
-					WarmupSec:           int(warmup.Seconds()),
-					DurationSec:         int(duration.Seconds()),
-					ConnectorName:       m.KCConnectorName,
-					ConnectorConfigJSON: m.KCConnectorConfigJSON,
-					Bucket:              m.Bucket,
-					SessionID:           m.SessionID,
+					VCPU:                    n,
+					MemLimitGiB:             memLimitPerVCPU * n,
+					WarmupSec:               int(warmup.Seconds()),
+					DurationSec:             int(duration.Seconds()),
+					ConnectorName:           m.KCConnectorName,
+					ConnectorConfigJSON:     m.KCConnectorConfigJSON,
+					Bucket:                  m.Bucket,
+					SessionID:               m.SessionID,
+					RedpandaMetricsEndpoint: m.RedpandaMetricsEndpoint,
 				})
 			default:
 				cancelWorkload()
@@ -166,12 +160,10 @@ func (m *MatrixRunner) Run(
 			}
 			promPts := m.fetchProm(ctx, n)
 
-			// Broker-side: fetch once per vCPU (covers both engines via topic
-			// label) and cache for the second engine pass.
-			if m.cachedBrokerByEngine == nil {
-				m.cachedBrokerByEngine = m.fetchBrokerSeries(ctx, n)
-			}
-			brokerSeries := m.cachedBrokerByEngine[engine]
+			// Broker-side: each engine scrapes /public_metrics during its
+			// own window and uploads to a per-engine filename, so we fetch
+			// only the matching engine's file here.
+			brokerSeries := m.fetchBrokerSeriesForEngine(ctx, engine, n)
 
 			var summary Summary
 			if engine == "kafka_connect" {
@@ -253,23 +245,34 @@ func (m *MatrixRunner) fetchProm(ctx context.Context, vcpu int) []PromPoint {
 	return pts
 }
 
-// fetchBrokerSeries downloads the per-vCPU broker-metrics dump and
-// splits it into per-engine series. Non-fatal: a missing or unparseable
-// file logs a warning and returns nil, just like fetchProm.
-func (m *MatrixRunner) fetchBrokerSeries(ctx context.Context, vcpu int) map[string][]TopicPoint {
+// fetchBrokerSeriesForEngine downloads the per-engine, per-vCPU broker
+// metrics dump and returns the topic series attributed to that engine.
+// Non-fatal: a missing or unparseable file logs and returns nil.
+//
+// Each engine writes its own scrape file (Connect → redpanda-N-connect.txt,
+// KC → redpanda-N-kc.txt) covering only that engine's bench window, so
+// we don't need to merge across engines — the file FOR an engine already
+// contains only that engine's bytes (the other engine wasn't running).
+func (m *MatrixRunner) fetchBrokerSeriesForEngine(ctx context.Context, engine string, vcpu int) []TopicPoint {
 	if m.LogFetcher == nil {
 		return nil
 	}
-	key := fmt.Sprintf("runs/%s/redpanda-%d.txt", m.SessionID, vcpu)
+	// The engine string is "kafka_connect" but the on-disk suffix is "kc"
+	// (matches the upload filename in kcscript.go::renderKCBenchScript).
+	suffix := engine
+	if engine == "kafka_connect" {
+		suffix = "kc"
+	}
+	key := fmt.Sprintf("runs/%s/redpanda-%d-%s.txt", m.SessionID, vcpu, suffix)
 	body, err := m.LogFetcher.Fetch(ctx, m.Bucket, key)
 	if err != nil {
-		fmt.Fprintf(stdout, "[bench] fetch broker metrics (non-fatal): %v\n", err)
+		fmt.Fprintf(stdout, "[bench] fetch broker metrics %s (non-fatal): %v\n", engine, err)
 		return nil
 	}
 	defer body.Close()
 	series, err := ParseTopicSeries(body)
 	if err != nil {
-		fmt.Fprintf(stdout, "[bench] parse broker metrics (non-fatal): %v\n", err)
+		fmt.Fprintf(stdout, "[bench] parse broker metrics %s (non-fatal): %v\n", engine, err)
 		return nil
 	}
 	if m.ScenarioConnector == "" {
@@ -278,10 +281,10 @@ func (m *MatrixRunner) fetchBrokerSeries(ctx context.Context, vcpu int) map[stri
 	}
 	byEngine, err := AttributeByEngine(series, m.SessionID, m.ScenarioConnector)
 	if err != nil {
-		fmt.Fprintf(stdout, "[bench] attribute broker metrics (non-fatal): %v\n", err)
+		fmt.Fprintf(stdout, "[bench] attribute broker metrics %s (non-fatal): %v\n", engine, err)
 		return nil
 	}
-	return byEngine
+	return byEngine[engine]
 }
 
 // parseAndTrim parses the Connect log and discards the leading warmup samples,
@@ -403,7 +406,7 @@ func renderBenchScript(a benchScriptArgs) string {
 	)
 	if a.RedpandaMetricsEndpoint != "" {
 		lines = append(lines,
-			fmt.Sprintf(`aws s3 cp "$RP" "s3://%s/runs/%s/redpanda-%d.txt" >/dev/null`,
+			fmt.Sprintf(`aws s3 cp "$RP" "s3://%s/runs/%s/redpanda-%d-connect.txt" >/dev/null`,
 				a.Bucket, a.SessionID, a.VCPU),
 		)
 	}

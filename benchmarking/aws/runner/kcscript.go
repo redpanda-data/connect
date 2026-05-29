@@ -19,6 +19,12 @@ type kcBenchScriptArgs struct {
 	ConnectorConfigJSON string // rendered JSON to PUT to /connectors/<name>/config
 	Bucket              string
 	SessionID           string
+	// RedpandaMetricsEndpoint is the host:port pair (e.g. "10.42.10.10:9644")
+	// the broker-side scraper curls every 10s while the KC JVM is alive.
+	// Empty disables the scraper. Mirrors benchScriptArgs.RedpandaMetricsEndpoint
+	// — each engine writes to its own file so the runner can attribute
+	// throughput per engine without merging across windows.
+	RedpandaMetricsEndpoint string
 }
 
 // renderKCBenchScript produces the shell script executed on the runner EC2
@@ -72,6 +78,28 @@ func renderKCBenchScript(a kcBenchScriptArgs) string {
 		fmt.Sprintf(`taskset -c 2-%d env KAFKA_HEAP_OPTS=-Xmx%dg /opt/kafka/bin/connect-distributed.sh /opt/kafka-connect/worker.properties >"$KC_LOG" 2>&1 &`,
 			cpusetHi, kcHeapGiB),
 		`PID=$!`,
+	}
+	// Broker-side scrape: every 10s while the KC JVM is alive, append a
+	// framed /public_metrics snapshot. Each engine writes to its own
+	// file so the runner can attribute throughput per engine without
+	// merging across windows.
+	if a.RedpandaMetricsEndpoint != "" {
+		lines = append(lines,
+			fmt.Sprintf(`RP=/tmp/redpanda-%d-kc.txt`, a.VCPU),
+			`: > "$RP"`,
+			fmt.Sprintf(`(
+  while kill -0 "$PID" 2>/dev/null; do
+    {
+      echo "###timestamp=$(date +%%s)"
+      curl -s --max-time 5 http://%s/public_metrics || echo "###scrape_error"
+    } >> "$RP"
+    sleep 10
+  done
+) &`, a.RedpandaMetricsEndpoint),
+			`RP_SCRAPER=$!`,
+		)
+	}
+	lines = append(lines,
 		// Wait until the REST API answers. KC + Debezium plugins is heavy; on a
 		// small runner the JVM can take 90-150s before /connectors responds.
 		`for i in $(seq 1 180); do
@@ -117,12 +145,25 @@ done`, a.ConnectorName),
 		`kill -TERM "$PID" 2>/dev/null || true`,
 		`wait "$PID" 2>/dev/null || true`,
 		`kill "$HEARTBEAT" 2>/dev/null || true`,
+	)
+	if a.RedpandaMetricsEndpoint != "" {
+		lines = append(lines, `kill "$RP_SCRAPER" 2>/dev/null || true`)
+	}
+	lines = append(lines,
 		`echo "kc bench point complete"`,
 		fmt.Sprintf(`aws s3 cp "$KC_LOG" "s3://%s/runs/%s/kc-%d.log" >/dev/null`,
 			a.Bucket, a.SessionID, a.VCPU),
+	)
+	if a.RedpandaMetricsEndpoint != "" {
+		lines = append(lines,
+			fmt.Sprintf(`aws s3 cp "$RP" "s3://%s/runs/%s/redpanda-%d-kc.txt" >/dev/null`,
+				a.Bucket, a.SessionID, a.VCPU),
+		)
+	}
+	lines = append(lines,
 		`echo "kc log uploaded"`,
 		// Restart the systemd unit so the host is ready for the next point.
 		`sudo systemctl start kafka-connect || true`,
-	}
+	)
 	return strings.Join(lines, "\n")
 }

@@ -239,8 +239,8 @@ func TestRenderBenchScript_RedpandaScraperWhenEndpointSet(t *testing.T) {
 	if !strings.Contains(out, `kill "$RP_SCRAPER" 2>/dev/null || true`) {
 		t.Errorf("expected RP_SCRAPER kill on shutdown; got:\n%s", out)
 	}
-	if !strings.Contains(out, `aws s3 cp "$RP" "s3://results-bucket/runs/sess-abc/redpanda-4.txt"`) {
-		t.Errorf("expected redpanda upload; got:\n%s", out)
+	if !strings.Contains(out, `aws s3 cp "$RP" "s3://results-bucket/runs/sess-abc/redpanda-4-connect.txt"`) {
+		t.Errorf("expected redpanda upload to per-engine filename; got:\n%s", out)
 	}
 }
 
@@ -323,24 +323,31 @@ func TestMatrixRun_PopulatesBrokerSeriesForBothEngines(t *testing.T) {
 	const sessionID = "sess1"
 	const connector = "postgres_cdc"
 
-	// Three frames covering a 20s window: bytes rise on both topics so
-	// both engines get non-empty BrokerSeries.
-	const rpDump = `###timestamp=1000
+	// Per-engine scrape files: each engine scrapes during its own window,
+	// so the Connect file holds only Connect's topic and the KC file holds
+	// only KC's topic. fetchBrokerSeriesForEngine reads the engine's own
+	// file with no cross-engine merge.
+	const rpConnect = `###timestamp=1000
 redpanda_kafka_request_bytes_total{redpanda_request="produce",topic="bench_sess1_postgres_cdc_connect"} 0
-redpanda_kafka_request_bytes_total{redpanda_request="produce",topic="bench_sess1_postgres_cdc_kc.public.orders"} 0
 ###timestamp=1010
 redpanda_kafka_request_bytes_total{redpanda_request="produce",topic="bench_sess1_postgres_cdc_connect"} 524288000
-redpanda_kafka_request_bytes_total{redpanda_request="produce",topic="bench_sess1_postgres_cdc_kc.public.orders"} 314572800
 ###timestamp=1020
 redpanda_kafka_request_bytes_total{redpanda_request="produce",topic="bench_sess1_postgres_cdc_connect"} 1048576000
+`
+	const rpKC = `###timestamp=2000
+redpanda_kafka_request_bytes_total{redpanda_request="produce",topic="bench_sess1_postgres_cdc_kc.public.orders"} 0
+###timestamp=2010
+redpanda_kafka_request_bytes_total{redpanda_request="produce",topic="bench_sess1_postgres_cdc_kc.public.orders"} 314572800
+###timestamp=2020
 redpanda_kafka_request_bytes_total{redpanda_request="produce",topic="bench_sess1_postgres_cdc_kc.public.orders"} 629145600
 `
 
 	connectLog := makeLog(180, 50)
 	fetcher := &FakeLogFetcher{
 		Contents: map[string]string{
-			fmt.Sprintf("runs/%s/sweep-1.log", sessionID):    connectLog,
-			fmt.Sprintf("runs/%s/redpanda-1.txt", sessionID): rpDump,
+			fmt.Sprintf("runs/%s/sweep-1.log", sessionID):            connectLog,
+			fmt.Sprintf("runs/%s/redpanda-1-connect.txt", sessionID): rpConnect,
+			fmt.Sprintf("runs/%s/redpanda-1-kc.txt", sessionID):      rpKC,
 		},
 		Errs: map[string]error{
 			fmt.Sprintf("runs/%s/prom-1.txt", sessionID): fmt.Errorf("not found"),
@@ -368,7 +375,7 @@ redpanda_kafka_request_bytes_total{redpanda_request="produce",topic="bench_sess1
 
 	connectPt := points[0]
 	require.Equal(t, "connect", connectPt.Engine)
-	require.NotEmpty(t, connectPt.BrokerSeries, "connect BrokerSeries must be populated from redpanda-1.txt")
+	require.NotEmpty(t, connectPt.BrokerSeries, "connect BrokerSeries must be populated from redpanda-1-connect.txt")
 	// Connect produced 500 MiB in 10s → 50 MiB/s.
 	require.InDelta(t, 50.0, connectPt.BrokerSeries[0].MBPerSec, 0.1)
 

@@ -76,6 +76,46 @@ func TestRenderKCBenchScript_SubmitsConnectorViaCurl(t *testing.T) {
 	}
 }
 
+func TestRenderKCBenchScript_ScrapesBrokerMetrics(t *testing.T) {
+	script := renderKCBenchScript(kcBenchScriptArgs{
+		VCPU:                    1,
+		MemLimitGiB:             2,
+		WarmupSec:               60,
+		DurationSec:             600,
+		ConnectorName:           "bench_pg",
+		ConnectorConfigJSON:     `{}`,
+		Bucket:                  "results-bucket",
+		SessionID:               "sess-abc",
+		RedpandaMetricsEndpoint: "10.42.0.10:9644",
+	})
+	if !strings.Contains(script, "public_metrics") {
+		t.Errorf("expected broker /public_metrics scrape; got:\n%s", script)
+	}
+	if !strings.Contains(script, "redpanda-1-kc.txt") {
+		t.Errorf("expected per-engine upload filename; got:\n%s", script)
+	}
+	if !strings.Contains(script, "10.42.0.10:9644") {
+		t.Errorf("expected broker endpoint in script; got:\n%s", script)
+	}
+}
+
+func TestRenderKCBenchScript_NoScrapeWhenEndpointEmpty(t *testing.T) {
+	script := renderKCBenchScript(kcBenchScriptArgs{
+		VCPU:                1,
+		MemLimitGiB:         2,
+		WarmupSec:           60,
+		DurationSec:         600,
+		ConnectorName:       "bench_pg",
+		ConnectorConfigJSON: `{}`,
+		Bucket:              "results-bucket",
+		SessionID:           "sess-abc",
+		// RedpandaMetricsEndpoint: "" — omitted
+	})
+	if strings.Contains(script, "public_metrics") {
+		t.Errorf("scrape should be omitted when endpoint is empty; got:\n%s", script)
+	}
+}
+
 func TestRenderKCBenchScript_HeapFloor(t *testing.T) {
 	// MemLimitGiB=1 → 1*3/4 = 0 → floor at 1.
 	script := renderKCBenchScript(kcBenchScriptArgs{
