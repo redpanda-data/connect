@@ -328,18 +328,18 @@ func TestMatrixRun_PopulatesBrokerSeriesForBothEngines(t *testing.T) {
 	// only KC's topic. fetchBrokerSeriesForEngine reads the engine's own
 	// file with no cross-engine merge.
 	const rpConnect = `###timestamp=1000
-redpanda_kafka_request_bytes_total{redpanda_request="produce",topic="bench_sess1_postgres_cdc_connect"} 0
+redpanda_kafka_request_bytes_total{redpanda_request="produce",redpanda_topic="bench_sess1_postgres_cdc_connect"} 0
 ###timestamp=1010
-redpanda_kafka_request_bytes_total{redpanda_request="produce",topic="bench_sess1_postgres_cdc_connect"} 524288000
+redpanda_kafka_request_bytes_total{redpanda_request="produce",redpanda_topic="bench_sess1_postgres_cdc_connect"} 524288000
 ###timestamp=1020
-redpanda_kafka_request_bytes_total{redpanda_request="produce",topic="bench_sess1_postgres_cdc_connect"} 1048576000
+redpanda_kafka_request_bytes_total{redpanda_request="produce",redpanda_topic="bench_sess1_postgres_cdc_connect"} 1048576000
 `
 	const rpKC = `###timestamp=2000
-redpanda_kafka_request_bytes_total{redpanda_request="produce",topic="bench_sess1_postgres_cdc_kc.public.orders"} 0
+redpanda_kafka_request_bytes_total{redpanda_request="produce",redpanda_topic="bench_sess1_postgres_cdc_kc.public.orders"} 0
 ###timestamp=2010
-redpanda_kafka_request_bytes_total{redpanda_request="produce",topic="bench_sess1_postgres_cdc_kc.public.orders"} 314572800
+redpanda_kafka_request_bytes_total{redpanda_request="produce",redpanda_topic="bench_sess1_postgres_cdc_kc.public.orders"} 314572800
 ###timestamp=2020
-redpanda_kafka_request_bytes_total{redpanda_request="produce",topic="bench_sess1_postgres_cdc_kc.public.orders"} 629145600
+redpanda_kafka_request_bytes_total{redpanda_request="produce",redpanda_topic="bench_sess1_postgres_cdc_kc.public.orders"} 629145600
 `
 
 	connectLog := makeLog(180, 50)
