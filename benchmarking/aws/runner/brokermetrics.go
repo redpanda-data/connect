@@ -56,8 +56,19 @@ func extractTopicProduceBytes(body string) (map[string]float64, error) {
 		if labels["redpanda_request"] != "produce" {
 			continue
 		}
-		topic := labels["topic"]
-		if topic == "" || strings.HasPrefix(topic, "_kc_") {
+		// Redpanda's /public_metrics labels topics as `redpanda_topic`,
+		// not the bare `topic` a vanilla Kafka exporter would use.
+		// Verified live on Redpanda v26.1.9.
+		topic := labels["redpanda_topic"]
+		if topic == "" ||
+			strings.HasPrefix(topic, "_kc_") ||
+			topic == "__consumer_offsets" ||
+			topic == "controller" {
+			continue
+		}
+		// Only attribute bytes from the user-topic namespace; the
+		// `redpanda` namespace is for internal controller bookkeeping.
+		if ns := labels["redpanda_namespace"]; ns != "" && ns != "kafka" {
 			continue
 		}
 		v, err := strconv.ParseFloat(valueStr, 64)

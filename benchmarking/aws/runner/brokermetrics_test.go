@@ -12,9 +12,9 @@ import (
 
 func TestBrokerMetrics_FrameSplit(t *testing.T) {
 	const body = `###timestamp=1000
-redpanda_kafka_request_bytes_total{topic="t1",redpanda_request="produce"} 1024
+redpanda_kafka_request_bytes_total{redpanda_topic="t1",redpanda_request="produce"} 1024
 ###timestamp=1010
-redpanda_kafka_request_bytes_total{topic="t1",redpanda_request="produce"} 2048
+redpanda_kafka_request_bytes_total{redpanda_topic="t1",redpanda_request="produce"} 2048
 `
 	frames, err := parseBrokerFrames(strings.NewReader(body))
 	if err != nil {
@@ -34,9 +34,9 @@ redpanda_kafka_request_bytes_total{topic="t1",redpanda_request="produce"} 2048
 func TestBrokerMetrics_ExtractTopicBytes(t *testing.T) {
 	const body = `# HELP redpanda_kafka_request_bytes_total ...
 # TYPE redpanda_kafka_request_bytes_total counter
-redpanda_kafka_request_bytes_total{redpanda_namespace="kafka",redpanda_request="produce",topic="bench_sess1_postgres_cdc_connect"} 1.234e+09
-redpanda_kafka_request_bytes_total{redpanda_namespace="kafka",redpanda_request="consume",topic="bench_sess1_postgres_cdc_connect"} 5e+08
-redpanda_kafka_request_bytes_total{redpanda_namespace="kafka",redpanda_request="produce",topic="bench_sess1_postgres_cdc_kc.public.orders"} 9.87e+08
+redpanda_kafka_request_bytes_total{redpanda_namespace="kafka",redpanda_request="produce",redpanda_topic="bench_sess1_postgres_cdc_connect"} 1.234e+09
+redpanda_kafka_request_bytes_total{redpanda_namespace="kafka",redpanda_request="consume",redpanda_topic="bench_sess1_postgres_cdc_connect"} 5e+08
+redpanda_kafka_request_bytes_total{redpanda_namespace="kafka",redpanda_request="produce",redpanda_topic="bench_sess1_postgres_cdc_kc.public.orders"} 9.87e+08
 `
 	bytesByTopic, err := extractTopicProduceBytes(body)
 	if err != nil {
@@ -57,8 +57,8 @@ redpanda_kafka_request_bytes_total{redpanda_namespace="kafka",redpanda_request="
 }
 
 func TestBrokerMetrics_ExtractTopicBytes_IgnoresInternal(t *testing.T) {
-	const body = `redpanda_kafka_request_bytes_total{redpanda_request="produce",topic="_kc_configs"} 4096
-redpanda_kafka_request_bytes_total{redpanda_request="produce",topic="bench_sess1_postgres_cdc_connect"} 1000
+	const body = `redpanda_kafka_request_bytes_total{redpanda_request="produce",redpanda_topic="_kc_configs"} 4096
+redpanda_kafka_request_bytes_total{redpanda_request="produce",redpanda_topic="bench_sess1_postgres_cdc_connect"} 1000
 `
 	bytesByTopic, err := extractTopicProduceBytes(body)
 	if err != nil {
@@ -74,11 +74,11 @@ redpanda_kafka_request_bytes_total{redpanda_request="produce",topic="bench_sess1
 
 func TestBrokerMetrics_TopicSeries_DeltasOverFrames(t *testing.T) {
 	const body = `###timestamp=1000
-redpanda_kafka_request_bytes_total{redpanda_request="produce",topic="t1"} 0
+redpanda_kafka_request_bytes_total{redpanda_request="produce",redpanda_topic="t1"} 0
 ###timestamp=1010
-redpanda_kafka_request_bytes_total{redpanda_request="produce",topic="t1"} 10485760
+redpanda_kafka_request_bytes_total{redpanda_request="produce",redpanda_topic="t1"} 10485760
 ###timestamp=1020
-redpanda_kafka_request_bytes_total{redpanda_request="produce",topic="t1"} 20971520
+redpanda_kafka_request_bytes_total{redpanda_request="produce",redpanda_topic="t1"} 20971520
 `
 	series, err := ParseTopicSeries(strings.NewReader(body))
 	if err != nil {
@@ -105,9 +105,9 @@ func TestBrokerMetrics_TopicSeries_HandlesCounterReset(t *testing.T) {
 	// If a counter goes BACKWARDS between frames (broker restart) the
 	// delta is non-meaningful — skip rather than report a negative rate.
 	const body = `###timestamp=1000
-redpanda_kafka_request_bytes_total{redpanda_request="produce",topic="t1"} 1000000
+redpanda_kafka_request_bytes_total{redpanda_request="produce",redpanda_topic="t1"} 1000000
 ###timestamp=1010
-redpanda_kafka_request_bytes_total{redpanda_request="produce",topic="t1"} 500
+redpanda_kafka_request_bytes_total{redpanda_request="produce",redpanda_topic="t1"} 500
 `
 	series, err := ParseTopicSeries(strings.NewReader(body))
 	if err != nil {
