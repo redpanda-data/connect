@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.94.1 - 2026-05-29
+
+### Fixed
+
+- oracledb_cdc: Emit CDC decimal values as canonical strings in both modes. ([@Jeffail](https://github.com/Jeffail), [#4465](https://github.com/redpanda-data/connect/pull/4465))
+
 ## 4.94.0 - 2026-05-28
 
 ### Added
