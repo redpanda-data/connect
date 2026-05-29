@@ -19,6 +19,7 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
+	"github.com/redpanda-data/benthos/v4/public/schema"
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/sqlutil"
@@ -433,36 +434,26 @@ func prepSnapshotScannerAndMappers(cols []*sql.ColumnType) (values []any, mapper
 				return s.Time, nil
 			}
 		case "NUMBER", "INTEGER", "INT", "SMALLINT", "FLOAT":
-			// Oracle NUMBER type can represent both integers and decimals.
-			// For integer-width columns (scale=0, precision<=18), scan as int64
-			// to match the streaming path's ParseInt behavior.
-			// Decimals with a declared (p, s) — that is, scale within the
-			// precision and within the bounded Decimal type — emit canonical
-			// decimal strings; everything else (undeclared NUMBER, the
-			// go-ora "any scale" sentinel where DecimalSize reports
-			// scale > precision, or precision exceeding the Decimal cap)
-			// falls back to BigDecimal so the source remains lossless.
+			// Classify the column with the same NumberToCommon the streaming
+			// schema cache uses, so snapshot and streaming agree on whether a
+			// NUMBER is an Int64, a bounded Decimal, or a BigDecimal — and so
+			// the emitted value type matches the schema in both modes.
 			precision, scale, ok := col.DecimalSize()
 			colName := col.Name()
-			withinDecimal := ok && precision > 0 && scale >= 0 && scale <= precision && precision <= 38
-			switch {
-			case withinDecimal && scale == 0 && precision <= MaxInt64DecimalPrecision:
+			common := NumberToCommon(colName, precision, scale, ok)
+			switch common.Type {
+			case schema.Int64:
+				// Scan integer-width columns natively; go-ora handles the
+				// NUMBER → int64 conversion robustly without a string round-trip.
 				val = new(sql.Null[int64])
 				mapper = snapshotValueMapper[int64]
-			case withinDecimal:
-				p, s := int32(precision), int32(scale)
-				val = new(sql.NullString)
-				mapper = stringMapping(func(text string) (any, error) {
-					out, err := sqlutil.CanonicaliseDecimal(text, p, s)
-					if err != nil {
-						return nil, fmt.Errorf("column %s: %w", colName, err)
-					}
-					return out, nil
-				})
 			default:
+				// Decimal / BigDecimal: scan as text and canonicalise to a
+				// string via the shared coercion (never a bare number), so
+				// downstream Avro string-field encoding accepts the value.
 				val = new(sql.NullString)
 				mapper = stringMapping(func(text string) (any, error) {
-					out, err := sqlutil.CanonicaliseBigDecimal(text)
+					out, err := sqlutil.CoerceToCommon(common, text)
 					if err != nil {
 						return nil, fmt.Errorf("column %s: %w", colName, err)
 					}
