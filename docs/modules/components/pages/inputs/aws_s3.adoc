@@ -92,6 +92,7 @@ input:
       max_messages: 10
       wait_time_seconds: 0
       nack_visibility_timeout: 0
+      message_timeout: 0s
 ```
 
 --
@@ -427,5 +428,14 @@ Custom SQS Nack Visibility timeout in seconds. Default is 0
 *Type*: `int`
 
 *Default*: `0`
+
+=== `sqs.message_timeout`
+
+The amount of time to keep an in-flight SQS notification hidden while its S3 object is being processed. When greater than zero this sets the visibility timeout on each received notification and periodically refreshes it (when half of the timeout has elapsed) via `ChangeMessageVisibility` until every record scanned from the object has been acked or nacked. This prevents the object from being redelivered and reprocessed when downloading, scanning and downstream delivery take longer than the queue's own visibility timeout. The default of `0s` disables this behaviour, preserving the queue's visibility timeout as the only deadline.
+
+
+*Type*: `string`
+
+*Default*: `"0s"`
 
 

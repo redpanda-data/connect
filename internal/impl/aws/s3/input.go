@@ -33,6 +33,8 @@ import (
 	sqstypes "github.com/aws/aws-sdk-go-v2/service/sqs/types"
 	"github.com/aws/smithy-go"
 
+	"github.com/Jeffail/shutdown"
+
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/codec"
 
@@ -51,6 +53,7 @@ const (
 	s3iSQSFieldMaxMessages      = "max_messages"
 	s3iSQSFieldWaitTimeSeconds  = "wait_time_seconds"
 	s3iSQSNackVisibilityTimeout = "nack_visibility_timeout"
+	s3iSQSFieldMessageTimeout   = "message_timeout"
 
 	// S3 Input Fields
 	s3iFieldBucket             = "bucket"
@@ -70,6 +73,7 @@ type s3iSQSConfig struct {
 	MaxMessages       int64
 	WaitTimeSeconds   int64
 	VisibilityTimeout int32
+	MessageTimeout    time.Duration
 }
 
 func s3iSQSConfigFromParsed(pConf *service.ParsedConfig) (conf s3iSQSConfig, err error) {
@@ -98,6 +102,9 @@ func s3iSQSConfigFromParsed(pConf *service.ParsedConfig) (conf s3iSQSConfig, err
 		return
 	}
 	if conf.VisibilityTimeout, err = baws.Int32Field(pConf, s3iSQSNackVisibilityTimeout); err != nil {
+		return
+	}
+	if conf.MessageTimeout, err = pConf.FieldDuration(s3iSQSFieldMessageTimeout); err != nil {
 		return
 	}
 	return
@@ -231,6 +238,10 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 					Description("Custom SQS Nack Visibility timeout in seconds. Default is 0").
 					Default(0).
 					Optional(),
+				service.NewDurationField(s3iSQSFieldMessageTimeout).
+					Description("The amount of time to keep an in-flight SQS notification hidden while its S3 object is being processed. When greater than zero this sets the visibility timeout on each received notification and periodically refreshes it (when half of the timeout has elapsed) via `ChangeMessageVisibility` until every record scanned from the object has been acked or nacked. This prevents the object from being redelivered and reprocessed when downloading, scanning and downstream delivery take longer than the queue's own visibility timeout. The default of `0s` disables this behaviour, preserving the queue's visibility timeout as the only deadline.").
+					Default("0s").
+					Advanced(),
 			).
 				Description("Consume SQS messages in order to trigger key downloads.").
 				Optional(),
@@ -392,6 +403,72 @@ func (staticTargetReader) Close(context.Context) error {
 
 //------------------------------------------------------------------------------
 
+// sqsInFlightHandle is a single SQS notification whose S3 object is still being
+// processed and whose visibility timeout must be periodically refreshed.
+type sqsInFlightHandle struct {
+	id            string
+	receiptHandle string
+	deadline      time.Time
+}
+
+// sqsInFlightTracker keeps the receipt handles of SQS notifications that are
+// currently being processed so that their visibility timeout can be refreshed
+// until every record derived from the object has been acked or nacked.
+//
+// Unlike the aws_sqs input there is no max-outstanding limit here: the s3 input
+// pulls a single bounded batch of notifications at a time, so a plain mutex-
+// guarded map is sufficient and we never need to block the receiver.
+type sqsInFlightTracker struct {
+	mu      sync.Mutex
+	handles map[string]*sqsInFlightHandle
+	timeout time.Duration
+}
+
+func newSQSInFlightTracker(timeout time.Duration) *sqsInFlightTracker {
+	return &sqsInFlightTracker{
+		handles: map[string]*sqsInFlightHandle{},
+		timeout: timeout,
+	}
+}
+
+func (t *sqsInFlightTracker) Add(id, receiptHandle string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.handles[id] = &sqsInFlightHandle{
+		id:            id,
+		receiptHandle: receiptHandle,
+		deadline:      time.Now().Add(t.timeout),
+	}
+}
+
+func (t *sqsInFlightTracker) Remove(id string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	delete(t.handles, id)
+}
+
+// PullToRefresh returns visibility-change entries for every tracked handle that
+// is within half of the timeout of expiring, resetting each returned handle's
+// deadline to now+timeout.
+func (t *sqsInFlightTracker) PullToRefresh(now time.Time) []sqstypes.ChangeMessageVisibilityBatchRequestEntry {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	var entries []sqstypes.ChangeMessageVisibilityBatchRequestEntry
+	for _, h := range t.handles {
+		if h.deadline.Sub(now) > t.timeout/2 {
+			continue
+		}
+		h.deadline = now.Add(t.timeout)
+		entries = append(entries, sqstypes.ChangeMessageVisibilityBatchRequestEntry{
+			Id:                aws.String(h.id),
+			ReceiptHandle:     aws.String(h.receiptHandle),
+			VisibilityTimeout: int32(t.timeout.Seconds()),
+		})
+	}
+	return entries
+}
+
 type sqsTargetReader struct {
 	conf s3iConfig
 	log  *service.Logger
@@ -401,6 +478,12 @@ type sqsTargetReader struct {
 	nextRequest time.Time
 
 	pending []*s3ObjectTarget
+
+	// tracker and closeSignal are only set when sqs.message_timeout > 0, in
+	// which case a background goroutine refreshes the visibility timeout of
+	// in-flight notifications.
+	tracker     *sqsInFlightTracker
+	closeSignal *shutdown.Signaller
 }
 
 func newSQSTargetReader(
@@ -409,7 +492,67 @@ func newSQSTargetReader(
 	s3 *s3.Client,
 	sqs *sqs.Client,
 ) *sqsTargetReader {
-	return &sqsTargetReader{conf: conf, log: log, sqs: sqs, s3: s3, nextRequest: time.Time{}, pending: nil}
+	r := &sqsTargetReader{conf: conf, log: log, sqs: sqs, s3: s3, nextRequest: time.Time{}, pending: nil}
+	if conf.SQS.MessageTimeout > 0 {
+		r.tracker = newSQSInFlightTracker(conf.SQS.MessageTimeout)
+		r.closeSignal = shutdown.NewSignaller()
+		go r.refreshLoop()
+	}
+	return r
+}
+
+// refreshLoop periodically extends the visibility timeout of every in-flight
+// SQS notification so that slow/large objects are not redelivered while still
+// being processed. It runs only when sqs.message_timeout > 0.
+func (s *sqsTargetReader) refreshLoop() {
+	defer s.closeSignal.TriggerHasStopped()
+
+	ctx, done := s.closeSignal.HardStopCtx(context.Background())
+	defer done()
+
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			s.refreshInFlight(ctx)
+		}
+	}
+}
+
+func (s *sqsTargetReader) refreshInFlight(ctx context.Context) {
+	entries := s.tracker.PullToRefresh(time.Now())
+	for len(entries) > 0 {
+		var batch []sqstypes.ChangeMessageVisibilityBatchRequestEntry
+		if len(entries) > 10 {
+			batch, entries = entries[:10], entries[10:]
+		} else {
+			batch, entries = entries, nil
+		}
+		if _, err := s.sqs.ChangeMessageVisibilityBatch(ctx, &sqs.ChangeMessageVisibilityBatchInput{
+			QueueUrl: aws.String(s.conf.SQS.URL),
+			Entries:  batch,
+		}); err != nil {
+			// Tolerate the race where a notification is acked/nacked at the same
+			// time as a refresh: the handle becomes invalid but no harm is done.
+			s.log.Debugf("Failed to refresh SQS visibility timeout for in-flight S3 notifications: %v", err)
+		}
+	}
+}
+
+func (s *sqsTargetReader) trackMessage(msg sqstypes.Message) {
+	if s.tracker != nil && msg.MessageId != nil && msg.ReceiptHandle != nil {
+		s.tracker.Add(*msg.MessageId, *msg.ReceiptHandle)
+	}
+}
+
+func (s *sqsTargetReader) untrackMessage(msg sqstypes.Message) {
+	if s.tracker != nil && msg.MessageId != nil {
+		s.tracker.Remove(*msg.MessageId)
+	}
 }
 
 func (s *sqsTargetReader) Pop(ctx context.Context) (*s3ObjectTarget, error) {
@@ -444,6 +587,13 @@ func (s *sqsTargetReader) Pop(ctx context.Context) (*s3ObjectTarget, error) {
 }
 
 func (s *sqsTargetReader) Close(ctx context.Context) error {
+	if s.closeSignal != nil {
+		s.closeSignal.TriggerHardStop()
+		select {
+		case <-s.closeSignal.HasStoppedChan():
+		case <-ctx.Done():
+		}
+	}
 	var err error
 	for _, p := range s.pending {
 		if aerr := p.ackFn(ctx, errors.New("service shutting down")); aerr != nil {
@@ -532,7 +682,7 @@ func (s *sqsTargetReader) readSQSEvents(ctx context.Context) ([]*s3ObjectTarget,
 		})
 	}
 
-	output, err := s.sqs.ReceiveMessage(ctx, &sqs.ReceiveMessageInput{
+	receiveInput := &sqs.ReceiveMessageInput{
 		QueueUrl:            &s.conf.SQS.URL,
 		MaxNumberOfMessages: int32(s.conf.SQS.MaxMessages),
 		WaitTimeSeconds:     int32(s.conf.SQS.WaitTimeSeconds),
@@ -542,7 +692,14 @@ func (s *sqsTargetReader) readSQSEvents(ctx context.Context) ([]*s3ObjectTarget,
 		MessageAttributeNames: []string{
 			string(sqstypes.MessageSystemAttributeNameSentTimestamp),
 		},
-	})
+	}
+	// When a processing heartbeat is enabled, hide each received notification for
+	// the full message_timeout up front; the refresh loop then keeps it hidden.
+	if s.conf.SQS.MessageTimeout > 0 {
+		receiveInput.VisibilityTimeout = int32(s.conf.SQS.MessageTimeout.Seconds())
+	}
+
+	output, err := s.sqs.ReceiveMessage(ctx, receiveInput)
 	if err != nil {
 		return nil, err
 	}
@@ -576,6 +733,11 @@ func (s *sqsTargetReader) readSQSEvents(ctx context.Context) ([]*s3ObjectTarget,
 			continue
 		}
 
+		// Start refreshing this notification's visibility timeout (no-op when the
+		// heartbeat is disabled); it is removed again once the object is fully
+		// acked or nacked below, after which its receipt handle is invalid.
+		s.trackMessage(sqsMsg)
+
 		pendingAcks := int32(len(objects))
 		var nackOnce sync.Once
 		for _, object := range objects {
@@ -597,6 +759,10 @@ func (s *sqsTargetReader) readSQSEvents(ctx context.Context) ([]*s3ObjectTarget,
 								// Prevent future acks from triggering a delete.
 								atomic.StoreInt32(&pendingAcks, -1)
 
+								// Stop refreshing: the message is going back to the
+								// queue and its receipt handle is about to be invalid.
+								s.untrackMessage(sqsMsg)
+
 								s.log.Debugf("Pushing SQS notification for key %q back into the queue due to error: %s", object.key, err)
 
 								// It's possible that this is called for one message
@@ -609,6 +775,9 @@ func (s *sqsTargetReader) readSQSEvents(ctx context.Context) ([]*s3ObjectTarget,
 						} else {
 							ackOnce.Do(func() {
 								if atomic.AddInt32(&pendingAcks, -1) == 0 {
+									// Last record acked: stop refreshing before
+									// deleting the message.
+									s.untrackMessage(sqsMsg)
 									aerr = s.ackSQSMessage(ctx, sqsMsg)
 								}
 							})
@@ -928,6 +1097,13 @@ func (a *awsS3Reader) Close(ctx context.Context) (err error) {
 	if a.object != nil {
 		err = a.object.scanner.Close(ctx)
 		a.object = nil
+	}
+	// Close the target reader so its SQS visibility-timeout refresh goroutine (if
+	// any) is stopped and pending notifications are released.
+	if a.keyReader != nil {
+		if cerr := a.keyReader.Close(ctx); cerr != nil && err == nil {
+			err = cerr
+		}
 	}
 	return
 }
