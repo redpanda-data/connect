@@ -363,30 +363,30 @@ func coerceStreamingValues(data map[string]any, info *columnTypeInfo, log *servi
 			continue
 		}
 
-		// Handle int64 values produced by ConvertValue's ParseInt path for
-		// columns whose schema type is Decimal or BigDecimal. A bare NUMBER
-		// value like 1 or 42 parses as int64 but must be a canonical decimal
-		// string to encode correctly into Avro decimal(bytes) fields.
-		if n, ok := val.(int64); ok {
-			s := strconv.FormatInt(n, 10)
-			switch c.Type {
-			case schema.Decimal:
-				if c.Logical != nil && c.Logical.Decimal != nil {
-					if canonical, err := sqlutil.CanonicaliseDecimal(s, c.Logical.Decimal.Precision, c.Logical.Decimal.Scale); err == nil {
-						data[col] = canonical
-					} else {
-						log.Warnf("coerce %s: cannot canonicalise decimal %q: %v", col, s, err)
-					}
-				}
-			case schema.BigDecimal:
-				if canonical, err := sqlutil.CanonicaliseBigDecimal(s); err == nil {
-					data[col] = canonical
-				} else {
-					log.Warnf("coerce %s: cannot canonicalise big decimal %q: %v", col, s, err)
-				}
-			}
-			continue
-		}
+		// // Handle int64 values produced by ConvertValue's ParseInt path for
+		// // columns whose schema type is Decimal or BigDecimal. A bare NUMBER
+		// // value like 1 or 42 parses as int64 but must be a canonical decimal
+		// // string to encode correctly into Avro decimal(bytes) fields.
+		// if n, ok := val.(int64); ok {
+		// 	s := strconv.FormatInt(n, 10)
+		// 	switch c.Type {
+		// 	case schema.Decimal:
+		// 		if c.Logical != nil && c.Logical.Decimal != nil {
+		// 			if canonical, err := sqlutil.CanonicaliseDecimal(s, c.Logical.Decimal.Precision, c.Logical.Decimal.Scale); err == nil {
+		// 				data[col] = canonical
+		// 			} else {
+		// 				log.Warnf("coerce %s: cannot canonicalise decimal %q: %v", col, s, err)
+		// 			}
+		// 		}
+		// 	case schema.BigDecimal:
+		// 		if canonical, err := sqlutil.CanonicaliseBigDecimal(s); err == nil {
+		// 			data[col] = canonical
+		// 		} else {
+		// 			log.Warnf("coerce %s: cannot canonicalise big decimal %q: %v", col, s, err)
+		// 		}
+		// 	}
+		// 	continue
+		// }
 
 		s, ok := val.(string)
 		if !ok {

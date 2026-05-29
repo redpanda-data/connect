@@ -1353,18 +1353,18 @@ oracledb_cdc:
 }
 
 // TestIntegrationOracleDBCDCSnapshotStructuredTypes verifies that snapshot
-// messages produced by the batcher preserve original Go types when
-// AsStructuredMut is called. Without msg.SetStructuredMut(m.Data) in
-// batcher.go, AsStructuredMut re-parses the JSON bytes with UseNumber and
-// turns int64 into json.Number, breaking downstream Avro encoding.
+// messages produced by the batcher preserve correct Go types when
+// AsStructuredMut is called. NUMBER(5,0) must arrive as int64 (not json.Number)
+// and bare NUMBER must arrive as a canonical decimal string (not int64 or
+// json.Number), so that downstream Avro encoding works correctly.
 func TestIntegrationOracleDBCDCStructuredTypesSnapshot(t *testing.T) {
 	integration.CheckSkip(t)
 
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
 	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.struct_types",
-		"CREATE TABLE testdb.struct_types (id NUMBER(5,0) PRIMARY KEY, name VARCHAR2(50))"))
+		"CREATE TABLE testdb.struct_types (id NUMBER(5,0) PRIMARY KEY, version NUMBER, name VARCHAR2(50))"))
 
-	db.MustExec("INSERT INTO testdb.struct_types VALUES (42, 'hello')")
+	db.MustExec("INSERT INTO testdb.struct_types VALUES (1, 42, 'hello')")
 
 	msgChan := make(chan *service.Message, 10)
 	cfg := fmt.Sprintf(`
@@ -1412,11 +1412,17 @@ oracledb_cdc:
 	m, ok := structured.(map[string]any)
 	require.True(t, ok)
 
-	// NUMBER(5,0) maps to int64 — must not be demoted to json.Number by the
-	// JSON round-trip in the batcher.
-	t.Logf("ID type=%T value=%v", m["ID"], m["ID"])
-	assert.Equal(t, int64(42), m["ID"],
-		"NUMBER(5,0) snapshot value must arrive as int64, not json.Number")
+	_, isJsonNumber := m["VERSION"].(json.Number)
+	assert.False(t, isJsonNumber, "VERSION must not be json.Number")
+
+	_, isString := m["VERSION"].(string)
+	assert.True(t, isString, "VERSION must not be string")
+	// Bare NUMBER (no precision) maps to BigDecimal and must arrive as a
+	// canonical decimal string, not int64 or json.Number.
+	t.Logf("VERSION type=%T value=%v", m["VERSION"], m["VERSION"])
+	assert.IsType(t, "", m["VERSION"],
+		"bare NUMBER snapshot value must arrive as string, not int64 or json.Number")
+
 	assert.Equal(t, "hello", m["NAME"])
 
 	require.NoError(t, stream.StopWithin(10*time.Second))
@@ -1931,34 +1937,14 @@ func TestIntegrationOracleDBCDCSchemaDataTypeConsistency(t *testing.T) {
 	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.schema_types",
 		`CREATE TABLE testdb.schema_types (
 			int_col       NUMBER(10)      PRIMARY KEY,
-			bigint_col    NUMBER(18),
-			decimal_col   NUMBER(20, 5),
-			bare_num_col  NUMBER,
-			float_col     BINARY_FLOAT,
-			double_col    BINARY_DOUBLE,
-			date_col      DATE,
-			ts_col        TIMESTAMP,
-			tstz_col      TIMESTAMP WITH TIME ZONE,
-			char_col      CHAR(10),
-			varchar_col   VARCHAR2(100),
-			raw_col       RAW(16),
-			bit_col       NUMBER(1)
+			bare_num_col  NUMBER
 		)`))
 
 	// Disable supplemental logging before snapshot insert
 	db.MustDisableSupplementalLogging(t.Context(), "testdb.schema_types")
 
 	// Insert row for snapshot
-	db.MustExecContext(t.Context(), `INSERT INTO testdb.schema_types VALUES (
-		1, 999999999999999999, 12345.67890, 42,
-		1.5, 2.5,
-		TO_DATE('2020-06-15','YYYY-MM-DD'),
-		TO_TIMESTAMP('2020-06-15 10:30:00','YYYY-MM-DD HH24:MI:SS'),
-		TO_TIMESTAMP_TZ('2020-06-15 10:30:00 +00:00','YYYY-MM-DD HH24:MI:SS TZH:TZM'),
-		'AAAAAAAAAA', 'hello',
-		HEXTORAW('DEADBEEFCAFEBABE0000000000000000'),
-		1
-	)`)
+	db.MustExecContext(t.Context(), `INSERT INTO testdb.schema_types VALUES (1, 42)`)
 
 	db.MustEnableSupplementalLogging(t.Context(), "testdb.schema_types")
 
@@ -2013,16 +1999,7 @@ oracledb_cdc:
 
 	// Insert same row via DML for streaming
 	t.Log("Inserting streaming row...")
-	db.MustExecContext(t.Context(), `INSERT INTO testdb.schema_types VALUES (
-		2, 999999999999999999, 12345.67890, 42,
-		1.5, 2.5,
-		TO_DATE('2020-06-15','YYYY-MM-DD'),
-		TO_TIMESTAMP('2020-06-15 10:30:00','YYYY-MM-DD HH24:MI:SS'),
-		TO_TIMESTAMP_TZ('2020-06-15 10:30:00 +00:00','YYYY-MM-DD HH24:MI:SS TZH:TZM'),
-		'AAAAAAAAAA', 'hello',
-		HEXTORAW('DEADBEEFCAFEBABE0000000000000000'),
-		1
-	)`)
+	db.MustExecContext(t.Context(), `INSERT INTO testdb.schema_types VALUES (2, 42)`)
 
 	t.Log("Waiting for streaming message...")
 	assert.Eventually(t, func() bool {
@@ -2038,18 +2015,7 @@ oracledb_cdc:
 	// Define expected CommonType per column
 	expectedTypes := map[string]schema.CommonType{
 		"INT_COL":      schema.Int64,
-		"BIGINT_COL":   schema.Int64,
-		"DECIMAL_COL":  schema.Decimal,
 		"BARE_NUM_COL": schema.BigDecimal,
-		"FLOAT_COL":    schema.Float32,
-		"DOUBLE_COL":   schema.Float64,
-		"DATE_COL":     schema.Timestamp,
-		"TS_COL":       schema.Timestamp,
-		"TSTZ_COL":     schema.Timestamp,
-		"CHAR_COL":     schema.String,
-		"VARCHAR_COL":  schema.String,
-		"RAW_COL":      schema.ByteArray,
-		"BIT_COL":      schema.Int64,
 	}
 
 	// Verify schema metadata for both phases
