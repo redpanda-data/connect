@@ -19,12 +19,18 @@ type kcBenchScriptArgs struct {
 	ConnectorConfigJSON string // rendered JSON to PUT to /connectors/<name>/config
 	Bucket              string
 	SessionID           string
-	// RedpandaMetricsEndpoint is the host:port pair (e.g. "10.42.10.10:9644")
-	// the broker-side scraper curls every 10s while the KC JVM is alive.
-	// Empty disables the scraper. Mirrors benchScriptArgs.RedpandaMetricsEndpoint
-	// — each engine writes to its own file so the runner can attribute
-	// throughput per engine without merging across windows.
+	// RedpandaMetricsEndpoint is the legacy single-broker host:port pair
+	// (e.g. "10.42.10.10:9644"). Empty disables the scraper.
+	//
+	// Deprecated: prefer RedpandaMetricsEndpoints. Redpanda's per-topic
+	// byte counters are per-broker; a single-broker scrape silently
+	// misses topics whose partition leader is on a different broker.
 	RedpandaMetricsEndpoint string
+	// RedpandaMetricsEndpoints is a comma-separated list of all broker
+	// host:9644 endpoints. The scraper iterates over all of them every
+	// 10s; the parser sums per-topic values across the brokers. If both
+	// fields are set, Endpoints wins.
+	RedpandaMetricsEndpoints string
 }
 
 // renderKCBenchScript produces the shell script executed on the runner EC2
@@ -83,19 +89,34 @@ func renderKCBenchScript(a kcBenchScriptArgs) string {
 	// framed /public_metrics snapshot. Each engine writes to its own
 	// file so the runner can attribute throughput per engine without
 	// merging across windows.
-	if a.RedpandaMetricsEndpoint != "" {
+	//
+	// Prefer the plural Endpoints (cluster-wide) but fall back to the
+	// singular Endpoint for callers that haven't migrated yet. Redpanda
+	// emits per-topic byte counters only on the broker leading the
+	// partition; the multi-broker loop concatenates all brokers'
+	// /public_metrics output under one timestamp header per interval,
+	// and the parser sums per-topic values across them.
+	endpoints := a.RedpandaMetricsEndpoints
+	if endpoints == "" {
+		endpoints = a.RedpandaMetricsEndpoint
+	}
+	if endpoints != "" {
 		lines = append(lines,
 			fmt.Sprintf(`RP=/tmp/redpanda-%d-kc.txt`, a.VCPU),
 			`: > "$RP"`,
-			fmt.Sprintf(`(
+			fmt.Sprintf(`ENDPOINTS=%q`, endpoints),
+			`(
   while kill -0 "$PID" 2>/dev/null; do
     {
-      echo "###timestamp=$(date +%%s)"
-      curl -s --max-time 5 http://%s/public_metrics || echo "###scrape_error"
+      echo "###timestamp=$(date +%s)"
+      IFS=, read -ra EPS <<< "$ENDPOINTS"
+      for EP in "${EPS[@]}"; do
+        curl -s --max-time 5 "http://$EP/public_metrics" || echo "###scrape_error_$EP"
+      done
     } >> "$RP"
     sleep 10
   done
-) &`, a.RedpandaMetricsEndpoint),
+) &`,
 			`RP_SCRAPER=$!`,
 		)
 	}
@@ -146,7 +167,7 @@ done`, a.ConnectorName),
 		`wait "$PID" 2>/dev/null || true`,
 		`kill "$HEARTBEAT" 2>/dev/null || true`,
 	)
-	if a.RedpandaMetricsEndpoint != "" {
+	if endpoints != "" {
 		lines = append(lines, `kill "$RP_SCRAPER" 2>/dev/null || true`)
 	}
 	lines = append(lines,
@@ -154,7 +175,7 @@ done`, a.ConnectorName),
 		fmt.Sprintf(`aws s3 cp "$KC_LOG" "s3://%s/runs/%s/kc-%d.log" >/dev/null`,
 			a.Bucket, a.SessionID, a.VCPU),
 	)
-	if a.RedpandaMetricsEndpoint != "" {
+	if endpoints != "" {
 		lines = append(lines,
 			fmt.Sprintf(`aws s3 cp "$RP" "s3://%s/runs/%s/redpanda-%d-kc.txt" >/dev/null`,
 				a.Bucket, a.SessionID, a.VCPU),

@@ -32,7 +32,17 @@ type MatrixRunner struct {
 	// RedpandaMetricsEndpoint is the host:port pair (e.g. "10.42.10.10:9644") the
 	// per-point scraper curls every 10s. Empty disables the scraper, so callers
 	// without a Redpanda cluster (e.g. an early-stack bring-up) won't fail.
+	//
+	// Deprecated: prefer RedpandaMetricsEndpoints. Redpanda emits per-topic byte
+	// counters only on the broker that leads a partition — scraping a single
+	// broker misses topics whose leader is elsewhere. Kept here for back-compat
+	// with callers that haven't migrated yet.
 	RedpandaMetricsEndpoint string
+	// RedpandaMetricsEndpoints is a comma-separated list of all broker
+	// host:9644 endpoints. Each bench script scrapes ALL brokers per
+	// interval because Redpanda emits per-topic byte counters only on
+	// the broker leading the partition.
+	RedpandaMetricsEndpoints string
 	// Engines lists the engines to sweep at each vCPU point, in order.
 	// Default ["connect"] preserves the pre-Plan-2 behavior.
 	Engines []string
@@ -98,15 +108,16 @@ func (m *MatrixRunner) Run(
 			switch engine {
 			case "connect":
 				script = renderBenchScript(benchScriptArgs{
-					VCPU:                    n,
-					MemLimitGiB:             memLimitPerVCPU * n,
-					WarmupSec:               int(warmup.Seconds()),
-					DurationSec:             int(duration.Seconds()),
-					ConfigPath:              m.ConfigPath,
-					BinaryPath:              m.BinaryPath,
-					Bucket:                  m.Bucket,
-					SessionID:               m.SessionID,
-					RedpandaMetricsEndpoint: m.RedpandaMetricsEndpoint,
+					VCPU:                     n,
+					MemLimitGiB:              memLimitPerVCPU * n,
+					WarmupSec:                int(warmup.Seconds()),
+					DurationSec:              int(duration.Seconds()),
+					ConfigPath:               m.ConfigPath,
+					BinaryPath:               m.BinaryPath,
+					Bucket:                   m.Bucket,
+					SessionID:                m.SessionID,
+					RedpandaMetricsEndpoint:  m.RedpandaMetricsEndpoint,
+					RedpandaMetricsEndpoints: m.RedpandaMetricsEndpoints,
 				})
 			case "kafka_connect":
 				// Per-vCPU connector name. KC stores Debezium offsets in
@@ -119,15 +130,16 @@ func (m *MatrixRunner) Run(
 				// "redo log is no longer available" warnings.
 				vcpuConnectorName := fmt.Sprintf("%s_v%d", m.KCConnectorName, n)
 				script = renderKCBenchScript(kcBenchScriptArgs{
-					VCPU:                    n,
-					MemLimitGiB:             memLimitPerVCPU * n,
-					WarmupSec:               int(warmup.Seconds()),
-					DurationSec:             int(duration.Seconds()),
-					ConnectorName:           vcpuConnectorName,
-					ConnectorConfigJSON:     m.KCConnectorConfigJSON,
-					Bucket:                  m.Bucket,
-					SessionID:               m.SessionID,
-					RedpandaMetricsEndpoint: m.RedpandaMetricsEndpoint,
+					VCPU:                     n,
+					MemLimitGiB:              memLimitPerVCPU * n,
+					WarmupSec:                int(warmup.Seconds()),
+					DurationSec:              int(duration.Seconds()),
+					ConnectorName:            vcpuConnectorName,
+					ConnectorConfigJSON:      m.KCConnectorConfigJSON,
+					Bucket:                   m.Bucket,
+					SessionID:                m.SessionID,
+					RedpandaMetricsEndpoint:  m.RedpandaMetricsEndpoint,
+					RedpandaMetricsEndpoints: m.RedpandaMetricsEndpoints,
 				})
 			default:
 				cancelWorkload()
@@ -313,15 +325,24 @@ func parseAndTrim(raw []byte, warmup time.Duration) []Sample {
 }
 
 type benchScriptArgs struct {
-	VCPU                    int
-	MemLimitGiB             int
-	WarmupSec               int
-	DurationSec             int
-	ConfigPath              string
-	BinaryPath              string
-	Bucket                  string
-	SessionID               string
+	VCPU        int
+	MemLimitGiB int
+	WarmupSec   int
+	DurationSec int
+	ConfigPath  string
+	BinaryPath  string
+	Bucket      string
+	SessionID   string
+	// RedpandaMetricsEndpoint is the legacy single-broker scrape target.
+	// Deprecated: prefer RedpandaMetricsEndpoints. Kept for back-compat with
+	// callers that haven't migrated to the multi-broker output yet.
 	RedpandaMetricsEndpoint string
+	// RedpandaMetricsEndpoints is a comma-separated list of host:9644
+	// endpoints, one per broker. The scraper iterates over all of them
+	// each interval because Redpanda emits per-topic byte counters only
+	// on the broker leading the partition. If both fields are set,
+	// Endpoints wins.
+	RedpandaMetricsEndpoints string
 }
 
 // renderBenchScript produces the shell script executed on the runner EC2 for
@@ -380,19 +401,34 @@ func renderBenchScript(a benchScriptArgs) string {
 ) &`,
 		`PROM_SCRAPER=$!`,
 	}
-	if a.RedpandaMetricsEndpoint != "" {
+	// Prefer the plural Endpoints (cluster-wide) but fall back to the
+	// singular Endpoint for callers that haven't migrated yet. Redpanda
+	// emits per-topic byte counters only on the broker leading the
+	// partition, so scraping a single broker silently drops topics whose
+	// leader landed elsewhere. The multi-broker loop concatenates all
+	// brokers' /public_metrics output under one timestamp header per
+	// interval; the parser sums per-topic values across the brokers.
+	endpoints := a.RedpandaMetricsEndpoints
+	if endpoints == "" {
+		endpoints = a.RedpandaMetricsEndpoint
+	}
+	if endpoints != "" {
 		lines = append(lines,
-			fmt.Sprintf(`RP=/tmp/redpanda-%d.txt`, a.VCPU),
+			fmt.Sprintf(`RP=/tmp/redpanda-%d-connect.txt`, a.VCPU),
 			`: > "$RP"`,
-			fmt.Sprintf(`(
+			fmt.Sprintf(`ENDPOINTS=%q`, endpoints),
+			`(
   while kill -0 "$PID" 2>/dev/null; do
     {
-      echo "###timestamp=$(date +%%s)"
-      curl -s --max-time 5 http://%s/public_metrics || echo "###scrape_error"
+      echo "###timestamp=$(date +%s)"
+      IFS=, read -ra EPS <<< "$ENDPOINTS"
+      for EP in "${EPS[@]}"; do
+        curl -s --max-time 5 "http://$EP/public_metrics" || echo "###scrape_error_$EP"
+      done
     } >> "$RP"
     sleep 10
   done
-) &`, a.RedpandaMetricsEndpoint),
+) &`,
 			`RP_SCRAPER=$!`,
 		)
 	}
@@ -403,7 +439,7 @@ func renderBenchScript(a benchScriptArgs) string {
 		`kill "$HEARTBEAT" 2>/dev/null || true`,
 		`kill "$PROM_SCRAPER" 2>/dev/null || true`,
 	)
-	if a.RedpandaMetricsEndpoint != "" {
+	if endpoints != "" {
 		lines = append(lines, `kill "$RP_SCRAPER" 2>/dev/null || true`)
 	}
 	lines = append(lines,
@@ -413,7 +449,7 @@ func renderBenchScript(a benchScriptArgs) string {
 		fmt.Sprintf(`aws s3 cp "$PROM" "s3://%s/runs/%s/prom-%d.txt" >/dev/null`,
 			a.Bucket, a.SessionID, a.VCPU),
 	)
-	if a.RedpandaMetricsEndpoint != "" {
+	if endpoints != "" {
 		lines = append(lines,
 			fmt.Sprintf(`aws s3 cp "$RP" "s3://%s/runs/%s/redpanda-%d-connect.txt" >/dev/null`,
 				a.Bucket, a.SessionID, a.VCPU),

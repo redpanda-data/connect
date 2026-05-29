@@ -37,6 +37,16 @@ func parseBrokerFrames(r io.Reader) ([]promSnapshot, error) {
 //
 // Topics with the "_kc_" prefix (KC's internal config/status/offset
 // topics) are excluded — they're worker bookkeeping, not bench output.
+//
+// Multi-broker semantics: a single frame's body is the concatenation of
+// /public_metrics output from EVERY broker (the bench scraper iterates
+// over all brokers per interval — see renderBenchScript). Redpanda emits
+// per-topic byte counters only on the broker leading the partition, so
+// each broker's body contributes the bytes for the partitions it leads;
+// summing across the brokers within a frame gives the cluster-wide total
+// for that topic. We use `+=` here, not `=`, to aggregate those
+// contributions. A single-broker scrape would degenerate to the same
+// behavior (only one occurrence per topic).
 func extractTopicProduceBytes(body string) (map[string]float64, error) {
 	out := map[string]float64{}
 	scanner := bufio.NewScanner(strings.NewReader(body))
@@ -75,7 +85,10 @@ func extractTopicProduceBytes(body string) (map[string]float64, error) {
 		if err != nil {
 			return nil, fmt.Errorf("parse %q: %w", line, err)
 		}
-		out[topic] = v
+		// Multi-broker frames concatenate every broker's output; the
+		// same topic may appear once per broker, with each broker
+		// contributing the bytes for partitions it leads. Sum them.
+		out[topic] += v
 	}
 	return out, scanner.Err()
 }
