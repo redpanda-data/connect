@@ -109,12 +109,21 @@ func (m *MatrixRunner) Run(
 					RedpandaMetricsEndpoint: m.RedpandaMetricsEndpoint,
 				})
 			case "kafka_connect":
+				// Per-vCPU connector name. KC stores Debezium offsets in
+				// the _kc_offsets topic keyed by connector name; if every
+				// sweep point reuses the same name, the connector at
+				// vCPU=N+1 wakes up trying to resume from vCPU=N's LSN —
+				// which Postgres has aged out of WAL between sweep points.
+				// Verified live in the 2026-05-29 postgres real bench:
+				// every KC point past the first produced 0 MB/s with
+				// "redo log is no longer available" warnings.
+				vcpuConnectorName := fmt.Sprintf("%s_v%d", m.KCConnectorName, n)
 				script = renderKCBenchScript(kcBenchScriptArgs{
 					VCPU:                    n,
 					MemLimitGiB:             memLimitPerVCPU * n,
 					WarmupSec:               int(warmup.Seconds()),
 					DurationSec:             int(duration.Seconds()),
-					ConnectorName:           m.KCConnectorName,
+					ConnectorName:           vcpuConnectorName,
 					ConnectorConfigJSON:     m.KCConnectorConfigJSON,
 					Bucket:                  m.Bucket,
 					SessionID:               m.SessionID,
