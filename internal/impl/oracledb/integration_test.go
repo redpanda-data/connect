@@ -1281,93 +1281,18 @@ func TestIntegrationOracleDBGoOraColumnTypesForNumber(t *testing.T) {
 	}
 }
 
-// TestIntegrationOracleDBCDCStreamingStructuredTypes verifies that streaming
-// messages produced by the batcher preserve correct Go types when
-// AsStructuredMut is called. Bare NUMBER (no precision) maps to BigDecimal and
-// must arrive as a canonical decimal string — not int64 or json.Number.
-func TestIntegrationOracleDBCDCStructuredTypesStreaming(t *testing.T) {
+func TestIntegrationOracleDBCDCPrecisionlessNumber(t *testing.T) {
 	integration.CheckSkip(t)
-
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
-	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.stream_types",
-		"CREATE TABLE testdb.stream_types (id NUMBER(5,0) PRIMARY KEY, version NUMBER, name VARCHAR2(50))"))
 
-	msgChan := make(chan *service.Message, 10)
-	cfg := fmt.Sprintf(`
-oracledb_cdc:
-  connection_string: %s
-  stream_snapshot: false
-  logminer:
-    scn_window_size: 20000
-    backoff_interval: 1s
-  include: ["TESTDB.STREAM_TYPES"]`, connStr)
+	t.Run("snapshot", func(t *testing.T) {
+		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.struct_types",
+			"CREATE TABLE testdb.struct_types (id NUMBER(5,0) PRIMARY KEY, version NUMBER, name VARCHAR2(50))"))
 
-	streamBuilder := service.NewStreamBuilder()
-	require.NoError(t, streamBuilder.AddInputYAML(cfg))
-	require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
-	require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
-		for _, msg := range mb {
-			msgChan <- msg
-		}
-		return nil
-	}))
+		db.MustExec("INSERT INTO testdb.struct_types VALUES (1, 42, 'hello')")
 
-	stream, err := streamBuilder.Build()
-	require.NoError(t, err)
-	license.InjectTestService(stream.Resources())
-	go func() {
-		if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
-			t.Error(err)
-		}
-	}()
-	go func() { <-t.Context().Done(); close(msgChan) }()
-
-	// Wait for LogMiner to start before inserting so the row lands in the redo log.
-	time.Sleep(10 * time.Second)
-	db.MustExec("INSERT INTO testdb.stream_types VALUES (1, 42, 'hello')")
-
-	var msgs []*service.Message
-	for msg := range msgChan {
-		msgs = append(msgs, msg)
-		if len(msgs) == 1 {
-			break
-		}
-	}
-	require.Len(t, msgs, 1)
-
-	structured, err := msgs[0].AsStructuredMut()
-	require.NoError(t, err)
-
-	m, ok := structured.(map[string]any)
-	require.True(t, ok)
-
-	// Bare NUMBER (no precision) maps to BigDecimal and must arrive as a
-	// canonical decimal string, not int64 or json.Number. coerceStreamingValues
-	// must convert the int64 produced by LogMiner's ParseInt path to a string.
-	t.Logf("VERSION type=%T value=%v", m["VERSION"], m["VERSION"])
-	assert.IsType(t, "", m["VERSION"],
-		"bare NUMBER streaming value must arrive as string, not int64 or json.Number")
-	assert.Equal(t, "hello", m["NAME"])
-
-	require.NoError(t, stream.StopWithin(10*time.Second))
-}
-
-// TestIntegrationOracleDBCDCSnapshotStructuredTypes verifies that snapshot
-// messages produced by the batcher preserve correct Go types when
-// AsStructuredMut is called. NUMBER(5,0) must arrive as int64 (not json.Number)
-// and bare NUMBER must arrive as a canonical decimal string (not int64 or
-// json.Number), so that downstream Avro encoding works correctly.
-func TestIntegrationOracleDBCDCStructuredTypesSnapshot(t *testing.T) {
-	integration.CheckSkip(t)
-
-	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
-	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.struct_types",
-		"CREATE TABLE testdb.struct_types (id NUMBER(5,0) PRIMARY KEY, version NUMBER, name VARCHAR2(50))"))
-
-	db.MustExec("INSERT INTO testdb.struct_types VALUES (1, 42, 'hello')")
-
-	msgChan := make(chan *service.Message, 10)
-	cfg := fmt.Sprintf(`
+		msgChan := make(chan *service.Message, 10)
+		cfg := fmt.Sprintf(`
 oracledb_cdc:
   connection_string: %s
   stream_snapshot: true
@@ -1377,55 +1302,133 @@ oracledb_cdc:
     backoff_interval: 1s
   include: ["TESTDB.STRUCT_TYPES"]`, connStr)
 
-	streamBuilder := service.NewStreamBuilder()
-	require.NoError(t, streamBuilder.AddInputYAML(cfg))
-	require.NoError(t, streamBuilder.SetLoggerYAML(`level: DEBUG`))
-	require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
-		for _, msg := range mb {
-			msgChan <- msg
+		streamBuilder := service.NewStreamBuilder()
+		require.NoError(t, streamBuilder.AddInputYAML(cfg))
+		require.NoError(t, streamBuilder.SetLoggerYAML(`level: DEBUG`))
+		require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+			for _, msg := range mb {
+				msgChan <- msg
+			}
+			return nil
+		}))
+
+		stream, err := streamBuilder.Build()
+		require.NoError(t, err)
+		license.InjectTestService(stream.Resources())
+		go func() {
+			if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+				t.Error(err)
+			}
+		}()
+		go func() { <-t.Context().Done(); close(msgChan) }()
+
+		var msgs []*service.Message
+		for msg := range msgChan {
+			msgs = append(msgs, msg)
+			if len(msgs) == 1 {
+				break
+			}
 		}
-		return nil
-	}))
+		require.Len(t, msgs, 1)
 
-	stream, err := streamBuilder.Build()
-	require.NoError(t, err)
-	license.InjectTestService(stream.Resources())
-	go func() {
-		if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
-			t.Error(err)
+		structured, err := msgs[0].AsStructuredMut()
+		require.NoError(t, err)
+
+		m, ok := structured.(map[string]any)
+		require.True(t, ok)
+
+		_, isJsonNumber := m["VERSION"].(json.Number)
+		assert.False(t, isJsonNumber, "VERSION must not be json.Number")
+
+		_, isInt64 := m["VERSION"].(int64)
+		assert.False(t, isInt64, "VERSION must not be int64")
+
+		_, isString := m["VERSION"].(string)
+		assert.True(t, isString, "VERSION must be string")
+
+		// Bare NUMBER (no precision) maps to BigDecimal and must arrive as a
+		// canonical decimal string, not int64 or json.Number.
+		t.Logf("VERSION type=%T value=%v", m["VERSION"], m["VERSION"])
+		assert.IsType(t, "", m["VERSION"],
+			"bare NUMBER snapshot value must arrive as string, not int64 or json.Number")
+
+		assert.Equal(t, "hello", m["NAME"])
+
+		require.NoError(t, stream.StopWithin(10*time.Second))
+	})
+
+	t.Run("streaming", func(t *testing.T) {
+		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.stream_types",
+			"CREATE TABLE testdb.stream_types (id NUMBER(5,0) PRIMARY KEY, version NUMBER, name VARCHAR2(50))"))
+
+		msgChan := make(chan *service.Message, 10)
+		cfg := fmt.Sprintf(`
+oracledb_cdc:
+  connection_string: %s
+  stream_snapshot: false
+  logminer:
+    scn_window_size: 20000
+    backoff_interval: 1s
+  include: ["TESTDB.STREAM_TYPES"]`, connStr)
+
+		streamBuilder := service.NewStreamBuilder()
+		require.NoError(t, streamBuilder.AddInputYAML(cfg))
+		require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
+		require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+			for _, msg := range mb {
+				msgChan <- msg
+			}
+			return nil
+		}))
+
+		stream, err := streamBuilder.Build()
+		require.NoError(t, err)
+		license.InjectTestService(stream.Resources())
+		go func() {
+			if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+				t.Error(err)
+			}
+		}()
+		go func() { <-t.Context().Done(); close(msgChan) }()
+
+		// Wait for LogMiner to start before inserting so the row lands in the redo log.
+		time.Sleep(10 * time.Second)
+		db.MustExec("INSERT INTO testdb.stream_types VALUES (1, 42, 'hello')")
+
+		var msgs []*service.Message
+		for msg := range msgChan {
+			msgs = append(msgs, msg)
+			if len(msgs) == 1 {
+				break
+			}
 		}
-	}()
-	go func() { <-t.Context().Done(); close(msgChan) }()
+		require.Len(t, msgs, 1)
 
-	var msgs []*service.Message
-	for msg := range msgChan {
-		msgs = append(msgs, msg)
-		if len(msgs) == 1 {
-			break
-		}
-	}
-	require.Len(t, msgs, 1)
+		structured, err := msgs[0].AsStructuredMut()
+		require.NoError(t, err)
 
-	structured, err := msgs[0].AsStructuredMut()
-	require.NoError(t, err)
+		m, ok := structured.(map[string]any)
+		require.True(t, ok)
 
-	m, ok := structured.(map[string]any)
-	require.True(t, ok)
+		_, isJsonNumber := m["VERSION"].(json.Number)
+		assert.False(t, isJsonNumber, "VERSION must not be json.Number")
 
-	_, isJsonNumber := m["VERSION"].(json.Number)
-	assert.False(t, isJsonNumber, "VERSION must not be json.Number")
+		_, isInt64 := m["VERSION"].(int64)
+		assert.False(t, isInt64, "VERSION must not be int64")
 
-	_, isString := m["VERSION"].(string)
-	assert.True(t, isString, "VERSION must not be string")
-	// Bare NUMBER (no precision) maps to BigDecimal and must arrive as a
-	// canonical decimal string, not int64 or json.Number.
-	t.Logf("VERSION type=%T value=%v", m["VERSION"], m["VERSION"])
-	assert.IsType(t, "", m["VERSION"],
-		"bare NUMBER snapshot value must arrive as string, not int64 or json.Number")
+		_, isString := m["VERSION"].(string)
+		assert.True(t, isString, "VERSION must be string")
 
-	assert.Equal(t, "hello", m["NAME"])
+		// Bare NUMBER (no precision) maps to BigDecimal and must arrive as a
+		// canonical decimal string, not int64 or json.Number. coerceStreamingValues
+		// must convert the int64 produced by LogMiner's ParseInt path to a string.
+		t.Logf("VERSION type=%T value=%v", m["VERSION"], m["VERSION"])
+		assert.IsType(t, "", m["VERSION"],
+			"bare NUMBER streaming value must arrive as string, not int64 or json.Number")
+		assert.Equal(t, "hello", m["NAME"])
 
-	require.NoError(t, stream.StopWithin(10*time.Second))
+		require.NoError(t, stream.StopWithin(10*time.Second))
+	})
 }
 
 func TestIntegrationOracleDBCDCSnapshotSchema(t *testing.T) {
