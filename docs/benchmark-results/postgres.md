@@ -180,3 +180,39 @@ extensions, and per-engine S3 artefacts. Not for publishable numbers.
 
 
 Raw samples + Prometheus snapshots: [`results/postgres/orders-cdc-plan2-smoke/2026-05-29T15-09-15Z.json`](results/postgres/orders-cdc-plan2-smoke/2026-05-29T15-09-15Z.json)
+
+
+## AWS — orders-cdc — 2026-05-30
+
+**Scenario:** Stream changes from a Postgres orders table under sustained heavy writes
+(target 150K writes/sec ≈ 180 MB/s) so the postgres_cdc input — not the
+producer — is the bottleneck across the whole CPU sweep. TRUNCATE between
+sweep points keeps the table size bounded (no Trap 3).
+
+**Git SHA:** [`5ccb10eb1`](https://github.com/redpanda-data/connect/commit/5ccb10eb166045a8ae33cf1635a0ab778879519d)
+
+**Infra:** Runner `c8g.4xlarge`; source `db.r6g.2xlarge` (400 GB) in `us-east-2`.
+
+**Dataset:** 
+
+### Throughput
+
+| GOMAXPROCS | engine        | MB/sec (p50) | broker MB/s | MB/sec (p5) | MB/sec (p95) | msg/sec (p50) | Δ vs Connect       |
+|------------|---------------|--------------|-------------|-------------|--------------|---------------|--------------------|
+| 1          | connect       |           51 |            3 |          25 |           51 |        40,000 |                    |
+| 1          | kafka_connect |           35 |           35 |          31 |           35 |             0 | -16 MB/s (-32%)    |
+| 2          | connect       |           38 |            3 |          19 |           83 |        30,000 |                    |
+| 2          | kafka_connect |           16 |           16 |          16 |           17 |             0 | -22 MB/s (-57%)    |
+| 4          | connect       |           62 |            4 |          25 |          102 |        48,918 |                    |
+| 4          | kafka_connect |           52 |           52 |          37 |           53 |             0 | -10 MB/s (-16%)    |
+| 8          | connect       |           32 |            2 |          13 |          102 |        25,000 |                    |
+| 8          | kafka_connect |           37 |           37 |          24 |           52 |             0 | +5 MB/s (+15%)     |
+
+
+### Cross-engine divergence
+
+| vCPU | faster        | slower        | ratio  | faster MB/s | slower MB/s |
+|------|---------------|---------------|--------|-------------|-------------|
+| 2    | connect       | kafka_connect | 2.31x |          38 |          16 |
+
+Raw samples + Prometheus snapshots: [`results/postgres/orders-cdc/2026-05-30T00-24-13Z.json`](results/postgres/orders-cdc/2026-05-30T00-24-13Z.json)
