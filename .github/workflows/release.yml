@@ -30,6 +30,9 @@ jobs:
 
       - name: Check Out Repo
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          fetch-tags: true
 
       - name: Configure AWS credentials for access to AWS Secrets Manager
         uses: aws-actions/configure-aws-credentials@v6
