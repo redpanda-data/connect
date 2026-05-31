@@ -73,6 +73,15 @@ var kcConnectorSpecs = map[string]kcConnectorSpec{
 	"mysql_cdc": {
 		Class:     "io.debezium.connector.mysql.MySqlConnector",
 		Direction: kcSource,
+		// snapshot.mode=no_data (not "never" like postgres): Debezium MySQL
+		// requires either an existing offset OR a snapshot to know where
+		// to start streaming. Plan 3's per-vCPU connector names give each
+		// sweep point a fresh connector with no previous offset, so
+		// "never" fails the task before warmup. "no_data" snapshots the
+		// schema only (table is TRUNCATEd between sweep points → no rows
+		// to capture) then streams from current binlog. Postgres Debezium
+		// is forgiving here because pgoutput can stream from current WAL
+		// position without an offset; MySQL is stricter.
 		PropsTemplate: `{
   "connector.class": "io.debezium.connector.mysql.MySqlConnector",
   "tasks.max": "1",
@@ -86,7 +95,7 @@ var kcConnectorSpecs = map[string]kcConnectorSpec{
   "topic.prefix": "{{.TopicPrefix}}",
   "schema.history.internal.kafka.bootstrap.servers": "{{.BootstrapServers}}",
   "schema.history.internal.kafka.topic": "_kc_schema_history_{{.TopicPrefix}}",
-  "snapshot.mode": "never",
+  "snapshot.mode": "no_data",
   "key.converter": "org.apache.kafka.connect.json.JsonConverter",
   "value.converter": "org.apache.kafka.connect.json.JsonConverter",
   "key.converter.schemas.enable": "false",
