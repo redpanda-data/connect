@@ -51,10 +51,6 @@ type MatrixRunner struct {
 	KCConnectorName string
 	// KCConnectorConfigJSON is the rendered JSON config posted to KC's REST API.
 	KCConnectorConfigJSON string
-	// ScenarioConnector is the connector name from the scenario YAML
-	// (e.g. "postgres_cdc"). Passed through from runBench so the
-	// broker-side attribution helper can identify per-engine topics.
-	ScenarioConnector string
 	// Topology supplies the direction-specific metric parser used by
 	// fetchBrokerSeriesForEngine.
 	Topology Topology
