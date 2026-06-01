@@ -41,10 +41,21 @@ var instanceTypeVCPU = map[string]int{
 	"c8g.16xlarge": 64,
 }
 
+// Direction is the role the connector-under-test plays in the pipeline.
+// Source connectors read an external system and write into Redpanda (CDC);
+// sink connectors read from Redpanda and write into an external system.
+type Direction string
+
+const (
+	DirectionSource Direction = "source"
+	DirectionSink   Direction = "sink"
+)
+
 type Scenario struct {
 	Name        string         `yaml:"name"`
 	Description string         `yaml:"description"`
 	Connector   string         `yaml:"connector"`
+	Direction   Direction      `yaml:"direction,omitempty"`
 	Stack       string         `yaml:"stack"`
 	Infra       InfraSpec      `yaml:"infra"`
 	Dataset     DatasetSpec    `yaml:"dataset"`
@@ -143,6 +154,7 @@ func LoadScenario(path string) (*Scenario, error) {
 	if err := yaml.Unmarshal(raw, &s); err != nil {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
 	}
+	s.applyDirectionDefault()
 	if err := s.Validate(); err != nil {
 		return nil, fmt.Errorf("validate %s: %w", path, err)
 	}
@@ -152,12 +164,27 @@ func LoadScenario(path string) (*Scenario, error) {
 	return &s, nil
 }
 
+// applyDirectionDefault sets the implicit "source" direction so existing CDC
+// scenarios (which omit the field) keep their behavior.
+func (s *Scenario) applyDirectionDefault() {
+	if s.Direction == "" {
+		s.Direction = DirectionSource
+	}
+}
+
 func (s *Scenario) Validate() error {
 	if s.Name == "" {
 		return fmt.Errorf("name is required")
 	}
 	if s.Connector == "" {
 		return fmt.Errorf("connector is required")
+	}
+	switch s.Direction {
+	case DirectionSource, DirectionSink, "":
+		// "" is tolerated for direct struct construction in tests; LoadScenario
+		// normalizes it via applyDirectionDefault.
+	default:
+		return fmt.Errorf("direction %q is invalid; must be %q or %q", s.Direction, DirectionSource, DirectionSink)
 	}
 	if _, ok := engineSpecFor(s.Connector); !ok {
 		return fmt.Errorf("connector %q has no engineSpec entry; add one to engineSpecs in scenario.go", s.Connector)
