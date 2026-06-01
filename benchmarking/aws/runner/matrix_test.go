@@ -219,6 +219,11 @@ func TestRenderBenchScript_RedpandaScraperWhenEndpointSet(t *testing.T) {
 	// Back-compat path: only the legacy singular field is set. The
 	// scraper still wraps it in the IFS-split shell construct (single-
 	// element list) so the script shape matches the multi-broker case.
+	sc := sourceTopology{}.MetricSidecar(MetricSidecarArgs{
+		Engine: "connect", VCPU: 4,
+		Bucket: "results-bucket", SessionID: "sess-abc",
+		Outs: map[string]string{"redpanda_metrics_endpoint": "10.42.10.10:9644"},
+	})
 	out := renderBenchScript(benchScriptArgs{
 		VCPU:                    4,
 		MemLimitGiB:             4,
@@ -229,6 +234,8 @@ func TestRenderBenchScript_RedpandaScraperWhenEndpointSet(t *testing.T) {
 		Bucket:                  "results-bucket",
 		SessionID:               "sess-abc",
 		RedpandaMetricsEndpoint: "10.42.10.10:9644",
+		ScrapeSetup:             sc.Setup,
+		ScrapeUpload:            sc.Upload,
 	})
 	if !strings.Contains(out, "RP=/tmp/redpanda-4-connect.txt") {
 		t.Errorf("expected RP path line for vcpu 4; got:\n%s", out)
@@ -258,6 +265,11 @@ func TestRenderBenchScript_RedpandaScrapesAllBrokers(t *testing.T) {
 	// postgres real bench — KC's Debezium topic had 0 attribution
 	// despite 2.9M records written).
 	endpoints := "10.42.10.10:9644,10.42.11.10:9644,10.42.12.10:9644"
+	sc := sourceTopology{}.MetricSidecar(MetricSidecarArgs{
+		Engine: "connect", VCPU: 4,
+		Bucket: "results-bucket", SessionID: "sess-abc",
+		Outs: map[string]string{"redpanda_metrics_endpoints": endpoints},
+	})
 	out := renderBenchScript(benchScriptArgs{
 		VCPU:                     4,
 		MemLimitGiB:              4,
@@ -268,6 +280,8 @@ func TestRenderBenchScript_RedpandaScrapesAllBrokers(t *testing.T) {
 		Bucket:                   "results-bucket",
 		SessionID:                "sess-abc",
 		RedpandaMetricsEndpoints: endpoints,
+		ScrapeSetup:              sc.Setup,
+		ScrapeUpload:             sc.Upload,
 	})
 	if !strings.Contains(out, "IFS=,") {
 		t.Errorf("expected IFS=, multi-endpoint split; got:\n%s", out)
@@ -282,6 +296,14 @@ func TestRenderBenchScript_RedpandaScrapesAllBrokers(t *testing.T) {
 func TestRenderBenchScript_PluralEndpointsTakePrecedence(t *testing.T) {
 	// When both legacy and new fields are set (transition window),
 	// the plural wins so we get cluster-wide scrape coverage.
+	sc := sourceTopology{}.MetricSidecar(MetricSidecarArgs{
+		Engine: "connect", VCPU: 1,
+		Bucket: "results-bucket", SessionID: "sess-abc",
+		Outs: map[string]string{
+			"redpanda_metrics_endpoint":  "10.42.10.10:9644",
+			"redpanda_metrics_endpoints": "10.42.10.10:9644,10.42.11.10:9644,10.42.12.10:9644",
+		},
+	})
 	out := renderBenchScript(benchScriptArgs{
 		VCPU:                     1,
 		MemLimitGiB:              1,
@@ -293,6 +315,8 @@ func TestRenderBenchScript_PluralEndpointsTakePrecedence(t *testing.T) {
 		SessionID:                "sess-abc",
 		RedpandaMetricsEndpoint:  "10.42.10.10:9644",
 		RedpandaMetricsEndpoints: "10.42.10.10:9644,10.42.11.10:9644,10.42.12.10:9644",
+		ScrapeSetup:              sc.Setup,
+		ScrapeUpload:             sc.Upload,
 	})
 	if !strings.Contains(out, "10.42.11.10:9644") || !strings.Contains(out, "10.42.12.10:9644") {
 		t.Errorf("plural endpoints must override singular; got:\n%s", out)

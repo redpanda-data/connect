@@ -31,6 +31,10 @@ type kcBenchScriptArgs struct {
 	// 10s; the parser sums per-topic values across the brokers. If both
 	// fields are set, Endpoints wins.
 	RedpandaMetricsEndpoints string
+	// ScrapeSetup launches the metric poller; ScrapeUpload copies the artifact
+	// to S3. Both come from Topology.MetricSidecar.
+	ScrapeSetup  string
+	ScrapeUpload string
 }
 
 // renderKCBenchScript produces the shell script executed on the runner EC2
@@ -85,40 +89,14 @@ func renderKCBenchScript(a kcBenchScriptArgs) string {
 			cpusetHi, kcHeapGiB),
 		`PID=$!`,
 	}
-	// Broker-side scrape: every 10s while the KC JVM is alive, append a
-	// framed /public_metrics snapshot. Each engine writes to its own
-	// file so the runner can attribute throughput per engine without
-	// merging across windows.
-	//
-	// Prefer the plural Endpoints (cluster-wide) but fall back to the
-	// singular Endpoint for callers that haven't migrated yet. Redpanda
-	// emits per-topic byte counters only on the broker leading the
-	// partition; the multi-broker loop concatenates all brokers'
-	// /public_metrics output under one timestamp header per interval,
-	// and the parser sums per-topic values across them.
-	endpoints := a.RedpandaMetricsEndpoints
-	if endpoints == "" {
-		endpoints = a.RedpandaMetricsEndpoint
-	}
-	if endpoints != "" {
-		lines = append(lines,
-			fmt.Sprintf(`RP=/tmp/redpanda-%d-kc.txt`, a.VCPU),
-			`: > "$RP"`,
-			fmt.Sprintf(`ENDPOINTS=%q`, endpoints),
-			`(
-  while kill -0 "$PID" 2>/dev/null; do
-    {
-      echo "###timestamp=$(date +%s)"
-      IFS=, read -ra EPS <<< "$ENDPOINTS"
-      for EP in "${EPS[@]}"; do
-        curl -s --max-time 5 "http://$EP/public_metrics" || echo "###scrape_error_$EP"
-      done
-    } >> "$RP"
-    sleep 10
-  done
-) &`,
-			`RP_SCRAPER=$!`,
-		)
+	// Broker-side scrape: the sidecar is computed by Topology.MetricSidecar
+	// and passed in via ScrapeSetup. It defines $RP and ends with
+	// RP_SCRAPER=$!, written to a per-engine file so the runner can attribute
+	// throughput per engine without merging across windows. Appended after
+	// $PID is live and before the bench window; empty when the topology has
+	// no scrape (or no endpoints).
+	if a.ScrapeSetup != "" {
+		lines = append(lines, a.ScrapeSetup)
 	}
 	lines = append(lines,
 		// Wait until the REST API answers. KC + Debezium plugins is heavy; on a
@@ -167,7 +145,7 @@ done`, a.ConnectorName),
 		`wait "$PID" 2>/dev/null || true`,
 		`kill "$HEARTBEAT" 2>/dev/null || true`,
 	)
-	if endpoints != "" {
+	if a.ScrapeSetup != "" {
 		lines = append(lines, `kill "$RP_SCRAPER" 2>/dev/null || true`)
 	}
 	lines = append(lines,
@@ -175,11 +153,8 @@ done`, a.ConnectorName),
 		fmt.Sprintf(`aws s3 cp "$KC_LOG" "s3://%s/runs/%s/kc-%d.log" >/dev/null`,
 			a.Bucket, a.SessionID, a.VCPU),
 	)
-	if endpoints != "" {
-		lines = append(lines,
-			fmt.Sprintf(`aws s3 cp "$RP" "s3://%s/runs/%s/redpanda-%d-kc.txt" >/dev/null`,
-				a.Bucket, a.SessionID, a.VCPU),
-		)
+	if a.ScrapeUpload != "" {
+		lines = append(lines, a.ScrapeUpload)
 	}
 	lines = append(lines,
 		`echo "kc log uploaded"`,

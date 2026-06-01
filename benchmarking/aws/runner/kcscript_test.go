@@ -81,6 +81,11 @@ func TestRenderKCBenchScript_ScrapesBrokerMetrics(t *testing.T) {
 	// loop must still wrap that single endpoint in the IFS-split shell
 	// construct so the script shape is the same as the multi-broker
 	// case (one less branch to maintain at runtime).
+	sc := sourceTopology{}.MetricSidecar(MetricSidecarArgs{
+		Engine: "kafka_connect", VCPU: 1,
+		Bucket: "results-bucket", SessionID: "sess-abc",
+		Outs: map[string]string{"redpanda_metrics_endpoint": "10.42.0.10:9644"},
+	})
 	script := renderKCBenchScript(kcBenchScriptArgs{
 		VCPU:                    1,
 		MemLimitGiB:             2,
@@ -91,6 +96,8 @@ func TestRenderKCBenchScript_ScrapesBrokerMetrics(t *testing.T) {
 		Bucket:                  "results-bucket",
 		SessionID:               "sess-abc",
 		RedpandaMetricsEndpoint: "10.42.0.10:9644",
+		ScrapeSetup:             sc.Setup,
+		ScrapeUpload:            sc.Upload,
 	})
 	if !strings.Contains(script, "public_metrics") {
 		t.Errorf("expected broker /public_metrics scrape; got:\n%s", script)
@@ -114,6 +121,11 @@ func TestRenderKCBenchScript_ScrapesAllBrokers(t *testing.T) {
 	// the topic showed 0 bytes despite Debezium having written 2.9M
 	// records. This test asserts the script visits all three brokers.
 	endpoints := "10.42.0.10:9644,10.42.1.10:9644,10.42.0.11:9644"
+	sc := sourceTopology{}.MetricSidecar(MetricSidecarArgs{
+		Engine: "kafka_connect", VCPU: 1,
+		Bucket: "results-bucket", SessionID: "sess-abc",
+		Outs: map[string]string{"redpanda_metrics_endpoints": endpoints},
+	})
 	script := renderKCBenchScript(kcBenchScriptArgs{
 		VCPU:                     1,
 		MemLimitGiB:              2,
@@ -124,6 +136,8 @@ func TestRenderKCBenchScript_ScrapesAllBrokers(t *testing.T) {
 		Bucket:                   "results-bucket",
 		SessionID:                "sess-abc",
 		RedpandaMetricsEndpoints: endpoints,
+		ScrapeSetup:              sc.Setup,
+		ScrapeUpload:             sc.Upload,
 	})
 	if !strings.Contains(script, "IFS=,") {
 		t.Errorf("expected IFS=, splitter for multi-endpoint scrape; got:\n%s", script)
@@ -144,6 +158,14 @@ func TestRenderKCBenchScript_PluralEndpointsTakePrecedence(t *testing.T) {
 	// (transition period), the plural wins so we get the cluster-wide
 	// scrape behavior. The legacy endpoint must NOT be the only one
 	// emitted to the script.
+	sc := sourceTopology{}.MetricSidecar(MetricSidecarArgs{
+		Engine: "kafka_connect", VCPU: 1,
+		Bucket: "results-bucket", SessionID: "sess-abc",
+		Outs: map[string]string{
+			"redpanda_metrics_endpoint":  "10.42.0.10:9644",
+			"redpanda_metrics_endpoints": "10.42.0.10:9644,10.42.1.10:9644,10.42.0.11:9644",
+		},
+	})
 	script := renderKCBenchScript(kcBenchScriptArgs{
 		VCPU:                     1,
 		MemLimitGiB:              2,
@@ -155,6 +177,8 @@ func TestRenderKCBenchScript_PluralEndpointsTakePrecedence(t *testing.T) {
 		SessionID:                "sess-abc",
 		RedpandaMetricsEndpoint:  "10.42.0.10:9644",
 		RedpandaMetricsEndpoints: "10.42.0.10:9644,10.42.1.10:9644,10.42.0.11:9644",
+		ScrapeSetup:              sc.Setup,
+		ScrapeUpload:             sc.Upload,
 	})
 	if !strings.Contains(script, "10.42.1.10:9644") || !strings.Contains(script, "10.42.0.11:9644") {
 		t.Errorf("plural endpoints must override singular; got:\n%s", script)

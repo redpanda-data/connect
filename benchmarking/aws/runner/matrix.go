@@ -56,6 +56,8 @@ type MatrixRunner struct {
 	Topology Topology
 	// Names is the per-session naming value passed into Topology.EngineSeries.
 	Names BenchNames
+	// Outs is the TF output map, passed into Topology.MetricSidecar.
+	Outs map[string]string
 }
 
 // SweepPoint is the per-point measurement.
@@ -105,6 +107,20 @@ func (m *MatrixRunner) Run(
 				close(workloadDone)
 			}
 
+			// Topology may be nil in narrow unit tests that exercise only the
+			// connect log-parsing path; those produce no scrape sidecar.
+			var sidecar MetricSidecar
+			if m.Topology != nil {
+				sidecar = m.Topology.MetricSidecar(MetricSidecarArgs{
+					Engine:    engine,
+					VCPU:      n,
+					Bucket:    m.Bucket,
+					SessionID: m.SessionID,
+					Outs:      m.Outs,
+					Names:     m.Names,
+				})
+			}
+
 			var script string
 			switch engine {
 			case "connect":
@@ -119,6 +135,8 @@ func (m *MatrixRunner) Run(
 					SessionID:                m.SessionID,
 					RedpandaMetricsEndpoint:  m.RedpandaMetricsEndpoint,
 					RedpandaMetricsEndpoints: m.RedpandaMetricsEndpoints,
+					ScrapeSetup:              sidecar.Setup,
+					ScrapeUpload:             sidecar.Upload,
 				})
 			case "kafka_connect":
 				// Per-vCPU connector name. KC stores Debezium offsets in
@@ -141,6 +159,8 @@ func (m *MatrixRunner) Run(
 					SessionID:                m.SessionID,
 					RedpandaMetricsEndpoint:  m.RedpandaMetricsEndpoint,
 					RedpandaMetricsEndpoints: m.RedpandaMetricsEndpoints,
+					ScrapeSetup:              sidecar.Setup,
+					ScrapeUpload:             sidecar.Upload,
 				})
 			default:
 				cancelWorkload()
@@ -333,6 +353,10 @@ type benchScriptArgs struct {
 	// on the broker leading the partition. If both fields are set,
 	// Endpoints wins.
 	RedpandaMetricsEndpoints string
+	// ScrapeSetup launches the metric poller; ScrapeUpload copies the artifact
+	// to S3. Both come from Topology.MetricSidecar.
+	ScrapeSetup  string
+	ScrapeUpload string
 }
 
 // renderBenchScript produces the shell script executed on the runner EC2 for
@@ -391,36 +415,12 @@ func renderBenchScript(a benchScriptArgs) string {
 ) &`,
 		`PROM_SCRAPER=$!`,
 	}
-	// Prefer the plural Endpoints (cluster-wide) but fall back to the
-	// singular Endpoint for callers that haven't migrated yet. Redpanda
-	// emits per-topic byte counters only on the broker leading the
-	// partition, so scraping a single broker silently drops topics whose
-	// leader landed elsewhere. The multi-broker loop concatenates all
-	// brokers' /public_metrics output under one timestamp header per
-	// interval; the parser sums per-topic values across the brokers.
-	endpoints := a.RedpandaMetricsEndpoints
-	if endpoints == "" {
-		endpoints = a.RedpandaMetricsEndpoint
-	}
-	if endpoints != "" {
-		lines = append(lines,
-			fmt.Sprintf(`RP=/tmp/redpanda-%d-connect.txt`, a.VCPU),
-			`: > "$RP"`,
-			fmt.Sprintf(`ENDPOINTS=%q`, endpoints),
-			`(
-  while kill -0 "$PID" 2>/dev/null; do
-    {
-      echo "###timestamp=$(date +%s)"
-      IFS=, read -ra EPS <<< "$ENDPOINTS"
-      for EP in "${EPS[@]}"; do
-        curl -s --max-time 5 "http://$EP/public_metrics" || echo "###scrape_error_$EP"
-      done
-    } >> "$RP"
-    sleep 10
-  done
-) &`,
-			`RP_SCRAPER=$!`,
-		)
+	// The broker-scrape sidecar is computed by Topology.MetricSidecar and
+	// passed in via ScrapeSetup. It defines $RP and ends with RP_SCRAPER=$!,
+	// so it must be appended after $PID is live and before the bench process
+	// is waited on. Empty when the topology has no scrape (or no endpoints).
+	if a.ScrapeSetup != "" {
+		lines = append(lines, a.ScrapeSetup)
 	}
 	lines = append(lines,
 		fmt.Sprintf(`sleep %d`, totalSec),
@@ -429,7 +429,7 @@ func renderBenchScript(a benchScriptArgs) string {
 		`kill "$HEARTBEAT" 2>/dev/null || true`,
 		`kill "$PROM_SCRAPER" 2>/dev/null || true`,
 	)
-	if endpoints != "" {
+	if a.ScrapeSetup != "" {
 		lines = append(lines, `kill "$RP_SCRAPER" 2>/dev/null || true`)
 	}
 	lines = append(lines,
@@ -439,11 +439,8 @@ func renderBenchScript(a benchScriptArgs) string {
 		fmt.Sprintf(`aws s3 cp "$PROM" "s3://%s/runs/%s/prom-%d.txt" >/dev/null`,
 			a.Bucket, a.SessionID, a.VCPU),
 	)
-	if endpoints != "" {
-		lines = append(lines,
-			fmt.Sprintf(`aws s3 cp "$RP" "s3://%s/runs/%s/redpanda-%d-connect.txt" >/dev/null`,
-				a.Bucket, a.SessionID, a.VCPU),
-		)
+	if a.ScrapeUpload != "" {
+		lines = append(lines, a.ScrapeUpload)
 	}
 	lines = append(lines, `echo "log uploaded"`)
 	return strings.Join(lines, "\n")
