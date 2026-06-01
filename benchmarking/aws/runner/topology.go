@@ -45,6 +45,24 @@ type MetricInputs struct {
 	Names BenchNames
 }
 
+// MetricSidecarArgs is the render context for MetricSidecar. Bucket/SessionID
+// locate the S3 upload; Outs carries TF outputs (broker endpoints for source,
+// Glue/warehouse for sink); Names supplies per-engine resource names.
+type MetricSidecarArgs struct {
+	Engine    string
+	VCPU      int
+	Bucket    string
+	SessionID string
+	Outs      map[string]string
+	Names     BenchNames
+}
+
+// MetricSidecar is the bash a bench script splices in to sample throughput.
+type MetricSidecar struct {
+	Setup  string // background poller; defines $RP, ends with RP_SCRAPER=$!
+	Upload string // aws s3 cp of $RP after the run
+}
+
 // Topology abstracts the direction-specific wiring of a bench. One
 // implementation exists per Direction. All source-vs-sink branching lives
 // behind this interface; callers (runBench, MatrixRunner) are direction-blind.
@@ -62,6 +80,14 @@ type Topology interface {
 	ResetScript(s *Scenario, outs map[string]string, n BenchNames) (string, error)
 	// EngineSeries turns a per-engine metrics dump into a throughput series.
 	EngineSeries(in MetricInputs, engine string) ([]TopicPoint, error)
+	// MetricArtifact is the per-engine, per-vCPU metrics dump basename that the
+	// bench script uploads and EngineSeries later parses.
+	MetricArtifact(engine string, vcpu int) string
+	// MetricSidecar returns the bash that samples throughput during a bench
+	// window. Setup launches a background poller (polling $PID every interval,
+	// framing samples under "###timestamp=<unix>" into $RP) and ends by setting
+	// RP_SCRAPER=$!. Upload copies $RP to S3 after the bench process exits.
+	MetricSidecar(args MetricSidecarArgs) MetricSidecar
 }
 
 // topologyFor selects the implementation for a scenario's direction. An empty
