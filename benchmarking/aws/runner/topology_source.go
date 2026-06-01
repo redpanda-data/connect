@@ -79,6 +79,11 @@ func (t sourceTopology) MetricSidecar(args MetricSidecarArgs) MetricSidecar {
 	if endpoints == "" {
 		endpoints = args.Outs["redpanda_metrics_endpoint"]
 	}
+	if endpoints == "" {
+		// Match the pre-refactor renderer, which omitted the scrape entirely
+		// when no broker endpoints were configured.
+		return MetricSidecar{}
+	}
 	setup := fmt.Sprintf(`RP=/tmp/%s
 : > "$RP"
 ENDPOINTS=%q

@@ -153,6 +153,17 @@ func TestSourceTopology_MetricSidecar_BrokerScrape(t *testing.T) {
 	}
 }
 
+func TestSourceTopology_MetricSidecar_EmptyWhenNoEndpoints(t *testing.T) {
+	sc := (sourceTopology{}).MetricSidecar(MetricSidecarArgs{
+		Engine: "connect", VCPU: 1, Bucket: "b", SessionID: "s",
+		Outs:  map[string]string{}, // no broker endpoints
+		Names: newBenchNames("s", "postgres_cdc"),
+	})
+	if sc.Setup != "" || sc.Upload != "" {
+		t.Errorf("no endpoints must yield an empty sidecar (scrape omitted), got Setup=%q Upload=%q", sc.Setup, sc.Upload)
+	}
+}
+
 func TestSourceTopology_EngineSeries_ParsesBrokerDump(t *testing.T) {
 	// One topic owned by Connect, sampled across two frames so a single
 	// throughput point is produced.
