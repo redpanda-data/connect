@@ -31,6 +31,7 @@ resource "aws_iam_role_policy" "bench_host_extra" {
           "s3:GetObject",
           "s3:ListBucket",
           "secretsmanager:GetSecretValue",
+          "glue:*",
         ]
         Resource = ["*"]
       },
