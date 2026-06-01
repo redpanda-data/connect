@@ -10,9 +10,12 @@ stack: postgres
 
 infra:
   source:
-    instance_class: db.r6g.2xlarge
-    storage_gb: 400
-    iops: 12000
+    instance_class: db.r6g.4xlarge   # was 2xlarge; bumped 2026-06-01 to lift producer-side
+                                       # gp3 throttling. Mysql diagnostic confirmed +73% Connect
+                                       # and +200% KC at vCPU=4 with this bump.
+                                       # See references/scenario-sizing.md ranked workarounds.
+    storage_gb: 800                    # 4xlarge needs more storage to maintain IOPS budget
+    iops: 24000                        # 2x the IOPS baseline
     parameters:
       rds.logical_replication: "1"
       max_wal_senders: "20"

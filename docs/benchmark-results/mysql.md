@@ -36,3 +36,37 @@ size bounded (no Trap 3).
 | 8    | connect       | kafka_connect | 5.45x |          92 |          17 |
 
 Raw samples + Prometheus snapshots: [`results/mysql/orders-cdc/2026-06-01T17-04-23Z.json`](results/mysql/orders-cdc/2026-06-01T17-04-23Z.json)
+
+
+## AWS — orders-cdc-vcpu4 — 2026-06-01
+
+**Scenario:** Single-point diagnostic variant of mysql-orders-cdc, pinned to vCPU=4 only.
+Used 2026-06-01 to test whether KC's vCPU=4 plateau at 17 MB/s lifts when
+the producer moves from db.r6g.2xlarge to db.r6g.4xlarge.
+
+Run with: `task aws:bench scenario=mysql/orders-cdc-vcpu4`
+Expected wall-clock: ~55-60 min. Expected spend: ~$3-4.
+
+Delete this file after the experiment is done.
+
+**Git SHA:** [`44ab9e9f7`](https://github.com/redpanda-data/connect/commit/44ab9e9f7a64cb53b2a1d27f5cbbb2b305a61d15)
+
+**Infra:** Runner `c8g.4xlarge`; source `db.r6g.4xlarge` (800 GB) in `us-east-2`.
+
+**Dataset:** 
+
+### Throughput
+
+| GOMAXPROCS | engine        | MB/sec (p50) | broker MB/s | MB/sec (p5) | MB/sec (p95) | msg/sec (p50) | Δ vs Connect       |
+|------------|---------------|--------------|-------------|-------------|--------------|---------------|--------------------|
+| 4          | connect       |          111 |            7 |         107 |          114 |        87,441 |                    |
+| 4          | kafka_connect |           51 |           51 |          39 |           54 |             0 | -60 MB/s (-54%)    |
+
+
+### Cross-engine divergence
+
+| vCPU | faster        | slower        | ratio  | faster MB/s | slower MB/s |
+|------|---------------|---------------|--------|-------------|-------------|
+| 4    | connect       | kafka_connect | 2.16x |         111 |          51 |
+
+Raw samples + Prometheus snapshots: [`results/mysql/orders-cdc-vcpu4/2026-06-01T19-52-07Z.json`](results/mysql/orders-cdc-vcpu4/2026-06-01T19-52-07Z.json)

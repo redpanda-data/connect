@@ -10,9 +10,13 @@ stack: mysql
 
 infra:
   source:
-    instance_class: db.r6g.2xlarge
-    storage_gb: 400
-    iops: 12000
+    instance_class: db.r6g.4xlarge   # was 2xlarge; bumped 2026-06-01 to diagnose
+                                       # whether KC's vCPU=4/8 plateau at 17 MB/s is
+                                       # producer-bound (gp3 throttling) or KC-side.
+                                       # See references/scenario-sizing.md ranked
+                                       # workarounds for producer-bound symptoms.
+    storage_gb: 800                    # 4xlarge needs more storage to maintain IOPS budget
+    iops: 24000                        # 2x the IOPS baseline
     # parameters left at module defaults: binlog_format=ROW, binlog_row_image=FULL,
     # binlog_checksum=NONE. backup_retention_period=1 is set in the module itself
     # because it's a required-for-CDC constant, not a per-scenario knob.
