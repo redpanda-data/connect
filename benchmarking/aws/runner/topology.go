@@ -11,12 +11,11 @@ import (
 	"strings"
 )
 
-// BenchNames is intended to become the single source of truth for the
-// per-session, per-engine resource names a bench uses. Today those names are
-// still computed independently in renderPipelineConfig/sourceTopology.Pipeline,
-// combineReset, buildKCRenderInputs, and AttributeByEngine; the ConnectTopic /
-// KCTopicPrefix helpers below exist so Plan 2 can route those sites through a
-// single authority. EngineSeries already consumes Names via MetricInputs.
+// BenchNames is the source of truth for the per-session, per-engine resource
+// names a bench uses. The sink path (sinkTopology) routes its table, topic, and
+// consumer-group names through these helpers. The source path still builds names
+// inline: a ${BENCH_SESSION_ID} topic literal in sourceTopology.Pipeline, plus
+// buildKCRenderInputs and AttributeByEngine for Kafka Connect.
 type BenchNames struct {
 	SessionID string
 	Connector string
