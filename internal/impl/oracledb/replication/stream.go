@@ -127,3 +127,19 @@ func ApplyNLSSettings(ctx context.Context, db dbExecer) error {
 	}
 	return nil
 }
+
+// VerifySnapshotFilters verifies that tables specified in the filters map exist in the tracked tables.
+func VerifySnapshotFilters(ctx context.Context, userTables []UserTable, filters map[string]string) error {
+	if len(filters) > 0 {
+		known := make(map[string]struct{}, len(userTables))
+		for _, t := range userTables {
+			known[t.FullName()] = struct{}{}
+		}
+		for table := range filters {
+			if _, ok := known[table]; !ok {
+				return fmt.Errorf("snapshot filter references unknown table %q: table not found in monitored tables", table)
+			}
+		}
+	}
+	return nil
+}

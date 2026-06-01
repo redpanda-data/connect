@@ -272,6 +272,7 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 		return nil, err
 	}
 
+	// snapshot filters
 	var snapshotFilters map[string]string
 	if conf.Contains(ociFieldSnapshot) {
 		snapshotConf := conf.Namespace(ociFieldSnapshot)
@@ -466,6 +467,7 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 			if userTables, err = replication.VerifyUserTables(ctx, conn, o.cfg.TablesFilter, o.log); err != nil {
 				return fmt.Errorf("verifying user defined tables: %w", err)
 			}
+
 			return nil
 		}(); err != nil {
 			return err
@@ -474,6 +476,11 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 		if userTables, err = replication.VerifyUserTables(ctx, o.db, o.cfg.TablesFilter, o.log); err != nil {
 			return fmt.Errorf("verifying user defined tables: %w", err)
 		}
+	}
+
+	// Validate that every table named in snapshot filters is actually being monitored.
+	if err = replication.VerifySnapshotFilters(ctx, userTables, o.cfg.SnapshotFilters); err != nil {
+		return fmt.Errorf("verifying snapshot filters: %w", err)
 	}
 
 	// Pre-fetch schemas for all monitored tables. A fresh cache is created on every Connect()
