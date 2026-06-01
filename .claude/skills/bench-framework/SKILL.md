@@ -142,8 +142,12 @@ Catches typos and missing-registry errors before any AWS spend. On failure, the 
 `task aws:bench` defaults to BOTH engines (connect + kafka_connect). Pin cpu_points to `[1]` in your scenario for the smoke:
 
 ```bash
-aws-vault exec bench -- task aws:bench scenario=<stack>/<scenario>
+aws-vault exec bench -- \
+  env REDPANDA_LICENSE_FILEPATH=$PWD/rpcn.license \
+  task aws:bench scenario=<stack>/<scenario>
 ```
+
+The `REDPANDA_LICENSE_FILEPATH` env var is mandatory — the runner refuses to start enterprise connectors without it. See [traps.md#license-location](references/traps.md#license-location).
 
 Acceptance:
 - Result JSON has TWO `PointResult` entries (one per engine)
@@ -225,13 +229,17 @@ Catches YAML typos, missing engineSpec/kcConnectorSpec entries, sizing-trap cand
 `task aws:bench` defaults to BOTH engines (Connect + KC sequential, ~2× wall-clock):
 
 ```bash
-aws-vault exec bench -- task aws:bench scenario=<stack>/<scenario>
+aws-vault exec bench -- \
+  env REDPANDA_LICENSE_FILEPATH=$PWD/rpcn.license \
+  task aws:bench scenario=<stack>/<scenario>
 ```
 
-The Taskfile doesn't forward extra flags. To narrow to one engine or pass `--keep-on-fail`, invoke the runner directly:
+`REDPANDA_LICENSE_FILEPATH` is mandatory — enterprise connectors won't start without it (see [traps.md#license-location](references/traps.md#license-location)). The Taskfile doesn't forward extra flags. To narrow to one engine or pass `--keep-on-fail`, invoke the runner directly:
 
 ```bash
-aws-vault exec bench -- go run ./benchmarking/aws/runner bench \
+aws-vault exec bench -- \
+  env REDPANDA_LICENSE_FILEPATH=$PWD/rpcn.license \
+  go run ./benchmarking/aws/runner bench \
   --scenario=benchmarking/aws/scenarios/<stack>/<scenario>.yaml \
   --repo-root=. --engines=connect --keep-on-fail
 ```

@@ -138,13 +138,19 @@ Run the cheapest possible smoke (~$1.50, ~25 min) to confirm everything wires up
 
 The Taskfile takes a bare relative path (prepends `benchmarking/aws/scenarios/` and appends `.yaml`). The Taskfile does NOT forward arbitrary flags, so to narrow to Connect-only you need the direct runner invocation:
 
+`REDPANDA_LICENSE_FILEPATH` is mandatory — the runner refuses to start enterprise connectors without it.
+
 ```bash
 # Pin the scenario to cpu_points: [1] temporarily.
 # Option A: both engines (Taskfile default — KC sequential after Connect, ~$3 total):
-aws-vault exec bench-<initials> -- task aws:bench scenario=postgres/orders-cdc
+aws-vault exec bench-<initials> -- \
+  env REDPANDA_LICENSE_FILEPATH=$PWD/rpcn.license \
+  task aws:bench scenario=postgres/orders-cdc
 
 # Option B: Connect only (cheaper, ~$1.50). Bypass the Taskfile:
-aws-vault exec bench-<initials> -- go run ./benchmarking/aws/runner bench \
+aws-vault exec bench-<initials> -- \
+  env REDPANDA_LICENSE_FILEPATH=$PWD/rpcn.license \
+  go run ./benchmarking/aws/runner bench \
   --scenario=benchmarking/aws/scenarios/postgres/orders-cdc.yaml \
   --repo-root=. \
   --engines=connect
