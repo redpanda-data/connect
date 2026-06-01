@@ -58,6 +58,7 @@ knowledge first-class and shareable.
 | Scope | Add new connector + operate existing + debug failures (single skill) |
 | Activity level | Scaffold & guide — skill renders templates and walks engineer through fill-in |
 | Audience | Connect-experienced, bench-new |
+| Multi-user model | **Per-teammate AWS account, shared backend convention** — each engineer brings their own AWS account, S3 state bucket, DDB lock table, and license. Backend config is currently hardcoded in `terraform/backend.hcl` + the two stacks' `main.tf`; teammates edit locally and stash/branch before pushing. Code-level parameterization (`BENCH_TFSTATE_BUCKET` env var) is a follow-up. |
 
 ## Layout
 
@@ -69,7 +70,8 @@ knowledge first-class and shareable.
 │   ├── rds-quirks.md               # RDS Postgres params, postgres_cdc TLS, instance minimums
 │   ├── kc-connector-mapping.md     # Debezium vs. Aiven JDBC decision tree
 │   ├── scenario-sizing.md          # workload --rate, seeder concurrency, TRUNCATE, ceilings
-│   ├── workflow-essentials.md      # aws-vault, license path, SIGINT, --keep-on-fail
+│   ├── workflow-essentials.md      # aws-vault, license path, SIGINT, --keep-on-fail (account-neutral)
+│   ├── bootstrap.md                # One-time per-teammate AWS account setup
 │   ├── debugging-playbook.md       # Symptom → root cause walks
 │   └── exemplar-tour.md            # Annotated walk of postgres + mysql_cdc files
 └── assets/
@@ -284,8 +286,17 @@ postgres/mysql actual ceilings (~50K vs. ~75K msg/sec on
 `db.r6g.2xlarge`). Pulled from `bench-scenario-sizing-lessons` memory.
 
 **`references/workflow-essentials.md`** — aws-vault wrapping, license
-at repo root, SIGINT teardown, `--keep-on-fail`. Pulled from
+at repo root, SIGINT teardown, `--keep-on-fail`. Account-neutral —
+does NOT cite a specific account ID. Pulled from
 `bench-workflow-essentials` memory.
+
+**`references/bootstrap.md`** — One-time setup for a new teammate.
+Covers: AWS account access / SSO config, S3 state bucket creation
+(per-teammate name like `redpanda-connect-bench-tfstate-<initials>`),
+DDB lock table creation, local edits to `backend.hcl` + the two
+stacks' `main.tf` backend blocks (with `git stash`/branch
+convention), license placement, cleanup-Lambda zip build, and a
+1-vCPU smoke verification. Roughly 80 lines.
 
 **`references/debugging-playbook.md`** — Symptom → root cause walks
 for the failure modes in the Debug table. Each ends with a
@@ -362,6 +373,13 @@ of this work.**
   inside scenarios.
 - A separate "operate-only" skill. Single skill v1; revisit if SKILL.md
   grows beyond ~400 lines or if "operate" branch dominates real usage.
+- **Backend config parameterization.** The S3 state bucket + DDB
+  lock table are hardcoded in 3 files (`terraform/backend.hcl` and
+  the two stacks' `main.tf`). Per-teammate use requires local edits
+  + `git stash`/branch hygiene. Follow-up: introduce
+  `BENCH_TFSTATE_BUCKET` env var (and matching DDB var) read by the
+  Taskfile + runner, plus a gitignored `backend.local.hcl` override
+  convention. Documented as a known limitation in `bootstrap.md`.
 
 ## Source memories drawn on
 

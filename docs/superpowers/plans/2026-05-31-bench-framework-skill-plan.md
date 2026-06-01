@@ -25,6 +25,7 @@ Files to create (all paths relative to repo root):
 │   ├── kc-connector-mapping.md
 │   ├── scenario-sizing.md
 │   ├── workflow-essentials.md
+│   ├── bootstrap.md
 │   ├── debugging-playbook.md
 │   └── exemplar-tour.md
 └── assets/
@@ -39,7 +40,7 @@ Files to create (all paths relative to repo root):
         └── reset.sql.tmpl
 ```
 
-13 files + 1 directory. Each task below produces one file (or a small cluster) and ends with a commit.
+14 files + 1 directory. Each task below produces one file (or a small cluster) and ends with a commit.
 
 ---
 
@@ -382,6 +383,8 @@ Each line links to [references/traps.md](references/traps.md). Skim before any b
 
 ## What are you doing?
 
+**First time on this account?** Do the one-time setup in [references/bootstrap.md](references/bootstrap.md) before anything else (~30 min). Each engineer brings their own AWS account, S3 state bucket, DDB lock table, and license — the bootstrap recipe walks all of it.
+
 1. **Adding a new connector bench** → [Add a new connector](#add-a-new-connector). Skill walks 9 steps to produce the TF stack, scenario YAML, engineSpec entry, kcConnectorSpec entry, reset SQL, plus tests.
 2. **Running an existing bench** → [Operate a bench](#operate-a-bench). Skill walks the pre-flight checklist, the run, live monitoring, and teardown.
 3. **Debugging a failed bench** → [Debug](#debug). Skill triages from symptom into the playbook.
@@ -455,10 +458,10 @@ Non-negotiables when running an AWS bench. Each was discovered by failure during
 Plain SSO sessions expire in under an hour. A bench takes ~90 min. The Go runner makes AWS SDK calls (S3 upload, SSM RunCommand) for the full duration; mid-run SSO refresh fails with `InvalidGrantException`. aws-vault mints a 12-hour STS session that the SDK uses throughout.
 
 ```bash
-aws-vault exec bench -- task aws:bench scenario=<path>
+aws-vault exec <your-profile> -- task aws:bench scenario=<path>
 ```
 
-The profile name `bench` corresponds to the account documented in the `aws-bench-account` memory (account 211125438402, us-east-2).
+`<your-profile>` is whatever you configured during one-time account setup — see [bootstrap.md](bootstrap.md). The skill examples use `bench-<initials>` as a convention but any name works.
 
 See also: [traps.md#aws-vault](traps.md#aws-vault).
 
@@ -524,7 +527,8 @@ feat(skill): workflow-essentials reference
 
 Six non-negotiables: aws-vault wrap, license location, SIGINT for
 teardown, defer ordering, validate before apply, --keep-on-fail
-for live debug.
+for live debug. Account-neutral — points at bootstrap.md for the
+specific account/profile setup.
 
 Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
@@ -533,7 +537,202 @@ EOF
 
 ---
 
-### Task 5: Fill in "Operate a bench" section in SKILL.md
+### Task 5: Write `references/bootstrap.md`
+
+**Files:**
+- Create: `.claude/skills/bench-framework/references/bootstrap.md`
+
+The skill is per-teammate: each engineer brings their own AWS account, S3 state bucket, DDB lock table, and license file. This task documents the one-time setup. **No code changes** — backend config is currently hardcoded; teammates edit locally and stash/branch before pushing. The "parameterize backend" follow-up is listed in Open Items.
+
+- [ ] **Step 1: Write the file**
+
+```markdown
+# Bootstrap: one-time AWS account setup
+
+You're using this skill against your own AWS account (per-teammate model). This page is the one-time setup. After it's done you can ignore it; the rest of the skill is account-neutral.
+
+> **Why per-teammate?** Cleaner spend attribution, no TF-state-lock concurrency when two people run at once, no risk of one teammate's destroy clobbering another's infra. Cost: ~50 lines of one-time setup.
+
+## Step 1: AWS account access
+
+You need an AWS account (Redpanda-owned sub-account or your own) with permissions for: EC2, RDS, S3, IAM, SSM, CloudWatch Logs, Lambda, EventBridge, SNS, DynamoDB, Cost Explorer. `AdministratorAccess` is sufficient.
+
+Set up an aws-vault profile pointing at it. Conventional name: `bench-<initials>`. Example `~/.aws/config` entry:
+
+```ini
+[profile bench-<initials>]
+sso_session = redpanda
+sso_account_id = <your-account-id>
+sso_role_name = AdministratorAccess
+region = us-east-2
+```
+
+(Or whatever your SSO config dictates — the only requirement is that `aws-vault exec bench-<initials>` works.)
+
+Verify:
+
+```bash
+aws-vault exec bench-<initials> -- aws sts get-caller-identity
+```
+
+## Step 2: Create the S3 state bucket
+
+S3 bucket names are globally unique. Use a name that includes your initials or similar:
+
+```bash
+aws-vault exec bench-<initials> -- \
+  aws s3 mb s3://redpanda-connect-bench-tfstate-<initials> --region us-east-2
+
+aws-vault exec bench-<initials> -- \
+  aws s3api put-bucket-versioning \
+    --bucket redpanda-connect-bench-tfstate-<initials> \
+    --versioning-configuration Status=Enabled
+
+aws-vault exec bench-<initials> -- \
+  aws s3api put-public-access-block \
+    --bucket redpanda-connect-bench-tfstate-<initials> \
+    --public-access-block-configuration \
+      BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
+
+aws-vault exec bench-<initials> -- \
+  aws s3api put-bucket-encryption \
+    --bucket redpanda-connect-bench-tfstate-<initials> \
+    --server-side-encryption-configuration \
+      '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}'
+```
+
+## Step 3: Create the DynamoDB lock table
+
+```bash
+aws-vault exec bench-<initials> -- \
+  aws dynamodb create-table \
+    --table-name redpanda-connect-bench-tflocks-<initials> \
+    --attribute-definitions AttributeName=LockID,AttributeType=S \
+    --key-schema AttributeName=LockID,KeyType=HASH \
+    --billing-mode PAY_PER_REQUEST \
+    --region us-east-2
+```
+
+Wait ~15s for it to become ACTIVE:
+
+```bash
+aws-vault exec bench-<initials> -- \
+  aws dynamodb describe-table \
+    --table-name redpanda-connect-bench-tflocks-<initials> \
+    --query 'Table.TableStatus' --region us-east-2
+```
+
+## Step 4: Edit backend config locally
+
+The framework currently hardcodes the bucket + DDB table in 3 files. Edit each to match what you created in Steps 2 + 3:
+
+```bash
+# 1. benchmarking/aws/terraform/backend.hcl
+sed -i '' "s/redpanda-connect-bench-tfstate/redpanda-connect-bench-tfstate-<initials>/" \
+  benchmarking/aws/terraform/backend.hcl
+sed -i '' "s/redpanda-connect-bench-tflocks/redpanda-connect-bench-tflocks-<initials>/" \
+  benchmarking/aws/terraform/backend.hcl
+
+# 2. benchmarking/aws/terraform/stacks/postgres/main.tf (backend block, line ~24)
+sed -i '' "s/redpanda-connect-bench-tfstate/redpanda-connect-bench-tfstate-<initials>/" \
+  benchmarking/aws/terraform/stacks/postgres/main.tf
+
+# 3. benchmarking/aws/terraform/stacks/mysql/main.tf (backend block, line ~24)
+sed -i '' "s/redpanda-connect-bench-tfstate/redpanda-connect-bench-tfstate-<initials>/" \
+  benchmarking/aws/terraform/stacks/mysql/main.tf
+```
+
+(On Linux, drop the `''` after `-i`.)
+
+**Important:** Do NOT commit these edits — they're personal to your account. Either:
+- Keep them in a local `bench-<initials>` branch you never push, OR
+- `git stash` before pushing to the main bench branch and `git stash pop` after
+
+A follow-up item is to parameterize this via `BENCH_TFSTATE_BUCKET` env var so local edits aren't needed. See spec's Open Items.
+
+## Step 5: Connect Enterprise license
+
+Place your license file at `<repo-root>/rpcn.license`. The `.gitignore` covers `*.license` so it won't be committed accidentally.
+
+```bash
+cp /path/to/your/rpcn.license /Users/<you>/Documents/connect_prakhar/rpcn.license
+```
+
+**Do NOT** place it in `~/Downloads/`, `~/Documents/`, or `~/Desktop/` — macOS TCC blocks reads from those dirs for sandboxed processes. See [traps.md#license-location](traps.md#license-location).
+
+## Step 6: Build the cleanup Lambda zip
+
+The orphan-cleanup Lambda needs `bootstrap.zip` built before `terraform apply`:
+
+```bash
+cd benchmarking/aws/cleanup-lambda && make zip && cd -
+```
+
+The zip is gitignored. Rebuild whenever the lambda source changes.
+
+## Step 7: Verify with a 1-vCPU smoke
+
+Run the cheapest possible smoke (~$1.50, ~25 min) to confirm everything wires up:
+
+```bash
+# Pin the scenario to cpu_points: [1] temporarily, then:
+aws-vault exec bench-<initials> -- task aws:bench \
+  scenario=benchmarking/aws/scenarios/postgres/orders-cdc.yaml \
+  --engines connect
+```
+
+Acceptance:
+- Apply succeeds (no `Backend configuration changed` errors → your edits in Step 4 are consistent)
+- Connect produces a non-zero throughput JSON
+- `defer destroy` runs cleanly at the end
+- Total spend ≈ $1.50
+
+If anything fails, see [debugging-playbook.md](debugging-playbook.md).
+
+## Done
+
+You're set up. Future benches just need `aws-vault exec bench-<initials> -- task aws:bench ...`. Skip back to the main [SKILL.md](../SKILL.md) flow.
+```
+
+- [ ] **Step 2: Verify referenced trap anchors resolve**
+
+```bash
+grep -oE 'traps\.md#[a-z-]+' .claude/skills/bench-framework/references/bootstrap.md \
+  | sed 's/traps.md#//' | sort | uniq > /tmp/anchors-used.txt
+comm -23 /tmp/anchors-used.txt /tmp/anchors-defined.txt
+```
+
+Expected: empty.
+
+- [ ] **Step 3: Verify file is ≤ 200 lines**
+
+```bash
+wc -l .claude/skills/bench-framework/references/bootstrap.md
+```
+
+Expected: ≤ 200 lines.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add .claude/skills/bench-framework/references/bootstrap.md
+git commit -m "$(cat <<'EOF'
+feat(skill): bootstrap reference for one-time account setup
+
+Per-teammate AWS account model: each engineer creates their own
+S3 state bucket + DDB lock table + license placement + cleanup
+Lambda zip. Backend config currently hardcoded in 3 files — doc
+covers local sed-edit + stash/branch workflow until parameter-
+ization lands as a follow-up.
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+EOF
+)"
+```
+
+---
+
+### Task 6: Fill in "Operate a bench" section in SKILL.md
 
 **Files:**
 - Modify: `.claude/skills/bench-framework/SKILL.md`
@@ -551,7 +750,11 @@ If you're running an existing bench (not adding a new connector), walk this chec
 
 ### Step 1: Pre-flight checklist
 
-- [ ] `aws-vault` installed; profile `bench` configured (account 211125438402, us-east-2)
+If you've never run this bench before, do the one-time setup in [references/bootstrap.md](references/bootstrap.md) first (~30 min). Otherwise:
+
+- [ ] aws-vault profile set up (see [bootstrap.md Step 1](references/bootstrap.md))
+- [ ] S3 state bucket + DDB lock table created (see [bootstrap.md Steps 2-3](references/bootstrap.md))
+- [ ] `backend.hcl` + stacks' `main.tf` backend blocks edited to your bucket name (see [bootstrap.md Step 4](references/bootstrap.md))
 - [ ] Redpanda Connect Enterprise license at repo root as `rpcn.license` (NOT `~/Downloads/`)
 - [ ] On `benchmarking` branch with latest commits (`git pull origin benchmarking`)
 - [ ] `make zip` run inside `benchmarking/aws/cleanup-lambda/` recently (orphan cleanup needs the artifact)
@@ -675,7 +878,7 @@ EOF
 
 ## Phase C: Debug branch
 
-### Task 6: Write `references/debugging-playbook.md`
+### Task 7: Write `references/debugging-playbook.md`
 
 **Files:**
 - Create: `.claude/skills/bench-framework/references/debugging-playbook.md`
@@ -881,7 +1084,7 @@ EOF
 
 ---
 
-### Task 7: Fill in "Debug" section in SKILL.md
+### Task 8: Fill in "Debug" section in SKILL.md
 
 **Files:**
 - Modify: `.claude/skills/bench-framework/SKILL.md`
@@ -943,7 +1146,7 @@ EOF
 
 ## Phase D: Add-connector branch
 
-### Task 8: Write `references/rds-quirks.md`
+### Task 9: Write `references/rds-quirks.md`
 
 **Files:**
 - Create: `.claude/skills/bench-framework/references/rds-quirks.md`
@@ -1037,7 +1240,7 @@ EOF
 
 ---
 
-### Task 9: Write `references/kc-connector-mapping.md`
+### Task 10: Write `references/kc-connector-mapping.md`
 
 **Files:**
 - Create: `.claude/skills/bench-framework/references/kc-connector-mapping.md`
@@ -1115,7 +1318,7 @@ EOF
 
 ---
 
-### Task 10: Write `references/scenario-sizing.md`
+### Task 11: Write `references/scenario-sizing.md`
 
 **Files:**
 - Create: `.claude/skills/bench-framework/references/scenario-sizing.md`
@@ -1219,7 +1422,7 @@ EOF
 
 ---
 
-### Task 11: Write `references/exemplar-tour.md`
+### Task 12: Write `references/exemplar-tour.md`
 
 **Files:**
 - Create: `.claude/skills/bench-framework/references/exemplar-tour.md`
@@ -1369,7 +1572,7 @@ EOF
 
 ---
 
-### Task 12: Create `assets/templates/` scaffolding
+### Task 13: Create `assets/templates/` scaffolding
 
 **Files:**
 - Create: `.claude/skills/bench-framework/assets/templates/tf-stack/main.tf.tmpl`
@@ -1680,7 +1883,7 @@ EOF
 
 ---
 
-### Task 13: Fill in "Add a new connector" section in SKILL.md
+### Task 14: Fill in "Add a new connector" section in SKILL.md
 
 **Files:**
 - Modify: `.claude/skills/bench-framework/SKILL.md`
@@ -1867,7 +2070,7 @@ EOF
 
 ## Phase E: Verification
 
-### Task 14: Dry-run scaffolding `sqlserver_cdc` and fix gaps
+### Task 15: Dry-run scaffolding `sqlserver_cdc` and fix gaps
 
 **Files:**
 - Possibly modify: any SKILL.md / references / templates if dry-run surfaces gaps
@@ -1912,7 +2115,7 @@ Defer MINOR gaps to a future polish PR — list them in commit message.
 - [ ] **Step 5: Re-verify all anchor links**
 
 ```bash
-# Re-run the link-resolution checks from Tasks 3, 7, 13
+# Re-run the link-resolution checks from Tasks 3, 8, 14
 grep -E '^<a name="' .claude/skills/bench-framework/references/traps.md | sed 's/.*name="//;s/".*//' | sort > /tmp/anchors-defined.txt
 grep -E '^<a name="' .claude/skills/bench-framework/references/debugging-playbook.md | sed 's/.*name="//;s/".*//' | sort > /tmp/playbook-defined.txt
 grep -E '^<a name="' .claude/skills/bench-framework/references/scenario-sizing.md | sed 's/.*name="//;s/".*//' | sort > /tmp/sizing-defined.txt
@@ -1968,7 +2171,7 @@ If no gaps surfaced, skip the commit and just note that in the agent's final sum
 
 Before declaring done, the implementer should verify:
 
-- [ ] All 14 tasks committed in order
+- [ ] All 15 tasks committed in order
 - [ ] `.claude/skills/bench-framework/SKILL.md` ≤ 300 lines
 - [ ] Each `.claude/skills/bench-framework/references/*.md` ≤ 350 lines (most ≤ 200)
 - [ ] Every anchor referenced in SKILL.md resolves to a `<a name="...">` in a references file
@@ -1983,3 +2186,4 @@ Before declaring done, the implementer should verify:
 2. Sinks (Plan 4) coverage — exemplar table currently says "TBD".
 3. Cross-linking to `redpanda-connect:pipeline` skill for Connect-side YAML inside scenarios.
 4. Visual companion mockups for the decision tree.
+5. **Parameterize backend config.** Replace the 3-file hardcoded bucket/DDB names with a `BENCH_TFSTATE_BUCKET` (+ DDB var) env var read by the Taskfile and the runner's `terraform.go`. Plus a gitignored `backend.local.hcl` override convention. Eliminates the `sed`-edit + `git stash` workflow currently documented in `bootstrap.md` Step 4.
