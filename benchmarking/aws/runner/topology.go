@@ -10,10 +10,12 @@ import (
 	"io"
 )
 
-// BenchNames is the single source of truth for the per-session, per-engine
-// resource names a bench uses. The same naming conventions were previously
-// duplicated across renderPipelineConfig, combineReset, buildKCRenderInputs,
-// and AttributeByEngine.
+// BenchNames is intended to become the single source of truth for the
+// per-session, per-engine resource names a bench uses. Today those names are
+// still computed independently in renderPipelineConfig/sourceTopology.Pipeline,
+// combineReset, buildKCRenderInputs, and AttributeByEngine; the ConnectTopic /
+// KCTopicPrefix helpers below exist so Plan 2 can route those sites through a
+// single authority. EngineSeries already consumes Names via MetricInputs.
 type BenchNames struct {
 	SessionID string
 	Connector string

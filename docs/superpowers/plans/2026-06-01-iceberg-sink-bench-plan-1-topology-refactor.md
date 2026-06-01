@@ -837,3 +837,15 @@ Expected: changes confined to `scenario.go`, `main.go`, `matrix.go`, the new `to
 ## Plan 2 preview (not yet written)
 
 Plan 2 — `Iceberg sink` — will add: `sinkTopology` + `sinkSpecs["iceberg"]`, the `Topology.Validate` method, `json-orders` seeder, `icebergmetrics.go` (poller-dump parser → `EngineSeries`), `kcConnectorSpecs["iceberg"]` (`kcSink`), the `terraform/modules/glue-iceberg` + `stacks/iceberg` stack, the `iceberg-kafka-connect` plugin install in `runner-user-data.tftpl`, and the `scenarios/iceberg/orders-sink.yaml` + `-smoke.yaml`. It will be written once Plan 1 lands (and against the live `internal/impl/iceberg/output_iceberg.go` field names + the Apache Iceberg KC sink config reference).
+
+### Carryover from Plan 1 final review — source-assumptions still OUTSIDE the `Topology` interface
+
+The Plan 1 interface boundary (pipeline + scripts + per-engine series *parsing*) is sound, but several source-shaped decisions live in the *orchestration* layer and will NOT be fixed automatically by returning a `sinkTopology` from `topologyFor`. Plan 2 must address these explicitly:
+
+1. **`MatrixRunner.Run` hard-codes Connect-vs-KC engine semantics** (`matrix.go` ~175-197): `engine == "connect"` parses Connect's rolling-stats log; `engine == "kafka_connect"` derives the Summary from broker bytes via `SummariseTopicPoints`. A sink's throughput is the Iceberg snapshot poll — there may be no broker-produce series at all. Decide whether Summary-derivation moves behind the topology.
+2. **Early-abort guard is `engine == "connect"` + `len(samples) == 0`** (`matrix.go` ~220). A sink whose throughput comes from snapshot polling (not parsed log samples) may never trip or may trip spuriously. Decide whether the abort signal comes from the topology.
+3. **The metric *fetch* (not just parse) is source-shaped.** `fetchBrokerSeriesForEngine` always downloads `redpanda-N-<suffix>.txt` from S3 (`matrix.go` ~288) and the suffix mapping (`connect`→`redpanda-N-connect.txt`, `kafka_connect`→`redpanda-N-kc.txt`) is decided in `MatrixRunner`, not the topology. A sink's metric artifact is the Iceberg poll dump (`iceberg-N-<engine>.txt`). Plan 2 needs a topology-supplied artifact key OR a generalized fetch — `EngineSeries` parsing alone isn't enough.
+4. **`buildKCRenderInputs` + KC connector rendering** (`main.go` ~254, `kcconnectors.go`) is Debezium/source-specific and invoked directly from `runBench`, not via the topology. For a sink KC connector, this path needs its own seam; if sinks skip KC, `runBench` must branch on `DirectionSink`.
+5. **`Topology.Validate`** was deferred in Plan 1 (the source engineSpec check stayed in `Scenario.Validate`). Plan 2 introduces it for sink-specific validation and migrates the source check.
+
+Minor Plan-1 leftovers Plan 2 should also tidy: the `BenchNames.ConnectTopic()`/`KCTopicPrefix()` helpers exist but no production site routes through them yet (the inline `fmt.Sprintf` calls in `sourceTopology.Pipeline` and `buildKCRenderInputs` remain); and the seed S3 key is computed in two places (`runSeeder` for upload vs `sourceTopology.SeedScript` for the script body) — a `BenchNames.SeedKey()` could own it.
