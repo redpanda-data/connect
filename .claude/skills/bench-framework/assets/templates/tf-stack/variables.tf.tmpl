@@ -1,0 +1,31 @@
+variable "region" {
+  type    = string
+}
+
+variable "runner_instance_type" {
+  type    = string
+}
+
+variable "bench_session_id" {
+  type    = string
+}
+
+variable "source_instance_class" {
+  type    = string
+  default = "db.r6g.2xlarge"
+}
+
+variable "source_storage_gb" {
+  type    = number
+  default = 400
+}
+
+variable "source_iops" {
+  type    = number
+  default = 12000
+}
+
+variable "source_parameters" {
+  type    = map(string)
+  default = {}
+}
