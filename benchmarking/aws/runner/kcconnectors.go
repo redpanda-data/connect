@@ -103,6 +103,33 @@ var kcConnectorSpecs = map[string]kcConnectorSpec{
 }`,
 		RequiredPlugins: []string{"debezium-connector-mysql*"},
 	},
+	"iceberg": {
+		Class:     "io.tabular.iceberg.connect.IcebergSinkConnector",
+		Direction: kcSink,
+		PropsTemplate: `{
+  "connector.class": "io.tabular.iceberg.connect.IcebergSinkConnector",
+  "tasks.max": "1",
+  "topics": "{{.Topic}}",
+  "iceberg.catalog.type": "rest",
+  "iceberg.catalog.uri": "{{.GlueRESTURI}}",
+  "iceberg.catalog.warehouse": "{{.Warehouse}}",
+  "iceberg.catalog.io-impl": "org.apache.iceberg.aws.s3.S3FileIO",
+  "iceberg.catalog.rest.sigv4-enabled": "true",
+  "iceberg.catalog.rest.signing-name": "glue",
+  "iceberg.catalog.rest.signing-region": "{{.Region}}",
+  "iceberg.catalog.client.region": "{{.Region}}",
+  "iceberg.tables": "{{.Namespace}}.{{.Table}}",
+  "iceberg.tables.auto-create-enabled": "true",
+  "iceberg.control.commit.interval-ms": "10000",
+  "consumer.override.group.id": "{{.ConsumerGroup}}",
+  "consumer.override.auto.offset.reset": "earliest",
+  "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+  "value.converter.schemas.enable": "false",
+  "key.converter": "org.apache.kafka.connect.json.JsonConverter",
+  "key.converter.schemas.enable": "false"
+}`,
+		RequiredPlugins: []string{"iceberg-kafka-connect*"},
+	},
 }
 
 func kcConnectorSpecFor(connector string) (kcConnectorSpec, bool) {
@@ -129,6 +156,15 @@ type kcRenderInputs struct {
 
 	// Kafka bootstrap.servers for the internal schema-history topic (MySQL)
 	BootstrapServers string
+
+	// Sink (iceberg) render inputs. Empty for source connectors.
+	GlueRESTURI   string
+	Warehouse     string
+	Region        string
+	Namespace     string
+	Table         string
+	Topic         string
+	ConsumerGroup string
 }
 
 // renderKCConfig produces the JSON config map ready to POST to the KC REST

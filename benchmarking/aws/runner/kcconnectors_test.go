@@ -158,6 +158,32 @@ func TestRenderKCConfig_ScenarioOverride(t *testing.T) {
 	}
 }
 
+func TestRenderKCConfig_Iceberg(t *testing.T) {
+	s := &Scenario{Connector: "iceberg", Direction: DirectionSink}
+	in := kcRenderInputs{
+		GlueRESTURI:   "https://glue.us-east-2.amazonaws.com/iceberg",
+		Warehouse:     "123456789012",
+		Region:        "us-east-2",
+		Namespace:     "bench",
+		Table:         "bench_sess_iceberg_kafka_connect",
+		Topic:         "bench_sess_iceberg_src",
+		ConsumerGroup: "bench_sess_iceberg_kafka_connect",
+	}
+	cfg, err := renderKCConfig(s, in)
+	if err != nil {
+		t.Fatalf("renderKCConfig: %v", err)
+	}
+	if cfg["connector.class"] != "io.tabular.iceberg.connect.IcebergSinkConnector" {
+		t.Errorf("class = %v", cfg["connector.class"])
+	}
+	if cfg["iceberg.catalog.rest.sigv4-enabled"] != "true" {
+		t.Errorf("sigv4 must be enabled for Glue REST")
+	}
+	if cfg["iceberg.tables"] != "bench.bench_sess_iceberg_kafka_connect" {
+		t.Errorf("iceberg.tables = %v", cfg["iceberg.tables"])
+	}
+}
+
 func TestRenderKCConfig_UnknownConnector(t *testing.T) {
 	s := &Scenario{Connector: "does_not_exist"}
 	_, err := renderKCConfig(s, kcRenderInputs{})
