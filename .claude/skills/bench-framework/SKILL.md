@@ -47,7 +47,108 @@ Each line links to [references/traps.md](references/traps.md). Skim before any b
 
 ## Operate a bench
 
-> _Filled in by Phase B._
+If you're running an existing bench (not adding a new connector), walk this checklist top-to-bottom. The pre-flight is mandatory; the rest is the actual run.
+
+### Step 1: Pre-flight checklist
+
+If you've never run this bench before, do the one-time setup in [references/bootstrap.md](references/bootstrap.md) first (~30 min). Otherwise:
+
+- [ ] aws-vault profile set up (see [bootstrap.md Step 1](references/bootstrap.md))
+- [ ] S3 state bucket + DDB lock table created (see [bootstrap.md Steps 2-3](references/bootstrap.md))
+- [ ] `backend.hcl` + stacks' `main.tf` backend blocks edited to your bucket name (see [bootstrap.md Step 4](references/bootstrap.md))
+- [ ] Redpanda Connect Enterprise license at repo root as `rpcn.license` (NOT `~/Downloads/`)
+- [ ] On `benchmarking` branch with latest commits (`git pull origin benchmarking`)
+- [ ] `make zip` run inside `benchmarking/aws/cleanup-lambda/` recently (orphan cleanup needs the artifact)
+
+Full rationale: [references/workflow-essentials.md](references/workflow-essentials.md).
+
+### Step 2: Pick the scenario
+
+List existing scenarios:
+
+```bash
+ls benchmarking/aws/scenarios/*/*.yaml
+```
+
+Wall-clock and spend estimates:
+
+| Scope | Wall-clock | Spend |
+|-------|------------|-------|
+| 1-vCPU smoke | ~25 min | ~$1.50 |
+| 4-point sweep × 2 engines | ~2.5-3h | ~$8 |
+| Full 4-point sweep × 2 engines at 150K writes/sec | ~3-4h | ~$10-12 |
+
+Long benches (>4h) risk the orphan-cleanup TTL — see [traps.md#orphan-ttl](references/traps.md#orphan-ttl).
+
+### Step 3: Validate (free, no AWS spend)
+
+```bash
+task aws:validate scenario=benchmarking/aws/scenarios/<stack>/<scenario>.yaml
+```
+
+Catches YAML typos, missing engineSpec/kcConnectorSpec entries, sizing-trap candidates.
+
+### Step 4: Run
+
+```bash
+aws-vault exec bench -- task aws:bench \
+  scenario=benchmarking/aws/scenarios/<stack>/<scenario>.yaml \
+  [--engines connect,kafka_connect] \
+  [--keep-on-fail]
+```
+
+- `--engines` defaults to `connect` only. Pass both to get the head-to-head sweep.
+- KC roughly doubles wall-clock per vCPU point (sequential, same runner host).
+- `--keep-on-fail` preserves infra for live debug — see [references/workflow-essentials.md#6](references/workflow-essentials.md).
+
+### Step 5: Live monitoring
+
+While the bench runs:
+
+- Heartbeat lines every 60s show rolling stats. "Good" = steady ≥ 20 MB/s once warmup ends.
+- S3 paths to check (replace `<sess>` with the session id printed at startup):
+  - `s3://<bucket>/runs/<sess>/sweep-<vcpu>.log` — Connect's full output per point
+  - `s3://<bucket>/runs/<sess>/prom-<vcpu>.txt` — `:4195/metrics` snapshots
+  - `s3://<bucket>/runs/<sess>/redpanda-{connect,kc}-<vcpu>.txt` — broker `/public_metrics`
+  - `s3://<bucket>/runs/<sess>/kc-<vcpu>.log` — KC JVM output
+
+If you need to interrupt: **SIGINT (Ctrl+C) only**. SIGKILL strands infra. See [traps.md#sigint](references/traps.md#sigint).
+
+### Step 6: Teardown
+
+Happy path: bench finishes, `defer destroy` fires automatically.
+
+Hung-bench path:
+
+```bash
+aws-vault exec bench -- task aws:down
+```
+
+If `task aws:down` fails with `bench_session_id: required variable not set`, see [debugging-playbook.md#tf-destroy-session-id](references/debugging-playbook.md#tf-destroy-session-id).
+
+### Step 7: Inspect results
+
+```bash
+ls benchmarking/aws/results/<connector>/<scenario>/
+```
+
+Each run produces a JSON + adjacent markdown. The auto-refreshed `benchmarking/aws/SUMMARY.md` table aggregates the latest run per scenario.
+
+How to read the per-run markdown:
+
+| Column | Meaning |
+|--------|---------|
+| `engine` | `connect` or `kafka_connect` |
+| `MB/sec (p50)` | Median throughput from rolling stats |
+| `broker MB/s` | Broker-derived median (canonical fairness metric) |
+| `MB/sec (p5)` / `(p95)` | Tail spread |
+| `msg/sec (p50)` | Median msg rate |
+| `Δ vs Connect` | Diff vs Connect at same vCPU (only on the KC row) |
+| `⚠` flag on SUMMARY row | Cross-engine divergence > 2× detected |
+
+### Step 8: On failure
+
+Go to [Debug](#debug).
 
 ## Debug
 
