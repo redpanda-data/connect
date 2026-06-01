@@ -365,10 +365,10 @@ func renderBenchScript(a benchScriptArgs) string {
 		fmt.Sprintf(`PROM=/tmp/prom-%d.txt`, a.VCPU),
 		`: > "$LOG"`,
 		`: > "$PROM"`,
-		// chrt removed for scheduler parity with KC (Plan 2 dropped --fifo on
-		// the KC side because it deadlocked the JVM under single-core taskset).
-		// taskset alone gives us CPU isolation; SCHED_OTHER is what KC uses.
-		// See docs/superpowers/plans/2026-05-22-kafka-connect-plan-3-reporting.md.
+		// chrt removed for scheduler parity with KC (it deadlocked the JVM
+		// under single-core taskset; see traps reference in the
+		// bench-framework Claude skill). taskset alone gives us CPU
+		// isolation; SCHED_OTHER is what KC uses.
 		fmt.Sprintf(`taskset -c 2-%d env GOMAXPROCS=%d GOMEMLIMIT=%dGiB REDPANDA_LICENSE_FILEPATH=/opt/bench/license.jwt %s run %s >"$LOG" 2>&1 &`,
 			cpusetHi, a.VCPU, a.MemLimitGiB, a.BinaryPath, a.ConfigPath),
 		`PID=$!`,

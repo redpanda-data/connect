@@ -2,7 +2,7 @@
 
 Production-shaped benchmarks for Redpanda Connect connectors, run on real AWS infrastructure.
 
-The design lives at [`docs/superpowers/specs/2026-05-19-aws-benchmarking-framework-design.md`](../../docs/superpowers/specs/2026-05-19-aws-benchmarking-framework-design.md). The implementation plan that built this folder lives at [`docs/superpowers/plans/2026-05-19-aws-benchmarking-framework-foundation.md`](../../docs/superpowers/plans/2026-05-19-aws-benchmarking-framework-foundation.md).
+This README is the authoritative reference. Design docs and implementation plans that built this framework lived in `docs/superpowers/{specs,plans}/2026-05-*` during development but are no longer in the tree; recover them from git history if needed.
 
 ---
 
