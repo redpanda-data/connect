@@ -420,6 +420,8 @@ redpanda_kafka_request_bytes_total{redpanda_request="produce",redpanda_topic="be
 		Bucket:                   "b",
 		SessionID:                sessionID,
 		ScenarioConnector:        connector,
+		Topology:                 sourceTopology{},
+		Names:                    newBenchNames(sessionID, connector),
 		Engines:                  []string{"connect", "kafka_connect"},
 		KCConnectorName:          "bench_postgres_cdc",
 		KCConnectorConfigJSON:    `{"connector.class":"x"}`,

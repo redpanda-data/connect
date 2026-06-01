@@ -55,6 +55,11 @@ type MatrixRunner struct {
 	// (e.g. "postgres_cdc"). Passed through from runBench so the
 	// broker-side attribution helper can identify per-engine topics.
 	ScenarioConnector string
+	// Topology supplies the direction-specific metric parser used by
+	// fetchBrokerSeriesForEngine.
+	Topology Topology
+	// Names is the per-session naming value passed into Topology.EngineSeries.
+	Names BenchNames
 }
 
 // SweepPoint is the per-point measurement.
@@ -291,21 +296,16 @@ func (m *MatrixRunner) fetchBrokerSeriesForEngine(ctx context.Context, engine st
 		return nil
 	}
 	defer body.Close()
-	series, err := ParseTopicSeries(body)
+	if m.Topology == nil {
+		fmt.Fprintf(stdout, "[bench] no Topology configured; broker attribution skipped\n")
+		return nil
+	}
+	pts, err := m.Topology.EngineSeries(MetricInputs{Body: body, Names: m.Names}, engine)
 	if err != nil {
-		fmt.Fprintf(stdout, "[bench] parse broker metrics %s (non-fatal): %v\n", engine, err)
+		fmt.Fprintf(stdout, "[bench] EngineSeries(%s) failed: %v\n", engine, err)
 		return nil
 	}
-	if m.ScenarioConnector == "" {
-		fmt.Fprintf(stdout, "[bench] no ScenarioConnector configured; broker attribution skipped\n")
-		return nil
-	}
-	byEngine, err := AttributeByEngine(series, m.SessionID, m.ScenarioConnector)
-	if err != nil {
-		fmt.Fprintf(stdout, "[bench] attribute broker metrics %s (non-fatal): %v\n", engine, err)
-		return nil
-	}
-	return byEngine[engine]
+	return pts
 }
 
 // parseAndTrim parses the Connect log and discards the leading warmup samples,
