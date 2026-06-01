@@ -122,6 +122,37 @@ func TestSourceTopology_Pipeline_InputAndOutput(t *testing.T) {
 	}
 }
 
+func TestSourceTopology_MetricArtifact(t *testing.T) {
+	if got := (sourceTopology{}).MetricArtifact("connect", 2); got != "redpanda-2-connect.txt" {
+		t.Errorf("connect artifact = %q", got)
+	}
+	if got := (sourceTopology{}).MetricArtifact("kafka_connect", 4); got != "redpanda-4-kc.txt" {
+		t.Errorf("kc artifact = %q", got)
+	}
+}
+
+func TestSourceTopology_MetricSidecar_BrokerScrape(t *testing.T) {
+	args := MetricSidecarArgs{
+		Engine: "connect", VCPU: 2,
+		Bucket: "rpcn-bench-results", SessionID: "sess",
+		Outs:  map[string]string{"redpanda_metrics_endpoints": "10.0.0.1:9644,10.0.0.2:9644"},
+		Names: newBenchNames("sess", "postgres_cdc"),
+	}
+	sc := (sourceTopology{}).MetricSidecar(args)
+	if !strings.Contains(sc.Setup, "/public_metrics") {
+		t.Errorf("source sidecar must scrape /public_metrics; got:\n%s", sc.Setup)
+	}
+	if !strings.Contains(sc.Setup, "10.0.0.1:9644,10.0.0.2:9644") {
+		t.Errorf("source sidecar must embed broker endpoints; got:\n%s", sc.Setup)
+	}
+	if !strings.Contains(sc.Setup, `RP=/tmp/redpanda-2-connect.txt`) {
+		t.Errorf("source sidecar must write the connect artifact; got:\n%s", sc.Setup)
+	}
+	if !strings.Contains(sc.Upload, "redpanda-2-connect.txt") {
+		t.Errorf("upload must reference the artifact; got:\n%s", sc.Upload)
+	}
+}
+
 func TestSourceTopology_EngineSeries_ParsesBrokerDump(t *testing.T) {
 	// One topic owned by Connect, sampled across two frames so a single
 	// throughput point is produced.

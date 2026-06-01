@@ -64,3 +64,38 @@ func (sourceTopology) EngineSeries(in MetricInputs, engine string) ([]TopicPoint
 	}
 	return byEngine[engine], nil
 }
+
+func (sourceTopology) MetricArtifact(engine string, vcpu int) string {
+	suffix := engine
+	if engine == "kafka_connect" {
+		suffix = "kc"
+	}
+	return fmt.Sprintf("redpanda-%d-%s.txt", vcpu, suffix)
+}
+
+func (t sourceTopology) MetricSidecar(args MetricSidecarArgs) MetricSidecar {
+	artifact := t.MetricArtifact(args.Engine, args.VCPU)
+	endpoints := args.Outs["redpanda_metrics_endpoints"]
+	if endpoints == "" {
+		endpoints = args.Outs["redpanda_metrics_endpoint"]
+	}
+	setup := fmt.Sprintf(`RP=/tmp/%s
+: > "$RP"
+ENDPOINTS=%q
+(
+  while kill -0 "$PID" 2>/dev/null; do
+    {
+      echo "###timestamp=$(date +%%s)"
+      IFS=, read -ra EPS <<< "$ENDPOINTS"
+      for EP in "${EPS[@]}"; do
+        curl -s --max-time 5 "http://$EP/public_metrics" || echo "###scrape_error_$EP"
+      done
+    } >> "$RP"
+    sleep 10
+  done
+) &
+RP_SCRAPER=$!`, artifact, endpoints)
+	upload := fmt.Sprintf(`aws s3 cp "$RP" "s3://%s/runs/%s/%s" >/dev/null`,
+		args.Bucket, args.SessionID, artifact)
+	return MetricSidecar{Setup: setup, Upload: upload}
+}
