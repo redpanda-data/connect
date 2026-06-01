@@ -279,23 +279,17 @@ func (m *MatrixRunner) fetchBrokerSeriesForEngine(ctx context.Context, engine st
 	if m.LogFetcher == nil {
 		return nil
 	}
-	// The engine string is "kafka_connect" but the on-disk suffix is "kc"
-	// (matches the upload filename in kcscript.go::renderKCBenchScript).
-	suffix := engine
-	if engine == "kafka_connect" {
-		suffix = "kc"
+	if m.Topology == nil {
+		fmt.Fprintf(stdout, "[bench] no Topology configured; metric fetch skipped\n")
+		return nil
 	}
-	key := fmt.Sprintf("runs/%s/redpanda-%d-%s.txt", m.SessionID, vcpu, suffix)
+	key := fmt.Sprintf("runs/%s/%s", m.SessionID, m.Topology.MetricArtifact(engine, vcpu))
 	body, err := m.LogFetcher.Fetch(ctx, m.Bucket, key)
 	if err != nil {
 		fmt.Fprintf(stdout, "[bench] fetch broker metrics %s (non-fatal): %v\n", engine, err)
 		return nil
 	}
 	defer body.Close()
-	if m.Topology == nil {
-		fmt.Fprintf(stdout, "[bench] no Topology configured; broker attribution skipped\n")
-		return nil
-	}
 	pts, err := m.Topology.EngineSeries(MetricInputs{Body: body, Names: m.Names}, engine)
 	if err != nil {
 		fmt.Fprintf(stdout, "[bench] EngineSeries(%s) failed: %v\n", engine, err)
