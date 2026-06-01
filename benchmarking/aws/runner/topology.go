@@ -49,6 +49,9 @@ type MetricInputs struct {
 // implementation exists per Direction. All source-vs-sink branching lives
 // behind this interface; callers (runBench, MatrixRunner) are direction-blind.
 type Topology interface {
+	// Validate checks direction-specific scenario fields beyond the generic
+	// checks in Scenario.Validate.
+	Validate(s *Scenario) error
 	// Pipeline returns the Connect input and output config maps.
 	Pipeline(s *Scenario, n BenchNames) (input, output map[string]any, err error)
 	// SeedScript renders the load-gen script that primes the system with data.
