@@ -11,7 +11,7 @@ Symptom-keyed lookup. Each section is anchored so SKILL.md and other references 
 
 **Where it bit:** Plan 2 smoke first run.
 
-**Investigate:**
+**Mitigation:** No single permanent fix — this is a diagnostic pattern. Investigate:
 
 1. Look for `[load]` lines in the sweep log on S3. None? Workload generator silent.
 2. Compare against Plan 1 smoke at same shape with `output: drop`.
