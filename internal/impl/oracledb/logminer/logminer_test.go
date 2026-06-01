@@ -10,6 +10,7 @@ package logminer
 
 import (
 	"context"
+	"database/sql"
 	"log/slog"
 	"testing"
 
@@ -232,14 +233,69 @@ func TestProcessRedoEventWithConnectCacheResource(t *testing.T) {
 	})
 }
 
+// TestLOBWriteBeforeInsert verifies that LOB_WRITE events buffered before their matching
+// INSERT (BASICFILE DISABLE STORAGE IN ROW ordering) are correctly assembled when the
+// INSERT is subsequently processed and drained.
+func TestLOBWriteBeforeInsert(t *testing.T) {
+	cache := NewInMemoryCache(0, service.MockResources().Metrics(), service.NewLoggerFromSlog(slog.Default()))
+	pub := &publisherStub{}
+	lm := newLogMiner(pub, cache)
+	lm.cfg.LOBEnabled = true
+	lm.lobColTypes = map[string]string{
+		"TESTDB.ORDERS.NOTES": "CLOB",
+	}
+
+	ctx := t.Context()
+
+	// OpStart
+	require.NoError(t, lm.processRedoEvent(ctx, &sqlredo.RedoEvent{
+		SCN: 100, Operation: sqlredo.OpStart, TransactionID: "tx1",
+	}))
+
+	// Two LOB_WRITE fragments arrive BEFORE the INSERT — BASICFILE out-of-line ordering.
+	for _, fragSQL := range []string{
+		"buf_c := 'Hello ';\ndbms_lob.write(loc_c, 6, 1, buf_c);",
+		"buf_c := 'World';\ndbms_lob.write(loc_c, 5, 7, buf_c);",
+	} {
+		require.NoError(t, lm.processRedoEvent(ctx, &sqlredo.RedoEvent{
+			SCN:           101,
+			Operation:     sqlredo.OpLobWrite,
+			TransactionID: "tx1",
+			SchemaName:    sql.NullString{String: "TESTDB", Valid: true},
+			TableName:     sql.NullString{String: "ORDERS", Valid: true},
+			SQLRedo:       sql.NullString{String: fragSQL, Valid: true},
+		}))
+	}
+
+	// INSERT arrives after the LOB_WRITEs; NOTES column is absent from SQL_REDO
+	// because BASICFILE out-of-line storage omits the column from the INSERT row.
+	require.NoError(t, lm.processRedoEvent(ctx, &sqlredo.RedoEvent{
+		SCN:           102,
+		Operation:     sqlredo.OpInsert,
+		TransactionID: "tx1",
+		SchemaName:    sql.NullString{String: "TESTDB", Valid: true},
+		TableName:     sql.NullString{String: "ORDERS", Valid: true},
+		SQLRedo:       sql.NullString{String: `insert into "TESTDB"."ORDERS"("ID","STATUS") values (42,'open')`, Valid: true},
+	}))
+
+	// Commit
+	require.NoError(t, lm.processRedoEvent(ctx, &sqlredo.RedoEvent{
+		SCN: 103, Operation: sqlredo.OpCommit, TransactionID: "tx1",
+	}))
+
+	require.Len(t, pub.messages, 1)
+	assert.Equal(t, "Hello World", pub.messages[0].Data.(map[string]any)["NOTES"])
+}
+
 func newLogMiner(pub replication.ChangePublisher, cache TransactionCache) *LogMiner {
 	return &LogMiner{
-		publisher: pub,
-		txnCache:  cache,
-		dmlParser: sqlredo.NewParser(),
-		log:       service.NewLoggerFromSlog(slog.Default()),
-		cfg:       NewDefaultConfig(),
-		lobStates: make(map[sqlredo.TransactionID]*sqlredo.TxnLOBState),
+		publisher:        pub,
+		txnCache:         cache,
+		dmlParser:        sqlredo.NewParser(),
+		log:              service.NewLoggerFromSlog(slog.Default()),
+		cfg:              NewDefaultConfig(),
+		lobStates:        make(map[sqlredo.TransactionID]*sqlredo.TxnLOBState),
+		pendingLOBWrites: make(map[sqlredo.TransactionID][]*sqlredo.RedoEvent),
 	}
 }
 
