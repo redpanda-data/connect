@@ -63,6 +63,12 @@ type MetricSidecar struct {
 	Upload string // aws s3 cp of $RP after the run
 }
 
+// KCRenderResult is the Kafka Connect connector to submit for an engine run.
+type KCRenderResult struct {
+	ConnectorName string // e.g. bench_postgres_cdc
+	ConfigJSON    string // rendered connector config posted to the KC REST API
+}
+
 // Topology abstracts the direction-specific wiring of a bench. One
 // implementation exists per Direction. All source-vs-sink branching lives
 // behind this interface; callers (runBench, MatrixRunner) are direction-blind.
@@ -88,6 +94,9 @@ type Topology interface {
 	// framing samples under "###timestamp=<unix>" into $RP) and ends by setting
 	// RP_SCRAPER=$!. Upload copies $RP to S3 after the bench process exits.
 	MetricSidecar(args MetricSidecarArgs) MetricSidecar
+	// KCConfig renders the Kafka Connect connector (name + JSON) for this
+	// scenario, or returns ok=false when the direction has no KC counterpart.
+	KCConfig(s *Scenario, outs map[string]string, n BenchNames) (res KCRenderResult, ok bool, err error)
 }
 
 // topologyFor selects the implementation for a scenario's direction. An empty

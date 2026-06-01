@@ -247,24 +247,15 @@ func runBench(opts benchOpts) (errOut error) {
 		}
 	}
 	if needsKC {
-		es, ok := engineSpecFor(s.Connector)
+		res, ok, err := topo.KCConfig(s, sharedOuts, names)
+		if err != nil {
+			return fmt.Errorf("KC config: %w", err)
+		}
 		if !ok {
-			return fmt.Errorf("no engineSpec for %q", s.Connector)
+			return fmt.Errorf("engine list includes kafka_connect but direction %q has no KC counterpart", s.Direction)
 		}
-		in, err := buildKCRenderInputs(s, es, sharedOuts, sessionID)
-		if err != nil {
-			return fmt.Errorf("build KC render inputs: %w", err)
-		}
-		cfg, err := renderKCConfig(s, in)
-		if err != nil {
-			return fmt.Errorf("render KC config: %w", err)
-		}
-		raw, err := json.Marshal(cfg)
-		if err != nil {
-			return err
-		}
-		kcConnectorName = fmt.Sprintf("bench_%s", s.Connector)
-		kcConfigJSON = string(raw)
+		kcConnectorName = res.ConnectorName
+		kcConfigJSON = res.ConfigJSON
 	}
 
 	mr := &MatrixRunner{
