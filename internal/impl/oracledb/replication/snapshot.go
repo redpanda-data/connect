@@ -30,6 +30,7 @@ import (
 type Snapshot struct {
 	dbPool                  *sql.DB
 	tables                  []UserTable
+	filters                 map[string]string
 	publisher               ChangePublisher
 	log                     *service.Logger
 	snapshotStatusMetric    *service.MetricGauge
@@ -44,6 +45,7 @@ type Snapshot struct {
 func NewSnapshot(ctx context.Context,
 	connectionString string,
 	tables []UserTable,
+	filters map[string]string,
 	publisher ChangePublisher,
 	lobEnabled bool,
 	pdbName string,
@@ -63,6 +65,7 @@ func NewSnapshot(ctx context.Context,
 	s := &Snapshot{
 		dbPool:                  db,
 		tables:                  tables,
+		filters:                 filters,
 		publisher:               publisher,
 		lobEnabled:              lobEnabled,
 		pdbName:                 pdbName,
@@ -224,7 +227,8 @@ func (s *Snapshot) snapshotTable(ctx context.Context, table UserTable, maxBatchS
 // lastSeenPksValues is mutated in place with the PK values from the last row of the batch,
 // so the caller can pass it as pksForQuery on the next iteration.
 func (s *Snapshot) processBatch(ctx context.Context, tx *sql.Tx, table UserTable, tablePks []string, pksForQuery map[string]any, lastSeenPksValues map[string]any, maxBatchSize int, tableName string) (batchCount int, err error) {
-	batchRows, err := querySnapshotTable(ctx, tx, table, tablePks, pksForQuery, maxBatchSize)
+	customQuery := s.filters[table.FullName()]
+	batchRows, err := querySnapshotTable(ctx, tx, table, tablePks, pksForQuery, maxBatchSize, customQuery)
 	if err != nil {
 		return 0, fmt.Errorf("execute snapshot table query: %w", err)
 	}
@@ -331,10 +335,16 @@ func getTablePrimaryKeys(ctx context.Context, tx *sql.Tx, table UserTable) ([]st
 	return pks, nil
 }
 
-func querySnapshotTable(ctx context.Context, tx *sql.Tx, table UserTable, pk []string, lastSeenPkVal map[string]any, limit int) (*sql.Rows, error) {
+func querySnapshotTable(ctx context.Context, tx *sql.Tx, table UserTable, pk []string, lastSeenPkVal map[string]any, limit int, customQuery string) (*sql.Rows, error) {
 	// Oracle uses FETCH FIRST instead of TOP, and it comes at the end
+	var tableSource string
+	if customQuery != "" {
+		tableSource = fmt.Sprintf("(%s) t", customQuery)
+	} else {
+		tableSource = fmt.Sprintf(`"%s"."%s"`, table.Schema, table.Name)
+	}
 	snapshotQueryParts := []string{
-		fmt.Sprintf(`SELECT * FROM "%s"."%s"`, table.Schema, table.Name),
+		"SELECT * FROM " + tableSource,
 	}
 
 	if lastSeenPkVal == nil {
