@@ -419,7 +419,6 @@ redpanda_kafka_request_bytes_total{redpanda_request="produce",redpanda_topic="be
 		RunnerInstance:           "i-runner",
 		Bucket:                   "b",
 		SessionID:                sessionID,
-		ScenarioConnector:        connector,
 		Topology:                 sourceTopology{},
 		Names:                    newBenchNames(sessionID, connector),
 		Engines:                  []string{"connect", "kafka_connect"},

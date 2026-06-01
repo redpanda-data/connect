@@ -281,7 +281,6 @@ func runBench(opts benchOpts) (errOut error) {
 		Engines:                  opts.engines,
 		KCConnectorName:          kcConnectorName,
 		KCConnectorConfigJSON:    kcConfigJSON,
-		ScenarioConnector:        s.Connector,
 		Topology:                 topo,
 		Names:                    names,
 	}
