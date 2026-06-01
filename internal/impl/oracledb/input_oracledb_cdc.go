@@ -62,6 +62,10 @@ const (
 	ociFieldLOBEnabled           = "lob_enabled"
 	ociFieldTransactionCache     = "transaction_cache"
 	ociFieldTransactionCacheKey  = "transaction_cache_key"
+
+	//-- snapshot specific
+	ociFieldSnapshot        = "snapshot"
+	ociFieldSnapshotFilters = "filters"
 )
 
 func init() {
@@ -169,6 +173,18 @@ This cache is designed for low-latency stores with cheap per-operation cost. Red
 			Optional(),
 	).Description("LogMiner configuration settings."),
 	).
+	// snapshot config
+	Field(service.NewObjectField(ociFieldSnapshot,
+		service.NewStringMapField(ociFieldSnapshotFilters).
+			Description("A map of fully-qualified table names (e.g. SCHEMA.TABLE) to SQL SELECT queries, used to override the default snapshot query per table.").
+			Example(map[string]any{
+				"TESTDB.USERS":    "SELECT * FROM TESTDB.USERS",
+				"TESTDB.PRODUCTS": "SELECT * FROM TESTDB.PRODUCTS WHERE ID > 1000",
+			}).
+			Optional(),
+	).Description("Snapshot configuration settings.").
+		Optional(),
+	).
 	Field(service.NewStringListField(ociFieldTablesInclude).
 		Description("Regular expressions for tables to include.").
 		Example("SCHEMA.PRODUCTS"),
@@ -216,6 +232,7 @@ type Config struct {
 	SnapshotMode         SnapshotMode
 	SnapshotMaxBatchSize int
 	SnapshotMaxWorkers   int
+	SnapshotFilters      map[string]string
 	TablesFilter         *confx.RegexpFilter
 	SCNCache             string
 	SCNCacheKey          string
@@ -273,6 +290,20 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 	}
 	if lmCfg, err = parseLogMinerConfig(conf); err != nil {
 		return nil, err
+	}
+
+	// snapshot filters
+	var snapshotFilters map[string]string
+	if conf.Contains(ociFieldSnapshot) {
+		snapshotConf := conf.Namespace(ociFieldSnapshot)
+		if snapshotConf.Contains(ociFieldSnapshotFilters) {
+			if snapshotFilters, err = snapshotConf.FieldStringMap(ociFieldSnapshotFilters); err != nil {
+				return nil, err
+			}
+			if err := replication.ValidateSnapshotFilters(snapshotFilters); err != nil {
+				return nil, fmt.Errorf("validating snapshot filters: %w", err)
+			}
+		}
 	}
 
 	// tables
@@ -350,6 +381,7 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 			SnapshotMode:         snapshotMode,
 			SnapshotMaxWorkers:   snapshotMaxWorkers,
 			SnapshotMaxBatchSize: snapshotMaxBatchSize,
+			SnapshotFilters:      snapshotFilters,
 			SCNCache:             scnCache,
 			SCNCacheKey:          scnCacheKey,
 			CpCacheTableName:     cpCacheTableName,
@@ -458,6 +490,7 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 			if userTables, err = replication.VerifyUserTables(ctx, conn, o.cfg.TablesFilter, o.log); err != nil {
 				return fmt.Errorf("verifying user defined tables: %w", err)
 			}
+
 			return nil
 		}(); err != nil {
 			return err
@@ -466,6 +499,11 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 		if userTables, err = replication.VerifyUserTables(ctx, o.db, o.cfg.TablesFilter, o.log); err != nil {
 			return fmt.Errorf("verifying user defined tables: %w", err)
 		}
+	}
+
+	// Validate that every table named in snapshot filters is actually being monitored.
+	if err = replication.SnapshotFilterTablesExist(userTables, o.cfg.SnapshotFilters); err != nil {
+		return fmt.Errorf("verifying snapshot filters: %w", err)
 	}
 
 	// Pre-fetch schemas for all monitored tables. A fresh cache is created on every Connect()
@@ -514,7 +552,7 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 
 	// no cached SCN means we're not recovering from a restart
 	if !o.cfg.SnapshotMode.IsSnapshotNone() && cachedSCN == replication.InvalidSCN {
-		if snapshotter, err = replication.NewSnapshot(ctx, o.cfg.ConnectionString, userTables, o.publisher, o.lmCfg.LOBEnabled, pdbNameForCache, o.log, o.metrics); err != nil {
+		if snapshotter, err = replication.NewSnapshot(ctx, o.cfg.ConnectionString, userTables, o.cfg.SnapshotFilters, o.publisher, o.lmCfg.LOBEnabled, pdbNameForCache, o.log, o.metrics); err != nil {
 			return fmt.Errorf("creating database snapshotter: %w", err)
 		}
 		defer func() {
