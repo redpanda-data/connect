@@ -15,5 +15,8 @@ output "{{ENGINE}}_dsn" {
 output "{{ENGINE}}_host"     { value = module.{{ENGINE}}.host }
 output "{{ENGINE}}_port"     { value = module.{{ENGINE}}.port }
 output "{{ENGINE}}_user"     { value = module.{{ENGINE}}.user }
-output "{{ENGINE}}_password" { value = module.{{ENGINE}}.password sensitive = true }
+output "{{ENGINE}}_password" {
+  value     = module.{{ENGINE}}.password
+  sensitive = true
+}
 output "{{ENGINE}}_db"       { value = module.{{ENGINE}}.db }
