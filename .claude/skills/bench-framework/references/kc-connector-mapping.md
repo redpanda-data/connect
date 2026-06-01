@@ -34,10 +34,30 @@ The runner's cloud-init installs these:
 If the connector you're benching needs a plugin not in the list above:
 
 1. Find the Confluent Hub / GitHub release URL for the connector's `*.zip` distribution.
-2. In `benchmarking/aws/terraform/shared/runner-user-data.tftpl`, add a step in the cloud-init runcmd to download + unzip into `/opt/kafka/plugins/<name>/`.
-3. Restart the kafka-connect systemd unit (`systemctl restart kafka-connect`) so KC's plugin scan picks it up.
-4. Verify on the runner: `curl -s localhost:8083/connector-plugins | jq -r '.[].class'` must include the new connector's class.
-5. Add the class + props template to `kcConnectorSpecs` in `runner/kcconnectors.go`.
+   - Debezium connectors: `https://repo1.maven.org/maven2/io/debezium/debezium-connector-<engine>/<version>/debezium-connector-<engine>-<version>-plugin.tar.gz`
+   - Current Debezium version in the framework: **2.7.x** (match this to avoid version skew with existing postgres/mysql connectors).
+   - Example for SQL Server 2.7.3: `https://repo1.maven.org/maven2/io/debezium/debezium-connector-sqlserver/2.7.3.Final/debezium-connector-sqlserver-2.7.3.Final-plugin.tar.gz`
+
+2. In `benchmarking/aws/terraform/shared/runner-user-data.tftpl`, add a step in the cloud-init `runcmd` to download + extract into `/opt/kafka/plugins/<name>/`. Follow the existing postgres/mysql plugin install pattern exactly. Example for SQL Server:
+   ```yaml
+   - mkdir -p /opt/kafka/plugins/debezium-connector-sqlserver
+   - curl -fsSL https://repo1.maven.org/maven2/io/debezium/debezium-connector-sqlserver/2.7.3.Final/debezium-connector-sqlserver-2.7.3.Final-plugin.tar.gz | tar -xz -C /opt/kafka/plugins/debezium-connector-sqlserver --strip-components=1
+   ```
+   The `--strip-components=1` flattens the archive's top-level directory so the JARs land directly in the plugin dir.
+
+3. Restart the kafka-connect systemd unit so KC's plugin scan picks it up. The unit name is `kafka-connect` (verify: `systemctl status kafka-connect` on the runner). The cloud-init step is:
+   ```yaml
+   - systemctl restart kafka-connect
+   ```
+   Place this AFTER the plugin install step (cloud-init runcmd runs in order).
+
+4. Verify on the runner after a bench launch (or by launching the shared stack standalone and SSM-ing in):
+   ```bash
+   curl -s localhost:8083/connector-plugins | jq -r '.[].class'
+   ```
+   Must include the new connector's class (e.g. `io.debezium.connector.sqlserver.SqlServerConnector`).
+
+5. Add the class + props template to `kcConnectorSpecs` in `runner/kcconnectors.go` (see `kc-connector-spec.go.tmpl`).
 
 ## kcConnectorSpec template gotchas
 

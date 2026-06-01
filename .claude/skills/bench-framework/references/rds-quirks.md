@@ -35,6 +35,52 @@ input:
 
 Trap: [traps.md#postgres-cdc-tls](traps.md#postgres-cdc-tls).
 
+## SQL Server: enabling CDC on RDS
+
+RDS SQL Server exposes `MSSQLSERVER` as the engine name. The Terraform module uses `engine = "sqlserver-se"` (Standard Edition) or `"sqlserver-ee"` (Enterprise). CDC is NOT enabled at RDS parameter level — instead it is enabled via T-SQL commands.
+
+**Required T-SQL to enable CDC on the database and table (run once, not in reset):**
+
+```sql
+-- 1. Enable CDC on the database
+EXEC sys.sp_cdc_enable_db;
+
+-- 2. Enable CDC on the target table
+EXEC sys.sp_cdc_enable_table
+  @source_schema = 'dbo',
+  @source_name   = 'orders',
+  @role_name     = null;
+```
+
+These commands are idempotent if run again but should go in the **first-run seed script**, not the reset block. The reset block only needs disable+truncate+re-enable (see `reset.sql.tmpl`).
+
+**RDS SQL Server parameters** (set in the module's parameter group):
+
+| Setting | Value | Why |
+|---------|-------|-----|
+| `rds.sqlserver_audit` | N/A | Not needed for CDC |
+
+No parameter group settings are required for CDC on RDS SQL Server — it is enabled at the DB/table level via T-SQL above.
+
+**RDS engine string and family for Terraform:**
+
+```hcl
+engine         = "sqlserver-se"          # Standard Edition
+engine_version = "15.00.4415.2.v1"      # SQL Server 2019 — check latest via aws rds describe-db-engine-versions
+family         = "sqlserver-se-15.0"     # parameter group family
+```
+
+Unlike Postgres and MySQL, RDS SQL Server uses **Windows Authentication** and requires `license_model = "license-included"`.
+
+**Security group port:** `1433` (not 5432 or 3306).
+
+**DSN format** for go-mssqldb driver:
+```
+sqlserver://bench:<password>@<host>:1433?database=benchdb
+```
+
+Mirror `modules/rds-mysql/` but change port/family/engine and add `license_model = "license-included"`.
+
 ## RDS instance class minimums
 
 CDC benches under sustained 50K+ msg/sec require:
@@ -43,6 +89,7 @@ CDC benches under sustained 50K+ msg/sec require:
 |--------|------------------------|---------|------|
 | Postgres | `db.r6g.2xlarge` | 400 GB gp3 | 12000 |
 | MySQL | `db.r6g.2xlarge` | 400 GB gp3 | 12000 |
+| SQL Server | `db.r5.2xlarge` (Graviton not available for SQL Server on RDS) | 400 GB gp3 | 12000 |
 
 Smaller instances will appear to work at low CPU points (vCPU=1) and degrade silently as the sweep ramps. The `iops` parameter is **required if `storage_gb >= 400`** and **forbidden if `storage_gb < 400`** for the Postgres engine — see `bench-debugging-history` #28.
 

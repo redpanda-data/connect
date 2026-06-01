@@ -62,7 +62,7 @@ Answer these before writing anything:
 |--------------------|--------------|
 | Postgres-shaped CDC (logical replication, slots) | `scenarios/postgres/orders-cdc.yaml` + `kcConnectorSpecs["postgres_cdc"]` |
 | MySQL-shaped CDC (binlog, no slots) | `scenarios/mysql/orders-cdc.yaml` + `kcConnectorSpecs["mysql_cdc"]` |
-| SQL Server CDC (table tail, schema-changes) | Closest: mysql shape; needs `sp_cdc_enable_table` in reset (Plan 4 territory) |
+| SQL Server CDC (table tail, schema-changes) | Closest: mysql shape; see `reset.sql.tmpl` for the `sp_cdc_disable_table`/`sp_cdc_enable_table` reset pattern. RDS SQL Server module doesn't exist yet — create it mirroring `modules/rds-mysql/` (see `references/rds-quirks.md#sql-server-enabling-cdc-on-rds`). Debezium SQL Server plugin not installed — add to cloud-init (see `references/kc-connector-mapping.md#adding-a-new-kc-plugin-cloud-init-step`). |
 | Mongo CDC (change stream) | Closest: postgres shape; Debezium MongoDB needs `mongo.connection.string` not user/pass split |
 | Sink (any) | Plan 4 — TBD when sink scenarios land |
 
