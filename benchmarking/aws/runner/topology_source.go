@@ -13,6 +13,13 @@ import "fmt"
 // functions so behavior is byte-identical to the pre-refactor runner.
 type sourceTopology struct{}
 
+func (sourceTopology) Validate(s *Scenario) error {
+	if _, ok := engineSpecFor(s.Connector); !ok {
+		return fmt.Errorf("connector %q has no engineSpec entry; add one to engineSpecs in scenario.go", s.Connector)
+	}
+	return nil
+}
+
 func (sourceTopology) Pipeline(s *Scenario, n BenchNames) (input, output map[string]any, err error) {
 	in, ok := s.Pipeline["input"].(map[string]any)
 	if !ok {

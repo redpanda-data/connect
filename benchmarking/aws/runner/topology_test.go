@@ -35,6 +35,20 @@ func TestTopologyFor(t *testing.T) {
 	}
 }
 
+func TestSourceTopology_Validate_RejectsUnknownConnector(t *testing.T) {
+	s := &Scenario{Connector: "nope_cdc", Direction: DirectionSource}
+	if err := (sourceTopology{}).Validate(s); err == nil {
+		t.Fatal("expected error for connector with no engineSpec")
+	}
+}
+
+func TestSourceTopology_Validate_AcceptsKnown(t *testing.T) {
+	s := &Scenario{Connector: "postgres_cdc", Direction: DirectionSource}
+	if err := (sourceTopology{}).Validate(s); err != nil {
+		t.Fatalf("postgres_cdc must validate, got %v", err)
+	}
+}
+
 func TestSourceTopology_SeedScript_MatchesRenderSeedScript(t *testing.T) {
 	s := &Scenario{
 		Connector: "postgres_cdc",

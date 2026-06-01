@@ -186,8 +186,12 @@ func (s *Scenario) Validate() error {
 	default:
 		return fmt.Errorf("direction %q is invalid; must be %q or %q", s.Direction, DirectionSource, DirectionSink)
 	}
-	if _, ok := engineSpecFor(s.Connector); !ok {
-		return fmt.Errorf("connector %q has no engineSpec entry; add one to engineSpecs in scenario.go", s.Connector)
+	topo, err := topologyFor(s.Direction)
+	if err != nil {
+		return err
+	}
+	if err := topo.Validate(s); err != nil {
+		return err
 	}
 	if s.Stack == "" {
 		return fmt.Errorf("stack is required")
