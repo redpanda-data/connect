@@ -128,6 +128,11 @@ func runBench(opts benchOpts) (errOut error) {
 	}
 	fmt.Printf("[1/7] loaded scenario %s\n", s.Name)
 
+	topo, err := topologyFor(s.Direction)
+	if err != nil {
+		return err
+	}
+
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
@@ -155,6 +160,7 @@ func runBench(opts benchOpts) (errOut error) {
 		return fmt.Errorf("terraform init %s: %w", s.Stack, err)
 	}
 	sessionID := newSessionID()
+	names := newBenchNames(sessionID, s.Connector)
 	sharedVars := map[string]string{
 		"region":               opts.region,
 		"runner_instance_type": s.Infra.Runner.InstanceType,
@@ -209,7 +215,7 @@ func runBench(opts benchOpts) (errOut error) {
 	}
 	fmt.Println("[3/7] built redpanda-connect")
 
-	cfgPath, err := renderPipelineConfig(s, sharedOuts)
+	cfgPath, err := renderPipelineConfig(s, sharedOuts, topo, names)
 	if err != nil {
 		return fmt.Errorf("render pipeline config: %w", err)
 	}
@@ -218,7 +224,7 @@ func runBench(opts benchOpts) (errOut error) {
 	}
 	fmt.Println("[4/7] staged binary + config on runner")
 
-	if err := runSeeder(ctx, opts, s, sharedOuts); err != nil {
+	if err := runSeeder(ctx, opts, s, sharedOuts, topo, names); err != nil {
 		return fmt.Errorf("seed: %w", err)
 	}
 	fmt.Println("[5/7] seed complete")
@@ -276,12 +282,14 @@ func runBench(opts benchOpts) (errOut error) {
 		KCConnectorName:          kcConnectorName,
 		KCConnectorConfigJSON:    kcConfigJSON,
 		ScenarioConnector:        s.Connector,
+		Topology:                 topo,
+		Names:                    names,
 	}
-	reset, err := combineReset(s.Connector, s.Reset, sharedOuts)
+	reset, err := topo.ResetScript(s, sharedOuts, names)
 	if err != nil {
 		return err
 	}
-	workload, err := renderWorkloadScript(s, sharedOuts)
+	workload, err := topo.WorkloadScript(s, sharedOuts, names)
 	if err != nil {
 		return err
 	}
@@ -529,27 +537,18 @@ func buildConnect(repoRoot string) (string, error) {
 	return out, nil
 }
 
-func renderPipelineConfig(s *Scenario, outs map[string]string) (string, error) {
-	// Per-engine output topic so broker-side metrics attribute cleanly.
-	// SessionID is substituted by substitutePlaceholders below.
-	topic := fmt.Sprintf("bench_${BENCH_SESSION_ID}_%s_connect", s.Connector)
-
+func renderPipelineConfig(s *Scenario, outs map[string]string, topo Topology, names BenchNames) (string, error) {
+	input, output, err := topo.Pipeline(s, names)
+	if err != nil {
+		return "", fmt.Errorf("render pipeline: %w", err)
+	}
 	cfg := map[string]any{
 		"http": map[string]any{"debug_endpoints": true},
 		"redpanda": map[string]any{
 			"seed_brokers": []string{"${REDPANDA_BROKER_ENDPOINTS}"},
 		},
-		"input": s.Pipeline["input"],
-		"output": map[string]any{
-			"processors": []any{
-				map[string]any{
-					"benchmark": map[string]any{"interval": "1s", "count_bytes": true},
-				},
-			},
-			"redpanda": map[string]any{
-				"topic": topic,
-			},
-		},
+		"input":  input,
+		"output": output,
 		"logger": map[string]any{"level": "INFO"},
 		"metrics": map[string]any{
 			"prometheus": map[string]any{"add_process_metrics": true, "add_go_metrics": true},
@@ -710,7 +709,7 @@ chmod 0600 /opt/bench/license.jwt
 `, bucket, bucket, bucket)
 	return ssmExec.Run(ctx, outs["runner_instance_id"], script, streamingOnLine(os.Stdout, "stage"))
 }
-func runSeeder(ctx context.Context, opts benchOpts, s *Scenario, outs map[string]string) error {
+func runSeeder(ctx context.Context, opts benchOpts, s *Scenario, outs map[string]string, topo Topology, names BenchNames) error {
 	if s.Dataset.Seeder == "" {
 		return nil
 	}
@@ -746,7 +745,7 @@ func runSeeder(ctx context.Context, opts benchOpts, s *Scenario, outs map[string
 	if err != nil {
 		return err
 	}
-	script, err := renderSeedScript(s, outs, key)
+	script, err := topo.SeedScript(s, outs, names)
 	if err != nil {
 		return err
 	}

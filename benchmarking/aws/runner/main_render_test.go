@@ -33,7 +33,7 @@ func TestRenderPipelineConfig_PostgresCDC(t *testing.T) {
 		"redpanda_broker_endpoints": "10.42.10.10:9092",
 	}
 
-	path, err := renderPipelineConfig(s, outs)
+	path, err := renderPipelineConfig(s, outs, sourceTopology{}, BenchNames{})
 	if err != nil {
 		t.Fatalf("renderPipelineConfig: %v", err)
 	}
@@ -87,7 +87,7 @@ func TestRenderPipelineConfig_ThreadsCacheResources(t *testing.T) {
 		"redpanda_broker_endpoints": "10.42.10.10:9092",
 	}
 
-	path, err := renderPipelineConfig(s, outs)
+	path, err := renderPipelineConfig(s, outs, sourceTopology{}, BenchNames{})
 	if err != nil {
 		t.Fatalf("renderPipelineConfig: %v", err)
 	}

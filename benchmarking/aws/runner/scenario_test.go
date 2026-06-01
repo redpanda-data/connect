@@ -172,7 +172,7 @@ func TestRenderPipelineConfig_PassesCacheResourcesThrough(t *testing.T) {
 		},
 	}
 	outs := map[string]string{"mysql_dsn": "u:p@tcp(h:3306)/db"}
-	path, err := renderPipelineConfig(s, outs)
+	path, err := renderPipelineConfig(s, outs, sourceTopology{}, BenchNames{})
 	if err != nil {
 		t.Fatalf("renderPipelineConfig: %v", err)
 	}
@@ -202,7 +202,7 @@ func TestRenderPipelineConfig_OmitsCacheResourcesWhenAbsent(t *testing.T) {
 		},
 	}
 	outs := map[string]string{"postgres_dsn": "postgres://u:p@h:5432/db"}
-	path, err := renderPipelineConfig(s, outs)
+	path, err := renderPipelineConfig(s, outs, sourceTopology{}, BenchNames{})
 	if err != nil {
 		t.Fatalf("renderPipelineConfig: %v", err)
 	}
