@@ -58,6 +58,9 @@ func TestIntegrationDorisStreamLoadOutput(t *testing.T) {
 		testcontainers.WithConfigModifier(func(c *container.Config) {
 			c.Hostname = "doris-fe"
 		}),
+		testcontainers.WithHostConfigModifier(func(hc *container.HostConfig) {
+			hc.Sysctls = map[string]string{"vm.max_map_count": "2000000"}
+		}),
 		network.WithNetwork([]string{"doris-fe"}, dockerNet),
 		testcontainers.WithExposedPorts("8030/tcp", "9010/tcp", "9030/tcp"),
 		testcontainers.WithEnv(map[string]string{
