@@ -125,7 +125,7 @@ func topologyFor(d Direction) (Topology, error) {
 	case DirectionSource, "":
 		return sourceTopology{}, nil
 	case DirectionSink:
-		return nil, fmt.Errorf("sink topology not yet implemented (lands in Plan 2)")
+		return sinkTopology{}, nil
 	default:
 		return nil, fmt.Errorf("unknown direction %q", d)
 	}

@@ -40,8 +40,8 @@ func TestTopologyFor(t *testing.T) {
 	if _, err := topologyFor(Direction("")); err != nil {
 		t.Errorf("empty direction must resolve to source, got %v", err)
 	}
-	if _, err := topologyFor(DirectionSink); err == nil {
-		t.Errorf("sink topology is not implemented in Plan 1; expected an error")
+	if _, err := topologyFor(DirectionSink); err != nil {
+		t.Errorf("sink topology must resolve, got %v", err)
 	}
 	if _, err := topologyFor(Direction("sideways")); err == nil {
 		t.Errorf("unknown direction must error")
