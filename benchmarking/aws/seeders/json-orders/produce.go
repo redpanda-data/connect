@@ -44,6 +44,11 @@ func seed(ctx context.Context, topic string, rows int64, rowSize int) error {
 
 	var produced, failed int64
 	for i := int64(0); i < rows; i++ {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
 		rec := map[string]any{
 			"id":      i,
 			"ts":      time.Now().UTC().Format(time.RFC3339Nano),

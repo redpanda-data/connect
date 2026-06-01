@@ -208,6 +208,9 @@ func runBench(opts benchOpts) (errOut error) {
 	// it here so per-engine renderers (renderPipelineConfig, buildKCRenderInputs,
 	// combineReset) can read it via outs["bench_session_id"].
 	sharedOuts["bench_session_id"] = sessionID
+	// aws_region is data the runner already holds (not a TF output). Sink Glue
+	// calls (catalog region, glue CLI --region) read it from outs["aws_region"].
+	sharedOuts["aws_region"] = opts.region
 
 	binPath, err := buildConnect(opts.repoRoot)
 	if err != nil {
