@@ -37,7 +37,7 @@ Each line links to [references/traps.md](references/traps.md). Skim before any b
 
 **First time on this account?** Do the one-time setup in [references/bootstrap.md](references/bootstrap.md) before anything else (~30 min). Each engineer brings their own AWS account, S3 state bucket, DDB lock table, and license — the bootstrap recipe walks all of it.
 
-1. **Adding a new connector bench** → [Add a new connector](#add-a-new-connector). Skill walks 9 steps to produce the TF stack, scenario YAML, engineSpec entry, kcConnectorSpec entry, reset SQL, plus tests.
+1. **Adding a new connector bench** → [Add a new connector](#add-a-new-connector). Skill walks 11 steps (interview → exemplar → TF stack → scenario YAML → engineSpec → kcConnectorSpec → reset SQL → validate → smoke → tests → commit).
 2. **Running an existing bench** → [Operate a bench](#operate-a-bench). Skill walks the pre-flight checklist, the run, live monitoring, and teardown.
 3. **Debugging a failed bench** → [Debug](#debug). Skill triages from symptom into the playbook.
 
@@ -128,19 +128,21 @@ Invariants (DO NOT skip):
 
 ### Step 7: Validate
 
+The Taskfile takes a bare relative path (it adds `benchmarking/aws/scenarios/` and `.yaml`):
+
 ```bash
-task aws:validate scenario=benchmarking/aws/scenarios/<stack>/<scenario>.yaml
+task aws:validate scenario=<stack>/<scenario>
+# e.g. task aws:validate scenario=postgres/orders-cdc
 ```
 
 Catches typos and missing-registry errors before any AWS spend. On failure, the error message will point at the issue; cross-check against [references/traps.md](references/traps.md).
 
 ### Step 8: 1-vCPU smoke
 
+`task aws:bench` defaults to BOTH engines (connect + kafka_connect). Pin cpu_points to `[1]` in your scenario for the smoke:
+
 ```bash
-# Pin cpu_points to [1] in your scenario for the smoke run
-aws-vault exec bench -- task aws:bench \
-  scenario=benchmarking/aws/scenarios/<stack>/<scenario>.yaml \
-  --engines connect,kafka_connect
+aws-vault exec bench -- task aws:bench scenario=<stack>/<scenario>
 ```
 
 Acceptance:
@@ -209,24 +211,32 @@ Long benches (>4h) risk the orphan-cleanup TTL — see [traps.md#orphan-ttl](ref
 
 ### Step 3: Validate (free, no AWS spend)
 
+The Taskfile prepends `benchmarking/aws/scenarios/` and appends `.yaml` — pass the bare relative path:
+
 ```bash
-task aws:validate scenario=benchmarking/aws/scenarios/<stack>/<scenario>.yaml
+task aws:validate scenario=<stack>/<scenario>
+# e.g.: task aws:validate scenario=postgres/orders-cdc
 ```
 
 Catches YAML typos, missing engineSpec/kcConnectorSpec entries, sizing-trap candidates.
 
 ### Step 4: Run
 
+`task aws:bench` defaults to BOTH engines (Connect + KC sequential, ~2× wall-clock):
+
 ```bash
-aws-vault exec bench -- task aws:bench \
-  scenario=benchmarking/aws/scenarios/<stack>/<scenario>.yaml \
-  [--engines connect,kafka_connect] \
-  [--keep-on-fail]
+aws-vault exec bench -- task aws:bench scenario=<stack>/<scenario>
 ```
 
-- `--engines` defaults to `connect` only. Pass both to get the head-to-head sweep.
-- KC roughly doubles wall-clock per vCPU point (sequential, same runner host).
-- `--keep-on-fail` preserves infra for live debug — see [references/workflow-essentials.md#6](references/workflow-essentials.md).
+The Taskfile doesn't forward extra flags. To narrow to one engine or pass `--keep-on-fail`, invoke the runner directly:
+
+```bash
+aws-vault exec bench -- go run ./benchmarking/aws/runner bench \
+  --scenario=benchmarking/aws/scenarios/<stack>/<scenario>.yaml \
+  --repo-root=. --engines=connect --keep-on-fail
+```
+
+`--keep-on-fail` preserves infra for live debug — see [workflow-essentials.md](references/workflow-essentials.md) rule 6.
 
 ### Step 5: Live monitoring
 
@@ -236,7 +246,7 @@ While the bench runs:
 - S3 paths to check (replace `<sess>` with the session id printed at startup):
   - `s3://<bucket>/runs/<sess>/sweep-<vcpu>.log` — Connect's full output per point
   - `s3://<bucket>/runs/<sess>/prom-<vcpu>.txt` — `:4195/metrics` snapshots
-  - `s3://<bucket>/runs/<sess>/redpanda-{connect,kc}-<vcpu>.txt` — broker `/public_metrics`
+  - `s3://<bucket>/runs/<sess>/redpanda-<vcpu>-{connect,kc}.txt` — broker `/public_metrics`
   - `s3://<bucket>/runs/<sess>/kc-<vcpu>.log` — KC JVM output
 
 If you need to interrupt: **SIGINT (Ctrl+C) only**. SIGKILL strands infra. See [traps.md#sigint](references/traps.md#sigint).
@@ -255,11 +265,15 @@ If `task aws:down` fails with `bench_session_id: required variable not set`, see
 
 ### Step 7: Inspect results
 
+Each run writes 3 artifacts:
+
 ```bash
-ls benchmarking/aws/results/<connector>/<scenario>/
+benchmarking/aws/results/<stack>/<scenario>/<timestamp>.json   # per-run JSON (canonical)
+docs/benchmark-results/<stack>.md                              # per-stack markdown, APPENDED per run
+docs/benchmark-results/SUMMARY.md                              # cross-scenario summary, auto-refreshed
 ```
 
-Each run produces a JSON + adjacent markdown. The auto-refreshed `benchmarking/aws/SUMMARY.md` table aggregates the latest run per scenario.
+The per-stack markdown is one file per stack (e.g. `docs/benchmark-results/postgres.md`), NOT adjacent to the JSON. Each run appends a new section.
 
 How to read the per-run markdown:
 
