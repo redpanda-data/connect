@@ -8,6 +8,7 @@ package main
 import (
 	"fmt"
 	"io"
+	"strings"
 )
 
 // BenchNames is intended to become the single source of truth for the
@@ -34,6 +35,23 @@ func (n BenchNames) ConnectTopic() string {
 // <prefix>.<schema>.<table> topics under it.
 func (n BenchNames) KCTopicPrefix() string {
 	return fmt.Sprintf("bench_%s_%s_kc", n.SessionID, n.Connector)
+}
+
+// SourceTopic is the pre-seeded Redpanda topic a sink bench consumes.
+func (n BenchNames) SourceTopic() string {
+	return fmt.Sprintf("bench_%s_%s_src", n.SessionID, n.Connector)
+}
+
+// IcebergTable is the per-engine Glue table name. Glue/SQL identifiers can't
+// contain '-', so the session id's dashes are converted to underscores.
+func (n BenchNames) IcebergTable(engine string) string {
+	safe := strings.ReplaceAll(n.SessionID, "-", "_")
+	return fmt.Sprintf("bench_%s_%s_%s", safe, n.Connector, engine)
+}
+
+// ConsumerGroup is the per-engine consumer group reading SourceTopic.
+func (n BenchNames) ConsumerGroup(engine string) string {
+	return fmt.Sprintf("bench_%s_%s_%s", n.SessionID, n.Connector, engine)
 }
 
 // MetricInputs carries everything EngineSeries needs to turn a per-engine
