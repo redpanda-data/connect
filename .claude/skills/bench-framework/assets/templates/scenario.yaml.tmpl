@@ -1,0 +1,52 @@
+name: {{ENGINE}}-{{TABLE}}-cdc
+description: |
+  Stream changes from a {{ENGINE}} {{TABLE}} table under sustained heavy writes
+  so the {{CONNECTOR}} input — not the producer — is the bottleneck across the
+  CPU sweep. TRUNCATE between sweep points keeps the table size bounded.
+
+# NOTE: every comment below is from a trap that bit during postgres/mysql benches.
+# Read references/scenario-sizing.md and references/traps.md before changing.
+
+connector: {{CONNECTOR}}
+stack: {{ENGINE}}
+
+infra:
+  source:
+    instance_class: db.r6g.2xlarge          # >= this for sustained 50K+ msg/sec; see rds-quirks.md
+    storage_gb: 400                          # 400+ required when iops is set
+    iops: 12000
+    parameters:
+      # Engine-specific. For postgres: rds.logical_replication, max_wal_senders.
+      # For mysql: binlog_format. Add your engine's required parameters.
+      # See references/rds-quirks.md.
+  runner:
+    instance_type: c8g.4xlarge               # Standard runner; matches postgres/mysql.
+
+dataset:
+  initial_rows: 0                            # TRUNCATE-between-points makes a seed pointless
+  row_size_bytes: 1200
+  tables: [{{TABLE}}]
+  seeder: cdc-rows                           # Default seeder; replace if you wrote a custom one
+
+workload:
+  write_rate_per_sec: 150000                 # PER-TABLE-PER-SEC; with N tables, total = N x this
+  duration: 15m
+  warmup: 2m
+
+pipeline:
+  input:
+    {{CONNECTOR}}:
+      # Fill in connector-specific config. For postgres_cdc / mysql_cdc, see the
+      # postgres/mysql scenarios as exemplars.
+      dsn: ${{{ENGINE}}}_DSN}
+      # TLS: if your input uses NewTLSField, do NOT set `enabled:` -- see traps.md#postgres-cdc-tls
+
+matrix:
+  cpu_points: [1, 2, 4, 8]
+
+reset:
+  # Drop engine-specific replication state (slot, GTID, savepoint) BEFORE truncate.
+  # For postgres: pg_drop_replication_slot for both Connect AND KC slot.
+  # For mysql: no slot -- Plan 3's per-vCPU connector name handles KC offset isolation.
+  # - sql: "..."
+  - sql: "TRUNCATE TABLE {{TABLE}}"

@@ -1,0 +1,47 @@
+# Terraform stack for {{CONNECTOR}} bench.
+#
+# Composes the shared infra (VPC, IAM, S3, runner+load-gen EC2, Redpanda
+# cluster) with the {{ENGINE}}-specific RDS module. Mirror the postgres
+# and mysql stacks at terraform/stacks/{postgres,mysql}/.
+
+terraform {
+  required_version = ">= 1.6"
+  required_providers {
+    aws = { source = "hashicorp/aws", version = "~> 5.0" }
+  }
+  backend "s3" {}
+}
+
+provider "aws" {
+  region = var.region
+  default_tags {
+    tags = {
+      Project           = "redpanda-connect-bench"
+      "bench-session-id" = var.bench_session_id
+      ManagedBy         = "terraform"
+    }
+  }
+}
+
+data "terraform_remote_state" "shared" {
+  backend = "s3"
+  config = {
+    bucket = "redpanda-connect-bench-tfstate"
+    key    = "shared/terraform.tfstate"
+    region = var.region
+  }
+}
+
+module "{{ENGINE}}" {
+  source = "../../modules/rds-{{ENGINE}}"  # TODO: create this module if it doesn't exist
+
+  vpc_id              = data.terraform_remote_state.shared.outputs.vpc_id
+  subnet_ids          = data.terraform_remote_state.shared.outputs.subnet_ids
+  runner_sg_id        = data.terraform_remote_state.shared.outputs.runner_sg_id
+  bench_session_id    = var.bench_session_id
+
+  instance_class      = var.source_instance_class
+  storage_gb          = var.source_storage_gb
+  iops                = var.source_iops
+  parameters          = var.source_parameters
+}
