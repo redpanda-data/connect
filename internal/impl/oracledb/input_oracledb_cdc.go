@@ -58,6 +58,10 @@ const (
 	ociFieldLOBEnabled           = "lob_enabled"
 	ociFieldTransactionCache     = "transaction_cache"
 	ociFieldTransactionCacheKey  = "transaction_cache_key"
+
+	//-- snapshot specific
+	ociFieldSnapshot        = "snapshot"
+	ociFieldSnapshotFilters = "filters"
 )
 
 func init() {
@@ -150,6 +154,18 @@ This cache is designed for low-latency stores with cheap per-operation cost. Red
 			Optional(),
 	).Description("LogMiner configuration settings."),
 	).
+	// snapshot config
+	Field(service.NewObjectField(ociFieldSnapshot,
+		service.NewStringMapField(ociFieldSnapshotFilters).
+			Description("A map of fully-qualified table names (e.g. SCHEMA.TABLE) to SQL SELECT queries, used to override the default snapshot query per table.").
+			Example(map[string]any{
+				"TESTDB.USERS":    "SELECT * FROM TESTDB.USERS",
+				"TESTDB.PRODUCTS": "SELECT * FROM TESTDB.PRODUCTS WHERE ID > 1000",
+			}).
+			Optional(),
+	).Description("Snapshot configuration settings.").
+		Optional(),
+	).
 	Field(service.NewStringListField(ociFieldTablesInclude).
 		Description("Regular expressions for tables to include.").
 		Example("SCHEMA.PRODUCTS"),
@@ -197,6 +213,7 @@ type Config struct {
 	StreamSnapshot       bool
 	SnapshotMaxBatchSize int
 	SnapshotMaxWorkers   int
+	SnapshotFilters      map[string]string
 	TablesFilter         *confx.RegexpFilter
 	SCNCache             string
 	SCNCacheKey          string
@@ -253,6 +270,16 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 	}
 	if lmCfg, err = parseLogMinerConfig(conf); err != nil {
 		return nil, err
+	}
+
+	var snapshotFilters map[string]string
+	if conf.Contains(ociFieldSnapshot) {
+		snapshotConf := conf.Namespace(ociFieldSnapshot)
+		if snapshotConf.Contains(ociFieldSnapshotFilters) {
+			if snapshotFilters, err = snapshotConf.FieldStringMap(ociFieldSnapshotFilters); err != nil {
+				return nil, err
+			}
+		}
 	}
 
 	// tables
@@ -330,6 +357,7 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 			StreamSnapshot:       streamSnapshot,
 			SnapshotMaxWorkers:   snapshotMaxWorkers,
 			SnapshotMaxBatchSize: snapshotMaxBatchSize,
+			SnapshotFilters:      snapshotFilters,
 			SCNCache:             scnCache,
 			SCNCacheKey:          scnCacheKey,
 			CpCacheTableName:     cpCacheTableName,
