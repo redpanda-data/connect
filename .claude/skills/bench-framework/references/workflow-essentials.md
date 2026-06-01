@@ -7,10 +7,14 @@ Non-negotiables when running an AWS bench. Each was discovered by failure during
 Plain SSO sessions expire in under an hour. A bench takes ~90 min. The Go runner makes AWS SDK calls (S3 upload, SSM RunCommand) for the full duration; mid-run SSO refresh fails with `InvalidGrantException`. aws-vault mints a 12-hour STS session that the SDK uses throughout.
 
 ```bash
-aws-vault exec <your-profile> -- task aws:bench scenario=<path>
+aws-vault exec <your-profile> -- \
+  env REDPANDA_LICENSE_FILEPATH=$PWD/rpcn.license \
+  task aws:bench scenario=<path>
 ```
 
 `<your-profile>` is whatever you configured during one-time account setup — see [bootstrap.md](bootstrap.md). The skill examples use `bench-<initials>` as a convention but any name works.
+
+`REDPANDA_LICENSE_FILEPATH` is mandatory — without it the runner fails immediately with `--license-file is required (or set REDPANDA_LICENSE_FILEPATH); enterprise connectors won't start without one`. You can also pass `--license-file=<path>` to the runner directly, but the env var works through the `task` wrapper. See also [traps.md#license-location](traps.md#license-location).
 
 See also: [traps.md#aws-vault](traps.md#aws-vault).
 
