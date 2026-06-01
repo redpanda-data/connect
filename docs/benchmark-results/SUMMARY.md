@@ -26,14 +26,11 @@ Last updated: 2026-03-16
 <!-- Copyright 2025 Redpanda Data, Inc. -->
 ## AWS Bench Results
 
-Last refreshed: 2026-05-30
+Last refreshed: 2026-06-01
 
 | Connector / Scenario  | Best vCPU | Connect MB/s | KC MB/s | Gap (Connect − KC) | Last Run    |
 |-----------------------|-----------|--------------|---------|--------------------|-------------|
-| mysql / orders-cdc    |         1 |           95 |      —    |                   —  | 2026-05-22  |
 | postgres / orders-cdc ⚠ |         4 |           62 |      52 | +10 MB/s (+16%)    | 2026-05-30  |
-| postgres / orders-cdc-plan2-smoke |         1 |           25 |      31 | -6 MB/s (-25%)     | 2026-05-29  |
-| postgres / orders-cdc-smoke |         1 |           25 |      —    |                   —  | 2026-05-28  |
 
 Each row is the **latest** run of that scenario. Raw samples + Prometheus snapshots live under `results/<connector>/<scenario>/`.
 
