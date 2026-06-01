@@ -38,9 +38,12 @@ pipeline:
     {{CONNECTOR}}:
       # Fill in connector-specific config. For postgres_cdc / mysql_cdc, see the
       # postgres/mysql scenarios as exemplars.
-      # When scaffolding, substitute the uppercased engine name here (e.g. SQLSERVER_DSN).
-      # Matches the DSNEnvVar in the engineSpec entry; see engine-spec.go.tmpl.
-      dsn: ${{{ENGINE}}_DSN_UPPERCASED}
+      # The DSN env var is the value of DSNEnvVar in the engineSpec entry (engine-spec.go.tmpl).
+      # By convention it is the engine name uppercased + "_DSN", e.g.:
+      #   postgres_cdc  → ${POSTGRES_DSN}
+      #   mysql_cdc     → ${MYSQL_DSN}
+      #   sqlserver_cdc → ${SQLSERVER_DSN}
+      dsn: ${{{ENGINE_UPPER}}_DSN}   # Replace {{ENGINE_UPPER}} with uppercase engine name, e.g. SQLSERVER
       # TLS: if your input uses NewTLSField, do NOT set `enabled:` -- see traps.md#postgres-cdc-tls
 
 matrix:

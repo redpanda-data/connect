@@ -75,7 +75,9 @@ aws-vault exec bench-<initials> -- \
 
 ## Step 4: Edit backend config locally
 
-The framework currently hardcodes the bucket + DDB table in 3 files. Edit each to match what you created in Steps 2 + 3:
+The framework currently hardcodes the bucket + DDB table in several files. Edit each to match what you created in Steps 2 + 3.
+
+**For the existing stacks (run once):**
 
 ```bash
 # 1. benchmarking/aws/terraform/backend.hcl
@@ -94,6 +96,15 @@ sed -i '' "s/redpanda-connect-bench-tfstate/redpanda-connect-bench-tfstate-<init
 ```
 
 (On Linux, drop the `''` after `-i`.)
+
+**If you are adding a NEW stack** (e.g. `stacks/sqlserver/`), the same substitution applies to its `main.tf` as well. Run:
+
+```bash
+sed -i '' "s/redpanda-connect-bench-tfstate/redpanda-connect-bench-tfstate-<initials>/" \
+  benchmarking/aws/terraform/stacks/<your-engine>/main.tf
+```
+
+Do this BEFORE the first bench run on the new stack, otherwise `terraform init` will try to connect to the shared bucket name and fail.
 
 **Important:** Do NOT commit these edits — they're personal to your account. Either:
 - Keep them in a local `bench-<initials>` branch you never push, OR

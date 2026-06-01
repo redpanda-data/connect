@@ -3,11 +3,15 @@
 # Composes the shared infra (VPC, IAM, S3, runner+load-gen EC2, Redpanda
 # cluster) with the {{ENGINE}}-specific RDS module. Mirror the postgres
 # and mysql stacks at terraform/stacks/{postgres,mysql}/.
+#
+# NOTE: The module is always named "rds" (not the engine name). The engine
+# identity is encoded in the source path and output names. See outputs.tf.tmpl.
 
 terraform {
   required_version = ">= 1.6"
   required_providers {
-    aws = { source = "hashicorp/aws", version = "~> 5.0" }
+    aws    = { source = "hashicorp/aws", version = "~> 5.70" }
+    random = { source = "hashicorp/random", version = "~> 3.6" }
   }
   backend "s3" {}
 }
@@ -16,9 +20,9 @@ provider "aws" {
   region = var.region
   default_tags {
     tags = {
-      Project           = "redpanda-connect-bench"
-      "bench-session-id" = var.bench_session_id
-      ManagedBy         = "terraform"
+      Project   = "redpanda-connect-bench"
+      Stack     = "{{ENGINE}}"
+      ManagedBy = "terraform"
     }
   }
 }
@@ -32,16 +36,20 @@ data "terraform_remote_state" "shared" {
   }
 }
 
-module "{{ENGINE}}" {
-  source = "../../modules/rds-{{ENGINE}}"  # TODO: create this module if it doesn't exist
+# Module is always named "rds"; engine identity comes from source path.
+# Create modules/rds-{{ENGINE}}/ if it doesn't exist — mirror modules/rds-mysql/.
+module "rds" {
+  source        = "../../modules/rds-{{ENGINE}}"
 
-  vpc_id              = data.terraform_remote_state.shared.outputs.vpc_id
-  subnet_ids          = data.terraform_remote_state.shared.outputs.subnet_ids
-  runner_sg_id        = data.terraform_remote_state.shared.outputs.runner_sg_id
-  bench_session_id    = var.bench_session_id
-
-  instance_class      = var.source_instance_class
-  storage_gb          = var.source_storage_gb
-  iops                = var.source_iops
-  parameters          = var.source_parameters
+  name_prefix   = "rpcn-bench-{{ENGINE_SHORT}}"    # Replace {{ENGINE_SHORT}} with a 2-3 char abbreviation, e.g. "ss" for sqlserver
+  vpc_id        = data.terraform_remote_state.shared.outputs.vpc_id
+  subnet_ids    = data.terraform_remote_state.shared.outputs.private_subnet_ids
+  client_sg_ids = [
+    data.terraform_remote_state.shared.outputs.runner_sg_id,
+    data.terraform_remote_state.shared.outputs.load_gen_sg_id,
+  ]
+  instance_class = var.instance_class
+  storage_gb     = var.storage_gb
+  iops           = var.iops
+  parameters     = var.parameters
 }
