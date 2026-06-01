@@ -20,6 +20,19 @@ func TestBenchNames_SourceTopicConventions(t *testing.T) {
 	}
 }
 
+func TestBenchNames_SinkConventions(t *testing.T) {
+	n := newBenchNames("sess-x", "iceberg")
+	if got := n.SourceTopic(); got != "bench_sess-x_iceberg_src" {
+		t.Errorf("SourceTopic = %q", got)
+	}
+	if got := n.IcebergTable("connect"); got != "bench_sess_x_iceberg_connect" {
+		t.Errorf("IcebergTable(connect) = %q (dashes must become underscores)", got)
+	}
+	if got := n.ConsumerGroup("kafka_connect"); got != "bench_sess-x_iceberg_kafka_connect" {
+		t.Errorf("ConsumerGroup = %q", got)
+	}
+}
+
 func TestTopologyFor(t *testing.T) {
 	if _, err := topologyFor(DirectionSource); err != nil {
 		t.Errorf("source topology must resolve, got %v", err)
