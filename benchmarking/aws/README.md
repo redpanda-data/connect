@@ -10,16 +10,17 @@ The design lives at [`docs/superpowers/specs/2026-05-19-aws-benchmarking-framewo
 
 1. [What this is](#what-this-is)
 2. [Status](#status)
-3. [First-time setup](#first-time-setup)
-4. [Running a benchmark](#running-a-benchmark)
-5. [What happens during a run](#what-happens-during-a-run)
-6. [Adding a new scenario](#adding-a-new-scenario)
-7. [Adding a new connector](#adding-a-new-connector)
-8. [Known limitations](#known-limitations)
-9. [Troubleshooting](#troubleshooting)
-10. [Cost](#cost)
-11. [Orphan cleanup](#orphan-cleanup)
-12. [File reference](#file-reference)
+3. [Using the Claude skill](#using-the-claude-skill)
+4. [First-time setup](#first-time-setup)
+5. [Running a benchmark](#running-a-benchmark)
+6. [What happens during a run](#what-happens-during-a-run)
+7. [Adding a new scenario](#adding-a-new-scenario)
+8. [Adding a new connector](#adding-a-new-connector)
+9. [Known limitations](#known-limitations)
+10. [Troubleshooting](#troubleshooting)
+11. [Cost](#cost)
+12. [Orphan cleanup](#orphan-cleanup)
+13. [File reference](#file-reference)
 
 ---
 
@@ -54,6 +55,57 @@ It runs as a single command from your laptop. Nothing CI-driven yet.
 | Other connectors (mysql, sqlserver, dynamodb, s3, iceberg) | 🔜 future plans — framework supports them |
 
 The framework foundation runs end-to-end on AWS, but a known SSM output-truncation issue prevents publishing reliable percentile data today. See [Known limitations](#known-limitations) for the path forward.
+
+---
+
+## Using the Claude skill
+
+This repo ships a Claude Code skill at [`.claude/skills/bench-framework/`](../../.claude/skills/bench-framework/) that walks you through the framework interactively — the same flows this README documents, but conversational and context-aware. Use it instead of grepping the README when you can.
+
+### What the skill does
+
+Three flows:
+
+1. **Adding a new connector bench** — interview-driven walkthrough that produces the 5 artifacts (TF stack, scenario YAML, `engineSpec` entry, `kcConnectorSpec` entry, reset SQL). Renders templates from `assets/templates/` and delegates Go edits to the `godev` agent.
+2. **Operating an existing bench** — pre-flight checklist (aws-vault, license placement, branch state, cleanup-Lambda zip), exact run command, live-monitoring guidance (S3 paths, heartbeats, SIGINT-only teardown), and result inspection.
+3. **Debugging a failed bench** — symptom-keyed lookup into a playbook of known failure modes (workload silent, KC HTTP 500, empty `broker_series`, RDS DNS flake, orphan-cleanup TTL, etc.). Each entry links to the commit SHA that fixed it.
+
+A 17-row "traps" reference is rendered at the top of the skill so the gotchas surface up front, regardless of which flow you pick.
+
+### How to install
+
+The skill is already in the repo — no separate install. To use it:
+
+1. Install Claude Code (see [claude.ai/code](https://claude.ai/code)).
+2. Clone this repo and check out the `benchmarking` branch.
+3. Open Claude Code in the repo root. The skill auto-loads when your context mentions `benchmarking/aws/`, or invoke it explicitly with `/bench-framework`.
+
+### How the skill is structured
+
+```
+.claude/skills/bench-framework/
+├── SKILL.md                        ← Top-level decision tree + 3-branch workflow
+├── references/                     ← Deep dives loaded on demand
+│   ├── traps.md                    ← 17 documented gotchas with anchors
+│   ├── bootstrap.md                ← One-time AWS account setup
+│   ├── workflow-essentials.md      ← aws-vault, license, SIGINT non-negotiables
+│   ├── rds-quirks.md               ← RDS Postgres/MySQL/SQL Server specifics
+│   ├── kc-connector-mapping.md     ← Which Kafka Connect plugin to use
+│   ├── scenario-sizing.md          ← write_rate, TRUNCATE, observed ceilings
+│   ├── exemplar-tour.md            ← File-by-file walk of postgres + mysql exemplars
+│   └── debugging-playbook.md       ← Symptom → root cause → fix SHA
+└── assets/templates/               ← Scaffolding rendered into your working tree
+    ├── tf-stack/                   ← main.tf, variables.tf, outputs.tf templates
+    ├── scenario.yaml.tmpl
+    ├── engine-spec.go.tmpl
+    ├── kc-connector-spec.go.tmpl
+    └── reset.sql.tmpl
+```
+
+### What the skill does NOT do
+
+- It never executes AWS commands or triggers real spend — that's an operator decision. The skill describes the command and waits for you to run it.
+- It doesn't replace this README. It points at the same exemplar files and references the same gotchas — but conversationally. The README is the durable record.
 
 ---
 
@@ -160,6 +212,8 @@ Or pass `--license-file=<path>` on the runner command line.
 ---
 
 ## Running a benchmark
+
+> Want a guided walkthrough? Invoke the [`bench-framework` Claude skill](#using-the-claude-skill) — it runs the pre-flight checklist, builds the exact command for your scenario, and steers you to the [Debug](#troubleshooting) section if anything fails.
 
 ### The one command
 
@@ -416,6 +470,8 @@ Validates the scenario YAML, instance-type vCPU math, duration minimums, and bou
 
 ## Adding a new connector
 
+> The [`bench-framework` Claude skill](#using-the-claude-skill) walks this end-to-end — interview, exemplar selection, template scaffolding, the `godev`/`tester` agent handoffs, and the 1-vCPU smoke. Use it if you'd rather not assemble the artifacts by hand.
+
 A new connector is a small PR with:
 
 1. **Terraform module** under `terraform/modules/<source-type>/` if the source isn't already supported. Reuse existing modules (`rds-postgres`, `rds-mysql`, etc.) when possible.
@@ -423,6 +479,7 @@ A new connector is a small PR with:
 3. **Seeder** under `seeders/<name>/` if the SQL flavor differs from what's already shipped (`cdc-rows` for postgres, `cdc-rows-mysql` for mysql).
 4. **Scenarios** under `scenarios/<connector>/`.
 5. **Engine spec entry** in `runner/scenario.go` — add a one-line map entry under `engineSpecs` keyed by connector name, naming the terraform output keys the runner should read (DSN, host/port/user/pass/db for the reset CLI). The seed/reset/workload script renderers in `runner/scripts.go` pick this up automatically.
+6. **KC connector spec entry** in `runner/kcconnectors.go` — needed only if you want the Connect-vs-Kafka-Connect head-to-head comparison. Mirror the postgres or mysql entries.
 
 ---
 
