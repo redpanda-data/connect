@@ -43,7 +43,7 @@ touches ~6 source-assuming spots in the runner. We refactor those behind a
 | Connector category | Iceberg **sink** | First sink bench (Plan 4). |
 | Data source | **Pre-seeded Redpanda topic**, bounded run | KC's Iceberg sink can only read from Kafka, so a topic is the only fair shared upstream. Bounded (no live workload) keeps the producer from becoming the bottleneck. |
 | Fairness metric | **Rows/bytes committed to Iceberg** (`total-files-size` / `total-records` from snapshot summary) | True end-to-end sink completion; can't be gamed by engine self-report. Iceberg snapshot metadata tracks it natively — no S3 scan. |
-| Catalog | **AWS Glue** + S3 warehouse | AWS-native, no extra server, supported by both engines. |
+| Catalog | **AWS Glue** + S3 warehouse, reached by **both engines via the Glue Iceberg REST endpoint + SigV4** | Connect's `iceberg` output only supports a REST catalog (`catalog.url` + `catalog.auth.aws_sigv4{service:"glue"}`), so KC's sink uses `iceberg.catalog.type=rest` against the *same* Glue REST URI + SigV4. Identical access path on both sides = apples-to-apples. (Corrected 2026-06-01 after reading `internal/impl/iceberg/output_iceberg.go`; earlier draft said "native glue type".) |
 | Record format (primary) | **Schemaless JSON** | Isolates the measurement to the Iceberg write path: avoids the two-different-Avro-converter fairness confound and drops the Schema-Registry/shared-module dependency. |
 | Record format (follow-up) | Avro + Schema Registry **variant** | Captures the "realistic decode" number; deferred. |
 | Framework change | **Approach B** — `Topology` abstraction | Cleaner long-term; the latent `kcSink` direction constant was waiting for it. Accepted cost: refactors the shared render/metric core. |
