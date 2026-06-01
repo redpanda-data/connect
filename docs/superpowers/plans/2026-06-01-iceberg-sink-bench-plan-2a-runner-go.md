@@ -1428,4 +1428,20 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 ## Plan 2B preview (not yet written)
 
-Plan 2B — `Terraform + smoke` — will add: `terraform/modules/glue-iceberg/` (S3 warehouse bucket + `aws_glue_catalog_database` + IAM policy granting the runner `glue:*`/`s3:*` on the warehouse), `terraform/stacks/iceberg/` (mirrors `stacks/postgres/`, emits `glue_rest_uri`/`warehouse_account_id`/`warehouse_s3_uri`/`s3_bucket`/`aws_region`), the `iceberg-kafka-connect` plugin install in `terraform/shared/runner-user-data.tftpl`, `scenarios/iceberg/orders-sink.yaml` + `orders-sink-smoke.yaml`, and the 1-vCPU smoke acceptance (two `PointResult`s, both `MedianMBPerSec>0`, series populated). It validates the one real integration risk: KC's REST-catalog-to-Glue SigV4 config.
+Plan 2B — `Terraform + smoke` — will add: `terraform/modules/glue-iceberg/` (S3 warehouse bucket + `aws_glue_catalog_database` + IAM policy granting the runner `glue:*`/`s3:*` on the warehouse), `terraform/stacks/iceberg/` (mirrors `stacks/postgres/`), the `iceberg-kafka-connect` plugin install in `terraform/shared/runner-user-data.tftpl`, `scenarios/iceberg/orders-sink.yaml` + `orders-sink-smoke.yaml`, and the 1-vCPU smoke acceptance (two `PointResult`s, both `MedianMBPerSec>0`, series populated). It validates the one real integration risk: KC's REST-catalog-to-Glue SigV4 config.
+
+### TF-output contract Plan 2A established (Plan 2B MUST satisfy)
+
+After Plan 2A (commits `77ecd3ad8`..`d6f9c884f` on `benchmarking`), the runner's sink path hard-depends on these TF output keys (the runner uppercases each to a `${...}` placeholder and also reads them directly in `sinkTopology`). The `stacks/iceberg` `outputs.tf` MUST emit, with these exact lowercase names:
+
+| TF output key | Used by | Notes |
+|---|---|---|
+| `glue_rest_uri` | Connect `catalog.url`, KC `iceberg.catalog.uri` | Glue Iceberg REST endpoint, e.g. `https://glue.<region>.amazonaws.com/iceberg` |
+| `warehouse_account_id` | Connect `catalog.warehouse`, KC `iceberg.catalog.warehouse` | AWS account id (Glue catalog identifier) |
+| `warehouse_s3_uri` | Connect `schema_evolution.table_location` | Base S3 URI **without** a trailing slash — the runner appends `/` (`topology_sink.go`) |
+| `s3_bucket` | Connect `storage.aws_s3.bucket` | warehouse bucket name |
+| `redpanda_broker_endpoints`, `results_bucket` | input/seed/upload | already emitted by the shared stack — reused unchanged |
+
+**`aws_region` is NOT a TF output** — Plan 2A injects it into the outputs map in `runBench` from `opts.region` (`main.go`: `sharedOuts["aws_region"] = opts.region`). Plan 2B should NOT add an `aws_region` output; it's already handled.
+
+Smoke watch-items (from Plan 2A final review): (a) the runner host needs `jq` + an `aws` CLI with **Glue** permissions on the sink path (the source path never needed Glue); (b) confirm the `MetricSidecar` chain `aws glue get-table → metadata_location → aws s3 cp → jq '.snapshots[]?.summary."total-files-size"'` returns a real cumulative size for BOTH engines' auto-created tables, since `ParseIcebergSeries` depends on the exact `total_files_size_bytes <n>` line shape; (c) the KC Tabular sink's REST-catalog-to-Glue SigV4 config (`iceberg.catalog.rest.sigv4-enabled` + `signing-name=glue`) is the highest integration risk — validate it first.
