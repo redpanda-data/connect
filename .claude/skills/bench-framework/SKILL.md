@@ -152,4 +152,19 @@ Go to [Debug](#debug).
 
 ## Debug
 
-> _Filled in by Phase C._
+Look up the symptom in the table below, then read the linked playbook entry. Each entry ends with the existing fix's commit SHA.
+
+| Symptom | Likely cause | Playbook |
+|---------|--------------|----------|
+| Connect `MedianMBPerSec=0`, no `[load]` lines | Workload generator silent | [link](references/debugging-playbook.md#empty-workload) |
+| KC HTTP 500 with no body | `curl --fail` suppressed body | [link](references/debugging-playbook.md#kc-http-500) |
+| `broker_series` empty though KC log shows writes | Wrong label name OR single-broker scrape | [link](references/debugging-playbook.md#broker-series-empty) |
+| `UNKNOWN_TOPIC_OR_PARTITION` errors | Redpanda `auto_create_topics_enabled=false` | [link](references/debugging-playbook.md#auto-create) |
+| KC at vCPU≥2 reports 0 MB/s, log says `redo log is no longer available` | Debezium offset persistence | [link](references/debugging-playbook.md#offset-isolation) |
+| `could not translate host name` RDS endpoint | VPC DNS flake | [link](references/debugging-playbook.md#dns-flake) |
+| Bench hangs after several hours, SSM "InstanceId not found" | Orphan-cleanup Lambda fired | [link](references/debugging-playbook.md#orphan-ttl) |
+| `task aws:down` fails: `bench_session_id required` | Shared stack declares it required | [link](references/debugging-playbook.md#tf-destroy-session-id) |
+| `terraform init shared: exit status 1` "Backend configuration changed" | Stale `.terraform/` dirs | [link](references/debugging-playbook.md#terraform-init-backend-changed) |
+| `ConditionalCheckFailedException: Error acquiring the state lock` | Stale DDB lock or missing table | [link](references/debugging-playbook.md#rds-dynamodb-lock) |
+
+If the symptom isn't here, search [traps.md](references/traps.md) by keyword and check git log for recent fixes on the `benchmarking` branch.
