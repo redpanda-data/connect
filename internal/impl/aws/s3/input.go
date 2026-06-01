@@ -51,6 +51,11 @@ const (
 	s3iSQSFieldMaxMessages      = "max_messages"
 	s3iSQSFieldWaitTimeSeconds  = "wait_time_seconds"
 	s3iSQSNackVisibilityTimeout = "nack_visibility_timeout"
+	s3iSQSFieldOnMissingObject  = "on_missing_object"
+
+	// Values for s3iSQSFieldOnMissingObject.
+	s3iSQSOnMissingObjectDrop = "drop"
+	s3iSQSOnMissingObjectNack = "nack"
 
 	// S3 Input Fields
 	s3iFieldBucket             = "bucket"
@@ -70,6 +75,7 @@ type s3iSQSConfig struct {
 	MaxMessages       int64
 	WaitTimeSeconds   int64
 	VisibilityTimeout int32
+	OnMissingObject   string
 }
 
 func s3iSQSConfigFromParsed(pConf *service.ParsedConfig) (conf s3iSQSConfig, err error) {
@@ -98,6 +104,9 @@ func s3iSQSConfigFromParsed(pConf *service.ParsedConfig) (conf s3iSQSConfig, err
 		return
 	}
 	if conf.VisibilityTimeout, err = baws.Int32Field(pConf, s3iSQSNackVisibilityTimeout); err != nil {
+		return
+	}
+	if conf.OnMissingObject, err = pConf.FieldString(s3iSQSFieldOnMissingObject); err != nil {
 		return
 	}
 	return
@@ -132,6 +141,10 @@ func s3iConfigFromParsed(pConf *service.ParsedConfig) (conf s3iConfig, err error
 		if conf.SQS, err = s3iSQSConfigFromParsed(pConf.Namespace(s3iFieldSQS)); err != nil {
 			return
 		}
+	}
+	if conf.DeleteObjects && conf.SQS.OnMissingObject == s3iSQSOnMissingObjectNack {
+		err = fmt.Errorf("%v.%v=%q cannot be combined with %v=true: a redelivered notification for an object this input already processed and deleted would be dead-lettered", s3iFieldSQS, s3iSQSFieldOnMissingObject, s3iSQSOnMissingObjectNack, s3iFieldDeleteObjects)
+		return
 	}
 	return
 }
@@ -231,6 +244,10 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 					Description("Custom SQS Nack Visibility timeout in seconds. Default is 0").
 					Default(0).
 					Optional(),
+				service.NewStringEnumField(s3iSQSFieldOnMissingObject, s3iSQSOnMissingObjectDrop, s3iSQSOnMissingObjectNack).
+					Description("How to handle an SQS notification whose S3 object cannot be found (a `NoSuchKey`/404 on download). `drop` (the default, and the historical behaviour) logs a warning, acks the notification and discards it - appropriate when `delete_objects` is enabled, since a redelivered notification for an already-deleted object is expected and harmless. `nack` instead logs an error and returns the notification to the queue so that an SQS redrive policy can dead-letter it after its `maxReceiveCount`; this is only safe when `delete_objects` is `false`, otherwise notifications for legitimately-deleted objects would be dead-lettered.").
+					Default(s3iSQSOnMissingObjectDrop).
+					Advanced(),
 			).
 				Description("Consume SQS messages in order to trigger key downloads.").
 				Optional(),
@@ -588,11 +605,21 @@ func (s *sqsTargetReader) readSQSEvents(ctx context.Context) ([]*s3ObjectTarget,
 						keyNotFound := false
 						if apiErr := smithy.APIError(nil); errors.As(err, &apiErr) {
 							if _, ok := apiErr.(*s3types.NoSuchKey); ok {
-								s.log.Warnf("Dropping SQS notification for missing key %q: %s", object.key, err)
 								keyNotFound = true
 							}
 						}
-						if err != nil && !keyNotFound {
+						// A missing object (NoSuchKey) is acked-and-dropped by default,
+						// but on_missing_object: nack returns it to the queue instead so
+						// an SQS redrive policy can dead-letter it after maxReceiveCount.
+						dropMissing := keyNotFound && s.conf.SQS.OnMissingObject != s3iSQSOnMissingObjectNack
+						if keyNotFound {
+							if dropMissing {
+								s.log.Warnf("Dropping SQS notification for missing key %q: %s", object.key, err)
+							} else {
+								s.log.Errorf("S3 object missing for key %q, nacking notification for redelivery: %s", object.key, err)
+							}
+						}
+						if err != nil && !dropMissing {
 							nackOnce.Do(func() {
 								// Prevent future acks from triggering a delete.
 								atomic.StoreInt32(&pendingAcks, -1)
