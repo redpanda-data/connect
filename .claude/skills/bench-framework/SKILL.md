@@ -43,7 +43,134 @@ Each line links to [references/traps.md](references/traps.md). Skim before any b
 
 ## Add a new connector
 
-> _Filled in by Phase D._
+This walkthrough produces 5 artifacts: a TF stack, scenario YAML, engineSpec entry, kcConnectorSpec entry, and reset SQL. Plus tests. Walk top-to-bottom.
+
+Read [references/exemplar-tour.md](references/exemplar-tour.md) FIRST — it's the mental model.
+
+### Step 0: Interview yourself
+
+Answer these before writing anything:
+
+1. **Connector category?** CDC source / sink / pure-stream / other.
+2. **Upstream/downstream system?** (e.g. `sqlserver_cdc`, `mongo_cdc`, `iceberg`, `s3`)
+3. **For CDC:** Postgres-shaped (slot-based logical replication) or MySQL-shaped (binlog, no slots)? Determines exemplar.
+4. **Connector name** in `internal/impl/<x>/`? (becomes the key in `engineSpecs` and `kcConnectorSpecs`)
+
+### Step 1: Pick the exemplar
+
+| New connector type | Mirror after |
+|--------------------|--------------|
+| Postgres-shaped CDC (logical replication, slots) | `scenarios/postgres/orders-cdc.yaml` + `kcConnectorSpecs["postgres_cdc"]` |
+| MySQL-shaped CDC (binlog, no slots) | `scenarios/mysql/orders-cdc.yaml` + `kcConnectorSpecs["mysql_cdc"]` |
+| SQL Server CDC (table tail, schema-changes) | Closest: mysql shape; needs `sp_cdc_enable_table` in reset (Plan 4 territory) |
+| Mongo CDC (change stream) | Closest: postgres shape; Debezium MongoDB needs `mongo.connection.string` not user/pass split |
+| Sink (any) | Plan 4 — TBD when sink scenarios land |
+
+If your connector doesn't fit, read both postgres and mysql exemplars in `references/exemplar-tour.md` and synthesise.
+
+### Step 2: Scaffold the TF stack
+
+Create `benchmarking/aws/terraform/stacks/<connector>/` mirroring `stacks/postgres/`. Use the templates in `.claude/skills/bench-framework/assets/templates/tf-stack/`:
+
+```bash
+mkdir -p benchmarking/aws/terraform/stacks/<connector>/
+# Copy each template, substituting {{CONNECTOR}} → <your connector key>
+# (e.g. sqlserver_cdc) and {{ENGINE}} → <your engine name> (e.g. sqlserver).
+```
+
+You'll also need a `terraform/modules/rds-<engine>/` module if your engine isn't postgres or mysql. Mirror `modules/rds-postgres/`.
+
+Check `references/rds-quirks.md` for any engine-specific RDS parameter group rules.
+
+### Step 3: Write the scenario YAML
+
+Create `benchmarking/aws/scenarios/<stack>/<scenario>.yaml` from `assets/templates/scenario.yaml.tmpl`. Pre-filled sizing defaults (instance class, storage, IOPS) match the postgres exemplar.
+
+Fill in the connector-specific bits:
+- `pipeline.input.<connector>:` block (look at the Connect docs for required fields)
+- Engine-specific `infra.source.parameters` (see `references/rds-quirks.md`)
+- Reset SQL inside `reset:` (see Step 6)
+
+Apply the sizing checklist in [references/scenario-sizing.md](references/scenario-sizing.md#sizing-checklist-for-a-new-scenario).
+
+### Step 4: Add the engineSpec entry
+
+Edit `benchmarking/aws/runner/scenario.go::engineSpecs`. Use the template at `assets/templates/engine-spec.go.tmpl` — it documents the DSN-only vs. discrete-fields decision.
+
+**Delegate to the `godev` agent:**
+
+> Add this engineSpec entry to `benchmarking/aws/runner/scenario.go::engineSpecs`. Match the existing postgres or mysql pattern (whichever fits — DSN-only or discrete-fields). Preserve the license header per CLAUDE.md.
+
+The entry from the template:
+
+```go
+// (paste your filled-in template here)
+```
+
+### Step 5: Add the kcConnectorSpec entry
+
+Edit `benchmarking/aws/runner/kcconnectors.go::kcConnectorSpecs`. Use the template at `assets/templates/kc-connector-spec.go.tmpl`.
+
+Critical: check [references/kc-connector-mapping.md](references/kc-connector-mapping.md) for plugin selection AND cloud-init plumbing — if the plugin isn't already installed on the runner, you'll need to add it in `terraform/shared/runner-user-data.tftpl`.
+
+**Delegate to the `godev` agent:**
+
+> Add this kcConnectorSpec entry to `benchmarking/aws/runner/kcconnectors.go::kcConnectorSpecs`. Mirror the postgres or mysql pattern. Set snapshot.mode according to whether the engine needs an offset to bootstrap (see references/kc-connector-mapping.md). Preserve the license header.
+
+### Step 6: Reset SQL
+
+In your scenario YAML's `reset:` array, write the engine-specific cleanup. See `assets/templates/reset.sql.tmpl` for postgres / mysql / SQL Server patterns.
+
+Invariants (DO NOT skip):
+- TRUNCATE the target table (Trap 8 — see [traps.md#truncate-between-points](references/traps.md#truncate-between-points))
+- Drop Connect's replication slot AND KC's replication slot if both engines are being swept (postgres shape only)
+- For KC, the per-vCPU connector naming in the bench script handles offset isolation — combineReset auto-injects connector DELETE + topic deletes ([traps.md#kc-connector-offset-isolation](references/traps.md#kc-connector-offset-isolation))
+
+### Step 7: Validate
+
+```bash
+task aws:validate scenario=benchmarking/aws/scenarios/<stack>/<scenario>.yaml
+```
+
+Catches typos and missing-registry errors before any AWS spend. On failure, the error message will point at the issue; cross-check against [references/traps.md](references/traps.md).
+
+### Step 8: 1-vCPU smoke
+
+```bash
+# Pin cpu_points to [1] in your scenario for the smoke run
+aws-vault exec bench -- task aws:bench \
+  scenario=benchmarking/aws/scenarios/<stack>/<scenario>.yaml \
+  --engines connect,kafka_connect
+```
+
+Acceptance:
+- Result JSON has TWO `PointResult` entries (one per engine)
+- KC's `Summary.MedianMBPerSec > 0` (broker-derived)
+- `BrokerSeries` populated for both engines
+
+On failure → [Debug](#debug).
+
+### Step 9: Tests
+
+**Delegate to the `tester` agent:**
+
+> Add scenario_test.go cases covering the new connector in engineSpecs AND kcConnectorSpecs. Mirror the existing test cases for postgres_cdc and mysql_cdc in `benchmarking/aws/runner/scenario_test.go` and `kcconnectors_test.go`. Run with `task test:unit -- benchmarking/aws/runner`.
+
+### Step 10: Commit
+
+After smoke passes and tests green:
+
+```bash
+git add benchmarking/aws/terraform/stacks/<connector>/ \
+        benchmarking/aws/scenarios/<stack>/ \
+        benchmarking/aws/terraform/modules/rds-<engine>/ \
+        benchmarking/aws/runner/scenario.go \
+        benchmarking/aws/runner/kcconnectors.go \
+        benchmarking/aws/runner/scenario_test.go \
+        benchmarking/aws/runner/kcconnectors_test.go
+
+git commit -m "feat(bench): add <connector> head-to-head bench"
+```
 
 ## Operate a bench
 
