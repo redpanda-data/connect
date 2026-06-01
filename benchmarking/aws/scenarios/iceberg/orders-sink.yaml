@@ -1,0 +1,36 @@
+name: iceberg-orders-sink
+description: |
+  Drain a pre-seeded Redpanda topic of flat JSON records into an Apache Iceberg
+  table (AWS Glue REST catalog + S3) and compare Connect's iceberg output against
+  the Kafka Connect Iceberg sink, head-to-head across a vCPU sweep. Throughput is
+  the Iceberg table's committed-bytes growth (total-files-size), polled from Glue.
+  Both engines reach Glue via the same REST endpoint + SigV4 (service=glue), so
+  the comparison is apples-to-apples. Bounded dataset (no sustained workload):
+  the topic is the fixed input; each sweep point re-reads it from the beginning.
+
+direction: sink
+connector: iceberg
+stack: iceberg
+
+infra:
+  runner:
+    instance_type: c8g.4xlarge
+
+dataset:
+  initial_rows: 160000000   # ~180 GiB at 1200 B/row → ≥15 min at 200 MB/s (8 vCPU)
+  row_size_bytes: 1200
+  seeder: json-orders
+  expected_peak_mb_s: 200
+
+pipeline:
+  # sinkTopology injects the redpanda INPUT (the pre-seeded topic) and the
+  # iceberg catalog/storage/table config from TF outputs + BenchNames. The
+  # scenario supplies only output-side tuning.
+  output:
+    iceberg:
+      batching:
+        count: 5000
+        period: 1s
+
+matrix:
+  cpu_points: [1, 2, 4, 8]
