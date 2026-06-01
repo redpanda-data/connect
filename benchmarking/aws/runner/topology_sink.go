@@ -8,6 +8,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 )
 
 // sinkTopology is the sink bench path: the connector-under-test reads a
@@ -23,10 +24,13 @@ func (sinkTopology) Validate(s *Scenario) error {
 }
 
 // Pipeline injects the redpanda INPUT (consuming the pre-seeded topic) and the
-// scenario-supplied OUTPUT component, filling catalog/storage/table from TF
-// output placeholders (resolved by substitutePlaceholders) + BenchNames. The
-// topic and table use the ${BENCH_SESSION_ID} placeholder so substitution
-// resolves them at render time (matching the source path's convention).
+// scenario-supplied OUTPUT component, filling catalog/storage from TF output
+// placeholders (resolved by substitutePlaceholders). The topic, consumer group,
+// and Iceberg table route through the BenchNames helpers (literals built from
+// the real SessionID) so the per-engine table matches exactly what
+// ResetScript/MetricSidecar poll — IcebergTable dash-sanitizes for Glue while
+// SourceTopic keeps dashes, which the ${BENCH_SESSION_ID} placeholder could not
+// do consistently.
 func (sinkTopology) Pipeline(s *Scenario, n BenchNames) (input, output map[string]any, err error) {
 	sp, ok := sinkSpecFor(s.Connector)
 	if !ok {
@@ -51,7 +55,7 @@ func (sinkTopology) Pipeline(s *Scenario, n BenchNames) (input, output map[strin
 		},
 	}
 	icfg["namespace"] = sp.Namespace
-	icfg["table"] = fmt.Sprintf("bench_${BENCH_SESSION_ID}_%s_connect", s.Connector)
+	icfg["table"] = n.IcebergTable("connect")
 	icfg["storage"] = map[string]any{
 		"aws_s3": map[string]any{
 			"bucket": "${S3_BUCKET}",
@@ -65,8 +69,8 @@ func (sinkTopology) Pipeline(s *Scenario, n BenchNames) (input, output map[strin
 	input = map[string]any{
 		"redpanda": map[string]any{
 			"seed_brokers":      []string{"${REDPANDA_BROKER_ENDPOINTS}"},
-			"topics":            []any{fmt.Sprintf("bench_${BENCH_SESSION_ID}_%s_src", s.Connector)},
-			"consumer_group":    fmt.Sprintf("bench_${BENCH_SESSION_ID}_%s_connect", s.Connector),
+			"topics":            []any{n.SourceTopic()},
+			"consumer_group":    n.ConsumerGroup("connect"),
 			"start_from_oldest": true,
 		},
 	}
@@ -94,12 +98,12 @@ func (sinkTopology) WorkloadScript(s *Scenario, outs map[string]string, n BenchN
 }
 
 func (sinkTopology) ResetScript(s *Scenario, outs map[string]string, n BenchNames) (string, error) {
-	sp, _ := sinkSpecFor(s.Connector)
+	sp, _ := sinkSpecFor(s.Connector) // ok ignored: Validate guarantees the sinkSpec exists
 	region := outs["aws_region"]
 	db := sp.Namespace
 	brokers := outs["redpanda_broker_endpoints"]
-	var b []byte
-	w := func(format string, a ...any) { b = append(b, []byte(fmt.Sprintf(format, a...)+"\n")...) }
+	var sb strings.Builder
+	w := func(format string, a ...any) { fmt.Fprintf(&sb, format+"\n", a...) }
 	w("set -euo pipefail")
 	for _, eng := range []string{"connect", "kafka_connect"} {
 		w(`aws glue delete-table --region %q --database-name %q --name %q 2>/dev/null || true`,
@@ -108,7 +112,7 @@ func (sinkTopology) ResetScript(s *Scenario, outs map[string]string, n BenchName
 			brokers, n.ConsumerGroup(eng))
 	}
 	w(`curl -fsS -X DELETE "http://localhost:8083/connectors/bench_%s" || true`, s.Connector)
-	return string(b), nil
+	return sb.String(), nil
 }
 
 func (sinkTopology) EngineSeries(in MetricInputs, engine string) ([]TopicPoint, error) {
@@ -125,7 +129,7 @@ func (sinkTopology) MetricArtifact(engine string, vcpu int) string {
 
 func (t sinkTopology) MetricSidecar(args MetricSidecarArgs) MetricSidecar {
 	artifact := t.MetricArtifact(args.Engine, args.VCPU)
-	sp, _ := sinkSpecFor(args.Names.Connector)
+	sp, _ := sinkSpecFor(args.Names.Connector) // ok ignored: Validate guarantees the sinkSpec exists
 	region := args.Outs["aws_region"]
 	db := sp.Namespace
 	table := args.Names.IcebergTable(args.Engine)

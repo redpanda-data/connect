@@ -44,11 +44,18 @@ func TestSinkTopology_Pipeline_RedpandaInIcebergOut(t *testing.T) {
 		t.Fatalf("input must be redpanda; got %#v", in)
 	}
 	topics, _ := rp["topics"].([]any)
-	if len(topics) != 1 || topics[0] != "bench_${BENCH_SESSION_ID}_iceberg_src" {
+	if len(topics) != 1 || topics[0] != "bench_sess_iceberg_src" {
 		t.Errorf("input topics = %#v", rp["topics"])
 	}
 	if _, ok := out["iceberg"]; !ok {
 		t.Errorf("output must be iceberg; got %#v", out)
+	}
+	icfg, _ := out["iceberg"].(map[string]any)
+	if icfg["table"] != "bench_sess_iceberg_connect" {
+		t.Errorf("output table = %v, want bench_sess_iceberg_connect (must match IcebergTable/ResetScript/MetricSidecar)", icfg["table"])
+	}
+	if rp["consumer_group"] != "bench_sess_iceberg_connect" {
+		t.Errorf("consumer_group = %v, want bench_sess_iceberg_connect", rp["consumer_group"])
 	}
 }
 
