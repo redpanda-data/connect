@@ -791,7 +791,6 @@ func bigQueryWriteAPIOutputFromConfig(conf *service.ParsedConfig, mgr *service.R
 	var cdc *cdcInjector
 	if cfg.WriteMode == "upsert" || cfg.WriteMode == "upsert_delete" {
 		cdc = &cdcInjector{
-			log:         mgr.Logger(),
 			changeType:  cfg.ChangeType,
 			changeSeq:   cfg.ChangeSequenceNumber,
 			allowDelete: cfg.WriteMode == "upsert_delete",

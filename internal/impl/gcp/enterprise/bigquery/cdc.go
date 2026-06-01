@@ -9,7 +9,6 @@
 package bigquery
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -98,7 +97,6 @@ func wrapDescriptorForCDC(base *descriptorpb.DescriptorProto, withSequenceNumber
 // Bloblang fields and the allowDelete flag. Safe to share across concurrent
 // WriteBatch goroutines because all fields are read-only after construction.
 type cdcInjector struct {
-	log         *service.Logger
 	changeType  *service.InterpolatedString
 	changeSeq   *service.InterpolatedString // nil when not configured
 	allowDelete bool                        // true for write_mode=upsert_delete
@@ -113,9 +111,8 @@ type cdcInjector struct {
 // otherwise overwrite (forces explicit user remediation rather than silent
 // data loss).
 func injectCDCJSON(jsonBytes []byte, changeType, changeSeq string) ([]byte, error) {
-	dec := json.NewDecoder(bytes.NewReader(jsonBytes))
 	var raw map[string]json.RawMessage
-	if err := dec.Decode(&raw); err != nil {
+	if err := json.Unmarshal(jsonBytes, &raw); err != nil {
 		return nil, fmt.Errorf("parsing JSON: %w", err)
 	}
 	if raw == nil {
