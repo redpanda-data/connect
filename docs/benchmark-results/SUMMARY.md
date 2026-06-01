@@ -30,6 +30,7 @@ Last refreshed: 2026-06-01
 
 | Connector / Scenario  | Best vCPU | Connect MB/s | KC MB/s | Gap (Connect − KC) | Last Run    |
 |-----------------------|-----------|--------------|---------|--------------------|-------------|
+| mysql / orders-cdc ⚠  |         2 |           95 |      38 | +57 MB/s (+60%)    | 2026-06-01  |
 | postgres / orders-cdc ⚠ |         4 |           62 |      52 | +10 MB/s (+16%)    | 2026-05-30  |
 
 Each row is the **latest** run of that scenario. Raw samples + Prometheus snapshots live under `results/<connector>/<scenario>/`.
