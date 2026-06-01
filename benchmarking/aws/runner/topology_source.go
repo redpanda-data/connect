@@ -5,7 +5,10 @@
 
 package main
 
-import "fmt"
+import (
+	"encoding/json"
+	"fmt"
+)
 
 // sourceTopology is the CDC bench path: the connector-under-test reads an
 // external system and writes into Redpanda; throughput is measured on the
@@ -71,6 +74,29 @@ func (sourceTopology) MetricArtifact(engine string, vcpu int) string {
 		suffix = "kc"
 	}
 	return fmt.Sprintf("redpanda-%d-%s.txt", vcpu, suffix)
+}
+
+func (sourceTopology) KCConfig(s *Scenario, outs map[string]string, n BenchNames) (KCRenderResult, bool, error) {
+	es, ok := engineSpecFor(s.Connector)
+	if !ok {
+		return KCRenderResult{}, false, fmt.Errorf("no engineSpec for %q", s.Connector)
+	}
+	in, err := buildKCRenderInputs(s, es, outs, n.SessionID)
+	if err != nil {
+		return KCRenderResult{}, false, fmt.Errorf("build KC render inputs: %w", err)
+	}
+	cfg, err := renderKCConfig(s, in)
+	if err != nil {
+		return KCRenderResult{}, false, fmt.Errorf("render KC config: %w", err)
+	}
+	raw, err := json.Marshal(cfg)
+	if err != nil {
+		return KCRenderResult{}, false, err
+	}
+	return KCRenderResult{
+		ConnectorName: fmt.Sprintf("bench_%s", s.Connector),
+		ConfigJSON:    string(raw),
+	}, true, nil
 }
 
 func (t sourceTopology) MetricSidecar(args MetricSidecarArgs) MetricSidecar {

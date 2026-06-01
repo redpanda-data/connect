@@ -122,6 +122,24 @@ func TestSourceTopology_Pipeline_InputAndOutput(t *testing.T) {
 	}
 }
 
+func TestSourceTopology_KCConfig_Postgres(t *testing.T) {
+	s := &Scenario{
+		Connector: "postgres_cdc",
+		Pipeline:  map[string]any{"input": map[string]any{"postgres_cdc": map[string]any{"schema": "public", "tables": []any{"orders"}}}},
+	}
+	outs := map[string]string{"postgres_dsn": "postgres://u:p@host:5432/db"}
+	res, ok, err := (sourceTopology{}).KCConfig(s, outs, newBenchNames("sess", "postgres_cdc"))
+	if err != nil || !ok {
+		t.Fatalf("KCConfig: ok=%v err=%v", ok, err)
+	}
+	if res.ConnectorName != "bench_postgres_cdc" {
+		t.Errorf("connector name = %q", res.ConnectorName)
+	}
+	if !strings.Contains(res.ConfigJSON, "io.debezium.connector.postgresql.PostgresConnector") {
+		t.Errorf("config must be the Debezium postgres connector; got:\n%s", res.ConfigJSON)
+	}
+}
+
 func TestSourceTopology_MetricArtifact(t *testing.T) {
 	if got := (sourceTopology{}).MetricArtifact("connect", 2); got != "redpanda-2-connect.txt" {
 		t.Errorf("connect artifact = %q", got)
