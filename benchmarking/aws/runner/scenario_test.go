@@ -136,6 +136,30 @@ func TestValidate_RejectsUnknownConnector(t *testing.T) {
 	}
 }
 
+func TestLoadScenario_DirectionDefaultsToSource(t *testing.T) {
+	s := &Scenario{Direction: ""}
+	s.applyDirectionDefault()
+	if s.Direction != DirectionSource {
+		t.Errorf("empty direction must default to source, got %q", s.Direction)
+	}
+}
+
+func TestValidate_RejectsUnknownDirection(t *testing.T) {
+	s := &Scenario{
+		Name:      "x",
+		Connector: "postgres_cdc",
+		Stack:     "postgres",
+		Direction: "sideways",
+		Infra:     InfraSpec{Runner: RunnerSpec{InstanceType: "c8g.4xlarge"}},
+		Matrix:    MatrixSpec{CPUPoints: []int{1}},
+		Workload:  &WorkloadSpec{Warmup: 2 * time.Minute, Duration: 15 * time.Minute},
+	}
+	err := s.Validate()
+	if err == nil || !strings.Contains(err.Error(), "direction") {
+		t.Fatalf("expected a direction error, got %v", err)
+	}
+}
+
 func TestRenderPipelineConfig_PassesCacheResourcesThrough(t *testing.T) {
 	s := &Scenario{
 		Pipeline: map[string]any{
