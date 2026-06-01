@@ -283,6 +283,7 @@ func runBench(opts benchOpts) (errOut error) {
 		KCConnectorConfigJSON:    kcConfigJSON,
 		Topology:                 topo,
 		Names:                    names,
+		Outs:                     sharedOuts,
 	}
 	reset, err := topo.ResetScript(s, sharedOuts, names)
 	if err != nil {
