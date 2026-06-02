@@ -241,7 +241,7 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 					Default(0).
 					Optional(),
 				service.NewDurationField(s3iSQSFieldIdlePollPeriod).
-					Description("How long to wait before the next SQS `ReceiveMessage` poll after a receive returns no messages. This back-off is applied *in addition to* `wait_time_seconds` long-polling and lets a mostly-idle queue issue far fewer requests, which is useful when polling SQS from outside AWS (for example across a NAT gateway). It trades latency for fewer requests: the first message arriving after an idle period may wait up to this long before being picked up, so keep it small for latency-sensitive queues. The default `0s` preserves the historical behaviour of a fixed 500ms throttle between empty polls.").
+					Description("How long to wait before the next SQS `ReceiveMessage` poll after a receive returns no messages. This back-off is applied *in addition to* `wait_time_seconds` long-polling and lets a mostly-idle queue issue far fewer requests, which is useful when polling SQS from outside AWS (for example across a NAT gateway). It trades latency for fewer requests: the first message arriving after an idle period may wait up to this long before being picked up, so keep it small for latency-sensitive queues. The default `0s` preserves the historical behaviour of a fixed 500ms throttle between empty polls; values below 500ms are raised to 500ms.").
 					Default("0s").
 					Advanced(),
 			).
@@ -405,6 +405,11 @@ func (staticTargetReader) Close(context.Context) error {
 
 //------------------------------------------------------------------------------
 
+// defaultIdleThrottle is the wait between empty SQS receives when no
+// idle_poll_period is configured, and the floor below which a configured
+// idle_poll_period is never allowed to drop.
+const defaultIdleThrottle = 500 * time.Millisecond
+
 type sqsTargetReader struct {
 	conf s3iConfig
 	log  *service.Logger
@@ -447,10 +452,7 @@ func (s *sqsTargetReader) Pop(ctx context.Context) (*s3ObjectTarget, error) {
 		return nil, err
 	}
 	if len(s.pending) == 0 {
-		idleThrottle := 500 * time.Millisecond
-		if s.conf.SQS.IdlePollPeriod > 0 {
-			idleThrottle = s.conf.SQS.IdlePollPeriod
-		}
+		idleThrottle := max(defaultIdleThrottle, s.conf.SQS.IdlePollPeriod)
 		s.nextRequest = time.Now().Add(idleThrottle)
 		return nil, context.Canceled
 	}
