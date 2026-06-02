@@ -182,6 +182,9 @@ func TestRenderKCConfig_Iceberg(t *testing.T) {
 	if cfg["iceberg.tables"] != "bench.bench_sess_iceberg_kafka_connect" {
 		t.Errorf("iceberg.tables = %v", cfg["iceberg.tables"])
 	}
+	if cfg["iceberg.tables.auto-create-enabled"] != "false" {
+		t.Errorf("auto-create must be false (tables are pre-created); got %v", cfg["iceberg.tables.auto-create-enabled"])
+	}
 }
 
 func TestRenderKCConfig_UnknownConnector(t *testing.T) {

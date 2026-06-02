@@ -119,7 +119,7 @@ var kcConnectorSpecs = map[string]kcConnectorSpec{
   "iceberg.catalog.rest.signing-region": "{{.Region}}",
   "iceberg.catalog.client.region": "{{.Region}}",
   "iceberg.tables": "{{.Namespace}}.{{.Table}}",
-  "iceberg.tables.auto-create-enabled": "true",
+  "iceberg.tables.auto-create-enabled": "false",
   "iceberg.control.commit.interval-ms": "10000",
   "consumer.override.group.id": "{{.ConsumerGroup}}",
   "consumer.override.auto.offset.reset": "earliest",
