@@ -23,8 +23,9 @@ func main() {
 		topic := fs.String("topic", "bench-orders", "destination topic")
 		rows := fs.Int64("rows", 1_000_000, "records to produce")
 		rowSize := fs.Int("row-size", 1200, "approximate record size in bytes")
+		partitions := fs.Int("partitions", 16, "topic partition count")
 		_ = fs.Parse(os.Args[2:])
-		if err := seed(context.Background(), *topic, *rows, *rowSize); err != nil {
+		if err := seed(context.Background(), *topic, *rows, *rowSize, *partitions); err != nil {
 			fmt.Fprintln(os.Stderr, "seed:", err)
 			os.Exit(1)
 		}
