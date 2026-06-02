@@ -25,7 +25,6 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
-	"github.com/redpanda-data/connect/v4/internal/cdc"
 	"github.com/redpanda-data/connect/v4/internal/confx"
 	"github.com/redpanda-data/connect/v4/internal/impl/oracledb/logminer"
 	"github.com/redpanda-data/connect/v4/internal/impl/oracledb/replication"
@@ -229,10 +228,9 @@ type oracleDBCDCInput struct {
 	lmCfg *logminer.Config
 	db    *sql.DB
 
-	res              *service.Resources
-	publisher        *batchPublisher
-	metrics          *service.Metrics
-	snapshotSignaler *cdc.Signaler
+	res       *service.Resources
+	publisher *batchPublisher
+	metrics   *service.Metrics
 
 	stopSig          *shutdown.Signaller
 	snapshotOnlyDone atomic.Bool
@@ -413,11 +411,6 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 	if err = o.db.PingContext(ctx); err != nil {
 		return fmt.Errorf("validating connection to oracle database: %w", err)
 	}
-
-	var signaler cdc.Signaler
-	signaler, err = replication.NewOracleSignaler(o.db, "", o.log)
-
-	signaler.TableExists()
 
 	if isCDB, err = o.detectContainerContext(ctx); err != nil {
 		return fmt.Errorf("detecting current container context: %w", err)

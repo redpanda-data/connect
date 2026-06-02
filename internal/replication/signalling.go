@@ -6,11 +6,11 @@
 //
 // https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
-package cdc
+package replication
 
 import "context"
 
-type Signaler interface {
+type Signaller interface {
 	// ValidateChannel validates the signal channel exists during connector startup.
 	ValidateChannel(ctx context.Context) error
 	// OnSignal detects whether a signal has been received from the channel.

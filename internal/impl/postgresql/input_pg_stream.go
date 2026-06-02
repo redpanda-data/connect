@@ -26,6 +26,7 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/asyncroutine"
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream"
 	"github.com/redpanda-data/connect/v4/internal/license"
+	"github.com/redpanda-data/connect/v4/internal/replication"
 )
 
 const (
@@ -394,6 +395,7 @@ type pgStreamInput struct {
 
 	snapshotMetrics *service.MetricGauge
 	replicationLag  *service.MetricGauge
+	snapshotSig     replication.Signaller
 	stopSig         *shutdown.Signaller
 
 	// IAM authentication fields
@@ -412,10 +414,16 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("unable to create replication stream: %w", err)
 	}
+
 	batcher, err := p.batching.NewBatcher(p.mgr)
 	if err != nil {
 		return err
 	}
+
+	if p.snapshotSig, err = NewSnapshotSignaller(p.logger); err != nil {
+
+	}
+
 	// Reset our stop signal
 	p.stopSig = shutdown.NewSignaller()
 	go p.processStream(pgStream, batcher)
