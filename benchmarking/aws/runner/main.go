@@ -222,14 +222,16 @@ func runBench(opts benchOpts) (errOut error) {
 	if err != nil {
 		return fmt.Errorf("render pipeline config: %w", err)
 	}
+	// Upload the iceberg-tablegen binary (sink scenarios only) BEFORE
+	// stageArtefacts, whose SSM script downloads it onto the runner — otherwise
+	// the object isn't in S3 yet and the best-effort download no-ops.
+	if err := stageTableGenForSink(ctx, opts, s, sharedOuts); err != nil {
+		return fmt.Errorf("stage iceberg-tablegen: %w", err)
+	}
 	if err := stageArtefacts(ctx, opts, sharedOuts, binPath, cfgPath); err != nil {
 		return fmt.Errorf("stage artefacts: %w", err)
 	}
 	fmt.Println("[4/7] staged binary + config on runner")
-
-	if err := stageTableGenForSink(ctx, opts, s, sharedOuts); err != nil {
-		return fmt.Errorf("stage iceberg-tablegen: %w", err)
-	}
 
 	if err := runSeeder(ctx, opts, s, sharedOuts, topo, names); err != nil {
 		return fmt.Errorf("seed: %w", err)
