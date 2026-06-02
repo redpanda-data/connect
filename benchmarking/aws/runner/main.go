@@ -227,6 +227,10 @@ func runBench(opts benchOpts) (errOut error) {
 	}
 	fmt.Println("[4/7] staged binary + config on runner")
 
+	if err := stageTableGenForSink(ctx, opts, s, sharedOuts); err != nil {
+		return fmt.Errorf("stage iceberg-tablegen: %w", err)
+	}
+
 	if err := runSeeder(ctx, opts, s, sharedOuts, topo, names); err != nil {
 		return fmt.Errorf("seed: %w", err)
 	}
@@ -701,9 +705,45 @@ aws s3 cp s3://%s/stage/config.yaml /opt/bench/config.yaml
 aws s3 cp s3://%s/stage/license.jwt /opt/bench/license.jwt
 chmod +x /opt/bench/redpanda-connect
 chmod 0600 /opt/bench/license.jwt
-`, bucket, bucket, bucket)
+aws s3 cp s3://%s/stage/iceberg-tablegen /opt/bench/iceberg-tablegen 2>/dev/null && chmod +x /opt/bench/iceberg-tablegen || true
+`, bucket, bucket, bucket, bucket)
 	return ssmExec.Run(ctx, outs["runner_instance_id"], script, streamingOnLine(os.Stdout, "stage"))
 }
+
+// stageTableGenForSink builds the iceberg-tablegen binary and uploads it to
+// s3://<bucket>/stage/iceberg-tablegen for sink scenarios. The runner downloads
+// it in stageArtefacts; sinkTopology.ResetScript invokes it to pre-create tables.
+func stageTableGenForSink(ctx context.Context, opts benchOpts, s *Scenario, outs map[string]string) error {
+	if s.Direction != DirectionSink {
+		return nil
+	}
+	dist := filepath.Join(opts.repoRoot, "benchmarking/aws/seeders/dist")
+	_ = os.MkdirAll(dist, 0o755)
+	binOut := filepath.Join(dist, "iceberg-tablegen")
+	cmd := exec.Command("go", "build", "-o", binOut, "./benchmarking/aws/seeders/iceberg-tablegen")
+	cmd.Dir = opts.repoRoot
+	cmd.Env = append(os.Environ(), "GOOS=linux", "GOARCH=arm64", "CGO_ENABLED=0")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("build iceberg-tablegen: %w", err)
+	}
+	cfg, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(opts.region))
+	if err != nil {
+		return err
+	}
+	uploader := manager.NewUploader(s3.NewFromConfig(cfg))
+	bucket := outs["results_bucket"]
+	f, err := os.Open(binOut)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	key := "stage/iceberg-tablegen"
+	_, err = uploader.Upload(ctx, &s3.PutObjectInput{Bucket: &bucket, Key: &key, Body: f})
+	return err
+}
+
 func runSeeder(ctx context.Context, opts benchOpts, s *Scenario, outs map[string]string, topo Topology, names BenchNames) error {
 	if s.Dataset.Seeder == "" {
 		return nil
