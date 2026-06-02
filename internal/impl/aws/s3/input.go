@@ -51,6 +51,7 @@ const (
 	s3iSQSFieldMaxMessages      = "max_messages"
 	s3iSQSFieldWaitTimeSeconds  = "wait_time_seconds"
 	s3iSQSNackVisibilityTimeout = "nack_visibility_timeout"
+	s3iSQSFieldIdlePollPeriod   = "idle_poll_period"
 
 	// S3 Input Fields
 	s3iFieldBucket             = "bucket"
@@ -70,6 +71,7 @@ type s3iSQSConfig struct {
 	MaxMessages       int64
 	WaitTimeSeconds   int64
 	VisibilityTimeout int32
+	IdlePollPeriod    time.Duration
 }
 
 func s3iSQSConfigFromParsed(pConf *service.ParsedConfig) (conf s3iSQSConfig, err error) {
@@ -98,6 +100,13 @@ func s3iSQSConfigFromParsed(pConf *service.ParsedConfig) (conf s3iSQSConfig, err
 		return
 	}
 	if conf.VisibilityTimeout, err = baws.Int32Field(pConf, s3iSQSNackVisibilityTimeout); err != nil {
+		return
+	}
+	if conf.IdlePollPeriod, err = pConf.FieldDuration(s3iSQSFieldIdlePollPeriod); err != nil {
+		return
+	}
+	if conf.IdlePollPeriod < 0 {
+		err = fmt.Errorf("%v.%v cannot be negative", s3iFieldSQS, s3iSQSFieldIdlePollPeriod)
 		return
 	}
 	return
@@ -231,6 +240,10 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 					Description("Custom SQS Nack Visibility timeout in seconds. Default is 0").
 					Default(0).
 					Optional(),
+				service.NewDurationField(s3iSQSFieldIdlePollPeriod).
+					Description("How long to wait before the next SQS `ReceiveMessage` poll after a receive returns no messages. This back-off is applied *in addition to* `wait_time_seconds` long-polling and lets a mostly-idle queue issue far fewer requests, which is useful when polling SQS from outside AWS (for example across a NAT gateway). It trades latency for fewer requests: the first message arriving after an idle period may wait up to this long before being picked up, so keep it small for latency-sensitive queues. The default `0s` preserves the historical behaviour of a fixed 500ms throttle between empty polls.").
+					Default("0s").
+					Advanced(),
 			).
 				Description("Consume SQS messages in order to trigger key downloads.").
 				Optional(),
