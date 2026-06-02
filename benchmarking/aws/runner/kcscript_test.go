@@ -10,6 +10,22 @@ import (
 	"testing"
 )
 
+func TestRenderKCBenchScript_WaitsForConnectorClass(t *testing.T) {
+	out := renderKCBenchScript(kcBenchScriptArgs{
+		VCPU:                1,
+		MemLimitGiB:         2,
+		WarmupSec:           0,
+		DurationSec:         900,
+		ConnectorName:       "bench_iceberg_v1",
+		ConnectorConfigJSON: `{"connector.class":"io.tabular.iceberg.connect.IcebergSinkConnector"}`,
+		Bucket:              "b",
+		SessionID:           "s",
+	})
+	if !strings.Contains(out, "connector-plugins") {
+		t.Errorf("KC bench script must poll /connector-plugins before submitting; got:\n%s", out)
+	}
+}
+
 func TestRenderKCBenchScript_PinsCoresAndHeap(t *testing.T) {
 	script := renderKCBenchScript(kcBenchScriptArgs{
 		VCPU:                4,
