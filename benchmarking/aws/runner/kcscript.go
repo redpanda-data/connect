@@ -110,6 +110,21 @@ done`,
 		fmt.Sprintf(`cat > /tmp/kc-cfg-%d.json <<'KCCFG'
 %s
 KCCFG`, a.VCPU, cfgJSON),
+		// A large connector plugin (e.g. the iceberg-kafka-connect runtime) can
+		// still be scanning the plugin path when the REST API first answers,
+		// so an immediate submit hits "Failed to find any class ... available
+		// connectors are: [<only built-in>]". Poll /connector-plugins for the
+		// class declared in the cfg file (already written above) until it
+		// registers, with a bounded timeout, before submitting.
+		fmt.Sprintf(`CLASS=$(sed -n 's/.*"connector.class"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' /tmp/kc-cfg-%d.json | head -1)
+echo "[kc] waiting for connector class $CLASS to register..."
+for i in $(seq 1 60); do
+  if curl -s localhost:8083/connector-plugins | grep -q "$CLASS"; then
+    echo "[kc] connector class registered after $((i*2))s"
+    break
+  fi
+  sleep 2
+done`, a.VCPU),
 		// Capture both response body and HTTP status code so we can print
 		// the worker's error message when the connector rejects validation
 		// (e.g. missing plugin, bad DSN, slot collision). curl --fail
