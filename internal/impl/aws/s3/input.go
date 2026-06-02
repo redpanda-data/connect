@@ -447,7 +447,11 @@ func (s *sqsTargetReader) Pop(ctx context.Context) (*s3ObjectTarget, error) {
 		return nil, err
 	}
 	if len(s.pending) == 0 {
-		s.nextRequest = time.Now().Add(time.Millisecond * 500)
+		idleThrottle := 500 * time.Millisecond
+		if s.conf.SQS.IdlePollPeriod > 0 {
+			idleThrottle = s.conf.SQS.IdlePollPeriod
+		}
+		s.nextRequest = time.Now().Add(idleThrottle)
 		return nil, context.Canceled
 	}
 	s.nextRequest = time.Time{}
