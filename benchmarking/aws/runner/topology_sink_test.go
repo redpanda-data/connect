@@ -108,6 +108,15 @@ func TestSinkTopology_ResetScript_DropsTableAndResetsOffset(t *testing.T) {
 	if !strings.Contains(sc, "aws glue delete-table") {
 		t.Errorf("reset must drop the per-engine Glue table; got:\n%s", sc)
 	}
+	if !strings.Contains(sc, "/opt/bench/iceberg-tablegen") {
+		t.Errorf("reset must invoke iceberg-tablegen to pre-create tables; got:\n%s", sc)
+	}
+	if !strings.Contains(sc, "--table=bench_sess_iceberg_connect") || !strings.Contains(sc, "--table=bench_sess_iceberg_kafka_connect") {
+		t.Errorf("reset must pre-create both per-engine tables; got:\n%s", sc)
+	}
+	if !strings.Contains(sc, "s3://rpcn-bench-ice/wh/bench/bench_sess_iceberg_connect") {
+		t.Errorf("reset must pass the per-table S3 location; got:\n%s", sc)
+	}
 }
 
 func TestSinkTopology_WorkloadScript_Empty(t *testing.T) {

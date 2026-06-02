@@ -102,12 +102,22 @@ func (sinkTopology) ResetScript(s *Scenario, outs map[string]string, n BenchName
 	region := outs["aws_region"]
 	db := sp.Namespace
 	brokers := outs["redpanda_broker_endpoints"]
+	catalogURI := outs["glue_rest_uri"]
+	warehouse := outs["warehouse_account_id"]
+	whBase := outs["warehouse_s3_uri"] // no trailing slash
 	var sb strings.Builder
 	w := func(format string, a ...any) { fmt.Fprintf(&sb, format+"\n", a...) }
 	w("set -euo pipefail")
 	for _, eng := range []string{"connect", "kafka_connect"} {
+		table := n.IcebergTable(eng)
+		// Drop the per-engine table so total-files-size restarts at 0.
 		w(`aws glue delete-table --region %q --database-name %q --name %q 2>/dev/null || true`,
-			region, db, n.IcebergTable(eng))
+			region, db, table)
+		// Pre-create the table with an explicit location: the Glue REST catalog
+		// requires one on create and the KC Tabular sink does not supply it.
+		w(`/opt/bench/iceberg-tablegen --catalog-uri=%s --warehouse=%s --region=%s --namespace=%s --table=%s --location=%s`,
+			catalogURI, warehouse, region, db, table, fmt.Sprintf("%s/%s/%s", whBase, db, table))
+		// Reset the per-engine consumer group to re-read the whole topic.
 		w(`/opt/kafka/bin/kafka-consumer-groups.sh --bootstrap-server %q --group %q --reset-offsets --to-earliest --all-topics --execute 2>/dev/null || true`,
 			brokers, n.ConsumerGroup(eng))
 	}
