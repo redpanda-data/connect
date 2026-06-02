@@ -36,6 +36,7 @@ const (
 	kfcFieldMetadataMaxAge         = "metadata_max_age"
 	kfcFieldRequestTimeoutOverhead = "request_timeout_overhead"
 	kfcFieldConnIdleTimeout        = "conn_idle_timeout"
+	kfcFieldRebootstrap            = "rebootstrap"
 
 	kfcFieldSeedBrokersDescription = "A list of broker addresses to connect to in order to establish connections. If an item of the list contains commas it will be expanded into multiple addresses."
 )
@@ -77,6 +78,11 @@ func FranzConnectionFields() []*service.ConfigField {
 			Description("The rough amount of time to allow connections to idle before they are closed.").
 			Default("20s").
 			Advanced(),
+		service.NewBoolField(kfcFieldRebootstrap).
+			Description("When enabled, the client re-resolves its `seed_brokers` and rebootstraps when a broker signals that its cached metadata is stale (the Kafka `REBOOTSTRAP_REQUIRED` error code 129, introduced by KIP-899 and KIP-1102). This is useful for seamless failover when `seed_brokers` is a stable DNS endpoint that can resolve to a different (for example, shadow versus primary) Redpanda cluster.").
+			Default(false).
+			Advanced().
+			Version("4.95.0"),
 		netutil.DialerConfigSpec(),
 	}
 }
@@ -92,6 +98,7 @@ type FranzConnectionDetails struct {
 	MetaMaxAge             time.Duration
 	RequestTimeoutOverhead time.Duration
 	ConnIdleTimeout        time.Duration
+	Rebootstrap            bool
 	DialerConfig           netutil.DialerConfig
 
 	Logger *service.Logger
@@ -139,6 +146,10 @@ func FranzConnectionDetailsFromConfig(conf *service.ParsedConfig, log *service.L
 		return nil, err
 	}
 
+	if d.Rebootstrap, err = conf.FieldBool(kfcFieldRebootstrap); err != nil {
+		return nil, err
+	}
+
 	if conf.Contains("tcp") {
 		if d.DialerConfig, err = netutil.DialerConfigFromParsed(conf.Namespace("tcp")); err != nil {
 			return nil, err
@@ -164,6 +175,16 @@ func (d *FranzConnectionDetails) FranzOpts() []kgo.Opt {
 		kgo.MetadataMaxAge(d.MetaMaxAge),
 		kgo.RequestTimeoutOverhead(d.RequestTimeoutOverhead),
 		kgo.ConnIdleTimeout(d.ConnIdleTimeout),
+	}
+
+	// Opt in to KIP-899 / KIP-1102 client rebootstrap. When the broker reports
+	// that the client's cached metadata is stale (REBOOTSTRAP_REQUIRED), franz-go
+	// re-resolves the configured seed brokers and reconnects, enabling seamless
+	// failover when seed_brokers points at a stable DNS endpoint.
+	if d.Rebootstrap {
+		opts = append(opts, kgo.OnRebootstrapRequired(func() ([]string, error) {
+			return d.SeedBrokers, nil
+		}))
 	}
 
 	{

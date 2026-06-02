@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+### Added
+
+- `redpanda` and `kafka` inputs and outputs now support an opt-in `rebootstrap` field that enables KIP-899 / KIP-1102 client rebootstrap, allowing seamless failover between Redpanda shadow and primary clusters when `seed_brokers` is a stable DNS endpoint. ([@david-yu](https://github.com/david-yu))
+
 ## 4.94.1 - 2026-05-29
 
 ### Fixed
