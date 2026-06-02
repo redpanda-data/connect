@@ -480,6 +480,10 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 				err   error
 			)
 			for _, msg := range batch {
+				if err := p.snapshotSig.OnSignal(ctx, msg); err != nil {
+					p.logger.Errorf("snapshot signal handler failed, continuing to process change events: %w", err)
+					continue
+				}
 				if mb, err = json.Marshal(msg.Data); err != nil {
 					p.logger.Errorf("failure to marshal message: %s", err)
 					break
