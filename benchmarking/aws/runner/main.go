@@ -278,6 +278,7 @@ func runBench(opts benchOpts) (errOut error) {
 		Topology:                 topo,
 		Names:                    names,
 		Outs:                     sharedOuts,
+		Direction:                s.Direction,
 	}
 	reset, err := topo.ResetScript(s, sharedOuts, names)
 	if err != nil {
