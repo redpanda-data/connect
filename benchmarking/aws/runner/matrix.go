@@ -58,6 +58,10 @@ type MatrixRunner struct {
 	Names BenchNames
 	// Outs is the TF output map, passed into Topology.MetricSidecar.
 	Outs map[string]string
+	// Direction selects how throughput is measured: source benches parse
+	// Connect's rolling-stats log (samples); sink benches use the metric
+	// series in brokerSeries (e.g. Iceberg committed bytes).
+	Direction Direction
 }
 
 // SweepPoint is the per-point measurement.
@@ -208,9 +212,10 @@ func (m *MatrixRunner) Run(
 			brokerSeries := m.fetchBrokerSeriesForEngine(ctx, engine, n)
 
 			var summary Summary
-			if engine == "kafka_connect" {
-				// KC has no rolling-stats log we can parse; derive Summary
-				// from broker-side bytes attributed to this engine.
+			if engine == "kafka_connect" || m.Direction == DirectionSink {
+				// No rolling-stats log to parse (KC has none; a sink's
+				// Connect pipeline has no benchmark processor). Derive the
+				// Summary from the metric series attributed to this engine.
 				summary = SummariseTopicPoints(brokerSeries)
 			} else {
 				summary = Summarise(samples)
@@ -228,23 +233,28 @@ func (m *MatrixRunner) Run(
 			fmt.Printf("  -> %d samples; median %.2f MB/s (p5 %.2f, p95 %.2f, peak %.2f), %d anomalies\n",
 				len(samples), summary.MedianMBPerSec, summary.P5MBPerSec, summary.P95MBPerSec, summary.PeakMBPerSec, len(anomalies))
 
-			// Early-abort: if the first Connect sweep point captured no samples
-			// (Connect failed to start or the connector errored out for the
-			// whole window), the remaining points will almost certainly fail
-			// the same way. Bail out, dump the tail of the log so the operator
-			// can see the failure, and let the destroy defer reclaim the infra.
-			//
-			// Guarded by engine == "connect" because KC samples are intentionally
-			// empty in Plan 2 (its log isn't parsed here) and would otherwise
-			// always trigger early-abort.
-			if engine == "connect" && n == cpuPoints[0] && len(samples) == 0 {
-				const tailMax = 4 * 1024
-				tail := rawLog
-				if len(rawLog) > tailMax {
-					tail = rawLog[len(rawLog)-tailMax:]
+			// Early-abort on the first sweep point if it produced no
+			// throughput data — later points would fail the same way. The
+			// signal differs by direction: source-Connect uses rolling-stats
+			// log samples; a sink (no such log) uses its metric series.
+			if n == cpuPoints[0] {
+				var empty bool
+				var what string
+				switch {
+				case m.Direction == DirectionSink:
+					empty, what = len(brokerSeries) == 0, "metric samples"
+				case engine == "connect":
+					empty, what = len(samples) == 0, "samples"
 				}
-				fmt.Fprintf(stdout, "[bench] connect log tail (last %d bytes):\n%s\n", len(tail), tail)
-				return out, fmt.Errorf("first sweep point at %d vCPU captured 0 samples — see log tail above", n)
+				if empty {
+					const tailMax = 4 * 1024
+					tail := rawLog
+					if len(rawLog) > tailMax {
+						tail = rawLog[len(rawLog)-tailMax:]
+					}
+					fmt.Fprintf(stdout, "[bench] connect log tail (last %d bytes):\n%s\n", len(tail), tail)
+					return out, fmt.Errorf("first sweep point at %d vCPU captured 0 %s — see log tail above", n, what)
+				}
 			}
 		}
 	}

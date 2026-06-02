@@ -469,6 +469,63 @@ redpanda_kafka_request_bytes_total{redpanda_request="produce",redpanda_topic="be
 	require.Greater(t, kcPt.Summary.MedianMBPerSec, 0.0, "KC Summary should be derived from broker bytes")
 }
 
+func TestMatrixRun_SinkDerivesSummaryFromBrokerSeries(t *testing.T) {
+	const sessionID = "sess-sink"
+	const connector = "iceberg"
+
+	// A sink's Connect pipeline has no benchmark processor, so there is no
+	// rolling-stats log to fetch/parse — log samples are empty by design.
+	// Throughput is the Iceberg committed-bytes series scraped into the
+	// per-engine metric artifact (iceberg-1-connect.txt for vCPU 1).
+	const iceberg = `###timestamp=1000
+total_files_size_bytes 0
+###timestamp=1010
+total_files_size_bytes 524288000
+###timestamp=1020
+total_files_size_bytes 1048576000
+`
+	fetcher := &FakeLogFetcher{
+		Contents: map[string]string{
+			fmt.Sprintf("runs/%s/iceberg-1-connect.txt", sessionID): iceberg,
+			// A sink Connect run still produces a (rolling-stats-free) log;
+			// parseAndTrim yields no samples from it.
+			fmt.Sprintf("runs/%s/sweep-1.log", sessionID): "INFO starting redpanda-connect\nINFO output connected\n",
+		},
+		Errs: map[string]error{
+			fmt.Sprintf("runs/%s/prom-1.txt", sessionID): fmt.Errorf("not found"),
+		},
+	}
+	ssm := &FakeSSM{Transcripts: map[string][]string{"i-runner": nil}}
+	prev := stdout
+	stdout = &bytes.Buffer{}
+	defer func() { stdout = prev }()
+
+	mr := &MatrixRunner{
+		SSM:            ssm,
+		LogFetcher:     fetcher,
+		RunnerInstance: "i-runner",
+		Bucket:         "b",
+		SessionID:      sessionID,
+		Topology:       sinkTopology{},
+		Names:          newBenchNames(sessionID, connector),
+		Engines:        []string{"connect"},
+		Direction:      DirectionSink,
+	}
+	points, err := mr.Run(context.Background(), []int{1}, 1, 60*time.Second, 120*time.Second, "", "")
+	// No spurious early-abort even though log samples are empty: the sink's
+	// metric series is non-empty.
+	require.NoError(t, err)
+	require.Len(t, points, 1)
+
+	p := points[0]
+	require.Equal(t, "connect", p.Engine)
+	require.Empty(t, p.Samples, "sink Connect pipeline produces no rolling-stats samples")
+	require.NotEmpty(t, p.BrokerSeries, "sink BrokerSeries must come from the Iceberg metric series")
+	// 500 MiB committed in 10s → 50 MiB/s.
+	require.Greater(t, p.Summary.MedianMBPerSec, 0.0, "Summary derived from brokerSeries, not empty log samples")
+	require.InDelta(t, 50.0, p.Summary.MedianMBPerSec, 0.1)
+}
+
 func TestMatrixRun_EngineInnerLoop_ConnectOnly(t *testing.T) {
 	const sessionID = "sess"
 	logFor := func(vcpu int) string { return makeLog(180, float64(50+vcpu)) }
