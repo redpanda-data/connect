@@ -228,8 +228,8 @@ func dorisContainerNetworkIP(t *testing.T, ctx context.Context, ctr *testcontain
 	netInfo, ok := inspect.NetworkSettings.Networks[networkName]
 	require.True(t, ok, "container not found on network %q", networkName)
 	ip := netInfo.IPAddress
-	require.NotEmpty(t, ip, "container has no IP on network %q", networkName)
-	return ip
+	require.True(t, ip.IsValid(), "container has no IP on network %q", networkName)
+	return ip.String()
 }
 
 func ignoreContextCanceled(err error) error {
