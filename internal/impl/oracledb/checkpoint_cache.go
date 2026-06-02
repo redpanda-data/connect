@@ -237,23 +237,12 @@ func createCacheTable(ctx context.Context, db *sql.DB, tbl cacheTable, cacheKey 
 }
 
 func createUpsertStoredProc(ctx context.Context, db *sql.DB, cacheTable cacheTable) error {
-	// Check if stored proc already exists
-	var count int
-	q := `SELECT COUNT(*) FROM ALL_PROCEDURES WHERE OWNER = :1 AND OBJECT_NAME = :2 AND OBJECT_TYPE = 'PROCEDURE'`
-	if err := db.QueryRowContext(ctx, q, strings.ToUpper(cacheTable.schema), strings.ToUpper(defaultStoredProcName)).Scan(&count); err != nil {
-		return fmt.Errorf("checking if stored procedure exists: %w", err)
-	}
-	if count > 0 {
-		return nil
-	}
-
-	// Create the upsert procedure
 	// Note: go-ora driver handles []byte parameters as RAW type
 	storedProcFullName := fmt.Sprintf("%s.%s", cacheTable.schema, defaultStoredProcName)
 	tableName := cacheTable.String()
 
 	createQuery := fmt.Sprintf(`
-		CREATE PROCEDURE %s (
+		CREATE OR REPLACE PROCEDURE %s (
 			p_key IN VARCHAR2,
 			p_value IN RAW
 		)
