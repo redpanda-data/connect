@@ -120,6 +120,30 @@ func TestEngineSpecFor_Unknown(t *testing.T) {
 	}
 }
 
+func TestEngineSpecFor_DynamoDB(t *testing.T) {
+	es, ok := engineSpecFor("aws_dynamodb_cdc")
+	if !ok {
+		t.Fatalf("aws_dynamodb_cdc should be registered")
+	}
+	if !es.NoDSN {
+		t.Errorf("aws_dynamodb_cdc must set NoDSN=true (IAM auth, no DSN); got %+v", es)
+	}
+	if es.DSNOutputKey != "" || es.DSNEnvVar != "" {
+		t.Errorf("aws_dynamodb_cdc must not declare DSN fields; got DSNOutputKey=%q DSNEnvVar=%q", es.DSNOutputKey, es.DSNEnvVar)
+	}
+	// The seeder and the bash reset block both read AWS_REGION + DDB_TABLE
+	// from the env; the engineSpec maps those to the dynamodb stack's TF
+	// output keys. If either link breaks, the rendered scripts will reference
+	// empty strings and fail at runtime — covered here so the regression
+	// surfaces in unit tests, not in an AWS smoke.
+	if got, want := es.ExtraEnvVars["AWS_REGION"], "aws_region"; got != want {
+		t.Errorf("ExtraEnvVars[AWS_REGION] = %q, want %q", got, want)
+	}
+	if got, want := es.ExtraEnvVars["DDB_TABLE"], "dynamodb_table_name"; got != want {
+		t.Errorf("ExtraEnvVars[DDB_TABLE] = %q, want %q", got, want)
+	}
+}
+
 func TestValidate_RejectsUnknownConnector(t *testing.T) {
 	s := &Scenario{
 		Name: "bad", Connector: "kafka_franz_in_disguise", Stack: "kafka",

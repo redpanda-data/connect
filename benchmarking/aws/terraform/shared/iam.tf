@@ -32,6 +32,12 @@ resource "aws_iam_role_policy" "bench_host_extra" {
           "s3:ListBucket",
           "secretsmanager:GetSecretValue",
           "glue:*",
+          # DynamoDB: source-table read/write for the seeder, Streams read for
+          # the Connect input, CreateTable for the connector's auto-managed
+          # checkpoint table. dynamodb:* covers the stream actions too
+          # (DescribeStream/GetRecords/GetShardIterator/ListStreams all live
+          # under the dynamodb: namespace).
+          "dynamodb:*",
         ]
         Resource = ["*"]
       },

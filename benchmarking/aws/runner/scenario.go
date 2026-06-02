@@ -122,6 +122,18 @@ type engineSpec struct {
 	ResetUserOutputKey string
 	ResetPassOutputKey string
 	ResetDBOutputKey   string
+
+	// NoDSN, when true, indicates the engine doesn't use a DSN (e.g. IAM-authed
+	// AWS services like DynamoDB). renderSeedScript and renderWorkloadScript
+	// skip the DSN env-var prefix in this case. combineReset rejects `sql:`
+	// reset steps for NoDSN engines — the scenario must use `bash:` steps.
+	NoDSN bool
+	// ExtraEnvVars maps an env-var name (e.g. "AWS_REGION") to a terraform
+	// output key (e.g. "aws_region"). These are emitted as `KEY="value"`
+	// prefixes on the seeder/workload commands in addition to (or instead of,
+	// for NoDSN engines) the DSN env var. Keys are sorted before emission to
+	// keep rendered scripts stable across Go's randomized map iteration.
+	ExtraEnvVars map[string]string
 }
 
 var engineSpecs = map[string]engineSpec{
@@ -137,6 +149,19 @@ var engineSpecs = map[string]engineSpec{
 		ResetUserOutputKey: "mysql_user",
 		ResetPassOutputKey: "mysql_password",
 		ResetDBOutputKey:   "mysql_db",
+	},
+	// aws_dynamodb_cdc uses IAM auth (no DSN). The seeder reads AWS_REGION and
+	// DDB_TABLE from its env, and the bash reset steps reference them via
+	// ${AWS_REGION} / ${DYNAMODB_TABLE_NAME} placeholders. No KC counterpart —
+	// Debezium 2.7.x doesn't ship a DynamoDB connector and the bench cloud-init
+	// doesn't install a paid alternative, so this scenario only runs against
+	// --engines=connect.
+	"aws_dynamodb_cdc": {
+		NoDSN: true,
+		ExtraEnvVars: map[string]string{
+			"AWS_REGION": "aws_region",
+			"DDB_TABLE":  "dynamodb_table_name",
+		},
 	},
 }
 

@@ -7,8 +7,30 @@ package main
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 )
+
+// envVarPrefix builds the `KEY="value" ...` prefix used in front of the seeder
+// and workload commands. ExtraEnvVars keys are emitted in sorted order, then
+// the DSN env var (unless es.NoDSN is set). Returns empty string when both
+// sources are empty.
+func envVarPrefix(es engineSpec, outs map[string]string) string {
+	keys := make([]string, 0, len(es.ExtraEnvVars))
+	for k := range es.ExtraEnvVars {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	var sb strings.Builder
+	for _, k := range keys {
+		fmt.Fprintf(&sb, "%s=%q ", k, outs[es.ExtraEnvVars[k]])
+	}
+	if !es.NoDSN && es.DSNEnvVar != "" {
+		fmt.Fprintf(&sb, "%s=%q ", es.DSNEnvVar, outs[es.DSNOutputKey])
+	}
+	return sb.String()
+}
 
 // Trust boundary: scenario YAML and terraform outputs are operator-controlled.
 // Renderers below quote values with %q (Go double-quoted string), which is NOT
@@ -29,11 +51,11 @@ func renderSeedScript(s *Scenario, outs map[string]string, s3Key string) (string
 set -euo pipefail
 aws s3 cp s3://%s/%s /opt/bench/%s
 chmod +x /opt/bench/%s
-%s=%q /opt/bench/%s seed \
+%s/opt/bench/%s seed \
   --tables=%s --rows=%d --row-size=%d
 `,
 		outs["results_bucket"], s3Key, s.Dataset.Seeder, s.Dataset.Seeder,
-		es.DSNEnvVar, outs[es.DSNOutputKey], s.Dataset.Seeder,
+		envVarPrefix(es, outs), s.Dataset.Seeder,
 		strings.Join(s.Dataset.Tables, ","), s.Dataset.InitialRows, s.Dataset.RowSizeBytes,
 	), nil
 }
@@ -47,6 +69,13 @@ func combineReset(connector string, steps []ResetStep, outs map[string]string) (
 	es, ok := engineSpecFor(connector)
 	if !ok {
 		return "", fmt.Errorf("combineReset: connector %q has no engineSpec", connector)
+	}
+	if es.NoDSN {
+		for _, st := range steps {
+			if st.SQL != "" {
+				return "", fmt.Errorf("combineReset: connector %q is NoDSN; sql: reset steps not supported (use bash: steps)", connector)
+			}
+		}
 	}
 	var sb strings.Builder
 	sb.WriteString("set -euo pipefail\n")
@@ -129,11 +158,11 @@ func renderWorkloadScript(s *Scenario, outs map[string]string) (string, error) {
 	totalSec := int((s.Workload.Warmup + s.Workload.Duration).Seconds())
 	return fmt.Sprintf(`
 set -euo pipefail
-%s=%q /opt/bench/%s workload \
+%s/opt/bench/%s workload \
   --tables=%s --row-size=%d \
   --rate=%d --duration=%ds
 `,
-		es.DSNEnvVar, outs[es.DSNOutputKey], s.Dataset.Seeder,
+		envVarPrefix(es, outs), s.Dataset.Seeder,
 		strings.Join(s.Dataset.Tables, ","),
 		s.Dataset.RowSizeBytes,
 		s.Workload.WriteRatePerSec,
