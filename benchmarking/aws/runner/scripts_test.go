@@ -52,6 +52,39 @@ func TestRenderSeedScript_MySQL(t *testing.T) {
 	}
 }
 
+func TestRenderSeedScript_NoDSN_WithExtraEnvVars(t *testing.T) {
+	// Register a test-only NoDSN engine and clean up after.
+	engineSpecs["aws_dynamodb_cdc_test"] = engineSpec{
+		NoDSN: true,
+		ExtraEnvVars: map[string]string{
+			"DDB_TABLE":  "dynamodb_table_name",
+			"AWS_REGION": "aws_region",
+		},
+	}
+	t.Cleanup(func() { delete(engineSpecs, "aws_dynamodb_cdc_test") })
+
+	s := &Scenario{
+		Connector: "aws_dynamodb_cdc_test",
+		Dataset:   DatasetSpec{Tables: []string{"orders"}, RowSizeBytes: 2048, Seeder: "cdc-ddb", InitialRows: 0},
+	}
+	outs := map[string]string{
+		"aws_region":          "us-east-2",
+		"dynamodb_table_name": "bench_orders",
+		"results_bucket":      "bucket",
+	}
+	script, err := renderSeedScript(s, outs, "stage/cdc-ddb")
+	if err != nil {
+		t.Fatalf("renderSeedScript: %v", err)
+	}
+	// ExtraEnvVars must appear sorted by key, BEFORE the seeder command. No DSN.
+	if !strings.Contains(script, `AWS_REGION="us-east-2" DDB_TABLE="bench_orders" /opt/bench/cdc-ddb seed`) {
+		t.Errorf("expected sorted ExtraEnvVars then seeder invocation; got:\n%s", script)
+	}
+	if strings.Contains(script, "_DSN=") {
+		t.Errorf("NoDSN engine must not emit any *_DSN= prefix; got:\n%s", script)
+	}
+}
+
 func TestRenderSeedScript_UnknownConnector(t *testing.T) {
 	s := &Scenario{Connector: "unknown_connector", Dataset: DatasetSpec{Seeder: "x"}}
 	_, err := renderSeedScript(s, map[string]string{}, "stage/x")
@@ -218,6 +251,65 @@ func TestRenderWorkloadScript_MySQL(t *testing.T) {
 	}
 	if !strings.Contains(got, "/opt/bench/cdc-rows-mysql workload") {
 		t.Errorf("mysql workload must invoke cdc-rows-mysql, not the hardcoded cdc-rows; got:\n%s", got)
+	}
+}
+
+func TestRenderWorkloadScript_NoDSN_WithExtraEnvVars(t *testing.T) {
+	engineSpecs["aws_dynamodb_cdc_test"] = engineSpec{
+		NoDSN: true,
+		ExtraEnvVars: map[string]string{
+			"AWS_REGION": "aws_region",
+			"DDB_TABLE":  "dynamodb_table_name",
+		},
+	}
+	t.Cleanup(func() { delete(engineSpecs, "aws_dynamodb_cdc_test") })
+
+	s := &Scenario{
+		Connector: "aws_dynamodb_cdc_test",
+		Dataset:   DatasetSpec{Tables: []string{"orders"}, RowSizeBytes: 2048, Seeder: "cdc-ddb"},
+		Workload:  &WorkloadSpec{Warmup: 2 * time.Minute, Duration: 15 * time.Minute, WriteRatePerSec: 5000},
+	}
+	outs := map[string]string{
+		"aws_region":          "us-east-2",
+		"dynamodb_table_name": "bench_orders",
+	}
+	got, err := renderWorkloadScript(s, outs)
+	if err != nil {
+		t.Fatalf("renderWorkloadScript: %v", err)
+	}
+	if !strings.Contains(got, `AWS_REGION="us-east-2" DDB_TABLE="bench_orders" /opt/bench/cdc-ddb workload`) {
+		t.Errorf("expected sorted ExtraEnvVars then workload invocation; got:\n%s", got)
+	}
+	if strings.Contains(got, "_DSN=") {
+		t.Errorf("NoDSN engine must not emit any *_DSN= prefix; got:\n%s", got)
+	}
+}
+
+func TestCombineReset_NoDSN_RejectsSQL(t *testing.T) {
+	engineSpecs["aws_dynamodb_cdc_test"] = engineSpec{NoDSN: true}
+	t.Cleanup(func() { delete(engineSpecs, "aws_dynamodb_cdc_test") })
+
+	_, err := combineReset("aws_dynamodb_cdc_test", []ResetStep{{SQL: "TRUNCATE TABLE orders"}}, map[string]string{})
+	if err == nil {
+		t.Fatal("expected error when NoDSN engine has a sql: reset step")
+	}
+	if !strings.Contains(err.Error(), "NoDSN") {
+		t.Errorf("error should mention NoDSN; got: %v", err)
+	}
+}
+
+func TestCombineReset_NoDSN_AllowsBash(t *testing.T) {
+	engineSpecs["aws_dynamodb_cdc_test"] = engineSpec{NoDSN: true}
+	t.Cleanup(func() { delete(engineSpecs, "aws_dynamodb_cdc_test") })
+
+	steps := []ResetStep{{Bash: "aws dynamodb delete-table --table-name ${DYNAMODB_TABLE_NAME} || true"}}
+	outs := map[string]string{"dynamodb_table_name": "bench_orders"}
+	got, err := combineReset("aws_dynamodb_cdc_test", steps, outs)
+	if err != nil {
+		t.Fatalf("combineReset: %v", err)
+	}
+	if !strings.Contains(got, "aws dynamodb delete-table --table-name bench_orders") {
+		t.Errorf("bash placeholder substitution should fire; got:\n%s", got)
 	}
 }
 

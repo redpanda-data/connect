@@ -1,0 +1,83 @@
+name: dynamodb-cdc
+description: |
+  Stream changes from a DynamoDB table under sustained PutItem load so the
+  aws_dynamodb_cdc input — not the producer — is the bottleneck across the
+  CPU sweep. Drop + recreate the table between sweep points (TRUNCATE doesn't
+  exist on DDB) to reset the stream ARN and shard state.
+
+  Connect-only initially: no Debezium DynamoDB connector ships in the bench
+  cloud-init, so engines=[connect]. Head-to-head with a paid KC connector
+  is deferred.
+
+connector: aws_dynamodb_cdc
+stack: dynamodb
+
+infra:
+  source:
+    # DynamoDB capacity lives in the TF stack vars (read_capacity / write_capacity),
+    # not in the scenario. The keys below are informational — the runner doesn't
+    # forward them to terraform for this stack. Override via TF vars if needed.
+    billing: PROVISIONED
+    read_capacity: 1000
+    write_capacity: 10000
+  runner:
+    instance_type: c8g.4xlarge
+
+dataset:
+  initial_rows: 0          # Reset hook drops + recreates the table; no seed survives anyway.
+  row_size_bytes: 1024     # 1KB items consume 1 WCU each — keeps the WCU math simple.
+  tables: [rpcn_bench_ddb_orders]
+  seeder: cdc-ddb
+
+workload:
+  # 5000 PutItems/sec × 1 KB ≈ 5000 WCU sustained. Well inside the 10000 WCU
+  # provisioned default — leaves headroom for the connector's DescribeTable
+  # polling and any burst-write retries from the load-gen. Bump if 1-vCPU smoke
+  # shows Connect is source-bound (not connector-bound).
+  write_rate_per_sec: 5000
+  duration: 15m
+  warmup: 2m
+
+pipeline:
+  input:
+    aws_dynamodb_cdc:
+      tables: [rpcn_bench_ddb_orders]
+      region: ${AWS_REGION}
+      # Default checkpoint_table name; the reset hook below drops it between
+      # sweep points so each point starts with no prior shard state.
+      checkpoint_table: redpanda_dynamodb_checkpoints
+      # snapshot_mode=none means CDC-only — no initial table scan.
+      snapshot_mode: none
+      # start_from: latest lets us begin reading immediately after table recreate
+      # without waiting for trim_horizon to materialize.
+      start_from: latest
+
+matrix:
+  cpu_points: [1, 2, 4, 8]
+
+reset:
+  # Drop the connector's auto-managed checkpoint table so per-shard cursors don't
+  # bleed across sweep points. delete-table on a non-existent table returns 404;
+  # `|| true` makes the first sweep point's reset idempotent.
+  - bash: "aws dynamodb delete-table --table-name redpanda_dynamodb_checkpoints --region ${AWS_REGION} 2>/dev/null || true"
+  - bash: "aws dynamodb wait table-not-exists --table-name redpanda_dynamodb_checkpoints --region ${AWS_REGION} 2>/dev/null || true"
+
+  # Drop + recreate the source table. The new table has a fresh stream ARN
+  # (DescribeTable picks it up), fresh shards, and zero items. The
+  # provisioned-throughput / stream-specification args MUST match the
+  # terraform module's spec — if you change defaults in modules/dynamodb-bench/,
+  # update this bash block too. (Terraform destroy works on whatever the table
+  # currently looks like, but a mismatch leaves the bench running against
+  # different capacity than declared.)
+  - bash: "aws dynamodb delete-table --table-name ${DYNAMODB_TABLE_NAME} --region ${AWS_REGION}"
+  - bash: "aws dynamodb wait table-not-exists --table-name ${DYNAMODB_TABLE_NAME} --region ${AWS_REGION}"
+  - bash: |
+      aws dynamodb create-table \
+        --table-name ${DYNAMODB_TABLE_NAME} \
+        --region ${AWS_REGION} \
+        --attribute-definitions AttributeName=id,AttributeType=S \
+        --key-schema AttributeName=id,KeyType=HASH \
+        --billing-mode PROVISIONED \
+        --provisioned-throughput ReadCapacityUnits=1000,WriteCapacityUnits=10000 \
+        --stream-specification StreamEnabled=true,StreamViewType=NEW_AND_OLD_IMAGES
+  - bash: "aws dynamodb wait table-exists --table-name ${DYNAMODB_TABLE_NAME} --region ${AWS_REGION}"
