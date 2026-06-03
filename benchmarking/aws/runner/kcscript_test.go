@@ -218,6 +218,46 @@ func TestRenderKCBenchScript_NoScrapeWhenEndpointEmpty(t *testing.T) {
 	}
 }
 
+func TestRenderKCBenchScript_FreesPort8083BeforeSpawnAndHandback(t *testing.T) {
+	// Regression: the full sweep previously stranded at the kafka_connect
+	// points because the systemd unit and the bench script's taskset JVM
+	// fought over port 8083 — the loser crash-looped on BindException. The
+	// script must (a) wait for :8083 to be free before spawning its own JVM
+	// (and kill any lingering connect-distributed straggler), and (b) wait
+	// for :8083 to free again after SIGTERMing its JVM before handing the
+	// port back to the systemd unit.
+	script := renderKCBenchScript(kcBenchScriptArgs{
+		VCPU:                1,
+		MemLimitGiB:         2,
+		WarmupSec:           0,
+		DurationSec:         900,
+		ConnectorName:       "bench_iceberg_v1",
+		ConnectorConfigJSON: `{"connector.class":"io.tabular.iceberg.connect.IcebergSinkConnector"}`,
+		Bucket:              "b",
+		SessionID:           "s",
+	})
+	// The port-free poll must appear at least twice: once before spawn, once
+	// before the systemd hand-back.
+	if got := strings.Count(script, "grep -q ':8083 '"); got < 2 {
+		t.Errorf("expected port-8083-free poll before spawn AND before hand-back (>=2); got %d:\n%s", got, script)
+	}
+	if !strings.Contains(script, "pkill -f connect-distributed") {
+		t.Errorf("expected lingering connect-distributed JVM to be killed before spawn; got:\n%s", script)
+	}
+	// The spawn-side free-wait must come BEFORE the JVM launch, and the
+	// hand-back free-wait must come BEFORE the systemctl start.
+	spawnIdx := strings.Index(script, "taskset -c")
+	startIdx := strings.LastIndex(script, "systemctl start kafka-connect")
+	firstWait := strings.Index(script, "grep -q ':8083 '")
+	lastWait := strings.LastIndex(script, "grep -q ':8083 '")
+	if !(firstWait >= 0 && firstWait < spawnIdx) {
+		t.Errorf("spawn-side port-free wait must precede the taskset JVM launch; got:\n%s", script)
+	}
+	if !(lastWait >= 0 && lastWait < startIdx) {
+		t.Errorf("hand-back port-free wait must precede 'systemctl start kafka-connect'; got:\n%s", script)
+	}
+}
+
 func TestRenderKCBenchScript_HeapFloor(t *testing.T) {
 	// MemLimitGiB=1 → 1*3/4 = 0 → floor at 1.
 	script := renderKCBenchScript(kcBenchScriptArgs{
