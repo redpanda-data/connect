@@ -152,12 +152,15 @@ func (t sinkTopology) MetricSidecar(args MetricSidecarArgs) MetricSidecar {
       META=$(aws glue get-table --region %q --database-name %q --name %q \
               --query 'Table.Parameters.metadata_location' --output text 2>/dev/null || echo "")
       if [ -n "$META" ] && [ "$META" != "None" ]; then
-        SIZE=$(aws s3 cp "$META" - 2>/dev/null \
-                | jq -r '[.snapshots[]?."summary"."total-files-size" // "0" | tonumber] | last // 0' 2>/dev/null || echo 0)
+        SNAP=$(aws s3 cp "$META" - 2>/dev/null || echo '{}')
+        SIZE=$(echo "$SNAP" | jq -r '[.snapshots[]?."summary"."total-files-size" // "0" | tonumber] | last // 0' 2>/dev/null || echo 0)
+        RECS=$(echo "$SNAP" | jq -r '[.snapshots[]?."summary"."total-records" // "0" | tonumber] | last // 0' 2>/dev/null || echo 0)
       else
         SIZE=0
+        RECS=0
       fi
       echo "total_files_size_bytes ${SIZE:-0}"
+      echo "total_records ${RECS:-0}"
     } >> "$RP"
     sleep 10
   done

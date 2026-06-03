@@ -32,6 +32,27 @@ func TestParseIcebergSeries_DeltaThroughput(t *testing.T) {
 	}
 }
 
+func TestParseIcebergSeries_RecordsPerSec(t *testing.T) {
+	dump := strings.Join([]string{
+		"###timestamp=1000",
+		"total_files_size_bytes 0",
+		"total_records 0",
+		"###timestamp=1010",
+		"total_files_size_bytes 104857600",
+		"total_records 1000000", // +1M records over 10s = 100k rec/s
+	}, "\n")
+	pts, err := ParseIcebergSeries(strings.NewReader(dump))
+	if err != nil {
+		t.Fatalf("ParseIcebergSeries: %v", err)
+	}
+	if len(pts) != 1 {
+		t.Fatalf("want 1 point, got %d (%#v)", len(pts), pts)
+	}
+	if pts[0].MsgPerSec < 99900 || pts[0].MsgPerSec > 100100 {
+		t.Errorf("want ~100000 msg/s, got %v", pts[0].MsgPerSec)
+	}
+}
+
 func TestParseIcebergSeries_SkipsCounterReset(t *testing.T) {
 	dump := strings.Join([]string{
 		"###timestamp=1000",

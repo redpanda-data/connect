@@ -31,6 +31,7 @@ type Summary struct {
 	P5MsgPerSec     float64 `json:"p5_msg_s"`
 	P95MsgPerSec    float64 `json:"p95_msg_s"`
 	PeakMsgPerSec   float64 `json:"peak_msg_s"`
+	MeanMsgPerSec   float64 `json:"mean_msg_s"`
 }
 
 // The benchmark processor emits bytes/sec via humanize.Bytes (SI base-10):
@@ -104,6 +105,7 @@ func Summarise(samples []Sample) Summary {
 		P5MsgPerSec:     percentile(msg, 5),
 		P95MsgPerSec:    percentile(msg, 95),
 		PeakMsgPerSec:   peak(msg),
+		MeanMsgPerSec:   mean(msg),
 	}
 }
 
@@ -118,15 +120,22 @@ func SummariseTopicPoints(pts []TopicPoint) Summary {
 		return Summary{}
 	}
 	mb := make([]float64, len(pts))
+	msg := make([]float64, len(pts))
 	for i, p := range pts {
 		mb[i] = p.MBPerSec
+		msg[i] = p.MsgPerSec
 	}
 	return Summary{
-		MedianMBPerSec: percentile(mb, 50),
-		P5MBPerSec:     percentile(mb, 5),
-		P95MBPerSec:    percentile(mb, 95),
-		PeakMBPerSec:   peak(mb),
-		MeanMBPerSec:   mean(mb),
+		MedianMBPerSec:  percentile(mb, 50),
+		P5MBPerSec:      percentile(mb, 5),
+		P95MBPerSec:     percentile(mb, 95),
+		PeakMBPerSec:    peak(mb),
+		MeanMBPerSec:    mean(mb),
+		MedianMsgPerSec: percentile(msg, 50),
+		P5MsgPerSec:     percentile(msg, 5),
+		P95MsgPerSec:    percentile(msg, 95),
+		PeakMsgPerSec:   peak(msg),
+		MeanMsgPerSec:   mean(msg),
 	}
 }
 

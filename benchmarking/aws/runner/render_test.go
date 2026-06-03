@@ -36,7 +36,8 @@ func sampleResult() *Result {
 				Samples: []Sample{{T: 0, MBPerSec: 153, MsgPerSec: 127344}},
 				Summary: Summary{MedianMBPerSec: 153, P5MBPerSec: 144, P95MBPerSec: 161, PeakMBPerSec: 167,
 					MeanMBPerSec:    0.123,
-					MedianMsgPerSec: 127344, P5MsgPerSec: 119800, P95MsgPerSec: 134000, PeakMsgPerSec: 138200},
+					MedianMsgPerSec: 127344, P5MsgPerSec: 119800, P95MsgPerSec: 134000, PeakMsgPerSec: 138200,
+					MeanMsgPerSec: 125000},
 			},
 		},
 	}
@@ -179,6 +180,9 @@ func TestAppendMarkdown(t *testing.T) {
 	// Mean throughput column (3-decimal so sub-1 sink rates show):
 	require.Contains(t, s, "mean MB/s")
 	require.Contains(t, s, "0.123", "expected 3-decimal mean MB/s value in row; full markdown:\n"+s)
+	// Mean records/sec column (compression-independent sink throughput):
+	require.Contains(t, s, "mean msg/s")
+	require.Contains(t, s, "125,000", "expected formatted mean msg/s value in row; full markdown:\n"+s)
 	// The engine label appears in the row:
 	require.Contains(t, s, "connect")
 	// The vCPU row still renders the median:

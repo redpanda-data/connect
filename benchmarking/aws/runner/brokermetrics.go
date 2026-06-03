@@ -97,6 +97,7 @@ func extractTopicProduceBytes(body string) (map[string]float64, error) {
 type TopicPoint struct {
 	T           int     `json:"t"` // seconds since first frame
 	MBPerSec    float64 `json:"mb_per_sec"`
+	MsgPerSec   float64 `json:"msg_per_sec"`
 	IntervalSec int     `json:"-"` // for debugging; not serialized
 }
 
