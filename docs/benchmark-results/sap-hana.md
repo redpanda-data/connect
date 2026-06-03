@@ -36,3 +36,40 @@ Ranges show min–max across `GOMAXPROCS` 1, 2, 4, 8.
 - Kafka `batching.count` has secondary effect. Larger batches reduce Kafka produce round-trips but do not compensate for a small `fetch_size`.
 - Core scaling is weak because the pipeline is dominated by sequential HANA cursor reads (single connection, single result set). Extra goroutines help overlap Kafka I/O with HANA processing but saturate quickly.
 - **Recommended configuration: `fetch_size=10000`, `batching.count=10000`, `GOMAXPROCS=8` → ~49,000 msg/s (~2M rows in 41s).**
+
+---
+
+## Incrementing Read
+
+Concurrent load + capture: 500,000 rows inserted via 10 parallel workers while the connector polls for new rows.
+Pipeline: `sap_hana` input (incrementing mode, `incrementing_column=ID`) → `kafka_franz` output. `max_in_flight=10`, `batching.count=1000`.
+Varying `fetch_size`, `GOMAXPROCS`, and `poll_interval`.
+
+### msg/sec
+
+| fetch_size | poll | cores=1 | cores=2 | cores=4 | cores=8 |
+|------------|------|---------|---------|---------|---------|
+| 1,000      | 100ms | 20,000 | 20,000 | 21,739 | 22,727 |
+| 1,000      | 500ms | 20,000 | 20,000 | 17,857 | 19,231 |
+| 1,000      | 1s    | 20,000 | 20,000 | 20,000 | 19,231 |
+| 10,000     | 100ms | 31,250 | 31,250 | 38,462 | 38,462 |
+| 10,000     | 500ms | 31,250 | 38,462 | 38,462 | 41,667 |
+| 10,000     | 1s    | 26,316 | 31,250 | 31,250 | 38,462 |
+| 100,000    | 100ms | 31,250 | 38,462 | 38,462 | 22,727 |
+| 100,000    | 500ms | 26,316 | 38,462 | 31,250 | 38,462 |
+| 100,000    | 1s    | 15,625 | 20,000 | 38,462 | 38,462 |
+
+### Best result per fetch_size (across all poll and core counts)
+
+| fetch_size | Best msg/s | Config |
+|------------|------------|--------|
+| 1,000      | 22,727 | poll=100ms, cores=8 |
+| 10,000     | **41,667** | poll=500ms, cores=8 |
+| 100,000    | 38,462 | poll=100ms/500ms, cores=2/4/8 |
+
+**Observations:**
+- `fetch_size` is again the dominant parameter. Increasing from 1,000 to 10,000 roughly doubles throughput (~22k → ~42k msg/s).
+- `fetch_size=100000` does not improve over 10,000 and is slightly slower in some configurations due to larger result-set transfer per poll.
+- `poll_interval=100ms` performs best at `fetch_size=1000` where more frequent polls compensate for small batches. At larger fetch sizes `poll_interval` has less effect since each poll already returns a large batch.
+- Core scaling is modest; the bottleneck is HANA cursor read latency, not CPU.
+- **Recommended configuration: `fetch_size=10000`, `poll_interval=100ms–500ms`, `GOMAXPROCS=4–8` → ~38,000–42,000 msg/s.**

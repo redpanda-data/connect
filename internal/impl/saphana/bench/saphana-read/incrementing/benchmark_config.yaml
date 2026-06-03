@@ -7,12 +7,17 @@ input:
     incrementing_column: ID
     incrementing_initial_value: ${HWM_INITIAL:}
     poll_interval: ${POLL_INTERVAL:1s}
+    fetch_size: ${BENCH_FETCH_SIZE:10000}
 
 output:
   kafka_franz:
     seed_brokers:
       - localhost:9092
     topic: ${KAFKA_TOPIC:rpcns-hana-bench-orders-inc}
+    max_in_flight: ${BENCH_MAX_IN_FLIGHT:10}
+    batching:
+      count: ${BENCH_BATCH_COUNT:1000}
+      period: 500ms
 
 http:
   address: "0.0.0.0:0"
