@@ -26,9 +26,11 @@ import (
 // are skipped, mirroring ParseTopicSeries.
 func ParseIcebergSeries(r io.Reader) ([]TopicPoint, error) {
 	type frame struct {
-		t     int64
-		bytes float64
-		hasB  bool
+		t       int64
+		bytes   float64
+		hasB    bool
+		records float64
+		hasR    bool
 	}
 	var frames []frame
 	scanner := bufio.NewScanner(r)
@@ -52,6 +54,16 @@ func ParseIcebergSeries(r io.Reader) ([]TopicPoint, error) {
 			}
 			frames[len(frames)-1].bytes = v
 			frames[len(frames)-1].hasB = true
+		case strings.HasPrefix(line, "total_records "):
+			if len(frames) == 0 {
+				continue
+			}
+			v, err := strconv.ParseFloat(strings.TrimSpace(strings.TrimPrefix(line, "total_records ")), 64)
+			if err != nil {
+				return nil, fmt.Errorf("parse records %q: %w", line, err)
+			}
+			frames[len(frames)-1].records = v
+			frames[len(frames)-1].hasR = true
 		}
 	}
 	if err := scanner.Err(); err != nil {
@@ -72,9 +84,16 @@ func ParseIcebergSeries(r io.Reader) ([]TopicPoint, error) {
 		if interval <= 0 || delta < 0 {
 			continue // out-of-order or counter reset
 		}
+		var msgPerSec float64
+		if prev.hasR && cur.hasR {
+			if rd := cur.records - prev.records; rd >= 0 {
+				msgPerSec = rd / float64(interval)
+			}
+		}
 		out = append(out, TopicPoint{
 			T:           int(cur.t - baseT),
 			MBPerSec:    delta / float64(interval) / (1 << 20),
+			MsgPerSec:   msgPerSec,
 			IntervalSec: int(interval),
 		})
 	}
