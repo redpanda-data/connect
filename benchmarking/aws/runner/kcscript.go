@@ -75,8 +75,28 @@ func renderKCBenchScript(a kcBenchScriptArgs) string {
 		fmt.Sprintf(`trap 'rc=$?; aws s3 cp "$KC_LOG" "s3://%s/runs/%s/kc-%d.log" --only-show-errors 2>/dev/null || true; exit $rc' EXIT`,
 			a.Bucket, a.SessionID, a.VCPU),
 		// Stop the cloud-init-launched worker so we can spawn under taskset.
+		//
+		// A plain `stop` + `sleep 2` is NOT enough: under load the worker's
+		// JVM can hold the REST listen socket (:8083) past the point systemd
+		// considers the unit stopped, and the unit's `Restart=on-failure` can
+		// relaunch it mid-handoff. If port 8083 is still owned when our
+		// taskset JVM (spawned just below) tries to bind, it dies with
+		// "Address already in use" (exit 2). Worse, if the systemd unit is the
+		// one that loses the race later, it crash-loops on BindException
+		// hundreds of times until the other JVM finally exits.
+		//
+		// So: stop the unit, kill any lingering connect-distributed JVM, and
+		// poll until :8083 is actually free before spawning ours. Re-issue the
+		// stop each iteration in case `Restart=on-failure` relaunched it.
 		`sudo systemctl stop kafka-connect || true`,
-		`sleep 2`,
+		`sudo pkill -f connect-distributed 2>/dev/null || true`,
+		`for i in $(seq 1 60); do
+  sudo ss -ltn 2>/dev/null | grep -q ':8083 ' || break
+  echo "[kc] waiting for port 8083 to free before spawn (${i}s)..."
+  sudo systemctl stop kafka-connect >/dev/null 2>&1 || true
+  sudo pkill -f connect-distributed 2>/dev/null || true
+  sleep 1
+done`,
 		// Spawn the JVM directly. Equivalent to the systemd unit's ExecStart
 		// but with vCPU + heap pinned for this sweep point.
 		//
@@ -173,6 +193,16 @@ done`, a.ConnectorName),
 	}
 	lines = append(lines,
 		`echo "kc log uploaded"`,
+		// Our taskset JVM was SIGTERM'd + waited on above, but under load it
+		// can take several seconds to release the :8083 listen socket. Wait
+		// for it before handing the port back to the systemd unit, otherwise
+		// the unit crash-loops on BindException (Restart=on-failure) until our
+		// JVM finally exits — which is the failure that previously stranded
+		// the full sweep at the kafka_connect points.
+		`for i in $(seq 1 60); do
+  sudo ss -ltn 2>/dev/null | grep -q ':8083 ' || break
+  sleep 1
+done`,
 		// Restart the systemd unit so the host is ready for the next point.
 		`sudo systemctl start kafka-connect || true`,
 	)

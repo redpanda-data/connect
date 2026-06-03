@@ -43,6 +43,13 @@ write_files:
       Environment=KAFKA_HEAP_OPTS=-Xmx2G
       ExecStart=/opt/kafka/bin/connect-distributed.sh /opt/kafka-connect/worker.properties
       Restart=on-failure
+      # Back off between restarts so a transient port-8083 collision with the
+      # bench script's own taskset JVM cannot tight-loop (it previously logged
+      # 600+ BindException restarts in seconds). TimeoutStopSec gives the JVM
+      # room to flush transactional/commit state and release the socket on a
+      # clean stop before the bench script spawns its pinned worker.
+      RestartSec=10
+      TimeoutStopSec=120
       User=root
 
       [Install]
