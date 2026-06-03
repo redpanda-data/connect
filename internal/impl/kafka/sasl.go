@@ -24,6 +24,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/aws/config"
+	connectoauth2 "github.com/redpanda-data/connect/v4/internal/oauth2"
 	"github.com/redpanda-data/connect/v4/internal/serviceaccount"
 
 	"github.com/twmb/franz-go/pkg/sasl"
@@ -64,6 +65,32 @@ func SASLFields() *service.ConfigField {
 		service.NewStringMapField("extensions").
 			Description("Key/value pairs to add to OAUTHBEARER authentication requests.").
 			Optional(),
+		service.NewObjectField("oauth2",
+			service.NewBoolField("enabled").
+				Description("Whether to use OAuth2 client credentials for dynamic token renewal.").
+				Default(false),
+			service.NewStringField("client_key").
+				Description("The OAuth2 client ID.").
+				Default(""),
+			service.NewStringField("client_secret").
+				Description("The OAuth2 client secret.").
+				Default("").
+				Secret(),
+			service.NewStringField("token_url").
+				Description("The URL of the token provider.").
+				Default(""),
+			service.NewStringListField("scopes").
+				Description("Optional list of requested permissions.").
+				Default([]any{}).
+				Advanced(),
+			service.NewStringMapField("endpoint_params").
+				Description("Optional additional parameters for the token endpoint (e.g. audience).").
+				Optional().
+				Advanced(),
+		).
+			Description("Allows you to specify OAuth2 client credentials for automatic token renewal on OAUTHBEARER. Compatible with any OAuth2 identity provider including Microsoft Entra, Okta, Auth0, and Keycloak.").
+			Optional().
+			Advanced(),
 		service.NewObjectField("aws", config.SessionFields()...).
 			Description("Contains AWS specific fields for when the `mechanism` is set to `AWS_MSK_IAM`.").
 			Optional(),
@@ -151,6 +178,59 @@ func plainSaslFromConfig(c *service.ParsedConfig) (sasl.Mechanism, error) {
 }
 
 func oauthSaslFromConfig(c *service.ParsedConfig) (sasl.Mechanism, error) {
+	if c.Contains("oauth2") {
+		oauth2Parsed := c.Namespace("oauth2")
+		enabled, err := oauth2Parsed.FieldBool("enabled")
+		if err != nil {
+			return nil, err
+		}
+		if enabled {
+			clientKey, err := oauth2Parsed.FieldString("client_key")
+			if err != nil {
+				return nil, err
+			}
+			clientSecret, err := oauth2Parsed.FieldString("client_secret")
+			if err != nil {
+				return nil, err
+			}
+			tokenURL, err := oauth2Parsed.FieldString("token_url")
+			if err != nil {
+				return nil, err
+			}
+			scopes, err := oauth2Parsed.FieldStringList("scopes")
+			if err != nil {
+				return nil, err
+			}
+
+			oauth2Conf := connectoauth2.Config{
+				Enabled:      true,
+				ClientKey:    clientKey,
+				ClientSecret: clientSecret,
+				TokenURL:     tokenURL,
+				Scopes:       scopes,
+			}
+			if oauth2Parsed.Contains("endpoint_params") {
+				ep, err := oauth2Parsed.FieldStringMap("endpoint_params")
+				if err != nil {
+					return nil, err
+				}
+				oauth2Conf.EndpointParams = make(map[string][]string, len(ep))
+				for k, v := range ep {
+					oauth2Conf.EndpointParams[k] = []string{v}
+				}
+			}
+
+			tokenSource := oauth2Conf.TokenSource(context.Background())
+			return oauth.Oauth(func(context.Context) (oauth.Auth, error) {
+				t, err := tokenSource.Token()
+				if err != nil {
+					return oauth.Auth{}, err
+				}
+				return oauth.Auth{Token: t.AccessToken}, nil
+			}), nil
+		}
+	}
+
 	token, err := c.FieldString("token")
 	if err != nil {
 		return nil, err
