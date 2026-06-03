@@ -4,10 +4,11 @@ silent: true
 
 tasks:
   bench:build:
-    desc: Build the redpanda-connect and count binaries
+    desc: Build the redpanda-connect, count, and setup binaries
     cmds:
       - go build -o /tmp/rpcns-hana-write-bench ../../../../../cmd/redpanda-connect/
       - go build -o /tmp/rpcns-hana-write-count ./count/
+      - go build -o /tmp/rpcns-hana-write-setup ./setup/
       - echo "Binaries built"
 
   bench:setup:
@@ -16,7 +17,7 @@ tasks:
       - |
         if [ -z "$HANA_DSN" ]; then echo "HANA_DSN env var required"; exit 1; fi
         if [ -z "$HANA_SCHEMA" ]; then echo "HANA_SCHEMA env var required"; exit 1; fi
-        HANA_DSN="$HANA_DSN" HANA_SCHEMA="$HANA_SCHEMA" go run ./setup/main.go
+        HANA_DSN="$HANA_DSN" HANA_SCHEMA="$HANA_SCHEMA" /tmp/rpcns-hana-write-setup
 
   bench:load:
     desc: "Fill Kafka topic with COUNT messages (e.g. task bench:load COUNT=1000000)"
@@ -26,7 +27,6 @@ tasks:
       - |
         TOPIC="hana-bench-writes"
 
-        # Delete + recreate topic for a clean run
         timeout 10 docker exec rpcns-hana-kafka kafka-topics --bootstrap-server localhost:29092 \
           --delete --topic "$TOPIC" > /dev/null 2>&1 || true
         ATTEMPTS=0
@@ -57,6 +57,7 @@ tasks:
         MAX_IN_FLIGHT={{.MAX_IN_FLIGHT}}
         INTERVAL={{.INTERVAL}}
         TOPIC="hana-bench-writes"
+        CORES_LABEL="${CORES:-unbounded}"
 
         pkill -9 -f "/tmp/rpcns-hana-write-bench run" 2>/dev/null || true
 
@@ -64,7 +65,7 @@ tasks:
           timeout 5 docker exec rpcns-hana-kafka kafka-get-offsets \
             --bootstrap-server localhost:29092 \
             --topic "$TOPIC" 2>/dev/null \
-            | awk -F: '{sum += $3} END {print sum+0}'
+            | awk -F: '{sum += $3} END {print sum+0}' || echo 0
         }
 
         get_hana_count() {
@@ -75,14 +76,14 @@ tasks:
         echo "Kafka topic contains $TOTAL messages"
 
         # Truncate HANA table and reset consumer group offset
-        HANA_DSN="$HANA_DSN" HANA_SCHEMA="$HANA_SCHEMA" go run ./setup/main.go > /dev/null
+        HANA_DSN="$HANA_DSN" HANA_SCHEMA="$HANA_SCHEMA" /tmp/rpcns-hana-write-setup > /dev/null
         docker exec rpcns-hana-kafka kafka-consumer-groups \
           --bootstrap-server localhost:29092 \
           --group hana-bench-write-group \
           --reset-offsets --to-earliest \
           --topic "$TOPIC" --execute > /dev/null 2>&1 || true
 
-        if [ -n "$CORES" ]; then echo "cores=$CORES  max_in_flight=$MAX_IN_FLIGHT"; else echo "cores=unbounded  max_in_flight=$MAX_IN_FLIGHT"; fi
+        printf "cores=%-10s  max_in_flight=%s\n" "$CORES_LABEL" "$MAX_IN_FLIGHT"
 
         HANA_DSN="$HANA_DSN" HANA_TABLE="${HANA_SCHEMA}.BENCH_WRITES" \
           MAX_IN_FLIGHT="$MAX_IN_FLIGHT" GOMAXPROCS="$CORES" \
@@ -113,10 +114,11 @@ tasks:
             AVG=$(awk "BEGIN { printf \"%.0f\", $TOTAL / ($ELAPSED > 0 ? $ELAPSED : 1) }")
             kill -9 $RPCN_PID 2>/dev/null || true
             echo "---"
-            if [ -n "$CORES" ]; then echo "cores=$CORES  max_in_flight=$MAX_IN_FLIGHT"; else echo "cores=unbounded  max_in_flight=$MAX_IN_FLIGHT"; fi
+            printf "cores=%-10s  max_in_flight=%s\n" "$CORES_LABEL" "$MAX_IN_FLIGHT"
             echo "Total messages : $COUNT / $TOTAL"
             echo "Elapsed        : ${ELAPSED}s"
             echo "Avg throughput : ${AVG} msg/s"
+            echo "RESULT cores=$CORES_LABEL maxinflight=$MAX_IN_FLIGHT total=$COUNT elapsed=${ELAPSED}s avg=$AVG"
             break
           fi
 
@@ -124,19 +126,28 @@ tasks:
           PREV_TIME=$NOW
         done
 
-  bench:all:
-    desc: "Run all cores × max_in_flight combinations (e.g. task bench:all OUT=results.txt)"
+  bench:matrix:
+    desc: "Sweep max_in_flight x cores (e.g. task bench:matrix OUT=results.txt)"
     vars:
       OUT: '{{.OUT | default ""}}'
     cmds:
       - |
-        for cores in 1 2 4 8; do
-          for mif in 5 10 20 50; do
-            if [ -n "{{.OUT}}" ]; then
-              task bench:run CORES=$cores MAX_IN_FLIGHT=$mif 2>&1 | tee -a {{.OUT}}
-            else
-              task bench:run CORES=$cores MAX_IN_FLIGHT=$mif
-            fi
+        OUT_FILE="{{.OUT}}"
+        HEADER=$(printf "%-12s  %-8s  %-12s  %-10s  %s\n" "MAX_INFLIGHT" "CORES" "TOTAL" "ELAPSED" "AVG_MSG_S")
+        echo "$HEADER"
+        if [ -n "$OUT_FILE" ]; then
+          echo "$HEADER" > "$OUT_FILE"
+        fi
+        for mif in 5 10 20 50; do
+          for cores in 1 2 4 8; do
+            OUTPUT=$(task bench:run CORES=$cores MAX_IN_FLIGHT=$mif 2>&1) || true
+            R=$(echo "$OUTPUT" | grep "^RESULT " || true)
+            TOTAL=$(echo "$R" | grep -o 'total=[^ ]*' | cut -d= -f2 || true); TOTAL=${TOTAL:-ERROR}
+            ELAPSED=$(echo "$R" | grep -o 'elapsed=[^ ]*' | cut -d= -f2 || true); ELAPSED=${ELAPSED:-?}
+            AVG=$(echo "$R" | grep -o 'avg=[^ ]*' | cut -d= -f2 || true); AVG=${AVG:-0}
+            ROW=$(printf "%-12s  %-8s  %-12s  %-10s  %s\n" "$mif" "$cores" "$TOTAL" "$ELAPSED" "$AVG")
+            echo "$ROW"
+            if [ -n "$OUT_FILE" ]; then echo "$ROW" >> "$OUT_FILE"; fi
           done
         done
 

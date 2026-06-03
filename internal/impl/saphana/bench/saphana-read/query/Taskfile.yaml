@@ -2,7 +2,22 @@ version: "3"
 
 silent: true
 
+vars:
+  HANA_DSN: '{{.HANA_DSN | default (env "HANA_DSN")}}'
+
 tasks:
+  up:
+    desc: Start Kafka
+    cmds:
+      - docker compose up -d
+      - until docker exec rpcns-hana-kafka kafka-broker-api-versions --bootstrap-server localhost:9092 > /dev/null 2>&1; do sleep 2; done
+      - echo "Kafka ready"
+
+  down:
+    desc: Stop and remove containers and volumes
+    cmds:
+      - docker compose down -v --remove-orphans
+
   bench:build:
     desc: Build the redpanda-connect and loader binaries
     cmds:
@@ -11,20 +26,26 @@ tasks:
       - echo "Binaries built"
 
   bench:load:
-    desc: "Create BENCH_ORDERS_QUERY table and load COUNT rows (e.g. task bench:load COUNT=1000000)"
+    desc: "Create BENCH_ORDERS_QUERY table and load COUNT rows (e.g. task bench:load COUNT=2000000 WORKERS=20)"
     vars:
-      COUNT: '{{.COUNT | default "1000000"}}'
+      COUNT: '{{.COUNT | default "2000000"}}'
+      WORKERS: '{{.WORKERS | default "20"}}'
+      BATCH: '{{.BATCH | default "5000"}}'
     cmds:
       - |
         if [ -z "$HANA_DSN" ]; then echo "HANA_DSN env var required"; exit 1; fi
         if [ -z "$HANA_SCHEMA" ]; then echo "HANA_SCHEMA env var required"; exit 1; fi
-        HANA_DSN="$HANA_DSN" HANA_SCHEMA="$HANA_SCHEMA" /tmp/rpcns-hana-query-bench-load -count {{.COUNT}}
+        HANA_DSN="$HANA_DSN" HANA_SCHEMA="$HANA_SCHEMA" \
+          /tmp/rpcns-hana-query-bench-load -count {{.COUNT}} -workers {{.WORKERS}} -batch {{.BATCH}}
 
   bench:run:
-    desc: "Run query benchmark (e.g. task bench:run CORES=4 QUERY='SELECT * FROM ...')"
+    desc: "Run query benchmark (e.g. task bench:run CORES=4 FETCH_SIZE=10000 BATCH_COUNT=1000)"
     vars:
       CORES: '{{.CORES | default ""}}'
       INTERVAL: '{{.INTERVAL | default "2"}}'
+      FETCH_SIZE: '{{.FETCH_SIZE | default "10000"}}'
+      BATCH_COUNT: '{{.BATCH_COUNT | default "1000"}}'
+      MAX_IN_FLIGHT: '{{.MAX_IN_FLIGHT | default "10"}}'
     cmds:
       - |
         if [ -z "$HANA_DSN" ]; then echo "HANA_DSN env var required"; exit 1; fi
@@ -35,34 +56,27 @@ tasks:
         CORES="{{.CORES}}"
         INTERVAL={{.INTERVAL}}
         TOPIC="rpcns-hana-bench-query"
+        CORES_LABEL="${CORES:-unbounded}"
 
         pkill -9 -f "/tmp/rpcns-hana-query-bench run" 2>/dev/null || true
 
-        get_kafka_count() {
+        get_kafka_abs() {
           timeout 5 docker exec rpcns-hana-kafka kafka-get-offsets \
             --bootstrap-server localhost:29092 \
             --topic "$TOPIC" 2>/dev/null \
-            | awk -F: '{sum += $3} END {print sum+0}'
+            | awk -F: '{sum += $3} END {print sum+0}' || echo 0
         }
 
-        timeout 10 docker exec rpcns-hana-kafka kafka-topics --bootstrap-server localhost:29092 \
-          --delete --topic "$TOPIC" > /dev/null 2>&1 || true
-        ATTEMPTS=0
-        until [ $ATTEMPTS -ge 30 ] || \
-          ! timeout 5 docker exec rpcns-hana-kafka kafka-topics --bootstrap-server localhost:29092 \
-            --list 2>/dev/null | grep -qF "$TOPIC"; do
-          sleep 1
-          ATTEMPTS=$((ATTEMPTS + 1))
-        done
+        CORES_LABEL="${CORES:-unbounded}"
+        printf "cores=%-10s  fetch=%-8s\n" "$CORES_LABEL" "{{.FETCH_SIZE}}"
 
-        if [ -n "$CORES" ]; then echo "cores=$CORES"; else echo "cores=unbounded"; fi
-        echo "query=$HANA_QUERY"
-
+        START_OFFSET=$(get_kafka_abs)
         START=$(date +%s)
         PREV_COUNT=0
         PREV_TIME=$START
 
-        HANA_DSN="$HANA_DSN" HANA_QUERY="$HANA_QUERY" KAFKA_TOPIC="$TOPIC" GOMAXPROCS="$CORES" \
+        BENCH_FETCH_SIZE="{{.FETCH_SIZE}}" BENCH_BATCH_COUNT="{{.BATCH_COUNT}}" BENCH_MAX_IN_FLIGHT="{{.MAX_IN_FLIGHT}}" \
+          HANA_DSN="$HANA_DSN" HANA_QUERY="$HANA_QUERY" KAFKA_TOPIC="$TOPIC" GOMAXPROCS="$CORES" \
           REDPANDA_LICENSE="$REDPANDA_LICENSE" REDPANDA_LICENSE_FILEPATH="$REDPANDA_LICENSE_FILEPATH" \
           /tmp/rpcns-hana-query-bench run ./benchmark_config.yaml > /tmp/rpcns_hana_query_bench.log 2>&1 &
         RPCN_PID=$!
@@ -71,7 +85,7 @@ tasks:
 
         while kill -0 $RPCN_PID 2>/dev/null; do
           sleep "$INTERVAL"
-          COUNT=$(get_kafka_count)
+          COUNT=$(( $(get_kafka_abs) - START_OFFSET ))
           COUNT=${COUNT:-0}
           NOW=$(date +%s)
           DELTA_T=$((NOW - PREV_TIME))
@@ -83,29 +97,44 @@ tasks:
           PREV_TIME=$NOW
         done
 
-        wait $RPCN_PID
+        wait $RPCN_PID || true
         END=$(date +%s)
         ELAPSED=$((END - START))
-        FINAL=$(get_kafka_count)
+        FINAL=$(( $(get_kafka_abs) - START_OFFSET ))
         AVG=$(awk "BEGIN { printf \"%.0f\", ${FINAL:-0} / ($ELAPSED > 0 ? $ELAPSED : 1) }")
         echo "---"
-        if [ -n "$CORES" ]; then echo "cores=$CORES"; else echo "cores=unbounded"; fi
+        printf "cores=%-10s  fetch=%-8s\n" "$CORES_LABEL" "{{.FETCH_SIZE}}"
         echo "Total messages : $FINAL"
         echo "Elapsed        : ${ELAPSED}s"
         echo "Avg throughput : ${AVG} msg/s"
+        echo "RESULT cores=$CORES_LABEL fetch={{.FETCH_SIZE}} total=$FINAL elapsed=${ELAPSED}s avg=$AVG"
 
-  bench:all:
-    desc: "Run all cores combinations (e.g. task bench:all OUT=results.txt)"
+  bench:matrix:
+    desc: "Sweep fetch_size x cores (e.g. task bench:matrix OUT=results.txt)"
     vars:
       OUT: '{{.OUT | default ""}}'
+      MAX_IN_FLIGHT: '{{.MAX_IN_FLIGHT | default "10"}}'
+      BATCH_COUNT: '{{.BATCH_COUNT | default "1000"}}'
     cmds:
       - |
-        for cores in 1 2 4 8; do
-          if [ -n "{{.OUT}}" ]; then
-            task bench:run CORES=$cores 2>&1 | tee -a {{.OUT}}
-          else
-            task bench:run CORES=$cores
-          fi
+        OUT_FILE="{{.OUT}}"
+        HEADER=$(printf "%-10s  %-8s  %-12s  %-10s  %s\n" "FETCH" "CORES" "TOTAL" "ELAPSED" "AVG_MSG_S")
+        echo "$HEADER"
+        if [ -n "$OUT_FILE" ]; then
+          printf "# max_in_flight={{.MAX_IN_FLIGHT}}  batch_count={{.BATCH_COUNT}}\n" > "$OUT_FILE"
+          echo "$HEADER" >> "$OUT_FILE"
+        fi
+        for fetch in 1000 10000 100000; do
+          for cores in 1 2 4 8; do
+            OUTPUT=$(task bench:run FETCH_SIZE=$fetch CORES=$cores BATCH_COUNT={{.BATCH_COUNT}} MAX_IN_FLIGHT={{.MAX_IN_FLIGHT}} 2>&1) || true
+            R=$(echo "$OUTPUT" | grep "^RESULT " || true)
+            TOTAL=$(echo "$R" | grep -o 'total=[^ ]*' | cut -d= -f2 || true); TOTAL=${TOTAL:-ERROR}
+            ELAPSED=$(echo "$R" | grep -o 'elapsed=[^ ]*' | cut -d= -f2 || true); ELAPSED=${ELAPSED:-?}
+            AVG=$(echo "$R" | grep -o 'avg=[^ ]*' | cut -d= -f2 || true); AVG=${AVG:-0}
+            ROW=$(printf "%-10s  %-8s  %-12s  %-10s  %s\n" "$fetch" "$cores" "$TOTAL" "$ELAPSED" "$AVG")
+            echo "$ROW"
+            if [ -n "$OUT_FILE" ]; then echo "$ROW" >> "$OUT_FILE"; fi
+          done
         done
 
   logs:

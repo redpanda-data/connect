@@ -3,12 +3,17 @@ input:
     dsn: ${HANA_DSN}
     mode: query
     query: ${HANA_QUERY}
+    fetch_size: ${BENCH_FETCH_SIZE:10000}
 
 output:
   kafka_franz:
     seed_brokers:
       - localhost:9092
     topic: ${KAFKA_TOPIC:rpcns-hana-bench-query}
+    max_in_flight: ${BENCH_MAX_IN_FLIGHT:10}
+    batching:
+      count: ${BENCH_BATCH_COUNT:1000}
+      period: 500ms
 
 http:
   address: "0.0.0.0:0"
