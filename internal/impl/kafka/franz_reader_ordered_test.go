@@ -1,4 +1,4 @@
-// Copyright 2024 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -207,4 +207,77 @@ func TestPartitionCacheBatching(t *testing.T) {
 	assert.Equal(t, []string{"iiiiiiii"}, popOutStrs(pCache))
 
 	assert.Equal(t, []string(nil), popOutStrs(pCache))
+}
+
+// orderedBatch builds a batchWithRecords of `count` sequential records starting
+// at `startOffset` for the given topic/partition.
+func orderedBatch(topic string, partition int32, startOffset, count int64) *batchWithRecords {
+	b := &batchWithRecords{}
+	for i := startOffset; i < startOffset+count; i++ {
+		b.b = append(b.b, &messageWithRecord{
+			m:    service.NewMessage([]byte("x")),
+			r:    &kgo.Record{Topic: topic, Partition: partition, Offset: i},
+			size: 1,
+		})
+		b.size++
+	}
+	return b
+}
+
+// TestOrderedCacheRevokedBlocksCommit verifies that a partitionCache flagged as
+// revoked does not commit a late ack, while an equivalent non-revoked cache
+// does. This is the ordered-reader analogue of the unordered data-loss fix:
+// without the guard a late MarkCommitRecords after a revoke would advance the
+// committed offset past records the new owner has not processed.
+func TestOrderedCacheRevokedBlocksCommit(t *testing.T) {
+	rec := newCommitRecorder()
+
+	pc := newPartitionCache(rec.commitFunc)
+	require.False(t, pc.push(1<<20, 10, orderedBatch("t", 0, 0, 3)))
+	ack := pc.pop()
+	require.NotNil(t, ack)
+
+	pc.markRevoked()
+	ack.onAck()
+	assert.Empty(t, rec.offsetsFor("t", 0), "revoked cache must not commit any offset")
+
+	// Control: a non-revoked cache commits the head of its batch as normal.
+	pc2 := newPartitionCache(rec.commitFunc)
+	require.False(t, pc2.push(1<<20, 10, orderedBatch("t", 1, 0, 3)))
+	ack2 := pc2.pop()
+	require.NotNil(t, ack2)
+	ack2.onAck()
+	assert.Equal(t, []int64{2}, rec.offsetsFor("t", 1), "non-revoked cache commits the batch head offset")
+}
+
+// TestOrderedReassignedPartitionUsesFreshCache proves the per-cache design is
+// immune to the same-member reassignment race: after revoke and reassignment a
+// fresh partitionCache is created and commits resume, while a stale ack still
+// referencing the old (revoked) cache can never commit.
+func TestOrderedReassignedPartitionUsesFreshCache(t *testing.T) {
+	rec := newCommitRecorder()
+	ps := newPartitionState(rec.commitFunc)
+	const bufSize, maxBatch = uint64(1 << 20), uint64(10)
+
+	// Old generation: a record on t/0 at offset 5, left in flight (not acked).
+	require.False(t, ps.addRecords("t", 0, orderedBatch("t", 0, 5, 1), bufSize, maxBatch))
+	oldAck := ps.pop()
+	require.NotNil(t, oldAck)
+
+	// Revoke t/0.
+	ps.removeTopicPartitions(map[string][]int32{"t": {0}})
+
+	// Reassignment: a new record on t/0 at offset 100 creates a fresh cache.
+	require.False(t, ps.addRecords("t", 0, orderedBatch("t", 0, 100, 1), bufSize, maxBatch))
+	newAck := ps.pop()
+	require.NotNil(t, newAck)
+
+	// New generation commits.
+	newAck.onAck()
+	assert.Equal(t, []int64{100}, rec.offsetsFor("t", 0), "reassigned partition commits via fresh cache")
+
+	// Stale old-generation ack must not commit.
+	oldAck.onAck()
+	assert.Equal(t, []int64{100}, rec.offsetsFor("t", 0), "stale ack from revoked cache must not commit")
+	assert.NotContains(t, rec.offsetsFor("t", 0), int64(5), "old offset 5 must never be committed")
 }
