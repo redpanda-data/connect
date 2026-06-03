@@ -109,6 +109,7 @@ type markdownRow struct {
 	VCPU           int
 	Engine         string
 	MedianMB       string
+	MeanMB         string
 	BrokerMedianMB string
 	P5MB           string
 	P95MB          string
@@ -180,6 +181,7 @@ func AppendMarkdown(target string, r *Result, description string) error {
 				VCPU:           p.VCPU,
 				Engine:         p.Engine,
 				MedianMB:       fmt.Sprintf("%12.0f", p.Summary.MedianMBPerSec),
+				MeanMB:         fmt.Sprintf("%12.3f", p.Summary.MeanMBPerSec),
 				BrokerMedianMB: fmt.Sprintf("%12.0f", brokerMedian),
 				P5MB:           fmt.Sprintf("%11.0f", p.Summary.P5MBPerSec),
 				P95MB:          fmt.Sprintf("%12.0f", p.Summary.P95MBPerSec),

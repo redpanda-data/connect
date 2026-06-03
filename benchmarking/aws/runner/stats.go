@@ -26,6 +26,7 @@ type Summary struct {
 	P5MBPerSec      float64 `json:"p5_mb_s"`
 	P95MBPerSec     float64 `json:"p95_mb_s"`
 	PeakMBPerSec    float64 `json:"peak_mb_s"`
+	MeanMBPerSec    float64 `json:"mean_mb_s"`
 	MedianMsgPerSec float64 `json:"median_msg_s"`
 	P5MsgPerSec     float64 `json:"p5_msg_s"`
 	P95MsgPerSec    float64 `json:"p95_msg_s"`
@@ -98,6 +99,7 @@ func Summarise(samples []Sample) Summary {
 		P5MBPerSec:      percentile(mb, 5),
 		P95MBPerSec:     percentile(mb, 95),
 		PeakMBPerSec:    peak(mb),
+		MeanMBPerSec:    mean(mb),
 		MedianMsgPerSec: percentile(msg, 50),
 		P5MsgPerSec:     percentile(msg, 5),
 		P95MsgPerSec:    percentile(msg, 95),
@@ -124,6 +126,7 @@ func SummariseTopicPoints(pts []TopicPoint) Summary {
 		P5MBPerSec:     percentile(mb, 5),
 		P95MBPerSec:    percentile(mb, 95),
 		PeakMBPerSec:   peak(mb),
+		MeanMBPerSec:   mean(mb),
 	}
 }
 
@@ -150,6 +153,17 @@ func percentile(values []float64, p float64) float64 {
 	hi := lo + 1
 	frac := rank - float64(lo)
 	return sorted[lo] + frac*(sorted[hi]-sorted[lo])
+}
+
+func mean(values []float64) float64 {
+	if len(values) == 0 {
+		return 0
+	}
+	var sum float64
+	for _, v := range values {
+		sum += v
+	}
+	return sum / float64(len(values))
 }
 
 func peak(values []float64) float64 {

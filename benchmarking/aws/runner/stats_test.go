@@ -75,6 +75,18 @@ func TestSummarise_EmptyInput(t *testing.T) {
 	require.Equal(t, Summary{}, Summarise([]Sample{}))
 }
 
+func TestSummariseTopicPoints_Mean(t *testing.T) {
+	// Bursty committer: mostly-zero per-interval rates with spikes.
+	pts := []TopicPoint{{T: 10, MBPerSec: 0}, {T: 20, MBPerSec: 0}, {T: 30, MBPerSec: 10}, {T: 40, MBPerSec: 0}}
+	s := SummariseTopicPoints(pts)
+	if s.MedianMBPerSec != 0 {
+		t.Errorf("median of bursty series = %v, want 0 (this is why median is unfair)", s.MedianMBPerSec)
+	}
+	if s.MeanMBPerSec < 2.49 || s.MeanMBPerSec > 2.51 {
+		t.Errorf("mean = %v, want 2.5 (10/4)", s.MeanMBPerSec)
+	}
+}
+
 func TestParseRollingStatsStream(t *testing.T) {
 	in := strings.NewReader(`INFO startup
 INFO rolling stats: 100 msg/sec, 1 MB/sec
