@@ -43,11 +43,20 @@ func seed(ctx context.Context, topic string, rows int64, rowSize, partitions int
 	// Explicitly create the topic before producing. Redpanda's broker-side
 	// auto_create_topics_enabled is not sufficient — franz-go must request it,
 	// and pre-creating lets us set the partition count for sink parallelism.
-	// Retry to tolerate brokers still booting right after provision.
+	//
+	// max.message.bytes must clear the producer's ProducerBatchMaxBytes (16
+	// MiB above): the broker validates each produce batch against the topic's
+	// max.message.bytes, and the broker default (~1 MiB) is far below our
+	// batch cap. Without this, batches that fill toward 16 MiB are rejected
+	// with MESSAGE_TOO_LARGE — a rare spike at low volume (the 12M smoke
+	// slipped by) but a hard failure when seeding 160M rows. 64 MiB gives the
+	// 16 MiB batches 4x headroom.
+	maxMsgBytes := "67108864" // 64 MiB
+	topicConfigs := map[string]*string{"max.message.bytes": &maxMsgBytes}
 	adm := kadm.NewClient(cl)
 	var lastErr error
 	for attempt := 1; attempt <= 30; attempt++ {
-		resp, err := adm.CreateTopics(ctx, int32(partitions), int16(3), nil, topic)
+		resp, err := adm.CreateTopics(ctx, int32(partitions), int16(3), topicConfigs, topic)
 		if err == nil {
 			if t, ok := resp[topic]; ok && t.Err != nil && !errors.Is(t.Err, kerr.TopicAlreadyExists) {
 				lastErr = fmt.Errorf("create topic %q: %w", topic, t.Err)
