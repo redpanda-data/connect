@@ -185,6 +185,18 @@ func TestRenderKCConfig_Iceberg(t *testing.T) {
 	if cfg["iceberg.tables.auto-create-enabled"] != "false" {
 		t.Errorf("auto-create must be false (tables are pre-created); got %v", cfg["iceberg.tables.auto-create-enabled"])
 	}
+	// Aligned to the repo's working reference connector.json: the sink manages
+	// its own consumer group for transactional offset commits, so we must NOT
+	// override it; and the control consumer/producer needs the longer timeouts.
+	if _, ok := cfg["consumer.override.group.id"]; ok {
+		t.Errorf("must NOT set consumer.override.group.id (interferes with the sink's own transactional group); got %v", cfg["consumer.override.group.id"])
+	}
+	if cfg["iceberg.control.commit.timeout-ms"] != "30000" {
+		t.Errorf("iceberg.control.commit.timeout-ms = %v, want 30000", cfg["iceberg.control.commit.timeout-ms"])
+	}
+	if cfg["iceberg.kafka.max.poll.interval.ms"] != "300000" {
+		t.Errorf("iceberg.kafka.max.poll.interval.ms = %v, want 300000", cfg["iceberg.kafka.max.poll.interval.ms"])
+	}
 }
 
 func TestRenderKCConfig_UnknownConnector(t *testing.T) {
