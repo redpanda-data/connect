@@ -1,0 +1,26 @@
+# Example pipeline: stream Jira issues into stdout.
+#
+# Set environment variables:
+#   JIRA_BASE_URL=https://your-domain.atlassian.net
+#   JIRA_EMAIL=you@example.com
+#   JIRA_API_TOKEN=<token from id.atlassian.com>
+
+input:
+  jira:
+    base_url: ${JIRA_BASE_URL:https://your-domain.atlassian.net}
+    auth:
+      email: ${JIRA_EMAIL:you@example.com}
+      api_token: ${JIRA_API_TOKEN:xxx}
+    resource: issues
+    jql: 'project = ENG'
+    poll_interval: 60s
+    cursor:
+      cache: jira_state
+
+cache_resources:
+  - label: jira_state
+    file:
+      directory: /var/lib/redpanda-connect/jira
+
+output:
+  stdout: {}

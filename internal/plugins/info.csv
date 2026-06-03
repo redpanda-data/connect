@@ -120,6 +120,7 @@ inproc                    ,output    ,inproc                    ,certified  ,n  
 insert_part               ,processor ,insert_part               ,certified  ,n          ,y     ,y              ,
 jaeger                    ,tracer    ,jaeger                    ,community  ,n          ,n     ,n              ,cloud uses a managed tracing integration
 javascript                ,processor ,javascript                ,certified  ,n          ,n     ,n              ,security: arbitrary code execution
+jira                      ,input     ,jira                      ,certified  ,n          ,y     ,n              ,
 jira                      ,processor ,jira                      ,certified  ,n          ,y     ,n              ,
 jmespath                  ,processor ,JMESPath                  ,certified  ,n          ,y     ,y              ,
 jq                        ,processor ,jq                        ,certified  ,n          ,y     ,y              ,

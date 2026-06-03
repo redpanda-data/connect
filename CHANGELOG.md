@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+### Added
+
+- jira: New `jira` input component for streaming Jira issues, comments, or changelog entries via JQL with cursor-based incremental polling.
+
 ## 4.94.1 - 2026-05-29
 
 ### Fixed
