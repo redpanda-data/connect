@@ -119,13 +119,13 @@ Every message produced by this input carries the following metadata fields:
 	Field(service.NewAutoRetryNacksToggleField())
 
 func init() {
-	service.MustRegisterInput("sap_hana", sapHANAInputConfigSpec,
-		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
+	service.MustRegisterBatchInput("sap_hana", sapHANAInputConfigSpec,
+		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
 			i, err := newSAPHANAInput(conf, mgr)
 			if err != nil {
 				return nil, err
 			}
-			return service.AutoRetryNacksToggled(conf, i)
+			return service.AutoRetryNacksBatchedToggled(conf, i)
 		})
 }
 
@@ -153,6 +153,14 @@ type sapHANAInput struct {
 
 	stopChan chan struct{}
 	stopOnce sync.Once
+
+	bulkExhausted bool
+
+	rowColNames      []string
+	rowValues        []any
+	rowPtrs          []any
+	rowCachedSchema  any
+	rowSchemaFetched bool
 }
 
 func newSAPHANAInput(conf *service.ParsedConfig, mgr *service.Resources) (*sapHANAInput, error) {
@@ -326,12 +334,24 @@ func (s *sapHANAInput) openRows(ctx context.Context) (*sql.Rows, error) {
 	}
 }
 
-func (s *sapHANAInput) Read(ctx context.Context) (*service.Message, service.AckFunc, error) {
+func (s *sapHANAInput) resetCursorCache() {
+	s.rowColNames = nil
+	s.rowValues = nil
+	s.rowPtrs = nil
+	s.rowCachedSchema = nil
+	s.rowSchemaFetched = false
+}
+
+func (s *sapHANAInput) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
 	s.dbMut.Lock()
 	defer s.dbMut.Unlock()
 
 	if s.db == nil {
 		return nil, nil, service.ErrNotConnected
+	}
+
+	if s.bulkExhausted {
+		return nil, nil, service.ErrEndOfInput
 	}
 
 	noop := func(context.Context, error) error { return nil }
@@ -350,6 +370,7 @@ func (s *sapHANAInput) Read(ctx context.Context) (*service.Message, service.AckF
 					return nil, nil, fmt.Errorf("executing query: %w", err)
 				}
 				s.rows = rows
+				s.resetCursorCache()
 
 			case shModeIncrementing, shModeTimestamp, shModeTimestampIncrementing:
 				// Release the lock while waiting so Close() can proceed.
@@ -378,30 +399,46 @@ func (s *sapHANAInput) Read(ctx context.Context) (*service.Message, service.AckF
 					return nil, nil, fmt.Errorf("executing query: %w", err)
 				}
 				s.rows = rows
+				s.resetCursorCache()
 			}
 		}
 
-		if s.rows.Next() {
+		batch := make(service.MessageBatch, 0, s.fetchSize)
+		for s.rows.Next() {
 			msg, err := s.scanRow(ctx, s.rows)
 			if err != nil {
 				_ = s.rows.Close()
 				s.rows = nil
+				s.resetCursorCache()
 				return nil, nil, err
 			}
-			return msg, noop, nil
+			batch = append(batch, msg)
+			if len(batch) >= s.fetchSize {
+				return batch, noop, nil
+			}
 		}
 		if err := s.rows.Err(); err != nil {
 			_ = s.rows.Close()
 			s.rows = nil
+			s.resetCursorCache()
 			return nil, nil, fmt.Errorf("iterating rows: %w", err)
 		}
 		_ = s.rows.Close()
 		s.rows = nil
+		s.resetCursorCache()
 
 		if s.mode == shModeTimestamp || s.mode == shModeTimestampIncrementing {
 			s.timestampHWM = s.tsQueryUpper
 		}
 		if s.mode == shModeBulk || s.mode == shModeQuery {
+			s.bulkExhausted = true
+		}
+
+		if len(batch) > 0 {
+			return batch, noop, nil
+		}
+
+		if s.bulkExhausted {
 			return nil, nil, service.ErrEndOfInput
 		}
 	}
@@ -409,23 +446,31 @@ func (s *sapHANAInput) Read(ctx context.Context) (*service.Message, service.AckF
 
 // scanRow reads the current row into a message and attaches metadata.
 func (s *sapHANAInput) scanRow(ctx context.Context, rows *sql.Rows) (*service.Message, error) {
-	colNames, err := rows.Columns()
-	if err != nil {
-		return nil, fmt.Errorf("getting column names: %w", err)
+	if s.rowColNames == nil {
+		colNames, err := rows.Columns()
+		if err != nil {
+			return nil, fmt.Errorf("getting column names: %w", err)
+		}
+		s.rowColNames = colNames
+		s.rowValues = make([]any, len(colNames))
+		s.rowPtrs = make([]any, len(colNames))
+		for i := range s.rowValues {
+			s.rowPtrs[i] = &s.rowValues[i]
+		}
+		if s.mode != shModeQuery {
+			schemaVal, _ := s.schemas.schemaForEvent(ctx, s.schemaName, s.tableName, colNames)
+			s.rowCachedSchema = schemaVal
+			s.rowSchemaFetched = true
+		}
 	}
 
-	values := make([]any, len(colNames))
-	ptrs := make([]any, len(colNames))
-	for i := range values {
-		ptrs[i] = &values[i]
-	}
-	if err := rows.Scan(ptrs...); err != nil {
+	if err := rows.Scan(s.rowPtrs...); err != nil {
 		return nil, fmt.Errorf("scanning columns: %w", err)
 	}
 
-	rowMap := make(map[string]any, len(colNames))
-	for i, name := range colNames {
-		rowMap[name] = values[i]
+	rowMap := make(map[string]any, len(s.rowColNames))
+	for i, name := range s.rowColNames {
+		rowMap[name] = s.rowValues[i]
 	}
 
 	if (s.mode == shModeIncrementing || s.mode == shModeTimestampIncrementing) && s.incrementingCol != "" {
@@ -441,10 +486,9 @@ func (s *sapHANAInput) scanRow(ctx context.Context, rows *sql.Rows) (*service.Me
 
 	msg := service.NewMessage(b)
 
-	if s.mode != shModeQuery {
-		schemaVal, _ := s.schemas.schemaForEvent(ctx, s.schemaName, s.tableName, colNames)
-		if schemaVal != nil {
-			msg.MetaSetMut("schema", schemaVal)
+	if s.rowSchemaFetched {
+		if s.rowCachedSchema != nil {
+			msg.MetaSetMut("schema", s.rowCachedSchema)
 		}
 		msg.MetaSetMut("sap_hana_schema", s.schemaName)
 		msg.MetaSetMut("sap_hana_table", s.tableName)

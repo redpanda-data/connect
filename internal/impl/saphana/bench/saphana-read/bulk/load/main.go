@@ -120,22 +120,13 @@ func main() {
 					batchEnd = endRow
 				}
 
-				tx, err := db.BeginTx(ctx, nil)
-				if err != nil {
-					errCh <- fmt.Errorf("worker %d begin tx: %w", workerIdx, err)
-					return
-				}
-
-				stmt, err := tx.PrepareContext(ctx, `INSERT INTO `+table+` (USER_ID, PRODUCT_ID, QUANTITY, PRICE, STATUS, NOTES, CREATED_AT) VALUES (?, ?, ?, ?, ?, ?, ?)`)
-				if err != nil {
-					_ = tx.Rollback()
-					errCh <- fmt.Errorf("worker %d prepare: %w", workerIdx, err)
-					return
-				}
-
+				n := batchEnd - batchStart
+				// go-hdb execMany: pass N*numFields args flat to a single ExecContext.
+				// Driver sends all rows in one MtInsert RPC instead of N round-trips.
+				args := make([]any, 0, n*7)
 				for i := batchStart; i < batchEnd; i++ {
-					notes := strings.Repeat(fmt.Sprintf("note_%d ", i+1), 10)
-					if _, err := stmt.ExecContext(ctx,
+					notes := strings.Repeat(fmt.Sprintf("note_%d ", i+1), 2)
+					args = append(args,
 						rng.Intn(100000)+1,
 						rng.Intn(10000)+1,
 						rng.Intn(10)+1,
@@ -143,24 +134,27 @@ func main() {
 						statuses[rng.Intn(3)],
 						notes,
 						time.Now().AddDate(0, 0, -rng.Intn(365)),
-					); err != nil {
-						_ = stmt.Close()
-						_ = tx.Rollback()
-						errCh <- fmt.Errorf("worker %d exec row %d: %w", workerIdx, i, err)
-						return
-					}
-					counter.Add(1)
+					)
 				}
 
-				if err := stmt.Close(); err != nil {
+				tx, err := db.BeginTx(ctx, nil)
+				if err != nil {
+					errCh <- fmt.Errorf("worker %d begin tx: %w", workerIdx, err)
+					return
+				}
+				if _, err := tx.ExecContext(ctx,
+					`INSERT INTO `+table+` (USER_ID, PRODUCT_ID, QUANTITY, PRICE, STATUS, NOTES, CREATED_AT) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+					args...,
+				); err != nil {
 					_ = tx.Rollback()
-					errCh <- fmt.Errorf("worker %d close stmt: %w", workerIdx, err)
+					errCh <- fmt.Errorf("worker %d exec batch %d: %w", workerIdx, batchStart, err)
 					return
 				}
 				if err := tx.Commit(); err != nil {
 					errCh <- fmt.Errorf("worker %d commit: %w", workerIdx, err)
 					return
 				}
+				counter.Add(int64(n))
 			}
 		}(w)
 	}
