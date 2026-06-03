@@ -30,7 +30,7 @@ tasks:
     vars:
       COUNT: '{{.COUNT | default "1000000"}}'
       WORKERS: '{{.WORKERS | default "20"}}'
-      BATCH: '{{.BATCH | default "500"}}'
+      BATCH: '{{.BATCH | default "5000"}}'
     cmds:
       - |
         if [ -z "$HANA_DSN" ]; then echo "HANA_DSN env var required"; exit 1; fi
@@ -38,44 +38,43 @@ tasks:
         HANA_DSN="$HANA_DSN" HANA_SCHEMA="$HANA_SCHEMA" /tmp/rpcns-hana-bench-load -count {{.COUNT}} -workers {{.WORKERS}} -batch {{.BATCH}}
 
   bench:run:
-    desc: "Run bulk read benchmark (e.g. task bench:run CORES=4)"
+    desc: "Run bulk read benchmark (e.g. task bench:run CORES=4 BATCH_COUNT=5000 FETCH_SIZE=10000 MAX_IN_FLIGHT=10)"
     vars:
       CORES: '{{.CORES | default ""}}'
       INTERVAL: '{{.INTERVAL | default "2"}}'
+      BATCH_COUNT: '{{.BATCH_COUNT | default "1000"}}'
+      FETCH_SIZE: '{{.FETCH_SIZE | default "10000"}}'
+      MAX_IN_FLIGHT: '{{.MAX_IN_FLIGHT | default "10"}}'
     cmds:
       - |
         if [ -z "$HANA_DSN" ]; then echo "HANA_DSN env var required"; exit 1; fi
         if [ -z "$HANA_SCHEMA" ]; then echo "HANA_SCHEMA env var required"; exit 1; fi
         CORES="{{.CORES}}"
+        BATCH_COUNT={{.BATCH_COUNT}}
+        FETCH_SIZE={{.FETCH_SIZE}}
+        MAX_IN_FLIGHT={{.MAX_IN_FLIGHT}}
         INTERVAL={{.INTERVAL}}
         TOPIC="rpcns-hana-bench-orders"
 
         pkill -9 -f "/tmp/rpcns-hana-bench run" 2>/dev/null || true
 
-        get_kafka_count() {
+        get_kafka_abs() {
           timeout 5 docker exec rpcns-hana-kafka kafka-get-offsets \
             --bootstrap-server localhost:29092 \
             --topic "$TOPIC" 2>/dev/null \
-            | awk -F: '{sum += $3} END {print sum+0}'
+            | awk -F: '{sum += $3} END {print sum+0}' || echo 0
         }
 
-        timeout 10 docker exec rpcns-hana-kafka kafka-topics --bootstrap-server localhost:29092 \
-          --delete --topic "$TOPIC" > /dev/null 2>&1 || true
-        ATTEMPTS=0
-        until [ $ATTEMPTS -ge 30 ] || \
-          ! timeout 5 docker exec rpcns-hana-kafka kafka-topics --bootstrap-server localhost:29092 \
-            --list 2>/dev/null | grep -qF "$TOPIC"; do
-          sleep 1
-          ATTEMPTS=$((ATTEMPTS + 1))
-        done
+        CORES_LABEL="${CORES:-unbounded}"
+        printf "cores=%-10s  batch=%-6s  fetch=%-6s  maxinflight=%s\n" "$CORES_LABEL" "$BATCH_COUNT" "$FETCH_SIZE" "$MAX_IN_FLIGHT"
 
-        if [ -n "$CORES" ]; then echo "cores=$CORES"; else echo "cores=unbounded"; fi
-
+        START_OFFSET=$(get_kafka_abs)
         START=$(date +%s)
         PREV_COUNT=0
         PREV_TIME=$START
 
-        HANA_DSN="$HANA_DSN" HANA_TABLE="BENCH_ORDERS" HANA_SCHEMA="$HANA_SCHEMA" KAFKA_TOPIC="$TOPIC" GOMAXPROCS="$CORES" \
+        BENCH_BATCH_COUNT="$BATCH_COUNT" BENCH_FETCH_SIZE="$FETCH_SIZE" BENCH_MAX_IN_FLIGHT="$MAX_IN_FLIGHT" \
+          HANA_DSN="$HANA_DSN" HANA_TABLE="BENCH_ORDERS" HANA_SCHEMA="$HANA_SCHEMA" KAFKA_TOPIC="$TOPIC" GOMAXPROCS="$CORES" \
           REDPANDA_LICENSE="$REDPANDA_LICENSE" REDPANDA_LICENSE_FILEPATH="$REDPANDA_LICENSE_FILEPATH" \
           /tmp/rpcns-hana-bench run ./benchmark_config.yaml > /tmp/rpcns_hana_bench.log 2>&1 &
         RPCN_PID=$!
@@ -84,7 +83,7 @@ tasks:
 
         while kill -0 $RPCN_PID 2>/dev/null; do
           sleep "$INTERVAL"
-          COUNT=$(get_kafka_count)
+          COUNT=$(( $(get_kafka_abs) - START_OFFSET ))
           COUNT=${COUNT:-0}
           NOW=$(date +%s)
           DELTA_T=$((NOW - PREV_TIME))
@@ -96,29 +95,45 @@ tasks:
           PREV_TIME=$NOW
         done
 
-        wait $RPCN_PID
+        wait $RPCN_PID || true
         END=$(date +%s)
         ELAPSED=$((END - START))
-        FINAL=$(get_kafka_count)
+        FINAL=$(( $(get_kafka_abs) - START_OFFSET ))
         AVG=$(awk "BEGIN { printf \"%.0f\", ${FINAL:-0} / ($ELAPSED > 0 ? $ELAPSED : 1) }")
         echo "---"
-        if [ -n "$CORES" ]; then echo "cores=$CORES"; else echo "cores=unbounded"; fi
+        printf "cores=%-10s  batch=%-6s  fetch=%-6s  maxinflight=%s\n" "$CORES_LABEL" "$BATCH_COUNT" "$FETCH_SIZE" "$MAX_IN_FLIGHT"
         echo "Total messages : $FINAL"
         echo "Elapsed        : ${ELAPSED}s"
         echo "Avg throughput : ${AVG} msg/s"
+        echo "RESULT cores=$CORES_LABEL batch=$BATCH_COUNT fetch=$FETCH_SIZE maxinflight=$MAX_IN_FLIGHT total=$FINAL elapsed=${ELAPSED}s avg=$AVG"
 
-  bench:all:
-    desc: "Run all cores combinations (e.g. task bench:all OUT=results.txt)"
+  bench:matrix:
+    desc: "Sweep batch_count x fetch_size x cores (fix MAX_IN_FLIGHT to hold constant, e.g. task bench:matrix OUT=results.txt)"
     vars:
       OUT: '{{.OUT | default ""}}'
+      MAX_IN_FLIGHT: '{{.MAX_IN_FLIGHT | default "10"}}'
     cmds:
       - |
-        for cores in 1 2 4 8; do
-          if [ -n "{{.OUT}}" ]; then
-            task bench:run CORES=$cores 2>&1 | tee -a {{.OUT}}
-          else
-            task bench:run CORES=$cores
-          fi
+        OUT_FILE="{{.OUT}}"
+        HEADER=$(printf "%-10s  %-10s  %-8s  %-12s  %-10s  %s\n" "BATCH" "FETCH" "CORES" "TOTAL" "ELAPSED" "AVG_MSG_S")
+        echo "$HEADER"
+        if [ -n "$OUT_FILE" ]; then
+          printf "# max_in_flight={{.MAX_IN_FLIGHT}}\n" > "$OUT_FILE"
+          echo "$HEADER" >> "$OUT_FILE"
+        fi
+        for fetch in 1000 10000 100000; do
+          for batch in 1000 5000 10000; do
+            for cores in 1 2 4 8; do
+              OUTPUT=$(task bench:run BATCH_COUNT=$batch CORES=$cores FETCH_SIZE=$fetch MAX_IN_FLIGHT={{.MAX_IN_FLIGHT}} 2>&1) || true
+              R=$(echo "$OUTPUT" | grep "^RESULT " || true)
+              TOTAL=$(echo "$R" | grep -o 'total=[^ ]*' | cut -d= -f2 || true); TOTAL=${TOTAL:-ERROR}
+              ELAPSED=$(echo "$R" | grep -o 'elapsed=[^ ]*' | cut -d= -f2 || true); ELAPSED=${ELAPSED:-?}
+              AVG=$(echo "$R" | grep -o 'avg=[^ ]*' | cut -d= -f2 || true); AVG=${AVG:-0}
+              ROW=$(printf "%-10s  %-10s  %-8s  %-12s  %-10s  %s\n" "$batch" "$fetch" "$cores" "$TOTAL" "$ELAPSED" "$AVG")
+              echo "$ROW"
+              if [ -n "$OUT_FILE" ]; then echo "$ROW" >> "$OUT_FILE"; fi
+            done
+          done
         done
 
   logs:
