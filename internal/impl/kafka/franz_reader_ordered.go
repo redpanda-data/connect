@@ -1,4 +1,4 @@
-// Copyright 2024 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -174,6 +174,13 @@ type partitionCache struct {
 	cacheSize       uint64
 	checkpointer    *checkpoint.Uncapped[*kgo.Record]
 	commitFn        func(r *kgo.Record)
+	// revoked is set once this partition has been revoked from the consumer
+	// (cooperative rebalance) or otherwise lost. Once set, offsets for this
+	// partition must never be committed, because the partition may already be
+	// owned by another consumer. It is guarded by mut so that the revoked check
+	// and the commit within a batch's ack callback are atomic with respect to
+	// revocation. See markRevoked for the full rationale.
+	revoked bool
 }
 
 func newPartitionCache(commitFn func(r *kgo.Record)) *partitionCache {
@@ -280,12 +287,21 @@ func (p *partitionCache) pop() *batchWithAckFn {
 	releaseFn := p.checkpointer.Track(nextBatch.b[len(nextBatch.b)-1].r, int64(len(nextBatch.b)))
 	onAck := func() {
 		p.mut.Lock()
+		defer p.mut.Unlock()
+
 		releaseRecord := releaseFn()
 		delete(p.pendingDispatch, batchID)
 		p.cacheSize -= nextBatch.size
-		p.mut.Unlock()
 
-		if releaseRecord != nil && *releaseRecord != nil {
+		// Only commit if the partition has not been revoked. After a revoke,
+		// franz-go deletes the partition from its uncommitted map once
+		// OnPartitionsRevoked returns, so a late MarkCommitRecords here would
+		// silently re-insert it and the next autocommit would advance the
+		// offset past records the new owner has not yet processed, causing data
+		// loss. Holding mut across the revoked check and the commit makes this
+		// atomic with respect to markRevoked, which runs before the revoke
+		// handler returns.
+		if !p.revoked && releaseRecord != nil && *releaseRecord != nil {
 			p.commitFn(*releaseRecord)
 		}
 	}
@@ -301,6 +317,21 @@ func (p *partitionCache) pauseFetch(limit uint64) (pauseFetch bool) {
 	pauseFetch = p.cacheSize >= limit
 	p.mut.Unlock()
 	return
+}
+
+// markRevoked flags the partition so that no further offsets are committed for
+// it. It must be called before the partition is removed from the tracker during
+// a revoke or loss, which happens inside the OnPartitionsRevoked/OnPartitionsLost
+// callbacks before franz-go cleans up its own uncommitted state. Because the
+// revoked flag is set (and read in the ack callback) under mut, any in-flight
+// ack either commits before this returns — and therefore before the revoke
+// callback returns and franz-go performs its cleanup — or observes the flag and
+// skips the commit entirely. Either way no offset can outlive the revoke and be
+// auto-committed for a partition we no longer own.
+func (p *partitionCache) markRevoked() {
+	p.mut.Lock()
+	p.revoked = true
+	p.mut.Unlock()
 }
 
 //------------------------------------------------------------------------------
@@ -381,6 +412,9 @@ func (c *partitionState) removeTopicPartitions(m map[string][]int32) {
 			continue
 		}
 		for _, lostPartition := range lostTopic {
+			if partCache, exists := trackedTopic[lostPartition]; exists {
+				partCache.markRevoked()
+			}
 			delete(trackedTopic, lostPartition)
 		}
 		if len(trackedTopic) == 0 {
