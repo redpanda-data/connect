@@ -47,7 +47,7 @@ tasks:
           /tmp/rpcns-hana-inc-bench-load -count {{.COUNT}} -workers {{.WORKERS}} -batch {{.BATCH}}
 
   bench:run:
-    desc: "Run incrementing benchmark — connector starts first, then rows inserted (e.g. task bench:run COUNT=500000 CORES=4 FETCH_SIZE=10000)"
+    desc: "Run incrementing benchmark — connector starts first, then rows inserted (e.g. task bench:run COUNT=500000 CORES=4 FETCH_SIZE=10000 RESET=false)"
     vars:
       COUNT: '{{.COUNT | default "500000"}}'
       CORES: '{{.CORES | default ""}}'
@@ -57,6 +57,7 @@ tasks:
       BATCH_COUNT: '{{.BATCH_COUNT | default "1000"}}'
       MAX_IN_FLIGHT: '{{.MAX_IN_FLIGHT | default "10"}}'
       WORKERS: '{{.WORKERS | default "10"}}'
+      RESET: '{{.RESET | default "true"}}'
     cmds:
       - |
         if [ -z "$HANA_DSN" ]; then echo "HANA_DSN env var required"; exit 1; fi
@@ -76,18 +77,25 @@ tasks:
             | awk -F: '{sum += $3} END {print sum+0}' || echo 0
         }
 
-        # Reset table to empty
-        HANA_DSN="$HANA_DSN" HANA_SCHEMA="$HANA_SCHEMA" /tmp/rpcns-hana-inc-bench-load -setup-only > /dev/null
+        HWM_INITIAL=""
+        if [ "{{.RESET}}" = "false" ]; then
+          # Keep existing rows — start connector at current MAX(ID) so pre-existing rows are skipped
+          HWM_INITIAL=$(HANA_DSN="$HANA_DSN" HANA_SCHEMA="$HANA_SCHEMA" /tmp/rpcns-hana-inc-bench-load -max-id 2>/dev/null || echo "")
+          echo "RESET=false: existing rows kept, HWM_INITIAL=${HWM_INITIAL:-0} (connector will skip pre-existing rows)"
+        else
+          # Reset table to empty
+          HANA_DSN="$HANA_DSN" HANA_SCHEMA="$HANA_SCHEMA" /tmp/rpcns-hana-inc-bench-load -setup-only > /dev/null
+        fi
 
         printf "cores=%-10s  fetch=%-8s  poll=%s\n" "$CORES_LABEL" "{{.FETCH_SIZE}}" "{{.POLL}}"
 
         # Record start offset — no topic deletion needed
         START_OFFSET=$(get_kafka_abs)
 
-        # Start connector (polls empty table, establishes HWM=0)
+        # Start connector
         BENCH_FETCH_SIZE="{{.FETCH_SIZE}}" BENCH_BATCH_COUNT="{{.BATCH_COUNT}}" BENCH_MAX_IN_FLIGHT="{{.MAX_IN_FLIGHT}}" \
           HANA_DSN="$HANA_DSN" HANA_TABLE="BENCH_ORDERS_INC" HANA_SCHEMA="$HANA_SCHEMA" KAFKA_TOPIC="$TOPIC" \
-          POLL_INTERVAL="{{.POLL}}" GOMAXPROCS="$CORES" \
+          POLL_INTERVAL="{{.POLL}}" GOMAXPROCS="$CORES" HWM_INITIAL="${HWM_INITIAL}" \
           REDPANDA_LICENSE="$REDPANDA_LICENSE" REDPANDA_LICENSE_FILEPATH="$REDPANDA_LICENSE_FILEPATH" \
           /tmp/rpcns-hana-inc-bench run ./benchmark_config.yaml > /tmp/rpcns_hana_inc_bench.log 2>&1 &
         RPCN_PID=$!
