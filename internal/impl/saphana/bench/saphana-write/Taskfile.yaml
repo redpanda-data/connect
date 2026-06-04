@@ -61,6 +61,18 @@ tasks:
 
         pkill -9 -f "/tmp/rpcns-hana-write-bench run" 2>/dev/null || true
 
+        # Wait for consumer group to release its members before resetting offsets.
+        # Reset-offsets fails silently when active consumers exist.
+        for _i in $(seq 1 30); do
+          ACTIVE=$(docker exec rpcns-hana-kafka kafka-consumer-groups \
+            --bootstrap-server localhost:29092 \
+            --group hana-bench-write-group \
+            --describe 2>/dev/null \
+            | awk 'NR>1 && $7 != "" && $7 != "-" {c++} END {print c+0}')
+          [ "${ACTIVE:-1}" -eq 0 ] && break
+          sleep 1
+        done
+
         get_kafka_total() {
           timeout 5 docker exec rpcns-hana-kafka kafka-get-offsets \
             --bootstrap-server localhost:29092 \

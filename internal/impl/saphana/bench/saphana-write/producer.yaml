@@ -13,6 +13,10 @@ output:
     seed_brokers:
       - ${KAFKA_BOOTSTRAP:localhost:9092}
     topic: hana-bench-writes
+    max_in_flight: 256
+    batching:
+      count: 10000
+      period: 500ms
 
 http:
   address: "0.0.0.0:0"

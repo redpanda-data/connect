@@ -103,3 +103,36 @@ Query: `SELECT * FROM "SCHEMA"."BENCH_ORDERS_QUERY"`. Varying `fetch_size` and `
 - Unlike bulk mode, `fetch_size=100,000` outperforms 10,000 at higher core counts (~95k vs ~77k msg/s). Query mode does not iterate a server-side cursor between fetches; a larger fetch size directly reduces HANA round-trips per result set.
 - Core scaling is more effective at `fetch_size=100,000`: cores=4 achieves the overall peak, suggesting that larger result transfers benefit from more parallel Kafka produce capacity.
 - **Recommended configuration: `fetch_size=100000`, `GOMAXPROCS=4` → ~95,000 msg/s (~2M rows in 21s).**
+
+---
+
+## Write
+
+Kafka → `sap_hana` output (native bulk insert): 2,000,000 rows × 4 columns (BIGINT, NVARCHAR(50), DOUBLE, TIMESTAMP).
+Pipeline: `kafka_franz` input → `sap_hana` output. Each batch is a single `MtInsert` RPC via go-hdb execMany.
+`batching.count=1000`. Varying `max_in_flight` (concurrent batch INSERT calls) and `GOMAXPROCS`.
+
+### msg/sec
+
+| max_in_flight | cores=1 | cores=2 | cores=4 | cores=8 |
+|---------------|---------|---------|---------|---------|
+| 5             | 31,250  | 34,483  | 36,364  | 36,364  |
+| 10            | 28,986  | 51,282  | 40,816  | **57,143** |
+| 20            | 28,169  | 33,333  | 35,714  | 37,736  |
+| 50            | 15,873  | 18,868  | 22,989  | 19,231  |
+
+### Best result per max_in_flight (across all core counts)
+
+| max_in_flight | Best msg/s | Config |
+|---------------|------------|--------|
+| 5             | 36,364 | cores=4 or 8 |
+| 10            | **57,143** | cores=8 |
+| 20            | 37,736 | cores=8 |
+| 50            | 22,989 | cores=4 |
+
+**Observations:**
+- `max_in_flight=10` is the sweet spot: ~57k msg/s at 8 cores. Lower values under-saturate HANA; higher values cause contention.
+- `max_in_flight=50` degrades significantly (~23k msg/s peak) — too many concurrent INSERT RPCs overwhelm HANA's concurrency handling.
+- Core scaling is most effective at `max_in_flight=10`: throughput nearly doubles from cores=1 to cores=8 (~29k → ~57k msg/s).
+- At `max_in_flight=5` and `max_in_flight=20`, gains plateau above cores=4, suggesting the bottleneck shifts to HANA INSERT latency.
+- **Recommended configuration: `max_in_flight=10`, `batching.count=1000`, `GOMAXPROCS=8` → ~57,000 msg/s (~2M rows in 35s).**
