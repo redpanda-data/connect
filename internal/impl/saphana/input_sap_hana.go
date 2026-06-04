@@ -20,6 +20,8 @@ import (
 	gohdb "github.com/SAP/go-hdb/driver"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
 const (
@@ -165,10 +167,9 @@ type sapHANAInput struct {
 }
 
 func newSAPHANAInput(conf *service.ParsedConfig, mgr *service.Resources) (*sapHANAInput, error) {
-	// TODO: restore license check before merge
-	// if err := license.CheckRunningEnterprise(mgr); err != nil {
-	// 	return nil, err
-	// }
+	if err := license.CheckRunningEnterprise(mgr); err != nil {
+		return nil, err
+	}
 
 	s := &sapHANAInput{
 		log:      mgr.Logger(),

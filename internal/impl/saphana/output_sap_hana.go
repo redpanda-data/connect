@@ -16,8 +16,11 @@ import (
 	"sync"
 
 	gohdb "github.com/SAP/go-hdb/driver"
+
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
 const (
@@ -89,6 +92,9 @@ type sapHANAOutput struct {
 }
 
 func newSAPHANAOutput(conf *service.ParsedConfig, mgr *service.Resources) (*sapHANAOutput, error) {
+	if err := license.CheckRunningEnterprise(mgr); err != nil {
+		return nil, err
+	}
 	o := &sapHANAOutput{log: mgr.Logger()}
 
 	var err error
