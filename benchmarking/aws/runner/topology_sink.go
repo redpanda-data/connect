@@ -66,14 +66,25 @@ func (sinkTopology) Pipeline(s *Scenario, n BenchNames) (input, output map[strin
 		"enabled":        true,
 		"table_location": "${WAREHOUSE_S3_URI}/",
 	}
-	input = map[string]any{
-		"redpanda": map[string]any{
-			"seed_brokers":      []string{"${REDPANDA_BROKER_ENDPOINTS}"},
-			"topics":            []any{n.SourceTopic()},
-			"consumer_group":    n.ConsumerGroup("connect"),
-			"start_from_oldest": true,
-		},
+	redpandaIn := map[string]any{
+		"seed_brokers":      []string{"${REDPANDA_BROKER_ENDPOINTS}"},
+		"topics":            []any{n.SourceTopic()},
+		"consumer_group":    n.ConsumerGroup("connect"),
+		"start_from_oldest": true,
 	}
+	// A scenario may supply extra redpanda-input tuning via pipeline.input_options
+	// (e.g. unordered_processing for input-side batching, which lets the input
+	// assemble large batches from its read-ahead fetch buffer so each iceberg
+	// commit carries far more records). Merge those in, but never let them
+	// clobber the bench-managed connection fields (brokers/topic/group) above.
+	if opts, ok := s.Pipeline["input_options"].(map[string]any); ok {
+		for k, v := range opts {
+			if _, managed := redpandaIn[k]; !managed {
+				redpandaIn[k] = v
+			}
+		}
+	}
+	input = map[string]any{"redpanda": redpandaIn}
 	output = map[string]any{sp.OutputComponent: icfg}
 	return input, output, nil
 }

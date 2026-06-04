@@ -59,6 +59,37 @@ func TestSinkTopology_Pipeline_RedpandaInIcebergOut(t *testing.T) {
 	}
 }
 
+func TestSinkTopology_Pipeline_MergesInputOptions(t *testing.T) {
+	// pipeline.input_options is merged into the redpanda input (e.g. input-side
+	// batching via unordered_processing), but must NOT clobber the bench-managed
+	// connection fields (topics / consumer_group / seed_brokers).
+	s := &Scenario{Connector: "iceberg", Direction: DirectionSink, Pipeline: map[string]any{
+		"input_options": map[string]any{
+			"unordered_processing": map[string]any{
+				"enabled":          true,
+				"checkpoint_limit": 100000,
+				"batching":         map[string]any{"count": 50000, "period": "10s"},
+			},
+			// Attempt to clobber a managed field — must be ignored.
+			"topics": []any{"hacker_topic"},
+		},
+		"output": map[string]any{"iceberg": map[string]any{"batching": map[string]any{"count": 50000}}},
+	}}
+	in, _, err := (sinkTopology{}).Pipeline(s, newBenchNames("sess", "iceberg"))
+	if err != nil {
+		t.Fatalf("Pipeline: %v", err)
+	}
+	rp, _ := in["redpanda"].(map[string]any)
+	if _, ok := rp["unordered_processing"]; !ok {
+		t.Errorf("expected unordered_processing merged into input; got %#v", rp)
+	}
+	// Managed field must survive the merge attempt.
+	topics, _ := rp["topics"].([]any)
+	if len(topics) != 1 || topics[0] != "bench_sess_iceberg_src" {
+		t.Errorf("input_options must not clobber managed topics; got %#v", rp["topics"])
+	}
+}
+
 func TestSinkTopology_MetricArtifact(t *testing.T) {
 	if got := (sinkTopology{}).MetricArtifact("connect", 4); got != "iceberg-4-connect.txt" {
 		t.Errorf("artifact = %q", got)

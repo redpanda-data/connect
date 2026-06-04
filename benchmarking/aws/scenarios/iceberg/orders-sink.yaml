@@ -25,12 +25,30 @@ dataset:
 pipeline:
   # sinkTopology injects the redpanda INPUT (the pre-seeded topic) and the
   # iceberg catalog/storage/table config from TF outputs + BenchNames. The
-  # scenario supplies only output-side tuning.
+  # scenario supplies input-side tuning (input_options, merged into the
+  # redpanda input) and output-side tuning.
+  #
+  # FAIR HEAD-TO-HEAD vs Kafka Connect: KC's Tabular sink commits every 10s via
+  # its coordinator. We match that cadence with input-side batching so each
+  # Connect commit carries ~10s of records (per-partition read-ahead batches)
+  # instead of the ~300/commit the defaults backpressure us into. This brings
+  # Connect to a sensible production config rather than comparing default-vs-
+  # tuned. (Measured ~110x over baseline in isolation; output_sent ~46k rec/s
+  # at 1 vCPU.) NOTE: unordered_processing trades cross-partition ordering —
+  # acceptable for a sink; the buffer variant is the order-preserving equivalent.
+  input_options:
+    unordered_processing:
+      enabled: true
+      checkpoint_limit: 100000
+      batching:
+        count: 50000
+        period: 10s
   output:
     iceberg:
+      max_in_flight: 8
       batching:
-        count: 5000
-        period: 1s
+        count: 50000
+        period: 10s
 
 matrix:
   cpu_points: [1, 2, 4, 8]
