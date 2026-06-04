@@ -19,4 +19,14 @@ resource "aws_dynamodb_table" "bench" {
 
   stream_enabled   = true
   stream_view_type = "NEW_AND_OLD_IMAGES"
+
+  # AWS's default delete timeout (10m) is too short for a 40K+ WCU table —
+  # delete can take 15-20m even when the table is idle. Without this override,
+  # `terraform destroy` times out and leaves the table in DELETING state with
+  # a stale entry in TF state, breaking the next bench's apply. Bumped to 30m
+  # to cover the 100K WCU ceiling case too.
+  timeouts {
+    create = "20m"
+    delete = "30m"
+  }
 }
