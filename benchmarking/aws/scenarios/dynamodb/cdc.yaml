@@ -19,23 +19,33 @@ infra:
     # match variables declared in terraform/stacks/dynamodb/variables.tf.
     # Billing mode is hardcoded PROVISIONED in the module (terraform/modules/
     # dynamodb-bench/main.tf) and is not a TF variable — don't add it here.
+    #
+    # Sized to AWS's default per-table WCU quota of 40,000. 4KB items at
+    # 10K PutItems/sec = 40K WCU sustained, ~40 MB/s producer. Connect saw
+    # 5.7 MB/s at 1 vCPU in the earlier smoke; at 40 MB/s producer it should
+    # saturate around 4 vCPU (postgres/mysql benches plateau around 100 MB/s
+    # but on a higher ceiling). To probe the 100 MB/s ceiling, request a DDB
+    # WCU quota increase via AWS Service Quotas and bump this to 120000.
+    # NOTE: full sweep's reset bash recreates the table with WriteCapacityUnits
+    # hardcoded to 10000 — that's incorrect for this sizing. Fix before sweep.
     read_capacity: 1000
-    write_capacity: 10000
+    write_capacity: 40000
   runner:
     instance_type: c8g.4xlarge
 
 dataset:
   initial_rows: 0          # Reset hook drops + recreates the table; no seed survives anyway.
-  row_size_bytes: 1024     # 1KB items consume 1 WCU each — keeps the WCU math simple.
+  row_size_bytes: 4096     # 4KB items consume 4 WCU each — fewer ops/sec for the same MB/s.
   tables: [rpcn_bench_ddb_orders]
   seeder: cdc-ddb
 
 workload:
-  # 5000 PutItems/sec × 1 KB ≈ 5000 WCU sustained. Well inside the 10000 WCU
-  # provisioned default — leaves headroom for the connector's DescribeTable
-  # polling and any burst-write retries from the load-gen. Bump if 1-vCPU smoke
-  # shows Connect is source-bound (not connector-bound).
-  write_rate_per_sec: 5000
+  # 9K PutItems/sec × 4 KB ≈ 36 MB/s producer, 36K WCU sustained. ~10% headroom
+  # under the 40K WCU table quota so the load-gen doesn't burn DDB's burst
+  # credits and hit ProvisionedThroughputExceededException late in long runs
+  # (observed in the 10K/sec smoke). To probe Connect past ~36 MB/s, request
+  # an AWS WCU quota increase or split across multiple tables.
+  write_rate_per_sec: 9000
   duration: 15m
   warmup: 2m
 
@@ -64,12 +74,12 @@ reset:
   - bash: "aws dynamodb wait table-not-exists --table-name redpanda_dynamodb_checkpoints --region ${AWS_REGION} 2>/dev/null || true"
 
   # Drop + recreate the source table. The new table has a fresh stream ARN
-  # (DescribeTable picks it up), fresh shards, and zero items. The
-  # provisioned-throughput / stream-specification args MUST match the
-  # terraform module's spec — if you change defaults in modules/dynamodb-bench/,
-  # update this bash block too. (Terraform destroy works on whatever the table
-  # currently looks like, but a mismatch leaves the bench running against
-  # different capacity than declared.)
+  # (DescribeTable picks it up), fresh shards, and zero items.
+  # ReadCapacityUnits / WriteCapacityUnits use the same values terraform
+  # provisioned with (via the engineSpec's ExtraEnvVars wiring from the
+  # dynamodb stack's read_capacity / write_capacity outputs). If you change
+  # the scenario's infra.source.{read,write}_capacity, this block tracks
+  # automatically — no double-edit required.
   - bash: "aws dynamodb delete-table --table-name ${DYNAMODB_TABLE_NAME} --region ${AWS_REGION}"
   - bash: "aws dynamodb wait table-not-exists --table-name ${DYNAMODB_TABLE_NAME} --region ${AWS_REGION}"
   - bash: |
@@ -79,6 +89,6 @@ reset:
         --attribute-definitions AttributeName=id,AttributeType=S \
         --key-schema AttributeName=id,KeyType=HASH \
         --billing-mode PROVISIONED \
-        --provisioned-throughput ReadCapacityUnits=1000,WriteCapacityUnits=10000 \
+        --provisioned-throughput ReadCapacityUnits=${READ_CAPACITY},WriteCapacityUnits=${WRITE_CAPACITY} \
         --stream-specification StreamEnabled=true,StreamViewType=NEW_AND_OLD_IMAGES
   - bash: "aws dynamodb wait table-exists --table-name ${DYNAMODB_TABLE_NAME} --region ${AWS_REGION}"

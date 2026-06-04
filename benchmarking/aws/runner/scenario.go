@@ -159,8 +159,10 @@ var engineSpecs = map[string]engineSpec{
 	"aws_dynamodb_cdc": {
 		NoDSN: true,
 		ExtraEnvVars: map[string]string{
-			"AWS_REGION": "aws_region",
-			"DDB_TABLE":  "dynamodb_table_name",
+			"AWS_REGION":     "aws_region",
+			"DDB_TABLE":      "dynamodb_table_name",
+			"READ_CAPACITY":  "read_capacity",
+			"WRITE_CAPACITY": "write_capacity",
 		},
 	},
 }

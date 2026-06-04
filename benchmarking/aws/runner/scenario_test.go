@@ -142,6 +142,16 @@ func TestEngineSpecFor_DynamoDB(t *testing.T) {
 	if got, want := es.ExtraEnvVars["DDB_TABLE"], "dynamodb_table_name"; got != want {
 		t.Errorf("ExtraEnvVars[DDB_TABLE] = %q, want %q", got, want)
 	}
+	// READ_CAPACITY / WRITE_CAPACITY are referenced by the scenario's reset
+	// bash (drop+recreate between sweep points). If these mappings break,
+	// the recreate falls back to empty WCU/RCU args and the table gets
+	// created with the wrong provisioned capacity mid-sweep.
+	if got, want := es.ExtraEnvVars["READ_CAPACITY"], "read_capacity"; got != want {
+		t.Errorf("ExtraEnvVars[READ_CAPACITY] = %q, want %q", got, want)
+	}
+	if got, want := es.ExtraEnvVars["WRITE_CAPACITY"], "write_capacity"; got != want {
+		t.Errorf("ExtraEnvVars[WRITE_CAPACITY] = %q, want %q", got, want)
+	}
 }
 
 func TestValidate_RejectsUnknownConnector(t *testing.T) {
