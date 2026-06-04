@@ -20,6 +20,7 @@ import (
 
 	"github.com/Jeffail/checkpoint"
 	"github.com/Jeffail/shutdown"
+	"github.com/blastrain/vitess-sqlparser/sqlparser"
 	_ "github.com/sijms/go-ora/v2"
 	"golang.org/x/sync/errgroup"
 
@@ -279,6 +280,15 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 		if snapshotConf.Contains(ociFieldSnapshotFilters) {
 			if snapshotFilters, err = snapshotConf.FieldStringMap(ociFieldSnapshotFilters); err != nil {
 				return nil, err
+			}
+			for table, query := range snapshotFilters {
+				stmt, err := sqlparser.Parse(query)
+				if err != nil {
+					return nil, fmt.Errorf("snapshot filter for table %q is not valid SQL: %w", table, err)
+				}
+				if _, ok := stmt.(*sqlparser.Select); !ok {
+					return nil, fmt.Errorf("snapshot filter for table %q must be a SELECT statement", table)
+				}
 			}
 		}
 	}
