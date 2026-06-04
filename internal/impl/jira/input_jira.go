@@ -32,6 +32,7 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/httpclient"
 	"github.com/redpanda-data/connect/v4/internal/impl/jira/jiraauth"
 	"github.com/redpanda-data/connect/v4/internal/impl/jira/jirahttp"
+	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
 // cursorSchemaVersion is the on-disk format version stamped into the cursor
@@ -413,6 +414,9 @@ func (p *pageState) allDispatched() bool {
 }
 
 func newReader(conf *service.ParsedConfig, mgr *service.Resources) (*reader, error) {
+	if err := license.CheckRunningEnterprise(mgr); err != nil {
+		return nil, err
+	}
 	cfg, err := parseInputConfig(conf)
 	if err != nil {
 		return nil, err

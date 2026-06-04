@@ -28,6 +28,8 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
+
+	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
 // TestIntegration_JiraInput_FirstRunHasNoCursorPredicate exercises the jira
@@ -77,6 +79,7 @@ jira:
 	}))
 	s, err := b.Build()
 	require.NoError(t, err)
+	license.InjectTestService(s.Resources())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()

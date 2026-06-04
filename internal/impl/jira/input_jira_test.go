@@ -34,6 +34,8 @@ import (
 
 	_ "github.com/redpanda-data/benthos/v4/public/components/io"
 	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
+
+	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
 // mockJiraServer is a configurable httptest.Server for jira API responses.
@@ -94,6 +96,7 @@ memory: {}
 	}))
 	s, err := builder.Build()
 	require.NoError(t, err)
+	license.InjectTestService(s.Resources())
 	return s, out
 }
 
@@ -377,6 +380,7 @@ jira:
 	}))
 	s, err := builder.Build()
 	require.NoError(t, err)
+	license.InjectTestService(s.Resources())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -466,6 +470,7 @@ jira:
 	}))
 	s, err := builder.Build()
 	require.NoError(t, err)
+	license.InjectTestService(s.Resources())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -716,6 +721,7 @@ memory: {}
 	}))
 	s, err := builder.Build()
 	require.NoError(t, err)
+	license.InjectTestService(s.Resources())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
@@ -826,6 +832,7 @@ failing_cache_for_test: {}
 	require.NoError(t, builder.AddConsumerFunc(func(_ context.Context, _ *service.Message) error { return nil }))
 	s, err := builder.Build()
 	require.NoError(t, err)
+	license.InjectTestService(s.Resources())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -919,6 +926,7 @@ file:
 		}))
 		s, err := builder.Build()
 		require.NoError(t, err)
+		license.InjectTestService(s.Resources())
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
 		go func() { _ = s.Run(ctx) }()
