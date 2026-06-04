@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math/rand"
 	"os"
 	"strings"
 	"sync/atomic"
@@ -80,7 +81,25 @@ func seed(ctx context.Context, topic string, rows int64, rowSize, partitions int
 	if padLen < 0 {
 		padLen = 0
 	}
-	pad := strings.Repeat("x", padLen)
+	// Realistic, high-entropy payload. The earlier repetitive 'x' padding
+	// compressed ~150x in Parquet, which made committed-bytes/sec meaningless
+	// and gave the Kafka Connect comparison an absurd ~7 B/record. We instead
+	// sample each record's payload from a large pool of random alphanumeric
+	// bytes (JSON-safe, no escaping surprises), so payloads are distinct and
+	// barely compressible — Parquet file sizes become representative and the
+	// MB/s axis symmetric across engines. A precomputed pool + random window
+	// keeps seeding fast (no per-byte RNG on the hot path).
+	const charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+	const poolSize = 16 << 20 // 16 MiB
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+	pool := make([]byte, poolSize)
+	for i := range pool {
+		pool[i] = charset[rng.Intn(len(charset))]
+	}
+	// Vary the low-cardinality fields too, so the record shape resembles real
+	// order data rather than constants.
+	regions := []string{"us-east-1", "us-east-2", "us-west-2", "eu-west-1", "ap-south-1"}
+	statuses := []string{"NEW", "PAID", "SHIPPED", "CANCELLED", "REFUNDED"}
 
 	var produced, failed int64
 	var firstErr atomic.Value // stores error
@@ -90,12 +109,17 @@ func seed(ctx context.Context, topic string, rows int64, rowSize, partitions int
 			return ctx.Err()
 		default:
 		}
+		var pad string
+		if padLen > 0 && poolSize > padLen {
+			off := rng.Intn(poolSize - padLen)
+			pad = string(pool[off : off+padLen])
+		}
 		rec := map[string]any{
 			"id":      i,
 			"ts":      time.Now().UTC().Format(time.RFC3339Nano),
-			"region":  "us-east-2",
+			"region":  regions[i%int64(len(regions))],
 			"amount":  float64(i%100000) / 100.0,
-			"status":  "NEW",
+			"status":  statuses[i%int64(len(statuses))],
 			"payload": pad,
 		}
 		val, err := json.Marshal(rec)
