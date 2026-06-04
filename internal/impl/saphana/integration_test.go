@@ -21,6 +21,7 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 
+	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 )
 
@@ -92,23 +93,22 @@ func readAllMessages(t *testing.T, dsn, yaml string) []map[string]any {
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
 
-	noop := func(context.Context, error) error { return nil }
-
 	var results []map[string]any
 	for {
-		msg, ack, err := input.Read(ctx)
+		batch, ack, err := input.ReadBatch(ctx)
 		if err != nil {
 			break
 		}
 		require.NoError(t, ack(context.Background(), nil))
 
-		raw, err := msg.AsBytes()
-		require.NoError(t, err)
+		for _, msg := range batch {
+			raw, err := msg.AsBytes()
+			require.NoError(t, err)
 
-		var row map[string]any
-		require.NoError(t, json.Unmarshal(raw, &row))
-		results = append(results, row)
-		_ = noop
+			var row map[string]any
+			require.NoError(t, json.Unmarshal(raw, &row))
+			results = append(results, row)
+		}
 	}
 	return results
 }
@@ -265,11 +265,126 @@ schema_name: SYSTEM
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
 
-	msg, ack, err := input.Read(ctx)
+	batch, ack, err := input.ReadBatch(ctx)
 	require.NoError(t, err)
 	require.NoError(t, ack(context.Background(), nil))
+	require.NotEmpty(t, batch)
 
-	schemaVal, ok := msg.MetaGet("schema")
+	schemaVal, ok := batch[0].MetaGet("schema")
 	assert.True(t, ok, "expected 'schema' metadata key")
 	assert.NotNil(t, schemaVal)
+}
+
+func TestIntegrationSAPHANAOutputWriteBatch(t *testing.T) {
+	integration.CheckSkip(t)
+	dsn := startHANA(t)
+	db := openTestDB(t, dsn)
+
+	_, err := db.ExecContext(t.Context(), `CREATE TABLE OUT_WRITE_TEST (ID INTEGER, NAME NVARCHAR(100))`)
+	require.NoError(t, err)
+	t.Cleanup(func() { _, _ = db.ExecContext(context.Background(), `DROP TABLE OUT_WRITE_TEST`) })
+
+	conf, err := sapHANAOutputConfigSpec.ParseYAML(fmt.Sprintf(`
+dsn: %q
+table: OUT_WRITE_TEST
+columns: [ID, NAME]
+args_mapping: 'root = [this.id, this.name]'
+`, dsn), nil)
+	require.NoError(t, err)
+
+	out, err := newSAPHANAOutput(conf, enterpriseResources())
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = out.Close(context.Background()) })
+	require.NoError(t, out.Connect(t.Context()))
+
+	batch := service.MessageBatch{
+		service.NewMessage([]byte(`{"id":1,"name":"alice"}`)),
+		service.NewMessage([]byte(`{"id":2,"name":"bob"}`)),
+		service.NewMessage([]byte(`{"id":3,"name":"carol"}`)),
+	}
+	require.NoError(t, out.WriteBatch(t.Context(), batch))
+
+	rows, err := db.QueryContext(t.Context(), `SELECT ID, NAME FROM OUT_WRITE_TEST ORDER BY ID`)
+	require.NoError(t, err)
+	defer rows.Close()
+
+	type row struct {
+		id   int64
+		name string
+	}
+	var got []row
+	for rows.Next() {
+		var r row
+		require.NoError(t, rows.Scan(&r.id, &r.name))
+		got = append(got, r)
+	}
+	require.NoError(t, rows.Err())
+	require.Len(t, got, 3)
+	assert.Equal(t, row{1, "alice"}, got[0])
+	assert.Equal(t, row{2, "bob"}, got[1])
+	assert.Equal(t, row{3, "carol"}, got[2])
+}
+
+func TestIntegrationSAPHANAOutputMultipleBatches(t *testing.T) {
+	integration.CheckSkip(t)
+	dsn := startHANA(t)
+	db := openTestDB(t, dsn)
+
+	_, err := db.ExecContext(t.Context(), `CREATE TABLE OUT_MULTI_TEST (ID INTEGER, NAME NVARCHAR(100))`)
+	require.NoError(t, err)
+	t.Cleanup(func() { _, _ = db.ExecContext(context.Background(), `DROP TABLE OUT_MULTI_TEST`) })
+
+	conf, err := sapHANAOutputConfigSpec.ParseYAML(fmt.Sprintf(`
+dsn: %q
+table: OUT_MULTI_TEST
+columns: [ID, NAME]
+args_mapping: 'root = [this.id, this.name]'
+`, dsn), nil)
+	require.NoError(t, err)
+
+	out, err := newSAPHANAOutput(conf, enterpriseResources())
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = out.Close(context.Background()) })
+	require.NoError(t, out.Connect(t.Context()))
+
+	require.NoError(t, out.WriteBatch(t.Context(), service.MessageBatch{
+		service.NewMessage([]byte(`{"id":1,"name":"alice"}`)),
+		service.NewMessage([]byte(`{"id":2,"name":"bob"}`)),
+	}))
+	require.NoError(t, out.WriteBatch(t.Context(), service.MessageBatch{
+		service.NewMessage([]byte(`{"id":3,"name":"carol"}`)),
+		service.NewMessage([]byte(`{"id":4,"name":"dave"}`)),
+	}))
+
+	var count int64
+	require.NoError(t, db.QueryRowContext(t.Context(), `SELECT COUNT(*) FROM OUT_MULTI_TEST`).Scan(&count))
+	assert.Equal(t, int64(4), count)
+}
+
+func TestIntegrationSAPHANAOutputArgsMappingError(t *testing.T) {
+	integration.CheckSkip(t)
+	dsn := startHANA(t)
+	db := openTestDB(t, dsn)
+
+	_, err := db.ExecContext(t.Context(), `CREATE TABLE OUT_ERR_TEST (ID INTEGER, NAME NVARCHAR(100))`)
+	require.NoError(t, err)
+	t.Cleanup(func() { _, _ = db.ExecContext(context.Background(), `DROP TABLE OUT_ERR_TEST`) })
+
+	conf, err := sapHANAOutputConfigSpec.ParseYAML(fmt.Sprintf(`
+dsn: %q
+table: OUT_ERR_TEST
+columns: [ID, NAME]
+args_mapping: 'root = "not-an-array"'
+`, dsn), nil)
+	require.NoError(t, err)
+
+	out, err := newSAPHANAOutput(conf, enterpriseResources())
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = out.Close(context.Background()) })
+	require.NoError(t, out.Connect(t.Context()))
+
+	err = out.WriteBatch(t.Context(), service.MessageBatch{
+		service.NewMessage([]byte(`{"id":1,"name":"alice"}`)),
+	})
+	require.ErrorContains(t, err, "must return an array")
 }
