@@ -73,3 +73,33 @@ Varying `fetch_size`, `GOMAXPROCS`, and `poll_interval`.
 - `poll_interval=100ms` performs best at `fetch_size=1000` where more frequent polls compensate for small batches. At larger fetch sizes `poll_interval` has less effect since each poll already returns a large batch.
 - Core scaling is modest; the bottleneck is HANA cursor read latency, not CPU.
 - **Recommended configuration: `fetch_size=10000`, `poll_interval=100ms–500ms`, `GOMAXPROCS=4–8` → ~38,000–42,000 msg/s.**
+
+---
+
+## Query Read
+
+Full scan via user-supplied SQL: 2,000,000 rows × ~300 B (BIGINT, INTEGER × 3, DECIMAL, NVARCHAR(20), NVARCHAR(200), TIMESTAMP).
+Pipeline: `sap_hana` input (query mode) → `kafka_franz` output. `max_in_flight=10`.
+Query: `SELECT * FROM "SCHEMA"."BENCH_ORDERS_QUERY"`. Varying `fetch_size` and `GOMAXPROCS`.
+
+### msg/sec
+
+| fetch_size | cores=1 | cores=2 | cores=4 | cores=8 |
+|------------|---------|---------|---------|---------|
+| 1,000      | 22,727  | 22,222  | 21,505  | 23,529  |
+| 10,000     | 68,966  | 76,923  | 76,923  | 71,429  |
+| 100,000    | 62,500  | 68,966  | **95,238** | 90,909 |
+
+### Best result per fetch_size (across all core counts)
+
+| fetch_size | Best msg/s | Config |
+|------------|------------|--------|
+| 1,000      | 23,529 | cores=8 |
+| 10,000     | 76,923 | cores=2 or 4 |
+| 100,000    | **95,238** | cores=4 |
+
+**Observations:**
+- `fetch_size` is again the dominant parameter. Increasing from 1,000 to 10,000 roughly triples throughput (~23k → ~77k msg/s).
+- Unlike bulk mode, `fetch_size=100,000` outperforms 10,000 at higher core counts (~95k vs ~77k msg/s). Query mode does not iterate a server-side cursor between fetches; a larger fetch size directly reduces HANA round-trips per result set.
+- Core scaling is more effective at `fetch_size=100,000`: cores=4 achieves the overall peak, suggesting that larger result transfers benefit from more parallel Kafka produce capacity.
+- **Recommended configuration: `fetch_size=100000`, `GOMAXPROCS=4` → ~95,000 msg/s (~2M rows in 21s).**
