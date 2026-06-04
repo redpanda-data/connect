@@ -331,14 +331,14 @@ func TestIntegrationOracleDBCDCSnapshotFilters(t *testing.T) {
 
 	// Create tables
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
-	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.foo", "CREATE TABLE testdb.foo (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
-	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.foo2", "CREATE TABLE testdb.foo2 (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
+	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.foo", "CREATE TABLE testdb.foo (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, name VARCHAR2(100), excluded_col VARCHAR2(100))"))
+	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.foo2", "CREATE TABLE testdb.foo2 (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, name VARCHAR2(100), excluded_col VARCHAR2(100))"))
 
 	// Insert 2000 rows across tables for initial snapshot streaming
 	want := 1000
 	for range 1000 {
-		db.MustExec("INSERT INTO testdb.foo (id) VALUES (DEFAULT)")
-		db.MustExec("INSERT INTO testdb.foo2 (id) VALUES (DEFAULT)")
+		db.MustExec("INSERT INTO testdb.foo (id, name, excluded_col) VALUES (DEFAULT, 'foo_name', 'should_not_appear')")
+		db.MustExec("INSERT INTO testdb.foo2 (id, name, excluded_col) VALUES (DEFAULT, 'foo2_name', 'should_not_appear')")
 	}
 
 	// wait for changes to propagate to redo logs
@@ -358,8 +358,8 @@ oracledb_cdc:
   stream_snapshot: true
   snapshot:
     filters:
-      TESTDB.FOO: "SELECT * FROM TESTDB.FOO WHERE ID > 500"
-      TESTDB.FOO2: "SELECT * FROM TESTDB.FOO2 WHERE ID > 500"
+      TESTDB.FOO: "SELECT ID, NAME FROM TESTDB.FOO WHERE ID > 500"
+      TESTDB.FOO2: "SELECT ID, NAME FROM TESTDB.FOO2 WHERE ID > 500"
   snapshot_max_batch_size: 10
   max_parallel_snapshot_tables: 3
   logminer:
@@ -402,6 +402,15 @@ oracledb_cdc:
 			return got >= want
 		}, time.Minute*5, time.Second*1)
 		assert.Truef(t, (got == want), "Wanted %d snapshot messages but got %d", want, got)
+
+		outBatchesMu.Lock()
+		for _, msg := range outBatches {
+			var row map[string]any
+			require.NoError(t, json.Unmarshal([]byte(msg), &row))
+			assert.Contains(t, row, "NAME", "expected NAME column in snapshot row")
+			assert.NotContains(t, row, "EXCLUDED_COL", "expected EXCLUDED_COL to be absent from snapshot row")
+		}
+		outBatchesMu.Unlock()
 	}
 
 	require.NoError(t, stream.StopWithin(time.Second*10))
