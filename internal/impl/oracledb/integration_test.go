@@ -358,8 +358,8 @@ oracledb_cdc:
   stream_snapshot: true
   snapshot:
     filters:
-	  - TESTDB.FOO: "SELECT * FROM TESTDB.FOO WHERE ID >= 500"
-	  - TESTDB.FOO2: "SELECT * FROM TESTDB.FOO2 WHERE ID >= 500"
+      TESTDB.FOO: "SELECT * FROM TESTDB.FOO WHERE ID > 500"
+      TESTDB.FOO2: "SELECT * FROM TESTDB.FOO2 WHERE ID > 500"
   snapshot_max_batch_size: 10
   max_parallel_snapshot_tables: 3
   logminer:

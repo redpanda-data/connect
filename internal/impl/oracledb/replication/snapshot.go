@@ -337,6 +337,20 @@ func getTablePrimaryKeys(ctx context.Context, tx *sql.Tx, table UserTable) ([]st
 
 func querySnapshotTable(ctx context.Context, tx *sql.Tx, table UserTable, pk []string, lastSeenPkVal map[string]any, limit int, customQuery string) (*sql.Rows, error) {
 	// Oracle uses FETCH FIRST instead of TOP, and it comes at the end
+	if lastSeenPkVal == nil {
+		// No cursor: use custom query directly to avoid a redundant wrapping subquery.
+		var base string
+		if customQuery != "" {
+			base = customQuery
+		} else {
+			base = fmt.Sprintf(`SELECT * FROM "%s"."%s"`, table.Schema, table.Name)
+		}
+		q := strings.Join([]string{base, buildOrderByClause(pk), fmt.Sprintf("FETCH FIRST %d ROWS ONLY", limit)}, " ")
+		return tx.QueryContext(ctx, q)
+	}
+
+	// Cursor pagination requires a WHERE clause; wrap the custom query in a subquery so the
+	// added WHERE does not conflict with any WHERE already present in customQuery.
 	var tableSource string
 	if customQuery != "" {
 		tableSource = fmt.Sprintf("(%s) t", customQuery)
@@ -345,14 +359,6 @@ func querySnapshotTable(ctx context.Context, tx *sql.Tx, table UserTable, pk []s
 	}
 	snapshotQueryParts := []string{
 		"SELECT * FROM " + tableSource,
-	}
-
-	if lastSeenPkVal == nil {
-		snapshotQueryParts = append(snapshotQueryParts, buildOrderByClause(pk))
-		snapshotQueryParts = append(snapshotQueryParts, fmt.Sprintf("FETCH FIRST %d ROWS ONLY", limit))
-
-		q := strings.Join(snapshotQueryParts, " ")
-		return tx.QueryContext(ctx, q)
 	}
 
 	// Build lexicographic comparison for composite keys
