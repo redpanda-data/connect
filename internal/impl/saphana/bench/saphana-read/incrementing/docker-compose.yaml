@@ -25,3 +25,14 @@ services:
       interval: 10s
       timeout: 10s
       retries: 12
+
+  console:
+    image: redpandadata/console:latest
+    container_name: rpcns-hana-inc-console
+    ports:
+      - "8080:8080"
+    environment:
+      KAFKA_BROKERS: kafka:29092
+    depends_on:
+      kafka:
+        condition: service_healthy

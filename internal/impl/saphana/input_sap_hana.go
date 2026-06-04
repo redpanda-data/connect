@@ -13,6 +13,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"sync"
 	"time"
 
@@ -444,6 +445,31 @@ func (s *sapHANAInput) ReadBatch(ctx context.Context) (service.MessageBatch, ser
 	}
 }
 
+// normalizeHANAValue converts go-hdb-specific types to JSON-friendly Go types.
+// NVARCHAR/VARCHAR arrive as []byte off the wire; DECIMAL as gohdb.Decimal (big.Rat alias).
+func normalizeHANAValue(v any) any {
+	switch val := v.(type) {
+	case []byte:
+		return string(val)
+	case gohdb.Decimal:
+		f, _ := (*big.Rat)(&val).Float64()
+		return f
+	case *gohdb.Decimal:
+		if val == nil {
+			return nil
+		}
+		f, _ := (*big.Rat)(val).Float64()
+		return f
+	case *big.Rat:
+		if val == nil {
+			return nil
+		}
+		f, _ := val.Float64()
+		return f
+	}
+	return v
+}
+
 // scanRow reads the current row into a message and attaches metadata.
 func (s *sapHANAInput) scanRow(ctx context.Context, rows *sql.Rows) (*service.Message, error) {
 	if s.rowColNames == nil {
@@ -470,7 +496,7 @@ func (s *sapHANAInput) scanRow(ctx context.Context, rows *sql.Rows) (*service.Me
 
 	rowMap := make(map[string]any, len(s.rowColNames))
 	for i, name := range s.rowColNames {
-		rowMap[name] = s.rowValues[i]
+		rowMap[name] = normalizeHANAValue(s.rowValues[i])
 	}
 
 	if (s.mode == shModeIncrementing || s.mode == shModeTimestampIncrementing) && s.incrementingCol != "" {
