@@ -248,7 +248,23 @@ type reader struct {
 	cur       cursor
 	connected atomic.Bool
 	page      *pageState
+
+	// runMu serialises onPageDrained and protects nextToken / runMaxUpdated.
+	// Both the Read goroutine (via waitForPageAcks) and the Close goroutine
+	// can invoke onPageDrained when the last ack fires, so the run-level
+	// state needs explicit synchronisation. Held only inside onPageDrained
+	// and the small write paths in fetchNextPage / buildSearchURL.
+	runMu sync.Mutex
+	// nextToken is the opaque pagination cursor returned by Jira. Empty
+	// when not in a multi-page run.
 	nextToken string
+	// runMaxUpdated accumulates max issue.updated across the current
+	// pagination run. The cursor is only persisted at the end of the run
+	// (when nextPageToken is empty) because Jira's cursor pagination
+	// requires JQL to remain stable across the token sequence — advancing
+	// the cursor mid-run would mutate the JQL while still passing the
+	// previous page's opaque token.
+	runMaxUpdated time.Time
 }
 
 // currentCursor returns a copy of the current cursor under read lock.
@@ -368,13 +384,6 @@ func (p *pageState) reset() {
 	p.pageHasNack.Store(false)
 	p.pageMaxUpdated = time.Time{}
 	p.done = nil
-}
-
-// bufferLen returns the number of messages in the current page buffer.
-func (p *pageState) bufferLen() int {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	return len(p.buffer)
 }
 
 // maxUpdated returns the highest issue.updated timestamp seen in the buffer.
@@ -561,20 +570,41 @@ func (r *reader) waitForPageAcks(ctx context.Context) error {
 }
 
 func (r *reader) onPageDrained(ctx context.Context) {
+	// Serialise with the symmetric Close-side call: if Close races with the
+	// Read goroutine's waitForPageAcks, both will reach onPageDrained when
+	// the same done channel closes, so the mutations here must be atomic.
+	r.runMu.Lock()
+	defer r.runMu.Unlock()
 	if r.page.pageHasNack.Load() {
-		// don't advance cursor; reset for the refetch on next Read
+		// Nack: discard the in-flight page and restart the pagination
+		// run from the current (unadvanced) cursor on the next Read.
+		// Resetting r.nextToken is critical — without it the next fetch
+		// would reuse the previous-page token and skip past the nacked
+		// records, which would then fall below the cursor predicate
+		// forever once a subsequent ack advanced it.
 		r.page.reset()
+		r.nextToken = ""
+		r.runMaxUpdated = time.Time{}
 		return
 	}
-	maxUpdated := r.page.maxUpdated()
-	bufferLen := r.page.bufferLen()
-	if !maxUpdated.IsZero() && maxUpdated.After(r.currentCursor().Updated) {
-		newCur := cursor{Updated: maxUpdated, Version: cursorSchemaVersion}
-		r.setCursor(newCur)
-		if err := r.writeCursor(ctx, newCur); err != nil {
-			r.log.Warnf("writing cursor: %v", err)
+	pageMax := r.page.maxUpdated()
+	if pageMax.After(r.runMaxUpdated) {
+		r.runMaxUpdated = pageMax
+	}
+	// Only advance the persisted cursor at the end of a pagination run.
+	// Mutating the JQL mid-run while reusing nextPageToken is unsound -
+	// Jira's cursor pagination expects the JQL to remain stable across
+	// the token sequence.
+	if r.nextToken == "" {
+		if !r.runMaxUpdated.IsZero() && r.runMaxUpdated.After(r.currentCursor().Updated) {
+			newCur := cursor{Updated: r.runMaxUpdated, Version: cursorSchemaVersion}
+			r.setCursor(newCur)
+			if err := r.writeCursor(ctx, newCur); err != nil {
+				r.log.Warnf("writing cursor: %v", err)
+			}
+			r.log.Infof("advanced cursor to %s after pagination run", newCur.Updated.Format(time.RFC3339))
 		}
-		r.log.Infof("advanced cursor to %s after %d issues", newCur.Updated.Format(time.RFC3339), bufferLen)
+		r.runMaxUpdated = time.Time{}
 	}
 	r.page.reset()
 }
@@ -623,7 +653,9 @@ func (r *reader) fetchNextPage(ctx context.Context) error {
 	}
 
 	r.page.load(msgs, maxUpdated)
+	r.runMu.Lock()
 	r.nextToken = page.NextPageToken
+	r.runMu.Unlock()
 	return nil
 }
 
@@ -747,8 +779,11 @@ func (r *reader) buildSearchURL() (*url.URL, error) {
 		q.Set("expand", strings.Join(expand, ","))
 	}
 	q.Set("maxResults", strconv.Itoa(r.cfg.pageSize))
-	if r.nextToken != "" {
-		q.Set("nextPageToken", r.nextToken)
+	r.runMu.Lock()
+	tok := r.nextToken
+	r.runMu.Unlock()
+	if tok != "" {
+		q.Set("nextPageToken", tok)
 	}
 	u.RawQuery = q.Encode()
 	return u, nil

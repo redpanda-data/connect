@@ -400,6 +400,96 @@ jira:
 	assert.NotContains(t, jqls[1], "updated >=", "nacked page must not advance the cursor")
 }
 
+// TestNack_RestartsPaginationFromCurrentCursor verifies that a nack on a
+// multi-page response restarts the pagination run from the current
+// (unadvanced) cursor. The mock returns page 1 with nextPageToken=page2; the
+// consumer nacks the first message. The next /search/jql request after the
+// nack must NOT carry nextPageToken=page2 in its query string — otherwise the
+// nacked records would be skipped past forever (the next page-2 ack would
+// advance the cursor beyond them).
+func TestNack_RestartsPaginationFromCurrentCursor(t *testing.T) {
+	mock := newMockJiraServer(t)
+	var calls atomic.Int32
+	var tokensMu sync.Mutex
+	var tokens []string
+	recordToken := func(tok string) {
+		tokensMu.Lock()
+		defer tokensMu.Unlock()
+		tokens = append(tokens, tok)
+	}
+	mock.handler = func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/rest/api/3/myself":
+			_, _ = w.Write([]byte(`{}`))
+		case "/rest/api/3/search/jql":
+			n := calls.Add(1)
+			tok := r.URL.Query().Get("nextPageToken")
+			recordToken(tok)
+			switch n {
+			case 1:
+				// First request of the (nacked) run: returns page 1 with a
+				// nextPageToken so the input would normally fetch page 2.
+				_, _ = w.Write([]byte(`{"issues":[{"id":"1","key":"PROJ-1","fields":{"project":{"key":"PROJ"},"updated":"2026-06-01T10:00:00.000+0000"}}],"nextPageToken":"page2"}`))
+			default:
+				// After the nack we expect a fresh request with NO
+				// nextPageToken; serve an empty page so the input idles.
+				_, _ = w.Write([]byte(`{"issues":[]}`))
+			}
+		default:
+			http.NotFound(w, r)
+		}
+	}
+
+	emitted := make(chan struct{}, 4)
+	builder := service.NewStreamBuilder()
+	require.NoError(t, builder.SetLoggerYAML(`level: OFF`))
+	require.NoError(t, builder.AddCacheYAML(`
+label: jira_state
+memory: {}
+`))
+	require.NoError(t, builder.AddInputYAML(fmt.Sprintf(`
+jira:
+  base_url: %q
+  auth: {email: u@x, api_token: tok}
+  resource: issues
+  poll_interval: 10s
+  cursor: {cache: jira_state, overlap: 0s}
+  auto_replay_nacks: false
+`, mock.URL)))
+	var nackOnce atomic.Bool
+	require.NoError(t, builder.AddConsumerFunc(func(_ context.Context, _ *service.Message) error {
+		emitted <- struct{}{}
+		if nackOnce.CompareAndSwap(false, true) {
+			return errors.New("forced nack")
+		}
+		return nil
+	}))
+	s, err := builder.Build()
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	go func() { _ = s.Run(ctx) }()
+
+	// First emission triggers a nack on the only message of page 1.
+	select {
+	case <-emitted:
+	case <-ctx.Done():
+		t.Fatal("no message emitted")
+	}
+	// Wait until at least a second JQL request fires after the nack. The
+	// invariant under test is that this second request carries NO
+	// nextPageToken — the pagination run restarts from the cursor.
+	require.Eventually(t, func() bool { return calls.Load() >= 2 }, 3*time.Second, 25*time.Millisecond)
+	require.NoError(t, s.StopWithin(2*time.Second))
+
+	tokensMu.Lock()
+	defer tokensMu.Unlock()
+	require.GreaterOrEqual(t, len(tokens), 2, "expected at least 2 search/jql requests, got %v", tokens)
+	assert.Empty(t, tokens[0], "first request should have no nextPageToken")
+	assert.Empty(t, tokens[1], "after nack the next request must NOT reuse nextPageToken=page2")
+}
+
 func TestConnect_CallsMyselfAndStartsFromZeroCursor(t *testing.T) {
 	mock := newMockJiraServer(t)
 
