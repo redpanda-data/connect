@@ -339,3 +339,67 @@ path on both engines before the full sweep.
 
 
 Raw samples + Prometheus snapshots: [`results/iceberg/orders-sink-smoke/2026-06-04T14-53-30Z.json`](results/iceberg/orders-sink-smoke/2026-06-04T14-53-30Z.json)
+
+
+## AWS — orders-sink-smoke — 2026-06-04
+
+**Scenario:** 1-vCPU smoke for the iceberg sink bench (Connect + Kafka Connect). Small
+pre-seeded dataset sized so a single vCPU still clears the 15-minute floor at
+a conservative ~15 MB/s estimate. Use this to validate the Glue REST + SigV4
+path on both engines before the full sweep.
+
+**Git SHA:** [`4cebe6024`](https://github.com/redpanda-data/connect/commit/4cebe602432b75d3107f4c2c557a4cefad905c7d)
+
+**Infra:** Runner `c8g.4xlarge`; source `` (0 GB) in `us-east-2`.
+
+**Dataset:** 12,000,000 rows × 1200 B = ~13 GB
+
+### Throughput
+
+| GOMAXPROCS | engine        | MB/sec (p50) | mean MB/s    | mean msg/s    | broker MB/s | MB/sec (p5) | MB/sec (p95) | msg/sec (p50) | Δ vs Connect       |
+|------------|---------------|--------------|--------------|---------------|-------------|-------------|--------------|---------------|--------------------|
+| 1          | connect       |           11 |       12.005 |        10,870 |           11 |           0 |           28 |         9,718 |                    |
+
+
+Raw samples + Prometheus snapshots: [`results/iceberg/orders-sink-smoke/2026-06-04T17-10-46Z.json`](results/iceberg/orders-sink-smoke/2026-06-04T17-10-46Z.json)
+
+
+## AWS — orders-sink — 2026-06-04
+
+**Scenario:** Drain a pre-seeded Redpanda topic of flat JSON records into an Apache Iceberg
+table (AWS Glue REST catalog + S3) and compare Connect's iceberg output against
+the Kafka Connect Iceberg sink, head-to-head across a vCPU sweep. Throughput is
+the Iceberg table's committed-bytes growth (total-files-size), polled from Glue.
+Both engines reach Glue via the same REST endpoint + SigV4 (service=glue), so
+the comparison is apples-to-apples. Bounded dataset (no sustained workload):
+the topic is the fixed input; each sweep point re-reads it from the beginning.
+
+**Git SHA:** [`b89613503`](https://github.com/redpanda-data/connect/commit/b89613503fb40cbdb7cc88103f9b5b6046350b99)
+
+**Infra:** Runner `c8g.4xlarge`; source `` (0 GB) in `us-east-2`.
+
+**Dataset:** 160,000,000 rows × 1200 B = ~178 GB
+
+### Throughput
+
+| GOMAXPROCS | engine        | MB/sec (p50) | mean MB/s    | mean msg/s    | broker MB/s | MB/sec (p5) | MB/sec (p95) | msg/sec (p50) | Δ vs Connect       |
+|------------|---------------|--------------|--------------|---------------|-------------|-------------|--------------|---------------|--------------------|
+| 1          | connect       |           17 |       17.128 |        15,453 |           17 |           0 |           38 |        15,234 |                    |
+| 1          | kafka_connect |           45 |       43.748 |        56,525 |           45 |          25 |           47 |        57,544 | +28 MB/s (+164%)   |
+| 2          | connect       |           39 |       40.452 |        36,496 |           39 |          19 |           65 |        35,570 |                    |
+| 2          | kafka_connect |           58 |       61.178 |        79,047 |           58 |          30 |          116 |        75,077 | +19 MB/s (+47%)    |
+| 4          | connect       |          171 |      170.025 |       153,405 |          171 |         156 |          186 |       154,545 |                    |
+| 4          | kafka_connect |           65 |       66.141 |        85,459 |           65 |          52 |           94 |        84,153 | -106 MB/s (-62%)   |
+| 8          | connect       |          242 |      197.541 |       178,231 |          242 |           0 |          267 |       218,181 |                    |
+| 8          | kafka_connect |           70 |       68.515 |        88,527 |           70 |          47 |           84 |        90,230 | -172 MB/s (-71%)   |
+
+
+### Cross-engine divergence
+
+| vCPU | faster        | slower        | ratio  | faster MB/s | slower MB/s |
+|------|---------------|---------------|--------|-------------|-------------|
+| 1    | kafka_connect | connect       | 2.64x |          45 |          17 |
+| 4    | connect       | kafka_connect | 2.63x |         171 |          65 |
+| 8    | connect       | kafka_connect | 3.46x |         242 |          70 |
+
+Raw samples + Prometheus snapshots: [`results/iceberg/orders-sink/2026-06-04T19-01-06Z.json`](results/iceberg/orders-sink/2026-06-04T19-01-06Z.json)
