@@ -67,28 +67,22 @@ matrix:
   cpu_points: [1, 2, 4, 8]
 
 reset:
-  # Drop the connector's auto-managed checkpoint table so per-shard cursors don't
-  # bleed across sweep points. delete-table on a non-existent table returns 404;
-  # `|| true` makes the first sweep point's reset idempotent.
+  # Between sweep points we only need to reset the CONNECTOR's position, not
+  # the source data. Connect's aws_dynamodb_cdc input reads DDB Streams (not
+  # table items) and resumes from its checkpoint table. Dropping the checkpoint
+  # table forces the next process to fall back to `start_from: latest` — the
+  # connector skips to the current stream tail and only reads records written
+  # during the upcoming sweep point's workload window.
+  #
+  # The source TABLE is left intact across sweep points. It grows ~9K items/sec
+  # × 17min × 4 points ≈ 37M items / 150GB by end-of-sweep, which is fine for
+  # the run (DDB storage is ~$0.001 per GB-hour). The final terraform destroy
+  # handles teardown with the 30m timeout override on the table resource.
+  #
+  # NOTE: this is intentionally different from the postgres/mysql benches.
+  # Their reset TRUNCATEs the source table because their connectors read FROM
+  # the table (via logical_replication / binlog), so leftover rows leak into
+  # the next sweep point's measurement. DDB Streams isolates source rows from
+  # the connector's view.
   - bash: "aws dynamodb delete-table --table-name redpanda_dynamodb_checkpoints --region ${AWS_REGION} 2>/dev/null || true"
   - bash: "aws dynamodb wait table-not-exists --table-name redpanda_dynamodb_checkpoints --region ${AWS_REGION} 2>/dev/null || true"
-
-  # Drop + recreate the source table. The new table has a fresh stream ARN
-  # (DescribeTable picks it up), fresh shards, and zero items.
-  # ReadCapacityUnits / WriteCapacityUnits use the same values terraform
-  # provisioned with (via the engineSpec's ExtraEnvVars wiring from the
-  # dynamodb stack's read_capacity / write_capacity outputs). If you change
-  # the scenario's infra.source.{read,write}_capacity, this block tracks
-  # automatically — no double-edit required.
-  - bash: "aws dynamodb delete-table --table-name ${DYNAMODB_TABLE_NAME} --region ${AWS_REGION}"
-  - bash: "aws dynamodb wait table-not-exists --table-name ${DYNAMODB_TABLE_NAME} --region ${AWS_REGION}"
-  - bash: |
-      aws dynamodb create-table \
-        --table-name ${DYNAMODB_TABLE_NAME} \
-        --region ${AWS_REGION} \
-        --attribute-definitions AttributeName=id,AttributeType=S \
-        --key-schema AttributeName=id,KeyType=HASH \
-        --billing-mode PROVISIONED \
-        --provisioned-throughput ReadCapacityUnits=${READ_CAPACITY},WriteCapacityUnits=${WRITE_CAPACITY} \
-        --stream-specification StreamEnabled=true,StreamViewType=NEW_AND_OLD_IMAGES
-  - bash: "aws dynamodb wait table-exists --table-name ${DYNAMODB_TABLE_NAME} --region ${AWS_REGION}"
