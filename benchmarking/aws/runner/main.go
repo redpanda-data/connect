@@ -561,6 +561,12 @@ func renderPipelineConfig(s *Scenario, outs map[string]string, topo Topology, na
 	if cr, ok := s.Pipeline["cache_resources"]; ok {
 		cfg["cache_resources"] = cr
 	}
+	// A scenario may declare a top-level buffer (e.g. memory) in its pipeline
+	// block to decouple a fast input from a commit-latency-bound output like
+	// the iceberg sink. Thread it through to the Connect config root.
+	if buf, ok := s.Pipeline["buffer"]; ok {
+		cfg["buffer"] = buf
+	}
 	raw, err := yaml.Marshal(cfg)
 	if err != nil {
 		return "", err
