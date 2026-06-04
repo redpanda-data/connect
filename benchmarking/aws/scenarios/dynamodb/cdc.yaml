@@ -14,10 +14,11 @@ stack: dynamodb
 
 infra:
   source:
-    # DynamoDB capacity lives in the TF stack vars (read_capacity / write_capacity),
-    # not in the scenario. The keys below are informational — the runner doesn't
-    # forward them to terraform for this stack. Override via TF vars if needed.
-    billing: PROVISIONED
+    # Every key under infra.source is forwarded to `terraform apply` as a -var
+    # flag (see main.go::translateInfraSource), so the key names below must
+    # match variables declared in terraform/stacks/dynamodb/variables.tf.
+    # Billing mode is hardcoded PROVISIONED in the module (terraform/modules/
+    # dynamodb-bench/main.tf) and is not a TF variable — don't add it here.
     read_capacity: 1000
     write_capacity: 10000
   runner:
