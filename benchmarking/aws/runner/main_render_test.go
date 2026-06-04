@@ -102,3 +102,45 @@ func TestRenderPipelineConfig_ThreadsCacheResources(t *testing.T) {
 		t.Errorf("expected cache_resources content; got:\n%s", body)
 	}
 }
+
+func TestRenderPipelineConfig_ThreadsBuffer(t *testing.T) {
+	// A scenario may declare a top-level buffer (e.g. to decouple a fast input
+	// from a commit-latency-bound sink output like iceberg). It must be
+	// threaded through to the Connect config root.
+	s := &Scenario{
+		Name:      "pg-test",
+		Connector: "postgres_cdc",
+		Stack:     "postgres",
+		Pipeline: map[string]any{
+			"buffer": map[string]any{
+				"memory": map[string]any{"limit": 536870912},
+			},
+			"input": map[string]any{
+				"postgres_cdc": map[string]any{
+					"dsn":    "${POSTGRES_DSN}",
+					"tables": []any{"orders"},
+				},
+			},
+		},
+	}
+	outs := map[string]string{
+		"bench_session_id":          "sess-xyz",
+		"postgres_dsn":              "postgres://u:p@host/db",
+		"redpanda_broker_endpoints": "10.42.10.10:9092",
+	}
+
+	path, err := renderPipelineConfig(s, outs, sourceTopology{}, BenchNames{})
+	if err != nil {
+		t.Fatalf("renderPipelineConfig: %v", err)
+	}
+	t.Cleanup(func() { os.Remove(path) })
+
+	raw, _ := os.ReadFile(path)
+	body := string(raw)
+	if !strings.Contains(body, "buffer:") {
+		t.Errorf("expected buffer to be threaded through; got:\n%s", body)
+	}
+	if !strings.Contains(body, "memory:") {
+		t.Errorf("expected buffer memory content; got:\n%s", body)
+	}
+}

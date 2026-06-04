@@ -20,11 +20,20 @@ dataset:
   expected_peak_mb_s: 15
 
 pipeline:
+  # Decouple the redpanda input (proven ~57k rec/s) from the commit-latency-
+  # bound iceberg output: the input fills this buffer at full speed so each
+  # output batch can pull a full `count` from it, putting ~50k records in each
+  # ~320ms Glue commit instead of ~300. Tests whether config alone closes the
+  # gap to KC (which commits ~1.3M records per snapshot via its coordinator).
+  buffer:
+    memory:
+      limit: 536870912   # 512 MiB
   output:
     iceberg:
+      max_in_flight: 8
       batching:
-        count: 5000
-        period: 1s
+        count: 50000
+        period: 10s
 
 matrix:
   cpu_points: [1]
