@@ -26,13 +26,13 @@ Last updated: 2026-03-16
 <!-- Copyright 2025 Redpanda Data, Inc. -->
 ## AWS Bench Results
 
-Last refreshed: 2026-06-04
+Last refreshed: 2026-06-05
 
 | Connector / Scenario  | Best vCPU | Connect MB/s | KC MB/s | Gap (Connect − KC) | Last Run    |
 |-----------------------|-----------|--------------|---------|--------------------|-------------|
-| dynamodb / cdc        |         1 |            6 |      —    |                   —  | 2026-06-04  |
-| iceberg / orders-sink ⚠ |         8 |          242 |      70 | +172 MB/s (+71%)   | 2026-06-04  |
-| iceberg / orders-sink-smoke |         1 |           11 |      —    |                   —  | 2026-06-04  |
+| dynamodb / cdc        |         1 |           36 |      —    |                   —  | 2026-06-05  |
+| iceberg / orders-sink ⚠ |         4 |          139 |      70 | +69 MB/s (+50%)    | 2026-06-05  |
+| iceberg / orders-sink-smoke |         1 |           10 |      —    |                   —  | 2026-06-05  |
 | mysql / orders-cdc ⚠  |         8 |          111 |      39 | +72 MB/s (+65%)    | 2026-06-02  |
 | postgres / orders-cdc ⚠ |         4 |          102 |      17 | +85 MB/s (+83%)    | 2026-06-01  |
 
