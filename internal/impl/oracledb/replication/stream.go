@@ -13,6 +13,9 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
+
+	"github.com/blastrain/vitess-sqlparser/sqlparser"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/confx"
@@ -128,8 +131,8 @@ func ApplyNLSSettings(ctx context.Context, db dbExecer) error {
 	return nil
 }
 
-// VerifySnapshotFilters verifies that tables specified in the filters map exist in the tracked tables.
-func VerifySnapshotFilters(ctx context.Context, userTables []UserTable, filters map[string]string) error {
+// SnapshotFilterTablesExist verifies that tables specified in the filters map exist in the tracked tables.
+func SnapshotFilterTablesExist(userTables []UserTable, filters map[string]string) error {
 	if len(filters) > 0 {
 		known := make(map[string]struct{}, len(userTables))
 		for _, t := range userTables {
@@ -141,5 +144,37 @@ func VerifySnapshotFilters(ctx context.Context, userTables []UserTable, filters 
 			}
 		}
 	}
+	return nil
+}
+
+// ValidateSnapshotFilters validates that the snapshot filters are SELECT statements only
+// and that they match the specified filter table (key).
+func ValidateSnapshotFilters(filters map[string]string) error {
+	for table, query := range filters {
+		stmt, err := sqlparser.Parse(query)
+		if err != nil {
+			return fmt.Errorf("snapshot filter for table %q is not valid SQL: %w", table, err)
+		}
+		if sel, ok := stmt.(*sqlparser.Select); !ok {
+			return fmt.Errorf("snapshot filter for table %q must be a SELECT statement", table)
+		} else if len(sel.From) != 1 {
+			return fmt.Errorf("snapshot filter for table %q must query exactly one table", table)
+		} else if ate, ok := sel.From[0].(*sqlparser.AliasedTableExpr); !ok {
+			return fmt.Errorf("snapshot filter for table %q must reference a simple table name", table)
+		} else if tn, ok := ate.Expr.(sqlparser.TableName); !ok {
+			return fmt.Errorf("snapshot filter for table %q must reference a simple table name", table)
+		} else {
+			var parsedTable string
+			if !tn.Qualifier.IsEmpty() {
+				parsedTable = strings.ToUpper(tn.Qualifier.String()) + "." + strings.ToUpper(tn.Name.String())
+			} else {
+				parsedTable = strings.ToUpper(tn.Name.String())
+			}
+			if strings.ToUpper(table) != parsedTable {
+				return fmt.Errorf("snapshot filter key %q does not match the table referenced in the query (%q)", table, parsedTable)
+			}
+		}
+	}
+
 	return nil
 }
