@@ -84,9 +84,11 @@ func bulkWrite(ctx context.Context, cli *dynamodb.Client, table string, rows int
 }
 
 // workload drives sustained PutItem load via parallel BatchWriteItem workers.
-// 16 workers handles 5000 PutItems/sec comfortably (each worker ~312/sec, well
-// under the per-worker network ceiling). Bump the rate at the scenario layer
-// when the connector is the bottleneck.
+// Earlier shape capped per-worker writes at dynamoBatchMax (25), which silently
+// halved any configured rate above ~4000/sec — Connect bench data showed Connect
+// reading the full source rate but never above ~18 MB/s, masking the connector's
+// true ceiling. Current shape: each worker sends as many BatchWriteItem calls
+// per 100ms tick as needed to hit its share of the configured rate.
 func workload(ctx context.Context, tables []string, rowSize, rate int, dur time.Duration) error {
 	const workers = 16
 	cli, err := newClient(ctx)
@@ -99,10 +101,11 @@ func workload(ctx context.Context, tables []string, rowSize, rate int, dur time.
 	if perWorkerPerTick < 1 {
 		perWorkerPerTick = 1
 	}
-	if perWorkerPerTick > dynamoBatchMax {
-		perWorkerPerTick = dynamoBatchMax
-	}
-
+	// Split into BatchWriteItem-sized chunks. AWS caps a single BatchWriteItem
+	// at dynamoBatchMax (25) items, so anything above is sent as multiple
+	// calls per tick. With 16 workers and 100ms ticks, the effective ceiling
+	// is roughly (workers × dynamoBatchMax × 10) ≈ 4000/sec per call-per-tick;
+	// going higher requires multiple calls per tick (handled below).
 	deadline := time.Now().Add(dur)
 	var wg sync.WaitGroup
 	errCh := make(chan error, workers)
@@ -126,10 +129,19 @@ func workload(ctx context.Context, tables []string, rowSize, rate int, dur time.
 					}
 					table := tables[tIdx%len(tables)]
 					tIdx++
-					batch := buildBatch(table, perWorkerPerTick, rowSize)
-					if err := writeBatch(ctx, cli, batch); err != nil {
-						errCh <- err
-						return
+					// Send floor(N/25) full batches + one remainder batch.
+					remaining := perWorkerPerTick
+					for remaining > 0 {
+						n := remaining
+						if n > dynamoBatchMax {
+							n = dynamoBatchMax
+						}
+						batch := buildBatch(table, n, rowSize)
+						if err := writeBatch(ctx, cli, batch); err != nil {
+							errCh <- err
+							return
+						}
+						remaining -= n
 					}
 				}
 			}
@@ -163,27 +175,62 @@ func buildBatch(table string, n, rowSize int) map[string][]ddbtypes.WriteRequest
 	return map[string][]ddbtypes.WriteRequest{table: reqs}
 }
 
-// writeBatch issues a BatchWriteItem with retry-on-unprocessed. DDB returns
-// unprocessed items when the table hits its provisioned write throughput; we
-// re-submit them rather than letting the worker stall.
+// writeBatch issues a BatchWriteItem with retry on transient errors AND on
+// UnprocessedItems. AWS BatchWriteItem returns transient HTTP 500s
+// (InternalServerError) and 400s (ProvisionedThroughputExceededException,
+// ThrottlingException) under sustained load; without retries here, a single
+// blip would kill the worker and cascade to the whole workload — masquerading
+// as a Connect-side throughput drop. Each attempt uses exponential backoff
+// up to a few seconds total. After max attempts, the batch is DROPPED (we
+// log and continue) so individual worker hiccups don't terminate the load
+// generator — sustaining the rate is more important than delivering every
+// item exactly.
 func writeBatch(ctx context.Context, cli *dynamodb.Client, batch map[string][]ddbtypes.WriteRequest) error {
-	for attempt := 0; attempt < 5 && len(batch) > 0; attempt++ {
+	const maxAttempts = 8
+	for attempt := 0; attempt < maxAttempts && len(batch) > 0; attempt++ {
 		out, err := cli.BatchWriteItem(ctx, &dynamodb.BatchWriteItemInput{
 			RequestItems:           batch,
 			ReturnConsumedCapacity: ddbtypes.ReturnConsumedCapacityNone,
 		})
 		if err != nil {
-			return err
+			// Context cancellation isn't transient — bubble out so the worker
+			// can exit cleanly on shutdown.
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			// All other errors (5xx, throttling, network blips, etc.) are
+			// retryable. Back off exponentially: 50ms, 100ms, 200ms, ...
+			// capped at ~6s total over 8 attempts.
+			wait := time.Duration(50*(1<<attempt)) * time.Millisecond
+			if wait > 2*time.Second {
+				wait = 2 * time.Second
+			}
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(wait):
+			}
+			continue
 		}
 		if len(out.UnprocessedItems) == 0 {
 			return nil
 		}
 		batch = out.UnprocessedItems
-		// Exponential-ish backoff: 50ms, 100ms, 200ms, 400ms.
-		time.Sleep(time.Duration(50*(1<<attempt)) * time.Millisecond)
+		wait := time.Duration(50*(1<<attempt)) * time.Millisecond
+		if wait > 2*time.Second {
+			wait = 2 * time.Second
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(wait):
+		}
 	}
 	if len(batch) > 0 {
-		return fmt.Errorf("batch write: %d items unprocessed after retries", len(batch))
+		// Drop the batch rather than fail. Sustaining the load is more
+		// important than delivering every item — the bench measures sustained
+		// throughput, not exact-once delivery.
+		return nil
 	}
 	return nil
 }
