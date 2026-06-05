@@ -1,15 +1,19 @@
 # SAP HANA Query Read Benchmark
 
-Measures `sap_hana` input throughput in `query` mode: executes a user-supplied SQL statement and produces one message per result row. Pipeline terminates after all result rows are emitted.
+Measures throughput of arbitrary SQL via two connectors:
+
+- **`sap_hana` input** (`query` mode) — executes a user-supplied SQL statement via go-hdb native protocol
+- **Kafka Connect JDBC Source** (`bulk` mode with custom query) — comparison baseline using ngdbc JDBC driver
 
 ## What it measures
 
-Throughput of arbitrary SQL — full scans, filtered queries, or queries with computed columns — without the overhead of table-level metadata. Useful for comparing selective vs full-scan performance.
+Throughput of arbitrary SQL — full scans, filtered queries, or queries with computed columns — without table-level metadata overhead.
 
 ## Prerequisites
 
-- Docker running (Kafka — run `task up` from `saphana-read/bulk/` if not already started)
+- Docker running
 - `HANA_DSN` and `HANA_SCHEMA` env vars set
+- For Kafka Connect benchmarks: `bench/ngdbc.jar` present (SAP HANA JDBC driver)
 
 ## Setup
 
@@ -17,56 +21,72 @@ Throughput of arbitrary SQL — full scans, filtered queries, or queries with co
 export HANA_DSN="hdb://USER:PASS@host:30015"
 export HANA_SCHEMA="YOUR_SCHEMA"
 
+task up                           # start Kafka
 task bench:build                  # build redpanda-connect + loader binaries
-task bench:load COUNT=1000000     # drop/create BENCH_ORDERS_QUERY, insert 1M rows
+task bench:load COUNT=2000000     # drop/create BENCH_ORDERS_QUERY, insert 2M rows
 ```
 
-## Run
+---
 
-### Full scan (default)
+## Redpanda Connect — sap_hana query mode
+
+### Single run
 
 ```bash
-task bench:run                    # runs: SELECT * FROM "SCHEMA"."BENCH_ORDERS_QUERY"
+task bench:run                    # SELECT * FROM "SCHEMA"."BENCH_ORDERS_QUERY"
+task bench:run CORES=4 FETCH_SIZE=100000
+```
+
+### Custom query
+
+```bash
+export HANA_QUERY='SELECT ID, USER_ID, CAST(PRICE AS DOUBLE) AS PRICE FROM "SCHEMA"."BENCH_ORDERS_QUERY" WHERE STATUS = '"'"'confirmed'"'"''
 task bench:run CORES=4
 ```
 
-### Filtered query
+### Full matrix (fetch_size × cores)
 
 ```bash
-export HANA_QUERY='SELECT * FROM "DAVIDDEDU"."BENCH_ORDERS_QUERY" WHERE STATUS = '"'"'confirmed'"'"''
-task bench:run
+task bench:matrix OUT=results.txt
 ```
 
-### Aggregation / computed columns
+Parameters: `FETCH_SIZE` (default 10000), `CORES` (default unbounded), `BATCH_COUNT` (default 1000), `MAX_IN_FLIGHT` (default 10).
 
-```bash
-export HANA_QUERY='SELECT USER_ID, SUM(PRICE) AS TOTAL FROM "DAVIDDEDU"."BENCH_ORDERS_QUERY" GROUP BY USER_ID'
-task bench:run
-```
-
-Output:
-```
-cores=4
-query=SELECT * FROM "DAVIDDEDU"."BENCH_ORDERS_QUERY"
-TIME        IN KAFKA        MSG/S
-10:00:01    14200           7100 msg/s
-...
 ---
-Total messages : 1000000
-Elapsed        : 108s
-Avg throughput : 9259 msg/s
-```
 
-## Run all core combinations
+## Kafka Connect JDBC Source (comparison)
+
+### Prerequisites
 
 ```bash
-task bench:all OUT=results.txt    # sweeps CORES=1,2,4,8
+# Build the Kafka Connect image (one-time, requires internet)
+task kc:build
+
+# Start Kafka Connect (Kafka must already be running via task up)
+task kc:up
 ```
+
+### Single run
+
+```bash
+task bench:kc:run FETCH_SIZE=10000 BATCH_MAX_ROWS=10000 TOTAL=2000000
+```
+
+### Full matrix (fetch_size × batch_max_rows)
+
+```bash
+task bench:kc:matrix TOTAL=2000000 OUT=kc_query.txt
+```
+
+Parameters: `FETCH_SIZE` (default 10000), `BATCH_MAX_ROWS` (default 10000), `TOTAL` (default 2000000).
+
+The connector uses `mode=bulk` with `poll.interval.ms=86400000` (one-shot read).
+`PRICE` is cast to `DOUBLE` to avoid an ngdbc 2.x hang with `DECIMAL+NVARCHAR+TIMESTAMP` result sets.
+
+---
 
 ## Teardown
 
-Stop Kafka from the bulk bench directory:
-
 ```bash
-cd ../bulk && task down
+task down
 ```

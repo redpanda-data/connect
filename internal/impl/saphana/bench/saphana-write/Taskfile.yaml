@@ -3,6 +3,42 @@ version: "3"
 silent: true
 
 tasks:
+  up:
+    desc: Start Kafka
+    cmds:
+      - docker compose up -d
+      - until docker exec rpcns-hana-kafka kafka-broker-api-versions --bootstrap-server localhost:9092 > /dev/null 2>&1; do sleep 2; done
+      - echo "Kafka ready"
+
+  down:
+    desc: Stop and remove containers and volumes
+    cmds:
+      - docker compose -f docker-compose.yaml -f docker-compose.kc.yaml down -v --remove-orphans 2>/dev/null || docker compose down -v --remove-orphans
+
+  kc:build:
+    desc: Build the Kafka Connect image (downloads JDBC plugin — requires internet)
+    cmds:
+      - docker compose -f docker-compose.yaml -f docker-compose.kc.yaml build kafka-connect
+      - echo "Kafka Connect image built"
+
+  kc:up:
+    desc: Start Kafka Connect (requires bench/ngdbc.jar and Kafka already running via task up)
+    cmds:
+      - |
+        if [ ! -f "../ngdbc.jar" ]; then
+          echo "ERROR: SAP HANA JDBC driver not found at bench/ngdbc.jar"
+          echo "       Copy ngdbc.jar from the HANA server or SAP Support Portal, then retry."
+          exit 1
+        fi
+        docker compose -f docker-compose.yaml -f docker-compose.kc.yaml up -d --force-recreate kafka-connect
+        echo "Waiting for Kafka Connect REST API..."
+        ATTEMPTS=0
+        until curl -sf http://localhost:8083/connectors >/dev/null 2>&1 || [ $ATTEMPTS -ge 60 ]; do
+          sleep 3; ATTEMPTS=$((ATTEMPTS+1))
+        done
+        if [ $ATTEMPTS -ge 60 ]; then echo "ERROR: Kafka Connect did not start within 3 min"; exit 1; fi
+        echo "Kafka Connect ready at http://localhost:8083"
+
   bench:build:
     desc: Build the redpanda-connect, count, and setup binaries
     cmds:
@@ -160,6 +196,178 @@ tasks:
             ROW=$(printf "%-12s  %-8s  %-12s  %-10s  %s\n" "$mif" "$cores" "$TOTAL" "$ELAPSED" "$AVG")
             echo "$ROW"
             if [ -n "$OUT_FILE" ]; then echo "$ROW" >> "$OUT_FILE"; fi
+          done
+        done
+
+  bench:kc:load:
+    desc: "Fill Kafka topic with COUNT schema-enabled messages for KC Sink (e.g. task bench:kc:load COUNT=2000000)"
+    vars:
+      COUNT: '{{.COUNT | default "2000000"}}'
+    cmds:
+      - |
+        TOPIC="hana-bench-kc-writes"
+
+        timeout 10 docker exec rpcns-hana-kafka kafka-topics --bootstrap-server localhost:29092 \
+          --delete --topic "$TOPIC" > /dev/null 2>&1 || true
+        ATTEMPTS=0
+        until [ $ATTEMPTS -ge 30 ] || \
+          ! docker exec rpcns-hana-kafka kafka-topics --bootstrap-server localhost:29092 \
+            --describe --topic "$TOPIC" > /dev/null 2>&1; do
+          sleep 1; ATTEMPTS=$((ATTEMPTS + 1))
+        done
+        docker exec rpcns-hana-kafka kafka-topics --bootstrap-server localhost:29092 \
+          --create --if-not-exists --topic "$TOPIC" --partitions 8 --replication-factor 1 > /dev/null
+
+        echo "Producing {{.COUNT}} schema-enabled messages to $TOPIC..."
+        COUNT={{.COUNT}} /tmp/rpcns-hana-write-bench run ./producer_kc.yaml
+        echo "Done"
+
+  bench:kc:run:
+    desc: "Run write benchmark via Kafka Connect JDBC Sink (e.g. task bench:kc:run BATCH_SIZE=1000 TASKS_MAX=1 TOTAL=2000000)"
+    vars:
+      BATCH_SIZE: '{{.BATCH_SIZE | default "1000"}}'
+      TASKS_MAX: '{{.TASKS_MAX | default "1"}}'
+      TOTAL: '{{.TOTAL | default "2000000"}}'
+      INTERVAL: '{{.INTERVAL | default "2"}}'
+    cmds:
+      - |
+        if [ -z "$HANA_DSN" ]; then echo "HANA_DSN env var required"; exit 1; fi
+        if [ -z "$HANA_SCHEMA" ]; then echo "HANA_SCHEMA env var required"; exit 1; fi
+        if [ ! -f "../ngdbc.jar" ]; then echo "ERROR: place SAP HANA JDBC driver at bench/ngdbc.jar"; exit 1; fi
+
+        # Parse DSN: hdb://user:pass@host:port
+        _S="${HANA_DSN#hdb://}"; KC_USER="${_S%%:*}"; _R="${_S#*:}"; KC_PASS="${_R%@*}"; KC_HP="${_S##*@}"
+        KC_JDBC="jdbc:sap://${KC_HP}"
+
+        BATCH={{.BATCH_SIZE}}; TASKS={{.TASKS_MAX}}; TOTAL={{.TOTAL}}; INTERVAL={{.INTERVAL}}
+        CONN="hana-bench-write-kc-$(date +%s)"; TOPIC="hana-bench-kc-writes"
+        KC_REST="http://localhost:8083"
+
+        # Escape schema name for JSON HANA quoted identifier
+        KC_TABLE=$(printf '"%s"."BENCH_WRITES"' "$HANA_SCHEMA" | sed 's/"/\\"/g')
+
+        ATTEMPTS=0
+        until curl -sf "${KC_REST}/connectors" >/dev/null 2>&1 || [ $ATTEMPTS -ge 30 ]; do
+          sleep 2; ATTEMPTS=$((ATTEMPTS+1))
+        done
+        if [ $ATTEMPTS -ge 30 ]; then echo "ERROR: Kafka Connect not ready — run: task kc:up"; exit 1; fi
+
+        # Delete all existing connectors so their consumers release all partitions
+        for _c in $(curl -sf "${KC_REST}/connectors" 2>/dev/null \
+          | python3 -c "import sys,json; [print(c) for c in json.load(sys.stdin)]" 2>/dev/null); do
+          curl -sf -X DELETE "${KC_REST}/connectors/$_c" >/dev/null 2>&1 || true
+        done
+        sleep 3
+
+        # Reset HANA table
+        HANA_DSN="$HANA_DSN" HANA_SCHEMA="$HANA_SCHEMA" /tmp/rpcns-hana-write-setup > /dev/null
+
+        # Get Kafka total messages before creating connector
+        get_kafka_total() {
+          timeout 5 docker exec rpcns-hana-kafka kafka-get-offsets \
+            --bootstrap-server localhost:29092 --topic "$TOPIC" 2>/dev/null \
+            | awk -F: '{sum+=$3} END{print sum+0}' || echo 0
+        }
+        KAFKA_TOTAL=$(get_kafka_total)
+
+        get_hana_count() {
+          HANA_DSN="$HANA_DSN" HANA_SCHEMA="$HANA_SCHEMA" /tmp/rpcns-hana-write-count 2>/dev/null || echo 0
+        }
+
+        printf "kc  batch_size=%-6s  tasks_max=%s\n" "$BATCH" "$TASKS"
+
+        curl -sf -X POST "${KC_REST}/connectors" \
+          -H "Content-Type: application/json" \
+          -d "{
+            \"name\":\"${CONN}\",
+            \"config\":{
+              \"connector.class\":\"com.sap.kafka.connect.sink.hana.HANASinkConnector\",
+              \"connection.url\":\"${KC_JDBC}\",
+              \"connection.user\":\"${KC_USER}\",
+              \"connection.password\":\"${KC_PASS}\",
+              \"topics\":\"${TOPIC}\",
+              \"${TOPIC}.table.name\":\"${KC_TABLE}\",
+              \"${TOPIC}.pk.mode\":\"none\",
+              \"${TOPIC}.table.type\":\"column\",
+              \"auto.create\":\"false\",
+              \"batch.size\":\"${BATCH}\",
+              \"consumer.override.max.poll.records\":\"${BATCH}\",
+              \"tasks.max\":\"${TASKS}\",
+              \"value.converter\":\"org.apache.kafka.connect.json.JsonConverter\",
+              \"value.converter.schemas.enable\":\"true\",
+              \"key.converter\":\"org.apache.kafka.connect.json.JsonConverter\",
+              \"key.converter.schemas.enable\":\"false\"
+            }
+          }" >/dev/null
+
+        # Wait for connector to reach RUNNING state
+        ATTEMPTS=0
+        until [ $ATTEMPTS -ge 30 ]; do
+          STATE=$(curl -sf "${KC_REST}/connectors/${CONN}/status" 2>/dev/null \
+            | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['connector']['state'])" 2>/dev/null || echo "UNKNOWN")
+          [ "$STATE" = "RUNNING" ] && break
+          [ "$STATE" = "FAILED" ] && echo "ERROR: connector failed to start" && exit 1
+          sleep 1; ATTEMPTS=$((ATTEMPTS+1))
+        done
+
+        START=$(date +%s); PREV_COUNT=0; PREV_TIME=$START
+        printf "%-10s  %-14s  %s\n" "TIME" "WRITTEN" "MSG/S"
+
+        while true; do
+          sleep "$INTERVAL"
+          COUNT=$(get_hana_count); COUNT=${COUNT:-0}; NOW=$(date +%s)
+          DELTA_T=$((NOW-PREV_TIME)); DELTA_C=$((COUNT-PREV_COUNT)); RATE=0
+          [ "$DELTA_T" -gt 0 ] && RATE=$((DELTA_C/DELTA_T))
+          printf "%-10s  %-14s  %s msg/s\n" "$(date +%H:%M:%S)" "$COUNT" "$RATE"
+
+          STATUS_JSON=$(curl -sf "${KC_REST}/connectors/${CONN}/status" 2>/dev/null || echo "{}")
+          CONN_STATE=$(echo "$STATUS_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('connector',{}).get('state','UNKNOWN'))" 2>/dev/null || echo "UNKNOWN")
+          TASK_FAILED=$(echo "$STATUS_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); print(any(t.get('state')=='FAILED' for t in d.get('tasks',[])))" 2>/dev/null || echo "False")
+          if [ "$CONN_STATE" = "FAILED" ] || [ "$TASK_FAILED" = "True" ]; then
+            TRACE=$(echo "$STATUS_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); t=next((t for t in d.get('tasks',[]) if t.get('state')=='FAILED'),{}); print((t.get('trace') or d.get('connector',{}).get('trace',''))[:400])" 2>/dev/null || echo "")
+            curl -sf -X DELETE "${KC_REST}/connectors/${CONN}" >/dev/null 2>&1 || true
+            echo "ERROR: connector/task FAILED — $TRACE"; exit 1
+          fi
+
+          if [ "${COUNT:-0}" -ge "$TOTAL" ]; then
+            ELAPSED=$((NOW-START))
+            AVG=$(awk "BEGIN{printf \"%.0f\",$TOTAL/($ELAPSED>0?$ELAPSED:1)}")
+            curl -sf -X DELETE "${KC_REST}/connectors/${CONN}" >/dev/null 2>&1 || true
+            echo "---"
+            printf "kc  batch_size=%-6s  tasks_max=%s\n" "$BATCH" "$TASKS"
+            echo "Total messages : $COUNT / $TOTAL"
+            echo "Elapsed        : ${ELAPSED}s"
+            echo "Avg throughput : ${AVG} msg/s"
+            echo "RESULT_KC_WRITE batch=$BATCH tasks=$TASKS total=$COUNT elapsed=${ELAPSED}s avg=$AVG"
+            break
+          fi
+          PREV_COUNT=$COUNT; PREV_TIME=$NOW
+        done
+
+  bench:kc:matrix:
+    desc: "Sweep batch_size x tasks_max over Kafka Connect JDBC Sink (e.g. task bench:kc:matrix TOTAL=2000000 OUT=kc_write.txt)"
+    vars:
+      TOTAL: '{{.TOTAL | default "2000000"}}'
+      OUT: '{{.OUT | default ""}}'
+    cmds:
+      - |
+        OUT_FILE="{{.OUT}}"
+        HDR=$(printf "%-12s  %-10s  %-12s  %-10s  %s\n" "BATCH_SIZE" "TASKS_MAX" "TOTAL" "ELAPSED" "AVG_MSG_S")
+        echo "$HDR"
+        if [ -n "$OUT_FILE" ]; then
+          printf "# kafka-connect jdbc sink  total={{.TOTAL}}\n" >"$OUT_FILE"
+          echo "$HDR" >>"$OUT_FILE"
+        fi
+        for batch in 1000 5000 10000; do
+          for tasks in 1 2 4; do
+            OUTPUT=$(task bench:kc:run BATCH_SIZE=$batch TASKS_MAX=$tasks TOTAL={{.TOTAL}} 2>&1) || true
+            R=$(echo "$OUTPUT" | grep "^RESULT_KC_WRITE " || true)
+            TOT=$(echo "$R" | grep -o 'total=[^ ]*' | cut -d= -f2 || true); TOT=${TOT:-ERROR}
+            EL=$(echo "$R" | grep -o 'elapsed=[^ ]*' | cut -d= -f2 || true); EL=${EL:-?}
+            AV=$(echo "$R" | grep -o 'avg=[^ ]*' | cut -d= -f2 || true); AV=${AV:-0}
+            ROW=$(printf "%-12s  %-10s  %-12s  %-10s  %s\n" "$batch" "$tasks" "$TOT" "$EL" "$AV")
+            echo "$ROW"
+            if [ -n "$OUT_FILE" ]; then echo "$ROW" >>"$OUT_FILE"; fi
           done
         done
 
