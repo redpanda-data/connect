@@ -17,6 +17,7 @@ import (
 	_ "github.com/redpanda-data/connect/v4/public/components/community"
 
 	// Import all enterprise components.
+	_ "github.com/redpanda-data/connect/v4/public/components/db2"
 	_ "github.com/redpanda-data/connect/v4/public/components/gateway"
 	_ "github.com/redpanda-data/connect/v4/public/components/gcp/enterprise"
 	_ "github.com/redpanda-data/connect/v4/public/components/google"
