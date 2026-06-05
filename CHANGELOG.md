@@ -9,6 +9,13 @@ All notable changes to this project will be documented in this file.
 
 - aws_s3: Added `sqs.on_missing_object` field to control how an SQS notification whose S3 object cannot be found is handled. The default `drop` preserves the historical behaviour (warn, ack and discard); `nack` instead logs an error and returns the notification to the queue so an SQS redrive policy can dead-letter it. ([@peczenyj](https://github.com/peczenyj), [#4475](https://github.com/redpanda-data/connect/pull/4475))
 
+## 4.95.0 - 2026-06-04
+
+### Fixed
+
+- kafka: Prevented spurious offset commits for revoked partitions during cooperative rebalances, strengthening the at-least-once delivery guarantee. ([@Jeffail](https://github.com/Jeffail), [#4477](https://github.com/redpanda-data/connect/pull/4477))
+- oracledb: Fixed a bug where integer-valued decimals from LogMiner redo were emitted as JSON numbers instead of canonical decimal strings, causing failures when encoding to Avro string-typed fields. ([@Jeffail](https://github.com/Jeffail), [#4465](https://github.com/redpanda-data/connect/pull/4465))
+
 ## 4.94.1 - 2026-05-29
 
 ### Fixed
