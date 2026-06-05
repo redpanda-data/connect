@@ -9,6 +9,13 @@ All notable changes to this project will be documented in this file.
 
 - `aws_s3` input: added an `sqs.message_timeout` field that periodically refreshes the visibility timeout of an in-flight SQS notification while its S3 object is being processed, preventing slow or large objects from being redelivered and reprocessed. Defaults to `0s` (disabled), preserving existing behaviour. ([@peczenyj](https://github.com/peczenyj), [#4468](https://github.com/redpanda-data/connect/issues/4468))
 
+## 4.95.0 - 2026-06-04
+
+### Fixed
+
+- kafka: Prevented spurious offset commits for revoked partitions during cooperative rebalances, strengthening the at-least-once delivery guarantee. ([@Jeffail](https://github.com/Jeffail), [#4477](https://github.com/redpanda-data/connect/pull/4477))
+- oracledb: Fixed a bug where integer-valued decimals from LogMiner redo were emitted as JSON numbers instead of canonical decimal strings, causing failures when encoding to Avro string-typed fields. ([@Jeffail](https://github.com/Jeffail), [#4465](https://github.com/redpanda-data/connect/pull/4465))
+
 ## 4.94.1 - 2026-05-29
 
 ### Fixed
