@@ -336,7 +336,7 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 			TLSConfig:        pgConnConfig.TLSConfig,
 			DBRawDSN:         dsn,
 			DBSchema:         schema,
-			DBTables:         tables,
+			DBTables:         append(tables, signalTableName),
 			RefreshAuthToken: iamAuthTokenBuilder,
 
 			IncludeTxnMarkers:        includeTxnMarkers,
@@ -374,6 +374,13 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 	}
 
 	return conf.WrapBatchInputExtractTracingSpanMapping("postgres_cdc", r)
+}
+
+func appendIfMissing(ss []string, s string) []string {
+	if slices.Contains(ss, s) {
+		return ss
+	}
+	return append(ss, s)
 }
 
 // validateSimpleString ensures we aren't vuln to SQL injection.
@@ -432,7 +439,7 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 		return err
 	}
 
-	if p.snapshotSig, err = NewSnapshotSignaller(p.signalTableName, p.logger); err != nil {
+	if p.snapshotSig, err = NewSnapshotSignaller(p.streamConfig.DBSchema, p.signalTableName, p.logger); err != nil {
 		return fmt.Errorf("unable to create snapshot signaller: %w", err)
 	}
 
@@ -493,7 +500,7 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 			)
 			for _, msg := range batch {
 				if err := p.snapshotSig.OnSignal(ctx, msg); err != nil {
-					p.logger.Errorf("failed to detect if change event was snapshot signal, continuing to process change events: %w", err)
+					p.logger.Errorf("failed to detect if change event was snapshot signal, continuing to process change events: %s", err)
 					continue
 				}
 				if mb, err = json.Marshal(msg.Data); err != nil {

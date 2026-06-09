@@ -16,18 +16,18 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/replication"
 )
 
-const signalSchema = "dbo"
-
 var _ replication.Signaller = (*snapshotSignaller)(nil)
 
 type snapshotSignaller struct {
 	log       *service.Logger
+	schema    string
 	tableName string
 }
 
-func NewSnapshotSignaller(tableName string, log *service.Logger) (*snapshotSignaller, error) {
+func NewSnapshotSignaller(schema, tableName string, log *service.Logger) (*snapshotSignaller, error) {
 	return &snapshotSignaller{
 		log:       log,
+		schema:    schema,
 		tableName: tableName,
 	}, nil
 }
@@ -37,7 +37,7 @@ func (o *snapshotSignaller) OnSignal(_ context.Context, event any) error {
 	if !ok {
 		return nil
 	}
-	if msg.Schema != signalSchema || msg.Table != o.tableName {
+	if msg.Schema != o.schema || msg.Table != o.tableName {
 		return nil
 	}
 

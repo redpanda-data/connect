@@ -1154,9 +1154,9 @@ postgres_cdc:
     dsn: %s
     slot_name: test_slot_signalling
     stream_snapshot: true
+    signal_table_name: rpcn_signal_table
     schema: dbo
     tables:
-      - rpcn_signal_table
       - events
 `, databaseURL)
 
