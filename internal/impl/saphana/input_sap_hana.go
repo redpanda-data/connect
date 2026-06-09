@@ -68,7 +68,8 @@ Every message produced by this input carries the following metadata fields:
 `).
 	Field(service.NewStringField(shFieldDSN).
 		Description("SAP HANA connection DSN.").
-		Example("hdb://user:password@host:39017"),
+		Example("hdb://user:password@host:39017").
+		Secret(),
 	).
 	Field(service.NewIntField(shFieldFetchSize).
 		Description("Number of rows requested per FetchNext round-trip. Larger values reduce round-trips on high-latency connections.").
@@ -389,6 +390,9 @@ func (s *sapHANAInput) ReadBatch(ctx context.Context) (service.MessageBatch, ser
 				s.dbMut.Lock()
 				if !timerFired {
 					return nil, nil, service.ErrEndOfInput
+				}
+				if s.db == nil {
+					return nil, nil, service.ErrNotConnected
 				}
 				// Pre-warm schema cache before opening rows (same reason as bulk mode).
 				if s.schemaName != "" {
