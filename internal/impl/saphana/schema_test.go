@@ -156,6 +156,24 @@ func TestSchemaCacheEmptySchemaName(t *testing.T) {
 	assert.Nil(t, got)
 }
 
+func TestQuoteIdentifier(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"MY_TABLE", `"MY_TABLE"`},
+		{"my schema", `"my schema"`},
+		{`tab"le`, `"tab""le"`},
+		{`a"b"c`, `"a""b""c"`},
+		{"", `""`},
+	}
+	for _, tc := range tests {
+		t.Run(tc.input, func(t *testing.T) {
+			assert.Equal(t, tc.want, quoteIdentifier(tc.input))
+		})
+	}
+}
+
 func TestSchemaCacheCachesResults(t *testing.T) {
 	// Seed the cache directly; a nil DB would panic on a real query.
 	cache := newSchemaCache(nil, service.MockResources().Logger())

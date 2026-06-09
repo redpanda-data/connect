@@ -376,7 +376,6 @@ func (s *sapHANAInput) ReadBatch(ctx context.Context) (service.MessageBatch, ser
 			case shModeIncrementing, shModeTimestamp, shModeTimestampIncrementing:
 				// Release the lock while waiting so Close() can proceed.
 				s.dbMut.Unlock()
-				var timerFired bool
 				select {
 				case <-ctx.Done():
 					s.dbMut.Lock()
@@ -385,12 +384,8 @@ func (s *sapHANAInput) ReadBatch(ctx context.Context) (service.MessageBatch, ser
 					s.dbMut.Lock()
 					return nil, nil, service.ErrEndOfInput
 				case <-time.After(s.pollInterval):
-					timerFired = true
 				}
 				s.dbMut.Lock()
-				if !timerFired {
-					return nil, nil, service.ErrEndOfInput
-				}
 				if s.db == nil {
 					return nil, nil, service.ErrNotConnected
 				}

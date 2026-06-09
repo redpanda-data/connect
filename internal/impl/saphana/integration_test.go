@@ -115,6 +115,7 @@ func readAllMessages(t *testing.T, dsn, yaml string) []map[string]any {
 
 func TestIntegrationSAPHANAInputBulk(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Log("Given a HANA instance with a table containing 3 rows")
 	dsn := startHANA(t)
 	db := openTestDB(t, dsn)
 
@@ -128,12 +129,14 @@ func TestIntegrationSAPHANAInputBulk(t *testing.T) {
 		require.NoError(t, err)
 	}
 
+	t.Log("When the input reads BULK_TEST in bulk mode")
 	rows := readAllMessages(t, dsn, fmt.Sprintf(`
 dsn: %q
 mode: bulk
 table: BULK_TEST
 `, dsn))
 
+	t.Log("Then all 3 rows are returned")
 	require.Len(t, rows, 3)
 	ids := make([]int64, 0, 3)
 	for _, row := range rows {
@@ -151,6 +154,7 @@ table: BULK_TEST
 
 func TestIntegrationSAPHANAInputQuery(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Log("Given a HANA table with 4 rows, 2 active and 2 inactive")
 	dsn := startHANA(t)
 	db := openTestDB(t, dsn)
 
@@ -164,12 +168,14 @@ func TestIntegrationSAPHANAInputQuery(t *testing.T) {
 		require.NoError(t, err)
 	}
 
+	t.Log("When the input reads with a WHERE ACTIVE = 1 filter in query mode")
 	rows := readAllMessages(t, dsn, fmt.Sprintf(`
 dsn: %q
 mode: query
 query: "SELECT * FROM QUERY_TEST WHERE ACTIVE = 1"
 `, dsn))
 
+	t.Log("Then only the 2 active rows are returned")
 	require.Len(t, rows, 2)
 	for _, row := range rows {
 		switch v := row["ACTIVE"].(type) {
@@ -185,6 +191,7 @@ query: "SELECT * FROM QUERY_TEST WHERE ACTIVE = 1"
 
 func TestIntegrationSAPHANAInputIncrementing(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Log("Given a HANA table with 5 rows keyed by a monotonic ID column")
 	dsn := startHANA(t)
 	db := openTestDB(t, dsn)
 
@@ -206,11 +213,11 @@ incrementing_column: ID
 poll_interval: 100ms
 `, dsn)
 
-	// First run: no HWM — all 5 rows returned.
+	t.Log("When the input reads in incrementing mode with no initial HWM")
 	rows := readAllMessages(t, dsn, confYAML)
+	t.Log("Then all 5 rows are returned")
 	require.Len(t, rows, 5)
 
-	// Second run: start with HWM=3 — only rows with ID>3 returned.
 	confWithHWM := fmt.Sprintf(`
 dsn: %q
 mode: incrementing
@@ -220,7 +227,9 @@ incrementing_initial_value: "3"
 poll_interval: 100ms
 `, dsn)
 
+	t.Log("When the input reads in incrementing mode with initial HWM=3")
 	rows2 := readAllMessages(t, dsn, confWithHWM)
+	t.Log("Then only rows with ID > 3 are returned")
 	require.Len(t, rows2, 2)
 	for _, row := range rows2 {
 		var id int64
@@ -238,6 +247,7 @@ poll_interval: 100ms
 
 func TestIntegrationSAPHANASchemaMetadata(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Log("Given a HANA table with one row and schema_name configured")
 	dsn := startHANA(t)
 	db := openTestDB(t, dsn)
 
@@ -260,6 +270,7 @@ schema_name: SYSTEM
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = input.Close(context.Background()) })
 
+	t.Log("When the input reads the row")
 	require.NoError(t, input.Connect(t.Context()))
 
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
@@ -270,6 +281,7 @@ schema_name: SYSTEM
 	require.NoError(t, ack(context.Background(), nil))
 	require.NotEmpty(t, batch)
 
+	t.Log("Then the message carries a 'schema' metadata field derived from SYS.TABLE_COLUMNS")
 	schemaVal, ok := batch[0].MetaGet("schema")
 	assert.True(t, ok, "expected 'schema' metadata key")
 	assert.NotNil(t, schemaVal)
@@ -277,6 +289,7 @@ schema_name: SYSTEM
 
 func TestIntegrationSAPHANAOutputWriteBatch(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Log("Given an empty HANA table and an output configured for bulk insert")
 	dsn := startHANA(t)
 	db := openTestDB(t, dsn)
 
@@ -297,6 +310,7 @@ args_mapping: 'root = [this.id, this.name]'
 	t.Cleanup(func() { _ = out.Close(context.Background()) })
 	require.NoError(t, out.Connect(t.Context()))
 
+	t.Log("When WriteBatch is called with 3 messages")
 	batch := service.MessageBatch{
 		service.NewMessage([]byte(`{"id":1,"name":"alice"}`)),
 		service.NewMessage([]byte(`{"id":2,"name":"bob"}`)),
@@ -304,6 +318,7 @@ args_mapping: 'root = [this.id, this.name]'
 	}
 	require.NoError(t, out.WriteBatch(t.Context(), batch))
 
+	t.Log("Then all 3 rows appear in the table in order")
 	rows, err := db.QueryContext(t.Context(), `SELECT ID, NAME FROM OUT_WRITE_TEST ORDER BY ID`)
 	require.NoError(t, err)
 	defer rows.Close()
@@ -327,6 +342,7 @@ args_mapping: 'root = [this.id, this.name]'
 
 func TestIntegrationSAPHANAOutputMultipleBatches(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Log("Given an empty HANA table and an output configured for bulk insert")
 	dsn := startHANA(t)
 	db := openTestDB(t, dsn)
 
@@ -347,6 +363,7 @@ args_mapping: 'root = [this.id, this.name]'
 	t.Cleanup(func() { _ = out.Close(context.Background()) })
 	require.NoError(t, out.Connect(t.Context()))
 
+	t.Log("When WriteBatch is called twice with 2 messages each")
 	require.NoError(t, out.WriteBatch(t.Context(), service.MessageBatch{
 		service.NewMessage([]byte(`{"id":1,"name":"alice"}`)),
 		service.NewMessage([]byte(`{"id":2,"name":"bob"}`)),
@@ -356,6 +373,7 @@ args_mapping: 'root = [this.id, this.name]'
 		service.NewMessage([]byte(`{"id":4,"name":"dave"}`)),
 	}))
 
+	t.Log("Then all 4 rows are present in the table")
 	var count int64
 	require.NoError(t, db.QueryRowContext(t.Context(), `SELECT COUNT(*) FROM OUT_MULTI_TEST`).Scan(&count))
 	assert.Equal(t, int64(4), count)
@@ -363,6 +381,7 @@ args_mapping: 'root = [this.id, this.name]'
 
 func TestIntegrationSAPHANAOutputArgsMappingError(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Log("Given an output whose args_mapping returns a string instead of an array")
 	dsn := startHANA(t)
 	db := openTestDB(t, dsn)
 
@@ -383,8 +402,10 @@ args_mapping: 'root = "not-an-array"'
 	t.Cleanup(func() { _ = out.Close(context.Background()) })
 	require.NoError(t, out.Connect(t.Context()))
 
+	t.Log("When WriteBatch is called")
 	err = out.WriteBatch(t.Context(), service.MessageBatch{
 		service.NewMessage([]byte(`{"id":1,"name":"alice"}`)),
 	})
+	t.Log("Then an error is returned indicating the mapping must produce an array")
 	require.ErrorContains(t, err, "must return an array")
 }
