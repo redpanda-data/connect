@@ -316,6 +316,7 @@ For a non-technical overview suitable for sales, marketing, and other non-engine
 | SQL Server CDC | [`internal/impl/mssqlserver/bench/`](../internal/impl/mssqlserver/bench/) | [results](benchmark-results/mssqlserver-cdc.md) | ~135 MB/sec, 100K msg/sec | Single connection bottleneck |
 | Oracle CDC | [`internal/impl/oracledb/bench/`](../internal/impl/oracledb/bench/) | [results](benchmark-results/oracledb-cdc.md) | ~50K msg/sec (streaming) | LogMiner single-threaded limitation |
 | DynamoDB CDC | [`internal/impl/aws/dynamodb/bench/`](../internal/impl/aws/dynamodb/bench/) | [results](benchmark-results/dynamodb-cdc.md) | ~200 MB/sec, 100K msg/sec | DynamoDB Local, 3 tables x 150K items |
+| SAP HANA | [`internal/impl/saphana/bench/`](../internal/impl/saphana/bench/) | [results](benchmark-results/sap-hana.md) | ~49K msg/sec (bulk), ~42K msg/sec (incrementing) | 2M rows, WSL2/Docker |
 
 ## Keeping Results Up to Date
 

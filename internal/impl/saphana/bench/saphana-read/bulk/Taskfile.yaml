@@ -183,8 +183,7 @@ tasks:
 
         # ngdbc 2.x hangs on SELECT * when result set combines DECIMAL+NVARCHAR+TIMESTAMP.
         # Cast PRICE to DOUBLE to avoid the hang; HANA_QUERY can override entirely.
-        KC_QUERY="${HANA_QUERY:-SELECT ID, USER_ID, PRODUCT_ID, QUANTITY, CAST(PRICE AS DOUBLE) AS PRICE, STATUS, NOTES, CREATED_AT FROM \"${HANA_SCHEMA}\".\"BENCH_ORDERS\"}"
-        KC_QUERY_JSON=$(printf '%s' "$KC_QUERY" | sed 's/\\/\\\\/g; s/"/\\"/g')
+        KC_TABLE=$(printf '"%s"."%s"' "$HANA_SCHEMA" "BENCH_ORDERS" | sed 's/\\/\\\\/g; s/"/\\"/g')
 
         ATTEMPTS=0
         until curl -sf http://localhost:8083/connectors >/dev/null 2>&1 || [ $ATTEMPTS -ge 30 ]; do
@@ -209,18 +208,16 @@ tasks:
           -d "{
             \"name\":\"${CONN}\",
             \"config\":{
-              \"connector.class\":\"io.confluent.connect.jdbc.JdbcSourceConnector\",
+              \"connector.class\":\"com.sap.kafka.connect.source.hana.HANASourceConnector\",
               \"connection.url\":\"${KC_JDBC}\",
               \"connection.user\":\"${KC_USER}\",
               \"connection.password\":\"${KC_PASS}\",
-              \"mode\":\"bulk\",
-              \"query\":\"${KC_QUERY_JSON}\",
-              \"topic.prefix\":\"${TOPIC}\",
+              \"topics\":\"${TOPIC}\",
+              \"${TOPIC}.table.name\":\"${KC_TABLE}\",
+              \"${TOPIC}.poll.interval.ms\":\"86400000\",
+              \"${TOPIC}.fetch.size\":\"${FETCH}\",
+              \"${TOPIC}.batch.max.rows\":\"${BATCH}\",
               \"tasks.max\":\"1\",
-              \"jdbc.fetch.size\":\"${FETCH}\",
-              \"batch.max.rows\":\"${BATCH}\",
-              \"poll.interval.ms\":\"86400000\",
-              \"numeric.mapping\":\"best_fit\",
               \"key.converter\":\"org.apache.kafka.connect.json.JsonConverter\",
               \"value.converter\":\"org.apache.kafka.connect.json.JsonConverter\",
               \"key.converter.schemas.enable\":\"false\",

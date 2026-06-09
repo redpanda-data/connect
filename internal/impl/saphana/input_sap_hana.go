@@ -278,12 +278,12 @@ func (s *sapHANAInput) Connect(ctx context.Context) error {
 	return nil
 }
 
-// tableRef returns a quoted table reference: "SCHEMA"."TABLE" or just "TABLE".
+// tableRef returns a properly quoted and escaped table reference.
 func (s *sapHANAInput) tableRef() string {
 	if s.schemaName != "" {
-		return `"` + s.schemaName + `"."` + s.tableName + `"`
+		return quoteIdentifier(s.schemaName) + "." + quoteIdentifier(s.tableName)
 	}
-	return `"` + s.tableName + `"`
+	return quoteIdentifier(s.tableName)
 }
 
 // openRows executes the query for the current mode and returns the result set.
@@ -294,41 +294,39 @@ func (s *sapHANAInput) openRows(ctx context.Context) (*sql.Rows, error) {
 		return s.db.QueryContext(ctx, q)
 
 	case shModeIncrementing:
+		inc := quoteIdentifier(s.incrementingCol)
 		if s.hwm == "" {
-			q := `SELECT * FROM ` + s.tableRef() +
-				` ORDER BY "` + s.incrementingCol + `"`
+			q := `SELECT * FROM ` + s.tableRef() + ` ORDER BY ` + inc
 			return s.db.QueryContext(ctx, q)
 		}
-		q := `SELECT * FROM ` + s.tableRef() +
-			` WHERE "` + s.incrementingCol + `" > ? ORDER BY "` + s.incrementingCol + `"`
+		q := `SELECT * FROM ` + s.tableRef() + ` WHERE ` + inc + ` > ? ORDER BY ` + inc
 		return s.db.QueryContext(ctx, q, s.hwm)
 
 	case shModeQuery:
 		return s.db.QueryContext(ctx, s.customQuery)
 
 	case shModeTimestamp:
+		tsc := quoteIdentifier(s.timestampCol)
 		s.tsQueryUpper = time.Now().Add(-s.timestampDelay)
 		if s.timestampHWM.IsZero() {
-			q := `SELECT * FROM ` + s.tableRef() +
-				` WHERE "` + s.timestampCol + `" <= ? ORDER BY "` + s.timestampCol + `"`
+			q := `SELECT * FROM ` + s.tableRef() + ` WHERE ` + tsc + ` <= ? ORDER BY ` + tsc
 			return s.db.QueryContext(ctx, q, s.tsQueryUpper)
 		}
-		q := `SELECT * FROM ` + s.tableRef() +
-			` WHERE "` + s.timestampCol + `" > ? AND "` + s.timestampCol + `" <= ? ORDER BY "` + s.timestampCol + `"`
+		q := `SELECT * FROM ` + s.tableRef() + ` WHERE ` + tsc + ` > ? AND ` + tsc + ` <= ? ORDER BY ` + tsc
 		return s.db.QueryContext(ctx, q, s.timestampHWM, s.tsQueryUpper)
 
 	case shModeTimestampIncrementing:
+		tsc := quoteIdentifier(s.timestampCol)
+		inc := quoteIdentifier(s.incrementingCol)
 		s.tsQueryUpper = time.Now().Add(-s.timestampDelay)
 		if s.timestampHWM.IsZero() {
-			q := `SELECT * FROM ` + s.tableRef() +
-				` WHERE "` + s.timestampCol + `" <= ?` +
-				` ORDER BY "` + s.timestampCol + `", "` + s.incrementingCol + `"`
+			q := `SELECT * FROM ` + s.tableRef() + ` WHERE ` + tsc + ` <= ? ORDER BY ` + tsc + `, ` + inc
 			return s.db.QueryContext(ctx, q, s.tsQueryUpper)
 		}
 		q := `SELECT * FROM ` + s.tableRef() +
-			` WHERE ("` + s.timestampCol + `" > ? OR ("` + s.timestampCol + `" = ? AND "` + s.incrementingCol + `" > ?))` +
-			` AND "` + s.timestampCol + `" <= ?` +
-			` ORDER BY "` + s.timestampCol + `", "` + s.incrementingCol + `"`
+			` WHERE (` + tsc + ` > ? OR (` + tsc + ` = ? AND ` + inc + ` > ?))` +
+			` AND ` + tsc + ` <= ?` +
+			` ORDER BY ` + tsc + `, ` + inc
 		return s.db.QueryContext(ctx, q, s.timestampHWM, s.timestampHWM, s.hwm, s.tsQueryUpper)
 
 	default:

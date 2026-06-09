@@ -17,3 +17,4 @@ __pycache__
 *.test.exe
 compile_out.txt
 test_output.txt
+internal/impl/saphana/bench/ngdbc.jar

@@ -182,8 +182,7 @@ tasks:
         FETCH={{.FETCH_SIZE}}; BATCH={{.BATCH_MAX_ROWS}}; TOTAL={{.TOTAL}}; INTERVAL={{.INTERVAL}}
 
         # ngdbc 2.x hangs on SELECT * with DECIMAL+NVARCHAR+TIMESTAMP — cast PRICE to DOUBLE
-        KC_QUERY="${HANA_QUERY:-SELECT ID, USER_ID, PRODUCT_ID, QUANTITY, CAST(PRICE AS DOUBLE) AS PRICE, STATUS, NOTES, CREATED_AT FROM \"${HANA_SCHEMA}\".\"BENCH_ORDERS_QUERY\"}"
-        KC_QUERY_JSON=$(printf '%s' "$KC_QUERY" | sed 's/\\/\\\\/g; s/"/\\"/g')
+        KC_TABLE=$(printf '"%s"."%s"' "$HANA_SCHEMA" "BENCH_ORDERS_QUERY" | sed 's/\\/\\\\/g; s/"/\\"/g')
 
         KC_REST="http://localhost:8083"
         ATTEMPTS=0
@@ -209,18 +208,16 @@ tasks:
           -d "{
             \"name\":\"${CONN}\",
             \"config\":{
-              \"connector.class\":\"io.confluent.connect.jdbc.JdbcSourceConnector\",
+              \"connector.class\":\"com.sap.kafka.connect.source.hana.HANASourceConnector\",
               \"connection.url\":\"${KC_JDBC}\",
               \"connection.user\":\"${KC_USER}\",
               \"connection.password\":\"${KC_PASS}\",
-              \"mode\":\"bulk\",
-              \"query\":\"${KC_QUERY_JSON}\",
-              \"topic.prefix\":\"${TOPIC}\",
+              \"topics\":\"${TOPIC}\",
+              \"${TOPIC}.table.name\":\"${KC_TABLE}\",
+              \"${TOPIC}.poll.interval.ms\":\"86400000\",
+              \"${TOPIC}.fetch.size\":\"${FETCH}\",
+              \"${TOPIC}.batch.max.rows\":\"${BATCH}\",
               \"tasks.max\":\"1\",
-              \"jdbc.fetch.size\":\"${FETCH}\",
-              \"batch.max.rows\":\"${BATCH}\",
-              \"poll.interval.ms\":\"86400000\",
-              \"numeric.mapping\":\"best_fit\",
               \"key.converter\":\"org.apache.kafka.connect.json.JsonConverter\",
               \"value.converter\":\"org.apache.kafka.connect.json.JsonConverter\",
               \"key.converter.schemas.enable\":\"false\",

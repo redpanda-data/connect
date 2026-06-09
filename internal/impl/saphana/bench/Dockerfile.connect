@@ -1,3 +1,0 @@
-FROM confluentinc/cp-kafka-connect:7.7.8
-RUN confluent-hub install --no-prompt confluentinc/kafka-connect-jdbc:10.8.0
-# Place the SAP HANA JDBC driver (ngdbc.jar) at bench/ngdbc.jar — mounted by docker-compose at runtime

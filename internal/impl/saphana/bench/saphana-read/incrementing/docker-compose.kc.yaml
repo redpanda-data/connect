@@ -2,7 +2,7 @@ services:
   kafka-connect:
     build:
       context: ../..
-      dockerfile: Dockerfile.connect
+      dockerfile: Dockerfile.connect.sap
     container_name: rpcns-hana-inc-connect
     # host networking so JDBC connections to HANA appear from the host IP
     # (HANA firewalls typically block Docker bridge IPs)
@@ -21,12 +21,12 @@ services:
       CONNECT_VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
       CONNECT_KEY_CONVERTER_SCHEMAS_ENABLE: "false"
       CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
-      CONNECT_PLUGIN_PATH: /usr/share/java,/usr/share/confluent-hub-components
+      CONNECT_PLUGIN_PATH: /usr/share/java,/usr/share/kafka-connect-sap
       CONNECT_REST_ADVERTISED_HOST_NAME: localhost
     volumes:
       - type: bind
         source: ../../ngdbc.jar
-        target: /usr/share/confluent-hub-components/confluentinc-kafka-connect-jdbc/lib/ngdbc.jar
+        target: /usr/share/kafka-connect-sap/lib/ngdbc.jar
         read_only: true
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8083/connectors || exit 1"]

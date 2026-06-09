@@ -11,6 +11,7 @@ Last updated: 2026-03-16
 | **SQL Server CDC** | **154 MB/s** | 119,000 | Change data capture from SQL Server |
 | **Oracle CDC (snapshot)** | — | 140,000 | Initial table snapshot from Oracle DB |
 | **Oracle CDC (streaming)** | — | 50,000–90,000 | Real-time change streaming via LogMiner |
+| **SAP HANA** | — | ~49,000 (bulk), ~42,000 (incrementing) | Bulk and incremental reads from SAP HANA |
 
 ## What These Numbers Mean
 
@@ -36,6 +37,7 @@ For full methodology, raw output, environment details, and bottleneck analysis, 
 - [SQL Server CDC](mssqlserver-cdc.md)
 - [Oracle CDC](oracledb-cdc.md)
 - [DynamoDB CDC](dynamodb-cdc.md)
+- [SAP HANA](sap-hana.md)
 
 ## How Benchmarks Are Run
 

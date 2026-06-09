@@ -12,11 +12,18 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/redpanda-data/benthos/v4/public/schema"
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
+
+// quoteIdentifier wraps s in double-quotes and escapes internal double-quotes
+// by doubling them, per the SQL standard identifier quoting rule.
+func quoteIdentifier(s string) string {
+	return `"` + strings.ReplaceAll(s, `"`, `""`) + `"`
+}
 
 // hanaTypeToCommonType maps a HANA DATA_TYPE_NAME string to schema.CommonType.
 // For DECIMAL columns, callers should use hanaDecimalToCommon which considers

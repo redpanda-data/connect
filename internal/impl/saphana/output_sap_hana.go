@@ -25,6 +25,7 @@ import (
 
 const (
 	shoFieldDSN         = "dsn"
+	shoFieldSchemaName  = "schema_name"
 	shoFieldTable       = "table"
 	shoFieldColumns     = "columns"
 	shoFieldArgsMapping = "args_mapping"
@@ -44,9 +45,13 @@ Each message is mapped to an ordered list of column values via ` + "`args_mappin
 		Example("hdb://user:password@host:39017").
 		Secret(),
 	).
+	Field(service.NewStringField(shoFieldSchemaName).
+		Description("Database schema for the table.").
+		Optional(),
+	).
 	Field(service.NewStringField(shoFieldTable).
-		Description("Table to insert into. Supports fully qualified form `\"SCHEMA\".\"TABLE\"` or plain `\"TABLE\"`.").
-		Example(`"MY_SCHEMA"."MY_TABLE"`),
+		Description("Table to insert into.").
+		Example("MY_TABLE"),
 	).
 	Field(service.NewStringListField(shoFieldColumns).
 		Description("Ordered list of column names to insert."),
@@ -81,14 +86,23 @@ func init() {
 }
 
 type sapHANAOutput struct {
-	dsn       string
-	insertSQL string
-	numCols   int
-	argsExec  *bloblang.Executor
+	dsn        string
+	schemaName string
+	tableName  string
+	insertSQL  string
+	numCols    int
+	argsExec   *bloblang.Executor
 
 	db    *sql.DB
 	dbMut sync.Mutex
 	log   *service.Logger
+}
+
+func (o *sapHANAOutput) tableRef() string {
+	if o.schemaName != "" {
+		return quoteIdentifier(o.schemaName) + "." + quoteIdentifier(o.tableName)
+	}
+	return quoteIdentifier(o.tableName)
 }
 
 func newSAPHANAOutput(conf *service.ParsedConfig, mgr *service.Resources) (*sapHANAOutput, error) {
@@ -102,8 +116,12 @@ func newSAPHANAOutput(conf *service.ParsedConfig, mgr *service.Resources) (*sapH
 		return nil, err
 	}
 
-	table, err := conf.FieldString(shoFieldTable)
-	if err != nil {
+	if conf.Contains(shoFieldSchemaName) {
+		if o.schemaName, err = conf.FieldString(shoFieldSchemaName); err != nil {
+			return nil, err
+		}
+	}
+	if o.tableName, err = conf.FieldString(shoFieldTable); err != nil {
 		return nil, err
 	}
 
@@ -118,12 +136,12 @@ func newSAPHANAOutput(conf *service.ParsedConfig, mgr *service.Resources) (*sapH
 
 	quotedCols := make([]string, len(columns))
 	for i, c := range columns {
-		quotedCols[i] = `"` + c + `"`
+		quotedCols[i] = quoteIdentifier(c)
 	}
 	placeholders := strings.Repeat("?,", len(columns))
 	placeholders = placeholders[:len(placeholders)-1]
 	o.insertSQL = fmt.Sprintf(`INSERT INTO %s (%s) VALUES (%s)`,
-		table, strings.Join(quotedCols, ", "), placeholders)
+		o.tableRef(), strings.Join(quotedCols, ", "), placeholders)
 
 	if o.argsExec, err = conf.FieldBloblang(shoFieldArgsMapping); err != nil {
 		return nil, err
