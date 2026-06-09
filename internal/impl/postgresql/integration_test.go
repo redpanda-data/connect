@@ -1133,6 +1133,99 @@ postgres_cdc:
 	require.NoError(t, streamOut.StopWithin(time.Second*10))
 }
 
+func TestIntegrationSignalling(t *testing.T) {
+	integration.CheckSkip(t)
+	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")
+	require.NoError(t, err)
+
+	_, err = db.Exec(`CREATE SCHEMA IF NOT EXISTS dbo`)
+	require.NoError(t, err)
+	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS dbo.rpcn_signal_table (id SERIAL PRIMARY KEY, type VARCHAR(32), data TEXT)`)
+	require.NoError(t, err)
+	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS dbo.events (id SERIAL PRIMARY KEY, name TEXT)`)
+	require.NoError(t, err)
+
+	// Pre-insert a signal row so OnSignal is exercised during the snapshot phase.
+	_, err = db.Exec(`INSERT INTO dbo.rpcn_signal_table (type, data) VALUES ('execute-snapshot', 'table1')`)
+	require.NoError(t, err)
+
+	template := fmt.Sprintf(`
+postgres_cdc:
+    dsn: %s
+    slot_name: test_slot_signalling
+    stream_snapshot: true
+    schema: dbo
+    tables:
+      - rpcn_signal_table
+      - events
+`, databaseURL)
+
+	streamOutBuilder := service.NewStreamBuilder()
+	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: DEBUG`))
+	require.NoError(t, streamOutBuilder.AddInputYAML(template))
+	require.NoError(t, streamOutBuilder.AddProcessorYAML(`mapping: 'root = @'`))
+
+	var received []any
+	var mu sync.Mutex
+	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(_ context.Context, batch service.MessageBatch) error {
+		mu.Lock()
+		defer mu.Unlock()
+		for _, msg := range batch {
+			data, err := msg.AsStructured()
+			if err != nil {
+				return err
+			}
+			m := data.(map[string]any)
+			if _, ok := m["lsn"]; ok {
+				m["lsn"] = "XXX/XXX"
+			}
+			delete(m, "schema")
+			received = append(received, m)
+		}
+		return nil
+	}))
+
+	streamOut, err := streamOutBuilder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(streamOut.Resources())
+
+	go func() {
+		if err := streamOut.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+			t.Error(err)
+		}
+	}()
+
+	// Snapshot row from dbo.rpcn_signal_table — OnSignal called during snapshot phase.
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+		mu.Lock()
+		defer mu.Unlock()
+		assert.Len(c, received, 1)
+	}, 25*time.Second, 100*time.Millisecond)
+
+	// Insert into both tables during live streaming.
+	// OnSignal must detect the signal row without suppressing either message.
+	_, err = db.Exec(`INSERT INTO dbo.rpcn_signal_table (type, data) VALUES ('execute-snapshot', 'table2')`)
+	require.NoError(t, err)
+	_, err = db.Exec(`INSERT INTO dbo.events (name) VALUES ('evt1')`)
+	require.NoError(t, err)
+
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+		mu.Lock()
+		defer mu.Unlock()
+		assert.Len(c, received, 3)
+	}, 25*time.Second, 100*time.Millisecond)
+
+	mu.Lock()
+	require.ElementsMatch(t, received, []any{
+		map[string]any{"operation": "read", "table": "rpcn_signal_table"},
+		map[string]any{"operation": "insert", "table": "rpcn_signal_table", "lsn": "XXX/XXX"},
+		map[string]any{"operation": "insert", "table": "events", "lsn": "XXX/XXX"},
+	})
+	mu.Unlock()
+
+	require.NoError(t, streamOut.StopWithin(10*time.Second))
+}
+
 func TestIntegrationHeartbeat(t *testing.T) {
 	integration.CheckSkip(t)
 	databaseURL, db, err := ResourceWithPostgreSQLVersion(t, "16")

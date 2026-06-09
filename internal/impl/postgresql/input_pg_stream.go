@@ -46,6 +46,7 @@ const (
 	fieldMaxParallelSnapshotTables = "max_parallel_snapshot_tables"
 	fieldUnchangedToastValue       = "unchanged_toast_value"
 	fieldHeartbeatInterval         = "heartbeat_interval"
+	fieldSignalTableName           = "signal_table_name"
 	fieldAWSIAMAuth                = "aws"
 	// FieldAWSIAMAuthEnabled enabled field.
 	FieldAWSIAMAuthEnabled = "enabled"
@@ -192,6 +193,10 @@ This connector uses the naming pattern ` + "`pglog_stream_<replication_slot_name
 			Description("AWS IAM authentication configuration for PostgreSQL instances. When enabled, IAM credentials are used to generate temporary authentication tokens instead of a static password.").
 			Advanced().
 			Optional()).
+		Field(service.NewStringField(fieldSignalTableName).
+			Description("The name of the table used to send signals to the connector, such as triggering a re-snapshot. The table must exist in the schema configured via the `schema` field.").
+			Default("rpcn_signal_table").
+			Advanced()).
 		Field(service.NewAutoRetryNacksToggleField()).
 		Field(service.NewBatchPolicyField(fieldBatching))
 }
@@ -215,6 +220,7 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		heartbeatInterval         time.Duration
 		iamAuthEnabled            bool
 		iamAuthTokenBuilder       TokenBuilder
+		signalTableName           string
 	)
 
 	if err := license.CheckRunningEnterprise(mgr); err != nil {
@@ -289,6 +295,10 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		return nil, err
 	}
 
+	if signalTableName, err = conf.FieldString(fieldSignalTableName); err != nil {
+		return nil, err
+	}
+
 	awsConf := conf.Namespace(fieldAWSIAMAuth)
 	iamAuthEnabled, _ = awsConf.FieldBool(FieldAWSIAMAuthEnabled)
 
@@ -351,7 +361,8 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		replicationLag:  replicationLag,
 		stopSig:         shutdown.NewSignaller(),
 
-		iamAuthEnabled: iamAuthEnabled,
+		iamAuthEnabled:  iamAuthEnabled,
+		signalTableName: signalTableName,
 	}
 
 	// Has stopped is how we notify that we're not connected. This will get reset at connection time.
@@ -399,7 +410,8 @@ type pgStreamInput struct {
 	stopSig         *shutdown.Signaller
 
 	// IAM authentication fields
-	iamAuthEnabled bool
+	iamAuthEnabled  bool
+	signalTableName string
 }
 
 func (p *pgStreamInput) Connect(ctx context.Context) error {
@@ -420,8 +432,8 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 		return err
 	}
 
-	if p.snapshotSig, err = NewSnapshotSignaller(p.logger); err != nil {
-
+	if p.snapshotSig, err = NewSnapshotSignaller(p.signalTableName, p.logger); err != nil {
+		return fmt.Errorf("unable to create snapshot signaller: %w", err)
 	}
 
 	// Reset our stop signal
@@ -481,7 +493,7 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 			)
 			for _, msg := range batch {
 				if err := p.snapshotSig.OnSignal(ctx, msg); err != nil {
-					p.logger.Errorf("snapshot signal handler failed, continuing to process change events: %w", err)
+					p.logger.Errorf("failed to detect if change event was snapshot signal, continuing to process change events: %w", err)
 					continue
 				}
 				if mb, err = json.Marshal(msg.Data); err != nil {
