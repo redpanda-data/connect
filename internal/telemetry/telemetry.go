@@ -15,15 +15,10 @@
 package telemetry
 
 import (
-	"crypto/rsa"
-	"crypto/x509"
-	"encoding/pem"
-	"errors"
+	"context"
 	"time"
 
-	"github.com/go-jose/go-jose/v4"
-	josejwt "github.com/go-jose/go-jose/v4/jwt"
-	"github.com/go-resty/resty/v2"
+	commontelemetry "github.com/redpanda-data/common-go/telemetry"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
@@ -57,32 +52,6 @@ const (
 	defaultExportPeriod = time.Hour * 24
 )
 
-// ParseRSAPrivateKeyFromPEM parses a PEM encoded PKCS1 or PKCS8 private key.
-func ParseRSAPrivateKeyFromPEM(key []byte) (*rsa.PrivateKey, error) {
-	var err error
-
-	// Parse PEM block
-	var block *pem.Block
-	if block, _ = pem.Decode(key); block == nil {
-		return nil, errors.New("cert must be pem encoded")
-	}
-
-	var parsedKey any
-	if parsedKey, err = x509.ParsePKCS1PrivateKey(block.Bytes); err != nil {
-		if parsedKey, err = x509.ParsePKCS8PrivateKey(block.Bytes); err != nil {
-			return nil, err
-		}
-	}
-
-	var pkey *rsa.PrivateKey
-	var ok bool
-	if pkey, ok = parsedKey.(*rsa.PrivateKey); !ok {
-		return nil, errors.New("not a RSA private key")
-	}
-
-	return pkey, nil
-}
-
 // ActivateExporter runs the telemetry exporter asynchronously, provided all
 // conditions for telemetry are satisfied.
 func ActivateExporter(identifier, version, deploymentType, tenantID string, logger *service.Logger, schema *service.ConfigSchema, conf *service.ParsedConfig) {
@@ -92,20 +61,8 @@ func ActivateExporter(identifier, version, deploymentType, tenantID string, logg
 		return
 	}
 
-	// Parse private key for signing the JWT payload before sending it to our telemetry endpoint.
-	rsaPrivateKey, err := ParseRSAPrivateKeyFromPEM([]byte(privateKey))
-	if err != nil {
-		logger.With("error", err).Debug("Failed to parse private key")
-		return
-	}
-	signer, err := jose.NewSigner(jose.SigningKey{Algorithm: jose.RS256, Key: rsaPrivateKey},
-		(&jose.SignerOptions{}).WithHeader("key_generation", 1))
-	if err != nil {
-		logger.With("error", err).Debug("Failed to create JWT signer")
-		return
-	}
-
 	// Parse export delay and periods.
+	var err error
 	exportDelay, exportPeriod := defaultExportDelay, defaultExportPeriod
 	if ExportDelay != "" {
 		if exportDelay, err = time.ParseDuration(ExportDelay); err != nil {
@@ -125,52 +82,35 @@ func ActivateExporter(identifier, version, deploymentType, tenantID string, logg
 		exportHost = ExportHost
 	}
 
-	tExporter := &telemetryExporter{
-		logger: logger,
-		Resty: resty.New().
-			SetHeader("User-Agent", "RedpandaConnect/"+version).
-			SetHeader("Accept-Encoding", "gzip").
-			SetHeader("Content-Type", "text/plain").
-			SetHeader("Accept", "application/json").
-			SetBaseURL(exportHost).
-			SetTimeout(10 * time.Second).
-			SetLogger(&logWrapper{l: logger}).
-			SetRetryCount(3),
-		JWTBuilder: josejwt.Signed(signer),
-	}
-
-	payload, err := extractPayload(identifier, deploymentType, tenantID, logger, schema, conf)
+	p, err := extractPayload(identifier, deploymentType, tenantID, logger, schema, conf)
 	if err != nil {
 		logger.With("error", err).Debug("Failed to create telemetry payload")
 		return
 	}
 
-	go exporterLoop(payload, exportDelay, exportPeriod, tExporter)
-}
-
-type telemetryExporter struct {
-	logger *service.Logger
-
-	Resty      *resty.Client
-	JWTBuilder josejwt.Builder
-}
-
-// Send telemetry payload to a hardcoded HTTP endpoint.
-func (t *telemetryExporter) export(p *payload) {
-	tokenStr, err := t.JWTBuilder.Claims(p).Serialize()
+	client, err := commontelemetry.New(commontelemetry.Config{
+		Endpoint:      exportHost,
+		Path:          "/connect/telemetry",
+		UserAgent:     "RedpandaConnect/" + version,
+		SigningKeyPEM: []byte(privateKey),
+		JWTHeaders:    map[string]any{"key_generation": 1},
+	})
 	if err != nil {
-		t.logger.With("error", err).Debug("Failed to get token string")
+		logger.With("error", err).Debug("failed to build telemetry client")
 		return
 	}
 
-	response, err := t.Resty.NewRequest().
-		SetBody(tokenStr).
-		Post("/connect/telemetry")
-	if err != nil {
-		t.logger.With("error", err).Debug("Failed to send request")
-		return
+	started := time.Now()
+	reporter := &commontelemetry.Reporter{
+		Client: client,
+		Delay:  exportDelay,
+		Period: exportPeriod,
+		Logger: benthosLogger{l: logger},
+		Collector: func(_ context.Context) (any, error) {
+			p.Uptime = int64(time.Since(started) / time.Second)
+			return p, nil
+		},
 	}
-	if response.IsError() {
-		t.logger.With("status_code", response.StatusCode()).Debug("Failed to send request")
-	}
+
+	go func() { _ = reporter.Run(context.Background()) }()
 }

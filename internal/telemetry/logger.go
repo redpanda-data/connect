@@ -14,20 +14,22 @@
 
 package telemetry
 
-import "github.com/redpanda-data/benthos/v4/public/service"
+import (
+	"fmt"
 
-type logWrapper struct {
+	"github.com/redpanda-data/benthos/v4/public/service"
+)
+
+// benthosLogger adapts a benthos *service.Logger to the telemetry.Logger
+// interface expected by the shared common-go/telemetry client.
+type benthosLogger struct {
 	l *service.Logger
 }
 
-func (l *logWrapper) Errorf(format string, v ...any) {
-	l.l.With("component", "resty").Debugf(format, v...)
-}
-
-func (*logWrapper) Warnf(string, ...any) {
-	// Ignore
-}
-
-func (*logWrapper) Debugf(string, ...any) {
-	// Ignore
+func (b benthosLogger) Debug(msg string, kv ...any) {
+	logger := b.l
+	for i := 0; i+1 < len(kv); i += 2 {
+		logger = logger.With(fmt.Sprint(kv[i]), kv[i+1])
+	}
+	logger.Debug(msg)
 }

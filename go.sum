@@ -1561,6 +1561,8 @@ github.com/redpanda-data/common-go/redpanda-otel-exporter v0.4.0 h1:lyLHsAMI4Ns8
 github.com/redpanda-data/common-go/redpanda-otel-exporter v0.4.0/go.mod h1:kzFoUX1Abv6ccz8wuTUUpmBlGwQcwNjSxYCuDLA4IyQ=
 github.com/redpanda-data/common-go/secrets v0.1.15 h1:sbyZrOKdb6JI2BFzoHI7OZvoUUwk3x9rR21oEt25aac=
 github.com/redpanda-data/common-go/secrets v0.1.15/go.mod h1:WjUU/5saSXwItZx6veFOGbQZUgPQz4MQ65z22y0Ky84=
+github.com/redpanda-data/common-go/telemetry v0.0.0-20260610110850-da889a76852d h1:jQGseB551fWF6LrbTgZBkDp4RuShsRMk1M8ODD+61po=
+github.com/redpanda-data/common-go/telemetry v0.0.0-20260610110850-da889a76852d/go.mod h1:jl4UZ/9/kX3XKPBYLWeog7y/lDNjNE0ptgGyROYOiIU=
 github.com/redpanda-data/connect/public/bundle/free/v4 v4.84.0 h1:asiPje6R/1+y4x3/hKBVJCEPV/tNlMGwK1QCL+wvtbY=
 github.com/redpanda-data/connect/public/bundle/free/v4 v4.84.0/go.mod h1:nl1fwRHtWRJyRPO5uwr1y727113eYnmp6gLqU5iheSk=
 github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec h1:W09IVJc94icq4NjY3clb7Lk8O1qJ8BdBEF8z0ibU0rE=
