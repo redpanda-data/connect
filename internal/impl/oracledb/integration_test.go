@@ -1930,6 +1930,7 @@ func TestIntegrationOracleDBCDCLOB(t *testing.T) {
 	integration.CheckSkip(t)
 
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
+	time.Sleep(10 * time.Second)
 
 	t.Run("LOB_TRIM handling for SecureFile LOB updates", func(t *testing.T) {
 		// Use default storage (SecureFile on Oracle Free 23c) so that Oracle emits
@@ -1940,6 +1941,8 @@ func TestIntegrationOracleDBCDCLOB(t *testing.T) {
 			id      NUMBER GENERATED ALWAYS AS IDENTITY (NOCACHE) PRIMARY KEY,
 			clobcol CLOB
 		)`))
+
+		time.Sleep(5 * time.Second)
 
 		var batch oracledbtest.Batch
 
@@ -2021,6 +2024,8 @@ oracledb_cdc:
 			clobcol CLOB
 		) LOB(clobcol) STORE AS BASICFILE`))
 
+		time.Sleep(5 * time.Second)
+
 		var batch oracledbtest.Batch
 
 		cfg := fmt.Sprintf(`
@@ -2097,6 +2102,8 @@ oracledb_cdc:
 			id      NUMBER GENERATED ALWAYS AS IDENTITY (NOCACHE) PRIMARY KEY,
 			clobcol CLOB
 		) LOB(clobcol) STORE AS BASICFILE (DISABLE STORAGE IN ROW NOCACHE)`))
+
+		time.Sleep(5 * time.Second)
 
 		var batch oracledbtest.Batch
 
