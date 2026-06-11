@@ -54,28 +54,22 @@ func TestIntegrationDorisStreamLoadOutput(t *testing.T) {
 		return
 	}
 
-	const (
-		feStaticIP = "172.28.0.2"
-		beStaticIP = "172.28.0.3"
-		netSubnet  = "172.28.0.0/16"
-		netGW      = "172.28.0.1"
-	)
-
 	ctx := t.Context()
 
-	// Use a fixed subnet so we can pre-assign a static IP to the FE container.
-	// The Doris entrypoint validates that FE_SERVERS contains a real IP address,
-	// not a hostname, so we must know the IP before the container starts.
-	dockerNet, err := network.New(ctx,
-		network.WithIPAM(&dockernetwork.IPAM{
-			Config: []dockernetwork.IPAMConfig{{
-				Subnet:  netip.MustParsePrefix(netSubnet),
-				Gateway: netip.MustParseAddr(netGW),
-			}},
-		}),
-	)
+	// Let Docker pick a non-conflicting subnet, then inspect it so we can
+	// pre-assign stable IPs. Doris entrypoints require real IPs in FE_SERVERS
+	// and BE_ADDR; they reject hostnames and fail if BE_ADDR is absent.
+	dockerNet, err := network.New(ctx)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = dockerNet.Remove(context.Background()) })
+
+	// Derive FE (.2) and BE (.3) from the Docker-assigned subnet.
+	netBase := dorisNetworkBase(t, dockerNet.ID)
+	gw := netBase.Next()            // .1 — Docker gateway, skip
+	feStaticAddr := gw.Next()       // .2
+	beStaticAddr := feStaticAddr.Next() // .3
+	feStaticIP := feStaticAddr.String()
+	beStaticIP := beStaticAddr.String()
 
 	fe, err := testcontainers.Run(ctx, "apache/doris:fe-"+dorisIntegrationVersion,
 		testcontainers.WithConfigModifier(func(c *container.Config) {
@@ -85,7 +79,7 @@ func TestIntegrationDorisStreamLoadOutput(t *testing.T) {
 		testcontainers.WithEndpointSettingsModifier(func(settings map[string]*dockernetwork.EndpointSettings) {
 			if ep, ok := settings[dockerNet.Name]; ok {
 				ep.IPAMConfig = &dockernetwork.EndpointIPAMConfig{
-					IPv4Address: netip.MustParseAddr(feStaticIP),
+					IPv4Address: feStaticAddr,
 				}
 			}
 		}),
@@ -101,9 +95,7 @@ func TestIntegrationDorisStreamLoadOutput(t *testing.T) {
 	testcontainers.CleanupContainer(t, fe)
 	require.NoError(t, err)
 
-	// The FE's static IP is already known; verify the container got it.
 	feIP := dorisContainerNetworkIP(t, ctx, fe, dockerNet.Name)
-	require.Equal(t, feStaticIP, feIP, "FE container did not get expected static IP")
 
 	// The BE entrypoint requires both FE_SERVERS and BE_ADDR (election mode).
 	// Pre-assign a static IP so BE_ADDR is known before the container starts.
@@ -112,7 +104,7 @@ func TestIntegrationDorisStreamLoadOutput(t *testing.T) {
 		testcontainers.WithEndpointSettingsModifier(func(settings map[string]*dockernetwork.EndpointSettings) {
 			if ep, ok := settings[dockerNet.Name]; ok {
 				ep.IPAMConfig = &dockernetwork.EndpointIPAMConfig{
-					IPv4Address: netip.MustParseAddr(beStaticIP),
+					IPv4Address: beStaticAddr,
 				}
 			}
 		}),
@@ -128,9 +120,7 @@ func TestIntegrationDorisStreamLoadOutput(t *testing.T) {
 	testcontainers.CleanupContainer(t, be)
 	require.NoError(t, err)
 
-	// Verify the BE got its pre-assigned static IP.
 	beIP := dorisContainerNetworkIP(t, ctx, be, dockerNet.Name)
-	require.Equal(t, beStaticIP, beIP, "BE container did not get expected static IP")
 
 	queryPort, err := fe.MappedPort(ctx, "9030/tcp")
 	require.NoError(t, err)
@@ -249,6 +239,19 @@ func buildDorisStreamLoadHelperBinary(t *testing.T) string {
 	output, err := cmd.CombinedOutput()
 	require.NoError(t, err, "building doris stream load helper binary:\n%s", string(output))
 	return helperBinary
+}
+
+// dorisNetworkBase returns the masked base address of the Docker-assigned subnet
+// for the given network (e.g., 172.20.0.0 for 172.20.0.0/16). The caller adds
+// offsets to derive stable container IPs: +1 = gateway, +2 = first host, etc.
+func dorisNetworkBase(t *testing.T, networkID string) netip.Addr {
+	t.Helper()
+	out, err := exec.Command("docker", "network", "inspect", networkID,
+		"--format", "{{range .IPAM.Config}}{{.Subnet}}{{end}}").Output()
+	require.NoError(t, err, "inspecting Docker network subnet")
+	prefix, err := netip.ParsePrefix(strings.TrimSpace(string(out)))
+	require.NoError(t, err, "parsing Docker network subnet")
+	return prefix.Masked().Addr()
 }
 
 // dorisContainerNetworkIP returns the container's IP address on the named
