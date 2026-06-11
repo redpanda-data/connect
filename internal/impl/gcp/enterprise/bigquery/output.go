@@ -53,6 +53,9 @@ const (
 	bqwaFieldStreamSweepInterval    = "stream_sweep_interval"
 	bqwaFieldMaxCachedStreams       = "max_cached_streams"
 	bqwaFieldWriteMode              = "write_mode"
+	bqwaFieldChangeType             = "change_type"
+	bqwaFieldChangeSequenceNumber   = "change_sequence_number"
+	bqwaFieldPrimaryKeys            = "primary_keys"
 	bqwaFieldAutoCreateTable        = "auto_create_table"
 	bqwaFieldSchema                 = "schema"
 	bqwaSchemaFieldName             = "name"
@@ -123,6 +126,10 @@ When `+"`auto_create_table`"+` is true, the output creates missing tables on the
 == Exactly-once caveat
 
 The exactly-once guarantee of `+"`pending_stream`"+` is "exactly-once within a stream". If a BatchCommitWriteStreams RPC succeeds but its response is lost to a network failure, benthos retries the batch through a new pending stream and the data lands twice. This is a fundamental limitation of the BigQuery Storage Write API exactly-once contract and applies to every implementation.
+
+== CDC migration
+
+When migrating from the load-jobs based `+"`gcp_bigquery`"+` output to CDC mode, see the xref:outputs/bigquery_cdc_migration.adoc[CDC migration guide].
 `).
 		Fields(
 			service.NewStringField(bqwaFieldProject).
@@ -140,13 +147,33 @@ The exactly-once guarantee of `+"`pending_stream`"+` is "exactly-once within a s
 					" Use 'json' to have the component convert JSON to proto automatically."+
 					" Use 'protobuf' to supply raw proto-encoded bytes.").
 				Default("json"),
-			service.NewStringEnumField(bqwaFieldWriteMode, "default_stream", "pending_stream").
+			service.NewStringEnumField(bqwaFieldWriteMode, "default_stream", "pending_stream", "upsert", "upsert_delete").
 				Description("How the output writes to BigQuery."+
 					" `default_stream` uses the multiplexed default stream (at-least-once, lowest latency)."+
 					" `pending_stream` allocates a per-batch pending stream that commits atomically,"+
-					" providing exactly-once semantics within a single committed batch.").
+					" providing exactly-once semantics within a single committed batch."+
+					" `upsert` writes UPSERT-only rows to a BigQuery CDC-enabled table; the target table must have a PRIMARY KEY."+
+					" `upsert_delete` allows both UPSERT and DELETE rows. Both CDC modes use the default stream as required by BigQuery.").
 				Default("default_stream").
 				Advanced(),
+			service.NewInterpolatedStringField(bqwaFieldChangeType).
+				Description("Bloblang expression resolving to the `_CHANGE_TYPE` pseudo-column value for each row."+
+					" Must resolve to `UPSERT` or `DELETE` (case-insensitive)."+
+					" Required when `write_mode` is `upsert` or `upsert_delete`."+
+					" Example: `${! metadata(\"operation\") }`.").
+				Optional(),
+			service.NewInterpolatedStringField(bqwaFieldChangeSequenceNumber).
+				Description("Optional Bloblang expression resolving to the `_CHANGE_SEQUENCE_NUMBER` pseudo-column value."+
+					" Format: 1 to 4 sections of 1 to 16 hexadecimal characters each, separated by `/`."+
+					" Example: `${! metadata(\"scn\") }` or `${! \"0/0/0/0\" }`."+
+					" When unset, BigQuery resolves ordering by arrival time.").
+				Optional(),
+			service.NewStringListField(bqwaFieldPrimaryKeys).
+				Description("Optional list of primary-key column names."+
+					" Required when `auto_create_table` is true and `write_mode` is `upsert` or `upsert_delete`."+
+					" When the target table is pre-existing, the connector falls back to the PRIMARY KEY declared on the table."+
+					" Up to 16 columns; composite keys are supported in the same order they are listed.").
+				Optional(),
 			service.NewBoolField(bqwaFieldAutoCreateTable).
 				Description("If true and the target table does not exist, the output creates it using the configured `schema`, `time_partitioning`, and `clustering`."+
 					" AlreadyExists errors from concurrent creators are treated as success."+
@@ -276,11 +303,14 @@ type bqTimePartitioningConfig struct {
 	RequireFilter bool
 }
 
-type bigQueryWriteAPIConfig struct {
+type bqWriteAPIConfig struct {
 	ProjectID              string
 	DatasetID              string
 	MessageFormat          string
 	WriteMode              string
+	ChangeType             *service.InterpolatedString
+	ChangeSequenceNumber   *service.InterpolatedString
+	PrimaryKeys            []string
 	AutoCreateTable        bool
 	Schema                 []bqSchemaField
 	TimePartitioning       bqTimePartitioningConfig
@@ -330,7 +360,7 @@ var validBQFieldModes = map[string]struct{}{
 // columns reference columns declared in the schema, and that the partition
 // field has a partition-eligible type. The checks only fire when columns are
 // actually configured (clustering empty / partition field empty is a no-op).
-func validateSchemaReferences(conf bigQueryWriteAPIConfig) error {
+func validateSchemaReferences(conf bqWriteAPIConfig) error {
 	if conf.TimePartitioning.Field == "" && len(conf.Clustering) == 0 {
 		return nil
 	}
@@ -410,7 +440,7 @@ func parseSchemaFields(confs []*service.ParsedConfig) ([]bqSchemaField, error) {
 	return out, nil
 }
 
-func bigQueryWriteAPIConfigFromParsed(pConf *service.ParsedConfig) (conf bigQueryWriteAPIConfig, err error) {
+func bqWriteAPIConfigFromParsed(pConf *service.ParsedConfig) (conf bqWriteAPIConfig, err error) {
 	if conf.ProjectID, err = pConf.FieldString(bqwaFieldProject); err != nil {
 		return
 	}
@@ -426,6 +456,45 @@ func bigQueryWriteAPIConfigFromParsed(pConf *service.ParsedConfig) (conf bigQuer
 	if conf.WriteMode, err = pConf.FieldString(bqwaFieldWriteMode); err != nil {
 		return
 	}
+	if pConf.Contains(bqwaFieldChangeType) {
+		if conf.ChangeType, err = pConf.FieldInterpolatedString(bqwaFieldChangeType); err != nil {
+			return
+		}
+	}
+	if pConf.Contains(bqwaFieldChangeSequenceNumber) {
+		if conf.ChangeSequenceNumber, err = pConf.FieldInterpolatedString(bqwaFieldChangeSequenceNumber); err != nil {
+			return
+		}
+	}
+	if conf.PrimaryKeys, err = pConf.FieldStringList(bqwaFieldPrimaryKeys); err != nil {
+		return
+	}
+	isCDC := conf.WriteMode == "upsert" || conf.WriteMode == "upsert_delete"
+	if isCDC && conf.ChangeType == nil {
+		err = fmt.Errorf("%s is required when %s is %q", bqwaFieldChangeType, bqwaFieldWriteMode, conf.WriteMode)
+		return
+	}
+	if isCDC && conf.MessageFormat != "json" {
+		// CDC mode injects pseudo-columns via JSON byte rewriting. Raw protobuf
+		// payloads would require deserialising via dynamicpb, setting the
+		// fields, and re-serialising — extra cost the user can avoid by
+		// converting upstream.
+		err = fmt.Errorf("%s is not supported when %s is %q (use message_format: json)",
+			bqwaFieldMessageFormat, bqwaFieldWriteMode, conf.WriteMode)
+		return
+	}
+	if !isCDC && conf.ChangeType != nil {
+		err = fmt.Errorf("%s is only valid when %s is upsert or upsert_delete", bqwaFieldChangeType, bqwaFieldWriteMode)
+		return
+	}
+	if !isCDC && conf.ChangeSequenceNumber != nil {
+		err = fmt.Errorf("%s is only valid when %s is upsert or upsert_delete", bqwaFieldChangeSequenceNumber, bqwaFieldWriteMode)
+		return
+	}
+	if len(conf.PrimaryKeys) > 16 {
+		err = fmt.Errorf("%s accepts at most 16 columns, got %d", bqwaFieldPrimaryKeys, len(conf.PrimaryKeys))
+		return
+	}
 	if conf.AutoCreateTable, err = pConf.FieldBool(bqwaFieldAutoCreateTable); err != nil {
 		return
 	}
@@ -439,6 +508,29 @@ func bigQueryWriteAPIConfigFromParsed(pConf *service.ParsedConfig) (conf bigQuer
 	if conf.AutoCreateTable && len(conf.Schema) == 0 {
 		err = fmt.Errorf("%s requires %s to be non-empty", bqwaFieldAutoCreateTable, bqwaFieldSchema)
 		return
+	}
+	if isCDC && conf.AutoCreateTable && len(conf.PrimaryKeys) == 0 {
+		err = fmt.Errorf("%s is required when %s is true and %s is %q",
+			bqwaFieldPrimaryKeys, bqwaFieldAutoCreateTable, bqwaFieldWriteMode, conf.WriteMode)
+		return
+	}
+	if len(conf.PrimaryKeys) > 0 && len(conf.Schema) > 0 {
+		cols := make(map[string]string, len(conf.Schema))
+		for _, f := range conf.Schema {
+			cols[f.Name] = f.Mode
+		}
+		for _, pk := range conf.PrimaryKeys {
+			mode, ok := cols[pk]
+			if !ok {
+				err = fmt.Errorf("%s column %q is not in %s", bqwaFieldPrimaryKeys, pk, bqwaFieldSchema)
+				return
+			}
+			if mode != "REQUIRED" {
+				err = fmt.Errorf("%s column %q must have mode REQUIRED in %s (got %q)",
+					bqwaFieldPrimaryKeys, pk, bqwaFieldSchema, mode)
+				return
+			}
+		}
 	}
 	// time_partitioning.type has no default, so a missing type — either via an
 	// absent block or a block without `type:` — leaves Type empty and the
@@ -583,14 +675,23 @@ func (e bqError) IsRetryable() bool      { return e.kind == bqErrorTransient }
 func (e bqError) IsPermanent() bool      { return e.kind == bqErrorPermanent }
 func (e bqError) IsSchemaMismatch() bool { return e.kind == bqErrorSchemaMismatch }
 
+// errPermanent is a sentinel that callers can wrap into errors that have no
+// underlying gRPC/googleapi classification (e.g. CDC config validation) so
+// classifyBQError surfaces them as permanent and the WriteBatch loop routes
+// the batch to DLQ instead of retrying forever.
+var errPermanent = errors.New("permanent error")
+
 // classifyBQError inspects err and returns a bqError carrying its retry
 // classification. gRPC permanent codes (InvalidArgument, NotFound,
 // PermissionDenied, AlreadyExists, FailedPrecondition, Unimplemented,
 // Unauthenticated) and REST 4xx codes (except 408 timeout and 429 throttling)
 // are treated as permanent; SCHEMA_MISMATCH_EXTRA_FIELDS surfaces separately;
-// everything else falls back to transient so the benthos retry loop gets a
-// chance.
+// errors wrapped with errPermanent are also treated as permanent; everything
+// else falls back to transient so the benthos retry loop gets a chance.
 func classifyBQError(err error) bqError {
+	if errors.Is(err, errPermanent) {
+		return bqError{kind: bqErrorPermanent, err: err}
+	}
 	if st, ok := grpcstatus.FromError(err); ok {
 		for _, detail := range st.Details() {
 			if storageErr, ok := detail.(*storagepb.StorageError); ok {
@@ -624,14 +725,19 @@ func classifyBQError(err error) bqError {
 }
 
 type streamWithDescriptor struct {
-	stream          *managedwriter.ManagedStream
-	descriptor      protoreflect.MessageDescriptor
+	stream     *managedwriter.ManagedStream
+	descriptor protoreflect.MessageDescriptor
+	// baseDescriptor is the user table's descriptor without the CDC pseudo-column
+	// wrap. Equal to descriptor for non-CDC streams. Used by handleWriteError so
+	// schema evolution diffs against the actual table schema rather than trying
+	// to add _CHANGE_TYPE / _CHANGE_SEQUENCE_NUMBER as real columns.
+	baseDescriptor  protoreflect.MessageDescriptor
 	descriptorProto *descriptorpb.DescriptorProto // needed by pendingStreamWriter (write_mode=pending_stream)
 	lastUsed        atomic.Int64                  // UnixNano timestamp, safe for concurrent access
 }
 
 type bigQueryWriteAPIOutput struct {
-	conf        bigQueryWriteAPIConfig
+	conf        bqWriteAPIConfig
 	tableInterp *service.InterpolatedString
 	log         *service.Logger
 	metrics     *bqwaMetrics
@@ -647,6 +753,10 @@ type bigQueryWriteAPIOutput struct {
 	// lifecycle. Nil-checked rather than gated on conf, so a pending-mode write
 	// against a disconnected output cleanly returns ErrNotConnected.
 	pending *pendingStreamWriter
+	// cdc is non-nil when write_mode is upsert or upsert_delete. Holds the
+	// Bloblang fields and the wrapped descriptor; injected per-row into
+	// writeBatchCDC.
+	cdc *cdcInjector
 
 	// Lock ordering: connMu must always be acquired before streamsMu to
 	// prevent deadlocks. Close() acquires connMu then streamsMu;
@@ -669,7 +779,7 @@ func bigQueryWriteAPIOutputFromConfig(conf *service.ParsedConfig, mgr *service.R
 	if err := license.CheckRunningEnterprise(mgr); err != nil {
 		return nil, err
 	}
-	cfg, err := bigQueryWriteAPIConfigFromParsed(conf)
+	cfg, err := bqWriteAPIConfigFromParsed(conf)
 	if err != nil {
 		return nil, err
 	}
@@ -681,6 +791,15 @@ func bigQueryWriteAPIOutputFromConfig(conf *service.ParsedConfig, mgr *service.R
 	creator, err := newTableCreator(cfg, mgr.Logger())
 	if err != nil {
 		return nil, err
+	}
+
+	var cdc *cdcInjector
+	if cfg.WriteMode == "upsert" || cfg.WriteMode == "upsert_delete" {
+		cdc = &cdcInjector{
+			changeType:  cfg.ChangeType,
+			changeSeq:   cfg.ChangeSequenceNumber,
+			allowDelete: cfg.WriteMode == "upsert_delete",
+		}
 	}
 
 	return &bigQueryWriteAPIOutput{
@@ -695,6 +814,7 @@ func bigQueryWriteAPIOutputFromConfig(conf *service.ParsedConfig, mgr *service.R
 			creator:        creator,
 		},
 		evolver: &schemaEvolver{log: mgr.Logger(), evolveTimeout: cfg.SchemaEvolutionTimeout},
+		cdc:     cdc,
 	}, nil
 }
 
@@ -794,6 +914,13 @@ func (o *bigQueryWriteAPIOutput) WriteBatch(ctx context.Context, batch service.M
 		return fmt.Errorf("getting stream for table %q: %w", tableID, err)
 	}
 
+	// CDC write modes inject _CHANGE_TYPE (and optionally _CHANGE_SEQUENCE_NUMBER)
+	// per row. Bad rows go to DLQ via BatchError.Failed(i, err) so good rows in
+	// the same batch still get written.
+	if o.cdc != nil {
+		return o.writeBatchCDC(ctx, client, swd, cacheKey, batch, tableID, start)
+	}
+
 	rows := make([][]byte, 0, len(batch))
 	for i, msg := range batch {
 		msgBytes, err := msg.AsBytes()
@@ -863,7 +990,9 @@ func (o *bigQueryWriteAPIOutput) WriteBatch(ctx context.Context, batch service.M
 
 	if rowErrs := resp.GetRowErrors(); len(rowErrs) > 0 {
 		o.metrics.rowsFailed.Incr(int64(len(rowErrs)))
-		o.metrics.rowsSent.Incr(int64(len(batch) - len(rowErrs)))
+		// Clamp: BQ shouldn't return more row errors than rows in the request,
+		// but guard the metric counter against a negative delta if it ever did.
+		o.metrics.rowsSent.Incr(int64(max(0, len(batch)-len(rowErrs))))
 		batchErr := service.NewBatchError(batch, errors.New("row errors from BigQuery"))
 		for _, re := range rowErrs {
 			idx := int(re.GetIndex())
@@ -888,6 +1017,141 @@ func permanentBatchError(batch service.MessageBatch, err error) error {
 		batchErr = batchErr.Failed(i, err)
 	}
 	return batchErr
+}
+
+// appendRowFailure lazily constructs and appends to a BatchError so the caller
+// can collect per-row failures without committing to a sentinel error when
+// there are no failures. headline becomes the BatchError's underlying error
+// when the first failure is appended; it's ignored on subsequent calls.
+func appendRowFailure(be *service.BatchError, batch service.MessageBatch, headline string, idx int, err error) *service.BatchError {
+	if be == nil {
+		be = service.NewBatchError(batch, errors.New(headline))
+	}
+	return be.Failed(idx, err)
+}
+
+// writeBatchCDC executes the CDC write path: per row, resolve the Bloblang
+// fields, validate the values, inject _CHANGE_TYPE (and optionally
+// _CHANGE_SEQUENCE_NUMBER) into the JSON payload, marshal to proto via the
+// wrapped descriptor, and AppendRows the result. Per-row validation failures
+// are collected into a BatchError so good rows in the same batch are still
+// written.
+func (o *bigQueryWriteAPIOutput) writeBatchCDC(
+	ctx context.Context,
+	client *bigquery.Client,
+	swd *streamWithDescriptor,
+	cacheKey string,
+	batch service.MessageBatch,
+	tableID string,
+	start time.Time,
+) error {
+	if o.conf.MessageFormat != "json" {
+		// Defensive — the parser already rejects message_format != json in CDC
+		// modes. If this fires it means the parser missed a case.
+		return permanentBatchError(batch, fmt.Errorf("CDC modes require message_format: json (got %q)", o.conf.MessageFormat))
+	}
+
+	var batchErr *service.BatchError
+	rows := make([][]byte, 0, len(batch))
+	rowIndex := make([]int, 0, len(batch))
+	validationFailures := 0
+
+	const cdcValidationHeadline = "CDC row validation errors"
+	for i, msg := range batch {
+		ct, err := batch.TryInterpolatedString(i, o.cdc.changeType)
+		if err != nil {
+			batchErr = appendRowFailure(batchErr, batch, cdcValidationHeadline, i, fmt.Errorf("interpolating change_type: %w", err))
+			validationFailures++
+			continue
+		}
+		var seq string
+		if o.cdc.changeSeq != nil {
+			seq, err = batch.TryInterpolatedString(i, o.cdc.changeSeq)
+			if err != nil {
+				batchErr = appendRowFailure(batchErr, batch, cdcValidationHeadline, i, fmt.Errorf("interpolating change_sequence_number: %w", err))
+				validationFailures++
+				continue
+			}
+		}
+
+		validatedCT, validatedSeq, err := o.cdc.validateAndResolveCDC(ct, seq)
+		if err != nil {
+			batchErr = appendRowFailure(batchErr, batch, cdcValidationHeadline, i, err)
+			validationFailures++
+			continue
+		}
+
+		msgBytes, err := msg.AsBytes()
+		if err != nil {
+			batchErr = appendRowFailure(batchErr, batch, cdcValidationHeadline, i, fmt.Errorf("reading message: %w", err))
+			validationFailures++
+			continue
+		}
+
+		injectedBytes, err := injectCDCJSON(msgBytes, validatedCT, validatedSeq)
+		if err != nil {
+			batchErr = appendRowFailure(batchErr, batch, cdcValidationHeadline, i, err)
+			validationFailures++
+			continue
+		}
+		protoBytes, err := jsonToProtoBytes(injectedBytes, swd.descriptor)
+		if err != nil {
+			batchErr = appendRowFailure(batchErr, batch, cdcValidationHeadline, i, fmt.Errorf("converting JSON to proto: %w", err))
+			validationFailures++
+			continue
+		}
+		rows = append(rows, protoBytes)
+		rowIndex = append(rowIndex, i)
+	}
+
+	if validationFailures > 0 {
+		o.metrics.rowsFailed.Incr(int64(validationFailures))
+	}
+
+	if len(rows) == 0 {
+		if batchErr != nil {
+			return batchErr
+		}
+		return nil
+	}
+
+	result, err := swd.stream.AppendRows(ctx, rows)
+	if err != nil {
+		o.evictStream(cacheKey)
+		// Pass baseDescriptor (not the CDC-wrapped one) so schema evolution
+		// diffs against the real table schema; otherwise Evolve would see
+		// _CHANGE_TYPE / _CHANGE_SEQUENCE_NUMBER as "missing" columns and
+		// try to ALTER TABLE to add them.
+		return o.handleWriteError(ctx, client, err, batch, tableID, swd.baseDescriptor, "appending CDC rows")
+	}
+	resp, err := result.FullResponse(ctx)
+	if err != nil {
+		o.evictStream(cacheKey)
+		return o.handleWriteError(ctx, client, err, batch, tableID, swd.baseDescriptor, "waiting for CDC append result")
+	}
+
+	o.metrics.batchLatency.Timing(time.Since(start).Nanoseconds())
+	if resp.GetUpdatedSchema() != nil {
+		o.log.Infof("BigQuery reported schema update for table %q, evicting cached stream", tableID)
+		o.evictStream(cacheKey)
+		o.resolver.Evict(tableID)
+	}
+
+	if rowErrs := resp.GetRowErrors(); len(rowErrs) > 0 {
+		for _, re := range rowErrs {
+			idx := int(re.GetIndex())
+			if idx >= 0 && idx < len(rowIndex) {
+				batchErr = appendRowFailure(batchErr, batch, "row errors from BigQuery", rowIndex[idx], fmt.Errorf("row %d: code %d: %s", idx, re.GetCode(), re.GetMessage()))
+			}
+		}
+		o.metrics.rowsFailed.Incr(int64(len(rowErrs)))
+	}
+	o.metrics.batchesSent.Incr(1)
+	o.metrics.rowsSent.Incr(int64(max(0, len(rows)-len(resp.GetRowErrors()))))
+	if batchErr != nil {
+		return batchErr
+	}
+	return nil
 }
 
 // handleWriteError classifies a gRPC error from an append or response and
@@ -1055,7 +1319,13 @@ func (o *bigQueryWriteAPIOutput) closeStreamAsync(s *managedwriter.ManagedStream
 }
 
 func (o *bigQueryWriteAPIOutput) getOrCreateStream(ctx context.Context, client *bigquery.Client, projectID, tableID string) (*streamWithDescriptor, string, error) {
-	cacheKey := o.tableCacheKey(projectID, tableID)
+	// parentPath is the BigQuery resource path used as the AppendRows
+	// destination. cacheKey adds a write-mode suffix so a CDC pipeline and a
+	// non-CDC pipeline pointed at the same table cannot share a stream — the
+	// underlying ManagedStream is bound to its schema descriptor, and the CDC
+	// path wraps the descriptor with pseudo-columns.
+	parentPath := o.tableCacheKey(projectID, tableID)
+	cacheKey := parentPath + "#mode=" + o.conf.WriteMode
 
 	now := time.Now()
 
@@ -1069,7 +1339,7 @@ func (o *bigQueryWriteAPIOutput) getOrCreateStream(ctx context.Context, client *
 	o.streamsMu.RUnlock()
 
 	// Slow path: create stream without holding the lock (network I/O).
-	swd, err := o.createStream(ctx, client, cacheKey, tableID)
+	swd, err := o.createStream(ctx, client, parentPath, tableID)
 	if err != nil {
 		return nil, cacheKey, err
 	}
@@ -1182,7 +1452,7 @@ func (o *bigQueryWriteAPIOutput) sweepIdleStreams(stop <-chan struct{}) {
 	}
 }
 
-func (o *bigQueryWriteAPIOutput) createStream(ctx context.Context, client *bigquery.Client, cacheKey, tableID string) (*streamWithDescriptor, error) {
+func (o *bigQueryWriteAPIOutput) createStream(ctx context.Context, client *bigquery.Client, parentPath, tableID string) (*streamWithDescriptor, error) {
 	o.connMu.RLock()
 	storageClient := o.storageClient
 	o.connMu.RUnlock()
@@ -1196,24 +1466,52 @@ func (o *bigQueryWriteAPIOutput) createStream(ctx context.Context, client *bigqu
 		return nil, err
 	}
 
+	// In CDC mode, append _CHANGE_TYPE (and optionally _CHANGE_SEQUENCE_NUMBER)
+	// to the user's descriptor and use the wrapped version for the managed
+	// stream. The resolver's cached descriptor stays unchanged so non-CDC
+	// pipelines sharing the resolver are not affected.
+	descriptorProto := rs.descriptorProto
+	descriptor := rs.messageDescriptor
+	if o.cdc != nil {
+		// CDC requires at least one PK source. If primary_keys is configured
+		// AND the table already declares PKs, both must agree. These are
+		// config-level errors with no underlying gRPC/googleapi classification,
+		// so wrap them with errPermanent to short-circuit the retry loop and
+		// route the batch to DLQ — the spec says these should fail loudly.
+		if err := validateCDCPrimaryKeys(o.conf.PrimaryKeys, rs.primaryKeys, tableID); err != nil {
+			return nil, fmt.Errorf("%w: %w", errPermanent, err)
+		}
+		wrapped, err := wrapDescriptorForCDC(rs.descriptorProto, o.cdc.changeSeq != nil)
+		if err != nil {
+			return nil, fmt.Errorf("%w: wrapping descriptor for CDC: %w", errPermanent, err)
+		}
+		wrappedMD, err := descriptorProtoToMessageDescriptor(wrapped)
+		if err != nil {
+			return nil, fmt.Errorf("%w: building wrapped message descriptor: %w", errPermanent, err)
+		}
+		descriptorProto = wrapped
+		descriptor = wrappedMD
+	}
+
 	// Detach from the per-batch ctx: the cached stream outlives this WriteBatch
 	// and is reused by every subsequent batch routing to the same table. If the
 	// stream were bound to this ctx, cancellation of the first batch (per-message
 	// deadline, source shutdown, ack timeout) would block all later AppendRows
 	// against the cached stream until the idle sweeper evicted it.
 	ms, err := storageClient.NewManagedStream(context.WithoutCancel(ctx),
-		managedwriter.WithDestinationTable(cacheKey),
+		managedwriter.WithDestinationTable(parentPath),
 		managedwriter.WithType(managedwriter.DefaultStream),
-		managedwriter.WithSchemaDescriptor(rs.descriptorProto),
+		managedwriter.WithSchemaDescriptor(descriptorProto),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("creating managed stream for %q: %w", cacheKey, err)
+		return nil, fmt.Errorf("creating managed stream for %q: %w", parentPath, err)
 	}
 
 	return &streamWithDescriptor{
 		stream:          ms,
-		descriptor:      rs.messageDescriptor,
-		descriptorProto: rs.descriptorProto,
+		descriptor:      descriptor,
+		baseDescriptor:  rs.messageDescriptor,
+		descriptorProto: descriptorProto,
 	}, nil
 }
 
