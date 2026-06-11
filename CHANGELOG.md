@@ -9,6 +9,17 @@ All notable changes to this project will be documented in this file.
 
 - aws_s3: Added `sqs.idle_poll_period` field to back off SQS polling when the queue is empty. The default `0s` preserves the historical fixed 500ms throttle between empty receives; a larger duration reduces `ReceiveMessage` request volume on idle queues at the cost of first-message latency. ([@peczenyj](https://github.com/peczenyj), [#4479](https://github.com/redpanda-data/connect/pull/4479))
 
+## 4.96.0 - 2026-06-11
+
+### Added
+
+- bigquery: Added CDC upsert and upsert_delete write modes to BigQuery connector with automatic _CHANGE_TYPE and _CHANGE_SEQUENCE_NUMBER injection for Change Data Capture workflows. ([@squiidz](https://github.com/squiidz), [#4453](https://github.com/redpanda-data/connect/pull/4453))
+- Doris: Added new stream load output. ([@xylaaaaa](https://github.com/xylaaaaa), [#4218](https://github.com/redpanda-data/connect/pull/4218))
+
+### Fixed
+
+- dynamodb_cdc: Paginate DescribeStream to discover all shards. ([@squiidz](https://github.com/squiidz), [#4489](https://github.com/redpanda-data/connect/pull/4489))
+
 ## 4.95.0 - 2026-06-04
 
 ### Fixed
