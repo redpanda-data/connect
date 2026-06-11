@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 
 	"google.golang.org/protobuf/proto"
@@ -150,24 +151,15 @@ func validateCDCPrimaryKeys(configPKs, tablePKs []string, tableID string) error 
 		return fmt.Errorf("CDC mode requires a PRIMARY KEY on table %q; declare one via primary_keys config or `ALTER TABLE … ADD PRIMARY KEY`", tableID)
 	}
 	if len(configPKs) > 0 && len(tablePKs) > 0 {
-		if !equalStringSlices(configPKs, tablePKs) {
+		// Order-sensitive: BigQuery PKs are positional (column order matches the
+		// declaration in ALTER TABLE … ADD PRIMARY KEY), so the config list must
+		// match the table list exactly, not just as a set.
+		if !slices.Equal(configPKs, tablePKs) {
 			return fmt.Errorf("primary_keys config %v does not match table %q PRIMARY KEY %v",
 				configPKs, tableID, tablePKs)
 		}
 	}
 	return nil
-}
-
-func equalStringSlices(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
 }
 
 // validateAndResolveCDC validates the resolved Bloblang values for a single

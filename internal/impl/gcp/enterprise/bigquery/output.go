@@ -303,7 +303,7 @@ type bqTimePartitioningConfig struct {
 	RequireFilter bool
 }
 
-type bigQueryWriteAPIConfig struct {
+type bqWriteAPIConfig struct {
 	ProjectID              string
 	DatasetID              string
 	MessageFormat          string
@@ -360,7 +360,7 @@ var validBQFieldModes = map[string]struct{}{
 // columns reference columns declared in the schema, and that the partition
 // field has a partition-eligible type. The checks only fire when columns are
 // actually configured (clustering empty / partition field empty is a no-op).
-func validateSchemaReferences(conf bigQueryWriteAPIConfig) error {
+func validateSchemaReferences(conf bqWriteAPIConfig) error {
 	if conf.TimePartitioning.Field == "" && len(conf.Clustering) == 0 {
 		return nil
 	}
@@ -440,7 +440,7 @@ func parseSchemaFields(confs []*service.ParsedConfig) ([]bqSchemaField, error) {
 	return out, nil
 }
 
-func bigQueryWriteAPIConfigFromParsed(pConf *service.ParsedConfig) (conf bigQueryWriteAPIConfig, err error) {
+func bqWriteAPIConfigFromParsed(pConf *service.ParsedConfig) (conf bqWriteAPIConfig, err error) {
 	if conf.ProjectID, err = pConf.FieldString(bqwaFieldProject); err != nil {
 		return
 	}
@@ -725,14 +725,19 @@ func classifyBQError(err error) bqError {
 }
 
 type streamWithDescriptor struct {
-	stream          *managedwriter.ManagedStream
-	descriptor      protoreflect.MessageDescriptor
+	stream     *managedwriter.ManagedStream
+	descriptor protoreflect.MessageDescriptor
+	// baseDescriptor is the user table's descriptor without the CDC pseudo-column
+	// wrap. Equal to descriptor for non-CDC streams. Used by handleWriteError so
+	// schema evolution diffs against the actual table schema rather than trying
+	// to add _CHANGE_TYPE / _CHANGE_SEQUENCE_NUMBER as real columns.
+	baseDescriptor  protoreflect.MessageDescriptor
 	descriptorProto *descriptorpb.DescriptorProto // needed by pendingStreamWriter (write_mode=pending_stream)
 	lastUsed        atomic.Int64                  // UnixNano timestamp, safe for concurrent access
 }
 
 type bigQueryWriteAPIOutput struct {
-	conf        bigQueryWriteAPIConfig
+	conf        bqWriteAPIConfig
 	tableInterp *service.InterpolatedString
 	log         *service.Logger
 	metrics     *bqwaMetrics
@@ -774,7 +779,7 @@ func bigQueryWriteAPIOutputFromConfig(conf *service.ParsedConfig, mgr *service.R
 	if err := license.CheckRunningEnterprise(mgr); err != nil {
 		return nil, err
 	}
-	cfg, err := bigQueryWriteAPIConfigFromParsed(conf)
+	cfg, err := bqWriteAPIConfigFromParsed(conf)
 	if err != nil {
 		return nil, err
 	}
@@ -1113,12 +1118,16 @@ func (o *bigQueryWriteAPIOutput) writeBatchCDC(
 	result, err := swd.stream.AppendRows(ctx, rows)
 	if err != nil {
 		o.evictStream(cacheKey)
-		return o.handleWriteError(ctx, client, err, batch, tableID, swd.descriptor, "appending CDC rows")
+		// Pass baseDescriptor (not the CDC-wrapped one) so schema evolution
+		// diffs against the real table schema; otherwise Evolve would see
+		// _CHANGE_TYPE / _CHANGE_SEQUENCE_NUMBER as "missing" columns and
+		// try to ALTER TABLE to add them.
+		return o.handleWriteError(ctx, client, err, batch, tableID, swd.baseDescriptor, "appending CDC rows")
 	}
 	resp, err := result.FullResponse(ctx)
 	if err != nil {
 		o.evictStream(cacheKey)
-		return o.handleWriteError(ctx, client, err, batch, tableID, swd.descriptor, "waiting for CDC append result")
+		return o.handleWriteError(ctx, client, err, batch, tableID, swd.baseDescriptor, "waiting for CDC append result")
 	}
 
 	o.metrics.batchLatency.Timing(time.Since(start).Nanoseconds())
@@ -1501,6 +1510,7 @@ func (o *bigQueryWriteAPIOutput) createStream(ctx context.Context, client *bigqu
 	return &streamWithDescriptor{
 		stream:          ms,
 		descriptor:      descriptor,
+		baseDescriptor:  rs.messageDescriptor,
 		descriptorProto: descriptorProto,
 	}, nil
 }

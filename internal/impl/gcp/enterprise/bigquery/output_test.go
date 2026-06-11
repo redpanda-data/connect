@@ -59,7 +59,7 @@ table: my_table
 	require.NoError(t, err)
 
 	// When we parse the config.
-	cfg, err := bigQueryWriteAPIConfigFromParsed(pConf)
+	cfg, err := bqWriteAPIConfigFromParsed(pConf)
 	require.NoError(t, err)
 
 	// Then defaults are applied correctly.
@@ -106,7 +106,7 @@ endpoint:
 	require.NoError(t, err)
 
 	// When we parse the config.
-	cfg, err := bigQueryWriteAPIConfigFromParsed(pConf)
+	cfg, err := bqWriteAPIConfigFromParsed(pConf)
 	require.NoError(t, err)
 
 	// Then all values are parsed correctly.
@@ -138,7 +138,7 @@ change_type: ${! metadata("operation") }
 `, mode)
 			pConf, err := spec.ParseYAML(yaml, nil)
 			require.NoError(t, err)
-			cfg, err := bigQueryWriteAPIConfigFromParsed(pConf)
+			cfg, err := bqWriteAPIConfigFromParsed(pConf)
 			require.NoError(t, err)
 			assert.Equal(t, mode, cfg.WriteMode)
 		})
@@ -156,7 +156,7 @@ write_mode: upsert
 change_type: ${! metadata("operation") }
 `, nil)
 		require.NoError(t, err)
-		cfg, err := bigQueryWriteAPIConfigFromParsed(pConf)
+		cfg, err := bqWriteAPIConfigFromParsed(pConf)
 		require.NoError(t, err)
 		require.NotNil(t, cfg.ChangeType)
 	})
@@ -168,7 +168,7 @@ table: my_table
 write_mode: upsert
 `, nil)
 		require.NoError(t, err)
-		_, err = bigQueryWriteAPIConfigFromParsed(pConf)
+		_, err = bqWriteAPIConfigFromParsed(pConf)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "change_type")
 	})
@@ -179,7 +179,7 @@ dataset: my_dataset
 table: my_table
 `, nil)
 		require.NoError(t, err)
-		cfg, err := bigQueryWriteAPIConfigFromParsed(pConf)
+		cfg, err := bqWriteAPIConfigFromParsed(pConf)
 		require.NoError(t, err)
 		assert.Nil(t, cfg.ChangeType)
 	})
@@ -195,7 +195,7 @@ change_type: ${! metadata("operation") }
 change_sequence_number: ${! metadata("scn") }
 `, nil)
 	require.NoError(t, err)
-	cfg, err := bigQueryWriteAPIConfigFromParsed(pConf)
+	cfg, err := bqWriteAPIConfigFromParsed(pConf)
 	require.NoError(t, err)
 	require.NotNil(t, cfg.ChangeSequenceNumber)
 }
@@ -212,7 +212,7 @@ change_type: ${! metadata("operation") }
 primary_keys: [id, tenant_id]
 `, nil)
 		require.NoError(t, err)
-		cfg, err := bigQueryWriteAPIConfigFromParsed(pConf)
+		cfg, err := bqWriteAPIConfigFromParsed(pConf)
 		require.NoError(t, err)
 		assert.Equal(t, []string{"id", "tenant_id"}, cfg.PrimaryKeys)
 	})
@@ -230,7 +230,7 @@ change_type: ${! metadata("operation") }
 primary_keys: [%s]
 `, strings.Join(keys, ", ")), nil)
 		require.NoError(t, err)
-		_, err = bigQueryWriteAPIConfigFromParsed(pConf)
+		_, err = bqWriteAPIConfigFromParsed(pConf)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "16")
 	})
@@ -246,7 +246,7 @@ schema:
   - { name: id, type: STRING, mode: REQUIRED }
 `, nil)
 		require.NoError(t, err)
-		_, err = bigQueryWriteAPIConfigFromParsed(pConf)
+		_, err = bqWriteAPIConfigFromParsed(pConf)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "primary_keys")
 	})
@@ -263,7 +263,7 @@ schema:
 primary_keys: [unknown_col]
 `, nil)
 		require.NoError(t, err)
-		_, err = bigQueryWriteAPIConfigFromParsed(pConf)
+		_, err = bqWriteAPIConfigFromParsed(pConf)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "unknown_col")
 	})
@@ -280,7 +280,7 @@ schema:
 primary_keys: [id]
 `, nil)
 		require.NoError(t, err)
-		_, err = bigQueryWriteAPIConfigFromParsed(pConf)
+		_, err = bqWriteAPIConfigFromParsed(pConf)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "REQUIRED")
 	})
@@ -328,7 +328,7 @@ message_format: protobuf
 		t.Run(tc.name, func(t *testing.T) {
 			pConf, err := spec.ParseYAML(tc.yaml, nil)
 			require.NoError(t, err)
-			_, err = bigQueryWriteAPIConfigFromParsed(pConf)
+			_, err = bqWriteAPIConfigFromParsed(pConf)
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), tc.errMsg)
 		})
@@ -392,7 +392,7 @@ delegates:
 		t.Run(tc.name, func(t *testing.T) {
 			pConf, err := spec.ParseYAML(tc.yaml, nil)
 			require.NoError(t, err)
-			_, err = bigQueryWriteAPIConfigFromParsed(pConf)
+			_, err = bqWriteAPIConfigFromParsed(pConf)
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), tc.errMsg)
 		})
@@ -417,7 +417,7 @@ schema:
 `, nil)
 	require.NoError(t, err)
 
-	cfg, err := bigQueryWriteAPIConfigFromParsed(pConf)
+	cfg, err := bqWriteAPIConfigFromParsed(pConf)
 	require.NoError(t, err)
 	require.Len(t, cfg.Schema, 4)
 	assert.Equal(t, "id", cfg.Schema[0].Name)
@@ -487,7 +487,7 @@ schema:
 		t.Run(tc.name, func(t *testing.T) {
 			pConf, err := spec.ParseYAML(tc.yaml, nil)
 			require.NoError(t, err)
-			_, err = bigQueryWriteAPIConfigFromParsed(pConf)
+			_, err = bqWriteAPIConfigFromParsed(pConf)
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), tc.errMsg)
 		})
@@ -515,7 +515,7 @@ clustering:
 `, nil)
 	require.NoError(t, err)
 
-	cfg, err := bigQueryWriteAPIConfigFromParsed(pConf)
+	cfg, err := bqWriteAPIConfigFromParsed(pConf)
 	require.NoError(t, err)
 	assert.Equal(t, "HOUR", cfg.TimePartitioning.Type)
 	assert.Equal(t, "created_at", cfg.TimePartitioning.Field)
@@ -532,7 +532,7 @@ dataset: my_dataset
 table: my_table
 `, nil)
 	require.NoError(t, err)
-	cfg, err := bigQueryWriteAPIConfigFromParsed(pConf)
+	cfg, err := bqWriteAPIConfigFromParsed(pConf)
 	require.NoError(t, err)
 	assert.Empty(t, cfg.TimePartitioning.Type)
 	assert.Empty(t, cfg.TimePartitioning.Field)
@@ -599,7 +599,7 @@ clustering: [a, b, c, d, e]
 		t.Run(tc.name, func(t *testing.T) {
 			pConf, err := spec.ParseYAML(tc.yaml, nil)
 			require.NoError(t, err)
-			_, err = bigQueryWriteAPIConfigFromParsed(pConf)
+			_, err = bqWriteAPIConfigFromParsed(pConf)
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), tc.errMsg)
 		})

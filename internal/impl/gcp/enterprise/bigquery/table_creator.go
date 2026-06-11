@@ -92,7 +92,7 @@ type tableCreator struct {
 // newTableCreator builds a tableCreator from the parsed config. Returns nil
 // when auto_create_table is disabled — callers nil-check to skip the create
 // path entirely.
-func newTableCreator(conf bigQueryWriteAPIConfig, log *service.Logger) (*tableCreator, error) {
+func newTableCreator(conf bqWriteAPIConfig, log *service.Logger) (*tableCreator, error) {
 	if !conf.AutoCreateTable {
 		return nil, nil
 	}
