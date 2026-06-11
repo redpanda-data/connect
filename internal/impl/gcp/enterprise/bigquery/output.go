@@ -619,8 +619,10 @@ func bqWriteAPIConfigFromParsed(pConf *service.ParsedConfig) (conf bqWriteAPICon
 }
 
 type bqwaMetrics struct {
-	rowsSent                *service.MetricCounter
-	rowsFailed              *service.MetricCounter
+	rowsSent   *service.MetricCounter
+	rowsFailed *service.MetricCounter
+	// batchesSent counts batches whose append RPC succeeded, including batches
+	// with per-row failures — row-level detail lives in rowsSent/rowsFailed.
 	batchesSent             *service.MetricCounter
 	batchLatency            *service.MetricTimer
 	retries                 *service.MetricCounter
@@ -995,10 +997,13 @@ func (o *bigQueryWriteAPIOutput) WriteBatch(ctx context.Context, batch service.M
 		// Clamp: BQ shouldn't return more row errors than rows in the request,
 		// but guard the metric counter against a negative delta if it ever did.
 		o.metrics.rowsSent.Incr(int64(max(0, len(batch)-len(rowErrs))))
+		// The append RPC itself succeeded, so the batch counts as sent — the
+		// CDC path does the same; row-level detail lives in rowsSent/rowsFailed.
+		o.metrics.batchesSent.Incr(1)
 		batchErr := service.NewBatchError(batch, errors.New("row errors from BigQuery"))
 		for _, re := range rowErrs {
 			idx := int(re.GetIndex())
-			if idx < len(batch) {
+			if idx >= 0 && idx < len(batch) {
 				batchErr = batchErr.Failed(idx, fmt.Errorf("row %d: code %d: %s", idx, re.GetCode(), re.GetMessage()))
 			}
 		}
@@ -1106,12 +1111,13 @@ func (o *bigQueryWriteAPIOutput) writeBatchCDC(
 		rowIndex = append(rowIndex, i)
 	}
 
-	if validationFailures > 0 {
-		o.metrics.rowsFailed.Incr(int64(validationFailures))
-	}
-
+	// validationFailures is counted into rowsFailed only on the paths that
+	// surface batchErr (below, and after a successful append). On the
+	// handleWriteError paths the whole batch is retried or DLQ'd, and counting
+	// before AppendRows would re-count the same failures on every retry.
 	if len(rows) == 0 {
 		if batchErr != nil {
+			o.metrics.rowsFailed.Incr(int64(validationFailures))
 			return batchErr
 		}
 		return nil
@@ -1143,10 +1149,15 @@ func (o *bigQueryWriteAPIOutput) writeBatchCDC(
 		for _, re := range rowErrs {
 			idx := int(re.GetIndex())
 			if idx >= 0 && idx < len(rowIndex) {
-				batchErr = appendRowFailure(batchErr, batch, "row errors from BigQuery", rowIndex[idx], fmt.Errorf("row %d: code %d: %s", idx, re.GetCode(), re.GetMessage()))
+				// re.GetIndex() is the position within the sent rows; report the
+				// original batch index so the message matches the failed message.
+				batchErr = appendRowFailure(batchErr, batch, "row errors from BigQuery", rowIndex[idx], fmt.Errorf("row %d: code %d: %s", rowIndex[idx], re.GetCode(), re.GetMessage()))
 			}
 		}
 		o.metrics.rowsFailed.Incr(int64(len(rowErrs)))
+	}
+	if validationFailures > 0 {
+		o.metrics.rowsFailed.Incr(int64(validationFailures))
 	}
 	o.metrics.batchesSent.Incr(1)
 	o.metrics.rowsSent.Incr(int64(max(0, len(rows)-len(resp.GetRowErrors()))))
