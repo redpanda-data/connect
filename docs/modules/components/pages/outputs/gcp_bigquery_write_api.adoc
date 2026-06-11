@@ -94,7 +94,7 @@ output:
     stream_idle_timeout: 5m
     stream_sweep_interval: 1m
     max_cached_streams: 1024
-    schema_resolve_timeout: 5s
+    schema_resolve_timeout: 15s
     schema_evolution_timeout: 30s
     endpoint:
       http: ""
@@ -505,12 +505,12 @@ Soft cap on the number of cached streams. When the cache exceeds this size, the 
 
 === `schema_resolve_timeout`
 
-How long a single BigQuery table-metadata fetch can run before being aborted. Coalesced concurrent resolves share one fetch, so this bounds the time a wedged backend can stall every batch routing to the same table.
+How long a single BigQuery table-metadata fetch can run before being aborted. Coalesced concurrent resolves share one fetch, so this bounds the time a wedged backend can stall every batch routing to the same table. On the auto_create_table path the budget covers Metadata→Create→Metadata, so it needs to absorb transient backend slowness on top of the metadata fetch itself.
 
 
 *Type*: `string`
 
-*Default*: `"5s"`
+*Default*: `"15s"`
 
 === `schema_evolution_timeout`
 

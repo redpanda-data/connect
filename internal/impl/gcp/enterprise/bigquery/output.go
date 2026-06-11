@@ -260,9 +260,11 @@ When migrating from the load-jobs based `+"`gcp_bigquery`"+` output to CDC mode,
 			service.NewDurationField(bqwaFieldSchemaResolveTimeout).
 				Description("How long a single BigQuery table-metadata fetch can run before being aborted."+
 					" Coalesced concurrent resolves share one fetch, so this bounds the time a wedged backend"+
-					" can stall every batch routing to the same table.").
+					" can stall every batch routing to the same table. On the auto_create_table path"+
+					" the budget covers Metadata→Create→Metadata, so it needs to absorb transient backend"+
+					" slowness on top of the metadata fetch itself.").
 				Advanced().
-				Default("5s"),
+				Default("15s"),
 			service.NewDurationField(bqwaFieldSchemaEvolutionTimeout).
 				Description("Total time budget for a single schema evolution attempt (Metadata + Update"+
 					" across all CAS retries on HTTP 412). Bounds how long the WriteBatch retry loop can be"+

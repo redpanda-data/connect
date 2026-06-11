@@ -73,7 +73,7 @@ table: my_table
 	assert.Empty(t, cfg.Delegates)
 	assert.Equal(t, 5*time.Minute, cfg.StreamIdleTimeout)
 	assert.Equal(t, 1*time.Minute, cfg.StreamSweepInterval)
-	assert.Equal(t, 5*time.Second, cfg.SchemaResolveTimeout)
+	assert.Equal(t, 15*time.Second, cfg.SchemaResolveTimeout)
 	assert.Equal(t, 30*time.Second, cfg.SchemaEvolutionTimeout)
 	assert.Empty(t, cfg.EndpointHTTP)
 	assert.Empty(t, cfg.EndpointGRPC)

@@ -286,6 +286,10 @@ gcp_bigquery_write_api:
   time_partitioning:
     type: DAY
   clustering: [tenant_id]
+  # The auto-create path runs Metadata→Create→Metadata inside one budget;
+  # CI runners under load have flaked the default repeatedly. 30s gives the
+  # emulator plenty of headroom without changing real-world write behavior.
+  schema_resolve_timeout: 30s
   endpoint:
     http: %s
     grpc: %s
