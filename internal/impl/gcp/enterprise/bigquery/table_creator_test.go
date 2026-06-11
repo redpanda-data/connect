@@ -110,3 +110,26 @@ func TestYAMLSchemaTypeMapping(t *testing.T) {
 		})
 	}
 }
+
+func TestTableCreatorBuildsPrimaryKey(t *testing.T) {
+	creator := &tableCreator{
+		schema: bigquery.Schema{
+			{Name: "id", Type: bigquery.StringFieldType, Required: true},
+		},
+		primaryKeys: []string{"id"},
+	}
+	meta := creator.buildMetadata()
+	require.NotNil(t, meta.TableConstraints)
+	require.NotNil(t, meta.TableConstraints.PrimaryKey)
+	assert.Equal(t, []string{"id"}, meta.TableConstraints.PrimaryKey.Columns)
+}
+
+func TestTableCreatorNoPrimaryKey(t *testing.T) {
+	creator := &tableCreator{
+		schema: bigquery.Schema{
+			{Name: "id", Type: bigquery.StringFieldType, Required: true},
+		},
+	}
+	meta := creator.buildMetadata()
+	assert.Nil(t, meta.TableConstraints)
+}

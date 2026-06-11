@@ -43,6 +43,9 @@ output:
     dataset: "" # No default (required)
     table: "" # No default (required)
     message_format: json
+    change_type: "" # No default (optional)
+    change_sequence_number: "" # No default (optional)
+    primary_keys: [] # No default (optional)
     max_in_flight: 4
     batching:
       count: 0
@@ -67,6 +70,9 @@ output:
     table: "" # No default (required)
     message_format: json
     write_mode: default_stream
+    change_type: "" # No default (optional)
+    change_sequence_number: "" # No default (optional)
+    primary_keys: [] # No default (optional)
     auto_create_table: false
     schema: []
     time_partitioning:
@@ -88,7 +94,7 @@ output:
     stream_idle_timeout: 5m
     stream_sweep_interval: 1m
     max_cached_streams: 1024
-    schema_resolve_timeout: 5s
+    schema_resolve_timeout: 15s
     schema_evolution_timeout: 30s
     endpoint:
       http: ""
@@ -127,6 +133,10 @@ When `auto_create_table` is true, the output creates missing tables on the fly u
 == Exactly-once caveat
 
 The exactly-once guarantee of `pending_stream` is "exactly-once within a stream". If a BatchCommitWriteStreams RPC succeeds but its response is lost to a network failure, benthos retries the batch through a new pending stream and the data lands twice. This is a fundamental limitation of the BigQuery Storage Write API exactly-once contract and applies to every implementation.
+
+== CDC migration
+
+When migrating from the load-jobs based `gcp_bigquery` output to CDC mode, see the xref:outputs/bigquery_cdc_migration.adoc[CDC migration guide].
 
 
 == Fields
@@ -173,7 +183,7 @@ Options:
 
 === `write_mode`
 
-How the output writes to BigQuery. `default_stream` uses the multiplexed default stream (at-least-once, lowest latency). `pending_stream` allocates a per-batch pending stream that commits atomically, providing exactly-once semantics within a single committed batch.
+How the output writes to BigQuery. `default_stream` uses the multiplexed default stream (at-least-once, lowest latency). `pending_stream` allocates a per-batch pending stream that commits atomically, providing exactly-once semantics within a single committed batch. `upsert` writes UPSERT-only rows to a BigQuery CDC-enabled table; the target table must have a PRIMARY KEY. `upsert_delete` allows both UPSERT and DELETE rows. Both CDC modes use the default stream as required by BigQuery.
 
 
 *Type*: `string`
@@ -183,7 +193,35 @@ How the output writes to BigQuery. `default_stream` uses the multiplexed default
 Options:
 `default_stream`
 , `pending_stream`
+, `upsert`
+, `upsert_delete`
 .
+
+=== `change_type`
+
+Bloblang expression resolving to the `_CHANGE_TYPE` pseudo-column value for each row. Must resolve to `UPSERT` or `DELETE` (case-insensitive). Required when `write_mode` is `upsert` or `upsert_delete`. Example: `${! metadata("operation") }`.
+This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
+
+
+*Type*: `string`
+
+
+=== `change_sequence_number`
+
+Optional Bloblang expression resolving to the `_CHANGE_SEQUENCE_NUMBER` pseudo-column value. Format: 1 to 4 sections of 1 to 16 hexadecimal characters each, separated by `/`. Example: `${! metadata("scn") }` or `${! "0/0/0/0" }`. When unset, BigQuery resolves ordering by arrival time.
+This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
+
+
+*Type*: `string`
+
+
+=== `primary_keys`
+
+Optional list of primary-key column names. Required when `auto_create_table` is true and `write_mode` is `upsert` or `upsert_delete`. When the target table is pre-existing, the connector falls back to the PRIMARY KEY declared on the table. Up to 16 columns; composite keys are supported in the same order they are listed.
+
+
+*Type*: `array`
+
 
 === `auto_create_table`
 
@@ -467,12 +505,12 @@ Soft cap on the number of cached streams. When the cache exceeds this size, the 
 
 === `schema_resolve_timeout`
 
-How long a single BigQuery table-metadata fetch can run before being aborted. Coalesced concurrent resolves share one fetch, so this bounds the time a wedged backend can stall every batch routing to the same table.
+How long a single BigQuery table-metadata fetch can run before being aborted. Coalesced concurrent resolves share one fetch, so this bounds the time a wedged backend can stall every batch routing to the same table. On the auto_create_table path the budget covers Metadata→Create→Metadata, so it needs to absorb transient backend slowness on top of the metadata fetch itself.
 
 
 *Type*: `string`
 
-*Default*: `"5s"`
+*Default*: `"15s"`
 
 === `schema_evolution_timeout`
 

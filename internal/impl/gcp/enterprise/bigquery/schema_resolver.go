@@ -28,10 +28,12 @@ import (
 )
 
 // resolvedSchema holds both descriptor forms (DescriptorProto for the managed
-// writer, MessageDescriptor for JSON-to-proto conversion).
+// writer, MessageDescriptor for JSON-to-proto conversion) plus the table's
+// declared primary keys (nil when the table has no PK constraint).
 type resolvedSchema struct {
 	descriptorProto   *descriptorpb.DescriptorProto
 	messageDescriptor protoreflect.MessageDescriptor
+	primaryKeys       []string
 }
 
 // schemaResolver caches resolved schemas per table and deduplicates concurrent
@@ -161,5 +163,23 @@ func resolveFromBQTable(ctx context.Context, client *bq.Client, creator *tableCr
 	return &resolvedSchema{
 		descriptorProto:   normalized,
 		messageDescriptor: md,
+		primaryKeys:       extractPrimaryKeysFromMetadata(meta),
 	}, nil
+}
+
+// extractPrimaryKeysFromMetadata reads the PRIMARY KEY declaration from a
+// fetched BigQuery table metadata. Returns nil if the table has no primary
+// key declared. The returned slice preserves the column order declared in
+// BigQuery, which is significant for composite keys.
+func extractPrimaryKeysFromMetadata(meta *bq.TableMetadata) []string {
+	if meta == nil || meta.TableConstraints == nil || meta.TableConstraints.PrimaryKey == nil {
+		return nil
+	}
+	cols := meta.TableConstraints.PrimaryKey.Columns
+	if len(cols) == 0 {
+		return nil
+	}
+	out := make([]string, len(cols))
+	copy(out, cols)
+	return out
 }
