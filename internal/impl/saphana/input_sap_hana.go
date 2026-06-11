@@ -141,7 +141,7 @@ type sapHANAInput struct {
 	mode            string
 	customQuery     string
 	incrementingCol string
-	hwm             string
+	hwm             any
 	pollInterval    time.Duration
 
 	timestampCol   string
@@ -207,8 +207,12 @@ func newSAPHANAInput(conf *service.ParsedConfig, mgr *service.Resources) (*sapHA
 			return nil, err
 		}
 	}
-	if s.hwm, err = conf.FieldString(shFieldIncrementingInitialVal); err != nil {
+	var hwmInit string
+	if hwmInit, err = conf.FieldString(shFieldIncrementingInitialVal); err != nil {
 		return nil, err
+	}
+	if hwmInit != "" {
+		s.hwm = hwmInit
 	}
 	if s.pollInterval, err = conf.FieldDuration(shFieldPollInterval); err != nil {
 		return nil, err
@@ -296,7 +300,7 @@ func (s *sapHANAInput) openRows(ctx context.Context) (*sql.Rows, error) {
 
 	case shModeIncrementing:
 		inc := quoteIdentifier(s.incrementingCol)
-		if s.hwm == "" {
+		if s.hwm == nil {
 			q := `SELECT * FROM ` + s.tableRef() + ` ORDER BY ` + inc
 			return s.db.QueryContext(ctx, q)
 		}
@@ -323,6 +327,14 @@ func (s *sapHANAInput) openRows(ctx context.Context) (*sql.Rows, error) {
 		if s.timestampHWM.IsZero() {
 			q := `SELECT * FROM ` + s.tableRef() + ` WHERE ` + tsc + ` <= ? ORDER BY ` + tsc + `, ` + inc
 			return s.db.QueryContext(ctx, q, s.tsQueryUpper)
+		}
+		if s.hwm == nil {
+			// timestampHWM advanced but no incrementing value seen yet (e.g. first window was empty).
+			// Use pure timestamp comparison to avoid binding nil against a numeric column.
+			q := `SELECT * FROM ` + s.tableRef() +
+				` WHERE ` + tsc + ` > ? AND ` + tsc + ` <= ?` +
+				` ORDER BY ` + tsc + `, ` + inc
+			return s.db.QueryContext(ctx, q, s.timestampHWM, s.tsQueryUpper)
 		}
 		q := `SELECT * FROM ` + s.tableRef() +
 			` WHERE (` + tsc + ` > ? OR (` + tsc + ` = ? AND ` + inc + ` > ?))` +
@@ -499,7 +511,7 @@ func (s *sapHANAInput) scanRow(ctx context.Context, rows *sql.Rows) (*service.Me
 
 	if (s.mode == shModeIncrementing || s.mode == shModeTimestampIncrementing) && s.incrementingCol != "" {
 		if v, ok := rowMap[s.incrementingCol]; ok && v != nil {
-			s.hwm = fmt.Sprintf("%v", v)
+			s.hwm = v
 		}
 	}
 

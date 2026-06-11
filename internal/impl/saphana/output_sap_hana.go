@@ -36,7 +36,7 @@ var sapHANAOutputConfigSpec = service.NewConfigSpec().
 	Categories("Services").
 	Version("4.92.0").
 	Summary("Writes rows to a SAP HANA table using native bulk insert.").
-	Description(`Inserts batches of rows into a SAP HANA table using go-hdb's execMany bulk path: all rows in a batch are sent in a single ` + "`MtInsert`" + ` RPC, minimising round-trips.
+	Description(`Inserts batches of rows into a SAP HANA table using a prepared statement. go-hdb batches all rows into a single ` + "`MtInsert`" + ` RPC when the argument count is a multiple of the column count, minimising round-trips.
 
 Each message is mapped to an ordered list of column values via ` + "`args_mapping`" + `. Configure ` + "`batching`" + ` on this output to control how many rows are bundled per INSERT call.
 `).
@@ -94,6 +94,7 @@ type sapHANAOutput struct {
 	argsExec   *bloblang.Executor
 
 	db    *sql.DB
+	stmt  *sql.Stmt
 	dbMut sync.Mutex
 	log   *service.Logger
 }
@@ -167,8 +168,14 @@ func (o *sapHANAOutput) Connect(ctx context.Context) error {
 		_ = db.Close()
 		return fmt.Errorf("pinging SAP HANA: %w", err)
 	}
+	stmt, err := db.PrepareContext(ctx, o.insertSQL)
+	if err != nil {
+		_ = db.Close()
+		return fmt.Errorf("preparing insert statement: %w", err)
+	}
 
 	o.db = db
+	o.stmt = stmt
 	o.log.Debug("Connected to SAP HANA.")
 	return nil
 }
@@ -176,6 +183,7 @@ func (o *sapHANAOutput) Connect(ctx context.Context) error {
 func (o *sapHANAOutput) WriteBatch(ctx context.Context, batch service.MessageBatch) error {
 	o.dbMut.Lock()
 	db := o.db
+	stmt := o.stmt
 	o.dbMut.Unlock()
 
 	if db == nil {
@@ -204,7 +212,7 @@ func (o *sapHANAOutput) WriteBatch(ctx context.Context, batch service.MessageBat
 		args = append(args, vals...)
 	}
 
-	if _, err := db.ExecContext(ctx, o.insertSQL, args...); err != nil {
+	if _, err := stmt.ExecContext(ctx, args...); err != nil {
 		return fmt.Errorf("bulk insert: %w", err)
 	}
 	return nil
@@ -214,6 +222,10 @@ func (o *sapHANAOutput) Close(_ context.Context) error {
 	o.dbMut.Lock()
 	defer o.dbMut.Unlock()
 
+	if o.stmt != nil {
+		_ = o.stmt.Close()
+		o.stmt = nil
+	}
 	if o.db != nil {
 		err := o.db.Close()
 		o.db = nil

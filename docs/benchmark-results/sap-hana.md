@@ -182,7 +182,7 @@ Same dataset: 2,000,000 rows × ~300 B via `io.confluent.connect.jdbc.JdbcSource
 ## Write
 
 Kafka → `sap_hana` output (native bulk insert): 2,000,000 rows × 4 columns (BIGINT, NVARCHAR(50), DOUBLE, TIMESTAMP).
-Pipeline: `kafka_franz` input → `sap_hana` output. Each batch is a single `MtInsert` RPC via go-hdb execMany.
+Pipeline: `kafka_franz` input → `sap_hana` output. Each batch is sent via a cached prepared statement; go-hdb batches all rows into a single `MtInsert` RPC.
 `batching.count=1000`. Varying `max_in_flight` (concurrent batch INSERT calls) and `GOMAXPROCS`.
 
 ### msg/sec
