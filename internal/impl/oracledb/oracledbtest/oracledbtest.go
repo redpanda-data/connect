@@ -189,9 +189,13 @@ func SetupTestWithOracleDBVersion(t *testing.T) (string, *TestDB) {
 	_, err := cfg.dbConn.ExecContext(ctx, "ALTER DATABASE ADD SUPPLEMENTAL LOG DATA")
 	assert.NoError(t, err)
 
+	time.Sleep(5 * time.Second)
+
 	// Enable minimal supplemental logging for primary keys at CDB level
 	_, err = cfg.dbConn.ExecContext(ctx, "ALTER DATABASE ADD SUPPLEMENTAL LOG DATA (PRIMARY KEY) COLUMNS")
 	assert.NoError(t, err)
+
+	time.Sleep(5 * time.Second)
 
 	// Enable creation of local users in CDB root (required to avoid ORA-65096)
 	_, err = cfg.dbConn.ExecContext(ctx, "ALTER SESSION SET \"_ORACLE_SCRIPT\"=TRUE")
