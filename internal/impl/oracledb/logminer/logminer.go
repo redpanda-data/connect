@@ -55,19 +55,22 @@ type LogMiner struct {
 }
 
 // NewMiner creates a new instance of LogMiner responsible for paging through change events based on the tables param.
-func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replication.ChangePublisher, cfg *Config, metrics *service.Metrics, logger *service.Logger) *LogMiner {
+// txnCache sets the transaction buffer implementation; pass nil to use the default in-memory cache.
+func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replication.ChangePublisher, cfg *Config, txnCache TransactionCache, metrics *service.Metrics, logger *service.Logger) *LogMiner {
 	// Build table filter condition once
-	// Only filter DML operations (1=INSERT, 2=DELETE, 3=UPDATE) by table
 	// Transaction control operations (6=START, 7=COMMIT, 36=ROLLBACK) don't have table info
+	// and must pass unfiltered. DML (1=INSERT, 2=DELETE, 3=UPDATE) and LOB operations
+	// (9=SELECT_LOB_LOCATOR, 10=LOB_WRITE, 11=LOB_TRIM) all carry SEG_OWNER/TABLE_NAME
+	// and must be restricted to configured tables to avoid capturing Oracle internal tables.
 	var buf strings.Builder
 	if len(userTables) > 0 {
-		opCodes := "6, 7, 36"
+		buf.WriteString(" AND (OPERATION_CODE IN (6, 7, 36)")
+		// DML and LOB operations carry the real table name — filter by configured tables.
+		dmlCodes := "1, 2, 3"
 		if cfg.LOBEnabled {
-			opCodes += ", 9, 10, 11"
+			dmlCodes += ", 9, 10, 11"
 		}
-		buf.WriteString(" AND (OPERATION_CODE IN (" + opCodes + ")")
-		// DML carries the real table name — filter by configured tables.
-		buf.WriteString(" OR (OPERATION_CODE IN (1, 2, 3) AND (") // Filter DML by table
+		buf.WriteString(" OR (OPERATION_CODE IN (" + dmlCodes + ") AND (") // Filter DML/LOB by table
 		for i, t := range userTables {
 			if i > 0 {
 				buf.WriteString(" OR ")
@@ -106,9 +109,12 @@ func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replicat
 		logMinerQuery: logMinerQuery,
 		logCollector:  NewLogFileCollector(),
 		sessionMgr:    NewSessionManager(cfg, logger),
-		txnCache:      NewInMemoryCache(cfg.MaxTransactionEvents, metrics, logger),
+		txnCache:      txnCache,
 		dmlParser:     sqlredo.NewParser(),
 		lobStates:     make(map[sqlredo.TransactionID]*sqlredo.TxnLOBState),
+	}
+	if lm.txnCache == nil {
+		lm.txnCache = NewInMemoryCache(cfg.MaxTransactionEvents, metrics, logger)
 	}
 	return lm
 }
@@ -252,7 +258,9 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 	switch redoEvent.Operation {
 	case sqlredo.OpStart:
 		// Transaction started
-		lm.txnCache.StartTransaction(redoEvent.TransactionID, redoEvent.SCN)
+		if err := lm.txnCache.StartTransaction(ctx, redoEvent.TransactionID, redoEvent.SCN); err != nil {
+			return fmt.Errorf("starting transaction %s: %w", redoEvent.TransactionID, err)
+		}
 
 	case sqlredo.OpInsert, sqlredo.OpUpdate, sqlredo.OpDelete:
 		// SQL_REDO should always be present for DML operations. If not, it's likely a temporary
@@ -269,21 +277,21 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 			return fmt.Errorf("parsing sql redo event into dml event: %w", err)
 		}
 
-		lm.txnCache.AddEvent(redoEvent.TransactionID, redoEvent.SCN, &event)
+		if err := lm.txnCache.AddEvent(ctx, redoEvent.TransactionID, redoEvent.SCN, &event); err != nil {
+			return fmt.Errorf("adding event to transaction %s: %w", redoEvent.TransactionID, err)
+		}
 
-	case sqlredo.OpSelectLobLocator, sqlredo.OpLobTrim:
+	case sqlredo.OpSelectLobLocator:
 		if !lm.cfg.LOBEnabled {
 			return nil
 		}
 		if !redoEvent.SQLRedo.Valid || redoEvent.SQLRedo.String == "" {
-			lm.log.Warnf("Skipping %s with no SQL_REDO (scn=%d, txn=%s)", redoEvent.Operation, redoEvent.SCN, redoEvent.TransactionID)
+			lm.log.Warnf("Skipping SELECT_LOB_LOCATOR with no SQL_REDO (scn=%d, txn=%s)", redoEvent.SCN, redoEvent.TransactionID)
 			return nil
 		}
-		// LOB_TRIM SQL has the same SELECT "COL" INTO ... FROM "SCHEMA"."TABLE" WHERE ...
-		// structure as SELECT_LOB_LOCATOR, so the same parser works for both.
 		info, err := sqlredo.ParseSelectLobLocator(redoEvent.SQLRedo.String)
 		if err != nil {
-			lm.log.Warnf("Failed to parse %s SQL (scn=%d, txn=%s): %v\nSQL: %.500s", redoEvent.Operation, redoEvent.SCN, redoEvent.TransactionID, err, redoEvent.SQLRedo.String)
+			lm.log.Warnf("Failed to parse SELECT_LOB_LOCATOR SQL (scn=%d, txn=%s): %v\nSQL: %.500s", redoEvent.SCN, redoEvent.TransactionID, err, redoEvent.SQLRedo.String)
 			return nil
 		}
 		// Resolve LOB type from the schema cache populated at startup.
@@ -308,13 +316,82 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 		}
 		state.ActiveKey = &key
 
+	case sqlredo.OpLobTrim:
+		if !lm.cfg.LOBEnabled {
+			return nil
+		}
+		// LOB_TRIM (op 11) comes in two forms depending on Oracle LOB type:
+		//
+		// Form A — SELECT "COL" INTO ... FROM "SCHEMA"."TABLE" WHERE ...
+		//   Emitted for certain LOB types (e.g. out-of-line SecureFile) without a preceding
+		//   SELECT_LOB_LOCATOR. In this case LOB_TRIM itself must establish the accumulator.
+		//
+		// Form B — dbms_lob.trim(loc_b, N)
+		//   Emitted when a SELECT_LOB_LOCATOR has already established the active key.
+		//   No schema/table/column info is present. The accumulator is left untouched
+		//   regardless of N — see the inline comment below for the rationale.
+		//
+		//   When N>0 and no fragments have been accumulated, a warning is emitted because
+		//   Oracle intends to keep the first N bytes/chars of the pre-existing LOB, which
+		//   we do not hold. In the common SecureFile full-rewrite path LOB_WRITE(s) precede
+		//   LOB_TRIM and the assembled length equals N, so no data is lost in practice.
+		if redoEvent.SQLRedo.Valid && redoEvent.SQLRedo.String != "" {
+			if info, err := sqlredo.ParseSelectLobLocator(redoEvent.SQLRedo.String); err == nil {
+				// Form A: establish (or reset) the accumulator for this LOB column.
+				colKey := fmt.Sprintf("%s.%s.%s", info.Schema, info.Table, info.Column)
+				lobType := lm.lobColTypes[strings.ToUpper(colKey)]
+				state := lm.getOrCreateLOBState(redoEvent.TransactionID)
+				key := sqlredo.LobKey{
+					Schema:   info.Schema,
+					Table:    info.Table,
+					Column:   info.Column,
+					PKString: sqlredo.FormatPKString(info.PKValues),
+				}
+				state.Accumulators[key] = &sqlredo.LobAccumulator{
+					Schema:   info.Schema,
+					Table:    info.Table,
+					Column:   info.Column,
+					PKValues: info.PKValues,
+					IsBinary: lobType == "BLOB",
+				}
+				state.ActiveKey = &key
+				return nil
+			}
+		}
+		// Form B: LOB_TRIM carries no schema/table/column info — the active key was
+		// already established by SELECT_LOB_LOCATOR. Oracle may emit LOB_TRIM before
+		// LOB_WRITE (BASICFILE "clear then write") or after (SecureFile "write then
+		// finalize"). In both cases the accumulator should be left untouched:
+		//   - Before LOB_WRITE: accumulator is empty anyway, so there is nothing to clear.
+		//   - After LOB_WRITE:  fragments are already accumulated; clearing them would
+		//     destroy the data before commit.
+		state, exists := lm.lobStates[redoEvent.TransactionID]
+		if !exists || state.ActiveKey == nil {
+			return nil
+		}
+		if redoEvent.SQLRedo.Valid && redoEvent.SQLRedo.String != "" {
+			if trimLen, err := sqlredo.ParseLobTrim(redoEvent.SQLRedo.String); err == nil && trimLen > 0 {
+				// Warn only for the blatant case: N>0 with no fragments at all, meaning
+				// the existing LOB prefix is preserved but we have nothing to emit.
+				// Two adjacent cases (N < total written bytes, or N > total written bytes
+				// with M>0) also produce an assembled value that does not exactly match N,
+				// but Assemble() is not truncated to N here. This is an intentional
+				// tradeoff: SecureFile full-rewrite UPDATEs (the common path) always write
+				// all bytes then trim to the exact final length, so assembled==N in
+				// practice. Partial-update patterns are not supported by this path.
+				if acc := state.Accumulators[*state.ActiveKey]; acc != nil && len(acc.Fragments) == 0 {
+					lm.log.Warnf("LOB_TRIM to non-zero length %d with no prior LOB_WRITE (scn=%d, txn=%s): assembled value may be incomplete", trimLen, redoEvent.SCN, redoEvent.TransactionID)
+				}
+			}
+		}
+
 	case sqlredo.OpLobWrite:
 		if !lm.cfg.LOBEnabled {
 			return nil
 		}
 		state, exists := lm.lobStates[redoEvent.TransactionID]
 		if !exists || state.ActiveKey == nil {
-			if !lm.inferLOBLocator(redoEvent) {
+			if !lm.inferLOBLocator(ctx, redoEvent) {
 				lm.log.Warnf("Received LOB_WRITE without active LOB locator (scn=%d, txn=%s)", redoEvent.SCN, redoEvent.TransactionID)
 				return nil
 			}
@@ -339,26 +416,59 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 
 	case sqlredo.OpCommit:
 		// Flush all buffered events for given transaction ID
-		if txn := lm.txnCache.GetTransaction(redoEvent.TransactionID); txn != nil {
+		txn, err := lm.txnCache.GetTransaction(ctx, redoEvent.TransactionID)
+		if err != nil {
+			return fmt.Errorf("fetching transaction %s on commit: %w", redoEvent.TransactionID, err)
+		}
+		if txn != nil {
 			safeCheckpointSCN := redoEvent.SCN
 
-			// InMemory cache specific behaviour
-			if cache, ok := lm.txnCache.(*InMemoryCache); ok {
-				// Compute the safe checkpoint SCN. If other transactions are still
-				// open, we must not advance the checkpoint past their start SCN - 1,
-				// otherwise a restart with in-memory cache would miss their already-seen DML events.
-				if lowestOpenSCN := cache.LowWatermarkSCN(redoEvent.TransactionID); lowestOpenSCN != math.MaxUint64 && lowestOpenSCN > 0 {
-					// We subtract 1 because the query resumes from the point before (i.e. SCN > checkpoint)
-					if lowestOpenSCN-1 < safeCheckpointSCN {
-						safeCheckpointSCN = lowestOpenSCN - 1
-					}
+			// If other transactions are still open, we must not advance the
+			// checkpoint past their start SCN - 1. Doing so would cause their
+			// already-seen DML events to be skipped on restart (the query resumes
+			// from SCN > checkpoint). We subtract 1 because the query is exclusive.
+			if lowestOpenSCN := lm.txnCache.LowWatermarkSCN(redoEvent.TransactionID); lowestOpenSCN != math.MaxUint64 && lowestOpenSCN > 0 {
+				if lowestOpenSCN-1 < safeCheckpointSCN {
+					safeCheckpointSCN = lowestOpenSCN - 1
 				}
 			}
 
 			if lm.cfg.LOBEnabled {
 				// Merge any accumulated LOB data into DML events before publishing.
 				if state, ok := lm.lobStates[redoEvent.TransactionID]; ok {
-					sqlredo.MergeLOBsIntoDMLEvents(state, txn.Events, lm.log)
+					unmerged := sqlredo.MergeLOBsIntoDMLEvents(state, txn.Events, lm.log)
+					// Synthesize UPDATE events for LOB accumulators that had no matching DML
+					// event. This handles Oracle SecureFile out-of-row LOBs where Oracle does
+					// not emit a DML UPDATE in LogMiner — only SELECT_LOB_LOCATOR + LOB_WRITE
+					// + LOB_TRIM operations are recorded.
+					//
+					// The synthesized event is intentionally sparse: Data contains only the
+					// LOB column(s) and OldValues contains only the PK columns extracted from
+					// the SELECT_LOB_LOCATOR WHERE clause. Other row columns are not available
+					// from redo alone. Carrying over values from a prior event in the same
+					// transaction is not possible here: MergeLOBsIntoDMLEvents merges into any
+					// matching INSERT (Pass 1) or PK-bearing UPDATE (Pass 2) before returning
+					// an accumulator as unmerged, so by definition no full-row DML event for
+					// this row exists in the transaction. Downstream consumers should treat a
+					// sparse UPDATE (OldValues containing only PK columns) as a LOB-column-only
+					// change with no information about other columns.
+					for _, acc := range unmerged {
+						assembled := acc.Assemble()
+						if assembled == nil {
+							continue
+						}
+						synthetic := &sqlredo.DMLEvent{
+							Operation:     sqlredo.OpUpdate,
+							Schema:        acc.Schema,
+							Table:         acc.Table,
+							Data:          map[string]any{acc.Column: assembled},
+							OldValues:     acc.PKValues,
+							TransactionID: redoEvent.TransactionID,
+							Timestamp:     redoEvent.Timestamp,
+						}
+						txn.Events = append(txn.Events, synthetic)
+						lm.log.Debugf("LOB merge: synthesized UPDATE for %s.%s.%s (pks=%v, fragments=%d)", acc.Schema, acc.Table, acc.Column, acc.PKValues, len(acc.Fragments))
+					}
 				}
 			}
 
@@ -404,7 +514,9 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 				}
 			}
 
-			lm.txnCache.CommitTransaction(redoEvent.TransactionID)
+			if err := lm.txnCache.CommitTransaction(ctx, redoEvent.TransactionID); err != nil {
+				return fmt.Errorf("committing transaction %s: %w", redoEvent.TransactionID, err)
+			}
 		}
 
 		// Always clean up lobStates on commit, including for transactions discarded by
@@ -420,7 +532,9 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 		if lm.cfg.LOBEnabled {
 			delete(lm.lobStates, redoEvent.TransactionID)
 		}
-		lm.txnCache.RollbackTransaction(redoEvent.TransactionID)
+		if err := lm.txnCache.RollbackTransaction(ctx, redoEvent.TransactionID); err != nil {
+			return fmt.Errorf("rolling back transaction %s: %w", redoEvent.TransactionID, err)
+		}
 	}
 
 	return nil
@@ -534,7 +648,7 @@ func (lm *LogMiner) isLOBOnlyEvent(ev *sqlredo.DMLEvent) bool {
 // placeholder; in that case the LOB column is absent from Data, so known LOB
 // columns for the table are also considered as inference candidates.
 // Returns true if a locator was successfully created.
-func (lm *LogMiner) inferLOBLocator(event *sqlredo.RedoEvent) bool {
+func (lm *LogMiner) inferLOBLocator(ctx context.Context, event *sqlredo.RedoEvent) bool {
 	if !event.SchemaName.Valid || !event.TableName.Valid {
 		return false
 	}
@@ -544,7 +658,11 @@ func (lm *LogMiner) inferLOBLocator(event *sqlredo.RedoEvent) bool {
 		return false
 	}
 
-	txn := lm.txnCache.GetTransaction(event.TransactionID)
+	txn, err := lm.txnCache.GetTransaction(ctx, event.TransactionID)
+	if err != nil {
+		lm.log.Errorf("Failed to get transaction %s for LOB locator inference: %v", event.TransactionID, err)
+		return false
+	}
 	if txn == nil {
 		return false
 	}

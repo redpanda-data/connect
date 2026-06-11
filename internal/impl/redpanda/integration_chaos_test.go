@@ -19,13 +19,17 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"net"
 	"os"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	dockerclient "github.com/docker/docker/client"
+	"github.com/moby/moby/api/types/container"
+	"github.com/moby/moby/api/types/network"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
@@ -58,6 +62,46 @@ func killContainer(ctx context.Context, ctr testcontainers.Container) error {
 	return cli.ContainerKill(ctx, ctr.GetContainerID(), "SIGKILL")
 }
 
+// startChaosCluster starts a single Redpanda broker with a pinned Kafka port.
+// Pinning the host port ensures that after container stop/start or kill/start,
+// the broker comes back on the same address so Kafka clients can reconnect.
+func startChaosCluster(t *testing.T) (redpandatest.Endpoints, testcontainers.Container, error) {
+	t.Helper()
+
+	l, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		return redpandatest.Endpoints{}, nil, fmt.Errorf("find free port: %w", err)
+	}
+	kafkaPort := l.Addr().(*net.TCPAddr).Port
+	l.Close()
+
+	cfg := redpandatest.DefaultConfig
+	cfg.ExtraOpts = []testcontainers.ContainerCustomizer{
+		testcontainers.WithHostConfigModifier(func(hc *container.HostConfig) {
+			if hc.PortBindings == nil {
+				hc.PortBindings = network.PortMap{}
+			}
+			hc.PortBindings[network.MustParsePort("9092/tcp")] = []network.PortBinding{
+				{HostPort: strconv.Itoa(kafkaPort)},
+			}
+		}),
+	}
+	return redpandatest.StartSingleBrokerWithConfig(t, cfg)
+}
+
+// waitBrokerReady waits for the Redpanda broker to accept TCP connections after a restart.
+func waitBrokerReady(t *testing.T, brokerAddr string) {
+	t.Helper()
+	require.Eventually(t, func() bool {
+		conn, err := net.DialTimeout("tcp", brokerAddr, time.Second)
+		if err != nil {
+			return false
+		}
+		conn.Close()
+		return true
+	}, 30*time.Second, 250*time.Millisecond, "broker did not become ready")
+}
+
 // TestIntegrationRedpandaChaosGracefulRestart tests client reconnection during
 // graceful broker restarts. This simulates rolling upgrades where brokers are
 // restarted one at a time.
@@ -65,7 +109,7 @@ func TestIntegrationRedpandaChaosGracefulRestart(t *testing.T) {
 	integration.CheckSkip(t)
 
 	t.Log("Given: single broker Redpanda cluster")
-	endpoints, ctr, err := redpandatest.StartSingleBroker(t)
+	endpoints, ctr, err := startChaosCluster(t)
 	require.NoError(t, err)
 	topic := "reconnect-test"
 
@@ -75,12 +119,15 @@ func TestIntegrationRedpandaChaosGracefulRestart(t *testing.T) {
 	consumeMessagesBackground(t, endpoints, topic, "test-cg", &consumedCount)
 
 	t.Log("When: broker is restarted gracefully")
-	time.Sleep(2 * time.Second)
+	require.Eventually(t, func() bool {
+		return producedCount.Load() > 0 && consumedCount.Load() > 0
+	}, 30*time.Second, 500*time.Millisecond, "messages did not start flowing")
 	initialProduced := producedCount.Load()
 	initialConsumed := consumedCount.Load()
 	t.Logf("Before restart - produced: %d, consumed: %d", initialProduced, initialConsumed)
 
 	require.NoError(t, restartContainer(t.Context(), ctr, 30*time.Second))
+	waitBrokerReady(t, endpoints.BrokerAddr)
 	t.Log("Broker restarted")
 
 	t.Log("Then: consumer reconnects and continues processing")
@@ -107,7 +154,7 @@ func TestIntegrationRedpandaChaosAbruptFailure(t *testing.T) {
 	integration.CheckSkip(t)
 
 	t.Log("Given: single broker Redpanda cluster")
-	endpoints, ctr, err := redpandatest.StartSingleBroker(t)
+	endpoints, ctr, err := startChaosCluster(t)
 	require.NoError(t, err)
 	topic := "partition-test"
 
@@ -117,7 +164,9 @@ func TestIntegrationRedpandaChaosAbruptFailure(t *testing.T) {
 	consumeMessagesBackground(t, endpoints, topic, "partition-cg", &consumedCount)
 
 	t.Log("When: broker is killed abruptly")
-	time.Sleep(2 * time.Second)
+	require.Eventually(t, func() bool {
+		return producedCount.Load() > 0 && consumedCount.Load() > 0
+	}, 30*time.Second, 500*time.Millisecond, "messages did not start flowing")
 	initialProduced := producedCount.Load()
 	initialConsumed := consumedCount.Load()
 	t.Logf("Before kill - produced: %d, consumed: %d", initialProduced, initialConsumed)
@@ -127,6 +176,7 @@ func TestIntegrationRedpandaChaosAbruptFailure(t *testing.T) {
 
 	t.Log("And: broker is restarted")
 	require.NoError(t, ctr.Start(t.Context()))
+	waitBrokerReady(t, endpoints.BrokerAddr)
 	t.Log("Broker started")
 
 	t.Log("Then: consumer detects failure and reconnects")
@@ -167,7 +217,7 @@ func TestIntegrationRedpandaChaosStability(t *testing.T) {
 	flag.Parse()
 
 	t.Logf("Given: single broker Redpanda cluster running for %v", duration)
-	endpoints, ctr, err := redpandatest.StartSingleBroker(t)
+	endpoints, ctr, err := startChaosCluster(t)
 	require.NoError(t, err)
 	topic := "stability-test"
 
@@ -196,6 +246,7 @@ func TestIntegrationRedpandaChaosStability(t *testing.T) {
 			t.Logf("Restart %d - before: produced=%d, consumed=%d", restartCount, beforeProduced, beforeConsumed)
 
 			require.NoError(t, restartContainer(t.Context(), ctr, 30*time.Second))
+			waitBrokerReady(t, endpoints.BrokerAddr)
 			t.Logf("Restart %d - broker restarted", restartCount)
 
 			time.Sleep(5 * time.Second)

@@ -121,6 +121,9 @@ jobs:
       - name: Install Task
         uses: ./.github/actions/setup-task
 
+      - name: Verify Integration Tests Registry
+        run: task test:integration:verify
+
       - name: Pull Latest Redpanda Image
         run: task docker:pull-redpanda
 

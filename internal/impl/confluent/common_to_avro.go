@@ -72,9 +72,48 @@ func commonToAvroInner(c schema.Common, recordName, namespace string, isRoot boo
 	case schema.Any:
 		return "bytes", nil
 	case schema.Timestamp:
+		// Honour Logical.Timestamp params if present; legacy nil-Logical
+		// schemas fall through EffectiveTimestamp() to {Millis, UTC},
+		// preserving the pre-PR encoder output exactly.
+		p := c.EffectiveTimestamp()
+		base := "long"
+		logicalName, err := avroTimestampLogicalName(p)
+		if err != nil {
+			return nil, fmt.Errorf("timestamp field %q: %w", c.Name, err)
+		}
 		return map[string]any{
-			"type":        "long",
-			"logicalType": "timestamp-millis",
+			"type":        base,
+			"logicalType": logicalName,
+		}, nil
+	case schema.Date:
+		return map[string]any{
+			"type":        "int",
+			"logicalType": "date",
+		}, nil
+	case schema.TimeOfDay:
+		if c.Logical == nil || c.Logical.TimeOfDay == nil {
+			return nil, fmt.Errorf("time-of-day field %q missing Logical.TimeOfDay parameters", c.Name)
+		}
+		// Avro time-{millis,micros} carry no zone semantics, so a
+		// TimeOfDay{AdjustToUTC=true} cannot be expressed faithfully.
+		// Reject loudly rather than silently dropping that bit.
+		if c.Logical.TimeOfDay.AdjustToUTC {
+			return nil, fmt.Errorf("time-of-day field %q has AdjustToUTC=true; Avro time-millis/time-micros have no UTC-adjust variant — coerce upstream before encoding", c.Name)
+		}
+		// Avro defines only time-millis (int) and time-micros (long); reject
+		// anything else loudly rather than silently downcasting.
+		switch c.Logical.TimeOfDay.Unit {
+		case schema.TimeUnitMillis:
+			return map[string]any{"type": "int", "logicalType": "time-millis"}, nil
+		case schema.TimeUnitMicros:
+			return map[string]any{"type": "long", "logicalType": "time-micros"}, nil
+		default:
+			return nil, fmt.Errorf("time-of-day field %q has unit %v which Avro cannot express; only MILLIS and MICROS are supported", c.Name, c.Logical.TimeOfDay.Unit)
+		}
+	case schema.UUID:
+		return map[string]any{
+			"type":        "string",
+			"logicalType": "uuid",
 		}, nil
 	case schema.Decimal:
 		if c.Logical == nil || c.Logical.Decimal == nil {
@@ -170,6 +209,28 @@ func commonToAvroUnion(c schema.Common) (any, error) {
 		variants = append(variants, v)
 	}
 	return variants, nil
+}
+
+// avroTimestampLogicalName picks the Avro logical-type name for a
+// TimestampParams value. The mapping mirrors the reverse path in
+// applyAvroLogicalType: AdjustToUTC=true picks `timestamp-*`, false picks
+// `local-timestamp-*`. Avro 1.10+ supports nanos; older brokers may reject it.
+func avroTimestampLogicalName(p schema.TimestampParams) (string, error) {
+	var unit string
+	switch p.Unit {
+	case schema.TimeUnitMillis:
+		unit = "millis"
+	case schema.TimeUnitMicros:
+		unit = "micros"
+	case schema.TimeUnitNanos:
+		unit = "nanos"
+	default:
+		return "", fmt.Errorf("unsupported timestamp unit %v (Avro supports only MILLIS, MICROS, NANOS)", p.Unit)
+	}
+	if p.AdjustToUTC {
+		return "timestamp-" + unit, nil
+	}
+	return "local-timestamp-" + unit, nil
 }
 
 // sanitizeAvroName derives a valid Avro name from an arbitrary subject string.

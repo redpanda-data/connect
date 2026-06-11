@@ -484,6 +484,16 @@ func parseSchemaEvolutionConfig(conf *service.ParsedConfig) (SchemaEvolutionConf
 		}
 	}
 
+	// Parse require_schema_metadata. The field carries Default(false) in the
+	// spec so FieldBool returns false-without-error when absent, no Contains
+	// guard required.
+	if cfg.RequireSchemaMetadata, err = conf.FieldBool(ioFieldSchemaEvolution, ioFieldSchemaEvolutionRequireSchemaMetadata); err != nil {
+		return cfg, err
+	}
+	if cfg.RequireSchemaMetadata && cfg.SchemaMetadata == "" {
+		return cfg, fmt.Errorf("%s.%s requires %s.%s to be set", ioFieldSchemaEvolution, ioFieldSchemaEvolutionRequireSchemaMetadata, ioFieldSchemaEvolution, ioFieldSchemaEvolutionSchemaMetadata)
+	}
+
 	return cfg, nil
 }
 

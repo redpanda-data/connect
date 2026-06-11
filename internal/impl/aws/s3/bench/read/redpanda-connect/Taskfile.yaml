@@ -1,0 +1,75 @@
+version: '3'
+
+vars:
+  ENDPOINT: http://localhost:4566
+  REGION: us-east-1
+  COUNT: '100000'
+  SIZE: '1024'
+
+env:
+  AWS_ACCESS_KEY_ID: xxxxx
+  AWS_SECRET_ACCESS_KEY: xxxxx
+  AWS_DEFAULT_REGION: "{{.REGION}}"
+
+tasks:
+  run:
+    desc: "Seed bucket and run the benchmark (e.g. task run CORES=4 COUNT=100000 SIZE=1024)"
+    silent: true
+    vars:
+      CORES: '{{.CORES | default ""}}'
+    cmds:
+      - task: up
+      - until curl -sf http://localhost:4566/_localstack/health > /dev/null; do sleep 1; done
+      - task: drop-bucket
+      - task: create
+      - task: seed
+      - echo "GOMAXPROCS={{.CORES | default "max"}}  COUNT={{.COUNT}}  SIZE={{.SIZE}}"
+      - |
+        {{if .CORES}}GOMAXPROCS={{.CORES}} {{end}}go run ../../../../../../../cmd/redpanda-connect/main.go run ./benchmark_config.yaml 2>&1 | grep "total stats"
+
+  bench:all:
+    desc: "Run benchmark across 1,2,4,8 cores (e.g. task bench:all COUNT=100000 SIZE=102400)"
+    silent: true
+    cmds:
+      - task: run
+        vars: { CORES: '1', COUNT: '{{.COUNT}}', SIZE: '{{.SIZE}}' }
+      - task: run
+        vars: { CORES: '2', COUNT: '{{.COUNT}}', SIZE: '{{.SIZE}}' }
+      - task: run
+        vars: { CORES: '4', COUNT: '{{.COUNT}}', SIZE: '{{.SIZE}}' }
+      - task: run
+        vars: { CORES: '8', COUNT: '{{.COUNT}}', SIZE: '{{.SIZE}}' }
+
+  seed:
+    silent: true
+    desc: "Upload objects to the bucket (e.g. task seed COUNT=100000 SIZE=102400)"
+    cmd: go run . seed --endpoint {{.ENDPOINT}} --region {{.REGION}} --total {{.COUNT}} --size {{.SIZE}} 2>&1 | grep "Completed"
+
+  up:
+    silent: true
+    cmd: |
+      if docker ps -q --filter name=s3-bench | grep -q .; then
+        true
+      else
+        docker rm -fv s3-bench 2>/dev/null || true
+        docker run -d \
+          --name s3-bench \
+          -p 4566:4566 \
+          localstack/localstack:3 > /dev/null
+        echo "LocalStack started."
+      fi
+
+  down:
+    silent: true
+    cmd: docker rm -fv s3-bench > /dev/null
+
+  localstack:logs:
+    cmd: docker logs -f s3-bench
+
+  create:
+    silent: true
+    cmd: go run . setup --endpoint {{.ENDPOINT}} --region {{.REGION}} > /dev/null
+
+  drop-bucket:
+    silent: true
+    cmd: go run . drop-bucket --endpoint {{.ENDPOINT}} --region {{.REGION}} > /dev/null

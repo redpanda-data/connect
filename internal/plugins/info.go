@@ -65,14 +65,14 @@ var baseInfoCSV []byte
 
 // PluginInfo describes a given component
 type PluginInfo struct {
-	Name           string
-	Type           TypeName
-	CommercialName string
-	Support        string
-	Version        string
-	Deprecated     bool
-	Cloud          bool
-	CloudWithGPU   bool
+	Name                   string
+	Type                   TypeName
+	CommercialName         string
+	Support                string
+	Deprecated             bool
+	Cloud                  bool
+	CloudWithGPU           bool
+	CloudUnsupportedReason string
 }
 
 func basePluginInfo(name string, typeStr TypeName, view *service.ConfigView) PluginInfo {
@@ -80,7 +80,6 @@ func basePluginInfo(name string, typeStr TypeName, view *service.ConfigView) Plu
 		Name:           name,
 		Type:           typeStr,
 		CommercialName: name,
-		Version:        "0.0.0",
 		Deprecated:     view.IsDeprecated(),
 		Support:        "community",
 	}
@@ -95,19 +94,15 @@ func pluginInfoFromMap(m map[string]string) PluginInfo {
 	if supportStr == "" {
 		supportStr = "community"
 	}
-	version := m["version"]
-	if version == "" {
-		version = "0.0.0"
-	}
 	return PluginInfo{
-		Name:           m["name"],
-		Type:           TypeName(m["type"]),
-		CommercialName: m["commercial_name"],
-		Version:        version,
-		Support:        supportStr,
-		Deprecated:     m["deprecated"] == "y",
-		Cloud:          m["cloud"] == "y",
-		CloudWithGPU:   m["cloud_with_gpu"] == "y",
+		Name:                   m["name"],
+		Type:                   TypeName(m["type"]),
+		CommercialName:         m["commercial_name"],
+		Support:                supportStr,
+		Deprecated:             m["deprecated"] == "y",
+		Cloud:                  m["cloud"] == "y",
+		CloudWithGPU:           m["cloud_with_gpu"] == "y",
+		CloudUnsupportedReason: m["cloud_unsupported_reason"],
 	}
 }
 
@@ -117,19 +112,19 @@ type columnInfo struct {
 }
 
 func pluginInfoMapColumns() []columnInfo {
-	return []columnInfo{{"name", 26}, {"type", 10}, {"commercial_name", 26}, {"version", 8}, {"support", 11}, {"deprecated", 11}, {"cloud", 6}, {"cloud_with_gpu", 0}}
+	return []columnInfo{{"name", 26}, {"type", 10}, {"commercial_name", 26}, {"support", 11}, {"deprecated", 11}, {"cloud", 6}, {"cloud_with_gpu", 15}, {"cloud_unsupported_reason", 0}}
 }
 
 func (c PluginInfo) toMap() map[string]string {
 	return map[string]string{
-		"name":            c.Name,
-		"type":            string(c.Type),
-		"commercial_name": c.CommercialName,
-		"version":         c.Version,
-		"support":         c.Support,
-		"deprecated":      formatBool(c.Deprecated),
-		"cloud":           formatBool(c.Cloud),
-		"cloud_with_gpu":  formatBool(c.CloudWithGPU),
+		"name":                     c.Name,
+		"type":                     string(c.Type),
+		"commercial_name":          c.CommercialName,
+		"support":                  c.Support,
+		"deprecated":               formatBool(c.Deprecated),
+		"cloud":                    formatBool(c.Cloud),
+		"cloud_with_gpu":           formatBool(c.CloudWithGPU),
+		"cloud_unsupported_reason": c.CloudUnsupportedReason,
 	}
 }
 

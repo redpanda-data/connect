@@ -162,11 +162,15 @@ func countFileLines(path string) (lines int, endsWithNewline bool, err error) {
 }
 
 func filterPackages(packages []TestPackage, filters []string) []TestPackage {
-	if len(filters) == 0 {
-		return packages
-	}
 	var filtered []TestPackage
 	for _, pkg := range packages {
+		if pkg.Skip {
+			continue
+		}
+		if len(filters) == 0 {
+			filtered = append(filtered, pkg)
+			continue
+		}
 		for _, f := range filters {
 			if strings.Contains(pkg.Path, f) {
 				filtered = append(filtered, pkg)

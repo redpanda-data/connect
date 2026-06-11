@@ -1,4 +1,4 @@
-// Copyright 2024 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -185,6 +185,13 @@ type partitionTracker struct {
 
 	checkpointerLock sync.Mutex
 	checkpointer     *checkpoint.Uncapped[*kgo.Record]
+	// revoked is set once this partition has been revoked from the consumer
+	// (cooperative rebalance) or otherwise lost. Once set, offsets for this
+	// partition must never be committed, because the partition may already be
+	// owned by another consumer. It is guarded by checkpointerLock so that the
+	// revoked check and the commit within a batch's ack callback are atomic
+	// with respect to revocation. See markRevoked for the full rationale.
+	revoked bool
 
 	outBatchChan chan<- batchWithAckFn
 	commitFn     func(r *kgo.Record)
@@ -294,10 +301,19 @@ func (p *partitionTracker) sendBatch(ctx context.Context, b service.MessageBatch
 		batch: b,
 		onAck: func() {
 			p.checkpointerLock.Lock()
-			releaseRecord := releaseFn()
-			p.checkpointerLock.Unlock()
+			defer p.checkpointerLock.Unlock()
 
-			if releaseRecord != nil && *releaseRecord != nil {
+			releaseRecord := releaseFn()
+
+			// Only commit if the partition has not been revoked. After a
+			// revoke, franz-go deletes the partition from its uncommitted map
+			// once OnPartitionsRevoked returns, so a late MarkCommitRecords
+			// here would silently re-insert it and the next autocommit would
+			// advance the offset past records the new owner has not yet
+			// processed, causing data loss. Holding checkpointerLock across the
+			// revoked check and the commit makes this atomic with respect to
+			// markRevoked, which runs before the revoke handler returns.
+			if !p.revoked && releaseRecord != nil && *releaseRecord != nil {
 				p.commitFn(*releaseRecord)
 			}
 		},
@@ -346,6 +362,21 @@ func (p *partitionTracker) pauseFetch(limit int) (pauseFetch bool) {
 	pauseFetch = p.checkpointer.Pending() >= int64(limit)
 	p.checkpointerLock.Unlock()
 	return
+}
+
+// markRevoked flags the partition so that no further offsets are committed for
+// it. It must be called before the partition is removed from the tracker during
+// a revoke or loss, which happens inside the OnPartitionsRevoked/OnPartitionsLost
+// callbacks before franz-go cleans up its own uncommitted state. Because the
+// revoked flag is set (and read in the ack callback) under checkpointerLock, any
+// in-flight ack either commits before this returns — and therefore before the
+// revoke callback returns and franz-go performs its cleanup — or observes the
+// flag and skips the commit entirely. Either way no offset can outlive the
+// revoke and be auto-committed for a partition we no longer own.
+func (p *partitionTracker) markRevoked() {
+	p.checkpointerLock.Lock()
+	p.revoked = true
+	p.checkpointerLock.Unlock()
 }
 
 func (p *partitionTracker) close(ctx context.Context) error {
@@ -450,6 +481,7 @@ func (c *checkpointTracker) removeTopicPartitions(ctx context.Context, m map[str
 		}
 		for _, lostPartition := range lostTopic {
 			if trackedPartition, exists := trackedTopic[lostPartition]; exists {
+				trackedPartition.markRevoked()
 				_ = trackedPartition.close(ctx)
 			}
 			delete(trackedTopic, lostPartition)

@@ -11,9 +11,11 @@ package iceberg
 import (
 	"testing"
 
+	"github.com/apache/iceberg-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/redpanda-data/benthos/v4/public/schema"
 	"github.com/redpanda-data/connect/v4/internal/impl/iceberg/icebergx"
 )
 
@@ -108,5 +110,139 @@ func TestParquetSinkNewFieldDedup(t *testing.T) {
 		sink.OnNewField(icebergx.Path{}, "foo", "y")
 
 		assert.Len(t, sink.newFieldErrors(), 2)
+	})
+}
+
+// TestBuildShredderFieldCommons verifies that the field-id → schema.Common
+// map produced for the shredder correctly traverses iceberg containers
+// (struct, list, map) so descendant leaf columns pick up unit metadata
+// instead of being treated as the container's leaf.
+func TestBuildShredderFieldCommons(t *testing.T) {
+	tsCommon := schema.Common{
+		Name:    "ts",
+		Type:    schema.Timestamp,
+		Logical: &schema.LogicalParams{Timestamp: &schema.TimestampParams{Unit: schema.TimeUnitMillis, AdjustToUTC: true}},
+	}
+
+	t.Run("nil root returns nil", func(t *testing.T) {
+		s := iceberg.NewSchema(1,
+			iceberg.NestedField{ID: 1, Name: "x", Type: iceberg.PrimitiveTypes.Int64},
+		)
+		assert.Nil(t, buildShredderFieldCommons(s, nil, false))
+	})
+
+	t.Run("flat schema registers leaf metadata", func(t *testing.T) {
+		s := iceberg.NewSchema(1,
+			iceberg.NestedField{ID: 1, Name: "id", Type: iceberg.PrimitiveTypes.Int64},
+			iceberg.NestedField{ID: 2, Name: "ts", Type: iceberg.TimestampTzType{}},
+		)
+		root := schema.Common{
+			Type: schema.Object,
+			Children: []schema.Common{
+				{Name: "id", Type: schema.Int64},
+				tsCommon,
+			},
+		}
+		got := buildShredderFieldCommons(s, &root, false)
+		require.NotNil(t, got)
+		require.Contains(t, got, 2)
+		assert.Equal(t, schema.Timestamp, got[2].Type)
+		require.NotNil(t, got[2].Logical)
+		require.NotNil(t, got[2].Logical.Timestamp)
+		assert.Equal(t, schema.TimeUnitMillis, got[2].Logical.Timestamp.Unit)
+	})
+
+	t.Run("nested struct registers descendant leaf", func(t *testing.T) {
+		s := iceberg.NewSchema(1,
+			iceberg.NestedField{ID: 1, Name: "outer", Type: &iceberg.StructType{
+				FieldList: []iceberg.NestedField{
+					{ID: 2, Name: "inner_ts", Type: iceberg.TimestampTzType{}},
+				},
+			}},
+		)
+		root := schema.Common{
+			Type: schema.Object,
+			Children: []schema.Common{
+				{Name: "outer", Type: schema.Object, Children: []schema.Common{
+					{
+						Name: "inner_ts", Type: schema.Timestamp,
+						Logical: &schema.LogicalParams{Timestamp: &schema.TimestampParams{Unit: schema.TimeUnitMicros, AdjustToUTC: true}},
+					},
+				}},
+			},
+		}
+		got := buildShredderFieldCommons(s, &root, false)
+		require.Contains(t, got, 2, "inner_ts should be registered by element ID")
+		assert.Equal(t, schema.TimeUnitMicros, got[2].Logical.Timestamp.Unit)
+	})
+
+	t.Run("list of timestamps registers element metadata", func(t *testing.T) {
+		s := iceberg.NewSchema(1,
+			iceberg.NestedField{ID: 1, Name: "events", Type: &iceberg.ListType{
+				ElementID: 100, Element: iceberg.TimestampTzType{}, ElementRequired: false,
+			}},
+		)
+		root := schema.Common{
+			Type: schema.Object,
+			Children: []schema.Common{
+				{Name: "events", Type: schema.Array, Children: []schema.Common{tsCommon}},
+			},
+		}
+		got := buildShredderFieldCommons(s, &root, false)
+		require.Contains(t, got, 100)
+		assert.Equal(t, schema.TimeUnitMillis, got[100].Logical.Timestamp.Unit)
+	})
+
+	t.Run("map of string to timestamp registers value metadata", func(t *testing.T) {
+		s := iceberg.NewSchema(1,
+			iceberg.NestedField{ID: 1, Name: "by_event", Type: &iceberg.MapType{
+				KeyID: 100, KeyType: iceberg.PrimitiveTypes.String,
+				ValueID: 101, ValueType: iceberg.TimestampTzType{}, ValueRequired: false,
+			}},
+		)
+		root := schema.Common{
+			Type: schema.Object,
+			Children: []schema.Common{
+				{Name: "by_event", Type: schema.Map, Children: []schema.Common{tsCommon}},
+			},
+		}
+		got := buildShredderFieldCommons(s, &root, false)
+		require.Contains(t, got, 101, "map value should be registered by ValueID")
+		assert.NotContains(t, got, 100, "map key should not be registered")
+		assert.Equal(t, schema.TimeUnitMillis, got[101].Logical.Timestamp.Unit)
+	})
+
+	t.Run("shape mismatch skips silently", func(t *testing.T) {
+		// iceberg has a list, but metadata has scalar Int64 — skip the field.
+		s := iceberg.NewSchema(1,
+			iceberg.NestedField{ID: 1, Name: "events", Type: &iceberg.ListType{
+				ElementID: 100, Element: iceberg.TimestampTzType{},
+			}},
+		)
+		root := schema.Common{
+			Type: schema.Object,
+			Children: []schema.Common{
+				{Name: "events", Type: schema.Int64},
+			},
+		}
+		got := buildShredderFieldCommons(s, &root, false)
+		assert.Empty(t, got, "wrong-shape metadata should not register anything")
+	})
+
+	t.Run("case-insensitive matching", func(t *testing.T) {
+		s := iceberg.NewSchema(1,
+			iceberg.NestedField{ID: 1, Name: "ts", Type: iceberg.TimestampTzType{}},
+		)
+		root := schema.Common{
+			Type: schema.Object,
+			Children: []schema.Common{
+				{
+					Name: "TS", Type: schema.Timestamp,
+					Logical: &schema.LogicalParams{Timestamp: &schema.TimestampParams{Unit: schema.TimeUnitMicros, AdjustToUTC: true}},
+				},
+			},
+		}
+		got := buildShredderFieldCommons(s, &root, false)
+		require.Contains(t, got, 1, "case-insensitive match should still register the metadata")
 	})
 }

@@ -1,4 +1,4 @@
-// Copyright 2025 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed as a Redpanda Enterprise file under the Redpanda Community
 // License (the "License"); you may not use this file except in compliance with
@@ -13,6 +13,7 @@ import (
 	"context"
 	"fmt"
 	"path"
+	"reflect"
 	"slices"
 	"strings"
 
@@ -23,6 +24,7 @@ import (
 	"github.com/parquet-go/parquet-go"
 	"github.com/parquet-go/parquet-go/format"
 
+	"github.com/redpanda-data/benthos/v4/public/schema"
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/impl/iceberg/icebergx"
 	"github.com/redpanda-data/connect/v4/internal/impl/iceberg/shredder"
@@ -30,24 +32,40 @@ import (
 
 // writer handles writing batches of messages to a single Iceberg table.
 type writer struct {
-	table         *table.Table
-	committer     *committer
-	caseSensitive bool
-	writerOpts    []parquet.WriterOption
-	logger        *service.Logger
+	table                 *table.Table
+	committer             *committer
+	caseSensitive         bool
+	writerOpts            []parquet.WriterOption
+	resolver              *typeResolver
+	requireSchemaMetadata bool
+	logger                *service.Logger
+
+	// coerceLoggedFieldIDs tracks the iceberg field IDs we have already
+	// logged a coerce-on-write notice for, so that a long-running writer
+	// emits the divergence between schema metadata and existing column
+	// type once per column rather than per batch. Single-goroutine access
+	// per writer instance so no synchronisation is needed.
+	coerceLoggedFieldIDs map[int]struct{}
 }
 
 // NewWriter creates a new writer for a specific table.
 // The table and committer should use separate table references since they
 // operate in different goroutines and the table object is mutable.
 // caseSensitive controls how message keys are matched against the schema.
-func NewWriter(tbl *table.Table, comm *committer, caseSensitive bool, writerOpts []parquet.WriterOption, logger *service.Logger) *writer {
+// resolver supplies optional per-message schema metadata used by the shredder
+// to interpret numeric inputs into time-typed columns; pass nil to disable.
+// requireSchemaMetadata enables shredder strict mode — see
+// [shredder.RecordShredder.StrictTemporalMode].
+func NewWriter(tbl *table.Table, comm *committer, caseSensitive bool, writerOpts []parquet.WriterOption, resolver *typeResolver, requireSchemaMetadata bool, logger *service.Logger) *writer {
 	return &writer{
-		table:         tbl,
-		committer:     comm,
-		caseSensitive: caseSensitive,
-		writerOpts:    writerOpts,
-		logger:        logger,
+		table:                 tbl,
+		committer:             comm,
+		caseSensitive:         caseSensitive,
+		writerOpts:            writerOpts,
+		resolver:              resolver,
+		requireSchemaMetadata: requireSchemaMetadata,
+		logger:                logger,
+		coerceLoggedFieldIDs:  map[int]struct{}{},
 	}
 }
 
@@ -186,8 +204,34 @@ func (w *writer) messagesToParquet(batch service.MessageBatch) ([]partitionFile,
 	}
 	numPartitionFields := spec.NumFields()
 
-	// Create shredder for the schema
+	// Create shredder for the schema. When schema metadata is configured
+	// and the first message in the batch carries it, use it to inform the
+	// shredder's numeric-to-temporal conversion. Schema metadata is the
+	// authoritative source for "this BIGINT-shaped value is actually
+	// timestamp-millis" and prevents the year-50000 silent corruption
+	// that bloblang.ValueAsTimestamp's seconds-default would otherwise
+	// produce.
+	//
+	// We sample the schema metadata from batch[0] only and apply it to
+	// every message in the batch. Connect's iceberg router groups by
+	// (namespace, table) before reaching this method, so messages in a
+	// batch share a destination table and — in every supported upstream
+	// (schema-registry decode, parquet decode, single-source streams) —
+	// a single schema. If a future upstream genuinely interleaves
+	// different schema metadata into one batch, this assumption breaks
+	// silently for messages 1..N; in that case the writer must be
+	// extended to per-message metadata lookup with a small cache.
 	rs := shredder.NewRecordShredder(schema, w.caseSensitive)
+	rs.StrictTemporalMode = w.requireSchemaMetadata
+	if w.resolver != nil && len(batch) > 0 {
+		if common, err := w.resolver.parseSchemaMetadata(batch[0]); err != nil {
+			w.logger.Warnf("parsing schema metadata for shredder: %v (falling back to schema-agnostic conversion)", err)
+		} else if common != nil {
+			fieldCommons := buildShredderFieldCommons(schema, common, w.caseSensitive)
+			w.logCoerceDecisions(schema, fieldCommons)
+			rs.SetFieldSchemaMetadata(fieldCommons)
+		}
+	}
 
 	// For unpartitioned tables, use a single writer
 	if spec.IsUnpartitioned() {
@@ -303,6 +347,185 @@ func (w *writer) messagesToParquet(batch service.MessageBatch) ([]partitionFile,
 // Close closes the writer and its committer.
 func (w *writer) Close() {
 	w.committer.Close()
+}
+
+// logCoerceDecisions inspects the resolved fieldID → schema.Common map
+// against the live iceberg schema and emits one INFO-level log per field
+// whose declared upstream type would have produced a different iceberg
+// column type than the one the table currently holds.
+//
+// The intended audience is operators rolling out the #4399 metadata fix
+// over existing tables whose columns were created under the pre-fix
+// (degraded) metadata shape: the log surface tells them which columns the
+// shredder is silently coerce-converting on write, so they can choose to
+// rebuild the affected tables when they want native temporal columns.
+//
+// Per-field dedup is via w.coerceLoggedFieldIDs so a long-running writer
+// emits each notice once, not per-batch.
+func (w *writer) logCoerceDecisions(s *iceberg.Schema, fieldCommons map[int]*schema.Common) {
+	if w.logger == nil || len(fieldCommons) == 0 {
+		return
+	}
+	icebergTypeByID := map[int]iceberg.Type{}
+	collectLeafIcebergTypes(s.AsStruct().FieldList, icebergTypeByID)
+
+	for fieldID, common := range fieldCommons {
+		if _, already := w.coerceLoggedFieldIDs[fieldID]; already {
+			continue
+		}
+		existingType, ok := icebergTypeByID[fieldID]
+		if !ok {
+			continue
+		}
+		// The type inferrer is used by commonTypeToIcebergType only for
+		// nested struct/list ID allocation, which we don't care about
+		// when comparing leaf primitives — a throwaway inferrer is fine.
+		impliedType, err := commonTypeToIcebergType(common, newTypeInferrer(w.caseSensitive))
+		if err != nil || impliedType == nil {
+			continue
+		}
+		if reflect.DeepEqual(existingType, impliedType) {
+			continue
+		}
+		fieldName := lookupFieldName(s, fieldID)
+		if w.requireSchemaMetadata {
+			w.logger.Infof(
+				"iceberg: field %q has existing column type %s but schema metadata declares %s; require_schema_metadata=true will reject writes for this column. Recreate the table to migrate to %s.",
+				fieldName, existingType.String(), impliedType.String(), impliedType.String(),
+			)
+		} else {
+			w.logger.Infof(
+				"iceberg: coercing field %q on write: existing column type %s does not match the type implied by schema metadata (%s). "+
+					"Values will be written using the existing column type. Recreate the table to migrate to %s.",
+				fieldName, existingType.String(), impliedType.String(), impliedType.String(),
+			)
+		}
+		w.coerceLoggedFieldIDs[fieldID] = struct{}{}
+	}
+}
+
+// collectLeafIcebergTypes recursively walks the iceberg schema, populating
+// out with fieldID → leaf type for every primitive-typed field.
+func collectLeafIcebergTypes(fields []iceberg.NestedField, out map[int]iceberg.Type) {
+	for _, f := range fields {
+		switch t := f.Type.(type) {
+		case *iceberg.StructType:
+			collectLeafIcebergTypes(t.FieldList, out)
+		case *iceberg.ListType:
+			// Lists wrap a single element; treat the element as a leaf
+			// candidate for completeness, even though primitive-element
+			// lists are the common case.
+			out[t.ElementID] = t.Element
+			if st, ok := t.Element.(*iceberg.StructType); ok {
+				collectLeafIcebergTypes(st.FieldList, out)
+			}
+		case *iceberg.MapType:
+			out[t.ValueID] = t.ValueType
+			if st, ok := t.ValueType.(*iceberg.StructType); ok {
+				collectLeafIcebergTypes(st.FieldList, out)
+			}
+		default:
+			out[f.ID] = f.Type
+		}
+	}
+}
+
+// lookupFieldName returns the human-readable name for an iceberg fieldID,
+// or a synthesized "field_<id>" if the schema doesn't expose it directly.
+func lookupFieldName(s *iceberg.Schema, fieldID int) string {
+	if name, ok := s.FindColumnName(fieldID); ok {
+		return name
+	}
+	return fmt.Sprintf("field_%d", fieldID)
+}
+
+// buildShredderFieldCommons walks an iceberg schema and the parallel
+// schema.Common metadata that produced it, returning a fieldID → *schema.Common
+// map keyed by the iceberg field IDs of every leaf column. The shredder
+// consults this to interpret numeric inputs into time-typed columns using
+// the unit/AdjustToUTC semantics declared by the upstream schema.
+//
+// Only leaf-level entries are emitted; struct/list/map containers are
+// recursed into. Field matching uses the same case-sensitivity rule as
+// shredding so the lookup behaves consistently with how values are routed.
+// Fields present in the iceberg schema but absent from the metadata are
+// skipped — those columns either pre-date the metadata or were added by
+// schema evolution from a different source.
+func buildShredderFieldCommons(s *iceberg.Schema, root *schema.Common, caseSensitive bool) map[int]*schema.Common {
+	if root == nil {
+		return nil
+	}
+	out := make(map[int]*schema.Common)
+	visitIcebergSchemaFields(s.AsStruct().FieldList, root, caseSensitive, out)
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func visitIcebergSchemaFields(fields []iceberg.NestedField, parent *schema.Common, caseSensitive bool, out map[int]*schema.Common) {
+	if parent == nil || parent.Type != schema.Object {
+		return
+	}
+	for _, f := range fields {
+		child := lookupCommonChild(parent, f.Name, caseSensitive)
+		if child == nil {
+			continue
+		}
+		recordOrRecurseIcebergField(f.ID, f.Type, child, caseSensitive, out)
+	}
+}
+
+// recordOrRecurseIcebergField is the leaf-vs-recurse decision for a single
+// iceberg type/common pair. Leaves are registered in out; container types
+// (struct, list, map) are recursed into so their leaf descendants pick up
+// metadata too.
+//
+// When the iceberg-side container shape and the common-side type don't
+// agree (e.g. iceberg has ListType but the common says Object), we skip
+// rather than blindly consume children of the wrong shape. The shredder
+// then falls back to the historical schema-agnostic conversion for those
+// fields, which is the safe loss-of-precision rather than misinterpreting.
+func recordOrRecurseIcebergField(fieldID int, typ iceberg.Type, common *schema.Common, caseSensitive bool, out map[int]*schema.Common) {
+	switch t := typ.(type) {
+	case *iceberg.StructType:
+		if common.Type != schema.Object {
+			return
+		}
+		visitIcebergSchemaFields(t.FieldList, common, caseSensitive, out)
+	case *iceberg.ListType:
+		// A schema.Common array carries the element schema as its single
+		// child; skip if the shape doesn't match.
+		if common.Type != schema.Array || len(common.Children) != 1 {
+			return
+		}
+		recordOrRecurseIcebergField(t.ElementID, t.Element, &common.Children[0], caseSensitive, out)
+	case *iceberg.MapType:
+		// schema.Common maps are encoded as type Map with a single child
+		// representing the value schema. Keys are always primitives in
+		// our model, so they don't need metadata. Recurse into the value.
+		if common.Type != schema.Map || len(common.Children) != 1 {
+			return
+		}
+		recordOrRecurseIcebergField(t.ValueID, t.ValueType, &common.Children[0], caseSensitive, out)
+	default:
+		// Leaf — register the metadata so the shredder can consult it.
+		out[fieldID] = common
+	}
+}
+
+func lookupCommonChild(parent *schema.Common, name string, caseSensitive bool) *schema.Common {
+	for i := range parent.Children {
+		ch := &parent.Children[i]
+		if caseSensitive {
+			if ch.Name == name {
+				return ch
+			}
+		} else if strings.EqualFold(ch.Name, name) {
+			return ch
+		}
+	}
+	return nil
 }
 
 // parquetColumn holds state for writing to a single parquet column.

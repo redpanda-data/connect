@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -55,6 +56,8 @@ const (
 	ociFieldMiningStrategy       = "strategy"
 	ociFieldMaxTransactionEvents = "max_transaction_events"
 	ociFieldLOBEnabled           = "lob_enabled"
+	ociFieldTransactionCache     = "transaction_cache"
+	ociFieldTransactionCacheKey  = "transaction_cache_key"
 )
 
 func init() {
@@ -134,6 +137,17 @@ When using the default Oracle based cache, the Connect user requires permission 
 		service.NewBoolField(ociFieldLOBEnabled).
 			Description("When enabled, large object (CLOB, BLOB) columns are included in both snapshot and streaming change events. When disabled, these columns are still present but contain no values. Enabling this option introduces additional performance overhead and increases memory requirements.").
 			Default(logminer.DefaultLOBEnabled),
+		service.NewStringField(ociFieldTransactionCache).
+			Description(`A https://www.docs.redpanda.com/redpanda-connect/components/caches/about[cache resource^] to use for buffering in-flight transactions. When set, DML events are serialized and stored in the named cache rather than held in memory, reducing connector memory usage for workloads with large or long-running transactions. If not set, an in-memory buffer is used.
+
+Each in-flight transaction is stored as N+1 cache entries: one metadata key holding the transaction ID, start SCN, and event count; and one event key per DML event. A transaction with 1000 events occupies 1001 cache entries. Each AddEvent call writes exactly two keys regardless of how many events the transaction has already accumulated.
+
+This cache is designed for low-latency stores with cheap per-operation cost. Redis and Memcached are the recommended backends. The built-in `+"`memory:{}`"+` cache works but provides no durability across restarts. High-latency or per-request-cost stores such as S3 or DynamoDB are not recommended - a transaction with 1000 events generates approximately 3000 cache operations across its lifetime, and because LogMiner processes events on a single goroutine, per-call latency directly reduces throughput. A backend that causes timeouts or errors will also cause the mining cycle to restart from an earlier checkpoint SCN, which can result in duplicate event delivery.`).
+			Optional(),
+		service.NewStringField(ociFieldTransactionCacheKey).
+			Description("The key prefix used when storing transactions in `"+ociFieldTransactionCache+"`. An alternative prefix must be set if multiple `oracledb_cdc` inputs share the same cache resource, since Oracle transaction IDs (USN.SLOT.SEQ) are only unique within a single Oracle instance and would otherwise collide.").
+			Default(logminer.DefaultTransactionCacheKey).
+			Optional(),
 	).Description("LogMiner configuration settings."),
 	).
 	Field(service.NewStringListField(ociFieldTablesInclude).
@@ -150,7 +164,7 @@ When using the default Oracle based cache, the Connect user requires permission 
 		Optional(),
 	).
 	Field(service.NewStringField(ociFieldCheckpointCacheTableName).
-		Description("The identifier for the checkpoint cache table name. If no `" + ociFieldCheckpointCache + "` field is specified, this input will automatically create a table and stored procedure under the `rpcn` schema to act as a checkpoint cache. This table stores the latest processed System Change Number (SCN) that has been successfully delivered, allowing Redpanda Connect to resume from that point upon restart rather than reconsume the entire redo log.").
+		Description("The identifier for the checkpoint cache table name. If no `" + ociFieldCheckpointCache + "` field is specified, this input will automatically create a table and stored procedure under the `rpcn` schema to act as a checkpoint cache. This table stores the latest processed System Change Number (SCN) that has been successfully delivered, allowing Redpanda Connect to resume from that point upon restart rather than reconsume the entire redo log. When `" + ociFieldPDBName + "` is set and this field is left at its default value, the table name is automatically derived per PDB (e.g. `RPCN.CDC_CHECKPOINT_MYPDB`) to avoid SCN collisions between pipelines monitoring different PDBs. Set this field explicitly to opt out of that auto-derivation.").
 		Default(defaultCheckpointCache).
 		Example("RPCN.CHECKPOINT_CACHE").
 		Optional(),
@@ -158,6 +172,7 @@ When using the default Oracle based cache, the Connect user requires permission 
 	Field(service.NewStringField(ociFieldCheckpointCacheKey).
 		Description("The key to use to store the snapshot position in `" + ociFieldCheckpointCache + "`. An alternative key can be provided if multiple CDC inputs share the same cache.").
 		Default("oracledb_cdc").
+		LintRule(`root = if this == "" { [ "must not be empty" ] } else if this.length() > ` + strconv.Itoa(checkpointCacheKeyLimit) + ` { [ "must not exceed ` + strconv.Itoa(checkpointCacheKeyLimit) + ` characters" ] }`).
 		Optional(),
 	).
 	Field(service.NewIntField(ociFieldCheckpointLimit).
@@ -254,14 +269,12 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 
 	// cache
 	// if no cache component is specified then we fall back to default SQL based version
+	if scnCacheKey, err = conf.FieldString(ociFieldCheckpointCacheKey); err != nil {
+		return nil, err
+	}
 	if conf.Contains(ociFieldCheckpointCache) {
 		if scnCache, err = conf.FieldString(ociFieldCheckpointCache); err != nil {
 			return nil, err
-		}
-		if conf.Resources().HasCache(scnCache) {
-			if scnCacheKey, err = conf.FieldString(ociFieldCheckpointCacheKey); err != nil {
-				return nil, err
-			}
 		}
 	}
 
@@ -392,7 +405,7 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 
 	// no cache specified so use default, internal oracle based cache
 	if o.cfg.SCNCache == "" && o.cpCache == nil {
-		c, err := newCheckpointCache(ctx, o.cfg.ConnectionString, cpCacheTable, o.log)
+		c, err := newCheckpointCache(ctx, o.cfg.ConnectionString, cpCacheTable, o.cfg.SCNCacheKey, o.log)
 		if err != nil {
 			return fmt.Errorf("initialising oracle based checkpoint cache: %w", err)
 		}
@@ -494,7 +507,11 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 	}
 
 	if o.lmCfg != nil {
-		streaming = logminer.NewMiner(o.db, userTables, o.publisher, o.lmCfg, o.metrics, o.log)
+		var txnCache logminer.TransactionCache
+		if o.lmCfg.TransactionCacheConfig.CacheName != "" {
+			txnCache = logminer.NewConnectCacheResource(o.res, o.lmCfg.TransactionCacheConfig, o.metrics, o.log)
+		}
+		streaming = logminer.NewMiner(o.db, userTables, o.publisher, o.lmCfg, txnCache, o.metrics, o.log)
 	} else {
 		return errors.New("logminer configuration required for streaming")
 	}
@@ -726,6 +743,18 @@ func parseLogMinerConfig(conf *service.ParsedConfig) (*logminer.Config, error) {
 		}
 		if cfg.LOBEnabled, err = lmConf.FieldBool(ociFieldLOBEnabled); err != nil {
 			return nil, err
+		}
+		// support cache_resources for buffering logminer transactions
+		if lmConf.Contains(ociFieldTransactionCache) {
+			if cfg.TransactionCacheConfig.CacheName, err = lmConf.FieldString(ociFieldTransactionCache); err != nil {
+				return nil, err
+			}
+			if cfg.TransactionCacheConfig.CacheKey, err = lmConf.FieldString(ociFieldTransactionCacheKey); err != nil {
+				return nil, err
+			}
+			if cfg.TransactionCacheConfig.MaxEvents, err = lmConf.FieldInt(ociFieldMaxTransactionEvents); err != nil {
+				return nil, err
+			}
 		}
 	}
 

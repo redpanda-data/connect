@@ -116,6 +116,44 @@ func TestCommonTypeToIcebergType(t *testing.T) {
 			Name: "amount",
 			Type: schema.BigDecimal,
 		}, "", true},
+		// Logical-type cases the original issue #4399 stopped at INT/BIGINT —
+		// these now produce the right Iceberg column types.
+		{"Timestamp millis UTC default (legacy nil Logical)", schema.Common{Type: schema.Timestamp}, "timestamptz", false},
+		{"Timestamp micros UTC", schema.Common{
+			Type:    schema.Timestamp,
+			Logical: &schema.LogicalParams{Timestamp: &schema.TimestampParams{Unit: schema.TimeUnitMicros, AdjustToUTC: true}},
+		}, "timestamptz", false},
+		{"Timestamp local micros (no tz)", schema.Common{
+			Type:    schema.Timestamp,
+			Logical: &schema.LogicalParams{Timestamp: &schema.TimestampParams{Unit: schema.TimeUnitMicros, AdjustToUTC: false}},
+		}, "timestamp", false},
+		{"Timestamp nanos UTC (V3)", schema.Common{
+			Type:    schema.Timestamp,
+			Logical: &schema.LogicalParams{Timestamp: &schema.TimestampParams{Unit: schema.TimeUnitNanos, AdjustToUTC: true}},
+		}, "timestamptz_ns", false},
+		{"Timestamp local nanos (V3)", schema.Common{
+			Type:    schema.Timestamp,
+			Logical: &schema.LogicalParams{Timestamp: &schema.TimestampParams{Unit: schema.TimeUnitNanos, AdjustToUTC: false}},
+		}, "timestamp_ns", false},
+		{"Date", schema.Common{Type: schema.Date}, "date", false},
+		{"TimeOfDay millis (no tz)", schema.Common{
+			Type:    schema.TimeOfDay,
+			Logical: &schema.LogicalParams{TimeOfDay: &schema.TimeOfDayParams{Unit: schema.TimeUnitMillis}},
+		}, "time", false},
+		{"TimeOfDay micros (no tz)", schema.Common{
+			Type:    schema.TimeOfDay,
+			Logical: &schema.LogicalParams{TimeOfDay: &schema.TimeOfDayParams{Unit: schema.TimeUnitMicros}},
+		}, "time", false},
+		{"TimeOfDay AdjustToUTC rejected (Iceberg has no time-with-tz)", schema.Common{
+			Type:    schema.TimeOfDay,
+			Logical: &schema.LogicalParams{TimeOfDay: &schema.TimeOfDayParams{Unit: schema.TimeUnitMicros, AdjustToUTC: true}},
+		}, "", true},
+		{"TimeOfDay missing Logical rejected", schema.Common{Type: schema.TimeOfDay}, "", true},
+		{"TimeOfDay nanos rejected (Iceberg TIME is micros)", schema.Common{
+			Type:    schema.TimeOfDay,
+			Logical: &schema.LogicalParams{TimeOfDay: &schema.TimeOfDayParams{Unit: schema.TimeUnitNanos}},
+		}, "", true},
+		{"UUID", schema.Common{Type: schema.UUID}, "uuid", false},
 	}
 
 	for _, tt := range tests {
@@ -129,6 +167,57 @@ func TestCommonTypeToIcebergType(t *testing.T) {
 			assert.Equal(t, tt.want, got.Type())
 		})
 	}
+}
+
+// TestCommonTypeToIcebergType_MapAndUnion closes the coverage gap the
+// common-schema-audit skill flagged: Map and Union previously fell into
+// the type switch's `default` arm with a generic "unsupported" error.
+// Map now maps to MapType<String, Value>; Union still errors but with a
+// remediation-pointer message rather than the generic one.
+func TestCommonTypeToIcebergType_MapAndUnion(t *testing.T) {
+	t.Run("Map of String->Int64", func(t *testing.T) {
+		root := schema.Common{
+			Type:     schema.Map,
+			Children: []schema.Common{{Type: schema.Int64}},
+		}
+		got, err := commonTypeToIcebergType(&root, newTypeInferrer(true))
+		require.NoError(t, err)
+		mt, ok := got.(*iceberg.MapType)
+		require.True(t, ok, "want *iceberg.MapType, got %T", got)
+		assert.Equal(t, "string", mt.KeyType.Type())
+		assert.Equal(t, "long", mt.ValueType.Type())
+	})
+
+	t.Run("Map of String->Timestamp", func(t *testing.T) {
+		root := schema.Common{
+			Type: schema.Map,
+			Children: []schema.Common{
+				{Type: schema.Timestamp, Logical: &schema.LogicalParams{
+					Timestamp: &schema.TimestampParams{Unit: schema.TimeUnitMillis, AdjustToUTC: true},
+				}},
+			},
+		}
+		got, err := commonTypeToIcebergType(&root, newTypeInferrer(true))
+		require.NoError(t, err)
+		mt, ok := got.(*iceberg.MapType)
+		require.True(t, ok)
+		assert.Equal(t, "timestamptz", mt.ValueType.Type())
+	})
+
+	t.Run("Map with wrong child arity errors clearly", func(t *testing.T) {
+		root := schema.Common{Type: schema.Map}
+		_, err := commonTypeToIcebergType(&root, newTypeInferrer(true))
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "exactly one value-type child")
+	})
+
+	t.Run("Union refused loudly", func(t *testing.T) {
+		root := schema.Common{Name: "u", Type: schema.Union}
+		_, err := commonTypeToIcebergType(&root, newTypeInferrer(true))
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "Union")
+		assert.Contains(t, err.Error(), "flatten", "error must point at the upstream remediation")
+	})
 }
 
 func TestFindCommonField(t *testing.T) {

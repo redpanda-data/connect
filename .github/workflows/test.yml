@@ -62,6 +62,42 @@ jobs:
           skip-cache: true
           skip-save-cache: true
 
+  test-push-to-gcp-ar:
+    runs-on: ubuntu-latest
+    steps:
+
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up test packages
+        run: |
+          touch /tmp/test.rpm
+          touch /tmp/test.deb
+
+      - name: Mock gcloud CLI
+        run: |
+          printf '#!/bin/bash\necho "gcloud $*"\n' \
+            | sudo tee /usr/local/bin/gcloud > /dev/null
+          sudo chmod +x /usr/local/bin/gcloud
+
+      - name: Test RPM GA — routed to redpanda-yum
+        run: |
+          out=$(./resources/scripts/push_pkg_to_gcp_ar.sh /tmp/test.rpm 1.0.0)
+          echo "$out"
+          echo "$out" | grep -q "artifacts yum upload redpanda-yum"
+
+      - name: Test RPM RC — routed to redpanda-unstable-yum
+        run: |
+          out=$(./resources/scripts/push_pkg_to_gcp_ar.sh /tmp/test.rpm 1.0.0-rc1)
+          echo "$out"
+          echo "$out" | grep -q "artifacts yum upload redpanda-unstable-yum"
+
+      - name: Test DEB — routed to redpanda-apt
+        run: |
+          out=$(./resources/scripts/push_pkg_to_gcp_ar.sh /tmp/test.deb 1.0.0)
+          echo "$out"
+          echo "$out" | grep -q "artifacts apt upload redpanda-apt"
+
   test-push-to-cloudsmith:
     runs-on: ubuntu-latest
     env:

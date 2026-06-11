@@ -1,0 +1,47 @@
+# Reads from bench-events Kafka topic and writes batched JSON to S3 (LocalStack).
+#
+# Usage:
+#   CONSUMER_GROUP=rpc-s3-bench FLUSH_SIZE=10000 \
+#   go run ../../../../../../cmd/redpanda-connect/main.go run ./pipeline.yaml
+#
+# Env vars:
+#   CONSUMER_GROUP   Kafka consumer group (default: rpc-s3-bench)
+#   FLUSH_SIZE       Records per S3 object (default: 10000)
+#   FLUSH_PERIOD     Time-based flush, e.g. "10s" (default: 10s)
+#   THREADS          pipeline.threads — parallel output workers (default: 1)
+#   FETCH_MIN_BYTES  Kafka fetch_min_bytes (default: 1048576 = 1 MiB)
+#   KAFKA_BOOTSTRAP  Broker address (default: localhost:9092)
+#   S3_ENDPOINT      S3 endpoint URL (default: http://localhost:4566)
+
+http:
+  enabled: false
+
+pipeline:
+  threads: ${THREADS:1}
+
+input:
+  kafka_franz:
+    seed_brokers:
+      - ${KAFKA_BOOTSTRAP:localhost:9092}
+    topics:
+      - bench-events
+    consumer_group: ${CONSUMER_GROUP:rpc-s3-bench}
+    fetch_min_bytes: ${FETCH_MIN_BYTES:1048576}
+    fetch_max_wait: 500ms
+
+output:
+  aws_s3:
+    bucket: bench-events
+    path: 'topics/bench-events/partition=${! meta("kafka_partition") }/${! count("objects") }.json'
+    endpoint: ${S3_ENDPOINT:http://localhost:4566}
+    force_path_style_urls: true
+    region: us-east-1
+    credentials:
+      id: test
+      secret: test
+    batching:
+      count: ${FLUSH_SIZE:10000}
+      period: ${FLUSH_PERIOD:10s}
+      processors:
+        - archive:
+            format: lines
