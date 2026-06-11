@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"net/netip"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -32,7 +31,6 @@ import (
 
 	mysqlDriver "github.com/go-sql-driver/mysql"
 	"github.com/moby/moby/api/types/container"
-	dockernetwork "github.com/moby/moby/api/types/network"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
@@ -56,38 +54,32 @@ func TestIntegrationDorisStreamLoadOutput(t *testing.T) {
 
 	ctx := t.Context()
 
-	// Let Docker pick a non-conflicting subnet, then inspect it so we can
-	// pre-assign stable IPs. Doris entrypoints require real IPs in FE_SERVERS
-	// and BE_ADDR; they reject hostnames and fail if BE_ADDR is absent.
+	// Doris entrypoints require a real IP in FE_SERVERS/BE_ADDR. Rather than
+	// assigning static IPs (which risks subnet conflicts on CI hosts), wrapper
+	// scripts discover each container's own IP at startup via hostname -I.
 	dockerNet, err := network.New(ctx)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = dockerNet.Remove(context.Background()) })
 
-	// Derive FE (.2) and BE (.3) from the Docker-assigned subnet.
-	netBase := dorisNetworkBase(t, dockerNet.ID)
-	gw := netBase.Next()            // .1 — Docker gateway, skip
-	feStaticAddr := gw.Next()       // .2
-	beStaticAddr := feStaticAddr.Next() // .3
-	feStaticIP := feStaticAddr.String()
-	beStaticIP := beStaticAddr.String()
-
 	fe, err := testcontainers.Run(ctx, "apache/doris:fe-"+dorisIntegrationVersion,
+		testcontainers.WithFiles(testcontainers.ContainerFile{
+			HostFilePath:      dorisWriteWrapperScript(t, `#!/bin/sh
+FE_IP=$(hostname -I | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+export FE_SERVERS="fe1:${FE_IP}:9010"
+export FE_ID=1
+# Default heap is -Xmx8192m -Xms8192m which exceeds CI runner RAM; reduce to fit.
+sed -i 's/-Xmx[0-9]*m/-Xmx2048m/g; s/-Xms[0-9]*m/-Xms512m/g' /opt/apache-doris/fe/conf/fe.conf
+exec bash /usr/local/bin/init_fe.sh
+`),
+			ContainerFilePath: "/fe_wrapper.sh",
+			FileMode:          0o700,
+		}),
 		testcontainers.WithConfigModifier(func(c *container.Config) {
-			c.Hostname = "doris-fe"
+			c.Entrypoint = []string{"/bin/sh", "/fe_wrapper.sh"}
+			c.Cmd = nil
 		}),
 		network.WithNetwork([]string{"doris-fe"}, dockerNet),
-		testcontainers.WithEndpointSettingsModifier(func(settings map[string]*dockernetwork.EndpointSettings) {
-			if ep, ok := settings[dockerNet.Name]; ok {
-				ep.IPAMConfig = &dockernetwork.EndpointIPAMConfig{
-					IPv4Address: feStaticAddr,
-				}
-			}
-		}),
 		testcontainers.WithExposedPorts("8030/tcp", "9010/tcp", "9030/tcp"),
-		testcontainers.WithEnv(map[string]string{
-			"FE_SERVERS": "fe1:" + feStaticIP + ":9010",
-			"FE_ID":      "1",
-		}),
 		testcontainers.WithWaitStrategy(
 			wait.ForListeningPort("9030/tcp").WithStartupTimeout(5*time.Minute),
 		),
@@ -95,23 +87,29 @@ func TestIntegrationDorisStreamLoadOutput(t *testing.T) {
 	testcontainers.CleanupContainer(t, fe)
 	require.NoError(t, err)
 
+	// Inspect the FE's actual Docker-assigned IP so the BE can reach it.
 	feIP := dorisContainerNetworkIP(t, ctx, fe, dockerNet.Name)
 
-	// The BE entrypoint requires both FE_SERVERS and BE_ADDR (election mode).
-	// Pre-assign a static IP so BE_ADDR is known before the container starts.
+	// The BE entrypoint (election mode) requires both FE_SERVERS and BE_ADDR.
+	// The wrapper sets BE_ADDR from the container's own IP at runtime.
 	be, err := testcontainers.Run(ctx, "apache/doris:be-"+dorisIntegrationVersion,
-		network.WithNetwork([]string{"doris-be"}, dockerNet),
-		testcontainers.WithEndpointSettingsModifier(func(settings map[string]*dockernetwork.EndpointSettings) {
-			if ep, ok := settings[dockerNet.Name]; ok {
-				ep.IPAMConfig = &dockernetwork.EndpointIPAMConfig{
-					IPv4Address: beStaticAddr,
-				}
-			}
+		testcontainers.WithFiles(testcontainers.ContainerFile{
+			HostFilePath:      dorisWriteWrapperScript(t, `#!/bin/sh
+BE_IP=$(hostname -I | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+export BE_ADDR="${BE_IP}:9050"
+exec bash /usr/local/bin/entry_point.sh
+`),
+			ContainerFilePath: "/be_wrapper.sh",
+			FileMode:          0o700,
 		}),
+		testcontainers.WithConfigModifier(func(c *container.Config) {
+			c.Entrypoint = []string{"/bin/sh", "/be_wrapper.sh"}
+			c.Cmd = nil
+		}),
+		network.WithNetwork([]string{"doris-be"}, dockerNet),
 		testcontainers.WithExposedPorts("8040/tcp", "9050/tcp"),
 		testcontainers.WithEnv(map[string]string{
-			"FE_SERVERS": "fe1:" + feStaticIP + ":9010",
-			"BE_ADDR":    beStaticIP + ":9050",
+			"FE_SERVERS": "fe1:" + feIP + ":9010",
 		}),
 		testcontainers.WithWaitStrategy(
 			wait.ForListeningPort("9050/tcp").WithStartupTimeout(5*time.Minute),
@@ -241,17 +239,12 @@ func buildDorisStreamLoadHelperBinary(t *testing.T) string {
 	return helperBinary
 }
 
-// dorisNetworkBase returns the masked base address of the Docker-assigned subnet
-// for the given network (e.g., 172.20.0.0 for 172.20.0.0/16). The caller adds
-// offsets to derive stable container IPs: +1 = gateway, +2 = first host, etc.
-func dorisNetworkBase(t *testing.T, networkID string) netip.Addr {
+// dorisWriteWrapperScript writes a shell script to a temp file and returns its path.
+func dorisWriteWrapperScript(t *testing.T, content string) string {
 	t.Helper()
-	out, err := exec.Command("docker", "network", "inspect", networkID,
-		"--format", "{{range .IPAM.Config}}{{.Subnet}}{{end}}").Output()
-	require.NoError(t, err, "inspecting Docker network subnet")
-	prefix, err := netip.ParsePrefix(strings.TrimSpace(string(out)))
-	require.NoError(t, err, "parsing Docker network subnet")
-	return prefix.Masked().Addr()
+	path := filepath.Join(t.TempDir(), "wrapper.sh")
+	require.NoError(t, os.WriteFile(path, []byte(content), 0o700))
+	return path
 }
 
 // dorisContainerNetworkIP returns the container's IP address on the named
@@ -356,8 +349,12 @@ func createDorisStreamLoadTable(t *testing.T, db *sql.DB) {
 	require.NoError(t, err)
 	_, err = db.Exec("DROP TABLE IF EXISTS connect_it.stream_load_events")
 	require.NoError(t, err)
-	_, err = db.Exec(`
-CREATE TABLE connect_it.stream_load_events (
+
+	// The BE reports Alive=true before its storage capacity is populated; retry
+	// until the table can actually be created.
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		_, err := db.Exec(`
+CREATE TABLE IF NOT EXISTS connect_it.stream_load_events (
   id INT,
   name VARCHAR(64),
   created_at DATETIME
@@ -366,7 +363,8 @@ DUPLICATE KEY(id)
 DISTRIBUTED BY HASH(id) BUCKETS 1
 PROPERTIES ("replication_num" = "1")
 `)
-	require.NoError(t, err)
+		assert.NoError(c, err)
+	}, 2*time.Minute, 2*time.Second, "stream_load_events table never became creatable")
 }
 
 func fetchDorisStreamLoadRows(db *sql.DB) ([]string, error) {
