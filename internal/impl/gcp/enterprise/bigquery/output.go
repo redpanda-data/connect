@@ -171,7 +171,8 @@ When migrating from the load-jobs based `+"`gcp_bigquery`"+` output to CDC mode,
 			service.NewStringListField(bqwaFieldPrimaryKeys).
 				Description("Optional list of primary-key column names."+
 					" Required when `auto_create_table` is true and `write_mode` is `upsert` or `upsert_delete`."+
-					" When the target table is pre-existing, the connector falls back to the PRIMARY KEY declared on the table."+
+					" A pre-existing table must already declare its PRIMARY KEY — this field cannot add one;"+
+					" when both are set they must match exactly (same columns, same order)."+
 					" Up to 16 columns; composite keys are supported in the same order they are listed.").
 				Optional(),
 			service.NewBoolField(bqwaFieldAutoCreateTable).
