@@ -36,9 +36,6 @@ jobs:
       - name: Pull Latest Redpanda Image
         run: task docker:pull-redpanda
 
-      - name: Configure kernel for integration tests
-        run: sudo sysctl -w vm.max_map_count=262144
-
       - name: Run Integration Tests
         run: task test:integration -- --output-dir "${{ runner.temp }}/integration"
         timeout-minutes: 120
@@ -129,9 +126,6 @@ jobs:
 
       - name: Pull Latest Redpanda Image
         run: task docker:pull-redpanda
-
-      - name: Configure kernel for integration tests
-        run: sudo sysctl -w vm.max_map_count=262144
 
       - name: Run Integration Tests
         env:
