@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/netip"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -31,6 +32,7 @@ import (
 
 	mysqlDriver "github.com/go-sql-driver/mysql"
 	"github.com/moby/moby/api/types/container"
+	dockernetwork "github.com/moby/moby/api/types/network"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
@@ -52,22 +54,44 @@ func TestIntegrationDorisStreamLoadOutput(t *testing.T) {
 		return
 	}
 
+	const (
+		feStaticIP = "172.28.0.2"
+		beStaticIP = "172.28.0.3"
+		netSubnet  = "172.28.0.0/16"
+		netGW      = "172.28.0.1"
+	)
+
 	ctx := t.Context()
 
-	dockerNet, err := network.New(ctx)
+	// Use a fixed subnet so we can pre-assign a static IP to the FE container.
+	// The Doris entrypoint validates that FE_SERVERS contains a real IP address,
+	// not a hostname, so we must know the IP before the container starts.
+	dockerNet, err := network.New(ctx,
+		network.WithIPAM(&dockernetwork.IPAM{
+			Config: []dockernetwork.IPAMConfig{{
+				Subnet:  netip.MustParsePrefix(netSubnet),
+				Gateway: netip.MustParseAddr(netGW),
+			}},
+		}),
+	)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = dockerNet.Remove(context.Background()) })
 
-	// Set a stable hostname so the FE can reference itself in FE_SERVERS using
-	// Docker's internal DNS rather than a pre-allocated IP.
 	fe, err := testcontainers.Run(ctx, "apache/doris:fe-"+dorisIntegrationVersion,
 		testcontainers.WithConfigModifier(func(c *container.Config) {
 			c.Hostname = "doris-fe"
 		}),
 		network.WithNetwork([]string{"doris-fe"}, dockerNet),
+		testcontainers.WithEndpointSettingsModifier(func(settings map[string]*dockernetwork.EndpointSettings) {
+			if ep, ok := settings[dockerNet.Name]; ok {
+				ep.IPAMConfig = &dockernetwork.EndpointIPAMConfig{
+					IPv4Address: netip.MustParseAddr(feStaticIP),
+				}
+			}
+		}),
 		testcontainers.WithExposedPorts("8030/tcp", "9010/tcp", "9030/tcp"),
 		testcontainers.WithEnv(map[string]string{
-			"FE_SERVERS": "fe1:doris-fe:9010",
+			"FE_SERVERS": "fe1:" + feStaticIP + ":9010",
 			"FE_ID":      "1",
 		}),
 		testcontainers.WithWaitStrategy(
@@ -77,16 +101,25 @@ func TestIntegrationDorisStreamLoadOutput(t *testing.T) {
 	testcontainers.CleanupContainer(t, fe)
 	require.NoError(t, err)
 
-	// Get the FE's internal Docker network IP so the BE can connect to it.
+	// The FE's static IP is already known; verify the container got it.
 	feIP := dorisContainerNetworkIP(t, ctx, fe, dockerNet.Name)
+	require.Equal(t, feStaticIP, feIP, "FE container did not get expected static IP")
 
-	// BE_ADDR is intentionally omitted: the BE image auto-detects its own
-	// Docker network IP, which is exactly what stream-load redirects will use.
+	// The BE entrypoint requires both FE_SERVERS and BE_ADDR (election mode).
+	// Pre-assign a static IP so BE_ADDR is known before the container starts.
 	be, err := testcontainers.Run(ctx, "apache/doris:be-"+dorisIntegrationVersion,
 		network.WithNetwork([]string{"doris-be"}, dockerNet),
+		testcontainers.WithEndpointSettingsModifier(func(settings map[string]*dockernetwork.EndpointSettings) {
+			if ep, ok := settings[dockerNet.Name]; ok {
+				ep.IPAMConfig = &dockernetwork.EndpointIPAMConfig{
+					IPv4Address: netip.MustParseAddr(beStaticIP),
+				}
+			}
+		}),
 		testcontainers.WithExposedPorts("8040/tcp", "9050/tcp"),
 		testcontainers.WithEnv(map[string]string{
-			"FE_SERVERS": "fe1:" + feIP + ":9010",
+			"FE_SERVERS": "fe1:" + feStaticIP + ":9010",
+			"BE_ADDR":    beStaticIP + ":9050",
 		}),
 		testcontainers.WithWaitStrategy(
 			wait.ForListeningPort("9050/tcp").WithStartupTimeout(5*time.Minute),
@@ -95,9 +128,9 @@ func TestIntegrationDorisStreamLoadOutput(t *testing.T) {
 	testcontainers.CleanupContainer(t, be)
 	require.NoError(t, err)
 
-	// Inspect the BE's Docker-internal IP: used for ALTER SYSTEM ADD BACKEND
-	// and as the redirect target for stream-load requests.
+	// Verify the BE got its pre-assigned static IP.
 	beIP := dorisContainerNetworkIP(t, ctx, be, dockerNet.Name)
+	require.Equal(t, beStaticIP, beIP, "BE container did not get expected static IP")
 
 	queryPort, err := fe.MappedPort(ctx, "9030/tcp")
 	require.NoError(t, err)
