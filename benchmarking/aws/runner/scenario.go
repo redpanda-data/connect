@@ -150,6 +150,20 @@ var engineSpecs = map[string]engineSpec{
 		ResetPassOutputKey: "mysql_password",
 		ResetDBOutputKey:   "mysql_db",
 	},
+	// oracledb_cdc connects via a go-ora DSN URL (connection_string). Oracle has
+	// no psql/mysql CLI on the runner, so the scenario's reset is a bash: step
+	// that shells out to the cdc-rows-oracle seeder's `exec` subcommand. The
+	// discrete Reset*OutputKey fields here drive the KC (Debezium Oracle) render
+	// in main.go, which needs host/port/user/password/dbname split out.
+	"oracledb_cdc": {
+		DSNOutputKey:       "oracle_dsn",
+		DSNEnvVar:          "ORACLE_DSN",
+		ResetHostOutputKey: "oracle_host",
+		ResetPortOutputKey: "oracle_port",
+		ResetUserOutputKey: "oracle_user",
+		ResetPassOutputKey: "oracle_password",
+		ResetDBOutputKey:   "oracle_db",
+	},
 	// aws_dynamodb_cdc uses IAM auth (no DSN). The seeder reads AWS_REGION and
 	// DDB_TABLE from its env, and the bash reset steps reference them via
 	// ${AWS_REGION} / ${DYNAMODB_TABLE_NAME} placeholders. No KC counterpart —

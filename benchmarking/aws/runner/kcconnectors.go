@@ -103,6 +103,38 @@ var kcConnectorSpecs = map[string]kcConnectorSpec{
 }`,
 		RequiredPlugins: []string{"debezium-connector-mysql*"},
 	},
+	"oracledb_cdc": {
+		Class:     "io.debezium.connector.oracle.OracleConnector",
+		Direction: kcSource,
+		// RDS Oracle 19c SE2 is non-CDB, so database.dbname is the SID and there
+		// is no database.pdb.name. snapshot.mode=no_data captures the schema (the
+		// table is TRUNCATEd between sweep points, so there are no rows to copy)
+		// then streams from the current SCN — matching the Connect side's
+		// stream_snapshot:false. log.mining.strategy=online_catalog matches the
+		// oracledb_cdc connector default and avoids writing the dictionary to
+		// redo. Like the mysql connector, Debezium Oracle keeps a schema-history
+		// topic. Both engines mine the same RDS redo via LogMiner — fair head-to-head.
+		PropsTemplate: `{
+  "connector.class": "io.debezium.connector.oracle.OracleConnector",
+  "tasks.max": "1",
+  "database.hostname": "{{.Host}}",
+  "database.port": "{{.Port}}",
+  "database.user": "{{.User}}",
+  "database.password": "{{.Password}}",
+  "database.dbname": "{{.Database}}",
+  "topic.prefix": "{{.TopicPrefix}}",
+  "table.include.list": "{{.SchemaTables}}",
+  "schema.history.internal.kafka.bootstrap.servers": "{{.BootstrapServers}}",
+  "schema.history.internal.kafka.topic": "_kc_schema_history_{{.TopicPrefix}}",
+  "snapshot.mode": "no_data",
+  "log.mining.strategy": "online_catalog",
+  "key.converter": "org.apache.kafka.connect.json.JsonConverter",
+  "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+  "key.converter.schemas.enable": "false",
+  "value.converter.schemas.enable": "false"
+}`,
+		RequiredPlugins: []string{"debezium-connector-oracle*"},
+	},
 	"iceberg": {
 		Class:     "io.tabular.iceberg.connect.IcebergSinkConnector",
 		Direction: kcSink,

@@ -606,6 +606,12 @@ func buildKCRenderInputs(s *Scenario, es engineSpec, outs map[string]string, ses
 			}
 		}
 	}
+	// Fallback: connectors that select tables via a non-"tables" field (e.g.
+	// oracledb_cdc uses `include`) leave in.Tables empty above. The canonical
+	// table list lives on the scenario dataset, so use that.
+	if len(in.Tables) == 0 {
+		in.Tables = append(in.Tables, s.Dataset.Tables...)
+	}
 
 	// Connection parts.
 	if es.ResetHostOutputKey != "" {
@@ -664,6 +670,15 @@ func buildKCRenderInputs(s *Scenario, es engineSpec, outs map[string]string, ses
 			sb.WriteString(in.Database + "." + t)
 		}
 		in.SchemaTables = sb.String()
+	case "oracledb_cdc":
+		// Debezium Oracle table.include.list is SCHEMA.TABLE, both upper-cased.
+		// The owning schema is the connecting user (RDS master, e.g. BENCH).
+		schema := strings.ToUpper(in.User)
+		parts := make([]string, 0, len(in.Tables))
+		for _, t := range in.Tables {
+			parts = append(parts, schema+"."+strings.ToUpper(t))
+		}
+		in.SchemaTables = strings.Join(parts, ",")
 	}
 
 	return in, nil
