@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"maps"
 	"math"
+	"slices"
 	"strings"
 	"time"
 
@@ -52,6 +53,10 @@ type LogMiner struct {
 	// lob types are split between redo log lines, we use lobStates to track them
 	// until we have all data to merge into published INSERT or UPDATE event.
 	lobStates map[sqlredo.TransactionID]*sqlredo.TxnLOBState
+	// pendingLOBWrites buffers LOB_WRITE events that arrived before their matching
+	// INSERT/UPDATE (BASICFILE DISABLE STORAGE IN ROW ordering). Drained when the
+	// INSERT/UPDATE is subsequently processed.
+	pendingLOBWrites map[sqlredo.TransactionID][]*sqlredo.RedoEvent
 }
 
 // NewMiner creates a new instance of LogMiner responsible for paging through change events based on the tables param.
@@ -106,13 +111,15 @@ func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replicat
 		log:       logger,
 
 		// logminer specific
-		logMinerQuery: logMinerQuery,
-		logCollector:  NewLogFileCollector(),
-		sessionMgr:    NewSessionManager(cfg, logger),
-		txnCache:      txnCache,
-		dmlParser:     sqlredo.NewParser(),
-		lobStates:     make(map[sqlredo.TransactionID]*sqlredo.TxnLOBState),
+		logMinerQuery:    logMinerQuery,
+		logCollector:     NewLogFileCollector(),
+		sessionMgr:       NewSessionManager(cfg, logger),
+		txnCache:         txnCache,
+		dmlParser:        sqlredo.NewParser(),
+		lobStates:        make(map[sqlredo.TransactionID]*sqlredo.TxnLOBState),
+		pendingLOBWrites: make(map[sqlredo.TransactionID][]*sqlredo.RedoEvent),
 	}
+
 	if lm.txnCache == nil {
 		lm.txnCache = NewInMemoryCache(cfg.MaxTransactionEvents, metrics, logger)
 	}
@@ -281,6 +288,12 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 			return fmt.Errorf("adding event to transaction %s: %w", redoEvent.TransactionID, err)
 		}
 
+		if lm.cfg.LOBEnabled && (redoEvent.Operation == sqlredo.OpInsert || redoEvent.Operation == sqlredo.OpUpdate) {
+			if err = lm.drainPendingLOBWrites(ctx, redoEvent.TransactionID); err != nil {
+				return fmt.Errorf("draining pending lob writes: %w", err)
+			}
+		}
+
 	case sqlredo.OpSelectLobLocator:
 		if !lm.cfg.LOBEnabled {
 			return nil
@@ -392,7 +405,8 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 		state, exists := lm.lobStates[redoEvent.TransactionID]
 		if !exists || state.ActiveKey == nil {
 			if !lm.inferLOBLocator(ctx, redoEvent) {
-				lm.log.Warnf("Received LOB_WRITE without active LOB locator (scn=%d, txn=%s)", redoEvent.SCN, redoEvent.TransactionID)
+				// INSERT not yet seen — buffer for retry once it arrives.
+				lm.pendingLOBWrites[redoEvent.TransactionID] = append(lm.pendingLOBWrites[redoEvent.TransactionID], redoEvent)
 				return nil
 			}
 			state = lm.lobStates[redoEvent.TransactionID]
@@ -409,8 +423,7 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 		// not as HEXTORAW. Only BLOB uses binary/hex encoding.
 		writeInfo, err := sqlredo.ParseLobWrite(redoEvent.SQLRedo.String, acc.IsBinary)
 		if err != nil {
-			lm.log.Warnf("Failed to parse LOB_WRITE SQL (scn=%d, txn=%s): %v\nSQL: %.500s", redoEvent.SCN, redoEvent.TransactionID, err, redoEvent.SQLRedo.String)
-			return nil
+			return fmt.Errorf("parsing LOB_WRITE SQL (scn=%d, txn=%s): %w\nSQL: %.500s", redoEvent.SCN, redoEvent.TransactionID, err, redoEvent.SQLRedo.String)
 		}
 		acc.AddFragment(writeInfo.Offset, writeInfo.Data)
 
@@ -519,18 +532,19 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 			}
 		}
 
-		// Always clean up lobStates on commit, including for transactions discarded by
-		// the cache (GetTransaction returns nil when MaxTransactionEvents is exceeded).
-		// Without this, LOB events that bypass the cache continue to accumulate in
-		// lobStates and are never freed.
+		// Always clean up lobStates and pendingLOBWrites on commit, including for
+		// transactions discarded by the cache (GetTransaction returns nil when
+		// MaxTransactionEvents is exceeded).
 		if lm.cfg.LOBEnabled {
 			delete(lm.lobStates, redoEvent.TransactionID)
+			delete(lm.pendingLOBWrites, redoEvent.TransactionID)
 		}
 
 	case sqlredo.OpRollback:
 		// Discard all buffered events for this transaction
 		if lm.cfg.LOBEnabled {
 			delete(lm.lobStates, redoEvent.TransactionID)
+			delete(lm.pendingLOBWrites, redoEvent.TransactionID)
 		}
 		if err := lm.txnCache.RollbackTransaction(ctx, redoEvent.TransactionID); err != nil {
 			return fmt.Errorf("rolling back transaction %s: %w", redoEvent.TransactionID, err)
@@ -700,22 +714,24 @@ func (lm *LogMiner) inferLOBLocator(ctx context.Context, event *sqlredo.RedoEven
 
 		pkString := sqlredo.FormatPKString(pkValues)
 
-		// Candidate LOB columns are those with an EMPTY_CLOB()/EMPTY_BLOB()
-		// placeholder (parsed as empty []byte). For INSERTs, BASICFILE columns
-		// with DISABLE STORAGE IN ROW emit NULL in SQL_REDO instead — the column
-		// is absent from Data — so iterate every known LOB column for the table.
-		for k, lobType := range lm.lobColTypes {
+		// Candidate LOB columns are those absent from Data or present as nil.
+		// BASICFILE out-of-row LOBs may appear as NULL or be omitted entirely
+		// from INSERT SQL_REDO. Columns with a non-nil value — including []byte{}
+		// from EMPTY_CLOB()/EMPTY_BLOB() — are inline LOBs whose LOB_WRITEs
+		// arrive after the INSERT, not before, so they are never candidates here.
+		// Iterate in sorted key order for deterministic column assignment.
+		for _, k := range slices.Sorted(maps.Keys(lm.lobColTypes)) {
 			if !strings.HasPrefix(k, prefix) {
 				continue
 			}
+			lobType := lm.lobColTypes[k]
 			col := k[len(prefix):]
 			val, present := ev.Data[col]
 			switch {
-			case present:
-				if b, ok := val.([]byte); !ok || len(b) != 0 {
-					continue
-				}
-			case ev.Operation != sqlredo.OpInsert:
+			case present && val != nil:
+				// Column has a non-nil value (including []byte{} inline LOB placeholders).
+				continue
+			case !present && ev.Operation != sqlredo.OpInsert:
 				continue
 			}
 
@@ -749,6 +765,50 @@ func (lm *LogMiner) inferLOBLocator(ctx context.Context, event *sqlredo.RedoEven
 	}
 
 	return false
+}
+
+// drainPendingLOBWrites retries LOB_WRITE events that were buffered because their
+// INSERT had not yet been processed. Called after each INSERT or UPDATE is added
+// to the transaction cache, at which point inferLOBLocator should succeed.
+func (lm *LogMiner) drainPendingLOBWrites(ctx context.Context, txnID sqlredo.TransactionID) error {
+	pending := lm.pendingLOBWrites[txnID]
+	if len(pending) == 0 {
+		return nil
+	}
+
+	var remaining []*sqlredo.RedoEvent
+	for _, event := range pending {
+		state, exists := lm.lobStates[txnID]
+		if !exists || state.ActiveKey == nil {
+			if !lm.inferLOBLocator(ctx, event) {
+				remaining = append(remaining, event)
+				continue
+			}
+			state = lm.lobStates[txnID]
+		}
+		acc := state.Accumulators[*state.ActiveKey]
+		if acc == nil {
+			remaining = append(remaining, event)
+			continue
+		}
+		if !event.SQLRedo.Valid || event.SQLRedo.String == "" {
+			continue
+		}
+		writeInfo, err := sqlredo.ParseLobWrite(event.SQLRedo.String, acc.IsBinary)
+		if err != nil {
+			return fmt.Errorf("parsing buffered LOB_WRITE SQL (scn=%d, txn=%s): %w\nSQL: %.500s", event.SCN, txnID, err, event.SQLRedo.String)
+		}
+		acc.AddFragment(writeInfo.Offset, writeInfo.Data)
+		lm.log.Debugf("Drained buffered LOB_WRITE for %s.%s.%s (txn=%s)", acc.Schema, acc.Table, acc.Column, txnID)
+	}
+
+	if len(remaining) == 0 {
+		delete(lm.pendingLOBWrites, txnID)
+	} else {
+		lm.pendingLOBWrites[txnID] = remaining
+	}
+
+	return nil
 }
 
 func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, startSCN, endSCN uint64, processEvent func(context.Context, *sqlredo.RedoEvent) error) error {
