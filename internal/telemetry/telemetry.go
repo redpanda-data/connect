@@ -96,7 +96,7 @@ func ActivateExporter(identifier, version, deploymentType, tenantID string, logg
 		JWTHeaders:    map[string]any{"key_generation": 1},
 	})
 	if err != nil {
-		logger.With("error", err).Debug("failed to build telemetry client")
+		logger.With("error", err).Debug("Failed to build telemetry client")
 		return
 	}
 
