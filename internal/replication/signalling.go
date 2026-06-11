@@ -13,6 +13,8 @@ import "context"
 type Signaller interface {
 	// ValidateChannel validates the signal channel exists during connector startup.
 	ValidateChannel(ctx context.Context) error
-	// OnSignal detects whether a signal has been received from the channel.
-	OnSignal(ctx context.Context, event any) error
+	// Listen detects whether a signal has been received from the channel.
+	Listen(ctx context.Context, event any) error
+	// OnSignal is invoked when a signal is recived from the signal channel.
+	OnSignal() struct{}
 }

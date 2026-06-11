@@ -19,20 +19,22 @@ import (
 var _ replication.Signaller = (*snapshotSignaller)(nil)
 
 type snapshotSignaller struct {
-	log       *service.Logger
-	schema    string
-	tableName string
+	log          *service.Logger
+	schema       string
+	tableName    string
+	onSignalChan chan struct{}
 }
 
 func NewSnapshotSignaller(schema, tableName string, log *service.Logger) (*snapshotSignaller, error) {
 	return &snapshotSignaller{
-		log:       log,
-		schema:    schema,
-		tableName: tableName,
+		log:          log,
+		schema:       schema,
+		tableName:    tableName,
+		onSignalChan: make(chan struct{}, 1),
 	}, nil
 }
 
-func (o *snapshotSignaller) OnSignal(_ context.Context, event any) error {
+func (o *snapshotSignaller) Listen(_ context.Context, event any) error {
 	msg, ok := event.(pglogicalstream.StreamMessage)
 	if !ok {
 		return nil
@@ -42,7 +44,13 @@ func (o *snapshotSignaller) OnSignal(_ context.Context, event any) error {
 	}
 
 	o.log.Debugf("snapshot signal received: operation=%s lsn=%v", msg.Operation, msg.LSN)
+
+	o.onSignalChan <- struct{}{}
 	return nil
+}
+
+func (o *snapshotSignaller) OnSignal() struct{} {
+	return struct{}{}
 }
 
 func (o *snapshotSignaller) ValidateChannel(ctx context.Context) error {

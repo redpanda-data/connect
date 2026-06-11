@@ -499,7 +499,7 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 				err   error
 			)
 			for _, msg := range batch {
-				if err := p.snapshotSig.OnSignal(ctx, msg); err != nil {
+				if err := p.snapshotSig.Listen(ctx, msg); err != nil {
 					p.logger.Errorf("failed to detect if change event was snapshot signal, continuing to process change events: %s", err)
 					continue
 				}
