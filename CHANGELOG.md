@@ -3,6 +3,17 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.96.0 - 2026-06-11
+
+### Added
+
+- bigquery: Added CDC upsert and upsert_delete write modes to BigQuery connector with automatic _CHANGE_TYPE and _CHANGE_SEQUENCE_NUMBER injection for Change Data Capture workflows. ([@squiidz](https://github.com/squiidz), [#4453](https://github.com/redpanda-data/connect/pull/4453))
+- Doris: Added new stream load output. ([@xylaaaaa](https://github.com/xylaaaaa), [#4218](https://github.com/redpanda-data/connect/pull/4218))
+
+### Fixed
+
+- dynamodb_cdc: Paginate DescribeStream to discover all shards. ([@squiidz](https://github.com/squiidz), [#4489](https://github.com/redpanda-data/connect/pull/4489))
+
 ## 4.95.0 - 2026-06-04
 
 ### Fixed
