@@ -1306,31 +1306,53 @@ type describeStreamPager interface {
 	DescribeStream(ctx context.Context, in *dynamodbstreams.DescribeStreamInput, opts ...func(*dynamodbstreams.Options)) (*dynamodbstreams.DescribeStreamOutput, error)
 }
 
+// maxDescribeStreamPages caps describeStreamAllShards iterations as a
+// defense against a misbehaving AWS API returning valid different
+// continuation tokens indefinitely. 1000 pages = 100k shards, three orders
+// of magnitude beyond any realistic DynamoDB Streams workload (real streams
+// rotate ~24 shards per 4h shard lifecycle).
+const maxDescribeStreamPages = 1000
+
 // describeStreamAllShards calls DescribeStream repeatedly, chaining
 // ExclusiveStartShardId = LastEvaluatedShardId from the previous response,
 // and accumulates shards across all pages. DescribeStream returns at most
 // 100 shards per call; on high-write streams the lifetime shard count
 // exceeds the page size within hours, and a single un-paginated call hides
 // the currently-open shards behind the LastEvaluatedShardId boundary.
-func describeStreamAllShards(ctx context.Context, c describeStreamPager, streamArn *string) ([]types.Shard, error) {
+func describeStreamAllShards(ctx context.Context, client describeStreamPager, streamArn *string) ([]types.Shard, error) {
 	var (
 		all     []types.Shard
 		startID *string
 	)
-	for {
-		out, err := c.DescribeStream(ctx, &dynamodbstreams.DescribeStreamInput{
+	for page := range maxDescribeStreamPages {
+		out, err := client.DescribeStream(ctx, &dynamodbstreams.DescribeStreamInput{
 			StreamArn:             streamArn,
 			ExclusiveStartShardId: startID,
 		})
 		if err != nil {
 			return nil, err
 		}
-		all = append(all, out.StreamDescription.Shards...)
-		startID = out.StreamDescription.LastEvaluatedShardId
-		if startID == nil {
+		for _, s := range out.StreamDescription.Shards {
+			if s.ShardId == nil {
+				continue
+			}
+			all = append(all, s)
+		}
+		next := out.StreamDescription.LastEvaluatedShardId
+		// AWS signals end-of-pagination via nil; also treat a non-nil
+		// pointer to the empty string as terminal to defend against
+		// interposing proxies that materialize the field.
+		if next == nil || *next == "" {
 			return all, nil
 		}
+		// Guard against a misbehaving service that returns the same
+		// cursor we just sent — would otherwise spin forever.
+		if startID != nil && *next == *startID {
+			return nil, fmt.Errorf("DescribeStream returned same LastEvaluatedShardId %q on page %d; aborting", *next, page)
+		}
+		startID = next
 	}
+	return nil, fmt.Errorf("describeStreamAllShards: exceeded %d pages without nil LastEvaluatedShardId; aborting", maxDescribeStreamPages)
 }
 
 // isCDCCheckpointStale checks if any CDC checkpoint points to expired stream data.

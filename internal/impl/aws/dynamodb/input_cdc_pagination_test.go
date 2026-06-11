@@ -11,6 +11,7 @@ package dynamodb
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/service/dynamodbstreams"
@@ -30,7 +31,10 @@ type fakeStreamPager struct {
 	calls  int
 }
 
-func (f *fakeStreamPager) DescribeStream(_ context.Context, in *dynamodbstreams.DescribeStreamInput, _ ...func(*dynamodbstreams.Options)) (*dynamodbstreams.DescribeStreamOutput, error) {
+func (f *fakeStreamPager) DescribeStream(ctx context.Context, in *dynamodbstreams.DescribeStreamInput, _ ...func(*dynamodbstreams.Options)) (*dynamodbstreams.DescribeStreamOutput, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	f.inputs = append(f.inputs, in)
 	idx := f.calls
 	f.calls++
@@ -158,4 +162,99 @@ func TestDescribeStreamAllShards(t *testing.T) {
 		assert.Contains(t, err.Error(), "auth failure")
 		assert.Equal(t, 1, fake.calls)
 	})
+
+	t.Run("empty-string LastEvaluatedShardId terminates pagination", func(t *testing.T) {
+		empty := ""
+		fake := &fakeStreamPager{
+			pages: []*dynamodbstreams.DescribeStreamOutput{
+				{StreamDescription: &types.StreamDescription{
+					Shards:               []types.Shard{shardWithID("s1")},
+					LastEvaluatedShardId: &empty,
+				}},
+			},
+		}
+		shards, err := describeStreamAllShards(context.Background(), fake, &arn)
+		require.NoError(t, err)
+		require.Len(t, shards, 1)
+		assert.Equal(t, 1, fake.calls, "must not loop on empty-string cursor")
+	})
+
+	t.Run("repeated LastEvaluatedShardId aborts to avoid infinite loop", func(t *testing.T) {
+		stuck := "stuck"
+		fake := &fakeStreamPager{
+			pages: []*dynamodbstreams.DescribeStreamOutput{
+				{StreamDescription: &types.StreamDescription{
+					Shards:               []types.Shard{shardWithID("a")},
+					LastEvaluatedShardId: &stuck,
+				}},
+				{StreamDescription: &types.StreamDescription{
+					Shards:               []types.Shard{shardWithID("b")},
+					LastEvaluatedShardId: &stuck,
+				}},
+			},
+		}
+		_, err := describeStreamAllShards(context.Background(), fake, &arn)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "LastEvaluatedShardId")
+		assert.Equal(t, 2, fake.calls)
+	})
+
+	t.Run("shards with nil ShardId are filtered out", func(t *testing.T) {
+		fake := &fakeStreamPager{
+			pages: []*dynamodbstreams.DescribeStreamOutput{
+				{StreamDescription: &types.StreamDescription{
+					Shards: []types.Shard{shardWithID("s1"), {ShardId: nil}, shardWithID("s2")},
+				}},
+			},
+		}
+		shards, err := describeStreamAllShards(context.Background(), fake, &arn)
+		require.NoError(t, err)
+		require.Len(t, shards, 2)
+		assert.Equal(t, "s1", *shards[0].ShardId)
+		assert.Equal(t, "s2", *shards[1].ShardId)
+	})
+
+	t.Run("cancelled context aborts before any call", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		fake := &fakeStreamPager{
+			pages: []*dynamodbstreams.DescribeStreamOutput{
+				{StreamDescription: &types.StreamDescription{
+					Shards: []types.Shard{shardWithID("s1")},
+				}},
+			},
+		}
+		_, err := describeStreamAllShards(ctx, fake, &arn)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, context.Canceled)
+		assert.Equal(t, 0, fake.calls)
+	})
+
+	t.Run("exceeds page cap returns error", func(t *testing.T) {
+		// An adversarial fake that always returns a valid different
+		// continuation token — exercises the iteration cap that defends
+		// against an API legitimately paginating forever.
+		fake := &infiniteStreamPager{}
+		_, err := describeStreamAllShards(context.Background(), fake, &arn)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "exceeded")
+		assert.Equal(t, maxDescribeStreamPages, fake.calls)
+	})
+}
+
+// infiniteStreamPager returns a new valid continuation token on every call,
+// forcing describeStreamAllShards to hit its page cap.
+type infiniteStreamPager struct {
+	calls int
+}
+
+func (f *infiniteStreamPager) DescribeStream(_ context.Context, _ *dynamodbstreams.DescribeStreamInput, _ ...func(*dynamodbstreams.Options)) (*dynamodbstreams.DescribeStreamOutput, error) {
+	f.calls++
+	next := fmt.Sprintf("page-%d", f.calls)
+	return &dynamodbstreams.DescribeStreamOutput{
+		StreamDescription: &types.StreamDescription{
+			Shards:               []types.Shard{shardWithID(fmt.Sprintf("s%d", f.calls))},
+			LastEvaluatedShardId: &next,
+		},
+	}, nil
 }
