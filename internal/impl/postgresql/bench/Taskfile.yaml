@@ -64,6 +64,17 @@ tasks:
     cmds:
       - psql {{.PG_DSN}} -c "SELECT pg_drop_replication_slot('bench_slot') FROM pg_replication_slots WHERE slot_name = 'bench_slot';"
 
+  psql:create:signal-table:
+    desc: Create the dbo schema and rpcn_signal_table used for snapshot signalling
+    cmds:
+      - psql {{.PG_DSN}} -c "CREATE SCHEMA IF NOT EXISTS dbo;"
+      - psql {{.PG_DSN}} -c "CREATE TABLE IF NOT EXISTS dbo.rpcn_signal_table (id SERIAL PRIMARY KEY, type VARCHAR(32), data TEXT);"
+
+  psql:signal:snapshot:
+    desc: Insert a snapshot signal into dbo.rpcn_signal_table to trigger a re-snapshot
+    cmds:
+      - psql {{.PG_DSN}} -c "INSERT INTO dbo.rpcn_signal_table (type, data) VALUES ('execute-snapshot', 'table1');"
+
   # ── CDC / Snapshot benchmarks ────────────────────────────────────────────────
 
   bench:run:

@@ -15,6 +15,6 @@ type Signaller interface {
 	ValidateChannel(ctx context.Context) error
 	// Listen detects whether a signal has been received from the channel.
 	Listen(ctx context.Context, event any) error
-	// OnSignal is invoked when a signal is recived from the signal channel.
-	OnSignal() struct{}
+	// OnSignal returns a channel that receives a value each time a signal is detected.
+	OnSignal() <-chan struct{}
 }

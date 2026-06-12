@@ -419,6 +419,8 @@ type pgStreamInput struct {
 	// IAM authentication fields
 	iamAuthEnabled  bool
 	signalTableName string
+
+	snapshotPending atomic.Bool
 }
 
 func (p *pgStreamInput) Connect(ctx context.Context) error {
@@ -427,6 +429,11 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 		if err := p.streamConfig.RefreshAuthToken(ctx); err != nil {
 			return fmt.Errorf("unable to generate IAM auth token: %w", err)
 		}
+	}
+
+	if p.snapshotPending.Load() {
+		p.streamConfig.StreamOldData = true
+		p.snapshotPending.Store(false)
 	}
 
 	pgStream, err := pglogicalstream.NewPgStream(ctx, p.streamConfig)
@@ -543,6 +550,10 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 					nextTimedBatchChan = time.After(d)
 				}
 			}
+		case <-p.snapshotSig.OnSignal():
+			p.logger.Infof("snapshot signal received, pausing stream to re-run snapshot")
+			p.snapshotPending.Store(true)
+			p.stopSig.TriggerSoftStop()
 		case err := <-pgStream.Errors():
 			p.logger.Warnf("logical replication stream error: %s", err)
 			// If the stream has internally errored then we should stop and restart processing

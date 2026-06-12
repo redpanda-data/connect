@@ -35,6 +35,7 @@ func NewSnapshotSignaller(schema, tableName string, log *service.Logger) (*snaps
 }
 
 func (o *snapshotSignaller) Listen(_ context.Context, event any) error {
+	o.log.Info("received")
 	msg, ok := event.(pglogicalstream.StreamMessage)
 	if !ok {
 		return nil
@@ -49,8 +50,8 @@ func (o *snapshotSignaller) Listen(_ context.Context, event any) error {
 	return nil
 }
 
-func (o *snapshotSignaller) OnSignal() struct{} {
-	return struct{}{}
+func (o *snapshotSignaller) OnSignal() <-chan struct{} {
+	return o.onSignalChan
 }
 
 func (o *snapshotSignaller) ValidateChannel(ctx context.Context) error {
