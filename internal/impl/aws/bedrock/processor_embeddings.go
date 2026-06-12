@@ -118,6 +118,11 @@ func newBedrockEmbeddingsProcessor(conf *service.ParsedConfig, _ *service.Resour
 			return nil, err
 		}
 	}
+	// Bedrock rejects Cohere embed requests without an input_type, so fail at
+	// config parse rather than per message at runtime.
+	if isCohereModel(model) && p.inputType == "" {
+		return nil, fmt.Errorf("%s is required when %s targets a Cohere embedding model", bedepFieldInputType, bedepFieldModel)
+	}
 	return p, nil
 }
 

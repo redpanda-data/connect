@@ -1,4 +1,4 @@
-// Copyright 2024 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,6 +20,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 func TestBuildEmbeddingsRequest(t *testing.T) {
@@ -135,4 +137,51 @@ func TestParseEmbeddingsResponseCohereMultipleVectorsRejected(t *testing.T) {
 	body := []byte(`{"embeddings":[[0.1],[0.2]]}`)
 	_, err := parseEmbeddingsResponse("cohere.embed-english-v3", body)
 	assert.ErrorContains(t, err, "expected a single embeddings response")
+}
+
+func TestNewProcessor_CohereRequiresInputType(t *testing.T) {
+	parseAndBuild := func(t *testing.T, yaml string) error {
+		t.Helper()
+		conf, err := newBedrockEmbeddingsConfigSpec().ParseYAML(yaml, nil)
+		require.NoError(t, err)
+		_, err = newBedrockEmbeddingsProcessor(conf, service.MockResources())
+		return err
+	}
+
+	t.Run("cohere without input_type fails at parse time", func(t *testing.T) {
+		err := parseAndBuild(t, `
+region: us-east-1
+credentials: {id: test, secret: test}
+model: cohere.embed-english-v3
+`)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "input_type")
+	})
+
+	t.Run("cohere regional profile without input_type fails at parse time", func(t *testing.T) {
+		err := parseAndBuild(t, `
+region: us-east-1
+credentials: {id: test, secret: test}
+model: us.cohere.embed-v4:0
+`)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "input_type")
+	})
+
+	t.Run("cohere with input_type builds", func(t *testing.T) {
+		require.NoError(t, parseAndBuild(t, `
+region: us-east-1
+credentials: {id: test, secret: test}
+model: cohere.embed-english-v3
+input_type: search_document
+`))
+	})
+
+	t.Run("titan without input_type builds", func(t *testing.T) {
+		require.NoError(t, parseAndBuild(t, `
+region: us-east-1
+credentials: {id: test, secret: test}
+model: amazon.titan-embed-text-v1
+`))
+	})
 }

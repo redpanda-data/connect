@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+### Fixed
+
+- aws_bedrock_embeddings: Cohere embedding models now send the correct request shape (previously Titan-shaped requests were rejected by Bedrock). A new `input_type` field is required for Cohere models, and both the Embed v3 and v4 response schemas are supported, including regional inference profiles such as `us.cohere.embed-v4:0`.
+
 ## 4.94.1 - 2026-05-29
 
 ### Fixed
