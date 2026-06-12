@@ -147,7 +147,7 @@ require (
 	github.com/redpanda-data/common-go/license v0.0.0-20260318014216-2bbd72bde0a0
 	github.com/redpanda-data/common-go/redpanda-otel-exporter v0.4.0
 	github.com/redpanda-data/common-go/secrets v0.1.15
-	github.com/redpanda-data/common-go/telemetry v0.0.0-20260610110850-da889a76852d
+	github.com/redpanda-data/common-go/telemetry v0.1.0
 	github.com/redpanda-data/connect/public/bundle/free/v4 v4.84.0
 	github.com/rs/xid v1.6.0
 	github.com/sashabaranov/go-openai v1.41.2
