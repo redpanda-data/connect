@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+### Fixed
+
+- aws_dynamodb_cdc: Shard checkpoints now only advance to the highest contiguously acknowledged position, so out-of-order acknowledgements or nacked batches can no longer move a checkpoint past undelivered records (which silently lost data after a crash or restart). Multi-table mode now also waits for all shard readers to exit during shutdown, fixing a possible send-on-closed-channel panic.
+
 ## 4.96.0 - 2026-06-11
 
 ### Added
