@@ -516,6 +516,13 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 		return errors.New("logminer configuration required for streaming")
 	}
 
+	if cachedSCN == replication.InvalidSCN && snapshotter == nil {
+		if cachedSCN, err = streaming.FindStartPos(ctx); err != nil {
+			return fmt.Errorf("fetching current SCN: %w", err)
+		}
+		o.log.Infof("No cached SCN found, fetched current position from database: %d", cachedSCN)
+	}
+
 	// Reset our stop signal
 	o.stopSig = shutdown.NewSignaller()
 
@@ -545,19 +552,6 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 			}
 
 			o.log.Infof("Successfully captured SCN following snapshot: %d", startSCN)
-		}
-
-		// If no SCN is available (no snapshot and no cached position), so get the start position from the DB
-		if startSCN == replication.InvalidSCN {
-			if startSCN, err = streaming.FindStartPos(softCtx); err != nil {
-				o.log.Errorf("Failed to get start SCN from database: %s", err)
-				o.stopSig.TriggerHasStopped()
-				return
-			}
-			o.log.Infof("No cached SCN found, fetched starting position from database: %d", startSCN)
-			if err = o.cacheSCN(softCtx, startSCN); err != nil {
-				o.log.Warnf("Failed to cache initial SCN (non-critical): %s", err)
-			}
 		}
 
 		// streaming
