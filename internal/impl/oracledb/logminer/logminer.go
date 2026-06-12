@@ -173,12 +173,14 @@ func (lm *LogMiner) ReadChanges(ctx context.Context, startPos replication.SCN) (
 	}
 }
 
-// FindStartPos finds the earliest possible SCN that exists within a log that's still available.
+// FindStartPos finds the earliest possible SCN that exists within a log that's still available,
+// falling back to the database's current SCN if no valid redo logs are found.
 func (lm *LogMiner) FindStartPos(ctx context.Context) (replication.SCN, error) {
 	query := `
 		SELECT MIN(FIRST_CHANGE#) AS FIRST_SCN
 		FROM (
 			SELECT FIRST_CHANGE# FROM V$LOG
+			WHERE FIRST_CHANGE# > 0
 			UNION
 			SELECT FIRST_CHANGE# FROM V$ARCHIVED_LOG
 			WHERE NAME IS NOT NULL
@@ -192,12 +194,25 @@ func (lm *LogMiner) FindStartPos(ctx context.Context) (replication.SCN, error) {
 		)
 	`
 
-	var firstSCN uint64
-	if err := lm.db.QueryRowContext(ctx, query).Scan(&firstSCN); err != nil {
+	var startPos sql.NullInt64
+	if err := lm.db.QueryRowContext(ctx, query).Scan(&startPos); err != nil {
 		return 0, fmt.Errorf("querying oldest available SCN in logs: %w", err)
 	}
 
-	return replication.SCN(firstSCN), nil
+	// fall back to currentSCN if we can't go back earlier
+	if !startPos.Valid || startPos.Int64 == 0 {
+		var currentPos uint64
+		if err := lm.db.QueryRowContext(ctx, "SELECT CURRENT_SCN FROM V$DATABASE").Scan(&currentPos); err != nil {
+			return 0, fmt.Errorf("querying current SCN from database: %w", err)
+		}
+		if currentPos == 0 {
+			return 0, errors.New("database returned an invalid CURRENT_SCN value (0)")
+		}
+		lm.log.Warnf("No redo logs with valid SCN found, defaulting to current SCN: %d", currentPos)
+		return replication.SCN(currentPos), nil
+	}
+
+	return replication.SCN(startPos.Int64), nil
 }
 
 func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp bool, err error) {
