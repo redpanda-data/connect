@@ -1,0 +1,53 @@
+version: "3.8"
+
+services:
+  hana:
+    image: saplabs/hanaexpress:latest
+    platform: linux/amd64
+    container_name: hxe
+    hostname: hxe
+    ports:
+      - "39013:39013"   # system DB
+      - "39015:39015"   # HXE tenant SQL
+      - "39017:39017"   # internal
+      - "39041:39041"   # SQL anywhere
+    volumes:
+      - hana-data:/hana/mounts
+    ulimits:
+      nofile:
+        soft: 1048576
+        hard: 1048576
+    # Required on Mac/Docker Desktop: HANA needs move_pages and mbind syscalls
+    # for NUMA memory management. These are blocked by the default seccomp profile.
+    security_opt:
+      - seccomp=unconfined
+    command: >
+      --passwords-url file:///hana/mounts/hxepasswd.json
+      --agree-to-sap-license
+    healthcheck:
+      test: ["CMD-SHELL", "/usr/sap/HXE/HDB90/exe/hdbsql -i 90 -u SYSTEM -p HXEHana1 -d HXE \"SELECT 1 FROM DUMMY\" > /dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 20
+      start_period: 300s
+
+  # Log-reader sidecar: same UID as hxeadm, read-only access to log files
+  # Used for future log format reverse-engineering work
+  log-sidecar:
+    image: busybox:latest
+    container_name: hxe-log-sidecar
+    user: "12000:79"
+    volumes:
+      - hana-data:/hana/mounts:ro
+    command: sh -c "while true; do sleep 3600; done"
+    depends_on:
+      hana:
+        condition: service_healthy
+
+volumes:
+  hana-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${HANA_DATA_PATH:-/tmp/hana-express-data}
