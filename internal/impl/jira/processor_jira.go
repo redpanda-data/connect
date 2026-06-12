@@ -50,8 +50,11 @@ func newJiraProcessorConfigSpec() *service.ConfigSpec {
 	spec := service.NewConfigSpec().
 		Categories("Services").
 		Version("4.68.0").
+		Deprecated().
 		Summary("Queries Jira resources and returns structured data").
 		Description(`Executes Jira API queries based on input messages and returns structured results. The processor handles pagination, retries, and field expansion automatically.
+
+This processor is deprecated in favour of the `+"`jira`"+` input, which streams issues, comments, and changelog entries with cursor-based incremental polling. The processor remains available for enrichment and lookup style operations.
 
 Supports querying the following Jira resources:
 - Issues (JQL queries)

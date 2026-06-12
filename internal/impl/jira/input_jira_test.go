@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -955,4 +957,228 @@ file:
 	jqlsMu.Unlock()
 	assert.Contains(t, firstJQLOfSecondRun, "updated >=",
 		"first JQL of second run must include cursor predicate loaded from cache")
+}
+
+// TestIdle_BoundaryIssueNotReemittedEveryPoll pins the seen-set dedup: an idle
+// Jira instance keeps returning the same boundary issue on every poll because
+// the cursor predicate is `updated >=`, so without dedup the input would emit
+// a duplicate of every boundary issue once per poll interval, forever.
+func TestIdle_BoundaryIssueNotReemittedEveryPoll(t *testing.T) {
+	mock := newMockJiraServer(t)
+	var calls atomic.Int32
+	var secondJQL atomic.Value
+	mock.handler = func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/rest/api/3/myself":
+			_, _ = w.Write([]byte(`{}`))
+		case "/rest/api/3/search/jql":
+			if calls.Add(1) == 2 {
+				secondJQL.Store(r.URL.Query().Get("jql"))
+			}
+			// Same issue on every poll, exactly as real Jira behaves while
+			// no new updates arrive.
+			_, _ = w.Write([]byte(`{"issues":[{"id":"1","key":"PROJ-1","fields":{"project":{"key":"PROJ"},"updated":"2026-06-01T10:00:00.000+0000"}}]}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}
+
+	yaml := fmt.Sprintf(`
+jira:
+  base_url: %q
+  auth: {email: u@x, api_token: tok}
+  resource: issues
+  poll_interval: 10s
+  cursor: {cache: jira_state, overlap: 0s}
+`, mock.URL)
+
+	s, out := buildStream(t, yaml)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	go func() { _ = s.Run(ctx) }()
+
+	select {
+	case <-out:
+	case <-ctx.Done():
+		t.Fatal("no first message")
+	}
+	// The second poll fires immediately (page 1 was non-empty); its response
+	// contains the same issue version, which must be suppressed.
+	require.Eventually(t, func() bool { return calls.Load() >= 2 }, 3*time.Second, 25*time.Millisecond)
+	select {
+	case m := <-out:
+		t.Fatalf("boundary issue re-emitted on idle poll: %v", m)
+	case <-time.After(300 * time.Millisecond):
+	}
+	require.NoError(t, s.StopWithin(2*time.Second))
+
+	jql, _ := secondJQL.Load().(string)
+	assert.Contains(t, jql, "updated >=", "second poll must carry the cursor predicate")
+}
+
+// TestUpdatedIssue_IsReemitted is the counterpart to the idle dedup test: when
+// a boundary issue is genuinely updated again (newer `updated` timestamp), the
+// new version must be emitted despite the issue key being in the seen set.
+func TestUpdatedIssue_IsReemitted(t *testing.T) {
+	mock := newMockJiraServer(t)
+	var calls atomic.Int32
+	mock.handler = func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/rest/api/3/myself":
+			_, _ = w.Write([]byte(`{}`))
+		case "/rest/api/3/search/jql":
+			if calls.Add(1) == 1 {
+				_, _ = w.Write([]byte(`{"issues":[{"id":"1","key":"PROJ-1","fields":{"project":{"key":"PROJ"},"updated":"2026-06-01T10:00:00.000+0000"}}]}`))
+			} else {
+				_, _ = w.Write([]byte(`{"issues":[{"id":"1","key":"PROJ-1","fields":{"project":{"key":"PROJ"},"updated":"2026-06-01T10:05:00.000+0000"}}]}`))
+			}
+		default:
+			http.NotFound(w, r)
+		}
+	}
+
+	yaml := fmt.Sprintf(`
+jira:
+  base_url: %q
+  auth: {email: u@x, api_token: tok}
+  resource: issues
+  poll_interval: 10s
+  cursor: {cache: jira_state, overlap: 0s}
+`, mock.URL)
+
+	s, out := buildStream(t, yaml)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	go func() { _ = s.Run(ctx) }()
+
+	updated := []string{}
+	for len(updated) < 2 {
+		select {
+		case m := <-out:
+			md := m["meta"].(map[string]any)
+			updated = append(updated, md["jira_updated"].(string))
+		case <-ctx.Done():
+			t.Fatalf("only got %d messages: %v", len(updated), updated)
+		}
+	}
+	require.NoError(t, s.StopWithin(2*time.Second))
+	assert.Equal(t, []string{"2026-06-01T10:00:00Z", "2026-06-01T10:05:00Z"}, updated)
+}
+
+// TestCursor_PersistedAfterEachAckedPage pins mid-backfill restartability: the
+// cursor checkpoint must be written to the cache after page 1 is acked and
+// BEFORE the page-2 request is issued, so a restart mid-run resumes from the
+// last acked page instead of the beginning of the backfill. The write and the
+// next fetch happen on the same goroutine, so observing the cache from the
+// page-2 handler is deterministic.
+func TestCursor_PersistedAfterEachAckedPage(t *testing.T) {
+	mock := newMockJiraServer(t)
+	cacheDir := t.TempDir()
+	var midRunCursor atomic.Value
+	mock.handler = func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/rest/api/3/myself":
+			_, _ = w.Write([]byte(`{}`))
+		case "/rest/api/3/search/jql":
+			if r.URL.Query().Get("nextPageToken") == "page2" {
+				var content strings.Builder
+				entries, _ := os.ReadDir(cacheDir)
+				for _, e := range entries {
+					b, _ := os.ReadFile(filepath.Join(cacheDir, e.Name()))
+					content.Write(b)
+				}
+				midRunCursor.Store(content.String())
+				_, _ = w.Write([]byte(`{"issues":[{"id":"2","key":"PROJ-2","fields":{"project":{"key":"PROJ"},"updated":"2026-06-01T10:05:00.000+0000"}}]}`))
+				return
+			}
+			_, _ = w.Write([]byte(`{"issues":[{"id":"1","key":"PROJ-1","fields":{"project":{"key":"PROJ"},"updated":"2026-06-01T10:00:00.000+0000"}}],"nextPageToken":"page2"}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}
+
+	builder := service.NewStreamBuilder()
+	require.NoError(t, builder.SetLoggerYAML(`level: OFF`))
+	require.NoError(t, builder.AddCacheYAML(fmt.Sprintf(`
+label: jira_state
+file:
+  directory: %s
+`, cacheDir)))
+	require.NoError(t, builder.AddInputYAML(fmt.Sprintf(`
+jira:
+  base_url: %q
+  auth: {email: u@x, api_token: tok}
+  resource: issues
+  poll_interval: 10s
+  cursor: {cache: jira_state, overlap: 0s}
+`, mock.URL)))
+	got := make(chan string, 8)
+	require.NoError(t, builder.AddConsumerFunc(func(_ context.Context, msg *service.Message) error {
+		id, _ := msg.MetaGet("jira_id")
+		got <- id
+		return nil
+	}))
+	s, err := builder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(s.Resources())
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	go func() { _ = s.Run(ctx) }()
+
+	keys := []string{}
+	for len(keys) < 2 {
+		select {
+		case k := <-got:
+			keys = append(keys, k)
+		case <-ctx.Done():
+			t.Fatalf("only got %v", keys)
+		}
+	}
+	require.NoError(t, s.StopWithin(2*time.Second))
+
+	assert.Equal(t, []string{"PROJ-1", "PROJ-2"}, keys)
+	cur, _ := midRunCursor.Load().(string)
+	require.NotEmpty(t, cur, "cursor must be on disk before the page-2 request is issued")
+	assert.Contains(t, cur, "2026-06-01T10:00:00Z", "mid-run checkpoint must carry page 1's max updated")
+	assert.Contains(t, cur, "PROJ-1", "mid-run checkpoint must carry page 1's seen entries")
+}
+
+func TestPruneSeen(t *testing.T) {
+	now := time.Date(2026, 6, 1, 10, 10, 0, 0, time.UTC)
+	seen := map[string]time.Time{
+		"OLD-1":  now.Add(-10 * time.Minute),
+		"EDGE-1": now.Add(-90 * time.Second), // inside cursor - overlap(1m) - 1m slack
+		"NEW-1":  now,
+	}
+	pruneSeen(seen, now, time.Minute)
+	assert.NotContains(t, seen, "OLD-1")
+	assert.Contains(t, seen, "EDGE-1")
+	assert.Contains(t, seen, "NEW-1")
+
+	// A zero cursor (first run) must not prune anything.
+	seen2 := map[string]time.Time{"K-1": now}
+	pruneSeen(seen2, time.Time{}, time.Minute)
+	assert.Contains(t, seen2, "K-1")
+}
+
+func TestCursor_SeenRoundtripAndV1Compat(t *testing.T) {
+	orig := cursor{
+		Updated: time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC),
+		Seen:    map[string]time.Time{"PROJ-1": time.Date(2026, 1, 2, 3, 4, 0, 0, time.UTC)},
+		Version: cursorSchemaVersion,
+	}
+	b, err := json.Marshal(orig)
+	require.NoError(t, err)
+	var decoded cursor
+	require.NoError(t, json.Unmarshal(b, &decoded))
+	assert.True(t, orig.Updated.Equal(decoded.Updated))
+	require.Contains(t, decoded.Seen, "PROJ-1")
+	assert.True(t, orig.Seen["PROJ-1"].Equal(decoded.Seen["PROJ-1"]))
+
+	// A v1 cursor (no seen field) must decode cleanly with a nil seen map.
+	var v1 cursor
+	require.NoError(t, json.Unmarshal([]byte(`{"updated":"2026-01-02T03:04:05Z","v":1}`), &v1))
+	assert.Nil(t, v1.Seen)
+	assert.Equal(t, 1, v1.Version)
 }

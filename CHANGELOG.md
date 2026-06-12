@@ -9,6 +9,10 @@ All notable changes to this project will be documented in this file.
 
 - jira: New `jira` input component for streaming Jira issues, comments, or changelog entries via JQL with cursor-based incremental polling.
 
+### Changed
+
+- jira: The `jira` processor is deprecated in favour of the new `jira` input; it remains available for enrichment and lookup style operations.
+
 ## 4.94.1 - 2026-05-29
 
 ### Fixed

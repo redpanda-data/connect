@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net/url"
 	"slices"
 	"strconv"
@@ -37,7 +38,8 @@ import (
 
 // cursorSchemaVersion is the on-disk format version stamped into the cursor
 // JSON; it is consumed by writeCursor when the input advances the cursor.
-const cursorSchemaVersion = 1
+// Version 2 added the Seen map; version 1 cursors decode cleanly (Seen nil).
+const cursorSchemaVersion = 2
 
 const (
 	resourceIssues    = "issues"
@@ -52,17 +54,39 @@ var validResources = []string{resourceIssues, resourceComments, resourceChangelo
 // Unknown JSON fields are ignored on decode for forward compatibility.
 type cursor struct {
 	Updated time.Time `json:"updated"`
-	Version int       `json:"v"`
+	// Seen maps issue keys to the updated timestamp at which they were last
+	// emitted, for issues inside the window the next JQL query re-matches
+	// (Updated - overlap, minus JQL's minute truncation). Because the cursor
+	// predicate is `updated >=`, boundary issues match again on every poll;
+	// this set suppresses re-emission of issue versions that were already
+	// delivered and acked.
+	Seen    map[string]time.Time `json:"seen,omitempty"`
+	Version int                  `json:"v"`
+}
+
+// pruneSeen drops seen entries that the next JQL query can no longer
+// re-match: anything older than cur - overlap, with one extra minute of slack
+// because the JQL threshold is truncated to minute precision.
+func pruneSeen(seen map[string]time.Time, cur time.Time, overlap time.Duration) {
+	if cur.IsZero() {
+		return
+	}
+	threshold := cur.Add(-overlap).Add(-time.Minute)
+	for k, v := range seen {
+		if v.Before(threshold) {
+			delete(seen, k)
+		}
+	}
 }
 
 func newJiraInputConfigSpec() *service.ConfigSpec {
 	spec := service.NewConfigSpec().
 		Categories("Services").
-		Version("4.95.0").
+		Version("4.96.0").
 		Summary("Streams Jira issues, comments, or changelog entries via JQL with incremental polling.").
-		Description(`Periodically queries Jira's REST API using a JQL filter and emits one message per resource. The cursor (max issue ` + "`updated`" + ` timestamp) is persisted via the configured cache resource so progress survives restarts.
+		Description(`Periodically queries Jira's REST API using a JQL filter and emits one message per resource. The cursor (max issue ` + "`updated`" + ` timestamp, plus the set of issue versions already emitted at the boundary) is persisted via the configured cache resource after every fully-acknowledged page, so progress survives restarts — including mid-backfill — and boundary issues are not re-emitted on every poll.
 
-Authentication uses API token (email + token) basic auth.
+Authentication uses API token (email + token) basic auth. The ` + "`backoff`" + ` settings govern the adaptive backoff applied to 429 responses; retries of 502/503/504 responses use a fixed three-attempt policy.
 
 Each message body is the raw JSON of the resource. Metadata fields:
 
@@ -259,12 +283,15 @@ type reader struct {
 	// nextToken is the opaque pagination cursor returned by Jira. Empty
 	// when not in a multi-page run.
 	nextToken string
+	// runJQL is the JQL string for the current pagination run, frozen when
+	// the run starts (nextToken empty). Jira's cursor pagination requires
+	// the JQL to remain stable across the token sequence, so mid-run cursor
+	// persistence must not leak into the query until the next run starts.
+	runJQL string
 	// runMaxUpdated accumulates max issue.updated across the current
-	// pagination run. The cursor is only persisted at the end of the run
-	// (when nextPageToken is empty) because Jira's cursor pagination
-	// requires JQL to remain stable across the token sequence — advancing
-	// the cursor mid-run would mutate the JQL while still passing the
-	// previous page's opaque token.
+	// pagination run. Progress (cursor + seen set) is persisted after every
+	// fully-acked page so a restart mid-backfill resumes from the last acked
+	// page; runJQL keeps the in-flight query stable regardless.
 	runMaxUpdated time.Time
 }
 
@@ -331,7 +358,10 @@ type pageState struct {
 	outstandingAcks atomic.Int32
 	pageHasNack     atomic.Bool
 	pageMaxUpdated  time.Time
-	done            chan struct{}
+	// pageSeen records (issue key -> updated) for every issue emitted in
+	// this page; merged into cursor.Seen once the page is fully acked.
+	pageSeen map[string]time.Time
+	done     chan struct{}
 }
 
 // nextBufferedMessage returns the next pending message from the page buffer.
@@ -361,12 +391,13 @@ func (p *pageState) isEmpty() bool {
 // outstandingAcks is pre-loaded to len(msgs) so the ack callback only needs
 // to decrement. An empty page has its done channel closed immediately so the
 // Read loop never blocks waiting for acks that will never fire.
-func (p *pageState) load(msgs []*service.Message, maxUpdated time.Time) {
+func (p *pageState) load(msgs []*service.Message, maxUpdated time.Time, seen map[string]time.Time) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.buffer = msgs
 	p.bufferIdx = 0
 	p.pageMaxUpdated = maxUpdated
+	p.pageSeen = seen
 	p.done = make(chan struct{})
 	p.outstandingAcks.Store(int32(len(msgs)))
 	if len(msgs) == 0 {
@@ -384,6 +415,7 @@ func (p *pageState) reset() {
 	p.bufferIdx = 0
 	p.pageHasNack.Store(false)
 	p.pageMaxUpdated = time.Time{}
+	p.pageSeen = nil
 	p.done = nil
 }
 
@@ -392,6 +424,13 @@ func (p *pageState) maxUpdated() time.Time {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return p.pageMaxUpdated
+}
+
+// seen returns the (issue key -> updated) map recorded for the current page.
+func (p *pageState) seen() map[string]time.Time {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.pageSeen
 }
 
 // currentDone returns the done channel for the current page under the page
@@ -487,6 +526,11 @@ func (r *reader) readCursor(ctx context.Context) (cursor, error) {
 	if inner != nil {
 		return cursor{}, inner
 	}
+	if c.Version > cursorSchemaVersion {
+		// Written by a newer binary; the fields we understand still decode,
+		// so resume from them best-effort rather than re-backfilling.
+		r.log.Warnf("cursor schema version %d is newer than supported %d; resuming best-effort from its updated timestamp", c.Version, cursorSchemaVersion)
+	}
 	return c, nil
 }
 
@@ -542,6 +586,12 @@ func (r *reader) Read(ctx context.Context) (*service.Message, service.AckFunc, e
 		}
 
 		if r.page.isEmpty() {
+			if r.hasNextToken() {
+				// Empty page mid-run (every issue deduped, or Jira returned
+				// an empty page with a continuation token): keep chaining
+				// the token without sleeping the full poll interval.
+				continue
+			}
 			// Caught up; sleep before polling again. Do not return
 			// ErrNotConnected — that would trigger a reconnect cycle.
 			select {
@@ -595,19 +645,29 @@ func (r *reader) onPageDrained(ctx context.Context) {
 	if pageMax.After(r.runMaxUpdated) {
 		r.runMaxUpdated = pageMax
 	}
-	// Only advance the persisted cursor at the end of a pagination run.
-	// Mutating the JQL mid-run while reusing nextPageToken is unsound -
-	// Jira's cursor pagination expects the JQL to remain stable across
-	// the token sequence.
-	if r.nextToken == "" {
-		if !r.runMaxUpdated.IsZero() && r.runMaxUpdated.After(r.currentCursor().Updated) {
-			newCur := cursor{Updated: r.runMaxUpdated, Version: cursorSchemaVersion}
-			r.setCursor(newCur)
-			if err := r.writeCursor(ctx, newCur); err != nil {
-				r.log.Warnf("writing cursor: %v", err)
-			}
-			r.log.Infof("advanced cursor to %s after pagination run", newCur.Updated.Format(time.RFC3339))
+	// Persist progress after every fully-acked page, not just at the end of
+	// the pagination run, so a restart mid-backfill resumes from the last
+	// acked page. Jira's cursor pagination requires the JQL to remain stable
+	// across the token sequence; runJQL freezes the in-flight query at run
+	// start, so advancing the cursor here cannot mutate it mid-run.
+	cur := r.currentCursor()
+	newUpdated := cur.Updated
+	if r.runMaxUpdated.After(newUpdated) {
+		newUpdated = r.runMaxUpdated
+	}
+	if pageSeen := r.page.seen(); len(pageSeen) > 0 || newUpdated.After(cur.Updated) {
+		seen := make(map[string]time.Time, len(cur.Seen)+len(pageSeen))
+		maps.Copy(seen, cur.Seen)
+		maps.Copy(seen, pageSeen)
+		pruneSeen(seen, newUpdated, r.cfg.cursorOverlap)
+		newCur := cursor{Updated: newUpdated, Seen: seen, Version: cursorSchemaVersion}
+		r.setCursor(newCur)
+		if err := r.writeCursor(ctx, newCur); err != nil {
+			r.log.Warnf("writing cursor: %v", err)
 		}
+		r.log.Debugf("checkpointed cursor at %s (%d boundary entries) after acked page", newCur.Updated.Format(time.RFC3339), len(seen))
+	}
+	if r.nextToken == "" {
 		r.runMaxUpdated = time.Time{}
 	}
 	r.page.reset()
@@ -627,15 +687,27 @@ func (r *reader) fetchNextPage(ctx context.Context) error {
 		return fmt.Errorf("decoding jira page: %w", err)
 	}
 
+	cur := r.currentCursor()
 	msgs := make([]*service.Message, 0, len(page.Issues))
+	pageSeen := make(map[string]time.Time, len(page.Issues))
 	var maxUpdated time.Time
 	for _, raw := range page.Issues {
 		var meta rawIssue
 		if err := json.Unmarshal(raw, &meta); err != nil {
 			return fmt.Errorf("decoding issue: %w", err)
 		}
-		if meta.Fields.Updated.After(maxUpdated) {
-			maxUpdated = meta.Fields.Updated.Time
+		upd := meta.Fields.Updated.Time
+		if !upd.IsZero() {
+			// The `updated >=` predicate re-matches boundary issues on every
+			// poll; skip versions that were already emitted and acked. A zero
+			// updated (field excluded by config) disables dedup for the issue
+			// rather than risking suppression of a genuinely new version.
+			if prev, ok := cur.Seen[meta.Key]; ok && !upd.After(prev) {
+				continue
+			}
+		}
+		if upd.After(maxUpdated) {
+			maxUpdated = upd
 		}
 
 		switch r.cfg.resource {
@@ -654,9 +726,12 @@ func (r *reader) fetchNextPage(ctx context.Context) error {
 			}
 			msgs = append(msgs, children...)
 		}
+		if !upd.IsZero() {
+			pageSeen[meta.Key] = upd
+		}
 	}
 
-	r.page.load(msgs, maxUpdated)
+	r.page.load(msgs, maxUpdated, pageSeen)
 	r.runMu.Lock()
 	r.nextToken = page.NextPageToken
 	r.runMu.Unlock()
@@ -773,9 +848,26 @@ func (r *reader) buildSearchURL() (*url.URL, error) {
 		return nil, err
 	}
 	q := u.Query()
-	q.Set("jql", r.buildJQL())
-	q.Set("fields", strings.Join(r.cfg.fields, ","))
-	expand := r.cfg.expand
+	// Freeze the JQL at the start of a pagination run: Jira's nextPageToken
+	// is only valid for the exact JQL it was issued against, and the cursor
+	// may now advance between pages of the same run.
+	r.runMu.Lock()
+	tok := r.nextToken
+	if tok == "" {
+		r.runJQL = r.buildJQL()
+	}
+	jql := r.runJQL
+	r.runMu.Unlock()
+	q.Set("jql", jql)
+	fields := slices.Clone(r.cfg.fields)
+	if !slices.Contains(fields, "*all") {
+		// Cursor advancement and metadata depend on these two fields; keep
+		// them present even when the user narrows the field list.
+		fields = appendUnique(fields, "updated")
+		fields = appendUnique(fields, "project")
+	}
+	q.Set("fields", strings.Join(fields, ","))
+	expand := slices.Clone(r.cfg.expand)
 	if r.cfg.resource == resourceChangelog {
 		expand = appendUnique(expand, "changelog")
 	}
@@ -783,14 +875,18 @@ func (r *reader) buildSearchURL() (*url.URL, error) {
 		q.Set("expand", strings.Join(expand, ","))
 	}
 	q.Set("maxResults", strconv.Itoa(r.cfg.pageSize))
-	r.runMu.Lock()
-	tok := r.nextToken
-	r.runMu.Unlock()
 	if tok != "" {
 		q.Set("nextPageToken", tok)
 	}
 	u.RawQuery = q.Encode()
 	return u, nil
+}
+
+// hasNextToken reports whether a pagination run is in flight.
+func (r *reader) hasNextToken() bool {
+	r.runMu.Lock()
+	defer r.runMu.Unlock()
+	return r.nextToken != ""
 }
 
 func (r *reader) buildJQL() string {

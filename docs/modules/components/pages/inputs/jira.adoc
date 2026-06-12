@@ -25,7 +25,7 @@ component_type_dropdown::[]
 
 Streams Jira issues, comments, or changelog entries via JQL with incremental polling.
 
-Introduced in version 4.95.0.
+Introduced in version 4.96.0.
 
 
 [tabs]
@@ -138,9 +138,9 @@ input:
 --
 ======
 
-Periodically queries Jira's REST API using a JQL filter and emits one message per resource. The cursor (max issue `updated` timestamp) is persisted via the configured cache resource so progress survives restarts.
+Periodically queries Jira's REST API using a JQL filter and emits one message per resource. The cursor (max issue `updated` timestamp, plus the set of issue versions already emitted at the boundary) is persisted via the configured cache resource after every fully-acknowledged page, so progress survives restarts — including mid-backfill — and boundary issues are not re-emitted on every poll.
 
-Authentication uses API token (email + token) basic auth.
+Authentication uses API token (email + token) basic auth. The `backoff` settings govern the adaptive backoff applied to 429 responses; retries of 502/503/504 responses use a fixed three-attempt policy.
 
 Each message body is the raw JSON of the resource. Metadata fields:
 

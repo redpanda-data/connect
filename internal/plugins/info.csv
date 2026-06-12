@@ -121,7 +121,7 @@ insert_part               ,processor ,insert_part               ,certified  ,n  
 jaeger                    ,tracer    ,jaeger                    ,community  ,n          ,n     ,n              ,cloud uses a managed tracing integration
 javascript                ,processor ,javascript                ,certified  ,n          ,n     ,n              ,security: arbitrary code execution
 jira                      ,input     ,jira                      ,certified  ,n          ,y     ,n              ,
-jira                      ,processor ,jira                      ,certified  ,n          ,y     ,n              ,
+jira                      ,processor ,jira                      ,certified  ,y          ,y     ,n              ,
 jmespath                  ,processor ,JMESPath                  ,certified  ,n          ,y     ,y              ,
 jq                        ,processor ,jq                        ,certified  ,n          ,y     ,y              ,
 json_api                  ,metric    ,json_api                  ,certified  ,n          ,n     ,n              ,cloud uses a managed metrics integration
