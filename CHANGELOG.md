@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.96.1 - 2026-06-12
+
+### Changed
+
+- oracledb_cdc: Connector now starts streaming from current SCN [@josephwoodward](https://github.com/josephwoodward), [#4509](https://github.com/redpanda-data/connect/pull/4509))
+
 ## 4.96.0 - 2026-06-11
 
 ### Added
