@@ -941,7 +941,6 @@ oracledb_cdc:
 
 func TestIntegrationOracleDBCDCSnapshotAndStreamingAllTypes(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Skip()
 
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
 	q := `
