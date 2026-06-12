@@ -203,6 +203,8 @@ oracledb_cdc:
 				}
 			}()
 
+			time.Sleep(10 * time.Second)
+
 			t.Log("Verifying snapshot changes...")
 			var got int
 			assert.Eventually(t, func() bool {
@@ -308,6 +310,8 @@ oracledb_cdc:
 				t.Error(err)
 			}
 		}()
+
+		time.Sleep(10 * time.Second)
 
 		t.Log("Verifying snapshot changes...")
 		var got int
@@ -569,6 +573,8 @@ oracledb_cdc:
 			}()
 		}
 
+		time.Sleep(10 * time.Second)
+
 		// insert initial test data
 		want := 3000
 		for range 1000 {
@@ -680,6 +686,8 @@ file:
 				close(msgChan)
 			}()
 		}
+
+		time.Sleep(10 * time.Second)
 
 		// insert initial test data
 		want := 3000
@@ -1360,6 +1368,8 @@ oracledb_cdc:
 		}()
 		go func() { <-t.Context().Done(); close(msgChan) }()
 
+		time.Sleep(10 * time.Second)
+
 		db.MustExec("INSERT INTO testdb.schema_ins VALUES (1, 'hello')")
 		db.MustExec("INSERT INTO testdb.schema_ins VALUES (2, 'world')")
 
@@ -1417,6 +1427,8 @@ oracledb_cdc:
 			}
 		}()
 		go func() { <-t.Context().Done(); close(msgChan) }()
+
+		time.Sleep(10 * time.Second)
 
 		// INSERT a row (all columns), then UPDATE only column B
 		db.MustExec("INSERT INTO testdb.schema_upd VALUES (1, 'x', 'y', 'z')")
@@ -1479,6 +1491,8 @@ oracledb_cdc:
 			}
 		}()
 		go func() { <-t.Context().Done(); close(msgChan) }()
+
+		time.Sleep(10 * time.Second)
 
 		db.MustExec("INSERT INTO testdb.schema_del VALUES (1, 'doomed')")
 		db.MustExec("DELETE FROM testdb.schema_del WHERE id = 1")
@@ -1624,6 +1638,8 @@ oracledb_cdc:
 	}()
 	go func() { <-t.Context().Done(); close(msgChan) }()
 
+	time.Sleep(10 * time.Second)
+
 	// INSERT before ALTER — schema has [ID, NAME]
 	db.MustExec("INSERT INTO testdb.schema_drift VALUES (1, 'before')")
 
@@ -1694,6 +1710,8 @@ oracledb_cdc:
 		}
 	}()
 	go func() { <-t.Context().Done(); close(msgChan) }()
+
+	time.Sleep(10 * time.Second)
 
 	db.MustExec("INSERT INTO testdb.schema_t1 VALUES (1, 'hello')")
 	db.MustExec("INSERT INTO testdb.schema_t2 VALUES (SYSDATE, HEXTORAW('DEADBEEFCAFEBABE0000000000000000'), 1.5)")
@@ -1954,6 +1972,8 @@ oracledb_cdc:
 			}
 		}()
 
+		time.Sleep(10 * time.Second)
+
 		t.Log("Inserting initial LOB row and waiting CDC event")
 		{
 			initialClob := strings.Repeat("A", 5000)
@@ -2034,6 +2054,8 @@ oracledb_cdc:
 			}
 		}()
 
+		time.Sleep(10 * time.Second)
+
 		t.Log("Inserting initial LOB row and waiting CDC event")
 		{
 			initialClob := strings.Repeat("A", 5000)
@@ -2110,6 +2132,8 @@ oracledb_cdc:
 				t.Error(err)
 			}
 		}()
+
+		time.Sleep(10 * time.Second)
 
 		t.Log("Inserting initial LOB row and waiting CDC event")
 		{
