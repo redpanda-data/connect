@@ -28,6 +28,9 @@ import (
 // https://docs.oracle.com/en/error-help/db/ora-01291/
 var errCodeMissingLogFile = 1291
 
+// https://docs.oracle.com/en/error-help/db/ora-01368/
+var errCodeRedoLogHeaderMismatch = 1368
+
 // LogMiner tracks and streams all change events from the configured change
 // tables tracked in tables.
 type LogMiner struct {
@@ -164,7 +167,7 @@ func (lm *LogMiner) ReadChanges(ctx context.Context, startPos replication.SCN) (
 			if caughtUp, err := lm.miningCycle(ctx, conn); err != nil {
 				return fmt.Errorf("mining logs: %w", err)
 			} else if caughtUp {
-				lm.log.Debugf("Caught up with redo logs, backing off..")
+				lm.log.Debugf("Caught up with redo logs, backing off...")
 				time.Sleep(lm.cfg.MiningBackoffInterval)
 			} else {
 				time.Sleep(lm.cfg.MiningInterval)
@@ -225,12 +228,21 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 				"   Note: This will result in data loss for events in the purged logs, so a snapshot may be required.",
 				lm.currentSCN, err, lm.cfg.SCNWindowSize, lm.cfg.MiningBackoffInterval)
 		}
+		if errors.As(err, &oraErr) && oraErr.ErrCode == errCodeRedoLogHeaderMismatch {
+			lm.log.Warnf("ORA-01368: redo log sequence recycled before session could start (SCN range %d–%d); the log will be available as an archived log on next cycle", lm.currentSCN, endSCN)
+			return false, nil
+		}
 		return false, fmt.Errorf("preparing logs and starting session at position %d: %w", lm.currentSCN, err)
 	}
 
 	// Query and process redoEvents from V$LOGMNR_CONTENTS
 	// The session is already active, just query it
 	if err := lm.queryLogMinerContents(ctx, conn, lm.currentSCN, endSCN, lm.processRedoEvent); err != nil {
+		var oraErr *goora.OracleError
+		if errors.As(err, &oraErr) && oraErr.ErrCode == errCodeRedoLogHeaderMismatch {
+			lm.log.Warnf("ORA-01368: redo log sequence recycled mid-query (SCN range %d–%d); retrying — archived log will be used on next cycle", lm.currentSCN, endSCN)
+			return false, nil
+		}
 		return false, fmt.Errorf("querying logminer contents between %d and %d: %w", lm.currentSCN, endSCN, err)
 	}
 
