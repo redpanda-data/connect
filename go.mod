@@ -101,9 +101,7 @@ require (
 	github.com/getsentry/sentry-go v0.44.1
 	github.com/go-faker/faker/v4 v4.7.0
 	github.com/go-git/go-git/v5 v5.19.1
-	github.com/go-jose/go-jose/v4 v4.1.4
 	github.com/go-mysql-org/go-mysql v1.14.0
-	github.com/go-resty/resty/v2 v2.17.2
 	github.com/go-sql-driver/mysql v1.9.3
 	github.com/go-viper/mapstructure/v2 v2.5.0
 	github.com/gocql/gocql v1.7.0
@@ -147,11 +145,12 @@ require (
 	github.com/rabbitmq/amqp091-go v1.10.0
 	github.com/rcrowley/go-metrics v0.0.0-20250401214520-65e299d6c5c9
 	github.com/redis/go-redis/v9 v9.18.0
-	github.com/redpanda-data/benthos/v4 v4.73.0
+	github.com/redpanda-data/benthos/v4 v4.74.0
 	github.com/redpanda-data/common-go/authz v0.2.1-0.20260319205134-242ab3c168b8
 	github.com/redpanda-data/common-go/license v0.0.0-20260318014216-2bbd72bde0a0
 	github.com/redpanda-data/common-go/redpanda-otel-exporter v0.4.0
 	github.com/redpanda-data/common-go/secrets v0.1.15
+	github.com/redpanda-data/common-go/telemetry v0.0.0-20260610110850-da889a76852d
 	github.com/redpanda-data/connect/public/bundle/free/v4 v4.84.0
 	github.com/rs/xid v1.6.0
 	github.com/sashabaranov/go-openai v1.41.2
@@ -260,7 +259,9 @@ require (
 	github.com/go-git/gcfg v1.5.1-0.20230307220236-3a3c6141e376 // indirect
 	github.com/go-git/go-billy/v5 v5.9.0 // indirect
 	github.com/go-jose/go-jose/v3 v3.0.4 // indirect
+	github.com/go-jose/go-jose/v4 v4.1.4 // indirect
 	github.com/go-quicktest/qt v1.101.1-0.20240301121107-c6c8733fa1e6 // indirect
+	github.com/go-resty/resty/v2 v2.17.2 // indirect
 	github.com/goccy/go-yaml v1.19.2 // indirect
 	github.com/google/jsonschema-go v0.4.2 // indirect
 	github.com/google/wire v0.7.0 // indirect
@@ -434,7 +435,7 @@ require (
 	github.com/eapache/queue v1.1.0 // indirect
 	github.com/fatih/color v1.19.0
 	github.com/felixge/httpsnoop v1.0.4 // indirect
-	github.com/fsnotify/fsnotify v1.9.0 // indirect
+	github.com/fsnotify/fsnotify v1.10.1 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.13 // indirect
 	github.com/go-faster/city v1.0.1 // indirect
 	github.com/go-faster/errors v0.7.1 // indirect
@@ -482,7 +483,7 @@ require (
 	github.com/jcmturner/gokrb5/v8 v8.4.4 // indirect
 	github.com/jcmturner/rpc/v2 v2.0.3 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
-	github.com/klauspost/compress v1.18.5
+	github.com/klauspost/compress v1.18.6
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
 	github.com/klauspost/pgzip v1.2.6 // indirect
 	github.com/kr/fs v0.1.0 // indirect
