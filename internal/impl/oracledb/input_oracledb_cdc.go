@@ -516,19 +516,26 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 		return errors.New("logminer configuration required for streaming")
 	}
 
+	if cachedSCN == replication.InvalidSCN && snapshotter == nil {
+		if cachedSCN, err = streaming.FindStartPos(ctx); err != nil {
+			return fmt.Errorf("fetching current SCN: %w", err)
+		}
+		o.log.Infof("No cached SCN found, fetched current position from database: %d", cachedSCN)
+	}
+
 	// Reset our stop signal
 	o.stopSig = shutdown.NewSignaller()
 
 	go func() {
 		var (
-			err    error
-			maxSCN = cachedSCN
+			err      error
+			startSCN = cachedSCN
 		)
 		softCtx, _ := o.stopSig.SoftStopCtx(context.Background())
 
 		// snapshot if no SCN exists then store checkpoint once complete
 		if snapshotter != nil {
-			if maxSCN, err = o.processSnapshot(softCtx, snapshotter); err != nil {
+			if startSCN, err = o.processSnapshot(softCtx, snapshotter); err != nil {
 				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 					o.log.Infof("Snapshotting stopped: %s", err)
 				} else {
@@ -538,32 +545,19 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 				return
 			}
 
-			if err = o.cacheSCN(softCtx, maxSCN); err != nil {
+			if err = o.cacheSCN(softCtx, startSCN); err != nil {
 				o.log.Errorf("Failed to capture SCN after snapshot completion. Snapshot will re-run on restart (may cause duplicate data): %s", err)
 				o.stopSig.TriggerHasStopped()
 				return
 			}
 
-			o.log.Infof("Successfully captured SCN following snapshot: %d", maxSCN)
-		}
-
-		// If no SCN is available (no snapshot and no cached position), so get the start position from the DB
-		if maxSCN == replication.InvalidSCN {
-			if maxSCN, err = streaming.FindStartPos(softCtx); err != nil {
-				o.log.Errorf("Failed to get start SCN from database: %s", err)
-				o.stopSig.TriggerHasStopped()
-				return
-			}
-			o.log.Infof("No cached SCN found, fetched starting position from database: %d", maxSCN)
-			if err = o.cacheSCN(softCtx, maxSCN); err != nil {
-				o.log.Warnf("Failed to cache initial SCN (non-critical): %s", err)
-			}
+			o.log.Infof("Successfully captured SCN following snapshot: %d", startSCN)
 		}
 
 		// streaming
 		wg, _ := errgroup.WithContext(softCtx)
 		wg.Go(func() error {
-			if err := streaming.ReadChanges(softCtx, maxSCN); err != nil {
+			if err := streaming.ReadChanges(softCtx, startSCN); err != nil {
 				return fmt.Errorf("streaming from logminer: %w", err)
 			}
 			return nil

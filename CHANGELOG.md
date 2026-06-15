@@ -3,11 +3,11 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## Unreleased
+## 4.96.1 - 2026-06-12
 
-### Fixed
+### Changed
 
-- aws_dynamodb_cdc: Shard checkpoints now only advance to the highest contiguously acknowledged position, so out-of-order acknowledgements or nacked batches can no longer move a checkpoint past undelivered records (which silently lost data after a crash or restart). Multi-table mode now also waits for all shard readers to exit during shutdown, fixing a possible send-on-closed-channel panic.
+- oracledb_cdc: Connector now starts streaming from current SCN [@josephwoodward](https://github.com/josephwoodward), [#4509](https://github.com/redpanda-data/connect/pull/4509))
 
 ## 4.96.0 - 2026-06-11
 
