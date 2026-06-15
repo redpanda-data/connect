@@ -6,7 +6,8 @@
 # Streams are enabled NEW_AND_OLD_IMAGES so both the Connect input and any future
 # KC counterpart see the full before/after payload.
 resource "aws_dynamodb_table" "bench" {
-  name           = var.table_name
+  for_each       = toset(var.table_names)
+  name           = each.value
   billing_mode   = "PROVISIONED"
   read_capacity  = var.read_capacity
   write_capacity = var.write_capacity

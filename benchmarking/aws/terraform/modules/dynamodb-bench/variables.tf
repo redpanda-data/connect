@@ -1,6 +1,6 @@
-variable "table_name" {
-  type        = string
-  description = "Name of the bench source table. The reset hook drops + recreates this table between sweep points, so a stable name is fine."
+variable "table_names" {
+  type        = list(string)
+  description = "Names of the bench source tables. One DynamoDB table is created per name (for_each). Multiple tables let the workload exceed the per-table 40K WCU quota: total provisioned WCU = length(table_names) * write_capacity, while each individual table stays within its own per-table quota. The reset hook only drops the connector's checkpoint table between sweep points, so stable names are fine."
 }
 
 variable "read_capacity" {

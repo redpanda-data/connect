@@ -3,9 +3,9 @@ variable "region" {
   default = "us-east-2"
 }
 
-variable "table_name" {
-  type    = string
-  default = "rpcn_bench_ddb_orders"
+variable "table_names" {
+  type    = list(string)
+  default = ["rpcn_bench_ddb_orders"]
 }
 
 variable "read_capacity" {

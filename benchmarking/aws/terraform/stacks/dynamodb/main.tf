@@ -28,7 +28,7 @@ data "terraform_remote_state" "shared" {
 
 module "dynamodb" {
   source         = "../../modules/dynamodb-bench"
-  table_name     = var.table_name
+  table_names    = var.table_names
   read_capacity  = var.read_capacity
   write_capacity = var.write_capacity
 }

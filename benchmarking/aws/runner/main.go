@@ -498,6 +498,11 @@ func translateInfraSource(src map[string]any, region string) map[string]string {
 			out[k] = fmt.Sprintf("%d", val)
 		case float64:
 			out[k] = fmt.Sprintf("%v", val)
+		case []any:
+			// YAML sequences (e.g. table_names: [a, b, c]) JSON-encode to a
+			// valid HCL list literal — ["a","b","c"] — for a list-typed -var.
+			b, _ := json.Marshal(val)
+			out[k] = string(b)
 		case map[string]any:
 			b, _ := json.Marshal(val)
 			out[k] = string(b)

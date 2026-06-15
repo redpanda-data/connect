@@ -1,9 +1,18 @@
 name: dynamodb-cdc
 description: |
-  Stream changes from a DynamoDB table under sustained PutItem load so the
-  aws_dynamodb_cdc input — not the producer — is the bottleneck across the
-  CPU sweep. Drop + recreate the table between sweep points (TRUNCATE doesn't
-  exist on DDB) to reset the stream ARN and shard state.
+  Stream changes from multiple DynamoDB tables under sustained PutItem load and
+  read them through a single aws_dynamodb_cdc input across the CPU sweep. Between
+  sweep points only the connector's checkpoint table is dropped (see reset
+  below); the source tables and their streams are left intact. TRUNCATE doesn't
+  exist on DDB, and dropping the checkpoint forces start_from: latest so each
+  point reads only its own workload window.
+
+  Multi-table is the lever that lets the producer exceed DynamoDB's per-table
+  40K WCU quota: a single table caps at ~36 MB/s (which Connect already
+  saturates at 1 vCPU, so it can't show scaling). N tables × 40K WCU give an
+  ~N×40 MB/s ceiling, so the CPU sweep can actually exercise Connect's fan-out
+  across N streams. Defaults to 2 tables (~72 MB/s). See the infra.source note
+  before raising N — total provisioned WCU is bounded by an account-level quota.
 
   Connect-only initially: no Debezium DynamoDB connector ships in the bench
   cloud-init, so engines=[connect]. Head-to-head with a paid KC connector
@@ -20,39 +29,56 @@ infra:
     # Billing mode is hardcoded PROVISIONED in the module (terraform/modules/
     # dynamodb-bench/main.tf) and is not a TF variable — don't add it here.
     #
-    # Sized to AWS's default per-table WCU quota of 40,000. 4KB items at
-    # 10K PutItems/sec = 40K WCU sustained, ~40 MB/s producer. Connect saw
-    # 5.7 MB/s at 1 vCPU in the earlier smoke; at 40 MB/s producer it should
-    # saturate around 4 vCPU (postgres/mysql benches plateau around 100 MB/s
-    # but on a higher ceiling). To probe the 100 MB/s ceiling, request a DDB
-    # WCU quota increase via AWS Service Quotas and bump this to 120000.
-    # NOTE: full sweep's reset bash recreates the table with WriteCapacityUnits
-    # hardcoded to 10000 — that's incorrect for this sizing. Fix before sweep.
+    # One DynamoDB table is created per name in table_names (the module uses
+    # for_each). write_capacity is PER TABLE, sized to AWS's default per-table
+    # WCU quota of 40,000: 4KB items consume 4 WCU each, so 40K WCU = ~10K
+    # PutItems/sec = ~40 MB/s per table. The workload runs each table at 9K/sec
+    # (~36 MB/s) for ~10% per-table WCU headroom.
+    #
+    # The three table lists MUST stay in sync: infra.source.table_names (TF
+    # creates them), dataset.tables (seeder writes to them), and
+    # pipeline.input.aws_dynamodb_cdc.tables (connector reads them).
+    #
+    # QUOTA (verified on this account in us-east-2, 2026-06-15):
+    #   - per-table write limit = 40,000 WCU (code L-AB614373)
+    #   - account write limit   = 80,000 WCU (code L-34F8CCC8)  <-- the binding one
+    # total provisioned WCU = len(table_names) × write_capacity must stay UNDER
+    # the account limit. 2 × 38K = 76K leaves ~4K headroom under 80K. Sitting at
+    # exactly 80K (e.g. 2 × 40K) risks CreateTable hanging in CREATING (cost the
+    # team ~47 min once). To reach 3 tables (~108 MB/s, matching the pg/mysql
+    # ceiling), first raise the account quota and wait for approval:
+    #   aws service-quotas request-service-quota-increase --service-code dynamodb \
+    #     --quota-code L-34F8CCC8 --desired-value 200000 --region us-east-2
+    table_names: [rpcn_bench_ddb_orders_0, rpcn_bench_ddb_orders_1]
     read_capacity: 1000
-    write_capacity: 40000
+    write_capacity: 38000
   runner:
     instance_type: c8g.4xlarge
 
 dataset:
-  initial_rows: 0          # Reset hook drops + recreates the table; no seed survives anyway.
+  initial_rows: 0          # CDC-only (snapshot_mode=none); no seed needed.
   row_size_bytes: 4096     # 4KB items consume 4 WCU each — fewer ops/sec for the same MB/s.
-  tables: [rpcn_bench_ddb_orders]
+  tables: [rpcn_bench_ddb_orders_0, rpcn_bench_ddb_orders_1]
   seeder: cdc-ddb
 
 workload:
-  # 9K PutItems/sec × 4 KB ≈ 36 MB/s producer, 36K WCU sustained. ~10% headroom
-  # under the 40K WCU table quota so the load-gen doesn't burn DDB's burst
-  # credits and hit ProvisionedThroughputExceededException late in long runs
-  # (observed in the 10K/sec smoke). To probe Connect past ~36 MB/s, request
-  # an AWS WCU quota increase or split across multiple tables.
-  write_rate_per_sec: 9000
+  # write_rate_per_sec is the TOTAL PutItems/sec across all dataset.tables — the
+  # cdc-ddb seeder round-robins workers across the table list. With 2 tables that
+  # is 9K/sec per table (~36 MB/s each, ~72 MB/s aggregate). Each table consumes
+  # ~36K WCU against 38K provisioned (~5% headroom); the seeder retries the
+  # occasional ProvisionedThroughputExceededException with exponential backoff.
+  # Keep this at ~9000 × len(tables).
+  write_rate_per_sec: 18000
   duration: 15m
   warmup: 2m
 
 pipeline:
   input:
     aws_dynamodb_cdc:
-      tables: [rpcn_bench_ddb_orders]
+      # Must match infra.source.table_names + dataset.tables. One input fans out
+      # across all listed tables' streams; the shard-pagination fix (CON-485)
+      # keeps it discovering open shards as they rotate under sustained load.
+      tables: [rpcn_bench_ddb_orders_0, rpcn_bench_ddb_orders_1]
       region: ${AWS_REGION}
       # Default checkpoint_table name; the reset hook below drops it between
       # sweep points so each point starts with no prior shard state.
@@ -74,10 +100,12 @@ reset:
   # connector skips to the current stream tail and only reads records written
   # during the upcoming sweep point's workload window.
   #
-  # The source TABLE is left intact across sweep points. It grows ~9K items/sec
-  # × 17min × 4 points ≈ 37M items / 150GB by end-of-sweep, which is fine for
-  # the run (DDB storage is ~$0.001 per GB-hour). The final terraform destroy
-  # handles teardown with the 30m timeout override on the table resource.
+  # The source TABLES are left intact across sweep points. They grow ~18K
+  # items/sec total × 17min × 4 points ≈ 73M items / ~300GB by end-of-sweep,
+  # which is fine for the run (DDB storage is ~$0.001 per GB-hour). One
+  # checkpoint table is shared across all source streams (keyed by StreamArn +
+  # ShardID), so a single drop resets the connector's position for every table.
+  # The final terraform destroy tears down each table with the 30m timeout.
   #
   # NOTE: this is intentionally different from the postgres/mysql benches.
   # Their reset TRUNCATEs the source table because their connectors read FROM

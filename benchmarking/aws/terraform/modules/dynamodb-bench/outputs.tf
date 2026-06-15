@@ -1,10 +1,14 @@
+# Comma-joined list of source table names. Kept as a single string (not a list)
+# so the runner's string-keyed terraform-output map and the DDB_TABLE
+# ExtraEnvVar contract stay intact. The seeder gets its table list from the
+# scenario's dataset.tables, not from this output, so the value is informational
+# / for the (vestigial) DDB_TABLE env only.
 output "dynamodb_table_name" {
-  value = aws_dynamodb_table.bench.name
+  value = join(",", var.table_names)
 }
 
-# Informational only — the Connect input discovers the current stream ARN via
-# DescribeTable, so callers don't need to wire this into the connector config.
-# It changes whenever the reset hook drops + recreates the table.
+# Informational only — the Connect input discovers each stream ARN via
+# DescribeTable, so callers don't wire these into the connector config.
 output "dynamodb_stream_arn" {
-  value = aws_dynamodb_table.bench.stream_arn
+  value = join(",", [for t in aws_dynamodb_table.bench : t.stream_arn])
 }
