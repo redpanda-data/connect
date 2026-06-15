@@ -41,7 +41,7 @@ var sapHANAOutputConfigSpec = service.NewConfigSpec().
 Each message is mapped to an ordered list of column values via ` + "`args_mapping`" + `. Configure ` + "`batching`" + ` on this output to control how many rows are bundled per INSERT call.
 `).
 	Field(service.NewStringField(shoFieldDSN).
-		Description("SAP HANA connection DSN.").
+		Description("SAP HANA connection DSN in `hdb://user:password@host:port` form.").
 		Example("hdb://user:password@host:39017").
 		Secret(),
 	).

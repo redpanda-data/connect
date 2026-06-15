@@ -141,7 +141,7 @@ func TestHanaDecimalToCommon(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := hanaDecimalToCommon("col", tc.precision, tc.scale)
+			got := hanaDecimalToCommon("col", tc.precision, tc.scale, true)
 			assert.Equal(t, tc.wantType, got.Type)
 			assert.Equal(t, "col", got.Name)
 		})
@@ -178,19 +178,22 @@ func TestSchemaCacheCachesResults(t *testing.T) {
 	// Seed the cache directly; a nil DB would panic on a real query.
 	cache := newSchemaCache(nil, service.MockResources().Logger())
 
+	schemaVal := map[string]any{"type": "record", "name": "MY_TABLE"}
 	seeded := &cachedSchema{
-		schemaVal: map[string]any{"type": "record", "name": "MY_TABLE"},
-		keys:      map[string]struct{}{"ID": {}, "NAME": {}},
+		result: &schemaResult{Val: schemaVal},
+		keys:   map[string]struct{}{"ID": {}, "NAME": {}},
 	}
 	cache.entries["MY_SCHEMA.MY_TABLE"] = seeded
 
 	// Both known columns — no DB query issued.
 	got, err := cache.schemaForEvent(context.Background(), "MY_SCHEMA", "MY_TABLE", []string{"ID", "NAME"})
 	require.NoError(t, err)
-	assert.Equal(t, seeded.schemaVal, got)
+	require.NotNil(t, got)
+	assert.Equal(t, schemaVal, got.Val)
 
 	// Second call — still cached.
 	got2, err := cache.schemaForEvent(context.Background(), "MY_SCHEMA", "MY_TABLE", []string{"ID"})
 	require.NoError(t, err)
-	assert.Equal(t, seeded.schemaVal, got2)
+	require.NotNil(t, got2)
+	assert.Equal(t, schemaVal, got2.Val)
 }

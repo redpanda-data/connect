@@ -12,6 +12,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 	"sync"
@@ -19,9 +20,11 @@ import (
 
 	gohdb "github.com/SAP/go-hdb/driver"
 
+	"github.com/redpanda-data/benthos/v4/public/schema"
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/license"
+	"github.com/redpanda-data/connect/v4/internal/sqlutil"
 )
 
 const (
@@ -38,6 +41,14 @@ const (
 	shFieldTimestampColumn    = "timestamp_column"
 	shFieldTimestampInitialVal = "timestamp_initial_value"
 	shFieldTimestampDelay     = "timestamp_delay"
+
+	shFieldCheckpointCache    = "checkpoint_cache"
+	shFieldCheckpointCacheKey = "checkpoint_cache_key"
+
+	shFieldNumericMapping            = "numeric_mapping"
+	shFieldMaxRetries                = "max_retries"
+	shNumericMappingNone    = "none"
+	shNumericMappingBestFit = "best_fit"
 
 	shModeBulk                 = "bulk"
 	shModeIncrementing          = "incrementing"
@@ -67,7 +78,7 @@ Every message produced by this input carries the following metadata fields:
 - ` + "`schema`" + `: Avro-compatible schema derived from ` + "`SYS.TABLE_COLUMNS`" + `, suitable for use with ` + "`schema_registry_encode`" + `. Column additions are detected automatically without a pipeline restart. Only present when ` + "`schema_name`" + ` is configured.
 `).
 	Field(service.NewStringField(shFieldDSN).
-		Description("SAP HANA connection DSN.").
+		Description("SAP HANA connection DSN in `hdb://user:password@host:port` form.").
 		Example("hdb://user:password@host:39017").
 		Secret(),
 	).
@@ -102,9 +113,9 @@ Every message produced by this input carries the following metadata fields:
 	).
 	Field(service.NewDurationField(shFieldPollInterval).
 		Description("How long to wait between polls in `incrementing`, `timestamp`, and `timestamp+incrementing` modes.").
-		Default("5s").
-		Example("1s").
-		Example("30s"),
+		Default("60s").
+		Example("10s").
+		Example("5m"),
 	).
 	Field(service.NewStringField(shFieldTimestampColumn).
 		Description("Column to use as the high-water mark for `timestamp` and `timestamp+incrementing` modes. Must be a TIMESTAMP or LONGDATE column.").
@@ -119,6 +130,25 @@ Every message produced by this input carries the following metadata fields:
 		Default("5s").
 		Example("0s").
 		Example("30s"),
+	).
+	Field(service.NewStringEnumField(shFieldNumericMapping, shNumericMappingNone, shNumericMappingBestFit).
+		Description("Controls how DECIMAL/NUMERIC columns are emitted:\n\n- `none`: always emit as a canonical decimal string, preserving full precision.\n- `best_fit`: emit as `int64` when scale is 0 and the value fits; otherwise emit as a canonical decimal string.").
+		Default(shNumericMappingNone),
+	).
+	Field(service.NewIntField(shFieldMaxRetries).
+		Description("Maximum number of times to retry a failed query before returning an error. Set to `0` to disable retries.").
+		Default(3).
+		Advanced(),
+	).
+	Field(service.NewStringField(shFieldCheckpointCache).
+		Description("Name of a cache resource to persist the high-water mark across restarts. When set, the connector resumes from where it left off rather than starting from scratch. Only effective in `incrementing`, `timestamp`, and `timestamp+incrementing` modes. The cache must be declared under `cache_resources`. Choose a durable backend (Redis, PostgreSQL) for production; in-memory caches lose state on restart.").
+		Example("redis_cache").
+		Optional(),
+	).
+	Field(service.NewStringField(shFieldCheckpointCacheKey).
+		Description("Key used to store the checkpoint in `checkpoint_cache`. Change this when multiple `sap_hana` inputs share the same cache resource to avoid key collisions.").
+		Default("sap_hana_hwm").
+		Advanced(),
 	).
 	Field(service.NewAutoRetryNacksToggleField())
 
@@ -149,6 +179,12 @@ type sapHANAInput struct {
 	tsQueryUpper   time.Time
 	timestampDelay time.Duration
 
+	numericMapping     string
+	maxRetries         int
+	checkpointCache    string
+	checkpointCacheKey string
+	mgr                *service.Resources
+
 	db      *sql.DB
 	rows    *sql.Rows
 	dbMut   sync.Mutex
@@ -164,6 +200,8 @@ type sapHANAInput struct {
 	rowValues        []any
 	rowPtrs          []any
 	rowCachedSchema  any
+	rowCachedPKCols  []string
+	rowCachedColTypes map[string]schema.Common
 	rowSchemaFetched bool
 }
 
@@ -174,6 +212,7 @@ func newSAPHANAInput(conf *service.ParsedConfig, mgr *service.Resources) (*sapHA
 
 	s := &sapHANAInput{
 		log:      mgr.Logger(),
+		mgr:      mgr,
 		stopChan: make(chan struct{}),
 	}
 
@@ -234,6 +273,20 @@ func newSAPHANAInput(conf *service.ParsedConfig, mgr *service.Resources) (*sapHA
 	if s.timestampDelay, err = conf.FieldDuration(shFieldTimestampDelay); err != nil {
 		return nil, err
 	}
+	if s.numericMapping, err = conf.FieldString(shFieldNumericMapping); err != nil {
+		return nil, err
+	}
+	if s.maxRetries, err = conf.FieldInt(shFieldMaxRetries); err != nil {
+		return nil, err
+	}
+	if conf.Contains(shFieldCheckpointCache) {
+		if s.checkpointCache, err = conf.FieldString(shFieldCheckpointCache); err != nil {
+			return nil, err
+		}
+	}
+	if s.checkpointCacheKey, err = conf.FieldString(shFieldCheckpointCacheKey); err != nil {
+		return nil, err
+	}
 
 	switch s.mode {
 	case shModeBulk, shModeIncrementing, shModeTimestamp, shModeTimestampIncrementing:
@@ -279,6 +332,13 @@ func (s *sapHANAInput) Connect(ctx context.Context) error {
 
 	s.db = db
 	s.schemas = newSchemaCache(db, s.log)
+
+	if err := s.loadCheckpoint(ctx); err != nil {
+		_ = db.Close()
+		s.db = nil
+		return fmt.Errorf("loading checkpoint: %w", err)
+	}
+
 	s.log.Debug("Connected to SAP HANA.")
 	return nil
 }
@@ -347,11 +407,44 @@ func (s *sapHANAInput) openRows(ctx context.Context) (*sql.Rows, error) {
 	}
 }
 
+// openRowsWithRetry calls openRows, retrying up to s.maxRetries times on
+// failure with linear backoff. The lock is released during each backoff sleep
+// so that Close() can proceed.
+func (s *sapHANAInput) openRowsWithRetry(ctx context.Context) (*sql.Rows, error) {
+	var err error
+	for attempt := 0; attempt <= s.maxRetries; attempt++ {
+		if attempt > 0 {
+			s.log.Warnf("Query failed (attempt %d/%d), retrying: %v", attempt, s.maxRetries, err)
+			s.dbMut.Unlock()
+			select {
+			case <-ctx.Done():
+				s.dbMut.Lock()
+				return nil, ctx.Err()
+			case <-s.stopChan:
+				s.dbMut.Lock()
+				return nil, service.ErrEndOfInput
+			case <-time.After(time.Duration(attempt) * time.Second):
+			}
+			s.dbMut.Lock()
+			if s.db == nil {
+				return nil, service.ErrNotConnected
+			}
+		}
+		var rows *sql.Rows
+		if rows, err = s.openRows(ctx); err == nil {
+			return rows, nil
+		}
+	}
+	return nil, err
+}
+
 func (s *sapHANAInput) resetCursorCache() {
 	s.rowColNames = nil
 	s.rowValues = nil
 	s.rowPtrs = nil
 	s.rowCachedSchema = nil
+	s.rowCachedPKCols = nil
+	s.rowCachedColTypes = nil
 	s.rowSchemaFetched = false
 }
 
@@ -378,7 +471,7 @@ func (s *sapHANAInput) ReadBatch(ctx context.Context) (service.MessageBatch, ser
 				if s.schemaName != "" && s.mode != shModeQuery {
 					_, _ = s.schemas.schemaForEvent(ctx, s.schemaName, s.tableName, nil)
 				}
-				rows, err := s.openRows(ctx)
+				rows, err := s.openRowsWithRetry(ctx)
 				if err != nil {
 					return nil, nil, fmt.Errorf("executing query: %w", err)
 				}
@@ -405,7 +498,7 @@ func (s *sapHANAInput) ReadBatch(ctx context.Context) (service.MessageBatch, ser
 				if s.schemaName != "" {
 					_, _ = s.schemas.schemaForEvent(ctx, s.schemaName, s.tableName, nil)
 				}
-				rows, err := s.openRows(ctx)
+				rows, err := s.openRowsWithRetry(ctx)
 				if err != nil {
 					return nil, nil, fmt.Errorf("executing query: %w", err)
 				}
@@ -425,6 +518,9 @@ func (s *sapHANAInput) ReadBatch(ctx context.Context) (service.MessageBatch, ser
 			}
 			batch = append(batch, msg)
 			if len(batch) >= s.fetchSize {
+				if err := s.saveCheckpoint(ctx); err != nil {
+					s.log.Warnf("Failed to save checkpoint: %v", err)
+				}
 				return batch, noop, nil
 			}
 		}
@@ -445,6 +541,10 @@ func (s *sapHANAInput) ReadBatch(ctx context.Context) (service.MessageBatch, ser
 			s.bulkExhausted = true
 		}
 
+		if err := s.saveCheckpoint(ctx); err != nil {
+			s.log.Warnf("Failed to save checkpoint: %v", err)
+		}
+
 		if len(batch) > 0 {
 			return batch, noop, nil
 		}
@@ -457,27 +557,76 @@ func (s *sapHANAInput) ReadBatch(ctx context.Context) (service.MessageBatch, ser
 
 // normalizeHANAValue converts go-hdb-specific types to JSON-friendly Go types.
 // NVARCHAR/VARCHAR arrive as []byte off the wire; DECIMAL as gohdb.Decimal (big.Rat alias).
-func normalizeHANAValue(v any) any {
+// colType carries schema metadata for the column (nil when schema is unavailable).
+// numericMapping controls how DECIMAL/NUMERIC values are emitted.
+func normalizeHANAValue(v any, colType *schema.Common, numericMapping string) any {
 	switch val := v.(type) {
 	case []byte:
 		return string(val)
 	case gohdb.Decimal:
-		f, _ := (*big.Rat)(&val).Float64()
-		return f
+		return normalizeDecimal((*big.Rat)(&val), colType, numericMapping)
 	case *gohdb.Decimal:
 		if val == nil {
 			return nil
 		}
-		f, _ := (*big.Rat)(val).Float64()
-		return f
+		return normalizeDecimal((*big.Rat)(val), colType, numericMapping)
 	case *big.Rat:
 		if val == nil {
 			return nil
 		}
-		f, _ := val.Float64()
-		return f
+		return normalizeDecimal(val, colType, numericMapping)
 	}
 	return v
+}
+
+// normalizeDecimal converts a big.Rat decimal to the representation selected
+// by numericMapping.
+func normalizeDecimal(r *big.Rat, colType *schema.Common, numericMapping string) any {
+	// Determine the canonical form from schema type when available.
+	if colType != nil {
+		switch colType.Type {
+		case schema.Int64:
+			// DECIMAL(p,0) that fits in int64 — return the integer directly.
+			if r.IsInt() && r.Num().IsInt64() {
+				return r.Num().Int64()
+			}
+		case schema.Decimal:
+			if colType.Logical != nil && colType.Logical.Decimal != nil {
+				p := colType.Logical.Decimal.Precision
+				s := colType.Logical.Decimal.Scale
+				text := r.FloatString(int(s))
+				if out, err := sqlutil.CanonicaliseDecimal(text, p, s); err == nil {
+					return out
+				}
+			}
+		}
+	}
+
+	// BigDecimal fallback: recover the natural scale from the denominator
+	// (HANA DECIMAL denominators are always powers of 10) then canonicalise.
+	if out, err := sqlutil.CanonicaliseBigDecimal(ratToNaturalDecimalString(r)); err == nil {
+		return out
+	}
+	f, _ := r.Float64()
+	return f
+}
+
+// ratToNaturalDecimalString converts a *big.Rat to a decimal string using the
+// minimal number of fractional digits that exactly represent the value.
+// For HANA DECIMAL values the denominator is always a power of 10.
+func ratToNaturalDecimalString(r *big.Rat) string {
+	denom := new(big.Int).Set(r.Denom())
+	ten := big.NewInt(10)
+	scale := 0
+	for denom.Cmp(big.NewInt(1)) > 0 {
+		q, rem := new(big.Int).DivMod(denom, ten, new(big.Int))
+		if rem.Sign() != 0 {
+			return r.FloatString(38)
+		}
+		denom = q
+		scale++
+	}
+	return r.FloatString(scale)
 }
 
 // scanRow reads the current row into a message and attaches metadata.
@@ -494,8 +643,12 @@ func (s *sapHANAInput) scanRow(ctx context.Context, rows *sql.Rows) (*service.Me
 			s.rowPtrs[i] = &s.rowValues[i]
 		}
 		if s.mode != shModeQuery {
-			schemaVal, _ := s.schemas.schemaForEvent(ctx, s.schemaName, s.tableName, colNames)
-			s.rowCachedSchema = schemaVal
+			sr, _ := s.schemas.schemaForEvent(ctx, s.schemaName, s.tableName, colNames)
+			if sr != nil {
+				s.rowCachedSchema = sr.Val
+				s.rowCachedPKCols = sr.PKCols
+				s.rowCachedColTypes = sr.ColTypes
+			}
 			s.rowSchemaFetched = true
 		}
 	}
@@ -506,7 +659,13 @@ func (s *sapHANAInput) scanRow(ctx context.Context, rows *sql.Rows) (*service.Me
 
 	rowMap := make(map[string]any, len(s.rowColNames))
 	for i, name := range s.rowColNames {
-		rowMap[name] = normalizeHANAValue(s.rowValues[i])
+		var ct *schema.Common
+		if s.rowCachedColTypes != nil {
+			if c, ok := s.rowCachedColTypes[name]; ok {
+				ct = &c
+			}
+		}
+		rowMap[name] = normalizeHANAValue(s.rowValues[i], ct, s.numericMapping)
 	}
 
 	if (s.mode == shModeIncrementing || s.mode == shModeTimestampIncrementing) && s.incrementingCol != "" {
@@ -526,11 +685,104 @@ func (s *sapHANAInput) scanRow(ctx context.Context, rows *sql.Rows) (*service.Me
 		if s.rowCachedSchema != nil {
 			msg.MetaSetMut("schema", s.rowCachedSchema)
 		}
-		msg.MetaSetMut("sap_hana_schema", s.schemaName)
-		msg.MetaSetMut("sap_hana_table", s.tableName)
+		if len(s.rowCachedPKCols) > 0 {
+			if pkJSON, merr := json.Marshal(s.rowCachedPKCols); merr == nil {
+				msg.MetaSetMut("primary_key_columns", string(pkJSON))
+			}
+		}
+		msg.MetaSetMut("database_schema", s.schemaName)
+		msg.MetaSetMut("table_name", s.tableName)
 	}
 
 	return msg, nil
+}
+
+// sapHANACheckpointState is the JSON shape persisted to the cache.
+// Typed pointer fields preserve the original Go type so bind parameters
+// round-trip correctly without implicit string casts.
+type sapHANACheckpointState struct {
+	TimestampHWM *time.Time `json:"ts_hwm,omitempty"`
+	IncrHWMStr   *string    `json:"incr_hwm_str,omitempty"`
+	IncrHWMInt   *int64     `json:"incr_hwm_int,omitempty"`
+	IncrHWMFloat *float64   `json:"incr_hwm_float,omitempty"`
+	IncrHWMTime  *time.Time `json:"incr_hwm_time,omitempty"`
+}
+
+func (s *sapHANAInput) loadCheckpoint(ctx context.Context) error {
+	if s.checkpointCache == "" {
+		return nil
+	}
+	var (
+		raw    []byte
+		getErr error
+	)
+	if err := s.mgr.AccessCache(ctx, s.checkpointCache, func(c service.Cache) {
+		raw, getErr = c.Get(ctx, s.checkpointCacheKey)
+	}); err != nil {
+		return fmt.Errorf("accessing checkpoint cache %q: %w", s.checkpointCache, err)
+	}
+	if errors.Is(getErr, service.ErrKeyNotFound) {
+		return nil
+	}
+	if getErr != nil {
+		return fmt.Errorf("reading checkpoint key %q: %w", s.checkpointCacheKey, getErr)
+	}
+
+	var cp sapHANACheckpointState
+	if err := json.Unmarshal(raw, &cp); err != nil {
+		return fmt.Errorf("parsing checkpoint: %w", err)
+	}
+	if cp.TimestampHWM != nil {
+		s.timestampHWM = *cp.TimestampHWM
+	}
+	switch {
+	case cp.IncrHWMStr != nil:
+		s.hwm = *cp.IncrHWMStr
+	case cp.IncrHWMInt != nil:
+		s.hwm = *cp.IncrHWMInt
+	case cp.IncrHWMFloat != nil:
+		s.hwm = *cp.IncrHWMFloat
+	case cp.IncrHWMTime != nil:
+		s.hwm = *cp.IncrHWMTime
+	}
+	s.log.Debugf("Loaded checkpoint: ts_hwm=%v incr_hwm=%v", s.timestampHWM, s.hwm)
+	return nil
+}
+
+func (s *sapHANAInput) saveCheckpoint(ctx context.Context) error {
+	if s.checkpointCache == "" {
+		return nil
+	}
+	cp := sapHANACheckpointState{}
+	if !s.timestampHWM.IsZero() {
+		cp.TimestampHWM = &s.timestampHWM
+	}
+	if s.hwm != nil {
+		switch v := s.hwm.(type) {
+		case string:
+			cp.IncrHWMStr = &v
+		case int64:
+			cp.IncrHWMInt = &v
+		case float64:
+			cp.IncrHWMFloat = &v
+		case time.Time:
+			cp.IncrHWMTime = &v
+		}
+	}
+	b, err := json.Marshal(cp)
+	if err != nil {
+		return fmt.Errorf("marshalling checkpoint: %w", err)
+	}
+	var setErr error
+	if err := s.mgr.AccessCache(ctx, s.checkpointCache, func(c service.Cache) {
+		setErr = c.Set(ctx, s.checkpointCacheKey, b, nil)
+	}); err != nil {
+		return fmt.Errorf("accessing checkpoint cache %q: %w", s.checkpointCache, err)
+	}
+	if setErr != nil {
+		return fmt.Errorf("writing checkpoint key %q: %w", s.checkpointCacheKey, setErr)
+	}
+	return nil
 }
 
 func (s *sapHANAInput) Close(ctx context.Context) error {
