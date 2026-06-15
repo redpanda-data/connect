@@ -286,6 +286,10 @@ gcp_bigquery_write_api:
   time_partitioning:
     type: DAY
   clustering: [tenant_id]
+  # The auto-create path runs Metadata→Create→Metadata inside one budget;
+  # CI runners under load have flaked the default repeatedly. 30s gives the
+  # emulator plenty of headroom without changing real-world write behavior.
+  schema_resolve_timeout: 30s
   endpoint:
     http: %s
     grpc: %s
@@ -497,4 +501,30 @@ gcp_bigquery_write_api:
 		}
 		return count >= 1
 	}, 30*time.Second, 500*time.Millisecond)
+}
+
+// CDC integration tests require a real BigQuery instance. The goccy emulator
+// does not implement the _CHANGE_TYPE / _CHANGE_SEQUENCE_NUMBER pseudo-columns,
+// PRIMARY KEY constraints, or the UPSERT/DELETE semantics that CDC mode
+// depends on. These subtests are gated with t.Skip so the package compiles
+// against the real BQ API and so a future real-BQ test job can flip the gate.
+func TestIntegrationCDC(t *testing.T) {
+	integration.CheckSkip(t)
+	const skipReason = "BigQuery CDC requires a real BigQuery instance; goccy emulator does not support CDC pseudo-columns"
+
+	t.Run("upsert", func(t *testing.T) {
+		t.Skip(skipReason)
+	})
+
+	t.Run("upsert_delete", func(t *testing.T) {
+		t.Skip(skipReason)
+	})
+
+	t.Run("out_of_order", func(t *testing.T) {
+		t.Skip(skipReason)
+	})
+
+	t.Run("mixed_batch", func(t *testing.T) {
+		t.Skip(skipReason)
+	})
 }

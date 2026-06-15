@@ -27,8 +27,12 @@ To certify a connector, it must meet the following requirements:
 - **1.3.1** Code is idiomatic following Effective Go recommendations, is readable, and is consistent with the broader Redpanda Connect code base.  
 - **1.3.2** Tests should cover end-to-end functionality and prove that the connector works across supported configurations.  
 - **1.3.3** Integration tests verify core workflows and are runnable in CI.
-- **1.3.4** Benchmarks have been run at various throughput levels so that we can determine CPU and memory trendlines based on usage.
-- **1.3.5** If a corresponding Kafka Connect connector exists, benchmarks have been run against it so we can compare it against our throughput and ensure Redpanda Connect's is comparable or better.
+- **1.3.4** Benchmarking covers **two distinct phases**, both of which are required:
+  - **Local benchmarking (localhost):** unit and local integration benchmarks that run without external infrastructure, giving fast, repeatable feedback during development.
+  - **Real-endpoint benchmarking:** benchmarks run against a real deployed server / real endpoint, exercising the connector against the actual target system rather than a local stand-in.
+  - Follow the standard process, directory layout, and reporting requirements in [`docs/benchmarking.md`](docs/benchmarking.md); record results under [`docs/benchmark-results/`](docs/benchmark-results/).
+- **1.3.5** Across both phases, benchmarks have been run at various throughput levels so that we can determine CPU and memory trendlines based on usage.
+- **1.3.6** If a corresponding Kafka Connect connector exists, benchmarks have been run against it so we can compare it against our throughput and ensure Redpanda Connect's is comparable or better.
 
 ---
 
@@ -57,12 +61,13 @@ We hold certified connectors to a consistent engineering bar so that they are re
 ### 3.1 Required Engineering Qualities
 
 - **3.1.1** Connector code is either authored by Redpanda engineers or reviewed and scoped by Redpanda before community contribution (e.g., defined in a GitHub issue).  
-- **3.1.2** Code adheres to standard Go practices: idiomatic, well-structured, and self-documenting.  
-- **3.1.3** The implementation is complete and correct, with no known bugs or missing core functionality.  
-- **3.1.4** The codebase feels consistent with other Redpanda Connect connectors, avoiding bespoke or idiosyncratic implementations.  
-- **3.1.5** Integration tests are easy to run locally and in CI environments, ideally with containerized dependencies.  
-- **3.1.6** Supports live credential rotation (e.g., for tokens or certs) with no downtime where applicable.  
-- **3.1.7** Has sufficient observability: logs, metrics, and tracing hooks as expected.
+- **3.1.2** Code adheres to standard Go practices: idiomatic, well-structured, self-documenting, and formatted with `gofumpt` (`task fmt`) so it stays consistent with the rest of the codebase.
+- **3.1.3** Connectors are written **Go-first** — idiomatic Go, never a line-by-line port of an implementation from another ecosystem (e.g. Debezium for CDC). We build toward a goal: **supporting the target endpoint well**, where "well" is defined by the rest of this document — clear documentation and UX (§1.1), well-designed configuration knobs and validation (§1.2.4), observability (§1.2), and reliability (§1.3). A reference implementation may be consulted to understand the endpoint or protocol, but it is not a specification to replicate, and we are not bound to its abstractions, idioms, or naming. Design the connector for our users and our codebase, not for parity with another tool.  
+- **3.1.4** The implementation is complete and correct, with no known bugs or missing core functionality.  
+- **3.1.5** The codebase feels consistent with other Redpanda Connect connectors, avoiding bespoke or idiosyncratic implementations.  
+- **3.1.6** Integration tests are easy to run locally and in CI environments, ideally with containerized dependencies.  
+- **3.1.7** Supports live credential rotation (e.g., for tokens or certs) with no downtime where applicable.  
+- **3.1.8** Has sufficient observability: logs, metrics, and tracing hooks as expected.
 
 ### 3.2 Anti-Patterns to Avoid
 
@@ -71,6 +76,11 @@ We hold certified connectors to a consistent engineering bar so that they are re
 - **3.2.3** Unfamiliar or confusing UX patterns.  
 - **3.2.4** Code that is difficult to test or maintain.  
 - **3.2.5** Excessive resource usage (e.g., unnecessary goroutines, memory or CPU overhead).
+
+### 3.3 Contribution Process & Change Size
+
+- **3.3.1** Changes are split into reviewable units. As a rule, neither a single PR nor an individual commit should reach ~10K lines of **code that a reviewer must read** — this keeps changes reviewable. AI-generated code counts in full: it needs *more* review, not less, and the limit is not a license to autogenerate past it. Only content that isn't reviewed line-by-line is excluded — mechanically generated/derived files (codegen output, mocks, bundle imports), vendored code, lockfiles, and non-code such as documentation, skills, Terraform, templates, and test fixtures/data. When a large PR is genuinely unavoidable, say why in the description and point reviewers at what matters.  
+- **3.3.2** Large features are broken into a series of smaller, self-contained PRs that can each be reviewed and reasoned about independently, rather than landed as one monolithic change.  
 
 ---
 

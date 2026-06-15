@@ -24,14 +24,18 @@ jobs:
           persist-credentials: false
 
       - name: Check for Claude config changes
+        id: check-permissions
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           PERMISSION=$(gh api repos/${{ github.repository }}/collaborators/${{ github.event.pull_request.user.login }}/permission --jq '.permission')
           if [[ "$PERMISSION" == "admin" || "$PERMISSION" == "write" ]]; then
             echo "Author has write access, skipping config change check."
+            echo "has_write_access=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+
+          echo "has_write_access=false" >> "$GITHUB_OUTPUT"
 
           MODIFIED_FILES=$(gh pr view ${{ github.event.pull_request.number }} --json files --jq '.files[].path')
           echo "$MODIFIED_FILES"
@@ -66,6 +70,7 @@ jobs:
 
       - name: Run Claude Code Review
         id: claude-review
+        if: steps.check-permissions.outputs.has_write_access == 'true'
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}

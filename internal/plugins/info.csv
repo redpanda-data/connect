@@ -72,6 +72,7 @@ decompress                ,scanner   ,decompress                ,certified  ,n  
 dedupe                    ,processor ,dedupe                    ,certified  ,n          ,y     ,y              ,
 discord                   ,input     ,discord                   ,community  ,n          ,n     ,n              ,not yet certified for cloud
 discord                   ,output    ,discord                   ,community  ,n          ,n     ,n              ,not yet certified for cloud
+doris_stream_load         ,output    ,doris_stream_load         ,community  ,n          ,n     ,n              ,not yet certified for cloud
 drop                      ,output    ,drop                      ,certified  ,n          ,y     ,y              ,
 drop_on                   ,output    ,drop_on                   ,certified  ,n          ,y     ,y              ,
 dynamic                   ,input     ,dynamic                   ,community  ,n          ,n     ,n              ,security: opens a listener unreachable from cloud
