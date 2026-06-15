@@ -10,6 +10,7 @@ package pgstream
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -300,10 +301,12 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 	if iamAuthTokenBuilder, err = AWSOptFn(context.Background(), awsConf, pgConnConfig, logger); err != nil {
 		return nil, err
 	}
-	if pgConnConfig.TLSConfig, err = conf.FieldTLS("tls"); err != nil {
+	var tlsConf *tls.Config
+	if tlsConf, err = conf.FieldTLS("tls"); err != nil {
 		return nil, err
 	}
-	if pgConnConfig.TLSConfig != nil {
+	if tlsConf != nil {
+		pgConnConfig.TLSConfig = tlsConf
 		pgConnConfig.TLSConfig.ServerName = pgConnConfig.Host
 	}
 	// This is required for postgres to understand we're interested in replication.
