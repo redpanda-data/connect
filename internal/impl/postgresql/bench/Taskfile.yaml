@@ -72,6 +72,7 @@ tasks:
 
   psql:signal:snapshot:
     desc: Insert a snapshot signal into dbo.rpcn_signal_table to trigger a re-snapshot
+    deps: [psql:create:signal-table]
     cmds:
       - psql {{.PG_DSN}} -c "INSERT INTO dbo.rpcn_signal_table (type, data) VALUES ('execute-snapshot', 'table1');"
 
