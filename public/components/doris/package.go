@@ -1,4 +1,4 @@
-// Copyright 2024 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,24 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package telemetry
+package doris
 
 import (
-	"fmt"
-
-	"github.com/redpanda-data/benthos/v4/public/service"
+	_ "github.com/redpanda-data/connect/v4/internal/impl/doris"
 )
-
-// benthosLogger adapts a benthos *service.Logger to the telemetry.Logger
-// interface expected by the shared common-go/telemetry client.
-type benthosLogger struct {
-	l *service.Logger
-}
-
-func (b benthosLogger) Debug(msg string, kv ...any) {
-	logger := b.l
-	for i := 0; i+1 < len(kv); i += 2 {
-		logger = logger.With(fmt.Sprint(kv[i]), kv[i+1])
-	}
-	logger.Debug(msg)
-}

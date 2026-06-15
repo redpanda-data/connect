@@ -85,13 +85,14 @@ type tableCreator struct {
 	partitioning           *bigquery.TimePartitioning
 	clustering             *bigquery.Clustering
 	requirePartitionFilter bool
+	primaryKeys            []string
 	log                    *service.Logger
 }
 
 // newTableCreator builds a tableCreator from the parsed config. Returns nil
 // when auto_create_table is disabled — callers nil-check to skip the create
 // path entirely.
-func newTableCreator(conf bigQueryWriteAPIConfig, log *service.Logger) (*tableCreator, error) {
+func newTableCreator(conf bqWriteAPIConfig, log *service.Logger) (*tableCreator, error) {
 	if !conf.AutoCreateTable {
 		return nil, nil
 	}
@@ -104,21 +105,34 @@ func newTableCreator(conf bigQueryWriteAPIConfig, log *service.Logger) (*tableCr
 		partitioning:           yamlTimePartitioningToBQ(conf.TimePartitioning),
 		clustering:             yamlClusteringToBQ(conf.Clustering),
 		requirePartitionFilter: conf.TimePartitioning.RequireFilter,
+		primaryKeys:            conf.PrimaryKeys,
 		log:                    log,
 	}, nil
 }
 
-// Ensure creates the table if it does not exist. AlreadyExists (HTTP 409) is
-// treated as success so concurrent creators race-tolerantly. Other errors
-// propagate so the caller (schemaResolver) can classify and retry.
-func (tc *tableCreator) Ensure(ctx context.Context, client *bigquery.Client, datasetID, tableID string) error {
+// buildMetadata returns the bigquery.TableMetadata used by Ensure. Extracted
+// from the inline literal so unit tests can exercise the PrimaryKey wiring
+// without going through Create.
+func (tc *tableCreator) buildMetadata() *bigquery.TableMetadata {
 	meta := &bigquery.TableMetadata{
 		Schema:                 tc.schema,
 		TimePartitioning:       tc.partitioning,
 		Clustering:             tc.clustering,
 		RequirePartitionFilter: tc.requirePartitionFilter,
 	}
-	if err := client.Dataset(datasetID).Table(tableID).Create(ctx, meta); err != nil {
+	if len(tc.primaryKeys) > 0 {
+		meta.TableConstraints = &bigquery.TableConstraints{
+			PrimaryKey: &bigquery.PrimaryKey{Columns: append([]string{}, tc.primaryKeys...)},
+		}
+	}
+	return meta
+}
+
+// Ensure creates the table if it does not exist. AlreadyExists (HTTP 409) is
+// treated as success so concurrent creators race-tolerantly. Other errors
+// propagate so the caller (schemaResolver) can classify and retry.
+func (tc *tableCreator) Ensure(ctx context.Context, client *bigquery.Client, datasetID, tableID string) error {
+	if err := client.Dataset(datasetID).Table(tableID).Create(ctx, tc.buildMetadata()); err != nil {
 		// Extract googleapi diagnostics (HTTP status + GCP-side error details)
 		// for a richer error message; fall back to the bare error otherwise.
 		var apiErr *googleapi.Error

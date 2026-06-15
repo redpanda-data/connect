@@ -3,15 +3,29 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## Unreleased
-
-### Added
-
-- jira: New `jira` input component for streaming Jira issues, comments, or changelog entries via JQL with cursor-based incremental polling.
+## 4.96.1 - 2026-06-12
 
 ### Changed
 
-- jira: The `jira` processor is deprecated in favour of the new `jira` input; it remains available for enrichment and lookup style operations.
+- oracledb_cdc: Connector now starts streaming from current SCN [@josephwoodward](https://github.com/josephwoodward), [#4509](https://github.com/redpanda-data/connect/pull/4509))
+
+## 4.96.0 - 2026-06-11
+
+### Added
+
+- bigquery: Added CDC upsert and upsert_delete write modes to BigQuery connector with automatic _CHANGE_TYPE and _CHANGE_SEQUENCE_NUMBER injection for Change Data Capture workflows. ([@squiidz](https://github.com/squiidz), [#4453](https://github.com/redpanda-data/connect/pull/4453))
+- Doris: Added new stream load output. ([@xylaaaaa](https://github.com/xylaaaaa), [#4218](https://github.com/redpanda-data/connect/pull/4218))
+
+### Fixed
+
+- dynamodb_cdc: Paginate DescribeStream to discover all shards. ([@squiidz](https://github.com/squiidz), [#4489](https://github.com/redpanda-data/connect/pull/4489))
+
+## 4.95.0 - 2026-06-04
+
+### Fixed
+
+- kafka: Prevented spurious offset commits for revoked partitions during cooperative rebalances, strengthening the at-least-once delivery guarantee. ([@Jeffail](https://github.com/Jeffail), [#4477](https://github.com/redpanda-data/connect/pull/4477))
+- oracledb: Fixed a bug where integer-valued decimals from LogMiner redo were emitted as JSON numbers instead of canonical decimal strings, causing failures when encoding to Avro string-typed fields. ([@Jeffail](https://github.com/Jeffail), [#4465](https://github.com/redpanda-data/connect/pull/4465))
 
 ## 4.94.1 - 2026-05-29
 

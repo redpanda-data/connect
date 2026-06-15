@@ -17,7 +17,6 @@ package telemetry
 import (
 	"fmt"
 	"runtime"
-	"time"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
@@ -102,21 +101,4 @@ func extractPayload(identifier, deploymentType, tenantID string, logger *service
 	}
 
 	return &p, nil
-}
-
-// This function runs asynchronously and is solely where telemetry data is
-// exported.
-func exporterLoop(p *payload, exportDelay, exportPeriod time.Duration, exporter *telemetryExporter) {
-	started := time.Now()
-
-	// First, wait until after the export delay has passed.
-	time.Sleep(exportDelay)
-
-	for {
-		p.Uptime = int64(time.Since(started) / time.Second)
-		exporter.export(p)
-
-		// Now wait for the next export.
-		time.Sleep(exportPeriod)
-	}
 }
