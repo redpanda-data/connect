@@ -335,3 +335,42 @@ fatal error condition).
 - `RecordBatcher.ShouldThrottle()` backpressure from downstream Redpanda —
   instrumented, zero firings observed during the degradation
 
+
+
+## AWS — cdc — 2026-06-15
+
+**Scenario:** Stream changes from multiple DynamoDB tables under sustained PutItem load and
+read them through a single aws_dynamodb_cdc input across the CPU sweep. Between
+sweep points only the connector's checkpoint table is dropped (see reset
+below); the source tables and their streams are left intact. TRUNCATE doesn't
+exist on DDB, and dropping the checkpoint forces start_from: latest so each
+point reads only its own workload window.
+
+Multi-table is the lever that lets the producer exceed DynamoDB's per-table
+40K WCU quota: a single table caps at ~36 MB/s (which Connect already
+saturates at 1 vCPU, so it can't show scaling). N tables × 40K WCU give an
+~N×40 MB/s ceiling, so the CPU sweep can actually exercise Connect's fan-out
+across N streams. Defaults to 2 tables (~72 MB/s). See the infra.source note
+before raising N — total provisioned WCU is bounded by an account-level quota.
+
+Connect-only initially: no Debezium DynamoDB connector ships in the bench
+cloud-init, so engines=[connect]. Head-to-head with a paid KC connector
+is deferred.
+
+**Git SHA:** [`d9d2b3c98`](https://github.com/redpanda-data/connect/commit/d9d2b3c980f2a8f39a51f8a654be2b7286a33e6f)
+
+**Infra:** Runner `c8g.4xlarge`; source `` (0 GB) in `us-east-2`.
+
+**Dataset:** 
+
+### Throughput
+
+| GOMAXPROCS | engine        | MB/sec (p50) | mean MB/s    | mean msg/s    | broker MB/s | MB/sec (p5) | MB/sec (p95) | msg/sec (p50) | Δ vs Connect       |
+|------------|---------------|--------------|--------------|---------------|-------------|-------------|--------------|---------------|--------------------|
+| 1          | connect       |           40 |       39.394 |         8,732 |           36 |          15 |           63 |         8,850 |                    |
+| 2          | connect       |           72 |       71.130 |        15,767 |           66 |          36 |          102 |        16,066 |                    |
+| 4          | connect       |           81 |       79.311 |        17,579 |           73 |          43 |          114 |        17,866 |                    |
+| 8          | connect       |           82 |       80.559 |        17,854 |           73 |          78 |           84 |        18,131 |                    |
+
+
+Raw samples + Prometheus snapshots: [`results/dynamodb/cdc/2026-06-15T17-44-43Z.json`](results/dynamodb/cdc/2026-06-15T17-44-43Z.json)
