@@ -22,7 +22,7 @@ type snapshotSignaller struct {
 	log          *service.Logger
 	schema       string
 	tableName    string
-	onSignalChan chan struct{}
+	onSignalChan chan *string
 }
 
 func NewSnapshotSignaller(schema, tableName string, log *service.Logger) (*snapshotSignaller, error) {
@@ -30,12 +30,11 @@ func NewSnapshotSignaller(schema, tableName string, log *service.Logger) (*snaps
 		log:          log,
 		schema:       schema,
 		tableName:    tableName,
-		onSignalChan: make(chan struct{}, 1),
+		onSignalChan: make(chan *string, 1),
 	}, nil
 }
 
 func (o *snapshotSignaller) Listen(_ context.Context, event any) error {
-	o.log.Info("received")
 	msg, ok := event.(pglogicalstream.StreamMessage)
 	if !ok {
 		return nil
@@ -43,14 +42,20 @@ func (o *snapshotSignaller) Listen(_ context.Context, event any) error {
 	if msg.Schema != o.schema || msg.Table != o.tableName {
 		return nil
 	}
+	if msg.Operation != pglogicalstream.InsertOpType {
+		return nil
+	}
 
 	o.log.Debugf("snapshot signal received: operation=%s lsn=%v", msg.Operation, msg.LSN)
 
-	o.onSignalChan <- struct{}{}
+	select {
+	case o.onSignalChan <- msg.LSN:
+	default:
+	}
 	return nil
 }
 
-func (o *snapshotSignaller) OnSignal() <-chan struct{} {
+func (o *snapshotSignaller) OnSignal() <-chan *string {
 	return o.onSignalChan
 }
 

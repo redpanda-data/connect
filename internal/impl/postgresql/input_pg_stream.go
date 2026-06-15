@@ -550,8 +550,13 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 					nextTimedBatchChan = time.After(d)
 				}
 			}
-		case <-p.snapshotSig.OnSignal():
+		case lsn := <-p.snapshotSig.OnSignal():
 			p.logger.Infof("snapshot signal received, pausing stream to re-run snapshot")
+			if lsn != nil {
+				if err := pgStream.AckLSN(ctx, *lsn); err != nil {
+					p.logger.Warnf("failed to ack signal LSN before re-snapshot: %s", err)
+				}
+			}
 			p.snapshotPending.Store(true)
 			p.stopSig.TriggerSoftStop()
 		case err := <-pgStream.Errors():
