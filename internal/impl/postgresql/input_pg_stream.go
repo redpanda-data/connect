@@ -195,7 +195,7 @@ This connector uses the naming pattern ` + "`pglog_stream_<replication_slot_name
 			Optional()).
 		Field(service.NewStringField(fieldSignalTableName).
 			Description("The name of the table used to send signals to the connector, such as triggering a re-snapshot. The table must exist in the schema configured via the `schema` field.").
-			Default("rpcn_signal_table").
+			Default(replication.DefaultSignalTableName).
 			Advanced()).
 		Field(service.NewAutoRetryNacksToggleField()).
 		Field(service.NewBatchPolicyField(fieldBatching))
@@ -360,9 +360,16 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		snapshotMetrics: snapshotMetrics,
 		replicationLag:  replicationLag,
 		stopSig:         shutdown.NewSignaller(),
+		streamSnapshot:  streamSnapshot,
 
 		iamAuthEnabled:  iamAuthEnabled,
 		signalTableName: signalTableName,
+	}
+
+	// Initialise signaller eagerly so IsPending() is safe to call before the first Connect().
+	i.eventSig, err = NewEventSignaller(schema, signalTableName, logger)
+	if err != nil {
+		return nil, fmt.Errorf("unable to create event signaller: %w", err)
 	}
 
 	// Has stopped is how we notify that we're not connected. This will get reset at connection time.
@@ -413,14 +420,14 @@ type pgStreamInput struct {
 
 	snapshotMetrics *service.MetricGauge
 	replicationLag  *service.MetricGauge
-	snapshotSig     replication.Signaller
+	eventSig        replication.Signaller
 	stopSig         *shutdown.Signaller
 
 	// IAM authentication fields
 	iamAuthEnabled  bool
 	signalTableName string
 
-	snapshotPending atomic.Bool
+	streamSnapshot bool // original value of streamConfig.StreamOldData, preserved for reconnects
 }
 
 func (p *pgStreamInput) Connect(ctx context.Context) error {
@@ -431,9 +438,16 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 		}
 	}
 
-	if p.snapshotPending.Load() {
+	if p.eventSig.IsPending() {
+		p.logger.Infof("snapshot signal pending, dropping replication slot for re-snapshot")
 		p.streamConfig.StreamOldData = true
-		p.snapshotPending.Store(false)
+		p.eventSig.Reset()
+		if err := p.dropReplicationSlot(ctx); err != nil {
+			return fmt.Errorf("dropping replication slot for re-snapshot: %w", err)
+		}
+		p.logger.Infof("replication slot dropped, re-snapshot will begin on next stream start")
+	} else {
+		p.streamConfig.StreamOldData = p.streamSnapshot
 	}
 
 	pgStream, err := pglogicalstream.NewPgStream(ctx, p.streamConfig)
@@ -444,10 +458,6 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 	batcher, err := p.batching.NewBatcher(p.mgr)
 	if err != nil {
 		return err
-	}
-
-	if p.snapshotSig, err = NewSnapshotSignaller(p.streamConfig.DBSchema, p.signalTableName, p.logger); err != nil {
-		return fmt.Errorf("unable to create snapshot signaller: %w", err)
 	}
 
 	// Reset our stop signal
@@ -506,10 +516,13 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 				err   error
 			)
 			for _, msg := range batch {
-				if err := p.snapshotSig.Listen(ctx, msg); err != nil {
+				if isSignal, err := p.eventSig.Listen(ctx, msg); err != nil {
 					p.logger.Errorf("failed to detect if change event was snapshot signal, continuing to process change events: %s", err)
 					continue
+				} else if isSignal {
+					continue // don't publish signal
 				}
+
 				if mb, err = json.Marshal(msg.Data); err != nil {
 					p.logger.Errorf("failure to marshal message: %s", err)
 					break
@@ -550,14 +563,13 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 					nextTimedBatchChan = time.After(d)
 				}
 			}
-		case lsn := <-p.snapshotSig.OnSignal():
+		case lsn := <-p.eventSig.OnSignal():
 			p.logger.Infof("snapshot signal received, pausing stream to re-run snapshot")
 			if lsn != nil {
 				if err := pgStream.AckLSN(ctx, *lsn); err != nil {
 					p.logger.Warnf("failed to ack signal LSN before re-snapshot: %s", err)
 				}
 			}
-			p.snapshotPending.Store(true)
 			p.stopSig.TriggerSoftStop()
 		case err := <-pgStream.Errors():
 			p.logger.Warnf("logical replication stream error: %s", err)
@@ -610,6 +622,15 @@ func (p *pgStreamInput) flushBatch(
 		return ctx.Err()
 	}
 	return nil
+}
+
+func (p *pgStreamInput) dropReplicationSlot(ctx context.Context) error {
+	conn, err := pgconn.ConnectConfig(ctx, p.streamConfig.DBConfig)
+	if err != nil {
+		return fmt.Errorf("opening connection: %w", err)
+	}
+	defer conn.Close(ctx)
+	return pglogicalstream.DropReplicationSlot(ctx, conn, p.streamConfig.ReplicationSlotName, pglogicalstream.DropReplicationSlotOptions{Wait: true})
 }
 
 func (p *pgStreamInput) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
