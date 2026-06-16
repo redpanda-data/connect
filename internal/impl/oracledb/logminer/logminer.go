@@ -25,8 +25,14 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/impl/oracledb/replication"
 )
 
-// https://docs.oracle.com/en/error-help/db/ora-01291/
-var errCodeMissingLogFile = 1291
+var (
+	// captures the time between DB commit and publish
+	publishLatencyMetric = "oracledb_cdc_publish_lag_ns"
+	// https://docs.oracle.com/en/error-help/db/ora-01291/
+	errCodeMissingLogFile = 1291
+	// https://docs.oracle.com/en/error-help/db/ora-01368/
+	errCodeRedoLogHeaderMismatch = 1368
+)
 
 // LogMiner tracks and streams all change events from the configured change
 // tables tracked in tables.
@@ -34,7 +40,6 @@ type LogMiner struct {
 	cfg           *Config
 	tables        []replication.UserTable
 	publisher     replication.ChangePublisher
-	log           *service.Logger
 	logCollector  *LogFileCollector
 	currentSCN    uint64
 	sessionMgr    *SessionManager
@@ -52,6 +57,9 @@ type LogMiner struct {
 	// lob types are split between redo log lines, we use lobStates to track them
 	// until we have all data to merge into published INSERT or UPDATE event.
 	lobStates map[sqlredo.TransactionID]*sqlredo.TxnLOBState
+
+	publishLagMetric *service.MetricTimer
+	log              *service.Logger
 }
 
 // NewMiner creates a new instance of LogMiner responsible for paging through change events based on the tables param.
@@ -106,12 +114,13 @@ func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replicat
 		log:       logger,
 
 		// logminer specific
-		logMinerQuery: logMinerQuery,
-		logCollector:  NewLogFileCollector(),
-		sessionMgr:    NewSessionManager(cfg, logger),
-		txnCache:      txnCache,
-		dmlParser:     sqlredo.NewParser(),
-		lobStates:     make(map[sqlredo.TransactionID]*sqlredo.TxnLOBState),
+		logMinerQuery:    logMinerQuery,
+		logCollector:     NewLogFileCollector(),
+		sessionMgr:       NewSessionManager(cfg, logger),
+		txnCache:         txnCache,
+		dmlParser:        sqlredo.NewParser(),
+		lobStates:        make(map[sqlredo.TransactionID]*sqlredo.TxnLOBState),
+		publishLagMetric: metrics.NewTimer(publishLatencyMetric),
 	}
 	if lm.txnCache == nil {
 		lm.txnCache = NewInMemoryCache(cfg.MaxTransactionEvents, metrics, logger)
@@ -164,7 +173,7 @@ func (lm *LogMiner) ReadChanges(ctx context.Context, startPos replication.SCN) (
 			if caughtUp, err := lm.miningCycle(ctx, conn); err != nil {
 				return fmt.Errorf("mining logs: %w", err)
 			} else if caughtUp {
-				lm.log.Debugf("Caught up with redo logs, backing off..")
+				lm.log.Debugf("Caught up with redo logs, backing off...")
 				time.Sleep(lm.cfg.MiningBackoffInterval)
 			} else {
 				time.Sleep(lm.cfg.MiningInterval)
@@ -173,31 +182,17 @@ func (lm *LogMiner) ReadChanges(ctx context.Context, startPos replication.SCN) (
 	}
 }
 
-// FindStartPos finds the earliest possible SCN that exists within a log that's still available.
+// FindStartPos returns the database's current SCN so that streaming begins from
+// the present moment rather than replaying historical redo logs.
 func (lm *LogMiner) FindStartPos(ctx context.Context) (replication.SCN, error) {
-	query := `
-		SELECT MIN(FIRST_CHANGE#) AS FIRST_SCN
-		FROM (
-			SELECT FIRST_CHANGE# FROM V$LOG
-			UNION
-			SELECT FIRST_CHANGE# FROM V$ARCHIVED_LOG
-			WHERE NAME IS NOT NULL
-			AND ARCHIVED = 'YES'
-			AND STATUS = 'A'
-			AND DEST_ID IN (
-				SELECT DEST_ID
-				FROM V$ARCHIVE_DEST_STATUS
-				WHERE STATUS='VALID' AND TYPE='LOCAL' AND ROWNUM=1
-			)
-		)
-	`
-
-	var firstSCN uint64
-	if err := lm.db.QueryRowContext(ctx, query).Scan(&firstSCN); err != nil {
-		return 0, fmt.Errorf("querying oldest available SCN in logs: %w", err)
+	var currentPos uint64
+	if err := lm.db.QueryRowContext(ctx, "SELECT CURRENT_SCN FROM V$DATABASE").Scan(&currentPos); err != nil {
+		return 0, fmt.Errorf("querying current SCN from database: %w", err)
 	}
-
-	return replication.SCN(firstSCN), nil
+	if currentPos == 0 {
+		return 0, errors.New("database returned an invalid CURRENT_SCN value (0)")
+	}
+	return replication.SCN(currentPos), nil
 }
 
 func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp bool, err error) {
@@ -239,12 +234,21 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 				"   Note: This will result in data loss for events in the purged logs, so a snapshot may be required.",
 				lm.currentSCN, err, lm.cfg.SCNWindowSize, lm.cfg.MiningBackoffInterval)
 		}
+		if errors.As(err, &oraErr) && oraErr.ErrCode == errCodeRedoLogHeaderMismatch {
+			lm.log.Warnf("ORA-01368: redo log sequence recycled before session could start (SCN range %d–%d); the log will be available as an archived log on next cycle", lm.currentSCN, endSCN)
+			return false, nil
+		}
 		return false, fmt.Errorf("preparing logs and starting session at position %d: %w", lm.currentSCN, err)
 	}
 
 	// Query and process redoEvents from V$LOGMNR_CONTENTS
 	// The session is already active, just query it
 	if err := lm.queryLogMinerContents(ctx, conn, lm.currentSCN, endSCN, lm.processRedoEvent); err != nil {
+		var oraErr *goora.OracleError
+		if errors.As(err, &oraErr) && oraErr.ErrCode == errCodeRedoLogHeaderMismatch {
+			lm.log.Warnf("ORA-01368: redo log sequence recycled mid-query (SCN range %d–%d); retrying — archived log will be used on next cycle", lm.currentSCN, endSCN)
+			return false, nil
+		}
 		return false, fmt.Errorf("querying logminer contents between %d and %d: %w", lm.currentSCN, endSCN, err)
 	}
 
@@ -512,6 +516,7 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 				if err := lm.publisher.Publish(ctx, msg); err != nil {
 					return fmt.Errorf("publishing event with SCN '%d': %w", redoEvent.SCN, err)
 				}
+				lm.publishLagMetric.Timing(time.Since(redoEvent.Timestamp).Nanoseconds())
 			}
 
 			if err := lm.txnCache.CommitTransaction(ctx, redoEvent.TransactionID); err != nil {

@@ -9,6 +9,23 @@ All notable changes to this project will be documented in this file.
 
 - aws_s3: Added `sqs.on_missing_object` field to control how an SQS notification whose S3 object cannot be found is handled. The default `drop` preserves the historical behaviour (warn, ack and discard); `nack` instead logs an error and returns the notification to the queue so an SQS redrive policy can dead-letter it. ([@peczenyj](https://github.com/peczenyj), [#4475](https://github.com/redpanda-data/connect/pull/4475))
 
+## 4.96.2 - 2026-06-16
+
+### Added
+
+- oracledb_cdc: oracledb_cdc: Add oracledb_cdc_publish_lag_ns metric to track publish latency. ([@josephwoodward](https://github.com/josephwoodward), [#4520](https://github.com/redpanda-data/connect/pull/4520))
+
+### Fixed
+
+- postgresql_cdc: Fix issue where defaults tls block would overwrite DSN configured params. ([@josephwoodward](https://github.com/josephwoodward), [#4518](https://github.com/redpanda-data/connect/pull/4518))
+
+## 4.96.1 - 2026-06-12
+
+
+### Changed
+
+- oracledb_cdc: Connector now starts streaming from current SCN ([@josephwoodward](https://github.com/josephwoodward), [#4509](https://github.com/redpanda-data/connect/pull/4509))
+
 ## 4.96.0 - 2026-06-11
 
 ### Added
