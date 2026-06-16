@@ -25,11 +25,14 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/impl/oracledb/replication"
 )
 
-// https://docs.oracle.com/en/error-help/db/ora-01291/
-var errCodeMissingLogFile = 1291
-
-// https://docs.oracle.com/en/error-help/db/ora-01368/
-var errCodeRedoLogHeaderMismatch = 1368
+var (
+	// captures the time between DB commit and publish
+	publishLatencyMetric = "oracledb_cdc_publish_lag_ns"
+	// https://docs.oracle.com/en/error-help/db/ora-01291/
+	errCodeMissingLogFile = 1291
+	// https://docs.oracle.com/en/error-help/db/ora-01368/
+	errCodeRedoLogHeaderMismatch = 1368
+)
 
 // LogMiner tracks and streams all change events from the configured change
 // tables tracked in tables.
@@ -37,7 +40,6 @@ type LogMiner struct {
 	cfg           *Config
 	tables        []replication.UserTable
 	publisher     replication.ChangePublisher
-	log           *service.Logger
 	logCollector  *LogFileCollector
 	currentSCN    uint64
 	sessionMgr    *SessionManager
@@ -55,6 +57,9 @@ type LogMiner struct {
 	// lob types are split between redo log lines, we use lobStates to track them
 	// until we have all data to merge into published INSERT or UPDATE event.
 	lobStates map[sqlredo.TransactionID]*sqlredo.TxnLOBState
+
+	publishLagMetric *service.MetricTimer
+	log              *service.Logger
 }
 
 // NewMiner creates a new instance of LogMiner responsible for paging through change events based on the tables param.
@@ -109,12 +114,13 @@ func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replicat
 		log:       logger,
 
 		// logminer specific
-		logMinerQuery: logMinerQuery,
-		logCollector:  NewLogFileCollector(),
-		sessionMgr:    NewSessionManager(cfg, logger),
-		txnCache:      txnCache,
-		dmlParser:     sqlredo.NewParser(),
-		lobStates:     make(map[sqlredo.TransactionID]*sqlredo.TxnLOBState),
+		logMinerQuery:    logMinerQuery,
+		logCollector:     NewLogFileCollector(),
+		sessionMgr:       NewSessionManager(cfg, logger),
+		txnCache:         txnCache,
+		dmlParser:        sqlredo.NewParser(),
+		lobStates:        make(map[sqlredo.TransactionID]*sqlredo.TxnLOBState),
+		publishLagMetric: metrics.NewTimer(publishLatencyMetric),
 	}
 	if lm.txnCache == nil {
 		lm.txnCache = NewInMemoryCache(cfg.MaxTransactionEvents, metrics, logger)
@@ -510,6 +516,7 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 				if err := lm.publisher.Publish(ctx, msg); err != nil {
 					return fmt.Errorf("publishing event with SCN '%d': %w", redoEvent.SCN, err)
 				}
+				lm.publishLagMetric.Timing(time.Since(redoEvent.Timestamp).Nanoseconds())
 			}
 
 			if err := lm.txnCache.CommitTransaction(ctx, redoEvent.TransactionID); err != nil {
