@@ -81,7 +81,7 @@ This input adds the following metadata fields to each message:
 - scn: the System Change Number in Oracle.
 - transaction_id: The Oracle transaction ID in ` + "`USN.SLOT.SEQ`" + ` format, identifying the transaction that produced the change. Not present on snapshot (` + "`read`" + `) messages.
 - source_ts_ms: The timestamp of when Oracle wrote the change record into the redo log, expressed as milliseconds since the Unix epoch. This reflects the database server's wall-clock time at the moment the DML executed, not the transaction commit time.
-- commit_ts_ms: The timestamp of the transaction commit, expressed as milliseconds since the Unix epoch. Not present on snapshot (` + "`read`" + `) messages.
+- commit_ts_ms: The timestamp of the transaction commit, expressed as milliseconds since the Unix epoch. Sourced from ` + "`V$LOGMNR_CONTENTS.TIMESTAMP`" + ` on the COMMIT redo record — this is Oracle's wall-clock time when the commit was written to the redo log, not a dedicated commit-timestamp column. Not present on snapshot (` + "`read`" + `) messages.
 - schema: The table schema, for use with schema-aware downstream processors such as ` + "`schema_registry_encode`" + `. When new columns are detected in CDC events, the schema is automatically refreshed from the Oracle catalog. Dropped columns are reflected after a connector restart.
 
 == Permissions
@@ -516,19 +516,26 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 		return errors.New("logminer configuration required for streaming")
 	}
 
+	if cachedSCN == replication.InvalidSCN && snapshotter == nil {
+		if cachedSCN, err = streaming.FindStartPos(ctx); err != nil {
+			return fmt.Errorf("fetching current SCN: %w", err)
+		}
+		o.log.Infof("No cached SCN found, fetched current position from database: %d", cachedSCN)
+	}
+
 	// Reset our stop signal
 	o.stopSig = shutdown.NewSignaller()
 
 	go func() {
 		var (
-			err    error
-			maxSCN = cachedSCN
+			err      error
+			startSCN = cachedSCN
 		)
 		softCtx, _ := o.stopSig.SoftStopCtx(context.Background())
 
 		// snapshot if no SCN exists then store checkpoint once complete
 		if snapshotter != nil {
-			if maxSCN, err = o.processSnapshot(softCtx, snapshotter); err != nil {
+			if startSCN, err = o.processSnapshot(softCtx, snapshotter); err != nil {
 				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 					o.log.Infof("Snapshotting stopped: %s", err)
 				} else {
@@ -538,32 +545,19 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 				return
 			}
 
-			if err = o.cacheSCN(softCtx, maxSCN); err != nil {
+			if err = o.cacheSCN(softCtx, startSCN); err != nil {
 				o.log.Errorf("Failed to capture SCN after snapshot completion. Snapshot will re-run on restart (may cause duplicate data): %s", err)
 				o.stopSig.TriggerHasStopped()
 				return
 			}
 
-			o.log.Infof("Successfully captured SCN following snapshot: %d", maxSCN)
-		}
-
-		// If no SCN is available (no snapshot and no cached position), so get the start position from the DB
-		if maxSCN == replication.InvalidSCN {
-			if maxSCN, err = streaming.FindStartPos(softCtx); err != nil {
-				o.log.Errorf("Failed to get start SCN from database: %s", err)
-				o.stopSig.TriggerHasStopped()
-				return
-			}
-			o.log.Infof("No cached SCN found, fetched starting position from database: %d", maxSCN)
-			if err = o.cacheSCN(softCtx, maxSCN); err != nil {
-				o.log.Warnf("Failed to cache initial SCN (non-critical): %s", err)
-			}
+			o.log.Infof("Successfully captured SCN following snapshot: %d", startSCN)
 		}
 
 		// streaming
 		wg, _ := errgroup.WithContext(softCtx)
 		wg.Go(func() error {
-			if err := streaming.ReadChanges(softCtx, maxSCN); err != nil {
+			if err := streaming.ReadChanges(softCtx, startSCN); err != nil {
 				return fmt.Errorf("streaming from logminer: %w", err)
 			}
 			return nil

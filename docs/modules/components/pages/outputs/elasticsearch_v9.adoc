@@ -42,6 +42,7 @@ output:
     action: "" # No default (required)
     id: ${!counter()}-${!timestamp_unix()} # No default (required)
     max_in_flight: 64
+    api_key: ""
     batching:
       count: 0
       byte_size: 0
@@ -74,6 +75,7 @@ output:
       root_cas_file: ""
       client_certs: []
     max_in_flight: 64
+    api_key: ""
     basic_auth:
       enabled: false
       username: ""
@@ -196,6 +198,23 @@ output:
     index: "cool-bug-facts"
     action: "index"
     id: ${! meta("s3_key") }
+```
+
+--
+Authenticating with an API key::
++
+--
+
+Set the `api_key` field to authenticate requests with an Elasticsearch API key. If `api_key` is set, it supersedes the `basic_auth` configuration.
+
+```yaml
+output:
+  elasticsearch_v9:
+    urls: ['https://localhost:9200']
+    index: "things"
+    action: "index"
+    id: ${! json("id") }
+    api_key: "${ELASTICSEARCH_API_KEY}"
 ```
 
 --
@@ -484,6 +503,20 @@ The maximum number of messages to have in flight at a given time. Increase this 
 *Type*: `int`
 
 *Default*: `64`
+
+=== `api_key`
+
+An API key to authenticate with. If set, it supersedes basic authentication.
+[CAUTION]
+====
+This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
+====
+
+
+
+*Type*: `string`
+
+*Default*: `""`
 
 === `basic_auth`
 

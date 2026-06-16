@@ -9,6 +9,23 @@ All notable changes to this project will be documented in this file.
 
 - `aws_s3` input: added an `sqs.message_timeout` field that periodically refreshes the visibility timeout of an in-flight SQS notification while its S3 object is being processed, preventing slow or large objects from being redelivered and reprocessed. Defaults to `0s` (disabled), preserving existing behaviour. ([@peczenyj](https://github.com/peczenyj), [#4468](https://github.com/redpanda-data/connect/issues/4468))
 
+## 4.96.2 - 2026-06-16
+
+### Added
+
+- oracledb_cdc: oracledb_cdc: Add oracledb_cdc_publish_lag_ns metric to track publish latency. ([@josephwoodward](https://github.com/josephwoodward), [#4520](https://github.com/redpanda-data/connect/pull/4520))
+
+### Fixed
+
+- postgresql_cdc: Fix issue where defaults tls block would overwrite DSN configured params. ([@josephwoodward](https://github.com/josephwoodward), [#4518](https://github.com/redpanda-data/connect/pull/4518))
+
+## 4.96.1 - 2026-06-12
+
+
+### Changed
+
+- oracledb_cdc: Connector now starts streaming from current SCN ([@josephwoodward](https://github.com/josephwoodward), [#4509](https://github.com/redpanda-data/connect/pull/4509))
+
 ## 4.96.0 - 2026-06-11
 
 ### Added
