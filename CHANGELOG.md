@@ -9,6 +9,23 @@ All notable changes to this project will be documented in this file.
 
 - aws_s3: Added `sqs.idle_poll_period` field to back off SQS polling when the queue is empty. The default `0s` preserves the historical fixed 500ms throttle between empty receives; a larger duration reduces `ReceiveMessage` request volume on idle queues at the cost of first-message latency. ([@peczenyj](https://github.com/peczenyj), [#4479](https://github.com/redpanda-data/connect/pull/4479))
 
+## 4.96.2 - 2026-06-16
+
+### Added
+
+- oracledb_cdc: oracledb_cdc: Add oracledb_cdc_publish_lag_ns metric to track publish latency. ([@josephwoodward](https://github.com/josephwoodward), [#4520](https://github.com/redpanda-data/connect/pull/4520))
+
+### Fixed
+
+- postgresql_cdc: Fix issue where defaults tls block would overwrite DSN configured params. ([@josephwoodward](https://github.com/josephwoodward), [#4518](https://github.com/redpanda-data/connect/pull/4518))
+
+## 4.96.1 - 2026-06-12
+
+
+### Changed
+
+- oracledb_cdc: Connector now starts streaming from current SCN ([@josephwoodward](https://github.com/josephwoodward), [#4509](https://github.com/redpanda-data/connect/pull/4509))
+
 ## 4.96.0 - 2026-06-11
 
 ### Added
