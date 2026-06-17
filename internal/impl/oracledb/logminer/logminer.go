@@ -239,7 +239,7 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 				lm.currentSCN, err, lm.cfg.SCNWindowSize, lm.cfg.MiningBackoffInterval)
 		}
 		if errors.As(err, &oraErr) && oraErr.ErrCode == errCodeRedoLogHeaderMismatch {
-			lm.log.Warnf("ORA-01368: redo log sequence recycled before session could start (SCN range %d–%d); the log will be available as an archived log on next cycle", lm.currentSCN, endSCN)
+			lm.log.Debugf("ORA-01368: redo log sequence recycled before session could start (SCN range %d–%d); the log will be available as an archived log on next cycle", lm.currentSCN, endSCN)
 			return false, nil
 		}
 		return false, fmt.Errorf("preparing logs and starting session at position %d: %w", lm.currentSCN, err)
@@ -250,7 +250,7 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 	if err := lm.queryLogMinerContents(ctx, conn, lm.currentSCN, endSCN, lm.processRedoEvent); err != nil {
 		var oraErr *goora.OracleError
 		if errors.As(err, &oraErr) && oraErr.ErrCode == errCodeRedoLogHeaderMismatch {
-			lm.log.Warnf("ORA-01368: redo log sequence recycled mid-query (SCN range %d–%d); retrying — archived log will be used on next cycle", lm.currentSCN, endSCN)
+			lm.log.Debugf("ORA-01368: redo log sequence recycled mid-query (SCN range %d–%d); retrying — archived log will be used on next cycle", lm.currentSCN, endSCN)
 			return false, nil
 		}
 		return false, fmt.Errorf("querying logminer contents between %d and %d: %w", lm.currentSCN, endSCN, err)
