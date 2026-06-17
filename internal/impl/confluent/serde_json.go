@@ -47,21 +47,30 @@ func resolveJSONSchema(ctx context.Context, client *sr.Client, schema franz_sr.S
 }
 
 func (s *schemaRegistryEncoder) getJSONEncoder(ctx context.Context, schema franz_sr.Schema) (schemaEncoder, error) {
-	return getJSONTranscoder(ctx, s.client, schema)
+	// Encoding never coerces: the message is validated and passed through as-is.
+	return getJSONTranscoder(ctx, s.client, schema, false)
 }
 
 func (s *schemaRegistryDecoder) getJSONDecoder(ctx context.Context, schema franz_sr.Schema) (schemaDecoder, error) {
-	return getJSONTranscoder(ctx, s.client, schema)
+	return getJSONTranscoder(ctx, s.client, schema, s.cfg.json.coerceData)
 }
 
-func getJSONTranscoder(ctx context.Context, cl *sr.Client, schema franz_sr.Schema) (func(m *service.Message) error, error) {
+func getJSONTranscoder(ctx context.Context, cl *sr.Client, schema franz_sr.Schema, coerce bool) (func(m *service.Message) error, error) {
 	sch, err := resolveJSONSchema(ctx, cl, schema)
 	if err != nil {
 		return nil, err
 	}
 
-	// -- we only need to verify if the message is valid since the input format which benthos uses (json) is the same
-	// -- as the output format
+	// When coercion is disabled we only need to verify that the message is
+	// valid, since the input format benthos uses (json) is the same as the
+	// output format and the message is left unchanged.
+	var coercer *jsonSchemaCoercer
+	if coerce {
+		if coercer, err = buildJSONSchemaCoercer(ctx, cl, schema); err != nil {
+			return nil, err
+		}
+	}
+
 	return func(m *service.Message) error {
 		b, err := m.AsBytes()
 		if err != nil {
@@ -76,6 +85,18 @@ func getJSONTranscoder(ctx context.Context, cl *sr.Client, schema franz_sr.Schem
 
 		if !res.Valid() {
 			return fmt.Errorf("json message does not conform to schema: %v", res.Errors())
+		}
+
+		// When enabled, rebuild the message using Go types that match the
+		// declared schema (e.g. integer -> int64) so downstream components
+		// infer the correct types. This makes decoding a transforming rather
+		// than validate-only operation.
+		if coercer != nil {
+			out, err := coercer.coerceMessage(b)
+			if err != nil {
+				return fmt.Errorf("coercing message to schema: %w", err)
+			}
+			m.SetStructuredMut(out)
 		}
 
 		return nil
