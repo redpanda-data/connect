@@ -58,6 +58,7 @@ const (
 	metricSnapshotBufferOverflow  = "dynamodb_cdc_snapshot_buffer_overflow"
 	metricCheckpointFailures      = "dynamodb_cdc_checkpoint_failures"
 	metricSnapshotSegmentDuration = "dynamodb_cdc_snapshot_segment_duration"
+	metricFailoverSkipped         = "dynamodb_cdc_failover_skipped"
 
 	// Config field names.
 	dciFieldTables                 = "tables"
@@ -65,6 +66,8 @@ const (
 	dciFieldTableTagFilter         = "table_tag_filter"
 	dciFieldTableDiscoveryInterval = "table_discovery_interval"
 	dciFieldCheckpointTable        = "checkpoint_table"
+	dciFieldGlobalTable            = "global_table"
+	dciFieldGlobalTableReplicas    = "global_table_replicas"
 	dciFieldBatchSize              = "batch_size"
 	dciFieldPollInterval           = "poll_interval"
 	dciFieldStartFrom              = "start_from"
@@ -157,6 +160,7 @@ This input adds the following metadata fields to each message:
 
 - `+"`dynamodb_shard_id`"+` - The shard ID from which the record was read (empty for snapshot records)
 - `+"`dynamodb_sequence_number`"+` - The sequence number of the record in the stream (empty for snapshot records)
+- `+"`dynamodb_approximate_creation_time`"+` - RFC3339 approximate creation time of the stream record (empty for snapshot records)
 - `+"`dynamodb_event_name`"+` - The type of change: INSERT, MODIFY, REMOVE, or READ (for snapshot records)
 - `+"`dynamodb_table`"+` - The name of the DynamoDB table
 
@@ -172,6 +176,13 @@ This input emits the following metrics:
 - `+"`dynamodb_cdc_snapshot_buffer_overflow`"+` - Incremented when the deduplication buffer exceeds its size limit, disabling dedup (counter)
 - `+"`dynamodb_cdc_snapshot_segment_duration`"+` - Time taken by each snapshot scan segment to complete (timer)
 - `+"`dynamodb_cdc_checkpoint_failures`"+` - Number of failed checkpoint writes to the checkpoint table (counter)
+- `+"`dynamodb_cdc_failover_skipped`"+` - Records skipped during global-table failover replay because they predate the resumed cutoff (counter)
+
+### Global Table Checkpoints (multi-region failover)
+
+In active/active or active/passive multi-region deployments, set `+"`global_table: true`"+` and list the other regions in `+"`global_table_replicas`"+` so the auto-created checkpoint table is provisioned as a DynamoDB Global Table (v2). Checkpoints then replicate across regions: a failed-over pipeline resumes near the last committed position instead of replaying the whole stream. Because each region's stream has its own sequence numbers, cross-region resume is time-based (at-least-once, replaying from the trim horizon up to the last replicated record time); same-region restarts still resume exactly. This only affects table creation — it is a no-op if the checkpoint table already exists.
+
+When `+"`global_table`"+` is enabled the principal additionally needs `+"`dynamodb:CreateTable`"+`, `+"`dynamodb:UpdateTable`"+`, `+"`dynamodb:DescribeTable`"+`, `+"`dynamodb:DescribeLimits`"+`, `+"`iam:CreateServiceLinkedRole`"+`, and create/describe permissions in each replica region.
 `).
 		Fields(
 			service.NewStringListField(dciFieldTables).
@@ -192,6 +203,14 @@ This input emits the following metrics:
 			service.NewStringField(dciFieldCheckpointTable).
 				Description("DynamoDB table name for storing checkpoints. Will be created if it doesn't exist.").
 				Default("redpanda_dynamodb_checkpoints"),
+			service.NewBoolField(dciFieldGlobalTable).
+				Description("When the checkpoint table is auto-created, provision it as a DynamoDB Global Table (v2) so checkpoints replicate across regions. Requires `global_table_replicas`. No effect if the checkpoint table already exists.").
+				Default(false).
+				Advanced(),
+			service.NewStringListField(dciFieldGlobalTableReplicas).
+				Description("Regions other than this pipeline's own region to replicate the checkpoint table to. The pipeline's own region is always included. Required when `global_table` is true. Only used when the checkpoint table is created.").
+				Default([]any{}).
+				Advanced(),
 			service.NewIntField(dciFieldBatchSize).
 				Description("Maximum number of records to read per shard in a single request. Valid range: 1-1000.").
 				Default(defaultDynamoDBBatchSize).
@@ -344,6 +363,8 @@ type dynamoDBCDCConfig struct {
 	parsedTagFilter        map[string][]string // Parsed filter for efficient matching
 	tableDiscoveryInterval time.Duration
 	checkpointTable        string
+	globalTable            bool
+	globalTableReplicas    []string
 	batchSize              int
 	pollInterval           time.Duration
 	startFrom              string
@@ -407,6 +428,7 @@ type dynamoDBCDCMetrics struct {
 	snapshotBufferOverflow  *service.MetricCounter // Counts buffer overflow events
 	snapshotSegmentDuration *service.MetricTimer   // Tracks segment scan duration
 	checkpointFailures      *service.MetricCounter // Counts checkpoint write failures
+	failoverSkipped         *service.MetricCounter // Counts records skipped during global-table failover replay
 }
 
 type dynamoDBShardReader struct {
@@ -418,6 +440,7 @@ type dynamoDBShardReader struct {
 	// where reading left off if the current iterator expires (see
 	// refreshExpiredIterator).
 	lastSequenceNumber string
+	failoverCutoff     time.Time // global-table failover: skip records at/under this time
 }
 
 // snapshotState encapsulates all state related to snapshot scanning.
@@ -641,6 +664,10 @@ func validateDynamoDBCDCConfig(conf dynamoDBCDCConfig) error {
 		return errors.New("tables list cannot be empty when table_discovery_mode is 'single' or 'includelist'")
 	}
 
+	if conf.globalTable && len(conf.globalTableReplicas) == 0 {
+		return errors.New("global_table requires at least one replica region in global_table_replicas")
+	}
+
 	// Validate snapshot configuration
 	if conf.snapshot.segments < 1 || conf.snapshot.segments > 10 {
 		return errors.New("snapshot_segments must be between 1 and 10")
@@ -686,6 +713,12 @@ func dynamoCDCInputConfigFromParsed(pConf *service.ParsedConfig) (conf dynamoDBC
 		return
 	}
 	if conf.checkpointTable, err = pConf.FieldString(dciFieldCheckpointTable); err != nil {
+		return
+	}
+	if conf.globalTable, err = pConf.FieldBool(dciFieldGlobalTable); err != nil {
+		return
+	}
+	if conf.globalTableReplicas, err = pConf.FieldStringList(dciFieldGlobalTableReplicas); err != nil {
 		return
 	}
 	if conf.batchSize, err = pConf.FieldInt(dciFieldBatchSize); err != nil {
@@ -742,6 +775,9 @@ func newDynamoDBCDCInputFromConfig(pConf *service.ParsedConfig, mgr *service.Res
 	if err != nil {
 		return nil, err
 	}
+	if conf.globalTable && awsConf.Region == "" {
+		return nil, errors.New("global_table requires an AWS region to be configured (set `region` or the AWS_REGION environment)")
+	}
 
 	input := &dynamoDBCDCInput{
 		conf:         conf,
@@ -759,6 +795,7 @@ func newDynamoDBCDCInputFromConfig(pConf *service.ParsedConfig, mgr *service.Res
 			snapshotBufferOverflow:  mgr.Metrics().NewCounter(metricSnapshotBufferOverflow),
 			snapshotSegmentDuration: mgr.Metrics().NewTimer(metricSnapshotSegmentDuration),
 			checkpointFailures:      mgr.Metrics().NewCounter(metricCheckpointFailures),
+			failoverSkipped:         mgr.Metrics().NewCounter(metricFailoverSkipped),
 		},
 	}
 
@@ -948,7 +985,15 @@ func (d *dynamoDBCDCInput) connectSingleTable(ctx context.Context, tableName str
 	d.keySchema = descTable.Table.KeySchema
 
 	// Initialize checkpointer
-	d.checkpointer, err = NewCheckpointer(ctx, d.dynamoClient, d.conf.checkpointTable, *d.streamArn, d.conf.checkpointLimit, d.log)
+	d.checkpointer, err = NewCheckpointer(ctx, d.dynamoClient, CheckpointerConfig{
+		TableName:       d.conf.checkpointTable,
+		SourceTable:     tableName,
+		StreamArn:       *d.streamArn,
+		CheckpointLimit: d.conf.checkpointLimit,
+		GlobalTable:     d.conf.globalTable,
+		Region:          d.awsConf.Region,
+		ReplicaRegions:  d.conf.globalTableReplicas,
+	}, d.log)
 	if err != nil {
 		return fmt.Errorf("creating checkpointer: %w", err)
 	}
@@ -1052,7 +1097,15 @@ func (d *dynamoDBCDCInput) initializeTableStream(ctx context.Context, tableName 
 	streamArn := *descTable.Table.LatestStreamArn
 
 	// Initialize checkpointer for this table
-	checkpointer, err := NewCheckpointer(ctx, d.dynamoClient, d.conf.checkpointTable, streamArn, d.conf.checkpointLimit, d.log)
+	checkpointer, err := NewCheckpointer(ctx, d.dynamoClient, CheckpointerConfig{
+		TableName:       d.conf.checkpointTable,
+		SourceTable:     tableName,
+		StreamArn:       streamArn,
+		CheckpointLimit: d.conf.checkpointLimit,
+		GlobalTable:     d.conf.globalTable,
+		Region:          d.awsConf.Region,
+		ReplicaRegions:  d.conf.globalTableReplicas,
+	}, d.log)
 	if err != nil {
 		return false, fmt.Errorf("creating checkpointer for table %s: %w", tableName, err)
 	}
@@ -1415,6 +1468,7 @@ func (d *dynamoDBCDCInput) refreshShards(ctx context.Context) error {
 	type shardToAdd struct {
 		shardID  string
 		iterator *string
+		cutoff   time.Time
 	}
 	var newShards []shardToAdd
 
@@ -1430,22 +1484,29 @@ func (d *dynamoDBCDCInput) refreshShards(ctx context.Context) error {
 			continue
 		}
 
-		// Check checkpoint (I/O operation - do not hold lock)
-		checkpoint, err := d.checkpointer.Get(ctx, shardID)
+		// Decide how to resume this shard (global-table aware).
+		decision, err := d.checkpointer.ResolveResume(ctx, shardID)
 		if err != nil {
-			return fmt.Errorf("getting checkpoint for shard %s: %w", shardID, err)
+			return fmt.Errorf("resolving resume for shard %s: %w", shardID, err)
 		}
 
 		var (
 			iteratorType   types.ShardIteratorType
 			sequenceNumber *string
+			cutoff         time.Time
 		)
 
-		if checkpoint != "" {
+		switch decision.Mode {
+		case resumeExact:
 			iteratorType = types.ShardIteratorTypeAfterSequenceNumber
-			sequenceNumber = &checkpoint
-			d.log.Infof("Resuming shard %s from checkpoint: %s", shardID, checkpoint)
-		} else {
+			seq := decision.SequenceNumber
+			sequenceNumber = &seq
+			d.log.Infof("Resuming shard %s from checkpoint: %s", shardID, seq)
+		case resumeFailover:
+			iteratorType = types.ShardIteratorTypeTrimHorizon
+			cutoff = decision.Cutoff
+			d.log.Infof("Failover resume for shard %s from trim horizon, skipping records at/before %s", shardID, cutoff.Format(time.RFC3339))
+		default:
 			if d.conf.startFrom == "latest" {
 				iteratorType = types.ShardIteratorTypeLatest
 			} else {
@@ -1468,6 +1529,7 @@ func (d *dynamoDBCDCInput) refreshShards(ctx context.Context) error {
 		newShards = append(newShards, shardToAdd{
 			shardID:  shardID,
 			iterator: iter.ShardIterator,
+			cutoff:   cutoff,
 		})
 	}
 
@@ -1478,9 +1540,10 @@ func (d *dynamoDBCDCInput) refreshShards(ctx context.Context) error {
 			// Double-check shard wasn't added by another goroutine
 			if _, exists := d.shardReaders[s.shardID]; !exists {
 				d.shardReaders[s.shardID] = &dynamoDBShardReader{
-					shardID:   s.shardID,
-					iterator:  s.iterator,
-					exhausted: false,
+					shardID:        s.shardID,
+					iterator:       s.iterator,
+					exhausted:      false,
+					failoverCutoff: s.cutoff,
 				}
 			}
 		}
@@ -1707,6 +1770,7 @@ func (d *dynamoDBCDCInput) refreshTableShards(ctx context.Context, tableName str
 	type shardToAdd struct {
 		shardID  string
 		iterator *string
+		cutoff   time.Time
 	}
 	var newShards []shardToAdd
 
@@ -1721,22 +1785,29 @@ func (d *dynamoDBCDCInput) refreshTableShards(ctx context.Context, tableName str
 			continue
 		}
 
-		// Check checkpoint
-		checkpoint, err := ts.checkpointer.Get(ctx, shardID)
+		// Decide how to resume this shard (global-table aware).
+		decision, err := ts.checkpointer.ResolveResume(ctx, shardID)
 		if err != nil {
-			return fmt.Errorf("getting checkpoint for shard %s: %w", shardID, err)
+			return fmt.Errorf("resolving resume for shard %s: %w", shardID, err)
 		}
 
 		var (
 			iteratorType   types.ShardIteratorType
 			sequenceNumber *string
+			cutoff         time.Time
 		)
 
-		if checkpoint != "" {
+		switch decision.Mode {
+		case resumeExact:
 			iteratorType = types.ShardIteratorTypeAfterSequenceNumber
-			sequenceNumber = &checkpoint
-			d.log.Infof("Resuming shard %s (table %s) from checkpoint: %s", shardID, tableName, checkpoint)
-		} else {
+			seq := decision.SequenceNumber
+			sequenceNumber = &seq
+			d.log.Infof("Resuming shard %s (table %s) from checkpoint: %s", shardID, tableName, seq)
+		case resumeFailover:
+			iteratorType = types.ShardIteratorTypeTrimHorizon
+			cutoff = decision.Cutoff
+			d.log.Infof("Failover resume for shard %s (table %s) from trim horizon, skipping records at/before %s", shardID, tableName, cutoff.Format(time.RFC3339))
+		default:
 			if d.conf.startFrom == "latest" {
 				iteratorType = types.ShardIteratorTypeLatest
 			} else {
@@ -1759,6 +1830,7 @@ func (d *dynamoDBCDCInput) refreshTableShards(ctx context.Context, tableName str
 		newShards = append(newShards, shardToAdd{
 			shardID:  shardID,
 			iterator: iter.ShardIterator,
+			cutoff:   cutoff,
 		})
 	}
 
@@ -1768,9 +1840,10 @@ func (d *dynamoDBCDCInput) refreshTableShards(ctx context.Context, tableName str
 		for _, s := range newShards {
 			if _, exists := ts.shardReaders[s.shardID]; !exists {
 				ts.shardReaders[s.shardID] = &dynamoDBShardReader{
-					shardID:   s.shardID,
-					iterator:  s.iterator,
-					exhausted: false,
+					shardID:        s.shardID,
+					iterator:       s.iterator,
+					exhausted:      false,
+					failoverCutoff: s.cutoff,
 				}
 			}
 		}
@@ -1867,6 +1940,26 @@ func (d *dynamoDBCDCInput) refreshExpiredIterator(ctx context.Context, cp *Check
 		return nil, fmt.Errorf("getting refreshed iterator for shard %s: %w", shardID, err)
 	}
 	return iter.ShardIterator, nil
+}
+
+// getShardCutoff returns the global-table failover cutoff for a shard (zero if
+// none); records at or before it are skipped during failover replay.
+func (ts *tableStream) getShardCutoff(shardID string) time.Time {
+	ts.mu.RLock()
+	defer ts.mu.RUnlock()
+	if reader, ok := ts.shardReaders[shardID]; ok {
+		return reader.failoverCutoff
+	}
+	return time.Time{}
+}
+
+func (d *dynamoDBCDCInput) getShardCutoff(shardID string) time.Time {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	if reader, ok := d.shardReaders[shardID]; ok {
+		return reader.failoverCutoff
+	}
+	return time.Time{}
 }
 
 // startTableShardReader reads from a single shard for a specific table
@@ -2031,7 +2124,7 @@ func (d *dynamoDBCDCInput) startTableShardReader(ctx context.Context, tableName 
 		if ts.snapshot != nil {
 			dedupeBuffer = ts.snapshot.seqBuffer
 		}
-		batch := convertTableRecordsToBatch(getRecords.Records, tableName, shardID, dedupeBuffer)
+		batch := convertTableRecordsToBatch(getRecords.Records, tableName, shardID, dedupeBuffer, ts.getShardCutoff(shardID), d.metrics.failoverSkipped)
 		if len(batch) == 0 {
 			continue
 		}
@@ -2084,10 +2177,20 @@ func (d *dynamoDBCDCInput) startTableShardReader(ctx context.Context, tableName 
 }
 
 // convertTableRecordsToBatch converts DynamoDB Stream records to Benthos messages for a specific table
-func convertTableRecordsToBatch(records []types.Record, tableName, shardID string, dedupeBuffer *snapshotSequenceBuffer) service.MessageBatch {
+func convertTableRecordsToBatch(records []types.Record, tableName, shardID string, dedupeBuffer *snapshotSequenceBuffer, failoverCutoff time.Time, failoverSkipped *service.MetricCounter) service.MessageBatch {
 	batch := make(service.MessageBatch, 0, len(records))
 
 	for _, record := range records {
+		// Global-table failover: skip records already processed in the prior region.
+		if !failoverCutoff.IsZero() && record.Dynamodb != nil && record.Dynamodb.ApproximateCreationDateTime != nil {
+			if !record.Dynamodb.ApproximateCreationDateTime.After(failoverCutoff) {
+				if failoverSkipped != nil {
+					failoverSkipped.Incr(1)
+				}
+				continue
+			}
+		}
+
 		// CDC deduplication: skip records already seen in snapshot
 		if dedupeBuffer != nil && record.Dynamodb != nil && record.Dynamodb.ApproximateCreationDateTime != nil {
 			cdcTimestamp := record.Dynamodb.ApproximateCreationDateTime.Format(time.RFC3339Nano)
@@ -2138,6 +2241,9 @@ func convertTableRecordsToBatch(records []types.Record, tableName, shardID strin
 		// Set metadata
 		msg.MetaSetMut("dynamodb_shard_id", shardID)
 		msg.MetaSetMut("dynamodb_sequence_number", sequenceNumber)
+		if record.Dynamodb != nil && record.Dynamodb.ApproximateCreationDateTime != nil {
+			msg.MetaSetMut("dynamodb_approximate_creation_time", record.Dynamodb.ApproximateCreationDateTime.Format(time.RFC3339Nano))
+		}
 		msg.MetaSetMut("dynamodb_event_name", string(record.EventName))
 		msg.MetaSetMut("dynamodb_table", tableName)
 
@@ -2421,7 +2527,7 @@ func (d *dynamoDBCDCInput) startShardReader(ctx context.Context, shardID string)
 		}
 
 		// Convert records to messages
-		batch := d.convertRecordsToBatch(getRecords.Records, shardID)
+		batch := d.convertRecordsToBatch(getRecords.Records, shardID, d.getShardCutoff(shardID))
 		if len(batch) == 0 {
 			continue
 		}
@@ -2670,7 +2776,7 @@ func writeStreamAttributeValueString(sb *strings.Builder, attr types.AttributeVa
 }
 
 // convertRecordsToBatch converts DynamoDB Stream records to Benthos messages
-func (d *dynamoDBCDCInput) convertRecordsToBatch(records []types.Record, shardID string) service.MessageBatch {
+func (d *dynamoDBCDCInput) convertRecordsToBatch(records []types.Record, shardID string, failoverCutoff time.Time) service.MessageBatch {
 	batch := make(service.MessageBatch, 0, len(records))
 
 	tableName := d.resolvedTable
@@ -2682,6 +2788,16 @@ func (d *dynamoDBCDCInput) convertRecordsToBatch(records []types.Record, shardID
 	}
 
 	for _, record := range records {
+		// Global-table failover: skip records already processed in the prior region.
+		if !failoverCutoff.IsZero() && record.Dynamodb != nil && record.Dynamodb.ApproximateCreationDateTime != nil {
+			if !record.Dynamodb.ApproximateCreationDateTime.After(failoverCutoff) {
+				if d.metrics.failoverSkipped != nil {
+					d.metrics.failoverSkipped.Incr(1)
+				}
+				continue
+			}
+		}
+
 		// CDC deduplication: skip records already seen in snapshot
 		if dedupeBuffer != nil && record.Dynamodb != nil && record.Dynamodb.ApproximateCreationDateTime != nil {
 			cdcTimestamp := record.Dynamodb.ApproximateCreationDateTime.Format(time.RFC3339Nano)
@@ -2732,6 +2848,9 @@ func (d *dynamoDBCDCInput) convertRecordsToBatch(records []types.Record, shardID
 		// Set metadata
 		msg.MetaSetMut("dynamodb_shard_id", shardID)
 		msg.MetaSetMut("dynamodb_sequence_number", sequenceNumber)
+		if record.Dynamodb != nil && record.Dynamodb.ApproximateCreationDateTime != nil {
+			msg.MetaSetMut("dynamodb_approximate_creation_time", record.Dynamodb.ApproximateCreationDateTime.Format(time.RFC3339Nano))
+		}
 		msg.MetaSetMut("dynamodb_event_name", string(record.EventName))
 		msg.MetaSetMut("dynamodb_table", tableName)
 

@@ -12,13 +12,65 @@ import (
 	"context"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	streamstypes "github.com/aws/aws-sdk-go-v2/service/dynamodbstreams/types"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
+
+func TestConvertTableRecordsToBatch_FailoverSkipsOldRecords(t *testing.T) {
+	cutoff := time.Date(2026, 6, 16, 10, 0, 0, 0, time.UTC)
+	older := cutoff.Add(-time.Minute)
+	newer := cutoff.Add(time.Minute)
+	records := []streamstypes.Record{
+		{Dynamodb: &streamstypes.StreamRecord{ApproximateCreationDateTime: &older, SequenceNumber: aws.String("1")}},
+		{Dynamodb: &streamstypes.StreamRecord{ApproximateCreationDateTime: &newer, SequenceNumber: aws.String("2")}},
+	}
+	skipped := service.MockResources().Metrics().NewCounter("test_skipped")
+	batch := convertTableRecordsToBatch(records, "t", "shard-1", nil, cutoff, skipped)
+	require.Len(t, batch, 1)
+	seq, _ := batch[0].MetaGet("dynamodb_sequence_number")
+	require.Equal(t, "2", seq)
+}
+
+func TestGlobalTableConfigParsing(t *testing.T) {
+	spec := dynamoDBCDCInputConfig()
+	env := service.NewEnvironment()
+
+	conf := `
+tables: [mytable]
+checkpoint_table: cps
+global_table: true
+global_table_replicas: [us-west-2, us-east-1]
+region: us-east-1
+`
+	parsed, err := spec.ParseYAML(conf, env)
+	require.NoError(t, err)
+
+	cfg, err := dynamoCDCInputConfigFromParsed(parsed)
+	require.NoError(t, err)
+	require.True(t, cfg.globalTable)
+	require.Equal(t, []string{"us-west-2", "us-east-1"}, cfg.globalTableReplicas)
+}
+
+func TestGlobalTableValidation_EmptyReplicas(t *testing.T) {
+	conf := dynamoDBCDCConfig{
+		tables:              []string{"t"},
+		checkpointTable:     "cps",
+		globalTable:         true,
+		globalTableReplicas: nil,
+		startFrom:           "trim_horizon",
+		batchSize:           100,
+		snapshot:            snapshotConfig{mode: snapshotModeNone, segments: 1, batchSize: 100},
+	}
+	err := validateDynamoDBCDCConfig(conf)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "global_table requires at least one replica region")
+}
 
 func TestConvertAttributeValue(t *testing.T) {
 	tests := []struct {

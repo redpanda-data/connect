@@ -17,6 +17,7 @@ All notable changes to this project will be documented in this file.
 - oracledb_cdc: Oracle CDC connector now publishes an oracledb_cdc_publish_lag_ns metric tracking latency between database commits and event publication. ([@josephwoodward](https://github.com/josephwoodward), [#4520](https://github.com/redpanda-data/connect/pull/4520))
 - oracledb_cdc: Oracle CDC connector now supports a configurable min_scn_window_size parameter to skip mining cycles when the SCN gap is too small. ([@josephwoodward](https://github.com/josephwoodward), [#4530](https://github.com/redpanda-data/connect/pull/4530))
 - aws_bedrock_embeddings: Support Cohere input_type and v4 response. ([@squiidz](https://github.com/squiidz), [#4473](https://github.com/redpanda-data/connect/pull/4473))
+- aws_dynamodb_cdc: The auto-created checkpoint table can now be provisioned as a DynamoDB Global Table via `global_table` / `global_table_replicas`, enabling low-RPO multi-region failover. ([@squiidz](https://github.com/squiidz), [#4529](https://github.com/redpanda-data/connect/pull/4529))
 
 ### Fixed
 

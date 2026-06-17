@@ -60,6 +60,8 @@ input:
     table_tag_filter: ""
     table_discovery_interval: 5m
     checkpoint_table: redpanda_dynamodb_checkpoints
+    global_table: false
+    global_table_replicas: []
     batch_size: 1000
     poll_interval: 1s
     start_from: trim_horizon
@@ -149,6 +151,7 @@ This input adds the following metadata fields to each message:
 
 - `dynamodb_shard_id` - The shard ID from which the record was read (empty for snapshot records)
 - `dynamodb_sequence_number` - The sequence number of the record in the stream (empty for snapshot records)
+- `dynamodb_approximate_creation_time` - RFC3339 approximate creation time of the stream record (empty for snapshot records)
 - `dynamodb_event_name` - The type of change: INSERT, MODIFY, REMOVE, or READ (for snapshot records)
 - `dynamodb_table` - The name of the DynamoDB table
 
@@ -164,6 +167,13 @@ This input emits the following metrics:
 - `dynamodb_cdc_snapshot_buffer_overflow` - Incremented when the deduplication buffer exceeds its size limit, disabling dedup (counter)
 - `dynamodb_cdc_snapshot_segment_duration` - Time taken by each snapshot scan segment to complete (timer)
 - `dynamodb_cdc_checkpoint_failures` - Number of failed checkpoint writes to the checkpoint table (counter)
+- `dynamodb_cdc_failover_skipped` - Records skipped during global-table failover replay because they predate the resumed cutoff (counter)
+
+### Global Table Checkpoints (multi-region failover)
+
+In active/active or active/passive multi-region deployments, set `global_table: true` and list the other regions in `global_table_replicas` so the auto-created checkpoint table is provisioned as a DynamoDB Global Table (v2). Checkpoints then replicate across regions: a failed-over pipeline resumes near the last committed position instead of replaying the whole stream. Because each region's stream has its own sequence numbers, cross-region resume is time-based (at-least-once, replaying from the trim horizon up to the last replicated record time); same-region restarts still resume exactly. This only affects table creation — it is a no-op if the checkpoint table already exists.
+
+When `global_table` is enabled the principal additionally needs `dynamodb:CreateTable`, `dynamodb:UpdateTable`, `dynamodb:DescribeTable`, `dynamodb:DescribeLimits`, `iam:CreateServiceLinkedRole`, and create/describe permissions in each replica region.
 
 
 == Examples
@@ -320,6 +330,24 @@ DynamoDB table name for storing checkpoints. Will be created if it doesn't exist
 *Type*: `string`
 
 *Default*: `"redpanda_dynamodb_checkpoints"`
+
+=== `global_table`
+
+When the checkpoint table is auto-created, provision it as a DynamoDB Global Table (v2) so checkpoints replicate across regions. Requires `global_table_replicas`. No effect if the checkpoint table already exists.
+
+
+*Type*: `bool`
+
+*Default*: `false`
+
+=== `global_table_replicas`
+
+Regions other than this pipeline's own region to replicate the checkpoint table to. The pipeline's own region is always included. Required when `global_table` is true. Only used when the checkpoint table is created.
+
+
+*Type*: `array`
+
+*Default*: `[]`
 
 === `batch_size`
 
