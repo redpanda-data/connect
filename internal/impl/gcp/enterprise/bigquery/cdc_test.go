@@ -190,8 +190,11 @@ func TestCDCInjectorValidateAndResolve(t *testing.T) {
 }
 
 func TestValidateCDCPrimaryKeys(t *testing.T) {
-	t.Run("config only", func(t *testing.T) {
-		require.NoError(t, validateCDCPrimaryKeys([]string{"id"}, nil, "t"))
+	t.Run("config only fails for pre-existing table without PK", func(t *testing.T) {
+		err := validateCDCPrimaryKeys([]string{"id"}, nil, "t")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "no PRIMARY KEY")
+		assert.Contains(t, err.Error(), "ALTER TABLE t ADD PRIMARY KEY (id) NOT ENFORCED")
 	})
 	t.Run("table only", func(t *testing.T) {
 		require.NoError(t, validateCDCPrimaryKeys(nil, []string{"id"}, "t"))
