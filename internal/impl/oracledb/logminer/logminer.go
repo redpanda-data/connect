@@ -954,33 +954,34 @@ func deduplicateLogs(archived, online []*LogFile) []*LogFile {
 	return out
 }
 
-// prepareLogsAndStartSession collects redo/archive logs for the given SCN range,
-// loads them into LogMiner, and starts a new mining session.
-// It is called on every mining cycle with explicit bounds. Passing ENDSCN=0 to
-// START_LOGMNR would freeze the session's view at session-start time, making events
-// written after that point invisible. An explicit endSCN ensures all events in
-// [startSCN, endSCN] are accessible.
+// prepareLogsAndStartSession collects redo/archive logs for the given SCN range and
+// starts (or restarts) a LogMiner session with explicit SCN bounds.
+//
+// Log files are only reloaded via ADD_LOGFILE when the required set changes — i.e.
+// on the first call or when a log switch occurs. Oracle supports recalling
+// START_LOGMNR on an already-active session with new bounds, so the session is kept
+// open across consecutive windows that cover the same log files. Passing ENDSCN=0 to
+// START_LOGMNR would freeze the session's view at session-start time; an explicit
+// endSCN ensures all events in [startSCN, endSCN] are visible.
 func (lm *LogMiner) prepareLogsAndStartSession(ctx context.Context, conn *sql.Conn, startSCN, endSCN uint64) error {
-	// End existing session if active
-	if lm.sessionMgr.IsActive() {
-		if err := lm.sessionMgr.EndSession(ctx, conn); err != nil {
-			lm.log.Errorf("Failed to end existing LogMiner session: %v", err)
-		}
-	}
-
-	// Collect log files that contain changes from current SCN
-	var (
-		logFiles []*LogFile
-		err      error
-	)
-	if logFiles, err = lm.logCollector.GetLogs(ctx, conn, startSCN, endSCN); err != nil {
+	logFiles, err := lm.logCollector.GetLogs(ctx, conn, startSCN, endSCN)
+	if err != nil {
 		return fmt.Errorf("collecting redo logs for logminer: %w", err)
 	}
 	lm.log.Debugf("Collected %d redo log file(s) for LogMiner", len(logFiles))
 
-	if err := lm.sessionMgr.AddLogFile(ctx, conn, logFiles); err != nil {
-		return fmt.Errorf("loading %d log files into logminer: %w", len(logFiles), err)
+	if lm.sessionMgr.logFilesChanged(logFiles) {
+		// Log files have changed (first start or log switch) — full reload required.
+		if lm.sessionMgr.IsActive() {
+			if err := lm.sessionMgr.EndSession(ctx, conn); err != nil {
+				lm.log.Errorf("Failed to end existing LogMiner session: %v", err)
+			}
+		}
+		if err := lm.sessionMgr.AddLogFile(ctx, conn, logFiles); err != nil {
+			return fmt.Errorf("loading %d log files into logminer: %w", len(logFiles), err)
+		}
 	}
+
 	if err := lm.sessionMgr.StartSession(ctx, conn, startSCN, endSCN, false); err != nil {
 		return fmt.Errorf("starting logminer session: %w", err)
 	}
