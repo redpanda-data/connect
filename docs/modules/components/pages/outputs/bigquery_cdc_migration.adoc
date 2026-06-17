@@ -65,6 +65,11 @@ primary_keys: [id]
 Composite primary keys are supported with up to 16 columns. The column order in `primary_keys` is significant for composite keys.
 ====
 
+[WARNING]
+====
+`primary_keys` does not add a `PRIMARY KEY` to a pre-existing table — it only applies when `auto_create_table` creates the table. For an existing table without one, run `ALTER TABLE … ADD PRIMARY KEY (…) NOT ENFORCED` first. When `primary_keys` is set and the table already declares a `PRIMARY KEY`, the two must match exactly (same columns, same order).
+====
+
 == Snapshot vs streaming
 
 BigQuery's CDC contract does not permit mixing INSERT (unspecified `_CHANGE_TYPE`) and UPSERT/DELETE rows in the same write. For initial backfills, recommendations are:

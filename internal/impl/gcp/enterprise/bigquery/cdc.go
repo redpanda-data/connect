@@ -144,13 +144,19 @@ func injectCDCJSON(jsonBytes []byte, changeType, changeSeq string) ([]byte, erro
 // validateCDCPrimaryKeys enforces BigQuery's CDC contract that the destination
 // table must have a PRIMARY KEY. configPKs is the user-declared list (may be
 // nil), tablePKs is what BigQuery reports for the table (may be nil if no
-// constraint is declared). The function fails if neither source has PKs, and
-// fails on mismatch when both are present.
+// constraint is declared). Only the table's declared PKs satisfy the contract:
+// primary_keys is materialized exclusively when auto_create_table creates the
+// table, so a pre-existing table without a PRIMARY KEY fails even when
+// primary_keys is set. When both sources are present they must match.
 func validateCDCPrimaryKeys(configPKs, tablePKs []string, tableID string) error {
-	if len(configPKs) == 0 && len(tablePKs) == 0 {
-		return fmt.Errorf("CDC mode requires a PRIMARY KEY on table %q; declare one via primary_keys config or `ALTER TABLE … ADD PRIMARY KEY`", tableID)
+	if len(tablePKs) == 0 {
+		if len(configPKs) > 0 {
+			return fmt.Errorf("table %q has no PRIMARY KEY; primary_keys cannot add one to an existing table (it only applies when auto_create_table creates the table) — run `ALTER TABLE %s ADD PRIMARY KEY (%s) NOT ENFORCED` first",
+				tableID, tableID, strings.Join(configPKs, ", "))
+		}
+		return fmt.Errorf("CDC mode requires a PRIMARY KEY on table %q; declare one via `ALTER TABLE … ADD PRIMARY KEY`", tableID)
 	}
-	if len(configPKs) > 0 && len(tablePKs) > 0 {
+	if len(configPKs) > 0 {
 		// Order-sensitive: BigQuery PKs are positional (column order matches the
 		// declaration in ALTER TABLE … ADD PRIMARY KEY), so the config list must
 		// match the table list exactly, not just as a set.
