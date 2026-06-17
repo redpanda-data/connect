@@ -177,6 +177,15 @@ root = this.apply("debeziumTimestampToAvroTimestamp")
 					Default(true),
 			).Description("Configuration for how to decode schemas that are of type PROTOBUF."),
 		).
+		Fields(
+			service.NewObjectField(
+				"json",
+				service.NewBoolField("coerce_data").
+					Description("Whether decoded values should be coerced to match the types declared in the JSON Schema. By default JSON Schema decoding only validates the message and leaves it untouched, which means numbers are later interpreted as floating point (`double`) and date-time values as strings. When set to `true` the decoder rebuilds the message so that values match the schema: `integer` fields become 64-bit integers, `number` fields stay floating point, `string` fields with `format: date-time` become timestamps, and any `default` values declared in the schema are applied to absent fields. This is useful for downstream components that infer their schema from the decoded values, such as the `iceberg` outputs, which will then create `bigint` columns for integer fields rather than `double`. Note that, unlike the default behaviour, this is no longer a read-only operation: the message contents are transformed. Because coercion is stricter than validation, a message that passes validation may still fail coercion (for example an integer that overflows a 64-bit value, or a `date-time` string that is not valid RFC 3339), in which case the error can be caught using xref:configuration:error_handling.adoc[error handling methods].").
+					Default(false).
+					Version("4.97.0"),
+			).Description("Configuration for how to decode schemas that are of type JSON."),
+		).
 		Field(
 			service.NewDurationField("cache_duration").
 				Description("The duration after which a schema is considered stale and will be removed from the cache.").
@@ -212,7 +221,10 @@ type decodingConfig struct {
 		mapping                    *bloblang.Executor
 		storeSchemaMeta            string
 	}
-	protobuf        protobufOptions
+	protobuf protobufOptions
+	json     struct {
+		coerceData bool
+	}
 	defaultSchemaID int
 }
 
@@ -290,6 +302,11 @@ func newSchemaRegistryDecoderFromConfig(conf *service.ParsedConfig, mgr *service
 		return nil, err
 	}
 	cfg.protobuf.serializeToJSON, err = conf.FieldBool("protobuf", "serialize_to_json")
+	if err != nil {
+		return nil, err
+	}
+
+	cfg.json.coerceData, err = conf.FieldBool("json", "coerce_data")
 	if err != nil {
 		return nil, err
 	}
