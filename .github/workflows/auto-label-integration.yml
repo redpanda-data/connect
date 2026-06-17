@@ -1,0 +1,21 @@
+name: Auto-label integration tests for contributors
+
+on:
+  pull_request_target:
+    types: [opened]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  auto-label:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Add run-integration-tests label for write-access authors
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PERMISSION=$(gh api "repos/${{ github.repository }}/collaborators/${{ github.event.pull_request.user.login }}/permission" --jq '.permission' 2>/dev/null || echo "none")
+          if [[ "${PERMISSION}" == "admin" || "${PERMISSION}" == "write" ]]; then
+            gh pr edit "${{ github.event.pull_request.number }}" --repo "${{ github.repository }}" --add-label "run-integration-tests"
+          fi
