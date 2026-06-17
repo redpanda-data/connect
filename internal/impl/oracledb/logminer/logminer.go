@@ -206,6 +206,10 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 		return true, nil
 	}
 
+	if deferMiningCycle(lm.currentSCN, dbCurrentSCN, lm.cfg.MinSCNWindowSize) {
+		return true, nil
+	}
+
 	endSCN := dbCurrentSCN
 	if maxRange := uint64(lm.cfg.SCNWindowSize); lm.currentSCN+maxRange < dbCurrentSCN {
 		endSCN = lm.currentSCN + maxRange
@@ -1022,4 +1026,12 @@ func toMessageEvent(dml *sqlredo.DMLEvent, scn uint64, checkpointSCN uint64, com
 	}
 
 	return m
+}
+
+func deferMiningCycle(currentSCN, dbCurrentSCN uint64, minWindowSize int) bool {
+	// check to see if SCN window size is greater than configured value
+	if minWindowSize <= 0 || dbCurrentSCN <= currentSCN {
+		return false
+	}
+	return dbCurrentSCN-currentSCN < uint64(minWindowSize)
 }
