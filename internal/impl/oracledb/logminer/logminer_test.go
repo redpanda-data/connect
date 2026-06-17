@@ -240,7 +240,7 @@ func TestSessionManagerFilesChanged(t *testing.T) {
 		wantChanged bool
 	}{
 		{
-			name:        "no files loaded yet",
+			name:        "no files loaded yet reports changed",
 			loaded:      nil,
 			incoming:    []*LogFile{{FileName: "redo01.log"}},
 			wantChanged: true,
@@ -252,19 +252,19 @@ func TestSessionManagerFilesChanged(t *testing.T) {
 			wantChanged: false,
 		},
 		{
-			name:        "more files incoming than loaded",
+			name:        "more files incoming than loaded reports changed",
 			loaded:      []*LogFile{{FileName: "redo01.log"}},
 			incoming:    []*LogFile{{FileName: "redo01.log"}, {FileName: "redo02.log"}},
 			wantChanged: true,
 		},
 		{
-			name:        "fewer files incoming than loaded",
+			name:        "fewer files incoming than loaded reports changed",
 			loaded:      []*LogFile{{FileName: "redo01.log"}, {FileName: "redo02.log"}},
 			incoming:    []*LogFile{{FileName: "redo01.log"}},
 			wantChanged: true,
 		},
 		{
-			name:        "same count but different filename",
+			name:        "same count but different filename reports changed",
 			loaded:      []*LogFile{{FileName: "redo01.log"}},
 			incoming:    []*LogFile{{FileName: "redo02.log"}},
 			wantChanged: true,
