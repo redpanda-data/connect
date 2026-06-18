@@ -52,6 +52,7 @@ const (
 	ociFieldLogMiner             = "logminer"
 	ociFieldSCNWindowSize        = "scn_window_size"
 	ociFieldMinSCNWindowSize     = "min_scn_window_size"
+	ociFieldMaxSCNWindowSize     = "max_scn_window_size"
 	ociFieldBackoffInterval      = "backoff_interval"
 	ociFieldMiningInterval       = "mining_interval"
 	ociFieldMiningStrategy       = "strategy"
@@ -119,11 +120,14 @@ When using the default Oracle based cache, the Connect user requires permission 
 	// logminer config
 	Field(service.NewObjectField(ociFieldLogMiner,
 		service.NewIntField(ociFieldSCNWindowSize).
-			Description("The SCN range to mine per cycle. Each cycle reads changes between the current SCN and current SCN + scn_window_size. Smaller values mean more frequent queries with lower memory usage but higher overhead; larger values reduce query frequency and improve throughput at the cost of higher memory usage per cycle.").
+			Description(`The SCN range to mine per cycle. Each cycle reads changes between the current SCN and current SCN + `+ociFieldSCNWindowSize+`. Smaller values mean more frequent queries with lower memory usage but higher overhead; larger values reduce query frequency and improve throughput at the cost of higher memory usage per cycle.`).
 			Default(logminer.DefaultSCNWindowSize),
 		service.NewIntField(ociFieldMinSCNWindowSize).
 			Description("The minimum SCN gap required before starting a new LogMiner session. When the gap between the connector's current position and the database's current SCN is smaller than this value, the mining cycle is skipped and the connector backs off instead. This prevents excessive LogMiner start/stop cycles on low-traffic databases where Oracle background activity advances the SCN without producing relevant events. Set to 0 to disable.").
 			Default(logminer.DefaultMinSCNWindowSize),
+		service.NewIntField(ociFieldMaxSCNWindowSize).
+			Description(`The maximum SCN range that can be mined in a single cycle. The window starts at `+ociFieldSCNWindowSize+` and grows by `+ociFieldSCNWindowSize+` each cycle that ends at the cap (backlog present), up to this limit. It shrinks by the same step each cycle that catches up to the database. This allows the connector to automatically mine larger windows during heavy backlog and smaller windows during steady state.`).
+			Default(logminer.DefaultMaxSCNWindowSize),
 		service.NewDurationField(ociFieldBackoffInterval).
 			Description("The interval between attempts to check for new changes once all data is processed. For low traffic tables increasing this value can reduce network traffic to the server.").
 			Default(logminer.DefaultMiningBackoffInterval.String()).
@@ -727,6 +731,12 @@ func parseLogMinerConfig(conf *service.ParsedConfig) (*logminer.Config, error) {
 		}
 		if cfg.MinSCNWindowSize < 0 {
 			return nil, fmt.Errorf("logminer.%s must be 0 or greater, got %d", ociFieldMinSCNWindowSize, cfg.MinSCNWindowSize)
+		}
+		if cfg.MaxSCNWindowSize, err = lmConf.FieldInt(ociFieldMaxSCNWindowSize); err != nil {
+			return nil, err
+		}
+		if cfg.MaxSCNWindowSize < cfg.SCNWindowSize {
+			return nil, fmt.Errorf("logminer.%s (%d) must be greater than or equal to logminer.%s (%d)", ociFieldMaxSCNWindowSize, cfg.MaxSCNWindowSize, ociFieldSCNWindowSize, cfg.SCNWindowSize)
 		}
 		if cfg.MiningBackoffInterval, err = lmConf.FieldDuration(ociFieldBackoffInterval); err != nil {
 			return nil, err

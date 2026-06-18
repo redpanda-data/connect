@@ -232,6 +232,52 @@ func TestProcessRedoEventWithConnectCacheResource(t *testing.T) {
 	})
 }
 
+func TestSessionManagerFilesChanged(t *testing.T) {
+	tests := []struct {
+		name        string
+		loaded      []*LogFile
+		incoming    []*LogFile
+		wantChanged bool
+	}{
+		{
+			name:        "no files loaded yet",
+			loaded:      nil,
+			incoming:    []*LogFile{{FileName: "redo01.log"}},
+			wantChanged: true,
+		},
+		{
+			name:        "same files in same order reports unchanged",
+			loaded:      []*LogFile{{FileName: "redo01.log"}, {FileName: "redo02.log"}},
+			incoming:    []*LogFile{{FileName: "redo01.log"}, {FileName: "redo02.log"}},
+			wantChanged: false,
+		},
+		{
+			name:        "more files incoming than loaded",
+			loaded:      []*LogFile{{FileName: "redo01.log"}},
+			incoming:    []*LogFile{{FileName: "redo01.log"}, {FileName: "redo02.log"}},
+			wantChanged: true,
+		},
+		{
+			name:        "fewer files incoming than loaded",
+			loaded:      []*LogFile{{FileName: "redo01.log"}, {FileName: "redo02.log"}},
+			incoming:    []*LogFile{{FileName: "redo01.log"}},
+			wantChanged: true,
+		},
+		{
+			name:        "same count but different filename",
+			loaded:      []*LogFile{{FileName: "redo01.log"}},
+			incoming:    []*LogFile{{FileName: "redo02.log"}},
+			wantChanged: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sm := &SessionManager{loadedFiles: tt.loaded}
+			assert.Equal(t, tt.wantChanged, sm.logFilesChanged(tt.incoming))
+		})
+	}
+}
+
 func TestShouldDeferMiningCycle(t *testing.T) {
 	tests := []struct {
 		name          string
