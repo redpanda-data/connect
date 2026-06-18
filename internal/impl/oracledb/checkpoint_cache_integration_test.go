@@ -79,6 +79,7 @@ oracledb_cdc:
   snapshot_max_batch_size: 10
   logminer:
     scn_window_size: 20000
+    min_scn_window_size: 0
     backoff_interval: 1s
   include: ["TESTDB.MTFOO"]
   batching:

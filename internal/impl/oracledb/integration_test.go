@@ -69,6 +69,7 @@ oracledb_cdc:
   snapshot_max_batch_size: 10
   logminer:
     scn_window_size: 20000
+    min_scn_window_size: 0
     backoff_interval: 1s
   include: ["TESTDB.MTFOO", "TESTDB2.MTBAR"]
   batching:
@@ -172,6 +173,7 @@ oracledb_cdc:
   snapshot_max_batch_size: 10
   logminer:
     scn_window_size: 20000
+    min_scn_window_size: 0
     backoff_interval: 1s
   include: ["TESTDB.FOO", "TESTDB.FOO2", "TESTDB2.BAR"]
   exclude: ["TESTDB.DOESNOTEXIST"]
@@ -282,6 +284,7 @@ oracledb_cdc:
   max_parallel_snapshot_tables: 3
   logminer:
     scn_window_size: 20000
+    min_scn_window_size: 0
     backoff_interval: 1s
   include: ["TESTDB.FOO", "TESTDB.FOO2", "TESTDB2.BAR"]
   exclude: ["TESTDB.DOESNOTEXIST"]`
@@ -345,6 +348,7 @@ oracledb_cdc:
   stream_snapshot: false
   logminer:
     scn_window_size: 20000
+    min_scn_window_size: 0
     backoff_interval: 1s
   include: ["TESTDB.FOO"]
   batching:
@@ -539,6 +543,7 @@ oracledb_cdc:
   stream_snapshot: false
   logminer:
     scn_window_size: 20000
+    min_scn_window_size: 0
     backoff_interval: 1s
   include: ["TESTDB.FOO", "TESTDB.FOO2", "TESTDB2.BAR"]
   exclude: ["TESTDB.DOESNOTEXIST"]
@@ -646,6 +651,7 @@ oracledb_cdc:
   stream_snapshot: false
   logminer:
     scn_window_size: 20000
+    min_scn_window_size: 0
     backoff_interval: 1s
     transaction_cache: "foocache"
   include: ["TESTDB.FOO", "TESTDB.FOO2", "TESTDB2.BAR"]
@@ -781,6 +787,7 @@ oracledb_cdc:
   stream_snapshot: true
   logminer:
     lob_enabled: false
+    min_scn_window_size: 0
   include: ["TESTDB.LOBDISABLED"]`
 			streamBuilder := service.NewStreamBuilder()
 			require.NoError(t, streamBuilder.AddInputYAML(cfg))
@@ -870,6 +877,7 @@ oracledb_cdc:
   stream_snapshot: true
   logminer:
     lob_enabled: true
+    min_scn_window_size: 0
   include: ["TESTDB.LOBENABLED"]`
 			streamBuilder := service.NewStreamBuilder()
 			require.NoError(t, streamBuilder.AddInputYAML(cfg))
@@ -1070,6 +1078,7 @@ oracledb_cdc:
   logminer:
     lob_enabled: true
     scn_window_size: 20000
+    min_scn_window_size: 0
     backoff_interval: 1s
   include: ["TESTDB.ALL_DATA_TYPES"]`
 
@@ -1270,6 +1279,7 @@ oracledb_cdc:
   snapshot_max_batch_size: 10
   logminer:
     scn_window_size: 20000
+    min_scn_window_size: 0
     backoff_interval: 1s
   include: ["TESTDB.SCHEMA_SNAP"]`
 
@@ -1348,6 +1358,7 @@ oracledb_cdc:
   stream_snapshot: false
   logminer:
     scn_window_size: 20000
+    min_scn_window_size: 0
     backoff_interval: 1s
   include: ["TESTDB.SCHEMA_INS"]`
 
@@ -1408,6 +1419,7 @@ oracledb_cdc:
   stream_snapshot: false
   logminer:
     scn_window_size: 20000
+    min_scn_window_size: 0
     backoff_interval: 1s
   include: ["TESTDB.SCHEMA_UPD"]`
 
@@ -1472,6 +1484,7 @@ oracledb_cdc:
   stream_snapshot: false
   logminer:
     scn_window_size: 20000
+    min_scn_window_size: 0
     backoff_interval: 1s
   include: ["TESTDB.SCHEMA_DEL"]`
 
@@ -1544,6 +1557,7 @@ oracledb_cdc:
   snapshot_max_batch_size: 10
   logminer:
     scn_window_size: 20000
+    min_scn_window_size: 0
     backoff_interval: 1s
   include: ["TESTDB.SCHEMA_PHASES"]`
 
@@ -1618,6 +1632,7 @@ oracledb_cdc:
   stream_snapshot: false
   logminer:
     scn_window_size: 20000
+    min_scn_window_size: 0
     backoff_interval: 1s
   include: ["TESTDB.SCHEMA_DRIFT"]`
 
@@ -1691,6 +1706,7 @@ oracledb_cdc:
   stream_snapshot: false
   logminer:
     scn_window_size: 20000
+    min_scn_window_size: 0
     backoff_interval: 1s
   include: ["TESTDB.SCHEMA_T1", "TESTDB.SCHEMA_T2"]`
 
@@ -1795,6 +1811,7 @@ oracledb_cdc:
   snapshot_max_batch_size: 10
   logminer:
     scn_window_size: 20000
+    min_scn_window_size: 0
     backoff_interval: 1s
   include: ["TESTDB.SCHEMA_TYPES"]`
 
@@ -1948,6 +1965,7 @@ oracledb_cdc:
   logminer:
     lob_enabled: true
     scn_window_size: 20000
+    min_scn_window_size: 0
     backoff_interval: 1s
   include: ["TESTDB.LOBTRIM"]`
 
@@ -2030,6 +2048,7 @@ oracledb_cdc:
   logminer:
     lob_enabled: true
     scn_window_size: 20000
+    min_scn_window_size: 0
     backoff_interval: 1s
   include: ["TESTDB.LOBTRIMBASIC"]`
 
@@ -2109,6 +2128,7 @@ oracledb_cdc:
   logminer:
     lob_enabled: true
     scn_window_size: 20000
+    min_scn_window_size: 0
     backoff_interval: 1s
   include: ["TESTDB.LOBTRIMBASICOOR"]`
 
@@ -2189,6 +2209,7 @@ oracledb_cdc:
   logminer:
     lob_enabled: true
     scn_window_size: 20000
+    min_scn_window_size: 0
     backoff_interval: 1s
   include: ["TESTDB.LOBFILTER_INCLUDED"]`
 

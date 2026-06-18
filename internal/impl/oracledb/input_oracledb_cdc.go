@@ -51,6 +51,7 @@ const (
 	//-- logminer specific
 	ociFieldLogMiner             = "logminer"
 	ociFieldSCNWindowSize        = "scn_window_size"
+	ociFieldMinSCNWindowSize     = "min_scn_window_size"
 	ociFieldBackoffInterval      = "backoff_interval"
 	ociFieldMiningInterval       = "mining_interval"
 	ociFieldMiningStrategy       = "strategy"
@@ -120,6 +121,9 @@ When using the default Oracle based cache, the Connect user requires permission 
 		service.NewIntField(ociFieldSCNWindowSize).
 			Description("The SCN range to mine per cycle. Each cycle reads changes between the current SCN and current SCN + scn_window_size. Smaller values mean more frequent queries with lower memory usage but higher overhead; larger values reduce query frequency and improve throughput at the cost of higher memory usage per cycle.").
 			Default(logminer.DefaultSCNWindowSize),
+		service.NewIntField(ociFieldMinSCNWindowSize).
+			Description("The minimum SCN gap required before starting a new LogMiner session. When the gap between the connector's current position and the database's current SCN is smaller than this value, the mining cycle is skipped and the connector backs off instead. This prevents excessive LogMiner start/stop cycles on low-traffic databases where Oracle background activity advances the SCN without producing relevant events. Set to 0 to disable.").
+			Default(logminer.DefaultMinSCNWindowSize),
 		service.NewDurationField(ociFieldBackoffInterval).
 			Description("The interval between attempts to check for new changes once all data is processed. For low traffic tables increasing this value can reduce network traffic to the server.").
 			Default(logminer.DefaultMiningBackoffInterval.String()).
@@ -717,6 +721,12 @@ func parseLogMinerConfig(conf *service.ParsedConfig) (*logminer.Config, error) {
 		}
 		if cfg.SCNWindowSize <= 0 {
 			return nil, fmt.Errorf("logminer.%s must be greater than 0, got %d", ociFieldSCNWindowSize, cfg.SCNWindowSize)
+		}
+		if cfg.MinSCNWindowSize, err = lmConf.FieldInt(ociFieldMinSCNWindowSize); err != nil {
+			return nil, err
+		}
+		if cfg.MinSCNWindowSize < 0 {
+			return nil, fmt.Errorf("logminer.%s must be 0 or greater, got %d", ociFieldMinSCNWindowSize, cfg.MinSCNWindowSize)
 		}
 		if cfg.MiningBackoffInterval, err = lmConf.FieldDuration(ociFieldBackoffInterval); err != nil {
 			return nil, err
