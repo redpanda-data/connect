@@ -37,16 +37,15 @@ var (
 // LogMiner tracks and streams all change events from the configured change
 // tables tracked in tables.
 type LogMiner struct {
-	cfg           *Config
-	tables        []replication.UserTable
-	publisher     replication.ChangePublisher
-	logCollector  *LogFileCollector
-	currentSCN    uint64
-	windowSize    int
-	sessionMgr    *SessionManager
-	db            *sql.DB
-	SleepDuration time.Duration
-	dmlParser     *sqlredo.Parser
+	cfg          *Config
+	tables       []replication.UserTable
+	publisher    replication.ChangePublisher
+	logCollector *LogFileCollector
+	currentSCN   uint64
+	windowSize   int
+	sessionMgr   *SessionManager
+	db           *sql.DB
+	dmlParser    *sqlredo.Parser
 
 	// Pre-built query string for LogMiner contents
 	logMinerQuery string
