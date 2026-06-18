@@ -42,6 +42,7 @@ type LogMiner struct {
 	publisher     replication.ChangePublisher
 	logCollector  *LogFileCollector
 	currentSCN    uint64
+	windowSize    int
 	sessionMgr    *SessionManager
 	db            *sql.DB
 	SleepDuration time.Duration
@@ -107,20 +108,21 @@ func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replicat
 	`, buf.String())
 
 	lm := &LogMiner{
-		cfg:       cfg,
-		db:        db,
-		tables:    userTables,
-		publisher: publisher,
-		log:       logger,
+		cfg:              cfg,
+		db:               db,
+		tables:           userTables,
+		publisher:        publisher,
+		publishLagMetric: metrics.NewTimer(publishLatencyMetric),
+		log:              logger,
 
 		// logminer specific
-		logMinerQuery:    logMinerQuery,
-		logCollector:     NewLogFileCollector(),
-		sessionMgr:       NewSessionManager(cfg, logger),
-		txnCache:         txnCache,
-		dmlParser:        sqlredo.NewParser(),
-		lobStates:        make(map[sqlredo.TransactionID]*sqlredo.TxnLOBState),
-		publishLagMetric: metrics.NewTimer(publishLatencyMetric),
+		logMinerQuery: logMinerQuery,
+		logCollector:  NewLogFileCollector(),
+		sessionMgr:    NewSessionManager(cfg, logger),
+		txnCache:      txnCache,
+		dmlParser:     sqlredo.NewParser(),
+		lobStates:     make(map[sqlredo.TransactionID]*sqlredo.TxnLOBState),
+		windowSize:    cfg.SCNWindowSize,
 	}
 	if lm.txnCache == nil {
 		lm.txnCache = NewInMemoryCache(cfg.MaxTransactionEvents, metrics, logger)
@@ -211,8 +213,10 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 	}
 
 	endSCN := dbCurrentSCN
-	if maxRange := uint64(lm.cfg.SCNWindowSize); lm.currentSCN+maxRange < dbCurrentSCN {
+	hitCap := false
+	if maxRange := uint64(lm.windowSize); lm.currentSCN+maxRange < dbCurrentSCN {
 		endSCN = lm.currentSCN + maxRange
+		hitCap = true
 	}
 
 	// Restart the session on every cycle with explicit SCN bounds. Oracle's START_LOGMNR
@@ -256,6 +260,7 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 		return false, fmt.Errorf("querying logminer contents between %d and %d: %w", lm.currentSCN, endSCN, err)
 	}
 
+	lm.windowSize = adaptWindowSize(lm.windowSize, hitCap, lm.cfg.MinSCNWindowSize, lm.cfg.MaxSCNWindowSize, lm.cfg.SCNWindowSize)
 	lm.currentSCN = endSCN
 	return endSCN >= dbCurrentSCN, nil
 }
@@ -859,8 +864,8 @@ func NewLogFileCollector() *LogFileCollector {
 	return &LogFileCollector{}
 }
 
-// GetLogs collects log files whose SCN range overlaps [startSCN, endSCN].
-func (*LogFileCollector) GetLogs(ctx context.Context, conn *sql.Conn, startSCN, endSCN uint64) ([]*LogFile, error) {
+// GetLogsBySCNRange collects log files whose SCN range overlaps [startSCN, endSCN].
+func (*LogFileCollector) GetLogsBySCNRange(ctx context.Context, conn *sql.Conn, startSCN, endSCN uint64) ([]*LogFile, error) {
 	query := `
 		SELECT FILE_NAME, FIRST_CHANGE, NEXT_CHANGE, SEQ, TYPE, THREAD
 		FROM (
@@ -955,16 +960,11 @@ func deduplicateLogs(archived, online []*LogFile) []*LogFile {
 }
 
 // prepareLogsAndStartSession collects redo/archive logs for the given SCN range and
-// starts (or restarts) a LogMiner session with explicit SCN bounds.
-//
-// Log files are only reloaded via ADD_LOGFILE when the required set changes — i.e.
-// on the first call or when a log switch occurs. Oracle supports recalling
-// START_LOGMNR on an already-active session with new bounds, so the session is kept
-// open across consecutive windows that cover the same log files. Passing ENDSCN=0 to
-// START_LOGMNR would freeze the session's view at session-start time; an explicit
-// endSCN ensures all events in [startSCN, endSCN] are visible.
+// starts (or restarts) a LogMiner session with explicit SCN bounds. Files are only reloaded
+// (via ADD_LOGFILE) when the required set of logs that contain SCN range changes - so the session is kept
+// open across consecutive windows that cover the same log files.
 func (lm *LogMiner) prepareLogsAndStartSession(ctx context.Context, conn *sql.Conn, startSCN, endSCN uint64) error {
-	logFiles, err := lm.logCollector.GetLogs(ctx, conn, startSCN, endSCN)
+	logFiles, err := lm.logCollector.GetLogsBySCNRange(ctx, conn, startSCN, endSCN)
 	if err != nil {
 		return fmt.Errorf("collecting redo logs for logminer: %w", err)
 	}
@@ -1035,4 +1035,11 @@ func deferMiningCycle(currentSCN, dbCurrentSCN uint64, minWindowSize int) bool {
 		return false
 	}
 	return dbCurrentSCN-currentSCN < uint64(minWindowSize)
+}
+
+func adaptWindowSize(currentSize int, hitCap bool, minSize, maxSize, increment int) int {
+	if hitCap {
+		return min(currentSize+increment, maxSize)
+	}
+	return max(currentSize-increment, minSize)
 }
