@@ -1037,6 +1037,24 @@ func appendRowFailure(be *service.BatchError, batch service.MessageBatch, headli
 	return be.Failed(idx, err)
 }
 
+// mapRowErrorsToBatch attaches BigQuery per-row errors to batchErr. Each
+// RowError's index refers to its position within the rows that were actually
+// sent (good rows only, after validation drops), so it is translated back to
+// the original batch index via rowIndex; both the attached failure and its
+// message reference that original index so they agree with the failed message.
+// Indices outside rowIndex are ignored.
+func mapRowErrorsToBatch(batchErr *service.BatchError, batch service.MessageBatch, rowIndex []int, rowErrs []*storagepb.RowError) *service.BatchError {
+	for _, re := range rowErrs {
+		idx := int(re.GetIndex())
+		if idx >= 0 && idx < len(rowIndex) {
+			origIdx := rowIndex[idx]
+			batchErr = appendRowFailure(batchErr, batch, "row errors from BigQuery", origIdx,
+				fmt.Errorf("row %d: code %d: %s", origIdx, re.GetCode(), re.GetMessage()))
+		}
+	}
+	return batchErr
+}
+
 // writeBatchCDC executes the CDC write path: per row, resolve the Bloblang
 // fields, validate the values, inject _CHANGE_TYPE (and optionally
 // _CHANGE_SEQUENCE_NUMBER) into the JSON payload, marshal to proto via the
@@ -1058,10 +1076,12 @@ func (o *bigQueryWriteAPIOutput) writeBatchCDC(
 		return permanentBatchError(batch, fmt.Errorf("CDC modes require message_format: json (got %q)", o.conf.MessageFormat))
 	}
 
-	var batchErr *service.BatchError
-	rows := make([][]byte, 0, len(batch))
-	rowIndex := make([]int, 0, len(batch))
-	validationFailures := 0
+	var (
+		batchErr           *service.BatchError
+		rows               = make([][]byte, 0, len(batch))
+		rowIndex           = make([]int, 0, len(batch))
+		validationFailures = 0
+	)
 
 	const cdcValidationHeadline = "CDC row validation errors"
 	for i, msg := range batch {
@@ -1146,14 +1166,7 @@ func (o *bigQueryWriteAPIOutput) writeBatchCDC(
 	}
 
 	if rowErrs := resp.GetRowErrors(); len(rowErrs) > 0 {
-		for _, re := range rowErrs {
-			idx := int(re.GetIndex())
-			if idx >= 0 && idx < len(rowIndex) {
-				// re.GetIndex() is the position within the sent rows; report the
-				// original batch index so the message matches the failed message.
-				batchErr = appendRowFailure(batchErr, batch, "row errors from BigQuery", rowIndex[idx], fmt.Errorf("row %d: code %d: %s", rowIndex[idx], re.GetCode(), re.GetMessage()))
-			}
-		}
+		batchErr = mapRowErrorsToBatch(batchErr, batch, rowIndex, rowErrs)
 		o.metrics.rowsFailed.Incr(int64(len(rowErrs)))
 	}
 	if validationFailures > 0 {
