@@ -37,16 +37,15 @@ var (
 // LogMiner tracks and streams all change events from the configured change
 // tables tracked in tables.
 type LogMiner struct {
-	cfg           *Config
-	tables        []replication.UserTable
-	publisher     replication.ChangePublisher
-	logCollector  *LogFileCollector
-	currentSCN    uint64
-	windowSize    int
-	sessionMgr    *SessionManager
-	db            *sql.DB
-	SleepDuration time.Duration
-	dmlParser     *sqlredo.Parser
+	cfg          *Config
+	tables       []replication.UserTable
+	publisher    replication.ChangePublisher
+	logCollector *LogFileCollector
+	currentSCN   uint64
+	windowSize   int
+	sessionMgr   *SessionManager
+	db           *sql.DB
+	dmlParser    *sqlredo.Parser
 
 	// Pre-built query string for LogMiner contents
 	logMinerQuery string
@@ -58,6 +57,8 @@ type LogMiner struct {
 	// lob types are split between redo log lines, we use lobStates to track them
 	// until we have all data to merge into published INSERT or UPDATE event.
 	lobStates map[sqlredo.TransactionID]*sqlredo.TxnLOBState
+	// suppresses repeated "caught up" log lines within a single idle stretch
+	caughtUpLogged bool
 
 	publishLagMetric *service.MetricTimer
 	log              *service.Logger
@@ -175,9 +176,13 @@ func (lm *LogMiner) ReadChanges(ctx context.Context, startPos replication.SCN) (
 			if caughtUp, err := lm.miningCycle(ctx, conn); err != nil {
 				return fmt.Errorf("mining logs: %w", err)
 			} else if caughtUp {
-				lm.log.Debugf("Caught up with redo logs, backing off...")
+				if !lm.caughtUpLogged {
+					lm.log.Debugf("Caught up with redo logs, backing off for %s...", lm.cfg.MiningBackoffInterval)
+					lm.caughtUpLogged = true
+				}
 				time.Sleep(lm.cfg.MiningBackoffInterval)
 			} else {
+				lm.caughtUpLogged = false
 				time.Sleep(lm.cfg.MiningInterval)
 			}
 		}
