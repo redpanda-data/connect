@@ -187,11 +187,12 @@ func (b *RecordBatcher) AckMessages(
 		// Already removed (nacked or double-acked); nothing to do.
 		return nil
 	}
-	b.dropBatchLocked(tb)
 
 	if len(b.shards) > b.maxTrackedShards {
 		return fmt.Errorf("checkpoint map exceeded maximum size (%d shards) - possible memory leak", b.maxTrackedShards)
 	}
+
+	b.dropBatchLocked(tb)
 
 	st := b.shards[tb.shardID]
 	if frontier := tb.resolve(); frontier != nil {
