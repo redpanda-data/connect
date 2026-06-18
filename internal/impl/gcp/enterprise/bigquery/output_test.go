@@ -687,6 +687,87 @@ table: my_table
 	assert.NoError(t, err)
 }
 
+func TestMapRowErrorsToBatch(t *testing.T) {
+	rowErr := func(idx int64, msg string) *storagepb.RowError {
+		return &storagepb.RowError{
+			Index:   idx,
+			Code:    storagepb.RowError_FIELDS_ERROR,
+			Message: msg,
+		}
+	}
+
+	tests := []struct {
+		name      string
+		batchSize int
+		// rowIndex maps sent-row position -> original batch index, as built by
+		// writeBatchCDC after some rows are dropped during validation.
+		rowIndex []int
+		rowErrs  []*storagepb.RowError
+		// wantFailures maps the original batch index that should carry a failure
+		// to a substring its error message must contain.
+		wantFailures map[int]string
+	}{
+		{
+			name:      "sent position maps back to original index",
+			batchSize: 5,
+			// Originals 0 and 2 failed validation, so only 1, 3 and 4 were sent.
+			rowIndex: []int{1, 3, 4},
+			// A BigQuery error at sent position 1 refers to original index 3.
+			rowErrs:      []*storagepb.RowError{rowErr(1, "bad field")},
+			wantFailures: map[int]string{3: "row 3: code 1: bad field"},
+		},
+		{
+			name:         "multiple row errors map independently",
+			batchSize:    4,
+			rowIndex:     []int{0, 2, 3},
+			rowErrs:      []*storagepb.RowError{rowErr(0, "a"), rowErr(2, "b")},
+			wantFailures: map[int]string{0: "row 0: code 1: a", 3: "row 3: code 1: b"},
+		},
+		{
+			name:         "out of range indices are ignored",
+			batchSize:    3,
+			rowIndex:     []int{0, 1},
+			rowErrs:      []*storagepb.RowError{rowErr(5, "too big"), rowErr(-1, "negative")},
+			wantFailures: map[int]string{},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			batch := make(service.MessageBatch, tc.batchSize)
+			for i := range batch {
+				batch[i] = service.NewMessage(fmt.Appendf(nil, "row-%d", i))
+			}
+			// Index before building the error: Index() tags the batch parts in
+			// place, and the error must be built from the tagged parts so the
+			// walk below can resolve each failure back to its original index.
+			index := batch.Index()
+
+			batchErr := mapRowErrorsToBatch(nil, batch, tc.rowIndex, tc.rowErrs)
+
+			if len(tc.wantFailures) == 0 {
+				require.Nil(t, batchErr, "expected no batch error when all indices are out of range")
+				return
+			}
+			require.NotNil(t, batchErr)
+
+			got := map[int]string{}
+			batchErr.WalkMessagesIndexedBy(index, func(i int, _ *service.Message, err error) bool {
+				if err != nil {
+					got[i] = err.Error()
+				}
+				return true
+			})
+
+			require.Len(t, got, len(tc.wantFailures), "unexpected set of failed indices: %v", got)
+			for idx, want := range tc.wantFailures {
+				require.Contains(t, got, idx, "expected a failure pinned to original index %d", idx)
+				assert.Equal(t, want, got[idx], "message should reference the original index, not the sent position")
+			}
+		})
+	}
+}
+
 func TestCloseNilClients(t *testing.T) {
 	// Given an output that has never connected.
 	out := newTestOutput(t, `
