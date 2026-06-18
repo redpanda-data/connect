@@ -80,9 +80,9 @@ func (sc *redoScanner) keyword(kw string) bool {
 // skipTableRef advances past an Oracle qualified table reference: "SCHEMA"."TABLE"
 // or just "TABLE", consuming any following whitespace.
 func (sc *redoScanner) skipTableRef() {
+loop:
 	for !sc.done() {
-		c := sc.s[sc.i]
-		switch c {
+		switch sc.s[sc.i] {
 		case '"':
 			sc.i++
 			for sc.i < len(sc.s) && sc.s[sc.i] != '"' {
@@ -94,7 +94,7 @@ func (sc *redoScanner) skipTableRef() {
 		case '.':
 			sc.i++
 		default:
-			break
+			break loop
 		}
 	}
 	sc.ws()
