@@ -37,15 +37,16 @@ var (
 // LogMiner tracks and streams all change events from the configured change
 // tables tracked in tables.
 type LogMiner struct {
-	cfg          *Config
-	tables       []replication.UserTable
-	publisher    replication.ChangePublisher
-	logCollector *LogFileCollector
-	currentSCN   uint64
-	windowSize   int
-	sessionMgr   *SessionManager
-	db           *sql.DB
-	dmlParser    *sqlredo.Parser
+	cfg           *Config
+	tables        []replication.UserTable
+	publisher     replication.ChangePublisher
+	logCollector  *LogFileCollector
+	currentSCN    uint64
+	windowSize    int
+	sessionMgr    *SessionManager
+	db            *sql.DB
+	SleepDuration time.Duration
+	dmlParser     *sqlredo.Parser
 
 	// Pre-built query string for LogMiner contents
 	logMinerQuery string
@@ -965,14 +966,9 @@ func deduplicateLogs(archived, online []*LogFile) []*LogFile {
 }
 
 // prepareLogsAndStartSession collects redo/archive logs for the given SCN range and
-// starts (or restarts) a LogMiner session with explicit SCN bounds.
-//
-// Log files are only reloaded via ADD_LOGFILE when the required set changes — i.e.
-// on the first call or when a log switch occurs. Oracle supports recalling
-// START_LOGMNR on an already-active session with new bounds, so the session is kept
-// open across consecutive windows that cover the same log files. Passing ENDSCN=0 to
-// START_LOGMNR would freeze the session's view at session-start time; an explicit
-// endSCN ensures all events in [startSCN, endSCN] are visible.
+// starts (or restarts) a LogMiner session with explicit SCN bounds. Files are only reloaded
+// (via ADD_LOGFILE) when the required set of logs that contain SCN range changes - so the session is kept
+// open across consecutive windows that cover the same log files.
 func (lm *LogMiner) prepareLogsAndStartSession(ctx context.Context, conn *sql.Conn, startSCN, endSCN uint64) error {
 	logFiles, err := lm.logCollector.GetLogsBySCNRange(ctx, conn, startSCN, endSCN)
 	if err != nil {
