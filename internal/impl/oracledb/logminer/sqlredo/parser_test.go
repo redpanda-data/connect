@@ -101,6 +101,91 @@ func TestParseTest(t *testing.T) {
 				"SPEC_CKC_ID": nil,
 			},
 		},
+		{
+			name: "UPDATE without WHERE clause",
+			sql:  `update "MYAPP"."TEST" set "COL1" = '1', "COL2" = NULL, "COL3" = 'Hello'`,
+			wantNewValues: map[string]any{
+				"COL1": "1",
+				"COL2": nil,
+				"COL3": "Hello",
+			},
+			wantOldValues: map[string]any{},
+		},
+		{
+			name:          "DELETE without WHERE clause",
+			sql:           `delete from "MYAPP"."TEST"`,
+			wantOldValues: map[string]any{},
+		},
+		// Oracle LogMiner can emit table aliases in SQL_REDO
+		{
+			name: "UPDATE with table alias in SET clause",
+			sql:  `update "MYAPP"."TEST" a set a."COL1" = '1', a."COL2" = NULL, a."COL3" = 'Hello'`,
+			wantNewValues: map[string]any{
+				"COL1": "1",
+				"COL2": nil,
+				"COL3": "Hello",
+			},
+			wantOldValues: map[string]any{},
+		},
+		{
+			name: "DELETE with table alias in WHERE clause",
+			sql:  `delete from "MYAPP"."TEST" a where a."COL1" = '1' and a."COL2" = '2'`,
+			wantOldValues: map[string]any{
+				"COL1": "1",
+				"COL2": "2",
+			},
+		},
+		// IS NULL / IS NOT NULL predicates in WHERE must be excluded from the result map
+		{
+			name: "IS NULL and IS NOT NULL in WHERE clause excluded from result",
+			sql:  `delete from "MYAPP"."TEST" where "C1" = '1' and "C2" IS NULL and "C3" IS NOT NULL`,
+			wantOldValues: map[string]any{
+				"C1": "1",
+			},
+		},
+		// Oracle emits bare "Unsupported Type" for columns it cannot represent
+		{
+			name: "INSERT with Unsupported Type bare value is nil",
+			sql:  `insert into "MYAPP"."TEST"("ID","NAME","UT","C1") values ('1','Acme',Unsupported Type,NULL)`,
+			wantNewValues: map[string]any{
+				"ID":   "1",
+				"NAME": "Acme",
+				"UT":   nil,
+				"C1":   nil,
+			},
+		},
+		// literal || inside a quoted string is not the concatenation operator
+		{
+			name: "literal double-pipe inside string is not concatenation",
+			sql:  `insert into "UNKNOWN"."TABLE" ("COL1","COL2") values ('I||am','test||case')`,
+			wantNewValues: map[string]any{
+				"COL1": "I||am",
+				"COL2": "test||case",
+			},
+		},
+		// identifiers (table and column names) may contain spaces or special characters
+		{
+			name: "table and column names with spaces and special characters",
+			sql:  `insert into "UNKNOWN"."OBJ# 74858"("COL 1","COL 2") values ('1','Hello')`,
+			wantNewValues: map[string]any{
+				"COL 1": "1",
+				"COL 2": "Hello",
+			},
+		},
+		// Complex INSERT combining strings, Oracle functions, Unsupported Type, and NULL
+		{
+			name: "INSERT mixing strings, Oracle functions, Unsupported Type, and NULL",
+			sql:  `insert into "MYAPP"."TEST"("ID","NAME","TS","UT","DATE","C1","C2") values ('1','Acme',TO_TIMESTAMP('2020-02-01 00:00:00.'),Unsupported Type,TO_DATE('2020-02-01 00:00:00', 'YYYY-MM-DD HH24:MI:SS'),NULL,NULL)`,
+			wantNewValues: map[string]any{
+				"ID":   "1",
+				"NAME": "Acme",
+				"TS":   "TO_TIMESTAMP('2020-02-01 00:00:00.')",
+				"UT":   nil,
+				"DATE": "TO_DATE('2020-02-01 00:00:00', 'YYYY-MM-DD HH24:MI:SS')",
+				"C1":   nil,
+				"C2":   nil,
+			},
+		},
 	}
 
 	for _, tt := range tests {

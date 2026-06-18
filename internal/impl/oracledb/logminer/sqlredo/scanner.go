@@ -101,8 +101,15 @@ loop:
 }
 
 // readIdent reads a double-quoted identifier and returns its content without the quotes.
+// It skips an optional alias prefix such as `a.` in `a."COL1"`.
 func (sc *redoScanner) readIdent() (string, error) {
 	sc.ws()
+	// skip optional table-alias prefix (e.g. `a.` in `a."COL1"`)
+	if !sc.done() && sc.s[sc.i] != '"' {
+		for !sc.done() && sc.s[sc.i] != '"' {
+			sc.i++
+		}
+	}
 	if sc.done() || sc.s[sc.i] != '"' {
 		snippet := sc.s[sc.i:]
 		if len(snippet) > 20 {
@@ -246,7 +253,22 @@ func (sc *redoScanner) readBare(converter *OracleValueConverter) (any, error) {
 	}
 
 	raw := strings.TrimSpace(sc.s[start:sc.i])
-	if raw == "NULL" || raw == "Unsupported" || raw == "Unsupported Type" {
+	if raw == "Unsupported" {
+		// "Unsupported Type" is a two-word Oracle LogMiner sentinel; consume the second
+		// word when present so the cursor isn't left mid-value-list.
+		j := sc.i
+		for j < len(sc.s) && isSpaceByte(sc.s[j]) {
+			j++
+		}
+		if strings.HasPrefix(sc.s[j:], "Type") {
+			end := j + len("Type")
+			if end >= len(sc.s) || isSpaceByte(sc.s[end]) || sc.s[end] == ',' || sc.s[end] == ')' {
+				sc.i = end
+			}
+		}
+		return nil, nil
+	}
+	if raw == "NULL" || raw == "Unsupported Type" {
 		return nil, nil
 	}
 	if converter != nil {
@@ -325,7 +347,12 @@ func (sc *redoScanner) doUpdate(converter *OracleValueConverter) (newValues, old
 	sc.skipTableRef()
 	sc.ws()
 	if !sc.keyword("set") {
-		return nil, nil, errors.New("expected SET keyword")
+		// Oracle LogMiner may emit a table alias before SET (e.g. "TABLE" a set a."C1"…)
+		sc.skipBareWord()
+		sc.ws()
+		if !sc.keyword("set") {
+			return nil, nil, errors.New("expected SET keyword")
+		}
 	}
 	sc.ws()
 
@@ -369,7 +396,12 @@ func (sc *redoScanner) doDelete(converter *OracleValueConverter) (newValues, old
 	sc.skipTableRef()
 	sc.ws()
 	if !sc.keyword("where") {
-		return nil, make(map[string]any), nil
+		// Oracle LogMiner may emit a table alias before WHERE (e.g. "TABLE" a where a."C1"…)
+		sc.skipBareWord()
+		sc.ws()
+		if !sc.keyword("where") {
+			return nil, make(map[string]any), nil
+		}
 	}
 	oldValues, err = sc.doWhere(converter)
 	return nil, oldValues, err
@@ -418,6 +450,13 @@ func (sc *redoScanner) doWhere(converter *OracleValueConverter) (map[string]any,
 		_ = sc.keyword("or")
 	}
 	return result, nil
+}
+
+// skipBareWord advances past a single bare identifier (no quotes, no parens).
+func (sc *redoScanner) skipBareWord() {
+	for !sc.done() && !isSpaceByte(sc.s[sc.i]) && sc.s[sc.i] != '(' && sc.s[sc.i] != '"' && sc.s[sc.i] != ';' {
+		sc.i++
+	}
 }
 
 func isSpaceByte(b byte) bool { return b == ' ' || b == '\t' || b == '\n' || b == '\r' }
