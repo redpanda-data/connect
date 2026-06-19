@@ -15,6 +15,12 @@ import (
 var (
 	// DefaultSCNWindowSize sets the window size used between SCNs in LogMiner.
 	DefaultSCNWindowSize = 20000
+	// DefaultMinSCNWindowSize is the minimum SCN gap required before starting a new LogMiner
+	// session.
+	DefaultMinSCNWindowSize = 1000
+	// DefaultMaxSCNWindowSize is the maximum SCN range that can be mined in a single cycle.
+	// The adaptive window grows toward this ceiling during backlog and shrinks during steady state.
+	DefaultMaxSCNWindowSize = 100000
 	// DefaultMiningBackoffInterval controls the mining cycle backoff interval.
 	DefaultMiningBackoffInterval = 5 * time.Second
 	// DefaultMiningInterval controls the interval between mining cycles during normal operation.
@@ -50,6 +56,8 @@ type TransactionCacheConfig struct {
 // Config holds configuration for LogMiner
 type Config struct {
 	SCNWindowSize          int
+	MinSCNWindowSize       int
+	MaxSCNWindowSize       int
 	MiningBackoffInterval  time.Duration
 	MiningInterval         time.Duration
 	MiningStrategy         MiningStrategy
@@ -63,6 +71,8 @@ type Config struct {
 func NewDefaultConfig() *Config {
 	return &Config{
 		SCNWindowSize:         DefaultSCNWindowSize,
+		MinSCNWindowSize:      DefaultMinSCNWindowSize,
+		MaxSCNWindowSize:      DefaultMaxSCNWindowSize,
 		MiningBackoffInterval: DefaultMiningBackoffInterval,
 		MiningInterval:        DefaultMiningInterval,
 		MiningStrategy:        MiningStrategy(DefaultMiningStrategy),

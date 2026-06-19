@@ -232,6 +232,104 @@ func TestProcessRedoEventWithConnectCacheResource(t *testing.T) {
 	})
 }
 
+func TestSessionManagerFilesChanged(t *testing.T) {
+	tests := []struct {
+		name        string
+		loaded      []*LogFile
+		incoming    []*LogFile
+		wantChanged bool
+	}{
+		{
+			name:        "no files loaded yet",
+			loaded:      nil,
+			incoming:    []*LogFile{{FileName: "redo01.log"}},
+			wantChanged: true,
+		},
+		{
+			name:        "same files in same order reports unchanged",
+			loaded:      []*LogFile{{FileName: "redo01.log"}, {FileName: "redo02.log"}},
+			incoming:    []*LogFile{{FileName: "redo01.log"}, {FileName: "redo02.log"}},
+			wantChanged: false,
+		},
+		{
+			name:        "more files incoming than loaded",
+			loaded:      []*LogFile{{FileName: "redo01.log"}},
+			incoming:    []*LogFile{{FileName: "redo01.log"}, {FileName: "redo02.log"}},
+			wantChanged: true,
+		},
+		{
+			name:        "fewer files incoming than loaded",
+			loaded:      []*LogFile{{FileName: "redo01.log"}, {FileName: "redo02.log"}},
+			incoming:    []*LogFile{{FileName: "redo01.log"}},
+			wantChanged: true,
+		},
+		{
+			name:        "same count but different filename",
+			loaded:      []*LogFile{{FileName: "redo01.log"}},
+			incoming:    []*LogFile{{FileName: "redo02.log"}},
+			wantChanged: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sm := &SessionManager{loadedFiles: tt.loaded}
+			assert.Equal(t, tt.wantChanged, sm.logFilesChanged(tt.incoming))
+		})
+	}
+}
+
+func TestShouldDeferMiningCycle(t *testing.T) {
+	tests := []struct {
+		name          string
+		currentSCN    uint64
+		dbSCN         uint64
+		minWindowSize int
+		shouldDefer   bool
+	}{
+		{
+			name:          "gap smaller than min window defers the cycle",
+			currentSCN:    1000,
+			dbSCN:         1005,
+			minWindowSize: 100,
+			shouldDefer:   true,
+		},
+		{
+			name:          "gap equal to min window does not defer",
+			currentSCN:    1000,
+			dbSCN:         1100,
+			minWindowSize: 100,
+			shouldDefer:   false,
+		},
+		{
+			name:          "gap larger than min window does not defer",
+			currentSCN:    1000,
+			dbSCN:         2000,
+			minWindowSize: 100,
+			shouldDefer:   false,
+		},
+		{
+			name:          "min window of zero disables the guard",
+			currentSCN:    1000,
+			dbSCN:         1001,
+			minWindowSize: 0,
+			shouldDefer:   false,
+		},
+		{
+			name:          "scns equal does not defer (existing guard handles this)",
+			currentSCN:    1000,
+			dbSCN:         1000,
+			minWindowSize: 100,
+			shouldDefer:   false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := deferMiningCycle(tt.currentSCN, tt.dbSCN, tt.minWindowSize)
+			assert.Equal(t, tt.shouldDefer, got)
+		})
+	}
+}
+
 func newLogMiner(pub replication.ChangePublisher, cache TransactionCache) *LogMiner {
 	return &LogMiner{
 		publisher: pub,

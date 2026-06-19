@@ -177,7 +177,7 @@ func dorisStreamLoadSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Beta().
 		Categories("Services").
-		Version("4.86.0").
+		Version("4.96.0").
 		Summary("Writes batches of messages into Apache Doris using Stream Load.").
 		Description(dorisStreamLoadDescription()).
 		Field(service.NewStringField(dsFieldURL).

@@ -9,6 +9,31 @@ All notable changes to this project will be documented in this file.
 
 - aws_s3: Added `sqs.idle_poll_period` field to back off SQS polling when the queue is empty. The default `0s` preserves the historical fixed 500ms throttle between empty receives; a larger duration reduces `ReceiveMessage` request volume on idle queues at the cost of first-message latency. ([@peczenyj](https://github.com/peczenyj), [#4479](https://github.com/redpanda-data/connect/pull/4479))
 
+## 4.97.0 - 2026-06-18
+
+### Added
+
+- elasticsearch: Added support for using Elasticsearch API keys for authentication. ([@dbason](https://github.com/dbason), [#4492](https://github.com/redpanda-data/connect/pull/4492))
+- oracledb_cdc: Oracle CDC connector now publishes an oracledb_cdc_publish_lag_ns metric tracking latency between database commits and event publication. ([@josephwoodward](https://github.com/josephwoodward), [#4520](https://github.com/redpanda-data/connect/pull/4520))
+- oracledb_cdc: Oracle CDC connector now supports a configurable min_scn_window_size parameter to skip mining cycles when the SCN gap is too small. ([@josephwoodward](https://github.com/josephwoodward), [#4530](https://github.com/redpanda-data/connect/pull/4530))
+- aws_bedrock_embeddings: Support Cohere input_type and v4 response. ([@squiidz](https://github.com/squiidz), [#4473](https://github.com/redpanda-data/connect/pull/4473))
+
+### Fixed
+
+- bigquery: BigQuery CDC now rejects writes to pre-existing tables that lack a PRIMARY KEY, with a clear error message guiding users to add one. ([@squiidz](https://github.com/squiidz), [#4503](https://github.com/redpanda-data/connect/pull/4503))
+- bigquery: Fix CDC row-error indexing and metric consistency.  ([@squiidz](https://github.com/squiidz), [#4504](https://github.com/redpanda-data/connect/pull/4504))
+- doris: Corrected the Doris Stream Load connector release version from 4.86.0 to 4.96.0. ([@josephwoodward](https://github.com/josephwoodward), [#4523](https://github.com/redpanda-data/connect/pull/4523))
+- oracledb_cdc: Oracle CDC connector now gracefully handles log recycle errors (ORA-01368) by logging a warning and retrying. ([@josephwoodward](https://github.com/josephwoodward), [#4516](https://github.com/redpanda-data/connect/pull/4516))
+- postgresql_cdc: PostgreSQL CDC connector now correctly passes sslmode=require in the DSN instead of having it overwritten by TLS configuration. ([@josephwoodward](https://github.com/josephwoodward), [#4518](https://github.com/redpanda-data/connect/pull/4518))
+- protobuf: Disabled hyperpb profile-guided recompilation in protobuf and schema_registry_decode processors to prevent unbounded heap growth from profile-retention memory leaks. ([@squiidz](https://github.com/squiidz), [#4527](https://github.com/redpanda-data/connect/pull/4527))
+- aws_dynamodb_cdc: Only checkpoint contiguously acked positions. ([@squiidz](https://github.com/squiidz), [#4510](https://github.com/redpanda-data/connect/pull/4510))
+
+### Changed
+
+- oracledb_cdc: Oracle CDC connector now begins at the current SCN upon connector start, with SCN fetching moved into the Connect function. ([@josephwoodward](https://github.com/josephwoodward), [#4509](https://github.com/redpanda-data/connect/pull/4509))
+- oracledb_cdc: Oracle CDC connector implements adaptive SCN windowing and improves LogMiner session reuse. ([@josephwoodward](https://github.com/josephwoodward), [#4531](https://github.com/redpanda-data/connect/pull/4531))
+- oracledb_cdc: Reduce allocations of parsing redo log queries to increase throughput. ([@josephwoodward](https://github.com/josephwoodward), [#4533](https://github.com/redpanda-data/connect/pull/4533))
+
 ## 4.96.2 - 2026-06-16
 
 ### Added
