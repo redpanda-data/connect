@@ -149,6 +149,69 @@ cursor:
 	assert.Contains(t, err.Error(), "worklogs")
 }
 
+func TestInputConfig_TrimsTrailingSlashFromBaseURL(t *testing.T) {
+	yaml := `
+base_url: https://example.atlassian.net/
+auth:
+  email: user@example.com
+  api_token: secret
+cursor:
+  cache: jira_state
+`
+	confSpec := newJiraInputConfigSpec()
+	parsed, err := confSpec.ParseYAML(yaml, nil)
+	require.NoError(t, err)
+
+	cfg, err := parseInputConfig(parsed)
+	require.NoError(t, err)
+	assert.Equal(t, "https://example.atlassian.net", cfg.httpCfg.BaseURL)
+}
+
+func TestAccountLocationFromMyself(t *testing.T) {
+	log := service.MockResources().Logger()
+	ny, err := time.LoadLocation("America/New_York")
+	require.NoError(t, err)
+
+	cases := []struct {
+		name string
+		body string
+		want *time.Location
+	}{
+		{"valid timezone", `{"timeZone":"America/New_York"}`, ny},
+		{"missing field falls back to UTC", `{"accountId":"abc"}`, time.UTC},
+		{"empty timezone falls back to UTC", `{"timeZone":""}`, time.UTC},
+		{"unknown zone falls back to UTC", `{"timeZone":"Mars/Phobos"}`, time.UTC},
+		{"invalid json falls back to UTC", `not json`, time.UTC},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := accountLocationFromMyself([]byte(tc.body), log)
+			assert.Equal(t, tc.want.String(), got.String())
+		})
+	}
+}
+
+func TestBuildJQL_RendersThresholdInAccountTimezone(t *testing.T) {
+	ny, err := time.LoadLocation("America/New_York")
+	require.NoError(t, err)
+
+	r := &reader{cfg: &inputCfg{cursorOverlap: 0}, accountLoc: ny}
+	// 2026-01-15T12:00:00Z is 07:00 on the same day in New York (UTC-5 in winter).
+	r.setCursor(cursor{Updated: time.Date(2026, 1, 15, 12, 0, 0, 0, time.UTC), Version: cursorSchemaVersion})
+
+	jql := r.buildJQL()
+	assert.Contains(t, jql, `updated >= "2026-01-15 07:00"`)
+	assert.NotContains(t, jql, "12:00", "threshold must be rendered in the account timezone, not UTC")
+}
+
+func TestBuildJQL_DefaultsToUTCWhenNoAccountLocation(t *testing.T) {
+	r := &reader{cfg: &inputCfg{cursorOverlap: 0}} // accountLoc nil
+	r.setCursor(cursor{Updated: time.Date(2026, 1, 15, 12, 0, 0, 0, time.UTC), Version: cursorSchemaVersion})
+
+	jql := r.buildJQL()
+	assert.Contains(t, jql, `updated >= "2026-01-15 12:00"`)
+}
+
 func TestCursor_JSONRoundtrip(t *testing.T) {
 	original := cursor{Updated: time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC), Version: 1}
 	b, err := json.Marshal(original)

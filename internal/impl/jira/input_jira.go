@@ -161,6 +161,9 @@ func parseInputConfig(conf *service.ParsedConfig) (*inputCfg, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Every request URL is built as BaseURL + "/rest/api/3/...", so a trailing
+	// slash on base_url would yield a double slash. Trim it defensively.
+	httpCfg.BaseURL = strings.TrimRight(httpCfg.BaseURL, "/")
 
 	email, err := conf.FieldString("auth", "email")
 	if err != nil {
@@ -273,6 +276,17 @@ type reader struct {
 	cur       cursor
 	connected atomic.Bool
 	page      *pageState
+	// accountLoc is the timezone of the authenticated Jira account, read from
+	// /myself in Connect. JQL evaluates date literals in this timezone, so the
+	// cursor predicate is rendered in it (not UTC). Defaults to UTC if the
+	// account timezone is absent or unknown to the runtime. Set once in Connect
+	// before any Read, so it needs no synchronisation.
+	accountLoc *time.Location
+	// lastRawIssueCount is the number of issues in the most recent raw page
+	// response (before dedup). Distinguishes a genuinely empty server page from
+	// a full page whose issues were all deduped, so Read only backs off on the
+	// former. Read-goroutine only.
+	lastRawIssueCount int
 
 	// runMu serialises onPageDrained and protects nextToken / runMaxUpdated.
 	// Both the Read goroutine (via waitForPageAcks) and the Close goroutine
@@ -480,14 +494,18 @@ func (r *reader) Connect(ctx context.Context) error {
 	}
 	r.client = client
 
-	// Validate auth via /myself.
+	// Validate auth via /myself, and capture the account timezone: JQL date
+	// literals are evaluated in the requesting account's timezone, so the
+	// cursor predicate must be rendered in it rather than UTC.
 	myselfURL, err := url.Parse(r.cfg.httpCfg.BaseURL + "/rest/api/3/myself")
 	if err != nil {
 		return fmt.Errorf("invalid base_url: %w", err)
 	}
-	if _, err := r.callAPI(ctx, myselfURL); err != nil {
+	myselfBody, err := r.callAPI(ctx, myselfURL)
+	if err != nil {
 		return fmt.Errorf("authenticating with jira: %w", err)
 	}
+	r.accountLoc = accountLocationFromMyself(myselfBody, r.log)
 
 	// Load cursor from cache.
 	c, err := r.readCursor(ctx)
@@ -587,9 +605,18 @@ func (r *reader) Read(ctx context.Context) (*service.Message, service.AckFunc, e
 
 		if r.page.isEmpty() {
 			if r.hasNextToken() {
-				// Empty page mid-run (every issue deduped, or Jira returned
-				// an empty page with a continuation token): keep chaining
-				// the token without sleeping the full poll interval.
+				// Empty page mid-run with a continuation token. A full page
+				// whose issues were all deduped is genuine progress, so chain
+				// the token immediately. But a server returning an empty raw
+				// page alongside a token would otherwise be polled in a tight
+				// request loop, so back off briefly in that case.
+				if r.lastRawIssueCount == 0 {
+					select {
+					case <-time.After(emptyPagePollBackoff):
+					case <-ctx.Done():
+						return nil, nil, ctx.Err()
+					}
+				}
 				continue
 			}
 			// Caught up; sleep before polling again. Do not return
@@ -731,6 +758,7 @@ func (r *reader) fetchNextPage(ctx context.Context) error {
 		}
 	}
 
+	r.lastRawIssueCount = len(page.Issues)
 	r.page.load(msgs, maxUpdated, pageSeen)
 	r.runMu.Lock()
 	r.nextToken = page.NextPageToken
@@ -889,6 +917,28 @@ func (r *reader) hasNextToken() bool {
 	return r.nextToken != ""
 }
 
+// accountLocationFromMyself extracts the account timezone from a /myself
+// response so the JQL cursor predicate can be rendered in it. Jira evaluates
+// JQL date literals in the requesting account's timezone and has no syntax to
+// attach an offset to a literal, so rendering in UTC would shift the effective
+// threshold by the account's offset. Falls back to UTC (with a warning) when
+// the field is absent or the zone is unknown to the runtime.
+func accountLocationFromMyself(body []byte, log *service.Logger) *time.Location {
+	var myself struct {
+		TimeZone string `json:"timeZone"`
+	}
+	if err := json.Unmarshal(body, &myself); err != nil || myself.TimeZone == "" {
+		log.Warn("could not determine Jira account timezone from /myself; rendering JQL cursor in UTC, which may cause a data-loss window if the account is not configured to UTC")
+		return time.UTC
+	}
+	loc, err := time.LoadLocation(myself.TimeZone)
+	if err != nil {
+		log.Warnf("Jira account timezone %q is not known to this runtime; rendering JQL cursor in UTC, which may cause a data-loss window: %v", myself.TimeZone, err)
+		return time.UTC
+	}
+	return loc
+}
+
 func (r *reader) buildJQL() string {
 	parts := []string{}
 	if r.cfg.jql != "" {
@@ -896,8 +946,12 @@ func (r *reader) buildJQL() string {
 	}
 	cur := r.currentCursor()
 	if !cur.Updated.IsZero() {
+		loc := r.accountLoc
+		if loc == nil {
+			loc = time.UTC
+		}
 		threshold := cur.Updated.Add(-r.cfg.cursorOverlap)
-		parts = append(parts, fmt.Sprintf(`updated >= "%s"`, threshold.UTC().Format("2006-01-02 15:04")))
+		parts = append(parts, fmt.Sprintf(`updated >= "%s"`, threshold.In(loc).Format("2006-01-02 15:04")))
 	}
 	jql := strings.Join(parts, " AND ")
 	if jql != "" {
@@ -918,6 +972,11 @@ func appendUnique(s []string, v string) []string {
 // messages once the stream finishes tearing down, so blocking on the full
 // shutdown ctx would just stall — the overlap window covers the replay.
 const closeAckDrainTimeout = 500 * time.Millisecond
+
+// emptyPagePollBackoff bounds how fast Read re-requests when the server returns
+// an empty page that still carries a continuation token, preventing a tight
+// request loop. Issue-bearing pages (even fully deduped) are not subject to it.
+const emptyPagePollBackoff = time.Second
 
 // Close drains any in-flight page acks so the cursor can advance for the last
 // page before tearing down, then resets the connected flag so a future Connect
