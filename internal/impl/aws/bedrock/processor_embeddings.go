@@ -18,6 +18,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"strings"
 	"unicode/utf8"
 
 	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime"
@@ -31,8 +33,9 @@ import (
 )
 
 const (
-	bedepFieldModel = "model"
-	bedepFieldText  = "text"
+	bedepFieldModel     = "model"
+	bedepFieldText      = "text"
+	bedepFieldInputType = "input_type"
 )
 
 func init() {
@@ -48,10 +51,18 @@ For more information, see the https://docs.aws.amazon.com/bedrock/latest/usergui
 		Version("4.37.0").
 		Fields(config.SessionFields()...).
 		Field(service.NewStringField(bedepFieldModel).
-			Examples("amazon.titan-embed-text-v1", "amazon.titan-embed-text-v2:0", "cohere.embed-english-v3", "cohere.embed-multilingual-v3").
+			Examples("amazon.titan-embed-text-v1", "amazon.titan-embed-text-v2:0", "cohere.embed-english-v3", "cohere.embed-multilingual-v3", "cohere.embed-v4:0").
 			Description("The model ID to use. For a full list see the https://docs.aws.amazon.com/bedrock/latest/userguide/model-ids.html[AWS Bedrock documentation^].")).
 		Field(service.NewStringField(bedepFieldText).
 			Description("The prompt you want to generate a response for. By default, the processor submits the entire payload as a string.").
+			Optional()).
+		Field(service.NewStringAnnotatedEnumField(bedepFieldInputType, map[string]string{
+			"search_document": "Used for embeddings stored in a vector database for search use-cases.",
+			"search_query":    "Used for embeddings of search queries run against a vector DB to find relevant documents.",
+			"classification":  "Used for embeddings passed through a text classifier.",
+			"clustering":      "Used for the embeddings run through a clustering algorithm.",
+		}).
+			Description("Specifies the type of input passed to the model. Required by Cohere embedding models; ignored by Amazon Titan models.").
 			Optional()).
 		Example(
 			"Store embedding vectors in Clickhouse",
@@ -101,6 +112,17 @@ func newBedrockEmbeddingsProcessor(conf *service.ParsedConfig, _ *service.Resour
 			return nil, err
 		}
 	}
+	if conf.Contains(bedepFieldInputType) {
+		p.inputType, err = conf.FieldString(bedepFieldInputType)
+		if err != nil {
+			return nil, err
+		}
+	}
+	// Bedrock rejects Cohere embed requests without an input_type, so fail at
+	// config parse rather than per message at runtime.
+	if isCohereModel(model) && p.inputType == "" {
+		return nil, fmt.Errorf("%s is required when %s targets a Cohere embedding model", bedepFieldInputType, bedepFieldModel)
+	}
 	return p, nil
 }
 
@@ -108,16 +130,88 @@ type bedrockEmbeddingsProcessor struct {
 	client *bedrockruntime.Client
 	model  string
 
-	text *service.InterpolatedString
+	text      *service.InterpolatedString
+	inputType string
 }
 
-type embeddingsRequest struct {
-	InputText string `json:"inputText"`
+// isCohereModel reports whether the model ID targets a Cohere embedding model
+// on Bedrock. The check uses a substring match so it covers both bare model
+// IDs (e.g. cohere.embed-english-v3) and regional inference profiles
+// (e.g. us.cohere.embed-v4:0).
+func isCohereModel(model string) bool {
+	return strings.Contains(model, "cohere")
 }
 
-type embeddingsResponse struct {
-	Embedding           []float64 `json:"embedding"`
-	InputTextTokenCount int       `json:"inputTextTokenCount"`
+func buildEmbeddingsRequest(model, text, inputType string) ([]byte, error) {
+	if isCohereModel(model) {
+		req := map[string]any{
+			"texts":           []string{text},
+			"embedding_types": []string{"float"},
+		}
+		if inputType != "" {
+			req["input_type"] = inputType
+		}
+		return json.Marshal(req)
+	}
+	return json.Marshal(map[string]any{"inputText": text})
+}
+
+func parseEmbeddingsResponse(model string, body []byte) ([]float64, error) {
+	if isCohereModel(model) {
+		return parseCohereEmbeddingsResponse(body)
+	}
+	var resp struct {
+		Embedding []float64 `json:"embedding"`
+	}
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return nil, err
+	}
+	if resp.Embedding == nil {
+		return nil, errors.New("response did not contain any embeddings")
+	}
+	return resp.Embedding, nil
+}
+
+// parseCohereEmbeddingsResponse handles both the legacy Cohere v3 schema
+// where `embeddings` is an array of vectors, and the Cohere v4 schema
+// where `embeddings` is an object keyed by embedding type
+// (e.g. {"float": [[...]]}).
+func parseCohereEmbeddingsResponse(body []byte) ([]float64, error) {
+	var raw struct {
+		Embeddings json.RawMessage `json:"embeddings"`
+	}
+	if err := json.Unmarshal(body, &raw); err != nil {
+		return nil, err
+	}
+	if len(raw.Embeddings) == 0 {
+		return nil, errors.New("response did not contain any embeddings")
+	}
+
+	var vectors [][]float64
+	switch raw.Embeddings[0] {
+	case '[':
+		if err := json.Unmarshal(raw.Embeddings, &vectors); err != nil {
+			return nil, fmt.Errorf("parsing cohere embeddings array: %w", err)
+		}
+	case '{':
+		var typed struct {
+			Float [][]float64 `json:"float"`
+		}
+		if err := json.Unmarshal(raw.Embeddings, &typed); err != nil {
+			return nil, fmt.Errorf("parsing cohere embeddings object: %w", err)
+		}
+		vectors = typed.Float
+	default:
+		return nil, fmt.Errorf("unexpected cohere embeddings shape: %s", string(raw.Embeddings))
+	}
+
+	if len(vectors) == 0 {
+		return nil, errors.New("response did not contain any embeddings")
+	}
+	if len(vectors) > 1 {
+		return nil, fmt.Errorf("expected a single embeddings response, got: %d", len(vectors))
+	}
+	return vectors[0], nil
 }
 
 func (b *bedrockEmbeddingsProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
@@ -125,8 +219,7 @@ func (b *bedrockEmbeddingsProcessor) Process(ctx context.Context, msg *service.M
 	if err != nil {
 		return nil, err
 	}
-	payload := embeddingsRequest{prompt}
-	payloadBytes, err := json.Marshal(payload)
+	payloadBytes, err := buildEmbeddingsRequest(b.model, prompt, b.inputType)
 	if err != nil {
 		return nil, err
 	}
@@ -138,15 +231,12 @@ func (b *bedrockEmbeddingsProcessor) Process(ctx context.Context, msg *service.M
 	if err != nil {
 		return nil, err
 	}
-	var resp embeddingsResponse
-	if err = json.Unmarshal(output.Body, &resp); err != nil {
+	embedding, err := parseEmbeddingsResponse(b.model, output.Body)
+	if err != nil {
 		return nil, err
 	}
-	if resp.Embedding == nil {
-		return nil, errors.New("response did not contain any embeddings")
-	}
-	vec := make([]any, len(resp.Embedding))
-	for i, e := range resp.Embedding {
+	vec := make([]any, len(embedding))
+	for i, e := range embedding {
 		vec[i] = e
 	}
 	out := msg.Copy()
