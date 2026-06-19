@@ -151,6 +151,14 @@ func (b *batchPublisher) Publish(ctx context.Context, m *replication.MessageEven
 		if m.Operation != replication.MessageOperationRead && typeInfo != nil {
 			if dataMap, ok := m.Data.(map[string]any); ok {
 				coerceStreamingValues(dataMap, typeInfo, b.log)
+				// Oracle LogMiner omits NULL-valued columns from SQL_REDO, so
+				// restore them explicitly to keep streaming records consistent
+				// with snapshot records (which always include every column).
+				for colName := range typeInfo.colTypes {
+					if _, exists := dataMap[colName]; !exists {
+						dataMap[colName] = nil
+					}
+				}
 			}
 		}
 	}

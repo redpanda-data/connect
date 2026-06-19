@@ -47,6 +47,8 @@ input:
     snapshot_max_batch_size: 1000
     logminer:
       scn_window_size: 20000
+      min_scn_window_size: 1000
+      max_scn_window_size: 100000
       backoff_interval: 5s
       mining_interval: 300ms
       strategy: online_catalog
@@ -87,6 +89,8 @@ input:
     snapshot_max_batch_size: 1000
     logminer:
       scn_window_size: 20000
+      min_scn_window_size: 1000
+      max_scn_window_size: 100000
       backoff_interval: 5s
       mining_interval: 300ms
       strategy: online_catalog
@@ -228,6 +232,24 @@ The SCN range to mine per cycle. Each cycle reads changes between the current SC
 *Type*: `int`
 
 *Default*: `20000`
+
+=== `logminer.min_scn_window_size`
+
+The minimum SCN gap required before starting a new LogMiner session. When the gap between the connector's current position and the database's current SCN is smaller than this value, the mining cycle is skipped and the connector backs off instead. This prevents excessive LogMiner start/stop cycles on low-traffic databases where Oracle background activity advances the SCN without producing relevant events. Set to 0 to disable.
+
+
+*Type*: `int`
+
+*Default*: `1000`
+
+=== `logminer.max_scn_window_size`
+
+The maximum SCN range that can be mined in a single cycle. The window starts at scn_window_size and grows by scn_window_size each cycle that ends at the cap (backlog present), up to this limit. It shrinks by the same step each cycle that catches up to the database. This allows the connector to automatically mine larger windows during heavy backlog and smaller windows during steady state.
+
+
+*Type*: `int`
+
+*Default*: `100000`
 
 === `logminer.backoff_interval`
 
