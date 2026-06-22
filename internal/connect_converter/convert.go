@@ -8,7 +8,11 @@
 
 package connectconverter
 
-import "gopkg.in/yaml.v3"
+import (
+	"strings"
+
+	"gopkg.in/yaml.v3"
+)
 
 // Convert turns a Kafka Connect connector config (REST-wrapped or flat JSON)
 // into an equivalent Redpanda Connect pipeline YAML.
@@ -65,5 +69,48 @@ func mapConverters(ctx *MapCtx) []*yaml.Node {
 	return nodes
 }
 
-// mapSMTs maps transforms.* to processors in order. Filled in Task 12.
-func mapSMTs(ctx *MapCtx) []*yaml.Node { return nil }
+// mapSMTs parses the transforms list in declared order and maps each SMT to
+// processor nodes.
+func mapSMTs(ctx *MapCtx) []*yaml.Node {
+	list, ok := ctx.String("transforms")
+	if !ok || strings.TrimSpace(list) == "" {
+		return nil
+	}
+	ctx.consume("transforms")
+
+	var out []*yaml.Node
+	for _, alias := range strings.Split(list, ",") {
+		alias = strings.TrimSpace(alias)
+		if alias == "" {
+			continue
+		}
+		prefix := "transforms." + alias + "."
+		typ, _ := ctx.String(prefix + "type")
+
+		// Collect this SMT's sub-properties, stripping the prefix.
+		props := map[string]any{}
+		for k, v := range ctx.cfg.Props {
+			if strings.HasPrefix(k, prefix) && k != prefix+"type" {
+				ctx.consume(k)
+				props[strings.TrimPrefix(k, prefix)] = v
+			}
+		}
+
+		smt := SMTConfig{Alias: alias, Type: typ, Props: props}
+		m, found := lookupSMT(typ)
+		if !found {
+			ctx.Warn(prefix+"type", "unsupported SMT "+typ)
+			s := scalar("root = this")
+			s.LineComment = "TODO: unsupported SMT " + typ + " — map manually"
+			out = append(out, component("mapping", s))
+			continue
+		}
+		nodes, err := m.Map(smt, ctx)
+		if err != nil {
+			ctx.Warn(prefix, err.Error())
+			continue
+		}
+		out = append(out, nodes...)
+	}
+	return out
+}
