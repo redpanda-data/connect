@@ -68,6 +68,30 @@ var AWSOptFn = notImportedAWSOptFn
 // TokenBuilder can be used for fetching passwords at runtime during connection (ie. IAM auth tokens)
 type TokenBuilder func(context.Context) error
 
+// parseMySQLConfig parses a MySQL DSN and applies the driver-level options
+// this connector always requires.
+func parseMySQLConfig(dsn string) (*mysql.Config, error) {
+	cfg, err := mysql.ParseDSN(dsn)
+	if err != nil {
+		return nil, fmt.Errorf("error parsing mysql DSN: %v", err)
+	}
+	// We require this configuration option is enabled.
+	cfg.ParseTime = true
+	return cfg, nil
+}
+
+// applyIAMDriverDefaults adjusts the parsed mysql.Config to match what AWS
+// RDS IAM authentication needs from the Go MySQL driver. The IAM token is
+// presented to MySQL as the user's password; the driver refuses to transmit
+// it unless `AllowCleartextPasswords` is set. TLS on the DSN is what protects
+// the token in transit.
+func applyIAMDriverDefaults(cfg *mysql.Config, iamEnabled bool) {
+	if !iamEnabled {
+		return
+	}
+	cfg.AllowCleartextPasswords = true
+}
+
 var mysqlStreamConfigSpec = service.NewConfigSpec().
 	Stable().
 	Categories("Services").
@@ -91,8 +115,9 @@ This input adds the following metadata fields to each message:
 			Description("The type of MySQL database to connect to.").
 			Default(gomysql.MySQLFlavor),
 		service.NewStringField(fieldMySQLDSN).
-			Description("The DSN of the MySQL database to connect to.").
-			Example("user:password@tcp(localhost:3306)/database"),
+			Description("The DSN of the MySQL database to connect to. When `"+fieldAWSIAMAuth+".enabled` is `true`, the Go MySQL driver's `allowCleartextPasswords=1` flag is set automatically so the IAM auth token can be transmitted; pair it with TLS (`tls=true` plus the RDS CA bundle, or `tls=skip-verify` for non-production) to protect the token on the wire.").
+			Example("user:password@tcp(localhost:3306)/database").
+			Example("user@tcp(mydb.abc123.us-east-1.rds.amazonaws.com:3306)/database?tls=true"),
 		service.NewStringListField(fieldMySQLTables).
 			Description("A list of tables to stream from the database.").
 			Example([]string{"table1", "table2"}).
@@ -130,7 +155,8 @@ This input adds the following metadata fields to each message:
 				Description("The AWS region where the MySQL instance is located. If no region is specified then the environment default will be used.").
 				Optional(),
 			service.NewStringField("endpoint").
-				Description("The MySQL endpoint hostname (e.g., mydb.abc123.us-east-1.rds.amazonaws.com)."),
+				Description("The MySQL endpoint as `host:port` (for example `mydb.abc123.us-east-1.rds.amazonaws.com:3306`). The AWS IAM token signer requires the port; if it is omitted the port from the DSN is used, falling back to `3306`. When this field is empty the address from the DSN is used.").
+				Default(""),
 			service.NewStringField("id").
 				Description("The ID of credentials to use.").
 				Optional().Advanced(),
@@ -240,12 +266,10 @@ func newMySQLStreamInput(conf *service.ParsedConfig, res *service.Resources) (s 
 	if err := gomysql.ValidateFlavor(i.flavor); err != nil {
 		return nil, err
 	}
-	i.mysqlConfig, err = mysql.ParseDSN(i.dsn)
+	i.mysqlConfig, err = parseMySQLConfig(i.dsn)
 	if err != nil {
-		return nil, fmt.Errorf("error parsing mysql DSN: %v", err)
+		return nil, err
 	}
-	// We require this configuration option is enabled.
-	i.mysqlConfig.ParseTime = true
 
 	// Configure TLS if specified
 	if i.customTLSConfig, err = conf.FieldTLS("tls"); err != nil {
@@ -269,6 +293,8 @@ func newMySQLStreamInput(conf *service.ParsedConfig, res *service.Resources) (s 
 	// Configure AWS IAM authentication if enabled
 	awsConf := conf.Namespace(fieldAWSIAMAuth)
 	i.iamAuthEnabled, _ = awsConf.FieldBool(FieldAWSIAMAuthEnabled)
+
+	applyIAMDriverDefaults(i.mysqlConfig, i.iamAuthEnabled)
 
 	if i.iamAuthTokenBuilder, err = AWSOptFn(context.Background(), awsConf, i.mysqlConfig, res.Logger()); err != nil {
 		return nil, err
