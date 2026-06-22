@@ -14,7 +14,7 @@ func init() {
 
 type gcsSinkConnector struct{}
 
-func (gcsSinkConnector) Map(cfg ConnectConfig, ctx *MapCtx) (Component, error) {
+func (gcsSinkConnector) Map(_ ConnectConfig, ctx *MapCtx) (Component, error) {
 	body := mapping()
 
 	if v, ok := ctx.String("gcs.bucket.name"); ok {

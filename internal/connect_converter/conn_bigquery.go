@@ -14,7 +14,7 @@ func init() {
 
 type bigQuerySinkConnector struct{}
 
-func (bigQuerySinkConnector) Map(cfg ConnectConfig, ctx *MapCtx) (Component, error) {
+func (bigQuerySinkConnector) Map(_ ConnectConfig, ctx *MapCtx) (Component, error) {
 	body := mapping()
 
 	if v, ok := ctx.String("project"); ok {

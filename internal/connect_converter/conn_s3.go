@@ -14,7 +14,7 @@ func init() {
 
 type s3SinkConnector struct{}
 
-func (s3SinkConnector) Map(cfg ConnectConfig, ctx *MapCtx) (Component, error) {
+func (s3SinkConnector) Map(_ ConnectConfig, ctx *MapCtx) (Component, error) {
 	body := mapping()
 
 	if v, ok := ctx.String("s3.bucket.name"); ok {

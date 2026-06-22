@@ -62,7 +62,7 @@ func driverAndDSN(ctx *MapCtx, body *yaml.Node) {
 
 type jdbcSourceConnector struct{}
 
-func (jdbcSourceConnector) Map(cfg ConnectConfig, ctx *MapCtx) (Component, error) {
+func (jdbcSourceConnector) Map(_ ConnectConfig, ctx *MapCtx) (Component, error) {
 	body := mapping()
 	driverAndDSN(ctx, body)
 
@@ -84,7 +84,7 @@ func (jdbcSourceConnector) Map(cfg ConnectConfig, ctx *MapCtx) (Component, error
 
 type jdbcSinkConnector struct{}
 
-func (jdbcSinkConnector) Map(cfg ConnectConfig, ctx *MapCtx) (Component, error) {
+func (jdbcSinkConnector) Map(_ ConnectConfig, ctx *MapCtx) (Component, error) {
 	body := mapping()
 	driverAndDSN(ctx, body)
 

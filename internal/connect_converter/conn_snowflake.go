@@ -14,7 +14,7 @@ func init() {
 
 type snowflakeSinkConnector struct{}
 
-func (snowflakeSinkConnector) Map(cfg ConnectConfig, ctx *MapCtx) (Component, error) {
+func (snowflakeSinkConnector) Map(_ ConnectConfig, ctx *MapCtx) (Component, error) {
 	body := mapping()
 
 	// mapRequired emits the value when the KC key is present; otherwise it

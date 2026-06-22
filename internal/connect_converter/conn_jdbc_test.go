@@ -18,7 +18,7 @@ import (
 func TestJDBCDriver(t *testing.T) {
 	assert.Equal(t, "postgres", jdbcDriver("jdbc:postgresql://h:5432/db"))
 	assert.Equal(t, "mysql", jdbcDriver("jdbc:mysql://h:3306/db"))
-	assert.Equal(t, "", jdbcDriver("weird"))
+	assert.Empty(t, jdbcDriver("weird"))
 	assert.Equal(t, "mssql", jdbcDriver("jdbc:sqlserver://h:1433;databaseName=db"))
 	assert.Equal(t, "clickhouse", jdbcDriver("jdbc:clickhouse://h:8123/db"))
 	assert.Equal(t, "postgresql://h:5432/db", dsnFromURL("jdbc:postgresql://h:5432/db"))

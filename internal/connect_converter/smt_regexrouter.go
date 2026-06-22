@@ -20,7 +20,7 @@ func init() {
 
 type regexRouterSMT struct{}
 
-func (regexRouterSMT) Map(smt SMTConfig, ctx *MapCtx) ([]*yaml.Node, error) {
+func (regexRouterSMT) Map(smt SMTConfig, _ *MapCtx) ([]*yaml.Node, error) {
 	regex, _ := smt.Props["regex"].(string)
 	replacement, _ := smt.Props["replacement"].(string)
 	// Kafka Connect uses $1 backrefs; Go's re_replace_all uses $1 too. The

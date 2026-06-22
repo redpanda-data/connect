@@ -40,6 +40,7 @@ type Component struct {
 // ConverterRole distinguishes key vs value converters.
 type ConverterRole int
 
+// Converter roles distinguish key vs value converters.
 const (
 	KeyConverter ConverterRole = iota
 	ValueConverter

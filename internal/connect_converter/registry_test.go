@@ -42,6 +42,6 @@ func TestRegisterAndLookupConnector(t *testing.T) {
 
 type stubConnector struct{}
 
-func (stubConnector) Map(cfg ConnectConfig, ctx *MapCtx) (Component, error) {
+func (stubConnector) Map(_ ConnectConfig, _ *MapCtx) (Component, error) {
 	return Component{Output: component("drop", mapping())}, nil
 }

@@ -79,7 +79,7 @@ func mapSMTs(ctx *MapCtx) []*yaml.Node {
 	ctx.consume("transforms")
 
 	var out []*yaml.Node
-	for _, alias := range strings.Split(list, ",") {
+	for alias := range strings.SplitSeq(list, ",") {
 		alias = strings.TrimSpace(alias)
 		if alias == "" {
 			continue

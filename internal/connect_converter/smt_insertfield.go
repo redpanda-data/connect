@@ -21,7 +21,7 @@ func init() {
 
 type insertFieldSMT struct{}
 
-func (insertFieldSMT) Map(smt SMTConfig, ctx *MapCtx) ([]*yaml.Node, error) {
+func (insertFieldSMT) Map(smt SMTConfig, _ *MapCtx) ([]*yaml.Node, error) {
 	field, _ := smt.Props["static.field"].(string)
 	value, _ := smt.Props["static.value"].(string)
 	var expr *yaml.Node

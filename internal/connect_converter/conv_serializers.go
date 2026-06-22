@@ -36,6 +36,6 @@ func (schemaRegistryConverter) Map(role ConverterRole, ctx *MapCtx) ([]*yaml.Nod
 // noopConverter emits no processor (data is already structured/text).
 type noopConverter struct{}
 
-func (noopConverter) Map(role ConverterRole, ctx *MapCtx) ([]*yaml.Node, error) {
+func (noopConverter) Map(_ ConverterRole, _ *MapCtx) ([]*yaml.Node, error) {
 	return nil, nil
 }

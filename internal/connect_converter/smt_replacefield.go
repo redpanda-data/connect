@@ -22,10 +22,10 @@ func init() {
 
 type replaceFieldSMT struct{}
 
-func (replaceFieldSMT) Map(smt SMTConfig, ctx *MapCtx) ([]*yaml.Node, error) {
+func (replaceFieldSMT) Map(smt SMTConfig, _ *MapCtx) ([]*yaml.Node, error) {
 	var lines []string
 	if renames, ok := smt.Props["renames"].(string); ok && renames != "" {
-		for _, pair := range strings.Split(renames, ",") {
+		for pair := range strings.SplitSeq(renames, ",") {
 			kvp := strings.SplitN(strings.TrimSpace(pair), ":", 2)
 			if len(kvp) == 2 {
 				lines = append(lines, fmt.Sprintf("root.%s = this.%s", kvp[1], kvp[0]))
@@ -34,7 +34,7 @@ func (replaceFieldSMT) Map(smt SMTConfig, ctx *MapCtx) ([]*yaml.Node, error) {
 		}
 	}
 	if exclude, ok := smt.Props["exclude"].(string); ok && exclude != "" {
-		for _, f := range strings.Split(exclude, ",") {
+		for f := range strings.SplitSeq(exclude, ",") {
 			lines = append(lines, fmt.Sprintf("root.%s = deleted()", strings.TrimSpace(f)))
 		}
 	}
