@@ -65,4 +65,24 @@ func TestSMTOrderPreserved(t *testing.T) {
 	// first node is the regex router (alias "a"), second is insertfield (alias "b").
 	assert.Equal(t, "mapping", nodes[0].Content[0].Value)
 	assert.Equal(t, "mapping", nodes[1].Content[0].Value)
+	// Order: node[0] must be the RegexRouter (alias a), node[1] the InsertField (alias b).
+	assert.Contains(t, nodes[0].Content[1].Value, "re_replace_all")
+	assert.Contains(t, nodes[1].Content[1].Value, `root.f = "v"`)
+}
+
+func TestSMTReplaceField(t *testing.T) {
+	in := []byte(`{"name":"s3","config":{
+	  "connector.class":"io.confluent.connect.s3.S3SinkConnector",
+	  "s3.bucket.name":"b",
+	  "transforms":"r",
+	  "transforms.r.type":"org.apache.kafka.connect.transforms.ReplaceField$Value",
+	  "transforms.r.renames":"old:new",
+	  "topics":"orders"
+	}}`)
+	res, err := Convert(in)
+	require.NoError(t, err)
+	y := string(res.YAML)
+	assertValidRPCN(t, res.YAML)
+	assert.Contains(t, y, "root.new = this.old")
+	assert.Contains(t, y, "root.old = deleted()")
 }
