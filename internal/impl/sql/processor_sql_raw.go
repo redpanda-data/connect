@@ -212,9 +212,12 @@ func NewSQLRawProcessorFromConfig(conf *service.ParsedConfig, mgr *service.Resou
 	}
 
 	var argsConverter argsConverter
-	if driverStr == "postgres" {
+	switch driverStr {
+	case "postgres", "pgx":
 		argsConverter = bloblValuesToPgSQLValues
-	} else {
+	case "clickhouse":
+		argsConverter = bloblValuesToClickHouseValues
+	default:
 		argsConverter = func(v []any) []any { return v }
 	}
 
