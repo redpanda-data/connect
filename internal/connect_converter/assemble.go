@@ -52,6 +52,8 @@ func assemble(cfg ConnectConfig, comp Component, procs []*yaml.Node, unmapped []
 	if comp.Output == nil && comp.Input != nil {
 		primary = input
 	}
+	// primary is always a component() node: a 2-element mapping {nameScalar, body}.
+	// The body is Content[1]; we attach unmapped-field TODOs there.
 	if len(unmapped) > 0 && len(primary.Content) == 2 {
 		body := primary.Content[1] // the component body map
 		var lines []string

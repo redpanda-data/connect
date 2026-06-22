@@ -13,22 +13,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/redpanda-data/benthos/v4/public/service"
-
-	// Register benthos built-in components (stdin/stdout etc.) so the stream
-	// builder accepts the generated stub config.
-	_ "github.com/redpanda-data/connect/v4/public/components/io"
-	_ "github.com/redpanda-data/connect/v4/public/components/pure"
 )
-
-// assertValidRPCN parses YAML through the benthos stream builder to prove it is
-// valid Redpanda Connect config, not just well-formed YAML.
-func assertValidRPCN(t *testing.T, yamlBytes []byte) {
-	t.Helper()
-	b := service.NewStreamBuilder()
-	require.NoError(t, b.SetYAML(string(yamlBytes)), "generated YAML is not valid RPCN config:\n%s", yamlBytes)
-}
 
 func TestConvertUnknownConnector(t *testing.T) {
 	in := []byte(`{"name":"mystery","config":{"connector.class":"com.acme.Mystery","topics":"orders"}}`)
@@ -47,5 +32,10 @@ func TestConvertUnknownConnector(t *testing.T) {
 
 func TestConvertMalformedReturnsError(t *testing.T) {
 	_, err := Convert([]byte(`{bad`))
+	require.Error(t, err)
+}
+
+func TestConvertMissingClassReturnsError(t *testing.T) {
+	_, err := Convert([]byte(`{"name":"x","config":{"topics":"orders"}}`))
 	require.Error(t, err)
 }
