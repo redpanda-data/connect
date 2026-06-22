@@ -36,6 +36,8 @@ var (
 	// DefaultTransactionCacheKey is the default prefix used for the transaction buffer cache key.
 	// Only relevant when configuring a (potentially shared) cache_resource transaction buffer.
 	DefaultTransactionCacheKey = "oracledb_cdc"
+	// DefaultUseCTEQuery controls whether the CTE-based LogMiner query is used.
+	DefaultUseCTEQuery = false
 )
 
 // MiningStrategy defines how LogMiner accesses dictionary information
@@ -65,6 +67,7 @@ type Config struct {
 	LOBEnabled             bool
 	PDBName                string
 	TransactionCacheConfig TransactionCacheConfig
+	UseCTEQuery            bool
 }
 
 // NewDefaultConfig returns a Config with default values
@@ -78,5 +81,6 @@ func NewDefaultConfig() *Config {
 		MiningStrategy:        MiningStrategy(DefaultMiningStrategy),
 		MaxTransactionEvents:  DefaultMaxTransactionEvents,
 		LOBEnabled:            DefaultLOBEnabled,
+		UseCTEQuery:           DefaultUseCTEQuery,
 	}
 }

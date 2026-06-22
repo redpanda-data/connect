@@ -56,6 +56,7 @@ input:
       lob_enabled: true
       transaction_cache: "" # No default (optional)
       transaction_cache_key: oracledb_cdc
+      use_cte_query: false
     include: [] # No default (required)
     exclude: [] # No default (optional)
     checkpoint_cache: "" # No default (optional)
@@ -98,6 +99,7 @@ input:
       lob_enabled: true
       transaction_cache: "" # No default (optional)
       transaction_cache_key: oracledb_cdc
+      use_cte_query: false
     include: [] # No default (required)
     exclude: [] # No default (optional)
     checkpoint_cache: "" # No default (optional)
@@ -332,6 +334,15 @@ The key prefix used when storing transactions in `transaction_cache`. An alterna
 *Type*: `string`
 
 *Default*: `"oracledb_cdc"`
+
+=== `logminer.use_cte_query`
+
+When enabled, LogMiner uses a CTE query that first identifies transaction IDs (XIDs) that touched the configured tables, then fetches all LogMiner rows only for those transactions. This eliminates commit and rollback events for unmonitored-table transactions from the result set, which significantly reduces data returned by Oracle on databases with many active unmonitored schemas. Has no effect when `include` is not configured.
+
+
+*Type*: `bool`
+
+*Default*: `false`
 
 === `include`
 

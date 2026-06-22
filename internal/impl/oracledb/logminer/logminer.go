@@ -70,46 +70,88 @@ type LogMiner struct {
 // NewMiner creates a new instance of LogMiner responsible for paging through change events based on the tables param.
 // txnCache sets the transaction buffer implementation; pass nil to use the default in-memory cache.
 func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replication.ChangePublisher, cfg *Config, txnCache TransactionCache, metrics *service.Metrics, logger *service.Logger) *LogMiner {
-	// Build table filter condition once
-	// Transaction control operations (6=START, 7=COMMIT, 36=ROLLBACK) don't have table info
-	// and must pass unfiltered. DML (1=INSERT, 2=DELETE, 3=UPDATE) and LOB operations
-	// (9=SELECT_LOB_LOCATOR, 10=LOB_WRITE, 11=LOB_TRIM) all carry SEG_OWNER/TABLE_NAME
-	// and must be restricted to configured tables to avoid capturing Oracle internal tables.
-	var buf strings.Builder
-	if len(userTables) > 0 {
-		buf.WriteString(" AND (OPERATION_CODE IN (6, 7, 36)")
-		// DML and LOB operations carry the real table name — filter by configured tables.
-		dmlCodes := "1, 2, 3"
-		if cfg.LOBEnabled {
-			dmlCodes += ", 9, 10, 11"
-		}
-		buf.WriteString(" OR (OPERATION_CODE IN (" + dmlCodes + ") AND (") // Filter DML/LOB by table
-		for i, t := range userTables {
-			if i > 0 {
-				buf.WriteString(" OR ")
-			}
-			fmt.Fprintf(&buf, "(SEG_OWNER = '%s' AND TABLE_NAME = '%s')", strings.ReplaceAll(t.Schema, "'", "''"), strings.ReplaceAll(t.Name, "'", "''"))
-		}
-		buf.WriteString(")))")
-	}
-	if cfg.PDBName != "" {
-		fmt.Fprintf(&buf, " AND SRC_CON_NAME = '%s'", strings.ReplaceAll(cfg.PDBName, "'", "''"))
+	// Build reusable query components.
+	// Transaction control ops (6=START, 7=COMMIT, 36=ROLLBACK) carry no table info
+	// so they cannot be filtered by table. DML (1=INSERT, 2=DELETE, 3=UPDATE) and
+	// LOB ops (9=SELECT_LOB_LOCATOR, 10=LOB_WRITE, 11=LOB_TRIM) carry SEG_OWNER/TABLE_NAME
+	// and are restricted to the configured tables.
+	dmlCodes := "1, 2, 3"
+	if cfg.LOBEnabled {
+		dmlCodes += ", 9, 10, 11"
 	}
 
-	logMinerQuery := fmt.Sprintf(`
-		SELECT
-			SCN,
-			SQL_REDO,
-			OPERATION_CODE,
-			TABLE_NAME,
-			SEG_OWNER,
-			TIMESTAMP,
-			XID,
-			COMMIT_SCN,
-			CSF
-		FROM V$LOGMNR_CONTENTS
-		WHERE SCN > :1 AND SCN <= :2%s
-	`, buf.String())
+	var tablePredBuf strings.Builder
+	for i, t := range userTables {
+		if i > 0 {
+			tablePredBuf.WriteString(" OR ")
+		}
+		fmt.Fprintf(&tablePredBuf, "(SEG_OWNER = '%s' AND TABLE_NAME = '%s')", strings.ReplaceAll(t.Schema, "'", "''"), strings.ReplaceAll(t.Name, "'", "''"))
+	}
+	tablePred := tablePredBuf.String()
+
+	pdbFilter := ""
+	if cfg.PDBName != "" {
+		pdbFilter = fmt.Sprintf(" AND SRC_CON_NAME = '%s'", strings.ReplaceAll(cfg.PDBName, "'", "''"))
+	}
+
+	var logMinerQuery string
+	if cfg.UseCTEQuery && len(userTables) > 0 {
+		logger.Info("Using CTE to identify transactions relevant to monitored tables")
+		// CTE approach: first identify XIDs that touched monitored tables, then join
+		// back to fetch all rows for only those transactions. This eliminates
+		// commit/rollback events for unmonitored-table transactions.
+		// The SCN filter is only in the CTE inner query. The outer query omits it
+		// because the LogMiner session (started via DBMS_LOGMNR.START_LOGMNR with
+		// STARTSCN/ENDSCN) already scopes V$LOGMNR_CONTENTS to the window, making
+		// a second SCN filter redundant. Repeating :1/:2 in the outer query caused
+		// go-ora to bind NULL to the second pair, matching no rows.
+		logMinerQuery = fmt.Sprintf(`
+			WITH relevant_xids AS (
+				SELECT /*+ NO_MERGE */ DISTINCT XID AS RXID
+				FROM V$LOGMNR_CONTENTS
+				WHERE SCN > :1 AND SCN <= :2
+				AND OPERATION_CODE IN (1, 2, 3)
+				AND (%s)%s
+			)
+			SELECT /*+ ORDERED USE_NL(r) */
+				v.SCN,
+				v.SQL_REDO,
+				v.OPERATION_CODE,
+				v.TABLE_NAME,
+				v.SEG_OWNER,
+				v.TIMESTAMP,
+				v.XID,
+				v.COMMIT_SCN,
+				v.CSF
+			FROM V$LOGMNR_CONTENTS v
+			JOIN relevant_xids r ON r.RXID = v.XID
+			WHERE (
+				v.OPERATION_CODE IN (6, 7, 36)
+				OR (v.OPERATION_CODE IN (%s) AND (%s))
+			)%s
+		`, tablePred, pdbFilter, dmlCodes, tablePred, pdbFilter)
+	} else {
+		var buf strings.Builder
+		if len(userTables) > 0 {
+			buf.WriteString(" AND (OPERATION_CODE IN (6, 7, 36)")
+			buf.WriteString(" OR (OPERATION_CODE IN (" + dmlCodes + ") AND (" + tablePred + ")))")
+		}
+		buf.WriteString(pdbFilter)
+		logMinerQuery = fmt.Sprintf(`
+			SELECT
+				SCN,
+				SQL_REDO,
+				OPERATION_CODE,
+				TABLE_NAME,
+				SEG_OWNER,
+				TIMESTAMP,
+				XID,
+				COMMIT_SCN,
+				CSF
+			FROM V$LOGMNR_CONTENTS
+			WHERE SCN > :1 AND SCN <= :2%s
+		`, buf.String())
+	}
 
 	lm := &LogMiner{
 		cfg:                  cfg,

@@ -60,6 +60,7 @@ const (
 	ociFieldLOBEnabled           = "lob_enabled"
 	ociFieldTransactionCache     = "transaction_cache"
 	ociFieldTransactionCacheKey  = "transaction_cache_key"
+	ociFieldUseCTEQuery          = "use_cte_query"
 )
 
 func init() {
@@ -156,6 +157,9 @@ This cache is designed for low-latency stores with cheap per-operation cost. Red
 			Description("The key prefix used when storing transactions in `"+ociFieldTransactionCache+"`. An alternative prefix must be set if multiple `oracledb_cdc` inputs share the same cache resource, since Oracle transaction IDs (USN.SLOT.SEQ) are only unique within a single Oracle instance and would otherwise collide.").
 			Default(logminer.DefaultTransactionCacheKey).
 			Optional(),
+		service.NewBoolField(ociFieldUseCTEQuery).
+			Description("When enabled, LogMiner uses a CTE query that first identifies transaction IDs (XIDs) that touched the configured tables, then fetches all LogMiner rows only for those transactions. This eliminates commit and rollback events for unmonitored-table transactions from the result set, which significantly reduces data returned by Oracle on databases with many active unmonitored schemas. Has no effect when `include` is not configured.").
+			Default(logminer.DefaultUseCTEQuery),
 	).Description("LogMiner configuration settings."),
 	).
 	Field(service.NewStringListField(ociFieldTablesInclude).
@@ -770,6 +774,9 @@ func parseLogMinerConfig(conf *service.ParsedConfig) (*logminer.Config, error) {
 			if cfg.TransactionCacheConfig.MaxEvents, err = lmConf.FieldInt(ociFieldMaxTransactionEvents); err != nil {
 				return nil, err
 			}
+		}
+		if cfg.UseCTEQuery, err = lmConf.FieldBool(ociFieldUseCTEQuery); err != nil {
+			return nil, err
 		}
 	}
 
