@@ -41,7 +41,7 @@
   {"path":"./internal/impl/nsq"},
   {"path":"./internal/impl/ollama","skip":true},
   {"path":"./internal/impl/opensearch"},
-  {"path":"./internal/impl/oracledb","timeout":"30m"},
+  {"path":"./internal/impl/oracledb","timeout":"20m"},
   {"path":"./internal/impl/oracledb/replication","skip":true},
   {"path":"./internal/impl/otlp","skip":true},
   {"path":"./internal/impl/postgresql"},
