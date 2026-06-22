@@ -157,7 +157,7 @@ func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replicat
 			FROM V$LOGMNR_CONTENTS V
 			JOIN relevant_xids R ON R.RXID = V.XID
 			WHERE V.SCN > :3 AND V.SCN <= :4%s
-		`, tablePred, pdbFilter, pdbFilter)
+		`, tablePred, pdbFilter, buf.String())
 		cteCrossWindowCommitQuery = fmt.Sprintf(`
 			SELECT
 				SCN,
