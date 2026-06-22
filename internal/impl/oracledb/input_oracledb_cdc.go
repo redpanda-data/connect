@@ -539,7 +539,8 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 			err      error
 			startSCN = cachedSCN
 		)
-		softCtx, _ := o.stopSig.SoftStopCtx(context.Background())
+		softCtx, cancel := o.stopSig.SoftStopCtx(context.Background())
+		defer cancel()
 
 		// snapshot if no SCN exists then store checkpoint once complete
 		if snapshotter != nil {

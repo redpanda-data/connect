@@ -28,6 +28,8 @@ import (
 var (
 	// captures the time between DB commit and publish
 	publishLatencyMetric = "oracledb_cdc_publish_lag_ns"
+	// captures the time from query execution to the first row being returned by LogMiner
+	timeToFirstRowMetric = "oracledb_cdc_logminer_time_to_first_row_ns"
 	// https://docs.oracle.com/en/error-help/db/ora-01291/
 	errCodeMissingLogFile = 1291
 	// https://docs.oracle.com/en/error-help/db/ora-01368/
@@ -60,8 +62,9 @@ type LogMiner struct {
 	// suppresses repeated "caught up" log lines within a single idle stretch
 	caughtUpLogged bool
 
-	publishLagMetric *service.MetricTimer
-	log              *service.Logger
+	publishLagMetric     *service.MetricTimer
+	timeToFirstRowMetric *service.MetricTimer
+	log                  *service.Logger
 }
 
 // NewMiner creates a new instance of LogMiner responsible for paging through change events based on the tables param.
@@ -109,12 +112,13 @@ func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replicat
 	`, buf.String())
 
 	lm := &LogMiner{
-		cfg:              cfg,
-		db:               db,
-		tables:           userTables,
-		publisher:        publisher,
-		publishLagMetric: metrics.NewTimer(publishLatencyMetric),
-		log:              logger,
+		cfg:                  cfg,
+		db:                   db,
+		tables:               userTables,
+		publisher:            publisher,
+		publishLagMetric:     metrics.NewTimer(publishLatencyMetric),
+		timeToFirstRowMetric: metrics.NewTimer(timeToFirstRowMetric),
+		log:                  logger,
 
 		// logminer specific
 		logMinerQuery: logMinerQuery,
@@ -776,14 +780,22 @@ func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, s
 	}
 
 	// Use the pre-built query from initialization
+	queryStart := time.Now()
 	rows, err := conn.QueryContext(ctx, lm.logMinerQuery, startSCN, endSCN)
 	if err != nil {
 		return fmt.Errorf("querying logminer: %w", err)
 	}
 	defer rows.Close()
 
-	var pending *sqlredo.RedoEvent // accumulates CSF continuation fragments
+	var (
+		pending  *sqlredo.RedoEvent // accumulates CSF continuation fragments
+		firstRow = true
+	)
 	for rows.Next() {
+		if firstRow {
+			lm.timeToFirstRowMetric.Timing(time.Since(queryStart).Nanoseconds())
+			firstRow = false
+		}
 		event := &sqlredo.RedoEvent{}
 		var (
 			commitSCN sql.NullInt64 // COMMIT_SCN can be NULL for uncommitted transactions
