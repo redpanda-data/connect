@@ -31,17 +31,21 @@ func TestMapCtxStringMissing(t *testing.T) {
 	c := newTestCtx(map[string]any{})
 	_, ok := c.String("missing")
 	assert.False(t, ok)
+	assert.Empty(t, c.Unmapped())
 }
 
 func TestMapCtxUnmappedExcludesMeta(t *testing.T) {
 	c := newTestCtx(map[string]any{
-		"connector.class": "io.example.Foo",
-		"name":            "c",
-		"tasks.max":       "1",
-		"transforms":      "a",
-		"key.converter":   "x",
-		"value.converter": "y",
-		"real.field":      "keep",
+		"connector.class":              "io.example.Foo",
+		"name":                         "c",
+		"tasks.max":                    "1",
+		"transforms":                   "a",
+		"key.converter":                "x",
+		"value.converter":              "y",
+		"transforms.a.type":            "io.example.SMT",
+		"key.converter.schemas.enable": "false",
+		"header.converter":             "io.example.HeaderConv",
+		"real.field":                   "keep",
 	})
 	assert.Equal(t, []string{"real.field"}, c.Unmapped())
 }
