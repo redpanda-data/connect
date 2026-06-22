@@ -20,9 +20,10 @@ func init() {
 
 type regexRouterSMT struct{}
 
-func (regexRouterSMT) Map(smt SMTConfig, _ *MapCtx) ([]*yaml.Node, error) {
+func (regexRouterSMT) Map(smt SMTConfig, ctx *MapCtx) ([]*yaml.Node, error) {
 	regex, _ := smt.Props["regex"].(string)
 	replacement, _ := smt.Props["replacement"].(string)
+	ctx.Warn(smt.Alias, "RegexRouter rewrites the topic name; verify the rewrite applies to your connector's direction (sink path vs source topic)")
 	// Kafka Connect uses $1 backrefs; Go's re_replace_all uses $1 too. The
 	// mapping processor takes its Bloblang directly as a string value.
 	expr := fmt.Sprintf(`meta kafka_topic = metadata("kafka_topic").re_replace_all(%q, %q)`, regex, replacement)

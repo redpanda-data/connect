@@ -23,7 +23,10 @@ type insertFieldSMT struct{}
 
 func (insertFieldSMT) Map(smt SMTConfig, _ *MapCtx) ([]*yaml.Node, error) {
 	field, _ := smt.Props["static.field"].(string)
-	value, _ := smt.Props["static.value"].(string)
+	var value string
+	if raw, ok := smt.Props["static.value"]; ok {
+		value = fmt.Sprint(raw)
+	}
 	var expr *yaml.Node
 	if field != "" {
 		expr = scalar(fmt.Sprintf("root.%s = %q", field, value))

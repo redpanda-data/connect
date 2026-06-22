@@ -46,3 +46,25 @@ func TestConvertJDBCSink(t *testing.T) {
 	assert.Contains(t, y, "driver: mysql")
 	assert.Contains(t, y, "table: orders")
 }
+
+func TestConvertJDBCSourceNoURL(t *testing.T) {
+	in := []byte(`{"name":"jdbc-src-nourl","config":{"connector.class":"io.confluent.connect.jdbc.JdbcSourceConnector"}}`)
+	res, err := Convert(in)
+	require.NoError(t, err)
+	y := string(res.YAML)
+	// Both driver and dsn stubs must be present so the config passes linting.
+	assert.Contains(t, y, "driver:")
+	assert.Contains(t, y, "dsn:")
+	assertValidRPCN(t, res.YAML)
+}
+
+func TestConvertJDBCSinkNoURL(t *testing.T) {
+	in := []byte(`{"name":"jdbc-sink-nourl","config":{"connector.class":"io.confluent.connect.jdbc.JdbcSinkConnector"}}`)
+	res, err := Convert(in)
+	require.NoError(t, err)
+	y := string(res.YAML)
+	// Both driver and dsn stubs must be present so the config passes linting.
+	assert.Contains(t, y, "driver:")
+	assert.Contains(t, y, "dsn:")
+	assertValidRPCN(t, res.YAML)
+}

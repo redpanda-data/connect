@@ -44,9 +44,12 @@ func driverAndDSN(ctx *MapCtx, body *yaml.Node) {
 	url, ok := ctx.String("connection.url")
 	if !ok {
 		ctx.Warn("connection.url", "missing JDBC connection URL")
-		stub := scalar("")
-		stub.LineComment = "TODO: set driver and dsn"
-		kv(body, "driver", stub)
+		driverStub := scalar("postgres")
+		driverStub.LineComment = "TODO: set the database driver (e.g. postgres, mysql, mssql)"
+		kv(body, "driver", driverStub)
+		dsnStub := scalar("")
+		dsnStub.LineComment = "TODO: set the database DSN"
+		kv(body, "dsn", dsnStub)
 		return
 	}
 	driver := jdbcDriver(url)

@@ -48,6 +48,15 @@ func TestSMTRegexRouter(t *testing.T) {
 	y := string(res.YAML)
 	assertValidRPCN(t, res.YAML)
 	assert.Contains(t, y, "re_replace_all")
+	// RegexRouter must always produce a warning about the topic rewrite.
+	var found bool
+	for _, w := range res.Warnings {
+		if w.Field == "r" {
+			found = true
+			break
+		}
+	}
+	assert.True(t, found, "expected a RegexRouter warning with field='r'")
 }
 
 func TestSMTOrderPreserved(t *testing.T) {
