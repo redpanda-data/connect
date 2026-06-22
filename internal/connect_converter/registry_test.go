@@ -30,6 +30,10 @@ func TestLookupConnectorMiss_ReturnsFallback(t *testing.T) {
 }
 
 func TestRegisterAndLookupConnector(t *testing.T) {
+	orig := connectorMappers
+	connectorMappers = map[string]ConnectorMapper{}
+	t.Cleanup(func() { connectorMappers = orig })
+
 	registerConnector("test.Only", stubConnector{})
 	m := lookupConnector("test.Only")
 	_, ok := m.(stubConnector)
