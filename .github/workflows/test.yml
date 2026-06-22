@@ -18,7 +18,7 @@ jobs:
           sudo docker image prune --all --force
 
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: Install Go
         uses: actions/setup-go@v6
         with:
@@ -45,7 +45,7 @@ jobs:
       CGO_ENABLED: 0
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: Install Go
         uses: actions/setup-go@v6
         with:
@@ -67,7 +67,7 @@ jobs:
     steps:
 
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up test packages
         run: |
@@ -104,7 +104,7 @@ jobs:
       CLOUDSMITH_API_KEY: thisisatest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Mock cloudsmith cli
         run: |
