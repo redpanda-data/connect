@@ -1,0 +1,13 @@
+# Converted from Kafka Connect connector "mm" (class=org.apache.kafka.connect.mirror.MirrorSourceConnector). Review # TODO markers.
+input:
+  kafka_franz:
+    seed_brokers:
+      - src:9092
+    topics:
+      - orders
+    consumer_group: mm-rpcn # TODO: confirm consumer group name
+output:
+  kafka_franz:
+    seed_brokers:
+      - dst:9092
+    topic: ${! @kafka_topic }
