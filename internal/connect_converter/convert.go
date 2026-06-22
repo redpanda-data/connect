@@ -42,8 +42,28 @@ func Convert(input []byte) (*Result, error) {
 	return &Result{YAML: out, Warnings: ctx.Warnings()}, nil
 }
 
-// mapConverters maps key/value.converter to processors. Filled in Task 11.
-func mapConverters(ctx *MapCtx) []*yaml.Node { return nil }
+// mapConverters maps the value converter to deserialization processors. The key
+// converter's presence is consumed silently (rarely needs a pipeline step).
+func mapConverters(ctx *MapCtx) []*yaml.Node {
+	if cls, ok := ctx.String(KeyConverter.Prefix()); ok {
+		_ = cls // consumed; no processor emitted for key conversion in v1
+	}
+	cls, ok := ctx.String(ValueConverter.Prefix())
+	if !ok {
+		return nil
+	}
+	m, found := lookupConverter(cls)
+	if !found {
+		ctx.Warn(ValueConverter.Prefix(), "unsupported value converter "+cls)
+		return nil
+	}
+	nodes, err := m.Map(ValueConverter, ctx)
+	if err != nil {
+		ctx.Warn(ValueConverter.Prefix(), err.Error())
+		return nil
+	}
+	return nodes
+}
 
 // mapSMTs maps transforms.* to processors in order. Filled in Task 12.
 func mapSMTs(ctx *MapCtx) []*yaml.Node { return nil }
