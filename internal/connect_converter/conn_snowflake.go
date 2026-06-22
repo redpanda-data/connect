@@ -17,6 +17,28 @@ type snowflakeSinkConnector struct{}
 func (snowflakeSinkConnector) Map(cfg ConnectConfig, ctx *MapCtx) (Component, error) {
 	body := mapping()
 
+	// mapRequired emits the value when the KC key is present; otherwise it
+	// emits a TODO stub AND records a warning so the caller knows the field
+	// needs attention before the config is production-ready.
+	mapRequired := func(kcKey, rpKey, todoMsg, warnMsg string) {
+		if v, ok := ctx.String(kcKey); ok {
+			kv(body, rpKey, scalar(v))
+		} else {
+			stub := scalar("")
+			stub.LineComment = "TODO: " + todoMsg
+			kv(body, rpKey, stub)
+			ctx.Warn(rpKey, warnMsg)
+		}
+	}
+
+	// mapOptional emits the value only when the KC key is present; absent
+	// optional fields are simply omitted with no stub or warning.
+	mapOptional := func(kcKey, rpKey string) {
+		if v, ok := ctx.String(kcKey); ok {
+			kv(body, rpKey, scalar(v))
+		}
+	}
+
 	// account: KC provides a full URL/host; RPCN wants the account identifier.
 	if v, ok := ctx.String("snowflake.url.name"); ok {
 		acc := scalar(v)
@@ -26,26 +48,25 @@ func (snowflakeSinkConnector) Map(cfg ConnectConfig, ctx *MapCtx) (Component, er
 		stub := scalar("")
 		stub.LineComment = "TODO: set the Snowflake account identifier (e.g. ORG-ACCOUNT)"
 		kv(body, "account", stub)
+		ctx.Warn("account", "no snowflake.url.name specified; emitted TODO stub — set account before deploying")
 	}
 
-	mapStr := func(kcKey, rpKey string) {
-		if v, ok := ctx.String(kcKey); ok {
-			kv(body, rpKey, scalar(v))
-		}
-	}
-	mapStr("snowflake.user.name", "user")
+	// user, role, database, schema are all required fields with no default.
+	mapRequired("snowflake.user.name", "user",
+		"set the Snowflake user name",
+		"no snowflake.user.name specified; emitted TODO stub — set user before deploying")
+	mapRequired("snowflake.role.name", "role",
+		"set the Snowflake role",
+		"no snowflake.role.name specified; emitted TODO stub — set role before deploying")
+	mapRequired("snowflake.database.name", "database",
+		"set the Snowflake database",
+		"no snowflake.database.name specified; emitted TODO stub — set database before deploying")
+	mapRequired("snowflake.schema.name", "schema",
+		"set the Snowflake schema",
+		"no snowflake.schema.name specified; emitted TODO stub — set schema before deploying")
 
-	if v, ok := ctx.String("snowflake.role.name"); ok {
-		kv(body, "role", scalar(v))
-	} else {
-		stub := scalar("")
-		stub.LineComment = "TODO: set the Snowflake role"
-		kv(body, "role", stub)
-	}
-
-	mapStr("snowflake.database.name", "database")
-	mapStr("snowflake.schema.name", "schema")
-	mapStr("snowflake.private.key", "private_key")
+	// private_key is optional in the spec (private_key_file is the alternative).
+	mapOptional("snowflake.private.key", "private_key")
 
 	ctx.consume("topics")
 	table := scalar("")

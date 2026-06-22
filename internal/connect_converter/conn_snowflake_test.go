@@ -33,4 +33,15 @@ func TestConvertSnowflakeSink(t *testing.T) {
 	assert.Contains(t, y, "user: svc")
 	assert.Contains(t, y, "database: DB")
 	assert.Contains(t, y, "schema: PUBLIC")
+	// role is absent from the input — expect a TODO stub and a warning.
+	assert.Contains(t, y, "role: ")
+	assert.Contains(t, y, "TODO: set the Snowflake role")
+	var roleWarned bool
+	for _, w := range res.Warnings {
+		if w.Field == "role" {
+			roleWarned = true
+			break
+		}
+	}
+	assert.True(t, roleWarned, "expected a warning for missing role field")
 }
