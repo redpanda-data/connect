@@ -30,10 +30,9 @@ var (
 	publishLatencyMetric = "oracledb_cdc_publish_lag_ns"
 	// captures the time from query execution to the first row being returned by LogMiner
 	timeToFirstRowMetric = "oracledb_cdc_logminer_time_to_first_row_ns"
-	// https://docs.oracle.com/en/error-help/db/ora-01291/
-	errCodeMissingLogFile = 1291
-	// https://docs.oracle.com/en/error-help/db/ora-01368/
-	errCodeRedoLogHeaderMismatch = 1368
+
+	errCodeMissingLogFile        = 1291 // https://docs.oracle.com/en/error-help/db/ora-01291/
+	errCodeRedoLogHeaderMismatch = 1368 // https://docs.oracle.com/en/error-help/db/ora-01368/
 )
 
 // LogMiner tracks and streams all change events from the configured change
@@ -51,7 +50,16 @@ type LogMiner struct {
 
 	// Pre-built query string for LogMiner contents
 	logMinerQuery string
-	txnCache      TransactionCache
+	// cteQuery is set when UseCTEQuery is true. It uses a SQL WITH clause to identify
+	// relevant XIDs and joins back to V$LOGMNR_CONTENTS for the full event set.
+	// The /*+ ORDERED USE_NL(R) */ hint drives the join from the main view, avoiding
+	// a double-scan of the cursor-backed V$LOGMNR_CONTENTS.
+	cteQuery string
+	// cteCrossWindowCommitQuery fetches commit/rollback events for the SCN range.
+	// Fires after the CTE query when the txn cache has pending transactions, catching
+	// commits for transactions whose DML fell in a prior mining window.
+	cteCrossWindowCommitQuery string
+	txnCache                  TransactionCache
 
 	// Redo logs don't include data types so we have to find lob types up front.
 	// ie "TESTDB.PRODUCTS.DESCRIPTION": "NCLOB",
@@ -94,50 +102,63 @@ func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replicat
 		pdbFilter = fmt.Sprintf(" AND SRC_CON_NAME = '%s'", strings.ReplaceAll(cfg.PDBName, "'", "''"))
 	}
 
-	var logMinerQuery string
+	var buf strings.Builder
+	if len(userTables) > 0 {
+		buf.WriteString(" AND (OPERATION_CODE IN (6, 7, 36)")
+		buf.WriteString(" OR (OPERATION_CODE IN (" + dmlCodes + ") AND (" + tablePred + ")))")
+	}
+	buf.WriteString(pdbFilter)
+	logMinerQuery := fmt.Sprintf(`
+		SELECT
+			SCN,
+			SQL_REDO,
+			OPERATION_CODE,
+			TABLE_NAME,
+			SEG_OWNER,
+			TIMESTAMP,
+			XID,
+			COMMIT_SCN,
+			CSF
+		FROM V$LOGMNR_CONTENTS
+		WHERE SCN > :1 AND SCN <= :2%s
+	`, buf.String())
+
+	// CTE query: a SQL WITH clause identifies relevant XIDs (transactions that touched
+	// monitored tables) and joins back to V$LOGMNR_CONTENTS for the full event set
+	// including begin/commit/rollback. The /*+ ORDERED USE_NL(R) */ hint directs Oracle
+	// to drive the join from the main view, avoiding a double-scan of the cursor-backed
+	// V$LOGMNR_CONTENTS.
+	//
+	// cteCrossWindowCommitQuery handles the cross-window commit case: a transaction
+	// whose DML was in a prior window won't appear in the CTE XID list, so its commit
+	// would be silently lost. It fires only when the txn cache reports pending
+	// transactions and requires one extra session restart.
+	var cteQuery, cteCrossWindowCommitQuery string
 	if cfg.UseCTEQuery && len(userTables) > 0 {
-		logger.Info("Using CTE to identify transactions relevant to monitored tables")
-		// CTE approach: first identify XIDs that touched monitored tables, then join
-		// back to fetch all rows for only those transactions. This eliminates
-		// commit/rollback events for unmonitored-table transactions.
-		// The SCN filter is only in the CTE inner query. The outer query omits it
-		// because the LogMiner session (started via DBMS_LOGMNR.START_LOGMNR with
-		// STARTSCN/ENDSCN) already scopes V$LOGMNR_CONTENTS to the window, making
-		// a second SCN filter redundant. Repeating :1/:2 in the outer query caused
-		// go-ora to bind NULL to the second pair, matching no rows.
-		logMinerQuery = fmt.Sprintf(`
+		logger.Info("Using CTE query to filter transactions by monitored tables")
+		cteQuery = fmt.Sprintf(`
 			WITH relevant_xids AS (
-				SELECT /*+ NO_MERGE */ DISTINCT XID AS RXID
+				SELECT DISTINCT XID AS RXID
 				FROM V$LOGMNR_CONTENTS
 				WHERE SCN > :1 AND SCN <= :2
 				AND OPERATION_CODE IN (1, 2, 3)
 				AND (%s)%s
 			)
-			SELECT /*+ ORDERED USE_NL(r) */
-				v.SCN,
-				v.SQL_REDO,
-				v.OPERATION_CODE,
-				v.TABLE_NAME,
-				v.SEG_OWNER,
-				v.TIMESTAMP,
-				v.XID,
-				v.COMMIT_SCN,
-				v.CSF
-			FROM V$LOGMNR_CONTENTS v
-			JOIN relevant_xids r ON r.RXID = v.XID
-			WHERE (
-				v.OPERATION_CODE IN (6, 7, 36)
-				OR (v.OPERATION_CODE IN (%s) AND (%s))
-			)%s
-		`, tablePred, pdbFilter, dmlCodes, tablePred, pdbFilter)
-	} else {
-		var buf strings.Builder
-		if len(userTables) > 0 {
-			buf.WriteString(" AND (OPERATION_CODE IN (6, 7, 36)")
-			buf.WriteString(" OR (OPERATION_CODE IN (" + dmlCodes + ") AND (" + tablePred + ")))")
-		}
-		buf.WriteString(pdbFilter)
-		logMinerQuery = fmt.Sprintf(`
+			SELECT /*+ ORDERED USE_NL(R) */
+				V.SCN,
+				V.SQL_REDO,
+				V.OPERATION_CODE,
+				V.TABLE_NAME,
+				V.SEG_OWNER,
+				V.TIMESTAMP,
+				V.XID,
+				V.COMMIT_SCN,
+				V.CSF
+			FROM V$LOGMNR_CONTENTS V
+			JOIN relevant_xids R ON R.RXID = V.XID
+			WHERE V.SCN > :3 AND V.SCN <= :4%s
+		`, tablePred, pdbFilter, pdbFilter)
+		cteCrossWindowCommitQuery = fmt.Sprintf(`
 			SELECT
 				SCN,
 				SQL_REDO,
@@ -149,8 +170,9 @@ func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replicat
 				COMMIT_SCN,
 				CSF
 			FROM V$LOGMNR_CONTENTS
-			WHERE SCN > :1 AND SCN <= :2%s
-		`, buf.String())
+			WHERE SCN > :1 AND SCN <= :2
+			AND OPERATION_CODE IN (7, 36)%s
+		`, pdbFilter)
 	}
 
 	lm := &LogMiner{
@@ -163,13 +185,15 @@ func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replicat
 		log:                  logger,
 
 		// logminer specific
-		logMinerQuery: logMinerQuery,
-		logCollector:  NewLogFileCollector(),
-		sessionMgr:    NewSessionManager(cfg, logger),
-		txnCache:      txnCache,
-		dmlParser:     sqlredo.NewParser(),
-		lobStates:     make(map[sqlredo.TransactionID]*sqlredo.TxnLOBState),
-		windowSize:    cfg.SCNWindowSize,
+		logMinerQuery:             logMinerQuery,
+		cteQuery:                  cteQuery,
+		cteCrossWindowCommitQuery: cteCrossWindowCommitQuery,
+		logCollector:              NewLogFileCollector(),
+		sessionMgr:                NewSessionManager(cfg, logger),
+		txnCache:                  txnCache,
+		dmlParser:                 sqlredo.NewParser(),
+		lobStates:                 make(map[sqlredo.TransactionID]*sqlredo.TxnLOBState),
+		windowSize:                cfg.SCNWindowSize,
 	}
 	if lm.txnCache == nil {
 		lm.txnCache = NewInMemoryCache(cfg.MaxTransactionEvents, metrics, logger)
@@ -821,22 +845,53 @@ func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, s
 		return nil
 	}
 
-	// Use the pre-built query from initialization
 	queryStart := time.Now()
-	rows, err := conn.QueryContext(ctx, lm.logMinerQuery, startSCN, endSCN)
-	if err != nil {
-		return fmt.Errorf("querying logminer: %w", err)
-	}
-	defer rows.Close()
+	firstRow := true
 
-	var (
-		pending  *sqlredo.RedoEvent // accumulates CSF continuation fragments
-		firstRow = true
-	)
+	if lm.cteQuery == "" {
+		rows, err := conn.QueryContext(ctx, lm.logMinerQuery, startSCN, endSCN)
+		if err != nil {
+			return fmt.Errorf("querying logminer: %w", err)
+		}
+		defer rows.Close()
+		return lm.scanLogMinerRows(ctx, rows, queryStart, &firstRow, processEvent)
+	}
+
+	// CTE path: :1/:2 bind the inner XID scan; :3/:4 bind the outer event fetch.
+	rows, err := conn.QueryContext(ctx, lm.cteQuery, startSCN, endSCN, startSCN, endSCN)
+	if err != nil {
+		return fmt.Errorf("querying logminer (CTE): %w", err)
+	}
+	if err := lm.scanLogMinerRows(ctx, rows, queryStart, &firstRow, processEvent); err != nil {
+		rows.Close()
+		return err
+	}
+	rows.Close()
+
+	// Cross-window commit catch-up: fires only when the txn cache has pending
+	// transactions. A transaction whose DML was in a prior SCN window won't appear in
+	// the CTE XID list, so its commit would be lost without this second pass.
+	// Requires a session restart to get a fresh V$LOGMNR_CONTENTS cursor.
+	if lm.txnCache.LowWatermarkSCN("") != math.MaxUint64 {
+		if err := lm.sessionMgr.StartSession(ctx, conn, startSCN, endSCN, false); err != nil {
+			return fmt.Errorf("restarting session for cross-window commit catch-up: %w", err)
+		}
+		rows, err := conn.QueryContext(ctx, lm.cteCrossWindowCommitQuery, startSCN, endSCN)
+		if err != nil {
+			return fmt.Errorf("querying cross-window commits: %w", err)
+		}
+		defer rows.Close()
+		return lm.scanLogMinerRows(ctx, rows, queryStart, &firstRow, processEvent)
+	}
+	return nil
+}
+
+func (lm *LogMiner) scanLogMinerRows(ctx context.Context, rows *sql.Rows, queryStart time.Time, firstRow *bool, processEvent func(context.Context, *sqlredo.RedoEvent) error) error {
+	var pending *sqlredo.RedoEvent // accumulates CSF continuation fragments
 	for rows.Next() {
-		if firstRow {
+		if *firstRow {
 			lm.timeToFirstRowMetric.Timing(time.Since(queryStart).Nanoseconds())
-			firstRow = false
+			*firstRow = false
 		}
 		event := &sqlredo.RedoEvent{}
 		var (
@@ -862,23 +917,19 @@ func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, s
 		// Rows with CSF=1 are continuation fragments; CSF=0 is the final (or only) row.
 		// Concatenate all fragments before emitting the event.
 		if pending != nil {
-			// Append this fragment's SQL to the accumulated SQL.
 			if event.SQLRedo.Valid {
 				pending.SQLRedo.String += event.SQLRedo.String
 			}
 			if csf == 0 {
-				// Final fragment — emit the accumulated event.
 				if err := processEvent(ctx, pending); err != nil {
 					return fmt.Errorf("processing redo event: %w", err)
 				}
 				pending = nil
 			}
-			// If csf == 1, continue accumulating.
 			continue
 		}
 
 		if csf == 1 {
-			// Start accumulating a multi-part SQL.
 			pending = event
 			continue
 		}
