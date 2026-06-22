@@ -22,7 +22,7 @@ func TestParseRESTWrapped(t *testing.T) {
 	assert.Equal(t, "my-conn", cfg.Name)
 	assert.Equal(t, "io.example.Foo", cfg.Class)
 	assert.Equal(t, "orders", cfg.Props["topics"])
-	// connector.class must NOT remain a stray prop key beyond Class.
+	// connector.class is retained in Props as well as promoted to Class.
 	assert.Equal(t, "io.example.Foo", cfg.Props["connector.class"])
 }
 
