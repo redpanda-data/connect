@@ -104,7 +104,10 @@ func TestConvertGCSSinkTimeBasedPartitioner(t *testing.T) {
 	require.NoError(t, err)
 	y := string(res.YAML)
 	assertValidRPCN(t, res.YAML)
-	assert.Contains(t, y, `metadata("kafka_timestamp_ms").number().ts_format("2006")`)
+	// kafka_timestamp_unix is epoch SECONDS; ts_format requires seconds.
+	assert.Contains(t, y, `metadata("kafka_timestamp_unix").number().ts_format("2006")`)
+	// Verify the old (broken) millisecond form is NOT emitted.
+	assert.NotContains(t, y, `metadata("kafka_timestamp_ms").number().ts_format`)
 	assert.Contains(t, y, "@kafka_topic")
 	assert.NotContains(t, y, "partitioner.class")
 	assert.NotContains(t, y, "path.format")

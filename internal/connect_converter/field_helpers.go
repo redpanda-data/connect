@@ -161,10 +161,14 @@ func applyObjectCompression(ctx *MapCtx, path *yaml.Node, ext string) {
 // translated via jodaToGoLayout and wrapped in a record-timestamp
 // interpolation, e.g.
 //
-//	${! metadata("kafka_timestamp_ms").number().ts_format("2006") }
+//	${! metadata("kafka_timestamp_unix").number().ts_format("2006") }
 //
-// The record timestamp is epoch millis under the kafka_timestamp_ms metadata
-// key. The emitted form has been verified against the benthos linter.
+// The record timestamp is epoch SECONDS under the kafka_timestamp_unix metadata
+// key (set by the redpanda/kafka_franz input via record.Timestamp.Unix()).
+// NOTE: Do NOT use kafka_timestamp_ms here — Bloblang's ts_format interprets a
+// bare number as epoch SECONDS, so feeding it epoch milliseconds would produce
+// wildly wrong years (~55000 instead of ~2024). kafka_timestamp_unix is the
+// correct key. The emitted form has been verified against the benthos linter.
 func jodaToGoLayoutForPath(pattern string) string {
 	isLetter := func(b byte) bool {
 		return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z')
@@ -195,7 +199,9 @@ func jodaToGoLayoutForPath(pattern string) string {
 			}
 			token := strings.ReplaceAll(pattern[start:i], "Y", "y")
 			goLayout := jodaToGoLayout(token)
-			sb.WriteString(`${! metadata("kafka_timestamp_ms").number().ts_format("`)
+			// kafka_timestamp_unix is epoch SECONDS — ts_format requires seconds.
+			// Using kafka_timestamp_ms (epoch ms) here would produce wrong dates.
+			sb.WriteString(`${! metadata("kafka_timestamp_unix").number().ts_format("`)
 			sb.WriteString(goLayout)
 			sb.WriteString(`") }`)
 		default:
