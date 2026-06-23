@@ -459,7 +459,7 @@ oracledb_cdc:
 
 func TestIntegrationOracleDBCDCStreaming(t *testing.T) {
 	integration.CheckSkip(t)
-	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
+	cdbConnStr, pdbDB, pdbName := oracledbtest.SetupCDBTestWithPDB(t)
 
 	var (
 		err    error
@@ -530,16 +530,127 @@ func TestIntegrationOracleDBCDCStreaming(t *testing.T) {
 		}
 	}
 
-	t.Run("With internal transaction buffer", func(t *testing.T) {
+	t.Run("With Common Table Expression Filter", func(t *testing.T) {
 		msgChan := make(chan *service.Message, 1)
 
-		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.foo", "CREATE TABLE testdb.foo (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, val NUMBER)"))
-		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.foo2", "CREATE TABLE testdb.foo2 (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, val NUMBER)"))
-		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb2.bar", "CREATE TABLE testdb2.bar (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, val NUMBER)"))
+		require.NoError(t, pdbDB.CreatePDBTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.foo", "CREATE TABLE testdb.foo (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, val NUMBER)"))
+		require.NoError(t, pdbDB.CreatePDBTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.foo2", "CREATE TABLE testdb.foo2 (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, val NUMBER)"))
+		require.NoError(t, pdbDB.CreatePDBTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb2.bar", "CREATE TABLE testdb2.bar (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, val NUMBER)"))
 
 		cfg := `
 oracledb_cdc:
-  connection_string: ` + connStr + `
+  connection_string: ` + cdbConnStr + `
+  pdb_name: ` + pdbName + `
+  stream_snapshot: false
+  logminer:
+    scn_window_size: 20000
+    min_scn_window_size: 1
+    use_cte_query: true
+    backoff_interval: 0s
+  include: ["TESTDB.FOO", "TESTDB.FOO2", "TESTDB2.BAR"]
+  exclude: ["TESTDB.DOESNOTEXIST"]
+  batching:
+    count: 500`
+
+		t.Log("Launching component...")
+		{
+			streamBuilder := service.NewStreamBuilder()
+			require.NoError(t, streamBuilder.AddInputYAML(cfg))
+			require.NoError(t, streamBuilder.SetLoggerYAML(`level: DEBUG`))
+
+			require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+				for _, msg := range mb {
+					msgChan <- msg
+				}
+				return nil
+			}))
+
+			stream, err = streamBuilder.Build()
+			require.NoError(t, err)
+			license.InjectTestService(stream.Resources())
+
+			go func() {
+				if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+					t.Error(err)
+				}
+			}()
+			go func() {
+				<-t.Context().Done()
+				close(msgChan)
+			}()
+		}
+
+		time.Sleep(10 * time.Second)
+
+		// insert initial test data
+		want := 3000
+		for range 1000 {
+			pdbDB.MustExec("INSERT INTO testdb.foo (val) VALUES (1)")
+			pdbDB.MustExec("INSERT INTO testdb.foo2 (val) VALUES (1)")
+			pdbDB.MustExec("INSERT INTO testdb2.bar (val) VALUES (1)")
+		}
+
+		t.Run("Streaming insert changes...", func(t *testing.T) {
+			msgs := collectMessages(t, msgChan, want)
+			mustAssertMetadata(t, "insert", msgs)
+
+			content, err := msgs[0].AsBytes()
+			assert.NoError(t, err)
+			var row map[string]any
+			require.NoError(t, json.Unmarshal(content, &row))
+			assert.Len(t, row, 2)
+			assert.Contains(t, row, "ID")
+			assert.EqualValues(t, "1", row["VAL"])
+		})
+
+		t.Run("Streaming update changes...", func(t *testing.T) {
+			pdbDB.MustExec("UPDATE testdb.foo SET val = 2")
+			pdbDB.MustExec("UPDATE testdb.foo2 SET val = 2")
+			pdbDB.MustExec("UPDATE testdb2.bar SET val = 2")
+
+			msgs := collectMessages(t, msgChan, want)
+			mustAssertMetadata(t, "update", msgs)
+
+			content, err := msgs[0].AsBytes()
+			assert.NoError(t, err)
+			var row map[string]any
+			require.NoError(t, json.Unmarshal(content, &row))
+			assert.Len(t, row, 2)
+			assert.Contains(t, row, "ID")
+			assert.EqualValues(t, "2", row["VAL"])
+		})
+
+		t.Run("Streaming delete changes...", func(t *testing.T) {
+			pdbDB.MustExec("DELETE FROM testdb.foo")
+			pdbDB.MustExec("DELETE FROM testdb.foo2")
+			pdbDB.MustExec("DELETE FROM testdb2.bar")
+
+			msgs := collectMessages(t, msgChan, want)
+			mustAssertMetadata(t, "delete", msgs)
+
+			content, err := msgs[0].AsBytes()
+			assert.NoError(t, err)
+			var row map[string]any
+			require.NoError(t, json.Unmarshal(content, &row))
+			assert.Len(t, row, 2)
+			assert.Contains(t, row, "ID")
+			assert.EqualValues(t, "2", row["VAL"])
+		})
+
+		require.NoError(t, stream.StopWithin(time.Second*10))
+	})
+
+	t.Run("With internal transaction buffer", func(t *testing.T) {
+		msgChan := make(chan *service.Message, 1)
+
+		require.NoError(t, pdbDB.CreatePDBTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.foo", "CREATE TABLE testdb.foo (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, val NUMBER)"))
+		require.NoError(t, pdbDB.CreatePDBTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.foo2", "CREATE TABLE testdb.foo2 (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, val NUMBER)"))
+		require.NoError(t, pdbDB.CreatePDBTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb2.bar", "CREATE TABLE testdb2.bar (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, val NUMBER)"))
+
+		cfg := `
+oracledb_cdc:
+  connection_string: ` + cdbConnStr + `
+  pdb_name: ` + pdbName + `
   stream_snapshot: false
   logminer:
     scn_window_size: 20000
@@ -583,9 +694,9 @@ oracledb_cdc:
 		// insert initial test data
 		want := 3000
 		for range 1000 {
-			db.MustExec("INSERT INTO testdb.foo (val) VALUES (1)")
-			db.MustExec("INSERT INTO testdb.foo2 (val) VALUES (1)")
-			db.MustExec("INSERT INTO testdb2.bar (val) VALUES (1)")
+			pdbDB.MustExec("INSERT INTO testdb.foo (val) VALUES (1)")
+			pdbDB.MustExec("INSERT INTO testdb.foo2 (val) VALUES (1)")
+			pdbDB.MustExec("INSERT INTO testdb2.bar (val) VALUES (1)")
 		}
 
 		t.Run("Streaming insert changes...", func(t *testing.T) {
@@ -602,9 +713,9 @@ oracledb_cdc:
 		})
 
 		t.Run("Streaming update changes...", func(t *testing.T) {
-			db.MustExec("UPDATE testdb.foo SET val = 2")
-			db.MustExec("UPDATE testdb.foo2 SET val = 2")
-			db.MustExec("UPDATE testdb2.bar SET val = 2")
+			pdbDB.MustExec("UPDATE testdb.foo SET val = 2")
+			pdbDB.MustExec("UPDATE testdb.foo2 SET val = 2")
+			pdbDB.MustExec("UPDATE testdb2.bar SET val = 2")
 
 			msgs := collectMessages(t, msgChan, want)
 			mustAssertMetadata(t, "update", msgs)
@@ -619,9 +730,9 @@ oracledb_cdc:
 		})
 
 		t.Run("Streaming delete changes...", func(t *testing.T) {
-			db.MustExec("DELETE FROM testdb.foo")
-			db.MustExec("DELETE FROM testdb.foo2")
-			db.MustExec("DELETE FROM testdb2.bar")
+			pdbDB.MustExec("DELETE FROM testdb.foo")
+			pdbDB.MustExec("DELETE FROM testdb.foo2")
+			pdbDB.MustExec("DELETE FROM testdb2.bar")
 
 			msgs := collectMessages(t, msgChan, want)
 			mustAssertMetadata(t, "delete", msgs)
@@ -641,13 +752,14 @@ oracledb_cdc:
 	t.Run("With cache_resource transaction buffer", func(t *testing.T) {
 		msgChan := make(chan *service.Message, 1)
 
-		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.foo", "CREATE TABLE testdb.foo (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, val NUMBER)"))
-		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.foo2", "CREATE TABLE testdb.foo2 (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, val NUMBER)"))
-		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb2.bar", "CREATE TABLE testdb2.bar (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, val NUMBER)"))
+		require.NoError(t, pdbDB.CreatePDBTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.foo", "CREATE TABLE testdb.foo (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, val NUMBER)"))
+		require.NoError(t, pdbDB.CreatePDBTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.foo2", "CREATE TABLE testdb.foo2 (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, val NUMBER)"))
+		require.NoError(t, pdbDB.CreatePDBTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb2.bar", "CREATE TABLE testdb2.bar (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, val NUMBER)"))
 
 		cfg := `
 oracledb_cdc:
-  connection_string: ` + connStr + `
+  connection_string: ` + cdbConnStr + `
+  pdb_name: ` + pdbName + `
   stream_snapshot: false
   logminer:
     scn_window_size: 20000
@@ -698,9 +810,9 @@ file:
 		// insert initial test data
 		want := 3000
 		for range 1000 {
-			db.MustExec("INSERT INTO testdb.foo (val) VALUES (1)")
-			db.MustExec("INSERT INTO testdb.foo2 (val) VALUES (1)")
-			db.MustExec("INSERT INTO testdb2.bar (val) VALUES (1)")
+			pdbDB.MustExec("INSERT INTO testdb.foo (val) VALUES (1)")
+			pdbDB.MustExec("INSERT INTO testdb.foo2 (val) VALUES (1)")
+			pdbDB.MustExec("INSERT INTO testdb2.bar (val) VALUES (1)")
 		}
 
 		t.Run("Streaming insert changes...", func(t *testing.T) {
@@ -717,9 +829,9 @@ file:
 		})
 
 		t.Run("Streaming update changes...", func(t *testing.T) {
-			db.MustExec("UPDATE testdb.foo SET val = 2")
-			db.MustExec("UPDATE testdb.foo2 SET val = 2")
-			db.MustExec("UPDATE testdb2.bar SET val = 2")
+			pdbDB.MustExec("UPDATE testdb.foo SET val = 2")
+			pdbDB.MustExec("UPDATE testdb.foo2 SET val = 2")
+			pdbDB.MustExec("UPDATE testdb2.bar SET val = 2")
 
 			msgs := collectMessages(t, msgChan, want)
 			mustAssertMetadata(t, "update", msgs)
@@ -734,9 +846,9 @@ file:
 		})
 
 		t.Run("Streaming delete changes...", func(t *testing.T) {
-			db.MustExec("DELETE FROM testdb.foo")
-			db.MustExec("DELETE FROM testdb.foo2")
-			db.MustExec("DELETE FROM testdb2.bar")
+			pdbDB.MustExec("DELETE FROM testdb.foo")
+			pdbDB.MustExec("DELETE FROM testdb.foo2")
+			pdbDB.MustExec("DELETE FROM testdb2.bar")
 
 			msgs := collectMessages(t, msgChan, want)
 			mustAssertMetadata(t, "delete", msgs)
