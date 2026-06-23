@@ -104,6 +104,17 @@ for _, w := range res.Warnings {
 | `InsertField` | `root.<field> = "<value>"` |
 | `ReplaceField` | renames → `root.<new> = this.<old>` + `root.<old> = deleted()`; excludes → `deleted()` |
 | `RegexRouter` | rewrites the `kafka_topic` metadata via `re_replace_all` |
+| `ExtractField` | `root = this.<field>` |
+| `HoistField` | `root = {"<field>": this}` |
+| `MaskField` | `root.<f> = ""` (or the `replacement`) for each masked field |
+| `Cast` | per-field `root.<f> = this.<f>.number()` / `.string()` / `.bool()` |
+| `TimestampConverter` | `root.<field> = this.<field>.ts_unix()` / `.ts_format(...)` / `.ts_parse(...)` (layout flagged with a TODO) |
+| `ValueToKey` | `meta key = this.<field>.string()` |
+
+Both the `$Value` and `$Key` class variants are registered. The generated Bloblang
+targets the value document; for `$Key` variants the mapper adds a `# TODO` + warning
+noting the transform should target the message key (RPCN sets keys via the output
+`key` field / `meta key`, not the value).
 
 Anything outside these lists (other connectors, converters, SMTs, or individual
 fields) is emitted as a commented stub / TODO with a recorded warning.
