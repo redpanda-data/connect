@@ -34,7 +34,7 @@
   {"path":"./internal/impl/mongodb/cdc","timeout":"15m"},
   {"path":"./internal/impl/mqtt"},
   {"path":"./internal/impl/mssqlserver","timeout":"10m"},
-  {"path":"./internal/impl/mssqlserver/replication","skip":true},
+  {"path":"./internal/impl/mssqlserver/replication","timeout":"10m"},
   {"path":"./internal/impl/mysql"},
   {"path":"./internal/impl/nanomsg"},
   {"path":"./internal/impl/nats"},
