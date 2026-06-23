@@ -20,10 +20,11 @@ import (
 // SessionManager manages LogMiner sessions, such as loading
 // logs into LogMiner then starting/ending mining sessions.
 type SessionManager struct {
-	cfg    *Config
-	opts   []string
-	active bool
-	log    *service.Logger
+	cfg         *Config
+	opts        []string
+	active      bool
+	loadedFiles []*LogFile
+	log         *service.Logger
 }
 
 // NewSessionManager creates a new SessionManager with the specified configuration.
@@ -47,6 +48,20 @@ func NewSessionManager(cfg *Config, logger *service.Logger) *SessionManager {
 	}
 }
 
+// logFilesChanged performance a filename check on whether newFiles differs from the currently loaded log files.
+// If they're considered the same ADD_LOGFILE can be skipped.
+func (sm *SessionManager) logFilesChanged(newFiles []*LogFile) bool {
+	if len(sm.loadedFiles) != len(newFiles) {
+		return true
+	}
+	for i, f := range sm.loadedFiles {
+		if f.FileName != newFiles[i].FileName {
+			return true
+		}
+	}
+	return false
+}
+
 // AddLogFile adds one or more redo log files to the LogMiner session for mining, clearing
 // previously loaded files before adding new files to the list of files to be mined.
 func (sm *SessionManager) AddLogFile(ctx context.Context, conn *sql.Conn, files []*LogFile) error {
@@ -64,6 +79,7 @@ func (sm *SessionManager) AddLogFile(ctx context.Context, conn *sql.Conn, files 
 		sm.log.Debugf("Loaded redo log file '%s' into LogMiner", f.FileName)
 	}
 
+	sm.loadedFiles = files
 	return nil
 }
 
@@ -94,6 +110,7 @@ func (sm *SessionManager) EndSession(ctx context.Context, conn *sql.Conn) error 
 	}
 
 	sm.active = false
+	sm.loadedFiles = nil
 	return nil
 }
 

@@ -25,22 +25,29 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/impl/oracledb/replication"
 )
 
-// https://docs.oracle.com/en/error-help/db/ora-01291/
-var errCodeMissingLogFile = 1291
+var (
+	// captures the time between DB commit and publish
+	publishLatencyMetric = "oracledb_cdc_publish_lag_ns"
+	// captures the time from query execution to the first row being returned by LogMiner
+	timeToFirstRowMetric = "oracledb_cdc_logminer_time_to_first_row_ns"
+	// https://docs.oracle.com/en/error-help/db/ora-01291/
+	errCodeMissingLogFile = 1291
+	// https://docs.oracle.com/en/error-help/db/ora-01368/
+	errCodeRedoLogHeaderMismatch = 1368
+)
 
 // LogMiner tracks and streams all change events from the configured change
 // tables tracked in tables.
 type LogMiner struct {
-	cfg           *Config
-	tables        []replication.UserTable
-	publisher     replication.ChangePublisher
-	log           *service.Logger
-	logCollector  *LogFileCollector
-	currentSCN    uint64
-	sessionMgr    *SessionManager
-	db            *sql.DB
-	SleepDuration time.Duration
-	dmlParser     *sqlredo.Parser
+	cfg          *Config
+	tables       []replication.UserTable
+	publisher    replication.ChangePublisher
+	logCollector *LogFileCollector
+	currentSCN   uint64
+	windowSize   int
+	sessionMgr   *SessionManager
+	db           *sql.DB
+	dmlParser    *sqlredo.Parser
 
 	// Pre-built query string for LogMiner contents
 	logMinerQuery string
@@ -52,6 +59,12 @@ type LogMiner struct {
 	// lob types are split between redo log lines, we use lobStates to track them
 	// until we have all data to merge into published INSERT or UPDATE event.
 	lobStates map[sqlredo.TransactionID]*sqlredo.TxnLOBState
+	// suppresses repeated "caught up" log lines within a single idle stretch
+	caughtUpLogged bool
+
+	publishLagMetric     *service.MetricTimer
+	timeToFirstRowMetric *service.MetricTimer
+	log                  *service.Logger
 }
 
 // NewMiner creates a new instance of LogMiner responsible for paging through change events based on the tables param.
@@ -99,11 +112,13 @@ func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replicat
 	`, buf.String())
 
 	lm := &LogMiner{
-		cfg:       cfg,
-		db:        db,
-		tables:    userTables,
-		publisher: publisher,
-		log:       logger,
+		cfg:                  cfg,
+		db:                   db,
+		tables:               userTables,
+		publisher:            publisher,
+		publishLagMetric:     metrics.NewTimer(publishLatencyMetric),
+		timeToFirstRowMetric: metrics.NewTimer(timeToFirstRowMetric),
+		log:                  logger,
 
 		// logminer specific
 		logMinerQuery: logMinerQuery,
@@ -112,6 +127,7 @@ func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replicat
 		txnCache:      txnCache,
 		dmlParser:     sqlredo.NewParser(),
 		lobStates:     make(map[sqlredo.TransactionID]*sqlredo.TxnLOBState),
+		windowSize:    cfg.SCNWindowSize,
 	}
 	if lm.txnCache == nil {
 		lm.txnCache = NewInMemoryCache(cfg.MaxTransactionEvents, metrics, logger)
@@ -164,40 +180,30 @@ func (lm *LogMiner) ReadChanges(ctx context.Context, startPos replication.SCN) (
 			if caughtUp, err := lm.miningCycle(ctx, conn); err != nil {
 				return fmt.Errorf("mining logs: %w", err)
 			} else if caughtUp {
-				lm.log.Debugf("Caught up with redo logs, backing off..")
+				if !lm.caughtUpLogged {
+					lm.log.Debugf("Caught up with redo logs, backing off for %s...", lm.cfg.MiningBackoffInterval)
+					lm.caughtUpLogged = true
+				}
 				time.Sleep(lm.cfg.MiningBackoffInterval)
 			} else {
+				lm.caughtUpLogged = false
 				time.Sleep(lm.cfg.MiningInterval)
 			}
 		}
 	}
 }
 
-// FindStartPos finds the earliest possible SCN that exists within a log that's still available.
+// FindStartPos returns the database's current SCN so that streaming begins from
+// the present moment rather than replaying historical redo logs.
 func (lm *LogMiner) FindStartPos(ctx context.Context) (replication.SCN, error) {
-	query := `
-		SELECT MIN(FIRST_CHANGE#) AS FIRST_SCN
-		FROM (
-			SELECT FIRST_CHANGE# FROM V$LOG
-			UNION
-			SELECT FIRST_CHANGE# FROM V$ARCHIVED_LOG
-			WHERE NAME IS NOT NULL
-			AND ARCHIVED = 'YES'
-			AND STATUS = 'A'
-			AND DEST_ID IN (
-				SELECT DEST_ID
-				FROM V$ARCHIVE_DEST_STATUS
-				WHERE STATUS='VALID' AND TYPE='LOCAL' AND ROWNUM=1
-			)
-		)
-	`
-
-	var firstSCN uint64
-	if err := lm.db.QueryRowContext(ctx, query).Scan(&firstSCN); err != nil {
-		return 0, fmt.Errorf("querying oldest available SCN in logs: %w", err)
+	var currentPos uint64
+	if err := lm.db.QueryRowContext(ctx, "SELECT CURRENT_SCN FROM V$DATABASE").Scan(&currentPos); err != nil {
+		return 0, fmt.Errorf("querying current SCN from database: %w", err)
 	}
-
-	return replication.SCN(firstSCN), nil
+	if currentPos == 0 {
+		return 0, errors.New("database returned an invalid CURRENT_SCN value (0)")
+	}
+	return replication.SCN(currentPos), nil
 }
 
 func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp bool, err error) {
@@ -211,9 +217,15 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 		return true, nil
 	}
 
+	if deferMiningCycle(lm.currentSCN, dbCurrentSCN, lm.cfg.MinSCNWindowSize) {
+		return true, nil
+	}
+
 	endSCN := dbCurrentSCN
-	if maxRange := uint64(lm.cfg.SCNWindowSize); lm.currentSCN+maxRange < dbCurrentSCN {
+	hitCap := false
+	if maxRange := uint64(lm.windowSize); lm.currentSCN+maxRange < dbCurrentSCN {
 		endSCN = lm.currentSCN + maxRange
+		hitCap = true
 	}
 
 	// Restart the session on every cycle with explicit SCN bounds. Oracle's START_LOGMNR
@@ -239,15 +251,25 @@ func (lm *LogMiner) miningCycle(ctx context.Context, conn *sql.Conn) (caughtUp b
 				"   Note: This will result in data loss for events in the purged logs, so a snapshot may be required.",
 				lm.currentSCN, err, lm.cfg.SCNWindowSize, lm.cfg.MiningBackoffInterval)
 		}
+		if errors.As(err, &oraErr) && oraErr.ErrCode == errCodeRedoLogHeaderMismatch {
+			lm.log.Debugf("ORA-01368: redo log sequence recycled before session could start (SCN range %d–%d); the log will be available as an archived log on next cycle", lm.currentSCN, endSCN)
+			return false, nil
+		}
 		return false, fmt.Errorf("preparing logs and starting session at position %d: %w", lm.currentSCN, err)
 	}
 
 	// Query and process redoEvents from V$LOGMNR_CONTENTS
 	// The session is already active, just query it
 	if err := lm.queryLogMinerContents(ctx, conn, lm.currentSCN, endSCN, lm.processRedoEvent); err != nil {
+		var oraErr *goora.OracleError
+		if errors.As(err, &oraErr) && oraErr.ErrCode == errCodeRedoLogHeaderMismatch {
+			lm.log.Debugf("ORA-01368: redo log sequence recycled mid-query (SCN range %d–%d); retrying — archived log will be used on next cycle", lm.currentSCN, endSCN)
+			return false, nil
+		}
 		return false, fmt.Errorf("querying logminer contents between %d and %d: %w", lm.currentSCN, endSCN, err)
 	}
 
+	lm.windowSize = adaptWindowSize(lm.windowSize, hitCap, lm.cfg.MinSCNWindowSize, lm.cfg.MaxSCNWindowSize, lm.cfg.SCNWindowSize)
 	lm.currentSCN = endSCN
 	return endSCN >= dbCurrentSCN, nil
 }
@@ -512,6 +534,7 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 				if err := lm.publisher.Publish(ctx, msg); err != nil {
 					return fmt.Errorf("publishing event with SCN '%d': %w", redoEvent.SCN, err)
 				}
+				lm.publishLagMetric.Timing(time.Since(redoEvent.Timestamp).Nanoseconds())
 			}
 
 			if err := lm.txnCache.CommitTransaction(ctx, redoEvent.TransactionID); err != nil {
@@ -757,14 +780,22 @@ func (lm *LogMiner) queryLogMinerContents(ctx context.Context, conn *sql.Conn, s
 	}
 
 	// Use the pre-built query from initialization
+	queryStart := time.Now()
 	rows, err := conn.QueryContext(ctx, lm.logMinerQuery, startSCN, endSCN)
 	if err != nil {
 		return fmt.Errorf("querying logminer: %w", err)
 	}
 	defer rows.Close()
 
-	var pending *sqlredo.RedoEvent // accumulates CSF continuation fragments
+	var (
+		pending  *sqlredo.RedoEvent // accumulates CSF continuation fragments
+		firstRow = true
+	)
 	for rows.Next() {
+		if firstRow {
+			lm.timeToFirstRowMetric.Timing(time.Since(queryStart).Nanoseconds())
+			firstRow = false
+		}
 		event := &sqlredo.RedoEvent{}
 		var (
 			commitSCN sql.NullInt64 // COMMIT_SCN can be NULL for uncommitted transactions
@@ -850,8 +881,8 @@ func NewLogFileCollector() *LogFileCollector {
 	return &LogFileCollector{}
 }
 
-// GetLogs collects log files whose SCN range overlaps [startSCN, endSCN].
-func (*LogFileCollector) GetLogs(ctx context.Context, conn *sql.Conn, startSCN, endSCN uint64) ([]*LogFile, error) {
+// GetLogsBySCNRange collects log files whose SCN range overlaps [startSCN, endSCN].
+func (*LogFileCollector) GetLogsBySCNRange(ctx context.Context, conn *sql.Conn, startSCN, endSCN uint64) ([]*LogFile, error) {
 	query := `
 		SELECT FILE_NAME, FIRST_CHANGE, NEXT_CHANGE, SEQ, TYPE, THREAD
 		FROM (
@@ -945,33 +976,29 @@ func deduplicateLogs(archived, online []*LogFile) []*LogFile {
 	return out
 }
 
-// prepareLogsAndStartSession collects redo/archive logs for the given SCN range,
-// loads them into LogMiner, and starts a new mining session.
-// It is called on every mining cycle with explicit bounds. Passing ENDSCN=0 to
-// START_LOGMNR would freeze the session's view at session-start time, making events
-// written after that point invisible. An explicit endSCN ensures all events in
-// [startSCN, endSCN] are accessible.
+// prepareLogsAndStartSession collects redo/archive logs for the given SCN range and
+// starts (or restarts) a LogMiner session with explicit SCN bounds. Files are only reloaded
+// (via ADD_LOGFILE) when the required set of logs that contain SCN range changes - so the session is kept
+// open across consecutive windows that cover the same log files.
 func (lm *LogMiner) prepareLogsAndStartSession(ctx context.Context, conn *sql.Conn, startSCN, endSCN uint64) error {
-	// End existing session if active
-	if lm.sessionMgr.IsActive() {
-		if err := lm.sessionMgr.EndSession(ctx, conn); err != nil {
-			lm.log.Errorf("Failed to end existing LogMiner session: %v", err)
-		}
-	}
-
-	// Collect log files that contain changes from current SCN
-	var (
-		logFiles []*LogFile
-		err      error
-	)
-	if logFiles, err = lm.logCollector.GetLogs(ctx, conn, startSCN, endSCN); err != nil {
+	logFiles, err := lm.logCollector.GetLogsBySCNRange(ctx, conn, startSCN, endSCN)
+	if err != nil {
 		return fmt.Errorf("collecting redo logs for logminer: %w", err)
 	}
 	lm.log.Debugf("Collected %d redo log file(s) for LogMiner", len(logFiles))
 
-	if err := lm.sessionMgr.AddLogFile(ctx, conn, logFiles); err != nil {
-		return fmt.Errorf("loading %d log files into logminer: %w", len(logFiles), err)
+	if lm.sessionMgr.logFilesChanged(logFiles) {
+		// Log files have changed (first start or log switch) — full reload required.
+		if lm.sessionMgr.IsActive() {
+			if err := lm.sessionMgr.EndSession(ctx, conn); err != nil {
+				lm.log.Errorf("Failed to end existing LogMiner session: %v", err)
+			}
+		}
+		if err := lm.sessionMgr.AddLogFile(ctx, conn, logFiles); err != nil {
+			return fmt.Errorf("loading %d log files into logminer: %w", len(logFiles), err)
+		}
 	}
+
 	if err := lm.sessionMgr.StartSession(ctx, conn, startSCN, endSCN, false); err != nil {
 		return fmt.Errorf("starting logminer session: %w", err)
 	}
@@ -1017,4 +1044,19 @@ func toMessageEvent(dml *sqlredo.DMLEvent, scn uint64, checkpointSCN uint64, com
 	}
 
 	return m
+}
+
+func deferMiningCycle(currentSCN, dbCurrentSCN uint64, minWindowSize int) bool {
+	// check to see if SCN window size is greater than configured value
+	if minWindowSize <= 0 || dbCurrentSCN <= currentSCN {
+		return false
+	}
+	return dbCurrentSCN-currentSCN < uint64(minWindowSize)
+}
+
+func adaptWindowSize(currentSize int, hitCap bool, minSize, maxSize, increment int) int {
+	if hitCap {
+		return min(currentSize+increment, maxSize)
+	}
+	return max(currentSize-increment, minSize)
 }

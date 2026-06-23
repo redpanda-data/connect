@@ -47,6 +47,8 @@ input:
     snapshot_max_batch_size: 1000
     logminer:
       scn_window_size: 20000
+      min_scn_window_size: 1000
+      max_scn_window_size: 100000
       backoff_interval: 5s
       mining_interval: 300ms
       strategy: online_catalog
@@ -87,6 +89,8 @@ input:
     snapshot_max_batch_size: 1000
     logminer:
       scn_window_size: 20000
+      min_scn_window_size: 1000
+      max_scn_window_size: 100000
       backoff_interval: 5s
       mining_interval: 300ms
       strategy: online_catalog
@@ -126,7 +130,7 @@ This input adds the following metadata fields to each message:
 - scn: the System Change Number in Oracle.
 - transaction_id: The Oracle transaction ID in `USN.SLOT.SEQ` format, identifying the transaction that produced the change. Not present on snapshot (`read`) messages.
 - source_ts_ms: The timestamp of when Oracle wrote the change record into the redo log, expressed as milliseconds since the Unix epoch. This reflects the database server's wall-clock time at the moment the DML executed, not the transaction commit time.
-- commit_ts_ms: The timestamp of the transaction commit, expressed as milliseconds since the Unix epoch. Not present on snapshot (`read`) messages.
+- commit_ts_ms: The timestamp of the transaction commit, expressed as milliseconds since the Unix epoch. Sourced from `V$LOGMNR_CONTENTS.TIMESTAMP` on the COMMIT redo record — this is Oracle's wall-clock time when the commit was written to the redo log, not a dedicated commit-timestamp column. Not present on snapshot (`read`) messages.
 - schema: The table schema, for use with schema-aware downstream processors such as `schema_registry_encode`. When new columns are detected in CDC events, the schema is automatically refreshed from the Oracle catalog. Dropped columns are reflected after a connector restart.
 
 == Permissions
@@ -228,6 +232,24 @@ The SCN range to mine per cycle. Each cycle reads changes between the current SC
 *Type*: `int`
 
 *Default*: `20000`
+
+=== `logminer.min_scn_window_size`
+
+The minimum SCN gap required before starting a new LogMiner session. When the gap between the connector's current position and the database's current SCN is smaller than this value, the mining cycle is skipped and the connector backs off instead. This prevents excessive LogMiner start/stop cycles on low-traffic databases where Oracle background activity advances the SCN without producing relevant events. Set to 0 to disable.
+
+
+*Type*: `int`
+
+*Default*: `1000`
+
+=== `logminer.max_scn_window_size`
+
+The maximum SCN range that can be mined in a single cycle. The window starts at scn_window_size and grows by scn_window_size each cycle that ends at the cap (backlog present), up to this limit. It shrinks by the same step each cycle that catches up to the database. This allows the connector to automatically mine larger windows during heavy backlog and smaller windows during steady state.
+
+
+*Type*: `int`
+
+*Default*: `100000`
 
 === `logminer.backoff_interval`
 

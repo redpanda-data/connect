@@ -1622,12 +1622,17 @@ func (d *dynamoDBCDCInput) startTableStreamCoordinator(ctx context.Context, tabl
 	}
 
 	// Track running shard readers for this table
+	var readerWg sync.WaitGroup
 	activeShards := make(map[string]context.CancelFunc)
 	defer func() {
-		// Cancel all active shard readers on shutdown
+		// Cancel all active shard readers on shutdown and wait for them to
+		// exit. The multi-table watcher closes d.msgChan once all coordinators
+		// have returned, so returning while a reader is still blocked on a
+		// msgChan send would panic with a send on a closed channel.
 		for _, cancelFn := range activeShards {
 			cancelFn()
 		}
+		readerWg.Wait()
 	}()
 
 	refreshTicker := time.NewTicker(shardRefreshInterval)
@@ -1643,7 +1648,9 @@ func (d *dynamoDBCDCInput) startTableStreamCoordinator(ctx context.Context, tabl
 			if _, exists := activeShards[shardID]; !exists && !reader.exhausted {
 				shardCtx, shardCancel := context.WithCancel(ctx)
 				activeShards[shardID] = shardCancel
-				go d.startTableShardReader(shardCtx, tableName, ts, shardID)
+				readerWg.Go(func() {
+					d.startTableShardReader(shardCtx, tableName, ts, shardID)
+				})
 			}
 		}
 		ts.mu.RUnlock()
