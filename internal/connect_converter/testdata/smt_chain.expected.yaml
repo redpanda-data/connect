@@ -8,7 +8,7 @@ input:
     consumer_group: connect-s3 # TODO: confirm consumer group
 pipeline:
   processors:
-    - mapping: meta kafka_topic = metadata("kafka_topic").re_replace_all("(.*)", "prefix_$1")
+    - mapping: meta kafka_topic = @kafka_topic.re_replace_all("(.*)", "prefix_$1")
     - mapping: root.src = "kafka"
 output:
   aws_s3:

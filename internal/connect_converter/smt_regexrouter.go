@@ -25,6 +25,6 @@ func (regexRouterSMT) Map(smt SMTConfig, ctx *MapCtx) ([]*yaml.Node, error) {
 	replacement, _ := smt.Props["replacement"].(string)
 	ctx.Warn(smt.Alias, "RegexRouter rewrites the topic name; verify the rewrite applies to your connector's direction (sink path vs source topic)")
 	// Kafka Connect uses $1 backrefs; Go's re_replace_all uses $1 too.
-	expr := fmt.Sprintf(`meta kafka_topic = metadata("kafka_topic").re_replace_all(%q, %q)`, regex, replacement)
+	expr := fmt.Sprintf(`meta kafka_topic = @kafka_topic.re_replace_all(%q, %q)`, regex, replacement)
 	return []*yaml.Node{mappingProc(scalar(expr))}, nil
 }

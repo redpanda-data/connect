@@ -24,7 +24,11 @@ type replaceFieldSMT struct{}
 
 func (replaceFieldSMT) Map(smt SMTConfig, _ *MapCtx) ([]*yaml.Node, error) {
 	var lines []string
+	found := false
+
+	// renames: old:new,old2:new2
 	if renames, ok := smt.Props["renames"].(string); ok && renames != "" {
+		found = true
 		for pair := range strings.SplitSeq(renames, ",") {
 			kvp := strings.SplitN(strings.TrimSpace(pair), ":", 2)
 			if len(kvp) == 2 {
@@ -33,15 +37,44 @@ func (replaceFieldSMT) Map(smt SMTConfig, _ *MapCtx) ([]*yaml.Node, error) {
 			}
 		}
 	}
-	if exclude, ok := smt.Props["exclude"].(string); ok && exclude != "" {
-		for f := range strings.SplitSeq(exclude, ",") {
+
+	// exclude / blacklist: field1,field2
+	excludeVal, _ := smt.Props["exclude"].(string)
+	blacklistVal, _ := smt.Props["blacklist"].(string)
+	excluded := excludeVal
+	if excluded == "" {
+		excluded = blacklistVal
+	}
+	if excluded != "" {
+		found = true
+		for f := range strings.SplitSeq(excluded, ",") {
 			lines = append(lines, fmt.Sprintf("root.%s = deleted()", strings.TrimSpace(f)))
 		}
 	}
+
+	// include / whitelist: field1,field2 — keep only listed fields.
+	includeVal, _ := smt.Props["include"].(string)
+	whitelistVal, _ := smt.Props["whitelist"].(string)
+	included := includeVal
+	if included == "" {
+		included = whitelistVal
+	}
+	if included != "" {
+		found = true
+		// Emit projection: root = {} then root.<f> = this.<f> for each kept field.
+		lines = append(lines, "root = {}")
+		for f := range strings.SplitSeq(included, ",") {
+			trimmed := strings.TrimSpace(f)
+			if trimmed != "" {
+				lines = append(lines, fmt.Sprintf("root.%s = this.%s", trimmed, trimmed))
+			}
+		}
+	}
+
 	var expr *yaml.Node
-	if len(lines) == 0 {
+	if !found {
 		expr = scalar("root = this")
-		expr.LineComment = "TODO: ReplaceField with include/whitelist semantics — map manually"
+		expr.LineComment = "TODO: ReplaceField has no parseable properties (renames/exclude/blacklist/include/whitelist) — map manually"
 	} else {
 		expr = scalar(strings.Join(lines, "\n"))
 	}

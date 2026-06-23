@@ -84,7 +84,8 @@ func TestSMTCast(t *testing.T) {
 	require.NoError(t, err)
 	assertValidRPCN(t, res.YAML)
 	y := string(res.YAML)
-	assert.Contains(t, y, "this.age.number()")
+	// Gap 3: integer types now use .int64(), not .number()
+	assert.Contains(t, y, "this.age.int64()")
 	assert.Contains(t, y, "this.score.number()")
 }
 

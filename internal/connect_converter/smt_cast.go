@@ -26,7 +26,9 @@ type castSMT struct{}
 // method. The bool reports whether the type is known.
 func castMethod(typ string) (string, bool) {
 	switch strings.TrimSpace(typ) {
-	case "int8", "int16", "int32", "int64", "float32", "float64":
+	case "int8", "int16", "int32", "int64":
+		return "int64", true
+	case "float32", "float64":
 		return "number", true
 	case "string":
 		return "string", true
@@ -39,6 +41,22 @@ func castMethod(typ string) (string, bool) {
 
 func (castSMT) Map(smt SMTConfig, ctx *MapCtx) ([]*yaml.Node, error) {
 	spec, _ := smt.Props["spec"].(string)
+
+	// Detect whole-value form: a single token with no colon.
+	trimmedSpec := strings.TrimSpace(spec)
+	if trimmedSpec != "" && !strings.Contains(trimmedSpec, ":") && !strings.Contains(trimmedSpec, ",") {
+		// whole-value/whole-key cast
+		var expr *yaml.Node
+		if method, ok := castMethod(trimmedSpec); ok {
+			expr = scalar(fmt.Sprintf("root = this.%s()", method))
+		} else {
+			expr = scalar("root = this")
+			expr.LineComment = "TODO: Cast whole-value with unknown type " + trimmedSpec + " — map manually"
+			ctx.Warn(smt.Alias, "Cast whole-value spec has unrecognised type "+trimmedSpec+"; emitted a passthrough stub")
+		}
+		annotateKeyVariant(smt, expr, ctx)
+		return []*yaml.Node{mappingProc(expr)}, nil
+	}
 
 	var lines []string
 	var hadUnknown bool
