@@ -166,3 +166,118 @@ END;`)
 	initialSCN := binary.LittleEndian.Uint64(expectedSCN)
 	assert.Greaterf(t, finalSCN, initialSCN, "expected final SCN (%d) to have advanced beyond initial SCN (%d)", finalSCN, initialSCN)
 }
+
+func TestIntegrationCheckpointCacheStoredProcRecreated(t *testing.T) {
+	integration.CheckSkip(t)
+
+	cdbConnStr, pdbDB, pdbName := oracledbtest.SetupCDBTestWithPDB(t)
+	require.NoError(t, pdbDB.CreatePDBTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.srpfoo",
+		"CREATE TABLE testdb.srpfoo (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY)"))
+
+	cdbDB, err := sql.Open("oracle", cdbConnStr)
+	require.NoError(t, err)
+	t.Cleanup(func() { assert.NoError(t, cdbDB.Close()) })
+	require.NoError(t, cdbDB.PingContext(t.Context()))
+
+	// Proc names are derived as <TABLE_NAME>_UPDATE — simulating a prior deployment
+	// that used a different table name, and therefore a different proc name.
+	oldName := fmt.Sprintf("C##RPCN.CDC_CHECKPOINT_%s_OLD", strings.ToUpper(pdbName))
+	oldProcName := fmt.Sprintf("CDC_CHECKPOINT_%s_OLD_UPDATE", strings.ToUpper(pdbName))
+	t.Log("Pre-creating old cache table and stale stored procedure...")
+	{
+		_, err = cdbDB.ExecContext(t.Context(), fmt.Sprintf(`CREATE TABLE %s (cache_key VARCHAR2(10) NOT NULL PRIMARY KEY, cache_val RAW(8))`, oldName))
+		require.NoError(t, err)
+
+		_, err = cdbDB.ExecContext(t.Context(), fmt.Sprintf(`
+		CREATE PROCEDURE C##RPCN.%s (p_key IN VARCHAR2, p_value IN RAW) AS v_count NUMBER;
+		BEGIN
+			SELECT COUNT(*) INTO v_count FROM %s WHERE cache_key = p_key;
+			IF v_count > 0 THEN
+				UPDATE %s SET cache_val = p_value WHERE cache_key = p_key;
+			ELSE
+				INSERT INTO %s (cache_key, cache_val) VALUES (p_key, p_value);
+			END IF;
+			COMMIT;
+		END;`, oldProcName, oldName, oldName, oldName))
+		require.NoError(t, err)
+	}
+
+	// The new cache table name the connector will be configured with.
+	newName := fmt.Sprintf("C##RPCN.MMM_CDC_CHECKPOINT_%s", strings.ToUpper(pdbName))
+	newTableName := fmt.Sprintf("MMM_CDC_CHECKPOINT_%s", strings.ToUpper(pdbName))
+	newProcName := fmt.Sprintf("MMM_CDC_CHECKPOINT_%s_UPDATE", strings.ToUpper(pdbName))
+
+	t.Logf("Launching connector with new checkpoint_cache_table_name %s...", newName)
+	{
+		cfg := `
+oracledb_cdc:
+  connection_string: %s
+  pdb_name: %s
+  checkpoint_cache_table_name: %s
+  stream_snapshot: false
+  max_parallel_snapshot_tables: 1
+  snapshot_max_batch_size: 10
+  logminer:
+    scn_window_size: 20000
+    backoff_interval: 1s
+  include: ["TESTDB.SRPFOO"]
+  batching:
+    count: 500`
+
+		streamBuilder := service.NewStreamBuilder()
+		require.NoError(t, streamBuilder.AddInputYAML(fmt.Sprintf(cfg, cdbConnStr, pdbName, newName)))
+		require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, _ service.MessageBatch) error {
+			return nil
+		}))
+
+		stream, err := streamBuilder.Build()
+		require.NoError(t, err)
+		license.InjectTestService(stream.Resources())
+
+		go func() {
+			if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+				t.Error(err)
+			}
+		}()
+
+		assert.Eventually(t, func() bool {
+			var count int
+			return cdbDB.QueryRowContext(t.Context(),
+				`SELECT COUNT(*) FROM all_tables WHERE owner = 'C##RPCN' AND table_name = :1`,
+				newTableName).Scan(&count) == nil && count > 0
+		}, time.Minute, time.Second, "expected new checkpoint cache table %q to be created", newName)
+
+		require.NoError(t, stream.StopWithin(time.Second*10))
+	}
+
+	t.Log("Verify new stored procedure was created and references new checkpoint cache table")
+	{
+		var procSource strings.Builder
+		rows, err := cdbDB.QueryContext(t.Context(), `SELECT text FROM all_source WHERE owner = 'C##RPCN' AND name = :1 AND type = 'PROCEDURE' ORDER BY line`, newProcName)
+		require.NoError(t, err)
+		t.Cleanup(func() { assert.NoError(t, rows.Close()) })
+		for rows.Next() {
+			var line string
+			require.NoError(t, rows.Scan(&line))
+			procSource.WriteString(line)
+		}
+		require.NoError(t, rows.Err())
+
+		body := procSource.String()
+		assert.NotEmpty(t, body, "stored procedure %q should have been created", newProcName)
+		assert.Contains(t, body, strings.ToUpper(newName), "stored procedure should reference the new cache table")
+		assert.NotContains(t, body, strings.ToUpper(oldName), "stored procedure should not reference the old cache table")
+	}
+
+	t.Log("Verify old cache table and stored procedure are left untouched")
+	{
+		// we don't want delete permission so customers need to clean these up if changing names.
+		var oldTableCount int
+		require.NoError(t, cdbDB.QueryRowContext(t.Context(), `SELECT COUNT(*) FROM all_tables WHERE owner = 'C##RPCN' AND table_name = :1`, fmt.Sprintf("CDC_CHECKPOINT_%s_OLD", strings.ToUpper(pdbName))).Scan(&oldTableCount))
+		assert.Equal(t, 1, oldTableCount, "old cache table should still exist")
+
+		var oldProcCount int
+		require.NoError(t, cdbDB.QueryRowContext(t.Context(), `SELECT COUNT(*) FROM all_procedures WHERE owner = 'C##RPCN' AND object_name = :1 AND object_type = 'PROCEDURE'`, oldProcName).Scan(&oldProcCount))
+		assert.Equal(t, 1, oldProcCount, "old stored procedure should still exist")
+	}
+}
