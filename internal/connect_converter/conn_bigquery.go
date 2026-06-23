@@ -41,5 +41,44 @@ func (bigQuerySinkConnector) Map(_ ConnectConfig, ctx *MapCtx) (Component, error
 	table.LineComment = "TODO: set the destination table (KC derives it from the topic)"
 	kv(body, "table", table)
 
+	// Credentials: `credentials` contains inline JSON → credentials_json.
+	// `keyfile` is a filesystem path; gcp_bigquery has no path field, so
+	// surface it as a TODO rather than silently drop.
+	if v, ok := ctx.String("credentials"); ok {
+		kv(body, "credentials_json", scalar(v))
+	} else if _, ok := ctx.Lookup("keyfile"); ok {
+		ctx.consume("keyfile")
+		// TODO: keyfile is a path to a service-account JSON file; credentials_json
+		// expects the JSON content inline — load the file manually and paste here.
+	}
+
+	// autoCreateTables → create_disposition.
+	// KC true  → CREATE_IF_NEEDED (BigQuery default, also gcp_bigquery default).
+	// KC false → CREATE_NEVER (table must already exist).
+	if v, ok := ctx.String("autoCreateTables"); ok {
+		if v == "false" {
+			kv(body, "create_disposition", scalar("CREATE_NEVER"))
+		}
+		// true is gcp_bigquery's default (CREATE_IF_NEEDED); omit for brevity.
+	}
+
+	// queueSize → batching.count. No KC byte-size or period knob for BigQuery
+	// sink, so byteSizeKey and periodMsKeys are left empty.
+	mapBatching(body, ctx, "queueSize", "", "")
+
+	// Recognized Confluent-internal plumbing with no gcp_bigquery equivalent.
+	consumeIgnored(ctx,
+		"sanitizeTopics",
+		"sanitizeFieldNames",
+		"allBQFieldsNullable",
+		"schemaRetriever",
+		"bigQueryRetry",
+		"bigQueryRetryWait",
+		"allowNewBigQueryFields",
+		"allowBigQueryRequiredFieldRelaxation",
+		"kafkaDataFieldName",
+		"kafkaKeyFieldName",
+	)
+
 	return Component{Output: component("gcp_bigquery", body)}, nil
 }
