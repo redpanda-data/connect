@@ -44,3 +44,20 @@ func TestConvertWithJSONValueConverter_NoProcessor(t *testing.T) {
 	assertValidRPCN(t, res.YAML)
 	assert.NotContains(t, string(res.YAML), "schema_registry_decode")
 }
+
+func TestSnowflakeJsonConverterNoProcessor(t *testing.T) {
+	in := []byte(`{"name":"s3","config":{
+	  "connector.class":"io.confluent.connect.s3.S3SinkConnector",
+	  "s3.bucket.name":"b",
+	  "value.converter":"com.snowflake.kafka.connector.records.SnowflakeJsonConverter",
+	  "topics":"orders"
+	}}`)
+	res, err := Convert(in)
+	require.NoError(t, err)
+	assertValidRPCN(t, res.YAML)
+	assert.NotContains(t, string(res.YAML), "schema_registry_decode")
+	// Confirm no warning about unsupported value converter.
+	for _, w := range res.Warnings {
+		assert.NotContains(t, w.Field, "unsupported value converter", "SnowflakeJsonConverter must not produce an unsupported-converter warning")
+	}
+}

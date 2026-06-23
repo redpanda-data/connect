@@ -67,6 +67,42 @@ func TestConvertSnowflakeStreamingSink(t *testing.T) {
 	assert.NotContains(t, y, "unsupported connector.class")
 }
 
+func TestConvertSnowflakeTopic2Table(t *testing.T) {
+	baseConfig := `"connector.class":"com.snowflake.kafka.connector.SnowflakeSinkConnector",` +
+		`"snowflake.url.name":"acct.snowflakecomputing.com",` +
+		`"snowflake.user.name":"svc",` +
+		`"snowflake.role.name":"R",` +
+		`"snowflake.database.name":"DB",` +
+		`"snowflake.schema.name":"PUBLIC",` +
+		`"topics":"orders_topic"`
+
+	t.Run("single mapping sets table without TODO", func(t *testing.T) {
+		in := []byte(`{"name":"sf","config":{` + baseConfig + `,"snowflake.topic2table.map":"orders_topic:ORDERS_RAW"}}`)
+		res, err := Convert(in)
+		require.NoError(t, err)
+		y := string(res.YAML)
+		assertValidRPCN(t, res.YAML)
+		assert.Contains(t, y, "table: ORDERS_RAW")
+		assert.NotContains(t, y, "unmapped field snowflake.topic2table.map")
+		for _, w := range res.Warnings {
+			assert.NotEqual(t, "snowflake.topic2table.map", w.Field, "topic2table.map must not surface as unmapped")
+		}
+	})
+
+	t.Run("multi mapping sets first table with TODO comment", func(t *testing.T) {
+		in := []byte(`{"name":"sf","config":{` + baseConfig + `,"snowflake.topic2table.map":"a:TA,b:TB"}}`)
+		res, err := Convert(in)
+		require.NoError(t, err)
+		y := string(res.YAML)
+		assertValidRPCN(t, res.YAML)
+		assert.Contains(t, y, "table: TA")
+		assert.Contains(t, y, "TODO")
+		for _, w := range res.Warnings {
+			assert.NotEqual(t, "snowflake.topic2table.map", w.Field, "topic2table.map must not surface as unmapped")
+		}
+	})
+}
+
 func TestConvertSnowflakeSinkFull(t *testing.T) {
 	in := []byte(`{"name":"sf-full","config":{
 	  "connector.class":"com.snowflake.kafka.connector.SnowflakeSinkConnector",

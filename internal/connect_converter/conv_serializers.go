@@ -15,6 +15,9 @@ func init() {
 	registerConverter("io.confluent.connect.protobuf.ProtobufConverter", schemaRegistryConverter{})
 	registerConverter("org.apache.kafka.connect.json.JsonConverter", noopConverter{})
 	registerConverter("org.apache.kafka.connect.storage.StringConverter", noopConverter{})
+	// Snowflake-bundled converters.
+	registerConverter("com.snowflake.kafka.connector.records.SnowflakeJsonConverter", noopConverter{})
+	registerConverter("com.snowflake.kafka.connector.records.SnowflakeAvroConverter", schemaRegistryConverter{})
 }
 
 // schemaRegistryConverter emits a schema_registry_decode processor.

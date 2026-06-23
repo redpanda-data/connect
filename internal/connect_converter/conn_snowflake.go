@@ -8,6 +8,8 @@
 
 package connectconverter
 
+import "strings"
+
 func init() {
 	registerConnector("com.snowflake.kafka.connector.SnowflakeSinkConnector", snowflakeSinkConnector{})
 	registerConnector("com.snowflake.kafka.connector.SnowflakeStreamingSinkConnector", snowflakeSinkConnector{})
@@ -72,9 +74,29 @@ func (snowflakeSinkConnector) Map(_ ConnectConfig, ctx *MapCtx) (Component, erro
 	mapOptional("snowflake.private.key.passphrase", "private_key_pass")
 
 	ctx.consume("topics")
-	table := scalar("")
-	table.LineComment = "TODO: set the destination table (KC derives it from the topic)"
-	kv(body, "table", table)
+
+	// topic2table.map has the form "topic1:table1,topic2:table2".
+	// RPCN snowflake_streaming has a single table per output, so we use the
+	// first entry's table value. If multiple mappings are present we note that
+	// only the first was applied.
+	if t2t, ok := ctx.String("snowflake.topic2table.map"); ok {
+		entries := strings.Split(t2t, ",")
+		// Each entry is "topic:table"; split on the first colon only.
+		firstParts := strings.SplitN(strings.TrimSpace(entries[0]), ":", 2)
+		tableVal := ""
+		if len(firstParts) == 2 {
+			tableVal = strings.TrimSpace(firstParts[1])
+		}
+		tableNode := scalar(tableVal)
+		if len(entries) > 1 {
+			tableNode.LineComment = "TODO: multiple topic→table mappings found; only the first was applied — RPCN snowflake_streaming has a single table per output"
+		}
+		kv(body, "table", tableNode)
+	} else {
+		table := scalar("")
+		table.LineComment = "TODO: set the destination table (KC derives it from the topic)"
+		kv(body, "table", table)
+	}
 
 	// Batching: the Snowflake KC connector buffers by record count, byte size and
 	// flush time. NOTE: buffer.flush.time is in SECONDS (unlike the *.ms period
