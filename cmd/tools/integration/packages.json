@@ -43,7 +43,7 @@
   {"path":"./internal/impl/opensearch"},
   {"path":"./internal/impl/oracledb","timeout":"30m"},
   {"path":"./internal/impl/oracledb/replication","skip":true},
-  {"path":"./internal/impl/otlp","skip":true},
+  {"path":"./internal/impl/otlp"},
   {"path":"./internal/impl/postgresql"},
   {"path":"./internal/impl/postgresql/pglogicalstream","skip":true},
   {"path":"./internal/impl/pulsar","timeout":"10m"},
