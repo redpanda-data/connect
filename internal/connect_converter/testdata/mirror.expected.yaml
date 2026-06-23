@@ -5,6 +5,7 @@ input:
       - src:9092
     topics:
       - orders
+    regexp_topics: true
     consumer_group: mm-rpcn # TODO: confirm consumer group name
 output:
   redpanda:

@@ -89,14 +89,18 @@ func TestConvertSnowflakeTopic2Table(t *testing.T) {
 		}
 	})
 
-	t.Run("multi mapping sets first table with TODO comment", func(t *testing.T) {
+	t.Run("multi mapping emits interpolated table expression", func(t *testing.T) {
 		in := []byte(`{"name":"sf","config":{` + baseConfig + `,"snowflake.topic2table.map":"a:TA,b:TB"}}`)
 		res, err := Convert(in)
 		require.NoError(t, err)
 		y := string(res.YAML)
 		assertValidRPCN(t, res.YAML)
-		assert.Contains(t, y, "table: TA")
-		assert.Contains(t, y, "TODO")
+		// Must use Bloblang interpolation over @kafka_topic to select the right table.
+		assert.Contains(t, y, `${!`)
+		assert.Contains(t, y, `@kafka_topic`)
+		assert.Contains(t, y, `TA`)
+		assert.Contains(t, y, `TB`)
+		// Must not surface as unmapped warning.
 		for _, w := range res.Warnings {
 			assert.NotEqual(t, "snowflake.topic2table.map", w.Field, "topic2table.map must not surface as unmapped")
 		}

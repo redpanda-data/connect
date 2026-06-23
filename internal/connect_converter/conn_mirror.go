@@ -36,6 +36,9 @@ func (mirrorSourceConnector) Map(cfg ConnectConfig, ctx *MapCtx) (Component, err
 		stub.LineComment = "TODO: set topics to mirror"
 		kv(in, "topics", seq(stub))
 	}
+	// MM2 treats `topics` as Java regex patterns. Enable regexp matching so
+	// patterns like "orders.*" work as expected in RPCN.
+	kv(in, "regexp_topics", boolScalar(true))
 	cg := scalar(cfg.Name + "-rpcn")
 	cg.LineComment = "TODO: confirm consumer group name"
 	kv(in, "consumer_group", cg)

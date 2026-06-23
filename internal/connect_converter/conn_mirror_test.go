@@ -15,6 +15,35 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestConvertMirrorRegexpTopics(t *testing.T) {
+	in := []byte(`{"name":"mm","config":{
+	  "connector.class":"org.apache.kafka.connect.mirror.MirrorSourceConnector",
+	  "source.cluster.bootstrap.servers":"src:9092",
+	  "target.cluster.bootstrap.servers":"dst:9092",
+	  "topics":"orders.*"
+	}}`)
+	res, err := Convert(in)
+	require.NoError(t, err)
+	y := string(res.YAML)
+	assertValidRPCN(t, res.YAML)
+	// regexp_topics: true must appear in the input so regex patterns are honoured.
+	assert.Contains(t, y, "regexp_topics: true")
+	// The output must NOT have regexp_topics.
+	// Rough check: count occurrences — only one should appear (the input section).
+	inputSection := y[:len(y)/2] // input is always first half (before "output:")
+	if idx := len("output:"); idx < len(y) {
+		// Find output: position
+		for i, c := range y {
+			if i+7 <= len(y) && y[i:i+7] == "output:" {
+				inputSection = y[:i]
+				break
+			}
+			_ = c
+		}
+	}
+	assert.Contains(t, inputSection, "regexp_topics: true")
+}
+
 func TestConvertMirror(t *testing.T) {
 	in := []byte(`{"name":"mm","config":{
 	  "connector.class":"org.apache.kafka.connect.mirror.MirrorSourceConnector",

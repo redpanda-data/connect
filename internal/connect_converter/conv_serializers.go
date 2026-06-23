@@ -13,6 +13,7 @@ import "gopkg.in/yaml.v3"
 func init() {
 	registerConverter("io.confluent.connect.avro.AvroConverter", schemaRegistryConverter{})
 	registerConverter("io.confluent.connect.protobuf.ProtobufConverter", schemaRegistryConverter{})
+	registerConverter("io.confluent.connect.json.JsonSchemaConverter", schemaRegistryConverter{})
 	registerConverter("org.apache.kafka.connect.json.JsonConverter", noopConverter{})
 	registerConverter("org.apache.kafka.connect.storage.StringConverter", noopConverter{})
 	// Snowflake-bundled converters.

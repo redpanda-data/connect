@@ -76,22 +76,43 @@ func (snowflakeSinkConnector) Map(_ ConnectConfig, ctx *MapCtx) (Component, erro
 	ctx.consume("topics")
 
 	// topic2table.map has the form "topic1:table1,topic2:table2".
-	// RPCN snowflake_streaming has a single table per output, so we use the
-	// first entry's table value. If multiple mappings are present we note that
-	// only the first was applied.
+	// RPCN snowflake_streaming's `table` field accepts Bloblang interpolation, so
+	// for a single mapping we emit the literal table name, and for multiple
+	// mappings we emit a match expression over @kafka_topic.
 	if t2t, ok := ctx.String("snowflake.topic2table.map"); ok {
 		entries := strings.Split(t2t, ",")
-		// Each entry is "topic:table"; split on the first colon only.
-		firstParts := strings.SplitN(strings.TrimSpace(entries[0]), ":", 2)
-		tableVal := ""
-		if len(firstParts) == 2 {
-			tableVal = strings.TrimSpace(firstParts[1])
+		// Parse all entries into (topic, table) pairs.
+		type pair struct{ topic, table string }
+		pairs := make([]pair, 0, len(entries))
+		for _, e := range entries {
+			parts := strings.SplitN(strings.TrimSpace(e), ":", 2)
+			if len(parts) == 2 {
+				pairs = append(pairs, pair{strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1])})
+			}
 		}
-		tableNode := scalar(tableVal)
-		if len(entries) > 1 {
-			tableNode.LineComment = "TODO: multiple topic→table mappings found; only the first was applied — RPCN snowflake_streaming has a single table per output"
+		if len(pairs) == 1 {
+			// Single mapping: literal table name.
+			kv(body, "table", scalar(pairs[0].table))
+		} else if len(pairs) > 1 {
+			// Multiple mappings: interpolated match expression over @kafka_topic.
+			// e.g. ${! match @kafka_topic { "a" => "TA", "b" => "TB", _ => @kafka_topic } }
+			var b strings.Builder
+			b.WriteString(`${! match @kafka_topic { `)
+			for _, p := range pairs {
+				b.WriteString(`"`)
+				b.WriteString(p.topic)
+				b.WriteString(`" => "`)
+				b.WriteString(p.table)
+				b.WriteString(`", `)
+			}
+			b.WriteString(`_ => @kafka_topic } }`)
+			kv(body, "table", scalar(b.String()))
+		} else {
+			// Malformed map value — fall back to a TODO stub.
+			table := scalar("")
+			table.LineComment = "TODO: set the destination table (could not parse snowflake.topic2table.map)"
+			kv(body, "table", table)
 		}
-		kv(body, "table", tableNode)
 	} else {
 		table := scalar("")
 		table.LineComment = "TODO: set the destination table (KC derives it from the topic)"

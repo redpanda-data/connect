@@ -7,6 +7,7 @@ input:
     topics:
       - orders
       - events
+    regexp_topics: true
     consumer_group: mm-full-rpcn # TODO: confirm consumer group name
     tls:
       enabled: true # TODO: configure source cluster TLS (cert/key paths or skip_cert_verify)
