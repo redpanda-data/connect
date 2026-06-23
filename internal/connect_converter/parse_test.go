@@ -44,3 +44,41 @@ func TestParseMissingClass(t *testing.T) {
 	_, err := parse([]byte(`{"name":"x","config":{"topics":"orders"}}`))
 	require.Error(t, err)
 }
+
+func TestParseStripsLineComments(t *testing.T) {
+	in := []byte(`{
+// full-line comment
+"connector.class": "io.example.Foo", // trailing comment
+"name": "my-conn", // another trailing comment
+"topics": "orders"
+}`)
+	cfg, err := parse(in)
+	require.NoError(t, err)
+	assert.Equal(t, "my-conn", cfg.Name)
+	assert.Equal(t, "io.example.Foo", cfg.Class)
+	assert.Equal(t, "orders", cfg.Props["topics"])
+}
+
+func TestParsePreservesSlashesInStrings(t *testing.T) {
+	// Flat form with a // URL value and a full-line comment.
+	in := []byte(`{
+// primary database
+"connector.class": "io.confluent.connect.jdbc.JdbcSourceConnector",
+"connection.url": "jdbc:postgresql://h:5432/db",
+"table.whitelist": "t"
+}`)
+	cfg, err := parse(in)
+	require.NoError(t, err)
+	assert.Equal(t, "jdbc:postgresql://h:5432/db", cfg.Props["connection.url"])
+	assert.Equal(t, "t", cfg.Props["table.whitelist"])
+
+	// Trailing comment on the same line as the URL value.
+	in2 := []byte(`{
+"connector.class": "io.confluent.connect.jdbc.JdbcSourceConnector",
+"connection.url": "jdbc:mysql://h:3306/db", // primary
+"table.whitelist": "t"
+}`)
+	cfg2, err := parse(in2)
+	require.NoError(t, err)
+	assert.Equal(t, "jdbc:mysql://h:3306/db", cfg2.Props["connection.url"])
+}
