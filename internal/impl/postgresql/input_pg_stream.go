@@ -350,6 +350,7 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 			Logger:                   logger,
 			UnchangedToastValue:      unchangedToastValue,
 			HeartbeatInterval:        heartbeatInterval,
+			SignalTableName:          signalTableName,
 		},
 		batching:        batching,
 		checkpointLimit: checkpointLimit,
@@ -362,8 +363,7 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		stopSig:         shutdown.NewSignaller(),
 		streamSnapshot:  streamSnapshot,
 
-		iamAuthEnabled:  iamAuthEnabled,
-		signalTableName: signalTableName,
+		iamAuthEnabled: iamAuthEnabled,
 	}
 
 	// Initialise signaller eagerly so IsPending() is safe to call before the first Connect().
@@ -381,13 +381,6 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 	}
 
 	return conf.WrapBatchInputExtractTracingSpanMapping("postgres_cdc", r)
-}
-
-func appendIfMissing(ss []string, s string) []string {
-	if slices.Contains(ss, s) {
-		return ss
-	}
-	return append(ss, s)
 }
 
 // validateSimpleString ensures we aren't vuln to SQL injection.
@@ -424,9 +417,7 @@ type pgStreamInput struct {
 	stopSig         *shutdown.Signaller
 
 	// IAM authentication fields
-	iamAuthEnabled  bool
-	signalTableName string
-
+	iamAuthEnabled bool
 	streamSnapshot bool // original value of streamConfig.StreamOldData, preserved for reconnects
 }
 

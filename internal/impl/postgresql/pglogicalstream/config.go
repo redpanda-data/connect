@@ -40,6 +40,7 @@ type Config struct {
 	BatchSize int
 	// If true, include BEGIN and COMMIT messages in the stream
 	IncludeTxnMarkers bool
+	SignalTableName   string
 
 	Logger *service.Logger
 

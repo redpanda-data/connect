@@ -20,9 +20,7 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/replication"
 )
 
-var (
-	_ replication.Signaller = (*eventSignaller)(nil)
-)
+var _ replication.Signaller = (*eventSignaller)(nil)
 
 type eventSignaller struct {
 	schema       string
@@ -33,6 +31,7 @@ type eventSignaller struct {
 	eventPending atomic.Bool
 }
 
+// NewEventSignaller creates an eventSignaller that detects signal INSERTs on the given schema.tableName.
 func NewEventSignaller(schema, tableName string, log *service.Logger) (*eventSignaller, error) {
 	return &eventSignaller{
 		schema:       schema,
@@ -58,12 +57,12 @@ func (o *eventSignaller) Listen(_ context.Context, event any) (bool, error) {
 
 	row, ok := msg.Data.(map[string]any)
 	if !ok {
-		return false, fmt.Errorf("failed to parse message data")
+		return false, fmt.Errorf("expected map for %s message data, got %T", o.tableName, msg.Data)
 	}
 
 	dataStr, ok := row["data"].(string)
 	if !ok {
-		return false, fmt.Errorf("failed to parse %s.data", o.tableName)
+		return false, fmt.Errorf("expected string for %s.data column, got %T", o.tableName, row["data"])
 	}
 
 	var sig replication.EventSignal
@@ -97,10 +96,11 @@ func (o *eventSignaller) OnSignal() <-chan *string {
 func (o *eventSignaller) IsPending() bool {
 	return o.eventPending.Load()
 }
+
 func (o *eventSignaller) Reset() {
 	o.eventPending.Store(false)
 }
 
-func (o *eventSignaller) ValidateChannel(ctx context.Context) error {
+func (*eventSignaller) ValidateChannel(_ context.Context) error {
 	return nil
 }

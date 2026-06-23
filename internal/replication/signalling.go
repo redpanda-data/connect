@@ -10,16 +10,17 @@ package replication
 
 import "context"
 
-var (
-	DefaultSignalTableName = "rpcn_signal_table"
-)
+// DefaultSignalTableName is the default name of the table used to send signals to the connector.
+var DefaultSignalTableName = "rpcn_signal_table"
 
+// EventSignal represents a signal event decoded from the signal table's data column.
 type EventSignal struct {
 	ID              string
 	Type            string
 	DataCollections []string `json:"data-collections"`
 }
 
+// Signaller detects and communicates signal events from a configured signal channel.
 type Signaller interface {
 	// ValidateChannel validates the signal channel exists during connector startup.
 	ValidateChannel(ctx context.Context) error

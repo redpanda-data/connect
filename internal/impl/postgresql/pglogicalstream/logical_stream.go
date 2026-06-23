@@ -47,7 +47,8 @@ type Stream struct {
 
 	includeTxnMarkers       bool
 	slotName                string
-	tables                  []TableFQN
+	streamingTables         []TableFQN
+	snapshotTables          []TableFQN
 	snapshotBatchSize       int
 	decodingPluginArguments []string
 	logger                  *service.Logger
@@ -104,6 +105,11 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		}
 		tables = append(tables, TableFQN{Schema: schema, Table: normalized})
 	}
+
+	snapshotTables := slices.DeleteFunc(slices.Clone(tables), func(t TableFQN) bool {
+		return t.Table == config.SignalTableName
+	})
+
 	batchSize := 1000
 	if config.BatchSize > 0 {
 		batchSize = config.BatchSize
@@ -114,7 +120,8 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		errors:                make(chan error, 1),
 		slotName:              config.ReplicationSlotName,
 		snapshotBatchSize:     batchSize,
-		tables:                tables,
+		streamingTables:       tables,
+		snapshotTables:        snapshotTables,
 		maxSnapshotWorkers:    config.MaxSnapshotWorkers,
 		logger:                config.Logger,
 		shutSig:               shutdown.NewSignaller(),
@@ -584,7 +591,7 @@ func (s *Stream) processSnapshot(ctx context.Context, snapshotter *snapshotter) 
 
 	snapshotTasks := []func(context.Context) error{}
 
-	for _, table := range s.tables {
+	for _, table := range s.snapshotTables {
 		s.logger.Infof("Planning snapshot scan for table: %v", table)
 		planStartTime := time.Now()
 		primaryKeyColumns, err := s.getPrimaryKeyColumn(ctx, table)
