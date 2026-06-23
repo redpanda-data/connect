@@ -27,7 +27,7 @@ func (gcsSinkConnector) Map(_ ConnectConfig, ctx *MapCtx) (Component, error) {
 	}
 
 	ctx.consume("topics")
-	kv(body, "path", topicObjectPath())
+	kv(body, "path", topicObjectPath(".json"))
 
 	return Component{Output: component("gcp_cloud_storage", body)}, nil
 }

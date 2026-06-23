@@ -8,6 +8,11 @@
 
 package connectconverter
 
+import (
+	"fmt"
+	"strings"
+)
+
 func init() {
 	registerConnector("io.confluent.connect.s3.S3SinkConnector", s3SinkConnector{})
 }
@@ -33,9 +38,50 @@ func (s3SinkConnector) Map(_ ConnectConfig, ctx *MapCtx) (Component, error) {
 	}
 
 	// Build an object path from the source topic. KC routes by topic; RPCN
-	// uses interpolation on the kafka_topic metadata.
+	// uses interpolation on the kafka_topic metadata. The file extension is
+	// derived from format.class; an optional topics.dir becomes a prefix.
 	ctx.consume("topics")
-	kv(body, "path", topicObjectPath())
+	ext := objectFormatExtension(ctx) // consumes format.class
+	path := topicObjectPath(ext)
+	if dir, ok := ctx.String("topics.dir"); ok && dir != "" {
+		path.Value = strings.TrimSuffix(dir, "/") + "/" + path.Value
+	}
+	if ext == ".avro" || ext == ".parquet" {
+		path.LineComment = "TODO: add an encode step (e.g. avro/parquet) before this output"
+	}
+	kv(body, "path", path)
+
+	// flush.size / rotation interval -> common batch policy.
+	mapBatching(body, ctx, "flush.size", "", "rotate.interval.ms")
+	mapBatching(body, ctx, "", "", "rotate.schedule.interval.ms")
+
+	// Explicit static AWS credentials, if provided.
+	if id, ok := ctx.String("aws.access.key.id"); ok {
+		creds := mapping()
+		kv(creds, "id", scalar(id))
+		if secret, ok := ctx.String("aws.secret.access.key"); ok {
+			kv(creds, "secret", scalar(secret))
+		}
+		kv(body, "credentials", creds)
+	} else {
+		ctx.consume("aws.secret.access.key")
+	}
+
+	// Recognized KC plumbing with no RPCN equivalent — drop quietly.
+	consumeIgnored(ctx,
+		"storage.class",
+		"schema.generator.class",
+		"schema.compatibility",
+		"s3.part.size",
+		"s3.compression.type",
+	)
+	// DefaultPartitioner matches RPCN's topic-based path; anything else
+	// changes the layout, so leave it to surface as a TODO.
+	if p, ok := ctx.cfg.Props["partitioner.class"]; ok {
+		if strings.Contains(fmt.Sprint(p), "DefaultPartitioner") {
+			ctx.consume("partitioner.class")
+		}
+	}
 
 	return Component{Output: component("aws_s3", body)}, nil
 }

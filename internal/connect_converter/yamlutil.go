@@ -34,10 +34,11 @@ func component(name string, body *yaml.Node) *yaml.Node {
 }
 
 // topicObjectPath returns a path scalar using the source topic and a
-// timestamp/UUID for uniqueness, with a review TODO comment. Used by S3/GCS
-// sink connectors that derive the object path from the topic name.
-func topicObjectPath() *yaml.Node {
-	path := scalar(`${! @kafka_topic }/${! timestamp_unix() }-${! uuid_v4() }.json`)
+// timestamp/UUID for uniqueness, with the given file extension and a review
+// TODO comment. Used by S3/GCS sink connectors that derive the object path
+// from the topic name.
+func topicObjectPath(ext string) *yaml.Node {
+	path := scalar(`${! @kafka_topic }/${! timestamp_unix() }-${! uuid_v4() }` + ext)
 	path.LineComment = "TODO: review object path/partitioning"
 	return path
 }
