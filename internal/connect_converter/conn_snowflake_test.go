@@ -45,3 +45,41 @@ func TestConvertSnowflakeSink(t *testing.T) {
 	}
 	assert.True(t, roleWarned, "expected a warning for missing role field")
 }
+
+func TestConvertSnowflakeSinkFull(t *testing.T) {
+	in := []byte(`{"name":"sf-full","config":{
+	  "connector.class":"com.snowflake.kafka.connector.SnowflakeSinkConnector",
+	  "snowflake.url.name":"myorg-myacct.snowflakecomputing.com",
+	  "snowflake.user.name":"loader",
+	  "snowflake.role.name":"LOADER_ROLE",
+	  "snowflake.database.name":"PROD",
+	  "snowflake.schema.name":"PUBLIC",
+	  "snowflake.private.key":"MYPRIVKEY",
+	  "snowflake.private.key.passphrase":"s3cr3t",
+	  "topics":"events",
+	  "buffer.count.records":"10000",
+	  "buffer.flush.time":"10",
+	  "buffer.size.bytes":"5000000",
+	  "behavior.on.null.values":"IGNORE",
+	  "snowflake.metadata.all":"true"
+	}}`)
+	res, err := Convert(in)
+	require.NoError(t, err)
+	assertValidRPCN(t, res.YAML)
+	y := string(res.YAML)
+	// Batching: count is an unquoted int, period uses the seconds suffix.
+	assert.Contains(t, y, "batching:")
+	assert.Contains(t, y, "count: 10000")
+	assert.Contains(t, y, "period: 10s")
+	assert.Contains(t, y, "byte_size: 5000000")
+	// Key passphrase mapped.
+	assert.Contains(t, y, "private_key_pass: s3cr3t")
+	// Plumbing keys are silently consumed: neither surfaced as unmapped warnings
+	// nor emitted as TODO noise in the YAML.
+	assert.NotContains(t, y, "behavior.on.null.values")
+	assert.NotContains(t, y, "snowflake.metadata.all")
+	for _, w := range res.Warnings {
+		assert.NotEqual(t, "behavior.on.null.values", w.Field, "plumbing key must not be unmapped")
+		assert.NotEqual(t, "snowflake.metadata.all", w.Field, "plumbing key must not be unmapped")
+	}
+}

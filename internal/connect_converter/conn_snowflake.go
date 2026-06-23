@@ -67,11 +67,47 @@ func (snowflakeSinkConnector) Map(_ ConnectConfig, ctx *MapCtx) (Component, erro
 
 	// private_key is optional in the spec (private_key_file is the alternative).
 	mapOptional("snowflake.private.key", "private_key")
+	// private_key_pass decrypts an encrypted RSA key.
+	mapOptional("snowflake.private.key.passphrase", "private_key_pass")
 
 	ctx.consume("topics")
 	table := scalar("")
 	table.LineComment = "TODO: set the destination table (KC derives it from the topic)"
 	kv(body, "table", table)
+
+	// Batching: the Snowflake KC connector buffers by record count, byte size and
+	// flush time. NOTE: buffer.flush.time is in SECONDS (unlike the *.ms period
+	// keys handled by mapBatching), so we build the block inline here and format
+	// the period as "<n>s". mapBatching is deliberately not reused.
+	batch := mapping()
+	if v, ok := ctx.String("buffer.count.records"); ok {
+		kv(batch, "count", intScalar(v))
+	}
+	if v, ok := ctx.String("buffer.size.bytes"); ok {
+		kv(batch, "byte_size", intScalar(v))
+	}
+	if v, ok := ctx.String("buffer.flush.time"); ok {
+		kv(batch, "period", scalar(v+"s"))
+	}
+	if len(batch.Content) > 0 {
+		kv(body, "batching", batch)
+	}
+
+	// Recognized Snowflake-Kafka-connector plumbing with no snowflake_streaming
+	// equivalent — drop quietly so they don't surface as TODO noise.
+	// (key.converter*/value.converter* are already treated as meta.)
+	consumeIgnored(ctx,
+		"behavior.on.null.values",
+		"snowflake.metadata.createtime",
+		"snowflake.metadata.topic",
+		"snowflake.metadata.offset.and.partition",
+		"snowflake.metadata.all",
+		"jvm.proxy.host",
+		"jvm.proxy.port",
+		// The KC connector's only streaming ingestion method maps onto the
+		// snowflake_streaming output itself; the key carries no extra config.
+		"snowflake.ingestion.method",
+	)
 
 	return Component{Output: component("snowflake_streaming", body)}, nil
 }
