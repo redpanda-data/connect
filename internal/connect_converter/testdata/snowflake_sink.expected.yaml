@@ -1,6 +1,11 @@
 # Converted from Kafka Connect connector "sf" (class=com.snowflake.kafka.connector.SnowflakeSinkConnector). Review # TODO markers.
 input:
-  stdin: {} # TODO: set the input that feeds this pipeline (e.g. your source topic)
+  redpanda:
+    seed_brokers:
+      - localhost:9092 # TODO: set your Redpanda/Kafka broker(s)
+    topics:
+      - orders
+    consumer_group: connect-sf # TODO: confirm consumer group
 output:
   snowflake_streaming:
     account: acct.snowflakecomputing.com # TODO: RPCN expects the account identifier, not the full URL

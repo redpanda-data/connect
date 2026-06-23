@@ -30,6 +30,32 @@ func TestConvertUnknownConnector(t *testing.T) {
 	assertValidRPCN(t, res.YAML)
 }
 
+func TestSinkSynthesizesRedpandaInput(t *testing.T) {
+	in := []byte(`{"name":"my-sink","config":{"connector.class":"io.confluent.connect.s3.S3SinkConnector","s3.bucket.name":"bkt","s3.region":"us-east-1","topics":"orders"}}`)
+	res, err := Convert(in)
+	require.NoError(t, err)
+
+	y := string(res.YAML)
+	assert.Contains(t, y, "redpanda:")
+	assert.Contains(t, y, "orders")
+	assert.Contains(t, y, "consumer_group: connect-my-sink")
+	assert.NotContains(t, y, "stdin:")
+
+	assertValidRPCN(t, res.YAML)
+}
+
+func TestUnknownConnectorKeepsStdinStub(t *testing.T) {
+	in := []byte(`{"name":"mystery","config":{"connector.class":"com.acme.Mystery","topics":"orders"}}`)
+	res, err := Convert(in)
+	require.NoError(t, err)
+
+	y := string(res.YAML)
+	assert.Contains(t, y, "stdin:")
+	assert.NotContains(t, y, "consumer_group: connect-mystery")
+
+	assertValidRPCN(t, res.YAML)
+}
+
 func TestConvertMalformedReturnsError(t *testing.T) {
 	_, err := Convert([]byte(`{bad`))
 	require.Error(t, err)

@@ -91,3 +91,28 @@ func consumeIgnored(ctx *MapCtx, keys ...string) {
 		ctx.consume(k)
 	}
 }
+
+// sinkInputFromTopics builds a redpanda input consuming the connector's topics,
+// or returns nil if no topics are configured. seed_brokers uses a placeholder
+// since broker addresses are worker-level config in Kafka Connect.
+func sinkInputFromTopics(cfg ConnectConfig, ctx *MapCtx) *yaml.Node {
+	v, ok := ctx.Lookup("topics")
+	if !ok || strings.TrimSpace(v) == "" {
+		return nil
+	}
+	ctx.consume("topics")
+
+	body := mapping()
+
+	brokers := scalar("localhost:9092")
+	brokers.LineComment = "TODO: set your Redpanda/Kafka broker(s)"
+	kv(body, "seed_brokers", seq(brokers))
+
+	kv(body, "topics", seq(scalarsFromCSV(v)...))
+
+	cg := scalar("connect-" + cfg.Name)
+	cg.LineComment = "TODO: confirm consumer group"
+	kv(body, "consumer_group", cg)
+
+	return component("redpanda", body)
+}

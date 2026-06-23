@@ -35,8 +35,10 @@ func TestConvertS3Sink(t *testing.T) {
 	assert.Contains(t, y, "bucket: my-bucket")
 	assert.Contains(t, y, "region: us-east-1")
 	assert.Contains(t, y, "path:")
-	// input side is a TODO stub for a sink.
-	assert.Contains(t, y, "TODO: set the input")
+	// input side synthesized from topics.
+	assert.Contains(t, y, "redpanda:")
+	assert.Contains(t, y, "orders")
+	assert.Contains(t, y, "consumer_group: connect-s3-sink")
 }
 
 func TestConvertS3SinkFull(t *testing.T) {

@@ -29,6 +29,14 @@ func Convert(input []byte) (*Result, error) {
 		return nil, err
 	}
 
+	if comp.Output != nil && comp.Input == nil {
+		if _, known := connectorMappers[cfg.Class]; known {
+			if in := sinkInputFromTopics(cfg, ctx); in != nil {
+				comp.Input = in
+			}
+		}
+	}
+
 	var procs []*yaml.Node
 	procs = append(procs, mapConverters(ctx)...)
 	procs = append(procs, mapSMTs(ctx)...)
