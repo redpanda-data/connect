@@ -99,6 +99,127 @@ func TestConvertAivenJDBCSinkConnector(t *testing.T) {
 	assert.NotContains(t, y, "unsupported")
 }
 
+// TestInjectUserInfo verifies the DSN credential-injection helper in isolation.
+func TestInjectUserInfo(t *testing.T) {
+	tests := []struct {
+		name     string
+		dsn      string
+		user     string
+		password string
+		want     string
+	}{
+		{
+			name:     "user and password",
+			dsn:      "postgresql://h:5432/db",
+			user:     "alice",
+			password: "s3cr3t",
+			want:     "postgresql://alice:s3cr3t@h:5432/db",
+		},
+		{
+			name:     "user only",
+			dsn:      "postgresql://h:5432/db",
+			user:     "alice",
+			password: "",
+			want:     "postgresql://alice@h:5432/db",
+		},
+		{
+			name:     "neither user nor password — unchanged",
+			dsn:      "postgresql://h:5432/db",
+			user:     "",
+			password: "",
+			want:     "postgresql://h:5432/db",
+		},
+		{
+			name:     "no scheme separator — unchanged",
+			dsn:      "h:5432/db",
+			user:     "alice",
+			password: "s3cr3t",
+			want:     "h:5432/db",
+		},
+		{
+			name:     "mysql with user+password",
+			dsn:      "mysql://h:3306/db",
+			user:     "bob",
+			password: "pass",
+			want:     "mysql://bob:pass@h:3306/db",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := injectUserInfo(tt.dsn, tt.user, tt.password)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+// TestConvertJDBCSourceWithCredentials verifies that connection.user/connection.password
+// are folded into the DSN and do NOT surface as unmapped-field warnings.
+func TestConvertJDBCSourceWithCredentials(t *testing.T) {
+	in := []byte(`{"name":"jdbc-src-creds","config":{` +
+		`"connector.class":"io.confluent.connect.jdbc.JdbcSourceConnector",` +
+		`"connection.url":"jdbc:postgresql://h:5432/db",` +
+		`"connection.user":"alice",` +
+		`"connection.password":"s3cr3t",` +
+		`"table.whitelist":"orders"` +
+		`}}`)
+	res, err := Convert(in)
+	require.NoError(t, err)
+	y := string(res.YAML)
+	assertValidRPCN(t, res.YAML)
+	assert.Contains(t, y, "sql_select:")
+	assert.Contains(t, y, "driver: postgres")
+	// credentials injected into DSN
+	assert.Contains(t, y, "postgresql://alice:s3cr3t@h:5432/db")
+	// secret hygiene TODO present
+	assert.Contains(t, y, "password is inlined")
+	// credentials must NOT surface as unmapped-field warnings
+	assert.NotContains(t, y, "unmapped field connection.user")
+	assert.NotContains(t, y, "unmapped field connection.password")
+}
+
+// TestConvertJDBCSinkWithCredentials verifies the same for the sink connector.
+func TestConvertJDBCSinkWithCredentials(t *testing.T) {
+	in := []byte(`{"name":"jdbc-sink-creds","config":{` +
+		`"connector.class":"io.confluent.connect.jdbc.JdbcSinkConnector",` +
+		`"connection.url":"jdbc:postgresql://h:5432/db",` +
+		`"connection.user":"alice",` +
+		`"connection.password":"s3cr3t",` +
+		`"table.name.format":"orders"` +
+		`}}`)
+	res, err := Convert(in)
+	require.NoError(t, err)
+	y := string(res.YAML)
+	assertValidRPCN(t, res.YAML)
+	assert.Contains(t, y, "sql_insert:")
+	assert.Contains(t, y, "driver: postgres")
+	// credentials injected into DSN
+	assert.Contains(t, y, "postgresql://alice:s3cr3t@h:5432/db")
+	// secret hygiene TODO present
+	assert.Contains(t, y, "password is inlined")
+	// credentials must NOT surface as unmapped-field warnings
+	assert.NotContains(t, y, "unmapped field connection.user")
+	assert.NotContains(t, y, "unmapped field connection.password")
+}
+
+// TestConvertJDBCSourceUserOnly verifies user-only (no password) injection.
+func TestConvertJDBCSourceUserOnly(t *testing.T) {
+	in := []byte(`{"name":"jdbc-src-user","config":{` +
+		`"connector.class":"io.confluent.connect.jdbc.JdbcSourceConnector",` +
+		`"connection.url":"jdbc:postgresql://h:5432/db",` +
+		`"connection.user":"alice",` +
+		`"table.whitelist":"orders"` +
+		`}}`)
+	res, err := Convert(in)
+	require.NoError(t, err)
+	y := string(res.YAML)
+	assertValidRPCN(t, res.YAML)
+	// user injected but no password
+	assert.Contains(t, y, "postgresql://alice@h:5432/db")
+	// no secret hygiene TODO when no password
+	assert.NotContains(t, y, "password is inlined")
+	assert.NotContains(t, y, "unmapped field connection.user")
+}
+
 func TestConvertJDBCSourceFull(t *testing.T) {
 	in := []byte(`{"name":"jdbc-src-full","config":{` +
 		`"connector.class":"io.confluent.connect.jdbc.JdbcSourceConnector",` +

@@ -43,6 +43,28 @@ func dsnFromURL(url string) string {
 	return strings.TrimPrefix(url, "jdbc:")
 }
 
+// injectUserInfo inserts "user[:password]@" into dsn right after the first "://"
+// separator. If dsn contains no "://", it is returned unchanged (caller should
+// emit a TODO noting that credentials could not be inlined). An empty user is a
+// no-op.
+func injectUserInfo(dsn, user, password string) string {
+	if user == "" {
+		return dsn
+	}
+	idx := strings.Index(dsn, "://")
+	if idx < 0 {
+		// TODO: no scheme separator found — credentials could not be inlined into DSN
+		return dsn
+	}
+	var userinfo string
+	if password != "" {
+		userinfo = user + ":" + password + "@"
+	} else {
+		userinfo = user + "@"
+	}
+	return dsn[:idx+3] + userinfo + dsn[idx+3:]
+}
+
 func driverAndDSN(ctx *MapCtx, body *yaml.Node) {
 	url, ok := ctx.String("connection.url")
 	if !ok {
@@ -53,6 +75,9 @@ func driverAndDSN(ctx *MapCtx, body *yaml.Node) {
 		dsnStub := scalar("")
 		dsnStub.LineComment = "TODO: set the database DSN"
 		kv(body, "dsn", dsnStub)
+		// Consume credential keys so they don't surface as unmapped-field warnings.
+		ctx.consume("connection.user")
+		ctx.consume("connection.password")
 		return
 	}
 	driver := jdbcDriver(url)
@@ -61,8 +86,18 @@ func driverAndDSN(ctx *MapCtx, body *yaml.Node) {
 		dn.LineComment = "TODO: unrecognized JDBC URL — set the driver manually"
 	}
 	kv(body, "driver", dn)
-	dsn := scalar(dsnFromURL(url))
-	dsn.LineComment = "TODO: verify DSN format for the chosen driver"
+
+	// Read (and consume) credentials so they do not surface as unmapped-field warnings.
+	user, _ := ctx.String("connection.user")
+	password, _ := ctx.String("connection.password")
+
+	dsnVal := injectUserInfo(dsnFromURL(url), user, password)
+	dsn := scalar(dsnVal)
+	comment := "TODO: verify DSN format for the chosen driver"
+	if password != "" {
+		comment += " # TODO: password is inlined — move to a secret/env-var reference"
+	}
+	dsn.LineComment = comment
 	kv(body, "dsn", dsn)
 }
 
