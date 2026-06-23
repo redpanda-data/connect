@@ -39,22 +39,26 @@ It runs as a single command from your laptop. Nothing CI-driven yet.
 
 ## Status
 
-| Layer                              | Status |
-|------------------------------------|---|
-| Scenario parser + validator        | ✅ working, 21+ unit tests |
+Framework:
+
+| Layer | Status |
+|-------|--------|
+| Scenario parser + validator | ✅ working, unit tested |
 | Stats parser + percentiles + anomalies | ✅ working, unit tested |
 | Runner orchestrator (CLI, terraform wrapper, SSM, matrix, render) | ✅ working |
 | Terraform shared stack (VPC/IAM/EC2/S3) | ✅ working on AWS |
-| Terraform postgres stack (RDS)     | ✅ working on AWS |
-| `cdc-rows` seeder (Postgres path)  | ✅ working — sustains ~108K rows/sec into RDS db.r6g.2xlarge |
-| End-to-end through stage 5 (seed)  | ✅ verified on real AWS |
-| Connect + license boot on runner   | ✅ verified |
-| Postgres CDC TLS connection        | ✅ verified |
-| **CPU sweep sample capture**       | ⚠ partial — see [Known limitations](#known-limitations) |
-| Destroy on success or SIGINT       | ✅ working — no orphans observed |
-| Other connectors (mysql, sqlserver, dynamodb, s3, iceberg) | 🔜 future plans — framework supports them |
+| CPU sweep sample capture + broker-side metrics | ✅ working |
+| Destroy on success or SIGINT | ✅ working — no orphans observed |
 
-The framework foundation runs end-to-end on AWS, but a known SSM output-truncation issue prevents publishing reliable percentile data today. See [Known limitations](#known-limitations) for the path forward.
+Connectors (head-to-head Connect vs Kafka Connect unless noted; results in [`docs/benchmark-results/`](../../docs/benchmark-results)):
+
+| Connector | Seeder | Stack | Status |
+|-----------|--------|-------|--------|
+| `postgres_cdc` | `cdc-rows-postgres` | `rds-postgres` | ✅ full sweep |
+| `mysql_cdc` | `cdc-rows-mysql` | `rds-mysql` | ✅ full sweep |
+| `oracledb_cdc` | `cdc-rows-oracle` | `rds-oracle` | ✅ full sweep — LogMiner-bound ceiling, see [`oracle.md`](../../docs/benchmark-results/oracle.md) |
+| `aws_dynamodb_cdc` | `cdc-ddb` | `dynamodb-bench` | ✅ full sweep (Connect-only — no Debezium DynamoDB comparator in the harness) |
+| iceberg (sink) | `json-orders` + `iceberg-tablegen` | `iceberg` (Glue) | ✅ sink sweep |
 
 ---
 
@@ -320,10 +324,10 @@ Architecture is three layers — Terraform, the Go runner orchestrator, and the 
 │   • Build redpanda-connect for linux/arm64                       │
 │   • Upload binary + rendered config + license.jwt to S3          │
 │   • SSM-cp those onto the runner EC2                             │
-│   • SSM-run the cdc-rows seeder on the load-gen EC2              │
+│   • SSM-run the cdc-rows-postgres seeder on the load-gen EC2              │
 │   • For n in [1, 2, 4, 8]:                                       │
 │       reset (drop CDC slot via psql)                             │
-│       start workload writer on load-gen (cdc-rows workload)      │
+│       start workload writer on load-gen (cdc-rows-postgres workload)      │
 │       SSM-run bench script on runner                             │
 │         taskset -c 2-… GOMAXPROCS=n GOMEMLIMIT=… redpanda-connect│
 │         sleep warmup+duration                                    │
@@ -342,7 +346,7 @@ Architecture is three layers — Terraform, the Go runner orchestrator, and the 
 │   │ runner EC2     │    │ load-gen EC2   │   │ RDS Postgres   │  │
 │   │ c8g.4xlarge    │    │ c8g.large      │   │ db.r6g.2xlarge │  │
 │   │ /opt/bench/    │    │ /opt/bench/    │   │ logical repl   │  │
-│   │   - connect    │    │   - cdc-rows   │   │ 400 GB gp3     │  │
+│   │   - connect    │    │   - cdc-rows-postgres   │   │ 400 GB gp3     │  │
 │   │   - config.yaml│    │ writes via DSN │   │                │  │
 │   │   - license.jwt│    └────────────────┘   └────────────────┘  │
 │   │ reads via DSN  │                                             │
@@ -366,7 +370,7 @@ Three things are needed:
 
 1. A scenario YAML under `scenarios/<connector>/<name>.yaml`.
 2. A Terraform stack for the connector (already exists for postgres).
-3. A seeder if your dataset shape isn't covered by an existing one (`cdc-rows` covers SQL CDC).
+3. A seeder if your dataset shape isn't covered by an existing one (`cdc-rows-postgres` covers SQL CDC).
 
 ### Scenario YAML schema
 
@@ -394,7 +398,7 @@ dataset:
   initial_rows: 75000000
   row_size_bytes: 1200
   tables: [orders]
-  seeder: cdc-rows                # binary at benchmarking/aws/seeders/<seeder>
+  seeder: cdc-rows-postgres                # binary at benchmarking/aws/seeders/<seeder>
 
 workload:                         # sustained writes during the bench
   write_rate_per_sec: 5000
@@ -476,7 +480,7 @@ A new connector is a small PR with:
 
 1. **Terraform module** under `terraform/modules/<source-type>/` if the source isn't already supported. Reuse existing modules (`rds-postgres`, `rds-mysql`, etc.) when possible.
 2. **Terraform stack** under `terraform/stacks/<connector>/` composing `shared/` and the source module. Use `terraform_remote_state` to read shared outputs (VPC, SG IDs).
-3. **Seeder** under `seeders/<name>/` if the SQL flavor differs from what's already shipped (`cdc-rows` for postgres, `cdc-rows-mysql` for mysql).
+3. **Seeder** under `seeders/<name>/` if the SQL flavor differs from what's already shipped (`cdc-rows-postgres` for postgres, `cdc-rows-mysql` for mysql).
 4. **Scenarios** under `scenarios/<connector>/`.
 5. **Engine spec entry** in `runner/scenario.go` — add a one-line map entry under `engineSpecs` keyed by connector name, naming the terraform output keys the runner should read (DSN, host/port/user/pass/db for the reset CLI). The seed/reset/workload script renderers in `runner/scripts.go` pick this up automatically.
 6. **KC connector spec entry** in `runner/kcconnectors.go` — needed only if you want the Connect-vs-Kafka-Connect head-to-head comparison. Mirror the postgres or mysql entries.
@@ -742,61 +746,58 @@ The next `terraform apply` will detect the changed source hash and update the fu
 
 ```
 benchmarking/aws/
-├── README.md                              ← you are here
-├── Taskfile.yml                           ← operator entry points
-├── .gitignore                             ← results/*.json, .terraform/, dist/
+├── README.md                  ← you are here
+├── Taskfile.yml               ← operator entry points (aws:bench / validate / down / summary / cost-check)
+├── .gitignore                 ← results/*.json, .terraform/, dist/
 ├── terraform/
-│   ├── backend.hcl                        ← shared S3 + DDB-lock backend config
-│   ├── shared/                            ← one apply, reused across all stacks
-│   │   ├── main.tf                        ← provider, locals, tags
-│   │   ├── variables.tf
-│   │   ├── vpc.tf                         ← /16 VPC + subnets + IGW + RT
-│   │   ├── security.tf                    ← runner + load-gen SGs
-│   │   ├── iam.tf                         ← SSM-managed instance role
-│   │   ├── runner.tf                      ← runner + load-gen EC2 (AL2023 arm64)
-│   │   ├── results_bucket.tf              ← S3 results bucket
-│   │   └── outputs.tf
-│   ├── modules/
-│   │   └── rds-postgres/                  ← reusable RDS Postgres module
-│   └── stacks/
-│       └── postgres/                      ← composes shared + rds-postgres
-├── scenarios/
-│   └── postgres/
-│       └── orders-cdc.yaml                ← shipped scenario
-├── seeders/
-│   └── cdc-rows/                          ← Go program: seed + workload subcommands
-│       ├── main.go
-│       └── sql.go
-├── runner/                                ← Go orchestrator
-│   ├── main.go                            ← CLI: bench / validate / down / cost-check
-│   ├── scenario.go                        ← scenario YAML parse + validate
-│   ├── stats.go                           ← rolling-stats line parser + percentiles
-│   ├── anomalies.go                       ← ≥60s dip detection
-│   ├── render.go                          ← Result JSON + markdown rendering
-│   ├── terraform.go                       ← terraform CLI wrapper
-│   ├── ssm.go                             ← SSM RunCommand + streaming output
-│   ├── matrix.go                          ← CPU sweep loop
-│   ├── templates/result.md.tmpl           ← markdown template (embedded)
-│   ├── testdata/                          ← unit-test fixtures
-│   └── *_test.go                          ← 21+ unit tests
-└── results/                               ← raw per-run JSON (gitignored)
-    └── .gitkeep
+│   ├── backend.hcl            ← shared S3 + DDB-lock backend config
+│   ├── shared/                ← one apply, reused by every stack: VPC, IAM, EC2
+│   │                            runner+load-gen, S3 results, Redpanda brokers,
+│   │                            runner cloud-init, orphan-cleanup lambda
+│   ├── modules/               ← reusable building blocks
+│   │   ├── rds-postgres/ rds-mysql/ rds-oracle/   ← RDS source databases
+│   │   ├── dynamodb-bench/                        ← DynamoDB tables + streams
+│   │   ├── glue-iceberg/                          ← Glue catalog + S3 warehouse
+│   │   └── redpanda/                              ← broker cluster
+│   └── stacks/                ← one per connector (composes shared + its module)
+│       └── postgres/ mysql/ oracle/ dynamodb/ iceberg/
+├── scenarios/                 ← benchmark definitions, one dir per connector
+│   └── postgres/ mysql/ oracle/ dynamodb/ iceberg/   *.yaml
+├── seeders/                   ← Go programs: seed + workload (+ exec) subcommands
+│   ├── cdc-rows-postgres/ cdc-rows-mysql/ cdc-rows-oracle/   ← SQL CDC row writers
+│   ├── cdc-ddb/                                              ← DynamoDB item writer
+│   ├── json-orders/                                         ← Kafka JSON producer (sink benches)
+│   └── iceberg-tablegen/                                    ← pre-creates Iceberg tables
+├── runner/                    ← Go orchestrator (see runner/doc.go for the full file map)
+│   ├── doc.go                 ← package reading guide (files grouped by concern)
+│   ├── main.go                ← CLI: bench / validate / down / cost-check / summary
+│   ├── scenario.go            ← scenario schema + engineSpecs (Connect side)
+│   ├── kcconnectors.go        ← kcConnectorSpecs (Kafka Connect / Debezium side)
+│   ├── matrix.go              ← the CPU sweep
+│   ├── …                      ← metrics / topology / render / infra (grouped in doc.go)
+│   ├── templates/             ← result + summary markdown templates
+│   └── testdata/              ← scenario fixtures for validation tests
+├── cleanup-lambda/            ← orphan-cleanup Lambda (destroys stacks past TTL)
+└── results/                   ← raw per-run JSON (gitignored)
 ```
 
 ---
 
 ## Future work
 
-This is a foundation. Concrete follow-ups:
+The framework is mature: broker-side metrics, the CPU sweep, the orphan-cleanup
+Lambda, `SUMMARY.md` auto-refresh, and five connectors all ship today. Open
+follow-ups:
 
-1. **Fix SSM stdout capture via S3** (highest priority). Without this, percentile data isn't trustworthy.
-2. **Fix the regex** to also match `B/sec` for low-throughput samples — same PR.
-3. **Implement the orphan-cleanup Lambda** (EventBridge → Lambda → terraform destroy on stacks > 24h old).
-4. **Add remaining connectors**: mysql, sqlserver, dynamodb, s3, iceberg. Each is ~1 module + 1 stack + 1–2 scenarios + maybe a seeder code path.
-5. **Add Prometheus snapshot capture** at the end of each sweep point — the JSON schema already has `prom_snapshot` (currently empty).
-6. **`SUMMARY.md` auto-refresh** — programmatically pick the best AWS run per connector for the at-a-glance table.
-
-Each can ship as its own focused PR using the same framework, no rework needed.
+1. **More connectors** — SQL Server CDC and an S3 sink are the obvious next
+   additions. Each is ~1 module + 1 stack + 1–2 scenarios + maybe a seeder
+   (see [Adding a new connector](#adding-a-new-connector)).
+2. **A Kafka Connect comparator for DynamoDB** — currently Connect-only (no
+   Debezium DynamoDB connector in the harness), so its results have no
+   head-to-head column.
+3. **Lint the rendered Connect config in `validate`** — `validate` checks the
+   scenario structure but not the rendered pipeline against the built binary, so
+   an unsupported input field only surfaces ~10 min into a run.
 
 ## Kafka Connect comparison infra (Plan 1, 2026-05-22)
 

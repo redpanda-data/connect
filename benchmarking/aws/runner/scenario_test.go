@@ -260,7 +260,7 @@ dataset:
   initial_rows: 0
   row_size_bytes: 1200
   tables: [orders]
-  seeder: cdc-rows
+  seeder: cdc-rows-postgres
 workload:
   write_rate_per_sec: 150000
   duration: 15m
@@ -311,7 +311,7 @@ dataset:
   initial_rows: 0
   row_size_bytes: 1200
   tables: [orders]
-  seeder: cdc-rows
+  seeder: cdc-rows-postgres
 workload:
   write_rate_per_sec: 150000
   duration: 15m

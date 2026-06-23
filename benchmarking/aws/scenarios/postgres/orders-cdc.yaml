@@ -27,7 +27,7 @@ dataset:
                            # ensureTable still runs to CREATE the table.
   row_size_bytes: 1200
   tables: [orders]
-  seeder: cdc-rows
+  seeder: cdc-rows-postgres
 
 workload:
   write_rate_per_sec: 150000

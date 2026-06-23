@@ -32,7 +32,7 @@ func newClient(ctx context.Context) (*dynamodb.Client, error) {
 }
 
 // seed bulk-loads initial rows. Scenarios that reset via drop+recreate set
-// rows=0, making this a no-op. Kept for parity with the cdc-rows seeder and in
+// rows=0, making this a no-op. Kept for parity with the cdc-rows-postgres seeder and in
 // case a future scenario wants pre-populated state.
 func seed(ctx context.Context, tables []string, rows int64, rowSize int) error {
 	if rows == 0 {

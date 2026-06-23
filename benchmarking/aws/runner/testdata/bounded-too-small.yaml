@@ -13,7 +13,7 @@ dataset:
   initial_rows: 1000000
   row_size_bytes: 500
   tables: [orders]
-  seeder: cdc-rows
+  seeder: cdc-rows-postgres
   expected_peak_mb_s: 10
 pipeline:
   input:

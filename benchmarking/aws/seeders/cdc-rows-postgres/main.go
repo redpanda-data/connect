@@ -16,7 +16,7 @@ import (
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Fprintln(os.Stderr, "usage: cdc-rows {seed|workload} [flags]")
+		fmt.Fprintln(os.Stderr, "usage: cdc-rows-postgres {seed|workload} [flags]")
 		os.Exit(2)
 	}
 	cmd := os.Args[1]

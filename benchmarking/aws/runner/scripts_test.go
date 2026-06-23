@@ -16,18 +16,18 @@ import (
 func TestRenderSeedScript_Postgres(t *testing.T) {
 	s := &Scenario{
 		Connector: "postgres_cdc",
-		Dataset:   DatasetSpec{Tables: []string{"orders"}, RowSizeBytes: 1200, Seeder: "cdc-rows", InitialRows: 1000},
+		Dataset:   DatasetSpec{Tables: []string{"orders"}, RowSizeBytes: 1200, Seeder: "cdc-rows-postgres", InitialRows: 1000},
 	}
 	outs := map[string]string{"postgres_dsn": "postgres://u:p@host:5432/db", "results_bucket": "bucket"}
-	script, err := renderSeedScript(s, outs, "stage/cdc-rows")
+	script, err := renderSeedScript(s, outs, "stage/cdc-rows-postgres")
 	if err != nil {
 		t.Fatalf("renderSeedScript: %v", err)
 	}
 	if !strings.Contains(script, "POSTGRES_DSN=") {
 		t.Errorf("postgres seed script must set POSTGRES_DSN; got:\n%s", script)
 	}
-	if !strings.Contains(script, "/opt/bench/cdc-rows seed") {
-		t.Errorf("postgres seed script must invoke /opt/bench/cdc-rows seed; got:\n%s", script)
+	if !strings.Contains(script, "/opt/bench/cdc-rows-postgres seed") {
+		t.Errorf("postgres seed script must invoke /opt/bench/cdc-rows-postgres seed; got:\n%s", script)
 	}
 }
 
@@ -219,7 +219,7 @@ func TestCombineReset_NoOpWhenSessionIDMissing(t *testing.T) {
 func TestRenderWorkloadScript_Postgres(t *testing.T) {
 	s := &Scenario{
 		Connector: "postgres_cdc",
-		Dataset:   DatasetSpec{Tables: []string{"orders"}, RowSizeBytes: 1200, Seeder: "cdc-rows"},
+		Dataset:   DatasetSpec{Tables: []string{"orders"}, RowSizeBytes: 1200, Seeder: "cdc-rows-postgres"},
 		Workload:  &WorkloadSpec{Warmup: 2 * time.Minute, Duration: 15 * time.Minute, WriteRatePerSec: 80000},
 	}
 	outs := map[string]string{"postgres_dsn": "postgres://u:p@host:5432/db"}
@@ -230,8 +230,8 @@ func TestRenderWorkloadScript_Postgres(t *testing.T) {
 	if !strings.Contains(got, "POSTGRES_DSN=") {
 		t.Errorf("postgres workload must set POSTGRES_DSN; got:\n%s", got)
 	}
-	if !strings.Contains(got, "/opt/bench/cdc-rows workload") {
-		t.Errorf("postgres workload must invoke cdc-rows; got:\n%s", got)
+	if !strings.Contains(got, "/opt/bench/cdc-rows-postgres workload") {
+		t.Errorf("postgres workload must invoke cdc-rows-postgres; got:\n%s", got)
 	}
 }
 
@@ -250,7 +250,7 @@ func TestRenderWorkloadScript_MySQL(t *testing.T) {
 		t.Errorf("mysql workload must set MYSQL_DSN; got:\n%s", got)
 	}
 	if !strings.Contains(got, "/opt/bench/cdc-rows-mysql workload") {
-		t.Errorf("mysql workload must invoke cdc-rows-mysql, not the hardcoded cdc-rows; got:\n%s", got)
+		t.Errorf("mysql workload must invoke cdc-rows-mysql, not the hardcoded cdc-rows-postgres; got:\n%s", got)
 	}
 }
 

@@ -13,7 +13,7 @@ dataset:
   initial_rows: 75000000
   row_size_bytes: 1200
   tables: [orders]
-  seeder: cdc-rows
+  seeder: cdc-rows-postgres
 workload:
   write_rate_per_sec: 5000
   duration: 5m

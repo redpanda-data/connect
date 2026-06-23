@@ -65,12 +65,12 @@ func TestSourceTopology_Validate_AcceptsKnown(t *testing.T) {
 func TestSourceTopology_SeedScript_MatchesRenderSeedScript(t *testing.T) {
 	s := &Scenario{
 		Connector: "postgres_cdc",
-		Dataset:   DatasetSpec{Tables: []string{"orders"}, RowSizeBytes: 1200, Seeder: "cdc-rows", InitialRows: 1000},
+		Dataset:   DatasetSpec{Tables: []string{"orders"}, RowSizeBytes: 1200, Seeder: "cdc-rows-postgres", InitialRows: 1000},
 	}
 	outs := map[string]string{"postgres_dsn": "postgres://u:p@host:5432/db", "results_bucket": "bucket"}
 	n := newBenchNames("sess", "postgres_cdc")
 
-	want, err := renderSeedScript(s, outs, "stage/cdc-rows")
+	want, err := renderSeedScript(s, outs, "stage/cdc-rows-postgres")
 	if err != nil {
 		t.Fatalf("renderSeedScript: %v", err)
 	}
