@@ -170,8 +170,10 @@ func TestConvertJDBCSourceWithCredentials(t *testing.T) {
 	assert.Contains(t, y, "driver: postgres")
 	// credentials injected into DSN
 	assert.Contains(t, y, "postgresql://alice:s3cr3t@h:5432/db")
-	// secret hygiene TODO present
+	// secret hygiene: single clean TODO (no double "# TODO:") and correct wording
 	assert.Contains(t, y, "password is inlined")
+	assert.Contains(t, y, "verify DSN format for the chosen driver; password is inlined")
+	assert.NotContains(t, y, "# TODO: password is inlined", "double-# TODO must not appear")
 	// credentials must NOT surface as unmapped-field warnings
 	assert.NotContains(t, y, "unmapped field connection.user")
 	assert.NotContains(t, y, "unmapped field connection.password")
@@ -194,8 +196,10 @@ func TestConvertJDBCSinkWithCredentials(t *testing.T) {
 	assert.Contains(t, y, "driver: postgres")
 	// credentials injected into DSN
 	assert.Contains(t, y, "postgresql://alice:s3cr3t@h:5432/db")
-	// secret hygiene TODO present
+	// secret hygiene: single clean TODO (no double "# TODO:") and correct wording
 	assert.Contains(t, y, "password is inlined")
+	assert.Contains(t, y, "verify DSN format for the chosen driver; password is inlined")
+	assert.NotContains(t, y, "# TODO: password is inlined", "double-# TODO must not appear")
 	// credentials must NOT surface as unmapped-field warnings
 	assert.NotContains(t, y, "unmapped field connection.user")
 	assert.NotContains(t, y, "unmapped field connection.password")

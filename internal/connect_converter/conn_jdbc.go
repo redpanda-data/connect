@@ -47,6 +47,10 @@ func dsnFromURL(url string) string {
 // separator. If dsn contains no "://", it is returned unchanged (caller should
 // emit a TODO noting that credentials could not be inlined). An empty user is a
 // no-op.
+//
+// NOTE: credentials that contain special characters such as '@', ':', '/', or '#'
+// are inserted verbatim and will corrupt the DSN. The verify-DSN TODO emitted by
+// the caller already prompts the user to review the output before use.
 func injectUserInfo(dsn, user, password string) string {
 	if user == "" {
 		return dsn
@@ -95,7 +99,7 @@ func driverAndDSN(ctx *MapCtx, body *yaml.Node) {
 	dsn := scalar(dsnVal)
 	comment := "TODO: verify DSN format for the chosen driver"
 	if password != "" {
-		comment += " # TODO: password is inlined — move to a secret/env-var reference"
+		comment = "TODO: verify DSN format for the chosen driver; password is inlined — move to a secret/env-var reference"
 	}
 	dsn.LineComment = comment
 	kv(body, "dsn", dsn)
