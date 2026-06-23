@@ -75,7 +75,7 @@ metrics:
 
 === `use_histogram_timing`
 
-Whether to export timing metrics as a histogram, if `false` a summary is used instead. When exporting histogram timings the delta values are converted from nanoseconds into seconds in order to better fit within bucket definitions. For more information on histograms and summaries refer to: https://prometheus.io/docs/practices/histograms/.
+Whether to export timing metrics as a histogram, if `false` a summary is used instead. When exporting histogram timings the delta values are converted from nanoseconds into seconds in order to better fit within bucket definitions, and a `_ns` metric name suffix is rewritten to `_seconds` to reflect the unit (for example `processor_latency_ns` becomes `processor_latency_seconds`). This also keeps the histogram series distinct from the summary series emitted when this field is `false`, which avoids Prometheus remote-write conflicts when a fleet mixes the setting. For more information on histograms and summaries refer to: https://prometheus.io/docs/practices/histograms/.
 
 
 *Type*: `bool`
