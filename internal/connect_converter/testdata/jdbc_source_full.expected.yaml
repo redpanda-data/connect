@@ -1,12 +1,11 @@
 # Converted from Kafka Connect connector "jdbc-src-full" (class=io.confluent.connect.jdbc.JdbcSourceConnector). Review # TODO markers.
 input:
   sql_select:
-    # TODO: unmapped field topic.prefix=jdbc-
     driver: postgres
     dsn: postgresql://h:5432/db # TODO: verify DSN format for the chosen driver
     table: orders
     columns:
       - '*' # TODO: list specific columns if needed
-    suffix: "" # TODO: KC mode=incrementing on column id; add ORDER BY id and a WHERE clause to replicate incremental polling
+    suffix: ORDER BY id # TODO: KC mode=incrementing; add a WHERE id > <last-seen> cursor for incremental polling
 output:
   stdout: {} # TODO: set the output destination

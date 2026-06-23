@@ -10,4 +10,4 @@ output:
   gcp_bigquery:
     project: proj
     dataset: ds
-    table: "" # TODO: set the destination table (KC derives it from the topic)
+    table: ${! @kafka_topic } # TODO: table derived from the topic — verify topic-name casing rules match BigQuery naming

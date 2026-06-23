@@ -37,19 +37,41 @@ func (bigQuerySinkConnector) Map(_ ConnectConfig, ctx *MapCtx) (Component, error
 	}
 
 	ctx.consume("topics")
-	table := scalar("")
-	table.LineComment = "TODO: set the destination table (KC derives it from the topic)"
-	kv(body, "table", table)
+	// KC derives the destination table from the topic (optionally remapped via
+	// topic2TableMap). gcp_bigquery's `table` accepts Bloblang interpolation, so
+	// emit a topic-derived value rather than an empty stub.
+	if t2t, ok := ctx.String("topic2TableMap"); ok && t2t != "" {
+		if expr, parsed := topicTableMatchExpr(t2t); parsed {
+			tn := scalar(expr)
+			tn.LineComment = "TODO: table derived from topic2TableMap — verify"
+			kv(body, "table", tn)
+		} else {
+			tn := scalar(`${! @kafka_topic }`)
+			tn.LineComment = "TODO: could not parse topic2TableMap — verify the destination table"
+			kv(body, "table", tn)
+		}
+	} else {
+		ctx.consume("defaultTopicToTableMap")
+		tn := scalar(`${! @kafka_topic }`)
+		tn.LineComment = "TODO: table derived from the topic — verify topic-name casing rules match BigQuery naming"
+		kv(body, "table", tn)
+	}
 
-	// Credentials: `credentials` contains inline JSON → credentials_json.
-	// `keyfile` is a filesystem path; gcp_bigquery has no path field, so
-	// surface it as a TODO rather than silently drop.
+	// Credentials: `credentials` / inline `keyfile` (keySource=JSON) contain the
+	// service-account JSON → credentials_json. A file path (keySource=FILE) has
+	// no gcp_bigquery field; APPLICATION_DEFAULT uses ambient credentials.
+	keySource, _ := ctx.String("keySource")
 	if v, ok := ctx.String("credentials"); ok {
 		kv(body, "credentials_json", scalar(v))
-	} else if _, ok := ctx.Lookup("keyfile"); ok {
 		ctx.consume("keyfile")
-		// TODO: keyfile is a path to a service-account JSON file; credentials_json
-		// expects the JSON content inline — load the file manually and paste here.
+	} else if v, ok := ctx.String("keyfile"); ok && v != "" {
+		if keySource == "JSON" {
+			kv(body, "credentials_json", scalar(v))
+		} else if keySource != "APPLICATION_DEFAULT" {
+			cj := scalar("")
+			cj.LineComment = "TODO: keyfile is a path (keySource=" + keySource + "); credentials_json expects inline JSON — load the file contents here"
+			kv(body, "credentials_json", cj)
+		}
 	}
 
 	// autoCreateTables → create_disposition.
@@ -66,6 +88,15 @@ func (bigQuerySinkConnector) Map(_ ConnectConfig, ctx *MapCtx) (Component, error
 	// sink, so byteSizeKey and periodMsKeys are left empty.
 	mapBatching(body, ctx, []string{"queueSize"}, "", "")
 
+	// gcp_bigquery performs streaming inserts only — it has no MERGE/upsert or
+	// delete path. Warn when the KC config relied on them.
+	if v, ok := ctx.String("upsertEnabled"); ok && v == "true" {
+		ctx.Warn("upsertEnabled", "gcp_bigquery streams inserts only — KC upsertEnabled merge semantics are not reproduced")
+	}
+	if v, ok := ctx.String("deleteEnabled"); ok && v == "true" {
+		ctx.Warn("deleteEnabled", "gcp_bigquery streams inserts only — KC deleteEnabled (CDC delete) is not reproduced")
+	}
+
 	// Recognized Confluent-internal plumbing with no gcp_bigquery equivalent.
 	consumeIgnored(ctx,
 		"sanitizeTopics",
@@ -78,6 +109,21 @@ func (bigQuerySinkConnector) Map(_ ConnectConfig, ctx *MapCtx) (Component, error
 		"allowBigQueryRequiredFieldRelaxation",
 		"kafkaDataFieldName",
 		"kafkaKeyFieldName",
+		"keySource",
+		"upsertEnabled",
+		"deleteEnabled",
+		"mergeIntervalMs",
+		"mergeRecordsThreshold",
+		"timePartitioningType",
+		"partitionExpirationMs",
+		"bigQueryPartitionDecorator",
+		"bigQueryMessageTimePartitioning",
+		"clusteringPartitionFieldNames",
+		"convertDoubleSpecialValues",
+		"allowSchemaUnionization",
+		"avroDataCacheSize",
+		"threadPoolSize",
+		"schemaRegistryLocation",
 	)
 
 	return Component{Output: component("gcp_bigquery", body)}, nil

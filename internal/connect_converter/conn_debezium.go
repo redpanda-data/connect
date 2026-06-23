@@ -57,11 +57,22 @@ func debeziumDBName(ctx *MapCtx) string {
 func debeziumTables(body *yaml.Node, ctx *MapCtx, fieldName string) {
 	if v, ok := ctx.String("table.include.list"); ok && v != "" {
 		kv(body, fieldName, seq(scalarsFromCSV(v)...))
-	} else {
-		stub := scalar("")
-		stub.LineComment = "TODO: list tables to capture (e.g. schema.table)"
-		kv(body, fieldName, seq(stub))
+		return
 	}
+	// No explicit include list — KC capture is defined by an exclude list,
+	// a database-level include list, or regex rules the *_cdc inputs can't
+	// express as a closed list. Emit a NON-EMPTY placeholder (an empty entry
+	// fails the "tables must contain at least one table" lint) and point at the
+	// real source of the table set.
+	note := "TODO: list the tables to capture (e.g. schema.table)"
+	if ex, ok := ctx.String("table.exclude.list"); ok && ex != "" {
+		note = "TODO: KC captured all tables except table.exclude.list=" + ex + " — enumerate the tables to capture (schema.table)"
+	} else if db, ok := ctx.String("database.include.list"); ok && db != "" {
+		note = "TODO: KC captured every table under database.include.list=" + db + " — enumerate the tables to capture (schema.table)"
+	}
+	stub := scalar("schema.table")
+	stub.LineComment = note
+	kv(body, fieldName, seq(stub))
 }
 
 // debeziumSnapshotModeToInitial returns true when Debezium snapshot.mode
@@ -77,16 +88,26 @@ func debeziumSnapshotModeToInitial(mode string) bool {
 }
 
 // consumeDebeziumCommon silently drops Debezium plumbing fields that have no
-// RPCN equivalent. topic.prefix and database.server.name are intentionally NOT
-// consumed here — they fall through to the engine's Unmapped() sweep so they
-// appear as inline "# TODO: unmapped field …" comments in the generated YAML.
+// RPCN equivalent.
+//
+// topic.prefix and database.server.name name the produced Kafka topics in
+// Debezium; the *_cdc inputs read rows directly and have no topic concept, so
+// these are consumed here rather than surfaced as unmapped noise.
+//
+// The schema-history families (schema.history.internal.* and the legacy
+// database.history.*) configure Debezium's external DDL-history Kafka topic,
+// which the *_cdc inputs do not use, so they are consumed too.
 //
 // Converter keys (value.converter, key.converter and their sub-keys) are
 // consumed here so that mapConverters() detects the early consumption and skips
 // emitting a schema_registry_decode processor — CDC inputs deliver structured
 // rows directly from the WAL/binlog; they do not read Avro/JSON-encoded bytes.
 func consumeDebeziumCommon(ctx *MapCtx) {
+	consumePrefix(ctx, "schema.history.internal.")
+	consumePrefix(ctx, "database.history.")
 	consumeIgnored(ctx,
+		"topic.prefix",
+		"database.server.name",
 		"tombstones.on.delete",
 		"decimal.handling.mode",
 		"time.precision.mode",
@@ -135,9 +156,20 @@ func (debeziumPostgresConnector) Map(_ ConnectConfig, ctx *MapCtx) (Component, e
 	hostPort := debeziumHostPort(ctx, "5432")
 	dbName := debeziumDBName(ctx)
 	dsnVal := fmt.Sprintf("postgres://%s:%s@%s/%s", user, password, hostPort, dbName)
+	// database.sslmode maps directly onto the libpq sslmode DSN parameter.
+	if mode, ok := ctx.String("database.sslmode"); ok && mode != "" {
+		dsnVal += "?sslmode=" + mode
+	}
 	dsnNode := scalar(dsnVal)
 	dsnNode.LineComment = "TODO: password is inlined — move to a secret/env-var reference"
 	kv(body, "dsn", dsnNode)
+
+	// postgres_cdc uses the pgoutput logical-decoding plugin; other Debezium
+	// plugins (decoderbufs/wal2json) don't apply.
+	if pn, ok := ctx.String("plugin.name"); ok && pn != "" && pn != "pgoutput" {
+		ctx.Warn("plugin.name", "postgres_cdc uses pgoutput; Debezium plugin.name="+pn+" is not applicable")
+	}
+	consumeIgnored(ctx, "publication.autocreate.mode")
 
 	// tables (required list)
 	debeziumTables(body, ctx, "tables")
@@ -171,10 +203,6 @@ func (debeziumPostgresConnector) Map(_ ConnectConfig, ctx *MapCtx) (Component, e
 		snapshotNode.LineComment = fmt.Sprintf("TODO: Debezium snapshot.mode=%s — verify this maps to stream_snapshot correctly", v)
 		kv(body, "stream_snapshot", snapshotNode)
 	}
-
-	// topic.prefix and database.server.name are intentionally NOT consumed here.
-	// They fall through to the engine's Unmapped() sweep which emits them as
-	// inline "# TODO: unmapped field …" comments in the generated YAML.
 
 	consumeDebeziumCommon(ctx)
 
@@ -233,10 +261,6 @@ func (debeziumMySQLConnector) Map(_ ConnectConfig, ctx *MapCtx) (Component, erro
 		ctx.Warn("database.server.id", "database.server.id="+v+" has no mysql_cdc equivalent — remove or handle at the MySQL server level")
 	}
 
-	// topic.prefix and database.server.name are intentionally NOT consumed here.
-	// They fall through to the engine's Unmapped() sweep which emits them as
-	// inline "# TODO: unmapped field …" comments in the generated YAML.
-
 	consumeDebeziumCommon(ctx)
 
 	return Component{Input: component("mysql_cdc", body)}, nil
@@ -263,6 +287,14 @@ func (debeziumSQLServerConnector) Map(_ ConnectConfig, ctx *MapCtx) (Component, 
 		ctx.consume("database.names")
 	}
 	connStr := fmt.Sprintf("sqlserver://%s:%s@%s?database=%s", user, password, hostPort, dbName)
+	// TLS knobs map onto go-mssqldb connection-string parameters.
+	if v, ok := ctx.String("database.encrypt"); ok && v != "" {
+		connStr += "&encrypt=" + v
+	}
+	if v, ok := ctx.String("database.trustServerCertificate"); ok && v != "" {
+		connStr += "&trustServerCertificate=" + v
+	}
+	ctx.consume("database.instance")
 	connNode := scalar(connStr)
 	connNode.LineComment = "TODO: password is inlined — move to a secret/env-var reference"
 	kv(body, "connection_string", connNode)
@@ -276,10 +308,6 @@ func (debeziumSQLServerConnector) Map(_ ConnectConfig, ctx *MapCtx) (Component, 
 		snapshotNode.LineComment = fmt.Sprintf("TODO: Debezium snapshot.mode=%s — verify this maps to stream_snapshot correctly", v)
 		kv(body, "stream_snapshot", snapshotNode)
 	}
-
-	// topic.prefix and database.server.name are intentionally NOT consumed here.
-	// They fall through to the engine's Unmapped() sweep which emits them as
-	// inline "# TODO: unmapped field …" comments in the generated YAML.
 
 	consumeDebeziumCommon(ctx)
 
@@ -318,6 +346,16 @@ func (debeziumOracleConnector) Map(_ ConnectConfig, ctx *MapCtx) (Component, err
 	}
 	kv(body, "connection_string", connNode)
 
+	// A pluggable-database name changes which service the CDC connection must
+	// target; surface it so the user can verify the connection_string.
+	if v, ok := ctx.String("database.pdb.name"); ok && v != "" {
+		ctx.Warn("database.pdb.name", "Oracle PDB="+v+"; ensure oracledb_cdc connection_string targets the pluggable-database service")
+	}
+	// LogMiner/XStream adapter, raw JDBC URL and LogMiner tuning have no
+	// oracledb_cdc equivalent (it manages log mining internally).
+	consumeIgnored(ctx, "database.connection.adapter", "database.url", "database.out.server.name")
+	consumePrefix(ctx, "log.mining.")
+
 	// include (required list) — maps from table.include.list (CSV)
 	debeziumTables(body, ctx, "include")
 
@@ -327,10 +365,6 @@ func (debeziumOracleConnector) Map(_ ConnectConfig, ctx *MapCtx) (Component, err
 		snapshotNode.LineComment = fmt.Sprintf("TODO: Debezium snapshot.mode=%s — verify this maps to stream_snapshot correctly", v)
 		kv(body, "stream_snapshot", snapshotNode)
 	}
-
-	// topic.prefix and database.server.name are intentionally NOT consumed here.
-	// They fall through to the engine's Unmapped() sweep which emits them as
-	// inline "# TODO: unmapped field …" comments in the generated YAML.
 
 	consumeDebeziumCommon(ctx)
 

@@ -11,4 +11,4 @@ output:
   redpanda:
     seed_brokers:
       - dst:9092
-    topic: ${! @kafka_topic }
+    topic: ${! @kafka_topic } # TODO: no source.cluster.alias — set the target topic naming policy if you use DefaultReplicationPolicy

@@ -19,6 +19,6 @@ output:
   redpanda:
     seed_brokers:
       - dst:9093
-    topic: ${! @kafka_topic }
+    topic: ${! @kafka_topic } # TODO: no source.cluster.alias — set the target topic naming policy if you use DefaultReplicationPolicy
     tls:
       enabled: true # TODO: configure target cluster TLS (cert/key paths or skip_cert_verify)

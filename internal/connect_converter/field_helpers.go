@@ -219,16 +219,23 @@ func jodaToGoLayoutForPath(pattern string) string {
 // partitioner tuning keys (partition.duration.ms, locale, timezone, path.format)
 // so they do not surface as unmapped TODO noise.
 //
-// When path.format is absent (TimeBasedPartitioner defaults) or cannot be
-// translated, it emits a best-effort path with an inline TODO instead.
-func applyTimeBasedPartitioner(ctx *MapCtx, path *yaml.Node) {
+// When path.format is absent it falls back to defaultFormat (used by the
+// Daily/Hourly partitioners, which imply a fixed bucket layout); if both are
+// empty or the format can't be translated, it emits a best-effort path with an
+// inline TODO instead.
+func applyTimeBasedPartitioner(ctx *MapCtx, path *yaml.Node, defaultFormat string) {
 	ctx.consume("partitioner.class")
 	ctx.consume("partition.duration.ms")
 	ctx.consume("locale")
 	ctx.consume("timezone")
+	ctx.consume("timestamp.extractor")
+	ctx.consume("timestamp.field")
 
 	format, ok := ctx.String("path.format")
 	if !ok || strings.TrimSpace(format) == "" {
+		format = defaultFormat
+	}
+	if strings.TrimSpace(format) == "" {
 		todo := "TODO: TimeBasedPartitioner uses default time-bucketing — add a time-based path prefix and verify"
 		if path.LineComment != "" {
 			path.LineComment += "; " + todo
@@ -252,11 +259,86 @@ func applyTimeBasedPartitioner(ctx *MapCtx, path *yaml.Node) {
 	path.Value = strings.TrimSuffix(prefix, "/") + "/" + path.Value
 }
 
+// applyFieldPartitioner handles a Kafka Connect FieldPartitioner by prefixing
+// the object path with a "<field>=${! this.<field> }/" segment per partition
+// field (mirroring the connector's "field=value/" Hive-style layout). It
+// consumes partitioner.class and partition.field.name.
+func applyFieldPartitioner(ctx *MapCtx, path *yaml.Node) {
+	ctx.consume("partitioner.class")
+	fields, ok := ctx.String("partition.field.name")
+	if !ok || strings.TrimSpace(fields) == "" {
+		todo := "TODO: FieldPartitioner needs partition.field.name — add a field-based path prefix"
+		if path.LineComment != "" {
+			path.LineComment += "; " + todo
+		} else {
+			path.LineComment = todo
+		}
+		return
+	}
+	var prefix strings.Builder
+	for f := range strings.SplitSeq(fields, ",") {
+		if f = strings.TrimSpace(f); f != "" {
+			prefix.WriteString(f + "=${! this." + f + " }/")
+		}
+	}
+	path.Value = prefix.String() + path.Value
+}
+
 // consumeIgnored marks recognized-but-irrelevant Kafka Connect plumbing keys
 // consumed WITHOUT recording a warning, so they don't surface as TODO noise.
 func consumeIgnored(ctx *MapCtx, keys ...string) {
 	for _, k := range keys {
 		ctx.consume(k)
+	}
+}
+
+// consumeConverterKeys marks the key/value converter properties consumed so the
+// engine's converter pass (mapConverters) emits no schema_registry_decode
+// processor. Use for inputs that read already-structured records directly
+// (CDC, sql_select) rather than Avro/JSON-encoded Kafka bytes. The converter
+// sub-keys are already excluded from the unmapped sweep via metaPrefixes.
+func consumeConverterKeys(ctx *MapCtx) {
+	ctx.consume(ValueConverter.Prefix())
+	ctx.consume(KeyConverter.Prefix())
+}
+
+// consumePrefix marks every config key sharing the given prefix consumed, so a
+// whole family of plumbing keys (e.g. schema.history.internal.*) doesn't
+// surface as unmapped TODO noise.
+func consumePrefix(ctx *MapCtx, prefix string) {
+	for k := range ctx.cfg.Props {
+		if strings.HasPrefix(k, prefix) {
+			ctx.consume(k)
+		}
+	}
+}
+
+// topicTableMatchExpr parses a Kafka Connect "topic2table" map
+// ("topic1:table1,topic2:table2") into an output table value. A single mapping
+// yields the literal table name; multiple mappings yield a Bloblang match over
+// @kafka_topic. Returns ("", false) when no parseable pairs are present.
+func topicTableMatchExpr(t2t string) (string, bool) {
+	type pair struct{ topic, table string }
+	var pairs []pair
+	for e := range strings.SplitSeq(t2t, ",") {
+		parts := strings.SplitN(strings.TrimSpace(e), ":", 2)
+		if len(parts) == 2 && strings.TrimSpace(parts[0]) != "" {
+			pairs = append(pairs, pair{strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1])})
+		}
+	}
+	switch len(pairs) {
+	case 0:
+		return "", false
+	case 1:
+		return pairs[0].table, true
+	default:
+		var b strings.Builder
+		b.WriteString(`${! match @kafka_topic { `)
+		for _, p := range pairs {
+			b.WriteString(`"` + p.topic + `" => "` + p.table + `", `)
+		}
+		b.WriteString(`_ => @kafka_topic } }`)
+		return b.String(), true
 	}
 }
 

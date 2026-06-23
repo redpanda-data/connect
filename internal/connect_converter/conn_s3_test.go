@@ -243,15 +243,18 @@ func TestConvertS3SinkTimeBasedPartitionerNoFormat(t *testing.T) {
 }
 
 // TestConvertS3SinkFieldPartitioner verifies a non-time, non-default partitioner
-// still surfaces as a TODO (left for manual review).
+// TestConvertS3SinkFieldPartitioner verifies a FieldPartitioner is consumed and
+// translated into a "field=${! this.field }/" path prefix.
 func TestConvertS3SinkFieldPartitioner(t *testing.T) {
-	in := []byte(`{"name":"s3","config":{"connector.class":"io.confluent.connect.s3.S3SinkConnector","s3.bucket.name":"b","s3.region":"us-east-1","topics":"t","partitioner.class":"io.confluent.connect.storage.partitioner.FieldPartitioner"}}`)
+	in := []byte(`{"name":"s3","config":{"connector.class":"io.confluent.connect.s3.S3SinkConnector","s3.bucket.name":"b","s3.region":"us-east-1","topics":"t","partitioner.class":"io.confluent.connect.storage.partitioner.FieldPartitioner","partition.field.name":"tenant,region"}}`)
 	res, err := Convert(in)
 	require.NoError(t, err)
 	y := string(res.YAML)
 	assertValidRPCN(t, res.YAML)
-	// FieldPartitioner is NOT consumed — surfaces in the unmapped sweep.
-	assert.Contains(t, y, "partitioner.class")
+	// FieldPartitioner is consumed (no unmapped TODO) and becomes a path prefix.
+	assert.NotContains(t, y, "partitioner.class")
+	assert.Contains(t, y, "tenant=${! this.tenant }/")
+	assert.Contains(t, y, "region=${! this.region }/")
 }
 
 // TestConvertS3SinkRotateSchedule verifies that flush.size AND

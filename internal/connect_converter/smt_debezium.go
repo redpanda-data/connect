@@ -76,13 +76,29 @@ func debeziumGuidance(smt SMTConfig, ctx *MapCtx, todoMsg string) ([]*yaml.Node,
 type extractNewRecordStateSMT struct{}
 
 func (extractNewRecordStateSMT) Map(smt SMTConfig, ctx *MapCtx) ([]*yaml.Node, error) {
-	ctx.Warn(
-		"transforms."+smt.Alias+".type",
-		"ExtractNewRecordState is a no-op for RPCN *_cdc inputs — records are already "+
-			"unwrapped; advanced options (add.fields, delete.handling.mode) are not translated",
-	)
+	msg := "ExtractNewRecordState is a no-op for RPCN *_cdc inputs — records are already unwrapped"
+	if opts := debeziumUnwrapOpts(smt); opts != "" {
+		msg += "; the row-shaping options [" + opts + "] are NOT reproduced — add equivalent mapping/filter processors if you depend on them"
+	}
+	ctx.Warn("transforms."+smt.Alias+".type", msg)
 	// Emit no processor nodes.
 	return nil, nil
+}
+
+// debeziumUnwrapOpts returns a comma-separated list of the row-shaping
+// ExtractNewRecordState options that are actually present (add.fields,
+// add.headers, delete.handling.mode, drop.tombstones), or "" if none are set.
+// These change the output record shape and are not reproduced by *_cdc inputs.
+func debeziumUnwrapOpts(smt SMTConfig) string {
+	var present []string
+	for _, k := range []string{"add.fields", "add.headers", "delete.handling.mode", "drop.tombstones"} {
+		if v, ok := smt.Props[k]; ok {
+			if s := strings.TrimSpace(fmt.Sprint(v)); s != "" {
+				present = append(present, k+"="+s)
+			}
+		}
+	}
+	return strings.Join(present, ", ")
 }
 
 // ── ExtractNewDocumentState (MongoDB) ─────────────────────────────────────────

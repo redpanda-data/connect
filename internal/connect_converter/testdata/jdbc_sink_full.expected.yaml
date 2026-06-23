@@ -9,6 +9,6 @@ output:
     columns:
       - id # TODO: list destination columns matching your message fields; KC pk.fields=id (pk.mode=)
     args_mapping: root = [ this.id ] # TODO: map message fields to column values
-    suffix: "" # TODO: KC insert.mode=upsert; sql_insert emits plain INSERT — write an ON CONFLICT or UPDATE suffix manually
+    suffix: "" # TODO: KC insert.mode=upsert; sql_insert emits a plain INSERT — write an ON CONFLICT/UPDATE suffix manually (needs pk.fields and the column list / fields.whitelist)
     batching:
       count: 500

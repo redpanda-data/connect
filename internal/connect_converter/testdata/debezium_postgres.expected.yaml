@@ -1,7 +1,6 @@
 # Converted from Kafka Connect connector "debezium-pg" (class=io.debezium.connector.postgresql.PostgresConnector). Review # TODO markers.
 input:
   postgres_cdc:
-    # TODO: unmapped field topic.prefix=myprefix
     dsn: postgres://pguser:pgpass@pghost:5432/mydb # TODO: password is inlined — move to a secret/env-var reference
     tables:
       - public.orders

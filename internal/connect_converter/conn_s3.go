@@ -81,17 +81,29 @@ func (s3SinkConnector) Map(_ ConnectConfig, ctx *MapCtx) (Component, error) {
 		"schema.compatibility",
 		"s3.part.size",
 		"s3.compression.type",
+		"parquet.codec",
+		"file.name.template",
+		"file.name.prefix",
+		"file.name.timestamp.source",
+		"file.name.timestamp.timezone",
+		"format.output.fields",
+		"format.output.fields.value.encoding",
 	)
-	// DefaultPartitioner matches RPCN's topic-based path; TimeBasedPartitioner
-	// is translated into a time-bucketed path prefix; any other partitioner
-	// changes the layout in a way we cannot map, so leave it to surface as a
-	// TODO for manual review.
+	// DefaultPartitioner matches RPCN's topic-based path; Time/Daily/Hourly
+	// partitioners become a time-bucketed path prefix; FieldPartitioner becomes
+	// a field-value prefix; any other partitioner is left as a TODO.
 	if p, ok := ctx.Lookup("partitioner.class"); ok {
 		switch {
 		case strings.Contains(p, "DefaultPartitioner"):
 			ctx.consume("partitioner.class")
+		case strings.Contains(p, "HourlyPartitioner"):
+			applyTimeBasedPartitioner(ctx, path, "'year'=YYYY/'month'=MM/'day'=dd/'hour'=HH")
+		case strings.Contains(p, "DailyPartitioner"):
+			applyTimeBasedPartitioner(ctx, path, "'year'=YYYY/'month'=MM/'day'=dd")
 		case strings.Contains(p, "TimeBasedPartitioner"):
-			applyTimeBasedPartitioner(ctx, path)
+			applyTimeBasedPartitioner(ctx, path, "")
+		case strings.Contains(p, "FieldPartitioner"):
+			applyFieldPartitioner(ctx, path)
 		}
 	}
 

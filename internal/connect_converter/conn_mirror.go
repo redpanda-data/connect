@@ -69,7 +69,30 @@ func (mirrorSourceConnector) Map(cfg ConnectConfig, ctx *MapCtx) (Component, err
 		stub.LineComment = "TODO: set target cluster brokers"
 		kv(out, "seed_brokers", seq(stub))
 	}
-	kv(out, "topic", scalar(`${! @kafka_topic }`))
+	// Target topic naming follows the MM2 replication policy. DefaultReplicationPolicy
+	// renames mirrored topics to "<source.alias><separator><topic>"; IdentityReplicationPolicy
+	// keeps the original name. We read the policy + alias + separator to reproduce this.
+	sourceAlias, _ := ctx.String("source.cluster.alias")
+	ctx.consume("target.cluster.alias")
+	sep := "."
+	if s, ok := ctx.String("replication.policy.separator"); ok && s != "" {
+		sep = s
+	}
+	policy, _ := ctx.String("replication.policy.class")
+	identity := strings.Contains(policy, "IdentityReplicationPolicy")
+	if identity || sourceAlias == "" {
+		// Identity policy (or no alias to prefix with) — keep the topic name.
+		topicNode := scalar(`${! @kafka_topic }`)
+		if !identity && sourceAlias == "" {
+			topicNode.LineComment = "TODO: no source.cluster.alias — set the target topic naming policy if you use DefaultReplicationPolicy"
+		}
+		kv(out, "topic", topicNode)
+	} else {
+		// DefaultReplicationPolicy (the MM2 default) prefixes the source alias.
+		topicNode := scalar(sourceAlias + sep + `${! @kafka_topic }`)
+		topicNode.LineComment = "TODO: DefaultReplicationPolicy renames topics to <source-alias>" + sep + "<topic> — verify"
+		kv(out, "topic", topicNode)
+	}
 
 	// Security: target cluster TLS/SASL.
 	if proto, ok := ctx.String("target.cluster.security.protocol"); ok {
@@ -88,15 +111,35 @@ func (mirrorSourceConnector) Map(cfg ConnectConfig, ctx *MapCtx) (Component, err
 		"target.cluster.ssl.key.password",
 	)
 
+	// topics.exclude (and the legacy topics.blacklist alias) can't be expressed
+	// in the redpanda input's topic list — surface it so the user adds a filter.
+	if v, ok := ctx.String("topics.exclude"); ok && v != "" {
+		ctx.Warn("topics.exclude", "redpanda input has no exclude list — topics matching ["+v+"] will be mirrored; add a filter processor to drop them")
+	} else if v, ok := ctx.String("topics.blacklist"); ok && v != "" {
+		ctx.Warn("topics.blacklist", "redpanda input has no exclude list — topics matching ["+v+"] will be mirrored; add a filter processor to drop them")
+	}
+
 	// MirrorMaker plumbing — no RPCN equivalent.
 	consumeIgnored(ctx,
 		"replication.factor",
+		"replication.policy.class",
+		"replication.policy.separator",
 		"sync.topic.configs.enabled",
+		"sync.topic.acls.enabled",
 		"refresh.topics.enabled",
+		"refresh.topics.interval.seconds",
 		"emit.heartbeats.enabled",
 		"emit.checkpoints.enabled",
 		"refresh.groups.enabled",
 		"sync.group.offsets.enabled",
+		"groups",
+		"groups.exclude",
+		"consumer.auto.offset.reset",
+		"offset-syncs.topic.location",
+		"offset-syncs.topic.replication.factor",
+		"offset.lag.max",
+		"heartbeats.topic.replication.factor",
+		"checkpoints.topic.replication.factor",
 	)
 
 	return Component{

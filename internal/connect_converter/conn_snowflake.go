@@ -137,6 +137,13 @@ func (snowflakeSinkConnector) Map(_ ConnectConfig, ctx *MapCtx) (Component, erro
 		kv(body, "batching", batch)
 	}
 
+	// Schematization changes the target table shape (one typed column per field
+	// vs a single RECORD_CONTENT VARIANT); snowflake_streaming writes the record
+	// as-is, so warn when KC had it enabled.
+	if v, ok := ctx.String("snowflake.enable.schematization"); ok && v == "true" {
+		ctx.Warn("snowflake.enable.schematization", "KC schematization splits the record into typed columns; snowflake_streaming writes the record as-is — define the target table columns or add a mapping to match")
+	}
+
 	// Recognized Snowflake-Kafka-connector plumbing with no snowflake_streaming
 	// equivalent — drop quietly so they don't surface as TODO noise.
 	// (key.converter*/value.converter* are already treated as meta.)
@@ -151,6 +158,17 @@ func (snowflakeSinkConnector) Map(_ ConnectConfig, ctx *MapCtx) (Component, erro
 		// The KC connector's only streaming ingestion method maps onto the
 		// snowflake_streaming output itself; the key carries no extra config.
 		"snowflake.ingestion.method",
+		"snowflake.enable.schematization",
+		"snowflake.streaming.enable.single.buffer",
+		"snowflake.streaming.max.client.lag",
+		"snowflake.streaming.client.provider.override.map",
+		"snowflake.role.name.override.map",
+		"snowflake.streaming.closeChannelsInParallel.enabled",
+		"enable.streaming.client.optimization",
+		"enable.mdc.logging",
+		"errors.tolerance",
+		"errors.log.enable",
+		"errors.deadletterqueue.topic.name",
 	)
 
 	return Component{Output: component("snowflake_streaming", body)}, nil

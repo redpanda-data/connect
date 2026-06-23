@@ -11,7 +11,7 @@ output:
   gcp_bigquery:
     project: my-project
     dataset: my_dataset
-    table: "" # TODO: set the destination table (KC derives it from the topic)
+    table: ${! @kafka_topic } # TODO: table derived from the topic — verify topic-name casing rules match BigQuery naming
     credentials_json: '{"type":"service_account"}'
     create_disposition: CREATE_NEVER
     batching:

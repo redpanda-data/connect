@@ -16,6 +16,9 @@ func init() {
 	registerConverter("io.confluent.connect.json.JsonSchemaConverter", schemaRegistryConverter{})
 	registerConverter("org.apache.kafka.connect.json.JsonConverter", noopConverter{})
 	registerConverter("org.apache.kafka.connect.storage.StringConverter", noopConverter{})
+	// ByteArrayConverter is a raw byte passthrough (the MirrorMaker2 default and
+	// common for raw object-store sinks). No decode step is needed.
+	registerConverter("org.apache.kafka.connect.converters.ByteArrayConverter", noopConverter{})
 	// Snowflake-bundled converters.
 	registerConverter("com.snowflake.kafka.connector.records.SnowflakeJsonConverter", noopConverter{})
 	registerConverter("com.snowflake.kafka.connector.records.SnowflakeAvroConverter", schemaRegistryConverter{})
