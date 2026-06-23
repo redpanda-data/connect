@@ -101,6 +101,8 @@ the right.
 				Addr:              addr,
 				Handler:           newMux(),
 				ReadHeaderTimeout: 5 * time.Second,
+				ReadTimeout:       30 * time.Second,
+				WriteTimeout:      30 * time.Second,
 			}
 			fmt.Fprintf(c.App.Writer, "Running converter playground at http://%s\n", addr)
 			return server.ListenAndServe()

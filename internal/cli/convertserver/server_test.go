@@ -10,6 +10,7 @@ package convertserver
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -80,11 +81,32 @@ func TestIndexServesPage(t *testing.T) {
 	require.NoError(t, err)
 	defer resp.Body.Close()
 	require.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Contains(t, resp.Header.Get("Content-Type"), "text/html")
 	b, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	page := string(b)
 	assert.Contains(t, page, `id="input"`)
 	assert.Contains(t, page, `id="output"`)
+}
+
+func TestIndexNotFound(t *testing.T) {
+	srv := httptest.NewServer(newMux())
+	defer srv.Close()
+	resp, err := http.Get(srv.URL + "/favicon.ico")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+}
+
+type errReader struct{}
+
+func (errReader) Read([]byte) (int, error) { return 0, errors.New("boom") }
+
+func TestConvertBodyReadError(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/convert", errReader{})
+	rec := httptest.NewRecorder()
+	handleConvert(rec, req)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
 }
 
 func TestCommandBuilds(t *testing.T) {
