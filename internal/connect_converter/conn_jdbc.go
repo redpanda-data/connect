@@ -221,7 +221,7 @@ func (jdbcSinkConnector) Map(_ ConnectConfig, ctx *MapCtx) (Component, error) {
 	}
 
 	// batch.size → batching.count (sql_insert supports the batching policy).
-	mapBatching(body, ctx, "batch.size", "", "")
+	mapBatching(body, ctx, []string{"batch.size"}, "", "")
 
 	consumeIgnored(ctx,
 		"insert.mode",

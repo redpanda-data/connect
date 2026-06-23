@@ -40,6 +40,77 @@ func TestConvertAivenGCSSinkConnector(t *testing.T) {
 	assert.NotContains(t, y, "unsupported")
 }
 
+// TestConvertAivenGCSSinkFormatOutputType verifies Aiven format.output.type
+// drives the GCS object extension when format.class is absent.
+func TestConvertAivenGCSSinkFormatOutputType(t *testing.T) {
+	cases := []struct {
+		name    string
+		fmtVal  string
+		wantExt string
+	}{
+		{"json", "json", ".json"},
+		{"jsonl", "jsonl", ".jsonl"},
+		{"csv", "csv", ".csv"},
+		{"avro", "avro", ".avro"},
+		{"parquet", "parquet", ".parquet"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			in := []byte(`{"name":"gcs","config":{"connector.class":"io.aiven.kafka.connect.gcs.GcsSinkConnector","gcs.bucket.name":"b","topics":"t","format.output.type":"` + tc.fmtVal + `"}}`)
+			res, err := Convert(in)
+			require.NoError(t, err)
+			y := string(res.YAML)
+			assertValidRPCN(t, res.YAML)
+			assert.Contains(t, y, tc.wantExt)
+			assert.NotContains(t, y, "format.output.type")
+			if tc.fmtVal == "avro" || tc.fmtVal == "parquet" {
+				assert.Contains(t, y, "add an encode step")
+			}
+		})
+	}
+}
+
+// TestConvertGCSSinkFileMaxRecords verifies Aiven file.max.records maps to
+// batching.count on GCS.
+func TestConvertGCSSinkFileMaxRecords(t *testing.T) {
+	in := []byte(`{"name":"gcs","config":{"connector.class":"io.aiven.kafka.connect.gcs.GcsSinkConnector","gcs.bucket.name":"b","topics":"t","file.max.records":"25"}}`)
+	res, err := Convert(in)
+	require.NoError(t, err)
+	y := string(res.YAML)
+	assertValidRPCN(t, res.YAML)
+	assert.Contains(t, y, "count: 25")
+	assert.NotContains(t, y, "file.max.records")
+	assert.NotContains(t, y, "unmapped field")
+}
+
+// TestConvertGCSSinkCompression verifies file.compression.type appends a suffix
+// and attaches a compress-processor TODO on GCS.
+func TestConvertGCSSinkCompression(t *testing.T) {
+	in := []byte(`{"name":"gcs","config":{"connector.class":"io.aiven.kafka.connect.gcs.GcsSinkConnector","gcs.bucket.name":"b","topics":"t","format.output.type":"json","file.compression.type":"gzip"}}`)
+	res, err := Convert(in)
+	require.NoError(t, err)
+	y := string(res.YAML)
+	assertValidRPCN(t, res.YAML)
+	assert.Contains(t, y, ".json.gz")
+	assert.Contains(t, y, "compress")
+	assert.NotContains(t, y, "file.compression.type")
+}
+
+// TestConvertGCSSinkTimeBasedPartitioner verifies TimeBasedPartitioner path.format
+// translation on GCS.
+func TestConvertGCSSinkTimeBasedPartitioner(t *testing.T) {
+	in := []byte(`{"name":"gcs","config":{"connector.class":"io.confluent.connect.gcs.GcsSinkConnector","gcs.bucket.name":"b","topics":"t","partitioner.class":"io.confluent.connect.storage.partitioner.TimeBasedPartitioner","path.format":"'year'=YYYY/'month'=MM/'day'=dd"}}`)
+	res, err := Convert(in)
+	require.NoError(t, err)
+	y := string(res.YAML)
+	assertValidRPCN(t, res.YAML)
+	assert.Contains(t, y, `metadata("kafka_timestamp_ms").number().ts_format("2006")`)
+	assert.Contains(t, y, "@kafka_topic")
+	assert.NotContains(t, y, "partitioner.class")
+	assert.NotContains(t, y, "path.format")
+	assert.NotContains(t, y, "unmapped field")
+}
+
 func TestConvertGCSSinkFull(t *testing.T) {
 	in := []byte(`{
 		"name": "gcs-sink-full",

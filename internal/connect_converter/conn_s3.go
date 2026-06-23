@@ -46,7 +46,7 @@ func (s3SinkConnector) Map(_ ConnectConfig, ctx *MapCtx) (Component, error) {
 	// uses interpolation on the kafka_topic metadata. The file extension is
 	// derived from format.class; an optional topics.dir becomes a prefix.
 	ctx.consume("topics")
-	ext := objectFormatExtension(ctx) // consumes format.class
+	ext := objectFormatExtension(ctx) // consumes format.class / format.output.type
 	path := topicObjectPath(ext)
 	if dir, ok := ctx.String("topics.dir"); ok && dir != "" {
 		path.Value = strings.TrimSuffix(dir, "/") + "/" + path.Value
@@ -54,10 +54,13 @@ func (s3SinkConnector) Map(_ ConnectConfig, ctx *MapCtx) (Component, error) {
 	if ext == ".avro" || ext == ".parquet" {
 		path.LineComment = "TODO: add an encode step (e.g. avro/parquet) before this output"
 	}
+	// Aiven file.compression.type appends a suffix and a compress-processor TODO.
+	applyObjectCompression(ctx, path, ext)
 	kv(body, "path", path)
 
-	// flush.size / rotation interval -> common batch policy (single block).
-	mapBatching(body, ctx, "flush.size", "", "rotate.interval.ms", "rotate.schedule.interval.ms")
+	// flush.size / file.max.records (count) + rotation interval (period) ->
+	// common batch policy (single block).
+	mapBatching(body, ctx, []string{"flush.size", "file.max.records"}, "", "rotate.interval.ms", "rotate.schedule.interval.ms")
 
 	// Explicit static AWS credentials, if provided.
 	if id, ok := ctx.String("aws.access.key.id"); ok {
@@ -79,11 +82,16 @@ func (s3SinkConnector) Map(_ ConnectConfig, ctx *MapCtx) (Component, error) {
 		"s3.part.size",
 		"s3.compression.type",
 	)
-	// DefaultPartitioner matches RPCN's topic-based path; anything else
-	// changes the layout, so leave it to surface as a TODO.
+	// DefaultPartitioner matches RPCN's topic-based path; TimeBasedPartitioner
+	// is translated into a time-bucketed path prefix; any other partitioner
+	// changes the layout in a way we cannot map, so leave it to surface as a
+	// TODO for manual review.
 	if p, ok := ctx.Lookup("partitioner.class"); ok {
-		if strings.Contains(p, "DefaultPartitioner") {
+		switch {
+		case strings.Contains(p, "DefaultPartitioner"):
 			ctx.consume("partitioner.class")
+		case strings.Contains(p, "TimeBasedPartitioner"):
+			applyTimeBasedPartitioner(ctx, path)
 		}
 	}
 

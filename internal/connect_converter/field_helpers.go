@@ -17,24 +17,33 @@ import (
 // mapBatching emits a single `batching:` block on body from whichever of the
 // given Kafka Connect keys are present. It consumes all keys it inspects.
 //
-//   - countKey maps to batching.count (unquoted integer).
+//   - countKeys: the FIRST present key becomes batching.count (unquoted
+//     integer); all remaining countKeys are also consumed so they do not
+//     surface as TODO noise (e.g. ["flush.size", "file.max.records"]).
 //   - byteSizeKey maps to batching.byte_size (unquoted integer).
 //   - periodMsKeys: the FIRST key that is present becomes batching.period
 //     (millisecond value converted to a duration string, e.g. "5000ms"); all
 //     remaining periodMsKeys are also consumed so they do not surface as TODO
 //     noise.
 //
-// At most ONE batching: mapping is emitted regardless of how many periodMsKeys
-// are supplied. If none of the keys are present, nothing is emitted.
+// At most ONE batching: mapping is emitted regardless of how many count/period
+// keys are supplied. If none of the keys are present, nothing is emitted.
 //
 // The sub-field names/shape (count/byte_size/period) match the common benthos
 // batch policy exposed by aws_s3 and friends — verified via assertValidRPCN.
-func mapBatching(body *yaml.Node, ctx *MapCtx, countKey, byteSizeKey string, periodMsKeys ...string) {
+func mapBatching(body *yaml.Node, ctx *MapCtx, countKeys []string, byteSizeKey string, periodMsKeys ...string) {
 	batch := mapping()
 
-	if countKey != "" {
-		if v, ok := ctx.String(countKey); ok {
+	// Use the first present countKey; consume all of them regardless.
+	countSet := false
+	for _, key := range countKeys {
+		if key == "" {
+			continue
+		}
+		v, ok := ctx.String(key) // always marks consumed
+		if ok && !countSet {
 			kv(batch, "count", intScalar(v))
+			countSet = true
 		}
 	}
 	if byteSizeKey != "" {
@@ -61,15 +70,36 @@ func mapBatching(body *yaml.Node, ctx *MapCtx, countKey, byteSizeKey string, per
 	kv(body, "batching", batch)
 }
 
-// objectFormatExtension reads and consumes `format.class` (side effect: the key
-// is marked consumed on ctx) and returns the object file extension implied by
-// the Kafka Connect format. Defaults to ".json" when the format is absent or
-// unrecognized.
+// objectFormatExtension reads and consumes the output-format keys (side effect:
+// the keys are marked consumed on ctx) and returns the object file extension
+// implied by the Kafka Connect format. It reads Confluent's `format.class`
+// first, then falls back to Aiven's `format.output.type`. Defaults to ".json"
+// when the format is absent or unrecognized.
 func objectFormatExtension(ctx *MapCtx) string {
 	cls, ok := ctx.String("format.class")
 	if !ok {
+		// Aiven S3/GCS sinks use format.output.type instead of format.class.
+		if typ, ok := ctx.String("format.output.type"); ok {
+			switch strings.ToLower(strings.TrimSpace(typ)) {
+			case "jsonl":
+				return ".jsonl"
+			case "csv":
+				return ".csv"
+			case "parquet":
+				return ".parquet"
+			case "avro":
+				return ".avro"
+			case "json":
+				return ".json"
+			default:
+				return ".json"
+			}
+		}
 		return ".json"
 	}
+	// Always consume format.output.type if present alongside format.class so it
+	// is not flagged as unmapped.
+	ctx.consume("format.output.type")
 	switch {
 	case strings.Contains(cls, "AvroFormat"):
 		return ".avro"
@@ -82,6 +112,138 @@ func objectFormatExtension(ctx *MapCtx) string {
 	default:
 		return ".json"
 	}
+}
+
+// compressionSuffix returns the object-path extension suffix for a Kafka
+// Connect file.compression.type value, plus the matching benthos compress
+// algorithm name. Returns ("", "") for none/empty/unrecognized values.
+func compressionSuffix(typ string) (suffix, algorithm string) {
+	switch strings.ToLower(strings.TrimSpace(typ)) {
+	case "gzip":
+		return ".gz", "gzip"
+	case "snappy":
+		return ".snappy", "snappy"
+	case "zstd":
+		return ".zst", "zstd"
+	default:
+		return "", ""
+	}
+}
+
+// applyObjectCompression reads and consumes `file.compression.type` (Aiven). For
+// a real compression algorithm it appends the matching suffix to the path's
+// extension and notes (inline) that a `compress` processor must be added to the
+// pipeline to actually compress the data, since the connector layer cannot
+// inject a processor. For none/absent/unrecognized, nothing changes.
+func applyObjectCompression(ctx *MapCtx, path *yaml.Node, ext string) {
+	typ, ok := ctx.String("file.compression.type")
+	if !ok {
+		return
+	}
+	suffix, algorithm := compressionSuffix(typ)
+	if suffix == "" {
+		return
+	}
+	// Replace the trailing ext in the path value with the compressed ext.
+	path.Value = strings.TrimSuffix(path.Value, ext) + ext + suffix
+	todo := "TODO: add a compress processor (algorithm: " + algorithm + ") to the pipeline before this output"
+	if path.LineComment != "" {
+		path.LineComment += "; " + todo
+	} else {
+		path.LineComment = todo
+	}
+}
+
+// jodaToGoLayoutForPath translates a Kafka Connect TimeBasedPartitioner
+// `path.format` (a Joda pattern, e.g. 'year'=YYYY/'month'=MM/'day'=dd) into a
+// Bloblang-interpolated path prefix. Literal runs (quoted 'segments' and
+// separators like = and /) pass through verbatim; date-token runs are
+// translated via jodaToGoLayout and wrapped in a record-timestamp
+// interpolation, e.g.
+//
+//	${! metadata("kafka_timestamp_ms").number().ts_format("2006") }
+//
+// The record timestamp is epoch millis under the kafka_timestamp_ms metadata
+// key. The emitted form has been verified against the benthos linter.
+func jodaToGoLayoutForPath(pattern string) string {
+	isLetter := func(b byte) bool {
+		return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z')
+	}
+	var sb strings.Builder
+	i := 0
+	for i < len(pattern) {
+		ch := pattern[i]
+		switch {
+		case ch == '\'':
+			// Quoted literal: emit the contents verbatim.
+			i++
+			for i < len(pattern) && pattern[i] != '\'' {
+				sb.WriteByte(pattern[i])
+				i++
+			}
+			if i < len(pattern) {
+				i++ // closing quote
+			}
+		case isLetter(ch):
+			// Collect a date-token run and translate it as a whole so
+			// multi-char tokens (YYYY, MM, dd) map correctly. Kafka Connect's
+			// TimeBasedPartitioner uses uppercase YYYY for the calendar year;
+			// jodaToGoLayout expects lowercase yyyy, so normalize Y→y here.
+			start := i
+			for i < len(pattern) && isLetter(pattern[i]) {
+				i++
+			}
+			token := strings.ReplaceAll(pattern[start:i], "Y", "y")
+			goLayout := jodaToGoLayout(token)
+			sb.WriteString(`${! metadata("kafka_timestamp_ms").number().ts_format("`)
+			sb.WriteString(goLayout)
+			sb.WriteString(`") }`)
+		default:
+			// Separator / literal char.
+			sb.WriteByte(ch)
+			i++
+		}
+	}
+	return sb.String()
+}
+
+// applyTimeBasedPartitioner handles a Kafka Connect TimeBasedPartitioner by
+// translating its `path.format` into a time-bucketed prefix prepended to the
+// existing topic-based object path. It consumes partitioner.class plus the
+// partitioner tuning keys (partition.duration.ms, locale, timezone, path.format)
+// so they do not surface as unmapped TODO noise.
+//
+// When path.format is absent (TimeBasedPartitioner defaults) or cannot be
+// translated, it emits a best-effort path with an inline TODO instead.
+func applyTimeBasedPartitioner(ctx *MapCtx, path *yaml.Node) {
+	ctx.consume("partitioner.class")
+	ctx.consume("partition.duration.ms")
+	ctx.consume("locale")
+	ctx.consume("timezone")
+
+	format, ok := ctx.String("path.format")
+	if !ok || strings.TrimSpace(format) == "" {
+		todo := "TODO: TimeBasedPartitioner uses default time-bucketing — add a time-based path prefix and verify"
+		if path.LineComment != "" {
+			path.LineComment += "; " + todo
+		} else {
+			path.LineComment = todo
+		}
+		return
+	}
+
+	prefix := jodaToGoLayoutForPath(format)
+	if strings.TrimSpace(prefix) == "" {
+		todo := "TODO: could not translate TimeBasedPartitioner path.format=" + format + " — add a time-based path prefix and verify"
+		if path.LineComment != "" {
+			path.LineComment += "; " + todo
+		} else {
+			path.LineComment = todo
+		}
+		return
+	}
+
+	path.Value = strings.TrimSuffix(prefix, "/") + "/" + path.Value
 }
 
 // consumeIgnored marks recognized-but-irrelevant Kafka Connect plumbing keys

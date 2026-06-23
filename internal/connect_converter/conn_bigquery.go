@@ -64,7 +64,7 @@ func (bigQuerySinkConnector) Map(_ ConnectConfig, ctx *MapCtx) (Component, error
 
 	// queueSize → batching.count. No KC byte-size or period knob for BigQuery
 	// sink, so byteSizeKey and periodMsKeys are left empty.
-	mapBatching(body, ctx, "queueSize", "", "")
+	mapBatching(body, ctx, []string{"queueSize"}, "", "")
 
 	// Recognized Confluent-internal plumbing with no gcp_bigquery equivalent.
 	consumeIgnored(ctx,

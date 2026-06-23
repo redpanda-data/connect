@@ -126,6 +126,131 @@ func TestConvertAivenKafkaConnectS3SinkConnector(t *testing.T) {
 	assert.NotContains(t, y, "unsupported")
 }
 
+// TestConvertAivenS3SinkFormatOutputType verifies Aiven format.output.type
+// drives the object extension when format.class is absent.
+func TestConvertAivenS3SinkFormatOutputType(t *testing.T) {
+	cases := []struct {
+		name    string
+		fmtVal  string
+		wantExt string
+	}{
+		{"json", "json", ".json"},
+		{"jsonl", "jsonl", ".jsonl"},
+		{"csv", "csv", ".csv"},
+		{"parquet", "parquet", ".parquet"},
+		{"avro", "avro", ".avro"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			in := []byte(`{"name":"s3","config":{"connector.class":"io.aiven.kafka.connect.s3.S3SinkConnector","aws.s3.bucket.name":"b","topics":"t","format.output.type":"` + tc.fmtVal + `"}}`)
+			res, err := Convert(in)
+			require.NoError(t, err)
+			y := string(res.YAML)
+			assertValidRPCN(t, res.YAML)
+			assert.Contains(t, y, tc.wantExt)
+			assert.NotContains(t, y, "format.output.type")
+			// avro/parquet must still surface the encode TODO.
+			if tc.fmtVal == "avro" || tc.fmtVal == "parquet" {
+				assert.Contains(t, y, "add an encode step")
+			}
+		})
+	}
+}
+
+// TestConvertS3SinkFileMaxRecords verifies Aiven file.max.records maps to
+// batching.count.
+func TestConvertS3SinkFileMaxRecords(t *testing.T) {
+	in := []byte(`{"name":"s3","config":{"connector.class":"io.aiven.kafka.connect.s3.S3SinkConnector","aws.s3.bucket.name":"b","topics":"t","file.max.records":"50"}}`)
+	res, err := Convert(in)
+	require.NoError(t, err)
+	y := string(res.YAML)
+	assertValidRPCN(t, res.YAML)
+	assert.Contains(t, y, "count: 50")
+	assert.NotContains(t, y, "file.max.records")
+	assert.NotContains(t, y, "unmapped field")
+}
+
+// TestConvertS3SinkCompression verifies file.compression.type appends a suffix
+// to the extension and attaches a compress-processor TODO.
+func TestConvertS3SinkCompression(t *testing.T) {
+	cases := []struct{ compression, suffix string }{
+		{"gzip", ".gz"},
+		{"snappy", ".snappy"},
+		{"zstd", ".zst"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.compression, func(t *testing.T) {
+			in := []byte(`{"name":"s3","config":{"connector.class":"io.aiven.kafka.connect.s3.S3SinkConnector","aws.s3.bucket.name":"b","topics":"t","format.output.type":"json","file.compression.type":"` + tc.compression + `"}}`)
+			res, err := Convert(in)
+			require.NoError(t, err)
+			y := string(res.YAML)
+			assertValidRPCN(t, res.YAML)
+			assert.Contains(t, y, ".json"+tc.suffix)
+			assert.Contains(t, y, "compress")
+			assert.NotContains(t, y, "file.compression.type")
+		})
+	}
+}
+
+// TestConvertS3SinkCompressionNone verifies none/absent compression adds no
+// suffix and no TODO.
+func TestConvertS3SinkCompressionNone(t *testing.T) {
+	in := []byte(`{"name":"s3","config":{"connector.class":"io.aiven.kafka.connect.s3.S3SinkConnector","aws.s3.bucket.name":"b","topics":"t","format.output.type":"json","file.compression.type":"none"}}`)
+	res, err := Convert(in)
+	require.NoError(t, err)
+	y := string(res.YAML)
+	assertValidRPCN(t, res.YAML)
+	assert.NotContains(t, y, ".json.")
+	assert.NotContains(t, y, "file.compression.type")
+}
+
+// TestConvertS3SinkTimeBasedPartitioner verifies TimeBasedPartitioner path.format
+// translates into a time-bucketed object path prefix.
+func TestConvertS3SinkTimeBasedPartitioner(t *testing.T) {
+	in := []byte(`{"name":"s3","config":{"connector.class":"io.confluent.connect.s3.S3SinkConnector","s3.bucket.name":"b","s3.region":"us-east-1","topics":"t","partitioner.class":"io.confluent.connect.storage.partitioner.TimeBasedPartitioner","path.format":"'year'=YYYY/'month'=MM/'day'=dd","partition.duration.ms":"3600000","locale":"en-US","timezone":"UTC"}}`)
+	res, err := Convert(in)
+	require.NoError(t, err)
+	y := string(res.YAML)
+	assertValidRPCN(t, res.YAML)
+	// Time-bucketed prefix using the record timestamp metadata.
+	assert.Contains(t, y, `metadata("kafka_timestamp_ms").number().ts_format("2006")`)
+	assert.Contains(t, y, `year=`)
+	assert.Contains(t, y, `month=`)
+	assert.Contains(t, y, `day=`)
+	// The topic-based suffix is still present.
+	assert.Contains(t, y, "@kafka_topic")
+	// All time-partitioner keys consumed — no TODO noise.
+	for _, k := range []string{"partitioner.class", "path.format", "partition.duration.ms", "locale", "timezone"} {
+		assert.NotContains(t, y, k)
+	}
+	assert.NotContains(t, y, "unmapped field")
+}
+
+// TestConvertS3SinkTimeBasedPartitionerNoFormat verifies TimeBasedPartitioner
+// without path.format consumes the keys and emits a TODO.
+func TestConvertS3SinkTimeBasedPartitionerNoFormat(t *testing.T) {
+	in := []byte(`{"name":"s3","config":{"connector.class":"io.confluent.connect.s3.S3SinkConnector","s3.bucket.name":"b","s3.region":"us-east-1","topics":"t","partitioner.class":"io.confluent.connect.storage.partitioner.TimeBasedPartitioner"}}`)
+	res, err := Convert(in)
+	require.NoError(t, err)
+	y := string(res.YAML)
+	assertValidRPCN(t, res.YAML)
+	assert.Contains(t, y, "TODO")
+	assert.NotContains(t, y, "partitioner.class")
+	assert.NotContains(t, y, "unmapped field")
+}
+
+// TestConvertS3SinkFieldPartitioner verifies a non-time, non-default partitioner
+// still surfaces as a TODO (left for manual review).
+func TestConvertS3SinkFieldPartitioner(t *testing.T) {
+	in := []byte(`{"name":"s3","config":{"connector.class":"io.confluent.connect.s3.S3SinkConnector","s3.bucket.name":"b","s3.region":"us-east-1","topics":"t","partitioner.class":"io.confluent.connect.storage.partitioner.FieldPartitioner"}}`)
+	res, err := Convert(in)
+	require.NoError(t, err)
+	y := string(res.YAML)
+	assertValidRPCN(t, res.YAML)
+	// FieldPartitioner is NOT consumed — surfaces in the unmapped sweep.
+	assert.Contains(t, y, "partitioner.class")
+}
+
 // TestConvertS3SinkRotateSchedule verifies that flush.size AND
 // rotate.schedule.interval.ms (with no rotate.interval.ms) produce exactly ONE
 // batching: block containing both count and period.
