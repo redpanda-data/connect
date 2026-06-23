@@ -56,7 +56,7 @@
   {"path":"./internal/impl/sftp"},
   {"path":"./internal/impl/snowflake"},
   {"path":"./internal/impl/snowflake/streaming","timeout":"20m"},
-  {"path":"./internal/impl/spicedb","skip":true},
+  {"path":"./internal/impl/spicedb"},
   {"path":"./internal/impl/splunk"},
   {"path":"./internal/impl/sql"},
   {"path":"./internal/impl/tigerbeetle","skip":true},
