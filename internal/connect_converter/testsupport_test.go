@@ -6,6 +6,11 @@
 //
 // https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
+// testsupport_test.go holds the shared test harness for the whole package:
+// the component-bundle blank-imports the benthos linter needs, plus the
+// assertValidRPCN / gapConvert helpers used across the connector, converter,
+// SMT, and regression test files.
+
 package connectconverter
 
 import (
@@ -41,4 +46,14 @@ func assertValidRPCN(t *testing.T, yamlBytes []byte) {
 	t.Helper()
 	b := service.NewStreamBuilder()
 	require.NoError(t, b.SetYAML(string(yamlBytes)), "generated YAML is not valid RPCN config:\n%s", yamlBytes)
+}
+
+// gapConvert converts a Kafka Connect config and asserts the result is
+// lint-valid RPCN, returning the YAML for further assertions.
+func gapConvert(t *testing.T, in string) string {
+	t.Helper()
+	res, err := Convert([]byte(in))
+	require.NoError(t, err)
+	assertValidRPCN(t, res.YAML)
+	return string(res.YAML)
 }

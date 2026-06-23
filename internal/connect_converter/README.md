@@ -185,15 +185,19 @@ output:
 
 ## Architecture
 
-Five stages, all in this package:
+Six stages, all in this package. **Start at `Convert()` in `engine_convert.go`** — it
+is the whole pipeline in ~40 lines.
 
 ```
 input bytes
-  → parse()     normalize JSON → ConnectConfig{Name, Class, Props}   (parse.go)
-  → registry    connector.class / converters / SMTs → mappers        (registry.go)
-  → mappers     build yaml.Node fragments + record warnings          (conn_*.go, conv_*.go, smt_*.go)
-  → assemble()  stitch into input / pipeline.processors / output      (assemble.go)
-  → render()    encode to YAML with inline # TODO comments            (render.go)
+  → parse()         normalize JSON → ConnectConfig{Name, Class, Props}   (engine_parse.go)
+  → registry        connector.class / converters / SMTs → mappers        (registry.go)
+  → connector.Map() build input/output component (+ Encode steps)        (conn_*.go)
+  → mapConverters() value.converter → decode processors                  (conv_serializers.go)
+  → mapSMTs()       transforms.*   → Bloblang processors                 (smt_*.go)
+  → comp.Encode     re-encode processors, run last before the output     (conn_s3/gcs.go)
+  → assemble()      stitch input / pipeline.processors / output          (engine_assemble.go)
+  → render()        encode to YAML with inline # TODO comments           (engine_render.go)
 ```
 
 - **`MapCtx`** (`mapctx.go`) is the per-conversion scratchpad: typed property
@@ -202,6 +206,21 @@ input bytes
 - The output is built as a `gopkg.in/yaml.v3` node tree so `# TODO` comments attach
   to the exact line they concern.
 - Mappers register themselves via `init()`, so adding one never touches the engine.
+
+### Repository layout
+
+Files are grouped by name prefix so the listing clusters by role (full map +
+debug guide in `doc.go`):
+
+| Group | Files | Role |
+|---|---|---|
+| Engine | `engine_convert.go`, `engine_parse.go`, `engine_assemble.go`, `engine_render.go` | The conversion pipeline. Start here. |
+| Core | `registry.go`, `mapctx.go`, `types.go`, `yaml.go` | Registries, scratchpad, types, yaml.Node builders. |
+| Connectors | `conn_*.go` | One file per connector family → RPCN input/output. |
+| Converters | `conv_serializers.go` | `value.converter` → decode processors. |
+| SMTs | `smt_*.go` | One file per Single Message Transform family. |
+| Helpers | `helpers_field.go`, `helpers_smt.go` | Shared building blocks (batching, paths, encode, field quoting, predicates). |
+| Tests | `*_test.go` (colocated), `testsupport_test.go`, `golden_test.go` | Per-file unit tests + shared harness + end-to-end goldens. |
 
 ## Extending
 
@@ -214,7 +233,7 @@ To add a connector:
    ```
    Read properties via `ctx.String(...)` (this marks them consumed), build the
    component body with the `mapping`/`scalar`/`kv`/`component` helpers
-   (`yamlutil.go`), emit `# TODO` LineComments and `ctx.Warn(...)` for required
+   (`yaml.go`), emit `# TODO` LineComments and `ctx.Warn(...)` for required
    fields you can't infer, and return `Component{Output: ...}` (or `Input`, or
    both).
 2. Register it in `init()`:
@@ -235,13 +254,13 @@ Run the suite:
 go test ./internal/connect_converter/
 ```
 
-- **Linter-backed validation.** The shared helper `assertValidRPCN` (in
-  `linter_test.go`) feeds every generated config through the real benthos
+- **Linter-backed validation.** The shared helpers `assertValidRPCN` / `gapConvert`
+  (in `testsupport_test.go`) feed every generated config through the real benthos
   `service.NewStreamBuilder().SetYAML(...)`, proving the output is valid Redpanda
   Connect config against the actual component schemas — not just well-formed YAML.
-  `linter_test.go` blank-imports the component bundles, so per-mapper tests don't
+  `testsupport_test.go` blank-imports the component bundles, so per-mapper tests don't
   manage imports.
-- **Golden files.** `golden_test.go` pins exact output for 9 end-to-end cases under
+- **Golden files.** `golden_test.go` pins exact output for the end-to-end cases under
   `testdata/`. Regenerate after an intentional change with:
   ```bash
   go test ./internal/connect_converter/ -run TestGolden -update

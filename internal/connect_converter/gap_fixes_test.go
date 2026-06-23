@@ -15,17 +15,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// gapConvert converts and asserts the result is lint-valid RPCN, returning the
-// YAML for further assertions. Used by the per-connector gap-fix regression
-// tests below.
-func gapConvert(t *testing.T, in string) string {
-	t.Helper()
-	res, err := Convert([]byte(in))
-	require.NoError(t, err)
-	assertValidRPCN(t, res.YAML)
-	return string(res.YAML)
-}
-
 // G1 — Oracle JDBC URLs resolve to the oracle driver + an oracle:// DSN
 // (previously emitted driver: "" which fails the sql_* driver enum lint).
 func TestGapOracleJDBCServiceURL(t *testing.T) {
