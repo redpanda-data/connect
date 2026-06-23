@@ -257,12 +257,41 @@ func consumeIgnored(ctx *MapCtx, keys ...string) {
 // sinkInputFromTopics builds a redpanda input consuming the connector's topics,
 // or returns nil if no topics are configured. seed_brokers uses a placeholder
 // since broker addresses are worker-level config in Kafka Connect.
+//
+// Two cases are handled:
+//   - `topics` (CSV of literal topic names): topics list is passed through as-is.
+//   - `topics.regex` (a single Java regex pattern): the pattern is placed in the
+//     topics list and regexp_topics is set to true so RPCN performs regex matching.
+//
+// When neither key is present (or both are empty) nil is returned and the caller
+// falls back to a stdin stub.
 func sinkInputFromTopics(cfg ConnectConfig, ctx *MapCtx) *yaml.Node {
+	// Prefer literal `topics` over `topics.regex`.
 	v, ok := ctx.Lookup("topics")
-	if !ok || strings.TrimSpace(v) == "" {
+	if ok && strings.TrimSpace(v) != "" {
+		ctx.consume("topics")
+
+		body := mapping()
+
+		brokers := scalar("localhost:9092")
+		brokers.LineComment = "TODO: set your Redpanda/Kafka broker(s)"
+		kv(body, "seed_brokers", seq(brokers))
+
+		kv(body, "topics", seq(scalarsFromCSV(v)...))
+
+		cg := scalar("connect-" + cfg.Name)
+		cg.LineComment = "TODO: confirm consumer group"
+		kv(body, "consumer_group", cg)
+
+		return component("redpanda", body)
+	}
+
+	// Fall back to topics.regex when literal topics is absent/empty.
+	re, ok := ctx.Lookup("topics.regex")
+	if !ok || strings.TrimSpace(re) == "" {
 		return nil
 	}
-	ctx.consume("topics")
+	ctx.consume("topics.regex")
 
 	body := mapping()
 
@@ -270,7 +299,8 @@ func sinkInputFromTopics(cfg ConnectConfig, ctx *MapCtx) *yaml.Node {
 	brokers.LineComment = "TODO: set your Redpanda/Kafka broker(s)"
 	kv(body, "seed_brokers", seq(brokers))
 
-	kv(body, "topics", seq(scalarsFromCSV(v)...))
+	kv(body, "topics", seq(scalar(strings.TrimSpace(re))))
+	kv(body, "regexp_topics", boolScalar(true))
 
 	cg := scalar("connect-" + cfg.Name)
 	cg.LineComment = "TODO: confirm consumer group"
