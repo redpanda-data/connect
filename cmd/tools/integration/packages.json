@@ -45,7 +45,7 @@
   {"path":"./internal/impl/oracledb/replication","skip":true},
   {"path":"./internal/impl/otlp"},
   {"path":"./internal/impl/postgresql"},
-  {"path":"./internal/impl/postgresql/pglogicalstream","skip":true},
+  {"path":"./internal/impl/postgresql/pglogicalstream"},
   {"path":"./internal/impl/pulsar","timeout":"10m"},
   {"path":"./internal/impl/qdrant"},
   {"path":"./internal/impl/questdb"},
