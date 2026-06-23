@@ -14,6 +14,8 @@ import (
 
 func init() {
 	registerConnector("io.confluent.connect.gcs.GcsSinkConnector", gcsSinkConnector{})
+	// Aiven GCS sink connector class name.
+	registerConnector("io.aiven.kafka.connect.gcs.GcsSinkConnector", gcsSinkConnector{})
 }
 
 type gcsSinkConnector struct{}

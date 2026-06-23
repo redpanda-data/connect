@@ -69,6 +69,36 @@ func TestConvertJDBCSinkNoURL(t *testing.T) {
 	assertValidRPCN(t, res.YAML)
 }
 
+// TestConvertAivenJDBCSourceConnector verifies that the Aiven JDBC source
+// connector alias routes to the sql_select input.
+func TestConvertAivenJDBCSourceConnector(t *testing.T) {
+	in := []byte(`{"name":"aiven-jdbc-src","config":{"connector.class":"io.aiven.connect.jdbc.JdbcSourceConnector","connection.url":"jdbc:postgresql://h:5432/db","table.whitelist":"orders"}}`)
+	res, err := Convert(in)
+	require.NoError(t, err)
+	y := string(res.YAML)
+	assertValidRPCN(t, res.YAML)
+	assert.Contains(t, y, "sql_select:")
+	assert.Contains(t, y, "driver: postgres")
+	assert.Contains(t, y, "table: orders")
+	assert.NotContains(t, y, "drop:")
+	assert.NotContains(t, y, "unsupported")
+}
+
+// TestConvertAivenJDBCSinkConnector verifies that the Aiven JDBC sink
+// connector alias routes to the sql_insert output.
+func TestConvertAivenJDBCSinkConnector(t *testing.T) {
+	in := []byte(`{"name":"aiven-jdbc-sink","config":{"connector.class":"io.aiven.connect.jdbc.JdbcSinkConnector","connection.url":"jdbc:mysql://h:3306/db","table.name.format":"orders"}}`)
+	res, err := Convert(in)
+	require.NoError(t, err)
+	y := string(res.YAML)
+	assertValidRPCN(t, res.YAML)
+	assert.Contains(t, y, "sql_insert:")
+	assert.Contains(t, y, "driver: mysql")
+	assert.Contains(t, y, "table: orders")
+	assert.NotContains(t, y, "drop:")
+	assert.NotContains(t, y, "unsupported")
+}
+
 func TestConvertJDBCSourceFull(t *testing.T) {
 	in := []byte(`{"name":"jdbc-src-full","config":{` +
 		`"connector.class":"io.confluent.connect.jdbc.JdbcSourceConnector",` +

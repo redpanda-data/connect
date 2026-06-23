@@ -81,6 +81,49 @@ func TestConvertS3SinkFull(t *testing.T) {
 	assert.NotContains(t, y, "unmapped field")
 }
 
+// TestConvertAivenS3SinkConnector verifies that the Aiven S3 connector alias
+// routes to the same aws_s3 output and that aws.s3.bucket.name is used as a
+// fallback bucket source when s3.bucket.name is absent.
+func TestConvertAivenS3SinkConnector(t *testing.T) {
+	in := []byte(`{
+	  "name":"aiven-s3-sink",
+	  "config":{
+	    "connector.class":"io.aiven.kafka.connect.s3.S3SinkConnector",
+	    "aws.s3.bucket.name":"my-bucket",
+	    "topics":"orders"
+	  }
+	}`)
+	res, err := Convert(in)
+	require.NoError(t, err)
+	y := string(res.YAML)
+	assertValidRPCN(t, res.YAML)
+	assert.Contains(t, y, "aws_s3:")
+	assert.Contains(t, y, "bucket: my-bucket")
+	assert.NotContains(t, y, "drop:")
+	assert.NotContains(t, y, "unsupported")
+}
+
+// TestConvertAivenKafkaConnectS3SinkConnector verifies the longer Aiven class
+// name alias also routes correctly with the aws.s3.bucket.name fallback.
+func TestConvertAivenKafkaConnectS3SinkConnector(t *testing.T) {
+	in := []byte(`{
+	  "name":"aiven-s3-sink-long",
+	  "config":{
+	    "connector.class":"io.aiven.kafka.connect.s3.AivenKafkaConnectS3SinkConnector",
+	    "aws.s3.bucket.name":"my-bucket",
+	    "topics":"orders"
+	  }
+	}`)
+	res, err := Convert(in)
+	require.NoError(t, err)
+	y := string(res.YAML)
+	assertValidRPCN(t, res.YAML)
+	assert.Contains(t, y, "aws_s3:")
+	assert.Contains(t, y, "bucket: my-bucket")
+	assert.NotContains(t, y, "drop:")
+	assert.NotContains(t, y, "unsupported")
+}
+
 // TestConvertS3SinkRotateSchedule verifies that flush.size AND
 // rotate.schedule.interval.ms (with no rotate.interval.ms) produce exactly ONE
 // batching: block containing both count and period.

@@ -14,6 +14,9 @@ import (
 
 func init() {
 	registerConnector("io.confluent.connect.s3.S3SinkConnector", s3SinkConnector{})
+	// Aiven S3 sink connector class names.
+	registerConnector("io.aiven.kafka.connect.s3.AivenKafkaConnectS3SinkConnector", s3SinkConnector{})
+	registerConnector("io.aiven.kafka.connect.s3.S3SinkConnector", s3SinkConnector{})
 }
 
 type s3SinkConnector struct{}
@@ -22,6 +25,9 @@ func (s3SinkConnector) Map(_ ConnectConfig, ctx *MapCtx) (Component, error) {
 	body := mapping()
 
 	if v, ok := ctx.String("s3.bucket.name"); ok {
+		kv(body, "bucket", scalar(v))
+	} else if v, ok := ctx.String("aws.s3.bucket.name"); ok {
+		// Aiven S3 sink uses aws.s3.bucket.name instead of s3.bucket.name.
 		kv(body, "bucket", scalar(v))
 	} else {
 		ctx.Warn("s3.bucket.name", "missing required bucket name")

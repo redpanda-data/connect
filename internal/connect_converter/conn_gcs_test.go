@@ -26,6 +26,20 @@ func TestConvertGCSSink(t *testing.T) {
 	assert.Contains(t, y, "path:")
 }
 
+// TestConvertAivenGCSSinkConnector verifies that the Aiven GCS connector alias
+// routes to the same gcp_cloud_storage output with the standard bucket field.
+func TestConvertAivenGCSSinkConnector(t *testing.T) {
+	in := []byte(`{"name":"aiven-gcs","config":{"connector.class":"io.aiven.kafka.connect.gcs.GcsSinkConnector","gcs.bucket.name":"my-gcs-bucket","topics":"orders"}}`)
+	res, err := Convert(in)
+	require.NoError(t, err)
+	y := string(res.YAML)
+	assertValidRPCN(t, res.YAML)
+	assert.Contains(t, y, "gcp_cloud_storage:")
+	assert.Contains(t, y, "bucket: my-gcs-bucket")
+	assert.NotContains(t, y, "drop:")
+	assert.NotContains(t, y, "unsupported")
+}
+
 func TestConvertGCSSinkFull(t *testing.T) {
 	in := []byte(`{
 		"name": "gcs-sink-full",

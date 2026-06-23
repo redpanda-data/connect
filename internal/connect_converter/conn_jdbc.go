@@ -17,6 +17,9 @@ import (
 func init() {
 	registerConnector("io.confluent.connect.jdbc.JdbcSourceConnector", jdbcSourceConnector{})
 	registerConnector("io.confluent.connect.jdbc.JdbcSinkConnector", jdbcSinkConnector{})
+	// Aiven JDBC connector class names.
+	registerConnector("io.aiven.connect.jdbc.JdbcSourceConnector", jdbcSourceConnector{})
+	registerConnector("io.aiven.connect.jdbc.JdbcSinkConnector", jdbcSinkConnector{})
 }
 
 // jdbcDriver maps a JDBC URL to the RPCN sql driver name.
