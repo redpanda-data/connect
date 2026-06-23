@@ -55,6 +55,16 @@ func TestSMTMaskField(t *testing.T) {
 	y := string(res.YAML)
 	assert.Contains(t, y, `root.ssn = ""`)
 	assert.Contains(t, y, `root.ccn = ""`)
+	// TODO comment must appear in the rendered YAML.
+	assert.Contains(t, y, "TODO: MaskField sets masked fields to an empty string; numeric/boolean fields will be stringified")
+	// A warning must be present for the MaskField alias.
+	var warned bool
+	for _, w := range res.Warnings {
+		if w.Field == "t" && strings.Contains(w.Message, "numeric/boolean fields will be stringified") {
+			warned = true
+		}
+	}
+	assert.True(t, warned, "expected MaskField numeric/boolean stringify warning")
 }
 
 func TestSMTMaskFieldReplacement(t *testing.T) {

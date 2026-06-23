@@ -42,6 +42,8 @@ func (maskFieldSMT) Map(smt SMTConfig, ctx *MapCtx) ([]*yaml.Node, error) {
 		ctx.Warn(smt.Alias, "MaskField is missing the 'fields' property; emitted a passthrough stub")
 	} else {
 		expr = scalar(strings.Join(lines, "\n"))
+		expr.LineComment = "TODO: MaskField sets masked fields to an empty string; numeric/boolean fields will be stringified — review and adjust types if needed"
+		ctx.Warn(smt.Alias, "MaskField sets masked fields to an empty string; numeric/boolean fields will be stringified — review and adjust types if needed")
 	}
 	annotateKeyVariant(smt, expr, ctx)
 	return []*yaml.Node{mappingProc(expr)}, nil

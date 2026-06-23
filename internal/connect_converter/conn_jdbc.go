@@ -130,7 +130,6 @@ func (jdbcSourceConnector) Map(_ ConnectConfig, ctx *MapCtx) (Component, error) 
 		"validate.non.null",
 		"numeric.mapping",
 		"table.types",
-		"topic.prefix",
 	)
 
 	return Component{Input: component("sql_select", body)}, nil

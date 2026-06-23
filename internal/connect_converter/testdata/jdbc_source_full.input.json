@@ -7,6 +7,7 @@
     "mode": "incrementing",
     "incrementing.column.name": "id",
     "poll.interval.ms": "5000",
-    "validate.non.null": "false"
+    "validate.non.null": "false",
+    "topic.prefix": "jdbc-"
   }
 }
