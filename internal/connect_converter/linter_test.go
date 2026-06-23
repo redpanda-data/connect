@@ -28,6 +28,7 @@ import (
 	_ "github.com/redpanda-data/connect/v4/public/components/oracledb"
 	_ "github.com/redpanda-data/connect/v4/public/components/postgresql"
 	_ "github.com/redpanda-data/connect/v4/public/components/pure"
+	_ "github.com/redpanda-data/connect/v4/public/components/pure/extended"
 	_ "github.com/redpanda-data/connect/v4/public/components/snowflake"
 	_ "github.com/redpanda-data/connect/v4/public/components/sql"
 )
