@@ -20,3 +20,14 @@ func TestConvertCliBuilds(t *testing.T) {
 	require.NotNil(t, cmd)
 	assert.Equal(t, "convert", cmd.Name)
 }
+
+func TestConvertCliHasServerSubcommand(t *testing.T) {
+	cmd := convertCli()
+	var found bool
+	for _, sub := range cmd.Subcommands {
+		if sub.Name == "server" {
+			found = true
+		}
+	}
+	assert.True(t, found, "convert should have a 'server' subcommand")
+}

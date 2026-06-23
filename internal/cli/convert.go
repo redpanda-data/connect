@@ -15,6 +15,7 @@ import (
 
 	"github.com/urfave/cli/v2"
 
+	"github.com/redpanda-data/connect/v4/internal/cli/convertserver"
 	connectconverter "github.com/redpanda-data/connect/v4/internal/connect_converter"
 )
 
@@ -37,6 +38,7 @@ Sections that could not be fully mapped are annotated with # TODO markers.
 				Usage:   "Write the converted config to a file instead of stdout.",
 			},
 		},
+		Subcommands: []*cli.Command{convertserver.Command()},
 		Action: func(c *cli.Context) error {
 			var (
 				input []byte
