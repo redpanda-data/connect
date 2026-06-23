@@ -42,7 +42,7 @@
   {"path":"./internal/impl/ollama","skip":true},
   {"path":"./internal/impl/opensearch"},
   {"path":"./internal/impl/oracledb","timeout":"30m"},
-  {"path":"./internal/impl/oracledb/replication","skip":true},
+  {"path":"./internal/impl/oracledb/replication","timeout":"30m"},
   {"path":"./internal/impl/otlp"},
   {"path":"./internal/impl/postgresql"},
   {"path":"./internal/impl/postgresql/pglogicalstream"},
