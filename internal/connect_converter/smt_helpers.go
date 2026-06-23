@@ -9,10 +9,56 @@
 package connectconverter
 
 import (
+	"fmt"
 	"strings"
 
 	"gopkg.in/yaml.v3"
 )
+
+// isSafeIdentifier reports whether s is a valid Bloblang bare identifier
+// (letters, digits, underscores only; must not start with a digit).
+func isSafeIdentifier(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i, r := range s {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r == '_':
+			// always ok
+		case r >= '0' && r <= '9':
+			if i == 0 {
+				return false // cannot start with digit
+			}
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+// fieldPath returns a parse-safe Bloblang path for base.name, where base is
+// "this" or "root". It splits name on "." into segments; each segment that is
+// not a safe identifier is quoted with %q so hyphens, leading digits, and
+// other special characters never break Bloblang parsing.
+//
+// Examples:
+//
+//	fieldPath("root", "event-type") → `root."event-type"`
+//	fieldPath("this", "payload")    → `this.payload`
+//	fieldPath("root", "a.b-c")      → `root.a."b-c"`
+func fieldPath(base, name string) string {
+	var sb strings.Builder
+	sb.WriteString(base)
+	for seg := range strings.SplitSeq(name, ".") {
+		sb.WriteByte('.')
+		if isSafeIdentifier(seg) {
+			sb.WriteString(seg)
+		} else {
+			fmt.Fprintf(&sb, "%q", seg)
+		}
+	}
+	return sb.String()
+}
 
 // mappingProc wraps a Bloblang expression as a mapping processor node.
 func mappingProc(expr *yaml.Node) *yaml.Node {

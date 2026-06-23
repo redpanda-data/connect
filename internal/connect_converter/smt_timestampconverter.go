@@ -108,22 +108,22 @@ func (timestampConverterSMT) Map(smt SMTConfig, ctx *MapCtx) ([]*yaml.Node, erro
 		expr.LineComment = "TODO: TimestampConverter without a 'field' — map manually"
 		ctx.Warn(smt.Alias, "TimestampConverter is missing the 'field' property; emitted a passthrough stub")
 	case targetType == "unix":
-		expr = scalar(fmt.Sprintf("root.%s = this.%s.ts_unix()", field, field))
+		expr = scalar(fmt.Sprintf("%s = %s.ts_unix()", fieldPath("root", field), fieldPath("this", field)))
 	case targetType == "string":
 		if format != "" {
 			goLayout := jodaToGoLayout(format)
-			expr = scalar(fmt.Sprintf(`root.%s = this.%s.ts_format(%q)`, field, field, goLayout))
+			expr = scalar(fmt.Sprintf(`%s = %s.ts_format(%q)`, fieldPath("root", field), fieldPath("this", field), goLayout))
 		} else {
-			expr = scalar(fmt.Sprintf(`root.%s = this.%s.ts_format("2006-01-02T15:04:05Z07:00")`, field, field))
+			expr = scalar(fmt.Sprintf(`%s = %s.ts_format("2006-01-02T15:04:05Z07:00")`, fieldPath("root", field), fieldPath("this", field)))
 			expr.LineComment = "TODO: set the target format to match the SMT's 'format' property"
 			ctx.Warn(smt.Alias, "TimestampConverter target.type=string: review the emitted ts_format layout against the SMT's 'format'")
 		}
 	case targetType == "Timestamp" || targetType == "Date" || targetType == "Time":
 		if format != "" {
 			goLayout := jodaToGoLayout(format)
-			expr = scalar(fmt.Sprintf(`root.%s = this.%s.ts_parse(%q)`, field, field, goLayout))
+			expr = scalar(fmt.Sprintf(`%s = %s.ts_parse(%q)`, fieldPath("root", field), fieldPath("this", field), goLayout))
 		} else {
-			expr = scalar(fmt.Sprintf(`root.%s = this.%s.ts_parse("2006-01-02T15:04:05Z07:00")`, field, field))
+			expr = scalar(fmt.Sprintf(`%s = %s.ts_parse("2006-01-02T15:04:05Z07:00")`, fieldPath("root", field), fieldPath("this", field)))
 			expr.LineComment = "TODO: set the input layout to parse target.type=" + targetType
 			ctx.Warn(smt.Alias, "TimestampConverter target.type="+targetType+": review the emitted ts_parse layout against your timestamp format")
 		}

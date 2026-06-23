@@ -101,9 +101,9 @@ func (headerFromSMT) Map(smt SMTConfig, ctx *MapCtx) ([]*yaml.Node, error) {
 	for i := range count {
 		field := fields[i]
 		header := headers[i]
-		lines = append(lines, fmt.Sprintf("meta %s = this.%s", metaKey(header), field))
+		lines = append(lines, fmt.Sprintf("meta %s = %s", metaKey(header), fieldPath("this", field)))
 		if operation == "move" {
-			lines = append(lines, fmt.Sprintf("root.%s = deleted()", field))
+			lines = append(lines, fieldPath("root", field)+" = deleted()")
 		}
 	}
 
@@ -144,7 +144,7 @@ func (headerToValueSMT) Map(smt SMTConfig, ctx *MapCtx) ([]*yaml.Node, error) {
 	for i := range count {
 		header := headers[i]
 		field := fields[i]
-		lines = append(lines, fmt.Sprintf("root.%s = metadata(%q)", field, header))
+		lines = append(lines, fmt.Sprintf("%s = metadata(%q)", fieldPath("root", field), header))
 		if operation == "move" {
 			lines = append(lines, fmt.Sprintf("meta %s = deleted()", metaKey(header)))
 		}
@@ -184,25 +184,4 @@ func metaKey(name string) string {
 		return name
 	}
 	return fmt.Sprintf("%q", name)
-}
-
-// isSafeIdentifier reports whether s is a valid Bloblang bare identifier
-// (letters, digits, underscores only; must not start with a digit).
-func isSafeIdentifier(s string) bool {
-	if s == "" {
-		return false
-	}
-	for i, r := range s {
-		switch {
-		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r == '_':
-			// always ok
-		case r >= '0' && r <= '9':
-			if i == 0 {
-				return false // cannot start with digit
-			}
-		default:
-			return false
-		}
-	}
-	return true
 }

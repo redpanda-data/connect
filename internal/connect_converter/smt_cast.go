@@ -70,9 +70,9 @@ func (castSMT) Map(smt SMTConfig, ctx *MapCtx) ([]*yaml.Node, error) {
 			continue
 		}
 		if method, ok := castMethod(typ); ok {
-			lines = append(lines, fmt.Sprintf("root.%s = this.%s.%s()", field, field, method))
+			lines = append(lines, fmt.Sprintf("%s = %s.%s()", fieldPath("root", field), fieldPath("this", field), method))
 		} else {
-			lines = append(lines, fmt.Sprintf("root.%s = this.%s # TODO: unknown cast type %s — map manually", field, field, typ))
+			lines = append(lines, fmt.Sprintf("%s = %s # TODO: unknown cast type %s — map manually", fieldPath("root", field), fieldPath("this", field), typ))
 			hadUnknown = true
 		}
 	}

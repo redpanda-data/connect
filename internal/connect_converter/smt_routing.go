@@ -152,7 +152,7 @@ func (extractTopicSMT) Map(smt SMTConfig, ctx *MapCtx) ([]*yaml.Node, error) {
 		if field == "" {
 			expr = scalar("meta kafka_topic = this.string()")
 		} else {
-			expr = scalar(fmt.Sprintf("meta kafka_topic = this.%s.string()", field))
+			expr = scalar(fmt.Sprintf("meta kafka_topic = %s.string()", fieldPath("this", field)))
 		}
 		annotateKeyVariant(smt, expr, ctx)
 	default:
@@ -160,7 +160,7 @@ func (extractTopicSMT) Map(smt SMTConfig, ctx *MapCtx) ([]*yaml.Node, error) {
 		if field == "" {
 			expr = scalar("meta kafka_topic = this.string()")
 		} else {
-			expr = scalar(fmt.Sprintf("meta kafka_topic = this.%s.string()", field))
+			expr = scalar(fmt.Sprintf("meta kafka_topic = %s.string()", fieldPath("this", field)))
 		}
 	}
 

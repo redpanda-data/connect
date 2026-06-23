@@ -39,9 +39,9 @@ func (valueToKeySMT) Map(smt SMTConfig, ctx *MapCtx) ([]*yaml.Node, error) {
 		expr.LineComment = "TODO: ValueToKey without 'fields' — map manually"
 		ctx.Warn(smt.Alias, "ValueToKey is missing the 'fields' property; emitted a passthrough stub")
 	case 1:
-		expr = scalar(fmt.Sprintf("meta key = this.%s.string()", names[0]))
+		expr = scalar(fmt.Sprintf("meta key = %s.string()", fieldPath("this", names[0])))
 	default:
-		expr = scalar(fmt.Sprintf("meta key = this.%s.string()", names[0]))
+		expr = scalar(fmt.Sprintf("meta key = %s.string()", fieldPath("this", names[0])))
 		expr.LineComment = "TODO: ValueToKey lists multiple fields — combine them into the key manually"
 		ctx.Warn(smt.Alias, "ValueToKey lists multiple fields; only the first was mapped — review and combine the remaining fields into the key")
 	}

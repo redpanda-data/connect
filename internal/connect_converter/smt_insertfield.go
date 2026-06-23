@@ -31,27 +31,27 @@ func (insertFieldSMT) Map(smt SMTConfig, _ *MapCtx) ([]*yaml.Node, error) {
 		if raw, ok := smt.Props["static.value"]; ok {
 			value = fmt.Sprint(raw)
 		}
-		lines = append(lines, fmt.Sprintf("root.%s = %q", staticField, value))
+		lines = append(lines, fmt.Sprintf("%s = %q", fieldPath("root", staticField), value))
 	}
 
 	// timestamp.field — use kafka_timestamp_ms from the kafka/redpanda input metadata.
 	if tsField, ok := smt.Props["timestamp.field"].(string); ok && tsField != "" {
-		lines = append(lines, fmt.Sprintf(`root.%s = metadata("kafka_timestamp_ms")`, tsField))
+		lines = append(lines, fieldPath("root", tsField)+` = metadata("kafka_timestamp_ms")`)
 	}
 
 	// topic.field
 	if topicField, ok := smt.Props["topic.field"].(string); ok && topicField != "" {
-		lines = append(lines, fmt.Sprintf("root.%s = @kafka_topic", topicField))
+		lines = append(lines, fieldPath("root", topicField)+" = @kafka_topic")
 	}
 
 	// partition.field
 	if partField, ok := smt.Props["partition.field"].(string); ok && partField != "" {
-		lines = append(lines, fmt.Sprintf(`root.%s = metadata("kafka_partition")`, partField))
+		lines = append(lines, fieldPath("root", partField)+` = metadata("kafka_partition")`)
 	}
 
 	// offset.field
 	if offsetField, ok := smt.Props["offset.field"].(string); ok && offsetField != "" {
-		lines = append(lines, fmt.Sprintf(`root.%s = metadata("kafka_offset")`, offsetField))
+		lines = append(lines, fieldPath("root", offsetField)+` = metadata("kafka_offset")`)
 	}
 
 	var expr *yaml.Node

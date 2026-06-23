@@ -32,8 +32,8 @@ func (replaceFieldSMT) Map(smt SMTConfig, _ *MapCtx) ([]*yaml.Node, error) {
 		for pair := range strings.SplitSeq(renames, ",") {
 			kvp := strings.SplitN(strings.TrimSpace(pair), ":", 2)
 			if len(kvp) == 2 {
-				lines = append(lines, fmt.Sprintf("root.%s = this.%s", kvp[1], kvp[0]))
-				lines = append(lines, fmt.Sprintf("root.%s = deleted()", kvp[0]))
+				lines = append(lines, fmt.Sprintf("%s = %s", fieldPath("root", kvp[1]), fieldPath("this", kvp[0])))
+				lines = append(lines, fieldPath("root", kvp[0])+" = deleted()")
 			}
 		}
 	}
@@ -48,7 +48,7 @@ func (replaceFieldSMT) Map(smt SMTConfig, _ *MapCtx) ([]*yaml.Node, error) {
 	if excluded != "" {
 		found = true
 		for f := range strings.SplitSeq(excluded, ",") {
-			lines = append(lines, fmt.Sprintf("root.%s = deleted()", strings.TrimSpace(f)))
+			lines = append(lines, fieldPath("root", strings.TrimSpace(f))+" = deleted()")
 		}
 	}
 
@@ -66,7 +66,7 @@ func (replaceFieldSMT) Map(smt SMTConfig, _ *MapCtx) ([]*yaml.Node, error) {
 		for f := range strings.SplitSeq(included, ",") {
 			trimmed := strings.TrimSpace(f)
 			if trimmed != "" {
-				lines = append(lines, fmt.Sprintf("root.%s = this.%s", trimmed, trimmed))
+				lines = append(lines, fmt.Sprintf("%s = %s", fieldPath("root", trimmed), fieldPath("this", trimmed)))
 			}
 		}
 	}

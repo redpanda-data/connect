@@ -32,7 +32,7 @@ func (maskFieldSMT) Map(smt SMTConfig, ctx *MapCtx) ([]*yaml.Node, error) {
 		if f == "" {
 			continue
 		}
-		lines = append(lines, fmt.Sprintf("root.%s = %q", f, replacement))
+		lines = append(lines, fmt.Sprintf("%s = %q", fieldPath("root", f), replacement))
 	}
 
 	var expr *yaml.Node

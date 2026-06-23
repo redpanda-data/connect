@@ -25,7 +25,7 @@ func (extractFieldSMT) Map(smt SMTConfig, ctx *MapCtx) ([]*yaml.Node, error) {
 		expr.LineComment = "TODO: ExtractField without a field — map manually"
 		ctx.Warn(smt.Alias, "ExtractField is missing the 'field' property; emitted a passthrough stub")
 	} else {
-		expr = scalar("root = this." + field)
+		expr = scalar("root = " + fieldPath("this", field))
 	}
 	annotateKeyVariant(smt, expr, ctx)
 	return []*yaml.Node{mappingProc(expr)}, nil
