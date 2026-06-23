@@ -77,8 +77,9 @@ func debeziumSnapshotModeToInitial(mode string) bool {
 }
 
 // consumeDebeziumCommon silently drops Debezium plumbing fields that have no
-// RPCN equivalent. topic.prefix / database.server.name are handled separately
-// as explicit TODOs because they carry naming intent.
+// RPCN equivalent. topic.prefix and database.server.name are intentionally NOT
+// consumed here — they fall through to the engine's Unmapped() sweep so they
+// appear as inline "# TODO: unmapped field …" comments in the generated YAML.
 func consumeDebeziumCommon(ctx *MapCtx) {
 	consumeIgnored(ctx,
 		"tombstones.on.delete",
@@ -159,13 +160,9 @@ func (debeziumPostgresConnector) Map(_ ConnectConfig, ctx *MapCtx) (Component, e
 		kv(body, "stream_snapshot", snapshotNode)
 	}
 
-	// topic.prefix carries naming intent — surface as TODO
-	if v, ok := ctx.String("topic.prefix"); ok {
-		ctx.Warn("topic.prefix", "topic.prefix="+v+" has no RPCN equivalent — used for Debezium topic naming only")
-	}
-	if v, ok := ctx.String("database.server.name"); ok {
-		ctx.Warn("database.server.name", "database.server.name="+v+" has no RPCN equivalent — used for Debezium topic naming only")
-	}
+	// topic.prefix and database.server.name are intentionally NOT consumed here.
+	// They fall through to the engine's Unmapped() sweep which emits them as
+	// inline "# TODO: unmapped field …" comments in the generated YAML.
 
 	consumeDebeziumCommon(ctx)
 
@@ -221,16 +218,12 @@ func (debeziumMySQLConnector) Map(_ ConnectConfig, ctx *MapCtx) (Component, erro
 
 	// database.server.id — no equivalent field in mysql_cdc
 	if v, ok := ctx.String("database.server.id"); ok {
-		ctx.Warn("database.server.id", "TODO: database.server.id="+v+" has no mysql_cdc equivalent — remove or handle at the MySQL server level")
+		ctx.Warn("database.server.id", "database.server.id="+v+" has no mysql_cdc equivalent — remove or handle at the MySQL server level")
 	}
 
-	// topic.prefix / database.server.name carry naming intent
-	if v, ok := ctx.String("topic.prefix"); ok {
-		ctx.Warn("topic.prefix", "topic.prefix="+v+" has no RPCN equivalent — used for Debezium topic naming only")
-	}
-	if v, ok := ctx.String("database.server.name"); ok {
-		ctx.Warn("database.server.name", "database.server.name="+v+" has no RPCN equivalent — used for Debezium topic naming only")
-	}
+	// topic.prefix and database.server.name are intentionally NOT consumed here.
+	// They fall through to the engine's Unmapped() sweep which emits them as
+	// inline "# TODO: unmapped field …" comments in the generated YAML.
 
 	consumeDebeziumCommon(ctx)
 
@@ -262,14 +255,8 @@ func (debeziumSQLServerConnector) Map(_ ConnectConfig, ctx *MapCtx) (Component, 
 	connNode.LineComment = "TODO: password is inlined — move to a secret/env-var reference"
 	kv(body, "connection_string", connNode)
 
-	// include (required list) — maps from table.include.list
-	if v, ok := ctx.String("table.include.list"); ok && v != "" {
-		kv(body, "include", seq(scalarsFromCSV(v)...))
-	} else {
-		stub := scalar("")
-		stub.LineComment = "TODO: list tables to capture as regexps (e.g. dbo.products)"
-		kv(body, "include", seq(stub))
-	}
+	// include (required list) — maps from table.include.list (CSV)
+	debeziumTables(body, ctx, "include")
 
 	// snapshot.mode → stream_snapshot (has default false so optional)
 	if v, ok := ctx.String("snapshot.mode"); ok {
@@ -278,13 +265,9 @@ func (debeziumSQLServerConnector) Map(_ ConnectConfig, ctx *MapCtx) (Component, 
 		kv(body, "stream_snapshot", snapshotNode)
 	}
 
-	// topic.prefix / database.server.name carry naming intent
-	if v, ok := ctx.String("topic.prefix"); ok {
-		ctx.Warn("topic.prefix", "topic.prefix="+v+" has no RPCN equivalent — used for Debezium topic naming only")
-	}
-	if v, ok := ctx.String("database.server.name"); ok {
-		ctx.Warn("database.server.name", "database.server.name="+v+" has no RPCN equivalent — used for Debezium topic naming only")
-	}
+	// topic.prefix and database.server.name are intentionally NOT consumed here.
+	// They fall through to the engine's Unmapped() sweep which emits them as
+	// inline "# TODO: unmapped field …" comments in the generated YAML.
 
 	consumeDebeziumCommon(ctx)
 
@@ -316,17 +299,15 @@ func (debeziumOracleConnector) Map(_ ConnectConfig, ctx *MapCtx) (Component, err
 	}
 	connStr := fmt.Sprintf("oracle://%s:%s@%s/%s", user, password, hostPort, serviceName)
 	connNode := scalar(connStr)
-	connNode.LineComment = "TODO: password is inlined — move to a secret/env-var reference"
+	if serviceName == "" {
+		connNode.LineComment = "TODO: set the Oracle service name; password is inlined — move to a secret/env-var reference"
+	} else {
+		connNode.LineComment = "TODO: password is inlined — move to a secret/env-var reference"
+	}
 	kv(body, "connection_string", connNode)
 
-	// include (required list) — maps from table.include.list
-	if v, ok := ctx.String("table.include.list"); ok && v != "" {
-		kv(body, "include", seq(scalarsFromCSV(v)...))
-	} else {
-		stub := scalar("")
-		stub.LineComment = "TODO: list tables to capture as regexps (e.g. SCHEMA.PRODUCTS)"
-		kv(body, "include", seq(stub))
-	}
+	// include (required list) — maps from table.include.list (CSV)
+	debeziumTables(body, ctx, "include")
 
 	// snapshot.mode → stream_snapshot (has default false so optional)
 	if v, ok := ctx.String("snapshot.mode"); ok {
@@ -335,13 +316,9 @@ func (debeziumOracleConnector) Map(_ ConnectConfig, ctx *MapCtx) (Component, err
 		kv(body, "stream_snapshot", snapshotNode)
 	}
 
-	// topic.prefix / database.server.name carry naming intent
-	if v, ok := ctx.String("topic.prefix"); ok {
-		ctx.Warn("topic.prefix", "topic.prefix="+v+" has no RPCN equivalent — used for Debezium topic naming only")
-	}
-	if v, ok := ctx.String("database.server.name"); ok {
-		ctx.Warn("database.server.name", "database.server.name="+v+" has no RPCN equivalent — used for Debezium topic naming only")
-	}
+	// topic.prefix and database.server.name are intentionally NOT consumed here.
+	// They fall through to the engine's Unmapped() sweep which emits them as
+	// inline "# TODO: unmapped field …" comments in the generated YAML.
 
 	consumeDebeziumCommon(ctx)
 
