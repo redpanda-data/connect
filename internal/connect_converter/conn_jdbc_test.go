@@ -68,3 +68,67 @@ func TestConvertJDBCSinkNoURL(t *testing.T) {
 	assert.Contains(t, y, "dsn:")
 	assertValidRPCN(t, res.YAML)
 }
+
+func TestConvertJDBCSourceFull(t *testing.T) {
+	in := []byte(`{"name":"jdbc-src-full","config":{` +
+		`"connector.class":"io.confluent.connect.jdbc.JdbcSourceConnector",` +
+		`"connection.url":"jdbc:postgresql://h:5432/db",` +
+		`"table.whitelist":"orders",` +
+		`"mode":"incrementing",` +
+		`"incrementing.column.name":"id",` +
+		`"poll.interval.ms":"5000",` +
+		`"validate.non.null":"false"` +
+		`}}`)
+	res, err := Convert(in)
+	require.NoError(t, err)
+	y := string(res.YAML)
+	assertValidRPCN(t, res.YAML)
+
+	// Mapped fields present.
+	assert.Contains(t, y, "sql_select:")
+	assert.Contains(t, y, "driver: postgres")
+	assert.Contains(t, y, "table: orders")
+	// Mode TODO surfaced as suffix comment.
+	assert.Contains(t, y, "KC mode=incrementing")
+	assert.Contains(t, y, "id")
+
+	// Ignored keys must NOT surface as unmapped TODOs.
+	assert.NotContains(t, y, "poll.interval.ms")
+	assert.NotContains(t, y, "validate.non.null")
+	assert.NotContains(t, y, "unmapped field mode")
+	assert.NotContains(t, y, "unmapped field poll")
+}
+
+func TestConvertJDBCSinkFull(t *testing.T) {
+	in := []byte(`{"name":"jdbc-sink-full","config":{` +
+		`"connector.class":"io.confluent.connect.jdbc.JdbcSinkConnector",` +
+		`"connection.url":"jdbc:postgresql://h:5432/db",` +
+		`"table.name.format":"orders",` +
+		`"insert.mode":"upsert",` +
+		`"batch.size":"500",` +
+		`"pk.fields":"id",` +
+		`"auto.create":"true"` +
+		`}}`)
+	res, err := Convert(in)
+	require.NoError(t, err)
+	y := string(res.YAML)
+	assertValidRPCN(t, res.YAML)
+
+	// Mapped fields present.
+	assert.Contains(t, y, "sql_insert:")
+	assert.Contains(t, y, "driver: postgres")
+	assert.Contains(t, y, "table: orders")
+	// insert.mode upsert surfaces as suffix TODO.
+	assert.Contains(t, y, "KC insert.mode=upsert")
+	// batch.size maps to batching.count.
+	assert.Contains(t, y, "batching:")
+	assert.Contains(t, y, "count: 500")
+	// pk.fields informs columns TODO.
+	assert.Contains(t, y, "pk.fields=id")
+
+	// Ignored keys must NOT surface as unmapped TODOs.
+	assert.NotContains(t, y, "unmapped field auto.create")
+	assert.NotContains(t, y, "unmapped field insert.mode")
+	assert.NotContains(t, y, "unmapped field batch.size")
+	assert.NotContains(t, y, "unmapped field pk.fields")
+}
