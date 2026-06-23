@@ -109,14 +109,29 @@ Aiven object-store/JDBC connectors and the Snowflake `…StreamingSinkConnector`
 the same components. MirrorMaker2's `MirrorCheckpointConnector` / `MirrorHeartbeatConnector`
 are recognized as operational (no data-pipeline equivalent).
 
-**Converters** (`value.converter`)
+**Converters / serialization** (`value.converter`) — the *decode* side
 
 | Converter | Result |
 |---|---|
 | `io.confluent.connect.avro.AvroConverter` | `schema_registry_decode` processor |
 | `io.confluent.connect.protobuf.ProtobufConverter` | `schema_registry_decode` processor |
-| `org.apache.kafka.connect.json.JsonConverter` | none (already structured) |
+| `io.confluent.connect.json.JsonSchemaConverter` | `schema_registry_decode` processor |
+| `org.apache.kafka.connect.json.JsonConverter` | `schemas.enable=true` → `root = this.payload` (unwrap the Connect envelope); else none (JSON is auto-parsed) |
 | `org.apache.kafka.connect.storage.StringConverter` | none |
+| `org.apache.kafka.connect.converters.ByteArrayConverter` | none (raw bytes) |
+
+CDC sources (Debezium) and direct-read inputs (JDBC source, Replicator) consume the
+converter without emitting a decode step — they read structured rows/raw bytes, not
+encoded Kafka payloads.
+
+**Re-encode** (the *encode* side) — object-store sinks re-serialize records to match
+`format.class`/`format.output.type`:
+
+| Format | Result |
+|---|---|
+| Avro | `avro` (`operator: from_json`) encode processor before the output (supply the schema) |
+| Parquet | path TODO to add a `parquet_encode` processor with a schema |
+| JSON / JSONL / CSV / bytes | none (the output serializes structured records / writes bytes) |
 
 **SMTs** (`transforms.*`), emitted as Bloblang `mapping` processors in declared order
 

@@ -51,8 +51,9 @@ func (s3SinkConnector) Map(_ ConnectConfig, ctx *MapCtx) (Component, error) {
 	if dir, ok := ctx.String("topics.dir"); ok && dir != "" {
 		path.Value = strings.TrimSuffix(dir, "/") + "/" + path.Value
 	}
-	if ext == ".avro" || ext == ".parquet" {
-		path.LineComment = "TODO: add an encode step (e.g. avro/parquet) before this output"
+	encode := objectEncodeProcessors(ext)
+	if ext == ".parquet" {
+		path.LineComment = "TODO: add a parquet_encode processor (with a schema) before this output"
 	}
 	// Aiven file.compression.type appends a suffix and a compress-processor TODO.
 	applyObjectCompression(ctx, path, ext)
@@ -107,5 +108,5 @@ func (s3SinkConnector) Map(_ ConnectConfig, ctx *MapCtx) (Component, error) {
 		}
 	}
 
-	return Component{Output: component("aws_s3", body)}, nil
+	return Component{Output: component("aws_s3", body), Encode: encode}, nil
 }

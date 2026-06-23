@@ -41,6 +41,8 @@ func Convert(input []byte) (*Result, error) {
 	var procs []*yaml.Node
 	procs = append(procs, mapConverters(ctx)...)
 	procs = append(procs, mapSMTs(ctx)...)
+	// Re-encode last: after value decoding and SMTs, immediately before output.
+	procs = append(procs, comp.Encode...)
 
 	unmapped := ctx.Unmapped()
 	for _, k := range unmapped {

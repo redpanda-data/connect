@@ -32,9 +32,15 @@ type Result struct {
 // Component is the input and/or output a connector maps to. A source sets
 // Input, a sink sets Output, MirrorMaker sets both. A nil side becomes a
 // commented TODO stub during assembly.
+//
+// Encode holds optional pipeline processors a sink needs to RE-serialize
+// records into its target wire/file format (e.g. an object-store sink writing
+// Avro/Parquet files). They run last in the pipeline — after value decoding and
+// SMTs — immediately before the output.
 type Component struct {
 	Input  *yaml.Node
 	Output *yaml.Node
+	Encode []*yaml.Node
 }
 
 // ConverterRole distinguishes key vs value converters.

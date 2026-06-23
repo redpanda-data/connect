@@ -18,6 +18,7 @@ import (
 	// Register component bundles so service.SetYAML can validate the
 	// generated configs. The benthos linter only knows about components
 	// that are blank-imported into the test binary.
+	_ "github.com/redpanda-data/connect/v4/public/components/avro"
 	_ "github.com/redpanda-data/connect/v4/public/components/aws"
 	_ "github.com/redpanda-data/connect/v4/public/components/confluent"
 	_ "github.com/redpanda-data/connect/v4/public/components/gcp"

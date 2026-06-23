@@ -284,6 +284,28 @@ func applyFieldPartitioner(ctx *MapCtx, path *yaml.Node) {
 	path.Value = prefix.String() + path.Value
 }
 
+// objectEncodeProcessors returns the pipeline encode step an object-store sink
+// needs to RE-serialize structured records into its target file format, keyed
+// by the file extension returned by objectFormatExtension. JSON/JSONL/CSV/text
+// and raw bytes need no encode (the output serializes structured records to
+// JSON, or writes bytes as-is), so those return nil.
+//
+// Parquet is intentionally NOT emitted here: parquet_encode requires a schema
+// (it fails to lint without one), which the converter cannot infer — the S3/GCS
+// mappers instead leave a path TODO directing the user to add parquet_encode.
+func objectEncodeProcessors(ext string) []*yaml.Node {
+	if ext != ".avro" {
+		return nil
+	}
+	body := mapping()
+	kv(body, "operator", scalar("from_json"))
+	kv(body, "encoding", scalar("binary"))
+	sch := scalar("")
+	sch.LineComment = "TODO: provide the Avro `schema` (or `schema_path`) to encode records as Avro"
+	kv(body, "schema", sch)
+	return []*yaml.Node{component("avro", body)}
+}
+
 // consumeIgnored marks recognized-but-irrelevant Kafka Connect plumbing keys
 // consumed WITHOUT recording a warning, so they don't surface as TODO noise.
 func consumeIgnored(ctx *MapCtx, keys ...string) {

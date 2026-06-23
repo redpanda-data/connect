@@ -63,8 +63,14 @@ func TestConvertAivenGCSSinkFormatOutputType(t *testing.T) {
 			assertValidRPCN(t, res.YAML)
 			assert.Contains(t, y, tc.wantExt)
 			assert.NotContains(t, y, "format.output.type")
-			if tc.fmtVal == "avro" || tc.fmtVal == "parquet" {
-				assert.Contains(t, y, "add an encode step")
+			// avro emits an `avro` encode processor; parquet leaves a path TODO
+			// (parquet_encode can't lint without a schema).
+			if tc.fmtVal == "avro" {
+				assert.Contains(t, y, "avro:")
+				assert.Contains(t, y, "from_json")
+			}
+			if tc.fmtVal == "parquet" {
+				assert.Contains(t, y, "parquet_encode")
 			}
 		})
 	}

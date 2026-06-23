@@ -8,13 +8,17 @@
 
 package connectconverter
 
-import "gopkg.in/yaml.v3"
+import (
+	"strings"
+
+	"gopkg.in/yaml.v3"
+)
 
 func init() {
 	registerConverter("io.confluent.connect.avro.AvroConverter", schemaRegistryConverter{})
 	registerConverter("io.confluent.connect.protobuf.ProtobufConverter", schemaRegistryConverter{})
 	registerConverter("io.confluent.connect.json.JsonSchemaConverter", schemaRegistryConverter{})
-	registerConverter("org.apache.kafka.connect.json.JsonConverter", noopConverter{})
+	registerConverter("org.apache.kafka.connect.json.JsonConverter", jsonConverter{})
 	registerConverter("org.apache.kafka.connect.storage.StringConverter", noopConverter{})
 	// ByteArrayConverter is a raw byte passthrough (the MirrorMaker2 default and
 	// common for raw object-store sinks). No decode step is needed.
@@ -45,4 +49,32 @@ type noopConverter struct{}
 
 func (noopConverter) Map(_ ConverterRole, _ *MapCtx) ([]*yaml.Node, error) {
 	return nil, nil
+}
+
+// jsonConverter handles org.apache.kafka.connect.json.JsonConverter.
+//
+// Redpanda Connect auto-parses JSON message bytes whenever a processor or output
+// accesses them structurally, so `schemas.enable=false` needs no decode step.
+// With `schemas.enable=true` (the Kafka Connect default) each record is wrapped
+// in Connect's `{"schema":..., "payload":...}` envelope, so the real record must
+// be unwrapped from `.payload`.
+type jsonConverter struct{}
+
+func (jsonConverter) Map(role ConverterRole, ctx *MapCtx) ([]*yaml.Node, error) {
+	v, ok := ctx.String(role.Prefix() + ".schemas.enable")
+	val := strings.TrimSpace(v)
+	switch {
+	case ok && strings.EqualFold(val, "true"):
+		s := scalar("root = this.payload")
+		s.LineComment = "TODO: JsonConverter schemas.enable=true wraps records in a {schema,payload} envelope — unwrapping payload"
+		return []*yaml.Node{component("mapping", s)}, nil
+	case !ok:
+		// schemas.enable defaults to true in Kafka Connect; flag the ambiguity
+		// rather than silently (un)wrapping.
+		ctx.Warn(role.Prefix(), "JsonConverter schemas.enable defaults to true — if records carry the {schema,payload} envelope, add `root = this.payload` to unwrap")
+		return nil, nil
+	default:
+		// schemas.enable=false → plain JSON, auto-parsed on structured access.
+		return nil, nil
+	}
 }

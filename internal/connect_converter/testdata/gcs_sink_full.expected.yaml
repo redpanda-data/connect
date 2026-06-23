@@ -7,9 +7,15 @@ input:
       - orders
       - shipments
     consumer_group: connect-gcs-sink-full # TODO: confirm consumer group
+pipeline:
+  processors:
+    - avro:
+        operator: from_json
+        encoding: binary
+        schema: "" # TODO: provide the Avro `schema` (or `schema_path`) to encode records as Avro
 output:
   gcp_cloud_storage:
     bucket: my-gcs-bucket
-    path: ${! @kafka_topic }/${! timestamp_unix() }-${! uuid_v4() }.avro # TODO: add an encode step (e.g. avro/parquet) before this output
+    path: ${! @kafka_topic }/${! timestamp_unix() }-${! uuid_v4() }.avro # TODO: review object path/partitioning
     batching:
       count: 3
