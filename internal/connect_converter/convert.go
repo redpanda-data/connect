@@ -9,6 +9,7 @@
 package connectconverter
 
 import (
+	"fmt"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -86,6 +87,11 @@ func mapConverters(ctx *MapCtx) []*yaml.Node {
 	return nodes
 }
 
+// filterSMTType is the only KC built-in SMT that handles KC predicates
+// internally (via filterSMT.Map). Generic gating skips this type to avoid
+// double-wrapping.
+const filterSMTType = "org.apache.kafka.connect.transforms.Filter"
+
 // mapSMTs parses the transforms list in declared order and maps each SMT to
 // processor nodes.
 func mapSMTs(ctx *MapCtx) []*yaml.Node {
@@ -127,7 +133,62 @@ func mapSMTs(ctx *MapCtx) []*yaml.Node {
 			ctx.Warn(prefix, err.Error())
 			continue
 		}
+
+		// Generic predicate gating: if this non-Filter SMT carries a predicate,
+		// wrap its processors in a switch so they only execute for matching records.
+		if typ != filterSMTType {
+			nodes = applyPredicateGating(smt, nodes, ctx)
+		}
+
 		out = append(out, nodes...)
 	}
 	return out
+}
+
+// applyPredicateGating checks whether smt.Props["predicate"] is set. If it is,
+// it wraps nodes in a benthos switch processor:
+//
+//	switch:
+//	  - check: <predExpr>     # or "!(<predExpr>)" when negate=true
+//	    processors:
+//	      - <node...>
+//
+// If the predicate class is unknown, nodes are returned ungated and a warning is
+// emitted. If no predicate is set, nodes are returned unchanged.
+func applyPredicateGating(smt SMTConfig, nodes []*yaml.Node, ctx *MapCtx) []*yaml.Node {
+	predName, _ := smt.Props["predicate"].(string)
+	predName = strings.TrimSpace(predName)
+	if predName == "" {
+		return nodes
+	}
+
+	// Consume all predicates.* keys so they don't surface as unmapped fields.
+	// (The Filter SMT does this itself; for other SMTs we do it here.)
+	consumeAllPredicateKeys(ctx)
+
+	negateStr, _ := smt.Props["negate"].(string)
+	negate := strings.EqualFold(strings.TrimSpace(negateStr), "true")
+
+	predExpr, ok := resolvePredicateExpr(predName, ctx)
+	if !ok {
+		// Unknown predicate class — leave nodes ungated, warn.
+		ctx.Warn(smt.Alias, fmt.Sprintf("unsupported predicate class for predicate %q — SMT applied unconditionally; map predicate manually", predName))
+		return nodes
+	}
+
+	checkExpr := predExpr
+	if negate {
+		checkExpr = fmt.Sprintf("!(%s)", predExpr)
+	}
+
+	// Build: switch: [{check: <expr>, processors: [<nodes...>]}]
+	caseNode := mapping()
+	kv(caseNode, "check", scalar(checkExpr))
+	procsNode := seq(nodes...)
+	kv(caseNode, "processors", procsNode)
+
+	switchBody := seq(caseNode)
+	switchProc := component("switch", switchBody)
+
+	return []*yaml.Node{switchProc}
 }

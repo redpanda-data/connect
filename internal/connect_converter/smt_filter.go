@@ -42,7 +42,7 @@ func (filterSMT) Map(smt SMTConfig, ctx *MapCtx) ([]*yaml.Node, error) {
 	}
 
 	// Resolve the predicate expression.
-	predExpr, ok := resolvePredicate(predName, ctx)
+	predExpr, ok := resolvePredicateExpr(predName, ctx)
 	if !ok {
 		// Unknown predicate class → passthrough stub with TODO + warning.
 		s := scalar("root = this")
@@ -73,10 +73,11 @@ func consumeAllPredicateKeys(ctx *MapCtx) {
 	}
 }
 
-// resolvePredicate looks up the predicate class for predName and returns the
-// Bloblang expression for that predicate. Returns ("", false) if the predicate
-// name is not found in the config or the class is unsupported.
-func resolvePredicate(predName string, ctx *MapCtx) (string, bool) {
+// resolvePredicateExpr looks up the predicate class for predName and returns
+// the Bloblang boolean expression for that predicate. Returns ("", false) if
+// the predicate name is not found in the config or the class is unsupported.
+// This is a shared helper used by both Filter and generic SMT predicate gating.
+func resolvePredicateExpr(predName string, ctx *MapCtx) (string, bool) {
 	typeKey := "predicates." + predName + ".type"
 	predClass, ok := ctx.Lookup(typeKey)
 	if !ok {
