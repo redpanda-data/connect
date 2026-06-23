@@ -117,11 +117,9 @@ func setupMCPServer(t *testing.T, issuerURL, orgID, policyFile string) *mcpServe
 		nil,
 		license.Config{},
 		auth,
+		mcpinternal.WithTestLicense(),
 	)
 	require.NoError(t, err)
-
-	// Inject enterprise license for authorization
-	license.InjectTestService(server.Resources())
 
 	// Start HTTP server on random port
 	listener, err := net.Listen("tcp", "localhost:0")
