@@ -99,9 +99,15 @@ for _, w := range res.Warnings {
 | `io.confluent.connect.gcs.GcsSinkConnector` | `gcp_cloud_storage` output |
 | `com.wepay.kafka.connect.bigquery.BigQuerySinkConnector` | `gcp_bigquery` output |
 | `com.snowflake.kafka.connector.SnowflakeSinkConnector` | `snowflake_streaming` output |
+| `org.apache.iceberg.connect.IcebergSinkConnector` (+ legacy `io.tabular.iceberg.connect.IcebergSinkConnector`) | `iceberg` output (REST catalog) |
 | `io.confluent.connect.jdbc.JdbcSourceConnector` | `sql_select` input |
 | `io.confluent.connect.jdbc.JdbcSinkConnector` | `sql_insert` output |
-| `org.apache.kafka.connect.mirror.MirrorSourceConnector` | `kafka_franz` input + output |
+| `org.apache.kafka.connect.mirror.MirrorSourceConnector` | `redpanda` input + output |
+| `io.confluent.connect.replicator.ReplicatorSourceConnector` | `redpanda` input + output |
+
+Aiven object-store/JDBC connectors and the Snowflake `…StreamingSinkConnector` alias map to
+the same components. MirrorMaker2's `MirrorCheckpointConnector` / `MirrorHeartbeatConnector`
+are recognized as operational (no data-pipeline equivalent).
 
 **Converters** (`value.converter`)
 

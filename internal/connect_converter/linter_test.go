@@ -21,6 +21,7 @@ import (
 	_ "github.com/redpanda-data/connect/v4/public/components/aws"
 	_ "github.com/redpanda-data/connect/v4/public/components/confluent"
 	_ "github.com/redpanda-data/connect/v4/public/components/gcp"
+	_ "github.com/redpanda-data/connect/v4/public/components/iceberg"
 	_ "github.com/redpanda-data/connect/v4/public/components/io"
 	_ "github.com/redpanda-data/connect/v4/public/components/kafka"
 	_ "github.com/redpanda-data/connect/v4/public/components/mssqlserver"

@@ -24,6 +24,7 @@ func TestGolden(t *testing.T) {
 		"s3_sink", "s3_sink_full", "gcs_sink", "gcs_sink_full", "bigquery_sink", "bigquery_sink_full", "snowflake_sink", "snowflake_sink_full",
 		"jdbc_source", "jdbc_sink", "jdbc_source_full", "jdbc_sink_full", "mirror", "mirror_full", "avro_s3", "smt_chain",
 		"debezium_postgres", "debezium_mysql",
+		"iceberg_sink", "iceberg_sink_full", "replicator", "replicator_full",
 	}
 	for _, name := range cases {
 		t.Run(name, func(t *testing.T) {
