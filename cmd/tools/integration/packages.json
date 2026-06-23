@@ -1,7 +1,7 @@
 [
   {"path":"./internal/impl/amqp09"},
   {"path":"./internal/impl/amqp1"},
-  {"path":"./internal/impl/arc","skip":true},
+  {"path":"./internal/impl/arc"},
   {"path":"./internal/impl/aws/cloudwatch"},
   {"path":"./internal/impl/aws/dynamodb"},
   {"path":"./internal/impl/aws/kinesis"},
