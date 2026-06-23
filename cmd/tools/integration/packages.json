@@ -15,7 +15,7 @@
   {"path":"./internal/impl/confluent"},
   {"path":"./internal/impl/couchbase"},
   {"path":"./internal/impl/cyborgdb","skip":true},
-  {"path":"./internal/impl/cypher","skip":true},
+  {"path":"./internal/impl/cypher"},
   {"path":"./internal/impl/doris", "skip":true},
   {"path":"./internal/impl/elasticsearch/v8"},
   {"path":"./internal/impl/elasticsearch/v9"},
