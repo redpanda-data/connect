@@ -62,6 +62,6 @@
   {"path":"./internal/impl/tigerbeetle","skip":true},
   {"path":"./internal/impl/zeromq","skip":true},
   {"path":"./internal/mcp"},
-  {"path":"./internal/secrets","skip":true},
+  {"path":"./internal/secrets"},
   {"path":"./tools/spanner/benchmark","skip":true}
 ]
