@@ -12,7 +12,7 @@
   {"path":"./internal/impl/cassandra"},
   {"path":"./internal/impl/cockroachdb"},
   {"path":"./internal/impl/cohere","skip":true},
-  {"path":"./internal/impl/confluent","skip":true},
+  {"path":"./internal/impl/confluent"},
   {"path":"./internal/impl/couchbase"},
   {"path":"./internal/impl/cyborgdb","skip":true},
   {"path":"./internal/impl/cypher","skip":true},
