@@ -27,9 +27,7 @@ func (gcsSinkConnector) Map(_ ConnectConfig, ctx *MapCtx) (Component, error) {
 	}
 
 	ctx.consume("topics")
-	path := scalar(`${! @kafka_topic }/${! timestamp_unix() }-${! uuid_v4() }.json`)
-	path.LineComment = "TODO: review object path/partitioning"
-	kv(body, "path", path)
+	kv(body, "path", topicObjectPath())
 
 	return Component{Output: component("gcp_cloud_storage", body)}, nil
 }

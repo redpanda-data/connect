@@ -45,6 +45,5 @@ func (valueToKeySMT) Map(smt SMTConfig, ctx *MapCtx) ([]*yaml.Node, error) {
 		expr.LineComment = "TODO: ValueToKey lists multiple fields — combine them into the key manually"
 		ctx.Warn(smt.Alias, "ValueToKey lists multiple fields; only the first was mapped — review and combine the remaining fields into the key")
 	}
-	// The mapping processor takes its Bloblang directly as a string value.
-	return []*yaml.Node{component("mapping", expr)}, nil
+	return []*yaml.Node{mappingProc(expr)}, nil
 }

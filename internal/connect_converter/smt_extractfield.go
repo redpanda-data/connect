@@ -8,11 +8,7 @@
 
 package connectconverter
 
-import (
-	"strings"
-
-	"gopkg.in/yaml.v3"
-)
+import "gopkg.in/yaml.v3"
 
 func init() {
 	registerSMT("org.apache.kafka.connect.transforms.ExtractField$Value", extractFieldSMT{})
@@ -32,20 +28,5 @@ func (extractFieldSMT) Map(smt SMTConfig, ctx *MapCtx) ([]*yaml.Node, error) {
 		expr = scalar("root = this." + field)
 	}
 	annotateKeyVariant(smt, expr, ctx)
-	// The mapping processor takes its Bloblang directly as a string value.
-	return []*yaml.Node{component("mapping", expr)}, nil
-}
-
-// annotateKeyVariant adds a TODO comment and warning when the SMT is the $Key
-// class variant, since the generated Bloblang operates on the value document.
-func annotateKeyVariant(smt SMTConfig, expr *yaml.Node, ctx *MapCtx) {
-	if !strings.HasSuffix(smt.Type, "$Key") {
-		return
-	}
-	if expr.LineComment == "" {
-		expr.LineComment = "TODO: this SMT targets the message KEY — review manually"
-	} else {
-		expr.LineComment += "; TODO: targets the message KEY — review manually"
-	}
-	ctx.Warn(smt.Alias, "this SMT targets the message KEY; review — RPCN sets keys via the output key field / meta key, not the value document")
+	return []*yaml.Node{mappingProc(expr)}, nil
 }

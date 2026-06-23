@@ -47,6 +47,5 @@ func (timestampConverterSMT) Map(smt SMTConfig, ctx *MapCtx) ([]*yaml.Node, erro
 		ctx.Warn(smt.Alias, "TimestampConverter has an unrecognised target.type="+targetType+"; emitted a passthrough stub")
 	}
 	annotateKeyVariant(smt, expr, ctx)
-	// The mapping processor takes its Bloblang directly as a string value.
-	return []*yaml.Node{component("mapping", expr)}, nil
+	return []*yaml.Node{mappingProc(expr)}, nil
 }

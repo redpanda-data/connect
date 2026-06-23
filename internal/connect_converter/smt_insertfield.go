@@ -34,6 +34,5 @@ func (insertFieldSMT) Map(smt SMTConfig, _ *MapCtx) ([]*yaml.Node, error) {
 		expr = scalar("root = this")
 		expr.LineComment = "TODO: InsertField without static.field — map manually (timestamp/topic/etc.)"
 	}
-	// The mapping processor takes its Bloblang directly as a string value.
-	return []*yaml.Node{component("mapping", expr)}, nil
+	return []*yaml.Node{mappingProc(expr)}, nil
 }

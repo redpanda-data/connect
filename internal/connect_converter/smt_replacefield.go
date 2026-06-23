@@ -45,6 +45,5 @@ func (replaceFieldSMT) Map(smt SMTConfig, _ *MapCtx) ([]*yaml.Node, error) {
 	} else {
 		expr = scalar(strings.Join(lines, "\n"))
 	}
-	// The mapping processor takes its Bloblang directly as a string value.
-	return []*yaml.Node{component("mapping", expr)}, nil
+	return []*yaml.Node{mappingProc(expr)}, nil
 }

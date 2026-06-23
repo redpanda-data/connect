@@ -32,3 +32,12 @@ func kv(m *yaml.Node, key string, val *yaml.Node) {
 func component(name string, body *yaml.Node) *yaml.Node {
 	return mapping(scalar(name), body)
 }
+
+// topicObjectPath returns a path scalar using the source topic and a
+// timestamp/UUID for uniqueness, with a review TODO comment. Used by S3/GCS
+// sink connectors that derive the object path from the topic name.
+func topicObjectPath() *yaml.Node {
+	path := scalar(`${! @kafka_topic }/${! timestamp_unix() }-${! uuid_v4() }.json`)
+	path.LineComment = "TODO: review object path/partitioning"
+	return path
+}

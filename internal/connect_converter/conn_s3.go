@@ -35,9 +35,7 @@ func (s3SinkConnector) Map(_ ConnectConfig, ctx *MapCtx) (Component, error) {
 	// Build an object path from the source topic. KC routes by topic; RPCN
 	// uses interpolation on the kafka_topic metadata.
 	ctx.consume("topics")
-	path := scalar(`${! @kafka_topic }/${! timestamp_unix() }-${! uuid_v4() }.json`)
-	path.LineComment = "TODO: review object path/partitioning"
-	kv(body, "path", path)
+	kv(body, "path", topicObjectPath())
 
 	return Component{Output: component("aws_s3", body)}, nil
 }
