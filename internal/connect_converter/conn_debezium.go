@@ -80,6 +80,11 @@ func debeziumSnapshotModeToInitial(mode string) bool {
 // RPCN equivalent. topic.prefix and database.server.name are intentionally NOT
 // consumed here — they fall through to the engine's Unmapped() sweep so they
 // appear as inline "# TODO: unmapped field …" comments in the generated YAML.
+//
+// Converter keys (value.converter, key.converter and their sub-keys) are
+// consumed here so that mapConverters() detects the early consumption and skips
+// emitting a schema_registry_decode processor — CDC inputs deliver structured
+// rows directly from the WAL/binlog; they do not read Avro/JSON-encoded bytes.
 func consumeDebeziumCommon(ctx *MapCtx) {
 	consumeIgnored(ctx,
 		"tombstones.on.delete",
@@ -106,6 +111,13 @@ func consumeDebeziumCommon(ctx *MapCtx) {
 		"binary.handling.mode",
 		"interval.handling.mode",
 		"lob.enabled",
+		// Converter keys: CDC inputs don't decode Avro/JSON-encoded Kafka bytes.
+		"value.converter",
+		"value.converter.schema.registry.url",
+		"value.converter.schemas.enable",
+		"key.converter",
+		"key.converter.schema.registry.url",
+		"key.converter.schemas.enable",
 	)
 }
 

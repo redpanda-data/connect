@@ -56,7 +56,16 @@ func Convert(input []byte) (*Result, error) {
 
 // mapConverters maps the value converter to deserialization processors. The key
 // converter's presence is consumed silently (rarely needs a pipeline step).
+//
+// If the connector mapper already consumed the value.converter key (e.g.
+// Debezium CDC connectors call consumeDebeziumCommon which marks it consumed),
+// we skip converter processing entirely — CDC inputs deliver structured rows
+// directly from the WAL/binlog and do not read Avro/JSON-encoded Kafka bytes.
 func mapConverters(ctx *MapCtx) []*yaml.Node {
+	if ctx.consumed[ValueConverter.Prefix()] {
+		// Connector already handled (or explicitly discarded) the value converter.
+		return nil
+	}
 	if cls, ok := ctx.String(KeyConverter.Prefix()); ok {
 		_ = cls // consumed; no processor emitted for key conversion in v1
 	}

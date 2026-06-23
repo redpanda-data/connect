@@ -143,6 +143,78 @@ func TestDebeziumOracle(t *testing.T) {
 	assertValidRPCN(t, res.YAML)
 }
 
+// TestDebeziumNoConverterDecodeWithAvro verifies that a Debezium CDC connector
+// configured with an Avro value.converter does NOT emit a schema_registry_decode
+// processor — CDC inputs already deliver structured rows from the WAL/binlog.
+func TestDebeziumNoConverterDecodeWithAvro(t *testing.T) {
+	in := []byte(`{
+		"name": "debezium-pg-avro",
+		"config": {
+			"connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+			"database.hostname": "pghost",
+			"database.port": "5432",
+			"database.user": "pguser",
+			"database.password": "pgpass",
+			"database.dbname": "mydb",
+			"table.include.list": "public.orders",
+			"slot.name": "my_slot",
+			"value.converter": "io.confluent.connect.avro.AvroConverter",
+			"value.converter.schema.registry.url": "http://registry:8081",
+			"key.converter": "io.confluent.connect.avro.AvroConverter",
+			"key.converter.schema.registry.url": "http://registry:8081"
+		}
+	}`)
+	res, err := Convert(in)
+	require.NoError(t, err)
+	y := string(res.YAML)
+
+	assert.Contains(t, y, "postgres_cdc:")
+	// CDC connectors must NOT produce a converter decode processor.
+	assert.NotContains(t, y, "schema_registry_decode")
+	assertValidRPCN(t, res.YAML)
+}
+
+// TestDebeziumExtractNewRecordStateIsNoop verifies that the canonical Debezium
+// "unwrap envelope" SMT is recognised and emits no processor nodes — *_cdc
+// inputs already deliver unwrapped row state.
+func TestDebeziumExtractNewRecordStateIsNoop(t *testing.T) {
+	in := []byte(`{
+		"name": "debezium-pg-smt",
+		"config": {
+			"connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+			"database.hostname": "pghost",
+			"database.port": "5432",
+			"database.user": "pguser",
+			"database.password": "pgpass",
+			"database.dbname": "mydb",
+			"table.include.list": "public.orders",
+			"slot.name": "my_slot",
+			"transforms": "unwrap",
+			"transforms.unwrap.type": "io.debezium.transforms.ExtractNewRecordState",
+			"transforms.unwrap.drop.tombstones": "true",
+			"transforms.unwrap.delete.handling.mode": "rewrite"
+		}
+	}`)
+	res, err := Convert(in)
+	require.NoError(t, err)
+	y := string(res.YAML)
+
+	assert.Contains(t, y, "postgres_cdc:")
+	// ExtractNewRecordState must NOT produce any processor node.
+	assert.NotContains(t, y, "mapping:")
+	// The SMT should NOT fall through to the "unsupported SMT — map manually" stub.
+	assert.NotContains(t, y, "map manually")
+	// An informational warning (not an error) must be present.
+	var foundWarn bool
+	for _, w := range res.Warnings {
+		if w.Field == "transforms.unwrap.type" {
+			foundWarn = true
+		}
+	}
+	assert.True(t, foundWarn, "expected an informational warning for ExtractNewRecordState")
+	assertValidRPCN(t, res.YAML)
+}
+
 // TestDebeziumMongoUnsupported verifies that the MongoDB connector is not
 // registered and falls through to the drop stub.
 func TestDebeziumMongoUnsupported(t *testing.T) {
