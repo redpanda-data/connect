@@ -46,6 +46,27 @@ func TestConvertSnowflakeSink(t *testing.T) {
 	assert.True(t, roleWarned, "expected a warning for missing role field")
 }
 
+func TestConvertSnowflakeStreamingSink(t *testing.T) {
+	in := []byte(`{"name":"sf","config":{
+	  "connector.class":"com.snowflake.kafka.connector.SnowflakeStreamingSinkConnector",
+	  "snowflake.url.name":"org-acct.snowflakecomputing.com:443",
+	  "snowflake.user.name":"u",
+	  "snowflake.database.name":"DB",
+	  "snowflake.schema.name":"PUBLIC",
+	  "snowflake.role.name":"R",
+	  "snowflake.private.key":"KEY",
+	  "snowflake.ingestion.method":"SNOWPIPE_STREAMING",
+	  "topics":"iot"
+	}}`)
+	res, err := Convert(in)
+	require.NoError(t, err)
+	y := string(res.YAML)
+	assertValidRPCN(t, res.YAML)
+	assert.Contains(t, y, "snowflake_streaming:")
+	assert.NotContains(t, y, "drop:")
+	assert.NotContains(t, y, "unsupported connector.class")
+}
+
 func TestConvertSnowflakeSinkFull(t *testing.T) {
 	in := []byte(`{"name":"sf-full","config":{
 	  "connector.class":"com.snowflake.kafka.connector.SnowflakeSinkConnector",

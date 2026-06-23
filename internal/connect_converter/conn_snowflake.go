@@ -10,6 +10,7 @@ package connectconverter
 
 func init() {
 	registerConnector("com.snowflake.kafka.connector.SnowflakeSinkConnector", snowflakeSinkConnector{})
+	registerConnector("com.snowflake.kafka.connector.SnowflakeStreamingSinkConnector", snowflakeSinkConnector{})
 }
 
 type snowflakeSinkConnector struct{}
