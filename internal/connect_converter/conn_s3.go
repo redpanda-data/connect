@@ -9,7 +9,6 @@
 package connectconverter
 
 import (
-	"fmt"
 	"strings"
 )
 
@@ -51,9 +50,8 @@ func (s3SinkConnector) Map(_ ConnectConfig, ctx *MapCtx) (Component, error) {
 	}
 	kv(body, "path", path)
 
-	// flush.size / rotation interval -> common batch policy.
-	mapBatching(body, ctx, "flush.size", "", "rotate.interval.ms")
-	mapBatching(body, ctx, "", "", "rotate.schedule.interval.ms")
+	// flush.size / rotation interval -> common batch policy (single block).
+	mapBatching(body, ctx, "flush.size", "", "rotate.interval.ms", "rotate.schedule.interval.ms")
 
 	// Explicit static AWS credentials, if provided.
 	if id, ok := ctx.String("aws.access.key.id"); ok {
@@ -77,8 +75,8 @@ func (s3SinkConnector) Map(_ ConnectConfig, ctx *MapCtx) (Component, error) {
 	)
 	// DefaultPartitioner matches RPCN's topic-based path; anything else
 	// changes the layout, so leave it to surface as a TODO.
-	if p, ok := ctx.cfg.Props["partitioner.class"]; ok {
-		if strings.Contains(fmt.Sprint(p), "DefaultPartitioner") {
+	if p, ok := ctx.Lookup("partitioner.class"); ok {
+		if strings.Contains(p, "DefaultPartitioner") {
 			ctx.consume("partitioner.class")
 		}
 	}

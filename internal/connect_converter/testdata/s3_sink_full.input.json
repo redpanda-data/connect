@@ -10,6 +10,7 @@
     "format.class": "io.confluent.connect.s3.format.avro.AvroFormat",
     "partitioner.class": "io.confluent.connect.storage.partitioner.DefaultPartitioner",
     "s3.part.size": "5242880",
+    "s3.compression.type": "gzip",
     "schema.compatibility": "NONE",
     "schema.generator.class": "io.confluent.connect.storage.hive.schema.DefaultSchemaGenerator",
     "storage.class": "io.confluent.connect.s3.storage.S3Storage"

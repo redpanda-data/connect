@@ -14,6 +14,12 @@ func scalar(val string) *yaml.Node {
 	return &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: val}
 }
 
+// intScalar renders a numeric value unquoted (empty tag lets yaml.v3 infer
+// the type, so integers appear as plain integers rather than quoted strings).
+func intScalar(val string) *yaml.Node {
+	return &yaml.Node{Kind: yaml.ScalarNode, Value: val}
+}
+
 func mapping(pairs ...*yaml.Node) *yaml.Node {
 	return &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map", Content: pairs}
 }

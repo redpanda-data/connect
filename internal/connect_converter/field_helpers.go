@@ -14,29 +14,44 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// mapBatching emits a `batching:` block on body from whichever of the given
-// Kafka Connect keys are present. countKey/byteSizeKey map straight to
-// count/byte_size; periodMsKey is a millisecond value converted to a duration
-// string (e.g. "5000ms"). If none of the keys are present nothing is emitted.
+// mapBatching emits a single `batching:` block on body from whichever of the
+// given Kafka Connect keys are present. It consumes all keys it inspects.
+//
+//   - countKey maps to batching.count (unquoted integer).
+//   - byteSizeKey maps to batching.byte_size (unquoted integer).
+//   - periodMsKeys: the FIRST key that is present becomes batching.period
+//     (millisecond value converted to a duration string, e.g. "5000ms"); all
+//     remaining periodMsKeys are also consumed so they do not surface as TODO
+//     noise.
+//
+// At most ONE batching: mapping is emitted regardless of how many periodMsKeys
+// are supplied. If none of the keys are present, nothing is emitted.
 //
 // The sub-field names/shape (count/byte_size/period) match the common benthos
 // batch policy exposed by aws_s3 and friends — verified via assertValidRPCN.
-func mapBatching(body *yaml.Node, ctx *MapCtx, countKey, byteSizeKey, periodMsKey string) {
+func mapBatching(body *yaml.Node, ctx *MapCtx, countKey, byteSizeKey string, periodMsKeys ...string) {
 	batch := mapping()
 
 	if countKey != "" {
 		if v, ok := ctx.String(countKey); ok {
-			kv(batch, "count", scalar(v))
+			kv(batch, "count", intScalar(v))
 		}
 	}
 	if byteSizeKey != "" {
 		if v, ok := ctx.String(byteSizeKey); ok {
-			kv(batch, "byte_size", scalar(v))
+			kv(batch, "byte_size", intScalar(v))
 		}
 	}
-	if periodMsKey != "" {
-		if v, ok := ctx.String(periodMsKey); ok {
+	// Use the first present periodMsKey; consume all of them regardless.
+	periodSet := false
+	for _, key := range periodMsKeys {
+		if key == "" {
+			continue
+		}
+		v, ok := ctx.String(key) // always marks consumed
+		if ok && !periodSet {
 			kv(batch, "period", scalar(v+"ms"))
+			periodSet = true
 		}
 	}
 
@@ -46,9 +61,10 @@ func mapBatching(body *yaml.Node, ctx *MapCtx, countKey, byteSizeKey, periodMsKe
 	kv(body, "batching", batch)
 }
 
-// objectFormatExtension reads and consumes `format.class` and returns the
-// object file extension implied by the Kafka Connect format. Defaults to
-// ".json" when the format is absent or unrecognized.
+// objectFormatExtension reads and consumes `format.class` (side effect: the key
+// is marked consumed on ctx) and returns the object file extension implied by
+// the Kafka Connect format. Defaults to ".json" when the format is absent or
+// unrecognized.
 func objectFormatExtension(ctx *MapCtx) string {
 	cls, ok := ctx.String("format.class")
 	if !ok {

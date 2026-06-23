@@ -7,4 +7,4 @@ output:
     region: us-west-2
     path: ${! @kafka_topic }/${! timestamp_unix() }-${! uuid_v4() }.avro # TODO: add an encode step (e.g. avro/parquet) before this output
     batching:
-      count: "3"
+      count: 3

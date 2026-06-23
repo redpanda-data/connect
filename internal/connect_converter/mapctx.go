@@ -59,6 +59,17 @@ func (c *MapCtx) String(key string) (string, bool) {
 // consume marks a key consumed without reading it.
 func (c *MapCtx) consume(key string) { c.consumed[key] = true }
 
+// Lookup returns the prop value as a string WITHOUT marking the key consumed.
+// Use this when you need to inspect a value before deciding whether to consume
+// it (e.g. consume only if value matches a known-safe pattern).
+func (c *MapCtx) Lookup(key string) (string, bool) {
+	v, ok := c.cfg.Props[key]
+	if !ok {
+		return "", false
+	}
+	return fmt.Sprint(v), true
+}
+
 // isMeta reports whether a key is framework/meta and should be ignored by the
 // unmapped sweep.
 func isMeta(key string) bool {

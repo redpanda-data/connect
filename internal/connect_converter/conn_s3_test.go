@@ -9,6 +9,7 @@
 package connectconverter
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -65,7 +66,7 @@ func TestConvertS3SinkFull(t *testing.T) {
 	assert.Contains(t, y, "bucket: confluent-kafka-connect-s3-testing")
 	assert.Contains(t, y, "region: us-west-2")
 	assert.Contains(t, y, "batching:")
-	assert.Contains(t, y, `count: "3"`)
+	assert.Contains(t, y, "count: 3") // unquoted integer
 	// Avro format drives the object extension.
 	assert.Contains(t, y, ".avro")
 
@@ -73,8 +74,42 @@ func TestConvertS3SinkFull(t *testing.T) {
 	for _, k := range []string{
 		"storage.class", "schema.generator.class",
 		"schema.compatibility", "s3.part.size", "partitioner.class",
+		"s3.compression.type",
 	} {
 		assert.NotContains(t, y, k, "ignored key %q should not appear as an unmapped field", k)
 	}
+	assert.NotContains(t, y, "unmapped field")
+}
+
+// TestConvertS3SinkRotateSchedule verifies that flush.size AND
+// rotate.schedule.interval.ms (with no rotate.interval.ms) produce exactly ONE
+// batching: block containing both count and period.
+func TestConvertS3SinkRotateSchedule(t *testing.T) {
+	in := []byte(`{
+	  "name":"s3-sink-sched",
+	  "config":{
+	    "connector.class":"io.confluent.connect.s3.S3SinkConnector",
+	    "s3.bucket.name":"my-bucket",
+	    "s3.region":"us-east-1",
+	    "topics":"orders",
+	    "flush.size":"100",
+	    "rotate.schedule.interval.ms":"60000"
+	  }
+	}`)
+	res, err := Convert(in)
+	require.NoError(t, err)
+	y := string(res.YAML)
+
+	assertValidRPCN(t, res.YAML)
+
+	// Exactly one batching: block — count the occurrences.
+	batchingCount := strings.Count(y, "batching:")
+	assert.Equal(t, 1, batchingCount, "expected exactly one batching: block, got %d\n%s", batchingCount, y)
+
+	// Both count and period must appear.
+	assert.Contains(t, y, "count: 100")
+	assert.Contains(t, y, "period: 60000ms")
+
+	// No unmapped field TODOs.
 	assert.NotContains(t, y, "unmapped field")
 }
