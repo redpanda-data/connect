@@ -25,7 +25,7 @@
   {"path":"./internal/impl/gcp/enterprise/changestreams"},
   {"path":"./internal/impl/gcp/enterprise/changestreams/metadata"},
   {"path":"./internal/impl/hdfs"},
-  {"path":"./internal/impl/iceberg/integration","skip":true},
+  {"path":"./internal/impl/iceberg/integration"},
   {"path":"./internal/impl/influxdb"},
   {"path":"./internal/impl/kafka","timeout":"10m"},
   {"path":"./internal/impl/kafka/enterprise"},
