@@ -219,3 +219,186 @@ func TestSanitizeAvroName(t *testing.T) {
 		})
 	}
 }
+
+// TestCommonToAvroLogicalTypeRoundTrip drives both halves of the Avro
+// adapter to confirm encode/decode are symmetric for every logical type
+// the connector now preserves. A schema.Common produced by a synthetic
+// decoder run, re-encoded to Avro JSON, must yield byte-equivalent output
+// to the original Avro spec for the same field.
+func TestCommonToAvroLogicalTypeRoundTrip(t *testing.T) {
+	cases := []struct {
+		name      string
+		input     schema.Common
+		wantOuter map[string]any
+	}{
+		{
+			name:      "Timestamp default (millis, UTC)",
+			input:     schema.Common{Type: schema.Timestamp},
+			wantOuter: map[string]any{"type": "long", "logicalType": "timestamp-millis"},
+		},
+		{
+			name: "Timestamp millis explicit",
+			input: schema.Common{
+				Type:    schema.Timestamp,
+				Logical: &schema.LogicalParams{Timestamp: &schema.TimestampParams{Unit: schema.TimeUnitMillis, AdjustToUTC: true}},
+			},
+			wantOuter: map[string]any{"type": "long", "logicalType": "timestamp-millis"},
+		},
+		{
+			name: "Timestamp micros UTC",
+			input: schema.Common{
+				Type:    schema.Timestamp,
+				Logical: &schema.LogicalParams{Timestamp: &schema.TimestampParams{Unit: schema.TimeUnitMicros, AdjustToUTC: true}},
+			},
+			wantOuter: map[string]any{"type": "long", "logicalType": "timestamp-micros"},
+		},
+		{
+			name: "Timestamp nanos UTC",
+			input: schema.Common{
+				Type:    schema.Timestamp,
+				Logical: &schema.LogicalParams{Timestamp: &schema.TimestampParams{Unit: schema.TimeUnitNanos, AdjustToUTC: true}},
+			},
+			wantOuter: map[string]any{"type": "long", "logicalType": "timestamp-nanos"},
+		},
+		{
+			name: "Timestamp local micros",
+			input: schema.Common{
+				Type:    schema.Timestamp,
+				Logical: &schema.LogicalParams{Timestamp: &schema.TimestampParams{Unit: schema.TimeUnitMicros, AdjustToUTC: false}},
+			},
+			wantOuter: map[string]any{"type": "long", "logicalType": "local-timestamp-micros"},
+		},
+		{
+			name:      "Date",
+			input:     schema.Common{Type: schema.Date},
+			wantOuter: map[string]any{"type": "int", "logicalType": "date"},
+		},
+		{
+			name: "TimeOfDay millis",
+			input: schema.Common{
+				Type:    schema.TimeOfDay,
+				Logical: &schema.LogicalParams{TimeOfDay: &schema.TimeOfDayParams{Unit: schema.TimeUnitMillis}},
+			},
+			wantOuter: map[string]any{"type": "int", "logicalType": "time-millis"},
+		},
+		{
+			name: "TimeOfDay micros",
+			input: schema.Common{
+				Type:    schema.TimeOfDay,
+				Logical: &schema.LogicalParams{TimeOfDay: &schema.TimeOfDayParams{Unit: schema.TimeUnitMicros}},
+			},
+			wantOuter: map[string]any{"type": "long", "logicalType": "time-micros"},
+		},
+		{
+			name:      "UUID",
+			input:     schema.Common{Type: schema.UUID},
+			wantOuter: map[string]any{"type": "string", "logicalType": "uuid"},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := avroUnmarshal(t, tc.input, "", "")
+			m, ok := got.(map[string]any)
+			require.True(t, ok, "expected object output, got %T", got)
+			assert.Equal(t, tc.wantOuter["type"], m["type"])
+			assert.Equal(t, tc.wantOuter["logicalType"], m["logicalType"])
+		})
+	}
+}
+
+// TestCommonToAvroTimeOfDayRejectsAdjustToUTC verifies that the Avro
+// encoder refuses to emit a TimeOfDay schema with AdjustToUTC=true.
+// Avro's time-millis / time-micros logical types carry no UTC-adjust bit,
+// so silently dropping it would lose the metadata. Fail loud instead.
+func TestCommonToAvroTimeOfDayRejectsAdjustToUTC(t *testing.T) {
+	c := schema.Common{
+		Name:    "shift_start",
+		Type:    schema.TimeOfDay,
+		Logical: &schema.LogicalParams{TimeOfDay: &schema.TimeOfDayParams{Unit: schema.TimeUnitMicros, AdjustToUTC: true}},
+	}
+	_, err := commonToAvroSchema(c, "Row", "")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "AdjustToUTC=true")
+	assert.Contains(t, err.Error(), "shift_start")
+}
+
+// TestCommonToAvroTimeOfDayRejectsUnsupportedUnit verifies that the
+// encoder refuses TimeOfDay schemas with units Avro doesn't define
+// (Seconds, Nanos), with a field-naming error mentioning the supported
+// units. Without this guard, an encoder downcast would silently change
+// resolution.
+func TestCommonToAvroTimeOfDayRejectsUnsupportedUnit(t *testing.T) {
+	for _, u := range []schema.TimeUnit{schema.TimeUnitSeconds, schema.TimeUnitNanos} {
+		t.Run(u.String(), func(t *testing.T) {
+			c := schema.Common{
+				Name:    "open_at",
+				Type:    schema.TimeOfDay,
+				Logical: &schema.LogicalParams{TimeOfDay: &schema.TimeOfDayParams{Unit: u}},
+			}
+			_, err := commonToAvroSchema(c, "Row", "")
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "MILLIS and MICROS")
+			assert.Contains(t, err.Error(), "open_at")
+		})
+	}
+}
+
+// TestCommonToAvroTimestampRejectsUnsupportedUnit verifies that the
+// avroTimestampLogicalName helper rejects timestamp units Avro doesn't
+// define (Seconds, and any other invalid TimeUnit). Avro 1.10+ supports
+// millis/micros/nanos.
+func TestCommonToAvroTimestampRejectsUnsupportedUnit(t *testing.T) {
+	c := schema.Common{
+		Name:    "event_time",
+		Type:    schema.Timestamp,
+		Logical: &schema.LogicalParams{Timestamp: &schema.TimestampParams{Unit: schema.TimeUnitSeconds, AdjustToUTC: true}},
+	}
+	_, err := commonToAvroSchema(c, "Row", "")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "event_time")
+	assert.Contains(t, err.Error(), "MILLIS, MICROS, NANOS")
+}
+
+// TestCommonToAvroDecodeEncodeRoundTrip ensures that decoding an Avro spec
+// via ecsAvroParseFromBytes and re-encoding via commonToAvroSchema yields a
+// schema with the same logicalType annotation. This is the symmetry contract
+// future format adapters should maintain.
+func TestCommonToAvroDecodeEncodeRoundTrip(t *testing.T) {
+	cases := []struct {
+		name      string
+		fieldType string
+	}{
+		{"timestamp-millis", `{"type":"long","logicalType":"timestamp-millis"}`},
+		{"timestamp-micros", `{"type":"long","logicalType":"timestamp-micros"}`},
+		{"local-timestamp-millis", `{"type":"long","logicalType":"local-timestamp-millis"}`},
+		{"date", `{"type":"int","logicalType":"date"}`},
+		{"time-millis", `{"type":"int","logicalType":"time-millis"}`},
+		{"time-micros", `{"type":"long","logicalType":"time-micros"}`},
+		{"uuid", `{"type":"string","logicalType":"uuid"}`},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			spec := []byte(`{
+				"type":"record","name":"Row",
+				"fields":[{"name":"f","type":` + tc.fieldType + `}]
+			}`)
+			c, err := ecsAvroParseFromBytes(ecsAvroConfig{preserveLogicalTypes: true}, spec)
+			require.NoError(t, err)
+			require.Len(t, c.Children, 1)
+
+			// Re-encode the decoded child and verify the logicalType is
+			// the same as what we started with.
+			f := c.Children[0]
+			out, err := commonToAvroSchema(f, "Inner", "")
+			require.NoError(t, err)
+			var rt map[string]any
+			require.NoError(t, json.Unmarshal([]byte(out), &rt))
+
+			var want map[string]any
+			require.NoError(t, json.Unmarshal([]byte(tc.fieldType), &want))
+			assert.Equal(t, want["logicalType"], rt["logicalType"])
+		})
+	}
+}

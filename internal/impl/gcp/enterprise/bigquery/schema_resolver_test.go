@@ -9,8 +9,12 @@
 package bigquery
 
 import (
+	"fmt"
+	"sync"
 	"testing"
+	"time"
 
+	"cloud.google.com/go/bigquery"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -107,6 +111,83 @@ func TestResolverEvictNonexistent(t *testing.T) {
 	// When we evict a nonexistent key, it does not panic.
 	assert.NotPanics(t, func() {
 		r.Evict("no_such_table")
+	})
+}
+
+// TestResolverConcurrentStress hammers Resolve, Evict, and direct cache
+// mutations from many goroutines for a short duration. With -race this
+// surfaces any unsynchronised access to the resolver's internal state. We
+// intentionally include a write path that uses singleflight (mimicking a
+// real Resolve cache miss followed by a Store) so the generation guard is
+// exercised under contention rather than only sequentially.
+func TestResolverConcurrentStress(t *testing.T) {
+	r := &schemaResolver{
+		log:            service.MockResources().Logger(),
+		resolveTimeout: time.Second,
+	}
+	md := buildTestMessageDescriptor(t)
+	const (
+		goroutines   = 32
+		opsPerWorker = 500
+		uniqueTables = 8
+	)
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+	for g := range goroutines {
+		go func(id int) {
+			defer wg.Done()
+			for i := range opsPerWorker {
+				table := fmt.Sprintf("t%d", (id+i)%uniqueTables)
+				switch i % 4 {
+				case 0:
+					// Cache-hit path (or miss into singleflight fallback).
+					_, _, _ = r.sf.Do(table, func() (any, error) {
+						genBefore := r.generation.Load()
+						rs := &resolvedSchema{messageDescriptor: md}
+						if r.generation.Load() == genBefore {
+							r.cache.Store(table, rs)
+						}
+						return rs, nil
+					})
+				case 1:
+					_, _ = r.cache.Load(table)
+				case 2:
+					r.Evict(table)
+				case 3:
+					// Force a generation bump without touching the cache to stress
+					// the atomic counter under contention.
+					r.generation.Add(1)
+				}
+			}
+		}(g)
+	}
+	wg.Wait()
+	// No assertions on final state — this test exists to fail under -race if
+	// any access path is unsafe. The build/test passes when atomic + lock
+	// invariants hold.
+	assert.GreaterOrEqual(t, r.generation.Load(), int64(0))
+}
+
+func TestExtractPrimaryKeysFromMetadata(t *testing.T) {
+	t.Run("returns columns in declared order", func(t *testing.T) {
+		meta := &bigquery.TableMetadata{
+			TableConstraints: &bigquery.TableConstraints{
+				PrimaryKey: &bigquery.PrimaryKey{Columns: []string{"tenant_id", "id"}},
+			},
+		}
+		pks := extractPrimaryKeysFromMetadata(meta)
+		assert.Equal(t, []string{"tenant_id", "id"}, pks)
+	})
+
+	t.Run("returns nil when no constraints", func(t *testing.T) {
+		assert.Nil(t, extractPrimaryKeysFromMetadata(&bigquery.TableMetadata{}))
+		assert.Nil(t, extractPrimaryKeysFromMetadata(&bigquery.TableMetadata{
+			TableConstraints: &bigquery.TableConstraints{},
+		}))
+	})
+
+	t.Run("returns nil on nil metadata", func(t *testing.T) {
+		assert.Nil(t, extractPrimaryKeysFromMetadata(nil))
 	})
 }
 

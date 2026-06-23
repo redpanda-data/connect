@@ -52,6 +52,11 @@ type SchemaEvolutionConfig struct {
 	// NewColumnTypeMapping is an optional Bloblang mapping that can override inferred
 	// or schema-metadata-derived column types during schema evolution.
 	NewColumnTypeMapping *bloblang.Executor
+	// RequireSchemaMetadata enables strict mode: when true, writing a numeric
+	// value into a time-typed column without registered schema metadata is a
+	// hard error rather than a silent fallback to bloblang's seconds-default.
+	// Only meaningful when SchemaMetadata is also set.
+	RequireSchemaMetadata bool
 }
 
 const maxSchemaEvolutionRetries = 10
@@ -663,8 +668,10 @@ func (r *Router) createWriter(ctx context.Context, key tableKey) (*writer, error
 		return nil, fmt.Errorf("creating committer: %w", err)
 	}
 
-	// Create writer with its own table reference and the committer
-	w := NewWriter(writerTbl, comm, r.caseSensitive, r.writerOpts, r.logger)
+	// Create writer with its own table reference and the committer.
+	// The resolver is passed so the writer can use schema metadata to
+	// interpret numeric inputs into time-typed columns at shredding time.
+	w := NewWriter(writerTbl, comm, r.caseSensitive, r.writerOpts, r.resolver, r.schemaEvoCfg.RequireSchemaMetadata, r.logger)
 	r.logger.Debugf("Created writer for table %s.%s", key.namespace, key.table)
 
 	return w, nil

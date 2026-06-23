@@ -11,6 +11,8 @@ package bigquery
 import (
 	"errors"
 	"fmt"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -57,19 +59,21 @@ table: my_table
 	require.NoError(t, err)
 
 	// When we parse the config.
-	cfg, err := bigQueryWriteAPIConfigFromParsed(pConf)
+	cfg, err := bqWriteAPIConfigFromParsed(pConf)
 	require.NoError(t, err)
 
 	// Then defaults are applied correctly.
 	assert.Equal(t, bigquery.DetectProjectID, cfg.ProjectID)
 	assert.Equal(t, "my_dataset", cfg.DatasetID)
 	assert.Equal(t, "json", cfg.MessageFormat)
+	assert.Equal(t, "default_stream", cfg.WriteMode)
+	assert.False(t, cfg.AutoCreateTable)
 	assert.Empty(t, cfg.CredentialsJSON)
 	assert.Empty(t, cfg.TargetPrincipal)
 	assert.Empty(t, cfg.Delegates)
 	assert.Equal(t, 5*time.Minute, cfg.StreamIdleTimeout)
 	assert.Equal(t, 1*time.Minute, cfg.StreamSweepInterval)
-	assert.Equal(t, 5*time.Second, cfg.SchemaResolveTimeout)
+	assert.Equal(t, 15*time.Second, cfg.SchemaResolveTimeout)
 	assert.Equal(t, 30*time.Second, cfg.SchemaEvolutionTimeout)
 	assert.Empty(t, cfg.EndpointHTTP)
 	assert.Empty(t, cfg.EndpointGRPC)
@@ -83,6 +87,10 @@ project: my-project
 dataset: my_dataset
 table: my_table
 message_format: protobuf
+write_mode: pending_stream
+auto_create_table: true
+schema:
+  - { name: id, type: STRING, mode: REQUIRED }
 credentials_json: '{"type":"service_account"}'
 target_principal: "sa@project.iam.gserviceaccount.com"
 delegates:
@@ -98,13 +106,15 @@ endpoint:
 	require.NoError(t, err)
 
 	// When we parse the config.
-	cfg, err := bigQueryWriteAPIConfigFromParsed(pConf)
+	cfg, err := bqWriteAPIConfigFromParsed(pConf)
 	require.NoError(t, err)
 
 	// Then all values are parsed correctly.
 	assert.Equal(t, "my-project", cfg.ProjectID)
 	assert.Equal(t, "my_dataset", cfg.DatasetID)
 	assert.Equal(t, "protobuf", cfg.MessageFormat)
+	assert.Equal(t, "pending_stream", cfg.WriteMode)
+	assert.True(t, cfg.AutoCreateTable)
 	assert.Equal(t, `{"type":"service_account"}`, cfg.CredentialsJSON)
 	assert.Equal(t, "sa@project.iam.gserviceaccount.com", cfg.TargetPrincipal)
 	assert.Equal(t, []string{"delegate@project.iam.gserviceaccount.com"}, cfg.Delegates)
@@ -114,6 +124,215 @@ endpoint:
 	assert.Equal(t, 45*time.Second, cfg.SchemaEvolutionTimeout)
 	assert.Equal(t, "http://localhost:9050", cfg.EndpointHTTP)
 	assert.Equal(t, "localhost:9060", cfg.EndpointGRPC)
+}
+
+func TestBigQueryWriteAPIConfigParsingWriteModeUpsert(t *testing.T) {
+	spec := bigQueryWriteAPISpec()
+	for _, mode := range []string{"upsert", "upsert_delete"} {
+		t.Run(mode, func(t *testing.T) {
+			yaml := fmt.Sprintf(`
+dataset: my_dataset
+table: my_table
+write_mode: %s
+change_type: ${! metadata("operation") }
+`, mode)
+			pConf, err := spec.ParseYAML(yaml, nil)
+			require.NoError(t, err)
+			cfg, err := bqWriteAPIConfigFromParsed(pConf)
+			require.NoError(t, err)
+			assert.Equal(t, mode, cfg.WriteMode)
+		})
+	}
+}
+
+func TestBigQueryWriteAPIConfigChangeType(t *testing.T) {
+	spec := bigQueryWriteAPISpec()
+
+	t.Run("change_type parsed for upsert mode", func(t *testing.T) {
+		pConf, err := spec.ParseYAML(`
+dataset: my_dataset
+table: my_table
+write_mode: upsert
+change_type: ${! metadata("operation") }
+`, nil)
+		require.NoError(t, err)
+		cfg, err := bqWriteAPIConfigFromParsed(pConf)
+		require.NoError(t, err)
+		require.NotNil(t, cfg.ChangeType)
+	})
+
+	t.Run("change_type required when upsert", func(t *testing.T) {
+		pConf, err := spec.ParseYAML(`
+dataset: my_dataset
+table: my_table
+write_mode: upsert
+`, nil)
+		require.NoError(t, err)
+		_, err = bqWriteAPIConfigFromParsed(pConf)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "change_type")
+	})
+
+	t.Run("change_type not required when default_stream", func(t *testing.T) {
+		pConf, err := spec.ParseYAML(`
+dataset: my_dataset
+table: my_table
+`, nil)
+		require.NoError(t, err)
+		cfg, err := bqWriteAPIConfigFromParsed(pConf)
+		require.NoError(t, err)
+		assert.Nil(t, cfg.ChangeType)
+	})
+}
+
+func TestBigQueryWriteAPIConfigChangeSequenceNumber(t *testing.T) {
+	spec := bigQueryWriteAPISpec()
+	pConf, err := spec.ParseYAML(`
+dataset: my_dataset
+table: my_table
+write_mode: upsert
+change_type: ${! metadata("operation") }
+change_sequence_number: ${! metadata("scn") }
+`, nil)
+	require.NoError(t, err)
+	cfg, err := bqWriteAPIConfigFromParsed(pConf)
+	require.NoError(t, err)
+	require.NotNil(t, cfg.ChangeSequenceNumber)
+}
+
+func TestBigQueryWriteAPIConfigPrimaryKeys(t *testing.T) {
+	spec := bigQueryWriteAPISpec()
+
+	t.Run("primary_keys parsed", func(t *testing.T) {
+		pConf, err := spec.ParseYAML(`
+dataset: my_dataset
+table: my_table
+write_mode: upsert
+change_type: ${! metadata("operation") }
+primary_keys: [id, tenant_id]
+`, nil)
+		require.NoError(t, err)
+		cfg, err := bqWriteAPIConfigFromParsed(pConf)
+		require.NoError(t, err)
+		assert.Equal(t, []string{"id", "tenant_id"}, cfg.PrimaryKeys)
+	})
+
+	t.Run("max 16 columns", func(t *testing.T) {
+		keys := make([]string, 17)
+		for i := range keys {
+			keys[i] = fmt.Sprintf("c%d", i)
+		}
+		pConf, err := spec.ParseYAML(fmt.Sprintf(`
+dataset: my_dataset
+table: my_table
+write_mode: upsert
+change_type: ${! metadata("operation") }
+primary_keys: [%s]
+`, strings.Join(keys, ", ")), nil)
+		require.NoError(t, err)
+		_, err = bqWriteAPIConfigFromParsed(pConf)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "16")
+	})
+
+	t.Run("required when auto_create_table and CDC mode", func(t *testing.T) {
+		pConf, err := spec.ParseYAML(`
+dataset: my_dataset
+table: my_table
+write_mode: upsert
+change_type: ${! metadata("operation") }
+auto_create_table: true
+schema:
+  - { name: id, type: STRING, mode: REQUIRED }
+`, nil)
+		require.NoError(t, err)
+		_, err = bqWriteAPIConfigFromParsed(pConf)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "primary_keys")
+	})
+
+	t.Run("PK column must exist in schema when both set", func(t *testing.T) {
+		pConf, err := spec.ParseYAML(`
+dataset: my_dataset
+table: my_table
+write_mode: upsert
+change_type: ${! metadata("operation") }
+auto_create_table: true
+schema:
+  - { name: id, type: STRING, mode: REQUIRED }
+primary_keys: [unknown_col]
+`, nil)
+		require.NoError(t, err)
+		_, err = bqWriteAPIConfigFromParsed(pConf)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "unknown_col")
+	})
+
+	t.Run("PK column must be REQUIRED when both set", func(t *testing.T) {
+		pConf, err := spec.ParseYAML(`
+dataset: my_dataset
+table: my_table
+write_mode: upsert
+change_type: ${! metadata("operation") }
+auto_create_table: true
+schema:
+  - { name: id, type: STRING, mode: NULLABLE }
+primary_keys: [id]
+`, nil)
+		require.NoError(t, err)
+		_, err = bqWriteAPIConfigFromParsed(pConf)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "REQUIRED")
+	})
+}
+
+func TestBigQueryWriteAPIConfigCDCIncompatibilities(t *testing.T) {
+	spec := bigQueryWriteAPISpec()
+	cases := []struct {
+		name   string
+		yaml   string
+		errMsg string
+	}{
+		{
+			name: "pending_stream rejects change_type",
+			yaml: `
+dataset: my_dataset
+table: my_table
+write_mode: pending_stream
+change_type: ${! metadata("operation") }
+`,
+			errMsg: "change_type",
+		},
+		{
+			name: "default_stream rejects change_sequence_number",
+			yaml: `
+dataset: my_dataset
+table: my_table
+change_sequence_number: ${! metadata("scn") }
+`,
+			errMsg: "change_sequence_number",
+		},
+		{
+			name: "upsert rejects message_format: protobuf",
+			yaml: `
+dataset: my_dataset
+table: my_table
+write_mode: upsert
+change_type: ${! metadata("operation") }
+message_format: protobuf
+`,
+			errMsg: "message_format",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			pConf, err := spec.ParseYAML(tc.yaml, nil)
+			require.NoError(t, err)
+			_, err = bqWriteAPIConfigFromParsed(pConf)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tc.errMsg)
+		})
+	}
 }
 
 func TestBigQueryWriteAPIConfigParsingRejectsNonPositiveDurations(t *testing.T) {
@@ -173,7 +392,214 @@ delegates:
 		t.Run(tc.name, func(t *testing.T) {
 			pConf, err := spec.ParseYAML(tc.yaml, nil)
 			require.NoError(t, err)
-			_, err = bigQueryWriteAPIConfigFromParsed(pConf)
+			_, err = bqWriteAPIConfigFromParsed(pConf)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tc.errMsg)
+		})
+	}
+}
+
+func TestSchemaParsing(t *testing.T) {
+	spec := bigQueryWriteAPISpec()
+	pConf, err := spec.ParseYAML(`
+dataset: my_dataset
+table: my_table
+auto_create_table: true
+schema:
+  - { name: id, type: STRING, mode: REQUIRED }
+  - { name: tags, type: STRING, mode: REPEATED }
+  - { name: age, type: INT64 }
+  - name: address
+    type: RECORD
+    fields:
+      - { name: line1, type: STRING }
+      - { name: city, type: STRING, mode: REQUIRED }
+`, nil)
+	require.NoError(t, err)
+
+	cfg, err := bqWriteAPIConfigFromParsed(pConf)
+	require.NoError(t, err)
+	require.Len(t, cfg.Schema, 4)
+	assert.Equal(t, "id", cfg.Schema[0].Name)
+	assert.Equal(t, "STRING", cfg.Schema[0].Type)
+	assert.Equal(t, "REQUIRED", cfg.Schema[0].Mode)
+	assert.Equal(t, "REPEATED", cfg.Schema[1].Mode)
+	// INT64 alias normalises to INTEGER.
+	assert.Equal(t, "INTEGER", cfg.Schema[2].Type)
+	assert.Equal(t, "NULLABLE", cfg.Schema[2].Mode)
+	assert.Equal(t, "RECORD", cfg.Schema[3].Type)
+	require.Len(t, cfg.Schema[3].Fields, 2)
+	assert.Equal(t, "line1", cfg.Schema[3].Fields[0].Name)
+	assert.Equal(t, "city", cfg.Schema[3].Fields[1].Name)
+	assert.Equal(t, "REQUIRED", cfg.Schema[3].Fields[1].Mode)
+}
+
+func TestSchemaValidation(t *testing.T) {
+	spec := bigQueryWriteAPISpec()
+	for _, tc := range []struct {
+		name   string
+		yaml   string
+		errMsg string
+	}{
+		{
+			name: "auto_create_table without schema",
+			yaml: `
+dataset: my_dataset
+table: my_table
+auto_create_table: true
+`,
+			errMsg: bqwaFieldSchema,
+		},
+		{
+			name: "invalid column type",
+			yaml: `
+dataset: my_dataset
+table: my_table
+auto_create_table: true
+schema:
+  - { name: id, type: NOTATYPE }
+`,
+			errMsg: "NOTATYPE",
+		},
+		{
+			name: "invalid mode",
+			yaml: `
+dataset: my_dataset
+table: my_table
+auto_create_table: true
+schema:
+  - { name: id, type: STRING, mode: WEIRD }
+`,
+			errMsg: "WEIRD",
+		},
+		{
+			name: "record without fields",
+			yaml: `
+dataset: my_dataset
+table: my_table
+auto_create_table: true
+schema:
+  - { name: addr, type: RECORD }
+`,
+			errMsg: "RECORD",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			pConf, err := spec.ParseYAML(tc.yaml, nil)
+			require.NoError(t, err)
+			_, err = bqWriteAPIConfigFromParsed(pConf)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tc.errMsg)
+		})
+	}
+}
+
+func TestPartitioningClusteringParsing(t *testing.T) {
+	spec := bigQueryWriteAPISpec()
+	pConf, err := spec.ParseYAML(`
+dataset: my_dataset
+table: my_table
+auto_create_table: true
+schema:
+  - { name: id, type: STRING }
+  - { name: created_at, type: TIMESTAMP }
+  - { name: user_id, type: STRING }
+time_partitioning:
+  type: HOUR
+  field: created_at
+  expiration: 24h
+  require_filter: true
+clustering:
+  - user_id
+  - id
+`, nil)
+	require.NoError(t, err)
+
+	cfg, err := bqWriteAPIConfigFromParsed(pConf)
+	require.NoError(t, err)
+	assert.Equal(t, "HOUR", cfg.TimePartitioning.Type)
+	assert.Equal(t, "created_at", cfg.TimePartitioning.Field)
+	assert.Equal(t, 24*time.Hour, cfg.TimePartitioning.Expiration)
+	assert.True(t, cfg.TimePartitioning.RequireFilter)
+	assert.Equal(t, []string{"user_id", "id"}, cfg.Clustering)
+}
+
+func TestPartitioningClusteringDefaults(t *testing.T) {
+	// Absent partition block leaves Type empty (sentinel for "not configured").
+	spec := bigQueryWriteAPISpec()
+	pConf, err := spec.ParseYAML(`
+dataset: my_dataset
+table: my_table
+`, nil)
+	require.NoError(t, err)
+	cfg, err := bqWriteAPIConfigFromParsed(pConf)
+	require.NoError(t, err)
+	assert.Empty(t, cfg.TimePartitioning.Type)
+	assert.Empty(t, cfg.TimePartitioning.Field)
+	assert.Empty(t, cfg.Clustering)
+}
+
+func TestPartitioningClusteringValidation(t *testing.T) {
+	spec := bigQueryWriteAPISpec()
+	for _, tc := range []struct {
+		name   string
+		yaml   string
+		errMsg string
+	}{
+		{
+			name: "partition field not in schema",
+			yaml: `
+dataset: my_dataset
+table: my_table
+auto_create_table: true
+schema: [{ name: id, type: STRING }]
+time_partitioning: { type: DAY, field: missing_col }
+`,
+			errMsg: "missing_col",
+		},
+		{
+			name: "partition field wrong type",
+			yaml: `
+dataset: my_dataset
+table: my_table
+auto_create_table: true
+schema: [{ name: id, type: STRING }]
+time_partitioning: { type: DAY, field: id }
+`,
+			errMsg: "DATE/TIMESTAMP/DATETIME",
+		},
+		{
+			name: "clustering column not in schema",
+			yaml: `
+dataset: my_dataset
+table: my_table
+auto_create_table: true
+schema: [{ name: id, type: STRING }]
+clustering: [missing_col]
+`,
+			errMsg: "missing_col",
+		},
+		{
+			name: "too many clustering columns",
+			yaml: `
+dataset: my_dataset
+table: my_table
+auto_create_table: true
+schema:
+  - { name: a, type: STRING }
+  - { name: b, type: STRING }
+  - { name: c, type: STRING }
+  - { name: d, type: STRING }
+  - { name: e, type: STRING }
+clustering: [a, b, c, d, e]
+`,
+			errMsg: "at most 4",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			pConf, err := spec.ParseYAML(tc.yaml, nil)
+			require.NoError(t, err)
+			_, err = bqWriteAPIConfigFromParsed(pConf)
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), tc.errMsg)
 		})
@@ -261,6 +687,87 @@ table: my_table
 	assert.NoError(t, err)
 }
 
+func TestMapRowErrorsToBatch(t *testing.T) {
+	rowErr := func(idx int64, msg string) *storagepb.RowError {
+		return &storagepb.RowError{
+			Index:   idx,
+			Code:    storagepb.RowError_FIELDS_ERROR,
+			Message: msg,
+		}
+	}
+
+	tests := []struct {
+		name      string
+		batchSize int
+		// rowIndex maps sent-row position -> original batch index, as built by
+		// writeBatchCDC after some rows are dropped during validation.
+		rowIndex []int
+		rowErrs  []*storagepb.RowError
+		// wantFailures maps the original batch index that should carry a failure
+		// to a substring its error message must contain.
+		wantFailures map[int]string
+	}{
+		{
+			name:      "sent position maps back to original index",
+			batchSize: 5,
+			// Originals 0 and 2 failed validation, so only 1, 3 and 4 were sent.
+			rowIndex: []int{1, 3, 4},
+			// A BigQuery error at sent position 1 refers to original index 3.
+			rowErrs:      []*storagepb.RowError{rowErr(1, "bad field")},
+			wantFailures: map[int]string{3: "row 3: code 1: bad field"},
+		},
+		{
+			name:         "multiple row errors map independently",
+			batchSize:    4,
+			rowIndex:     []int{0, 2, 3},
+			rowErrs:      []*storagepb.RowError{rowErr(0, "a"), rowErr(2, "b")},
+			wantFailures: map[int]string{0: "row 0: code 1: a", 3: "row 3: code 1: b"},
+		},
+		{
+			name:         "out of range indices are ignored",
+			batchSize:    3,
+			rowIndex:     []int{0, 1},
+			rowErrs:      []*storagepb.RowError{rowErr(5, "too big"), rowErr(-1, "negative")},
+			wantFailures: map[int]string{},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			batch := make(service.MessageBatch, tc.batchSize)
+			for i := range batch {
+				batch[i] = service.NewMessage(fmt.Appendf(nil, "row-%d", i))
+			}
+			// Index before building the error: Index() tags the batch parts in
+			// place, and the error must be built from the tagged parts so the
+			// walk below can resolve each failure back to its original index.
+			index := batch.Index()
+
+			batchErr := mapRowErrorsToBatch(nil, batch, tc.rowIndex, tc.rowErrs)
+
+			if len(tc.wantFailures) == 0 {
+				require.Nil(t, batchErr, "expected no batch error when all indices are out of range")
+				return
+			}
+			require.NotNil(t, batchErr)
+
+			got := map[int]string{}
+			batchErr.WalkMessagesIndexedBy(index, func(i int, _ *service.Message, err error) bool {
+				if err != nil {
+					got[i] = err.Error()
+				}
+				return true
+			})
+
+			require.Len(t, got, len(tc.wantFailures), "unexpected set of failed indices: %v", got)
+			for idx, want := range tc.wantFailures {
+				require.Contains(t, got, idx, "expected a failure pinned to original index %d", idx)
+				assert.Equal(t, want, got[idx], "message should reference the original index, not the sent position")
+			}
+		})
+	}
+}
+
 func TestCloseNilClients(t *testing.T) {
 	// Given an output that has never connected.
 	out := newTestOutput(t, `
@@ -337,6 +844,93 @@ func TestDescriptorProtoToMessageDescriptorErrors(t *testing.T) {
 		assert.Nil(t, md)
 		assert.Contains(t, err.Error(), "creating file descriptor from normalized proto")
 	})
+}
+
+// TestStreamCacheConcurrentStress exercises the stream cache from many
+// goroutines doing reads (fast path), inserts (with LRU eviction), and
+// targeted evictions. The point isn't to assert final cache contents — Go's
+// race detector and the lock invariants are what we're stressing.
+func TestStreamCacheConcurrentStress(t *testing.T) {
+	out := newTestOutput(t, `
+dataset: my_dataset
+table: my_table
+max_cached_streams: 16
+`)
+	out.streams = make(map[string]*streamWithDescriptor)
+
+	// Seed enough entries to make the LRU scan non-trivial.
+	for i := range 8 {
+		k := fmt.Sprintf("projects/p/datasets/d/tables/seed%d", i)
+		swd := &streamWithDescriptor{}
+		swd.lastUsed.Store(time.Now().Add(time.Duration(-i) * time.Second).UnixNano())
+		out.streams[k] = swd
+	}
+
+	const (
+		goroutines   = 16
+		opsPerWorker = 500
+	)
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+	for g := range goroutines {
+		go func(id int) {
+			defer wg.Done()
+			for i := range opsPerWorker {
+				key := fmt.Sprintf("projects/p/datasets/d/tables/t%d", (id*opsPerWorker+i)%24)
+				switch i % 4 {
+				case 0:
+					// Fast-path read with lastUsed update.
+					out.streamsMu.RLock()
+					if cached, exists := out.streams[key]; exists {
+						cached.lastUsed.Store(time.Now().UnixNano())
+					}
+					out.streamsMu.RUnlock()
+				case 1:
+					// Insert path mimicking getOrCreateStream's tail.
+					out.streamsMu.Lock()
+					if _, exists := out.streams[key]; !exists {
+						newSwd := &streamWithDescriptor{}
+						newSwd.lastUsed.Store(time.Now().UnixNano())
+						out.streams[key] = newSwd
+						// Drive the LRU pass under contention.
+						if len(out.streams) > out.conf.MaxCachedStreams {
+							var lruKey string
+							var lruTS int64 = -1
+							for k, s := range out.streams {
+								if k == key {
+									continue
+								}
+								ts := s.lastUsed.Load()
+								if lruTS == -1 || ts < lruTS {
+									lruKey = k
+									lruTS = ts
+								}
+							}
+							if lruKey != "" {
+								delete(out.streams, lruKey)
+							}
+						}
+					}
+					out.streamsMu.Unlock()
+				case 2:
+					out.evictStream(key)
+				case 3:
+					out.streamsMu.RLock()
+					_ = len(out.streams)
+					out.streamsMu.RUnlock()
+				}
+			}
+		}(g)
+	}
+	wg.Wait()
+
+	// The cap is a soft limit but should be honoured under the contention
+	// pattern above (each insert evicts at most one extra entry).
+	out.streamsMu.RLock()
+	size := len(out.streams)
+	out.streamsMu.RUnlock()
+	assert.LessOrEqual(t, size, out.conf.MaxCachedStreams+1,
+		"cache should stay within ~MaxCachedStreams under concurrent insert/evict")
 }
 
 func TestSweepIdleStreams(t *testing.T) {
@@ -524,6 +1118,8 @@ func TestMetricsInitialization(t *testing.T) {
 	require.NotNil(t, m.retries)
 	require.NotNil(t, m.schemaEvolutions)
 	require.NotNil(t, m.schemaEvolutionFailures)
+	require.NotNil(t, m.cachedStreams)
+	require.NotNil(t, m.streamsEvicted)
 }
 
 func TestBuildAuthOpts(t *testing.T) {

@@ -15,6 +15,12 @@ import (
 var (
 	// DefaultSCNWindowSize sets the window size used between SCNs in LogMiner.
 	DefaultSCNWindowSize = 20000
+	// DefaultMinSCNWindowSize is the minimum SCN gap required before starting a new LogMiner
+	// session.
+	DefaultMinSCNWindowSize = 1000
+	// DefaultMaxSCNWindowSize is the maximum SCN range that can be mined in a single cycle.
+	// The adaptive window grows toward this ceiling during backlog and shrinks during steady state.
+	DefaultMaxSCNWindowSize = 100000
 	// DefaultMiningBackoffInterval controls the mining cycle backoff interval.
 	DefaultMiningBackoffInterval = 5 * time.Second
 	// DefaultMiningInterval controls the interval between mining cycles during normal operation.
@@ -27,6 +33,9 @@ var (
 	DefaultMaxTransactionEvents = 0
 	// DefaultLOBEnabled controls whether LOB column processing is enabled.
 	DefaultLOBEnabled = true
+	// DefaultTransactionCacheKey is the default prefix used for the transaction buffer cache key.
+	// Only relevant when configuring a (potentially shared) cache_resource transaction buffer.
+	DefaultTransactionCacheKey = "oracledb_cdc"
 )
 
 // MiningStrategy defines how LogMiner accesses dictionary information
@@ -37,21 +46,33 @@ const (
 	OnlineCatalogStrategy MiningStrategy = "online_catalog"
 )
 
+// TransactionCacheConfig contains config specific to service.Cache implementations (ie cache_resources)
+type TransactionCacheConfig struct {
+	CacheName string
+	CacheKey  string
+	MaxEvents int
+}
+
 // Config holds configuration for LogMiner
 type Config struct {
-	SCNWindowSize         int
-	MiningBackoffInterval time.Duration
-	MiningInterval        time.Duration
-	MiningStrategy        MiningStrategy
-	MaxTransactionEvents  int
-	LOBEnabled            bool
-	PDBName               string
+	SCNWindowSize          int
+	MinSCNWindowSize       int
+	MaxSCNWindowSize       int
+	MiningBackoffInterval  time.Duration
+	MiningInterval         time.Duration
+	MiningStrategy         MiningStrategy
+	MaxTransactionEvents   int
+	LOBEnabled             bool
+	PDBName                string
+	TransactionCacheConfig TransactionCacheConfig
 }
 
 // NewDefaultConfig returns a Config with default values
 func NewDefaultConfig() *Config {
 	return &Config{
 		SCNWindowSize:         DefaultSCNWindowSize,
+		MinSCNWindowSize:      DefaultMinSCNWindowSize,
+		MaxSCNWindowSize:      DefaultMaxSCNWindowSize,
 		MiningBackoffInterval: DefaultMiningBackoffInterval,
 		MiningInterval:        DefaultMiningInterval,
 		MiningStrategy:        MiningStrategy(DefaultMiningStrategy),

@@ -134,7 +134,7 @@ func TestOracleNumberToCommonType(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			c := oracleNumberToCommon("col", tt.precision, tt.scale, tt.hasInfo)
+			c := replication.NumberToCommon("col", tt.precision, tt.scale, tt.hasInfo)
 			assert.Equal(t, tt.wantType, c.Type)
 		})
 	}
@@ -402,6 +402,35 @@ func TestCoerceStreamingValues(t *testing.T) {
 				},
 			},
 			want: map[string]any{"amount": "12345.67890"},
+		},
+		{
+			// Regression: a bare integer literal (int64, as produced by the
+			// redo-log converter) for a Decimal column must be canonicalised to
+			// a string rather than leaking as a JSON number that downstream Avro
+			// string-field encoding rejects.
+			name: "decimal int64 canonicalised to string",
+			data: map[string]any{"amount": int64(2)},
+			info: &columnTypeInfo{
+				colTypes: map[string]schema.Common{
+					"amount": {
+						Type: schema.Decimal,
+						Logical: &schema.LogicalParams{
+							Decimal: &schema.DecimalParams{Precision: 10, Scale: 2},
+						},
+					},
+				},
+			},
+			want: map[string]any{"amount": "2.00"},
+		},
+		{
+			name: "big decimal int64 canonicalised to string",
+			data: map[string]any{"amount": int64(678)},
+			info: &columnTypeInfo{
+				colTypes: map[string]schema.Common{
+					"amount": {Type: schema.BigDecimal},
+				},
+			},
+			want: map[string]any{"amount": "678"},
 		},
 		{
 			name: "varchar2 string not coerced",

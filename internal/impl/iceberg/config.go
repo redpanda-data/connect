@@ -69,12 +69,13 @@ const (
 	ioFieldAzureAccessKey        = "storage_access_key"
 
 	// Schema evolution fields
-	ioFieldSchemaEvolution                     = "schema_evolution"
-	ioFieldSchemaEvolutionEnabled              = "enabled"
-	ioFieldSchemaEvolutionPartitionSpec        = "partition_spec"
-	ioFieldSchemaEvolutionTableLoc             = "table_location"
-	ioFieldSchemaEvolutionSchemaMetadata       = "schema_metadata"
-	ioFieldSchemaEvolutionNewColumnTypeMapping = "new_column_type_mapping"
+	ioFieldSchemaEvolution                      = "schema_evolution"
+	ioFieldSchemaEvolutionEnabled               = "enabled"
+	ioFieldSchemaEvolutionPartitionSpec         = "partition_spec"
+	ioFieldSchemaEvolutionTableLoc              = "table_location"
+	ioFieldSchemaEvolutionSchemaMetadata        = "schema_metadata"
+	ioFieldSchemaEvolutionNewColumnTypeMapping  = "new_column_type_mapping"
+	ioFieldSchemaEvolutionRequireSchemaMetadata = "require_schema_metadata"
 
 	// Commit fields
 	ioFieldCommit               = "commit"
@@ -331,6 +332,10 @@ array:list
 				service.NewBloblangField(ioFieldSchemaEvolutionNewColumnTypeMapping).
 					Description("An optional Bloblang mapping to customize column types during schema evolution. This mapping is executed for each new column and can override the inferred or schema-metadata-derived type. The mapping receives an object with fields `name` (column name), `path` (dot-separated path), `value` (sample value), `inferred_type` (the type that would be used without this mapping), `message` (the full message body), `namespace`, and `table`. It must return a string with a valid Iceberg type name: `boolean`, `int`, `long`, `float`, `double`, `string`, `binary`, `date`, `time`, `timestamp`, `timestamptz`, `uuid`, `decimal(p,s)`, or `fixed[n]`.").
 					Optional().
+					Advanced(),
+				service.NewBoolField(ioFieldSchemaEvolutionRequireSchemaMetadata).
+					Description("When `true`, writing a numeric value into a `timestamp`, `timestamptz`, `date`, or `time` column without `schema_metadata` registered for that column is a hard error. The default `false` permits a fallback path that interprets bare numeric timestamps as Unix seconds and bare numeric times as already-microseconds — convenient, but silently wrong if upstream produced milliseconds. Enable this when you cannot guarantee the upstream attaches schema metadata and want to fail loudly rather than corrupt dates by ~50,000 years. No effect on time-typed columns receiving `time.Time`/`time.Duration` Go values, which carry their own unit unambiguously, and no effect on non-time columns. Requires `schema_metadata` to be set.").
+					Default(false).
 					Advanced(),
 			).Description("Schema evolution configuration.").
 				Optional().

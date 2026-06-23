@@ -68,6 +68,15 @@ runcmd:
   - curl -sSL https://repo1.maven.org/maven2/io/debezium/debezium-connector-postgres/2.7.3.Final/debezium-connector-postgres-2.7.3.Final-plugin.tar.gz | tar -xz -C /opt/kafka-connect/plugins/
   - curl -sSL https://repo1.maven.org/maven2/io/debezium/debezium-connector-mysql/2.7.3.Final/debezium-connector-mysql-2.7.3.Final-plugin.tar.gz | tar -xz -C /opt/kafka-connect/plugins/
 
+  # Debezium Oracle connector + Oracle JDBC driver. Unlike the postgres/mysql
+  # plugins, ojdbc is NOT bundled in the Debezium archive and is not Apache-
+  # licensed, so it's pulled separately from Maven Central into the connector's
+  # plugin dir. The archive unpacks to debezium-connector-oracle/. Both Connect
+  # (oracledb_cdc) and Debezium mine the same RDS redo logs via LogMiner, so
+  # this is a fair head-to-head comparator.
+  - curl -sSL https://repo1.maven.org/maven2/io/debezium/debezium-connector-oracle/2.7.3.Final/debezium-connector-oracle-2.7.3.Final-plugin.tar.gz | tar -xz -C /opt/kafka-connect/plugins/
+  - curl -sSL -o /opt/kafka-connect/plugins/debezium-connector-oracle/ojdbc11.jar https://repo1.maven.org/maven2/com/oracle/database/jdbc/ojdbc11/21.13.0.0/ojdbc11-21.13.0.0.jar
+
   # Aiven JDBC sink + JDBC drivers (postgres + mariadb). Repo was renamed in 2024;
   # archive unpacks to jdbc-connector-for-apache-kafka-6.10.0/, not the old aiven-* name.
   - curl -sSL -o /tmp/aiven-jdbc.zip https://github.com/Aiven-Open/jdbc-connector-for-apache-kafka/releases/download/v6.10.0/jdbc-connector-for-apache-kafka-6.10.0.zip

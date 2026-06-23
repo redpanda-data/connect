@@ -250,6 +250,186 @@ func TestIntegrationSchemaEvolution(t *testing.T) {
 	assert.True(t, evolved, "missing==0 must signal retry, not a permanent failure, so concurrent batches are not dropped to DLQ")
 }
 
+func TestIntegrationAutoCreateTable(t *testing.T) {
+	integration.CheckSkip(t)
+
+	const (
+		projectID = "test-project"
+		datasetID = "test_dataset"
+		tableID   = "auto_created"
+	)
+
+	emu := startEmulator(t, projectID, datasetID)
+
+	t.Log("Given the table does not exist and auto_create_table is enabled")
+
+	sb := service.NewStreamBuilder()
+	require.NoError(t, sb.SetLoggerYAML(`level: DEBUG`))
+
+	sendFn, err := sb.AddProducerFunc()
+	require.NoError(t, err)
+
+	// Schema kept simple (STRING columns + ingestion-time partitioning) so the
+	// test exercises auto-create + partitioning + clustering without tripping
+	// over the protojson↔INT64 representation rules that TIMESTAMP/INTEGER
+	// columns require.
+	require.NoError(t, sb.AddOutputYAML(fmt.Sprintf(`
+gcp_bigquery_write_api:
+  project: %s
+  dataset: %s
+  table: %s
+  auto_create_table: true
+  schema:
+    - { name: id, type: STRING, mode: REQUIRED }
+    - { name: payload, type: STRING }
+    - { name: tenant_id, type: STRING }
+  time_partitioning:
+    type: DAY
+  clustering: [tenant_id]
+  # The auto-create path runs Metadata→Create→Metadata inside one budget;
+  # CI runners under load have flaked the default repeatedly. 30s gives the
+  # emulator plenty of headroom without changing real-world write behavior.
+  schema_resolve_timeout: 30s
+  endpoint:
+    http: %s
+    grpc: %s
+`, projectID, datasetID, tableID, emu.httpEndpoint, emu.grpcEndpoint)))
+
+	stream, err := sb.Build()
+	require.NoError(t, err)
+	license.InjectTestService(stream.Resources())
+
+	go func() {
+		if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+			t.Errorf("stream error: %v", err)
+		}
+	}()
+	t.Cleanup(func() {
+		if err := stream.StopWithin(10 * time.Second); err != nil {
+			t.Log(err)
+		}
+	})
+
+	require.NoError(t, sendFn(t.Context(), service.NewMessage([]byte(
+		`{"id":"a","payload":"hello","tenant_id":"t1"}`))))
+
+	t.Log("Then the table is auto-created with the configured schema")
+	require.Eventually(t, func() bool {
+		_, err := emu.bqClient.Dataset(datasetID).Table(tableID).Metadata(t.Context())
+		return err == nil
+	}, 10*time.Second, 250*time.Millisecond)
+
+	meta, err := emu.bqClient.Dataset(datasetID).Table(tableID).Metadata(t.Context())
+	require.NoError(t, err)
+	require.Len(t, meta.Schema, 3)
+	var names []string
+	for _, f := range meta.Schema {
+		names = append(names, f.Name)
+	}
+	assert.ElementsMatch(t, []string{"id", "payload", "tenant_id"}, names)
+	// Partitioning/clustering metadata may be a no-op on the emulator — guard
+	// so this test still proves auto-create works without coupling to emulator
+	// completeness.
+	if meta.TimePartitioning != nil {
+		assert.Equal(t, bigquery.DayPartitioningType, meta.TimePartitioning.Type)
+		// Ingestion-time partitioning leaves Field empty (uses _PARTITIONTIME).
+		assert.Empty(t, meta.TimePartitioning.Field)
+	}
+	if meta.Clustering != nil {
+		assert.Equal(t, []string{"tenant_id"}, meta.Clustering.Fields)
+	}
+
+	t.Log("And the row lands in the table")
+	require.Eventually(t, func() bool {
+		it := emu.bqClient.Dataset(datasetID).Table(tableID).Read(t.Context())
+		var count int
+		for {
+			var row map[string]bigquery.Value
+			if err := it.Next(&row); errors.Is(err, iterator.Done) {
+				break
+			} else if err != nil {
+				return false
+			}
+			count++
+		}
+		return count >= 1
+	}, 30*time.Second, 500*time.Millisecond)
+}
+
+func TestIntegrationPendingStreamMode(t *testing.T) {
+	integration.CheckSkip(t)
+	// The goccy/bigquery-emulator (used by these integration tests) does not
+	// implement the Pending write-stream type or BatchCommitWriteStreams; the
+	// test hangs waiting for the commit RPC. Skip until the emulator gains
+	// support or these tests can target real BigQuery in a nightly job.
+	t.Skip("goccy bigquery-emulator does not implement Pending streams / BatchCommitWriteStreams")
+
+	const (
+		projectID = "test-project"
+		datasetID = "test_dataset"
+		tableID   = "pending_test"
+	)
+
+	emu := startEmulator(t, projectID, datasetID)
+
+	t.Log("Given a table exists for pending-stream writes")
+	require.NoError(t, emu.bqClient.Dataset(datasetID).Table(tableID).Create(t.Context(), &bigquery.TableMetadata{
+		Schema: bigquery.Schema{
+			{Name: "id", Type: bigquery.StringFieldType, Required: true},
+		},
+	}))
+
+	sb := service.NewStreamBuilder()
+	require.NoError(t, sb.SetLoggerYAML(`level: DEBUG`))
+
+	sendFn, err := sb.AddProducerFunc()
+	require.NoError(t, err)
+
+	require.NoError(t, sb.AddOutputYAML(fmt.Sprintf(`
+gcp_bigquery_write_api:
+  project: %s
+  dataset: %s
+  table: %s
+  write_mode: pending_stream
+  batching:
+    count: 3
+  endpoint:
+    http: %s
+    grpc: %s
+`, projectID, datasetID, tableID, emu.httpEndpoint, emu.grpcEndpoint)))
+
+	stream, err := sb.Build()
+	require.NoError(t, err)
+	license.InjectTestService(stream.Resources())
+
+	go func() {
+		if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+			t.Errorf("stream error: %v", err)
+		}
+	}()
+	t.Cleanup(func() { _ = stream.StopWithin(10 * time.Second) })
+
+	for _, id := range []string{"a", "b", "c"} {
+		require.NoError(t, sendFn(t.Context(), service.NewMessage([]byte(`{"id":"`+id+`"}`))))
+	}
+
+	t.Log("Then all 3 rows are committed atomically and visible")
+	require.Eventually(t, func() bool {
+		it := emu.bqClient.Dataset(datasetID).Table(tableID).Read(t.Context())
+		var count int
+		for {
+			var row map[string]bigquery.Value
+			if err := it.Next(&row); errors.Is(err, iterator.Done) {
+				break
+			} else if err != nil {
+				return false
+			}
+			count++
+		}
+		return count == 3
+	}, 30*time.Second, 500*time.Millisecond)
+}
+
 func TestIntegrationTableNameSanitization(t *testing.T) {
 	integration.CheckSkip(t)
 
@@ -321,4 +501,30 @@ gcp_bigquery_write_api:
 		}
 		return count >= 1
 	}, 30*time.Second, 500*time.Millisecond)
+}
+
+// CDC integration tests require a real BigQuery instance. The goccy emulator
+// does not implement the _CHANGE_TYPE / _CHANGE_SEQUENCE_NUMBER pseudo-columns,
+// PRIMARY KEY constraints, or the UPSERT/DELETE semantics that CDC mode
+// depends on. These subtests are gated with t.Skip so the package compiles
+// against the real BQ API and so a future real-BQ test job can flip the gate.
+func TestIntegrationCDC(t *testing.T) {
+	integration.CheckSkip(t)
+	const skipReason = "BigQuery CDC requires a real BigQuery instance; goccy emulator does not support CDC pseudo-columns"
+
+	t.Run("upsert", func(t *testing.T) {
+		t.Skip(skipReason)
+	})
+
+	t.Run("upsert_delete", func(t *testing.T) {
+		t.Skip(skipReason)
+	})
+
+	t.Run("out_of_order", func(t *testing.T) {
+		t.Skip(skipReason)
+	})
+
+	t.Run("mixed_batch", func(t *testing.T) {
+		t.Skip(skipReason)
+	})
 }

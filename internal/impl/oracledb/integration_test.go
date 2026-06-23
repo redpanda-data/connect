@@ -62,20 +62,21 @@ func TestIntegrationOracleDBCDCSnapshotAndStreaming(t *testing.T) {
 		{
 			cfg := `
 oracledb_cdc:
-  connection_string: %s
-  pdb_name: %s
+  connection_string: ` + cdbConnStr + `
+  pdb_name: ` + pdbName + `
   stream_snapshot: true
   max_parallel_snapshot_tables: 2
   snapshot_max_batch_size: 10
   logminer:
     scn_window_size: 20000
+    min_scn_window_size: 0
     backoff_interval: 1s
   include: ["TESTDB.MTFOO", "TESTDB2.MTBAR"]
   batching:
     count: 500`
 
 			streamBuilder := service.NewStreamBuilder()
-			require.NoError(t, streamBuilder.AddInputYAML(fmt.Sprintf(cfg, cdbConnStr, pdbName)))
+			require.NoError(t, streamBuilder.AddInputYAML(cfg))
 			require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
 
 			require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
@@ -166,12 +167,13 @@ END;`)
 		{
 			cfg := `
 oracledb_cdc:
-  connection_string: %s
+  connection_string: ` + connStr + `
   stream_snapshot: true
   max_parallel_snapshot_tables: 3
   snapshot_max_batch_size: 10
   logminer:
     scn_window_size: 20000
+    min_scn_window_size: 0
     backoff_interval: 1s
   include: ["TESTDB.FOO", "TESTDB.FOO2", "TESTDB2.BAR"]
   exclude: ["TESTDB.DOESNOTEXIST"]
@@ -179,7 +181,7 @@ oracledb_cdc:
     count: 500`
 
 			streamBuilder := service.NewStreamBuilder()
-			require.NoError(t, streamBuilder.AddInputYAML(fmt.Sprintf(cfg, connStr)))
+			require.NoError(t, streamBuilder.AddInputYAML(cfg))
 			require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
 
 			require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
@@ -202,6 +204,8 @@ oracledb_cdc:
 					t.Error(err)
 				}
 			}()
+
+			time.Sleep(10 * time.Second)
 
 			t.Log("Verifying snapshot changes...")
 			var got int
@@ -264,9 +268,6 @@ func TestIntegrationOracleDBCDCConcurrentSnapshot(t *testing.T) {
 		db.MustExec("INSERT INTO testdb2.bar (id) VALUES (DEFAULT)")
 	}
 
-	// wait for changes to propagate to redo logs
-	time.Sleep(5 * time.Second)
-
 	var (
 		outBatches   []string
 		outBatchesMu sync.Mutex
@@ -277,18 +278,19 @@ func TestIntegrationOracleDBCDCConcurrentSnapshot(t *testing.T) {
 	{
 		cfg := `
 oracledb_cdc:
-  connection_string: %s
+  connection_string: ` + connStr + `
   stream_snapshot: true
   snapshot_max_batch_size: 10
   max_parallel_snapshot_tables: 3
   logminer:
     scn_window_size: 20000
+    min_scn_window_size: 0
     backoff_interval: 1s
   include: ["TESTDB.FOO", "TESTDB.FOO2", "TESTDB2.BAR"]
   exclude: ["TESTDB.DOESNOTEXIST"]`
 
 		streamBuilder := service.NewStreamBuilder()
-		require.NoError(t, streamBuilder.AddInputYAML(fmt.Sprintf(cfg, connStr)))
+		require.NoError(t, streamBuilder.AddInputYAML(cfg))
 		require.NoError(t, streamBuilder.SetLoggerYAML(`level: DEBUG`))
 
 		require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
@@ -311,6 +313,8 @@ oracledb_cdc:
 				t.Error(err)
 			}
 		}()
+
+		time.Sleep(10 * time.Second)
 
 		t.Log("Verifying snapshot changes...")
 		var got int
@@ -340,10 +344,11 @@ func TestIntegrationOracleDBCDCResumesFromCheckpoint(t *testing.T) {
 
 	cfg := `
 oracledb_cdc:
-  connection_string: %s
+  connection_string: ` + connStr + `
   stream_snapshot: false
   logminer:
     scn_window_size: 20000
+    min_scn_window_size: 0
     backoff_interval: 1s
   include: ["TESTDB.FOO"]
   batching:
@@ -352,7 +357,7 @@ oracledb_cdc:
 	t.Log("Launching component to stream initial data...")
 	{
 		streamBuilder := service.NewStreamBuilder()
-		require.NoError(t, streamBuilder.AddInputYAML(fmt.Sprintf(cfg, connStr)))
+		require.NoError(t, streamBuilder.AddInputYAML(cfg))
 		require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
 
 		require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
@@ -414,7 +419,7 @@ oracledb_cdc:
 
 		// Create new stream builder for second phase
 		streamBuilder2 := service.NewStreamBuilder()
-		require.NoError(t, streamBuilder2.AddInputYAML(fmt.Sprintf(cfg, connStr)))
+		require.NoError(t, streamBuilder2.AddInputYAML(cfg))
 		require.NoError(t, streamBuilder2.SetLoggerYAML(`level: INFO`))
 
 		require.NoError(t, streamBuilder2.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
@@ -454,67 +459,18 @@ oracledb_cdc:
 
 func TestIntegrationOracleDBCDCStreaming(t *testing.T) {
 	integration.CheckSkip(t)
-
-	// Create tables
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
-	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.foo", "CREATE TABLE testdb.foo (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, val NUMBER)"))
-	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.foo2", "CREATE TABLE testdb.foo2 (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, val NUMBER)"))
-	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb2.bar", "CREATE TABLE testdb2.bar (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, val NUMBER)"))
 
 	var (
-		err     error
-		stream  *service.Stream
-		msgChan = make(chan *service.Message, 1)
+		err    error
+		stream *service.Stream
 	)
 
-	cfg := `
-oracledb_cdc:
-  connection_string: %s
-  stream_snapshot: false
-  logminer:
-    scn_window_size: 20000
-    backoff_interval: 1s
-  include: ["TESTDB.FOO", "TESTDB.FOO2", "TESTDB2.BAR"]
-  exclude: ["TESTDB.DOESNOTEXIST"]
-  batching:
-    count: 500`
-
-	t.Log("Launching component...")
-	{
-		streamBuilder := service.NewStreamBuilder()
-		require.NoError(t, streamBuilder.AddInputYAML(fmt.Sprintf(cfg, connStr)))
-		require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
-
-		require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
-			for _, msg := range mb {
-				msgChan <- msg
-			}
-			return nil
-		}))
-
-		stream, err = streamBuilder.Build()
-		require.NoError(t, err)
-		license.InjectTestService(stream.Resources())
-
-		go func() {
-			if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
-				t.Error(err)
-			}
-		}()
-		go func() {
-			<-t.Context().Done()
-			close(msgChan)
-		}()
-	}
-
-	// wait for component to start
-	time.Sleep(10 * time.Second)
-
 	// collectMessages reads messages from channel ready for assertion
-	collectMessages := func(t *testing.T, want int) []*service.Message {
+	collectMessages := func(t *testing.T, c chan *service.Message, want int) []*service.Message {
 		t.Helper()
 		msgs := make([]*service.Message, 0, want)
-		for msg := range msgChan {
+		for msg := range c {
 			msgs = append(msgs, msg)
 			if len(msgs) == want {
 				break
@@ -525,7 +481,6 @@ oracledb_cdc:
 		return msgs
 	}
 
-	// mustAssertMetadata ensures correct metadata exists in messages
 	mustAssertMetadata := func(t *testing.T, operation string, msgs []*service.Message) {
 		t.Helper()
 		results := make(map[string][]*service.Message)
@@ -575,62 +530,228 @@ oracledb_cdc:
 		}
 	}
 
-	// insert initial test data
-	want := 3000
-	for range 1000 {
-		db.MustExec("INSERT INTO testdb.foo (val) VALUES (1)")
-		db.MustExec("INSERT INTO testdb.foo2 (val) VALUES (1)")
-		db.MustExec("INSERT INTO testdb2.bar (val) VALUES (1)")
-	}
+	t.Run("With internal transaction buffer", func(t *testing.T) {
+		msgChan := make(chan *service.Message, 1)
 
-	t.Run("Streaming insert changes...", func(t *testing.T) {
-		msgs := collectMessages(t, want)
-		mustAssertMetadata(t, "insert", msgs)
+		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.foo", "CREATE TABLE testdb.foo (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, val NUMBER)"))
+		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.foo2", "CREATE TABLE testdb.foo2 (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, val NUMBER)"))
+		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb2.bar", "CREATE TABLE testdb2.bar (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, val NUMBER)"))
 
-		content, err := msgs[0].AsBytes()
-		assert.NoError(t, err)
-		var row map[string]any
-		require.NoError(t, json.Unmarshal(content, &row))
-		assert.Len(t, row, 2)
-		assert.Contains(t, row, "ID")
-		assert.EqualValues(t, "1", row["VAL"])
+		cfg := `
+oracledb_cdc:
+  connection_string: ` + connStr + `
+  stream_snapshot: false
+  logminer:
+    scn_window_size: 20000
+    min_scn_window_size: 0
+    backoff_interval: 1s
+  include: ["TESTDB.FOO", "TESTDB.FOO2", "TESTDB2.BAR"]
+  exclude: ["TESTDB.DOESNOTEXIST"]
+  batching:
+    count: 500`
+
+		t.Log("Launching component...")
+		{
+			streamBuilder := service.NewStreamBuilder()
+			require.NoError(t, streamBuilder.AddInputYAML(cfg))
+			require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
+
+			require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+				for _, msg := range mb {
+					msgChan <- msg
+				}
+				return nil
+			}))
+
+			stream, err = streamBuilder.Build()
+			require.NoError(t, err)
+			license.InjectTestService(stream.Resources())
+
+			go func() {
+				if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+					t.Error(err)
+				}
+			}()
+			go func() {
+				<-t.Context().Done()
+				close(msgChan)
+			}()
+		}
+
+		time.Sleep(10 * time.Second)
+
+		// insert initial test data
+		want := 3000
+		for range 1000 {
+			db.MustExec("INSERT INTO testdb.foo (val) VALUES (1)")
+			db.MustExec("INSERT INTO testdb.foo2 (val) VALUES (1)")
+			db.MustExec("INSERT INTO testdb2.bar (val) VALUES (1)")
+		}
+
+		t.Run("Streaming insert changes...", func(t *testing.T) {
+			msgs := collectMessages(t, msgChan, want)
+			mustAssertMetadata(t, "insert", msgs)
+
+			content, err := msgs[0].AsBytes()
+			assert.NoError(t, err)
+			var row map[string]any
+			require.NoError(t, json.Unmarshal(content, &row))
+			assert.Len(t, row, 2)
+			assert.Contains(t, row, "ID")
+			assert.EqualValues(t, "1", row["VAL"])
+		})
+
+		t.Run("Streaming update changes...", func(t *testing.T) {
+			db.MustExec("UPDATE testdb.foo SET val = 2")
+			db.MustExec("UPDATE testdb.foo2 SET val = 2")
+			db.MustExec("UPDATE testdb2.bar SET val = 2")
+
+			msgs := collectMessages(t, msgChan, want)
+			mustAssertMetadata(t, "update", msgs)
+
+			content, err := msgs[0].AsBytes()
+			assert.NoError(t, err)
+			var row map[string]any
+			require.NoError(t, json.Unmarshal(content, &row))
+			assert.Len(t, row, 2)
+			assert.Contains(t, row, "ID")
+			assert.EqualValues(t, "2", row["VAL"])
+		})
+
+		t.Run("Streaming delete changes...", func(t *testing.T) {
+			db.MustExec("DELETE FROM testdb.foo")
+			db.MustExec("DELETE FROM testdb.foo2")
+			db.MustExec("DELETE FROM testdb2.bar")
+
+			msgs := collectMessages(t, msgChan, want)
+			mustAssertMetadata(t, "delete", msgs)
+
+			content, err := msgs[0].AsBytes()
+			assert.NoError(t, err)
+			var row map[string]any
+			require.NoError(t, json.Unmarshal(content, &row))
+			assert.Len(t, row, 2)
+			assert.Contains(t, row, "ID")
+			assert.EqualValues(t, "2", row["VAL"])
+		})
+
+		require.NoError(t, stream.StopWithin(time.Second*10))
 	})
 
-	t.Run("Streaming update changes...", func(t *testing.T) {
-		db.MustExec("UPDATE testdb.foo SET val = 2")
-		db.MustExec("UPDATE testdb.foo2 SET val = 2")
-		db.MustExec("UPDATE testdb2.bar SET val = 2")
+	t.Run("With cache_resource transaction buffer", func(t *testing.T) {
+		msgChan := make(chan *service.Message, 1)
 
-		msgs := collectMessages(t, want)
-		mustAssertMetadata(t, "update", msgs)
+		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.foo", "CREATE TABLE testdb.foo (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, val NUMBER)"))
+		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.foo2", "CREATE TABLE testdb.foo2 (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, val NUMBER)"))
+		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb2.bar", "CREATE TABLE testdb2.bar (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, val NUMBER)"))
 
-		content, err := msgs[0].AsBytes()
-		assert.NoError(t, err)
-		var row map[string]any
-		require.NoError(t, json.Unmarshal(content, &row))
-		assert.Len(t, row, 2)
-		assert.Contains(t, row, "ID")
-		assert.EqualValues(t, "2", row["VAL"])
+		cfg := `
+oracledb_cdc:
+  connection_string: ` + connStr + `
+  stream_snapshot: false
+  logminer:
+    scn_window_size: 20000
+    min_scn_window_size: 0
+    backoff_interval: 1s
+    transaction_cache: "foocache"
+  include: ["TESTDB.FOO", "TESTDB.FOO2", "TESTDB2.BAR"]
+  exclude: ["TESTDB.DOESNOTEXIST"]
+  batching:
+    count: 500`
+
+		cacheConf := `
+label: foocache
+file:
+  directory: ` + t.TempDir()
+
+		t.Log("Launching component...")
+		{
+			streamBuilder := service.NewStreamBuilder()
+			require.NoError(t, streamBuilder.AddInputYAML(cfg))
+			require.NoError(t, streamBuilder.AddCacheYAML(cacheConf))
+			require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
+
+			require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+				for _, msg := range mb {
+					msgChan <- msg
+				}
+				return nil
+			}))
+
+			stream, err = streamBuilder.Build()
+			require.NoError(t, err)
+			license.InjectTestService(stream.Resources())
+
+			go func() {
+				if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+					t.Error(err)
+				}
+			}()
+			go func() {
+				<-t.Context().Done()
+				close(msgChan)
+			}()
+		}
+
+		time.Sleep(10 * time.Second)
+
+		// insert initial test data
+		want := 3000
+		for range 1000 {
+			db.MustExec("INSERT INTO testdb.foo (val) VALUES (1)")
+			db.MustExec("INSERT INTO testdb.foo2 (val) VALUES (1)")
+			db.MustExec("INSERT INTO testdb2.bar (val) VALUES (1)")
+		}
+
+		t.Run("Streaming insert changes...", func(t *testing.T) {
+			msgs := collectMessages(t, msgChan, want)
+			mustAssertMetadata(t, "insert", msgs)
+
+			content, err := msgs[0].AsBytes()
+			assert.NoError(t, err)
+			var row map[string]any
+			require.NoError(t, json.Unmarshal(content, &row))
+			assert.Len(t, row, 2)
+			assert.Contains(t, row, "ID")
+			assert.EqualValues(t, "1", row["VAL"])
+		})
+
+		t.Run("Streaming update changes...", func(t *testing.T) {
+			db.MustExec("UPDATE testdb.foo SET val = 2")
+			db.MustExec("UPDATE testdb.foo2 SET val = 2")
+			db.MustExec("UPDATE testdb2.bar SET val = 2")
+
+			msgs := collectMessages(t, msgChan, want)
+			mustAssertMetadata(t, "update", msgs)
+
+			content, err := msgs[0].AsBytes()
+			assert.NoError(t, err)
+			var row map[string]any
+			require.NoError(t, json.Unmarshal(content, &row))
+			assert.Len(t, row, 2)
+			assert.Contains(t, row, "ID")
+			assert.EqualValues(t, "2", row["VAL"])
+		})
+
+		t.Run("Streaming delete changes...", func(t *testing.T) {
+			db.MustExec("DELETE FROM testdb.foo")
+			db.MustExec("DELETE FROM testdb.foo2")
+			db.MustExec("DELETE FROM testdb2.bar")
+
+			msgs := collectMessages(t, msgChan, want)
+			mustAssertMetadata(t, "delete", msgs)
+
+			content, err := msgs[0].AsBytes()
+			assert.NoError(t, err)
+			var row map[string]any
+			require.NoError(t, json.Unmarshal(content, &row))
+			assert.Len(t, row, 2)
+			assert.Contains(t, row, "ID")
+			assert.EqualValues(t, "2", row["VAL"])
+		})
+
+		require.NoError(t, stream.StopWithin(time.Second*10))
 	})
-
-	t.Run("Streaming delete changes...", func(t *testing.T) {
-		db.MustExec("DELETE FROM testdb.foo")
-		db.MustExec("DELETE FROM testdb.foo2")
-		db.MustExec("DELETE FROM testdb2.bar")
-
-		msgs := collectMessages(t, want)
-		mustAssertMetadata(t, "delete", msgs)
-
-		content, err := msgs[0].AsBytes()
-		assert.NoError(t, err)
-		var row map[string]any
-		require.NoError(t, json.Unmarshal(content, &row))
-		assert.Len(t, row, 2)
-		assert.Contains(t, row, "ID")
-		assert.EqualValues(t, "2", row["VAL"])
-	})
-
-	require.NoError(t, stream.StopWithin(time.Second*10))
 }
 
 func TestIntegrationOracleDBCDCLargeObjectColumnsToggle(t *testing.T) {
@@ -652,14 +773,6 @@ func TestIntegrationOracleDBCDCLargeObjectColumnsToggle(t *testing.T) {
 		err    error
 	)
 
-	cfg := `
-oracledb_cdc:
-  connection_string: %s
-  stream_snapshot: true
-  logminer:
-    lob_enabled: %s
-  include: ["%s"]`
-
 	t.Run("lob_enabled=false", func(t *testing.T) {
 		for range snapshotRows {
 			db.MustExec("INSERT INTO testdb.lobdisabled (varcharcol, inlinelob, outoflinelob) VALUES (:1, :2, :3)", "snapshot", inline, outofline)
@@ -668,8 +781,16 @@ oracledb_cdc:
 		var batch oracledbtest.Batch
 		t.Logf("%s: Launching component...", t.Name())
 		{
+			cfg := `
+oracledb_cdc:
+  connection_string: ` + connStr + `
+  stream_snapshot: true
+  logminer:
+    lob_enabled: false
+    min_scn_window_size: 0
+  include: ["TESTDB.LOBDISABLED"]`
 			streamBuilder := service.NewStreamBuilder()
-			require.NoError(t, streamBuilder.AddInputYAML(fmt.Sprintf(cfg, connStr, "false", "TESTDB.LOBDISABLED")))
+			require.NoError(t, streamBuilder.AddInputYAML(cfg))
 			require.NoError(t, streamBuilder.SetLoggerYAML(`level: WARN`))
 
 			require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
@@ -750,8 +871,16 @@ oracledb_cdc:
 		var batch oracledbtest.Batch
 		t.Logf("%s: Launching component...", t.Name())
 		{
+			cfg := `
+oracledb_cdc:
+  connection_string: ` + connStr + `
+  stream_snapshot: true
+  logminer:
+    lob_enabled: true
+    min_scn_window_size: 0
+  include: ["TESTDB.LOBENABLED"]`
 			streamBuilder := service.NewStreamBuilder()
-			require.NoError(t, streamBuilder.AddInputYAML(fmt.Sprintf(cfg, connStr, "true", "TESTDB.LOBENABLED")))
+			require.NoError(t, streamBuilder.AddInputYAML(cfg))
 			require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
 
 			require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
@@ -943,17 +1072,18 @@ func TestIntegrationOracleDBCDCSnapshotAndStreamingAllTypes(t *testing.T) {
 	{
 		cfg := `
 oracledb_cdc:
-  connection_string: %s
+  connection_string: ` + connStr + `
   stream_snapshot: true
   snapshot_max_batch_size: 100
   logminer:
     lob_enabled: true
     scn_window_size: 20000
+    min_scn_window_size: 0
     backoff_interval: 1s
   include: ["TESTDB.ALL_DATA_TYPES"]`
 
 		streamBuilder := service.NewStreamBuilder()
-		require.NoError(t, streamBuilder.AddInputYAML(fmt.Sprintf(cfg, connStr)))
+		require.NoError(t, streamBuilder.AddInputYAML(cfg))
 		require.NoError(t, streamBuilder.SetLoggerYAML(`level: DEBUG`))
 
 		require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
@@ -1130,283 +1260,280 @@ oracledb_cdc:
 	}
 }
 
-func TestIntegrationOracleDBCDCSnapshotSchema(t *testing.T) {
+func TestIntegrationOracleDBCDCReplicateTableSchema(t *testing.T) {
 	integration.CheckSkip(t)
-
 	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
-	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.schema_snap",
-		"CREATE TABLE testdb.schema_snap (id NUMBER(10) PRIMARY KEY, name VARCHAR2(100), created_at DATE, data RAW(16), score BINARY_FLOAT)"))
 
-	db.MustExec("INSERT INTO testdb.schema_snap VALUES (1, 'Alice', SYSDATE, HEXTORAW('DEADBEEF'), 1.5)")
-	db.MustExec("INSERT INTO testdb.schema_snap VALUES (2, 'Bob', SYSDATE, HEXTORAW('CAFEBABE'), 2.5)")
+	t.Run("Snapshot Schema", func(t *testing.T) {
+		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.schema_snap",
+			"CREATE TABLE testdb.schema_snap (id NUMBER(10) PRIMARY KEY, name VARCHAR2(100), created_at DATE, data RAW(16), score BINARY_FLOAT)"))
 
-	msgChan := make(chan *service.Message, 10)
-	cfg := fmt.Sprintf(`
+		db.MustExec("INSERT INTO testdb.schema_snap VALUES (1, 'Alice', SYSDATE, HEXTORAW('DEADBEEF'), 1.5)")
+		db.MustExec("INSERT INTO testdb.schema_snap VALUES (2, 'Bob', SYSDATE, HEXTORAW('CAFEBABE'), 2.5)")
+
+		msgChan := make(chan *service.Message, 10)
+		cfg := `
 oracledb_cdc:
-  connection_string: %s
+  connection_string: ` + connStr + `
   stream_snapshot: true
   snapshot_max_batch_size: 10
   logminer:
     scn_window_size: 20000
+    min_scn_window_size: 0
     backoff_interval: 1s
-  include: ["TESTDB.SCHEMA_SNAP"]`, connStr)
+  include: ["TESTDB.SCHEMA_SNAP"]`
 
-	streamBuilder := service.NewStreamBuilder()
-	require.NoError(t, streamBuilder.AddInputYAML(cfg))
-	require.NoError(t, streamBuilder.SetLoggerYAML(`level: DEBUG`))
-	require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
-		for _, msg := range mb {
-			msgChan <- msg
+		streamBuilder := service.NewStreamBuilder()
+		require.NoError(t, streamBuilder.AddInputYAML(cfg))
+		require.NoError(t, streamBuilder.SetLoggerYAML(`level: DEBUG`))
+		require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+			for _, msg := range mb {
+				msgChan <- msg
+			}
+			return nil
+		}))
+
+		stream, err := streamBuilder.Build()
+		require.NoError(t, err)
+		license.InjectTestService(stream.Resources())
+		go func() {
+			if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+				t.Error(err)
+			}
+		}()
+		go func() { <-t.Context().Done(); close(msgChan) }()
+
+		// Collect 2 snapshot messages
+		var msgs []*service.Message
+		for msg := range msgChan {
+			msgs = append(msgs, msg)
+			if len(msgs) == 2 {
+				break
+			}
 		}
-		return nil
-	}))
+		require.Len(t, msgs, 2)
 
-	stream, err := streamBuilder.Build()
-	require.NoError(t, err)
-	license.InjectTestService(stream.Resources())
-	go func() {
-		if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
-			t.Error(err)
+		for i, msg := range msgs {
+			s := oracledbtest.ExtractSchema(t, msg)
+			assert.Equal(t, "SCHEMA_SNAP", s.Name, "msg %d", i)
+			assert.Equal(t, schema.Object, s.Type, "msg %d", i)
+			require.Len(t, s.Children, 5, "msg %d: expected 5 columns", i)
+
+			id := oracledbtest.ChildByName(t, s, "ID")
+			assert.Equal(t, schema.Int64, id.Type, "NUMBER(10) with scale=0 should be Int64")
+			assert.True(t, id.Optional)
+
+			name := oracledbtest.ChildByName(t, s, "NAME")
+			assert.Equal(t, schema.String, name.Type)
+
+			createdAt := oracledbtest.ChildByName(t, s, "CREATED_AT")
+			assert.Equal(t, schema.Timestamp, createdAt.Type)
+
+			data := oracledbtest.ChildByName(t, s, "DATA")
+			assert.Equal(t, schema.ByteArray, data.Type)
+
+			score := oracledbtest.ChildByName(t, s, "SCORE")
+			assert.Equal(t, schema.Float32, score.Type)
+
+			fp := oracledbtest.ExtractFingerprint(t, msg)
+			assert.NotEmpty(t, fp, "msg %d: fingerprint should be present", i)
 		}
-	}()
-	go func() { <-t.Context().Done(); close(msgChan) }()
 
-	// Collect 2 snapshot messages
-	var msgs []*service.Message
-	for msg := range msgChan {
-		msgs = append(msgs, msg)
-		if len(msgs) == 2 {
-			break
-		}
-	}
-	require.Len(t, msgs, 2)
+		// Both snapshot messages should have the same fingerprint
+		fp0 := oracledbtest.ExtractFingerprint(t, msgs[0])
+		fp1 := oracledbtest.ExtractFingerprint(t, msgs[1])
+		assert.Equal(t, fp0, fp1, "snapshot messages should have identical fingerprints")
 
-	for i, msg := range msgs {
-		s := oracledbtest.ExtractSchema(t, msg)
-		assert.Equal(t, "SCHEMA_SNAP", s.Name, "msg %d", i)
-		assert.Equal(t, schema.Object, s.Type, "msg %d", i)
-		require.Len(t, s.Children, 5, "msg %d: expected 5 columns", i)
+		require.NoError(t, stream.StopWithin(10*time.Second))
+	})
 
-		id := oracledbtest.ChildByName(t, s, "ID")
-		assert.Equal(t, schema.Int64, id.Type, "NUMBER(10) with scale=0 should be Int64")
-		assert.True(t, id.Optional)
+	t.Run("Streaming Insert Schema", func(t *testing.T) {
+		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.schema_ins",
+			"CREATE TABLE testdb.schema_ins (id NUMBER(10) PRIMARY KEY, val VARCHAR2(50))"))
 
-		name := oracledbtest.ChildByName(t, s, "NAME")
-		assert.Equal(t, schema.String, name.Type)
-
-		createdAt := oracledbtest.ChildByName(t, s, "CREATED_AT")
-		assert.Equal(t, schema.Timestamp, createdAt.Type)
-
-		data := oracledbtest.ChildByName(t, s, "DATA")
-		assert.Equal(t, schema.ByteArray, data.Type)
-
-		score := oracledbtest.ChildByName(t, s, "SCORE")
-		assert.Equal(t, schema.Float32, score.Type)
-
-		fp := oracledbtest.ExtractFingerprint(t, msg)
-		assert.NotEmpty(t, fp, "msg %d: fingerprint should be present", i)
-	}
-
-	// Both snapshot messages should have the same fingerprint
-	fp0 := oracledbtest.ExtractFingerprint(t, msgs[0])
-	fp1 := oracledbtest.ExtractFingerprint(t, msgs[1])
-	assert.Equal(t, fp0, fp1, "snapshot messages should have identical fingerprints")
-
-	require.NoError(t, stream.StopWithin(10*time.Second))
-}
-
-func TestIntegrationOracleDBCDCStreamingInsertSchema(t *testing.T) {
-	integration.CheckSkip(t)
-
-	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
-	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.schema_ins",
-		"CREATE TABLE testdb.schema_ins (id NUMBER(10) PRIMARY KEY, val VARCHAR2(50))"))
-
-	msgChan := make(chan *service.Message, 10)
-	cfg := fmt.Sprintf(`
+		msgChan := make(chan *service.Message, 10)
+		cfg := `
 oracledb_cdc:
-  connection_string: %s
+  connection_string: ` + connStr + `
   stream_snapshot: false
   logminer:
     scn_window_size: 20000
+    min_scn_window_size: 0
     backoff_interval: 1s
-  include: ["TESTDB.SCHEMA_INS"]`, connStr)
+  include: ["TESTDB.SCHEMA_INS"]`
 
-	streamBuilder := service.NewStreamBuilder()
-	require.NoError(t, streamBuilder.AddInputYAML(cfg))
-	require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
-	require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
-		for _, msg := range mb {
-			msgChan <- msg
+		streamBuilder := service.NewStreamBuilder()
+		require.NoError(t, streamBuilder.AddInputYAML(cfg))
+		require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
+		require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+			for _, msg := range mb {
+				msgChan <- msg
+			}
+			return nil
+		}))
+
+		stream, err := streamBuilder.Build()
+		require.NoError(t, err)
+		license.InjectTestService(stream.Resources())
+		go func() {
+			if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+				t.Error(err)
+			}
+		}()
+		go func() { <-t.Context().Done(); close(msgChan) }()
+
+		time.Sleep(10 * time.Second)
+
+		db.MustExec("INSERT INTO testdb.schema_ins VALUES (1, 'hello')")
+		db.MustExec("INSERT INTO testdb.schema_ins VALUES (2, 'world')")
+
+		var msgs []*service.Message
+		for msg := range msgChan {
+			msgs = append(msgs, msg)
+			if len(msgs) >= 2 {
+				break
+			}
 		}
-		return nil
-	}))
+		require.Len(t, msgs, 2)
 
-	stream, err := streamBuilder.Build()
-	require.NoError(t, err)
-	license.InjectTestService(stream.Resources())
-	go func() {
-		if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
-			t.Error(err)
+		for i, msg := range msgs {
+			s := oracledbtest.ExtractSchema(t, msg)
+			assert.Equal(t, "SCHEMA_INS", s.Name, "msg %d", i)
+			require.Len(t, s.Children, 2, "msg %d", i)
 		}
-	}()
-	go func() { <-t.Context().Done(); close(msgChan) }()
 
-	time.Sleep(10 * time.Second)
+		// Fingerprint should be stable across inserts to the same table
+		assert.Equal(t, oracledbtest.ExtractFingerprint(t, msgs[0]), oracledbtest.ExtractFingerprint(t, msgs[1]))
 
-	db.MustExec("INSERT INTO testdb.schema_ins VALUES (1, 'hello')")
-	db.MustExec("INSERT INTO testdb.schema_ins VALUES (2, 'world')")
+		require.NoError(t, stream.StopWithin(10*time.Second))
+	})
 
-	var msgs []*service.Message
-	for msg := range msgChan {
-		msgs = append(msgs, msg)
-		if len(msgs) == 2 {
-			break
-		}
-	}
-	require.Len(t, msgs, 2)
+	t.Run("Streaming update schema", func(t *testing.T) {
+		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.schema_upd",
+			"CREATE TABLE testdb.schema_upd (id NUMBER(10) PRIMARY KEY, a VARCHAR2(50), b VARCHAR2(50), c VARCHAR2(50))"))
 
-	for i, msg := range msgs {
-		s := oracledbtest.ExtractSchema(t, msg)
-		assert.Equal(t, "SCHEMA_INS", s.Name, "msg %d", i)
-		require.Len(t, s.Children, 2, "msg %d", i)
-	}
-
-	// Fingerprint should be stable across inserts to the same table
-	assert.Equal(t, oracledbtest.ExtractFingerprint(t, msgs[0]), oracledbtest.ExtractFingerprint(t, msgs[1]))
-
-	require.NoError(t, stream.StopWithin(10*time.Second))
-}
-
-func TestIntegrationOracleDBCDCStreamingUpdateSchema(t *testing.T) {
-	integration.CheckSkip(t)
-
-	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
-	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.schema_upd",
-		"CREATE TABLE testdb.schema_upd (id NUMBER(10) PRIMARY KEY, a VARCHAR2(50), b VARCHAR2(50), c VARCHAR2(50))"))
-
-	msgChan := make(chan *service.Message, 10)
-	cfg := fmt.Sprintf(`
+		msgChan := make(chan *service.Message, 10)
+		cfg := `
 oracledb_cdc:
-  connection_string: %s
+  connection_string: ` + connStr + `
   stream_snapshot: false
   logminer:
     scn_window_size: 20000
+    min_scn_window_size: 0
     backoff_interval: 1s
-  include: ["TESTDB.SCHEMA_UPD"]`, connStr)
+  include: ["TESTDB.SCHEMA_UPD"]`
 
-	streamBuilder := service.NewStreamBuilder()
-	require.NoError(t, streamBuilder.AddInputYAML(cfg))
-	require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
-	require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
-		for _, msg := range mb {
-			msgChan <- msg
+		streamBuilder := service.NewStreamBuilder()
+		require.NoError(t, streamBuilder.AddInputYAML(cfg))
+		require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
+		require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+			for _, msg := range mb {
+				msgChan <- msg
+			}
+			return nil
+		}))
+
+		stream, err := streamBuilder.Build()
+		require.NoError(t, err)
+		license.InjectTestService(stream.Resources())
+		go func() {
+			if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+				t.Error(err)
+			}
+		}()
+		go func() { <-t.Context().Done(); close(msgChan) }()
+
+		time.Sleep(10 * time.Second)
+
+		// INSERT a row (all columns), then UPDATE only column B
+		db.MustExec("INSERT INTO testdb.schema_upd VALUES (1, 'x', 'y', 'z')")
+		db.MustExec("UPDATE testdb.schema_upd SET b = 'updated' WHERE id = 1")
+
+		var msgs []*service.Message
+		for msg := range msgChan {
+			msgs = append(msgs, msg)
+			if len(msgs) >= 2 {
+				break
+			}
 		}
-		return nil
-	}))
+		require.Len(t, msgs, 2)
 
-	stream, err := streamBuilder.Build()
-	require.NoError(t, err)
-	license.InjectTestService(stream.Resources())
-	go func() {
-		if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
-			t.Error(err)
-		}
-	}()
-	go func() { <-t.Context().Done(); close(msgChan) }()
+		// Both INSERT and UPDATE should carry the same full table schema
+		insertSchema := oracledbtest.ExtractSchema(t, msgs[0])
+		updateSchema := oracledbtest.ExtractSchema(t, msgs[1])
 
-	time.Sleep(10 * time.Second)
+		assert.Equal(t, "SCHEMA_UPD", insertSchema.Name)
+		assert.Equal(t, "SCHEMA_UPD", updateSchema.Name)
+		require.Len(t, insertSchema.Children, 4, "full table schema should have 4 columns")
+		require.Len(t, updateSchema.Children, 4, "UPDATE should carry full table schema, not just SET columns")
 
-	// INSERT a row (all columns), then UPDATE only column B
-	db.MustExec("INSERT INTO testdb.schema_upd VALUES (1, 'x', 'y', 'z')")
-	db.MustExec("UPDATE testdb.schema_upd SET b = 'updated' WHERE id = 1")
+		assert.Equal(t, oracledbtest.ExtractFingerprint(t, msgs[0]), oracledbtest.ExtractFingerprint(t, msgs[1]),
+			"INSERT and UPDATE on same table should have identical schema fingerprints")
 
-	var msgs []*service.Message
-	for msg := range msgChan {
-		msgs = append(msgs, msg)
-		if len(msgs) == 2 {
-			break
-		}
-	}
-	require.Len(t, msgs, 2)
+		require.NoError(t, stream.StopWithin(10*time.Second))
+	})
 
-	// Both INSERT and UPDATE should carry the same full table schema
-	insertSchema := oracledbtest.ExtractSchema(t, msgs[0])
-	updateSchema := oracledbtest.ExtractSchema(t, msgs[1])
+	t.Run("Streaming Delete Schema", func(t *testing.T) {
+		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.schema_del",
+			"CREATE TABLE testdb.schema_del (id NUMBER(10) PRIMARY KEY, val VARCHAR2(50))"))
 
-	assert.Equal(t, "SCHEMA_UPD", insertSchema.Name)
-	assert.Equal(t, "SCHEMA_UPD", updateSchema.Name)
-	require.Len(t, insertSchema.Children, 4, "full table schema should have 4 columns")
-	require.Len(t, updateSchema.Children, 4, "UPDATE should carry full table schema, not just SET columns")
-
-	assert.Equal(t, oracledbtest.ExtractFingerprint(t, msgs[0]), oracledbtest.ExtractFingerprint(t, msgs[1]),
-		"INSERT and UPDATE on same table should have identical schema fingerprints")
-
-	require.NoError(t, stream.StopWithin(10*time.Second))
-}
-
-func TestIntegrationOracleDBCDCStreamingDeleteSchema(t *testing.T) {
-	integration.CheckSkip(t)
-
-	connStr, db := oracledbtest.SetupTestWithOracleDBVersion(t)
-	require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.schema_del",
-		"CREATE TABLE testdb.schema_del (id NUMBER(10) PRIMARY KEY, val VARCHAR2(50))"))
-
-	msgChan := make(chan *service.Message, 10)
-	cfg := fmt.Sprintf(`
+		msgChan := make(chan *service.Message, 10)
+		cfg := `
 oracledb_cdc:
-  connection_string: %s
+  connection_string: ` + connStr + `
   stream_snapshot: false
   logminer:
     scn_window_size: 20000
+    min_scn_window_size: 0
     backoff_interval: 1s
-  include: ["TESTDB.SCHEMA_DEL"]`, connStr)
+  include: ["TESTDB.SCHEMA_DEL"]`
 
-	streamBuilder := service.NewStreamBuilder()
-	require.NoError(t, streamBuilder.AddInputYAML(cfg))
-	require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
-	require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
-		for _, msg := range mb {
-			msgChan <- msg
+		streamBuilder := service.NewStreamBuilder()
+		require.NoError(t, streamBuilder.AddInputYAML(cfg))
+		require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
+		require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+			for _, msg := range mb {
+				msgChan <- msg
+			}
+			return nil
+		}))
+
+		stream, err := streamBuilder.Build()
+		require.NoError(t, err)
+		license.InjectTestService(stream.Resources())
+		go func() {
+			if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+				t.Error(err)
+			}
+		}()
+		go func() { <-t.Context().Done(); close(msgChan) }()
+
+		time.Sleep(10 * time.Second)
+
+		db.MustExec("INSERT INTO testdb.schema_del VALUES (1, 'doomed')")
+		db.MustExec("DELETE FROM testdb.schema_del WHERE id = 1")
+
+		var msgs []*service.Message
+		for msg := range msgChan {
+			msgs = append(msgs, msg)
+			if len(msgs) >= 2 {
+				break
+			}
 		}
-		return nil
-	}))
+		require.Len(t, msgs, 2)
 
-	stream, err := streamBuilder.Build()
-	require.NoError(t, err)
-	license.InjectTestService(stream.Resources())
-	go func() {
-		if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
-			t.Error(err)
-		}
-	}()
-	go func() { <-t.Context().Done(); close(msgChan) }()
+		insertSchema := oracledbtest.ExtractSchema(t, msgs[0])
+		deleteSchema := oracledbtest.ExtractSchema(t, msgs[1])
 
-	time.Sleep(10 * time.Second)
+		assert.Equal(t, "SCHEMA_DEL", insertSchema.Name)
+		assert.Equal(t, "SCHEMA_DEL", deleteSchema.Name)
+		require.Len(t, deleteSchema.Children, 2, "DELETE should carry full table schema")
 
-	db.MustExec("INSERT INTO testdb.schema_del VALUES (1, 'doomed')")
-	db.MustExec("DELETE FROM testdb.schema_del WHERE id = 1")
+		assert.Equal(t, oracledbtest.ExtractFingerprint(t, msgs[0]), oracledbtest.ExtractFingerprint(t, msgs[1]),
+			"INSERT and DELETE on same table should have identical schema fingerprints")
 
-	var msgs []*service.Message
-	for msg := range msgChan {
-		msgs = append(msgs, msg)
-		if len(msgs) == 2 {
-			break
-		}
-	}
-	require.Len(t, msgs, 2)
-
-	insertSchema := oracledbtest.ExtractSchema(t, msgs[0])
-	deleteSchema := oracledbtest.ExtractSchema(t, msgs[1])
-
-	assert.Equal(t, "SCHEMA_DEL", insertSchema.Name)
-	assert.Equal(t, "SCHEMA_DEL", deleteSchema.Name)
-	require.Len(t, deleteSchema.Children, 2, "DELETE should carry full table schema")
-
-	assert.Equal(t, oracledbtest.ExtractFingerprint(t, msgs[0]), oracledbtest.ExtractFingerprint(t, msgs[1]),
-		"INSERT and DELETE on same table should have identical schema fingerprints")
-
-	require.NoError(t, stream.StopWithin(10*time.Second))
+		require.NoError(t, stream.StopWithin(10*time.Second))
+	})
 }
 
 func TestIntegrationOracleDBCDCSchemaConsistentAcrossPhases(t *testing.T) {
@@ -1423,15 +1550,16 @@ func TestIntegrationOracleDBCDCSchemaConsistentAcrossPhases(t *testing.T) {
 		outMsgsMu sync.Mutex
 	)
 
-	cfg := fmt.Sprintf(`
+	cfg := `
 oracledb_cdc:
-  connection_string: %s
+  connection_string: ` + connStr + `
   stream_snapshot: true
   snapshot_max_batch_size: 10
   logminer:
     scn_window_size: 20000
+    min_scn_window_size: 0
     backoff_interval: 1s
-  include: ["TESTDB.SCHEMA_PHASES"]`, connStr)
+  include: ["TESTDB.SCHEMA_PHASES"]`
 
 	streamBuilder := service.NewStreamBuilder()
 	require.NoError(t, streamBuilder.AddInputYAML(cfg))
@@ -1498,14 +1626,15 @@ func TestIntegrationOracleDBCDCSchemaColumnAdded(t *testing.T) {
 		"CREATE TABLE testdb.schema_drift (id NUMBER(10) PRIMARY KEY, name VARCHAR2(100))"))
 
 	msgChan := make(chan *service.Message, 10)
-	cfg := fmt.Sprintf(`
+	cfg := `
 oracledb_cdc:
-  connection_string: %s
+  connection_string: ` + connStr + `
   stream_snapshot: false
   logminer:
     scn_window_size: 20000
+    min_scn_window_size: 0
     backoff_interval: 1s
-  include: ["TESTDB.SCHEMA_DRIFT"]`, connStr)
+  include: ["TESTDB.SCHEMA_DRIFT"]`
 
 	streamBuilder := service.NewStreamBuilder()
 	require.NoError(t, streamBuilder.AddInputYAML(cfg))
@@ -1571,14 +1700,15 @@ func TestIntegrationOracleDBCDCMultiTableSchema(t *testing.T) {
 		"CREATE TABLE testdb.schema_t2 (x DATE, y RAW(16), z BINARY_FLOAT)"))
 
 	msgChan := make(chan *service.Message, 10)
-	cfg := fmt.Sprintf(`
+	cfg := `
 oracledb_cdc:
-  connection_string: %s
+  connection_string: ` + connStr + `
   stream_snapshot: false
   logminer:
     scn_window_size: 20000
+    min_scn_window_size: 0
     backoff_interval: 1s
-  include: ["TESTDB.SCHEMA_T1", "TESTDB.SCHEMA_T2"]`, connStr)
+  include: ["TESTDB.SCHEMA_T1", "TESTDB.SCHEMA_T2"]`
 
 	streamBuilder := service.NewStreamBuilder()
 	require.NoError(t, streamBuilder.AddInputYAML(cfg))
@@ -1674,15 +1804,16 @@ func TestIntegrationOracleDBCDCSchemaDataTypeConsistency(t *testing.T) {
 		outMsgsMu sync.Mutex
 	)
 
-	cfg := fmt.Sprintf(`
+	cfg := `
 oracledb_cdc:
-  connection_string: %s
+  connection_string: ` + connStr + `
   stream_snapshot: true
   snapshot_max_batch_size: 10
   logminer:
     scn_window_size: 20000
+    min_scn_window_size: 0
     backoff_interval: 1s
-  include: ["TESTDB.SCHEMA_TYPES"]`, connStr)
+  include: ["TESTDB.SCHEMA_TYPES"]`
 
 	streamBuilder := service.NewStreamBuilder()
 	require.NoError(t, streamBuilder.AddInputYAML(cfg))
@@ -1827,15 +1958,16 @@ func TestIntegrationOracleDBCDCLOB(t *testing.T) {
 
 		var batch oracledbtest.Batch
 
-		cfg := fmt.Sprintf(`
+		cfg := `
 oracledb_cdc:
-  connection_string: %s
+  connection_string: ` + connStr + `
   stream_snapshot: false
   logminer:
     lob_enabled: true
     scn_window_size: 20000
+    min_scn_window_size: 0
     backoff_interval: 1s
-  include: ["TESTDB.LOBTRIM"]`, connStr)
+  include: ["TESTDB.LOBTRIM"]`
 
 		streamBuilder := service.NewStreamBuilder()
 		require.NoError(t, streamBuilder.AddInputYAML(cfg))
@@ -1860,6 +1992,8 @@ oracledb_cdc:
 				t.Error(err)
 			}
 		}()
+
+		time.Sleep(10 * time.Second)
 
 		t.Log("Inserting initial LOB row and waiting CDC event")
 		{
@@ -1907,15 +2041,16 @@ oracledb_cdc:
 
 		var batch oracledbtest.Batch
 
-		cfg := fmt.Sprintf(`
+		cfg := `
 oracledb_cdc:
-  connection_string: %s
+  connection_string: ` + connStr + `
   stream_snapshot: false
   logminer:
     lob_enabled: true
     scn_window_size: 20000
+    min_scn_window_size: 0
     backoff_interval: 1s
-  include: ["TESTDB.LOBTRIMBASIC"]`, connStr)
+  include: ["TESTDB.LOBTRIMBASIC"]`
 
 		streamBuilder := service.NewStreamBuilder()
 		require.NoError(t, streamBuilder.AddInputYAML(cfg))
@@ -1940,6 +2075,8 @@ oracledb_cdc:
 				t.Error(err)
 			}
 		}()
+
+		time.Sleep(10 * time.Second)
 
 		t.Log("Inserting initial LOB row and waiting CDC event")
 		{
@@ -1984,15 +2121,16 @@ oracledb_cdc:
 
 		var batch oracledbtest.Batch
 
-		cfg := fmt.Sprintf(`
+		cfg := `
 oracledb_cdc:
-  connection_string: %s
+  connection_string: ` + connStr + `
   stream_snapshot: false
   logminer:
     lob_enabled: true
     scn_window_size: 20000
+    min_scn_window_size: 0
     backoff_interval: 1s
-  include: ["TESTDB.LOBTRIMBASICOOR"]`, connStr)
+  include: ["TESTDB.LOBTRIMBASICOOR"]`
 
 		streamBuilder := service.NewStreamBuilder()
 		require.NoError(t, streamBuilder.AddInputYAML(cfg))
@@ -2017,6 +2155,8 @@ oracledb_cdc:
 				t.Error(err)
 			}
 		}()
+
+		time.Sleep(10 * time.Second)
 
 		t.Log("Inserting initial LOB row and waiting CDC event")
 		{
@@ -2046,6 +2186,76 @@ oracledb_cdc:
 				return false
 			}, time.Minute*2, time.Millisecond*500, "expected a CDC event carrying the updated CLOB value after BASICFILE out-of-row LOB_TRIM handling")
 		}
+		require.NoError(t, stream.StopWithin(time.Second*10))
+	})
+
+	t.Run("Filtering excludes unmonitored tables", func(t *testing.T) {
+		// Two tables with out-of-line LOB columns. DISABLE STORAGE IN ROW forces Oracle to
+		// emit SELECT_LOB_LOCATOR / LOB_WRITE op codes (9/10/11) on every insert — exactly
+		// the operation class that was previously unfiltered by the LogMiner SQL query, allowing
+		// LOB writes to unmonitored tables to leak into the output.
+		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.lobfilter_included",
+			`CREATE TABLE testdb.lobfilter_included (id NUMBER GENERATED ALWAYS AS IDENTITY (NOCACHE) PRIMARY KEY, data NCLOB) LOB(data) STORE AS BASICFILE (DISABLE STORAGE IN ROW)`))
+		require.NoError(t, db.CreateTableWithSupplementalLoggingIfNotExists(t.Context(), "testdb.lobfilter_excluded",
+			`CREATE TABLE testdb.lobfilter_excluded (id NUMBER GENERATED ALWAYS AS IDENTITY (NOCACHE) PRIMARY KEY, data NCLOB) LOB(data) STORE AS BASICFILE (DISABLE STORAGE IN ROW)`))
+
+		var batch oracledbtest.Batch
+
+		// Only lobfilter_included is in the include list; lobfilter_excluded must produce no output.
+		cfg := `
+oracledb_cdc:
+  connection_string: ` + connStr + `
+  stream_snapshot: false
+  logminer:
+    lob_enabled: true
+    scn_window_size: 20000
+    min_scn_window_size: 0
+    backoff_interval: 1s
+  include: ["TESTDB.LOBFILTER_INCLUDED"]`
+
+		streamBuilder := service.NewStreamBuilder()
+		require.NoError(t, streamBuilder.AddInputYAML(cfg))
+		require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
+		require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+			batch.Lock()
+			defer batch.Unlock()
+			for _, msg := range mb {
+				msgBytes, err := msg.AsBytes()
+				assert.NoError(t, err)
+				batch.Msgs = append(batch.Msgs, string(msgBytes))
+			}
+			return nil
+		}))
+
+		stream, err := streamBuilder.Build()
+		require.NoError(t, err)
+		license.InjectTestService(stream.Resources())
+
+		go func() {
+			if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+				t.Error(err)
+			}
+		}()
+
+		// Allow LogMiner to start up and reach the current SCN before producing data.
+		time.Sleep(10 * time.Second)
+
+		lobVal := strings.Repeat("X", 5000)
+		for range 5 {
+			db.MustExec("INSERT INTO testdb.lobfilter_included (data) VALUES (:1)", lobVal)
+			db.MustExec("INSERT INTO testdb.lobfilter_excluded (data) VALUES (:1)", lobVal)
+		}
+
+		// Exactly 5 messages must arrive — those from lobfilter_included only.
+		assert.Eventually(t, func() bool {
+			return batch.Count() == 5
+		}, time.Minute*2, time.Millisecond*500, "timed out waiting for 5 messages from included table")
+
+		// No messages from lobfilter_excluded should leak through.
+		assert.Never(t, func() bool {
+			return batch.Count() > 5
+		}, time.Second*3, time.Millisecond*200, "received unexpected messages from excluded table")
+
 		require.NoError(t, stream.StopWithin(time.Second*10))
 	})
 }

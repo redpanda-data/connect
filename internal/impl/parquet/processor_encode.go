@@ -414,6 +414,55 @@ func parquetNodeFromCommonField(field schema.Common, tsUnit parquet.TimeUnit) (p
 		return nil, fmt.Errorf("field %q is BigDecimal which has no fixed precision/scale; cast or coerce upstream before parquet_encode", field.Name)
 	case schema.ByteArray:
 		n = parquet.Leaf(parquet.ByteArrayType)
+	case schema.Date:
+		n = parquet.Date()
+	case schema.TimeOfDay:
+		// Iceberg, Avro, and the Common schema model all treat
+		// time-of-day as a unit-tagged integer. parquet has a parallel
+		// representation via parquet.Time(unit). When the Common schema
+		// omits the Logical params we default to millis to match the
+		// Avro spec's preferred wire form for time-of-day.
+		unit := parquet.Millisecond
+		if field.Logical != nil && field.Logical.TimeOfDay != nil {
+			switch field.Logical.TimeOfDay.Unit {
+			case schema.TimeUnitMicros:
+				unit = parquet.Microsecond
+			case schema.TimeUnitNanos:
+				unit = parquet.Nanosecond
+			case schema.TimeUnitSeconds:
+				return nil, fmt.Errorf("time-of-day field %q has unit SECONDS which parquet cannot express; coerce upstream to MILLIS, MICROS, or NANOS", field.Name)
+			}
+		}
+		n = parquet.Time(unit)
+	case schema.UUID:
+		// parquet.UUID() is a 16-byte fixed-length byte array with the
+		// UUID logical-type annotation. The encoding coercion visitor
+		// handles string→[]byte conversion at encode time.
+		n = parquet.UUID()
+	case schema.Map:
+		// Common-schema maps key on string by convention; the single
+		// child describes the value type.
+		if len(field.Children) != 1 {
+			return nil, fmt.Errorf("source schema contains map '%v' that does not define a single value type child", field.Name)
+		}
+		valueNode, err := parquetNodeFromCommonField(field.Children[0], tsUnit)
+		if err != nil {
+			return nil, err
+		}
+		n = parquet.Map(parquet.String(), valueNode)
+	case schema.Union:
+		// Parquet has no native union; we'd need to flatten to a single
+		// branch and lose the type information for the others. Refuse
+		// loudly rather than silently picking the wrong branch — the
+		// operator can collapse the union upstream (typically by
+		// projecting to the single non-null variant) before encoding.
+		return nil, fmt.Errorf("source schema contains union '%v' that parquet cannot express; flatten to a single branch upstream before parquet_encode", field.Name)
+	case schema.Null:
+		// A schema that declares a column as always-null is degenerate
+		// for parquet, which requires every column to have a physical
+		// type. Match the Avro spec convention that null can be the
+		// type of a union branch but not the type of a record field.
+		return nil, fmt.Errorf("source schema contains field %q with type NULL; parquet requires a concrete physical type, drop the field or wrap it in a union upstream", field.Name)
 	case schema.Array:
 		if len(field.Children) != 1 {
 			return nil, fmt.Errorf("source schema contains array '%v' that does not define a child type", field.Name)

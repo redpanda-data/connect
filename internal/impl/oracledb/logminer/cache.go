@@ -9,6 +9,7 @@
 package logminer
 
 import (
+	"context"
 	"math"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -19,11 +20,17 @@ import (
 // at which point we know it's safe to flush transactions to the Connect pipeline.
 // If a rollback events is received the cache will be be cleared instead of flushed.
 type TransactionCache interface {
-	StartTransaction(txnID sqlredo.TransactionID, scn uint64)
-	AddEvent(txnID sqlredo.TransactionID, scn uint64, event *sqlredo.DMLEvent)
-	GetTransaction(txnID sqlredo.TransactionID) *Transaction
-	CommitTransaction(txnID sqlredo.TransactionID)
-	RollbackTransaction(txnID sqlredo.TransactionID)
+	StartTransaction(ctx context.Context, txnID sqlredo.TransactionID, scn uint64) error
+	AddEvent(ctx context.Context, txnID sqlredo.TransactionID, scn uint64, event *sqlredo.DMLEvent) error
+	GetTransaction(ctx context.Context, txnID sqlredo.TransactionID) (*Transaction, error)
+	CommitTransaction(ctx context.Context, txnID sqlredo.TransactionID) error
+	RollbackTransaction(ctx context.Context, txnID sqlredo.TransactionID) error
+	// LowWatermarkSCN returns the lowest start SCN among all currently open
+	// (uncommitted) transactions, excluding excludeTxnID. Returns math.MaxUint64
+	// if no other open transactions exist. Used to compute a safe checkpoint SCN
+	// on commit: advancing the checkpoint past an open transaction's start SCN
+	// would cause its already-seen DML events to be missed on restart.
+	LowWatermarkSCN(excludeTxnID sqlredo.TransactionID) uint64
 }
 
 // Transaction buffers events until commit
@@ -62,12 +69,12 @@ func NewInMemoryCache(maxTransactionEvents int, metrics *service.Metrics, logger
 // StartTransaction initializes a new transaction in the cache with the given transaction ID and SCN.
 // If the transaction already exists in the cache it is left untouched so that previously
 // accumulated events are not lost when LogMiner re-emits the START record across polling cycles.
-func (tc *InMemoryCache) StartTransaction(txnID sqlredo.TransactionID, scn uint64) {
+func (tc *InMemoryCache) StartTransaction(_ context.Context, txnID sqlredo.TransactionID, scn uint64) error {
 	if _, discarded := tc.discardedTxns[txnID]; discarded {
-		return
+		return nil
 	}
 	if _, exists := tc.transactions[txnID]; exists {
-		return
+		return nil
 	}
 	tc.transactions[txnID] = &Transaction{
 		ID:     txnID,
@@ -75,14 +82,15 @@ func (tc *InMemoryCache) StartTransaction(txnID sqlredo.TransactionID, scn uint6
 		Events: []*sqlredo.DMLEvent{},
 	}
 	tc.transactionsMetric.Incr(1)
+	return nil
 }
 
 // AddEvent adds a DML event to the specified transaction's buffer.
 // If the transaction doesn't exist, it creates a new transaction with the event.
 // If maxTransactionEvents is set and the buffer exceeds it, the transaction is discarded.
-func (tc *InMemoryCache) AddEvent(txnID sqlredo.TransactionID, scn uint64, event *sqlredo.DMLEvent) {
+func (tc *InMemoryCache) AddEvent(_ context.Context, txnID sqlredo.TransactionID, scn uint64, event *sqlredo.DMLEvent) error {
 	if _, discarded := tc.discardedTxns[txnID]; discarded {
-		return
+		return nil
 	}
 	if txn, exists := tc.transactions[txnID]; exists {
 		txn.Events = append(txn.Events, event)
@@ -107,30 +115,30 @@ func (tc *InMemoryCache) AddEvent(txnID sqlredo.TransactionID, scn uint64, event
 		tc.transactionsMetric.Incr(1)
 		tc.eventsMetric.Incr(1)
 	}
+	return nil
 }
 
 // GetTransaction retrieves the transaction with the given ID from the cache.
-// Returns nil if the transaction doesn't exist.
-func (tc *InMemoryCache) GetTransaction(txnID sqlredo.TransactionID) *Transaction {
-	return tc.transactions[txnID]
+// Returns (nil, nil) if the transaction doesn't exist.
+func (tc *InMemoryCache) GetTransaction(_ context.Context, txnID sqlredo.TransactionID) (*Transaction, error) {
+	return tc.transactions[txnID], nil
 }
 
 // CommitTransaction removes the committed transaction from the cache.
-func (tc *InMemoryCache) CommitTransaction(txnID sqlredo.TransactionID) {
+func (tc *InMemoryCache) CommitTransaction(_ context.Context, txnID sqlredo.TransactionID) error {
 	delete(tc.discardedTxns, txnID)
 	tx, ok := tc.transactions[txnID]
 	if !ok {
-		return
+		return nil
 	}
 	tc.eventsMetric.Decr(int64(len(tx.Events)))
-
 	delete(tc.transactions, txnID)
 	tc.transactionsMetric.Decr(1)
+	return nil
 }
 
 // LowWatermarkSCN returns the lowest start SCN among all currently open
 // (uncommitted) transactions. Returns math.MaxUint64 if no open transactions.
-// This behaviour is specific to in-memory caches and not part of the cache interface.
 func (tc *InMemoryCache) LowWatermarkSCN(excludeTxnID sqlredo.TransactionID) uint64 {
 	lowestOpenSCN := uint64(math.MaxUint64)
 	for id, txn := range tc.transactions {
@@ -142,14 +150,14 @@ func (tc *InMemoryCache) LowWatermarkSCN(excludeTxnID sqlredo.TransactionID) uin
 }
 
 // RollbackTransaction removes the rolled back transaction from the cache, discarding all buffered events.
-func (tc *InMemoryCache) RollbackTransaction(txnID sqlredo.TransactionID) {
+func (tc *InMemoryCache) RollbackTransaction(_ context.Context, txnID sqlredo.TransactionID) error {
 	delete(tc.discardedTxns, txnID)
 	tx, ok := tc.transactions[txnID]
 	if !ok {
-		return
+		return nil
 	}
 	tc.eventsMetric.Decr(int64(len(tx.Events)))
-
 	delete(tc.transactions, txnID)
 	tc.transactionsMetric.Decr(1)
+	return nil
 }
