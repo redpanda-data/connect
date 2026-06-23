@@ -37,6 +37,21 @@ It writes the YAML to `-o`/`--output` (or stdout), prints a one-line warning
 summary to stderr, and exits `0` even when there are TODO markers — non-zero only
 on unusable input.
 
+### Web playground
+
+For interactive use, `convert server` starts a local two-pane playground — paste a
+Kafka Connect config on the left, see the live Redpanda Connect YAML (with `# TODO`
+markers and a warning count) on the right:
+
+```bash
+rpk connect convert server                 # http://localhost:4196
+rpk connect convert server --http :8080    # custom bind address
+```
+
+It serves a single self-contained page and a `POST /convert` endpoint that calls
+the same engine; the UI updates as you type. Localhost-bound; intended as a local
+dev tool. Implementation lives in `internal/cli/convertserver`.
+
 ### Getting the Kafka Connect JSON
 
 The converter accepts JSON only (it never talks to the network itself). Fetch the
