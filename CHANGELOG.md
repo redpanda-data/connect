@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+### Added
+
+- aws_s3: Added `sqs.idle_poll_period` field to back off SQS polling when the queue is empty. The default `0s` preserves the historical fixed 500ms throttle between empty receives; a larger duration reduces `ReceiveMessage` request volume on idle queues at the cost of first-message latency. ([@peczenyj](https://github.com/peczenyj), [#4479](https://github.com/redpanda-data/connect/pull/4479))
+
 ## 4.97.0 - 2026-06-18
 
 ### Added

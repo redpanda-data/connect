@@ -92,6 +92,7 @@ input:
       max_messages: 10
       wait_time_seconds: 0
       nack_visibility_timeout: 0
+      idle_poll_period: 0s
 ```
 
 --
@@ -427,5 +428,14 @@ Custom SQS Nack Visibility timeout in seconds. Default is 0
 *Type*: `int`
 
 *Default*: `0`
+
+=== `sqs.idle_poll_period`
+
+How long to wait before the next SQS `ReceiveMessage` poll after a receive returns no messages. This back-off is applied *in addition to* `wait_time_seconds` long-polling and lets a mostly-idle queue issue far fewer requests, which is useful when polling SQS from outside AWS (for example across a NAT gateway). It trades latency for fewer requests: the first message arriving after an idle period may wait up to this long before being picked up, so keep it small for latency-sensitive queues. The default `0s` preserves the historical behaviour of a fixed 500ms throttle between empty polls; values below 500ms are raised to 500ms.
+
+
+*Type*: `string`
+
+*Default*: `"0s"`
 
 
