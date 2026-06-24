@@ -54,15 +54,17 @@ require (
 	github.com/authzed/authzed-go v1.8.0
 	github.com/authzed/grpcutil v0.0.0-20260105210157-e237581949c2
 	github.com/aws/aws-lambda-go v1.54.0
-	github.com/aws/aws-sdk-go-v2 v1.41.6
+	github.com/aws/aws-sdk-go-v2 v1.41.7
 	github.com/aws/aws-sdk-go-v2/config v1.32.16
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.15
 	github.com/aws/aws-sdk-go-v2/feature/dynamodb/expression v1.8.36
+	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.22.8
 	github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager v0.1.11
 	github.com/aws/aws-sdk-go-v2/service/athena v1.57.3
 	github.com/aws/aws-sdk-go-v2/service/bedrockruntime v1.50.4
 	github.com/aws/aws-sdk-go-v2/service/cloudwatch v1.55.2
 	github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs v1.65.0
+	github.com/aws/aws-sdk-go-v2/service/costexplorer v1.63.8
 	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.57.0
 	github.com/aws/aws-sdk-go-v2/service/firehose v1.42.12
 	github.com/aws/aws-sdk-go-v2/service/glue v1.139.3
@@ -71,6 +73,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.99.1
 	github.com/aws/aws-sdk-go-v2/service/sns v1.39.14
 	github.com/aws/aws-sdk-go-v2/service/sqs v1.42.24
+	github.com/aws/aws-sdk-go-v2/service/ssm v1.68.2
 	github.com/aws/aws-sdk-go-v2/service/sts v1.42.0
 	github.com/beanstalkd/go-beanstalk v0.2.0
 	github.com/benhoyt/goawk v1.31.0
@@ -232,7 +235,6 @@ require (
 	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
 	github.com/apache/arrow-go/v18 v18.6.0 // indirect
 	github.com/apache/arrow/go/v12 v12.0.1 // indirect
-	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.22.8 // indirect
 	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.41.4 // indirect
 	github.com/aws/aws-sdk-go-v2/service/signin v1.0.10 // indirect
 	github.com/bitfield/gotestdox v0.2.2 // indirect
@@ -387,8 +389,8 @@ require (
 	github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue v1.20.36 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.18.22 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/rds/auth v1.6.20
-	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.22 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.7.22 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.23 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.7.23 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/v4a v1.4.23 // indirect
 	github.com/aws/aws-sdk-go-v2/service/dynamodbstreams v1.32.13
 	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.8 // indirect
@@ -398,7 +400,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.19.22 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sso v1.30.16 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.35.20 // indirect
-	github.com/aws/smithy-go v1.25.0
+	github.com/aws/smithy-go v1.25.1
 	github.com/aymerick/douceur v0.2.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bits-and-blooms/bitset v1.24.4 // indirect

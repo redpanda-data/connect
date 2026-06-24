@@ -1,0 +1,39 @@
+name: iceberg-orders-sink-smoke
+description: |
+  1-vCPU smoke for the iceberg sink bench (Connect + Kafka Connect). Small
+  pre-seeded dataset sized so a single vCPU still clears the 15-minute floor at
+  a conservative ~15 MB/s estimate. Use this to validate the Glue REST + SigV4
+  path on both engines before the full sweep.
+
+direction: sink
+connector: iceberg
+stack: iceberg
+
+infra:
+  runner:
+    instance_type: c8g.4xlarge
+
+dataset:
+  initial_rows: 12000000    # ~13.7 GiB at 1200 B/row → ~915 s at 15 MB/s ≥ 15 min
+  row_size_bytes: 1200
+  seeder: json-orders
+  expected_peak_mb_s: 15
+
+pipeline:
+  # Decouple the redpanda input (proven ~57k rec/s) from the commit-latency-
+  # bound iceberg output: the input fills this buffer at full speed so each
+  # output batch can pull a full `count` from it, putting ~50k records in each
+  # ~320ms Glue commit instead of ~300. Tests whether config alone closes the
+  # gap to KC (which commits ~1.3M records per snapshot via its coordinator).
+  buffer:
+    memory:
+      limit: 536870912   # 512 MiB
+  output:
+    iceberg:
+      max_in_flight: 8
+      batching:
+        count: 50000
+        period: 10s
+
+matrix:
+  cpu_points: [1]

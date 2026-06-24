@@ -1,0 +1,61 @@
+name: mysql-orders-cdc
+description: |
+  Stream changes from a high-write MySQL orders table (target 150K writes/sec
+  ≈ 180 MB/s) so the mysql_cdc input — not the producer — is the bottleneck
+  across the whole CPU sweep. TRUNCATE between sweep points keeps the table
+  size bounded (no Trap 3).
+
+connector: mysql_cdc
+stack: mysql
+
+infra:
+  source:
+    instance_class: db.r6g.4xlarge   # was 2xlarge; bumped 2026-06-01 to diagnose
+                                       # whether KC's vCPU=4/8 plateau at 17 MB/s is
+                                       # producer-bound (gp3 throttling) or KC-side.
+                                       # See references/scenario-sizing.md ranked
+                                       # workarounds for producer-bound symptoms.
+    storage_gb: 800                    # 4xlarge needs more storage to maintain IOPS budget
+    iops: 24000                        # 2x the IOPS baseline
+    # parameters left at module defaults: binlog_format=ROW, binlog_row_image=FULL,
+    # binlog_checksum=NONE. backup_retention_period=1 is set in the module itself
+    # because it's a required-for-CDC constant, not a per-scenario knob.
+  runner:
+    instance_type: c8g.4xlarge
+
+dataset:
+  initial_rows: 0          # TRUNCATE-before-every-point makes a seed pointless;
+                           # ensureTable still runs to CREATE the table.
+  row_size_bytes: 1200
+  tables: [orders]
+  seeder: cdc-rows-mysql
+
+workload:
+  write_rate_per_sec: 150000
+  duration: 15m
+  warmup: 2m
+
+pipeline:
+  cache_resources:
+    - label: bench_checkpoint
+      memory: {}
+  input:
+    mysql_cdc:
+      flavor: mysql
+      dsn: ${MYSQL_DSN}
+      tls:
+        skip_cert_verify: true   # RDS-internal CA isn't in the runner image;
+                                  # mysql_cdc uses NewTLSField (no `enabled` toggle).
+      stream_snapshot: false
+      tables: [orders]
+      checkpoint_cache: bench_checkpoint
+      checkpoint_key: mysql_bench
+      batching:
+        count: 5000
+        period: 1s
+
+matrix:
+  cpu_points: [1, 2, 4, 8]
+
+reset:
+  - sql: "TRUNCATE TABLE orders"
