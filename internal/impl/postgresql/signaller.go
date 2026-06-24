@@ -20,20 +20,20 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/replication"
 )
 
-var _ replication.Signaller = (*eventSignaller)(nil)
+var _ replication.Signaller = (*controlSignaller)(nil)
 
-type eventSignaller struct {
+type controlSignaller struct {
 	schema       string
 	tableName    string
 	onSignalChan chan *string
 	log          *service.Logger
 
-	eventPending atomic.Bool
+	signalPending atomic.Bool
 }
 
-// NewEventSignaller creates an eventSignaller that detects signal INSERTs on the given schema.tableName.
-func NewEventSignaller(schema, tableName string, log *service.Logger) (*eventSignaller, error) {
-	return &eventSignaller{
+// NewControlSignaller creates an instance of replication.Signaller that detects signal INSERTs on the given schema.tableName.
+func NewControlSignaller(schema, tableName string, log *service.Logger) (*controlSignaller, error) {
+	return &controlSignaller{
 		schema:       schema,
 		tableName:    tableName,
 		onSignalChan: make(chan *string, 1),
@@ -43,8 +43,8 @@ func NewEventSignaller(schema, tableName string, log *service.Logger) (*eventSig
 
 // Listen checks for signal related events, returning true when the message is a signal
 // so the caller can decide whether they want to skip it or publish it to the pipeline.
-func (o *eventSignaller) Listen(_ context.Context, event any) (bool, error) {
-	msg, ok := event.(pglogicalstream.StreamMessage)
+func (o *controlSignaller) Listen(_ context.Context, signal any) (bool, error) {
+	msg, ok := signal.(pglogicalstream.StreamMessage)
 	if !ok {
 		return false, nil
 	}
@@ -65,7 +65,7 @@ func (o *eventSignaller) Listen(_ context.Context, event any) (bool, error) {
 		return false, fmt.Errorf("expected string for %s.data column, got %T", o.tableName, row["data"])
 	}
 
-	var sig replication.EventSignal
+	var sig replication.ControlSignal
 	if err := json.Unmarshal([]byte(dataStr), &sig); err != nil {
 		return false, fmt.Errorf("unmarshaling signal %s.data: %w", o.tableName, err)
 	}
@@ -81,7 +81,7 @@ func (o *eventSignaller) Listen(_ context.Context, event any) (bool, error) {
 	log := o.log.With("id", sig.ID, "type", sig.Type)
 	log.Infof("Signal %q received: operation=%s lsn=%v", sig.Type, msg.Operation, msg.LSN)
 
-	o.eventPending.Store(true)
+	o.signalPending.Store(true)
 	select {
 	case o.onSignalChan <- msg.LSN:
 	default:
@@ -89,18 +89,18 @@ func (o *eventSignaller) Listen(_ context.Context, event any) (bool, error) {
 	return true, nil
 }
 
-func (o *eventSignaller) OnSignal() <-chan *string {
+func (o *controlSignaller) OnSignal() <-chan *string {
 	return o.onSignalChan
 }
 
-func (o *eventSignaller) IsPending() bool {
-	return o.eventPending.Load()
+func (o *controlSignaller) IsPending() bool {
+	return o.signalPending.Load()
 }
 
-func (o *eventSignaller) Reset() {
-	o.eventPending.Store(false)
+func (o *controlSignaller) Reset() {
+	o.signalPending.Store(false)
 }
 
-func (*eventSignaller) ValidateChannel(_ context.Context) error {
+func (*controlSignaller) ValidateChannel(_ context.Context) error {
 	return nil
 }

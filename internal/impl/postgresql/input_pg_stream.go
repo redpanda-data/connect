@@ -367,8 +367,7 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 	}
 
 	// Initialise signaller eagerly so IsPending() is safe to call before the first Connect().
-	i.eventSig, err = NewEventSignaller(schema, signalTableName, logger)
-	if err != nil {
+	if i.controlSig, err = NewControlSignaller(schema, signalTableName, logger); err != nil {
 		return nil, fmt.Errorf("unable to create event signaller: %w", err)
 	}
 
@@ -413,7 +412,7 @@ type pgStreamInput struct {
 
 	snapshotMetrics *service.MetricGauge
 	replicationLag  *service.MetricGauge
-	eventSig        replication.Signaller
+	controlSig      replication.Signaller
 	stopSig         *shutdown.Signaller
 
 	// IAM authentication fields
@@ -429,10 +428,10 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 		}
 	}
 
-	if p.eventSig.IsPending() {
+	if p.controlSig.IsPending() {
 		p.logger.Infof("snapshot signal pending, dropping replication slot for re-snapshot")
 		p.streamConfig.StreamOldData = true
-		p.eventSig.Reset()
+		p.controlSig.Reset()
 		if err := p.dropReplicationSlot(ctx); err != nil {
 			return fmt.Errorf("dropping replication slot for re-snapshot: %w", err)
 		}
@@ -507,7 +506,7 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 				err   error
 			)
 			for _, msg := range batch {
-				if isSignal, err := p.eventSig.Listen(ctx, msg); err != nil {
+				if isSignal, err := p.controlSig.Listen(ctx, msg); err != nil {
 					p.logger.Errorf("failed to detect if change event was snapshot signal, continuing to process change events: %s", err)
 					continue
 				} else if isSignal {
@@ -554,7 +553,7 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 					nextTimedBatchChan = time.After(d)
 				}
 			}
-		case lsn := <-p.eventSig.OnSignal():
+		case lsn := <-p.controlSig.OnSignal():
 			p.logger.Infof("snapshot signal received, pausing stream to re-run snapshot")
 			if lsn != nil {
 				if err := pgStream.AckLSN(ctx, *lsn); err != nil {

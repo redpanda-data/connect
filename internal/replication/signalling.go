@@ -13,8 +13,8 @@ import "context"
 // DefaultSignalTableName is the default name of the table used to send signals to the connector.
 var DefaultSignalTableName = "rpcn_signal_table"
 
-// EventSignal represents a signal event decoded from the signal table's data column.
-type EventSignal struct {
+// ControlSignal represents a insert into the signal table.
+type ControlSignal struct {
 	ID              string
 	Type            string
 	DataCollections []string `json:"data-collections"`
@@ -26,7 +26,7 @@ type Signaller interface {
 	ValidateChannel(ctx context.Context) error
 	// Listen detects whether a signal has been received from the channel.
 	// Returns true if the event was a signal and should not be published into the pipeline.
-	Listen(ctx context.Context, event any) (bool, error)
+	Listen(ctx context.Context, signal any) (bool, error)
 	// OnSignal returns a channel that receives the LSN of the triggering event each time a signal is detected.
 	OnSignal() <-chan *string
 
