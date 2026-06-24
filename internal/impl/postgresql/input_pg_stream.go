@@ -336,7 +336,7 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 			TLSConfig:        pgConnConfig.TLSConfig,
 			DBRawDSN:         dsn,
 			DBSchema:         schema,
-			DBTables:         append(tables, signalTableName),
+			DBTables:         tables,
 			RefreshAuthToken: iamAuthTokenBuilder,
 
 			IncludeTxnMarkers:        includeTxnMarkers,

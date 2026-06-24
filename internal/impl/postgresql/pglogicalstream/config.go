@@ -40,7 +40,10 @@ type Config struct {
 	BatchSize int
 	// If true, include BEGIN and COMMIT messages in the stream
 	IncludeTxnMarkers bool
-	SignalTableName   string
+	// SignalTableName is the name of the signal table. Rows inserted into this
+	// table are treated as control signals rather than data, and the table is
+	// excluded from snapshot scans.
+	SignalTableName string
 
 	Logger *service.Logger
 

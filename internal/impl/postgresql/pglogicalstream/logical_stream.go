@@ -47,8 +47,6 @@ type Stream struct {
 
 	includeTxnMarkers       bool
 	slotName                string
-	streamingTables         []TableFQN
-	snapshotTables          []TableFQN
 	snapshotBatchSize       int
 	decodingPluginArguments []string
 	logger                  *service.Logger
@@ -106,10 +104,6 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		tables = append(tables, TableFQN{Schema: schema, Table: normalized})
 	}
 
-	snapshotTables := slices.DeleteFunc(slices.Clone(tables), func(t TableFQN) bool {
-		return t.Table == config.SignalTableName
-	})
-
 	batchSize := 1000
 	if config.BatchSize > 0 {
 		batchSize = config.BatchSize
@@ -120,8 +114,6 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		errors:                make(chan error, 1),
 		slotName:              config.ReplicationSlotName,
 		snapshotBatchSize:     batchSize,
-		streamingTables:       tables,
-		snapshotTables:        snapshotTables,
 		maxSnapshotWorkers:    config.MaxSnapshotWorkers,
 		logger:                config.Logger,
 		shutSig:               shutdown.NewSignaller(),
@@ -175,9 +167,18 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 
 	stream.decodingPluginArguments = pluginArguments
 
+	tablesForPublication := tables
+	if config.SignalTableName != "" {
+		normalizedSignalTable, err := sanitize.NormalizePostgresIdentifier(config.SignalTableName)
+		if err != nil {
+			return nil, fmt.Errorf("invalid signal table name %q: %w", config.SignalTableName, err)
+		}
+		tablesForPublication = append(slices.Clone(tables), TableFQN{Schema: schema, Table: normalizedSignalTable})
+	}
+
 	pubName := "pglog_stream_" + config.ReplicationSlotName
-	stream.logger.Infof("Creating publication %s for tables: %s", pubName, tables)
-	if err = CreatePublication(ctx, stream.pgConn, pubName, tables); err != nil {
+	stream.logger.Infof("Creating publication %s for tables: %s", pubName, tablesForPublication)
+	if err = CreatePublication(ctx, stream.pgConn, pubName, tablesForPublication); err != nil {
 		return nil, err
 	}
 	cleanups = append(cleanups, func() {
@@ -254,7 +255,7 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		defer done()
 		var startLSN LSN
 		if snapshotter != nil {
-			if err = stream.processSnapshot(ctx, snapshotter); err != nil {
+			if err = stream.processSnapshot(ctx, tables, snapshotter); err != nil {
 				stream.errors <- fmt.Errorf("processing snapshot: %w", err)
 				return
 			}
@@ -579,7 +580,7 @@ func (s *Stream) processChange(ctx context.Context, msgLSN LSN, xld XLogData, re
 	}
 }
 
-func (s *Stream) processSnapshot(ctx context.Context, snapshotter *snapshotter) error {
+func (s *Stream) processSnapshot(ctx context.Context, tables []TableFQN, snapshotter *snapshotter) error {
 	if err := snapshotter.Prepare(ctx); err != nil {
 		return fmt.Errorf("unable to prepare snapshot: %w", err)
 	}
@@ -591,7 +592,7 @@ func (s *Stream) processSnapshot(ctx context.Context, snapshotter *snapshotter) 
 
 	snapshotTasks := []func(context.Context) error{}
 
-	for _, table := range s.snapshotTables {
+	for _, table := range tables {
 		s.logger.Infof("Planning snapshot scan for table: %v", table)
 		planStartTime := time.Now()
 		primaryKeyColumns, err := s.getPrimaryKeyColumn(ctx, table)
