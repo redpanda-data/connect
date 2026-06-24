@@ -1029,7 +1029,7 @@ func (s *Client) DescribeWritableFields(ctx context.Context, sobject string) (ma
 	}
 	fields := make(map[string]struct{}, len(dr.Fields))
 	for _, f := range dr.Fields {
-		if f.Updateable {
+		if f.Updateable || f.Createable {
 			fields[f.Name] = struct{}{}
 		}
 	}

@@ -484,7 +484,7 @@ func (s *salesforceSinkOutput) blockFields(sobject string, newBlocked []string) 
 	}
 }
 
-// filterRecord returns a copy of rec containing only updateable fields.
+// filterRecord returns a copy of rec containing only writable (createable or updateable) fields.
 func filterRecord(rec map[string]any, writable map[string]struct{}) map[string]any {
 	out := make(map[string]any, len(writable))
 	for k, v := range rec {

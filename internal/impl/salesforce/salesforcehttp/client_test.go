@@ -108,6 +108,91 @@ func mustParseURL(s string) *url.URL {
 	return u
 }
 
+func TestDescribeWritableFields(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name         string
+		fields       []map[string]any
+		wantWritable []string
+		wantExcluded []string
+	}{
+		{
+			name: "updateable only included",
+			fields: []map[string]any{
+				{"name": "Name", "createable": false, "updateable": true},
+				{"name": "ReadOnly__c", "createable": false, "updateable": false},
+			},
+			wantWritable: []string{"Name"},
+			wantExcluded: []string{"ReadOnly__c"},
+		},
+		{
+			name: "createable only included (Platform Event custom fields)",
+			fields: []map[string]any{
+				{"name": "MyField__c", "createable": true, "updateable": false},
+				{"name": "AnotherField__c", "createable": true, "updateable": false},
+				{"name": "ReadOnly__c", "createable": false, "updateable": false},
+			},
+			wantWritable: []string{"MyField__c", "AnotherField__c"},
+			wantExcluded: []string{"ReadOnly__c"},
+		},
+		{
+			name: "createable and updateable both included",
+			fields: []map[string]any{
+				{"name": "Name", "createable": true, "updateable": true},
+			},
+			wantWritable: []string{"Name"},
+		},
+		{
+			name: "neither createable nor updateable excluded",
+			fields: []map[string]any{
+				{"name": "SystemField__c", "createable": false, "updateable": false},
+			},
+			wantExcluded: []string{"SystemField__c"},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch r.URL.Path {
+				case "/services/oauth2/token":
+					_, _ = w.Write([]byte(`{"access_token":"test-token"}`))
+				case "/services/data/v65.0/sobjects/MyObject__c/describe":
+					_ = json.NewEncoder(w).Encode(map[string]any{"fields": tc.fields})
+				default:
+					w.WriteHeader(http.StatusNotFound)
+				}
+			}))
+			defer ts.Close()
+
+			client, err := NewClient(ClientConfig{
+				OrgURL:         ts.URL,
+				ClientID:       "id",
+				ClientSecret:   "secret",
+				APIVersion:     "v65.0",
+				QueryBatchSize: 2000,
+				HTTPClient:     ts.Client(),
+			})
+			require.NoError(t, err)
+			client.bearerToken.Store("test-token")
+
+			got, err := client.DescribeWritableFields(t.Context(), "MyObject__c")
+			require.NoError(t, err)
+
+			for _, f := range tc.wantWritable {
+				assert.Contains(t, got, f)
+			}
+			for _, f := range tc.wantExcluded {
+				assert.NotContains(t, got, f)
+			}
+			assert.Len(t, got, len(tc.wantWritable))
+		})
+	}
+}
+
 func TestDo(t *testing.T) {
 	t.Run("2xx returns body", func(t *testing.T) {
 		t.Parallel()
