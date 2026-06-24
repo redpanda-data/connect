@@ -28,7 +28,7 @@ type controlSignaller struct {
 	onSignalChan chan *string
 	log          *service.Logger
 
-	signalPending atomic.Bool
+	signalPending atomic.Pointer[replication.ControlSignal]
 }
 
 // NewControlSignaller creates an instance of replication.Signaller that detects signal INSERTs on the given schema.tableName.
@@ -81,7 +81,7 @@ func (o *controlSignaller) Listen(_ context.Context, signal any) (bool, error) {
 	log := o.log.With("id", sig.ID, "type", sig.Type)
 	log.Infof("Signal %q received: operation=%s lsn=%v", sig.Type, msg.Operation, msg.LSN)
 
-	o.signalPending.Store(true)
+	o.signalPending.Store(&sig)
 	select {
 	case o.onSignalChan <- msg.LSN:
 	default:
@@ -93,12 +93,13 @@ func (o *controlSignaller) OnSignal() <-chan *string {
 	return o.onSignalChan
 }
 
-func (o *controlSignaller) IsPending() bool {
-	return o.signalPending.Load()
+func (o *controlSignaller) IsPending() (bool, *replication.ControlSignal) {
+	sig := o.signalPending.Load()
+	return sig != nil, sig
 }
 
 func (o *controlSignaller) Reset() {
-	o.signalPending.Store(false)
+	o.signalPending.Store(nil)
 }
 
 func (*controlSignaller) ValidateChannel(_ context.Context) error {

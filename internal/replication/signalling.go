@@ -20,6 +20,11 @@ type ControlSignal struct {
 	DataCollections []string `json:"data-collections"`
 }
 
+// IsSnapshot returns true if the ControlSignal is a snapshot signal.
+func (s *ControlSignal) IsSnapshot() bool {
+	return s.Type == "execute-snapshot"
+}
+
 // Signaller detects and communicates signal events from a configured signal channel.
 type Signaller interface {
 	// ValidateChannel validates the signal channel exists during connector startup.
@@ -29,7 +34,8 @@ type Signaller interface {
 	Listen(ctx context.Context, signal any) (bool, error)
 	// OnSignal returns a channel that receives the LSN of the triggering event each time a signal is detected.
 	OnSignal() <-chan *string
-
-	IsPending() bool
+	// IsPending informs the caller whether a signal is being processed.
+	IsPending() (bool, *ControlSignal)
+	// Reset indicates the control signal has been handled and resets the signaller ready for the next signal.
 	Reset()
 }

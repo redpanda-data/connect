@@ -428,14 +428,15 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 		}
 	}
 
-	if p.controlSig.IsPending() {
-		p.logger.Infof("snapshot signal pending, dropping replication slot for re-snapshot")
-		p.streamConfig.StreamOldData = true
-		p.controlSig.Reset()
-		if err := p.dropReplicationSlot(ctx); err != nil {
-			return fmt.Errorf("dropping replication slot for re-snapshot: %w", err)
+	if pending, signal := p.controlSig.IsPending(); pending && signal != nil {
+		if signal.IsSnapshot() {
+			p.logger.Infof("%s signal pending, dropping replication slot for re-snapshot", signal.Type)
+			p.streamConfig.StreamOldData = true
+			p.controlSig.Reset()
+			if err := p.dropReplicationSlot(ctx); err != nil {
+				return fmt.Errorf("dropping replication slot for re-snapshot: %w", err)
+			}
 		}
-		p.logger.Infof("replication slot dropped, re-snapshot will begin on next stream start")
 	} else {
 		p.streamConfig.StreamOldData = p.streamSnapshot
 	}
