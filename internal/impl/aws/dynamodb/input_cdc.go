@@ -1827,17 +1827,16 @@ func lastRecordSequenceNumber(records []types.Record) string {
 // pipeline's normal at-least-once guarantee), then the persisted checkpoint,
 // and finally the configured start position when nothing has been read yet.
 func resolveResumeIterator(lastSeq, checkpoint, startFrom string) (types.ShardIteratorType, *string) {
-	seq := lastSeq
-	if seq == "" {
-		seq = checkpoint
-	}
-	if seq != "" {
-		return types.ShardIteratorTypeAfterSequenceNumber, &seq
-	}
-	if startFrom == "latest" {
+	switch {
+	case lastSeq != "":
+		return types.ShardIteratorTypeAfterSequenceNumber, &lastSeq
+	case checkpoint != "":
+		return types.ShardIteratorTypeAfterSequenceNumber, &checkpoint
+	case startFrom == "latest":
 		return types.ShardIteratorTypeLatest, nil
+	default:
+		return types.ShardIteratorTypeTrimHorizon, nil
 	}
-	return types.ShardIteratorTypeTrimHorizon, nil
 }
 
 // refreshExpiredIterator obtains a fresh shard iterator after the previous one
@@ -1966,7 +1965,12 @@ func (d *dynamoDBCDCInput) startTableShardReader(ctx context.Context, tableName 
 
 				newIter, refreshErr := d.refreshExpiredIterator(ctx, ts.checkpointer, ts.streamArn, shardID, lastSeq)
 				if refreshErr != nil {
-					d.log.Errorf("Failed to refresh expired iterator for shard %s (table %s): %v", shardID, tableName, refreshErr)
+					// Refreshing can fail transiently (e.g. throttling or a
+					// network blip). Wait poll_interval and let the loop retry
+					// the refresh rather than spinning, until it succeeds or the
+					// reader is cancelled. No data is lost: the resume position
+					// is recomputed from the checkpoint on each attempt.
+					d.log.Errorf("Failed to refresh expired iterator for shard %s (table %s), retrying in %v: %v", shardID, tableName, d.conf.pollInterval, refreshErr)
 					idleTimer.Reset(d.conf.pollInterval)
 					select {
 					case <-ctx.Done():
@@ -2355,7 +2359,12 @@ func (d *dynamoDBCDCInput) startShardReader(ctx context.Context, shardID string)
 
 				newIter, refreshErr := d.refreshExpiredIterator(ctx, d.checkpointer, aws.ToString(d.streamArn), shardID, lastSeq)
 				if refreshErr != nil {
-					d.log.Errorf("Failed to refresh expired iterator for shard %s: %v", shardID, refreshErr)
+					// Refreshing can fail transiently (e.g. throttling or a
+					// network blip). Wait poll_interval and let the loop retry
+					// the refresh rather than spinning, until it succeeds or the
+					// reader is cancelled. No data is lost: the resume position
+					// is recomputed from the checkpoint on each attempt.
+					d.log.Errorf("Failed to refresh expired iterator for shard %s, retrying in %v: %v", shardID, d.conf.pollInterval, refreshErr)
 					idleTimer.Reset(d.conf.pollInterval)
 					select {
 					case <-ctx.Done():
