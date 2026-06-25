@@ -1431,22 +1431,34 @@ func (d *dynamoDBCDCInput) isCDCCheckpointStale(ctx context.Context) (bool, erro
 	for _, shard := range shards {
 		shardID := *shard.ShardId
 
-		// Check if we have a checkpoint for this shard
-		checkpoint, err := d.checkpointer.Get(ctx, shardID)
-		if err != nil || checkpoint == "" {
-			if err != nil {
-				d.log.Warnf("Failed to get checkpoint for shard %s: %v", shardID, err)
-			}
+		// Resolve how this shard would resume, using the same global-table-aware
+		// logic as the real readers. After a regional failover the checkpoint
+		// row holds another region's sequence number, which ResolveResume
+		// classifies as a time-based failover replay (resumeFailover) rather
+		// than an exact resume — so we must NOT probe it with that foreign
+		// sequence number against this region's stream. Doing so previously
+		// errored and was misread as a stale checkpoint, forcing a needless full
+		// re-snapshot on the first restart after failover.
+		decision, err := d.checkpointer.ResolveResume(ctx, shardID)
+		if err != nil {
+			return false, fmt.Errorf("resolving resume for shard %s: %w", shardID, err)
+		}
+
+		// Only an exact (same-region) resume can be stale: its sequence number
+		// belongs to this stream, so a failed iterator means the data has been
+		// trimmed (connector down beyond the retention window). Failover and
+		// default resumes read from the trim horizon, which is always valid.
+		if !cdcCheckpointProbeNeeded(decision.Mode) {
 			continue
 		}
 
-		// Try to get a shard iterator using the checkpointed sequence number
-		// If this fails, the sequence is too old and data has expired
+		// Try to get a shard iterator using the checkpointed sequence number.
+		// If this fails, the sequence is too old and data has expired.
 		_, err = d.streamsClient.GetShardIterator(ctx, &dynamodbstreams.GetShardIteratorInput{
 			StreamArn:         d.streamArn,
 			ShardId:           shard.ShardId,
 			ShardIteratorType: types.ShardIteratorTypeAfterSequenceNumber,
-			SequenceNumber:    &checkpoint,
+			SequenceNumber:    &decision.SequenceNumber,
 		})
 		if err != nil {
 			d.log.Warnf("Shard %s checkpoint is stale: %v", shardID, err)
@@ -1456,6 +1468,14 @@ func (d *dynamoDBCDCInput) isCDCCheckpointStale(ctx context.Context) (bool, erro
 	}
 
 	return false, nil
+}
+
+// cdcCheckpointProbeNeeded reports whether a shard's resume decision warrants
+// probing the stream to detect a stale (trimmed) checkpoint. Only an exact,
+// same-region resume carries a sequence number valid against this stream;
+// failover and default resumes read from the trim horizon and are never stale.
+func cdcCheckpointProbeNeeded(mode resumeMode) bool {
+	return mode == resumeExact
 }
 
 func (d *dynamoDBCDCInput) refreshShards(ctx context.Context) error {

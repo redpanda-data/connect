@@ -277,6 +277,18 @@ func shardRow(streamArn, shardID, seq, ts string) map[string]types.AttributeValu
 	return row
 }
 
+func TestCDCCheckpointProbeNeeded(t *testing.T) {
+	// Only an exact, same-region resume can be a stale checkpoint: its sequence
+	// number belongs to this stream, so a failed iterator means trimmed data.
+	require.True(t, cdcCheckpointProbeNeeded(resumeExact))
+	// A failover resume reads from the trim horizon (another region's sequence
+	// number must NOT be probed against this stream) — never stale. This is the
+	// regression guard: probing here re-triggered a full snapshot after failover.
+	require.False(t, cdcCheckpointProbeNeeded(resumeFailover))
+	// No usable checkpoint: nothing to probe.
+	require.False(t, cdcCheckpointProbeNeeded(resumeDefault))
+}
+
 func TestResolveResume_ExactWhenCurrentStreamHasRows(t *testing.T) {
 	c := globalCheckpointerWithPartition(t, "arn:A", []map[string]types.AttributeValue{
 		shardRow("arn:A", "shard-1", "seq-9", "2026-06-16T10:00:00Z"),
