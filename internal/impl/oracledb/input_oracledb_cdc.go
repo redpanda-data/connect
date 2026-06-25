@@ -22,6 +22,8 @@ import (
 	"github.com/Jeffail/checkpoint"
 	"github.com/Jeffail/shutdown"
 	_ "github.com/sijms/go-ora/v2"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -249,7 +251,30 @@ type oracleDBCDCInput struct {
 	stopSig          *shutdown.Signaller
 	snapshotOnlyDone atomic.Bool
 	log              *service.Logger
+	tracer           trace.Tracer
 	cpCache          service.Cache
+}
+
+// CDC tracing span names, emitted per CONTRIBUTING.md §5.4.4 around the
+// snapshot, stream, and checkpoint-commit paths.
+const (
+	traceSnapshot         = "oracledb_cdc.snapshot"
+	traceStream           = "oracledb_cdc.stream"
+	traceCheckpointCommit = "oracledb_cdc.checkpoint_commit"
+)
+
+// spanned runs fn within a tracing span named for a CDC phase, recording any
+// error onto the span. It is the seam used to instrument the snapshot and
+// stream paths (CONTRIBUTING.md §5.4.4).
+func (o *oracleDBCDCInput) spanned(ctx context.Context, name string, fn func(context.Context) error) error {
+	ctx, span := o.tracer.Start(ctx, name)
+	defer span.End()
+	if err := fn(ctx); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return err
+	}
+	return nil
 }
 
 func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resources) (s service.BatchInput, err error) {
@@ -391,6 +416,7 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 		lmCfg:     lmCfg,
 		res:       resources,
 		log:       logger,
+		tracer:    resources.OtelTracer().Tracer("oracledb_cdc"),
 		metrics:   resources.Metrics(),
 		stopSig:   shutdown.NewSignaller(),
 		publisher: newBatchPublisher(batcher, cp, logger),
@@ -592,7 +618,11 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 
 		// snapshot if no SCN exists then store checkpoint once complete
 		if snapshotter != nil {
-			if startSCN, err = o.processSnapshot(softCtx, snapshotter); err != nil {
+			if err = o.spanned(softCtx, traceSnapshot, func(ctx context.Context) error {
+				var serr error
+				startSCN, serr = o.processSnapshot(ctx, snapshotter)
+				return serr
+			}); err != nil {
 				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 					o.log.Infof("Snapshotting stopped: %s", err)
 				} else {
@@ -624,10 +654,12 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 		// streaming
 		wg, _ := errgroup.WithContext(softCtx)
 		wg.Go(func() error {
-			if err := streaming.ReadChanges(softCtx, startSCN); err != nil {
-				return fmt.Errorf("streaming from logminer: %w", err)
-			}
-			return nil
+			return o.spanned(softCtx, traceStream, func(ctx context.Context) error {
+				if err := streaming.ReadChanges(ctx, startSCN); err != nil {
+					return fmt.Errorf("streaming from logminer: %w", err)
+				}
+				return nil
+			})
 		})
 		if err := wg.Wait(); err != nil && softCtx.Err() == nil && !errors.Is(err, context.Canceled) {
 			o.log.Errorf("Error during Oracle CDC Component: %s", err)
@@ -678,6 +710,9 @@ func (o *oracleDBCDCInput) cacheSCN(ctx context.Context, scn replication.SCN) er
 		return errors.New("SCN for caching is empty")
 	}
 
+	ctx, span := o.tracer.Start(ctx, traceCheckpointCommit)
+	defer span.End()
+
 	// Use internal Oracle-based cache if set (when no external cache configured),
 	// otherwise use external cache resource
 	var cErr error
@@ -692,6 +727,8 @@ func (o *oracleDBCDCInput) cacheSCN(ctx context.Context, scn replication.SCN) er
 	}
 
 	if cErr != nil {
+		span.RecordError(cErr)
+		span.SetStatus(codes.Error, cErr.Error())
 		return fmt.Errorf("persisting checkpoint to cache: %w", cErr)
 	}
 	return nil
