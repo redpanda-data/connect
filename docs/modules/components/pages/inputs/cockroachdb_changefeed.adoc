@@ -46,7 +46,7 @@ input:
   cockroachdb_changefeed:
     dsn: postgres://user:password@example.com:26257/defaultdb?sslmode=require # No default (required)
     tables: [] # No default (required)
-    cursor_cache: "" # No default (optional)
+    checkpoint_cache: "" # No default (optional)
     auto_replay_nacks: true
 ```
 
@@ -68,7 +68,7 @@ input:
       root_cas_file: ""
       client_certs: []
     tables: [] # No default (required)
-    cursor_cache: "" # No default (optional)
+    checkpoint_cache: "" # No default (optional)
     options: [] # No default (optional)
     auto_replay_nacks: true
 ```
@@ -263,7 +263,7 @@ tables:
   - table2
 ```
 
-=== `cursor_cache`
+=== `checkpoint_cache`
 
 A https://docs.redpanda.com/redpanda-connect/components/caches/about[cache resource^] to use for storing the current latest cursor that has been successfully delivered, this allows Redpanda Connect to continue from that cursor upon restart, rather than consume the entire state of the table.
 
@@ -275,7 +275,7 @@ A https://docs.redpanda.com/redpanda-connect/components/caches/about[cache resou
 
 A list of options to be included in the changefeed (WITH X, Y...).
 
-NOTE: Both the CURSOR option and UPDATED will be ignored from these options when a `cursor_cache` is specified, as they are set explicitly by Redpanda Connect in this case.
+NOTE: Both the CURSOR option and UPDATED will be ignored from these options when a `checkpoint_cache` is specified, as they are set explicitly by Redpanda Connect in this case.
 
 
 *Type*: `array`

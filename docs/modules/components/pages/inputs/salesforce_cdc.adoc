@@ -46,7 +46,7 @@ input:
     replay_preset: latest
     snapshot_max_batch_size: 2000
     stream_batch_size: 100
-    max_parallel_snapshot_objects: 1
+    max_parallel_snapshot_tables: 0 # No default (optional)
     checkpoint_cache: persistent_cache # No default (required)
     checkpoint_cache_key: salesforce_cdc
     checkpoint_limit: 1024
@@ -77,7 +77,7 @@ input:
     replay_preset: latest
     snapshot_max_batch_size: 2000
     stream_batch_size: 100
-    max_parallel_snapshot_objects: 1
+    max_parallel_snapshot_tables: 0 # No default (optional)
     checkpoint_cache: persistent_cache # No default (required)
     checkpoint_cache_key: salesforce_cdc
     checkpoint_limit: 1024
@@ -432,14 +432,13 @@ stream_batch_size: 100
 stream_batch_size: 500
 ```
 
-=== `max_parallel_snapshot_objects`
+=== `max_parallel_snapshot_tables`
 
-Number of sObjects snapshotted concurrently during the REST snapshot phase. Each in-flight snapshot consumes one HTTP connection and Salesforce API call quota. Default 1 serializes the work — raise when snapshotting many sObjects and your API limits permit.
+Number of sObjects snapshotted concurrently during the REST snapshot phase. Each in-flight snapshot consumes one HTTP connection and Salesforce API call quota. Defaults to 1, which serializes the work — raise when snapshotting many sObjects and your API limits permit.
 
 
 *Type*: `int`
 
-*Default*: `1`
 
 === `checkpoint_cache`
 

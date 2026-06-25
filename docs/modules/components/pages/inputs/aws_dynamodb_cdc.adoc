@@ -40,7 +40,7 @@ input:
   label: ""
   aws_dynamodb_cdc:
     tables: []
-    checkpoint_table: redpanda_dynamodb_checkpoints
+    checkpoint_cache: "" # No default (optional)
     start_from: trim_horizon
     snapshot_mode: none
 ```
@@ -59,7 +59,7 @@ input:
     table_discovery_mode: single
     table_tag_filter: ""
     table_discovery_interval: 5m
-    checkpoint_table: redpanda_dynamodb_checkpoints
+    checkpoint_cache: "" # No default (optional)
     batch_size: 1000
     poll_interval: 1s
     start_from: trim_horizon
@@ -67,8 +67,8 @@ input:
     max_tracked_shards: 10000
     throttle_backoff: 100ms
     snapshot_mode: none
-    snapshot_segments: 1
-    snapshot_batch_size: 100
+    max_parallel_snapshot_tables: 0 # No default (optional)
+    snapshot_max_batch_size: 0 # No default (optional)
     snapshot_throttle: 100ms
     snapshot_deduplicate: true
     snapshot_buffer_size: 100000
@@ -312,14 +312,13 @@ Interval for rescanning and discovering new tables when using `tag` or `includel
 
 *Default*: `"5m"`
 
-=== `checkpoint_table`
+=== `checkpoint_cache`
 
-DynamoDB table name for storing checkpoints. Will be created if it doesn't exist.
+DynamoDB table name for storing checkpoints. Will be created if it doesn't exist. Defaults to `redpanda_dynamodb_checkpoints`.
 
 
 *Type*: `string`
 
-*Default*: `"redpanda_dynamodb_checkpoints"`
 
 === `batch_size`
 
@@ -395,23 +394,21 @@ Options:
 , `snapshot_and_cdc`
 .
 
-=== `snapshot_segments`
+=== `max_parallel_snapshot_tables`
 
-Number of parallel scan segments (1-10). Higher parallelism scans faster but consumes more RCUs. Start with 1 for safety.
-
-
-*Type*: `int`
-
-*Default*: `1`
-
-=== `snapshot_batch_size`
-
-Records per scan request during snapshot. Maximum 1000. Lower values provide better backpressure control but require more API calls.
+Number of parallel scan segments (1-10). Higher parallelism scans faster but consumes more RCUs. Start with 1 for safety. Defaults to 1.
 
 
 *Type*: `int`
 
-*Default*: `100`
+
+=== `snapshot_max_batch_size`
+
+Records per scan request during snapshot. Maximum 1000. Lower values provide better backpressure control but require more API calls. Defaults to 100.
+
+
+*Type*: `int`
+
 
 === `snapshot_throttle`
 
