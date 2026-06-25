@@ -50,4 +50,5 @@ type StreamMessage struct {
 	// It is set as message metadata and excluded from JSON serialization.
 	ColumnSchema any       `json:"-"`
 	CommitTime   time.Time `json:"-"`
+	BeforeData   any       `json:"-"`
 }

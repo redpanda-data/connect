@@ -996,6 +996,9 @@ func TestIntegrationPostgresMetadata(t *testing.T) {
 
 	require.NoError(t, err)
 
+	_, err = db.Exec(`ALTER TABLE flights REPLICA IDENTITY FULL`)
+	require.NoError(t, err)
+
 	_, err = db.Exec(`INSERT INTO "FlightsCompositePK" ("Seq", "Name", "CreatedAt") VALUES ($1, $2, $3);`, 1, "delta", "2006-01-02T15:04:05Z07:00")
 	require.NoError(t, err)
 	_, err = db.Exec(`INSERT INTO flights (name, created_at) VALUES ($1, $2);`, "delta", "2006-01-02T15:04:05Z07:00")
@@ -1035,6 +1038,16 @@ postgres_cdc:
 				assert.NoError(t, err, "commit_ts_ms should be a valid integer")
 				assert.Positive(t, ms, "commit_ts_ms should be a positive Unix ms timestamp")
 				d["commit_ts_ms"] = "SET"
+			}
+			if before, ok := d["before"].(map[string]any); ok {
+				op, _ := d["operation"].(string)
+				switch op {
+				case "update":
+					assert.Equal(t, "bravo", before["name"], "update: before.name should be the pre-update value")
+				case "delete":
+					assert.Equal(t, "charlie", before["name"], "delete: before.name should be the post-update, pre-delete value")
+				}
+				d["before"] = "SET"
 			}
 			delete(d, "schema") // Schema metadata tested separately in TestIntegrationPostgresCDCSchemaMetadata
 			outBatches = append(outBatches, data)
@@ -1105,12 +1118,14 @@ postgres_cdc:
 				"table":        "flights",
 				"lsn":          "XXX/XXX",
 				"commit_ts_ms": "SET",
+				"before":       "SET",
 			},
 			map[string]any{
 				"operation":    "delete",
 				"table":        "flights",
 				"lsn":          "XXX/XXX",
 				"commit_ts_ms": "SET",
+				"before":       "SET",
 			},
 		},
 	)

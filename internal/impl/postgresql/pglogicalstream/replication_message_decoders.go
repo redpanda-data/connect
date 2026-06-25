@@ -133,6 +133,30 @@ func toStreamMessage(logicalMsg Message, relations map[uint32]*RelationMessage, 
 			}
 		}
 		message.Data = values
+		if logicalMsg.OldTuple != nil {
+			before := map[string]any{}
+			for idx, col := range logicalMsg.OldTuple.Columns {
+				if idx >= len(rel.Columns) {
+					break
+				}
+				colName := rel.Columns[idx].Name
+				switch col.DataType {
+				case 'n': // null
+					before[colName] = nil
+				case 'u': // unchanged toast
+					before[colName] = unchangedToastValue
+				case 't': // text
+					val, err := decodeTextColumnData(typeMap, col.Data, rel.Columns[idx].DataType, rel.Columns[idx].TypeModifier)
+					if err != nil {
+						return nil, fmt.Errorf("unable to decode before column data: %w", err)
+					}
+					before[colName] = val
+				default:
+					return nil, fmt.Errorf("unable to decode before column data, unknown data type: %d", col.DataType)
+				}
+			}
+			message.BeforeData = before
+		}
 	case *DeleteMessage:
 		rel, ok := relations[logicalMsg.RelationID]
 		if !ok {
@@ -159,6 +183,7 @@ func toStreamMessage(logicalMsg Message, relations map[uint32]*RelationMessage, 
 			}
 		}
 		message.Data = values
+		message.BeforeData = values
 	case *TruncateMessage:
 	case *TypeMessage:
 	case *OriginMessage:
