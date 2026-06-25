@@ -75,7 +75,7 @@ func TestCaptureProcessor(t *testing.T) {
 	require.Equal(t, "benthos-sentry", event.Release, "event has wrong release")
 	require.Equal(t, map[string]any{"country": "us"}, event.Contexts["profile"])
 	require.Equal(t, map[string]string{"app": "test 0.1.0", "pipeline": "test-pipeline", "benthos": "mock"}, event.Tags)
-	require.Equal(t, map[string]any{"foo": "bar", "version": "v0.1.0"}, event.Extra)
+	require.Equal(t, map[string]any{"foo": "bar", "version": "v0.1.0"}, event.Contexts["extras"])
 }
 
 func TestCaptureProcessor_Sync(t *testing.T) {
@@ -123,7 +123,7 @@ func TestCaptureProcessor_Sync(t *testing.T) {
 	require.Equal(t, "testing", event.Environment, "event has wrong environment")
 	require.Equal(t, "benthos-sentry", event.Release, "event has wrong release")
 	require.Equal(t, sentry.LevelDebug, event.Level, "event has wrong level")
-	require.Equal(t, map[string]any{"name": "jane"}, event.Extra)
+	require.Equal(t, map[string]any{"name": "jane"}, event.Contexts["extras"])
 }
 
 func TestCaptureProcessor_InvalidMessage(t *testing.T) {

@@ -757,8 +757,8 @@ github.com/gabriel-vasile/mimetype v1.4.13/go.mod h1:d+9Oxyo1wTzWdyVUPMmXFvp4F9t
 github.com/gdamore/optopia v0.2.0/go.mod h1:YKYEwo5C1Pa617H7NlPcmQXl+vG6YnSSNB44n8dNL0Q=
 github.com/generikvault/gvalstrings v0.0.0-20180926130504-471f38f0112a h1:J8FuFJ7K+Hiwkla2kT9fVIVix+EZhAlDsZwRlfFI3MA=
 github.com/generikvault/gvalstrings v0.0.0-20180926130504-471f38f0112a/go.mod h1:ms6iGk40n2YQrbM9Sr6onzwYBD1q5D0T5DQmcaye6uU=
-github.com/getsentry/sentry-go v0.44.1 h1:/cPtrA5qB7uMRrhgSn9TYtcEF36auGP3Y6+ThvD/yaI=
-github.com/getsentry/sentry-go v0.44.1/go.mod h1:XDotiNZbgf5U8bPDUAfvcFmOnMQQceESxyKaObSssW0=
+github.com/getsentry/sentry-go v0.47.0 h1:AnSMSyrYA5qZCIN/2xpgAAwv63sVULV+vBq37ajouc8=
+github.com/getsentry/sentry-go v0.47.0/go.mod h1:h+b4VHpKnK7aUXB5wc+KDnPgp9ZtfliRD4eV85FbiSA=
 github.com/ghodss/yaml v1.0.0/go.mod h1:4dBDuWmgqj2HViK6kFavaiC9ZROes6MMH2rRYeMEF04=
 github.com/gin-contrib/sse v0.1.0/go.mod h1:RHrZQHXnP2xjPF+u1gW/2HnVO7nvIa9PG3Gm+fLHvGI=
 github.com/gin-gonic/gin v1.6.3/go.mod h1:75u5sXoLsGZoRN5Sgbi1eraJ4GU3++wFwWzhwvtwp4M=
