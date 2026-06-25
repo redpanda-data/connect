@@ -31,6 +31,7 @@ import (
 	"github.com/cenkalti/backoff/v4"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/connect/v4/internal/cdcfield"
 	baws "github.com/redpanda-data/connect/v4/internal/impl/aws"
 	"github.com/redpanda-data/connect/v4/internal/impl/aws/config"
 )
@@ -60,23 +61,26 @@ const (
 	metricSnapshotSegmentDuration = "dynamodb_cdc_snapshot_segment_duration"
 
 	// Config field names.
-	dciFieldTables                 = "tables"
-	dciFieldTableDiscoveryMode     = "table_discovery_mode"
-	dciFieldTableTagFilter         = "table_tag_filter"
-	dciFieldTableDiscoveryInterval = "table_discovery_interval"
-	dciFieldCheckpointTable        = "checkpoint_table"
-	dciFieldBatchSize              = "batch_size"
-	dciFieldPollInterval           = "poll_interval"
-	dciFieldStartFrom              = "start_from"
-	dciFieldCheckpointLimit        = "checkpoint_limit"
-	dciFieldMaxTrackedShards       = "max_tracked_shards"
-	dciFieldThrottleBackoff        = "throttle_backoff"
-	dciFieldSnapshotMode           = "snapshot_mode"
-	dciFieldSnapshotSegments       = "snapshot_segments"
-	dciFieldSnapshotBatchSize      = "snapshot_batch_size"
-	dciFieldSnapshotThrottle       = "snapshot_throttle"
-	dciFieldSnapshotDedupe         = "snapshot_deduplicate"
-	dciFieldSnapshotBufferSize     = "snapshot_buffer_size"
+	dciFieldTables                    = "tables"
+	dciFieldTableDiscoveryMode        = "table_discovery_mode"
+	dciFieldTableTagFilter            = "table_tag_filter"
+	dciFieldTableDiscoveryInterval    = "table_discovery_interval"
+	dciFieldCheckpointTable           = "checkpoint_table"
+	dciFieldCheckpointCache           = "checkpoint_cache"
+	dciFieldBatchSize                 = "batch_size"
+	dciFieldPollInterval              = "poll_interval"
+	dciFieldStartFrom                 = "start_from"
+	dciFieldCheckpointLimit           = "checkpoint_limit"
+	dciFieldMaxTrackedShards          = "max_tracked_shards"
+	dciFieldThrottleBackoff           = "throttle_backoff"
+	dciFieldSnapshotMode              = "snapshot_mode"
+	dciFieldSnapshotSegments          = "snapshot_segments"
+	dciFieldMaxParallelSnapshotTables = "max_parallel_snapshot_tables"
+	dciFieldSnapshotBatchSize         = "snapshot_batch_size"
+	dciFieldSnapshotMaxBatchSize      = "snapshot_max_batch_size"
+	dciFieldSnapshotThrottle          = "snapshot_throttle"
+	dciFieldSnapshotDedupe            = "snapshot_deduplicate"
+	dciFieldSnapshotBufferSize        = "snapshot_buffer_size"
 
 	// Snapshot states.
 	snapshotStateNotStarted int32 = 0
@@ -189,9 +193,13 @@ This input emits the following metrics:
 				Description("Interval for rescanning and discovering new tables when using `tag` or `includelist` mode. Set to 0 to disable periodic rescanning.").
 				Default("5m").
 				Advanced(),
+			service.NewStringField(dciFieldCheckpointCache).
+				Description("DynamoDB table name for storing checkpoints. Will be created if it doesn't exist. Defaults to `redpanda_dynamodb_checkpoints`.").
+				Optional(),
 			service.NewStringField(dciFieldCheckpointTable).
 				Description("DynamoDB table name for storing checkpoints. Will be created if it doesn't exist.").
-				Default("redpanda_dynamodb_checkpoints"),
+				Optional().
+				Deprecated(),
 			service.NewIntField(dciFieldBatchSize).
 				Description("Maximum number of records to read per shard in a single request. Valid range: 1-1000.").
 				Default(defaultDynamoDBBatchSize).
@@ -218,16 +226,28 @@ This input emits the following metrics:
 			service.NewStringEnumField(dciFieldSnapshotMode, "none", "snapshot_only", "snapshot_and_cdc").
 				Description("Snapshot behavior. `none`: CDC only (default). `snapshot_only`: one-time table scan, no streaming. `snapshot_and_cdc`: scan entire table then stream changes.").
 				Default("none"),
+			service.NewIntField(dciFieldMaxParallelSnapshotTables).
+				Description("Number of parallel scan segments (1-10). Higher parallelism scans faster but consumes more RCUs. Start with 1 for safety. Defaults to 1.").
+				Optional().
+				LintRule(`root = if this < 1 || this > 10 { ["max_parallel_snapshot_tables must be between 1 and 10"] }`).
+				Advanced(),
 			service.NewIntField(dciFieldSnapshotSegments).
 				Description("Number of parallel scan segments (1-10). Higher parallelism scans faster but consumes more RCUs. Start with 1 for safety.").
-				Default(1).
+				Optional().
 				LintRule(`root = if this < 1 || this > 10 { ["snapshot_segments must be between 1 and 10"] }`).
+				Advanced().
+				Deprecated(),
+			service.NewIntField(dciFieldSnapshotMaxBatchSize).
+				Description("Records per scan request during snapshot. Maximum 1000. Lower values provide better backpressure control but require more API calls. Defaults to 100.").
+				Optional().
+				LintRule(`root = if this < 1 || this > 1000 { ["snapshot_max_batch_size must be between 1 and 1000"] }`).
 				Advanced(),
 			service.NewIntField(dciFieldSnapshotBatchSize).
 				Description("Records per scan request during snapshot. Maximum 1000. Lower values provide better backpressure control but require more API calls.").
-				Default(100).
+				Optional().
 				LintRule(`root = if this < 1 || this > 1000 { ["snapshot_batch_size must be between 1 and 1000"] }`).
-				Advanced(),
+				Advanced().
+				Deprecated(),
 			service.NewDurationField(dciFieldSnapshotThrottle).
 				Description("Minimum time between scan requests per segment. Use this to limit RCU consumption during snapshot.").
 				Default("100ms").
@@ -680,7 +700,7 @@ func dynamoCDCInputConfigFromParsed(pConf *service.ParsedConfig) (conf dynamoDBC
 	if conf.tableDiscoveryInterval, err = pConf.FieldDuration(dciFieldTableDiscoveryInterval); err != nil {
 		return
 	}
-	if conf.checkpointTable, err = pConf.FieldString(dciFieldCheckpointTable); err != nil {
+	if conf.checkpointTable, err = cdcfield.ResolveString(pConf, dciFieldCheckpointCache, dciFieldCheckpointTable, "redpanda_dynamodb_checkpoints"); err != nil {
 		return
 	}
 	if conf.batchSize, err = pConf.FieldInt(dciFieldBatchSize); err != nil {
@@ -704,10 +724,10 @@ func dynamoCDCInputConfigFromParsed(pConf *service.ParsedConfig) (conf dynamoDBC
 	if conf.snapshot.mode, err = pConf.FieldString(dciFieldSnapshotMode); err != nil {
 		return
 	}
-	if conf.snapshot.segments, err = pConf.FieldInt(dciFieldSnapshotSegments); err != nil {
+	if conf.snapshot.segments, err = cdcfield.ResolveInt(pConf, dciFieldMaxParallelSnapshotTables, dciFieldSnapshotSegments, 1); err != nil {
 		return
 	}
-	if conf.snapshot.batchSize, err = pConf.FieldInt(dciFieldSnapshotBatchSize); err != nil {
+	if conf.snapshot.batchSize, err = cdcfield.ResolveInt(pConf, dciFieldSnapshotMaxBatchSize, dciFieldSnapshotBatchSize, 100); err != nil {
 		return
 	}
 	if conf.snapshot.throttle, err = pConf.FieldDuration(dciFieldSnapshotThrottle); err != nil {
