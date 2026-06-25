@@ -68,7 +68,6 @@ var knownNonConformant = map[string]map[string]string{
 		"stream_snapshot":              "uses enum snapshot_mode; pending OD-2 (bool vs enum)",
 	},
 	"cockroachdb_changefeed": {
-		"checkpoint_cache":             "uses cursor_cache; migrate to checkpoint_cache",
 		"checkpoint_limit":             "not yet exposed under the canonical name",
 		"snapshot_max_batch_size":      "no distinct snapshot phase (changefeed initial scan)",
 		"max_parallel_snapshot_tables": "no distinct snapshot phase (changefeed initial scan)",

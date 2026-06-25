@@ -32,6 +32,8 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
+	"github.com/redpanda-data/connect/v4/internal/cdcfield"
+
 	_ "github.com/lib/pq"
 )
 
@@ -54,11 +56,15 @@ func crdbChangefeedInputConfig() *service.ConfigSpec {
 			service.NewStringListField("tables").
 				Description("CSV of tables to be included in the changefeed").
 				Example([]string{"table1", "table2"}),
-			service.NewStringField("cursor_cache").
+			service.NewStringField("checkpoint_cache").
 				Description("A https://docs.redpanda.com/redpanda-connect/components/caches/about[cache resource^] to use for storing the current latest cursor that has been successfully delivered, this allows Redpanda Connect to continue from that cursor upon restart, rather than consume the entire state of the table.").
 				Optional(),
+			service.NewStringField("cursor_cache").
+				Description("A https://docs.redpanda.com/redpanda-connect/components/caches/about[cache resource^] to use for storing the current latest cursor that has been successfully delivered, this allows Redpanda Connect to continue from that cursor upon restart, rather than consume the entire state of the table.").
+				Optional().
+				Deprecated(),
 			service.NewStringListField("options").
-				Description("A list of options to be included in the changefeed (WITH X, Y...).\n\nNOTE: Both the CURSOR option and UPDATED will be ignored from these options when a `cursor_cache` is specified, as they are set explicitly by Redpanda Connect in this case.").
+				Description("A list of options to be included in the changefeed (WITH X, Y...).\n\nNOTE: Both the CURSOR option and UPDATED will be ignored from these options when a `checkpoint_cache` is specified, as they are set explicitly by Redpanda Connect in this case.").
 				Example([]string{`virtual_columns="omitted"`}).
 				Advanced().
 				Optional(),
@@ -108,7 +114,9 @@ func newCRDBChangefeedInputFromConfig(conf *service.ParsedConfig, res *service.R
 		return nil, err
 	}
 
-	c.cursorCache, _ = conf.FieldString("cursor_cache")
+	if c.cursorCache, err = cdcfield.ResolveString(conf, "checkpoint_cache", "cursor_cache", ""); err != nil {
+		return nil, err
+	}
 
 	// Setup the query
 	tables, err := conf.FieldStringList("tables")

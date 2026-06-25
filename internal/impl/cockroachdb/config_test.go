@@ -46,3 +46,41 @@ options:
 	assert.Equal(t, "EXPERIMENTAL CHANGEFEED FOR strm_2 WITH UPDATED, CURSOR='1637953249519902405.0000000000'", selectInput.statement)
 	require.NoError(t, selectInput.Close(t.Context()))
 }
+
+// TestCRDBCheckpointCacheFieldNames verifies the non-breaking rename of
+// cursor_cache to the canonical checkpoint_cache: both names parse and resolve
+// to the same cursor cache, and conflicting values are rejected.
+func TestCRDBCheckpointCacheFieldNames(t *testing.T) {
+	spec := crdbChangefeedInputConfig()
+	env := service.NewEnvironment()
+	build := func(t *testing.T, extra string) (*crdbChangefeedInput, error) {
+		t.Helper()
+		conf := "dsn: postgresql://u:p@localhost:26257/db?sslmode=require\ntables: [strm_2]\n" + extra
+		parsed, err := spec.ParseYAML(conf, env)
+		require.NoError(t, err)
+		return newCRDBChangefeedInputFromConfig(parsed, service.MockResources())
+	}
+
+	t.Run("deprecated cursor_cache", func(t *testing.T) {
+		in, err := build(t, "cursor_cache: my_cache")
+		require.NoError(t, err)
+		assert.Equal(t, "my_cache", in.cursorCache)
+		require.NoError(t, in.Close(t.Context()))
+	})
+	t.Run("canonical checkpoint_cache", func(t *testing.T) {
+		in, err := build(t, "checkpoint_cache: my_cache")
+		require.NoError(t, err)
+		assert.Equal(t, "my_cache", in.cursorCache)
+		require.NoError(t, in.Close(t.Context()))
+	})
+	t.Run("both set to same value", func(t *testing.T) {
+		in, err := build(t, "cursor_cache: my_cache\ncheckpoint_cache: my_cache")
+		require.NoError(t, err)
+		assert.Equal(t, "my_cache", in.cursorCache)
+		require.NoError(t, in.Close(t.Context()))
+	})
+	t.Run("both set to conflicting values", func(t *testing.T) {
+		_, err := build(t, "cursor_cache: a\ncheckpoint_cache: b")
+		require.Error(t, err)
+	})
+}
