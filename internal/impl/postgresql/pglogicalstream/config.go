@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
@@ -42,6 +43,10 @@ type Config struct {
 	IncludeTxnMarkers bool
 
 	Logger *service.Logger
+	// Tracer is used to emit CDC tracing spans around the snapshot, stream,
+	// and checkpoint-commit paths (CONTRIBUTING.md §5.4.4). May be nil, in
+	// which case a no-op tracer is used.
+	Tracer trace.Tracer
 
 	PgStandbyTimeout   time.Duration
 	WalMonitorInterval time.Duration

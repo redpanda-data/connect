@@ -338,6 +338,7 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 			WalMonitorInterval:       walMonitorInterval,
 			MaxSnapshotWorkers:       maxParallelSnapshotTables,
 			Logger:                   logger,
+			Tracer:                   mgr.OtelTracer().Tracer("postgres_cdc"),
 			UnchangedToastValue:      unchangedToastValue,
 			HeartbeatInterval:        heartbeatInterval,
 		},
