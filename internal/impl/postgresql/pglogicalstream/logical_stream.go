@@ -20,6 +20,9 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgproto3"
 	"github.com/jackc/pgx/v5/pgtype"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/trace/noop"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -29,6 +32,14 @@ import (
 )
 
 const decodingPlugin = "pgoutput"
+
+// CDC tracing span names, emitted per CONTRIBUTING.md §5.4.4 around the
+// snapshot, stream, and checkpoint-commit paths.
+const (
+	traceSnapshot         = "postgres_cdc.snapshot"
+	traceStream           = "postgres_cdc.stream"
+	traceCheckpointCommit = "postgres_cdc.checkpoint_commit"
+)
 
 // Stream is a structure that represents a logical replication stream
 // It includes the connection to the database, the context for the stream, and snapshotting functionality
@@ -51,6 +62,7 @@ type Stream struct {
 	snapshotBatchSize       int
 	decodingPluginArguments []string
 	logger                  *service.Logger
+	tracer                  trace.Tracer
 	monitor                 *Monitor
 	heartbeat               *heartbeat
 	maxSnapshotWorkers      int
@@ -108,6 +120,10 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 	if config.BatchSize > 0 {
 		batchSize = config.BatchSize
 	}
+	tracer := config.Tracer
+	if tracer == nil {
+		tracer = noop.NewTracerProvider().Tracer("postgres_cdc")
+	}
 	stream := &Stream{
 		pgConn:                dbConn,
 		messages:              make(chan []StreamMessage),
@@ -117,6 +133,7 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		tables:                tables,
 		maxSnapshotWorkers:    config.MaxSnapshotWorkers,
 		logger:                config.Logger,
+		tracer:                tracer,
 		shutSig:               shutdown.NewSignaller(),
 		includeTxnMarkers:     config.IncludeTxnMarkers,
 		standbyMessageTimeout: config.PgStandbyTimeout,
@@ -213,7 +230,9 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		}
 		go func() {
 			defer stream.shutSig.TriggerHasStopped()
-			if err := stream.streamMessages(confirmedLSNFromDB); err != nil {
+			if err := stream.spanned(ctx, traceStream, func(context.Context) error {
+				return stream.streamMessages(confirmedLSNFromDB)
+			}); err != nil {
 				stream.errors <- fmt.Errorf("logical replication stream error: %w", err)
 			}
 		}()
@@ -247,7 +266,9 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		defer done()
 		var startLSN LSN
 		if snapshotter != nil {
-			if err = stream.processSnapshot(ctx, snapshotter); err != nil {
+			if err = stream.spanned(ctx, traceSnapshot, func(ctx context.Context) error {
+				return stream.processSnapshot(ctx, snapshotter)
+			}); err != nil {
 				stream.errors <- fmt.Errorf("processing snapshot: %w", err)
 				return
 			}
@@ -303,7 +324,9 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 			stream.errors <- fmt.Errorf("starting logical replication: %w", err)
 			return
 		}
-		if err := stream.streamMessages(startLSN); err != nil {
+		if err := stream.spanned(ctx, traceStream, func(context.Context) error {
+			return stream.streamMessages(startLSN)
+		}); err != nil {
 			stream.errors <- fmt.Errorf("logical replication stream error: %w", err)
 		}
 	}()
@@ -317,6 +340,20 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 // including the % of snapshot messages processed and the WAL lag in bytes.
 func (s *Stream) GetProgress() *Report {
 	return s.monitor.Report()
+}
+
+// spanned runs fn within a tracing span named for a CDC phase, recording any
+// error onto the span. It is the seam used to instrument the snapshot and
+// stream paths (CONTRIBUTING.md §5.4.4).
+func (s *Stream) spanned(ctx context.Context, name string, fn func(context.Context) error) error {
+	ctx, span := s.tracer.Start(ctx, name)
+	defer span.End()
+	if err := fn(ctx); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return err
+	}
+	return nil
 }
 
 func (s *Stream) startLr(ctx context.Context, lsnStart LSN) error {
@@ -360,6 +397,9 @@ func (s *Stream) getAckedLSN() LSN {
 }
 
 func (s *Stream) commitAckedLSN(ctx context.Context, lsn LSN) error {
+	ctx, span := s.tracer.Start(ctx, traceCheckpointCommit)
+	defer span.End()
+
 	err := SendStandbyStatusUpdate(
 		ctx,
 		s.pgConn,
@@ -369,6 +409,8 @@ func (s *Stream) commitAckedLSN(ctx context.Context, lsn LSN) error {
 		},
 	)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return fmt.Errorf("sending standby status message at LSN %s: %w", lsn, err)
 	}
 	return nil

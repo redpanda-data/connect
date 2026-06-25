@@ -21,6 +21,8 @@ import (
 
 	"github.com/Jeffail/checkpoint"
 	"github.com/Jeffail/shutdown"
+	otelcodes "go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -384,8 +386,31 @@ type salesforceCDCInput struct {
 	batching   service.BatchPolicy
 	mgr        *service.Resources
 	logger     *service.Logger
+	tracer     trace.Tracer
 
 	executor atomic.Pointer[salesforceCDCInputExecutor]
+}
+
+// CDC tracing span names, emitted per CONTRIBUTING.md §5.4.4 around the
+// snapshot, stream, and checkpoint-commit paths.
+const (
+	traceSnapshot         = "salesforce_cdc.snapshot"
+	traceStream           = "salesforce_cdc.stream"
+	traceCheckpointCommit = "salesforce_cdc.checkpoint_commit"
+)
+
+// spanned runs fn within a tracing span named for a CDC phase, recording any
+// error onto the span. It is the seam used to instrument the snapshot and
+// stream paths (CONTRIBUTING.md §5.4.4).
+func (s *salesforceCDCInput) spanned(ctx context.Context, name string, fn func(context.Context) error) error {
+	ctx, span := s.tracer.Start(ctx, name)
+	defer span.End()
+	if err := fn(ctx); err != nil {
+		span.RecordError(err)
+		span.SetStatus(otelcodes.Error, err.Error())
+		return err
+	}
+	return nil
 }
 
 // salesforceCDCInputExecutor hosts everything Connect builds: the gRPC and
@@ -438,6 +463,7 @@ func newSalesforceCDCInput(pConf *service.ParsedConfig, mgr *service.Resources) 
 		batching:   batching,
 		mgr:        mgr,
 		logger:     mgr.Logger(),
+		tracer:     mgr.OtelTracer().Tracer("salesforce_cdc"),
 	}
 	return service.AutoRetryNacksBatchedToggled(pConf, in)
 }
@@ -555,7 +581,7 @@ func (e *salesforceCDCInputExecutor) run() {
 		len(e.topicSpecs), cdcCount, peCount, firehose, e.conf.StreamSnapshot, e.conf.ReplayPreset,
 	)
 
-	if err := e.runSnapshotIfNeeded(ctx); err != nil {
+	if err := e.spanned(ctx, traceSnapshot, e.runSnapshotIfNeeded); err != nil {
 		if ctx.Err() == nil {
 			e.logger.Errorf("snapshot phase failed: %v", err)
 		}
@@ -570,7 +596,9 @@ func (e *salesforceCDCInputExecutor) run() {
 	for _, spec := range e.topicSpecs {
 		go func(spec cdcTopicSpec) {
 			defer wg.Done()
-			if err := e.runTopic(ctx, spec); err != nil {
+			if err := e.spanned(ctx, traceStream, func(ctx context.Context) error {
+				return e.runTopic(ctx, spec)
+			}); err != nil {
 				if ctx.Err() == nil {
 					e.logger.Errorf("topic %s: %v", spec.Path, err)
 				}
@@ -1003,8 +1031,13 @@ func (e *salesforceCDCInputExecutor) loadState(ctx context.Context) error {
 // serialized bytes are unchanged it skips the cache round-trip. Callers must
 // hold e.mu.
 func (e *salesforceCDCInputExecutor) saveStateLocked(ctx context.Context) error {
+	ctx, span := e.tracer.Start(ctx, traceCheckpointCommit)
+	defer span.End()
+
 	b, err := json.Marshal(e.state)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(otelcodes.Error, err.Error())
 		return fmt.Errorf("marshal checkpoint state: %w", err)
 	}
 
@@ -1012,9 +1045,13 @@ func (e *salesforceCDCInputExecutor) saveStateLocked(ctx context.Context) error 
 	if err := e.mgr.AccessCache(ctx, e.conf.Checkpoint.Cache, func(cache service.Cache) {
 		setErr = cache.Set(ctx, e.conf.Checkpoint.CacheKey, b, nil)
 	}); err != nil {
+		span.RecordError(err)
+		span.SetStatus(otelcodes.Error, err.Error())
 		return fmt.Errorf("access cache %q: %w", e.conf.Checkpoint.Cache, err)
 	}
 	if setErr != nil {
+		span.RecordError(setErr)
+		span.SetStatus(otelcodes.Error, setErr.Error())
 		return fmt.Errorf("set cache key %q: %w", e.conf.Checkpoint.CacheKey, setErr)
 	}
 

@@ -16,6 +16,8 @@ import (
 	"time"
 
 	"github.com/Jeffail/shutdown"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/api/option"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -176,6 +178,7 @@ type asyncMessage struct {
 type spannerCDCReader struct {
 	conf    spannerCDCInputConfig
 	log     *service.Logger
+	tracer  trace.Tracer
 	metrics *changestreams.Metrics
 
 	batching   service.BatchPolicy
@@ -211,12 +214,35 @@ func newSpannerCDCReader(conf spannerCDCInputConfig, batching service.BatchPolic
 	return &spannerCDCReader{
 		conf:     conf,
 		log:      mgr.Logger(),
+		tracer:   mgr.OtelTracer().Tracer("gcp_spanner_cdc"),
 		metrics:  changestreams.NewMetrics(mgr.Metrics(), conf.StreamID),
 		batching: batching,
 		batcher:  newSpannerPartitionBatcherFactory(batching, mgr),
 		resCh:    make(chan asyncMessage),
 		stopSig:  shutdown.NewSignaller(),
 	}
+}
+
+// CDC tracing span names, emitted per CONTRIBUTING.md §5.4.4. A Spanner change
+// stream has no distinct snapshot phase (initial state arrives as change
+// records), so only the stream and checkpoint-commit paths are instrumented.
+const (
+	traceStream           = "gcp_spanner_cdc.stream"
+	traceCheckpointCommit = "gcp_spanner_cdc.checkpoint_commit"
+)
+
+// spanned runs fn within a tracing span named for a CDC phase, recording any
+// error onto the span. It is the seam used to instrument the stream path
+// (CONTRIBUTING.md §5.4.4).
+func (r *spannerCDCReader) spanned(ctx context.Context, name string, fn func(context.Context) error) error {
+	ctx, span := r.tracer.Start(ctx, name)
+	defer span.End()
+	if err := fn(ctx); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return err
+	}
+	return nil
 }
 
 func (r *spannerCDCReader) emit(
@@ -229,9 +255,13 @@ func (r *spannerCDCReader) emit(
 		return nil, nil
 	}
 	ackOnce := ack.NewOnce(func(ctx context.Context) error {
+		ctx, span := r.tracer.Start(ctx, traceCheckpointCommit)
+		defer span.End()
 		// If we processed the message and failed to update the watermark, we
 		// would try to update it on the next message, no need to return an error here.
 		if err := r.subscriber.UpdatePartitionWatermark(ctx, partitionToken, commitTimestamp); err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
 			r.log.Errorf("%s: failed to update watermark: %v", partitionToken, err)
 		}
 		return nil
@@ -340,7 +370,7 @@ func (r *spannerCDCReader) Connect(ctx context.Context) error {
 
 	go func() {
 		defer cancel()
-		if err := r.subscriber.Run(ctx); err != nil {
+		if err := r.spanned(ctx, traceStream, r.subscriber.Run); err != nil {
 			r.log.Errorf("Spanner change stream reader error: %v", err)
 		}
 		r.subscriber.Close()
