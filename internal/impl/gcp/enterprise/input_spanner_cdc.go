@@ -12,6 +12,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"regexp"
 	"sync"
 	"time"
 
@@ -20,6 +21,7 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/ack"
+	"github.com/redpanda-data/connect/v4/internal/confx"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/gcp/enterprise/changestreams"
 	"github.com/redpanda-data/connect/v4/internal/license"
@@ -32,6 +34,8 @@ const (
 	siFieldInstanceID           = "instance_id"
 	siFieldDatabaseID           = "database_id"
 	siFieldStreamID             = "stream_id"
+	siFieldTablesInclude        = "include"
+	siFieldTablesExclude        = "exclude"
 	siFieldStartTimestamp       = "start_timestamp"
 	siFieldEndTimestamp         = "end_timestamp"
 	siFieldHeartbeatInterval    = "heartbeat_interval"
@@ -49,6 +53,20 @@ const (
 
 type spannerCDCInputConfig struct {
 	changestreams.Config
+
+	// tablesFilter restricts which tables' change records are emitted. The
+	// change stream itself defines the set of watched tables (in Spanner DDL);
+	// this filter is applied per-record against the record's table name.
+	tablesFilter *confx.RegexpFilter
+}
+
+// includeTable reports whether change records for the given table should be
+// emitted under the configured include/exclude regex filter.
+func (c spannerCDCInputConfig) includeTable(table string) bool {
+	if c.tablesFilter == nil {
+		return true
+	}
+	return c.tablesFilter.Matches(table)
 }
 
 func parseRFC3339Nano(pConf *service.ParsedConfig, key string) (time.Time, error) {
@@ -93,6 +111,18 @@ func spannerCDCInputConfigFromParsed(pConf *service.ParsedConfig) (conf spannerC
 	if conf.StreamID, err = pConf.FieldString(siFieldStreamID); err != nil {
 		return
 	}
+	var tableIncludes, tableExcludes []*regexp.Regexp
+	if includes, err := pConf.FieldStringList(siFieldTablesInclude); err != nil {
+		return conf, err
+	} else if tableIncludes, err = confx.ParseRegexpPatterns(includes); err != nil {
+		return conf, err
+	}
+	if excludes, err := pConf.FieldStringList(siFieldTablesExclude); err != nil {
+		return conf, err
+	} else if tableExcludes, err = confx.ParseRegexpPatterns(excludes); err != nil {
+		return conf, err
+	}
+	conf.tablesFilter = &confx.RegexpFilter{Include: tableIncludes, Exclude: tableExcludes}
 	if conf.StartTimestamp, err = parseRFC3339Nano(pConf, siFieldStartTimestamp); err != nil {
 		return
 	}
@@ -145,6 +175,14 @@ https://cloud.google.com/spanner/docs/change-streams
 		Field(service.NewStringField(siFieldInstanceID).Description("Spanner instance ID")).
 		Field(service.NewStringField(siFieldDatabaseID).Description("Spanner database ID")).
 		Field(service.NewStringField(siFieldStreamID).Description("The name of the change stream to track, the stream must exist in the database. To create a change stream, see https://cloud.google.com/spanner/docs/change-streams/manage.")).
+		Field(service.NewStringListField(siFieldTablesInclude).
+			Description("Regular expressions matched against the table name of each change record to restrict which of the change stream's tables are emitted. The change stream itself defines the set of watched tables; when this field is set, only records whose table matches at least one of these patterns are emitted.").
+			Example("Singers").
+			Default([]any{})).
+		Field(service.NewStringListField(siFieldTablesExclude).
+			Description("Regular expressions matched against the table name of each change record to drop records from emission. A record whose table matches any of these patterns is dropped even if it matches an `" + siFieldTablesInclude + "` pattern.").
+			Example("Audit").
+			Default([]any{})).
 		Field(service.NewStringField(siFieldStartTimestamp).Optional().Description("RFC3339 formatted inclusive timestamp to start reading from the change stream (default: current time)").Example("2022-01-01T00:00:00Z").Default("")).
 		Field(service.NewStringField(siFieldEndTimestamp).Optional().Description("RFC3339 formatted exclusive timestamp to stop reading at (default: no end time)").Example("2022-01-01T00:00:00Z").Default("")).
 		Field(service.NewStringField(siFieldHeartbeatInterval).Advanced().Description("Duration string for heartbeat interval").Default("10s")).
@@ -292,6 +330,12 @@ func (r *spannerCDCReader) onDataChangeRecord(ctx context.Context, partitionToke
 		}
 		batcher.AddAck(ack)
 
+		return nil
+	}
+
+	// Skip records for tables excluded by the include/exclude filter. The
+	// change stream may watch more tables than the pipeline wants to consume.
+	if !r.conf.includeTable(dcr.TableName) {
 		return nil
 	}
 
