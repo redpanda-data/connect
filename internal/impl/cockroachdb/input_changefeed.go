@@ -25,6 +25,8 @@ import (
 	"github.com/Jeffail/gabs/v2"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/Jeffail/checkpoint"
 
@@ -82,7 +84,31 @@ type crdbChangefeedInput struct {
 
 	res     *service.Resources
 	logger  *service.Logger
+	tracer  trace.Tracer
 	shutSig *shutdown.Signaller
+}
+
+// CDC tracing span names, emitted per CONTRIBUTING.md §5.4.4. A CockroachDB
+// changefeed has no distinct snapshot phase (the initial backfill is part of
+// the change stream), so only the stream and checkpoint-commit paths are
+// instrumented.
+const (
+	traceStream           = "cockroachdb_changefeed.stream"
+	traceCheckpointCommit = "cockroachdb_changefeed.checkpoint_commit"
+)
+
+// spanned runs fn within a tracing span named for a CDC phase, recording any
+// error onto the span. It is the seam used to instrument the stream path
+// (CONTRIBUTING.md §5.4.4).
+func (c *crdbChangefeedInput) spanned(ctx context.Context, name string, fn func(context.Context) error) error {
+	ctx, span := c.tracer.Start(ctx, name)
+	defer span.End()
+	if err := fn(ctx); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return err
+	}
+	return nil
 }
 
 const cursorCacheKey = "crdb_changefeed_cursor"
@@ -92,6 +118,7 @@ func newCRDBChangefeedInputFromConfig(conf *service.ParsedConfig, res *service.R
 		cursorCheckpointer: checkpoint.NewCapped[string](1024), // TODO: Configure this?
 		res:                res,
 		logger:             res.Logger(),
+		tracer:             res.OtelTracer().Tracer("cockroachdb_changefeed"),
 		shutSig:            shutdown.NewSignaller(),
 	}
 
@@ -204,7 +231,11 @@ func (c *crdbChangefeedInput) Connect(ctx context.Context) (err error) {
 	queryCtx, queryCancel := c.shutSig.SoftStopCtx(context.Background())
 	c.queryCancel = queryCancel
 
-	c.rows, err = c.pgPool.Query(queryCtx, c.statement)
+	err = c.spanned(queryCtx, traceStream, func(context.Context) error {
+		var qErr error
+		c.rows, qErr = c.pgPool.Query(queryCtx, c.statement)
+		return qErr
+	})
 	if err != nil {
 		queryCancel()
 		c.queryCancel = nil
@@ -301,10 +332,18 @@ func (c *crdbChangefeedInput) Read(ctx context.Context) (*service.Message, servi
 		if cursorTimestamp == nil {
 			return nil
 		}
+		ctx, span := c.tracer.Start(ctx, traceCheckpointCommit)
+		defer span.End()
 		if err := c.res.AccessCache(ctx, c.cursorCache, func(c service.Cache) {
 			cErr = c.Set(ctx, cursorCacheKey, []byte(*cursorTimestamp), nil)
 		}); err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
 			return err
+		}
+		if cErr != nil {
+			span.RecordError(cErr)
+			span.SetStatus(codes.Error, cErr.Error())
 		}
 		return
 	}, nil
