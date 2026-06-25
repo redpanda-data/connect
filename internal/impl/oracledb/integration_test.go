@@ -269,7 +269,7 @@ func TestIntegrationOracleDBCDCConcurrentSnapshot(t *testing.T) {
 	}
 
 	var (
-		outBatches   []string
+		outBatches   []*service.Message
 		outBatchesMu sync.Mutex
 		stream       *service.Stream
 		err          error
@@ -291,15 +291,13 @@ oracledb_cdc:
 
 		streamBuilder := service.NewStreamBuilder()
 		require.NoError(t, streamBuilder.AddInputYAML(cfg))
-		require.NoError(t, streamBuilder.SetLoggerYAML(`level: DEBUG`))
+		require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
 
 		require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
 			outBatchesMu.Lock()
 			defer outBatchesMu.Unlock()
 			for _, msg := range mb {
-				msgBytes, err := msg.AsBytes()
-				assert.NoError(t, err)
-				outBatches = append(outBatches, string(msgBytes))
+				outBatches = append(outBatches, msg)
 			}
 			return nil
 		}))
@@ -325,6 +323,16 @@ oracledb_cdc:
 			return got >= want
 		}, time.Minute*5, time.Second*1)
 		assert.Truef(t, (got == want), "Wanted %d snapshot messages but got %d", want, got)
+		outBatchesMu.Lock()
+
+		expectedSCN, _ := outBatches[0].MetaGetMut("scn")
+		for i, msg := range outBatches {
+			scn, ok := msg.MetaGet("scn")
+			assert.Truef(t, ok, "Expected snapshot message[%d] to have scn metadata", i)
+			assert.NotEmptyf(t, scn, "Expected snapshot message[%d] scn metadata to be non-empty", i)
+			assert.Equal(t, expectedSCN, scn, "Expected snapshot scn to be identical for all messages but was not")
+		}
+		outBatchesMu.Unlock()
 	}
 
 	require.NoError(t, stream.StopWithin(time.Second*10))
