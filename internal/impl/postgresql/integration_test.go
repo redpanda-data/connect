@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -1029,6 +1030,12 @@ postgres_cdc:
 			if _, ok := d["lsn"]; ok {
 				d["lsn"] = "XXX/XXX" // Consistent LSN for assertions below
 			}
+			if ct, ok := d["commit_ts_ms"].(string); ok {
+				ms, err := strconv.ParseInt(ct, 10, 64)
+				assert.NoError(t, err, "commit_ts_ms should be a valid integer")
+				assert.Positive(t, ms, "commit_ts_ms should be a positive Unix ms timestamp")
+				d["commit_ts_ms"] = "SET"
+			}
 			delete(d, "schema") // Schema metadata tested separately in TestIntegrationPostgresCDCSchemaMetadata
 			outBatches = append(outBatches, data)
 		}
@@ -1074,14 +1081,16 @@ postgres_cdc:
 				"table":     "flights",
 			},
 			map[string]any{
-				"operation": "insert",
-				"table":     "flights",
-				"lsn":       "XXX/XXX",
+				"operation":    "insert",
+				"table":        "flights",
+				"lsn":          "XXX/XXX",
+				"commit_ts_ms": "SET",
 			},
 			map[string]any{
-				"operation": "insert",
-				"table":     "FlightsCompositePK",
-				"lsn":       "XXX/XXX",
+				"operation":    "insert",
+				"table":        "FlightsCompositePK",
+				"lsn":          "XXX/XXX",
+				"commit_ts_ms": "SET",
 			},
 		},
 	)
