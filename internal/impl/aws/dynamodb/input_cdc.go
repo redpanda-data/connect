@@ -413,6 +413,11 @@ type dynamoDBShardReader struct {
 	shardID   string
 	iterator  *string
 	exhausted bool
+	// lastSequenceNumber is the sequence number of the most recent record read
+	// from the shard. It is used to obtain a fresh iterator that resumes exactly
+	// where reading left off if the current iterator expires (see
+	// refreshExpiredIterator).
+	lastSequenceNumber string
 }
 
 // snapshotState encapsulates all state related to snapshot scanning.
@@ -1799,6 +1804,71 @@ func (d *dynamoDBCDCInput) getShardIterator(shardID string) *string {
 	return reader.iterator
 }
 
+// lastRecordSequenceNumber returns the sequence number of the final record in a
+// GetRecords response, or "" if the slice is empty or the field is unset.
+// Records are returned in stream order, so this is the furthest position the
+// shard iterator has advanced past and the point to resume from after an
+// iterator refresh.
+func lastRecordSequenceNumber(records []types.Record) string {
+	if len(records) == 0 {
+		return ""
+	}
+	last := records[len(records)-1]
+	if last.Dynamodb != nil && last.Dynamodb.SequenceNumber != nil {
+		return *last.Dynamodb.SequenceNumber
+	}
+	return ""
+}
+
+// resolveResumeIterator decides which iterator type and sequence number to use
+// when re-acquiring an iterator after the previous one expired. It prefers the
+// last sequence number actually read from the shard (resuming exactly where a
+// healthy iterator would be, so no records are skipped or re-read beyond the
+// pipeline's normal at-least-once guarantee), then the persisted checkpoint,
+// and finally the configured start position when nothing has been read yet.
+func resolveResumeIterator(lastSeq, checkpoint, startFrom string) (types.ShardIteratorType, *string) {
+	switch {
+	case lastSeq != "":
+		return types.ShardIteratorTypeAfterSequenceNumber, &lastSeq
+	case checkpoint != "":
+		return types.ShardIteratorTypeAfterSequenceNumber, &checkpoint
+	case startFrom == "latest":
+		return types.ShardIteratorTypeLatest, nil
+	default:
+		return types.ShardIteratorTypeTrimHorizon, nil
+	}
+}
+
+// refreshExpiredIterator obtains a fresh shard iterator after the previous one
+// expired, resuming from the most precise position available so the pipeline
+// self-recovers without a restart and without a data gap. See
+// isExpiredIteratorError and resolveResumeIterator.
+func (d *dynamoDBCDCInput) refreshExpiredIterator(ctx context.Context, cp *Checkpointer, streamArn, shardID, lastSeq string) (*string, error) {
+	// Only consult the checkpoint store when nothing has been read yet; when we
+	// have a last-read sequence it is the most precise resume point and avoids
+	// failing recovery on a transient checkpoint-read error.
+	var checkpoint string
+	if lastSeq == "" {
+		var err error
+		if checkpoint, err = cp.Get(ctx, shardID); err != nil {
+			return nil, fmt.Errorf("getting checkpoint for shard %s: %w", shardID, err)
+		}
+	}
+
+	iteratorType, sequenceNumber := resolveResumeIterator(lastSeq, checkpoint, d.conf.startFrom)
+
+	iter, err := d.streamsClient.GetShardIterator(ctx, &dynamodbstreams.GetShardIteratorInput{
+		StreamArn:         &streamArn,
+		ShardId:           &shardID,
+		ShardIteratorType: iteratorType,
+		SequenceNumber:    sequenceNumber,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("getting refreshed iterator for shard %s: %w", shardID, err)
+	}
+	return iter.ShardIterator, nil
+}
+
 // startTableShardReader reads from a single shard for a specific table
 func (d *dynamoDBCDCInput) startTableShardReader(ctx context.Context, tableName string, ts *tableStream, shardID string) {
 	d.log.Debugf("Starting reader for shard %s (table %s)", shardID, tableName)
@@ -1884,6 +1954,38 @@ func (d *dynamoDBCDCInput) startTableShardReader(ctx context.Context, tableName 
 				}
 				return
 			}
+			if isExpiredIteratorError(err) {
+				d.log.Warnf("Shard %s (table %s) iterator expired, refreshing from last position", shardID, tableName)
+				ts.mu.RLock()
+				var lastSeq string
+				if reader, ok := ts.shardReaders[shardID]; ok {
+					lastSeq = reader.lastSequenceNumber
+				}
+				ts.mu.RUnlock()
+
+				newIter, refreshErr := d.refreshExpiredIterator(ctx, ts.checkpointer, ts.streamArn, shardID, lastSeq)
+				if refreshErr != nil {
+					// Refreshing can fail transiently (e.g. throttling or a
+					// network blip). Wait poll_interval and let the loop retry
+					// the refresh rather than spinning, until it succeeds or the
+					// reader is cancelled. No data is lost: the resume position
+					// is recomputed from the checkpoint on each attempt.
+					d.log.Errorf("Failed to refresh expired iterator for shard %s (table %s), retrying in %v: %v", shardID, tableName, d.conf.pollInterval, refreshErr)
+					idleTimer.Reset(d.conf.pollInterval)
+					select {
+					case <-ctx.Done():
+						return
+					case <-idleTimer.C:
+					}
+					continue
+				}
+				ts.mu.Lock()
+				if reader, ok := ts.shardReaders[shardID]; ok {
+					reader.iterator = newIter
+				}
+				ts.mu.Unlock()
+				continue
+			}
 			d.log.Errorf("Failed to get records from shard %s (table %s): %v", shardID, tableName, err)
 			idleTimer.Reset(d.conf.pollInterval)
 			select {
@@ -1906,6 +2008,9 @@ func (d *dynamoDBCDCInput) startTableShardReader(ctx context.Context, tableName 
 				d.log.Infof("Shard %s (table %s) exhausted", shardID, tableName)
 				ts.mu.Unlock()
 				return
+			}
+			if seq := lastRecordSequenceNumber(getRecords.Records); seq != "" {
+				reader.lastSequenceNumber = seq
 			}
 		}
 		ts.mu.Unlock()
@@ -2243,6 +2348,38 @@ func (d *dynamoDBCDCInput) startShardReader(ctx context.Context, shardID string)
 				}
 				return
 			}
+			if isExpiredIteratorError(err) {
+				d.log.Warnf("Shard %s iterator expired, refreshing from last position", shardID)
+				d.mu.RLock()
+				var lastSeq string
+				if reader, ok := d.shardReaders[shardID]; ok {
+					lastSeq = reader.lastSequenceNumber
+				}
+				d.mu.RUnlock()
+
+				newIter, refreshErr := d.refreshExpiredIterator(ctx, d.checkpointer, aws.ToString(d.streamArn), shardID, lastSeq)
+				if refreshErr != nil {
+					// Refreshing can fail transiently (e.g. throttling or a
+					// network blip). Wait poll_interval and let the loop retry
+					// the refresh rather than spinning, until it succeeds or the
+					// reader is cancelled. No data is lost: the resume position
+					// is recomputed from the checkpoint on each attempt.
+					d.log.Errorf("Failed to refresh expired iterator for shard %s, retrying in %v: %v", shardID, d.conf.pollInterval, refreshErr)
+					idleTimer.Reset(d.conf.pollInterval)
+					select {
+					case <-ctx.Done():
+						return
+					case <-idleTimer.C:
+					}
+					continue
+				}
+				d.mu.Lock()
+				if reader, ok := d.shardReaders[shardID]; ok {
+					reader.iterator = newIter
+				}
+				d.mu.Unlock()
+				continue
+			}
 			d.log.Errorf("Failed to get records from shard %s: %v", shardID, err)
 			idleTimer.Reset(d.conf.pollInterval)
 			select {
@@ -2265,6 +2402,9 @@ func (d *dynamoDBCDCInput) startShardReader(ctx context.Context, shardID string)
 				d.log.Infof("Shard %s exhausted", shardID)
 				d.mu.Unlock()
 				return
+			}
+			if seq := lastRecordSequenceNumber(getRecords.Records); seq != "" {
+				reader.lastSequenceNumber = seq
 			}
 		}
 		d.mu.Unlock()
