@@ -25,6 +25,8 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/semaphore"
 
@@ -186,6 +188,7 @@ func newMongoCDC(conf *service.ParsedConfig, res *service.Resources) (i service.
 		readChan:          make(chan mongoBatch),
 		errorChan:         make(chan error, 1),
 		logger:            res.Logger(),
+		tracer:            res.OtelTracer().Tracer("mongodb_cdc"),
 		collectionSchemas: make(map[string]*cachedSchema),
 	}
 	var url, username, password, dbName, appName string
@@ -337,6 +340,7 @@ type mongoCDC struct {
 	db          *mongo.Database
 	collections []string
 	logger      *service.Logger
+	tracer      trace.Tracer
 
 	shutsig   *shutdown.Signaller
 	readChan  chan mongoBatch
@@ -365,6 +369,28 @@ type mongoCDC struct {
 type cachedSchema struct {
 	schema any      // serialised Common Schema (from ToAny())
 	keys   []string // sorted top-level field names for key-set fingerprinting
+}
+
+// CDC tracing span names, emitted per CONTRIBUTING.md §5.4.4 around the
+// snapshot, stream, and checkpoint-commit paths.
+const (
+	traceSnapshot         = "mongodb_cdc.snapshot"
+	traceStream           = "mongodb_cdc.stream"
+	traceCheckpointCommit = "mongodb_cdc.checkpoint_commit"
+)
+
+// spanned runs fn within a tracing span named for a CDC phase, recording any
+// error onto the span. It is the seam used to instrument the snapshot and
+// stream paths (CONTRIBUTING.md §5.4.4).
+func (m *mongoCDC) spanned(ctx context.Context, name string, fn func(context.Context) error) error {
+	ctx, span := m.tracer.Start(ctx, name)
+	defer span.End()
+	if err := fn(ctx); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return err
+	}
+	return nil
 }
 
 func (m *mongoCDC) Connect(ctx context.Context) error {
@@ -494,12 +520,14 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 		}()
 		cp := checkpoint.NewCapped[bson.Raw](int64(m.checkpointLimit))
 		if m.resumeToken == nil {
-			g, gctx := errgroup.WithContext(ctx)
-			for _, name := range m.collections {
-				coll := m.db.Collection(name)
-				g.Go(func() error { return m.readSnapshot(gctx, coll, ts, cp) })
-			}
-			if err := g.Wait(); err != nil {
+			if err := m.spanned(ctx, traceSnapshot, func(ctx context.Context) error {
+				g, gctx := errgroup.WithContext(ctx)
+				for _, name := range m.collections {
+					coll := m.db.Collection(name)
+					g.Go(func() error { return m.readSnapshot(gctx, coll, ts, cp) })
+				}
+				return g.Wait()
+			}); err != nil {
 				select {
 				case m.errorChan <- fmt.Errorf("error reading MongoDB snapshot: %w", err):
 				default:
@@ -507,7 +535,9 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 				return
 			}
 		}
-		if err := m.readFromStream(ctx, cp, opts); err != nil {
+		if err := m.spanned(ctx, traceStream, func(ctx context.Context) error {
+			return m.readFromStream(ctx, cp, opts)
+		}); err != nil {
 			select {
 			case m.errorChan <- fmt.Errorf("error watching MongoDB change stream: %w", err):
 			default:
