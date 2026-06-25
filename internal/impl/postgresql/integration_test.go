@@ -1059,13 +1059,21 @@ postgres_cdc:
 
 	_, err = db.Exec(`INSERT INTO "FlightsCompositePK" ("Seq", "Name", "CreatedAt") VALUES ($1, $2, $3);`, 2, "bravo", "2006-01-02T15:04:05Z07:00")
 	require.NoError(t, err)
-	_, err = db.Exec(`INSERT INTO flights (name, created_at) VALUES ($1, $2);`, "bravo", "2006-01-02T15:04:05Z07:00")
+
+	var flightsID int
+	err = db.QueryRow(`INSERT INTO flights (name, created_at) VALUES ($1, $2) RETURNING id;`, "bravo", "2006-01-02T15:04:05Z07:00").Scan(&flightsID)
+	require.NoError(t, err)
+
+	_, err = db.Exec(`UPDATE flights SET name = $1 WHERE id = $2;`, "charlie", flightsID)
+	require.NoError(t, err)
+
+	_, err = db.Exec(`DELETE FROM flights WHERE id = $1;`, flightsID)
 	require.NoError(t, err)
 
 	assert.EventuallyWithT(t, func(c *assert.CollectT) {
 		outBatchMut.Lock()
 		defer outBatchMut.Unlock()
-		assert.Len(c, outBatches, 4, "got: %#v", outBatches)
+		assert.Len(c, outBatches, 6, "got: %#v", outBatches)
 	}, time.Second*25, time.Millisecond*100)
 
 	require.ElementsMatch(
@@ -1082,13 +1090,25 @@ postgres_cdc:
 			},
 			map[string]any{
 				"operation":    "insert",
-				"table":        "flights",
+				"table":        "FlightsCompositePK",
 				"lsn":          "XXX/XXX",
 				"commit_ts_ms": "SET",
 			},
 			map[string]any{
 				"operation":    "insert",
-				"table":        "FlightsCompositePK",
+				"table":        "flights",
+				"lsn":          "XXX/XXX",
+				"commit_ts_ms": "SET",
+			},
+			map[string]any{
+				"operation":    "update",
+				"table":        "flights",
+				"lsn":          "XXX/XXX",
+				"commit_ts_ms": "SET",
+			},
+			map[string]any{
+				"operation":    "delete",
+				"table":        "flights",
 				"lsn":          "XXX/XXX",
 				"commit_ts_ms": "SET",
 			},
