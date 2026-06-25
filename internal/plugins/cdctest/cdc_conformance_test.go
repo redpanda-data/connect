@@ -86,8 +86,7 @@ var knownNonConformant = map[string]map[string]string{
 		"max_parallel_snapshot_tables": "uses snapshot_parallelism; migrate",
 	},
 	"postgres_cdc": {
-		"checkpoint_cache":        "uses native replication-slot checkpointing by design",
-		"snapshot_max_batch_size": "uses snapshot_batch_size; migrate",
+		"checkpoint_cache": "uses native replication-slot checkpointing by design",
 	},
 	"salesforce_cdc": {
 		"max_parallel_snapshot_tables": "uses max_parallel_snapshot_objects; migrate",
