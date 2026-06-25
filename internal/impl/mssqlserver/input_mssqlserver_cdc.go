@@ -19,6 +19,8 @@ import (
 
 	"github.com/Jeffail/checkpoint"
 	"github.com/Jeffail/shutdown"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -156,7 +158,30 @@ type sqlServerCDCInput struct {
 	connMu  sync.Mutex
 	stopSig *shutdown.Signaller
 	log     *service.Logger
+	tracer  trace.Tracer
 	cpCache service.Cache
+}
+
+// CDC tracing span names, emitted per CONTRIBUTING.md §5.4.4 around the
+// snapshot, stream, and checkpoint-commit paths.
+const (
+	traceSnapshot         = "microsoft_sql_server_cdc.snapshot"
+	traceStream           = "microsoft_sql_server_cdc.stream"
+	traceCheckpointCommit = "microsoft_sql_server_cdc.checkpoint_commit"
+)
+
+// spanned runs fn within a tracing span named for a CDC phase, recording any
+// error onto the span. It is the seam used to instrument the snapshot and
+// stream paths (CONTRIBUTING.md §5.4.4).
+func (i *sqlServerCDCInput) spanned(ctx context.Context, name string, fn func(context.Context) error) error {
+	ctx, span := i.tracer.Start(ctx, name)
+	defer span.End()
+	if err := fn(ctx); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return err
+	}
+	return nil
 }
 
 func newMSSQLServerCDCInput(conf *service.ParsedConfig, resources *service.Resources) (s service.BatchInput, err error) {
@@ -264,6 +289,7 @@ func newMSSQLServerCDCInput(conf *service.ParsedConfig, resources *service.Resou
 			},
 		},
 		res:       resources,
+		tracer:    resources.OtelTracer().Tracer("microsoft_sql_server_cdc"),
 		log:       logger,
 		metrics:   resources.Metrics(),
 		stopSig:   shutdown.NewSignaller(),
@@ -354,7 +380,11 @@ func (i *sqlServerCDCInput) Connect(ctx context.Context) error {
 
 		// snapshot if no LSN exists then store checkpoint once complete
 		if snapshotter != nil {
-			if maxLSN, err = i.processSnapshot(softCtx, snapshotter); err != nil {
+			if err = i.spanned(softCtx, traceSnapshot, func(ctx context.Context) error {
+				var serr error
+				maxLSN, serr = i.processSnapshot(ctx, snapshotter)
+				return serr
+			}); err != nil {
 				if i.stopSig.IsHardStopSignalled() {
 					i.log.Errorf("Shutting down snapshotting process: %s", err)
 				} else {
@@ -378,10 +408,12 @@ func (i *sqlServerCDCInput) Connect(ctx context.Context) error {
 		// streaming
 		wg, ctx := errgroup.WithContext(softCtx)
 		wg.Go(func() error {
-			if err := streaming.ReadChangeTables(ctx, i.db, maxLSN); err != nil {
-				return fmt.Errorf("streaming from change tables: %w", err)
-			}
-			return nil
+			return i.spanned(ctx, traceStream, func(ctx context.Context) error {
+				if err := streaming.ReadChangeTables(ctx, i.db, maxLSN); err != nil {
+					return fmt.Errorf("streaming from change tables: %w", err)
+				}
+				return nil
+			})
 		})
 		if err := wg.Wait(); err != nil && !errors.Is(err, context.Canceled) {
 			i.log.Errorf("Error during Microsoft SQL Server CDC Component: %s", err)
@@ -426,6 +458,9 @@ func (i *sqlServerCDCInput) cacheLSN(ctx context.Context, lsn replication.LSN) e
 		return errors.New("LSN for caching is empty")
 	}
 
+	ctx, span := i.tracer.Start(ctx, traceCheckpointCommit)
+	defer span.End()
+
 	var cErr error
 	if i.cpCache != nil {
 		cErr = i.cpCache.Set(ctx, i.cfg.lsnCacheKey, lsn, nil)
@@ -438,6 +473,8 @@ func (i *sqlServerCDCInput) cacheLSN(ctx context.Context, lsn replication.LSN) e
 	}
 
 	if cErr != nil {
+		span.RecordError(cErr)
+		span.SetStatus(codes.Error, cErr.Error())
 		return fmt.Errorf("unable persist checkpoint to cache: %w", cErr)
 	}
 	return nil
