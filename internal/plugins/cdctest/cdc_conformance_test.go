@@ -80,10 +80,6 @@ var knownNonConformant = map[string]map[string]string{
 		"max_parallel_snapshot_tables": "not yet exposed under the canonical name",
 		"stream_snapshot":              "not yet exposed under the canonical name",
 	},
-	"mongodb_cdc": {
-		"snapshot_max_batch_size":      "snapshot batch size not exposed under the canonical name",
-		"max_parallel_snapshot_tables": "uses snapshot_parallelism; migrate",
-	},
 	"postgres_cdc": {
 		"checkpoint_cache": "uses native replication-slot checkpointing by design",
 	},
