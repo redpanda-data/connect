@@ -42,6 +42,8 @@ input:
     client_secret: "" # No default (required)
     api_version: v65.0
     topics: [] # No default (required)
+    include: []
+    exclude: []
     stream_snapshot: true
     replay_preset: latest
     snapshot_max_batch_size: 2000
@@ -73,6 +75,8 @@ input:
     client_secret: "" # No default (required)
     api_version: v65.0
     topics: [] # No default (required)
+    include: []
+    exclude: []
     stream_snapshot: true
     replay_preset: latest
     snapshot_max_batch_size: 2000
@@ -370,6 +374,36 @@ topics:
   - Opportunity
   - MyCustom__c
   - /event/Sync_Requested__e
+```
+
+=== `include`
+
+Regular expressions matched against the sObject name to further restrict which of the configured `topics` are subscribed to. When set, an sObject-bearing CDC topic is only kept if its sObject matches at least one of these patterns. The CDC firehose (`/data/ChangeEvents`) and Platform Event (`/event/...`) topics have no single sObject and are not affected by this filter.
+
+
+*Type*: `array`
+
+*Default*: `[]`
+
+```yml
+# Examples
+
+include: Account
+```
+
+=== `exclude`
+
+Regular expressions matched against the sObject name to exclude CDC topics from subscription. An sObject-bearing CDC topic matching any of these patterns is dropped even if it matches an `include` pattern.
+
+
+*Type*: `array`
+
+*Default*: `[]`
+
+```yml
+# Examples
+
+exclude: LoginHistory
 ```
 
 === `stream_snapshot`
