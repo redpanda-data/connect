@@ -45,6 +45,8 @@ input:
     snapshot_batch_size: 1000
     schema: public # No default (required)
     tables: [] # No default (required)
+    include: []
+    exclude: []
     checkpoint_limit: 1024
     temporary_slot: false
     slot_name: my_test_slot # No default (required)
@@ -75,6 +77,8 @@ input:
     snapshot_batch_size: 1000
     schema: public # No default (required)
     tables: [] # No default (required)
+    include: []
+    exclude: []
     checkpoint_limit: 1024
     temporary_slot: false
     slot_name: my_test_slot # No default (required)
@@ -198,6 +202,36 @@ A list of table names to include in the logical replication. Each table should b
 tables:
   - my_table_1
   - '"MyCaseSensitiveTableNeedingQuotes"'
+```
+
+=== `include`
+
+Regular expressions matched against `schema.table` to further restrict which of the configured `tables` are streamed. When set, a table is only streamed if it matches at least one of these patterns.
+
+
+*Type*: `array`
+
+*Default*: `[]`
+
+```yml
+# Examples
+
+include: public.products
+```
+
+=== `exclude`
+
+Regular expressions matched against `schema.table` to exclude tables from streaming. A table matching any of these patterns is dropped even if it matches an `include` pattern.
+
+
+*Type*: `array`
+
+*Default*: `[]`
+
+```yml
+# Examples
+
+exclude: public.audit_log
 ```
 
 === `checkpoint_limit`

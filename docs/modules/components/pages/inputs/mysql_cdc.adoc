@@ -42,6 +42,8 @@ input:
     flavor: mysql
     dsn: user:password@tcp(localhost:3306)/database # No default (required)
     tables: [] # No default (required)
+    include: []
+    exclude: []
     checkpoint_cache: "" # No default (required)
     checkpoint_key: mysql_binlog_position
     snapshot_max_batch_size: 1000
@@ -69,6 +71,8 @@ input:
     flavor: mysql
     dsn: user:password@tcp(localhost:3306)/database # No default (required)
     tables: [] # No default (required)
+    include: []
+    exclude: []
     checkpoint_cache: "" # No default (required)
     checkpoint_key: mysql_binlog_position
     snapshot_max_batch_size: 1000
@@ -163,6 +167,36 @@ A list of tables to stream from the database.
 tables:
   - table1
   - table2
+```
+
+=== `include`
+
+Regular expressions matched against `database.table` to further restrict which of the configured `tables` are streamed. When set, a table is only streamed if it matches at least one of these patterns.
+
+
+*Type*: `array`
+
+*Default*: `[]`
+
+```yml
+# Examples
+
+include: mydb.products
+```
+
+=== `exclude`
+
+Regular expressions matched against `database.table` to exclude tables from streaming. A table matching any of these patterns is dropped even if it matches an `include` pattern.
+
+
+*Type*: `array`
+
+*Default*: `[]`
+
+```yml
+# Examples
+
+exclude: mydb.audit_log
 ```
 
 === `checkpoint_cache`

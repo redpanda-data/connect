@@ -44,6 +44,8 @@ input:
     instance_id: "" # No default (required)
     database_id: "" # No default (required)
     stream_id: "" # No default (required)
+    include: []
+    exclude: []
     start_timestamp: ""
     end_timestamp: ""
     batching:
@@ -69,6 +71,8 @@ input:
     instance_id: "" # No default (required)
     database_id: "" # No default (required)
     stream_id: "" # No default (required)
+    include: []
+    exclude: []
     start_timestamp: ""
     end_timestamp: ""
     heartbeat_interval: 10s
@@ -143,6 +147,36 @@ The name of the change stream to track, the stream must exist in the database. T
 
 *Type*: `string`
 
+
+=== `include`
+
+Regular expressions matched against the table name of each change record to restrict which of the change stream's tables are emitted. The change stream itself defines the set of watched tables; when this field is set, only records whose table matches at least one of these patterns are emitted.
+
+
+*Type*: `array`
+
+*Default*: `[]`
+
+```yml
+# Examples
+
+include: Singers
+```
+
+=== `exclude`
+
+Regular expressions matched against the table name of each change record to drop records from emission. A record whose table matches any of these patterns is dropped even if it matches an `include` pattern.
+
+
+*Type*: `array`
+
+*Default*: `[]`
+
+```yml
+# Examples
+
+exclude: Audit
+```
 
 === `start_timestamp`
 

@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"strconv"
 	"time"
 
@@ -24,6 +25,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/asyncroutine"
+	"github.com/redpanda-data/connect/v4/internal/confx"
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream"
 	"github.com/redpanda-data/connect/v4/internal/license"
 )
@@ -36,6 +38,8 @@ const (
 	fieldSnapshotBatchSize         = "snapshot_batch_size"
 	fieldSchema                    = "schema"
 	fieldTables                    = "tables"
+	fieldTablesInclude             = "include"
+	fieldTablesExclude             = "exclude"
 	fieldCheckpointLimit           = "checkpoint_limit"
 	fieldTemporarySlot             = "temporary_slot"
 	fieldPgStandbyTimeout          = "pg_standby_timeout"
@@ -113,6 +117,14 @@ This input adds the following metadata fields to each message:
 		Field(service.NewStringListField(fieldTables).
 			Description("A list of table names to include in the logical replication. Each table should be specified as a separate item.").
 			Example([]string{"my_table_1", `"MyCaseSensitiveTableNeedingQuotes"`})).
+		Field(service.NewStringListField(fieldTablesInclude).
+			Description("Regular expressions matched against `schema.table` to further restrict which of the configured `" + fieldTables + "` are streamed. When set, a table is only streamed if it matches at least one of these patterns.").
+			Example("public.products").
+			Default([]any{})).
+		Field(service.NewStringListField(fieldTablesExclude).
+			Description("Regular expressions matched against `schema.table` to exclude tables from streaming. A table matching any of these patterns is dropped even if it matches an `" + fieldTablesInclude + "` pattern.").
+			Example("public.audit_log").
+			Default([]any{})).
 		Field(service.NewIntField(fieldCheckpointLimit).
 			Description("The maximum number of messages that can be processed at a given time. Increasing this limit enables parallel processing and batching at the output level. Any given LSN will not be acknowledged unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.").
 			Default(1024)).
@@ -194,6 +206,21 @@ This connector uses the naming pattern ` + "`pglog_stream_<replication_slot_name
 		Field(service.NewBatchPolicyField(fieldBatching))
 }
 
+// filterPostgresTables returns the subset of tables that pass the include/exclude
+// regex filter. Each table is matched in its fully qualified `schema.table` form.
+func filterPostgresTables(filter *confx.RegexpFilter, schema string, tables []string) []string {
+	if filter == nil || (len(filter.Include) == 0 && len(filter.Exclude) == 0) {
+		return tables
+	}
+	kept := make([]string, 0, len(tables))
+	for _, table := range tables {
+		if filter.Matches(schema + "." + table) {
+			kept = append(kept, table)
+		}
+	}
+	return kept
+}
+
 func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s service.BatchInput, err error) {
 	var (
 		dsn                       string
@@ -247,6 +274,22 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 
 	if tables, err = conf.FieldStringList(fieldTables); err != nil {
 		return nil, err
+	}
+
+	var tableIncludes, tableExcludes []*regexp.Regexp
+	if includes, err := conf.FieldStringList(fieldTablesInclude); err != nil {
+		return nil, err
+	} else if tableIncludes, err = confx.ParseRegexpPatterns(includes); err != nil {
+		return nil, err
+	}
+	if excludes, err := conf.FieldStringList(fieldTablesExclude); err != nil {
+		return nil, err
+	} else if tableExcludes, err = confx.ParseRegexpPatterns(excludes); err != nil {
+		return nil, err
+	}
+	tables = filterPostgresTables(&confx.RegexpFilter{Include: tableIncludes, Exclude: tableExcludes}, schema, tables)
+	if len(tables) == 0 {
+		return nil, fmt.Errorf("the configured %s and %s patterns excluded every entry in %s", fieldTablesInclude, fieldTablesExclude, fieldTables)
 	}
 
 	if checkpointLimit, err = conf.FieldInt(fieldCheckpointLimit); err != nil {
