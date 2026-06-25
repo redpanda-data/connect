@@ -1,4 +1,4 @@
-// Copyright 2025 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed as a Redpanda Enterprise file under the Redpanda Community
 // License (the "License"); you may not use this file except in compliance with
@@ -77,10 +77,15 @@ type Router struct {
 	caseSensitive bool
 	schemaEvoCfg  SchemaEvolutionConfig
 	commitCfg     CommitConfig
+	rowOpCfg      RowOpConfig
 	writerOpts    []parquet.WriterOption
 	resolver      *typeResolver
 
 	entries sync.Map // tableKey -> *tableEntry
+
+	// metrics is optional (nil in some tests); set after construction by the
+	// output. Writers and committers inherit it.
+	metrics *opMetrics
 
 	logger *service.Logger
 }
@@ -96,6 +101,7 @@ func NewRouter(
 	caseSensitive bool,
 	schemaEvoCfg SchemaEvolutionConfig,
 	commitCfg CommitConfig,
+	rowOpCfg RowOpConfig,
 	writerOpts []parquet.WriterOption,
 	logger *service.Logger,
 ) *Router {
@@ -106,6 +112,7 @@ func NewRouter(
 		caseSensitive: caseSensitive,
 		schemaEvoCfg:  schemaEvoCfg,
 		commitCfg:     commitCfg,
+		rowOpCfg:      rowOpCfg,
 		writerOpts:    writerOpts,
 		resolver:      newTypeResolver(schemaEvoCfg.SchemaMetadata, schemaEvoCfg.NewColumnTypeMapping, caseSensitive, logger),
 		logger:        logger,
@@ -463,7 +470,54 @@ func (r *Router) buildSchemaWithResolver(record map[string]any, msg *service.Mes
 		})
 	}
 
-	return iceberg.NewSchema(0, fields...), nil
+	return r.schemaWithIdentifierFields(fields)
+}
+
+// schemaWithIdentifierFields builds the create-table schema, registering the
+// configured identifier_fields as the table's Iceberg identifier-field-ids so
+// that downstream engines and other writers see the row's primary key. Iceberg
+// requires identifier fields to be required and of a primitive, non-floating-
+// point type, so the matching columns are marked required here; a null or
+// missing value in an identifier column is consequently rejected on write
+// (consistent with how upsert/delete already reject null keys). A configured
+// identifier column that is absent from the created schema (not present in the
+// first message and not declared in schema_metadata) or of an unsuitable type
+// is a hard error rather than a silently unkeyed table.
+//
+// With no identifier_fields configured the schema is created exactly as before
+// (all columns optional, no identifier-field-ids), so append-only table
+// creation is unchanged.
+func (r *Router) schemaWithIdentifierFields(fields []iceberg.NestedField) (*iceberg.Schema, error) {
+	if len(r.rowOpCfg.IdentifierFields) == 0 {
+		return iceberg.NewSchema(0, fields...), nil
+	}
+
+	identifierIDs := make([]int, 0, len(r.rowOpCfg.IdentifierFields))
+	for _, name := range r.rowOpCfg.IdentifierFields {
+		idx := -1
+		for i := range fields {
+			if fields[i].Name == name || (!r.caseSensitive && strings.EqualFold(fields[i].Name, name)) {
+				idx = i
+				break
+			}
+		}
+		if idx < 0 {
+			return nil, fmt.Errorf("%s column %q is not present in the table being created; it must appear in the first message or be declared in schema_metadata", ioFieldIdentifierFields, name)
+		}
+		field := fields[idx]
+		if _, ok := field.Type.(iceberg.PrimitiveType); !ok {
+			return nil, fmt.Errorf("%s column %q has non-primitive type %s; identifier fields must be primitive", ioFieldIdentifierFields, field.Name, field.Type)
+		}
+		switch field.Type.(type) {
+		case iceberg.Float32Type, iceberg.Float64Type:
+			return nil, fmt.Errorf("%s column %q has floating-point type %s, which cannot be an identifier field", ioFieldIdentifierFields, field.Name, field.Type)
+		}
+		// Iceberg requires identifier fields to be required (non-null).
+		fields[idx].Required = true
+		identifierIDs = append(identifierIDs, field.ID)
+	}
+
+	return iceberg.NewSchemaWithIdentifiers(0, identifierIDs, fields...), nil
 }
 
 // orderedField pairs the key used to look up a value in the record with the
@@ -667,11 +721,13 @@ func (r *Router) createWriter(ctx context.Context, key tableKey) (*writer, error
 	if err != nil {
 		return nil, fmt.Errorf("creating committer: %w", err)
 	}
+	comm.metrics = r.metrics
 
 	// Create writer with its own table reference and the committer.
 	// The resolver is passed so the writer can use schema metadata to
 	// interpret numeric inputs into time-typed columns at shredding time.
-	w := NewWriter(writerTbl, comm, r.caseSensitive, r.writerOpts, r.resolver, r.schemaEvoCfg.RequireSchemaMetadata, r.logger)
+	w := NewWriter(writerTbl, comm, r.caseSensitive, r.writerOpts, r.resolver, r.schemaEvoCfg.RequireSchemaMetadata, r.rowOpCfg, r.logger)
+	w.metrics = r.metrics
 	r.logger.Debugf("Created writer for table %s.%s", key.namespace, key.table)
 
 	return w, nil

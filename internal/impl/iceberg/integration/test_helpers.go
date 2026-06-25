@@ -1,4 +1,4 @@
-// Copyright 2025 Redpanda Data, Inc.
+// Copyright 2026 Redpanda Data, Inc.
 //
 // Licensed as a Redpanda Enterprise file under the Redpanda Community
 // License (the "License"); you may not use this file except in compliance with
@@ -91,12 +91,20 @@ type RouterOption func(*routerOpts)
 type routerOpts struct {
 	caseSensitive bool
 	schemaEvoCfg  icebergimpl.SchemaEvolutionConfig
+	rowOpCfg      icebergimpl.RowOpConfig
 }
 
 // WithSchemaEvolution enables schema evolution on the test router.
 func WithSchemaEvolution(cfg icebergimpl.SchemaEvolutionConfig) RouterOption {
 	return func(o *routerOpts) {
 		o.schemaEvoCfg = cfg
+	}
+}
+
+// WithRowOperation configures per-message row-level operations on the test router.
+func WithRowOperation(cfg icebergimpl.RowOpConfig) RouterOption {
+	return func(o *routerOpts) {
+		o.rowOpCfg = cfg
 	}
 }
 
@@ -138,7 +146,7 @@ func (infra *testInfrastructure) NewRouter(
 		MaxSnapshotAge:       24 * time.Hour,
 		MaxRetries:           3,
 	}
-	router := icebergimpl.NewRouter(infra.CatalogConfig(), namespaceStr, tableStr, o.caseSensitive, o.schemaEvoCfg, commitCfg, nil, logger)
+	router := icebergimpl.NewRouter(infra.CatalogConfig(), namespaceStr, tableStr, o.caseSensitive, o.schemaEvoCfg, commitCfg, o.rowOpCfg, nil, logger)
 	t.Cleanup(func() { router.Close() })
 	return router
 }
