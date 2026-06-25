@@ -171,7 +171,7 @@ This input emits the following metrics:
 
 ### Global Table Checkpoints (multi-region failover)
 
-In active/active or active/passive multi-region deployments, set `global_table: true` and list the other regions in `global_table_replicas` so the auto-created checkpoint table is provisioned as a DynamoDB Global Table (v2). Checkpoints then replicate across regions: a failed-over pipeline resumes near the last committed position instead of replaying the whole stream. Because each region's stream has its own sequence numbers, cross-region resume is time-based (at-least-once, replaying from the trim horizon up to the last replicated record time); same-region restarts still resume exactly. This only affects table creation — it is a no-op if the checkpoint table already exists.
+In active/active or active/passive multi-region deployments, set `global_table: true` and list the other regions in `global_table_replicas` so the auto-created checkpoint table is provisioned as a DynamoDB Global Table (v2). Checkpoints then replicate across regions: a failed-over pipeline resumes near the last committed position instead of replaying the whole stream. Because each region's stream has its own sequence numbers, cross-region resume is time-based (at-least-once, replaying from the trim horizon up to the last replicated record time); same-region restarts still resume exactly. If the checkpoint table already exists, enabling `global_table` reconciles it towards the desired configuration: any missing replica regions are added via `UpdateTable`. The existing table must have been created in global mode (it must use a `TableId` hash key); pointing `global_table` at a pre-existing non-global checkpoint table fails fast with a clear error rather than mutating it.
 
 When `global_table` is enabled the principal additionally needs `dynamodb:CreateTable`, `dynamodb:UpdateTable`, `dynamodb:DescribeTable`, `dynamodb:DescribeLimits`, `iam:CreateServiceLinkedRole`, and create/describe permissions in each replica region.
 
@@ -333,7 +333,7 @@ DynamoDB table name for storing checkpoints. Will be created if it doesn't exist
 
 === `global_table`
 
-When the checkpoint table is auto-created, provision it as a DynamoDB Global Table (v2) so checkpoints replicate across regions. Requires `global_table_replicas`. No effect if the checkpoint table already exists.
+Provision the checkpoint table as a DynamoDB Global Table (v2) so checkpoints replicate across regions. Requires `global_table_replicas`. When the table is auto-created it is created as a global table; when it already exists, its replicas are reconciled (missing regions are added via `UpdateTable`). The existing table must have been created in global mode (`TableId` hash key) — enabling this against a pre-existing non-global checkpoint table fails fast with a clear error.
 
 
 *Type*: `bool`
@@ -342,7 +342,7 @@ When the checkpoint table is auto-created, provision it as a DynamoDB Global Tab
 
 === `global_table_replicas`
 
-Regions other than this pipeline's own region to replicate the checkpoint table to. The pipeline's own region is always included. Required when `global_table` is true. Only used when the checkpoint table is created.
+Regions other than this pipeline's own region to replicate the checkpoint table to. The pipeline's own region is always included. Required when `global_table` is true. Applied both when the checkpoint table is created and, for an existing global table, when reconciling replicas (missing regions are added; this list is not used to remove regions).
 
 
 *Type*: `array`

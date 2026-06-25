@@ -88,7 +88,9 @@ func TestCheckpointer_GlobalModeSetUsesPortableKey(t *testing.T) {
 	api := &fakeCheckpointAPI{
 		describeTable: func(context.Context, *dynamodb.DescribeTableInput, ...func(*dynamodb.Options)) (*dynamodb.DescribeTableOutput, error) {
 			return &dynamodb.DescribeTableOutput{Table: &types.TableDescription{
+				TableName:   aws.String("cps"),
 				TableStatus: types.TableStatusActive,
+				KeySchema:   globalTableKeySchema(),
 				Replicas: []types.ReplicaDescription{
 					{RegionName: aws.String("us-east-1")},
 					{RegionName: aws.String("us-west-2")},
@@ -170,7 +172,12 @@ func TestEnsureTable_GlobalReconcilesMissingReplicaWhenTableExists(t *testing.T)
 			for _, r := range added {
 				reps = append(reps, types.ReplicaDescription{RegionName: aws.String(r), ReplicaStatus: types.ReplicaStatusActive})
 			}
-			return &dynamodb.DescribeTableOutput{Table: &types.TableDescription{TableStatus: types.TableStatusActive, Replicas: reps}}, nil
+			return &dynamodb.DescribeTableOutput{Table: &types.TableDescription{
+				TableName:   aws.String("cps"),
+				TableStatus: types.TableStatusActive,
+				KeySchema:   globalTableKeySchema(),
+				Replicas:    reps,
+			}}, nil
 		},
 		createTable: func(context.Context, *dynamodb.CreateTableInput, ...func(*dynamodb.Options)) (*dynamodb.CreateTableOutput, error) {
 			return nil, errors.New("CreateTable must not be called when table exists")
@@ -192,12 +199,56 @@ func TestEnsureTable_GlobalReconcilesMissingReplicaWhenTableExists(t *testing.T)
 	require.Equal(t, []string{"us-west-2"}, added)
 }
 
+func TestEnsureTable_GlobalRejectsExistingNonGlobalTable(t *testing.T) {
+	updateCalled := false
+	api := &fakeCheckpointAPI{
+		describeTable: func(context.Context, *dynamodb.DescribeTableInput, ...func(*dynamodb.Options)) (*dynamodb.DescribeTableOutput, error) {
+			// A table created without global_table mode uses a StreamArn hash key.
+			return &dynamodb.DescribeTableOutput{Table: &types.TableDescription{
+				TableName:   aws.String("cps"),
+				TableStatus: types.TableStatusActive,
+				KeySchema: []types.KeySchemaElement{
+					{AttributeName: aws.String("StreamArn"), KeyType: types.KeyTypeHash},
+					{AttributeName: aws.String("ShardID"), KeyType: types.KeyTypeRange},
+				},
+			}}, nil
+		},
+		createTable: func(context.Context, *dynamodb.CreateTableInput, ...func(*dynamodb.Options)) (*dynamodb.CreateTableOutput, error) {
+			return nil, errors.New("CreateTable must not be called when table exists")
+		},
+		updateTable: func(context.Context, *dynamodb.UpdateTableInput, ...func(*dynamodb.Options)) (*dynamodb.UpdateTableOutput, error) {
+			updateCalled = true
+			return &dynamodb.UpdateTableOutput{}, nil
+		},
+	}
+	_, err := NewCheckpointer(context.Background(), api, CheckpointerConfig{
+		TableName: "cps", SourceTable: "t", StreamArn: "arn:A", CheckpointLimit: 1,
+		GlobalTable: true, Region: "us-east-1", ReplicaRegions: []string{"us-west-2"},
+	}, checkpointTestLogger())
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "StreamArn")
+	require.Contains(t, err.Error(), "global_table")
+	require.False(t, updateCalled, "must not reconcile replicas against a schema-mismatched table")
+}
+
+// globalTableKeySchema returns the key schema of a checkpoint table created in
+// global mode (TableId hash + ShardID range), matching what ensureTableExists
+// provisions and what validateGlobalTableSchema requires.
+func globalTableKeySchema() []types.KeySchemaElement {
+	return []types.KeySchemaElement{
+		{AttributeName: aws.String("TableId"), KeyType: types.KeyTypeHash},
+		{AttributeName: aws.String("ShardID"), KeyType: types.KeyTypeRange},
+	}
+}
+
 func globalCheckpointerWithPartition(t *testing.T, currentStreamArn string, items []map[string]types.AttributeValue) *Checkpointer {
 	t.Helper()
 	api := &fakeCheckpointAPI{
 		describeTable: func(context.Context, *dynamodb.DescribeTableInput, ...func(*dynamodb.Options)) (*dynamodb.DescribeTableOutput, error) {
 			return &dynamodb.DescribeTableOutput{Table: &types.TableDescription{
+				TableName:   aws.String("cps"),
 				TableStatus: types.TableStatusActive,
+				KeySchema:   globalTableKeySchema(),
 				Replicas:    []types.ReplicaDescription{{RegionName: aws.String("us-east-1")}, {RegionName: aws.String("us-west-2")}},
 			}}, nil
 		},

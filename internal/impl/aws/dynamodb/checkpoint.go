@@ -23,6 +23,15 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
+// Checkpoint table key attribute names. The hash key differs by mode: the
+// default mode keys checkpoints by the current stream ARN, while global mode
+// keys by the source table name so the key is portable across regions.
+const (
+	checkpointHashKeyDefault = "StreamArn"
+	checkpointHashKeyGlobal  = "TableId"
+	checkpointRangeKey       = "ShardID"
+)
+
 // checkpointDynamoAPI is the subset of the DynamoDB client the Checkpointer
 // uses. *dynamodb.Client satisfies it; tests provide a fake.
 type checkpointDynamoAPI interface {
@@ -93,13 +102,44 @@ func NewCheckpointer(
 	return c, nil
 }
 
+// hashKeyName returns the name of a table's HASH (partition) key, or "" if the
+// description has no hash key.
+func hashKeyName(table *types.TableDescription) string {
+	if table == nil {
+		return ""
+	}
+	for _, k := range table.KeySchema {
+		if k.KeyType == types.KeyTypeHash {
+			return aws.ToString(k.AttributeName)
+		}
+	}
+	return ""
+}
+
+// validateGlobalTableSchema ensures a pre-existing checkpoint table can be used
+// in global mode. A table created without global_table uses a StreamArn hash
+// key, whereas global mode keys checkpoints by TableId; reusing it would write
+// rows under a key the schema doesn't define and reconcile replicas onto an
+// incompatible table. Fail fast with an actionable error instead.
+func validateGlobalTableSchema(table *types.TableDescription) error {
+	if got := hashKeyName(table); got != checkpointHashKeyGlobal {
+		return fmt.Errorf("checkpoint table %s already exists with hash key %q, but global_table mode requires hash key %q; the table was created without global_table enabled and cannot be reused (point global_table at a new checkpoint table or recreate this one)",
+			aws.ToString(table.TableName), got, checkpointHashKeyGlobal)
+	}
+	return nil
+}
+
 func (c *Checkpointer) ensureTableExists(ctx context.Context) error {
 	desc, err := c.svc.DescribeTable(ctx, &dynamodb.DescribeTableInput{
 		TableName: aws.String(c.tableName),
 	})
 	if err == nil {
-		// Table exists. In global mode, reconcile missing replicas only.
+		// Table exists. In global mode, validate the schema is compatible and
+		// reconcile any missing replicas.
 		if c.globalTable {
+			if err := validateGlobalTableSchema(desc.Table); err != nil {
+				return err
+			}
 			return c.reconcileReplicas(ctx, desc.Table)
 		}
 		return nil
@@ -109,19 +149,19 @@ func (c *Checkpointer) ensureTableExists(ctx context.Context) error {
 	}
 
 	// Table doesn't exist, create it.
-	hashAttr := "StreamArn"
+	hashAttr := checkpointHashKeyDefault
 	if c.globalTable {
-		hashAttr = "TableId"
+		hashAttr = checkpointHashKeyGlobal
 	}
 	input := &dynamodb.CreateTableInput{
 		AttributeDefinitions: []types.AttributeDefinition{
 			{AttributeName: aws.String(hashAttr), AttributeType: types.ScalarAttributeTypeS},
-			{AttributeName: aws.String("ShardID"), AttributeType: types.ScalarAttributeTypeS},
+			{AttributeName: aws.String(checkpointRangeKey), AttributeType: types.ScalarAttributeTypeS},
 		},
 		BillingMode: types.BillingModePayPerRequest,
 		KeySchema: []types.KeySchemaElement{
 			{AttributeName: aws.String(hashAttr), KeyType: types.KeyTypeHash},
-			{AttributeName: aws.String("ShardID"), KeyType: types.KeyTypeRange},
+			{AttributeName: aws.String(checkpointRangeKey), KeyType: types.KeyTypeRange},
 		},
 		TableName: aws.String(c.tableName),
 	}
@@ -212,13 +252,13 @@ func (c *Checkpointer) waitForTableActive(ctx context.Context) error {
 func (c *Checkpointer) checkpointKey(shardID string) map[string]types.AttributeValue {
 	if c.globalTable {
 		return map[string]types.AttributeValue{
-			"TableId": &types.AttributeValueMemberS{Value: c.sourceTable},
-			"ShardID": &types.AttributeValueMemberS{Value: shardID},
+			checkpointHashKeyGlobal: &types.AttributeValueMemberS{Value: c.sourceTable},
+			checkpointRangeKey:      &types.AttributeValueMemberS{Value: shardID},
 		}
 	}
 	return map[string]types.AttributeValue{
-		"StreamArn": &types.AttributeValueMemberS{Value: c.streamArn},
-		"ShardID":   &types.AttributeValueMemberS{Value: shardID},
+		checkpointHashKeyDefault: &types.AttributeValueMemberS{Value: c.streamArn},
+		checkpointRangeKey:       &types.AttributeValueMemberS{Value: shardID},
 	}
 }
 
