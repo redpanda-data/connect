@@ -26,6 +26,7 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
+	"github.com/redpanda-data/connect/v4/internal/cdcfield"
 	"github.com/redpanda-data/connect/v4/internal/httpclient"
 	"github.com/redpanda-data/connect/v4/internal/impl/salesforce/salesforcegrpc"
 	"github.com/redpanda-data/connect/v4/internal/impl/salesforce/salesforcehttp"
@@ -37,9 +38,10 @@ const (
 	sfciFieldStreamSnapshot = "stream_snapshot"
 	sfciFieldReplayPreset   = "replay_preset"
 
-	sfciFieldSnapshotMaxBatchSize    = "snapshot_max_batch_size"
-	sfciFieldStreamBatchSize         = "stream_batch_size"
-	sfciFieldMaxParallelSnapshotObjs = "max_parallel_snapshot_objects"
+	sfciFieldSnapshotMaxBatchSize      = "snapshot_max_batch_size"
+	sfciFieldStreamBatchSize           = "stream_batch_size"
+	sfciFieldMaxParallelSnapshotTables = "max_parallel_snapshot_tables"
+	sfciFieldMaxParallelSnapshotObjs   = "max_parallel_snapshot_objects"
 
 	sfciReplayLatest   = "latest"
 	sfciReplayEarliest = "earliest"
@@ -130,9 +132,13 @@ Each ` + "`/data/...`" + ` topic requires Change Data Capture to be enabled for 
 			Default(100).
 			Example(100).
 			Example(500)).
+		Field(service.NewIntField(sfciFieldMaxParallelSnapshotTables).
+			Description("Number of sObjects snapshotted concurrently during the REST snapshot phase. Each in-flight snapshot consumes one HTTP connection and Salesforce API call quota. Defaults to 1, which serializes the work — raise when snapshotting many sObjects and your API limits permit.").
+			Optional()).
 		Field(service.NewIntField(sfciFieldMaxParallelSnapshotObjs).
 			Description("Number of sObjects snapshotted concurrently during the REST snapshot phase. Each in-flight snapshot consumes one HTTP connection and Salesforce API call quota. Default 1 serializes the work — raise when snapshotting many sObjects and your API limits permit.").
-			Default(1)).
+			Optional().
+			Deprecated()).
 		Field(service.NewStringField(sfFieldCheckpointCache).
 			Description("Name of the cache resource used to persist snapshot cursor and per-topic replay IDs across restarts. The cache must be declared under the top-level `cache_resources` block. Choose a durable cache (Redis, Postgres, DynamoDB) for production; in-memory caches lose checkpoints on restart.").
 			Example("persistent_cache")).
@@ -349,7 +355,7 @@ func NewCDCInputConfigFromParsed(pConf *service.ParsedConfig) (CDCInputConfig, e
 	}
 	cfg.StreamBatchSize = int32(streamBatch)
 
-	if cfg.MaxParallelSnapshotObjs, err = pConf.FieldInt(sfciFieldMaxParallelSnapshotObjs); err != nil {
+	if cfg.MaxParallelSnapshotObjs, err = cdcfield.ResolveInt(pConf, sfciFieldMaxParallelSnapshotTables, sfciFieldMaxParallelSnapshotObjs, 1); err != nil {
 		return cfg, err
 	}
 	if cfg.MaxParallelSnapshotObjs < 1 {

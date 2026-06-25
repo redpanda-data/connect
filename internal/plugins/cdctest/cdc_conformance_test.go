@@ -88,9 +88,6 @@ var knownNonConformant = map[string]map[string]string{
 	"postgres_cdc": {
 		"checkpoint_cache": "uses native replication-slot checkpointing by design",
 	},
-	"salesforce_cdc": {
-		"max_parallel_snapshot_tables": "uses max_parallel_snapshot_objects; migrate",
-	},
 	"tigerbeetle_cdc": {
 		"checkpoint_cache":             "non-relational; §5 applicability under triage",
 		"checkpoint_limit":             "non-relational; §5 applicability under triage",
