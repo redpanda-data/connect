@@ -776,7 +776,7 @@ func newDynamoDBCDCInputFromConfig(pConf *service.ParsedConfig, mgr *service.Res
 		return nil, err
 	}
 	if conf.globalTable && awsConf.Region == "" {
-		return nil, errors.New("global_table requires an AWS region to be configured (set `region` or the AWS_REGION environment)")
+		return nil, errors.New("global_table requires an AWS region to be configured (set `region` or the AWS_REGION environmental variable)")
 	}
 
 	input := &dynamoDBCDCInput{
