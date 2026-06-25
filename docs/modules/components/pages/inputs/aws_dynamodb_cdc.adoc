@@ -56,6 +56,8 @@ input:
   label: ""
   aws_dynamodb_cdc:
     tables: []
+    include: []
+    exclude: []
     table_discovery_mode: single
     table_tag_filter: ""
     table_discovery_interval: 5m
@@ -278,6 +280,36 @@ List of table names to stream from. For single table mode, provide one table. Fo
 *Type*: `array`
 
 *Default*: `[]`
+
+=== `include`
+
+Regular expressions matched against the table name to further restrict which discovered tables are streamed. Applies to both explicitly listed tables and tables found via `table_discovery_mode: tag`. When set, a table is only streamed if it matches at least one of these patterns.
+
+
+*Type*: `array`
+
+*Default*: `[]`
+
+```yml
+# Examples
+
+include: orders
+```
+
+=== `exclude`
+
+Regular expressions matched against the table name to exclude tables from streaming. A table matching any of these patterns is dropped even if it matches an `include` pattern.
+
+
+*Type*: `array`
+
+*Default*: `[]`
+
+```yml
+# Examples
+
+exclude: audit_log
+```
 
 === `table_discovery_mode`
 

@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"regexp"
 	"slices"
 	"sort"
 	"strconv"
@@ -31,6 +32,7 @@ import (
 	"github.com/cenkalti/backoff/v4"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/connect/v4/internal/confx"
 	baws "github.com/redpanda-data/connect/v4/internal/impl/aws"
 	"github.com/redpanda-data/connect/v4/internal/impl/aws/config"
 )
@@ -61,6 +63,8 @@ const (
 
 	// Config field names.
 	dciFieldTables                 = "tables"
+	dciFieldTablesInclude          = "include"
+	dciFieldTablesExclude          = "exclude"
 	dciFieldTableDiscoveryMode     = "table_discovery_mode"
 	dciFieldTableTagFilter         = "table_tag_filter"
 	dciFieldTableDiscoveryInterval = "table_discovery_interval"
@@ -177,6 +181,16 @@ This input emits the following metrics:
 			service.NewStringListField(dciFieldTables).
 				Description("List of table names to stream from. For single table mode, provide one table. For multi-table mode, provide multiple tables.").
 				Default([]any{}),
+			service.NewStringListField(dciFieldTablesInclude).
+				Description("Regular expressions matched against the table name to further restrict which discovered tables are streamed. Applies to both explicitly listed tables and tables found via `"+dciFieldTableDiscoveryMode+": tag`. When set, a table is only streamed if it matches at least one of these patterns.").
+				Example("orders").
+				Default([]any{}).
+				Advanced(),
+			service.NewStringListField(dciFieldTablesExclude).
+				Description("Regular expressions matched against the table name to exclude tables from streaming. A table matching any of these patterns is dropped even if it matches an `"+dciFieldTablesInclude+"` pattern.").
+				Example("audit_log").
+				Default([]any{}).
+				Advanced(),
 			service.NewStringEnumField(dciFieldTableDiscoveryMode, "single", "tag", "includelist").
 				Description("Table discovery mode. `single`: stream from tables specified in `tables` list. `tag`: auto-discover tables by tags (ignores `tables` field). `includelist`: stream from tables in `tables` list (alias for `single`, kept for compatibility).").
 				Default("single").
@@ -339,6 +353,7 @@ type snapshotConfig struct {
 
 type dynamoDBCDCConfig struct {
 	tables                 []string
+	tablesFilter           *confx.RegexpFilter // Include/exclude regex filter over table names
 	tableDiscoveryMode     string
 	tableTagFilter         string              // Multi-tag filter: "key1:v1,v2;key2:v3"
 	parsedTagFilter        map[string][]string // Parsed filter for efficient matching
@@ -665,6 +680,18 @@ func dynamoCDCInputConfigFromParsed(pConf *service.ParsedConfig) (conf dynamoDBC
 	if conf.tables, err = pConf.FieldStringList(dciFieldTables); err != nil {
 		return
 	}
+	var tableIncludes, tableExcludes []*regexp.Regexp
+	if includes, err := pConf.FieldStringList(dciFieldTablesInclude); err != nil {
+		return conf, err
+	} else if tableIncludes, err = confx.ParseRegexpPatterns(includes); err != nil {
+		return conf, err
+	}
+	if excludes, err := pConf.FieldStringList(dciFieldTablesExclude); err != nil {
+		return conf, err
+	} else if tableExcludes, err = confx.ParseRegexpPatterns(excludes); err != nil {
+		return conf, err
+	}
+	conf.tablesFilter = &confx.RegexpFilter{Include: tableIncludes, Exclude: tableExcludes}
 	if conf.tableDiscoveryMode, err = pConf.FieldString(dciFieldTableDiscoveryMode); err != nil {
 		return
 	}
@@ -771,22 +798,47 @@ func newDynamoDBCDCInputFromConfig(pConf *service.ParsedConfig, mgr *service.Res
 
 // discoverTables discovers tables based on the configured discovery mode
 func (d *dynamoDBCDCInput) discoverTables(ctx context.Context) ([]string, error) {
+	var tables []string
 	switch d.conf.tableDiscoveryMode {
 	case discoveryModeSingle, discoveryModeIncludelist:
 		if len(d.conf.tables) == 0 {
 			return nil, errors.New("tables list cannot be empty when table_discovery_mode is single or includelist")
 		}
-		return d.conf.tables, nil
+		tables = d.conf.tables
 
 	case discoveryModeTag:
 		if d.conf.tableTagFilter == "" {
 			return nil, errors.New("table_tag_filter cannot be empty when table_discovery_mode is tag")
 		}
-		return d.discoverTablesByTag(ctx)
+		var err error
+		if tables, err = d.discoverTablesByTag(ctx); err != nil {
+			return nil, err
+		}
 
 	default:
 		return nil, fmt.Errorf("unsupported table_discovery_mode: %s", d.conf.tableDiscoveryMode)
 	}
+
+	filtered := filterDynamoTables(d.conf.tablesFilter, tables)
+	if len(filtered) == 0 && len(tables) > 0 {
+		d.log.Warnf("the configured %s and %s patterns excluded every discovered table", dciFieldTablesInclude, dciFieldTablesExclude)
+	}
+	return filtered, nil
+}
+
+// filterDynamoTables returns the subset of tables that pass the include/exclude
+// regex filter. Each table is matched by its name.
+func filterDynamoTables(filter *confx.RegexpFilter, tables []string) []string {
+	if filter == nil || (len(filter.Include) == 0 && len(filter.Exclude) == 0) {
+		return tables
+	}
+	kept := make([]string, 0, len(tables))
+	for _, table := range tables {
+		if filter.Matches(table) {
+			kept = append(kept, table)
+		}
+	}
+	return kept
 }
 
 // discoverTablesByTag discovers tables that match the configured tag key/value
