@@ -35,6 +35,8 @@ type Service struct {
 	loadedLicense *atomic.Pointer[license.RedpandaLicense]
 	conf          Config
 
+	isTestLicense bool
+
 	expiryMetric *service.MetricGauge
 	cancel       context.CancelFunc
 }
@@ -62,13 +64,25 @@ func RegisterService(res *service.Resources, conf Config) {
 		conf:          conf,
 	}
 
-	license, err := s.readAndValidateLicense()
+	l, err := s.readAndValidateLicense()
+	licenseReadErr := err
 	if err != nil {
 		res.Logger().With("error", err).Error("Failed to read Redpanda License")
-		license = openSourceLicense
+		l = openSourceLicense
 	}
 
-	s.setLicense(res, license)
+	if !l.AllowsEnterpriseFeatures() && os.Getenv("REDPANDA_CONNECT_DEV_LICENSE") != "" {
+		s.isTestLicense = true
+		l = embeddedTestLicense
+		if licenseReadErr != nil {
+			res.Logger().With("error", licenseReadErr).Error("Production license invalid; activating embedded dev license (REDPANDA_CONNECT_DEV_LICENSE set) — enterprise features subject to 1 MB/s throughput cap. Fix your license to remove the cap: https://docs.redpanda.com/redpanda-connect/get-started/licensing/")
+		} else {
+			res.Logger().Info("Running under embedded test license (REDPANDA_CONNECT_DEV_LICENSE set) — enterprise features subject to 1 MB/s throughput cap per process. Apply a production license to remove the cap: https://docs.redpanda.com/redpanda-connect/get-started/licensing/")
+		}
+		registerThrottler(res, newThrottler(res))
+	}
+
+	s.setLicense(res, l)
 	setSharedService(res, s)
 }
 

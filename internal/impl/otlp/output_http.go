@@ -280,6 +280,7 @@ func init() {
 				return
 			}
 
+			o = license.WrapBatchOutput(mgr, o)
 			return
 		})
 }

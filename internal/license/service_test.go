@@ -30,5 +30,32 @@ func TestLicenseEnterpriseNoLicense(t *testing.T) {
 	loaded, err := LoadFromResources(res)
 	require.NoError(t, err)
 
+	// No production license, no env var → open-source, no enterprise features.
 	assert.False(t, loaded.AllowsEnterpriseFeatures())
+
+	svc := getSharedService(res)
+	require.NotNil(t, svc)
+	assert.False(t, svc.isTestLicense)
+	assert.Nil(t, getThrottler(res))
+}
+
+func TestLicenseDevLicenseEnvVar(t *testing.T) {
+	t.Setenv("REDPANDA_CONNECT_DEV_LICENSE", "1")
+
+	tmpDir := t.TempDir()
+	res := service.MockResources()
+	RegisterService(res, Config{
+		customDefaultLicenseFilepath: filepath.Join(tmpDir, "missing.license"),
+	})
+
+	loaded, err := LoadFromResources(res)
+	require.NoError(t, err)
+
+	// Env var set → embedded test license with enterprise access and throttler.
+	assert.True(t, loaded.AllowsEnterpriseFeatures())
+
+	svc := getSharedService(res)
+	require.NotNil(t, svc)
+	assert.True(t, svc.isTestLicense)
+	assert.NotNil(t, getThrottler(res))
 }

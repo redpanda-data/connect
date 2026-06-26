@@ -176,6 +176,7 @@ redpanda_agent_runtime:
 		}
 		return stream, nil
 	}
+	var primaryRes *service.Resources
 	for name, agent := range config.Agents {
 		stream, err := buildStream(name, agent)
 		if err != nil {
@@ -183,10 +184,12 @@ redpanda_agent_runtime:
 			cancel(err)
 			break
 		}
-		license.RegisterService(
-			stream.Resources(),
-			licenseConfig,
-		)
+		if primaryRes == nil {
+			license.RegisterService(stream.Resources(), licenseConfig)
+			primaryRes = stream.Resources()
+		} else {
+			license.RegisterServiceFrom(primaryRes, stream.Resources())
+		}
 		eg.Go(func() error { return stream.Run(ctx) })
 	}
 	if config.HTTP.enabled {

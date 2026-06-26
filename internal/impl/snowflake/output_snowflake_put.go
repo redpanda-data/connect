@@ -404,6 +404,9 @@ func init() {
 				return
 			}
 			output, err = newSnowflakeWriterFromConfig(conf, mgr)
+			if err == nil {
+				output = license.WrapBatchOutput(mgr, output)
+			}
 			return
 		})
 }

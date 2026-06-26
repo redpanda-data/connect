@@ -46,6 +46,35 @@ func CheckRunningEnterprise(res *service.Resources) error {
 	return nil
 }
 
+// WrapBatchOutput wraps output with throughput throttling when running under
+// the embedded test license. Returns output unchanged under a production license
+// or when no license service is registered.
+func WrapBatchOutput(res *service.Resources, output service.BatchOutput) service.BatchOutput {
+	svc := getSharedService(res)
+	if svc == nil || !svc.isTestLicense {
+		return output
+	}
+	t := getThrottler(res)
+	if t == nil {
+		return output
+	}
+	return &throttledBatchOutput{wrapped: output, throttler: t}
+}
+
+// RegisterServiceFrom copies the license service and throttler from src to dst.
+// Use in agent mode so all per-stream Resources share one Service and Throttler
+// rather than each getting an independent token bucket.
+func RegisterServiceFrom(src, dst *service.Resources) {
+	svc := getSharedService(src)
+	if svc == nil {
+		return
+	}
+	setSharedService(dst, svc)
+	if t := getThrottler(src); t != nil {
+		registerThrottler(dst, t)
+	}
+}
+
 type sharedServiceKeyType int
 
 var sharedServiceKey sharedServiceKeyType
@@ -60,4 +89,20 @@ func getSharedService(res *service.Resources) *Service {
 		return nil
 	}
 	return reg.(*Service)
+}
+
+type throttlerKeyType int
+
+var throttlerKey throttlerKeyType
+
+func registerThrottler(res *service.Resources, t *Throttler) {
+	res.SetGeneric(throttlerKey, t)
+}
+
+func getThrottler(res *service.Resources) *Throttler {
+	v, _ := res.GetGeneric(throttlerKey)
+	if v == nil {
+		return nil
+	}
+	return v.(*Throttler)
 }

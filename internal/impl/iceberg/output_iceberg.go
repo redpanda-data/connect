@@ -57,6 +57,7 @@ func init() {
 				return
 			}
 
+			output = license.WrapBatchOutput(mgr, output)
 			return
 		})
 }
