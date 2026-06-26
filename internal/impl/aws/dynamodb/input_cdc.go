@@ -2196,19 +2196,34 @@ func (d *dynamoDBCDCInput) startTableShardReader(ctx context.Context, tableName 
 	}
 }
 
+// shouldSkipFailoverRecord reports whether a record was already processed in the
+// prior region during a global-table failover replay and may be skipped.
+//
+// The cutoff is the minimum ApproximateCreationTime across the prior region's
+// checkpoints. DynamoDB Streams ApproximateCreationDateTime is second-granular,
+// so records can share the cutoff second; on the shard whose checkpoint defines
+// the cutoff, records in that same second that followed the checkpointed
+// position were never processed in the prior region. Skipping only records
+// strictly before the cutoff replays that boundary second (acceptable
+// duplicates) rather than dropping it, preserving at-least-once delivery.
+func shouldSkipFailoverRecord(record types.Record, failoverCutoff time.Time) bool {
+	if failoverCutoff.IsZero() || record.Dynamodb == nil || record.Dynamodb.ApproximateCreationDateTime == nil {
+		return false
+	}
+	return record.Dynamodb.ApproximateCreationDateTime.Before(failoverCutoff)
+}
+
 // convertTableRecordsToBatch converts DynamoDB Stream records to Benthos messages for a specific table
 func convertTableRecordsToBatch(records []types.Record, tableName, shardID string, dedupeBuffer *snapshotSequenceBuffer, failoverCutoff time.Time, failoverSkipped *service.MetricCounter) service.MessageBatch {
 	batch := make(service.MessageBatch, 0, len(records))
 
 	for _, record := range records {
 		// Global-table failover: skip records already processed in the prior region.
-		if !failoverCutoff.IsZero() && record.Dynamodb != nil && record.Dynamodb.ApproximateCreationDateTime != nil {
-			if !record.Dynamodb.ApproximateCreationDateTime.After(failoverCutoff) {
-				if failoverSkipped != nil {
-					failoverSkipped.Incr(1)
-				}
-				continue
+		if shouldSkipFailoverRecord(record, failoverCutoff) {
+			if failoverSkipped != nil {
+				failoverSkipped.Incr(1)
 			}
+			continue
 		}
 
 		// CDC deduplication: skip records already seen in snapshot
@@ -2809,13 +2824,11 @@ func (d *dynamoDBCDCInput) convertRecordsToBatch(records []types.Record, shardID
 
 	for _, record := range records {
 		// Global-table failover: skip records already processed in the prior region.
-		if !failoverCutoff.IsZero() && record.Dynamodb != nil && record.Dynamodb.ApproximateCreationDateTime != nil {
-			if !record.Dynamodb.ApproximateCreationDateTime.After(failoverCutoff) {
-				if d.metrics.failoverSkipped != nil {
-					d.metrics.failoverSkipped.Incr(1)
-				}
-				continue
+		if shouldSkipFailoverRecord(record, failoverCutoff) {
+			if d.metrics.failoverSkipped != nil {
+				d.metrics.failoverSkipped.Incr(1)
 			}
+			continue
 		}
 
 		// CDC deduplication: skip records already seen in snapshot

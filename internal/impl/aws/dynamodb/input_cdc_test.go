@@ -37,6 +37,45 @@ func TestConvertTableRecordsToBatch_FailoverSkipsOldRecords(t *testing.T) {
 	require.Equal(t, "2", seq)
 }
 
+// ApproximateCreationDateTime is second-granular, so records can share the
+// cutoff second. The cutoff is the minimum foreign checkpoint time, so records
+// in that exact second may not have been processed in the prior region; they
+// must be replayed (at-least-once) rather than dropped. Only strictly-older
+// records are skipped.
+func TestConvertTableRecordsToBatch_FailoverKeepsBoundarySecond(t *testing.T) {
+	cutoff := time.Date(2026, 6, 16, 10, 0, 0, 0, time.UTC)
+	before := cutoff.Add(-time.Second)
+	atCutoff := cutoff // same second as the cutoff -> must be kept
+	after := cutoff.Add(time.Second)
+	records := []streamstypes.Record{
+		{Dynamodb: &streamstypes.StreamRecord{ApproximateCreationDateTime: &before, SequenceNumber: aws.String("1")}},
+		{Dynamodb: &streamstypes.StreamRecord{ApproximateCreationDateTime: &atCutoff, SequenceNumber: aws.String("2")}},
+		{Dynamodb: &streamstypes.StreamRecord{ApproximateCreationDateTime: &after, SequenceNumber: aws.String("3")}},
+	}
+	skipped := service.MockResources().Metrics().NewCounter("test_skipped_boundary")
+	batch := convertTableRecordsToBatch(records, "t", "shard-1", nil, cutoff, skipped)
+	require.Len(t, batch, 2)
+	seq0, _ := batch[0].MetaGet("dynamodb_sequence_number")
+	seq1, _ := batch[1].MetaGet("dynamodb_sequence_number")
+	require.Equal(t, "2", seq0)
+	require.Equal(t, "3", seq1)
+}
+
+func TestShouldSkipFailoverRecord(t *testing.T) {
+	cutoff := time.Date(2026, 6, 16, 10, 0, 0, 0, time.UTC)
+	rec := func(ts *time.Time) streamstypes.Record {
+		return streamstypes.Record{Dynamodb: &streamstypes.StreamRecord{ApproximateCreationDateTime: ts}}
+	}
+	before := cutoff.Add(-time.Second)
+	after := cutoff.Add(time.Second)
+
+	require.True(t, shouldSkipFailoverRecord(rec(&before), cutoff), "strictly older record is skipped")
+	require.False(t, shouldSkipFailoverRecord(rec(&cutoff), cutoff), "boundary-second record is kept (at-least-once)")
+	require.False(t, shouldSkipFailoverRecord(rec(&after), cutoff), "newer record is kept")
+	require.False(t, shouldSkipFailoverRecord(rec(&before), time.Time{}), "no cutoff -> never skip")
+	require.False(t, shouldSkipFailoverRecord(rec(nil), cutoff), "missing timestamp -> never skip")
+}
+
 func TestGlobalTableConfigParsing(t *testing.T) {
 	spec := dynamoDBCDCInputConfig()
 	env := service.NewEnvironment()
