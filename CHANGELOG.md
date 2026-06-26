@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+### Fixed
+
+- The IANA time zone database is now embedded in all distributed binaries, so components that resolve named time zones (such as the `jira` input rendering JQL date predicates in the account timezone) work correctly in the stripped release container images, which carry no system zoneinfo.
+
 ## 4.98.0 - 2026-06-26
 
 ### Added

@@ -20,6 +20,10 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	_ "github.com/redpanda-data/connect/public/bundle/free/v4"
+
+	// Embed the IANA tz database so time.LoadLocation works in the stripped
+	// release image (no system zoneinfo). See internal/tzdata.
+	_ "github.com/redpanda-data/connect/v4/internal/tzdata"
 )
 
 var (

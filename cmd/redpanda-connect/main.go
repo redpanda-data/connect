@@ -19,6 +19,10 @@ import (
 	"github.com/redpanda-data/connect/v4/public/schema"
 
 	_ "github.com/redpanda-data/connect/v4/public/components/all"
+
+	// Embed the IANA tz database so time.LoadLocation works in the stripped
+	// release image (no system zoneinfo). See internal/tzdata.
+	_ "github.com/redpanda-data/connect/v4/internal/tzdata"
 )
 
 var (

@@ -29,6 +29,10 @@ import (
 	_ "github.com/redpanda-data/connect/v4/public/components/cloud"
 	// Add in extra new AI plugins
 	_ "github.com/redpanda-data/connect/v4/public/components/ollama"
+
+	// Embed the IANA tz database so time.LoadLocation works in the stripped
+	// release image (no system zoneinfo). See internal/tzdata.
+	_ "github.com/redpanda-data/connect/v4/internal/tzdata"
 )
 
 var (
