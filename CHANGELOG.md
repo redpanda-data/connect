@@ -3,6 +3,24 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.98.0 - 2026-06-26
+
+### Added
+
+- postgres_cdc: PostgreSQL CDC events now include commit_ts_ms metadata field with the transaction commit timestamp for insert, update, and delete operations. ([@josephwoodward](https://github.com/josephwoodward), [#4554](https://github.com/redpanda-data/connect/pull/4554))
+
+### Fixed
+
+- aws_dynamodb_cdc: DynamoDB Streams connector now recovers from expired shard iterators by re-acquiring fresh iterators from the last read position, eliminating data gaps on prolonged backpressure or idle periods. ([@squiidz](https://github.com/squiidz), [#4545](https://github.com/redpanda-data/connect/pull/4545))
+- file: File output now validates paths to reject OS-specific invalid characters (colons on macOS, control characters and special chars on Windows, NUL on all platforms) that cause silent data loss. ([@twmb](https://github.com/twmb), [#4053](https://github.com/redpanda-data/connect/pull/4053))
+- oracledb_cdc: Fixed goroutine leak in streaming reconnect loop and added time-to-first-row metric for LogMiner performance tracking. ([@josephwoodward](https://github.com/josephwoodward), [#4540](https://github.com/redpanda-data/connect/pull/4540))
+
+### Changed
+
+- general: try_catch processor is now available in cloud distributions alongside other try/catch processors. ([@josephwoodward](https://github.com/josephwoodward), [#4562](https://github.com/redpanda-data/connect/pull/4562))
+- oracledb_cdc: Snapshot messages now include the current SCN in metadata, improving CDC standard conformance for change data capture operations. ([@josephwoodward](https://github.com/josephwoodward), [#4542](https://github.com/redpanda-data/connect/pull/4542))
+- sentry: Migrated sentry_capture processor to sentry-go v0.47.0 by attaching extras as a context instead of the removed SetExtras API. ([@twmb](https://github.com/twmb), [#4549](https://github.com/redpanda-data/connect/pull/4549))
+
 ## Unreleased
 
 ### Fixed
