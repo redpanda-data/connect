@@ -436,6 +436,12 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 			if err := p.dropReplicationSlot(ctx); err != nil {
 				return fmt.Errorf("dropping replication slot for re-snapshot: %w", err)
 			}
+
+			// ensure we only snapshot tables specified in control signal
+			if len(signal.DataCollections) > 0 {
+				p.streamConfig.SnapshotTables = signal.FilterTables(p.streamConfig.DBSchema, p.streamConfig.DBTables)
+				defer func() { p.streamConfig.SnapshotTables = nil }()
+			}
 		}
 	} else {
 		p.streamConfig.StreamOldData = p.streamSnapshot

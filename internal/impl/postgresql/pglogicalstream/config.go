@@ -44,6 +44,9 @@ type Config struct {
 	// table are treated as control signals rather than data, and the table is
 	// excluded from snapshot scans.
 	SignalTableName string
+	// SnapshotTables overrides DBTables for snapshot scans when non-empty.
+	// The publication always tracks DBTables regardless of this field.
+	SnapshotTables []string
 
 	Logger *service.Logger
 

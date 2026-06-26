@@ -104,6 +104,18 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		tables = append(tables, TableFQN{Schema: schema, Table: normalized})
 	}
 
+	snapshotTables := tables
+	if len(config.SnapshotTables) > 0 {
+		snapshotTables = make([]TableFQN, 0, len(config.SnapshotTables))
+		for _, table := range config.SnapshotTables {
+			normalized, err := sanitize.NormalizePostgresIdentifier(table)
+			if err != nil {
+				return nil, fmt.Errorf("invalid snapshot table name %q: %w", table, err)
+			}
+			snapshotTables = append(snapshotTables, TableFQN{Schema: schema, Table: normalized})
+		}
+	}
+
 	batchSize := 1000
 	if config.BatchSize > 0 {
 		batchSize = config.BatchSize
@@ -255,11 +267,11 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		defer done()
 		var startLSN LSN
 		if snapshotter != nil {
-			if err = stream.processSnapshot(ctx, tables, snapshotter); err != nil {
+			if err = stream.processSnapshot(ctx, snapshotTables, snapshotter); err != nil {
 				stream.errors <- fmt.Errorf("processing snapshot: %w", err)
 				return
 			}
-			for _, table := range tables {
+			for _, table := range snapshotTables {
 				stream.monitor.MarkSnapshotComplete(table)
 			}
 			// TODO: Do we want to ensure all snapshot messages are ack'd before moving
