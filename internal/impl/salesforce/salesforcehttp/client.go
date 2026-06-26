@@ -1017,8 +1017,9 @@ func extractFieldNames(describeJSON []byte) ([]string, error) {
 	return fields, nil
 }
 
-// DescribeWritableFields returns the set of field names that are updateable for the given SObject.
-func (s *Client) DescribeWritableFields(ctx context.Context, sobject string) (map[string]struct{}, error) {
+// DescribeWritableFields returns the set of field names writable for the given SObject and operation.
+// insert → createable fields; update → updateable fields; upsert (or other) → createable or updateable.
+func (s *Client) DescribeWritableFields(ctx context.Context, sobject, operation string) (map[string]struct{}, error) {
 	raw, err := s.GetSObjectResource(ctx, sobject)
 	if err != nil {
 		return nil, fmt.Errorf("describe %s: %w", sobject, err)
@@ -1029,8 +1030,19 @@ func (s *Client) DescribeWritableFields(ctx context.Context, sobject string) (ma
 	}
 	fields := make(map[string]struct{}, len(dr.Fields))
 	for _, f := range dr.Fields {
-		if f.Updateable || f.Createable {
-			fields[f.Name] = struct{}{}
+		switch operation {
+		case "insert":
+			if f.Createable {
+				fields[f.Name] = struct{}{}
+			}
+		case "update":
+			if f.Updateable {
+				fields[f.Name] = struct{}{}
+			}
+		default: // upsert: a record may be inserted or updated, so include both
+			if f.Createable || f.Updateable {
+				fields[f.Name] = struct{}{}
+			}
 		}
 	}
 	return fields, nil

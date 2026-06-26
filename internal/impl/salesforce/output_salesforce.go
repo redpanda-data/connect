@@ -421,11 +421,19 @@ func (s *salesforceSinkOutput) Close(ctx context.Context) error {
 	return firstErr
 }
 
-// getWritableFields returns a copy of the cached updateable field set for an SObject, fetching it on first call.
-// A copy is returned so callers can iterate safely while blockFields mutates the underlying map concurrently.
-func (s *salesforceSinkOutput) getWritableFields(ctx context.Context, sobject string) (map[string]struct{}, error) {
+// writableKey returns the cache key for (sobject, operation) pairs so that different operations
+// on the same SObject don't share or poison each other's writable-field sets.
+func writableKey(sobject, operation string) string {
+	return sobject + ":" + operation
+}
+
+// getWritableFields returns a copy of the cached writable field set for the given SObject and operation,
+// fetching from Salesforce on first call. A copy is returned so callers can iterate safely while
+// blockFields mutates the underlying map concurrently.
+func (s *salesforceSinkOutput) getWritableFields(ctx context.Context, sobject, operation string) (map[string]struct{}, error) {
+	key := writableKey(sobject, operation)
 	s.writableFieldsMu.RLock()
-	fields, ok := s.writableFields[sobject]
+	fields, ok := s.writableFields[key]
 	if ok {
 		cp := copyStringSet(fields)
 		s.writableFieldsMu.RUnlock()
@@ -433,20 +441,20 @@ func (s *salesforceSinkOutput) getWritableFields(ctx context.Context, sobject st
 	}
 	s.writableFieldsMu.RUnlock()
 
-	fields, err := s.client.DescribeWritableFields(ctx, sobject)
+	fields, err := s.client.DescribeWritableFields(ctx, sobject, operation)
 	if err != nil {
 		return nil, err
 	}
 
 	s.writableFieldsMu.Lock()
-	if existing, ok := s.writableFields[sobject]; ok {
+	if existing, ok := s.writableFields[key]; ok {
 		s.writableFieldsMu.Unlock()
 		return copyStringSet(existing), nil
 	}
-	s.writableFields[sobject] = fields
+	s.writableFields[key] = fields
 	s.writableFieldsMu.Unlock()
 
-	s.log.Debugf("salesforce_sink: %s has %d updateable fields", sobject, len(fields))
+	s.log.Debugf("salesforce_sink: %s (%s) has %d writable fields", sobject, operation, len(fields))
 	return copyStringSet(fields), nil
 }
 
@@ -458,29 +466,30 @@ func copyStringSet(m map[string]struct{}) map[string]struct{} {
 	return cp
 }
 
-// blockFields removes fields from the writable cache for sobject and logs all blocked fields so far.
-// Called when Salesforce rejects fields with INVALID_FIELD_FOR_INSERT_UPDATE.
-func (s *salesforceSinkOutput) blockFields(sobject string, newBlocked []string) {
+// blockFields removes fields from the writable cache for the given sobject+operation and logs all
+// blocked fields so far. Called when Salesforce rejects fields with INVALID_FIELD_FOR_INSERT_UPDATE.
+func (s *salesforceSinkOutput) blockFields(sobject, operation string, newBlocked []string) {
+	key := writableKey(sobject, operation)
 	s.writableFieldsMu.Lock()
 	defer s.writableFieldsMu.Unlock()
-	fields := s.writableFields[sobject]
+	fields := s.writableFields[key]
 	var newlyBlocked []string
 	for _, f := range newBlocked {
-		if _, already := s.blockedFields[sobject][f]; !already {
+		if _, already := s.blockedFields[key][f]; !already {
 			delete(fields, f)
-			if s.blockedFields[sobject] == nil {
-				s.blockedFields[sobject] = make(map[string]struct{})
+			if s.blockedFields[key] == nil {
+				s.blockedFields[key] = make(map[string]struct{})
 			}
-			s.blockedFields[sobject][f] = struct{}{}
+			s.blockedFields[key][f] = struct{}{}
 			newlyBlocked = append(newlyBlocked, f)
 		}
 	}
 	if len(newlyBlocked) > 0 {
-		blocked := make([]string, 0, len(s.blockedFields[sobject]))
-		for f := range s.blockedFields[sobject] {
+		blocked := make([]string, 0, len(s.blockedFields[key]))
+		for f := range s.blockedFields[key] {
 			blocked = append(blocked, f)
 		}
-		s.log.Warnf("salesforce_sink: %s: profile-blocked fields (total %d): %v", sobject, len(blocked), blocked)
+		s.log.Warnf("salesforce_sink: %s (%s): profile-blocked fields (total %d): %v", sobject, operation, len(blocked), blocked)
 	}
 }
 
@@ -523,12 +532,8 @@ func (s *salesforceSinkOutput) writeRealtime(ctx context.Context, records []map[
 }
 
 func (s *salesforceSinkOutput) writeRealtimeChunk(ctx context.Context, records []map[string]any, m topicMapping, retries int) error {
-	writable, err := s.getWritableFields(ctx, m.sobject)
-	if err != nil {
-		return fmt.Errorf("salesforce_sink: could not describe %s: %w", m.sobject, err)
-	}
-
 	var respBody []byte
+	var err error
 
 	if m.operation == "delete" {
 		// DELETE /composite/sobjects?ids=id1,id2&allOrNone=false — no body.
@@ -542,6 +547,11 @@ func (s *salesforceSinkOutput) writeRealtimeChunk(ctx context.Context, records [
 		rawURL := s.client.OrgURL() + basePath + "?ids=" + strings.Join(ids, ",") + "&allOrNone=" + strconv.FormatBool(m.allOrNone)
 		respBody, err = s.client.DeleteJSON(ctx, rawURL)
 	} else {
+		var writable map[string]struct{}
+		writable, err = s.getWritableFields(ctx, m.sobject, m.operation)
+		if err != nil {
+			return fmt.Errorf("salesforce_sink: could not describe %s: %w", m.sobject, err)
+		}
 		wrapped := make([]map[string]any, len(records))
 		for i, rec := range records {
 			r := filterRecord(rec, writable)
@@ -584,7 +594,7 @@ func (s *salesforceSinkOutput) writeRealtimeChunk(ctx context.Context, records [
 		}
 	}
 	if len(blocked) > 0 {
-		s.blockFields(m.sobject, blocked)
+		s.blockFields(m.sobject, m.operation, blocked)
 		// Only retry for idempotent operations (upsert/update). For insert, already-succeeded
 		// records have been committed by Salesforce and re-sending would create duplicates.
 		// When allOrNone=false the batch is partially committed, so retrying the full chunk
@@ -652,7 +662,7 @@ func (s *salesforceSinkOutput) writeBulk(ctx context.Context, records []map[stri
 		return nil
 	}
 
-	writable, err := s.getWritableFields(ctx, m.sobject)
+	writable, err := s.getWritableFields(ctx, m.sobject, m.operation)
 	if err != nil {
 		return fmt.Errorf("salesforce_sink: could not describe %s: %w", m.sobject, err)
 	}

@@ -111,44 +111,43 @@ func mustParseURL(s string) *url.URL {
 func TestDescribeWritableFields(t *testing.T) {
 	t.Parallel()
 
+	// allFields describes a mixed SObject: Name is updateable-only, MyField__c is createable-only,
+	// BothField__c is both, and ReadOnly__c is neither.
+	allFields := []map[string]any{
+		{"name": "Name", "createable": false, "updateable": true},
+		{"name": "MyField__c", "createable": true, "updateable": false},
+		{"name": "BothField__c", "createable": true, "updateable": true},
+		{"name": "ReadOnly__c", "createable": false, "updateable": false},
+	}
+
 	tests := []struct {
 		name         string
-		fields       []map[string]any
+		operation    string
 		wantWritable []string
 		wantExcluded []string
 	}{
 		{
-			name: "updateable only included",
-			fields: []map[string]any{
-				{"name": "Name", "createable": false, "updateable": true},
-				{"name": "ReadOnly__c", "createable": false, "updateable": false},
-			},
-			wantWritable: []string{"Name"},
+			name:         "insert includes only createable fields",
+			operation:    "insert",
+			wantWritable: []string{"MyField__c", "BothField__c"},
+			wantExcluded: []string{"Name", "ReadOnly__c"},
+		},
+		{
+			name:         "update includes only updateable fields",
+			operation:    "update",
+			wantWritable: []string{"Name", "BothField__c"},
+			wantExcluded: []string{"MyField__c", "ReadOnly__c"},
+		},
+		{
+			name:         "upsert includes createable or updateable fields",
+			operation:    "upsert",
+			wantWritable: []string{"Name", "MyField__c", "BothField__c"},
 			wantExcluded: []string{"ReadOnly__c"},
 		},
 		{
-			name: "createable only included (Platform Event custom fields)",
-			fields: []map[string]any{
-				{"name": "MyField__c", "createable": true, "updateable": false},
-				{"name": "AnotherField__c", "createable": true, "updateable": false},
-				{"name": "ReadOnly__c", "createable": false, "updateable": false},
-			},
-			wantWritable: []string{"MyField__c", "AnotherField__c"},
+			name:         "read-only fields excluded for all operations",
+			operation:    "insert",
 			wantExcluded: []string{"ReadOnly__c"},
-		},
-		{
-			name: "createable and updateable both included",
-			fields: []map[string]any{
-				{"name": "Name", "createable": true, "updateable": true},
-			},
-			wantWritable: []string{"Name"},
-		},
-		{
-			name: "neither createable nor updateable excluded",
-			fields: []map[string]any{
-				{"name": "SystemField__c", "createable": false, "updateable": false},
-			},
-			wantExcluded: []string{"SystemField__c"},
 		},
 	}
 
@@ -161,7 +160,7 @@ func TestDescribeWritableFields(t *testing.T) {
 				case "/services/oauth2/token":
 					_, _ = w.Write([]byte(`{"access_token":"test-token"}`))
 				case "/services/data/v65.0/sobjects/MyObject__c/describe":
-					_ = json.NewEncoder(w).Encode(map[string]any{"fields": tc.fields})
+					_ = json.NewEncoder(w).Encode(map[string]any{"fields": allFields})
 				default:
 					w.WriteHeader(http.StatusNotFound)
 				}
@@ -179,7 +178,7 @@ func TestDescribeWritableFields(t *testing.T) {
 			require.NoError(t, err)
 			client.bearerToken.Store("test-token")
 
-			got, err := client.DescribeWritableFields(t.Context(), "MyObject__c")
+			got, err := client.DescribeWritableFields(t.Context(), "MyObject__c", tc.operation)
 			require.NoError(t, err)
 
 			for _, f := range tc.wantWritable {
@@ -188,7 +187,9 @@ func TestDescribeWritableFields(t *testing.T) {
 			for _, f := range tc.wantExcluded {
 				assert.NotContains(t, got, f)
 			}
-			assert.Len(t, got, len(tc.wantWritable))
+			if len(tc.wantWritable) > 0 {
+				assert.Len(t, got, len(tc.wantWritable))
+			}
 		})
 	}
 }
