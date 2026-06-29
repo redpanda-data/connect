@@ -85,11 +85,10 @@ func (p *batchPublisher) loop() {
 		flushBatch = flushBatchTicker.C
 	}
 
-	// Use HardStopCtx (not SoftStopCtx) so that a soft-stop signal exits the
-	// select loop without cancelling an in-flight publishBatch send. This lets
-	// FlushRemaining drain the loop before taking over as sole flusher, without
-	// risking an aborted send dropping the last batch.
-	closeAtLeisureCtx, done := p.shutSig.HardStopCtx(context.Background())
+	// hardStopCtx survives a soft stop so that an in-flight publishBatch send can
+	// complete before the loop exits. Only a hard stop (triggered by Close)
+	// cancels it, which is the forced-shutdown last resort.
+	hardStopCtx, done := p.shutSig.HardStopCtx(context.Background())
 	defer done()
 
 	for {
@@ -111,13 +110,13 @@ func (p *batchPublisher) loop() {
 					return
 				}
 
-				if sendBatch, _ = p.batcher.Flush(closeAtLeisureCtx); len(sendBatch) == 0 {
+				if sendBatch, _ = p.batcher.Flush(hardStopCtx); len(sendBatch) == 0 {
 					return
 				}
 			}()
 
 			if len(sendBatch) > 0 {
-				if err := p.publishBatch(closeAtLeisureCtx, sendBatch); err != nil {
+				if err := p.publishBatch(hardStopCtx, sendBatch); err != nil {
 					return
 				}
 			}
@@ -276,17 +275,6 @@ func (b *batchPublisher) msgs() <-chan asyncMessage {
 
 // FlushRemaining stops the loop goroutine and then flushes any partial batch
 // still held in the batcher, blocking until it is consumed by ReadBatch.
-//
-// Stopping the loop first is necessary to eliminate the race where loop() wins
-// the batcherMu lock, flushes the residual batch, and blocks on msgChan while
-// we simultaneously see an empty batcher and signal end-of-input — leaving
-// loop()'s pending send racing against the stop channel in ReadBatch's select.
-//
-// Because loop() uses HardStopCtx for its publishBatch calls, triggering a soft
-// stop here exits the select but does not cancel an in-flight send. We wait for
-// HasStoppedChan() before touching the batcher, guaranteeing loop() has fully
-// exited (and any in-flight send has been consumed) before we become the sole
-// flusher.
 func (b *batchPublisher) FlushRemaining(ctx context.Context) error {
 	if b.batcher == nil {
 		return nil

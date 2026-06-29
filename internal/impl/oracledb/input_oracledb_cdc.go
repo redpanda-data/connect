@@ -580,7 +580,7 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 			if err = o.publisher.FlushRemaining(softCtx); err != nil {
 				o.log.Errorf("Failed to flush remaining snapshot events: %s", err)
 			}
-			o.log.Infof("Snapshot-only mode complete, stopping")
+			o.log.Infof("Snapshot-only mode complete, stopping at SCN %s", startSCN)
 			o.snapshotOnlyDone.Store(true)
 			o.stopSig.TriggerHasStopped()
 			return
