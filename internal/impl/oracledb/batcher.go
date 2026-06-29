@@ -54,12 +54,7 @@ func newBatchPublisher(batcher *service.Batcher, checkpoint *checkpoint.Capped[r
 // loop creates a long-running process that periodically flushes batches by configured interval.
 // lifted from internal/impl/kafka/franz_reader_ordered.go
 func (p *batchPublisher) loop() {
-	defer func() {
-		if p.batcher != nil {
-			p.batcher.Close(context.Background())
-		}
-		p.shutSig.TriggerHasStopped()
-	}()
+	defer p.shutSig.TriggerHasStopped()
 
 	// No need to loop when there's no batcher for async writes.
 	if p.batcher == nil {
@@ -90,7 +85,11 @@ func (p *batchPublisher) loop() {
 		flushBatch = flushBatchTicker.C
 	}
 
-	closeAtLeisureCtx, done := p.shutSig.SoftStopCtx(context.Background())
+	// Use HardStopCtx (not SoftStopCtx) so that a soft-stop signal exits the
+	// select loop without cancelling an in-flight publishBatch send. This lets
+	// FlushRemaining drain the loop before taking over as sole flusher, without
+	// risking an aborted send dropping the last batch.
+	closeAtLeisureCtx, done := p.shutSig.HardStopCtx(context.Background())
 	defer done()
 
 	for {
@@ -275,14 +274,26 @@ func (b *batchPublisher) msgs() <-chan asyncMessage {
 	return b.msgChan
 }
 
-// FlushRemaining flushes any partial batch held in the batcher and blocks until
-// it has been consumed by ReadBatch. Call this after all events have been
-// published and before signalling end-of-input, to avoid dropping the last
-// partial batch.
+// FlushRemaining stops the loop goroutine and then flushes any partial batch
+// still held in the batcher, blocking until it is consumed by ReadBatch.
+//
+// Stopping the loop first is necessary to eliminate the race where loop() wins
+// the batcherMu lock, flushes the residual batch, and blocks on msgChan while
+// we simultaneously see an empty batcher and signal end-of-input — leaving
+// loop()'s pending send racing against the stop channel in ReadBatch's select.
+//
+// Because loop() uses HardStopCtx for its publishBatch calls, triggering a soft
+// stop here exits the select but does not cancel an in-flight send. We wait for
+// HasStoppedChan() before touching the batcher, guaranteeing loop() has fully
+// exited (and any in-flight send has been consumed) before we become the sole
+// flusher.
 func (b *batchPublisher) FlushRemaining(ctx context.Context) error {
 	if b.batcher == nil {
 		return nil
 	}
+	b.shutSig.TriggerSoftStop()
+	<-b.shutSig.HasStoppedChan()
+
 	b.batcherMu.Lock()
 	remaining, err := b.batcher.Flush(ctx)
 	b.batcherMu.Unlock()
@@ -293,7 +304,13 @@ func (b *batchPublisher) FlushRemaining(ctx context.Context) error {
 }
 
 // Close signals the publisher's loop goroutine to stop and waits for it to exit.
+// TriggerHardStop cancels the HardStopCtx used by publishBatch, unblocking any
+// send that is waiting on msgChan when no consumer is left.
 func (b *batchPublisher) Close() {
 	b.shutSig.TriggerSoftStop()
+	b.shutSig.TriggerHardStop()
 	<-b.shutSig.HasStoppedChan()
+	if b.batcher != nil {
+		_ = b.batcher.Close(context.Background())
+	}
 }
