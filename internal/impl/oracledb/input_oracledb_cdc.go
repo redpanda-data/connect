@@ -16,6 +16,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/Jeffail/checkpoint"
@@ -231,9 +232,10 @@ type oracleDBCDCInput struct {
 	publisher *batchPublisher
 	metrics   *service.Metrics
 
-	stopSig *shutdown.Signaller
-	log     *service.Logger
-	cpCache service.Cache
+	stopSig          *shutdown.Signaller
+	snapshotOnlyDone atomic.Bool
+	log              *service.Logger
+	cpCache          service.Cache
 }
 
 func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resources) (s service.BatchInput, err error) {
@@ -541,8 +543,9 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 		o.log.Infof("No cached SCN found, fetched current position from database: %d", cachedSCN)
 	}
 
-	// Reset our stop signal
+	// Reset our stop signal and snapshot-only completion flag
 	o.stopSig = shutdown.NewSignaller()
+	o.snapshotOnlyDone.Store(false)
 
 	go func() {
 		var (
@@ -575,6 +578,7 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 
 		if o.cfg.SnapshotMode == SnapshotModeSnapshotOnly {
 			o.log.Infof("Snapshot-only mode complete, stopping")
+			o.snapshotOnlyDone.Store(true)
 			o.stopSig.TriggerHasStopped()
 			return
 		}
@@ -660,6 +664,9 @@ func (o *oracleDBCDCInput) ReadBatch(ctx context.Context) (service.MessageBatch,
 	case m := <-o.publisher.msgs():
 		return m.msg, m.ackFn, nil
 	case <-o.stopSig.HasStoppedChan():
+		if o.snapshotOnlyDone.Load() {
+			return nil, nil, service.ErrEndOfInput
+		}
 		return nil, nil, service.ErrNotConnected
 	case <-ctx.Done():
 		return nil, nil, ctx.Err()
