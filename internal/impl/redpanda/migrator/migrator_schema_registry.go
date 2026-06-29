@@ -946,8 +946,9 @@ type importModeManager struct {
 	*schemaRegistryMigrator
 	active bool
 
-	mu       sync.RWMutex
-	prevMode map[string]sr.Mode // destination subject -> previous mode (or noMode if not set)
+	mu         sync.RWMutex
+	prevMode   map[string]sr.Mode // destination subject -> previous mode (or noMode if not set)
+	callbackMu sync.Mutex         // serializes TestingOnSetSubjectMode calls from concurrent goroutines
 }
 
 func (m *schemaRegistryMigrator) newImportModeManager(ctx context.Context) (*importModeManager, error) {
@@ -1124,7 +1125,9 @@ func (c *importModeManager) setSubjectMode(ctx context.Context, subject string, 
 	}
 
 	if c.conf.TestingOnSetSubjectMode != nil {
+		c.callbackMu.Lock()
 		c.conf.TestingOnSetSubjectMode(subject, mode)
+		c.callbackMu.Unlock()
 	}
 
 	return nil

@@ -17,7 +17,6 @@ package telemetry
 import (
 	"fmt"
 	"runtime"
-	"time"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
@@ -60,14 +59,24 @@ type payload struct {
 
 	// Information about the host and process
 	HostInfo hostInfo `json:"hostInfo"`
+
+	// DeploymentType identifies how this Connect instance is deployed. Expected
+	// values: "self-hosted", "byoc", "serverless". Empty when not set.
+	DeploymentType string `json:"deploymentType,omitempty"`
+
+	// TenantID identifies the owning tenant for cloud-managed deployments
+	// (typically the Redpanda Cloud organization ID). Empty for self-hosted.
+	TenantID string `json:"tenantId,omitempty"`
 }
 
 // All information sent during a telemetry export is extracted within this
 // function and stored within the payload.
-func extractPayload(identifier string, logger *service.Logger, schema *service.ConfigSchema, conf *service.ParsedConfig) (*payload, error) {
+func extractPayload(identifier, deploymentType, tenantID string, logger *service.Logger, schema *service.ConfigSchema, conf *service.ParsedConfig) (*payload, error) {
 	p := payload{
-		ID:     identifier,
-		Uptime: 0,
+		ID:             identifier,
+		Uptime:         0,
+		DeploymentType: deploymentType,
+		TenantID:       tenantID,
 		HostInfo: hostInfo{
 			NumCPU:     runtime.NumCPU(),
 			GoMaxProcs: runtime.GOMAXPROCS(0), // using 0 means to just read the value
@@ -92,21 +101,4 @@ func extractPayload(identifier string, logger *service.Logger, schema *service.C
 	}
 
 	return &p, nil
-}
-
-// This function runs asynchronously and is solely where telemetry data is
-// exported.
-func exporterLoop(p *payload, exportDelay, exportPeriod time.Duration, exporter *telemetryExporter) {
-	started := time.Now()
-
-	// First, wait until after the export delay has passed.
-	time.Sleep(exportDelay)
-
-	for {
-		p.Uptime = int64(time.Since(started) / time.Second)
-		exporter.export(p)
-
-		// Now wait for the next export.
-		time.Sleep(exportPeriod)
-	}
 }

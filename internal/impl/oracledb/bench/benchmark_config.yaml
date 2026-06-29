@@ -12,6 +12,8 @@ input:
       scn_window_size: 190000
       backoff_interval: 2s
       mining_interval: 0s
+      # transaction_cache: testcache
+      # transaction_cache_key: mykey
     include:
       - TESTDB.USERS
       - TESTDB.PRODUCTS
@@ -26,10 +28,16 @@ output:
         interval: 1s
         count_bytes: true
   file:
-    path: "./results.json"
+    path: "./benchmark_results.json"
     codec: lines
   # stdout: {}
   # drop: {}
+
+cache_resources:
+  - label: testcache
+    # memory: {}
+    file:
+      directory: "./cache/"
 
 logger:
   level: INFO

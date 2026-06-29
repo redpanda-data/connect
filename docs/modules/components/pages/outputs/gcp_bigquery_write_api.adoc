@@ -43,7 +43,10 @@ output:
     dataset: "" # No default (required)
     table: "" # No default (required)
     message_format: json
-    max_in_flight: 64
+    change_type: "" # No default (optional)
+    change_sequence_number: "" # No default (optional)
+    primary_keys: [] # No default (optional)
+    max_in_flight: 4
     batching:
       count: 0
       byte_size: 0
@@ -66,7 +69,19 @@ output:
     dataset: "" # No default (required)
     table: "" # No default (required)
     message_format: json
-    max_in_flight: 64
+    write_mode: default_stream
+    change_type: "" # No default (optional)
+    change_sequence_number: "" # No default (optional)
+    primary_keys: [] # No default (optional)
+    auto_create_table: false
+    schema: []
+    time_partitioning:
+      type: "" # No default (optional)
+      field: ""
+      expiration: 0s
+      require_filter: false
+    clustering: []
+    max_in_flight: 4
     batching:
       count: 0
       byte_size: 0
@@ -78,6 +93,9 @@ output:
     delegates: []
     stream_idle_timeout: 5m
     stream_sweep_interval: 1m
+    max_cached_streams: 1024
+    schema_resolve_timeout: 15s
+    schema_evolution_timeout: 30s
     endpoint:
       http: ""
       grpc: ""
@@ -92,12 +110,33 @@ This provides higher throughput and lower latency than the legacy streaming API 
 Messages can be formatted as JSON (default) or raw protobuf bytes.
 When using JSON format the component automatically fetches the table schema and converts each message to the corresponding proto representation.
 
-WARNING: The proto3 JSON mapping encodes int64 and uint64 values as strings.
-JSON messages with integer fields must use string values (e.g. `"age": "30"` not `"age": 30`).
-Otherwise the write will fail with an unmarshalling error.
+WARNING: protojson encodes int64 and uint64 values as strings, bytes as base64-encoded strings, and timestamps as RFC 3339 strings.
+JSON messages must follow these conventions (e.g. `"age": "30"`, `"data": "aGVsbG8="`, `"created_at": "2026-01-02T15:04:05Z"`); otherwise the write will fail with an unmarshalling error.
 
 When batching is enabled the table name is resolved from the first message in each batch.
 All messages in the same batch are written to that table.
+
+The interpolated table name is sanitized for BigQuery: dots, hyphens, slashes and whitespace are replaced with underscores, non-ASCII-alphanumeric characters are stripped, leading digits are prefixed with `_`, and the result is truncated to 1024 characters.
+A name that sanitizes to the empty string is rejected as a permanent error.
+
+== Write modes
+
+The `write_mode` field selects between two write paths:
+
+- `default_stream` (default): the multiplexed default stream. Lowest latency, at-least-once semantics.
+- `pending_stream`: a fresh pending stream is allocated per batch; rows are written with sequential offsets, the stream is finalized, then atomically committed. Provides exactly-once semantics within a single committed batch.
+
+== Auto-create
+
+When `auto_create_table` is true, the output creates missing tables on the fly using the configured `schema`, `time_partitioning`, and `clustering`. `AlreadyExists` errors from concurrent creators are treated as success. When the table name is interpolated, every auto-created table receives the same configuration.
+
+== Exactly-once caveat
+
+The exactly-once guarantee of `pending_stream` is "exactly-once within a stream". If a BatchCommitWriteStreams RPC succeeds but its response is lost to a network failure, benthos retries the batch through a new pending stream and the data lands twice. This is a fundamental limitation of the BigQuery Storage Write API exactly-once contract and applies to every implementation.
+
+== CDC migration
+
+When migrating from the load-jobs based `gcp_bigquery` output to CDC mode, see the xref:outputs/bigquery_cdc_migration.adoc[CDC migration guide].
 
 
 == Fields
@@ -142,6 +181,158 @@ Options:
 , `protobuf`
 .
 
+=== `write_mode`
+
+How the output writes to BigQuery. `default_stream` uses the multiplexed default stream (at-least-once, lowest latency). `pending_stream` allocates a per-batch pending stream that commits atomically, providing exactly-once semantics within a single committed batch. `upsert` writes UPSERT-only rows to a BigQuery CDC-enabled table; the target table must have a PRIMARY KEY. `upsert_delete` allows both UPSERT and DELETE rows. Both CDC modes use the default stream as required by BigQuery.
+
+
+*Type*: `string`
+
+*Default*: `"default_stream"`
+
+Options:
+`default_stream`
+, `pending_stream`
+, `upsert`
+, `upsert_delete`
+.
+
+=== `change_type`
+
+Bloblang expression resolving to the `_CHANGE_TYPE` pseudo-column value for each row. Must resolve to `UPSERT` or `DELETE` (case-insensitive). Required when `write_mode` is `upsert` or `upsert_delete`. Example: `${! metadata("operation") }`.
+This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
+
+
+*Type*: `string`
+
+
+=== `change_sequence_number`
+
+Optional Bloblang expression resolving to the `_CHANGE_SEQUENCE_NUMBER` pseudo-column value. Format: 1 to 4 sections of 1 to 16 hexadecimal characters each, separated by `/`. Example: `${! metadata("scn") }` or `${! "0/0/0/0" }`. When unset, BigQuery resolves ordering by arrival time.
+This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
+
+
+*Type*: `string`
+
+
+=== `primary_keys`
+
+Optional list of primary-key column names. Required when `auto_create_table` is true and `write_mode` is `upsert` or `upsert_delete`. A pre-existing table must already declare its PRIMARY KEY — this field cannot add one; when both are set they must match exactly (same columns, same order). Up to 16 columns; composite keys are supported in the same order they are listed.
+
+
+*Type*: `array`
+
+
+=== `auto_create_table`
+
+If true and the target table does not exist, the output creates it using the configured `schema`, `time_partitioning`, and `clustering`. AlreadyExists errors from concurrent creators are treated as success. When the table name is interpolated, every auto-created table receives the same schema and partition/clustering settings.
+
+
+*Type*: `bool`
+
+*Default*: `false`
+
+=== `schema`
+
+Column definitions used by `auto_create_table`. Required when `auto_create_table` is true.
+
+
+*Type*: `array`
+
+*Default*: `[]`
+
+=== `schema[].name`
+
+Column name.
+
+
+*Type*: `string`
+
+
+=== `schema[].type`
+
+BigQuery column type (STRING, BYTES, INTEGER/INT64, FLOAT/FLOAT64, NUMERIC, BIGNUMERIC, BOOLEAN/BOOL, TIMESTAMP, DATE, TIME, DATETIME, GEOGRAPHY, JSON, RECORD).
+
+
+*Type*: `string`
+
+
+=== `schema[].mode`
+
+Column mode: NULLABLE (default), REQUIRED, or REPEATED.
+
+
+*Type*: `string`
+
+*Default*: `"NULLABLE"`
+
+=== `schema[].fields`
+
+For RECORD columns, the list of nested fields. Same shape as the top-level schema list.
+
+
+*Type*: `array`
+
+
+=== `time_partitioning`
+
+Optional time-partitioning settings applied during `auto_create_table`. Setting `type` is the trigger — when omitted, the block is treated as absent.
+
+
+*Type*: `object`
+
+
+=== `time_partitioning.type`
+
+Partitioning granularity.
+
+
+*Type*: `string`
+
+
+Options:
+`DAY`
+, `HOUR`
+, `MONTH`
+, `YEAR`
+.
+
+=== `time_partitioning.field`
+
+Column to partition on. Must be of type DATE, TIMESTAMP, or DATETIME. If empty, the table uses ingestion-time partitioning (`_PARTITIONTIME`).
+
+
+*Type*: `string`
+
+*Default*: `""`
+
+=== `time_partitioning.expiration`
+
+Optional partition expiration. Zero means no expiration.
+
+
+*Type*: `string`
+
+*Default*: `"0s"`
+
+=== `time_partitioning.require_filter`
+
+If true, queries against the table must filter on the partition column.
+
+
+*Type*: `bool`
+
+*Default*: `false`
+
+=== `clustering`
+
+Optional clustering columns (up to 4) applied during `auto_create_table`. All names must appear in `schema`.
+
+
+*Type*: `array`
+
+*Default*: `[]`
+
 === `max_in_flight`
 
 The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
@@ -149,7 +340,7 @@ The maximum number of messages to have in flight at a given time. Increase this 
 
 *Type*: `int`
 
-*Default*: `64`
+*Default*: `4`
 
 === `batching`
 
@@ -302,6 +493,33 @@ How often to check for idle streams to close.
 *Type*: `string`
 
 *Default*: `"1m"`
+
+=== `max_cached_streams`
+
+Soft cap on the number of cached streams. When the cache exceeds this size, the least-recently-used stream is evicted. Set to 0 for unlimited (rely on idle-timeout sweeping only). Relevant when the table field uses interpolation to route to many tables.
+
+
+*Type*: `int`
+
+*Default*: `1024`
+
+=== `schema_resolve_timeout`
+
+How long a single BigQuery table-metadata fetch can run before being aborted. Coalesced concurrent resolves share one fetch, so this bounds the time a wedged backend can stall every batch routing to the same table. On the auto_create_table path the budget covers Metadata→Create→Metadata, so it needs to absorb transient backend slowness on top of the metadata fetch itself.
+
+
+*Type*: `string`
+
+*Default*: `"15s"`
+
+=== `schema_evolution_timeout`
+
+Total time budget for a single schema evolution attempt (Metadata + Update across all CAS retries on HTTP 412). Bounds how long the WriteBatch retry loop can be starved by a wedged backend.
+
+
+*Type*: `string`
+
+*Default*: `"30s"`
 
 === `endpoint`
 

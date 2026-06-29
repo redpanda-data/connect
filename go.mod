@@ -1,6 +1,6 @@
 module github.com/redpanda-data/connect/v4
 
-go 1.26.3
+go 1.26.4
 
 replace github.com/99designs/keyring => github.com/Jeffail/keyring v1.2.3
 
@@ -97,10 +97,8 @@ require (
 	github.com/generikvault/gvalstrings v0.0.0-20180926130504-471f38f0112a
 	github.com/getsentry/sentry-go v0.44.1
 	github.com/go-faker/faker/v4 v4.7.0
-	github.com/go-git/go-git/v5 v5.18.0
-	github.com/go-jose/go-jose/v4 v4.1.4
+	github.com/go-git/go-git/v5 v5.19.1
 	github.com/go-mysql-org/go-mysql v1.14.0
-	github.com/go-resty/resty/v2 v2.17.2
 	github.com/go-sql-driver/mysql v1.9.3
 	github.com/go-viper/mapstructure/v2 v2.5.0
 	github.com/gocql/gocql v1.7.0
@@ -144,16 +142,17 @@ require (
 	github.com/rabbitmq/amqp091-go v1.10.0
 	github.com/rcrowley/go-metrics v0.0.0-20250401214520-65e299d6c5c9
 	github.com/redis/go-redis/v9 v9.18.0
-	github.com/redpanda-data/benthos/v4 v4.73.0
+	github.com/redpanda-data/benthos/v4 v4.75.0
 	github.com/redpanda-data/common-go/authz v0.2.1-0.20260319205134-242ab3c168b8
 	github.com/redpanda-data/common-go/license v0.0.0-20260318014216-2bbd72bde0a0
 	github.com/redpanda-data/common-go/redpanda-otel-exporter v0.4.0
 	github.com/redpanda-data/common-go/secrets v0.1.15
+	github.com/redpanda-data/common-go/telemetry v0.1.0
 	github.com/redpanda-data/connect/public/bundle/free/v4 v4.84.0
 	github.com/rs/xid v1.6.0
 	github.com/sashabaranov/go-openai v1.41.2
 	github.com/sijms/go-ora/v2 v2.9.0
-	github.com/slack-go/slack v0.20.0
+	github.com/slack-go/slack v0.23.1
 	github.com/smira/go-statsd v1.3.4
 	github.com/snowflakedb/gosnowflake v1.19.0
 	github.com/sourcegraph/conc v0.3.0
@@ -170,7 +169,7 @@ require (
 	github.com/timeplus-io/proton-go-driver/v2 v2.1.4
 	github.com/tmc/langchaingo v0.1.14
 	github.com/trinodb/trino-go-client v0.333.0
-	github.com/twmb/avro v1.7.2
+	github.com/twmb/avro v1.7.3-0.20260513193503-1e5c2a3fc070
 	github.com/twmb/franz-go v1.20.7
 	github.com/twmb/franz-go/pkg/kadm v1.17.2
 	github.com/twmb/franz-go/pkg/kmsg v1.12.0
@@ -185,7 +184,7 @@ require (
 	go.mongodb.org/mongo-driver/v2 v2.5.0
 	go.nanomsg.org/mangos/v3 v3.4.2
 	go.opentelemetry.io/collector/pdata v1.54.0
-	go.opentelemetry.io/otel v1.43.0
+	go.opentelemetry.io/otel v1.44.0
 	go.opentelemetry.io/otel/exporters/jaeger v1.17.0
 	go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc v0.19.0
 	go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploghttp v0.19.0
@@ -198,13 +197,13 @@ require (
 	go.opentelemetry.io/otel/sdk v1.43.0
 	go.opentelemetry.io/otel/sdk/log v0.19.0
 	go.opentelemetry.io/otel/sdk/metric v1.43.0
-	go.opentelemetry.io/otel/trace v1.43.0
+	go.opentelemetry.io/otel/trace v1.44.0
 	go.starlark.net v0.0.0-20260210143700-b62fd896b91b
 	go.uber.org/multierr v1.11.0
-	golang.org/x/crypto v0.50.0
-	golang.org/x/net v0.53.0
+	golang.org/x/crypto v0.52.0
+	golang.org/x/net v0.55.0
 	golang.org/x/sync v0.20.0
-	golang.org/x/text v0.36.0
+	golang.org/x/text v0.37.0
 	google.golang.org/api v0.276.0
 	google.golang.org/protobuf v1.36.11
 	modernc.org/sqlite v1.49.1
@@ -256,9 +255,11 @@ require (
 	github.com/envoyproxy/protoc-gen-validate v1.3.3 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.0 // indirect
 	github.com/go-git/gcfg v1.5.1-0.20230307220236-3a3c6141e376 // indirect
-	github.com/go-git/go-billy/v5 v5.8.0 // indirect
+	github.com/go-git/go-billy/v5 v5.9.0 // indirect
 	github.com/go-jose/go-jose/v3 v3.0.4 // indirect
+	github.com/go-jose/go-jose/v4 v4.1.4 // indirect
 	github.com/go-quicktest/qt v1.101.1-0.20240301121107-c6c8733fa1e6 // indirect
+	github.com/go-resty/resty/v2 v2.17.2 // indirect
 	github.com/goccy/go-yaml v1.19.2 // indirect
 	github.com/google/jsonschema-go v0.4.2 // indirect
 	github.com/google/wire v0.7.0 // indirect
@@ -272,7 +273,6 @@ require (
 	github.com/jcmturner/goidentity/v6 v6.0.1 // indirect
 	github.com/jhump/protoreflect/v2 v2.0.0-beta.2 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
-	github.com/juju/errors v1.0.0 // indirect
 	github.com/jzelinskie/stringz v0.0.3 // indirect
 	github.com/kevinburke/ssh_config v1.6.0 // indirect
 	github.com/klauspost/asmfmt v1.3.2 // indirect
@@ -304,7 +304,7 @@ require (
 	github.com/pingcap/failpoint v0.0.0-20251231045439-91d91e123837 // indirect
 	github.com/pingcap/log v1.1.1-0.20241212030209-7e3ff8601a2a // indirect
 	github.com/pingcap/tidb/pkg/parser v0.0.0-20260318222514-bab4993b6fd6 // indirect
-	github.com/pjbgf/sha1cd v0.5.0 // indirect
+	github.com/pjbgf/sha1cd v0.6.0 // indirect
 	github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10 // indirect
 	github.com/pterm/pterm v0.12.83 // indirect
 	github.com/rs/zerolog v1.34.0 // indirect
@@ -379,7 +379,7 @@ require (
 	github.com/andybalholm/brotli v1.2.1 // indirect
 	github.com/apache/arrow/go/arrow v0.0.0-20211112161151-bc219186db40 // indirect
 	github.com/apache/arrow/go/v15 v15.0.2 // indirect
-	github.com/apache/thrift v0.22.0 // indirect
+	github.com/apache/thrift v0.23.0 // indirect
 	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
 	github.com/ardielle/ardielle-go v1.5.2 // indirect
 	github.com/armon/go-metrics v0.3.10 // indirect
@@ -402,7 +402,6 @@ require (
 	github.com/aymerick/douceur v0.2.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bits-and-blooms/bitset v1.24.4 // indirect
-	github.com/blastrain/vitess-sqlparser v0.0.0-20201030050434-a139afbb1aba
 	github.com/btnguyen2k/consu/checksum v1.1.1 // indirect
 	github.com/btnguyen2k/consu/g18 v0.1.0 // indirect
 	github.com/btnguyen2k/consu/gjrc v0.2.2 // indirect
@@ -432,7 +431,7 @@ require (
 	github.com/eapache/queue v1.1.0 // indirect
 	github.com/fatih/color v1.19.0
 	github.com/felixge/httpsnoop v1.0.4 // indirect
-	github.com/fsnotify/fsnotify v1.9.0 // indirect
+	github.com/fsnotify/fsnotify v1.10.1 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.13 // indirect
 	github.com/go-faster/city v1.0.1 // indirect
 	github.com/go-faster/errors v0.7.1 // indirect
@@ -480,7 +479,7 @@ require (
 	github.com/jcmturner/gokrb5/v8 v8.4.4 // indirect
 	github.com/jcmturner/rpc/v2 v2.0.3 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
-	github.com/klauspost/compress v1.18.5
+	github.com/klauspost/compress v1.18.6
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
 	github.com/klauspost/pgzip v1.2.6 // indirect
 	github.com/kr/fs v0.1.0 // indirect
@@ -545,14 +544,14 @@ require (
 	go.opencensus.io v0.24.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.67.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.67.0 // indirect
-	go.opentelemetry.io/otel/metric v1.43.0
+	go.opentelemetry.io/otel/metric v1.44.0
 	go.opentelemetry.io/proto/otlp v1.10.0 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/zap v1.27.1 // indirect
 	golang.org/x/mod v0.35.0 // indirect
 	golang.org/x/oauth2 v0.36.0
-	golang.org/x/sys v0.43.0
-	golang.org/x/term v0.42.0 // indirect
+	golang.org/x/sys v0.45.0
+	golang.org/x/term v0.43.0 // indirect
 	golang.org/x/time v0.15.0
 	golang.org/x/tools v0.44.0 // indirect
 	golang.org/x/xerrors v0.0.0-20240903120638-7835f813f4da // indirect

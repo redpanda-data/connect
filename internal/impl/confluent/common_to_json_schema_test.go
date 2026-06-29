@@ -61,6 +61,29 @@ func TestCommonToJSONSchemaTimestamp(t *testing.T) {
 	assert.Equal(t, "date-time", got["format"])
 }
 
+// TestCommonToJSONSchemaDateTimeUUID covers the three semantic types
+// the schema-coverage audit flagged as missing. JSON Schema draft 2019-09
+// defines `date`, `time`, and `uuid` format keywords; mapping the
+// schema.Common variants to those keeps the encoder symmetric with the
+// rest of the type matrix.
+func TestCommonToJSONSchemaDateTimeUUID(t *testing.T) {
+	t.Run("Date", func(t *testing.T) {
+		got := jsonSchemaUnmarshal(t, schema.Common{Type: schema.Date})
+		assert.Equal(t, "string", got["type"])
+		assert.Equal(t, "date", got["format"])
+	})
+	t.Run("TimeOfDay", func(t *testing.T) {
+		got := jsonSchemaUnmarshal(t, schema.Common{Type: schema.TimeOfDay})
+		assert.Equal(t, "string", got["type"])
+		assert.Equal(t, "time", got["format"])
+	})
+	t.Run("UUID", func(t *testing.T) {
+		got := jsonSchemaUnmarshal(t, schema.Common{Type: schema.UUID})
+		assert.Equal(t, "string", got["type"])
+		assert.Equal(t, "uuid", got["format"])
+	})
+}
+
 func TestCommonToJSONSchemaByteArray(t *testing.T) {
 	got := jsonSchemaUnmarshal(t, schema.Common{Type: schema.ByteArray})
 	assert.Equal(t, "string", got["type"])

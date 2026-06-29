@@ -11,10 +11,7 @@ package oracledb
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
-	"math"
-	"strconv"
 	"strings"
 	"sync"
 
@@ -26,7 +23,7 @@ import (
 )
 
 // oracleTypeToCommonType maps an Oracle DATA_TYPE string to a schema.CommonType.
-// For NUMBER columns, callers should use oracleNumberToCommonType which
+// For NUMBER columns, callers should use replication.NumberToCommon which
 // considers precision and scale for a more specific mapping.
 func oracleTypeToCommonType(dataType string) schema.CommonType {
 	switch strings.ToUpper(dataType) {
@@ -44,39 +41,6 @@ func oracleTypeToCommonType(dataType string) schema.CommonType {
 	default:
 		return schema.String
 	}
-}
-
-// oracleNumberToCommon builds a schema.Common entry for a NUMBER column.
-// The mapping picks the most specific representation:
-//   - !hasDecimalInfo: BigDecimal — Oracle's "floating decimal" with no
-//     declared precision/scale.
-//   - scale > precision (driver sentinel for undeclared scale, e.g. go-ora's
-//     (38, 255) for bare NUMBER): BigDecimal.
-//   - scale == 0 && 0 < precision <= 18: Int64 (existing optimisation —
-//     scale-0 NUMBER fits losslessly in int64).
-//   - scale < 0: rounded to Decimal(precision, 0) since Avro/Parquet/Iceberg
-//     can't represent negative scale.
-//   - otherwise: Decimal(precision, scale).
-func oracleNumberToCommon(name string, precision, scale int64, hasDecimalInfo bool) schema.Common {
-	if !hasDecimalInfo {
-		return schema.NewBigDecimal(name, true)
-	}
-	if scale < 0 {
-		scale = 0
-	}
-	// Treat scale-greater-than-precision as undeclared (driver sentinel).
-	if scale > precision {
-		return schema.NewBigDecimal(name, true)
-	}
-	if scale == 0 && precision > 0 && precision <= replication.MaxInt64DecimalPrecision {
-		return schema.Common{Name: name, Type: schema.Int64, Optional: true}
-	}
-	if c, err := schema.NewDecimal(name, int32(precision), int32(scale), true); err == nil {
-		return c
-	}
-	// Precision out of bounds for the bounded Decimal type — fall back to
-	// BigDecimal so the source remains lossless.
-	return schema.NewBigDecimal(name, true)
 }
 
 // isNumberType reports whether dataType is one of Oracle's numeric type names
@@ -162,7 +126,7 @@ ORDER BY COLUMN_ID`
 
 		var common schema.Common
 		if isNumberType(dataType) {
-			common = oracleNumberToCommon(colName, precision.Int64, scale.Int64, precision.Valid && scale.Valid)
+			common = replication.NumberToCommon(colName, precision.Int64, scale.Int64, precision.Valid && scale.Valid)
 		} else {
 			common = schema.Common{
 				Name:     colName,
@@ -284,7 +248,7 @@ func (sc *schemaCache) seedFromColumnMeta(table replication.UserTable, meta []re
 	for _, m := range meta {
 		var common schema.Common
 		if isNumberType(m.TypeName) {
-			common = oracleNumberToCommon(m.Name, m.Precision, m.Scale, m.HasDecimalSize)
+			common = replication.NumberToCommon(m.Name, m.Precision, m.Scale, m.HasDecimalSize)
 		} else {
 			common = schema.Common{
 				Name:     m.Name,
@@ -310,18 +274,21 @@ func (sc *schemaCache) seedFromColumnMeta(table replication.UserTable, meta []re
 // Streaming value coercion
 // ---------------------------------------------------------------------------
 
-// coerceStreamingValues converts string values from LogMiner SQL_REDO parsing
-// to their proper Go types based on schema column metadata. This ensures type
+// coerceStreamingValues converts values from LogMiner SQL_REDO parsing to their
+// proper Go types based on schema column metadata. This ensures type
 // consistency between snapshot (which returns native Go types via sql.Scan) and
-// streaming (which returns strings because LogMiner quotes all INSERT values).
+// streaming (whose redo values arrive as quoted strings, bare int64 integer
+// literals, or json.Number floats depending on the value and Oracle version).
 //
-// Numeric types are coerced as follows: Int64 becomes int64, Float32/Float64
-// become float64, Decimal/BigDecimal become canonical decimal strings.
-// Columns mapped to schema.String are left as-is since they're indistinguishable
-// from VARCHAR2 once they reach this layer.
+// All numeric inputs — string, int64, or json.Number — are routed through the
+// shared sqlutil.CoerceToCommon so that Int64 columns become int64,
+// Float32/Float64 become float64, and Decimal/BigDecimal become canonical
+// decimal strings. In particular a bare integer literal (int64) destined for a
+// Decimal column is canonicalised to a string rather than leaking as a JSON
+// number, which downstream Avro string-field encoding rejects.
 //
-// The data map is mutated in place. On parse failure, the original string value
-// is preserved and a warning is logged.
+// The data map is mutated in place. On a recoverable parse failure the original
+// value is preserved and a warning is logged.
 func coerceStreamingValues(data map[string]any, info *columnTypeInfo, log *service.Logger) {
 	if info == nil {
 		return
@@ -331,69 +298,11 @@ func coerceStreamingValues(data map[string]any, info *columnTypeInfo, log *servi
 		if !known {
 			continue
 		}
-
-		// Handle json.Number values produced by ConvertValue for bare float
-		// literals (e.g. BINARY_FLOAT/BINARY_DOUBLE). These need to be
-		// converted to float64 to match the snapshot path.
-		if jn, ok := val.(json.Number); ok {
-			switch c.Type {
-			case schema.Float32, schema.Float64:
-				if f, err := jn.Float64(); err == nil {
-					data[col] = f
-				}
-			case schema.Int64:
-				if n, err := jn.Int64(); err == nil {
-					data[col] = n
-				}
-			case schema.Decimal:
-				if c.Logical != nil && c.Logical.Decimal != nil {
-					if canonical, err := sqlutil.CanonicaliseDecimal(jn.String(), c.Logical.Decimal.Precision, c.Logical.Decimal.Scale); err == nil {
-						data[col] = canonical
-					} else {
-						log.Warnf("coerce %s: cannot canonicalise decimal %q: %v", col, jn.String(), err)
-					}
-				}
-			case schema.BigDecimal:
-				if canonical, err := sqlutil.CanonicaliseBigDecimal(jn.String()); err == nil {
-					data[col] = canonical
-				} else {
-					log.Warnf("coerce %s: cannot canonicalise big decimal %q: %v", col, jn.String(), err)
-				}
-			}
+		coerced, err := sqlutil.CoerceToCommon(c, val)
+		if err != nil {
+			log.Warnf("coerce %s: %v", col, err)
 			continue
 		}
-
-		s, ok := val.(string)
-		if !ok {
-			continue // already typed (nil, int64, time.Time, etc.)
-		}
-		switch c.Type {
-		case schema.Int64:
-			if n, err := strconv.ParseInt(s, 10, 64); err == nil {
-				data[col] = n
-			} else {
-				log.Warnf("coerce %s: cannot parse %q as int64: %v", col, s, err)
-			}
-		case schema.Float32, schema.Float64:
-			if f, err := strconv.ParseFloat(s, 64); err == nil && !math.IsNaN(f) && !math.IsInf(f, 0) {
-				data[col] = f
-			} else if err != nil {
-				log.Warnf("coerce %s: cannot parse %q as float64: %v", col, s, err)
-			}
-		case schema.Decimal:
-			if c.Logical != nil && c.Logical.Decimal != nil {
-				if canonical, err := sqlutil.CanonicaliseDecimal(s, c.Logical.Decimal.Precision, c.Logical.Decimal.Scale); err == nil {
-					data[col] = canonical
-				} else {
-					log.Warnf("coerce %s: cannot canonicalise decimal %q: %v", col, s, err)
-				}
-			}
-		case schema.BigDecimal:
-			if canonical, err := sqlutil.CanonicaliseBigDecimal(s); err == nil {
-				data[col] = canonical
-			} else {
-				log.Warnf("coerce %s: cannot canonicalise big decimal %q: %v", col, s, err)
-			}
-		}
+		data[col] = coerced
 	}
 }

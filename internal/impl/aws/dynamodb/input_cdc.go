@@ -1299,24 +1299,78 @@ func (d *dynamoDBCDCInput) connectWithSnapshot(ctx context.Context, tableName st
 	return nil
 }
 
+// describeStreamPager is the minimum surface of *dynamodbstreams.Client
+// needed by describeStreamAllShards. Defined so tests can supply a fake
+// without depending on the concrete AWS SDK client.
+type describeStreamPager interface {
+	DescribeStream(ctx context.Context, in *dynamodbstreams.DescribeStreamInput, opts ...func(*dynamodbstreams.Options)) (*dynamodbstreams.DescribeStreamOutput, error)
+}
+
+// maxDescribeStreamPages caps describeStreamAllShards iterations as a
+// defense against a misbehaving AWS API returning valid different
+// continuation tokens indefinitely. 1000 pages = 100k shards, three orders
+// of magnitude beyond any realistic DynamoDB Streams workload (real streams
+// rotate ~24 shards per 4h shard lifecycle).
+const maxDescribeStreamPages = 1000
+
+// describeStreamAllShards calls DescribeStream repeatedly, chaining
+// ExclusiveStartShardId = LastEvaluatedShardId from the previous response,
+// and accumulates shards across all pages. DescribeStream returns at most
+// 100 shards per call; on high-write streams the lifetime shard count
+// exceeds the page size within hours, and a single un-paginated call hides
+// the currently-open shards behind the LastEvaluatedShardId boundary.
+func describeStreamAllShards(ctx context.Context, client describeStreamPager, streamArn *string) ([]types.Shard, error) {
+	var (
+		all     []types.Shard
+		startID *string
+	)
+	for page := range maxDescribeStreamPages {
+		out, err := client.DescribeStream(ctx, &dynamodbstreams.DescribeStreamInput{
+			StreamArn:             streamArn,
+			ExclusiveStartShardId: startID,
+		})
+		if err != nil {
+			return nil, err
+		}
+		for _, s := range out.StreamDescription.Shards {
+			if s.ShardId == nil {
+				continue
+			}
+			all = append(all, s)
+		}
+		next := out.StreamDescription.LastEvaluatedShardId
+		// AWS signals end-of-pagination via nil; also treat a non-nil
+		// pointer to the empty string as terminal to defend against
+		// interposing proxies that materialize the field.
+		if next == nil || *next == "" {
+			return all, nil
+		}
+		// Guard against a misbehaving service that returns the same
+		// cursor we just sent — would otherwise spin forever.
+		if startID != nil && *next == *startID {
+			return nil, fmt.Errorf("DescribeStream returned same LastEvaluatedShardId %q on page %d; aborting", *next, page)
+		}
+		startID = next
+	}
+	return nil, fmt.Errorf("describeStreamAllShards: exceeded %d pages without nil LastEvaluatedShardId; aborting", maxDescribeStreamPages)
+}
+
 // isCDCCheckpointStale checks if any CDC checkpoint points to expired stream data.
 // Returns true if any checkpoint is stale (stream data no longer available).
 // This happens when the connector was down >24 hours (DynamoDB Streams retention limit).
 func (d *dynamoDBCDCInput) isCDCCheckpointStale(ctx context.Context) (bool, error) {
-	// Get current shards from the stream
-	streamDesc, err := d.streamsClient.DescribeStream(ctx, &dynamodbstreams.DescribeStreamInput{
-		StreamArn: d.streamArn,
-	})
+	// Get current shards from the stream (paginated; see describeStreamAllShards).
+	shards, err := describeStreamAllShards(ctx, d.streamsClient, d.streamArn)
 	if err != nil {
 		return false, fmt.Errorf("describing stream: %w", err)
 	}
 
-	if len(streamDesc.StreamDescription.Shards) == 0 {
+	if len(shards) == 0 {
 		// No shards = no data = checkpoint doesn't matter
 		return false, nil
 	}
 
-	for _, shard := range streamDesc.StreamDescription.Shards {
+	for _, shard := range shards {
 		shardID := *shard.ShardId
 
 		// Check if we have a checkpoint for this shard
@@ -1347,9 +1401,7 @@ func (d *dynamoDBCDCInput) isCDCCheckpointStale(ctx context.Context) (bool, erro
 }
 
 func (d *dynamoDBCDCInput) refreshShards(ctx context.Context) error {
-	streamDesc, err := d.streamsClient.DescribeStream(ctx, &dynamodbstreams.DescribeStreamInput{
-		StreamArn: d.streamArn,
-	})
+	shards, err := describeStreamAllShards(ctx, d.streamsClient, d.streamArn)
 	if err != nil {
 		return err
 	}
@@ -1361,7 +1413,7 @@ func (d *dynamoDBCDCInput) refreshShards(ctx context.Context) error {
 	}
 	var newShards []shardToAdd
 
-	for _, shard := range streamDesc.StreamDescription.Shards {
+	for _, shard := range shards {
 		shardID := *shard.ShardId
 
 		// Check if shard already exists (minimize lock hold time)
@@ -1570,12 +1622,17 @@ func (d *dynamoDBCDCInput) startTableStreamCoordinator(ctx context.Context, tabl
 	}
 
 	// Track running shard readers for this table
+	var readerWg sync.WaitGroup
 	activeShards := make(map[string]context.CancelFunc)
 	defer func() {
-		// Cancel all active shard readers on shutdown
+		// Cancel all active shard readers on shutdown and wait for them to
+		// exit. The multi-table watcher closes d.msgChan once all coordinators
+		// have returned, so returning while a reader is still blocked on a
+		// msgChan send would panic with a send on a closed channel.
 		for _, cancelFn := range activeShards {
 			cancelFn()
 		}
+		readerWg.Wait()
 	}()
 
 	refreshTicker := time.NewTicker(shardRefreshInterval)
@@ -1591,7 +1648,9 @@ func (d *dynamoDBCDCInput) startTableStreamCoordinator(ctx context.Context, tabl
 			if _, exists := activeShards[shardID]; !exists && !reader.exhausted {
 				shardCtx, shardCancel := context.WithCancel(ctx)
 				activeShards[shardID] = shardCancel
-				go d.startTableShardReader(shardCtx, tableName, ts, shardID)
+				readerWg.Go(func() {
+					d.startTableShardReader(shardCtx, tableName, ts, shardID)
+				})
 			}
 		}
 		ts.mu.RUnlock()
@@ -1634,9 +1693,7 @@ func (d *dynamoDBCDCInput) startTableStreamCoordinator(ctx context.Context, tabl
 
 // refreshTableShards refreshes shard information for a specific table
 func (d *dynamoDBCDCInput) refreshTableShards(ctx context.Context, tableName string, ts *tableStream) error {
-	streamDesc, err := d.streamsClient.DescribeStream(ctx, &dynamodbstreams.DescribeStreamInput{
-		StreamArn: &ts.streamArn,
-	})
+	shards, err := describeStreamAllShards(ctx, d.streamsClient, &ts.streamArn)
 	if err != nil {
 		return err
 	}
@@ -1648,7 +1705,7 @@ func (d *dynamoDBCDCInput) refreshTableShards(ctx context.Context, tableName str
 	}
 	var newShards []shardToAdd
 
-	for _, shard := range streamDesc.StreamDescription.Shards {
+	for _, shard := range shards {
 		shardID := *shard.ShardId
 
 		// Check if shard already exists

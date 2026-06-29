@@ -41,6 +41,9 @@ type Output struct {
 
 // NewOutput creates a new Output.
 func NewOutput(term io.Writer, indexPath string) *Output {
+	if os.Getenv("FORCE_COLOR") != "" || os.Getenv("CI") != "" {
+		color.NoColor = false
+	}
 	return &Output{
 		term:      term,
 		indexPath: indexPath,

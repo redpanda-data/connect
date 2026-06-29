@@ -47,11 +47,15 @@ input:
     snapshot_max_batch_size: 1000
     logminer:
       scn_window_size: 20000
+      min_scn_window_size: 1000
+      max_scn_window_size: 100000
       backoff_interval: 5s
       mining_interval: 300ms
       strategy: online_catalog
       max_transaction_events: 0
       lob_enabled: true
+      transaction_cache: "" # No default (optional)
+      transaction_cache_key: oracledb_cdc
     include: [] # No default (required)
     exclude: [] # No default (optional)
     checkpoint_cache: "" # No default (optional)
@@ -85,11 +89,15 @@ input:
     snapshot_max_batch_size: 1000
     logminer:
       scn_window_size: 20000
+      min_scn_window_size: 1000
+      max_scn_window_size: 100000
       backoff_interval: 5s
       mining_interval: 300ms
       strategy: online_catalog
       max_transaction_events: 0
       lob_enabled: true
+      transaction_cache: "" # No default (optional)
+      transaction_cache_key: oracledb_cdc
     include: [] # No default (required)
     exclude: [] # No default (optional)
     checkpoint_cache: "" # No default (optional)
@@ -122,7 +130,7 @@ This input adds the following metadata fields to each message:
 - scn: the System Change Number in Oracle.
 - transaction_id: The Oracle transaction ID in `USN.SLOT.SEQ` format, identifying the transaction that produced the change. Not present on snapshot (`read`) messages.
 - source_ts_ms: The timestamp of when Oracle wrote the change record into the redo log, expressed as milliseconds since the Unix epoch. This reflects the database server's wall-clock time at the moment the DML executed, not the transaction commit time.
-- commit_ts_ms: The timestamp of the transaction commit, expressed as milliseconds since the Unix epoch. Not present on snapshot (`read`) messages.
+- commit_ts_ms: The timestamp of the transaction commit, expressed as milliseconds since the Unix epoch. Sourced from `V$LOGMNR_CONTENTS.TIMESTAMP` on the COMMIT redo record — this is Oracle's wall-clock time when the commit was written to the redo log, not a dedicated commit-timestamp column. Not present on snapshot (`read`) messages.
 - schema: The table schema, for use with schema-aware downstream processors such as `schema_registry_encode`. When new columns are detected in CDC events, the schema is automatically refreshed from the Oracle catalog. Dropped columns are reflected after a connector restart.
 
 == Permissions
@@ -225,6 +233,24 @@ The SCN range to mine per cycle. Each cycle reads changes between the current SC
 
 *Default*: `20000`
 
+=== `logminer.min_scn_window_size`
+
+The minimum SCN gap required before starting a new LogMiner session. When the gap between the connector's current position and the database's current SCN is smaller than this value, the mining cycle is skipped and the connector backs off instead. This prevents excessive LogMiner start/stop cycles on low-traffic databases where Oracle background activity advances the SCN without producing relevant events. Set to 0 to disable.
+
+
+*Type*: `int`
+
+*Default*: `1000`
+
+=== `logminer.max_scn_window_size`
+
+The maximum SCN range that can be mined in a single cycle. The window starts at scn_window_size and grows by scn_window_size each cycle that ends at the cap (backlog present), up to this limit. It shrinks by the same step each cycle that catches up to the database. This allows the connector to automatically mine larger windows during heavy backlog and smaller windows during steady state.
+
+
+*Type*: `int`
+
+*Default*: `100000`
+
 === `logminer.backoff_interval`
 
 The interval between attempts to check for new changes once all data is processed. For low traffic tables increasing this value can reduce network traffic to the server.
@@ -286,6 +312,27 @@ When enabled, large object (CLOB, BLOB) columns are included in both snapshot an
 
 *Default*: `true`
 
+=== `logminer.transaction_cache`
+
+A https://www.docs.redpanda.com/redpanda-connect/components/caches/about[cache resource^] to use for buffering in-flight transactions. When set, DML events are serialized and stored in the named cache rather than held in memory, reducing connector memory usage for workloads with large or long-running transactions. If not set, an in-memory buffer is used.
+
+Each in-flight transaction is stored as N+1 cache entries: one metadata key holding the transaction ID, start SCN, and event count; and one event key per DML event. A transaction with 1000 events occupies 1001 cache entries. Each AddEvent call writes exactly two keys regardless of how many events the transaction has already accumulated.
+
+This cache is designed for low-latency stores with cheap per-operation cost. Redis and Memcached are the recommended backends. The built-in `memory:{}` cache works but provides no durability across restarts. High-latency or per-request-cost stores such as S3 or DynamoDB are not recommended - a transaction with 1000 events generates approximately 3000 cache operations across its lifetime, and because LogMiner processes events on a single goroutine, per-call latency directly reduces throughput. A backend that causes timeouts or errors will also cause the mining cycle to restart from an earlier checkpoint SCN, which can result in duplicate event delivery.
+
+
+*Type*: `string`
+
+
+=== `logminer.transaction_cache_key`
+
+The key prefix used when storing transactions in `transaction_cache`. An alternative prefix must be set if multiple `oracledb_cdc` inputs share the same cache resource, since Oracle transaction IDs (USN.SLOT.SEQ) are only unique within a single Oracle instance and would otherwise collide.
+
+
+*Type*: `string`
+
+*Default*: `"oracledb_cdc"`
+
 === `include`
 
 Regular expressions for tables to include.
@@ -324,7 +371,7 @@ A https://www.docs.redpanda.com/redpanda-connect/components/caches/about[cache r
 
 === `checkpoint_cache_table_name`
 
-The identifier for the checkpoint cache table name. If no `checkpoint_cache` field is specified, this input will automatically create a table and stored procedure under the `rpcn` schema to act as a checkpoint cache. This table stores the latest processed System Change Number (SCN) that has been successfully delivered, allowing Redpanda Connect to resume from that point upon restart rather than reconsume the entire redo log.
+The identifier for the checkpoint cache table name. If no `checkpoint_cache` field is specified, this input will automatically create a table and stored procedure under the `rpcn` schema to act as a checkpoint cache. This table stores the latest processed System Change Number (SCN) that has been successfully delivered, allowing Redpanda Connect to resume from that point upon restart rather than reconsume the entire redo log. When `pdb_name` is set and this field is left at its default value, the table name is automatically derived per PDB (e.g. `RPCN.CDC_CHECKPOINT_MYPDB`) to avoid SCN collisions between pipelines monitoring different PDBs. Set this field explicitly to opt out of that auto-derivation.
 
 
 *Type*: `string`

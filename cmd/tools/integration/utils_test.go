@@ -175,9 +175,10 @@ func TestFilterPackages(t *testing.T) {
 	}
 
 	tests := []struct {
-		name    string
-		filters []string
-		expect  []TestPackage
+		name     string
+		packages []TestPackage
+		filters  []string
+		expect   []TestPackage
 	}{
 		{
 			name:    "no filters returns all",
@@ -209,11 +210,33 @@ func TestFilterPackages(t *testing.T) {
 			filters: []string{"aws"},
 			expect:  []TestPackage{{Path: "./internal/impl/aws/s3"}, {Path: "./internal/impl/aws/sqs"}},
 		},
+		{
+			name: "skip excludes package when no filter",
+			packages: []TestPackage{
+				{Path: "./internal/impl/kafka"},
+				{Path: "./internal/impl/arc", Skip: true},
+			},
+			filters: nil,
+			expect:  []TestPackage{{Path: "./internal/impl/kafka"}},
+		},
+		{
+			name: "skip excludes package even when filter explicitly matches",
+			packages: []TestPackage{
+				{Path: "./internal/impl/kafka"},
+				{Path: "./internal/impl/arc", Skip: true},
+			},
+			filters: []string{"arc"},
+			expect:  nil,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.expect, filterPackages(pkgs, tt.filters))
+			input := tt.packages
+			if input == nil {
+				input = pkgs
+			}
+			assert.Equal(t, tt.expect, filterPackages(input, tt.filters))
 		})
 	}
 }

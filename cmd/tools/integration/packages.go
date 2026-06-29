@@ -24,8 +24,10 @@ const defaultTimeout = "5m"
 
 // TestPackage defines a package to test with an optional custom timeout.
 type TestPackage struct {
-	Path    string `json:"path"`
-	Timeout string `json:"timeout"`
+	Path       string `json:"path"`
+	Timeout    string `json:"timeout"`
+	Skip       bool   `json:"skip,omitempty"`
+	SkipReason string `json:"skip_reason,omitempty"`
 }
 
 // TimeoutStr returns the timeout for go test -timeout, defaulting to 5m.

@@ -1,0 +1,218 @@
+// Copyright 2026 Redpanda Data, Inc.
+//
+// Licensed as a Redpanda Enterprise file under the Redpanda Community
+// License (the "License"); you may not use this file except in compliance with
+// the License. You may obtain a copy of the License at
+//
+// https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
+
+package bigquery
+
+import (
+	"fmt"
+	"sync"
+	"testing"
+	"time"
+
+	"cloud.google.com/go/bigquery"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/reflect/protoreflect"
+	"google.golang.org/protobuf/types/descriptorpb"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
+)
+
+func TestResolverCacheHit(t *testing.T) {
+	// Given a resolver with a pre-populated cache entry.
+	r := &schemaResolver{log: service.MockResources().Logger()}
+	expected := &resolvedSchema{
+		messageDescriptor: buildTestMessageDescriptor(t),
+	}
+	r.cache.Store("my_table", expected)
+
+	// When we resolve the same table (no BQ client needed for a cache hit).
+	rs, err := r.Resolve(t.Context(), nil, "my_dataset", "my_table")
+
+	// Then the cached value is returned without error.
+	require.NoError(t, err)
+	assert.Same(t, expected, rs)
+}
+
+func TestResolverCacheMissNoBQClient(t *testing.T) {
+	// Given a resolver with no BQ client.
+	r := &schemaResolver{log: service.MockResources().Logger()}
+
+	// When we resolve a table with no cache entry.
+	rs, err := r.Resolve(t.Context(), nil, "my_dataset", "missing")
+
+	// Then it returns an error about no schema source.
+	require.Error(t, err)
+	assert.Nil(t, rs)
+	assert.Contains(t, err.Error(), "no schema source available")
+}
+
+func TestResolverEvict(t *testing.T) {
+	// Given a resolver with a cached entry.
+	r := &schemaResolver{log: service.MockResources().Logger()}
+	r.cache.Store("my_table", &resolvedSchema{})
+
+	// When we evict that table.
+	r.Evict("my_table")
+
+	// Then the cache entry is gone.
+	_, ok := r.cache.Load("my_table")
+	assert.False(t, ok)
+}
+
+func TestResolverEvictBumpsGeneration(t *testing.T) {
+	// Evict must bump the generation counter so an in-flight Resolve detects
+	// it raced with the eviction. The counter is the load-bearing piece of
+	// the singleflight/Evict race fix; if it isn't bumped, a stale fetch
+	// result would be silently re-stored after the eviction.
+	r := &schemaResolver{log: service.MockResources().Logger()}
+	before := r.generation.Load()
+	r.Evict("any_table")
+	assert.Greater(t, r.generation.Load(), before)
+}
+
+func TestResolverEvictMidFlightDiscardsStaleResult(t *testing.T) {
+	// Simulate the documented race: a Resolve fetch is in flight (we model
+	// this by storing genBefore, then Evicting, then doing what the inner
+	// singleflight function does on completion). The post-fetch generation
+	// check must see the bump and skip the cache.Store, so the next Resolve
+	// hits a clean miss instead of re-reading the stale schema.
+	r := &schemaResolver{log: service.MockResources().Logger()}
+	rs := &resolvedSchema{messageDescriptor: buildTestMessageDescriptor(t)}
+
+	// Step 1: a fetch starts and snapshots the generation.
+	genBefore := r.generation.Load()
+
+	// Step 2: a concurrent writer evicts (e.g. handleWriteError after a
+	// schema_mismatch + successful Evolve).
+	r.Evict("my_table")
+
+	// Step 3: the in-flight fetch completes and tries to cache its result.
+	// The generation has been bumped, so the equality check fails and the
+	// store is suppressed.
+	if r.generation.Load() == genBefore {
+		r.cache.Store("my_table", rs)
+	}
+
+	// Then the cache does not contain the would-be-stale entry.
+	_, ok := r.cache.Load("my_table")
+	assert.False(t, ok, "stale schema must not be re-stored after Evict")
+}
+
+func TestResolverEvictNonexistent(t *testing.T) {
+	// Given a resolver with no cache entries.
+	r := &schemaResolver{log: service.MockResources().Logger()}
+
+	// When we evict a nonexistent key, it does not panic.
+	assert.NotPanics(t, func() {
+		r.Evict("no_such_table")
+	})
+}
+
+// TestResolverConcurrentStress hammers Resolve, Evict, and direct cache
+// mutations from many goroutines for a short duration. With -race this
+// surfaces any unsynchronised access to the resolver's internal state. We
+// intentionally include a write path that uses singleflight (mimicking a
+// real Resolve cache miss followed by a Store) so the generation guard is
+// exercised under contention rather than only sequentially.
+func TestResolverConcurrentStress(t *testing.T) {
+	r := &schemaResolver{
+		log:            service.MockResources().Logger(),
+		resolveTimeout: time.Second,
+	}
+	md := buildTestMessageDescriptor(t)
+	const (
+		goroutines   = 32
+		opsPerWorker = 500
+		uniqueTables = 8
+	)
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+	for g := range goroutines {
+		go func(id int) {
+			defer wg.Done()
+			for i := range opsPerWorker {
+				table := fmt.Sprintf("t%d", (id+i)%uniqueTables)
+				switch i % 4 {
+				case 0:
+					// Cache-hit path (or miss into singleflight fallback).
+					_, _, _ = r.sf.Do(table, func() (any, error) {
+						genBefore := r.generation.Load()
+						rs := &resolvedSchema{messageDescriptor: md}
+						if r.generation.Load() == genBefore {
+							r.cache.Store(table, rs)
+						}
+						return rs, nil
+					})
+				case 1:
+					_, _ = r.cache.Load(table)
+				case 2:
+					r.Evict(table)
+				case 3:
+					// Force a generation bump without touching the cache to stress
+					// the atomic counter under contention.
+					r.generation.Add(1)
+				}
+			}
+		}(g)
+	}
+	wg.Wait()
+	// No assertions on final state — this test exists to fail under -race if
+	// any access path is unsafe. The build/test passes when atomic + lock
+	// invariants hold.
+	assert.GreaterOrEqual(t, r.generation.Load(), int64(0))
+}
+
+func TestExtractPrimaryKeysFromMetadata(t *testing.T) {
+	t.Run("returns columns in declared order", func(t *testing.T) {
+		meta := &bigquery.TableMetadata{
+			TableConstraints: &bigquery.TableConstraints{
+				PrimaryKey: &bigquery.PrimaryKey{Columns: []string{"tenant_id", "id"}},
+			},
+		}
+		pks := extractPrimaryKeysFromMetadata(meta)
+		assert.Equal(t, []string{"tenant_id", "id"}, pks)
+	})
+
+	t.Run("returns nil when no constraints", func(t *testing.T) {
+		assert.Nil(t, extractPrimaryKeysFromMetadata(&bigquery.TableMetadata{}))
+		assert.Nil(t, extractPrimaryKeysFromMetadata(&bigquery.TableMetadata{
+			TableConstraints: &bigquery.TableConstraints{},
+		}))
+	})
+
+	t.Run("returns nil on nil metadata", func(t *testing.T) {
+		assert.Nil(t, extractPrimaryKeysFromMetadata(nil))
+	})
+}
+
+// buildTestMessageDescriptor creates a simple (name STRING, age INT64)
+// message descriptor for unit tests.
+func buildTestMessageDescriptor(t *testing.T) protoreflect.MessageDescriptor {
+	t.Helper()
+	dp := &descriptorpb.DescriptorProto{
+		Name: new("TestMessage"),
+		Field: []*descriptorpb.FieldDescriptorProto{
+			{
+				Name:   new("name"),
+				Number: new(int32(1)),
+				Type:   descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum(),
+				Label:  descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(),
+			},
+			{
+				Name:   new("age"),
+				Number: new(int32(2)),
+				Type:   descriptorpb.FieldDescriptorProto_TYPE_INT64.Enum(),
+				Label:  descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(),
+			},
+		},
+	}
+	md, err := descriptorProtoToMessageDescriptor(dp)
+	require.NoError(t, err)
+	return md
+}

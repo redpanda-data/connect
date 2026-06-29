@@ -201,7 +201,8 @@ func (s *schemaRegistryDecoder) getAvroDecoder(ctx context.Context, aschema fran
 
 	// Build parse options for preserve_logical_types: register custom
 	// types that convert time.Duration→time.Time for time-of-day fields,
-	// avro.Duration→string, and optionally Kafka Connect types.
+	// avro.Duration→string, decimal bytes→json.Number, and optionally
+	// Kafka Connect (Debezium) types.
 	var parseOpts []avro.SchemaOpt
 	if s.cfg.avro.preserveLogicalTypes {
 		parseOpts = append(parseOpts, preserveLogicalTypeOpts()...)
@@ -222,7 +223,9 @@ func (s *schemaRegistryDecoder) getAvroDecoder(ctx context.Context, aschema fran
 	)
 	if s.cfg.avro.storeSchemaMeta != "" {
 		c, parseErr := ecsAvroParseFromBytes(ecsAvroConfig{
-			rawUnion: s.cfg.avro.rawUnions,
+			rawUnion:                   s.cfg.avro.rawUnions,
+			preserveLogicalTypes:       s.cfg.avro.preserveLogicalTypes,
+			translateKafkaConnectTypes: s.cfg.avro.translateKafkaConnectTypes,
 		}, []byte(schemaSpec))
 		if parseErr != nil {
 			s.logger.With("error", parseErr).Error("Failed to extract common schema for meta storage")

@@ -59,6 +59,12 @@ func commonToJSONSchemaNode(c schema.Common) (map[string]any, error) {
 		return commonToJSONSchemaUnion(c)
 	case schema.Timestamp:
 		return map[string]any{"type": "string", "format": "date-time"}, nil
+	case schema.Date:
+		return map[string]any{"type": "string", "format": "date"}, nil
+	case schema.TimeOfDay:
+		return map[string]any{"type": "string", "format": "time"}, nil
+	case schema.UUID:
+		return map[string]any{"type": "string", "format": "uuid"}, nil
 	case schema.Decimal:
 		if c.Logical == nil || c.Logical.Decimal == nil {
 			return nil, fmt.Errorf("decimal field %q missing precision/scale", c.Name)

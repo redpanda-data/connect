@@ -238,7 +238,45 @@ func commonTypeToIcebergTypeRec(c *schema.Common, ti *typeInferrer) (iceberg.Typ
 	case schema.ByteArray:
 		return iceberg.BinaryType{}, nil
 	case schema.Timestamp:
-		return iceberg.TimestampTzType{}, nil
+		// Pick an Iceberg variant per the schema's declared unit/UTC-adjust.
+		// Legacy Timestamps (nil Logical) fall through to the millis/UTC
+		// default via EffectiveTimestamp(), preserving today's behavior of
+		// "always TimestampTzType". Schemas that explicitly say nanos use
+		// the V3 *NsType variants (catalog must support spec V3 to read
+		// these — that's surfaced as a write-time error from iceberg-go,
+		// not silently downcast here).
+		p := c.EffectiveTimestamp()
+		switch {
+		case p.Unit == schema.TimeUnitNanos && p.AdjustToUTC:
+			return iceberg.TimestampTzNsType{}, nil
+		case p.Unit == schema.TimeUnitNanos:
+			return iceberg.TimestampNsType{}, nil
+		case p.AdjustToUTC:
+			return iceberg.TimestampTzType{}, nil
+		default:
+			return iceberg.TimestampType{}, nil
+		}
+	case schema.Date:
+		return iceberg.DateType{}, nil
+	case schema.TimeOfDay:
+		// Iceberg's TIME is microseconds since midnight, no timezone. Reject
+		// shapes Iceberg can't faithfully represent rather than silently
+		// downcast — see sink-design-guidance.md.
+		if c.Logical == nil || c.Logical.TimeOfDay == nil {
+			return nil, fmt.Errorf("time-of-day field %q missing Logical.TimeOfDay parameters", c.Name)
+		}
+		p := c.Logical.TimeOfDay
+		if p.AdjustToUTC {
+			return nil, fmt.Errorf("time-of-day field %q has AdjustToUTC=true; Iceberg has no time-with-tz column type, downcast or restructure upstream", c.Name)
+		}
+		switch p.Unit {
+		case schema.TimeUnitMillis, schema.TimeUnitMicros:
+			return iceberg.TimeType{}, nil
+		default:
+			return nil, fmt.Errorf("time-of-day field %q has unit %v; Iceberg supports only MILLIS and MICROS for TIME columns", c.Name, p.Unit)
+		}
+	case schema.UUID:
+		return iceberg.UUIDType{}, nil
 	case schema.Decimal:
 		if c.Logical == nil || c.Logical.Decimal == nil {
 			return nil, fmt.Errorf("decimal field %q is missing precision/scale", c.Name)
@@ -250,6 +288,13 @@ func commonTypeToIcebergTypeRec(c *schema.Common, ti *typeInferrer) (iceberg.Typ
 		return commonObjectToIcebergStruct(c, ti)
 	case schema.Array:
 		return commonArrayToIcebergList(c, ti)
+	case schema.Map:
+		return commonMapToIcebergMap(c, ti)
+	case schema.Union:
+		// Iceberg has no native union type. Surface the constraint
+		// loudly with a remediation pointer rather than the generic
+		// "unsupported" error — same pattern as parquet_encode.
+		return nil, fmt.Errorf("field %q is Union which iceberg cannot express; flatten to a single branch upstream (typically by projecting to the non-null variant) before iceberg", c.Name)
 	case schema.Any, schema.Null:
 		return iceberg.StringType{}, nil
 	default:
@@ -301,6 +346,26 @@ func commonArrayToIcebergList(c *schema.Common, ti *typeInferrer) (*iceberg.List
 		ElementID:       ti.allocateFieldID(),
 		Element:         elemType,
 		ElementRequired: false,
+	}, nil
+}
+
+// commonMapToIcebergMap converts a schema.Common Map (which always keys on
+// string by convention, with the single child describing the value type)
+// to an iceberg.MapType. Mirrors the Avro / parquet conventions.
+func commonMapToIcebergMap(c *schema.Common, ti *typeInferrer) (*iceberg.MapType, error) {
+	if len(c.Children) != 1 {
+		return nil, fmt.Errorf("map type must have exactly one value-type child, got %d", len(c.Children))
+	}
+	valType, err := commonTypeToIcebergTypeRec(&c.Children[0], ti)
+	if err != nil {
+		return nil, fmt.Errorf("map value: %w", err)
+	}
+	return &iceberg.MapType{
+		KeyID:         ti.allocateFieldID(),
+		KeyType:       iceberg.StringType{},
+		ValueID:       ti.allocateFieldID(),
+		ValueType:     valType,
+		ValueRequired: false,
 	}, nil
 }
 

@@ -55,11 +55,33 @@ jobs:
           path: ${{ runner.temp }}/integration/
           retention-days: 7
 
+  check-author-access:
+    if: github.event_name == 'pull_request' && github.event.action == 'opened'
+    runs-on: ubuntu-latest
+    outputs:
+      allowed: ${{ steps.perm.outputs.allowed }}
+    steps:
+      - name: Check author permission
+        id: perm
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PERMISSION=$(gh api "repos/${{ github.repository }}/collaborators/${{ github.event.pull_request.user.login }}/permission" --jq '.permission' 2>/dev/null || echo "none")
+          if [[ "${PERMISSION}" == "admin" || "${PERMISSION}" == "write" ]]; then
+            echo "allowed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "allowed=false" >> "$GITHUB_OUTPUT"
+          fi
+
   integration-test-filter:
+    needs: [check-author-access]
     if: >-
-      (github.event_name == 'issue_comment' && github.event.issue.pull_request && startsWith(github.event.comment.body, '/integration ')) ||
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.filter != '') ||
-      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'run-integration-tests'))
+      always() && (
+        needs.check-author-access.outputs.allowed == 'true' ||
+        (github.event_name == 'issue_comment' && github.event.issue.pull_request && startsWith(github.event.comment.body, '/integration ')) ||
+        (github.event_name == 'workflow_dispatch' && github.event.inputs.filter != '') ||
+        (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'run-integration-tests'))
+      )
     runs-on: ubuntu-latest-32
     env:
       CGO_ENABLED: 0
@@ -120,6 +142,9 @@ jobs:
 
       - name: Install Task
         uses: ./.github/actions/setup-task
+
+      - name: Verify Integration Tests Registry
+        run: task test:integration:verify
 
       - name: Pull Latest Redpanda Image
         run: task docker:pull-redpanda
