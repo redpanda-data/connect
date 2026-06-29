@@ -1,0 +1,12 @@
+{
+  "name": "sf",
+  "config": {
+    "connector.class": "com.snowflake.kafka.connector.SnowflakeSinkConnector",
+    "snowflake.url.name": "acct.snowflakecomputing.com",
+    "snowflake.user.name": "svc",
+    "snowflake.database.name": "DB",
+    "snowflake.schema.name": "PUBLIC",
+    "snowflake.private.key": "KEY",
+    "topics": "orders"
+  }
+}

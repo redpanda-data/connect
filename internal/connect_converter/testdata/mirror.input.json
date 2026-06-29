@@ -1,0 +1,9 @@
+{
+  "name": "mm",
+  "config": {
+    "connector.class": "org.apache.kafka.connect.mirror.MirrorSourceConnector",
+    "source.cluster.bootstrap.servers": "src:9092",
+    "target.cluster.bootstrap.servers": "dst:9092",
+    "topics": "orders"
+  }
+}

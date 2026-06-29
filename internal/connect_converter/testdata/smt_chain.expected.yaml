@@ -1,0 +1,17 @@
+# Converted from Kafka Connect connector "s3" (class=io.confluent.connect.s3.S3SinkConnector). Review # TODO markers.
+input:
+  redpanda:
+    seed_brokers:
+      - localhost:9092 # TODO: set your Redpanda/Kafka broker(s)
+    topics:
+      - orders
+    consumer_group: connect-s3 # TODO: confirm consumer group
+pipeline:
+  processors:
+    - mapping: meta kafka_topic = @kafka_topic.re_replace_all("(.*)", "prefix_$1")
+    - mapping: root.src = "kafka"
+output:
+  aws_s3:
+    bucket: my-bucket
+    region: us-east-1
+    path: ${! @kafka_topic }/${! timestamp_unix() }-${! uuid_v4() }.json # TODO: review object path/partitioning
