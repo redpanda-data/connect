@@ -108,7 +108,6 @@ When using the default Oracle based cache, the Connect user requires permission 
 	).
 	Field(service.NewBoolField(ociFieldStreamSnapshot).
 		Description("If set to true, the connector will query all the existing data as a part of snapshot process. Otherwise, it will start from the current System Change Number position.").
-		LintRule(`root = if this == true { ["deprecated: use 'snapshot_mode: snapshot_and_stream' instead of 'stream_snapshot: true'"] }`).
 		Example(true).
 		Default(false).
 		Deprecated(),
