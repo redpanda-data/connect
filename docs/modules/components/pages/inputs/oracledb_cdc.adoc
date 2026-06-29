@@ -190,6 +190,7 @@ Controls snapshot behaviour. `none` (default) skips snapshotting and starts stre
 
 *Type*: `string`
 
+Requires version 4.99.0 or newer
 
 Options:
 `none`
