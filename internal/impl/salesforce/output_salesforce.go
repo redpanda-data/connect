@@ -448,14 +448,16 @@ func (s *salesforceSinkOutput) getWritableFields(ctx context.Context, sobject, o
 
 	s.writableFieldsMu.Lock()
 	if existing, ok := s.writableFields[key]; ok {
+		cp := copyStringSet(existing)
 		s.writableFieldsMu.Unlock()
-		return copyStringSet(existing), nil
+		return cp, nil
 	}
 	s.writableFields[key] = fields
+	cp := copyStringSet(fields)
 	s.writableFieldsMu.Unlock()
 
 	s.log.Debugf("salesforce_sink: %s (%s) has %d writable fields", sobject, operation, len(fields))
-	return copyStringSet(fields), nil
+	return cp, nil
 }
 
 func copyStringSet(m map[string]struct{}) map[string]struct{} {
