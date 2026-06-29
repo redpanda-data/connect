@@ -279,7 +279,7 @@ func TestIntegrationOracleDBCDCConcurrentSnapshot(t *testing.T) {
 		cfg := `
 oracledb_cdc:
   connection_string: ` + connStr + `
-  snapshot_mode: snapshot_and_stream
+  snapshot_mode: snapshot_only
   snapshot_max_batch_size: 10
   max_parallel_snapshot_tables: 3
   logminer:
