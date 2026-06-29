@@ -83,6 +83,9 @@ func TestIntegrationSnapshot(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equalf(t, totalRows, publisher.count(), "Expected all %d rows to be captured during snapshot", totalRows)
+		for i, msg := range publisher.messages {
+			assert.Equalf(t, scn, msg.SCN, "Expected snapshot message[%d] to carry the captured SCN", i)
+		}
 	})
 
 	t.Run("TwoColumnCompositeKey_WithPagination", func(t *testing.T) {
@@ -112,6 +115,9 @@ func TestIntegrationSnapshot(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equalf(t, totalRows, publisher.count(), "Expected all %d rows to be captured during snapshot", totalRows)
+		for i, msg := range publisher.messages {
+			assert.Equalf(t, scn, msg.SCN, "Expected snapshot message[%d] to carry the captured SCN", i)
+		}
 	})
 
 	t.Run("ThreeColumnCompositeKey_WithPagination", func(t *testing.T) {
@@ -143,6 +149,9 @@ func TestIntegrationSnapshot(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equalf(t, totalRows, publisher.count(), "Expected all %d rows to be captured during snapshot", totalRows)
+		for i, msg := range publisher.messages {
+			assert.Equalf(t, scn, msg.SCN, "Expected snapshot message[%d] to carry the captured SCN", i)
+		}
 	})
 }
 

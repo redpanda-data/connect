@@ -3,6 +3,30 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.98.0 - 2026-06-26
+
+### Added
+
+- postgres_cdc: PostgreSQL CDC events now include commit_ts_ms metadata field with the transaction commit timestamp for insert, update, and delete operations. ([@josephwoodward](https://github.com/josephwoodward), [#4554](https://github.com/redpanda-data/connect/pull/4554))
+
+### Fixed
+
+- aws_dynamodb_cdc: DynamoDB Streams connector now recovers from expired shard iterators by re-acquiring fresh iterators from the last read position, eliminating data gaps on prolonged backpressure or idle periods. ([@squiidz](https://github.com/squiidz), [#4545](https://github.com/redpanda-data/connect/pull/4545))
+- file: File output now validates paths to reject OS-specific invalid characters (colons on macOS, control characters and special chars on Windows, NUL on all platforms) that cause silent data loss. ([@twmb](https://github.com/twmb), [#4053](https://github.com/redpanda-data/connect/pull/4053))
+- oracledb_cdc: Fixed goroutine leak in streaming reconnect loop and added time-to-first-row metric for LogMiner performance tracking. ([@josephwoodward](https://github.com/josephwoodward), [#4540](https://github.com/redpanda-data/connect/pull/4540))
+
+### Changed
+
+- general: try_catch processor is now available in cloud distributions alongside other try/catch processors. ([@josephwoodward](https://github.com/josephwoodward), [#4562](https://github.com/redpanda-data/connect/pull/4562))
+- oracledb_cdc: Snapshot messages now include the current SCN in metadata, improving CDC standard conformance for change data capture operations. ([@josephwoodward](https://github.com/josephwoodward), [#4542](https://github.com/redpanda-data/connect/pull/4542))
+- sentry: Migrated sentry_capture processor to sentry-go v0.47.0 by attaching extras as a context instead of the removed SetExtras API. ([@twmb](https://github.com/twmb), [#4549](https://github.com/redpanda-data/connect/pull/4549))
+
+## Unreleased
+
+### Fixed
+
+- aws_dynamodb_cdc: The CDC input now recovers automatically from an expired DynamoDB Streams shard iterator (`ExpiredIteratorException`), which previously caused an affected shard to retry the dead iterator indefinitely and stall until a pod restart. The shard now obtains a fresh iterator and resumes from the last read position without a data gap.
+
 ## 4.97.0 - 2026-06-18
 
 ### Added
@@ -11,6 +35,7 @@ All notable changes to this project will be documented in this file.
 - oracledb_cdc: Oracle CDC connector now publishes an oracledb_cdc_publish_lag_ns metric tracking latency between database commits and event publication. ([@josephwoodward](https://github.com/josephwoodward), [#4520](https://github.com/redpanda-data/connect/pull/4520))
 - oracledb_cdc: Oracle CDC connector now supports a configurable min_scn_window_size parameter to skip mining cycles when the SCN gap is too small. ([@josephwoodward](https://github.com/josephwoodward), [#4530](https://github.com/redpanda-data/connect/pull/4530))
 - aws_bedrock_embeddings: Support Cohere input_type and v4 response. ([@squiidz](https://github.com/squiidz), [#4473](https://github.com/redpanda-data/connect/pull/4473))
+- aws_dynamodb_cdc: The auto-created checkpoint table can now be provisioned as a DynamoDB Global Table via `global_table` / `global_table_replicas`, enabling low-RPO multi-region failover. ([@squiidz](https://github.com/squiidz), [#4529](https://github.com/redpanda-data/connect/pull/4529))
 
 ### Fixed
 

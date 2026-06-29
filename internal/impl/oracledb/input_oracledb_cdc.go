@@ -80,7 +80,7 @@ This input adds the following metadata fields to each message:
 - database_schema: The database schema for the table where the message originates from.
 - table_name: Name of the table that the message originated from.
 - operation: Type of operation that generated the message: "read", "delete", "insert", or "update". "read" is from messages that are read in the initial snapshot phase.
-- scn: the System Change Number in Oracle.
+- scn: The System Change Number in Oracle. Messages published as part of a snapshot will contain Oracle's current SCN captured at time of snapshot.
 - transaction_id: The Oracle transaction ID in ` + "`USN.SLOT.SEQ`" + ` format, identifying the transaction that produced the change. Not present on snapshot (` + "`read`" + `) messages.
 - source_ts_ms: The timestamp of when Oracle wrote the change record into the redo log, expressed as milliseconds since the Unix epoch. This reflects the database server's wall-clock time at the moment the DML executed, not the transaction commit time.
 - commit_ts_ms: The timestamp of the transaction commit, expressed as milliseconds since the Unix epoch. Sourced from ` + "`V$LOGMNR_CONTENTS.TIMESTAMP`" + ` on the COMMIT redo record — this is Oracle's wall-clock time when the commit was written to the redo log, not a dedicated commit-timestamp column. Not present on snapshot (` + "`read`" + `) messages.

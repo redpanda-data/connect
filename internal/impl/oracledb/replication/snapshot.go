@@ -36,6 +36,7 @@ type Snapshot struct {
 	snapshotRowsTotalMetric *service.MetricCounter
 	lobEnabled              bool
 	pdbName                 string
+	scn                     SCN // published as part of snapshot read metadata
 }
 
 // NewSnapshot creates a new instance of Snapshot capable of snapshotting provided tables.
@@ -69,6 +70,7 @@ func NewSnapshot(ctx context.Context,
 		snapshotStatusMetric:    metrics.NewGauge("oracledb_cdc_snapshot_status", "table"),
 		snapshotRowsTotalMetric: metrics.NewCounter("oracledb_cdc_snapshot_rows_total", "table"),
 		log:                     logger,
+		scn:                     InvalidSCN,
 	}
 	return s, nil
 }
@@ -81,13 +83,15 @@ func (s *Snapshot) Prepare(ctx context.Context) (SCN, error) {
 	}
 
 	var currentSCN SCN
-	sql := `SELECT CURRENT_SCN FROM V$DATABASE`
-	if err := s.dbPool.QueryRowContext(ctx, sql).Scan(&currentSCN); err != nil {
+	if err := s.dbPool.QueryRowContext(ctx, `SELECT CURRENT_SCN FROM V$DATABASE`).Scan(&currentSCN); err != nil {
 		return InvalidSCN, fmt.Errorf("getting current SCN for snapshot: %w", err)
 	}
 
-	s.log.Infof("Captured SCN before snapshot at SCN: %s", currentSCN)
-	return currentSCN, nil
+	// capture to include on snapshot metadata
+	s.scn = currentSCN
+
+	s.log.Infof("Captured SCN before snapshot at SCN: %s", s.scn)
+	return s.scn, nil
 }
 
 // Read launches N go routines (based on maxWorkers) and starts the process of
@@ -278,9 +282,12 @@ func (s *Snapshot) processBatch(ctx context.Context, tx *sql.Tx, table UserTable
 			Schema:     table.Schema,
 			Data:       row,
 			Operation:  MessageOperationRead,
-			SCN:        0,
 			ColumnMeta: colMeta,
 		}
+		if s.scn != InvalidSCN {
+			m.SCN = s.scn
+		}
+
 		if err = s.publisher.Publish(ctx, &m); err != nil {
 			return 0, fmt.Errorf("handling snapshot table row: %w", err)
 		}

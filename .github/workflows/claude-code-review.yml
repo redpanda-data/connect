@@ -62,6 +62,10 @@ jobs:
             echo "# Test Patterns"
             echo ""
             cat .claude/agents/tester.md
+            echo ""
+            echo "# Connector Certification & Contribution Guidelines (CONTRIBUTING.md)"
+            echo ""
+            cat CONTRIBUTING.md
             echo "__REVIEW_GUIDES_EOF__"
           } >> "$GITHUB_ENV"
 
@@ -125,6 +129,7 @@ jobs:
 
             **CRITICAL: We only want HIGH SIGNAL issues.** Flag issues where:
             - Clear, unambiguous CLAUDE.md violations where you can quote the exact rule being broken
+            - CONTRIBUTING.md violations — the connector certification & contribution spec is included in the **Reference** section below; cite the exact clause (e.g. "§1.2.2", "§5.4.1"). For any PR that adds or changes a CDC connector (an input registered `*_cdc`/`*_changefeed`), enforce the **§5 CDC Connector Standard**: read the canonical references named in §5 (`internal/impl/oracledb`, `internal/impl/mysql`, `internal/impl/postgresql`) and compare against them. Flag divergence from the fleet's flat message shape, non-canonical config/metadata names (deterministic gate: `internal/plugins/cdctest`), an absent `checkpoint_cache` / checkpoint-not-on-snapshot-completion, or `float64` for DECIMAL/NUMERIC. Scope enforcement to the surface the PR actually changes — do NOT flag pre-existing gaps on an unrelated change. Anchor every finding to an in-repo file you have read; do NOT rely on external knowledge of formats like Debezium.
             - [Project Go patterns](.claude/agents/godev.md) violations: (single vs batch MustRegister*), ConfigSpec construction, field name constants, ParsedConfig extraction, Resources pattern, import organization, license headers, formatting/linting, error handling (wrapping with gerund form, %w), context propagation (no context.Background() in methods, no storing ctx on structs), concurrency patterns (mutex, goroutine lifecycle), shutdown/cleanup (idempotent Close, sync.Once), public wrappers, bundle registration, info.csv metadata, distribution classification
             - [Project Test patterns](.claude/agents/tester.md) violations:
                 - Unit tests: table-driven tests with errContains, assert vs require, config parsing with MockResources, enterprise InjectTestService, processor/input/output/bloblang lifecycle tests, config linting, NewStreamBuilder pipelines, HTTP mock servers
