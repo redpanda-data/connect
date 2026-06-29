@@ -115,12 +115,12 @@ const (
 	SnapshotModeSnapshotAndStream SnapshotMode = "snapshot_and_stream"
 )
 
-// IsSnapshotNone returns true of snapshot_mode config is snapshot_only, otherwise returns false.
+// IsSnapshotOnly returns true if the snapshot_mode config is snapshot_only, otherwise false.
 func (s SnapshotMode) IsSnapshotOnly() bool {
 	return s == SnapshotModeSnapshotOnly
 }
 
-// IsSnapshotNone returns true of snapshot_mode config is none, otherwise returns false.
+// IsSnapshotNone returns true if the snapshot_mode config is none, otherwise false.
 func (s SnapshotMode) IsSnapshotNone() bool {
 	return s == SnapshotModeNone
 }
