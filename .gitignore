@@ -17,3 +17,5 @@ __pycache__
 *.test.exe
 compile_out.txt
 test_output.txt
+.claude/worktrees/
+.claude/scheduled_tasks.lock

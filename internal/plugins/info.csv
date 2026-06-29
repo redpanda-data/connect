@@ -324,3 +324,4 @@ workflow                  ,processor ,workflow                  ,certified  ,n  
 xml                       ,processor ,xml                       ,community  ,n          ,y     ,y              ,
 zmq4                      ,input     ,zmq4                      ,community  ,n          ,n     ,n              ,requires libzmq; excluded from cloud build
 zmq4                      ,output    ,zmq4                      ,community  ,n          ,n     ,n              ,requires libzmq; excluded from cloud build
+saphana_cdc               ,input     ,saphana_cdc               ,enterprise ,n          ,y     ,y              ,

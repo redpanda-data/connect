@@ -38,6 +38,7 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azqueue v1.0.1
 	github.com/Azure/go-amqp v1.5.1
 	github.com/ClickHouse/clickhouse-go/v2 v2.43.0
+	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/trace v1.31.0
 	github.com/IBM/sarama v1.47.0
 	github.com/Jeffail/checkpoint v1.1.0
@@ -47,6 +48,7 @@ require (
 	github.com/Masterminds/squirrel v1.5.4
 	github.com/PaesslerAG/gval v1.2.4
 	github.com/PaesslerAG/jsonpath v0.1.1
+	github.com/SAP/go-hdb v1.16.11
 	github.com/a2aproject/a2a-go v0.3.12
 	github.com/apache/iceberg-go v0.5.1-0.20260506193454-dfc5851d9367
 	github.com/apache/pulsar-client-go v0.18.0

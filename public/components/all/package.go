@@ -27,6 +27,7 @@ import (
 	_ "github.com/redpanda-data/connect/v4/public/components/mssqlserver"
 	_ "github.com/redpanda-data/connect/v4/public/components/mysql"
 	_ "github.com/redpanda-data/connect/v4/public/components/oracledb"
+	_ "github.com/redpanda-data/connect/v4/public/components/saphana"
 	_ "github.com/redpanda-data/connect/v4/public/components/postgresql"
 	_ "github.com/redpanda-data/connect/v4/public/components/salesforce"
 	_ "github.com/redpanda-data/connect/v4/public/components/slack"
