@@ -43,6 +43,7 @@ input:
     wallet_path: /opt/oracle/wallet # No default (optional)
     wallet_password: "" # No default (optional)
     stream_snapshot: false
+    snapshot_mode: none
     max_parallel_snapshot_tables: 1
     snapshot_max_batch_size: 1000
     logminer:
@@ -85,6 +86,7 @@ input:
     wallet_path: /opt/oracle/wallet # No default (optional)
     wallet_password: "" # No default (optional)
     stream_snapshot: false
+    snapshot_mode: none
     max_parallel_snapshot_tables: 1
     snapshot_max_batch_size: 1000
     logminer:
@@ -197,6 +199,21 @@ If set to true, the connector will query all the existing data as a part of snap
 
 stream_snapshot: true
 ```
+
+=== `snapshot_mode`
+
+Controls snapshot behaviour. `none` (default) skips snapshotting and starts streaming from the current SCN. `snapshot_only` performs a full snapshot, persists the SCN checkpoint, then stops without streaming. `snapshot_and_stream` performs a full snapshot then transitions to streaming.
+
+
+*Type*: `string`
+
+*Default*: `"none"`
+
+Options:
+`none`
+, `snapshot_only`
+, `snapshot_and_stream`
+.
 
 === `max_parallel_snapshot_tables`
 
