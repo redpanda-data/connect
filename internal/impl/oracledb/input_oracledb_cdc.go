@@ -45,6 +45,7 @@ const (
 	ociFieldCheckpointCacheTableName  = "checkpoint_cache_table_name"
 	ociFieldBatching                  = "batching"
 	ociFieldPDBName                   = "pdb_name"
+	ociFieldSnapshotMode              = "snapshot_mode"
 
 	shutdownTimeout = 5 * time.Second
 
@@ -60,6 +61,18 @@ const (
 	ociFieldLOBEnabled           = "lob_enabled"
 	ociFieldTransactionCache     = "transaction_cache"
 	ociFieldTransactionCacheKey  = "transaction_cache_key"
+)
+
+// SnapshotMode controls whether and how an initial table snapshot is taken before streaming begins.
+type SnapshotMode string
+
+const (
+	// SnapshotModeNone skips snapshotting and starts streaming from the current SCN.
+	SnapshotModeNone SnapshotMode = "none"
+	// SnapshotModeSnapshotOnly performs a full snapshot, persists the SCN checkpoint, then stops without streaming.
+	SnapshotModeSnapshotOnly SnapshotMode = "snapshot_only"
+	// SnapshotModeSnapshotAndStream performs a full snapshot then transitions to streaming.
+	SnapshotModeSnapshotAndStream SnapshotMode = "snapshot_and_stream"
 )
 
 func init() {
@@ -107,8 +120,16 @@ When using the default Oracle based cache, the Connect user requires permission 
 	).
 	Field(service.NewBoolField(ociFieldStreamSnapshot).
 		Description("If set to true, the connector will query all the existing data as a part of snapshot process. Otherwise, it will start from the current System Change Number position.").
+		LintRule(`root = if this == true { ["deprecated: use 'snapshot_mode: snapshot_and_stream' instead of 'stream_snapshot: true'"] }`).
 		Example(true).
 		Default(false),
+	).
+	Field(service.NewStringEnumField(ociFieldSnapshotMode,
+		string(SnapshotModeNone),
+		string(SnapshotModeSnapshotOnly),
+		string(SnapshotModeSnapshotAndStream)).
+		Description("Controls snapshot behaviour. `none` (default) skips snapshotting and starts streaming from the current SCN. `snapshot_only` performs a full snapshot, persists the SCN checkpoint, then stops without streaming. `snapshot_and_stream` performs a full snapshot then transitions to streaming.").
+		Default(string(SnapshotModeNone)),
 	).
 	Field(service.NewIntField(ociFieldMaxParallelSnapshotTables).
 		Description("Specifies a number of tables that will be processed in parallel during the snapshot processing stage.").
@@ -202,7 +223,7 @@ type asyncMessage struct {
 // Config is the configuration for a Oracle connector.
 type Config struct {
 	ConnectionString     string
-	StreamSnapshot       bool
+	SnapshotMode         SnapshotMode
 	SnapshotMaxBatchSize int
 	SnapshotMaxWorkers   int
 	TablesFilter         *confx.RegexpFilter
@@ -229,7 +250,7 @@ type oracleDBCDCInput struct {
 func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resources) (s service.BatchInput, err error) {
 	var (
 		connectionString     string
-		streamSnapshot       bool
+		snapshotMode         SnapshotMode
 		snapshotMaxWorkers   int
 		snapshotMaxBatchSize int
 
@@ -250,8 +271,18 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 	if connectionString, err = conf.FieldString(ociFieldConnectionString); err != nil {
 		return nil, err
 	}
-	if streamSnapshot, err = conf.FieldBool(ociFieldStreamSnapshot); err != nil {
+	if rawMode, err := conf.FieldString(ociFieldSnapshotMode); err != nil {
 		return nil, err
+	} else {
+		snapshotMode = SnapshotMode(rawMode)
+	}
+	// backward compat: stream_snapshot: true upgrades to snapshot_and_stream when snapshot_mode is not set
+	if snapshotMode == SnapshotModeNone {
+		if streamSnapshot, err := conf.FieldBool(ociFieldStreamSnapshot); err != nil {
+			return nil, err
+		} else if streamSnapshot {
+			snapshotMode = SnapshotModeSnapshotAndStream
+		}
 	}
 	if snapshotMaxWorkers, err = conf.FieldInt(ociFieldMaxParallelSnapshotTables); err != nil {
 		return nil, err
@@ -335,7 +366,7 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 	o := oracleDBCDCInput{
 		cfg: Config{
 			ConnectionString:     connectionString,
-			StreamSnapshot:       streamSnapshot,
+			SnapshotMode:         snapshotMode,
 			SnapshotMaxWorkers:   snapshotMaxWorkers,
 			SnapshotMaxBatchSize: snapshotMaxBatchSize,
 			SCNCache:             scnCache,
@@ -501,7 +532,7 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 	)
 
 	// no cached SCN means we're not recovering from a restart
-	if o.cfg.StreamSnapshot && cachedSCN == replication.InvalidSCN {
+	if o.cfg.SnapshotMode != SnapshotModeNone && cachedSCN == replication.InvalidSCN {
 		if snapshotter, err = replication.NewSnapshot(ctx, o.cfg.ConnectionString, userTables, o.publisher, o.lmCfg.LOBEnabled, pdbNameForCache, o.log, o.metrics); err != nil {
 			return fmt.Errorf("creating database snapshotter: %w", err)
 		}
@@ -561,6 +592,12 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 			}
 
 			o.log.Infof("Successfully captured SCN following snapshot: %d", startSCN)
+		}
+
+		if o.cfg.SnapshotMode == SnapshotModeSnapshotOnly {
+			o.log.Infof("Snapshot-only mode complete, stopping")
+			o.stopSig.TriggerHasStopped()
+			return
 		}
 
 		// streaming
