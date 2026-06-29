@@ -275,6 +275,23 @@ func (b *batchPublisher) msgs() <-chan asyncMessage {
 	return b.msgChan
 }
 
+// FlushRemaining flushes any partial batch held in the batcher and blocks until
+// it has been consumed by ReadBatch. Call this after all events have been
+// published and before signalling end-of-input, to avoid dropping the last
+// partial batch.
+func (b *batchPublisher) FlushRemaining(ctx context.Context) error {
+	if b.batcher == nil {
+		return nil
+	}
+	b.batcherMu.Lock()
+	remaining, err := b.batcher.Flush(ctx)
+	b.batcherMu.Unlock()
+	if err != nil || len(remaining) == 0 {
+		return err
+	}
+	return b.publishBatch(ctx, remaining)
+}
+
 // Close signals the publisher's loop goroutine to stop and waits for it to exit.
 func (b *batchPublisher) Close() {
 	b.shutSig.TriggerSoftStop()
