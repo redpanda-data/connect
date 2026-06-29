@@ -102,3 +102,34 @@ func parseWalletConfig(conf *service.ParsedConfig, overrides map[string]string) 
 
 	return nil
 }
+
+// SnapshotMode controls whether and how an initial table snapshot is taken before streaming begins.
+type SnapshotMode string
+
+const (
+	// SnapshotModeNone skips snapshotting and starts streaming from the current SCN.
+	SnapshotModeNone SnapshotMode = "none"
+	// SnapshotModeSnapshotOnly performs a full snapshot, persists the SCN checkpoint, then stops without streaming.
+	SnapshotModeSnapshotOnly SnapshotMode = "snapshot_only"
+	// SnapshotModeSnapshotAndStream performs a full snapshot then transitions to streaming.
+	SnapshotModeSnapshotAndStream SnapshotMode = "snapshot_and_stream"
+)
+
+func parseSnapshotMode(conf *service.ParsedConfig) (SnapshotMode, error) {
+	if conf.Contains(ociFieldSnapshotMode) {
+		raw, err := conf.FieldString(ociFieldSnapshotMode)
+		if err != nil {
+			return SnapshotModeNone, err
+		}
+		return SnapshotMode(raw), nil
+	}
+	// snapshot_mode not set — apply backward compat
+	streamSnapshot, err := conf.FieldBool(ociFieldStreamSnapshot)
+	if err != nil {
+		return SnapshotModeNone, err
+	}
+	if streamSnapshot {
+		return SnapshotModeSnapshotAndStream, nil
+	}
+	return SnapshotModeNone, nil
+}

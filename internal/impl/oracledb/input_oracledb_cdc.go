@@ -63,18 +63,6 @@ const (
 	ociFieldTransactionCacheKey  = "transaction_cache_key"
 )
 
-// SnapshotMode controls whether and how an initial table snapshot is taken before streaming begins.
-type SnapshotMode string
-
-const (
-	// SnapshotModeNone skips snapshotting and starts streaming from the current SCN.
-	SnapshotModeNone SnapshotMode = "none"
-	// SnapshotModeSnapshotOnly performs a full snapshot, persists the SCN checkpoint, then stops without streaming.
-	SnapshotModeSnapshotOnly SnapshotMode = "snapshot_only"
-	// SnapshotModeSnapshotAndStream performs a full snapshot then transitions to streaming.
-	SnapshotModeSnapshotAndStream SnapshotMode = "snapshot_and_stream"
-)
-
 func init() {
 	service.MustRegisterBatchInput("oracledb_cdc", oracleDBStreamConfigSpec, newOracleDBCDCInput)
 }
@@ -122,14 +110,15 @@ When using the default Oracle based cache, the Connect user requires permission 
 		Description("If set to true, the connector will query all the existing data as a part of snapshot process. Otherwise, it will start from the current System Change Number position.").
 		LintRule(`root = if this == true { ["deprecated: use 'snapshot_mode: snapshot_and_stream' instead of 'stream_snapshot: true'"] }`).
 		Example(true).
-		Default(false),
+		Default(false).
+		Deprecated(),
 	).
 	Field(service.NewStringEnumField(ociFieldSnapshotMode,
 		string(SnapshotModeNone),
 		string(SnapshotModeSnapshotOnly),
 		string(SnapshotModeSnapshotAndStream)).
 		Description("Controls snapshot behaviour. `none` (default) skips snapshotting and starts streaming from the current SCN. `snapshot_only` performs a full snapshot, persists the SCN checkpoint, then stops without streaming. `snapshot_and_stream` performs a full snapshot then transitions to streaming.").
-		Default(string(SnapshotModeNone)),
+		Optional(),
 	).
 	Field(service.NewIntField(ociFieldMaxParallelSnapshotTables).
 		Description("Specifies a number of tables that will be processed in parallel during the snapshot processing stage.").
@@ -271,18 +260,8 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 	if connectionString, err = conf.FieldString(ociFieldConnectionString); err != nil {
 		return nil, err
 	}
-	if rawMode, err := conf.FieldString(ociFieldSnapshotMode); err != nil {
+	if snapshotMode, err = parseSnapshotMode(conf); err != nil {
 		return nil, err
-	} else {
-		snapshotMode = SnapshotMode(rawMode)
-	}
-	// backward compat: stream_snapshot: true upgrades to snapshot_and_stream when snapshot_mode is not set
-	if snapshotMode == SnapshotModeNone {
-		if streamSnapshot, err := conf.FieldBool(ociFieldStreamSnapshot); err != nil {
-			return nil, err
-		} else if streamSnapshot {
-			snapshotMode = SnapshotModeSnapshotAndStream
-		}
 	}
 	if snapshotMaxWorkers, err = conf.FieldInt(ociFieldMaxParallelSnapshotTables); err != nil {
 		return nil, err
