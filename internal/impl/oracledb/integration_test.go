@@ -64,7 +64,7 @@ func TestIntegrationOracleDBCDCSnapshotAndStreaming(t *testing.T) {
 oracledb_cdc:
   connection_string: ` + cdbConnStr + `
   pdb_name: ` + pdbName + `
-  stream_snapshot: true
+  snapshot_mode: snapshot_and_stream
   max_parallel_snapshot_tables: 2
   snapshot_max_batch_size: 10
   logminer:
@@ -279,7 +279,7 @@ func TestIntegrationOracleDBCDCConcurrentSnapshot(t *testing.T) {
 		cfg := `
 oracledb_cdc:
   connection_string: ` + connStr + `
-  stream_snapshot: true
+  snapshot_mode: snapshot_only
   snapshot_max_batch_size: 10
   max_parallel_snapshot_tables: 3
   logminer:
@@ -353,7 +353,7 @@ func TestIntegrationOracleDBCDCResumesFromCheckpoint(t *testing.T) {
 	cfg := `
 oracledb_cdc:
   connection_string: ` + connStr + `
-  stream_snapshot: false
+  snapshot_mode: none
   logminer:
     scn_window_size: 20000
     min_scn_window_size: 0
@@ -548,7 +548,7 @@ func TestIntegrationOracleDBCDCStreaming(t *testing.T) {
 		cfg := `
 oracledb_cdc:
   connection_string: ` + connStr + `
-  stream_snapshot: false
+  snapshot_mode: none
   logminer:
     scn_window_size: 20000
     min_scn_window_size: 0
@@ -656,7 +656,7 @@ oracledb_cdc:
 		cfg := `
 oracledb_cdc:
   connection_string: ` + connStr + `
-  stream_snapshot: false
+  snapshot_mode: none
   logminer:
     scn_window_size: 20000
     min_scn_window_size: 0
@@ -792,7 +792,7 @@ func TestIntegrationOracleDBCDCLargeObjectColumnsToggle(t *testing.T) {
 			cfg := `
 oracledb_cdc:
   connection_string: ` + connStr + `
-  stream_snapshot: true
+  snapshot_mode: snapshot_and_stream
   logminer:
     lob_enabled: false
     min_scn_window_size: 0
@@ -883,6 +883,7 @@ oracledb_cdc:
 oracledb_cdc:
   connection_string: ` + connStr + `
   stream_snapshot: true
+  snapshot_mode: snapshot_and_stream
   logminer:
     lob_enabled: true
     min_scn_window_size: 0

@@ -42,7 +42,7 @@ input:
     connection_string: oracle://username:password@host:port/service_name # No default (required)
     wallet_path: /opt/oracle/wallet # No default (optional)
     wallet_password: "" # No default (optional)
-    stream_snapshot: false
+    snapshot_mode: "" # No default (optional)
     max_parallel_snapshot_tables: 1
     snapshot_max_batch_size: 1000
     logminer:
@@ -84,7 +84,7 @@ input:
     connection_string: oracle://username:password@host:port/service_name # No default (required)
     wallet_path: /opt/oracle/wallet # No default (optional)
     wallet_password: "" # No default (optional)
-    stream_snapshot: false
+    snapshot_mode: "" # No default (optional)
     max_parallel_snapshot_tables: 1
     snapshot_max_batch_size: 1000
     logminer:
@@ -183,20 +183,20 @@ This field contains sensitive information that usually shouldn't be added to a c
 *Type*: `string`
 
 
-=== `stream_snapshot`
+=== `snapshot_mode`
 
-If set to true, the connector will query all the existing data as a part of snapshot process. Otherwise, it will start from the current System Change Number position.
+Controls snapshot behaviour. `none` (default) skips snapshotting and starts streaming from the current SCN. `snapshot_only` performs a full snapshot, persists the SCN checkpoint, then stops without streaming. `snapshot_and_stream` performs a full snapshot then transitions to streaming.
 
 
-*Type*: `bool`
+*Type*: `string`
 
-*Default*: `false`
+Requires version 4.99.0 or newer
 
-```yml
-# Examples
-
-stream_snapshot: true
-```
+Options:
+`none`
+, `snapshot_only`
+, `snapshot_and_stream`
+.
 
 === `max_parallel_snapshot_tables`
 
