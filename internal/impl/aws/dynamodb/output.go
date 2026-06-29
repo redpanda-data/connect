@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"reflect"
 	"strconv"
 	"sync"
 	"time"
@@ -38,6 +39,10 @@ import (
 )
 
 const (
+	// dynamoDBMaxBatchItems is the maximum number of items that can be sent in
+	// a single BatchWriteItem request per the AWS API.
+	dynamoDBMaxBatchItems = 25
+
 	// DynamoDB Output Fields
 	ddboField               = "namespace"
 	ddboFieldTable          = "table"
@@ -386,82 +391,137 @@ func (d *dynamoDBWriter) WriteBatch(ctx context.Context, b service.MessageBatch)
 		return err
 	}
 
-	batchResult, err := d.client.BatchWriteItem(ctx, &dynamodb.BatchWriteItemInput{
-		RequestItems: map[string][]types.WriteRequest{
-			*d.table: writeReqs,
-		},
-	})
-	if err != nil {
-		headlineErr := err
+	// Chunk writeReqs into groups of dynamoDBMaxBatchItems (25) per the
+	// DynamoDB BatchWriteItem API limit.
+	for chunkStart := 0; chunkStart < len(writeReqs); chunkStart += dynamoDBMaxBatchItems {
+		boff.Reset()
+		chunkEnd := min(chunkStart+dynamoDBMaxBatchItems, len(writeReqs))
+		chunk := writeReqs[chunkStart:chunkEnd]
 
-		// None of the messages were successful, attempt to send individually
-	individualRequestsLoop:
-		for err != nil {
-			batchErr := service.NewBatchError(b, headlineErr)
-			for i, req := range writeReqs {
-				if req.PutRequest == nil {
-					continue
-				}
-				if _, iErr := d.client.PutItem(ctx, &dynamodb.PutItemInput{
-					TableName: d.table,
-					Item:      req.PutRequest.Item,
-				}); iErr != nil {
-					d.log.Errorf("Put error: %v\n", iErr)
-					wait := boff.NextBackOff()
-					if wait == backoff.Stop {
-						break individualRequestsLoop
-					}
-					select {
-					case <-time.After(wait):
-					case <-ctx.Done():
-						break individualRequestsLoop
-					}
-					batchErr.Failed(i, iErr)
-				} else {
-					writeReqs[i].PutRequest = nil
-				}
-			}
-			if batchErr.IndexedErrors() == 0 {
-				err = nil
-			} else {
-				err = batchErr
-			}
-		}
-		return err
-	}
-
-	unproc := batchResult.UnprocessedItems[*d.table]
-unprocessedLoop:
-	for len(unproc) > 0 {
-		wait := boff.NextBackOff()
-		if wait == backoff.Stop {
-			break unprocessedLoop
-		}
-
-		select {
-		case <-time.After(wait):
-		case <-ctx.Done():
-			break unprocessedLoop
-		}
-		if batchResult, err = d.client.BatchWriteItem(ctx, &dynamodb.BatchWriteItemInput{
+		batchResult, err := d.client.BatchWriteItem(ctx, &dynamodb.BatchWriteItemInput{
 			RequestItems: map[string][]types.WriteRequest{
-				*d.table: unproc,
+				*d.table: chunk,
 			},
-		}); err != nil {
-			d.log.Errorf("Write multi error: %v\n", err)
-		} else if unproc = batchResult.UnprocessedItems[*d.table]; len(unproc) > 0 {
-			err = fmt.Errorf("setting %v items", len(unproc))
-		} else {
-			unproc = nil
-		}
-	}
+		})
+		if err != nil {
+			headlineErr := err
 
-	if len(unproc) > 0 {
-		if err == nil {
-			err = errors.New("ran out of request retries")
+			// None of the messages were successful, attempt to send individually
+		individualRequestsLoop:
+			for err != nil {
+				batchErr := service.NewBatchError(b, headlineErr)
+				for j, req := range chunk {
+					if req.PutRequest == nil {
+						continue
+					}
+					if _, iErr := d.client.PutItem(ctx, &dynamodb.PutItemInput{
+						TableName: d.table,
+						Item:      req.PutRequest.Item,
+					}); iErr != nil {
+						d.log.Errorf("Put error: %v\n", iErr)
+						wait := boff.NextBackOff()
+						if wait == backoff.Stop {
+							break individualRequestsLoop
+						}
+						select {
+						case <-time.After(wait):
+						case <-ctx.Done():
+							break individualRequestsLoop
+						}
+						batchErr.Failed(chunkStart+j, iErr)
+					} else {
+						chunk[j].PutRequest = nil
+					}
+				}
+				if batchErr.IndexedErrors() == 0 {
+					err = nil
+				} else {
+					// Mark all items in subsequent unattempted chunks as
+					// failed to prevent silent data loss.
+					for k := chunkEnd; k < len(writeReqs); k++ {
+						batchErr.Failed(k, headlineErr)
+					}
+					err = batchErr
+				}
+			}
+			if err != nil {
+				return err
+			}
+			// Individual fallback wrote every item in this chunk; move on.
+			continue
+		}
+
+		unproc := batchResult.UnprocessedItems[*d.table]
+	unprocessedLoop:
+		for len(unproc) > 0 {
+			wait := boff.NextBackOff()
+			if wait == backoff.Stop {
+				break unprocessedLoop
+			}
+
+			select {
+			case <-time.After(wait):
+			case <-ctx.Done():
+				break unprocessedLoop
+			}
+			if batchResult, err = d.client.BatchWriteItem(ctx, &dynamodb.BatchWriteItemInput{
+				RequestItems: map[string][]types.WriteRequest{
+					*d.table: unproc,
+				},
+			}); err != nil {
+				d.log.Errorf("Write multi error: %v\n", err)
+			} else if unproc = batchResult.UnprocessedItems[*d.table]; len(unproc) > 0 {
+				err = fmt.Errorf("setting %v items", len(unproc))
+			} else {
+				unproc = nil
+			}
+		}
+
+		if len(unproc) > 0 {
+			if err == nil {
+				err = errors.New("ran out of request retries")
+			}
+			batchErr := service.NewBatchError(b, err)
+			// Map each unprocessed item back to its original index in
+			// this chunk so only the genuinely-unwritten items (and
+			// items in unattempted later chunks) are marked as failed.
+			matched := make([]bool, len(chunk))
+			matches := 0
+			for _, u := range unproc {
+				for j := range chunk {
+					if matched[j] {
+						continue
+					}
+					if reflect.DeepEqual(u, chunk[j]) {
+						matched[j] = true
+						matches++
+						break
+					}
+				}
+			}
+			if matches == len(unproc) {
+				for j, m := range matched {
+					if m {
+						batchErr.Failed(chunkStart+j, err)
+					}
+				}
+			} else {
+				// Some unprocessed items did not match anything in the
+				// chunk — the SDK returned a shape we did not expect. Fall
+				// back to marking the whole chunk failed. Writes are
+				// upserts, so retried items that already landed are
+				// harmless; the alternative is silent data loss.
+				for j := range chunk {
+					batchErr.Failed(chunkStart+j, err)
+				}
+			}
+			for k := chunkEnd; k < len(writeReqs); k++ {
+				batchErr.Failed(k, err)
+			}
+			return batchErr
 		}
 	}
-	return err
+	return nil
 }
 
 func (*dynamoDBWriter) Close(context.Context) error {
