@@ -45,6 +45,7 @@ type SObject struct {
 type DescribeResult struct {
 	Fields []struct {
 		Name       string `json:"name"`
+		Createable bool   `json:"createable"`
 		Updateable bool   `json:"updateable"`
 	} `json:"fields"`
 }
