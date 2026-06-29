@@ -115,6 +115,16 @@ const (
 	SnapshotModeSnapshotAndStream SnapshotMode = "snapshot_and_stream"
 )
 
+// IsSnapshotNone returns true of snapshot_mode config is snapshot_only, otherwise returns false.
+func (s SnapshotMode) IsSnapshotOnly() bool {
+	return s == SnapshotModeSnapshotOnly
+}
+
+// IsSnapshotNone returns true of snapshot_mode config is none, otherwise returns false.
+func (s SnapshotMode) IsSnapshotNone() bool {
+	return s == SnapshotModeNone
+}
+
 func parseSnapshotMode(conf *service.ParsedConfig) (SnapshotMode, error) {
 	if conf.Contains(ociFieldSnapshotMode) {
 		if raw, err := conf.FieldString(ociFieldSnapshotMode); err != nil {
