@@ -117,18 +117,16 @@ const (
 
 func parseSnapshotMode(conf *service.ParsedConfig) (SnapshotMode, error) {
 	if conf.Contains(ociFieldSnapshotMode) {
-		raw, err := conf.FieldString(ociFieldSnapshotMode)
-		if err != nil {
+		if raw, err := conf.FieldString(ociFieldSnapshotMode); err != nil {
 			return SnapshotModeNone, err
+		} else {
+			return SnapshotMode(raw), nil
 		}
-		return SnapshotMode(raw), nil
 	}
 	// snapshot_mode not set — apply backward compat
-	streamSnapshot, err := conf.FieldBool(ociFieldStreamSnapshot)
-	if err != nil {
+	if streamSnapshot, err := conf.FieldBool(ociFieldStreamSnapshot); err != nil {
 		return SnapshotModeNone, err
-	}
-	if streamSnapshot {
+	} else if streamSnapshot {
 		return SnapshotModeSnapshotAndStream, nil
 	}
 	return SnapshotModeNone, nil
