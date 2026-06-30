@@ -36,7 +36,8 @@ type Snapshot struct {
 	snapshotRowsTotalMetric *service.MetricCounter
 	lobEnabled              bool
 	pdbName                 string
-	scn                     SCN // published as part of snapshot read metadata
+	scn                     SCN       // published as part of snapshot read metadata
+	commitTimestamp         time.Time // Oracle server time at snapshot prepare
 }
 
 // NewSnapshot creates a new instance of Snapshot capable of snapshotting provided tables.
@@ -83,7 +84,7 @@ func (s *Snapshot) Prepare(ctx context.Context) (SCN, error) {
 	}
 
 	var currentSCN SCN
-	if err := s.dbPool.QueryRowContext(ctx, `SELECT CURRENT_SCN FROM V$DATABASE`).Scan(&currentSCN); err != nil {
+	if err := s.dbPool.QueryRowContext(ctx, `SELECT CURRENT_SCN, SYSTIMESTAMP FROM V$DATABASE`).Scan(&currentSCN, &s.commitTimestamp); err != nil {
 		return InvalidSCN, fmt.Errorf("getting current SCN for snapshot: %w", err)
 	}
 
@@ -286,6 +287,9 @@ func (s *Snapshot) processBatch(ctx context.Context, tx *sql.Tx, table UserTable
 		}
 		if s.scn != InvalidSCN {
 			m.SCN = s.scn
+		}
+		if !s.commitTimestamp.IsZero() {
+			m.CommitTimestamp = s.commitTimestamp
 		}
 
 		if err = s.publisher.Publish(ctx, &m); err != nil {
