@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+### Added
+
+- `aws_s3` input: added an `sqs.message_timeout` field that periodically refreshes the visibility timeout of an in-flight SQS notification while its S3 object is being processed, preventing slow or large objects from being redelivered and reprocessed. Defaults to `0s` (disabled), preserving existing behaviour. ([@peczenyj](https://github.com/peczenyj), [#4468](https://github.com/redpanda-data/connect/issues/4468))
+
 ## 4.98.0 - 2026-06-26
 
 ### Added
