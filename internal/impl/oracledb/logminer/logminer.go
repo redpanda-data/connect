@@ -59,6 +59,10 @@ type LogMiner struct {
 	// lob types are split between redo log lines, we use lobStates to track them
 	// until we have all data to merge into published INSERT or UPDATE event.
 	lobStates map[sqlredo.TransactionID]*sqlredo.TxnLOBState
+	// pendingLOBWrites holds LOB_WRITE events that arrived before their INSERT
+	// (BASICFILE DISABLE STORAGE IN ROW ordering from Oracle LogMiner). They are
+	// replayed after the INSERT is buffered so inferLOBLocator can find it.
+	pendingLOBWrites map[sqlredo.TransactionID][]*sqlredo.RedoEvent
 	// suppresses repeated "caught up" log lines within a single idle stretch
 	caughtUpLogged bool
 
@@ -121,13 +125,14 @@ func NewMiner(db *sql.DB, userTables []replication.UserTable, publisher replicat
 		log:                  logger,
 
 		// logminer specific
-		logMinerQuery: logMinerQuery,
-		logCollector:  NewLogFileCollector(),
-		sessionMgr:    NewSessionManager(cfg, logger),
-		txnCache:      txnCache,
-		dmlParser:     sqlredo.NewParser(),
-		lobStates:     make(map[sqlredo.TransactionID]*sqlredo.TxnLOBState),
-		windowSize:    cfg.SCNWindowSize,
+		logMinerQuery:    logMinerQuery,
+		logCollector:     NewLogFileCollector(),
+		sessionMgr:       NewSessionManager(cfg, logger),
+		txnCache:         txnCache,
+		dmlParser:        sqlredo.NewParser(),
+		lobStates:        make(map[sqlredo.TransactionID]*sqlredo.TxnLOBState),
+		pendingLOBWrites: make(map[sqlredo.TransactionID][]*sqlredo.RedoEvent),
+		windowSize:       cfg.SCNWindowSize,
 	}
 	if lm.txnCache == nil {
 		lm.txnCache = NewInMemoryCache(cfg.MaxTransactionEvents, metrics, logger)
@@ -302,6 +307,11 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 		if err := lm.txnCache.AddEvent(ctx, redoEvent.TransactionID, redoEvent.SCN, &event); err != nil {
 			return fmt.Errorf("adding event to transaction %s: %w", redoEvent.TransactionID, err)
 		}
+		if lm.cfg.LOBEnabled {
+			if err := lm.replayDeferredLOBWrites(ctx, redoEvent.TransactionID); err != nil {
+				return err
+			}
+		}
 
 	case sqlredo.OpSelectLobLocator:
 		if !lm.cfg.LOBEnabled {
@@ -414,7 +424,10 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 		state, exists := lm.lobStates[redoEvent.TransactionID]
 		if !exists || state.ActiveKey == nil {
 			if !lm.inferLOBLocator(ctx, redoEvent) {
-				lm.log.Warnf("Received LOB_WRITE without active LOB locator (scn=%d, txn=%s)", redoEvent.SCN, redoEvent.TransactionID)
+				// INSERT may arrive later in the same LogMiner batch (BASICFILE
+				// DISABLE STORAGE IN ROW ordering). Defer and replay after DML.
+				lm.log.Debugf("LOB_WRITE before INSERT (scn=%d, txn=%s): deferring", redoEvent.SCN, redoEvent.TransactionID)
+				lm.pendingLOBWrites[redoEvent.TransactionID] = append(lm.pendingLOBWrites[redoEvent.TransactionID], redoEvent)
 				return nil
 			}
 			state = lm.lobStates[redoEvent.TransactionID]
@@ -548,12 +561,17 @@ func (lm *LogMiner) processRedoEvent(ctx context.Context, redoEvent *sqlredo.Red
 		// lobStates and are never freed.
 		if lm.cfg.LOBEnabled {
 			delete(lm.lobStates, redoEvent.TransactionID)
+			if pending := lm.pendingLOBWrites[redoEvent.TransactionID]; len(pending) > 0 {
+				lm.log.Warnf("Dropping %d deferred LOB_WRITE(s) on commit for txn %s — no matching INSERT found", len(pending), redoEvent.TransactionID)
+				delete(lm.pendingLOBWrites, redoEvent.TransactionID)
+			}
 		}
 
 	case sqlredo.OpRollback:
 		// Discard all buffered events for this transaction
 		if lm.cfg.LOBEnabled {
 			delete(lm.lobStates, redoEvent.TransactionID)
+			delete(lm.pendingLOBWrites, redoEvent.TransactionID)
 		}
 		if err := lm.txnCache.RollbackTransaction(ctx, redoEvent.TransactionID); err != nil {
 			return fmt.Errorf("rolling back transaction %s: %w", redoEvent.TransactionID, err)
@@ -630,6 +648,24 @@ func (lm *LogMiner) loadLOBColumnTypes(ctx context.Context) (resErr error) {
 	}
 
 	return rows.Err()
+}
+
+// replayDeferredLOBWrites replays LOB_WRITE events that were buffered because
+// their INSERT had not yet arrived. Called after each DML event is added to the
+// transaction cache so that inferLOBLocator can now find the INSERT.
+func (lm *LogMiner) replayDeferredLOBWrites(ctx context.Context, txnID sqlredo.TransactionID) error {
+	pending := lm.pendingLOBWrites[txnID]
+	if len(pending) == 0 {
+		return nil
+	}
+	// Clear before replaying so re-buffering during the loop appends to a fresh slice.
+	delete(lm.pendingLOBWrites, txnID)
+	for _, ev := range pending {
+		if err := lm.processRedoEvent(ctx, ev); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (lm *LogMiner) getOrCreateLOBState(txnID sqlredo.TransactionID) *sqlredo.TxnLOBState {

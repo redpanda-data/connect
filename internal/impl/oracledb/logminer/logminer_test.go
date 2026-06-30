@@ -10,6 +10,7 @@ package logminer
 
 import (
 	"context"
+	"database/sql"
 	"log/slog"
 	"testing"
 
@@ -330,14 +331,67 @@ func TestShouldDeferMiningCycle(t *testing.T) {
 	}
 }
 
+// TestLOBWriteBeforeInsert verifies that a LOB_WRITE event arriving before the
+// INSERT for the same transaction (BASICFILE DISABLE STORAGE IN ROW ordering) is
+// deferred and replayed correctly once the INSERT lands in the transaction cache.
+func TestLOBWriteBeforeInsert(t *testing.T) {
+	cache := NewInMemoryCache(0, service.MockResources().Metrics(), service.NewLoggerFromSlog(slog.Default()))
+	pub := &publisherStub{}
+	lm := newLogMiner(pub, cache)
+	lm.cfg.LOBEnabled = true
+	lm.lobColTypes = map[string]string{
+		"TESTDB.PRODUCTS.DESCRIPTION": "CLOB",
+	}
+
+	// Transaction starts.
+	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+		SCN: 100, Operation: sqlredo.OpStart, TransactionID: "txA",
+	}))
+
+	// LOB_WRITE arrives before INSERT — inferLOBLocator fails, event is deferred.
+	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+		SCN:           100,
+		Operation:     sqlredo.OpLobWrite,
+		TransactionID: "txA",
+		SchemaName:    sql.NullString{String: "TESTDB", Valid: true},
+		TableName:     sql.NullString{String: "PRODUCTS", Valid: true},
+		SQLRedo:       sql.NullString{String: " buf_c := 'hello';\n  dbms_lob.write(loc_c, 5, 1, buf_c);", Valid: true},
+	}))
+	assert.Len(t, lm.pendingLOBWrites["txA"], 1, "LOB_WRITE before INSERT should be deferred")
+
+	// INSERT arrives — triggers replayDeferredLOBWrites which processes the deferred LOB_WRITE.
+	// Oracle omits DISABLE STORAGE IN ROW columns from the INSERT SQL_REDO, so DESCRIPTION is absent.
+	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+		SCN:           100,
+		Operation:     sqlredo.OpInsert,
+		TransactionID: "txA",
+		SchemaName:    sql.NullString{String: "TESTDB", Valid: true},
+		TableName:     sql.NullString{String: "PRODUCTS", Valid: true},
+		SQLRedo:       sql.NullString{String: `insert into "TESTDB"."PRODUCTS"("ID") values ('1')`, Valid: true},
+	}))
+	assert.Empty(t, lm.pendingLOBWrites["txA"], "deferred LOB_WRITE should be replayed after INSERT")
+
+	// Commit — LOB fragments merged into INSERT, then published as a single message.
+	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+		SCN: 200, Operation: sqlredo.OpCommit, TransactionID: "txA",
+	}))
+
+	require.Len(t, pub.messages, 1)
+	data, ok := pub.messages[0].Data.(map[string]any)
+	require.True(t, ok, "Data should be map[string]any")
+	assert.Equal(t, "hello", data["DESCRIPTION"])
+	assert.Empty(t, lm.pendingLOBWrites)
+}
+
 func newLogMiner(pub replication.ChangePublisher, cache TransactionCache) *LogMiner {
 	return &LogMiner{
-		publisher: pub,
-		txnCache:  cache,
-		dmlParser: sqlredo.NewParser(),
-		log:       service.NewLoggerFromSlog(slog.Default()),
-		cfg:       NewDefaultConfig(),
-		lobStates: make(map[sqlredo.TransactionID]*sqlredo.TxnLOBState),
+		publisher:        pub,
+		txnCache:         cache,
+		dmlParser:        sqlredo.NewParser(),
+		log:              service.NewLoggerFromSlog(slog.Default()),
+		cfg:              NewDefaultConfig(),
+		lobStates:        make(map[sqlredo.TransactionID]*sqlredo.TxnLOBState),
+		pendingLOBWrites: make(map[sqlredo.TransactionID][]*sqlredo.RedoEvent),
 	}
 }
 
