@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+### Fixed
+
+- kafka: Broker connectivity failures (connection, read, and write errors such as `i/o timeout`) from the franz-go client are now logged at WARN instead of only at debug level, so they can be alerted on without enabling debug logging. Emissions are throttled per broker. Affects all franz-based connectors (`kafka_franz`, `redpanda`, `redpanda_migrator`, ...).
+
 ## 4.98.0 - 2026-06-26
 
 ### Added
