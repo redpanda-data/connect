@@ -71,13 +71,13 @@ func RegisterService(res *service.Resources, conf Config) {
 		l = openSourceLicense
 	}
 
-	if !l.AllowsEnterpriseFeatures() && os.Getenv("REDPANDA_CONNECT_DEV_LICENSE") != "" {
+	if !l.AllowsEnterpriseFeatures() {
 		s.isTestLicense = true
 		l = embeddedTestLicense
 		if licenseReadErr != nil {
-			res.Logger().With("error", licenseReadErr).Error("Production license invalid; activating embedded dev license (REDPANDA_CONNECT_DEV_LICENSE set) — enterprise features subject to 1 MB/s throughput cap. Fix your license to remove the cap: https://docs.redpanda.com/redpanda-connect/get-started/licensing/")
+			res.Logger().With("error", licenseReadErr).Error("Production license invalid; activating embedded dev license — enterprise features subject to 1 MB/s throughput cap. Fix your license to remove the cap: https://docs.redpanda.com/redpanda-connect/get-started/licensing/")
 		} else {
-			res.Logger().Info("Running under embedded test license (REDPANDA_CONNECT_DEV_LICENSE set) — enterprise features subject to 1 MB/s throughput cap per process. Apply a production license to remove the cap: https://docs.redpanda.com/redpanda-connect/get-started/licensing/")
+			res.Logger().Info("Running under embedded dev license — enterprise features subject to 1 MB/s throughput cap per process. Apply a production license to remove the cap: https://docs.redpanda.com/redpanda-connect/get-started/licensing/")
 		}
 		registerThrottler(res, newThrottler(res))
 	}
