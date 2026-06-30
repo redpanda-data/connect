@@ -16,6 +16,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/Jeffail/checkpoint"
@@ -45,6 +46,7 @@ const (
 	ociFieldCheckpointCacheTableName  = "checkpoint_cache_table_name"
 	ociFieldBatching                  = "batching"
 	ociFieldPDBName                   = "pdb_name"
+	ociFieldSnapshotMode              = "snapshot_mode"
 
 	shutdownTimeout = 5 * time.Second
 
@@ -80,7 +82,7 @@ This input adds the following metadata fields to each message:
 - database_schema: The database schema for the table where the message originates from.
 - table_name: Name of the table that the message originated from.
 - operation: Type of operation that generated the message: "read", "delete", "insert", or "update". "read" is from messages that are read in the initial snapshot phase.
-- scn: the System Change Number in Oracle.
+- scn: The System Change Number in Oracle. Messages published as part of a snapshot will contain Oracle's current SCN captured at time of snapshot.
 - transaction_id: The Oracle transaction ID in ` + "`USN.SLOT.SEQ`" + ` format, identifying the transaction that produced the change. Not present on snapshot (` + "`read`" + `) messages.
 - source_ts_ms: The timestamp of when Oracle wrote the change record into the redo log, expressed as milliseconds since the Unix epoch. This reflects the database server's wall-clock time at the moment the DML executed, not the transaction commit time.
 - commit_ts_ms: The timestamp of the transaction commit, expressed as milliseconds since the Unix epoch. Sourced from ` + "`V$LOGMNR_CONTENTS.TIMESTAMP`" + ` on the COMMIT redo record — this is Oracle's wall-clock time when the commit was written to the redo log, not a dedicated commit-timestamp column. Not present on snapshot (` + "`read`" + `) messages.
@@ -108,7 +110,16 @@ When using the default Oracle based cache, the Connect user requires permission 
 	Field(service.NewBoolField(ociFieldStreamSnapshot).
 		Description("If set to true, the connector will query all the existing data as a part of snapshot process. Otherwise, it will start from the current System Change Number position.").
 		Example(true).
-		Default(false),
+		Default(false).
+		Deprecated(),
+	).
+	Field(service.NewStringEnumField(ociFieldSnapshotMode,
+		string(SnapshotModeNone),
+		string(SnapshotModeSnapshotOnly),
+		string(SnapshotModeSnapshotAndStream)).
+		Description("Controls snapshot behaviour. `none` (default) skips snapshotting and starts streaming from the current SCN. `snapshot_only` performs a full snapshot, persists the SCN checkpoint, then stops without streaming. `snapshot_and_stream` performs a full snapshot then transitions to streaming.").
+		Optional().
+		Version("4.99.0"),
 	).
 	Field(service.NewIntField(ociFieldMaxParallelSnapshotTables).
 		Description("Specifies a number of tables that will be processed in parallel during the snapshot processing stage.").
@@ -202,7 +213,7 @@ type asyncMessage struct {
 // Config is the configuration for a Oracle connector.
 type Config struct {
 	ConnectionString     string
-	StreamSnapshot       bool
+	SnapshotMode         SnapshotMode
 	SnapshotMaxBatchSize int
 	SnapshotMaxWorkers   int
 	TablesFilter         *confx.RegexpFilter
@@ -221,15 +232,16 @@ type oracleDBCDCInput struct {
 	publisher *batchPublisher
 	metrics   *service.Metrics
 
-	stopSig *shutdown.Signaller
-	log     *service.Logger
-	cpCache service.Cache
+	stopSig          *shutdown.Signaller
+	snapshotOnlyDone atomic.Bool
+	log              *service.Logger
+	cpCache          service.Cache
 }
 
 func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resources) (s service.BatchInput, err error) {
 	var (
 		connectionString     string
-		streamSnapshot       bool
+		snapshotMode         SnapshotMode
 		snapshotMaxWorkers   int
 		snapshotMaxBatchSize int
 
@@ -250,7 +262,7 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 	if connectionString, err = conf.FieldString(ociFieldConnectionString); err != nil {
 		return nil, err
 	}
-	if streamSnapshot, err = conf.FieldBool(ociFieldStreamSnapshot); err != nil {
+	if snapshotMode, err = parseSnapshotMode(conf); err != nil {
 		return nil, err
 	}
 	if snapshotMaxWorkers, err = conf.FieldInt(ociFieldMaxParallelSnapshotTables); err != nil {
@@ -335,7 +347,7 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 	o := oracleDBCDCInput{
 		cfg: Config{
 			ConnectionString:     connectionString,
-			StreamSnapshot:       streamSnapshot,
+			SnapshotMode:         snapshotMode,
 			SnapshotMaxWorkers:   snapshotMaxWorkers,
 			SnapshotMaxBatchSize: snapshotMaxBatchSize,
 			SCNCache:             scnCache,
@@ -501,7 +513,7 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 	)
 
 	// no cached SCN means we're not recovering from a restart
-	if o.cfg.StreamSnapshot && cachedSCN == replication.InvalidSCN {
+	if !o.cfg.SnapshotMode.IsSnapshotNone() && cachedSCN == replication.InvalidSCN {
 		if snapshotter, err = replication.NewSnapshot(ctx, o.cfg.ConnectionString, userTables, o.publisher, o.lmCfg.LOBEnabled, pdbNameForCache, o.log, o.metrics); err != nil {
 			return fmt.Errorf("creating database snapshotter: %w", err)
 		}
@@ -531,15 +543,17 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 		o.log.Infof("No cached SCN found, fetched current position from database: %d", cachedSCN)
 	}
 
-	// Reset our stop signal
+	// Reset our stop signal and snapshot-only completion flag
 	o.stopSig = shutdown.NewSignaller()
+	o.snapshotOnlyDone.Store(false)
 
 	go func() {
 		var (
 			err      error
 			startSCN = cachedSCN
 		)
-		softCtx, _ := o.stopSig.SoftStopCtx(context.Background())
+		softCtx, cancel := o.stopSig.SoftStopCtx(context.Background())
+		defer cancel()
 
 		// snapshot if no SCN exists then store checkpoint once complete
 		if snapshotter != nil {
@@ -560,6 +574,16 @@ func (o *oracleDBCDCInput) Connect(ctx context.Context) (resErr error) {
 			}
 
 			o.log.Infof("Successfully captured SCN following snapshot: %d", startSCN)
+		}
+
+		if o.cfg.SnapshotMode.IsSnapshotOnly() {
+			if err = o.publisher.FlushRemaining(softCtx); err != nil {
+				o.log.Errorf("Failed to flush remaining snapshot events: %s", err)
+			}
+			o.log.Infof("Snapshot-only mode complete, stopping at SCN %s", startSCN)
+			o.snapshotOnlyDone.Store(true)
+			o.stopSig.TriggerHasStopped()
+			return
 		}
 
 		// streaming
@@ -643,6 +667,9 @@ func (o *oracleDBCDCInput) ReadBatch(ctx context.Context) (service.MessageBatch,
 	case m := <-o.publisher.msgs():
 		return m.msg, m.ackFn, nil
 	case <-o.stopSig.HasStoppedChan():
+		if o.snapshotOnlyDone.Load() {
+			return nil, nil, service.ErrEndOfInput
+		}
 		return nil, nil, service.ErrNotConnected
 	case <-ctx.Done():
 		return nil, nil, ctx.Err()

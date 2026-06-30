@@ -39,9 +39,10 @@ import (
 const packagesJSONPath = "cmd/tools/integration/packages.json"
 
 type testPackage struct {
-	Path    string `json:"path"`
-	Timeout string `json:"timeout,omitempty"`
-	Skip    bool   `json:"skip,omitempty"`
+	Path       string `json:"path"`
+	Timeout    string `json:"timeout,omitempty"`
+	Skip       bool   `json:"skip,omitempty"`
+	SkipReason string `json:"skip_reason,omitempty"`
 }
 
 func main() {
@@ -104,16 +105,34 @@ func cmdVerify() {
 	}
 	sort.Strings(missing)
 
-	if len(missing) == 0 {
-		fmt.Println("All integration test packages are registered.")
+	// Every skipped package must document why, so skips are deliberate and
+	// reviewable rather than silent.
+	var undocumented []string
+	for _, pkg := range existing {
+		if pkg.Skip && strings.TrimSpace(pkg.SkipReason) == "" {
+			undocumented = append(undocumented, pkg.Path)
+		}
+	}
+	sort.Strings(undocumented)
+
+	if len(missing) == 0 && len(undocumented) == 0 {
+		fmt.Println("All integration test packages are registered and every skip is documented.")
 		return
 	}
 
-	fmt.Fprintln(os.Stderr, "The following packages contain integration tests but are not registered in "+packagesJSONPath+":")
-	for _, pkg := range missing {
-		fmt.Fprintf(os.Stderr, "  %s\n", pkg)
+	if len(missing) > 0 {
+		fmt.Fprintln(os.Stderr, "The following packages contain integration tests but are not registered in "+packagesJSONPath+":")
+		for _, pkg := range missing {
+			fmt.Fprintf(os.Stderr, "  %s\n", pkg)
+		}
+		fmt.Fprintln(os.Stderr, "\nRun the generate command to update "+packagesJSONPath+".")
 	}
-	fmt.Fprintln(os.Stderr, "\nRun the generate command to update "+packagesJSONPath+".")
+	if len(undocumented) > 0 {
+		fmt.Fprintln(os.Stderr, "The following packages are skipped without a skip_reason (every skip:true must document why):")
+		for _, pkg := range undocumented {
+			fmt.Fprintf(os.Stderr, "  %s\n", pkg)
+		}
+	}
 	os.Exit(1)
 }
 

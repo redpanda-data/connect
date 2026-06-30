@@ -52,7 +52,7 @@ func newCaptureProcessorConfig() *service.ConfigSpec {
 				Example(`root = deleted()`),
 
 			service.NewBloblangField("extras").
-				Description("A mapping that must evaluate to an object. If this mapping produces a value, then it is set on a sentry event as extras.").
+				Description("A mapping that must evaluate to an object. If this mapping produces a value, then it is attached to the sentry event as a context named `extras`. (Prior to v4.x this populated the event's deprecated Additional Data section, which the upstream sentry-go SDK removed.)").
 				Optional().
 				Example(`root.foo = "bar"`).
 				Example(`root = this.without("password")`),
@@ -274,7 +274,16 @@ func (proc *captureProcessor) Process(_ context.Context, msg *service.Message) (
 	hub.WithScope(func(scope *sentry.Scope) {
 		scope.SetContexts(sentryCtx)
 		scope.SetTags(tags)
-		scope.SetExtras(extras) //nolint:staticcheck
+		// sentry-go v0.47.0 removed the deprecated Scope.SetExtras/Event.Extra
+		// API in favour of attributes (which only apply to logs, not to the
+		// error/message events this processor captures). To preserve the
+		// extras data on captured events we attach it as a dedicated context
+		// named "extras" instead. The data now surfaces under the event's
+		// Contexts section in Sentry rather than the legacy Additional Data
+		// section.
+		if len(extras) > 0 {
+			scope.SetContext("extras", extras)
+		}
 
 		hub.CaptureMessage(message)
 	})

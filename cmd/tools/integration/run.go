@@ -67,7 +67,13 @@ func cmdRun(args []string) error {
 
 	packages := filterPackages(allPackages, filters)
 	if len(packages) == 0 {
-		return fmt.Errorf("no packages match filter: %v", filters)
+		// No registered, non-skipped packages match the filter. This is common
+		// in CI: a pull request's filter is derived from its changed paths, so a
+		// PR that only touches packages without integration tests (or only
+		// skipped ones) matches nothing. Treat that as a no-op success rather
+		// than an error so those PRs don't fail spuriously.
+		fmt.Printf("No integration test packages match filter %v; nothing to run.\n", filters)
+		return nil
 	}
 
 	// Determine output directory.

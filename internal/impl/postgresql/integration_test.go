@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -995,6 +996,9 @@ func TestIntegrationPostgresMetadata(t *testing.T) {
 
 	require.NoError(t, err)
 
+	_, err = db.Exec(`ALTER TABLE flights REPLICA IDENTITY FULL`)
+	require.NoError(t, err)
+
 	_, err = db.Exec(`INSERT INTO "FlightsCompositePK" ("Seq", "Name", "CreatedAt") VALUES ($1, $2, $3);`, 1, "delta", "2006-01-02T15:04:05Z07:00")
 	require.NoError(t, err)
 	_, err = db.Exec(`INSERT INTO flights (name, created_at) VALUES ($1, $2);`, "delta", "2006-01-02T15:04:05Z07:00")
@@ -1029,6 +1033,22 @@ postgres_cdc:
 			if _, ok := d["lsn"]; ok {
 				d["lsn"] = "XXX/XXX" // Consistent LSN for assertions below
 			}
+			if ct, ok := d["commit_ts_ms"].(string); ok {
+				ms, err := strconv.ParseInt(ct, 10, 64)
+				assert.NoError(t, err, "commit_ts_ms should be a valid integer")
+				assert.Positive(t, ms, "commit_ts_ms should be a positive Unix ms timestamp")
+				d["commit_ts_ms"] = "SET"
+			}
+			if before, ok := d["before"].(map[string]any); ok {
+				op, _ := d["operation"].(string)
+				switch op {
+				case "update":
+					assert.Equal(t, "bravo", before["name"], "update: before.name should be the pre-update value")
+				case "delete":
+					assert.Equal(t, "charlie", before["name"], "delete: before.name should be the post-update, pre-delete value")
+				}
+				d["before"] = "SET"
+			}
 			delete(d, "schema") // Schema metadata tested separately in TestIntegrationPostgresCDCSchemaMetadata
 			outBatches = append(outBatches, data)
 		}
@@ -1052,13 +1072,21 @@ postgres_cdc:
 
 	_, err = db.Exec(`INSERT INTO "FlightsCompositePK" ("Seq", "Name", "CreatedAt") VALUES ($1, $2, $3);`, 2, "bravo", "2006-01-02T15:04:05Z07:00")
 	require.NoError(t, err)
-	_, err = db.Exec(`INSERT INTO flights (name, created_at) VALUES ($1, $2);`, "bravo", "2006-01-02T15:04:05Z07:00")
+
+	var flightsID int
+	err = db.QueryRow(`INSERT INTO flights (name, created_at) VALUES ($1, $2) RETURNING id;`, "bravo", "2006-01-02T15:04:05Z07:00").Scan(&flightsID)
+	require.NoError(t, err)
+
+	_, err = db.Exec(`UPDATE flights SET name = $1 WHERE id = $2;`, "charlie", flightsID)
+	require.NoError(t, err)
+
+	_, err = db.Exec(`DELETE FROM flights WHERE id = $1;`, flightsID)
 	require.NoError(t, err)
 
 	assert.EventuallyWithT(t, func(c *assert.CollectT) {
 		outBatchMut.Lock()
 		defer outBatchMut.Unlock()
-		assert.Len(c, outBatches, 4, "got: %#v", outBatches)
+		assert.Len(c, outBatches, 6, "got: %#v", outBatches)
 	}, time.Second*25, time.Millisecond*100)
 
 	require.ElementsMatch(
@@ -1074,14 +1102,30 @@ postgres_cdc:
 				"table":     "flights",
 			},
 			map[string]any{
-				"operation": "insert",
-				"table":     "flights",
-				"lsn":       "XXX/XXX",
+				"operation":    "insert",
+				"table":        "FlightsCompositePK",
+				"lsn":          "XXX/XXX",
+				"commit_ts_ms": "SET",
 			},
 			map[string]any{
-				"operation": "insert",
-				"table":     "FlightsCompositePK",
-				"lsn":       "XXX/XXX",
+				"operation":    "insert",
+				"table":        "flights",
+				"lsn":          "XXX/XXX",
+				"commit_ts_ms": "SET",
+			},
+			map[string]any{
+				"operation":    "update",
+				"table":        "flights",
+				"lsn":          "XXX/XXX",
+				"commit_ts_ms": "SET",
+				"before":       "SET",
+			},
+			map[string]any{
+				"operation":    "delete",
+				"table":        "flights",
+				"lsn":          "XXX/XXX",
+				"commit_ts_ms": "SET",
+				"before":       "SET",
 			},
 		},
 	)

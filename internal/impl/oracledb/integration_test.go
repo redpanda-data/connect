@@ -64,7 +64,7 @@ func TestIntegrationOracleDBCDCSnapshotAndStreaming(t *testing.T) {
 oracledb_cdc:
   connection_string: ` + cdbConnStr + `
   pdb_name: ` + pdbName + `
-  stream_snapshot: true
+  snapshot_mode: snapshot_and_stream
   max_parallel_snapshot_tables: 2
   snapshot_max_batch_size: 10
   logminer:
@@ -269,7 +269,7 @@ func TestIntegrationOracleDBCDCConcurrentSnapshot(t *testing.T) {
 	}
 
 	var (
-		outBatches   []string
+		outBatches   []*service.Message
 		outBatchesMu sync.Mutex
 		stream       *service.Stream
 		err          error
@@ -279,7 +279,7 @@ func TestIntegrationOracleDBCDCConcurrentSnapshot(t *testing.T) {
 		cfg := `
 oracledb_cdc:
   connection_string: ` + connStr + `
-  stream_snapshot: true
+  snapshot_mode: snapshot_only
   snapshot_max_batch_size: 10
   max_parallel_snapshot_tables: 3
   logminer:
@@ -291,15 +291,13 @@ oracledb_cdc:
 
 		streamBuilder := service.NewStreamBuilder()
 		require.NoError(t, streamBuilder.AddInputYAML(cfg))
-		require.NoError(t, streamBuilder.SetLoggerYAML(`level: DEBUG`))
+		require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
 
 		require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
 			outBatchesMu.Lock()
 			defer outBatchesMu.Unlock()
 			for _, msg := range mb {
-				msgBytes, err := msg.AsBytes()
-				assert.NoError(t, err)
-				outBatches = append(outBatches, string(msgBytes))
+				outBatches = append(outBatches, msg)
 			}
 			return nil
 		}))
@@ -325,6 +323,16 @@ oracledb_cdc:
 			return got >= want
 		}, time.Minute*5, time.Second*1)
 		assert.Truef(t, (got == want), "Wanted %d snapshot messages but got %d", want, got)
+		outBatchesMu.Lock()
+
+		expectedSCN, _ := outBatches[0].MetaGetMut("scn")
+		for i, msg := range outBatches {
+			scn, ok := msg.MetaGet("scn")
+			assert.Truef(t, ok, "Expected snapshot message[%d] to have scn metadata", i)
+			assert.NotEmptyf(t, scn, "Expected snapshot message[%d] scn metadata to be non-empty", i)
+			assert.Equal(t, expectedSCN, scn, "Expected snapshot scn to be identical for all messages but was not")
+		}
+		outBatchesMu.Unlock()
 	}
 
 	require.NoError(t, stream.StopWithin(time.Second*10))
@@ -345,7 +353,7 @@ func TestIntegrationOracleDBCDCResumesFromCheckpoint(t *testing.T) {
 	cfg := `
 oracledb_cdc:
   connection_string: ` + connStr + `
-  stream_snapshot: false
+  snapshot_mode: none
   logminer:
     scn_window_size: 20000
     min_scn_window_size: 0
@@ -540,7 +548,7 @@ func TestIntegrationOracleDBCDCStreaming(t *testing.T) {
 		cfg := `
 oracledb_cdc:
   connection_string: ` + connStr + `
-  stream_snapshot: false
+  snapshot_mode: none
   logminer:
     scn_window_size: 20000
     min_scn_window_size: 0
@@ -648,7 +656,7 @@ oracledb_cdc:
 		cfg := `
 oracledb_cdc:
   connection_string: ` + connStr + `
-  stream_snapshot: false
+  snapshot_mode: none
   logminer:
     scn_window_size: 20000
     min_scn_window_size: 0
@@ -784,7 +792,7 @@ func TestIntegrationOracleDBCDCLargeObjectColumnsToggle(t *testing.T) {
 			cfg := `
 oracledb_cdc:
   connection_string: ` + connStr + `
-  stream_snapshot: true
+  snapshot_mode: snapshot_and_stream
   logminer:
     lob_enabled: false
     min_scn_window_size: 0
@@ -875,6 +883,7 @@ oracledb_cdc:
 oracledb_cdc:
   connection_string: ` + connStr + `
   stream_snapshot: true
+  snapshot_mode: snapshot_and_stream
   logminer:
     lob_enabled: true
     min_scn_window_size: 0
