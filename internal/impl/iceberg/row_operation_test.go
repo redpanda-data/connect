@@ -138,11 +138,12 @@ func TestSplitByOperation(t *testing.T) {
 		structuredMsg(t, map[string]any{"op": "", "id": 4}), // empty defaults to insert
 	}
 
-	inserts, deletes, err := w.splitByOperation(batch)
+	inserts, deletes, counts, err := w.splitByOperation(batch)
 	require.NoError(t, err)
 	// insert(1) + upsert(2) + default-insert(4) => 3 inserts; upsert(2) + delete(3) => 2 deletes.
 	assert.Len(t, inserts, 3)
 	assert.Len(t, deletes, 2)
+	assert.Equal(t, opCounts{inserted: 2, upserted: 1, deleted: 1}, counts)
 }
 
 func TestSplitByOperationUnknownValueErrors(t *testing.T) {
@@ -154,7 +155,7 @@ func TestSplitByOperationUnknownValueErrors(t *testing.T) {
 		},
 	}
 	batch := service.MessageBatch{structuredMsg(t, map[string]any{"op": "c", "id": 1})}
-	_, _, err := w.splitByOperation(batch)
+	_, _, _, err := w.splitByOperation(batch)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "c")
 }
@@ -175,11 +176,15 @@ func TestSplitByOperationCollapsesPerKey(t *testing.T) {
 		structuredMsg(t, map[string]any{"op": "delete", "id": 2}), // upsert-then-delete same key: delete wins
 	}
 
-	inserts, deletes, err := w.splitByOperation(batch)
+	inserts, deletes, counts, err := w.splitByOperation(batch)
 	require.NoError(t, err)
 
 	// One equality delete per keyed key {1, 2}.
 	require.Len(t, deletes, 2)
+
+	// Counts are post-collapse: the two upserts to key 1 count as one upsert
+	// (not two), key 2 collapses to a single delete, and id=9 is one insert.
+	assert.Equal(t, opCounts{inserted: 1, upserted: 1, deleted: 1}, counts)
 
 	// Data rows: the insert (id=9) and the surviving upsert for key 1 (v="b").
 	// Key 2's final op is delete, so it contributes no data row.
@@ -202,7 +207,7 @@ func TestSplitByOperationMissingKeyErrors(t *testing.T) {
 		},
 	}
 	batch := service.MessageBatch{structuredMsg(t, map[string]any{"op": "upsert", "other": 1})}
-	_, _, err := w.splitByOperation(batch)
+	_, _, _, err := w.splitByOperation(batch)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "missing or null")
 }
@@ -215,7 +220,7 @@ func TestSplitByOperationUpsertRequiresIdentifierFields(t *testing.T) {
 		},
 	}
 	batch := service.MessageBatch{structuredMsg(t, map[string]any{"op": "upsert", "id": 1})}
-	_, _, err := w.splitByOperation(batch)
+	_, _, _, err := w.splitByOperation(batch)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), ioFieldIdentifierFields)
 }
@@ -244,6 +249,18 @@ func TestDeleteKeyJSONValue(t *testing.T) {
 
 	// a non-integer value into an integer column is a hard error.
 	_, err = deleteKeyJSONValue(iceberg.PrimitiveTypes.Int64, 1.5)
+	require.Error(t, err)
+
+	// an integer-valued float64 within float64's exact-integer range is fine.
+	v, err = deleteKeyJSONValue(iceberg.PrimitiveTypes.Int64, float64(1_000_000_000_000_000))
+	require.NoError(t, err)
+	assert.Equal(t, "1000000000000000", v)
+
+	// a float64 at/beyond 2^53 cannot be represented exactly as an integer, so
+	// int64(n) would silently corrupt or overflow the delete key — reject it.
+	_, err = deleteKeyJSONValue(iceberg.PrimitiveTypes.Int64, float64(uint64(1)<<53))
+	require.Error(t, err)
+	_, err = deleteKeyJSONValue(iceberg.PrimitiveTypes.Int64, 9.3e18) // > 2^63, would overflow int64
 	require.Error(t, err)
 
 	// a bare numeric value into a temporal column is a hard error: its unit is
