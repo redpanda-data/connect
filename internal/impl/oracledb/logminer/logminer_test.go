@@ -359,7 +359,8 @@ func TestLOBWriteBeforeInsert(t *testing.T) {
 	}))
 	assert.Len(t, lm.pendingLOBWrites["txA"], 1, "LOB_WRITE before INSERT should be deferred")
 
-	// INSERT arrives — triggers replayDeferredLOBWrites which processes the deferred LOB_WRITE.
+	// INSERT arrives. Replay is deferred until COMMIT (not triggered at DML time)
+	// so that SELECT_LOB_LOCATOR can claim SecureFile columns first.
 	// Oracle omits DISABLE STORAGE IN ROW columns from the INSERT SQL_REDO, so DESCRIPTION is absent.
 	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
 		SCN:           100,
@@ -369,7 +370,7 @@ func TestLOBWriteBeforeInsert(t *testing.T) {
 		TableName:     sql.NullString{String: "PRODUCTS", Valid: true},
 		SQLRedo:       sql.NullString{String: `insert into "TESTDB"."PRODUCTS"("ID") values ('1')`, Valid: true},
 	}))
-	assert.Empty(t, lm.pendingLOBWrites["txA"], "deferred LOB_WRITE should be replayed after INSERT")
+	assert.Len(t, lm.pendingLOBWrites["txA"], 1, "deferred LOB_WRITE should remain pending until COMMIT")
 
 	// Commit — LOB fragments merged into INSERT, then published as a single message.
 	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
@@ -381,6 +382,261 @@ func TestLOBWriteBeforeInsert(t *testing.T) {
 	require.True(t, ok, "Data should be map[string]any")
 	assert.Equal(t, "hello", data["DESCRIPTION"])
 	assert.Empty(t, lm.pendingLOBWrites)
+}
+
+// TestLOBWriteBeforeInsertMultiLOBColumns verifies the exact CI failure scenario:
+// a table with multiple LOB columns where BASICFILE DISABLE STORAGE IN ROW LOB_WRITEs
+// arrive before the INSERT, and Oracle writes NULL (not EMPTY_CLOB) for ALL LOB columns
+// in the INSERT SQL_REDO. The fix requires:
+//  1. Deferring replay to COMMIT time (so SELECT_LOB_LOCATOR claims SecureFile columns first)
+//  2. Skipping claimed columns in inferLOBLocator
+//  3. Treating nil (Oracle NULL) as a valid inference candidate
+func TestLOBWriteBeforeInsertMultiLOBColumns(t *testing.T) {
+	cache := NewInMemoryCache(0, service.MockResources().Metrics(), service.NewLoggerFromSlog(slog.Default()))
+	pub := &publisherStub{}
+	lm := newLogMiner(pub, cache)
+	lm.cfg.LOBEnabled = true
+	// Two LOB columns: SECUREFILE_COL (regular CLOB, will get SELECT_LOB_LOCATOR)
+	// and OOL_COL (BASICFILE DISABLE STORAGE IN ROW, no SELECT_LOB_LOCATOR).
+	lm.lobColTypes = map[string]string{
+		"TESTDB.T.SECUREFILE_COL": "CLOB",
+		"TESTDB.T.OOL_COL":       "CLOB",
+	}
+
+	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+		SCN: 100, Operation: sqlredo.OpStart, TransactionID: "txA",
+	}))
+
+	// OOL_COL LOB_WRITEs arrive before the INSERT (BASICFILE DISABLE STORAGE IN ROW ordering).
+	// Two writes with distinct offsets so assembled value is "helloworld" (not just "hello").
+	for _, write := range []string{
+		` buf_c := 'hello';` + "\n  dbms_lob.write(loc_c, 5, 1, buf_c);",
+		` buf_c := 'world';` + "\n  dbms_lob.write(loc_c, 5, 6, buf_c);",
+	} {
+		require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+			SCN:           101,
+			Operation:     sqlredo.OpLobWrite,
+			TransactionID: "txA",
+			SchemaName:    sql.NullString{String: "TESTDB", Valid: true},
+			TableName:     sql.NullString{String: "T", Valid: true},
+			SQLRedo:       sql.NullString{String: write, Valid: true},
+		}))
+	}
+	assert.Len(t, lm.pendingLOBWrites["txA"], 2, "OOL_COL LOB_WRITEs should be deferred")
+
+	// INSERT arrives. Oracle writes NULL for both LOB columns in SQL_REDO.
+	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+		SCN:           102,
+		Operation:     sqlredo.OpInsert,
+		TransactionID: "txA",
+		SchemaName:    sql.NullString{String: "TESTDB", Valid: true},
+		TableName:     sql.NullString{String: "T", Valid: true},
+		SQLRedo:       sql.NullString{String: `insert into "TESTDB"."T"("ID","SECUREFILE_COL","OOL_COL") values ('42',NULL,NULL)`, Valid: true},
+	}))
+	assert.Len(t, lm.pendingLOBWrites["txA"], 2, "LOB_WRITEs should remain deferred after INSERT")
+
+	// SELECT_LOB_LOCATOR for SECUREFILE_COL arrives and claims it.
+	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+		SCN:           103,
+		Operation:     sqlredo.OpSelectLobLocator,
+		TransactionID: "txA",
+		SchemaName:    sql.NullString{String: "TESTDB", Valid: true},
+		TableName:     sql.NullString{String: "T", Valid: true},
+		SQLRedo:       sql.NullString{String: `declare lob_1 clob; begin select "SECUREFILE_COL" into lob_1 from "TESTDB"."T" where "ID" = '42';`, Valid: true},
+	}))
+	// SECUREFILE_COL LOB_WRITEs arrive via its own SELECT_LOB_LOCATOR path.
+	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+		SCN:           104,
+		Operation:     sqlredo.OpLobWrite,
+		TransactionID: "txA",
+		SchemaName:    sql.NullString{String: "TESTDB", Valid: true},
+		TableName:     sql.NullString{String: "T", Valid: true},
+		SQLRedo:       sql.NullString{String: ` buf_c := 'securefile data';\n  dbms_lob.write(loc_c, 14, 1, buf_c);`, Valid: true},
+	}))
+
+	// COMMIT — replay deferred LOB_WRITEs, inferLOBLocator should pick OOL_COL
+	// (the only unclaimed column) and correctly assemble "hellohello".
+	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+		SCN: 200, Operation: sqlredo.OpCommit, TransactionID: "txA",
+	}))
+
+	require.Len(t, pub.messages, 1)
+	data, ok := pub.messages[0].Data.(map[string]any)
+	require.True(t, ok, "Data should be map[string]any")
+	assert.Equal(t, "helloworld", data["OOL_COL"], "BASICFILE out-of-row column should have both LOB_WRITE fragments assembled")
+	assert.Equal(t, "securefile data", data["SECUREFILE_COL"], "SecureFile column should have its own LOB_WRITE data")
+	assert.Empty(t, lm.pendingLOBWrites)
+}
+
+// TestBasicfileOORSelectLobLocatorDeferredWrites covers the exact CI failure scenario:
+// Oracle emits SELECT_LOB_LOCATOR for a BASICFILE DISABLE STORAGE IN ROW column AFTER
+// the INSERT, but the LOB_WRITE events for that column arrived BEFORE the INSERT.
+// The SELECT_LOB_LOCATOR creates an empty accumulator (no post-INSERT LOB_WRITEs come).
+// At COMMIT time, inferLOBLocator must detect the empty accumulator and route the
+// deferred LOB_WRITEs to it rather than dropping them as "already claimed".
+func TestBasicfileOORSelectLobLocatorDeferredWrites(t *testing.T) {
+	cache := NewInMemoryCache(0, service.MockResources().Metrics(), service.NewLoggerFromSlog(slog.Default()))
+	pub := &publisherStub{}
+	lm := newLogMiner(pub, cache)
+	lm.cfg.LOBEnabled = true
+	lm.lobColTypes = map[string]string{
+		"TESTDB.T.OOL_COL":        "CLOB",
+		"TESTDB.T.SECUREFILE_COL": "CLOB",
+	}
+
+	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+		SCN: 100, Operation: sqlredo.OpStart, TransactionID: "txA",
+	}))
+
+	// OOL_COL LOB_WRITEs arrive before the INSERT (BASICFILE DISABLE STORAGE IN ROW ordering).
+	for _, write := range []string{
+		" buf_c := 'hello';\n  dbms_lob.write(loc_c, 5, 1, buf_c);",
+		" buf_c := 'world';\n  dbms_lob.write(loc_c, 5, 6, buf_c);",
+	} {
+		require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+			SCN:           101,
+			Operation:     sqlredo.OpLobWrite,
+			TransactionID: "txA",
+			SchemaName:    sql.NullString{String: "TESTDB", Valid: true},
+			TableName:     sql.NullString{String: "T", Valid: true},
+			SQLRedo:       sql.NullString{String: write, Valid: true},
+		}))
+	}
+	assert.Len(t, lm.pendingLOBWrites["txA"], 2, "OOL_COL LOB_WRITEs should be deferred before INSERT")
+
+	// INSERT arrives with NULL for both LOB columns.
+	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+		SCN:           102,
+		Operation:     sqlredo.OpInsert,
+		TransactionID: "txA",
+		SchemaName:    sql.NullString{String: "TESTDB", Valid: true},
+		TableName:     sql.NullString{String: "T", Valid: true},
+		SQLRedo:       sql.NullString{String: `insert into "TESTDB"."T"("ID","OOL_COL","SECUREFILE_COL") values ('42',NULL,NULL)`, Valid: true},
+	}))
+	assert.Len(t, lm.pendingLOBWrites["txA"], 2, "LOB_WRITEs should remain deferred after INSERT")
+
+	// Oracle emits SELECT_LOB_LOCATOR for OOL_COL (BASICFILE OOR behavior) — no LOB_WRITEs follow.
+	// This creates an empty accumulator (0 fragments).
+	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+		SCN:           103,
+		Operation:     sqlredo.OpSelectLobLocator,
+		TransactionID: "txA",
+		SchemaName:    sql.NullString{String: "TESTDB", Valid: true},
+		TableName:     sql.NullString{String: "T", Valid: true},
+		SQLRedo:       sql.NullString{String: `declare lob_1 clob; begin select "OOL_COL" into lob_1 from "TESTDB"."T" where "ID" = '42';`, Valid: true},
+	}))
+
+	// SECUREFILE_COL gets SELECT_LOB_LOCATOR + LOB_WRITE (normal path, non-empty accumulator).
+	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+		SCN:           104,
+		Operation:     sqlredo.OpSelectLobLocator,
+		TransactionID: "txA",
+		SchemaName:    sql.NullString{String: "TESTDB", Valid: true},
+		TableName:     sql.NullString{String: "T", Valid: true},
+		SQLRedo:       sql.NullString{String: `declare lob_1 clob; begin select "SECUREFILE_COL" into lob_1 from "TESTDB"."T" where "ID" = '42';`, Valid: true},
+	}))
+	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+		SCN:           105,
+		Operation:     sqlredo.OpLobWrite,
+		TransactionID: "txA",
+		SchemaName:    sql.NullString{String: "TESTDB", Valid: true},
+		TableName:     sql.NullString{String: "T", Valid: true},
+		SQLRedo:       sql.NullString{String: " buf_c := 'securedata';\n  dbms_lob.write(loc_c, 10, 1, buf_c);", Valid: true},
+	}))
+
+	// COMMIT — replay deferred LOB_WRITEs; inferLOBLocator must route them to
+	// OOL_COL's empty accumulator (not drop them as "already claimed").
+	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+		SCN: 200, Operation: sqlredo.OpCommit, TransactionID: "txA",
+	}))
+
+	require.Len(t, pub.messages, 1)
+	data, ok := pub.messages[0].Data.(map[string]any)
+	require.True(t, ok, "Data should be map[string]any")
+	assert.Equal(t, "helloworld", data["OOL_COL"], "BASICFILE OOR column should have deferred LOB_WRITEs assembled")
+	assert.Equal(t, "securedata", data["SECUREFILE_COL"], "SecureFile column should have its LOB_WRITE data")
+	assert.Empty(t, lm.pendingLOBWrites, "no LOB_WRITEs should remain deferred after COMMIT")
+}
+
+// TestBasicfileOORInferFromLOBOnlyUpdate covers the exact CI failure scenario where:
+//   - A BASICFILE DISABLE STORAGE IN ROW LOB column (OOL_COL) has its LOB_WRITE events
+//     arrive before any DML event; all are deferred.
+//   - Oracle emits a LOB-only UPDATE for a SecureFile column (SECUREFILE_COL) that does
+//     NOT include OOL_COL in its SET clause (BASICFILE OOR columns are absent).
+//   - There is no INSERT event in the transaction cache.
+//   - At COMMIT time, inferLOBLocator must treat OOL_COL as a BASICFILE OOR candidate
+//     from the LOB-only UPDATE (absent from SET = BASICFILE OOR, not a disqualifier).
+func TestBasicfileOORInferFromLOBOnlyUpdate(t *testing.T) {
+	cache := NewInMemoryCache(0, service.MockResources().Metrics(), service.NewLoggerFromSlog(slog.Default()))
+	pub := &publisherStub{}
+	lm := newLogMiner(pub, cache)
+	lm.cfg.LOBEnabled = true
+	lm.lobColTypes = map[string]string{
+		"TESTDB.T.OOL_COL":        "CLOB",
+		"TESTDB.T.SECUREFILE_COL": "CLOB",
+	}
+
+	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+		SCN: 100, Operation: sqlredo.OpStart, TransactionID: "txA",
+	}))
+
+	// OOL_COL LOB_WRITEs arrive with no DML events in txnCache yet — all deferred.
+	for _, write := range []string{
+		" buf_c := 'hello';\n  dbms_lob.write(loc_c, 5, 1, buf_c);",
+		" buf_c := 'world';\n  dbms_lob.write(loc_c, 5, 6, buf_c);",
+	} {
+		require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+			SCN:           101,
+			Operation:     sqlredo.OpLobWrite,
+			TransactionID: "txA",
+			SchemaName:    sql.NullString{String: "TESTDB", Valid: true},
+			TableName:     sql.NullString{String: "T", Valid: true},
+			SQLRedo:       sql.NullString{String: write, Valid: true},
+		}))
+	}
+	assert.Len(t, lm.pendingLOBWrites["txA"], 2, "OOL_COL LOB_WRITEs should be deferred")
+
+	// Oracle emits a LOB-only UPDATE for SECUREFILE_COL. OOL_COL (BASICFILE OOR) is
+	// absent from the SET clause — this is the case that triggered the CI failure.
+	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+		SCN:           102,
+		Operation:     sqlredo.OpUpdate,
+		TransactionID: "txA",
+		SchemaName:    sql.NullString{String: "TESTDB", Valid: true},
+		TableName:     sql.NullString{String: "T", Valid: true},
+		SQLRedo:       sql.NullString{String: `update "TESTDB"."T" set "SECUREFILE_COL" = 'X' where "ID" = '42'`, Valid: true},
+	}))
+
+	// SECUREFILE_COL gets its real data via SELECT_LOB_LOCATOR + LOB_WRITE.
+	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+		SCN:           103,
+		Operation:     sqlredo.OpSelectLobLocator,
+		TransactionID: "txA",
+		SchemaName:    sql.NullString{String: "TESTDB", Valid: true},
+		TableName:     sql.NullString{String: "T", Valid: true},
+		SQLRedo:       sql.NullString{String: `declare lob_1 clob; begin select "SECUREFILE_COL" into lob_1 from "TESTDB"."T" where "ID" = '42';`, Valid: true},
+	}))
+	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+		SCN:           104,
+		Operation:     sqlredo.OpLobWrite,
+		TransactionID: "txA",
+		SchemaName:    sql.NullString{String: "TESTDB", Valid: true},
+		TableName:     sql.NullString{String: "T", Valid: true},
+		SQLRedo:       sql.NullString{String: " buf_c := 'securedata';\n  dbms_lob.write(loc_c, 10, 1, buf_c);", Valid: true},
+	}))
+
+	// COMMIT — replay deferred LOB_WRITEs; inferLOBLocator must find OOL_COL as a
+	// candidate from the LOB-only UPDATE (absent from SET = BASICFILE OOR, not a skip).
+	require.NoError(t, lm.processRedoEvent(t.Context(), &sqlredo.RedoEvent{
+		SCN: 200, Operation: sqlredo.OpCommit, TransactionID: "txA",
+	}))
+
+	require.Len(t, pub.messages, 1)
+	data, ok := pub.messages[0].Data.(map[string]any)
+	require.True(t, ok, "Data should be map[string]any")
+	assert.Equal(t, "helloworld", data["OOL_COL"], "BASICFILE OOR column should have deferred LOB_WRITEs assembled")
+	assert.Equal(t, "securedata", data["SECUREFILE_COL"], "SecureFile column should have its LOB_WRITE data")
+	assert.Empty(t, lm.pendingLOBWrites, "no LOB_WRITEs should remain deferred after COMMIT")
 }
 
 func newLogMiner(pub replication.ChangePublisher, cache TransactionCache) *LogMiner {
