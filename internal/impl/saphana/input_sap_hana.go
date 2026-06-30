@@ -15,6 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"strconv"
 	"sync"
 	"time"
 
@@ -253,7 +254,7 @@ func newSAPHANAInput(conf *service.ParsedConfig, mgr *service.Resources) (*sapHA
 		return nil, err
 	}
 	if hwmInit != "" {
-		s.hwm = hwmInit
+		s.hwm = parseIncrHWMString(hwmInit)
 	}
 	if s.pollInterval, err = conf.FieldDuration(shFieldPollInterval); err != nil {
 		return nil, err
@@ -631,6 +632,20 @@ func (s *sapHANAInput) ReadBatch(ctx context.Context) (service.MessageBatch, ser
 			return nil, nil, service.ErrEndOfInput
 		}
 	}
+}
+
+// parseIncrHWMString converts the string value of incrementing_initial_value
+// to the most specific numeric type so that the first poll binds the correct
+// wire type instead of a VARCHAR parameter that some HANA versions reject.
+// Mirrors the type ladder used by loadCheckpoint.
+func parseIncrHWMString(s string) any {
+	if i, err := strconv.ParseInt(s, 10, 64); err == nil {
+		return i
+	}
+	if f, err := strconv.ParseFloat(s, 64); err == nil {
+		return f
+	}
+	return s
 }
 
 // normalizeHANAValue converts go-hdb-specific types to JSON-friendly Go types.
