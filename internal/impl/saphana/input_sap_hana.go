@@ -460,8 +460,6 @@ func (s *sapHANAInput) ReadBatch(ctx context.Context) (service.MessageBatch, ser
 		return nil, nil, service.ErrEndOfInput
 	}
 
-	noop := func(context.Context, error) error { return nil }
-
 	for {
 		if s.rows == nil {
 			switch s.mode {
@@ -518,10 +516,16 @@ func (s *sapHANAInput) ReadBatch(ctx context.Context) (service.MessageBatch, ser
 			}
 			batch = append(batch, msg)
 			if len(batch) >= s.fetchSize {
-				if err := s.saveCheckpoint(ctx); err != nil {
-					s.log.Warnf("Failed to save checkpoint: %v", err)
-				}
-				return batch, noop, nil
+				hwmSnap, tsHWMSnap := s.hwm, s.timestampHWM
+				return batch, func(ctx context.Context, err error) error {
+					if err != nil {
+						return nil
+					}
+					if saveErr := s.saveCheckpointValues(ctx, hwmSnap, tsHWMSnap); saveErr != nil {
+						s.log.Warnf("Failed to save checkpoint: %v", saveErr)
+					}
+					return nil
+				}, nil
 			}
 		}
 		if err := s.rows.Err(); err != nil {
@@ -541,12 +545,22 @@ func (s *sapHANAInput) ReadBatch(ctx context.Context) (service.MessageBatch, ser
 			s.bulkExhausted = true
 		}
 
-		if err := s.saveCheckpoint(ctx); err != nil {
-			s.log.Warnf("Failed to save checkpoint: %v", err)
+		if len(batch) > 0 {
+			hwmSnap, tsHWMSnap := s.hwm, s.timestampHWM
+			return batch, func(ctx context.Context, err error) error {
+				if err != nil {
+					return nil
+				}
+				if saveErr := s.saveCheckpointValues(ctx, hwmSnap, tsHWMSnap); saveErr != nil {
+					s.log.Warnf("Failed to save checkpoint: %v", saveErr)
+				}
+				return nil
+			}, nil
 		}
 
-		if len(batch) > 0 {
-			return batch, noop, nil
+		// Empty poll: nothing in flight, safe to persist immediately.
+		if err := s.saveCheckpoint(ctx); err != nil {
+			s.log.Warnf("Failed to save checkpoint: %v", err)
 		}
 
 		if s.bulkExhausted {
@@ -759,6 +773,45 @@ func (s *sapHANAInput) saveCheckpoint(ctx context.Context) error {
 	}
 	if s.hwm != nil {
 		switch v := s.hwm.(type) {
+		case string:
+			cp.IncrHWMStr = &v
+		case int64:
+			cp.IncrHWMInt = &v
+		case float64:
+			cp.IncrHWMFloat = &v
+		case time.Time:
+			cp.IncrHWMTime = &v
+		}
+	}
+	b, err := json.Marshal(cp)
+	if err != nil {
+		return fmt.Errorf("marshalling checkpoint: %w", err)
+	}
+	var setErr error
+	if err := s.mgr.AccessCache(ctx, s.checkpointCache, func(c service.Cache) {
+		setErr = c.Set(ctx, s.checkpointCacheKey, b, nil)
+	}); err != nil {
+		return fmt.Errorf("accessing checkpoint cache %q: %w", s.checkpointCache, err)
+	}
+	if setErr != nil {
+		return fmt.Errorf("writing checkpoint key %q: %w", s.checkpointCacheKey, setErr)
+	}
+	return nil
+}
+
+// saveCheckpointValues persists explicit HWM values to the cache. Used by
+// AckFunc closures that capture snapshots at batch-return time so the cache
+// write happens only after downstream acks, not at read time.
+func (s *sapHANAInput) saveCheckpointValues(ctx context.Context, hwm any, tsHWM time.Time) error {
+	if s.checkpointCache == "" {
+		return nil
+	}
+	cp := sapHANACheckpointState{}
+	if !tsHWM.IsZero() {
+		cp.TimestampHWM = &tsHWM
+	}
+	if hwm != nil {
+		switch v := hwm.(type) {
 		case string:
 			cp.IncrHWMStr = &v
 		case int64:
