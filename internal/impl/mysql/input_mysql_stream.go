@@ -216,10 +216,6 @@ type mysqlStreamInput struct {
 }
 
 func newMySQLStreamInput(conf *service.ParsedConfig, res *service.Resources) (s service.BatchInput, err error) {
-	if err := license.CheckRunningEnterprise(res); err != nil {
-		return nil, err
-	}
-
 	i := mysqlStreamInput{
 		logger:           res.Logger(),
 		rawMessageEvents: make(chan MessageEvent),
@@ -342,7 +338,7 @@ func newMySQLStreamInput(conf *service.ParsedConfig, res *service.Resources) (s 
 }
 
 func init() {
-	service.MustRegisterBatchInput("mysql_cdc", mysqlStreamConfigSpec, newMySQLStreamInput)
+	license.MustRegisterEnterpriseBatchInput("mysql_cdc", mysqlStreamConfigSpec, newMySQLStreamInput)
 }
 
 // ---- Redpanda Connect specific methods----

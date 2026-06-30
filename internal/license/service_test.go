@@ -34,5 +34,6 @@ func TestLicenseDevLicenseDefault(t *testing.T) {
 	svc := getSharedService(res)
 	require.NotNil(t, svc)
 	assert.True(t, svc.isTestLicense)
-	assert.NotNil(t, getThrottler(res))
+	assert.NotNil(t, getEgressThrottler(res))
+	assert.NotNil(t, getIngressThrottler(res))
 }

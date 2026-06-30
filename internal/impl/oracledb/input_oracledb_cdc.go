@@ -63,7 +63,7 @@ const (
 )
 
 func init() {
-	service.MustRegisterBatchInput("oracledb_cdc", oracleDBStreamConfigSpec, newOracleDBCDCInput)
+	license.MustRegisterEnterpriseBatchInput("oracledb_cdc", oracleDBStreamConfigSpec, newOracleDBCDCInput)
 }
 
 var oracleDBStreamConfigSpec = service.NewConfigSpec().
@@ -244,9 +244,6 @@ func newOracleDBCDCInput(conf *service.ParsedConfig, resources *service.Resource
 		logger = resources.Logger()
 	)
 
-	if err := license.CheckRunningEnterprise(resources); err != nil {
-		return nil, err
-	}
 	if connectionString, err = conf.FieldString(ociFieldConnectionString); err != nil {
 		return nil, err
 	}

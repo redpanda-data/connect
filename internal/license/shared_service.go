@@ -46,22 +46,118 @@ func CheckRunningEnterprise(res *service.Resources) error {
 	return nil
 }
 
-// WrapBatchOutput wraps output with throughput throttling when running under
-// the embedded test license. Returns output unchanged under a production license
+// WrapBatchOutput wraps output with egress throttling when running under
+// the embedded dev license. Returns output unchanged under a production license
 // or when no license service is registered.
 func WrapBatchOutput(res *service.Resources, output service.BatchOutput) service.BatchOutput {
 	svc := getSharedService(res)
 	if svc == nil || !svc.isTestLicense {
 		return output
 	}
-	t := getThrottler(res)
+	t := getEgressThrottler(res)
 	if t == nil {
 		return output
 	}
 	return &throttledBatchOutput{wrapped: output, throttler: t}
 }
 
-// RegisterServiceFrom copies the license service and throttler from src to dst.
+// WrapBatchInput wraps input with ingress throttling when running under
+// the embedded dev license. Returns input unchanged under a production license
+// or when no license service is registered.
+func WrapBatchInput(res *service.Resources, input service.BatchInput) service.BatchInput {
+	svc := getSharedService(res)
+	if svc == nil || !svc.isTestLicense {
+		return input
+	}
+	t := getIngressThrottler(res)
+	if t == nil {
+		return input
+	}
+	return &throttledBatchInput{wrapped: input, throttler: t}
+}
+
+// MustRegisterEnterpriseBatchOutput registers an enterprise batch output.
+// The license check and dev-license egress throttle wrapping are applied
+// automatically; the ctor must not call CheckRunningEnterprise or
+// WrapBatchOutput itself.
+func MustRegisterEnterpriseBatchOutput(
+	name string,
+	spec *service.ConfigSpec,
+	ctor func(*service.ParsedConfig, *service.Resources) (service.BatchOutput, service.BatchPolicy, int, error),
+) {
+	service.MustRegisterBatchOutput(name, spec,
+		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchOutput, service.BatchPolicy, int, error) {
+			if err := CheckRunningEnterprise(mgr); err != nil {
+				return nil, service.BatchPolicy{}, 0, err
+			}
+			out, bp, mif, err := ctor(conf, mgr)
+			if err == nil {
+				out = WrapBatchOutput(mgr, out)
+			}
+			return out, bp, mif, err
+		})
+}
+
+// WrapInput wraps input with ingress throttling when running under
+// the embedded dev license. Returns input unchanged under a production license
+// or when no license service is registered.
+func WrapInput(res *service.Resources, input service.Input) service.Input {
+	svc := getSharedService(res)
+	if svc == nil || !svc.isTestLicense {
+		return input
+	}
+	t := getIngressThrottler(res)
+	if t == nil {
+		return input
+	}
+	return &throttledInput{wrapped: input, throttler: t}
+}
+
+// MustRegisterEnterpriseInput registers an enterprise input.
+// The license check and dev-license ingress throttle wrapping are applied
+// automatically; the ctor must not call CheckRunningEnterprise or
+// WrapInput itself.
+func MustRegisterEnterpriseInput(
+	name string,
+	spec *service.ConfigSpec,
+	ctor func(*service.ParsedConfig, *service.Resources) (service.Input, error),
+) {
+	service.MustRegisterInput(name, spec,
+		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
+			if err := CheckRunningEnterprise(mgr); err != nil {
+				return nil, err
+			}
+			in, err := ctor(conf, mgr)
+			if err == nil {
+				in = WrapInput(mgr, in)
+			}
+			return in, err
+		})
+}
+
+// MustRegisterEnterpriseBatchInput registers an enterprise batch input.
+// The license check and dev-license ingress throttle wrapping are applied
+// automatically; the ctor must not call CheckRunningEnterprise or
+// WrapBatchInput itself.
+func MustRegisterEnterpriseBatchInput(
+	name string,
+	spec *service.ConfigSpec,
+	ctor func(*service.ParsedConfig, *service.Resources) (service.BatchInput, error),
+) {
+	service.MustRegisterBatchInput(name, spec,
+		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
+			if err := CheckRunningEnterprise(mgr); err != nil {
+				return nil, err
+			}
+			in, err := ctor(conf, mgr)
+			if err == nil {
+				in = WrapBatchInput(mgr, in)
+			}
+			return in, err
+		})
+}
+
+// RegisterServiceFrom copies the license service and throttlers from src to dst.
 // Use in agent mode so all per-stream Resources share one Service and Throttler
 // rather than each getting an independent token bucket.
 func RegisterServiceFrom(src, dst *service.Resources) {
@@ -70,8 +166,11 @@ func RegisterServiceFrom(src, dst *service.Resources) {
 		return
 	}
 	setSharedService(dst, svc)
-	if t := getThrottler(src); t != nil {
-		registerThrottler(dst, t)
+	if t := getEgressThrottler(src); t != nil {
+		registerEgressThrottler(dst, t)
+	}
+	if t := getIngressThrottler(src); t != nil {
+		registerIngressThrottler(dst, t)
 	}
 }
 
@@ -91,16 +190,30 @@ func getSharedService(res *service.Resources) *Service {
 	return reg.(*Service)
 }
 
-type throttlerKeyType int
+type egressThrottlerKeyType int
+type ingressThrottlerKeyType int
 
-var throttlerKey throttlerKeyType
+var egressThrottlerKey egressThrottlerKeyType
+var ingressThrottlerKey ingressThrottlerKeyType
 
-func registerThrottler(res *service.Resources, t *Throttler) {
-	res.SetGeneric(throttlerKey, t)
+func registerEgressThrottler(res *service.Resources, t *Throttler) {
+	res.SetGeneric(egressThrottlerKey, t)
 }
 
-func getThrottler(res *service.Resources) *Throttler {
-	v, _ := res.GetGeneric(throttlerKey)
+func getEgressThrottler(res *service.Resources) *Throttler {
+	v, _ := res.GetGeneric(egressThrottlerKey)
+	if v == nil {
+		return nil
+	}
+	return v.(*Throttler)
+}
+
+func registerIngressThrottler(res *service.Resources, t *Throttler) {
+	res.SetGeneric(ingressThrottlerKey, t)
+}
+
+func getIngressThrottler(res *service.Resources) *Throttler {
+	v, _ := res.GetGeneric(ingressThrottlerKey)
 	if v == nil {
 		return nil
 	}

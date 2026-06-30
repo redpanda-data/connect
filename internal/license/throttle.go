@@ -82,8 +82,8 @@ func (t *Throttler) Wait(ctx context.Context, n int) error {
 	}
 }
 
-// throttledBatchOutput wraps a service.BatchOutput and enforces the test
-// license throughput cap before each WriteBatch call.
+// throttledBatchOutput wraps a service.BatchOutput and enforces the dev
+// license egress cap before each WriteBatch call.
 type throttledBatchOutput struct {
 	wrapped   service.BatchOutput
 	throttler *Throttler
@@ -109,4 +109,60 @@ func (o *throttledBatchOutput) WriteBatch(ctx context.Context, batch service.Mes
 
 func (o *throttledBatchOutput) Close(ctx context.Context) error {
 	return o.wrapped.Close(ctx)
+}
+
+// throttledInput wraps a service.Input and enforces the dev
+// license ingress cap after each Read call.
+type throttledInput struct {
+	wrapped   service.Input
+	throttler *Throttler
+}
+
+func (i *throttledInput) Connect(ctx context.Context) error { return i.wrapped.Connect(ctx) }
+
+func (i *throttledInput) Read(ctx context.Context) (*service.Message, service.AckFunc, error) {
+	msg, ackFn, err := i.wrapped.Read(ctx)
+	if err != nil || msg == nil {
+		return msg, ackFn, err
+	}
+	if b, berr := msg.AsBytes(); berr == nil {
+		if err := i.throttler.Wait(ctx, len(b)); err != nil {
+			return nil, nil, err
+		}
+	}
+	return msg, ackFn, nil
+}
+
+func (i *throttledInput) Close(ctx context.Context) error { return i.wrapped.Close(ctx) }
+
+// throttledBatchInput wraps a service.BatchInput and enforces the dev
+// license ingress cap after each ReadBatch call.
+type throttledBatchInput struct {
+	wrapped   service.BatchInput
+	throttler *Throttler
+}
+
+func (i *throttledBatchInput) Connect(ctx context.Context) error {
+	return i.wrapped.Connect(ctx)
+}
+
+func (i *throttledBatchInput) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
+	batch, ackFn, err := i.wrapped.ReadBatch(ctx)
+	if err != nil || len(batch) == 0 {
+		return batch, ackFn, err
+	}
+	var n int
+	for _, msg := range batch {
+		if b, berr := msg.AsBytes(); berr == nil {
+			n += len(b)
+		}
+	}
+	if err := i.throttler.Wait(ctx, n); err != nil {
+		return nil, nil, err
+	}
+	return batch, ackFn, nil
+}
+
+func (i *throttledBatchInput) Close(ctx context.Context) error {
+	return i.wrapped.Close(ctx)
 }

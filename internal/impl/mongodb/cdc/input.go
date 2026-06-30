@@ -175,13 +175,10 @@ Schema metadata is discovered using a two-tier strategy:
 }
 
 func init() {
-	service.MustRegisterBatchInput("mongodb_cdc", spec(), newMongoCDC)
+	license.MustRegisterEnterpriseBatchInput("mongodb_cdc", spec(), newMongoCDC)
 }
 
 func newMongoCDC(conf *service.ParsedConfig, res *service.Resources) (i service.BatchInput, err error) {
-	if err := license.CheckRunningEnterprise(res); err != nil {
-		return nil, err
-	}
 	cdc := &mongoCDC{
 		readChan:          make(chan mongoBatch),
 		errorChan:         make(chan error, 1),

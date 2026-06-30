@@ -32,6 +32,29 @@ func (m *mockBatchOutput) WriteBatch(_ context.Context, b service.MessageBatch) 
 	return nil
 }
 
+// mockBatchInput returns a single fixed batch per ReadBatch call.
+type mockBatchInput struct {
+	batch service.MessageBatch
+}
+
+func (m *mockBatchInput) Connect(_ context.Context) error { return nil }
+func (m *mockBatchInput) Close(_ context.Context) error   { return nil }
+func (m *mockBatchInput) ReadBatch(_ context.Context) (service.MessageBatch, service.AckFunc, error) {
+	return m.batch, func(ctx context.Context, err error) error { return nil }, nil
+}
+
+func devLicenseResources(t *testing.T) *service.Resources {
+	t.Helper()
+	tmpDir := t.TempDir()
+	res := service.MockResources()
+	RegisterService(res, Config{
+		customDefaultLicenseFilepath: filepath.Join(tmpDir, "missing.license"),
+	})
+	svc := getSharedService(res)
+	require.True(t, svc.isTestLicense)
+	return res
+}
+
 func TestWrapBatchOutput_NoopUnderProductionLicense(t *testing.T) {
 	res := service.MockResources()
 	InjectTestService(res) // enterprise, but NOT isTestLicense
@@ -43,24 +66,36 @@ func TestWrapBatchOutput_NoopUnderProductionLicense(t *testing.T) {
 	assert.Same(t, inner, wrapped.(*mockBatchOutput))
 }
 
-func TestWrapBatchOutput_ThrottlesUnderTestLicense(t *testing.T) {
-	t.Setenv("REDPANDA_CONNECT_DEV_LICENSE", "1")
-
-	tmpDir := t.TempDir()
-	res := service.MockResources()
-	RegisterService(res, Config{
-		customDefaultLicenseFilepath: filepath.Join(tmpDir, "missing.license"),
-	})
-
-	svc := getSharedService(res)
-	require.True(t, svc.isTestLicense)
+func TestWrapBatchOutput_ThrottlesUnderDevLicense(t *testing.T) {
+	res := devLicenseResources(t)
 
 	inner := &mockBatchOutput{}
 	wrapped := WrapBatchOutput(res, inner)
 
-	// Should be wrapped.
 	_, ok := wrapped.(*throttledBatchOutput)
-	assert.True(t, ok, "expected throttledBatchOutput wrapper under test license")
+	assert.True(t, ok, "expected throttledBatchOutput wrapper under dev license")
+}
+
+func TestWrapBatchInput_NoopUnderProductionLicense(t *testing.T) {
+	res := service.MockResources()
+	InjectTestService(res) // enterprise, but NOT isTestLicense
+
+	msg := service.NewMessage([]byte("hello"))
+	inner := &mockBatchInput{batch: service.MessageBatch{msg}}
+	wrapped := WrapBatchInput(res, inner)
+
+	assert.Same(t, inner, wrapped.(*mockBatchInput))
+}
+
+func TestWrapBatchInput_ThrottlesUnderDevLicense(t *testing.T) {
+	res := devLicenseResources(t)
+
+	msg := service.NewMessage([]byte("hello"))
+	inner := &mockBatchInput{batch: service.MessageBatch{msg}}
+	wrapped := WrapBatchInput(res, inner)
+
+	_, ok := wrapped.(*throttledBatchInput)
+	assert.True(t, ok, "expected throttledBatchInput wrapper under dev license")
 }
 
 func TestThrottler_PassthroughBelowCap(t *testing.T) {

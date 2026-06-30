@@ -54,12 +54,8 @@ func inputSpec() *service.ConfigSpec {
 }
 
 func init() {
-	service.MustRegisterInput("splunk", inputSpec(),
+	license.MustRegisterEnterpriseInput("splunk", inputSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
-			if err := license.CheckRunningEnterprise(mgr); err != nil {
-				return nil, err
-			}
-
 			i, err := inputFromParsed(conf, mgr.Logger())
 			if err != nil {
 				return nil, err

@@ -51,7 +51,7 @@ const (
 )
 
 func init() {
-	service.MustRegisterBatchInput("salesforce_cdc", salesforceCDCInputConfigSpec(), newSalesforceCDCInput)
+	license.MustRegisterEnterpriseBatchInput("salesforce_cdc", salesforceCDCInputConfigSpec(), newSalesforceCDCInput)
 }
 
 func salesforceCDCInputConfigSpec() *service.ConfigSpec {
@@ -406,9 +406,6 @@ type salesforceCDCInputExecutor struct {
 }
 
 func newSalesforceCDCInput(pConf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
-	if err := license.CheckRunningEnterprise(mgr); err != nil {
-		return nil, err
-	}
 
 	conf, err := NewCDCInputConfigFromParsed(pConf)
 	if err != nil {

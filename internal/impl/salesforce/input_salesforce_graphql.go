@@ -29,7 +29,7 @@ const (
 )
 
 func init() {
-	service.MustRegisterInput("salesforce_graphql", salesforceGraphQLInputConfigSpec(), newSalesforceGraphQLInput)
+	license.MustRegisterEnterpriseInput("salesforce_graphql", salesforceGraphQLInputConfigSpec(), newSalesforceGraphQLInput)
 }
 
 func salesforceGraphQLInputConfigSpec() *service.ConfigSpec {
@@ -158,11 +158,7 @@ type salesforceGraphQLInput struct {
 }
 
 func newSalesforceGraphQLInput(pConf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
-	if err := license.CheckRunningEnterprise(mgr); err != nil {
-		return nil, err
-	}
-
-	conf, err := NewGraphQLInputConfigFromParsed(pConf)
+conf, err := NewGraphQLInputConfigFromParsed(pConf)
 	if err != nil {
 		return nil, err
 	}
