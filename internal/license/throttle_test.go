@@ -25,8 +25,8 @@ type mockBatchOutput struct {
 	batches []service.MessageBatch
 }
 
-func (m *mockBatchOutput) Connect(_ context.Context) error { return nil }
-func (m *mockBatchOutput) Close(_ context.Context) error   { return nil }
+func (*mockBatchOutput) Connect(_ context.Context) error { return nil }
+func (*mockBatchOutput) Close(_ context.Context) error   { return nil }
 func (m *mockBatchOutput) WriteBatch(_ context.Context, b service.MessageBatch) error {
 	m.batches = append(m.batches, b)
 	return nil
@@ -37,10 +37,10 @@ type mockBatchInput struct {
 	batch service.MessageBatch
 }
 
-func (m *mockBatchInput) Connect(_ context.Context) error { return nil }
-func (m *mockBatchInput) Close(_ context.Context) error   { return nil }
+func (*mockBatchInput) Connect(_ context.Context) error { return nil }
+func (*mockBatchInput) Close(_ context.Context) error   { return nil }
 func (m *mockBatchInput) ReadBatch(_ context.Context) (service.MessageBatch, service.AckFunc, error) {
-	return m.batch, func(ctx context.Context, err error) error { return nil }, nil
+	return m.batch, func(_ context.Context, _ error) error { return nil }, nil
 }
 
 func devLicenseResources(t *testing.T) *service.Resources {

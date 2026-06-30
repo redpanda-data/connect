@@ -190,11 +190,15 @@ func getSharedService(res *service.Resources) *Service {
 	return reg.(*Service)
 }
 
-type egressThrottlerKeyType int
-type ingressThrottlerKeyType int
+type (
+	egressThrottlerKeyType  int
+	ingressThrottlerKeyType int
+)
 
-var egressThrottlerKey egressThrottlerKeyType
-var ingressThrottlerKey ingressThrottlerKeyType
+var (
+	egressThrottlerKey  egressThrottlerKeyType
+	ingressThrottlerKey ingressThrottlerKeyType
+)
 
 func registerEgressThrottler(res *service.Resources, t *Throttler) {
 	res.SetGeneric(egressThrottlerKey, t)

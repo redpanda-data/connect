@@ -406,7 +406,6 @@ type salesforceCDCInputExecutor struct {
 }
 
 func newSalesforceCDCInput(pConf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
-
 	conf, err := NewCDCInputConfigFromParsed(pConf)
 	if err != nil {
 		return nil, err

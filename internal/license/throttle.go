@@ -13,14 +13,15 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/redpanda-data/benthos/v4/public/service"
 	"golang.org/x/time/rate"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 const (
-	testLicenseBytesPerSec  = 1 * 1024 * 1024 // 1 MB/s
-	testLicenseWindowSec    = 30
-	testLicenseBurstBytes   = testLicenseBytesPerSec * testLicenseWindowSec // 30 MB burst
+	testLicenseBytesPerSec = 1 * 1024 * 1024 // 1 MB/s
+	testLicenseWindowSec   = 30
+	testLicenseBurstBytes  = testLicenseBytesPerSec * testLicenseWindowSec // 30 MB burst
 )
 
 // Throttler enforces the 1 MB/s compressed-bytes-out cap for enterprise

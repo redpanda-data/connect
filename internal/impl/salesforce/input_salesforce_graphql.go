@@ -158,7 +158,7 @@ type salesforceGraphQLInput struct {
 }
 
 func newSalesforceGraphQLInput(pConf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
-conf, err := NewGraphQLInputConfigFromParsed(pConf)
+	conf, err := NewGraphQLInputConfigFromParsed(pConf)
 	if err != nil {
 		return nil, err
 	}
