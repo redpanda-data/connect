@@ -143,8 +143,9 @@ func (c *committer) commitRowDelta(ctx context.Context, input CommitInput) error
 	c.commitMu.Lock()
 	defer c.commitMu.Unlock()
 
-	if input.SchemaID != c.currentSchemaID() {
-		return &StaleSchemaError{WriterSchemaID: input.SchemaID, CurrentSchemaID: c.currentSchemaID()}
+	currentSchemaID := c.currentSchemaID()
+	if input.SchemaID != currentSchemaID {
+		return &StaleSchemaError{WriterSchemaID: input.SchemaID, CurrentSchemaID: currentSchemaID}
 	}
 	if err := c.commitLocked(ctx, func(txn *table.Transaction, props iceberg.Properties) error {
 		// RowDelta derives the snapshot operation automatically
@@ -215,9 +216,7 @@ func (c *committer) commitLocked(ctx context.Context, stage func(*table.Transact
 }
 
 func (c *committer) incrCommitFailure() {
-	if c.metrics != nil {
-		c.metrics.commitFailures.Incr(1)
-	}
+	c.metrics.incrCommitFailure()
 }
 
 // currentSchemaID returns the table's current schema ID.

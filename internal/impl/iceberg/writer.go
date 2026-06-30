@@ -140,32 +140,35 @@ func (w *writer) Write(ctx context.Context, batch service.MessageBatch) error {
 	if !w.rowOpCfg.mutating() {
 		files, err := w.writeDataFiles(ctx, batch)
 		if err != nil {
-			return err
+			return fmt.Errorf("writing data files: %w", err)
 		}
 		if err := w.committer.Commit(ctx, CommitInput{Files: files, SchemaID: w.table.Schema().ID}); err != nil {
 			w.cleanupFiles(ctx, files)
 			return fmt.Errorf("committing: %w", err)
 		}
+		// Metrics reflect successfully committed rows, so they are incremented
+		// only after the commit succeeds.
+		w.metrics.incrInserted(int64(len(batch)))
 		return nil
 	}
 
 	// Row-level mutations: split the batch by operation, write inserted rows as
 	// data files and deleted/upserted keys as equality-delete files, then commit
 	// them together so a single snapshot reflects the whole batch.
-	inserts, deletes, err := w.splitByOperation(batch)
+	inserts, deletes, counts, err := w.splitByOperation(batch)
 	if err != nil {
-		return err
+		return fmt.Errorf("splitting batch by row operation: %w", err)
 	}
 
 	var files, deleteFiles []iceberg.DataFile
 	if len(inserts) > 0 {
 		if files, err = w.writeDataFiles(ctx, inserts); err != nil {
-			return err
+			return fmt.Errorf("writing data files: %w", err)
 		}
 	}
 	if len(deletes) > 0 {
 		if deleteFiles, err = w.writeEqualityDeletes(ctx, deletes); err != nil {
-			return err
+			return fmt.Errorf("writing equality deletes: %w", err)
 		}
 	}
 	if len(files) == 0 && len(deleteFiles) == 0 {
@@ -175,6 +178,10 @@ func (w *writer) Write(ctx context.Context, batch service.MessageBatch) error {
 		w.cleanupFiles(ctx, files, deleteFiles)
 		return fmt.Errorf("committing: %w", err)
 	}
+	// Increment only after the commit succeeds, using the post-collapse counts.
+	w.metrics.incrInserted(counts.inserted)
+	w.metrics.incrUpserted(counts.upserted)
+	w.metrics.incrDeleted(counts.deleted)
 	return nil
 }
 
@@ -185,6 +192,7 @@ func (w *writer) Write(ctx context.Context, batch service.MessageBatch) error {
 func (w *writer) cleanupFiles(ctx context.Context, groups ...[]iceberg.DataFile) {
 	fs, err := w.table.FS(ctx)
 	if err != nil {
+		w.logger.Debugf("Skipping cleanup of uncommitted files: could not obtain table filesystem: %v", err)
 		return
 	}
 	for _, group := range groups {
@@ -303,7 +311,7 @@ func (w *writer) writeDataFiles(ctx context.Context, batch service.MessageBatch)
 // and is deliberately not keyed; mixing it with upsert/delete on the same key
 // within one batch is not de-duplicated (map create events to `upsert`, not
 // `insert`, for keyed data).
-func (w *writer) splitByOperation(batch service.MessageBatch) (service.MessageBatch, service.MessageBatch, error) {
+func (w *writer) splitByOperation(batch service.MessageBatch) (service.MessageBatch, service.MessageBatch, opCounts, error) {
 	var inserts service.MessageBatch
 
 	type keyedOp struct {
@@ -313,35 +321,30 @@ func (w *writer) splitByOperation(batch service.MessageBatch) (service.MessageBa
 	order := make([]string, 0, len(batch))
 	latest := make(map[string]keyedOp, len(batch))
 
-	var nInsert, nUpsert, nDelete int64
+	var nInsert int64
 	for i, msg := range batch {
 		opStr, err := w.rowOpCfg.Operation.TryString(msg)
 		if err != nil {
-			return nil, nil, fmt.Errorf("evaluating %s for message %d: %w", ioFieldRowOperation, i, err)
+			return nil, nil, opCounts{}, fmt.Errorf("evaluating %s for message %d: %w", ioFieldRowOperation, i, err)
 		}
 		if opStr == "" {
 			opStr = string(rowOpInsert)
 		}
 		op, err := parseRowOperation(opStr)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, opCounts{}, err
 		}
 		if op == rowOpInsert {
 			nInsert++
 			inserts = append(inserts, msg)
 			continue
 		}
-		if op == rowOpUpsert {
-			nUpsert++
-		} else {
-			nDelete++
-		}
 		if len(w.rowOpCfg.IdentifierFields) == 0 {
-			return nil, nil, fmt.Errorf("%s %q requires %s to be set", ioFieldRowOperation, op, ioFieldIdentifierFields)
+			return nil, nil, opCounts{}, fmt.Errorf("%s %q requires %s to be set", ioFieldRowOperation, op, ioFieldIdentifierFields)
 		}
 		key, err := w.dedupKey(msg)
 		if err != nil {
-			return nil, nil, fmt.Errorf("message %d: %w", i, err)
+			return nil, nil, opCounts{}, fmt.Errorf("message %d: %w", i, err)
 		}
 		if _, seen := latest[key]; !seen {
 			order = append(order, key)
@@ -349,7 +352,11 @@ func (w *writer) splitByOperation(batch service.MessageBatch) (service.MessageBa
 		latest[key] = keyedOp{op: op, msg: msg}
 	}
 
+	// Count upsert/delete after collapsing per key, so the metrics reflect the
+	// operations actually committed (one per identifier key) rather than every
+	// message in the batch.
 	deletes := make(service.MessageBatch, 0, len(order))
+	var nUpsert, nDelete int64
 	for _, key := range order {
 		ko := latest[key]
 		// Every keyed operation removes any prior version of the row.
@@ -357,15 +364,22 @@ func (w *writer) splitByOperation(batch service.MessageBatch) (service.MessageBa
 		// An upsert also (re)writes the row; a delete does not.
 		if ko.op == rowOpUpsert {
 			inserts = append(inserts, ko.msg)
+			nUpsert++
+		} else {
+			nDelete++
 		}
 	}
 
-	if w.metrics != nil {
-		w.metrics.inserted.Incr(nInsert)
-		w.metrics.upserted.Incr(nUpsert)
-		w.metrics.deleted.Incr(nDelete)
-	}
-	return inserts, deletes, nil
+	return inserts, deletes, opCounts{inserted: nInsert, upserted: nUpsert, deleted: nDelete}, nil
+}
+
+// opCounts is the per-operation tally for a batch, counted after per-key
+// collapse so it matches what is committed. Metrics are incremented from it
+// only once the commit succeeds.
+type opCounts struct {
+	inserted int64
+	upserted int64
+	deleted  int64
 }
 
 // dedupKey builds a stable identity string from a message's identifier_fields
@@ -417,6 +431,13 @@ func deleteKeyJSONValue(t iceberg.Type, v any) (any, error) {
 		case float64:
 			if n != math.Trunc(n) {
 				return nil, fmt.Errorf("integer column given non-integer value %v", n)
+			}
+			// A float64 only represents integers exactly up to 2^53; beyond that
+			// int64(n) loses precision or overflows, silently producing a wrong
+			// delete key. Reject rather than corrupt — pass large integers as an
+			// int64/json.Number/string instead.
+			if math.Abs(n) >= 1<<53 {
+				return nil, fmt.Errorf("integer column given value %v outside the range representable exactly as a float64 (provide it as an integer or string)", n)
 			}
 			return strconv.FormatInt(int64(n), 10), nil
 		case string:
@@ -474,9 +495,11 @@ func deleteKeyJSONValue(t iceberg.Type, v any) (any, error) {
 // a partition source appears once). Every contributing column must be a
 // primitive type (a fundamental Iceberg constraint on identifier fields).
 func (w *writer) deleteRecordFields(tableSchema *iceberg.Schema, spec *iceberg.PartitionSpec) ([]iceberg.NestedField, []int, error) {
-	seen := map[int]struct{}{}
-	var fields []iceberg.NestedField
-	eqFieldIDs := make([]int, 0, len(w.rowOpCfg.IdentifierFields))
+	var (
+		fields     []iceberg.NestedField
+		seen       = map[int]struct{}{}
+		eqFieldIDs = make([]int, 0, len(w.rowOpCfg.IdentifierFields))
+	)
 
 	for _, name := range w.rowOpCfg.IdentifierFields {
 		field, ok := tableSchema.FindFieldByName(name)

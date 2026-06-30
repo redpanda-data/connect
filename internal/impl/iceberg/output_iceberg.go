@@ -67,22 +67,45 @@ type icebergOutput struct {
 	logger *service.Logger
 }
 
-// opMetrics holds counters for row-level operations and commit health. Fields
-// are nil in tests that construct writers/committers directly; callers must
-// nil-check the holder before incrementing.
+// opMetrics holds counters for row-level operations and commit health. Row
+// operations share a single counter labelled by operation (insert/upsert/
+// delete), following the Prometheus convention of one metric with a label
+// rather than one metric per verb, so they aggregate cleanly. The holder is nil
+// in tests that construct writers/committers directly; the incr* methods are
+// nil-safe so callers need not check.
 type opMetrics struct {
-	inserted       *service.MetricCounter
-	upserted       *service.MetricCounter
-	deleted        *service.MetricCounter
+	rowOps         *service.MetricCounter // labelled by "operation"
 	commitFailures *service.MetricCounter
 }
 
 func newOpMetrics(m *service.Metrics) *opMetrics {
 	return &opMetrics{
-		inserted:       m.NewCounter("iceberg_rows_inserted"),
-		upserted:       m.NewCounter("iceberg_rows_upserted"),
-		deleted:        m.NewCounter("iceberg_rows_deleted"),
-		commitFailures: m.NewCounter("iceberg_commit_failures"),
+		rowOps:         m.NewCounter("iceberg_row_operations_total", "operation"),
+		commitFailures: m.NewCounter("iceberg_commit_failures_total"),
+	}
+}
+
+func (m *opMetrics) incrInserted(n int64) {
+	if m != nil && n > 0 {
+		m.rowOps.Incr(n, "insert")
+	}
+}
+
+func (m *opMetrics) incrUpserted(n int64) {
+	if m != nil && n > 0 {
+		m.rowOps.Incr(n, "upsert")
+	}
+}
+
+func (m *opMetrics) incrDeleted(n int64) {
+	if m != nil && n > 0 {
+		m.rowOps.Incr(n, "delete")
+	}
+}
+
+func (m *opMetrics) incrCommitFailure() {
+	if m != nil {
+		m.commitFailures.Incr(1)
 	}
 }
 
