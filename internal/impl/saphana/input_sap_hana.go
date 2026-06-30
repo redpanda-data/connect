@@ -104,7 +104,7 @@ Every message produced by this input carries the following metadata fields:
 		Optional(),
 	).
 	Field(service.NewStringField(shFieldIncrementingColumn).
-		Description("Column to use as the high-water mark for `incrementing` mode. Must be monotonically increasing (e.g. an auto-increment ID or a timestamp column).").
+		Description("Column to use as the high-water mark for `incrementing` mode. Must be strictly monotonically increasing with no duplicate values — a BIGINT auto-increment column is ideal. Columns that produce duplicate values (e.g. a plain TIMESTAMP) will cause rows whose value ties span a `fetch_size` boundary to be re-delivered. Use `timestamp+incrementing` mode to handle timestamp columns safely.").
 		Optional(),
 	).
 	Field(service.NewStringField(shFieldIncrementingInitialVal).
@@ -172,6 +172,8 @@ type sapHANAInput struct {
 	customQuery     string
 	incrementingCol string
 	hwm             any
+	hwmSafe         any // last checkpointable HWM: highest value whose tie-group is fully emitted
+	peekedRow       *service.Message // row buffered from peek-ahead at fetch_size boundary
 	pollInterval    time.Duration
 
 	timestampCol   string
@@ -338,6 +340,9 @@ func (s *sapHANAInput) Connect(ctx context.Context) error {
 		s.db = nil
 		return fmt.Errorf("loading checkpoint: %w", err)
 	}
+	// hwmSafe must start at the loaded checkpoint value so that a partial
+	// batch on the first poll never persists nil and regresses progress.
+	s.hwmSafe = s.hwm
 
 	s.log.Debug("Connected to SAP HANA.")
 	return nil
@@ -446,6 +451,7 @@ func (s *sapHANAInput) resetCursorCache() {
 	s.rowCachedPKCols = nil
 	s.rowCachedColTypes = nil
 	s.rowSchemaFetched = false
+	s.peekedRow = nil
 }
 
 func (s *sapHANAInput) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
@@ -506,6 +512,12 @@ func (s *sapHANAInput) ReadBatch(ctx context.Context) (service.MessageBatch, ser
 		}
 
 		batch := make(service.MessageBatch, 0, s.fetchSize)
+		// Emit the row buffered by the previous batch's peek-ahead before
+		// continuing the cursor scan. s.hwm was already updated when peeked.
+		if s.peekedRow != nil {
+			batch = append(batch, s.peekedRow)
+			s.peekedRow = nil
+		}
 		for s.rows.Next() {
 			msg, err := s.scanRow(ctx, s.rows)
 			if err != nil {
@@ -516,6 +528,51 @@ func (s *sapHANAInput) ReadBatch(ctx context.Context) (service.MessageBatch, ser
 			}
 			batch = append(batch, msg)
 			if len(batch) >= s.fetchSize {
+				if s.mode == shModeIncrementing {
+					// Peek ahead to determine whether the current HWM group is
+					// complete before committing the checkpoint.  If the next row
+					// carries the same incrementing value we are mid-group and
+					// must not advance hwmSafe — doing so would skip the remaining
+					// tied rows on the next poll.
+					hwmAtPeek := s.hwm
+					if s.rows.Next() {
+						peekedMsg, pErr := s.scanRow(ctx, s.rows)
+						if pErr != nil {
+							_ = s.rows.Close()
+							s.rows = nil
+							s.resetCursorCache()
+							return nil, nil, pErr
+						}
+						s.peekedRow = peekedMsg
+						if s.hwm != hwmAtPeek {
+							// Group boundary crossed: previous value is fully emitted.
+							s.hwmSafe = hwmAtPeek
+						}
+						// else: still mid-group; hwmSafe stays at last complete group.
+					} else {
+						// Cursor exhausted by the peek: current HWM is safe.
+						if rErr := s.rows.Err(); rErr != nil {
+							_ = s.rows.Close()
+							s.rows = nil
+							s.resetCursorCache()
+							return nil, nil, fmt.Errorf("iterating rows: %w", rErr)
+						}
+						_ = s.rows.Close()
+						s.rows = nil
+						s.resetCursorCache()
+						s.hwmSafe = s.hwm
+					}
+					hwmSnap, tsHWMSnap := s.hwmSafe, s.timestampHWM
+					return batch, func(ctx context.Context, err error) error {
+						if err != nil {
+							return nil
+						}
+						if saveErr := s.saveCheckpointValues(ctx, hwmSnap, tsHWMSnap); saveErr != nil {
+							s.log.Warnf("Failed to save checkpoint: %v", saveErr)
+						}
+						return nil
+					}, nil
+				}
 				hwmSnap, tsHWMSnap := s.hwm, s.timestampHWM
 				return batch, func(ctx context.Context, err error) error {
 					if err != nil {
@@ -541,12 +598,19 @@ func (s *sapHANAInput) ReadBatch(ctx context.Context) (service.MessageBatch, ser
 		if s.mode == shModeTimestamp || s.mode == shModeTimestampIncrementing {
 			s.timestampHWM = s.tsQueryUpper
 		}
+		if s.mode == shModeIncrementing {
+			// Cursor fully consumed: every row seen, so current HWM is safe.
+			s.hwmSafe = s.hwm
+		}
 		if s.mode == shModeBulk || s.mode == shModeQuery {
 			s.bulkExhausted = true
 		}
 
 		if len(batch) > 0 {
 			hwmSnap, tsHWMSnap := s.hwm, s.timestampHWM
+			if s.mode == shModeIncrementing {
+				hwmSnap = s.hwmSafe
+			}
 			return batch, func(ctx context.Context, err error) error {
 				if err != nil {
 					return nil
