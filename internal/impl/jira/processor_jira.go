@@ -31,6 +31,7 @@ import (
 	"errors"
 
 	"github.com/redpanda-data/connect/v4/internal/httpclient"
+	"github.com/redpanda-data/connect/v4/internal/impl/jira/jiraauth"
 	"github.com/redpanda-data/connect/v4/internal/impl/jira/jirahttp"
 	"github.com/redpanda-data/connect/v4/internal/license"
 
@@ -49,8 +50,11 @@ func newJiraProcessorConfigSpec() *service.ConfigSpec {
 	spec := service.NewConfigSpec().
 		Categories("Services").
 		Version("4.68.0").
+		Deprecated().
 		Summary("Queries Jira resources and returns structured data").
 		Description(`Executes Jira API queries based on input messages and returns structured results. The processor handles pagination, retries, and field expansion automatically.
+
+This processor is deprecated in favour of the `+"`jira`"+` input, which streams issues, comments, and changelog entries with cursor-based incremental polling. The processor remains available for enrichment and lookup style operations.
 
 Supports querying the following Jira resources:
 - Issues (JQL queries)
@@ -119,16 +123,10 @@ func newJiraProcessor(conf *service.ParsedConfig, mgr *service.Resources) (*jira
 	if err != nil {
 		return nil, err
 	}
-	if username == "" {
-		return nil, errors.New("username must not be empty")
-	}
 
 	apiToken, err := conf.FieldString("api_token")
 	if err != nil {
 		return nil, err
-	}
-	if apiToken == "" {
-		return nil, errors.New("api_token must not be empty")
 	}
 
 	maxResults, err := conf.FieldInt("max_results_per_page")
@@ -139,34 +137,13 @@ func newJiraProcessor(conf *service.ParsedConfig, mgr *service.Resources) (*jira
 		return nil, errors.New("max_results_per_page must be between 1 and 5000")
 	}
 
-	// Wire Jira basic auth into the httpclient auth signer.
-	httpCfg.AuthSigner = httpclient.BasicAuthSigner(username, apiToken)
-
-	// Configure retry: retry on 429/5xx, drop on 401/403.
-	httpCfg.Retry = &httpclient.RetryConfig{
-		MaxRetries:    3,
-		RetryStatuses: []int{429, 502, 503, 504},
-		DropStatuses:  []int{401, 403},
-	}
-
-	httpCfg.MetricPrefix = "jira_http"
-
-	httpClient, err := httpclient.NewClient(httpCfg, mgr)
+	client, err := jiraauth.BuildClient(mgr, &httpCfg, username, apiToken, maxResults)
 	if err != nil {
 		return nil, err
 	}
 
-	headerPolicy := &jirahttp.AuthHeaderPolicy{
-		HeaderName: "X-Seraph-LoginReason",
-		IsProblem: func(reason string) bool {
-			return reason != "" && reason != "OK" && reason != "AUTHENTICATED_TRUE"
-		},
-	}
-
-	jiraHttp := jirahttp.NewClient(mgr.Logger(), httpCfg.BaseURL, maxResults, httpClient, headerPolicy)
-
 	return &jiraProcessor{
-		client: jiraHttp,
+		client: client,
 		log:    mgr.Logger(),
 	}, nil
 }
