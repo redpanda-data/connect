@@ -326,11 +326,17 @@ oracledb_cdc:
 		outBatchesMu.Lock()
 
 		expectedSCN, _ := outBatches[0].MetaGetMut("scn")
+		expectedCommitTs, _ := outBatches[0].MetaGetMut("commit_ts_ms")
 		for i, msg := range outBatches {
 			scn, ok := msg.MetaGet("scn")
 			assert.Truef(t, ok, "Expected snapshot message[%d] to have scn metadata", i)
 			assert.NotEmptyf(t, scn, "Expected snapshot message[%d] scn metadata to be non-empty", i)
 			assert.Equal(t, expectedSCN, scn, "Expected snapshot scn to be identical for all messages but was not")
+
+			commitTs, ok := msg.MetaGet("commit_ts_ms")
+			assert.Truef(t, ok, "Expected snapshot message[%d] to have commit_ts_ms metadata", i)
+			assert.NotEmptyf(t, commitTs, "Expected snapshot message[%d] commit_ts_ms metadata to be non-empty", i)
+			assert.Equal(t, expectedCommitTs, commitTs, "Expected snapshot commit_ts_ms to be identical for all messages but was not")
 		}
 		outBatchesMu.Unlock()
 	}
