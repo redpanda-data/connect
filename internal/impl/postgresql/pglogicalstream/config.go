@@ -47,6 +47,11 @@ type Config struct {
 	// SnapshotTables overrides DBTables for snapshot scans when non-empty.
 	// The publication always tracks DBTables regardless of this field.
 	SnapshotTables []string
+	// ForceSnapshot forces a snapshot to run even when the replication slot already exists.
+	// When true and the slot exists, a snapshot is taken against current DB state using a
+	// REPEATABLE READ transaction rather than an EXPORT_SNAPSHOT. Used for signal-triggered
+	// re-snapshots that do not need to drop and recreate the slot.
+	ForceSnapshot bool
 
 	Logger *service.Logger
 

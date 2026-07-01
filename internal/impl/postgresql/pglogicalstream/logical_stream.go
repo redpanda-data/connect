@@ -222,21 +222,47 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 			stream.ackedLSN = confirmedLSNFromDB
 			stream.ackedLSNMu.Unlock()
 		}
-		if config.StreamOldData {
-			for _, table := range tables {
-				stream.monitor.MarkSnapshotComplete(table)
+		if config.ForceSnapshot && config.StreamOldData {
+			snapshotter, err := newSnapshotter(config, config.DBRawDSN, config.Logger, "", config.MaxSnapshotWorkers)
+			if err != nil {
+				return nil, fmt.Errorf("creating snapshotter for re-snapshot: %w", err)
 			}
-		}
-		stream.logger.Debugf("starting stream from LSN %s", confirmedLSNFromDB.String())
-		if err = stream.startLr(ctx, confirmedLSNFromDB); err != nil {
-			return nil, err
-		}
-		go func() {
-			defer stream.shutSig.TriggerHasStopped()
-			if err := stream.streamMessages(confirmedLSNFromDB); err != nil {
-				stream.errors <- fmt.Errorf("logical replication stream error: %w", err)
+			go func() {
+				defer stream.shutSig.TriggerHasStopped()
+				ctx, done := stream.shutSig.SoftStopCtx(context.Background())
+				defer done()
+				if err := stream.processSnapshot(ctx, snapshotTables, snapshotter); err != nil {
+					stream.errors <- fmt.Errorf("processing snapshot: %w", err)
+					return
+				}
+				for _, table := range snapshotTables {
+					stream.monitor.MarkSnapshotComplete(table)
+				}
+				if err := stream.startLr(ctx, confirmedLSNFromDB); err != nil {
+					stream.errors <- fmt.Errorf("starting logical replication: %w", err)
+					return
+				}
+				if err := stream.streamMessages(confirmedLSNFromDB); err != nil {
+					stream.errors <- fmt.Errorf("logical replication stream error: %w", err)
+				}
+			}()
+		} else {
+			if config.StreamOldData {
+				for _, table := range tables {
+					stream.monitor.MarkSnapshotComplete(table)
+				}
 			}
-		}()
+			stream.logger.Debugf("starting stream from LSN %s", confirmedLSNFromDB.String())
+			if err = stream.startLr(ctx, confirmedLSNFromDB); err != nil {
+				return nil, err
+			}
+			go func() {
+				defer stream.shutSig.TriggerHasStopped()
+				if err := stream.streamMessages(confirmedLSNFromDB); err != nil {
+					stream.errors <- fmt.Errorf("logical replication stream error: %w", err)
+				}
+			}()
+		}
 		cleanups = nil
 		return stream, nil
 	}

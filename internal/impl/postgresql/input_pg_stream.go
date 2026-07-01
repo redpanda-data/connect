@@ -435,10 +435,9 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 		if signal.IsSnapshot() {
 			p.logger.Infof("%s signal pending, dropping replication slot for re-snapshot", signal.Type)
 			p.streamConfig.StreamOldData = true
+			p.streamConfig.ForceSnapshot = true
+			defer func() { p.streamConfig.ForceSnapshot = false }()
 			p.controlSig.Reset()
-			if err := p.dropReplicationSlot(ctx); err != nil {
-				return fmt.Errorf("dropping replication slot for re-snapshot: %w", err)
-			}
 
 			// ensure we only snapshot tables specified in control signal
 			if len(signal.DataCollections) > 0 {
@@ -622,15 +621,6 @@ func (p *pgStreamInput) flushBatch(
 		return ctx.Err()
 	}
 	return nil
-}
-
-func (p *pgStreamInput) dropReplicationSlot(ctx context.Context) error {
-	conn, err := pgconn.ConnectConfig(ctx, p.streamConfig.DBConfig)
-	if err != nil {
-		return fmt.Errorf("opening connection: %w", err)
-	}
-	defer conn.Close(ctx)
-	return pglogicalstream.DropReplicationSlot(ctx, conn, p.streamConfig.ReplicationSlotName, pglogicalstream.DropReplicationSlotOptions{Wait: true})
 }
 
 func (p *pgStreamInput) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
