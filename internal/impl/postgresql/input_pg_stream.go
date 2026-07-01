@@ -556,7 +556,16 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 					p.logger.Errorf("failed to detect if change event was snapshot signal, continuing to process change events: %s", err)
 					continue
 				} else if isSignal {
-					continue // don't publish signal
+					if msg.LSN != nil {
+						if resolveFn, err := cp.Track(ctx, msg.LSN, 0); err == nil {
+							if maxLSN := resolveFn(); maxLSN != nil && *maxLSN != nil {
+								if err := pgStream.AckLSN(ctx, **maxLSN); err != nil {
+									p.logger.Warnf("failed to ack signal LSN: %s", err)
+								}
+							}
+						}
+					}
+					continue
 				}
 
 				if mb, err = json.Marshal(msg.Data); err != nil {
@@ -599,12 +608,13 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 					nextTimedBatchChan = time.After(d)
 				}
 			}
-		case lsn := <-p.controlSig.OnSignal():
+		case <-p.controlSig.OnSignal():
 			p.logger.Infof("snapshot signal received, pausing stream to re-run snapshot")
-			if lsn != nil {
-				if err := pgStream.AckLSN(ctx, *lsn); err != nil {
-					p.logger.Warnf("failed to ack signal LSN before re-snapshot: %s", err)
-				}
+			// The signal row's LSN was already routed through the checkpointer in
+			// the batch processing path above. Flush any remaining batcher contents
+			// so nothing is stranded, then trigger soft stop.
+			if flushedBatch, err := batcher.Flush(ctx); err == nil {
+				_ = p.flushBatch(ctx, pgStream, cp, flushedBatch)
 			}
 			p.stopSig.TriggerSoftStop()
 		case err := <-pgStream.Errors():
