@@ -101,7 +101,3 @@ func (o *controlSignaller) IsPending() (bool, *replication.ControlSignal) {
 func (o *controlSignaller) Reset() {
 	o.signalPending.Store(nil)
 }
-
-func (*controlSignaller) ValidateChannel(_ context.Context) error {
-	return nil
-}

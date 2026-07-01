@@ -55,8 +55,6 @@ func (s *ControlSignal) FilterTables(schema string, tables []string) []string {
 
 // Signaller detects and communicates signal events from a configured signal channel.
 type Signaller interface {
-	// ValidateChannel validates the signal channel exists during connector startup.
-	ValidateChannel(ctx context.Context) error
 	// Listen detects whether a signal has been received from the channel.
 	// Returns true if the event was a signal and should not be published into the pipeline.
 	Listen(ctx context.Context, signal any) (bool, error)
